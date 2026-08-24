@@ -30,29 +30,55 @@
   --gap: 16px;
 }
 
+/* 暗いテーマ用の色。閲覧者の設定は3通りあるため、両方の指定を書いておく。
+   ・OSの設定が暗い場合            → @media (prefers-color-scheme: dark)
+   ・閲覧側が明示的に切り替えた場合 → :root[data-theme="dark"] / [data-theme="light"] */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
-
+  
     --surface-0: #131312;
     --surface-1: #1a1a19;
     --surface-2: #262625;
     --border:    #383835;
-
+  
     --text-primary:   #ffffff;
     --text-secondary: #c3c2b7;
     --text-muted:     #8d8c84;
-
+  
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #c98500;
     --series-5: #d55181;
-
+  
     --accent: #3987e5;
     --warn:   #c98500;
     --danger: #e66767;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-0: #131312;
+  --surface-1: #1a1a19;
+  --surface-2: #262625;
+  --border:    #383835;
+
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted:     #8d8c84;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+
+  --accent: #3987e5;
+  --warn:   #c98500;
+  --danger: #e66767;
 }
 
 * { box-sizing: border-box; }
