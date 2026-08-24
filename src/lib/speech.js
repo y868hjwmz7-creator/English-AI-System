@@ -38,11 +38,36 @@ export function isRecordingSupported() {
  *   そのため、名前から品質を判定して並べ替え、いちばん良い声を既定にします。
  */
 
-/** 学習用として明らかに不適切な声(macOS のネタ声)。一覧から除外する。 */
+/**
+ * ★実機(iOS 18.7)で分かったこと
+ *
+ *   1. ネタ声の名前は端末の言語に翻訳される。
+ *      日本語環境では Bells が「ベル」、Jester が「道化」、
+ *      Whisper が「ささやき声」として現れる。
+ *      → 英語名だけで判定してはいけない。voiceURI で判定する。
+ *
+ *   2. 同じ声が二重に現れる端末がある(39個中12個が重複だった)。
+ *      → 名前と言語で重複を取り除く。
+ *
+ *   3. Apple の声の品質は voiceURI に現れる。
+ *      com.apple.voice.premium.*  / .enhanced.*  / .compact.*
+ *      ネタ声は com.apple.speech.synthesis.voice.* という古い系統にある。
+ *      → 表示名より voiceURI のほうが信頼できる。
+ *
+ *   4. 学習者向けにはアメリカ英語が基準。
+ *      評価が同点だと、オーストラリア英語などが選ばれてしまっていた。
+ *      → アクセントに優先順位を付ける。
+ */
+
+/** 学習用として明らかに不適切な声(ネタ声)。一覧から除外する。 */
 const NOVELTY_VOICES = [
+  // 英語名
   'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos', 'deranged',
   'good news', 'hysterical', 'jester', 'organ', 'pipe organ', 'trinoids',
   'whisper', 'wobble', 'zarvox', 'superstar', 'princess',
+  // 日本語環境での表示名(実機で確認)
+  'ベル', '道化', 'オルガン', 'スーパースター', 'トリノイド', 'ささやき声', '震え',
+  '鐘', '泡', 'チェロ', '悪い知らせ', '良い知らせ', 'うなり', 'きしみ', '風変わり',
 ]
 
 /** Apple の標準的な英語話者。ネタ声ではなく、お手本として使える。 */
@@ -55,30 +80,50 @@ const APPLE_STANDARD = [
 const LOW_PRIORITY = ['grandma', 'grandpa', 'rocko', 'sandy', 'shelley', 'eddy', 'flo', 'reed', 'junior', 'kathy', 'fred', 'ralph', 'agnes', 'vicki', 'victoria', 'bruce']
 
 /**
+ * 学習のお手本として望ましいアクセントの順位。
+ * 日本の英語教育はアメリカ英語が基準のため、en-US を最優先にする。
+ */
+const ACCENT_PRIORITY = { 'en-us': 30, 'en-gb': 24, 'en-ca': 10, 'en-au': 6, 'en-ie': 4, 'en-nz': 4, 'en-za': 2, 'en-in': 2 }
+
+/** ネタ声かどうか。表示名と voiceURI の両方で判定する。 */
+function isNoveltyVoice(voice) {
+  const name = (voice.name || '').toLowerCase()
+  const uri = (voice.voiceURI || '').toLowerCase()
+  // Apple の古い系統(com.apple.speech.synthesis.voice.*)はネタ声とレガシー音声
+  if (uri.includes('speech.synthesis.voice.')) return true
+  return NOVELTY_VOICES.some((n) => name.startsWith(n.toLowerCase()))
+}
+
+/**
  * 声の品質を点数で評価する。数字が大きいほど良い。
- * 端末によって入っている声が違うため、名前から推定するしかない。
+ * 表示名は端末の言語に翻訳されるため、voiceURI を優先して見る。
  */
 function scoreVoice(voice) {
   const name = (voice.name || '').toLowerCase()
+  const uri = (voice.voiceURI || '').toLowerCase()
+  const both = name + ' ' + uri
   let score = 0
 
-  // 各社の高品質版。名前に品質を示す語が入っている
-  if (name.includes('premium')) score += 100
-  if (name.includes('enhanced')) score += 90
-  if (name.includes('neural') || name.includes('natural')) score += 90
-  if (name.includes('siri')) score += 80
+  // 各社の高品質版
+  if (both.includes('premium')) score += 100
+  if (both.includes('enhanced')) score += 90
+  if (both.includes('neural') || both.includes('natural')) score += 90
+  if (both.includes('siri')) score += 80
 
   // 提供元による傾向
   if (name.startsWith('google')) score += 70
-  if (APPLE_STANDARD.some((n) => name.startsWith(n))) score += 60
+  if (APPLE_STANDARD.some((n) => name.startsWith(n))) score += 40
   if (name.startsWith('microsoft')) score += 50
 
   // 通信を使う声は、端末内蔵の簡易な声より品質が高いことが多い
   if (voice.localService === false) score += 20
 
   // 簡易版・癖の強い声は下げる
-  if (name.includes('compact')) score -= 60
+  if (both.includes('compact')) score -= 60
   if (LOW_PRIORITY.some((n) => name.startsWith(n))) score -= 50
+
+  // 学習のお手本として望ましいアクセントを優先する
+  score += ACCENT_PRIORITY[(voice.lang || '').toLowerCase()] ?? 0
 
   // 端末の既定の声は、わずかに優遇する
   if (voice.default) score += 5
@@ -88,9 +133,12 @@ function scoreVoice(voice) {
 
 /** 品質の目安を日本語のラベルにする(画面に出すため) */
 export function voiceQualityLabel(voice) {
-  const score = scoreVoice(voice)
-  if (score >= 80) return '高品質'
-  if (score >= 50) return '標準'
+  const both = ((voice.name || '') + ' ' + (voice.voiceURI || '')).toLowerCase()
+  if (both.includes('premium') || both.includes('enhanced') || both.includes('neural') || both.includes('natural')) {
+    return '高品質'
+  }
+  if (both.includes('compact')) return '簡易'
+  if (scoreVoice(voice) >= 50) return '標準'
   return '簡易'
 }
 
@@ -124,11 +172,20 @@ export function loadEnglishVoices() {
       return
     }
 
-    const pickEnglish = (voices) =>
-      voices
+    const pickEnglish = (voices) => {
+      const seen = new Set()
+      return voices
         .filter((v) => v.lang && v.lang.toLowerCase().startsWith('en'))
-        .filter((v) => !NOVELTY_VOICES.some((n) => (v.name || '').toLowerCase().startsWith(n)))
+        .filter((v) => !isNoveltyVoice(v))
+        .filter((v) => {
+          // 同じ声が二重に現れる端末があるため、重複を取り除く
+          const key = `${v.name}|${v.lang}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
         .sort((a, b) => scoreVoice(b) - scoreVoice(a))
+    }
 
     const immediate = pickEnglish(window.speechSynthesis.getVoices())
     if (immediate.length > 0) {
@@ -155,7 +212,7 @@ export function loadEnglishVoices() {
  * なければ画面で「端末に良い声を追加する方法」を案内する。
  */
 export function hasGoodVoice(voices) {
-  return voices.some((v) => scoreVoice(v) >= 50)
+  return voices.some((v) => voiceQualityLabel(v) === '高品質')
 }
 
 /**
@@ -188,67 +245,150 @@ export function stopSpeaking() {
 }
 
 /**
+ * ===================================================================
+ *  マイク録音
+ * ===================================================================
+ *
+ * ★iOS Safari の制約について(実機で判明)
+ *
+ *   当初は「録音のたびにマイクを取り直す」実装にしたが、
+ *   iOS Safari では2回目以降が依然として失敗した。
+ *
+ *   より確からしい原因は、**同じページで2つ目の MediaRecorder を
+ *   作ること**そのものが失敗する点にある。
+ *   そこで、いったん作った録音器とマイクをそのまま保持し、
+ *   2回目以降は同じ録音器を start() し直す方式に変更した。
+ *
+ *   万一この方式が使えない環境のために、順に別の方法を試す。
+ *     方法1: 既存の録音器を start() し直す(iOS 向けの本命)
+ *     方法2: 生きているマイクに新しい録音器を作る
+ *     方法3: マイクを取り直して新しい録音器を作る
+ *
+ *   どの方法で成功したかは lastRecordingStrategy に記録し、
+ *   診断ページで確認できるようにしている。
+ *
+ * ★マイクの解放
+ *   上記の方式では、練習中はマイクを掴んだままになる。
+ *   録り直しのたびに許可の確認が挟まらない利点がある一方、
+ *   録音マークが出続けるため、練習画面を離れるときに
+ *   releaseMicrophone() で必ず解放すること。
+ */
+
+let sharedStream = null
+let sharedRecorder = null
+let sharedMimeType = ''
+
+/** どの方法で録音を開始できたか(診断用) */
+export let lastRecordingStrategy = ''
+
+/** マイクが生きているか */
+function streamIsLive(stream) {
+  return !!stream && stream.active && stream.getAudioTracks().some((t) => t.readyState === 'live')
+}
+
+/** この端末が対応している録音形式を選ぶ */
+function pickMimeType() {
+  if (typeof MediaRecorder.isTypeSupported !== 'function') return ''
+  const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+  return preferred.find((type) => MediaRecorder.isTypeSupported(type)) || ''
+}
+
+/**
+ * マイクを解放する。
+ * 練習画面を離れるとき、アプリを閉じるときに必ず呼ぶこと。
+ * 呼ばないと、ブラウザの録音マークが出続ける。
+ */
+export function releaseMicrophone() {
+  try {
+    if (sharedRecorder && sharedRecorder.state !== 'inactive') sharedRecorder.stop()
+  } catch {
+    /* すでに止まっていれば何もしない */
+  }
+  sharedRecorder = null
+  if (sharedStream) sharedStream.getTracks().forEach((track) => track.stop())
+  sharedStream = null
+}
+
+/**
  * マイク録音を開始する。
  *
- * 戻り値は { stop } というオブジェクト。
- * stop() を呼ぶと録音が止まり、音声データ(Blob)の URL が返ってきます。
+ * 戻り値は { stop, cancel }。
+ * stop() を呼ぶと録音が止まり、音声データが返ってきます。
  *
- * ★仕様書 3.2 の方針どおり、録音した音声はサーバーに送りません。
- *   ブラウザのメモリ上に置くだけで、ページを閉じれば消えます。
+ * ★録音した音声はサーバーに送りません(仕様書 3.2)。
  */
 export async function startRecording() {
   if (!isRecordingSupported()) {
     throw new Error('このブラウザは録音に対応していません。')
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-  // 録音の形式はブラウザによって異なる。
-  //   Chrome / Edge / Firefox → audio/webm
-  //   iOS Safari             → audio/mp4
-  // 対応している形式を順に試し、どれも指定できなければブラウザ既定に任せる。
-  // (形式を決め打ちすると、対応していないブラウザで録音開始に失敗する)
-  const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
-  const supported =
-    typeof MediaRecorder.isTypeSupported === 'function'
-      ? preferred.find((type) => MediaRecorder.isTypeSupported(type))
-      : undefined
-
-  // マイクを解放する。録音の成否にかかわらず必ず呼ぶ。
-  // 解放し忘れると、ブラウザの録音マークが消えないうえ、
-  // iOS Safari では次の録音が開始できなくなる。
-  const releaseMic = () => {
-    stream.getTracks().forEach((track) => track.stop())
-  }
-
-  let recorder
-  try {
-    recorder = supported ? new MediaRecorder(stream, { mimeType: supported }) : new MediaRecorder(stream)
-  } catch (err) {
-    // 形式の指定が拒否された場合は、指定なしでもう一度試す
-    console.warn('録音形式の指定に失敗したため、ブラウザ既定の形式で録音します。', err)
-    try {
-      recorder = new MediaRecorder(stream)
-    } catch (err2) {
-      releaseMic() // ここで解放しないとマイクが掴まれたままになる
-      throw err2
-    }
+  // マイクが死んでいたら取り直す。取り直した場合、録音器も作り直す。
+  if (!streamIsLive(sharedStream)) {
+    sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    sharedRecorder = null
   }
 
   const chunks = []
-  const mimeType = recorder.mimeType || supported || 'audio/webm'
-  let finished = false
-
-  recorder.addEventListener('dataavailable', (event) => {
-    if (event.data.size > 0) chunks.push(event.data)
-  })
-
-  try {
-    recorder.start()
-  } catch (err) {
-    releaseMic()
-    throw err
+  const collect = (event) => {
+    if (event.data && event.data.size > 0) chunks.push(event.data)
   }
+
+  const makeRecorder = () => {
+    const mimeType = pickMimeType()
+    const rec = mimeType
+      ? new MediaRecorder(sharedStream, { mimeType })
+      : new MediaRecorder(sharedStream)
+    sharedMimeType = rec.mimeType || mimeType || 'audio/webm'
+    return rec
+  }
+
+  let started = false
+
+  // 方法1: 既存の録音器を start() し直す(iOS Safari 向けの本命)
+  if (sharedRecorder && sharedRecorder.state === 'inactive') {
+    try {
+      sharedRecorder.ondataavailable = collect
+      sharedRecorder.start()
+      started = true
+      lastRecordingStrategy = '既存の録音器を再開'
+    } catch (err) {
+      console.warn('既存の録音器を再開できませんでした。', err)
+      sharedRecorder = null
+    }
+  }
+
+  // 方法2: 生きているマイクに新しい録音器を作る
+  if (!started) {
+    try {
+      sharedRecorder = makeRecorder()
+      sharedRecorder.ondataavailable = collect
+      sharedRecorder.start()
+      started = true
+      lastRecordingStrategy = '新しい録音器を作成'
+    } catch (err) {
+      console.warn('新しい録音器を作れませんでした。マイクを取り直します。', err)
+      sharedRecorder = null
+    }
+  }
+
+  // 方法3: マイクごと取り直す
+  if (!started) {
+    if (sharedStream) sharedStream.getTracks().forEach((t) => t.stop())
+    sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    try {
+      sharedRecorder = makeRecorder()
+      sharedRecorder.ondataavailable = collect
+      sharedRecorder.start()
+      lastRecordingStrategy = 'マイクを取り直して作成'
+    } catch (err) {
+      releaseMicrophone()
+      throw err
+    }
+  }
+
+  const recorder = sharedRecorder
+  const mimeType = sharedMimeType
+  let finished = false
 
   return {
     /** 録音を止め、音声データを返す。二重に呼ばれても安全。 */
@@ -263,9 +403,10 @@ export async function startRecording() {
         recorder.addEventListener(
           'stop',
           () => {
-            releaseMic()
+            // ここでマイクは解放しない。次の録音で同じ録音器を使い回すため。
+            // 練習画面を離れるときに releaseMicrophone() で解放する。
             const blob = new Blob(chunks, { type: mimeType })
-            resolve({ blob, url: URL.createObjectURL(blob), mimeType })
+            resolve({ blob, url: URL.createObjectURL(blob), mimeType, strategy: lastRecordingStrategy })
           },
           { once: true },
         )
@@ -273,7 +414,6 @@ export async function startRecording() {
         try {
           recorder.stop()
         } catch (err) {
-          releaseMic()
           reject(err)
         }
       })
@@ -288,7 +428,6 @@ export async function startRecording() {
       } catch {
         /* すでに止まっていれば何もしない */
       }
-      releaseMic()
     },
   }
 }

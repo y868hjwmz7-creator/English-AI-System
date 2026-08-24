@@ -9,6 +9,7 @@ import {
   isRecordingSupported,
   isSpeechSupported,
   loadEnglishVoices,
+  releaseMicrophone,
   speak,
   startRecording,
   stopSpeaking,
@@ -232,11 +233,18 @@ function PronunciationPractice({ state, setState, learnerId }) {
 
   // 録音の途中で画面を離れた場合に、マイクを解放する。
   // 解放し忘れると録音マークが消えず、次に戻ってきたとき録音を開始できない。
+  // 練習画面を離れるときにマイクを解放する。
+  // 録り直しを速くするため練習中はマイクを掴んだままにしているので、
+  // ここで解放しないと録音マークが出続けてしまう。
   useEffect(() => {
+    const release = () => releaseMicrophone()
+    // 画面を閉じた・バックグラウンドに回った場合にも解放する
+    document.addEventListener('pagehide', release)
     return () => {
-      if (recorder) recorder.cancel()
+      document.removeEventListener('pagehide', release)
+      release()
     }
-  }, [recorder])
+  }, [])
 
   // 録音した音声のURLは、使い終わったらメモリから解放する
   useEffect(() => {

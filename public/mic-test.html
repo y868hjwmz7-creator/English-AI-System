@@ -260,7 +260,18 @@ audio { width: 100%; margin-top: 10px; }
   // アプリ本体と同じ基準で声の品質を評価する
   var NOVELTY = ['albert','bad news','bahh','bells','boing','bubbles','cellos','deranged',
     'good news','hysterical','jester','organ','pipe organ','trinoids','whisper','wobble',
-    'zarvox','superstar','princess']
+    'zarvox','superstar','princess',
+    // 日本語環境ではネタ声の名前が翻訳される(実機で確認)
+    'ベル','道化','オルガン','スーパースター','トリノイド','ささやき声','震え',
+    '鐘','泡','チェロ','悪い知らせ','良い知らせ','うなり','きしみ','風変わり']
+  var ACCENT = { 'en-us':30, 'en-gb':24, 'en-ca':10, 'en-au':6, 'en-ie':4, 'en-nz':4, 'en-za':2, 'en-in':2 }
+
+  function isNovelty(v) {
+    var uri = (v.voiceURI || '').toLowerCase()
+    if (uri.indexOf('speech.synthesis.voice.') >= 0) return true
+    var n = (v.name || '').toLowerCase()
+    return NOVELTY.some(function (x) { return n.indexOf(x.toLowerCase()) === 0 })
+  }
   var APPLE_STD = ['samantha','ava','allison','susan','nicky','aaron','tom','serena',
     'daniel','kate','oliver','karen','moira','tessa','rishi']
   var LOW_PRI = ['grandma','grandpa','rocko','sandy','shelley','eddy','flo','reed',
@@ -268,32 +279,42 @@ audio { width: 100%; margin-top: 10px; }
 
   function scoreVoice(v) {
     var n = (v.name || '').toLowerCase()
+    var b = n + ' ' + (v.voiceURI || '').toLowerCase()
     var sc = 0
-    if (n.indexOf('premium') >= 0) sc += 100
-    if (n.indexOf('enhanced') >= 0) sc += 90
-    if (n.indexOf('neural') >= 0 || n.indexOf('natural') >= 0) sc += 90
-    if (n.indexOf('siri') >= 0) sc += 80
+    if (b.indexOf('premium') >= 0) sc += 100
+    if (b.indexOf('enhanced') >= 0) sc += 90
+    if (b.indexOf('neural') >= 0 || b.indexOf('natural') >= 0) sc += 90
+    if (b.indexOf('siri') >= 0) sc += 80
     if (n.indexOf('google') === 0) sc += 70
-    if (APPLE_STD.some(function (x) { return n.indexOf(x) === 0 })) sc += 60
+    if (APPLE_STD.some(function (x) { return n.indexOf(x) === 0 })) sc += 40
     if (n.indexOf('microsoft') === 0) sc += 50
     if (v.localService === false) sc += 20
-    if (n.indexOf('compact') >= 0) sc -= 60
+    if (b.indexOf('compact') >= 0) sc -= 60
     if (LOW_PRI.some(function (x) { return n.indexOf(x) === 0 })) sc -= 50
+    sc += ACCENT[(v.lang || '').toLowerCase()] || 0
     if (v.default) sc += 5
     return sc
   }
   function qualityOf(v) {
-    var sc = scoreVoice(v)
-    return sc >= 80 ? ['高品質', 'q-high'] : sc >= 50 ? ['標準', 'q-mid'] : ['簡易', 'q-low']
+    var b = ((v.name || '') + ' ' + (v.voiceURI || '')).toLowerCase()
+    if (b.indexOf('premium') >= 0 || b.indexOf('enhanced') >= 0 ||
+        b.indexOf('neural') >= 0 || b.indexOf('natural') >= 0) return ['高品質', 'q-high']
+    if (b.indexOf('compact') >= 0) return ['簡易', 'q-low']
+    return scoreVoice(v) >= 50 ? ['標準', 'q-mid'] : ['簡易', 'q-low']
   }
 
   function collectVoices() {
     if (!results.hasTTS) return []
+    var seen = {}
     return window.speechSynthesis.getVoices()
       .filter(function (v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0 })
+      .filter(function (v) { return !isNovelty(v) })
       .filter(function (v) {
-        var n = (v.name || '').toLowerCase()
-        return !NOVELTY.some(function (x) { return n.indexOf(x) === 0 })
+        // 同じ声が二重に現れる端末があるため、重複を取り除く
+        var key = v.name + '|' + v.lang
+        if (seen[key]) return false
+        seen[key] = true
+        return true
       })
       .sort(function (a, b) { return scoreVoice(b) - scoreVoice(a) })
   }
@@ -338,7 +359,7 @@ audio { width: 100%; margin-top: 10px; }
     })
 
     var names = englishVoices.map(function (v) {
-      return qualityOf(v)[0] + ':' + v.name + '(' + v.lang + ')'
+      return qualityOf(v)[0] + ':' + v.name + '(' + v.lang + ') [' + (v.voiceURI || '不明') + ']'
     })
     results.voiceCount = englishVoices.length
     results.voiceList = names
@@ -391,13 +412,13 @@ audio { width: 100%; margin-top: 10px; }
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
       var track = stream.getAudioTracks()[0]
       var label = track ? track.label || '(名前なし)' : '不明'
-      // 確認できたらすぐ閉じる。録音のたびに取り直すため、ここで保持はしない。
-      // (保持したまま使い回すと、iOS Safari では2回目の録音が失敗する)
-      stream.getTracks().forEach(function (t) { t.stop() })
+      // この接続は録音でもそのまま使う(取り直しは失敗のときだけ)
+      micStream = stream
+      recorder = null
       setOut('out-mic', mark(true, 'マイクを使えます') +
         '<br><span class="hint">入力: ' + label + '</span>')
       results.mic = '成功'
-      log('マイク: 許可されました。入力=' + label + '(確認後に接続を閉じました)')
+      log('マイク: 許可されました。入力=' + label)
       el('btn-rec').disabled = false
     }).catch(function (err) {
       setOut('out-mic', mark(false, 'エラー: ' + err.name) +
@@ -409,86 +430,170 @@ audio { width: 100%; margin-top: 10px; }
 
   /* ---------- 3. 録音 ---------- */
 
+  /**
+   * ★iOS Safari では、同じページで2つ目の MediaRecorder を作れないことがある。
+   *   そのため、いったん作った録音器とマイクをそのまま保持し、
+   *   2回目以降は同じ録音器を start() し直す。
+   *   それが駄目な場合に備え、順に別の方法を試す。
+   */
   var recorder = null
+  var micStream = null
   var chunks = []
-  var lastUrl = null       // 直前の録音のURL(次の録音時に破棄する)
-  var lastMimeType = ''    // 録音の形式(recorder を手放したあとも表示するため)
+  var lastUrl = null
+  var lastMimeType = ''
+  var strategyUsed = ''
+
+  function streamIsLive(st) {
+    return !!st && st.active && st.getAudioTracks().some(function (t) { return t.readyState === 'live' })
+  }
+
+  function pickMime() {
+    if (typeof MediaRecorder.isTypeSupported !== 'function') return ''
+    var c = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+    for (var i = 0; i < c.length; i++) if (MediaRecorder.isTypeSupported(c[i])) return c[i]
+    return ''
+  }
+
+  function collect(e) { if (e.data && e.data.size > 0) chunks.push(e.data) }
+
+  function releaseMic() {
+    try { if (recorder && recorder.state !== 'inactive') recorder.stop() } catch (e) {}
+    recorder = null
+    if (micStream) micStream.getTracks().forEach(function (t) { t.stop() })
+    micStream = null
+  }
+
+  function makeRecorder() {
+    var mt = pickMime()
+    var r = mt ? new MediaRecorder(micStream, { mimeType: mt }) : new MediaRecorder(micStream)
+    lastMimeType = r.mimeType || mt || 'audio/webm'
+    return r
+  }
+
+  function beginRecording(btn) {
+    chunks = []
+    var started = false
+
+    // 方法1: 既存の録音器を再開する(iOS Safari 向けの本命)
+    if (recorder && recorder.state === 'inactive') {
+      try {
+        recorder.ondataavailable = collect
+        recorder.start()
+        started = true
+        strategyUsed = '既存の録音器を再開'
+      } catch (err) {
+        log('方法1(既存の録音器を再開)が失敗: ' + err.name + ' — ' + err.message)
+        recorder = null
+      }
+    }
+
+    // 方法2: 生きているマイクに新しい録音器を作る
+    if (!started) {
+      try {
+        recorder = makeRecorder()
+        recorder.ondataavailable = collect
+        recorder.start()
+        started = true
+        strategyUsed = '新しい録音器を作成'
+      } catch (err) {
+        log('方法2(新しい録音器を作成)が失敗: ' + err.name + ' — ' + err.message)
+        recorder = null
+      }
+    }
+
+    if (!started) return false
+
+    recorder.onstop = function () {
+      var blob = new Blob(chunks, { type: lastMimeType || 'audio/webm' })
+      var p = el('player')
+      if (lastUrl) URL.revokeObjectURL(lastUrl)
+      lastUrl = URL.createObjectURL(blob)
+      p.src = lastUrl
+      p.hidden = false
+      btn.textContent = '録音をはじめる'
+
+      if (blob.size === 0) {
+        setOut('out-rec', mark(false, '録音は終わりましたが、音声が空でした') +
+          '<br><span class="hint">方法: ' + strategyUsed + '</span>')
+        results.rec = '失敗(音声が空) / 方法: ' + strategyUsed
+        log('録音: 完了したがサイズ0。方法=' + strategyUsed)
+        return
+      }
+
+      setOut('out-rec', mark(true, '録音できました') +
+        '<br><span class="hint">形式: ' + (lastMimeType || '不明') +
+        ' / サイズ: ' + Math.round(blob.size / 1024) + 'KB' +
+        ' / 方法: ' + strategyUsed + '</span>' +
+        '<br><span class="hint">下の再生ボタンで、自分の声が聞こえるか確かめてください。</span>')
+      results.rec = '成功 / 形式 ' + (lastMimeType || '不明') + ' / ' +
+        Math.round(blob.size / 1024) + 'KB / 方法: ' + strategyUsed
+      log('録音: 完了。方法=' + strategyUsed + ' 形式=' + lastMimeType + ' サイズ=' + blob.size + 'B')
+    }
+
+    btn.textContent = '■ 録音を止める'
+    setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
+    log('録音: 開始(方法: ' + strategyUsed + ')')
+    return true
+  }
 
   el('btn-rec').addEventListener('click', function () {
     var btn = this
+
     if (recorder && recorder.state === 'recording') {
-      recorder.stop()
+      try { recorder.stop() } catch (err) {
+        setOut('out-rec', mark(false, '録音を止められませんでした: ' + err.name))
+        log('録音: stop 失敗 ' + err.name)
+      }
       return
     }
+
     if (!('MediaRecorder' in window)) {
       setOut('out-rec', mark(false, 'この環境は録音に対応していません'))
       results.rec = 'MediaRecorder 非対応'
-      log('録音: MediaRecorder 非対応')
       return
     }
-    var go = function (stream) {
-      chunks = []
-      var closeStream = function () {
-        stream.getTracks().forEach(function (t) { t.stop() })
-      }
 
-      // アプリ本体と同じ手順で、この端末が対応している録音形式を選ぶ。
-      // recorder.mimeType は空を返す環境があるため、当てにしない。
-      var chosen = ''
-      if (typeof MediaRecorder.isTypeSupported === 'function') {
-        var candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
-        for (var ci = 0; ci < candidates.length; ci++) {
-          if (MediaRecorder.isTypeSupported(candidates[ci])) { chosen = candidates[ci]; break }
-        }
+    // マイクが生きていればそのまま使う。死んでいれば取り直す。
+    if (streamIsLive(micStream)) {
+      if (!beginRecording(btn)) {
+        // 方法3: マイクごと取り直す
+        log('方法3: マイクを取り直します')
+        releaseMic()
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
+          micStream = st
+          strategyUsed = 'マイクを取り直して作成'
+          if (!beginRecording(btn)) {
+            setOut('out-rec', mark(false, 'どの方法でも録音を開始できませんでした') +
+              '<br><span class="hint">下のログを結果と一緒に送ってください。</span>')
+            results.rec = '失敗(全方法)'
+          }
+        }).catch(function (err) {
+          setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name))
+          results.rec = 'マイクエラー: ' + err.name
+          log('録音: マイクエラー ' + err.name + ' — ' + (err.message || ''))
+        })
       }
-
-      try {
-        recorder = chosen ? new MediaRecorder(stream, { mimeType: chosen }) : new MediaRecorder(stream)
-      } catch (err) {
-        closeStream()
-        setOut('out-rec', mark(false, '録音を開始できません: ' + err.name))
-        results.rec = 'エラー: ' + err.name
-        log('録音 エラー: ' + err.name + ' — ' + err.message)
-        return
-      }
-      recorder.ondataavailable = function (e) { if (e.data.size > 0) chunks.push(e.data) }
-      recorder.onstop = function () {
-        // 録音が終わったらマイクを必ず解放する。
-        // これを怠ると、録音マークが消えず、2回目の録音も失敗する。
-        closeStream()
-        recorder = null
-
-        var blob = new Blob(chunks, { type: lastMimeType || 'audio/webm' })
-        var p = el('player')
-        if (lastUrl) URL.revokeObjectURL(lastUrl) // 前回の録音を破棄する
-        lastUrl = URL.createObjectURL(blob)
-        p.src = lastUrl
-        p.hidden = false
-        btn.textContent = '録音をはじめる'
-        setOut('out-rec', mark(true, '録音できました') +
-          '<br><span class="hint">形式: ' + (lastMimeType || '不明') +
-          ' / サイズ: ' + Math.round(blob.size / 1024) + 'KB</span>' +
-          '<br><span class="hint">下の再生ボタンで、自分の声が聞こえるか確かめてください。</span>')
-        results.rec = '成功 / 形式 ' + (lastMimeType || '不明') + ' / ' + Math.round(blob.size / 1024) + 'KB'
-        log('録音: 完了。形式=' + lastMimeType + ' サイズ=' + blob.size + 'B')
-      }
-      recorder.start()
-      lastMimeType = chosen || recorder.mimeType || ''
-      btn.textContent = '■ 録音を止める'
-      setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
-      log('録音: 開始')
+      return
     }
 
-    // ★録音のたびにマイクを新しく取り直す。
-    //   前回の接続を使い回すと、iOS Safari では2回目以降が必ず失敗する。
-    //   利用者は録り直しを何度も行うため、ここは毎回新規取得にしている。
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(go).catch(function (err) {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
+      micStream = st
+      recorder = null
+      if (!beginRecording(btn)) {
+        setOut('out-rec', mark(false, '録音を開始できませんでした') +
+          '<br><span class="hint">下のログを結果と一緒に送ってください。</span>')
+        results.rec = '失敗(開始できず)'
+      }
+    }).catch(function (err) {
       setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name) +
         '<br><span class="hint">' + (err.message || '') + '</span>')
       results.rec = 'マイクエラー: ' + err.name
       log('録音: マイクエラー ' + err.name + ' — ' + (err.message || ''))
     })
   })
+
+  // 画面を閉じるときにマイクを解放する
+  window.addEventListener('pagehide', releaseMic)
 
   /* ---------- 4. 音声認識 ---------- */
 
@@ -503,7 +608,13 @@ audio { width: 100%; margin-top: 10px; }
       log('音声認識: 非対応(SpeechRecognition が存在しません)')
       return
     }
-    if (recog) { try { recog.stop() } catch (e) {} recog = null; btn.textContent = '話してみる'; return }
+    if (recog) {
+      // stop() は「ここまでの内容で確定して」という合図。
+      // abort() と違い、認識結果を捨てないのでこちらを使う。
+      try { recog.stop() } catch (e) { /* すでに止まっていれば何もしない */ }
+      btn.textContent = '確定を待っています…'
+      return // onend の中で後片付けする
+    }
 
     try {
       recog = new SR()
@@ -520,6 +631,7 @@ audio { width: 100%; margin-top: 10px; }
     recog.maxAlternatives = 1
 
     var got = ''
+    var interimText = ''   // 確定前の認識結果。iOS では確定が来ないことがある
     var started = false
 
     recog.onstart = function () { started = true; log('音声認識: 開始') }
@@ -533,6 +645,7 @@ audio { width: 100%; margin-top: 10px; }
         if (e.results[i].isFinal) got += t
         else interim += t
       }
+      if (interim) interimText = interim
       var conf = e.results[e.results.length - 1][0].confidence
       setOut('out-sr', '<strong>' + (got || interim) + '</strong>' +
         (got ? '<br><span class="hint">確からしさ: ' +
@@ -557,7 +670,16 @@ audio { width: 100%; margin-top: 10px; }
       if (got) {
         setOut('out-sr', mark(true, '認識できました') + '<br><strong>' + got + '</strong>')
         results.sr = '成功: 「' + got + '」'
-        log('音声認識: 終了。結果「' + got + '」')
+        log('音声認識: 終了。確定結果「' + got + '」')
+      } else if (interimText) {
+        // ★iOS では、認識自体は成功していても「確定」の合図が来ないまま
+        //   終わることがある。確定を待つと、正しく聞き取れているのに
+        //   「認識されませんでした」と表示されてしまうため、
+        //   確定前の結果をそのまま採用する。
+        setOut('out-sr', mark(true, '認識できました') + '<br><strong>' + interimText + '</strong>' +
+          '<br><span class="hint">※この端末は「確定」の合図を返さないため、認識途中の結果を採用しました</span>')
+        results.sr = '成功(確定なし): 「' + interimText + '」'
+        log('音声認識: 終了。確定は来なかったが認識結果あり「' + interimText + '」')
       } else if (started && !results.sr) {
         setOut('out-sr', mark(null, '起動はしましたが、何も認識されませんでした') +
           '<br><span class="hint">もう一度、はっきりと話してみてください。</span>')
