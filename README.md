@@ -194,6 +194,15 @@ English-AI-System/
     └── data/                  ← カテゴリ定義、例文、サンプルデータ
 ```
 
+### 関連ドキュメント
+
+| ファイル | 内容 |
+|---|---|
+| [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) | 要件・仕様書 |
+| [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) | 用語集とファイルの説明 |
+| [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) | **Supabase を始める手順**(アカウント作成から) |
+| [`docs/PRONUNCIATION_OPTIONS.md`](docs/PRONUNCIATION_OPTIONS.md) | **発音評価の3案の比較と推奨** |
+
 ### これからやること
 
 1. 発音評価の方式を決める(仕様書 第5.1章の3案から選ぶ)
