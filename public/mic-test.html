@@ -416,8 +416,7 @@ audio { width: 100%; margin-top: 10px; }
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
       var track = stream.getAudioTracks()[0]
       var label = track ? track.label || '(名前なし)' : '不明'
-      // 確認できたら必ず閉じる。
-      // マイクを掴んだままだと iOS では音声認識が aborted で失敗する。
+      // 確認だけなので閉じる。録音時に改めて組み立てる。
       stream.getTracks().forEach(function (t) { t.stop() })
       setOut('out-mic', mark(true, 'マイクを使えます') +
         '<br><span class="hint">入力: ' + label + '</span>')
@@ -445,16 +444,28 @@ audio { width: 100%; margin-top: 10px; }
    *   掴んだままだと、iOS では音声認識が aborted で失敗する。
    */
   var TARGET_RATE = 16000
-  var recSession = null   // 録音中の状態
   var lastUrl = null
 
   /**
-   * ★AudioContext はページに1つだけ作り、close() しない。
-   *   録音のたびに作り直すと、iOS Safari では2回目以降が
-   *   すべて無音(音量0)になり、音声認識まで失敗するようになる。
-   *   録音していない間は suspend() して、音声認識に資源を明け渡す。
+   * ★AudioContext もマイクへの接続も、1組だけ作って使い回す。
+   *
+   *   実機 iOS 18.7 で判明したこと:
+   *     - AudioContext を録音のたびに作り直す → 2回目から無音
+   *     - 接続部品(getUserMedia / createMediaStreamSource)を
+   *       録音のたびに作り直す → 数回〜十数回で無音になる
+   *   どちらもエラーが出ないため気づきにくい。
+   *
+   *   対処: 最初の1回だけ組み立て、以後は「音を集めるかどうか」を
+   *         切り替えるだけにする。無音だった場合は壊れたとみなして
+   *         組み立て直す。
    */
   var audioCtx = null
+  var micStream = null
+  var sourceNode = null
+  var processorNode = null
+  var silenceNode = null
+  var collector = null     // 録音中に音を集める入れ物
+  var graphBuilds = 0      // 何回組み立て直したか(診断用)
 
   function getAudioCtx() {
     var AC = window.AudioContext || window.webkitAudioContext
@@ -467,6 +478,61 @@ audio { width: 100%; margin-top: 10px; }
     if (audioCtx && audioCtx.state === 'running') {
       try { audioCtx.suspend() } catch (e) {}
     }
+  }
+
+  function teardownGraph() {
+    if (processorNode) processorNode.onaudioprocess = null
+    try {
+      if (sourceNode) sourceNode.disconnect()
+      if (processorNode) processorNode.disconnect()
+      if (silenceNode) silenceNode.disconnect()
+    } catch (e) {}
+    if (micStream) micStream.getTracks().forEach(function (t) { t.stop() })
+    sourceNode = null; processorNode = null; silenceNode = null; micStream = null
+    collector = null
+  }
+
+  function releaseMic() { teardownGraph(); suspendAudio() }
+
+  function graphIsAlive() {
+    return !!(micStream && micStream.active &&
+      micStream.getAudioTracks().some(function (t) { return t.readyState === 'live' }) &&
+      sourceNode && processorNode)
+  }
+
+  /** マイクへの接続を用意する。done(ctx) / fail(err) を呼ぶ。 */
+  function ensureGraph(done, fail) {
+    var ctx = getAudioCtx()
+    if (!ctx) { fail(new Error('AudioContext 非対応')); return }
+
+    var build = function () {
+      if (graphIsAlive()) { done(ctx); return }
+      teardownGraph()
+      navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      }).then(function (stream) {
+        micStream = stream
+        sourceNode = ctx.createMediaStreamSource(stream)
+        processorNode = ctx.createScriptProcessor(4096, 1, 1)
+        silenceNode = ctx.createGain()
+        silenceNode.gain.value = 0
+        processorNode.onaudioprocess = function (e) {
+          if (!collector) return
+          var input = e.inputBuffer.getChannelData(0)
+          collector.buffers.push(new Float32Array(input))
+          collector.total += input.length
+        }
+        sourceNode.connect(processorNode)
+        processorNode.connect(silenceNode)
+        silenceNode.connect(ctx.destination)
+        graphBuilds++
+        log('マイクへの接続を組み立てました(' + graphBuilds + '回目 / ' + ctx.sampleRate + 'Hz)')
+        done(ctx)
+      }).catch(fail)
+    }
+
+    if (ctx.state !== 'running') ctx.resume().then(build).catch(build)
+    else build()
   }
 
   function encodeWav(samples, rate) {
@@ -500,105 +566,71 @@ audio { width: 100%; margin-top: 10px; }
   }
 
   function stopRecordingSession(btn) {
-    if (!recSession) return
-    var sess = recSession
-    recSession = null
+    if (!collector) return
+    var mine = collector
+    collector = null
+    var rate = audioCtx.sampleRate
 
-    // マイクと音声処理を完全に解放する
-    sess.processor.onaudioprocess = null
-    try { sess.source.disconnect(); sess.processor.disconnect(); sess.silence.disconnect() } catch (e) {}
-    sess.stream.getTracks().forEach(function (t) { t.stop() })
-    var rate = sess.ctx.sampleRate
-    // close() しない。閉じて作り直すと iOS で無音になる。休止するだけにする。
-    suspendAudio()
-
-    // 集めた音声を1本につないで WAV にする
-    var merged = new Float32Array(sess.total)
+    var merged = new Float32Array(mine.total)
     var off = 0
-    sess.buffers.forEach(function (b) { merged.set(b, off); off += b.length })
+    mine.buffers.forEach(function (b) { merged.set(b, off); off += b.length })
     var samples = downsample(merged, rate, TARGET_RATE)
-    var blob = encodeWav(samples, TARGET_RATE)
 
     var peak = 0
     for (var i = 0; i < samples.length; i++) { var a = Math.abs(samples[i]); if (a > peak) peak = a }
-    if (peak > 1) peak = 1   // 表示が101%にならないよう上限を1にする
+    if (peak > 1) peak = 1
     var seconds = (samples.length / TARGET_RATE).toFixed(1)
 
     btn.textContent = '録音をはじめる'
+
+    if (samples.length === 0) {
+      teardownGraph()
+      setOut('out-rec', mark(false, '音声を取り込めませんでした') +
+        '<br><span class="hint">マイクを繋ぎ直しました。もう一度お試しください。</span>')
+      results.rec = '失敗(音声なし)'
+      log('録音: 音声を取り込めなかった。接続を解体')
+      return
+    }
+
+    if (peak < 0.01) {
+      // 無音は接続が壊れた合図。解体して、次回に組み立て直す。
+      teardownGraph()
+      setOut('out-rec', mark(null, '録音はできましたが、ほぼ無音でした') +
+        '<br><span class="hint">' + seconds + '秒 / 音量 0%</span>' +
+        '<br><span class="hint"><strong>マイクを繋ぎ直しました。もう一度録音してみてください。</strong>' +
+        'それでも無音の場合、他のアプリや通話がマイクを使っていないかご確認ください。</span>')
+      results.rec = '無音(' + seconds + '秒) / 組み立て' + graphBuilds + '回目'
+      log('録音: 無音だったため接続を解体。組み立て' + graphBuilds + '回目で発生')
+      return
+    }
+
+    var blob = encodeWav(samples, TARGET_RATE)
     var p = el('player')
     if (lastUrl) URL.revokeObjectURL(lastUrl)
     lastUrl = URL.createObjectURL(blob)
     p.src = lastUrl
     p.hidden = false
 
-    if (samples.length === 0) {
-      setOut('out-rec', mark(false, '音声を取り込めませんでした'))
-      results.rec = '失敗(音声なし)'
-      log('録音: 音声を取り込めなかった')
-      return
-    }
-    if (peak < 0.01) {
-      setOut('out-rec', mark(null, '録音はできましたが、ほぼ無音でした') +
-        '<br><span class="hint">' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '%</span>' +
-        '<br><span class="hint">マイクに向かって話しても無音になる場合、' +
-        '他のアプリや通話がマイクを使っていないかご確認ください。</span>')
-      results.rec = '無音(' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '%)'
-      log('録音: 完了したが無音。' + seconds + '秒 音量=' + peak.toFixed(3))
-      return
-    }
-
     setOut('out-rec', mark(true, '録音できました') +
       '<br><span class="hint">形式: audio/wav / 長さ: ' + seconds + '秒 / 音量: ' + Math.round(peak * 100) + '%' +
       ' / サイズ: ' + Math.round(blob.size / 1024) + 'KB</span>' +
       '<br><span class="hint">下の再生ボタンで、自分の声が聞こえるか確かめてください。</span>')
-    results.rec = '成功 / WAV / ' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '% / ' + Math.round(blob.size / 1024) + 'KB'
+    results.rec = '成功 / WAV / ' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '% / 組み立て' + graphBuilds + '回目'
     log('録音: 完了。' + seconds + '秒 音量=' + Math.round(peak * 100) + '% サイズ=' + blob.size + 'B')
   }
 
   el('btn-rec').addEventListener('click', function () {
     var btn = this
 
-    if (recSession) { stopRecordingSession(btn); return }
-
-    var ctx = getAudioCtx()
-    if (!ctx) {
-      setOut('out-rec', mark(false, 'この環境は音声処理に対応していません'))
-      results.rec = 'AudioContext 非対応'
-      return
-    }
+    if (collector) { stopRecordingSession(btn); return }
 
     setOut('out-rec', '<em>マイクを準備しています…</em>')
-    navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-    }).then(function (stream) {
-      var begin = function () {
-        var source = ctx.createMediaStreamSource(stream)
-        var processor = ctx.createScriptProcessor(4096, 1, 1)
-        var silence = ctx.createGain()
-        silence.gain.value = 0   // 自分の声が返らないよう音量ゼロで出口につなぐ
-
-        var buffers = [], total = 0
-        processor.onaudioprocess = function (e) {
-          var input = e.inputBuffer.getChannelData(0)
-          buffers.push(new Float32Array(input))
-          total += input.length
-        }
-        source.connect(processor); processor.connect(silence); silence.connect(ctx.destination)
-
-        recSession = { ctx: ctx, stream: stream, source: source, processor: processor,
-                       silence: silence, buffers: buffers, total: 0 }
-        // total は閉じ込みのため参照で持てないので、停止時に数え直す
-        Object.defineProperty(recSession, 'total', { get: function () { return total } })
-
-        btn.textContent = '■ 録音を止める'
-        setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
-        log('録音: 開始(Web Audio / ' + ctx.sampleRate + 'Hz / 状態=' + ctx.state + ')')
-      }
-      // iOS では操作のあとに resume しないと音が取れない。
-      // 前の録音のあと休止しているため、毎回ここで動かし直す。
-      if (ctx.state !== 'running') ctx.resume().then(begin).catch(begin)
-      else begin()
-    }).catch(function (err) {
+    ensureGraph(function () {
+      collector = { buffers: [], total: 0 }
+      btn.textContent = '■ 録音を止める'
+      setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
+      log('録音: 開始(組み立て' + graphBuilds + '回目の接続を使用)')
+    }, function (err) {
       setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name) +
         '<br><span class="hint">' + (err.message || '') + '</span>')
       results.rec = 'マイクエラー: ' + err.name
@@ -606,9 +638,7 @@ audio { width: 100%; margin-top: 10px; }
     })
   })
 
-  window.addEventListener('pagehide', function () {
-    if (recSession) { try { recSession.stream.getTracks().forEach(function (t) { t.stop() }) } catch (e) {} }
-  })
+  window.addEventListener('pagehide', releaseMic)
 
   /* ---------- 4. 音声認識 ---------- */
 
@@ -704,10 +734,10 @@ audio { width: 100%; margin-top: 10px; }
       recog = null
     }
 
-    // ★音声認識を始める前に、録音側の音声処理を休止する。
-    //   休止しないと iOS では aborted / audio-capture で失敗する。
-    suspendAudio()
-    if (recSession) { log('音声認識: 録音中だったため停止します'); stopRecordingSession(el('btn-rec')) }
+    // ★音声認識を始める前に、マイクを完全に手放す。
+    //   掴んだままだと iOS では aborted / audio-capture で失敗する。
+    if (collector) { log('音声認識: 録音中だったため停止します'); stopRecordingSession(el('btn-rec')) }
+    releaseMic()
 
     try {
       recog.start()

@@ -250,8 +250,8 @@ function PronunciationPractice({ state, setState, learnerId }) {
   // 録音の途中で画面を離れた場合に、マイクを解放する。
   // 解放し忘れると録音マークが消えず、次に戻ってきたとき録音を開始できない。
   // 練習画面を離れるときにマイクを解放する。
-  // 録り直しを速くするため練習中はマイクを掴んだままにしているので、
-  // ここで解放しないと録音マークが出続けてしまう。
+  // 録り直しを速くするため、練習中はマイクへの接続を保持している。
+  // ここで解放しないと、端末の録音マークが出続けてしまう。
   useEffect(() => {
     const release = () => releaseMicrophone()
     // 画面を閉じた・バックグラウンドに回った場合にも解放する
@@ -305,8 +305,27 @@ function PronunciationPractice({ state, setState, learnerId }) {
   const handleRecordStop = async () => {
     if (!recorder) return
     setStatus('scoring')
-    const { blob, url } = await recorder.stop()
+    const { blob, url, isSilent, durationSeconds } = await recorder.stop()
     setRecorder(null)
+
+    // 無音だった場合は採点しない。採点しても意味のない数字が出るだけで、
+    // 利用者は「録音できていない」ことに気づけないため。
+    if (isSilent) {
+      setStatus('')
+      setResult(null)
+      setRecordedUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      URL.revokeObjectURL(url)
+      setError(
+        durationSeconds < 0.5
+          ? '録音が短すぎました。ボタンを押してから話し始めてください。'
+          : '音が入っていませんでした。マイクを繋ぎ直したので、もう一度お試しください。',
+      )
+      return
+    }
+
     setRecordedUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev)
       return url
