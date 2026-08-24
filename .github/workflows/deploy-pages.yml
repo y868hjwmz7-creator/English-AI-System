@@ -1,0 +1,70 @@
+# ------------------------------------------------------------------
+# このファイルの役目
+#
+# GitHub に変更が入るたびに、GitHub のサーバー上でアプリを組み立てて
+# 「GitHub Pages」というウェブサイトとして公開します。
+#
+# つまり、あなたのパソコンには何もインストールしなくても、
+# ブラウザで URL を開くだけでアプリを使えるようになります。
+#
+# 【最初に1回だけ必要な設定】
+#   GitHub のリポジトリ画面 → Settings → Pages を開き、
+#   「Source」を "GitHub Actions" に変更してください。
+#   その後このワークフローが動くと、公開URLが表示されます。
+#
+#   公開URLの形: https://<あなたのユーザー名>.github.io/English-AI-System/
+#
+# 【注意】
+#   GitHub Pages は公開ウェブサイトです。リポジトリが Private の場合、
+#   無料プランでは Pages を使えません(Public にするか有料プランが必要)。
+#   会社の情報を含めない試作段階のうちは Public でも問題ありませんが、
+#   気になる場合は README の「1ファイル版」の方法をお使いください。
+# ------------------------------------------------------------------
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # GitHubの画面から手動で実行することもできます
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: アプリを組み立てる
+        run: npm run build
+        env:
+          # GitHub Pages はリポジトリ名のフォルダの下で配信されるため、その指定
+          BASE_PATH: /${{ github.event.repository.name }}/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

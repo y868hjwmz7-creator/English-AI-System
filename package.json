@@ -1,0 +1,23 @@
+{
+  "name": "english-ai-system",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "英語学習の記録・発音練習アプリと、指導者向け管理ダッシュボード",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:pages": "BASE_PATH=/English-AI-System/ vite build",
+    "build:single": "BUILD_SINGLE=1 vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
