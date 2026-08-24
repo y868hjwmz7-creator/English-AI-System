@@ -19,3 +19,4 @@ npm-debug.log*
 
 # 一時ファイル(Artifact公開用に生成したもの)
 .artifact.html
+.artifact-mictest.html
