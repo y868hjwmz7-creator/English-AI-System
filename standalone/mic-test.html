@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>音声機能の動作確認</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f7f6f3; --card: #fcfcfb; --border: #e0dfda; --track: #f0efec;
+  --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #85847e;
+  --ok: #1baf7a; --ng: #e34948; --warn: #eda100; --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #131312; --card: #1a1a19; --border: #383835; --track: #262625;
+    --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8d8c84;
+    --ok: #199e70; --ng: #e66767; --warn: #c98500; --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #131312; --card: #1a1a19; --border: #383835; --track: #262625;
+  --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8d8c84;
+  --ok: #199e70; --ng: #e66767; --warn: #c98500; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
+  font-size: 15px; line-height: 1.7;
+}
+.wrap {
+  max-width: 640px; margin: 0 auto;
+  padding: 24px max(16px, env(safe-area-inset-left)) max(48px, env(safe-area-inset-bottom));
+}
+h1 { font-size: 20px; margin: 0 0 4px; }
+.lead { color: var(--ink-2); font-size: 13px; margin: 0 0 20px; }
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; margin-bottom: 14px;
+}
+h2 { font-size: 15px; margin: 0 0 10px; }
+.step { display: inline-block; background: var(--accent); color: #fff;
+  width: 22px; height: 22px; line-height: 22px; text-align: center;
+  border-radius: 50%; font-size: 12px; font-weight: 700; margin-right: 6px; }
+p { margin: 0 0 10px; }
+.hint { color: var(--ink-3); font-size: 12px; line-height: 1.6; }
+button {
+  font: inherit; font-size: 16px; padding: 12px 18px; min-height: 48px;
+  border-radius: 8px; border: 1px solid var(--accent); background: var(--accent);
+  color: #fff; font-weight: 600; cursor: pointer; width: 100%; margin-top: 4px;
+}
+button.sub { background: var(--card); color: var(--ink); border-color: var(--border); font-weight: 500; }
+button:disabled { opacity: .45; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.rows li:last-child { border-bottom: 0; }
+.rows .k { color: var(--ink-2); }
+.rows .v { text-align: right; font-weight: 600; word-break: break-word; }
+.ok { color: var(--ok); } .ng { color: var(--ng); } .warn { color: var(--warn); }
+.result {
+  margin-top: 12px; padding: 12px; border-radius: 8px;
+  background: var(--track); font-size: 15px; min-height: 52px; word-break: break-word;
+}
+.result em { color: var(--ink-3); font-style: normal; font-size: 13px; }
+.target { font-size: 18px; font-weight: 700; margin: 6px 0 12px; }
+.banner { border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
+.banner.ng { background: color-mix(in srgb, var(--ng) 12%, var(--card)); border: 1px solid var(--ng); color: var(--ink); }
+.banner.warn { background: color-mix(in srgb, var(--warn) 14%, var(--card)); border: 1px solid var(--warn); color: var(--ink); }
+pre {
+  background: var(--track); border-radius: 8px; padding: 12px; font-size: 11px;
+  line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  margin: 10px 0 0; max-height: 260px; overflow-y: auto;
+}
+audio { width: 100%; margin-top: 10px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>音声機能の動作確認</h1>
+<p class="lead">
+  このページは、お使いの端末で <strong>読み上げ・録音・音声認識</strong> が
+  実際に動くかを確かめるためのものです。1〜4を上から順に試して、
+  最後に結果をコピーして送ってください。
+</p>
+
+<div id="banner"></div>
+
+<div class="card">
+  <h2>この端末の状況</h2>
+  <ul class="rows" id="env"></ul>
+</div>
+
+<div class="card">
+  <h2><span class="step">1</span>読み上げ(お手本の音声)</h2>
+  <p class="hint">英文を読み上げます。音量を上げて、消音スイッチも解除してください。</p>
+  <button id="btn-speak">お手本を聞く</button>
+  <div class="result" id="out-speak"><em>まだ試していません</em></div>
+</div>
+
+<div class="card">
+  <h2><span class="step">2</span>マイクの許可</h2>
+  <p class="hint">押すと許可を求める表示が出ます。「許可」を選んでください。</p>
+  <button id="btn-mic">マイクの使用を許可する</button>
+  <div class="result" id="out-mic"><em>まだ試していません</em></div>
+</div>
+
+<div class="card">
+  <h2><span class="step">3</span>録音して聞き返す</h2>
+  <p class="hint">押している間ではなく、押すと録音が始まります。もう一度押すと止まります。</p>
+  <button id="btn-rec">録音をはじめる</button>
+  <div class="result" id="out-rec"><em>まだ試していません</em></div>
+  <audio id="player" controls hidden></audio>
+</div>
+
+<div class="card">
+  <h2><span class="step">4</span>音声認識 — ここが本命です</h2>
+  <p class="hint">下の英文を声に出して読んでください。聞き取った文字が表示されれば成功です。</p>
+  <p class="target">I usually walk to the station in the morning.</p>
+  <button id="btn-rec2">話してみる</button>
+  <div class="result" id="out-sr"><em>まだ試していません</em></div>
+</div>
+
+<div class="card">
+  <h2>結果</h2>
+  <p class="hint">下のボタンでコピーして、そのままチャットに貼ってください。</p>
+  <button class="sub" id="btn-copy">結果をコピーする</button>
+  <pre id="log"></pre>
+</div>
+
+</div>
+
+<script>
+(function () {
+  'use strict'
+
+  var logLines = []
+  var results = {}
+  var el = function (id) { return document.getElementById(id) }
+
+  function log(msg) {
+    var t = new Date().toLocaleTimeString('ja-JP')
+    logLines.push('[' + t + '] ' + msg)
+    el('log').textContent = logLines.join('\n')
+    el('log').scrollTop = el('log').scrollHeight
+  }
+
+  function setOut(id, html) { el(id).innerHTML = html }
+  function mark(good, text) {
+    var cls = good === true ? 'ok' : good === false ? 'ng' : 'warn'
+    var sym = good === true ? '✓' : good === false ? '✕' : '△'
+    return '<span class="' + cls + '">' + sym + ' ' + text + '</span>'
+  }
+
+  /* ---------- 環境の確認 ---------- */
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  var inIframe = window.self !== window.top
+  var ua = navigator.userAgent
+
+  function browserName() {
+    if (/CriOS/.test(ua)) return 'Chrome (iOS)'
+    if (/FxiOS/.test(ua)) return 'Firefox (iOS)'
+    if (/EdgiOS/.test(ua)) return 'Edge (iOS)'
+    if (/Edg\//.test(ua)) return 'Edge'
+    if (/Chrome\//.test(ua)) return 'Chrome'
+    if (/Safari\//.test(ua)) return 'Safari'
+    return 'その他'
+  }
+  function osName() {
+    if (/iPhone|iPad|iPod/.test(ua)) {
+      var m = ua.match(/OS (\d+)[_.](\d+)/)
+      return 'iOS ' + (m ? m[1] + '.' + m[2] : '')
+    }
+    if (/Mac OS X/.test(ua)) return 'macOS'
+    if (/Windows/.test(ua)) return 'Windows'
+    if (/Android/.test(ua)) return 'Android'
+    return 'その他'
+  }
+
+  results.os = osName()
+  results.browser = browserName()
+  results.secure = window.isSecureContext
+  results.iframe = inIframe
+  results.hasSR = !!SR
+  results.hasTTS = 'speechSynthesis' in window
+  results.hasRec = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && 'MediaRecorder' in window
+
+  var rows = [
+    ['OS', results.os, null],
+    ['ブラウザ', results.browser, null],
+    ['アドレス', location.protocol, location.protocol === 'https:' || location.hostname === 'localhost'],
+    ['読み上げ機能', results.hasTTS ? 'あり' : 'なし', results.hasTTS],
+    ['録音機能', results.hasRec ? 'あり' : 'なし', results.hasRec],
+    ['音声認識機能', results.hasSR ? 'あり' : 'なし', results.hasSR],
+  ]
+  el('env').innerHTML = rows.map(function (r) {
+    var v = r[2] === null ? r[1] : mark(r[2], r[1])
+    return '<li><span class="k">' + r[0] + '</span><span class="v">' + v + '</span></li>'
+  }).join('')
+
+  log('OS: ' + results.os + ' / ブラウザ: ' + results.browser)
+  log('userAgent: ' + ua)
+  log('https: ' + window.isSecureContext + ' / iframe内: ' + inIframe)
+  log('読み上げ: ' + results.hasTTS + ' / 録音: ' + results.hasRec + ' / 音声認識: ' + results.hasSR)
+
+  var banners = []
+  if (location.protocol === 'file:') {
+    banners.push('<div class="banner ng"><strong>このままでは正しく確認できません。</strong>' +
+      'ファイルを直接開いているため(<code>file://</code>)、マイクが使えません。' +
+      '<code>https://</code> で始まるURLから開き直してください。</div>')
+  }
+  if (inIframe) {
+    banners.push('<div class="banner warn"><strong>ご注意:</strong> ' +
+      'このページは別のページの中に埋め込まれた状態で開かれています。' +
+      'この状態でマイクが使えない場合、原因は埋め込み側の制限であって、' +
+      '<strong>端末やブラウザの問題とは限りません</strong>。' +
+      '正確に確かめるには、このページを単独のURLとして開いてください。</div>')
+  }
+  el('banner').innerHTML = banners.join('')
+
+  /* ---------- 1. 読み上げ ---------- */
+
+  el('btn-speak').addEventListener('click', function () {
+    if (!results.hasTTS) {
+      setOut('out-speak', mark(false, 'この端末は読み上げに対応していません'))
+      results.tts = 'なし'
+      log('TTS: 非対応')
+      return
+    }
+    var voices = window.speechSynthesis.getVoices().filter(function (v) {
+      return v.lang && v.lang.toLowerCase().indexOf('en') === 0
+    })
+    var u = new SpeechSynthesisUtterance('I usually walk to the station in the morning.')
+    u.lang = 'en-US'
+    u.rate = 0.9
+    if (voices.length) u.voice = voices[0]
+    u.onstart = function () { log('TTS: 再生開始') }
+    u.onend = function () {
+      setOut('out-speak', mark(true, '再生しました') +
+        '<br><span class="hint">使われた声: ' + (voices[0] ? voices[0].name + ' (' + voices[0].lang + ')' : '既定の声') +
+        ' / 英語の声 ' + voices.length + '個</span>')
+      results.tts = '成功 / 英語の声 ' + voices.length + '個 / ' + (voices[0] ? voices[0].name : '既定')
+      log('TTS: 再生完了。英語の声 ' + voices.length + '個: ' +
+        voices.slice(0, 6).map(function (v) { return v.name + '(' + v.lang + ')' }).join(', '))
+    }
+    u.onerror = function (e) {
+      setOut('out-speak', mark(false, 'エラー: ' + e.error))
+      results.tts = 'エラー: ' + e.error
+      log('TTS エラー: ' + e.error)
+    }
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.speak(u)
+    setOut('out-speak', '<em>再生中…</em>')
+  })
+
+  /* ---------- 2. マイクの許可 ---------- */
+
+  var micStream = null
+
+  el('btn-mic').addEventListener('click', function () {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setOut('out-mic', mark(false, 'この環境ではマイクを使えません'))
+      results.mic = 'getUserMedia 非対応'
+      log('マイク: getUserMedia 非対応')
+      return
+    }
+    setOut('out-mic', '<em>許可を待っています…</em>')
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      micStream = stream
+      var track = stream.getAudioTracks()[0]
+      setOut('out-mic', mark(true, 'マイクを使えます') +
+        '<br><span class="hint">入力: ' + (track ? track.label || '(名前なし)' : '不明') + '</span>')
+      results.mic = '成功'
+      log('マイク: 許可されました。入力=' + (track ? track.label : '?'))
+      el('btn-rec').disabled = false
+    }).catch(function (err) {
+      setOut('out-mic', mark(false, 'エラー: ' + err.name) +
+        '<br><span class="hint">' + (err.message || '') + '</span>')
+      results.mic = 'エラー: ' + err.name + ' — ' + (err.message || '')
+      log('マイク エラー: ' + err.name + ' — ' + (err.message || ''))
+    })
+  })
+
+  /* ---------- 3. 録音 ---------- */
+
+  var recorder = null
+  var chunks = []
+
+  el('btn-rec').addEventListener('click', function () {
+    var btn = this
+    if (recorder && recorder.state === 'recording') {
+      recorder.stop()
+      return
+    }
+    if (!('MediaRecorder' in window)) {
+      setOut('out-rec', mark(false, 'この環境は録音に対応していません'))
+      results.rec = 'MediaRecorder 非対応'
+      log('録音: MediaRecorder 非対応')
+      return
+    }
+    var go = function (stream) {
+      chunks = []
+      try {
+        recorder = new MediaRecorder(stream)
+      } catch (err) {
+        setOut('out-rec', mark(false, '録音を開始できません: ' + err.name))
+        results.rec = 'エラー: ' + err.name
+        log('録音 エラー: ' + err.name + ' — ' + err.message)
+        return
+      }
+      recorder.ondataavailable = function (e) { if (e.data.size > 0) chunks.push(e.data) }
+      recorder.onstop = function () {
+        var blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
+        var url = URL.createObjectURL(blob)
+        var p = el('player')
+        p.src = url
+        p.hidden = false
+        btn.textContent = '録音をはじめる'
+        setOut('out-rec', mark(true, '録音できました') +
+          '<br><span class="hint">形式: ' + (recorder.mimeType || '不明') +
+          ' / サイズ: ' + Math.round(blob.size / 1024) + 'KB</span>' +
+          '<br><span class="hint">下の再生ボタンで、自分の声が聞こえるか確かめてください。</span>')
+        results.rec = '成功 / 形式 ' + (recorder.mimeType || '不明') + ' / ' + Math.round(blob.size / 1024) + 'KB'
+        log('録音: 完了。形式=' + recorder.mimeType + ' サイズ=' + blob.size + 'B')
+      }
+      recorder.start()
+      btn.textContent = '■ 録音を止める'
+      setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
+      log('録音: 開始')
+    }
+
+    if (micStream && micStream.active) {
+      go(micStream)
+    } else {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
+        micStream = s
+        go(s)
+      }).catch(function (err) {
+        setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name))
+        results.rec = 'マイクエラー: ' + err.name
+        log('録音: マイクエラー ' + err.name)
+      })
+    }
+  })
+
+  /* ---------- 4. 音声認識 ---------- */
+
+  var recog = null
+
+  el('btn-rec2').addEventListener('click', function () {
+    var btn = this
+    if (!SR) {
+      setOut('out-sr', mark(false, 'この端末・ブラウザには音声認識機能がありません') +
+        '<br><span class="hint">この場合、案1(ブラウザの音声認識で採点する方法)はこの端末では使えません。</span>')
+      results.sr = '非対応'
+      log('音声認識: 非対応(SpeechRecognition が存在しません)')
+      return
+    }
+    if (recog) { try { recog.stop() } catch (e) {} recog = null; btn.textContent = '話してみる'; return }
+
+    try {
+      recog = new SR()
+    } catch (err) {
+      setOut('out-sr', mark(false, '起動できません: ' + err.name))
+      results.sr = '起動エラー: ' + err.name
+      log('音声認識: 起動エラー ' + err.name + ' — ' + err.message)
+      return
+    }
+
+    recog.lang = 'en-US'
+    recog.interimResults = true
+    recog.continuous = false
+    recog.maxAlternatives = 1
+
+    var got = ''
+    var started = false
+
+    recog.onstart = function () { started = true; log('音声認識: 開始') }
+    recog.onaudiostart = function () { log('音声認識: 音の取り込み開始') }
+    recog.onspeechstart = function () { log('音声認識: 発話を検出') }
+
+    recog.onresult = function (e) {
+      var interim = ''
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        var t = e.results[i][0].transcript
+        if (e.results[i].isFinal) got += t
+        else interim += t
+      }
+      var conf = e.results[e.results.length - 1][0].confidence
+      setOut('out-sr', '<strong>' + (got || interim) + '</strong>' +
+        (got ? '<br><span class="hint">確からしさ: ' +
+          (typeof conf === 'number' && conf > 0 ? Math.round(conf * 100) + '%' : '不明') + '</span>' : ''))
+      log('音声認識: ' + (got ? '確定「' + got + '」' : '認識中「' + interim + '」'))
+    }
+
+    recog.onerror = function (e) {
+      var msg = { 'no-speech': '声が検出されませんでした', 'audio-capture': 'マイクを使えませんでした',
+        'not-allowed': 'マイクの使用が許可されていません', 'network': '通信エラー',
+        'service-not-allowed': 'この環境では音声認識が許可されていません',
+        'aborted': '中断されました' }[e.error] || e.error
+      setOut('out-sr', mark(false, msg) + '<br><span class="hint">エラー名: ' + e.error + '</span>')
+      results.sr = 'エラー: ' + e.error + ' (' + msg + ')'
+      log('音声認識 エラー: ' + e.error)
+      btn.textContent = '話してみる'
+      recog = null
+    }
+
+    recog.onend = function () {
+      btn.textContent = '話してみる'
+      if (got) {
+        setOut('out-sr', mark(true, '認識できました') + '<br><strong>' + got + '</strong>')
+        results.sr = '成功: 「' + got + '」'
+        log('音声認識: 終了。結果「' + got + '」')
+      } else if (started && !results.sr) {
+        setOut('out-sr', mark(null, '起動はしましたが、何も認識されませんでした') +
+          '<br><span class="hint">もう一度、はっきりと話してみてください。</span>')
+        results.sr = '起動したが認識結果なし'
+        log('音声認識: 終了。結果なし')
+      }
+      recog = null
+    }
+
+    try {
+      recog.start()
+      btn.textContent = '■ 止める'
+      setOut('out-sr', '<em>聞いています… 英文を声に出して読んでください</em>')
+    } catch (err) {
+      setOut('out-sr', mark(false, '開始できません: ' + err.name))
+      results.sr = '開始エラー: ' + err.name
+      log('音声認識: start() 失敗 ' + err.name + ' — ' + err.message)
+      recog = null
+      btn.textContent = '話してみる'
+    }
+  })
+
+  /* ---------- 結果のコピー ---------- */
+
+  el('btn-copy').addEventListener('click', function () {
+    var btn = this
+    var text = [
+      '=== 音声機能の動作確認 結果 ===',
+      'OS: ' + results.os,
+      'ブラウザ: ' + results.browser,
+      'アドレス: ' + location.protocol + (results.iframe ? ' (埋め込み状態)' : ''),
+      'https: ' + results.secure,
+      '',
+      '機能の有無:',
+      '  読み上げ: ' + (results.hasTTS ? 'あり' : 'なし'),
+      '  録音: ' + (results.hasRec ? 'あり' : 'なし'),
+      '  音声認識: ' + (results.hasSR ? 'あり' : 'なし'),
+      '',
+      '実際に試した結果:',
+      '  1 読み上げ: ' + (results.tts || '未実施'),
+      '  2 マイク: ' + (results.mic || '未実施'),
+      '  3 録音: ' + (results.rec || '未実施'),
+      '  4 音声認識: ' + (results.sr || '未実施'),
+      '',
+      'userAgent: ' + ua,
+      '',
+      '--- 詳細ログ ---',
+      logLines.join('\n'),
+    ].join('\n')
+
+    var done = function () {
+      btn.textContent = 'コピーしました'
+      setTimeout(function () { btn.textContent = '結果をコピーする' }, 2000)
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        el('log').textContent = text
+        btn.textContent = '↓ここを長押しして選択・コピーしてください'
+      })
+    } else {
+      el('log').textContent = text
+      btn.textContent = '↓ここを長押しして選択・コピーしてください'
+    }
+  })
+
+  el('btn-rec').disabled = false
+  log('準備完了。上から順に試してください。')
+})()
+</script>
+</body>
+</html>

@@ -24,7 +24,11 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # main だけでなく、作業用ブランチからも公開できるようにしています。
+    # (main に取り込む前に、iPhone などの実機で動作を確認したいため)
+    branches:
+      - main
+      - 'claude/**'
   workflow_dispatch: # GitHubの画面から手動で実行することもできます
 
 permissions:
