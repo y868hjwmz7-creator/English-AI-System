@@ -295,3 +295,42 @@ audio { width: 100%; margin-top: 4px; }
 .table tr.is-clickable:hover { background: var(--surface-0); }
 .table tr.is-selected { background: color-mix(in srgb, var(--accent) 8%, var(--surface-1)); }
 .note-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+/* ------------------------------------------------------------------
+   スマートフォン(特に iPhone / Safari)向けの調整
+   ------------------------------------------------------------------ */
+
+/* iOS で横向きにしたときに文字が勝手に拡大されるのを防ぐ */
+html { -webkit-text-size-adjust: 100%; }
+
+/* ノッチ(画面上部の切り欠き)にコンテンツが隠れないようにする */
+.app {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: max(64px, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 560px) {
+  /* 「16時間30分」のような長い値が2行に折り返さないよう、少し小さくする */
+  .stat-value { font-size: 22px; }
+  .app-title { font-size: 19px; }
+  .card { padding: 16px; }
+  .field-row { grid-template-columns: 1fr; }
+
+  /* 表は横スクロールで見る。iOSで指を離したあとも滑るようにする */
+  .table-scroll { -webkit-overflow-scrolling: touch; }
+  .table th, .table td { padding: 8px; }
+}
+
+/* 指で操作する端末では、押す場所を大きくする */
+@media (pointer: coarse) {
+  .btn, .tab { min-height: 44px; }
+  .chip { min-height: 38px; }
+  .btn--link { min-height: 0; }
+
+  /* iOS Safari は文字が16px未満の入力欄をタップすると画面を勝手に拡大する。
+     16px にしておくとその拡大が起きない。 */
+  input[type='text'], input[type='date'], input[type='number'], select, textarea {
+    font-size: 16px;
+  }
+}
