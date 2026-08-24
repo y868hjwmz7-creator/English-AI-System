@@ -203,13 +203,25 @@ audio { width: 100%; margin-top: 4px; }
 /* ---------------- お知らせ ---------------- */
 
 .notice { border-radius: 8px; padding: 10px 14px; font-size: 13px; line-height: 1.6; }
-.notice--warn { background: color-mix(in srgb, var(--warn) 12%, var(--surface-1)); border: 1px solid var(--warn); }
+.notice--warn {
+  background: var(--surface-1); /* color-mix 非対応ブラウザ向けの代替 */
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface-1));
+  border: 1px solid var(--warn);
+}
 .notice--info { background: var(--surface-1); border: 1px solid var(--border); color: var(--text-secondary); }
 .app-notice { margin-bottom: var(--gap); }
 
 .badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-.badge--warn { background: color-mix(in srgb, var(--warn) 20%, var(--surface-1)); color: var(--text-primary); border: 1px solid var(--warn); }
-.badge--alert { background: color-mix(in srgb, var(--danger) 15%, var(--surface-1)); color: var(--text-primary); border: 1px solid var(--danger); }
+.badge--warn {
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--warn) 20%, var(--surface-1));
+  color: var(--text-primary); border: 1px solid var(--warn);
+}
+.badge--alert {
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--danger) 15%, var(--surface-1));
+  color: var(--text-primary); border: 1px solid var(--danger);
+}
 
 .hint { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; }
 .muted { color: var(--text-muted); }
@@ -293,7 +305,10 @@ audio { width: 100%; margin-top: 4px; }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table tr.is-clickable { cursor: pointer; }
 .table tr.is-clickable:hover { background: var(--surface-0); }
-.table tr.is-selected { background: color-mix(in srgb, var(--accent) 8%, var(--surface-1)); }
+.table tr.is-selected {
+  background: var(--surface-0);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-1));
+}
 .note-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ------------------------------------------------------------------

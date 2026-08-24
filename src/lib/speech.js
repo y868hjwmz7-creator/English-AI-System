@@ -97,7 +97,27 @@ export async function startRecording() {
   }
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-  const recorder = new MediaRecorder(stream)
+
+  // 録音の形式はブラウザによって異なる。
+  //   Chrome / Edge / Firefox → audio/webm
+  //   iOS Safari             → audio/mp4
+  // 対応している形式を順に試し、どれも指定できなければブラウザ既定に任せる。
+  // (形式を決め打ちすると、対応していないブラウザで録音開始に失敗する)
+  const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+  const supported =
+    typeof MediaRecorder.isTypeSupported === 'function'
+      ? preferred.find((type) => MediaRecorder.isTypeSupported(type))
+      : undefined
+
+  let recorder
+  try {
+    recorder = supported ? new MediaRecorder(stream, { mimeType: supported }) : new MediaRecorder(stream)
+  } catch (err) {
+    // 形式の指定が拒否された場合は、指定なしでもう一度試す
+    console.warn('録音形式の指定に失敗したため、ブラウザ既定の形式で録音します。', err)
+    recorder = new MediaRecorder(stream)
+  }
+
   const chunks = []
 
   recorder.addEventListener('dataavailable', (event) => {
@@ -113,8 +133,9 @@ export async function startRecording() {
           () => {
             // マイクを解放する(これを忘れるとブラウザの録音マークが消えません)
             stream.getTracks().forEach((track) => track.stop())
-            const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
-            resolve({ blob, url: URL.createObjectURL(blob), durationHint: chunks.length })
+            const mimeType = recorder.mimeType || supported || 'audio/webm'
+            const blob = new Blob(chunks, { type: mimeType })
+            resolve({ blob, url: URL.createObjectURL(blob), mimeType })
           },
           { once: true },
         )
