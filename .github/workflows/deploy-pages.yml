@@ -59,6 +59,13 @@ jobs:
           # GitHub Pages はリポジトリ名のフォルダの下で配信されるため、その指定
           BASE_PATH: /${{ github.event.repository.name }}/
 
+      - name: 1ファイル版を組み立てる
+        # ダウンロードして開くだけで使える版。公開物に download.html として含める。
+        # (ビルド結果なのでリポジトリには置かず、ここで作る)
+        run: |
+          npm run build:single
+          cp standalone/index.html dist/download.html
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
