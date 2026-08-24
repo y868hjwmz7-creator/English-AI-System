@@ -109,38 +109,81 @@ export async function startRecording() {
       ? preferred.find((type) => MediaRecorder.isTypeSupported(type))
       : undefined
 
+  // マイクを解放する。録音の成否にかかわらず必ず呼ぶ。
+  // 解放し忘れると、ブラウザの録音マークが消えないうえ、
+  // iOS Safari では次の録音が開始できなくなる。
+  const releaseMic = () => {
+    stream.getTracks().forEach((track) => track.stop())
+  }
+
   let recorder
   try {
     recorder = supported ? new MediaRecorder(stream, { mimeType: supported }) : new MediaRecorder(stream)
   } catch (err) {
     // 形式の指定が拒否された場合は、指定なしでもう一度試す
     console.warn('録音形式の指定に失敗したため、ブラウザ既定の形式で録音します。', err)
-    recorder = new MediaRecorder(stream)
+    try {
+      recorder = new MediaRecorder(stream)
+    } catch (err2) {
+      releaseMic() // ここで解放しないとマイクが掴まれたままになる
+      throw err2
+    }
   }
 
   const chunks = []
+  const mimeType = recorder.mimeType || supported || 'audio/webm'
+  let finished = false
 
   recorder.addEventListener('dataavailable', (event) => {
     if (event.data.size > 0) chunks.push(event.data)
   })
-  recorder.start()
+
+  try {
+    recorder.start()
+  } catch (err) {
+    releaseMic()
+    throw err
+  }
 
   return {
+    /** 録音を止め、音声データを返す。二重に呼ばれても安全。 */
     stop() {
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
+        if (finished) {
+          reject(new Error('この録音はすでに終了しています。'))
+          return
+        }
+        finished = true
+
         recorder.addEventListener(
           'stop',
           () => {
-            // マイクを解放する(これを忘れるとブラウザの録音マークが消えません)
-            stream.getTracks().forEach((track) => track.stop())
-            const mimeType = recorder.mimeType || supported || 'audio/webm'
+            releaseMic()
             const blob = new Blob(chunks, { type: mimeType })
             resolve({ blob, url: URL.createObjectURL(blob), mimeType })
           },
           { once: true },
         )
-        recorder.stop()
+
+        try {
+          recorder.stop()
+        } catch (err) {
+          releaseMic()
+          reject(err)
+        }
       })
+    },
+
+    /** 録音を破棄する(保存せずにやめる場合) */
+    cancel() {
+      if (finished) return
+      finished = true
+      try {
+        if (recorder.state !== 'inactive') recorder.stop()
+      } catch {
+        /* すでに止まっていれば何もしない */
+      }
+      releaseMic()
     },
   }
 }

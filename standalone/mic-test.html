@@ -265,8 +265,6 @@ audio { width: 100%; margin-top: 10px; }
 
   /* ---------- 2. マイクの許可 ---------- */
 
-  var micStream = null
-
   el('btn-mic').addEventListener('click', function () {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setOut('out-mic', mark(false, 'この環境ではマイクを使えません'))
@@ -276,12 +274,15 @@ audio { width: 100%; margin-top: 10px; }
     }
     setOut('out-mic', '<em>許可を待っています…</em>')
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-      micStream = stream
       var track = stream.getAudioTracks()[0]
+      var label = track ? track.label || '(名前なし)' : '不明'
+      // 確認できたらすぐ閉じる。録音のたびに取り直すため、ここで保持はしない。
+      // (保持したまま使い回すと、iOS Safari では2回目の録音が失敗する)
+      stream.getTracks().forEach(function (t) { t.stop() })
       setOut('out-mic', mark(true, 'マイクを使えます') +
-        '<br><span class="hint">入力: ' + (track ? track.label || '(名前なし)' : '不明') + '</span>')
+        '<br><span class="hint">入力: ' + label + '</span>')
       results.mic = '成功'
-      log('マイク: 許可されました。入力=' + (track ? track.label : '?'))
+      log('マイク: 許可されました。入力=' + label + '(確認後に接続を閉じました)')
       el('btn-rec').disabled = false
     }).catch(function (err) {
       setOut('out-mic', mark(false, 'エラー: ' + err.name) +
@@ -295,6 +296,8 @@ audio { width: 100%; margin-top: 10px; }
 
   var recorder = null
   var chunks = []
+  var lastUrl = null       // 直前の録音のURL(次の録音時に破棄する)
+  var lastMimeType = ''    // 録音の形式(recorder を手放したあとも表示するため)
 
   el('btn-rec').addEventListener('click', function () {
     var btn = this
@@ -310,9 +313,24 @@ audio { width: 100%; margin-top: 10px; }
     }
     var go = function (stream) {
       chunks = []
+      var closeStream = function () {
+        stream.getTracks().forEach(function (t) { t.stop() })
+      }
+
+      // アプリ本体と同じ手順で、この端末が対応している録音形式を選ぶ。
+      // recorder.mimeType は空を返す環境があるため、当てにしない。
+      var chosen = ''
+      if (typeof MediaRecorder.isTypeSupported === 'function') {
+        var candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+        for (var ci = 0; ci < candidates.length; ci++) {
+          if (MediaRecorder.isTypeSupported(candidates[ci])) { chosen = candidates[ci]; break }
+        }
+      }
+
       try {
-        recorder = new MediaRecorder(stream)
+        recorder = chosen ? new MediaRecorder(stream, { mimeType: chosen }) : new MediaRecorder(stream)
       } catch (err) {
+        closeStream()
         setOut('out-rec', mark(false, '録音を開始できません: ' + err.name))
         results.rec = 'エラー: ' + err.name
         log('録音 エラー: ' + err.name + ' — ' + err.message)
@@ -320,37 +338,41 @@ audio { width: 100%; margin-top: 10px; }
       }
       recorder.ondataavailable = function (e) { if (e.data.size > 0) chunks.push(e.data) }
       recorder.onstop = function () {
-        var blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
-        var url = URL.createObjectURL(blob)
+        // 録音が終わったらマイクを必ず解放する。
+        // これを怠ると、録音マークが消えず、2回目の録音も失敗する。
+        closeStream()
+        recorder = null
+
+        var blob = new Blob(chunks, { type: lastMimeType || 'audio/webm' })
         var p = el('player')
-        p.src = url
+        if (lastUrl) URL.revokeObjectURL(lastUrl) // 前回の録音を破棄する
+        lastUrl = URL.createObjectURL(blob)
+        p.src = lastUrl
         p.hidden = false
         btn.textContent = '録音をはじめる'
         setOut('out-rec', mark(true, '録音できました') +
-          '<br><span class="hint">形式: ' + (recorder.mimeType || '不明') +
+          '<br><span class="hint">形式: ' + (lastMimeType || '不明') +
           ' / サイズ: ' + Math.round(blob.size / 1024) + 'KB</span>' +
           '<br><span class="hint">下の再生ボタンで、自分の声が聞こえるか確かめてください。</span>')
-        results.rec = '成功 / 形式 ' + (recorder.mimeType || '不明') + ' / ' + Math.round(blob.size / 1024) + 'KB'
-        log('録音: 完了。形式=' + recorder.mimeType + ' サイズ=' + blob.size + 'B')
+        results.rec = '成功 / 形式 ' + (lastMimeType || '不明') + ' / ' + Math.round(blob.size / 1024) + 'KB'
+        log('録音: 完了。形式=' + lastMimeType + ' サイズ=' + blob.size + 'B')
       }
       recorder.start()
+      lastMimeType = chosen || recorder.mimeType || ''
       btn.textContent = '■ 録音を止める'
       setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
       log('録音: 開始')
     }
 
-    if (micStream && micStream.active) {
-      go(micStream)
-    } else {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
-        micStream = s
-        go(s)
-      }).catch(function (err) {
-        setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name))
-        results.rec = 'マイクエラー: ' + err.name
-        log('録音: マイクエラー ' + err.name)
-      })
-    }
+    // ★録音のたびにマイクを新しく取り直す。
+    //   前回の接続を使い回すと、iOS Safari では2回目以降が必ず失敗する。
+    //   利用者は録り直しを何度も行うため、ここは毎回新規取得にしている。
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(go).catch(function (err) {
+      setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name) +
+        '<br><span class="hint">' + (err.message || '') + '</span>')
+      results.rec = 'マイクエラー: ' + err.name
+      log('録音: マイクエラー ' + err.name + ' — ' + (err.message || ''))
+    })
   })
 
   /* ---------- 4. 音声認識 ---------- */

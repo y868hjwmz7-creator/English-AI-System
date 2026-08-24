@@ -197,6 +197,14 @@ function PronunciationPractice({ state, setState, learnerId }) {
     return () => stopSpeaking()
   }, [])
 
+  // 録音の途中で画面を離れた場合に、マイクを解放する。
+  // 解放し忘れると録音マークが消えず、次に戻ってきたとき録音を開始できない。
+  useEffect(() => {
+    return () => {
+      if (recorder) recorder.cancel()
+    }
+  }, [recorder])
+
   // 録音した音声のURLは、使い終わったらメモリから解放する
   useEffect(() => {
     return () => {
@@ -216,6 +224,11 @@ function PronunciationPractice({ state, setState, learnerId }) {
   const handleRecordStart = async () => {
     setError('')
     setResult(null)
+    // 前回の録音を破棄してから始める(録り直しを何度でもできるようにするため)
+    setRecordedUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
     try {
       const rec = await startRecording()
       setRecorder(rec)
@@ -314,7 +327,7 @@ function PronunciationPractice({ state, setState, learnerId }) {
             onClick={handleRecordStart}
             disabled={status === 'scoring' || !isRecordingSupported()}
           >
-            {status === 'scoring' ? '採点中…' : '録音する'}
+            {status === 'scoring' ? '採点中…' : result || recordedUrl ? 'もう一度録音する' : '録音する'}
           </button>
         ) : (
           <button type="button" className="btn btn--danger" onClick={handleRecordStop}>
@@ -334,6 +347,8 @@ function PronunciationPractice({ state, setState, learnerId }) {
           <span className="field-label">自分の録音を聞き返す</span>
           <audio src={recordedUrl} controls />
           <p className="hint">
+            納得いくまで何度でも録り直せます。「もう一度録音する」を押すと、前の録音は破棄されます。
+            <br />
             録音した音声はこの端末の中だけにあり、サーバーには送っていません。ページを閉じると消えます。
           </p>
         </div>
