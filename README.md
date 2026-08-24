@@ -12,8 +12,9 @@
 
 ### 方法1: 1ファイル版をダウンロードして開く(いちばん手軽)
 
-1. GitHub でこのリポジトリの [`standalone/index.html`](standalone/index.html) を開く
-2. 画面右上の **Download**(下向き矢印のアイコン)を押して保存する
+1. 次のURLを開く
+   `https://y868hjwmz7-creator.github.io/English-AI-System/download.html`
+2. ブラウザの保存機能でファイルとして保存する
 3. 保存したファイルをダブルクリックする
 
 ブラウザでアプリが開きます。インストール作業も、インターネット接続も不要です。
@@ -188,7 +189,7 @@ Node.js 20 以上。
 | `npm install` | 必要な部品(ライブラリ)をダウンロードする。最初に1回 |
 | `npm run dev` | 開発用サーバーを起動する。`http://localhost:5173` で確認 |
 | `npm run build` | 公開用に組み立てる。`dist/` に出力 |
-| `npm run build:single` | 1ファイル版を作る。`standalone/index.html` に出力 |
+| `npm run build:single` | 1ファイル版を作る。`standalone/index.html` に出力(Gitには入れない) |
 | `npm run preview` | 組み立てた結果を確認する |
 
 ### ファイルの置き場所
@@ -205,9 +206,6 @@ English-AI-System/
 ├── docs/
 │   ├── PROJECT_SPEC.md        ← 要件・仕様書(何を作るか)
 │   └── GETTING_STARTED.md     ← 用語とファイルの説明(はじめての方向け)
-│
-├── standalone/
-│   └── index.html             ← 1ファイル版(ダウンロードして開けば動く)
 │
 ├── .github/workflows/
 │   └── deploy-pages.yml       ← GitHub Pages への自動公開の設定

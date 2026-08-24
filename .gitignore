@@ -1,9 +1,10 @@
 # 依存パッケージ(npm install で復元できるのでGitには入れない)
 node_modules/
 
-# ビルド結果
+# ビルド結果(コードから作り直せるのでGitには入れない)
 dist/
 build/
+standalone/
 
 # 環境変数(APIキーなどの秘密情報。絶対にGitに入れない)
 .env
