@@ -267,10 +267,6 @@ export function stopSpeaking() {
  *     - 出来上がる形式が常に WAV。端末ごとに webm / mp4 と分かれない
  *     - 発音評価サービスは WAV をそのまま受け取れるものが多い
  *     - 16kHz に落として送るため、通信量も小さい
- *
- * ★録音のたびにマイクを完全に解放する
- *   マイクを掴んだままにすると、iOS では音声認識が
- *   「aborted」で失敗する(実機で確認)。録音が終わったら必ず手放す。
  */
 
 const TARGET_SAMPLE_RATE = 16000 // 音声認識・発音評価が扱いやすい標準的な値
@@ -306,7 +302,103 @@ function getAudioContext() {
 }
 
 /**
- * 音声処理を休止し、マイクの資源を手放す。
+ * ★マイクへの接続も1組だけ作って使い回す(実機 iOS 18.7 で判明)
+ *
+ *   AudioContext を使い回すようにしても、録音のたびに
+ *   getUserMedia と createMediaStreamSource をやり直していると、
+ *   数回〜十数回で**エラーを出さないまま無音になる**。
+ *
+ *     1周目の録音7回: すべて成功(音量83〜100%)
+ *     音声認識6回: すべて成功
+ *     2周目の録音: 2回成功したあと、3回目から音量0
+ *
+ *   iOS は音声入力の経路を端末全体で持っており、
+ *   接続部品を作っては捨てると経路が壊れると考えられる。
+ *
+ *   対処: マイクと接続部品は最初の1回だけ作り、そのまま保持する。
+ *         録音の開始・停止は「音を集めるかどうか」の切り替えだけで行う。
+ *
+ * ★引き換えに、練習中はマイクを掴んだままになる
+ *   端末の録音マークが出続けるため、練習画面を離れるときは
+ *   releaseMicrophone() を必ず呼ぶこと。
+ *   また音声認識を使う前にも、releaseMicrophone() で明け渡すこと。
+ */
+let micStream = null
+let sourceNode = null
+let processorNode = null
+let silenceNode = null
+
+/** 録音中に音を集める入れ物。null なら録音していない。 */
+let collector = null
+
+/** マイクへの接続を組み立てる(すでにあれば何もしない) */
+async function ensureAudioGraph() {
+  const context = getAudioContext()
+  if (!context) throw new Error('このブラウザは音声処理に対応していません。')
+
+  // iOS では利用者の操作のあとに resume しないと音が取れない
+  if (context.state !== 'running') {
+    try {
+      await context.resume()
+    } catch {
+      /* resume できなくても続行を試みる */
+    }
+  }
+
+  const graphIsAlive =
+    micStream && micStream.active && micStream.getAudioTracks().some((t) => t.readyState === 'live') && sourceNode && processorNode
+
+  if (graphIsAlive) return context
+
+  teardownAudioGraph()
+
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  })
+
+  sourceNode = context.createMediaStreamSource(micStream)
+  processorNode = context.createScriptProcessor(4096, 1, 1)
+
+  // 音量ゼロの出口につなぐ。
+  // 出口につながないと処理が動かないブラウザがある一方、
+  // そのままスピーカーにつなぐと自分の声が返ってハウリングするため。
+  silenceNode = context.createGain()
+  silenceNode.gain.value = 0
+
+  processorNode.onaudioprocess = (event) => {
+    if (!collector) return // 録音していない間は捨てる
+    const input = event.inputBuffer.getChannelData(0)
+    collector.buffers.push(new Float32Array(input))
+    collector.total += input.length
+  }
+
+  sourceNode.connect(processorNode)
+  processorNode.connect(silenceNode)
+  silenceNode.connect(context.destination)
+
+  return context
+}
+
+/** マイクへの接続を解体する */
+function teardownAudioGraph() {
+  if (processorNode) processorNode.onaudioprocess = null
+  try {
+    if (sourceNode) sourceNode.disconnect()
+    if (processorNode) processorNode.disconnect()
+    if (silenceNode) silenceNode.disconnect()
+  } catch {
+    /* すでに切れていれば何もしない */
+  }
+  if (micStream) micStream.getTracks().forEach((track) => track.stop())
+  sourceNode = null
+  processorNode = null
+  silenceNode = null
+  micStream = null
+  collector = null
+}
+
+/**
+ * 音声処理を休止する。
  *
  * ★音声認識を始める前に必ず呼ぶこと。
  *   録音のあとに休止せずに音声認識を始めると、iOS では
@@ -322,8 +414,15 @@ export async function suspendAudio() {
   }
 }
 
-/** 互換性のために残している。録音のたびにマイクは解放している。 */
+/**
+ * マイクを完全に手放す。
+ *
+ * ★次の場面で必ず呼ぶこと。
+ *   - 練習画面を離れるとき(録音マークが出続けるため)
+ *   - 音声認識を始める前(掴んだままだと iOS で失敗するため)
+ */
 export function releaseMicrophone() {
+  teardownAudioGraph()
   suspendAudio()
 }
 
@@ -412,94 +511,49 @@ export async function startRecording() {
     throw new Error('このブラウザは録音に対応していません。')
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-  })
+  const context = await ensureAudioGraph()
+  const sampleRate = context.sampleRate
 
-  const context = getAudioContext()
-  if (!context) {
-    stream.getTracks().forEach((track) => track.stop())
-    throw new Error('このブラウザは音声処理に対応していません。')
-  }
-
-  // iOS では利用者の操作のあとに resume しないと音が取れない。
-  // 前の録音のあと suspend しているため、毎回ここで動かし直す。
-  if (context.state !== 'running') {
-    try {
-      await context.resume()
-    } catch {
-      /* resume できなくても続行を試みる */
-    }
-  }
-
-  const source = context.createMediaStreamSource(stream)
-  const processor = context.createScriptProcessor(4096, 1, 1)
-
-  // 音量ゼロの出口につなぐ。
-  // 出口につながないと処理が動かないブラウザがある一方、
-  // そのままスピーカーにつなぐと自分の声が返ってハウリングするため。
-  const silence = context.createGain()
-  silence.gain.value = 0
-
-  const buffers = []
-  let totalLength = 0
-
-  processor.onaudioprocess = (event) => {
-    const input = event.inputBuffer.getChannelData(0)
-    buffers.push(new Float32Array(input))
-    totalLength += input.length
-  }
-
-  source.connect(processor)
-  processor.connect(silence)
-  silence.connect(context.destination)
+  // 音を集め始める。接続はそのまま使い回す。
+  const myCollector = { buffers: [], total: 0 }
+  collector = myCollector
 
   let finished = false
 
-  /**
-   * マイクを解放し、音声処理を休止する。
-   * AudioContext は close() しない。閉じて作り直すと iOS で無音になる。
-   */
-  const cleanup = () => {
-    processor.onaudioprocess = null
-    try {
-      source.disconnect()
-      processor.disconnect()
-      silence.disconnect()
-    } catch {
-      /* すでに切れていれば何もしない */
-    }
-    stream.getTracks().forEach((track) => track.stop())
-    suspendAudio()
+  const finish = () => {
+    finished = true
+    if (collector === myCollector) collector = null
   }
 
   return {
     /** 録音を止め、WAV の音声データを返す。二重に呼ばれても安全。 */
     async stop() {
       if (finished) throw new Error('この録音はすでに終了しています。')
-      finished = true
+      finish()
 
-      const sourceRate = context.sampleRate
-      cleanup()
+      const merged = mergeBuffers(myCollector.buffers, myCollector.total)
+      const resampled = downsample(merged, sampleRate, TARGET_SAMPLE_RATE)
+      const level = peakLevel(resampled)
 
-      const merged = mergeBuffers(buffers, totalLength)
-      const resampled = downsample(merged, sourceRate, TARGET_SAMPLE_RATE)
+      // 無音だった場合は、マイクへの接続が壊れている可能性がある。
+      // 次の録音で作り直せるよう、ここで解体しておく。
+      if (level < 0.01) teardownAudioGraph()
+
       const blob = encodeWav(resampled, TARGET_SAMPLE_RATE)
-
       return {
         blob,
         url: URL.createObjectURL(blob),
         mimeType: 'audio/wav',
         durationSeconds: resampled.length / TARGET_SAMPLE_RATE,
-        peakLevel: peakLevel(resampled), // 無音だったかの判定に使う
+        peakLevel: level,
+        isSilent: level < 0.01,
       }
     },
 
     /** 録音を破棄する(保存せずにやめる場合) */
     cancel() {
       if (finished) return
-      finished = true
-      cleanup()
+      finish()
     },
   }
 }
