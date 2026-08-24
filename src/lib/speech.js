@@ -26,7 +26,92 @@ export function isRecordingSupported() {
 }
 
 /**
- * 使える英語の声の一覧を取得する。
+ * ここから: 声の選び方
+ *
+ * ★なぜ選び方が重要か
+ *   端末には英語の声が何種類も入っており、getVoices() が返す並び順は
+ *   品質順ではありません。単純に先頭を選ぶと、
+ *   「簡易版(Compact)の声」や、macOS に入っている
+ *   ネタ用の声(Bells, Zarvox など)が選ばれてしまいます。
+ *   学習用のお手本としては使い物になりません。
+ *
+ *   そのため、名前から品質を判定して並べ替え、いちばん良い声を既定にします。
+ */
+
+/** 学習用として明らかに不適切な声(macOS のネタ声)。一覧から除外する。 */
+const NOVELTY_VOICES = [
+  'albert', 'bad news', 'bahh', 'bells', 'boing', 'bubbles', 'cellos', 'deranged',
+  'good news', 'hysterical', 'jester', 'organ', 'pipe organ', 'trinoids',
+  'whisper', 'wobble', 'zarvox', 'superstar', 'princess',
+]
+
+/** Apple の標準的な英語話者。ネタ声ではなく、お手本として使える。 */
+const APPLE_STANDARD = [
+  'samantha', 'ava', 'allison', 'susan', 'nicky', 'aaron', 'tom',
+  'serena', 'daniel', 'kate', 'oliver', 'karen', 'moira', 'tessa', 'rishi',
+]
+
+/** 学習用には向かない、癖の強い声。使えるが優先しない。 */
+const LOW_PRIORITY = ['grandma', 'grandpa', 'rocko', 'sandy', 'shelley', 'eddy', 'flo', 'reed', 'junior', 'kathy', 'fred', 'ralph', 'agnes', 'vicki', 'victoria', 'bruce']
+
+/**
+ * 声の品質を点数で評価する。数字が大きいほど良い。
+ * 端末によって入っている声が違うため、名前から推定するしかない。
+ */
+function scoreVoice(voice) {
+  const name = (voice.name || '').toLowerCase()
+  let score = 0
+
+  // 各社の高品質版。名前に品質を示す語が入っている
+  if (name.includes('premium')) score += 100
+  if (name.includes('enhanced')) score += 90
+  if (name.includes('neural') || name.includes('natural')) score += 90
+  if (name.includes('siri')) score += 80
+
+  // 提供元による傾向
+  if (name.startsWith('google')) score += 70
+  if (APPLE_STANDARD.some((n) => name.startsWith(n))) score += 60
+  if (name.startsWith('microsoft')) score += 50
+
+  // 通信を使う声は、端末内蔵の簡易な声より品質が高いことが多い
+  if (voice.localService === false) score += 20
+
+  // 簡易版・癖の強い声は下げる
+  if (name.includes('compact')) score -= 60
+  if (LOW_PRIORITY.some((n) => name.startsWith(n))) score -= 50
+
+  // 端末の既定の声は、わずかに優遇する
+  if (voice.default) score += 5
+
+  return score
+}
+
+/** 品質の目安を日本語のラベルにする(画面に出すため) */
+export function voiceQualityLabel(voice) {
+  const score = scoreVoice(voice)
+  if (score >= 80) return '高品質'
+  if (score >= 50) return '標準'
+  return '簡易'
+}
+
+/** アメリカ英語かイギリス英語かなどを日本語にする */
+export function voiceAccentLabel(voice) {
+  const lang = (voice.lang || '').toLowerCase()
+  const map = {
+    'en-us': 'アメリカ英語',
+    'en-gb': 'イギリス英語',
+    'en-au': 'オーストラリア英語',
+    'en-ca': 'カナダ英語',
+    'en-ie': 'アイルランド英語',
+    'en-in': 'インド英語',
+    'en-nz': 'ニュージーランド英語',
+    'en-za': '南アフリカ英語',
+  }
+  return map[lang] || lang
+}
+
+/**
+ * 使える英語の声の一覧を、品質の良い順に並べて返す。
  *
  * ★既知の落とし穴:
  *   getVoices() は最初の1回目に空の配列を返す端末があります。
@@ -39,7 +124,11 @@ export function loadEnglishVoices() {
       return
     }
 
-    const pickEnglish = (voices) => voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith('en'))
+    const pickEnglish = (voices) =>
+      voices
+        .filter((v) => v.lang && v.lang.toLowerCase().startsWith('en'))
+        .filter((v) => !NOVELTY_VOICES.some((n) => (v.name || '').toLowerCase().startsWith(n)))
+        .sort((a, b) => scoreVoice(b) - scoreVoice(a))
 
     const immediate = pickEnglish(window.speechSynthesis.getVoices())
     if (immediate.length > 0) {
@@ -62,6 +151,14 @@ export function loadEnglishVoices() {
 }
 
 /**
+ * 一覧の中に、お手本として使える品質の声があるか。
+ * なければ画面で「端末に良い声を追加する方法」を案内する。
+ */
+export function hasGoodVoice(voices) {
+  return voices.some((v) => scoreVoice(v) >= 50)
+}
+
+/**
  * 英文を読み上げる。
  * @param {string} text 読み上げる英文
  * @param {object} options { voice, rate }
@@ -71,8 +168,16 @@ export function speak(text, { voice, rate = 0.9 } = {}) {
   window.speechSynthesis.cancel() // 前の読み上げが残っていたら止める
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = voice?.lang || 'en-US'
-  if (voice) utterance.voice = voice
+  // 声の指定が拒否される場合がある。失敗しても読み上げ自体は続けたいので、
+  // ここで握りつぶして端末の既定の声に任せる。
+  try {
+    if (voice) utterance.voice = voice
+  } catch (err) {
+    console.warn('指定された声を使えないため、端末の既定の声で読み上げます。', err)
+  }
   utterance.rate = rate
+  utterance.pitch = 1
+  utterance.volume = 1
   window.speechSynthesis.speak(utterance)
   return true
 }

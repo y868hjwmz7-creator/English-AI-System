@@ -80,6 +80,19 @@ pre {
   margin: 10px 0 0; max-height: 260px; overflow-y: auto;
 }
 audio { width: 100%; margin-top: 10px; }
+.voice-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.voice-row:last-child { border-bottom: 0; }
+.voice-info { flex: 1; min-width: 0; font-size: 13px; }
+.voice-name { font-weight: 600; word-break: break-word; }
+.voice-meta { color: var(--ink-3); font-size: 11px; }
+.voice-play { width: auto; flex-shrink: 0; margin: 0; padding: 8px 14px; font-size: 14px;
+  background: var(--card); color: var(--ink); border-color: var(--border); font-weight: 500; }
+.q-tag { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 10px;
+  font-weight: 700; margin-right: 5px; vertical-align: 1px; }
+.q-high { background: var(--ok); color: #fff; }
+.q-mid { background: var(--track); color: var(--ink-2); }
+.q-low { background: var(--track); color: var(--ink-3); }
+
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 </style>
 </head>
@@ -102,9 +115,20 @@ audio { width: 100%; margin-top: 10px; }
 
 <div class="card">
   <h2><span class="step">1</span>読み上げ(お手本の音声)</h2>
-  <p class="hint">英文を読み上げます。音量を上げて、消音スイッチも解除してください。</p>
-  <button id="btn-speak">お手本を聞く</button>
+  <p class="hint">
+    音量を上げて、消音スイッチも解除してください。<br />
+    <strong>この端末に入っている英語の声を、1つずつ聴き比べられます。</strong>
+    いちばん自然に聞こえた声を覚えておいて、あとで教えてください。
+  </p>
+  <button id="btn-speak">いちばん品質が高い声で聞く</button>
   <div class="result" id="out-speak"><em>まだ試していません</em></div>
+
+  <div id="voice-list-wrap" hidden>
+    <p class="hint" style="margin-top:14px">
+      <strong>声の一覧</strong>(品質の良い順)— 押すと、その声で読み上げます
+    </p>
+    <ul class="rows" id="voice-list"></ul>
+  </div>
 </div>
 
 <div class="card">
@@ -230,6 +254,97 @@ audio { width: 100%; margin-top: 10px; }
 
   /* ---------- 1. 読み上げ ---------- */
 
+  var SAMPLE = 'I usually walk to the station in the morning.'
+  var englishVoices = []
+
+  // アプリ本体と同じ基準で声の品質を評価する
+  var NOVELTY = ['albert','bad news','bahh','bells','boing','bubbles','cellos','deranged',
+    'good news','hysterical','jester','organ','pipe organ','trinoids','whisper','wobble',
+    'zarvox','superstar','princess']
+  var APPLE_STD = ['samantha','ava','allison','susan','nicky','aaron','tom','serena',
+    'daniel','kate','oliver','karen','moira','tessa','rishi']
+  var LOW_PRI = ['grandma','grandpa','rocko','sandy','shelley','eddy','flo','reed',
+    'junior','kathy','fred','ralph','agnes','vicki','victoria','bruce']
+
+  function scoreVoice(v) {
+    var n = (v.name || '').toLowerCase()
+    var sc = 0
+    if (n.indexOf('premium') >= 0) sc += 100
+    if (n.indexOf('enhanced') >= 0) sc += 90
+    if (n.indexOf('neural') >= 0 || n.indexOf('natural') >= 0) sc += 90
+    if (n.indexOf('siri') >= 0) sc += 80
+    if (n.indexOf('google') === 0) sc += 70
+    if (APPLE_STD.some(function (x) { return n.indexOf(x) === 0 })) sc += 60
+    if (n.indexOf('microsoft') === 0) sc += 50
+    if (v.localService === false) sc += 20
+    if (n.indexOf('compact') >= 0) sc -= 60
+    if (LOW_PRI.some(function (x) { return n.indexOf(x) === 0 })) sc -= 50
+    if (v.default) sc += 5
+    return sc
+  }
+  function qualityOf(v) {
+    var sc = scoreVoice(v)
+    return sc >= 80 ? ['高品質', 'q-high'] : sc >= 50 ? ['標準', 'q-mid'] : ['簡易', 'q-low']
+  }
+
+  function collectVoices() {
+    if (!results.hasTTS) return []
+    return window.speechSynthesis.getVoices()
+      .filter(function (v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0 })
+      .filter(function (v) {
+        var n = (v.name || '').toLowerCase()
+        return !NOVELTY.some(function (x) { return n.indexOf(x) === 0 })
+      })
+      .sort(function (a, b) { return scoreVoice(b) - scoreVoice(a) })
+  }
+
+  function playWith(voice, onDone) {
+    var u = new SpeechSynthesisUtterance(SAMPLE)
+    u.lang = voice ? voice.lang : 'en-US'
+    // 声の指定が拒否されても、読み上げ自体は続ける
+    try { if (voice) u.voice = voice } catch (err) { log('この声は指定できませんでした: ' + err.message) }
+    u.rate = 0.9
+    u.onend = function () { if (onDone) onDone(null) }
+    u.onerror = function (e) { if (onDone) onDone(e.error) }
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.speak(u)
+  }
+
+  function renderVoiceList() {
+    englishVoices = collectVoices()
+    if (!englishVoices.length) return
+    el('voice-list-wrap').hidden = false
+    el('voice-list').innerHTML = englishVoices.map(function (v, i) {
+      var q = qualityOf(v)
+      return '<li class="voice-row">' +
+        '<span class="voice-info">' +
+          '<span class="q-tag ' + q[1] + '">' + q[0] + '</span>' +
+          '<span class="voice-name">' + v.name + '</span>' +
+          '<br><span class="voice-meta">' + v.lang +
+          (v.localService === false ? ' / 通信を使う声' : ' / 端末内の声') +
+          (v.default ? ' / この端末の既定' : '') + '</span>' +
+        '</span>' +
+        '<button class="voice-play" data-i="' + i + '">▶ 聞く</button>' +
+      '</li>'
+    }).join('')
+
+    Array.prototype.forEach.call(el('voice-list').querySelectorAll('.voice-play'), function (b) {
+      b.addEventListener('click', function () {
+        var v = englishVoices[Number(b.dataset.i)]
+        b.textContent = '再生中…'
+        playWith(v, function () { b.textContent = '▶ 聞く' })
+        log('声を試聴: ' + v.name + ' (' + v.lang + ')')
+      })
+    })
+
+    var names = englishVoices.map(function (v) {
+      return qualityOf(v)[0] + ':' + v.name + '(' + v.lang + ')'
+    })
+    results.voiceCount = englishVoices.length
+    results.voiceList = names
+    log('英語の声 ' + englishVoices.length + '個: ' + names.join(' | '))
+  }
+
   el('btn-speak').addEventListener('click', function () {
     if (!results.hasTTS) {
       setOut('out-speak', mark(false, 'この端末は読み上げに対応していません'))
@@ -237,31 +352,31 @@ audio { width: 100%; margin-top: 10px; }
       log('TTS: 非対応')
       return
     }
-    var voices = window.speechSynthesis.getVoices().filter(function (v) {
-      return v.lang && v.lang.toLowerCase().indexOf('en') === 0
-    })
-    var u = new SpeechSynthesisUtterance('I usually walk to the station in the morning.')
-    u.lang = 'en-US'
-    u.rate = 0.9
-    if (voices.length) u.voice = voices[0]
-    u.onstart = function () { log('TTS: 再生開始') }
-    u.onend = function () {
-      setOut('out-speak', mark(true, '再生しました') +
-        '<br><span class="hint">使われた声: ' + (voices[0] ? voices[0].name + ' (' + voices[0].lang + ')' : '既定の声') +
-        ' / 英語の声 ' + voices.length + '個</span>')
-      results.tts = '成功 / 英語の声 ' + voices.length + '個 / ' + (voices[0] ? voices[0].name : '既定')
-      log('TTS: 再生完了。英語の声 ' + voices.length + '個: ' +
-        voices.slice(0, 6).map(function (v) { return v.name + '(' + v.lang + ')' }).join(', '))
-    }
-    u.onerror = function (e) {
-      setOut('out-speak', mark(false, 'エラー: ' + e.error))
-      results.tts = 'エラー: ' + e.error
-      log('TTS エラー: ' + e.error)
-    }
-    window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(u)
+    renderVoiceList()
+    var best = englishVoices[0]
     setOut('out-speak', '<em>再生中…</em>')
+    playWith(best, function (err) {
+      if (err) {
+        setOut('out-speak', mark(false, 'エラー: ' + err))
+        results.tts = 'エラー: ' + err
+        log('TTS エラー: ' + err)
+        return
+      }
+      var q = best ? qualityOf(best)[0] : '不明'
+      setOut('out-speak', mark(true, '再生しました') +
+        '<br><span class="hint">使われた声: <strong>' + (best ? best.name : '既定の声') + '</strong>' +
+        ' [' + q + '] / この端末の英語の声は ' + englishVoices.length + '個</span>' +
+        '<br><span class="hint">下の一覧から、他の声も聴き比べられます。</span>')
+      results.tts = '成功 / ' + (best ? best.name + ' [' + q + ']' : '既定') + ' / 英語の声 ' + englishVoices.length + '個'
+    })
   })
+
+  // 声の一覧は遅れて用意される端末があるため、届いたら表示を更新する
+  if (results.hasTTS && 'onvoiceschanged' in window.speechSynthesis) {
+    window.speechSynthesis.addEventListener('voiceschanged', function () {
+      if (englishVoices.length) renderVoiceList()
+    })
+  }
 
   /* ---------- 2. マイクの許可 ---------- */
 
@@ -483,6 +598,11 @@ audio { width: 100%; margin-top: 10px; }
       '',
       '実際に試した結果:',
       '  1 読み上げ: ' + (results.tts || '未実施'),
+      '',
+      'この端末に入っている英語の声(' + (results.voiceCount || 0) + '個):',
+      (results.voiceList || ['(未取得 — ①のボタンを押すと取得されます)'])
+        .map(function (n) { return '  - ' + n }).join('\n'),
+      '',
       '  2 マイク: ' + (results.mic || '未実施'),
       '  3 録音: ' + (results.rec || '未実施'),
       '  4 音声認識: ' + (results.sr || '未実施'),

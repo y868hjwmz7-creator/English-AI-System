@@ -5,12 +5,15 @@ import { calculateStreak, formatMinutes, lastNDays, shortDate, today } from '../
 import { addPronunciationAttempt, addStudyLog, removeStudyLog } from '../lib/store.js'
 import { scorePronunciation } from '../lib/pronunciation.js'
 import {
+  hasGoodVoice,
   isRecordingSupported,
   isSpeechSupported,
   loadEnglishVoices,
   speak,
   startRecording,
   stopSpeaking,
+  voiceAccentLabel,
+  voiceQualityLabel,
 } from '../lib/speech.js'
 import BarChart from './charts/BarChart.jsx'
 import HBarChart from './charts/HBarChart.jsx'
@@ -183,7 +186,20 @@ function StudyLogForm({ state, setState, learnerId }) {
 function PronunciationPractice({ state, setState, learnerId }) {
   const [phraseId, setPhraseId] = useState(practicePhrases[0].id)
   const [voices, setVoices] = useState([])
-  const [voiceIndex, setVoiceIndex] = useState(0)
+  const [voiceName, setVoiceName] = useState(() => {
+    try {
+      return localStorage.getItem('english-ai-system:voice') || ''
+    } catch {
+      return ''
+    }
+  })
+  const [rate, setRate] = useState(() => {
+    try {
+      return Number(localStorage.getItem('english-ai-system:rate')) || 0.85
+    } catch {
+      return 0.85
+    }
+  })
   const [recorder, setRecorder] = useState(null)
   const [recordedUrl, setRecordedUrl] = useState(null)
   const [result, setResult] = useState(null)
@@ -193,9 +209,26 @@ function PronunciationPractice({ state, setState, learnerId }) {
   const phrase = practicePhrases.find((p) => p.id === phraseId)
 
   useEffect(() => {
-    loadEnglishVoices().then(setVoices)
+    loadEnglishVoices().then((list) => {
+      setVoices(list)
+      // 記憶した声が今の端末にない場合は、いちばん品質の良い声に戻す
+      // (list は品質の良い順に並んでいる)
+      setVoiceName((prev) => (list.some((v) => v.name === prev) ? prev : list[0]?.name || ''))
+    })
     return () => stopSpeaking()
   }, [])
+
+  // 選んだ声と速さを覚えておく
+  useEffect(() => {
+    try {
+      if (voiceName) localStorage.setItem('english-ai-system:voice', voiceName)
+      localStorage.setItem('english-ai-system:rate', String(rate))
+    } catch {
+      /* 保存できなくても読み上げ自体は動く */
+    }
+  }, [voiceName, rate])
+
+  const selectedVoice = voices.find((v) => v.name === voiceName) || voices[0]
 
   // 録音の途中で画面を離れた場合に、マイクを解放する。
   // 解放し忘れると録音マークが消えず、次に戻ってきたとき録音を開始できない。
@@ -218,7 +251,7 @@ function PronunciationPractice({ state, setState, learnerId }) {
       return
     }
     setError('')
-    speak(phrase.text, { voice: voices[voiceIndex] })
+    speak(phrase.text, { voice: selectedVoice, rate })
   }
 
   const handleRecordStart = async () => {
@@ -300,19 +333,46 @@ function PronunciationPractice({ state, setState, learnerId }) {
       </blockquote>
 
       {voices.length > 0 && (
-        <label className="field">
-          <span>
-            お手本の声
-            <small className="field-hint">※使える声は端末によって異なります</small>
-          </span>
-          <select value={voiceIndex} onChange={(e) => setVoiceIndex(Number(e.target.value))}>
-            {voices.map((v, i) => (
-              <option key={`${v.name}-${i}`} value={i}>
-                {v.name}({v.lang})
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="field-row">
+          <label className="field">
+            <span>
+              お手本の声
+              <small className="field-hint">品質の良い順に並んでいます</small>
+            </span>
+            <select value={selectedVoice?.name ?? ''} onChange={(e) => setVoiceName(e.target.value)}>
+              {voices.map((v) => (
+                <option key={v.name} value={v.name}>
+                  [{voiceQualityLabel(v)}] {v.name} — {voiceAccentLabel(v)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>読み上げの速さ</span>
+            <select value={rate} onChange={(e) => setRate(Number(e.target.value))}>
+              <option value={0.7}>ゆっくり</option>
+              <option value={0.85}>やや ゆっくり</option>
+              <option value={1}>ふつう</option>
+              <option value={1.15}>やや 速い</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      {voices.length > 0 && !hasGoodVoice(voices) && (
+        <div className="notice notice--warn">
+          <strong>この端末には、お手本に適した音声が入っていません。</strong>
+          <br />
+          いま選べるのは簡易な音声のみです。より自然な音声を追加できます。
+          <br />
+          <small>
+            iPhone / iPad: 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 から、
+            「高品質」と表示された声をダウンロード
+            <br />
+            Mac: システム設定 → アクセシビリティ → 読み上げコンテンツ → システムの声 → 声を管理
+          </small>
+        </div>
       )}
 
       <div className="btn-row">
