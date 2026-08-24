@@ -448,6 +448,27 @@ audio { width: 100%; margin-top: 10px; }
   var recSession = null   // 録音中の状態
   var lastUrl = null
 
+  /**
+   * ★AudioContext はページに1つだけ作り、close() しない。
+   *   録音のたびに作り直すと、iOS Safari では2回目以降が
+   *   すべて無音(音量0)になり、音声認識まで失敗するようになる。
+   *   録音していない間は suspend() して、音声認識に資源を明け渡す。
+   */
+  var audioCtx = null
+
+  function getAudioCtx() {
+    var AC = window.AudioContext || window.webkitAudioContext
+    if (!AC) return null
+    if (!audioCtx || audioCtx.state === 'closed') audioCtx = new AC()
+    return audioCtx
+  }
+
+  function suspendAudio() {
+    if (audioCtx && audioCtx.state === 'running') {
+      try { audioCtx.suspend() } catch (e) {}
+    }
+  }
+
   function encodeWav(samples, rate) {
     var buf = new ArrayBuffer(44 + samples.length * 2)
     var view = new DataView(buf)
@@ -488,7 +509,8 @@ audio { width: 100%; margin-top: 10px; }
     try { sess.source.disconnect(); sess.processor.disconnect(); sess.silence.disconnect() } catch (e) {}
     sess.stream.getTracks().forEach(function (t) { t.stop() })
     var rate = sess.ctx.sampleRate
-    if (sess.ctx.state !== 'closed') { try { sess.ctx.close() } catch (e) {} }
+    // close() しない。閉じて作り直すと iOS で無音になる。休止するだけにする。
+    suspendAudio()
 
     // 集めた音声を1本につないで WAV にする
     var merged = new Float32Array(sess.total)
@@ -499,6 +521,7 @@ audio { width: 100%; margin-top: 10px; }
 
     var peak = 0
     for (var i = 0; i < samples.length; i++) { var a = Math.abs(samples[i]); if (a > peak) peak = a }
+    if (peak > 1) peak = 1   // 表示が101%にならないよう上限を1にする
     var seconds = (samples.length / TARGET_RATE).toFixed(1)
 
     btn.textContent = '録音をはじめる'
@@ -516,7 +539,9 @@ audio { width: 100%; margin-top: 10px; }
     }
     if (peak < 0.01) {
       setOut('out-rec', mark(null, '録音はできましたが、ほぼ無音でした') +
-        '<br><span class="hint">' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '% — マイクに向かって話してみてください</span>')
+        '<br><span class="hint">' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '%</span>' +
+        '<br><span class="hint">マイクに向かって話しても無音になる場合、' +
+        '他のアプリや通話がマイクを使っていないかご確認ください。</span>')
       results.rec = '無音(' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '%)'
       log('録音: 完了したが無音。' + seconds + '秒 音量=' + peak.toFixed(3))
       return
@@ -535,8 +560,8 @@ audio { width: 100%; margin-top: 10px; }
 
     if (recSession) { stopRecordingSession(btn); return }
 
-    var AC = window.AudioContext || window.webkitAudioContext
-    if (!AC) {
+    var ctx = getAudioCtx()
+    if (!ctx) {
       setOut('out-rec', mark(false, 'この環境は音声処理に対応していません'))
       results.rec = 'AudioContext 非対応'
       return
@@ -546,7 +571,6 @@ audio { width: 100%; margin-top: 10px; }
     navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     }).then(function (stream) {
-      var ctx = new AC()
       var begin = function () {
         var source = ctx.createMediaStreamSource(stream)
         var processor = ctx.createScriptProcessor(4096, 1, 1)
@@ -568,10 +592,11 @@ audio { width: 100%; margin-top: 10px; }
 
         btn.textContent = '■ 録音を止める'
         setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
-        log('録音: 開始(Web Audio / ' + ctx.sampleRate + 'Hz)')
+        log('録音: 開始(Web Audio / ' + ctx.sampleRate + 'Hz / 状態=' + ctx.state + ')')
       }
-      // iOS では操作のあとに resume しないと音が取れない
-      if (ctx.state === 'suspended') ctx.resume().then(begin).catch(begin)
+      // iOS では操作のあとに resume しないと音が取れない。
+      // 前の録音のあと休止しているため、毎回ここで動かし直す。
+      if (ctx.state !== 'running') ctx.resume().then(begin).catch(begin)
       else begin()
     }).catch(function (err) {
       setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name) +
@@ -678,6 +703,11 @@ audio { width: 100%; margin-top: 10px; }
       }
       recog = null
     }
+
+    // ★音声認識を始める前に、録音側の音声処理を休止する。
+    //   休止しないと iOS では aborted / audio-capture で失敗する。
+    suspendAudio()
+    if (recSession) { log('音声認識: 録音中だったため停止します'); stopRecordingSession(el('btn-rec')) }
 
     try {
       recog.start()

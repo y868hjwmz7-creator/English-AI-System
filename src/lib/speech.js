@@ -275,9 +275,56 @@ export function stopSpeaking() {
 
 const TARGET_SAMPLE_RATE = 16000 // 音声認識・発音評価が扱いやすい標準的な値
 
-/** 互換性のために残している。現在は録音のたびに解放しているため、通常は不要。 */
+/**
+ * ★AudioContext は1つだけ作って使い回す(実機 iOS 18.7 で判明)
+ *
+ *   録音のたびに新しい AudioContext を作り、終わったら close() する実装では、
+ *   iOS Safari で2回目以降の録音が**すべて無音**になった。
+ *   エラーは出ず、音量0の音声が返ってくるため気づきにくい。
+ *
+ *     録音1回目: 音量=100% サイズ=131116B   ← 成功
+ *     録音2回目: 無音 音量=0.000
+ *     録音3回目: 無音 音量=0.000
+ *
+ *   さらに、そのあと音声認識まで aborted で失敗するようになった。
+ *   iOS では音声の入出力が端末全体で1つの資源として扱われており、
+ *   AudioContext を作っては壊すとその資源が壊れるためと考えられる。
+ *
+ *   対処: AudioContext はページに1つだけ作り、close() しない。
+ *         録音していない間は suspend() して、音声認識に資源を明け渡す。
+ */
+let audioContext = null
+
+/** 使い回す AudioContext を取り出す(無ければ作る) */
+function getAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return null
+  if (!audioContext || audioContext.state === 'closed') {
+    audioContext = new AudioContextClass()
+  }
+  return audioContext
+}
+
+/**
+ * 音声処理を休止し、マイクの資源を手放す。
+ *
+ * ★音声認識を始める前に必ず呼ぶこと。
+ *   録音のあとに休止せずに音声認識を始めると、iOS では
+ *   aborted / audio-capture で失敗する(実機で確認)。
+ */
+export async function suspendAudio() {
+  if (audioContext && audioContext.state === 'running') {
+    try {
+      await audioContext.suspend()
+    } catch {
+      /* 休止できなくても処理は続ける */
+    }
+  }
+}
+
+/** 互換性のために残している。録音のたびにマイクは解放している。 */
 export function releaseMicrophone() {
-  /* 各録音が自分で後始末するため、ここですることはない */
+  suspendAudio()
 }
 
 /** 集めた音声の断片を1本につなぐ */
@@ -349,7 +396,7 @@ function peakLevel(samples) {
     const value = Math.abs(samples[i])
     if (value > peak) peak = value
   }
-  return peak
+  return peak > 1 ? 1 : peak
 }
 
 /**
@@ -369,15 +416,15 @@ export async function startRecording() {
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
   })
 
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext
-  if (!AudioContextClass) {
+  const context = getAudioContext()
+  if (!context) {
     stream.getTracks().forEach((track) => track.stop())
     throw new Error('このブラウザは音声処理に対応していません。')
   }
 
-  const context = new AudioContextClass()
-  // iOS では利用者の操作のあとに resume しないと音が取れない
-  if (context.state === 'suspended') {
+  // iOS では利用者の操作のあとに resume しないと音が取れない。
+  // 前の録音のあと suspend しているため、毎回ここで動かし直す。
+  if (context.state !== 'running') {
     try {
       await context.resume()
     } catch {
@@ -409,7 +456,10 @@ export async function startRecording() {
 
   let finished = false
 
-  /** マイクと音声処理を完全に解放する */
+  /**
+   * マイクを解放し、音声処理を休止する。
+   * AudioContext は close() しない。閉じて作り直すと iOS で無音になる。
+   */
   const cleanup = () => {
     processor.onaudioprocess = null
     try {
@@ -420,7 +470,7 @@ export async function startRecording() {
       /* すでに切れていれば何もしない */
     }
     stream.getTracks().forEach((track) => track.stop())
-    if (context.state !== 'closed') context.close().catch(() => {})
+    suspendAudio()
   }
 
   return {
