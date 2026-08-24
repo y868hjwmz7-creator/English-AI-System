@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { categories, categoryColor, categoryLabel } from '../data/categories.js'
 import { practicePhrases } from '../data/practicePhrases.js'
+import { SPEAKER_MODES, genderLabel, genderOf, hasGender, resolveVoice } from '../data/speakers.js'
 import { calculateStreak, formatMinutes, lastNDays, shortDate, today } from '../lib/format.js'
 import { addPronunciationAttempt, addStudyLog, removeStudyLog } from '../lib/store.js'
 import { scorePronunciation } from '../lib/pronunciation.js'
@@ -187,13 +188,17 @@ function StudyLogForm({ state, setState, learnerId }) {
 function PronunciationPractice({ state, setState, learnerId }) {
   const [phraseId, setPhraseId] = useState(practicePhrases[0].id)
   const [voices, setVoices] = useState([])
-  const [voiceName, setVoiceName] = useState(() => {
+  const [speaker, setSpeaker] = useState(() => {
+    // 話者の設定は端末に覚えておく
     try {
-      return localStorage.getItem('english-ai-system:voice') || ''
+      const saved = JSON.parse(localStorage.getItem('english-ai-system:speaker') || 'null')
+      if (saved && saved.mode) return saved
     } catch {
-      return ''
+      /* 壊れていれば初期値を使う */
     }
+    return { mode: 'random', gender: 'female', fixedName: '', femaleName: '', maleName: '' }
   })
+  const [lastSpokenBy, setLastSpokenBy] = useState(null)
   const [rate, setRate] = useState(() => {
     try {
       return Number(localStorage.getItem('english-ai-system:rate')) || 0.85
@@ -212,24 +217,35 @@ function PronunciationPractice({ state, setState, learnerId }) {
   useEffect(() => {
     loadEnglishVoices().then((list) => {
       setVoices(list)
-      // 記憶した声が今の端末にない場合は、いちばん品質の良い声に戻す
-      // (list は品質の良い順に並んでいる)
-      setVoiceName((prev) => (list.some((v) => v.name === prev) ? prev : list[0]?.name || ''))
+      // 記憶した話者がこの端末にない場合に備え、既定値を埋め直す
+      setSpeaker((prev) => {
+        const female = list.find((v) => genderOf(v) === 'female')
+        const male = list.find((v) => genderOf(v) === 'male')
+        const exists = (name) => list.some((v) => v.name === name)
+        return {
+          ...prev,
+          fixedName: exists(prev.fixedName) ? prev.fixedName : list[0]?.name || '',
+          femaleName: exists(prev.femaleName) ? prev.femaleName : female?.name || '',
+          maleName: exists(prev.maleName) ? prev.maleName : male?.name || '',
+        }
+      })
     })
     return () => stopSpeaking()
   }, [])
 
-  // 選んだ声と速さを覚えておく
+  // 話者の設定と速さを覚えておく
   useEffect(() => {
     try {
-      if (voiceName) localStorage.setItem('english-ai-system:voice', voiceName)
+      localStorage.setItem('english-ai-system:speaker', JSON.stringify(speaker))
       localStorage.setItem('english-ai-system:rate', String(rate))
     } catch {
       /* 保存できなくても読み上げ自体は動く */
     }
-  }, [voiceName, rate])
+  }, [speaker, rate])
 
-  const selectedVoice = voices.find((v) => v.name === voiceName) || voices[0]
+  const updateSpeaker = (patch) => setSpeaker((prev) => ({ ...prev, ...patch }))
+  const femaleVoices = voices.filter((v) => genderOf(v) === 'female')
+  const maleVoices = voices.filter((v) => genderOf(v) === 'male')
 
   // 録音の途中で画面を離れた場合に、マイクを解放する。
   // 解放し忘れると録音マークが消えず、次に戻ってきたとき録音を開始できない。
@@ -253,13 +269,16 @@ function PronunciationPractice({ state, setState, learnerId }) {
     }
   }, [recordedUrl])
 
-  const handleSpeak = () => {
+  /** お手本を読み上げる。gender を渡すと、その性別の話者で読み上げる。 */
+  const handleSpeak = (requestedGender = null) => {
     if (!isSpeechSupported()) {
       setError('このブラウザは読み上げに対応していません。')
       return
     }
     setError('')
-    speak(phrase.text, { voice: selectedVoice, rate })
+    const voice = resolveVoice(voices, speaker, requestedGender)
+    setLastSpokenBy(voice)
+    speak(phrase.text, { voice, rate })
   }
 
   const handleRecordStart = async () => {
@@ -341,52 +360,151 @@ function PronunciationPractice({ state, setState, learnerId }) {
       </blockquote>
 
       {voices.length > 0 && (
-        <div className="field-row">
-          <label className="field">
-            <span>
-              お手本の声
-              <small className="field-hint">品質の良い順に並んでいます</small>
-            </span>
-            <select value={selectedVoice?.name ?? ''} onChange={(e) => setVoiceName(e.target.value)}>
-              {voices.map((v) => (
-                <option key={v.name} value={v.name}>
-                  [{voiceQualityLabel(v)}] {v.name} — {voiceAccentLabel(v)}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="speaker">
+          <div className="field-row">
+            <label className="field">
+              <span>お手本の話者の選び方</span>
+              <select value={speaker.mode} onChange={(e) => updateSpeaker({ mode: e.target.value })}>
+                {SPEAKER_MODES.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="field">
-            <span>読み上げの速さ</span>
-            <select value={rate} onChange={(e) => setRate(Number(e.target.value))}>
-              <option value={0.7}>ゆっくり</option>
-              <option value={0.85}>やや ゆっくり</option>
-              <option value={1}>ふつう</option>
-              <option value={1.15}>やや 速い</option>
-            </select>
-          </label>
+            <label className="field">
+              <span>読み上げの速さ</span>
+              <select value={rate} onChange={(e) => setRate(Number(e.target.value))}>
+                <option value={0.7}>ゆっくり</option>
+                <option value={0.85}>やや ゆっくり</option>
+                <option value={1}>ふつう</option>
+                <option value={1.15}>やや 速い</option>
+              </select>
+            </label>
+          </div>
+
+          <p className="hint">{SPEAKER_MODES.find((m) => m.id === speaker.mode)?.description}</p>
+
+          {/* 選び方に応じて、必要な指定だけを出す */}
+          {speaker.mode === 'gender' && (
+            <div className="chip-row">
+              {['female', 'male'].map((g) => (
+                <label key={g} className={`chip${speaker.gender === g ? ' is-selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="speaker-gender"
+                    checked={speaker.gender === g}
+                    onChange={() => updateSpeaker({ gender: g })}
+                    disabled={!hasGender(voices, g)}
+                  />
+                  {genderLabel[g]}
+                  {!hasGender(voices, g) && <small className="muted">(この端末にはいません)</small>}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {speaker.mode === 'fixed' && (
+            <label className="field">
+              <span>話者</span>
+              <select value={speaker.fixedName} onChange={(e) => updateSpeaker({ fixedName: e.target.value })}>
+                {voices.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.name} — {genderLabel[genderOf(v)]} / {voiceAccentLabel(v)} [{voiceQualityLabel(v)}]
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {speaker.mode === 'pair' && (
+            <div className="field-row">
+              <label className="field">
+                <span>女性の話者</span>
+                <select
+                  value={speaker.femaleName}
+                  onChange={(e) => updateSpeaker({ femaleName: e.target.value })}
+                  disabled={femaleVoices.length === 0}
+                >
+                  {femaleVoices.length === 0 && <option value="">この端末にはいません</option>}
+                  {femaleVoices.map((v) => (
+                    <option key={v.name} value={v.name}>
+                      {v.name} — {voiceAccentLabel(v)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>男性の話者</span>
+                <select
+                  value={speaker.maleName}
+                  onChange={(e) => updateSpeaker({ maleName: e.target.value })}
+                  disabled={maleVoices.length === 0}
+                >
+                  {maleVoices.length === 0 && <option value="">この端末にはいません</option>}
+                  {maleVoices.map((v) => (
+                    <option key={v.name} value={v.name}>
+                      {v.name} — {voiceAccentLabel(v)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
         </div>
       )}
 
       {voices.length > 0 && !hasGoodVoice(voices) && (
         <div className="notice notice--warn">
-          <strong>この端末には、お手本に適した音声が入っていません。</strong>
+          <strong>この端末では、お手本に適した音声を選べません。</strong>
           <br />
-          いま選べるのは簡易な音声のみです。より自然な音声を追加できます。
-          <br />
+          いま使えるのは簡易な音声のみです。
           <small>
-            iPhone / iPad: 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 から、
-            「高品質」と表示された声をダウンロード
             <br />
-            Mac: システム設定 → アクセシビリティ → 読み上げコンテンツ → システムの声 → 声を管理
+            iPhone / iPad の場合、設定から高品質な音声をダウンロードしても、
+            Apple の制限によりブラウザからは使えません。
+            この問題は、音声をあらかじめ用意する方式に切り替えることで解決します。
           </small>
         </div>
       )}
 
       <div className="btn-row">
-        <button type="button" className="btn" onClick={handleSpeak}>
-          お手本を聞く
-        </button>
+        {/* 選び方に応じて、押せるボタンを変える */}
+        {speaker.mode === 'random' || speaker.mode === 'gender' ? (
+          <>
+            <button type="button" className="btn" onClick={() => handleSpeak()}>
+              お手本を聞く
+            </button>
+            {hasGender(voices, 'female') && (
+              <button type="button" className="btn" onClick={() => handleSpeak('female')}>
+                女性の声で
+              </button>
+            )}
+            {hasGender(voices, 'male') && (
+              <button type="button" className="btn" onClick={() => handleSpeak('male')}>
+                男性の声で
+              </button>
+            )}
+          </>
+        ) : speaker.mode === 'pair' ? (
+          <>
+            {speaker.femaleName && (
+              <button type="button" className="btn" onClick={() => handleSpeak('female')}>
+                {speaker.femaleName} の声で
+              </button>
+            )}
+            {speaker.maleName && (
+              <button type="button" className="btn" onClick={() => handleSpeak('male')}>
+                {speaker.maleName} の声で
+              </button>
+            )}
+          </>
+        ) : (
+          <button type="button" className="btn" onClick={() => handleSpeak()}>
+            お手本を聞く
+          </button>
+        )}
 
         {status !== 'recording' ? (
           <button
@@ -406,6 +524,12 @@ function PronunciationPractice({ state, setState, learnerId }) {
 
       {!isRecordingSupported() && (
         <p className="hint">このブラウザ・環境では録音を使えません。お手本の読み上げのみ利用できます。</p>
+      )}
+      {lastSpokenBy && (
+        <p className="hint">
+          いま読み上げたのは <strong>{lastSpokenBy.name}</strong>({genderLabel[genderOf(lastSpokenBy)]} /{' '}
+          {voiceAccentLabel(lastSpokenBy)})です。
+        </p>
       )}
       {status === 'recording' && <p className="recording-indicator">● 録音中… 英文を声に出して読んでください</p>}
       {error && <p className="error">{error}</p>}

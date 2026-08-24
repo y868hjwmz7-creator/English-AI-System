@@ -239,6 +239,11 @@ export function speak(text, { voice, rate = 0.9 } = {}) {
   return true
 }
 
+/** 中断はエラーではない。別の声を押した、画面を離れた等で起きる。 */
+export function isBenignSpeechError(error) {
+  return error === 'canceled' || error === 'interrupted'
+}
+
 /** 読み上げを止める */
 export function stopSpeaking() {
   if (isSpeechSupported()) window.speechSynthesis.cancel()
@@ -246,74 +251,112 @@ export function stopSpeaking() {
 
 /**
  * ===================================================================
- *  マイク録音
+ *  マイク録音 — Web Audio 方式
  * ===================================================================
  *
- * ★iOS Safari の制約について(実機で判明)
+ * ★なぜ MediaRecorder を使わないのか(実機 iOS 18.7 Safari で確認)
  *
- *   当初は「録音のたびにマイクを取り直す」実装にしたが、
- *   iOS Safari では2回目以降が依然として失敗した。
+ *   iOS Safari では MediaRecorder が2回目以降まともに動かない。
+ *     - 新しい MediaRecorder を作り直す方式 → 2回目が失敗
+ *     - 同じ MediaRecorder を start() し直す方式 → 音声が空(5バイト)になる
  *
- *   より確からしい原因は、**同じページで2つ目の MediaRecorder を
- *   作ること**そのものが失敗する点にある。
- *   そこで、いったん作った録音器とマイクをそのまま保持し、
- *   2回目以降は同じ録音器を start() し直す方式に変更した。
+ *   そこで MediaRecorder を使わず、Web Audio API で生の音声を自分で集め、
+ *   WAV 形式に組み立てる方式に変更した。この方式には利点が多い。
  *
- *   万一この方式が使えない環境のために、順に別の方法を試す。
- *     方法1: 既存の録音器を start() し直す(iOS 向けの本命)
- *     方法2: 生きているマイクに新しい録音器を作る
- *     方法3: マイクを取り直して新しい録音器を作る
+ *     - iOS を含む全ブラウザで同じように動く
+ *     - 出来上がる形式が常に WAV。端末ごとに webm / mp4 と分かれない
+ *     - 発音評価サービスは WAV をそのまま受け取れるものが多い
+ *     - 16kHz に落として送るため、通信量も小さい
  *
- *   どの方法で成功したかは lastRecordingStrategy に記録し、
- *   診断ページで確認できるようにしている。
- *
- * ★マイクの解放
- *   上記の方式では、練習中はマイクを掴んだままになる。
- *   録り直しのたびに許可の確認が挟まらない利点がある一方、
- *   録音マークが出続けるため、練習画面を離れるときに
- *   releaseMicrophone() で必ず解放すること。
+ * ★録音のたびにマイクを完全に解放する
+ *   マイクを掴んだままにすると、iOS では音声認識が
+ *   「aborted」で失敗する(実機で確認)。録音が終わったら必ず手放す。
  */
 
-let sharedStream = null
-let sharedRecorder = null
-let sharedMimeType = ''
+const TARGET_SAMPLE_RATE = 16000 // 音声認識・発音評価が扱いやすい標準的な値
 
-/** どの方法で録音を開始できたか(診断用) */
-export let lastRecordingStrategy = ''
-
-/** マイクが生きているか */
-function streamIsLive(stream) {
-  return !!stream && stream.active && stream.getAudioTracks().some((t) => t.readyState === 'live')
-}
-
-/** この端末が対応している録音形式を選ぶ */
-function pickMimeType() {
-  if (typeof MediaRecorder.isTypeSupported !== 'function') return ''
-  const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
-  return preferred.find((type) => MediaRecorder.isTypeSupported(type)) || ''
-}
-
-/**
- * マイクを解放する。
- * 練習画面を離れるとき、アプリを閉じるときに必ず呼ぶこと。
- * 呼ばないと、ブラウザの録音マークが出続ける。
- */
+/** 互換性のために残している。現在は録音のたびに解放しているため、通常は不要。 */
 export function releaseMicrophone() {
-  try {
-    if (sharedRecorder && sharedRecorder.state !== 'inactive') sharedRecorder.stop()
-  } catch {
-    /* すでに止まっていれば何もしない */
+  /* 各録音が自分で後始末するため、ここですることはない */
+}
+
+/** 集めた音声の断片を1本につなぐ */
+function mergeBuffers(buffers, totalLength) {
+  const result = new Float32Array(totalLength)
+  let offset = 0
+  for (const buffer of buffers) {
+    result.set(buffer, offset)
+    offset += buffer.length
   }
-  sharedRecorder = null
-  if (sharedStream) sharedStream.getTracks().forEach((track) => track.stop())
-  sharedStream = null
+  return result
+}
+
+/** 標本化周波数を落とす(48kHz → 16kHz など)。単純な線形補間で十分。 */
+function downsample(samples, fromRate, toRate) {
+  if (toRate >= fromRate) return samples
+  const ratio = fromRate / toRate
+  const newLength = Math.round(samples.length / ratio)
+  const result = new Float32Array(newLength)
+  for (let i = 0; i < newLength; i += 1) {
+    const position = i * ratio
+    const index = Math.floor(position)
+    const fraction = position - index
+    const a = samples[index] ?? 0
+    const b = samples[index + 1] ?? a
+    result[i] = a + (b - a) * fraction
+  }
+  return result
+}
+
+/** 音声データを WAV ファイルの形に組み立てる(16bit モノラル) */
+function encodeWav(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2)
+  const view = new DataView(buffer)
+
+  const writeText = (offset, text) => {
+    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i))
+  }
+
+  writeText(0, 'RIFF')
+  view.setUint32(4, 36 + samples.length * 2, true)
+  writeText(8, 'WAVE')
+  writeText(12, 'fmt ')
+  view.setUint32(16, 16, true) // fmt チャンクの長さ
+  view.setUint16(20, 1, true) // 1 = 圧縮なし(PCM)
+  view.setUint16(22, 1, true) // モノラル
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true) // 1秒あたりのバイト数
+  view.setUint16(32, 2, true) // 1標本あたりのバイト数
+  view.setUint16(34, 16, true) // 16bit
+  writeText(36, 'data')
+  view.setUint32(40, samples.length * 2, true)
+
+  // -1.0〜1.0 の値を 16bit の整数に変換する
+  let offset = 44
+  for (let i = 0; i < samples.length; i += 1) {
+    const clamped = Math.max(-1, Math.min(1, samples[i]))
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true)
+    offset += 2
+  }
+
+  return new Blob([view], { type: 'audio/wav' })
+}
+
+/** 音の大きさ(0〜1)。無音のまま録音していないかの判定に使う。 */
+function peakLevel(samples) {
+  let peak = 0
+  for (let i = 0; i < samples.length; i += 1) {
+    const value = Math.abs(samples[i])
+    if (value > peak) peak = value
+  }
+  return peak
 }
 
 /**
  * マイク録音を開始する。
  *
  * 戻り値は { stop, cancel }。
- * stop() を呼ぶと録音が止まり、音声データが返ってきます。
+ * stop() を呼ぶと録音が止まり、WAV 形式の音声データが返ってきます。
  *
  * ★録音した音声はサーバーに送りません(仕様書 3.2)。
  */
@@ -322,112 +365,91 @@ export async function startRecording() {
     throw new Error('このブラウザは録音に対応していません。')
   }
 
-  // マイクが死んでいたら取り直す。取り直した場合、録音器も作り直す。
-  if (!streamIsLive(sharedStream)) {
-    sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    sharedRecorder = null
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  })
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) {
+    stream.getTracks().forEach((track) => track.stop())
+    throw new Error('このブラウザは音声処理に対応していません。')
   }
 
-  const chunks = []
-  const collect = (event) => {
-    if (event.data && event.data.size > 0) chunks.push(event.data)
-  }
-
-  const makeRecorder = () => {
-    const mimeType = pickMimeType()
-    const rec = mimeType
-      ? new MediaRecorder(sharedStream, { mimeType })
-      : new MediaRecorder(sharedStream)
-    sharedMimeType = rec.mimeType || mimeType || 'audio/webm'
-    return rec
-  }
-
-  let started = false
-
-  // 方法1: 既存の録音器を start() し直す(iOS Safari 向けの本命)
-  if (sharedRecorder && sharedRecorder.state === 'inactive') {
+  const context = new AudioContextClass()
+  // iOS では利用者の操作のあとに resume しないと音が取れない
+  if (context.state === 'suspended') {
     try {
-      sharedRecorder.ondataavailable = collect
-      sharedRecorder.start()
-      started = true
-      lastRecordingStrategy = '既存の録音器を再開'
-    } catch (err) {
-      console.warn('既存の録音器を再開できませんでした。', err)
-      sharedRecorder = null
+      await context.resume()
+    } catch {
+      /* resume できなくても続行を試みる */
     }
   }
 
-  // 方法2: 生きているマイクに新しい録音器を作る
-  if (!started) {
-    try {
-      sharedRecorder = makeRecorder()
-      sharedRecorder.ondataavailable = collect
-      sharedRecorder.start()
-      started = true
-      lastRecordingStrategy = '新しい録音器を作成'
-    } catch (err) {
-      console.warn('新しい録音器を作れませんでした。マイクを取り直します。', err)
-      sharedRecorder = null
-    }
+  const source = context.createMediaStreamSource(stream)
+  const processor = context.createScriptProcessor(4096, 1, 1)
+
+  // 音量ゼロの出口につなぐ。
+  // 出口につながないと処理が動かないブラウザがある一方、
+  // そのままスピーカーにつなぐと自分の声が返ってハウリングするため。
+  const silence = context.createGain()
+  silence.gain.value = 0
+
+  const buffers = []
+  let totalLength = 0
+
+  processor.onaudioprocess = (event) => {
+    const input = event.inputBuffer.getChannelData(0)
+    buffers.push(new Float32Array(input))
+    totalLength += input.length
   }
 
-  // 方法3: マイクごと取り直す
-  if (!started) {
-    if (sharedStream) sharedStream.getTracks().forEach((t) => t.stop())
-    sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    try {
-      sharedRecorder = makeRecorder()
-      sharedRecorder.ondataavailable = collect
-      sharedRecorder.start()
-      lastRecordingStrategy = 'マイクを取り直して作成'
-    } catch (err) {
-      releaseMicrophone()
-      throw err
-    }
-  }
+  source.connect(processor)
+  processor.connect(silence)
+  silence.connect(context.destination)
 
-  const recorder = sharedRecorder
-  const mimeType = sharedMimeType
   let finished = false
 
+  /** マイクと音声処理を完全に解放する */
+  const cleanup = () => {
+    processor.onaudioprocess = null
+    try {
+      source.disconnect()
+      processor.disconnect()
+      silence.disconnect()
+    } catch {
+      /* すでに切れていれば何もしない */
+    }
+    stream.getTracks().forEach((track) => track.stop())
+    if (context.state !== 'closed') context.close().catch(() => {})
+  }
+
   return {
-    /** 録音を止め、音声データを返す。二重に呼ばれても安全。 */
-    stop() {
-      return new Promise((resolve, reject) => {
-        if (finished) {
-          reject(new Error('この録音はすでに終了しています。'))
-          return
-        }
-        finished = true
+    /** 録音を止め、WAV の音声データを返す。二重に呼ばれても安全。 */
+    async stop() {
+      if (finished) throw new Error('この録音はすでに終了しています。')
+      finished = true
 
-        recorder.addEventListener(
-          'stop',
-          () => {
-            // ここでマイクは解放しない。次の録音で同じ録音器を使い回すため。
-            // 練習画面を離れるときに releaseMicrophone() で解放する。
-            const blob = new Blob(chunks, { type: mimeType })
-            resolve({ blob, url: URL.createObjectURL(blob), mimeType, strategy: lastRecordingStrategy })
-          },
-          { once: true },
-        )
+      const sourceRate = context.sampleRate
+      cleanup()
 
-        try {
-          recorder.stop()
-        } catch (err) {
-          reject(err)
-        }
-      })
+      const merged = mergeBuffers(buffers, totalLength)
+      const resampled = downsample(merged, sourceRate, TARGET_SAMPLE_RATE)
+      const blob = encodeWav(resampled, TARGET_SAMPLE_RATE)
+
+      return {
+        blob,
+        url: URL.createObjectURL(blob),
+        mimeType: 'audio/wav',
+        durationSeconds: resampled.length / TARGET_SAMPLE_RATE,
+        peakLevel: peakLevel(resampled), // 無音だったかの判定に使う
+      }
     },
 
     /** 録音を破棄する(保存せずにやめる場合) */
     cancel() {
       if (finished) return
       finished = true
-      try {
-        if (recorder.state !== 'inactive') recorder.stop()
-      } catch {
-        /* すでに止まっていれば何もしない */
-      }
+      cleanup()
     },
   }
 }

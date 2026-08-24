@@ -326,7 +326,11 @@ audio { width: 100%; margin-top: 10px; }
     try { if (voice) u.voice = voice } catch (err) { log('この声は指定できませんでした: ' + err.message) }
     u.rate = 0.9
     u.onend = function () { if (onDone) onDone(null) }
-    u.onerror = function (e) { if (onDone) onDone(e.error) }
+    u.onerror = function (e) {
+      // 別の声を押した、画面を離れた等で止めた場合。異常ではない。
+      if (e.error === 'canceled' || e.error === 'interrupted') { if (onDone) onDone(null); return }
+      if (onDone) onDone(e.error)
+    }
     window.speechSynthesis.cancel()
     window.speechSynthesis.speak(u)
   }
@@ -412,9 +416,9 @@ audio { width: 100%; margin-top: 10px; }
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
       var track = stream.getAudioTracks()[0]
       var label = track ? track.label || '(名前なし)' : '不明'
-      // この接続は録音でもそのまま使う(取り直しは失敗のときだけ)
-      micStream = stream
-      recorder = null
+      // 確認できたら必ず閉じる。
+      // マイクを掴んだままだと iOS では音声認識が aborted で失敗する。
+      stream.getTracks().forEach(function (t) { t.stop() })
       setOut('out-mic', mark(true, 'マイクを使えます') +
         '<br><span class="hint">入力: ' + label + '</span>')
       results.mic = '成功'
@@ -428,162 +432,147 @@ audio { width: 100%; margin-top: 10px; }
     })
   })
 
-  /* ---------- 3. 録音 ---------- */
+  /* ---------- 3. 録音(Web Audio 方式) ---------- */
 
   /**
-   * ★iOS Safari では、同じページで2つ目の MediaRecorder を作れないことがある。
-   *   そのため、いったん作った録音器とマイクをそのまま保持し、
-   *   2回目以降は同じ録音器を start() し直す。
-   *   それが駄目な場合に備え、順に別の方法を試す。
+   * ★iOS Safari では MediaRecorder が2回目以降まともに動かない。
+   *   新しく作り直すと失敗し、同じものを再開すると音声が空(5バイト)になる。
+   *   そこで MediaRecorder を使わず、Web Audio API で生の音声を集め、
+   *   自分で WAV に組み立てる方式に変更した。
+   *   出来上がる形式が常に WAV になるため、端末による違いも無くなる。
+   *
+   * ★録音が終わったらマイクを完全に解放する。
+   *   掴んだままだと、iOS では音声認識が aborted で失敗する。
    */
-  var recorder = null
-  var micStream = null
-  var chunks = []
+  var TARGET_RATE = 16000
+  var recSession = null   // 録音中の状態
   var lastUrl = null
-  var lastMimeType = ''
-  var strategyUsed = ''
 
-  function streamIsLive(st) {
-    return !!st && st.active && st.getAudioTracks().some(function (t) { return t.readyState === 'live' })
+  function encodeWav(samples, rate) {
+    var buf = new ArrayBuffer(44 + samples.length * 2)
+    var view = new DataView(buf)
+    function txt(off, str) { for (var i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)) }
+    txt(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); txt(8, 'WAVE')
+    txt(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true)
+    view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true)
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true)
+    txt(36, 'data'); view.setUint32(40, samples.length * 2, true)
+    var off = 44
+    for (var i = 0; i < samples.length; i++) {
+      var v = Math.max(-1, Math.min(1, samples[i]))
+      view.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true)
+      off += 2
+    }
+    return new Blob([view], { type: 'audio/wav' })
   }
 
-  function pickMime() {
-    if (typeof MediaRecorder.isTypeSupported !== 'function') return ''
-    var c = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
-    for (var i = 0; i < c.length; i++) if (MediaRecorder.isTypeSupported(c[i])) return c[i]
-    return ''
+  function downsample(samples, from, to) {
+    if (to >= from) return samples
+    var ratio = from / to
+    var out = new Float32Array(Math.round(samples.length / ratio))
+    for (var i = 0; i < out.length; i++) {
+      var pos = i * ratio, idx = Math.floor(pos), frac = pos - idx
+      var a = samples[idx] || 0, b = samples[idx + 1] === undefined ? a : samples[idx + 1]
+      out[i] = a + (b - a) * frac
+    }
+    return out
   }
 
-  function collect(e) { if (e.data && e.data.size > 0) chunks.push(e.data) }
+  function stopRecordingSession(btn) {
+    if (!recSession) return
+    var sess = recSession
+    recSession = null
 
-  function releaseMic() {
-    try { if (recorder && recorder.state !== 'inactive') recorder.stop() } catch (e) {}
-    recorder = null
-    if (micStream) micStream.getTracks().forEach(function (t) { t.stop() })
-    micStream = null
-  }
+    // マイクと音声処理を完全に解放する
+    sess.processor.onaudioprocess = null
+    try { sess.source.disconnect(); sess.processor.disconnect(); sess.silence.disconnect() } catch (e) {}
+    sess.stream.getTracks().forEach(function (t) { t.stop() })
+    var rate = sess.ctx.sampleRate
+    if (sess.ctx.state !== 'closed') { try { sess.ctx.close() } catch (e) {} }
 
-  function makeRecorder() {
-    var mt = pickMime()
-    var r = mt ? new MediaRecorder(micStream, { mimeType: mt }) : new MediaRecorder(micStream)
-    lastMimeType = r.mimeType || mt || 'audio/webm'
-    return r
-  }
+    // 集めた音声を1本につないで WAV にする
+    var merged = new Float32Array(sess.total)
+    var off = 0
+    sess.buffers.forEach(function (b) { merged.set(b, off); off += b.length })
+    var samples = downsample(merged, rate, TARGET_RATE)
+    var blob = encodeWav(samples, TARGET_RATE)
 
-  function beginRecording(btn) {
-    chunks = []
-    var started = false
+    var peak = 0
+    for (var i = 0; i < samples.length; i++) { var a = Math.abs(samples[i]); if (a > peak) peak = a }
+    var seconds = (samples.length / TARGET_RATE).toFixed(1)
 
-    // 方法1: 既存の録音器を再開する(iOS Safari 向けの本命)
-    if (recorder && recorder.state === 'inactive') {
-      try {
-        recorder.ondataavailable = collect
-        recorder.start()
-        started = true
-        strategyUsed = '既存の録音器を再開'
-      } catch (err) {
-        log('方法1(既存の録音器を再開)が失敗: ' + err.name + ' — ' + err.message)
-        recorder = null
-      }
+    btn.textContent = '録音をはじめる'
+    var p = el('player')
+    if (lastUrl) URL.revokeObjectURL(lastUrl)
+    lastUrl = URL.createObjectURL(blob)
+    p.src = lastUrl
+    p.hidden = false
+
+    if (samples.length === 0) {
+      setOut('out-rec', mark(false, '音声を取り込めませんでした'))
+      results.rec = '失敗(音声なし)'
+      log('録音: 音声を取り込めなかった')
+      return
+    }
+    if (peak < 0.01) {
+      setOut('out-rec', mark(null, '録音はできましたが、ほぼ無音でした') +
+        '<br><span class="hint">' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '% — マイクに向かって話してみてください</span>')
+      results.rec = '無音(' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '%)'
+      log('録音: 完了したが無音。' + seconds + '秒 音量=' + peak.toFixed(3))
+      return
     }
 
-    // 方法2: 生きているマイクに新しい録音器を作る
-    if (!started) {
-      try {
-        recorder = makeRecorder()
-        recorder.ondataavailable = collect
-        recorder.start()
-        started = true
-        strategyUsed = '新しい録音器を作成'
-      } catch (err) {
-        log('方法2(新しい録音器を作成)が失敗: ' + err.name + ' — ' + err.message)
-        recorder = null
-      }
-    }
-
-    if (!started) return false
-
-    recorder.onstop = function () {
-      var blob = new Blob(chunks, { type: lastMimeType || 'audio/webm' })
-      var p = el('player')
-      if (lastUrl) URL.revokeObjectURL(lastUrl)
-      lastUrl = URL.createObjectURL(blob)
-      p.src = lastUrl
-      p.hidden = false
-      btn.textContent = '録音をはじめる'
-
-      if (blob.size === 0) {
-        setOut('out-rec', mark(false, '録音は終わりましたが、音声が空でした') +
-          '<br><span class="hint">方法: ' + strategyUsed + '</span>')
-        results.rec = '失敗(音声が空) / 方法: ' + strategyUsed
-        log('録音: 完了したがサイズ0。方法=' + strategyUsed)
-        return
-      }
-
-      setOut('out-rec', mark(true, '録音できました') +
-        '<br><span class="hint">形式: ' + (lastMimeType || '不明') +
-        ' / サイズ: ' + Math.round(blob.size / 1024) + 'KB' +
-        ' / 方法: ' + strategyUsed + '</span>' +
-        '<br><span class="hint">下の再生ボタンで、自分の声が聞こえるか確かめてください。</span>')
-      results.rec = '成功 / 形式 ' + (lastMimeType || '不明') + ' / ' +
-        Math.round(blob.size / 1024) + 'KB / 方法: ' + strategyUsed
-      log('録音: 完了。方法=' + strategyUsed + ' 形式=' + lastMimeType + ' サイズ=' + blob.size + 'B')
-    }
-
-    btn.textContent = '■ 録音を止める'
-    setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
-    log('録音: 開始(方法: ' + strategyUsed + ')')
-    return true
+    setOut('out-rec', mark(true, '録音できました') +
+      '<br><span class="hint">形式: audio/wav / 長さ: ' + seconds + '秒 / 音量: ' + Math.round(peak * 100) + '%' +
+      ' / サイズ: ' + Math.round(blob.size / 1024) + 'KB</span>' +
+      '<br><span class="hint">下の再生ボタンで、自分の声が聞こえるか確かめてください。</span>')
+    results.rec = '成功 / WAV / ' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '% / ' + Math.round(blob.size / 1024) + 'KB'
+    log('録音: 完了。' + seconds + '秒 音量=' + Math.round(peak * 100) + '% サイズ=' + blob.size + 'B')
   }
 
   el('btn-rec').addEventListener('click', function () {
     var btn = this
 
-    if (recorder && recorder.state === 'recording') {
-      try { recorder.stop() } catch (err) {
-        setOut('out-rec', mark(false, '録音を止められませんでした: ' + err.name))
-        log('録音: stop 失敗 ' + err.name)
-      }
+    if (recSession) { stopRecordingSession(btn); return }
+
+    var AC = window.AudioContext || window.webkitAudioContext
+    if (!AC) {
+      setOut('out-rec', mark(false, 'この環境は音声処理に対応していません'))
+      results.rec = 'AudioContext 非対応'
       return
     }
 
-    if (!('MediaRecorder' in window)) {
-      setOut('out-rec', mark(false, 'この環境は録音に対応していません'))
-      results.rec = 'MediaRecorder 非対応'
-      return
-    }
+    setOut('out-rec', '<em>マイクを準備しています…</em>')
+    navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    }).then(function (stream) {
+      var ctx = new AC()
+      var begin = function () {
+        var source = ctx.createMediaStreamSource(stream)
+        var processor = ctx.createScriptProcessor(4096, 1, 1)
+        var silence = ctx.createGain()
+        silence.gain.value = 0   // 自分の声が返らないよう音量ゼロで出口につなぐ
 
-    // マイクが生きていればそのまま使う。死んでいれば取り直す。
-    if (streamIsLive(micStream)) {
-      if (!beginRecording(btn)) {
-        // 方法3: マイクごと取り直す
-        log('方法3: マイクを取り直します')
-        releaseMic()
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
-          micStream = st
-          strategyUsed = 'マイクを取り直して作成'
-          if (!beginRecording(btn)) {
-            setOut('out-rec', mark(false, 'どの方法でも録音を開始できませんでした') +
-              '<br><span class="hint">下のログを結果と一緒に送ってください。</span>')
-            results.rec = '失敗(全方法)'
-          }
-        }).catch(function (err) {
-          setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name))
-          results.rec = 'マイクエラー: ' + err.name
-          log('録音: マイクエラー ' + err.name + ' — ' + (err.message || ''))
-        })
-      }
-      return
-    }
+        var buffers = [], total = 0
+        processor.onaudioprocess = function (e) {
+          var input = e.inputBuffer.getChannelData(0)
+          buffers.push(new Float32Array(input))
+          total += input.length
+        }
+        source.connect(processor); processor.connect(silence); silence.connect(ctx.destination)
 
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
-      micStream = st
-      recorder = null
-      if (!beginRecording(btn)) {
-        setOut('out-rec', mark(false, '録音を開始できませんでした') +
-          '<br><span class="hint">下のログを結果と一緒に送ってください。</span>')
-        results.rec = '失敗(開始できず)'
+        recSession = { ctx: ctx, stream: stream, source: source, processor: processor,
+                       silence: silence, buffers: buffers, total: 0 }
+        // total は閉じ込みのため参照で持てないので、停止時に数え直す
+        Object.defineProperty(recSession, 'total', { get: function () { return total } })
+
+        btn.textContent = '■ 録音を止める'
+        setOut('out-rec', '<em>録音中… 何か話してから、もう一度ボタンを押してください</em>')
+        log('録音: 開始(Web Audio / ' + ctx.sampleRate + 'Hz)')
       }
+      // iOS では操作のあとに resume しないと音が取れない
+      if (ctx.state === 'suspended') ctx.resume().then(begin).catch(begin)
+      else begin()
     }).catch(function (err) {
       setOut('out-rec', mark(false, 'マイクを使えません: ' + err.name) +
         '<br><span class="hint">' + (err.message || '') + '</span>')
@@ -592,8 +581,9 @@ audio { width: 100%; margin-top: 10px; }
     })
   })
 
-  // 画面を閉じるときにマイクを解放する
-  window.addEventListener('pagehide', releaseMic)
+  window.addEventListener('pagehide', function () {
+    if (recSession) { try { recSession.stream.getTracks().forEach(function (t) { t.stop() }) } catch (e) {} }
+  })
 
   /* ---------- 4. 音声認識 ---------- */
 

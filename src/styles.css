@@ -349,3 +349,7 @@ html { -webkit-text-size-adjust: 100%; }
     font-size: 16px;
   }
 }
+
+/* 話者の設定 */
+.speaker { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.speaker .hint { margin: 0; }
