@@ -244,3 +244,16 @@ English-AI-System/
 3. ログイン機能をつけて、学習者と管理者を分ける
 
 詳しくは [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) をご覧ください。
+
+---
+
+## 別プロダクトの設計資料（GLOBAL TREASURE）
+
+このリポジトリには、英語学習アプリとは**別のプロダクト**
+「GLOBAL TREASURE（AIリセール＆越境販売OS）」の設計資料も置いています。
+コードはまだありません。設計だけの段階です。
+
+- 入口: [`docs/global-treasure/README.md`](docs/global-treasure/README.md)
+
+> 中身が別プロダクトのため、実装に進む段階では**別リポジトリへの分離**を推奨します
+> （理由は上記 README の D-1 を参照）。
