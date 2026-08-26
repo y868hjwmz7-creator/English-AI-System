@@ -10,7 +10,8 @@
     "build:pages": "BASE_PATH=/English-AI-System/ vite build",
     "build:single": "BUILD_SINGLE=1 vite build",
     "preview": "vite preview",
-    "audio": "node scripts/generate-audio.mjs"
+    "audio": "node scripts/generate-audio.mjs",
+    "test:db": "bash scripts/test-migration.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

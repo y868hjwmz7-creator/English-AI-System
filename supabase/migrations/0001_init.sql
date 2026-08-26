@@ -83,55 +83,7 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ────────────────────────────────────────────────────────────────
--- 2. RLS で使う判定関数
---
---   security definer にしてあるのは、関数の中の SELECT に RLS を
---   かけないため。かかると profiles のポリシーが自分自身を呼び、
---   無限ループになる。
--- ────────────────────────────────────────────────────────────────
-
-create or replace function public.is_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.profiles where id = auth.uid() and role = 'admin'
-  );
-$$;
-
--- 自分(講師)が担当している生徒か
-create or replace function public.teaches(target uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.learner_admins
-    where admin_id = auth.uid() and learner_id = target
-  );
-$$;
-
--- その教材が自分に配信されているか(生徒用)
-create or replace function public.is_assigned_material(target uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.assignments
-    where material_id = target and learner_id = auth.uid()
-  );
-$$;
-
--- ────────────────────────────────────────────────────────────────
--- 3. 弱点タグ
+-- 2. 弱点タグ
 -- ────────────────────────────────────────────────────────────────
 
 create table if not exists public.weakness_tags (
@@ -191,7 +143,7 @@ on conflict (id) do update set
   sort_order = excluded.sort_order;
 
 -- ────────────────────────────────────────────────────────────────
--- 4. 教材
+-- 3. 教材
 -- ────────────────────────────────────────────────────────────────
 
 create table if not exists public.materials (
@@ -239,7 +191,7 @@ create table if not exists public.material_audio (
 );
 
 -- ────────────────────────────────────────────────────────────────
--- 5. 宿題の配信
+-- 4. 宿題の配信
 -- ────────────────────────────────────────────────────────────────
 
 create table if not exists public.assignments (
@@ -256,7 +208,7 @@ create index if not exists assignments_learner_idx on public.assignments (learne
 create index if not exists assignments_material_idx on public.assignments (material_id);
 
 -- ────────────────────────────────────────────────────────────────
--- 6. 学習記録と発音練習
+-- 5. 学習記録と発音練習
 -- ────────────────────────────────────────────────────────────────
 
 create table if not exists public.study_logs (
@@ -287,7 +239,7 @@ create index if not exists attempts_user_idx on public.attempts (user_id, attemp
 comment on column public.attempts.engine is 'mock はシミュレーション。実エンジンの値と混ぜて集計しないこと。';
 
 -- ────────────────────────────────────────────────────────────────
--- 7. レッスンのフィードバック(弱点 → 次の教材 の循環の要)
+-- 6. レッスンのフィードバック(弱点 → 次の教材 の循環の要)
 -- ────────────────────────────────────────────────────────────────
 
 create table if not exists public.lesson_feedback (
@@ -306,6 +258,58 @@ create table if not exists public.lesson_feedback_tags (
   tag_id      text not null references public.weakness_tags(id) on delete restrict,
   primary key (feedback_id, tag_id)
 );
+
+-- ────────────────────────────────────────────────────────────────
+-- 7. RLS で使う判定関数
+--
+--   テーブルをすべて作ったあとに定義する。
+--   SQL 関数は作成時に本文を検査されるため、まだ無いテーブルを
+--   参照していると「relation does not exist」で失敗する。
+--
+--   security definer にしてあるのは、関数の中の SELECT に RLS を
+--   かけないため。かかると profiles のポリシーが自分自身を呼び、
+--   無限ループになる。
+-- ────────────────────────────────────────────────────────────────
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles where id = auth.uid() and role = 'admin'
+  );
+$$;
+
+-- 自分(講師)が担当している生徒か
+create or replace function public.teaches(target uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.learner_admins
+    where admin_id = auth.uid() and learner_id = target
+  );
+$$;
+
+-- その教材が自分に配信されているか(生徒用)
+create or replace function public.is_assigned_material(target uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.assignments
+    where material_id = target and learner_id = auth.uid()
+  );
+$$;
 
 -- ────────────────────────────────────────────────────────────────
 -- 8. RLS(誰がどの行を読み書きできるか)
@@ -359,6 +363,17 @@ create policy "自分のプロフィールを直す" on public.profiles
   for update to authenticated using (id = auth.uid() or public.is_admin())
   with check (id = auth.uid() or public.is_admin());
 -- INSERT のポリシーは作らない。作成はトリガーのみが行う。
+
+-- 【重要】role は誰にも更新させない。
+--
+--   RLS は「どの行を」しか絞れないので、上のポリシーだけでは
+--   生徒が自分の行の role を 'admin' に書き換えられてしまう。
+--   そうなると教材を作れ、全生徒のデータが見えるようになる。
+--   更新してよい列を、列単位の権限で明示的に絞る。
+--
+--   role の変更は SQL Editor から行う(手順書 第6節)。
+revoke update on public.profiles from authenticated;
+grant update (display_name, industry) on public.profiles to authenticated;
 
 -- learner_admins ------------------------------------------------
 create policy "担当関係を見る" on public.learner_admins
