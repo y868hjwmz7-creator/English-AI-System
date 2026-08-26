@@ -193,6 +193,28 @@ function StudyLogForm({ state, setState, learnerId }) {
 /* 発音練習                                                            */
 /* ------------------------------------------------------------------ */
 
+/** スピーカーの絵。お手本の音声であることを示す。 */
+function SpeakerIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M4 8h3l4-3.5v11L7 12H4z" fill="currentColor" />
+      <path d="M13.5 7.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M15.8 5.2a6.5 6.5 0 0 1 0 9.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** マイクの絵。自分の録音であることを示す。 */
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+      <rect x="7.5" y="2.5" width="5" height="9" rx="2.5" fill="currentColor" />
+      <path d="M4.8 9.5a5.2 5.2 0 0 0 10.4 0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M10 14.7v2.8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function PronunciationPractice({ state, setState, learnerId }) {
   const [phraseId, setPhraseId] = useState(practicePhrases[0].id)
   const [voices, setVoices] = useState([])
@@ -471,202 +493,263 @@ function PronunciationPractice({ state, setState, learnerId }) {
         <p className="phrase-ja">{phrase.ja}</p>
       </blockquote>
 
-      {voices.length > 0 && (
-        <div className="speaker">
-          <div className="field-row">
-            <label className="field">
-              <span>お手本の話者の選び方</span>
-              <select value={speaker.mode} onChange={(e) => updateSpeaker({ mode: e.target.value })}>
-                {SPEAKER_MODES.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+      {/* ------------------------------------------------------------------
+          お手本と自分の録音を、はっきり分かれた2つの枠に置く。
+          どちらの音声かひと目で分かることが、聞き比べの前提になる。
+          ------------------------------------------------------------------ */}
 
-            <label className="field">
-              <span>読み上げの速さ</span>
-              <select value={rate} onChange={(e) => setRate(Number(e.target.value))}>
-                <option value={0.7}>ゆっくり</option>
-                <option value={0.85}>やや ゆっくり</option>
-                <option value={1}>ふつう</option>
-                <option value={1.15}>やや 速い</option>
-              </select>
-            </label>
-          </div>
+      <section className="panel panel--model">
+        <h3 className="panel-title">
+          <SpeakerIcon />
+          お手本
+        </h3>
 
-          <p className="hint">{SPEAKER_MODES.find((m) => m.id === speaker.mode)?.description}</p>
-
-          {/* 選び方に応じて、必要な指定だけを出す */}
-          {speaker.mode === 'gender' && (
-            <div className="chip-row">
-              {['female', 'male'].map((g) => (
-                <label key={g} className={`chip${speaker.gender === g ? ' is-selected' : ''}`}>
-                  <input
-                    type="radio"
-                    name="speaker-gender"
-                    checked={speaker.gender === g}
-                    onChange={() => updateSpeaker({ gender: g })}
-                    disabled={!hasGender(voices, g)}
-                  />
-                  {genderLabel[g]}
-                  {!hasGender(voices, g) && <small className="muted">(この端末にはいません)</small>}
-                </label>
-              ))}
-            </div>
-          )}
-
-          {speaker.mode === 'fixed' && (
-            <label className="field">
-              <span>話者</span>
-              <select value={speaker.fixedName} onChange={(e) => updateSpeaker({ fixedName: e.target.value })}>
-                {voices.map((v) => (
-                  <option key={v.name} value={v.name}>
-                    {v.name} — {genderLabel[genderOf(v)]} / {voiceAccentLabel(v)} [{voiceQualityLabel(v)}]
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {speaker.mode === 'pair' && (
-            <div className="field-row">
-              <label className="field">
-                <span>女性の話者</span>
-                <select
-                  value={speaker.femaleName}
-                  onChange={(e) => updateSpeaker({ femaleName: e.target.value })}
-                  disabled={femaleVoices.length === 0}
-                >
-                  {femaleVoices.length === 0 && <option value="">この端末にはいません</option>}
-                  {femaleVoices.map((v) => (
-                    <option key={v.name} value={v.name}>
-                      {v.name} — {voiceAccentLabel(v)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>男性の話者</span>
-                <select
-                  value={speaker.maleName}
-                  onChange={(e) => updateSpeaker({ maleName: e.target.value })}
-                  disabled={maleVoices.length === 0}
-                >
-                  {maleVoices.length === 0 && <option value="">この端末にはいません</option>}
-                  {maleVoices.map((v) => (
-                    <option key={v.name} value={v.name}>
-                      {v.name} — {voiceAccentLabel(v)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-        </div>
-      )}
-
-      {voices.length > 0 && !hasGoodVoice(voices) && (
-        <div className="notice notice--warn">
-          <strong>この端末では、お手本に適した音声を選べません。</strong>
-          <br />
-          いま使えるのは簡易な音声のみです。
-          <small>
-            <br />
-            iPhone / iPad の場合、設定から高品質な音声をダウンロードしても、
-            Apple の制限によりブラウザからは使えません。
-            この問題は、音声をあらかじめ用意する方式に切り替えることで解決します。
-          </small>
-        </div>
-      )}
-
-      <div className="btn-row">
-        {/* 選び方に応じて、押せるボタンを変える */}
-        {speaker.mode === 'random' || speaker.mode === 'gender' ? (
+        {voices.length === 0 ? (
+          <p className="hint">この端末では読み上げを使えません。</p>
+        ) : (
           <>
-            <button type="button" className="btn" onClick={() => handleSpeak()}>
-              お手本を聞く
+            <div className="panel-actions">
+              {speaker.mode === 'pair' ? (
+                <>
+                  {speaker.femaleName && (
+                    <button type="button" className="btn" onClick={() => handleSpeak('female')}>
+                      ▶ {speaker.femaleName}
+                    </button>
+                  )}
+                  {speaker.maleName && (
+                    <button type="button" className="btn" onClick={() => handleSpeak('male')}>
+                      ▶ {speaker.maleName}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button type="button" className="btn btn--panel btn--model" onClick={() => handleSpeak()}>
+                    ▶ お手本を聞く
+                  </button>
+                  {(speaker.mode === 'random' || speaker.mode === 'gender') && hasGender(voices, 'female') && (
+                    <button type="button" className="btn" onClick={() => handleSpeak('female')}>
+                      ▶ 女性
+                    </button>
+                  )}
+                  {(speaker.mode === 'random' || speaker.mode === 'gender') && hasGender(voices, 'male') && (
+                    <button type="button" className="btn" onClick={() => handleSpeak('male')}>
+                      ▶ 男性
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {lastSpokenBy && (
+              <p className="panel-note">
+                読み上げ: <strong>{lastSpokenBy.name}</strong>
+                {'（'}
+                {genderLabel[genderOf(lastSpokenBy)]} / {voiceAccentLabel(lastSpokenBy)}
+                {'）'}
+              </p>
+            )}
+
+            {/* 細かい設定は普段たたんでおく。画面を単純に保つため。 */}
+            <details className="settings">
+              <summary>お手本の設定</summary>
+              <div className="settings-body">
+                <div className="field-row">
+                  <label className="field">
+                    <span>話者の選び方</span>
+                    <select value={speaker.mode} onChange={(e) => updateSpeaker({ mode: e.target.value })}>
+                      {SPEAKER_MODES.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>読み上げの速さ</span>
+                    <select value={rate} onChange={(e) => setRate(Number(e.target.value))}>
+                      <option value={0.7}>ゆっくり</option>
+                      <option value={0.85}>やや ゆっくり</option>
+                      <option value={1}>ふつう</option>
+                      <option value={1.15}>やや 速い</option>
+                    </select>
+                  </label>
+                </div>
+
+                <p className="hint">{SPEAKER_MODES.find((m) => m.id === speaker.mode)?.description}</p>
+
+                {speaker.mode === 'gender' && (
+                  <div className="chip-row">
+                    {['female', 'male'].map((g) => (
+                      <label key={g} className={`chip${speaker.gender === g ? ' is-selected' : ''}`}>
+                        <input
+                          type="radio"
+                          name="speaker-gender"
+                          checked={speaker.gender === g}
+                          onChange={() => updateSpeaker({ gender: g })}
+                          disabled={!hasGender(voices, g)}
+                        />
+                        {genderLabel[g]}
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {speaker.mode === 'fixed' && (
+                  <label className="field">
+                    <span>話者</span>
+                    <select value={speaker.fixedName} onChange={(e) => updateSpeaker({ fixedName: e.target.value })}>
+                      {voices.map((v) => (
+                        <option key={v.name} value={v.name}>
+                          {v.name} — {genderLabel[genderOf(v)]} / {voiceAccentLabel(v)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {speaker.mode === 'pair' && (
+                  <div className="field-row">
+                    <label className="field">
+                      <span>女性の話者</span>
+                      <select
+                        value={speaker.femaleName}
+                        onChange={(e) => updateSpeaker({ femaleName: e.target.value })}
+                        disabled={femaleVoices.length === 0}
+                      >
+                        {femaleVoices.length === 0 && <option value="">この端末にはいません</option>}
+                        {femaleVoices.map((v) => (
+                          <option key={v.name} value={v.name}>
+                            {v.name} — {voiceAccentLabel(v)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>男性の話者</span>
+                      <select
+                        value={speaker.maleName}
+                        onChange={(e) => updateSpeaker({ maleName: e.target.value })}
+                        disabled={maleVoices.length === 0}
+                      >
+                        {maleVoices.length === 0 && <option value="">この端末にはいません</option>}
+                        {maleVoices.map((v) => (
+                          <option key={v.name} value={v.name}>
+                            {v.name} — {voiceAccentLabel(v)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+
+                {!hasGoodVoice(voices) && (
+                  <p className="hint">
+                    この端末で選べるのは簡易な音声のみです。iPhone / iPad では高品質な音声を
+                    ダウンロードしても、Apple の制限によりブラウザからは使えません。
+                    音声をあらかじめ用意する方式に切り替えることで解決します。
+                  </p>
+                )}
+              </div>
+            </details>
+          </>
+        )}
+      </section>
+
+      <section className="panel panel--mine">
+        <h3 className="panel-title">
+          <MicIcon />
+          自分の録音
+        </h3>
+
+        <div className="panel-actions">
+          {status !== 'recording' ? (
+            <button
+              type="button"
+              className="btn btn--panel btn--mine"
+              onClick={handleRecordStart}
+              disabled={status === 'scoring' || !isRecordingSupported()}
+            >
+              {status === 'scoring' ? '採点中…' : result || recordedUrl ? '● もう一度録音する' : '● 録音する'}
             </button>
-            {hasGender(voices, 'female') && (
-              <button type="button" className="btn" onClick={() => handleSpeak('female')}>
-                女性の声で
-              </button>
-            )}
-            {hasGender(voices, 'male') && (
-              <button type="button" className="btn" onClick={() => handleSpeak('male')}>
-                男性の声で
-              </button>
-            )}
-          </>
-        ) : speaker.mode === 'pair' ? (
-          <>
-            {speaker.femaleName && (
-              <button type="button" className="btn" onClick={() => handleSpeak('female')}>
-                {speaker.femaleName} の声で
-              </button>
-            )}
-            {speaker.maleName && (
-              <button type="button" className="btn" onClick={() => handleSpeak('male')}>
-                {speaker.maleName} の声で
-              </button>
-            )}
-          </>
-        ) : (
-          <button type="button" className="btn" onClick={() => handleSpeak()}>
-            お手本を聞く
-          </button>
-        )}
-
-        {status !== 'recording' ? (
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={handleRecordStart}
-            disabled={status === 'scoring' || !isRecordingSupported()}
-          >
-            {status === 'scoring' ? '採点中…' : result || recordedUrl ? 'もう一度録音する' : '録音する'}
-          </button>
-        ) : (
-          <button type="button" className="btn btn--danger" onClick={handleRecordStop}>
-            録音を止めて採点
-          </button>
-        )}
-      </div>
-
-      {!isRecordingSupported() && (
-        <p className="hint">このブラウザ・環境では録音を使えません。お手本の読み上げのみ利用できます。</p>
-      )}
-      {lastSpokenBy && (
-        <p className="hint">
-          いま読み上げたのは <strong>{lastSpokenBy.name}</strong>({genderLabel[genderOf(lastSpokenBy)]} /{' '}
-          {voiceAccentLabel(lastSpokenBy)})です。
-        </p>
-      )}
-      {status === 'recording' && <p className="recording-indicator">● 録音中… 英文を声に出して読んでください</p>}
-      {error && <p className="error">{error}</p>}
-
-      {recordedUrl && (
-        <div className="compare">
-          <span className="field-label">聞き比べる</span>
-          {/* お手本のすぐ隣に自分の録音を置く。交互に聞けることが練習の要。 */}
-          <div className="compare-row">
-            <div className="compare-side">
-              <span className="compare-label">お手本</span>
-              <button type="button" className="btn" onClick={() => handleSpeak()}>
-                ▶ 再生
-              </button>
-            </div>
-            <div className="compare-side compare-side--wide">
-              <span className="compare-label">自分の録音</span>
-              <audio src={recordedUrl} controls />
-            </div>
-          </div>
-          <p className="hint">
-            納得いくまで何度でも録り直せます。「もう一度録音する」を押すと、前の録音は破棄されます。
-          </p>
+          ) : (
+            <button type="button" className="btn btn--panel btn--danger" onClick={handleRecordStop}>
+              ■ 録音を止めて採点
+            </button>
+          )}
         </div>
-      )}
+
+        {status === 'recording' && (
+          <p className="recording-indicator">● 録音中… 英文を声に出して読んでください</p>
+        )}
+
+        {recordedUrl ? (
+          <>
+            <audio src={recordedUrl} controls />
+            <p className="panel-note">
+              上の「お手本」と交互に聞いて比べてください。納得いくまで録り直せます。
+            </p>
+          </>
+        ) : (
+          !isRecordingSupported() && (
+            <p className="hint">このブラウザ・環境では録音を使えません。</p>
+          )
+        )}
+
+        {isRecordingSupported() && isStorageSupported() && (
+          <details className="settings">
+            <summary>録音の保存({keepRecordings ? `残す・${savedIds.length}件` : '残さない'})</summary>
+            <div className="settings-body">
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={keepRecordings}
+                  onChange={(e) => setKeepRecordings(e.target.checked)}
+                />
+                <span>この端末に録音を残す(直近{MAX_RECORDINGS}件)</span>
+              </label>
+              <p className="hint">
+                {keepRecordings
+                  ? `過去の録音を聞き返せます。${MAX_RECORDINGS}件を超えると古いものから消えます。`
+                  : '録音は保存しません。いま録音したものだけ、その場で聞き返せます。'}
+                <br />
+                保存先はこの端末の中だけです。サーバーには送りません。別の端末では聞けません。
+              </p>
+
+              {savedIds.length > 0 && (
+                <>
+                  <ul className="saved-list">
+                    {savedIds.slice(0, 10).map((id, i) => {
+                      const attempt = state.pronunciationAttempts.find((a) => a.id === id)
+                      return (
+                        <li key={id} className="saved-row">
+                          <span className="saved-info">
+                            {attempt ? `${attempt.score}点` : '—'}
+                            <small className="muted">
+                              {' '}
+                              {attempt?.targetText?.slice(0, 24) ?? `録音 ${i + 1}`}
+                              {attempt?.targetText?.length > 24 ? '…' : ''}
+                            </small>
+                          </span>
+                          <button type="button" className="btn btn--small" onClick={() => handlePlaySaved(id)}>
+                            {playingId === id ? '再生中' : '▶ 聞く'}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {playingUrl && <audio src={playingUrl} controls autoPlay />}
+                  <button type="button" className="btn btn--link" onClick={handleDeleteAll}>
+                    保存した録音をすべて削除する
+                  </button>
+                </>
+              )}
+            </div>
+          </details>
+        )}
+      </section>
+
+      {error && <p className="error">{error}</p>}
 
       {result && (
         <div className="score">
@@ -683,56 +766,6 @@ function PronunciationPractice({ state, setState, learnerId }) {
               { key: 'intonation', label: '抑揚', value: result.breakdown.intonation, color: 'var(--series-1)' },
             ]}
           />
-        </div>
-      )}
-
-      {isRecordingSupported() && isStorageSupported() && (
-        <div className="chart-block">
-          <h3 className="chart-title">録音の保存</h3>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={keepRecordings}
-              onChange={(e) => setKeepRecordings(e.target.checked)}
-            />
-            <span>この端末に録音を残す(直近{MAX_RECORDINGS}件)</span>
-          </label>
-          <p className="hint">
-            {keepRecordings
-              ? `過去の録音を聞き返せます。保存先はこの端末の中だけで、サーバーには送りません。${MAX_RECORDINGS}件を超えると古いものから消えます。`
-              : '録音は保存しません。いま録音したものだけ、その場で聞き返せます。'}
-            <br />
-            別の端末では聞けません。ブラウザのサイトデータを削除すると消えます。
-          </p>
-
-          {savedIds.length > 0 && (
-            <>
-              <ul className="saved-list">
-                {savedIds.slice(0, 10).map((id, i) => {
-                  const attempt = state.pronunciationAttempts.find((a) => a.id === id)
-                  return (
-                    <li key={id} className="saved-row">
-                      <span className="saved-info">
-                        {attempt ? `${attempt.score}点` : '—'}
-                        <small className="muted">
-                          {' '}
-                          {attempt?.targetText?.slice(0, 28) ?? `録音 ${i + 1}`}
-                          {attempt?.targetText?.length > 28 ? '…' : ''}
-                        </small>
-                      </span>
-                      <button type="button" className="btn btn--small" onClick={() => handlePlaySaved(id)}>
-                        {playingId === id ? '再生中' : '▶ 聞く'}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-              {playingUrl && <audio src={playingUrl} controls autoPlay />}
-              <button type="button" className="btn btn--link" onClick={handleDeleteAll}>
-                保存した録音をすべて削除する
-              </button>
-            </>
-          )}
         </div>
       )}
 

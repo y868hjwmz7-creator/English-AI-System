@@ -350,22 +350,6 @@ html { -webkit-text-size-adjust: 100%; }
   }
 }
 
-/* 話者の設定 */
-.speaker { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-.speaker .hint { margin: 0; }
-
-/* 聞き比べ(お手本と自分の録音を並べる) */
-.compare { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
-.compare-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-.compare-side { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
-.compare-side--wide { flex: 1; min-width: 200px; }
-.compare-label { font-size: 11px; color: var(--text-muted); }
-.compare-row .btn { white-space: nowrap; }
-.compare-row audio { width: 100%; margin-top: 0; }
-@media (max-width: 560px) {
-  .compare-row { flex-direction: column; align-items: stretch; }
-  .compare-side { width: 100%; }
-}
 
 /* 保存の切り替え(チェックの状態が見えるようにする)
    .chip の中の入力欄は隠す指定があるため、専用の見た目を用意している */
@@ -387,3 +371,53 @@ html { -webkit-text-size-adjust: 100%; }
 .saved-row:last-child { border-bottom: 0; }
 .saved-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn--small { padding: 5px 12px; font-size: 13px; min-height: 34px; flex-shrink: 0; }
+
+/* ------------------------------------------------------------------
+   お手本 / 自分の録音 の枠
+   どちらの音声かひと目で分かるよう、色と見出しで区別する。
+   ------------------------------------------------------------------ */
+.panel {
+  margin-top: 14px; padding: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-0);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.panel--model { border-left: 4px solid var(--series-1); }
+.panel--mine  { border-left: 4px solid var(--series-2); }
+
+.panel-title {
+  margin: 0; display: flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.02em;
+}
+.panel--model .panel-title { color: var(--series-1); }
+.panel--mine  .panel-title { color: var(--series-2); }
+
+.panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.panel-actions .btn { flex: 0 0 auto; }
+/* 主となるボタンだけ幅を広げ、補助のボタンと差をつける */
+.btn--panel { flex: 1 1 auto; min-width: 160px; }
+
+.panel-note { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+.panel audio { width: 100%; margin: 0; }
+
+/* たたんでおける設定 */
+.settings { border-top: 1px solid var(--border); padding-top: 8px; }
+.settings > summary {
+  cursor: pointer; font-size: 12px; color: var(--text-secondary);
+  list-style: none; padding: 4px 0; min-height: 32px; display: flex; align-items: center;
+}
+.settings > summary::-webkit-details-marker { display: none; }
+.settings > summary::before { content: '▸ '; margin-right: 4px; }
+.settings[open] > summary::before { content: '▾ '; }
+.settings-body { display: flex; flex-direction: column; gap: 10px; padding: 8px 0 4px; }
+
+/* 枠の色と揃えた主ボタン。どちらの操作か色でも分かるようにする。 */
+.btn--model {
+  background: var(--series-1); border-color: var(--series-1);
+  color: #fff; font-weight: 600;
+}
+.btn--mine {
+  background: var(--series-2); border-color: var(--series-2);
+  color: #fff; font-weight: 600;
+}
+.btn--model:hover, .btn--mine:hover { filter: brightness(0.94); }
