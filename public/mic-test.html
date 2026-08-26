@@ -439,9 +439,6 @@ audio { width: 100%; margin-top: 10px; }
    *   そこで MediaRecorder を使わず、Web Audio API で生の音声を集め、
    *   自分で WAV に組み立てる方式に変更した。
    *   出来上がる形式が常に WAV になるため、端末による違いも無くなる。
-   *
-   * ★録音が終わったらマイクを完全に解放する。
-   *   掴んだままだと、iOS では音声認識が aborted で失敗する。
    */
   var TARGET_RATE = 16000
   var lastUrl = null
