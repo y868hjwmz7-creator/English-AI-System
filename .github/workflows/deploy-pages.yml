@@ -59,6 +59,13 @@ jobs:
           # GitHub Pages はリポジトリ名のフォルダの下で配信されるため、その指定
           BASE_PATH: /${{ github.event.repository.name }}/
 
+      - name: 診断ページに版を埋め込む
+        # 古い内容がブラウザに残っていると、直したはずの不具合が
+        # 直っていないように見える。どの版を見ているか分かるようにする。
+        run: |
+          STAMP="$(date -u '+%Y-%m-%d %H:%M') UTC / ${GITHUB_SHA:0:7}"
+          sed -i "s|__BUILD_STAMP__|${STAMP}|g" dist/mic-test.html
+
       - name: 1ファイル版を組み立てる
         # ダウンロードして開くだけで使える版。公開物に download.html として含める。
         # (ビルド結果なのでリポジトリには置かず、ここで作る)

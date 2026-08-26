@@ -100,6 +100,7 @@ audio { width: 100%; margin-top: 10px; }
 <div class="wrap">
 
 <h1>音声機能の動作確認</h1>
+<p class="lead" id="version-line">版: <code>__BUILD_STAMP__</code></p>
 <p class="lead">
   このページは、お使いの端末で <strong>読み上げ・録音・音声認識</strong> が
   実際に動くかを確かめるためのものです。1〜4を上から順に試して、
@@ -169,6 +170,13 @@ audio { width: 100%; margin-top: 10px; }
 
   var logLines = []
   var results = {}
+
+  /**
+   * このページの版。公開時に埋め込まれる。
+   * 古い内容が残っていると、直したはずの不具合が直っていないように見える。
+   * 結果にも含めて、どの版で確認したのかが分かるようにする。
+   */
+  var BUILD_STAMP = '__BUILD_STAMP__'
   var el = function (id) { return document.getElementById(id) }
 
   function log(msg) {
@@ -232,6 +240,7 @@ audio { width: 100%; margin-top: 10px; }
     return '<li><span class="k">' + r[0] + '</span><span class="v">' + v + '</span></li>'
   }).join('')
 
+  log('版: ' + BUILD_STAMP)
   log('OS: ' + results.os + ' / ブラウザ: ' + results.browser)
   log('userAgent: ' + ua)
   log('https: ' + window.isSecureContext + ' / iframe内: ' + inIframe)
@@ -805,6 +814,7 @@ audio { width: 100%; margin-top: 10px; }
     var btn = this
     var text = [
       '=== 音声機能の動作確認 結果 ===',
+      '版: ' + BUILD_STAMP,
       'OS: ' + results.os,
       'ブラウザ: ' + results.browser,
       'アドレス: ' + location.protocol + (results.iframe ? ' (埋め込み状態)' : ''),
@@ -851,6 +861,10 @@ audio { width: 100%; margin-top: 10px; }
       btn.textContent = '↓ここを長押しして選択・コピーしてください'
     }
   })
+
+  if (BUILD_STAMP.indexOf('__BUILD') === 0) {
+    el('version-line').textContent = '版: (未公開の手元の版です)'
+  }
 
   el('btn-rec').disabled = false
   log('準備完了。上から順に試してください。')
