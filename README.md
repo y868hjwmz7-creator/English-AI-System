@@ -189,6 +189,7 @@ Node.js 20 以上。
 | `npm install` | 必要な部品(ライブラリ)をダウンロードする。最初に1回 |
 | `npm run dev` | 開発用サーバーを起動する。`http://localhost:5173` で確認 |
 | `npm run build` | 公開用に組み立てる。`dist/` に出力 |
+| `npm run audio` | お手本音声を生成する。`docs/AUDIO_SETUP.md` 参照 |
 | `npm run build:single` | 1ファイル版を作る。`standalone/index.html` に出力(Gitには入れない) |
 | `npm run preview` | 組み立てた結果を確認する |
 
@@ -234,6 +235,7 @@ English-AI-System/
 | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) | 用語集とファイルの説明 |
 | [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) | **Supabase を始める手順**(アカウント作成から) |
 | [`docs/PRONUNCIATION_OPTIONS.md`](docs/PRONUNCIATION_OPTIONS.md) | **発音評価の3案の比較と推奨** |
+| [`docs/AUDIO_SETUP.md`](docs/AUDIO_SETUP.md) | **お手本音声を用意する手順**(全端末で同じ品質にする) |
 
 ### これからやること
 

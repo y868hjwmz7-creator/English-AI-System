@@ -14,6 +14,60 @@
 
 import { voiceQualityLabel } from '../lib/speech.js'
 
+/** 配列からランダムに1つ選ぶ */
+function pickRandom(list) {
+  if (!list.length) return null
+  return list[Math.floor(Math.random() * list.length)]
+}
+
+/**
+ * ★事前に生成しておくお手本の話者(4人)
+ *
+ *   端末に入っている音声は品質がばらばらで、iPhone では簡易版しか
+ *   使えない(仕様書 3.3.4)。そのため、練習用の英文の音声を
+ *   あらかじめ生成して配信し、全端末で同じ品質にする。
+ *
+ *   ここに定義した4人が、アプリ上の「話者」になる。
+ *   端末内蔵の音声は、生成が間に合っていない文章のための予備として残す。
+ *
+ *   地域訛り(スコットランド英語など)は後回し(仕様書 7.1)。
+ */
+export const PREGENERATED_SPEAKERS = [
+  { id: 'us-female', label: 'Emma', accent: 'アメリカ英語', gender: 'female', lang: 'en-US' },
+  { id: 'us-male', label: 'Ryan', accent: 'アメリカ英語', gender: 'male', lang: 'en-US' },
+  { id: 'uk-female', label: 'Sophie', accent: 'イギリス英語', gender: 'female', lang: 'en-GB' },
+  { id: 'uk-male', label: 'Oliver', accent: 'イギリス英語', gender: 'male', lang: 'en-GB' },
+]
+
+export const findSpeaker = (id) => PREGENERATED_SPEAKERS.find((s) => s.id === id) || null
+
+/** 設定にもとづいて、事前生成の話者を1人決める */
+export function resolvePregenerated(available, settings, requestedGender = null) {
+  const pool = PREGENERATED_SPEAKERS.filter((s) => available.includes(s.id))
+  if (!pool.length) return null
+
+  const byGender = (g) => pool.filter((s) => s.gender === g)
+  const byId = (id) => pool.find((s) => s.id === id)
+
+  switch (settings.mode) {
+    case 'gender': {
+      const g = requestedGender || settings.gender || 'female'
+      return pickRandom(byGender(g)) || pool[0]
+    }
+    case 'fixed':
+      return byId(settings.fixedSpeakerId) || pool[0]
+    case 'pair': {
+      const g = requestedGender || 'female'
+      const id = g === 'male' ? settings.maleSpeakerId : settings.femaleSpeakerId
+      return byId(id) || pickRandom(byGender(g)) || pool[0]
+    }
+    case 'random':
+    default:
+      if (requestedGender) return pickRandom(byGender(requestedGender)) || pool[0]
+      return pickRandom(pool) || pool[0]
+  }
+}
+
 /** 女性の声として知られている名前 */
 const FEMALE = [
   // Apple
@@ -104,11 +158,7 @@ function bestQualityOnly(voices) {
   return voices
 }
 
-/** 配列からランダムに1つ選ぶ */
-function pickRandom(list) {
-  if (!list.length) return null
-  return list[Math.floor(Math.random() * list.length)]
-}
+
 
 /**
  * 設定にもとづいて、実際に読み上げる声を決める。

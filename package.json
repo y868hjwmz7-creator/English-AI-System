@@ -9,7 +9,8 @@
     "build": "vite build",
     "build:pages": "BASE_PATH=/English-AI-System/ vite build",
     "build:single": "BUILD_SINGLE=1 vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "audio": "node scripts/generate-audio.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

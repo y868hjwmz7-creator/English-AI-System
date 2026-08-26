@@ -421,3 +421,11 @@ html { -webkit-text-size-adjust: 100%; }
   color: #fff; font-weight: 600;
 }
 .btn--model:hover, .btn--mine:hover { filter: brightness(0.94); }
+
+/* 事前生成の音声を使っていることを示す印 */
+.badge-quality {
+  margin-left: auto; padding: 2px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--series-3) 16%, var(--surface-1));
+  border: 1px solid var(--series-3); color: var(--text-secondary);
+  font-size: 10px; font-weight: 600; letter-spacing: 0;
+}

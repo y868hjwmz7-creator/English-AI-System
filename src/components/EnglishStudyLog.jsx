@@ -1,7 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { categories, categoryColor, categoryLabel } from '../data/categories.js'
 import { practicePhrases } from '../data/practicePhrases.js'
-import { SPEAKER_MODES, genderLabel, genderOf, hasGender, resolveVoice } from '../data/speakers.js'
+import {
+  PREGENERATED_SPEAKERS,
+  SPEAKER_MODES,
+  findSpeaker,
+  genderLabel,
+  genderOf,
+  hasGender,
+  resolvePregenerated,
+  resolveVoice,
+} from '../data/speakers.js'
+import { availableSpeakersFor, loadModelAudioManifest, modelAudioUrl } from '../lib/modelAudio.js'
 import { calculateStreak, formatMinutes, lastNDays, shortDate, today } from '../lib/format.js'
 import { addPronunciationAttempt, addStudyLog, createId, removeStudyLog } from '../lib/store.js'
 import { scorePronunciation } from '../lib/pronunciation.js'
@@ -226,9 +236,26 @@ function PronunciationPractice({ state, setState, learnerId }) {
     } catch {
       /* 壊れていれば初期値を使う */
     }
-    return { mode: 'random', gender: 'female', fixedName: '', femaleName: '', maleName: '' }
+    return {
+      mode: 'random',
+      gender: 'female',
+      fixedName: '',
+      femaleName: '',
+      maleName: '',
+      // 事前生成の音声を使うときの指定
+      fixedSpeakerId: 'us-female',
+      femaleSpeakerId: 'us-female',
+      maleSpeakerId: 'us-male',
+    }
   })
   const [lastSpokenBy, setLastSpokenBy] = useState(null)
+
+  /**
+   * 事前に生成したお手本音声の目録。
+   * 用意されていればそれを再生し、無ければ端末内蔵の読み上げに切り替える。
+   */
+  const [manifest, setManifest] = useState(null)
+  const modelAudioRef = useRef(null)
 
   /**
    * 録音をこの端末に保存するかどうか。利用者が選べる。
@@ -258,6 +285,10 @@ function PronunciationPractice({ state, setState, learnerId }) {
   const [error, setError] = useState('')
 
   const phrase = practicePhrases.find((p) => p.id === phraseId)
+
+  useEffect(() => {
+    loadModelAudioManifest().then(setManifest)
+  }, [])
 
   useEffect(() => {
     loadEnglishVoices().then((list) => {
@@ -364,15 +395,63 @@ function PronunciationPractice({ state, setState, learnerId }) {
     }
   }, [recordedUrl])
 
-  /** お手本を読み上げる。gender を渡すと、その性別の話者で読み上げる。 */
+  /** この英文について、事前生成の音声が用意されている話者 */
+  const readySpeakerIds = availableSpeakersFor(manifest, phrase.id)
+  const usePregenerated = readySpeakerIds.length > 0
+
+  /**
+   * お手本を読み上げる。gender を渡すと、その性別の話者で読み上げる。
+   *
+   * 事前生成の音声があればそれを再生する。全端末で同じ品質になるため。
+   * 無ければ端末内蔵の読み上げに切り替える(予備)。
+   */
   const handleSpeak = (requestedGender = null) => {
+    setError('')
+
+    if (usePregenerated) {
+      const chosen = resolvePregenerated(readySpeakerIds, speaker, requestedGender)
+      const url = chosen && modelAudioUrl(manifest, phrase.id, chosen.id)
+      if (url) {
+        stopSpeaking() // 端末の読み上げが残っていたら止める
+        const player = modelAudioRef.current
+        if (player) {
+          player.src = url
+          player.playbackRate = rate
+          player.play().catch(() => {
+            // 再生できない場合は端末内蔵の読み上げに切り替える
+            speakWithDevice(requestedGender)
+          })
+          setLastSpokenBy({
+            name: chosen.label,
+            genderKey: chosen.gender,
+            accentText: chosen.accent,
+            source: 'pregenerated',
+          })
+          return
+        }
+      }
+    }
+
+    speakWithDevice(requestedGender)
+  }
+
+  /** 端末内蔵の読み上げを使う(予備) */
+  const speakWithDevice = (requestedGender) => {
     if (!isSpeechSupported()) {
       setError('このブラウザは読み上げに対応していません。')
       return
     }
-    setError('')
     const voice = resolveVoice(voices, speaker, requestedGender)
-    setLastSpokenBy(voice)
+    if (!voice) {
+      setError('この端末では読み上げに使える音声が見つかりませんでした。')
+      return
+    }
+    setLastSpokenBy({
+      name: voice.name,
+      genderKey: genderOf(voice),
+      accentText: voiceAccentLabel(voice),
+      source: 'device',
+    })
     speak(phrase.text, { voice, rate })
   }
 
@@ -502,9 +581,10 @@ function PronunciationPractice({ state, setState, learnerId }) {
         <h3 className="panel-title">
           <SpeakerIcon />
           お手本
+          {usePregenerated && <span className="badge-quality">全端末で同じ品質</span>}
         </h3>
 
-        {voices.length === 0 ? (
+        {voices.length === 0 && !usePregenerated ? (
           <p className="hint">この端末では読み上げを使えません。</p>
         ) : (
           <>
@@ -545,10 +625,21 @@ function PronunciationPractice({ state, setState, learnerId }) {
               <p className="panel-note">
                 読み上げ: <strong>{lastSpokenBy.name}</strong>
                 {'（'}
-                {genderLabel[genderOf(lastSpokenBy)]} / {voiceAccentLabel(lastSpokenBy)}
+                {genderLabel[lastSpokenBy.genderKey]} / {lastSpokenBy.accentText}
                 {'）'}
+                {lastSpokenBy.source === 'device' && (
+                  <>
+                    <br />
+                    <small className="muted">
+                      この端末の音声です。品質は端末によって変わります。
+                    </small>
+                  </>
+                )}
               </p>
             )}
+
+            {/* 事前生成した音声の再生用。画面には出さない。 */}
+            <audio ref={modelAudioRef} hidden preload="none" />
 
             {/* 細かい設定は普段たたんでおく。画面を単純に保つため。 */}
             <details className="settings">
@@ -595,20 +686,62 @@ function PronunciationPractice({ state, setState, learnerId }) {
                   </div>
                 )}
 
-                {speaker.mode === 'fixed' && (
-                  <label className="field">
-                    <span>話者</span>
-                    <select value={speaker.fixedName} onChange={(e) => updateSpeaker({ fixedName: e.target.value })}>
-                      {voices.map((v) => (
-                        <option key={v.name} value={v.name}>
-                          {v.name} — {genderLabel[genderOf(v)]} / {voiceAccentLabel(v)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+                {speaker.mode === 'fixed' &&
+                  (usePregenerated ? (
+                    <label className="field">
+                      <span>話者</span>
+                      <select
+                        value={speaker.fixedSpeakerId}
+                        onChange={(e) => updateSpeaker({ fixedSpeakerId: e.target.value })}
+                      >
+                        {PREGENERATED_SPEAKERS.filter((sp) => readySpeakerIds.includes(sp.id)).map((sp) => (
+                          <option key={sp.id} value={sp.id}>
+                            {sp.label} — {genderLabel[sp.gender]} / {sp.accent}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <label className="field">
+                      <span>話者</span>
+                      <select value={speaker.fixedName} onChange={(e) => updateSpeaker({ fixedName: e.target.value })}>
+                        {voices.map((v) => (
+                          <option key={v.name} value={v.name}>
+                            {v.name} — {genderLabel[genderOf(v)]} / {voiceAccentLabel(v)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
 
-                {speaker.mode === 'pair' && (
+                {speaker.mode === 'pair' &&
+                  (usePregenerated ? (
+                    <div className="field-row">
+                      {['female', 'male'].map((g) => (
+                        <label key={g} className="field">
+                          <span>{genderLabel[g]}の話者</span>
+                          <select
+                            value={g === 'male' ? speaker.maleSpeakerId : speaker.femaleSpeakerId}
+                            onChange={(e) =>
+                              updateSpeaker(
+                                g === 'male'
+                                  ? { maleSpeakerId: e.target.value }
+                                  : { femaleSpeakerId: e.target.value },
+                              )
+                            }
+                          >
+                            {PREGENERATED_SPEAKERS.filter(
+                              (sp) => sp.gender === g && readySpeakerIds.includes(sp.id),
+                            ).map((sp) => (
+                              <option key={sp.id} value={sp.id}>
+                                {sp.label} — {sp.accent}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
                   <div className="field-row">
                     <label className="field">
                       <span>女性の話者</span>
@@ -641,9 +774,9 @@ function PronunciationPractice({ state, setState, learnerId }) {
                       </select>
                     </label>
                   </div>
-                )}
+                  ))}
 
-                {!hasGoodVoice(voices) && (
+                {!usePregenerated && !hasGoodVoice(voices) && (
                   <p className="hint">
                     この端末で選べるのは簡易な音声のみです。iPhone / iPad では高品質な音声を
                     ダウンロードしても、Apple の制限によりブラウザからは使えません。
