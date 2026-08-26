@@ -2,10 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 言語
+**全プロジェクト共通のルールは [`.claude/rules/common.md`](.claude/rules/common.md) にある。**
+言語・事実の扱い・検証の作法・記録の残し方・鍵の扱い・Git の決まりはそちら。
+このファイルには、**このプロジェクト固有のこと**だけを書く。
 
-**利用者への返答・コミットメッセージ・コード内のコメント・ドキュメントは、すべて日本語で書く。**
-利用者はプログラミングの初学者であり、専門用語には短い言い換えを添える。
+作業ブランチ: `claude/project-spec-document-k5wmwy`
 
 ## コマンド
 
@@ -124,20 +125,15 @@ SQL 関数は作成時に本文を検査される。まだ無いテーブルを�
 `relation does not exist` で失敗する。`0001_init.sql` では判定関数を
 テーブルの後(第7節)にまとめてある。
 
-## 鍵の扱い
+## 鍵(このプロジェクト固有)
+
+扱いの原則は共通ルールにある。このプロジェクトで出てくるのは次の3つ。
 
 | 鍵 | 扱い |
 |---|---|
-| Supabase の `anon` / `publishable`(`sb_publishable_...`) | 公開前提。アプリに埋め込んでよい |
-| Supabase の `service_role` / `secret`(`sb_secret_...`) | **絶対に扱わない。利用者にも求めない** |
-| Azure Speech の鍵 | `.env` か GitHub Secrets に直接書いてもらう。**チャットに貼らせない** |
+| Supabase `sb_publishable_...` | 公開前提。`.env` と GitHub Secrets に置く |
+| Supabase `sb_secret_...` / `service_role` | **扱わない。利用者にも求めない** |
+| Azure Speech の鍵 | 利用者が `.env` か GitHub Secrets に直接書く |
 
 `anon` キーが公開されていても安全なのは RLS が守っているからである。
 **RLS を無効化する変更は行わない。**
-
-## Git
-
-- 作業ブランチは `claude/project-spec-document-k5wmwy`。`main` に直接 push しない
-- Pull Request は明示的に頼まれたときだけ作る
-- コミットメッセージは日本語。**何を変えたかだけでなく、なぜそう判断したかを書く。**
-  この判断の記録が、次のセッションの自分にとって唯一の引き継ぎになる
