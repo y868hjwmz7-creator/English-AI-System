@@ -9,6 +9,18 @@
 --   途中で失敗しても、何度でも貼り直して実行できます
 --   (すべて「無ければ作る」書き方にしてあります)。
 --
+-- 【実行時に「Potential issue detected」という警告が出ます】
+--   これは正常です。Supabase は「作る」以外の操作が含まれていると
+--   一律にこの警告を出します。このファイルに含まれるのは次の3つだけで、
+--   いずれも「このファイルが前回作ったものを作り直す」ためのものです。
+--
+--     drop policy   … このファイルが作る12テーブルのポリシーだけを消す
+--     drop trigger  … このファイルが作るトリガー1つだけを消す
+--     revoke        … assignments の更新権限を絞る(第8節の説明を参照)
+--
+--   利用者のデータを消す文(delete / drop table / truncate)は
+--   1つも含まれていません。
+--
 -- 【このファイルが作るもの】
 --   ・生徒と講師の情報          profiles / learner_admins
 --   ・弱点タグ                  weakness_tags(38件を投入)
@@ -314,17 +326,31 @@ alter table public.attempts             enable row level security;
 alter table public.lesson_feedback      enable row level security;
 alter table public.lesson_feedback_tags enable row level security;
 
--- 何度でも実行できるよう、同名のポリシーがあれば作り直す
+-- 何度でも実行できるよう、同名のポリシーがあれば作り直す。
+--
+-- 消す対象は「このファイルが作る12テーブル」だけに限っている。
+-- 同じデータベースに別の用途のテーブルがあっても、それらのポリシーには触れない。
 do $$
 declare r record;
 begin
   for r in
     select schemaname, tablename, policyname
-    from pg_policies where schemaname = 'public'
+    from pg_policies
+    where schemaname = 'public'
+      and tablename in (
+        'profiles', 'learner_admins', 'weakness_tags',
+        'materials', 'material_tags', 'material_items', 'material_audio',
+        'assignments', 'study_logs', 'attempts',
+        'lesson_feedback', 'lesson_feedback_tags'
+      )
   loop
     execute format('drop policy %I on %I.%I', r.policyname, r.schemaname, r.tablename);
   end loop;
 end $$;
+
+-- Storage のポリシーも、このファイルが作る2つだけを名指しで消す
+drop policy if exists "音声は配信された生徒と講師だけ" on storage.objects;
+drop policy if exists "音声を置けるのは講師だけ" on storage.objects;
 
 -- profiles ------------------------------------------------------
 create policy "自分のプロフィールを見る" on public.profiles
