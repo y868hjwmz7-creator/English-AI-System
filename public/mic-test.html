@@ -463,6 +463,26 @@ audio { width: 100%; margin-top: 10px; }
   var silenceNode = null
   var collector = null     // 録音中に音を集める入れ物
   var graphBuilds = 0      // 何回組み立て直したか(診断用)
+  var graphStale = false   // マイクの機器が入れ替わったか
+
+  /**
+   * ★マイクの機器が入れ替わったら、接続を作り直す。
+   *   接続を保持する設計のため、練習の途中で Bluetooth のイヤホンを
+   *   繋いだ・外した場合に、すでに無い機器を掴んだままになる。
+   *   その結果、無音になったり音量が極端に小さくなったりする。
+   */
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener('devicechange', function () {
+      log('マイクの機器が入れ替わりました。次の録音で接続を作り直します。')
+      if (collector) graphStale = true
+      else teardownGraph()
+    })
+  }
+
+  function currentMicLabel() {
+    var t = micStream && micStream.getAudioTracks ? micStream.getAudioTracks()[0] : null
+    return (t && t.label) || ''
+  }
 
   function getAudioCtx() {
     var AC = window.AudioContext || window.webkitAudioContext
@@ -487,11 +507,13 @@ audio { width: 100%; margin-top: 10px; }
     if (micStream) micStream.getTracks().forEach(function (t) { t.stop() })
     sourceNode = null; processorNode = null; silenceNode = null; micStream = null
     collector = null
+    graphStale = false
   }
 
   function releaseMic() { teardownGraph(); suspendAudio() }
 
   function graphIsAlive() {
+    if (graphStale) return false
     return !!(micStream && micStream.active &&
       micStream.getAudioTracks().some(function (t) { return t.readyState === 'live' }) &&
       sourceNode && processorNode)
@@ -523,7 +545,9 @@ audio { width: 100%; margin-top: 10px; }
         processorNode.connect(silenceNode)
         silenceNode.connect(ctx.destination)
         graphBuilds++
-        log('マイクへの接続を組み立てました(' + graphBuilds + '回目 / ' + ctx.sampleRate + 'Hz)')
+        graphStale = false
+        log('マイクへの接続を組み立てました(' + graphBuilds + '回目 / ' + ctx.sampleRate + 'Hz / 入力=' +
+          (currentMicLabel() || '不明') + ')')
         done(ctx)
       }).catch(fail)
     }
@@ -567,6 +591,7 @@ audio { width: 100%; margin-top: 10px; }
     var mine = collector
     collector = null
     var rate = audioCtx.sampleRate
+    var device = currentMicLabel()
 
     var merged = new Float32Array(mine.total)
     var off = 0
@@ -596,7 +621,7 @@ audio { width: 100%; margin-top: 10px; }
         '<br><span class="hint">' + seconds + '秒 / 音量 0%</span>' +
         '<br><span class="hint"><strong>マイクを繋ぎ直しました。もう一度録音してみてください。</strong>' +
         'それでも無音の場合、他のアプリや通話がマイクを使っていないかご確認ください。</span>')
-      results.rec = '無音(' + seconds + '秒) / 組み立て' + graphBuilds + '回目'
+      results.rec = '無音(' + seconds + '秒) / 入力 ' + (device || '不明') + ' / 組み立て' + graphBuilds + '回目'
       log('録音: 無音だったため接続を解体。組み立て' + graphBuilds + '回目で発生')
       return
     }
@@ -608,11 +633,16 @@ audio { width: 100%; margin-top: 10px; }
     p.src = lastUrl
     p.hidden = false
 
+    var quiet = peak < 0.08
     setOut('out-rec', mark(true, '録音できました') +
       '<br><span class="hint">形式: audio/wav / 長さ: ' + seconds + '秒 / 音量: ' + Math.round(peak * 100) + '%' +
       ' / サイズ: ' + Math.round(blob.size / 1024) + 'KB</span>' +
+      '<br><span class="hint">入力: ' + (device || '不明') + '</span>' +
+      (quiet ? '<br><span class="warn">△ 音量がかなり小さいです。Bluetooth のイヤホンをお使いの場合、' +
+        '端末内蔵のマイクのほうが安定します。</span>' : '') +
       '<br><span class="hint">下の再生ボタンで、自分の声が聞こえるか確かめてください。</span>')
-    results.rec = '成功 / WAV / ' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '% / 組み立て' + graphBuilds + '回目'
+    results.rec = '成功 / WAV / ' + seconds + '秒 / 音量 ' + Math.round(peak * 100) + '% / 入力 ' +
+      (device || '不明') + ' / 組み立て' + graphBuilds + '回目'
     log('録音: 完了。' + seconds + '秒 音量=' + Math.round(peak * 100) + '% サイズ=' + blob.size + 'B')
   }
 

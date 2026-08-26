@@ -331,6 +331,36 @@ let silenceNode = null
 /** 録音中に音を集める入れ物。null なら録音していない。 */
 let collector = null
 
+/**
+ * ★マイクの機器が入れ替わったら、接続を作り直す(実機の報告より)
+ *
+ *   接続を保持する設計にしたため、練習の途中で
+ *   Bluetooth のイヤホンを繋いだ・外した・接続が切れた場合に、
+ *   すでに存在しない機器を掴んだままになる。
+ *   その結果、無音になったり音量が極端に小さくなったりする。
+ *
+ *   英語学習では Bluetooth のイヤホンを使う人が多いと想定されるため、
+ *   機器の入れ替わりを検知して、次の録音で接続を作り直す。
+ */
+let graphIsStale = false
+
+if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
+  navigator.mediaDevices.addEventListener('devicechange', () => {
+    if (collector) {
+      // 録音中は中断させたくないので、印だけ付けて次回に作り直す
+      graphIsStale = true
+    } else {
+      teardownAudioGraph()
+    }
+  })
+}
+
+/** いま使っているマイクの名前(画面に出して、機器の取り違えに気づけるようにする) */
+export function currentMicLabel() {
+  const track = micStream?.getAudioTracks?.()[0]
+  return track?.label || ''
+}
+
 /** マイクへの接続を組み立てる(すでにあれば何もしない) */
 async function ensureAudioGraph() {
   const context = getAudioContext()
@@ -346,6 +376,7 @@ async function ensureAudioGraph() {
   }
 
   const graphIsAlive =
+    !graphIsStale &&
     micStream && micStream.active && micStream.getAudioTracks().some((t) => t.readyState === 'live') && sourceNode && processorNode
 
   if (graphIsAlive) return context
@@ -375,6 +406,7 @@ async function ensureAudioGraph() {
   sourceNode.connect(processorNode)
   processorNode.connect(silenceNode)
   silenceNode.connect(context.destination)
+  graphIsStale = false
 
   return context
 }
@@ -395,6 +427,7 @@ function teardownAudioGraph() {
   silenceNode = null
   micStream = null
   collector = null
+  graphIsStale = false
 }
 
 /**
@@ -531,6 +564,7 @@ export async function startRecording() {
       if (finished) throw new Error('この録音はすでに終了しています。')
       finish()
 
+      const deviceLabel = currentMicLabel()
       const merged = mergeBuffers(myCollector.buffers, myCollector.total)
       const resampled = downsample(merged, sampleRate, TARGET_SAMPLE_RATE)
       const level = peakLevel(resampled)
@@ -547,6 +581,9 @@ export async function startRecording() {
         durationSeconds: resampled.length / TARGET_SAMPLE_RATE,
         peakLevel: level,
         isSilent: level < 0.01,
+        // 音量が小さすぎる場合の案内に使う。Bluetooth 機器では起きやすい。
+        isQuiet: level >= 0.01 && level < 0.08,
+        deviceLabel,
       }
     },
 

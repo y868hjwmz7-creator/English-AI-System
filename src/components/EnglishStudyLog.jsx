@@ -305,7 +305,7 @@ function PronunciationPractice({ state, setState, learnerId }) {
   const handleRecordStop = async () => {
     if (!recorder) return
     setStatus('scoring')
-    const { blob, url, isSilent, durationSeconds } = await recorder.stop()
+    const { blob, url, isSilent, isQuiet, durationSeconds, deviceLabel } = await recorder.stop()
     setRecorder(null)
 
     // 無音だった場合は採点しない。採点しても意味のない数字が出るだけで、
@@ -321,9 +321,19 @@ function PronunciationPractice({ state, setState, learnerId }) {
       setError(
         durationSeconds < 0.5
           ? '録音が短すぎました。ボタンを押してから話し始めてください。'
-          : '音が入っていませんでした。マイクを繋ぎ直したので、もう一度お試しください。',
+          : '音が入っていませんでした。マイクを繋ぎ直したので、もう一度お試しください。' +
+            (deviceLabel ? `(使用中のマイク: ${deviceLabel})` : ''),
       )
       return
+    }
+
+    // 音量が小さすぎると採点の精度が落ちる。Bluetooth のイヤホンで起きやすい。
+    if (isQuiet) {
+      setError(
+        `音量がかなり小さいです。採点の精度が落ちる可能性があります。${
+          deviceLabel ? `(使用中のマイク: ${deviceLabel})` : ''
+        }`,
+      )
     }
 
     setRecordedUrl((prev) => {
