@@ -307,20 +307,27 @@ audio { width: 100%; margin-top: 10px; }
     return scoreVoice(v) >= 50 ? ['標準', 'q-mid'] : ['簡易', 'q-low']
   }
 
-  function collectVoices() {
+  /** 端末が返した英語の声を、加工せずそのまま取り出す(診断用) */
+  function rawVoices() {
     if (!results.hasTTS) return []
-    var seen = {}
     return window.speechSynthesis.getVoices()
       .filter(function (v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0 })
+  }
+
+  function collectVoices() {
+    var seen = {}
+    return rawVoices()
       .filter(function (v) { return !isNovelty(v) })
+      // ★先に品質順へ並べてから重複を除く。
+      //   同じ表示名で簡易版と高品質版の両方を返す端末があるため、
+      //   並べる前に除くと簡易版のほうを残してしまう。
+      .sort(function (a, b) { return scoreVoice(b) - scoreVoice(a) })
       .filter(function (v) {
-        // 同じ声が二重に現れる端末があるため、重複を取り除く
         var key = v.name + '|' + v.lang
         if (seen[key]) return false
         seen[key] = true
         return true
       })
-      .sort(function (a, b) { return scoreVoice(b) - scoreVoice(a) })
   }
 
   function playWith(voice, onDone) {
@@ -371,7 +378,16 @@ audio { width: 100%; margin-top: 10px; }
     })
     results.voiceCount = englishVoices.length
     results.voiceList = names
-    log('英語の声 ' + englishVoices.length + '個: ' + names.join(' | '))
+
+    // 加工前の一覧も残す。重複や除外で何が隠れたか分かるようにするため。
+    var raw = rawVoices()
+    results.rawVoiceCount = raw.length
+    results.rawVoiceList = raw.map(function (v) {
+      return v.name + '(' + v.lang + ') [' + (v.voiceURI || '不明') + ']' +
+        (v.localService === false ? ' 通信' : '')
+    })
+    log('英語の声: 端末が返した数 ' + raw.length + '個 / 表示 ' + englishVoices.length + '個')
+    log('加工前の一覧: ' + results.rawVoiceList.join(' | '))
   }
 
   el('btn-speak').addEventListener('click', function () {
@@ -802,9 +818,14 @@ audio { width: 100%; margin-top: 10px; }
       '実際に試した結果:',
       '  1 読み上げ: ' + (results.tts || '未実施'),
       '',
-      'この端末に入っている英語の声(' + (results.voiceCount || 0) + '個):',
+      'この端末に入っている英語の声(表示 ' + (results.voiceCount || 0) + '個 / 端末が返した数 ' +
+        (results.rawVoiceCount || 0) + '個):',
       (results.voiceList || ['(未取得 — ①のボタンを押すと取得されます)'])
         .map(function (n) { return '  - ' + n }).join('\n'),
+      '',
+      '加工前の一覧(重複や除外を含む):',
+      (results.rawVoiceList || ['(未取得)'])
+        .map(function (n) { return '  * ' + n }).join('\n'),
       '',
       '  2 マイク: ' + (results.mic || '未実施'),
       '  3 録音: ' + (results.rec || '未実施'),

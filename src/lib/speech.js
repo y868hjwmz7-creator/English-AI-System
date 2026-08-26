@@ -47,7 +47,8 @@ export function isRecordingSupported() {
  *      → 英語名だけで判定してはいけない。voiceURI で判定する。
  *
  *   2. 同じ声が二重に現れる端末がある(39個中12個が重複だった)。
- *      → 名前と言語で重複を取り除く。
+ *      → 品質順に並べてから重複を取り除く。並べる前に除くと、
+ *        簡易版のほうを残してしまう恐れがある。
  *
  *   3. Apple の声の品質は voiceURI に現れる。
  *      com.apple.voice.premium.*  / .enhanced.*  / .compact.*
@@ -190,17 +191,23 @@ export function loadEnglishVoices() {
 
     const pickEnglish = (voices) => {
       const seen = new Set()
-      return voices
-        .filter((v) => v.lang && v.lang.toLowerCase().startsWith('en'))
-        .filter((v) => !isNoveltyVoice(v))
-        .filter((v) => {
-          // 同じ声が二重に現れる端末があるため、重複を取り除く
-          const key = `${v.name}|${v.lang}`
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-        .sort((a, b) => scoreVoice(b) - scoreVoice(a))
+      return (
+        voices
+          .filter((v) => v.lang && v.lang.toLowerCase().startsWith('en'))
+          .filter((v) => !isNoveltyVoice(v))
+          // ★先に品質順へ並べてから重複を除く(実機の報告より)
+          //   同じ表示名で簡易版と高品質版の両方を返す端末がある。
+          //   iOS の Chrome は同じ名前の声を2つずつ返していた。
+          //   先に見つかったほうを残す実装では、高品質版を捨てる恐れがあった。
+          //   並べ替えてから除けば、必ず良いほうが残る。
+          .sort((a, b) => scoreVoice(b) - scoreVoice(a))
+          .filter((v) => {
+            const key = `${v.name}|${v.lang}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+      )
     }
 
     const immediate = pickEnglish(window.speechSynthesis.getVoices())
