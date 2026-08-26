@@ -1,0 +1,82 @@
+# ------------------------------------------------------------------
+# このファイルの役目
+#
+# 練習用の英文を追加したとき、足りないお手本音声を自動で作ります。
+# あなたがコマンドを実行する必要はありません。
+#
+# 【最初に1回だけ必要な設定】
+#   GitHub のリポジトリ画面 → Settings → Secrets and variables → Actions
+#   → New repository secret で次の2つを登録してください。
+#
+#     AZURE_SPEECH_KEY     … Azure の音声サービスのキー
+#     AZURE_SPEECH_REGION  … japaneast など
+#
+#   登録するまでは、このワークフローは何もせずに終わります。
+#   鍵は GitHub が暗号化して保管し、ログにも表示されません。
+#
+# 【動き】
+#   練習用の英文が変わると動きます。
+#   足りない音声だけを作り、リポジトリに追加します。
+#   すでにある音声は作り直さないため、課金も増えません。
+# ------------------------------------------------------------------
+name: お手本音声を生成する
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - 'src/data/practicePhrases.js'
+      - 'scripts/generate-audio.mjs'
+  workflow_dispatch: # 画面から手動で実行することもできます
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-audio
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 鍵が登録されているか確認する
+        id: check
+        env:
+          KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AZURE_SPEECH_KEY が未登録のため、音声の生成をとばします。"
+            echo "::notice::登録方法は docs/AUDIO_SETUP.md を参照してください。"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
+        with:
+          node-version: 20
+
+      - name: 足りない音声を作る
+        if: steps.check.outputs.ready == 'true'
+        env:
+          AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+          AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+        run: npm run audio
+
+      - name: 追加された音声をリポジトリに入れる
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          if [ -z "$(git status --porcelain public/audio)" ]; then
+            echo "新しい音声はありませんでした。"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/audio
+          COUNT=$(git diff --cached --name-only --diff-filter=A -- public/audio | grep -c '\.mp3$' || true)
+          git commit -m "chore: お手本音声を${COUNT}件追加する (自動生成)"
+          git push
