@@ -97,7 +97,8 @@ export function addPronunciationAttempt(state, attempt) {
   return {
     ...state,
     pronunciationAttempts: [
-      { ...attempt, id: createId(), attemptedAt: new Date().toISOString() },
+      // id は呼び出し側で指定できる。端末に保存した録音と結びつけるため。
+      { id: createId(), ...attempt, attemptedAt: new Date().toISOString() },
       ...state.pronunciationAttempts,
     ],
   }

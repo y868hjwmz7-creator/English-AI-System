@@ -3,8 +3,16 @@ import { categories, categoryColor, categoryLabel } from '../data/categories.js'
 import { practicePhrases } from '../data/practicePhrases.js'
 import { SPEAKER_MODES, genderLabel, genderOf, hasGender, resolveVoice } from '../data/speakers.js'
 import { calculateStreak, formatMinutes, lastNDays, shortDate, today } from '../lib/format.js'
-import { addPronunciationAttempt, addStudyLog, removeStudyLog } from '../lib/store.js'
+import { addPronunciationAttempt, addStudyLog, createId, removeStudyLog } from '../lib/store.js'
 import { scorePronunciation } from '../lib/pronunciation.js'
+import {
+  MAX_RECORDINGS,
+  deleteAllRecordings,
+  isStorageSupported,
+  listRecordingIds,
+  loadRecording,
+  saveRecording,
+} from '../lib/recordings.js'
 import {
   hasGoodVoice,
   isRecordingSupported,
@@ -199,6 +207,21 @@ function PronunciationPractice({ state, setState, learnerId }) {
     return { mode: 'random', gender: 'female', fixedName: '', femaleName: '', maleName: '' }
   })
   const [lastSpokenBy, setLastSpokenBy] = useState(null)
+
+  /**
+   * 録音をこの端末に保存するかどうか。利用者が選べる。
+   * 保存しない設定でも「いま録音したもの」はその場で聞き返せる。
+   */
+  const [keepRecordings, setKeepRecordings] = useState(() => {
+    try {
+      return localStorage.getItem('english-ai-system:keepRecordings') !== 'off'
+    } catch {
+      return true
+    }
+  })
+  const [savedIds, setSavedIds] = useState([])       // 保存済み録音のID一覧
+  const [playingId, setPlayingId] = useState(null)   // 履歴から再生中のもの
+  const [playingUrl, setPlayingUrl] = useState(null)
   const [rate, setRate] = useState(() => {
     try {
       return Number(localStorage.getItem('english-ai-system:rate')) || 0.85
@@ -242,6 +265,56 @@ function PronunciationPractice({ state, setState, learnerId }) {
       /* 保存できなくても読み上げ自体は動く */
     }
   }, [speaker, rate])
+
+  // 保存設定を覚えておく
+  useEffect(() => {
+    try {
+      localStorage.setItem('english-ai-system:keepRecordings', keepRecordings ? 'on' : 'off')
+    } catch {
+      /* 保存できなくても動作に支障はない */
+    }
+  }, [keepRecordings])
+
+  // 保存済み録音の一覧を読み込む
+  const refreshSavedIds = () => {
+    if (!isStorageSupported()) return
+    listRecordingIds(learnerId).then(setSavedIds)
+  }
+  useEffect(refreshSavedIds, [learnerId])
+
+  // 履歴から再生するために作ったURLは、使い終わったら解放する
+  useEffect(() => {
+    return () => {
+      if (playingUrl) URL.revokeObjectURL(playingUrl)
+    }
+  }, [playingUrl])
+
+  /** 保存済みの録音を再生する */
+  const handlePlaySaved = async (id) => {
+    const blob = await loadRecording(id)
+    if (!blob) {
+      setError('この録音は端末に残っていませんでした。')
+      return
+    }
+    setPlayingUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(blob)
+    })
+    setPlayingId(id)
+  }
+
+  /** 保存した録音をすべて消す */
+  const handleDeleteAll = async () => {
+    if (!window.confirm('この端末に保存した録音をすべて削除します。よろしいですか?')) return
+    const count = await deleteAllRecordings(learnerId)
+    setSavedIds([])
+    setPlayingId(null)
+    setPlayingUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setError(count ? `${count}件の録音を削除しました。` : '削除する録音はありませんでした。')
+  }
 
   const updateSpeaker = (patch) => setSpeaker((prev) => ({ ...prev, ...patch }))
   const femaleVoices = voices.filter((v) => genderOf(v) === 'female')
@@ -346,16 +419,26 @@ function PronunciationPractice({ state, setState, learnerId }) {
     setResult(scored)
     setStatus('')
 
-    // 保存するのは点数と英文だけ。音声そのものは保存しません。
+    // 点数と英文は記録に残す。音声そのものはサーバーには送りません。
+    const attemptId = createId()
     setState((prev) =>
       addPronunciationAttempt(prev, {
+        id: attemptId,
         learnerId,
         targetText: phrase.text,
         score: scored.score,
         recognizedText: scored.recognizedText,
         engine: scored.engine,
+        hasRecording: keepRecordings,
       }),
     )
+
+    // 音声は、利用者が「保存する」を選んでいる場合だけ端末に残す。
+    if (keepRecordings && isStorageSupported()) {
+      const ok = await saveRecording({ id: attemptId, learnerId, targetText: phrase.text, blob })
+      if (ok) refreshSavedIds()
+      else setError('録音を端末に保存できませんでした。空き容量をご確認ください。')
+    }
   }
 
   const recentScores = state.pronunciationAttempts
@@ -564,13 +647,23 @@ function PronunciationPractice({ state, setState, learnerId }) {
       {error && <p className="error">{error}</p>}
 
       {recordedUrl && (
-        <div className="field">
-          <span className="field-label">自分の録音を聞き返す</span>
-          <audio src={recordedUrl} controls />
+        <div className="compare">
+          <span className="field-label">聞き比べる</span>
+          {/* お手本のすぐ隣に自分の録音を置く。交互に聞けることが練習の要。 */}
+          <div className="compare-row">
+            <div className="compare-side">
+              <span className="compare-label">お手本</span>
+              <button type="button" className="btn" onClick={() => handleSpeak()}>
+                ▶ 再生
+              </button>
+            </div>
+            <div className="compare-side compare-side--wide">
+              <span className="compare-label">自分の録音</span>
+              <audio src={recordedUrl} controls />
+            </div>
+          </div>
           <p className="hint">
             納得いくまで何度でも録り直せます。「もう一度録音する」を押すと、前の録音は破棄されます。
-            <br />
-            録音した音声はこの端末の中だけにあり、サーバーには送っていません。ページを閉じると消えます。
           </p>
         </div>
       )}
@@ -590,6 +683,56 @@ function PronunciationPractice({ state, setState, learnerId }) {
               { key: 'intonation', label: '抑揚', value: result.breakdown.intonation, color: 'var(--series-1)' },
             ]}
           />
+        </div>
+      )}
+
+      {isRecordingSupported() && isStorageSupported() && (
+        <div className="chart-block">
+          <h3 className="chart-title">録音の保存</h3>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={keepRecordings}
+              onChange={(e) => setKeepRecordings(e.target.checked)}
+            />
+            <span>この端末に録音を残す(直近{MAX_RECORDINGS}件)</span>
+          </label>
+          <p className="hint">
+            {keepRecordings
+              ? `過去の録音を聞き返せます。保存先はこの端末の中だけで、サーバーには送りません。${MAX_RECORDINGS}件を超えると古いものから消えます。`
+              : '録音は保存しません。いま録音したものだけ、その場で聞き返せます。'}
+            <br />
+            別の端末では聞けません。ブラウザのサイトデータを削除すると消えます。
+          </p>
+
+          {savedIds.length > 0 && (
+            <>
+              <ul className="saved-list">
+                {savedIds.slice(0, 10).map((id, i) => {
+                  const attempt = state.pronunciationAttempts.find((a) => a.id === id)
+                  return (
+                    <li key={id} className="saved-row">
+                      <span className="saved-info">
+                        {attempt ? `${attempt.score}点` : '—'}
+                        <small className="muted">
+                          {' '}
+                          {attempt?.targetText?.slice(0, 28) ?? `録音 ${i + 1}`}
+                          {attempt?.targetText?.length > 28 ? '…' : ''}
+                        </small>
+                      </span>
+                      <button type="button" className="btn btn--small" onClick={() => handlePlaySaved(id)}>
+                        {playingId === id ? '再生中' : '▶ 聞く'}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              {playingUrl && <audio src={playingUrl} controls autoPlay />}
+              <button type="button" className="btn btn--link" onClick={handleDeleteAll}>
+                保存した録音をすべて削除する
+              </button>
+            </>
+          )}
         </div>
       )}
 

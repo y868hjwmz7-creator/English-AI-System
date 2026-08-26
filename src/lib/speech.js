@@ -521,14 +521,43 @@ function encodeWav(samples, sampleRate) {
   return new Blob([view], { type: 'audio/wav' })
 }
 
-/** 音の大きさ(0〜1)。無音のまま録音していないかの判定に使う。 */
-function peakLevel(samples) {
+/**
+ * 音の大きさを測る。
+ *
+ * ★最大音量だけで判定してはいけない(実機の報告より)
+ *   当初は最大音量が1%未満なら「無音」としていたが、
+ *   Bluetooth のマイクは音量が小さくなりやすく、
+ *   耳では聞こえていて音声認識も通る音声を
+ *   「無音」と誤判定してしまう恐れがあった。
+ *
+ *   また最大音量だけを見ると、雑音が一瞬入っただけで
+ *   「音がある」と誤判定してしまう。
+ *
+ *   そこで、最大音量(peak)と平均的な音量(rms)の両方を見る。
+ *     - 本当に無音: peak も rms も極端に小さい
+ *     - 小さいが有効: rms は小さいが、peak との差がある(声の抑揚)
+ */
+function measureLevel(samples) {
   let peak = 0
+  let sumOfSquares = 0
   for (let i = 0; i < samples.length; i += 1) {
-    const value = Math.abs(samples[i])
-    if (value > peak) peak = value
+    const value = samples[i]
+    const magnitude = Math.abs(value)
+    if (magnitude > peak) peak = magnitude
+    sumOfSquares += value * value
   }
-  return peak > 1 ? 1 : peak
+  const rms = samples.length ? Math.sqrt(sumOfSquares / samples.length) : 0
+  return { peak: peak > 1 ? 1 : peak, rms: rms > 1 ? 1 : rms }
+}
+
+/** 本当に何も録れていないか。ここを厳しくしすぎると、小声の録音を弾いてしまう。 */
+function isTrulySilent({ peak, rms }) {
+  return peak < 0.005 && rms < 0.002
+}
+
+/** 録れてはいるが小さい。採点はするが、利用者に知らせる。 */
+function isQuietLevel({ peak, rms }) {
+  return !isTrulySilent({ peak, rms }) && (peak < 0.08 || rms < 0.01)
 }
 
 /**
@@ -567,11 +596,12 @@ export async function startRecording() {
       const deviceLabel = currentMicLabel()
       const merged = mergeBuffers(myCollector.buffers, myCollector.total)
       const resampled = downsample(merged, sampleRate, TARGET_SAMPLE_RATE)
-      const level = peakLevel(resampled)
+      const level = measureLevel(resampled)
+      const silent = isTrulySilent(level)
 
-      // 無音だった場合は、マイクへの接続が壊れている可能性がある。
+      // 本当に無音だった場合は、マイクへの接続が壊れている可能性がある。
       // 次の録音で作り直せるよう、ここで解体しておく。
-      if (level < 0.01) teardownAudioGraph()
+      if (silent) teardownAudioGraph()
 
       const blob = encodeWav(resampled, TARGET_SAMPLE_RATE)
       return {
@@ -579,10 +609,11 @@ export async function startRecording() {
         url: URL.createObjectURL(blob),
         mimeType: 'audio/wav',
         durationSeconds: resampled.length / TARGET_SAMPLE_RATE,
-        peakLevel: level,
-        isSilent: level < 0.01,
-        // 音量が小さすぎる場合の案内に使う。Bluetooth 機器では起きやすい。
-        isQuiet: level >= 0.01 && level < 0.08,
+        peakLevel: level.peak,
+        rmsLevel: level.rms,
+        isSilent: silent,
+        // 録れてはいるが小さい。Bluetooth 機器では起きやすい。
+        isQuiet: isQuietLevel(level),
         deviceLabel,
       }
     },
