@@ -22,6 +22,15 @@ let manifestPromise = null
  */
 export function loadModelAudioManifest() {
   if (manifestPromise) return manifestPromise
+
+  // ファイルを直接開いた場合(1ファイル版)は、目録を取りに行けない。
+  // 取りに行くとブラウザがエラーとして記録するため、最初から諦める。
+  // この場合は端末内蔵の読み上げを使う。
+  if (typeof location !== 'undefined' && location.protocol === 'file:') {
+    manifestPromise = Promise.resolve({ speakers: [], phrases: {}, ext: 'mp3' })
+    return manifestPromise
+  }
+
   manifestPromise = fetch(MANIFEST_URL)
     .then((res) => (res.ok ? res.json() : null))
     .then((data) => data ?? { speakers: [], phrases: {}, ext: 'mp3' })
