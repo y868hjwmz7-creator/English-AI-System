@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AdminDashboard from './components/AdminDashboard.jsx'
 import EnglishStudyLog from './components/EnglishStudyLog.jsx'
+import SupabaseStatus from './components/SupabaseStatus.jsx'
 import { buildSeed } from './data/seed.js'
 import { loadState, resetState, saveState } from './lib/store.js'
 
@@ -80,6 +81,8 @@ export default function App() {
           サンプルデータに戻す
         </button>
       </div>
+
+      <SupabaseStatus />
 
       <div className="notice notice--info app-notice">
         <strong>この試作版について:</strong> データはこのブラウザの中だけに保存されます(サーバーは使っていません)。

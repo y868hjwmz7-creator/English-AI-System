@@ -58,6 +58,11 @@ jobs:
         env:
           # GitHub Pages はリポジトリ名のフォルダの下で配信されるため、その指定
           BASE_PATH: /${{ github.event.repository.name }}/
+          # Supabase の接続情報。リポジトリの Settings → Secrets and variables →
+          # Actions → New repository secret で登録します。
+          # 未登録でもビルドは通り、これまでどおり端末内のデータで動きます。
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: 診断ページに版を埋め込む
         # 古い内容がブラウザに残っていると、直したはずの不具合が
@@ -72,6 +77,9 @@ jobs:
         run: |
           npm run build:single
           cp standalone/index.html dist/download.html
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

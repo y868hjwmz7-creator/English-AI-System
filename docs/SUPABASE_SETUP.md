@@ -195,3 +195,92 @@ Claude Code に「Supabaseのアカウントを作りました」と伝えて、
 | **RLS** | 行単位のアクセス制限。「自分の記録しか見えない」を実現する仕組み |
 | **anon キー** | アプリから接続するための、公開前提の鍵 |
 | **MAU** | 月間アクティブユーザー数。その月にログインした人数 |
+
+---
+
+## 5. データベースを作る(SQL を1回実行する)
+
+接続情報がそろったら、テーブルとアクセス制御を作ります。
+
+1. Supabase の管理画面 → 左メニュー **SQL Editor** → **New query**
+2. リポジトリの [`../supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql)
+   の中身を**すべて**コピーして貼り付ける
+3. **Run** を押す
+4. **Success. No rows returned** と出れば成功
+
+失敗しても何度でも貼り直して実行できます
+(すべて「無ければ作る」書き方にしてあります)。
+
+### この SQL が作るもの
+
+| 種類 | テーブル |
+|---|---|
+| 人 | `profiles` / `learner_admins` |
+| 弱点タグ | `weakness_tags`(38件を自動で投入) |
+| 教材 | `materials` / `material_items` / `material_tags` / `material_audio` |
+| 宿題 | `assignments` |
+| 記録 | `study_logs` / `attempts` |
+| フィードバック | `lesson_feedback` / `lesson_feedback_tags` |
+| 音声の置き場 | Storage バケット `material-audio` |
+
+あわせて、**すべてのテーブルに RLS(誰がどの行を読めるか)を設定します。**
+ここが安全性の本体です。**RLS を無効にしないでください。**
+無効にすると、アプリの鍵を持つ誰もが全データを読めるようになります。
+
+### 6. 自分を「講師」にする(必須)
+
+SQL を実行しただけでは、まだ誰も教材を作れません。
+
+1. アプリを開いてサインアップし、自分のアカウントを作る
+2. SQL Editor で次を実行する(メールアドレスは自分のものに置き換える)
+
+```sql
+update public.profiles set role = 'admin'
+where id = (select id from auth.users where email = 'あなたのメールアドレス');
+```
+
+生徒のアカウントを作ったら、担当関係も登録します。
+
+```sql
+insert into public.learner_admins (admin_id, learner_id)
+values ('講師のUUID', '生徒のUUID');
+```
+
+UUID は SQL Editor で `select id, email from auth.users;` を実行すると分かります。
+
+---
+
+## 7. 公開版(GitHub Pages)にも接続情報を渡す
+
+`.env` は Git に入らないので、公開版のビルドには別に渡す必要があります。
+
+1. GitHub のリポジトリ → **Settings** → 左メニュー **Secrets and variables** → **Actions**
+2. **New repository secret** を2回押して、次の2つを登録する
+
+| Name | Secret |
+|---|---|
+| `VITE_SUPABASE_URL` | `https://<Project ID>.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | `sb_publishable_...`(または `eyJ...`) |
+
+登録すると、次回の公開から自動で使われます。
+**登録しなくてもビルドは失敗しません**(その場合はこれまでどおり端末内のデータで動きます)。
+
+> `anon` / `publishable` キーはブラウザに配られる以上そもそも隠せませんが、
+> 鍵の置き場所を1か所にそろえておくと、あとで Azure の鍵など
+> **本当に秘密の鍵**を扱うときに間違えません。
+
+---
+
+## 8. つながったか確かめる
+
+アプリを開くと、画面の上に接続状態が出ます。
+
+| 表示 | 意味 | 次にすること |
+|---|---|---|
+| **Supabase に接続できています** | 完了 | — |
+| **Supabase はまだ設定されていません** | URL か鍵が無い | 第4節・第7節 |
+| **あと一歩 — テーブルがまだありません** | 接続はできている | 第5節の SQL を実行する |
+| **Supabase に届きませんでした** | 通信できていない | URL の綴りを確認する |
+| **Supabase がエラーを返しました** | 鍵が違う可能性 | 鍵を貼り直す |
+
+この帯は、つなぎ込みが終わったら外します。
