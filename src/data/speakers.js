@@ -12,6 +12,8 @@
  *   画面側は端末の声に直接依存せず、この表を通して扱っています。
  */
 
+import { voiceQualityLabel } from '../lib/speech.js'
+
 /** 女性の声として知られている名前 */
 const FEMALE = [
   // Apple
@@ -78,6 +80,30 @@ export const SPEAKER_MODES = [
   },
 ]
 
+/**
+ * ★おまかせで選ぶときは、品質の良い声だけを対象にする
+ *
+ *   当初は使える声すべてから無差別に選んでいた。
+ *   しかし端末には品質の異なる声が混在しており、
+ *   たまたま簡易な声が当たると、お手本として使い物にならない。
+ *
+ *   実機で、Chrome では Google の高品質な声が入っていたにもかかわらず
+ *   「毎回おまかせ」が簡易な声を選び得る状態だった。
+ *
+ *   対処: その端末で最も良い品質の段階だけを候補にする。
+ *         声の多様性は保ちつつ、品質の下限を保証できる。
+ */
+const QUALITY_ORDER = ['高品質', '標準', '簡易']
+
+function bestQualityOnly(voices) {
+  if (!voices.length) return voices
+  for (const tier of QUALITY_ORDER) {
+    const matched = voices.filter((v) => voiceQualityLabel(v) === tier)
+    if (matched.length) return matched
+  }
+  return voices
+}
+
 /** 配列からランダムに1つ選ぶ */
 function pickRandom(list) {
   if (!list.length) return null
@@ -100,7 +126,8 @@ export function resolveVoice(voices, settings, requestedGender = null) {
   switch (settings.mode) {
     case 'gender': {
       const gender = requestedGender || settings.gender || 'female'
-      return pickRandom(byGender(gender)) || voices[0]
+      // 品質の下限を保証したうえで、その性別の中から選ぶ
+      return pickRandom(bestQualityOnly(byGender(gender))) || voices[0]
     }
     case 'fixed':
       return byName(settings.fixedName) || voices[0]
@@ -112,8 +139,8 @@ export function resolveVoice(voices, settings, requestedGender = null) {
     case 'random':
     default: {
       // 読み上げ時に性別ボタンが押されていれば、その性別の中から選ぶ
-      if (requestedGender) return pickRandom(byGender(requestedGender)) || voices[0]
-      return pickRandom(voices) || voices[0]
+      if (requestedGender) return pickRandom(bestQualityOnly(byGender(requestedGender))) || voices[0]
+      return pickRandom(bestQualityOnly(voices)) || voices[0]
     }
   }
 }

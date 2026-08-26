@@ -131,12 +131,28 @@ function scoreVoice(voice) {
   return score
 }
 
-/** 品質の目安を日本語のラベルにする(画面に出すため) */
+/**
+ * 品質の目安を日本語のラベルにする(画面に出すため)
+ *
+ * ★通信を使う声は「高品質」に含める(実機の報告より)
+ *   Chrome の Google 音声は名前に Premium などの語を含まないため、
+ *   当初は「標準」と判定していた。しかし実際には通信先で生成される
+ *   ニューラル音声であり、端末内蔵の声より明確に自然である。
+ *   実機で「Chrome で開いたら音声の質がとても良かった」との報告があり、
+ *   判定基準を見直した。
+ */
 export function voiceQualityLabel(voice) {
-  const both = ((voice.name || '') + ' ' + (voice.voiceURI || '')).toLowerCase()
+  const name = (voice.name || '').toLowerCase()
+  const both = name + ' ' + (voice.voiceURI || '').toLowerCase()
+
+  // 各社が明示している高品質版
   if (both.includes('premium') || both.includes('enhanced') || both.includes('neural') || both.includes('natural')) {
     return '高品質'
   }
+  // 通信して生成する声。端末に入っている簡易な声より質が高い。
+  if (voice.localService === false) return '高品質'
+  if (name.startsWith('google')) return '高品質'
+
   if (both.includes('compact')) return '簡易'
   if (scoreVoice(voice) >= 50) return '標準'
   return '簡易'

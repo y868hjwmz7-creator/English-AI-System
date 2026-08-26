@@ -296,9 +296,13 @@ audio { width: 100%; margin-top: 10px; }
     return sc
   }
   function qualityOf(v) {
-    var b = ((v.name || '') + ' ' + (v.voiceURI || '')).toLowerCase()
+    var n = (v.name || '').toLowerCase()
+    var b = n + ' ' + (v.voiceURI || '').toLowerCase()
     if (b.indexOf('premium') >= 0 || b.indexOf('enhanced') >= 0 ||
         b.indexOf('neural') >= 0 || b.indexOf('natural') >= 0) return ['高品質', 'q-high']
+    // 通信して生成する声は、端末内蔵の簡易な声より質が高い
+    if (v.localService === false) return ['高品質', 'q-high']
+    if (n.indexOf('google') === 0) return ['高品質', 'q-high']
     if (b.indexOf('compact') >= 0) return ['簡易', 'q-low']
     return scoreVoice(v) >= 50 ? ['標準', 'q-mid'] : ['簡易', 'q-low']
   }
