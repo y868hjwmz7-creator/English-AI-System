@@ -9,7 +9,7 @@ import { signIn } from '../lib/auth.js'
 import { supabaseProjectRef } from '../lib/supabase.js'
 
 export default function SignIn() {
-  const [email, setEmail] = useState('')
+  const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -19,7 +19,7 @@ export default function SignIn() {
     if (busy) return
     setBusy(true)
     setError(null)
-    const { error: message } = await signIn(email, password)
+    const { error: message } = await signIn(loginId, password)
     // 成功した場合は App 側がログイン状態の変化を受け取って画面を差し替える。
     // ここでは失敗したときだけ後始末をする。
     if (message) {
@@ -35,16 +35,29 @@ export default function SignIn() {
         <p className="card-hint">ログインしてください。</p>
 
         <form onSubmit={handleSubmit}>
+          {/*
+            ゲストとトレーナーには「tanaka01」のようなIDだけを渡す。
+            メールアドレスを用意させない方針のため、type="email" にはしない
+            (ブラウザが「@ を入れてください」と拒むため)。
+            @ が入っていればメールアドレスとして扱う。
+          */}
           <label className="field">
-            <span>メールアドレス</span>
+            <span>ログインID</span>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={loginId}
+              onChange={(e) => setLoginId(e.target.value)}
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
               required
               autoFocus
             />
+            <span className="field-hint">
+              トレーナーから渡されたIDを、そのまま入れてください
+              (メールアドレスではありません)。
+            </span>
           </label>
 
           <label className="field signin-field">

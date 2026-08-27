@@ -49,11 +49,36 @@ function toJapanese(message) {
   return m
 }
 
+/**
+ * ログインIDから組み立てる、実在しないメールアドレスの後ろ側。
+ *
+ * Supabase のログインはメールアドレスの形を要求するが、ゲストとトレーナーに
+ * メールアドレスを用意させるのは現実的ではない(仕様書 第5.8節)。そこで
+ * ID だけで登録し、こちらで形を整える。実際にメールは送らない。
+ *
+ * **supabase/functions/create-user/index.ts の LOGIN_DOMAIN と同じ値である。**
+ * 片方だけ変えると、発行したアカウントでログインできなくなる。
+ * Edge Function からはこのファイルを読めないため、同じ値を2か所に置いている。
+ */
+export const LOGIN_DOMAIN = 'users.english-ai-system.local'
+
+/**
+ * 入力された文字列を、ログインに使う形にする。
+ *
+ * ゲストは「tanaka01」のようなIDを渡される。@ が入っていればそのまま
+ * メールアドレスとして扱う(Supabase の画面から作った最初の管理者など、
+ * 本物のメールアドレスで登録されている人のため)。
+ */
+export const toLoginEmail = (input) => {
+  const value = String(input ?? '').trim()
+  return value.includes('@') ? value : `${value.toLowerCase()}@${LOGIN_DOMAIN}`
+}
+
 /** ログインする。成功なら { error: null }。 */
-export async function signIn(email, password) {
+export async function signIn(idOrEmail, password) {
   if (!supabase) return { error: 'Supabase が設定されていません。' }
   const { error } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
+    email: toLoginEmail(idOrEmail),
     password,
   })
   return { error: error ? toJapanese(error.message) : null }

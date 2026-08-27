@@ -95,7 +95,11 @@ export default function TrainerLearners({ me }) {
     const { data, error: e } = await createAccount({ ...newGuest, role: 'learner' })
     setAddBusy(false)
     if (e) { setError(e); return }
-    setMessage(`${data.displayName} さんを追加しました。ログインID は ${data.loginId} です。`)
+    // トレーナーがそのままゲストに伝えられる形で出す。
+    // 何を渡せばよいか分からないと、発行しても使ってもらえない。
+    setMessage(`${data.displayName} さんを追加しました。`
+      + `このアプリのURL・ログインID「${data.loginId}」・いま決めたパスワードの`
+      + '3つを、ご本人にお伝えください(メールアドレスは要りません)。')
     setNewGuest({ displayName: '', loginId: '', password: '' })
     setAdding(false)
     reload()
