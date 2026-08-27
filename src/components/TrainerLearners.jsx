@@ -1,14 +1,14 @@
 /**
- * トレーナーの「生徒」画面。
+ * トレーナーの「ゲスト」画面。
  *
- * レッスン前に開く画面。担当している生徒のレベル(CEFR)と
+ * レッスン前に開く画面。担当しているゲストのレベル(CEFR)と
  * 最新の TOEIC / VERSANT が一目で分かるようにする。
  * レベルの物差しは教材と同じ CEFR にそろえてある。
  */
 import { useEffect, useState } from 'react'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, scoreTestLabel } from '../data/cefr.js'
 import {
-  addLearnerScore, loadMyLearnersDetailed, loadScoreHistory,
+  addLearnerScore, createAccount, loadMyLearnersDetailed, loadScoreHistory,
   setLearnerCefr, setLearnerStatus,
 } from '../lib/materials.js'
 
@@ -30,6 +30,11 @@ export default function TrainerLearners({ me }) {
 
   // スコアを入れるための一時的な入力欄
   const [form, setForm] = useState({ testType: 'toeic', score: '', takenOn: today() })
+
+  // ゲストを追加するための入力欄
+  const [adding, setAdding] = useState(false)
+  const [newGuest, setNewGuest] = useState({ displayName: '', loginId: '', password: '' })
+  const [addBusy, setAddBusy] = useState(false)
 
   const reload = async () => {
     const { data, error: e } = await loadMyLearnersDetailed()
@@ -82,6 +87,20 @@ export default function TrainerLearners({ me }) {
     reload()
   }
 
+  const submitGuest = async (event) => {
+    event.preventDefault()
+    if (addBusy) return
+    setAddBusy(true)
+    setError(null)
+    const { data, error: e } = await createAccount({ ...newGuest, role: 'learner' })
+    setAddBusy(false)
+    if (e) { setError(e); return }
+    setMessage(`${data.displayName} さんを追加しました。ログインID は ${data.loginId} です。`)
+    setNewGuest({ displayName: '', loginId: '', password: '' })
+    setAdding(false)
+    reload()
+  }
+
   if (loading) return <p className="muted">読み込み中…</p>
 
   return (
@@ -90,10 +109,18 @@ export default function TrainerLearners({ me }) {
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
       <div className="card">
-        <h2 className="card-title">担当している生徒</h2>
+        <div className="material-head">
+          <h2 className="card-title">担当しているゲスト</h2>
+          {!adding && (
+            <button type="button" className="btn btn--primary btn--small"
+                    onClick={() => { setAdding(true); setMessage(null) }}>
+              ＋ ゲストを追加
+            </button>
+          )}
+        </div>
         {learners.length === 0 ? (
           <p className="card-hint">
-            まだ担当している生徒がいません。生徒のアカウントを作ると、ここに並びます。
+            まだ担当しているゲストがいません。ゲストのアカウントを作ると、ここに並びます。
           </p>
         ) : (
           <p className="card-hint">
@@ -101,6 +128,55 @@ export default function TrainerLearners({ me }) {
           </p>
         )}
       </div>
+
+      {adding && (
+        <form className="card" onSubmit={submitGuest}>
+          <h3 className="card-title">ゲストを追加する</h3>
+          <p className="card-hint">
+            追加したゲストは<strong>自動であなたの担当になります。</strong>
+            ログインIDとパスワードは、あなたからご本人に伝えてください。
+          </p>
+
+          <label className="field">
+            <span>お名前</span>
+            <input value={newGuest.displayName} required
+                   placeholder="例: 田中 みなみ"
+                   onChange={(e) => setNewGuest({ ...newGuest, displayName: e.target.value })} />
+          </label>
+
+          <label className="field">
+            <span>
+              ログインID
+              <span className="field-hint">半角の英数字と . _ - だけ。3文字以上</span>
+            </span>
+            <input value={newGuest.loginId} required
+                   placeholder="例: tanaka01" autoComplete="off"
+                   onChange={(e) => setNewGuest({ ...newGuest, loginId: e.target.value })} />
+          </label>
+
+          <label className="field">
+            <span>
+              パスワード
+              <span className="field-hint">8文字以上。必ず控えてください</span>
+            </span>
+            {/* あえて伏せ字にしない。トレーナーが控えてゲストに伝えるため。 */}
+            <input value={newGuest.password} required minLength={8}
+                   autoComplete="off"
+                   onChange={(e) => setNewGuest({ ...newGuest, password: e.target.value })} />
+          </label>
+
+          <p className="field-hint">
+            パスワードを忘れた場合、ご本人では戻せません。あなたが再設定します。
+          </p>
+
+          <div className="btn-row">
+            <button type="submit" className="btn btn--primary" disabled={addBusy}>
+              {addBusy ? '追加しています…' : '追加する'}
+            </button>
+            <button type="button" className="btn" onClick={() => setAdding(false)}>やめる</button>
+          </div>
+        </form>
+      )}
 
       {learners.map((l) => {
         const toeic = l.scores.toeic

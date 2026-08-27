@@ -23,7 +23,7 @@ export default function AdminDashboard({ state }) {
     [state.studyLogs, daySet],
   )
 
-  /** 生徒ごとの集計 */
+  /** ゲストごとの集計 */
   const learnerStats = useMemo(() => {
     return state.learners
       .map((learner) => {
@@ -68,7 +68,7 @@ export default function AdminDashboard({ state }) {
       </div>
 
       <div className="stat-row">
-        <Stat label="生徒の人数" value={state.learners.length} unit="人" />
+        <Stat label="ゲストの人数" value={state.learners.length} unit="人" />
         <Stat label="期間中に学習した人" value={activeLearners} unit="人" />
         <Stat label="期間中の合計学習時間" value={formatMinutes(totalMinutes)} />
         <Stat
@@ -91,7 +91,7 @@ export default function AdminDashboard({ state }) {
         </section>
 
         <section className="card">
-          <h2 className="card-title">生徒別の学習時間</h2>
+          <h2 className="card-title">ゲスト別の学習時間</h2>
           <HBarChart
             data={learnerStats.map((l) => ({ key: l.id, label: l.name, value: l.minutes }))}
             emptyMessage="この期間に学習記録がありません。"
@@ -100,14 +100,14 @@ export default function AdminDashboard({ state }) {
       </div>
 
       <section className="card">
-        <h2 className="card-title">生徒一覧</h2>
-        <p className="card-hint">名前をクリックすると、その生徒の内訳を表示します。</p>
+        <h2 className="card-title">ゲスト一覧</h2>
+        <p className="card-hint">名前をクリックすると、そのゲストの内訳を表示します。</p>
 
         <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
-                <th>生徒</th>
+                <th>ゲスト</th>
                 <th>レベル</th>
                 <th className="num">期間中の学習時間</th>
                 <th className="num">記録件数</th>
@@ -169,7 +169,7 @@ function Stat({ label, value, unit = '' }) {
   )
 }
 
-/** 選ばれた生徒の詳細 */
+/** 選ばれたゲストの詳細 */
 function LearnerDetail({ learner, state, days }) {
   const logs = state.studyLogs.filter((log) => log.learnerId === learner.id)
   const daySet = new Set(days)

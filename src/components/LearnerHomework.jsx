@@ -1,8 +1,8 @@
 /**
- * 生徒の「今週の宿題」画面。
+ * ゲストの「今週の宿題」画面。
  *
- * 配信された教材を並べ、取り組んだら「やった」を記録する。
- * 生徒が書き換えられるのはこの記録だけで、
+ * 共有された教材を並べ、取り組んだら「やった」を記録する。
+ * ゲストが書き換えられるのはこの記録だけで、
  * 提出期限やトレーナーの確認印には触れられない(列単位の権限で絞ってある)。
  */
 import { useEffect, useState } from 'react'
@@ -52,7 +52,7 @@ export default function LearnerHomework() {
         <h2 className="card-title">今週の宿題</h2>
         {assignments.length === 0 ? (
           <p className="card-hint">
-            まだ宿題は配信されていません。次のレッスンのあとに届きます。
+            まだ宿題は届いていません。次のレッスンのあとに届きます。
           </p>
         ) : (
           <p className="card-hint">
@@ -75,7 +75,7 @@ export default function LearnerHomework() {
                 </div>
 
                 <p className="card-hint">
-                  配信 {formatDate(a.assigned_at)}
+                  共有 {formatDate(a.assigned_at)}
                   {a.due_on && ` / 次のレッスン ${a.due_on}`}
                 </p>
 

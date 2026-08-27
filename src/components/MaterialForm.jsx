@@ -21,7 +21,9 @@ import {
 } from '../data/exerciseTypes.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
-import { MATERIAL_KINDS, createMaterial, generateSection } from '../lib/materials.js'
+import {
+  MATERIAL_KINDS, createMaterial, dropDuplicates, generateSection, loadUsedSentences,
+} from '../lib/materials.js'
 
 /** 今日の日付。教材名を自動で付けるのに使う。 */
 const todayLabel = () => new Date().toISOString().slice(0, 10)
@@ -45,6 +47,8 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [generating, setGenerating] = useState(null)   // 生成中の進み具合
+  const [showEditor, setShowEditor] = useState(false)  // 手で直す欄を出すか
+  const [dropped, setDropped] = useState(0)            // 重複で外した数
 
   const patchSection = (si, patch) =>
     setSections(sections.map((sec, i) => (i === si ? { ...sec, ...patch } : sec)))
@@ -73,21 +77,27 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
    * **生成した内容は保存しない。** 発行を押すまでは下書きのままである。
    */
   const generate = async () => {
-    if (!tagIds.length) {
-      setError('先に弱点タグを選んでください。何の練習かが決まらないと作れません。')
+    if (tagIds.length !== 1) {
+      setError(tagIds.length === 0
+        ? '弱点タグを1つ選んでください。何の練習かが決まらないと作れません。'
+        : '教材は弱点1つにつき1つ作ります。タグを1つだけ選んでください。'
+          + '複数の弱点に出したい場合は、この手順を弱点の数だけ繰り返してください。')
       return
     }
     setError(null)
+    setDropped(0)
 
-    // 選んだタグの名前と例を、そのまま「何の練習か」として渡す
-    const topic = tagIds.map((id) => {
-      const tag = weaknessTags.find((t) => t.id === id)
-      return tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : id
-    }).join(' / ')
+    const tag = weaknessTags.find((t) => t.id === tagIds[0])
+    const topic = tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : tagIds[0]
+
+    // すでにこの弱点で使った英文を集めて、同じ文を作らせない
+    const { data: used } = await loadUsedSentences(tagIds)
+    const usedSet = new Set(used ?? [])
 
     const plan = defaultSectionsFor(kind)
     const made = []
     let point = teachingPoint
+    let droppedCount = 0
 
     for (let i = 0; i < plan.length; i += 1) {
       setGenerating({ done: i, total: plan.length, label: exerciseLabel(plan[i].exercise_type) })
@@ -95,17 +105,23 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
         sectionType: plan[i].exercise_type,
         count: plan[i].count,
         topic, level, industry, isFirst: i === 0,
+        avoid: [...usedSet].slice(-120),
       })
       if (e) { setGenerating(null); setError(e); return }
-      made.push(data.section)
+
+      // 念のため、返ってきた中に重複があれば取り除く
+      const { kept, dropped: out } = dropDuplicates(data.section.items, usedSet)
+      droppedCount += out.length
+      made.push({ ...data.section, items: kept })
       if (data.teaching_point && !point) point = data.teaching_point
     }
 
     setGenerating(null)
     setSections(made)
     setTeachingPoint(point)
+    setDropped(droppedCount)
     if (!title.trim()) {
-      const parts = [todayLabel(), tagIds.map(weaknessTagLabel).join('・'), level]
+      const parts = [todayLabel(), weaknessTagLabel(tagIds[0]), level]
       if (industry) parts.push(industryLabel(industry))
       setTitle(parts.join(' / '))
     }
@@ -162,7 +178,7 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
       <label className="field">
         <span>
           業界
-          <span className="field-hint">選ばなければ「汎用」。どの生徒にも使えます</span>
+          <span className="field-hint">選ばなければ「汎用」。どのゲストにも使えます</span>
         </span>
         <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
           <option value="">汎用(全員)</option>
@@ -173,7 +189,7 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
       </label>
 
       <label className="field">
-        <span>取り組み方(生徒に見えます・任意)</span>
+        <span>取り組み方(ゲストに見えます・任意)</span>
         <input value={instruction} onChange={(e) => setInstruction(e.target.value)}
                placeholder="例: to不定詞を「〜すべき」という感覚で捉えること" />
       </label>
@@ -192,7 +208,7 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
         <legend>
           弱点タグ
           <span className="field-hint">
-            必須。ここで付けておかないと、次に同じ弱点の生徒が来たときに見つけられません
+            必須。ここで付けておかないと、次に同じ弱点のゲストが来たときに見つけられません
           </span>
         </legend>
         <WeaknessTagPicker selected={tagIds} onChange={setTagIds} />
@@ -201,9 +217,18 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
       <div className="generate-box">
         <h3 className="card-title">AI に下書きを作らせる</h3>
         <p className="card-hint">
-          下の<strong>弱点タグ</strong>を選んでから押してください。
+          上の<strong>弱点タグを1つ</strong>選んでから押してください。
           レベルと業界も自動で反映されます。
           {kind === 'pattern' && ' 文型ドリルは 4演習 × 10問 = 40問 作ります。'}
+        </p>
+        <p className="card-hint">
+          <strong>教材は弱点1つにつき1つ</strong>作ります
+          (実物のドリルと同じく、1つの文法ポイントに絞るため)。
+          複数の弱点に出したいときは、この手順を弱点の数だけ繰り返してください。
+        </p>
+        <p className="card-hint">
+          同じ弱点ですでに使った英文は<strong>自動で避けます。</strong>
+          前と同じ文章は出ません。
         </p>
         <button type="button" className="btn btn--primary"
                 onClick={generate} disabled={!!generating || busy}>
@@ -213,15 +238,46 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
         </button>
         <p className="field-hint">
           作ったあと、<strong>必ず目を通して直してください。</strong>
-          共有した教材は他のトレーナーの生徒にも届きます。
+          共有した教材は他のトレーナーのゲストにも届きます。
         </p>
       </div>
 
       <fieldset className="field">
         <legend>
           演習
-          <span className="field-hint">{sections.length} 種類 / 合計 {totalItems} 問</span>
+          <span className="field-hint">
+            {sections.length} 種類 / 合計 {totalItems} 問
+            {dropped > 0 && ` / 重複していた ${dropped} 問は除きました`}
+          </span>
         </legend>
+
+        {/* 手入力は「どうしても直したいとき」のためのもの。
+            40問を毎回打つことは想定していないので、既定では隠す。 */}
+        {!showEditor ? (
+          <div className="editor-toggle">
+            {totalItems > 0 ? (
+              <>
+                <p className="card-hint">
+                  {sections.map((sec) => `${exerciseLabel(sec.exercise_type)} ${sec.items.length}問`)
+                    .join(' / ')}
+                </p>
+                <button type="button" className="btn btn--small"
+                        onClick={() => setShowEditor(true)}>
+                  中身を見て直す
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="card-hint">まだ中身がありません。上のボタンで作ってください。</p>
+                <button type="button" className="btn btn--link"
+                        onClick={() => setShowEditor(true)}>
+                  手で入力する
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+        <>
 
         {sections.map((sec, si) => {
           const type = exerciseType(sec.exercise_type)
@@ -279,10 +335,17 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
           )
         })}
 
-        <button type="button" className="btn"
-                onClick={() => setSections([...sections, newSection()])}>
-          ＋ 演習を追加
-        </button>
+        <div className="btn-row">
+          <button type="button" className="btn btn--small"
+                  onClick={() => setSections([...sections, newSection()])}>
+            ＋ 演習を追加
+          </button>
+          <button type="button" className="btn btn--link" onClick={() => setShowEditor(false)}>
+            折りたたむ
+          </button>
+        </div>
+        </>
+        )}
       </fieldset>
 
       <fieldset className="field">

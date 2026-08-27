@@ -36,7 +36,7 @@ import {
 import BarChart from './charts/BarChart.jsx'
 import HBarChart from './charts/HBarChart.jsx'
 
-/** 生徒向けの画面 */
+/** ゲスト向けの画面 */
 export default function EnglishStudyLog({ state, setState, learnerId }) {
   const logs = useMemo(
     () => state.studyLogs.filter((log) => log.learnerId === learnerId),

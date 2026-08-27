@@ -12,7 +12,7 @@ import MaterialForm from './MaterialForm.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
-import { exerciseLabel } from '../data/exerciseTypes.js'
+import { exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import { assignMaterial, kindLabel, loadMyLearners, searchMaterials } from '../lib/materials.js'
 
@@ -22,6 +22,8 @@ export default function TrainerMaterials({ me }) {
   const [level, setLevel] = useState(null)
   const [keyword, setKeyword] = useState('')
   const [industry, setIndustry] = useState('')
+  const [sort, setSort] = useState('new')      // 並び順
+  const [openId, setOpenId] = useState(null)   // 中身を開いている教材
 
   const [materials, setMaterials] = useState([])
   const [learners, setLearners] = useState([])
@@ -63,7 +65,7 @@ export default function TrainerMaterials({ me }) {
     })
     if (e) { setError(e); return }
     setError(null)
-    setMessage(`${data.count} 人に配信しました。`)
+    setMessage(`${data.count} 人と共有しました。`)
     setAssigningId(null)
     setPicked([])
   }
@@ -78,6 +80,13 @@ export default function TrainerMaterials({ me }) {
     )
   }
 
+  // 並べ替え。探しやすさは、絞り込みと並び順の両方で決まる。
+  const sorted = [...materials].sort((a, b) => {
+    if (sort === 'items') return b.itemCount - a.itemCount
+    if (sort === 'title') return a.title.localeCompare(b.title, 'ja')
+    return new Date(b.created_at) - new Date(a.created_at)
+  })
+
   const active = learners.filter((l) => l.status === 'active')
   const notActive = learners.filter((l) => l.status !== 'active')
 
@@ -87,7 +96,7 @@ export default function TrainerMaterials({ me }) {
         <h2 className="card-title">教材をさがす</h2>
         <p className="card-hint">
           レッスンで指摘した弱点を選ぶと、その弱点の教材が出ます。
-          <strong>あればそのまま配信できます。</strong>作るより速く、生徒には同じ価値が届きます。
+          <strong>あればそのまま配信できます。</strong>作るより速く、ゲストには同じ価値が届きます。
         </p>
 
         {/* さがす場面では基礎練習(子音全般・母音全般)も選べる。
@@ -111,6 +120,12 @@ export default function TrainerMaterials({ me }) {
                  onChange={(e) => setKeyword(e.target.value)}
                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); search() } }} />
           <button type="button" className="btn btn--small" onClick={search}>さがす</button>
+          <span className="filter-label">並び順</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="new">新しい順</option>
+            <option value="items">問数の多い順</option>
+            <option value="title">名前順</option>
+          </select>
         </div>
       </div>
 
@@ -133,7 +148,7 @@ export default function TrainerMaterials({ me }) {
       ) : (
         <>
           <p className="muted">{materials.length} 件</p>
-          {materials.map((m) => (
+          {sorted.map((m) => (
             <div key={m.id} className="card material-card">
               <div className="material-head">
                 <h3 className="card-title">{m.title}</h3>
@@ -172,11 +187,53 @@ export default function TrainerMaterials({ me }) {
                 ))}
               </ul>
 
+              {openId === m.id ? (
+                <div className="material-detail">
+                  {m.sections.map((sec) => {
+                    const type = exerciseType(sec.exercise_type)
+                    return (
+                      <section key={sec.id} className="exercise-view">
+                        <h4 className="section-title">
+                          {exerciseLabel(sec.exercise_type)}({sec.items.length} 問)
+                          {!type?.audioFrom && <span className="field-hint"> 音声なし</span>}
+                        </h4>
+                        {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
+                        <ol className="material-preview">
+                          {sec.items.map((it) => (
+                            <li key={it.id}>
+                              {it.prompt_en && <div lang="en">{it.prompt_en}</div>}
+                              {it.prompt_ja && <div>{it.prompt_ja}</div>}
+                              {it.question && <div lang="en">{it.question}</div>}
+                              {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
+                              {it.audio_text && !it.prompt_en && (
+                                <div lang="en" className="muted">読み上げ: {it.audio_text}</div>
+                              )}
+                              {it.answer && <div className="detail-answer">→ {it.answer}</div>}
+                              {it.answer_alt && (
+                                <div className="muted">別解: {it.answer_alt}</div>
+                              )}
+                              {it.note && <div className="field-hint">{it.note}</div>}
+                            </li>
+                          ))}
+                        </ol>
+                      </section>
+                    )
+                  })}
+                  <button type="button" className="btn btn--link" onClick={() => setOpenId(null)}>
+                    中身を閉じる
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="btn btn--small" onClick={() => setOpenId(m.id)}>
+                  中身を見る(全 {m.itemCount} 問)
+                </button>
+              )}
+
               {assigningId === m.id ? (
                 <div className="assign-box">
-                  <p className="field-label">配信する生徒を選んでください(複数可)</p>
+                  <p className="field-label">共有するゲストを選んでください(複数可)</p>
                   {active.length === 0 && (
-                    <p className="muted">受講中の生徒がいません。</p>
+                    <p className="muted">受講中のゲストがいません。</p>
                   )}
                   <div className="assign-list">
                     {active.map((l) => (
@@ -192,13 +249,13 @@ export default function TrainerMaterials({ me }) {
                   </div>
                   {notActive.length > 0 && (
                     <p className="field-hint">
-                      休会中・退会済の {notActive.length} 人には配信できません。
+                      休会中・退会済の {notActive.length} 人とは共有できません。
                     </p>
                   )}
                   <div className="btn-row">
                     <button type="button" className="btn btn--primary"
                             onClick={doAssign} disabled={!picked.length}>
-                      {picked.length ? `${picked.length} 人に配信する` : '配信する'}
+                      {picked.length ? `${picked.length} 人と共有する` : '配信する'}
                     </button>
                     <button type="button" className="btn" onClick={() => setAssigningId(null)}>
                       やめる
@@ -208,7 +265,7 @@ export default function TrainerMaterials({ me }) {
               ) : (
                 <button type="button" className="btn btn--primary"
                         onClick={() => startAssign(m.id)}>
-                  この教材を配信する
+                  この教材をゲストと共有する
                 </button>
               )}
             </div>

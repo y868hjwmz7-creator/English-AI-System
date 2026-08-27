@@ -220,6 +220,9 @@ Deno.serve(async (req) => {
   const level = String(body.level ?? 'B1')
   const industry = String(body.industry ?? '').trim()
   const isFirst = Boolean(body.isFirst)
+  // すでに使われている英文。同じ文章が二度出ると、ゲストは
+  // 「前にやった」と感じて手が止まる。避けさせる。
+  const avoid = Array.isArray(body.avoid) ? body.avoid.slice(0, 150).map(String) : []
 
   if (!SECTION_INSTRUCTIONS[sectionType]) {
     return reply({ error: `演習の種類が正しくありません: ${sectionType}` }, 400)
@@ -241,6 +244,11 @@ Deno.serve(async (req) => {
     `${SECTION_INSTRUCTIONS[sectionType]}`,
     ``,
     `**${count} 問ちょうど**作ること。減らさないこと。`,
+    avoid.length
+      ? `\n# すでに使った英文(これらと同じ文は絶対に作らないこと)\n`
+        + avoid.map((a) => `- ${a}`).join('\n')
+        + `\n\n同じ文型でも、場面・主語・目的語・数量を変えて別の文にすること。`
+      : '',
     isFirst ? '\nこれが最初の演習なので、teaching_point(教材全体の指導ポイント)も入れること。' : '',
   ].join('\n')
 

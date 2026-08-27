@@ -12,7 +12,7 @@
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { supabase } from './supabase.js'
 
-// 教材のレベルは生徒のレベルと同じ物差し(CEFR)を使う
+// 教材のレベルはゲストのレベルと同じ物差し(CEFR)を使う
 export { CEFR_LEVELS, cefrLabel }
 
 const ok = (data) => ({ data, error: null })
@@ -29,11 +29,11 @@ export const MATERIAL_KINDS = [
 
 export const kindLabel = (id) => MATERIAL_KINDS.find((k) => k.id === id)?.label ?? id
 
-// ── 生徒の一覧 ────────────────────────────────────────────────
+// ── ゲストの一覧 ────────────────────────────────────────────────
 
 /**
- * 自分が担当している生徒。
- * 2回に分けて問い合わせている。learner_admins は生徒と講師の両方が
+ * 自分が担当しているゲスト。
+ * 2回に分けて問い合わせている。learner_admins はゲストと講師の両方が
  * profiles を指しているため、1回でつなぐと指定が複雑になり壊れやすい。
  */
 export async function loadMyLearners() {
@@ -43,7 +43,7 @@ export async function loadMyLearners() {
     .from('learner_admins')
     .select('learner_id, started_on, handover_note')
     .is('ended_on', null)
-  if (linkError) return fail(linkError, '担当している生徒を読めませんでした')
+  if (linkError) return fail(linkError, '担当しているゲストを読めませんでした')
   if (!links?.length) return ok([])
 
   const { data: people, error: peopleError } = await supabase
@@ -51,7 +51,7 @@ export async function loadMyLearners() {
     .select('id, display_name, status')
     .in('id', links.map((l) => l.learner_id))
     .order('display_name')
-  if (peopleError) return fail(peopleError, '生徒の情報を読めませんでした')
+  if (peopleError) return fail(peopleError, 'ゲストの情報を読めませんでした')
 
   const noteOf = new Map(links.map((l) => [l.learner_id, l.handover_note]))
   return ok((people ?? []).map((p) => ({ ...p, handoverNote: noteOf.get(p.id) ?? null })))
@@ -96,7 +96,7 @@ export async function searchMaterials({
   if (idsWithTag) query = query.in('id', idsWithTag)
   if (level) query = query.eq('level', level)
   // 業界を選んだときは「その業界」と「汎用」の両方を出す。
-  // 汎用の教材はどの生徒にも使えるため、隠すと選択肢が不当に狭まる。
+  // 汎用の教材はどのゲストにも使えるため、隠すと選択肢が不当に狭まる。
   if (industry) query = query.or(`industry.eq.${industry},industry.is.null`)
   if (keyword.trim()) query = query.ilike('title', `%${keyword.trim()}%`)
 
@@ -218,13 +218,13 @@ export async function createMaterial({
 // ── 配信する ──────────────────────────────────────────────────
 
 /**
- * 1つの教材を、複数の生徒にまとめて配信する。
- * 週60レッスンの規模では、同じ弱点の生徒が必ず複数いるため
+ * 1つの教材を、複数のゲストにまとめて配信する。
+ * 週60レッスンの規模では、同じ弱点のゲストが必ず複数いるため
  * まとめて配信できることが前提になる(仕様書 第5.5節)。
  */
 export async function assignMaterial({ materialId, learnerIds, assignedBy, dueOn = null }) {
   if (!supabase) return ng('Supabase が設定されていません')
-  if (!learnerIds?.length) return ng('配信する生徒を選んでください')
+  if (!learnerIds?.length) return ng('配信するゲストを選んでください')
 
   const { error } = await supabase.from('assignments').insert(
     learnerIds.map((learner_id) => ({
@@ -235,16 +235,16 @@ export async function assignMaterial({ materialId, learnerIds, assignedBy, dueOn
     })),
   )
   if (error) {
-    // 休会中・退会済の生徒には配信できない(データベース側で止めている)
+    // 休会中・退会済のゲストには配信できない(データベース側で止めている)
     if (/row-level security|violates/i.test(error.message)) {
-      return ng('配信できませんでした。休会中または退会済の生徒が含まれていないか確認してください。')
+      return ng('共有できませんでした。休会中または退会済のゲストが含まれていないか確認してください。')
     }
-    return fail(error, '配信できませんでした')
+    return fail(error, '共有できませんでした')
   }
   return ok({ count: learnerIds.length })
 }
 
-// ── 生徒側:自分の宿題 ────────────────────────────────────────
+// ── ゲスト側:自分の宿題 ────────────────────────────────────────
 
 export async function loadMyAssignments() {
   if (!supabase) return ng('Supabase が設定されていません')
@@ -274,7 +274,7 @@ export async function loadMyAssignments() {
 
 /**
  * 「やった」を記録する。
- * 生徒が書き換えられるのはこの欄だけ(列単位の権限で絞ってある)。
+ * ゲストが書き換えられるのはこの欄だけ(列単位の権限で絞ってある)。
  */
 export async function markAssignmentDone(assignmentId, done = true) {
   if (!supabase) return ng('Supabase が設定されていません')
@@ -286,7 +286,7 @@ export async function markAssignmentDone(assignmentId, done = true) {
   return ok(true)
 }
 
-/** トレーナー側:担当生徒の取り組み状況 */
+/** トレーナー側:担当ゲストの取り組み状況 */
 export async function loadAssignmentsForLearner(learnerId) {
   if (!supabase) return ng('Supabase が設定されていません')
   const { data, error } = await supabase
@@ -299,10 +299,10 @@ export async function loadAssignmentsForLearner(learnerId) {
   return ok(data ?? [])
 }
 
-// ── 生徒の一覧(レベルとスコア付き) ──────────────────────────
+// ── ゲストの一覧(レベルとスコア付き) ──────────────────────────
 
 /**
- * 担当している生徒を、CEFR と最新スコアつきで読む。
+ * 担当しているゲストを、CEFR と最新スコアつきで読む。
  * 一覧に出すのは「いちばん新しい TOEIC」と「いちばん新しい VERSANT」だけ。
  * 履歴すべてを毎回読むのは無駄なので、データベース側でまとめてある
  * (learner_latest_scores)。
@@ -314,7 +314,7 @@ export async function loadMyLearnersDetailed() {
     .from('learner_admins')
     .select('learner_id, started_on, handover_note')
     .is('ended_on', null)
-  if (linkError) return fail(linkError, '担当している生徒を読めませんでした')
+  if (linkError) return fail(linkError, '担当しているゲストを読めませんでした')
   if (!links?.length) return ok([])
 
   const ids = links.map((l) => l.learner_id)
@@ -327,7 +327,7 @@ export async function loadMyLearnersDetailed() {
       supabase.from('learner_latest_scores')
         .select('learner_id, test_type, score, taken_on').in('learner_id', ids),
     ])
-  if (peopleError) return fail(peopleError, '生徒の情報を読めませんでした')
+  if (peopleError) return fail(peopleError, 'ゲストの情報を読めませんでした')
   if (scoreError) return fail(scoreError, 'スコアを読めませんでした')
 
   const noteOf = new Map(links.map((l) => [l.learner_id, l.handover_note]))
@@ -344,7 +344,7 @@ export async function loadMyLearnersDetailed() {
   })))
 }
 
-/** 生徒の CEFR レベルを記録する(トレーナーのみ) */
+/** ゲストの CEFR レベルを記録する(トレーナーのみ) */
 export async function setLearnerCefr(learnerId, cefr) {
   if (!supabase) return ng('Supabase が設定されていません')
   const { error } = await supabase
@@ -407,12 +407,12 @@ export async function setLearnerStatus(learnerId, status, note) {
  * 時間切れになりやすいため。10問ずつなら失敗しても作り直しが軽い。
  */
 export async function generateSection({
-  sectionType, count = 10, topic, level, industry = '', isFirst = false,
+  sectionType, count = 10, topic, level, industry = '', isFirst = false, avoid = [],
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
   const { data, error } = await supabase.functions.invoke('generate-material', {
-    body: { sectionType, count, topic, level, industry, isFirst },
+    body: { sectionType, count, topic, level, industry, isFirst, avoid },
   })
 
   if (error) {
@@ -427,4 +427,86 @@ export async function generateSection({
   }
   if (data?.error) return ng(data.error)
   return ok(data)
+}
+
+// ── アカウントを発行する ──────────────────────────────────────
+
+/**
+ * ゲスト(またはトレーナー)のアカウントを作る。
+ *
+ * 管理者の鍵が要る操作なので、Supabase のサーバー上の受付窓口
+ * (create-user)に任せる。ブラウザは「誰を作りたいか」を送るだけで、
+ * 鍵には触れない(仕様書 第5.8節)。
+ *
+ * トレーナーが作れるのはゲストだけ。これは窓口の側で強制している。
+ */
+export async function createAccount({ loginId, password, displayName, role = 'learner' }) {
+  if (!supabase) return ng('Supabase が設定されていません')
+
+  const { data, error } = await supabase.functions.invoke('create-user', {
+    body: { loginId, password, displayName, role },
+  })
+
+  if (error) {
+    let detail = ''
+    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      return ng('アカウント発行の窓口につながりませんでした。'
+        + 'Supabase に create-user を配置したか確認してください。')
+    }
+    return ng(detail || `アカウントを作れませんでした: ${error.message}`)
+  }
+  if (data?.error) return ng(data.error)
+  return ok(data.user)
+}
+
+// ── すでにある英文(重複を避けるため) ──────────────────────────
+
+/**
+ * その弱点タグですでに使われている英文を集める。
+ *
+ * 同じ文章が二度出ると、ゲストは「前にやった」と感じて手が止まる。
+ * 生成のときにこの一覧を渡し、避けさせる。
+ *
+ * 数が多くなりすぎないよう、直近の教材から集めて上限をかける。
+ */
+export async function loadUsedSentences(tagIds, limit = 120) {
+  if (!supabase || !tagIds?.length) return ok([])
+
+  const { data: tagged, error: tagError } = await supabase
+    .from('material_tags').select('material_id').in('tag_id', tagIds).limit(60)
+  if (tagError) return fail(tagError, 'すでにある英文を読めませんでした')
+  const ids = [...new Set((tagged ?? []).map((r) => r.material_id))]
+  if (!ids.length) return ok([])
+
+  const { data, error } = await supabase
+    .from('material_items')
+    .select('prompt_en, audio_text, answer')
+    .in('material_id', ids)
+    .limit(400)
+  if (error) return fail(error, 'すでにある英文を読めませんでした')
+
+  const seen = new Set()
+  for (const row of data ?? []) {
+    for (const v of [row.prompt_en, row.audio_text, row.answer]) {
+      const text = String(v ?? '').trim()
+      // 英語の文だけを集める(和訳や日本語の設問は対象外)
+      if (text && /^[\x20-\x7E\u2018\u2019\u201C\u201D]+$/.test(text) && /[a-zA-Z]/.test(text)) {
+        seen.add(text)
+      }
+    }
+  }
+  return ok([...seen].slice(-limit))
+}
+
+/** 生成した設問から、すでにある英文と同じものを取り除く */
+export function dropDuplicates(items, usedSet) {
+  const kept = []
+  const dropped = []
+  for (const it of items ?? []) {
+    const key = String(it.prompt_en || it.audio_text || it.answer || '').trim()
+    if (key && usedSet.has(key)) dropped.push(key)
+    else { kept.push(it); if (key) usedSet.add(key) }
+  }
+  return { kept, dropped }
 }

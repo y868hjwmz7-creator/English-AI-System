@@ -52,7 +52,7 @@ export default function App() {
   const isOwner = profile?.role === 'owner'
   const isLearner = profile?.role === 'learner'
 
-  // 生徒がトレーナー用の画面を開いていたら戻す。
+  // ゲストがトレーナー用の画面を開いていたら戻す。
   // 見えるデータはどのみち RLS が止めるが、画面としても出さない。
   useEffect(() => {
     if (!isSupabaseConfigured || !profile) return
@@ -106,7 +106,7 @@ export default function App() {
       <header className="app-header">
         <div className="app-header-main">
           <h1 className="app-title">English AI System</h1>
-          <p className="app-subtitle">生徒の学習記録・発音練習と、トレーナー向けの管理画面(試作版)</p>
+          <p className="app-subtitle">ゲストの学習記録・発音練習と、トレーナー向けの管理画面(試作版)</p>
         </div>
 
         <nav className="tabs" aria-label="画面の切り替え">
@@ -126,7 +126,7 @@ export default function App() {
               className={`tab${view === 'learners' ? ' is-active' : ''}`}
               onClick={() => setView('learners')}
             >
-              生徒
+              ゲスト
             </button>
           )}
           {(!isSupabaseConfigured || !isTrainer) && (
@@ -164,7 +164,7 @@ export default function App() {
           </span>
           <span className={`badge ${isTrainer ? 'badge--admin' : 'badge--learner'}`}>
             {profile
-              ? (isOwner ? '管理者' : isTrainer ? 'トレーナー' : '生徒')
+              ? (isOwner ? '管理者' : isTrainer ? 'トレーナー' : 'ゲスト')
               : '役割を確認中'}
           </span>
           <button type="button" className="btn btn--link" onClick={signOut}>
@@ -176,7 +176,7 @@ export default function App() {
       <div className="app-toolbar">
         {view === 'learner' && (
           <label className="field field--inline">
-            <span>生徒</span>
+            <span>ゲスト</span>
             <select value={learnerId ?? ''} onChange={(e) => setLearnerId(e.target.value)}>
               {state.learners.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -212,7 +212,7 @@ export default function App() {
           currentLearner ? (
             <EnglishStudyLog state={state} setState={setState} learnerId={learnerId} />
           ) : (
-            <p>生徒が登録されていません。</p>
+            <p>ゲストが登録されていません。</p>
           )
         ) : (
           <AdminDashboard state={state} />
