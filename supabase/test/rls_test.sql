@@ -25,14 +25,24 @@ begin
   raise notice '✓ %', label;
 end $$;
 
--- ある操作が「拒否されること」を確かめる
+-- ある操作が「拒否されること」を確かめる。
+--
+-- 拒否のされ方は2通りある。どちらも「拒否された」として扱う。
+--   ・アクセス制御(RLS や権限)が弾く  … insufficient_privilege / 42501
+--   ・関数が自分で断る(raise exception) … P0001。断り文句も表示する
+-- それ以外の失敗は、想定外なのでそのまま止める(見逃さないため)。
 create or replace function pg_temp.expect_denied(label text, stmt text)
 returns void language plpgsql as $$
 begin
   execute stmt;
   raise exception '✗ % … 拒否されるはずが、通ってしまった', label;
 exception
-  when insufficient_privilege or check_violation then raise notice '✓ % (拒否された)', label;
+  when insufficient_privilege or check_violation then
+    raise notice '✓ % (拒否された)', label;
+  when raise_exception then
+    -- 自分で立てた「通ってしまった」も同じ種類なので、見分ける
+    if sqlerrm like '✗%' then raise; end if;
+    raise notice '✓ % (拒否された: %)', label, sqlerrm;
   when others then
     if sqlstate = '42501' then raise notice '✓ % (拒否された)', label;
     else raise; end if;
@@ -194,6 +204,77 @@ select pg_temp.expect('トレーナーがトレーナー別集計を呼んでも
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select pg_temp.expect('生徒が集計を呼んでも何も返らない',
   (select count(*)::int from public.school_summary()), 0);
+
+-- ── 担当の引き継ぎ(0003 で追加) ────────────────────────────
+-- トレーナー1 が、生徒B のレッスン記録を残しておく。
+-- 引き継いだあと、これが新しい担当に見えることを確かめるため。
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+insert into public.lesson_feedback (learner_id, admin_id, lesson_on, good_points, weakness_note)
+values ('22222222-2222-2222-2222-222222222222',
+        '11111111-1111-1111-1111-111111111111',
+        current_date, 'リズムが良くなった', '語尾の子音が弱い');
+
+select pg_temp.expect('引き継ぎ前: トレーナー1に生徒Bのレッスン記録が見える',
+  (select count(*)::int from public.lesson_feedback), 1);
+
+-- トレーナーは引き継ぎを実行できない(管理者だけの操作)
+select pg_temp.expect_denied('トレーナーは担当を変更できない', $$
+  select public.transfer_learner('22222222-2222-2222-2222-222222222222',
+                                 '44444444-4444-4444-4444-444444444444') $$);
+
+-- 管理者が、生徒B の担当をトレーナー2 に移す
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select public.transfer_learner(
+  '22222222-2222-2222-2222-222222222222',
+  '44444444-4444-4444-4444-444444444444',
+  '語尾の子音を重点的に。宿題は毎回やってくる生徒です。');
+
+-- 引き継ぎ後
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect('引き継ぎ後: 前の担当には生徒Bの学習記録が見えない',
+  (select count(*)::int from public.study_logs), 0);
+select pg_temp.expect('引き継ぎ後: 前の担当には生徒Bのレッスン記録も見えない',
+  (select count(*)::int from public.lesson_feedback), 0);
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select pg_temp.expect('引き継ぎ後: 新しい担当に生徒Bの学習記録が見える',
+  (select count(*)::int from public.study_logs), 1);
+select pg_temp.expect('引き継ぎ後: 新しい担当に過去のレッスン記録が引き継がれる',
+  (select count(*)::int from public.lesson_feedback), 1);
+select pg_temp.expect('引き継ぎ後: 弱点の指摘内容もそのまま読める',
+  (select weakness_note from public.lesson_feedback limit 1), '語尾の子音が弱い');
+
+-- 担当の履歴が残っている(誰がいつ担当だったか)
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('担当の履歴が残る(終わった担当と現在の担当で2件)',
+  (select count(*)::int from public.learner_admins
+   where learner_id = '22222222-2222-2222-2222-222222222222'), 2);
+
+-- ── 退職の手続き(0003 で追加) ──────────────────────────────
+-- トレーナー1 を退職させ、残りの担当をトレーナー2 に引き継ぐ
+select pg_temp.expect('退職の手続きが実行できる',
+  (select public.retire_trainer('11111111-1111-1111-1111-111111111111',
+                                '44444444-4444-4444-4444-444444444444',
+                                '退職に伴う引き継ぎ') >= 0), true);
+
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect('退職者には教材が見えなくなる',
+  (select count(*)::int from public.materials), 0);
+select pg_temp.expect_denied('退職者は教材を作れない', $$
+  insert into public.materials (title, level, kind, created_by)
+  values ('退職後の教材', 1, 'word', '11111111-1111-1111-1111-111111111111') $$);
+
+-- 過去の記録は壊れていない(退職者を消していないため)
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select pg_temp.expect('退職しても、その人が残したレッスン記録は消えない',
+  (select count(*)::int from public.lesson_feedback), 1);
+
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('退職者の行は消さずに残る(過去の記録が壊れないため)',
+  (select status from public.profiles
+   where id = '11111111-1111-1111-1111-111111111111'), 'inactive');
+select pg_temp.expect_denied('管理者でも自分自身は停止できない', $$
+  select public.retire_trainer('55555555-5555-5555-5555-555555555555') $$);
 
 -- ── ログインしていない状態 ───────────────────────────────────
 reset role;
