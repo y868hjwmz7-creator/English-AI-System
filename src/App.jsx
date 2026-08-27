@@ -103,7 +103,14 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        <p>English AI System — 試作版 v0.1.0</p>
+        <p>
+          English AI System — 試作版 v0.1.0
+          {/* 公開時に版が埋め込まれる。手元で動かしているときは出ない。
+              「見ているのが新しい版かどうか」をこれで確かめる。 */}
+          {import.meta.env.VITE_BUILD_STAMP && (
+            <> ／ 版: <code>{import.meta.env.VITE_BUILD_STAMP}</code></>
+          )}
+        </p>
       </footer>
     </div>
   )

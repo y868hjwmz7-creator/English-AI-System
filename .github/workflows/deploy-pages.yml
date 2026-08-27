@@ -53,9 +53,17 @@ jobs:
 
       - run: npm ci
 
+      - name: 版の情報を用意する
+        # 古い内容がブラウザに残っていると、直したはずの不具合が
+        # 直っていないように見える。画面のどこかに版を出しておき、
+        # 「どの版を見ているか」を機械的に判別できるようにする。
+        run: |
+          echo "VITE_BUILD_STAMP=$(date -u '+%Y-%m-%d %H:%M') UTC / ${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+
       - name: アプリを組み立てる
         run: npm run build
         env:
+          VITE_BUILD_STAMP: ${{ env.VITE_BUILD_STAMP }}
           # GitHub Pages はリポジトリ名のフォルダの下で配信されるため、その指定
           BASE_PATH: /${{ github.event.repository.name }}/
           # Supabase の接続情報。リポジトリの Settings → Secrets and variables →
@@ -78,6 +86,7 @@ jobs:
           npm run build:single
           cp standalone/index.html dist/download.html
         env:
+          VITE_BUILD_STAMP: ${{ env.VITE_BUILD_STAMP }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
