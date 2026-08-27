@@ -85,7 +85,9 @@ export default function App() {
       <SupabaseStatus />
 
       <div className="notice notice--info app-notice">
-        <strong>この試作版について:</strong> データはこのブラウザの中だけに保存されます(サーバーは使っていません)。
+        <strong>この試作版について:</strong> Supabase への接続はできましたが、
+        <strong>画面に出ているデータはまだこのブラウザの中のもの</strong>です
+        (サンプルデータ)。これから順に Supabase へ移していきます。
         発音スコアは<strong>実際の音声を解析した結果ではなく、仮の数値</strong>です。
         詳しくは <code>docs/PROJECT_SPEC.md</code> の第5章をご覧ください。
       </div>
