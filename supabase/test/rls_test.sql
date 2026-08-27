@@ -5,9 +5,11 @@
 -- 画面にボタンを出さないだけでは防げないので、必ずここで確認する。
 --
 -- 登場人物:
---   トレーナー   … 教材を作り、生徒Bを担当する
---   生徒B  … トレーナーの担当。教材が配信されている
---   生徒C  … トレーナーの担当ではない。何も配信されていない
+--   トレーナー1 … 教材を作り、生徒Bを担当する
+--   トレーナー2 … 別の担当。教材の共有範囲を確かめるために出てくる
+--   生徒B       … トレーナー1の担当。教材が配信されている
+--   生徒C       … 誰の担当でもない。何も配信されていない
+--   管理者      … role='owner'。集計だけを見る
 -- ============================================================================
 
 \set ON_ERROR_STOP on
@@ -38,16 +40,22 @@ end $$;
 
 -- ── 下準備(superuser として。RLS は適用されない) ─────────────
 insert into auth.users (id, email) values
-  ('11111111-1111-1111-1111-111111111111', 'teacher@example.com'),
+  ('11111111-1111-1111-1111-111111111111', 'trainer1@example.com'),
   ('22222222-2222-2222-2222-222222222222', 'student-b@example.com'),
-  ('33333333-3333-3333-3333-333333333333', 'student-c@example.com');
+  ('33333333-3333-3333-3333-333333333333', 'student-c@example.com'),
+  ('44444444-4444-4444-4444-444444444444', 'trainer2@example.com'),
+  ('55555555-5555-5555-5555-555555555555', 'owner@example.com');
 
 -- トリガーで profiles が自動作成されているはず
 select pg_temp.expect('サインアップで profiles が自動で作られる',
-  (select count(*)::int from public.profiles), 3);
+  (select count(*)::int from public.profiles), 5);
 
-update public.profiles set role = 'admin', display_name = 'トレーナー'
+update public.profiles set role = 'trainer', display_name = 'トレーナー1'
   where id = '11111111-1111-1111-1111-111111111111';
+update public.profiles set role = 'trainer', display_name = 'トレーナー2'
+  where id = '44444444-4444-4444-4444-444444444444';
+update public.profiles set role = 'owner', display_name = '管理者'
+  where id = '55555555-5555-5555-5555-555555555555';
 update public.profiles set display_name = '生徒B' where id = '22222222-2222-2222-2222-222222222222';
 update public.profiles set display_name = '生徒C' where id = '33333333-3333-3333-3333-333333333333';
 
@@ -144,6 +152,48 @@ select pg_temp.expect('生徒Cには自分の学習記録だけが見える',
   (select count(*)::int from public.study_logs), 1);
 select pg_temp.expect('生徒Cには他人のプロフィールが見えない',
   (select count(*)::int from public.profiles), 1);
+
+-- ── 教材の共有範囲(0002 で追加) ───────────────────────────
+-- トレーナー1 が、共有しない教材をもう1つ作る
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+insert into public.materials (id, title, level, kind, status, visibility, created_by)
+values ('aaaaaaaa-0000-0000-0000-000000000002', '自分用の下書き', 2, 'passage', 'draft', 'private',
+        '11111111-1111-1111-1111-111111111111');
+
+select pg_temp.expect('作った本人には共有しない教材も見える',
+  (select count(*)::int from public.materials), 2);
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select pg_temp.expect('別のトレーナーには共有された教材だけ見える',
+  (select count(*)::int from public.materials), 1);
+select pg_temp.expect('別のトレーナーには他人の非共有の教材は見えない',
+  (select count(*)::int from public.materials
+   where id = 'aaaaaaaa-0000-0000-0000-000000000002'), 0);
+select pg_temp.expect('別のトレーナーには担当外の生徒の学習記録は見えない',
+  (select count(*)::int from public.study_logs), 0);
+
+-- ── 管理者(owner)は集計だけを見る(0002 で追加) ───────────
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('管理者は全体の集計を見られる',
+  (select count(*)::int from public.school_summary()), 1);
+select pg_temp.expect('管理者はトレーナー別の集計を見られる',
+  (select count(*)::int from public.trainer_summary()), 3);
+select pg_temp.expect('集計の中身が取れている(生徒の人数)',
+  (select learner_count from public.school_summary()), 2);
+-- 生の記録は見せない設計。owner はトレーナーを兼ねるが、
+-- 担当していない生徒の学習記録は読めない。
+select pg_temp.expect('管理者でも担当外の生徒の学習記録は読めない',
+  (select count(*)::int from public.study_logs), 0);
+
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect('トレーナーが集計を呼んでも何も返らない',
+  (select count(*)::int from public.school_summary()), 0);
+select pg_temp.expect('トレーナーがトレーナー別集計を呼んでも何も返らない',
+  (select count(*)::int from public.trainer_summary()), 0);
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('生徒が集計を呼んでも何も返らない',
+  (select count(*)::int from public.school_summary()), 0);
 
 -- ── ログインしていない状態 ───────────────────────────────────
 reset role;
