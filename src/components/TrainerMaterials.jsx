@@ -95,13 +95,12 @@ export default function TrainerMaterials({ me }) {
 
         <div className="filter-row material-filter">
           <span className="filter-label">レベル</span>
-          <button type="button" className={`btn btn--toggle${level === null ? ' is-active' : ''}`}
-                  onClick={() => setLevel(null)}>すべて</button>
-          {CEFR_LEVELS.map((l) => (
-            <button key={l.id} type="button"
-                    className={`btn btn--toggle${level === l.id ? ' is-active' : ''}`}
-                    onClick={() => setLevel(l.id)} title={l.ja}>{l.label}</button>
-          ))}
+          <select value={level ?? ''} onChange={(e) => setLevel(e.target.value || null)}>
+            <option value="">すべて</option>
+            {CEFR_LEVELS.map((l) => (
+              <option key={l.id} value={l.id}>{l.label} — {l.ja}</option>
+            ))}
+          </select>
           <span className="filter-label">業界</span>
           <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
             <option value="">すべて</option>

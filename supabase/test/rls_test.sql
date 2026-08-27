@@ -309,9 +309,24 @@ select pg_temp.expect_denied('TOEIC で 1000 点は登録できない', $$
 select pg_temp.expect_denied('VERSANT で 95 点は登録できない', $$
   insert into public.learner_scores (learner_id, test_type, score, taken_on)
   values ('22222222-2222-2222-2222-222222222222', 'versant', 95, current_date) $$);
-select pg_temp.expect_denied('CEFR に無いレベルは登録できない', $$
+select pg_temp.expect_denied('区分に無いレベルは登録できない', $$
   update public.profiles set cefr = 'D1'
   where id = '22222222-2222-2222-2222-222222222222' $$);
+
+-- 14段階(Pre-Basic 〜 Proficiency)がすべて使えることを確かめる
+do $$
+declare lv text;
+begin
+  foreach lv in array array[
+    'Pre-Basic','Basic','A1','A1+','A2','A2+','B1','B1+','B2','B2+','C1','C1+','C2','Proficiency'
+  ] loop
+    update public.profiles set cefr = lv
+      where id = '22222222-2222-2222-2222-222222222222';
+  end loop;
+  raise notice '✓ 14段階すべてを登録できる';
+end $$;
+update public.profiles set cefr = 'B1'
+  where id = '22222222-2222-2222-2222-222222222222';
 
 -- 生徒側から見た場合
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';

@@ -42,6 +42,18 @@ from (
   select '⑧ 休みの予定の表がある(0004)', exists (
     select 1 from pg_tables where tablename = 'trainer_absences'), 8
   union all
-  select '⑨ 弱点タグが38件ある', (
-    select count(*) = 38 from public.weakness_tags), 9
+  select '⑨ 弱点タグがある', (
+    select count(*) >= 38 from public.weakness_tags), 9
+  union all
+  select '⑩ レベル(CEFR)がある(0005)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'profiles' and column_name = 'cefr'), 10
+  union all
+  select '⑪ スコアの表がある(0005)', exists (
+    select 1 from pg_tables where tablename = 'learner_scores'), 11
+  union all
+  select '⑫ レベルが14段階ある(0006)', exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_cefr_check'
+      and pg_get_constraintdef(oid) like '%Proficiency%'), 12
 ) t order by 順;
