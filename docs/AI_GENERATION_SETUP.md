@@ -84,18 +84,23 @@
 | `create-user` | アカウントの発行(第 5.8 節) |
 | `generate-material` | 教材の下書き生成(この文書) |
 
+> **どちらの関数も1ファイルにまとめてあります。**
+> 分けたほうが読みやすいのですが、配置の手順が増えると事故のもとになるため、
+> あえて `index.ts` 1つに収めてあります。
+
 ### 方法1:Supabase の画面から(できればこちら)
 
-1. 左メニュー **Edge Functions** → **Create a new function**
-2. 名前に `generate-material` と入れる
-3. 出てきた編集画面に、リポジトリの
-   `supabase/functions/generate-material/index.ts` の中身を貼る
-4. **同じフォルダの `prompt.ts` も必要です。**
-   画面でファイルを追加できる場合は `prompt.ts` として追加する
-5. **Deploy** を押す
+1. 左メニュー **Edge Functions** を開く
+2. **Deploy a new function**(または **Create a new function**)を押す
+3. 画面で作る方(**Via Editor** など、ブラウザ上で書く選択肢)を選ぶ
+4. 名前に `generate-material` と入れる
+5. 出てきた編集画面の中身を**すべて消して**、リポジトリの
+   `supabase/functions/generate-material/index.ts` を丸ごと貼る
+6. **Deploy** を押す
+7. 同じ手順で `create-user` も配置する
 
-> **画面にファイルを追加する機能が無い場合**は、方法2になります。
-> `index.ts` は `prompt.ts` を読み込んでいるため、1ファイルでは動きません。
+> **画面に「Deploy a new function」が見当たらない場合**は方法2です。
+> Supabase の画面は版によって変わります。
 
 ### 方法2:あなたの Mac から
 
@@ -104,8 +109,8 @@ Mac に Node.js と Supabase CLI を入れて、リポジトリを取得した�
 ```
 npx supabase login
 npx supabase link --project-ref tsfoecjabgcdmvxdcpgy
-npx supabase functions deploy generate-material
-npx supabase functions deploy create-user
+npx supabase functions deploy generate-material --no-verify-jwt=false
+npx supabase functions deploy create-user --no-verify-jwt=false
 ```
 
 手順が必要でしたらご案内します。
