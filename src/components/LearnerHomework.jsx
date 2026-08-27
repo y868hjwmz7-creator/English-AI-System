@@ -7,7 +7,8 @@
  */
 import { useEffect, useState } from 'react'
 import { cefrLabel } from '../data/cefr.js'
-import { exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
+import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
+import PassagePractice from './PassagePractice.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 
@@ -91,6 +92,21 @@ export default function LearnerHomework() {
                     )}
                     {a.material?.sections.map((sec) => {
                       const type = exerciseType(sec.exercise_type)
+                      // 記事・会話は「問」ではなく1本の読み物。
+                      // 声に出す練習は、この中で取り組み方を切り替える。
+                      if (isPassageSection(sec.exercise_type)) {
+                        return (
+                          <section key={sec.id} className="exercise-view">
+                            <h5 className="section-title">{exerciseLabel(sec.exercise_type)}</h5>
+                            {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
+                            <PassagePractice
+                              section={sec}
+                              headline={a.material?.headline}
+                              isDialogue={sec.exercise_type === 'dialogue'}
+                            />
+                          </section>
+                        )
+                      }
                       return (
                         <section key={sec.id} className="exercise-view">
                           <h5 className="section-title">

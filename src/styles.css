@@ -619,3 +619,36 @@ html { -webkit-text-size-adjust: 100%; }
   border: 1px solid var(--border); border-radius: 999px;
   font-size: 11px; color: var(--text-secondary); white-space: nowrap;
 }
+
+/* ── 記事・会話の本文と、声に出す練習 ───────────────────────── */
+.passage { margin-top: 8px; }
+.passage-headline {
+  margin: 0 0 10px; font-size: 18px; line-height: 1.4; color: var(--text-primary);
+}
+.passage-modes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chip {
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-1); color: var(--text-secondary); font-size: 13px; cursor: pointer;
+}
+.chip--on { background: var(--series-1); border-color: var(--series-1); color: #fff; }
+.passage-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+
+.passage-body { list-style: none; margin: 0; padding: 0; }
+.passage-part {
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.passage-speaker { font-size: 13px; color: var(--series-1); margin-bottom: 2px; }
+.passage-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
+.passage-ja { margin: 0 0 4px; color: var(--text-secondary); font-size: 14px; line-height: 1.8; }
+.passage-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.btn--small { padding: 4px 10px; font-size: 13px; }
+.passage-notice { margin: 8px 0; }
+
+/* 文字起こしの色分け。色だけに頼らず、線でも区別する
+   (色の見え方には個人差がある) */
+.transcript { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface-1); }
+.transcript-line { margin: 0 0 6px; line-height: 2; font-size: 15px; }
+.w--ok     { color: var(--text-primary); }
+.w--missed { color: var(--text-secondary); text-decoration: line-through; }
+.w--extra  { color: var(--series-3); text-decoration: underline; }
+.material-headline { margin: 2px 0 6px; color: var(--text-secondary); font-size: 14px; }

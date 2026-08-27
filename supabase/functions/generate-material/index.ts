@@ -71,7 +71,9 @@ const SYSTEM_PROMPT = `あなたは日本のパーソナル英語スクールの
 教材全体の指導ポイント:
    emails to reply to のように、reply to の to を落とさないこと。
 
-# 作るときに必ず守ること
+# 文型ドリルを作るときに必ず守ること
+
+(記事・会話を作るときは、この下の「読み物を作るとき」に従うこと)
 
 1. **1つの文法ポイントに絞る。** 複数の文法を混ぜない
 2. **同じ文型で、場面と語彙だけを変える。** 定着が狙いなので変化は最小限
@@ -86,6 +88,27 @@ const SYSTEM_PROMPT = `あなたは日本のパーソナル英語スクールの
 7. 英文は**自然で、実際に使われる言い方**にする。教科書的な不自然さを避ける
 8. 日本語訳は**その文法の感覚が伝わる訳し方**にする
    (to不定詞なら「〜すべき」と訳して感覚をつかませる)
+
+# 読み物(記事・会話)を作るときに必ず守ること
+
+記事とダイアローグは**練習問題ではなく読み物**である。上のドリルの決まりは
+当てはまらない。ここで作るものは、音読・オーバーラッピング・シャドーイング・
+リピーティングに使う「まとまった1本の文章」である。
+
+1. **短い文の寄せ集めにしない。** 前を受けて話が進み、最後に区切りがつくこと。
+   段落や発言を切り離して読んでも意味が通る、という作りにしない
+2. **中身で読ませる。** 具体的な事実・数字・固有の状況を入れる。
+   「テクノロジーは私たちの生活を変えています」のような、
+   どの業界にも当てはまる文だけで埋めない。**面白いと思わせること**が条件である
+3. **その業界の人が「あるある」と思う細部を入れる。**
+   業界が指定されていれば、その現場でしか出てこない言葉や事情を使う
+4. 語彙とテンポは指定されたレベルに合わせる。ただし
+   **内容まで子ども向けにしない。** 大人が読んで退屈しないこと
+5. 会話は**場面ごとに話し方を変える。** 噂話ならくだけた言い回しと相づち、
+   交渉なら条件を確かめ合う言い方、会議なら議題に沿った進め方にする
+6. 会話の登場人物は**名前と立場を最初に決めて、最後まで変えない**
+7. 事実として言い切る内容は、**一般に知られている範囲にとどめる。**
+   実在の企業や人物の、確認できない具体的な数字や発言を作らない
 
 # レベルの目安
 
@@ -114,6 +137,40 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     'リスニング。audio_text に読み上げる英文、question に英語の設問、answer に解答を入れる。'
     + 'prompt_en と prompt_ja は入れない(英文を見せないため)。'
     + '設問は、英文を聞かないと答えられないものにする。',
+
+  // ── 本文(まとまった1本)────────────────────────────────
+  // ここは「設問」ではなく「読み物」を作らせる。1項目 = 1段落 / 1発言。
+  // 短い文を並べるのではなく、前の段落を受けて話が進むこと。
+  article:
+    '記事。**1項目 = 1段落**。読み物として通して読めること。'
+    + '前の段落を受けて話が進み、最後の段落で締めること。'
+    + '各段落は3〜5文、45〜65語。全体で250〜350語になる。'
+    + 'prompt_en に段落の英文、prompt_ja にその段落の日本語訳を入れる。'
+    + 'audio_text は prompt_en と同じにする。answer は空文字にする。'
+    + '**headline に記事の見出しを入れる**(英語、8語以内、内容が分かるもの)。'
+    + '1段落目で何の話か分かるようにし、事実・具体例・数字を入れて、'
+    + '「人に話したくなる」中身にすること。教科書調の当たり障りのない文章にしない。',
+  dialogue:
+    '会話。**1項目 = 1つの発言**。speaker に話す人(名前と肩書き。'
+    + '例: Sarah (Product Manager))、prompt_en にその発言、'
+    + 'prompt_ja に日本語訳を入れる。audio_text は prompt_en と同じ。answer は空文字。'
+    + '**登場人物は2人**で、名前は最初から最後まで変えない。'
+    + '1発言は1〜3文。話が始まり、進み、区切りがつくところまでを1本にする。'
+    + '相づち・言いよどみ・言い換えなど、実際の会話に出るものを入れる。'
+    + '**headline に会話の題名を入れる**(英語、8語以内)。'
+    + '場面の指定に合わせて丁寧さを変えること。噂話と交渉で同じ話し方にしない。',
+  comprehension:
+    '内容理解。question に英語の設問、answer に英語の解答例を入れる。'
+    + 'prompt_en と prompt_ja は入れない。answer_alt に別の言い方があれば入れる。'
+    + '**本文を読まないと答えられない設問**にする。一般常識で答えられるものは作らない。'
+    + '最後の1問は、内容についてどう思うかを述べさせる問い(意見を言わせるもの)にする。',
+  vocab_note:
+    '本文に出た語句。**本文に実際に出てきた語句だけ**を選ぶ。出てこない語を作らない。'
+    + 'prompt_en に語句、prompt_ja に意味、note にその語句を使った短い例文(英語)と'
+    + '使いどころの注意を入れる。audio_text は prompt_en と同じ。answer は空文字。'
+    + 'ゲストのレベルにとって新しい語、または知っていても使えていない語を選ぶ。',
+
+  // ── 旧「長文」で使っていたもの ────────────────────────────
   read_aloud:   '音読。prompt_en に英文、prompt_ja に訳、audio_text は prompt_en と同じにする。',
   overlapping:  'オーバーラッピング。prompt_en に英文、prompt_ja に訳、audio_text は prompt_en と同じ。',
   shadowing:    'シャドーイング。prompt_en に英文、prompt_ja に訳、audio_text は prompt_en と同じ。',
@@ -133,6 +190,10 @@ const EMIT_SECTION_TOOL = {
     required: ['instruction', 'items'],
     properties: {
       instruction: { type: 'string', description: 'この演習の指示文(日本語)' },
+      headline: {
+        type: 'string',
+        description: '記事の見出し / 会話の題名(英語、8語以内)。記事・会話のときだけ入れる',
+      },
       teaching_point: {
         type: 'string',
         description: '教材全体にかかる指導ポイント。1〜2文。最初の演習でだけ入れる',
@@ -153,6 +214,7 @@ const EMIT_SECTION_TOOL = {
             answer_alt: { type: 'string', description: '別解。改行区切り' },
             audio_text: { type: 'string', description: '読み上げる英文' },
             note:       { type: 'string', description: '1問ごとの補足' },
+            speaker:    { type: 'string', description: '話す人(会話のときだけ)' },
           },
         },
       },
@@ -220,6 +282,12 @@ Deno.serve(async (req) => {
   const level = String(body.level ?? 'B1')
   const industry = String(body.industry ?? '').trim()
   const isFirst = Boolean(body.isFirst)
+  // 記事のジャンル / 会話の場面 / 話題の指定。記事と会話のときだけ使う
+  const genre = String(body.genre ?? '').trim()
+  const scene = String(body.scene ?? '').trim()
+  const subject = String(body.subject ?? '').trim()
+  // 本文。内容理解と語句は、本文を読まないと作れない
+  const context = String(body.context ?? '').trim().slice(0, 8000)
   // すでに使われている英文。同じ文章が二度出ると、ゲストは
   // 「前にやった」と感じて手が止まる。避けさせる。
   const avoid = Array.isArray(body.avoid) ? body.avoid.slice(0, 150).map(String) : []
@@ -227,23 +295,50 @@ Deno.serve(async (req) => {
   if (!SECTION_INSTRUCTIONS[sectionType]) {
     return reply({ error: `演習の種類が正しくありません: ${sectionType}` }, 400)
   }
-  if (!topic) return reply({ error: '弱点(何の練習か)を指定してください' }, 400)
+  // 記事と会話は、弱点が無くても作れる(読み物として成立するため)。
+  // 文型ドリルは何の練習か決まらないと作れない。
+  const isPassage = sectionType === 'article' || sectionType === 'dialogue'
+  const needsContext = sectionType === 'comprehension' || sectionType === 'vocab_note'
+  if (!topic && !isPassage && !needsContext) {
+    return reply({ error: '弱点(何の練習か)を指定してください' }, 400)
+  }
+  if (needsContext && !context) {
+    return reply({ error: '本文が空です。先に記事か会話を作ってください' }, 400)
+  }
 
   // ── 3. 生成する ──────────────────────────────────────────
   const client = new Anthropic({ apiKey })
 
+  // 本文は「問」ではなく段落・発言なので、数え方の言い方を変える。
+  // 「10問作れ」と言うと、まとまった文章ではなく設問を作りにいってしまう。
+  const countLine = sectionType === 'article'
+    ? `**${count} 段落ちょうど**にすること。段落を減らさないこと。`
+    : sectionType === 'dialogue'
+      ? `**${count} 発言ちょうど**にすること。発言を減らさないこと。`
+      : `**${count} 問ちょうど**作ること。減らさないこと。`
+
   const userPrompt = [
-    `# 何の練習か`,
-    topic,
+    topic ? `# 注意させたい弱点\n${topic}` : '',
+    isPassage && topic
+      ? '本文の中に、この弱点にあたる表現を自然に何度も入れること。'
+        + 'ただし**不自然な文章にしてまで入れない**。読み物として成立することが先。'
+      : '',
     ``,
     `# レベル`,
     level,
     industry ? `\n# 業界\n${industry}の場面に寄せること。` : '\n# 業界\n指定なし(どの職種にも通じる場面にする)。',
+    genre ? `\n# 記事のジャンル\n${genre}` : '',
+    scene ? `\n# 会話の場面\n${scene}\nこの場面らしい丁寧さ・語彙・テンポにすること。` : '',
+    subject
+      ? `\n# 話題(指定あり)\n${subject}\nこの話題で書くこと。`
+      : (isPassage ? '\n# 話題\n指定なし。業界とジャンルに合う、具体的で面白い話題を自分で決めること。'
+        + '当たり障りのない一般論にしない。' : ''),
+    context ? `\n# 本文(この内容から作ること)\n${context}` : '',
     ``,
     `# 作る演習`,
     `${SECTION_INSTRUCTIONS[sectionType]}`,
     ``,
-    `**${count} 問ちょうど**作ること。減らさないこと。`,
+    countLine,
     avoid.length
       ? `\n# すでに使った英文(これらと同じ文は絶対に作らないこと)\n`
         + avoid.map((a) => `- ${a}`).join('\n')
@@ -274,6 +369,7 @@ Deno.serve(async (req) => {
 
     const result = block.input as {
       instruction?: string
+      headline?: string
       teaching_point?: string
       items?: Record<string, string>[]
     }
@@ -285,6 +381,7 @@ Deno.serve(async (req) => {
         instruction: result.instruction ?? '',
         items: result.items ?? [],
       },
+      headline: result.headline ?? null,
       teaching_point: result.teaching_point ?? null,
       // 画面に「いくら使ったか」を出せるようにしておく
       usage: {

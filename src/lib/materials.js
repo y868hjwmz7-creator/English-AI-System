@@ -21,11 +21,23 @@ const ng = (error) => ({ data: null, error })
 const fail = (e, fallback) => ng(e?.message ? `${fallback}: ${e.message}` : fallback)
 
 export const MATERIAL_KINDS = [
-  { id: 'pattern', label: '文型ドリル', hint: '同じ文法で違う文章をくり返す。定着が狙い' },
-  { id: 'passage', label: '長文', hint: '音読・オーバーラッピング・シャドーイング・リピーティングで使う' },
-  { id: 'word',    label: '単語', hint: '単語学習で使う' },
-  { id: 'phrase',  label: 'フレーズ', hint: 'フレーズ学習で使う' },
+  { id: 'pattern',  label: '文型ドリル',
+    hint: '同じ文法で違う文章をくり返す。定着が狙い。4演習 × 10問 = 40問' },
+  { id: 'reading',  label: 'リーディング(記事)',
+    hint: '業界別のニュースや読み物を1本。音読・シャドーイングに使う' },
+  { id: 'dialogue', label: 'ダイアローグ(会話)',
+    hint: '場面を決めた会話を1本。役を決めて声に出す' },
+  { id: 'word',     label: '単語', hint: '単語学習で使う' },
+  { id: 'phrase',   label: 'フレーズ', hint: 'フレーズ学習で使う' },
+  // 旧「長文」。新規では選べないが、既存の教材の表示に使う
+  { id: 'passage',  label: '長文(旧)', hint: '作り直す前の形。新しくは作れない', legacy: true },
 ]
+
+/** 新しく作れる種類(旧いものを除く) */
+export const NEW_MATERIAL_KINDS = MATERIAL_KINDS.filter((k) => !k.legacy)
+
+/** 本文を1本作る種類(記事・会話)かどうか。問数ではなく長さで考える */
+export const isPassageKind = (kind) => kind === 'reading' || kind === 'dialogue'
 
 export const kindLabel = (id) => MATERIAL_KINDS.find((k) => k.id === id)?.label ?? id
 
@@ -65,6 +77,7 @@ export async function loadMyLearners() {
  */
 export async function searchMaterials({
   tagIds = [], level = null, keyword = '', industry = null,
+  kind = null, genre = null, scene = null,
 } = {}) {
   if (!supabase) return ng('Supabase が設定されていません')
 
@@ -82,12 +95,12 @@ export async function searchMaterials({
     .from('materials')
     .select(`
       id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
-      teaching_point,
+      teaching_point, headline, genre, scene, topic,
       material_tags ( tag_id ),
       material_sections (
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                         answer, answer_alt, audio_text, note, tag_id )
+                         answer, answer_alt, audio_text, note, tag_id, speaker )
       )
     `)
     .order('created_at', { ascending: false })
@@ -98,7 +111,15 @@ export async function searchMaterials({
   // 業界を選んだときは「その業界」と「汎用」の両方を出す。
   // 汎用の教材はどのゲストにも使えるため、隠すと選択肢が不当に狭まる。
   if (industry) query = query.or(`industry.eq.${industry},industry.is.null`)
-  if (keyword.trim()) query = query.ilike('title', `%${keyword.trim()}%`)
+  if (kind) query = query.eq('kind', kind)
+  // 記事と会話は、弱点ではなくジャンル・場面で探すことが多い
+  if (genre) query = query.eq('genre', genre)
+  if (scene) query = query.eq('scene', scene)
+  // 見出しでも引けるようにする。記事は見出しで覚えているため
+  if (keyword.trim()) {
+    const k = keyword.trim()
+    query = query.or(`title.ilike.%${k}%,headline.ilike.%${k}%`)
+  }
 
   const { data, error } = await query
   if (error) return fail(error, '教材を読めませんでした')
@@ -133,6 +154,8 @@ const ITEM_FIELDS = [
   'prompt_en', 'prompt_ja', 'hint', 'question', 'answer', 'answer_alt', 'audio_text', 'note',
   // 混合ドリルで「この問題はどの弱点か」。単一の弱点の教材では空
   'tag_id',
+  // 会話で「誰の発言か」。記事や文型ドリルでは空
+  'speaker',
 ]
 
 /** 空の欄を落として、中身のある設問だけを残す */
@@ -151,6 +174,7 @@ const cleanItems = (items) =>
 export async function createMaterial({
   title, level, kind, instruction_ja = '', teaching_point = '',
   visibility = 'school', industry = null,
+  headline = '', genre = '', scene = '', topic = '',
   sections = [], tagIds = [], createdBy,
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
@@ -161,7 +185,12 @@ export async function createMaterial({
 
   if (!String(title).trim()) return ng('教材名を入れてください')
   if (!cleanSections.length) return ng('設問を1つ以上入れてください')
-  if (!tagIds.length) return ng('弱点タグを1つ以上選んでください(選ばないと、あとから見つけられません)')
+  // 弱点タグは、あとから教材を見つけるための索引である(第5.5節)。
+  // ただし記事と会話は、ジャンル・場面・見出しで探せるので必須にしない。
+  // 弱点に紐づかない読み物を作れないと、そもそも作れる幅が狭くなる。
+  if (!tagIds.length && !isPassageKind(kind)) {
+    return ng('弱点タグを1つ以上選んでください(選ばないと、あとから見つけられません)')
+  }
 
   const { data: material, error: materialError } = await supabase
     .from('materials')
@@ -172,6 +201,11 @@ export async function createMaterial({
       teaching_point: String(teaching_point).trim() || null,
       visibility,
       industry: industry || null,
+      // 記事・会話のときだけ入る。文型ドリルでは空のまま
+      headline: String(headline ?? '').trim() || null,
+      genre: genre || null,
+      scene: scene || null,
+      topic: String(topic ?? '').trim() || null,
       status: 'published',
       published_at: new Date().toISOString(),
       created_by: createdBy,
@@ -209,10 +243,12 @@ export async function createMaterial({
   const { error: itemsError } = await supabase.from('material_items').insert(rows)
   if (itemsError) return rollback(`設問を登録できませんでした: ${itemsError.message}`)
 
-  const { error: tagsError } = await supabase
-    .from('material_tags')
-    .insert(tagIds.map((tag_id) => ({ material_id: material.id, tag_id })))
-  if (tagsError) return rollback(`弱点タグを登録できませんでした: ${tagsError.message}`)
+  if (tagIds.length) {
+    const { error: tagsError } = await supabase
+      .from('material_tags')
+      .insert(tagIds.map((tag_id) => ({ material_id: material.id, tag_id })))
+    if (tagsError) return rollback(`弱点タグを登録できませんでした: ${tagsError.message}`)
+  }
 
   return ok({ id: material.id })
 }
@@ -256,11 +292,11 @@ export async function loadMyAssignments() {
     .select(`
       id, assigned_at, due_on, learner_done_at,
       materials (
-        id, title, level, kind, instruction_ja, teaching_point,
+        id, title, level, kind, instruction_ja, teaching_point, headline, genre, scene, topic,
         material_sections (
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                           answer, answer_alt, audio_text, note, tag_id )
+                           answer, answer_alt, audio_text, note, tag_id, speaker )
         )
       )
     `)
@@ -410,11 +446,16 @@ export async function setLearnerStatus(learnerId, status, note) {
  */
 export async function generateSection({
   sectionType, count = 10, topic, level, industry = '', isFirst = false, avoid = [],
+  genre = '', scene = '', subject = '', context = '',
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
   const { data, error } = await supabase.functions.invoke('generate-material', {
-    body: { sectionType, count, topic, level, industry, isFirst, avoid },
+    body: {
+      sectionType, count, topic, level, industry, isFirst, avoid,
+      // 記事のジャンル / 会話の場面 / 話題の指定 / すでに作った本文
+      genre, scene, subject, context,
+    },
   })
 
   if (error) {

@@ -157,3 +157,99 @@ select pg_temp.expect2('設問の総数(実物は各10問なので、ここは�
 select pg_temp.expect2('演習ごとに番号を1から振れる',
   (select count(*)::int from public.material_items
    where material_id = 'bbbbbbbb-0000-0000-0000-000000000001' and seq = 1), 4);
+
+-- ============================================================================
+-- リーディング(記事)とダイアローグ(会話)が入るか(0010)
+--
+-- 「長文」で作ったら長文にならなかった件の作り直し。
+-- 記事は段落の並び、会話は話者つきの発言の並びで持てることを確かめる。
+-- ============================================================================
+
+-- ── 記事 ──────────────────────────────────────────────────
+insert into public.materials
+  (id, title, level, kind, industry, visibility, status, headline, genre, topic, created_by)
+values (
+  'bbbbbbbb-0000-0000-0000-000000000002',
+  '2026-08-27 / Why Small Teams Ship Faster / B1 / IT・技術',
+  'B1', 'reading', 'it', 'school', 'published',
+  'Why Small Teams Ship Faster',
+  'trend',
+  '少人数チームのほうが速く出せるのはなぜか',
+  '99999999-9999-9999-9999-999999999999'
+);
+
+insert into public.material_sections (id, material_id, seq, exercise_type, instruction)
+values ('cccccccc-0000-0000-0000-000000000011',
+        'bbbbbbbb-0000-0000-0000-000000000002', 1, 'article',
+        '記事を読んでください。声に出す練習は、下のボタンで切り替えられます。');
+
+insert into public.material_items
+  (material_id, section_id, seq, prompt_en, prompt_ja, audio_text)
+values
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'cccccccc-0000-0000-0000-000000000011', 1,
+   'Last year, a payments company split its engineering group into teams of four. Six months later, the number of releases had tripled.',
+   '昨年、ある決済会社はエンジニア部門を4人ずつのチームに分けた。半年後、リリースの回数は3倍になっていた。',
+   'Last year, a payments company split its engineering group into teams of four. Six months later, the number of releases had tripled.'),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'cccccccc-0000-0000-0000-000000000011', 2,
+   'The reason was not that the engineers worked longer hours. It was that fewer people had to agree before anything could move.',
+   '理由は、エンジニアが長時間働くようになったからではない。何かを進める前に合意すべき人数が減ったからである。',
+   'The reason was not that the engineers worked longer hours. It was that fewer people had to agree before anything could move.');
+
+select pg_temp.expect2('記事は段落の並びとして入る',
+  (select count(*)::int from public.material_items
+   where section_id = 'cccccccc-0000-0000-0000-000000000011'), 2);
+
+select pg_temp.expect2('記事の見出しが保てる',
+  (select headline from public.materials
+   where id = 'bbbbbbbb-0000-0000-0000-000000000002'), 'Why Small Teams Ship Faster');
+
+select pg_temp.expect2('記事のジャンルが保てる',
+  (select genre from public.materials
+   where id = 'bbbbbbbb-0000-0000-0000-000000000002'), 'trend');
+
+select pg_temp.expect2('段落は1文ではなく、まとまった長さで入る(40語以上)',
+  (select min(array_length(string_to_array(prompt_en, ' '), 1))::int >= 20
+   from public.material_items
+   where section_id = 'cccccccc-0000-0000-0000-000000000011'), true);
+
+-- ── 会話 ──────────────────────────────────────────────────
+insert into public.materials
+  (id, title, level, kind, industry, visibility, status, headline, scene, created_by)
+values (
+  'bbbbbbbb-0000-0000-0000-000000000003',
+  '2026-08-27 / Did You Hear About the New Vendor? / B1 / IT・技術',
+  'B1', 'dialogue', 'it', 'school', 'published',
+  'Did You Hear About the New Vendor?',
+  'gossip',
+  '99999999-9999-9999-9999-999999999999'
+);
+
+insert into public.material_sections (id, material_id, seq, exercise_type)
+values ('cccccccc-0000-0000-0000-000000000012',
+        'bbbbbbbb-0000-0000-0000-000000000003', 1, 'dialogue');
+
+insert into public.material_items
+  (material_id, section_id, seq, speaker, prompt_en, prompt_ja)
+values
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'cccccccc-0000-0000-0000-000000000012', 1,
+   'Mika (QA Lead)', 'Hey, did you hear they picked a new vendor for the billing system?',
+   'ねえ、請求システムの業者、新しいところに決まったって聞いた?'),
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'cccccccc-0000-0000-0000-000000000012', 2,
+   'Dan (Backend Engineer)', 'No way. Already? I thought we were still comparing three of them.',
+   'えっ、もう? まだ3社を比べてる途中だと思ってたけど。');
+
+select pg_temp.expect2('会話は話者つきの発言として入る',
+  (select count(*)::int from public.material_items
+   where section_id = 'cccccccc-0000-0000-0000-000000000012' and speaker is not null), 2);
+
+select pg_temp.expect2('話者に名前と肩書きが入る',
+  (select speaker from public.material_items
+   where section_id = 'cccccccc-0000-0000-0000-000000000012' and seq = 1), 'Mika (QA Lead)');
+
+select pg_temp.expect2('会話の場面が保てる',
+  (select scene from public.materials
+   where id = 'bbbbbbbb-0000-0000-0000-000000000003'), 'gossip');
+
+-- ── 旧「長文」は移されている ──────────────────────────────
+select pg_temp.expect2('旧「長文」の教材は残っていない(reading に移した)',
+  (select count(*)::int from public.materials where kind = 'passage'), 0);

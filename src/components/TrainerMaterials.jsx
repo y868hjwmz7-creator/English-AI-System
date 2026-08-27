@@ -14,7 +14,10 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
-import { assignMaterial, kindLabel, loadMyLearners, searchMaterials } from '../lib/materials.js'
+import {
+  NEW_MATERIAL_KINDS, assignMaterial, kindLabel, loadMyLearners, searchMaterials,
+} from '../lib/materials.js'
+import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
@@ -22,6 +25,9 @@ export default function TrainerMaterials({ me }) {
   const [level, setLevel] = useState(null)
   const [keyword, setKeyword] = useState('')
   const [industry, setIndustry] = useState('')
+  const [kind, setKind] = useState('')         // 教材の種類で絞る
+  const [genre, setGenre] = useState('')       // 記事のジャンル
+  const [scene, setScene] = useState('')       // 会話の場面
   const [sort, setSort] = useState('new')      // 並び順
   const [openId, setOpenId] = useState(null)   // 中身を開いている教材
 
@@ -37,14 +43,19 @@ export default function TrainerMaterials({ me }) {
   const search = async () => {
     setLoading(true)
     setError(null)
-    const { data, error: e } = await searchMaterials({ tagIds, level, keyword, industry })
+    const { data, error: e } = await searchMaterials({
+      tagIds, level, keyword, industry,
+      kind: kind || null,
+      genre: kind === 'reading' ? (genre || null) : null,
+      scene: kind === 'dialogue' ? (scene || null) : null,
+    })
     setLoading(false)
     if (e) { setError(e); return }
     setMaterials(data)
   }
 
   // 絞り込みが変わったら探し直す。search 自体は毎回作り直されるので依存に入れない。
-  useEffect(() => { search() }, [tagIds, level, industry])
+  useEffect(() => { search() }, [tagIds, level, industry, kind, genre, scene])
 
   useEffect(() => {
     loadMyLearners().then(({ data, error: e }) => {
@@ -112,12 +123,35 @@ export default function TrainerMaterials({ me }) {
               <option key={l.id} value={l.id}>{l.label} — {l.ja}</option>
             ))}
           </select>
+          <span className="filter-label">種類</span>
+          <select value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="">すべて</option>
+            {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+          </select>
+          {kind === 'reading' && (
+            <>
+              <span className="filter-label">ジャンル</span>
+              <select value={genre} onChange={(e) => setGenre(e.target.value)}>
+                <option value="">すべて</option>
+                {READING_GENRES.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+              </select>
+            </>
+          )}
+          {kind === 'dialogue' && (
+            <>
+              <span className="filter-label">場面</span>
+              <select value={scene} onChange={(e) => setScene(e.target.value)}>
+                <option value="">すべて</option>
+                {DIALOGUE_SCENES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select>
+            </>
+          )}
           <span className="filter-label">業界</span>
           <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
             <option value="">すべて</option>
             {INDUSTRIES.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
           </select>
-          <input className="material-keyword" value={keyword} placeholder="教材名で絞る"
+          <input className="material-keyword" value={keyword} placeholder="教材名・見出しで絞る"
                  onChange={(e) => setKeyword(e.target.value)}
                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); search() } }} />
           <button type="button" className="btn btn--small" onClick={search}>さがす</button>
@@ -153,6 +187,9 @@ export default function TrainerMaterials({ me }) {
             <div key={m.id} className="card material-card">
               <div className="material-head">
                 <h3 className="card-title">{m.title}</h3>
+                {m.headline && (
+                  <p className="material-headline" lang="en">{m.headline}</p>
+                )}
                 <span className="muted">
                   {cefrLabel(m.level)} / {kindLabel(m.kind)} / {industryLabel(m.industry)}
                   {m.visibility === 'private' && ' / 自分だけ'}
@@ -204,6 +241,9 @@ export default function TrainerMaterials({ me }) {
                             <li key={it.id}>
                               {it.tag_id && (
                                 <span className="item-tag">{weaknessTagLabel(it.tag_id)}</span>
+                              )}
+                              {it.speaker && (
+                                <div className="passage-speaker" lang="en">{it.speaker}</div>
                               )}
                               {it.prompt_en && <div lang="en">{it.prompt_en}</div>}
                               {it.prompt_ja && <div>{it.prompt_ja}</div>}

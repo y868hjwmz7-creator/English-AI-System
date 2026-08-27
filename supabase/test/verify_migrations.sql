@@ -6,7 +6,7 @@
 --   何も書き換えず、何も消しません。**見るだけ**の SQL です。
 --
 -- 【成功したときの見え方】
---   21行の表が出て、すべて「✅ OK」になります。
+--   24行の表が出て、すべて「✅ OK」になります。
 --   「❌ まだです」がある行は、その番号のファイルがまだ実行されていません。
 -- ============================================================================
 
@@ -89,4 +89,18 @@ from (
   select '㉑ 1問ごとの弱点を持てる(0009・混合ドリル)', exists (
     select 1 from information_schema.columns
     where table_name = 'material_items' and column_name = 'tag_id'), 21
+  union all
+  select '㉒ リーディングと会話が選べる(0010)', (
+    select pg_get_constraintdef(oid) like '%reading%'
+       and pg_get_constraintdef(oid) like '%dialogue%'
+    from pg_constraint where conname = 'materials_kind_check'), 22
+  union all
+  select '㉓ 見出し・ジャンル・場面・話題がある(0010)', (
+    select count(*) = 4 from information_schema.columns
+    where table_name = 'materials'
+      and column_name in ('headline', 'genre', 'scene', 'topic')), 23
+  union all
+  select '㉔ 会話の話者を持てる(0010)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'material_items' and column_name = 'speaker'), 24
 ) t order by 順;

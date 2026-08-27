@@ -22,8 +22,10 @@ import {
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
-  MATERIAL_KINDS, createMaterial, generateSectionUnique, loadUsedSentences, normEn,
+  NEW_MATERIAL_KINDS, createMaterial, generateSection, generateSectionUnique,
+  isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
+import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
 const MAX_TAGS = 3
@@ -83,6 +85,10 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
   const [forLearner, setForLearner] = useState('')     // 誰に出す教材か(任意)
   const [similarNotes, setSimilarNotes] = useState([]) // 意味が近すぎて外した文
   const [warning, setWarning] = useState(null)         // 効いていない仕組みの知らせ
+  const [headline, setHeadline] = useState('')         // 記事の見出し / 会話の題名
+  const [genre, setGenre] = useState('news')           // 記事のジャンル
+  const [scene, setScene] = useState('casual')         // 会話の場面
+  const [subject, setSubject] = useState('')           // 話題の指定(任意)
 
   const patchSection = (si, patch) =>
     setSections(sections.map((sec, i) => (i === si ? { ...sec, ...patch } : sec)))
@@ -110,27 +116,88 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
    * この2つだけで、40問は AI が作る(仕様書 第5.13.5節)。
    * **生成した内容は保存しない。** 発行を押すまでは下書きのままである。
    */
-  const generate = async () => {
-    if (tagIds.length === 0) {
-      setError('弱点タグを選んでください。何の練習かが決まらないと作れません。')
-      return
-    }
-    if (tagIds.length > MAX_TAGS) {
-      setError(`混ぜられる弱点は ${MAX_TAGS} つまでです。`
-        + `${tagIds.length} つだと1つあたりの問数が少なすぎて、練習量になりません。`)
-      return
-    }
-    setError(null)
-    setDropped(0)
-    setShort(0)
-    setSimilarNotes([])
-    setWarning(null)
+  /** 弱点タグを、AI に渡す文言にする */
+  const topicOf = (id) => {
+    const tag = weaknessTags.find((t) => t.id === id)
+    return tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : id
+  }
 
-    const topicOf = (id) => {
-      const tag = weaknessTags.find((t) => t.id === id)
-      return tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : id
+  /** 教材名を自動で付ける。手入力を減らすため(仕様書 第5.13.5節) */
+  const autoTitle = (head) => {
+    const parts = [todayLabel()]
+    if (head) parts.push(head)
+    else if (kind === 'reading') parts.push(READING_GENRES.find((g) => g.id === genre)?.label ?? '')
+    else if (kind === 'dialogue') parts.push(DIALOGUE_SCENES.find((x) => x.id === scene)?.label ?? '')
+    else parts.push(tagIds.map(weaknessTagLabel).join(' + '))
+    parts.push(level)
+    if (industry) parts.push(industryLabel(industry))
+    const name = learners.find((l) => l.id === forLearner)?.display_name
+    if (name) parts.push(name)
+    return parts.filter(Boolean).join(' / ')
+  }
+
+  /**
+   * 記事・会話を作る。
+   *
+   * **本文は1本まるごと作る。** 段落や発言を弱点ごとに分けたり、
+   * 重複で1つずつ落としたりしない。落とすと話がつながらなくなる。
+   * 内容理解と語句は、できあがった本文を渡して作らせる。
+   * そうしないと本文と噛み合わない設問ができる(第5.17節)。
+   */
+  const generatePassage = async () => {
+    const plan = defaultSectionsFor(kind)
+    const [bodyPlan, ...rest] = plan
+    const { data: used } = await loadUsedSentences(tagIds)
+
+    setGenerating({ done: 0, total: plan.length, label: exerciseLabel(bodyPlan.exercise_type) })
+    const { data: body, error: bodyError } = await generateSection({
+      sectionType: bodyPlan.exercise_type,
+      count: bodyPlan.count,
+      topic: tagIds.map(topicOf).join(' / '),
+      level, industry, isFirst: true,
+      genre: kind === 'reading'
+        ? [READING_GENRES.find((g) => g.id === genre)?.label,
+           READING_GENRES.find((g) => g.id === genre)?.hint].filter(Boolean).join(' — ')
+        : '',
+      scene: kind === 'dialogue'
+        ? [DIALOGUE_SCENES.find((x) => x.id === scene)?.label,
+           DIALOGUE_SCENES.find((x) => x.id === scene)?.hint].filter(Boolean).join(' — ')
+        : '',
+      subject,
+      avoid: (used ?? []).slice(-40),
+    })
+    if (bodyError) { setGenerating(null); setError(bodyError); return }
+
+    const made = [body.section]
+    // できた本文を、そのまま次の生成に渡す
+    const context = (body.section.items ?? [])
+      .map((it) => (it.speaker ? `${it.speaker}: ${it.prompt_en}` : it.prompt_en))
+      .filter(Boolean).join('\n\n')
+
+    for (let i = 0; i < rest.length; i += 1) {
+      setGenerating({ done: i + 1, total: plan.length, label: exerciseLabel(rest[i].exercise_type) })
+      const { data, error: e } = await generateSection({
+        sectionType: rest[i].exercise_type,
+        count: rest[i].count,
+        topic: tagIds.map(topicOf).join(' / '),
+        level, industry, context,
+      })
+      if (e) { setGenerating(null); setError(e); return }
+      made.push(data.section)
     }
 
+    setGenerating(null)
+    setSections(made)
+    if (body.headline) setHeadline(body.headline)
+    if (body.teaching_point && !teachingPoint) setTeachingPoint(body.teaching_point)
+    if (!title.trim()) setTitle(autoTitle(body.headline))
+  }
+
+  /**
+   * 文型ドリル・単語・フレーズを作る。
+   * 弱点が複数なら問数を分けて、1問ずつ交互に並べる(第5.16.1節)。
+   */
+  const generateDrill = async () => {
     // ① 生成の前に、すでに使った英文を渡して避けさせる(誘導)
     const { data: used } = await loadUsedSentences(tagIds)
     const usedSet = new Set((used ?? []).map(normEn))
@@ -138,7 +205,7 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
     const plan = defaultSectionsFor(kind)
     const made = []
     const notes = []
-    const points = []
+    let point = teachingPoint
     let warn = null
     let droppedCount = 0
     let shortCount = 0
@@ -177,7 +244,9 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
         shortCount += result.short
         notes.push(...(result.tooSimilar ?? []))
         warn = warn || result.warning
-        if (result.teaching_point) points.push(result.teaching_point)
+        // 指導ポイントは**最初の1回だけ**採る。演習ごとに集めると、
+        // 同じ内容が言い換えられて何本も並ぶ(実際に6本並んだ)。
+        if (!point && result.teaching_point) point = result.teaching_point
         instruction = instruction || result.section.instruction
         // 1問ごとに、どの弱点の問題かを持たせる(混ぜたときに必要)
         perTag.push(result.section.items.map((it) => ({
@@ -194,18 +263,34 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
 
     setGenerating(null)
     setSections(made)
-    setTeachingPoint(teachingPoint || [...new Set(points)].join('\n'))
+    setTeachingPoint(point)
     setDropped(droppedCount)
     setShort(shortCount)
     setSimilarNotes(notes)
     setWarning(warn)
-    if (!title.trim()) {
-      const parts = [todayLabel(), tagIds.map(weaknessTagLabel).join(' + '), level]
-      if (industry) parts.push(industryLabel(industry))
-      const name = learners.find((l) => l.id === forLearner)?.display_name
-      if (name) parts.push(name)
-      setTitle(parts.join(' / '))
+    if (!title.trim()) setTitle(autoTitle(null))
+  }
+
+  const generate = async () => {
+    // 記事と会話は、弱点を選ばなくても作れる(読み物として成立するため)。
+    // 文型ドリルは、何の練習かが決まらないと作れない。
+    if (!isPassageKind(kind) && tagIds.length === 0) {
+      setError('弱点タグを選んでください。何の練習かが決まらないと作れません。')
+      return
     }
+    if (tagIds.length > MAX_TAGS) {
+      setError(`選べる弱点は ${MAX_TAGS} つまでです。`
+        + `${tagIds.length} つだと1つあたりの問数が少なすぎて、練習量になりません。`)
+      return
+    }
+    setError(null)
+    setDropped(0)
+    setShort(0)
+    setSimilarNotes([])
+    setWarning(null)
+
+    if (isPassageKind(kind)) await generatePassage()
+    else await generateDrill()
   }
 
   const handleSubmit = async (event) => {
@@ -216,6 +301,8 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
     const { data, error: message } = await createMaterial({
       title, level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
       visibility, industry, sections, tagIds, createdBy,
+      headline, genre: kind === 'reading' ? genre : '', scene: kind === 'dialogue' ? scene : '',
+      topic: subject,
     })
     setBusy(false)
     if (message) { setError(message); return }
@@ -248,13 +335,74 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
         <label className="field">
           <span>種類</span>
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            {MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+            {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
           </select>
         </label>
       </div>
       <p className="field-hint material-kind-hint">
-        {MATERIAL_KINDS.find((k) => k.id === kind)?.hint}
+        {NEW_MATERIAL_KINDS.find((k) => k.id === kind)?.hint}
       </p>
+
+      {kind === 'reading' && (
+        <label className="field">
+          <span>
+            記事のジャンル
+            <span className="field-hint">業界と組み合わせて、何の記事にするかが決まります</span>
+          </span>
+          <select value={genre} onChange={(e) => setGenre(e.target.value)}>
+            {READING_GENRES.map((g) => (
+              <option key={g.id} value={g.id}>{g.label} — {g.hint}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {kind === 'dialogue' && (
+        <label className="field">
+          <span>
+            会話の場面
+            <span className="field-hint">
+              場面によって丁寧さと言い回しが変わります。同じ話題でも別の教材になります
+            </span>
+          </span>
+          <select value={scene} onChange={(e) => setScene(e.target.value)}>
+            {DIALOGUE_SCENES.map((x) => (
+              <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {isPassageKind(kind) && (
+        <>
+          <label className="field">
+            <span>
+              話題(任意)
+              <span className="field-hint">
+                空のままなら、業界とジャンルに合う話題を AI が決めます。
+                「今週これを読ませたい」があるときだけ書いてください
+              </span>
+            </span>
+            <input
+              type="text" value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="例: 生成AIを社内で使うときのルール作り"
+            />
+          </label>
+
+          <label className="field">
+            <span>
+              見出し
+              <span className="field-hint">作ると自動で入ります。直しても構いません</span>
+            </span>
+            <input
+              type="text" value={headline} lang="en"
+              onChange={(e) => setHeadline(e.target.value)}
+              placeholder="作ると自動で入ります"
+            />
+          </label>
+        </>
+      )}
 
       <label className="field">
         <span>
@@ -289,7 +437,9 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
         <legend>
           弱点タグ
           <span className="field-hint">
-            必須。ここで付けておかないと、次に同じ弱点のゲストが来たときに見つけられません
+            {isPassageKind(kind)
+              ? '任意。付けると、その表現が本文に自然に出てくるように作ります'
+              : '必須。ここで付けておかないと、次に同じ弱点のゲストが来たときに見つけられません'}
           </span>
         </legend>
         <WeaknessTagPicker selected={tagIds} onChange={setTagIds} />
@@ -303,12 +453,15 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
           {kind === 'pattern' && ' 文型ドリルは 4演習 × 10問 = 40問 作ります。'}
         </p>
         <p className="card-hint">
-          <strong>弱点は1〜{MAX_TAGS}つ選べます。</strong>
-          {tagIds.length <= 1
+          {isPassageKind(kind)
+            ? '弱点タグは任意です。選ぶと、その表現が本文の中に自然に何度も出るように作ります。'
+              + '選ばなくても読み物としては成立します。'
+            : `弱点は1〜${MAX_TAGS}つ選べます。`}
+          {!isPassageKind(kind) && (tagIds.length <= 1
             ? '1つだけ選ぶと、その弱点に絞った教材になります(実物のドリルと同じ形)。'
-            : `${tagIds.length}つ選んだので、混合ドリルになります。`}
+            : `${tagIds.length}つ選んだので、混合ドリルになります。`)}
         </p>
-        {tagIds.length > 1 && (
+        {!isPassageKind(kind) && tagIds.length > 1 && (
           <p className="card-hint">
             {defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問を
             {tagIds.map(weaknessTagLabel).join(' / ')} に分け、
@@ -318,6 +471,16 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
             どの問題がどの弱点かは、1問ごとに記録します。
           </p>
         )}
+        {isPassageKind(kind) && (
+          <p className="card-hint">
+            <strong>本文は1本まるごと作ります。</strong>
+            短い英文を並べるのではなく、前を受けて話が進む
+            {kind === 'reading' ? '記事' : '会話'}になります
+            (およそ {kind === 'reading' ? '250〜350語' : '14発言'})。
+            シャドーイングやオーバーラッピングは、この本文に対して行います。
+          </p>
+        )}
+
         <label className="field">
           このゲスト向けに作る(任意)
           <select value={forLearner} onChange={(e) => setForLearner(e.target.value)}>
@@ -332,17 +495,24 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
           </span>
         </label>
 
-        <p className="card-hint">
-          同じ英文は二度出しません。生成するたびにデータベースと照合し、
-          すでに出した文が混じっていれば取り除いて<strong>その分を作り直します。</strong>
-          ただし<strong>意味が近いだけの別の文は防げません</strong>
-          (I have work to do. / I have a job to do.)。
-        </p>
+        {!isPassageKind(kind) && (
+          <p className="card-hint">
+            同じ英文は二度出しません。生成するたびにデータベースと照合し、
+            すでに出した文が混じっていれば取り除いて<strong>その分を作り直します。</strong>
+            意味が近すぎる文も弾きます。
+          </p>
+        )}
+
         <button type="button" className="btn btn--primary"
                 onClick={generate} disabled={!!generating || busy}>
           {generating
             ? `作っています… ${generating.label}(${generating.done + 1}/${generating.total})`
-            : `下書きを作る(${defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問)`}
+            : isPassageKind(kind)
+              ? `${kind === 'reading' ? '記事' : '会話'}を作る(`
+                + defaultSectionsFor(kind)
+                  .map((s2) => `${exerciseLabel(s2.exercise_type)}${s2.count}`).join(' + ')
+                + ')'
+              : `下書きを作る(${defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問)`}
         </button>
         <p className="field-hint">
           作ったあと、<strong>必ず目を通して直してください。</strong>

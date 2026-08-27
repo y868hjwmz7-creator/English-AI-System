@@ -33,6 +33,40 @@ export const EXERCISE_TYPES = [
     fields: ['audio_text', 'question', 'answer'], audioFrom: 'audio_text',
     hideAnswerFromLearner: true, hidePromptFromLearner: true,
   },
+  // ── 本文(まとまった1本)────────────────────────────────
+  //
+  // article と dialogue は「設問」ではなく「読み物」である。
+  // 1つの演習の中に段落(または発言)が順に並び、それで1本になる。
+  // ゲストはこの本文に対して、音読・オーバーラッピング・シャドーイング・
+  // リピーティングを行う。**取り組み方は本文の中で切り替える。**
+  // 以前は取り組み方ごとに演習を分けていたため、まとまった文章にならず、
+  // 短い英文が並ぶだけになっていた(仕様書 第5.17節)。
+  {
+    id: 'article', label: '記事',
+    instruction: '記事を読んでください。声に出す練習は、下のボタンで切り替えられます。',
+    fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
+    isPassage: true,
+  },
+  {
+    id: 'dialogue', label: '会話',
+    instruction: '会話を読んでください。役を決めて声に出すと効果が上がります。',
+    fields: ['speaker', 'prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
+    isPassage: true,
+  },
+  {
+    id: 'comprehension', label: '内容の理解',
+    instruction: '本文の内容について、英語で答えなさい。',
+    fields: ['question', 'answer'], audioFrom: null,
+    hideAnswerFromLearner: true,
+  },
+  {
+    id: 'vocab_note', label: '本文に出た語句',
+    instruction: '本文に出てきた語句です。意味と使い方を確かめてください。',
+    fields: ['prompt_en', 'prompt_ja', 'note'], audioFrom: 'prompt_en',
+  },
+
+  // ── 旧「長文」で使っていたもの ────────────────────────────
+  // 新規では使わない。既存の教材を読むために残してある。
   {
     id: 'read_aloud', label: '音読',
     instruction: 'お手本を聞いてから音読してください。',
@@ -72,6 +106,7 @@ export const FIELD_LABELS = {
   answer_alt: { label: '別解(改行区切り)', placeholder: 'I have many things to do today.' },
   audio_text: { label: '読み上げる英文', placeholder: 'I have three things to do before I leave.' },
   note:       { label: '補足',         placeholder: 'reply to an email なので、最後の to を落とさない。' },
+  speaker:    { label: '話す人',       placeholder: 'Sarah (Product Manager)' },
 }
 
 /**
@@ -88,12 +123,36 @@ export const DEFAULT_SECTIONS = {
     { exercise_type: 'translate_ja_en', count: 10 },
     { exercise_type: 'listening',       count: 10 },
   ],
+  // リーディングは「記事1本」。count は段落の数であって、問題の数ではない。
+  // 6段落でおよそ 250〜350 語になる。シャドーイングに使うには、
+  // これくらいの長さが要る(短い文の寄せ集めでは練習にならない)。
+  reading: [
+    { exercise_type: 'article',       count: 6 },
+    { exercise_type: 'comprehension', count: 5 },
+    { exercise_type: 'vocab_note',    count: 8 },
+  ],
+  // ダイアローグは「会話1本」。count は発言の数。
+  // 14往復ぶんで、場面がひととおり成立する長さになる。
+  dialogue: [
+    { exercise_type: 'dialogue',      count: 14 },
+    { exercise_type: 'comprehension', count: 4 },
+    { exercise_type: 'vocab_note',    count: 6 },
+  ],
+  word:   [{ exercise_type: 'vocabulary', count: 20 }],
+  phrase: [{ exercise_type: 'phrase',     count: 20 }],
+  // 旧「長文」。新規では選べないが、既存の教材を開くために残す
   passage: [
     { exercise_type: 'read_aloud',  count: 8 },
     { exercise_type: 'shadowing',   count: 8 },
   ],
-  word:   [{ exercise_type: 'vocabulary', count: 20 }],
-  phrase: [{ exercise_type: 'phrase',     count: 20 }],
 }
+
+/**
+ * 本文(記事・会話)の演習かどうか。
+ *
+ * 本文は「問数」で数えない。段落や発言がいくつあっても1本の読み物である。
+ * 弱点で分割してはいけないのも、この演習である。
+ */
+export const isPassageSection = (typeId) => !!exerciseType(typeId)?.isPassage
 
 export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SECTIONS.pattern
