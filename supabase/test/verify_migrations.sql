@@ -56,4 +56,17 @@ from (
     select 1 from pg_constraint
     where conname = 'profiles_cefr_check'
       and pg_get_constraintdef(oid) like '%Proficiency%'), 12
+  union all
+  select '⑬ 演習の表がある(0007)', exists (
+    select 1 from pg_tables where tablename = 'material_sections'), 13
+  union all
+  select '⑭ 設問に与える語・設問・解答がある(0007)', (
+    select count(*) = 4 from information_schema.columns
+    where table_name = 'material_items'
+      and column_name in ('hint', 'question', 'answer', 'audio_text')), 14
+  union all
+  select '⑮ 文型ドリルが選べる(0007)', exists (
+    select 1 from pg_constraint
+    where conname = 'materials_kind_check'
+      and pg_get_constraintdef(oid) like '%pattern%'), 15
 ) t order by 順;
