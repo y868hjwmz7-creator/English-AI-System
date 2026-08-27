@@ -394,3 +394,37 @@ export async function setLearnerStatus(learnerId, status, note) {
   if (error) return fail(error, '在籍状態を変えられませんでした')
   return ok(true)
 }
+
+// ── AI に下書きを作らせる ─────────────────────────────────────
+
+/**
+ * 演習を1つぶん生成する。
+ *
+ * **保存はしない。下書きが返るだけ。**
+ * トレーナーが目を通して直す工程を飛ばさせないため(仕様書 第5.13.5節)。
+ *
+ * 1回に1演習だけ作るのは、40問を一度に作らせると応答が長くなり
+ * 時間切れになりやすいため。10問ずつなら失敗しても作り直しが軽い。
+ */
+export async function generateSection({
+  sectionType, count = 10, topic, level, industry = '', isFirst = false,
+}) {
+  if (!supabase) return ng('Supabase が設定されていません')
+
+  const { data, error } = await supabase.functions.invoke('generate-material', {
+    body: { sectionType, count, topic, level, industry, isFirst },
+  })
+
+  if (error) {
+    // 受付窓口が返した日本語の理由を拾う
+    let detail = ''
+    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      return ng('生成の窓口につながりませんでした。'
+        + 'Supabase に generate-material を配置したか確認してください。')
+    }
+    return ng(detail || `生成に失敗しました: ${error.message}`)
+  }
+  if (data?.error) return ng(data.error)
+  return ok(data)
+}

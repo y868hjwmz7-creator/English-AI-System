@@ -73,3 +73,27 @@ export const FIELD_LABELS = {
   audio_text: { label: '読み上げる英文', placeholder: 'I have three things to do before I leave.' },
   note:       { label: '補足',         placeholder: 'reply to an email なので、最後の to を落とさない。' },
 }
+
+/**
+ * 教材の種類ごとの、既定の演習構成と問数。
+ *
+ * 文型ドリルの「4演習 × 10問 = 40問」は、実物のドリルに合わせた数字
+ * (仕様書 第5.13.3節)。量は定着の条件なので、既定として下げない。
+ * トレーナーが増減できる。
+ */
+export const DEFAULT_SECTIONS = {
+  pattern: [
+    { exercise_type: 'translate_en_ja', count: 10 },
+    { exercise_type: 'fill_blank',      count: 10 },
+    { exercise_type: 'translate_ja_en', count: 10 },
+    { exercise_type: 'listening',       count: 10 },
+  ],
+  passage: [
+    { exercise_type: 'read_aloud',  count: 8 },
+    { exercise_type: 'shadowing',   count: 8 },
+  ],
+  word:   [{ exercise_type: 'vocabulary', count: 20 }],
+  phrase: [{ exercise_type: 'phrase',     count: 20 }],
+}
+
+export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SECTIONS.pattern

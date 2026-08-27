@@ -579,3 +579,14 @@ html { -webkit-text-size-adjust: 100%; }
 .answer { margin-top: 4px; font-size: 13px; }
 .answer > summary { cursor: pointer; color: var(--accent); }
 .answer > div { margin-top: 4px; }
+
+/* ---------------- AI に下書きを作らせる ---------------- */
+
+.generate-box {
+  margin: 16px 0; padding: 14px;
+  border: 1px solid var(--accent); border-radius: var(--radius);
+  background: var(--surface-1);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-1));
+}
+.generate-box .card-title { margin-bottom: 4px; }
+.generate-box .field-hint { display: block; margin-top: 8px; }

@@ -16,9 +16,15 @@
 import { useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
-import { EXERCISE_TYPES, FIELD_LABELS, exerciseType } from '../data/exerciseTypes.js'
-import { INDUSTRIES } from '../data/industries.js'
-import { MATERIAL_KINDS, createMaterial } from '../lib/materials.js'
+import {
+  EXERCISE_TYPES, FIELD_LABELS, defaultSectionsFor, exerciseLabel, exerciseType,
+} from '../data/exerciseTypes.js'
+import { INDUSTRIES, industryLabel } from '../data/industries.js'
+import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
+import { MATERIAL_KINDS, createMaterial, generateSection } from '../lib/materials.js'
+
+/** 今日の日付。教材名を自動で付けるのに使う。 */
+const todayLabel = () => new Date().toISOString().slice(0, 10)
 
 const newSection = (typeId = 'translate_en_ja') => ({
   exercise_type: typeId,
@@ -38,6 +44,7 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
   const [tagIds, setTagIds] = useState([])
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [generating, setGenerating] = useState(null)   // 生成中の進み具合
 
   const patchSection = (si, patch) =>
     setSections(sections.map((sec, i) => (i === si ? { ...sec, ...patch } : sec)))
@@ -57,6 +64,52 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
     (n, sec) => n + sec.items.filter((it) => Object.values(it).some((v) => String(v ?? '').trim())).length,
     0,
   )
+
+  /**
+   * AI に下書きを作らせる。
+   *
+   * 選んだ弱点タグとレベル・業界をそのまま渡す。トレーナーが打つのは
+   * この2つだけで、40問は AI が作る(仕様書 第5.13.5節)。
+   * **生成した内容は保存しない。** 発行を押すまでは下書きのままである。
+   */
+  const generate = async () => {
+    if (!tagIds.length) {
+      setError('先に弱点タグを選んでください。何の練習かが決まらないと作れません。')
+      return
+    }
+    setError(null)
+
+    // 選んだタグの名前と例を、そのまま「何の練習か」として渡す
+    const topic = tagIds.map((id) => {
+      const tag = weaknessTags.find((t) => t.id === id)
+      return tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : id
+    }).join(' / ')
+
+    const plan = defaultSectionsFor(kind)
+    const made = []
+    let point = teachingPoint
+
+    for (let i = 0; i < plan.length; i += 1) {
+      setGenerating({ done: i, total: plan.length, label: exerciseLabel(plan[i].exercise_type) })
+      const { data, error: e } = await generateSection({
+        sectionType: plan[i].exercise_type,
+        count: plan[i].count,
+        topic, level, industry, isFirst: i === 0,
+      })
+      if (e) { setGenerating(null); setError(e); return }
+      made.push(data.section)
+      if (data.teaching_point && !point) point = data.teaching_point
+    }
+
+    setGenerating(null)
+    setSections(made)
+    setTeachingPoint(point)
+    if (!title.trim()) {
+      const parts = [todayLabel(), tagIds.map(weaknessTagLabel).join('・'), level]
+      if (industry) parts.push(industryLabel(industry))
+      setTitle(parts.join(' / '))
+    }
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -137,6 +190,35 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
 
       <fieldset className="field">
         <legend>
+          弱点タグ
+          <span className="field-hint">
+            必須。ここで付けておかないと、次に同じ弱点の生徒が来たときに見つけられません
+          </span>
+        </legend>
+        <WeaknessTagPicker selected={tagIds} onChange={setTagIds} />
+      </fieldset>
+
+      <div className="generate-box">
+        <h3 className="card-title">AI に下書きを作らせる</h3>
+        <p className="card-hint">
+          下の<strong>弱点タグ</strong>を選んでから押してください。
+          レベルと業界も自動で反映されます。
+          {kind === 'pattern' && ' 文型ドリルは 4演習 × 10問 = 40問 作ります。'}
+        </p>
+        <button type="button" className="btn btn--primary"
+                onClick={generate} disabled={!!generating || busy}>
+          {generating
+            ? `作っています… ${generating.label}(${generating.done + 1}/${generating.total})`
+            : `下書きを作る(${defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問)`}
+        </button>
+        <p className="field-hint">
+          作ったあと、<strong>必ず目を通して直してください。</strong>
+          共有した教材は他のトレーナーの生徒にも届きます。
+        </p>
+      </div>
+
+      <fieldset className="field">
+        <legend>
           演習
           <span className="field-hint">{sections.length} 種類 / 合計 {totalItems} 問</span>
         </legend>
@@ -201,16 +283,6 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
                 onClick={() => setSections([...sections, newSection()])}>
           ＋ 演習を追加
         </button>
-      </fieldset>
-
-      <fieldset className="field">
-        <legend>
-          弱点タグ
-          <span className="field-hint">
-            必須。ここで付けておかないと、次に同じ弱点の生徒が来たときに見つけられません
-          </span>
-        </legend>
-        <WeaknessTagPicker selected={tagIds} onChange={setTagIds} />
       </fieldset>
 
       <fieldset className="field">
