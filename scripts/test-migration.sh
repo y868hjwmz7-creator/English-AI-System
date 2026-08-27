@@ -42,15 +42,40 @@ su postgres -c "psql -d $DB -tAc \"
 
 echo "✅ すべて通りました"
 
-echo
-echo "▶ 教材の形が実物のドリルを収められるか確かめる"
-su postgres -c "psql -v ON_ERROR_STOP=1 -d $DB -f supabase/test/material_shape_test.sql" 2>&1 \
-  | sed 's/^psql:[^ ]* NOTICE:  //; s/^NOTICE:  //' \
-  | grep -vE '^\s*(expect2|-+|\(1 row\)|INSERT [0-9]+ [0-9]+|UPDATE [0-9]+|CREATE FUNCTION)?\s*$'
+# ---------------------------------------------------------------------------
+# 検証ファイルは、それぞれ「まっさらな DB の複製」の上で走らせる。
+#
+# 以前は1つの DB で続けて走らせていたため、先に走った検証が作った
+# データが、あとの検証の数え上げを狂わせた(profiles が 5 のはずが 6)。
+# 検証どうしが干渉すると、本当は壊れていないものが赤くなり、
+# 本当に壊れているものを見落とす。複製は一瞬で作れるので、毎回分ける。
+# ---------------------------------------------------------------------------
+run_test() {           # run_test <検証ファイル> <見出し>
+  local file=$1 title=$2 out status=0 db
+  db="${DB}_$(basename "$file" .sql)"
+  echo
+  echo "▶ $title"
+  su postgres -c "psql -q -c 'drop database if exists $db;'"
+  su postgres -c "psql -q -c 'create database $db template $DB;'"
+
+  # 出力を先に受け取る。パイプに直接つなぐと、psql が失敗しても
+  # 後ろの grep の結果で成否が決まってしまい、赤くならない。
+  out=$(su postgres -c "psql -v ON_ERROR_STOP=1 -d $db -f $file" 2>&1) || status=1
+
+  printf '%s\n' "$out" \
+    | sed 's/^psql:[^ ]* NOTICE:  //; s/^NOTICE:  //' \
+    | grep -vE '^\s*(expect|expect2|expect3|expect_denied3|expect_denied|-+|\(1 row\)|INSERT [0-9]+ [0-9]+|UPDATE [0-9]+|DELETE [0-9]+|CREATE FUNCTION)?\s*$' || true
+
+  su postgres -c "psql -q -c 'drop database if exists $db;'"
+  if [ "$status" -ne 0 ]; then
+    echo "❌ 「$title」で失敗しました"
+    exit 1
+  fi
+}
+
+run_test supabase/test/material_shape_test.sql "教材の形が実物のドリルを収められるか確かめる"
+run_test supabase/test/dedup_test.sql          "同じ英文が二度出ないことを確かめる"
+run_test supabase/test/rls_test.sql            "RLS(アクセス制御)が意図どおりか確かめる"
 
 echo
-echo "▶ RLS(アクセス制御)が意図どおりか確かめる"
-su postgres -c "psql -v ON_ERROR_STOP=1 -d $DB -f supabase/test/rls_test.sql" 2>&1 \
-  | sed 's/^psql:[^ ]* NOTICE:  //; s/^NOTICE:  //' \
-  | grep -vE '^\s*(expect|expect_denied|-+|\(1 row\))?\s*$'
-echo "✅ アクセス制御も意図どおりです"
+echo "✅ 検証はすべて意図どおりです"

@@ -6,7 +6,7 @@
 --   何も書き換えず、何も消しません。**見るだけ**の SQL です。
 --
 -- 【成功したときの見え方】
---   9行の表が出て、すべて「✅ OK」になります。
+--   18行の表が出て、すべて「✅ OK」になります。
 --   「❌ まだです」がある行は、その番号のファイルがまだ実行されていません。
 -- ============================================================================
 
@@ -69,4 +69,14 @@ from (
     select 1 from pg_constraint
     where conname = 'materials_kind_check'
       and pg_get_constraintdef(oid) like '%pattern%'), 15
+  union all
+  select '⑯ 英文の台帳がある(0008)', exists (
+    select 1 from pg_tables where tablename = 'material_sentences'), 16
+  union all
+  select '⑰ 英文をそろえる関数が正しく動く(0008)', (
+    select public.norm_en('I have several emails ___ to reply to.')
+         = public.norm_en('I have several emails to reply to.')), 17
+  union all
+  select '⑱ 既出の照合ができる(0008)', exists (
+    select 1 from pg_proc where proname = 'used_sentences'), 18
 ) t order by 順;

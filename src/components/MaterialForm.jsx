@@ -22,7 +22,7 @@ import {
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
-  MATERIAL_KINDS, createMaterial, dropDuplicates, generateSection, loadUsedSentences,
+  MATERIAL_KINDS, createMaterial, generateSectionUnique, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 
 /** 今日の日付。教材名を自動で付けるのに使う。 */
@@ -34,7 +34,7 @@ const newSection = (typeId = 'translate_en_ja') => ({
   items: [{}, {}, {}],
 })
 
-export default function MaterialForm({ createdBy, onCreated, onCancel }) {
+export default function MaterialForm({ createdBy, learners = [], onCreated, onCancel }) {
   const [title, setTitle] = useState('')
   const [level, setLevel] = useState('B1')
   const [kind, setKind] = useState('pattern')
@@ -49,6 +49,8 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
   const [generating, setGenerating] = useState(null)   // 生成中の進み具合
   const [showEditor, setShowEditor] = useState(false)  // 手で直す欄を出すか
   const [dropped, setDropped] = useState(0)            // 重複で外した数
+  const [short, setShort] = useState(0)                // 作り直しても足りなかった数
+  const [forLearner, setForLearner] = useState('')     // 誰に出す教材か(任意)
 
   const patchSection = (si, patch) =>
     setSections(sections.map((sec, i) => (i === si ? { ...sec, ...patch } : sec)))
@@ -86,43 +88,52 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
     }
     setError(null)
     setDropped(0)
+    setShort(0)
 
     const tag = weaknessTags.find((t) => t.id === tagIds[0])
     const topic = tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : tagIds[0]
 
-    // すでにこの弱点で使った英文を集めて、同じ文を作らせない
+    // ① 生成の前に、すでに使った英文を渡して避けさせる(誘導)
     const { data: used } = await loadUsedSentences(tagIds)
-    const usedSet = new Set(used ?? [])
+    const usedSet = new Set((used ?? []).map(normEn))
 
     const plan = defaultSectionsFor(kind)
     const made = []
     let point = teachingPoint
     let droppedCount = 0
+    let shortCount = 0
 
     for (let i = 0; i < plan.length; i += 1) {
       setGenerating({ done: i, total: plan.length, label: exerciseLabel(plan[i].exercise_type) })
-      const { data, error: e } = await generateSection({
-        sectionType: plan[i].exercise_type,
-        count: plan[i].count,
-        topic, level, industry, isFirst: i === 0,
-        avoid: [...usedSet].slice(-120),
-      })
-      if (e) { setGenerating(null); setError(e); return }
 
-      // 念のため、返ってきた中に重複があれば取り除く
-      const { kept, dropped: out } = dropDuplicates(data.section.items, usedSet)
-      droppedCount += out.length
-      made.push({ ...data.section, items: kept })
-      if (data.teaching_point && !point) point = data.teaching_point
+      // ② 生成のあとに、データベースへ照合して既出を落とし、
+      //    落ちた分は作り直す。ここが「絶対に被らない」の担保。
+      const result = await generateSectionUnique(
+        {
+          sectionType: plan[i].exercise_type,
+          count: plan[i].count,
+          topic, level, industry, isFirst: i === 0,
+        },
+        { usedSet, learnerId: forLearner || null, tagIds },
+      )
+      if (result.error) { setGenerating(null); setError(result.error); return }
+
+      droppedCount += result.dropped
+      shortCount += result.short
+      made.push(result.section)
+      if (result.teaching_point && !point) point = result.teaching_point
     }
 
     setGenerating(null)
     setSections(made)
     setTeachingPoint(point)
     setDropped(droppedCount)
+    setShort(shortCount)
     if (!title.trim()) {
       const parts = [todayLabel(), weaknessTagLabel(tagIds[0]), level]
       if (industry) parts.push(industryLabel(industry))
+      const name = learners.find((l) => l.id === forLearner)?.display_name
+      if (name) parts.push(name)
       setTitle(parts.join(' / '))
     }
   }
@@ -226,9 +237,25 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
           (実物のドリルと同じく、1つの文法ポイントに絞るため)。
           複数の弱点に出したいときは、この手順を弱点の数だけ繰り返してください。
         </p>
+        <label className="field">
+          このゲスト向けに作る(任意)
+          <select value={forLearner} onChange={(e) => setForLearner(e.target.value)}>
+            <option value="">指定しない</option>
+            {learners.map((l) => (
+              <option key={l.id} value={l.id}>{l.display_name}</option>
+            ))}
+          </select>
+          <span className="field-hint">
+            指定すると、<strong>そのゲストがこれまでに受け取った英文を1文も使いません</strong>
+            (弱点を問わず、共有済みの教材すべてと照合します)。教材名にもお名前が入ります。
+          </span>
+        </label>
+
         <p className="card-hint">
-          同じ弱点ですでに使った英文は<strong>自動で避けます。</strong>
-          前と同じ文章は出ません。
+          同じ英文は二度出しません。生成するたびにデータベースと照合し、
+          すでに出した文が混じっていれば取り除いて<strong>その分を作り直します。</strong>
+          ただし<strong>意味が近いだけの別の文は防げません</strong>
+          (I have work to do. / I have a job to do.)。
         </p>
         <button type="button" className="btn btn--primary"
                 onClick={generate} disabled={!!generating || busy}>
@@ -247,7 +274,8 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
           演習
           <span className="field-hint">
             {sections.length} 種類 / 合計 {totalItems} 問
-            {dropped > 0 && ` / 重複していた ${dropped} 問は除きました`}
+            {dropped > 0 && ` / 前と同じ英文だった ${dropped} 問は作り直しました`}
+            {short > 0 && ` / ${short} 問は足りません(この弱点で英文が出尽くしています)`}
           </span>
         </legend>
 

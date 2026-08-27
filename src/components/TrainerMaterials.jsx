@@ -74,6 +74,7 @@ export default function TrainerMaterials({ me }) {
     return (
       <MaterialForm
         createdBy={me.id}
+        learners={learners.filter((l) => l.status === 'active')}
         onCancel={() => setMode('search')}
         onCreated={() => { setMode('search'); setMessage('教材を発行しました。'); search() }}
       />

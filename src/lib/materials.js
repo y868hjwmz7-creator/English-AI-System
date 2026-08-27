@@ -460,15 +460,50 @@ export async function createAccount({ loginId, password, displayName, role = 'le
   return ok(data.user)
 }
 
-// ── すでにある英文(重複を避けるため) ──────────────────────────
+// ── 同じ英文を二度出さない ────────────────────────────────────
+//
+// 【なぜ2段構えなのか】
+//   ① 生成の前に、使った英文をいくつか AI に見せて避けさせる
+//      (loadUsedSentences)。これは「なるべく違う文を作らせる」ための
+//      誘導であって、保証ではない。AI が指示を外すこともあるし、
+//      一度に渡せる数にも限りがある。
+//   ② 生成のあとに、データベースへ問い合わせて既出の文を落とす
+//      (findUsedSentences)。**保証はこちらが担う。**
+//      候補の数だけを問い合わせるので、教材が何万件に増えても効く。
+//
+//   ②だけでも重複は防げるが、落としてばかりでは問数が足りなくなる。
+//   ①で当たりを減らし、②で取りこぼしを止める。
 
 /**
- * その弱点タグですでに使われている英文を集める。
+ * 英文を突き合わせ用の形にそろえる。
  *
- * 同じ文章が二度出ると、ゲストは「前にやった」と感じて手が止まる。
- * 生成のときにこの一覧を渡し、避けさせる。
+ * データベースの public.norm_en() と**同じ規則**にしてある
+ * (0008_sentence_ledger.sql)。片方だけ変えると、手元の判定と
+ * データベースの判定がずれて、片方を素通りする。
+ */
+export const normEn = (text) =>
+  String(text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+/**
+ * 1つの設問に含まれる英文をすべて取り出す(そろえた形で)。
  *
- * 数が多くなりすぎないよう、直近の教材から集めて上限をかける。
+ * 提示文・読み上げ文・解答のどれか1つでも既出と一致すれば、
+ * その設問は「前に出した文」である。穴埋めの提示文は「___」が
+ * 空白に潰れるため、解答文と同じ形になる。
+ */
+export const sentencesOf = (item) =>
+  [item?.prompt_en, item?.audio_text, item?.answer].map(normEn).filter(Boolean)
+
+/** 設問から、そのまま照合に出せる生の英文を取り出す */
+export const rawSentencesOf = (item) =>
+  [item?.prompt_en, item?.audio_text, item?.answer]
+    .map((v) => String(v ?? '').trim()).filter(Boolean)
+
+/**
+ * その弱点タグですでに使われている英文を集める(①の誘導用)。
+ *
+ * 上限をかけている。全部渡すと指示が長くなりすぎるため。
+ * 取りこぼしは②で止まるので、ここは網羅していなくてよい。
  */
 export async function loadUsedSentences(tagIds, limit = 120) {
   if (!supabase || !tagIds?.length) return ok([])
@@ -499,14 +534,95 @@ export async function loadUsedSentences(tagIds, limit = 120) {
   return ok([...seen].slice(-limit))
 }
 
-/** 生成した設問から、すでにある英文と同じものを取り除く */
+/**
+ * 候補の英文のうち、すでに使ったものを返す(②の保証用)。
+ *
+ *   learnerId … そのゲストに共有済みの教材すべて(弱点を問わない)
+ *   tagIds    … 同じ弱点のライブラリ全体(まだ誰にも共有していない分も)
+ *
+ * 返るのは「そろえた形」の集合なので、normEn() を通したものと突き合わせる。
+ */
+export async function findUsedSentences(candidates, { learnerId = null, tagIds = null } = {}) {
+  if (!supabase || !candidates?.length) return ok(new Set())
+
+  const { data, error } = await supabase.rpc('used_sentences', {
+    p_learner: learnerId || null,
+    p_tags: tagIds?.length ? tagIds : null,
+    p_candidates: candidates,
+  })
+  if (error) return fail(error, 'すでに使った英文を照合できませんでした')
+  return ok(new Set(
+    (data ?? []).map((r) => (typeof r === 'string' ? r : r?.used_sentences)).filter(Boolean),
+  ))
+}
+
+/**
+ * 生成した設問から、すでにある英文と同じものを取り除く。
+ *
+ * usedSet は「そろえた形」の集合。残した設問の英文はその場で
+ * usedSet に足す。同じ生成の中で同じ文が二度出るのも防ぐため。
+ */
 export function dropDuplicates(items, usedSet) {
   const kept = []
   const dropped = []
   for (const it of items ?? []) {
-    const key = String(it.prompt_en || it.audio_text || it.answer || '').trim()
-    if (key && usedSet.has(key)) dropped.push(key)
-    else { kept.push(it); if (key) usedSet.add(key) }
+    const keys = sentencesOf(it)
+    if (!keys.length) { kept.push(it); continue }
+    if (keys.some((k) => usedSet.has(k))) dropped.push(keys[0])
+    else { kept.push(it); keys.forEach((k) => usedSet.add(k)) }
   }
   return { kept, dropped }
+}
+
+/**
+ * 1つの演習を、指定の問数がそろうまで作る。
+ *
+ * 重複で落ちた分は作り直す。落としたまま進むと、40問のはずが
+ * 34問になり、「量が定着の条件」という前提が崩れる(第5.13節)。
+ * ただし無限には粘らない。同じ弱点で英文が出尽くしていることも
+ * あるため、3回試して足りなければ、足りないまま返して画面に出す。
+ */
+export async function generateSectionUnique(params, { usedSet, learnerId, tagIds }) {
+  const wanted = params.count
+  const items = []
+  let droppedTotal = 0
+  let instruction = ''
+
+  for (let attempt = 0; attempt < 3 && items.length < wanted; attempt += 1) {
+    const { data, error } = await generateSection({
+      ...params,
+      count: wanted - items.length,
+      avoid: [...usedSet].slice(-120),
+    })
+    if (error) return { error }
+    instruction = instruction || data.section?.instruction || ''
+
+    // 手元で分かる重複(この生成の中の重複と、すでに知っている英文)
+    const { kept, dropped } = dropDuplicates(data.section?.items ?? [], usedSet)
+    droppedTotal += dropped.length
+
+    // データベースに照合する。ここが保証。
+    const candidates = kept.flatMap(rawSentencesOf)
+    const { data: used, error: lookupError } = await findUsedSentences(candidates, {
+      learnerId, tagIds,
+    })
+    if (lookupError) return { error: lookupError }
+
+    for (const it of kept) {
+      const keys = sentencesOf(it)
+      if (keys.some((k) => used.has(k))) {
+        droppedTotal += 1
+        keys.forEach((k) => usedSet.add(k))   // 二度と候補に出さない
+      } else if (items.length < wanted) {
+        items.push(it)
+      }
+    }
+  }
+
+  return {
+    section: { ...(params.section ?? {}), exercise_type: params.sectionType, instruction, items },
+    dropped: droppedTotal,
+    short: wanted - items.length,
+    teaching_point: null,
+  }
 }

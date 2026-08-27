@@ -60,15 +60,31 @@ UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
 
 `supabase/migrations/*.sql` を変更したら、Supabase に貼る前に必ず実行する。
 手元の PostgreSQL(`service postgresql start` が要る場合がある)にまっさらな DB を作り、
-マイグレーションを **2回** 実行してから、アクセス制御を25項目で検証する。
+マイグレーションを **2回** 実行してから、3つの検証ファイルを走らせる。
 
 - `supabase/test/supabase_stub.sql` — `auth.users` / `auth.uid()` / `storage` /
   `authenticated` ロール / 既定の権限付与という、Supabase 環境の最小の再現
 - `supabase/test/rls_test.sql` — トレーナー1人・ゲスト2人を作り、
   「誰に何が見え、何ができないか」を確かめる。**拒否されるべき操作が通ったら失敗する**
+- `supabase/test/material_shape_test.sql` — 実物のドリルがそのまま入るか
+- `supabase/test/dedup_test.sql` — 同じ英文が二度出ないか
 
 この検証は実際に重大な穴(ゲストが自分をトレーナーに昇格できる)を見つけた実績がある。
 省略しないこと。
+
+#### 検証ファイルは1つずつ別の DB で走らせる
+
+`material_shape_test.sql` が profiles を1つ作るため、同じ DB で続けて走らせると
+`rls_test.sql` の数え上げがずれて落ちた(2026-08)。
+`scripts/test-migration.sh` は、移行を流した DB を `template` として複製し、
+**検証ファイルごとにまっさらな複製の上で走らせる。**
+検証どうしが干渉すると、壊れていないものが赤くなり、
+**本当に壊れているものを見落とす。**
+
+#### 検証の出力をパイプに直接つながない
+
+`psql ... | sed | grep` と書くと、`psql` が失敗しても最後の `grep` の結果で
+成否が決まり、赤くならない。**出力を一度変数で受けてから流す。**
 
 ## このアプリが解く問題
 
