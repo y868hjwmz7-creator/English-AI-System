@@ -10,7 +10,7 @@ const RANGES = [
   { id: 30, label: '直近30日' },
 ]
 
-/** 指導者(講師・保護者)向けの管理画面 */
+/** 指導者(トレーナー・保護者)向けの管理画面 */
 export default function AdminDashboard({ state }) {
   const [rangeDays, setRangeDays] = useState(14)
   const [selectedLearnerId, setSelectedLearnerId] = useState(null)

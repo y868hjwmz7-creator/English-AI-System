@@ -434,3 +434,32 @@ html { -webkit-text-size-adjust: 100%; }
   border: 1px solid var(--series-3); color: var(--text-secondary);
   font-size: 10px; font-weight: 600; letter-spacing: 0;
 }
+
+/* ---------------- ログイン画面 ---------------- */
+
+.signin { display: flex; justify-content: center; padding: 48px 16px; }
+.signin-card { width: 100%; max-width: 380px; }
+.signin-field { margin-top: 12px; }
+.signin-error { margin-top: 12px; }
+.signin-submit { width: 100%; margin-top: 16px; }
+.signin-note { margin-top: 16px; margin-bottom: 0; line-height: 1.6; }
+.signin-ref { margin: 8px 0 0; font-size: 11px; }
+
+/* ---------------- ログイン中の表示 ---------------- */
+
+.app-account {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: var(--gap); font-size: 13px;
+}
+.app-account-name { font-weight: 600; }
+.badge--admin {
+  background: var(--surface-1); /* color-mix 非対応ブラウザ向けの代替 */
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-1));
+  border: 1px solid var(--accent); color: var(--text-primary);
+  margin-left: 0;
+}
+.badge--learner {
+  background: var(--surface-1);
+  border: 1px solid var(--border); color: var(--text-secondary);
+  margin-left: 0;
+}

@@ -22,7 +22,7 @@
 --   1つも含まれていません。
 --
 -- 【このファイルが作るもの】
---   ・生徒と講師の情報          profiles / learner_admins
+--   ・生徒とトレーナーの情報          profiles / learner_admins
 --   ・弱点タグ                  weakness_tags(38件を投入)
 --   ・教材                      materials / material_items / material_tags / material_audio
 --   ・宿題の配信                assignments
@@ -39,7 +39,7 @@
 -- ============================================================================
 
 -- ────────────────────────────────────────────────────────────────
--- 1. 人(生徒と講師)
+-- 1. 人(生徒とトレーナー)
 -- ────────────────────────────────────────────────────────────────
 
 create table if not exists public.profiles (
@@ -49,9 +49,9 @@ create table if not exists public.profiles (
   industry     text,                       -- NULL = 汎用。職種別の教材を出す場合に使う
   created_at   timestamptz not null default now()
 );
-comment on table public.profiles is '生徒と講師。auth.users と 1対1。';
+comment on table public.profiles is '生徒とトレーナー。auth.users と 1対1。';
 
--- 講師と生徒の担当関係(多対多にしてある)
+-- トレーナーと生徒の担当関係(多対多にしてある)
 create table if not exists public.learner_admins (
   admin_id   uuid not null references public.profiles(id) on delete cascade,
   learner_id uuid not null references public.profiles(id) on delete cascade,
@@ -202,7 +202,7 @@ create table if not exists public.assignments (
   assigned_at      timestamptz not null default now(),
   due_on           date,
   learner_done_at  timestamptz,            -- 生徒が「やった」を押した日時
-  admin_checked_at timestamptz             -- 講師がレッスンで確認した日時
+  admin_checked_at timestamptz             -- トレーナーがレッスンで確認した日時
 );
 create index if not exists assignments_learner_idx on public.assignments (learner_id, assigned_at desc);
 create index if not exists assignments_material_idx on public.assignments (material_id);
@@ -283,7 +283,7 @@ as $$
   );
 $$;
 
--- 自分(講師)が担当している生徒か
+-- 自分(トレーナー)が担当している生徒か
 create or replace function public.teaches(target uuid)
 returns boolean
 language sql
@@ -353,6 +353,10 @@ begin
 end $$;
 
 -- Storage のポリシーも、このファイルが作る2つだけを名指しで消す
+drop policy if exists "音声は配信された生徒とトレーナーだけ" on storage.objects;
+drop policy if exists "音声を置けるのはトレーナーだけ" on storage.objects;
+-- 旧名(2026-08 に「講師」から「トレーナー」へ呼び方を変える前のもの)。
+-- すでに旧名で作られている環境でも作り直せるように残しておく。
 drop policy if exists "音声は配信された生徒と講師だけ" on storage.objects;
 drop policy if exists "音声を置けるのは講師だけ" on storage.objects;
 
@@ -378,14 +382,14 @@ grant update (display_name, industry) on public.profiles to authenticated;
 -- learner_admins ------------------------------------------------
 create policy "担当関係を見る" on public.learner_admins
   for select to authenticated using (admin_id = auth.uid() or learner_id = auth.uid());
-create policy "担当関係は講師だけが決める" on public.learner_admins
+create policy "担当関係はトレーナーだけが決める" on public.learner_admins
   for all to authenticated using (public.is_admin() and admin_id = auth.uid())
   with check (public.is_admin() and admin_id = auth.uid());
 
 -- weakness_tags -------------------------------------------------
 create policy "タグは全員が読める" on public.weakness_tags
   for select to authenticated using (true);
-create policy "タグを増やせるのは講師だけ" on public.weakness_tags
+create policy "タグを増やせるのはトレーナーだけ" on public.weakness_tags
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- materials -----------------------------------------------------
@@ -393,7 +397,7 @@ create policy "タグを増やせるのは講師だけ" on public.weakness_tags
 create policy "配信された教材だけ見える" on public.materials
   for select to authenticated
   using (public.is_admin() or public.is_assigned_material(id));
-create policy "教材を作れるのは講師だけ" on public.materials
+create policy "教材を作れるのはトレーナーだけ" on public.materials
   for all to authenticated
   using (public.is_admin() and created_by = auth.uid())
   with check (public.is_admin() and created_by = auth.uid());
@@ -403,13 +407,13 @@ create policy "教材を作れるのは講師だけ" on public.materials
 create policy "教材のタグ" on public.material_tags
   for select to authenticated
   using (public.is_admin() or public.is_assigned_material(material_id));
-create policy "教材のタグは講師だけ" on public.material_tags
+create policy "教材のタグはトレーナーだけ" on public.material_tags
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 create policy "教材の英文" on public.material_items
   for select to authenticated
   using (public.is_admin() or public.is_assigned_material(material_id));
-create policy "教材の英文は講師だけ" on public.material_items
+create policy "教材の英文はトレーナーだけ" on public.material_items
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 create policy "お手本音声" on public.material_audio
@@ -420,7 +424,7 @@ create policy "お手本音声" on public.material_audio
       where mi.id = item_id and public.is_assigned_material(mi.material_id)
     )
   );
-create policy "お手本音声は講師だけ" on public.material_audio
+create policy "お手本音声はトレーナーだけ" on public.material_audio
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- assignments ---------------------------------------------------
@@ -429,7 +433,7 @@ create policy "自分の宿題を見る" on public.assignments
   using (learner_id = auth.uid() or (public.is_admin() and public.teaches(learner_id)));
 create policy "生徒はやった記録だけ更新できる" on public.assignments
   for update to authenticated using (learner_id = auth.uid()) with check (learner_id = auth.uid());
-create policy "配信できるのは講師だけ" on public.assignments
+create policy "配信できるのはトレーナーだけ" on public.assignments
   for all to authenticated
   using (public.is_admin() and public.teaches(learner_id))
   with check (public.is_admin() and public.teaches(learner_id) and assigned_by = auth.uid());
@@ -442,20 +446,20 @@ grant update (learner_done_at) on public.assignments to authenticated;
 -- study_logs ----------------------------------------------------
 create policy "自分の学習記録" on public.study_logs
   for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-create policy "講師は担当生徒の学習記録を見る" on public.study_logs
+create policy "トレーナーは担当生徒の学習記録を見る" on public.study_logs
   for select to authenticated using (public.is_admin() and public.teaches(user_id));
 
 -- attempts ------------------------------------------------------
 create policy "自分の発音練習" on public.attempts
   for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-create policy "講師は担当生徒の発音練習を見る" on public.attempts
+create policy "トレーナーは担当生徒の発音練習を見る" on public.attempts
   for select to authenticated using (public.is_admin() and public.teaches(user_id));
 
 -- lesson_feedback -----------------------------------------------
 create policy "自分へのフィードバックを見る" on public.lesson_feedback
   for select to authenticated
   using (learner_id = auth.uid() or (public.is_admin() and public.teaches(learner_id)));
-create policy "フィードバックを書けるのは講師だけ" on public.lesson_feedback
+create policy "フィードバックを書けるのはトレーナーだけ" on public.lesson_feedback
   for all to authenticated
   using (public.is_admin() and public.teaches(learner_id))
   with check (public.is_admin() and public.teaches(learner_id) and admin_id = auth.uid());
@@ -467,7 +471,7 @@ create policy "フィードバックのタグを見る" on public.lesson_feedbac
     where f.id = feedback_id
       and (f.learner_id = auth.uid() or (public.is_admin() and public.teaches(f.learner_id)))
   ));
-create policy "フィードバックのタグは講師だけ" on public.lesson_feedback_tags
+create policy "フィードバックのタグはトレーナーだけ" on public.lesson_feedback_tags
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- ────────────────────────────────────────────────────────────────
@@ -481,7 +485,7 @@ insert into storage.buckets (id, name, public)
 values ('material-audio', 'material-audio', false)
 on conflict (id) do nothing;
 
-create policy "音声は配信された生徒と講師だけ" on storage.objects
+create policy "音声は配信された生徒とトレーナーだけ" on storage.objects
   for select to authenticated
   using (
     bucket_id = 'material-audio' and (
@@ -493,7 +497,7 @@ create policy "音声は配信された生徒と講師だけ" on storage.objects
       )
     )
   );
-create policy "音声を置けるのは講師だけ" on storage.objects
+create policy "音声を置けるのはトレーナーだけ" on storage.objects
   for all to authenticated
   using (bucket_id = 'material-audio' and public.is_admin())
   with check (bucket_id = 'material-audio' and public.is_admin());
@@ -503,12 +507,12 @@ create policy "音声を置けるのは講師だけ" on storage.objects
 --
 -- 【この直後に必ず行うこと】
 --   1. アプリからサインアップして、自分のアカウントを作る
---   2. この SQL Editor で次を実行し、自分を講師にする
+--   2. この SQL Editor で次を実行し、自分をトレーナーにする
 --        update public.profiles set role = 'admin'
 --        where id = (select id from auth.users where email = 'あなたのメールアドレス');
 --   3. 生徒のアカウントを作ったら、担当関係を登録する
 --        insert into public.learner_admins (admin_id, learner_id)
---        values ('講師のUUID', '生徒のUUID');
+--        values ('トレーナーのUUID', '生徒のUUID');
 --
 --   ※ 誰も admin にしないと、教材を1件も作れません。
 -- ============================================================================

@@ -5,9 +5,9 @@
 -- 画面にボタンを出さないだけでは防げないので、必ずここで確認する。
 --
 -- 登場人物:
---   講師   … 教材を作り、生徒Bを担当する
---   生徒B  … 講師の担当。教材が配信されている
---   生徒C  … 講師の担当ではない。何も配信されていない
+--   トレーナー   … 教材を作り、生徒Bを担当する
+--   生徒B  … トレーナーの担当。教材が配信されている
+--   生徒C  … トレーナーの担当ではない。何も配信されていない
 -- ============================================================================
 
 \set ON_ERROR_STOP on
@@ -46,7 +46,7 @@ insert into auth.users (id, email) values
 select pg_temp.expect('サインアップで profiles が自動で作られる',
   (select count(*)::int from public.profiles), 3);
 
-update public.profiles set role = 'admin', display_name = '講師'
+update public.profiles set role = 'admin', display_name = 'トレーナー'
   where id = '11111111-1111-1111-1111-111111111111';
 update public.profiles set display_name = '生徒B' where id = '22222222-2222-2222-2222-222222222222';
 update public.profiles set display_name = '生徒C' where id = '33333333-3333-3333-3333-333333333333';
@@ -59,7 +59,7 @@ insert into public.study_logs (user_id, studied_on, minutes, category) values
   ('22222222-2222-2222-2222-222222222222', current_date, 30, '音読'),
   ('33333333-3333-3333-3333-333333333333', current_date, 30, '音読');
 
--- ── 講師として ───────────────────────────────────────────────
+-- ── トレーナーとして ───────────────────────────────────────────────
 set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
@@ -78,16 +78,16 @@ values ('aaaaaaaa-0000-0000-0000-000000000001',
         '22222222-2222-2222-2222-222222222222',
         '11111111-1111-1111-1111-111111111111');
 
-select pg_temp.expect('講師は自分の教材が見える',
+select pg_temp.expect('トレーナーは自分の教材が見える',
   (select count(*)::int from public.materials), 1);
-select pg_temp.expect('講師は担当している生徒Bの学習記録が見える',
+select pg_temp.expect('トレーナーは担当している生徒Bの学習記録が見える',
   (select count(*)::int from public.study_logs
    where user_id = '22222222-2222-2222-2222-222222222222'), 1);
-select pg_temp.expect('講師でも担当外の生徒Cの学習記録は見えない',
+select pg_temp.expect('トレーナーでも担当外の生徒Cの学習記録は見えない',
   (select count(*)::int from public.study_logs
    where user_id = '33333333-3333-3333-3333-333333333333'), 0);
 
-select pg_temp.expect_denied('講師でも担当外の生徒Cには配信できない', $$
+select pg_temp.expect_denied('トレーナーでも担当外の生徒Cには配信できない', $$
   insert into public.assignments (material_id, learner_id, assigned_by)
   values ('aaaaaaaa-0000-0000-0000-000000000001',
           '33333333-3333-3333-3333-333333333333',
@@ -115,7 +115,7 @@ select pg_temp.expect('生徒Bは「やった」を記録できる',
 -- しかし他の欄は書き換えられない
 select pg_temp.expect_denied('生徒Bは提出期限を書き換えられない', $$
   update public.assignments set due_on = current_date $$);
-select pg_temp.expect_denied('生徒Bは講師の確認印を偽装できない', $$
+select pg_temp.expect_denied('生徒Bはトレーナーの確認印を偽装できない', $$
   update public.assignments set admin_checked_at = now() $$);
 
 -- 教材は作れない
@@ -127,7 +127,7 @@ select pg_temp.expect_denied('生徒Bは自分に宿題を配信できない', $
   values ('aaaaaaaa-0000-0000-0000-000000000001',
           '22222222-2222-2222-2222-222222222222',
           '22222222-2222-2222-2222-222222222222') $$);
-select pg_temp.expect_denied('生徒Bは自分を講師に昇格できない', $$
+select pg_temp.expect_denied('生徒Bは自分をトレーナーに昇格できない', $$
   update public.profiles set role = 'admin'
   where id = '22222222-2222-2222-2222-222222222222' $$);
 

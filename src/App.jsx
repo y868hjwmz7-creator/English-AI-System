@@ -1,14 +1,54 @@
 import { useEffect, useMemo, useState } from 'react'
 import AdminDashboard from './components/AdminDashboard.jsx'
 import EnglishStudyLog from './components/EnglishStudyLog.jsx'
+import SignIn from './components/SignIn.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import { buildSeed } from './data/seed.js'
+import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadState, resetState, saveState } from './lib/store.js'
+import { isSupabaseConfigured } from './lib/supabase.js'
 
 export default function App() {
   const [view, setView] = useState('learner') // 'learner' | 'admin'
   const [state, setState] = useState(null)
   const [learnerId, setLearnerId] = useState(null)
+
+  // ログイン状態。Supabase 未設定のときは最初から「確認済み・未ログイン」にする
+  // (その場合はログインを求めず、これまでどおり端末内のデータで動かす)。
+  const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [authChecked, setAuthChecked] = useState(!isSupabaseConfigured)
+
+  // 起動時に一度、以降はログイン状態が変わるたびに追いかける
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    let alive = true
+    getSession().then((s) => {
+      if (!alive) return
+      setSession(s)
+      setAuthChecked(true)
+    })
+    return onAuthChange((s) => {
+      if (!alive) return
+      setSession(s)
+      setAuthChecked(true)
+    })
+  }, [])
+
+  // ログインしている人の表示名と役割を読む
+  useEffect(() => {
+    if (!session?.user?.id) { setProfile(null); return }
+    let alive = true
+    loadProfile(session.user.id).then((p) => { if (alive) setProfile(p) })
+    return () => { alive = false }
+  }, [session])
+
+  const isAdmin = profile?.role === 'admin'
+
+  // 生徒には管理者の画面を出さない。役割が分かった時点で戻す。
+  useEffect(() => {
+    if (isSupabaseConfigured && profile && !isAdmin && view === 'admin') setView('learner')
+  }, [profile, isAdmin, view])
 
   // 起動時にデータを読み込む(なければサンプルデータを作る)
   useEffect(() => {
@@ -34,8 +74,14 @@ export default function App() {
     setLearnerId(fresh.learners[0]?.id ?? null)
   }
 
-  if (!state) {
+  if (!authChecked || !state) {
     return <div className="loading">読み込み中…</div>
+  }
+
+  // Supabase が設定されているならログインを必須にする。
+  // 未設定のときは従来どおり、ログインなしで動く。
+  if (isSupabaseConfigured && !session) {
+    return <SignIn />
   }
 
   return (
@@ -54,15 +100,33 @@ export default function App() {
           >
             学習者の画面
           </button>
-          <button
-            type="button"
-            className={`tab${view === 'admin' ? ' is-active' : ''}`}
-            onClick={() => setView('admin')}
-          >
-            管理者の画面
-          </button>
+          {/* 管理者の画面はトレーナーだけ。Supabase 未設定のときは
+              試作版として従来どおり両方見せる。 */}
+          {(!isSupabaseConfigured || isAdmin) && (
+            <button
+              type="button"
+              className={`tab${view === 'admin' ? ' is-active' : ''}`}
+              onClick={() => setView('admin')}
+            >
+              管理者の画面
+            </button>
+          )}
         </nav>
       </header>
+
+      {session && (
+        <div className="app-account">
+          <span className="app-account-name">
+            {profile?.display_name || session.user.email}
+          </span>
+          <span className={`badge ${isAdmin ? 'badge--admin' : 'badge--learner'}`}>
+            {profile ? (isAdmin ? 'トレーナー' : '生徒') : '役割を確認中'}
+          </span>
+          <button type="button" className="btn btn--link" onClick={signOut}>
+            ログアウト
+          </button>
+        </div>
+      )}
 
       <div className="app-toolbar">
         {view === 'learner' && (
