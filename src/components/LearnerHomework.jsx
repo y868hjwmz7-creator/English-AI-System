@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { cefrLabel } from '../data/cefr.js'
 import { exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
+import { weaknessTagLabel } from '../data/weaknessTags.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
@@ -99,6 +100,11 @@ export default function LearnerHomework() {
                           <ol className="material-preview">
                             {sec.items.map((it) => (
                               <li key={it.id}>
+                                {/* 混合ドリルでは、どの弱点の問題かを見せる。
+                                    何に注意して解くかが分からないと練習にならない。 */}
+                                {it.tag_id && (
+                                  <span className="item-tag">{weaknessTagLabel(it.tag_id)}</span>
+                                )}
                                 {/* リスニングは英文を見せない。聞いて答えるため。 */}
                                 {!type?.hidePromptFromLearner && it.prompt_en && (
                                   <div lang="en" className="homework-en">{it.prompt_en}</div>

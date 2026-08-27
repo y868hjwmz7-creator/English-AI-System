@@ -124,6 +124,23 @@ UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
 - **Supabase**(Postgres + Auth + RLS + Storage)。接続情報は `.env` と
   GitHub Actions のシークレットから読む。**未設定でもアプリは落ちず、localStorage で動く**
 
+### Supabase 上で動く関数(Edge Function)3つ
+
+ブラウザに置けないもの(鍵・重い処理)はここにある。配置は利用者が
+Supabase の画面から行う。**1関数1ファイル**にしてあるのは、配置の手順を
+増やさないため。
+
+| 関数 | 役目 | 鍵 |
+|---|---|---|
+| `create-user` | アカウント発行 | `service_role`(関数の中だけ) |
+| `generate-material` | 教材の下書き生成 | Claude API |
+| `check-similar` | 意味が近すぎる英文を弾く | **不要**(`gte-small` が Supabase 内にある) |
+
+同じ英文を二度出さない仕組みは3段(仕様書 第5.16.2節)。
+**保証しているのは②と③で、①は誘導にすぎない。**
+意味の近さの境目は `SIMILARITY_THRESHOLD`(`src/lib/materials.js`)1か所。
+**実測していない初期値なので、外しすぎ・素通りしすぎが出たらここを直す。**
+
 ### データの置き場
 
 | 何を | どこに | なぜ |

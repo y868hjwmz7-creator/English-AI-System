@@ -6,7 +6,7 @@
 --   何も書き換えず、何も消しません。**見るだけ**の SQL です。
 --
 -- 【成功したときの見え方】
---   18行の表が出て、すべて「✅ OK」になります。
+--   21行の表が出て、すべて「✅ OK」になります。
 --   「❌ まだです」がある行は、その番号のファイルがまだ実行されていません。
 -- ============================================================================
 
@@ -79,4 +79,14 @@ from (
   union all
   select '⑱ 既出の照合ができる(0008)', exists (
     select 1 from pg_proc where proname = 'used_sentences'), 18
+  union all
+  select '⑲ 英文の並び(意味の判定)の表がある(0009)', exists (
+    select 1 from pg_tables where tablename = 'sentence_embeddings'), 19
+  union all
+  select '⑳ 意味の近さの照合ができる(0009)', exists (
+    select 1 from pg_proc where proname = 'similar_sentences'), 20
+  union all
+  select '㉑ 1問ごとの弱点を持てる(0009・混合ドリル)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'material_items' and column_name = 'tag_id'), 21
 ) t order by 順;

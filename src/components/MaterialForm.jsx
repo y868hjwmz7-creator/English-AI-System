@@ -25,6 +25,36 @@ import {
   MATERIAL_KINDS, createMaterial, generateSectionUnique, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 
+/** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
+const MAX_TAGS = 3
+
+/**
+ * 問数を弱点で分ける。
+ *
+ * 10問を3つの弱点に分けると 4/3/3 になる。どの弱点が4問になるかは
+ * 演習ごとにずらす。ずらさないと、いつも同じ弱点だけ1問多くなる。
+ */
+const splitCount = (total, parts, offset = 0) => {
+  const base = Math.floor(total / parts)
+  const rest = total % parts
+  return Array.from({ length: parts }, (_, i) => base + (((i + offset) % parts) < rest ? 1 : 0))
+}
+
+/**
+ * 弱点ごとの問題を交互に並べる。
+ *
+ * 弱点ごとにまとめて並べると、その塊の間は1つの弱点だけに注意すればよく、
+ * 「意識が分散しても弱点に注意を保つ」練習にならない(利用者の狙い)。
+ */
+const interleave = (lists) => {
+  const out = []
+  const longest = Math.max(0, ...lists.map((l) => l.length))
+  for (let i = 0; i < longest; i += 1) {
+    for (const list of lists) if (list[i]) out.push(list[i])
+  }
+  return out
+}
+
 /** 今日の日付。教材名を自動で付けるのに使う。 */
 const todayLabel = () => new Date().toISOString().slice(0, 10)
 
@@ -51,6 +81,8 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
   const [dropped, setDropped] = useState(0)            // 重複で外した数
   const [short, setShort] = useState(0)                // 作り直しても足りなかった数
   const [forLearner, setForLearner] = useState('')     // 誰に出す教材か(任意)
+  const [similarNotes, setSimilarNotes] = useState([]) // 意味が近すぎて外した文
+  const [warning, setWarning] = useState(null)         // 効いていない仕組みの知らせ
 
   const patchSection = (si, patch) =>
     setSections(sections.map((sec, i) => (i === si ? { ...sec, ...patch } : sec)))
@@ -79,19 +111,25 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
    * **生成した内容は保存しない。** 発行を押すまでは下書きのままである。
    */
   const generate = async () => {
-    if (tagIds.length !== 1) {
-      setError(tagIds.length === 0
-        ? '弱点タグを1つ選んでください。何の練習かが決まらないと作れません。'
-        : '教材は弱点1つにつき1つ作ります。タグを1つだけ選んでください。'
-          + '複数の弱点に出したい場合は、この手順を弱点の数だけ繰り返してください。')
+    if (tagIds.length === 0) {
+      setError('弱点タグを選んでください。何の練習かが決まらないと作れません。')
+      return
+    }
+    if (tagIds.length > MAX_TAGS) {
+      setError(`混ぜられる弱点は ${MAX_TAGS} つまでです。`
+        + `${tagIds.length} つだと1つあたりの問数が少なすぎて、練習量になりません。`)
       return
     }
     setError(null)
     setDropped(0)
     setShort(0)
+    setSimilarNotes([])
+    setWarning(null)
 
-    const tag = weaknessTags.find((t) => t.id === tagIds[0])
-    const topic = tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : tagIds[0]
+    const topicOf = (id) => {
+      const tag = weaknessTags.find((t) => t.id === id)
+      return tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : id
+    }
 
     // ① 生成の前に、すでに使った英文を渡して避けさせる(誘導)
     const { data: used } = await loadUsedSentences(tagIds)
@@ -99,38 +137,70 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
 
     const plan = defaultSectionsFor(kind)
     const made = []
-    let point = teachingPoint
+    const notes = []
+    const points = []
+    let warn = null
     let droppedCount = 0
     let shortCount = 0
+    const totalSteps = plan.length * tagIds.length
+    let step = 0
 
     for (let i = 0; i < plan.length; i += 1) {
-      setGenerating({ done: i, total: plan.length, label: exerciseLabel(plan[i].exercise_type) })
+      // 弱点が1つなら 10問すべて、3つなら 4/3/3 のように分ける
+      const counts = splitCount(plan[i].count, tagIds.length, i)
+      const perTag = []
+      let instruction = ''
 
-      // ② 生成のあとに、データベースへ照合して既出を落とし、
-      //    落ちた分は作り直す。ここが「絶対に被らない」の担保。
-      const result = await generateSectionUnique(
-        {
-          sectionType: plan[i].exercise_type,
-          count: plan[i].count,
-          topic, level, industry, isFirst: i === 0,
-        },
-        { usedSet, learnerId: forLearner || null, tagIds },
-      )
-      if (result.error) { setGenerating(null); setError(result.error); return }
+      for (let t = 0; t < tagIds.length; t += 1) {
+        if (counts[t] === 0) { perTag.push([]); continue }
+        setGenerating({
+          done: step, total: totalSteps,
+          label: `${exerciseLabel(plan[i].exercise_type)}${
+            tagIds.length > 1 ? ` / ${weaknessTagLabel(tagIds[t])}` : ''}`,
+        })
+        step += 1
 
-      droppedCount += result.dropped
-      shortCount += result.short
-      made.push(result.section)
-      if (result.teaching_point && !point) point = result.teaching_point
+        // ② 生成のあとに、既出と「意味が近すぎる文」を落とし、
+        //    落ちた分は作り直す。ここが「被らない」の担保。
+        const result = await generateSectionUnique(
+          {
+            sectionType: plan[i].exercise_type,
+            count: counts[t],
+            topic: topicOf(tagIds[t]),
+            level, industry, isFirst: i === 0 && t === 0,
+          },
+          { usedSet, learnerId: forLearner || null, tagIds },
+        )
+        if (result.error) { setGenerating(null); setError(result.error); return }
+
+        droppedCount += result.dropped
+        shortCount += result.short
+        notes.push(...(result.tooSimilar ?? []))
+        warn = warn || result.warning
+        if (result.teaching_point) points.push(result.teaching_point)
+        instruction = instruction || result.section.instruction
+        // 1問ごとに、どの弱点の問題かを持たせる(混ぜたときに必要)
+        perTag.push(result.section.items.map((it) => ({
+          ...it, tag_id: tagIds.length > 1 ? tagIds[t] : undefined,
+        })))
+      }
+
+      made.push({
+        exercise_type: plan[i].exercise_type,
+        instruction,
+        items: interleave(perTag),
+      })
     }
 
     setGenerating(null)
     setSections(made)
-    setTeachingPoint(point)
+    setTeachingPoint(teachingPoint || [...new Set(points)].join('\n'))
     setDropped(droppedCount)
     setShort(shortCount)
+    setSimilarNotes(notes)
+    setWarning(warn)
     if (!title.trim()) {
-      const parts = [todayLabel(), weaknessTagLabel(tagIds[0]), level]
+      const parts = [todayLabel(), tagIds.map(weaknessTagLabel).join(' + '), level]
       if (industry) parts.push(industryLabel(industry))
       const name = learners.find((l) => l.id === forLearner)?.display_name
       if (name) parts.push(name)
@@ -233,10 +303,21 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
           {kind === 'pattern' && ' 文型ドリルは 4演習 × 10問 = 40問 作ります。'}
         </p>
         <p className="card-hint">
-          <strong>教材は弱点1つにつき1つ</strong>作ります
-          (実物のドリルと同じく、1つの文法ポイントに絞るため)。
-          複数の弱点に出したいときは、この手順を弱点の数だけ繰り返してください。
+          <strong>弱点は1〜{MAX_TAGS}つ選べます。</strong>
+          {tagIds.length <= 1
+            ? '1つだけ選ぶと、その弱点に絞った教材になります(実物のドリルと同じ形)。'
+            : `${tagIds.length}つ選んだので、混合ドリルになります。`}
         </p>
+        {tagIds.length > 1 && (
+          <p className="card-hint">
+            {defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問を
+            {tagIds.map(weaknessTagLabel).join(' / ')} に分け、
+            <strong>交互に並べます。</strong>
+            まとめて並べると、その間は1つの弱点だけ見ていればよく、
+            意識が分散した状態で注意を保つ練習になりません。
+            どの問題がどの弱点かは、1問ごとに記録します。
+          </p>
+        )}
         <label className="field">
           このゲスト向けに作る(任意)
           <select value={forLearner} onChange={(e) => setForLearner(e.target.value)}>
@@ -269,12 +350,45 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
         </p>
       </div>
 
+      {warning && (
+        <div className="notice notice--warn">
+          <strong>意味の近さの判定が働きませんでした。</strong>
+          <div>{warning}</div>
+          <p className="field-hint">
+            一字一句同じ英文は、これまでどおり弾いています。
+            働いていないのは「言い換えただけの文」の判定だけです。
+          </p>
+        </div>
+      )}
+
+      {similarNotes.length > 0 && (
+        <div className="notice">
+          <strong>意味が近すぎるとして {similarNotes.length} 問を外しました。</strong>
+          <ul className="similar-list">
+            {similarNotes.slice(0, 8).map((n, i) => (
+              <li key={i}>
+                <span className="similar-new">{n.sentence}</span>
+                <span className="similar-vs">≒</span>
+                <span className="similar-old">{n.matched}</span>
+                <span className="similar-score">
+                  {Math.round((n.similarity ?? 0) * 100)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="field-hint">
+            右が、前に出した文です。外しすぎだと感じたら教えてください。
+            近さの境目は調整できます。
+          </p>
+        </div>
+      )}
+
       <fieldset className="field">
         <legend>
           演習
           <span className="field-hint">
             {sections.length} 種類 / 合計 {totalItems} 問
-            {dropped > 0 && ` / 前と同じ英文だった ${dropped} 問は作り直しました`}
+            {dropped > 0 && ` / 前と同じ・似すぎていた ${dropped} 問は作り直しました`}
             {short > 0 && ` / ${short} 問は足りません(この弱点で英文が出尽くしています)`}
           </span>
         </legend>

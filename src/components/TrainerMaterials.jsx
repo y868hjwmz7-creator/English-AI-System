@@ -202,6 +202,9 @@ export default function TrainerMaterials({ me }) {
                         <ol className="material-preview">
                           {sec.items.map((it) => (
                             <li key={it.id}>
+                              {it.tag_id && (
+                                <span className="item-tag">{weaknessTagLabel(it.tag_id)}</span>
+                              )}
                               {it.prompt_en && <div lang="en">{it.prompt_en}</div>}
                               {it.prompt_ja && <div>{it.prompt_ja}</div>}
                               {it.question && <div lang="en">{it.question}</div>}

@@ -601,3 +601,21 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .material-detail .material-preview li { margin-bottom: 10px; }
 .detail-answer { color: var(--series-3); }
+
+/* 意味が近すぎて外した文の一覧。左が今回作った文、右が前に出した文 */
+.similar-list { list-style: none; margin: 8px 0; padding: 0; font-size: 13px; }
+.similar-list li {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.similar-new { color: var(--text-primary); }
+.similar-vs  { color: var(--text-secondary); }
+.similar-old { color: var(--text-secondary); }
+.similar-score { margin-left: auto; color: var(--series-3); font-variant-numeric: tabular-nums; }
+
+/* 混合ドリルで、1問がどの弱点のものかを示す小さな札 */
+.item-tag {
+  display: inline-block; margin-right: 6px; padding: 1px 6px;
+  border: 1px solid var(--border); border-radius: 999px;
+  font-size: 11px; color: var(--text-secondary); white-space: nowrap;
+}

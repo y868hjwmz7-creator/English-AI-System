@@ -87,7 +87,7 @@ export async function searchMaterials({
       material_sections (
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                         answer, answer_alt, audio_text, note )
+                         answer, answer_alt, audio_text, note, tag_id )
       )
     `)
     .order('created_at', { ascending: false })
@@ -131,6 +131,8 @@ const normalizeMaterial = (m) => {
  */
 const ITEM_FIELDS = [
   'prompt_en', 'prompt_ja', 'hint', 'question', 'answer', 'answer_alt', 'audio_text', 'note',
+  // 混合ドリルで「この問題はどの弱点か」。単一の弱点の教材では空
+  'tag_id',
 ]
 
 /** 空の欄を落として、中身のある設問だけを残す */
@@ -258,7 +260,7 @@ export async function loadMyAssignments() {
         material_sections (
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                           answer, answer_alt, audio_text, note )
+                           answer, answer_alt, audio_text, note, tag_id )
         )
       )
     `)
@@ -575,18 +577,74 @@ export function dropDuplicates(items, usedSet) {
 }
 
 /**
+ * 意味が「近すぎる」と見なす境目。
+ *
+ * 0〜1 で、1 が同じ意味。**実際の教材で調整する前提の初期値である。**
+ * 同じ文法の40問はそもそも構造が似ているため、下げすぎると正しい問題まで
+ * 弾いてしまう。上げすぎると「ほぼ同じ」が通る。
+ * 変えるときはここ1か所だけを直す(仕様書 第5.16.2節)。
+ */
+export const SIMILARITY_THRESHOLD = 0.92
+
+/**
+ * 候補の英文のうち、意味が近すぎるものを探す(③の保証用)。
+ *
+ * 0008 の照合は「一字一句同じ」しか見ない。
+ * 「I have work to do.」と「I have a job to do.」は素通りする。
+ * そこで英文を384個の数値に変換して近さを測る。変換は Supabase の
+ * サーバー上で完結するので、文章が外部に出ず、費用もかからない
+ * (仕様書 第5.16.2節)。
+ *
+ * 返るのは [{ index, sentence, matched, similarity }] の並び。
+ * index は渡した candidates の何番目か。
+ */
+export async function findSimilarSentences(candidates, {
+  learnerId = null, tagIds = null, threshold = SIMILARITY_THRESHOLD,
+} = {}) {
+  if (!supabase || !candidates?.length) return ok([])
+  if (!learnerId && !tagIds?.length) return ok([])
+
+  const { data, error } = await supabase.functions.invoke('check-similar', {
+    body: { candidates, learnerId: learnerId || null, tagIds: tagIds ?? null, threshold },
+  })
+
+  if (error) {
+    let detail = ''
+    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      return ng('意味の近さを調べる窓口につながりませんでした。'
+        + 'Supabase に check-similar を配置したか確認してください。')
+    }
+    return ng(detail || `意味の近さを調べられませんでした: ${error.message}`)
+  }
+  if (data?.error) return ng(data.error)
+  return ok(data?.tooSimilar ?? [])
+}
+
+/**
  * 1つの演習を、指定の問数がそろうまで作る。
  *
  * 重複で落ちた分は作り直す。落としたまま進むと、40問のはずが
  * 34問になり、「量が定着の条件」という前提が崩れる(第5.13節)。
  * ただし無限には粘らない。同じ弱点で英文が出尽くしていることも
  * あるため、3回試して足りなければ、足りないまま返して画面に出す。
+ *
+ * 落とし方は3段。
+ *   ① 手元で分かる重複(この生成の中の重複・すでに知っている英文)
+ *   ② データベースに照合(一字一句同じ英文)
+ *   ③ 意味の近さで照合(ほぼ同じ英文)  ← similar が false なら飛ばす
  */
-export async function generateSectionUnique(params, { usedSet, learnerId, tagIds }) {
+export async function generateSectionUnique(params, {
+  usedSet, learnerId, tagIds, similar = true, threshold = SIMILARITY_THRESHOLD,
+}) {
   const wanted = params.count
   const items = []
+  const tooSimilar = []
   let droppedTotal = 0
   let instruction = ''
+  let teachingPoint = null
+  let warning = null
+  let useSimilar = similar
 
   for (let attempt = 0; attempt < 3 && items.length < wanted; attempt += 1) {
     const { data, error } = await generateSection({
@@ -596,33 +654,67 @@ export async function generateSectionUnique(params, { usedSet, learnerId, tagIds
     })
     if (error) return { error }
     instruction = instruction || data.section?.instruction || ''
+    teachingPoint = teachingPoint || data.teaching_point || null
 
-    // 手元で分かる重複(この生成の中の重複と、すでに知っている英文)
+    // ① 手元で分かる重複
     const { kept, dropped } = dropDuplicates(data.section?.items ?? [], usedSet)
     droppedTotal += dropped.length
 
-    // データベースに照合する。ここが保証。
-    const candidates = kept.flatMap(rawSentencesOf)
-    const { data: used, error: lookupError } = await findUsedSentences(candidates, {
-      learnerId, tagIds,
-    })
+    // ② 一字一句同じ英文(データベースに照合)
+    const { data: used, error: lookupError } = await findUsedSentences(
+      kept.flatMap(rawSentencesOf), { learnerId, tagIds },
+    )
     if (lookupError) return { error: lookupError }
 
+    const survived = []
     for (const it of kept) {
       const keys = sentencesOf(it)
       if (keys.some((k) => used.has(k))) {
         droppedTotal += 1
         keys.forEach((k) => usedSet.add(k))   // 二度と候補に出さない
+      } else {
+        survived.push(it)
+      }
+    }
+
+    // ③ 意味が近すぎる英文
+    let close = new Set()
+    if (useSimilar && survived.length) {
+      // 1問につき1文だけ照合する。提示文と解答は同じ意味なので、
+      // 両方送ると同じ判定を2回することになる。
+      const texts = survived.map((it) => rawSentencesOf(it)[0] ?? '')
+      const { data: hits, error: simError } = await findSimilarSentences(texts, {
+        learnerId, tagIds, threshold,
+      })
+      if (simError) {
+        // 窓口が未配置でも生成そのものは止めない。
+        // 一字一句の照合(②)は効いているので、重複が素通りするわけではない。
+        // ただし黙って続けない。何が効いていないかを画面に出す。
+        warning = simError
+        useSimilar = false
+      }
+      for (const h of hits ?? []) {
+        close.add(h.index)
+        tooSimilar.push(h)
+      }
+    }
+
+    survived.forEach((it, i) => {
+      if (close.has(i)) {
+        droppedTotal += 1
+        sentencesOf(it).forEach((k) => usedSet.add(k))
       } else if (items.length < wanted) {
         items.push(it)
       }
-    }
+    })
   }
 
   return {
-    section: { ...(params.section ?? {}), exercise_type: params.sectionType, instruction, items },
+    section: { exercise_type: params.sectionType, instruction, items },
     dropped: droppedTotal,
+    tooSimilar,
+    warning,
     short: wanted - items.length,
-    teaching_point: null,
+    teaching_point: teachingPoint,
   }
 }

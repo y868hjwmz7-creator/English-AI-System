@@ -29,7 +29,8 @@ begin
   execute stmt;
   raise exception '✗ % … 通ってしまった', label;
 exception
-  when insufficient_privilege then raise notice '✓ % (拒否された)', label;
+  when insufficient_privilege or foreign_key_violation or check_violation then
+    raise notice '✓ % (拒否された)', label;
   when raise_exception then
     if sqlerrm like '✗%' then raise; end if;
     raise notice '✓ % (拒否された: %)', label, sqlerrm;
@@ -174,6 +175,116 @@ select pg_temp.expect3('設問を消すと、その英文は台帳から外れ�
   (select count(*)::int from public.material_sentences
    where text_norm = 'do you have anything to eat'), 0);
 
+-- ── 意味の近さでの判定(0009) ──────────────────────────────────
+--
+-- 実際の変換(gte-small)は Edge Function の中でしか動かないため、
+-- ここでは並びを手で作って、**判定の理屈が正しいか**だけを確かめる。
+-- 「同じ向きなら 1、直角なら 0」という性質を使う。
+
+reset role;
+
+-- 384個の数値。pos の位置だけ 1、other の位置に w を置く。
+create or replace function pg_temp.onehot(pos int, other int default null, w real default 0)
+returns vector(384) language sql as $$
+  select ('[' || array_to_string(array(
+    select case when i = pos then 1::real
+                when i = other then w
+                else 0::real end
+    from generate_series(1, 384) i), ',') || ']')::vector(384);
+$$;
+
+-- 関数に渡すための JSON にする
+create or replace function pg_temp.as_json(v vector) returns jsonb language sql as $$
+  select to_jsonb(string_to_array(btrim(v::text, '[]'), ',')::real[]);
+$$;
+
+-- 残っている英文(1文)に並びを与える
+insert into public.sentence_embeddings (text_norm, embedding)
+values ('i have several emails to reply to', pg_temp.onehot(1));
+
+set role authenticated;
+set request.jwt.claim.sub = 'd1111111-1111-1111-1111-111111111111';
+
+select pg_temp.expect3('同じ向きの文は「近すぎる」と判定される',
+  (select count(*)::int from public.similar_sentences(
+     'd2222222-2222-2222-2222-222222222222', null,
+     jsonb_build_array(pg_temp.as_json(pg_temp.onehot(1))), 0.92)), 1);
+
+select pg_temp.expect3('どれと近いかが返る',
+  (select matched from public.similar_sentences(
+     'd2222222-2222-2222-2222-222222222222', null,
+     jsonb_build_array(pg_temp.as_json(pg_temp.onehot(1))), 0.92)),
+  'i have several emails to reply to');
+
+select pg_temp.expect3('ほとんど同じ向き(近さ約0.995)も弾かれる',
+  (select count(*)::int from public.similar_sentences(
+     'd2222222-2222-2222-2222-222222222222', null,
+     jsonb_build_array(pg_temp.as_json(pg_temp.onehot(1, 2, 0.1))), 0.92)), 1);
+
+select pg_temp.expect3('向きが違う文は弾かれない',
+  (select count(*)::int from public.similar_sentences(
+     'd2222222-2222-2222-2222-222222222222', null,
+     jsonb_build_array(pg_temp.as_json(pg_temp.onehot(5))), 0.92)), 0);
+
+select pg_temp.expect3('しきい値を上げると、少し違うだけの文は通る',
+  (select count(*)::int from public.similar_sentences(
+     'd2222222-2222-2222-2222-222222222222', null,
+     jsonb_build_array(pg_temp.as_json(pg_temp.onehot(1, 2, 0.5))), 0.92)), 0);
+
+select pg_temp.expect3('候補をまとめて渡すと、近すぎるものだけ返る',
+  (select count(*)::int from public.similar_sentences(
+     'd2222222-2222-2222-2222-222222222222', null,
+     jsonb_build_array(
+       pg_temp.as_json(pg_temp.onehot(1)),
+       pg_temp.as_json(pg_temp.onehot(5)),
+       pg_temp.as_json(pg_temp.onehot(1, 2, 0.05))), 0.92)), 2);
+
+select pg_temp.expect3('何番目の候補かが返る(0から数える)',
+  (select min(idx)::int from public.similar_sentences(
+     'd2222222-2222-2222-2222-222222222222', null,
+     jsonb_build_array(
+       pg_temp.as_json(pg_temp.onehot(5)),
+       pg_temp.as_json(pg_temp.onehot(1))), 0.92)), 1);
+
+select pg_temp.expect3('関係のないゲストの範囲では判定しない',
+  (select count(*)::int from public.similar_sentences(
+     null, array['l-r'],
+     jsonb_build_array(pg_temp.as_json(pg_temp.onehot(1))), 0.92)), 0);
+
+-- ── まだ変換していない英文を探す ──────────────────────────────
+reset role;
+insert into public.material_items (material_id, section_id, seq, prompt_en, prompt_ja)
+values ('dddddddd-0000-0000-0000-000000000001', 'dddddddd-1111-0000-0000-000000000001', 3,
+        'She has a report to finish.', '彼女には仕上げるべき報告書があります。');
+set role authenticated;
+set request.jwt.claim.sub = 'd1111111-1111-1111-1111-111111111111';
+
+select pg_temp.expect3('並びの無い英文が拾える',
+  (select count(*)::int from public.sentences_without_embedding(
+     'd2222222-2222-2222-2222-222222222222', null, 200)), 1);
+
+select pg_temp.expect3('拾えるのは、まだ変換していない文だけ',
+  (select array_agg(s) from public.sentences_without_embedding(
+     'd2222222-2222-2222-2222-222222222222', null, 200) as s),
+  array['she has a report to finish']);
+
+select pg_temp.expect3('上限を0にすると何も返らない',
+  (select count(*)::int from public.sentences_without_embedding(
+     'd2222222-2222-2222-2222-222222222222', null, 0)), 0);
+
+-- ── 混合ドリル:1問ごとの弱点(0009) ──────────────────────────
+update public.material_items set tag_id = 'infinitive'
+  where material_id = 'dddddddd-0000-0000-0000-000000000001' and seq = 1;
+
+select pg_temp.expect3('1問ごとに弱点を持たせられる',
+  (select tag_id from public.material_items
+   where material_id = 'dddddddd-0000-0000-0000-000000000001' and seq = 1), 'infinitive');
+
+select pg_temp.expect_denied3('存在しない弱点は持たせられない', $$
+  update public.material_items set tag_id = 'nonexistent-tag'
+  where material_id = 'dddddddd-0000-0000-0000-000000000001' and seq = 1
+$$);
+
 -- ── 呼べる人の制限 ────────────────────────────────────────────
 select pg_temp.expect_denied3('担当していないゲストは指定できない', $$
   select * from public.used_sentences(
@@ -185,6 +296,17 @@ set request.jwt.claim.sub = 'd2222222-2222-2222-2222-222222222222';
 select pg_temp.expect_denied3('ゲストは照合を呼べない', $$
   select * from public.used_sentences(null, array['infinitive'], array['I have work to do.'])
 $$);
+
+select pg_temp.expect_denied3('ゲストは意味の近さの照合を呼べない', $$
+  select * from public.similar_sentences(null, array['infinitive'], '[]'::jsonb, 0.92)
+$$);
+
+select pg_temp.expect_denied3('ゲストは未変換の英文を読み出せない', $$
+  select * from public.sentences_without_embedding(null, array['infinitive'], 10)
+$$);
+
+select pg_temp.expect3('ゲストには英文の並びが見えない',
+  (select count(*)::int from public.sentence_embeddings), 0);
 
 select pg_temp.expect3('ゲストには英文の台帳が見えない',
   (select count(*)::int from public.material_sentences), 0);

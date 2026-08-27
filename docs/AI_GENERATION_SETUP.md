@@ -77,12 +77,17 @@
 
 ## ③ 受付窓口を配置する
 
-配置するのは2つです。
+配置するのは3つです。
 
-| 関数 | 役目 |
-|---|---|
-| `create-user` | アカウントの発行(第 5.8 節) |
-| `generate-material` | 教材の下書き生成(この文書) |
+| 関数 | 役目 | 鍵 |
+|---|---|---|
+| `create-user` | アカウントの発行(第 5.8 節) | Supabase の鍵だけ |
+| `generate-material` | 教材の下書き生成(この文書) | Claude の鍵が要る |
+| `check-similar` | 意味が近すぎる英文を弾く(第 5.16.2 節) | **鍵は要りません** |
+
+> **`check-similar` に鍵は要りません。** 英文を数値に変換する仕組みが
+> Supabase の中に最初から入っている(`gte-small`)ため、外部のサービスを
+> 呼びません。文章がどこにも送られず、追加の費用もかかりません。
 
 > **どちらの関数も1ファイルにまとめてあります。**
 > 分けたほうが読みやすいのですが、配置の手順が増えると事故のもとになるため、
@@ -97,7 +102,7 @@
 5. 出てきた編集画面の中身を**すべて消して**、リポジトリの
    `supabase/functions/generate-material/index.ts` を丸ごと貼る
 6. **Deploy** を押す
-7. 同じ手順で `create-user` も配置する
+7. 同じ手順で `create-user` と `check-similar` も配置する
 
 > **画面に「Deploy a new function」が見当たらない場合**は方法2です。
 > Supabase の画面は版によって変わります。
@@ -111,6 +116,7 @@ npx supabase login
 npx supabase link --project-ref tsfoecjabgcdmvxdcpgy
 npx supabase functions deploy generate-material --no-verify-jwt=false
 npx supabase functions deploy create-user --no-verify-jwt=false
+npx supabase functions deploy check-similar --no-verify-jwt=false
 ```
 
 手順が必要でしたらご案内します。
@@ -141,6 +147,8 @@ npx supabase functions deploy create-user --no-verify-jwt=false
 | 画面に出る文 | 原因 | どうするか |
 |---|---|---|
 | 生成の窓口につながりませんでした | ③がまだ | 関数を配置する |
+| 意味の近さを調べる窓口につながりませんでした | `check-similar` がまだ | ③で3つめの関数を配置する |
+| 英文を数値に変換する仕組みを使えませんでした | Supabase の Edge Runtime が古い | Supabase 側の更新を待つ。それまでは一字一句の照合だけが働く |
 | Claude の鍵が設定されていません | ②がまだ | Secrets に登録する |
 | Claude の鍵が正しくありません | 鍵の写し間違い | ①からやり直す |
 | Claude の残高が不足しています | クレジット切れ | Console の Billing で追加 |
