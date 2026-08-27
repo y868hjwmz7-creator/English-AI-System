@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import MaterialForm from './MaterialForm.jsx'
+import TeachingNote from './TeachingNote.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
@@ -205,7 +206,7 @@ export default function TrainerMaterials({ me }) {
               {m.instruction_ja && <p className="card-hint">{m.instruction_ja}</p>}
 
               {m.teaching_point && (
-                <p className="homework-instruction">{m.teaching_point}</p>
+                <TeachingNote text={m.teaching_point} />
               )}
 
               <p className="muted">

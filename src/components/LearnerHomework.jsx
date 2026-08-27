@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { cefrLabel } from '../data/cefr.js'
 import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
+import TeachingNote from './TeachingNote.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 
@@ -82,13 +83,13 @@ export default function LearnerHomework() {
                 </p>
 
                 {a.material?.instruction_ja && (
-                  <p className="homework-instruction">{a.material.instruction_ja}</p>
+                  <TeachingNote text={a.material.instruction_ja} title="やること" tone="todo" />
                 )}
 
                 {openId === a.id ? (
                   <>
                     {a.material?.teaching_point && (
-                      <p className="homework-instruction">{a.material.teaching_point}</p>
+                      <TeachingNote text={a.material.teaching_point} title="ここに注意" />
                     )}
                     {a.material?.sections.map((sec) => {
                       const type = exerciseType(sec.exercise_type)

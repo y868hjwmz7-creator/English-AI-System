@@ -652,3 +652,35 @@ html { -webkit-text-size-adjust: 100%; }
 .w--missed { color: var(--text-secondary); text-decoration: line-through; }
 .w--extra  { color: var(--series-3); text-decoration: underline; }
 .material-headline { margin: 2px 0 6px; color: var(--text-secondary); font-size: 14px; }
+
+/* ── 指導ポイント(文法の説明)────────────────────────────────
+   長い日本語を1つの段落で流すと読めない。行で区切り、
+   見出しと英語の例が目に入るようにする。 */
+.teaching-note {
+  margin: 10px 0; padding: 10px 12px;
+  border: 1px solid var(--border); border-left: 3px solid var(--series-1);
+  border-radius: 8px; background: var(--surface-1);
+}
+.teaching-note--todo { border-left-color: var(--series-2); }
+.teaching-note-title {
+  font-size: 12px; letter-spacing: .04em; color: var(--text-secondary); margin-bottom: 6px;
+}
+.teaching-note-list { list-style: none; margin: 0; padding: 0; }
+.teaching-note-list > li {
+  position: relative; padding-left: 14px; margin-bottom: 8px;
+  font-size: 14px; line-height: 1.9; color: var(--text-primary);
+}
+.teaching-note-list > li:last-child { margin-bottom: 0; }
+.teaching-note-list > li::before {
+  content: ''; position: absolute; left: 0; top: 12px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--border);
+}
+.teaching-note-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.teaching-note-head::before { display: none; }
+.teaching-note-head { padding-left: 0; }
+.teaching-note-tag {
+  padding: 1px 8px; border-radius: 999px;
+  background: var(--series-1); color: #fff; font-size: 12px; white-space: nowrap;
+}
+/* 日本語の中の英語。地の文に埋もれさせない */
+.en-term { font-weight: 600; letter-spacing: .01em; }

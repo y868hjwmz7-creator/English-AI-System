@@ -205,7 +205,9 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
     const plan = defaultSectionsFor(kind)
     const made = []
     const notes = []
-    let point = teachingPoint
+    // 指導ポイントは**弱点1つにつき1本**だけ採る。演習ごとに集めていたため、
+    // 同じ内容が言い換えられて何本も並んでいた(実際に6本並んだ)。
+    const pointOfTag = new Map()
     let warn = null
     let droppedCount = 0
     let shortCount = 0
@@ -244,9 +246,9 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
         shortCount += result.short
         notes.push(...(result.tooSimilar ?? []))
         warn = warn || result.warning
-        // 指導ポイントは**最初の1回だけ**採る。演習ごとに集めると、
-        // 同じ内容が言い換えられて何本も並ぶ(実際に6本並んだ)。
-        if (!point && result.teaching_point) point = result.teaching_point
+        if (result.teaching_point && !pointOfTag.has(tagIds[t])) {
+          pointOfTag.set(tagIds[t], result.teaching_point)
+        }
         instruction = instruction || result.section.instruction
         // 1問ごとに、どの弱点の問題かを持たせる(混ぜたときに必要)
         perTag.push(result.section.items.map((it) => ({
@@ -260,6 +262,14 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
         items: interleave(perTag),
       })
     }
+
+    // 弱点が複数なら【弱点名】を頭に付けて、1行ずつ並べる。
+    // 見出しが無いと、どの説明がどの弱点のものか分からない。
+    const point = teachingPoint || [...pointOfTag.entries()]
+      .map(([tagId, text]) => (tagIds.length > 1
+        ? `【${weaknessTagLabel(tagId)}】${String(text).trim()}`
+        : String(text).trim()))
+      .join('\n')
 
     setGenerating(null)
     setSections(made)
@@ -428,7 +438,7 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
           指導ポイント
           <span className="field-hint">この文法全体の勘所。1問ごとではなく教材全体にかかるもの</span>
         </span>
-        <textarea rows={2} value={teachingPoint}
+        <textarea rows={5} value={teachingPoint}
                   onChange={(e) => setTeachingPoint(e.target.value)}
                   placeholder="例: emails to reply to のように、reply to の to を落とさないこと" />
       </label>
