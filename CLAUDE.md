@@ -28,13 +28,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |---|---|
 | 開発サーバー | `npm run dev` |
 | ビルド | `npm run build` |
+| **書き間違いの検査** | `npm run lint` |
 | GitHub Pages 用ビルド | `npm run build:pages` |
 | 1ファイル版(ダウンロードして開ける版) | `npm run build:single` |
 | **DB マイグレーションと RLS の検証** | `npm run test:db` |
 | お手本音声の生成(Azure の鍵が必要) | `npm run audio` |
 
 自動テストは `npm run test:db` のみ。ユニットテストの枠組みは無い。
-UI の変更は `npm run build` が通ることと、必要なら Playwright で実際に触って確かめる。
+UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
+必要なら Playwright で実際に触って確かめる。
+
+### `npm run build` が通っても安心してはいけない
+
+**import を書き忘れても Vite のビルドは成功する。** 開いた瞬間に落ちる。
+実際に `App.jsx` で `TrainerMaterials` の import が抜けたままビルドが通り、
+画面を開くまで分からない状態になった(2026-08)。
+`npm run lint` は、この「存在しない名前を使っている」を機械的に見つける。
+
+### ログインが要る画面を手元で確かめる方法
+
+この環境からは Supabase に届かないため、ログインを通せない。
+`.env` を一時的に退避すると Supabase 未設定の状態になり、
+ログインなしで中の画面を開ける。**確認後に必ず戻すこと。**
+トレーナー向けの画面など、利用者情報が要るものは、
+一時的に仮の値を差し込んで見た目だけ確かめ、すぐ戻す。
 
 ### `npm run test:db` は SQL を触ったら必ず通す
 

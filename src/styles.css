@@ -463,3 +463,78 @@ html { -webkit-text-size-adjust: 100%; }
   border: 1px solid var(--border); color: var(--text-secondary);
   margin-left: 0;
 }
+
+/* ---------------- 教材と宿題 ---------------- */
+
+.stack { display: flex; flex-direction: column; gap: var(--gap); }
+.section-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+
+/* 弱点タグを選ぶ */
+.tagpicker { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 4px; }
+.tagpicker-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.tagpicker-label {
+  min-width: 8.5em; flex-shrink: 0;
+  color: var(--text-secondary); font-size: 12px;
+}
+.tagpicker-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tagchip {
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; line-height: 1.5;
+  background: var(--surface-1); border: 1px solid var(--border);
+  color: var(--text-secondary); cursor: pointer;
+}
+.tagchip:hover { border-color: var(--text-muted); }
+.tagchip.is-on {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 600;
+}
+.tagchip.is-static { cursor: default; }
+.tagchip.is-static:hover { border-color: var(--border); }
+
+/* 教材の一覧 */
+.material-filter { margin-top: 12px; }
+.material-keyword { max-width: 200px; }
+.material-card .material-tags { margin: 8px 0; }
+.material-head {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: space-between; gap: 8px;
+}
+.material-preview {
+  margin: 10px 0; padding-left: 1.4em;
+  font-size: 13px; line-height: 1.8; color: var(--text-secondary);
+}
+.material-preview li { margin-bottom: 4px; }
+
+/* 教材を作る */
+.material-form-row { max-width: 360px; }
+.material-kind-hint { margin: -4px 0 12px; }
+.material-items { margin: 16px 0; }
+.material-item-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+}
+.material-item-no {
+  min-width: 1.6em; flex-shrink: 0;
+  color: var(--text-muted); font-size: 12px; text-align: right;
+}
+.material-item-row input { min-width: 0; flex: 1 1 40%; }
+
+/* 配信先を選ぶ */
+.assign-box {
+  margin-top: 12px; padding: 12px;
+  border: 1px solid var(--accent); border-radius: var(--radius);
+}
+.assign-list { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0; }
+
+/* 宿題 */
+.homework-card.is-done { opacity: 0.72; }
+.homework-instruction {
+  margin: 8px 0; padding: 8px 12px;
+  border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0;
+  background: var(--surface-1); font-size: 13px;
+}
+.homework-en { font-size: 15px; color: var(--text-primary); }
+
+@media (max-width: 640px) {
+  .tagpicker-label { min-width: 100%; }
+  .material-item-row { flex-wrap: wrap; }
+  .material-item-row input { flex: 1 1 100%; }
+}

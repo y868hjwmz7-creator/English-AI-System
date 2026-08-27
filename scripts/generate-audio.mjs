@@ -24,7 +24,7 @@
  *   使えません。あらかじめ作って配れば、全端末で同じ品質になります。
  */
 
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 

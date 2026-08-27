@@ -4,7 +4,6 @@ import { practicePhrases } from '../data/practicePhrases.js'
 import {
   PREGENERATED_SPEAKERS,
   SPEAKER_MODES,
-  findSpeaker,
   genderLabel,
   genderOf,
   hasGender,
@@ -33,7 +32,6 @@ import {
   startRecording,
   stopSpeaking,
   voiceAccentLabel,
-  voiceQualityLabel,
 } from '../lib/speech.js'
 import BarChart from './charts/BarChart.jsx'
 import HBarChart from './charts/HBarChart.jsx'

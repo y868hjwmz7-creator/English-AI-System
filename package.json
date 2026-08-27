@@ -11,7 +11,8 @@
     "build:single": "BUILD_SINGLE=1 vite build",
     "preview": "vite preview",
     "audio": "node scripts/generate-audio.mjs",
-    "test:db": "bash scripts/test-migration.sh"
+    "test:db": "bash scripts/test-migration.sh",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
