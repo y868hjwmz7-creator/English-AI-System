@@ -188,8 +188,8 @@ select pg_temp.expect('管理者は全体の集計を見られる',
   (select count(*)::int from public.school_summary()), 1);
 select pg_temp.expect('管理者はトレーナー別の集計を見られる',
   (select count(*)::int from public.trainer_summary()), 3);
-select pg_temp.expect('集計の中身が取れている(生徒の人数)',
-  (select learner_count from public.school_summary()), 2);
+select pg_temp.expect('集計の中身が取れている(受講中の生徒数)',
+  (select learner_active from public.school_summary()), 2);
 -- 生の記録は見せない設計。owner はトレーナーを兼ねるが、
 -- 担当していない生徒の学習記録は読めない。
 select pg_temp.expect('管理者でも担当外の生徒の学習記録は読めない',
@@ -275,6 +275,78 @@ select pg_temp.expect('退職者の行は消さずに残る(過去の記録が�
    where id = '11111111-1111-1111-1111-111111111111'), 'inactive');
 select pg_temp.expect_denied('管理者でも自分自身は停止できない', $$
   select public.retire_trainer('55555555-5555-5555-5555-555555555555') $$);
+
+-- ── 生徒の在籍状態(0004 で追加) ────────────────────────────
+-- ここまでで、生徒B の担当はトレーナー2 になっている。
+
+-- 休みの予定。トレーナー2 が自分の予定を入れる。
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+insert into public.trainer_absences (trainer_id, from_date, to_date, reason)
+values ('44444444-4444-4444-4444-444444444444',
+        current_date + 7, current_date + 9, '研修のため');
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('担当トレーナーの休みの予定が生徒に見える',
+  (select count(*)::int from public.trainer_absences), 1);
+select pg_temp.expect('休みの理由も読める',
+  (select reason from public.trainer_absences limit 1), '研修のため');
+select pg_temp.expect_denied('生徒はトレーナーの休みを勝手に入れられない', $$
+  insert into public.trainer_absences (trainer_id, from_date, to_date)
+  values ('44444444-4444-4444-4444-444444444444', current_date, current_date) $$);
+
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('担当ではないトレーナーの休みは見えない',
+  (select count(*)::int from public.trainer_absences), 0);
+
+-- 休会中にする
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select public.set_learner_status('22222222-2222-2222-2222-222222222222',
+                                 'paused', '回数コース修了後');
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('休会中でも自分の学習記録は見られる',
+  (select count(*)::int from public.study_logs), 1);
+select pg_temp.expect('休会中でも配信済みの教材は見られる',
+  (select count(*)::int from public.materials), 1);
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select pg_temp.expect('休会中でも担当は外れない',
+  (select count(*)::int from public.learner_admins
+   where learner_id = '22222222-2222-2222-2222-222222222222' and ended_on is null), 1);
+select pg_temp.expect_denied('休会中の生徒には新しい宿題を配信できない', $$
+  insert into public.assignments (material_id, learner_id, assigned_by)
+  values ('aaaaaaaa-0000-0000-0000-000000000001',
+          '22222222-2222-2222-2222-222222222222',
+          '44444444-4444-4444-4444-444444444444') $$);
+
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('集計で休会中が分けて数えられる',
+  (select learner_paused from public.school_summary()), 1);
+select pg_temp.expect('集計で受講中の人数が減る',
+  (select learner_active from public.school_summary()), 1);
+
+-- 退会にする
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select public.set_learner_status('22222222-2222-2222-2222-222222222222',
+                                 'inactive', '全額返金で退会');
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('退会したら自分の学習記録も見えなくなる',
+  (select count(*)::int from public.study_logs), 0);
+select pg_temp.expect('退会したら教材も見えなくなる',
+  (select count(*)::int from public.materials), 0);
+select pg_temp.expect('退会しても自分のプロフィールは読める(状態を表示するため)',
+  (select status from public.profiles where id = auth.uid()), 'inactive');
+
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('退会したら担当が外れる',
+  (select count(*)::int from public.learner_admins
+   where learner_id = '22222222-2222-2222-2222-222222222222' and ended_on is null), 0);
+select pg_temp.expect('退会した理由が残る',
+  (select status_note from public.profiles
+   where id = '22222222-2222-2222-2222-222222222222'), '全額返金で退会');
+select pg_temp.expect('集計で退会済が分けて数えられる',
+  (select learner_withdrawn from public.school_summary()), 1);
 
 -- ── ログインしていない状態 ───────────────────────────────────
 reset role;
