@@ -100,6 +100,12 @@ UI の変更は `npm run build` が通ることと、必要なら Playwright で
 - 利用者は **会社PC にアプリをインストールできない**。すべてブラウザで完結させる
 - Chromium と Playwright は使える(`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`)。
   マイクは `--use-fake-device-for-media-stream` で代用する
+- **`pkill -f "vite"` のような指定で開発サーバーを止めない。**
+  実行中のシェル自身が引っかかって落ち、そのコマンドの残りが実行されない
+  (2回やった)。止めるなら `fuser -k 5173/tcp`。
+  開発サーバーは放置しても害はないので、そもそも止めなくてよい
+- 画面の確認は、`.env` を一時的に退避すると Supabase 未設定の状態になり、
+  ログインを通さずに中の画面を見られる。確認後に必ず戻すこと
 
 ## 踏んだ落とし穴(繰り返さないこと)
 

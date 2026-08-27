@@ -10,7 +10,7 @@ const RANGES = [
   { id: 30, label: '直近30日' },
 ]
 
-/** 指導者(トレーナー・保護者)向けの管理画面 */
+/** トレーナー向けの管理画面 */
 export default function AdminDashboard({ state }) {
   const [rangeDays, setRangeDays] = useState(14)
   const [selectedLearnerId, setSelectedLearnerId] = useState(null)
@@ -23,7 +23,7 @@ export default function AdminDashboard({ state }) {
     [state.studyLogs, daySet],
   )
 
-  /** 学習者ごとの集計 */
+  /** 生徒ごとの集計 */
   const learnerStats = useMemo(() => {
     return state.learners
       .map((learner) => {
@@ -68,7 +68,7 @@ export default function AdminDashboard({ state }) {
       </div>
 
       <div className="stat-row">
-        <Stat label="学習者数" value={state.learners.length} unit="人" />
+        <Stat label="生徒の人数" value={state.learners.length} unit="人" />
         <Stat label="期間中に学習した人" value={activeLearners} unit="人" />
         <Stat label="期間中の合計学習時間" value={formatMinutes(totalMinutes)} />
         <Stat
@@ -91,7 +91,7 @@ export default function AdminDashboard({ state }) {
         </section>
 
         <section className="card">
-          <h2 className="card-title">学習者別の学習時間</h2>
+          <h2 className="card-title">生徒別の学習時間</h2>
           <HBarChart
             data={learnerStats.map((l) => ({ key: l.id, label: l.name, value: l.minutes }))}
             emptyMessage="この期間に学習記録がありません。"
@@ -100,14 +100,14 @@ export default function AdminDashboard({ state }) {
       </div>
 
       <section className="card">
-        <h2 className="card-title">学習者一覧</h2>
-        <p className="card-hint">名前をクリックすると、その学習者の内訳を表示します。</p>
+        <h2 className="card-title">生徒一覧</h2>
+        <p className="card-hint">名前をクリックすると、その生徒の内訳を表示します。</p>
 
         <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
-                <th>学習者</th>
+                <th>生徒</th>
                 <th>レベル</th>
                 <th className="num">期間中の学習時間</th>
                 <th className="num">記録件数</th>
@@ -169,7 +169,7 @@ function Stat({ label, value, unit = '' }) {
   )
 }
 
-/** 選ばれた学習者の詳細 */
+/** 選ばれた生徒の詳細 */
 function LearnerDetail({ learner, state, days }) {
   const logs = state.studyLogs.filter((log) => log.learnerId === learner.id)
   const daySet = new Set(days)
