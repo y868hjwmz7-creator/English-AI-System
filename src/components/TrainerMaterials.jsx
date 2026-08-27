@@ -11,15 +11,16 @@ import { useEffect, useState } from 'react'
 import MaterialForm from './MaterialForm.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
-import {
-  LEVELS, assignMaterial, kindLabel, levelLabel, loadMyLearners, searchMaterials,
-} from '../lib/materials.js'
+import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+import { INDUSTRIES, industryLabel } from '../data/industries.js'
+import { assignMaterial, kindLabel, loadMyLearners, searchMaterials } from '../lib/materials.js'
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
   const [tagIds, setTagIds] = useState([])
   const [level, setLevel] = useState(null)
   const [keyword, setKeyword] = useState('')
+  const [industry, setIndustry] = useState('')
 
   const [materials, setMaterials] = useState([])
   const [learners, setLearners] = useState([])
@@ -33,15 +34,14 @@ export default function TrainerMaterials({ me }) {
   const search = async () => {
     setLoading(true)
     setError(null)
-    const { data, error: e } = await searchMaterials({ tagIds, level, keyword })
+    const { data, error: e } = await searchMaterials({ tagIds, level, keyword, industry })
     setLoading(false)
     if (e) { setError(e); return }
     setMaterials(data)
   }
 
-  // 絞り込みが変わるたびに探し直す
   // 絞り込みが変わったら探し直す。search 自体は毎回作り直されるので依存に入れない。
-  useEffect(() => { search() }, [tagIds, level])
+  useEffect(() => { search() }, [tagIds, level, industry])
 
   useEffect(() => {
     loadMyLearners().then(({ data, error: e }) => {
@@ -89,17 +89,24 @@ export default function TrainerMaterials({ me }) {
           <strong>あればそのまま配信できます。</strong>作るより速く、生徒には同じ価値が届きます。
         </p>
 
-        <WeaknessTagPicker selected={tagIds} onChange={setTagIds} includeDrills={false} />
+        {/* さがす場面では基礎練習(子音全般・母音全般)も選べる。
+            弱点として指摘する場面では出さない(粒度が違うため)。 */}
+        <WeaknessTagPicker selected={tagIds} onChange={setTagIds} includeDrills />
 
         <div className="filter-row material-filter">
           <span className="filter-label">レベル</span>
           <button type="button" className={`btn btn--toggle${level === null ? ' is-active' : ''}`}
                   onClick={() => setLevel(null)}>すべて</button>
-          {LEVELS.map((l) => (
+          {CEFR_LEVELS.map((l) => (
             <button key={l.id} type="button"
                     className={`btn btn--toggle${level === l.id ? ' is-active' : ''}`}
-                    onClick={() => setLevel(l.id)}>{l.label}</button>
+                    onClick={() => setLevel(l.id)} title={l.ja}>{l.label}</button>
           ))}
+          <span className="filter-label">業界</span>
+          <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
+            <option value="">すべて</option>
+            {INDUSTRIES.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+          </select>
           <input className="material-keyword" value={keyword} placeholder="教材名で絞る"
                  onChange={(e) => setKeyword(e.target.value)}
                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); search() } }} />
@@ -131,7 +138,7 @@ export default function TrainerMaterials({ me }) {
               <div className="material-head">
                 <h3 className="card-title">{m.title}</h3>
                 <span className="muted">
-                  {levelLabel(m.level)} / {kindLabel(m.kind)}
+                  {cefrLabel(m.level)} / {kindLabel(m.kind)} / {industryLabel(m.industry)}
                   {m.visibility === 'private' && ' / 自分だけ'}
                 </span>
               </div>

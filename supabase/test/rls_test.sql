@@ -82,7 +82,7 @@ set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
 insert into public.materials (id, title, level, kind, status, created_by)
-values ('aaaaaaaa-0000-0000-0000-000000000001', '/l/ と /r/ の練習', 2, 'passage', 'published',
+values ('aaaaaaaa-0000-0000-0000-000000000001', '/l/ と /r/ の練習', 'B1', 'passage', 'published',
         '11111111-1111-1111-1111-111111111111');
 
 insert into public.material_items (material_id, seq, text_en, text_ja)
@@ -139,7 +139,7 @@ select pg_temp.expect_denied('生徒Bはトレーナーの確認印を偽装で�
 -- 教材は作れない
 select pg_temp.expect_denied('生徒Bは教材を作れない', $$
   insert into public.materials (title, level, kind, created_by)
-  values ('勝手に作った教材', 1, 'word', '22222222-2222-2222-2222-222222222222') $$);
+  values ('勝手に作った教材', 'A2', 'word', '22222222-2222-2222-2222-222222222222') $$);
 select pg_temp.expect_denied('生徒Bは自分に宿題を配信できない', $$
   insert into public.assignments (material_id, learner_id, assigned_by)
   values ('aaaaaaaa-0000-0000-0000-000000000001',
@@ -167,7 +167,7 @@ select pg_temp.expect('生徒Cには他人のプロフィールが見えない',
 -- トレーナー1 が、共有しない教材をもう1つ作る
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 insert into public.materials (id, title, level, kind, status, visibility, created_by)
-values ('aaaaaaaa-0000-0000-0000-000000000002', '自分用の下書き', 2, 'passage', 'draft', 'private',
+values ('aaaaaaaa-0000-0000-0000-000000000002', '自分用の下書き', 'B1', 'passage', 'draft', 'private',
         '11111111-1111-1111-1111-111111111111');
 
 select pg_temp.expect('作った本人には共有しない教材も見える',
@@ -262,7 +262,7 @@ select pg_temp.expect('退職者には教材が見えなくなる',
   (select count(*)::int from public.materials), 0);
 select pg_temp.expect_denied('退職者は教材を作れない', $$
   insert into public.materials (title, level, kind, created_by)
-  values ('退職後の教材', 1, 'word', '11111111-1111-1111-1111-111111111111') $$);
+  values ('退職後の教材', 'A2', 'word', '11111111-1111-1111-1111-111111111111') $$);
 
 -- 過去の記録は壊れていない(退職者を消していないため)
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
@@ -275,6 +275,62 @@ select pg_temp.expect('退職者の行は消さずに残る(過去の記録が�
    where id = '11111111-1111-1111-1111-111111111111'), 'inactive');
 select pg_temp.expect_denied('管理者でも自分自身は停止できない', $$
   select public.retire_trainer('55555555-5555-5555-5555-555555555555') $$);
+
+-- ── レベル(CEFR)とスコア(0005 で追加) ───────────────────
+-- ここでは 生徒B の担当はトレーナー2 になっている。
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+update public.profiles set cefr = 'B1'
+  where id = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('トレーナーは担当生徒のレベルを判定できる',
+  (select cefr from public.profiles where id = '22222222-2222-2222-2222-222222222222'), 'B1');
+
+insert into public.learner_scores (learner_id, test_type, score, taken_on, recorded_by)
+values ('22222222-2222-2222-2222-222222222222', 'toeic',   650, current_date - 200,
+        '44444444-4444-4444-4444-444444444444'),
+       ('22222222-2222-2222-2222-222222222222', 'toeic',   720, current_date - 10,
+        '44444444-4444-4444-4444-444444444444'),
+       ('22222222-2222-2222-2222-222222222222', 'versant',  48, current_date - 10,
+        '44444444-4444-4444-4444-444444444444');
+
+select pg_temp.expect('スコアの履歴が残る(TOEIC 2回ぶん)',
+  (select count(*)::int from public.learner_scores where test_type = 'toeic'), 2);
+select pg_temp.expect('一覧には最新のスコアだけが出る',
+  (select count(*)::int from public.learner_latest_scores), 2);
+select pg_temp.expect('最新の TOEIC が取れる',
+  (select score::int from public.learner_latest_scores where test_type = 'toeic'), 720);
+select pg_temp.expect('最新の VERSANT が取れる',
+  (select score::int from public.learner_latest_scores where test_type = 'versant'), 48);
+
+-- 打ち間違いはデータベース側で止める
+select pg_temp.expect_denied('TOEIC で 1000 点は登録できない', $$
+  insert into public.learner_scores (learner_id, test_type, score, taken_on)
+  values ('22222222-2222-2222-2222-222222222222', 'toeic', 1000, current_date) $$);
+select pg_temp.expect_denied('VERSANT で 95 点は登録できない', $$
+  insert into public.learner_scores (learner_id, test_type, score, taken_on)
+  values ('22222222-2222-2222-2222-222222222222', 'versant', 95, current_date) $$);
+select pg_temp.expect_denied('CEFR に無いレベルは登録できない', $$
+  update public.profiles set cefr = 'D1'
+  where id = '22222222-2222-2222-2222-222222222222' $$);
+
+-- 生徒側から見た場合
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('生徒は自分のスコアを見られる',
+  (select count(*)::int from public.learner_scores), 3);
+select pg_temp.expect_denied('生徒は自分のスコアを記録できない', $$
+  insert into public.learner_scores (learner_id, test_type, score, taken_on)
+  values ('22222222-2222-2222-2222-222222222222', 'toeic', 990, current_date) $$);
+select pg_temp.expect_denied('生徒は自分のレベルを書き換えられない', $$
+  update public.profiles set cefr = 'C2'
+  where id = '22222222-2222-2222-2222-222222222222' $$);
+select pg_temp.expect_denied('生徒は自分の在籍状態を変えられない', $$
+  update public.profiles set status = 'active'
+  where id = '22222222-2222-2222-2222-222222222222' $$);
+
+-- 担当していないトレーナーからは見えない
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('他人のスコアは見えない',
+  (select count(*)::int from public.learner_scores), 0);
 
 -- ── 生徒の在籍状態(0004 で追加) ────────────────────────────
 -- ここまでで、生徒B の担当はトレーナー2 になっている。

@@ -44,11 +44,12 @@ export const weaknessTags = [
   { id: 'b-v',                 category: 'consonant',  kind: 'weakness', label: '/b/ と /v/',      hint: 'best / vest、boat / vote' },
   { id: 'final-consonant',     category: 'consonant',  kind: 'weakness', label: '語尾の子音',      hint: '語尾に母音を足さない。book を「ブックゥ」にしない' },
   { id: 'consonant-cluster',   category: 'consonant',  kind: 'weakness', label: '子音連続',        hint: 'street、texts、asked のように子音が続く形' },
-  { id: 'all-consonants',      category: 'consonant',  kind: 'drill',    label: '全子音の基本練習', hint: '弱点ではなく網羅型の反復ドリル。子音をひととおり通す' },
+  { id: 'all-consonants',      category: 'consonant',  kind: 'drill',    label: '子音全般',        hint: '特定の音ではなく、子音をひととおり通す網羅型の練習' },
 
   // ── 発音(母音) ─────────────────────────────
   { id: 'short-long-vowel',    category: 'vowel',      kind: 'weakness', label: '短母音と長母音',   hint: 'ship / sheep、full / fool' },
   { id: 'schwa',               category: 'vowel',      kind: 'weakness', label: 'あいまい母音',     hint: 'about、sofa、banana の弱く読む母音' },
+  { id: 'all-vowels',          category: 'vowel',      kind: 'drill',    label: '母音全般',        hint: '特定の音ではなく、母音をひととおり通す網羅型の練習' },
 
   // ── リズム ────────────────────────────────
   { id: 'word-stress',         category: 'rhythm',     kind: 'weakness', label: '強勢の位置',       hint: '単語のどの音節を強く読むか。PREsent / preSENT' },

@@ -7,16 +7,19 @@
  */
 import { useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
-import { LEVELS, MATERIAL_KINDS, createMaterial } from '../lib/materials.js'
+import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+import { INDUSTRIES } from '../data/industries.js'
+import { MATERIAL_KINDS, createMaterial } from '../lib/materials.js'
 
 const emptyRow = () => ({ text_en: '', text_ja: '' })
 
 export default function MaterialForm({ createdBy, onCreated, onCancel }) {
   const [title, setTitle] = useState('')
-  const [level, setLevel] = useState(2)
+  const [level, setLevel] = useState('B1')
   const [kind, setKind] = useState('passage')
   const [instruction, setInstruction] = useState('')
   const [visibility, setVisibility] = useState('school')
+  const [industry, setIndustry] = useState('')
   const [rows, setRows] = useState([emptyRow(), emptyRow(), emptyRow()])
   const [tagIds, setTagIds] = useState([])
   const [error, setError] = useState(null)
@@ -33,7 +36,7 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
     setBusy(true)
     setError(null)
     const { data, error: message } = await createMaterial({
-      title, level, kind, instruction_ja: instruction, visibility,
+      title, level, kind, instruction_ja: instruction, visibility, industry,
       items: rows, tagIds, createdBy,
     })
     setBusy(false)
@@ -58,8 +61,10 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
       <div className="field-row material-form-row">
         <label className="field">
           <span>レベル</span>
-          <select value={level} onChange={(e) => setLevel(Number(e.target.value))}>
-            {LEVELS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+          <select value={level} onChange={(e) => setLevel(e.target.value)}>
+            {CEFR_LEVELS.map((l) => (
+              <option key={l.id} value={l.id}>{cefrLabel(l.id)}</option>
+            ))}
           </select>
         </label>
         <label className="field">
@@ -72,6 +77,21 @@ export default function MaterialForm({ createdBy, onCreated, onCancel }) {
       <p className="field-hint material-kind-hint">
         {MATERIAL_KINDS.find((k) => k.id === kind)?.hint}
       </p>
+
+      <label className="field">
+        <span>
+          業界
+          <span className="field-hint">
+            選ばなければ「汎用」。汎用の教材はどの生徒にも使えます
+          </span>
+        </span>
+        <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
+          <option value="">汎用(全員)</option>
+          {INDUSTRIES.map((i) => (
+            <option key={i.id} value={i.id}>{i.label} — {i.hint}</option>
+          ))}
+        </select>
+      </label>
 
       <label className="field">
         <span>取り組み方(生徒に見えます・任意)</span>

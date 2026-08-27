@@ -3,6 +3,7 @@ import AdminDashboard from './components/AdminDashboard.jsx'
 import EnglishStudyLog from './components/EnglishStudyLog.jsx'
 import LearnerHomework from './components/LearnerHomework.jsx'
 import SignIn from './components/SignIn.jsx'
+import TrainerLearners from './components/TrainerLearners.jsx'
 import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import { buildSeed } from './data/seed.js'
@@ -55,7 +56,7 @@ export default function App() {
   // 見えるデータはどのみち RLS が止めるが、画面としても出さない。
   useEffect(() => {
     if (!isSupabaseConfigured || !profile) return
-    if (isLearner && (view === 'materials' || view === 'admin')) setView('homework')
+    if (isLearner && ['materials', 'learners', 'admin'].includes(view)) setView('homework')
   }, [profile, isLearner, view])
 
   // ログインした直後は、その人が最初に見たい画面を開く
@@ -117,6 +118,15 @@ export default function App() {
               onClick={() => setView('materials')}
             >
               教材
+            </button>
+          )}
+          {(!isSupabaseConfigured || isTrainer) && (
+            <button
+              type="button"
+              className={`tab${view === 'learners' ? ' is-active' : ''}`}
+              onClick={() => setView('learners')}
+            >
+              生徒
             </button>
           )}
           {(!isSupabaseConfigured || !isTrainer) && (
@@ -194,6 +204,8 @@ export default function App() {
       <main className="app-main">
         {view === 'materials' ? (
           profile ? <TrainerMaterials me={profile} /> : <p className="muted">読み込み中…</p>
+        ) : view === 'learners' ? (
+          profile ? <TrainerLearners me={profile} /> : <p className="muted">読み込み中…</p>
         ) : view === 'homework' ? (
           <LearnerHomework />
         ) : view === 'learner' ? (

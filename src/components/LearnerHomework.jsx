@@ -6,7 +6,8 @@
  * 提出期限やトレーナーの確認印には触れられない(列単位の権限で絞ってある)。
  */
 import { useEffect, useState } from 'react'
-import { kindLabel, levelLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
+import { cefrLabel } from '../data/cefr.js'
+import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
@@ -68,7 +69,7 @@ export default function LearnerHomework() {
                 <div className="material-head">
                   <h4 className="card-title">{a.material?.title ?? '(教材が見つかりません)'}</h4>
                   <span className="muted">
-                    {a.material && `${levelLabel(a.material.level)} / ${kindLabel(a.material.kind)}`}
+                    {a.material && `${cefrLabel(a.material.level)} / ${kindLabel(a.material.kind)}`}
                   </span>
                 </div>
 

@@ -9,7 +9,11 @@
  * 例外は投げず、必ず { data, error } の形で返す。
  * error は日本語の文字列(そのまま画面に出せる)。
  */
+import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { supabase } from './supabase.js'
+
+// 教材のレベルは生徒のレベルと同じ物差し(CEFR)を使う
+export { CEFR_LEVELS, cefrLabel }
 
 const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
@@ -22,14 +26,7 @@ export const MATERIAL_KINDS = [
   { id: 'phrase',  label: 'フレーズ', hint: 'フレーズ学習で使う' },
 ]
 
-export const LEVELS = [
-  { id: 1, label: '初級' },
-  { id: 2, label: '中級' },
-  { id: 3, label: '上級' },
-]
-
 export const kindLabel = (id) => MATERIAL_KINDS.find((k) => k.id === id)?.label ?? id
-export const levelLabel = (n) => LEVELS.find((l) => l.id === n)?.label ?? `レベル${n}`
 
 // ── 生徒の一覧 ────────────────────────────────────────────────
 
@@ -65,7 +62,9 @@ export async function loadMyLearners() {
  * 教材を探す。**これが既定の動線である**(仕様書 第5.5節)。
  * 新しく作るより、すでにある教材を見つけるほうが速い。
  */
-export async function searchMaterials({ tagIds = [], level = null, keyword = '' } = {}) {
+export async function searchMaterials({
+  tagIds = [], level = null, keyword = '', industry = null,
+} = {}) {
   if (!supabase) return ng('Supabase が設定されていません')
 
   // 弱点タグで絞る場合は、まず該当する教材の id を集める
@@ -81,7 +80,7 @@ export async function searchMaterials({ tagIds = [], level = null, keyword = '' 
   let query = supabase
     .from('materials')
     .select(`
-      id, title, level, kind, status, visibility, instruction_ja, created_by, created_at,
+      id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
       material_tags ( tag_id ),
       material_items ( id, seq, text_en, text_ja, note_ja )
     `)
@@ -90,6 +89,9 @@ export async function searchMaterials({ tagIds = [], level = null, keyword = '' 
 
   if (idsWithTag) query = query.in('id', idsWithTag)
   if (level) query = query.eq('level', level)
+  // 業界を選んだときは「その業界」と「汎用」の両方を出す。
+  // 汎用の教材はどの生徒にも使えるため、隠すと選択肢が不当に狭まる。
+  if (industry) query = query.or(`industry.eq.${industry},industry.is.null`)
   if (keyword.trim()) query = query.ilike('title', `%${keyword.trim()}%`)
 
   const { data, error } = await query
@@ -113,7 +115,7 @@ const normalizeMaterial = (m) => ({
  * 途中で失敗したら、作りかけの教材を消して中途半端な状態を残さない。
  */
 export async function createMaterial({
-  title, level, kind, instruction_ja = '', visibility = 'school',
+  title, level, kind, instruction_ja = '', visibility = 'school', industry = null,
   items = [], tagIds = [], createdBy,
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
@@ -138,6 +140,7 @@ export async function createMaterial({
       level, kind,
       instruction_ja: String(instruction_ja).trim() || null,
       visibility,
+      industry: industry || null,
       status: 'published',
       published_at: new Date().toISOString(),
       created_by: createdBy,
@@ -244,4 +247,100 @@ export async function loadAssignmentsForLearner(learnerId) {
     .limit(50)
   if (error) return fail(error, '取り組み状況を読めませんでした')
   return ok(data ?? [])
+}
+
+// ── 生徒の一覧(レベルとスコア付き) ──────────────────────────
+
+/**
+ * 担当している生徒を、CEFR と最新スコアつきで読む。
+ * 一覧に出すのは「いちばん新しい TOEIC」と「いちばん新しい VERSANT」だけ。
+ * 履歴すべてを毎回読むのは無駄なので、データベース側でまとめてある
+ * (learner_latest_scores)。
+ */
+export async function loadMyLearnersDetailed() {
+  if (!supabase) return ng('Supabase が設定されていません')
+
+  const { data: links, error: linkError } = await supabase
+    .from('learner_admins')
+    .select('learner_id, started_on, handover_note')
+    .is('ended_on', null)
+  if (linkError) return fail(linkError, '担当している生徒を読めませんでした')
+  if (!links?.length) return ok([])
+
+  const ids = links.map((l) => l.learner_id)
+
+  const [{ data: people, error: peopleError }, { data: scores, error: scoreError }] =
+    await Promise.all([
+      supabase.from('profiles')
+        .select('id, display_name, status, status_note, cefr, industry')
+        .in('id', ids).order('display_name'),
+      supabase.from('learner_latest_scores')
+        .select('learner_id, test_type, score, taken_on').in('learner_id', ids),
+    ])
+  if (peopleError) return fail(peopleError, '生徒の情報を読めませんでした')
+  if (scoreError) return fail(scoreError, 'スコアを読めませんでした')
+
+  const noteOf = new Map(links.map((l) => [l.learner_id, l.handover_note]))
+  const scoreOf = new Map()
+  for (const s of scores ?? []) {
+    if (!scoreOf.has(s.learner_id)) scoreOf.set(s.learner_id, {})
+    scoreOf.get(s.learner_id)[s.test_type] = { score: Number(s.score), takenOn: s.taken_on }
+  }
+
+  return ok((people ?? []).map((p) => ({
+    ...p,
+    handoverNote: noteOf.get(p.id) ?? null,
+    scores: scoreOf.get(p.id) ?? {},
+  })))
+}
+
+/** 生徒の CEFR レベルを記録する(トレーナーのみ) */
+export async function setLearnerCefr(learnerId, cefr) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  const { error } = await supabase
+    .from('profiles').update({ cefr: cefr || null }).eq('id', learnerId)
+  if (error) return fail(error, 'レベルを記録できませんでした')
+  return ok(true)
+}
+
+/** スコアを1件記録する(トレーナーのみ) */
+export async function addLearnerScore({ learnerId, testType, score, takenOn, note, recordedBy }) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  const value = Number(score)
+  if (!Number.isFinite(value)) return ng('スコアを数字で入れてください')
+  if (!takenOn) return ng('受験日を入れてください')
+
+  const { error } = await supabase.from('learner_scores').insert({
+    learner_id: learnerId, test_type: testType, score: value,
+    taken_on: takenOn, note: note || null, recorded_by: recordedBy,
+  })
+  if (error) {
+    if (/learner_scores_range|violates check/i.test(error.message)) {
+      return ng('スコアが範囲の外です。TOEIC は 10〜990、VERSANT は 20〜80 です。')
+    }
+    return fail(error, 'スコアを記録できませんでした')
+  }
+  return ok(true)
+}
+
+/** スコアの履歴(1人ぶん) */
+export async function loadScoreHistory(learnerId) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  const { data, error } = await supabase
+    .from('learner_scores')
+    .select('id, test_type, score, taken_on, note')
+    .eq('learner_id', learnerId)
+    .order('taken_on', { ascending: false })
+  if (error) return fail(error, 'スコアの履歴を読めませんでした')
+  return ok(data ?? [])
+}
+
+/** 在籍状態を変える(受講中 / 休会中 / 退会済) */
+export async function setLearnerStatus(learnerId, status, note) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  const { error } = await supabase.rpc('set_learner_status', {
+    p_learner_id: learnerId, p_status: status, p_note: note || null,
+  })
+  if (error) return fail(error, '在籍状態を変えられませんでした')
+  return ok(true)
 }
