@@ -558,3 +558,24 @@ html { -webkit-text-size-adjust: 100%; }
   font-size: 13px; line-height: 1.9; color: var(--text-secondary);
 }
 .badge--warn { margin-left: 6px; }
+
+/* ---------------- 演習(教材の中のまとまり) ---------------- */
+
+.exercise-block {
+  margin: 12px 0; padding: 12px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.exercise-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.exercise-no {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex-shrink: 0;
+  border-radius: 999px; background: var(--accent); color: #fff;
+  font-size: 12px; font-weight: 600;
+}
+.exercise-instruction { width: 100%; margin: 8px 0; }
+.exercise-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.exercise-fields { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.exercise-view { margin: 14px 0; }
+.answer { margin-top: 4px; font-size: 13px; }
+.answer > summary { cursor: pointer; color: var(--accent); }
+.answer > div { margin-top: 4px; }

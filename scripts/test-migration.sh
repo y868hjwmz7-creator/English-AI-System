@@ -43,6 +43,12 @@ su postgres -c "psql -d $DB -tAc \"
 echo "✅ すべて通りました"
 
 echo
+echo "▶ 教材の形が実物のドリルを収められるか確かめる"
+su postgres -c "psql -v ON_ERROR_STOP=1 -d $DB -f supabase/test/material_shape_test.sql" 2>&1 \
+  | sed 's/^psql:[^ ]* NOTICE:  //; s/^NOTICE:  //' \
+  | grep -vE '^\s*(expect2|-+|\(1 row\)|INSERT [0-9]+ [0-9]+|UPDATE [0-9]+|CREATE FUNCTION)?\s*$'
+
+echo
 echo "▶ RLS(アクセス制御)が意図どおりか確かめる"
 su postgres -c "psql -v ON_ERROR_STOP=1 -d $DB -f supabase/test/rls_test.sql" 2>&1 \
   | sed 's/^psql:[^ ]* NOTICE:  //; s/^NOTICE:  //' \

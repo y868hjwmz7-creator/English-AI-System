@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import { cefrLabel } from '../data/cefr.js'
+import { exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
@@ -84,22 +85,55 @@ export default function LearnerHomework() {
 
                 {openId === a.id ? (
                   <>
-                    <ol className="material-preview">
-                      {a.material?.items.map((it) => (
-                        <li key={it.id}>
-                          <span lang="en" className="homework-en">{it.text_en}</span>
-                          {it.text_ja && <div className="muted">{it.text_ja}</div>}
-                          {it.note_ja && <div className="field-hint">{it.note_ja}</div>}
-                        </li>
-                      ))}
-                    </ol>
+                    {a.material?.teaching_point && (
+                      <p className="homework-instruction">{a.material.teaching_point}</p>
+                    )}
+                    {a.material?.sections.map((sec) => {
+                      const type = exerciseType(sec.exercise_type)
+                      return (
+                        <section key={sec.id} className="exercise-view">
+                          <h5 className="section-title">
+                            {exerciseLabel(sec.exercise_type)}({sec.items.length} 問)
+                          </h5>
+                          {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
+                          <ol className="material-preview">
+                            {sec.items.map((it) => (
+                              <li key={it.id}>
+                                {/* リスニングは英文を見せない。聞いて答えるため。 */}
+                                {!type?.hidePromptFromLearner && it.prompt_en && (
+                                  <div lang="en" className="homework-en">{it.prompt_en}</div>
+                                )}
+                                {it.prompt_ja && <div>{it.prompt_ja}</div>}
+                                {it.question && (
+                                  <div lang="en" className="homework-en">{it.question}</div>
+                                )}
+                                {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
+                                {/* 解答は、答えを考える前に見えてはいけない */}
+                                {it.answer && type?.hideAnswerFromLearner ? (
+                                  <details className="answer">
+                                    <summary>解答を見る</summary>
+                                    <div>{it.answer}</div>
+                                    {it.answer_alt && (
+                                      <div className="muted">別解: {it.answer_alt}</div>
+                                    )}
+                                    {it.note && <div className="field-hint">{it.note}</div>}
+                                  </details>
+                                ) : (
+                                  it.note && <div className="field-hint">{it.note}</div>
+                                )}
+                              </li>
+                            ))}
+                          </ol>
+                        </section>
+                      )
+                    })}
                     <button type="button" className="btn btn--link" onClick={() => setOpenId(null)}>
                       閉じる
                     </button>
                   </>
                 ) : (
                   <button type="button" className="btn btn--small" onClick={() => setOpenId(a.id)}>
-                    英文を見る({a.material?.items.length ?? 0} 文)
+                    開く(演習 {a.material?.sections.length ?? 0} 種類 / {a.material?.itemCount ?? 0} 問)
                   </button>
                 )}
 

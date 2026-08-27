@@ -12,6 +12,7 @@ import MaterialForm from './MaterialForm.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+import { exerciseLabel } from '../data/exerciseTypes.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import { assignMaterial, kindLabel, loadMyLearners, searchMaterials } from '../lib/materials.js'
 
@@ -150,15 +151,26 @@ export default function TrainerMaterials({ me }) {
 
               {m.instruction_ja && <p className="card-hint">{m.instruction_ja}</p>}
 
-              <ol className="material-preview">
-                {m.items.slice(0, 3).map((it) => (
-                  <li key={it.id}>
-                    <span lang="en">{it.text_en}</span>
-                    {it.text_ja && <span className="muted"> — {it.text_ja}</span>}
+              {m.teaching_point && (
+                <p className="homework-instruction">{m.teaching_point}</p>
+              )}
+
+              <p className="muted">
+                演習 {m.sections.length} 種類 / 全 {m.itemCount} 問
+              </p>
+              <ul className="material-preview">
+                {m.sections.map((sec) => (
+                  <li key={sec.id}>
+                    <strong>{exerciseLabel(sec.exercise_type)}</strong>({sec.items.length} 問)
+                    {sec.items[0] && (
+                      <span className="muted">
+                        {' '}— {sec.items[0].prompt_en || sec.items[0].prompt_ja
+                                || sec.items[0].question || sec.items[0].audio_text}
+                      </span>
+                    )}
                   </li>
                 ))}
-                {m.items.length > 3 && <li className="muted">ほか {m.items.length - 3} 文</li>}
-              </ol>
+              </ul>
 
               {assigningId === m.id ? (
                 <div className="assign-box">

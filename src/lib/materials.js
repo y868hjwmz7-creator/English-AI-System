@@ -21,6 +21,7 @@ const ng = (error) => ({ data: null, error })
 const fail = (e, fallback) => ng(e?.message ? `${fallback}: ${e.message}` : fallback)
 
 export const MATERIAL_KINDS = [
+  { id: 'pattern', label: '文型ドリル', hint: '同じ文法で違う文章をくり返す。定着が狙い' },
   { id: 'passage', label: '長文', hint: '音読・オーバーラッピング・シャドーイング・リピーティングで使う' },
   { id: 'word',    label: '単語', hint: '単語学習で使う' },
   { id: 'phrase',  label: 'フレーズ', hint: 'フレーズ学習で使う' },
@@ -81,8 +82,13 @@ export async function searchMaterials({
     .from('materials')
     .select(`
       id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
+      teaching_point,
       material_tags ( tag_id ),
-      material_items ( id, seq, text_en, text_ja, note_ja )
+      material_sections (
+        id, seq, exercise_type, instruction,
+        material_items ( id, seq, prompt_en, prompt_ja, hint, question,
+                         answer, answer_alt, audio_text, note )
+      )
     `)
     .order('created_at', { ascending: false })
     .limit(50)
@@ -100,11 +106,20 @@ export async function searchMaterials({
   return ok((data ?? []).map(normalizeMaterial))
 }
 
-const normalizeMaterial = (m) => ({
-  ...m,
-  tagIds: (m.material_tags ?? []).map((t) => t.tag_id),
-  items: [...(m.material_items ?? [])].sort((a, b) => a.seq - b.seq),
-})
+const sortBySeq = (list) => [...(list ?? [])].sort((a, b) => a.seq - b.seq)
+
+const normalizeMaterial = (m) => {
+  const sections = sortBySeq(m.material_sections).map((sec) => ({
+    ...sec, items: sortBySeq(sec.material_items),
+  }))
+  return {
+    ...m,
+    tagIds: (m.material_tags ?? []).map((t) => t.tag_id),
+    sections,
+    // 教材全体で何問あるか(一覧の目安に出す)
+    itemCount: sections.reduce((n, sec) => n + sec.items.length, 0),
+  }
+}
 
 // ── 教材を作る ────────────────────────────────────────────────
 
@@ -114,23 +129,36 @@ const normalizeMaterial = (m) => ({
  * ブラウザからの操作なので、3つの登録をまとめて1つの取引にはできない。
  * 途中で失敗したら、作りかけの教材を消して中途半端な状態を残さない。
  */
+const ITEM_FIELDS = [
+  'prompt_en', 'prompt_ja', 'hint', 'question', 'answer', 'answer_alt', 'audio_text', 'note',
+]
+
+/** 空の欄を落として、中身のある設問だけを残す */
+const cleanItems = (items) =>
+  (items ?? [])
+    .map((it) => {
+      const row = {}
+      for (const f of ITEM_FIELDS) {
+        const v = String(it[f] ?? '').trim()
+        if (v) row[f] = v
+      }
+      return row
+    })
+    .filter((row) => Object.keys(row).length > 0)
+
 export async function createMaterial({
-  title, level, kind, instruction_ja = '', visibility = 'school', industry = null,
-  items = [], tagIds = [], createdBy,
+  title, level, kind, instruction_ja = '', teaching_point = '',
+  visibility = 'school', industry = null,
+  sections = [], tagIds = [], createdBy,
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
-  const clean = items
-    .map((it, i) => ({
-      seq: i + 1,
-      text_en: String(it.text_en ?? '').trim(),
-      text_ja: String(it.text_ja ?? '').trim() || null,
-      note_ja: String(it.note_ja ?? '').trim() || null,
-    }))
-    .filter((it) => it.text_en)
+  const cleanSections = sections
+    .map((sec) => ({ ...sec, items: cleanItems(sec.items) }))
+    .filter((sec) => sec.items.length)
 
   if (!String(title).trim()) return ng('教材名を入れてください')
-  if (!clean.length) return ng('英文を1つ以上入れてください')
+  if (!cleanSections.length) return ng('設問を1つ以上入れてください')
   if (!tagIds.length) return ng('弱点タグを1つ以上選んでください(選ばないと、あとから見つけられません)')
 
   const { data: material, error: materialError } = await supabase
@@ -139,6 +167,7 @@ export async function createMaterial({
       title: String(title).trim(),
       level, kind,
       instruction_ja: String(instruction_ja).trim() || null,
+      teaching_point: String(teaching_point).trim() || null,
       visibility,
       industry: industry || null,
       status: 'published',
@@ -154,10 +183,29 @@ export async function createMaterial({
     return ng(message)
   }
 
-  const { error: itemsError } = await supabase
-    .from('material_items')
-    .insert(clean.map((it) => ({ ...it, material_id: material.id })))
-  if (itemsError) return rollback(`英文を登録できませんでした: ${itemsError.message}`)
+  // 演習をまとめて作り、返ってきた id に設問をぶら下げる
+  const { data: madeSections, error: sectionError } = await supabase
+    .from('material_sections')
+    .insert(cleanSections.map((sec, i) => ({
+      material_id: material.id,
+      seq: i + 1,
+      exercise_type: sec.exercise_type,
+      instruction: String(sec.instruction ?? '').trim() || null,
+    })))
+    .select('id, seq')
+  if (sectionError) return rollback(`演習を登録できませんでした: ${sectionError.message}`)
+
+  const idOfSeq = new Map((madeSections ?? []).map((r) => [r.seq, r.id]))
+  const rows = cleanSections.flatMap((sec, i) =>
+    sec.items.map((it, j) => ({
+      ...it,
+      section_id: idOfSeq.get(i + 1),
+      material_id: material.id,
+      seq: j + 1,
+    })))
+
+  const { error: itemsError } = await supabase.from('material_items').insert(rows)
+  if (itemsError) return rollback(`設問を登録できませんでした: ${itemsError.message}`)
 
   const { error: tagsError } = await supabase
     .from('material_tags')
@@ -206,8 +254,12 @@ export async function loadMyAssignments() {
     .select(`
       id, assigned_at, due_on, learner_done_at,
       materials (
-        id, title, level, kind, instruction_ja,
-        material_items ( id, seq, text_en, text_ja, note_ja )
+        id, title, level, kind, instruction_ja, teaching_point,
+        material_sections (
+          id, seq, exercise_type, instruction,
+          material_items ( id, seq, prompt_en, prompt_ja, hint, question,
+                           answer, answer_alt, audio_text, note )
+        )
       )
     `)
     .order('assigned_at', { ascending: false })
@@ -216,9 +268,7 @@ export async function loadMyAssignments() {
 
   return ok((data ?? []).map((a) => ({
     ...a,
-    material: a.materials
-      ? { ...a.materials, items: [...(a.materials.material_items ?? [])].sort((x, y) => x.seq - y.seq) }
-      : null,
+    material: a.materials ? normalizeMaterial(a.materials) : null,
   })))
 }
 
