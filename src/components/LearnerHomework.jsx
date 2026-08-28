@@ -13,7 +13,7 @@ import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { printElement } from '../lib/print.js'
-import { splitTitleDate } from '../lib/format.js'
+import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
@@ -92,15 +92,16 @@ export default function LearnerHomework() {
                 >
                   <span className="homework-open-mark">{openId === a.id ? '▾' : '▸'}</span>
                   <span className="homework-open-body">
-                    <span className="homework-open-title">
-                      {a.material ? splitTitleDate(a.material.title).title : '(教材が見つかりません)'}
-                    </span>
-                    <span className="muted">
-                      {a.material && `${cefrLabel(a.material.level)} / ${kindLabel(a.material.kind)}`}
-                      {a.material?.itemCount ? ` / 全 ${a.material.itemCount} 問` : ''}
-                    </span>
+                    <MaterialTitle
+                      title={a.material?.title ?? '(教材が見つかりません)'}
+                      as="span" size="row"
+                      fallbackTags={a.material
+                        ? [cefrLabel(a.material.level), kindLabel(a.material.kind)] : []}
+                    />
                     <span className="card-hint">
-                      共有 {formatDate(a.assigned_at)}
+                      {kindLabel(a.material?.kind)}
+                      {a.material?.itemCount ? ` / 全 ${a.material.itemCount} 問` : ''}
+                      {' / 共有 '}{formatDate(a.assigned_at)}
                       {a.due_on && ` / 次のレッスン ${a.due_on}`}
                     </span>
                   </span>
@@ -116,15 +117,8 @@ export default function LearnerHomework() {
                 {openId === a.id ? (
                   <div id={`homework-${a.id}`}>
                     <div className="print-only print-head">
-                      <div className="print-head-row">
-                        <strong>{splitTitleDate(a.material?.title).title}</strong>
-                        {splitTitleDate(a.material?.title).date && (
-                          <span className="sheet-date">
-                            {splitTitleDate(a.material?.title).date}
-                          </span>
-                        )}
-                      </div>
-                      {a.material?.headline && <div lang="en">{a.material.headline}</div>}
+                      <MaterialTitle title={a.material?.title} headline={a.material?.headline}
+                                     as="strong" size="sheet" />
                       <div className="print-meta">
                         {cefrLabel(a.material?.level)} / {kindLabel(a.material?.kind)}
                         {' / '}共有 {formatDate(a.assigned_at)}

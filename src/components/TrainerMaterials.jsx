@@ -14,7 +14,7 @@ import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { printElement } from '../lib/print.js'
 import LessonView from './LessonView.jsx'
-import { splitTitleDate } from '../lib/format.js'
+import MaterialTitle from './MaterialTitle.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
@@ -205,18 +205,14 @@ export default function TrainerMaterials({ me }) {
           {sorted.map((m) => (
             <div key={m.id} className="card material-card">
               <div className="material-head">
-                {/* 日付は右上へ。左端にあると何の教材かが読みにくい */}
-                <div className="material-title-row">
-                  <h3 className="card-title">{splitTitleDate(m.title).title}</h3>
-                  {splitTitleDate(m.title).date && (
-                    <span className="sheet-date">{splitTitleDate(m.title).date}</span>
-                  )}
-                </div>
-                {m.headline && (
-                  <p className="material-headline" lang="en">{m.headline}</p>
-                )}
+                {/* 見出しは弱点だけ。レベル・業界は小さな札、日付は右上 */}
+                <MaterialTitle
+                  title={m.title}
+                  headline={m.headline}
+                  fallbackTags={[cefrLabel(m.level), kindLabel(m.kind), industryLabel(m.industry)]}
+                />
                 <span className="muted">
-                  {cefrLabel(m.level)} / {kindLabel(m.kind)} / {industryLabel(m.industry)}
+                  {kindLabel(m.kind)}
                   {m.visibility === 'private' && ' / 自分だけ'}
                 </span>
               </div>
@@ -255,12 +251,9 @@ export default function TrainerMaterials({ me }) {
                   {/* 紙に出したときだけ出る見出し。何の教材か分からない
                       紙が配られると、あとで整理できない */}
                   <div className="print-only print-head">
-                    <div className="print-head-row">
-                      <strong>{splitTitleDate(m.title).title}</strong>
-                      {splitTitleDate(m.title).date && (
-                        <span className="sheet-date">{splitTitleDate(m.title).date}</span>
-                      )}
-                    </div>
+                    <MaterialTitle title={m.title} headline={m.headline} as="strong" size="sheet"
+                                   fallbackTags={[cefrLabel(m.level), kindLabel(m.kind),
+                                     industryLabel(m.industry)]} />
                     {m.headline && <div lang="en">{m.headline}</div>}
                     <div className="print-meta">
                       {cefrLabel(m.level)} / {kindLabel(m.kind)} / {industryLabel(m.industry)}

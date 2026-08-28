@@ -64,19 +64,32 @@ export function calculateStreak(dateKeys) {
 }
 
 /**
- * 教材名から、先頭の日付を切り離す。
+ * 教材名を、見出し・条件・日付に分ける。
  *
- * 教材名は「2026-08-27 / 数の表現 + 数字 / B1 / 製造」のように、
- * 日付から始まる形で自動生成される。並べ替えや検索には都合がよいが、
- * **見出しの左端に日付が来ると、何の教材かが読みにくい**
- * (2026-08 の指摘)。表示するときだけ切り離し、日付は右上に逃がす。
+ * 教材名は「2026-08-27 / 数の表現 + 数字 / B1 / 製造 / テスト太郎」の
+ * ように、日付から始まり「/」で条件が続く形で自動生成される。
+ * 並べ替えや検索には都合がよいが、**そのまま1行で出すと
+ * 「何の教材か」が読み取れない**(2026-08 の指摘)。
  *
- * **保存されている教材名は変えない。** 既にある教材もそのまま直る。
+ * 表示するときだけ分ける。**保存されている教材名は変えない。**
+ * 既にある教材もそのまま直り、名前で並べ替えたときの順序も保たれる。
  *
- * @returns {{ date: string|null, title: string }}
+ * @returns {{ date: string|null, main: string, tags: string[] }}
+ *   date … 先頭の日付(無ければ null)
+ *   main … 見出しにするもの(ふつうは弱点の名前)
+ *   tags … 小さな札にするもの(レベル・業界・ゲスト名など)
  */
-export function splitTitleDate(title) {
+export function parseMaterialTitle(title) {
   const text = String(title ?? '').trim()
-  const m = /^(\d{4}-\d{2}-\d{2})\s*\/\s*(.+)$/.exec(text)
-  return m ? { date: m[1], title: m[2] } : { date: null, title: text }
+  const m = /^(\d{4}-\d{2}-\d{2})\s*\/\s*(.*)$/.exec(text)
+  const date = m ? m[1] : null
+  const rest = (m ? m[2] : text).trim()
+  const parts = rest.split('/').map((x) => x.trim()).filter(Boolean)
+  return { date, main: parts[0] ?? rest, tags: parts.slice(1) }
+}
+
+/** 先頭の日付だけが要るとき(印刷の見出しなど) */
+export function splitTitleDate(title) {
+  const { date, main, tags } = parseMaterialTitle(title)
+  return { date, title: [main, ...tags].join(' / ') }
 }

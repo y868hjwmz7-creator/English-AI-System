@@ -800,7 +800,12 @@ html { -webkit-text-size-adjust: 100%; }
   .print-target .print-head strong { font-size: 15pt; line-height: 1.4; }
   .print-target .print-head div { font-size: 12pt; color: #444 !important; margin-top: 2pt; }
   .print-target .print-meta { font-size: 9.5pt; color: #666 !important; margin-top: 3pt; }
-  .print-target .sheet-date { font-size: 10pt; color: #555 !important; }
+  .print-target .mtitle-date { font-size: 10pt; color: #555 !important; }
+  .print-target .mtitle-main { font-size: 15pt; }
+  .print-target .mtitle-headline { font-size: 12pt; color: #444 !important; }
+  .print-target .mtitle-chip {
+    font-size: 9pt; border-color: #999 !important; color: #444 !important;
+  }
 
   /* ── 演習の見出し ──────────────────────────────── */
   .print-target .section-title {
@@ -1032,19 +1037,34 @@ html { -webkit-text-size-adjust: 100%; }
 .homework-open-title { font-size: 16px; font-weight: 600; line-height: 1.5; }
 .homework-open .muted, .homework-open .card-hint { font-size: 13px; }
 
-/* ── 教材名の右上に出す日付 ──────────────────────────────
-   教材名は「2026-08-27 / …」の形で自動生成される。並べ替えには
-   都合がよいが、見出しの左端に日付が来ると何の教材か読みにくい。
-   表示のときだけ切り離して右へ逃がす(保存されている名前は変えない)。 */
-.material-title-row, .lesson-head-row, .print-head-row {
-  display: flex; gap: 12px; align-items: baseline;
+/* ── 教材の見出し ────────────────────────────────────────
+   見出しは弱点だけ。レベル・業界・ゲスト名は小さな札にして下に並べる。
+   日付は右上。教材名を1行で出すと、何の教材かが読み取れない。 */
+.mtitle { min-width: 0; }
+.mtitle-row { display: flex; gap: 12px; align-items: baseline; }
+.mtitle-main {
+  flex: 1; min-width: 0; margin: 0;
+  font-weight: 700; line-height: 1.45; color: var(--text-primary);
 }
-.material-title-row .card-title, .lesson-head-row strong, .print-head-row strong {
-  flex: 1; min-width: 0;
-}
-.sheet-date {
+.mtitle--card .mtitle-main { font-size: 17px; }
+.mtitle--row  .mtitle-main { font-size: 16px; }
+.mtitle--sheet .mtitle-main { font-size: 1.15em; }
+.mtitle-date {
   flex: 0 0 auto; margin-left: auto;
-  color: var(--text-secondary); font-size: 13px;
+  color: var(--text-muted); font-size: 12px;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.lesson-head-row .sheet-date { color: #666; font-size: .62em; }
+.mtitle-headline { margin-top: 2px; color: var(--text-secondary); font-size: 14px; }
+.mtitle-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.mtitle-chip {
+  padding: 1px 9px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-2); color: var(--text-secondary);
+  font-size: 12px; white-space: nowrap;
+}
+
+/* 紙の上(レッスン表示・印刷)は白黒に寄せる */
+.mtitle--sheet .mtitle-date { color: #666; font-size: .6em; }
+.mtitle--sheet .mtitle-headline { color: #555; font-size: .8em; }
+.mtitle--sheet .mtitle-chip {
+  border-color: #bbb; background: transparent; color: #555; font-size: .6em;
+}
