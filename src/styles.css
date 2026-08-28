@@ -681,14 +681,15 @@ html { -webkit-text-size-adjust: 100%; }
 
 .passage-body { list-style: none; margin: 0; padding: 0; }
 .passage-part {
-  padding: 12px 0; border-bottom: 1px solid var(--border);
+  /* 色が付くときだけ余白を足すと行が横に動く。はじめからこの余白で置く */
+  padding: 12px 10px 12px 14px; border-bottom: 1px solid var(--border);
 }
 /* いま読み上げているところ。ゲスト側は配色に合わせて変える */
 .passage-part.is-speaking {
   background: var(--speaking-bg);
-  box-shadow: inset 4px 0 0 var(--speaking-bar);
-  border-radius: 4px;
-  padding-left: 12px;
+  box-shadow: inset 5px 0 0 var(--speaking-bar);
+  border-radius: 6px;
+  border-bottom-color: transparent;
 }
 .passage-part.is-speaking .passage-en { font-weight: 600; }
 @media print { .passage-part.is-speaking { background: none; box-shadow: none; } }
@@ -1024,10 +1025,14 @@ html { -webkit-text-size-adjust: 100%; }
    オーバーラッピングもシャドーイングもできない(2026-08 の要望)。
    **紙は白のままなので、色は決め打ちにする。**
    `var(--*)` を使うと、暗い配色のときに白い紙の上で色が飛ぶ。 */
+/* 色の帯は**番号の丸に重ねない。** 重なると、丸の左端が帯に食われて
+   汚れて見える(2026-08 の指摘)。余白は色が付いていないときも同じだけ
+   取ってあるので、色が移っても行がずれない。 */
 .lesson-items > li.is-speaking {
   background: #fff4cc;
-  box-shadow: inset 4px 0 0 #e0a800;
-  border-radius: 4px;
+  box-shadow: inset 5px 0 0 #e0a800;
+  border-radius: 6px;
+  border-bottom-color: transparent;
 }
 .lesson-items > li.is-speaking .lesson-en { font-weight: 600; }
 /* 印刷には残さない。読み上げの途中で刷ることがある */
@@ -1054,11 +1059,13 @@ html { -webkit-text-size-adjust: 100%; }
 .lesson-items { list-style: none; margin: 0; padding: 0; counter-reset: lq; }
 .lesson-items > li {
   position: relative; counter-increment: lq;
-  margin-bottom: 20px; padding: 0 0 16px 42px; border-bottom: 1px solid #e4e4e0;
+  /* 左の 56px は「帯 + 余白 + 番号の丸 + 余白」。色が付くときだけ広げると
+     行が横に動いてしまうので、はじめからこの余白で置く */
+  margin-bottom: 16px; padding: 8px 12px 16px 56px; border-bottom: 1px solid #e4e4e0;
 }
 .lesson-items > li::before {
   content: counter(lq);
-  position: absolute; left: 0; top: 2px;
+  position: absolute; left: 14px; top: 10px;
   width: 30px; height: 30px; line-height: 28px; text-align: center;
   border: 1px solid #999; border-radius: 50%; font-size: .68em; color: #444;
 }
