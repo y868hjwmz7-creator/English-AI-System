@@ -34,7 +34,9 @@ export function onAuthChange(callback) {
 function toJapanese(message) {
   const m = String(message ?? '')
   if (/invalid login credentials/i.test(m)) {
-    return 'メールアドレスかパスワードが違います。'
+    // 画面の項目名は「ログインID」なので、言葉をそろえる。
+    // ここだけ「メールアドレス」と出ると、何を間違えたのか分からなくなる。
+    return 'ログインID(またはメールアドレス)か、パスワードが違います。'
   }
   if (/email not confirmed/i.test(m)) {
     return 'このアカウントはまだ確認されていません。Supabase の Authentication → Users で、'

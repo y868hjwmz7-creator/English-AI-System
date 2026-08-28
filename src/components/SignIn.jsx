@@ -55,8 +55,8 @@ export default function SignIn() {
               autoFocus
             />
             <span className="field-hint">
-              トレーナーから渡されたIDを、そのまま入れてください
-              (メールアドレスではありません)。
+              ゲストの方は、トレーナーから渡されたIDをそのまま入れてください。
+              トレーナー・管理者の方は、<strong>ご自身のメールアドレス</strong>で入ります。
             </span>
           </label>
 
