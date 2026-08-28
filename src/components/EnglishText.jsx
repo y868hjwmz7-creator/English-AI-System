@@ -145,6 +145,9 @@ export default function EnglishText({
                   else open(i, part)
                 }, HOLD_MS)
               }}
+              // iPhone・iPad の長押しメニュー(コピー / Google で検索)を出さない。
+              // CSS の -webkit-touch-callout と合わせて二重に止める
+              onContextMenu={(e) => e.preventDefault()}
               onPointerUp={cancelHold}
               onPointerCancel={cancelHold}
               onPointerMove={() => { if (touchRef.current) cancelHold() }}

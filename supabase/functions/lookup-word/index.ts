@@ -154,14 +154,22 @@ Deno.serve(async (req) => {
 
     // ── 1. ログインしている人か確かめる ────────────────────
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) return reply({ error: 'ログインが必要です' }, 401)
+    if (!authHeader) {
+      return reply({ error: 'ログインが必要です。画面を読み込み直してください。' }, 401)
+    }
 
     const asCaller = createClient(url, anonKey, {
       global: { headers: { Authorization: authHeader } },
       auth: { persistSession: false },
     })
     const { data: { user: caller } } = await asCaller.auth.getUser()
-    if (!caller) return reply({ error: 'ログインの情報が確認できませんでした' }, 401)
+    if (!caller) {
+      // 長く開いたままのタブで、ログインの札の期限が切れているとここに来る。
+      // **何をすればよいかまで書く。** 文言だけでは利用者は動けない
+      return reply({
+        error: 'ログインの期限が切れています。画面を読み込み直してから、もう一度お試しください。',
+      }, 401)
+    }
 
     // ── 2. 送られてきた内容 ────────────────────────────────
     let body: Record<string, unknown>

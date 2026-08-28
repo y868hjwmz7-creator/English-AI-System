@@ -65,8 +65,19 @@ export async function lookupWord({ word, sentence = '', level = 'B1' }) {
   if (!norm) return ng('英語の語ではありません')
   if (!supabase) return ng('Supabase が設定されていません')
 
+  // **ログインの札(トークン)を、ここで取り直してから渡す。**
+  //   長く開いたままのタブでは札の期限が切れていることがある。
+  //   getSession() は必要なら取り直してくれる。
+  //   これをせずに窓口へ投げると「ログインの情報が確認できませんでした」と
+  //   返り、利用者には何が起きたのか分からない(2026-08 実機)。
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    return ng('ログインが切れています。画面を読み込み直してから、もう一度お試しください。')
+  }
+
   const { data, error } = await supabase.functions.invoke('lookup-word', {
     body: { word, sentence, level },
+    headers: { Authorization: `Bearer ${session.access_token}` },
   })
   if (error) {
     let detail = ''
