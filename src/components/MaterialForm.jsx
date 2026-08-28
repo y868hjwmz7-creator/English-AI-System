@@ -93,10 +93,16 @@ export default function MaterialForm({
   // 以前は全部指定し終えてからでないと選べず、やりにくかった(2026-08)。
   const [shareWith, setShareWith] = useState([])
   const [showDetails, setShowDetails] = useState(false)  // 記入欄を開くか
+  // できあがったことを、押したボタンのすぐ下で知らせる。
+  // 以前は「中身を見て直す」を押すまで、できたかどうか分からなかった
+  // (2026-08 の指摘)。ボタンが元に戻るだけでは、失敗と区別がつかない。
+  const [done, setDone] = useState(null)
   const [similarNotes, setSimilarNotes] = useState([]) // 意味が近すぎて外した文
   const [warning, setWarning] = useState(null)         // 効いていない仕組みの知らせ
   const errorRef = useRef(null)                        // 失敗の知らせまで画面を送る
   const tagRef = useRef(null)                          // 弱点タグの欄
+  const doneRef = useRef(null)                         // できあがりの知らせ
+  const submitRef = useRef(null)                       // 発行ボタン
   const [headline, setHeadline] = useState('')         // 記事の見出し / 会話の題名
   const [genre, setGenre] = useState('news')           // 記事のジャンル
   const [scene, setScene] = useState('casual')         // 会話の場面
@@ -212,6 +218,7 @@ export default function MaterialForm({
     if (body.headline) setHeadline(body.headline)
     if (body.teaching_point && !teachingPoint) setTeachingPoint(body.teaching_point)
     if (!title.trim()) setTitle(autoTitle(body.headline))
+    finish(made, body.headline)
   }
 
   /**
@@ -300,6 +307,30 @@ export default function MaterialForm({
     setSimilarNotes(notes)
     setWarning(warn)
     if (!title.trim()) setTitle(autoTitle(null))
+    finish(made, null)
+  }
+
+  /**
+   * できあがったことを知らせる。
+   *
+   * 問数だけでなく**最初の1問の英文**も出す。数字だけでは
+   * 「本当に中身ができているのか」が分からないため。
+   */
+  const finish = (made, head) => {
+    const first = made.flatMap((sec) => sec.items)
+      .map((it) => it.prompt_en || it.audio_text || it.answer || it.question)
+      .find(Boolean)
+    setDone({
+      total: made.reduce((n, sec) => n + sec.items.length, 0),
+      parts: made.map((sec) => ({
+        label: exerciseLabel(sec.exercise_type), count: sec.items.length,
+      })),
+      headline: head ?? null,
+      sample: first ?? null,
+    })
+    window.setTimeout(() => {
+      doneRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 50)
   }
 
   /** 失敗の知らせを画面に出し、そこまで送る */
@@ -334,6 +365,7 @@ export default function MaterialForm({
     setShort(0)
     setSimilarNotes([])
     setWarning(null)
+    setDone(null)
 
     if (isPassageKind(kind)) await generatePassage()
     else await generateDrill()
@@ -576,17 +608,60 @@ export default function MaterialForm({
           {generating
             ? `作っています… ${generating.label}`
               + `(${generating.done + 1}/${generating.total})${elapsed ? ` ${elapsed}秒` : ''}`
-            : isPassageKind(kind)
-              ? `${kind === 'reading' ? '記事' : '会話'}を作る(`
-                + defaultSectionsFor(kind)
-                  .map((s2) => `${exerciseLabel(s2.exercise_type)}${s2.count}`).join(' + ')
-                + ')'
-              : `下書きを作る(${defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問)`}
+            : done
+              // 一度できたあとは「作り直す」。同じ文言のままだと、
+              // 押してよいのか分からず、二重に作ってしまう。
+              ? `作り直す(いまの下書きは消えます)`
+              : isPassageKind(kind)
+                ? `${kind === 'reading' ? '記事' : '会話'}を作る(`
+                  + defaultSectionsFor(kind)
+                    .map((s2) => `${exerciseLabel(s2.exercise_type)}${s2.count}`).join(' + ')
+                  + ')'
+                : `下書きを作る(${defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問)`}
         </button>
         {generating && (
           <p className="field-hint">
             1〜3分かかります。<strong>この画面を閉じないでください。</strong>
           </p>
+        )}
+
+        {/*
+          できたことを、押したボタンのすぐ下で知らせる。
+          ボタンが元に戻るだけでは、失敗したのか成功したのか分からない。
+          問数だけでなく最初の1問も出す。数字だけでは中身の有無が分からない。
+        */}
+        {done && !generating && (
+          <div className="notice notice--ok generate-done" ref={doneRef}>
+            <strong>✓ 下書きができました（全 {done.total} 問）</strong>
+            {done.headline && (
+              <div className="generate-done-headline" lang="en">{done.headline}</div>
+            )}
+            <div className="generate-done-parts">
+              {done.parts.map((part, i) => (
+                <span key={i} className="tagchip is-static">
+                  {part.label} {part.count}
+                </span>
+              ))}
+            </div>
+            {done.sample && (
+              <p className="generate-done-sample">
+                <span className="field-hint">最初の1問</span>
+                <span lang="en">{done.sample}</span>
+              </p>
+            )}
+            <div className="btn-row">
+              <button type="button" className="btn"
+                      onClick={() => setShowEditor(true)}>
+                中身をすべて見る
+              </button>
+              <button type="button" className="btn btn--primary"
+                      onClick={() => submitRef.current?.scrollIntoView({
+                        block: 'center', behavior: 'smooth',
+                      })}>
+                このまま発行へ進む
+              </button>
+            </div>
+          </div>
         )}
 
         {/* 失敗の知らせは、押したボタンのすぐ下に出す。
@@ -843,7 +918,7 @@ export default function MaterialForm({
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
       <div className="btn-row">
-        <button type="submit" className="btn btn--primary" disabled={busy}>
+        <button type="submit" className="btn btn--primary" disabled={busy} ref={submitRef}>
           {busy
             ? '発行しています…'
             : shareWith.length

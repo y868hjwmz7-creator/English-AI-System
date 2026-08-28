@@ -739,3 +739,13 @@ html { -webkit-text-size-adjust: 100%; }
   margin: 14px 0; padding: 10px 12px;
   border: 1px dashed var(--border); border-radius: var(--radius);
 }
+
+/* 下書きができたことの知らせ。押したボタンのすぐ下に出す */
+.generate-done { margin-top: 12px; }
+.generate-done-headline { margin: 6px 0; font-size: 15px; font-weight: 600; }
+.generate-done-parts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.generate-done-sample {
+  margin: 8px 0; padding: 8px 10px; border-radius: 8px;
+  background: var(--surface-1); font-size: 14px; line-height: 1.7;
+}
+.generate-done-sample .field-hint { display: block; margin-bottom: 2px; }
