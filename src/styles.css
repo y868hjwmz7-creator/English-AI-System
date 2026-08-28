@@ -1188,6 +1188,26 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .lesson-sheet .btn { margin-top: 6px; border-color: #ccc; background: #f7f7f5; color: #1a1a1a; }
 
+/* 意味の窓。**紙の中でも色を決め打ちにする。**
+   `.lesson-sheet *` が文字色を黒にするので、暗い配色の変数を使うと
+   「黒い背景に黒い文字」になって読めなくなる(第5.22.6節①と同じ話) */
+.lesson-sheet .etext-pop {
+  background: #fff; border-color: #d8d8d4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22);
+}
+.lesson-sheet .etext-pop-head { border-bottom-color: #e4e4e0; }
+.lesson-sheet .etext-pos { border-color: #ccc; color: #555; }
+.lesson-sheet .etext-sense-mean { color: #444; }
+.lesson-sheet .etext-sense.is-main .etext-sense-mean { color: #1a1a1a; }
+.lesson-sheet .etext-sense-no,
+.lesson-sheet .etext-pop-ex,
+.lesson-sheet .etext-pop-note,
+.lesson-sheet .etext-pop-busy,
+.lesson-sheet .etext-pop-close { color: #666; }
+.lesson-sheet .etext-word:hover,
+.lesson-sheet .etext-word.is-open { background: #ececea; border-bottom-color: #888; }
+.lesson-sheet .etext-word.is-unknown { background: #ffe3e0; box-shadow: 0 1px 0 0 #e34948; }
+
 @media (max-width: 600px) {
   .lesson-sheet { padding: 18px 16px 48px; margin: 8px auto; }
   .lesson-tools { margin-left: 0; }

@@ -92,7 +92,10 @@ export default function LearnerHomework() {
 
   return (
     <div className="stack">
-      {lessonOf && <LessonView material={lessonOf} onClose={() => setLessonOf(null)} />}
+      {lessonOf && (
+        <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
+                    wordStatuses={wordStatuses} onMarkWord={markWord} />
+      )}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
       <div className="card">

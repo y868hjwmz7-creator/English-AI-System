@@ -23,6 +23,7 @@ import { loadEnglishVoices, speakSequence, stopSpeaking } from '../lib/speech.js
 import { castVoices, voiceFor } from '../lib/voiceCast.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
+import EnglishText from './EnglishText.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 
@@ -32,7 +33,12 @@ const SIZES = [
   { id: 'xl', label: '特大' },
 ]
 
-export default function LessonView({ material, onClose }) {
+export default function LessonView({
+  material, onClose,
+  // ゲストが開いたときは「知っていた / 知らなかった」も付けられる。
+  // トレーナーが開いたときは意味を見るだけ(申告はゲスト本人のもの)
+  wordStatuses = null, onMarkWord = null,
+}) {
   const sections = material?.sections ?? []
   const [page, setPage] = useState(0)
   // 解答の出し方は2通り。**両方要る。**
@@ -261,8 +267,14 @@ export default function LessonView({ material, onClose }) {
                   {it.speaker && <div className="lesson-speaker" lang="en">{it.speaker}</div>}
 
                   {/* リスニングは英文を出さない。聞いて答えるため */}
+                  {/* 語に触れると意味が出る。**トレーナー側にも要る。**
+                      レッスン中に「この語は?」と聞かれる場所そのものなので、
+                      ここに無いと画面を離れて調べることになる(2026-08 の指摘)。 */}
                   {!type?.hidePromptFromLearner && it.prompt_en && (
-                    <div className="lesson-en" lang="en">{it.prompt_en}</div>
+                    <div className="lesson-en">
+                      <EnglishText text={it.prompt_en} level={material.level}
+                                   statuses={wordStatuses} onMark={onMarkWord} />
+                    </div>
                   )}
                   {/* 本文(記事・会話)の訳は、はじめは伏せる。
                       英文だけが出ていたほうがシャドーイングしやすく、
@@ -270,7 +282,12 @@ export default function LessonView({ material, onClose }) {
                   {it.prompt_ja && (isPassage
                     ? isOpen(key(it, i)) && <div className="lesson-ja">{it.prompt_ja}</div>
                     : <div className="lesson-ja">{it.prompt_ja}</div>)}
-                  {it.question && <div className="lesson-en" lang="en">{it.question}</div>}
+                  {it.question && (
+                    <div className="lesson-en">
+                      <EnglishText text={it.question} level={material.level}
+                                   statuses={wordStatuses} onMark={onMarkWord} />
+                    </div>
+                  )}
                   {it.hint && <div className="lesson-note">与える語: {it.hint}</div>}
 
                   {type?.audioFrom && it[type.audioFrom] && (

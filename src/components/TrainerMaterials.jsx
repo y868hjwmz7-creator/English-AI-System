@@ -25,6 +25,7 @@ import {
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
+import EnglishText from './EnglishText.jsx'
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
@@ -310,9 +311,16 @@ export default function TrainerMaterials({ me }) {
                                   <SpeakButton text={it[type.audioFrom]} />
                                 </div>
                               )}
-                              {it.prompt_en && <div lang="en">{it.prompt_en}</div>}
+                              {/* 語に触れると意味が出る。トレーナーは見るだけで、
+                                  「知っていた / 知らなかった」は付けない
+                                  (それはゲスト本人の申告であるため) */}
+                              {it.prompt_en && (
+                                <div><EnglishText text={it.prompt_en} level={m.level} /></div>
+                              )}
                               {it.prompt_ja && <div>{it.prompt_ja}</div>}
-                              {it.question && <div lang="en">{it.question}</div>}
+                              {it.question && (
+                                <div><EnglishText text={it.question} level={m.level} /></div>
+                              )}
                               {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
                               {it.audio_text && !it.prompt_en && (
                                 <div lang="en" className="muted">読み上げ: {it.audio_text}</div>
