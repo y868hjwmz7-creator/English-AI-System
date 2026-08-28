@@ -76,6 +76,7 @@ run_test() {           # run_test <検証ファイル> <見出し>
 run_test supabase/test/material_shape_test.sql "教材の形が実物のドリルを収められるか確かめる"
 run_test supabase/test/dedup_test.sql          "同じ英文が二度出ないことを確かめる"
 run_test supabase/test/rls_test.sql            "RLS(アクセス制御)が意図どおりか確かめる"
+run_test supabase/test/vocab_test.sql          "語彙の定着(意味の控え・知っていた/知らなかった)を確かめる"
 
 echo
 echo "✅ 検証はすべて意図どおりです"

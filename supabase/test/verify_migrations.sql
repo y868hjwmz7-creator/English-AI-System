@@ -103,4 +103,23 @@ from (
   select '㉔ 会話の話者を持てる(0010)', exists (
     select 1 from information_schema.columns
     where table_name = 'material_items' and column_name = 'speaker'), 24
+  union all
+  select '㉕ 語の意味の控えがある(0011)', exists (
+    select 1 from pg_tables where tablename = 'word_glosses'), 25
+  union all
+  select '㉖ 意味の控えは読むだけ(書き込みのポリシーが無い)(0011)', (
+    select count(*) = 0 from pg_policies
+    where tablename = 'word_glosses' and cmd <> 'SELECT'), 26
+  union all
+  select '㉗ 知っていた / 知らなかった を持てる(0011)', exists (
+    select 1 from pg_tables where tablename = 'word_reviews'), 27
+  union all
+  select '㉘ 復習語を取り出せる(0011)', exists (
+    select 1 from pg_proc where proname = 'review_words'), 28
+  union all
+  select '㉙ 宿題に出た語句を取り出せる(0011)', exists (
+    select 1 from pg_proc where proname = 'homework_words'), 29
+  union all
+  select '㉚ 語のそろえ方がある(0011)', (
+    select public.norm_word('"Deployment,"') = 'deployment'), 30
 ) t order by 順;
