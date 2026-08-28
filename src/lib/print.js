@@ -11,14 +11,16 @@
  *   印刷用の指定(styles.css の @media print)が、印の付いた部分以外を
  *   隠す。印刷が終わったら印を外す。
  */
-export function printElement(element) {
+export function printElement(element, { worksheet = false } = {}) {
   if (!element) return
   const body = document.body
   element.classList.add('print-target')
+  // 書き込む用紙(ゲスト用)は、設問のあとに記入欄を出す
+  if (worksheet) element.classList.add('print-worksheet')
   body.classList.add('is-printing')
 
   const cleanup = () => {
-    element.classList.remove('print-target')
+    element.classList.remove('print-target', 'print-worksheet')
     body.classList.remove('is-printing')
     window.removeEventListener('afterprint', cleanup)
   }

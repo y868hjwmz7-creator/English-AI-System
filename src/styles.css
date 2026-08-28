@@ -753,7 +753,14 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* ── 印刷(PDF で保存)────────────────────────────────────────
    画面の一部だけを紙に出す。印を付けた部分以外を隠す方式にしてある
-   (別窓を開く方式は iPhone で止められることがあるため)。 */
+   (別窓を開く方式は iPhone で止められることがあるため)。
+
+   【文字の大きさを決め打ちにしている理由】
+   ゲストには40〜50代が多い。画面と同じ相対サイズのまま紙に出すと
+   小さすぎて読めない。**紙の上での実寸(pt)で指定する。**
+   英文は解く対象なので日本語訳より大きく、訳は添え物なので小さく、
+   濃さ(黒〜グレー)で主従を付ける。色は使わない(白黒で印刷しても
+   区別が消えないようにするため)。 */
 .print-only { display: none; }
 
 @media print {
@@ -763,27 +770,120 @@ html { -webkit-text-size-adjust: 100%; }
   body.is-printing .print-target * { visibility: visible; }
   body.is-printing .print-target {
     position: absolute; left: 0; top: 0; width: 100%;
-    padding: 0; margin: 0; border: none; background: #fff; color: #000;
+    padding: 0; margin: 0; border: none;
   }
+  /* 紙は白。画面の色を引きずると、地の色が全面に刷られる */
+  html, body.is-printing { background: #fff !important; }
 
   /* 紙に出しても意味のないものは消す */
   .no-print, .tabbar, .app-header nav, .btn, button { display: none !important; }
-
   .print-only { display: block; }
 
-  /* 紙は白。画面用の濃い背景のままだとインクを食う */
+  /* 紙は白、文字は黒とグレー。濃い背景のままだとインクを食う */
   .print-target, .print-target * {
-    background: #fff !important; color: #000 !important; box-shadow: none !important;
+    background: transparent !important; color: #1a1a1a !important;
+    box-shadow: none !important; border-color: #ccc !important;
   }
-  .print-target .card, .print-target .exercise-view, .print-target .material-detail {
-    border-color: #bbb !important;
-  }
-  /* 設問が紙の途中で割れないようにする */
-  .print-target li, .print-target .passage-part { break-inside: avoid; }
-  .print-target .section-title { break-after: avoid; }
 
-  @page { margin: 14mm; }
+  @page { size: A4; margin: 16mm 14mm 18mm; }
+
+  .print-target {
+    font-size: 11pt; line-height: 1.85;
+    font-family: "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+  }
+
+  /* ── 紙の見出し(何の教材か)──────────────────────── */
+  .print-target .print-head {
+    margin: 0 0 10pt; padding-bottom: 6pt;
+    border-bottom: 2pt solid #1a1a1a;
+  }
+  .print-target .print-head strong { font-size: 15pt; line-height: 1.4; }
+  .print-target .print-head div { font-size: 12pt; color: #444 !important; margin-top: 2pt; }
+  .print-target .print-meta { font-size: 9.5pt; color: #666 !important; margin-top: 3pt; }
+
+  /* ── 演習の見出し ──────────────────────────────── */
+  .print-target .section-title {
+    margin: 16pt 0 6pt; padding: 3pt 0 3pt 8pt;
+    font-size: 12.5pt; font-weight: 700;
+    border-left: 4pt solid #1a1a1a;
+    break-after: avoid;
+  }
+  .print-target .card-hint { font-size: 10pt; color: #555 !important; margin: 0 0 8pt; }
+
+  /* ── 設問 ──────────────────────────────────────── */
+  .print-target ol.material-preview { margin: 0; padding-left: 0; list-style: none; }
+  .print-target ol.material-preview > li {
+    position: relative;
+    margin: 0 0 10pt; padding: 0 0 8pt 22pt;
+    border-bottom: 0.5pt solid #ddd;
+    break-inside: avoid;
+    counter-increment: q;
+  }
+  .print-target ol.material-preview { counter-reset: q; }
+  .print-target ol.material-preview > li::before {
+    content: counter(q);
+    position: absolute; left: 0; top: 2pt;
+    width: 15pt; height: 15pt; line-height: 15pt; text-align: center;
+    border: 0.5pt solid #666; border-radius: 50%;
+    font-size: 9pt; color: #333 !important;
+  }
+
+  /* 英文は解く対象。いちばん大きく、いちばん濃く */
+  .print-target .homework-en,
+  .print-target [lang="en"] { font-size: 12.5pt; line-height: 1.75; color: #000 !important; }
+  /* 日本語訳・補足は添え物 */
+  .print-target .muted,
+  .print-target .field-hint { font-size: 9.5pt; color: #666 !important; }
+  .print-target .detail-answer { font-size: 11pt; color: #333 !important; }
+
+  /* 【解答について】
+     ゲストの画面では解答が折りたたまれているので、そのまま印刷すると
+     **問題だけの用紙**になる。これは狙いどおりで、開いて刷らない。
+     解答つきの控えが要るときは、トレーナーの「中身を見る」から印刷する
+     (あちらは解答が出た状態で並んでいる)。 */
+  .print-target details.answer { display: none; }
+
+  /* 書き込む欄。訳や英作文を紙に書くための余白。
+     解答を隠す演習(和訳・穴埋め・英訳・リスニング)のときだけ出す。 */
+  .print-worksheet ol.writable > li::after {
+    content: ''; display: block; margin-top: 7pt; height: 34pt;
+    background-image: repeating-linear-gradient(
+      to bottom, transparent 0, transparent 16pt, #ccc 16pt, #ccc 16.4pt);
+  }
+
+  /* ── 1問ごとの弱点の札・話す人 ──────────────────── */
+  .print-target .item-tag {
+    border: 0.5pt solid #999 !important; color: #444 !important;
+    font-size: 8.5pt; padding: 0 4pt;
+  }
+  .print-target .passage-speaker { font-size: 10pt; font-weight: 700; color: #333 !important; }
+
+  /* ── 記事・会話の本文 ──────────────────────────── */
+  .print-target .passage-headline {
+    font-size: 14pt; font-weight: 700; margin: 0 0 8pt;
+    padding-bottom: 4pt; border-bottom: 1pt solid #999;
+  }
+  .print-target .passage-part {
+    margin-bottom: 9pt; padding-bottom: 6pt;
+    border-bottom: 0.5pt dotted #ddd; break-inside: avoid;
+  }
+  .print-target .passage-en { font-size: 12.5pt; line-height: 1.95; color: #000 !important; }
+  .print-target .passage-ja { font-size: 10pt; color: #666 !important; }
+
+  /* ── 指導ポイント ──────────────────────────────── */
+  .print-target .teaching-note {
+    border: 0.5pt solid #999 !important; border-left: 3pt solid #1a1a1a !important;
+    padding: 7pt 9pt; margin: 8pt 0; break-inside: avoid;
+  }
+  .print-target .teaching-note-title { font-size: 9pt; color: #666 !important; }
+  .print-target .teaching-note-list > li { font-size: 10.5pt; line-height: 1.8; }
+  .print-target .teaching-note-tag {
+    border: 0.5pt solid #666 !important; color: #1a1a1a !important;
+    background: transparent !important; font-size: 9pt;
+  }
+  .print-target .en-term { font-weight: 700; color: #000 !important; }
 }
+
 .print-head { margin-bottom: 10px; font-size: 16px; line-height: 1.5; }
 
 /* ── ゲストの詳細(過去の宿題)──────────────────────────── */
@@ -796,3 +896,26 @@ html { -webkit-text-size-adjust: 100%; }
 .past-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .past-date { font-size: 13px; color: var(--text-secondary); }
 .past-title { margin: 4px 0 2px; font-weight: 600; }
+
+/* ── しぼり込みの札(過去の宿題)──────────────────────────
+   選べるのは「実際に当てはまるものだけ」。39個の弱点を全部並べても
+   ほとんどが0件で、選びようがない。件数を添えると押す前に結果が読める。 */
+.past-filters { margin: 10px 0 6px; }
+.chiprow {
+  display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px;
+}
+.chip-count {
+  margin-left: 4px; padding: 0 5px; border-radius: 999px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.past-count {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text-secondary);
+  padding-top: 6px; border-top: 1px solid var(--border);
+}
+.past-count select { margin-left: auto; }
+/* しぼり込みで当たった弱点だけ、色を変えて目立たせる */
+.tagchip.is-hit {
+  border-color: var(--accent); color: var(--accent); font-weight: 600;
+}

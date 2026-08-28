@@ -36,6 +36,12 @@ export default function TrainerLearners({ me }) {
   const [assignments, setAssignments] = useState([])
   const [summary, setSummary] = useState(null)
   const [detailBusy, setDetailBusy] = useState(false)
+  // 過去の宿題の絞り込み。
+  // **出すのは、そのゲストの宿題に実際に含まれる弱点だけ。**
+  // 39個の弱点タグを全部並べても、ほとんどが0件で選びようがない。
+  const [pastTags, setPastTags] = useState([])
+  const [pastDone, setPastDone] = useState('all')   // all | done | todo
+  const [pastSort, setPastSort] = useState('new')   // new | old
 
   // スコアを入れるための一時的な入力欄
   const [form, setForm] = useState({ testType: 'toeic', score: '', takenOn: today() })
@@ -57,6 +63,8 @@ export default function TrainerLearners({ me }) {
   const openDetail = async (id, tab = 'homework') => {
     setOpenId(id)
     setDetailTab(tab)
+    setPastTags([])
+    setPastDone('all')
     setMessage(null)
     setForm({ testType: 'toeic', score: '', takenOn: today() })
     setDetailBusy(true)
@@ -249,7 +257,26 @@ export default function TrainerLearners({ me }) {
                   ]}
                 />
 
-                {detailTab === 'homework' && (
+                {detailTab === 'homework' && (() => {
+                  // 弱点ごとの件数。0件の弱点は出さない
+                  const counts = new Map()
+                  for (const a of assignments) {
+                    for (const t of a.material?.tagIds ?? []) {
+                      counts.set(t, (counts.get(t) ?? 0) + 1)
+                    }
+                  }
+                  const tagList = [...counts.entries()].sort((x, y) => y[1] - x[1])
+
+                  const shown = assignments
+                    .filter((a) => (pastDone === 'all'
+                      || (pastDone === 'done') === !!a.learner_done_at))
+                    .filter((a) => (pastTags.length === 0
+                      || (a.material?.tagIds ?? []).some((t) => pastTags.includes(t))))
+                    .sort((x, y) => (pastSort === 'old'
+                      ? new Date(x.assigned_at) - new Date(y.assigned_at)
+                      : new Date(y.assigned_at) - new Date(x.assigned_at)))
+
+                  return (
                   <>
                     {summary && (
                       <p className="card-hint">
@@ -263,8 +290,69 @@ export default function TrainerLearners({ me }) {
                         まだ何も共有していません。「教材」タブから共有できます。
                       </p>
                     )}
+
+                    {assignments.length > 0 && (
+                      <div className="past-filters">
+                        {/* 取り組みの状態。件数を添えると、押す前に結果が読める */}
+                        <div className="chiprow">
+                          {[
+                            { id: 'all', label: 'すべて', n: assignments.length },
+                            { id: 'done', label: 'やった',
+                              n: assignments.filter((a) => a.learner_done_at).length },
+                            { id: 'todo', label: 'まだ',
+                              n: assignments.filter((a) => !a.learner_done_at).length },
+                          ].map((f) => (
+                            <button key={f.id} type="button"
+                                    className={`chip${pastDone === f.id ? ' chip--on' : ''}`}
+                                    onClick={() => setPastDone(f.id)}>
+                              {f.label} <span className="chip-count">{f.n}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {tagList.length > 0 && (
+                          <>
+                            <p className="field-hint">
+                              文法・弱点でしぼる(この人に出したものだけ出ます)
+                            </p>
+                            <div className="chiprow">
+                              {tagList.map(([tag, n]) => (
+                                <button key={tag} type="button"
+                                        className={`chip${pastTags.includes(tag) ? ' chip--on' : ''}`}
+                                        onClick={() => setPastTags(pastTags.includes(tag)
+                                          ? pastTags.filter((x) => x !== tag)
+                                          : [...pastTags, tag])}>
+                                  {weaknessTagLabel(tag)} <span className="chip-count">{n}</span>
+                                </button>
+                              ))}
+                              {pastTags.length > 0 && (
+                                <button type="button" className="btn btn--link"
+                                        onClick={() => setPastTags([])}>
+                                  しぼり込みを外す
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
+
+                        <div className="past-count">
+                          <span>{shown.length} 件</span>
+                          <select value={pastSort} onChange={(e) => setPastSort(e.target.value)}>
+                            <option value="new">新しい順</option>
+                            <option value="old">古い順</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {assignments.length > 0 && shown.length === 0 && (
+                      <p className="card-hint">
+                        この条件に当てはまる宿題はありません。しぼり込みを外してください。
+                      </p>
+                    )}
+
                     <ul className="past-list">
-                      {assignments.map((a) => (
+                      {shown.map((a) => (
                         <li key={a.id} className="past-item">
                           <div className="past-head">
                             <span className="past-date">{formatDate(a.assigned_at)}</span>
@@ -286,7 +374,11 @@ export default function TrainerLearners({ me }) {
                           {!!a.material?.tagIds?.length && (
                             <div className="tagpicker-tags">
                               {a.material.tagIds.map((t) => (
-                                <span key={t} className="tagchip is-static">
+                                // しぼり込みで選んだ弱点だけ色を変える。
+                                // どの弱点で引っかかったのかが一目で分かる
+                                <span key={t}
+                                      className={`tagchip is-static${
+                                        pastTags.includes(t) ? ' is-hit' : ''}`}>
                                   {weaknessTagLabel(t)}
                                 </span>
                               ))}
@@ -296,7 +388,8 @@ export default function TrainerLearners({ me }) {
                       ))}
                     </ul>
                   </>
-                )}
+                  )
+                })()}
 
                 {detailTab === 'record' && (
                 <>

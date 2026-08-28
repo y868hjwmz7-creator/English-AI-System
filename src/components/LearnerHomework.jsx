@@ -98,13 +98,19 @@ export default function LearnerHomework() {
                     <div className="print-only print-head">
                       <strong>{a.material?.title}</strong>
                       {a.material?.headline && <div lang="en">{a.material.headline}</div>}
+                      <div className="print-meta">
+                        {cefrLabel(a.material?.level)} / {kindLabel(a.material?.kind)}
+                        {' / '}共有 {formatDate(a.assigned_at)}
+                        {a.due_on && ` / 次のレッスン ${a.due_on}`}
+                      </div>
                     </div>
                     <div className="btn-row no-print">
                       <button type="button" className="btn btn--small"
                               onClick={() => printElement(
                                 document.getElementById(`homework-${a.id}`),
+                                { worksheet: true },
                               )}>
-                        🖨 印刷 / PDFで保存
+                        🖨 印刷 / PDFで保存(問題のみ)
                       </button>
                     </div>
                     {a.material?.teaching_point && (
@@ -154,7 +160,9 @@ export default function LearnerHomework() {
                             {exerciseLabel(sec.exercise_type)}({sec.items.length} 問)
                           </h5>
                           {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
-                          <ol className="material-preview">
+                          {/* 解答を隠す演習は、紙に書き込む余白を出す */}
+                          <ol className={`material-preview${
+                            type?.hideAnswerFromLearner ? ' writable' : ''}`}>
                             {sec.items.map((it) => (
                               <li key={it.id}>
                                 {/* 混合ドリルでは、どの弱点の問題かを見せる。

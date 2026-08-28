@@ -247,6 +247,11 @@ export default function TrainerMaterials({ me }) {
                   <div className="print-only print-head">
                     <strong>{m.title}</strong>
                     {m.headline && <div lang="en">{m.headline}</div>}
+                    <div className="print-meta">
+                      {cefrLabel(m.level)} / {kindLabel(m.kind)} / {industryLabel(m.industry)}
+                      {' / '}全 {m.itemCount} 問
+                      {m.tagIds.length ? ` / ${m.tagIds.map(weaknessTagLabel).join('・')}` : ''}
+                    </div>
                   </div>
                   <div className="btn-row no-print">
                     <button type="button" className="btn btn--small"
