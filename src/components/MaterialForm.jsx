@@ -13,7 +13,7 @@
  * 手入力は「AI 生成がまだ無い間のつなぎ」と「AI の下書きを直す土台」。
  * 1教材40問を毎回ここで打つことは想定していない。
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import {
@@ -79,16 +79,27 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [generating, setGenerating] = useState(null)   // 生成中の進み具合
+  const [elapsed, setElapsed] = useState(0)            // 生成に掛かっている秒数
   const [showEditor, setShowEditor] = useState(false)  // 手で直す欄を出すか
   const [dropped, setDropped] = useState(0)            // 重複で外した数
   const [short, setShort] = useState(0)                // 作り直しても足りなかった数
   const [forLearner, setForLearner] = useState('')     // 誰に出す教材か(任意)
   const [similarNotes, setSimilarNotes] = useState([]) // 意味が近すぎて外した文
   const [warning, setWarning] = useState(null)         // 効いていない仕組みの知らせ
+  const errorRef = useRef(null)                        // 失敗の知らせまで画面を送る
   const [headline, setHeadline] = useState('')         // 記事の見出し / 会話の題名
   const [genre, setGenre] = useState('news')           // 記事のジャンル
   const [scene, setScene] = useState('casual')         // 会話の場面
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
+
+  // 生成中は秒数を数える。1〜3分かかることがあるため、動いていることが
+  // 分からないと「固まった」と思われる(実際にそう見えた)。
+  useEffect(() => {
+    if (!generating) { setElapsed(0); return undefined }
+    const started = Date.now()
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000)
+    return () => clearInterval(timer)
+  }, [generating])
 
   const patchSection = (si, patch) =>
     setSections(sections.map((sec, i) => (i === si ? { ...sec, ...patch } : sec)))
@@ -166,7 +177,7 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
       subject,
       avoid: (used ?? []).slice(-40),
     })
-    if (bodyError) { setGenerating(null); setError(bodyError); return }
+    if (bodyError) { fail(bodyError); return }
 
     const made = [body.section]
     // できた本文を、そのまま次の生成に渡す
@@ -182,7 +193,7 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
         topic: tagIds.map(topicOf).join(' / '),
         level, industry, context,
       })
-      if (e) { setGenerating(null); setError(e); return }
+      if (e) { fail(e); return }
       made.push(data.section)
     }
 
@@ -240,7 +251,7 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
           },
           { usedSet, learnerId: forLearner || null, tagIds },
         )
-        if (result.error) { setGenerating(null); setError(result.error); return }
+        if (result.error) { fail(result.error); return }
 
         droppedCount += result.dropped
         shortCount += result.short
@@ -279,6 +290,16 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
     setSimilarNotes(notes)
     setWarning(warn)
     if (!title.trim()) setTitle(autoTitle(null))
+  }
+
+  /** 失敗の知らせを画面に出し、そこまで送る */
+  const fail = (message) => {
+    setGenerating(null)
+    setError(message)
+    // 描画を待ってから寄せる。すぐ呼ぶと、まだ要素が無い。
+    window.setTimeout(() => {
+      errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 50)
   }
 
   const generate = async () => {
@@ -516,7 +537,8 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
         <button type="button" className="btn btn--primary"
                 onClick={generate} disabled={!!generating || busy}>
           {generating
-            ? `作っています… ${generating.label}(${generating.done + 1}/${generating.total})`
+            ? `作っています… ${generating.label}`
+              + `(${generating.done + 1}/${generating.total})${elapsed ? ` ${elapsed}秒` : ''}`
             : isPassageKind(kind)
               ? `${kind === 'reading' ? '記事' : '会話'}を作る(`
                 + defaultSectionsFor(kind)
@@ -524,6 +546,22 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
                 + ')'
               : `下書きを作る(${defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問)`}
         </button>
+        {generating && (
+          <p className="field-hint">
+            1〜3分かかります。<strong>この画面を閉じないでください。</strong>
+          </p>
+        )}
+
+        {/* 失敗の知らせは、押したボタンのすぐ下に出す。
+            以前は画面のいちばん下にあり、スマホでは見えなかった。
+            何が起きたか分からないまま終わるのが、いちばん困る。 */}
+        {error && (
+          <div className="notice notice--warn generate-error" role="alert" ref={errorRef}>
+            <strong>作れませんでした。</strong>
+            <div>{error}</div>
+          </div>
+        )}
+
         <p className="field-hint">
           作ったあと、<strong>必ず目を通して直してください。</strong>
           共有した教材は他のトレーナーのゲストにも届きます。

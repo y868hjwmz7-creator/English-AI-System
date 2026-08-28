@@ -354,24 +354,32 @@ Deno.serve(async (req) => {
     isFirst ? '\nこれが最初の演習なので、teaching_point(教材全体の指導ポイント)も入れること。' : '',
   ].join('\n')
 
-  try {
-    const response = await client.messages.create({
+  // 生成そのもの。**待っている間も返事の一部を送り続ける**必要があるため、
+  // 実際の処理はこの関数に閉じ込め、下の ReadableStream から呼ぶ。
+  const generate = async () => {
+    // Anthropic 側は必ず streaming で受け取る。40問ぶんの長い応答を
+    // 一括で待つと、SDK の HTTP タイムアウトに掛かる。
+    const stream = client.messages.stream({
       model: 'claude-opus-5',
       max_tokens: 16000,
+      // 作るものは形が決まっているので、思考は中くらいで足りる。
+      // 既定(high)のままだと40問で3分を超え、Supabase 側で切られていた。
+      output_config: { effort: 'medium' },
       // 指示は毎回同じなので、キャッシュを効かせて費用を抑える
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       tools: [EMIT_SECTION_TOOL as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: 'emit_section' },
       messages: [{ role: 'user', content: userPrompt }],
     })
+    const response = await stream.finalMessage()
 
     if (response.stop_reason === 'refusal') {
-      return reply({ error: '内容が安全上の理由で断られました。弱点の指定を見直してください。' }, 400)
+      return { error: '内容が安全上の理由で断られました。弱点の指定を見直してください。' }
     }
 
     const block = response.content.find((b) => b.type === 'tool_use')
     if (!block || block.type !== 'tool_use') {
-      return reply({ error: '生成の結果を読み取れませんでした。もう一度お試しください。' }, 502)
+      return { error: '生成の結果を読み取れませんでした。もう一度お試しください。' }
     }
 
     const result = block.input as {
@@ -381,7 +389,7 @@ Deno.serve(async (req) => {
       items?: Record<string, string>[]
     }
 
-    return reply({
+    return {
       ok: true,
       section: {
         exercise_type: sectionType,
@@ -396,19 +404,55 @@ Deno.serve(async (req) => {
         output: response.usage.output_tokens,
         cacheRead: response.usage.cache_read_input_tokens ?? 0,
       },
-    })
-  } catch (e) {
+    }
+  }
+
+  /** 例外を、原因の分かる日本語にする */
+  const explain = (e: unknown) => {
     const message = e instanceof Error ? e.message : String(e)
-    // 鍵の誤りと使いすぎは、原因が分かるように書き分ける
     if (/authentication|invalid x-api-key|401/i.test(message)) {
-      return reply({ error: 'Claude の鍵が正しくありません。Secrets の ANTHROPIC_API_KEY を確認してください。' }, 500)
+      return 'Claude の鍵が正しくありません。Secrets の ANTHROPIC_API_KEY を確認してください。'
     }
     if (/rate.?limit|429/i.test(message)) {
-      return reply({ error: '短い時間に作りすぎました。少し待ってからお試しください。' }, 429)
+      return '短い時間に作りすぎました。少し待ってからお試しください。'
     }
     if (/credit|billing|402/i.test(message)) {
-      return reply({ error: 'Claude の残高が不足しています。Anthropic Console でご確認ください。' }, 402)
+      return 'Claude の残高が不足しています。Anthropic Console でご確認ください。'
     }
-    return reply({ error: `生成に失敗しました: ${message}` }, 500)
+    return `生成に失敗しました: ${message}`
   }
+
+  // ── 4. 待っている間も、少しずつ返事を送り続ける ──────────
+  //
+  // 【なぜこれが必要か】
+  //   Supabase の関数は、**150秒のあいだ何も返さないと切られる**。
+  //   40問の生成はそれを超えることがあり、利用者の画面では
+  //   「2分ほど待つと、何も出ずにボタンが元に戻る」状態になっていた。
+  //
+  //   そこで、答えが出るまでのあいだ**空白を1文字ずつ送り続ける**。
+  //   通信が生きていると見なされるため、途中で切られない。
+  //   空白は JSON の前に付いても読み飛ばされるので、受け取る側は
+  //   これまでどおり JSON として読める。
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const beat = setInterval(() => {
+        try { controller.enqueue(encoder.encode(' ')) } catch { /* すでに閉じている */ }
+      }, 5000)
+      try {
+        const payload = await generate()
+        controller.enqueue(encoder.encode(JSON.stringify(payload)))
+      } catch (e) {
+        console.error(e)
+        controller.enqueue(encoder.encode(JSON.stringify({ error: explain(e) })))
+      } finally {
+        clearInterval(beat)
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: { ...cors, 'Content-Type': 'application/json' },
+  })
 })

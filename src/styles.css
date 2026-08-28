@@ -723,3 +723,6 @@ html { -webkit-text-size-adjust: 100%; }
 }
 /* 日本語の中の英語。地の文に埋もれさせない */
 .en-term { font-weight: 600; letter-spacing: .01em; }
+
+/* 生成に失敗したときの知らせ。押したボタンのすぐ下に出す */
+.generate-error { margin-top: 10px; }
