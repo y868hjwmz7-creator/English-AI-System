@@ -32,11 +32,21 @@ export default function LessonView({ material, onClose }) {
   const sections = material?.sections ?? []
   const [page, setPage] = useState(0)
   // 解答の出し方は2通り。**両方要る。**
-  //   ・右上のボタン … 全部まとめて出す(答え合わせのとき)
-  //   ・問ごとのボタン … 1問ずつ出す(トレーナーとゲストで一緒に進めるとき)
+  //   ・右上のボタン … 全部まとめて出す / 隠す(答え合わせのとき)
+  //   ・問ごとのボタン … 1問ずつ出す / 隠す(一緒に進めるとき)
+  //
+  // 問ごとの状態は、右上の設定に対する「例外」として持つ。
+  //   全部隠しているとき … openItems に入っているものだけ出す
+  //   全部出しているとき … closedItems に入っているものだけ隠す
+  // こうすると、**どちらの状態からでも1問ずつ開け閉めできる。**
+  // 一度見た解答をまた隠して解き直す、という使い方のため(2026-08 の要望)。
   const [showAnswers, setShowAnswers] = useState(false)
   const [openItems, setOpenItems] = useState(() => new Set())
+  const [closedItems, setClosedItems] = useState(() => new Set())
   const [size, setSize] = useState('l')
+
+  /** ページを移ったら、1問ずつの開け閉めは元に戻す */
+  const resetItems = () => { setOpenItems(new Set()); setClosedItems(new Set()) }
 
   // 開いているあいだは、後ろの画面を動かさない
   useEffect(() => {
@@ -51,11 +61,11 @@ export default function LessonView({ material, onClose }) {
       if (e.key === 'Escape') onClose?.()
       if (e.key === 'ArrowRight') {
         setPage((p) => Math.min(p + 1, sections.length - 1))
-        setOpenItems(new Set())
+        resetItems()
       }
       if (e.key === 'ArrowLeft') {
         setPage((p) => Math.max(p - 1, 0))
-        setOpenItems(new Set())
+        resetItems()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -65,6 +75,19 @@ export default function LessonView({ material, onClose }) {
   if (!material) return null
   const section = sections[page]
   const key = (it, i) => it.id ?? `${page}-${i}`
+
+  /** その問の解答が出ているか */
+  const isOpen = (k) => (showAnswers ? !closedItems.has(k) : openItems.has(k))
+
+  /** その問の解答を出す / 隠す */
+  const toggleItem = (k) => {
+    const target = showAnswers ? closedItems : openItems
+    const next = new Set(target)
+    if (next.has(k)) next.delete(k)
+    else next.add(k)
+    if (showAnswers) setClosedItems(next)
+    else setOpenItems(next)
+  }
   const type = section ? exerciseType(section.exercise_type) : null
 
   return (
@@ -76,11 +99,11 @@ export default function LessonView({ material, onClose }) {
         <div className="lesson-pages">
           <button type="button" className="btn btn--small"
                   disabled={page === 0}
-                  onClick={() => { setPage(page - 1); setOpenItems(new Set()) }}>◀</button>
+                  onClick={() => { setPage(page - 1); resetItems() }}>◀</button>
           <span>{page + 1} / {sections.length}</span>
           <button type="button" className="btn btn--small"
                   disabled={page >= sections.length - 1}
-                  onClick={() => { setPage(page + 1); setOpenItems(new Set()) }}>▶</button>
+                  onClick={() => { setPage(page + 1); resetItems() }}>▶</button>
         </div>
 
         <div className="lesson-tools">
@@ -90,6 +113,7 @@ export default function LessonView({ material, onClose }) {
                     // 全部出す・全部隠す。1問ずつ開いたものも一緒に閉じる
                     setShowAnswers(!showAnswers)
                     setOpenItems(new Set())
+                    setClosedItems(new Set())
                   }}>
             {showAnswers ? 'すべての解答を隠す' : 'すべての解答を出す'}
           </button>
@@ -147,14 +171,15 @@ export default function LessonView({ material, onClose }) {
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。
                       レッスンで1問ずつ答え合わせをするために、問ごとが要る。 */}
-                  {(it.answer || it.audio_text) && !(showAnswers || openItems.has(key(it, i))) && (
+                  {(it.answer || it.audio_text) && (
                     <button type="button" className="btn btn--small lesson-reveal"
-                            onClick={() => setOpenItems(new Set(openItems).add(key(it, i)))}>
-                      解答を見る
+                            aria-expanded={isOpen(key(it, i))}
+                            onClick={() => toggleItem(key(it, i))}>
+                      {isOpen(key(it, i)) ? '解答を隠す' : '解答を見る'}
                     </button>
                   )}
 
-                  {(showAnswers || openItems.has(key(it, i))) && (
+                  {isOpen(key(it, i)) && (
                     <>
                       {/* リスニングは英文を見せずに聞かせる。答え合わせでは
                           **読み上げた英文そのもの**を出す。何を言われたのかが
