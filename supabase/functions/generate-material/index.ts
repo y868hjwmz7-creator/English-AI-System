@@ -392,6 +392,11 @@ Deno.serve(async (req) => {
   // すでに使われている英文。同じ文章が二度出ると、ゲストは
   // 「前にやった」と感じて手が止まる。避けさせる。
   const avoid = Array.isArray(body.avoid) ? body.avoid.slice(0, 150).map(String) : []
+  // 復習として**必ず入れる語**。これまでの宿題に出て、ゲストが
+  // 「知らなかった」と付けたものなど(第5.23節)。
+  // 上限を切ってあるのは、指示が長くなりすぎると本来の指定が薄まるため。
+  const reviewWords = (Array.isArray(body.reviewWords) ? body.reviewWords : [])
+    .map((w) => String(w ?? '').trim()).filter(Boolean).slice(0, 20)
 
   if (!SECTION_INSTRUCTIONS[sectionType]) {
     return reply({ error: `演習の種類が正しくありません: ${sectionType}` }, 400)
@@ -452,6 +457,13 @@ Deno.serve(async (req) => {
     `${SECTION_INSTRUCTIONS[sectionType]}`,
     ``,
     countLine,
+    reviewWords.length
+      ? `\n# 必ず入れる語(復習)\n`
+        + reviewWords.map((w) => `- ${w}`).join('\n')
+        + `\n\nこれらは、このゲストが過去の宿題で出会った語である。`
+        + `**先頭から順にこの語で作り**、足りない分だけ新しい語を足すこと。`
+        + `同じ語を2回出さない。意味・使い方は、**復習として身に付く**ように書く。`
+      : '',
     avoid.length
       ? `\n# すでに使った英文(これらと同じ文は絶対に作らないこと)\n`
         + avoid.map((a) => `- ${a}`).join('\n')

@@ -22,6 +22,7 @@ import { loadEnglishVoices, speak, speakSequence, stopSpeaking } from '../lib/sp
 import { castVoices, voiceFor } from '../lib/voiceCast.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
+import EnglishText from './EnglishText.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 
@@ -45,7 +46,10 @@ const MODES = [
   },
 ]
 
-export default function PassagePractice({ section, headline, isDialogue }) {
+export default function PassagePractice({
+  section, headline, isDialogue,
+  level = 'B1', wordStatuses = null, onMarkWord = null,
+}) {
   const [mode, setMode] = useState('read')
   const [voices, setVoices] = useState([])
   const [showJa, setShowJa] = useState(false)
@@ -190,7 +194,10 @@ export default function PassagePractice({ section, headline, isDialogue }) {
               {isDialogue && item.speaker && (
                 <div className="passage-speaker" lang="en">{item.speaker}</div>
               )}
-              <p className="passage-en" lang="en">{item.prompt_en}</p>
+              <p className="passage-en">
+                <EnglishText text={item.prompt_en} level={level}
+                             statuses={wordStatuses} onMark={onMarkWord} />
+              </p>
               {showJa && item.prompt_ja && <p className="passage-ja">{item.prompt_ja}</p>}
 
               <div className="passage-actions">

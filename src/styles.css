@@ -26,6 +26,9 @@
   /* いま読み上げているところの色。**明るい / 暗いの両方に必ず置く** */
   --speaking-bg:  #fff4cc;
   --speaking-bar: #e0a800;
+  /* 「知らなかった」と付けた語の色。**明るい / 暗いの両方に必ず置く** */
+  --unknown-bg:   #ffe3e0;
+  --unknown-bar:  #e34948;
   --warn:    #eda100;
   --danger:  #e34948;
 
@@ -58,6 +61,8 @@
     --accent: #3987e5;
     --speaking-bg:  #3a3213;
     --speaking-bar: #c98500;
+    --unknown-bg:   #3e2220;
+    --unknown-bar:  #e66767;
     --warn:   #c98500;
     --danger: #e66767;
   }
@@ -84,6 +89,8 @@
   --accent: #3987e5;
   --speaking-bg:  #3a3213;
   --speaking-bar: #c98500;
+  --unknown-bg:   #3e2220;
+  --unknown-bar:  #e66767;
   --warn:   #c98500;
   --danger: #e66767;
 }
@@ -1019,6 +1026,70 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 本文を通して聞くボタン */
 .lesson-listen { margin: 0 0 14px; }
+
+/* ── 1語ずつ触れる英文 ────────────────────────────────────
+   語に触れると意味が出る。「知らなかった」と付けた語は色が残る。
+   **紙には出さない。** 枠も色も、印刷では邪魔になるだけ。 */
+.etext-word-wrap { position: relative; }
+.etext-word {
+  display: inline; padding: 0; margin: 0;
+  border: 0; border-bottom: 1px solid transparent; border-radius: 2px;
+  background: none; color: inherit;
+  font: inherit; line-height: inherit; cursor: pointer;
+}
+.etext-word:hover, .etext-word.is-open {
+  background: var(--surface-2); border-bottom-color: var(--text-muted);
+}
+/* 知らなかった語。**次に開いても色が残る**(2026-08 の要望) */
+.etext-word.is-unknown {
+  background: var(--unknown-bg);
+  box-shadow: 0 1px 0 0 var(--unknown-bar);
+}
+.etext-word.is-known { color: inherit; opacity: .72; }
+
+.etext-pop {
+  position: absolute; left: 0; top: 1.6em; z-index: 40;
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 248px; max-width: min(88vw, 340px);
+  padding: 10px 26px 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-1); color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  font-size: 13px; line-height: 1.6; text-align: left; white-space: normal;
+}
+.etext-pop-head { display: flex; align-items: center; gap: 8px; }
+.etext-pos {
+  padding: 0 7px; border: 1px solid var(--border); border-radius: 999px;
+  font-size: 11px; color: var(--text-secondary);
+}
+.etext-pop-mean { font-weight: 600; }
+.etext-pop-ex { color: var(--text-secondary); font-size: 12px; }
+.etext-pop-note { color: var(--text-muted); font-size: 12px; }
+.etext-pop-busy, .etext-pop-error { color: var(--text-secondary); }
+.etext-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.etext-pop-close {
+  position: absolute; right: 4px; top: 4px;
+  border: 0; background: none; color: var(--text-muted);
+  font-size: 13px; line-height: 1; cursor: pointer; padding: 4px;
+}
+.btn--warnish { border-color: var(--unknown-bar); }
+
+/* 紙には語の枠も色も出さない */
+@media print {
+  .etext-word { background: none !important; box-shadow: none !important;
+                border-bottom-color: transparent !important; }
+}
+
+/* これまでの宿題から復習する語を混ぜる欄 */
+.review-box {
+  margin: 12px 0; padding: 10px 12px;
+  border: 1px dashed var(--border); border-radius: var(--radius);
+}
+.review-count { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.review-words { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.tagchip.is-unknown {
+  background: var(--unknown-bg); border-color: var(--unknown-bar);
+}
 
 /* 読み上げの速さ。画面に1つだけ置く */
 .rate-pick {

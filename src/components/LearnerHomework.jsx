@@ -19,6 +19,8 @@ import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materia
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
+import { clearWordStatus, loadMyWordStatuses, setWordStatus } from '../lib/vocab.js'
+import EnglishText from './EnglishText.jsx'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
@@ -35,6 +37,9 @@ export default function LearnerHomework() {
   // 読み上げの速さ。**画面に1つだけ置く。** ここで選んだものが、
   // この画面のすべての読み上げに効く(2026-08 利用者の指定)
   const [rateId, setRateId] = useState(loadRateId)
+  // 語の「知っていた / 知らなかった」。**画面を開いたときに1回だけ読む。**
+  // 語ごとに問い合わせると、1画面で何十回も往復することになる。
+  const [wordStatuses, setWordStatuses] = useState(() => new Map())
 
   const reload = async () => {
     const { data, error: e } = await loadMyAssignments()
@@ -45,6 +50,29 @@ export default function LearnerHomework() {
   }
 
   useEffect(() => { reload() }, [])
+
+  useEffect(() => {
+    loadMyWordStatuses().then(({ data }) => { if (data) setWordStatuses(data) })
+  }, [])
+
+  /**
+   * 語に「知っていた / 知らなかった」を付ける(null で取り消し)。
+   * **手元の表示を先に変える。** 通信を待って色が変わるのでは、
+   * 押した手ごたえが無い。失敗したら元に戻す。
+   */
+  const markWord = async (norm, status) => {
+    const before = new Map(wordStatuses)
+    setWordStatuses((m) => {
+      const next = new Map(m)
+      if (status) next.set(norm, status)
+      else next.delete(norm)
+      return next
+    })
+    const { error: e } = status
+      ? await setWordStatus(norm, status)
+      : await clearWordStatus(norm)
+    if (e) { setError(e); setWordStatuses(before) }
+  }
 
   const toggleDone = async (assignment) => {
     const next = !assignment.learner_done_at
@@ -194,6 +222,9 @@ export default function LearnerHomework() {
                               section={sec}
                               headline={a.material?.headline}
                               isDialogue={sec.exercise_type === 'dialogue'}
+                              level={a.material?.level}
+                              wordStatuses={wordStatuses}
+                              onMarkWord={markWord}
                             />
                           </section>
                         )
@@ -225,11 +256,17 @@ export default function LearnerHomework() {
                                 )}
                                 {/* リスニングは英文を見せない。聞いて答えるため。 */}
                                 {!type?.hidePromptFromLearner && it.prompt_en && (
-                                  <div lang="en" className="homework-en">{it.prompt_en}</div>
+                                  <div className="homework-en">
+                                    <EnglishText text={it.prompt_en} level={a.material?.level}
+                                                 statuses={wordStatuses} onMark={markWord} />
+                                  </div>
                                 )}
                                 {it.prompt_ja && <div>{it.prompt_ja}</div>}
                                 {it.question && (
-                                  <div lang="en" className="homework-en">{it.question}</div>
+                                  <div className="homework-en">
+                                    <EnglishText text={it.question} level={a.material?.level}
+                                                 statuses={wordStatuses} onMark={markWord} />
+                                  </div>
                                 )}
                                 {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
                                 {/* 解答は、答えを考える前に見えてはいけない */}

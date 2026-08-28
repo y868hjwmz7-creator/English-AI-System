@@ -26,6 +26,7 @@ import {
   generateSectionUnique, isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
+import { collectReviewWords } from '../lib/vocab.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
 const MAX_TAGS = 3
@@ -100,6 +101,16 @@ export default function MaterialForm({
   const [genre, setGenre] = useState(initial.genre || 'news')   // 記事のジャンル
   const [scene, setScene] = useState(initial.scene || 'casual')  // 会話の場面
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
+  // ── 復習の材料(単語・フレーズの教材だけで使う)──────────────
+  //   これまでの宿題に出た語のうち、ゲストが「知らなかった」と付けたものを
+  //   混ぜる。**毎回まったく新しい語を出していては、定着しない**(第5.23節)。
+  const [reviewPool, setReviewPool] = useState([])     // 混ぜられる語
+  const [reviewCount, setReviewCount] = useState(0)    // そのうち何語混ぜるか
+  const [reviewBusy, setReviewBusy] = useState(false)
+  // **読めなかったことを「0語」と同じ見た目にしない。**
+  // 0011 をまだ流していないときに「まだありません」と出ると、
+  // 何が足りないのか分からなくなる(この失敗を何度もした)
+  const [reviewError, setReviewError] = useState(null)
 
   // 生成中は秒数を数える。1〜3分かかることがあるため、動いていることが
   // 分からないと「固まった」と思われる(実際にそう見えた)。
@@ -109,6 +120,26 @@ export default function MaterialForm({
     const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000)
     return () => clearInterval(timer)
   }, [generating])
+
+  // 単語・フレーズの教材で、ゲストを1人だけ選んでいるときに材料を読む。
+  // **複数人だと「誰の復習か」が決まらない**ので、そのときは出さない。
+  const reviewLearner = (kind === 'word' || kind === 'phrase') && shareWith.length === 1
+    ? shareWith[0] : null
+
+  useEffect(() => {
+    if (!reviewLearner) { setReviewPool([]); setReviewCount(0); return }
+    let alive = true
+    setReviewBusy(true)
+    collectReviewWords(reviewLearner, { limit: 20 }).then(({ data, error: e }) => {
+      if (!alive) return
+      setReviewBusy(false)
+      setReviewError(e ?? null)
+      setReviewPool(data ?? [])
+      // 既定は半分。全部を復習にすると新しい語が入らず、逆に0だと復習にならない
+      setReviewCount(Math.min(data?.length ?? 0, 10))
+    })
+    return () => { alive = false }
+  }, [reviewLearner])
 
   const patchSection = (si, patch) =>
     setSections(sections.map((sec, i) => (i === si ? { ...sec, ...patch } : sec)))
@@ -282,6 +313,8 @@ export default function MaterialForm({
           topic: topicOf(tagIds[0]),
           topics: tagIds.length > 1 ? tagIds.map(topicOf) : [],
           level, industry, isFirst: i === 0,
+          // 復習の語は最初の演習にだけ渡す。単語・フレーズは1演習しかない
+          reviewWords: i === 0 ? reviewPool.slice(0, reviewCount).map((w) => w.word) : [],
         },
         { usedSet, learnerIds: shareWith, tagIds },
       )
@@ -596,6 +629,67 @@ export default function MaterialForm({
             (およそ {kind === 'reading' ? '250〜350語' : '14発言'})。
             シャドーイングやオーバーラッピングは、この本文に対して行います。
           </p>
+        )}
+
+        {/* ── これまでの宿題から復習する ──────────────────────
+            毎回まったく新しい語を出していては、定着しない。
+            そのゲストが「知らなかった」と付けた語を、先に入れる。
+            ゲストを1人だけ選んでいるときにだけ出す。
+            **複数人だと「誰の復習か」が決まらない。** */}
+        {(kind === 'word' || kind === 'phrase') && (
+          <div className="review-box">
+            {shareWith.length !== 1 ? (
+              <p className="field-hint">
+                これまでの宿題から復習する語を混ぜられます。
+                <strong>上でゲストを1人だけ選んでください。</strong>
+              </p>
+            ) : reviewBusy ? (
+              <p className="field-hint">これまでの宿題を調べています…</p>
+            ) : reviewError ? (
+              <p className="notice notice--warn">
+                復習する語を読めませんでした。{reviewError}
+                <br />
+                <strong>0011_vocabulary.sql をまだ実行していないと、この知らせが出ます。</strong>
+              </p>
+            ) : reviewPool.length === 0 ? (
+              <p className="field-hint">
+                このゲストには、まだ復習できる語がありません。
+                宿題の英文で<strong>「知らなかった」</strong>を付けてもらうと、ここに溜まります。
+              </p>
+            ) : (
+              <>
+                <p className="field-hint">
+                  <strong>これまでの宿題から復習する。</strong>
+                  「知らなかった」と付けた語と、まだ確かめていない語が
+                  {reviewPool.length} 語あります。
+                </p>
+                <label className="review-count">
+                  <span>混ぜる語の数</span>
+                  <select value={reviewCount}
+                          onChange={(e) => setReviewCount(Number(e.target.value))}>
+                    {Array.from({ length: reviewPool.length + 1 }, (_, i) => (
+                      <option key={i} value={i}>{i} 語</option>
+                    ))}
+                  </select>
+                  <span className="field-hint">
+                    残りの{Math.max(0, defaultSectionsFor(kind)
+                      .reduce((n, x) => n + x.count, 0) - reviewCount)} 語は新しく作ります
+                  </span>
+                </label>
+                <div className="review-words">
+                  {reviewPool.slice(0, reviewCount).map((w) => (
+                    <span key={w.word}
+                          className={`tagchip is-static${w.source === 'unknown' ? ' is-unknown' : ''}`}>
+                      {w.word}
+                    </span>
+                  ))}
+                </div>
+                <p className="field-hint">
+                  色の付いた語が「知らなかった」と付けたものです。先に入ります。
+                </p>
+              </>
+            )}
+          </div>
         )}
 
         <div className="generate-chosen">
