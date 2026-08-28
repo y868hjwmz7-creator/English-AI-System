@@ -22,7 +22,7 @@ import {
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
-  NEW_MATERIAL_KINDS, createMaterial, generateSection, generateSectionUnique,
+  NEW_MATERIAL_KINDS, assignMaterial, createMaterial, generateSection, generateSectionUnique,
   isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
@@ -89,7 +89,10 @@ export default function MaterialForm({
   const [showEditor, setShowEditor] = useState(false)  // 手で直す欄を出すか
   const [dropped, setDropped] = useState(0)            // 重複で外した数
   const [short, setShort] = useState(0)                // 作り直しても足りなかった数
-  const [forLearner, setForLearner] = useState('')     // 誰に出す教材か(任意)
+  // 誰に出すか。**画面のいちばん上で、最初から選べる。**
+  // 以前は全部指定し終えてからでないと選べず、やりにくかった(2026-08)。
+  const [shareWith, setShareWith] = useState([])
+  const [showDetails, setShowDetails] = useState(false)  // 記入欄を開くか
   const [similarNotes, setSimilarNotes] = useState([]) // 意味が近すぎて外した文
   const [warning, setWarning] = useState(null)         // 効いていない仕組みの知らせ
   const errorRef = useRef(null)                        // 失敗の知らせまで画面を送る
@@ -149,8 +152,8 @@ export default function MaterialForm({
     else parts.push(tagIds.map(weaknessTagLabel).join(' + '))
     parts.push(level)
     if (industry) parts.push(industryLabel(industry))
-    const name = learners.find((l) => l.id === forLearner)?.display_name
-    if (name) parts.push(name)
+    const name = learners.find((l) => l.id === shareWith[0])?.display_name
+    if (name && shareWith.length === 1) parts.push(name)
     return parts.filter(Boolean).join(' / ')
   }
 
@@ -256,7 +259,7 @@ export default function MaterialForm({
             topic: topicOf(tagIds[t]),
             level, industry, isFirst: i === 0 && t === 0,
           },
-          { usedSet, learnerId: forLearner || null, tagIds },
+          { usedSet, learnerIds: shareWith, tagIds },
         )
         if (result.error) { fail(result.error); return }
 
@@ -341,15 +344,35 @@ export default function MaterialForm({
     if (busy) return
     setBusy(true)
     setError(null)
+    // 教材名は空でよい。日付・弱点・レベルから組み立てる。
+    // 必須にすると、AI に作らせるだけの人にも入力を強いることになる。
     const { data, error: message } = await createMaterial({
-      title, level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
+      title: title.trim() || autoTitle(headline),
+      level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
       visibility, industry, sections, tagIds, createdBy,
       headline, genre: kind === 'reading' ? genre : '', scene: kind === 'dialogue' ? scene : '',
       topic: subject,
     })
+    if (message) { setBusy(false); setError(message); return }
+
+    // 上で選んでおいたゲストに、そのまま共有する。
+    // 発行と共有が別の操作だと、作ったのに届いていない教材が生まれる。
+    let shared = 0
+    if (shareWith.length) {
+      const { error: shareError } = await assignMaterial({
+        materialId: data.id, learnerIds: shareWith, assignedBy: createdBy,
+      })
+      if (shareError) {
+        setBusy(false)
+        setError(`教材はできましたが、共有できませんでした: ${shareError}`
+          + ' 一覧から共有し直してください。')
+        return
+      }
+      shared = shareWith.length
+    }
+
     setBusy(false)
-    if (message) { setError(message); return }
-    onCreated?.(data.id)
+    onCreated?.(data.id, shared)
   }
 
   return (
@@ -360,11 +383,52 @@ export default function MaterialForm({
         既にある教材を使うほうが、作るよりずっと速く配信できます。
       </p>
 
-      <label className="field">
-        <span>教材名</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)}
-               placeholder="例: 名詞 + to不定詞 =「〜すべき / 〜する必要のある」" required />
-      </label>
+      {/*
+        誰に出すかは**最初に選ぶ**。あとから選ぶ形にしていたため、
+        すべて指定し終えるまで選択肢が出てこず、やりにくかった。
+        ここで選んでおくと、発行と同時に共有まで終わる。
+      */}
+      <fieldset className="field">
+        <legend>
+          誰に出すか
+          <span className="field-hint">
+            選ばずに作って、あとから一覧で共有することもできます
+          </span>
+        </legend>
+        {learners.length === 0 ? (
+          <p className="field-hint">
+            担当しているゲストがまだいません。「ゲスト」タブから追加できます。
+          </p>
+        ) : (
+          <>
+            <div className="tagpicker-tags">
+              {learners.map((l) => (
+                <button
+                  key={l.id} type="button"
+                  className={`tagchip${shareWith.includes(l.id) ? ' is-on' : ''}`}
+                  onClick={() => setShareWith(shareWith.includes(l.id)
+                    ? shareWith.filter((x) => x !== l.id)
+                    : [...shareWith, l.id])}
+                >
+                  {l.display_name}
+                </button>
+              ))}
+            </div>
+            {shareWith.length === 1 && (
+              <p className="field-hint">
+                1人に絞ったので、<strong>そのゲストがこれまでに受け取った英文を1文も使いません</strong>
+                (弱点を問わず、共有済みの教材すべてと照合します)。教材名にもお名前が入ります。
+              </p>
+            )}
+            {shareWith.length > 1 && (
+              <p className="field-hint">
+                {shareWith.length}人に出します。
+                <strong>全員ぶんの「前に出した英文」と照合します。</strong>
+              </p>
+            )}
+          </>
+        )}
+      </fieldset>
 
       <div className="field-row material-form-row">
         <label className="field">
@@ -416,37 +480,6 @@ export default function MaterialForm({
         </label>
       )}
 
-      {isPassageKind(kind) && (
-        <>
-          <label className="field">
-            <span>
-              話題(任意)
-              <span className="field-hint">
-                空のままなら、業界とジャンルに合う話題を AI が決めます。
-                「今週これを読ませたい」があるときだけ書いてください
-              </span>
-            </span>
-            <input
-              type="text" value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="例: 生成AIを社内で使うときのルール作り"
-            />
-          </label>
-
-          <label className="field">
-            <span>
-              見出し
-              <span className="field-hint">作ると自動で入ります。直しても構いません</span>
-            </span>
-            <input
-              type="text" value={headline} lang="en"
-              onChange={(e) => setHeadline(e.target.value)}
-              placeholder="作ると自動で入ります"
-            />
-          </label>
-        </>
-      )}
-
       <label className="field">
         <span>
           業界
@@ -458,22 +491,6 @@ export default function MaterialForm({
             <option key={i.id} value={i.id}>{i.label} — {i.hint}</option>
           ))}
         </select>
-      </label>
-
-      <label className="field">
-        <span>取り組み方(ゲストに見えます・任意)</span>
-        <input value={instruction} onChange={(e) => setInstruction(e.target.value)}
-               placeholder="例: to不定詞を「〜すべき」という感覚で捉えること" />
-      </label>
-
-      <label className="field">
-        <span>
-          指導ポイント
-          <span className="field-hint">この文法全体の勘所。1問ごとではなく教材全体にかかるもの</span>
-        </span>
-        <textarea rows={5} value={teachingPoint}
-                  onChange={(e) => setTeachingPoint(e.target.value)}
-                  placeholder="例: emails to reply to のように、reply to の to を落とさないこと" />
       </label>
 
       <fieldset className="field" ref={tagRef}>
@@ -545,20 +562,6 @@ export default function MaterialForm({
               </button>
             )}
         </div>
-
-        <label className="field">
-          このゲスト向けに作る(任意)
-          <select value={forLearner} onChange={(e) => setForLearner(e.target.value)}>
-            <option value="">指定しない</option>
-            {learners.map((l) => (
-              <option key={l.id} value={l.id}>{l.display_name}</option>
-            ))}
-          </select>
-          <span className="field-hint">
-            指定すると、<strong>そのゲストがこれまでに受け取った英文を1文も使いません</strong>
-            (弱点を問わず、共有済みの教材すべてと照合します)。教材名にもお名前が入ります。
-          </span>
-        </label>
 
         {!isPassageKind(kind) && (
           <p className="card-hint">
@@ -742,6 +745,82 @@ export default function MaterialForm({
         )}
       </fieldset>
 
+      {/*
+        記入欄は既定で閉じておく。並んでいるだけで煩雑に見えるうえ、
+        教材名は自動で付き、指導ポイントも生成で入るため、
+        ふだんは触らなくてよい(2026-08 の指摘)。
+      */}
+      <div className="details-box">
+        <button type="button" className="btn btn--link"
+                onClick={() => setShowDetails(!showDetails)}>
+          {showDetails ? '▾ 詳しく設定する(任意)を閉じる' : '▸ 詳しく設定する(任意)'}
+        </button>
+        {!showDetails && (
+          <p className="field-hint">
+            教材名・取り組み方・指導ポイント
+            {isPassageKind(kind) && '・話題・見出し'}
+            。ふだんは触らなくて構いません(自動で入ります)。
+          </p>
+        )}
+
+        {showDetails && (
+          <>
+            <label className="field">
+              <span>
+                教材名
+                <span className="field-hint">空のままなら、日付と弱点から自動で付きます</span>
+              </span>
+              <input value={title} onChange={(e) => setTitle(e.target.value)}
+                     placeholder="作ると自動で入ります" />
+            </label>
+
+            {isPassageKind(kind) && (
+              <>
+                <label className="field">
+                  <span>
+                    話題(任意)
+                    <span className="field-hint">
+                      空のままなら、業界とジャンルに合う話題を AI が決めます
+                    </span>
+                  </span>
+                  <input type="text" value={subject}
+                         onChange={(e) => setSubject(e.target.value)}
+                         placeholder="例: 生成AIを社内で使うときのルール作り" />
+                </label>
+
+                <label className="field">
+                  <span>
+                    見出し
+                    <span className="field-hint">作ると自動で入ります。直しても構いません</span>
+                  </span>
+                  <input type="text" value={headline} lang="en"
+                         onChange={(e) => setHeadline(e.target.value)}
+                         placeholder="作ると自動で入ります" />
+                </label>
+              </>
+            )}
+
+            <label className="field">
+              <span>取り組み方(ゲストに見えます・任意)</span>
+              <input value={instruction} onChange={(e) => setInstruction(e.target.value)}
+                     placeholder="例: to不定詞を「〜すべき」という感覚で捉えること" />
+            </label>
+
+            <label className="field">
+              <span>
+                指導ポイント
+                <span className="field-hint">
+                  この文法全体の勘所。作ると自動で入ります
+                </span>
+              </span>
+              <textarea rows={5} value={teachingPoint}
+                        onChange={(e) => setTeachingPoint(e.target.value)}
+                        placeholder="例: emails to reply to のように、reply to の to を落とさないこと" />
+            </label>
+          </>
+        )}
+      </div>
+
       <fieldset className="field">
         <legend>公開範囲</legend>
         <div className="btn-row">
@@ -765,7 +844,11 @@ export default function MaterialForm({
 
       <div className="btn-row">
         <button type="submit" className="btn btn--primary" disabled={busy}>
-          {busy ? '発行しています…' : '発行する'}
+          {busy
+            ? '発行しています…'
+            : shareWith.length
+              ? `発行して ${shareWith.length}人と共有する`
+              : '発行する(共有はあとで)'}
         </button>
         <button type="button" className="btn" onClick={onCancel}>やめる</button>
       </div>

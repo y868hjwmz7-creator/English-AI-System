@@ -653,8 +653,12 @@ export async function findSimilarSentences(candidates, {
     let detail = ''
     try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
     if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      // 配置していない場合と、配置したが関数の中で落ちた場合の両方でここに来る。
+      // 落ちると応答に CORS の印が付かず、ブラウザからは区別がつかない。
+      // どちらなのかは Supabase の Logs にしか出ないので、そこを案内する。
       return ng('意味の近さを調べる窓口につながりませんでした。'
-        + 'Supabase に check-similar を配置したか確認してください。')
+        + 'check-similar を配置したか、配置済みなら '
+        + 'Supabase → Edge Functions → check-similar → Logs に出ている理由をご確認ください。')
     }
     return ng(detail || `意味の近さを調べられませんでした: ${error.message}`)
   }
@@ -676,7 +680,7 @@ export async function findSimilarSentences(candidates, {
  *   ③ 意味の近さで照合(ほぼ同じ英文)  ← similar が false なら飛ばす
  */
 export async function generateSectionUnique(params, {
-  usedSet, learnerId, tagIds, similar = true, threshold = SIMILARITY_THRESHOLD,
+  usedSet, learnerIds = [], tagIds, similar = true, threshold = SIMILARITY_THRESHOLD,
 }) {
   const wanted = params.count
   const items = []
@@ -702,10 +706,17 @@ export async function generateSectionUnique(params, {
     droppedTotal += dropped.length
 
     // ② 一字一句同じ英文(データベースに照合)
-    const { data: used, error: lookupError } = await findUsedSentences(
-      kept.flatMap(rawSentencesOf), { learnerId, tagIds },
-    )
-    if (lookupError) return { error: lookupError }
+    //    共有する相手が複数いるときは、**全員ぶん**を見る。
+    //    照合は索引が効くので、人数が増えても軽い。
+    const candidates = kept.flatMap(rawSentencesOf)
+    const used = new Set()
+    for (const scope of learnerIds.length ? learnerIds : [null]) {
+      const { data: hit, error: lookupError } = await findUsedSentences(candidates, {
+        learnerId: scope, tagIds,
+      })
+      if (lookupError) return { error: lookupError }
+      hit.forEach((k) => used.add(k))
+    }
 
     const survived = []
     for (const it of kept) {
@@ -724,8 +735,10 @@ export async function generateSectionUnique(params, {
       // 1問につき1文だけ照合する。提示文と解答は同じ意味なので、
       // 両方送ると同じ判定を2回することになる。
       const texts = survived.map((it) => rawSentencesOf(it)[0] ?? '')
+      // 意味の近さは変換に時間がかかるため、1人ずつは回さない。
+      // 相手が1人ならその人、複数ならライブラリ全体(弱点)で見る。
       const { data: hits, error: simError } = await findSimilarSentences(texts, {
-        learnerId, tagIds, threshold,
+        learnerId: learnerIds.length === 1 ? learnerIds[0] : null, tagIds, threshold,
       })
       if (simError) {
         // 窓口が未配置でも生成そのものは止めない。

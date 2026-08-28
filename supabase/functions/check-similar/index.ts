@@ -48,11 +48,21 @@ const reply = (body: unknown, status = 200) =>
 const normEn = (text: string) =>
   String(text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
-// 一度に変換する既存の文の上限。多すぎると時間切れになる。
-// 足りなければ次の呼び出しで続きが埋まる。
-const BACKFILL_LIMIT = 200
+// 一度に変換する既存の文の上限。
+// Edge Function には CPU 時間と記憶域の上限があり、まとめて変換すると
+// 関数ごと落ちる。落ちると通信そのものが失敗し、原因が分かりにくい。
+// 足りなければ次の呼び出しで続きが埋まるので、少なめにしておく。
+const BACKFILL_LIMIT = 40
 
-Deno.serve(async (req) => {
+/**
+ * 実際の処理。
+ *
+ * **この中で例外が出ても、必ず日本語の理由を JSON で返す。**
+ * 関数がそのまま落ちると、応答に CORS の印が付かず、ブラウザからは
+ * 「窓口につながりませんでした」としか見えない。何が起きたのか
+ * 分からないのがいちばん困る。
+ */
+const handle = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return reply({ error: 'POST で呼んでください' }, 405)
 
@@ -197,4 +207,14 @@ Deno.serve(async (req) => {
       similarity: h.similarity,
     })),
   })
+}
+
+Deno.serve(async (req) => {
+  try {
+    return await handle(req)
+  } catch (e) {
+    console.error('check-similar で予期しない失敗', e)
+    const message = e instanceof Error ? e.message : String(e)
+    return reply({ error: `意味の近さを調べられませんでした: ${message}` }, 500)
+  }
 })

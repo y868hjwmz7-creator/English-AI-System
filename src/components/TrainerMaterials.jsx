@@ -94,7 +94,13 @@ export default function TrainerMaterials({ me }) {
         learners={learners.filter((l) => l.status === 'active')}
         initial={{ tagIds, level: level ?? '', industry }}
         onCancel={() => setMode('search')}
-        onCreated={() => { setMode('search'); setMessage('教材を発行しました。'); search() }}
+        onCreated={(id, shared) => {
+          setMode('search')
+          setMessage(shared
+            ? `教材を発行し、${shared}人と共有しました。`
+            : '教材を発行しました。一覧から共有できます。')
+          search()
+        }}
       />
     )
   }

@@ -733,3 +733,9 @@ html { -webkit-text-size-adjust: 100%; }
   display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
   margin: 10px 0;
 }
+
+/* 詳しい設定。既定では閉じておく */
+.details-box {
+  margin: 14px 0; padding: 10px 12px;
+  border: 1px dashed var(--border); border-radius: var(--radius);
+}
