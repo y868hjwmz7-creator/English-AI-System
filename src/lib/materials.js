@@ -656,9 +656,10 @@ export async function findSimilarSentences(candidates, {
       // 配置していない場合と、配置したが関数の中で落ちた場合の両方でここに来る。
       // 落ちると応答に CORS の印が付かず、ブラウザからは区別がつかない。
       // どちらなのかは Supabase の Logs にしか出ないので、そこを案内する。
-      return ng('意味の近さを調べる窓口につながりませんでした。'
-        + 'check-similar を配置したか、配置済みなら '
-        + 'Supabase → Edge Functions → check-similar → Logs に出ている理由をご確認ください。')
+      return ng('意味の近さを調べる窓口が応答しませんでした。'
+        + '関数が CPU の上限(2秒)で止まった可能性があります。'
+        + 'Supabase → Edge Functions → check-similar → Logs に '
+        + '「CPU Time exceeded」と出ていれば、それです。')
     }
     return ng(detail || `意味の近さを調べられませんでした: ${error.message}`)
   }

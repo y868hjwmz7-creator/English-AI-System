@@ -48,11 +48,22 @@ const reply = (body: unknown, status = 200) =>
 const normEn = (text: string) =>
   String(text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
-// 一度に変換する既存の文の上限。
-// Edge Function には CPU 時間と記憶域の上限があり、まとめて変換すると
-// 関数ごと落ちる。落ちると通信そのものが失敗し、原因が分かりにくい。
-// 足りなければ次の呼び出しで続きが埋まるので、少なめにしておく。
-const BACKFILL_LIMIT = 40
+// ★ここは実機のログで決めた値である。勝手に増やさないこと。
+//
+// Edge Function は **1回の呼び出しで CPU 2秒** までしか使えない。
+// 英文を数値に変換する処理は CPU を使うため、まとめて行うと
+// 「CPU Time exceeded」で関数ごと落ちる。落ちると応答に CORS の印が
+// 付かず、画面には「窓口につながりません」としか出ない(2026-08 実機)。
+//
+// 一度に変換するのは、
+//   ・今回の候補(最大 CANDIDATE_LIMIT 件)
+//   ・まだ変換していない古い英文(最大 BACKFILL_LIMIT 件)
+// の合計だけにする。
+//
+// 0009 以降に作った教材の英文は、作られた時点で候補として変換され
+// 保存されるので、追いつきが要るのは 0009 より前の教材だけである。
+const BACKFILL_LIMIT = 5
+const CANDIDATE_LIMIT = 12
 
 /**
  * 実際の処理。
@@ -97,8 +108,11 @@ const handle = async (req: Request): Promise<Response> => {
     return reply({ error: '送られた内容を読めませんでした' }, 400)
   }
 
+  // 上限を超えた分は見ない。全部見ようとして関数が落ちるより、
+  // 見た範囲で確実に返すほうがよい(落ちると1件も判定できない)。
   const candidates = (Array.isArray(body.candidates) ? body.candidates : [])
     .map((c) => String(c ?? '')).filter((c) => normEn(c))
+    .slice(0, CANDIDATE_LIMIT)
   const learnerId = body.learnerId ? String(body.learnerId) : null
   const tagIds = Array.isArray(body.tagIds) && body.tagIds.length
     ? body.tagIds.map((t) => String(t))
