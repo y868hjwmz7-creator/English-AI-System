@@ -11,6 +11,8 @@ import { useEffect, useState } from 'react'
 import MaterialForm from './MaterialForm.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
+import SpeakButton from './SpeakButton.jsx'
+import { printElement } from '../lib/print.js'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
@@ -239,7 +241,19 @@ export default function TrainerMaterials({ me }) {
               </ul>
 
               {openId === m.id ? (
-                <div className="material-detail">
+                <div className="material-detail" id={`material-${m.id}`}>
+                  {/* 紙に出したときだけ出る見出し。何の教材か分からない
+                      紙が配られると、あとで整理できない */}
+                  <div className="print-only print-head">
+                    <strong>{m.title}</strong>
+                    {m.headline && <div lang="en">{m.headline}</div>}
+                  </div>
+                  <div className="btn-row no-print">
+                    <button type="button" className="btn btn--small"
+                            onClick={() => printElement(document.getElementById(`material-${m.id}`))}>
+                      🖨 印刷 / PDFで保存
+                    </button>
+                  </div>
                   <Tabs
                     variant="sub"
                     ariaLabel="演習の切り替え"
@@ -271,6 +285,11 @@ export default function TrainerMaterials({ me }) {
                               )}
                               {it.speaker && (
                                 <div className="passage-speaker" lang="en">{it.speaker}</div>
+                              )}
+                              {type?.audioFrom && it[type.audioFrom] && (
+                                <div className="item-audio">
+                                  <SpeakButton text={it[type.audioFrom]} />
+                                </div>
                               )}
                               {it.prompt_en && <div lang="en">{it.prompt_en}</div>}
                               {it.prompt_ja && <div>{it.prompt_ja}</div>}

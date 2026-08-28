@@ -749,3 +749,50 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--surface-1); font-size: 14px; line-height: 1.7;
 }
 .generate-done-sample .field-hint { display: block; margin-bottom: 2px; }
+.item-audio { margin: 4px 0; }
+
+/* ── 印刷(PDF で保存)────────────────────────────────────────
+   画面の一部だけを紙に出す。印を付けた部分以外を隠す方式にしてある
+   (別窓を開く方式は iPhone で止められることがあるため)。 */
+.print-only { display: none; }
+
+@media print {
+  /* 印刷用の指定が効くのは、印刷ボタンを押したときだけ */
+  body.is-printing * { visibility: hidden; }
+  body.is-printing .print-target,
+  body.is-printing .print-target * { visibility: visible; }
+  body.is-printing .print-target {
+    position: absolute; left: 0; top: 0; width: 100%;
+    padding: 0; margin: 0; border: none; background: #fff; color: #000;
+  }
+
+  /* 紙に出しても意味のないものは消す */
+  .no-print, .tabbar, .app-header nav, .btn, button { display: none !important; }
+
+  .print-only { display: block; }
+
+  /* 紙は白。画面用の濃い背景のままだとインクを食う */
+  .print-target, .print-target * {
+    background: #fff !important; color: #000 !important; box-shadow: none !important;
+  }
+  .print-target .card, .print-target .exercise-view, .print-target .material-detail {
+    border-color: #bbb !important;
+  }
+  /* 設問が紙の途中で割れないようにする */
+  .print-target li, .print-target .passage-part { break-inside: avoid; }
+  .print-target .section-title { break-after: avoid; }
+
+  @page { margin: 14mm; }
+}
+.print-head { margin-bottom: 10px; font-size: 16px; line-height: 1.5; }
+
+/* ── ゲストの詳細(過去の宿題)──────────────────────────── */
+.learner-name {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font: inherit; color: var(--accent); text-decoration: underline;
+}
+.past-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.past-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.past-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.past-date { font-size: 13px; color: var(--text-secondary); }
+.past-title { margin: 4px 0 2px; font-weight: 600; }

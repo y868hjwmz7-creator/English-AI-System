@@ -382,6 +382,63 @@ export async function loadMyLearnersDetailed() {
   })))
 }
 
+/**
+ * そのゲストに、これまで共有した教材の一覧(トレーナー用)。
+ *
+ * レッスンの前に「先週何を出したか」「やったか」を見る画面で使う。
+ * 見えるのは担当しているゲストの分だけ(RLS が担保する)。
+ */
+export async function loadLearnerAssignments(learnerId, limit = 50) {
+  if (!supabase) return ng('Supabase が設定されていません')
+
+  const { data, error } = await supabase
+    .from('assignments')
+    .select(`
+      id, assigned_at, due_on, learner_done_at, admin_checked_at,
+      materials (
+        id, title, level, kind, headline, teaching_point,
+        material_tags ( tag_id ),
+        material_sections ( id, material_items ( id ) )
+      )
+    `)
+    .eq('learner_id', learnerId)
+    .order('assigned_at', { ascending: false })
+    .limit(limit)
+  if (error) return fail(error, '過去の宿題を読めませんでした')
+
+  return ok((data ?? []).map((a) => ({
+    ...a,
+    material: a.materials
+      ? {
+        ...a.materials,
+        tagIds: (a.materials.material_tags ?? []).map((t) => t.tag_id),
+        itemCount: (a.materials.material_sections ?? [])
+          .reduce((n, sec) => n + (sec.material_items?.length ?? 0), 0),
+      }
+      : null,
+  })))
+}
+
+/** ゲストの学習記録のまとめ(取り組んだ量を見るため) */
+export async function loadLearnerSummary(learnerId) {
+  if (!supabase) return ng('Supabase が設定されていません')
+
+  const { data, error } = await supabase
+    .from('study_logs')
+    .select('studied_on, minutes, category')
+    .eq('user_id', learnerId)
+    .order('studied_on', { ascending: false })
+    .limit(200)
+  if (error) return fail(error, '学習記録を読めませんでした')
+
+  const logs = data ?? []
+  return ok({
+    days: new Set(logs.map((l) => l.studied_on)).size,
+    minutes: logs.reduce((n, l) => n + (Number(l.minutes) || 0), 0),
+    lastOn: logs[0]?.studied_on ?? null,
+  })
+}
+
 /** ゲストの CEFR レベルを記録する(トレーナーのみ) */
 export async function setLearnerCefr(learnerId, cefr) {
   if (!supabase) return ng('Supabase が設定されていません')

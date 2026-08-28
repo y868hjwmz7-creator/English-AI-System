@@ -105,6 +105,27 @@ select pg_temp.expect('トレーナーでも担当外の生徒Cの学習記録�
   (select count(*)::int from public.study_logs
    where user_id = '33333333-3333-3333-3333-333333333333'), 0);
 
+-- ── ゲスト一覧の画面が使う問い合わせ(2026-08 の不具合調査) ──
+--
+-- 「追加したゲストが一覧に出てこない」と報告があったため、画面と
+-- **同じ順序・同じ条件**で引いて、データベース側に問題がないことを固定する。
+--   ① 担当の一覧(learner_admins。終わっていないもの)
+--   ② その id で profiles を引く
+--   ③ 最新スコアの一覧を引く
+
+select pg_temp.expect('ゲスト一覧① 担当の行が読める',
+  (select count(*)::int from public.learner_admins where ended_on is null), 1);
+
+select pg_temp.expect('ゲスト一覧② 担当ゲストの名前が読める',
+  (select display_name from public.profiles
+   where id in (select learner_id from public.learner_admins where ended_on is null)),
+  '生徒B');
+
+select pg_temp.expect('ゲスト一覧③ 最新スコアの一覧を引ける(0件でも失敗しない)',
+  (select count(*)::int >= 0 from public.learner_latest_scores
+   where learner_id in (select learner_id from public.learner_admins where ended_on is null)),
+  true);
+
 select pg_temp.expect_denied('トレーナーでも担当外の生徒Cには配信できない', $$
   insert into public.assignments (material_id, learner_id, assigned_by)
   values ('aaaaaaaa-0000-0000-0000-000000000001',

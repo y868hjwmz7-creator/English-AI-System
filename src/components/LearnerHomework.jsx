@@ -11,6 +11,8 @@ import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseT
 import PassagePractice from './PassagePractice.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
+import SpeakButton from './SpeakButton.jsx'
+import { printElement } from '../lib/print.js'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 
@@ -92,7 +94,19 @@ export default function LearnerHomework() {
                 )}
 
                 {openId === a.id ? (
-                  <>
+                  <div id={`homework-${a.id}`}>
+                    <div className="print-only print-head">
+                      <strong>{a.material?.title}</strong>
+                      {a.material?.headline && <div lang="en">{a.material.headline}</div>}
+                    </div>
+                    <div className="btn-row no-print">
+                      <button type="button" className="btn btn--small"
+                              onClick={() => printElement(
+                                document.getElementById(`homework-${a.id}`),
+                              )}>
+                        🖨 印刷 / PDFで保存
+                      </button>
+                    </div>
                     {a.material?.teaching_point && (
                       <TeachingNote text={a.material.teaching_point} title="ここに注意" />
                     )}
@@ -148,6 +162,16 @@ export default function LearnerHomework() {
                                 {it.tag_id && (
                                   <span className="item-tag">{weaknessTagLabel(it.tag_id)}</span>
                                 )}
+                                {/* 読み上げ。リスニングは英文を見せずに音だけ出す。
+                                    聞く手段が無いと、この演習は解きようがない。 */}
+                                {type?.audioFrom && it[type.audioFrom] && (
+                                  <div className="item-audio">
+                                    <SpeakButton
+                                      text={it[type.audioFrom]}
+                                      label={type.hidePromptFromLearner ? '聞く' : 'お手本'}
+                                    />
+                                  </div>
+                                )}
                                 {/* リスニングは英文を見せない。聞いて答えるため。 */}
                                 {!type?.hidePromptFromLearner && it.prompt_en && (
                                   <div lang="en" className="homework-en">{it.prompt_en}</div>
@@ -176,10 +200,11 @@ export default function LearnerHomework() {
                         </section>
                       )
                     })}
-                    <button type="button" className="btn btn--link" onClick={() => setOpenId(null)}>
+                    <button type="button" className="btn btn--link no-print"
+                            onClick={() => setOpenId(null)}>
                       閉じる
                     </button>
-                  </>
+                  </div>
                 ) : (
                   <button type="button" className="btn btn--small" onClick={() => setOpenId(a.id)}>
                     開く(演習 {a.material?.sections.length ?? 0} 種類 / {a.material?.itemCount ?? 0} 問)

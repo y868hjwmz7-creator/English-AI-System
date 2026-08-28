@@ -8,9 +8,11 @@
 import { useEffect, useState } from 'react'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, scoreTestLabel } from '../data/cefr.js'
 import {
-  addLearnerScore, createAccount, loadMyLearnersDetailed, loadScoreHistory,
-  setLearnerCefr, setLearnerStatus,
+  addLearnerScore, createAccount, kindLabel, loadLearnerAssignments, loadLearnerSummary,
+  loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
 } from '../lib/materials.js'
+import { weaknessTagLabel } from '../data/weaknessTags.js'
+import Tabs from './Tabs.jsx'
 
 const STATUS = {
   active:   { label: '受講中', cls: 'badge--admin' },
@@ -19,6 +21,7 @@ const STATUS = {
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
+const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
 export default function TrainerLearners({ me }) {
   const [learners, setLearners] = useState([])
@@ -27,6 +30,12 @@ export default function TrainerLearners({ me }) {
   const [message, setMessage] = useState(null)
   const [openId, setOpenId] = useState(null)
   const [history, setHistory] = useState([])
+  // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
+  // 過去の宿題を最初に開く(2026-08 の要望)。
+  const [detailTab, setDetailTab] = useState('homework')
+  const [assignments, setAssignments] = useState([])
+  const [summary, setSummary] = useState(null)
+  const [detailBusy, setDetailBusy] = useState(false)
 
   // スコアを入れるための一時的な入力欄
   const [form, setForm] = useState({ testType: 'toeic', score: '', takenOn: today() })
@@ -45,12 +54,19 @@ export default function TrainerLearners({ me }) {
   }
   useEffect(() => { reload() }, [])
 
-  const openDetail = async (id) => {
+  const openDetail = async (id, tab = 'homework') => {
     setOpenId(id)
+    setDetailTab(tab)
     setMessage(null)
     setForm({ testType: 'toeic', score: '', takenOn: today() })
-    const { data } = await loadScoreHistory(id)
-    setHistory(data ?? [])
+    setDetailBusy(true)
+    const [{ data: hist }, { data: past }, { data: sum }] = await Promise.all([
+      loadScoreHistory(id), loadLearnerAssignments(id), loadLearnerSummary(id),
+    ])
+    setHistory(hist ?? [])
+    setAssignments(past ?? [])
+    setSummary(sum ?? null)
+    setDetailBusy(false)
   }
 
   const changeCefr = async (learner, cefr) => {
@@ -189,7 +205,12 @@ export default function TrainerLearners({ me }) {
           <div key={l.id} className="card learner-card">
             <div className="material-head">
               <h3 className="card-title">
-                {l.display_name}
+                {/* 名前を押すと開く。カードのどこかに小さなボタンがあるより、
+                    名前そのものが入口になっているほうが迷わない */}
+                <button type="button" className="learner-name"
+                        onClick={() => (openId === l.id ? setOpenId(null) : openDetail(l.id))}>
+                  {l.display_name}
+                </button>
                 <span className={`badge ${STATUS[l.status]?.cls ?? ''}`}>
                   {STATUS[l.status]?.label ?? l.status}
                 </span>
@@ -217,6 +238,68 @@ export default function TrainerLearners({ me }) {
 
             {openId === l.id ? (
               <div className="assign-box">
+                <Tabs
+                  variant="sub"
+                  ariaLabel="ゲストの情報の切り替え"
+                  value={detailTab}
+                  onChange={setDetailTab}
+                  items={[
+                    { id: 'homework', label: '過去の宿題', count: assignments.length },
+                    { id: 'record', label: 'レベルとスコア' },
+                  ]}
+                />
+
+                {detailTab === 'homework' && (
+                  <>
+                    {summary && (
+                      <p className="card-hint">
+                        学習した日 {summary.days} 日 / 合計 {Math.round(summary.minutes / 60)} 時間
+                        {summary.lastOn && ` / 最後の記録 ${summary.lastOn}`}
+                      </p>
+                    )}
+                    {detailBusy && <p className="muted">読み込み中…</p>}
+                    {!detailBusy && assignments.length === 0 && (
+                      <p className="card-hint">
+                        まだ何も共有していません。「教材」タブから共有できます。
+                      </p>
+                    )}
+                    <ul className="past-list">
+                      {assignments.map((a) => (
+                        <li key={a.id} className="past-item">
+                          <div className="past-head">
+                            <span className="past-date">{formatDate(a.assigned_at)}</span>
+                            <span className={`badge ${a.learner_done_at
+                              ? 'badge--admin' : 'badge--learner'}`}>
+                              {a.learner_done_at ? 'やった' : 'まだ'}
+                            </span>
+                            {a.admin_checked_at && <span className="badge">確認済</span>}
+                          </div>
+                          <div className="past-title">{a.material?.title ?? '(消された教材)'}</div>
+                          {a.material?.headline && (
+                            <div className="muted" lang="en">{a.material.headline}</div>
+                          )}
+                          <div className="muted">
+                            {a.material && `${cefrLabel(a.material.level)} / `}
+                            {a.material && `${kindLabel(a.material.kind)} / `}
+                            {a.material?.itemCount ? `${a.material.itemCount} 問` : ''}
+                          </div>
+                          {!!a.material?.tagIds?.length && (
+                            <div className="tagpicker-tags">
+                              {a.material.tagIds.map((t) => (
+                                <span key={t} className="tagchip is-static">
+                                  {weaknessTagLabel(t)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+
+                {detailTab === 'record' && (
+                <>
                 <p className="field-label">レベル(CEFR)</p>
                 <div className="btn-row">
                   {CEFR_LEVELS.map((c) => (
@@ -276,14 +359,24 @@ export default function TrainerLearners({ me }) {
                   ))}
                 </div>
 
+                </>
+                )}
+
                 <div className="btn-row">
                   <button type="button" className="btn" onClick={() => setOpenId(null)}>閉じる</button>
                 </div>
               </div>
             ) : (
-              <button type="button" className="btn btn--small" onClick={() => openDetail(l.id)}>
-                レベル・スコアを記録する
-              </button>
+              <div className="btn-row">
+                <button type="button" className="btn btn--small"
+                        onClick={() => openDetail(l.id, 'homework')}>
+                  過去の宿題を見る
+                </button>
+                <button type="button" className="btn btn--small"
+                        onClick={() => openDetail(l.id, 'record')}>
+                  レベル・スコアを記録する
+                </button>
+              </div>
             )}
           </div>
         )
