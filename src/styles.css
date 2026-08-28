@@ -976,6 +976,10 @@ html { -webkit-text-size-adjust: 100%; }
   border-radius: 6px; box-shadow: 0 6px 24px rgb(0 0 0 / 35%);
   line-height: 1.9;
 }
+/* 紙の中は、暗い配色を選んでいても黒い文字にする。
+   var(--text-*) を使っている部品が紛れ込んでも消えないようにするため */
+.lesson-sheet, .lesson-sheet * { color: #1a1a1a; }
+.lesson-sheet .muted, .lesson-sheet .field-hint, .lesson-sheet .card-hint { color: #666; }
 .lesson-sheet--m  { font-size: 16px; }
 .lesson-sheet--l  { font-size: 19px; }
 .lesson-sheet--xl { font-size: 23px; }
@@ -1062,9 +1066,23 @@ html { -webkit-text-size-adjust: 100%; }
   font-size: 12px; white-space: nowrap;
 }
 
-/* 紙の上(レッスン表示・印刷)は白黒に寄せる */
+/* 紙の上(レッスン表示・印刷)は白黒に寄せる。
+   **色は必ず決め打ちにする。** var(--text-primary) のままだと、
+   暗い配色のときに白い文字が白い紙に載って消える(2026-08 実機で発生)。 */
+.mtitle--sheet .mtitle-main { color: #1a1a1a; }
 .mtitle--sheet .mtitle-date { color: #666; font-size: .6em; }
 .mtitle--sheet .mtitle-headline { color: #555; font-size: .8em; }
 .mtitle--sheet .mtitle-chip {
   border-color: #bbb; background: transparent; color: #555; font-size: .6em;
+}
+
+/* レッスン表示:1問ずつの解答 */
+.lesson-reveal { margin-top: 6px; margin-left: 8px; }
+.lesson-heard {
+  margin-top: 6px; padding: 6px 10px;
+  border-left: 4px solid #888; background: #f6f6f4;
+  font-size: .9em;
+}
+.lesson-heard-label {
+  display: block; font-size: .68em; color: #666; margin-bottom: 2px;
 }

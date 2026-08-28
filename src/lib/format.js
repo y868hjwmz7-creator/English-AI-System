@@ -84,7 +84,11 @@ export function parseMaterialTitle(title) {
   const m = /^(\d{4}-\d{2}-\d{2})\s*\/\s*(.*)$/.exec(text)
   const date = m ? m[1] : null
   const rest = (m ? m[2] : text).trim()
-  const parts = rest.split('/').map((x) => x.trim()).filter(Boolean)
+  // **「 / 」(前後に空白)でだけ区切る。**
+  // 弱点の名前そのものに「/」が入ることがある(分詞(ing/ed) など)。
+  // 空白なしの「/」まで区切ると、名前が「分詞(ing」と「ed)」に割れる
+  // (2026-08 実機で発生)。教材名の自動生成も「 / 」でつないでいる。
+  const parts = rest.split(/\s+\/\s+/).map((x) => x.trim()).filter(Boolean)
   return { date, main: parts[0] ?? rest, tags: parts.slice(1) }
 }
 

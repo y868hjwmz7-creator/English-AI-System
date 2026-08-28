@@ -31,7 +31,11 @@ const SIZES = [
 export default function LessonView({ material, onClose }) {
   const sections = material?.sections ?? []
   const [page, setPage] = useState(0)
+  // 解答の出し方は2通り。**両方要る。**
+  //   ・右上のボタン … 全部まとめて出す(答え合わせのとき)
+  //   ・問ごとのボタン … 1問ずつ出す(トレーナーとゲストで一緒に進めるとき)
   const [showAnswers, setShowAnswers] = useState(false)
+  const [openItems, setOpenItems] = useState(() => new Set())
   const [size, setSize] = useState('l')
 
   // 開いているあいだは、後ろの画面を動かさない
@@ -45,8 +49,14 @@ export default function LessonView({ material, onClose }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose?.()
-      if (e.key === 'ArrowRight') setPage((p) => Math.min(p + 1, sections.length - 1))
-      if (e.key === 'ArrowLeft') setPage((p) => Math.max(p - 1, 0))
+      if (e.key === 'ArrowRight') {
+        setPage((p) => Math.min(p + 1, sections.length - 1))
+        setOpenItems(new Set())
+      }
+      if (e.key === 'ArrowLeft') {
+        setPage((p) => Math.max(p - 1, 0))
+        setOpenItems(new Set())
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -54,6 +64,7 @@ export default function LessonView({ material, onClose }) {
 
   if (!material) return null
   const section = sections[page]
+  const key = (it, i) => it.id ?? `${page}-${i}`
   const type = section ? exerciseType(section.exercise_type) : null
 
   return (
@@ -64,17 +75,23 @@ export default function LessonView({ material, onClose }) {
 
         <div className="lesson-pages">
           <button type="button" className="btn btn--small"
-                  disabled={page === 0} onClick={() => setPage(page - 1)}>◀</button>
+                  disabled={page === 0}
+                  onClick={() => { setPage(page - 1); setOpenItems(new Set()) }}>◀</button>
           <span>{page + 1} / {sections.length}</span>
           <button type="button" className="btn btn--small"
-                  disabled={page >= sections.length - 1} onClick={() => setPage(page + 1)}>▶</button>
+                  disabled={page >= sections.length - 1}
+                  onClick={() => { setPage(page + 1); setOpenItems(new Set()) }}>▶</button>
         </div>
 
         <div className="lesson-tools">
           <button type="button"
                   className={`btn btn--small${showAnswers ? ' btn--primary' : ''}`}
-                  onClick={() => setShowAnswers(!showAnswers)}>
-            {showAnswers ? '解答を隠す' : '解答を出す'}
+                  onClick={() => {
+                    // 全部出す・全部隠す。1問ずつ開いたものも一緒に閉じる
+                    setShowAnswers(!showAnswers)
+                    setOpenItems(new Set())
+                  }}>
+            {showAnswers ? 'すべての解答を隠す' : 'すべての解答を出す'}
           </button>
           <div className="lesson-sizes">
             {SIZES.map((s) => (
@@ -108,8 +125,8 @@ export default function LessonView({ material, onClose }) {
             {section.instruction && <p className="lesson-instruction">{section.instruction}</p>}
 
             <ol className="lesson-items">
-              {section.items.map((it) => (
-                <li key={it.id ?? it.seq}>
+              {section.items.map((it, i) => (
+                <li key={key(it, i)}>
                   {it.tag_id && <span className="lesson-tag">{weaknessTagLabel(it.tag_id)}</span>}
                   {it.speaker && <div className="lesson-speaker" lang="en">{it.speaker}</div>}
 
@@ -128,13 +145,31 @@ export default function LessonView({ material, onClose }) {
                     />
                   )}
 
-                  {showAnswers && it.answer && (
-                    <div className="lesson-answer">→ {it.answer}</div>
+                  {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。
+                      レッスンで1問ずつ答え合わせをするために、問ごとが要る。 */}
+                  {(it.answer || it.audio_text) && !(showAnswers || openItems.has(key(it, i))) && (
+                    <button type="button" className="btn btn--small lesson-reveal"
+                            onClick={() => setOpenItems(new Set(openItems).add(key(it, i)))}>
+                      解答を見る
+                    </button>
                   )}
-                  {showAnswers && it.answer_alt && (
-                    <div className="lesson-note">別解: {it.answer_alt}</div>
+
+                  {(showAnswers || openItems.has(key(it, i))) && (
+                    <>
+                      {/* リスニングは英文を見せずに聞かせる。答え合わせでは
+                          **読み上げた英文そのもの**を出す。何を言われたのかが
+                          分からないと、直しようがない(2026-08 の指摘)。 */}
+                      {type?.hidePromptFromLearner && it.audio_text && (
+                        <div className="lesson-heard">
+                          <span className="lesson-heard-label">読み上げた英文</span>
+                          <span lang="en">{it.audio_text}</span>
+                        </div>
+                      )}
+                      {it.answer && <div className="lesson-answer">→ {it.answer}</div>}
+                      {it.answer_alt && <div className="lesson-note">別解: {it.answer_alt}</div>}
+                      {it.note && <div className="lesson-note">{it.note}</div>}
+                    </>
                   )}
-                  {showAnswers && it.note && <div className="lesson-note">{it.note}</div>}
                 </li>
               ))}
             </ol>
