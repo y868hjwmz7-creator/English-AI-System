@@ -726,3 +726,10 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 生成に失敗したときの知らせ。押したボタンのすぐ下に出す */
 .generate-error { margin-top: 10px; }
+
+/* 生成ボタンの近くに、いま選んでいる弱点を出す。
+   選んだつもりで選べていない、を防ぐ */
+.generate-chosen {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin: 10px 0;
+}

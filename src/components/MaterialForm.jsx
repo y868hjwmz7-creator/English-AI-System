@@ -66,16 +66,22 @@ const newSection = (typeId = 'translate_en_ja') => ({
   items: [{}, {}, {}],
 })
 
-export default function MaterialForm({ createdBy, learners = [], onCreated, onCancel }) {
+export default function MaterialForm({
+  createdBy, learners = [], initial = {}, onCreated, onCancel,
+}) {
+  // さがす画面で選んだ条件を、そのまま引き継ぐ。
+  // 引き継がないと、探して見つからなかったときに同じ指定をもう一度
+  // 入れ直すことになる。実際に「先に選んだはずの弱点が選ばれていない」と
+  // なってやり直しになった(2026-08)。
   const [title, setTitle] = useState('')
-  const [level, setLevel] = useState('B1')
+  const [level, setLevel] = useState(initial.level || 'B1')
   const [kind, setKind] = useState('pattern')
   const [instruction, setInstruction] = useState('')
   const [teachingPoint, setTeachingPoint] = useState('')
   const [visibility, setVisibility] = useState('school')
-  const [industry, setIndustry] = useState('')
+  const [industry, setIndustry] = useState(initial.industry || '')
   const [sections, setSections] = useState([newSection()])
-  const [tagIds, setTagIds] = useState([])
+  const [tagIds, setTagIds] = useState(initial.tagIds ?? [])
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [generating, setGenerating] = useState(null)   // 生成中の進み具合
@@ -87,6 +93,7 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
   const [similarNotes, setSimilarNotes] = useState([]) // 意味が近すぎて外した文
   const [warning, setWarning] = useState(null)         // 効いていない仕組みの知らせ
   const errorRef = useRef(null)                        // 失敗の知らせまで画面を送る
+  const tagRef = useRef(null)                          // 弱点タグの欄
   const [headline, setHeadline] = useState('')         // 記事の見出し / 会話の題名
   const [genre, setGenre] = useState('news')           // 記事のジャンル
   const [scene, setScene] = useState('casual')         // 会話の場面
@@ -307,6 +314,11 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
     // 文型ドリルは、何の練習かが決まらないと作れない。
     if (!isPassageKind(kind) && tagIds.length === 0) {
       setError('弱点タグを選んでください。何の練習かが決まらないと作れません。')
+      // 知らせを出すだけでなく、直す場所まで画面を送る。
+      // どこを直せばよいか分からないと、探し回ることになる。
+      window.setTimeout(() => {
+        tagRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }, 50)
       return
     }
     if (tagIds.length > MAX_TAGS) {
@@ -464,7 +476,7 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
                   placeholder="例: emails to reply to のように、reply to の to を落とさないこと" />
       </label>
 
-      <fieldset className="field">
+      <fieldset className="field" ref={tagRef}>
         <legend>
           弱点タグ
           <span className="field-hint">
@@ -511,6 +523,28 @@ export default function MaterialForm({ createdBy, learners = [], onCreated, onCa
             シャドーイングやオーバーラッピングは、この本文に対して行います。
           </p>
         )}
+
+        <div className="generate-chosen">
+          <span className="field-hint">いま選んでいる弱点</span>
+          {tagIds.length
+            ? (
+              <span className="tagpicker-tags">
+                {tagIds.map((t) => (
+                  <span key={t} className="tagchip is-static">{weaknessTagLabel(t)}</span>
+                ))}
+              </span>
+            )
+            : (
+              <button
+                type="button" className="btn btn--link"
+                onClick={() => tagRef.current?.scrollIntoView({
+                  block: 'center', behavior: 'smooth',
+                })}
+              >
+                まだ選んでいません(押すと選ぶ場所へ移動します)
+              </button>
+            )}
+        </div>
 
         <label className="field">
           このゲスト向けに作る(任意)

@@ -86,9 +86,13 @@ export default function TrainerMaterials({ me }) {
 
   if (mode === 'create') {
     return (
+      // さがすときに選んだ条件を、そのまま作成画面へ引き継ぐ。
+      // 「探して → 無ければ作る」が既定の動線なので(第5.5節)、
+      // ここで指定が消えると、同じことを2度入力させることになる。
       <MaterialForm
         createdBy={me.id}
         learners={learners.filter((l) => l.status === 'active')}
+        initial={{ tagIds, level: level ?? '', industry }}
         onCancel={() => setMode('search')}
         onCreated={() => { setMode('search'); setMessage('教材を発行しました。'); search() }}
       />
