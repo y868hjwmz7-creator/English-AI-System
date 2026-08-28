@@ -6,6 +6,7 @@ import SignIn from './components/SignIn.jsx'
 import TrainerLearners from './components/TrainerLearners.jsx'
 import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
+import Tabs from './components/Tabs.jsx'
 import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadState, resetState, saveState } from './lib/store.js'
@@ -109,52 +110,23 @@ export default function App() {
           <p className="app-subtitle">ゲストの学習記録・発音練習と、トレーナー向けの管理画面(試作版)</p>
         </div>
 
-        <nav className="tabs" aria-label="画面の切り替え">
-          {/* 教材はトレーナーの中心機能なので最初に置く */}
-          {(!isSupabaseConfigured || isTrainer) && (
-            <button
-              type="button"
-              className={`tab${view === 'materials' ? ' is-active' : ''}`}
-              onClick={() => setView('materials')}
-            >
-              教材
-            </button>
-          )}
-          {(!isSupabaseConfigured || isTrainer) && (
-            <button
-              type="button"
-              className={`tab${view === 'learners' ? ' is-active' : ''}`}
-              onClick={() => setView('learners')}
-            >
-              ゲスト
-            </button>
-          )}
-          {(!isSupabaseConfigured || !isTrainer) && (
-            <button
-              type="button"
-              className={`tab${view === 'homework' ? ' is-active' : ''}`}
-              onClick={() => setView('homework')}
-            >
-              今週の宿題
-            </button>
-          )}
-          <button
-            type="button"
-            className={`tab${view === 'learner' ? ' is-active' : ''}`}
-            onClick={() => setView('learner')}
-          >
-            学習の記録
-          </button>
-          {(!isSupabaseConfigured || isTrainer) && (
-            <button
-              type="button"
-              className={`tab${view === 'admin' ? ' is-active' : ''}`}
-              onClick={() => setView('admin')}
-            >
-              集計
-            </button>
-          )}
-        </nav>
+        {/*
+          タブは役割の順に並べる。トレーナーには「教材 → ゲスト → 集計」が
+          仕事の順で、「今週の宿題 / 学習の記録」は自分自身の学習の画面である。
+          並びが仕事の順になっていないと、毎回目で探すことになる。
+        */}
+        <Tabs
+          ariaLabel="画面の切り替え"
+          value={view}
+          onChange={setView}
+          items={[
+            (!isSupabaseConfigured || isTrainer) && { id: 'materials', label: '教材' },
+            (!isSupabaseConfigured || isTrainer) && { id: 'learners', label: 'ゲスト' },
+            (!isSupabaseConfigured || isTrainer) && { id: 'admin', label: '集計' },
+            (!isSupabaseConfigured || !isTrainer) && { id: 'homework', label: '今週の宿題' },
+            { id: 'learner', label: '学習の記録' },
+          ]}
+        />
       </header>
 
       {session && (

@@ -10,6 +10,7 @@ import { cefrLabel } from '../data/cefr.js'
 import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
 import TeachingNote from './TeachingNote.jsx'
+import Tabs from './Tabs.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 
@@ -20,6 +21,10 @@ export default function LearnerHomework() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [openId, setOpenId] = useState(null)
+  // 教材ごとに、いまどの演習を開いているか。
+  // 記事・設問・語句を縦に全部並べると、スマホでは延々と流れて
+  // 「どこまでやったか」が分からなくなる(2026-08 の指摘)。
+  const [openSection, setOpenSection] = useState({})
 
   const reload = async () => {
     const { data, error: e } = await loadMyAssignments()
@@ -91,7 +96,28 @@ export default function LearnerHomework() {
                     {a.material?.teaching_point && (
                       <TeachingNote text={a.material.teaching_point} title="ここに注意" />
                     )}
-                    {a.material?.sections.map((sec) => {
+                    {(() => {
+                      const secs = a.material?.sections ?? []
+                      const currentId = openSection[a.id] ?? secs[0]?.id
+                      return (
+                        <Tabs
+                          variant="sub"
+                          ariaLabel="演習の切り替え"
+                          value={currentId}
+                          onChange={(id) => setOpenSection((m) => ({ ...m, [a.id]: id }))}
+                          items={secs.map((sec) => ({
+                            id: sec.id,
+                            label: exerciseLabel(sec.exercise_type),
+                            count: isPassageSection(sec.exercise_type) ? null : sec.items.length,
+                          }))}
+                        />
+                      )
+                    })()}
+                    {a.material?.sections
+                      .filter((sec, i) =>
+                        sec.id === (openSection[a.id] ?? a.material.sections[0]?.id)
+                        || (a.material.sections.length < 2 && i === 0))
+                      .map((sec) => {
                       const type = exerciseType(sec.exercise_type)
                       // 記事・会話は「問」ではなく1本の読み物。
                       // 声に出す練習は、この中で取り組み方を切り替える。

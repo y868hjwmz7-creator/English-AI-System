@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import MaterialForm from './MaterialForm.jsx'
 import TeachingNote from './TeachingNote.jsx'
+import Tabs from './Tabs.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
@@ -31,6 +32,7 @@ export default function TrainerMaterials({ me }) {
   const [scene, setScene] = useState('')       // 会話の場面
   const [sort, setSort] = useState('new')      // 並び順
   const [openId, setOpenId] = useState(null)   // 中身を開いている教材
+  const [openSection, setOpenSection] = useState({})  // 教材ごとに開いている演習
 
   const [materials, setMaterials] = useState([])
   const [learners, setLearners] = useState([])
@@ -228,7 +230,21 @@ export default function TrainerMaterials({ me }) {
 
               {openId === m.id ? (
                 <div className="material-detail">
-                  {m.sections.map((sec) => {
+                  <Tabs
+                    variant="sub"
+                    ariaLabel="演習の切り替え"
+                    value={openSection[m.id] ?? m.sections[0]?.id}
+                    onChange={(id) => setOpenSection((x) => ({ ...x, [m.id]: id }))}
+                    items={m.sections.map((sec) => ({
+                      id: sec.id,
+                      label: exerciseLabel(sec.exercise_type),
+                      count: sec.items.length,
+                    }))}
+                  />
+                  {m.sections
+                    .filter((sec, i) => sec.id === (openSection[m.id] ?? m.sections[0]?.id)
+                      || (m.sections.length < 2 && i === 0))
+                    .map((sec) => {
                     const type = exerciseType(sec.exercise_type)
                     return (
                       <section key={sec.id} className="exercise-view">

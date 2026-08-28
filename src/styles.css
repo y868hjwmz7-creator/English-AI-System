@@ -106,12 +106,51 @@ body {
 .app-title { margin: 0; font-size: 22px; letter-spacing: 0.01em; }
 .app-subtitle { margin: 4px 0 0; color: var(--text-secondary); font-size: 13px; }
 
-.tabs { display: flex; gap: 4px; }
-.tab {
-  padding: 8px 16px; border: 1px solid var(--border); background: var(--surface-1);
-  color: var(--text-secondary); border-radius: var(--radius); cursor: pointer; font-size: 14px;
+/* ---------------- タブ ----------------
+   スマホでは折り返さず、横に流す。折り返すと「教」「材」のように
+   縦に割れて読めなくなる(実機で確認、2026-08)。 */
+.tabbar {
+  display: flex; gap: 2px;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
 }
-.tab.is-active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.tabbar::-webkit-scrollbar { display: none; }
+.tabbar-tab {
+  flex: 0 0 auto; white-space: nowrap;
+  border: none; background: none; cursor: pointer;
+  color: var(--text-secondary); font-size: 15px;
+}
+.tabbar-count {
+  /* 選ばれたタブは背景が濃くなるので、色を固定せず親に合わせる。
+     固定すると、濃い背景の上で白い丸だけが浮いて見える */
+  margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  color: inherit; font-size: 12px; font-variant-numeric: tabular-nums;
+}
+
+/* 画面の切り替え(下線で示す)。上に貼り付いて、どこにいても切り替えられる */
+.tabbar--main {
+  position: sticky; top: 0; z-index: 20;
+  gap: 4px; border-bottom: 1px solid var(--border);
+  background: var(--surface-0, var(--bg, #fff));
+  margin: 0 -4px; padding: 0 4px;
+}
+.tabbar--main .tabbar-tab {
+  padding: 12px 14px; border-bottom: 2px solid transparent; font-weight: 500;
+}
+.tabbar--main .tabbar-tab.is-active {
+  color: var(--accent); border-bottom-color: var(--accent); font-weight: 700;
+}
+
+/* 教材の中の切り替え(丸い札で示す)。画面の切り替えと見分けるため形を変える */
+.tabbar--sub { gap: 6px; margin: 8px 0 10px; }
+.tabbar--sub .tabbar-tab {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-1); font-size: 14px;
+}
+.tabbar--sub .tabbar-tab.is-active {
+  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+}
 
 .app-toolbar {
   display: flex; flex-wrap: wrap; gap: var(--gap);
@@ -344,7 +383,7 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 指で操作する端末では、押す場所を大きくする */
 @media (pointer: coarse) {
-  .btn, .tab { min-height: 44px; }
+  .btn, .tabbar-tab { min-height: 44px; }
   .chip { min-height: 38px; }
   .btn--link { min-height: 0; }
 
