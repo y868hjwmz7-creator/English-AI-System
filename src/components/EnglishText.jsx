@@ -6,29 +6,25 @@
  *   ・その場で「知っていた」「知らなかった」を選べる
  *   ・**「知らなかった」と付けた語は色が変わり、次に開いても色のまま**
  *
- * 【触り方 — どの端末でも同じように使えること】
- *   最初の作りは「パソコンはカーソルを置くだけ / スマホは長押し」だった。
- *   これは2つの点で失敗した(2026-08 実機)。
+ * 【触り方】(2026-08 利用者の指定)
  *
- *   ① **カーソルの判定を外すと、何をしても開かない。**
- *      `(hover: hover) and (pointer: fine)` は、触れる画面のついた
- *      パソコンなどで false になることがある。そのとき長押ししか
- *      残らないので、利用者からは「壊れている」ようにしか見えない。
- *   ② **吹き出しのボタンを押せない。**
- *      語から外れた瞬間に閉じていたため、「知っていた」を押そうと
- *      カーソルを動かすと、その途中で消えてしまった。
- *
- *   そこで作り直した。
- *
- *   | 操作 | 何が起きるか |
+ *   | 端末 | 開き方 |
  *   |---|---|
- *   | **押す / 触る** | 開いて**そのまま留まる**。もう一度押すと閉じる |
- *   | カーソルを置く | 開く(留まらない) |
- *   | 語や吹き出しから離れる | **0.6秒待ってから**閉じる(留まっているときは閉じない) |
- *   | ✕ / 外側を押す / Esc | 閉じる |
+ *   | パソコン(マウス・ペン) | 語を**クリック**する |
+ *   | スマホ・タブレット | 語を **450ms 押し続ける**(少し長めに触れる) |
  *
- *   **押す操作はどの端末でも必ず効く。** カーソルの判定は「おまけ」に
- *   格下げした。判定を外しても使えなくならない。
+ *   **カーソルを置いただけでは開かない。** 読んでいる途中で次々に開くと、
+ *   本文が読めなくなる。**軽く触れただけでも開かない。**
+ *   画面を送るだけで開いてしまうため。
+ *
+ *   判定は「その操作がどれで来たか」(`pointerType`)で行う。
+ *   `(hover: hover)` のような**環境の当て推量に賭けない。**
+ *   一度この判定を外して「何をしても開かない」状態になった(2026-08)。
+ *
+ *   【開いたら、閉じる操作をするまで留まる】
+ *   語から外れた瞬間に閉じていたため、「知っていた」を押そうと
+ *   カーソルを動かすと途中で消えていた(2026-08 の指摘)。
+ *   いまは ✕ / 外側を押す / Esc / 同じ語をもう一度押す、で閉じる。
  *
  * 【意味はいつ引くか】
  *   **開いたときに初めて引く。** 本文を出した時点で全部引くと、
@@ -41,48 +37,36 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { lookupWord, splitWords } from '../lib/vocab.js'
 
-/** カーソルが使える端末か。**開けるかどうかを、これだけに頼らない** */
-const hasHover = () => {
-  try { return window.matchMedia('(hover: hover) and (pointer: fine)').matches } catch { return false }
-}
-
-/** 離れてから閉じるまでの猶予。吹き出しのボタンまで動かす時間 */
-const CLOSE_DELAY = 600
+/** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
+const HOLD_MS = 450
 
 export default function EnglishText({
   text, level = 'B1', statuses = null, onMark = null, className = '', lang = 'en',
 }) {
   const [openIndex, setOpenIndex] = useState(null)  // いま開いている語
-  const [pinned, setPinned] = useState(false)       // 押して開いた(留まる)
   const [gloss, setGloss] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const closeTimer = useRef(null)
+  const holdTimer = useRef(null)   // 長押しの計測
+  const heldRef = useRef(false)    // 長押しで開いた直後か(続く click を捨てる)
+  const touchRef = useRef(false)   // 直前の操作が「触る」だったか
   const popRef = useRef(null)
   const rootRef = useRef(null)
   const parts = splitWords(text ?? '')
 
-  const cancelClose = () => {
-    if (closeTimer.current) { window.clearTimeout(closeTimer.current); closeTimer.current = null }
+  const cancelHold = () => {
+    if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null }
   }
 
   const close = () => {
-    cancelClose()
+    cancelHold()
     setOpenIndex(null)
-    setPinned(false)
     setGloss(null)
     setError(null)
   }
 
-  /** 離れた。**すぐには閉じない。** 吹き出しまで動かす時間を残す */
-  const scheduleClose = () => {
-    if (pinned) return
-    cancelClose()
-    closeTimer.current = window.setTimeout(close, CLOSE_DELAY)
-  }
-
   const open = async (index, part) => {
-    cancelClose()
+    cancelHold()
     if (openIndex === index && gloss) return   // すでに出ている
     setOpenIndex(index)
     setGloss(null)
@@ -94,7 +78,7 @@ export default function EnglishText({
     setGloss(data)
   }
 
-  useEffect(() => cancelClose, [])
+  useEffect(() => cancelHold, [])
 
   // 外側を押す / Esc で閉じる。**留めたものを閉じる手段が要る**
   useEffect(() => {
@@ -138,25 +122,38 @@ export default function EnglishText({
               type="button"
               className={`etext-word${status ? ` is-${status}` : ''}${isOpen ? ' is-open' : ''}`}
               aria-expanded={isOpen}
-              // **押す操作はどの端末でも必ず効く。** これが本筋
-              onClick={() => {
-                if (isOpen && pinned) { close(); return }
-                setPinned(true)
-                open(i, part)
+              // どの操作で来たかで分ける。**環境の当て推量に賭けない**
+              onPointerDown={(e) => {
+                touchRef.current = e.pointerType === 'touch'
+                heldRef.current = false
+                if (!touchRef.current) return
+                // 触る端末: 少し長めに触れたときだけ開く
+                cancelHold()
+                holdTimer.current = window.setTimeout(() => {
+                  heldRef.current = true
+                  if (isOpen) close()
+                  else open(i, part)
+                }, HOLD_MS)
               }}
-              // カーソルはおまけ。置いただけでも出るが、留まらない
-              onMouseEnter={() => { cancelClose(); if (hasHover() && !pinned) open(i, part) }}
-              onMouseLeave={scheduleClose}
+              onPointerUp={cancelHold}
+              onPointerCancel={cancelHold}
+              onPointerMove={() => { if (touchRef.current) cancelHold() }}
+              onClick={() => {
+                // 長押しで開いた直後の click は捨てる(すぐ閉じてしまうため)
+                if (heldRef.current) { heldRef.current = false; return }
+                // 触る端末では、軽く触れただけでは開かない
+                if (touchRef.current) return
+                if (isOpen) close()
+                else open(i, part)
+              }}
             >
               {part.text}
             </button>
 
+            {/* 開いたら、閉じる操作をするまで留まる。
+                離れた瞬間に閉じていたため、中のボタンを押せなかった */}
             {isOpen && (
-              <span
-                className="etext-pop no-print" role="dialog" ref={popRef}
-                onMouseEnter={cancelClose}
-                onMouseLeave={scheduleClose}
-              >
+              <span className="etext-pop no-print" role="dialog" ref={popRef}>
                 {busy && <span className="etext-pop-busy">調べています…</span>}
                 {error && <span className="etext-pop-error">{error}</span>}
                 {gloss && (
