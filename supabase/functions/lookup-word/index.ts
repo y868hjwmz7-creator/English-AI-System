@@ -16,17 +16,21 @@
 //   **新しい語1つあたり およそ 0.0005 円**。以後は無料。
 //
 // 【意味は文の中で決まる】
-//   run は「走る」とは限らない。**その語が出てきた文をそのまま渡す。**
-//   ただし控えは語ごとに1つなので、**最初に引いたときの文脈の意味**が
-//   残る。ここは割り切り(`要確認`。別の意味が要ると分かったら、
-//   語+文脈の組で持つ形に変える)。
+//   run は「走る」とは限らない。利用者の指定で、
+//   **その文でふさわしい意味を先頭に置き、他の意味も続けて出す**
+//   (2026-08)。画面では先頭を大きく、二番目以降を小さく出す。
+//
+//   そのため控えの鍵は **(語, 出てきた文の指紋) の組**にしてある。
+//   同じ教材の同じ文なら、最初の1人が触れたときだけ費用がかかり、
+//   以後は誰が触れても無料。別の文に出てきた同じ語は、そのとき一度だけ引く。
 //
 // 【呼び出し方(アプリ側)】
 //   supabase.functions.invoke('lookup-word', {
 //     body: { word: 'deployment', sentence: 'The deployment failed.', level: 'B1' }
 //   })
-//   返るもの: { gloss: { word_norm, display, pos, meaning_ja, example_en, note },
-//               cached: true | false }
+//   返るもの: { gloss: { word_norm, display, senses: [{pos, meaning_ja,
+//               example_en, note}, …] }, cached: true | false }
+//   senses は**ふさわしい順**。先頭がその文での意味。
 //
 // 【安全のために】
 //   ・ログインしている人だけが呼べる
@@ -57,6 +61,22 @@ const normWord = (text: string) =>
     .trim()
     .replace(/^[\s'-]+|[\s'-]+$/g, '')
 
+/**
+ * 出てきた文の「指紋」。
+ *
+ * 文はそのまま鍵にするには長すぎる。そろえてから SHA-256 を取り、
+ * 先頭16文字を使う。**そろえ方を変えると、これまでの控えを
+ * 引き当てられなくなる**(費用が増えるだけで壊れはしない)。
+ */
+async function contextKeyOf(sentence: string): Promise<string> {
+  const norm = String(sentence ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  if (!norm) return ''
+  const bytes = new TextEncoder().encode(norm)
+  const hash = await crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
+}
+
 // 使うモデル。generate-material と合わせてある。
 // **変えたら画面側の単価(PRICE_PER_MTOK)も一緒に変えること。**
 const MODEL = 'claude-sonnet-5'
@@ -64,13 +84,24 @@ const MODEL = 'claude-sonnet-5'
 const SYSTEM_PROMPT = `あなたは日本人のビジネス英語学習者に語の意味を教える辞書である。
 
 # 守ること
-1. **文の中での意味**を答える。辞書の1番目の意味を機械的に写さない
-2. 品詞は日本語で1語(名詞 / 動詞 / 形容詞 / 副詞 / 前置詞 / 接続詞 /
-   代名詞 / 助動詞 / 間投詞 / 熟語 のいずれか)
-3. 意味は**日本語で30字以内**。言い換えを2つまで「・」で並べてよい
-4. 例文は**短い1文**(8語以内)。渡された文をそのまま写さない
-5. 注意は、**日本人が間違えやすい点があるときだけ**。無ければ空文字
-6. 見出し(display)は、渡された語の**そのままの形**にする。
+1. **意味を1〜4件返す。** そして
+   **その文でふさわしい意味を必ず先頭に置く。**
+   例: 「The trains run every ten minutes.」の run なら
+   1番目に「(電車が)走る・運行する」、2番目以降に「運営する」「動かす」。
+   「She runs a small bakery.」の run なら
+   1番目に「(店を)経営する・運営する」、2番目以降に「走る」。
+   **辞書の並び順を機械的に写さない。** 文を読んで決めること
+2. 2件目以降は、**その語を学ぶうえで知っておくべき他の意味**を、
+   よく使う順に並べる。無理に4件にしない。1件で十分なら1件でよい
+3. 品詞は日本語で1語(名詞 / 動詞 / 形容詞 / 副詞 / 前置詞 / 接続詞 /
+   代名詞 / 助動詞 / 間投詞 / 熟語 のいずれか)。**意味ごとに付ける**
+   (run は「走る」なら動詞、「運営」なら動詞、「連続」なら名詞)
+4. 意味は**日本語で30字以内**。言い換えを2つまで「・」で並べてよい
+5. 例文は**短い1文**(8語以内)。渡された文をそのまま写さない。
+   **その意味で使っている例**にする
+6. 注意は、**日本人が間違えやすい点があるときだけ**。無ければ空文字。
+   先頭の意味にだけ付ければよい
+7. 見出し(display)は、渡された語の**そのままの形**にする。
    原形に戻さない(went を go にしない)。活用形なら意味の中で触れる
 
 # 出力
@@ -83,13 +114,24 @@ const EMIT_GLOSS_TOOL = {
   input_schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['display', 'pos', 'meaning_ja', 'example_en', 'note'],
+    required: ['display', 'senses'],
     properties: {
-      display:    { type: 'string', description: '見出し。渡された語のままの形' },
-      pos:        { type: 'string', description: '品詞(日本語で1語)' },
-      meaning_ja: { type: 'string', description: 'この文の中での意味(日本語30字以内)' },
-      example_en: { type: 'string', description: '短い例文(英語8語以内)' },
-      note:       { type: 'string', description: '間違えやすい点。無ければ空文字' },
+      display: { type: 'string', description: '見出し。渡された語のままの形' },
+      senses: {
+        type: 'array',
+        description: '意味。**その文でふさわしいものを先頭に**、1〜4件',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['pos', 'meaning_ja', 'example_en', 'note'],
+          properties: {
+            pos:        { type: 'string', description: '品詞(日本語で1語)' },
+            meaning_ja: { type: 'string', description: '意味(日本語30字以内)' },
+            example_en: { type: 'string', description: 'その意味で使った短い例文(英語8語以内)' },
+            note:       { type: 'string', description: '間違えやすい点。無ければ空文字' },
+          },
+        },
+      },
     },
   },
 }
@@ -122,13 +164,15 @@ Deno.serve(async (req) => {
 
     const sentence = String(body.sentence ?? '').trim().slice(0, 400)
     const level = String(body.level ?? 'B1').trim().slice(0, 20)
+    const contextKey = await contextKeyOf(sentence)
 
     // ── 3. 控えにあれば、それを返す(費用がかからない) ─────
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
       auth: { persistSession: false },
     })
     const { data: cached } = await admin
-      .from('word_glosses').select('*').eq('word_norm', wordNorm).maybeSingle()
+      .from('word_glosses').select('*')
+      .eq('word_norm', wordNorm).eq('context_key', contextKey).maybeSingle()
     if (cached) return reply({ gloss: cached, cached: true })
 
     // ── 4. 無ければ1語だけ引く ─────────────────────────────
@@ -144,7 +188,7 @@ Deno.serve(async (req) => {
     const response = await client.messages.create({
       model: MODEL,
       // 返すのは短い1件だけ。ここが大きいと、間違って長く書かせたときに響く
-      max_tokens: 1000,
+      max_tokens: 1500,
       // 辞書を引くだけなので、考える量は最小でよい(費用は考えた分もかかる)
       output_config: { effort: 'low' },
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
@@ -167,24 +211,37 @@ Deno.serve(async (req) => {
     if (!block || block.type !== 'tool_use') {
       return reply({ error: '意味を読み取れませんでした。もう一度お試しください。' }, 200)
     }
-    const out = block.input as Record<string, string>
-    if (!out.meaning_ja) {
+    const out = block.input as { display?: string; senses?: Record<string, string>[] }
+    // **中身が0件のまま「成功」を返さない**(第5.19.6節と同じ考え方)
+    const senses = (out.senses ?? [])
+      .filter((x) => String(x?.meaning_ja ?? '').trim())
+      .slice(0, 4)
+      .map((x) => ({
+        pos: x.pos ?? '',
+        meaning_ja: x.meaning_ja,
+        example_en: x.example_en ?? '',
+        note: x.note ?? '',
+      }))
+    if (!senses.length) {
       return reply({ error: '意味が空で返ってきました。もう一度お試しください。' }, 200)
     }
 
+    // 古い列にも先頭の意味を入れておく。0011 の形で読む場所が残っていても壊れない
     const gloss = {
       word_norm: wordNorm,
+      context_key: contextKey,
       display: out.display || raw,
-      pos: out.pos || '',
-      meaning_ja: out.meaning_ja,
-      example_en: out.example_en || null,
-      note: out.note || null,
+      pos: senses[0].pos,
+      meaning_ja: senses[0].meaning_ja,
+      example_en: senses[0].example_en || null,
+      note: senses[0].note || null,
+      senses,
     }
 
     // ── 5. 控えに残す。**次からは無料で出る** ───────────────
     //   同時に別の人が同じ語を引くことがあるので、衝突は無視する。
     const { error: saveError } = await admin
-      .from('word_glosses').upsert(gloss, { onConflict: 'word_norm' })
+      .from('word_glosses').upsert(gloss, { onConflict: 'word_norm,context_key' })
     if (saveError) console.error('控えに残せませんでした', saveError)
 
     return reply({

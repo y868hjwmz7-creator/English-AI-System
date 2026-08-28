@@ -52,20 +52,18 @@ export function splitWords(text) {
 }
 
 /**
- * 意味と品詞を引く。
+ * 意味と品詞を引く。**その文でふさわしい意味が先頭**で返る。
  *
- * まず控えを読む(無料)。無ければ窓口に尋ねる。
- * 窓口が控えに残すので、**同じ語の2回目からはここで終わる。**
+ * 控えの鍵は「語 + 出てきた文」の組である。文の指紋の作り方は
+ * 窓口(lookup-word)の中にしかないので、**画面からは控えを直接読まない。**
+ * 同じ規則を4か所目に増やすと、必ずずれる(第5.23.7節)。
+ *
+ * 窓口は、控えにあればそれを返す(費用なし)。無ければ1語だけ引いて残す。
  */
 export async function lookupWord({ word, sentence = '', level = 'B1' }) {
   const norm = normWord(word)
   if (!norm) return ng('英語の語ではありません')
   if (!supabase) return ng('Supabase が設定されていません')
-
-  const { data: cached, error: readError } = await supabase
-    .from('word_glosses').select('*').eq('word_norm', norm).maybeSingle()
-  if (readError) return fail(readError, '意味の控えを読めませんでした')
-  if (cached) return ok(cached)
 
   const { data, error } = await supabase.functions.invoke('lookup-word', {
     body: { word, sentence, level },
@@ -81,7 +79,23 @@ export async function lookupWord({ word, sentence = '', level = 'B1' }) {
   }
   if (data?.error) return ng(data.error)
   if (!data?.gloss) return ng('意味を読み取れませんでした')
-  return ok(data.gloss)
+  return ok(withSenses(data.gloss))
+}
+
+/**
+ * 控えの形をそろえる。
+ * 0012 より前に作った控えは `senses` を持たない。古い列から組み立てる。
+ */
+function withSenses(gloss) {
+  const senses = Array.isArray(gloss?.senses) && gloss.senses.length
+    ? gloss.senses
+    : [{
+      pos: gloss?.pos ?? '',
+      meaning_ja: gloss?.meaning_ja ?? '',
+      example_en: gloss?.example_en ?? '',
+      note: gloss?.note ?? '',
+    }].filter((x) => x.meaning_ja)
+  return { ...gloss, senses }
 }
 
 // ── 知っていた / 知らなかった ────────────────────────────────

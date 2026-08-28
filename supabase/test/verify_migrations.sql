@@ -122,4 +122,12 @@ from (
   union all
   select '㉚ 語のそろえ方がある(0011)', (
     select public.norm_word('"Deployment,"') = 'deployment'), 30
+  union all
+  select '㉛ 意味を複数持てる(0012)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'word_glosses' and column_name = 'senses'), 31
+  union all
+  select '㉜ 文脈ごとに控えを持てる(0012)', (
+    select array_length(conkey, 1) = 2 from pg_constraint
+    where conrelid = 'public.word_glosses'::regclass and contype = 'p'), 32
 ) t order by 順;

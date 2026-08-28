@@ -53,9 +53,16 @@ insert into public.learner_admins (admin_id, learner_id) values
   ('e1111111-1111-1111-1111-111111111111', 'e2222222-2222-2222-2222-222222222222');
 
 -- 意味の控えを1つ置く(本番では Edge Function が service_role で入れる)
-insert into public.word_glosses (word_norm, display, pos, meaning_ja, example_en)
-values ('deployment', 'deployment', '名詞', '(システムの)配置・リリース',
-        'The deployment failed last night.');
+insert into public.word_glosses (word_norm, context_key, display, pos, meaning_ja, example_en, senses)
+values ('deployment', '', 'deployment', '名詞', '(システムの)配置・リリース',
+        'The deployment failed last night.',
+        '[{"pos":"名詞","meaning_ja":"(システムの)配置・リリース",
+           "example_en":"The deployment failed last night.","note":""}]'::jsonb);
+
+-- 同じ語でも、出てきた文が違えば別の控えになる(0012)
+insert into public.word_glosses (word_norm, context_key, display, pos, meaning_ja, senses)
+values ('deployment', 'abc123', 'deployment', '名詞', '(部隊の)配置',
+        '[{"pos":"名詞","meaning_ja":"(部隊の)配置","example_en":"","note":""}]'::jsonb);
 
 -- ── 語のそろえ方 ──────────────────────────────────────────────
 select pg_temp.ok('大文字小文字をそろえる',
@@ -81,8 +88,12 @@ set role authenticated;
 set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
 
 select pg_temp.ok('意味の控えは読める',
-  (select meaning_ja from public.word_glosses where word_norm = 'deployment'),
+  (select meaning_ja from public.word_glosses
+   where word_norm = 'deployment' and context_key = ''),
   '(システムの)配置・リリース');
+
+select pg_temp.ok('同じ語でも、出てきた文が違えば別の控えになる(0012)',
+  (select count(*)::int from public.word_glosses where word_norm = 'deployment'), 2);
 
 select pg_temp.denied('意味の控えは書き込めない(勝手な意味を混ぜられない)',
   $$insert into public.word_glosses (word_norm, display, pos, meaning_ja)
@@ -92,12 +103,17 @@ select pg_temp.denied('意味の控えは書き込めない(勝手な意味を�
 -- 「拒否された」ではなく「変わっていない」で確かめる。
 update public.word_glosses set meaning_ja = 'でたらめ' where word_norm = 'deployment';
 select pg_temp.ok('意味の控えは書き換えられない(値が変わらない)',
-  (select meaning_ja from public.word_glosses where word_norm = 'deployment'),
+  (select meaning_ja from public.word_glosses
+   where word_norm = 'deployment' and context_key = ''),
   '(システムの)配置・リリース');
 
 delete from public.word_glosses where word_norm = 'deployment';
 select pg_temp.ok('意味の控えは消せない',
-  (select count(*)::int from public.word_glosses where word_norm = 'deployment'), 1);
+  (select count(*)::int from public.word_glosses where word_norm = 'deployment'), 2);
+
+select pg_temp.ok('意味は複数持てる(0012)',
+  (select jsonb_array_length(senses) from public.word_glosses
+   where word_norm = 'deployment' and context_key = ''), 1);
 
 insert into public.word_reviews (learner_id, word_norm, status)
 values ('e2222222-2222-2222-2222-222222222222', 'deployment', 'unknown');
@@ -184,6 +200,17 @@ select pg_temp.ok('担当ゲストの復習語を読める',
 select pg_temp.ok('復習語には意味と品詞が付いてくる',
   (select pos from public.review_words(
      'e2222222-2222-2222-2222-222222222222', 'unknown', 40)), '名詞');
+
+-- 0012 で同じ語の控えが複数になった。**そのまま結合すると同じ語が何度も並ぶ。**
+select pg_temp.ok('同じ語の控えが複数あっても、復習の一覧には1回しか出ない',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40)
+   where word_norm = 'deployment'), 1);
+
+select pg_temp.ok('文脈の指定が無い控えのほうが使われる',
+  (select meaning_ja from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40)
+   where word_norm = 'deployment'), '(システムの)配置・リリース');
 
 select pg_temp.ok('配信した語句を取り出せる',
   (select count(*)::int from public.homework_words(

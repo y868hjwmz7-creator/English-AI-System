@@ -1050,20 +1050,39 @@ html { -webkit-text-size-adjust: 100%; }
 .etext-pop {
   position: absolute; left: 0; top: 1.6em; z-index: 40;
   display: flex; flex-direction: column; gap: 4px;
-  min-width: 248px; max-width: min(88vw, 340px);
+  min-width: 272px; max-width: min(90vw, 384px);
   padding: 10px 26px 10px 12px;
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
   font-size: 13px; line-height: 1.6; text-align: left; white-space: normal;
 }
-.etext-pop-head { display: flex; align-items: center; gap: 8px; }
+.etext-pop-head {
+  display: flex; align-items: baseline; gap: 8px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.etext-pop-head strong { font-size: 15px; }
 .etext-pos {
   padding: 0 7px; border: 1px solid var(--border); border-radius: 999px;
-  font-size: 11px; color: var(--text-secondary);
+  font-size: 11px; color: var(--text-secondary); flex: none;
 }
-.etext-pop-mean { font-weight: 600; }
+
+/* 意味の並び。**先頭がその文での意味**なので大きく、以降は小さく。
+   大きさで「どれがいま効いている意味か」が一目で分かる(2026-08 の指定) */
+.etext-sense { display: flex; flex-direction: column; gap: 2px; }
+.etext-sense-line { display: flex; align-items: baseline; gap: 6px; }
+.etext-sense-mean { font-size: 12.5px; color: var(--text-secondary); }
+.etext-sense.is-main .etext-sense-mean {
+  font-size: 15px; font-weight: 700; color: var(--text-primary);
+}
+.etext-sense.is-main { padding-bottom: 4px; }
+.etext-sense + .etext-sense { margin-top: 3px; }
+.etext-sense-no {
+  min-width: 1.1em; color: var(--text-muted); font-size: 11px; flex: none;
+}
+.etext-sense:not(.is-main) .etext-pos { font-size: 10px; padding: 0 5px; }
 .etext-pop-ex { color: var(--text-secondary); font-size: 12px; }
+.etext-sense:not(.is-main) .etext-pop-ex { font-size: 11px; color: var(--text-muted); }
 .etext-pop-note { color: var(--text-muted); font-size: 12px; }
 .etext-pop-busy, .etext-pop-error { color: var(--text-secondary); }
 .etext-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }

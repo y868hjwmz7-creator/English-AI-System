@@ -114,13 +114,24 @@ export default function EnglishText({
                   <>
                     <span className="etext-pop-head">
                       <strong lang="en">{gloss.display}</strong>
-                      {gloss.pos && <span className="etext-pos">{gloss.pos}</span>}
                     </span>
-                    <span className="etext-pop-mean">{gloss.meaning_ja}</span>
-                    {gloss.example_en && (
-                      <span className="etext-pop-ex" lang="en">{gloss.example_en}</span>
-                    )}
-                    {gloss.note && <span className="etext-pop-note">{gloss.note}</span>}
+                    {/* **その文でふさわしい意味が先頭に来る**(2026-08 の指定)。
+                        先頭は大きく、二番目からは小さく出す。
+                        「走る」の文脈なら「走る」が大きく、
+                        「運営する」「走らせる」が下に小さく並ぶ。 */}
+                    {(gloss.senses ?? []).map((sense, si) => (
+                      <span key={si} className={`etext-sense${si === 0 ? ' is-main' : ''}`}>
+                        <span className="etext-sense-line">
+                          {si > 0 && <span className="etext-sense-no">{si + 1}</span>}
+                          {sense.pos && <span className="etext-pos">{sense.pos}</span>}
+                          <span className="etext-sense-mean">{sense.meaning_ja}</span>
+                        </span>
+                        {sense.example_en && (
+                          <span className="etext-pop-ex" lang="en">{sense.example_en}</span>
+                        )}
+                        {sense.note && <span className="etext-pop-note">{sense.note}</span>}
+                      </span>
+                    ))}
                   </>
                 )}
                 {onMark && (
