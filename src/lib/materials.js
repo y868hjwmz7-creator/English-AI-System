@@ -677,14 +677,19 @@ export function dropDuplicates(items, usedSet) {
 /**
  * 生成にかかる費用の目安。
  *
- * Claude Opus 5 の単価(100万トークンあたり 入力 $5 / 出力 $25)。
- * **出力には「考えている時間」も含まれる。** 教材づくりの費用は、
- * ほぼ全額がここで決まる。入力は桁が2つ小さい(第5.21節)。
- *
+ * **いま使っているのは Claude Sonnet 5**(100万トークンあたり
+ * 入力 $2 / 出力 $10)。**出力には「考えている時間」も含まれる。**
+ * 教材づくりの費用は、ほぼ全額がここで決まる(第5.21節)。
  * キャッシュから読んだ分は入力の1割。
- * 単価を変えるときはここ1か所だけを直す。
+ *
+ * **モデルを変えたら、ここも必ず変える。**
+ * 使うモデルは supabase/functions/generate-material/index.ts の MODEL。
+ * 片方だけ変えると、画面に出る金額が実際と食い違う。
+ *   Opus 5   … { input: 5, output: 25, cacheRead: 0.5 }
+ *   Sonnet 5 … { input: 2, output: 10, cacheRead: 0.2 }
+ *   Haiku 4.5… { input: 1, output: 5,  cacheRead: 0.1 }
  */
-export const PRICE_PER_MTOK = { input: 5, output: 25, cacheRead: 0.5 }
+export const PRICE_PER_MTOK = { input: 2, output: 10, cacheRead: 0.2 }
 
 /** トークン数から、おおよその金額(ドル)を出す */
 export const estimateCost = (usage) => {

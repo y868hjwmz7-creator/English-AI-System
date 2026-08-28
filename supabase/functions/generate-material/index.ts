@@ -125,6 +125,29 @@ C1 / C1+ / C2 / Proficiency … 微妙な言い回し、専門的な議論
 
 emit_section という道具だけを使って返すこと。文章での説明は要らない。`
 
+/**
+ * 使うモデル。**ここ1行を変えれば入れ替わる。**
+ *
+ * 【なぜ Sonnet 5 にしたか】(2026-08 / 仕様書 第5.21節)
+ *   Opus 5 で1教材あたり $0.5〜0.7 かかっていた。Sonnet 5 は
+ *   入力 $2 / 出力 $10(100万トークン)で、**出力が Opus の 2.5分の1**。
+ *   作るものは形が細かく決まっているので、まずこちらで質を確かめる。
+ *
+ * 【戻したいとき】
+ *   'claude-opus-5' に書き換えて配置し直すだけ。あわせて画面側の
+ *   単価(src/lib/materials.js の PRICE_PER_MTOK)も戻すこと。
+ *   **片方だけ変えると、画面に出る金額が実際と食い違う。**
+ *
+ * 【切り替えで気をつけたこと】
+ *   ・temperature などは指定していない(Sonnet 5 では指定すると失敗する)
+ *   ・thinking は指定していない。Sonnet 5 は既定で adaptive になる
+ *   ・指示のキャッシュは Sonnet 5 の最小長(1,024トークン)を超えているので、
+ *     これまでどおり効く(システム指示は約1,650トークン)
+ *   ・Sonnet 5 は**指示をより字句どおりに解釈する。** 指示が細かい
+ *     この用途には向くが、曖昧な言い回しを残さないこと
+ */
+const MODEL = 'claude-sonnet-5'
+
 /** 演習の種類ごとの、追加の指示 */
 const SECTION_INSTRUCTIONS: Record<string, string> = {
   translate_en_ja:
@@ -385,7 +408,7 @@ Deno.serve(async (req) => {
     // Anthropic 側は必ず streaming で受け取る。40問ぶんの長い応答を
     // 一括で待つと、SDK の HTTP タイムアウトに掛かる。
     const stream = client.messages.stream({
-      model: 'claude-opus-5',
+      model: MODEL,
       max_tokens: 16000,
       // 作るものは形が決まっているので、思考は中くらいで足りる。
       // 既定(high)のままだと40問で3分を超え、Supabase 側で切られていた。
