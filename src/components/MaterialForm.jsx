@@ -63,7 +63,12 @@ export default function MaterialForm({
   // なってやり直しになった(2026-08)。
   const [title, setTitle] = useState('')
   const [level, setLevel] = useState(initial.level || 'B1')
-  const [kind, setKind] = useState('pattern')
+  // **種類も引き継ぐ。** さがす画面で「ダイアローグ」を選んで作成に移ったのに
+  // 「文型トレーニング」に戻っていた(2026-08 の指摘)。
+  // 引き継ぐのは、さがす画面にある指定すべて(弱点・レベル・業界・種類・
+  // ジャンル・場面)。一部だけ引き継ぐと、どれが残ってどれが消えるのか
+  // 利用者には見分けられない。
+  const [kind, setKind] = useState(initial.kind || 'pattern')
   const [instruction, setInstruction] = useState('')
   const [teachingPoint, setTeachingPoint] = useState('')
   const [visibility, setVisibility] = useState('school')
@@ -92,8 +97,8 @@ export default function MaterialForm({
   const doneRef = useRef(null)                         // できあがりの知らせ
   const submitRef = useRef(null)                       // 発行ボタン
   const [headline, setHeadline] = useState('')         // 記事の見出し / 会話の題名
-  const [genre, setGenre] = useState('news')           // 記事のジャンル
-  const [scene, setScene] = useState('casual')         // 会話の場面
+  const [genre, setGenre] = useState(initial.genre || 'news')   // 記事のジャンル
+  const [scene, setScene] = useState(initial.scene || 'casual')  // 会話の場面
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
 
   // 生成中は秒数を数える。1〜3分かかることがあるため、動いていることが
@@ -536,8 +541,11 @@ export default function MaterialForm({
       <div className="generate-box">
         <h3 className="card-title">AI に下書きを作らせる</h3>
         <p className="card-hint">
-          上の<strong>弱点タグを1つ</strong>選んでから押してください。
-          レベルと業界も自動で反映されます。
+          {/* 記事・会話では弱点タグは任意。ここで「1つ選んでから」と書くと
+              すぐ下の「任意です」と食い違い、どちらが本当か分からなくなる */}
+          {isPassageKind(kind)
+            ? '種類・場面・レベル・業界は、上で選んだものがそのまま反映されます。'
+            : <>上の<strong>弱点タグを1つ</strong>選んでから押してください。 レベルと業界も自動で反映されます。</>}
           {kind === 'pattern' && ' 文型ドリルは 4演習 × 10問 = 40問 作ります。'}
         </p>
         <p className="card-hint">

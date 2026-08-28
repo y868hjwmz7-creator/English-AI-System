@@ -94,10 +94,12 @@ export default function TrainerMaterials({ me }) {
       // さがすときに選んだ条件を、そのまま作成画面へ引き継ぐ。
       // 「探して → 無ければ作る」が既定の動線なので(第5.5節)、
       // ここで指定が消えると、同じことを2度入力させることになる。
+      // **この画面にある指定は全部渡す。** 弱点だけ渡して種類を渡さなかったため、
+      // ダイアローグを選んで作成に移ると文型トレーニングに戻っていた(2026-08)。
       <MaterialForm
         createdBy={me.id}
         learners={learners.filter((l) => l.status === 'active')}
-        initial={{ tagIds, level: level ?? '', industry }}
+        initial={{ tagIds, level: level ?? '', industry, kind, genre, scene }}
         onCancel={() => setMode('search')}
         onCreated={(id, shared) => {
           setMode('search')
