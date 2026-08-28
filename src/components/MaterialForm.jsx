@@ -186,7 +186,11 @@ export default function MaterialForm({
       subject,
       avoid: (used ?? []).slice(-40),
     })
-    if (bodyError) { fail(bodyError); return }
+    // **どの段階で失敗したのかを、必ず名前で言う。**
+    // 記事・会話は「本文 → 内容の理解 → 語句」と3回に分けて作る。
+    // どこで転んだのかが分からないと、利用者には直しようがない。
+    const bodyName = exerciseLabel(bodyPlan.exercise_type)
+    if (bodyError) { fail(`${bodyName}を作れませんでした。${bodyError}`); return }
 
     const spent = {
       input: body.usage?.input ?? 0,
@@ -195,9 +199,20 @@ export default function MaterialForm({
     }
     const made = [body.section]
     // できた本文を、そのまま次の生成に渡す
-    const context = (body.section.items ?? [])
-      .map((it) => (it.speaker ? `${it.speaker}: ${it.prompt_en}` : it.prompt_en))
+    const context = (body.section?.items ?? [])
+      .map((it) => [it.speaker, it.prompt_en].filter(Boolean).join(': '))
       .filter(Boolean).join('\n\n')
+
+    // **本文が取れていないなら、ここで止める。**
+    // 以前はそのまま次(内容の理解)へ進み、受付窓口から
+    // 「本文が空です。先に記事か会話を作ってください」と返っていた。
+    // 押したのは「会話を作る」なので、これでは何が起きたのか分からない
+    // (2026-08 の指摘)。転んだ場所を、その名前で伝える。
+    if (!context) {
+      fail(`${bodyName}の中身が空でした。もう一度お試しください。`
+        + '何度も続くときは、この文言をそのままお知らせください。')
+      return
+    }
 
     for (let i = 0; i < rest.length; i += 1) {
       setGenerating({ done: i + 1, total: plan.length, label: exerciseLabel(rest[i].exercise_type) })
@@ -207,7 +222,7 @@ export default function MaterialForm({
         topic: tagIds.map(topicOf).join(' / '),
         level, industry, context,
       })
-      if (e) { fail(e); return }
+      if (e) { fail(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`); return }
       spent.input += data.usage?.input ?? 0
       spent.output += data.usage?.output ?? 0
       spent.cacheRead += data.usage?.cacheRead ?? 0

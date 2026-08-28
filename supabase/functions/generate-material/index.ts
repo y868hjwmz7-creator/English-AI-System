@@ -409,7 +409,11 @@ Deno.serve(async (req) => {
     // 一括で待つと、SDK の HTTP タイムアウトに掛かる。
     const stream = client.messages.stream({
       model: MODEL,
-      max_tokens: 16000,
+      // **上限であって、使う量ではない。** 実際に出た分しか課金されないので、
+      // 上げても費用は増えない。ここで足りないと、途中で切られた中途半端な
+      // 結果が「空っぽ」として返り、原因の分からない失敗になる(下の確認を参照)。
+      // 会話14発言・記事6段落は日本語訳も付くため、16000 では届かないことがある。
+      max_tokens: 32000,
       // 作るものは形が決まっているので、思考は中くらいで足りる。
       // 既定(high)のままだと40問で3分を超え、Supabase 側で切られていた。
       output_config: { effort: 'medium' },
@@ -424,6 +428,17 @@ Deno.serve(async (req) => {
     if (response.stop_reason === 'refusal') {
       return { error: '内容が安全上の理由で断られました。弱点の指定を見直してください。' }
     }
+    // **途中で切られた場合は、必ずここで止める。**
+    // 切られると、道具に渡す JSON が途中までしか届かない。SDK は読める
+    // ところまでを返すので、items が丸ごと欠けた「空っぽの成功」になる。
+    // これを見逃すと、次の演習で「本文が空です」という、
+    // 何が起きたのか分からない失敗になる(2026-08 実機)。
+    if (response.stop_reason === 'max_tokens') {
+      return {
+        error: `${sectionType} が長すぎて途中で切れました。`
+          + '問数(段落数・発言数)を減らすか、もう一度お試しください。',
+      }
+    }
 
     const block = response.content.find((b) => b.type === 'tool_use')
     if (!block || block.type !== 'tool_use') {
@@ -437,6 +452,15 @@ Deno.serve(async (req) => {
       items?: Record<string, string>[]
     }
 
+    // **中身が0件のまま「成功」を返さない。**
+    // 呼んだ側は次の演習へ進んでしまい、失敗の場所が分からなくなる。
+    if (!Array.isArray(result.items) || result.items.length === 0) {
+      return {
+        error: `${sectionType} の中身が空で返ってきました`
+          + `(終了理由: ${response.stop_reason ?? '不明'})。もう一度お試しください。`,
+      }
+    }
+
     return {
       ok: true,
       section: {
@@ -446,6 +470,8 @@ Deno.serve(async (req) => {
       },
       headline: result.headline ?? null,
       teaching_point: result.teaching_point ?? null,
+      // 何が起きたのかを追えるようにしておく。原因の切り分けに要る
+      stop_reason: response.stop_reason ?? null,
       // 画面に「いくら使ったか」を出せるようにしておく
       usage: {
         input: response.usage.input_tokens,
