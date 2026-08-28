@@ -1057,6 +1057,8 @@ html { -webkit-text-size-adjust: 100%; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
   font-size: 13px; line-height: 1.6; text-align: left; white-space: normal;
 }
+/* 画面の右端からはみ出すときは右寄せにする(意味の続きが読めなくなるため) */
+.etext-pop.is-right { left: auto; right: 0; }
 .etext-pop-head {
   display: flex; align-items: baseline; gap: 8px;
   padding-bottom: 6px; border-bottom: 1px solid var(--border);
