@@ -919,3 +919,10 @@ html { -webkit-text-size-adjust: 100%; }
 .tagchip.is-hit {
   border-color: var(--accent); color: var(--accent); font-weight: 600;
 }
+
+/* 生成にかかった費用。見えないと使いすぎに気づけない */
+.generate-cost {
+  margin: 8px 0; padding: 6px 10px; border-radius: 8px;
+  background: var(--surface-1); font-size: 14px;
+}
+.generate-cost .field-hint { display: block; margin-top: 2px; }

@@ -128,13 +128,12 @@ emit_section という道具だけを使って返すこと。文章での説明�
 /** 演習の種類ごとの、追加の指示 */
 const SECTION_INSTRUCTIONS: Record<string, string> = {
   translate_en_ja:
-    '英文和訳。prompt_en に英文、answer に日本語訳を入れる。audio_text は prompt_en と同じにする。',
+    '英文和訳。prompt_en に英文、answer に日本語訳を入れる。',
   fill_blank:
     '穴埋め。prompt_en に（　　　）を含む英文、hint に与える語(原形など)、answer に空欄に入る形を入れる。'
     + 'audio_text は入れない。落とし穴の問には note に理由を書く。',
   translate_ja_en:
-    '和文英訳。prompt_ja に日本語、answer に解答例、answer_alt に別解(改行区切り、1〜2個)を入れる。'
-    + 'audio_text は answer と同じにする。',
+    '和文英訳。prompt_ja に日本語、answer に解答例、answer_alt に別解(改行区切り、1〜2個)を入れる。',
   listening:
     'リスニング。audio_text に読み上げる英文、question に英語の設問、answer に解答を入れる。'
     + 'prompt_en と prompt_ja は入れない(英文を見せないため)。'
@@ -147,15 +146,14 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     '記事。**1項目 = 1段落**。読み物として通して読めること。'
     + '前の段落を受けて話が進み、最後の段落で締めること。'
     + '各段落は3〜5文、45〜65語。全体で250〜350語になる。'
-    + 'prompt_en に段落の英文、prompt_ja にその段落の日本語訳を入れる。'
-    + 'audio_text は prompt_en と同じにする。answer は空文字にする。'
+    + 'prompt_en に段落の英文、prompt_ja にその段落の日本語訳を入れる。answer は空文字にする。'
     + '**headline に記事の見出しを入れる**(英語、8語以内、内容が分かるもの)。'
     + '1段落目で何の話か分かるようにし、事実・具体例・数字を入れて、'
     + '「人に話したくなる」中身にすること。教科書調の当たり障りのない文章にしない。',
   dialogue:
     '会話。**1項目 = 1つの発言**。speaker に話す人(名前と肩書き。'
     + '例: Sarah (Product Manager))、prompt_en にその発言、'
-    + 'prompt_ja に日本語訳を入れる。audio_text は prompt_en と同じ。answer は空文字。'
+    + 'prompt_ja に日本語訳を入れる。answer は空文字。'
     + '**登場人物は2人**で、名前は最初から最後まで変えない。'
     + '1発言は1〜3文。話が始まり、進み、区切りがつくところまでを1本にする。'
     + '相づち・言いよどみ・言い換えなど、実際の会話に出るものを入れる。'
@@ -169,16 +167,16 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
   vocab_note:
     '本文に出た語句。**本文に実際に出てきた語句だけ**を選ぶ。出てこない語を作らない。'
     + 'prompt_en に語句、prompt_ja に意味、note にその語句を使った短い例文(英語)と'
-    + '使いどころの注意を入れる。audio_text は prompt_en と同じ。answer は空文字。'
+    + '使いどころの注意を入れる。answer は空文字。'
     + 'ゲストのレベルにとって新しい語、または知っていても使えていない語を選ぶ。',
 
   // ── 旧「長文」で使っていたもの ────────────────────────────
-  read_aloud:   '音読。prompt_en に英文、prompt_ja に訳、audio_text は prompt_en と同じにする。',
-  overlapping:  'オーバーラッピング。prompt_en に英文、prompt_ja に訳、audio_text は prompt_en と同じ。',
-  shadowing:    'シャドーイング。prompt_en に英文、prompt_ja に訳、audio_text は prompt_en と同じ。',
-  repeating:    'リピーティング。1文を短めにする。prompt_en に英文、prompt_ja に訳、audio_text は prompt_en と同じ。',
-  vocabulary:   '単語。prompt_en に語、prompt_ja に意味と使い方、audio_text は prompt_en と同じ。',
-  phrase:       'フレーズ。prompt_en にフレーズ、prompt_ja に意味と使う場面、audio_text は prompt_en と同じ。',
+  read_aloud:   '音読。prompt_en に英文、prompt_ja に訳を入れる。',
+  overlapping:  'オーバーラッピング。prompt_en に英文、prompt_ja に訳を入れる。',
+  shadowing:    'シャドーイング。prompt_en に英文、prompt_ja に訳を入れる。',
+  repeating:    'リピーティング。1文を短めにする。prompt_en に英文、prompt_ja に訳を入れる。',
+  vocabulary:   '単語。prompt_en に語、prompt_ja に意味と使い方を入れる。',
+  phrase:       'フレーズ。prompt_en にフレーズ、prompt_ja に意味と使う場面を入れる。',
 }
 
 /** 生成した中身を受け取るための道具の形 */
@@ -219,9 +217,19 @@ const EMIT_SECTION_TOOL = {
             question:   { type: 'string', description: '設問(リスニング)' },
             answer:     { type: 'string', description: '解答 / 解答例' },
             answer_alt: { type: 'string', description: '別解。改行区切り' },
-            audio_text: { type: 'string', description: '読み上げる英文' },
+            audio_text: {
+              type: 'string',
+              // 以前は「prompt_en と同じにする」と指示していた。同じ英文を
+              // 2回書かせることになり、出力の課金がその分増えていた。
+              // 読み上げは prompt_en から行えるので、**リスニングのときだけ**入れる。
+              description: '読み上げる英文。リスニングのときだけ入れる。他では入れない',
+            },
             note:       { type: 'string', description: '1問ごとの補足' },
             speaker:    { type: 'string', description: '話す人(会話のときだけ)' },
+            tag_no: {
+              type: 'integer',
+              description: '弱点が複数指定されているとき、その問がどの弱点か(1から始まる番号)',
+            },
           },
         },
       },
@@ -286,6 +294,11 @@ Deno.serve(async (req) => {
   const sectionType = String(body.sectionType ?? '')
   const count = Math.min(Math.max(Number(body.count ?? 10), 1), 20)
   const topic = String(body.topic ?? '').trim()          // 弱点タグの名前と例
+  // 混合ドリル。以前は弱点ごとに呼び分けていたため、弱点3つで
+  // 4演習 × 3 = 12回の生成になっていた。**1回にまとめて費用を1/3にする。**
+  // 分け方と交互の並びは、この中で指示する。
+  const topics = (Array.isArray(body.topics) ? body.topics : [])
+    .map((t) => String(t ?? '').trim()).filter(Boolean).slice(0, 3)
   const level = String(body.level ?? 'B1')
   const industry = String(body.industry ?? '').trim()
   const isFirst = Boolean(body.isFirst)
@@ -324,8 +337,20 @@ Deno.serve(async (req) => {
       ? `**${count} 発言ちょうど**にすること。発言を減らさないこと。`
       : `**${count} 問ちょうど**作ること。減らさないこと。`
 
+  // 弱点が複数のときの指示。番号で返させ、画面側で並べ替える。
+  const mixedLine = topics.length > 1
+    ? `# 混ぜる弱点(${topics.length}つ)\n`
+      + topics.map((t, i) => `${i + 1}. ${t}`).join('\n')
+      + `\n\n**${count}問を、この ${topics.length} つの弱点にできるだけ均等に分ける**`
+      + `(例: 10問を3つなら 4/3/3)。`
+      + `**1問ずつ交互に並べる**(1番の弱点 → 2番 → 3番 → 1番 …)。`
+      + `まとめて並べない。`
+      + `**各問に tag_no(1〜${topics.length})を必ず入れる。**`
+    : ''
+
   const userPrompt = [
-    topic ? `# 注意させたい弱点\n${topic}` : '',
+    mixedLine,
+    !mixedLine && topic ? `# 注意させたい弱点\n${topic}` : '',
     isPassage && topic
       ? '本文の中に、この弱点にあたる表現を自然に何度も入れること。'
         + 'ただし**不自然な文章にしてまで入れない**。読み物として成立することが先。'

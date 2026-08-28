@@ -22,25 +22,13 @@ import {
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
-  NEW_MATERIAL_KINDS, assignMaterial, createMaterial, generateSection, generateSectionUnique,
-  isPassageKind, loadUsedSentences, normEn,
+  NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost, generateSection,
+  generateSectionUnique, isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
 const MAX_TAGS = 3
-
-/**
- * 問数を弱点で分ける。
- *
- * 10問を3つの弱点に分けると 4/3/3 になる。どの弱点が4問になるかは
- * 演習ごとにずらす。ずらさないと、いつも同じ弱点だけ1問多くなる。
- */
-const splitCount = (total, parts, offset = 0) => {
-  const base = Math.floor(total / parts)
-  const rest = total % parts
-  return Array.from({ length: parts }, (_, i) => base + (((i + offset) % parts) < rest ? 1 : 0))
-}
 
 /**
  * 弱点ごとの問題を交互に並べる。
@@ -195,6 +183,11 @@ export default function MaterialForm({
     })
     if (bodyError) { fail(bodyError); return }
 
+    const spent = {
+      input: body.usage?.input ?? 0,
+      output: body.usage?.output ?? 0,
+      cacheRead: body.usage?.cacheRead ?? 0,
+    }
     const made = [body.section]
     // できた本文を、そのまま次の生成に渡す
     const context = (body.section.items ?? [])
@@ -210,6 +203,9 @@ export default function MaterialForm({
         level, industry, context,
       })
       if (e) { fail(e); return }
+      spent.input += data.usage?.input ?? 0
+      spent.output += data.usage?.output ?? 0
+      spent.cacheRead += data.usage?.cacheRead ?? 0
       made.push(data.section)
     }
 
@@ -218,7 +214,7 @@ export default function MaterialForm({
     if (body.headline) setHeadline(body.headline)
     if (body.teaching_point && !teachingPoint) setTeachingPoint(body.teaching_point)
     if (!title.trim()) setTitle(autoTitle(body.headline))
-    finish(made, body.headline)
+    finish(made, body.headline, spent)
   }
 
   /**
@@ -233,71 +229,69 @@ export default function MaterialForm({
     const plan = defaultSectionsFor(kind)
     const made = []
     const notes = []
-    // 指導ポイントは**弱点1つにつき1本**だけ採る。演習ごとに集めていたため、
-    // 同じ内容が言い換えられて何本も並んでいた(実際に6本並んだ)。
-    const pointOfTag = new Map()
+    // 指導ポイントは最初の演習で1本だけ受け取る。演習ごとに集めていた
+    // ころは、同じ内容が言い換えられて6本並んだ。
+    let point = teachingPoint
     let warn = null
     let droppedCount = 0
     let shortCount = 0
-    const totalSteps = plan.length * tagIds.length
-    let step = 0
+    const spent = { input: 0, output: 0, cacheRead: 0 }
 
     for (let i = 0; i < plan.length; i += 1) {
-      // 弱点が1つなら 10問すべて、3つなら 4/3/3 のように分ける
-      const counts = splitCount(plan[i].count, tagIds.length, i)
-      const perTag = []
-      let instruction = ''
+      setGenerating({
+        done: i, total: plan.length, label: exerciseLabel(plan[i].exercise_type),
+      })
 
-      for (let t = 0; t < tagIds.length; t += 1) {
-        if (counts[t] === 0) { perTag.push([]); continue }
-        setGenerating({
-          done: step, total: totalSteps,
-          label: `${exerciseLabel(plan[i].exercise_type)}${
-            tagIds.length > 1 ? ` / ${weaknessTagLabel(tagIds[t])}` : ''}`,
-        })
-        step += 1
+      // ② 生成のあとに、既出と「意味が近すぎる文」を落とし、
+      //    落ちた分は作り直す。ここが「被らない」の担保。
+      //
+      // 弱点が複数でも**1回にまとめて**作らせる。以前は弱点ごとに
+      // 呼び分けていたため、弱点3つで 4演習 × 3 = 12回になり、
+      // 費用が3倍かかっていた(第5.21節)。分け方と交互の並びは
+      // 指示で伝え、返ってきた tag_no で並べ直す。
+      const result = await generateSectionUnique(
+        {
+          sectionType: plan[i].exercise_type,
+          count: plan[i].count,
+          topic: topicOf(tagIds[0]),
+          topics: tagIds.length > 1 ? tagIds.map(topicOf) : [],
+          level, industry, isFirst: i === 0,
+        },
+        { usedSet, learnerIds: shareWith, tagIds },
+      )
+      if (result.error) { fail(result.error); return }
 
-        // ② 生成のあとに、既出と「意味が近すぎる文」を落とし、
-        //    落ちた分は作り直す。ここが「被らない」の担保。
-        const result = await generateSectionUnique(
-          {
-            sectionType: plan[i].exercise_type,
-            count: counts[t],
-            topic: topicOf(tagIds[t]),
-            level, industry, isFirst: i === 0 && t === 0,
-          },
-          { usedSet, learnerIds: shareWith, tagIds },
-        )
-        if (result.error) { fail(result.error); return }
+      droppedCount += result.dropped
+      shortCount += result.short
+      notes.push(...(result.tooSimilar ?? []))
+      warn = warn || result.warning
+      spent.input += result.usage?.input ?? 0
+      spent.output += result.usage?.output ?? 0
+      spent.cacheRead += result.usage?.cacheRead ?? 0
+      if (result.teaching_point && !point) point = result.teaching_point
 
-        droppedCount += result.dropped
-        shortCount += result.short
-        notes.push(...(result.tooSimilar ?? []))
-        warn = warn || result.warning
-        if (result.teaching_point && !pointOfTag.has(tagIds[t])) {
-          pointOfTag.set(tagIds[t], result.teaching_point)
-        }
-        instruction = instruction || result.section.instruction
-        // 1問ごとに、どの弱点の問題かを持たせる(混ぜたときに必要)
-        perTag.push(result.section.items.map((it) => ({
-          ...it, tag_id: tagIds.length > 1 ? tagIds[t] : undefined,
-        })))
+      // 1問ごとに、どの弱点の問題かを持たせる。
+      // 番号が返らなかった問は、順番で割り当てる(抜けを残さない)。
+      let items = result.section.items.map((it, n) => ({
+        ...it,
+        tag_id: tagIds.length > 1
+          ? (tagIds[(Number(it.tag_no) || 0) - 1] ?? tagIds[n % tagIds.length])
+          : undefined,
+        tag_no: undefined,
+      }))
+
+      // 交互に並んでいなければ、こちらで並べ直す。
+      // 指示だけに頼ると、まとまって並ぶことがある。
+      if (tagIds.length > 1) {
+        items = interleave(tagIds.map((t) => items.filter((it) => it.tag_id === t)))
       }
 
       made.push({
         exercise_type: plan[i].exercise_type,
-        instruction,
-        items: interleave(perTag),
+        instruction: result.section.instruction,
+        items,
       })
     }
-
-    // 弱点が複数なら【弱点名】を頭に付けて、1行ずつ並べる。
-    // 見出しが無いと、どの説明がどの弱点のものか分からない。
-    const point = teachingPoint || [...pointOfTag.entries()]
-      .map(([tagId, text]) => (tagIds.length > 1
-        ? `【${weaknessTagLabel(tagId)}】${String(text).trim()}`
-        : String(text).trim()))
-      .join('\n')
 
     setGenerating(null)
     setSections(made)
@@ -307,7 +301,7 @@ export default function MaterialForm({
     setSimilarNotes(notes)
     setWarning(warn)
     if (!title.trim()) setTitle(autoTitle(null))
-    finish(made, null)
+    finish(made, null, spent)
   }
 
   /**
@@ -316,7 +310,7 @@ export default function MaterialForm({
    * 問数だけでなく**最初の1問の英文**も出す。数字だけでは
    * 「本当に中身ができているのか」が分からないため。
    */
-  const finish = (made, head) => {
+  const finish = (made, head, spent = null) => {
     const first = made.flatMap((sec) => sec.items)
       .map((it) => it.prompt_en || it.audio_text || it.answer || it.question)
       .find(Boolean)
@@ -327,6 +321,8 @@ export default function MaterialForm({
       })),
       headline: head ?? null,
       sample: first ?? null,
+      // かかった費用。見えないと、使いすぎに気づけない(第5.21節)
+      spent,
     })
     window.setTimeout(() => {
       doneRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -643,6 +639,18 @@ export default function MaterialForm({
                 </span>
               ))}
             </div>
+            {done.spent && (done.spent.input + done.spent.output) > 0 && (
+              <p className="generate-cost">
+                この生成にかかった費用 <strong>約 ${estimateCost(done.spent).toFixed(2)}</strong>
+                <span className="field-hint">
+                  出力 {done.spent.output.toLocaleString()} /
+                  入力 {done.spent.input.toLocaleString()}
+                  {done.spent.cacheRead > 0
+                    && `(うち再利用 ${done.spent.cacheRead.toLocaleString()})`}
+                  {' — '}費用のほとんどは出力側です
+                </span>
+              </p>
+            )}
             {done.sample && (
               <p className="generate-done-sample">
                 <span className="field-hint">最初の1問</span>

@@ -502,14 +502,14 @@ export async function setLearnerStatus(learnerId, status, note) {
  * 時間切れになりやすいため。10問ずつなら失敗しても作り直しが軽い。
  */
 export async function generateSection({
-  sectionType, count = 10, topic, level, industry = '', isFirst = false, avoid = [],
-  genre = '', scene = '', subject = '', context = '',
+  sectionType, count = 10, topic, topics = [], level, industry = '',
+  isFirst = false, avoid = [], genre = '', scene = '', subject = '', context = '',
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
   const { data, error } = await supabase.functions.invoke('generate-material', {
     body: {
-      sectionType, count, topic, level, industry, isFirst, avoid,
+      sectionType, count, topic, topics, level, industry, isFirst, avoid,
       // 記事のジャンル / 会話の場面 / 話題の指定 / すでに作った本文
       genre, scene, subject, context,
     },
@@ -675,6 +675,26 @@ export function dropDuplicates(items, usedSet) {
 }
 
 /**
+ * 生成にかかる費用の目安。
+ *
+ * Claude Opus 5 の単価(100万トークンあたり 入力 $5 / 出力 $25)。
+ * **出力には「考えている時間」も含まれる。** 教材づくりの費用は、
+ * ほぼ全額がここで決まる。入力は桁が2つ小さい(第5.21節)。
+ *
+ * キャッシュから読んだ分は入力の1割。
+ * 単価を変えるときはここ1か所だけを直す。
+ */
+export const PRICE_PER_MTOK = { input: 5, output: 25, cacheRead: 0.5 }
+
+/** トークン数から、おおよその金額(ドル)を出す */
+export const estimateCost = (usage) => {
+  if (!usage) return 0
+  return ((usage.input ?? 0) * PRICE_PER_MTOK.input
+    + (usage.output ?? 0) * PRICE_PER_MTOK.output
+    + (usage.cacheRead ?? 0) * PRICE_PER_MTOK.cacheRead) / 1_000_000
+}
+
+/**
  * 意味が「近すぎる」と見なす境目。
  *
  * 0〜1 で、1 が同じ意味。**実際の教材で調整する前提の初期値である。**
@@ -748,6 +768,7 @@ export async function generateSectionUnique(params, {
   let teachingPoint = null
   let warning = null
   let useSimilar = similar
+  const usage = { input: 0, output: 0, cacheRead: 0 }
 
   for (let attempt = 0; attempt < 3 && items.length < wanted; attempt += 1) {
     const { data, error } = await generateSection({
@@ -758,6 +779,10 @@ export async function generateSectionUnique(params, {
     if (error) return { error }
     instruction = instruction || data.section?.instruction || ''
     teachingPoint = teachingPoint || data.teaching_point || null
+    // 何回作り直したかも含めて足す。実際に使った分を出すため
+    usage.input += data.usage?.input ?? 0
+    usage.output += data.usage?.output ?? 0
+    usage.cacheRead += data.usage?.cacheRead ?? 0
 
     // ① 手元で分かる重複
     const { kept, dropped } = dropDuplicates(data.section?.items ?? [], usedSet)
@@ -828,5 +853,6 @@ export async function generateSectionUnique(params, {
     warning,
     short: wanted - items.length,
     teaching_point: teachingPoint,
+    usage,
   }
 }
