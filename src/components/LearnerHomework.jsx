@@ -13,6 +13,7 @@ import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { printElement } from '../lib/print.js'
+import { splitTitleDate } from '../lib/format.js'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
@@ -92,7 +93,7 @@ export default function LearnerHomework() {
                   <span className="homework-open-mark">{openId === a.id ? '▾' : '▸'}</span>
                   <span className="homework-open-body">
                     <span className="homework-open-title">
-                      {a.material?.title ?? '(教材が見つかりません)'}
+                      {a.material ? splitTitleDate(a.material.title).title : '(教材が見つかりません)'}
                     </span>
                     <span className="muted">
                       {a.material && `${cefrLabel(a.material.level)} / ${kindLabel(a.material.kind)}`}
@@ -115,7 +116,14 @@ export default function LearnerHomework() {
                 {openId === a.id ? (
                   <div id={`homework-${a.id}`}>
                     <div className="print-only print-head">
-                      <strong>{a.material?.title}</strong>
+                      <div className="print-head-row">
+                        <strong>{splitTitleDate(a.material?.title).title}</strong>
+                        {splitTitleDate(a.material?.title).date && (
+                          <span className="sheet-date">
+                            {splitTitleDate(a.material?.title).date}
+                          </span>
+                        )}
+                      </div>
                       {a.material?.headline && <div lang="en">{a.material.headline}</div>}
                       <div className="print-meta">
                         {cefrLabel(a.material?.level)} / {kindLabel(a.material?.kind)}

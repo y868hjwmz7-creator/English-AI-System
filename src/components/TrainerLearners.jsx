@@ -13,6 +13,7 @@ import {
 } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import Tabs from './Tabs.jsx'
+import { splitTitleDate } from '../lib/format.js'
 
 const STATUS = {
   active:   { label: '受講中', cls: 'badge--admin' },
@@ -362,7 +363,9 @@ export default function TrainerLearners({ me }) {
                             </span>
                             {a.admin_checked_at && <span className="badge">確認済</span>}
                           </div>
-                          <div className="past-title">{a.material?.title ?? '(消された教材)'}</div>
+                          <div className="past-title">
+                            {a.material ? splitTitleDate(a.material.title).title : '(消された教材)'}
+                          </div>
                           {a.material?.headline && (
                             <div className="muted" lang="en">{a.material.headline}</div>
                           )}

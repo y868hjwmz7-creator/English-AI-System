@@ -800,6 +800,7 @@ html { -webkit-text-size-adjust: 100%; }
   .print-target .print-head strong { font-size: 15pt; line-height: 1.4; }
   .print-target .print-head div { font-size: 12pt; color: #444 !important; margin-top: 2pt; }
   .print-target .print-meta { font-size: 9.5pt; color: #666 !important; margin-top: 3pt; }
+  .print-target .sheet-date { font-size: 10pt; color: #555 !important; }
 
   /* ── 演習の見出し ──────────────────────────────── */
   .print-target .section-title {
@@ -1030,3 +1031,20 @@ html { -webkit-text-size-adjust: 100%; }
 .homework-open-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .homework-open-title { font-size: 16px; font-weight: 600; line-height: 1.5; }
 .homework-open .muted, .homework-open .card-hint { font-size: 13px; }
+
+/* ── 教材名の右上に出す日付 ──────────────────────────────
+   教材名は「2026-08-27 / …」の形で自動生成される。並べ替えには
+   都合がよいが、見出しの左端に日付が来ると何の教材か読みにくい。
+   表示のときだけ切り離して右へ逃がす(保存されている名前は変えない)。 */
+.material-title-row, .lesson-head-row, .print-head-row {
+  display: flex; gap: 12px; align-items: baseline;
+}
+.material-title-row .card-title, .lesson-head-row strong, .print-head-row strong {
+  flex: 1; min-width: 0;
+}
+.sheet-date {
+  flex: 0 0 auto; margin-left: auto;
+  color: var(--text-secondary); font-size: 13px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.lesson-head-row .sheet-date { color: #666; font-size: .62em; }

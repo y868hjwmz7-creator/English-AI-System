@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react'
 import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
+import { splitTitleDate } from '../lib/format.js'
 import SpeakButton from './SpeakButton.jsx'
 
 const SIZES = [
@@ -52,6 +53,8 @@ export default function LessonView({ material, onClose }) {
   }, [onClose, sections.length])
 
   if (!material) return null
+  // 日付は右上へ逃がす。左端に日付があると、何の教材かが読みにくい
+  const { date, title } = splitTitleDate(material.title)
   const section = sections[page]
   const type = section ? exerciseType(section.exercise_type) : null
 
@@ -94,7 +97,10 @@ export default function LessonView({ material, onClose }) {
       {/* ここが「紙」。暗い配色を選んでいても白のまま */}
       <div className={`lesson-sheet lesson-sheet--${size}`} id="lesson-sheet">
         <div className="lesson-head">
-          <strong>{material.title}</strong>
+          <div className="lesson-head-row">
+            <strong>{title}</strong>
+            {date && <span className="sheet-date">{date}</span>}
+          </div>
           {material.headline && <div lang="en">{material.headline}</div>}
         </div>
 

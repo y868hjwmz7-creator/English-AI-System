@@ -62,3 +62,21 @@ export function calculateStreak(dateKeys) {
   }
   return streak
 }
+
+/**
+ * 教材名から、先頭の日付を切り離す。
+ *
+ * 教材名は「2026-08-27 / 数の表現 + 数字 / B1 / 製造」のように、
+ * 日付から始まる形で自動生成される。並べ替えや検索には都合がよいが、
+ * **見出しの左端に日付が来ると、何の教材かが読みにくい**
+ * (2026-08 の指摘)。表示するときだけ切り離し、日付は右上に逃がす。
+ *
+ * **保存されている教材名は変えない。** 既にある教材もそのまま直る。
+ *
+ * @returns {{ date: string|null, title: string }}
+ */
+export function splitTitleDate(title) {
+  const text = String(title ?? '').trim()
+  const m = /^(\d{4}-\d{2}-\d{2})\s*\/\s*(.+)$/.exec(text)
+  return m ? { date: m[1], title: m[2] } : { date: null, title: text }
+}
