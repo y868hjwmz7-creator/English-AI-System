@@ -1020,6 +1020,21 @@ html { -webkit-text-size-adjust: 100%; }
 /* 本文を通して聞くボタン */
 .lesson-listen { margin: 0 0 14px; }
 
+/* 読み上げの速さ。画面に1つだけ置く */
+.rate-pick {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 10px; font-size: 13px; color: var(--text-secondary);
+  white-space: nowrap; flex: none;
+}
+.rate-pick select { font-size: 13px; padding: 3px 6px; }
+.lesson-rate {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #ddd;
+  /* 「速さ」が「速 / さ」と縦に割れていた(2026-08)。ラベルは折り返さない */
+  white-space: nowrap; flex: none;
+}
+.lesson-rate select { font-size: 12px; padding: 3px 4px; max-width: 8.5em; }
+
 /* いま読み上げているところ。
    通しで聞いているとき、どこを読んでいるのか目で追えないと
    オーバーラッピングもシャドーイングもできない(2026-08 の要望)。

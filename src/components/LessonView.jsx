@@ -21,6 +21,7 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
 import { loadEnglishVoices, speakSequence, stopSpeaking } from '../lib/speech.js'
 import { castVoices, voiceFor } from '../lib/voiceCast.js'
+import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
@@ -47,6 +48,8 @@ export default function LessonView({ material, onClose }) {
   const [openItems, setOpenItems] = useState(() => new Set())
   const [closedItems, setClosedItems] = useState(() => new Set())
   const [size, setSize] = useState('l')
+  // 読み上げの速さ。**画面に1つだけ。** 端末に覚えさせる(2026-08 利用者の指定)
+  const [rateId, setRateId] = useState(loadRateId)
   // 読み上げ。**会話は話す人ごとに声を変える**(2026-08 の指摘)。
   // 同じ声だと、どちらが話しているのか耳で分からない。
   const [voices, setVoices] = useState([])
@@ -150,6 +153,7 @@ export default function LessonView({ material, onClose }) {
     stopAllRef.current = speakSequence(
       playable.map(({ it }) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker) })),
       {
+        rate: rateOf(rateId),
         onIndex: (i) => {
           if (i === null) { stopAllRef.current = null; setPlayingAll(false) }
           setSpeakingKey(i === null ? null : playable[i]?.key ?? null)
@@ -186,6 +190,15 @@ export default function LessonView({ material, onClose }) {
                   }}>
             {showAnswers ? 'すべての解答を隠す' : 'すべての解答を出す'}
           </button>
+          <label className="lesson-rate">
+            <span>速さ</span>
+            <select value={rateId}
+                    onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopAll() }}>
+              {SPEECH_RATES.map((r) => (
+                <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+              ))}
+            </select>
+          </label>
           <div className="lesson-sizes">
             {SIZES.map((s) => (
               <button key={s.id} type="button"
@@ -264,6 +277,7 @@ export default function LessonView({ material, onClose }) {
                     <SpeakButton
                       text={it[type.audioFrom]}
                       voice={voiceFor(cast, it.speaker)}
+                      rate={rateOf(rateId)}
                       onPlayingChange={(on) => setSpeakingKey(on ? key(it, i) : null)}
                     />
                   )}

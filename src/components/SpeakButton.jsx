@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react'
 import { isSpeechSupported, loadEnglishVoices, speak, stopSpeaking } from '../lib/speech.js'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
+import { loadRateId, rateOf } from '../lib/speechRate.js'
 
 /** 声の読み込みは1回だけ。以降は同じ約束を使い回す */
 let voicePromise = null
@@ -24,9 +25,12 @@ const bestVoice = () => {
 // **対になる操作は、どちらも同じ言葉づかいにする。**
 // Listen と「止める」が並ぶと、押し分けが一瞬わからない。
 export default function SpeakButton({
-  text, label = 'Listen', rate = 0.9, className = '', voice: given = null,
+  text, label = 'Listen', rate = null, className = '', voice: given = null,
   onPlayingChange = null,
 }) {
+  // 速さの指定が無ければ、端末に覚えさせた速さを使う。
+  // こうしておくと、速さを選ぶ場所が無い画面でも同じ速さで鳴る
+  const speed = rate ?? rateOf(loadRateId())
   // 会話では話す人ごとに声を変える。指定があればそれを使う(voiceCast.js)
   const [auto, setAuto] = useState(null)
   const voice = given ?? auto
@@ -47,7 +51,7 @@ export default function SpeakButton({
     if (playing) { stopSpeaking(); setState(false); return }
     stopSpeaking()
     setState(true)
-    speak(text, { voice, rate })
+    speak(text, { voice, rate: speed })
     // 読み終わりの合図は端末によって来ないことがあるため、
     // 語数からおおよその時間で戻す。押せないままになるより実害が小さい。
     const seconds = Math.max(2, String(text).split(/\s+/).length / 2.2)

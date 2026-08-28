@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadEnglishVoices, speak, speakSequence, stopSpeaking } from '../lib/speech.js'
 import { castVoices, voiceFor } from '../lib/voiceCast.js'
+import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
@@ -48,6 +49,9 @@ export default function PassagePractice({ section, headline, isDialogue }) {
   const [mode, setMode] = useState('read')
   const [voices, setVoices] = useState([])
   const [showJa, setShowJa] = useState(false)
+  // 読み上げの速さ。取り組み方ごとのもとの速さに**掛ける**ので、
+  // 音読・シャドーイングの差は保たれる
+  const [rateId, setRateId] = useState(loadRateId)
   const [speakingId, setSpeakingId] = useState(null)
   const [listeningId, setListeningId] = useState(null)
   const [results, setResults] = useState({})   // 段落ごとの結果
@@ -87,7 +91,7 @@ export default function PassagePractice({ section, headline, isDialogue }) {
     stopPlaying()
     setSpeakingId(item.id)
     speak(item.audio_text || item.prompt_en,
-      { voice: voiceFor(cast, item.speaker, voice), rate: current.rate })
+      { voice: voiceFor(cast, item.speaker, voice), rate: rateOf(rateId, current.rate) })
     // 読み終わりの合図は端末によって来ないことがあるため、
     // 語数からおおよその時間で戻す。表示が戻らないより実害が小さい。
     const seconds = Math.max(2, (item.prompt_en ?? '').split(/\s+/).length / 2.2)
@@ -107,7 +111,7 @@ export default function PassagePractice({ section, headline, isDialogue }) {
     stopAllRef.current = speakSequence(
       playable.map((it) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker, voice) })),
       {
-        rate: current.rate,
+        rate: rateOf(rateId, current.rate),
         onIndex: (i) => {
           if (i === null) stopAllRef.current = null
           setSpeakingId(i === null ? null : playable[i]?.id ?? null)
@@ -158,6 +162,15 @@ export default function PassagePractice({ section, headline, isDialogue }) {
         <button type="button" className="btn" onClick={playAll}>
           <SpeakerIcon />Listen (全体)
         </button>
+        <label className="rate-pick">
+          <span>速さ</span>
+          <select value={rateId}
+                  onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopPlaying() }}>
+            {SPEECH_RATES.map((r) => (
+              <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+            ))}
+          </select>
+        </label>
         <button type="button" className="btn" onClick={() => setShowJa(!showJa)}>
           {showJa ? '日本語を隠す' : '日本語を見る'}
         </button>

@@ -18,6 +18,7 @@ import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
+import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
@@ -31,6 +32,9 @@ export default function LearnerHomework() {
   // 「どこまでやったか」が分からなくなる(2026-08 の指摘)。
   const [openSection, setOpenSection] = useState({})
   const [lessonOf, setLessonOf] = useState(null)   // レッスン表示で開いている教材
+  // 読み上げの速さ。**画面に1つだけ置く。** ここで選んだものが、
+  // この画面のすべての読み上げに効く(2026-08 利用者の指定)
+  const [rateId, setRateId] = useState(loadRateId)
 
   const reload = async () => {
     const { data, error: e } = await loadMyAssignments()
@@ -74,6 +78,15 @@ export default function LearnerHomework() {
             残り <strong>{todo.length}</strong> 件 / 全 {assignments.length} 件
           </p>
         )}
+        <label className="rate-pick">
+          <span>読み上げの速さ</span>
+          <select value={rateId}
+                  onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value) }}>
+            {SPEECH_RATES.map((r) => (
+              <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {[['取り組む', todo], ['やったもの', done]].map(([label, list]) => (
