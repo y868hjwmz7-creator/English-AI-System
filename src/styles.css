@@ -1211,7 +1211,29 @@ html { -webkit-text-size-adjust: 100%; }
 .lesson-sheet .etext-word.is-unknown { background: #ffe3e0; box-shadow: 0 1px 0 0 #e34948; }
 
 @media (max-width: 600px) {
-  .lesson-sheet { padding: 18px 16px 48px; margin: 8px auto; }
+  /* ── スマホでの紙 ────────────────────────────────────
+     左右の余白が大きすぎて、本文が画面の3分の2しか使えていなかった
+     (2026-08 の指摘)。特に**番号の丸のぶん左だけ深く空いて**いて、
+     左右のつり合いも悪かった。
+
+     スマホでは番号を**行の中に置く**(ぶら下げない)。
+     こうすると左の深い余白が要らなくなり、左右が揃う。 */
+  .lesson-sheet {
+    width: calc(100% - 10px);
+    padding: 16px 12px 40px;
+    margin: 5px auto;
+  }
+  .lesson-items > li { padding: 6px 2px 14px 2px; }
+  /* 番号は左に浮かせる。1行目は番号の横から始まり、2行目からは
+     左端いっぱいまで使える。ぶら下げと違って、深い余白ができない */
+  .lesson-items > li::before {
+    position: static; float: left; display: block;
+    width: 1.7em; height: 1.7em; line-height: 1.6em;
+    margin: 1px 8px 2px 0;
+  }
+  .lesson-items > li::after { content: ''; display: block; clear: both; }
+  .lesson-items > li.is-speaking { padding-left: 8px; padding-right: 6px; }
+  .lesson-head { margin-bottom: 14px; }
   .lesson-tools { margin-left: 0; }
 }
 
