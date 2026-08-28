@@ -992,6 +992,16 @@ html { -webkit-text-size-adjust: 100%; }
 .lesson-head {
   margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px solid #1a1a1a;
 }
+/* ボタンの中の小さな絵。**文字に合わせて拡大縮小する。**
+   px 固定にすると、レッスン表示の「特大」で絵だけ取り残される */
+.icon {
+  width: 1em; height: 1em; vertical-align: -0.13em; margin-right: .38em;
+  flex: none;
+}
+
+/* 本文を通して聞くボタン */
+.lesson-listen { margin: 0 0 14px; }
+
 .lesson-head strong { font-size: 1.15em; }
 .lesson-head div { color: #555; margin-top: 3px; }
 

@@ -18,7 +18,9 @@
  *   この前提は画面にも書く(隠すと、点数を実力と誤解させる)。
  */
 import { useEffect, useRef, useState } from 'react'
-import { loadEnglishVoices, speak, stopSpeaking } from '../lib/speech.js'
+import { loadEnglishVoices, speak, speakSequence, stopSpeaking } from '../lib/speech.js'
+import { castVoices, voiceFor } from '../lib/voiceCast.js'
+import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 
@@ -44,7 +46,7 @@ const MODES = [
 
 export default function PassagePractice({ section, headline, isDialogue }) {
   const [mode, setMode] = useState('read')
-  const [voice, setVoice] = useState(null)
+  const [voices, setVoices] = useState([])
   const [showJa, setShowJa] = useState(false)
   const [speakingId, setSpeakingId] = useState(null)
   const [listeningId, setListeningId] = useState(null)
@@ -54,28 +56,43 @@ export default function PassagePractice({ section, headline, isDialogue }) {
 
   useEffect(() => {
     let alive = true
-    loadEnglishVoices().then((list) => { if (alive) setVoice(list[0] ?? null) })
+    loadEnglishVoices().then((list) => { if (alive) setVoices(list) })
     return () => { alive = false; stopSpeaking() }
   }, [])
 
   const current = MODES.find((m) => m.id === mode) ?? MODES[0]
+  // 話す人 → 声。**会話は1人1声。** 同じ声だと役を追えない(2026-08 の指摘)
+  const cast = castVoices(voices, section.items.map((it) => it.speaker))
+  const voice = voices[0] ?? null
 
   const playOne = (item) => {
     stopSpeaking()
     setSpeakingId(item.id)
-    speak(item.audio_text || item.prompt_en, { voice, rate: current.rate })
+    speak(item.audio_text || item.prompt_en,
+      { voice: voiceFor(cast, item.speaker, voice), rate: current.rate })
     // 読み終わりの合図は端末によって来ないことがあるため、
     // 語数からおおよその時間で戻す。表示が戻らないより実害が小さい。
     const seconds = Math.max(2, (item.prompt_en ?? '').split(/\s+/).length / 2.2)
     window.setTimeout(() => setSpeakingId((id) => (id === item.id ? null : id)), seconds * 1000)
   }
 
+  /**
+   * 通して読み上げる。
+   * **1本にまとめて読ませない。** 話す人ごとに声を変えるため、
+   * 1発言ずつ順に読ませる(speakSequence)。
+   */
   const playAll = () => {
     stopSpeaking()
-    const text = section.items
-      .map((it) => (isDialogue && it.speaker ? `${it.speaker}. ${it.prompt_en}` : it.prompt_en))
-      .filter(Boolean).join(' ')
-    speak(text, { voice, rate: current.rate })
+    // 先に「読めるもの」だけに絞ってから並べる。絞ったあとで番号を数えないと、
+    // 「いま読んでいる発言」の印が1つずれる
+    const playable = section.items.filter((it) => String(it.prompt_en ?? '').trim())
+    speakSequence(
+      playable.map((it) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker, voice) })),
+      {
+        rate: current.rate,
+        onIndex: (i) => setSpeakingId(i === null ? null : playable[i]?.id ?? null),
+      },
+    )
   }
 
   /** 話して確かめる。もう一度押すと止めて、結果を出す。 */
@@ -118,12 +135,14 @@ export default function PassagePractice({ section, headline, isDialogue }) {
 
       <div className="passage-tools">
         <button type="button" className="btn" onClick={playAll}>
-          ▶ 通して聞く
+          <SpeakerIcon />Listen (全体)
         </button>
         <button type="button" className="btn" onClick={() => setShowJa(!showJa)}>
           {showJa ? '日本語を隠す' : '日本語を見る'}
         </button>
-        <button type="button" className="btn" onClick={stopSpeaking}>■ 止める</button>
+        <button type="button" className="btn" onClick={stopSpeaking}>
+          <StopIcon />止める
+        </button>
       </div>
 
       {notice && <div className="notice notice--warn passage-notice">{notice}</div>}
@@ -144,7 +163,9 @@ export default function PassagePractice({ section, headline, isDialogue }) {
                   type="button" className="btn btn--small"
                   onClick={() => playOne(item)}
                 >
-                  {speakingId === item.id ? '読んでいます…' : '🔊 お手本'}
+                  {speakingId === item.id
+                    ? '読んでいます…'
+                    : <><SpeakerIcon />Listen</>}
                 </button>
                 {isRecognitionSupported() && (
                   <button
@@ -152,7 +173,9 @@ export default function PassagePractice({ section, headline, isDialogue }) {
                     className={`btn btn--small${listeningId === item.id ? ' btn--primary' : ''}`}
                     onClick={() => checkOne(item)}
                   >
-                    {listeningId === item.id ? '■ 話し終わったら押す' : '🎤 話して確かめる'}
+                    {listeningId === item.id
+                      ? <><StopIcon />話し終わったら押す</>
+                      : <><MicIcon />話して確かめる</>}
                   </button>
                 )}
               </div>

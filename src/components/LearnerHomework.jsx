@@ -206,8 +206,7 @@ export default function LearnerHomework() {
                                   <div className="item-audio">
                                     <SpeakButton
                                       text={it[type.audioFrom]}
-                                      label={type.hidePromptFromLearner ? '聞く' : 'お手本'}
-                                    />
+                                                    />
                                   </div>
                                 )}
                                 {/* リスニングは英文を見せない。聞いて答えるため。 */}

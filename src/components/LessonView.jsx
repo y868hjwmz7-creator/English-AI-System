@@ -15,10 +15,13 @@
  *     答え合わせのときに出す。トレーナーが手元で決める
  *   ・文字の大きさを3段階で変えられる。共有先の画面の大きさが分からないため
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { countLabel, exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
+import { loadEnglishVoices, speakSequence, stopSpeaking } from '../lib/speech.js'
+import { castVoices, voiceFor } from '../lib/voiceCast.js'
+import { SpeakerIcon, StopIcon } from './Icons.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 
@@ -44,9 +47,31 @@ export default function LessonView({ material, onClose }) {
   const [openItems, setOpenItems] = useState(() => new Set())
   const [closedItems, setClosedItems] = useState(() => new Set())
   const [size, setSize] = useState('l')
+  // 読み上げ。**会話は話す人ごとに声を変える**(2026-08 の指摘)。
+  // 同じ声だと、どちらが話しているのか耳で分からない。
+  const [voices, setVoices] = useState([])
+  const [playingAll, setPlayingAll] = useState(false)
+  const stopAllRef = useRef(null)
 
-  /** ページを移ったら、1問ずつの開け閉めは元に戻す */
-  const resetItems = () => { setOpenItems(new Set()); setClosedItems(new Set()) }
+  /** 通しの読み上げを止める */
+  const stopAll = () => {
+    stopAllRef.current?.()
+    stopAllRef.current = null
+    setPlayingAll(false)
+  }
+
+  /** ページを移ったら、1問ずつの開け閉めと読み上げを元に戻す */
+  const resetItems = () => {
+    setOpenItems(new Set())
+    setClosedItems(new Set())
+    stopAll()
+  }
+
+  useEffect(() => {
+    let alive = true
+    loadEnglishVoices().then((list) => { if (alive) setVoices(list) })
+    return () => { alive = false; stopSpeaking() }
+  }, [])
 
   // 開いているあいだは、後ろの画面を動かさない
   useEffect(() => {
@@ -58,7 +83,7 @@ export default function LessonView({ material, onClose }) {
   // Esc で閉じる。左右の矢印でページを送る
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.()
+      if (e.key === 'Escape') { stopSpeaking(); onClose?.() }
       if (e.key === 'ArrowRight') {
         setPage((p) => Math.min(p + 1, sections.length - 1))
         resetItems()
@@ -96,12 +121,28 @@ export default function LessonView({ material, onClose }) {
   }
   const type = section ? exerciseType(section.exercise_type) : null
   const isPassage = section ? isPassageSection(section.exercise_type) : false
+  // 話す人 → 声。会話でないときは空(既定の声が使われる)
+  const cast = castVoices(voices, (section?.items ?? []).map((it) => it.speaker))
+
+  /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
+  const playWhole = () => {
+    if (playingAll) { stopAll(); return }
+    const parts = (section?.items ?? [])
+      .map((it) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker) }))
+      .filter((x) => x.text)
+    if (!parts.length) return
+    setPlayingAll(true)
+    stopAllRef.current = speakSequence(parts, {
+      onIndex: (i) => { if (i === null) { stopAllRef.current = null; setPlayingAll(false) } },
+    })
+  }
 
   return (
     <div className="lesson" role="dialog" aria-label="レッスンで使う表示">
       {/* 操作するところ。共有される側にも見えるが、紙の外に置く */}
       <div className="lesson-bar no-print">
-        <button type="button" className="btn btn--small" onClick={onClose}>✕ 閉じる</button>
+        <button type="button" className="btn btn--small"
+                onClick={() => { stopSpeaking(); onClose?.() }}>✕ 閉じる</button>
 
         <div className="lesson-pages">
           <button type="button" className="btn btn--small"
@@ -167,6 +208,17 @@ export default function LessonView({ material, onClose }) {
             </h3>
             {section.instruction && <p className="lesson-instruction">{section.instruction}</p>}
 
+            {/* **通して聞く手段を、大きく表示したときにも置く。**
+                無いと、オーバーラッピングやシャドーイングができない
+                (2026-08 の指摘)。話す人が変わると声も変わる。 */}
+            {isPassage && (
+              <div className="lesson-listen no-print">
+                <button type="button" className="btn btn--small" onClick={playWhole}>
+                  {playingAll ? <><StopIcon />止める</> : <><SpeakerIcon />Listen (全体)</>}
+                </button>
+              </div>
+            )}
+
             <ol className="lesson-items">
               {section.items.map((it, i) => (
                 <li key={key(it, i)}>
@@ -189,7 +241,7 @@ export default function LessonView({ material, onClose }) {
                   {type?.audioFrom && it[type.audioFrom] && (
                     <SpeakButton
                       text={it[type.audioFrom]}
-                      label={type.hidePromptFromLearner ? '聞く' : 'お手本'}
+                      voice={voiceFor(cast, it.speaker)}
                     />
                   )}
 

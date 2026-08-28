@@ -262,6 +262,73 @@ export function speak(text, { voice, rate = 0.9 } = {}) {
   return true
 }
 
+/**
+ * 何本かの英文を、**順に**読み上げる。
+ *
+ * 会話は話す人ごとに声を変えるため、1本にまとめて読ませることができない
+ * (`speak()` は前の読み上げを止めてしまう)。1つ終わったら次を始める。
+ *
+ * 【気をつけたこと】
+ *   読み終わりの合図(onend)は端末によって来ないことがある。
+ *   来なかったときに**そこで止まってしまう**ので、語数から見積もった
+ *   時間で次へ進む保険を入れてある。
+ *
+ * @param {Array<{text: string, voice?: object}>} parts 読み上げるもの
+ * @param {object} options { rate, onIndex } onIndex は再生中の番号(終わりで null)
+ * @returns {Function} 止めるための関数
+ */
+export function speakSequence(parts, { rate = 0.9, onIndex } = {}) {
+  const list = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
+  if (!isSpeechSupported() || !list.length) return () => {}
+  window.speechSynthesis.cancel()
+
+  let stopped = false
+  let timer = null
+  let index = 0
+
+  const next = () => {
+    if (timer) { window.clearTimeout(timer); timer = null }
+    if (stopped || index >= list.length) { onIndex?.(null); return }
+    const part = list[index]
+    onIndex?.(index)
+
+    const utterance = new SpeechSynthesisUtterance(part.text)
+    utterance.lang = part.voice?.lang || 'en-US'
+    try {
+      if (part.voice) utterance.voice = part.voice
+    } catch (err) {
+      console.warn('指定された声を使えないため、端末の既定の声で読み上げます。', err)
+    }
+    utterance.rate = rate
+    utterance.pitch = 1
+    utterance.volume = 1
+
+    let moved = false
+    const advance = () => {
+      if (moved || stopped) return
+      moved = true
+      index += 1
+      next()
+    }
+    utterance.onend = advance
+    utterance.onerror = advance
+    // 合図が来なかったときの保険。見積もりの2倍 + 2秒で先へ進む
+    const words = String(part.text).split(/\s+/).length
+    timer = window.setTimeout(advance, (Math.max(2, words / 2.2) * 2 + 2) * 1000)
+
+    window.speechSynthesis.speak(utterance)
+  }
+
+  next()
+
+  return () => {
+    stopped = true
+    if (timer) window.clearTimeout(timer)
+    window.speechSynthesis.cancel()
+    onIndex?.(null)
+  }
+}
+
 /** 中断はエラーではない。別の声を押した、画面を離れた等で起きる。 */
 export function isBenignSpeechError(error) {
   return error === 'canceled' || error === 'interrupted'

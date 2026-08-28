@@ -35,6 +35,7 @@ import {
 } from '../lib/speech.js'
 import BarChart from './charts/BarChart.jsx'
 import HBarChart from './charts/HBarChart.jsx'
+import { MicIcon, SpeakerIcon } from './Icons.jsx'
 
 /** ゲスト向けの画面 */
 export default function EnglishStudyLog({ state, setState, learnerId }) {
@@ -200,28 +201,6 @@ function StudyLogForm({ state, setState, learnerId }) {
 /* ------------------------------------------------------------------ */
 /* 発音練習                                                            */
 /* ------------------------------------------------------------------ */
-
-/** スピーカーの絵。お手本の音声であることを示す。 */
-function SpeakerIcon() {
-  return (
-    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
-      <path d="M4 8h3l4-3.5v11L7 12H4z" fill="currentColor" />
-      <path d="M13.5 7.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M15.8 5.2a6.5 6.5 0 0 1 0 9.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-/** マイクの絵。自分の録音であることを示す。 */
-function MicIcon() {
-  return (
-    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
-      <rect x="7.5" y="2.5" width="5" height="9" rx="2.5" fill="currentColor" />
-      <path d="M4.8 9.5a5.2 5.2 0 0 0 10.4 0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M10 14.7v2.8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  )
-}
 
 function PronunciationPractice({ state, setState, learnerId }) {
   const [phraseId, setPhraseId] = useState(practicePhrases[0].id)
@@ -603,7 +582,7 @@ function PronunciationPractice({ state, setState, learnerId }) {
               ) : (
                 <>
                   <button type="button" className="btn btn--panel btn--model" onClick={() => handleSpeak()}>
-                    ▶ お手本を聞く
+                    <SpeakerIcon />Listen
                   </button>
                   {(speaker.mode === 'random' || speaker.mode === 'gender') && hasGender(voices, 'female') && (
                     <button type="button" className="btn" onClick={() => handleSpeak('female')}>

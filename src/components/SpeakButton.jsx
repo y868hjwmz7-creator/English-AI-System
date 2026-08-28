@@ -10,6 +10,7 @@
  */
 import { useEffect, useState } from 'react'
 import { isSpeechSupported, loadEnglishVoices, speak, stopSpeaking } from '../lib/speech.js'
+import { SpeakerIcon, StopIcon } from './Icons.jsx'
 
 /** 声の読み込みは1回だけ。以降は同じ約束を使い回す */
 let voicePromise = null
@@ -18,13 +19,19 @@ const bestVoice = () => {
   return voicePromise
 }
 
-export default function SpeakButton({ text, label = 'お手本', rate = 0.9, className = '' }) {
-  const [voice, setVoice] = useState(null)
+// 読み上げのボタンは、どの演習でも **Listen** と書く(2026-08 利用者の指定)。
+// 「お手本」「聞く」と場所によって違う言葉になっていた。
+export default function SpeakButton({
+  text, label = 'Listen', rate = 0.9, className = '', voice: given = null,
+}) {
+  // 会話では話す人ごとに声を変える。指定があればそれを使う(voiceCast.js)
+  const [auto, setAuto] = useState(null)
+  const voice = given ?? auto
   const [playing, setPlaying] = useState(false)
 
   useEffect(() => {
     let alive = true
-    bestVoice().then((v) => { if (alive) setVoice(v) })
+    bestVoice().then((v) => { if (alive) setAuto(v) })
     return () => { alive = false }
   }, [])
 
@@ -43,7 +50,9 @@ export default function SpeakButton({ text, label = 'お手本', rate = 0.9, cla
 
   return (
     <button type="button" className={`btn btn--small no-print ${className}`} onClick={play}>
-      {playing ? '■ 止める' : `🔊 ${label}`}
+      {playing
+        ? <><StopIcon />止める</>
+        : <><SpeakerIcon />{label}</>}
     </button>
   )
 }
