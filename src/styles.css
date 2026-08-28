@@ -926,3 +926,107 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--surface-1); font-size: 14px;
 }
 .generate-cost .field-hint { display: block; margin-top: 2px; }
+
+/* ── 配色の切り替え ────────────────────────────────────────── */
+.app-title-row {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+}
+.theme-switch {
+  display: inline-flex; margin-left: auto;
+  border: 1px solid var(--border); border-radius: 999px; overflow: hidden;
+}
+.theme-btn {
+  border: none; background: none; cursor: pointer;
+  padding: 4px 10px; font-size: 12px; color: var(--text-secondary);
+}
+.theme-btn.is-active { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* ── レッスンで使う表示(画面共有用)──────────────────────────
+   紙に刷ったときと同じ見え方を、画面の上で出す。
+   **暗い配色を選んでいても、紙は白のまま。**
+   画面共有では白いほうが見やすく、「PDF に近い」という要望にも合う。 */
+.lesson {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column;
+  background: #3a3a38;   /* 紙の外。紙が浮いて見えるように暗くする */
+}
+.lesson-bar {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  padding: 8px 12px; background: #24241f; color: #f2f2ee;
+}
+.lesson-bar .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
+.lesson-bar .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lesson-bar .btn:disabled { opacity: .4; }
+.lesson-pages { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.lesson-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.lesson-sizes { display: inline-flex; border: 1px solid #55554e; border-radius: 999px; overflow: hidden; }
+.lesson-sizes .theme-btn { color: #d8d8d2; }
+
+.lesson-sheet {
+  flex: 1; overflow-y: auto;
+  margin: 16px auto; padding: 28px 32px 60px;
+  width: min(860px, calc(100% - 24px));
+  background: #fff; color: #1a1a1a;
+  border-radius: 6px; box-shadow: 0 6px 24px rgb(0 0 0 / 35%);
+  line-height: 1.9;
+}
+.lesson-sheet--m  { font-size: 16px; }
+.lesson-sheet--l  { font-size: 19px; }
+.lesson-sheet--xl { font-size: 23px; }
+
+.lesson-head {
+  margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px solid #1a1a1a;
+}
+.lesson-head strong { font-size: 1.15em; }
+.lesson-head div { color: #555; margin-top: 3px; }
+.lesson-section {
+  margin: 0 0 8px; padding-left: 10px; border-left: 5px solid #1a1a1a;
+  font-size: 1.05em;
+}
+.lesson-instruction { margin: 0 0 18px; color: #555; font-size: .82em; }
+
+.lesson-items { list-style: none; margin: 0; padding: 0; counter-reset: lq; }
+.lesson-items > li {
+  position: relative; counter-increment: lq;
+  margin-bottom: 20px; padding: 0 0 16px 42px; border-bottom: 1px solid #e4e4e0;
+}
+.lesson-items > li::before {
+  content: counter(lq);
+  position: absolute; left: 0; top: 2px;
+  width: 30px; height: 30px; line-height: 28px; text-align: center;
+  border: 1px solid #999; border-radius: 50%; font-size: .68em; color: #444;
+}
+.lesson-tag {
+  display: inline-block; margin-bottom: 4px; padding: 1px 9px;
+  border: 1px solid #aaa; border-radius: 999px; font-size: .6em; color: #555;
+}
+.lesson-speaker { font-weight: 700; color: #333; font-size: .78em; }
+.lesson-en { color: #000; }
+.lesson-ja { color: #555; font-size: .82em; }
+.lesson-note { color: #666; font-size: .74em; }
+.lesson-answer {
+  margin-top: 6px; padding: 4px 10px;
+  border-left: 4px solid #1baf7a; color: #1a1a1a; font-size: .88em;
+}
+.lesson-sheet .btn { margin-top: 6px; border-color: #ccc; background: #f7f7f5; color: #1a1a1a; }
+
+@media (max-width: 600px) {
+  .lesson-sheet { padding: 18px 16px 48px; margin: 8px auto; }
+  .lesson-tools { margin-left: 0; }
+}
+
+/* ── 宿題の行(押して開く)────────────────────────────────
+   以前は下の小さなボタンでしか開けず、並んでいるだけの一覧に見えていた。
+   行そのものを押せるようにし、印(▸ ▾)で押せることを示す。 */
+.homework-open {
+  display: flex; width: 100%; gap: 10px; align-items: flex-start;
+  padding: 4px 0; border: none; background: none; cursor: pointer;
+  text-align: left; font: inherit; color: inherit;
+  border-radius: 8px;
+}
+.homework-open:hover { background: var(--surface-2); }
+.homework-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.homework-open-mark { color: var(--text-muted); font-size: 14px; padding-top: 3px; }
+.homework-open-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.homework-open-title { font-size: 16px; font-weight: 600; line-height: 1.5; }
+.homework-open .muted, .homework-open .card-hint { font-size: 13px; }

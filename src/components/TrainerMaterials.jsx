@@ -13,6 +13,7 @@ import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { printElement } from '../lib/print.js'
+import LessonView from './LessonView.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
@@ -35,6 +36,7 @@ export default function TrainerMaterials({ me }) {
   const [sort, setSort] = useState('new')      // 並び順
   const [openId, setOpenId] = useState(null)   // 中身を開いている教材
   const [openSection, setOpenSection] = useState({})  // 教材ごとに開いている演習
+  const [lessonOf, setLessonOf] = useState(null)      // レッスン表示で開いている教材
 
   const [materials, setMaterials] = useState([])
   const [learners, setLearners] = useState([])
@@ -119,6 +121,7 @@ export default function TrainerMaterials({ me }) {
 
   return (
     <div className="stack">
+      {lessonOf && <LessonView material={lessonOf} onClose={() => setLessonOf(null)} />}
       <div className="card">
         <h2 className="card-title">教材をさがす</h2>
         <p className="card-hint">
@@ -254,6 +257,10 @@ export default function TrainerMaterials({ me }) {
                     </div>
                   </div>
                   <div className="btn-row no-print">
+                    <button type="button" className="btn btn--small btn--primary"
+                            onClick={() => setLessonOf(m)}>
+                      📺 レッスンで使う(大きく表示)
+                    </button>
                     <button type="button" className="btn btn--small"
                             onClick={() => printElement(document.getElementById(`material-${m.id}`))}>
                       🖨 印刷 / PDFで保存

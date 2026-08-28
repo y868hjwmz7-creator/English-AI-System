@@ -7,6 +7,7 @@ import TrainerLearners from './components/TrainerLearners.jsx'
 import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import Tabs from './components/Tabs.jsx'
+import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadState, resetState, saveState } from './lib/store.js'
@@ -23,6 +24,10 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [authChecked, setAuthChecked] = useState(!isSupabaseConfigured)
+  const [theme, setTheme] = useState(loadTheme)
+
+  // 選んだ配色を画面に反映する。最初の1回も含めてここで行う
+  useEffect(() => { applyTheme(theme) }, [theme])
 
   // 起動時に一度、以降はログイン状態が変わるたびに追いかける
   useEffect(() => {
@@ -106,7 +111,22 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="app-header-main">
-          <h1 className="app-title">English AI System</h1>
+          <div className="app-title-row">
+            <h1 className="app-title">English AI System</h1>
+            {/* 配色の切り替え。レッスン中の画面共有は明るいほうが見やすく、
+                夜の自習は暗いほうが目が楽。場面で変わるので選べるようにする */}
+            <div className="theme-switch" role="group" aria-label="配色">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id} type="button" title={t.hint}
+                  className={`theme-btn${theme === t.id ? ' is-active' : ''}`}
+                  onClick={() => setTheme(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <p className="app-subtitle">ゲストの学習記録・発音練習と、トレーナー向けの管理画面(試作版)</p>
         </div>
 

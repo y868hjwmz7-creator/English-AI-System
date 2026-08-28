@@ -13,6 +13,7 @@ import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { printElement } from '../lib/print.js'
+import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 
@@ -27,6 +28,7 @@ export default function LearnerHomework() {
   // 記事・設問・語句を縦に全部並べると、スマホでは延々と流れて
   // 「どこまでやったか」が分からなくなる(2026-08 の指摘)。
   const [openSection, setOpenSection] = useState({})
+  const [lessonOf, setLessonOf] = useState(null)   // レッスン表示で開いている教材
 
   const reload = async () => {
     const { data, error: e } = await loadMyAssignments()
@@ -56,6 +58,7 @@ export default function LearnerHomework() {
 
   return (
     <div className="stack">
+      {lessonOf && <LessonView material={lessonOf} onClose={() => setLessonOf(null)} />}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
       <div className="card">
@@ -77,17 +80,33 @@ export default function LearnerHomework() {
             <h3 className="section-title">{label}({list.length})</h3>
             {list.map((a) => (
               <div key={a.id} className={`card homework-card${a.learner_done_at ? ' is-done' : ''}`}>
-                <div className="material-head">
-                  <h4 className="card-title">{a.material?.title ?? '(教材が見つかりません)'}</h4>
-                  <span className="muted">
-                    {a.material && `${cefrLabel(a.material.level)} / ${kindLabel(a.material.kind)}`}
+                {/* 見出しの行そのものを押して開く。以前は下の小さなボタンでしか
+                    開けず、並んでいるだけの一覧に見えていた(2026-08 の指摘)。
+                    ひらく・とじるの印(▸ ▾)も出して、押せることを示す。 */}
+                <button
+                  type="button"
+                  className="homework-open no-print"
+                  aria-expanded={openId === a.id}
+                  onClick={() => setOpenId(openId === a.id ? null : a.id)}
+                >
+                  <span className="homework-open-mark">{openId === a.id ? '▾' : '▸'}</span>
+                  <span className="homework-open-body">
+                    <span className="homework-open-title">
+                      {a.material?.title ?? '(教材が見つかりません)'}
+                    </span>
+                    <span className="muted">
+                      {a.material && `${cefrLabel(a.material.level)} / ${kindLabel(a.material.kind)}`}
+                      {a.material?.itemCount ? ` / 全 ${a.material.itemCount} 問` : ''}
+                    </span>
+                    <span className="card-hint">
+                      共有 {formatDate(a.assigned_at)}
+                      {a.due_on && ` / 次のレッスン ${a.due_on}`}
+                    </span>
                   </span>
-                </div>
-
-                <p className="card-hint">
-                  共有 {formatDate(a.assigned_at)}
-                  {a.due_on && ` / 次のレッスン ${a.due_on}`}
-                </p>
+                  <span className={`badge ${a.learner_done_at ? 'badge--admin' : 'badge--warn'}`}>
+                    {a.learner_done_at ? 'やった' : 'まだ'}
+                  </span>
+                </button>
 
                 {a.material?.instruction_ja && (
                   <TeachingNote text={a.material.instruction_ja} title="やること" tone="todo" />
@@ -105,6 +124,10 @@ export default function LearnerHomework() {
                       </div>
                     </div>
                     <div className="btn-row no-print">
+                      <button type="button" className="btn btn--small btn--primary"
+                              onClick={() => setLessonOf(a.material)}>
+                        📺 大きく表示する
+                      </button>
                       <button type="button" className="btn btn--small"
                               onClick={() => printElement(
                                 document.getElementById(`homework-${a.id}`),
@@ -213,11 +236,7 @@ export default function LearnerHomework() {
                       閉じる
                     </button>
                   </div>
-                ) : (
-                  <button type="button" className="btn btn--small" onClick={() => setOpenId(a.id)}>
-                    開く(演習 {a.material?.sections.length ?? 0} 種類 / {a.material?.itemCount ?? 0} 問)
-                  </button>
-                )}
+                ) : null}
 
                 <div className="btn-row">
                   <button
