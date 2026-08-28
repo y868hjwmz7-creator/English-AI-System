@@ -23,6 +23,9 @@
   --series-5: #e87ba4;  /* 桃   */
 
   --accent:  #2a78d6;
+  /* いま読み上げているところの色。**明るい / 暗いの両方に必ず置く** */
+  --speaking-bg:  #fff4cc;
+  --speaking-bar: #e0a800;
   --warn:    #eda100;
   --danger:  #e34948;
 
@@ -53,6 +56,8 @@
     --series-5: #d55181;
   
     --accent: #3987e5;
+    --speaking-bg:  #3a3213;
+    --speaking-bar: #c98500;
     --warn:   #c98500;
     --danger: #e66767;
   }
@@ -77,6 +82,8 @@
   --series-5: #d55181;
 
   --accent: #3987e5;
+  --speaking-bg:  #3a3213;
+  --speaking-bar: #c98500;
   --warn:   #c98500;
   --danger: #e66767;
 }
@@ -676,6 +683,16 @@ html { -webkit-text-size-adjust: 100%; }
 .passage-part {
   padding: 12px 0; border-bottom: 1px solid var(--border);
 }
+/* いま読み上げているところ。ゲスト側は配色に合わせて変える */
+.passage-part.is-speaking {
+  background: var(--speaking-bg);
+  box-shadow: inset 4px 0 0 var(--speaking-bar);
+  border-radius: 4px;
+  padding-left: 12px;
+}
+.passage-part.is-speaking .passage-en { font-weight: 600; }
+@media print { .passage-part.is-speaking { background: none; box-shadow: none; } }
+
 .passage-speaker { font-size: 13px; color: var(--series-1); margin-bottom: 2px; }
 .passage-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
 .passage-ja { margin: 0 0 4px; color: var(--text-secondary); font-size: 14px; line-height: 1.8; }
@@ -1001,6 +1018,20 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 本文を通して聞くボタン */
 .lesson-listen { margin: 0 0 14px; }
+
+/* いま読み上げているところ。
+   通しで聞いているとき、どこを読んでいるのか目で追えないと
+   オーバーラッピングもシャドーイングもできない(2026-08 の要望)。
+   **紙は白のままなので、色は決め打ちにする。**
+   `var(--*)` を使うと、暗い配色のときに白い紙の上で色が飛ぶ。 */
+.lesson-items > li.is-speaking {
+  background: #fff4cc;
+  box-shadow: inset 4px 0 0 #e0a800;
+  border-radius: 4px;
+}
+.lesson-items > li.is-speaking .lesson-en { font-weight: 600; }
+/* 印刷には残さない。読み上げの途中で刷ることがある */
+@media print { .lesson-items > li.is-speaking { background: none; box-shadow: none; } }
 
 .lesson-head strong { font-size: 1.15em; }
 .lesson-head div { color: #555; margin-top: 3px; }

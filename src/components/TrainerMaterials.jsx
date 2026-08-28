@@ -24,6 +24,7 @@ import {
   NEW_MATERIAL_KINDS, assignMaterial, kindLabel, loadMyLearners, searchMaterials,
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
+import { PrintIcon, ScreenIcon } from './Icons.jsx'
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
@@ -265,11 +266,11 @@ export default function TrainerMaterials({ me }) {
                   <div className="btn-row no-print">
                     <button type="button" className="btn btn--small btn--primary"
                             onClick={() => setLessonOf(m)}>
-                      📺 レッスンで使う(大きく表示)
+                      <ScreenIcon />レッスンで使う(大きく表示)
                     </button>
                     <button type="button" className="btn btn--small"
                             onClick={() => printElement(document.getElementById(`material-${m.id}`))}>
-                      🖨 印刷 / PDFで保存
+                      <PrintIcon />印刷 / PDFで保存
                     </button>
                   </div>
                   <Tabs

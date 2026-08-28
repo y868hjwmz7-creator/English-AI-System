@@ -53,6 +53,7 @@ export default function PassagePractice({ section, headline, isDialogue }) {
   const [results, setResults] = useState({})   // 段落ごとの結果
   const [notice, setNotice] = useState(null)
   const sessionRef = useRef(null)
+  const stopAllRef = useRef(null)   // 通しの読み上げを止めるための関数
 
   useEffect(() => {
     let alive = true
@@ -60,13 +61,30 @@ export default function PassagePractice({ section, headline, isDialogue }) {
     return () => { alive = false; stopSpeaking() }
   }, [])
 
+  // 読んでいるところまで画面を送る。すでに見えていれば動かない
+  useEffect(() => {
+    if (!speakingId) return
+    document.querySelector(`[data-part="${window.CSS.escape(String(speakingId))}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [speakingId])
+
   const current = MODES.find((m) => m.id === mode) ?? MODES[0]
   // 話す人 → 声。**会話は1人1声。** 同じ声だと役を追えない(2026-08 の指摘)
   const cast = castVoices(voices, section.items.map((it) => it.speaker))
   const voice = voices[0] ?? null
 
-  const playOne = (item) => {
+  /** 読み上げを止める。通しでも1発言でも、同じところで止める */
+  const stopPlaying = () => {
+    stopAllRef.current?.()
+    stopAllRef.current = null
     stopSpeaking()
+    setSpeakingId(null)
+  }
+
+  const playOne = (item) => {
+    // 鳴っているものをもう一度押したら、止める(Listen ⇄ Stop)
+    if (speakingId === item.id) { stopPlaying(); return }
+    stopPlaying()
     setSpeakingId(item.id)
     speak(item.audio_text || item.prompt_en,
       { voice: voiceFor(cast, item.speaker, voice), rate: current.rate })
@@ -82,15 +100,18 @@ export default function PassagePractice({ section, headline, isDialogue }) {
    * 1発言ずつ順に読ませる(speakSequence)。
    */
   const playAll = () => {
-    stopSpeaking()
+    stopPlaying()
     // 先に「読めるもの」だけに絞ってから並べる。絞ったあとで番号を数えないと、
     // 「いま読んでいる発言」の印が1つずれる
     const playable = section.items.filter((it) => String(it.prompt_en ?? '').trim())
-    speakSequence(
+    stopAllRef.current = speakSequence(
       playable.map((it) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker, voice) })),
       {
         rate: current.rate,
-        onIndex: (i) => setSpeakingId(i === null ? null : playable[i]?.id ?? null),
+        onIndex: (i) => {
+          if (i === null) stopAllRef.current = null
+          setSpeakingId(i === null ? null : playable[i]?.id ?? null)
+        },
       },
     )
   }
@@ -99,7 +120,7 @@ export default function PassagePractice({ section, headline, isDialogue }) {
   const checkOne = async (item) => {
     if (listeningId === item.id) { sessionRef.current?.stop(); return }
     setNotice(null)
-    stopSpeaking()
+    stopPlaying()
     setListeningId(item.id)
 
     const session = startRecognition()
@@ -125,7 +146,7 @@ export default function PassagePractice({ section, headline, isDialogue }) {
           <button
             key={m.id} type="button"
             className={`chip${mode === m.id ? ' chip--on' : ''}`}
-            onClick={() => { stopSpeaking(); setMode(m.id) }}
+            onClick={() => { stopPlaying(); setMode(m.id) }}
           >
             {m.label}
           </button>
@@ -140,8 +161,8 @@ export default function PassagePractice({ section, headline, isDialogue }) {
         <button type="button" className="btn" onClick={() => setShowJa(!showJa)}>
           {showJa ? '日本語を隠す' : '日本語を見る'}
         </button>
-        <button type="button" className="btn" onClick={stopSpeaking}>
-          <StopIcon />止める
+        <button type="button" className="btn" onClick={stopPlaying}>
+          <StopIcon />Stop
         </button>
       </div>
 
@@ -151,7 +172,8 @@ export default function PassagePractice({ section, headline, isDialogue }) {
         {section.items.map((item) => {
           const result = results[item.id]
           return (
-            <li key={item.id} className="passage-part">
+            <li key={item.id} data-part={item.id}
+                className={`passage-part${speakingId === item.id ? ' is-speaking' : ''}`}>
               {isDialogue && item.speaker && (
                 <div className="passage-speaker" lang="en">{item.speaker}</div>
               )}
@@ -164,7 +186,7 @@ export default function PassagePractice({ section, headline, isDialogue }) {
                   onClick={() => playOne(item)}
                 >
                   {speakingId === item.id
-                    ? '読んでいます…'
+                    ? <><StopIcon />Stop</>
                     : <><SpeakerIcon />Listen</>}
                 </button>
                 {isRecognitionSupported() && (

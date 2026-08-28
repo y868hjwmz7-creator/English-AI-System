@@ -47,3 +47,29 @@ export function StopIcon({ className = 'icon' }) {
     </svg>
   )
 }
+
+/** 画面(レッスンで大きく表示する) */
+export function ScreenIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <rect x="2.2" y="3.5" width="15.6" height="10.5" rx="1.8" fill="none"
+            stroke="currentColor" strokeWidth="1.5" />
+      <path d="M7 17h6" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** 印刷 */
+export function PrintIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M6 7V3h8v4" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinejoin="round" />
+      <rect x="2.5" y="7" width="15" height="7" rx="1.6" fill="none"
+            stroke="currentColor" strokeWidth="1.5" />
+      <rect x="6" y="12" width="8" height="5" rx="1" fill="none"
+            stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}

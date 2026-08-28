@@ -19,10 +19,13 @@ const bestVoice = () => {
   return voicePromise
 }
 
-// 読み上げのボタンは、どの演習でも **Listen** と書く(2026-08 利用者の指定)。
-// 「お手本」「聞く」と場所によって違う言葉になっていた。
+// 読み上げのボタンは、どの演習でも **Listen**、止めるときは **Stop**
+// (2026-08 利用者の指定)。「お手本」「聞く」と場所によって違っていた。
+// **対になる操作は、どちらも同じ言葉づかいにする。**
+// Listen と「止める」が並ぶと、押し分けが一瞬わからない。
 export default function SpeakButton({
   text, label = 'Listen', rate = 0.9, className = '', voice: given = null,
+  onPlayingChange = null,
 }) {
   // 会話では話す人ごとに声を変える。指定があればそれを使う(voiceCast.js)
   const [auto, setAuto] = useState(null)
@@ -37,21 +40,24 @@ export default function SpeakButton({
 
   if (!text || !isSpeechSupported()) return null
 
+  // 読んでいるあいだ、親が「いまここ」を色で示せるように知らせる
+  const setState = (on) => { setPlaying(on); onPlayingChange?.(on) }
+
   const play = () => {
-    if (playing) { stopSpeaking(); setPlaying(false); return }
+    if (playing) { stopSpeaking(); setState(false); return }
     stopSpeaking()
-    setPlaying(true)
+    setState(true)
     speak(text, { voice, rate })
     // 読み終わりの合図は端末によって来ないことがあるため、
     // 語数からおおよその時間で戻す。押せないままになるより実害が小さい。
     const seconds = Math.max(2, String(text).split(/\s+/).length / 2.2)
-    window.setTimeout(() => setPlaying(false), seconds * 1000)
+    window.setTimeout(() => setState(false), seconds * 1000)
   }
 
   return (
     <button type="button" className={`btn btn--small no-print ${className}`} onClick={play}>
       {playing
-        ? <><StopIcon />止める</>
+        ? <><StopIcon />Stop</>
         : <><SpeakerIcon />{label}</>}
     </button>
   )

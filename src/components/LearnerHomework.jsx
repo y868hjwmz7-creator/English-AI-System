@@ -17,6 +17,7 @@ import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
+import { PrintIcon, ScreenIcon } from './Icons.jsx'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
@@ -133,14 +134,14 @@ export default function LearnerHomework() {
                     <div className="btn-row no-print">
                       <button type="button" className="btn btn--small btn--primary"
                               onClick={() => setLessonOf(a.material)}>
-                        📺 大きく表示する
+                        <ScreenIcon />大きく表示する
                       </button>
                       <button type="button" className="btn btn--small"
                               onClick={() => printElement(
                                 document.getElementById(`homework-${a.id}`),
                                 { worksheet: true },
                               )}>
-                        🖨 印刷 / PDFで保存(問題のみ)
+                        <PrintIcon />印刷 / PDFで保存(問題のみ)
                       </button>
                     </div>
                     {a.material?.teaching_point && (

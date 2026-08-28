@@ -842,7 +842,7 @@ function PronunciationPractice({ state, setState, learnerId }) {
                             </small>
                           </span>
                           <button type="button" className="btn btn--small" onClick={() => handlePlaySaved(id)}>
-                            {playingId === id ? '再生中' : '▶ 聞く'}
+                            {playingId === id ? '再生中' : <><SpeakerIcon />Listen</>}
                           </button>
                         </li>
                       )

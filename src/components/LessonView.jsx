@@ -21,7 +21,7 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
 import { loadEnglishVoices, speakSequence, stopSpeaking } from '../lib/speech.js'
 import { castVoices, voiceFor } from '../lib/voiceCast.js'
-import { SpeakerIcon, StopIcon } from './Icons.jsx'
+import { PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 
@@ -51,6 +51,10 @@ export default function LessonView({ material, onClose }) {
   // 同じ声だと、どちらが話しているのか耳で分からない。
   const [voices, setVoices] = useState([])
   const [playingAll, setPlayingAll] = useState(false)
+  // いま読み上げている項目。**色で示す。**
+  // 通しで聞いているとき、どこを読んでいるのか目で追えないと
+  // オーバーラッピングもシャドーイングもできない(2026-08 の要望)。
+  const [speakingKey, setSpeakingKey] = useState(null)
   const stopAllRef = useRef(null)
 
   /** 通しの読み上げを止める */
@@ -58,6 +62,7 @@ export default function LessonView({ material, onClose }) {
     stopAllRef.current?.()
     stopAllRef.current = null
     setPlayingAll(false)
+    setSpeakingKey(null)
   }
 
   /** ページを移ったら、1問ずつの開け閉めと読み上げを元に戻す */
@@ -72,6 +77,14 @@ export default function LessonView({ material, onClose }) {
     loadEnglishVoices().then((list) => { if (alive) setVoices(list) })
     return () => { alive = false; stopSpeaking() }
   }, [])
+
+  // 読んでいるところが画面の外に出ないよう、そこまで送る。
+  // `nearest` なので、すでに見えていれば動かない(押した直後に飛ばない)。
+  useEffect(() => {
+    if (!speakingKey) return
+    document.querySelector(`[data-key="${window.CSS.escape(speakingKey)}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [speakingKey])
 
   // 開いているあいだは、後ろの画面を動かさない
   useEffect(() => {
@@ -127,14 +140,22 @@ export default function LessonView({ material, onClose }) {
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
     if (playingAll) { stopAll(); return }
-    const parts = (section?.items ?? [])
-      .map((it) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker) }))
-      .filter((x) => x.text)
-    if (!parts.length) return
+    // 先に「読めるもの」だけに絞る。絞ったあとで番号を数えないと、
+    // 色を付ける場所が1つずれる
+    const playable = (section?.items ?? [])
+      .map((it, i) => ({ it, key: key(it, i) }))
+      .filter(({ it }) => String(it.prompt_en ?? '').trim())
+    if (!playable.length) return
     setPlayingAll(true)
-    stopAllRef.current = speakSequence(parts, {
-      onIndex: (i) => { if (i === null) { stopAllRef.current = null; setPlayingAll(false) } },
-    })
+    stopAllRef.current = speakSequence(
+      playable.map(({ it }) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker) })),
+      {
+        onIndex: (i) => {
+          if (i === null) { stopAllRef.current = null; setPlayingAll(false) }
+          setSpeakingKey(i === null ? null : playable[i]?.key ?? null)
+        },
+      },
+    )
   }
 
   return (
@@ -176,7 +197,7 @@ export default function LessonView({ material, onClose }) {
           </div>
           <button type="button" className="btn btn--small"
                   onClick={() => printElement(document.getElementById('lesson-sheet'))}>
-            🖨 印刷
+            <PrintIcon />印刷
           </button>
         </div>
       </div>
@@ -214,14 +235,15 @@ export default function LessonView({ material, onClose }) {
             {isPassage && (
               <div className="lesson-listen no-print">
                 <button type="button" className="btn btn--small" onClick={playWhole}>
-                  {playingAll ? <><StopIcon />止める</> : <><SpeakerIcon />Listen (全体)</>}
+                  {playingAll ? <><StopIcon />Stop</> : <><SpeakerIcon />Listen (全体)</>}
                 </button>
               </div>
             )}
 
             <ol className="lesson-items">
               {section.items.map((it, i) => (
-                <li key={key(it, i)}>
+                <li key={key(it, i)} data-key={key(it, i)}
+                    className={speakingKey === key(it, i) ? 'is-speaking' : undefined}>
                   {it.tag_id && <span className="lesson-tag">{weaknessTagLabel(it.tag_id)}</span>}
                   {it.speaker && <div className="lesson-speaker" lang="en">{it.speaker}</div>}
 
@@ -242,6 +264,7 @@ export default function LessonView({ material, onClose }) {
                     <SpeakButton
                       text={it[type.audioFrom]}
                       voice={voiceFor(cast, it.speaker)}
+                      onPlayingChange={(on) => setSpeakingKey(on ? key(it, i) : null)}
                     />
                   )}
 
