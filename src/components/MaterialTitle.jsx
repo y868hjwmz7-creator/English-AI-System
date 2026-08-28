@@ -30,7 +30,10 @@ export default function MaterialTitle({
         <Tag className="mtitle-main">{main || '(名前のない教材)'}</Tag>
         {date && <span className="mtitle-date">{date}</span>}
       </div>
-      {headline && <div className="mtitle-headline" lang="en">{headline}</div>}
+      {/* 教材名そのものが見出しになっている古い教材では、同じ英文が2行
+          続けて並んでしまう(2026-08 実機)。同じなら2行目は出さない。 */}
+      {headline && headline.trim() !== (main ?? '').trim()
+        && <div className="mtitle-headline" lang="en">{headline}</div>}
       {chips.length > 0 && (
         <div className="mtitle-chips">
           {chips.map((c, i) => <span key={i} className="mtitle-chip">{c}</span>)}

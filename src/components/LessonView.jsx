@@ -16,7 +16,7 @@
  *   ・文字の大きさを3段階で変えられる。共有先の画面の大きさが分からないため
  */
 import { useEffect, useState } from 'react'
-import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
+import { countLabel, exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
 import MaterialTitle from './MaterialTitle.jsx'
@@ -73,6 +73,12 @@ export default function LessonView({ material, onClose }) {
   }, [onClose, sections.length])
 
   if (!material) return null
+  // 弱点は教材名にも入る。**全部入っているなら、札は出さない**(同じ言葉が
+  // 2度並ぶため)。1つでも欠けていれば、**全部**を札で出す。
+  // 一部だけを出すと、何が抜けているのか分からない一覧になる。
+  const allTags = material.tagIds ?? []
+  const titleText = String(material.title ?? '')
+  const extraTags = allTags.every((t) => titleText.includes(weaknessTagLabel(t))) ? [] : allTags
   const section = sections[page]
   const key = (it, i) => it.id ?? `${page}-${i}`
 
@@ -89,6 +95,7 @@ export default function LessonView({ material, onClose }) {
     else setOpenItems(next)
   }
   const type = section ? exerciseType(section.exercise_type) : null
+  const isPassage = section ? isPassageSection(section.exercise_type) : false
 
   return (
     <div className="lesson" role="dialog" aria-label="レッスンで使う表示">
@@ -138,13 +145,25 @@ export default function LessonView({ material, onClose }) {
         <div className="lesson-head">
           <MaterialTitle title={material.title} headline={material.headline}
                          as="strong" size="sheet" />
+          {/* **何の練習かを、紙の上に必ず残す。**
+              記事・会話は場面の題名が主役になるため、弱点(文法事項)が
+              どこにも出ていなかった。紙で復習するときに分からなくなる
+              (2026-08 の指摘)。教材名にすでに入っているものは繰り返さない。 */}
+          {extraTags.length > 0 && (
+            <div className="lesson-weakness">
+              <span className="lesson-weakness-label">文法事項</span>
+              {extraTags.map((t) => (
+                <span key={t} className="lesson-weakness-tag">{weaknessTagLabel(t)}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         {section && (
           <>
             <h3 className="lesson-section">
               {exerciseLabel(section.exercise_type)}
-              {!isPassageSection(section.exercise_type) && `（${section.items.length} 問）`}
+              {`（${countLabel(section.exercise_type, section.items.length)}）`}
             </h3>
             {section.instruction && <p className="lesson-instruction">{section.instruction}</p>}
 
@@ -158,7 +177,12 @@ export default function LessonView({ material, onClose }) {
                   {!type?.hidePromptFromLearner && it.prompt_en && (
                     <div className="lesson-en" lang="en">{it.prompt_en}</div>
                   )}
-                  {it.prompt_ja && <div className="lesson-ja">{it.prompt_ja}</div>}
+                  {/* 本文(記事・会話)の訳は、はじめは伏せる。
+                      英文だけが出ていたほうがシャドーイングしやすく、
+                      「訳を見る」で確かめられる。設問の日本語は伏せない。 */}
+                  {it.prompt_ja && (isPassage
+                    ? isOpen(key(it, i)) && <div className="lesson-ja">{it.prompt_ja}</div>
+                    : <div className="lesson-ja">{it.prompt_ja}</div>)}
                   {it.question && <div className="lesson-en" lang="en">{it.question}</div>}
                   {it.hint && <div className="lesson-note">与える語: {it.hint}</div>}
 
@@ -171,11 +195,13 @@ export default function LessonView({ material, onClose }) {
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。
                       レッスンで1問ずつ答え合わせをするために、問ごとが要る。 */}
-                  {(it.answer || it.audio_text) && (
+                  {(it.answer || it.audio_text || (isPassage && it.prompt_ja)) && (
                     <button type="button" className="btn btn--small lesson-reveal"
                             aria-expanded={isOpen(key(it, i))}
                             onClick={() => toggleItem(key(it, i))}>
-                      {isOpen(key(it, i)) ? '解答を隠す' : '解答を見る'}
+                      {isPassage
+                        ? (isOpen(key(it, i)) ? '訳を隠す' : '訳を見る')
+                        : (isOpen(key(it, i)) ? '解答を隠す' : '解答を見る')}
                     </button>
                   )}
 

@@ -18,7 +18,7 @@ import MaterialTitle from './MaterialTitle.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
-import { exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
+import { countLabel, exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, kindLabel, loadMyLearners, searchMaterials,
@@ -237,7 +237,7 @@ export default function TrainerMaterials({ me }) {
               <ul className="material-preview">
                 {m.sections.map((sec) => (
                   <li key={sec.id}>
-                    <strong>{exerciseLabel(sec.exercise_type)}</strong>({sec.items.length} 問)
+                    <strong>{exerciseLabel(sec.exercise_type)}</strong>({countLabel(sec.exercise_type, sec.items.length)})
                     {sec.items[0] && (
                       <span className="muted">
                         {' '}— {sec.items[0].prompt_en || sec.items[0].prompt_ja
@@ -256,7 +256,6 @@ export default function TrainerMaterials({ me }) {
                     <MaterialTitle title={m.title} headline={m.headline} as="strong" size="sheet"
                                    fallbackTags={[cefrLabel(m.level), kindLabel(m.kind),
                                      industryLabel(m.industry)]} />
-                    {m.headline && <div lang="en">{m.headline}</div>}
                     <div className="print-meta">
                       {cefrLabel(m.level)} / {kindLabel(m.kind)} / {industryLabel(m.industry)}
                       {' / '}全 {m.itemCount} 問
@@ -292,7 +291,7 @@ export default function TrainerMaterials({ me }) {
                     return (
                       <section key={sec.id} className="exercise-view">
                         <h4 className="section-title">
-                          {exerciseLabel(sec.exercise_type)}({sec.items.length} 問)
+                          {exerciseLabel(sec.exercise_type)}({countLabel(sec.exercise_type, sec.items.length)})
                           {!type?.audioFrom && <span className="field-hint"> 音声なし</span>}
                         </h4>
                         {sec.instruction && <p className="card-hint">{sec.instruction}</p>}

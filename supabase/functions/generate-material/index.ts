@@ -154,12 +154,11 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     '英文和訳。prompt_en に英文、answer に日本語訳を入れる。',
   fill_blank:
     '穴埋め。prompt_en に（　　　）を含む英文、hint に与える語(原形など)、answer に空欄に入る形を入れる。'
-    + 'audio_text は入れない。落とし穴の問には note に理由を書く。',
+    + '落とし穴の問には note に理由を書く。',
   translate_ja_en:
     '和文英訳。prompt_ja に日本語、answer に解答例、answer_alt に別解(改行区切り、1〜2個)を入れる。',
   listening:
     'リスニング。audio_text に読み上げる英文、question に英語の設問、answer に解答を入れる。'
-    + 'prompt_en と prompt_ja は入れない(英文を見せないため)。'
     + '設問は、英文を聞かないと答えられないものにする。',
 
   // ── 本文(まとまった1本)────────────────────────────────
@@ -169,18 +168,21 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     '記事。**1項目 = 1段落**。読み物として通して読めること。'
     + '前の段落を受けて話が進み、最後の段落で締めること。'
     + '各段落は3〜5文、45〜65語。全体で250〜350語になる。'
-    + 'prompt_en に段落の英文、prompt_ja にその段落の日本語訳を入れる。answer は空文字にする。'
-    + '**headline に記事の見出しを入れる**(英語、8語以内、内容が分かるもの)。'
+    + 'prompt_en に段落の英文、prompt_ja にその段落の日本語訳を入れる。'
+    + '**items に入れるのは段落そのものだけ。** 見出しの一覧・要約・登場人物の'
+    + '紹介など、段落でないものを項目にしない。'
     + '1段落目で何の話か分かるようにし、事実・具体例・数字を入れて、'
     + '「人に話したくなる」中身にすること。教科書調の当たり障りのない文章にしない。',
   dialogue:
-    '会話。**1項目 = 1つの発言**。speaker に話す人(名前と肩書き。'
-    + '例: Sarah (Product Manager))、prompt_en にその発言、'
-    + 'prompt_ja に日本語訳を入れる。answer は空文字。'
+    '会話。**1項目 = 1人の1回の発言**。speaker に話す人(名前と肩書き。'
+    + '例: Sarah (Product Manager))、prompt_en にその発言の英語、'
+    + 'prompt_ja に日本語訳を入れる。'
+    + '**items に入れるのは発言だけ。** 登場人物の一覧を項目にしない。'
+    + '**prompt_en が空の項目を作らない。** 話す人の名前だけの項目は発言ではない。'
     + '**登場人物は2人**で、名前は最初から最後まで変えない。'
+    + '2人が交互に話し、指定された数の発言で1本の会話になること。'
     + '1発言は1〜3文。話が始まり、進み、区切りがつくところまでを1本にする。'
     + '相づち・言いよどみ・言い換えなど、実際の会話に出るものを入れる。'
-    + '**headline に会話の題名を入れる**(英語、8語以内)。'
     + '場面の指定に合わせて丁寧さを変えること。噂話と交渉で同じ話し方にしない。',
   comprehension:
     '内容理解。question に英語の設問、answer に英語の解答例を入れる。'
@@ -190,7 +192,7 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
   vocab_note:
     '本文に出た語句。**本文に実際に出てきた語句だけ**を選ぶ。出てこない語を作らない。'
     + 'prompt_en に語句、prompt_ja に意味、note にその語句を使った短い例文(英語)と'
-    + '使いどころの注意を入れる。answer は空文字。'
+    + '使いどころの注意を入れる。'
     + 'ゲストのレベルにとって新しい語、または知っていても使えていない語を選ぶ。',
 
   // ── 旧「長文」で使っていたもの ────────────────────────────
@@ -202,63 +204,119 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
   phrase:       'フレーズ。prompt_en にフレーズ、prompt_ja に意味と使う場面を入れる。',
 }
 
-/** 生成した中身を受け取るための道具の形 */
-const EMIT_SECTION_TOOL = {
-  name: 'emit_section',
-  description: '作った演習を返す',
-  strict: true,
-  input_schema: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['instruction', 'items'],
-    properties: {
-      instruction: { type: 'string', description: 'この演習の指示文(日本語)' },
-      headline: {
-        type: 'string',
-        description: '記事の見出し / 会話の題名(英語、8語以内)。記事・会話のときだけ入れる',
-      },
-      teaching_point: {
-        type: 'string',
-        description:
-          '教材全体にかかる指導ポイント。最初の演習でだけ入れる。'
-          + '**1つの注意点につき1行**にし、行と行は改行(\\n)で区切る。2〜4行。'
-          + '1行は40〜70字。長い1本の文にしない(画面で読めなくなる)。'
-          + '各行に、その注意点が効いている英語の例を1つ入れる'
-          + '(例: 「決定する」は make a decision。do a decision とは言わない)。',
-      },
+/** 1問(1段落・1発言)の欄の説明 */
+const ITEM_FIELDS: Record<string, { type: string; description: string }> = {
+  prompt_en:  { type: 'string', description: '英語で提示するもの' },
+  prompt_ja:  { type: 'string', description: '日本語で提示するもの' },
+  hint:       { type: 'string', description: '与える語(穴埋め)' },
+  question:   { type: 'string', description: '設問(英語)' },
+  answer:     { type: 'string', description: '解答 / 解答例' },
+  answer_alt: { type: 'string', description: '別解。改行区切り' },
+  // 以前は「prompt_en と同じにする」と指示していた。同じ英文を2回
+  // 書かせることになり、出力の課金がその分増えていた。
+  // 読み上げは prompt_en から行えるので、**リスニングのときだけ**入れる。
+  audio_text: { type: 'string', description: '読み上げる英文' },
+  note:       { type: 'string', description: '1問ごとの補足' },
+  speaker:    { type: 'string', description: '話す人(名前と肩書き。例: Sarah (Product Manager))' },
+  tag_no:     { type: 'integer', description: 'その問がどの弱点か(1から始まる番号)' },
+}
+
+/**
+ * 演習の種類ごとに、**必ず入れる欄**と、入れてもよい欄。
+ *
+ * 【なぜ種類ごとに分けるのか】(2026-08)
+ *   以前は全種類で1つの形を使い、必須は `answer` だけだった。
+ *   会話では `answer` は空文字でよいので、**実質どんな形でも通ってしまう。**
+ *   実際、14発言を頼んだのに「話す人だけの項目が2つ」という、
+ *   登場人物の一覧のようなものが返ってきた(実機で確認)。
+ *   本文の英語が無いので音声も出せず、シャドーイングもできない。
+ *
+ *   **形は指示文ではなく、道具の形で縛る。** 指示文は読み飛ばされうるが、
+ *   道具の形(strict)は API が保証する。会話なら speaker・prompt_en・
+ *   prompt_ja が必ず入る。要らない欄は最初から出さないので、
+ *   **余計な出力に課金されることもない。**
+ */
+const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }> = {
+  translate_en_ja: { required: ['prompt_en', 'answer'], optional: ['note', 'tag_no'] },
+  fill_blank:      { required: ['prompt_en', 'hint', 'answer'], optional: ['note', 'tag_no'] },
+  translate_ja_en: { required: ['prompt_ja', 'answer'], optional: ['answer_alt', 'note', 'tag_no'] },
+  listening:       { required: ['audio_text', 'question', 'answer'], optional: ['note', 'tag_no'] },
+
+  // 本文。**英語と訳が必ず要る。** これが無いと音声も出せない
+  article:         { required: ['prompt_en', 'prompt_ja'], optional: [] },
+  dialogue:        { required: ['speaker', 'prompt_en', 'prompt_ja'], optional: [] },
+  comprehension:   { required: ['question', 'answer'], optional: ['answer_alt'] },
+  vocab_note:      { required: ['prompt_en', 'prompt_ja', 'note'], optional: [] },
+
+  vocabulary:      { required: ['prompt_en', 'prompt_ja'], optional: ['note', 'tag_no'] },
+  phrase:          { required: ['prompt_en', 'prompt_ja'], optional: ['note', 'tag_no'] },
+
+  // 旧「長文」で使っていたもの。既存の教材を作り直せるように残す
+  read_aloud:      { required: ['prompt_en', 'prompt_ja'], optional: [] },
+  overlapping:     { required: ['prompt_en', 'prompt_ja'], optional: [] },
+  shadowing:       { required: ['prompt_en', 'prompt_ja'], optional: [] },
+  repeating:       { required: ['prompt_en', 'prompt_ja'], optional: [] },
+}
+
+/**
+ * 生成した中身を受け取るための道具の形を、演習の種類に合わせて組み立てる。
+ * `strict: true` なので、ここで決めた形どおりの JSON しか返ってこない。
+ */
+const emitSectionTool = (sectionType: string, isFirst: boolean) => {
+  const fields = SECTION_FIELDS[sectionType] ?? { required: ['answer'], optional: [] }
+  const itemProps: Record<string, unknown> = {}
+  for (const name of [...fields.required, ...fields.optional]) {
+    itemProps[name] = ITEM_FIELDS[name]
+  }
+
+  const isPassage = sectionType === 'article' || sectionType === 'dialogue'
+  const props: Record<string, unknown> = {
+    instruction: { type: 'string', description: 'この演習の指示文(日本語)' },
+    items: {
+      type: 'array',
+      description: isPassage ? '本文(1項目 = 1段落 / 1発言)' : '設問',
       items: {
-        type: 'array',
-        description: '設問',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['answer'],
-          properties: {
-            prompt_en:  { type: 'string', description: '英語で提示するもの' },
-            prompt_ja:  { type: 'string', description: '日本語で提示するもの' },
-            hint:       { type: 'string', description: '与える語(穴埋め)' },
-            question:   { type: 'string', description: '設問(リスニング)' },
-            answer:     { type: 'string', description: '解答 / 解答例' },
-            answer_alt: { type: 'string', description: '別解。改行区切り' },
-            audio_text: {
-              type: 'string',
-              // 以前は「prompt_en と同じにする」と指示していた。同じ英文を
-              // 2回書かせることになり、出力の課金がその分増えていた。
-              // 読み上げは prompt_en から行えるので、**リスニングのときだけ**入れる。
-              description: '読み上げる英文。リスニングのときだけ入れる。他では入れない',
-            },
-            note:       { type: 'string', description: '1問ごとの補足' },
-            speaker:    { type: 'string', description: '話す人(会話のときだけ)' },
-            tag_no: {
-              type: 'integer',
-              description: '弱点が複数指定されているとき、その問がどの弱点か(1から始まる番号)',
-            },
-          },
-        },
+        type: 'object',
+        additionalProperties: false,
+        required: fields.required,
+        properties: itemProps,
       },
     },
-  },
-} as const
+  }
+  const required = ['instruction', 'items']
+
+  if (isPassage) {
+    props.headline = {
+      type: 'string',
+      description: '記事の見出し / 会話の題名(英語、8語以内、内容が分かるもの)',
+    }
+    required.push('headline')
+  }
+  if (isFirst) {
+    props.teaching_point = {
+      type: 'string',
+      description:
+        '教材全体にかかる指導ポイント。'
+        + '**1つの注意点につき1行**にし、行と行は改行(\\n)で区切る。2〜4行。'
+        + '1行は40〜70字。長い1本の文にしない(画面で読めなくなる)。'
+        + '各行に、その注意点が効いている英語の例を1つ入れる'
+        + '(例: 「決定する」は make a decision。do a decision とは言わない)。',
+    }
+    required.push('teaching_point')
+  }
+
+  return {
+    name: 'emit_section',
+    description: '作った演習を返す',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      additionalProperties: false,
+      required,
+      properties: props,
+    },
+  }
+}
 
 // ────────────────────────────────────────────────────────────────
 // ここから受付窓口の本体
@@ -419,7 +477,7 @@ Deno.serve(async (req) => {
       output_config: { effort: 'medium' },
       // 指示は毎回同じなので、キャッシュを効かせて費用を抑える
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      tools: [EMIT_SECTION_TOOL as unknown as Anthropic.Tool],
+      tools: [emitSectionTool(sectionType, isFirst) as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: 'emit_section' },
       messages: [{ role: 'user', content: userPrompt }],
     })

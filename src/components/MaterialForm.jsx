@@ -142,13 +142,19 @@ export default function MaterialForm({
     return tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : id
   }
 
-  /** 教材名を自動で付ける。手入力を減らすため(仕様書 第5.13.5節) */
-  const autoTitle = (head) => {
+  /**
+   * 教材名を自動で付ける。手入力を減らすため(仕様書 第5.13.5節)。
+   *
+   * **見出し(headline)はここに入れない。** 見出しは題名として別に出るので、
+   * 教材名にも入れると同じ英文が2行続けて並ぶ(2026-08 実機)。
+   * 記事・会話の見出しはジャンル/場面の日本語にし、**弱点も必ず残す。**
+   * 紙で復習するとき、何の練習だったのかが分からなくなるため。
+   */
+  const autoTitle = () => {
     const parts = [todayLabel()]
-    if (head) parts.push(head)
-    else if (kind === 'reading') parts.push(READING_GENRES.find((g) => g.id === genre)?.label ?? '')
+    if (kind === 'reading') parts.push(READING_GENRES.find((g) => g.id === genre)?.label ?? '')
     else if (kind === 'dialogue') parts.push(DIALOGUE_SCENES.find((x) => x.id === scene)?.label ?? '')
-    else parts.push(tagIds.map(weaknessTagLabel).join(' + '))
+    if (tagIds.length) parts.push(tagIds.map(weaknessTagLabel).join(' + '))
     parts.push(level)
     if (industry) parts.push(industryLabel(industry))
     const name = learners.find((l) => l.id === shareWith[0])?.display_name
@@ -233,7 +239,7 @@ export default function MaterialForm({
     setSections(made)
     if (body.headline) setHeadline(body.headline)
     if (body.teaching_point && !teachingPoint) setTeachingPoint(body.teaching_point)
-    if (!title.trim()) setTitle(autoTitle(body.headline))
+    if (!title.trim()) setTitle(autoTitle())
     finish(made, body.headline, spent)
   }
 
@@ -320,7 +326,7 @@ export default function MaterialForm({
     setShort(shortCount)
     setSimilarNotes(notes)
     setWarning(warn)
-    if (!title.trim()) setTitle(autoTitle(null))
+    if (!title.trim()) setTitle(autoTitle())
     finish(made, null, spent)
   }
 
@@ -395,7 +401,7 @@ export default function MaterialForm({
     // 教材名は空でよい。日付・弱点・レベルから組み立てる。
     // 必須にすると、AI に作らせるだけの人にも入力を強いることになる。
     const { data, error: message } = await createMaterial({
-      title: title.trim() || autoTitle(headline),
+      title: title.trim() || autoTitle(),
       level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
       visibility, industry, sections, tagIds, createdBy,
       headline, genre: kind === 'reading' ? genre : '', scene: kind === 'dialogue' ? scene : '',

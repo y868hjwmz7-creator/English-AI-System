@@ -806,6 +806,11 @@ html { -webkit-text-size-adjust: 100%; }
   .print-target .mtitle-chip {
     font-size: 9pt; border-color: #999 !important; color: #444 !important;
   }
+  .print-target .lesson-weakness { margin-top: 4pt; font-size: 9pt; }
+  .print-target .lesson-weakness-label { color: #666 !important; }
+  .print-target .lesson-weakness-tag {
+    padding: 0 5pt; border: 0.7pt solid #999 !important; color: #333 !important;
+  }
 
   /* ── 演習の見出し ──────────────────────────────── */
   .print-target .section-title {
@@ -989,6 +994,16 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .lesson-head strong { font-size: 1.15em; }
 .lesson-head div { color: #555; margin-top: 3px; }
+
+/* 何の練習か(弱点)。主役ではないので小さく、しかし必ず見えるように */
+.lesson-weakness {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 6px; font-size: .72em;
+}
+.lesson-weakness-label { color: #666; letter-spacing: .04em; }
+.lesson-weakness-tag {
+  padding: 1px 8px; border: 1px solid #bbb; border-radius: 999px; color: #333;
+}
 .lesson-section {
   margin: 0 0 8px; padding-left: 10px; border-left: 5px solid #1a1a1a;
   font-size: 1.05em;

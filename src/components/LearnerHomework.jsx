@@ -123,6 +123,11 @@ export default function LearnerHomework() {
                         {cefrLabel(a.material?.level)} / {kindLabel(a.material?.kind)}
                         {' / '}共有 {formatDate(a.assigned_at)}
                         {a.due_on && ` / 次のレッスン ${a.due_on}`}
+                        {/* 何の練習だったのかを、紙にも残す。
+                            トレーナー側の紙には入っていて、ゲスト側だけ
+                            抜けていた(2026-08 の見直し) */}
+                        {a.material?.tagIds?.length
+                          ? ` / ${a.material.tagIds.map(weaknessTagLabel).join('・')}` : ''}
                       </div>
                     </div>
                     <div className="btn-row no-print">

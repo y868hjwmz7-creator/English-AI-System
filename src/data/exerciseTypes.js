@@ -56,7 +56,9 @@ export const EXERCISE_TYPES = [
   {
     id: 'comprehension', label: '内容の理解',
     instruction: '本文の内容について、英語で答えなさい。',
-    fields: ['question', 'answer'], audioFrom: null,
+    // 設問も英語なので、読み上げを付ける。「音声はどんな場面でも欲しい」
+    // という要望による(2026-08)。聞き取れないと設問自体が壁になる。
+    fields: ['question', 'answer'], audioFrom: 'question',
     hideAnswerFromLearner: true,
   },
   {
@@ -95,6 +97,16 @@ export const EXERCISE_TYPES = [
 
 export const exerciseType = (id) => EXERCISE_TYPES.find((t) => t.id === id)
 export const exerciseLabel = (id) => exerciseType(id)?.label ?? id
+
+/**
+ * 数え方の単位。**本文は「問」で数えない。**
+ * 記事は段落、会話は発言である(仕様書 第5.17節)。
+ * 「会話(14 問)」と書くと、14個の設問があるように読めてしまう。
+ */
+export const countUnit = (id) => (id === 'article' ? '段落' : id === 'dialogue' ? '発言' : '問')
+
+/** 「14 発言」「10 問」のような表示 */
+export const countLabel = (id, n) => `${n} ${countUnit(id)}`
 
 /** 欄の日本語名と入力の目安 */
 export const FIELD_LABELS = {
