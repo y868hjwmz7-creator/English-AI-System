@@ -130,4 +130,8 @@ from (
   select '㉜ 文脈ごとに控えを持てる(0012)', (
     select array_length(conkey, 1) = 2 from pg_constraint
     where conrelid = 'public.word_glosses'::regclass and contype = 'p'), 32
+  union all
+  select '㉝ 発音記号を持てる(0013)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'word_glosses' and column_name = 'phonetic'), 33
 ) t order by 順;

@@ -1057,13 +1057,18 @@ html { -webkit-text-size-adjust: 100%; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
   font-size: 13px; line-height: 1.6; text-align: left; white-space: normal;
 }
-/* 画面の右端からはみ出すときは右寄せにする(意味の続きが読めなくなるため) */
-.etext-pop.is-right { left: auto; right: 0; }
 .etext-pop-head {
   display: flex; align-items: baseline; gap: 8px;
   padding-bottom: 6px; border-bottom: 1px solid var(--border);
 }
+.etext-pop-head { flex-wrap: wrap; }
 .etext-pop-head strong { font-size: 15px; }
+/* 発音記号。読み方が分からないと声に出せない */
+.etext-phonetic {
+  color: var(--text-secondary); font-size: 12.5px; letter-spacing: .01em;
+}
+.etext-listen { margin-left: auto; padding: 2px 8px; font-size: 11.5px; }
+.etext-listen .icon { margin-right: .3em; }
 .etext-pos {
   padding: 0 7px; border: 1px solid var(--border); border-radius: 999px;
   font-size: 11px; color: var(--text-secondary); flex: none;
@@ -1199,6 +1204,8 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .lesson-sheet .etext-pop-head { border-bottom-color: #e4e4e0; }
 .lesson-sheet .etext-pos { border-color: #ccc; color: #555; }
+.lesson-sheet .etext-phonetic { color: #666; }
+.lesson-sheet .etext-listen { margin-top: 0; }
 .lesson-sheet .etext-sense-mean { color: #444; }
 .lesson-sheet .etext-sense.is-main .etext-sense-mean { color: #1a1a1a; }
 .lesson-sheet .etext-sense-no,

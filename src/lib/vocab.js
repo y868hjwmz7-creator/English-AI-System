@@ -95,7 +95,7 @@ function withSenses(gloss) {
       example_en: gloss?.example_en ?? '',
       note: gloss?.note ?? '',
     }].filter((x) => x.meaning_ja)
-  return { ...gloss, senses }
+  return { ...gloss, senses, phonetic: gloss?.phonetic ?? null }
 }
 
 // ── 知っていた / 知らなかった ────────────────────────────────

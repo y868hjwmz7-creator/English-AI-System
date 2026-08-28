@@ -28,8 +28,8 @@
 //   supabase.functions.invoke('lookup-word', {
 //     body: { word: 'deployment', sentence: 'The deployment failed.', level: 'B1' }
 //   })
-//   返るもの: { gloss: { word_norm, display, senses: [{pos, meaning_ja,
-//               example_en, note}, …] }, cached: true | false }
+//   返るもの: { gloss: { word_norm, display, phonetic, senses: [{pos,
+//               meaning_ja, example_en, note}, …] }, cached: true | false }
 //   senses は**ふさわしい順**。先頭がその文での意味。
 //
 // 【安全のために】
@@ -103,6 +103,11 @@ const SYSTEM_PROMPT = `あなたは日本人のビジネス英語学習者に語
    先頭の意味にだけ付ければよい
 7. 見出し(display)は、渡された語の**そのままの形**にする。
    原形に戻さない(went を go にしない)。活用形なら意味の中で触れる
+8. 発音記号(phonetic)は**渡された語のその形**の読み方を、
+   国際音声記号(IPA)で。前後のスラッシュは付けない(例: rʌn)。
+   **その文での読み方**にする。同じ綴りでも文脈で変わる語がある
+   (read は現在なら riːd、過去なら red。live は動詞なら lɪv、
+   形容詞なら laɪv)。アメリカ英語を基本にする
 
 # 出力
 emit_gloss という道具だけを使って返すこと。文章での説明は要らない。`
@@ -114,9 +119,13 @@ const EMIT_GLOSS_TOOL = {
   input_schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['display', 'senses'],
+    required: ['display', 'phonetic', 'senses'],
     properties: {
       display: { type: 'string', description: '見出し。渡された語のままの形' },
+      phonetic: {
+        type: 'string',
+        description: 'その文での読み方(IPA)。スラッシュは付けない。例: rʌn',
+      },
       senses: {
         type: 'array',
         description: '意味。**その文でふさわしいものを先頭に**、1〜4件',
@@ -211,7 +220,9 @@ Deno.serve(async (req) => {
     if (!block || block.type !== 'tool_use') {
       return reply({ error: '意味を読み取れませんでした。もう一度お試しください。' }, 200)
     }
-    const out = block.input as { display?: string; senses?: Record<string, string>[] }
+    const out = block.input as {
+      display?: string; phonetic?: string; senses?: Record<string, string>[]
+    }
     // **中身が0件のまま「成功」を返さない**(第5.19.6節と同じ考え方)
     const senses = (out.senses ?? [])
       .filter((x) => String(x?.meaning_ja ?? '').trim())
@@ -231,6 +242,9 @@ Deno.serve(async (req) => {
       word_norm: wordNorm,
       context_key: contextKey,
       display: out.display || raw,
+      // 前後のスラッシュが付いてくることがある。控えには裸で入れ、
+      // 画面側で /…/ を付ける(出し方を1か所にまとめるため)
+      phonetic: String(out.phonetic ?? '').replace(/^\/+|\/+$/g, '').trim() || null,
       pos: senses[0].pos,
       meaning_ja: senses[0].meaning_ja,
       example_en: senses[0].example_en || null,

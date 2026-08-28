@@ -111,6 +111,10 @@ delete from public.word_glosses where word_norm = 'deployment';
 select pg_temp.ok('意味の控えは消せない',
   (select count(*)::int from public.word_glosses where word_norm = 'deployment'), 2);
 
+select pg_temp.ok('発音記号を持てる(0013)',
+  (select count(*)::int from information_schema.columns
+   where table_name = 'word_glosses' and column_name = 'phonetic'), 1);
+
 select pg_temp.ok('意味は複数持てる(0012)',
   (select jsonb_array_length(senses) from public.word_glosses
    where word_norm = 'deployment' and context_key = ''), 1);

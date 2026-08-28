@@ -36,6 +36,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { lookupWord, splitWords } from '../lib/vocab.js'
+import SpeakButton from './SpeakButton.jsx'
 
 /** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
 const HOLD_MS = 450
@@ -93,14 +94,23 @@ export default function EnglishText({
     }
   }, [openIndex])
 
-  // 画面の右端からはみ出したら、右寄せにする。
-  // はみ出したままだと、意味の続きが読めない
+  /**
+   * 吹き出しを画面の中に収める。
+   *
+   * 語の位置に合わせて出すので、行の端の語では画面からはみ出す。
+   * **右へはみ出すときは左へ、左へはみ出すときは右へずらす。**
+   * 片側だけ直すと、逆側にはみ出して読めなくなる(スマホで実際に起きた)。
+   */
   useLayoutEffect(() => {
     const el = popRef.current
     if (!el) return
-    el.classList.remove('is-right')
+    el.style.left = '0px'
     const rect = el.getBoundingClientRect()
-    if (rect.right > window.innerWidth - 8) el.classList.add('is-right')
+    const margin = 8
+    let shift = 0
+    if (rect.right > window.innerWidth - margin) shift = window.innerWidth - margin - rect.right
+    if (rect.left + shift < margin) shift = margin - rect.left
+    if (shift) el.style.left = `${Math.round(shift)}px`
   }, [openIndex, gloss, busy, error])
 
   const mark = async (status) => {
@@ -160,6 +170,14 @@ export default function EnglishText({
                   <>
                     <span className="etext-pop-head">
                       <strong lang="en">{gloss.display}</strong>
+                      {/* 発音記号。意味が分かっても読み方が分からないと、
+                          声に出す練習につながらない(2026-08 の要望)。
+                          スラッシュは画面側で付ける(控えには裸で入っている) */}
+                      {gloss.phonetic && (
+                        <span className="etext-phonetic">/{gloss.phonetic}/</span>
+                      )}
+                      <SpeakButton text={gloss.display || part.text}
+                                   className="etext-listen" />
                     </span>
                     {/* **その文でふさわしい意味が先頭に来る**(2026-08 の指定)。
                         先頭は大きく、二番目からは小さく出す。 */}
