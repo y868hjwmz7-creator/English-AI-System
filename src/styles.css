@@ -29,6 +29,17 @@
   /* 「知らなかった」と付けた語の色。**明るい / 暗いの両方に必ず置く** */
   --unknown-bg:   #ffe3e0;
   --unknown-bar:  #e34948;
+  /* 語の吹き出し。**彩度は低く。** 長く見ても疲れないことを優先する */
+  --gloss-head-bg: #f2f5f8;
+  --gloss-phonetic: #5f7a8a;
+  --gloss-note:    #7a5f2e;
+  --gloss-note-bg: #faf3e4;
+  --pos-noun:   #2f6f86;  --pos-noun-bg:   #eaf3f7;
+  --pos-verb:   #38795a;  --pos-verb-bg:   #eaf4ee;
+  --pos-adj:    #8a5588;  --pos-adj-bg:    #f6edf5;
+  --pos-adv:    #8a6a33;  --pos-adv-bg:    #f9f2e6;
+  --pos-conj:   #5c6470;  --pos-conj-bg:   #eff1f4;
+  --pos-phrase: #4c6ba8;  --pos-phrase-bg: #eef2fa;
   --warn:    #eda100;
   --danger:  #e34948;
 
@@ -63,6 +74,16 @@
     --speaking-bar: #c98500;
     --unknown-bg:   #3e2220;
     --unknown-bar:  #e66767;
+    --gloss-head-bg: #23231f;
+    --gloss-phonetic: #9db6c2;
+    --gloss-note:    #cfa96a;
+    --gloss-note-bg: #2f2a1e;
+    --pos-noun:   #79b7cd;  --pos-noun-bg:   #1d2c33;
+    --pos-verb:   #7cc09c;  --pos-verb-bg:   #1c2b24;
+    --pos-adj:    #c491c2;  --pos-adj-bg:    #2c2130;
+    --pos-adv:    #cfa96a;  --pos-adv-bg:    #2f2a1e;
+    --pos-conj:   #a3adba;  --pos-conj-bg:   #262a2f;
+    --pos-phrase: #93aee0;  --pos-phrase-bg: #212734;
     --warn:   #c98500;
     --danger: #e66767;
   }
@@ -91,6 +112,16 @@
   --speaking-bar: #c98500;
   --unknown-bg:   #3e2220;
   --unknown-bar:  #e66767;
+  --gloss-head-bg: #23231f;
+  --gloss-phonetic: #9db6c2;
+  --gloss-note:    #cfa96a;
+  --gloss-note-bg: #2f2a1e;
+  --pos-noun:   #79b7cd;  --pos-noun-bg:   #1d2c33;
+  --pos-verb:   #7cc09c;  --pos-verb-bg:   #1c2b24;
+  --pos-adj:    #c491c2;  --pos-adj-bg:    #2c2130;
+  --pos-adv:    #cfa96a;  --pos-adv-bg:    #2f2a1e;
+  --pos-conj:   #a3adba;  --pos-conj-bg:   #262a2f;
+  --pos-phrase: #93aee0;  --pos-phrase-bg: #212734;
   --warn:   #c98500;
   --danger: #e66767;
 }
@@ -1026,24 +1057,54 @@ html { -webkit-text-size-adjust: 100%; }
 .lesson-sizes { display: inline-flex; border: 1px solid #55554e; border-radius: 999px; overflow: hidden; }
 .lesson-sizes .theme-btn { color: #d8d8d2; }
 
+/* ── レッスンで使う紙の配色 ──────────────────────────────────
+   【考え方】(2026-08 利用者の指定)
+     ・**長時間見続けても疲れにくいこと。** 真っ白と真っ黒の組み合わせは
+       まぶしく、目が疲れる。紙はほんのり暖かい白、文字は少し柔らげた黒
+     ・**色で情報を整理する。** 英文・訳・解答・補足を色で描き分けると、
+       読まなくても「これは訳だ」と分かる
+     ・**彩度は低く保つ。** 鮮やかな色は数分で疲れる。全体に濁りを入れる
+     ・**色だけに頼らない。** 左の線・大きさ・余白でも区別する
+       (色の見え方には個人差がある)
+
+   値は**決め打ちにする。** 紙は暗い配色を選んでいても白のままなので、
+   `var(--text-*)` を使うと暗い配色のとき文字が消える(第5.22.6節①)。 */
 .lesson-sheet {
+  --paper:        #fdfcf9;   /* ほんのり暖かい白。真っ白はまぶしい */
+  --ink:          #24292f;   /* 真っ黒にしない */
+  --ink-soft:     #5a646e;
+  --ink-faint:    #8b949e;
+  --rule:         #e7e3da;
+
+  --accent:       #2f6f86;   /* 落ち着いた青緑。見出しと区切り */
+  --accent-bg:    #edf4f7;
+  --answer:       #38795a;   /* 解答。深い緑 */
+  --answer-bg:    #ecf4ef;
+  --translate:    #4c6ba8;   /* 訳。青 */
+  --translate-bg: #eff2f9;
+  --note:         #8a6a33;   /* 補足。落ち着いた金茶 */
+  --note-bg:      #faf4e8;
+  --voice-a:      #2f6f86;   /* 会話の1人目 */
+  --voice-b:      #8a5588;   /* 会話の2人目 */
+
   flex: 1; overflow-y: auto;
   margin: 16px auto; padding: 28px 32px 60px;
   width: min(860px, calc(100% - 24px));
-  background: #fff; color: #1a1a1a;
-  border-radius: 6px; box-shadow: 0 6px 24px rgb(0 0 0 / 35%);
+  background: var(--paper); color: var(--ink);
+  border-radius: 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 32%);
   line-height: 1.9;
 }
-/* 紙の中は、暗い配色を選んでいても黒い文字にする。
+/* 紙の中は、暗い配色を選んでいても読める色にする。
    var(--text-*) を使っている部品が紛れ込んでも消えないようにするため */
-.lesson-sheet, .lesson-sheet * { color: #1a1a1a; }
-.lesson-sheet .muted, .lesson-sheet .field-hint, .lesson-sheet .card-hint { color: #666; }
+.lesson-sheet, .lesson-sheet * { color: var(--ink); }
+.lesson-sheet .muted, .lesson-sheet .field-hint, .lesson-sheet .card-hint { color: var(--ink-soft); }
 .lesson-sheet--m  { font-size: 16px; }
 .lesson-sheet--l  { font-size: 19px; }
 .lesson-sheet--xl { font-size: 23px; }
 
 .lesson-head {
-  margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px solid #1a1a1a;
+  margin-bottom: 18px; padding-bottom: 10px;
+  border-bottom: 2px solid var(--accent);
 }
 /* ボタンの中の小さな絵。**文字に合わせて拡大縮小する。**
    px 固定にすると、レッスン表示の「特大」で絵だけ取り残される */
@@ -1092,22 +1153,37 @@ html { -webkit-text-size-adjust: 100%; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
   font-size: 13px; line-height: 1.6; text-align: left; white-space: normal;
 }
+/* 見出しの行。**帯にして、意味の並びと切り分ける。**
+   どこまでが見出しでどこからが意味か、線1本より分かりやすい */
 .etext-pop-head {
-  display: flex; align-items: baseline; gap: 8px;
-  padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: -10px -26px 6px -12px; padding: 9px 26px 8px 12px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  background: var(--gloss-head-bg);
 }
-.etext-pop-head { flex-wrap: wrap; }
-.etext-pop-head strong { font-size: 15px; }
+.etext-pop-head strong { font-size: 15.5px; letter-spacing: .01em; }
 /* 発音記号。読み方が分からないと声に出せない */
 .etext-phonetic {
-  color: var(--text-secondary); font-size: 12.5px; letter-spacing: .01em;
+  color: var(--gloss-phonetic); font-size: 12.5px; letter-spacing: .02em;
 }
 .etext-listen { margin-left: auto; padding: 2px 8px; font-size: 11.5px; }
 .etext-listen .icon { margin-right: .3em; }
+
+/* 品詞。**種類ごとに色を変える。** 見ただけで名詞か動詞か分かる。
+   彩度は低く保つ。並んだときに目が疲れないようにするため。
+   色だけに頼らず、文字そのものも出している */
 .etext-pos {
-  padding: 0 7px; border: 1px solid var(--border); border-radius: 999px;
-  font-size: 11px; color: var(--text-secondary); flex: none;
+  padding: 1px 8px; border: 1px solid transparent; border-radius: 999px;
+  font-size: 11px; flex: none; font-weight: 600;
+  background: var(--surface-2); color: var(--text-secondary);
 }
+.etext-pos--noun   { background: var(--pos-noun-bg);   color: var(--pos-noun); }
+.etext-pos--verb   { background: var(--pos-verb-bg);   color: var(--pos-verb); }
+.etext-pos--adj    { background: var(--pos-adj-bg);    color: var(--pos-adj); }
+.etext-pos--adv    { background: var(--pos-adv-bg);    color: var(--pos-adv); }
+.etext-pos--conj   { background: var(--pos-conj-bg);   color: var(--pos-conj); }
+.etext-pos--phrase { background: var(--pos-phrase-bg); color: var(--pos-phrase); }
 
 /* 意味の並び。**先頭がその文での意味**なので大きく、以降は小さく。
    大きさで「どれがいま効いている意味か」が一目で分かる(2026-08 の指定) */
@@ -1123,9 +1199,15 @@ html { -webkit-text-size-adjust: 100%; }
   min-width: 1.1em; color: var(--text-muted); font-size: 11px; flex: none;
 }
 .etext-sense:not(.is-main) .etext-pos { font-size: 10px; padding: 0 5px; }
-.etext-pop-ex { color: var(--text-secondary); font-size: 12px; }
+.etext-pop-ex {
+  color: var(--text-secondary); font-size: 12px;
+  padding-left: 8px; border-left: 2px solid var(--border);
+}
 .etext-sense:not(.is-main) .etext-pop-ex { font-size: 11px; color: var(--text-muted); }
-.etext-pop-note { color: var(--text-muted); font-size: 12px; }
+.etext-pop-note {
+  color: var(--gloss-note); font-size: 12px;
+  padding: 3px 8px; border-radius: 6px; background: var(--gloss-note-bg);
+}
 .etext-pop-time { color: var(--text-muted); font-size: 11px; }
 .etext-pop-busy, .etext-pop-error { color: var(--text-secondary); }
 .etext-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
@@ -1222,8 +1304,8 @@ html { -webkit-text-size-adjust: 100%; }
    汚れて見える(2026-08 の指摘)。余白は色が付いていないときも同じだけ
    取ってあるので、色が移っても行がずれない。 */
 .lesson-items > li.is-speaking {
-  background: #fff4cc;
-  box-shadow: inset 5px 0 0 #e0a800;
+  background: #fdf3d9;
+  box-shadow: inset 5px 0 0 #d99e2b;
   border-radius: 6px;
   border-bottom-color: transparent;
 }
@@ -1232,29 +1314,39 @@ html { -webkit-text-size-adjust: 100%; }
 @media print { .lesson-items > li.is-speaking { background: none; box-shadow: none; } }
 
 .lesson-head strong { font-size: 1.15em; }
-.lesson-head div { color: #555; margin-top: 3px; }
+.lesson-head div { color: var(--ink-soft); margin-top: 3px; }
+.lesson-sheet .mtitle-headline { color: var(--accent); }
+.lesson-sheet .mtitle-chip { border-color: var(--rule); color: var(--ink-soft); background: #fff; }
 
 /* 何の練習か(弱点)。主役ではないので小さく、しかし必ず見えるように */
 .lesson-weakness {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   margin-top: 6px; font-size: .72em;
 }
-.lesson-weakness-label { color: #666; letter-spacing: .04em; }
+.lesson-weakness-label { color: var(--ink-faint); letter-spacing: .04em; }
 .lesson-weakness-tag {
-  padding: 1px 8px; border: 1px solid #bbb; border-radius: 999px; color: #333;
+  padding: 1px 9px; border: 1px solid transparent; border-radius: 999px;
+  background: var(--accent-bg); color: var(--accent);
 }
 .lesson-section {
-  margin: 0 0 8px; padding-left: 10px; border-left: 5px solid #1a1a1a;
+  margin: 0 0 8px; padding-left: 10px;
+  border-left: 5px solid var(--accent);
   font-size: 1.05em;
 }
-.lesson-instruction { margin: 0 0 18px; color: #555; font-size: .82em; }
+.lesson-sheet .lesson-section { color: var(--accent); }
+.lesson-instruction {
+  margin: 0 0 18px; padding: 8px 12px;
+  border-radius: 8px; background: var(--accent-bg);
+  color: var(--ink-soft); font-size: .82em; line-height: 1.75;
+}
 
 .lesson-items { list-style: none; margin: 0; padding: 0; counter-reset: lq; }
 .lesson-items > li {
   position: relative; counter-increment: lq;
   /* 左の 56px は「帯 + 余白 + 番号の丸 + 余白」。色が付くときだけ広げると
      行が横に動いてしまうので、はじめからこの余白で置く */
-  margin-bottom: 16px; padding: 8px 12px 16px 56px; border-bottom: 1px solid #e4e4e0;
+  margin-bottom: 16px; padding: 8px 12px 16px 56px;
+  border-bottom: 1px solid var(--rule);
 }
 /* 番号の丸。
    **大きさも位置も em で決める。** px で固定すると、文字を「大」「特大」に
@@ -1267,43 +1359,94 @@ html { -webkit-text-size-adjust: 100%; }
   content: counter(lq);
   position: absolute; left: 14px; top: calc(8px + 0.52em);
   width: 1.75em; height: 1.75em; line-height: 1.68em; text-align: center;
-  border: 1px solid #999; border-radius: 50%; font-size: .68em; color: #444;
+  border: 1px solid transparent; border-radius: 50%; font-size: .68em;
+  background: var(--accent-bg);
 }
+.lesson-sheet .lesson-items > li::before { color: var(--accent); }
 .lesson-tag {
   display: inline-block; margin-bottom: 4px; padding: 1px 9px;
-  border: 1px solid #aaa; border-radius: 999px; font-size: .6em; color: #555;
+  border: 1px solid transparent; border-radius: 999px; font-size: .6em;
+  background: var(--note-bg);
 }
-.lesson-speaker { font-weight: 700; color: #333; font-size: .78em; }
-.lesson-en { color: #000; }
-.lesson-ja { color: #555; font-size: .82em; }
-.lesson-note { color: #666; font-size: .74em; }
+.lesson-sheet .lesson-tag { color: var(--note); }
+
+/* 会話の話す人。**2人を色で分ける。** 声を分けたのと同じ理由で、
+   目でも役を追えるようにする(奇数・偶数の発言で交互になる) */
+.lesson-speaker { font-weight: 700; font-size: .78em; letter-spacing: .01em; }
+.lesson-sheet .lesson-items > li:nth-child(odd)  .lesson-speaker { color: var(--voice-a); }
+.lesson-sheet .lesson-items > li:nth-child(even) .lesson-speaker { color: var(--voice-b); }
+.lesson-en { font-weight: 450; }
+/* 訳・解答・補足を、色と左の線で描き分ける。
+   **読まなくても「これは訳だ」と分かるようにする。**
+   色だけに頼らず、左の線と文字の大きさでも区別している */
+.lesson-ja {
+  margin-top: 5px; padding: 4px 10px;
+  border-left: 3px solid var(--translate); border-radius: 0 6px 6px 0;
+  background: var(--translate-bg); font-size: .82em;
+}
+.lesson-sheet .lesson-ja { color: var(--translate); }
+
+.lesson-note {
+  margin-top: 5px; padding: 3px 10px;
+  border-left: 3px solid var(--note); border-radius: 0 6px 6px 0;
+  background: var(--note-bg); font-size: .74em;
+}
+.lesson-sheet .lesson-note { color: var(--note); }
+
 .lesson-answer {
-  margin-top: 6px; padding: 4px 10px;
-  border-left: 4px solid #1baf7a; color: #1a1a1a; font-size: .88em;
+  margin-top: 6px; padding: 5px 10px;
+  border-left: 4px solid var(--answer); border-radius: 0 6px 6px 0;
+  background: var(--answer-bg); font-size: .88em; font-weight: 600;
 }
-.lesson-sheet .btn { margin-top: 6px; border-color: #ccc; background: #f7f7f5; color: #1a1a1a; }
+.lesson-sheet .lesson-answer { color: var(--answer); }
+
+.lesson-sheet .btn {
+  margin-top: 6px; border-color: var(--rule); background: #fff;
+  color: var(--ink-soft);
+}
+.lesson-sheet .btn:hover { background: var(--accent-bg); color: var(--accent); }
 
 /* 意味の窓。**紙の中でも色を決め打ちにする。**
    `.lesson-sheet *` が文字色を黒にするので、暗い配色の変数を使うと
    「黒い背景に黒い文字」になって読めなくなる(第5.22.6節①と同じ話) */
+/* 紙の中の吹き出し。**紙は暗い配色でも白のまま**なので、
+   ここでも明るい側の色に決め打ちする(第5.22.6節①と同じ話)。
+   品詞の色は明るい背景向けなので、そのまま使える */
 .lesson-sheet .etext-pop {
-  background: #fff; border-color: #d8d8d4;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .22);
+  --gloss-head-bg: #f2f5f8;
+  --gloss-phonetic: #5f7a8a;
+  --gloss-note:    #7a5f2e;
+  --gloss-note-bg: #faf3e4;
+  --pos-noun:   #2f6f86;  --pos-noun-bg:   #eaf3f7;
+  --pos-verb:   #38795a;  --pos-verb-bg:   #eaf4ee;
+  --pos-adj:    #8a5588;  --pos-adj-bg:    #f6edf5;
+  --pos-adv:    #8a6a33;  --pos-adv-bg:    #f9f2e6;
+  --pos-conj:   #5c6470;  --pos-conj-bg:   #eff1f4;
+  --pos-phrase: #4c6ba8;  --pos-phrase-bg: #eef2fa;
+  background: #fff; border-color: var(--rule);
+  box-shadow: 0 10px 28px rgba(36, 41, 47, .18);
 }
-.lesson-sheet .etext-pop-head { border-bottom-color: #e4e4e0; }
-.lesson-sheet .etext-pos { border-color: #ccc; color: #555; }
-.lesson-sheet .etext-phonetic { color: #666; }
+.lesson-sheet .etext-pop-head { border-bottom-color: var(--rule); }
+.lesson-sheet .etext-pop-head strong { color: var(--ink); }
+.lesson-sheet .etext-pos--noun   { color: var(--pos-noun); }
+.lesson-sheet .etext-pos--verb   { color: var(--pos-verb); }
+.lesson-sheet .etext-pos--adj    { color: var(--pos-adj); }
+.lesson-sheet .etext-pos--adv    { color: var(--pos-adv); }
+.lesson-sheet .etext-pos--conj   { color: var(--pos-conj); }
+.lesson-sheet .etext-pos--phrase { color: var(--pos-phrase); }
+.lesson-sheet .etext-phonetic { color: var(--gloss-phonetic); }
 .lesson-sheet .etext-listen { margin-top: 0; }
-.lesson-sheet .etext-sense-mean { color: #444; }
-.lesson-sheet .etext-sense.is-main .etext-sense-mean { color: #1a1a1a; }
+.lesson-sheet .etext-sense-mean { color: var(--ink-soft); }
+.lesson-sheet .etext-sense.is-main .etext-sense-mean { color: var(--ink); }
+.lesson-sheet .etext-pop-note { color: var(--gloss-note); }
 .lesson-sheet .etext-sense-no,
 .lesson-sheet .etext-pop-ex,
-.lesson-sheet .etext-pop-note,
 .lesson-sheet .etext-pop-busy,
-.lesson-sheet .etext-pop-close { color: #666; }
+.lesson-sheet .etext-pop-time,
+.lesson-sheet .etext-pop-close { color: var(--ink-faint); }
 .lesson-sheet .etext-word:hover,
-.lesson-sheet .etext-word.is-open { background: #ececea; border-bottom-color: #888; }
-.lesson-sheet .etext-word.is-unknown { background: #ffe3e0; box-shadow: 0 1px 0 0 #e34948; }
+.lesson-sheet .etext-word.is-open { background: var(--accent-bg); border-bottom-color: var(--accent); }
+.lesson-sheet .etext-word.is-unknown { background: #fbe6e3; box-shadow: 0 1px 0 0 #c9534f; }
 
 @media (max-width: 600px) {
   /* ── スマホでの紙 ────────────────────────────────────
@@ -1388,9 +1531,10 @@ html { -webkit-text-size-adjust: 100%; }
 .lesson-reveal { margin-top: 6px; margin-left: 8px; }
 .lesson-heard {
   margin-top: 6px; padding: 6px 10px;
-  border-left: 4px solid #888; background: #f6f6f4;
-  font-size: .9em;
+  border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0;
+  background: var(--accent-bg); font-size: .9em;
 }
 .lesson-heard-label {
-  display: block; font-size: .68em; color: #666; margin-bottom: 2px;
+  display: block; font-size: .68em; margin-bottom: 2px;
 }
+.lesson-sheet .lesson-heard-label { color: var(--accent); }

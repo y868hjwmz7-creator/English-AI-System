@@ -35,7 +35,7 @@
  *   紙には語の枠も色も要らない。`no-print` で消す。
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { lookupWord, preloadGlosses, splitWords } from '../lib/vocab.js'
+import { lookupWord, posKind, preloadGlosses, splitWords } from '../lib/vocab.js'
 import SpeakButton from './SpeakButton.jsx'
 
 /** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
@@ -193,7 +193,11 @@ export default function EnglishText({
                       <span key={si} className={`etext-sense${si === 0 ? ' is-main' : ''}`}>
                         <span className="etext-sense-line">
                           {si > 0 && <span className="etext-sense-no">{si + 1}</span>}
-                          {sense.pos && <span className="etext-pos">{sense.pos}</span>}
+                          {sense.pos && (
+                            <span className={`etext-pos etext-pos--${posKind(sense.pos)}`}>
+                              {sense.pos}
+                            </span>
+                          )}
                           <span className="etext-sense-mean">{sense.meaning_ja}</span>
                         </span>
                         {sense.example_en && (

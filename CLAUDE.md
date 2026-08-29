@@ -234,11 +234,17 @@ Opus 5 の最小長512を超えているので載る)。
 | 関数 | モデル | なぜ |
 |---|---|---|
 | `generate-material` | `claude-sonnet-5` | 教材の質が要る |
-| `lookup-word` | `claude-haiku-4-5` | 辞書を1語引くだけ。**速さが実用性に直結する** |
+| `lookup-word` | `claude-sonnet-5` | 質を優先。**遅さの原因は別にあった**(下記) |
+
+`lookup-word` を一度 `claude-haiku-4-5` にしたが、
+**利用者の実測で「質には満足だが、速くはなっていない」**(2026-08)。
+遅さの正体はモデルではなく**関数の立ち上がり**(SDK の読み込み)だったため、
+`claude-sonnet-5` に戻し、代わりに SDK を外して `fetch` で直接呼ぶようにした。
+**モデルを速さの調整つまみとして使わない。**
 
 **Haiku 4.5 は `output_config.effort` に対応していない。** 付けると失敗する。
 指示のキャッシュも4,096トークン以上でないと載らない(黙って載らないだけ)。
-`lookup-word` のモデルを戻すときは、`effort` の指定も一緒に戻すこと。
+`lookup-word` のモデルを変えるときは、`effort` の指定も一緒に見直すこと。
 
 ### Supabase の関数は CPU 2秒で止まる
 
@@ -264,8 +270,12 @@ Anthropic 側も **streaming で受け取る**。`output_config.effort` は
 ### 画面まわりの決まり
 
 - **配色は3通り**(自動 / 明るい / 暗い)。`src/lib/theme.js` が
-  `<html>` の `data-theme` を切り替える。色そのものは `styles.css` の
-  `:root` と `:root[data-theme="dark"]`。**片方だけ足さない**
+  `<html>` の `data-theme` を切り替える。色の変数を足すときは
+  **`styles.css` の3か所すべてに書く。**
+  `:root` / `@media (prefers-color-scheme: dark)` / `:root[data-theme="dark"]`。
+  **1か所でも抜けると、そこを選んだときだけ色が食い違う。**
+  実際、暗い側を media にだけ2回書き、`[data-theme="dark"]` に書き忘れて
+  吹き出しの帯が明るいまま残った(2026-08)。**確認は明るい・暗いの両方で行う**
 - **レッスンで使う表示**(`LessonView.jsx`)は画面共有用。
   **暗い配色を選んでいても紙は白のまま。** 共有先で見やすいことが優先。
   したがって**紙の中の文字色は決め打ちにする。** `var(--text-primary)` の

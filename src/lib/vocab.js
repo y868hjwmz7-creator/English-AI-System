@@ -306,6 +306,24 @@ export async function lookupWord({ word, sentence = '', level = 'B1' }) {
   return ok(gloss)
 }
 
+/**
+ * 品詞を、色分けのための種類に振り分ける。
+ *
+ * **見ただけで「これは動詞だ」と分かるようにする。**
+ * 色は控えめにする。鮮やかだと、並んだときに目が疲れる。
+ * 知らない品詞は「その他」にまとめる(色が付かないだけで、表示は出る)。
+ */
+export function posKind(pos) {
+  const p = String(pos ?? '')
+  if (p.includes('名詞') && !p.includes('代名詞')) return 'noun'
+  if (p.includes('動詞') && !p.includes('助動詞')) return 'verb'
+  if (p.includes('形容')) return 'adj'
+  if (p.includes('副詞')) return 'adv'
+  if (p.includes('前置') || p.includes('接続')) return 'conj'
+  if (p.includes('熟語') || p.includes('句')) return 'phrase'
+  return 'other'
+}
+
 // ── 知っていた / 知らなかった ────────────────────────────────
 
 /**
