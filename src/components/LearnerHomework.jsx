@@ -10,6 +10,7 @@ import { cefrLabel } from '../data/cefr.js'
 import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
 import TeachingNote from './TeachingNote.jsx'
+import PhraseChips from './PhraseChips.jsx'
 import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { printElement } from '../lib/print.js'
@@ -247,6 +248,9 @@ export default function LearnerHomework() {
                                 {!type?.hidePromptFromLearner && it.prompt_en && (
                                   <div className="homework-en">
                                     <EnglishText text={it.prompt_en} level={a.material?.level}
+                                                 statuses={wordStatuses} onMark={markWord} />
+                                    <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
+                                                 level={a.material?.level}
                                                  statuses={wordStatuses} onMark={markWord} />
                                   </div>
                                 )}

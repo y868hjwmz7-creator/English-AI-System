@@ -387,25 +387,56 @@ export async function loadMyWordStatuses() {
   return ok(new Map((data ?? []).map((r) => [r.word_norm, r.status])))
 }
 
-/** 「知っていた」「知らなかった」を付ける。同じ語は上書きする */
-export async function setWordStatus(word, status, materialId = null) {
+/**
+ * 自分の単語帳。**意味・箱・次に出す日まで揃えて返す。**
+ *
+ * 【なぜ要るか】(2026-08 の設計)
+ *   「知らなかった」を選んでも、これまで本人からは何も見えなかった。
+ *   選んだ手応えが無いと続かない。ここが復習の入口になる。
+ *
+ * `review_words()` は本人・担当トレーナー・管理者だけが呼べる
+ * (SQL 側で確かめている)。画面側で役割を判定しない。
+ */
+export async function loadMyWordbook({ status = 'unknown', limit = 200, dueOnly = false } = {}) {
+  if (!supabase) return ok([])
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return ok([])
+
+  const { data, error } = await supabase.rpc('review_words', {
+    p_learner: user.id,
+    p_status: status,
+    p_limit: limit,
+    p_due_only: dueOnly,
+  })
+  if (error) return fail(error, '単語帳を読めませんでした')
+  return ok(data ?? [])
+}
+
+/**
+ * 「知っていた」「知らなかった」を付ける。
+ *
+ * **次に出す日は、画面では決めない。** SQL の `mark_word()` に任せる
+ * (0015)。端末の日付や時差で食い違わないようにするためと、
+ * 間隔の決まりを2か所に持たないためである。
+ *
+ * `kind` は 'word' か 'phrase'。句・イディオム・句動詞は 'phrase'。
+ * 鍵の作り方は語と同じなので、同じ表に入る。
+ */
+export async function setWordStatus(word, status, { kind = 'word', materialId = null } = {}) {
   const norm = normWord(word)
   if (!norm) return ng('英語の語ではありません')
   if (!supabase) return ng('Supabase が設定されていません')
   if (!['known', 'unknown'].includes(status)) return ng('状態が正しくありません')
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return ng('ログインが必要です')
-
-  const { error } = await supabase.from('word_reviews').upsert({
-    learner_id: user.id,
-    word_norm: norm,
-    status,
-    material_id: materialId,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'learner_id,word_norm' })
+  const { data, error } = await supabase.rpc('mark_word', {
+    p_norm: norm,
+    p_status: status,
+    p_kind: kind === 'phrase' ? 'phrase' : 'word',
+    p_material: materialId,
+  })
   if (error) return fail(error, '記録できませんでした')
-  return ok(norm)
+  // 次にいつ出るかを返す。「7日後にまた出ます」と画面に出すため
+  return ok({ norm, ...(Array.isArray(data) ? data[0] : data) ?? {} })
 }
 
 /** 付けた記録を取り消す(間違えて押したとき) */
@@ -423,11 +454,13 @@ export async function clearWordStatus(word) {
 // ── トレーナーが復習の材料を集める ────────────────────────────
 
 /** そのゲストが「知らなかった」と付けた語(意味付き、新しい順) */
-export async function loadReviewWords(learnerId, { status = 'unknown', limit = 40 } = {}) {
+export async function loadReviewWords(
+  learnerId, { status = 'unknown', limit = 40, dueOnly = false } = {},
+) {
   if (!supabase) return ng('Supabase が設定されていません')
   if (!learnerId) return ok([])
   const { data, error } = await supabase.rpc('review_words', {
-    p_learner: learnerId, p_status: status, p_limit: limit,
+    p_learner: learnerId, p_status: status, p_limit: limit, p_due_only: dueOnly,
   })
   if (error) return fail(error, '復習する語を読めませんでした')
   return ok(data ?? [])
@@ -457,11 +490,16 @@ export async function loadHomeworkWords(learnerId, { limit = 200 } = {}) {
  * 同じ語は1回だけ。新しい順に並べる。
  */
 export async function collectReviewWords(learnerId, { limit = 20 } = {}) {
-  const [{ data: unknownWords, error: e1 }, { data: homework, error: e2 }] =
+  // **今日出すべきものを先に取る**(0015)。忘れかけた頃に再会させたい。
+  // 足りないぶんだけ、まだ日の来ていないものと宿題の語で埋める
+  const [{ data: dueWords, error: e0 }, { data: unknownWords, error: e1 },
+    { data: homework, error: e2 }] =
     await Promise.all([
+      loadReviewWords(learnerId, { status: 'unknown', limit: 200, dueOnly: true }),
       loadReviewWords(learnerId, { status: 'unknown', limit: 200 }),
       loadHomeworkWords(learnerId, { limit: 200 }),
     ])
+  if (e0) return ng(e0)
   if (e1) return ng(e1)
   if (e2) return ng(e2)
 
@@ -478,6 +516,7 @@ export async function collectReviewWords(learnerId, { limit = 20 } = {}) {
     })
   }
 
+  for (const w of dueWords ?? []) add(w, 'due')
   for (const w of unknownWords ?? []) add(w, 'unknown')
   for (const w of homework ?? []) {
     if (w.status === 'known') continue   // 知っていた語は混ぜない

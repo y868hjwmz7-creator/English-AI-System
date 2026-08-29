@@ -681,13 +681,17 @@ export default function MaterialForm({
                 <div className="review-words">
                   {reviewPool.slice(0, reviewCount).map((w) => (
                     <span key={w.word}
-                          className={`tagchip is-static${w.source === 'unknown' ? ' is-unknown' : ''}`}>
+                          title={w.source === 'due' ? '今日が復習の日です' : ''}
+                          className={'tagchip is-static'
+                            + (w.source === 'unknown' || w.source === 'due' ? ' is-unknown' : '')
+                            + (w.source === 'due' ? ' is-due' : '')}>
                       {w.word}
                     </span>
                   ))}
                 </div>
                 <p className="field-hint">
                   色の付いた語が「知らなかった」と付けたものです。先に入ります。
+                  <strong>★の付いた語は、今日が復習の日です。</strong>
                 </p>
               </>
             )}

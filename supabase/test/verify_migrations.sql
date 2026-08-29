@@ -6,7 +6,7 @@
 --   何も書き換えず、何も消しません。**見るだけ**の SQL です。
 --
 -- 【成功したときの見え方】
---   24行の表が出て、すべて「✅ OK」になります。
+--   40行の表が出て、すべて「✅ OK」になります。
 --   「❌ まだです」がある行は、その番号のファイルがまだ実行されていません。
 -- ============================================================================
 
@@ -140,4 +140,25 @@ from (
   union all
   select '㉟ 「単語」の弱点タグがある(0014)', (
     select count(*) = 6 from public.weakness_tags where category = 'word'), 35
+  union all
+  select '㊱ 復習の箱と次に出す日がある(0015)', (
+    select count(*) = 3 from information_schema.columns
+    where table_name = 'word_reviews'
+      and column_name in ('kind', 'box', 'due_on')), 36
+  union all
+  select '㊲ 印を付ける関数がある(0015)', exists (
+    select 1 from pg_proc where proname = 'mark_word'), 37
+  union all
+  select '㊳ 間隔の決まりが入っている(0015)', (
+    -- 知らなかった → 箱 0・翌日。**数字ごと確かめる**
+    select prosrc like '%when 5 then 14%' from pg_proc where proname = 'mark_word'), 38
+  union all
+  select '㊴ 今日出すべきものだけに絞れる(0015)', (
+    select count(*) = 4 from pg_proc p,
+      unnest(p.proargnames) a where p.proname = 'review_words'
+      and a in ('p_learner', 'p_status', 'p_limit', 'p_due_only')), 39
+  union all
+  select '㊵ 要点フレーズを持てる(0015)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'material_items' and column_name = 'phrases'), 40
 ) t order by 順;

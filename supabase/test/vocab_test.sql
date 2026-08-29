@@ -262,4 +262,252 @@ select pg_temp.denied('担当外のゲストの宿題の語は取り出せない
   $$select * from public.homework_words(
       'e2222222-2222-2222-2222-222222222222', 200)$$);
 
+
+-- ============================================================================
+-- 0015 間隔をあけた復習(箱)と、句・イディオム
+--
+--   **間隔の決まりは mark_word() だけが持つ。** ここで数字ごと確かめる。
+--   画面側で日を計算すると、端末の日付や時差で食い違う。
+-- ============================================================================
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+
+-- ── 知らなかった → 箱は 0、翌日にまた出る ────────────────────
+select public.mark_word('Rollback', 'unknown');
+
+select pg_temp.ok('知らなかった語は箱 0 に入る',
+  (select box::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), 0);
+
+select pg_temp.ok('知らなかった語は翌日にまた出る',
+  (select due_on from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), current_date + 1);
+
+select pg_temp.ok('大文字で渡してもそろえられる',
+  (select count(*)::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'Rollback'), 0);
+
+-- ── 知っていた を重ねると、間隔が延びていく ──────────────────
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('1回目に知っていた → 箱 1・1日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), '1/1');
+
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('2回目 → 箱 2・2日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), '2/2');
+
+select public.mark_word('rollback', 'known');
+select public.mark_word('rollback', 'known');
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('5回目 → 箱 5・14日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), '5/14');
+
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('6回目 → 箱 6・30日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), '6/30');
+
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('箱は 6 で頭打ちになる',
+  (select box::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), 6);
+
+-- **忘れたら、いちばん下まで戻る。** 少しずつ下げると、
+-- 覚えていない語がいつまでも長い間隔のまま残る
+select public.mark_word('rollback', 'unknown');
+select pg_temp.ok('分からなくなったら箱 0 まで戻る',
+  (select box::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), 0);
+
+-- ── 句・イディオムも同じ表に入る ──────────────────────────────
+select public.mark_word('look  forward   to', 'unknown', 'phrase');
+
+select pg_temp.ok('句は空白ひとつにそろえて入る',
+  (select count(*)::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'look forward to'), 1);
+
+select pg_temp.ok('句には phrase の印が付く',
+  (select kind from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'look forward to'), 'phrase');
+
+select pg_temp.ok('復習の一覧にも句が出る',
+  (select kind from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40)
+   where word_norm = 'look forward to'), 'phrase');
+
+-- ── 今日出すべきものだけに絞れる ──────────────────────────────
+set role postgres;
+update public.word_reviews set due_on = current_date + 10
+ where learner_id = 'e2222222-2222-2222-2222-222222222222'
+   and word_norm = 'look forward to';
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+
+select pg_temp.ok('先の日付のものは「今日出すべき」に入らない',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40, true)
+   where word_norm = 'look forward to'), 0);
+
+select pg_temp.ok('絞らなければ出る',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40, false)
+   where word_norm = 'look forward to'), 1);
+
+-- ── 他人の記録には書けない ────────────────────────────────────
+--   mark_word は auth.uid() にしか書かない。**引数で人を選べない。**
+set request.jwt.claim.sub = 'e3333333-3333-3333-3333-333333333333';
+select public.mark_word('rollback', 'known');
+set role postgres;
+select pg_temp.ok('別の人が付けても、もとの人の記録は変わらない',
+  (select box::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), 0);
+select pg_temp.ok('付けた人自身の記録として入る',
+  (select count(*)::int from public.word_reviews
+   where learner_id = 'e3333333-3333-3333-3333-333333333333'
+     and word_norm = 'rollback'), 1);
+
+-- ── 本文の要点フレーズを教材に持たせられる ────────────────────
+select pg_temp.ok('material_items に phrases がある',
+  (select count(*)::int from information_schema.columns
+   where table_name = 'material_items' and column_name = 'phrases'), 1);
+
+
+-- ============================================================================
+-- 0015 間隔をあけた復習(箱)と、句・イディオム
+--
+--   **間隔の決まりは mark_word() だけが持つ。** ここで数字ごと確かめる。
+--   画面側で日を計算すると、端末の日付や時差で食い違う。
+-- ============================================================================
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+
+-- ── 知らなかった → 箱は 0、翌日にまた出る ────────────────────
+select public.mark_word('Rollback', 'unknown');
+
+select pg_temp.ok('知らなかった語は箱 0 に入る',
+  (select box::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), 0);
+
+select pg_temp.ok('知らなかった語は翌日にまた出る',
+  (select due_on from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), current_date + 1);
+
+select pg_temp.ok('大文字で渡してもそろえられる',
+  (select count(*)::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'Rollback'), 0);
+
+-- ── 知っていた を重ねると、間隔が延びていく ──────────────────
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('1回目に知っていた → 箱 1・1日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), '1/1');
+
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('2回目 → 箱 2・2日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), '2/2');
+
+select public.mark_word('rollback', 'known');
+select public.mark_word('rollback', 'known');
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('5回目 → 箱 5・14日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), '5/14');
+
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('6回目 → 箱 6・30日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), '6/30');
+
+select public.mark_word('rollback', 'known');
+select pg_temp.ok('箱は 6 で頭打ちになる',
+  (select box::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), 6);
+
+-- **忘れたら、いちばん下まで戻る。** 少しずつ下げると、
+-- 覚えていない語がいつまでも長い間隔のまま残る
+select public.mark_word('rollback', 'unknown');
+select pg_temp.ok('分からなくなったら箱 0 まで戻る',
+  (select box::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), 0);
+
+-- ── 句・イディオムも同じ表に入る ──────────────────────────────
+select public.mark_word('look  forward   to', 'unknown', 'phrase');
+
+select pg_temp.ok('句は空白ひとつにそろえて入る',
+  (select count(*)::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'look forward to'), 1);
+
+select pg_temp.ok('句には phrase の印が付く',
+  (select kind from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'look forward to'), 'phrase');
+
+select pg_temp.ok('復習の一覧にも句が出る',
+  (select kind from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40)
+   where word_norm = 'look forward to'), 'phrase');
+
+-- ── 今日出すべきものだけに絞れる ──────────────────────────────
+set role postgres;
+update public.word_reviews set due_on = current_date + 10
+ where learner_id = 'e2222222-2222-2222-2222-222222222222'
+   and word_norm = 'look forward to';
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+
+select pg_temp.ok('先の日付のものは「今日出すべき」に入らない',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40, true)
+   where word_norm = 'look forward to'), 0);
+
+select pg_temp.ok('絞らなければ出る',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40, false)
+   where word_norm = 'look forward to'), 1);
+
+-- ── 他人の記録には書けない ────────────────────────────────────
+--   mark_word は auth.uid() にしか書かない。**引数で人を選べない。**
+set request.jwt.claim.sub = 'e3333333-3333-3333-3333-333333333333';
+select public.mark_word('rollback', 'known');
+set role postgres;
+select pg_temp.ok('別の人が付けても、もとの人の記録は変わらない',
+  (select box::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), 0);
+select pg_temp.ok('付けた人自身の記録として入る',
+  (select count(*)::int from public.word_reviews
+   where learner_id = 'e3333333-3333-3333-3333-333333333333'
+     and word_norm = 'rollback'), 1);
+
+-- ── 本文の要点フレーズを教材に持たせられる ────────────────────
+select pg_temp.ok('material_items に phrases がある',
+  (select count(*)::int from information_schema.columns
+   where table_name = 'material_items' and column_name = 'phrases'), 1);
+
 reset role;

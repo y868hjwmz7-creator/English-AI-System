@@ -33,7 +33,7 @@ export default function useWordStatuses() {
    * **手元の表示を先に変える。** 通信を待って色が変わるのでは、
    * 押した手ごたえが無い。失敗したら元に戻す。
    */
-  const mark = useCallback(async (norm, status) => {
+  const mark = useCallback(async (norm, status, kind = 'word') => {
     let before = null
     setStatuses((m) => {
       before = m
@@ -43,10 +43,16 @@ export default function useWordStatuses() {
       return next
     })
     const { error: e } = status
-      ? await setWordStatus(norm, status)
+      ? await setWordStatus(norm, status, { kind })
       : await clearWordStatus(norm)
     if (e) { setError(e); if (before) setStatuses(before) }
   }, [])
 
-  return { statuses, mark, error }
+  /** 画面から読み直したいとき(単語帳で状態を変えたあとなど) */
+  const reload = useCallback(async () => {
+    const { data } = await loadMyWordStatuses()
+    if (data) setStatuses(data)
+  }, [])
+
+  return { statuses, mark, reload, error }
 }

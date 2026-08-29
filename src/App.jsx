@@ -10,6 +10,7 @@ import Tabs from './components/Tabs.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
 import { setViewerRole } from './lib/viewer.js'
+import Wordbook from './components/Wordbook.jsx'
 import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadState, resetState, saveState } from './lib/store.js'
@@ -164,6 +165,9 @@ export default function App() {
             (!isSupabaseConfigured || isTrainer) && { id: 'learners', label: 'ゲスト' },
             (!isSupabaseConfigured || isTrainer) && { id: 'admin', label: '集計' },
             (!isSupabaseConfigured || !isTrainer) && { id: 'homework', label: '今週の宿題' },
+            // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
+            // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
+            { id: 'wordbook', label: '単語帳' },
             { id: 'learner', label: '学習の記録' },
           ]}
         />
@@ -220,6 +224,8 @@ export default function App() {
           profile ? <TrainerLearners me={profile} /> : <p className="muted">読み込み中…</p>
         ) : view === 'homework' ? (
           <LearnerHomework />
+        ) : view === 'wordbook' ? (
+          <Wordbook />
         ) : view === 'learner' ? (
           currentLearner ? (
             <EnglishStudyLog state={state} setState={setState} learnerId={learnerId} />

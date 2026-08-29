@@ -100,7 +100,8 @@ export async function searchMaterials({
       material_sections (
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                         answer, answer_alt, audio_text, note, tag_id, speaker )
+                         answer, answer_alt, audio_text, note, tag_id, speaker,
+                         phrases )
       )
     `)
     .order('created_at', { ascending: false })
@@ -161,7 +162,8 @@ export async function loadMaterial(materialId) {
       material_sections (
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                         answer, answer_alt, audio_text, note, tag_id, speaker )
+                         answer, answer_alt, audio_text, note, tag_id, speaker,
+                         phrases )
       )
     `)
     .eq('id', materialId)
@@ -196,6 +198,15 @@ const cleanItems = (items) =>
         const v = String(it[f] ?? '').trim()
         if (v) row[f] = v
       }
+      // 本文の要点フレーズ(0015)。**文字ではなく配列なので別に扱う。**
+      // 中身の無いものは落とす。空の配列を入れても場所を取るだけ
+      const phrases = (Array.isArray(it.phrases) ? it.phrases : [])
+        .map((ph) => ({
+          text: String(ph?.text ?? '').trim(),
+          note: String(ph?.note ?? '').trim(),
+        }))
+        .filter((ph) => ph.text)
+      if (phrases.length) row.phrases = phrases
       return row
     })
     .filter((row) => Object.keys(row).length > 0)
@@ -325,7 +336,8 @@ export async function loadMyAssignments() {
         material_sections (
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                           answer, answer_alt, audio_text, note, tag_id, speaker )
+                           answer, answer_alt, audio_text, note, tag_id, speaker,
+                           phrases )
         )
       )
     `)

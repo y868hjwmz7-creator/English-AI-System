@@ -24,6 +24,7 @@ import { prefetchGlosses } from '../lib/vocab.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
+import PhraseChips from './PhraseChips.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 
@@ -220,6 +221,9 @@ export default function PassagePractice({
                              statuses={wordStatuses} onMark={onMarkWord}
                              readingAt={speakingId === item.id ? readingAt : null} />
               </p>
+              {/* 語をまたぐ言い回しは、語1つでは拾えない。札にして横に置く */}
+              <PhraseChips phrases={item.phrases} sentence={item.prompt_en}
+                           level={level} statuses={wordStatuses} onMark={onMarkWord} />
               {showJa && item.prompt_ja && <p className="passage-ja">{item.prompt_ja}</p>}
 
               <div className="passage-actions">

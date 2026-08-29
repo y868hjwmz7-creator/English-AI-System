@@ -1213,6 +1213,40 @@ html { -webkit-text-size-adjust: 100%; }
   .etext-word.is-reading { transition: none; }
 }
 
+/* ── この文の要点(フレーズ・イディオム・句動詞)────────────────
+   語を1つずつ触れる仕組みでは、語をまたぐ言い回しを拾えない。
+   本文のすぐ下に札で置き、押すと語と同じ吹き出しが出る。
+   **札なので、ひと押しで開く。** 本文の語とは触り方を変えてある */
+.phrases {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 6px 0 2px;
+}
+.phrases-label {
+  font-size: 11.5px; color: var(--text-muted); letter-spacing: .03em;
+  margin-right: 2px;
+}
+.phrase-wrap { position: relative; }
+.phrase-chip {
+  padding: 2px 10px; border-radius: 999px;
+  border: 1px dashed var(--border); background: var(--surface-1);
+  color: var(--text-secondary); font: inherit; font-size: 13px; line-height: 1.6;
+  cursor: pointer;
+}
+.phrase-chip:hover, .phrase-chip.is-open {
+  border-style: solid; border-color: var(--text-muted); color: var(--text-primary);
+}
+/* 「知らなかった」と付けた句は色が残る。**語とそろえる** */
+.phrase-chip.is-unknown {
+  background: var(--unknown-bg); border-color: var(--unknown-bar); border-style: solid;
+  color: var(--text-primary);
+}
+.phrase-chip.is-known { opacity: .6; }
+/* 紙の上では、札の地の色を紙に合わせる */
+.lesson-sheet .phrase-chip {
+  background: #fff; border-color: var(--rule); color: var(--ink-soft);
+}
+.lesson-sheet .phrases-label { color: var(--ink-faint); }
+
 .etext-pop {
   position: absolute; left: 0; top: 1.6em; z-index: 40;
   display: flex; flex-direction: column; gap: 4px;
@@ -1349,6 +1383,10 @@ html { -webkit-text-size-adjust: 100%; }
 .tagchip.is-unknown {
   background: var(--unknown-bg); border-color: var(--unknown-bar);
 }
+/* 今日が復習の日の語。**ただ色を変えるだけにしない。**
+   色の見え方には個人差があるので、印そのものを付ける */
+.tagchip.is-due { font-weight: 700; }
+.tagchip.is-due::before { content: '★ '; }
 
 /* 読み上げの速さ。画面に1つだけ置く */
 .rate-pick {
@@ -1674,3 +1712,25 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--text-secondary);
 }
 :root[data-palette="plain"] .teaching-note { border-left: 0; }
+
+/* ── 単語帳 ────────────────────────────────────────────────────
+   「知らなかった」と付けたものが並ぶ。**印を付けた手応えが
+   本人に見えることが、続く条件である**(2026-08 の設計) */
+.wordbook { list-style: none; margin: 10px 0 0; padding: 0; }
+.wordbook-row {
+  padding: 10px 12px; margin-bottom: 8px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.wordbook-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.wordbook-word { font-size: 17px; font-weight: 600; }
+.wordbook-kind {
+  padding: 1px 8px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text-secondary); font-size: 11.5px;
+}
+.wordbook-mean { margin-top: 3px; color: var(--text-secondary); font-size: 14px; }
+.wordbook-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
+}
+/* 箱と次に出る日。**進んでいることが見えないと続かない** */
+.wordbook-when { margin-right: auto; font-size: 11.5px; color: var(--text-muted); }

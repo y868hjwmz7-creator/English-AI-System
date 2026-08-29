@@ -68,6 +68,9 @@ UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
   「誰に何が見え、何ができないか」を確かめる。**拒否されるべき操作が通ったら失敗する**
 - `supabase/test/material_shape_test.sql` — 実物のドリルがそのまま入るか
 - `supabase/test/dedup_test.sql` — 同じ英文が二度出ないか
+- `supabase/test/vocab_test.sql` — 意味の控え・箱・句。**間隔の日数そのもの**も見る
+- `supabase/test/verify_migrations.sql` — 利用者が Supabase に貼る確認 SQL。
+  **これ自体が古びる**ので、ここで毎回まわして「まだです」が無いことを確かめる
 
 この検証は実際に重大な穴(ゲストが自分をトレーナーに昇格できる)を見つけた実績がある。
 省略しないこと。
@@ -402,6 +405,22 @@ Anthropic 側も **streaming で受け取る**。`output_config.effort` は
 **担当ゲストの記録には触れない。** 列名が `learner_id` なのは DB の
 呼び方であって「ゲストのもの」という意味ではない。
 処理は `src/lib/useWordStatuses.js` に1つだけ置く。画面ごとに書き写さない。
+
+**次に出す日を画面で計算しない。** `mark_word()`(SQL)が決める。
+箱(0〜6)が上がるたびに 1 → 2 → 4 → 7 → 14 → 30 日と延び、
+分からなかったら 0 まで戻す。**間隔の決まりを2か所に持たない。**
+端末の日付や時差で食い違う。数字は `vocab_test.sql` で確かめてある。
+
+句・イディオム・句動詞も**同じ表に入る**。鍵は「そろえた形」なので
+`look forward to` はそのまま鍵になる。`kind` で見分けるだけ。
+**表も鍵も増やさない。**
+
+要点フレーズ(`material_items.phrases`)は**教材を作る時点で拾う**。
+開くたびに AI に拾わせない。費用が毎回かかり、何が出るかも分からない。
+`generate-material` の `PHRASE_TYPES` にある演習だけが対象。
+
+意味の吹き出しは `GlossPopover.jsx` 1つ。語(`EnglishText`)と
+句(`PhraseChips`)の両方から使う。**同じ見た目を2か所に書き写さない。**
 詳しくは仕様書 第5.23節。
 
 ### データの置き場

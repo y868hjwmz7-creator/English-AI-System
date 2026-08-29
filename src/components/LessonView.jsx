@@ -27,6 +27,7 @@ import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
+import PhraseChips from './PhraseChips.jsx'
 import { PALETTES, applyPalette, loadPalette } from '../lib/palette.js'
 
 const SIZES = [
@@ -312,6 +313,11 @@ export default function LessonView({
                                    statuses={wordStatuses} onMark={onMarkWord}
                                    readingAt={speakingKey === key(it, i) ? readingAt : null} />
                     </div>
+                  )}
+                  {it.prompt_en && (
+                    <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
+                                 level={material.level}
+                                 statuses={wordStatuses} onMark={onMarkWord} />
                   )}
                   {/* 本文(記事・会話)の訳は、はじめは伏せる。
                       英文だけが出ていたほうがシャドーイングしやすく、

@@ -219,6 +219,23 @@ const ITEM_FIELDS: Record<string, { type: string; description: string }> = {
   note:       { type: 'string', description: '1問ごとの補足' },
   speaker:    { type: 'string', description: '話す人(名前と肩書き。例: Sarah (Product Manager))' },
   tag_no:     { type: 'integer', description: 'その問がどの弱点か(1から始まる番号)' },
+  // 本文の要点フレーズ(0015)。**語をまたぐ言い回しは、語1つでは拾えない。**
+  // look forward to / put off のようなものを、作る時点で拾っておく。
+  // 開くたびに拾わせると、費用が毎回かかり、何が出るかも分からない。
+  phrases: {
+    type: 'array',
+    description: 'この文の要点となる言い回し(コロケーション・イディオム・句動詞)。'
+      + '**0〜2個。無ければ空の配列。** 1語で分かるものは入れない',
+    items: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['text', 'note'],
+      properties: {
+        text: { type: 'string', description: '本文に出てくるとおりの形(英語、2〜5語)' },
+        note: { type: 'string', description: '意味と使い方(日本語、40字以内)' },
+      },
+    },
+  },
 }
 
 /**
@@ -237,14 +254,14 @@ const ITEM_FIELDS: Record<string, { type: string; description: string }> = {
  *   **余計な出力に課金されることもない。**
  */
 const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }> = {
-  translate_en_ja: { required: ['prompt_en', 'answer'], optional: ['note', 'tag_no'] },
+  translate_en_ja: { required: ['prompt_en', 'answer'], optional: ['note', 'tag_no', 'phrases'] },
   fill_blank:      { required: ['prompt_en', 'hint', 'answer'], optional: ['note', 'tag_no'] },
   translate_ja_en: { required: ['prompt_ja', 'answer'], optional: ['answer_alt', 'note', 'tag_no'] },
   listening:       { required: ['audio_text', 'question', 'answer'], optional: ['note', 'tag_no'] },
 
   // 本文。**英語と訳が必ず要る。** これが無いと音声も出せない
-  article:         { required: ['prompt_en', 'prompt_ja'], optional: [] },
-  dialogue:        { required: ['speaker', 'prompt_en', 'prompt_ja'], optional: [] },
+  article:         { required: ['prompt_en', 'prompt_ja'], optional: ['phrases'] },
+  dialogue:        { required: ['speaker', 'prompt_en', 'prompt_ja'], optional: ['phrases'] },
   comprehension:   { required: ['question', 'answer'], optional: ['answer_alt'] },
   vocab_note:      { required: ['prompt_en', 'prompt_ja', 'note'], optional: [] },
 
@@ -257,6 +274,9 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
   shadowing:       { required: ['prompt_en', 'prompt_ja'], optional: [] },
   repeating:       { required: ['prompt_en', 'prompt_ja'], optional: [] },
 }
+
+/** 要点フレーズを拾わせる演習。**本文と英文があるものだけ。** */
+const PHRASE_TYPES = new Set(['article', 'dialogue', 'translate_en_ja'])
 
 /**
  * 生成した中身を受け取るための道具の形を、演習の種類に合わせて組み立てる。
@@ -470,6 +490,17 @@ Deno.serve(async (req) => {
         + `\n\n同じ文型でも、場面・主語・目的語・数量を変えて別の文にすること。`
       : '',
     isFirst ? '\nこれが最初の演習なので、teaching_point(教材全体の指導ポイント)も入れること。' : '',
+    // 要点フレーズ。**語をまたぐ言い回しは、語1つでは拾えない。**
+    // 拾えるのは本文と英文のある演習だけなので、その形のときだけ頼む
+    PHRASE_TYPES.has(sectionType)
+      ? `\n# phrases(各項目の要点となる言い回し)\n`
+        + `その文に**コロケーション・イディオム・句動詞**があれば、`
+        + `**0〜2個**だけ phrases に入れること。`
+        + `\n- text は**本文に出てくるとおりの形**で書く(活用も変えない)`
+        + `\n- **1語で意味が分かるものは入れない。** 2〜5語のまとまりに限る`
+        + `\n- note は意味と使い方を40字以内の日本語で`
+        + `\n- 見つからない文では**空の配列**にする。無理に作らない`
+      : '',
   ].join('\n')
 
   // 生成そのもの。**待っている間も返事の一部を送り続ける**必要があるため、

@@ -34,9 +34,9 @@
  * 【印刷には出さない】
  *   紙には語の枠も色も要らない。`no-print` で消す。
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { lookupWord, posKind, preloadGlosses, splitWords } from '../lib/vocab.js'
-import SpeakButton from './SpeakButton.jsx'
+import { useEffect, useRef, useState } from 'react'
+import { lookupWord, preloadGlosses, splitWords } from '../lib/vocab.js'
+import GlossPopover from './GlossPopover.jsx'
 
 /** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
 const HOLD_MS = 450
@@ -52,7 +52,6 @@ export default function EnglishText({
   const holdTimer = useRef(null)   // 長押しの計測
   const heldRef = useRef(false)    // 長押しで開いた直後か(続く click を捨てる)
   const touchRef = useRef(false)   // 直前の操作が「触る」だったか
-  const popRef = useRef(null)
   const rootRef = useRef(null)
   const parts = splitWords(text ?? '')
 
@@ -111,24 +110,6 @@ export default function EnglishText({
     }
   }, [openIndex])
 
-  /**
-   * 吹き出しを画面の中に収める。
-   *
-   * 語の位置に合わせて出すので、行の端の語では画面からはみ出す。
-   * **右へはみ出すときは左へ、左へはみ出すときは右へずらす。**
-   * 片側だけ直すと、逆側にはみ出して読めなくなる(スマホで実際に起きた)。
-   */
-  useLayoutEffect(() => {
-    const el = popRef.current
-    if (!el) return
-    el.style.left = '0px'
-    const rect = el.getBoundingClientRect()
-    const margin = 8
-    let shift = 0
-    if (rect.right > window.innerWidth - margin) shift = window.innerWidth - margin - rect.right
-    if (rect.left + shift < margin) shift = margin - rect.left
-    if (shift) el.style.left = `${Math.round(shift)}px`
-  }, [openIndex, gloss, busy, error])
 
   const mark = async (status) => {
     const part = parts[openIndex]
@@ -185,65 +166,12 @@ export default function EnglishText({
             {/* 開いたら、閉じる操作をするまで留まる。
                 離れた瞬間に閉じていたため、中のボタンを押せなかった */}
             {isOpen && (
-              <span className="etext-pop no-print" role="dialog" ref={popRef}>
-                {busy && <span className="etext-pop-busy">調べています…</span>}
-                {error && <span className="etext-pop-error">{error}</span>}
-                {gloss && (
-                  <>
-                    <span className="etext-pop-head">
-                      <strong lang="en">{gloss.display}</strong>
-                      {/* 発音記号。意味が分かっても読み方が分からないと、
-                          声に出す練習につながらない(2026-08 の要望)。
-                          スラッシュは画面側で付ける(控えには裸で入っている) */}
-                      {gloss.phonetic && (
-                        <span className="etext-phonetic">/{gloss.phonetic}/</span>
-                      )}
-                      <SpeakButton text={gloss.display || part.text}
-                                   className="etext-listen" />
-                    </span>
-                    {/* **その文でふさわしい意味が先頭に来る**(2026-08 の指定)。
-                        先頭は大きく、二番目からは小さく出す。 */}
-                    {(gloss.senses ?? []).map((sense, si) => (
-                      <span key={si} className={`etext-sense${si === 0 ? ' is-main' : ''}`}>
-                        <span className="etext-sense-line">
-                          {si > 0 && <span className="etext-sense-no">{si + 1}</span>}
-                          {sense.pos && (
-                            <span className={`etext-pos etext-pos--${posKind(sense.pos)}`}>
-                              {sense.pos}
-                            </span>
-                          )}
-                          <span className="etext-sense-mean">{sense.meaning_ja}</span>
-                        </span>
-                        {sense.example_en && (
-                          <span className="etext-pop-ex" lang="en">{sense.example_en}</span>
-                        )}
-                        {sense.note && <span className="etext-pop-note">{sense.note}</span>}
-                      </span>
-                    ))}
-                  </>
-                )}
-                {/* はじめて引いた語だけ、かかった時間を小さく出す。
-                    2回目からは控えから出るので出ない(2026-08) */}
-                {gloss?.lookedUpMs != null && (
-                  <span className="etext-pop-time">
-                    はじめて調べました({(gloss.lookedUpMs / 1000).toFixed(1)} 秒)
-                  </span>
-                )}
-                {onMark && (
-                  <span className="etext-pop-actions">
-                    <button type="button" className="btn btn--small"
-                            onClick={() => mark('known')}>知っていた</button>
-                    <button type="button" className="btn btn--small btn--warnish"
-                            onClick={() => mark('unknown')}>知らなかった</button>
-                    {status && (
-                      <button type="button" className="btn btn--link"
-                              onClick={() => mark(null)}>取り消す</button>
-                    )}
-                  </span>
-                )}
-                <button type="button" className="etext-pop-close" onClick={close}
-                        aria-label="閉じる">✕</button>
-              </span>
+              <GlossPopover
+                gloss={gloss} busy={busy} error={error} status={status}
+                fallbackText={part.text} deps={openIndex}
+                onMark={onMark ? (next) => mark(next) : null}
+                onClose={close}
+              />
             )}
           </span>
         )

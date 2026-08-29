@@ -78,5 +78,28 @@ run_test supabase/test/dedup_test.sql          "同じ英文が二度出ない�
 run_test supabase/test/rls_test.sql            "RLS(アクセス制御)が意図どおりか確かめる"
 run_test supabase/test/vocab_test.sql          "語彙の定着(意味の控え・知っていた/知らなかった)を確かめる"
 
+# ---------------------------------------------------------------------------
+# 利用者が Supabase に貼る確認 SQL も、ここで毎回まわす。
+#
+# **この確認 SQL 自体が古びる。** 移行を足したのに確認項目を足し忘れると、
+# 「全部 OK」と出ているのに入っていない、という最悪の見え方になる。
+# ---------------------------------------------------------------------------
+echo
+echo "▶ 利用者に渡す確認 SQL(verify_migrations.sql)"
+db="${DB}_verify"
+su postgres -c "psql -q -c 'drop database if exists $db;'"
+su postgres -c "psql -q -c 'create database $db template $DB;'"
+verify_out=$(su postgres -c "psql -v ON_ERROR_STOP=1 -d $db -tA -f supabase/test/verify_migrations.sql" 2>&1) || {
+  echo "$verify_out"; echo "❌ 確認 SQL が実行できませんでした"; exit 1; }
+su postgres -c "psql -q -c 'drop database if exists $db;'"
+ng=$(printf '%s\n' "$verify_out" | grep -c 'まだです' || true)
+total=$(printf '%s\n' "$verify_out" | grep -c '|' || true)
+echo "  確認項目 $total 件 / まだのもの $ng 件"
+if [ "$ng" -ne 0 ]; then
+  printf '%s\n' "$verify_out" | grep 'まだです'
+  echo "❌ 確認 SQL に「まだです」があります"
+  exit 1
+fi
+
 echo
 echo "✅ 検証はすべて意図どおりです"

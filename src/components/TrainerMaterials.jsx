@@ -26,6 +26,7 @@ import {
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
+import PhraseChips from './PhraseChips.jsx'
 import useWordStatuses from '../lib/useWordStatuses.js'
 
 export default function TrainerMaterials({ me }) {
@@ -322,12 +323,18 @@ export default function TrainerMaterials({ me }) {
                                   <SpeakButton text={it[type.audioFrom]} />
                                 </div>
                               )}
-                              {/* 語に触れると意味が出る。トレーナーは見るだけで、
-                                  「知っていた / 知らなかった」は付けない
-                                  (それはゲスト本人の申告であるため) */}
+                              {/* 語に触れると意味が出る。**トレーナー自身も
+                                  「知っていた / 知らなかった」を付けられる**
+                                  (2026-08 利用者の指定)。付けた記録は
+                                  トレーナー自身のもので、ゲストのものには触れない */}
                               {it.prompt_en && (
-                                <div><EnglishText text={it.prompt_en} level={m.level}
-                                                  statuses={wordStatuses} onMark={markWord} /></div>
+                                <div>
+                                  <EnglishText text={it.prompt_en} level={m.level}
+                                               statuses={wordStatuses} onMark={markWord} />
+                                  <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
+                                               level={m.level}
+                                               statuses={wordStatuses} onMark={markWord} />
+                                </div>
                               )}
                               {it.prompt_ja && <div>{it.prompt_ja}</div>}
                               {it.question && (
