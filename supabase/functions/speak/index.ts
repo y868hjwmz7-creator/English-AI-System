@@ -87,47 +87,67 @@ const CLIP_REV = '1'
  * **`src/data/speakers.js` の PREGENERATED_SPEAKERS と id をそろえること。**
  * ばらばらにすると、同じ「Emma」なのに場所によって声が違う、が起きる。
  *
- * 【なぜ2社ぶんあるか】(2026-08 利用者の指摘)
- *   「抑揚や人間らしさで求めているレベルには少し足りない」。
- *   知り合いが Google(Gemini)で作ったアプリの音声がとても人間的だった、
- *   という話が出発点である。
+ * ============================================================================
+ * 【声を2段に分ける】(2026-08 利用者の指定)
  *
- *   声の質は、聞いてみないと分からない。**聞き比べられるようにしておく。**
- *   どちらを使うかは **Secrets にどちらの鍵を入れたか**で決まる。
- *   コードは触らなくてよい。
+ *   いちばん自然な声(ElevenLabs)を教材ぜんぶに使うと、月2,000本の規模で
+ *   月6万〜12万円になる(第 5.2.1 節)。**声の良さが学習効果に直結する
+ *   ところにだけ**使い、残りは無料枠に収まる声でまかなう。
  *
- *     GOOGLE_TTS_API_KEY を入れた           → Google(Chirp 3: HD)
- *     AZURE_SPEECH_KEY + REGION だけ入れた  → Azure(DragonHD)
+ *   | 段 | 使う音声 | どこで使うか |
+ *   |---|---|---|
+ *   | `premium`  | ElevenLabs | 記事・会話の本文、リスニング、発音・リズムの弱点 |
+ *   | `standard` | Google / Azure | 文法ドリル、単語、フレーズ |
  *
- *   **切り替えたら CLIP_REV を1つ進めること。** 前の声の MP3 が残る。
+ *   どちらの段になるかは**画面側が決める**(`src/lib/voiceTier.js`)。
+ *   ここでは渡された段に従うだけ。**判断を2か所に置かない。**
+ *
+ * ============================================================================
+ * 【標準の段は、話者ごとに会社を振り分ける】
+ *
+ *   無料枠は Google が毎月100万文字、Azure が毎月50万文字。
+ *   **両方を使えば毎月150万文字まで無料**になる。
+ *
+ *   ただし**1本の教材の途中で会社を切り替えてはいけない。** 会話の1番目の発言が
+ *   Google、2番目が Azure では、同じ役の声が変わって聞こえる。
+ *   そこで**話者ごとに固定で振り分ける。** 会話は男女1人ずつになるので、
+ *   自然と半々に分かれる。
+ *
+ *   割り当てを変えたいときは、この表を書き換えて **CLIP_REV を進める**。
  */
 
+/** 標準の段で、その話者をどちらの会社に任せるか */
+const SPEAKER_PROVIDER: Record<string, 'google' | 'azure'> = {
+  'us-female': 'google',
+  'us-male': 'azure',
+  'uk-female': 'google',
+  'uk-male': 'azure',
+}
+
 /**
- * Azure。**DragonHD** は Azure でいちばん人間に近い段階の音声である。
- * `Neural` より抑揚が豊かで、間の取り方が自然になる。
+ * Azure(標準の段)。**HD ではない Neural を使う。**
  *
- * `要確認`: **DragonHD はアメリカ英語にしかない。** イギリス英語は
- * Neural のまま置いてある。使えるリージョンも限られている。
- * 使えないと Azure が 400 を返すので、そのときは `:DragonHDLatestNeural`
- * を外して `en-US-AvaMultilingualNeural` のように Neural に戻すこと。
+ * 【なぜ HD を使わないか】(2026-08 に確認)
+ *   Azure の無料枠(F0)は **HD 音声を含まない。** 含むのは HD でない
+ *   prebuilt neural voice だけである。DragonHD を指定すると F0 では失敗する。
+ *   標準の段の役目は「読み方が分かればよい」なので、Neural で足りる。
+ *   良い声が要るところは ElevenLabs に任せる。
  */
 const AZURE_VOICES: Record<string, { voice: string; lang: string }> = {
-  'us-female': { voice: 'en-US-Ava:DragonHDLatestNeural', lang: 'en-US' },
-  'us-male': { voice: 'en-US-Andrew:DragonHDLatestNeural', lang: 'en-US' },
+  'us-female': { voice: 'en-US-EmmaMultilingualNeural', lang: 'en-US' },
+  'us-male': { voice: 'en-US-RyanMultilingualNeural', lang: 'en-US' },
   'uk-female': { voice: 'en-GB-SoniaNeural', lang: 'en-GB' },
   'uk-male': { voice: 'en-GB-RyanNeural', lang: 'en-GB' },
 }
 
 /**
- * Google Cloud Text-to-Speech の **Chirp 3: HD**。
- * 知り合いのアプリで「とても人間的」と言われたのと同じ系統の音声である。
- * 無料枠は毎月100万文字(Azure の2倍)。超えると100万文字あたり $30。
+ * Google Cloud Text-to-Speech の **Chirp 3: HD**(標準の段)。
+ * 無料枠は毎月100万文字。超えると100万文字あたり $30。
  *
- * `要確認`: 声の名前と、**鍵だけで呼べること**(サービスアカウントが
- * 要らないこと)。こちらから Google には通信できないため、
- * **実機で確かめていない。** 間違っていても壊れない(端末の声に戻るだけ)。
- * そのときは窓口が返す `detail` に Google の返事がそのまま入るので、
- * それを見て直す。
+ * `要確認`: 声の名前と、鍵だけで呼べること(サービスアカウントが要らないこと)。
+ * こちらから Google には通信できないため、**実機で確かめていない。**
+ * 間違っていても壊れない(端末の声に戻る)。そのときは窓口が返す `detail` に
+ * Google の返事がそのまま入るので、それを見て直す。
  */
 const GOOGLE_VOICES: Record<string, { voice: string; lang: string }> = {
   'us-female': { voice: 'en-US-Chirp3-HD-Achernar', lang: 'en-US' },
@@ -135,6 +155,40 @@ const GOOGLE_VOICES: Record<string, { voice: string; lang: string }> = {
   'uk-female': { voice: 'en-GB-Chirp3-HD-Achernar', lang: 'en-GB' },
   'uk-male': { voice: 'en-GB-Chirp3-HD-Charon', lang: 'en-GB' },
 }
+
+/**
+ * ElevenLabs(良い段)。**声の id は Secrets から読む。コードに書かない。**
+ *
+ * 【なぜ Secrets から読むのか】
+ *   ElevenLabs の Voice Library には、アメリカ各都市・イギリス各地方・
+ *   アイルランド・スコットランド・オーストラリアなど、たくさんの
+ *   アクセントの声がある。**どれを使うかは利用者が選ぶことである。**
+ *   こちらが id を決め打ちすると、選び直すたびにコードを触ることになる。
+ *
+ * 【入れ方】
+ *   ElevenLabs の画面で声を選び、その Voice ID を Supabase の
+ *   Edge Functions → Secrets に入れる。
+ *
+ *     ELEVENLABS_VOICE_US_FEMALE / _US_MALE / _UK_FEMALE / _UK_MALE
+ *     ELEVENLABS_VOICE_DEFAULT   … 個別の指定が無い話者に使う
+ *
+ *   **id を入れていない話者は、標準の段に落ちる。** 失敗にはしない。
+ *   4人ぶん用意できていなくても、そこだけ Google / Azure で鳴る。
+ */
+const ELEVEN_SECRET: Record<string, string> = {
+  'us-female': 'ELEVENLABS_VOICE_US_FEMALE',
+  'us-male': 'ELEVENLABS_VOICE_US_MALE',
+  'uk-female': 'ELEVENLABS_VOICE_UK_FEMALE',
+  'uk-male': 'ELEVENLABS_VOICE_UK_MALE',
+}
+
+/**
+ * ElevenLabs のモデル。**Secrets の ELEVENLABS_MODEL で差し替えられる。**
+ * 既定は実績のある `eleven_multilingual_v2`。
+ * v3 を試すときは Secrets に `eleven_v3` を入れる(プランによっては
+ * 使えないことがあるため、既定にはしない)。
+ */
+const ELEVEN_MODEL_DEFAULT = 'eleven_multilingual_v2'
 
 const DEFAULT_VOICE = 'us-female'
 
@@ -252,6 +306,32 @@ async function synthGoogle(
 }
 
 /**
+ * ElevenLabs に作らせる(良い段)。
+ *
+ * MP3 がそのまま返るので、変換は要らない。
+ * **速さも高さも指定しない。** 自然な速さで作り、遅く・速くするのは
+ * 画面側(`playbackRate`)の仕事である。
+ */
+async function synthEleven(text: string, voiceId: string, key: string, model: string) {
+  const res = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`,
+    {
+      method: 'POST',
+      headers: {
+        'xi-api-key': key,
+        'Content-Type': 'application/json',
+        Accept: 'audio/mpeg',
+      },
+      body: JSON.stringify({ text, model_id: model }),
+    },
+  )
+  if (!res.ok) {
+    return { error: humanTtsError('ElevenLabs', res.status, await res.text().catch(() => '')) }
+  }
+  return { audio: await res.arrayBuffer() }
+}
+
+/**
  * Azure からの断りを、**画面に出せる日本語**にする。
  *
  * 【ゲストには、仕組みの内側を見せない】(`lookup-word` と同じ考え方)
@@ -288,6 +368,17 @@ const humanTtsError = (who: string, status: number, raw: string) => {
         + '無料枠(Azure は毎月50万文字 / Google は毎月100万文字)を'
         + '使い切っている可能性があります。使用量を確認してください。',
       fatal: false,
+    }
+  }
+  if (status === 402 || /quota|credit/i.test(text)) {
+    // ElevenLabs はクレジットを使い切ると 401 / 402 で断る。
+    // **待っても直らない**ので、この画面のあいだは取りに来させない
+    return {
+      error: GENERIC,
+      detail: `${who} のクレジットを使い切りました。`
+        + 'プランを上げるか、翌月まで待ってください。'
+        + '(標準の声で読み上げる演習は、これまでどおり鳴ります)',
+      fatal: true,
     }
   }
   if (status >= 500) {
@@ -342,19 +433,43 @@ Deno.serve(async (req) => {
       }, 400)
     }
 
-    // ── どちらの会社に作らせるか ────────────────────────────
+    // ── どの声で作るか ──────────────────────────────────────
     //
-    //   **鍵がどちらにあるかで決まる。** コードを触らずに切り替えられる。
-    //   Google を入れたらそちらが優先(あとから足すほうが「試したいほう」)。
+    //   段(premium / standard)は**画面が決めて渡してくる**
+    //   (`src/lib/voiceTier.js`)。ここでは従うだけ。
+    //   **判断を2か所に置かない。** 置けば必ず食い違う。
+    const tier = String(body.tier ?? 'standard') === 'premium' ? 'premium' : 'standard'
+
     const googleKey = Deno.env.get('GOOGLE_TTS_API_KEY')
     const azureKey = Deno.env.get('AZURE_SPEECH_KEY')
     const azureRegion = Deno.env.get('AZURE_SPEECH_REGION')
-    const provider = googleKey ? 'google' : (azureKey && azureRegion ? 'azure' : null)
-    const table = provider === 'google' ? GOOGLE_VOICES : AZURE_VOICES
+    const elevenKey = Deno.env.get('ELEVENLABS_API_KEY')
+    const hasGoogle = !!googleKey
+    const hasAzure = !!(azureKey && azureRegion)
 
-    const voiceId = table[String(body.voice ?? '')] ? String(body.voice) : DEFAULT_VOICE
-    const speaker = table[voiceId]
-    const path = `${CLIP_REV}/${voiceId}/${await fingerprint(voiceId, text)}.mp3`
+    const voiceId = SPEAKER_PROVIDER[String(body.voice ?? '')]
+      ? String(body.voice) : DEFAULT_VOICE
+
+    // 良い段。**声の id を入れていない話者は、標準の段に落とす。**
+    // 4人ぶんそろっていなくても、そこだけ標準の声で鳴ればよい
+    const elevenVoice = elevenKey
+      ? (Deno.env.get(ELEVEN_SECRET[voiceId]) ?? Deno.env.get('ELEVENLABS_VOICE_DEFAULT') ?? '')
+      : ''
+    const usePremium = tier === 'premium' && !!elevenVoice
+
+    // 標準の段。話者ごとに会社を決めてある。
+    // **片方しか鍵が無いときは、あるほうを使う**(止まるより鳴るほうがよい)
+    let standardProvider: 'google' | 'azure' | null = SPEAKER_PROVIDER[voiceId]
+    if (standardProvider === 'google' && !hasGoogle) standardProvider = hasAzure ? 'azure' : null
+    if (standardProvider === 'azure' && !hasAzure) standardProvider = hasGoogle ? 'google' : null
+
+    const provider = usePremium ? 'eleven' : standardProvider
+
+    // 置き場所には**段も入れる。** 同じ英文でも、良い声と標準の声では
+    // 別のファイルである。入れないと、先に作られたほうが両方に返ってしまう。
+    // 画面側(`src/lib/audioClips.js`)と同じ組み立てにすること
+    const madeTier = usePremium ? 'premium' : 'standard'
+    const path = `${CLIP_REV}/${madeTier}/${voiceId}/${await fingerprint(voiceId, text)}.mp3`
     const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${path}`
 
     // ── 3. すでにあるなら、作らない ────────────────────────
@@ -374,23 +489,32 @@ Deno.serve(async (req) => {
       return reply({
         error: GENERIC,
         detail: '音声合成がまだ設定されていません。Supabase の Edge Functions →'
-          + ' Secrets に、次のどちらかを追加してください。'
-          + ' ① AZURE_SPEECH_KEY と AZURE_SPEECH_REGION(Azure DragonHD)'
-          + ' ② GOOGLE_TTS_API_KEY(Google Chirp 3: HD)',
+          + ' Secrets に、次を追加してください。'
+          + ' ① GOOGLE_TTS_API_KEY(標準の声・毎月100万文字まで無料)'
+          + ' ② AZURE_SPEECH_KEY と AZURE_SPEECH_REGION(標準の声・毎月50万文字まで無料)'
+          + ' ③ ELEVENLABS_API_KEY と ELEVENLABS_VOICE_*(本文などの良い声)',
         fatal: true,
       }, 503)
     }
 
-    const made = provider === 'google'
-      ? await synthGoogle(text, speaker, googleKey!)
-      : await synthAzure(text, speaker, azureKey!, azureRegion!)
+    let made: { audio?: ArrayBuffer; error?: unknown }
+    if (provider === 'eleven') {
+      made = await synthEleven(
+        text, elevenVoice, elevenKey!,
+        Deno.env.get('ELEVENLABS_MODEL') ?? ELEVEN_MODEL_DEFAULT,
+      )
+    } else if (provider === 'google') {
+      made = await synthGoogle(text, GOOGLE_VOICES[voiceId], googleKey!)
+    } else {
+      made = await synthAzure(text, AZURE_VOICES[voiceId], azureKey!, azureRegion!)
+    }
     if (made.error) return reply(made.error, 502)
     const audio = made.audio!
     if (!audio.byteLength) {
       // **中身が0件のまま「成功」を返さない。**
       return reply({
         error: GENERIC,
-        detail: `${provider === 'google' ? 'Google' : 'Azure'} が空の音声を返しました。`
+        detail: `${provider} が空の音声を返しました。`
           + '英文に読める文字が無い可能性があります。',
         fatal: false,
       }, 502)
@@ -426,9 +550,9 @@ Deno.serve(async (req) => {
       url: publicUrl,
       cached: false,
       chars: text.length,
-      // どちらの声で作ったかを返す。**聞き比べのときに、これが手がかりになる**
+      // どの声で作ったかを返す。**聞き比べのときに、これが手がかりになる**
       provider,
-      voice: speaker.voice,
+      tier: madeTier,
       ms: Date.now() - startedAt,
     })
   } catch (e) {

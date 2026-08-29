@@ -392,12 +392,29 @@ MP3 を取りに行く待ちで流れが切れるためである
 だから public にしてある。**書き込めるのは窓口だけ**(0016 はそれ以外の
 書き込みポリシーを1つも作らない)。ここを緩めない。
 
-**どの声で作るかは、鍵をどちらに入れたかで決まる。** コードは触らない。
+**声は2段。判断は `voiceTierFor()`(`src/lib/voiceTier.js`)1か所。**
+窓口は渡された段に従うだけ。**判断を2か所に置かない。**
 
-| Secrets に入れたもの | 使われる声 | 無料枠 |
+| 段 | 音声 | どこで |
+|---|---|---|
+| `premium` | ElevenLabs | 記事・会話の本文 / リスニング / **弱点が「発音」「リズム」** |
+| `standard` | Google Chirp 3: HD と Azure Neural | ドリル・単語・フレーズ・吹き出し |
+
+**Azure の無料枠(F0)は HD 音声を含まない。** DragonHD を指定すると失敗する。
+Azure の役目は標準の段なので、HD でない Neural を使う。
+
+**標準の段は話者ごとに会社を固定する**(`SPEAKER_PROVIDER`)。
+女性=Google / 男性=Azure。両方の無料枠を使って毎月150万文字まで無料になる。
+**1本の教材の途中で会社を切り替えない。** 役の声が変わって聞こえる。
+
+| Secrets | 使われる声 | 無料枠 |
 |---|---|---|
 | `GOOGLE_TTS_API_KEY` | Google Chirp 3: HD | 毎月100万文字 |
-| `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` | Azure DragonHD | 毎月50万文字 |
+| `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` | Azure Neural(HD 不可) | 毎月50万文字 |
+| `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_*` | ElevenLabs | 無し(従量) |
+
+**ElevenLabs の声の id はコードに書かない。Secrets から読む。**
+アクセントは利用者が選ぶものである。id が無い話者は標準の段に落ちる。
 
 **`CLIP_REV` は2か所にある。** `src/lib/audioClips.js` と
 `supabase/functions/speak/index.ts`。**声を変えたら、両方を1つ進める。**

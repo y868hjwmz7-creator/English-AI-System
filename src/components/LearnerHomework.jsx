@@ -18,6 +18,7 @@ import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
+import { voiceTierFor } from '../lib/voiceTier.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
@@ -210,6 +211,7 @@ export default function LearnerHomework() {
                             {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
                             <PassagePractice
                               section={sec}
+                              tags={a.material?.tagIds}
                               headline={a.material?.headline}
                               isDialogue={sec.exercise_type === 'dialogue'}
                               level={a.material?.level}
@@ -241,7 +243,11 @@ export default function LearnerHomework() {
                                   <div className="item-audio">
                                     <SpeakButton
                                       text={it[type.audioFrom]}
-                                                    />
+                                      tier={voiceTierFor({
+                                        exerciseType: sec.exercise_type,
+                                        tags: a.material?.tagIds,
+                                      })}
+                                    />
                                   </div>
                                 )}
                                 {/* リスニングは英文を見せない。聞いて答えるため。 */}

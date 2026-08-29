@@ -21,6 +21,7 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { readAloudSequence, stopReading } from '../lib/readAloud.js'
+import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
@@ -173,6 +174,9 @@ export default function LessonView({
   const cast = castVoices(voices, (section?.items ?? []).map((it) => it.speaker))
   // こちらで作った音声(MP3)の話者。端末の声から換算しない(voiceCast.js)
   const clipCast = castClipSpeakers((section?.items ?? []).map((it) => it.speaker))
+  // 良い声を使うか、標準の声で足りるか(`voiceTier.js`)。
+  // 記事・会話とリスニング、それに**発音・リズムの弱点**なら良い声にする
+  const tier = voiceTierFor({ exerciseType: section?.exercise_type, tags: allTags })
 
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
@@ -192,6 +196,7 @@ export default function LessonView({
       })),
       {
         rate: rateOf(rateId),
+        clipTier: tier,
         onIndex: (i) => {
           if (i === null) { stopAllRef.current = null; setPlayingAll(false) }
           setSpeakingKey(i === null ? null : playable[i]?.key ?? null)
@@ -345,6 +350,7 @@ export default function LessonView({
                     <SpeakButton
                       text={it[type.audioFrom]}
                       voice={voiceFor(cast, it.speaker)}
+                      tier={tier}
                       rate={rateOf(rateId)}
                       onPlayingChange={(on) => {
                         setSpeakingKey(on ? key(it, i) : null)

@@ -22,7 +22,7 @@
  *
  *   置き場所は、英文と話者から**計算で決まる。**
  *
- *       tts/<話者>/<英文の SHA-256>.mp3
+ *       tts/<版>/<段>/<話者>/<英文の SHA-256>.mp3
  *
  *   目録の表を持たない。**持つと必ずファイルと食い違う。**
  *   場所が計算で出るなら、取りに行って「鳴ったか、鳴らなかったか」で判る。
@@ -56,6 +56,7 @@
  */
 import { PREGENERATED_SPEAKERS } from '../data/speakers.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
+import { STANDARD } from './voiceTier.js'
 import { markIndexAt, wordMarks } from './wordTiming.js'
 
 /** 0016 で作るバケツ。窓口(supabase/functions/speak)と同じ名前にすること */
@@ -122,8 +123,13 @@ async function fingerprint(voiceId, text) {
     .map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-const publicUrlOf = (voiceId, hash) =>
-  `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${CLIP_REV}/${voiceId}/${hash}.mp3`
+/**
+ * 置き場所。**段(`tier`)も鍵に入れる。**
+ * 同じ英文でも、良い声と標準の声では別のファイルである。
+ * 入れないと、先に作られたほうが両方に返ってしまう。
+ */
+const publicUrlOf = (tier, voiceId, hash) =>
+  `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${CLIP_REV}/${tier}/${voiceId}/${hash}.mp3`
 
 // ── 鳴らす道具は1つだけ ────────────────────────────────────
 //
@@ -178,11 +184,11 @@ if (typeof document !== 'undefined') {
  * 窓口に作らせる。**ここだけが Azure を使わせる入口である。**
  * 駄目だった理由が「待っても直らない」ものなら、以後は取りに行かない。
  */
-async function askForClip(text, voiceId) {
+async function askForClip(text, voiceId, tier) {
   if (!supabase) return null
   try {
     const { data, error } = await supabase.functions.invoke('speak', {
-      body: { text, voice: voiceId },
+      body: { text, voice: voiceId, tier },
     })
     // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある
     const body = data ?? {}
@@ -207,28 +213,28 @@ async function askForClip(text, voiceId) {
  * 往復が1回増え、控えが効いていて一瞬で鳴るはずの場合まで遅くなる。
  * 「鳴ったか、鳴らなかったか」で判るので、それで足りる。
  */
-export async function clipUrl(text, voiceId = DEFAULT_CLIP_VOICE) {
+export async function clipUrl(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return null
   const body = normText(text)
   if (!body) return null
   const voice = clipVoiceId(voiceId)
-  const key = `${voice}|${body}`
+  const key = `${tier}|${voice}|${body}`
   if (urlCache.has(key)) return urlCache.get(key)
   if (gaveUp.has(key)) return null
 
-  const url = publicUrlOf(voice, await fingerprint(voice, body))
+  const url = publicUrlOf(tier, voice, await fingerprint(voice, body))
   urlCache.set(key, url)
   return url
 }
 
 /** 「その場所には無かった」と分かったときに呼ぶ。窓口に作らせて場所を返す */
-export async function makeClip(text, voiceId = DEFAULT_CLIP_VOICE) {
+export async function makeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return null
   const body = normText(text)
   const voice = clipVoiceId(voiceId)
-  const key = `${voice}|${body}`
+  const key = `${tier}|${voice}|${body}`
   if (gaveUp.has(key)) return null
-  const url = await askForClip(body, voice)
+  const url = await askForClip(body, voice, tier)
   if (!url) { gaveUp.add(key); urlCache.delete(key); return null }
   urlCache.set(key, url)
   return url
@@ -239,16 +245,16 @@ export async function makeClip(text, voiceId = DEFAULT_CLIP_VOICE) {
  * 会話は発言ごとに1本なので、これが無いと発言のたびに間があく。
  * **失敗しても何もしない。** 先読みのために画面を止めない。
  */
-export function prefetchClip(text, voiceId = DEFAULT_CLIP_VOICE) {
+export function prefetchClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return
-  clipUrl(text, voiceId).then((url) => {
+  clipUrl(text, voiceId, tier).then((url) => {
     if (!url) return
     // **`fetch` では取りに行かない。** 別のドメインなので CORS の許しが要る。
     // `<audio>` の先読みなら要らず、しかも端末の控えにそのまま入る。
     // ここで作った札は鳴らさない。控えを温めるためだけのもの
     const warm = new Audio()
     warm.preload = 'auto'
-    warm.addEventListener('error', () => { makeClip(text, voiceId) })
+    warm.addEventListener('error', () => { makeClip(text, voiceId, tier) })
     warm.src = url
     warm.load()
   }).catch(() => {})
@@ -288,13 +294,14 @@ export function stopClip() {
  * @param {Function} o.onStart 鳴り始めたときに1回
  */
 export async function playClip({
-  text, voiceId = DEFAULT_CLIP_VOICE, rate = 1, onWord = null, onStart = null,
+  text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD,
+  rate = 1, onWord = null, onStart = null,
 } = {}) {
   if (!canUseClips()) return false
   const body = normText(text)
   if (!body) return false
 
-  let url = await clipUrl(body, voiceId)
+  let url = await clipUrl(body, voiceId, tier)
   if (!url) return false
 
   const mine = (generation += 1)
@@ -326,7 +333,7 @@ export async function playClip({
   if (mine !== generation) return true   // 止められた・別のものが始まった
   if (!ok) {
     // その場所には無かった。窓口に作らせる
-    url = await makeClip(body, voiceId)
+    url = await makeClip(body, voiceId, tier)
     if (!url) return false
     if (mine !== generation) return true
     ok = await tryPlay(url)

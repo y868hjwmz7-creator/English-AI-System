@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { readAloud, readAloudSequence, stopReading } from '../lib/readAloud.js'
+import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
@@ -50,7 +51,7 @@ const MODES = [
 ]
 
 export default function PassagePractice({
-  section, headline, isDialogue,
+  section, headline, isDialogue, tags = null,
   level = 'B1', wordStatuses = null, onMarkWord = null,
 }) {
   const [mode, setMode] = useState('read')
@@ -96,6 +97,8 @@ export default function PassagePractice({
   // こちらで作った音声(MP3)の話者。**端末の声から換算しない。**
   // 端末に英語の声が1つも無いと、2人とも同じ話者になってしまう
   const clipCast = castClipSpeakers(section.items.map((it) => it.speaker))
+  // 本文はシャドーイングの素材なので、**良い声を使う**(`voiceTier.js`)
+  const tier = voiceTierFor({ exerciseType: section.exercise_type, tags })
   const voice = voices[0] ?? null
 
   /** 読み上げを止める。通しでも1発言でも、同じところで止める */
@@ -117,6 +120,7 @@ export default function PassagePractice({
     readAloud(item.audio_text || item.prompt_en, {
       voice: voiceFor(cast, item.speaker, voice),
       clipVoice: voiceFor(clipCast, item.speaker, null),
+      clipTier: tier,
       rate: rateOf(rateId, current.rate),
       onWord: (w) => setReadingAt(w ? w.charIndex : null),
     }).then(() => {
@@ -143,6 +147,7 @@ export default function PassagePractice({
       })),
       {
         rate: rateOf(rateId, current.rate),
+        clipTier: tier,
         onIndex: (i) => {
           if (i === null) stopAllRef.current = null
           setSpeakingId(i === null ? null : playable[i]?.id ?? null)

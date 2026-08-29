@@ -17,6 +17,7 @@ import LessonView from './LessonView.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
+import { voiceTierFor } from '../lib/voiceTier.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { countLabel, exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
@@ -320,7 +321,13 @@ export default function TrainerMaterials({ me }) {
                               )}
                               {type?.audioFrom && it[type.audioFrom] && (
                                 <div className="item-audio">
-                                  <SpeakButton text={it[type.audioFrom]} />
+                                  <SpeakButton
+                                    text={it[type.audioFrom]}
+                                    tier={voiceTierFor({
+                                      exerciseType: sec.exercise_type,
+                                      tags: m.tagIds,
+                                    })}
+                                  />
                                 </div>
                               )}
                               {/* 語に触れると意味が出る。**トレーナー自身も

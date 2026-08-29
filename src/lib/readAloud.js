@@ -44,6 +44,7 @@ import {
   DEFAULT_CLIP_VOICE, canUseClips, playClip, prefetchClip, stopClip,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
+import { STANDARD } from './voiceTier.js'
 import { clipSpeakerFor } from './voiceCast.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
@@ -71,12 +72,13 @@ export const canReadAloud = () => isSpeechSupported() || canUseClips()
  * @param {object} o
  * @param {object} o.voice     端末の声(受け皿として使う)
  * @param {string} o.clipVoice MP3 の話者 id。省略時は端末の声から決める
+ * @param {string} o.clipTier  声の段(`voiceTier.js`)。既定は標準の声
  * @param {number} o.rate      速さの倍率
  * @param {Function} o.onWord  いま読んでいる語の位置({charIndex})
  * @returns {Promise<void>} 読み終わったら解決する
  */
 export async function readAloud(text, {
-  voice = null, clipVoice = null, rate = 0.9, onWord = null,
+  voice = null, clipVoice = null, clipTier = STANDARD, rate = 0.9, onWord = null,
 } = {}) {
   stopReading()
   const mine = session
@@ -84,6 +86,7 @@ export async function readAloud(text, {
   const played = await playClip({
     text,
     voiceId: clipVoice ?? clipSpeakerFor(voice),
+    tier: clipTier,
     rate,
     onWord,
   })
@@ -106,10 +109,12 @@ export async function readAloud(text, {
  *   これが無いと、発言のたびに1秒ほど黙る。
  *
  * @param {Array<{text: string, voice?: object, clipVoice?: string}>} parts
- * @param {object} o { rate, onIndex, onWord } onIndex は再生中の番号(終わりで null)
+ * @param {object} o { rate, clipTier, onIndex, onWord } onIndex は再生中の番号(終わりで null)
  * @returns {Function} 止めるための関数
  */
-export function readAloudSequence(parts, { rate = 0.9, onIndex, onWord } = {}) {
+export function readAloudSequence(parts, {
+  rate = 0.9, clipTier = STANDARD, onIndex, onWord,
+} = {}) {
   const list = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
   stopReading()
   const mine = session
@@ -129,12 +134,15 @@ export function readAloudSequence(parts, { rate = 0.9, onIndex, onWord } = {}) {
       const played = await playClip({
         text: part.text,
         voiceId: clipVoice,
+        tier: clipTier,
         rate,
         onWord: relay,
         // 鳴り始めたら、次のぶんを裏で用意しておく
         onStart: () => {
           const ahead = list[i + 1]
-          if (ahead) prefetchClip(ahead.text, ahead.clipVoice ?? clipSpeakerFor(ahead.voice))
+          if (ahead) {
+            prefetchClip(ahead.text, ahead.clipVoice ?? clipSpeakerFor(ahead.voice), clipTier)
+          }
         },
       })
       if (!alive()) return
