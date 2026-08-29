@@ -15,6 +15,8 @@ export const INDUSTRIES = [
   { id: 'hospitality',   label: '接客・観光',   hint: '案内、予約、トラブル対応' },
   { id: 'manufacturing', label: '製造',         hint: '工程説明、品質、安全' },
   { id: 'pharma',        label: '製薬',         hint: '治験、承認申請、品質管理、学術情報' },
+  { id: 'trading',       label: '商社',         hint: '仕入交渉、見積、船積、与信、代理店' },
+  { id: 'finance',       label: '金融',         hint: '融資、投資、決算説明、コンプライアンス' },
 ]
 
 export const industryLabel = (id) =>

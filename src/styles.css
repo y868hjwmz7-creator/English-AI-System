@@ -1178,16 +1178,23 @@ html { -webkit-text-size-adjust: 100%; }
   user-select: none;
   touch-action: manipulation;   /* 二度触れたときの拡大も止める */
 }
-/* 語に触れたとき。**他の印と同じ高さにそろえる**(2026-08 の指摘)。
+/* 語に触れたとき。**他の印と同じ高さ・同じ位置にそろえる**(2026-08 の指摘)。
    行の高さいっぱいに敷くと、触れるたびに本文が波打って見える。
+
+   **色を塗るのは `<button>` ではなく、外側の `<span>` のほう。**
+   `<button>` の箱は `<span>` より 7px 下まで伸びていて(実測)、
+   同じ書き方をしても帯だけ下にはみ出して見えた。まとまりの囲み
+   (`.etext-run`)と同じ `<span>` に塗れば、位置がそろう。
+
    紙の上だけ別に書かない。**色は変数で持ち、紙が差し替える。**
    別々に書いていたため、あとに置いた紙用の指定が勝ってしまい、
    まとまりの中でも1語だけ反応する不具合になった(2026-08 の指摘) */
-.etext-word:hover, .etext-word.is-open {
+.etext-word-wrap:hover,
+.etext-word-wrap:has(.etext-word.is-open) {
   background: linear-gradient(var(--mark-hover-bg), var(--mark-hover-bg))
     no-repeat bottom / 100% .62em;
-  border-bottom-color: var(--mark-hover-line);
 }
+.etext-word:hover, .etext-word.is-open { border-bottom-color: var(--mark-hover-line); }
 /* 知らなかった語。**次に開いても色が残る**(2026-08 の要望)。
    ただし**目立たせすぎない**(2026-08 の指摘)。地の色を行の高さいっぱいに
    敷くと、本文が縞模様になって読めなくなる。
@@ -1229,6 +1236,8 @@ html { -webkit-text-size-adjust: 100%; }
 .etext-run .etext-word.is-open {
   background: none; border-bottom-color: transparent;
 }
+.etext-run .etext-word-wrap:hover,
+.etext-run .etext-word-wrap:has(.etext-word.is-open) { background: none; }
 /* まとまりに触れたとき・開いているとき。
    **まとまり全体が「いま選ばれている」と見えるようにする**
    (2026-08 の指定)。1語ぶんだけ反応すると、まとまりが崩れて見える。
