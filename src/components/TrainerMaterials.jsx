@@ -26,6 +26,7 @@ import {
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
+import useWordStatuses from '../lib/useWordStatuses.js'
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
@@ -39,6 +40,9 @@ export default function TrainerMaterials({ me }) {
   const [sort, setSort] = useState('new')      // 並び順
   const [openId, setOpenId] = useState(null)   // 中身を開いている教材
   const [openSection, setOpenSection] = useState({})  // 教材ごとに開いている演習
+  // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
+  // (2026-08 利用者の指定)。担当ゲストの記録には触れない
+  const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
   const [lessonOf, setLessonOf] = useState(null)      // レッスン表示で開いている教材
 
   const [materials, setMaterials] = useState([])
@@ -126,7 +130,10 @@ export default function TrainerMaterials({ me }) {
 
   return (
     <div className="stack">
-      {lessonOf && <LessonView material={lessonOf} onClose={() => setLessonOf(null)} />}
+      {lessonOf && (
+        <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
+                    wordStatuses={wordStatuses} onMarkWord={markWord} />
+      )}
       <div className="card">
         <h2 className="card-title">教材をさがす</h2>
         <p className="card-hint">
@@ -277,8 +284,10 @@ export default function TrainerMaterials({ me }) {
                   <Tabs
                     variant="sub"
                     ariaLabel="演習の切り替え"
-                    value={openSection[m.id] ?? m.sections[0]?.id}
-                    onChange={(id) => setOpenSection((x) => ({ ...x, [m.id]: id }))}
+                    value={openSection[m.id] ?? null}
+                    onChange={(id) => setOpenSection((x) => ({
+                      ...x, [m.id]: x[m.id] === id ? null : id,
+                    }))}
                     items={m.sections.map((sec) => ({
                       id: sec.id,
                       label: exerciseLabel(sec.exercise_type),
@@ -286,7 +295,9 @@ export default function TrainerMaterials({ me }) {
                     }))}
                   />
                   {m.sections
-                    .filter((sec, i) => sec.id === (openSection[m.id] ?? m.sections[0]?.id)
+                    /* はじめはどれも開かない。演習が1種類のときだけ開く
+                       (Tabs は2つ未満だと描かないため、押す先が無い) */
+                    .filter((sec, i) => sec.id === openSection[m.id]
                       || (m.sections.length < 2 && i === 0))
                     .map((sec) => {
                     const type = exerciseType(sec.exercise_type)
@@ -315,11 +326,13 @@ export default function TrainerMaterials({ me }) {
                                   「知っていた / 知らなかった」は付けない
                                   (それはゲスト本人の申告であるため) */}
                               {it.prompt_en && (
-                                <div><EnglishText text={it.prompt_en} level={m.level} /></div>
+                                <div><EnglishText text={it.prompt_en} level={m.level}
+                                                  statuses={wordStatuses} onMark={markWord} /></div>
                               )}
                               {it.prompt_ja && <div>{it.prompt_ja}</div>}
                               {it.question && (
-                                <div><EnglishText text={it.question} level={m.level} /></div>
+                                <div><EnglishText text={it.question} level={m.level}
+                                                  statuses={wordStatuses} onMark={markWord} /></div>
                               )}
                               {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
                               {it.audio_text && !it.prompt_en && (

@@ -16,6 +16,7 @@
  * 例外は投げず、必ず { data, error } の形で返す。
  */
 import { supabase } from './supabase.js'
+import { canSeeSystemDetail } from './viewer.js'
 
 const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
@@ -269,6 +270,22 @@ export async function prefetchGlosses(entries, { level = 'B1' } = {}) {
 }
 
 /**
+ * 断りを、**見ている人に合わせて**選ぶ。
+ *
+ * 窓口は「誰に見せてもよい文(`error`)」と
+ * 「原因と直し方(`detail`)」の両方を返す。
+ * **ゲストには内側の事情を見せない**(2026-08 利用者の指定)。
+ * 「Claude の残高が足りません」はゲストにできることが何も無く、
+ * スクールの内側の話でしかない。
+ * トレーナー・管理者には、直し方まで分かる `detail` を出す。
+ */
+const GENERIC_LOOKUP_ERROR =
+  'いま辞書を使えません。少し時間をおいてから、もう一度お試しください。'
+
+const shownError = (body) =>
+  (canSeeSystemDetail() && body?.detail) ? body.detail : (body?.error ?? GENERIC_LOOKUP_ERROR)
+
+/**
  * 意味と品詞を引く。**その文でふさわしい意味が先頭**で返る。
  *
  * 探す順は「覚えている → データベースの控え → 窓口」。
@@ -310,15 +327,22 @@ export async function lookupWord({ word, sentence = '', level = 'B1' }) {
     headers: { Authorization: `Bearer ${session.access_token}` },
   })
   if (error) {
-    let detail = ''
-    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    let body = null
+    try { body = await error.context?.json() } catch { /* 読めなければ無視 */ }
+    if (body?.error) return ng(shownError(body))
     if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-      return ng('意味を調べる窓口につながりませんでした。'
-        + 'Supabase に lookup-word を配置したか確認してください。')
+      return ng(shownError({
+        error: `${GENERIC_LOOKUP_ERROR}直らないときは、担当のトレーナーにお知らせください。`,
+        detail: '意味を調べる窓口につながりませんでした。'
+          + 'Supabase に lookup-word を配置したか確認してください。',
+      }))
     }
-    return ng(detail || `調べられませんでした: ${error.message}`)
+    return ng(shownError({
+      error: GENERIC_LOOKUP_ERROR,
+      detail: `調べられませんでした: ${error.message}`,
+    }))
   }
-  if (data?.error) return ng(data.error)
+  if (data?.error) return ng(shownError(data))
   if (!data?.gloss) return ng('意味を読み取れませんでした')
   // はじめて引いた語だけ、かかった時間を持たせる。
   // **速い・遅いを体感で議論しないため。** 2回目からは控えから出るので付かない

@@ -16,6 +16,7 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import Tabs from './Tabs.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
+import useWordStatuses from '../lib/useWordStatuses.js'
 import MaterialForm from './MaterialForm.jsx'
 import { ScreenIcon } from './Icons.jsx'
 
@@ -41,6 +42,9 @@ export default function TrainerLearners({ me }) {
   // レッスンで大きく表示している教材。**このゲストの分しか出ない。**
   // 画面共有のとき、他のゲストの情報を出さずに進められる(2026-08 の要望)
   const [lessonOf, setLessonOf] = useState(null)
+  // トレーナー自身の語の記録(2026-08 利用者の指定)。
+  // 担当ゲストの記録には触れない — RLS が learner_id = auth.uid() で縛る
+  const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
   const [lessonBusy, setLessonBusy] = useState(null)
   const [assignments, setAssignments] = useState([])
   const [summary, setSummary] = useState(null)
@@ -158,7 +162,8 @@ export default function TrainerLearners({ me }) {
   return (
     <div className="stack">
       {lessonOf && (
-        <LessonView material={lessonOf} onClose={() => setLessonOf(null)} />
+        <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
+                    wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
       {message && <div className="notice notice--ok">{message}</div>}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}

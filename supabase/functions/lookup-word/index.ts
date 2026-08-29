@@ -53,34 +53,74 @@ const cors = {
 }
 
 /** Claude からの断り。言い換え済みの文を持たせて、そのまま画面に出せるようにする */
-class ApiError extends Error {}
+/** Claude からの断り。画面に出す文と、係の人だけに見せる原因を持つ */
+class ApiError extends Error {
+  detail: string
+  fatal: boolean
+  constructor(info: { message: string; detail: string; fatal: boolean }) {
+    super(info.message)
+    this.detail = info.detail
+    this.fatal = info.fatal
+  }
+}
 
 /**
- * Claude からの断りを、**利用者が次に何をすればよいか分かる日本語**にする。
+ * Claude からの断りを、**画面に出せる日本語**にする。
  *
  * そのまま出すと `400 {"type":"error","error":{...}}` という英語の JSON が
  * 吹き出しに並び、何が起きたのか分からない(2026-08 実機)。
- * とくに**残高切れ**は、待っても直らず、支払いをしないと直らない。
- * 「調べられませんでした」だけでは、いつまでも原因にたどり着けない。
+ *
+ * 【ゲストには、内側の事情を見せない】(2026-08 利用者の指定)
+ *   「Claude の残高が足りません」はゲストに見せる言葉ではない。
+ *   ゲストにできることは何も無く、スクールの内側の話でしかない。
+ *
+ *   ・`message` … 誰に見せてもよい一般的な言い方
+ *   ・`detail`  … 原因と、直し方。**トレーナー・管理者にだけ**出す
+ *
+ *   どちらを出すかは画面側が決める(`src/lib/viewer.js`)。
+ *   ここでは両方返すだけにする。**役割の判定を2か所に置かない。**
  */
+const GENERIC = 'いま辞書を使えません。少し時間をおいてから、もう一度お試しください。'
+const ASK_STAFF = '直らないときは、担当のトレーナーにお知らせください。'
+
 const humanApiError = (status: number, raw: string) => {
   const text = String(raw ?? '')
   if (/credit balance is too low|insufficient[_ ]?(quota|credit)|billing/i.test(text)) {
-    return 'Claude の残高が足りません。'
-      + 'Anthropic Console → Plans & Billing で追加してください。'
-      + '(すでに調べたことのある語は、これまでどおり出ます)'
+    return {
+      message: `${GENERIC}${ASK_STAFF}`,
+      detail: 'Claude の残高が足りません。'
+        + 'Anthropic Console → Plans & Billing で追加してください。'
+        + '(すでに調べたことのある語は、これまでどおり出ます)',
+      fatal: true,   // 待っても直らない
+    }
   }
   if (status === 401 || /invalid x-api-key|authentication/i.test(text)) {
-    return 'Claude の鍵が正しくありません。'
-      + 'Supabase の Edge Functions → Secrets の ANTHROPIC_API_KEY を確認してください。'
+    return {
+      message: `${GENERIC}${ASK_STAFF}`,
+      detail: 'Claude の鍵が正しくありません。'
+        + 'Supabase の Edge Functions → Secrets の ANTHROPIC_API_KEY を確認してください。',
+      fatal: true,
+    }
   }
   if (status === 429 || /rate.?limit/i.test(text)) {
-    return '短い時間に調べすぎました。少し待ってからお試しください。'
+    return {
+      message: '短い時間に調べすぎました。少し待ってからお試しください。',
+      detail: `Anthropic の呼び出し上限に当たりました(${status})。`,
+      fatal: false,
+    }
   }
   if (status >= 500) {
-    return 'Claude 側が一時的に応答していません。少し待ってからお試しください。'
+    return {
+      message: GENERIC,
+      detail: `Claude 側が応答していません(${status})。`,
+      fatal: false,
+    }
   }
-  return `調べられませんでした(${status})。${text.slice(0, 160)}`
+  return {
+    message: `${GENERIC}${ASK_STAFF}`,
+    detail: `Claude からの応答: ${status} ${text.slice(0, 200)}`,
+    fatal: false,
+  }
 }
 
 const reply = (body: unknown, status = 200) =>
@@ -389,8 +429,8 @@ Deno.serve(async (req) => {
         // **裏で先に引いているだけなので、画面には出さない。**
         // 直せる種類の断り(残高・鍵)かどうかを画面に伝え、
         // それ以上むだに呼ばないようにする
-        const message = humanApiError(res.status, text)
-        return reply({ error: message, fatal: /残高|鍵/.test(message) }, 200)
+        const info = humanApiError(res.status, text)
+        return reply({ error: info.message, detail: info.detail, fatal: info.fatal }, 200)
       }
       const data = await res.json()
       const block = (data.content ?? []).find((b: { type: string }) => b.type === 'tool_use')
@@ -552,7 +592,7 @@ Deno.serve(async (req) => {
     // **残高切れ・鍵ちがいは待っても直らない。** その場合は fatal を付けて、
     // 画面側にこれ以上むだに呼ばせない
     if (e instanceof ApiError) {
-      return reply({ error: e.message, fatal: /残高|鍵/.test(e.message) }, 200)
+      return reply({ error: e.message, detail: e.detail, fatal: e.fatal }, 200)
     }
     const message = e instanceof Error ? e.message : String(e)
     return reply({ error: `調べられませんでした: ${message}` }, 200)

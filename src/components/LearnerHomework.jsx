@@ -19,7 +19,7 @@ import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materia
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
-import { clearWordStatus, loadMyWordStatuses, setWordStatus } from '../lib/vocab.js'
+import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
@@ -39,7 +39,8 @@ export default function LearnerHomework() {
   const [rateId, setRateId] = useState(loadRateId)
   // 語の「知っていた / 知らなかった」。**画面を開いたときに1回だけ読む。**
   // 語ごとに問い合わせると、1画面で何十回も往復することになる。
-  const [wordStatuses, setWordStatuses] = useState(() => new Map())
+  // 「知っていた / 知らなかった」。中身は useWordStatuses.js にある
+  const { statuses: wordStatuses, mark: markWord, error: wordError } = useWordStatuses()
 
   const reload = async () => {
     const { data, error: e } = await loadMyAssignments()
@@ -51,28 +52,7 @@ export default function LearnerHomework() {
 
   useEffect(() => { reload() }, [])
 
-  useEffect(() => {
-    loadMyWordStatuses().then(({ data }) => { if (data) setWordStatuses(data) })
-  }, [])
-
-  /**
-   * 語に「知っていた / 知らなかった」を付ける(null で取り消し)。
-   * **手元の表示を先に変える。** 通信を待って色が変わるのでは、
-   * 押した手ごたえが無い。失敗したら元に戻す。
-   */
-  const markWord = async (norm, status) => {
-    const before = new Map(wordStatuses)
-    setWordStatuses((m) => {
-      const next = new Map(m)
-      if (status) next.set(norm, status)
-      else next.delete(norm)
-      return next
-    })
-    const { error: e } = status
-      ? await setWordStatus(norm, status)
-      : await clearWordStatus(norm)
-    if (e) { setError(e); setWordStatuses(before) }
-  }
+  useEffect(() => { if (wordError) setError(wordError) }, [wordError])
 
   const toggleDone = async (assignment) => {
     const next = !assignment.learner_done_at
@@ -191,15 +171,21 @@ export default function LearnerHomework() {
                     {a.material?.teaching_point && (
                       <TeachingNote text={a.material.teaching_point} title="ここに注意" />
                     )}
+                    {/* **はじめはどれも開かない**(2026-08 の指摘)。
+                        1つ目が開いた状態で出ると、宿題を並べて見渡せない。
+                        押したタブだけを開き、同じタブをもう一度押すと閉じる。
+                        演習が1種類のときはタブが出ない(Tabs は2つ未満だと
+                        描かない)ので、そのときだけ開いたままにする。 */}
                     {(() => {
                       const secs = a.material?.sections ?? []
-                      const currentId = openSection[a.id] ?? secs[0]?.id
                       return (
                         <Tabs
                           variant="sub"
                           ariaLabel="演習の切り替え"
-                          value={currentId}
-                          onChange={(id) => setOpenSection((m) => ({ ...m, [a.id]: id }))}
+                          value={openSection[a.id] ?? null}
+                          onChange={(id) => setOpenSection((m) => ({
+                            ...m, [a.id]: m[a.id] === id ? null : id,
+                          }))}
                           items={secs.map((sec) => ({
                             id: sec.id,
                             label: exerciseLabel(sec.exercise_type),
@@ -210,7 +196,7 @@ export default function LearnerHomework() {
                     })()}
                     {a.material?.sections
                       .filter((sec, i) =>
-                        sec.id === (openSection[a.id] ?? a.material.sections[0]?.id)
+                        sec.id === openSection[a.id]
                         || (a.material.sections.length < 2 && i === 0))
                       .map((sec) => {
                       const type = exerciseType(sec.exercise_type)

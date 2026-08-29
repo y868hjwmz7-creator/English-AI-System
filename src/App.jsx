@@ -9,6 +9,7 @@ import SupabaseStatus from './components/SupabaseStatus.jsx'
 import Tabs from './components/Tabs.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
+import { setViewerRole } from './lib/viewer.js'
 import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadState, resetState, saveState } from './lib/store.js'
@@ -31,6 +32,9 @@ export default function App() {
   // 選んだ配色を画面に反映する。最初の1回も含めてここで行う
   useEffect(() => { applyTheme(theme) }, [theme])
   useEffect(() => { applyPalette(palette) }, [palette])
+  // 仕組みの内側の事情(鍵・残高)を出してよい相手かどうかの判断に使う。
+  // **ゲストには内側の話を見せない**(2026-08 利用者の指定)
+  useEffect(() => { setViewerRole(profile?.role ?? null) }, [profile])
 
   // 起動時に一度、以降はログイン状態が変わるたびに追いかける
   useEffect(() => {
