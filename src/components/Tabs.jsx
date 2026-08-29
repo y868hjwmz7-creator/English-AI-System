@@ -22,8 +22,14 @@ export default function Tabs({
   // 選んでいるタブが画面の外にあると、いまどこにいるか分からない。
   // 横に流れるので、選ばれたタブを見える位置まで寄せる。
   useEffect(() => {
-    const active = barRef.current?.querySelector('.is-active')
-    active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const bar = barRef.current
+    const active = bar?.querySelector('.is-active')
+    if (!bar || !active) return
+    // **タブの帯だけを動かす。** scrollIntoView は、帯が動かせないときに
+    // 画面そのものを横へずらしてしまう。ログイン直後に左右が
+    // 切れて見える原因になりうる(2026-08)。
+    const target = active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2
+    bar.scrollLeft = Math.max(0, target)
   }, [value])
 
   if (list.length < 2) return null

@@ -212,10 +212,38 @@ body {
 .field-hint { margin-left: 6px; color: var(--text-muted); font-weight: normal; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-input[type='text'], input[type='date'], input[type='number'], select, textarea {
+/* 入力欄。**password / email も必ず含める。**
+   抜けていると、その欄だけ見た目が揃わず、下の16pxの決まりも効かない */
+input[type='text'], input[type='password'], input[type='email'],
+input[type='search'], input[type='tel'], input[type='date'],
+input[type='number'], select, textarea {
   padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--surface-0); color: var(--text-primary);
   font-family: inherit; font-size: 14px; width: 100%;
+}
+
+/* ★iPhone・iPad で**画面が勝手に拡大されるのを防ぐ**
+   ─────────────────────────────────────────────────────
+   iOS の Safari は、**16px より小さい文字の入力欄に触れると画面を拡大する。**
+   拡大は入力が終わっても戻らないので、ログインしたあとの画面が
+   横にはみ出したまま(左右が切れたまま)になっていた(2026-08 実機)。
+
+   拡大させない指定(maximum-scale)で塞ぐこともできるが、
+   それは**文字を大きくしたい人の操作まで奪う。**
+   入力欄の文字を16px以上にするのが正しい直し方である。 */
+@media (max-width: 760px), (pointer: coarse) {
+  /* **上の指定と同じ細かさで書く。** `input` とだけ書くと、
+     `input[type='password']` の指定のほうが強く、効かない
+     (メディアクエリは強さを足さない)。実際にこれで password だけ
+     14px のまま残った(2026-08) */
+  input, textarea, select,
+  input[type='text'], input[type='password'], input[type='email'],
+  input[type='search'], input[type='tel'], input[type='date'],
+  input[type='number'] { font-size: 16px; }
+  button { font-size: 16px; }
+  .rate-pick select, .lesson-rate select { font-size: 16px; }
+  .btn--small { font-size: 14px; }   /* ボタンは拡大の対象外なので戻す */
+  .theme-btn, .tagchip { font-size: 13px; }
 }
 textarea { resize: vertical; }
 audio { width: 100%; margin-top: 4px; }
