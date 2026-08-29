@@ -10,10 +10,14 @@ import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, scoreTestLabel } from '../data/cef
 import {
   addLearnerScore, createAccount, kindLabel, loadLearnerAssignments, loadLearnerSummary,
   loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
+  loadMaterial,
 } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import Tabs from './Tabs.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
+import LessonView from './LessonView.jsx'
+import MaterialForm from './MaterialForm.jsx'
+import { ScreenIcon } from './Icons.jsx'
 
 const STATUS = {
   active:   { label: '受講中', cls: 'badge--admin' },
@@ -34,6 +38,10 @@ export default function TrainerLearners({ me }) {
   // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
   // 過去の宿題を最初に開く(2026-08 の要望)。
   const [detailTab, setDetailTab] = useState('homework')
+  // レッスンで大きく表示している教材。**このゲストの分しか出ない。**
+  // 画面共有のとき、他のゲストの情報を出さずに進められる(2026-08 の要望)
+  const [lessonOf, setLessonOf] = useState(null)
+  const [lessonBusy, setLessonBusy] = useState(null)
   const [assignments, setAssignments] = useState([])
   const [summary, setSummary] = useState(null)
   const [detailBusy, setDetailBusy] = useState(false)
@@ -60,6 +68,21 @@ export default function TrainerLearners({ me }) {
     setLearners(data)
   }
   useEffect(() => { reload() }, [])
+
+  /**
+   * 過去の宿題を「レッスンで使う形」(大きく表示)で開く。
+   *
+   * 一覧は軽くするため中身を読んでいない(数だけ)。開くときに読む。
+   * **ここから開くのは、そのゲストに出した教材だけ。**
+   * 画面共有のとき、他のゲストの情報を出さずに進められる(2026-08 の要望)。
+   */
+  const openLesson = async (materialId) => {
+    setLessonBusy(materialId)
+    const { data, error: e } = await loadMaterial(materialId)
+    setLessonBusy(null)
+    if (e) { setError(e); return }
+    setLessonOf(data)
+  }
 
   const openDetail = async (id, tab = 'homework') => {
     setOpenId(id)
@@ -134,6 +157,9 @@ export default function TrainerLearners({ me }) {
 
   return (
     <div className="stack">
+      {lessonOf && (
+        <LessonView material={lessonOf} onClose={() => setLessonOf(null)} />
+      )}
       {message && <div className="notice notice--ok">{message}</div>}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
@@ -254,6 +280,7 @@ export default function TrainerLearners({ me }) {
                   onChange={setDetailTab}
                   items={[
                     { id: 'homework', label: '過去の宿題', count: assignments.length },
+                    { id: 'create', label: 'この人に教材を作る' },
                     { id: 'record', label: 'レベルとスコア' },
                   ]}
                 />
@@ -386,12 +413,48 @@ export default function TrainerLearners({ me }) {
                               ))}
                             </div>
                           )}
+                          {/* ここから開けば、**このゲストの教材しか映らない。**
+                              「教材」タブから探すと、他のゲストに出したものも
+                              画面に並んでしまう(画面共有では見せたくない) */}
+                          {a.material && (
+                            <button type="button" className="btn btn--small"
+                                    disabled={lessonBusy === a.material.id}
+                                    onClick={() => openLesson(a.material.id)}>
+                              <ScreenIcon />
+                              {lessonBusy === a.material.id
+                                ? '開いています…' : 'レッスンで使う(大きく表示)'}
+                            </button>
+                          )}
                         </li>
                       ))}
                     </ul>
                   </>
                   )
                 })()}
+
+                {detailTab === 'create' && (
+                  <>
+                    <p className="card-hint">
+                      <strong>{l.display_name} さんだけに共有されます。</strong>
+                      レッスン中に画面を共有していても、
+                      他のゲストの名前は出ません。
+                    </p>
+                    <MaterialForm
+                      createdBy={me.id}
+                      // **この1人しか選べない。** 誤って他のゲストへ
+                      // 共有することも、名前が見えることもない
+                      learners={[{ id: l.id, display_name: l.display_name, status: 'active' }]}
+                      initial={{ level: l.level ?? '', shareWith: [l.id] }}
+                      onCancel={() => setDetailTab('homework')}
+                      onCreated={(id, shared) => {
+                        setMessage(shared
+                          ? `${l.display_name} さんに共有しました。`
+                          : '教材を発行しました。');
+                        openDetail(l.id, 'homework')
+                      }}
+                    />
+                  </>
+                )}
 
                 {detailTab === 'record' && (
                 <>

@@ -142,6 +142,35 @@ const normalizeMaterial = (m) => {
   }
 }
 
+/**
+ * 教材を1件、中身ごと読む。
+ *
+ * 過去の宿題の一覧は、軽くするために**中身を読んでいない**(数だけ)。
+ * レッスンで大きく表示するときは中身が要るので、そのときだけ読む。
+ */
+export async function loadMaterial(materialId) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (!materialId) return ng('教材が指定されていません')
+
+  const { data, error } = await supabase
+    .from('materials')
+    .select(`
+      id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
+      teaching_point, headline, genre, scene, topic,
+      material_tags ( tag_id ),
+      material_sections (
+        id, seq, exercise_type, instruction,
+        material_items ( id, seq, prompt_en, prompt_ja, hint, question,
+                         answer, answer_alt, audio_text, note, tag_id, speaker )
+      )
+    `)
+    .eq('id', materialId)
+    .maybeSingle()
+  if (error) return fail(error, '教材の中身を読めませんでした')
+  if (!data) return ng('教材が見つかりませんでした')
+  return ok(normalizeMaterial(data))
+}
+
 // ── 教材を作る ────────────────────────────────────────────────
 
 /**

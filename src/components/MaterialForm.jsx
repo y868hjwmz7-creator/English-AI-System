@@ -85,7 +85,9 @@ export default function MaterialForm({
   const [short, setShort] = useState(0)                // 作り直しても足りなかった数
   // 誰に出すか。**画面のいちばん上で、最初から選べる。**
   // 以前は全部指定し終えてからでないと選べず、やりにくかった(2026-08)。
-  const [shareWith, setShareWith] = useState([])
+  // ゲストの詳細から作るときは、**その1人が最初から選ばれている**
+  // (他のゲストは候補にも出ない。画面共有で名前が見えないようにするため)
+  const [shareWith, setShareWith] = useState(initial.shareWith ?? [])
   const [showDetails, setShowDetails] = useState(false)  // 記入欄を開くか
   // できあがったことを、押したボタンのすぐ下で知らせる。
   // 以前は「中身を見て直す」を押すまで、できたかどうか分からなかった
