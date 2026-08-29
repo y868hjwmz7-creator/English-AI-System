@@ -134,4 +134,10 @@ from (
   select '㉝ 発音記号を持てる(0013)', exists (
     select 1 from information_schema.columns
     where table_name = 'word_glosses' and column_name = 'phonetic'), 33
+  union all
+  select '㉞ 弱点の見出しが6つに整理されている(0014)', (
+    select count(distinct category) = 6 from public.weakness_tags), 34
+  union all
+  select '㉟ 「単語」の弱点タグがある(0014)', (
+    select count(*) = 6 from public.weakness_tags where category = 'word'), 35
 ) t order by 順;

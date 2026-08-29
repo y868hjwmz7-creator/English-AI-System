@@ -23,13 +23,24 @@
  * アプリの作り直しは要りません。最初から完璧を目指す必要はありません。
  */
 
+/**
+ * 見出しは6つ(2026-08 利用者の指定)。
+ *   発音 / リズム / 文法 / 表現 / 単語 / 流暢性
+ *
+ * 以前は「発音(子音)」「発音(母音)」と分けていたが、
+ * 選ぶ場面では**まず「発音」を開き、その中で選ぶ**ほうが早い。
+ * 子音・母音は見出しの中の小見出しとして残してある(group)。
+ *
+ * **id は変えない。** 変えると過去の教材が行方不明になる。
+ * category の値だけを付け替えている(0014)。
+ */
 export const weaknessCategories = [
-  { id: 'consonant',  label: '発音(子音)' },
-  { id: 'vowel',      label: '発音(母音)' },
-  { id: 'rhythm',     label: 'リズム' },
-  { id: 'grammar',    label: '文法' },
-  { id: 'expression', label: '表現' },
-  { id: 'fluency',    label: '流暢さ' },
+  { id: 'pronunciation', label: '発音',   hint: '音そのもの。子音・母音の作り分け' },
+  { id: 'rhythm',        label: 'リズム', hint: '強弱・つながり・脱落。文の流れ' },
+  { id: 'grammar',       label: '文法',   hint: '形の決まり。冠詞・時制・語順など' },
+  { id: 'expression',    label: '表現',   hint: '言い回し。つなぎ言葉・決まり文句' },
+  { id: 'word',          label: '単語',   hint: '語そのもの。抽象語・業界語・使い分け' },
+  { id: 'fluency',       label: '流暢性', hint: '話しつづける力。間・速さ・要約' },
 ]
 
 /**
@@ -39,17 +50,17 @@ export const weaknessCategories = [
  */
 export const weaknessTags = [
   // ── 発音(子音) ─────────────────────────────
-  { id: 'l-r',                 category: 'consonant',  kind: 'weakness', label: '/l/ と /r/',      hint: 'light / right、collect / correct' },
-  { id: 's-th',                category: 'consonant',  kind: 'weakness', label: '/s/ と /th/',     hint: 'sink / think、mouse / mouth' },
-  { id: 'b-v',                 category: 'consonant',  kind: 'weakness', label: '/b/ と /v/',      hint: 'best / vest、boat / vote' },
-  { id: 'final-consonant',     category: 'consonant',  kind: 'weakness', label: '語尾の子音',      hint: '語尾に母音を足さない。book を「ブックゥ」にしない' },
-  { id: 'consonant-cluster',   category: 'consonant',  kind: 'weakness', label: '子音連続',        hint: 'street、texts、asked のように子音が続く形' },
-  { id: 'all-consonants',      category: 'consonant',  kind: 'drill',    label: '子音全般',        hint: '特定の音ではなく、子音をひととおり通す網羅型の練習' },
+  { id: 'l-r',                 category: 'pronunciation', group: '子音', kind: 'weakness', label: '/l/ と /r/',      hint: 'light / right、collect / correct' },
+  { id: 's-th',                category: 'pronunciation', group: '子音', kind: 'weakness', label: '/s/ と /th/',     hint: 'sink / think、mouse / mouth' },
+  { id: 'b-v',                 category: 'pronunciation', group: '子音', kind: 'weakness', label: '/b/ と /v/',      hint: 'best / vest、boat / vote' },
+  { id: 'final-consonant',     category: 'pronunciation', group: '子音', kind: 'weakness', label: '語尾の子音',      hint: '語尾に母音を足さない。book を「ブックゥ」にしない' },
+  { id: 'consonant-cluster',   category: 'pronunciation', group: '子音', kind: 'weakness', label: '子音連続',        hint: 'street、texts、asked のように子音が続く形' },
+  { id: 'all-consonants',      category: 'pronunciation', group: '子音', kind: 'drill',    label: '子音全般',        hint: '特定の音ではなく、子音をひととおり通す網羅型の練習' },
 
   // ── 発音(母音) ─────────────────────────────
-  { id: 'short-long-vowel',    category: 'vowel',      kind: 'weakness', label: '短母音と長母音',   hint: 'ship / sheep、full / fool' },
-  { id: 'schwa',               category: 'vowel',      kind: 'weakness', label: 'あいまい母音',     hint: 'about、sofa、banana の弱く読む母音' },
-  { id: 'all-vowels',          category: 'vowel',      kind: 'drill',    label: '母音全般',        hint: '特定の音ではなく、母音をひととおり通す網羅型の練習' },
+  { id: 'short-long-vowel',    category: 'pronunciation', group: '母音', kind: 'weakness', label: '短母音と長母音',   hint: 'ship / sheep、full / fool' },
+  { id: 'schwa',               category: 'pronunciation', group: '母音', kind: 'weakness', label: 'あいまい母音',     hint: 'about、sofa、banana の弱く読む母音' },
+  { id: 'all-vowels',          category: 'pronunciation', group: '母音', kind: 'drill',    label: '母音全般',        hint: '特定の音ではなく、母音をひととおり通す網羅型の練習' },
 
   // ── リズム ────────────────────────────────
   { id: 'word-stress',         category: 'rhythm',     kind: 'weakness', label: '強勢の位置',       hint: '単語のどの音節を強く読むか。PREsent / preSENT' },
@@ -83,7 +94,17 @@ export const weaknessTags = [
   { id: 'idiom',               category: 'expression', kind: 'weakness', label: 'イディオム',      hint: '直訳できない慣用表現' },
   { id: 'collocation',         category: 'expression', kind: 'weakness', label: 'コロケーション',  hint: '語の相性。make a decision(× do a decision)' },
 
-  // ── 流暢さ ────────────────────────────────
+  // ── 単語(2026-08 に足した見出し)──────────────
+  //   語そのものの問題。表現(言い回し)とは別に数える。
+  //   「言いたい語が出てこない」は、言い回しではなく語の問題であることが多い。
+  { id: 'word-basic',          category: 'word',       kind: 'weakness', label: '基礎語の抜け',    hint: 'よく出るのに使えていない語。keep / hold / raise など' },
+  { id: 'word-abstract',       category: 'word',       kind: 'weakness', label: '抽象語',          hint: '概念をあらわす語。approach / factor / extent / impact' },
+  { id: 'word-industry',       category: 'word',       kind: 'weakness', label: '業界の語',        hint: 'その業界でしか使わない語。仕事で必ず要る' },
+  { id: 'word-synonym',        category: 'word',       kind: 'weakness', label: '類義語の使い分け', hint: 'problem / issue / trouble のような近い語の選び分け' },
+  { id: 'word-form',           category: 'word',       kind: 'weakness', label: '語形の作り分け',  hint: 'analyze / analysis / analytical のような品詞ちがい' },
+  { id: 'word-all',            category: 'word',       kind: 'drill',    label: '単語全般',        hint: '特定の語ではなく、語彙をひととおり通す網羅型の練習' },
+
+  // ── 流暢性 ────────────────────────────────
   { id: 'hesitation',          category: 'fluency',    kind: 'weakness', label: '言いよどみ',      hint: '詰まって止まる、同じ語を繰り返す' },
   { id: 'pausing',             category: 'fluency',    kind: 'weakness', label: '間の取り方',      hint: '意味の切れ目で区切る。不自然な位置で切らない' },
   { id: 'speed',               category: 'fluency',    kind: 'weakness', label: '速さ',            hint: '速すぎる / 遅すぎる。一定の速さを保つ' },
@@ -96,6 +117,21 @@ export const weaknessTagsByCategory = () =>
     ...category,
     tags: weaknessTags.filter((tag) => tag.category === category.id),
   }))
+
+/**
+ * 見出しの中の小見出し(発音の「子音」「母音」など)でまとめる。
+ * 小見出しが無いタグは、まとめて1つの塊にする。
+ */
+export const groupsOf = (tags) => {
+  const groups = []
+  for (const tag of tags) {
+    const name = tag.group ?? ''
+    const found = groups.find((g) => g.name === name)
+    if (found) found.tags.push(tag)
+    else groups.push({ name, tags: [tag] })
+  }
+  return groups
+}
 
 /** レッスンで「弱点」として指摘できるものだけ。基礎ドリルは含まない。 */
 export const selectableWeaknessTags = () =>

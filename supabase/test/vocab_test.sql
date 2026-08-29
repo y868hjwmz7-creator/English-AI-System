@@ -64,6 +64,17 @@ insert into public.word_glosses (word_norm, context_key, display, pos, meaning_j
 values ('deployment', 'abc123', 'deployment', '名詞', '(部隊の)配置',
         '[{"pos":"名詞","meaning_ja":"(部隊の)配置","example_en":"","note":""}]'::jsonb);
 
+-- ── 弱点タグの見出し(0014)────────────────────────────────────
+select pg_temp.ok('発音の見出しが1つにまとまっている(0014)',
+  (select count(*)::int from public.weakness_tags
+   where category in ('consonant', 'vowel')), 0);
+
+select pg_temp.ok('「単語」の見出しがある(0014)',
+  (select count(*)::int from public.weakness_tags where category = 'word'), 6);
+
+select pg_temp.ok('タグの id は変えていない(過去の教材が迷子にならない)',
+  (select count(*)::int from public.weakness_tags where id = 'l-r'), 1);
+
 -- ── 語のそろえ方 ──────────────────────────────────────────────
 select pg_temp.ok('大文字小文字をそろえる',
   public.norm_word('Deployment') = public.norm_word('deployment'), true);
