@@ -161,4 +161,15 @@ from (
   select '㊵ 要点フレーズを持てる(0015)', exists (
     select 1 from information_schema.columns
     where table_name = 'material_items' and column_name = 'phrases'), 40
+  union all
+  select '㊶ 読み上げ音声の置き場がある(0016)', (
+    select public from storage.buckets where id = 'tts'), 41
+  union all
+  select '㊷ 音声を置けるのは窓口だけ(0016)', (
+    -- tts に書き込みを許すポリシーが**1つも無い**ことを確かめる。
+    -- ここが緩むと、誰でも好きな音声を教材に紛れ込ませられる
+    select count(*) = 0 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and cmd in ('INSERT', 'UPDATE', 'ALL')
+      and coalesce(qual, '') || coalesce(with_check, '') like '%''tts''%'), 42
 ) t order by 順;

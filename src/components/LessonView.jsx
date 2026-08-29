@@ -19,8 +19,9 @@ import { useEffect, useRef, useState } from 'react'
 import { countLabel, exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
-import { loadEnglishVoices, speakSequence, stopSpeaking } from '../lib/speech.js'
-import { castVoices, voiceFor } from '../lib/voiceCast.js'
+import { loadEnglishVoices } from '../lib/speech.js'
+import { readAloudSequence, stopReading } from '../lib/readAloud.js'
+import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -81,6 +82,7 @@ export default function LessonView({
   const stopAll = () => {
     stopAllRef.current?.()
     stopAllRef.current = null
+    stopReading()
     setPlayingAll(false)
     setSpeakingKey(null)
   }
@@ -95,7 +97,7 @@ export default function LessonView({
   useEffect(() => {
     let alive = true
     loadEnglishVoices().then((list) => { if (alive) setVoices(list) })
-    return () => { alive = false; stopSpeaking() }
+    return () => { alive = false; stopReading() }
   }, [])
 
   // 読んでいるところが画面の外に出ないよう、そこまで送る。
@@ -129,7 +131,7 @@ export default function LessonView({
   // Esc で閉じる。左右の矢印でページを送る
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') { stopSpeaking(); onClose?.() }
+      if (e.key === 'Escape') { stopReading(); onClose?.() }
       if (e.key === 'ArrowRight') {
         setPage((p) => Math.min(p + 1, sections.length - 1))
         resetItems()
@@ -169,6 +171,8 @@ export default function LessonView({
   const isPassage = section ? isPassageSection(section.exercise_type) : false
   // 話す人 → 声。会話でないときは空(既定の声が使われる)
   const cast = castVoices(voices, (section?.items ?? []).map((it) => it.speaker))
+  // こちらで作った音声(MP3)の話者。端末の声から換算しない(voiceCast.js)
+  const clipCast = castClipSpeakers((section?.items ?? []).map((it) => it.speaker))
 
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
@@ -180,8 +184,12 @@ export default function LessonView({
       .filter(({ it }) => String(it.prompt_en ?? '').trim())
     if (!playable.length) return
     setPlayingAll(true)
-    stopAllRef.current = speakSequence(
-      playable.map(({ it }) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker) })),
+    stopAllRef.current = readAloudSequence(
+      playable.map(({ it }) => ({
+        text: it.prompt_en,
+        voice: voiceFor(cast, it.speaker),
+        clipVoice: voiceFor(clipCast, it.speaker, null),
+      })),
       {
         rate: rateOf(rateId),
         onIndex: (i) => {
@@ -199,7 +207,7 @@ export default function LessonView({
       {/* 操作するところ。共有される側にも見えるが、紙の外に置く */}
       <div className="lesson-bar no-print">
         <button type="button" className="btn btn--small"
-                onClick={() => { stopSpeaking(); onClose?.() }}>✕ 閉じる</button>
+                onClick={() => { stopReading(); onClose?.() }}>✕ 閉じる</button>
 
         <div className="lesson-pages">
           <button type="button" className="btn btn--small"

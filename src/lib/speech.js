@@ -7,7 +7,14 @@
  *   同じコードでも Windows / Mac / iPhone / Android で声が変わり、
  *   アメリカ英語・イギリス英語を確実に指定することはできません。
  *   本番で音声品質を揃えたい場合は、外部の音声合成サービスに切り替える必要があります。
+ *
+ * ★2026-08 追記 — ここは**予備の経路**になった
+ *   iPhone では、どのブラウザを使っても良い声が出せないことが実機で確定した
+ *   (仕様書 5.2.1)。そこで教材の英文は、こちらで作った MP3 を配る形に変えた。
+ *   その振り分けは `readAloud.js` が行う。**画面はそちらを呼ぶこと。**
+ *   このファイルの `speak()` は、MP3 がまだ無いときの受け皿である。
  */
+import { markIndexAt, totalWeight, weighWords, wordMarks } from './wordTiming.js'
 
 /** ブラウザが読み上げ機能に対応しているか */
 export function isSpeechSupported() {
@@ -277,29 +284,6 @@ const saveCps = (voiceName, cps) => {
 }
 
 /**
- * 語の位置と、その語に配る「重み」を出す。
- *
- * 長い語ほど時間がかかる。読点・句点のあとには**間**が入るので、
- * その分を足しておく。ここがずれると、色だけ先に進んでしまう。
- */
-const weighWords = (text) => {
-  const src = String(text ?? '')
-  const re = /[A-Za-z][A-Za-z'-]*/g
-  const out = []
-  let m = re.exec(src)
-  while (m) {
-    const after = src.slice(m.index + m[0].length, m.index + m[0].length + 2)
-    // 語そのもの + 続く空白 + 句読点の間
-    let weight = m[0].length + 1
-    if (/^[,;:]/.test(after)) weight += 3
-    if (/^[.!?]/.test(after)) weight += 6
-    out.push({ at: m.index, weight })
-    m = re.exec(src)
-  }
-  return out
-}
-
-/**
  * **いま読んでいる語**を知らせる。
  *
  * 【なぜ要るか】(2026-08 利用者の指定)
@@ -349,21 +333,13 @@ const attachWordTracking = (utterance, onWord, { text, rate = 1, voiceName = '' 
 
   const startEstimate = () => {
     if (gotBoundary || timer || !words.length) return
-    const total = words.reduce((n, w) => n + w.weight, 0)
     const cps = loadCps(voiceName) * (rate || 1)
-    const seconds = total / cps
-    // 語ごとの「ここまでに終わっているはず」の時刻
-    let acc = 0
-    const marks = words.map((w) => {
-      acc += w.weight
-      return { at: w.at, until: (acc / total) * seconds * 1000 }
-    })
+    // 語ごとの「ここまでに終わっているはず」の時刻。配り方は MP3 と同じ
+    const marks = wordMarks(text ?? utterance.text ?? '', (totalWeight(words) / cps) * 1000)
     let index = -1
     timer = window.setInterval(() => {
-      const elapsed = Date.now() - startedAt
-      let next = marks.findIndex((m) => elapsed < m.until)
-      if (next < 0) next = marks.length - 1
-      if (next !== index) {
+      const next = markIndexAt(marks, Date.now() - startedAt)
+      if (next >= 0 && next !== index) {
         index = next
         onWord({ charIndex: marks[index].at, charLength: 0 })
       }
@@ -380,7 +356,7 @@ const attachWordTracking = (utterance, onWord, { text, rate = 1, voiceName = '' 
     stopTimer()
     // 実際にかかった時間から、この声の速さを覚える。次からはこれを使う
     const spent = (Date.now() - startedAt) / 1000
-    const chars = words.reduce((n, w) => n + w.weight, 0)
+    const chars = totalWeight(words)
     if (startedAt && spent > 0.5 && chars > 0) {
       saveCps(voiceName, chars / spent / (rate || 1))
     }
@@ -417,80 +393,64 @@ export function speak(text, { voice, rate = 0.9, onWord } = {}) {
 }
 
 /**
- * 何本かの英文を、**順に**読み上げる。
+ * 英文を1本だけ読み上げ、**読み終わるまで待てる**形にしたもの。
  *
- * 会話は話す人ごとに声を変えるため、1本にまとめて読ませることができない
- * (`speak()` は前の読み上げを止めてしまう)。1つ終わったら次を始める。
+ * 【なぜ要るか】
+ *   会話は話す人ごとに声を変えるため、1本にまとめて読ませられない
+ *   (`speak()` は前の読み上げを止めてしまう)。1つ終わったら次を始める。
+ *   その「順に」の面倒は `readAloud.js` が見るので、
+ *   ここは **1本ぶんの約束(Promise)**だけを返す。
  *
  * 【気をつけたこと】
  *   読み終わりの合図(onend)は端末によって来ないことがある。
  *   来なかったときに**そこで止まってしまう**ので、語数から見積もった
- *   時間で次へ進む保険を入れてある。
+ *   時間で先へ進む保険を入れてある。
  *
- * @param {Array<{text: string, voice?: object}>} parts 読み上げるもの
- * @param {object} options { rate, onIndex } onIndex は再生中の番号(終わりで null)
- * @returns {Function} 止めるための関数
+ * @returns {{done: Promise<void>, stop: Function}}
  */
-export function speakSequence(parts, { rate = 0.9, onIndex, onWord } = {}) {
-  const list = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
-  if (!isSpeechSupported() || !list.length) return () => {}
-  window.speechSynthesis.cancel()
-
-  let stopped = false
-  let timer = null
-  let index = 0
-  // 見積もりで語を送っているときの止め手。次の文に移るときと、
-  // 止めたときに必ず呼ぶ。**放っておくと裏で動き続ける**
-  let stopWords = () => {}
-
-  const next = () => {
-    if (timer) { window.clearTimeout(timer); timer = null }
-    stopWords()
-    if (stopped || index >= list.length) { onIndex?.(null); onWord?.(null); return }
-    const part = list[index]
-    onIndex?.(index)
-
-    const utterance = new SpeechSynthesisUtterance(part.text)
-    stopWords = attachWordTracking(
-      utterance,
-      onWord ? (at) => onWord({ ...at, index }) : null,
-      { text: part.text, rate, voiceName: part.voice?.name },
-    )
-    utterance.lang = part.voice?.lang || 'en-US'
-    try {
-      if (part.voice) utterance.voice = part.voice
-    } catch (err) {
-      console.warn('指定された声を使えないため、端末の既定の声で読み上げます。', err)
-    }
-    utterance.rate = rate
-    utterance.pitch = 1
-    utterance.volume = 1
-
-    let moved = false
-    const advance = () => {
-      if (moved || stopped) return
-      moved = true
-      index += 1
-      next()
-    }
-    utterance.onend = advance
-    utterance.onerror = advance
-    // 合図が来なかったときの保険。見積もりの2倍 + 2秒で先へ進む
-    const words = String(part.text).split(/\s+/).length
-    timer = window.setTimeout(advance, (Math.max(2, words / 2.2) * 2 + 2) * 1000)
-
-    window.speechSynthesis.speak(utterance)
+export function speakOnce(text, { voice, rate = 0.9, onWord } = {}) {
+  if (!isSpeechSupported() || !String(text ?? '').trim()) {
+    return { done: Promise.resolve(), stop: () => {} }
   }
 
-  next()
+  let settle = () => {}
+  const done = new Promise((resolve) => { settle = resolve })
 
-  return () => {
-    stopped = true
-    if (timer) window.clearTimeout(timer)
+  const utterance = new SpeechSynthesisUtterance(text)
+  const stopWords = attachWordTracking(utterance, onWord, {
+    text, rate, voiceName: voice?.name,
+  })
+  utterance.lang = voice?.lang || 'en-US'
+  // 声の指定が拒否される場合がある。失敗しても読み上げ自体は続けたい
+  try {
+    if (voice) utterance.voice = voice
+  } catch (err) {
+    console.warn('指定された声を使えないため、端末の既定の声で読み上げます。', err)
+  }
+  utterance.rate = rate
+  utterance.pitch = 1
+  utterance.volume = 1
+
+  let finished = false
+  let timer = null
+  const finish = () => {
+    if (finished) return
+    finished = true
+    if (timer) { window.clearTimeout(timer); timer = null }
     stopWords()
-    window.speechSynthesis.cancel()
-    onIndex?.(null)
-    onWord?.(null)
+    settle()
+  }
+  utterance.onend = finish
+  utterance.onerror = finish
+  // 合図が来なかったときの保険。見積もりの2倍 + 2秒で先へ進む
+  const words = String(text).split(/\s+/).length
+  timer = window.setTimeout(finish, (Math.max(2, words / 2.2) * 2 + 2) * 1000)
+
+  window.speechSynthesis.speak(utterance)
+
+  return {
+    done,
+    stop: () => { finish(); window.speechSynthesis.cancel() },
   }
 }
 

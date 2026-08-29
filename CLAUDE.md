@@ -127,7 +127,7 @@ UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
 - **Supabase**(Postgres + Auth + RLS + Storage)。接続情報は `.env` と
   GitHub Actions のシークレットから読む。**未設定でもアプリは落ちず、localStorage で動く**
 
-### Supabase 上で動く関数(Edge Function)3つ
+### Supabase 上で動く関数(Edge Function)4つ
 
 ブラウザに置けないもの(鍵・重い処理)はここにある。配置は利用者が
 Supabase の画面から行う。**1関数1ファイル**にしてあるのは、配置の手順を
@@ -138,6 +138,7 @@ Supabase の画面から行う。**1関数1ファイル**にしてあるのは�
 | `create-user` | アカウント発行 | `service_role`(関数の中だけ) |
 | `generate-material` | 教材の下書き生成 | Claude API |
 | `check-similar` | 意味が近すぎる英文を弾く | **不要**(`gte-small` が Supabase 内にある) |
+| `speak` | 英文の読み上げ音声(MP3)を作って置く | Azure Speech |
 
 同じ英文を二度出さない仕組みは3段(仕様書 第5.16.2節)。
 **保証しているのは②と③で、①は誘導にすぎない。**
@@ -259,6 +260,7 @@ Opus 5 の最小長512を超えているので載る)。
 |---|---|---|
 | `generate-material` | `claude-sonnet-5` | 教材の質が要る |
 | `lookup-word` | `claude-sonnet-5` | 質を優先。**遅さの原因は別にあった**(下記) |
+| `speak` | Azure Speech(Claude ではない) | 音声合成。無料枠は毎月50万文字 |
 
 `lookup-word` を一度 `claude-haiku-4-5` にしたが、
 **利用者の実測で「質には満足だが、速くはなっていない」**(2026-08)。
@@ -332,6 +334,46 @@ Anthropic 側も **streaming で受け取る**。`output_config.effort` は
 どれが残ってどれが消えるのかは利用者には見分けられず、気まぐれに見える。
 
 **絞り込みの項目を足したら、`initial` にも必ず足すこと。**
+
+### 読み上げは `readAloud.js` を呼ぶ。端末の声を直接使わない
+
+**iPhone では、どのブラウザを使っても良い声を出せない。**
+iOS はすべてのブラウザの中身が Safari(WebKit)であり、
+高品質音声を Web Speech API に**一切公開しない**(実機で生47件・premium 0件)。
+2026-08、知り合いの iPhone + Chrome で「最低な声」が出た、という報告で確定した。
+
+そこで教材の英文は **こちらで作った MP3 を配る。**
+
+```
+tts/<話者>/<英文の SHA-256>.mp3   ← 場所は計算で決まる。目録の表は持たない
+```
+
+- 画面はまずこの場所を `<audio>` に渡す。**あればそれで終わり**(CDN と端末の控え)
+- 無ければ窓口 `speak` が Azure に作らせて置き、場所を返す
+- それも駄目なら**端末の声に落ちる。画面には何も出さない**
+
+**画面はどちらを鳴らすか決めない。** 英文が出る場所は4つある。
+4か所に分岐を書けば必ず食い違う。`src/lib/readAloud.js` の
+`readAloud()` / `readAloudSequence()` / `stopReading()` だけを呼ぶこと。
+`speech.js` の `speak()` は受け皿であって、画面から直接呼ぶものではない。
+
+**速さでファイルを増やさない。** MP3 は自然な速さで1本だけ作り、
+5段階の速さは `playbackRate` で変える。作り分けると費用も容量も5倍になる。
+
+**語の重みの配り方は `wordTiming.js` 1つに置く。** 端末の声と MP3 で
+別々に書くと、同じ本文なのに色の進み方が変わる。
+
+**`<audio>` は1つだけ作り、作り直さない。** 最初に画面へ触れた瞬間に
+無音を鳴らして解錠する。iOS は「押した流れの中で始まった再生」しか許さず、
+MP3 を取りに行く待ちで流れが切れるためである
+(`AudioContext` を1つだけ作るのと同じ理由)。
+
+**会話の話者は `castClipSpeakers()` で決める。端末の声から換算しない。**
+英語の声が1つも無い端末では、換算すると2人とも同じ話者になる。
+
+`tts` バケツに**録音は入らない。** 入るのは教材の英文の読み上げだけ。
+だから public にしてある。**書き込めるのは窓口だけ**(0016 はそれ以外の
+書き込みポリシーを1つも作らない)。ここを緩めない。
 
 ### 読み上げのボタンは「Listen」/「Stop」。絵は `Icons.jsx` から
 
@@ -548,7 +590,7 @@ SQL 関数は作成時に本文を検査される。まだ無いテーブルを�
 |---|---|
 | Supabase `sb_publishable_...` | 公開前提。`.env` と GitHub Secrets に置く |
 | Supabase `sb_secret_...` / `service_role` | **扱わない。利用者にも求めない** |
-| Azure Speech の鍵 | 利用者が `.env` か GitHub Secrets に直接書く |
+| Azure Speech の鍵 | 利用者が `.env` / GitHub Secrets / **Supabase の Edge Functions → Secrets** に直接書く |
 
 `anon` キーが公開されていても安全なのは RLS が守っているからである。
 **RLS を無効化する変更は行わない。**

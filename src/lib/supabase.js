@@ -23,6 +23,13 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
 /** 接続情報がそろっているか。画面に案内を出すときに使います。 */
 export const isSupabaseConfigured = Boolean(url && key)
 
+/**
+ * プロジェクトの URL。
+ * Storage に置いた読み上げ音声を `<audio src>` に直接渡すために使います
+ * (`src/lib/audioClips.js`)。SDK からは取り出せないので、ここで公開します。
+ */
+export const supabaseUrl = url ?? ''
+
 export const supabase = isSupabaseConfigured
   ? createClient(url, key, {
       auth: {

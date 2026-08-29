@@ -7,9 +7,16 @@
  *
  * 声の読み込みは端末ごとに時間がかかるので、**アプリ全体で1回だけ**行う。
  * 設問ごとに読み込むと、40問の画面で40回走ることになる。
+ *
+ * 【2026-08 — 鳴らすのは、こちらで作った音声】
+ *   iPhone では端末の声がひどい(仕様書 5.2.1)。教材の英文は
+ *   こちらで作った MP3 を配る形に変えた。どちらを鳴らすかは
+ *   `readAloud.js` が決めるので、ここは呼ぶだけでよい。
+ *   端末の声は、MP3 がまだ無いときの受け皿として渡している。
  */
 import { useEffect, useState } from 'react'
-import { isSpeechSupported, loadEnglishVoices, speak, stopSpeaking } from '../lib/speech.js'
+import { loadEnglishVoices } from '../lib/speech.js'
+import { canReadAloud, readAloud, stopReading } from '../lib/readAloud.js'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
 import { loadRateId, rateOf } from '../lib/speechRate.js'
 
@@ -42,21 +49,21 @@ export default function SpeakButton({
     return () => { alive = false }
   }, [])
 
-  if (!text || !isSpeechSupported()) return null
+  if (!text || !canReadAloud()) return null
 
   // 読んでいるあいだ、親が「いまここ」を色で示せるように知らせる
   const setState = (on) => { setPlaying(on); onPlayingChange?.(on) }
 
   const play = () => {
-    if (playing) { stopSpeaking(); setState(false); onWord?.(null); return }
-    stopSpeaking()
+    if (playing) { stopReading(); setState(false); onWord?.(null); return }
     setState(true)
-    // いま読んでいる語の位置を親へ知らせる(色を付けるため)
-    speak(text, { voice, rate: speed, onWord })
-    // 読み終わりの合図は端末によって来ないことがあるため、
-    // 語数からおおよその時間で戻す。押せないままになるより実害が小さい。
-    const seconds = Math.max(2, String(text).split(/\s+/).length / 2.2)
-    window.setTimeout(() => { setState(false); onWord?.(null) }, seconds * 1000)
+    // いま読んでいる語の位置を親へ知らせる(色を付けるため)。
+    // **読み終わったところで Stop から Listen に戻す。**
+    // MP3 なら本当の読み終わり、端末の声なら保険の時間で戻る(speech.js)
+    readAloud(text, { voice, rate: speed, onWord }).then(() => {
+      setState(false)
+      onWord?.(null)
+    })
   }
 
   return (

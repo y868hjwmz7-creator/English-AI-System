@@ -18,8 +18,9 @@
  *   この前提は画面にも書く(隠すと、点数を実力と誤解させる)。
  */
 import { useEffect, useRef, useState } from 'react'
-import { loadEnglishVoices, speak, speakSequence, stopSpeaking } from '../lib/speech.js'
-import { castVoices, voiceFor } from '../lib/voiceCast.js'
+import { loadEnglishVoices } from '../lib/speech.js'
+import { readAloud, readAloudSequence, stopReading } from '../lib/readAloud.js'
+import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
@@ -71,7 +72,7 @@ export default function PassagePractice({
   useEffect(() => {
     let alive = true
     loadEnglishVoices().then((list) => { if (alive) setVoices(list) })
-    return () => { alive = false; stopSpeaking() }
+    return () => { alive = false; stopReading() }
   }, [])
 
   // 開いた時点で、まだ控えに無い語を裏で引いておく(2026-08 の要望)
@@ -92,13 +93,16 @@ export default function PassagePractice({
   const current = MODES.find((m) => m.id === mode) ?? MODES[0]
   // 話す人 → 声。**会話は1人1声。** 同じ声だと役を追えない(2026-08 の指摘)
   const cast = castVoices(voices, section.items.map((it) => it.speaker))
+  // こちらで作った音声(MP3)の話者。**端末の声から換算しない。**
+  // 端末に英語の声が1つも無いと、2人とも同じ話者になってしまう
+  const clipCast = castClipSpeakers(section.items.map((it) => it.speaker))
   const voice = voices[0] ?? null
 
   /** 読み上げを止める。通しでも1発言でも、同じところで止める */
   const stopPlaying = () => {
     stopAllRef.current?.()
     stopAllRef.current = null
-    stopSpeaking()
+    stopReading()
     setSpeakingId(null)
     setReadingAt(null)
   }
@@ -108,32 +112,35 @@ export default function PassagePractice({
     if (speakingId === item.id) { stopPlaying(); return }
     stopPlaying()
     setSpeakingId(item.id)
-    speak(item.audio_text || item.prompt_en, {
+    // 読み終わったら Listen に戻す。**MP3 なら本当の読み終わりで戻る。**
+    // 端末の声のときは、合図が来ない端末のための保険が speakOnce にある
+    readAloud(item.audio_text || item.prompt_en, {
       voice: voiceFor(cast, item.speaker, voice),
+      clipVoice: voiceFor(clipCast, item.speaker, null),
       rate: rateOf(rateId, current.rate),
       onWord: (w) => setReadingAt(w ? w.charIndex : null),
-    })
-    // 読み終わりの合図は端末によって来ないことがあるため、
-    // 語数からおおよその時間で戻す。表示が戻らないより実害が小さい。
-    const seconds = Math.max(2, (item.prompt_en ?? '').split(/\s+/).length / 2.2)
-    window.setTimeout(() => {
+    }).then(() => {
       setSpeakingId((id) => (id === item.id ? null : id))
       setReadingAt(null)
-    }, seconds * 1000)
+    })
   }
 
   /**
    * 通して読み上げる。
    * **1本にまとめて読ませない。** 話す人ごとに声を変えるため、
-   * 1発言ずつ順に読ませる(speakSequence)。
+   * 1発言ずつ順に読ませる(readAloudSequence)。
    */
   const playAll = () => {
     stopPlaying()
     // 先に「読めるもの」だけに絞ってから並べる。絞ったあとで番号を数えないと、
     // 「いま読んでいる発言」の印が1つずれる
     const playable = section.items.filter((it) => String(it.prompt_en ?? '').trim())
-    stopAllRef.current = speakSequence(
-      playable.map((it) => ({ text: it.prompt_en, voice: voiceFor(cast, it.speaker, voice) })),
+    stopAllRef.current = readAloudSequence(
+      playable.map((it) => ({
+        text: it.prompt_en,
+        voice: voiceFor(cast, it.speaker, voice),
+        clipVoice: voiceFor(clipCast, it.speaker, null),
+      })),
       {
         rate: rateOf(rateId, current.rate),
         onIndex: (i) => {
