@@ -43,6 +43,7 @@ const HOLD_MS = 450
 
 export default function EnglishText({
   text, level = 'B1', statuses = null, onMark = null, className = '', lang = 'en',
+  readingAt = null,
 }) {
   const [openIndex, setOpenIndex] = useState(null)  // いま開いている語
   const [gloss, setGloss] = useState(null)
@@ -54,6 +55,17 @@ export default function EnglishText({
   const popRef = useRef(null)
   const rootRef = useRef(null)
   const parts = splitWords(text ?? '')
+
+  // いま読み上げられている語。
+  //
+  // ブラウザは「何文字目を読み始めた」しか教えてくれない。
+  // その位置が空白や句読点に落ちることがあり、**そのたびに色が消えて
+  // ちらつく。** そこで「その位置以前で、いちばん後ろにある語」を選ぶ。
+  // こうすると次の語の合図が来るまで色が留まり、滑らかに移っていく。
+  // **先回りして次の語を光らせない。** 読む前に色が動くと合わない。
+  const readingIndex = readingAt == null ? -1 : parts.reduce(
+    (found, part, i) => (part.word && part.at <= readingAt ? i : found), -1,
+  )
 
   const cancelHold = () => {
     if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null }
@@ -131,11 +143,13 @@ export default function EnglishText({
         if (!part.word) return <span key={i}>{part.text}</span>
         const status = statuses?.get(part.norm) ?? null
         const isOpen = openIndex === i
+        const isReading = i === readingIndex
         return (
           <span key={i} className="etext-word-wrap">
             <button
               type="button"
-              className={`etext-word${status ? ` is-${status}` : ''}${isOpen ? ' is-open' : ''}`}
+              className={`etext-word${status ? ` is-${status}` : ''}${isOpen ? ' is-open' : ''}`
+                + `${isReading ? ' is-reading' : ''}`}
               aria-expanded={isOpen}
               // どの操作で来たかで分ける。**環境の当て推量に賭けない**
               onPointerDown={(e) => {

@@ -156,7 +156,7 @@ export default function LearnerHomework() {
                 </button>
 
                 {a.material?.instruction_ja && (
-                  <TeachingNote text={a.material.instruction_ja} title="やること" tone="todo" />
+                  <TeachingNote text={a.material.instruction_ja} title="やること" tone="todo" defaultOpen />
                 )}
 
                 {openId === a.id ? (

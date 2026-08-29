@@ -63,13 +63,25 @@ const toLines = (text) => {
   return [raw]
 }
 
-export default function TeachingNote({ text, title = '指導ポイント', tone = 'point' }) {
+export default function TeachingNote({
+  text, title = '指導ポイント', tone = 'point', defaultOpen = false,
+}) {
   const lines = toLines(text)
   if (!lines.length) return null
 
+  // 【…】の見出しがいくつあるか。畳んだままでも中身の量が分かるようにする
+  const headCount = lines.filter((l) => HEADING.test(l)).length
+  const summary = headCount > 1 ? `${headCount} 件` : `${lines.length} 行`
+
   return (
-    <div className={`teaching-note teaching-note--${tone}`}>
-      <div className="teaching-note-title">{title}</div>
+    <details className={`teaching-note teaching-note--${tone}`} open={defaultOpen}>
+      {/* **既定では畳んでおく。** 開きっぱなしだと一覧がうるさく、
+          肝心の英文が下に押しやられる(2026-08 の指摘) */}
+      <summary className="teaching-note-title">
+        <span className="teaching-note-caret" aria-hidden="true" />
+        <span className="teaching-note-label">{title}</span>
+        <span className="teaching-note-count">{summary}</span>
+      </summary>
       <ul className="teaching-note-list">
         {lines.map((line, i) => {
           const heading = HEADING.exec(line)
@@ -84,6 +96,6 @@ export default function TeachingNote({ text, title = '指導ポイント', tone 
           return <li key={i}>{markEnglish(line, `l${i}`)}</li>
         })}
       </ul>
-    </div>
+    </details>
   )
 }

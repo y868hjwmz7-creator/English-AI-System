@@ -24,8 +24,12 @@
 
   --accent:  #2a78d6;
   /* いま読み上げているところの色。**明るい / 暗いの両方に必ず置く** */
-  --speaking-bg:  #fff4cc;
-  --speaking-bar: #e0a800;
+  /* 読み上げ中。**橙は目が疲れる**という指摘(2026-08)。
+     落ち着いた青緑にし、いま読んでいる語だけを少し濃くする */
+  --speaking-bg:  #eef4f7;
+  --speaking-bar: #7fa8bd;
+  --reading-bg:   #cfe3ed;
+  --reading-fg:   #14343f;
   /* 「知らなかった」と付けた語の色。**明るい / 暗いの両方に必ず置く** */
   --unknown-bg:   #ffe3e0;
   --unknown-bar:  #e34948;
@@ -70,8 +74,10 @@
     --series-5: #d55181;
   
     --accent: #3987e5;
-    --speaking-bg:  #3a3213;
-    --speaking-bar: #c98500;
+    --speaking-bg:  #1d2a30;
+    --speaking-bar: #5d8ba0;
+    --reading-bg:   #2c4d5c;
+    --reading-fg:   #eaf4f9;
     --unknown-bg:   #3e2220;
     --unknown-bar:  #e66767;
     --gloss-head-bg: #23231f;
@@ -108,8 +114,10 @@
   --series-5: #d55181;
 
   --accent: #3987e5;
-  --speaking-bg:  #3a3213;
-  --speaking-bar: #c98500;
+  --speaking-bg:  #1d2a30;
+  --speaking-bar: #5d8ba0;
+  --reading-bg:   #2c4d5c;
+  --reading-fg:   #eaf4f9;
   --unknown-bg:   #3e2220;
   --unknown-bar:  #e66767;
   --gloss-head-bg: #23231f;
@@ -583,9 +591,13 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 弱点タグを選ぶ */
 .tagpicker { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 4px; }
-.tagpicker-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.tagpicker-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
+/* 「子音」「母音」のような小見出し。
+   **幅を広く取らない。** 8.5em 確保していたため、2文字の見出しと
+   最初の札のあいだが大きく空いていた(2026-08 の指摘)。
+   2つとも2文字なので、3em あれば頭がそろう */
 .tagpicker-label {
-  min-width: 8.5em; flex-shrink: 0;
+  min-width: 3em; flex-shrink: 0;
   color: var(--text-secondary); font-size: 12px;
 }
 .tagpicker-tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -646,7 +658,6 @@ html { -webkit-text-size-adjust: 100%; }
 .homework-en { font-size: 15px; color: var(--text-primary); }
 
 @media (max-width: 640px) {
-  .tagpicker-label { min-width: 100%; }
   .material-item-row { flex-wrap: wrap; }
   .material-item-row input { flex: 1 1 100%; }
 }
@@ -780,31 +791,59 @@ html { -webkit-text-size-adjust: 100%; }
    長い日本語を1つの段落で流すと読めない。行で区切り、
    見出しと英語の例が目に入るようにする。 */
 .teaching-note {
-  margin: 10px 0; padding: 10px 12px;
-  border: 1px solid var(--border); border-left: 3px solid var(--series-1);
-  border-radius: 8px; background: var(--surface-1);
+  margin: 10px 0;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-1);
 }
-.teaching-note--todo { border-left-color: var(--series-2); }
+/* 畳んでいるときは、ただの1行の見出しに見えるようにする。
+   囲みの主張を弱め、開いたときだけ中身の枠に見せる */
+.teaching-note[open] { background: var(--surface-2); }
 .teaching-note-title {
-  font-size: 12px; letter-spacing: .04em; color: var(--text-secondary); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; cursor: pointer; list-style: none;
+  font-size: 12.5px; letter-spacing: .03em; color: var(--text-secondary);
 }
-.teaching-note-list { list-style: none; margin: 0; padding: 0; }
+.teaching-note-title::-webkit-details-marker { display: none; }
+.teaching-note-title:hover { color: var(--text-primary); }
+/* ▸ / ▾。**押せることが見て分かる形にする** */
+.teaching-note-caret {
+  width: 0; height: 0; flex: none;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  transition: transform .12s ease;
+}
+.teaching-note[open] .teaching-note-caret { transform: rotate(90deg); }
+.teaching-note-label { font-weight: 600; }
+.teaching-note--point .teaching-note-label { color: var(--series-1); }
+.teaching-note--todo  .teaching-note-label { color: var(--series-2); }
+.teaching-note-count { margin-left: auto; font-size: 11.5px; color: var(--text-muted); }
+
+.teaching-note-list {
+  list-style: none; margin: 0; padding: 2px 12px 11px;
+  border-top: 1px solid var(--border);
+}
 .teaching-note-list > li {
-  position: relative; padding-left: 14px; margin-bottom: 8px;
-  font-size: 14px; line-height: 1.9; color: var(--text-primary);
+  position: relative; padding: 7px 0 7px 15px;
+  font-size: 14px; line-height: 1.85; color: var(--text-primary);
 }
-.teaching-note-list > li:last-child { margin-bottom: 0; }
+/* 行と行の間に細い線を引く。1行が2行に折り返しても、
+   どこまでが1つの指摘なのかが分かる */
+.teaching-note-list > li + li { border-top: 1px dashed var(--border); }
 .teaching-note-list > li::before {
-  content: ''; position: absolute; left: 0; top: 12px;
-  width: 5px; height: 5px; border-radius: 50%; background: var(--border);
+  content: ''; position: absolute; left: 2px; top: 1.05em;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted);
 }
-.teaching-note-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.teaching-note-head {
+  display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline;
+  padding-left: 0;
+}
 .teaching-note-head::before { display: none; }
-.teaching-note-head { padding-left: 0; }
 .teaching-note-tag {
-  padding: 1px 8px; border-radius: 999px;
-  background: var(--series-1); color: #fff; font-size: 12px; white-space: nowrap;
+  padding: 1px 9px; border-radius: 999px;
+  background: var(--series-1); color: #fff;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
 }
+.teaching-note--todo .teaching-note-tag { background: var(--series-2); }
 /* 日本語の中の英語。地の文に埋もれさせない */
 .en-term { font-weight: 600; letter-spacing: .01em; }
 
@@ -1086,6 +1125,10 @@ html { -webkit-text-size-adjust: 100%; }
   --note-bg:      #faf4e8;
   --voice-a:      #2f6f86;   /* 会話の1人目 */
   --voice-b:      #8a5588;   /* 会話の2人目 */
+  --speak-bg:     #eef4f7;   /* 読み上げ中の行。橙は疲れる(2026-08) */
+  --speak-bar:    #7fa8bd;
+  --read-bg:      #cfe3ed;   /* いま読んでいる語 */
+  --read-fg:      #14343f;
 
   flex: 1; overflow-y: auto;
   margin: 16px auto; padding: 28px 32px 60px;
@@ -1142,6 +1185,33 @@ html { -webkit-text-size-adjust: 100%; }
   box-shadow: 0 1px 0 0 var(--unknown-bar);
 }
 .etext-word.is-known { color: inherit; opacity: .72; }
+
+/* ── いま読み上げている語 ──────────────────────────────────
+   行のかたまりだけを光らせていると、どこを読んでいるのか分からない
+   (2026-08 利用者の指定)。**語ごとに、滑らかに移っていく。**
+
+   ・色は控えめにする。1語ずつ点滅すると、かえって目が疲れる
+   ・動くのは背景の色だけ。**字の大きさや太さは変えない。**
+     太さを変えると幅が変わり、行が組み直されて文字が跳ねる
+   ・合図を出さない端末(iOS の Safari)ではここが一度も付かない。
+     そのぶん行のかたまりの色が残るので、目印が消えることはない */
+.etext-word.is-reading {
+  background: var(--reading-bg);
+  color: var(--reading-fg);
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--reading-bg);
+  transition: background-color .12s linear, color .12s linear;
+}
+.lesson-sheet .etext-word.is-reading {
+  background: var(--read-bg); color: var(--read-fg);
+  box-shadow: 0 0 0 2px var(--read-bg);
+}
+/* 読み上げの色は刷らない。途中で刷ることがある */
+@media print { .etext-word.is-reading { background: none; color: inherit; box-shadow: none; } }
+/* 「動きを減らす」設定の端末では、色を動かさない */
+@media (prefers-reduced-motion: reduce) {
+  .etext-word.is-reading { transition: none; }
+}
 
 .etext-pop {
   position: absolute; left: 0; top: 1.6em; z-index: 40;
@@ -1304,8 +1374,8 @@ html { -webkit-text-size-adjust: 100%; }
    汚れて見える(2026-08 の指摘)。余白は色が付いていないときも同じだけ
    取ってあるので、色が移っても行がずれない。 */
 .lesson-items > li.is-speaking {
-  background: #fdf3d9;
-  box-shadow: inset 5px 0 0 #d99e2b;
+  background: var(--speak-bg);
+  box-shadow: inset 5px 0 0 var(--speak-bar);
   border-radius: 6px;
   border-bottom-color: transparent;
 }
@@ -1538,3 +1608,69 @@ html { -webkit-text-size-adjust: 100%; }
   display: block; font-size: .68em; margin-bottom: 2px;
 }
 .lesson-sheet .lesson-heard-label { color: var(--accent); }
+
+/* ── プレイン(色を使わない)──────────────────────────────────
+   「色が多いと疲れる」という感じ方もあるため、色を足す前の
+   黒とグレーだけの見え方に戻せるようにした(2026-08 利用者の指定)。
+
+   **色を1か所ずつ打ち消して回らない。** 変数だけを差し替える。
+   打ち消して回ると、色を足すたびにここへ足し忘れる。
+
+   ボタンやタブの青は残す。**あれは色ではなく「押せる」という合図**で、
+   消すと押せる場所が分からなくなる。ここで消すのは、
+   訳・解答・補足・品詞といった**中身の色分け**だけ。
+
+   明るい / 暗い とは別のものなので、既存の変数(--surface-2 など)を
+   借りる。そうすれば、明るい側・暗い側の両方で自動的に成り立つ。 */
+:root[data-palette="plain"] {
+  --speaking-bg:  var(--surface-2);
+  --speaking-bar: var(--text-muted);
+  --reading-bg:   var(--border);
+  --reading-fg:   var(--text-primary);
+
+  --gloss-head-bg:  var(--surface-2);
+  --gloss-phonetic: var(--text-muted);
+  --gloss-note:     var(--text-secondary);
+  --gloss-note-bg:  var(--surface-2);
+
+  --pos-noun:   var(--text-secondary);  --pos-noun-bg:   var(--surface-2);
+  --pos-verb:   var(--text-secondary);  --pos-verb-bg:   var(--surface-2);
+  --pos-adj:    var(--text-secondary);  --pos-adj-bg:    var(--surface-2);
+  --pos-adv:    var(--text-secondary);  --pos-adv-bg:    var(--surface-2);
+  --pos-conj:   var(--text-secondary);  --pos-conj-bg:   var(--surface-2);
+  --pos-phrase: var(--text-secondary);  --pos-phrase-bg: var(--surface-2);
+}
+
+/* 紙(大きく表示)。紙は常に白なので、灰色は値で直接書く */
+:root[data-palette="plain"] .lesson-sheet {
+  --accent:       #3a4149;   --accent-bg:    #f1f2f4;
+  --answer:       #3a4149;   --answer-bg:    #f1f2f4;
+  --translate:    #5a646e;   --translate-bg: #f5f6f7;
+  --note:         #5a646e;   --note-bg:      #f5f6f7;
+  --voice-a:      #24292f;   --voice-b:      #5a646e;
+  --speak-bg:     #f1f2f4;   --speak-bar:    #9aa3ac;
+  --read-bg:      #dfe3e7;   --read-fg:      #14181c;
+}
+/* 紙の上の吹き出しも、そろえて灰色にする */
+:root[data-palette="plain"] .lesson-sheet .etext-pop {
+  --gloss-head-bg:  #f1f2f4;
+  --gloss-phonetic: #8b949e;
+  --gloss-note:     #5a646e;
+  --gloss-note-bg:  #f5f6f7;
+  --pos-noun:   #5a646e;  --pos-noun-bg:   #f1f2f4;
+  --pos-verb:   #5a646e;  --pos-verb-bg:   #f1f2f4;
+  --pos-adj:    #5a646e;  --pos-adj-bg:    #f1f2f4;
+  --pos-adv:    #5a646e;  --pos-adv-bg:    #f1f2f4;
+  --pos-conj:   #5a646e;  --pos-conj-bg:   #f1f2f4;
+  --pos-phrase: #5a646e;  --pos-phrase-bg: #f1f2f4;
+}
+/* 指導ポイントの見出しと札。ここだけは変数を使っていないので個別に */
+:root[data-palette="plain"] .teaching-note--point .teaching-note-label,
+:root[data-palette="plain"] .teaching-note--todo  .teaching-note-label {
+  color: var(--text-primary);
+}
+:root[data-palette="plain"] .teaching-note-tag,
+:root[data-palette="plain"] .teaching-note--todo .teaching-note-tag {
+  background: var(--text-secondary);
+}
+:root[data-palette="plain"] .teaching-note { border-left: 0; }

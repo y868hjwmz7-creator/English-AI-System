@@ -58,6 +58,9 @@ export default function PassagePractice({
   // 音読・シャドーイングの差は保たれる
   const [rateId, setRateId] = useState(loadRateId)
   const [speakingId, setSpeakingId] = useState(null)
+  // いま読み上げている語の位置(何文字目か)。合図を出さない端末では
+  // null のままで、これまでどおり発言ごとの色分けだけが残る
+  const [readingAt, setReadingAt] = useState(null)
   const [listeningId, setListeningId] = useState(null)
   const [results, setResults] = useState({})   // 段落ごとの結果
   const [notice, setNotice] = useState(null)
@@ -96,6 +99,7 @@ export default function PassagePractice({
     stopAllRef.current = null
     stopSpeaking()
     setSpeakingId(null)
+    setReadingAt(null)
   }
 
   const playOne = (item) => {
@@ -103,12 +107,18 @@ export default function PassagePractice({
     if (speakingId === item.id) { stopPlaying(); return }
     stopPlaying()
     setSpeakingId(item.id)
-    speak(item.audio_text || item.prompt_en,
-      { voice: voiceFor(cast, item.speaker, voice), rate: rateOf(rateId, current.rate) })
+    speak(item.audio_text || item.prompt_en, {
+      voice: voiceFor(cast, item.speaker, voice),
+      rate: rateOf(rateId, current.rate),
+      onWord: (w) => setReadingAt(w ? w.charIndex : null),
+    })
     // 読み終わりの合図は端末によって来ないことがあるため、
     // 語数からおおよその時間で戻す。表示が戻らないより実害が小さい。
     const seconds = Math.max(2, (item.prompt_en ?? '').split(/\s+/).length / 2.2)
-    window.setTimeout(() => setSpeakingId((id) => (id === item.id ? null : id)), seconds * 1000)
+    window.setTimeout(() => {
+      setSpeakingId((id) => (id === item.id ? null : id))
+      setReadingAt(null)
+    }, seconds * 1000)
   }
 
   /**
@@ -128,7 +138,9 @@ export default function PassagePractice({
         onIndex: (i) => {
           if (i === null) stopAllRef.current = null
           setSpeakingId(i === null ? null : playable[i]?.id ?? null)
+          setReadingAt(null)   // 次の発言に移ったら、前の語の色を消す
         },
+        onWord: (w) => setReadingAt(w ? w.charIndex : null),
       },
     )
   }
@@ -205,7 +217,8 @@ export default function PassagePractice({
               )}
               <p className="passage-en">
                 <EnglishText text={item.prompt_en} level={level}
-                             statuses={wordStatuses} onMark={onMarkWord} />
+                             statuses={wordStatuses} onMark={onMarkWord}
+                             readingAt={speakingId === item.id ? readingAt : null} />
               </p>
               {showJa && item.prompt_ja && <p className="passage-ja">{item.prompt_ja}</p>}
 

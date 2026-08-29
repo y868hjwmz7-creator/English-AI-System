@@ -26,7 +26,7 @@ const bestVoice = () => {
 // Listen と「止める」が並ぶと、押し分けが一瞬わからない。
 export default function SpeakButton({
   text, label = 'Listen', rate = null, className = '', voice: given = null,
-  onPlayingChange = null,
+  onPlayingChange = null, onWord = null,
 }) {
   // 速さの指定が無ければ、端末に覚えさせた速さを使う。
   // こうしておくと、速さを選ぶ場所が無い画面でも同じ速さで鳴る
@@ -48,14 +48,15 @@ export default function SpeakButton({
   const setState = (on) => { setPlaying(on); onPlayingChange?.(on) }
 
   const play = () => {
-    if (playing) { stopSpeaking(); setState(false); return }
+    if (playing) { stopSpeaking(); setState(false); onWord?.(null); return }
     stopSpeaking()
     setState(true)
-    speak(text, { voice, rate: speed })
+    // いま読んでいる語の位置を親へ知らせる(色を付けるため)
+    speak(text, { voice, rate: speed, onWord })
     // 読み終わりの合図は端末によって来ないことがあるため、
     // 語数からおおよその時間で戻す。押せないままになるより実害が小さい。
     const seconds = Math.max(2, String(text).split(/\s+/).length / 2.2)
-    window.setTimeout(() => setState(false), seconds * 1000)
+    window.setTimeout(() => { setState(false); onWord?.(null) }, seconds * 1000)
   }
 
   return (

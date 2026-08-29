@@ -239,14 +239,43 @@ export function hasGoodVoice(voices) {
 }
 
 /**
+ * **いま読んでいる語**を知らせる。
+ *
+ * 【なぜ要るか】(2026-08 利用者の指定)
+ *   文のかたまりごとに色を付けていたが、どこを読んでいるのか分からない。
+ *   語ごとに、滑らかに移っていくようにする。
+ *
+ * 【仕組み】
+ *   ブラウザは `boundary` で「いま何文字目から何文字を読み始めた」だけを
+ *   教えてくれる。語そのものは渡されないので、**文字の位置**を画面へ返し、
+ *   受け取った側が語を突き止める(`splitWords()` の `at`)。
+ *
+ * 【対応していない端末がある】
+ *   **iOS の Safari は `boundary` を出さないことがある。**
+ *   その場合はこの合図が一度も来ないだけで、
+ *   これまでどおり「文のかたまり」の色分けが残る。**何も壊れない。**
+ *   合図が来ない端末で語の色だけに頼ると、どこも光らなくなる。
+ */
+const attachWordTracking = (utterance, onWord) => {
+  if (!onWord) return
+  utterance.onboundary = (e) => {
+    // 語の切れ目だけを見る。文の切れ目(sentence)は無視する
+    if (e.name && e.name !== 'word') return
+    if (typeof e.charIndex !== 'number') return
+    onWord({ charIndex: e.charIndex, charLength: e.charLength ?? 0 })
+  }
+}
+
+/**
  * 英文を読み上げる。
  * @param {string} text 読み上げる英文
  * @param {object} options { voice, rate }
  */
-export function speak(text, { voice, rate = 0.9 } = {}) {
+export function speak(text, { voice, rate = 0.9, onWord } = {}) {
   if (!isSpeechSupported()) return false
   window.speechSynthesis.cancel() // 前の読み上げが残っていたら止める
   const utterance = new SpeechSynthesisUtterance(text)
+  attachWordTracking(utterance, onWord)
   utterance.lang = voice?.lang || 'en-US'
   // 声の指定が拒否される場合がある。失敗しても読み上げ自体は続けたいので、
   // ここで握りつぶして端末の既定の声に任せる。
@@ -277,7 +306,7 @@ export function speak(text, { voice, rate = 0.9 } = {}) {
  * @param {object} options { rate, onIndex } onIndex は再生中の番号(終わりで null)
  * @returns {Function} 止めるための関数
  */
-export function speakSequence(parts, { rate = 0.9, onIndex } = {}) {
+export function speakSequence(parts, { rate = 0.9, onIndex, onWord } = {}) {
   const list = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
   if (!isSpeechSupported() || !list.length) return () => {}
   window.speechSynthesis.cancel()
@@ -288,11 +317,12 @@ export function speakSequence(parts, { rate = 0.9, onIndex } = {}) {
 
   const next = () => {
     if (timer) { window.clearTimeout(timer); timer = null }
-    if (stopped || index >= list.length) { onIndex?.(null); return }
+    if (stopped || index >= list.length) { onIndex?.(null); onWord?.(null); return }
     const part = list[index]
     onIndex?.(index)
 
     const utterance = new SpeechSynthesisUtterance(part.text)
+    attachWordTracking(utterance, onWord ? (at) => onWord({ ...at, index }) : null)
     utterance.lang = part.voice?.lang || 'en-US'
     try {
       if (part.voice) utterance.voice = part.voice
@@ -326,6 +356,7 @@ export function speakSequence(parts, { rate = 0.9, onIndex } = {}) {
     if (timer) window.clearTimeout(timer)
     window.speechSynthesis.cancel()
     onIndex?.(null)
+    onWord?.(null)
   }
 }
 

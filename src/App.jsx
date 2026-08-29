@@ -8,6 +8,7 @@ import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import Tabs from './components/Tabs.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
+import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
 import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadState, resetState, saveState } from './lib/store.js'
@@ -25,9 +26,11 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [authChecked, setAuthChecked] = useState(!isSupabaseConfigured)
   const [theme, setTheme] = useState(loadTheme)
+  const [palette, setPalette] = useState(loadPalette)
 
   // 選んだ配色を画面に反映する。最初の1回も含めてここで行う
   useEffect(() => { applyTheme(theme) }, [theme])
+  useEffect(() => { applyPalette(palette) }, [palette])
 
   // 起動時に一度、以降はログイン状態が変わるたびに追いかける
   useEffect(() => {
@@ -123,6 +126,19 @@ export default function App() {
                   onClick={() => setTheme(t.id)}
                 >
                   {t.label}
+                </button>
+              ))}
+            </div>
+            {/* 色を使うかどうか。**明るい / 暗い とは別のもの。**
+                色が多いほうが疲れる、という感じ方もある(2026-08 の指定) */}
+            <div className="theme-switch" role="group" aria-label="色づかい">
+              {PALETTES.map((p) => (
+                <button
+                  key={p.id} type="button" title={p.hint}
+                  className={`theme-btn${palette === p.id ? ' is-active' : ''}`}
+                  onClick={() => setPalette(p.id)}
+                >
+                  {p.label}
                 </button>
               ))}
             </div>

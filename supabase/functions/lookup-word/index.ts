@@ -52,6 +52,37 @@ const cors = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+/** Claude からの断り。言い換え済みの文を持たせて、そのまま画面に出せるようにする */
+class ApiError extends Error {}
+
+/**
+ * Claude からの断りを、**利用者が次に何をすればよいか分かる日本語**にする。
+ *
+ * そのまま出すと `400 {"type":"error","error":{...}}` という英語の JSON が
+ * 吹き出しに並び、何が起きたのか分からない(2026-08 実機)。
+ * とくに**残高切れ**は、待っても直らず、支払いをしないと直らない。
+ * 「調べられませんでした」だけでは、いつまでも原因にたどり着けない。
+ */
+const humanApiError = (status: number, raw: string) => {
+  const text = String(raw ?? '')
+  if (/credit balance is too low|insufficient[_ ]?(quota|credit)|billing/i.test(text)) {
+    return 'Claude の残高が足りません。'
+      + 'Anthropic Console → Plans & Billing で追加してください。'
+      + '(すでに調べたことのある語は、これまでどおり出ます)'
+  }
+  if (status === 401 || /invalid x-api-key|authentication/i.test(text)) {
+    return 'Claude の鍵が正しくありません。'
+      + 'Supabase の Edge Functions → Secrets の ANTHROPIC_API_KEY を確認してください。'
+  }
+  if (status === 429 || /rate.?limit/i.test(text)) {
+    return '短い時間に調べすぎました。少し待ってからお試しください。'
+  }
+  if (status >= 500) {
+    return 'Claude 側が一時的に応答していません。少し待ってからお試しください。'
+  }
+  return `調べられませんでした(${status})。${text.slice(0, 160)}`
+}
+
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -355,7 +386,11 @@ Deno.serve(async (req) => {
       })
       if (!res.ok) {
         const text = await res.text()
-        return reply({ error: `まとめて調べられませんでした: ${res.status} ${text.slice(0, 200)}` }, 200)
+        // **裏で先に引いているだけなので、画面には出さない。**
+        // 直せる種類の断り(残高・鍵)かどうかを画面に伝え、
+        // それ以上むだに呼ばないようにする
+        const message = humanApiError(res.status, text)
+        return reply({ error: message, fatal: /残高|鍵/.test(message) }, 200)
       }
       const data = await res.json()
       const block = (data.content ?? []).find((b: { type: string }) => b.type === 'tool_use')
@@ -434,7 +469,7 @@ Deno.serve(async (req) => {
       })
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(`${res.status} ${text.slice(0, 300)}`)
+        throw new ApiError(humanApiError(res.status, text))
       }
       return await res.json()
     }
@@ -513,13 +548,13 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     console.error(e)
+    // すでに日本語に言い換えてあるものは、そのまま出す。
+    // **残高切れ・鍵ちがいは待っても直らない。** その場合は fatal を付けて、
+    // 画面側にこれ以上むだに呼ばせない
+    if (e instanceof ApiError) {
+      return reply({ error: e.message, fatal: /残高|鍵/.test(e.message) }, 200)
+    }
     const message = e instanceof Error ? e.message : String(e)
-    if (/authentication|invalid x-api-key|401/i.test(message)) {
-      return reply({ error: 'Claude の鍵が正しくありません。' }, 200)
-    }
-    if (/rate.?limit|429/i.test(message)) {
-      return reply({ error: '短い時間に調べすぎました。少し待ってからお試しください。' }, 200)
-    }
     return reply({ error: `調べられませんでした: ${message}` }, 200)
   }
 })

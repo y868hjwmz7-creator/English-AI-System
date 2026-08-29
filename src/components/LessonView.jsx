@@ -27,6 +27,7 @@ import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
+import { PALETTES, applyPalette, loadPalette } from '../lib/palette.js'
 
 const SIZES = [
   { id: 'm', label: '標準' },
@@ -65,6 +66,14 @@ export default function LessonView({
   // 通しで聞いているとき、どこを読んでいるのか目で追えないと
   // オーバーラッピングもシャドーイングもできない(2026-08 の要望)。
   const [speakingKey, setSpeakingKey] = useState(null)
+  // いま読み上げている語の位置(もとの英文の何文字目か)。
+  // **語ごとに色を移していくために要る**(2026-08 利用者の指定)。
+  // 合図を出さない端末(iOS の Safari)では null のままで、
+  // これまでどおり「文のかたまり」の色分けだけが残る
+  const [readingAt, setReadingAt] = useState(null)
+  // 色を使うかどうか。**ここで選べることが要る。**
+  // レッスン中はこの画面から離れないので、上の見出しまで戻れない
+  const [palette, setPalette] = useState(loadPalette)
   const stopAllRef = useRef(null)
 
   /** 通しの読み上げを止める */
@@ -162,7 +171,7 @@ export default function LessonView({
 
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
-    if (playingAll) { stopAll(); return }
+    if (playingAll) { stopAll(); setReadingAt(null); return }
     // 先に「読めるもの」だけに絞る。絞ったあとで番号を数えないと、
     // 色を付ける場所が1つずれる
     const playable = (section?.items ?? [])
@@ -177,7 +186,9 @@ export default function LessonView({
         onIndex: (i) => {
           if (i === null) { stopAllRef.current = null; setPlayingAll(false) }
           setSpeakingKey(i === null ? null : playable[i]?.key ?? null)
+          setReadingAt(null)   // 次の文に移ったら、前の語の色を消す
         },
+        onWord: (w) => setReadingAt(w ? w.charIndex : null),
       },
     )
   }
@@ -219,6 +230,17 @@ export default function LessonView({
               ))}
             </select>
           </label>
+          {/* 色づかい。カラー = 訳・解答・補足を色で見分ける /
+              プレイン = 黒とグレーだけ(2026-08 利用者の指定) */}
+          <div className="lesson-sizes">
+            {PALETTES.map((p) => (
+              <button key={p.id} type="button" title={p.hint}
+                      className={`theme-btn${palette === p.id ? ' is-active' : ''}`}
+                      onClick={() => { setPalette(p.id); applyPalette(p.id) }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
           <div className="lesson-sizes">
             {SIZES.map((s) => (
               <button key={s.id} type="button"
@@ -287,7 +309,8 @@ export default function LessonView({
                   {!type?.hidePromptFromLearner && it.prompt_en && (
                     <div className="lesson-en">
                       <EnglishText text={it.prompt_en} level={material.level}
-                                   statuses={wordStatuses} onMark={onMarkWord} />
+                                   statuses={wordStatuses} onMark={onMarkWord}
+                                   readingAt={speakingKey === key(it, i) ? readingAt : null} />
                     </div>
                   )}
                   {/* 本文(記事・会話)の訳は、はじめは伏せる。
@@ -309,7 +332,11 @@ export default function LessonView({
                       text={it[type.audioFrom]}
                       voice={voiceFor(cast, it.speaker)}
                       rate={rateOf(rateId)}
-                      onPlayingChange={(on) => setSpeakingKey(on ? key(it, i) : null)}
+                      onPlayingChange={(on) => {
+                        setSpeakingKey(on ? key(it, i) : null)
+                        if (!on) setReadingAt(null)
+                      }}
+                      onWord={(w) => setReadingAt(w ? w.charIndex : null)}
                     />
                   )}
 

@@ -35,19 +35,25 @@ export const normWord = (text) =>
     .trim()
     .replace(/^[\s'-]+|[\s'-]+$/g, '')
 
-/** 英文を「語」と「語でないもの」に分ける。区切りもそのまま残す */
+/**
+ * 英文を「語」と「語でないもの」に分ける。区切りもそのまま残す。
+ *
+ * `at` は、もとの英文の何文字目から始まるか。
+ * **読み上げ中の語に色を付けるのに要る。** ブラウザは「いま何文字目を
+ * 読んでいるか」しか教えてくれないので、文字の位置で語を突き止める。
+ */
 export function splitWords(text) {
   const parts = []
   const re = /[A-Za-z][A-Za-z'-]*/g
   let last = 0
   let m = re.exec(text ?? '')
   while (m) {
-    if (m.index > last) parts.push({ word: false, text: text.slice(last, m.index) })
-    parts.push({ word: true, text: m[0], norm: normWord(m[0]) })
+    if (m.index > last) parts.push({ word: false, text: text.slice(last, m.index), at: last })
+    parts.push({ word: true, text: m[0], norm: normWord(m[0]), at: m.index })
     last = m.index + m[0].length
     m = re.exec(text)
   }
-  if (last < (text ?? '').length) parts.push({ word: false, text: text.slice(last) })
+  if (last < (text ?? '').length) parts.push({ word: false, text: text.slice(last), at: last })
   return parts
 }
 
@@ -196,8 +202,18 @@ work works day time year people way thing things`.trim().split(/\s+/))
 const PREFETCH_LIMIT = 24
 const prefetchDone = new Set()   // 同じ本文を二度先読みしない
 
+/**
+ * **待っても直らない断りが返ったら、先読みをやめる。**
+ *
+ * 残高切れや鍵ちがいは、何度呼んでも同じ結果になる。
+ * それでも教材を開くたびに10語ずつ呼びに行くと、
+ * 直らないことのために待たされ続ける(2026-08 実機で残高切れを確認)。
+ * この画面を読み込み直すまで、先読みは止めたままにする。
+ */
+let prefetchStopped = false
+
 export async function prefetchGlosses(entries, { level = 'B1' } = {}) {
-  if (!supabase) return
+  if (!supabase || prefetchStopped) return
   const list = (entries ?? []).filter((e) => e && e.text)
   if (!list.length) return
 
@@ -240,7 +256,12 @@ export async function prefetchGlosses(entries, { level = 'B1' } = {}) {
       body: { words: chunk.map(({ word, sentence, contextKey }) => ({ word, sentence, contextKey })), level },
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
-    if (error || data?.error) return   // 失敗したら静かにやめる(触れれば引ける)
+    // 失敗したら静かにやめる(触れれば引ける)。
+    // **直らない種類の断りなら、この画面のあいだは二度と先読みしない**
+    if (error || data?.error) {
+      if (data?.fatal) prefetchStopped = true
+      return
+    }
     for (const g of data?.glosses ?? []) {
       memoryCache.set(cacheKey(g.word_norm, g.context_key), withSenses(g))
     }
