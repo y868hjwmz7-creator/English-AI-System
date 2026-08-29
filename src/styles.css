@@ -1179,12 +1179,28 @@ html { -webkit-text-size-adjust: 100%; }
 .etext-word:hover, .etext-word.is-open {
   background: var(--surface-2); border-bottom-color: var(--text-muted);
 }
-/* 知らなかった語。**次に開いても色が残る**(2026-08 の要望) */
+/* 知らなかった語。**次に開いても色が残る**(2026-08 の要望)。
+   ただし**目立たせすぎない**(2026-08 の指摘)。地の色を行の高さいっぱいに
+   敷くと、本文が縞模様になって読めなくなる。
+   色は下半分だけに薄く敷き、下線で示す。 */
 .etext-word.is-unknown {
-  background: var(--unknown-bg);
-  box-shadow: 0 1px 0 0 var(--unknown-bar);
+  background: linear-gradient(var(--unknown-bg), var(--unknown-bg))
+    no-repeat bottom / 100% .62em;
+  border-bottom: 2px solid var(--unknown-bar);
+  border-radius: 0;
+  box-shadow: none;
 }
 .etext-word.is-known { color: inherit; opacity: .72; }
+
+/* なぞって選んでいる語(まとめて1つの言い回しとして引く)。
+   **1語ずつの色とは別の見え方にする。** 同じだと、いま何を選んで
+   いるのか分からない */
+.etext-word.is-picked {
+  background: var(--reading-bg); color: var(--reading-fg);
+  border-radius: 2px; border-bottom-color: transparent;
+}
+.etext-pop--paper ~ * .etext-word.is-picked { background: var(--read-bg); }
+.lesson-sheet .etext-word.is-picked { background: var(--read-bg); color: var(--read-fg); }
 
 /* ── いま読み上げている語 ──────────────────────────────────
    行のかたまりだけを光らせていると、どこを読んでいるのか分からない
@@ -1247,8 +1263,11 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .lesson-sheet .phrases-label { color: var(--ink-faint); }
 
+/* 吹き出しは body の直下に出す(`GlossPopover` が portal で置く)。
+   紙は overflow-y: auto なので、横方向にも切ってしまう。
+   親の中に置くと端の語で切れ、紙が横にずれる原因にもなった(2026-08 実機) */
 .etext-pop {
-  position: absolute; left: 0; top: 1.6em; z-index: 40;
+  position: fixed; z-index: 200;
   display: flex; flex-direction: column; gap: 4px;
   min-width: 272px; max-width: min(90vw, 384px);
   padding: 10px 26px 10px 12px;
@@ -1520,7 +1539,8 @@ html { -webkit-text-size-adjust: 100%; }
 /* 紙の中の吹き出し。**紙は暗い配色でも白のまま**なので、
    ここでも明るい側の色に決め打ちする(第5.22.6節①と同じ話)。
    品詞の色は明るい背景向けなので、そのまま使える */
-.lesson-sheet .etext-pop {
+.etext-pop--paper {
+  background: #fdfcf9; color: #24292f; border-color: #e7e3da;
   --gloss-head-bg: #f2f5f8;
   --gloss-phonetic: #5f7a8a;
   --gloss-note:    #7a5f2e;
@@ -1534,24 +1554,24 @@ html { -webkit-text-size-adjust: 100%; }
   background: #fff; border-color: var(--rule);
   box-shadow: 0 10px 28px rgba(36, 41, 47, .18);
 }
-.lesson-sheet .etext-pop-head { border-bottom-color: var(--rule); }
-.lesson-sheet .etext-pop-head strong { color: var(--ink); }
-.lesson-sheet .etext-pos--noun   { color: var(--pos-noun); }
-.lesson-sheet .etext-pos--verb   { color: var(--pos-verb); }
-.lesson-sheet .etext-pos--adj    { color: var(--pos-adj); }
-.lesson-sheet .etext-pos--adv    { color: var(--pos-adv); }
-.lesson-sheet .etext-pos--conj   { color: var(--pos-conj); }
-.lesson-sheet .etext-pos--phrase { color: var(--pos-phrase); }
-.lesson-sheet .etext-phonetic { color: var(--gloss-phonetic); }
+.etext-pop--paper .etext-pop-head { border-bottom-color: var(--rule); }
+.etext-pop--paper .etext-pop-head strong { color: var(--ink); }
+.etext-pop--paper .etext-pos--noun   { color: var(--pos-noun); }
+.etext-pop--paper .etext-pos--verb   { color: var(--pos-verb); }
+.etext-pop--paper .etext-pos--adj    { color: var(--pos-adj); }
+.etext-pop--paper .etext-pos--adv    { color: var(--pos-adv); }
+.etext-pop--paper .etext-pos--conj   { color: var(--pos-conj); }
+.etext-pop--paper .etext-pos--phrase { color: var(--pos-phrase); }
+.etext-pop--paper .etext-phonetic { color: var(--gloss-phonetic); }
 .lesson-sheet .etext-listen { margin-top: 0; }
 .lesson-sheet .etext-sense-mean { color: var(--ink-soft); }
 .lesson-sheet .etext-sense.is-main .etext-sense-mean { color: var(--ink); }
-.lesson-sheet .etext-pop-note { color: var(--gloss-note); }
+.etext-pop--paper .etext-pop-note { color: var(--gloss-note); }
 .lesson-sheet .etext-sense-no,
-.lesson-sheet .etext-pop-ex,
-.lesson-sheet .etext-pop-busy,
-.lesson-sheet .etext-pop-time,
-.lesson-sheet .etext-pop-close { color: var(--ink-faint); }
+.etext-pop--paper .etext-pop-ex,
+.etext-pop--paper .etext-pop-busy,
+.etext-pop--paper .etext-pop-time,
+.etext-pop--paper .etext-pop-close { color: var(--ink-faint); }
 .lesson-sheet .etext-word:hover,
 .lesson-sheet .etext-word.is-open { background: var(--accent-bg); border-bottom-color: var(--accent); }
 .lesson-sheet .etext-word.is-unknown { background: #fbe6e3; box-shadow: 0 1px 0 0 #c9534f; }
@@ -1690,7 +1710,7 @@ html { -webkit-text-size-adjust: 100%; }
   --read-bg:      #dfe3e7;   --read-fg:      #14181c;
 }
 /* 紙の上の吹き出しも、そろえて灰色にする */
-:root[data-palette="plain"] .lesson-sheet .etext-pop {
+:root[data-palette="plain"] .etext-pop--paper {
   --gloss-head-bg:  #f1f2f4;
   --gloss-phonetic: #8b949e;
   --gloss-note:     #5a646e;

@@ -35,7 +35,7 @@
  *   紙には語の枠も色も要らない。`no-print` で消す。
  */
 import { useEffect, useRef, useState } from 'react'
-import { lookupWord, preloadGlosses, splitWords } from '../lib/vocab.js'
+import { lookupWord, normWord, preloadGlosses, splitWords } from '../lib/vocab.js'
 import GlossPopover from './GlossPopover.jsx'
 
 /** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
@@ -53,7 +53,49 @@ export default function EnglishText({
   const heldRef = useRef(false)    // 長押しで開いた直後か(続く click を捨てる)
   const touchRef = useRef(false)   // 直前の操作が「触る」だったか
   const rootRef = useRef(null)
+  const anchorRef = useRef(null)   // 吹き出しを出す位置(語 or なぞった範囲の先頭)
   const parts = splitWords(text ?? '')
+
+  // ── なぞって句を選ぶ ────────────────────────────────────
+  //
+  // 【なぜ要るか】(2026-08 利用者の指定)
+  //   > on の上でクリックし、house までドラッグしたら、まとめて
+  //   > ハイライトされ、そのフレーズの訳が出てくるようにできないか？
+  //
+  //   `on the house` のような言い回しは、1語ずつ見ても意味が分からない。
+  //   教材が拾った要点フレーズ(`PhraseChips`)だけでは、
+  //   **その場で気づいたものを調べられない。**
+  //
+  // 【ブラウザの範囲選択は使わない】
+  //   語には `user-select: none` を掛けてある(iPhone の長押しメニューを
+  //   止めるため)。外すとあの問題が戻る。そこで**自前でなぞりを見る。**
+  //   こうすると、マウスでも指でも同じ操作になる。
+  const dragFrom = useRef(null)          // なぞり始めた語
+  const [dragTo, setDragTo] = useState(null)   // いま指・カーソルの下にある語
+  const [range, setRange] = useState(null)     // 確定した範囲 [from, to]
+
+  /** その座標にある語の番号。無ければ null */
+  const wordAt = (x, y) => {
+    const el = document.elementFromPoint(x, y)?.closest?.('[data-widx]')
+    const n = el ? Number(el.dataset.widx) : NaN
+    return Number.isInteger(n) ? n : null
+  }
+
+  // なぞっている最中と、確定した範囲。どちらも同じ色で示す
+  const span = range ?? (dragFrom.current != null && dragTo != null
+    && dragTo !== dragFrom.current ? [dragFrom.current, dragTo] : null)
+  const lo = span ? Math.min(span[0], span[1]) : -1
+  const hi = span ? Math.max(span[0], span[1]) : -2
+
+  /** 吹き出しに出す状態。句を開いているときは**句そのもの**の状態 */
+  const popStatus = (() => {
+    if (!range) return null
+    const head = parts[range[0]]
+    const tail = parts[range[1]]
+    if (!head || !tail) return null
+    const phrase = (text ?? '').slice(head.at, tail.at + tail.text.length).trim()
+    return statuses?.get(normWord(phrase)) ?? null
+  })()
 
   // いま読み上げられている語。
   //
@@ -75,6 +117,9 @@ export default function EnglishText({
     setOpenIndex(null)
     setGloss(null)
     setError(null)
+    setRange(null)
+    dragFrom.current = null
+    setDragTo(null)
   }
 
   const open = async (index, part) => {
@@ -90,6 +135,32 @@ export default function EnglishText({
     setGloss(data)
   }
 
+  /**
+   * なぞった範囲を1つの言い回しとして引く。
+   * **もとの英文からそのまま切り出す。** 語を空白でつなぎ直すと、
+   * ハイフンやアポストロフィのある語で形が変わってしまう。
+   */
+  const openRange = async (from, to) => {
+    const a = Math.min(from, to)
+    const b = Math.max(from, to)
+    const head = parts[a]
+    const tail = parts[b]
+    if (!head?.word || !tail?.word) return
+    const phrase = (text ?? '').slice(head.at, tail.at + tail.text.length).trim()
+    if (!phrase) return
+
+    setRange([a, b])
+    setOpenIndex(a)
+    anchorRef.current = rootRef.current?.querySelector(`[data-widx="${a}"]`) ?? null
+    setGloss(null)
+    setError(null)
+    setBusy(true)
+    const { data, error: e } = await lookupWord({ word: phrase, sentence: text, level })
+    setBusy(false)
+    if (e) { setError(e); return }
+    setGloss(data)
+  }
+
   useEffect(() => cancelHold, [])
 
   // **本文が出た時点で、控えにある語をまとめて読んでおく。**
@@ -100,7 +171,13 @@ export default function EnglishText({
   // 外側を押す / Esc で閉じる。**留めたものを閉じる手段が要る**
   useEffect(() => {
     if (openIndex === null) return undefined
-    const onDown = (e) => { if (!rootRef.current?.contains(e.target)) close() }
+    const onDown = (e) => {
+      // 吹き出しは body の直下に出る(切られないため)。
+      // **中を押したときに閉じてはいけない**
+      if (rootRef.current?.contains(e.target)) return
+      if (e.target?.closest?.('.etext-pop')) return
+      close()
+    }
     const onKey = (e) => { if (e.key === 'Escape') close() }
     document.addEventListener('pointerdown', onDown)
     document.addEventListener('keydown', onKey)
@@ -112,8 +189,18 @@ export default function EnglishText({
 
 
   const mark = async (status) => {
+    if (!onMark) return
+    if (range) {
+      // なぞって選んだ言い回し。**語ではなく句として記録する**
+      const head = parts[range[0]]
+      const tail = parts[range[1]]
+      const phrase = (text ?? '').slice(head.at, tail.at + tail.text.length).trim()
+      await onMark(normWord(phrase), status, 'phrase')
+      close()
+      return
+    }
     const part = parts[openIndex]
-    if (!part || !onMark) return
+    if (!part) return
     await onMark(part.norm, status)
     close()
   }
@@ -129,18 +216,25 @@ export default function EnglishText({
           <span key={i} className="etext-word-wrap">
             <button
               type="button"
+              data-widx={i}
               className={`etext-word${status ? ` is-${status}` : ''}${isOpen ? ' is-open' : ''}`
-                + `${isReading ? ' is-reading' : ''}`}
+                + `${isReading ? ' is-reading' : ''}`
+                + `${i >= lo && i <= hi ? ' is-picked' : ''}`}
               aria-expanded={isOpen}
               // どの操作で来たかで分ける。**環境の当て推量に賭けない**
               onPointerDown={(e) => {
                 touchRef.current = e.pointerType === 'touch'
                 heldRef.current = false
+                // なぞりの起点。指でもマウスでも同じ
+                dragFrom.current = i
+                setDragTo(i)
+                setRange(null)
                 if (!touchRef.current) return
                 // 触る端末: 少し長めに触れたときだけ開く
                 cancelHold()
                 holdTimer.current = window.setTimeout(() => {
                   heldRef.current = true
+                  anchorRef.current = e.currentTarget
                   if (isOpen) close()
                   else open(i, part)
                 }, HOLD_MS)
@@ -148,14 +242,37 @@ export default function EnglishText({
               // iPhone・iPad の長押しメニュー(コピー / Google で検索)を出さない。
               // CSS の -webkit-touch-callout と合わせて二重に止める
               onContextMenu={(e) => e.preventDefault()}
-              onPointerUp={cancelHold}
-              onPointerCancel={cancelHold}
-              onPointerMove={() => { if (touchRef.current) cancelHold() }}
-              onClick={() => {
-                // 長押しで開いた直後の click は捨てる(すぐ閉じてしまうため)
+              onPointerUp={(e) => {
+                cancelHold()
+                const from = dragFrom.current
+                const to = wordAt(e.clientX, e.clientY)
+                dragFrom.current = null
+                setDragTo(null)
+                // **2語以上をなぞったら、まとめて1つの言い回しとして引く**
+                if (from != null && to != null && to !== from) {
+                  heldRef.current = true   // 続く click を捨てる
+                  openRange(from, to)
+                }
+              }}
+              onPointerCancel={() => {
+                cancelHold()
+                dragFrom.current = null
+                setDragTo(null)
+              }}
+              onPointerMove={(e) => {
+                if (dragFrom.current == null) return
+                const at = wordAt(e.clientX, e.clientY)
+                if (at != null && at !== dragTo) setDragTo(at)
+                // なぞり始めたら、長押しでの1語表示はやめる
+                if (at != null && at !== dragFrom.current) cancelHold()
+                else if (touchRef.current && at == null) cancelHold()
+              }}
+              onClick={(e) => {
+                // 長押し・なぞりで開いた直後の click は捨てる(すぐ閉じてしまうため)
                 if (heldRef.current) { heldRef.current = false; return }
                 // 触る端末では、軽く触れただけでは開かない
                 if (touchRef.current) return
+                anchorRef.current = e.currentTarget
                 if (isOpen) close()
                 else open(i, part)
               }}
@@ -164,11 +281,14 @@ export default function EnglishText({
             </button>
 
             {/* 開いたら、閉じる操作をするまで留まる。
-                離れた瞬間に閉じていたため、中のボタンを押せなかった */}
+                離れた瞬間に閉じていたため、中のボタンを押せなかった。
+                吹き出しは body の直下に出す(親に切られないため) */}
             {isOpen && (
               <GlossPopover
-                gloss={gloss} busy={busy} error={error} status={status}
-                fallbackText={part.text} deps={openIndex}
+                anchorEl={anchorRef.current}
+                gloss={gloss} busy={busy} error={error}
+                status={range ? popStatus : status}
+                fallbackText={part.text}
                 onMark={onMark ? (next) => mark(next) : null}
                 onClose={close}
               />

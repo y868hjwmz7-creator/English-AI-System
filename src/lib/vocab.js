@@ -413,6 +413,28 @@ export async function loadMyWordbook({ status = 'unknown', limit = 200, dueOnly 
 }
 
 /**
+ * 0015 を貼る前の Supabase 向けの控えめな書き込み。
+ *
+ * `mark_word()` がまだ無い環境で、**押しても何も起きない**状態を避ける。
+ * 箱(box)と次に出す日(due_on)は決められないので、
+ * 「知っていた / 知らなかった」だけを残す。
+ * 0015 を貼れば、この道は通らなくなる。
+ */
+async function legacySetWordStatus(norm, status, materialId) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return ng('ログインが必要です')
+  const { error } = await supabase.from('word_reviews').upsert({
+    learner_id: user.id,
+    word_norm: norm,
+    status,
+    material_id: materialId,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'learner_id,word_norm' })
+  if (error) return fail(error, '記録できませんでした')
+  return ok({ norm, status })
+}
+
+/**
  * 「知っていた」「知らなかった」を付ける。
  *
  * **次に出す日は、画面では決めない。** SQL の `mark_word()` に任せる
@@ -434,6 +456,14 @@ export async function setWordStatus(word, status, { kind = 'word', materialId = 
     p_kind: kind === 'phrase' ? 'phrase' : 'word',
     p_material: materialId,
   })
+  // **0015 をまだ貼っていない Supabase でも動くようにする。**
+  // 貼るまでのあいだ「押しても色が付かない」状態にしない(2026-08 実機)。
+  // 箱と次に出す日は付かないが、知っていた / 知らなかったは残る
+  if (error && /mark_word|function|schema cache|PGRST202/i.test(
+    `${error.message ?? ''} ${error.code ?? ''}`,
+  )) {
+    return legacySetWordStatus(norm, status, materialId)
+  }
   if (error) return fail(error, '記録できませんでした')
   // 次にいつ出るかを返す。「7日後にまた出ます」と画面に出すため
   return ok({ norm, ...(Array.isArray(data) ? data[0] : data) ?? {} })

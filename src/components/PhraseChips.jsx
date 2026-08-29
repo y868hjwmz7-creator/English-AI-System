@@ -35,6 +35,7 @@ export default function PhraseChips({
 }) {
   const list = (phrases ?? []).filter((p) => String(p?.text ?? '').trim())
   const [openIndex, setOpenIndex] = useState(null)
+  const anchorRef = useRef(null)
   const [gloss, setGloss] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -45,7 +46,12 @@ export default function PhraseChips({
   // 外側を押す / Esc で閉じる。**留めたものを閉じる手段が要る**
   useEffect(() => {
     if (openIndex === null) return undefined
-    const onDown = (e) => { if (!rootRef.current?.contains(e.target)) close() }
+    const onDown = (e) => {
+      // 吹き出しは body の直下に出る。**中を押したときに閉じてはいけない**
+      if (rootRef.current?.contains(e.target)) return
+      if (e.target?.closest?.('.etext-pop')) return
+      close()
+    }
     const onKey = (e) => { if (e.key === 'Escape') close() }
     document.addEventListener('pointerdown', onDown)
     document.addEventListener('keydown', onKey)
@@ -57,8 +63,9 @@ export default function PhraseChips({
 
   if (!list.length) return null
 
-  const open = async (i, phrase) => {
+  const open = async (i, phrase, el) => {
     if (openIndex === i) { close(); return }
+    anchorRef.current = el ?? null
     setOpenIndex(i)
     setGloss(null)
     setError(null)
@@ -91,12 +98,13 @@ export default function PhraseChips({
               className={`phrase-chip${status ? ` is-${status}` : ''}${isOpen ? ' is-open' : ''}`}
               aria-expanded={isOpen}
               title={phrase.note ?? ''}
-              onClick={() => open(i, phrase)}
+              onClick={(e) => open(i, phrase, e.currentTarget)}
             >
               <span lang="en">{phrase.text}</span>
             </button>
             {isOpen && (
               <GlossPopover
+                anchorEl={anchorRef.current}
                 gloss={gloss} busy={busy} error={error} status={status}
                 fallbackText={phrase.text} deps={openIndex}
                 onMark={onMark ? (next) => { onMark(norm, next, 'phrase'); close() } : null}

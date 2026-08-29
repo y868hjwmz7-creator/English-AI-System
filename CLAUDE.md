@@ -426,6 +426,22 @@ Anthropic 側も **streaming で受け取る**。`output_config.effort` は
 
 意味の吹き出しは `GlossPopover.jsx` 1つ。語(`EnglishText`)と
 句(`PhraseChips`)の両方から使う。**同じ見た目を2か所に書き写さない。**
+
+**吹き出しは `createPortal` で body の直下に出す。**
+紙(`.lesson-sheet`)は `overflow-y: auto` で、CSS の決まりにより
+**横方向も切る。** 中に置くと端の語で切れ、紙が横にずれる(2026-08 実機)。
+body の直下に出るので `.lesson-sheet .etext-pop` では色が届かない。
+`.etext-pop--paper` を付けて当てる。「外側を押したら閉じる」も、
+**吹き出しの中は外側ではない**と判定する。
+
+**語をなぞると、まとめて1つの言い回しとして引ける**(`data-widx` +
+`elementFromPoint`)。ブラウザの範囲選択は使わない。語には
+`user-select: none` が要る(iPhone の長押しメニューを止めるため)。
+
+**DB の関数を使うように変えるときは、貼る前でも動く道を残す。**
+`setWordStatus()` を `mark_word()` に切り替えたとき、SQL を貼るまで
+「押しても色が付かない」状態になった(2026-08 実機)。
+関数が無いという断りのときだけ、前の書き方に戻している。
 詳しくは仕様書 第5.23節。
 
 ### データの置き場

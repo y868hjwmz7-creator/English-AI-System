@@ -17,6 +17,7 @@ import Tabs from './Tabs.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import useWordStatuses from '../lib/useWordStatuses.js'
+import LearnerWordbook from './LearnerWordbook.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import { ScreenIcon } from './Icons.jsx'
 
@@ -286,6 +287,8 @@ export default function TrainerLearners({ me }) {
                   items={[
                     { id: 'homework', label: '過去の宿題', count: assignments.length },
                     { id: 'create', label: 'この人に教材を作る' },
+                    // 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい
+                    { id: 'wordbook', label: '単語帳' },
                     { id: 'record', label: 'レベルとスコア' },
                   ]}
                 />
@@ -459,6 +462,10 @@ export default function TrainerLearners({ me }) {
                       }}
                     />
                   </>
+                )}
+
+                {detailTab === 'wordbook' && (
+                  <LearnerWordbook learnerId={l.id} learnerName={l.display_name} />
                 )}
 
                 {detailTab === 'record' && (
