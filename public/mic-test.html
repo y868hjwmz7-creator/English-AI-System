@@ -339,12 +339,29 @@ audio { width: 100%; margin-top: 10px; }
       })
   }
 
+  /**
+   * ★語ごとの合図(boundary)が何回来たかを数える。
+   *
+   *   宿題の画面では、いま読んでいる語に色を付けている。その目印は
+   *   `boundary` という合図だけが教えてくれる。**この合図を出さない
+   *   端末がある**(iOS の Safari、通信でしゃべる声など)。
+   *   出ない端末では語の色が付かないので、文のかたまりの色分けだけが
+   *   残る仕組みにしてあるが、**どちらなのかは実機でしか分からない。**
+   *   ここで数えて、はっきりさせる。
+   */
+  var boundaryHits = 0
+
   function playWith(voice, onDone) {
     var u = new SpeechSynthesisUtterance(SAMPLE)
     u.lang = voice ? voice.lang : 'en-US'
     // 声の指定が拒否されても、読み上げ自体は続ける
     try { if (voice) u.voice = voice } catch (err) { log('この声は指定できませんでした: ' + err.message) }
     u.rate = 0.9
+    boundaryHits = 0
+    u.onboundary = function (e) {
+      if (e.name && e.name !== 'word') return
+      boundaryHits += 1
+    }
     u.onend = function () { if (onDone) onDone(null) }
     u.onerror = function (e) {
       // 別の声を押した、画面を離れた等で止めた場合。異常ではない。
@@ -379,6 +396,11 @@ audio { width: 100%; margin-top: 10px; }
         b.textContent = '再生中…'
         playWith(v, function () { b.textContent = '▶ 聞く' })
         log('声を試聴: ' + v.name + ' (' + v.lang + ')')
+        // どの声で語ごとの色が動くかは、声ごとに違う。1つずつ確かめられるように
+        window.setTimeout(function () {
+          log('  → 語ごとの合図: ' + boundaryHits + ' 回'
+            + (boundaryHits > 0 ? '(語ごとに色が動きます)' : '(色は動きません)'))
+        }, 4000)
       })
     })
 
@@ -417,11 +439,19 @@ audio { width: 100%; margin-top: 10px; }
         return
       }
       var q = best ? qualityOf(best)[0] : '不明'
+      // 語ごとの色が動くかどうか。**合図が来なければ語の色は付かない**
+      var wordMark = boundaryHits > 0
+        ? '語ごとに色が動きます(合図 ' + boundaryHits + ' 回)'
+        : '語ごとの色は動きません(この声は合図を出しません)。'
+          + '文のかたまりの色分けだけになります'
       setOut('out-speak', mark(true, '再生しました') +
         '<br><span class="hint">使われた声: <strong>' + (best ? best.name : '既定の声') + '</strong>' +
         ' [' + q + '] / この端末の英語の声は ' + englishVoices.length + '個</span>' +
+        '<br><span class="hint">' + (boundaryHits > 0 ? '○ ' : '△ ') + wordMark + '</span>' +
         '<br><span class="hint">下の一覧から、他の声も聴き比べられます。</span>')
-      results.tts = '成功 / ' + (best ? best.name + ' [' + q + ']' : '既定') + ' / 英語の声 ' + englishVoices.length + '個'
+      results.tts = '成功 / ' + (best ? best.name + ' [' + q + ']' : '既定') + ' / 英語の声 '
+        + englishVoices.length + '個 / 語ごとの合図 ' + boundaryHits + ' 回'
+      log('語ごとの合図(boundary): ' + boundaryHits + ' 回')
     })
   })
 
