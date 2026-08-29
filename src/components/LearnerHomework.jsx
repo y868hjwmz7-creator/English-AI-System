@@ -212,6 +212,7 @@ export default function LearnerHomework() {
                             <PassagePractice
                               section={sec}
                               tags={a.material?.tagIds}
+                              voiceId={a.material?.voiceId}
                               headline={a.material?.headline}
                               isDialogue={sec.exercise_type === 'dialogue'}
                               level={a.material?.level}
@@ -243,6 +244,7 @@ export default function LearnerHomework() {
                                   <div className="item-audio">
                                     <SpeakButton
                                       text={it[type.audioFrom]}
+                                      clipVoice={a.material?.voiceId}
                                       tier={voiceTierFor({
                                         exerciseType: sec.exercise_type,
                                         tags: a.material?.tagIds,

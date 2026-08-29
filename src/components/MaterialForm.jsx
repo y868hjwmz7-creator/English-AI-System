@@ -26,6 +26,7 @@ import {
   generateSectionUnique, isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
+import { CLIP_ACCENTS, CLIP_GENDERS, DEFAULT_VOICE_ID, findVoice, voiceOf } from '../data/clipVoices.js'
 import { collectReviewWords } from '../lib/vocab.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
@@ -102,6 +103,15 @@ export default function MaterialForm({
   const [headline, setHeadline] = useState('')         // 記事の見出し / 会話の題名
   const [genre, setGenre] = useState(initial.genre || 'news')   // 記事のジャンル
   const [scene, setScene] = useState(initial.scene || 'casual')  // 会話の場面
+  // 読み上げに使う声(0017)。訛りと性別で選ぶ。
+  // **会話では、ここで選んだ訛りの中で男女が割り当てられる**(voiceCast.js)
+  const [accent, setAccent] = useState(
+    () => findVoice(initial.voiceId)?.accent ?? findVoice(DEFAULT_VOICE_ID).accent,
+  )
+  const [voiceGender, setVoiceGender] = useState(
+    () => findVoice(initial.voiceId)?.gender ?? findVoice(DEFAULT_VOICE_ID).gender,
+  )
+  const voiceId = voiceOf(accent, voiceGender)
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
   // ── 復習の材料(単語・フレーズの教材だけで使う)──────────────
   //   これまでの宿題に出た語のうち、ゲストが「知らなかった」と付けたものを
@@ -440,6 +450,7 @@ export default function MaterialForm({
       level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
       visibility, industry, sections, tagIds, createdBy,
       headline, genre: kind === 'reading' ? genre : '', scene: kind === 'dialogue' ? scene : '',
+      voiceId,
       topic: subject,
     })
     if (message) { setBusy(false); setError(message); return }
@@ -568,6 +579,38 @@ export default function MaterialForm({
           </select>
         </label>
       )}
+
+      {/* 読み上げの声(0017)。
+          **相手の訛りが聞き取れないと仕事にならない。** インドやシンガポールの
+          英語は、教科書のアメリカ英語しか聞いていないと歯が立たない。
+          教材ごとに相手を変えられること自体に、練習の価値がある。 */}
+      <div className="field-row voice-row">
+        <label className="field">
+          <span>
+            読み上げの声
+            <span className="field-hint">
+              記事・会話の本文と、発音・リズムの練習で使われます。
+              会話では、この訛りの中で話す人ごとに男女が割り当てられます
+            </span>
+          </span>
+          <select value={accent} onChange={(e) => setAccent(e.target.value)}>
+            {CLIP_ACCENTS.map((a) => (
+              <option key={a.id} value={a.id}>{a.label} — {a.hint}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>
+            話す人
+            <span className="field-hint">1人で読む教材のとき</span>
+          </span>
+          <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value)}>
+            {CLIP_GENDERS.map((g) => (
+              <option key={g.id} value={g.id}>{g.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <label className="field">
         <span>

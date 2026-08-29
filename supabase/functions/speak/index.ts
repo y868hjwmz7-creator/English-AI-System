@@ -161,25 +161,35 @@ const GOOGLE_VOICES: Record<string, { voice: string; lang: string }> = {
  *
  * 【なぜ Secrets から読むのか】
  *   ElevenLabs の Voice Library には、アメリカ各都市・イギリス各地方・
- *   アイルランド・スコットランド・オーストラリアなど、たくさんの
+ *   アイルランド・スコットランド・インド・シンガポールなど、たくさんの
  *   アクセントの声がある。**どれを使うかは利用者が選ぶことである。**
  *   こちらが id を決め打ちすると、選び直すたびにコードを触ることになる。
  *
- * 【入れ方】
- *   ElevenLabs の画面で声を選び、その Voice ID を Supabase の
- *   Edge Functions → Secrets に入れる。
+ * 【入れ方】Secrets に **`ELEVENLABS_VOICES`** を1つだけ置く。中身は JSON。
  *
- *     ELEVENLABS_VOICE_US_FEMALE / _US_MALE / _UK_FEMALE / _UK_MALE
- *     ELEVENLABS_VOICE_DEFAULT   … 個別の指定が無い話者に使う
+ *     {"us-female":"21m0...","us-male":"pNIn...","sc-male":"abcd...", ...}
  *
- *   **id を入れていない話者は、標準の段に落ちる。** 失敗にはしない。
- *   4人ぶん用意できていなくても、そこだけ Google / Azure で鳴る。
+ *   鍵は `src/data/clipVoices.js` の id とそろえる。20個あっても Secret は1つ。
+ *   `ELEVENLABS_VOICE_DEFAULT` を置けば、一覧に無い声はそこへ落ちる。
+ *
+ * 【入れていない声は、標準の段の音で作る】
+ *   失敗にはしない。**鳴らないより、標準の声で鳴るほうがよい。**
+ *   置き場所は頼まれたまま(`premium/<選んだ声>/...`)にする。そうしないと
+ *   毎回窓口を呼びに来ることになる。**あとで id を足したら `CLIP_REV`
+ *   を進める**こと。進めないと、前の音がそのまま返り続ける。
  */
-const ELEVEN_SECRET: Record<string, string> = {
-  'us-female': 'ELEVENLABS_VOICE_US_FEMALE',
-  'us-male': 'ELEVENLABS_VOICE_US_MALE',
-  'uk-female': 'ELEVENLABS_VOICE_UK_FEMALE',
-  'uk-male': 'ELEVENLABS_VOICE_UK_MALE',
+function elevenVoiceFor(voiceId: string): string {
+  const raw = Deno.env.get('ELEVENLABS_VOICES')
+  if (raw) {
+    try {
+      const table = JSON.parse(raw) as Record<string, string>
+      const hit = String(table?.[voiceId] ?? '').trim()
+      if (hit) return hit
+    } catch {
+      // JSON が壊れていても止めない。既定に落ちる
+    }
+  }
+  return String(Deno.env.get('ELEVENLABS_VOICE_DEFAULT') ?? '').trim()
 }
 
 /**
@@ -447,29 +457,31 @@ Deno.serve(async (req) => {
     const hasGoogle = !!googleKey
     const hasAzure = !!(azureKey && azureRegion)
 
-    const voiceId = SPEAKER_PROVIDER[String(body.voice ?? '')]
-      ? String(body.voice) : DEFAULT_VOICE
+    // 頼まれた声。**訛りの一覧は画面側(`src/data/clipVoices.js`)だけが持つ。**
+    // ここは知らない id が来てもよい。ファイル名として安全な形にだけ丸める
+    const voiceId = String(body.voice ?? '').replace(/[^a-z0-9-]/gi, '').slice(0, 40)
+      || DEFAULT_VOICE
+    // 標準の段での代役。**窓口が知っている4つのどれか**でなければ既定に落とす
+    const base = SPEAKER_PROVIDER[String(body.base ?? '')] ? String(body.base) : DEFAULT_VOICE
 
-    // 良い段。**声の id を入れていない話者は、標準の段に落とす。**
-    // 4人ぶんそろっていなくても、そこだけ標準の声で鳴ればよい
-    const elevenVoice = elevenKey
-      ? (Deno.env.get(ELEVEN_SECRET[voiceId]) ?? Deno.env.get('ELEVENLABS_VOICE_DEFAULT') ?? '')
-      : ''
+    // 良い段。**声の id を入れていない訛りは、標準の段の音で作る。**
+    // 失敗にはしない。鳴らないより、標準の声で鳴るほうがよい
+    const elevenVoice = elevenKey ? elevenVoiceFor(voiceId) : ''
     const usePremium = tier === 'premium' && !!elevenVoice
 
-    // 標準の段。話者ごとに会社を決めてある。
+    // 標準の段。代役の話者ごとに会社を決めてある。
     // **片方しか鍵が無いときは、あるほうを使う**(止まるより鳴るほうがよい)
-    let standardProvider: 'google' | 'azure' | null = SPEAKER_PROVIDER[voiceId]
+    let standardProvider: 'google' | 'azure' | null = SPEAKER_PROVIDER[base]
     if (standardProvider === 'google' && !hasGoogle) standardProvider = hasAzure ? 'azure' : null
     if (standardProvider === 'azure' && !hasAzure) standardProvider = hasGoogle ? 'google' : null
 
     const provider = usePremium ? 'eleven' : standardProvider
 
-    // 置き場所には**段も入れる。** 同じ英文でも、良い声と標準の声では
-    // 別のファイルである。入れないと、先に作られたほうが両方に返ってしまう。
-    // 画面側(`src/lib/audioClips.js`)と同じ組み立てにすること
-    const madeTier = usePremium ? 'premium' : 'standard'
-    const path = `${CLIP_REV}/${madeTier}/${voiceId}/${await fingerprint(voiceId, text)}.mp3`
+    // 置き場所は**頼まれたまま**にする。段も声も、画面が計算した形と同じに。
+    // 良い声を用意できずに標準の音で作ったときも、ここは変えない。
+    // 変えると、画面は毎回「無い」と判断して窓口を呼びに来ることになる。
+    // (あとで声の id を足したときは `CLIP_REV` を進める)
+    const path = `${CLIP_REV}/${tier}/${voiceId}/${await fingerprint(voiceId, text)}.mp3`
     const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${path}`
 
     // ── 3. すでにあるなら、作らない ────────────────────────
@@ -492,7 +504,7 @@ Deno.serve(async (req) => {
           + ' Secrets に、次を追加してください。'
           + ' ① GOOGLE_TTS_API_KEY(標準の声・毎月100万文字まで無料)'
           + ' ② AZURE_SPEECH_KEY と AZURE_SPEECH_REGION(標準の声・毎月50万文字まで無料)'
-          + ' ③ ELEVENLABS_API_KEY と ELEVENLABS_VOICE_*(本文などの良い声)',
+          + ' ③ ELEVENLABS_API_KEY と ELEVENLABS_VOICES(本文などの良い声)',
         fatal: true,
       }, 503)
     }
@@ -504,9 +516,9 @@ Deno.serve(async (req) => {
         Deno.env.get('ELEVENLABS_MODEL') ?? ELEVEN_MODEL_DEFAULT,
       )
     } else if (provider === 'google') {
-      made = await synthGoogle(text, GOOGLE_VOICES[voiceId], googleKey!)
+      made = await synthGoogle(text, GOOGLE_VOICES[base], googleKey!)
     } else {
-      made = await synthAzure(text, AZURE_VOICES[voiceId], azureKey!, azureRegion!)
+      made = await synthAzure(text, AZURE_VOICES[base], azureKey!, azureRegion!)
     }
     if (made.error) return reply(made.error, 502)
     const audio = made.audio!
@@ -552,7 +564,9 @@ Deno.serve(async (req) => {
       chars: text.length,
       // どの声で作ったかを返す。**聞き比べのときに、これが手がかりになる**
       provider,
-      tier: madeTier,
+      tier,
+      // 良い声を頼まれたのに用意できなかったことを、係の人に伝える
+      fellBack: tier === 'premium' && !usePremium,
       ms: Date.now() - startedAt,
     })
   } catch (e) {

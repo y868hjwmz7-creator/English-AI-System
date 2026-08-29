@@ -51,7 +51,7 @@ const MODES = [
 ]
 
 export default function PassagePractice({
-  section, headline, isDialogue, tags = null,
+  section, headline, isDialogue, tags = null, voiceId = null,
   level = 'B1', wordStatuses = null, onMarkWord = null,
 }) {
   const [mode, setMode] = useState('read')
@@ -96,7 +96,8 @@ export default function PassagePractice({
   const cast = castVoices(voices, section.items.map((it) => it.speaker))
   // こちらで作った音声(MP3)の話者。**端末の声から換算しない。**
   // 端末に英語の声が1つも無いと、2人とも同じ話者になってしまう
-  const clipCast = castClipSpeakers(section.items.map((it) => it.speaker))
+  // 訛りは教材が決め、性別は役ごとに決まる(0017)
+  const clipCast = castClipSpeakers(section.items.map((it) => it.speaker), voiceId)
   // 本文はシャドーイングの素材なので、**良い声を使う**(`voiceTier.js`)
   const tier = voiceTierFor({ exerciseType: section.exercise_type, tags })
   const voice = voices[0] ?? null
@@ -119,7 +120,7 @@ export default function PassagePractice({
     // 端末の声のときは、合図が来ない端末のための保険が speakOnce にある
     readAloud(item.audio_text || item.prompt_en, {
       voice: voiceFor(cast, item.speaker, voice),
-      clipVoice: voiceFor(clipCast, item.speaker, null),
+      clipVoice: voiceFor(clipCast, item.speaker, voiceId),
       clipTier: tier,
       rate: rateOf(rateId, current.rate),
       onWord: (w) => setReadingAt(w ? w.charIndex : null),
@@ -143,7 +144,7 @@ export default function PassagePractice({
       playable.map((it) => ({
         text: it.prompt_en,
         voice: voiceFor(cast, it.speaker, voice),
-        clipVoice: voiceFor(clipCast, it.speaker, null),
+        clipVoice: voiceFor(clipCast, it.speaker, voiceId),
       })),
       {
         rate: rateOf(rateId, current.rate),

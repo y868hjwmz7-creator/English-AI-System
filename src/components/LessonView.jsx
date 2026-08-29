@@ -173,7 +173,10 @@ export default function LessonView({
   // 話す人 → 声。会話でないときは空(既定の声が使われる)
   const cast = castVoices(voices, (section?.items ?? []).map((it) => it.speaker))
   // こちらで作った音声(MP3)の話者。端末の声から換算しない(voiceCast.js)
-  const clipCast = castClipSpeakers((section?.items ?? []).map((it) => it.speaker))
+  // 訛りは教材が決め、性別は役ごとに決まる(0017)
+  const clipCast = castClipSpeakers(
+    (section?.items ?? []).map((it) => it.speaker), material.voiceId,
+  )
   // 良い声を使うか、標準の声で足りるか(`voiceTier.js`)。
   // 記事・会話とリスニング、それに**発音・リズムの弱点**なら良い声にする
   const tier = voiceTierFor({ exerciseType: section?.exercise_type, tags: allTags })
@@ -192,7 +195,7 @@ export default function LessonView({
       playable.map(({ it }) => ({
         text: it.prompt_en,
         voice: voiceFor(cast, it.speaker),
-        clipVoice: voiceFor(clipCast, it.speaker, null),
+        clipVoice: voiceFor(clipCast, it.speaker, material.voiceId),
       })),
       {
         rate: rateOf(rateId),
@@ -350,6 +353,7 @@ export default function LessonView({
                     <SpeakButton
                       text={it[type.audioFrom]}
                       voice={voiceFor(cast, it.speaker)}
+                      clipVoice={voiceFor(clipCast, it.speaker, material.voiceId)}
                       tier={tier}
                       rate={rateOf(rateId)}
                       onPlayingChange={(on) => {

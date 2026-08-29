@@ -247,6 +247,10 @@ body {
 .field > span, .field > legend, .field-label { color: var(--text-secondary); font-size: 12px; }
 .field-hint { margin-left: 6px; color: var(--text-muted); font-weight: normal; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* 読み上げの声。訛りの説明が長いので、訛り側を広く取る(0017)。
+   **ここに置くこと。** 下のスマホ用の指定より後ろに書くと、
+   同じ強さなので後ろが勝ち、狭い画面でも2列のままになる(実測) */
+.voice-row { grid-template-columns: 3fr 1fr; max-width: 560px; }
 
 /* 入力欄。**password / email も必ず含める。**
    抜けていると、その欄だけ見た目が揃わず、下の16pxの決まりも効かない */
@@ -452,7 +456,9 @@ html { -webkit-text-size-adjust: 100%; }
   .stat-value { font-size: 22px; }
   .app-title { font-size: 19px; }
   .card { padding: 16px; }
-  .field-row { grid-template-columns: 1fr; }
+  /* **`.voice-row` も並べて書く。** あとに置いた指定のほうが勝つため、
+     ここに書き足さないとスマホの幅でも2列のままになる(実測) */
+  .field-row, .voice-row { grid-template-columns: 1fr; }
 
   /* 表は横スクロールで見る。iOSで指を離したあとも滑るようにする */
   .table-scroll { -webkit-overflow-scrolling: touch; }

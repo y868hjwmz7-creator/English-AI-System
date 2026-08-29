@@ -16,7 +16,10 @@
  *   確実にするなら、生成のときに人物の性別も返させる必要がある
  *   (いまは行っていない。出力が増えるため)。
  */
-import { PREGENERATED_SPEAKERS, genderOf } from '../data/speakers.js'
+import {
+  DEFAULT_VOICE_ID, findVoice, voiceOf,
+} from '../data/clipVoices.js'
+import { genderOf } from '../data/speakers.js'
 
 /** 女性名としてよく使われるもの(手がかり。網羅は目指さない) */
 const FEMALE_NAMES = [
@@ -108,25 +111,34 @@ export function castVoices(voices, speakers) {
 }
 
 /**
- * 話す人ごとの**こちらで作った音声の話者**を決める。
+ * 話す人ごとの**こちらで作った音声の声**を決める。
  *
  * 【なぜ端末の声から換算しないのか】
  *   端末に英語の声が1つも無い、あるいは全員同じ性別と判定される端末では、
- *   `castVoices()` の結果から換算すると**2人とも同じ話者**になってしまう。
- *   MP3 の話者は4人と決まっているので、端末を経由せずここで直接決める。
+ *   `castVoices()` の結果から換算すると**2人とも同じ声**になってしまう。
+ *   使える声は決まっているので、端末を経由せずここで直接決める。
  *
- * @returns {Map<string, string>} 話す人 → 話者 id(`PREGENERATED_SPEAKERS`)
+ * 【訛りは教材が決め、性別は役ごとに決まる】(2026-08)
+ *   教材に選んだ声(`materials.voice_id`)から**訛りだけ**を受け取り、
+ *   同じ訛りの中で女性・男性を配る。
+ *   会話の相手が急にスコットランドからインドに変わってはおかしい。
+ *   **訛りは1本の教材でそろえる。**
+ *
+ * @param {Array<string>} speakers 出てくる順の話す人
+ * @param {string} materialVoiceId 教材に選んだ声。訛りだけを使う
+ * @returns {Map<string, string>} 話す人 → 声 id(`CLIP_VOICES`)
  */
-export function castClipSpeakers(speakers) {
+export function castClipSpeakers(speakers, materialVoiceId = DEFAULT_VOICE_ID) {
+  const accent = findVoice(materialVoiceId)?.accent
+    ?? findVoice(DEFAULT_VOICE_ID).accent
   const cast = new Map()
   const used = new Set()
   for (const { name, gender } of assignGenders(speakers)) {
-    const pool = PREGENERATED_SPEAKERS.filter((s) => s.gender === gender)
-    const picked = pool.find((s) => !used.has(s.id)) ?? pool[0] ?? PREGENERATED_SPEAKERS[0]
-    if (picked) {
-      cast.set(name, picked.id)
-      used.add(picked.id)
-    }
+    let id = voiceOf(accent, gender)
+    // 3人目からは声が足りない。**同じ声を使い回す**(黙って別の訛りにしない)
+    if (used.has(id)) id = voiceOf(accent, gender === 'female' ? 'male' : 'female')
+    cast.set(name, id)
+    used.add(id)
   }
   return cast
 }
@@ -157,7 +169,6 @@ export const voiceFor = (cast, speaker, fallback = null) =>
  */
 export function clipSpeakerFor(voice) {
   const gender = genderOf(voice ?? {}) === 'male' ? 'male' : 'female'
-  const region = /^en-gb/i.test(voice?.lang ?? '') ? 'uk' : 'us'
-  const id = `${region}-${gender}`
-  return PREGENERATED_SPEAKERS.some((s) => s.id === id) ? id : 'us-female'
+  const accent = /^en-gb/i.test(voice?.lang ?? '') ? 'uk' : 'us'
+  return voiceOf(accent, gender)
 }

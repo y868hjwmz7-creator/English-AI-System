@@ -54,7 +54,7 @@
  *   無音を鳴らして解錠しておく。** 以後は待ちを挟んでも鳴らせる。
  *   録音の `AudioContext` で学んだ作法(1つだけ作り、作り直さない)と同じ。
  */
-import { PREGENERATED_SPEAKERS } from '../data/speakers.js'
+import { DEFAULT_VOICE_ID, baseVoiceOf, clipVoiceId } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
 import { markIndexAt, wordMarks } from './wordTiming.js'
@@ -74,14 +74,12 @@ const BUCKET = 'tts'
  */
 const CLIP_REV = '1'
 
-/** 話者の指定が無いときの声。`PREGENERATED_SPEAKERS` の id である */
-export const DEFAULT_CLIP_VOICE = 'us-female'
-
-const VALID_VOICES = new Set(PREGENERATED_SPEAKERS.map((s) => s.id))
-
-/** 使える話者に丸める。知らない id が来ても落とさない */
-export const clipVoiceId = (id) =>
-  (VALID_VOICES.has(id) ? id : DEFAULT_CLIP_VOICE)
+/**
+ * 話者の指定が無いときの声。
+ * 一覧と丸め方は `src/data/clipVoices.js` に置いてある。**2か所に持たない。**
+ */
+export const DEFAULT_CLIP_VOICE = DEFAULT_VOICE_ID
+export { clipVoiceId }
 
 // ── この画面のあいだ覚えておくこと ──────────────────────────
 //
@@ -188,7 +186,12 @@ async function askForClip(text, voiceId, tier) {
   if (!supabase) return null
   try {
     const { data, error } = await supabase.functions.invoke('speak', {
-      body: { text, voice: voiceId, tier },
+      body: {
+        text, voice: voiceId, tier,
+        // 標準の段での代役。**訛りの一覧は画面側だけが持つ**ので、
+        // 窓口が知らない訛りを選んでも、これを見れば読み上げられる
+        base: baseVoiceOf(voiceId),
+      },
     })
     // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある
     const body = data ?? {}

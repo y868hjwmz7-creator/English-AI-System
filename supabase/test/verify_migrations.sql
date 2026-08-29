@@ -172,4 +172,8 @@ from (
     where schemaname = 'storage' and tablename = 'objects'
       and cmd in ('INSERT', 'UPDATE', 'ALL')
       and coalesce(qual, '') || coalesce(with_check, '') like '%''tts''%'), 42
+  union all
+  select '㊸ 教材ごとに声を選べる(0017)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'materials' and column_name = 'voice_id'), 43
 ) t order by 順;

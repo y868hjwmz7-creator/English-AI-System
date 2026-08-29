@@ -323,6 +323,7 @@ export default function TrainerMaterials({ me }) {
                                 <div className="item-audio">
                                   <SpeakButton
                                     text={it[type.audioFrom]}
+                                    clipVoice={m.voiceId}
                                     tier={voiceTierFor({
                                       exerciseType: sec.exercise_type,
                                       tags: m.tagIds,

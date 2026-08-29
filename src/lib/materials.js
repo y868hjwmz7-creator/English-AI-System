@@ -95,7 +95,7 @@ export async function searchMaterials({
     .from('materials')
     .select(`
       id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
-      teaching_point, headline, genre, scene, topic,
+      teaching_point, headline, genre, scene, topic, voice_id,
       material_tags ( tag_id ),
       material_sections (
         id, seq, exercise_type, instruction,
@@ -137,6 +137,8 @@ const normalizeMaterial = (m) => {
   return {
     ...m,
     tagIds: (m.material_tags ?? []).map((t) => t.tag_id),
+    // 読み上げに使う声(0017)。空なら画面側が既定に丸める
+    voiceId: m.voice_id ?? null,
     sections,
     // 教材全体で何問あるか(一覧の目安に出す)
     itemCount: sections.reduce((n, sec) => n + sec.items.length, 0),
@@ -157,7 +159,7 @@ export async function loadMaterial(materialId) {
     .from('materials')
     .select(`
       id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
-      teaching_point, headline, genre, scene, topic,
+      teaching_point, headline, genre, scene, topic, voice_id,
       material_tags ( tag_id ),
       material_sections (
         id, seq, exercise_type, instruction,
@@ -214,7 +216,7 @@ const cleanItems = (items) =>
 export async function createMaterial({
   title, level, kind, instruction_ja = '', teaching_point = '',
   visibility = 'school', industry = null,
-  headline = '', genre = '', scene = '', topic = '',
+  headline = '', genre = '', scene = '', topic = '', voiceId = null,
   sections = [], tagIds = [], createdBy,
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
@@ -246,6 +248,8 @@ export async function createMaterial({
       genre: genre || null,
       scene: scene || null,
       topic: String(topic ?? '').trim() || null,
+      // 読み上げに使う声(0017)。空なら既定(アメリカ英語・女性)
+      voice_id: voiceId || null,
       status: 'published',
       published_at: new Date().toISOString(),
       created_by: createdBy,
@@ -333,6 +337,7 @@ export async function loadMyAssignments() {
       id, assigned_at, due_on, learner_done_at,
       materials (
         id, title, level, kind, instruction_ja, teaching_point, headline, genre, scene, topic,
+        voice_id,
         material_sections (
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
@@ -437,7 +442,7 @@ export async function loadLearnerAssignments(learnerId, limit = 50) {
     .select(`
       id, assigned_at, due_on, learner_done_at, admin_checked_at,
       materials (
-        id, title, level, kind, headline, teaching_point,
+        id, title, level, kind, headline, teaching_point, voice_id,
         material_tags ( tag_id ),
         material_sections ( id, material_items ( id ) )
       )
@@ -453,6 +458,7 @@ export async function loadLearnerAssignments(learnerId, limit = 50) {
       ? {
         ...a.materials,
         tagIds: (a.materials.material_tags ?? []).map((t) => t.tag_id),
+        voiceId: a.materials.voice_id ?? null,
         itemCount: (a.materials.material_sections ?? [])
           .reduce((n, sec) => n + (sec.material_items?.length ?? 0), 0),
       }

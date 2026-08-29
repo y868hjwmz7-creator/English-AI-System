@@ -411,10 +411,29 @@ Azure の役目は標準の段なので、HD でない Neural を使う。
 |---|---|---|
 | `GOOGLE_TTS_API_KEY` | Google Chirp 3: HD | 毎月100万文字 |
 | `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` | Azure Neural(HD 不可) | 毎月50万文字 |
-| `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_*` | ElevenLabs | 無し(従量) |
+| `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICES` | ElevenLabs | 無し(従量) |
 
-**ElevenLabs の声の id はコードに書かない。Secrets から読む。**
-アクセントは利用者が選ぶものである。id が無い話者は標準の段に落ちる。
+**ElevenLabs の声の id はコードに書かない。** Secret は1つ
+(`ELEVENLABS_VOICES`)で、中身は `{"sc-male":"abcd...", ...}` の JSON。
+鍵は `src/data/clipVoices.js` の id とそろえる。
+アクセントは利用者が選ぶものである。**id が無い声は標準の段の音で作る。**
+失敗にはしない。あとで id を足したら `CLIP_REV` を進める。
+
+### 訛りは教材ごとに選ぶ。一覧は `clipVoices.js` だけが持つ
+
+`materials.voice_id`(0017)に `sc-male` のような id が入る。
+一覧(訛り10 × 男女2 = 20)は `src/data/clipVoices.js` **1か所**。
+**DB でも窓口でも選択肢を縛らない。** 訛りを足すたびに移行を貼ったり
+関数を配置し直したりするのでは、利用者が声を選び直せない。
+
+- **会話は、訛りを教材でそろえ、性別を役ごとに配る**(`castClipSpeakers`)。
+  相手が急にスコットランドからインドに変わってはおかしい
+- **標準の段(Google / Azure)にはこの訛りが無い。** 各行が持つ `base`
+  (代役)に落とす。画面が窓口へ `base` も一緒に送るので、
+  **窓口は訛りの一覧を知らなくてよい**
+- **訛りを増やすと音声も増える。** 鍵は(段, 声, 英文)なので、同じ英文を
+  3つの訛りで作れば3倍かかる。**教材ごとに1つ**という使い方を崩さない
+- 再生のたびに選ばせない。同じ理由(費用が訛りの数だけ増える)
 
 **`CLIP_REV` は2か所にある。** `src/lib/audioClips.js` と
 `supabase/functions/speak/index.ts`。**声を変えたら、両方を1つ進める。**

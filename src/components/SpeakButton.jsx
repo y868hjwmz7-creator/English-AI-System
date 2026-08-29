@@ -34,7 +34,7 @@ const bestVoice = () => {
 // Listen と「止める」が並ぶと、押し分けが一瞬わからない。
 export default function SpeakButton({
   text, label = 'Listen', rate = null, className = '', voice: given = null,
-  tier = STANDARD, onPlayingChange = null, onWord = null,
+  clipVoice = null, tier = STANDARD, onPlayingChange = null, onWord = null,
 }) {
   // 速さの指定が無ければ、端末に覚えさせた速さを使う。
   // こうしておくと、速さを選ぶ場所が無い画面でも同じ速さで鳴る
@@ -61,7 +61,7 @@ export default function SpeakButton({
     // いま読んでいる語の位置を親へ知らせる(色を付けるため)。
     // **読み終わったところで Stop から Listen に戻す。**
     // MP3 なら本当の読み終わり、端末の声なら保険の時間で戻る(speech.js)
-    readAloud(text, { voice, clipTier: tier, rate: speed, onWord }).then(() => {
+    readAloud(text, { voice, clipVoice, clipTier: tier, rate: speed, onWord }).then(() => {
       setState(false)
       onWord?.(null)
     })
