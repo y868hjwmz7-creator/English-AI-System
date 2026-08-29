@@ -105,13 +105,18 @@ export default function GlossPopover({
       {gloss && (
         <>
           <span className="etext-pop-head">
-            <strong lang="en">{gloss.display || fallbackText}</strong>
-            {/* 発音記号。意味が分かっても読み方が分からないと、
-                声に出す練習につながらない(2026-08 の要望)。
-                スラッシュは画面側で付ける(控えには裸で入っている) */}
-            {gloss.phonetic && (
-              <span className="etext-phonetic">/{gloss.phonetic}/</span>
-            )}
+            {/* 語と発音記号を**ひとつの塊**にする。別々に並べると、
+                長い語のときに Listen だけ次の行へ落ちて間延びした
+                (2026-08 の指摘)。Listen は常に右上に留める */}
+            <span className="etext-pop-word">
+              <strong lang="en">{gloss.display || fallbackText}</strong>
+              {/* 発音記号。意味が分かっても読み方が分からないと、
+                  声に出す練習につながらない(2026-08 の要望)。
+                  スラッシュは画面側で付ける(控えには裸で入っている) */}
+              {gloss.phonetic && (
+                <span className="etext-phonetic">/{gloss.phonetic}/</span>
+              )}
+            </span>
             <SpeakButton text={gloss.display || fallbackText} className="etext-listen" />
           </span>
           {/* **その文でふさわしい意味が先頭に来る**(2026-08 の指定)。

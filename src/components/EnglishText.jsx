@@ -117,9 +117,6 @@ export default function EnglishText({
     return found
   })()
 
-  /** その位置が言い回しの中か。中なら状態を返す */
-  const phraseAt = (i) => phraseSpans.find((sp) => i >= sp.from && i <= sp.to)?.status ?? null
-
   /** 吹き出しに出す状態。句を開いているときは**句そのもの**の状態 */
   const popStatus = (() => {
     if (!range) return null
@@ -248,34 +245,47 @@ export default function EnglishText({
    *   **囲む箱を1つにすれば、ずれようがない。**
    *   行をまたいでも、行ごとに正しく引かれる(インライン要素の性質)。
    *
-   * まとまりは2種類。**なぞっている最中のほうが優先**である
+   * **1語のときも同じ囲みで描く。** 別の仕組みで描いていたため、
+   * 1語の赤だけ高さが違って見えた(2026-08 の指摘)。
+   * 同じ箱で描けば、そろえる努力が要らない。
+   *
+   * まとまりは3種類。**なぞっている最中がいちばん優先**である
    * (いま選んでいるものが見えないと操作できない)。
    */
   const runs = []
   {
     let i = 0
     while (i < parts.length) {
-      const pick = i >= lo && i <= hi ? { cls: 'is-picked', to: hi } : null
-      const sp = pick ? null : phraseSpans.find((x) => i >= x.from && i <= x.to)
-      const run = pick ?? (sp ? { cls: `is-phrase is-${sp.status}`, to: sp.to } : null)
-      if (run) {
-        runs.push({ cls: run.cls, from: i, to: run.to })
-        i = run.to + 1
-      } else {
-        runs.push({ cls: null, from: i, to: i })
-        i += 1
+      if (i >= lo && i <= hi) {
+        runs.push({ cls: 'is-picked', from: i, to: hi, phrase: null })
+        i = hi + 1
+        continue
       }
+      const sp = phraseSpans.find((x) => i >= x.from && i <= x.to)
+      if (sp) {
+        runs.push({ cls: `is-phrase is-${sp.status}`, from: sp.from, to: sp.to, phrase: sp })
+        i = sp.to + 1
+        continue
+      }
+      const st = parts[i].word ? (statuses?.get(parts[i].norm) ?? null) : null
+      runs.push({ cls: st ? `is-word is-${st}` : null, from: i, to: i, phrase: null })
+      i += 1
     }
   }
 
-  /** 部品ひとつぶん。語なら押せるボタン、そうでなければただの文字 */
-  const renderPart = (part, i) => {
+  /**
+   * 部品ひとつぶん。語なら押せるボタン、そうでなければただの文字。
+   *
+   * `run` に言い回しが入っているときは、**その中のどの語を押しても
+   * まとまりの意味を出す**(2026-08 の指定)。ひとまとまりとして
+   * 色を付けているのに、押すと1語の意味が出るのでは辻褄が合わない。
+   */
+  const renderPart = (part, i, run = null) => {
         if (!part.word) return <span key={i}>{part.text}</span>
-        // 言い回しの一部なら、**語ごとの色は付けない。**
-        // 囲みの色と重なって縞になり、どこまでがひとまとまりか分からなくなる
-        const inPhrase = phraseAt(i)
-        const status = inPhrase ? null : (statuses?.get(part.norm) ?? null)
-        const isOpen = openIndex === i
+        const asPhrase = run?.phrase ?? null
+        // 囲みが色を持つので、語そのものには色を付けない(縞にならないように)
+        const status = null
+        const isOpen = asPhrase ? openIndex === asPhrase.from : openIndex === i
         const isReading = i === readingIndex
         return (
           <span key={i} className="etext-word-wrap">
@@ -297,10 +307,12 @@ export default function EnglishText({
                 if (!touchRef.current) return
                 // 触る端末: 少し長めに触れたときだけ開く
                 cancelHold()
+                const el = e.currentTarget
                 holdTimer.current = window.setTimeout(() => {
                   heldRef.current = true
-                  anchorRef.current = e.currentTarget
+                  anchorRef.current = el.closest('.etext-run') ?? el
                   if (isOpen) close()
+                  else if (asPhrase) openRange(asPhrase.from, asPhrase.to)
                   else open(i, part)
                 }, HOLD_MS)
               }}
@@ -337,8 +349,9 @@ export default function EnglishText({
                 if (heldRef.current) { heldRef.current = false; return }
                 // 触る端末では、軽く触れただけでは開かない
                 if (touchRef.current) return
-                anchorRef.current = e.currentTarget
+                anchorRef.current = e.currentTarget.closest('.etext-run') ?? e.currentTarget
                 if (isOpen) close()
+                else if (asPhrase) openRange(asPhrase.from, asPhrase.to)
                 else open(i, part)
               }}
             >
@@ -353,7 +366,10 @@ export default function EnglishText({
                 anchorEl={anchorRef.current}
                 gloss={gloss} busy={busy} error={error}
                 status={range ? popStatus : status}
-                fallbackText={part.text}
+                fallbackText={asPhrase
+                  ? (text ?? '').slice(parts[asPhrase.from].at,
+                    parts[asPhrase.to].at + parts[asPhrase.to].text.length).trim()
+                  : part.text}
                 onMark={onMark ? (next) => mark(next) : null}
                 onClose={close}
               />
@@ -366,7 +382,7 @@ export default function EnglishText({
     <span className={`etext ${className}`} lang={lang} ref={rootRef}>
       {runs.map((run) => {
         const inner = []
-        for (let i = run.from; i <= run.to; i += 1) inner.push(renderPart(parts[i], i))
+        for (let i = run.from; i <= run.to; i += 1) inner.push(renderPart(parts[i], i, run))
         if (!run.cls) return inner
         return (
           <span key={`run-${run.from}`} className={`etext-run ${run.cls}`}>{inner}</span>

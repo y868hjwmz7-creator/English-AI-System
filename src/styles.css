@@ -36,11 +36,6 @@
   /* 言い回し(2語以上)。**1語とは色を分ける**(2026-08 利用者の指定) */
   --phrase-bg:    #ece4f7;
   --phrase-bar:   #7a51b5;
-  /* 語の吹き出し。**彩度は低く。** 長く見ても疲れないことを優先する */
-  --gloss-head-bg: #f2f5f8;
-  --gloss-phonetic: #5f7a8a;
-  --gloss-note:    #7a5f2e;
-  --gloss-note-bg: #faf3e4;
   --pos-noun:   #2f6f86;  --pos-noun-bg:   #eaf3f7;
   --pos-verb:   #38795a;  --pos-verb-bg:   #eaf4ee;
   --pos-adj:    #8a5588;  --pos-adj-bg:    #f6edf5;
@@ -85,10 +80,6 @@
     --unknown-bar:  #e66767;
     --phrase-bg:    #2e2540;
     --phrase-bar:   #a487d6;
-    --gloss-head-bg: #23231f;
-    --gloss-phonetic: #9db6c2;
-    --gloss-note:    #cfa96a;
-    --gloss-note-bg: #2f2a1e;
     --pos-noun:   #79b7cd;  --pos-noun-bg:   #1d2c33;
     --pos-verb:   #7cc09c;  --pos-verb-bg:   #1c2b24;
     --pos-adj:    #c491c2;  --pos-adj-bg:    #2c2130;
@@ -127,10 +118,6 @@
   --unknown-bar:  #e66767;
   --phrase-bg:    #2e2540;
   --phrase-bar:   #a487d6;
-  --gloss-head-bg: #23231f;
-  --gloss-phonetic: #9db6c2;
-  --gloss-note:    #cfa96a;
-  --gloss-note-bg: #2f2a1e;
   --pos-noun:   #79b7cd;  --pos-noun-bg:   #1d2c33;
   --pos-verb:   #7cc09c;  --pos-verb-bg:   #1c2b24;
   --pos-adj:    #c491c2;  --pos-adj-bg:    #2c2130;
@@ -1194,14 +1181,9 @@ html { -webkit-text-size-adjust: 100%; }
    ただし**目立たせすぎない**(2026-08 の指摘)。地の色を行の高さいっぱいに
    敷くと、本文が縞模様になって読めなくなる。
    色は下半分だけに薄く敷き、下線で示す。 */
-.etext-word.is-unknown {
-  background: linear-gradient(var(--unknown-bg), var(--unknown-bg))
-    no-repeat bottom / 100% .62em;
-  border-bottom: 2px solid var(--unknown-bar);
-  border-radius: 0;
-  box-shadow: none;
-}
-.etext-word.is-known { color: inherit; opacity: .72; }
+/* 1語の印も、2語以上と**同じ囲みで描く**(`.etext-run.is-word`)。
+   語そのものに色を付けていたころは、`<button>` の箱の高さが違って
+   1語だけ帯が高く見えた(2026-08 の指摘)。 */
 
 /* ── 2語以上のまとまり ────────────────────────────────────────
    **囲みを1つにする。** 語ごとに色を付けると語間で線が切れ、
@@ -1209,20 +1191,54 @@ html { -webkit-text-size-adjust: 100%; }
    継ぎ目が残った(2026-08 実測)。囲みが1つならずれようがない。
    インライン要素なので、行をまたいでも行ごとに正しく引かれる。 */
 .etext-run { border-radius: 0; }
-/* 言い回し(2語以上)。**1語の赤とは色を分ける**(2026-08 利用者の指定) */
+/* 知らなかったもの。**1語 = 赤 / 2語以上 = 紫**(2026-08 利用者の指定)。
+   帯の高さも線の太さも同じにする。違うのは色だけ。 */
+.etext-run.is-word.is-unknown {
+  background: linear-gradient(var(--unknown-bg), var(--unknown-bg))
+    no-repeat bottom / 100% .62em;
+  box-shadow: 0 2px 0 0 var(--unknown-bar);
+}
 .etext-run.is-phrase.is-unknown {
   background: linear-gradient(var(--phrase-bg), var(--phrase-bg))
     no-repeat bottom / 100% .62em;
   box-shadow: 0 2px 0 0 var(--phrase-bar);
 }
-.etext-run.is-phrase.is-known { opacity: .72; }
+/* 「知っていた」に戻したものは、**何も付けない。**
+   薄い灰色にしていたが、読みにくくなるだけだった(2026-08 の指摘) */
 /* なぞっている最中。**いま何を選んでいるかが、離す前に分かる** */
 .etext-run.is-picked {
   background: var(--reading-bg); color: var(--reading-fg);
 }
 .lesson-sheet .etext-run.is-picked { background: var(--read-bg); color: var(--read-fg); }
-/* 囲みの中の語は、自分では色を持たない(縞にならないように) */
-.etext-run .etext-word { background: none; border-bottom-color: transparent; }
+/* 囲みの中の語は、自分では色を持たない(縞にならないように)。
+   **ホバーも語ごとにしない。** せっかくひとまとまりで色を付けたのに、
+   カーソルを置いた語だけ浮くと、まとまりが崩れて見える(2026-08 の指摘) */
+.etext-run .etext-word,
+.etext-run .etext-word:hover,
+.etext-run .etext-word.is-open {
+  background: none; border-bottom-color: transparent;
+}
+/* まとまりごと反応させる。色は変えず、少しだけ濃くする */
+.etext-run.is-word.is-unknown:hover {
+  background: linear-gradient(
+      color-mix(in srgb, var(--unknown-bar) 26%, transparent),
+      color-mix(in srgb, var(--unknown-bar) 26%, transparent))
+    no-repeat bottom / 100% .62em;
+}
+.etext-run.is-phrase.is-unknown:hover {
+  background: linear-gradient(
+      color-mix(in srgb, var(--phrase-bar) 26%, transparent),
+      color-mix(in srgb, var(--phrase-bar) 26%, transparent))
+    no-repeat bottom / 100% .62em;
+}
+/* 印の付いていない言い回しでも、まとまりとして反応する */
+.etext-run.is-phrase:hover {
+  background: linear-gradient(
+      color-mix(in srgb, var(--phrase-bar) 14%, transparent),
+      color-mix(in srgb, var(--phrase-bar) 14%, transparent))
+    no-repeat bottom / 100% .62em;
+  cursor: pointer;
+}
 
 /* なぞって選んでいる語(まとめて1つの言い回しとして引く)。
    **1語ずつの色とは別の見え方にする。** 同じだと、いま何を選んで
@@ -1283,7 +1299,8 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--unknown-bg); border-color: var(--unknown-bar); border-style: solid;
   color: var(--text-primary);
 }
-.phrase-chip.is-known { opacity: .6; }
+/* 「知っていた」に戻した札も薄くしない(2026-08 の指摘)。
+   読みにくくなるだけで、得るものが無かった */
 /* 紙の上では、札の地の色を紙に合わせる */
 .lesson-sheet .phrase-chip {
   background: #fff; border-color: var(--rule); color: var(--ink-soft);
@@ -1293,40 +1310,57 @@ html { -webkit-text-size-adjust: 100%; }
 /* 吹き出しは body の直下に出す(`GlossPopover` が portal で置く)。
    紙は overflow-y: auto なので、横方向にも切ってしまう。
    親の中に置くと端の語で切れ、紙が横にずれる原因にもなった(2026-08 実機) */
+/* ── 意味の吹き出し ────────────────────────────────────────────
+   **中の色は、ここに並べた `--pop-*` だけで決める。**
+   個別に上書きして回っていたため、`.is-main` のほうが強くて
+   暗い配色のとき白い吹き出しに白い文字が載った(2026-08 の指摘)。
+   変数にしておけば、紙の上でも一式を差し替えるだけで済む。
+
+   design: シンプル・見やすい・飽きない。
+   ・囲みも帯も増やさない。**線1本と余白で分ける**
+   ・色を持つのは品詞の札だけ。文字はすべて濃さで区別する
+   ・いちばん大事な「その文での意味」だけを大きくする */
 .etext-pop {
+  --pop-bg:    var(--surface-1);
+  --pop-fg:    var(--text-primary);
+  --pop-dim:   var(--text-secondary);
+  --pop-faint: var(--text-muted);
+  --pop-rule:  var(--border);
+
   position: fixed; z-index: 200;
-  display: flex; flex-direction: column; gap: 4px;
-  min-width: 272px; max-width: min(90vw, 384px);
-  padding: 10px 26px 10px 12px;
-  border: 1px solid var(--border); border-radius: 10px;
-  background: var(--surface-1); color: var(--text-primary);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
-  font-size: 13px; line-height: 1.6; text-align: left; white-space: normal;
+  display: flex; flex-direction: column; gap: 10px;
+  min-width: 260px; max-width: min(92vw, 380px);
+  padding: 14px 16px;
+  border: 1px solid var(--pop-rule); border-radius: 12px;
+  background: var(--pop-bg); color: var(--pop-fg);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 20%);
+  font-size: 13px; line-height: 1.7; text-align: left; white-space: normal;
 }
-/* 見出しの行。**帯にして、意味の並びと切り分ける。**
-   どこまでが見出しでどこからが意味か、線1本より分かりやすい */
+
+/* 見出し。**帯にしない。** 線1本で足りる。
+   語と発音記号はひとつの塊にして、Listen は常に右上に置く */
 .etext-pop-head {
-  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  margin: -10px -26px 6px -12px; padding: 9px 26px 8px 12px;
-  border-bottom: 1px solid var(--border);
-  border-radius: 10px 10px 0 0;
-  background: var(--gloss-head-bg);
+  display: flex; align-items: flex-start; gap: 10px; padding-right: 18px;
 }
-.etext-pop-head strong { font-size: 15.5px; letter-spacing: .01em; }
+.etext-pop-word {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; min-width: 0;
+}
+.etext-pop-head strong {
+  font-size: 17px; font-weight: 650; letter-spacing: .01em; color: var(--pop-fg);
+}
 /* 発音記号。読み方が分からないと声に出せない */
-.etext-phonetic {
-  color: var(--gloss-phonetic); font-size: 12.5px; letter-spacing: .02em;
+.etext-phonetic { color: var(--pop-faint); font-size: 12.5px; letter-spacing: .02em; }
+.etext-listen {
+  margin-left: auto; flex: none; padding: 3px 10px; font-size: 11.5px;
 }
-.etext-listen { margin-left: auto; padding: 2px 8px; font-size: 11.5px; }
 .etext-listen .icon { margin-right: .3em; }
 
-/* 品詞。**種類ごとに色を変える。** 見ただけで名詞か動詞か分かる。
-   彩度は低く保つ。並んだときに目が疲れないようにするため。
-   色だけに頼らず、文字そのものも出している */
+/* 品詞。**ここだけが色を持つ。** 見ただけで名詞か動詞か分かる。
+   彩度は低く保つ。並んだときに目が疲れないようにするため */
 .etext-pos {
-  padding: 1px 8px; border: 1px solid transparent; border-radius: 999px;
-  font-size: 11px; flex: none; font-weight: 600;
-  background: var(--surface-2); color: var(--text-secondary);
+  padding: 1px 8px; border-radius: 999px;
+  font-size: 10.5px; flex: none; font-weight: 600; line-height: 1.6;
+  background: var(--surface-2); color: var(--pop-dim);
 }
 .etext-pos--noun   { background: var(--pos-noun-bg);   color: var(--pos-noun); }
 .etext-pos--verb   { background: var(--pos-verb-bg);   color: var(--pos-verb); }
@@ -1335,38 +1369,48 @@ html { -webkit-text-size-adjust: 100%; }
 .etext-pos--conj   { background: var(--pos-conj-bg);   color: var(--pos-conj); }
 .etext-pos--phrase { background: var(--pos-phrase-bg); color: var(--pos-phrase); }
 
-/* 意味の並び。**先頭がその文での意味**なので大きく、以降は小さく。
+/* 意味の並び。**先頭がその文での意味**なので大きく、以降は静かに。
    大きさで「どれがいま効いている意味か」が一目で分かる(2026-08 の指定) */
-.etext-sense { display: flex; flex-direction: column; gap: 2px; }
-.etext-sense-line { display: flex; align-items: baseline; gap: 6px; }
-.etext-sense-mean { font-size: 12.5px; color: var(--text-secondary); }
+.etext-sense { display: flex; flex-direction: column; gap: 3px; }
+.etext-sense-line { display: flex; align-items: baseline; gap: 7px; }
+.etext-sense-mean { font-size: 13px; color: var(--pop-dim); }
 .etext-sense.is-main .etext-sense-mean {
-  font-size: 15px; font-weight: 700; color: var(--text-primary);
+  font-size: 15.5px; font-weight: 650; color: var(--pop-fg); line-height: 1.55;
 }
-.etext-sense.is-main { padding-bottom: 4px; }
-.etext-sense + .etext-sense { margin-top: 3px; }
-.etext-sense-no {
-  min-width: 1.1em; color: var(--text-muted); font-size: 11px; flex: none;
-}
-.etext-sense:not(.is-main) .etext-pos { font-size: 10px; padding: 0 5px; }
+/* 2つめから下は、線1本で区切る。囲みは増やさない */
+.etext-sense + .etext-sense { padding-top: 9px; border-top: 1px solid var(--pop-rule); }
+.etext-sense-no { min-width: 1.1em; color: var(--pop-faint); font-size: 11px; flex: none; }
+.etext-sense:not(.is-main) .etext-pos { font-size: 10px; padding: 0 6px; }
+
+/* 例文。**英語だと分かるように、色ではなく細い縦線で示す** */
 .etext-pop-ex {
-  color: var(--text-secondary); font-size: 12px;
-  padding-left: 8px; border-left: 2px solid var(--border);
+  color: var(--pop-dim); font-size: 12px; line-height: 1.6;
+  padding-left: 9px; border-left: 2px solid var(--pop-rule);
 }
-.etext-sense:not(.is-main) .etext-pop-ex { font-size: 11px; color: var(--text-muted); }
-.etext-pop-note {
-  color: var(--gloss-note); font-size: 12px;
-  padding: 3px 8px; border-radius: 6px; background: var(--gloss-note-bg);
+.etext-sense:not(.is-main) .etext-pop-ex { font-size: 11.5px; color: var(--pop-faint); }
+/* 使い方の一言。**囲まない。** 囲みが増えるほど、目が休まらない */
+.etext-pop-note { color: var(--pop-faint); font-size: 11.5px; line-height: 1.6; }
+.etext-pop-time { color: var(--pop-faint); font-size: 11px; }
+.etext-pop-busy, .etext-pop-error { color: var(--pop-dim); }
+
+/* 「知っていた / 知らなかった」。**どちらも同じ重さ。**
+   赤い字は、間違いを責められているように見える(2026-08 の指摘) */
+.etext-pop-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding-top: 10px; border-top: 1px solid var(--pop-rule);
 }
-.etext-pop-time { color: var(--text-muted); font-size: 11px; }
-.etext-pop-busy, .etext-pop-error { color: var(--text-secondary); }
-.etext-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.etext-pop-actions .btn { padding: 5px 14px; font-size: 12.5px; }
+.etext-pop-actions .btn--link { margin-left: auto; padding: 5px 2px; }
+
 .etext-pop-close {
-  position: absolute; right: 4px; top: 4px;
-  border: 0; background: none; color: var(--text-muted);
+  position: absolute; right: 8px; top: 8px;
+  border: 0; background: none; color: var(--pop-faint);
   font-size: 13px; line-height: 1; cursor: pointer; padding: 4px;
 }
-.btn--warnish { border-color: var(--unknown-bar); }
+.etext-pop-close:hover { color: var(--pop-fg); }
+
+/* 以前は「知らなかった」だけ赤枠にしていたが、責められているように
+   見えるとの指摘(2026-08)。どちらの選択も同じ重さで置く */
 
 /* 紙には語の枠も色も出さない */
 @media print {
@@ -1560,60 +1604,34 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .lesson-sheet .btn:hover { background: var(--accent-bg); color: var(--accent); }
 
-/* 意味の窓。**紙の中でも色を決め打ちにする。**
-   `.lesson-sheet *` が文字色を黒にするので、暗い配色の変数を使うと
-   「黒い背景に黒い文字」になって読めなくなる(第5.22.6節①と同じ話) */
-/* 紙の中の吹き出し。**紙は暗い配色でも白のまま**なので、
-   ここでも明るい側の色に決め打ちする(第5.22.6節①と同じ話)。
-   品詞の色は明るい背景向けなので、そのまま使える */
 /* 紙の上に出る吹き出し。**紙は暗い配色でも白のまま**なので、
-   中身も明るい側で決め打ちにする。**ボタンまで含めてそろえる。**
-   ボタンだけ配色任せにしていたため、暗い配色のとき白い吹き出しに
-   黒いボタンが載った(2026-08 実機の指摘)。 */
+   中身も明るい側で決め打ちにする。**変数を差し替えるだけ。**
+   個別に上書きして回ると、必ずどこかが取り残される(2026-08 の指摘で
+   「1つめの意味が白いまま」「ボタンだけ黒いまま」が起きた) */
 .etext-pop--paper {
-  background: #fdfcf9; color: #24292f; border-color: #e7e3da;
-  --gloss-head-bg: #f2f5f8;
-  --gloss-phonetic: #5f7a8a;
-  --gloss-note:    #7a5f2e;
-  --gloss-note-bg: #faf3e4;
+  --pop-bg:    #fff;
+  --pop-fg:    #24292f;
+  --pop-dim:   #5a646e;
+  --pop-faint: #8b949e;
+  --pop-rule:  #e7e3da;
+
   --pos-noun:   #2f6f86;  --pos-noun-bg:   #eaf3f7;
   --pos-verb:   #38795a;  --pos-verb-bg:   #eaf4ee;
   --pos-adj:    #8a5588;  --pos-adj-bg:    #f6edf5;
   --pos-adv:    #8a6a33;  --pos-adv-bg:    #f9f2e6;
   --pos-conj:   #5c6470;  --pos-conj-bg:   #eff1f4;
   --pos-phrase: #4c6ba8;  --pos-phrase-bg: #eef2fa;
-  background: #fff; border-color: var(--rule);
-  box-shadow: 0 10px 28px rgba(36, 41, 47, .18);
+
+  box-shadow: 0 10px 30px rgb(36 41 47 / 18%);
 }
-.etext-pop--paper .etext-pop-head { border-bottom-color: var(--rule); }
-.etext-pop--paper .etext-pop-head strong { color: var(--ink); }
-.etext-pop--paper .etext-pos--noun   { color: var(--pos-noun); }
-.etext-pop--paper .etext-pos--verb   { color: var(--pos-verb); }
-.etext-pop--paper .etext-pos--adj    { color: var(--pos-adj); }
-.etext-pop--paper .etext-pos--adv    { color: var(--pos-adv); }
-.etext-pop--paper .etext-pos--conj   { color: var(--pos-conj); }
-.etext-pop--paper .etext-pos--phrase { color: var(--pos-phrase); }
-.etext-pop--paper .etext-phonetic { color: var(--gloss-phonetic); }
-.lesson-sheet .etext-listen { margin-top: 0; }
-.lesson-sheet .etext-sense-mean { color: var(--ink-soft); }
-.lesson-sheet .etext-sense.is-main .etext-sense-mean { color: var(--ink); }
-.etext-pop--paper .etext-pop-note { color: var(--gloss-note); }
-.lesson-sheet .etext-sense-no,
-.etext-pop--paper .etext-pop-ex,
-.etext-pop--paper .etext-pop-busy,
-.etext-pop--paper .etext-pop-time,
-.etext-pop--paper .etext-pop-close { color: #8b949e; }
-.etext-pop--paper .etext-sense-mean { color: #24292f; }
-.etext-pop--paper .etext-sense-no { color: #8b949e; }
+/* ボタンも紙に合わせる。**中身まで含めて決め打ちにする** */
 .etext-pop--paper .btn {
   background: #fff; border-color: #dcd8cf; color: #24292f;
 }
-.etext-pop--paper .btn:hover { border-color: #b9b3a7; }
-.etext-pop--paper .btn--warnish { border-color: #e07a72; color: #a33b33; }
+.etext-pop--paper .btn:hover { border-color: #a9a294; background: #f7f6f3; }
 .etext-pop--paper .btn--link { background: none; border-color: transparent; color: #2f6f86; }
 .lesson-sheet .etext-word:hover,
 .lesson-sheet .etext-word.is-open { background: var(--accent-bg); border-bottom-color: var(--accent); }
-.lesson-sheet .etext-word.is-unknown { background: #fbe6e3; box-shadow: 0 1px 0 0 #c9534f; }
 
 @media (max-width: 600px) {
   /* ── スマホでの紙 ────────────────────────────────────
@@ -1725,11 +1743,6 @@ html { -webkit-text-size-adjust: 100%; }
   --reading-bg:   var(--border);
   --reading-fg:   var(--text-primary);
 
-  --gloss-head-bg:  var(--surface-2);
-  --gloss-phonetic: var(--text-muted);
-  --gloss-note:     var(--text-secondary);
-  --gloss-note-bg:  var(--surface-2);
-
   --pos-noun:   var(--text-secondary);  --pos-noun-bg:   var(--surface-2);
   --pos-verb:   var(--text-secondary);  --pos-verb-bg:   var(--surface-2);
   --pos-adj:    var(--text-secondary);  --pos-adj-bg:    var(--surface-2);
@@ -1751,10 +1764,6 @@ html { -webkit-text-size-adjust: 100%; }
 }
 /* 紙の上の吹き出しも、そろえて灰色にする */
 :root[data-palette="plain"] .etext-pop--paper {
-  --gloss-head-bg:  #f1f2f4;
-  --gloss-phonetic: #8b949e;
-  --gloss-note:     #5a646e;
-  --gloss-note-bg:  #f5f6f7;
   --pos-noun:   #5a646e;  --pos-noun-bg:   #f1f2f4;
   --pos-verb:   #5a646e;  --pos-verb-bg:   #f1f2f4;
   --pos-adj:    #5a646e;  --pos-adj-bg:    #f1f2f4;
