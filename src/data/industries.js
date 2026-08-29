@@ -17,6 +17,8 @@ export const INDUSTRIES = [
   { id: 'pharma',        label: '製薬',         hint: '治験、承認申請、品質管理、学術情報' },
   { id: 'trading',       label: '商社',         hint: '仕入交渉、見積、船積、与信、代理店' },
   { id: 'finance',       label: '金融',         hint: '融資、投資、決算説明、コンプライアンス' },
+  { id: 'construction',  label: '建設・不動産', hint: '図面、工程、契約、内見、施工管理' },
+  { id: 'legal',         label: '法務',         hint: '契約書、条項の交渉、社内相談、コンプライアンス' },
 ]
 
 export const industryLabel = (id) =>
