@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadEnglishVoices, speak, speakSequence, stopSpeaking } from '../lib/speech.js'
 import { castVoices, voiceFor } from '../lib/voiceCast.js'
+import { prefetchGlosses } from '../lib/vocab.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -68,6 +69,14 @@ export default function PassagePractice({
     loadEnglishVoices().then((list) => { if (alive) setVoices(list) })
     return () => { alive = false; stopSpeaking() }
   }, [])
+
+  // 開いた時点で、まだ控えに無い語を裏で引いておく(2026-08 の要望)
+  useEffect(() => {
+    prefetchGlosses(
+      section.items.map((it) => ({ text: it.prompt_en })).filter((x) => x.text),
+      { level },
+    )
+  }, [section, level])
 
   // 読んでいるところまで画面を送る。すでに見えていれば動かない
   useEffect(() => {

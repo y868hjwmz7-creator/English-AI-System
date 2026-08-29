@@ -39,7 +39,11 @@
 //   ・**控えへの書き込みはこの関数だけ**(service_role)。画面からは読むだけ
 //   ・1回の呼び出しで1語だけ。まとめ送りにしない(費用が読めなくなる)
 // ============================================================================
-import Anthropic from 'npm:@anthropic-ai/sdk@0.65.0'
+// **Anthropic の SDK は読み込まない。**
+//   Edge Function は呼ばれるたびに立ち上がることがある(コールドスタート)。
+//   npm の大きな部品を読み込むと、その支度だけで1〜数秒かかる。
+//   ここでやるのは「1回 POST する」だけなので、fetch で直接呼ぶ。
+//   これは**モデルを速いものに替えるより効く**ことがある(2026-08)。
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const cors = {
@@ -82,7 +86,12 @@ async function contextKeyOf(sentence: string): Promise<string> {
 /**
  * 使うモデル。**ここ1行を変えれば入れ替わる。**
  *
- * 【なぜ Haiku 4.5 なのか】(2026-08 利用者の指定)
+ * 【いまは Sonnet 5】(2026-08 利用者の指定で Haiku 4.5 から戻した)
+ *   Haiku 4.5 に替えても**体感は変わらなかった**。
+ *   つまり遅さの原因はモデルではなく、**関数の立ち上がり**だった。
+ *   質は Sonnet 5 のほうが安定するので、こちらに戻してある。
+ *
+ * 【Haiku 4.5 を試したときの記録】
  *   語に触れてから意味が出るまでが長い、という指摘があった。
  *   控えにある語は通信なしで出るようにしたが(第5.23.11節)、
  *   **まだ誰も引いていない語は AI に尋ねるぶん、どうしてもかかる。**
@@ -97,9 +106,9 @@ async function contextKeyOf(sentence: string): Promise<string> {
  * 【教材の生成は替えていない】
  *   `generate-material` は Sonnet 5 のまま。あちらは質が要る。
  *
- * 【戻したいとき】
- *   'claude-sonnet-5' に書き換えて配置し直す。
- *   そのときは下の output_config(effort)も一緒に戻すこと。
+ * 【また Haiku 4.5 を試したいとき】
+ *   'claude-haiku-4-5' に書き換え、**下の output_config(effort)を消す。**
+ *   Haiku 4.5 は effort に対応しておらず、付けたまま呼ぶと失敗する。
  *
  * 【替えるときに気をつけたこと】
  *   ・Haiku 4.5 は `output_config.effort` に**対応していない**。
@@ -112,7 +121,16 @@ async function contextKeyOf(sentence: string): Promise<string> {
  *     ここの指示は700トークンほどなので**載らない**(エラーにはならず、
  *     黙って載らないだけ)。入力は1回あたり1円未満なので実害はない
  */
-const MODEL = 'claude-haiku-4-5'
+const MODEL = 'claude-sonnet-5'
+
+/**
+ * 先読みで、1回にまとめて引く語の数。
+ *
+ * **1語ずつ呼ばない。** 指示文(約700トークン)が語の数だけかかり、
+ * 1語あたりの費用が3倍近くになる。まとめれば指示文は1回で済む。
+ * 大きくしすぎると、返ってくるまでが長くなり、途中で切られる危険も増す。
+ */
+const BATCH_LIMIT = 10
 
 const SYSTEM_PROMPT = `あなたは日本人のビジネス英語学習者に語の意味を教える辞書である。
 
@@ -178,8 +196,80 @@ const EMIT_GLOSS_TOOL = {
   },
 }
 
+/** まとめて引くときの受け皿。1回の呼び出しで何語も返す */
+const EMIT_GLOSSES_TOOL = {
+  name: 'emit_glosses',
+  description: '複数の語の意味をまとめて返す',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        description: '渡された語と**同じ数・同じ順**で返す',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['display', 'phonetic', 'senses'],
+          properties: {
+            display:  { type: 'string', description: '見出し。渡された語のままの形' },
+            phonetic: { type: 'string', description: 'その文での読み方(IPA)。スラッシュは付けない' },
+            senses: {
+              type: 'array',
+              description: '意味。**その文でふさわしいものを先頭に**、1〜3件',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['pos', 'meaning_ja', 'example_en', 'note'],
+                properties: {
+                  pos:        { type: 'string' },
+                  meaning_ja: { type: 'string' },
+                  example_en: { type: 'string' },
+                  note:       { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+}
+
+/** 語ひとつぶんの控えの形にそろえる */
+const toGloss = (raw: string, wordNorm: string, contextKey: string,
+                 out: { display?: string; phonetic?: string; senses?: Record<string, string>[] }) => {
+  const senses = (out.senses ?? [])
+    .filter((x) => String(x?.meaning_ja ?? '').trim())
+    .slice(0, 4)
+    .map((x) => ({
+      pos: x.pos ?? '',
+      meaning_ja: x.meaning_ja,
+      example_en: x.example_en ?? '',
+      note: x.note ?? '',
+    }))
+  if (!senses.length) return null
+  return {
+    word_norm: wordNorm,
+    context_key: contextKey,
+    display: out.display || raw,
+    phonetic: String(out.phonetic ?? '').replace(/^\/+|\/+$/g, '').trim() || null,
+    pos: senses[0].pos,
+    meaning_ja: senses[0].meaning_ja,
+    example_en: senses[0].example_en || null,
+    note: senses[0].note || null,
+    senses,
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+
+  // どこに時間がかかっているのかを測って返す。
+  // **速い・遅いを体感で議論しない。** 数字で見る(2026-08)
+  const startedAt = Date.now()
+  let askedAt = 0
 
   try {
     const url = Deno.env.get('SUPABASE_URL')!
@@ -208,6 +298,85 @@ Deno.serve(async (req) => {
     let body: Record<string, unknown>
     try { body = await req.json() } catch { return reply({ error: '内容を読めませんでした' }, 400) }
 
+    // 控えに書き込むのはこの関数だけ(service_role)。画面からは読むだけ
+    const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+      auth: { persistSession: false },
+    })
+
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
+    if (!apiKey) {
+      return reply({
+        error: 'Claude の鍵が設定されていません。Supabase の Edge Functions → Secrets に'
+          + ' ANTHROPIC_API_KEY を追加してください。',
+      }, 500)
+    }
+
+    // ── まとめて引く(先読み)────────────────────────────────
+    //
+    //   教材を開いたときに、まだ控えに無い語を**裏で先に引いておく**
+    //   (2026-08 の要望)。触れたときには出来上がっている。
+    //
+    //   **1語ずつ呼ばない。** 指示文(約700トークン)が語の数だけかかり、
+    //   費用が3倍近くになる。10語をまとめて1回で引く。
+    if (Array.isArray(body.words) && body.words.length) {
+      const items = (body.words as Record<string, string>[])
+        .map((w) => ({
+          raw: String(w.word ?? '').trim().slice(0, 60),
+          sentence: String(w.sentence ?? '').trim().slice(0, 400),
+          contextKey: String(w.contextKey ?? '').slice(0, 32),
+        }))
+        .filter((w) => normWord(w.raw))
+        .slice(0, BATCH_LIMIT)
+      if (!items.length) return reply({ glosses: [] })
+
+      const prompt = [
+        '# 調べる語(この順で、同じ数だけ返すこと)',
+        ...items.map((w, i) => `${i + 1}. ${w.raw}\n   出てきた文: ${w.sentence}`),
+        `\n# 学習者のレベル\n${String(body.level ?? 'B1').slice(0, 20)}`,
+      ].join('\n')
+
+      askedAt = Date.now()
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 4000,
+          output_config: { effort: 'low' },
+          system: [{ type: 'text', text: SYSTEM_PROMPT }],
+          tools: [EMIT_GLOSSES_TOOL],
+          tool_choice: { type: 'tool', name: 'emit_glosses' },
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        return reply({ error: `まとめて調べられませんでした: ${res.status} ${text.slice(0, 200)}` }, 200)
+      }
+      const data = await res.json()
+      const block = (data.content ?? []).find((b: { type: string }) => b.type === 'tool_use')
+      const out = (block?.input?.items ?? []) as Record<string, string>[]
+
+      const glosses = []
+      for (let i = 0; i < items.length; i += 1) {
+        const g = out[i] ? toGloss(items[i].raw, normWord(items[i].raw), items[i].contextKey, out[i]) : null
+        if (g) glosses.push(g)
+      }
+      if (glosses.length) {
+        const { error: saveError } = await admin
+          .from('word_glosses').upsert(glosses, { onConflict: 'word_norm,context_key' })
+        if (saveError) console.error('控えに残せませんでした', saveError)
+      }
+      return reply({
+        glosses,
+        ms: { total: Date.now() - startedAt, setup: askedAt - startedAt, ai: Date.now() - askedAt },
+      })
+    }
+
     const raw = String(body.word ?? '').trim().slice(0, 60)
     const wordNorm = normWord(raw)
     if (!wordNorm) return reply({ error: '英語の語を指定してください' }, 400)
@@ -221,64 +390,64 @@ Deno.serve(async (req) => {
       ? body.contextKey.slice(0, 32)
       : await contextKeyOf(sentence)
 
-    // ── 3. 控えにあれば、それを返す(費用がかからない) ─────
-    const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
-      auth: { persistSession: false },
-    })
-    const { data: cached } = await admin
-      .from('word_glosses').select('*')
-      .eq('word_norm', wordNorm).eq('context_key', contextKey).maybeSingle()
-    if (cached) return reply({ gloss: cached, cached: true })
+    // ── 3. ここへ来るのは「控えに無い語」だけ ────────────────
+    //
+    //   控えは**画面側が先に読んでいる**(src/lib/vocab.js)。
+    //   ここでもう一度読むと、その往復のぶんだけ遅くなるだけである。
+    //   同じ語を2人が同時に引いても、下の upsert で上書きされるだけで害はない。
 
-    // ── 4. 無ければ1語だけ引く ─────────────────────────────
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-    if (!apiKey) {
-      return reply({
-        error: 'Claude の鍵が設定されていません。Supabase の Edge Functions → Secrets に'
-          + ' ANTHROPIC_API_KEY を追加してください。',
-      }, 500)
-    }
-
-    const client = new Anthropic({ apiKey })
+    // ── 4. 1語だけ引く ────────────────────────────────────
 
     /**
-     * 実際に尋ねる。
+     * 実際に尋ねる(REST を直接叩く)。
      *
      * `strict: true` は「返す形を API が保証する」指定である。
-     * **Haiku 4.5 は世代が古く、この環境からは対応を確かめられない。**
-     * 対応していなければ呼び出しごと失敗し、意味が一切出なくなる。
-     *
-     * そこで、**形の指定で断られたときだけ、外してもう一度尋ねる。**
-     * 外しても指示文で形は伝えてあるので、たいてい同じものが返る。
-     * 中身が空なら、この下の確認で弾かれる。
+     * 断られたときだけ外して引き直す(モデルによっては通らないため)。
      */
-    const ask = (strict: boolean) => client.messages.create({
-      model: MODEL,
-      // 返すのは短い1件だけ。ここが大きいと、間違って長く書かせたときに響く
-      max_tokens: 1500,
-      // **effort は指定しない。** Haiku 4.5 は対応しておらず、
-      // 付けたまま呼ぶと失敗する(モデルを戻すときは一緒に戻す)
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      tools: [{ ...EMIT_GLOSS_TOOL, strict } as unknown as Anthropic.Tool],
-      tool_choice: { type: 'tool', name: 'emit_gloss' },
-      messages: [{
-        role: 'user',
-        content: [
-          `# 語\n${raw}`,
-          sentence ? `\n# 出てきた文\n${sentence}` : '',
-          `\n# 学習者のレベル\n${level}`,
-        ].join(''),
-      }],
-    })
+    const ask = async (strict: boolean) => {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          // 返すのは短い1件だけ
+          max_tokens: 1000,
+          // 辞書を引くだけなので、考える量は最小でよい
+          // ※ Haiku 4.5 に替えるときは、この1行を消すこと
+          output_config: { effort: 'low' },
+          system: [{ type: 'text', text: SYSTEM_PROMPT }],
+          tools: [{ ...EMIT_GLOSS_TOOL, strict }],
+          tool_choice: { type: 'tool', name: 'emit_gloss' },
+          messages: [{
+            role: 'user',
+            content: [
+              `# 語\n${raw}`,
+              sentence ? `\n# 出てきた文\n${sentence}` : '',
+              `\n# 学習者のレベル\n${level}`,
+            ].join(''),
+          }],
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`${res.status} ${text.slice(0, 300)}`)
+      }
+      return await res.json()
+    }
 
     let response
+    askedAt = Date.now()
     try {
       response = await ask(true)
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       // 形の指定を断られたときだけ、外してもう一度。
       // それ以外の失敗(鍵・上限など)は、そのまま下の catch に任せる
-      if (!/strict|schema|input_schema|400/i.test(message)) throw e
+      if (!/strict|schema|input_schema|\b400\b/i.test(message)) throw e
       console.warn('形の指定が通らなかったので、外して引き直します', message)
       response = await ask(false)
     }
@@ -286,11 +455,11 @@ Deno.serve(async (req) => {
     if (response.stop_reason === 'refusal') {
       return reply({ error: 'この語は調べられませんでした。' }, 200)
     }
-    const block = response.content.find((b) => b.type === 'tool_use')
-    if (!block || block.type !== 'tool_use') {
+    const block = (response.content ?? []).find((b: { type: string }) => b.type === 'tool_use')
+    if (!block) {
       return reply({ error: '意味を読み取れませんでした。もう一度お試しください。' }, 200)
     }
-    const out = block.input as {
+    const out = (block.input ?? {}) as {
       display?: string; phonetic?: string; senses?: Record<string, string>[]
     }
     // **中身が0件のまま「成功」を返さない**(第5.19.6節と同じ考え方)
@@ -332,8 +501,14 @@ Deno.serve(async (req) => {
       gloss,
       cached: false,
       usage: {
-        input: response.usage.input_tokens,
-        output: response.usage.output_tokens,
+        input: response.usage?.input_tokens ?? 0,
+        output: response.usage?.output_tokens ?? 0,
+      },
+      // 内訳。支度(立ち上がり)と、AI に尋ねている時間を分けて返す
+      ms: {
+        total: Date.now() - startedAt,
+        setup: askedAt - startedAt,
+        ai: Date.now() - askedAt,
       },
     })
   } catch (e) {

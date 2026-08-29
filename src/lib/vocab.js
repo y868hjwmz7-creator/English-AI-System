@@ -155,6 +155,99 @@ async function runPreload() {
 }
 
 /**
+ * 先読みしない語(ごくありふれた語)。
+ *
+ * **教材を開いた時点で全部引くと、費用が跳ね上がる。**
+ * the / is / and のような語は、誰も意味を知りたがらない。
+ * ここに載っている語は先読みしない(触れれば、そのときちゃんと引く)。
+ */
+const COMMON = new Set(`a an the this that these those i you he she it we they
+me him her us them my your his its our their mine yours
+is am are was were be been being do does did done have has had
+will would can could shall should may might must
+and or but so if then than as of in on at to for from by with without
+about into over under after before during between through
+not no yes very too also just only even still yet more most much many
+some any all both each every other another such same
+here there where when why how what which who whom whose
+one two three four five six seven eight nine ten
+i'm you're we're they're it's don't doesn't didn't isn't aren't wasn't weren't
+can't won't wouldn't couldn't shouldn't i've you've we've they've
+get got go goes went come came make made take took give gave
+say said see saw know knew think thought want wanted need needed
+like liked look looked use used find found tell told ask asked
+work works day time year people way thing things`.trim().split(/\s+/))
+
+/**
+ * まだ控えに無い語を、**裏で先に引いておく。**
+ *
+ * 【なぜ必要か】(2026-08 の要望)
+ *   ウェブページのように、開いた時点で支度を済ませておきたい。
+ *   触れてから引きに行くと、はじめての語はどうしても数秒待たされる。
+ *
+ * 【費用を跳ね上げないために】
+ *   ・ごくありふれた語は引かない(上の COMMON)
+ *   ・**1回に10語まとめて**引く。1語ずつ呼ぶと指示文の分だけ費用が3倍になる
+ *   ・1つの教材につき **PREFETCH_LIMIT 語まで**。全部は引かない
+ *   ・引いた結果はスクール全体の控えに残るので、**2人目からは無料**
+ *
+ *   目安: 1語あたりおよそ 0.1 円。24語で 2.4 円、しかも一度きり。
+ */
+const PREFETCH_LIMIT = 24
+const prefetchDone = new Set()   // 同じ本文を二度先読みしない
+
+export async function prefetchGlosses(entries, { level = 'B1' } = {}) {
+  if (!supabase) return
+  const list = (entries ?? []).filter((e) => e && e.text)
+  if (!list.length) return
+
+  const seen = new Set()
+  const wanted = []
+  for (const { text } of list) {
+    const ctx = await contextKeyOf(text)
+    for (const part of splitWords(text)) {
+      if (!part.word) continue
+      const key = cacheKey(part.norm, ctx)
+      if (seen.has(key) || memoryCache.has(key) || prefetchDone.has(key)) continue
+      if (COMMON.has(part.norm) || part.norm.length <= 2) continue
+      seen.add(key)
+      wanted.push({ word: part.text, sentence: text, contextKey: ctx, key })
+    }
+  }
+  if (!wanted.length) return
+
+  // すでに控えにあるものを外す(引き直さない)
+  const { data: have } = await supabase
+    .from('word_glosses').select('word_norm, context_key, senses, display, phonetic, pos, meaning_ja, example_en, note')
+    .in('context_key', [...new Set(wanted.map((w) => w.contextKey))])
+    .in('word_norm', [...new Set(wanted.map((w) => normWord(w.word)))].slice(0, 400))
+  for (const row of have ?? []) {
+    memoryCache.set(cacheKey(row.word_norm, row.context_key), withSenses(row))
+  }
+  const missing = wanted
+    .filter((w) => !memoryCache.has(w.key))
+    .slice(0, PREFETCH_LIMIT)
+  if (!missing.length) return
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return
+
+  // 10語ずつ、順番に。まとめて一度に投げると返りが遅くなる
+  for (let i = 0; i < missing.length; i += 10) {
+    const chunk = missing.slice(i, i + 10)
+    for (const w of chunk) prefetchDone.add(w.key)
+    const { data, error } = await supabase.functions.invoke('lookup-word', {
+      body: { words: chunk.map(({ word, sentence, contextKey }) => ({ word, sentence, contextKey })), level },
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+    if (error || data?.error) return   // 失敗したら静かにやめる(触れれば引ける)
+    for (const g of data?.glosses ?? []) {
+      memoryCache.set(cacheKey(g.word_norm, g.context_key), withSenses(g))
+    }
+  }
+}
+
+/**
  * 意味と品詞を引く。**その文でふさわしい意味が先頭**で返る。
  *
  * 探す順は「覚えている → データベースの控え → 窓口」。
@@ -206,8 +299,10 @@ export async function lookupWord({ word, sentence = '', level = 'B1' }) {
   }
   if (data?.error) return ng(data.error)
   if (!data?.gloss) return ng('意味を読み取れませんでした')
-  const gloss = withSenses(data.gloss)
-  memoryCache.set(cacheKey(norm, ctx), gloss)
+  // はじめて引いた語だけ、かかった時間を持たせる。
+  // **速い・遅いを体感で議論しないため。** 2回目からは控えから出るので付かない
+  const gloss = { ...withSenses(data.gloss), lookedUpMs: data.ms?.total ?? null }
+  memoryCache.set(cacheKey(norm, ctx), { ...gloss, lookedUpMs: null })
   return ok(gloss)
 }
 

@@ -204,6 +204,13 @@ export default function EnglishText({
                     ))}
                   </>
                 )}
+                {/* はじめて引いた語だけ、かかった時間を小さく出す。
+                    2回目からは控えから出るので出ない(2026-08) */}
+                {gloss?.lookedUpMs != null && (
+                  <span className="etext-pop-time">
+                    はじめて調べました({(gloss.lookedUpMs / 1000).toFixed(1)} 秒)
+                  </span>
+                )}
                 {onMark && (
                   <span className="etext-pop-actions">
                     <button type="button" className="btn btn--small"

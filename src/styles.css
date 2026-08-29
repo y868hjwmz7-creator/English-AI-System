@@ -1126,6 +1126,7 @@ html { -webkit-text-size-adjust: 100%; }
 .etext-pop-ex { color: var(--text-secondary); font-size: 12px; }
 .etext-sense:not(.is-main) .etext-pop-ex { font-size: 11px; color: var(--text-muted); }
 .etext-pop-note { color: var(--text-muted); font-size: 12px; }
+.etext-pop-time { color: var(--text-muted); font-size: 11px; }
 .etext-pop-busy, .etext-pop-error { color: var(--text-secondary); }
 .etext-pop-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .etext-pop-close {

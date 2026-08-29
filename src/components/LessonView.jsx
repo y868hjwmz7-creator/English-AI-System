@@ -24,6 +24,7 @@ import { castVoices, voiceFor } from '../lib/voiceCast.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
+import { prefetchGlosses } from '../lib/vocab.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 
@@ -94,6 +95,19 @@ export default function LessonView({
     document.querySelector(`[data-key="${window.CSS.escape(speakingKey)}"]`)
       ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [speakingKey])
+
+  // **開いた時点で、まだ控えに無い語を裏で引いておく。**
+  // 触れてから引きに行くと、はじめての語は数秒待たされる(2026-08 の要望)。
+  // 見えているページの分だけ。全ページを一度に引くと無駄が出る。
+  useEffect(() => {
+    const sec = sections[page]
+    if (!sec) return
+    const texts = sec.items
+      .map((it) => it.prompt_en || it.question || '')
+      .filter(Boolean)
+      .map((text) => ({ text }))
+    prefetchGlosses(texts, { level: material?.level })
+  }, [page, sections, material?.level])
 
   // 開いているあいだは、後ろの画面を動かさない
   useEffect(() => {
