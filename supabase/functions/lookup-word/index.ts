@@ -79,9 +79,40 @@ async function contextKeyOf(sentence: string): Promise<string> {
     .map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
 }
 
-// 使うモデル。generate-material と合わせてある。
-// **変えたら画面側の単価(PRICE_PER_MTOK)も一緒に変えること。**
-const MODEL = 'claude-sonnet-5'
+/**
+ * 使うモデル。**ここ1行を変えれば入れ替わる。**
+ *
+ * 【なぜ Haiku 4.5 なのか】(2026-08 利用者の指定)
+ *   語に触れてから意味が出るまでが長い、という指摘があった。
+ *   控えにある語は通信なしで出るようにしたが(第5.23.11節)、
+ *   **まだ誰も引いていない語は AI に尋ねるぶん、どうしてもかかる。**
+ *
+ *   ここでやっているのは「辞書を1語引く」だけで、出力は30〜60トークンと短い。
+ *   **教材を作る仕事とは、求められる質がまるで違う。**
+ *   速さが実用性に直結するこの用途では Haiku が向く。
+ *
+ *   費用も下がる(出力 100万トークンあたり $10 → $5)。
+ *   ただし**費用が理由ではない。** 速さが理由である。
+ *
+ * 【教材の生成は替えていない】
+ *   `generate-material` は Sonnet 5 のまま。あちらは質が要る。
+ *
+ * 【戻したいとき】
+ *   'claude-sonnet-5' に書き換えて配置し直す。
+ *   そのときは下の output_config(effort)も一緒に戻すこと。
+ *
+ * 【替えるときに気をつけたこと】
+ *   ・Haiku 4.5 は `output_config.effort` に**対応していない**。
+ *     付けたまま呼ぶと失敗する。だからこの関数では指定しない
+ *   ・`thinking` も指定しない。辞書を引くだけなので考える必要がない。
+ *     指定しなければ、この世代のモデルは考えずにすぐ答える
+ *   ・この関数の費用は画面に出していないので、単価の表示は直さなくてよい
+ *     (生成の単価 PRICE_PER_MTOK は generate-material 用である)
+ *   ・Haiku 4.5 は**指示が4,096トークン以上ないとキャッシュに載らない。**
+ *     ここの指示は700トークンほどなので**載らない**(エラーにはならず、
+ *     黙って載らないだけ)。入力は1回あたり1円未満なので実害はない
+ */
+const MODEL = 'claude-haiku-4-5'
 
 const SYSTEM_PROMPT = `あなたは日本人のビジネス英語学習者に語の意味を教える辞書である。
 
@@ -117,7 +148,7 @@ emit_gloss という道具だけを使って返すこと。文章での説明は
 const EMIT_GLOSS_TOOL = {
   name: 'emit_gloss',
   description: '語の意味を返す',
-  strict: true,
+  // strict は呼び出すときに付ける(通らなければ外して引き直すため)
   input_schema: {
     type: 'object',
     additionalProperties: false,
@@ -209,14 +240,26 @@ Deno.serve(async (req) => {
     }
 
     const client = new Anthropic({ apiKey })
-    const response = await client.messages.create({
+
+    /**
+     * 実際に尋ねる。
+     *
+     * `strict: true` は「返す形を API が保証する」指定である。
+     * **Haiku 4.5 は世代が古く、この環境からは対応を確かめられない。**
+     * 対応していなければ呼び出しごと失敗し、意味が一切出なくなる。
+     *
+     * そこで、**形の指定で断られたときだけ、外してもう一度尋ねる。**
+     * 外しても指示文で形は伝えてあるので、たいてい同じものが返る。
+     * 中身が空なら、この下の確認で弾かれる。
+     */
+    const ask = (strict: boolean) => client.messages.create({
       model: MODEL,
       // 返すのは短い1件だけ。ここが大きいと、間違って長く書かせたときに響く
       max_tokens: 1500,
-      // 辞書を引くだけなので、考える量は最小でよい(費用は考えた分もかかる)
-      output_config: { effort: 'low' },
+      // **effort は指定しない。** Haiku 4.5 は対応しておらず、
+      // 付けたまま呼ぶと失敗する(モデルを戻すときは一緒に戻す)
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      tools: [EMIT_GLOSS_TOOL as unknown as Anthropic.Tool],
+      tools: [{ ...EMIT_GLOSS_TOOL, strict } as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: 'emit_gloss' },
       messages: [{
         role: 'user',
@@ -227,6 +270,18 @@ Deno.serve(async (req) => {
         ].join(''),
       }],
     })
+
+    let response
+    try {
+      response = await ask(true)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      // 形の指定を断られたときだけ、外してもう一度。
+      // それ以外の失敗(鍵・上限など)は、そのまま下の catch に任せる
+      if (!/strict|schema|input_schema|400/i.test(message)) throw e
+      console.warn('形の指定が通らなかったので、外して引き直します', message)
+      response = await ask(false)
+    }
 
     if (response.stop_reason === 'refusal') {
       return reply({ error: 'この語は調べられませんでした。' }, 200)
