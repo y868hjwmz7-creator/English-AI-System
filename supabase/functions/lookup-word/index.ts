@@ -26,8 +26,10 @@
 //
 // 【呼び出し方(アプリ側)】
 //   supabase.functions.invoke('lookup-word', {
-//     body: { word: 'deployment', sentence: 'The deployment failed.', level: 'B1' }
+//     body: { word: 'deployment', sentence: 'The deployment failed.',
+//             level: 'B1', contextKey: '…' }
 //   })
+//   contextKey は画面側(src/lib/vocab.js)が作る。ここでは作り直さない。
 //   返るもの: { gloss: { word_norm, display, phonetic, senses: [{pos,
 //               meaning_ja, example_en, note}, …] }, cached: true | false }
 //   senses は**ふさわしい順**。先頭がその文での意味。
@@ -181,7 +183,12 @@ Deno.serve(async (req) => {
 
     const sentence = String(body.sentence ?? '').trim().slice(0, 400)
     const level = String(body.level ?? 'B1').trim().slice(0, 20)
-    const contextKey = await contextKeyOf(sentence)
+    // **鍵は画面側で作ったものを使う。** 両方で同じ計算をすると、
+    // いつか必ずずれる(語のそろえ方で懲りた)。
+    // 古い画面からの呼び出しに備えて、無ければここで作る。
+    const contextKey = typeof body.contextKey === 'string' && body.contextKey
+      ? body.contextKey.slice(0, 32)
+      : await contextKeyOf(sentence)
 
     // ── 3. 控えにあれば、それを返す(費用がかからない) ─────
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {

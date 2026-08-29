@@ -52,45 +52,33 @@ export function splitWords(text) {
 }
 
 /**
- * 意味と品詞を引く。**その文でふさわしい意味が先頭**で返る。
+ * 出てきた文の「指紋」。
  *
- * 控えの鍵は「語 + 出てきた文」の組である。文の指紋の作り方は
- * 窓口(lookup-word)の中にしかないので、**画面からは控えを直接読まない。**
- * 同じ規則を4か所目に増やすと、必ずずれる(第5.23.7節)。
+ * 控えの鍵は (語, 出てきた文) の組である。文はそのまま鍵にするには長いので、
+ * そろえた文の SHA-256 の先頭16文字を使う。
  *
- * 窓口は、控えにあればそれを返す(費用なし)。無ければ1語だけ引いて残す。
+ * **この規則を持つのは、ここ1か所だけにする。**
+ * 窓口(lookup-word)には、ここで作った鍵をそのまま渡す。
+ * 両方で同じ計算をすると、必ずいつかずれる(語のそろえ方で懲りた)。
  */
-export async function lookupWord({ word, sentence = '', level = 'B1' }) {
-  const norm = normWord(word)
-  if (!norm) return ng('英語の語ではありません')
-  if (!supabase) return ng('Supabase が設定されていません')
-
-  // **ログインの札(トークン)を、ここで取り直してから渡す。**
-  //   長く開いたままのタブでは札の期限が切れていることがある。
-  //   getSession() は必要なら取り直してくれる。
-  //   これをせずに窓口へ投げると「ログインの情報が確認できませんでした」と
-  //   返り、利用者には何が起きたのか分からない(2026-08 実機)。
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) {
-    return ng('ログインが切れています。画面を読み込み直してから、もう一度お試しください。')
-  }
-
-  const { data, error } = await supabase.functions.invoke('lookup-word', {
-    body: { word, sentence, level },
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  })
-  if (error) {
-    let detail = ''
-    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
-    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-      return ng('意味を調べる窓口につながりませんでした。'
-        + 'Supabase に lookup-word を配置したか確認してください。')
+export async function contextKeyOf(sentence) {
+  const norm = String(sentence ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  if (!norm) return ''
+  // crypto.subtle は「安全な接続(https)」でしか使えない。
+  // 使えない場所でも**止まらない**ように、簡単な計算に落とす。
+  // 鍵が変わるだけで、壊れはしない(そのぶん引き直しになる)。
+  if (!window.crypto?.subtle) {
+    let h1 = 0x811c9dc5
+    let h2 = 0x01000193
+    for (let i = 0; i < norm.length; i += 1) {
+      h1 = Math.imul(h1 ^ norm.charCodeAt(i), 0x01000193) >>> 0
+      h2 = Math.imul(h2 + norm.charCodeAt(i), 0x85ebca6b) >>> 0
     }
-    return ng(detail || `調べられませんでした: ${error.message}`)
+    return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).slice(0, 16)
   }
-  if (data?.error) return ng(data.error)
-  if (!data?.gloss) return ng('意味を読み取れませんでした')
-  return ok(withSenses(data.gloss))
+  const bytes = new TextEncoder().encode(norm)
+  const hash = await window.crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
 }
 
 /**
@@ -107,6 +95,120 @@ function withSenses(gloss) {
       note: gloss?.note ?? '',
     }].filter((x) => x.meaning_ja)
   return { ...gloss, senses, phonetic: gloss?.phonetic ?? null }
+}
+
+// ── 速さのための控え(この画面が開いているあいだだけ)──────────
+//
+// 【なぜ要るか】(2026-08 の指摘)
+//   語に触れてから意味が出るまでが長く感じる、という報告があった。
+//   一度引いた語でも、毎回こうなっていた。
+//
+//     ① ログインの札を確かめる
+//     ② 窓口(Edge Function)を呼ぶ      ← 往復に時間がかかる
+//     ③ 窓口がデータベースの控えを読む
+//     ④ 返す
+//
+//   **控えにあるなら、窓口を通す必要はない。** 画面から直接読めばよい。
+//   さらに、本文が出た時点で**まとめて先に読んでおけば**、
+//   触れた瞬間に出る(通信ゼロ)。
+//
+//   ・memoryCache … この画面が開いているあいだ覚えておく
+//   ・preloadGlosses() … 本文に出る語を**1回の問い合わせ**でまとめて読む
+//   ・lookupWord() … 覚えている → データベース → 窓口 の順に探す
+const memoryCache = new Map()
+const cacheKey = (norm, ctx) => `${norm}\u0000${ctx}`
+
+/** まとめ読みの待ち行列。少し待って1回にまとめる(1文ごとに投げない) */
+let pending = null
+let pendingTimer = null
+
+/**
+ * 本文に出てくる語の意味を、**まとめて先に読んでおく。**
+ * 控えにあるものだけを読む(無いものは触れたときに引く)。
+ */
+export function preloadGlosses(text, sentence = text) {
+  if (!supabase || !text) return
+  if (!pending) pending = { words: new Set(), sentences: new Set() }
+  for (const part of splitWords(text)) if (part.word) pending.words.add(part.norm)
+  pending.sentences.add(sentence)
+
+  if (pendingTimer) window.clearTimeout(pendingTimer)
+  pendingTimer = window.setTimeout(runPreload, 60)
+}
+
+async function runPreload() {
+  const batch = pending
+  pending = null
+  pendingTimer = null
+  if (!batch || !batch.words.size) return
+
+  const keys = await Promise.all([...batch.sentences].map(contextKeyOf))
+  const words = [...batch.words]
+  // 語が多すぎると問い合わせが長くなりすぎる。1回に400語まで
+  const { data } = await supabase
+    .from('word_glosses').select('*')
+    .in('context_key', keys)
+    .in('word_norm', words.slice(0, 400))
+  for (const row of data ?? []) {
+    memoryCache.set(cacheKey(row.word_norm, row.context_key), withSenses(row))
+  }
+}
+
+/**
+ * 意味と品詞を引く。**その文でふさわしい意味が先頭**で返る。
+ *
+ * 探す順は「覚えている → データベースの控え → 窓口」。
+ * **窓口を呼ぶのは、まだ誰も引いたことのない語だけ。**
+ */
+export async function lookupWord({ word, sentence = '', level = 'B1' }) {
+  const norm = normWord(word)
+  if (!norm) return ng('英語の語ではありません')
+  if (!supabase) return ng('Supabase が設定されていません')
+
+  const ctx = await contextKeyOf(sentence)
+
+  // ① この画面で一度引いたもの(通信なし)
+  const remembered = memoryCache.get(cacheKey(norm, ctx))
+  if (remembered) return ok(remembered)
+
+  // ② データベースの控え(窓口を通さないぶん速い)
+  const { data: cached } = await supabase
+    .from('word_glosses').select('*')
+    .eq('word_norm', norm).eq('context_key', ctx).maybeSingle()
+  if (cached) {
+    const gloss = withSenses(cached)
+    memoryCache.set(cacheKey(norm, ctx), gloss)
+    return ok(gloss)
+  }
+
+  // ③ まだ誰も引いていない語。ここで初めて窓口を呼ぶ
+  //
+  // **ログインの札を取り直してから渡す。** 長く開いたままのタブでは
+  // 期限が切れていることがあり、そのままだと 401 が返る(2026-08 実機)。
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    return ng('ログインが切れています。画面を読み込み直してから、もう一度お試しください。')
+  }
+
+  const { data, error } = await supabase.functions.invoke('lookup-word', {
+    // 鍵はここで作ったものを渡す。窓口では作り直さない(ずれないように)
+    body: { word, sentence, level, contextKey: ctx },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  if (error) {
+    let detail = ''
+    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      return ng('意味を調べる窓口につながりませんでした。'
+        + 'Supabase に lookup-word を配置したか確認してください。')
+    }
+    return ng(detail || `調べられませんでした: ${error.message}`)
+  }
+  if (data?.error) return ng(data.error)
+  if (!data?.gloss) return ng('意味を読み取れませんでした')
+  const gloss = withSenses(data.gloss)
+  memoryCache.set(cacheKey(norm, ctx), gloss)
+  return ok(gloss)
 }
 
 // ── 知っていた / 知らなかった ────────────────────────────────

@@ -35,7 +35,7 @@
  *   紙には語の枠も色も要らない。`no-print` で消す。
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { lookupWord, splitWords } from '../lib/vocab.js'
+import { lookupWord, preloadGlosses, splitWords } from '../lib/vocab.js'
 import SpeakButton from './SpeakButton.jsx'
 
 /** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
@@ -80,6 +80,11 @@ export default function EnglishText({
   }
 
   useEffect(() => cancelHold, [])
+
+  // **本文が出た時点で、控えにある語をまとめて読んでおく。**
+  // 触れてから読みに行くと、そのぶん待たされる(2026-08 の指摘)。
+  // 同じ画面の何本もの文が同時に頼むので、少し待って1回にまとめている。
+  useEffect(() => { preloadGlosses(text) }, [text])
 
   // 外側を押す / Esc で閉じる。**留めたものを閉じる手段が要る**
   useEffect(() => {
