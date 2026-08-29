@@ -36,6 +36,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { lookupWord, normWord, preloadGlosses, splitWords } from '../lib/vocab.js'
+import { splitSentences } from '../lib/wordTiming.js'
 import GlossPopover from './GlossPopover.jsx'
 
 /** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
@@ -127,16 +128,24 @@ export default function EnglishText({
     return statuses?.get(normWord(phrase)) ?? null
   })()
 
-  // いま読み上げられている語。
+  // いま読み上げているところ。**語ではなく、文**で色を付ける。
   //
-  // ブラウザは「何文字目を読み始めた」しか教えてくれない。
-  // その位置が空白や句読点に落ちることがあり、**そのたびに色が消えて
-  // ちらつく。** そこで「その位置以前で、いちばん後ろにある語」を選ぶ。
-  // こうすると次の語の合図が来るまで色が留まり、滑らかに移っていく。
-  // **先回りして次の語を光らせない。** 読む前に色が動くと合わない。
-  const readingIndex = readingAt == null ? -1 : parts.reduce(
-    (found, part, i) => (part.word && part.at <= readingAt ? i : found), -1,
-  )
+  // 【なぜ文にしたか】(2026-08 利用者の指定)
+  //   > 読み上げている単語のハイライトは、別に文章毎でも大丈夫です。
+  //   > フルストップからフルストップまでをハイライト。
+  //
+  //   語ごとに色を付けていたが、合図(`boundary`)を出さない端末では
+  //   時間からの見積もりに頼るしかなく、**1語ずれると目に見えて
+  //   気持ちが悪い。** 利用者の会社PCの英語の声は3つとも合図を出さない。
+  //   文の単位なら、多少ずれても「いまこの文を読んでいる」は正しいままである。
+  //   **精度を上げるより、外れても困らない見せ方を選ぶ。**
+  //
+  //   合図が来る端末・MP3(長さが正確に分かる)では、そのぶん切り替わりも
+  //   正確になる。**どちらの経路でも同じ見え方になる。**
+  const sentences = splitSentences(text ?? '')
+  const readingSpan = readingAt == null
+    ? null
+    : sentences.find((sp) => readingAt >= sp.start && readingAt < sp.end) ?? null
 
   const cancelHold = () => {
     if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null }
@@ -293,15 +302,13 @@ export default function EnglishText({
         // 囲みが色を持つので、語そのものには色を付けない(縞にならないように)
         const status = null
         const isOpen = asPhrase ? openIndex === asPhrase.from : openIndex === i
-        const isReading = i === readingIndex
         return (
           <span key={i} className="etext-word-wrap">
             <button
               type="button"
               data-widx={i}
               className={`etext-word${status ? ` is-${status}` : ''}`
-                + `${isOpen ? ' is-open' : ''}`
-                + `${isReading ? ' is-reading' : ''}`}
+                + `${isOpen ? ' is-open' : ''}`}
               aria-expanded={isOpen}
               // どの操作で来たかで分ける。**環境の当て推量に賭けない**
               onPointerDown={(e) => {
@@ -385,22 +392,46 @@ export default function EnglishText({
         )
   }
 
+  const renderRun = (run) => {
+    const inner = []
+    for (let i = run.from; i <= run.to; i += 1) inner.push(renderPart(parts[i], i, run))
+    if (!run.cls) return inner
+    // 吹き出しを開いているあいだは、**まとまり全体が選ばれたまま**に見せる。
+    // どれについての意味を見ているのか、目で追えるようにするため
+    const open = openIndex !== null && openIndex >= run.from && openIndex <= run.to
+    return (
+      <span key={`run-${run.from}`}
+            className={`etext-run ${run.cls}${open ? ' is-open' : ''}`}>
+        {inner}
+      </span>
+    )
+  }
+
+  // 文ごとに1つの箱でくくる。**読み上げの色は、この箱に付ける。**
+  //
+  // 語や空白に別々に色を付けると、帯が階段状になる。
+  // `<button>` は `display: inline` を指定しても効かず、Chromium では
+  // `inline-block` になる。実測で語の箱は 31.6px、空白の箱は 21.0px
+  // だった。囲みが1つならずれようがない(`.etext-run` と同じ考え方)。
+  //
+  // 箱は**ただのインライン**にする。折り返し方を変えないため。
+  // 行をまたぐと、行ごとに帯が引かれる。蛍光ペンで引いたのと同じ形になる。
+  const groups = sentences.map(() => [])
+  runs.forEach((run) => {
+    const at = parts[run.from]?.at ?? 0
+    let gi = sentences.findIndex((sp) => at >= sp.start && at < sp.end)
+    if (gi < 0) gi = groups.length - 1
+    groups[gi].push(run)
+  })
+
   return (
     <span className={`etext ${className}`} lang={lang} ref={rootRef}>
-      {runs.map((run) => {
-        const inner = []
-        for (let i = run.from; i <= run.to; i += 1) inner.push(renderPart(parts[i], i, run))
-        if (!run.cls) return inner
-        // 吹き出しを開いているあいだは、**まとまり全体が選ばれたまま**に見せる。
-        // どれについての意味を見ているのか、目で追えるようにするため
-        const open = openIndex !== null && openIndex >= run.from && openIndex <= run.to
-        return (
-          <span key={`run-${run.from}`}
-                className={`etext-run ${run.cls}${open ? ' is-open' : ''}`}>
-            {inner}
-          </span>
-        )
-      })}
+      {groups.map((rs, gi) => (
+        <span key={`sent-${gi}`}
+              className={`etext-sent${sentences[gi] === readingSpan ? ' is-reading' : ''}`}>
+          {rs.map(renderRun)}
+        </span>
+      ))}
     </span>
   )
 }

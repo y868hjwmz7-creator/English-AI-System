@@ -1265,31 +1265,43 @@ html { -webkit-text-size-adjust: 100%; }
    いるのか分からない */
 
 
-/* ── いま読み上げている語 ──────────────────────────────────
-   行のかたまりだけを光らせていると、どこを読んでいるのか分からない
-   (2026-08 利用者の指定)。**語ごとに、滑らかに移っていく。**
+/* ── いま読み上げている文 ──────────────────────────────────
+   **フルストップからフルストップまでを、まとめて光らせる**
+   (2026-08 利用者の指定)。
 
-   ・色は控えめにする。1語ずつ点滅すると、かえって目が疲れる
+   もとは語ごとに動かしていた。ところが合図(`boundary`)を出さない
+   端末では時間からの見積もりに頼るしかなく、**1語ずれると目に見えて
+   気持ちが悪い。** 利用者の会社PC(Windows / Chrome)の英語の声は
+   3つとも合図を出さない(mic-test.html で 0 回を実測)。
+   文の単位なら、多少ずれても「いまこの文を読んでいる」は正しいままである。
+   **精度を上げるより、外れても困らない見せ方を選ぶ。**
+
+   ・**色は文ぜんぶを囲む箱1つに付ける**(`.etext-sent`)。
+     語や空白に別々に付けると、帯が階段状になる。`<button>` は
+     `display: inline` を指定しても効かず、Chromium では `inline-block`
+     になるためである(実測で語の箱 31.6px / 空白の箱 21.0px)。
+     囲みが1つならずれようがない(`.etext-run` と同じ考え方)
+   ・箱は**ただのインライン**にする。`display` を変えると折り返し方が変わる。
+     行をまたぐと行ごとに帯が引かれ、蛍光ペンで引いたのと同じ形になる
    ・動くのは背景の色だけ。**字の大きさや太さは変えない。**
      太さを変えると幅が変わり、行が組み直されて文字が跳ねる
-   ・合図を出さない端末(iOS の Safari)ではここが一度も付かない。
-     そのぶん行のかたまりの色が残るので、目印が消えることはない */
-.etext-word.is-reading {
+   ・「知らなかった」の印(`.etext-run`)は帯の上に残る。
+     読んでいる最中でも、どの語に印を付けたかが見える */
+.etext-sent.is-reading {
   background: var(--reading-bg);
   color: var(--reading-fg);
-  border-radius: 3px;
-  box-shadow: 0 0 0 2px var(--reading-bg);
   transition: background-color .12s linear, color .12s linear;
 }
-.lesson-sheet .etext-word.is-reading {
+.lesson-sheet .etext-sent.is-reading {
   background: var(--read-bg); color: var(--read-fg);
-  box-shadow: 0 0 0 2px var(--read-bg);
 }
 /* 読み上げの色は刷らない。途中で刷ることがある */
-@media print { .etext-word.is-reading { background: none; color: inherit; box-shadow: none; } }
+@media print {
+  .etext-sent.is-reading { background: none; color: inherit; }
+}
 /* 「動きを減らす」設定の端末では、色を動かさない */
 @media (prefers-reduced-motion: reduce) {
-  .etext-word.is-reading { transition: none; }
+  .etext-sent.is-reading { transition: none; }
 }
 
 /* ── この文の要点(フレーズ・イディオム・句動詞)────────────────

@@ -28,9 +28,16 @@
 //   **同じ英文には二度払わない。** 教材はスクール全体で共有しているので、
 //   最初の1人が再生した時点で、残り 1,499 人ぶんの音声が出来上がる。
 //
+// 【どの声を使うか】
+//   Secrets にどちらの鍵を入れたかで決まる。**コードは触らなくてよい。**
+//     GOOGLE_TTS_API_KEY を入れた           → Google(Chirp 3: HD)
+//     AZURE_SPEECH_KEY + REGION だけ入れた  → Azure(DragonHD)
+//   切り替えたら CLIP_REV を1つ進めること(画面側も同じ値にする)。
+//
 // 【費用】
-//   Azure の無料枠は **毎月 50 万文字**。教材1本がおよそ 2,000 文字なので、
-//   月に 250 本まで無料枠に収まる。超えたぶんは 100 万文字あたり $16。
+//   無料枠は Azure が **毎月 50 万文字**、Google が **毎月 100 万文字**。
+//   教材1本がおよそ 2,000 文字なので、月 250〜500 本まで無料枠に収まる。
+//   超えたぶんは 100 万文字あたり Azure $16 前後 / Google $30 前後。
 //   **文字数で課金される。同じ英文を作り直さないことが、そのまま節約になる。**
 //
 // 【安全のために】
@@ -62,18 +69,73 @@ const reply = (body: unknown, status = 200) =>
 const BUCKET = 'tts'
 
 /**
- * 話者と、Azure の音声名の対応。
+ * 音声の**版**。置き場所の頭に付く(`tts/<版>/<話者>/<指紋>.mp3`)。
+ *
+ * **声を変えたら、ここを1つ進める。** そうしないと、前の声で作った
+ * MP3 がそのまま返り続け、変えたことが誰にも伝わらない。
+ *
+ * **`src/lib/audioClips.js` の CLIP_REV と、必ず同じ値にすること。**
+ * 画面と窓口の両方が同じ場所を計算する。片方だけ変えると、
+ * 画面が見に行く場所と窓口が置く場所が食い違い、
+ * **毎回作り直して毎回課金される。**
+ */
+const CLIP_REV = '1'
+
+/**
+ * 話者と、実際の音声名の対応。
  *
  * **`src/data/speakers.js` の PREGENERATED_SPEAKERS と id をそろえること。**
- * `scripts/generate-audio.mjs`(練習用の例文を作る道具)とも同じ声にしてある。
  * ばらばらにすると、同じ「Emma」なのに場所によって声が違う、が起きる。
+ *
+ * 【なぜ2社ぶんあるか】(2026-08 利用者の指摘)
+ *   「抑揚や人間らしさで求めているレベルには少し足りない」。
+ *   知り合いが Google(Gemini)で作ったアプリの音声がとても人間的だった、
+ *   という話が出発点である。
+ *
+ *   声の質は、聞いてみないと分からない。**聞き比べられるようにしておく。**
+ *   どちらを使うかは **Secrets にどちらの鍵を入れたか**で決まる。
+ *   コードは触らなくてよい。
+ *
+ *     GOOGLE_TTS_API_KEY を入れた           → Google(Chirp 3: HD)
+ *     AZURE_SPEECH_KEY + REGION だけ入れた  → Azure(DragonHD)
+ *
+ *   **切り替えたら CLIP_REV を1つ進めること。** 前の声の MP3 が残る。
  */
-const VOICES: Record<string, { voice: string; lang: string }> = {
-  'us-female': { voice: 'en-US-EmmaMultilingualNeural', lang: 'en-US' },
-  'us-male': { voice: 'en-US-RyanMultilingualNeural', lang: 'en-US' },
+
+/**
+ * Azure。**DragonHD** は Azure でいちばん人間に近い段階の音声である。
+ * `Neural` より抑揚が豊かで、間の取り方が自然になる。
+ *
+ * `要確認`: **DragonHD はアメリカ英語にしかない。** イギリス英語は
+ * Neural のまま置いてある。使えるリージョンも限られている。
+ * 使えないと Azure が 400 を返すので、そのときは `:DragonHDLatestNeural`
+ * を外して `en-US-AvaMultilingualNeural` のように Neural に戻すこと。
+ */
+const AZURE_VOICES: Record<string, { voice: string; lang: string }> = {
+  'us-female': { voice: 'en-US-Ava:DragonHDLatestNeural', lang: 'en-US' },
+  'us-male': { voice: 'en-US-Andrew:DragonHDLatestNeural', lang: 'en-US' },
   'uk-female': { voice: 'en-GB-SoniaNeural', lang: 'en-GB' },
   'uk-male': { voice: 'en-GB-RyanNeural', lang: 'en-GB' },
 }
+
+/**
+ * Google Cloud Text-to-Speech の **Chirp 3: HD**。
+ * 知り合いのアプリで「とても人間的」と言われたのと同じ系統の音声である。
+ * 無料枠は毎月100万文字(Azure の2倍)。超えると100万文字あたり $30。
+ *
+ * `要確認`: 声の名前と、**鍵だけで呼べること**(サービスアカウントが
+ * 要らないこと)。こちらから Google には通信できないため、
+ * **実機で確かめていない。** 間違っていても壊れない(端末の声に戻るだけ)。
+ * そのときは窓口が返す `detail` に Google の返事がそのまま入るので、
+ * それを見て直す。
+ */
+const GOOGLE_VOICES: Record<string, { voice: string; lang: string }> = {
+  'us-female': { voice: 'en-US-Chirp3-HD-Achernar', lang: 'en-US' },
+  'us-male': { voice: 'en-US-Chirp3-HD-Charon', lang: 'en-US' },
+  'uk-female': { voice: 'en-GB-Chirp3-HD-Achernar', lang: 'en-GB' },
+  'uk-male': { voice: 'en-GB-Chirp3-HD-Charon', lang: 'en-GB' },
+}
+
 const DEFAULT_VOICE = 'us-female'
 
 /**
@@ -110,6 +172,86 @@ const escapeXml = (text: string) =>
     .replace(/'/g, '&apos;')
 
 /**
+ * Azure に作らせる。
+ *
+ * **速さは変えない。** 自然な速さで作り、遅く・速くするのは画面側
+ * (`playbackRate`)の仕事である。段階ごとに作ると費用も置き場所も5倍になる。
+ * (DragonHD はそもそも `prosody` の速さ指定に対応していないので、
+ *  この決め方でちょうど噛み合っている)
+ */
+async function synthAzure(
+  text: string, speaker: { voice: string; lang: string }, key: string, region: string,
+) {
+  const ssml =
+    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"`
+    + ` xml:lang="${speaker.lang}"><voice name="${speaker.voice}">`
+    + `${escapeXml(text)}</voice></speak>`
+
+  const res = await fetch(
+    `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`,
+    {
+      method: 'POST',
+      headers: {
+        'Ocp-Apim-Subscription-Key': key,
+        'Content-Type': 'application/ssml+xml',
+        'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+        'User-Agent': 'english-ai-system',
+      },
+      body: ssml,
+    },
+  )
+  if (!res.ok) {
+    return { error: humanTtsError('Azure', res.status, await res.text().catch(() => '')) }
+  }
+  return { audio: await res.arrayBuffer() }
+}
+
+/**
+ * Google Cloud Text-to-Speech に作らせる(Chirp 3: HD)。
+ *
+ * 鍵1つで呼べる形にしてある(`?key=`)。サービスアカウントの JSON を
+ * 扱わせない。**利用者に秘密鍵ファイルを触らせない**ためである。
+ *
+ * 返ってくるのは base64 の文字列なので、ここでバイト列に戻す。
+ */
+async function synthGoogle(
+  text: string, speaker: { voice: string; lang: string }, key: string,
+) {
+  const res = await fetch(
+    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input: { text },
+        voice: { languageCode: speaker.lang, name: speaker.voice },
+        // Chirp 3: HD は速さ・高さの指定に対応していない。**付けない。**
+        audioConfig: { audioEncoding: 'MP3' },
+      }),
+    },
+  )
+  if (!res.ok) {
+    return { error: humanTtsError('Google', res.status, await res.text().catch(() => '')) }
+  }
+  const body = await res.json().catch(() => ({}))
+  const b64 = String(body?.audioContent ?? '')
+  if (!b64) {
+    return {
+      error: {
+        error: GENERIC,
+        detail: 'Google が音声を返しませんでした。返事: '
+          + JSON.stringify(body).slice(0, 300),
+        fatal: false,
+      },
+    }
+  }
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i)
+  return { audio: bytes.buffer }
+}
+
+/**
  * Azure からの断りを、**画面に出せる日本語**にする。
  *
  * 【ゲストには、仕組みの内側を見せない】(`lookup-word` と同じ考え方)
@@ -127,32 +269,35 @@ const escapeXml = (text: string) =>
  */
 const GENERIC = 'いま音声を用意できません。端末の声で読み上げます。'
 
-const humanAzureError = (status: number, raw: string) => {
+const humanTtsError = (who: string, status: number, raw: string) => {
   const text = String(raw ?? '')
   if (status === 401 || status === 403) {
     return {
       error: GENERIC,
-      detail: 'Azure の鍵かリージョンが正しくありません。Supabase の'
-        + ' Edge Functions → Secrets の AZURE_SPEECH_KEY と'
-        + ' AZURE_SPEECH_REGION を確認してください。',
+      detail: `${who} の鍵が正しくありません。Supabase の`
+        + ' Edge Functions → Secrets を確認してください'
+        + '(Azure は AZURE_SPEECH_KEY と AZURE_SPEECH_REGION、'
+        + ' Google は GOOGLE_TTS_API_KEY)。',
       fatal: true,
     }
   }
   if (status === 429) {
     return {
       error: GENERIC,
-      detail: 'Azure の呼び出し上限に当たりました。無料枠(毎月50万文字)を'
-        + '使い切っている可能性があります。Azure ポータル →'
-        + ' 音声サービス → 使用量で確認してください。',
+      detail: `${who} の呼び出し上限に当たりました。`
+        + '無料枠(Azure は毎月50万文字 / Google は毎月100万文字)を'
+        + '使い切っている可能性があります。使用量を確認してください。',
       fatal: false,
     }
   }
   if (status >= 500) {
-    return { error: GENERIC, detail: `Azure 側が応答していません(${status})。`, fatal: false }
+    return { error: GENERIC, detail: `${who} 側が応答していません(${status})。`, fatal: false }
   }
+  // 400 は**声の名前が使えない**ときにも来る。返事をそのまま載せる。
+  // ここを削ると、DragonHD が使えないリージョンだったときに原因が分からない
   return {
     error: GENERIC,
-    detail: `Azure からの応答: ${status} ${text.slice(0, 200)}`,
+    detail: `${who} からの応答: ${status} ${text.slice(0, 300)}`,
     fatal: false,
   }
 }
@@ -197,9 +342,19 @@ Deno.serve(async (req) => {
       }, 400)
     }
 
-    const voiceId = VOICES[String(body.voice ?? '')] ? String(body.voice) : DEFAULT_VOICE
-    const speaker = VOICES[voiceId]
-    const path = `${voiceId}/${await fingerprint(voiceId, text)}.mp3`
+    // ── どちらの会社に作らせるか ────────────────────────────
+    //
+    //   **鍵がどちらにあるかで決まる。** コードを触らずに切り替えられる。
+    //   Google を入れたらそちらが優先(あとから足すほうが「試したいほう」)。
+    const googleKey = Deno.env.get('GOOGLE_TTS_API_KEY')
+    const azureKey = Deno.env.get('AZURE_SPEECH_KEY')
+    const azureRegion = Deno.env.get('AZURE_SPEECH_REGION')
+    const provider = googleKey ? 'google' : (azureKey && azureRegion ? 'azure' : null)
+    const table = provider === 'google' ? GOOGLE_VOICES : AZURE_VOICES
+
+    const voiceId = table[String(body.voice ?? '')] ? String(body.voice) : DEFAULT_VOICE
+    const speaker = table[voiceId]
+    const path = `${CLIP_REV}/${voiceId}/${await fingerprint(voiceId, text)}.mp3`
     const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${path}`
 
     // ── 3. すでにあるなら、作らない ────────────────────────
@@ -212,51 +367,31 @@ Deno.serve(async (req) => {
       return reply({ url: publicUrl, cached: true, ms: Date.now() - startedAt })
     }
 
-    // ── 4. Azure に作らせる ────────────────────────────────
-    const azureKey = Deno.env.get('AZURE_SPEECH_KEY')
-    const azureRegion = Deno.env.get('AZURE_SPEECH_REGION')
-    if (!azureKey || !azureRegion) {
+    // ── 4. 作らせる ────────────────────────────────────────
+    if (!provider) {
       // **まだ用意していないだけ**なので、これは失敗ではない扱いにする。
       // 画面は端末の声に戻り、この画面のあいだ取りに来るのをやめる。
       return reply({
         error: GENERIC,
         detail: '音声合成がまだ設定されていません。Supabase の Edge Functions →'
-          + ' Secrets に AZURE_SPEECH_KEY と AZURE_SPEECH_REGION を追加してください。',
+          + ' Secrets に、次のどちらかを追加してください。'
+          + ' ① AZURE_SPEECH_KEY と AZURE_SPEECH_REGION(Azure DragonHD)'
+          + ' ② GOOGLE_TTS_API_KEY(Google Chirp 3: HD)',
         fatal: true,
       }, 503)
     }
 
-    // 速さは変えずに、**自然な速さで作る。**
-    // 遅くするのは画面側(`playbackRate`)の仕事である。
-    // ここで遅くすると、速さの段階ごとに別のファイルが要る = 費用が5倍になる。
-    const ssml =
-      `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"`
-      + ` xml:lang="${speaker.lang}"><voice name="${speaker.voice}">`
-      + `${escapeXml(text)}</voice></speak>`
-
-    const made = await fetch(
-      `https://${azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
-      {
-        method: 'POST',
-        headers: {
-          'Ocp-Apim-Subscription-Key': azureKey,
-          'Content-Type': 'application/ssml+xml',
-          'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
-          'User-Agent': 'english-ai-system',
-        },
-        body: ssml,
-      },
-    )
-    if (!made.ok) {
-      const raw = await made.text().catch(() => '')
-      return reply(humanAzureError(made.status, raw), 502)
-    }
-    const audio = await made.arrayBuffer()
+    const made = provider === 'google'
+      ? await synthGoogle(text, speaker, googleKey!)
+      : await synthAzure(text, speaker, azureKey!, azureRegion!)
+    if (made.error) return reply(made.error, 502)
+    const audio = made.audio!
     if (!audio.byteLength) {
       // **中身が0件のまま「成功」を返さない。**
       return reply({
         error: GENERIC,
-        detail: 'Azure が空の音声を返しました。英文に読める文字が無い可能性があります。',
+        detail: `${provider === 'google' ? 'Google' : 'Azure'} が空の音声を返しました。`
+          + '英文に読める文字が無い可能性があります。',
         fatal: false,
       }, 502)
     }
@@ -291,6 +426,9 @@ Deno.serve(async (req) => {
       url: publicUrl,
       cached: false,
       chars: text.length,
+      // どちらの声で作ったかを返す。**聞き比べのときに、これが手がかりになる**
+      provider,
+      voice: speaker.voice,
       ms: Date.now() - startedAt,
     })
   } catch (e) {

@@ -61,6 +61,18 @@ import { markIndexAt, wordMarks } from './wordTiming.js'
 /** 0016 で作るバケツ。窓口(supabase/functions/speak)と同じ名前にすること */
 const BUCKET = 'tts'
 
+/**
+ * 音声の**版**。置き場所の頭に付く(`tts/<版>/<話者>/<指紋>.mp3`)。
+ *
+ * **`supabase/functions/speak/index.ts` の CLIP_REV と、必ず同じ値にすること。**
+ * 画面と窓口の両方が同じ場所を計算する。片方だけ変えると、画面が見に行く
+ * 場所と窓口が置く場所が食い違い、**毎回作り直して毎回課金される。**
+ *
+ * 声を変えたとき(会社を替えた・DragonHD にしたなど)に1つ進める。
+ * 進めないと、前の声で作った MP3 がそのまま返り続ける。
+ */
+const CLIP_REV = '1'
+
 /** 話者の指定が無いときの声。`PREGENERATED_SPEAKERS` の id である */
 export const DEFAULT_CLIP_VOICE = 'us-female'
 
@@ -111,7 +123,7 @@ async function fingerprint(voiceId, text) {
 }
 
 const publicUrlOf = (voiceId, hash) =>
-  `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${voiceId}/${hash}.mp3`
+  `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${CLIP_REV}/${voiceId}/${hash}.mp3`
 
 // ── 鳴らす道具は1つだけ ────────────────────────────────────
 //
