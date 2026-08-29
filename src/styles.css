@@ -33,6 +33,9 @@
   /* 「知らなかった」と付けた語の色。**明るい / 暗いの両方に必ず置く** */
   --unknown-bg:   #ffe3e0;
   --unknown-bar:  #e34948;
+  /* 言い回し(2語以上)。**1語とは色を分ける**(2026-08 利用者の指定) */
+  --phrase-bg:    #ece4f7;
+  --phrase-bar:   #7a51b5;
   /* 語の吹き出し。**彩度は低く。** 長く見ても疲れないことを優先する */
   --gloss-head-bg: #f2f5f8;
   --gloss-phonetic: #5f7a8a;
@@ -80,6 +83,8 @@
     --reading-fg:   #eaf4f9;
     --unknown-bg:   #3e2220;
     --unknown-bar:  #e66767;
+    --phrase-bg:    #2e2540;
+    --phrase-bar:   #a487d6;
     --gloss-head-bg: #23231f;
     --gloss-phonetic: #9db6c2;
     --gloss-note:    #cfa96a;
@@ -120,6 +125,8 @@
   --reading-fg:   #eaf4f9;
   --unknown-bg:   #3e2220;
   --unknown-bar:  #e66767;
+  --phrase-bg:    #2e2540;
+  --phrase-bar:   #a487d6;
   --gloss-head-bg: #23231f;
   --gloss-phonetic: #9db6c2;
   --gloss-note:    #cfa96a;
@@ -1129,6 +1136,10 @@ html { -webkit-text-size-adjust: 100%; }
   --speak-bar:    #7fa8bd;
   --read-bg:      #cfe3ed;   /* いま読んでいる語 */
   --read-fg:      #14343f;
+  /* 知らなかった語・言い回し。**紙は暗い配色でも白のまま**なので、
+     ここも明るい側で決め打ちにする */
+  --unknown-bg:   #ffe3e0;   --unknown-bar:  #e34948;
+  --phrase-bg:    #ece4f7;   --phrase-bar:   #7a51b5;
 
   flex: 1; overflow-y: auto;
   margin: 16px auto; padding: 28px 32px 60px;
@@ -1192,15 +1203,31 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .etext-word.is-known { color: inherit; opacity: .72; }
 
+/* ── 2語以上のまとまり ────────────────────────────────────────
+   **囲みを1つにする。** 語ごとに色を付けると語間で線が切れ、
+   空白に色を足しても `<button>` と `<span>` で下端が 7px ずれて
+   継ぎ目が残った(2026-08 実測)。囲みが1つならずれようがない。
+   インライン要素なので、行をまたいでも行ごとに正しく引かれる。 */
+.etext-run { border-radius: 0; }
+/* 言い回し(2語以上)。**1語の赤とは色を分ける**(2026-08 利用者の指定) */
+.etext-run.is-phrase.is-unknown {
+  background: linear-gradient(var(--phrase-bg), var(--phrase-bg))
+    no-repeat bottom / 100% .62em;
+  box-shadow: 0 2px 0 0 var(--phrase-bar);
+}
+.etext-run.is-phrase.is-known { opacity: .72; }
+/* なぞっている最中。**いま何を選んでいるかが、離す前に分かる** */
+.etext-run.is-picked {
+  background: var(--reading-bg); color: var(--reading-fg);
+}
+.lesson-sheet .etext-run.is-picked { background: var(--read-bg); color: var(--read-fg); }
+/* 囲みの中の語は、自分では色を持たない(縞にならないように) */
+.etext-run .etext-word { background: none; border-bottom-color: transparent; }
+
 /* なぞって選んでいる語(まとめて1つの言い回しとして引く)。
    **1語ずつの色とは別の見え方にする。** 同じだと、いま何を選んで
    いるのか分からない */
-.etext-word.is-picked {
-  background: var(--reading-bg); color: var(--reading-fg);
-  border-radius: 2px; border-bottom-color: transparent;
-}
-.etext-pop--paper ~ * .etext-word.is-picked { background: var(--read-bg); }
-.lesson-sheet .etext-word.is-picked { background: var(--read-bg); color: var(--read-fg); }
+
 
 /* ── いま読み上げている語 ──────────────────────────────────
    行のかたまりだけを光らせていると、どこを読んでいるのか分からない
@@ -1539,6 +1566,10 @@ html { -webkit-text-size-adjust: 100%; }
 /* 紙の中の吹き出し。**紙は暗い配色でも白のまま**なので、
    ここでも明るい側の色に決め打ちする(第5.22.6節①と同じ話)。
    品詞の色は明るい背景向けなので、そのまま使える */
+/* 紙の上に出る吹き出し。**紙は暗い配色でも白のまま**なので、
+   中身も明るい側で決め打ちにする。**ボタンまで含めてそろえる。**
+   ボタンだけ配色任せにしていたため、暗い配色のとき白い吹き出しに
+   黒いボタンが載った(2026-08 実機の指摘)。 */
 .etext-pop--paper {
   background: #fdfcf9; color: #24292f; border-color: #e7e3da;
   --gloss-head-bg: #f2f5f8;
@@ -1571,7 +1602,15 @@ html { -webkit-text-size-adjust: 100%; }
 .etext-pop--paper .etext-pop-ex,
 .etext-pop--paper .etext-pop-busy,
 .etext-pop--paper .etext-pop-time,
-.etext-pop--paper .etext-pop-close { color: var(--ink-faint); }
+.etext-pop--paper .etext-pop-close { color: #8b949e; }
+.etext-pop--paper .etext-sense-mean { color: #24292f; }
+.etext-pop--paper .etext-sense-no { color: #8b949e; }
+.etext-pop--paper .btn {
+  background: #fff; border-color: #dcd8cf; color: #24292f;
+}
+.etext-pop--paper .btn:hover { border-color: #b9b3a7; }
+.etext-pop--paper .btn--warnish { border-color: #e07a72; color: #a33b33; }
+.etext-pop--paper .btn--link { background: none; border-color: transparent; color: #2f6f86; }
 .lesson-sheet .etext-word:hover,
 .lesson-sheet .etext-word.is-open { background: var(--accent-bg); border-bottom-color: var(--accent); }
 .lesson-sheet .etext-word.is-unknown { background: #fbe6e3; box-shadow: 0 1px 0 0 #c9534f; }
@@ -1697,6 +1736,7 @@ html { -webkit-text-size-adjust: 100%; }
   --pos-adv:    var(--text-secondary);  --pos-adv-bg:    var(--surface-2);
   --pos-conj:   var(--text-secondary);  --pos-conj-bg:   var(--surface-2);
   --pos-phrase: var(--text-secondary);  --pos-phrase-bg: var(--surface-2);
+  --phrase-bg:  var(--surface-2);       --phrase-bar:    var(--text-muted);
 }
 
 /* 紙(大きく表示)。紙は常に白なので、灰色は値で直接書く */

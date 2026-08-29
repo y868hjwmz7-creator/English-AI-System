@@ -87,6 +87,39 @@ export default function EnglishText({
   const lo = span ? Math.min(span[0], span[1]) : -1
   const hi = span ? Math.max(span[0], span[1]) : -2
 
+  /**
+   * 記録してある言い回しが、この本文のどこに出てくるか。
+   *
+   * 【なぜ要るか】(2026-08 の指摘)
+   *   `on the house` を「知らなかった」と付けても、本文では `on` だけに
+   *   色が付いていた。**言い回しは、はじめの語から終わりの語まで
+   *   ひとつながりで示さないと、何を覚えるのか分からない。**
+   *
+   * `statuses` の鍵は「そろえた形」なので、空白を含むものが言い回しである。
+   * 語をそろえて並べ、同じ並びを本文の中から探す。
+   */
+  const phraseSpans = (() => {
+    if (!statuses?.size) return []
+    const words = []
+    parts.forEach((part, i) => { if (part.word) words.push({ i, norm: part.norm }) })
+    const found = []
+    for (const [key, st] of statuses) {
+      if (!key.includes(' ')) continue
+      const needle = key.split(' ')
+      for (let w = 0; w + needle.length <= words.length; w += 1) {
+        let hit = true
+        for (let k = 0; k < needle.length; k += 1) {
+          if (words[w + k].norm !== needle[k]) { hit = false; break }
+        }
+        if (hit) found.push({ from: words[w].i, to: words[w + needle.length - 1].i, status: st })
+      }
+    }
+    return found
+  })()
+
+  /** その位置が言い回しの中か。中なら状態を返す */
+  const phraseAt = (i) => phraseSpans.find((sp) => i >= sp.from && i <= sp.to)?.status ?? null
+
   /** 吹き出しに出す状態。句を開いているときは**句そのもの**の状態 */
   const popStatus = (() => {
     if (!range) return null
@@ -205,11 +238,43 @@ export default function EnglishText({
     close()
   }
 
-  return (
-    <span className={`etext ${className}`} lang={lang} ref={rootRef}>
-      {parts.map((part, i) => {
+  /**
+   * 2語以上のまとまりを、**ひとつの箱で囲む。**
+   *
+   * 【なぜ要るか】(2026-08 の指摘)
+   *   語ごとに色を付けると、語と語のあいだで線が切れる。
+   *   空白にも同じ色を付けてみたが、`<button>` と `<span>` では
+   *   下端の位置が 7px ずれていて(実測)、継ぎ目が残った。
+   *   **囲む箱を1つにすれば、ずれようがない。**
+   *   行をまたいでも、行ごとに正しく引かれる(インライン要素の性質)。
+   *
+   * まとまりは2種類。**なぞっている最中のほうが優先**である
+   * (いま選んでいるものが見えないと操作できない)。
+   */
+  const runs = []
+  {
+    let i = 0
+    while (i < parts.length) {
+      const pick = i >= lo && i <= hi ? { cls: 'is-picked', to: hi } : null
+      const sp = pick ? null : phraseSpans.find((x) => i >= x.from && i <= x.to)
+      const run = pick ?? (sp ? { cls: `is-phrase is-${sp.status}`, to: sp.to } : null)
+      if (run) {
+        runs.push({ cls: run.cls, from: i, to: run.to })
+        i = run.to + 1
+      } else {
+        runs.push({ cls: null, from: i, to: i })
+        i += 1
+      }
+    }
+  }
+
+  /** 部品ひとつぶん。語なら押せるボタン、そうでなければただの文字 */
+  const renderPart = (part, i) => {
         if (!part.word) return <span key={i}>{part.text}</span>
-        const status = statuses?.get(part.norm) ?? null
+        // 言い回しの一部なら、**語ごとの色は付けない。**
+        // 囲みの色と重なって縞になり、どこまでがひとまとまりか分からなくなる
+        const inPhrase = phraseAt(i)
+        const status = inPhrase ? null : (statuses?.get(part.norm) ?? null)
         const isOpen = openIndex === i
         const isReading = i === readingIndex
         return (
@@ -217,9 +282,9 @@ export default function EnglishText({
             <button
               type="button"
               data-widx={i}
-              className={`etext-word${status ? ` is-${status}` : ''}${isOpen ? ' is-open' : ''}`
-                + `${isReading ? ' is-reading' : ''}`
-                + `${i >= lo && i <= hi ? ' is-picked' : ''}`}
+              className={`etext-word${status ? ` is-${status}` : ''}`
+                + `${isOpen ? ' is-open' : ''}`
+                + `${isReading ? ' is-reading' : ''}`}
               aria-expanded={isOpen}
               // どの操作で来たかで分ける。**環境の当て推量に賭けない**
               onPointerDown={(e) => {
@@ -294,6 +359,17 @@ export default function EnglishText({
               />
             )}
           </span>
+        )
+  }
+
+  return (
+    <span className={`etext ${className}`} lang={lang} ref={rootRef}>
+      {runs.map((run) => {
+        const inner = []
+        for (let i = run.from; i <= run.to; i += 1) inner.push(renderPart(parts[i], i))
+        if (!run.cls) return inner
+        return (
+          <span key={`run-${run.from}`} className={`etext-run ${run.cls}`}>{inner}</span>
         )
       })}
     </span>
