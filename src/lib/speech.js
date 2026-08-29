@@ -239,31 +239,156 @@ export function hasGoodVoice(voices) {
 }
 
 /**
+ * 読み上げの速さの見積もり。**声ごとに実測して覚える。**
+ *
+ * 単位は「1秒あたりの重み」(速さ1.0のとき)。重みは下の `weighWords()` が
+ * 決めるもので、**文字数そのものではない**(語ごとに +1、句読点の間も足す)。
+ * 英語の読み上げはおよそ 15 文字/秒。重みは文字数の 1.2 倍ほどになるので、
+ * 初期値は 18 にしてある。
+ *
+ * 1回読み上げるたびに、実際にかかった時間で直していく。
+ * **推測を推測のままにしない。** 2回目からはその声の実測値で動く。
+ */
+const CPS_KEY = 'english-ai-speech-cps'
+const CPS_DEFAULT = 18
+const CPS_MIN = 6
+const CPS_MAX = 34
+
+const loadCps = (voiceName) => {
+  try {
+    const all = JSON.parse(window.localStorage.getItem(CPS_KEY) ?? '{}')
+    const v = Number(all[voiceName || '既定'])
+    return Number.isFinite(v) && v >= CPS_MIN && v <= CPS_MAX ? v : CPS_DEFAULT
+  } catch {
+    return CPS_DEFAULT
+  }
+}
+
+const saveCps = (voiceName, cps) => {
+  if (!Number.isFinite(cps) || cps < CPS_MIN || cps > CPS_MAX) return
+  try {
+    const all = JSON.parse(window.localStorage.getItem(CPS_KEY) ?? '{}')
+    const key = voiceName || '既定'
+    // 急に振れないよう、前の値と半々で混ぜる
+    const before = Number(all[key])
+    all[key] = Number.isFinite(before) ? (before + cps) / 2 : cps
+    window.localStorage.setItem(CPS_KEY, JSON.stringify(all))
+  } catch { /* 保存できなくても動く */ }
+}
+
+/**
+ * 語の位置と、その語に配る「重み」を出す。
+ *
+ * 長い語ほど時間がかかる。読点・句点のあとには**間**が入るので、
+ * その分を足しておく。ここがずれると、色だけ先に進んでしまう。
+ */
+const weighWords = (text) => {
+  const src = String(text ?? '')
+  const re = /[A-Za-z][A-Za-z'-]*/g
+  const out = []
+  let m = re.exec(src)
+  while (m) {
+    const after = src.slice(m.index + m[0].length, m.index + m[0].length + 2)
+    // 語そのもの + 続く空白 + 句読点の間
+    let weight = m[0].length + 1
+    if (/^[,;:]/.test(after)) weight += 3
+    if (/^[.!?]/.test(after)) weight += 6
+    out.push({ at: m.index, weight })
+    m = re.exec(src)
+  }
+  return out
+}
+
+/**
  * **いま読んでいる語**を知らせる。
  *
  * 【なぜ要るか】(2026-08 利用者の指定)
  *   文のかたまりごとに色を付けていたが、どこを読んでいるのか分からない。
  *   語ごとに、滑らかに移っていくようにする。
  *
- * 【仕組み】
- *   ブラウザは `boundary` で「いま何文字目から何文字を読み始めた」だけを
- *   教えてくれる。語そのものは渡されないので、**文字の位置**を画面へ返し、
- *   受け取った側が語を突き止める(`splitWords()` の `at`)。
+ * 【仕組みは2段構え】
  *
- * 【対応していない端末がある】
- *   **iOS の Safari は `boundary` を出さないことがある。**
- *   その場合はこの合図が一度も来ないだけで、
- *   これまでどおり「文のかたまり」の色分けが残る。**何も壊れない。**
- *   合図が来ない端末で語の色だけに頼ると、どこも光らなくなる。
+ *   ① ブラウザの合図(`boundary`)を使う。**これがあるときは正確。**
+ *      「いま何文字目から読み始めた」だけが渡されるので、
+ *      文字の位置を画面へ返し、受け取った側が語を突き止める。
+ *
+ *   ② **合図が来ない端末では、時間から見積もって動かす。**
+ *
+ * 【なぜ②が要るのか】(2026-08 実機で確定)
+ *   利用者の会社PC(Windows / Chrome)に入っている英語の声は3つとも
+ *   Google の「通信を使う声」で、**3つとも合図を出さなかった**
+ *   (mic-test.html で 0 回を確認)。iOS の Safari でも出ないことがある。
+ *   合図だけに頼ると、**主に使う端末で語の色が一度も動かない。**
+ *
+ * 【見積もりを推測のままにしない】
+ *   語の長さと句読点の間で時間を配り、読み終わったら**実際にかかった
+ *   時間で声ごとの速さを覚える**(`saveCps`)。2回目からはその実測値で動く。
+ *   合図が1回でも来たら、見積もりは即座にやめて合図に従う。
  */
-const attachWordTracking = (utterance, onWord) => {
-  if (!onWord) return
+const attachWordTracking = (utterance, onWord, { text, rate = 1, voiceName = '' } = {}) => {
+  if (!onWord) return () => {}
+
+  const words = weighWords(text ?? utterance.text ?? '')
+  let gotBoundary = false
+  let timer = null
+  let startedAt = 0
+
+  const stopTimer = () => {
+    if (timer) { window.clearInterval(timer); timer = null }
+  }
+
   utterance.onboundary = (e) => {
     // 語の切れ目だけを見る。文の切れ目(sentence)は無視する
     if (e.name && e.name !== 'word') return
     if (typeof e.charIndex !== 'number') return
+    // **合図が来た端末では、見積もりを使わない**
+    gotBoundary = true
+    stopTimer()
     onWord({ charIndex: e.charIndex, charLength: e.charLength ?? 0 })
   }
+
+  const startEstimate = () => {
+    if (gotBoundary || timer || !words.length) return
+    const total = words.reduce((n, w) => n + w.weight, 0)
+    const cps = loadCps(voiceName) * (rate || 1)
+    const seconds = total / cps
+    // 語ごとの「ここまでに終わっているはず」の時刻
+    let acc = 0
+    const marks = words.map((w) => {
+      acc += w.weight
+      return { at: w.at, until: (acc / total) * seconds * 1000 }
+    })
+    let index = -1
+    timer = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt
+      let next = marks.findIndex((m) => elapsed < m.until)
+      if (next < 0) next = marks.length - 1
+      if (next !== index) {
+        index = next
+        onWord({ charIndex: marks[index].at, charLength: 0 })
+      }
+    }, 60)
+  }
+
+  utterance.onstart = () => {
+    startedAt = Date.now()
+    // 合図が来る端末なら、この間に来る。来なければ見積もりに切り替える
+    window.setTimeout(startEstimate, 350)
+  }
+
+  const finish = () => {
+    stopTimer()
+    // 実際にかかった時間から、この声の速さを覚える。次からはこれを使う
+    const spent = (Date.now() - startedAt) / 1000
+    const chars = words.reduce((n, w) => n + w.weight, 0)
+    if (startedAt && spent > 0.5 && chars > 0) {
+      saveCps(voiceName, chars / spent / (rate || 1))
+    }
+  }
+  utterance.addEventListener?.('end', finish)
+  utterance.addEventListener?.('error', finish)
+
+  return stopTimer
 }
 
 /**
@@ -275,7 +400,7 @@ export function speak(text, { voice, rate = 0.9, onWord } = {}) {
   if (!isSpeechSupported()) return false
   window.speechSynthesis.cancel() // 前の読み上げが残っていたら止める
   const utterance = new SpeechSynthesisUtterance(text)
-  attachWordTracking(utterance, onWord)
+  attachWordTracking(utterance, onWord, { text, rate, voiceName: voice?.name })
   utterance.lang = voice?.lang || 'en-US'
   // 声の指定が拒否される場合がある。失敗しても読み上げ自体は続けたいので、
   // ここで握りつぶして端末の既定の声に任せる。
@@ -314,15 +439,23 @@ export function speakSequence(parts, { rate = 0.9, onIndex, onWord } = {}) {
   let stopped = false
   let timer = null
   let index = 0
+  // 見積もりで語を送っているときの止め手。次の文に移るときと、
+  // 止めたときに必ず呼ぶ。**放っておくと裏で動き続ける**
+  let stopWords = () => {}
 
   const next = () => {
     if (timer) { window.clearTimeout(timer); timer = null }
+    stopWords()
     if (stopped || index >= list.length) { onIndex?.(null); onWord?.(null); return }
     const part = list[index]
     onIndex?.(index)
 
     const utterance = new SpeechSynthesisUtterance(part.text)
-    attachWordTracking(utterance, onWord ? (at) => onWord({ ...at, index }) : null)
+    stopWords = attachWordTracking(
+      utterance,
+      onWord ? (at) => onWord({ ...at, index }) : null,
+      { text: part.text, rate, voiceName: part.voice?.name },
+    )
     utterance.lang = part.voice?.lang || 'en-US'
     try {
       if (part.voice) utterance.voice = part.voice
@@ -354,6 +487,7 @@ export function speakSequence(parts, { rate = 0.9, onIndex, onWord } = {}) {
   return () => {
     stopped = true
     if (timer) window.clearTimeout(timer)
+    stopWords()
     window.speechSynthesis.cancel()
     onIndex?.(null)
     onWord?.(null)
