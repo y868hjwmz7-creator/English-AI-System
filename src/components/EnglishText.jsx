@@ -257,7 +257,14 @@ export default function EnglishText({
     let i = 0
     while (i < parts.length) {
       if (i >= lo && i <= hi) {
-        runs.push({ cls: 'is-picked', from: i, to: hi, phrase: null })
+        // 選んだ範囲が、記録してある言い回しとぴったり同じなら、
+        // **その言い回しの色のままにする。** 押した瞬間に紫から青へ
+        // 変わると、同じものを見ているように思えない(2026-08)
+        const same = phraseSpans.find((x) => x.from === lo && x.to === hi)
+        runs.push({
+          cls: same ? `is-phrase is-${same.status}` : 'is-picked',
+          from: i, to: hi, phrase: same ?? null,
+        })
         i = hi + 1
         continue
       }
@@ -384,8 +391,14 @@ export default function EnglishText({
         const inner = []
         for (let i = run.from; i <= run.to; i += 1) inner.push(renderPart(parts[i], i, run))
         if (!run.cls) return inner
+        // 吹き出しを開いているあいだは、**まとまり全体が選ばれたまま**に見せる。
+        // どれについての意味を見ているのか、目で追えるようにするため
+        const open = openIndex !== null && openIndex >= run.from && openIndex <= run.to
         return (
-          <span key={`run-${run.from}`} className={`etext-run ${run.cls}`}>{inner}</span>
+          <span key={`run-${run.from}`}
+                className={`etext-run ${run.cls}${open ? ' is-open' : ''}`}>
+            {inner}
+          </span>
         )
       })}
     </span>

@@ -36,6 +36,9 @@
   /* 言い回し(2語以上)。**1語とは色を分ける**(2026-08 利用者の指定) */
   --phrase-bg:    #ece4f7;
   --phrase-bar:   #7a51b5;
+  /* 語に触れたときの目印 */
+  --mark-hover-bg:   var(--surface-2);
+  --mark-hover-line: var(--text-muted);
   --pos-noun:   #2f6f86;  --pos-noun-bg:   #eaf3f7;
   --pos-verb:   #38795a;  --pos-verb-bg:   #eaf4ee;
   --pos-adj:    #8a5588;  --pos-adj-bg:    #f6edf5;
@@ -1127,6 +1130,7 @@ html { -webkit-text-size-adjust: 100%; }
      ここも明るい側で決め打ちにする */
   --unknown-bg:   #ffe3e0;   --unknown-bar:  #e34948;
   --phrase-bg:    #ece4f7;   --phrase-bar:   #7a51b5;
+  --mark-hover-bg:   #e6eef2;  --mark-hover-line: #2f6f86;
 
   flex: 1; overflow-y: auto;
   margin: 16px auto; padding: 28px 32px 60px;
@@ -1174,8 +1178,15 @@ html { -webkit-text-size-adjust: 100%; }
   user-select: none;
   touch-action: manipulation;   /* 二度触れたときの拡大も止める */
 }
+/* 語に触れたとき。**他の印と同じ高さにそろえる**(2026-08 の指摘)。
+   行の高さいっぱいに敷くと、触れるたびに本文が波打って見える。
+   紙の上だけ別に書かない。**色は変数で持ち、紙が差し替える。**
+   別々に書いていたため、あとに置いた紙用の指定が勝ってしまい、
+   まとまりの中でも1語だけ反応する不具合になった(2026-08 の指摘) */
 .etext-word:hover, .etext-word.is-open {
-  background: var(--surface-2); border-bottom-color: var(--text-muted);
+  background: linear-gradient(var(--mark-hover-bg), var(--mark-hover-bg))
+    no-repeat bottom / 100% .62em;
+  border-bottom-color: var(--mark-hover-line);
 }
 /* 知らなかった語。**次に開いても色が残る**(2026-08 の要望)。
    ただし**目立たせすぎない**(2026-08 の指摘)。地の色を行の高さいっぱいに
@@ -1218,26 +1229,26 @@ html { -webkit-text-size-adjust: 100%; }
 .etext-run .etext-word.is-open {
   background: none; border-bottom-color: transparent;
 }
-/* まとまりごと反応させる。色は変えず、少しだけ濃くする */
-.etext-run.is-word.is-unknown:hover {
-  background: linear-gradient(
-      color-mix(in srgb, var(--unknown-bar) 26%, transparent),
-      color-mix(in srgb, var(--unknown-bar) 26%, transparent))
-    no-repeat bottom / 100% .62em;
-}
-.etext-run.is-phrase.is-unknown:hover {
-  background: linear-gradient(
-      color-mix(in srgb, var(--phrase-bar) 26%, transparent),
-      color-mix(in srgb, var(--phrase-bar) 26%, transparent))
-    no-repeat bottom / 100% .62em;
-}
-/* 印の付いていない言い回しでも、まとまりとして反応する */
-.etext-run.is-phrase:hover {
-  background: linear-gradient(
-      color-mix(in srgb, var(--phrase-bar) 14%, transparent),
-      color-mix(in srgb, var(--phrase-bar) 14%, transparent))
-    no-repeat bottom / 100% .62em;
+/* まとまりに触れたとき・開いているとき。
+   **まとまり全体が「いま選ばれている」と見えるようにする**
+   (2026-08 の指定)。1語ぶんだけ反応すると、まとまりが崩れて見える。
+
+   ふだんは下半分の帯。触れると**全体がふわりと染まる。**
+   下線はそのまま残すので、何色のまとまりかは変わらない。 */
+.etext-run.is-phrase { transition: background-color .12s ease; }
+.etext-run.is-phrase:hover,
+.etext-run.is-phrase.is-open {
+  background: color-mix(in srgb, var(--phrase-bar) 15%, transparent);
+  border-radius: 4px;
+  box-shadow: 0 2px 0 0 var(--phrase-bar);
   cursor: pointer;
+}
+/* 1語も同じ考え方。触れたら少しだけ濃くする */
+.etext-run.is-word.is-unknown:hover,
+.etext-run.is-word.is-unknown.is-open {
+  background: color-mix(in srgb, var(--unknown-bar) 15%, transparent);
+  border-radius: 4px;
+  box-shadow: 0 2px 0 0 var(--unknown-bar);
 }
 
 /* なぞって選んでいる語(まとめて1つの言い回しとして引く)。
@@ -1630,8 +1641,7 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .etext-pop--paper .btn:hover { border-color: #a9a294; background: #f7f6f3; }
 .etext-pop--paper .btn--link { background: none; border-color: transparent; color: #2f6f86; }
-.lesson-sheet .etext-word:hover,
-.lesson-sheet .etext-word.is-open { background: var(--accent-bg); border-bottom-color: var(--accent); }
+
 
 @media (max-width: 600px) {
   /* ── スマホでの紙 ────────────────────────────────────
