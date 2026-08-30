@@ -11,9 +11,9 @@
      ・地 → カード → その中の面 で、**目に見える段**を作る
      ・前は #f7f6f3 → #fcfcfb で、地とカードの差が 5 しかなかった
      ・枠線も一段強くして、カードの輪郭が分かるようにする */
-  --surface-0: #eceae4;   /* 画面の背景。いちばん濃い */
+  --surface-0: #eaecef;   /* 画面の背景。いちばん濃い */
   --surface-1: #ffffff;   /* カードの背景 */
-  --surface-2: #eeece6;   /* カードの中の面・札 */
+  --surface-2: #f0f2f4;   /* カードの中の面・札 */
   /* カタマリごとの訳の帯(0021)。**うすい緑**(2026-08 利用者の指定)。
      > もちょっと明るいカラーのチョイスが良いです。薄い緑やグレーなど
      解答の囲みの上に置くので、囲みの地色とは別の色でないと帯に見えない */
@@ -23,13 +23,13 @@
      カードより**暗く**なり、黒い穴のように見えた(2026-08 実機)。
      > 黒背景に黒ボタンは殺風景すぎる */
   --btn-bg:   #ffffff;
-  --quiet-bg: #e2dfd7;   /* 「まだ」「共有する」など、一段うしろのボタン */
+  --quiet-bg: #e4e7ea;   /* 「まだ」「共有する」など、一段うしろのボタン */
   --on-accent: #ffffff;  /* 青の塗りつぶしの上に乗る文字 */
-  --border:    #d6d3ca;
+  --border:    #d5d9de;
 
   --text-primary:   #0b0b0b;
-  --text-secondary: #4d4c48;
-  --text-muted:     #7b7a73;
+  --text-secondary: #4a4e54;
+  --text-muted:     #767b82;
 
   --series-1: #2a78d6;  /* 青   */
   --series-2: #eb6834;  /* 橙   */
@@ -1388,6 +1388,20 @@ html { -webkit-text-size-adjust: 100%; }
   color: var(--text-secondary);
   font-size: 13px; line-height: 1.6; text-align: center;
 }
+/* ★ 狭い画面では**左寄せ**にする(2026-08 利用者の指定)
+
+     > このように毎回改行するのであれば日本語は左寄せでお願いします。
+
+   まん中に置くのは、カタマリが**横に並んでいる**ときの話である。
+   スマホでは1カタマリで1行を使い切るので、まん中に置くと訳だけが
+   広い行の中央に浮き、**上の英語のどこに対応するのか分からなくなる。**
+   左に寄せれば、英語の先頭と訳の先頭が縦にそろう。
+
+   **判断は幅だけ**にする(`useWide()` と同じ 860px。CLAUDE.md の決まり)。
+   端末の種類も文字数も見ない。横向きにすれば広い扱いになるのも素直である。 */
+@media (max-width: 860px) {
+  .chunk-ja { text-align: left; }
+}
 /* 区切りの棒。英語の側にだけ出す */
 .chunk-bar { margin-right: 4px; color: var(--accent); font-weight: 700; }
 
@@ -1782,11 +1796,11 @@ html { -webkit-text-size-adjust: 100%; }
    値は**決め打ちにする。** 紙は暗い配色を選んでいても白のままなので、
    `var(--text-*)` を使うと暗い配色のとき文字が消える(第5.22.6節①)。 */
 .lesson-sheet {
-  --paper:        #fdfcf9;   /* ほんのり暖かい白。真っ白はまぶしい */
+  --paper:        #fcfcfd;   /* ほんのり冷たい白。真っ白はまぶしい */
   --ink:          #24292f;   /* 真っ黒にしない */
   --ink-soft:     #5a646e;
   --ink-faint:    #8b949e;
-  --rule:         #e7e3da;
+  --rule:         #e3e6e9;
 
   /* ★★ 紙の中は、**明るい配色の島**にする ★★
      (2026-08 実機。暗い配色のまま教材 → 6Steps / Quick Response に入ると、
@@ -1802,12 +1816,12 @@ html { -webkit-text-size-adjust: 100%; }
      自動的に明るい側の色になる。値は明るい配色と同じものにしてあるので、
      明るい配色で見たときの見た目は変わらない。 */
   --btn-bg:         #ffffff;
-  --quiet-bg:       #eceae3;
+  --quiet-bg:       #e9ebee;
   --on-accent:      #ffffff;
   --surface-0:      #ffffff;
-  --surface-1:      #fbfaf7;
-  --surface-2:      #f0efec;
-  --border:         #e7e3da;
+  --surface-1:      #f9fafb;
+  --surface-2:      #eef0f2;
+  --border:         #e3e6e9;
   --text-primary:   #24292f;
   --text-secondary: #5a646e;
   --text-muted:     #8b949e;
@@ -1815,9 +1829,9 @@ html { -webkit-text-size-adjust: 100%; }
   --shadow-1: 0 1px 2px rgb(36 41 47 / 8%);
   --shadow-2: 0 8px 26px rgb(36 41 47 / 12%), 0 2px 6px rgb(36 41 47 / 8%);
   /* 練習の囲み。**紙の上では、紙の色にそろえる** */
-  --qa-bg:        #faf8f3;   /* ごくうすい地色。紙より少しだけ濃い */
-  --qa-line:      #e7e3da;
-  --qa-answer:    #f0ece2;
+  --qa-bg:        #f7f8fa;   /* ごくうすい地色。紙より少しだけ濃い */
+  --qa-line:      #e3e6e9;
+  --qa-answer:    #eef0f3;
   --chunk-bg:     #e9f1e7;   /* カタマリごとの訳の帯(0021)。うすい緑 */
 
   --accent:       #2f6f86;   /* 落ち着いた青緑。見出しと区切り */
@@ -2443,7 +2457,7 @@ html { -webkit-text-size-adjust: 100%; }
   --pop-fg:    #24292f;
   --pop-dim:   #5a646e;
   --pop-faint: #8b949e;
-  --pop-rule:  #e7e3da;
+  --pop-rule:  #e3e6e9;
 
   --pos-noun:   #2f6f86;  --pos-noun-bg:   #eaf3f7;
   --pos-verb:   #38795a;  --pos-verb-bg:   #eaf4ee;
