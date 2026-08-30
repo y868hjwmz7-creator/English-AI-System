@@ -36,7 +36,7 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { prefetchGlosses } from '../lib/vocab.js'
-import { storedChunks } from '../lib/chunkJa.js'
+import { storedChunks, storedParts } from '../lib/chunkJa.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -390,7 +390,7 @@ export default function PassagePractice({
                     /* **カタマリの真上に、そのカタマリの訳**(0021)。
                        控えが無い教材では英語だけになる */
                     <ChunkedText text={item.prompt_en} ja={storedChunks(item)}
-                                 level={slashLevel} />
+                                 parts={storedParts(item)} level={slashLevel} />
                   ) : view === 'slash' || flowing ? (
                     /* 区切りを見ながら重ねて読む。区切りは②と同じ決まりで出す */
                     <SlashedText text={item.prompt_en}

@@ -129,6 +129,9 @@ const DETERMINERS = new Set([
  *   間違った注意は何も言われないより困る。
  */
 const PHRASAL_PAIRS = new Set([
+  // **前置詞を取る動詞は入れない**(`work on the report` `look after the kids`
+  //  `stand by the door` `go over the plan`)。あれは前置詞句なので、
+  //  `work / on the report` と切ってよい。入れると正しい区切りを咎める
   'get up', 'get out', 'get off', 'get back', 'get away', 'get along',
   'give up', 'give back', 'give out', 'give away', 'give in',
   'take off', 'take out', 'take over', 'take on', 'take back', 'take away',
@@ -136,18 +139,18 @@ const PHRASAL_PAIRS = new Set([
   'pick up', 'pick out',
   'set up', 'set out', 'set off', 'set aside',
   'turn on', 'turn off', 'turn out', 'turn up', 'turn down', 'turn around',
-  'look up', 'look out', 'look over', 'look after', 'look forward',
-  'find out', 'figure out', 'work out', 'work on',
+  'look up', 'look out', 'look forward',
+  'find out', 'figure out', 'work out',
   'carry out', 'carry on',
   'bring in', 'bring up', 'bring back', 'bring about', 'bring out',
   'hand in', 'hand out', 'hand over',
   'call off', 'call back', 'call up',
   'come back', 'come up', 'come out', 'come in', 'come along',
-  'go on', 'go out', 'go back', 'go over', 'go ahead',
+  'go out', 'go back', 'go ahead',
   'run out', 'break down', 'break up', 'break out',
   'cut off', 'cut down', 'cut out',
   'fill in', 'fill out', 'fill up',
-  'hold on', 'hold up', 'hold back',
+  'hold up', 'hold back',
   'keep up', 'keep on', 'keep out', 'keep away',
   'let out', 'let down', 'let in',
   'make up', 'make out',
@@ -157,7 +160,7 @@ const PHRASAL_PAIRS = new Set([
   'push back', 'push through',
   'send out', 'send back', 'send in', 'send off',
   'shut down', 'shut off', 'sort out',
-  'stand up', 'stand out', 'stand by',
+  'stand up', 'stand out',
   'start over', 'start up', 'scale up', 'scale down',
   'throw away', 'throw out', 'try out', 'try on', 'use up', 'wake up',
   'write down', 'write up', 'write out',
@@ -248,6 +251,117 @@ const SURE_DETERMINERS = new Set([
 const SURE_MODALS = new Set([
   'can', 'could', 'may', 'might', 'must', 'shall', 'should', 'will', 'would',
 ])
+
+/**
+ * **形容詞**(2026-08 利用者の指定で足した)。
+ *
+ *   > 形容詞と名詞の間に区切りを入れても注意されません。
+ *   > これは注意するように変えるべきです。ただ、気をつけるべきは、
+ *   > I am happy / because I've passed an exam. みたいに
+ *   > 後ろが名詞ではない場合は OK であるべきです。
+ *
+ * 【入れるのは、ほかの品詞にならない語だけ】
+ *   `clean` `open` `close` `light` `free` は**動詞**、
+ *   `right` `kind` `second` は**名詞**、
+ *   `hard` `fast` `late` `high` `just` `only` `well` は**副詞**にもなる。
+ *   **どれも入れない**(取り違えると、正しい区切りを咎める)。
+ *   `-er` `-est` は語幹に戻して当てる(`safer` → `safe`)。
+ */
+const ADJECTIVES = new Set([
+  'able', 'afraid', 'angry', 'anxious', 'available', 'awful', 'beautiful',
+  'boring', 'brave', 'brief', 'bright', 'brilliant', 'busy', 'calm',
+  'careful', 'cheap', 'clever', 'comfortable', 'common', 'competitive',
+  'complex', 'complicated', 'confident', 'confusing', 'convenient',
+  'crowded', 'curious', 'dangerous', 'delicious', 'detailed', 'difficult',
+  'dirty', 'dramatic', 'eager', 'easy', 'effective', 'efficient', 'elegant',
+  'empty', 'enormous', 'enthusiastic', 'essential', 'excellent', 'expensive',
+  'familiar', 'famous', 'fantastic', 'flexible', 'formal', 'fortunate',
+  'frequent', 'fresh', 'friendly', 'frightening', 'funny', 'generous',
+  'gentle', 'global', 'gorgeous', 'grateful', 'happy', 'healthy', 'heavy',
+  'helpful', 'honest', 'horrible', 'huge', 'hungry', 'ideal', 'impatient',
+  'important', 'impossible', 'impressive', 'incredible', 'independent',
+  'informal', 'intelligent', 'interesting', 'international', 'jealous',
+  'lazy', 'legal', 'lively', 'lonely', 'loud', 'lovely', 'lucky',
+  'massive', 'messy', 'modern', 'narrow', 'nervous', 'noisy', 'normal',
+  'obvious', 'official', 'ordinary', 'original', 'painful', 'patient',
+  'peaceful', 'perfect', 'personal', 'polite', 'poor', 'popular',
+  'possible', 'powerful', 'practical', 'precise', 'previous', 'professional',
+  'proud', 'quiet', 'rapid', 'rare', 'realistic', 'reasonable', 'recent',
+  'relevant', 'reliable', 'remarkable', 'responsible', 'rich', 'ridiculous',
+  'risky', 'rude', 'sad', 'safe', 'scary', 'secure', 'sensible', 'sensitive',
+  'serious', 'severe', 'significant', 'silly', 'similar', 'simple',
+  'sincere', 'slow', 'small', 'smart', 'sorry', 'special', 'specific',
+  'stable', 'steady', 'strange', 'strict', 'strong', 'stupid', 'successful',
+  'sudden', 'suitable', 'surprising', 'sustainable', 'talented', 'tasty',
+  'terrible', 'thirsty', 'tiny', 'tired', 'traditional', 'typical', 'ugly',
+  'unable', 'uncomfortable', 'unhappy', 'unusual', 'urgent', 'useful',
+  'useless', 'usual', 'valuable', 'various', 'violent', 'wealthy', 'weird',
+  'wonderful', 'worried', 'worthy', 'young',
+  // よく出るもの。**動詞・名詞・副詞にもなる語は入れない**
+  // (`clean` `open` `light` `right` `kind` `hard` `fast` `late` `high` など)
+  'new', 'old', 'big', 'large', 'great', 'short', 'good', 'bad', 'nice',
+  'warm', 'cold', 'hot', 'quick', 'full', 'wide', 'tall', 'thick', 'thin',
+  'sharp', 'smooth', 'sweet', 'soft', 'weak', 'tough', 'main', 'major',
+  'minor', 'whole', 'entire', 'extra', 'final', 'initial', 'single',
+  'double', 'total', 'digital', 'financial', 'technical', 'medical',
+  'political', 'social', 'economic', 'physical', 'mental', 'natural',
+  'national', 'local', 'regional', 'private', 'current', 'annual',
+  'basic', 'central', 'commercial', 'creative', 'critical', 'cultural',
+  'daily', 'weekly', 'monthly', 'yearly', 'digital', 'direct', 'domestic',
+  'electronic', 'external', 'internal', 'foreign', 'historical',
+  'industrial', 'initial', 'legal', 'logical', 'moral', 'multiple',
+  'mutual', 'negative', 'positive', 'potential', 'primary', 'rural',
+  'scientific', 'secondary', 'strategic', 'temporary', 'urban', 'virtual',
+  'visual', 'weekly',
+])
+
+/**
+ * 形が不規則な過去分詞。`-ed` で終わらないので、当てるには並べるしかない。
+ * **`a broken / window` を咎める**ために要る。
+ * 単なる過去形と同じ形のものも入っているが、`isParticiple` を使う側で
+ * 「冠詞や形容詞のうしろ」に限っているので、`He lost / the game` は咎めない。
+ */
+const IRREGULAR_PARTICIPLES = new Set([
+  'broken', 'written', 'given', 'taken', 'spoken', 'chosen', 'driven',
+  'frozen', 'hidden', 'known', 'shown', 'thrown', 'worn', 'torn', 'born',
+  'lost', 'made', 'built', 'sent', 'kept', 'held', 'told', 'sold', 'felt',
+  'left', 'meant', 'paid', 'done', 'seen', 'grown', 'drawn', 'blown',
+])
+
+/**
+ * **つなぎの動詞**。このあとの形容詞は「述語」なので、
+ * そこでカタマリを終えてよい(`I am happy / because …`)。
+ */
+const LINKING_VERBS = new Set([
+  'be', 'am', 'is', 'are', 'was', 'were', 'been', 'being',
+  'seem', 'seems', 'seemed', 'look', 'looks', 'looked',
+  'feel', 'feels', 'felt', 'become', 'becomes', 'became',
+  'stay', 'stays', 'stayed', 'remain', 'remains', 'remained',
+  'sound', 'sounds', 'sounded', 'appear', 'appears', 'appeared',
+  'taste', 'tastes', 'smell', 'smells', 'prove', 'proves', 'proved',
+  'grew', 'grow', 'grows', 'getting', 'got', 'gets',
+])
+
+/** 形容詞の前に立つ副詞。`is very happy /` でも述語だと分かるようにする */
+const DEGREE_WORDS = new Set([
+  'very', 'so', 'too', 'quite', 'really', 'pretty', 'rather', 'extremely',
+  'fairly', 'incredibly', 'especially', 'particularly', 'always', 'still',
+  'already', 'not', 'never', 'more', 'most', 'less', 'least',
+])
+
+/** 形容詞かどうか。`safer` `safest` は `safe` に戻して見る */
+const isAdjective = (w) => {
+  if (ADJECTIVES.has(w)) return true
+  for (const t of [w.replace(/er$/, ''), w.replace(/est$/, ''),
+    w.replace(/er$/, 'e'), w.replace(/est$/, 'e'),
+    w.replace(/ier$/, 'y'), w.replace(/iest$/, 'y')]) {
+    if (t !== w && ADJECTIVES.has(t)) return true
+  }
+  return false
+}
+
+/** `-ing` / `-ed` の分詞。名詞の前に付けば形容詞のはたらきをする */
+const isParticiple = (w) => /^[a-z]{4,}(ing|ed)$/.test(w) || IRREGULAR_PARTICIPLES.has(w)
 
 /**
  * **カタマリの先頭にしか立てない語**(2026-08 利用者の指定で足した)。
@@ -454,6 +568,31 @@ export function slashesFor(sentence, level = 'beginner') {
  *   何が来ていても正しい**として、いっさい咎めない。
  *   これは当て推量ではなく、記号から確実に分かることである。
  */
+/**
+ * その形容詞が「述語」かどうか。**つなぎの動詞が2語前までにあるか**で見る。
+ * `is happy` `feels very safe` `looks really tired` を拾う。
+ */
+function predicative(words, i) {
+  for (let k = 2; k <= 3; k += 1) {
+    const w = bare(words[i - k] ?? '')
+    if (!w) continue
+    if (LINKING_VERBS.has(w)) return true
+    // あいだにあってよいのは、程度をあらわす副詞だけ
+    if (k === 2 && !DEGREE_WORDS.has(w)) return false
+  }
+  return false
+}
+
+/**
+ * その語は、カタマリの先頭に立つ**機能語**か。
+ * 形容詞のうしろがこれなら、名詞にかかっているのではない
+ * (`happy / because …` `safer / than …` `good / at …`)。
+ */
+function startsChunk(w) {
+  return !w || PREPOSITIONS.has(w) || CONNECTORS.has(w) || MODALS.has(w)
+    || HEAD_WORDS.has(w) || w === 'than' || w === 'as' || w === 'to'
+}
+
 export function slashProblem(words, i) {
   if (i <= 0 || i >= words.length) return null
   const raw = words[i - 1]
@@ -509,6 +648,32 @@ export function slashProblem(words, i) {
       at: i,
       short: `${raw} は名詞と離さない`,
       text: `「${raw}」は次の名詞にかかります。あいだでは区切りません。`,
+    }
+  }
+  // ⑥ 形容詞・分詞と、そのうしろの名詞を離している(2026-08 利用者の指定)
+  //
+  //   > 形容詞と名詞の間に区切りを入れても注意されません。
+  //   > ただ、I am happy / because … みたいに後ろが名詞ではない場合は OK
+  //
+  //   **形容詞が「述語」なら、そこで終えてよい。**
+  //   見分け方は3つで、どれか当てはまれば咎めない。
+  //     ・つなぎの動詞が2語前までにある(`is happy /` `feels very safe /`)
+  //     ・うしろが**機能語**(前置詞・接続詞・助動詞・`than` `as`)
+  //     ・文の切れ目・読点のあと(この関数の先頭で弾いてある)
+  //
+  //   分詞(`-ing` / `-ed`)は、**冠詞や形容詞のうしろに立つとき**だけ見る。
+  //   `a broken / window` は咎めるが、`I saw some people / dancing …` は
+  //   咎めない(利用者の指定。うしろから名詞を修飾する分詞は、
+  //   **切っても切らなくてもよい**)。
+  const attributive = isAdjective(prev)
+    || (isParticiple(prev)
+      && (DETERMINERS.has(bare(words[i - 2] ?? '')) || isAdjective(bare(words[i - 2] ?? ''))))
+  if (attributive && !predicative(words, i) && !startsChunk(next)) {
+    return {
+      at: i,
+      short: `${raw} は名詞と離さない`,
+      text: `「${raw}」はうしろの名詞にかかっています。`
+        + `形容詞と名詞のあいだでは区切りません。`,
     }
   }
   // ⑤ 接続詞・関係詞でカタマリを終えている。**次のまとまりの先頭に置く**

@@ -373,7 +373,9 @@ export default function MaterialForm({
         for (const part of cj.parts ?? []) {
           const src = byNo.get(part.no)
           const item = made[0].items[part.no - 1]
-          if (src && item) item.chunks = { en: src.en, ja: part.ja }
+          // **切れ目そのものも残す**(`parts`)。残しておけば、あとで
+          // 区切りの決まりを直しても、すでに作った訳がずれない(2026-08)
+          if (src && item) item.chunks = { en: src.en, ja: part.ja, parts: src.chunks }
         }
         spent.input += cj.usage?.input ?? 0
         spent.output += cj.usage?.output ?? 0

@@ -30,8 +30,13 @@
 import { chunkPairs } from '../lib/chunkJa.js'
 import SlashedText from './SlashedText.jsx'
 
-export default function ChunkedText({ text, ja = null, level = 'beginner', showJa = true }) {
-  const pairs = chunkPairs(text, ja, level)
+export default function ChunkedText({
+  text, ja = null, level = 'beginner', showJa = true, parts = null,
+}) {
+  // `parts` は控えたときの切れ目。**あれば、それを使う。**
+  // 表示のたびに計算し直すと、区切りの決まりを直したときに
+  // すでに作った訳が丸ごと出なくなる(2026-08 実機)
+  const pairs = chunkPairs(text, ja, level, parts)
   // 控えが無い / 数が合わない。**英語だけを、これまでどおり出す**
   if (!pairs) return <SlashedText text={text} level={level} />
 

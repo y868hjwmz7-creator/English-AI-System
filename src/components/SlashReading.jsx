@@ -44,7 +44,7 @@
  */
 import { Fragment, useEffect, useState } from 'react'
 import { checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
-import { chunkPairsAtMarks, storedChunks } from '../lib/chunkJa.js'
+import { chunkPairsOfAtMarks, storedChunks } from '../lib/chunkJa.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
@@ -339,10 +339,23 @@ function splitMarks(parts, marks) {
  */
 function MinePairs({ parts, marks }) {
   return splitMarks(parts, marks).map(({ part, local }, i) => {
-    const pairs = chunkPairsAtMarks(part.prompt_en, storedChunks(part), local)
-    // 控えが無い / 数が合わない。**英語だけを出す。無いものを見せない**
+    const pairs = chunkPairsOfAtMarks(part, local)
+    // 控えが無い / 数が合わない。**黙って英語だけを出さない。**
+    // 何が起きたのか分からず、直す道も見えない(2026-08 実機)
     if (!pairs) {
-      return <p className="slash-out" key={part.id ?? i} lang="en">{part.prompt_en}</p>
+      return (
+        <div key={part.id ?? i}>
+          <p className="slash-out" lang="en">{part.prompt_en}</p>
+          {storedChunks(part) && (
+            <p className="notice notice--warn slash-stale">
+              区切りの決まりが変わったため、この本文の訳は数が合わなくなりました。
+              <br />
+              教材をさがす画面でこの教材を開き、
+              <strong>「区切りの訳を作る」</strong>を押すと作り直せます。
+            </p>
+          )}
+        </div>
+      )
     }
     return (
       <p className="slash-out slash-out--mine" key={part.id ?? i}>

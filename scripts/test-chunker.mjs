@@ -167,6 +167,56 @@ console.log('\n▶ 数字混じりの語を、助動詞や前置詞と間違え�
     cut(n, 'beginner'))
 }
 
+/* ── 形容詞・分詞と名詞のあいだ(2026-08 利用者の指定)──────────────
+   > 形容詞と名詞の間に区切りを入れても注意されません。これは注意する
+   > ように変えるべきです。ただ、I am happy / because … みたいに
+   > 後ろが名詞ではない場合は OK であるべきです。
+   > 例：I saw some people / dancing in the park. でも OK だし、
+   >     I saw / some people dancing in the park. でも OK です。 */
+console.log('\n▶ 形容詞・分詞は、うしろの名詞と離さない')
+{
+  ok('a new / habit', checkSlashes('A new habit is spreading fast.', [2]).length > 0)
+  ok('a careful / plan',
+    checkSlashes('We need a careful plan for the meeting.', [4]).length > 0)
+  ok('a broken / window(不規則な分詞)',
+    checkSlashes('He opened a broken window in the room.', [4]).length > 0)
+  ok('a growing / number',
+    checkSlashes('There is a growing number of viewers.', [4]).length > 0)
+  ok('比較級でも当たる(a safer / way)',
+    checkSlashes('They found a safer way to do it.', [4]).length > 0)
+}
+
+console.log('\n▶ 述語の形容詞・うしろが名詞でないときは、咎めない')
+{
+  ok('I am happy / because …',
+    checkSlashes("I am happy because I have passed an exam.", [3]).length === 0)
+  ok('It feels safer / than …',
+    checkSlashes('It feels safer than reading a textbook.', [3]).length === 0)
+  ok('He is good / at math.', checkSlashes('He is good at math.', [3]).length === 0)
+  ok('She is very tired / today.',
+    checkSlashes('She is very tired today.', [4]).length === 0)
+  ok('The report is very important / for us.',
+    checkSlashes('The report is very important for us.', [5]).length === 0)
+}
+
+/* うしろから名詞を修飾する分詞は、**切っても切らなくてもよい**(利用者の指定) */
+console.log('\n▶ うしろから修飾する分詞は、どちらでも咎めない')
+{
+  const t = 'They saw some people dancing in the park.'
+  ok('some people / dancing …', checkSlashes(t, [4]).length === 0)
+  ok('They saw / some people dancing …', checkSlashes(t, [2]).length === 0)
+  ok('The man standing / there is my boss.',
+    checkSlashes('The man standing there is my boss.', [3]).length === 0)
+  ok('He lost / the game(過去形であって分詞ではない)',
+    checkSlashes('He lost the game yesterday.', [2]).length === 0)
+  ok('He is working / on the report(前置詞を取る動詞)',
+    checkSlashes('He is working on the report now.', [3]).length === 0)
+  ok('She looks / after the children',
+    checkSlashes('She looks after the children every day.', [2]).length === 0)
+  ok('We stand / by the door',
+    checkSlashes('We stand by the door and wait.', [2]).length === 0)
+}
+
 console.log('\n▶ カタマリをつなぐと、もとの文に戻る')
 for (const [name, text] of Object.entries(S)) {
   for (const lv of ['beginner', 'middle', 'advanced']) {

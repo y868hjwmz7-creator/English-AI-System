@@ -84,6 +84,48 @@ export function storedChunks(item) {
 }
 
 /**
+ * 控えたときの**カタマリの英語**(2026-08 に足した)。
+ *
+ * 【なぜ持つのか】
+ *   訳は「初級の区切り」でそろえて作る。以前はその区切りを
+ *   **表示のたびに計算し直していた**ので、区切りの決まりを直すと
+ *   カタマリの数が変わり、**すでに作った訳が丸ごと出なくなった**
+ *   (2026-08 実機。句動詞の決まりを足したとき)。
+ *
+ *   控えたときの切れ目そのものを一緒に残しておけば、
+ *   **あとで決まりを変えても、訳はずれない。**
+ *
+ * 【古い控えには入っていない】
+ *   0021 で作ったものには `parts` が無い。そのときは null を返し、
+ *   これまでどおり計算し直す(数が合わなければ訳を出さない)。
+ */
+export function storedParts(item) {
+  const c = item?.chunks
+  const parts = Array.isArray(c?.parts) ? c.parts.map((x) => String(x ?? '')) : null
+  if (!parts?.length) return null
+  // **中身が本文と食い違っていたら使わない。** つないで元に戻ることを見る
+  if (norm(parts.join(' ')) !== norm(item?.prompt_en)) return null
+  if (!Array.isArray(c?.ja) || c.ja.length !== parts.length) return null
+  return parts
+}
+
+/** カタマリの英語から、区切りの位置(語数の積み上げ)を出す */
+const cutsFromParts = (parts) => {
+  const at = []
+  let n = 0
+  for (const p of parts.slice(0, -1)) { n += wordsOf(p).length; at.push(n) }
+  return at
+}
+
+/**
+ * 訳を分けられる位置。**控えに残っていればそれを使い、無ければ計算する。**
+ * ここを1か所にしておかないと、表示と作成で切れ目が食い違う。
+ */
+const baseCuts = (text, parts) => (
+  parts?.length ? cutsFromParts(parts) : slashesFor(text, BASE_LEVEL).map((x) => x.at)
+)
+
+/**
  * 「英語のカタマリ + その訳」の対を作る。
  *
  * @param {string} text  英文(段落 / 発言まるごと)
@@ -91,10 +133,10 @@ export function storedChunks(item) {
  * @param {string} level 画面で選んでいる細かさ
  * @returns {{en: string, ja: string}[]|null} 数が合わなければ null
  */
-export function chunkPairs(text, ja, level = BASE_LEVEL) {
+export function chunkPairs(text, ja, level = BASE_LEVEL, parts = null) {
   const words = wordsOf(text)
   if (!words.length) return null
-  const base = slashesFor(text, BASE_LEVEL).map((x) => x.at)
+  const base = baseCuts(text, parts)
   // **数が合わなければ切らない。** ずれた対は、無いより害が大きい
   if (!Array.isArray(ja) || ja.length !== base.length + 1) return null
 
@@ -121,7 +163,11 @@ export function chunkPairs(text, ja, level = BASE_LEVEL) {
 
 /** 画面から呼ぶ入口。項目と細かさを渡すと、対か null が返る */
 export const chunkPairsOf = (item, level = BASE_LEVEL) =>
-  chunkPairs(item?.prompt_en, storedChunks(item), level)
+  chunkPairs(item?.prompt_en, storedChunks(item), level, storedParts(item))
+
+/** 自分の区切りに合わせた対。**控えの切れ目を使う**(無ければ計算する) */
+export const chunkPairsOfAtMarks = (item, marks) =>
+  chunkPairsAtMarks(item?.prompt_en, storedChunks(item), marks, storedParts(item))
 
 /**
  * **自分が入れた区切り**に、訳を当てる(2026-08 利用者の指定)。
@@ -146,10 +192,10 @@ export const chunkPairsOf = (item, level = BASE_LEVEL) =>
  * @param {number[]} marks 自分が入れた区切りの位置
  * @returns {{segs: string[], ja: string}[]|null} 数が合わなければ null
  */
-export function chunkPairsAtMarks(text, ja, marks) {
+export function chunkPairsAtMarks(text, ja, marks, parts = null) {
   const words = wordsOf(text)
   if (!words.length) return null
-  const base = slashesFor(text, BASE_LEVEL).map((x) => x.at)
+  const base = baseCuts(text, parts)
   // **数が合わなければ切らない。** ずれた対は、無いより害が大きい
   if (!Array.isArray(ja) || ja.length !== base.length + 1) return null
 

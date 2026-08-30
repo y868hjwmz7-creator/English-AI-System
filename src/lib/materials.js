@@ -11,7 +11,7 @@
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { isPassageSection } from '../data/exerciseTypes.js'
-import { chunkPlan, storedChunks } from './chunkJa.js'
+import { chunkPairsOf, chunkPlan } from './chunkJa.js'
 import { supabase } from './supabase.js'
 
 // 教材のレベルはゲストのレベルと同じ物差し(CEFR)を使う
@@ -301,7 +301,12 @@ const cleanItems = (items) =>
       // {en: 作ったときの英文, ja: [カタマリごとの訳]}
       const chunks = it.chunks
       if (Array.isArray(chunks?.ja) && chunks.ja.length && !missingColumns.has('chunks')) {
-        row.chunks = { en: String(chunks.en ?? '').trim(), ja: chunks.ja.map((x) => String(x ?? '')) }
+        row.chunks = {
+          en: String(chunks.en ?? '').trim(),
+          ja: chunks.ja.map((x) => String(x ?? '')),
+          // 切れ目そのもの。**あとで決まりを直しても訳がずれない**(2026-08)
+          ...(Array.isArray(chunks.parts) ? { parts: chunks.parts.map((x) => String(x ?? '')) } : {}),
+        }
       }
       return row
     })
@@ -743,8 +748,14 @@ export async function addChunkJa(material) {
     .filter((it) => String(it.prompt_en ?? '').trim())
   if (!items.length) return ng('この教材には本文(記事・会話)がありません')
 
-  // まだ訳が無いものだけ。**すでにあるものに、もう一度課金しない**
-  const todo = items.filter((it) => !storedChunks(it))
+  // まだ訳が無いもの**と、ずれてしまったもの**だけ。
+  //
+  // **`storedChunks()` の有無で見てはいけない**(2026-08 実機)。
+  // あれは英文が同じかどうかしか見ないので、区切りの決まりを直して
+  // カタマリの数が変わった教材まで「もう作ってある」と判定してしまう。
+  // その結果、**訳が出ないのに作り直せない**という行き止まりになっていた。
+  // **実際に対が作れるか(`chunkPairsOf`)で見る。**
+  const todo = items.filter((it) => !chunkPairsOf(it))
   if (!todo.length) return ok({ made: 0, spent: null })
 
   const plan = chunkPlan(todo)
@@ -765,7 +776,9 @@ export async function addChunkJa(material) {
     if (!item?.id) continue
     const { error: e } = await supabase
       .from('material_items')
-      .update({ chunks: { en: src.en, ja: part.ja } })
+      // **切れ目そのものも残す**(`parts`)。残しておけば、あとで
+      // 区切りの決まりを直しても、すでに作った訳がずれない
+      .update({ chunks: { en: src.en, ja: part.ja, parts: src.chunks } })
       .eq('id', item.id)
     if (e) return fail(e, '訳を控えられませんでした')
     made += 1
