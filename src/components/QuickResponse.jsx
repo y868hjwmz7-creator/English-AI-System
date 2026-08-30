@@ -62,12 +62,9 @@ export default function QuickResponse({
   useEffect(() => {
     const body = bodyRef.current
     if (!body) return
-    // **入りきるなら、動かさない。** 上から積んであるので、
-    // 「問題 → 答え」の順に並んで**両方見える**(2026-08 の指摘)。
-    // 小さい画面で入りきらないときだけ、**答えが見えるところまで**送る
-    // (先頭のままだと答えが下に隠れ、開いた意味が無い)
-    const fits = body.scrollHeight <= body.clientHeight + 1
-    body.scrollTop = (shown && !fits) ? body.scrollHeight : 0
+    // **いつも上から。** 問題と答えは入れ替えて出すので、
+    // どちらも枠の先頭から始まる。送る必要そのものが無くなった
+    body.scrollTop = 0
   }, [shown, at])
 
   const card = pairs[at] ?? null
@@ -160,26 +157,24 @@ export default function QuickResponse({
               押し出され、そのつど送らないと読めなかった(2026-08 の指摘)。
               **文の長さが変わっても、ボタンは動かない。** */}
           <div className="qr-body" ref={bodyRef}>
-            <p className="qr-from">
-              {card.from}{card.speaker && ` / ${card.speaker}`}
-            </p>
+            {/* 話す人だけは残す。誰のせりふかで言い方が変わる。
+                **「記事」「会話」の札は出さない**(2026-08 の指定)。
+                どの教材から出ているかは、上の題名を見れば分かる */}
+            {card.speaker && <p className="qr-from">{card.speaker}</p>}
 
-            {/* 出す側は日本語だけ。**英語は出さない。音も鳴らさない** */}
-            <p className="qr-ja">
-              {/* 訳が段落ぶんしか無いときは、そう言う。
-                  **無いものをあるように見せない** */}
-              {card.jaIsWhole && <span className="slash-ja-label">段落の訳</span>}
-              {card.ja}
-            </p>
-
-            {/* 開いてはじめて、英語と音が出る */}
-            {shown && (
-              <div className="answer-box qr-en" ref={enRef}>
+            {/* **問題と答えは入れ替える**(2026-08 の指定)。
+                並べて出すと、長い文では両方が入らない。
+                入れ替えなら、いつでも上から始まり、必ず収まる */}
+            {shown ? (
+              <div className="qr-en" ref={enRef}>
                 <EnglishText text={card.en} textJa={card.ja} level={material?.level}
                              statuses={wordStatuses} onMark={onMarkWord} />
                 <SpeakButton text={card.en} className="etext-listen"
                              clipVoice={clipVoice} tier={tier} />
               </div>
+            ) : (
+              /* 出す側は日本語だけ。**英語は出さない。音も鳴らさない** */
+              <p className="qr-ja">{card.ja}</p>
             )}
           </div>
 

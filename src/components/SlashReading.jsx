@@ -91,9 +91,6 @@ export default function SlashReading({
           // **1本ずつ、その場で判定する**(2026-08 利用者の指定)
           const judge = judgeSlashes(s.text, mine, level)
           const model = judge.model
-          const notes = Object.entries(judge.at)
-            .filter(([, v]) => v.state === 'ng')
-            .map(([at, v]) => ({ at: Number(at), text: v.why }))
           return (
             <li key={s.id} className="qa-row slash-row">
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
@@ -133,6 +130,16 @@ export default function SlashReading({
                           /
                         </span>
                       )}
+                      {/* **まちがいは、その場に吹き出しで出す。**
+                          下にまとめて並べていたので、どの区切りの話なのか
+                          ぱっと見て分からなかった(2026-08 の指摘)。
+                          ここに出せば、直せば消える */}
+                      {judge.at[i]?.state === 'ng' && (
+                        <span className="slash-tip" role="note"
+                              title={judge.at[i].why}>
+                          {judge.at[i].short}
+                        </span>
+                      )}
                       {i === 0 ? (
                         <span className="slash-word is-first">{w}</span>
                       ) : (
@@ -165,19 +172,6 @@ export default function SlashReading({
                     <span className="slash-score-done">模範どおりです</span>
                   )}
                 </p>
-              )}
-
-              {/* 決まりで確かめられることだけを言う。
-                  **あやふやなことは言わない。**「たぶん違う」は、
-                  何も言われないより困る */}
-              {notes.length > 0 && (
-                <ul className="slash-notes">
-                  {notes.map((n, i) => (
-                    <li key={i}>{n.text.split('**').map((t, k) => (
-                      k % 2 ? <strong key={k}>{t}</strong> : t
-                    ))}</li>
-                  ))}
-                </ul>
               )}
 
               {open && (

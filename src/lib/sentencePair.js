@@ -52,9 +52,12 @@ export function splitEnSentences(text) {
 export function alignedSentences(en, ja) {
   const enParts = splitEnSentences(en)
   const jaParts = splitJaSentences(ja)
-  const whole = [{ en: String(en ?? '').trim(), ja: String(ja ?? '').trim(), aligned: false }]
-
-  if (enParts.length <= 1) return whole
+  // **英文が1文なら、その訳はその文の訳である。**
+  // ここを `aligned: false` にしていたので、1文の項目にまで
+  // 「段落の訳」の札が出ていた(2026-08 の指摘)
+  if (enParts.length <= 1) {
+    return [{ en: String(en ?? '').trim(), ja: String(ja ?? '').trim(), aligned: true }]
+  }
   // **数が合わなければ切らない。** ずれた対を作るほうが害が大きい
   if (enParts.length !== jaParts.length) {
     return enParts.map((t) => ({ en: t, ja: String(ja ?? '').trim(), aligned: false }))

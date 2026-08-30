@@ -50,8 +50,8 @@ export const canQuickRespond = (exerciseType) => Boolean(PAIR_FIELDS[exerciseTyp
 /**
  * 教材から、日本語と英語の対をぜんぶ集める。
  *
- * @returns {{ja, en, speaker, from, key, jaIsWhole}[]}
- *   `jaIsWhole` は「訳が段落ぶんしか無い」という印。画面が札を出す
+ * @returns {{ja, en, speaker, from, key}[]}
+ *   **1文ずつの対だけ。** 訳が段落ぶんしか無いものは入らない
  */
 export function quickResponsePairs(material) {
   const out = []
@@ -71,9 +71,12 @@ export function quickResponsePairs(material) {
       // 記事の1項目は段落なので、そのままでは日本語が5行も出てしまう。
       // 訳の数が合わないときは切らない(`alignedSentences`)
       alignedSentences(en, ja).forEach((pair, k) => {
+        // **1文ごとの問題が Quick Response の定義である**(2026-08 の指定)。
+        // 訳が段落ぶんしか無いものは、1文の問題にならないので**出さない。**
+        // 「段落の訳」と断って出すくらいなら、出さないほうがよい
+        if (!pair.aligned) return
         out.push({
           ja: pair.ja, en: pair.en, from, speaker,
-          jaIsWhole: !pair.aligned,
           key: `${key}-${k}`,
         })
       })

@@ -363,7 +363,10 @@ export default function LessonView({
           ボタンの場所が動かない**(2026-08 の指摘) */}
       <div className={`lesson-sheet lesson-sheet--${size}${run ? ' is-running' : ''}`}
            id="lesson-sheet">
-        <div className="lesson-head">
+        {/* Quick Response のあいだは、題名の帯を出さない(2026-08 の指定)。
+            **問題を出す場所を、そのぶん広く取る。**
+            6Steps は本文を読む練習なので、題名はそのまま出す */}
+        <div className={`lesson-head${qr ? ' is-hidden' : ''}`}>
           <MaterialTitle title={material.title} headline={material.headline}
                          as="strong" size="sheet" />
           {/* **何の練習かを、紙の上に必ず残す。**

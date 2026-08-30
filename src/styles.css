@@ -1222,8 +1222,32 @@ html { -webkit-text-size-adjust: 100%; }
   cursor: help;
 }
 .slash-mark.is-ok    { color: var(--ok); }
-.slash-mark.is-ng    { color: var(--ng); text-decoration: underline wavy; }
+/* まちがいは**強く出す。** 赤い丸で囲み、すぐ横に吹き出しを付ける */
+.slash-mark.is-ng {
+  color: #fff; background: var(--ng); border-radius: 4px;
+  padding: 0 0.28em; text-decoration: none;
+}
 .slash-mark.is-plain { color: var(--text-muted); }
+
+/* その場の指導。**まちがえた場所のすぐ横**に出す。
+   下にまとめて並べていたので、どの区切りの話なのか分からなかった
+   (2026-08 の指摘)。直せば消えるので、注意書きが溜まらない */
+.slash-tip {
+  position: relative;
+  display: inline-block; vertical-align: middle;
+  margin: 0 0.35em 0 0.5em; padding: 3px 9px;
+  border: 1px solid var(--ng); border-radius: 8px;
+  background: var(--ng-bg); color: var(--ng);
+  font-size: 12px; font-weight: 700; line-height: 1.5;
+  white-space: nowrap; cursor: help;
+}
+/* 吹き出しの尻尾。**左のスラッシュを指す** */
+.slash-tip::before {
+  content: ''; position: absolute; left: -5px; top: 50%;
+  width: 8px; height: 8px; transform: translateY(-50%) rotate(45deg);
+  border-left: 1px solid var(--ng); border-bottom: 1px solid var(--ng);
+  background: var(--ng-bg);
+}
 .slash-out .slash-mark { cursor: default; }
 
 /* その場の判定。**数だけ言う。場所は言わない**(答えを渡さない) */
@@ -1241,12 +1265,6 @@ html { -webkit-text-size-adjust: 100%; }
 .slash-out--model { color: var(--text-secondary); }
 .slash-out--model .slash-mark { color: var(--accent); }
 
-.slash-notes {
-  margin: 10px 0 0; padding: 9px 12px 9px 28px; border-radius: 8px;
-  background: var(--ng-bg); color: var(--ng);
-  font-size: 13px; line-height: 1.75;
-}
-.slash-notes strong { color: inherit; }
 .slash-copy { margin-left: auto; font-size: 12px; }
 .slash-ja {
   margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--border);
@@ -2582,7 +2600,7 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* どこまで来たか。**終わりが見えないと続かない** */
 .qr-bar {
-  height: 6px; margin: 10px 0 4px; border-radius: 999px;
+  height: 6px; margin: 8px 0 2px; border-radius: 999px;
   background: var(--surface-2); overflow: hidden;
 }
 .qr-bar > span {
@@ -2595,23 +2613,22 @@ html { -webkit-text-size-adjust: 100%; }
    紙の上では高さいっぱいに広げるので、まん中に落ち着く */
 .qr-card {
   display: flex; flex-direction: column;
-  min-height: 12rem; padding: 4px 0; text-align: center;
+  padding: 0; text-align: center;
 }
 .qr-body {
-  flex: 1 1 auto; display: flex; flex-direction: column;
-  gap: 4px; overflow-y: auto;
-  /* **0 まで縮ませない。** `min-height: 0` にしていたので、窓が低いと
-     ここが高さ 0 になり、**問題が真っ白になった**(2026-08 実機)。
-     入りきらないときは、紙のほうが縦に送られればよい */
-  min-height: 6rem;
-  /* **上に詰める。** まん中ぞろえにしていたら、問題の上が空きすぎ、
-     答えを開くと問題が上へ押し出されて**両方は見えなかった**
-     (2026-08 の指摘)。上から積めば、問題と答えが必ず並んで見える。
-     余白は上に少しだけ置いて、天井に貼り付いて見えないようにする */
+  /* **高さを決め打ちにする。**
+     伸ばすと、大きな画面で下に大きな空白ができる。
+     縮ませると、窓が低いときに高さ 0 になって**問題が真っ白になった**
+     (2026-08 実機)。決め打ちなら、**ボタンの場所も動かない。**
+     長い問題は、この中だけで送られる */
+  flex: 0 0 auto; height: clamp(7rem, 30vh, 18rem);
+  display: flex; flex-direction: column;
+  gap: 6px; overflow-y: auto;
+  /* **上に詰める。**「2 / 30 のすぐ下に問題の上端」(2026-08 の指定) */
   justify-content: flex-start;
-  padding-top: 10px;
+  padding-top: 2px;
 }
-.qr-from { margin: 0 0 10px; color: var(--qr-faint); font-size: 12px; }
+.qr-from { margin: 0; color: var(--qr-faint); font-size: 12px; }
 /* 出す側の日本語。**大きく出す。** ここだけを見て言う */
 .qr-ja {
   margin: 0 auto; max-width: 34em;
@@ -2625,12 +2642,13 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .qr-actions .btn { min-width: 104px; }
 /* 開いたあとの英語。語に触れれば意味も引ける */
-/* 開いたあとの英語。**出題のすぐ下**に出す(ボタンの下ではない)。
-   囲みは、ほかのトレーニングの「解答」と同じ形にする(`.answer-box`) */
+/* 答え。**問題と入れ替えて**同じ場所に出す。
+   出す場所が同じなので、目が迷わない */
 .qr-en {
   display: flex; align-items: flex-start; justify-content: center;
-  gap: 8px; margin-top: 14px;
-  font-size: 17px; text-align: left;
+  gap: 10px; margin: 0;
+  /* 問題(日本語)と同じ場所・同じそろえ方にする。**目が迷わない** */
+  font-size: 19px; font-weight: 600; line-height: 1.7; text-align: center;
 }
 .qr-en .etext-listen { margin-left: 0; flex: 0 0 auto; }
 
@@ -2704,13 +2722,17 @@ html { -webkit-text-size-adjust: 100%; }
   color: var(--accent); font-weight: 700;
 }
 
+/* Quick Response のあいだは、題名の帯を出さない。
+   **問題を出す場所を、そのぶん広く取る**(2026-08 の指定) */
+.lesson-head.is-hidden { display: none; }
+
 /* 通しの練習のあいだは、紙を縦いっぱいの1枚として使う。
    **出題がまん中に落ち着き、ボタンの場所が動かない。**
    長すぎる中身だけが `.qr-body` の中で送られる */
 .lesson-sheet.is-running { display: flex; flex-direction: column; }
-.lesson-sheet.is-running > .qr { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
-/* **下限は残す。** 0 にすると、窓が低いときに中身が消える(上記) */
-.lesson-sheet.is-running .qr-card { flex: 1 1 auto; }
+/* **紙いっぱいに伸ばさない。** 伸ばすと下に大きな空白ができる。
+   出題の枠の高さは決め打ちなので、そのぶんだけ縦に使う */
+.lesson-sheet.is-running > .qr { flex: 0 0 auto; }
 
 /* ── 練習を始める行 ────────────────────────────────────────
    **「中身を見る」タブとは別のもの。** タブは教材の中身を見るためのもので、

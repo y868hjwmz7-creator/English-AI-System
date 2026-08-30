@@ -182,6 +182,9 @@ export function checkSlashes(sentence, marks) {
   const at = [...new Set(marks)].sort((a, b) => a - b)
   const notes = []
 
+  //
+  // **`short` は吹き出しに出す一言。** その場に出すものなので短く。
+  // `text` は詳しい言い方で、触れたときに出す(`title`)。
   for (const i of at) {
     if (i <= 0 || i >= words.length) continue
     // ① 区切りの最後が前置詞になっている(利用者の明示した NG)
@@ -189,8 +192,9 @@ export function checkSlashes(sentence, marks) {
     if (PREPOSITIONS.has(prev)) {
       notes.push({
         at: i, kind: 'ng',
+        short: `${words[i - 1]} の前で区切る`,
         text: `「${words[i - 1]}」で区切りが終わっています。`
-          + `**前置詞＋名詞でひとかたまり**なので、${words[i - 1]} の**前**で区切ります。`,
+          + `前置詞＋名詞でひとかたまりなので、${words[i - 1]} の前で区切ります。`,
       })
     }
     // ② 助動詞と動詞のあいだで切っている
@@ -198,14 +202,15 @@ export function checkSlashes(sentence, marks) {
     if (aux) {
       notes.push({
         at: i, kind: 'ng',
-        text: `「${aux}」の途中で区切れています。`
-          + `**助動詞と動詞はひとかたまり**で訳します。`,
+        short: `${aux} は切らない`,
+        text: `「${aux}」の途中で区切れています。助動詞と動詞はひとかたまりで訳します。`,
       })
     }
     // ③ 冠詞・限定詞のあとで切っている
     if (DETERMINERS.has(prev)) {
       notes.push({
         at: i, kind: 'ng',
+        short: `${words[i - 1]} は名詞と離さない`,
         text: `「${words[i - 1]}」のあとで区切れています。名詞と離さないでください。`,
       })
     }
@@ -252,14 +257,18 @@ export function judgeSlashes(sentence, marks, level = 'beginner') {
   const model = slashesFor(sentence, level)
   const modelAt = new Set(model.map((x) => x.at))
   const why = new Map(model.map((x) => [x.at, x.why]))
-  const broken = new Map(checkSlashes(sentence, marks).map((n) => [n.at, n.text]))
+  const broken = new Map(checkSlashes(sentence, marks).map((n) => [n.at, n]))
 
   const at = {}
   let ok = 0
   let ng = 0
   let plain = 0
   for (const i of [...new Set(marks)].sort((a, b) => a - b)) {
-    if (broken.has(i)) { at[i] = { state: 'ng', why: broken.get(i) }; ng += 1 }
+    if (broken.has(i)) {
+      const n = broken.get(i)
+      at[i] = { state: 'ng', why: n.text, short: n.short }
+      ng += 1
+    }
     else if (modelAt.has(i)) { at[i] = { state: 'ok', why: why.get(i) }; ok += 1 }
     else { at[i] = { state: 'plain', why: '' }; plain += 1 }
   }
