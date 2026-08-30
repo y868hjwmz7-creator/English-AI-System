@@ -73,3 +73,19 @@ export function PrintIcon({ className = 'icon' }) {
     </svg>
   )
 }
+
+/**
+ * 表示の設定(歯車)。
+ * 狭い画面で、めったに触らない設定をしまっておく札に使う。
+ * 大きさは `1em`。**px で固定しない**(レッスン表示は文字を3段階に変える)。
+ */
+export function GearIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <circle cx="10" cy="10" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 2.4v2.1M10 15.5v2.1M17.6 10h-2.1M4.5 10H2.4
+               M15.4 4.6l-1.5 1.5M6.1 13.9l-1.5 1.5M15.4 15.4l-1.5-1.5M6.1 6.1L4.6 4.6"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}

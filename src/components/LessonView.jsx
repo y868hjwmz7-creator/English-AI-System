@@ -25,7 +25,7 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
-import { PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
+import { GearIcon, PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import MaterialTitle from './MaterialTitle.jsx'
@@ -38,6 +38,22 @@ const SIZES = [
   { id: 'l', label: '大' },
   { id: 'xl', label: '特大' },
 ]
+
+/**
+ * 文字の大きさを覚えておく。
+ * **一度決めれば、毎回選ぶものではない。** 覚えないから、開くたびに
+ * 上の操作欄を触ることになり、それが場所を取る原因にもなっていた。
+ */
+const SIZE_KEY = 'eas.lessonSize'
+const loadSize = () => {
+  try {
+    const id = window.localStorage.getItem(SIZE_KEY)
+    return SIZES.some((s) => s.id === id) ? id : 'l'
+  } catch { return 'l' }
+}
+const saveSize = (id) => {
+  try { window.localStorage.setItem(SIZE_KEY, id) } catch { /* 使えなくても困らない */ }
+}
 
 export default function LessonView({
   material, onClose,
@@ -59,7 +75,14 @@ export default function LessonView({
   const [showAnswers, setShowAnswers] = useState(false)
   const [openItems, setOpenItems] = useState(() => new Set())
   const [closedItems, setClosedItems] = useState(() => new Set())
-  const [size, setSize] = useState('l')
+  const [size, setSize] = useState(loadSize)
+  // 画面の狭い端末では、めったに触らない設定をしまっておく。
+  // **一度決めれば何度も要らないもの**(速さ・配色・文字の大きさ・印刷)。
+  // パソコンでは常に出したままにする(CSS が決める。第5.22節)
+  const [openSettings, setOpenSettings] = useState(false)
+  // Esc の扱いで今の状態を見たい。`useEffect` の中から読めるように控える
+  const openSettingsRef = useRef(false)
+  openSettingsRef.current = openSettings
   // 読み上げの速さ。**画面に1つだけ。** 端末に覚えさせる(2026-08 利用者の指定)
   const [rateId, setRateId] = useState(loadRateId)
   // 読み上げ。**会話は話す人ごとに声を変える**(2026-08 の指摘)。
@@ -133,7 +156,10 @@ export default function LessonView({
   // Esc で閉じる。左右の矢印でページを送る
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') { stopReading(); onClose?.() }
+      if (e.key !== 'Escape') return
+      // **開いているものから閉じる。** いきなり画面ごと閉じない
+      if (openSettingsRef.current) { setOpenSettings(false); return }
+      stopReading(); onClose?.()
       if (e.key === 'ArrowRight') {
         setPage((p) => Math.min(p + 1, sections.length - 1))
         resetItems()
@@ -217,30 +243,51 @@ export default function LessonView({
     <div className="lesson" role="dialog" aria-label="レッスンで使う表示">
       {/* 操作するところ。共有される側にも見えるが、紙の外に置く */}
       <div className="lesson-bar no-print">
+        {/* ── いつも要るもの。**この1行に収める** ──────────────
+            スマホでは操作欄が4段になり、画面の4割を占めていた
+            (2026-08 実機)。レッスン中に何度も触るのは
+            「閉じる・ページ送り・解答」の3つだけである。
+            狭い画面では言葉も短くする(`.wide-text` を隠す)。 */}
         <button type="button" className="btn btn--small"
-                onClick={() => { stopReading(); onClose?.() }}>✕ 閉じる</button>
+                aria-label="閉じる"
+                onClick={() => { stopReading(); onClose?.() }}>
+          ✕<span className="wide-text"> 閉じる</span>
+        </button>
 
         <div className="lesson-pages">
           <button type="button" className="btn btn--small"
-                  disabled={page === 0}
+                  disabled={page === 0} aria-label="前のページ"
                   onClick={() => { setPage(page - 1); resetItems() }}>◀</button>
           <span>{page + 1} / {sections.length}</span>
           <button type="button" className="btn btn--small"
-                  disabled={page >= sections.length - 1}
+                  disabled={page >= sections.length - 1} aria-label="次のページ"
                   onClick={() => { setPage(page + 1); resetItems() }}>▶</button>
         </div>
 
-        <div className="lesson-tools">
-          <button type="button"
-                  className={`btn btn--small${showAnswers ? ' btn--primary' : ''}`}
-                  onClick={() => {
-                    // 全部出す・全部隠す。1問ずつ開いたものも一緒に閉じる
-                    setShowAnswers(!showAnswers)
-                    setOpenItems(new Set())
-                    setClosedItems(new Set())
-                  }}>
-            {showAnswers ? 'すべての解答を隠す' : 'すべての解答を出す'}
-          </button>
+        <button type="button"
+                className={`btn btn--small${showAnswers ? ' btn--primary' : ''}`}
+                onClick={() => {
+                  // 全部出す・全部隠す。1問ずつ開いたものも一緒に閉じる
+                  setShowAnswers(!showAnswers)
+                  setOpenItems(new Set())
+                  setClosedItems(new Set())
+                }}>
+          <span className="wide-text">すべての</span>
+          解答を{showAnswers ? '隠す' : '出す'}
+        </button>
+
+        {/* ── しまっておくもの ────────────────────────────────
+            速さ・配色・文字の大きさ・印刷は、**一度決めれば何度も
+            要らない。** 狭い画面ではここに畳み、押したときだけ出す。
+            パソコンでは畳まない(CSS が決めるので、この札も出ない)。 */}
+        <button type="button" className="btn btn--small lesson-more"
+                aria-expanded={openSettings} aria-controls="lesson-settings"
+                onClick={() => setOpenSettings((v) => !v)}>
+          <GearIcon />表示
+        </button>
+
+        <div className={`lesson-settings${openSettings ? ' is-open' : ''}`}
+             id="lesson-settings">
           <label className="lesson-rate">
             <span>速さ</span>
             <select value={rateId}
@@ -265,7 +312,7 @@ export default function LessonView({
             {SIZES.map((s) => (
               <button key={s.id} type="button"
                       className={`theme-btn${size === s.id ? ' is-active' : ''}`}
-                      onClick={() => setSize(s.id)}>
+                      onClick={() => { setSize(s.id); saveSize(s.id) }}>
                 {s.label}
               </button>
             ))}

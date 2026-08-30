@@ -1099,9 +1099,13 @@ html { -webkit-text-size-adjust: 100%; }
 .lesson-bar .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .lesson-bar .btn:disabled { opacity: .4; }
 .lesson-pages { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.lesson-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.lesson-settings {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto;
+}
 .lesson-sizes { display: inline-flex; border: 1px solid #55554e; border-radius: 999px; overflow: hidden; }
 .lesson-sizes .theme-btn { color: #d8d8d2; }
+/* 「表示」の札。**広い画面では出さない**(設定は常に並んでいるため) */
+.lesson-more { display: none; }
 
 /* ── レッスンで使う紙の配色 ──────────────────────────────────
    【考え方】(2026-08 利用者の指定)
@@ -1735,7 +1739,36 @@ html { -webkit-text-size-adjust: 100%; }
   .lesson-items > li::after { content: ''; display: block; clear: both; }
   .lesson-items > li.is-speaking { padding-left: 8px; padding-right: 6px; }
   .lesson-head { margin-bottom: 14px; }
-  .lesson-tools { margin-left: 0; }
+}
+
+/* ── 狭い画面では、めったに触らない設定をしまう ──────────────
+   【なぜ】(2026-08 実機・利用者の指摘)
+     スマホで「大きく表示」すると、上の操作欄が**4段**になり、
+     画面のおよそ4割を占めていた。教材がほとんど見えない。
+
+   > 一度設定すれば何度も必要なものではなさそうなものは
+   > 普段はしまっておくような感じが良いですね。
+   > パソコンでは今のままで良いと思います。
+
+   レッスン中に何度も触るのは「閉じる・ページ送り・解答」の3つだけ。
+   速さ・配色・文字の大きさ・印刷は、一度決めれば何度も要らない。
+
+   【なぜ幅で切り替えるのか】
+     端末の種類を当て推量しない(`pointer` や UA を見ない)。
+     **見えている幅だけで決める。** 横向きにすれば広い扱いになるのも、
+     利用者にとっては素直である。iPad の縦(834px)までを狭いとみなす。 */
+@media (max-width: 860px) {
+  /* 言葉を短くする。「✕ 閉じる」→「✕」、「すべての解答を出す」→「解答を出す」 */
+  .lesson-bar .wide-text { display: none; }
+  .lesson-bar { gap: 8px; padding: 6px 10px; }
+  .lesson-more { display: inline-flex; margin-left: auto; }
+
+  /* 畳んでおく。押したときだけ、下に1行ぶん出す */
+  .lesson-settings { display: none; }
+  .lesson-settings.is-open {
+    display: flex; flex-basis: 100%; margin-left: 0;
+    padding-top: 8px; border-top: 1px solid #45453f;
+  }
 }
 
 /* ── 宿題の行(押して開く)────────────────────────────────
