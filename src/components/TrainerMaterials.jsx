@@ -319,7 +319,7 @@ export default function TrainerMaterials({ me }) {
                   記事の1段落目をそのまま並べていたので、1件で画面ぜんぶを
                   食っていた。さがす画面は**見比べる**ためのものなので、
                   1件が長いほど見比べにくくなる。
-                  中身は「中身を見る」で開ける。
+                  中身は、行そのものを押せば開く(▸ / ▾)。
 
                   何の演習が何問あるかは、教材を選ぶのに要る。
                   **1行に畳んで残す**(2行あった数の行も、これに1本化する)。 */}
@@ -346,11 +346,10 @@ export default function TrainerMaterials({ me }) {
                       {m.tagIds.length ? ` / ${m.tagIds.map(weaknessTagLabel).join('・')}` : ''}
                     </div>
                   </div>
+                  {/* **「レッスンで使う」はここに置かない。**
+                      開いていない行にも出しているので、開くと2つ並んでしまう。
+                      **同じことをするボタンを2つ見せない**(CLAUDE.md)。 */}
                   <div className="btn-row no-print">
-                    <button type="button" className="btn btn--small btn--primary"
-                            onClick={() => setLessonOf(m)}>
-                      <ScreenIcon />レッスンで使う(大きく表示)
-                    </button>
                     <button type="button" className="btn btn--small"
                             onClick={() => printElement(document.getElementById(`material-${m.id}`))}>
                       <PrintIcon />印刷 / PDFで保存
@@ -465,6 +464,19 @@ export default function TrainerMaterials({ me }) {
                   </button>
                 </div>
               ) : null}
+
+              {/* **「中身を見る」があった場所には「レッスンで使う」を置く**
+                  (2026-08 利用者の指定)。さがした教材に対してすぐしたいのは
+                  「中身を眺める」ことではなく「レッスンで使う」ことである。
+                  中身は、行そのものを押せば開く(▸ / ▾)。
+
+                  **開いていても閉じていても、いつも出す。** 開くと消える
+                  のでは、いちいち閉じてから押すことになる。
+                  そのぶん、中身の中には置かない(2つ並んでしまう)。 */}
+              <button type="button" className="btn btn--small"
+                      onClick={() => setLessonOf(m)}>
+                <ScreenIcon />レッスンで使う(大きく表示)
+              </button>
 
               {assigningId === m.id ? (
                 <div className="assign-box">
