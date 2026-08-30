@@ -2889,6 +2889,20 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .lesson-sheet .practice-row .icon { font-size: 1em; }
 
+/* 狭い画面では、**練習の入口を必ず横に並べる。**
+
+   紙の文字は3段階に変えられる。「特大」にすると 0.8em でも 18px になり、
+   「6Steps」と「Quick Response」が1行に収まらず**縦に積まれて**いた
+   (2026-08 実機)。そのぶん本文が下へ押し出される。
+
+   **ここは読むものではなく操作である。** 本文の大きさに合わせて
+   大きくする理由がないので、この幅では px で固定する。 */
+@media (max-width: 600px) {
+  .practice-row { flex-wrap: nowrap; }
+  .practice-row .btn { white-space: nowrap; }
+  .lesson-sheet .practice-row .btn { font-size: 13px; padding: 6px 10px; }
+}
+
 /* ── トレーナーが見る単語帳 ────────────────────────────────
    ここから語を選んで、そのまま教材を作る。
    **復習が、次の宿題になる。** それがこのアプリの中心である */
