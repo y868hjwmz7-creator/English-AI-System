@@ -23,6 +23,7 @@ import { loadEnglishVoices } from '../lib/speech.js'
 import { readAloudSequence, stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
+import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -175,8 +176,10 @@ export default function LessonView({
   // こちらで作った音声(MP3)の話者。端末の声から換算しない(voiceCast.js)
   // 訛りは教材が決め、性別は役ごとに決まる(0017)
   const clipCast = castClipSpeakers(
-    (section?.items ?? []).map((it) => it.speaker), material.voiceId,
+    (section?.items ?? []).map((it) => it.speaker), material.voiceIds,
   )
+  // 話す人が無い教材(ドリルなど)でも、1つめの声で読む
+  const soloVoice = resolveVoices(material.voiceIds)[0]
   // 良い声を使うか、標準の声で足りるか(`voiceTier.js`)。
   // 記事・会話とリスニング、それに**発音・リズムの弱点**なら良い声にする
   const tier = voiceTierFor({ exerciseType: section?.exercise_type, tags: allTags })
@@ -195,7 +198,7 @@ export default function LessonView({
       playable.map(({ it }) => ({
         text: it.prompt_en,
         voice: voiceFor(cast, it.speaker),
-        clipVoice: voiceFor(clipCast, it.speaker, material.voiceId),
+        clipVoice: voiceFor(clipCast, it.speaker, soloVoice),
       })),
       {
         rate: rateOf(rateId),
@@ -353,7 +356,7 @@ export default function LessonView({
                     <SpeakButton
                       text={it[type.audioFrom]}
                       voice={voiceFor(cast, it.speaker)}
-                      clipVoice={voiceFor(clipCast, it.speaker, material.voiceId)}
+                      clipVoice={voiceFor(clipCast, it.speaker, soloVoice)}
                       tier={tier}
                       rate={rateOf(rateId)}
                       onPlayingChange={(on) => {

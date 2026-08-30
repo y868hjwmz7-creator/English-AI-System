@@ -1,57 +1,76 @@
 /**
- * 教材の読み上げに使える**声の一覧**。
+ * 教材の読み上げに使える**声の名簿**。
  *
  * ============================================================================
- * 【なぜ要るか】(2026-08 利用者の指定)
+ * 【利用者が編集するのは、この下の CLIP_VOICES だけです】
  *
- *   > ElevenLabs の声を決めたら、教材作成の際に好きな声を選べるように
- *   > 出来ますか？ アクセントの種類が恐らく10くらい、それに男女、
- *   > くらいで選ぼうと思っています
+ *   ElevenLabs で気に入った声を見つけたら、**1行足すだけ**です。
  *
- *   ビジネス英語では、**相手の訛りが聞き取れないと仕事にならない。**
- *   インド・シンガポール・スコットランドの英語は、教科書の
- *   アメリカ英語しか聞いていないと歯が立たない。
- *   教材ごとに相手を変えられることには、それ自体に練習の価値がある。
+ *     { id: 'us-3', accent: 'us', gender: 'female', use: 'narration',
+ *       label: 'Rachel', elevenId: '21m00Tcm4TlvDq8ikWAM' },
  *
- * ============================================================================
- * 【この表が持つもの / 持たないもの】
+ *   | 欄 | 何を書くか |
+ *   |---|---|
+ *   | `id`       | この名簿の中だけの合言葉。**他と重ならなければ何でもよい**。`us-3` など |
+ *   | `accent`   | 下の CLIP_ACCENTS の id(`us` `uk` `sc` …) |
+ *   | `gender`   | `female` か `male` |
+ *   | `use`      | `narration` / `conversation` / `both`。下の【向き】を参照 |
+ *   | `label`    | 画面に出す名前。ElevenLabs で見えている名前のままでよい |
+ *   | `elevenId` | ElevenLabs の Voice ID(⋮ → Copy voice ID) |
  *
- *   持つ  … id・画面に出す名前・アクセント・性別・標準の段での代役
- *   持たない … **ElevenLabs の声の id。** あれは利用者が選ぶものであり、
- *              Supabase の Secrets(`ELEVENLABS_VOICES`)に置く。
- *              選び直すたびにコードを触ることになってはいけない
- *
- *   つないでいるのは **この表の id** だけである。Secrets の JSON の鍵を
- *   ここの id と同じにすれば結びつく。**同じ情報を2か所に持たない。**
+ *   **1つの訛りに何人でも登録できます。** 3人でも5人でも構いません。
+ *   会話では、その中から選んだ人が役ごとに話します。
  *
  * ============================================================================
- * 【標準の段には、この訛りは無い】
+ * 【向き(`use`)— ElevenLabs の分類をそのまま持ち込む】(2026-08 利用者の指定)
  *
- *   Google と Azure が持っているのは、ほぼアメリカ英語とイギリス英語だけ。
- *   スコットランドやジャマイカの声は無い。
- *   そこで各行に **`base`(標準の段での代役)** を持たせてある。
+ *   > ナレーションや記事の朗読向きの声と、会話向きの感情豊かな声も
+ *   > カテゴリーとして分けてありました。これはアプリ内でも活用したいです。
  *
- *     記事・会話の本文、発音・リズムのドリル → ElevenLabs(選んだ訛り)
- *     それ以外の演習                        → base の声(Google / Azure)
+ *   ElevenLabs の一覧には「Narrative Story」「Conversational」といった
+ *   分類が付いている。**あれは的を射ている。** 記事の朗読に感情豊かな声を
+ *   当てると芝居がかって聞きづらく、会話に淡々としたナレーションの声を
+ *   当てると人と話している感じがしない。
  *
- *   1本の教材の中で声が変わるが、**演習が変われば声も変わってよい。**
- *   本文とドリルは、そもそも別の取り組みである。
+ *   | `use` | ElevenLabs の分類のめやす | アプリのどこで出るか |
+ *   |---|---|---|
+ *   | `narration`    | Narrative Story / Informative Educational | 記事、文型ドリル、単語、フレーズ |
+ *   | `conversation` | Conversational / Entertainment Tv         | 会話(ダイアローグ) |
+ *   | `both`         | どちらにも使える、と自分で判断したもの     | 両方に出る |
+ *
+ *   **教材の種類で、選べる声が自動的に絞られる。** 会話を作るときは
+ *   会話向きだけ、記事なら朗読向きだけが並ぶ。取り違えようがない。
+ *
+ *   **`id` は一度決めたら変えないこと。** 変えると、その声で作った
+ *   音声の置き場所が変わり、作り直し(= 課金)になります。
  *
  * ============================================================================
- * 【アクセントを増やすと、音声も増える】
+ * 【なぜ Voice ID をここに書くのか】(2026-08 に方針を変えた)
  *
- *   置き場所の鍵は(段, 話者, 英文)である。同じ英文を3つの訛りで作れば
- *   **3倍かかる。** 教材ごとに1つ選ぶ、という使い方を崩さないこと。
+ *   はじめは Supabase の Secrets に置いていた。しかし声が増えると、
+ *   **名前と性別はコード、id は Secrets、と2か所に分かれる。**
+ *   30人ぶんを2か所でそろえるのは、いつか必ずずれる。
+ *
+ *   Voice ID は**鍵ではない。** ElevenLabs の声を指す番号にすぎず、
+ *   これだけでは何もできない(API キーが別に要る)。
+ *   だから**1か所にまとめる**ほうがよい。
+ *   **API キーは Secrets のまま。** あれは鍵である。
  *
  * ============================================================================
- * 【この一覧は、利用者が決めるもの】
+ * 【標準の段(Google / Azure)には、この訛りが無い】
  *
- *   下は**たたき台**である。ビジネスで出会う相手を想定して10並べてある。
- *   利用者が ElevenLabs で声を選んだら、**この表を作り直してよい。**
- *   `id` を変えると、その声で作った音声は作り直しになる(鍵が変わるため)。
+ *   持っているのはほぼアメリカ英語とイギリス英語だけ。
+ *   スコットランドやインドの声は無い。そこで**代役**に落とす。
+ *
+ *     記事・会話の本文、発音・リズムのドリル → ElevenLabs(選んだ声)
+ *     それ以外の演習                        → 代役(Google / Azure)
+ *
+ *   代役は「アメリカ寄り(米・加)なら us、それ以外は uk」× 性別で決まる。
+ *   **同じ訛り・同じ性別の声どうしは、代役を共有する。**
+ *   ドリルの音声はそのぶん作り直さずに済む。
  */
 
-/** 訛りの並び。画面の選択肢の順番でもある */
+/** 訛りの一覧。画面の選択肢の順番でもある */
 export const CLIP_ACCENTS = [
   { id: 'us', label: 'アメリカ',        hint: '標準。既定はこれ' },
   { id: 'uk', label: 'イギリス',        hint: 'RP(容認発音)' },
@@ -65,49 +84,124 @@ export const CLIP_ACCENTS = [
   { id: 'za', label: '南アフリカ',      hint: '母音が独特' },
 ]
 
-export const accentLabel = (id) =>
-  CLIP_ACCENTS.find((a) => a.id === id)?.label ?? id
+export const DEFAULT_ACCENT = 'us'
 
-/** 性別。**話す人の役を分けるためのもの**で、それ以上の意味は持たせない */
-export const CLIP_GENDERS = [
-  { id: 'female', label: '女性' },
-  { id: 'male', label: '男性' },
+/** 声の向き。教材の種類で自動的に絞る */
+export const VOICE_USES = [
+  { id: 'narration', label: 'ナレーション向き', hint: '記事の朗読・ドリル・単語' },
+  { id: 'conversation', label: '会話向き', hint: '感情のある受け答え' },
+  { id: 'both', label: 'どちらでも', hint: '両方に出る' },
 ]
 
 /**
- * 声の一覧。訛り × 男女。
- *
- * `base` は標準の段(Google / Azure)での代役。
- * `us-female` / `us-male` / `uk-female` / `uk-male` の4つは、
- * 標準の段がそのまま持っている声なので、自分自身が代役になる。
+ * 教材の種類から、要る声の向きを決める。
+ * **ここ1か所で決める。** 画面ごとに書くと必ず食い違う。
  */
-export const CLIP_VOICES = CLIP_ACCENTS.flatMap((accent) =>
-  CLIP_GENDERS.map((gender) => ({
-    id: `${accent.id}-${gender.id}`,
-    accent: accent.id,
-    gender: gender.id,
-    label: `${accent.label}(${gender.label})`,
-    // 標準の段では、アメリカ寄りは us、イギリス諸島・その他は uk に寄せる
-    base: `${['us', 'ca'].includes(accent.id) ? 'us' : 'uk'}-${gender.id}`,
-  })),
-)
+export const voicePurposeFor = (kind) =>
+  (kind === 'dialogue' ? 'conversation' : 'narration')
+
+/** その教材に要る声の人数。会話は2人、それ以外は1人 */
+export const voiceCountFor = (kind) => (kind === 'dialogue' ? 2 : 1)
+
+export const accentLabel = (id) =>
+  CLIP_ACCENTS.find((a) => a.id === id)?.label ?? id
+
+// ============================================================================
+// ★★★ ここに声を足してください ★★★
+//
+//   いまは空です。空のあいだは、これまでどおり標準の声(Google / Azure)で
+//   読み上げます。**壊れません。**
+//
+//   ElevenLabs で選んだ声を、下の例のように1行ずつ書き足してください。
+//   足した順に画面の選択肢に出ます。
+//
+//     { id: 'us-1', accent: 'us', gender: 'female',
+//       label: 'Rachel', elevenId: 'ここに Voice ID' },
+//     { id: 'us-2', accent: 'us', gender: 'male',
+//       label: 'Brian',  elevenId: 'ここに Voice ID' },
+//     { id: 'sc-1', accent: 'sc', gender: 'male',
+//       label: 'Angus',  elevenId: 'ここに Voice ID' },
+// ============================================================================
+export const CLIP_VOICES = [
+]
+
+// ── ここから下は仕組み。触らなくてよい ──────────────────────────
 
 /** 標準の段(Google / Azure)がそのまま持っている声 */
 export const BASE_VOICES = ['us-female', 'us-male', 'uk-female', 'uk-male']
 
-export const DEFAULT_VOICE_ID = 'us-female'
+export const DEFAULT_BASE = 'us-female'
+
+/** 訛りと性別から、標準の段での代役を決める */
+export const baseOf = (accent, gender) =>
+  `${['us', 'ca'].includes(accent) ? 'us' : 'uk'}-${gender === 'male' ? 'male' : 'female'}`
 
 export const findVoice = (id) => CLIP_VOICES.find((v) => v.id === id) ?? null
 
-export const voiceLabel = (id) => findVoice(id)?.label ?? id
+/** 名簿に無い id でも落とさない。代役だけは必ず決まる */
+export const baseVoiceOf = (id) => {
+  const v = findVoice(id)
+  if (v) return baseOf(v.accent, v.gender)
+  // 名簿に無いものは、id そのものが代役の名前かもしれない(`us-female` など)
+  return BASE_VOICES.includes(id) ? id : DEFAULT_BASE
+}
 
-/** 使える id に丸める。知らない id が来ても落とさない */
-export const clipVoiceId = (id) => (findVoice(id) ? id : DEFAULT_VOICE_ID)
+/** その声で ElevenLabs を使えるか(Voice ID が入っているか) */
+export const elevenIdOf = (id) => String(findVoice(id)?.elevenId ?? '').trim()
 
-/** 標準の段で使う代役。知らない id なら既定 */
-export const baseVoiceOf = (id) => findVoice(id)?.base ?? DEFAULT_VOICE_ID
+/** 画面に出す名前。「Rachel(アメリカ・女性)」 */
+export const voiceLabel = (id) => {
+  const v = findVoice(id)
+  if (!v) return id
+  return `${v.label}(${accentLabel(v.accent)}・${v.gender === 'male' ? '男性' : '女性'})`
+}
 
-/** その訛りの、指定した性別の声 */
-export const voiceOf = (accent, gender) =>
-  CLIP_VOICES.find((v) => v.accent === accent && v.gender === gender)?.id
-  ?? DEFAULT_VOICE_ID
+/** その訛りに登録されている声。向きを指定すると、その向きだけに絞る */
+export const voicesOfAccent = (accent, purpose = null) => CLIP_VOICES.filter(
+  (v) => v.accent === accent
+    && (!purpose || v.use === purpose || v.use === 'both'),
+)
+
+/** その向きの声が1人でもいる訛り。**選べない訛りを並べない** */
+export const accentsWithVoices = (purpose = null) =>
+  CLIP_ACCENTS.filter((a) => voicesOfAccent(a.id, purpose).length > 0)
+
+/**
+ * おまかせ。その訛りから **n 人**を選ぶ。
+ *
+ * **男女が交互になるように選ぶ。** 会話で同じ性別が続くと、
+ * どちらが話しているのか耳で分からない。
+ *
+ * 選ぶのは**教材を作るとき1回だけ**で、結果は教材に保存する。
+ * 開くたびに選び直すと、**同じ教材なのに毎回ちがう声になり、
+ * そのたびに音声を作り直す(= 課金される)。**
+ */
+export function pickVoices(accent, n = 1, purpose = null) {
+  const pool = voicesOfAccent(accent, purpose)
+  if (!pool.length) return []
+  const shuffled = [...pool].sort(() => Math.random() - 0.5)
+  const byGender = { female: shuffled.filter((v) => v.gender === 'female'),
+    male: shuffled.filter((v) => v.gender === 'male') }
+  const out = []
+  let want = byGender.female.length >= byGender.male.length ? 'female' : 'male'
+  while (out.length < n) {
+    const other = want === 'female' ? 'male' : 'female'
+    const pick = byGender[want].shift() ?? byGender[other].shift()
+    if (!pick) break
+    out.push(pick.id)
+    want = other
+  }
+  // 人数が足りなければ、そのぶんは使い回す(黙って別の訛りにしない)
+  while (out.length < n && out.length) out.push(out[out.length % out.length])
+  return out
+}
+
+/**
+ * 教材に保存された声の並びを、使える形に整える。
+ * 空なら「その訛りの代役1人」にする(声をまだ登録していないとき)。
+ */
+export function resolveVoices(voiceIds, accent = DEFAULT_ACCENT) {
+  const list = (voiceIds ?? []).filter((id) => findVoice(id))
+  if (list.length) return list
+  return [baseOf(accent, 'female')]
+}

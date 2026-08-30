@@ -17,7 +17,7 @@
 --   ・material_items に「要点フレーズ」の列が1つ増えます
 --   ・Storage に「tts」という置き場(バケツ)が1つできます。
 --     ここに、こちらで作った読み上げ音声(MP3)が入ります
---   ・materials に「読み上げの声」の列が1つ増えます。
+--   ・materials に「読み上げの声の並び」の列が1つ増えます。
 --     空のままなら、これまでどおりアメリカ英語の女性で読み上げます
 --   ・word_reviews に「出会った文」の列が1つ増えます。
 --     これから付ける語に入ります。**すでに付けた語は空のままです**
@@ -463,10 +463,13 @@ update storage.buckets set public = true where id = 'tts' and public is distinct
 -- 【何をするか】
 --   `materials` に列を1つ足すだけ。**表は増やさない。**
 --
---       voice_id text   例: 'us-female' / 'sc-male' / 'in-female'
+--       voice_ids text[]   例: {'us-1'} / {'sc-2','sc-5'} / {'in-1','in-3'}
+--
+--   **並びである。** 会話は2人以上が話すので、1つでは足りない。
+--   先頭から順に、出てくる話す人へ割り当てる。
 --
 --   値の一覧は画面側が持つ(`src/data/clipVoices.js`)。
---   **DB で選択肢を縛らない。** 訛りを足すたびに移行が要るのでは、
+--   **DB で選択肢を縛らない。** 声を足すたびに移行が要るのでは、
 --   利用者が声を選び直すたびに SQL を貼ることになる。
 --   知らない値が入っていても、画面が既定の声に丸める。
 --
@@ -483,11 +486,17 @@ update storage.buckets set public = true where id = 'tts' and public is distinct
 -- ============================================================================
 
 alter table public.materials
-  add column if not exists voice_id text;
+  add column if not exists voice_ids text[];
 
-comment on column public.materials.voice_id is
-  '読み上げに使う声。例: us-female / sc-male。一覧は src/data/clipVoices.js。'
-  ' NULL なら既定(アメリカ英語・女性)。';
+comment on column public.materials.voice_ids is
+  '読み上げに使う声の並び。例: {sc-2,sc-5}。一覧は src/data/clipVoices.js。'
+  '先頭から順に、出てくる話す人へ割り当てる。'
+  'NULL や空なら既定(アメリカ英語・女性)。';
+
+-- 【以前この移行を貼った方へ】
+--   はじめは `voice_id`(1つだけ)にしていたが、会話には足りないため
+--   `voice_ids`(並び)に変えた。`voice_id` が残っていても害はない。
+--   何も書き込んでいないので、消しても残しても構わない。
 
 
 

@@ -54,7 +54,7 @@
  *   無音を鳴らして解錠しておく。** 以後は待ちを挟んでも鳴らせる。
  *   録音の `AudioContext` で学んだ作法(1つだけ作り、作り直さない)と同じ。
  */
-import { DEFAULT_VOICE_ID, baseVoiceOf, clipVoiceId } from '../data/clipVoices.js'
+import { DEFAULT_BASE, baseVoiceOf, elevenIdOf } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
 import { markIndexAt, wordMarks } from './wordTiming.js'
@@ -78,8 +78,17 @@ const CLIP_REV = '1'
  * 話者の指定が無いときの声。
  * 一覧と丸め方は `src/data/clipVoices.js` に置いてある。**2か所に持たない。**
  */
-export const DEFAULT_CLIP_VOICE = DEFAULT_VOICE_ID
-export { clipVoiceId }
+export const DEFAULT_CLIP_VOICE = DEFAULT_BASE
+
+/**
+ * 置き場所に使う名前。
+ *
+ * **良い声は名簿の id、標準の声は代役の名前**にする。
+ * こうすると、同じ訛り・同じ性別の声どうしは**標準の音声を共有できる。**
+ * ドリルのぶんを、声の数だけ作り直さずに済む。
+ */
+const pathVoice = (voiceId, tier) =>
+  (tier === 'premium' ? String(voiceId || DEFAULT_BASE) : baseVoiceOf(voiceId))
 
 // ── この画面のあいだ覚えておくこと ──────────────────────────
 //
@@ -182,15 +191,18 @@ if (typeof document !== 'undefined') {
  * 窓口に作らせる。**ここだけが Azure を使わせる入口である。**
  * 駄目だった理由が「待っても直らない」ものなら、以後は取りに行かない。
  */
-async function askForClip(text, voiceId, tier) {
+async function askForClip(text, pathName, tier, rosterId) {
   if (!supabase) return null
   try {
     const { data, error } = await supabase.functions.invoke('speak', {
       body: {
-        text, voice: voiceId, tier,
-        // 標準の段での代役。**訛りの一覧は画面側だけが持つ**ので、
-        // 窓口が知らない訛りを選んでも、これを見れば読み上げられる
-        base: baseVoiceOf(voiceId),
+        text, voice: pathName, tier,
+        // 標準の段での代役。**声の名簿は画面側だけが持つ**ので、
+        // 窓口が知らない声を選んでも、これを見れば読み上げられる
+        base: baseVoiceOf(rosterId),
+        // ElevenLabs の Voice ID。名簿(`src/data/clipVoices.js`)にある。
+        // 無ければ窓口は標準の声で作る
+        elevenVoice: elevenIdOf(rosterId) || undefined,
       },
     })
     // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある
@@ -220,7 +232,7 @@ export async function clipUrl(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDAR
   if (!canUseClips()) return null
   const body = normText(text)
   if (!body) return null
-  const voice = clipVoiceId(voiceId)
+  const voice = pathVoice(voiceId, tier)
   const key = `${tier}|${voice}|${body}`
   if (urlCache.has(key)) return urlCache.get(key)
   if (gaveUp.has(key)) return null
@@ -234,10 +246,10 @@ export async function clipUrl(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDAR
 export async function makeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return null
   const body = normText(text)
-  const voice = clipVoiceId(voiceId)
+  const voice = pathVoice(voiceId, tier)
   const key = `${tier}|${voice}|${body}`
   if (gaveUp.has(key)) return null
-  const url = await askForClip(body, voice, tier)
+  const url = await askForClip(body, voice, tier, voiceId)
   if (!url) { gaveUp.add(key); urlCache.delete(key); return null }
   urlCache.set(key, url)
   return url

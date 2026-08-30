@@ -157,39 +157,25 @@ const GOOGLE_VOICES: Record<string, { voice: string; lang: string }> = {
 }
 
 /**
- * ElevenLabs(良い段)。**声の id は Secrets から読む。コードに書かない。**
+ * ElevenLabs(良い段)。**どの声を使うかは画面が決めて送ってくる。**
  *
- * 【なぜ Secrets から読むのか】
- *   ElevenLabs の Voice Library には、アメリカ各都市・イギリス各地方・
- *   アイルランド・スコットランド・インド・シンガポールなど、たくさんの
- *   アクセントの声がある。**どれを使うかは利用者が選ぶことである。**
- *   こちらが id を決め打ちすると、選び直すたびにコードを触ることになる。
+ * 【なぜ窓口が声の名簿を持たないのか】(2026-08 に方針を変えた)
+ *   利用者は訛りごとに何人も声を選ぶ(10訛り × 3人なら30人)。
+ *   名前・性別・向き(ナレーション / 会話)は画面が要るので、
+ *   名簿は `src/data/clipVoices.js` にある。
+ *   **窓口にも同じ名簿を置くと、30行を2か所でそろえることになる。**
+ *   いつか必ずずれるので、置かない。
  *
- * 【入れ方】Secrets に **`ELEVENLABS_VOICES`** を1つだけ置く。中身は JSON。
+ *   Voice ID は**鍵ではない。** ElevenLabs の声を指す番号にすぎず、
+ *   これだけでは何もできない(API キーが別に要る)。だから画面から
+ *   送ってもらう。**API キーは Secrets のまま。** あれは鍵である。
  *
- *     {"us-female":"21m0...","us-male":"pNIn...","sc-male":"abcd...", ...}
- *
- *   鍵は `src/data/clipVoices.js` の id とそろえる。20個あっても Secret は1つ。
- *   `ELEVENLABS_VOICE_DEFAULT` を置けば、一覧に無い声はそこへ落ちる。
- *
- * 【入れていない声は、標準の段の音で作る】
- *   失敗にはしない。**鳴らないより、標準の声で鳴るほうがよい。**
- *   置き場所は頼まれたまま(`premium/<選んだ声>/...`)にする。そうしないと
- *   毎回窓口を呼びに来ることになる。**あとで id を足したら `CLIP_REV`
- *   を進める**こと。進めないと、前の音がそのまま返り続ける。
+ * 【送られてきた id は形だけ確かめる】
+ *   ログインしている人しか呼べないが、思わぬ値でそのまま呼ばない。
  */
-function elevenVoiceFor(voiceId: string): string {
-  const raw = Deno.env.get('ELEVENLABS_VOICES')
-  if (raw) {
-    try {
-      const table = JSON.parse(raw) as Record<string, string>
-      const hit = String(table?.[voiceId] ?? '').trim()
-      if (hit) return hit
-    } catch {
-      // JSON が壊れていても止めない。既定に落ちる
-    }
-  }
-  return String(Deno.env.get('ELEVENLABS_VOICE_DEFAULT') ?? '').trim()
+const cleanElevenId = (raw: unknown) => {
+  const id = String(raw ?? '').trim()
+  return /^[A-Za-z0-9]{16,48}$/.test(id) ? id : ''
 }
 
 /**
@@ -464,9 +450,9 @@ Deno.serve(async (req) => {
     // 標準の段での代役。**窓口が知っている4つのどれか**でなければ既定に落とす
     const base = SPEAKER_PROVIDER[String(body.base ?? '')] ? String(body.base) : DEFAULT_VOICE
 
-    // 良い段。**声の id を入れていない訛りは、標準の段の音で作る。**
+    // 良い段。**Voice ID を入れていない声は、標準の段の音で作る。**
     // 失敗にはしない。鳴らないより、標準の声で鳴るほうがよい
-    const elevenVoice = elevenKey ? elevenVoiceFor(voiceId) : ''
+    const elevenVoice = elevenKey ? cleanElevenId(body.elevenVoice) : ''
     const usePremium = tier === 'premium' && !!elevenVoice
 
     // 標準の段。代役の話者ごとに会社を決めてある。
@@ -504,7 +490,8 @@ Deno.serve(async (req) => {
           + ' Secrets に、次を追加してください。'
           + ' ① GOOGLE_TTS_API_KEY(標準の声・毎月100万文字まで無料)'
           + ' ② AZURE_SPEECH_KEY と AZURE_SPEECH_REGION(標準の声・毎月50万文字まで無料)'
-          + ' ③ ELEVENLABS_API_KEY と ELEVENLABS_VOICES(本文などの良い声)',
+          + ' ③ ELEVENLABS_API_KEY(本文などの良い声。'
+          + '声は src/data/clipVoices.js に登録する)',
         fatal: true,
       }, 503)
     }
@@ -571,9 +558,9 @@ Deno.serve(async (req) => {
       fellBack: tier === 'premium' && !usePremium,
       detail: tier === 'premium' && !usePremium
         ? (elevenKey
-          ? `ELEVENLABS_VOICES に "${voiceId}" が入っていないので、`
-            + '標準の声で作りました。ElevenLabs の Voice ID を足してから、'
-            + 'CLIP_REV を1つ進めてください。'
+          ? `"${voiceId}" に ElevenLabs の Voice ID が入っていないので、`
+            + '標準の声で作りました。src/data/clipVoices.js の elevenId を'
+            + '確かめてください。'
           : 'ELEVENLABS_API_KEY が設定されていないので、標準の声で作りました。')
         : undefined,
       ms: Date.now() - startedAt,

@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from 'react'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { readAloud, readAloudSequence, stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
+import { resolveVoices } from '../data/clipVoices.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
@@ -51,7 +52,7 @@ const MODES = [
 ]
 
 export default function PassagePractice({
-  section, headline, isDialogue, tags = null, voiceId = null,
+  section, headline, isDialogue, tags = null, voiceIds = null,
   level = 'B1', wordStatuses = null, onMarkWord = null,
 }) {
   const [mode, setMode] = useState('read')
@@ -97,7 +98,9 @@ export default function PassagePractice({
   // こちらで作った音声(MP3)の話者。**端末の声から換算しない。**
   // 端末に英語の声が1つも無いと、2人とも同じ話者になってしまう
   // 訛りは教材が決め、性別は役ごとに決まる(0017)
-  const clipCast = castClipSpeakers(section.items.map((it) => it.speaker), voiceId)
+  const clipCast = castClipSpeakers(section.items.map((it) => it.speaker), voiceIds)
+  // 記事のように話す人がいない本文は、1つめの声で読む
+  const soloVoice = resolveVoices(voiceIds)[0]
   // 本文はシャドーイングの素材なので、**良い声を使う**(`voiceTier.js`)
   const tier = voiceTierFor({ exerciseType: section.exercise_type, tags })
   const voice = voices[0] ?? null
@@ -120,7 +123,7 @@ export default function PassagePractice({
     // 端末の声のときは、合図が来ない端末のための保険が speakOnce にある
     readAloud(item.audio_text || item.prompt_en, {
       voice: voiceFor(cast, item.speaker, voice),
-      clipVoice: voiceFor(clipCast, item.speaker, voiceId),
+      clipVoice: voiceFor(clipCast, item.speaker, soloVoice),
       clipTier: tier,
       rate: rateOf(rateId, current.rate),
       onWord: (w) => setReadingAt(w ? w.charIndex : null),
@@ -144,7 +147,7 @@ export default function PassagePractice({
       playable.map((it) => ({
         text: it.prompt_en,
         voice: voiceFor(cast, it.speaker, voice),
-        clipVoice: voiceFor(clipCast, it.speaker, voiceId),
+        clipVoice: voiceFor(clipCast, it.speaker, soloVoice),
       })),
       {
         rate: rateOf(rateId, current.rate),

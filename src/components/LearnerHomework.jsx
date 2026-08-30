@@ -19,6 +19,7 @@ import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
+import { resolveVoices } from '../data/clipVoices.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
@@ -212,7 +213,7 @@ export default function LearnerHomework() {
                             <PassagePractice
                               section={sec}
                               tags={a.material?.tagIds}
-                              voiceId={a.material?.voiceId}
+                              voiceIds={a.material?.voiceIds}
                               headline={a.material?.headline}
                               isDialogue={sec.exercise_type === 'dialogue'}
                               level={a.material?.level}
@@ -244,7 +245,7 @@ export default function LearnerHomework() {
                                   <div className="item-audio">
                                     <SpeakButton
                                       text={it[type.audioFrom]}
-                                      clipVoice={a.material?.voiceId}
+                                      clipVoice={resolveVoices(a.material?.voiceIds)[0]}
                                       tier={voiceTierFor({
                                         exerciseType: sec.exercise_type,
                                         tags: a.material?.tagIds,

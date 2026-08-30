@@ -175,7 +175,7 @@ from (
   union all
   select '㊸ 教材ごとに声を選べる(0017)', exists (
     select 1 from information_schema.columns
-    where table_name = 'materials' and column_name = 'voice_id'), 43
+    where table_name = 'materials' and column_name = 'voice_ids'), 43
   union all
   select '㊹ 出会った文を控えられる(0018)', exists (
     select 1 from information_schema.columns

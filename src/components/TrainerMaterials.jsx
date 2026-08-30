@@ -18,6 +18,7 @@ import MaterialTitle from './MaterialTitle.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
+import { resolveVoices } from '../data/clipVoices.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { countLabel, exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
@@ -323,7 +324,7 @@ export default function TrainerMaterials({ me }) {
                                 <div className="item-audio">
                                   <SpeakButton
                                     text={it[type.audioFrom]}
-                                    clipVoice={m.voiceId}
+                                    clipVoice={resolveVoices(m.voiceIds)[0]}
                                     tier={voiceTierFor({
                                       exerciseType: sec.exercise_type,
                                       tags: m.tagIds,

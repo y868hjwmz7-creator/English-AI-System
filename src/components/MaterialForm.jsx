@@ -26,7 +26,10 @@ import {
   generateSectionUnique, isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
-import { CLIP_ACCENTS, CLIP_GENDERS, DEFAULT_VOICE_ID, findVoice, voiceOf } from '../data/clipVoices.js'
+import {
+  CLIP_ACCENTS, DEFAULT_ACCENT, pickVoices,
+  voiceCountFor, voicePurposeFor, voicesOfAccent,
+} from '../data/clipVoices.js'
 import { collectReviewWords } from '../lib/vocab.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
@@ -103,15 +106,14 @@ export default function MaterialForm({
   const [headline, setHeadline] = useState('')         // 記事の見出し / 会話の題名
   const [genre, setGenre] = useState(initial.genre || 'news')   // 記事のジャンル
   const [scene, setScene] = useState(initial.scene || 'casual')  // 会話の場面
-  // 読み上げに使う声(0017)。訛りと性別で選ぶ。
-  // **会話では、ここで選んだ訛りの中で男女が割り当てられる**(voiceCast.js)
-  const [accent, setAccent] = useState(
-    () => findVoice(initial.voiceId)?.accent ?? findVoice(DEFAULT_VOICE_ID).accent,
-  )
-  const [voiceGender, setVoiceGender] = useState(
-    () => findVoice(initial.voiceId)?.gender ?? findVoice(DEFAULT_VOICE_ID).gender,
-  )
-  const voiceId = voiceOf(accent, voiceGender)
+  // 読み上げに使う声(0017)。
+  //   ① 訛りを選ぶ(国籍で絞る)
+  //   ② そのままなら**おまかせ**。人を指名したいときだけ選ぶ
+  // 会話は2人、それ以外は1人。**選べる声は教材の種類で絞られる**
+  // (会話なら会話向き、記事やドリルならナレーション向き)。
+  const [accent, setAccent] = useState(initial.accent || DEFAULT_ACCENT)
+  // 指名した声。空文字のところは「おまかせ」
+  const [picked, setPicked] = useState([])
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
   // ── 復習の材料(単語・フレーズの教材だけで使う)──────────────
   //   これまでの宿題に出た語のうち、ゲストが「知らなかった」と付けたものを
@@ -135,6 +137,34 @@ export default function MaterialForm({
 
   // 単語・フレーズの教材で、ゲストを1人だけ選んでいるときに材料を読む。
   // **複数人だと「誰の復習か」が決まらない**ので、そのときは出さない。
+  // 声のこと。**教材の種類で、要る人数と選べる向きが決まる**
+  const voicePurpose = voicePurposeFor(kind)
+  const voiceCount = voiceCountFor(kind)
+  const voicePool = voicesOfAccent(accent, voicePurpose)
+
+  /**
+   * 保存する声の並びを決める。
+   * 指名されていないところは、その場で**おまかせ**で埋める。
+   * 声を1人も登録していないときは空のまま返す(標準の声で読み上げる)。
+   */
+  const resolvedVoices = () => {
+    if (!voicePool.length) return []
+    const chosen = []
+    for (let i = 0; i < voiceCount; i += 1) {
+      const want = picked[i]
+      if (want && voicePool.some((v) => v.id === want) && !chosen.includes(want)) {
+        chosen.push(want)
+      }
+    }
+    if (chosen.length >= voiceCount) return chosen
+    // 足りないぶんをおまかせで足す。**すでに指名した人とは重ねない**
+    for (const id of pickVoices(accent, voiceCount * 2, voicePurpose)) {
+      if (chosen.length >= voiceCount) break
+      if (!chosen.includes(id)) chosen.push(id)
+    }
+    return chosen
+  }
+
   const reviewLearner = (kind === 'word' || kind === 'phrase') && shareWith.length === 1
     ? shareWith[0] : null
 
@@ -450,7 +480,10 @@ export default function MaterialForm({
       level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
       visibility, industry, sections, tagIds, createdBy,
       headline, genre: kind === 'reading' ? genre : '', scene: kind === 'dialogue' ? scene : '',
-      voiceId,
+      // **おまかせは、ここで1回だけ決めて保存する。**
+      // 開くたびに選び直すと、同じ教材なのに毎回ちがう声になり、
+      // そのたびに音声を作り直す(= 課金される)
+      voiceIds: resolvedVoices(),
       topic: subject,
     })
     if (message) { setBusy(false); setError(message); return }
@@ -583,34 +616,65 @@ export default function MaterialForm({
       {/* 読み上げの声(0017)。
           **相手の訛りが聞き取れないと仕事にならない。** インドやシンガポールの
           英語は、教科書のアメリカ英語しか聞いていないと歯が立たない。
-          教材ごとに相手を変えられること自体に、練習の価値がある。 */}
-      <div className="field-row voice-row">
-        <label className="field">
-          <span>
-            読み上げの声
-            <span className="field-hint">
-              記事・会話の本文と、発音・リズムの練習で使われます。
-              会話では、この訛りの中で話す人ごとに男女が割り当てられます
-            </span>
+          教材ごとに相手を変えられること自体に、練習の価値がある。
+
+          選べる声は**教材の種類で絞る。** 会話には会話向きの声、
+          記事やドリルにはナレーション向きの声しか出さない。
+          記事の朗読に感情豊かな声を当てると芝居がかって聞きづらく、
+          会話に淡々とした声を当てると人と話している感じがしない。 */}
+      <fieldset className="field voice-pick">
+        <legend>
+          読み上げの声
+          <span className="field-hint">
+            {kind === 'dialogue'
+              ? '会話向きの声から2人。指名しなければ、その訛りからおまかせで選びます'
+              : 'ナレーション向きの声から1人。指名しなければ、その訛りからおまかせで選びます'}
           </span>
-          <select value={accent} onChange={(e) => setAccent(e.target.value)}>
-            {CLIP_ACCENTS.map((a) => (
-              <option key={a.id} value={a.id}>{a.label} — {a.hint}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>
-            話す人
-            <span className="field-hint">1人で読む教材のとき</span>
-          </span>
-          <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value)}>
-            {CLIP_GENDERS.map((g) => (
-              <option key={g.id} value={g.id}>{g.label}</option>
-            ))}
-          </select>
-        </label>
-      </div>
+        </legend>
+
+        <div className="voice-row">
+          <label className="field">
+            <span>訛り(国籍)</span>
+            <select value={accent} onChange={(e) => { setAccent(e.target.value); setPicked([]) }}>
+              {CLIP_ACCENTS.map((a) => (
+                <option key={a.id} value={a.id}>{a.label} — {a.hint}</option>
+              ))}
+            </select>
+          </label>
+
+          {voicePool.length > 0 && Array.from({ length: voiceCount }, (unused, i) => (
+            <label className="field" key={i}>
+              <span>{voiceCount > 1 ? `話す人 ${i + 1}` : '話す人'}</span>
+              <select
+                value={picked[i] ?? ''}
+                onChange={(e) => setPicked((list) => {
+                  const next = [...list]
+                  next[i] = e.target.value
+                  return next
+                })}
+              >
+                <option value="">おまかせ</option>
+                {voicePool.map((v) => (
+                  <option key={v.id} value={v.id}
+                          disabled={picked.some((x, j) => x === v.id && j !== i)}>
+                    {v.label}({v.gender === 'male' ? '男性' : '女性'})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+
+        {/* 声をまだ1人も登録していないとき。**黙って標準の声にしない** */}
+        {!voicePool.length && (
+          <p className="field-hint">
+            この訛りには、まだ
+            {voicePurpose === 'conversation' ? '会話向き' : 'ナレーション向き'}
+            の声が登録されていません。標準の声(Google / Azure)で読み上げます。
+            声を足すには <code>src/data/clipVoices.js</code> に1行書き足します。
+          </p>
+        )}
+      </fieldset>
 
       <label className="field">
         <span>
