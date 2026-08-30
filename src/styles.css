@@ -585,14 +585,34 @@ audio { width: 100%; margin-top: 4px; }
   color: var(--accent); text-decoration: underline;
 }
 .btn--link:active { transform: none; }
-/* 「まだ」「知らなかった」「言えなかった」。
-   **正解と同じ見た目にしない。** 押し分けを一瞬で間違える。
-   赤は「知らなかった」の色(`--unknown-*`)にそろえてあり、
-   **叱る色ではない。** うすく敷くだけにする */
-.btn--warnish {
-  background: var(--unknown-bg);
-  border-color: var(--unknown-bar);
+/* 「まだ」「知らなかった」。**正解と同じ見た目にしない。**
+   押し分けを一瞬で間違える。
+
+   【赤をやめた】(2026-08 利用者の指定)
+   > この配色も嫌です。赤がいらないです。…「まだ」はグレー
+
+   以前は「知らなかった」の色(`--unknown-*`)にそろえて赤くしていた。
+   だが**知らないことは失敗ではない。** 語そのものに付く赤い線が
+   「まだの語」を示しているので、ボタンまで赤くする必要がない。
+   **灰色の塗りつぶし**にして、「覚えた」(青の塗りつぶし)と
+   **色ではなく明るさ**で分ける。プレインでも見分けられる。 */
+.btn--quiet {
+  /* **`--border` を借りる。** 明るい側でも暗い側でも「灰色」になり、
+     プレイン(色を消す)でもそのまま成り立つ。
+     `--surface-2` だと暗い配色でカードとの差が小さく、
+     **黒い箱に見えた**(2026-08 の指摘) */
+  background: var(--border);
+  border-color: var(--border);
   color: var(--text-primary);
+}
+.btn--quiet:hover { border-color: var(--text-muted); }
+/* 「意味を見る」「英語を見る」。**答えではない。**
+   塗りつぶすと、暗い配色で黒い箱に見える(2026-08 の指摘)。
+   枠線だけにして、地の色になじませる */
+.btn--ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
 }
 .btn--toggle { padding: 5px 12px; font-size: 13px; }
 .btn--toggle.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -2542,11 +2562,16 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .wordcard-mean { font-size: 17px; font-weight: 600; }
 .wordcard .wordbook-seen { margin-top: 10px; text-align: left; }
+/* **答えの2つは、となりどうし。**「意味を見る」は1段上に置く
+   (2026-08 利用者の指定)。1列に3つ並べると、狭い画面で
+   [まだ][意味を見る] / [覚えた] と折り返し、答えが上下に分かれていた */
 .wordcard-actions {
-  display: flex; flex-wrap: wrap; align-items: center;
-  justify-content: center; gap: 10px; margin-top: 18px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; margin-top: 18px;
 }
-.wordcard-actions .btn { min-width: 96px; }
+/* **2つは同じ幅にする。** 幅が違うと、片方が「主」に見えてしまう */
+.wordcard-answers { display: flex; justify-content: center; gap: 10px; width: min(100%, 320px); }
+.wordcard-answers .btn { flex: 1 1 0; min-width: 0; }
 
 /* 出す側。語と Listen を**まとめて中央に**置く。
    `.etext-listen` は本文の中では右に寄せてあるので、ここでは打ち消す */
@@ -2710,13 +2735,14 @@ html { -webkit-text-size-adjust: 100%; }
   margin: 0 auto; max-width: 34em;
   font-size: 19px; font-weight: 600; line-height: 1.7;
 }
+/* 単語帳と同じ並べ方。**答えの2つはとなりどうし**(2026-08 利用者の指定) */
 .qr-actions {
   flex: 0 0 auto;
-  display: flex; flex-wrap: wrap; align-items: center;
-  justify-content: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
   margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--qr-rule);
 }
-.qr-actions .btn { min-width: 104px; }
+.qr-answers { display: flex; justify-content: center; gap: 10px; width: min(100%, 320px); }
+.qr-answers .btn { flex: 1 1 0; min-width: 0; }
 /* 開いたあとの英語。語に触れれば意味も引ける */
 /* 答え。**問題と入れ替えて**同じ場所に出す。
    出す場所が同じなので、目が迷わない */
@@ -2754,30 +2780,26 @@ html { -webkit-text-size-adjust: 100%; }
    `.lesson-sheet .btn` が**全部を白い枠に**そろえてしまうので、
    答えの2つはここで塗り直す。塗り直さないと「まだ」と「言えた」が
    同じ見た目になり、押し分けられない。
-   **色だけに頼らない。** プレイン(色を消す)でも分かるよう、
-   片方は塗りつぶし・片方は枠線と太字にしてある */
-/* 答えの2つ。**べた塗りにしない。**
-   うすい地色 + 同じ色の文字 + 枠線 + 太字で押し分ける。
+   **べた塗りにはしない。** うすい地色 + 同じ色の文字 + 枠線 + 太字で分ける。
    **色だけに頼らない**ので、プレイン(色を消す)でも見分けられる */
 .qr--paper .qr-actions .btn--primary {
   background: var(--accent-soft); border-color: var(--accent-line);
   color: var(--accent); font-weight: 700;
 }
-.qr--paper .qr-actions .btn--warnish {
-  background: var(--ng-bg); border-color: var(--ng);
-  color: var(--ng); font-weight: 700;
+.qr--paper .qr-actions .btn--quiet {
+  background: var(--qa-answer); border-color: var(--rule);
+  color: var(--ink); font-weight: 700;
 }
-/* まん中の「英語を見る」は、答えではない。**うすく置く** */
-.qr--paper .qr-actions .btn:not(.btn--primary):not(.btn--warnish) {
-  color: var(--qr-dim);
-}
+/* 「英語を見る」は、答えではない。**うすく置く** */
+.qr--paper .qr-actions .btn--ghost { color: var(--qr-dim); }
 
 @media (max-width: 560px) {
   .qr-ja { font-size: 17px; }
   /* **文字を折り返させない。** 幅をそろえるために min-width を効かせていたら、
      「言えなかった」が2行に割れた(実測)。中身の幅で置く */
   .qr-actions { gap: 8px; }
-  .qr-actions .btn { min-width: 0; padding: 8px 12px; }
+  .qr-answers { gap: 8px; }
+  .qr-answers .btn { padding: 8px 12px; }
 }
 
 /* とても狭い画面(iPhone SE など)。3つは1行に入らない。

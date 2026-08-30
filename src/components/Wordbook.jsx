@@ -373,18 +373,26 @@ export default function Wordbook({ level = null }) {
             {/* ── 思い出す / 日本語 → 英語 ───────────────────── */}
             {isSelfGraded(form) && (
               <div className="wordcard-actions">
-                <button type="button" className="btn btn--warnish"
-                        disabled={busy === card.word_norm}
-                        onClick={() => answer(card, 'unknown')}>まだ</button>
-                <button type="button" className="btn" aria-expanded={shown}
+                {/* **答えの2つを、となりどうしに置く**(2026-08 利用者の指定)。
+                    以前は「意味を見る」をまん中に挟んでいたが、狭い画面では
+                    [まだ][意味を見る] / [覚えた] と折り返して、
+                    **答えの2つが上下に分かれていた**(実機)。
+                    見るほうを1段上に出せば、どの幅でも2つは並ぶ */}
+                <button type="button" className="btn btn--ghost btn--small"
+                        aria-expanded={shown}
                         onClick={() => setShown((v) => !v)}>
                   {form === 'ja2en'
                     ? (shown ? '英語を隠す' : '英語を見る')
                     : (shown ? '意味を隠す' : '意味を見る')}
                 </button>
-                <button type="button" className="btn btn--primary"
-                        disabled={busy === card.word_norm}
-                        onClick={() => answer(card, 'known')}>覚えた</button>
+                <div className="wordcard-answers">
+                  <button type="button" className="btn btn--quiet"
+                          disabled={busy === card.word_norm}
+                          onClick={() => answer(card, 'unknown')}>まだ</button>
+                  <button type="button" className="btn btn--primary"
+                          disabled={busy === card.word_norm}
+                          onClick={() => answer(card, 'known')}>覚えた</button>
+                </div>
               </div>
             )}
 
@@ -442,7 +450,7 @@ export default function Wordbook({ level = null }) {
                   <button type="button" className="btn btn--small"
                           disabled={busy === row.word_norm}
                           onClick={() => answer(row, 'known')}>覚えた</button>
-                  <button type="button" className="btn btn--small btn--warnish"
+                  <button type="button" className="btn btn--small btn--quiet"
                           disabled={busy === row.word_norm}
                           onClick={() => answer(row, 'unknown')}>まだ</button>
                 </div>

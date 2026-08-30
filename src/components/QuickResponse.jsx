@@ -202,17 +202,23 @@ export default function QuickResponse({
             )}
           </div>
 
+          {/* **単語帳と同じ形にそろえる**(言葉づかいも見た目も並べ方も)。
+              「英語を見る」は答えではないので1段上に出し、
+              **答えの2つはとなりどうし**に置く(2026-08 利用者の指定)。
+              「言えなかった」は6文字あり、スマホで2行に割れた(実測)ので
+              「まだ」にしてある */}
           <div className="qr-actions">
-            {/* **単語帳と同じ言葉づかいにする。** あちらは「まだ / 覚えた」。
-                「言えなかった」は6文字あり、スマホで2行に割れた(実測) */}
-            <button type="button" className="btn btn--warnish"
-                    onClick={() => answer(false)}>まだ</button>
-            <button type="button" className="btn" aria-expanded={shown}
+            <button type="button" className="btn btn--ghost btn--small"
+                    aria-expanded={shown}
                     onClick={() => setShown((v) => !v)}>
               {shown ? '英語を隠す' : '英語を見る'}
             </button>
-            <button type="button" className="btn btn--primary"
-                    onClick={() => answer(true)}>言えた</button>
+            <div className="qr-answers">
+              <button type="button" className="btn btn--quiet"
+                      onClick={() => answer(false)}>まだ</button>
+              <button type="button" className="btn btn--primary"
+                      onClick={() => answer(true)}>言えた</button>
+            </div>
           </div>
         </div>
       )}
