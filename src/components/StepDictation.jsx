@@ -59,7 +59,7 @@ export default function StepDictation({
           const diff = open && mine.trim() ? compareTranscript(s.text, mine) : null
           const spoken = results[s.id]
           return (
-            <li key={s.id} className="dictation-row">
+            <li key={s.id} className="qa-row dictation-row">
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                   本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
               <div className="row-head">
@@ -120,7 +120,8 @@ export default function StepDictation({
               )}
 
               {open && (
-                <div className="dictation-answer">
+                <div className="answer-box dictation-answer">
+                  <p className="answer-box-label">解答</p>
                   <p className="dictation-en">
                     <EnglishText text={s.text} textJa={s.ja} level={level}
                                  statuses={wordStatuses} onMark={onMarkWord} />

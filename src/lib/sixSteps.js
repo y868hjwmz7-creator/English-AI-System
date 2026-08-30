@@ -14,9 +14,10 @@
  * 【単位が2通りある】
  *   ①②④⑥ は**1文ずつ**。③⑤ は**本文まるごと**。
  *   本文の項目は「段落(記事)」「発言(会話)」なので、
- *   1文ずつのステップでは `splitSentences()` でさらに分ける。
+ *   1文ずつのステップでは `alignedSentences()` でさらに分ける
+ *   (**訳も1文ずつに合わせる。** 数が合わないときだけ段落の訳を添える)。
  */
-import { splitSentences } from './wordTiming.js'
+import { alignedSentences } from './sentencePair.js'
 
 /**
  * @property {string} id       内部の名前
@@ -106,29 +107,27 @@ export const HAS_LOOKUP = new Set(['meaning', 'repeat'])
  * 本文の項目(段落 / 発言)を、**1文ずつ**にほどく。
  *
  * ①②④⑥ は1文が単位である。記事の項目は段落なので、そのままでは大きすぎる。
- * 文の切り方は読み上げと同じ `splitSentences()` を使う。
+ * 文の切り方は読み上げと同じ `splitSentences()` を使う(`sentencePair.js` 経由)。
  * **切り方を2か所に持たない。** ずれると、聞いた文と書く文が食い違う。
  *
- * 日本語は**段落ぶんしか無い**(訳は段落単位で作られる)。
- * だから文ごとの訳は付けられない。段落の訳を、その段落のどの文にも添える。
- * **無いものを、あるように見せない。**
+ * 訳も1文ずつに合わせる。**数が合わないときだけ**段落の訳を添え、
+ * `jaIsWhole` を立てて画面に札を出させる。**無いものを、あるように見せない。**
  */
 export function sentencesOf(items) {
   const out = []
   ;(items ?? []).forEach((item, n) => {
     const en = String(item.prompt_en ?? '').trim()
     if (!en) return
-    const parts = splitSentences(en)
-      .map((s) => en.slice(s.start, s.end).trim())
-      .filter(Boolean)
-    parts.forEach((text, i) => {
+    // **訳も1文ずつに合わせる。** 段落の訳をそのまま添えていたので、
+    // 英文1文に対して段落まるごとの訳が付いていた(2026-08 の指摘)。
+    // 数が合わないときだけ、段落の訳を添えて札を付ける
+    alignedSentences(en, item.prompt_ja).forEach((pair, i) => {
       out.push({
         id: `${item.id ?? n}-${i}`,
-        text,
+        text: pair.en,
         speaker: item.speaker ?? '',
-        // 段落に文が1つしか無いときは、その訳はその文の訳でもある
-        ja: item.prompt_ja ?? '',
-        jaIsWhole: parts.length > 1,
+        ja: pair.ja,
+        jaIsWhole: !pair.aligned,
         itemId: item.id ?? n,
       })
     })
@@ -180,7 +179,9 @@ export function groupSentences(sentences, size = 1) {
       // 話す人が途中で変わったら、まとめて出す
       speaker: [...new Set(buf.map((x) => x.speaker).filter(Boolean))].join(' / '),
       ja: [...new Set(buf.map((x) => x.ja).filter(Boolean))].join(''),
-      jaIsWhole: buf.some((x) => x.jaIsWhole) || buf.length > 1,
+      // **まとめただけでは「段落の訳」にならない。**
+      // 1文ずつの訳がそろっているなら、つないだものはそのまま正しい訳である
+      jaIsWhole: buf.some((x) => x.jaIsWhole),
       count: buf.length,
     })
     buf = []

@@ -79,7 +79,6 @@ export default function PassagePractice({
   const [dictSize, setDictSize] = useState(loadDictSize)
   const sessionRef = useRef(null)
   const stopAllRef = useRef(null)   // 通しの読み上げを止めるための関数
-  const stepBarRef = useRef(null)   // 6Steps の帯(選んでいるものを見える位置へ寄せる)
 
   useEffect(() => {
     let alive = true
@@ -123,15 +122,6 @@ export default function PassagePractice({
   // ステップを移ったら、鳴っているものを止め、⑤ の「本文を出す」も戻す
   useEffect(() => { stopReading(); setSpeakingId(null); setReadingAt(null); setPeek(false) }, [step])
 
-  // 6つは横に流れるので、**選んでいるものを見える位置へ寄せる。**
-  // どこにいるか分からないまま端の項目を探すことになる(タブと同じ)。
-  // **帯だけを動かす。** `scrollIntoView` は画面ごと横へずらすことがある
-  useEffect(() => {
-    const bar = stepBarRef.current
-    const on = bar?.querySelector('.chip--on')
-    if (!bar || !on) return
-    bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2)
-  }, [step])
 
   /** 読み上げを止める。通しでも1発言でも、同じところで止める */
   const stopPlaying = () => {
@@ -223,7 +213,7 @@ export default function PassagePractice({
           いま何番目かが分かることそのものが道しるべになる。
           折り返さず横に流し、選んでいるものを見える位置へ寄せる
           (タブで一度学んだこと) */}
-      <div className="passage-modes steps" role="group" aria-label="6Steps" ref={stepBarRef}>
+      <div className="passage-modes steps" role="group" aria-label="6Steps">
         {SIX_STEPS.map((m) => (
           <button
             key={m.id} type="button" title={m.hint}

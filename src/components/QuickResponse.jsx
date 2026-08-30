@@ -42,6 +42,7 @@ export default function QuickResponse({
   const [shown, setShown] = useState(false)
   const doneRef = useRef([])          // 言えた / 言えなかったの記録(この1回ぶん)
   const enRef = useRef(null)          // 開いた答え(入りきらないときに送る先)
+  const bodyRef = useRef(null)        // 出題の枠。**動かすのはここだけ**
   const [finished, setFinished] = useState(false)
 
   // 画面を離れるときは、鳴っているものを止める
@@ -53,9 +54,21 @@ export default function QuickResponse({
   // **開いた答えが枠に入りきらないときは、こちらで送る。**
   // 「上下にスクロールして微調整せずに」(2026-08 利用者の指定)。
   // ボタンは動かさないので、動くのはこの枠の中だけである
+  //
+  // **送りの面倒は、この1つの effect に集める。**
+  // 「開いたら送る」と「問が変わったら戻す」を別々に書いたら、
+  // 問を進めた瞬間に前の状態のまま送られ、**次の問の日本語が枠の外から
+  // 始まった**(2026-08 の実測。scrollTop が 40 のまま残っていた)。
   useEffect(() => {
-    if (!shown) return
-    enRef.current?.scrollIntoView({ block: 'nearest' })
+    const body = bodyRef.current
+    if (!body) return
+    if (shown && enRef.current) {
+      // **この枠だけを動かす。** `scrollIntoView` は紙まで一緒に送ってしまい、
+      // かえって出題が画面の外へ出る。答えの**頭**を枠の上に合わせる
+      body.scrollTop = Math.max(0, enRef.current.offsetTop - body.offsetTop)
+    } else {
+      body.scrollTop = 0
+    }
   }, [shown, at])
 
   const card = pairs[at] ?? null
@@ -147,17 +160,22 @@ export default function QuickResponse({
               以前は答えがボタンの下に出ていたので、画面のいちばん下へ
               押し出され、そのつど送らないと読めなかった(2026-08 の指摘)。
               **文の長さが変わっても、ボタンは動かない。** */}
-          <div className="qr-body">
+          <div className="qr-body" ref={bodyRef}>
             <p className="qr-from">
               {card.from}{card.speaker && ` / ${card.speaker}`}
             </p>
 
             {/* 出す側は日本語だけ。**英語は出さない。音も鳴らさない** */}
-            <p className="qr-ja">{card.ja}</p>
+            <p className="qr-ja">
+              {/* 訳が段落ぶんしか無いときは、そう言う。
+                  **無いものをあるように見せない** */}
+              {card.jaIsWhole && <span className="slash-ja-label">段落の訳</span>}
+              {card.ja}
+            </p>
 
             {/* 開いてはじめて、英語と音が出る */}
             {shown && (
-              <div className="qr-en" ref={enRef}>
+              <div className="answer-box qr-en" ref={enRef}>
                 <EnglishText text={card.en} textJa={card.ja} level={material?.level}
                              statuses={wordStatuses} onMark={onMarkWord} />
                 <SpeakButton text={card.en} className="etext-listen"

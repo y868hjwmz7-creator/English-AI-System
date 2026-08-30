@@ -225,3 +225,46 @@ export function chunksOf(sentence, marks) {
   }
   return out
 }
+
+/**
+ * ゲストが入れた区切りを、**1本ずつその場で判定する**(2026-08 利用者の指定)。
+ *
+ * > ゲストが引いたスラッシュの位置でも間違っているか、いないか、
+ * > そういったことが即座に分かるように判定したうえで
+ * > フィードバックを加えれるような仕組みに
+ *
+ * 【3通りにしか分けない】
+ *   模範と違う = まちがい、**ではない。** 切り方には幅があり、
+ *   模範は決まりから作った1つの案にすぎない。
+ *   **決まりに反しているものだけを「ちがう」と言う。**
+ *   あやふやなことを言わない、というこの仕組みの原則どおりである。
+ *
+ *   | 印 | いつ |
+ *   |---|---|
+ *   | `ok`    | 模範にもある。**確かに合っている** |
+ *   | `ng`    | **決まりに反している**(前置詞のあと・助動詞の途中・冠詞のあと) |
+ *   | `plain` | 模範には無いが、決まりにも反していない。**何も言わない** |
+ *
+ * @returns {{at: {[n]: {state, why}}, ok: number, ng: number, plain: number,
+ *            missing: number, model: number[]}}
+ */
+export function judgeSlashes(sentence, marks, level = 'beginner') {
+  const model = slashesFor(sentence, level)
+  const modelAt = new Set(model.map((x) => x.at))
+  const why = new Map(model.map((x) => [x.at, x.why]))
+  const broken = new Map(checkSlashes(sentence, marks).map((n) => [n.at, n.text]))
+
+  const at = {}
+  let ok = 0
+  let ng = 0
+  let plain = 0
+  for (const i of [...new Set(marks)].sort((a, b) => a - b)) {
+    if (broken.has(i)) { at[i] = { state: 'ng', why: broken.get(i) }; ng += 1 }
+    else if (modelAt.has(i)) { at[i] = { state: 'ok', why: why.get(i) }; ok += 1 }
+    else { at[i] = { state: 'plain', why: '' }; plain += 1 }
+  }
+  // まだ入れていない模範の区切りの数。**場所は言わない。**
+  // 数だけ分かれば「もう少しある」と気づける(答えは渡さない)
+  const missing = model.filter((x) => !marks.includes(x.at)).length
+  return { at, ok, ng, plain, missing, model: model.map((x) => x.at) }
+}

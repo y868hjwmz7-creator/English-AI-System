@@ -18,6 +18,7 @@
  *   1本の教材を通しでやるものなので、順番はそのままにする。
  */
 import { exerciseLabel } from '../data/exerciseTypes.js'
+import { alignedSentences } from './sentencePair.js'
 
 /**
  * 演習の種類ごとに、「日本語(出す側)」と「英語(答え)」がどの欄にあるか。
@@ -49,7 +50,8 @@ export const canQuickRespond = (exerciseType) => Boolean(PAIR_FIELDS[exerciseTyp
 /**
  * 教材から、日本語と英語の対をぜんぶ集める。
  *
- * @returns {{ja: string, en: string, speaker: string, from: string, key: string}[]}
+ * @returns {{ja, en, speaker, from, key, jaIsWhole}[]}
+ *   `jaIsWhole` は「訳が段落ぶんしか無い」という印。画面が札を出す
  */
 export function quickResponsePairs(material) {
   const out = []
@@ -63,10 +65,17 @@ export function quickResponsePairs(material) {
       // **どちらか欠けているものは出さない。**
       // 日本語だけ出して英語が空だと、答え合わせができない
       if (!ja || !en) return
-      out.push({
-        ja, en, from,
-        speaker: String(it.speaker ?? '').trim(),
-        key: it.id ?? `${sec.id ?? sec.exercise_type}-${i}`,
+      const key = it.id ?? `${sec.id ?? sec.exercise_type}-${i}`
+      const speaker = String(it.speaker ?? '').trim()
+      // **1文ずつにほどく**(2026-08 の指摘)。
+      // 記事の1項目は段落なので、そのままでは日本語が5行も出てしまう。
+      // 訳の数が合わないときは切らない(`alignedSentences`)
+      alignedSentences(en, ja).forEach((pair, k) => {
+        out.push({
+          ja: pair.ja, en: pair.en, from, speaker,
+          jaIsWhole: !pair.aligned,
+          key: `${key}-${k}`,
+        })
       })
     })
   }

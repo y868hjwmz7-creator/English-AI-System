@@ -42,7 +42,7 @@ export default function StepSentence({
         const ja = openJa[s.id]
         const spoken = results[s.id]
         return (
-          <li key={s.id} className="stepsent-row">
+          <li key={s.id} className="qa-row stepsent-row">
             {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                 本文をそのぶん上に寄せられる(2026-08 の指摘) */}
             <div className="row-head">

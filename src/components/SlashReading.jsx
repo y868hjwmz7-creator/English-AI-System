@@ -26,7 +26,7 @@
  *   いまは文ぜんぶの訳を出している(仕様書 第5.29.3節)。
  */
 import { Fragment, useState } from 'react'
-import { SLASH_LEVELS, checkSlashes, slashesFor, wordsOf } from '../lib/chunker.js'
+import { SLASH_LEVELS, judgeSlashes, wordsOf } from '../lib/chunker.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
@@ -88,11 +88,14 @@ export default function SlashReading({
           const words = wordsOf(s.text)
           const mine = marks[s.id] ?? []
           const open = shown[s.id]
-          const model = slashesFor(s.text, level).map((x) => x.at)
-          const why = slashesFor(s.text, level)
-          const notes = checkSlashes(s.text, mine)
+          // **1本ずつ、その場で判定する**(2026-08 利用者の指定)
+          const judge = judgeSlashes(s.text, mine, level)
+          const model = judge.model
+          const notes = Object.entries(judge.at)
+            .filter(([, v]) => v.state === 'ng')
+            .map(([at, v]) => ({ at: Number(at), text: v.why }))
           return (
-            <li key={s.id} className="slash-row">
+            <li key={s.id} className="qa-row slash-row">
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                   本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
               <div className="row-head">
@@ -122,7 +125,14 @@ export default function SlashReading({
                 {words.map((w, i) => (
                   <Fragment key={i}>
                     <span className="slash-w">
-                      {mine.includes(i) && <span className="slash-mark" aria-hidden="true">/</span>}
+                      {mine.includes(i) && (
+                        <span className={`slash-mark is-${judge.at[i]?.state ?? 'plain'}`}
+                              title={judge.at[i]?.why || ''}
+                              aria-label={judge.at[i]?.state === 'ok' ? '合っている区切り'
+                                : judge.at[i]?.state === 'ng' ? '決まりに反する区切り' : '区切り'}>
+                          /
+                        </span>
+                      )}
                       {i === 0 ? (
                         <span className="slash-word is-first">{w}</span>
                       ) : (
@@ -140,6 +150,23 @@ export default function SlashReading({
                 ))}
               </p>
 
+              {/* 入れた瞬間に分かる judge。
+                  **模範と違う = まちがい、ではない。** 切り方には幅がある。
+                  決まりに反しているものだけを「ちがう」と言う */}
+              {mine.length > 0 && (
+                <p className="slash-score">
+                  <span className="slash-score-ok">合っている {judge.ok}</span>
+                  {judge.ng > 0 && <span className="slash-score-ng">ちがう {judge.ng}</span>}
+                  {judge.plain > 0 && <span className="slash-score-plain">模範には無い {judge.plain}</span>}
+                  {judge.missing > 0 && (
+                    <span className="slash-score-rest">あと {judge.missing} か所</span>
+                  )}
+                  {judge.missing === 0 && judge.ng === 0 && (
+                    <span className="slash-score-done">模範どおりです</span>
+                  )}
+                </p>
+              )}
+
               {/* 決まりで確かめられることだけを言う。
                   **あやふやなことは言わない。**「たぶん違う」は、
                   何も言われないより困る */}
@@ -154,8 +181,8 @@ export default function SlashReading({
               )}
 
               {open && (
-                <div className="slash-answer">
-                  <p className="slash-answer-label">
+                <div className="answer-box slash-answer">
+                  <p className="answer-box-label">
                     模範の区切り({SLASH_LEVELS.find((l) => l.id === level)?.label})
                     {mine.length > 0 && (
                       <button type="button" className="btn btn--link slash-copy"
@@ -164,13 +191,11 @@ export default function SlashReading({
                       </button>
                     )}
                   </p>
-                  {/* **自分の区切りと同じ形で出す。** 形が違うと見比べられない */}
+                  {/* **自分の区切りと同じ形で出す。** 形が違うと見比べられない。
+                      理由の一覧は**廃止した**(2026-08「見づらいだけ」)。
+                      長い文だと12行並び、読むものではなくなっていた。
+                      理由は1本ずつ、スラッシュに触れると出る(`title`) */}
                   <Slashed words={words} marks={model} tone="model" />
-                  {why.length > 0 && (
-                    <ul className="slash-why">
-                      {why.map((x, i) => <li key={i}>{x.why}</li>)}
-                    </ul>
-                  )}
                   {s.ja && (
                     <p className="slash-ja">
                       {s.jaIsWhole && <span className="slash-ja-label">段落の訳</span>}
