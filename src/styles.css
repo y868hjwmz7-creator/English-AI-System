@@ -1402,8 +1402,29 @@ html { -webkit-text-size-adjust: 100%; }
 @media (max-width: 860px) {
   .chunk-ja { text-align: left; }
 }
-/* 区切りの棒。英語の側にだけ出す */
+/* 区切りの棒。英語の側にだけ出す
+   (**訳だけを出しているときは、訳の側に出す。** 区切りを示すものが他に無い) */
 .chunk-bar { margin-right: 4px; color: var(--accent); font-weight: 700; }
+
+/* ★ 狭い画面の「切り替え表示」(2026-08 利用者の指定)
+
+     > スマホの時は日本語と英語は切り替え表示、同じ位置になるように
+     > してください。無理して両方見せても窮屈に感じますね。
+
+   **訳を英語と同じ大きさで、同じ場所に出す。** 小さいままだと行の高さが
+   変わり、切り替えるたびに下のものが動く。地色はこれまでと同じうすい緑で、
+   「これは訳だ」と一目で分かるようにしておく。 */
+.chunk-en--ja {
+  padding: 2px 6px 1px 0;
+  color: var(--text-secondary);
+}
+/* 帯は**棒(/)の外**に置く。中に入れると区切りまで緑になり、
+   カタマリの切れ目が見えなくなる */
+.chunk-band { padding: 1px 5px; border-radius: 3px; background: var(--chunk-bg); }
+.chunked--swap { row-gap: 6px; }
+
+/* 「英語 / 訳」の札。**広い画面では出さない**(上下に並ぶので要らない) */
+.chunk-side { display: inline-flex; gap: 4px; }
 
 .slash-copy { margin-left: auto; font-size: 12px; }
 .slash-ja {
@@ -2447,6 +2468,14 @@ html { -webkit-text-size-adjust: 100%; }
   color: var(--ink-soft);
 }
 .lesson-sheet .btn:hover { background: var(--accent-bg); color: var(--accent); }
+/* 「英語 / 訳」の札。`.lesson-sheet .btn` が全部を白い枠にそろえてしまうので、
+   選んでいる側をここで塗り直す。塗り直さないと**どちらを見ているのか
+   分からない。** べた塗りにはせず、うすい地色 + 同じ色の文字 + 枠線 + 太字
+   (「選んでいる印を、べた塗りにしない」・2026-08) */
+.lesson-sheet .btn.btn--toggle.is-active {
+  background: var(--accent-soft); border-color: var(--accent-line);
+  color: var(--accent); font-weight: 700;
+}
 
 /* 紙の上に出る吹き出し。**紙は暗い配色でも白のまま**なので、
    中身も明るい側で決め打ちにする。**変数を差し替えるだけ。**

@@ -36,6 +36,7 @@ import { SLASH_LEVELS, checkSlashes, judgeSlashes, wordsOf } from '../lib/chunke
 import { storedChunks } from '../lib/chunkJa.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
 import { loadChunkJa, saveChunkJa } from '../lib/slashLevel.js'
+import ChunkSideToggle from './ChunkSideToggle.jsx'
 import ChunkedText from './ChunkedText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 
@@ -124,6 +125,9 @@ export default function SlashReading({
             カタマリの訳を出す
           </label>
         )}
+        {/* 狭い画面では、英語と訳を**同じ場所で入れ替える**(2026-08 利用者の指定)。
+            広い画面では上下に並ぶので、この札は出ない */}
+        {hasJa && withJa && <ChunkSideToggle />}
       </div>
 
       <ol className="slash-list">
