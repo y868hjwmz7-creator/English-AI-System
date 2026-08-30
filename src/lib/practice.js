@@ -66,7 +66,8 @@ export async function logPractice(kind, seconds = 0, times = 0) {
     missing = true
     // **黙って落とさない。** 何が足りないのかは残しておく
     console.warn('取り組みの記録(0022)がまだありません。'
-      + 'supabase/apply の SQL を貼ると、トレーナー側に反映されるようになります')
+      + 'GitHub のリポジトリにある supabase/apply/pending_2026-08-29.sql を'
+      + 'Supabase の SQL Editor で実行すると、トレーナー側に反映されます')
   }
 }
 
@@ -160,7 +161,8 @@ export async function sendReminder(learnerId, message = '') {
   if (error) {
     if (notYet(error)) {
       return ng('リマインドの置き場(0022)が、まだ Supabase にありません。'
-        + ' Supabase → SQL Editor で supabase/apply の SQL を実行してからお試しください。')
+        + ' GitHub のリポジトリにあるファイル(supabase/apply/pending_2026-08-29.sql)を、'
+        + 'Supabase の 左メニュー「SQL Editor」で実行してからお試しください。')
     }
     return fail(error, 'リマインドを送れませんでした')
   }

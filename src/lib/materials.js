@@ -731,8 +731,8 @@ export async function addChunkJa(material) {
     // **どこで何をすればよいかまで書く。** 「まだありません」だけでは、
     // 利用者は次に何をすればよいのか分からない(共通ルール)
     return ng('カタマリごとの訳の置き場(0021)が、まだ Supabase にありません。'
-      + ' Supabase → SQL Editor で supabase/apply/pending_2026-08-29.sql を'
-      + '実行してから、もう一度お試しください'
+      + ' GitHub のリポジトリにあるファイル(supabase/apply/pending_2026-08-29.sql)を、'
+      + 'Supabase の 左メニュー「SQL Editor」で実行してから、もう一度お試しください'
       + '(教材・宿題・ゲストの情報には触れない SQL です)。')
   }
 
