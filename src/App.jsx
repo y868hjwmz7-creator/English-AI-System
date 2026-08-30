@@ -6,9 +6,13 @@ import SignIn from './components/SignIn.jsx'
 import TrainerLearners from './components/TrainerLearners.jsx'
 import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
-import Tabs from './components/Tabs.jsx'
+import AppNav, { AppTopbar } from './components/AppNav.jsx'
+import {
+  BookIcon, CardsIcon, ChartIcon, PeopleIcon, TaskIcon, TrendIcon,
+} from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
+import { loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } from './lib/nav.js'
 import { setViewerRole } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
 import { buildSeed } from './data/seed.js'
@@ -29,6 +33,22 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(!isSupabaseConfigured)
   const [theme, setTheme] = useState(loadTheme)
   const [palette, setPalette] = useState(loadPalette)
+
+  // 左のメニュー。広い画面(1024px 以上)では画面を押し出して並び、
+  // 狭い画面ではふだん隠れていて ☰ でかぶせて開く。
+  // **たたんだかどうかは覚える**(毎回たたみ直すのでは意味がない)。
+  const wide = useWide()
+  const [navOpen, setNavOpen] = useState(loadNavOpen)
+  // 狭い画面へ移ったときは、開いたままにしない。
+  // かぶせる形なので、開いたままだと中身が読めない
+  useEffect(() => { if (!wide) setNavOpen(false) }, [wide])
+  // 試作版の断り書き。一度閉じたら覚えておく
+  const [noticeOpen, setNoticeOpen] = useState(loadNoticeOpen)
+  const toggleNav = () => setNavOpen((v) => {
+    const next = !v
+    if (wide) saveNavOpen(next)   // 覚えるのは PC のときだけ
+    return next
+  })
 
   // 選んだ配色を画面に反映する。最初の1回も含めてここで行う
   useEffect(() => { applyTheme(theme) }, [theme])
@@ -115,67 +135,57 @@ export default function App() {
     return <SignIn />
   }
 
-  return (
-    <div className="app">
-      <header className="app-header">
-        <div className="app-header-main">
-          <div className="app-title-row">
-            <h1 className="app-title">English AI System</h1>
-            {/* 配色の切り替え。レッスン中の画面共有は明るいほうが見やすく、
-                夜の自習は暗いほうが目が楽。場面で変わるので選べるようにする */}
-            <div className="theme-switch" role="group" aria-label="配色">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id} type="button" title={t.hint}
-                  className={`theme-btn${theme === t.id ? ' is-active' : ''}`}
-                  onClick={() => setTheme(t.id)}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            {/* 色を使うかどうか。**明るい / 暗い とは別のもの。**
-                色が多いほうが疲れる、という感じ方もある(2026-08 の指定) */}
-            <div className="theme-switch" role="group" aria-label="色づかい">
-              {PALETTES.map((p) => (
-                <button
-                  key={p.id} type="button" title={p.hint}
-                  className={`theme-btn${palette === p.id ? ' is-active' : ''}`}
-                  onClick={() => setPalette(p.id)}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="app-subtitle">ゲストの学習記録・発音練習と、トレーナー向けの管理画面(試作版)</p>
-        </div>
+  // 画面の一覧。**メニューも、帯に出す名前も、これ1つを見る。**
+  // 2か所に書くと、並びと呼び名が必ず食い違う。
+  //
+  // 並びは役割の順。トレーナーには「教材 → ゲスト → 集計」が仕事の順で、
+  // 「今週の宿題 / 学習の記録」は自分自身の学習の画面である。
+  const pages = [
+    (!isSupabaseConfigured || isTrainer) && { id: 'materials', label: '教材', icon: BookIcon },
+    (!isSupabaseConfigured || isTrainer) && { id: 'learners', label: 'ゲスト', icon: PeopleIcon },
+    (!isSupabaseConfigured || isTrainer) && { id: 'admin', label: '集計', icon: ChartIcon },
+    (!isSupabaseConfigured || !isTrainer) && { id: 'homework', label: '今週の宿題', icon: TaskIcon },
+    // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
+    // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
+    { id: 'wordbook', label: '単語帳', icon: CardsIcon },
+    { id: 'learner', label: '学習の記録', icon: TrendIcon },
+  ].filter(Boolean)
+  const pageLabel = pages.find((p) => p.id === view)?.label ?? 'English AI System'
 
-        {/*
-          タブは役割の順に並べる。トレーナーには「教材 → ゲスト → 集計」が
-          仕事の順で、「今週の宿題 / 学習の記録」は自分自身の学習の画面である。
-          並びが仕事の順になっていないと、毎回目で探すことになる。
-        */}
-        <Tabs
-          ariaLabel="画面の切り替え"
-          value={view}
-          onChange={setView}
-          items={[
-            (!isSupabaseConfigured || isTrainer) && { id: 'materials', label: '教材' },
-            (!isSupabaseConfigured || isTrainer) && { id: 'learners', label: 'ゲスト' },
-            (!isSupabaseConfigured || isTrainer) && { id: 'admin', label: '集計' },
-            (!isSupabaseConfigured || !isTrainer) && { id: 'homework', label: '今週の宿題' },
-            // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
-            // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
-            { id: 'wordbook', label: '単語帳' },
-            { id: 'learner', label: '学習の記録' },
-          ]}
-        />
-      </header>
+  /* 左のメニューの下に置くもの。
+     **配色も色づかいも、一度決めたら何度も触るものではない。**
+     上に出しっぱなしにすると、スマホでは題名と同じ幅を食う
+     (レッスン表示の操作欄で一度学んだこと・第5.25節)。 */
+  const navFooter = (
+    <>
+      <div className="nav-setting">
+        <span className="nav-setting-label">配色</span>
+        <div className="theme-switch" role="group" aria-label="配色">
+          {THEMES.map((t) => (
+            <button key={t.id} type="button" title={t.hint}
+                    className={`theme-btn${theme === t.id ? ' is-active' : ''}`}
+                    onClick={() => setTheme(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="nav-setting">
+        <span className="nav-setting-label">色づかい</span>
+        <div className="theme-switch" role="group" aria-label="色づかい">
+          {PALETTES.map((x) => (
+            <button key={x.id} type="button" title={x.hint}
+                    className={`theme-btn${palette === x.id ? ' is-active' : ''}`}
+                    onClick={() => setPalette(x.id)}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {session && (
-        <div className="app-account">
-          <span className="app-account-name">
+        <div className="nav-account">
+          <span className="nav-account-name">
             {profile?.display_name || session.user.email}
           </span>
           <span className={`badge ${isTrainer ? 'badge--admin' : 'badge--learner'}`}>
@@ -188,65 +198,105 @@ export default function App() {
           </button>
         </div>
       )}
+    </>
+  )
 
-      <div className="app-toolbar">
-        {view === 'learner' && (
-          <label className="field field--inline">
-            <span>ゲスト</span>
-            <select value={learnerId ?? ''} onChange={(e) => setLearnerId(e.target.value)}>
-              {state.learners.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}({l.grade})
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <button type="button" className="btn btn--link" onClick={handleReset}>
-          サンプルデータに戻す
-        </button>
-      </div>
+  return (
+    <div className={`app-shell${wide ? ' is-wide' : ' is-narrow'}`
+                    + (navOpen ? ' nav-open' : ' nav-closed')}>
+      <AppNav
+        items={pages} value={view} onChange={setView}
+        open={navOpen} wide={wide}
+        onClose={() => setNavOpen(false)}
+        title="English AI System"
+        footer={navFooter}
+      />
 
-      <SupabaseStatus />
+      <div className="app-body">
+        {/* どこにいても ☰ が同じ場所にある。名前も出すので、
+            スマホでメニューが隠れていても「いまどこか」が分かる */}
+        <AppTopbar
+          onToggle={toggleNav} open={navOpen} wide={wide} pageLabel={pageLabel}
+        />
 
-      <div className="notice notice--info app-notice">
-        <strong>この試作版について:</strong> Supabase への接続はできましたが、
-        <strong>画面に出ているデータはまだこのブラウザの中のもの</strong>です
-        (サンプルデータ)。これから順に Supabase へ移していきます。
-        発音スコアは<strong>実際の音声を解析した結果ではなく、仮の数値</strong>です。
-        詳しくは <code>docs/PROJECT_SPEC.md</code> の第5章をご覧ください。
-      </div>
-
-      <main className="app-main">
-        {view === 'materials' ? (
-          profile ? <TrainerMaterials me={profile} /> : <p className="muted">読み込み中…</p>
-        ) : view === 'learners' ? (
-          profile ? <TrainerLearners me={profile} /> : <p className="muted">読み込み中…</p>
-        ) : view === 'homework' ? (
-          <LearnerHomework />
-        ) : view === 'wordbook' ? (
-          <Wordbook level={profile?.cefr ?? null} />
-        ) : view === 'learner' ? (
-          currentLearner ? (
-            <EnglishStudyLog state={state} setState={setState} learnerId={learnerId} />
-          ) : (
-            <p>ゲストが登録されていません。</p>
-          )
-        ) : (
-          <AdminDashboard state={state} />
-        )}
-      </main>
-
-      <footer className="app-footer">
-        <p>
-          English AI System — 試作版 v0.1.0
-          {/* 公開時に版が埋め込まれる。手元で動かしているときは出ない。
-              「見ているのが新しい版かどうか」をこれで確かめる。 */}
-          {import.meta.env.VITE_BUILD_STAMP && (
-            <> ／ 版: <code>{import.meta.env.VITE_BUILD_STAMP}</code></>
+        <div className="app">
+          {/* 本文の上に置くのは、**その画面で使うものだけ。**
+              「サンプルデータに戻す」はどの画面にも要らないので下へ移した
+              (試作版の後始末であって、日々の操作ではない) */}
+          {view === 'learner' && (
+            <div className="app-toolbar">
+              <label className="field field--inline">
+                <span>ゲスト</span>
+                <select value={learnerId ?? ''} onChange={(e) => setLearnerId(e.target.value)}>
+                  {state.learners.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}({l.grade})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           )}
-        </p>
-      </footer>
+
+          <SupabaseStatus />
+
+          {/* 試作版の断り書き。**毎回ぜんぶ読ませない。**
+              どの画面にも出るので、開いたままだと本文が下へ押し下げられる。
+              一度閉じたら覚えておき、見たいときだけ開く */}
+          {noticeOpen ? (
+            <div className="notice notice--info app-notice">
+              <button type="button" className="btn btn--link app-notice-close"
+                      onClick={() => { setNoticeOpen(false); saveNoticeOpen(false) }}>
+                とじる
+              </button>
+              <strong>この試作版について:</strong> Supabase への接続はできましたが、
+              <strong>画面に出ているデータはまだこのブラウザの中のもの</strong>です
+              (サンプルデータ)。これから順に Supabase へ移していきます。
+              発音スコアは<strong>実際の音声を解析した結果ではなく、仮の数値</strong>です。
+              詳しくは <code>docs/PROJECT_SPEC.md</code> の第5章をご覧ください。
+            </div>
+          ) : (
+            <button type="button" className="btn btn--link app-notice-open"
+                    onClick={() => { setNoticeOpen(true); saveNoticeOpen(true) }}>
+              この試作版についての断り書きを読む
+            </button>
+          )}
+
+          <main className="app-main">
+            {view === 'materials' ? (
+              profile ? <TrainerMaterials me={profile} /> : <p className="muted">読み込み中…</p>
+            ) : view === 'learners' ? (
+              profile ? <TrainerLearners me={profile} /> : <p className="muted">読み込み中…</p>
+            ) : view === 'homework' ? (
+              <LearnerHomework />
+            ) : view === 'wordbook' ? (
+              <Wordbook level={profile?.cefr ?? null} />
+            ) : view === 'learner' ? (
+              currentLearner ? (
+                <EnglishStudyLog state={state} setState={setState} learnerId={learnerId} />
+              ) : (
+                <p>ゲストが登録されていません。</p>
+              )
+            ) : (
+              <AdminDashboard state={state} />
+            )}
+          </main>
+
+          <footer className="app-footer">
+            <p>
+              English AI System — 試作版 v0.1.0
+              {/* 公開時に版が埋め込まれる。手元で動かしているときは出ない。
+                  「見ているのが新しい版かどうか」をこれで確かめる。 */}
+              {import.meta.env.VITE_BUILD_STAMP && (
+                <> ／ 版: <code>{import.meta.env.VITE_BUILD_STAMP}</code></>
+              )}
+            </p>
+            <button type="button" className="btn btn--link" onClick={handleReset}>
+              サンプルデータに戻す
+            </button>
+          </footer>
+        </div>
+      </div>
     </div>
   )
 }

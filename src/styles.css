@@ -50,6 +50,14 @@
 
   --radius: 10px;
   --gap: 16px;
+
+  /* 浮き上がり。**紙の上に置いた紙**に見えるだけの、ごく薄い影。
+     色と同じく**変数で持つ。** 暗い側では影がほとんど見えないので、
+     代わりに縁を少し明るくする(3か所すべてに置くこと) */
+  --shadow-1: 0 1px 2px rgba(16, 15, 12, 0.04), 0 1px 1px rgba(16, 15, 12, 0.03);
+  --shadow-2: 0 6px 20px rgba(16, 15, 12, 0.10), 0 2px 6px rgba(16, 15, 12, 0.06);
+  /* キーボードで移動している人に、いまどこにいるかを見せる輪 */
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
 }
 
 /* 暗いテーマ用の色。閲覧者の設定は3通りあるため、両方の指定を書いておく。
@@ -91,6 +99,9 @@
     --pos-phrase: #93aee0;  --pos-phrase-bg: #212734;
     --warn:   #c98500;
     --danger: #e66767;
+    /* 暗い側では黒い影がほとんど見えない。**濃くするのではなく深くする** */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.40);
+    --shadow-2: 0 8px 26px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.40);
   }
 }
 
@@ -129,6 +140,8 @@
   --pos-phrase: #93aee0;  --pos-phrase-bg: #212734;
   --warn:   #c98500;
   --danger: #e66767;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-2: 0 8px 26px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.40);
 }
 
 * { box-sizing: border-box; }
@@ -144,17 +157,155 @@ body {
 
 .loading { padding: 48px; text-align: center; color: var(--text-secondary); }
 
-/* ---------------- レイアウト ---------------- */
+/* ---------------- レイアウト ----------------
+   画面は「左のメニュー + 本体」の2枚である(2026-08 利用者の指定)。
 
-.app { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+     PC(1024px 以上)  … メニューが**押し出して**並ぶ。☰ で細くたためる
+     スマホ・パッド     … メニューは隠れ、☰ で**かぶせて**開く
 
-.app-header {
-  display: flex; flex-wrap: wrap; gap: var(--gap);
-  align-items: flex-end; justify-content: space-between;
-  padding-bottom: 16px; border-bottom: 1px solid var(--border);
+   **判断は幅だけ。** 端末の種類を当て推量しない(`src/lib/nav.js`)。 */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;   /* スマホの下バーぶんを引いた高さ。対応しない端末は上を使う */
 }
-.app-title { margin: 0; font-size: 22px; letter-spacing: 0.01em; }
-.app-subtitle { margin: 4px 0 0; color: var(--text-secondary); font-size: 13px; }
+
+/* 本体。**ここだけが縦に伸びる。** メニューは貼り付いたまま動かない */
+.app-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+
+.app { width: 100%; max-width: 1100px; margin: 0 auto; padding: 20px 16px 64px; }
+
+/* ── 上の帯 ────────────────────────────────────────────────
+   **どこにいても ☰ が同じ場所にある。** 探させない。
+   名前も出すので、メニューが隠れていても「いまどこか」が分かる */
+.app-topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 56px; padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-0);
+}
+.app-topbar-title {
+  font-size: 16px; font-weight: 700; letter-spacing: 0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.app-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* 絵だけのボタン。**指で押せる大きさ(44px)を割らない** */
+.nav-icon-btn {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 0;
+  border: none; border-radius: 10px; background: none; cursor: pointer;
+  color: var(--text-secondary); font-size: 20px;
+}
+.nav-icon-btn:hover { background: var(--surface-2); color: var(--text-primary); }
+
+/* ── 左のメニュー ────────────────────────────────────────── */
+.app-nav {
+  --nav-w: 248px;
+  --nav-w-mini: 68px;
+  flex: 0 0 auto;
+  display: flex; flex-direction: column;
+  width: var(--nav-w);
+  border-right: 1px solid var(--border);
+  background: var(--surface-1);
+}
+/* PC。**画面を押し出して並ぶ。** 貼り付いて、本体だけが動く */
+.app-nav.is-wide {
+  position: sticky; top: 0; align-self: flex-start;
+  height: 100vh; height: 100dvh; overflow-y: auto;
+  transition: width 0.16s ease;
+}
+/* 細くたたんだところ。絵だけになる */
+.app-nav.is-wide.is-closed { width: var(--nav-w-mini); }
+.app-nav.is-wide.is-closed .app-nav-brand,
+.app-nav.is-wide.is-closed .app-nav-label,
+.app-nav.is-wide.is-closed .app-nav-foot { display: none; }
+.app-nav.is-wide.is-closed .app-nav-head { justify-content: center; }
+.app-nav.is-wide.is-closed .app-nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+
+/* スマホ・パッド。**かぶせて開く。** 閉じているあいだは画面の外に置く */
+.app-nav.is-drawer {
+  position: fixed; z-index: 60; top: 0; left: 0; bottom: 0;
+  width: min(var(--nav-w), 84vw);
+  overflow-y: auto;
+  box-shadow: 0 0 0 100vmax transparent;
+  transform: translateX(-100%);
+  transition: transform 0.18s ease, visibility 0.18s;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.app-nav.is-drawer.is-open { transform: translateX(0); box-shadow: var(--shadow-2); }
+/* 閉じているあいだは、キーボードでも触れないようにする。
+   **`visibility` も一緒に移り変わらせる。** すぐ `hidden` にすると、
+   閉じるときの滑りが見えないまま消える */
+.app-nav.is-drawer.is-closed { visibility: hidden; }
+
+/* うしろの膜。押すと閉じる */
+.nav-scrim {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0, 0, 0, 0.42);
+  animation: nav-scrim-in 0.18s ease;
+}
+@keyframes nav-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+
+.app-nav-head {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 56px; padding: 8px 10px 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.app-nav-brand {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 15px; font-weight: 700; line-height: 1.25;
+}
+.app-nav-head .nav-icon-btn { margin-left: auto; }
+
+.app-nav-list { list-style: none; margin: 0; padding: 10px 8px; }
+.app-nav-item {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 44px; padding: 10px 12px;
+  border: none; border-radius: 10px; background: none; cursor: pointer;
+  color: var(--text-secondary); font-size: 15px; text-align: left;
+}
+.app-nav-item:hover { background: var(--surface-2); color: var(--text-primary); }
+/* いまいる画面。**色だけに頼らない。** 太字と左の帯も付ける */
+.app-nav-item.is-active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent); font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.app-nav-icon {
+  flex: 0 0 auto; display: inline-flex; align-items: center;
+  width: 20px; font-size: 20px;
+}
+.app-nav-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+
+/* メニューの下。**一度決めたら何度も触らないもの**を置く場所 */
+.app-nav-foot {
+  margin-top: auto; padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+}
+/* 配色・色づかい。**見出しは上に置く。**
+   横に並べると「色づかい」が2行に割れ、札とぶつかった(2026-08 の実測) */
+.nav-setting { display: flex; flex-direction: column; gap: 4px; }
+.nav-setting-label { color: var(--text-muted); font-size: 11.5px; }
+.nav-setting .theme-switch { margin-left: 0; align-self: flex-start; }
+.nav-setting .theme-btn { padding: 6px 12px; }
+.nav-account {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.nav-account-name {
+  flex-basis: 100%; font-weight: 600; font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.nav-account .btn--link { margin-left: auto; }
 
 /* ---------------- タブ ----------------
    スマホでは折り返さず、横に流す。折り返すと「教」「材」のように
@@ -208,7 +359,15 @@ body {
 }
 .app-toolbar > .btn--link { margin-left: auto; }
 .app-main { margin-top: var(--gap); }
-.app-footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12px; }
+/* 帯の下、本文の上。空のときに隙間だけ残さない */
+.app-toolbar:empty { display: none; margin: 0; }
+.app-footer {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px var(--gap);
+  margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border);
+  color: var(--text-muted); font-size: 12px;
+}
+.app-footer > p { margin: 0; }
+.app-footer > .btn--link { margin-left: auto; font-size: 12px; }
 
 .stack-lg { display: flex; flex-direction: column; gap: var(--gap); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
@@ -217,11 +376,48 @@ body {
   .app-header { align-items: flex-start; }
 }
 
+/* ---------------- どの画面にも効く決まり ----------------
+   ここは**部品ごとではなく、まとめて**効かせるもの。
+   1つずつ書いて回ると、新しい部品で必ず抜ける。 */
+
+/* キーボードで移動している人に、いまどこにいるかを見せる。
+   **`:focus` ではなく `:focus-visible`。** マウスで押しただけの
+   ボタンにまで輪が出ると、うるさいだけである */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* 入力欄。**押せる高さをボタンとそろえる。**
+   スマホの Safari は、16px 未満の入力欄に触れると画面を勝手に拡大する */
+input, select, textarea {
+  font-family: inherit;
+}
+@media (max-width: 860px) {
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+    font-size: 16px;
+  }
+}
+
+/* 動きを減らす設定にしている人には、動かさない。
+   前庭障害のある人には、滑る動きが気持ち悪さの原因になる */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ---------------- カード ---------------- */
 
 .card {
   background: var(--surface-1); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 20px;
+  /* **紙の上に置いた紙**に見える程度。縁だけだと、地の色と近いときに
+     どこまでが1枚なのか分かりにくかった */
+  box-shadow: var(--shadow-1);
 }
 .card--highlight { border-color: var(--accent); }
 .card-title { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
@@ -310,15 +506,25 @@ audio { width: 100%; margin-top: 4px; }
 /* ---------------- ボタン ---------------- */
 
 .btn {
+  /* **指で押せる高さ(40px)を割らない。** 小さいボタンは押し損ねる。
+     `btn--small` / `btn--link` のように、意図して小さくするものは別に指定する */
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 40px;
   padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--surface-0); color: var(--text-primary);
-  font-family: inherit; font-size: 14px; cursor: pointer;
+  font-family: inherit; font-size: 14px; line-height: 1.4; cursor: pointer;
 }
 .btn:hover { border-color: var(--text-muted); }
+.btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .btn--danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
-.btn--link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; }
+.btn--link {
+  display: inline; min-height: 0;
+  background: none; border: none; padding: 0;
+  color: var(--accent); text-decoration: underline;
+}
+.btn--link:active { transform: none; }
 .btn--toggle { padding: 5px 12px; font-size: 13px; }
 .btn--toggle.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
@@ -341,7 +547,14 @@ audio { width: 100%; margin-top: 4px; }
   background: color-mix(in srgb, var(--series-3) 12%, var(--surface-1));
   border: 1px solid var(--series-3);
 }
-.app-notice { margin-bottom: var(--gap); }
+/* 試作版の断り書き。**たたんでおける。**
+   どの画面にも出るので、開いたままだと本文がそのぶん下がる */
+.app-notice { position: relative; margin-bottom: var(--gap); padding-right: 72px; }
+.app-notice-close { position: absolute; top: 10px; right: 12px; }
+.app-notice-open {
+  display: inline-block; margin-bottom: var(--gap);
+  padding: 0; font-size: 12.5px;
+}
 
 .badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
 .badge--warn {
@@ -450,7 +663,8 @@ audio { width: 100%; margin-top: 4px; }
 /* iOS で横向きにしたときに文字が勝手に拡大されるのを防ぐ */
 html { -webkit-text-size-adjust: 100%; }
 
-/* ノッチ(画面上部の切り欠き)にコンテンツが隠れないようにする */
+/* ノッチ(画面上部の切り欠き)にコンテンツが隠れないようにする。
+   上の切り欠きは帯(`.app-topbar`)が受け持つので、ここは左右と下だけ */
 .app {
   padding-left: max(16px, env(safe-area-inset-left));
   padding-right: max(16px, env(safe-area-inset-right));
@@ -460,7 +674,7 @@ html { -webkit-text-size-adjust: 100%; }
 @media (max-width: 560px) {
   /* 「16時間30分」のような長い値が2行に折り返さないよう、少し小さくする */
   .stat-value { font-size: 22px; }
-  .app-title { font-size: 19px; }
+  .app-title { font-size: 19px; }   /* ログイン画面の題名 */
   .card { padding: 16px; }
   .field-row { grid-template-columns: 1fr; }
 
@@ -572,13 +786,11 @@ html { -webkit-text-size-adjust: 100%; }
 .signin-note { margin-top: 16px; margin-bottom: 0; line-height: 1.6; }
 .signin-ref { margin: 8px 0 0; font-size: 11px; }
 
-/* ---------------- ログイン中の表示 ---------------- */
+/* ---------------- ログイン中の表示 ----------------
+   誰として入っているかは**左のメニューの下**に置く(`.nav-account`)。
+   以前は本文の上に1行あったが、どの画面でも同じことしか言わないので、
+   本文をそのぶん押し下げていた。 */
 
-.app-account {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-bottom: var(--gap); font-size: 13px;
-}
-.app-account-name { font-weight: 600; }
 .badge--admin {
   background: var(--surface-1); /* color-mix 非対応ブラウザ向けの代替 */
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-1));
@@ -1069,9 +1281,6 @@ html { -webkit-text-size-adjust: 100%; }
 .generate-cost .field-hint { display: block; margin-top: 2px; }
 
 /* ── 配色の切り替え ────────────────────────────────────────── */
-.app-title-row {
-  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-}
 .theme-switch {
   display: inline-flex; margin-left: auto;
   border: 1px solid var(--border); border-radius: 999px; overflow: hidden;
