@@ -79,7 +79,7 @@ export default function TrainerLearners({ me }) {
   useEffect(() => { reload() }, [])
 
   /**
-   * 過去の宿題を「レッスンで使う形」(大きく表示)で開く。
+   * 過去の宿題を「セッションで使う形」(大きく表示)で開く。
    *
    * 一覧は軽くするため中身を読んでいない(数だけ)。開くときに読む。
    * **ここから開くのは、そのゲストに出した教材だけ。**
@@ -435,7 +435,7 @@ export default function TrainerLearners({ me }) {
                                     onClick={() => openLesson(a.material.id)}>
                               <ScreenIcon />
                               {lessonBusy === a.material.id
-                                ? '開いています…' : 'レッスンで使う(大きく表示)'}
+                                ? '開いています…' : 'セッションで使う(大きく表示)'}
                             </button>
                           )}
                         </li>

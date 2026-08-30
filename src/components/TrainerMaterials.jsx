@@ -351,7 +351,7 @@ export default function TrainerMaterials({ me }) {
                       {m.tagIds.length ? ` / ${m.tagIds.map(weaknessTagLabel).join('・')}` : ''}
                     </div>
                   </div>
-                  {/* **「レッスンで使う」はここに置かない。**
+                  {/* **「セッションで使う」はここに置かない。**
                       開いていない行にも出しているので、開くと2つ並んでしまう。
                       **同じことをするボタンを2つ見せない**(CLAUDE.md)。 */}
                   <div className="btn-row no-print">
@@ -470,17 +470,20 @@ export default function TrainerMaterials({ me }) {
                 </div>
               ) : null}
 
-              {/* **「中身を見る」があった場所には「レッスンで使う」を置く**
+              {/* **「中身を見る」があった場所には「セッションで使う」を置く**
                   (2026-08 利用者の指定)。さがした教材に対してすぐしたいのは
-                  「中身を眺める」ことではなく「レッスンで使う」ことである。
+                  「中身を眺める」ことではなく「セッションで使う」ことである。
                   中身は、行そのものを押せば開く(▸ / ▾)。
 
                   **開いていても閉じていても、いつも出す。** 開くと消える
                   のでは、いちいち閉じてから押すことになる。
-                  そのぶん、中身の中には置かない(2つ並んでしまう)。 */}
-              <button type="button" className="btn btn--small"
+                  そのぶん、中身の中には置かない(2つ並んでしまう)。
+
+                  **いちばん強い見た目はこちらに置く**(利用者の指定)。
+                  共有は、すでに教材が決まってからの操作である。 */}
+              <button type="button" className="btn btn--primary"
                       onClick={() => setLessonOf(m)}>
-                <ScreenIcon />レッスンで使う(大きく表示)
+                <ScreenIcon />セッションで使う(大きく表示)
               </button>
 
               {assigningId === m.id ? (
@@ -517,7 +520,10 @@ export default function TrainerMaterials({ me }) {
                   </div>
                 </div>
               ) : (
-                <button type="button" className="btn btn--primary"
+                /* **共有は、一段うしろに置く**(2026-08 利用者の指定)。
+                   小さく、灰色の塗りつぶし(`btn--quiet`)にする。
+                   青の塗りつぶしは「セッションで使う」に譲った */
+                <button type="button" className="btn btn--small btn--quiet"
                         onClick={() => startAssign(m.id)}>
                   この教材をゲストと共有する
                 </button>

@@ -267,7 +267,7 @@ export default function LessonView({
   }
 
   return (
-    <div className="lesson" role="dialog" aria-label="レッスンで使う表示">
+    <div className="lesson" role="dialog" aria-label="セッションで使う表示">
       {/* 操作するところ。共有される側にも見えるが、紙の外に置く */}
       <div className="lesson-bar no-print">
         {/* ── いつも要るもの。**この1行に収める** ──────────────
