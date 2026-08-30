@@ -89,19 +89,23 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
   
-    --surface-0: #131312;
-    --surface-1: #1a1a19;
-    --surface-2: #262625;
+    /* ★ 面の段差をはっきりさせる(2026-08「全体的に見にくい」)
+       ・地 → カード → その中の面 で、**目に見える段**を作る
+       ・前は 0x13 → 0x1a → 0x26 で、地とカードの差が 7 しかなかった
+       ・枠線も一段強くして、カードの輪郭が分かるようにする */
+    --surface-0: #0c0c0b;   /* ページの地。いちばん暗く */
+    --surface-1: #1c1c1a;   /* カード */
+    --surface-2: #2b2b28;   /* カードの中の面・札 */
     --chunk-bg: #2c3a2e;
-    --btn-bg:   #2a2a28;
-    --quiet-bg: #3f3f3b;
+    --btn-bg:   #303030;
+    --quiet-bg: #454541;
     /* うすい水色の上に白い文字は薄い。**暗い側は文字を濃くする** */
     --on-accent: #10222f;
-    --border:    #383835;
+    --border:    #46463f;
   
     --text-primary:   #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #8d8c84;
+    --text-secondary: #cfcec4;
+    --text-muted:     #9a998f;
   
     --series-1: #3987e5;
     --series-2: #d95926;
@@ -139,18 +143,20 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --surface-0: #131312;
-  --surface-1: #1a1a19;
-  --surface-2: #262625;
+  /* ★ 面の段差をはっきりさせる。**上の @media と同じ値にする。**
+     1か所でも抜けると、そこを選んだときだけ色が食い違う */
+  --surface-0: #0c0c0b;
+  --surface-1: #1c1c1a;
+  --surface-2: #2b2b28;
   --chunk-bg: #2c3a2e;
-  --btn-bg:   #2a2a28;
-  --quiet-bg: #3f3f3b;
+  --btn-bg:   #303030;
+  --quiet-bg: #454541;
   --on-accent: #10222f;
-  --border:    #383835;
+  --border:    #46463f;
 
   --text-primary:   #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted:     #8d8c84;
+  --text-secondary: #cfcec4;
+  --text-muted:     #9a998f;
 
   --series-1: #3987e5;
   --series-2: #d95926;
@@ -2567,6 +2573,23 @@ html { -webkit-text-size-adjust: 100%; }
   padding: 1px 9px; border: 1px solid var(--border); border-radius: 999px;
   background: var(--surface-2); color: var(--text-secondary);
   font-size: 12px; white-space: nowrap;
+}
+/* **弱点の札だけを目立たせる**(2026-08 利用者の指定)。
+   何の弱点の教材かは、選ぶときにいちばん見る情報である。
+   レベルや業界と同じ見た目だと、札の列に埋もれる。
+
+   **べた塗りにはしない。** うすい地色 + 同じ色の文字 + 枠線 + 太字の4つで示す
+   (「選んでいる印」と同じ決まり)。色だけに頼らないので、
+   プレイン(色を消す)でも太字と枠線で見分けられる。 */
+.mtitle-chip--main {
+  background: var(--accent-soft); border-color: var(--accent-line);
+  color: var(--accent); font-weight: 700;
+}
+/* プレイン(色を消す)では、色みを抜いて**太字と枠線だけ**で示す。
+   ここは「押せる合図」ではなく**中身の色分け**なので、青は残さない */
+:root[data-palette="plain"] .mtitle-chip--main {
+  background: var(--surface-2); border-color: var(--text-muted);
+  color: var(--text-primary);
 }
 
 /* 紙の上(レッスン表示・印刷)は白黒に寄せる。

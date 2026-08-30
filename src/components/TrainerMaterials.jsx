@@ -301,6 +301,7 @@ export default function TrainerMaterials({ me }) {
                   <MaterialTitle
                     title={m.title}
                     headline={m.headline}
+                    weakness={m.tagIds.map(weaknessTagLabel).join(' + ')}
                     fallbackTags={[m.tagIds.map(weaknessTagLabel).join(' + '),
                       cefrLabel(m.level), kindLabel(m.kind), industryLabel(m.industry)]}
                   />

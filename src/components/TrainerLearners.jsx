@@ -454,6 +454,8 @@ export default function TrainerLearners({ me }) {
                           <MaterialTitle
                             title={a.material?.title ?? '(消された教材)'}
                             headline={a.material?.headline}
+                            weakness={(a.material?.tagIds ?? [])
+                              .map(weaknessTagLabel).join(' + ')}
                             fallbackTags={[(a.material?.tagIds ?? [])
                               .map(weaknessTagLabel).join(' + ')]}
                             as="div" size="row"

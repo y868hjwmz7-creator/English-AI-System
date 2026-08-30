@@ -17,12 +17,27 @@
 import { parseMaterialTitle } from '../lib/format.js'
 
 export default function MaterialTitle({
-  title, fallbackTags = [], headline = null, as: Tag = 'h3', size = 'card',
+  title, fallbackTags = [], headline = null, weakness = '',
+  as: Tag = 'h3', size = 'card',
 }) {
   const { date, main, tags } = parseMaterialTitle(title)
   // 教材名に条件が入っていれば、それを札にする。手で付けた名前など、
   // 入っていないときは呼び出し側から渡されたもの(レベル・種類・業界)を使う。
   const chips = (tags.length ? tags : fallbackTags).filter(Boolean)
+
+  /**
+   * **弱点の札だけを目立たせる**(2026-08 利用者の指定)。
+   *
+   * > 弱点ポイントをもう少し目立たせてください。
+   *
+   * 何の弱点の教材かは、選ぶときにいちばん見る情報である。
+   * レベルや業界と同じ見た目だと、札の列に埋もれる。
+   *
+   * **どれが弱点かは、呼び出し側から受け取る。** 札の並び順や
+   * 文字の形から当てない(手で名前を付けた教材では並びが変わる)。
+   * 見出しそのものが弱点のとき(文型ドリル)は、札で繰り返さない。
+   */
+  const w = String(weakness ?? '').trim()
 
   return (
     <div className={`mtitle mtitle--${size}`}>
@@ -36,7 +51,12 @@ export default function MaterialTitle({
         && <div className="mtitle-headline" lang="en">{headline}</div>}
       {chips.length > 0 && (
         <div className="mtitle-chips">
-          {chips.map((c, i) => <span key={i} className="mtitle-chip">{c}</span>)}
+          {chips.map((c, i) => (
+            <span key={i}
+                  className={`mtitle-chip${c === w && main.trim() !== w ? ' mtitle-chip--main' : ''}`}>
+              {c}
+            </span>
+          ))}
         </div>
       )}
     </div>
