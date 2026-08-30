@@ -38,9 +38,23 @@ import { useEffect, useRef, useState } from 'react'
 import { lookupWord, normWord, preloadGlosses, splitWords } from '../lib/vocab.js'
 import { splitSentences } from '../lib/wordTiming.js'
 import GlossPopover from './GlossPopover.jsx'
+import { tapFeedback } from '../lib/haptics.js'
 
 /** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
 const HOLD_MS = 450
+
+/**
+ * これ以上動いたら「押した」ではなく「動かした」とみなす(px)。
+ *
+ * 【なぜ要るか】(2026-08 実機)
+ *   > iPhoneとiPadでスクロールしようとすると単語の意味が出て来てしまいます
+ *
+ *   画面を送るとき、指は**同じ語の上に留まったまま**縦に動く。
+ *   これまでは「指の下の語が変わったか」しか見ていなかったので、
+ *   語が変わらない縦の動きは長押しと区別できず、450ms で開いてしまった。
+ *   **指が動いたかどうかを、距離で見る。**
+ */
+const MOVE_SLOP = 10
 
 export default function EnglishText({
   text, textJa = '', level = 'B1', statuses = null, onMark = null,
@@ -51,6 +65,10 @@ export default function EnglishText({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const holdTimer = useRef(null)   // 長押しの計測
+  const holdOff = useRef(null)     // 長押しの見張りをやめる後始末
+  const startPt = useRef(null)     // 指を置いた場所(動いたかを距離で見る)
+  const scrolledRef = useRef(false)  // 指を置いてから画面が動いたか
+  const [holding, setHolding] = useState(false)  // いま押し続けているか(手応え)
   const heldRef = useRef(false)    // 長押しで開いた直後か(続く click を捨てる)
   const touchRef = useRef(false)   // 直前の操作が「触る」だったか
   const rootRef = useRef(null)
@@ -149,6 +167,40 @@ export default function EnglishText({
 
   const cancelHold = () => {
     if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null }
+    // 見張り(動いたか・画面が送られたか)も一緒に外す
+    holdOff.current?.()
+    holdOff.current = null
+    setHolding(false)
+  }
+
+  /**
+   * 長押しのあいだ、**動いたら・画面が送られたら、やめる。**
+   *
+   * 語そのものの `onPointerMove` だけでは足りない。
+   *   ・縦に送るとき、指は同じ語の上に留まる(語が変わらないので気づけない)
+   *   ・画面が動き始めると、iOS は語への `pointermove` を送らなくなる
+   * そこで**書類ぜんぶ**を見張る。`scroll` は伝わらないので capture で拾う。
+   */
+  const watchHold = (x, y) => {
+    startPt.current = { x, y }
+    scrolledRef.current = false
+    const onMove = (ev) => {
+      const t = ev.touches?.[0] ?? ev
+      const p = startPt.current
+      if (!p || t.clientX == null) return
+      if (Math.hypot(t.clientX - p.x, t.clientY - p.y) > MOVE_SLOP) cancelHold()
+    }
+    // **画面が送られたら、なぞりの選択もやめる。** 送っただけなのに
+    // 2語をなぞったことにされると、身に覚えのない意味が出る
+    const onScroll = () => { scrolledRef.current = true; cancelHold() }
+    document.addEventListener('pointermove', onMove, { passive: true })
+    document.addEventListener('touchmove', onMove, { passive: true })
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    holdOff.current = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('scroll', onScroll, { capture: true })
+    }
   }
 
   const close = () => {
@@ -323,7 +375,8 @@ export default function EnglishText({
               type="button"
               data-widx={i}
               className={`etext-word${status ? ` is-${status}` : ''}`
-                + `${isOpen ? ' is-open' : ''}`}
+                + `${isOpen ? ' is-open' : ''}`
+                + `${holding && dragFrom.current === i ? ' is-holding' : ''}`}
               aria-expanded={isOpen}
               // どの操作で来たかで分ける。**環境の当て推量に賭けない**
               onPointerDown={(e) => {
@@ -337,8 +390,18 @@ export default function EnglishText({
                 // 触る端末: 少し長めに触れたときだけ開く
                 cancelHold()
                 const el = e.currentTarget
+                watchHold(e.clientX, e.clientY)
+                // **押していることが見て分かるようにする**(2026-08 の要望)。
+                // 何も変わらないと、押せているのか分からない
+                setHolding(true)
                 holdTimer.current = window.setTimeout(() => {
                   heldRef.current = true
+                  holdOff.current?.()
+                  holdOff.current = null
+                  holdTimer.current = null
+                  setHolding(false)
+                  // **開いた瞬間に、手応えを返す**(バイブ / 押した印)
+                  tapFeedback('hold')
                   anchorRef.current = el.closest('.etext-run') ?? el
                   if (isOpen) close()
                   else if (asPhrase) openRange(asPhrase.from, asPhrase.to)
@@ -349,11 +412,15 @@ export default function EnglishText({
               // CSS の -webkit-touch-callout と合わせて二重に止める
               onContextMenu={(e) => e.preventDefault()}
               onPointerUp={(e) => {
+                const scrolled = scrolledRef.current
                 cancelHold()
                 const from = dragFrom.current
                 const to = wordAt(e.clientX, e.clientY)
                 dragFrom.current = null
                 setDragTo(null)
+                // **画面を送っただけのときは、何もしない。**
+                // 送っている途中で指が別の語に渡ると、なぞったことにされていた
+                if (scrolled) return
                 // **2語以上をなぞったら、まとめて1つの言い回しとして引く**
                 if (from != null && to != null && to !== from) {
                   heldRef.current = true   // 続く click を捨てる

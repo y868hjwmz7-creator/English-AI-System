@@ -1771,6 +1771,11 @@ html { -webkit-text-size-adjust: 100%; }
 /* ── 1語ずつ触れる英文 ────────────────────────────────────
    語に触れると意味が出る。「知らなかった」と付けた語は色が残る。
    **紙には出さない。** 枠も色も、印刷では邪魔になるだけ。 */
+/* ※ `touch-action: pan-y`(縦送りをブラウザに任せる)は**使えない。**
+   `touch-action` は**インラインの箱には効かない**決まりで、ここは
+   インラインである。`inline-block` にすると折り返し方が変わり、
+   語の高さもずれる(`.etext-run` で一度学んだこと)。
+   代わりに、長押しの取り消しを**こちらで見張る**(`EnglishText.jsx`)。 */
 .etext-word-wrap { position: relative; }
 .etext-word {
   display: inline; padding: 0; margin: 0;
@@ -1802,6 +1807,14 @@ html { -webkit-text-size-adjust: 100%; }
     no-repeat bottom / 100% .62em;
 }
 .etext-word:hover, .etext-word.is-open { border-bottom-color: var(--mark-hover-line); }
+/* **押し続けているあいだ、押していることが見て分かるようにする**
+   (2026-08 の要望)。指は画面を隠すので、何も変わらないと
+   押せているのか分からない。長押しが効いた瞬間には、
+   これとは別に短い振動も返す(`src/lib/haptics.js`) */
+.etext-word.is-holding {
+  background: var(--mark-hover-bg);
+  border-bottom-color: var(--mark-hover-line);
+}
 /* 知らなかった語。**次に開いても色が残る**(2026-08 の要望)。
    ただし**目立たせすぎない**(2026-08 の指摘)。地の色を行の高さいっぱいに
    敷くと、本文が縞模様になって読めなくなる。

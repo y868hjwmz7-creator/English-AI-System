@@ -14,6 +14,7 @@ import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
 import { loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } from './lib/nav.js'
 import { setViewerRole } from './lib/viewer.js'
+import { installTapFeedback } from './lib/haptics.js'
 import Wordbook from './components/Wordbook.jsx'
 import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
@@ -51,6 +52,10 @@ export default function App() {
   })
 
   // 選んだ配色を画面に反映する。最初の1回も含めてここで行う
+  // 触る端末で、押したときに短い手応えを返す(2026-08 の要望)。
+  // **アプリで1か所だけ。** 画面ごとに書くと、新しいボタンで必ず抜ける
+  useEffect(() => installTapFeedback(), [])
+
   useEffect(() => { applyTheme(theme) }, [theme])
   useEffect(() => { applyPalette(palette) }, [palette])
   // 仕組みの内側の事情(鍵・残高)を出してよい相手かどうかの判断に使う。
