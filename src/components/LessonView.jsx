@@ -271,6 +271,12 @@ export default function LessonView({
       {/* 操作するところ。共有される側にも見えるが、紙の外に置く */}
       <div className="lesson-bar no-print">
         {/* ── いつも要るもの。**この1行に収める** ──────────────
+            **1つの囲みにまとめて、折り返さないようにしてある。**
+            以前は帯ぜんぶを折り返させていたので、iPhone(390px)で
+            「表示」だけが2段目に落ち、**帯の高さが2倍**になっていた
+            (2026-08 実機)。紙がそのぶん狭くなる。 */}
+        <div className="lesson-bar-main">
+        {/* ── いつも要るもの ──────────────────────────────
             スマホでは操作欄が4段になり、画面の4割を占めていた
             (2026-08 実機)。レッスン中に何度も触るのは
             「閉じる・ページ送り・解答」の3つだけである。
@@ -317,8 +323,9 @@ export default function LessonView({
         <button type="button" className="btn btn--small lesson-more"
                 aria-expanded={openSettings} aria-controls="lesson-settings"
                 onClick={() => setOpenSettings((v) => !v)}>
-          <GearIcon />表示
+          <GearIcon /><span className="mid-text">表示</span>
         </button>
+        </div>
 
         <div className={`lesson-settings${openSettings ? ' is-open' : ''}`}
              id="lesson-settings">

@@ -1660,14 +1660,27 @@ html { -webkit-text-size-adjust: 100%; }
   display: flex; flex-direction: column;
   background: #3a3a38;   /* 紙の外。紙が浮いて見えるように暗くする */
 }
+/* 帯そのものは折り返してよい(「表示」を開いたとき、設定が2段目に出る)。
+   **いつも要る操作だけは、絶対に折り返させない。** */
 .lesson-bar {
   display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
   padding: 8px 12px; background: #24241f; color: #f2f2ee;
 }
+/* **閉じる・ページ送り・解答・表示。この4つは必ず1行に収める。**
+   帯ぜんぶを折り返させていたので、iPhone(390px)で「表示」だけが
+   2段目に落ち、**帯の高さが2倍**になっていた(2026-08 実機)。
+   紙がそのぶん狭くなる。 */
+/* パソコンでは**中身の幅のまま**。伸ばすと、右に並べてある設定
+   (`.lesson-settings` の `margin-left: auto`)を2段目へ押し出してしまう */
+.lesson-bar-main {
+  flex: 0 1 auto; min-width: 0;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 10px;
+}
 .lesson-bar .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
 .lesson-bar .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .lesson-bar .btn:disabled { opacity: .4; }
-.lesson-pages { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.lesson-pages { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; font-size: 14px; }
+.lesson-pages > span { white-space: nowrap; }
 .lesson-settings {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto;
 }
@@ -2354,7 +2367,14 @@ html { -webkit-text-size-adjust: 100%; }
 @media (max-width: 860px) {
   /* 言葉を短くする。「✕ 閉じる」→「✕」、「すべての解答を出す」→「解答を出す」 */
   .lesson-bar .wide-text { display: none; }
-  .lesson-bar { gap: 8px; padding: 6px 10px; }
+  .lesson-bar { gap: 8px; padding: 6px 8px; }
+  /* 狭い画面では**横いっぱい**に広げる。そうしないと「表示」が
+     解答ボタンのすぐ隣に来て、右端が空く */
+  .lesson-bar-main { flex: 1 1 auto; gap: 6px; }
+  .lesson-pages { gap: 6px; }
+  /* 狭い画面では、ボタンの左右の余白も詰める。
+     **4つを1行に収めるため**で、押せる高さ(34px)は変えない */
+  .lesson-bar .btn { padding: 5px 10px; }
   .lesson-more { display: inline-flex; margin-left: auto; }
 
   /* 畳んでおく。押したときだけ、下に1行ぶん出す */
@@ -2363,6 +2383,14 @@ html { -webkit-text-size-adjust: 100%; }
     display: flex; flex-basis: 100%; margin-left: 0;
     padding-top: 8px; border-top: 1px solid #45453f;
   }
+}
+
+/* いちばん狭い端末(iPhone SE = 320px)では、「表示」を**絵だけ**にする。
+   ここまで詰めないと4つが1行に入らない。押せることは絵と `aria-label`
+   で分かるので、言葉が無くても迷わない */
+@media (max-width: 340px) {
+  .lesson-more .mid-text { display: none; }
+  .lesson-more { padding-left: 8px; padding-right: 8px; }
 }
 
 /* ── 宿題の行(押して開く)────────────────────────────────
