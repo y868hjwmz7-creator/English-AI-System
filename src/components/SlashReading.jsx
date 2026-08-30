@@ -25,8 +25,8 @@
  *   そのカタマリを日本語で何と言うかは決まりでは書けない。
  *   いまは文ぜんぶの訳を出している(仕様書 第5.29.3節)。
  */
-import { Fragment, useState } from 'react'
-import { SLASH_LEVELS, judgeSlashes, wordsOf } from '../lib/chunker.js'
+import { Fragment, useEffect, useState } from 'react'
+import { SLASH_LEVELS, checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
@@ -53,12 +53,49 @@ export default function SlashReading({
   const [marks, setMarks] = useState({})   // 文ごとの区切り
   const [shown, setShown] = useState({})   // 「解答を見る」を押した文
 
-  const toggle = (id, at) => setMarks((m) => {
+  //
+  // **まちがいは、次にどこかを触ったら消える**(2026-08 利用者の指定)。
+  // 指摘を読んだあと、自分で消して回らなくてよい。
+  // ただし**いま押したものは残す。** 消してしまうと、吹き出しが
+  // 出た瞬間に消えて、何を言われたのか読めない。
+  const dropWrong = (list, text, keep = null) => {
+    const bad = new Set(checkSlashes(text, list).map((n) => n.at))
+    if (!bad.size) return list
+    return list.filter((i) => i === keep || !bad.has(i))
+  }
+
+  /** その区切りだけを消す(吹き出しを押したとき) */
+  const remove = (id, at) => setMarks((m) => ({
+    ...m, [id]: (m[id] ?? []).filter((i) => i !== at),
+  }))
+
+  const toggle = (id, at, text) => setMarks((m) => {
     const now = new Set(m[id] ?? [])
     if (now.has(at)) now.delete(at)
     else now.add(at)
-    return { ...m, [id]: [...now].sort((a, b) => a - b) }
+    const next = dropWrong([...now].sort((a, b) => a - b), text, at)
+    return { ...m, [id]: next }
   })
+
+  // 語**以外**を押したときも消す。画面のどこを触っても、指摘は片づく
+  useEffect(() => {
+    const onClick = (e) => {
+      if (e.target.closest?.('.slash-word')) return
+      setMarks((m) => {
+        let changed = false
+        const next = { ...m }
+        for (const blk of blocks) {
+          const cur = m[blk.id]
+          if (!cur?.length) continue
+          const kept = dropWrong(cur, blk.text)
+          if (kept.length !== cur.length) { next[blk.id] = kept; changed = true }
+        }
+        return changed ? next : m
+      })
+    }
+    document.addEventListener('click', onClick)
+    return () => document.removeEventListener('click', onClick)
+  }, [blocks])
 
   return (
     <div className="slash">
@@ -135,10 +172,14 @@ export default function SlashReading({
                           ぱっと見て分からなかった(2026-08 の指摘)。
                           ここに出せば、直せば消える */}
                       {judge.at[i]?.state === 'ng' && (
-                        <span className="slash-tip" role="note"
-                              title={judge.at[i].why}>
+                        /* **吹き出しを押すと、そのまちがいごと消える**
+                           (2026-08 利用者の指定)。読んだらすぐ片づけられる */
+                        <button type="button" className="slash-tip"
+                                title={`${judge.at[i].why}(押すと消えます)`}
+                                aria-label={`${judge.at[i].short}。押すとこの区切りを消します`}
+                                onClick={() => remove(s.id, i)}>
                           {judge.at[i].short}
-                        </span>
+                        </button>
                       )}
                       {i === 0 ? (
                         <span className="slash-word is-first">{w}</span>
@@ -147,7 +188,7 @@ export default function SlashReading({
                                 className={`slash-word${mine.includes(i) ? ' is-on' : ''}`}
                                 aria-pressed={mine.includes(i)}
                                 aria-label={`${w} の前で区切る`}
-                                onClick={() => toggle(s.id, i)}>
+                                onClick={() => toggle(s.id, i, s.text)}>
                           {w}
                         </button>
                       )}

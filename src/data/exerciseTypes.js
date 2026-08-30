@@ -89,10 +89,12 @@ export const EXERCISE_TYPES = [
     instruction: 'お手本を聞いてから、1文ずつ繰り返してください。',
     fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
   },
+  // 単語・フレーズには**発音記号を入れる**(0020、2026-08 利用者の指定)。
+  // 発音の練習に使う教材なのに、どう読むのかが書いていなかった
   { id: 'vocabulary', label: '単語', instruction: '意味を覚えてください。',
-    fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en' },
+    fields: ['prompt_en', 'phonetic', 'prompt_ja'], audioFrom: 'prompt_en' },
   { id: 'phrase', label: 'フレーズ', instruction: '場面ごと覚えてください。',
-    fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en' },
+    fields: ['prompt_en', 'phonetic', 'prompt_ja'], audioFrom: 'prompt_en' },
 ]
 
 export const exerciseType = (id) => EXERCISE_TYPES.find((t) => t.id === id)

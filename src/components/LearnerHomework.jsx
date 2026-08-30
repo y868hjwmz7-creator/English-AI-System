@@ -12,6 +12,7 @@ import PassagePractice from './PassagePractice.jsx'
 import QuickResponse from './QuickResponse.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import PhraseChips from './PhraseChips.jsx'
+import Phonetic from './Phonetic.jsx'
 import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { printElement } from '../lib/print.js'
@@ -292,6 +293,7 @@ export default function LearnerHomework() {
                                   <div className="homework-en">
                                     <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={a.material?.level}
                                                  statuses={wordStatuses} onMark={markWord} />
+                                    <Phonetic value={it.phonetic} />
                                     <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
                                                  level={a.material?.level}
                                                  statuses={wordStatuses} onMark={markWord} />

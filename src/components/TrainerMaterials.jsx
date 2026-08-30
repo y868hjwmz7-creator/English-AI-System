@@ -29,6 +29,7 @@ import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
 import PhraseChips from './PhraseChips.jsx'
+import Phonetic from './Phonetic.jsx'
 import useWordStatuses from '../lib/useWordStatuses.js'
 
 export default function TrainerMaterials({ me }) {
@@ -340,6 +341,7 @@ export default function TrainerMaterials({ me }) {
                                 <div>
                                   <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={m.level}
                                                statuses={wordStatuses} onMark={markWord} />
+                                  <Phonetic value={it.phonetic} />
                                   <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
                                                level={m.level}
                                                statuses={wordStatuses} onMark={markWord} />

@@ -219,6 +219,16 @@ const ITEM_FIELDS: Record<string, { type: string; description: string }> = {
   note:       { type: 'string', description: '1問ごとの補足' },
   speaker:    { type: 'string', description: '話す人(名前と肩書き。例: Sarah (Product Manager))' },
   tag_no:     { type: 'integer', description: 'その問がどの弱点か(1から始まる番号)' },
+  // 発音記号(0020)。**単語・フレーズの教材だけ。**
+  // 発音の練習をする教材なのに、どう読むのかが書いていなかった
+  // (2026-08 利用者の指定)。作る時点で一緒に書かせれば、
+  // 1教材につき1回で済む。開くたびに引くと、費用が20倍になる。
+  phonetic: {
+    type: 'string',
+    description: 'prompt_en の発音記号(IPA)。**スラッシュは付けない。**'
+      + 'アメリカ英語。語のあいだは半角スペースで区切る。'
+      + '強勢の印(ˈ ˌ)を必ず入れる。例: dræft ðə ˈkɑːntrækt',
+  },
   // 本文の要点フレーズ(0015)。**語をまたぐ言い回しは、語1つでは拾えない。**
   // look forward to / put off のようなものを、作る時点で拾っておく。
   // 開くたびに拾わせると、費用が毎回かかり、何が出るかも分からない。
@@ -265,8 +275,10 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
   comprehension:   { required: ['question', 'answer'], optional: ['answer_alt'] },
   vocab_note:      { required: ['prompt_en', 'prompt_ja', 'note'], optional: [] },
 
-  vocabulary:      { required: ['prompt_en', 'prompt_ja'], optional: ['note', 'tag_no'] },
-  phrase:          { required: ['prompt_en', 'prompt_ja'], optional: ['note', 'tag_no'] },
+  // 発音記号は**必須**にする。発音の練習に使う教材なので、
+  // 「あったり無かったり」では困る(`strict: true` が形を保証する)
+  vocabulary:      { required: ['prompt_en', 'prompt_ja', 'phonetic'], optional: ['note', 'tag_no'] },
+  phrase:          { required: ['prompt_en', 'prompt_ja', 'phonetic'], optional: ['note', 'tag_no'] },
 
   // 旧「長文」で使っていたもの。既存の教材を作り直せるように残す
   read_aloud:      { required: ['prompt_en', 'prompt_ja'], optional: [] },

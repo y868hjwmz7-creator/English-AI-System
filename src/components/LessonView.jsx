@@ -34,6 +34,7 @@ import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton from './SpeakButton.jsx'
 import PhraseChips from './PhraseChips.jsx'
+import Phonetic from './Phonetic.jsx'
 import { PALETTES, applyPalette, loadPalette } from '../lib/palette.js'
 
 const SIZES = [
@@ -458,6 +459,7 @@ export default function LessonView({
                                    readingAt={speakingKey === key(it, i) ? readingAt : null} />
                     </div>
                   )}
+                  {it.phonetic && <Phonetic value={it.phonetic} />}
                   {it.prompt_en && (
                     <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
                                  level={material.level}

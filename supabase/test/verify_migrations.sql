@@ -196,4 +196,8 @@ from (
   select '㊽ 週の続き具合と業界別を数えられる(0019)', (
     select count(distinct proname) = 3 from pg_proc
     where proname in ('vocab_week', 'vocab_by_industry', 'note_wordbook_view')), 48
+  union all
+  select '㊾ 単語・フレーズに発音記号を持てる(0020)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'material_items' and column_name = 'phonetic'), 49
 ) t order by 順;

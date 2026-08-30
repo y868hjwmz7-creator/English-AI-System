@@ -102,7 +102,7 @@ export async function searchMaterials({
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')} )
       )
     `)
     .order('created_at', { ascending: false })
@@ -224,7 +224,7 @@ export async function loadMaterial(materialId) {
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')} )
       )
     `)
     .eq('id', materialId)
@@ -248,6 +248,8 @@ const ITEM_FIELDS = [
   'tag_id',
   // 会話で「誰の発言か」。記事や文型ドリルでは空
   'speaker',
+  // 発音記号(0020)。単語・フレーズの教材で入る
+  'phonetic',
 ]
 
 /** 空の欄を落として、中身のある設問だけを残す */
@@ -257,7 +259,8 @@ const cleanItems = (items) =>
       const row = {}
       for (const f of ITEM_FIELDS) {
         const v = String(it[f] ?? '').trim()
-        if (v) row[f] = v
+        // 列がまだ無いと分かっているときは送らない(挿入ごと失敗するため)
+        if (v && !missingColumns.has(f)) row[f] = v
       }
       // 本文の要点フレーズ(0015)。**文字ではなく配列なので別に扱う。**
       // 中身の無いものは落とす。空の配列を入れても場所を取るだけ
@@ -407,7 +410,7 @@ export async function loadMyAssignments() {
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                            answer, answer_alt, audio_text, note, tag_id,
-                           speaker${optLast('phrases')} )
+                           speaker${optLast('phrases')}${optLast('phonetic')} )
         )
       )
     `)

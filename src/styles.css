@@ -429,6 +429,17 @@ input, select, textarea {
   }
 }
 
+/* 発音記号。**英文のすぐ下に、控えめに。**
+   読むのは英文のほうなので、記号が主役になってはいけない */
+.phonetic {
+  display: block; margin-top: 2px;
+  color: var(--text-muted); font-size: 0.86em;
+  font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', 'Segoe UI', system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+/* 紙(レッスン表示)では、紙の色にそろえる */
+.lesson-sheet .phonetic { color: var(--ink-faint); }
+
 /* 練習の「1問ぶん」と「答え」の囲み。
    **どのトレーニングでも同じ形にする**(2026-08 の指定)。
    細い線1本で区切っていたので、どこからどこまでが1問なのか
@@ -1239,8 +1250,10 @@ html { -webkit-text-size-adjust: 100%; }
   border: 1px solid var(--ng); border-radius: 8px;
   background: var(--ng-bg); color: var(--ng);
   font-size: 12px; font-weight: 700; line-height: 1.5;
-  white-space: nowrap; cursor: help;
+  white-space: nowrap; cursor: pointer;
+  font-family: inherit;
 }
+.slash-tip:hover { filter: brightness(0.97); }
 /* 吹き出しの尻尾。**左のスラッシュを指す** */
 .slash-tip::before {
   content: ''; position: absolute; left: -5px; top: 50%;
