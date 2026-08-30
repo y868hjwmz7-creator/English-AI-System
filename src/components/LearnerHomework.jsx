@@ -256,7 +256,7 @@ export default function LearnerHomework() {
                                 {/* リスニングは英文を見せない。聞いて答えるため。 */}
                                 {!type?.hidePromptFromLearner && it.prompt_en && (
                                   <div className="homework-en">
-                                    <EnglishText text={it.prompt_en} level={a.material?.level}
+                                    <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={a.material?.level}
                                                  statuses={wordStatuses} onMark={markWord} />
                                     <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
                                                  level={a.material?.level}

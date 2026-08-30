@@ -177,9 +177,10 @@ from (
     select 1 from information_schema.columns
     where table_name = 'materials' and column_name = 'voice_ids'), 43
   union all
-  select '㊹ 出会った文を控えられる(0018)', exists (
-    select 1 from information_schema.columns
-    where table_name = 'word_reviews' and column_name = 'seen_in'), 44
+  select '㊹ 出会った文を控えられる(0018)', (
+    select count(*) = 2 from information_schema.columns
+    where table_name = 'word_reviews'
+      and column_name in ('seen_in', 'seen_in_ja')), 44
   union all
   select '㊺ 復習の一覧が出会った文を返す(0018)', (
     select count(*) = 1 from pg_proc p, unnest(p.proargnames) a

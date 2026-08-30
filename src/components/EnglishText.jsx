@@ -43,8 +43,8 @@ import GlossPopover from './GlossPopover.jsx'
 const HOLD_MS = 450
 
 export default function EnglishText({
-  text, level = 'B1', statuses = null, onMark = null, className = '', lang = 'en',
-  readingAt = null,
+  text, textJa = '', level = 'B1', statuses = null, onMark = null,
+  className = '', lang = 'en', readingAt = null,
 }) {
   const [openIndex, setOpenIndex] = useState(null)  // いま開いている語
   const [gloss, setGloss] = useState(null)
@@ -233,18 +233,21 @@ export default function EnglishText({
     // 単語帳で「どこで会ったか」を出すと、思い出す手がかりになる。
     // 語が入っている**その文だけ**を渡す(段落まるごとでは長すぎる)
     const seen = readingSpanOf()
+    // 文の日本語。**英文と和訳が1対1のときだけ渡す。**
+    // 段落まるごとの訳を1文の訳として控えると、嘘になる
+    const seenJa = sentences.length === 1 ? (textJa ?? '').trim() || null : null
     if (range) {
       // なぞって選んだ言い回し。**語ではなく句として記録する**
       const head = parts[range[0]]
       const tail = parts[range[1]]
       const phrase = (text ?? '').slice(head.at, tail.at + tail.text.length).trim()
-      await onMark(normWord(phrase), status, 'phrase', seen)
+      await onMark(normWord(phrase), status, 'phrase', seen, seenJa)
       close()
       return
     }
     const part = parts[openIndex]
     if (!part) return
-    await onMark(part.norm, status, 'word', seen)
+    await onMark(part.norm, status, 'word', seen, seenJa)
     close()
   }
 

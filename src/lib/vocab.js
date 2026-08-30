@@ -413,6 +413,33 @@ export async function loadMyWordbook({ status = 'unknown', limit = 200, dueOnly 
 }
 
 /**
+ * その語を**くわしく**引く。単語帳から深掘りするときに使う。
+ *
+ * 【なぜ吹き出しではなく、こちら側に置くのか】(2026-08 利用者の指定)
+ *   > そこまでたくさん意味は必要ありません。学習者を混乱させるだけです。
+ *   > それ以上は、単語帳からさらに深ぼれる仕組み
+ *
+ *   読んでいる途中の吹き出しは**いま要る意味1つ**でよい。
+ *   腰を据えて調べたいのは単語帳のほうである。**場面が違う。**
+ *
+ * 控えにある**すべての文脈ぶん**を返す(同じ語でも文によって意味が違う)。
+ * **新しく AI に尋ねない。** 控えを読むだけなので、費用はかからない。
+ */
+export async function loadGlossDetail(wordNorm) {
+  if (!supabase) return ok([])
+  const norm = normWord(wordNorm)
+  if (!norm) return ok([])
+  const { data, error } = await supabase
+    .from('word_glosses')
+    .select('display, phonetic, senses, pos, meaning_ja, context_key, created_at')
+    .eq('word_norm', norm)
+    .order('created_at', { ascending: true })
+    .limit(8)
+  if (error) return fail(error, 'くわしい意味を読めませんでした')
+  return ok(data ?? [])
+}
+
+/**
  * 単語帳の進み具合。**続いていることが見えないと続かない。**
  *
  * 復習は「今日やることが有限で、減っていくのが見える」と続く。
@@ -481,7 +508,7 @@ async function legacySetWordStatus(norm, status, materialId) {
 let noSentenceArg = false
 
 export async function setWordStatus(word, status, {
-  kind = 'word', materialId = null, sentence = null,
+  kind = 'word', materialId = null, sentence = null, sentenceJa = null,
 } = {}) {
   const norm = normWord(word)
   if (!norm) return ng('英語の語ではありません')
@@ -498,9 +525,11 @@ export async function setWordStatus(word, status, {
   // 最初の1文だけが残る(あとから上書きしないのは SQL 側の決まり)。
   // **0018 を貼る前は、この引数を受け取れない。** そのときは付けずに呼び直す
   let { data, error } = sentence && !noSentenceArg
-    ? await supabase.rpc('mark_word', { ...args, p_sentence: sentence })
+    ? await supabase.rpc('mark_word', {
+      ...args, p_sentence: sentence, p_sentence_ja: sentenceJa || null,
+    })
     : await supabase.rpc('mark_word', args)
-  if (error && sentence && !noSentenceArg && /p_sentence|PGRST202|function/i.test(
+  if (error && sentence && !noSentenceArg && /p_sentence|p_sentence_ja|PGRST202|function/i.test(
     `${error.message ?? ''} ${error.code ?? ''}`,
   )) {
     noSentenceArg = true

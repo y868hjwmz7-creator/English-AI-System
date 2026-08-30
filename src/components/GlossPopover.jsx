@@ -25,6 +25,25 @@ import { createPortal } from 'react-dom'
 import { posKind } from '../lib/vocab.js'
 import SpeakButton from './SpeakButton.jsx'
 
+/** 意味ひとつぶん。**同じ見た目を2か所に書き写さない** */
+function Sense({ sense, index }) {
+  return (
+    <span className={`etext-sense${index === 0 ? ' is-main' : ''}`}>
+      <span className="etext-sense-line">
+        {index > 0 && <span className="etext-sense-no">{index + 1}</span>}
+        {sense.pos && (
+          <span className={`etext-pos etext-pos--${posKind(sense.pos)}`}>{sense.pos}</span>
+        )}
+        <span className="etext-sense-mean">{sense.meaning_ja}</span>
+      </span>
+      {sense.example_en && (
+        <span className="etext-pop-ex" lang="en">{sense.example_en}</span>
+      )}
+      {sense.note && <span className="etext-pop-note">{sense.note}</span>}
+    </span>
+  )
+}
+
 const MARGIN = 8
 /** 語と吹き出しのあいだ */
 const GAP = 6
@@ -37,6 +56,11 @@ export default function GlossPopover({
 }) {
   const popRef = useRef(null)
   const [place, setPlace] = useState(null)
+  // ほかの意味は**畳んでおく。** 別の語を開いたら、また畳む
+  const [showMore, setShowMore] = useState(false)
+  useEffect(() => { setShowMore(false) }, [anchorEl, gloss])
+
+  const senses = gloss?.senses ?? []
 
   /**
    * 語の位置に合わせて置き直す。画面の外へ出さない。
@@ -93,7 +117,7 @@ export default function GlossPopover({
     })
   }
 
-  useLayoutEffect(position, [anchorEl, gloss, busy, error])
+  useLayoutEffect(position, [anchorEl, gloss, busy, error, showMore])
 
   // 画面を動かしたら追いかける。**閉じない。**
   // 読みながら少し送ることがあるので、消えるとかえって困る。
@@ -159,24 +183,25 @@ export default function GlossPopover({
             </span>
             <SpeakButton text={gloss.display || fallbackText} className="etext-listen" />
           </span>
-          {/* **その文でふさわしい意味が先頭に来る**(2026-08 の指定)。
-              先頭は大きく、二番目からは小さく出す。 */}
-          {(gloss.senses ?? []).map((sense, si) => (
-            <span key={si} className={`etext-sense${si === 0 ? ' is-main' : ''}`}>
-              <span className="etext-sense-line">
-                {si > 0 && <span className="etext-sense-no">{si + 1}</span>}
-                {sense.pos && (
-                  <span className={`etext-pos etext-pos--${posKind(sense.pos)}`}>
-                    {sense.pos}
-                  </span>
-                )}
-                <span className="etext-sense-mean">{sense.meaning_ja}</span>
-              </span>
-              {sense.example_en && (
-                <span className="etext-pop-ex" lang="en">{sense.example_en}</span>
-              )}
-              {sense.note && <span className="etext-pop-note">{sense.note}</span>}
-            </span>
+          {/* **その文でふさわしい意味だけを出す**(2026-08 利用者の指定)。
+              > そこまでたくさん意味は必要ありません。
+              > 学習者を混乱させるだけです。
+
+              読んでいる途中に開く吹き出しである。**いま要るのは1つ。**
+              ほかの意味は畳んでおき、知りたい人だけが開く。
+              さらに深く知りたいときは単語帳で見る(そちらは机に向かう場面)。 */}
+          {senses.slice(0, 1).map((sense, si) => (
+            <Sense key={si} sense={sense} index={si} />
+          ))}
+
+          {senses.length > 1 && !showMore && (
+            <button type="button" className="btn btn--link etext-more"
+                    onClick={() => setShowMore(true)}>
+              ほかの意味({senses.length - 1})
+            </button>
+          )}
+          {showMore && senses.slice(1).map((sense, si) => (
+            <Sense key={si + 1} sense={sense} index={si + 1} />
           ))}
         </>
       )}

@@ -2,28 +2,38 @@
  * 単語帳 — 自分が「知らなかった」と付けた語と句。
  *
  * ============================================================================
- * 【なぜ作り直したか】(2026-08 利用者の指定「単語帳のパワーアップ」)
- *
- *   前の形は、語と意味を**同時に**並べて出していた。これでは
- *   「読んで、うなずいて、終わり」になる。**思い出す機会が1度も無い。**
+ * 【今日の復習は、1語ずつのカード】(2026-08 利用者の指定)
  *
  *   記憶は**思い出そうとしたときに**強くなる。読み返した回数ではない。
- *   そこで「今日の復習」を作り直した。
+ *   だから語と意味を同時には出さない。
  *
- *     ① 語だけを出す。意味は隠す        ← ここで思い出そうとする
- *     ② 「意味を見る」で答え合わせ
- *     ③ 「覚えた / まだ」を選ぶ         ← 次にいつ出すかが決まる
+ *   > 「意味を見る」ボタンはそのままに、「覚えた」「まだ」を左右に置き、
+ *   > 意味を開かなくても押せるようにしたい。そして毎回順番をシャッフルする。
+ *   > そして「意味を見る」の上に訳なしのその単語やフレーズが出て来た一文を
+ *   > 入れて欲しい。意味を見るで文の意味も確認できる。
+ *   > 文の音声ももちろん聴ける。そして別モードで日本語→英語も欲しい。
  *
- *   **答えを見る前に、必ず1回考える。** これがこの画面の全部である。
+ *   ┌──────────────────────────────┐
+ *   │              のこり 12 語                    │
+ *   │                                              │
+ *   │          look forward to        [Listen]     │  ← 出す側
+ *   │                                              │
+ *   │  We look forward to hearing from you. [Listen]│  ← 出会った文(訳なし)
+ *   │                                              │
+ *   │   [ まだ ]   [ 意味を見る ]   [ 覚えた ]     │
+ *   └──────────────────────────────┘
  *
- * 【出会った文を一緒に出す】(0018)
- *   人は文脈ごと覚える。"consideration" を単独で覚えるより、
- *   「Thank you for your consideration.」で出会ったことを思い出せるほうが、
- *   次に会ったときに出てくる。出会った文は、その語を最初に付けたときに
- *   控えてある。**思い出す手がかりなので、意味と一緒に出す。**
+ *   ・**「覚えた」「まだ」は最初から押せる。** 分かっているものを
+ *     いちいち開かせない。分からないときだけ「意味を見る」を押す
+ *   ・**毎回順番を混ぜる。** 並び順で覚えてしまうと、意味を思い出さずに
+ *     答えられてしまう
+ *   ・**出会った文を、訳なしで先に出す。** 人は文脈ごと覚える。
+ *     文の中で見れば、意味を思い出す手がかりになる
+ *   ・「意味を見る」で、語の意味と**文の意味**の両方が出る
  *
- * 【残りが見える】
- *   終わりの見えない作業は続かない。今日の残りと、覚えた数を上に出す。
+ * 【日本語 → 英語のモードもある】
+ *   出す側と答える側を入れ替えるだけ。**話すための力は、こちら向きで育つ。**
+ *   英語を見て意味が分かるのと、日本語から英語が出てくるのは別の力である。
  *
  * 【間隔をあけて出す】(0015)
  *   「覚えた」を押すたびに箱が1つ上がり、次に出るまでが
@@ -32,10 +42,11 @@
  *
  * 【トレーナーも使う】
  *   `word_reviews` はログインしている人ごとの記録である。
- *   トレーナーが開けばトレーナー自身の単語帳になる。
  */
 import { useCallback, useEffect, useState } from 'react'
-import { loadMyWordbook, loadWordbookCounts, setWordStatus } from '../lib/vocab.js'
+import {
+  loadGlossDetail, loadMyWordbook, loadWordbookCounts, setWordStatus,
+} from '../lib/vocab.js'
 import SpeakButton from './SpeakButton.jsx'
 import Tabs from './Tabs.jsx'
 
@@ -43,6 +54,12 @@ const VIEWS = [
   { id: 'due', label: '今日の復習', status: 'unknown', dueOnly: true },
   { id: 'unknown', label: '知らなかった', status: 'unknown', dueOnly: false },
   { id: 'known', label: '覚えた', status: 'known', dueOnly: false },
+]
+
+/** 出す側。英語から思い出すか、日本語から思い出すか */
+const MODES = [
+  { id: 'en', label: '英語 → 日本語', hint: '読んで分かる力' },
+  { id: 'ja', label: '日本語 → 英語', hint: '話すときに出てくる力' },
 ]
 
 /** 次に出る日を、日数で言い換える。日付だけだと遠さが分からない */
@@ -56,32 +73,68 @@ const whenLabel = (dueOn) => {
   return `${days} 日後`
 }
 
+/** **毎回混ぜる。** 並び順で覚えてしまうと、思い出す練習にならない */
+const shuffle = (list) => {
+  const out = [...list]
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
 /**
- * 出会った文の中で、その語を**太字にする**。
+ * 出会った文。その語のところを**太字**にする。
  * 文の中のどこに居たかが見えると、思い出しやすい。
- * 見つからなければ、そのまま出す(活用形が違うときなど)。
  */
-function SeenIn({ sentence, word }) {
+function SeenIn({ sentence, word, hideWord = false }) {
   if (!sentence) return null
   const needle = String(word ?? '').trim()
-  const at = needle
-    ? sentence.toLowerCase().indexOf(needle.toLowerCase())
-    : -1
+  const at = needle ? sentence.toLowerCase().indexOf(needle.toLowerCase()) : -1
+  if (at < 0) return <p className="wordbook-seen" lang="en">{sentence}</p>
   return (
     <p className="wordbook-seen" lang="en">
-      {at < 0 ? sentence : (
-        <>
-          {sentence.slice(0, at)}
-          <strong>{sentence.slice(at, at + needle.length)}</strong>
-          {sentence.slice(at + needle.length)}
-        </>
-      )}
+      {sentence.slice(0, at)}
+      {/* 日本語 → 英語のときは、答えになる語を隠す */}
+      {hideWord
+        ? <span className="wordbook-blank">{'　'.repeat(Math.max(2, Math.ceil(needle.length / 3)))}</span>
+        : <strong>{sentence.slice(at, at + needle.length)}</strong>}
+      {sentence.slice(at + needle.length)}
     </p>
+  )
+}
+
+/** 単語帳から深掘りする。**控えを読むだけ。AI に尋ね直さない** */
+function Detail({ wordNorm }) {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    let alive = true
+    loadGlossDetail(wordNorm).then(({ data }) => { if (alive) setRows(data ?? []) })
+    return () => { alive = false }
+  }, [wordNorm])
+
+  if (rows === null) return <p className="hint">読み込み中…</p>
+  const senses = rows.flatMap((r) => (Array.isArray(r.senses) && r.senses.length
+    ? r.senses
+    : [{ pos: r.pos, meaning_ja: r.meaning_ja }]))
+  if (!senses.length) return <p className="hint">くわしい控えはまだありません。</p>
+  return (
+    <ul className="wordbook-detail">
+      {senses.map((se, i) => (
+        <li key={i}>
+          {se.pos && <span className="etext-pos">{se.pos}</span>}
+          <span className="wordbook-detail-mean">{se.meaning_ja}</span>
+          {se.example_en && <span className="wordbook-detail-ex" lang="en">{se.example_en}</span>}
+          {se.note && <span className="wordbook-detail-note">{se.note}</span>}
+        </li>
+      ))}
+    </ul>
   )
 }
 
 export default function Wordbook() {
   const [view, setView] = useState('due')
+  const [mode, setMode] = useState('en')
   const [rows, setRows] = useState([])
   const [counts, setCounts] = useState({ due: 0, unknown: 0, known: 0 })
   const [loading, setLoading] = useState(true)
@@ -89,7 +142,7 @@ export default function Wordbook() {
   const [busy, setBusy] = useState(null)
   // 「意味を見る」を押したか。**答えを見る前に、必ず1回考える**
   const [shown, setShown] = useState(false)
-  // 今日この画面で答えた数。減っていくのが見えると続く
+  const [deep, setDeep] = useState(false)
   const [done, setDone] = useState(0)
 
   const current = VIEWS.find((v) => v.id === view) ?? VIEWS[0]
@@ -104,16 +157,15 @@ export default function Wordbook() {
     if (tally.data) setCounts(tally.data)
     if (list.error) { setError(list.error); return }
     setError(null)
-    setRows(list.data)
+    // 今日の復習だけ混ぜる。見返す用の一覧は、出た順のままがよい
+    setRows(current.dueOnly ? shuffle(list.data) : list.data)
     setShown(false)
+    setDeep(false)
   }, [current.status, current.dueOnly])
 
   useEffect(() => { reload() }, [reload])
 
-  /**
-   * その場で答える。**押した行はすぐ消す。**
-   * 読み直しを待って消えるのでは、押した手ごたえが無い。
-   */
+  /** その場で答える。**押した行はすぐ消す。** 待たされると手ごたえが無い */
   const answer = async (row, status) => {
     setBusy(row.word_norm)
     const { error: e } = await setWordStatus(row.word_norm, status, { kind: row.kind })
@@ -121,6 +173,7 @@ export default function Wordbook() {
     if (e) { setError(e); return }
     setRows((list) => list.filter((r) => r.word_norm !== row.word_norm))
     setShown(false)
+    setDeep(false)
     if (current.dueOnly) {
       setDone((n) => n + 1)
       setCounts((c) => ({
@@ -133,6 +186,8 @@ export default function Wordbook() {
   }
 
   const card = current.dueOnly ? rows[0] : null
+  const word = card ? (card.display || card.word_norm) : ''
+  const fromJa = mode === 'ja'
 
   return (
     <section className="card">
@@ -147,12 +202,25 @@ export default function Wordbook() {
       </div>
 
       <Tabs
-        variant="sub"
-        ariaLabel="単語帳の切り替え"
-        value={view}
-        onChange={setView}
+        variant="sub" ariaLabel="単語帳の切り替え"
+        value={view} onChange={setView}
         items={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
       />
+
+      {/* 出す側を入れ替える。**話す力は日本語 → 英語で育つ** */}
+      {current.dueOnly && (
+        <div className="wordbook-mode" role="group" aria-label="出題の向き">
+          {MODES.map((m) => (
+            <button key={m.id} type="button"
+                    className={`chip${mode === m.id ? ' is-selected' : ''}`}
+                    aria-pressed={mode === m.id}
+                    onClick={() => { setMode(m.id); setShown(false); setDeep(false) }}>
+              {m.label}
+            </button>
+          ))}
+          <span className="field-hint">{MODES.find((m) => m.id === mode)?.hint}</span>
+        </div>
+      )}
 
       {error && <p className="notice notice--error">{error}</p>}
       {loading && <p className="hint">読み込み中…</p>}
@@ -165,49 +233,83 @@ export default function Wordbook() {
         </p>
       )}
 
-      {/* ── 今日の復習は、1語ずつ。**先に思い出す** ─────────────── */}
       {card && (
         <div className="wordcard">
           <p className="wordcard-count">のこり {rows.length} 語</p>
 
+          {/* 出す側 */}
           <div className="wordcard-face">
-            <span className="wordcard-word" lang="en">
-              {card.display || card.word_norm}
-            </span>
-            {card.kind === 'phrase' && <span className="wordbook-kind">言い回し</span>}
-            <SpeakButton text={card.display || card.word_norm} className="etext-listen" />
+            {fromJa ? (
+              <span className="wordcard-word">{card.meaning_ja || '(意味の控えがありません)'}</span>
+            ) : (
+              <>
+                <span className="wordcard-word" lang="en">{word}</span>
+                {card.kind === 'phrase' && <span className="wordbook-kind">言い回し</span>}
+                <SpeakButton text={word} className="etext-listen" />
+              </>
+            )}
           </div>
 
-          {!shown && (
-            <>
-              <p className="wordcard-ask">意味を思い出してから、押してください</p>
-              <button type="button" className="btn btn--primary wordcard-reveal"
-                      onClick={() => setShown(true)}>意味を見る</button>
-            </>
+          {/* 出会った文。**訳なしで、答えを見る前に出す。** 文の音も聴ける */}
+          {card.seen_in && (
+            <div className="wordcard-seen">
+              <SeenIn sentence={card.seen_in} word={word} hideWord={fromJa && !shown} />
+              {/* 日本語 → 英語のときは、答えを見るまで音を出さない。
+                  **鳴らせば答えが聞こえてしまい、思い出す練習にならない** */}
+              {(!fromJa || shown) && (
+                <SpeakButton text={card.seen_in} className="etext-listen" />
+              )}
+            </div>
           )}
 
+          {/* 「覚えた」「まだ」は**左右に、最初から押せる** */}
+          <div className="wordcard-actions">
+            <button type="button" className="btn btn--warnish"
+                    disabled={busy === card.word_norm}
+                    onClick={() => answer(card, 'unknown')}>まだ</button>
+            <button type="button" className="btn"
+                    aria-expanded={shown}
+                    onClick={() => setShown((v) => !v)}>
+              {fromJa
+                ? (shown ? '英語を隠す' : '英語を見る')
+                : (shown ? '意味を隠す' : '意味を見る')}
+            </button>
+            <button type="button" className="btn btn--primary"
+                    disabled={busy === card.word_norm}
+                    onClick={() => answer(card, 'known')}>覚えた</button>
+          </div>
+
           {shown && (
-            <>
-              <div className="wordcard-back">
-                {card.pos && <span className="etext-pos">{card.pos}</span>}
-                <span className="wordcard-mean">{card.meaning_ja || '(意味の控えがありません)'}</span>
-              </div>
-              <SeenIn sentence={card.seen_in} word={card.display || card.word_norm} />
-              <div className="wordcard-actions">
-                <button type="button" className="btn btn--primary"
-                        disabled={busy === card.word_norm}
-                        onClick={() => answer(card, 'known')}>覚えた</button>
-                <button type="button" className="btn btn--warnish"
-                        disabled={busy === card.word_norm}
-                        onClick={() => answer(card, 'unknown')}>まだ</button>
-                <span className="wordbook-when">箱 {card.box} / 次は {whenLabel(card.due_on)}</span>
-              </div>
-            </>
+            <div className="wordcard-back">
+              {fromJa ? (
+                <p className="wordcard-answer">
+                  <span className="wordcard-mean" lang="en">{word}</span>
+                  <SpeakButton text={word} className="etext-listen" />
+                </p>
+              ) : (
+                <p className="wordcard-answer">
+                  {card.pos && <span className="etext-pos">{card.pos}</span>}
+                  <span className="wordcard-mean">{card.meaning_ja || '(意味の控えがありません)'}</span>
+                </p>
+              )}
+              {/* 文の意味。**分かるときだけ入っている**(0018) */}
+              {card.seen_in_ja && <p className="wordcard-seen-ja">{card.seen_in_ja}</p>}
+
+              <button type="button" className="btn btn--link"
+                      onClick={() => setDeep((v) => !v)}>
+                {deep ? 'とじる' : 'くわしく'}
+              </button>
+              {deep && <Detail wordNorm={card.word_norm} />}
+            </div>
           )}
+
+          <p className="wordbook-when wordcard-when">
+            箱 {card.box} / 次は {whenLabel(card.due_on)}
+          </p>
         </div>
       )}
 
-      {/* ── 見返す用の一覧。こちらは意味を隠さない ────────────────── */}
+      {/* 見返す用の一覧。こちらは意味を隠さない */}
       {!current.dueOnly && (
         <ul className="wordbook">
           {rows.map((row) => (
@@ -220,8 +322,8 @@ export default function Wordbook() {
               </div>
               {row.meaning_ja && <div className="wordbook-mean">{row.meaning_ja}</div>}
               <SeenIn sentence={row.seen_in} word={row.display || row.word_norm} />
+              {row.seen_in_ja && <p className="wordcard-seen-ja">{row.seen_in_ja}</p>}
               <div className="wordbook-actions">
-                {/* 箱と次に出る日。**進んでいることが見えないと続かない** */}
                 <span className="wordbook-when">
                   箱 {row.box} / 次は {whenLabel(row.due_on)}
                 </span>

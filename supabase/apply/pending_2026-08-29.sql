@@ -19,7 +19,7 @@
 --     ここに、こちらで作った読み上げ音声(MP3)が入ります
 --   ・materials に「読み上げの声の並び」の列が1つ増えます。
 --     空のままなら、これまでどおりアメリカ英語の女性で読み上げます
---   ・word_reviews に「出会った文」の列が1つ増えます。
+--   ・word_reviews に「出会った文」と「その文の日本語」の列が増えます。
 --     これから付ける語に入ります。**すでに付けた語は空のままです**
 --     (どの文で出会ったかは、もう分からないため)
 --
@@ -515,9 +515,14 @@ comment on column public.materials.voice_ids is
 --   文にたどりつけず、復習の場では実質たどりつけない。
 --
 -- 【何をするか】
---   ① `word_reviews` に `seen_in`(出会った文)を1列足す
---   ② `mark_word()` に文を渡せるようにする(5つめの引数)
---   ③ `review_words()` が `seen_in` も返すようにする
+--   ① `word_reviews` に `seen_in`(出会った文)と
+--      `seen_in_ja`(その文の日本語)を足す
+--   ② `mark_word()` に文を渡せるようにする(5つめ・6つめの引数)
+--   ③ `review_words()` が2つとも返すようにする
+--
+--   日本語のほうは**分かるときだけ**入る。文型ドリルは英文と和訳が
+--   1対1なので入るが、記事の本文は段落ごとの訳しか無いため入らない。
+--   **無いものを、あるように見せない。**
 --
 --   **表は増やさない。** 語1つにつき1文で足りる。
 --
@@ -536,11 +541,14 @@ comment on column public.materials.voice_ids is
 -- 1. 出会った文を控える列
 -- ────────────────────────────────────────────────────────────────
 alter table public.word_reviews
-  add column if not exists seen_in text;
+  add column if not exists seen_in    text,
+  add column if not exists seen_in_ja text;
 
 comment on column public.word_reviews.seen_in is
   'その語に最初に出会った英文。復習のときに文脈ごと思い出すために出す。'
   '最初の1文だけを残し、あとから上書きしない。';
+comment on column public.word_reviews.seen_in_ja is
+  'その文の日本語。分かるときだけ入る(英文と和訳が1対1の演習)。';
 
 -- ────────────────────────────────────────────────────────────────
 -- 2. mark_word() に文を渡せるようにする
@@ -549,13 +557,15 @@ comment on column public.word_reviews.seen_in is
 --   関数か決められず PostgREST が断る。
 -- ────────────────────────────────────────────────────────────────
 drop function if exists public.mark_word(text, text, text, uuid);
+drop function if exists public.mark_word(text, text, text, uuid, text);
 
 create or replace function public.mark_word(
   p_norm     text,
   p_status   text,
   p_kind     text default 'word',
   p_material uuid default null,
-  p_sentence text default null
+  p_sentence text default null,
+  p_sentence_ja text default null
 )
 returns table (word_norm text, status text, box smallint, due_on date)
 language plpgsql
@@ -571,6 +581,7 @@ declare
   v_box      smallint;
   v_days     int;
   v_sentence text;
+  v_ja       text;
 begin
   v_norm := public.norm_word(p_norm);
   if v_norm is null then
@@ -585,6 +596,10 @@ begin
   v_sentence := nullif(btrim(regexp_replace(coalesce(p_sentence, ''), '\s+', ' ', 'g')), '');
   if v_sentence is not null then
     v_sentence := left(v_sentence, 300);
+  end if;
+  v_ja := nullif(btrim(regexp_replace(coalesce(p_sentence_ja, ''), '\s+', ' ', 'g')), '');
+  if v_ja is not null then
+    v_ja := left(v_ja, 300);
   end if;
 
   select r.box into v_box
@@ -610,10 +625,11 @@ begin
 
   return query
   insert into public.word_reviews as w
-    (learner_id, word_norm, kind, status, box, due_on, material_id, seen_in, updated_at)
+    (learner_id, word_norm, kind, status, box, due_on, material_id,
+     seen_in, seen_in_ja, updated_at)
   values
     (auth.uid(), v_norm, coalesce(p_kind, 'word'), p_status,
-     v_box, current_date + v_days, p_material, v_sentence, now())
+     v_box, current_date + v_days, p_material, v_sentence, v_ja, now())
   on conflict (learner_id, word_norm) do update
     set status      = excluded.status,
         kind        = excluded.kind,
@@ -624,12 +640,13 @@ begin
         material_id = coalesce(w.material_id, excluded.material_id),
         -- 出会った文も同じ。**最初の1文が思い出の手がかりになる**
         seen_in     = coalesce(w.seen_in, excluded.seen_in),
+        seen_in_ja  = coalesce(w.seen_in_ja, excluded.seen_in_ja),
         updated_at  = now()
   returning w.word_norm, w.status, w.box, w.due_on;
 end;
 $$;
 
-comment on function public.mark_word(text, text, text, uuid, text) is
+comment on function public.mark_word(text, text, text, uuid, text, text) is
   '語や句に「知っていた / 知らなかった」を付け、次に出す日を決める。'
   '出会った文も控える(最初の1文だけ)。間隔の決まりはこの関数だけが持つ。';
 
@@ -655,6 +672,7 @@ returns table (
   pos        text,
   meaning_ja text,
   seen_in    text,
+  seen_in_ja text,
   status     text,
   box        smallint,
   due_on     date,
@@ -682,6 +700,7 @@ begin
            coalesce(g.pos, ''),
            coalesce(g.meaning_ja, ''),
            r.seen_in,
+           r.seen_in_ja,
            r.status,
            r.box,
            r.due_on,
@@ -711,5 +730,5 @@ comment on function public.review_words(uuid, text, int, boolean) is
 -- ────────────────────────────────────────────────────────────────
 -- 4. 権限。**作り直した関数には、もう一度付け直す**
 -- ────────────────────────────────────────────────────────────────
-grant execute on function public.mark_word(text, text, text, uuid, text) to authenticated;
+grant execute on function public.mark_word(text, text, text, uuid, text, text) to authenticated;
 grant execute on function public.review_words(uuid, text, int, boolean)  to authenticated;

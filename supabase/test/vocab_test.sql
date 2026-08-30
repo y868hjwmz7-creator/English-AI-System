@@ -541,11 +541,25 @@ select pg_temp.ok('復習の一覧にも出会った文が出る',
    where word_norm = 'deployment'),
   'The deployment failed last night.');
 
+-- 文の日本語も控える。**分かるときだけ入る**(英文と和訳が1対1の演習)
+select public.mark_word('handover', 'unknown', 'word', null,
+  'Please prepare the handover document.', '引き継ぎ書を用意してください。');
+select pg_temp.ok('文の日本語も入る',
+  (select seen_in_ja from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'handover'), '引き継ぎ書を用意してください。');
+select public.mark_word('handover', 'known', 'word', null,
+  'Another sentence.', 'べつの日本語。');
+select pg_temp.ok('文の日本語も上書きされない',
+  (select seen_in_ja from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'handover'), '引き継ぎ書を用意してください。');
+
 -- 文を渡さずに付けた語は、空のままでよい(古い教材から付けたとき)
-select public.mark_word('handover', 'unknown');
+select public.mark_word('shortfall', 'unknown');
 select pg_temp.ok('文を渡さなければ空のまま',
   (select coalesce(seen_in, '(なし)') from public.word_reviews
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
-     and word_norm = 'handover'), '(なし)');
+     and word_norm = 'shortfall'), '(なし)');
 
 reset role;

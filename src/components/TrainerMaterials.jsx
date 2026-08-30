@@ -338,7 +338,7 @@ export default function TrainerMaterials({ me }) {
                                   トレーナー自身のもので、ゲストのものには触れない */}
                               {it.prompt_en && (
                                 <div>
-                                  <EnglishText text={it.prompt_en} level={m.level}
+                                  <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={m.level}
                                                statuses={wordStatuses} onMark={markWord} />
                                   <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
                                                level={m.level}

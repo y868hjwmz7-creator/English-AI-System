@@ -233,7 +233,7 @@ export default function PassagePractice({
                 <div className="passage-speaker" lang="en">{item.speaker}</div>
               )}
               <p className="passage-en">
-                <EnglishText text={item.prompt_en} level={level}
+                <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
                              statuses={wordStatuses} onMark={onMarkWord}
                              readingAt={speakingId === item.id ? readingAt : null} />
               </p>

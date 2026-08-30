@@ -1459,6 +1459,13 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 「知っていた / 知らなかった」。**どちらも同じ重さ。**
    赤い字は、間違いを責められているように見える(2026-08 の指摘) */
+/* 「ほかの意味」。**押せると分かる程度に、しかし目立たせない。**
+   いま要るのは1つめの意味であって、これは寄り道である */
+.etext-more {
+  align-self: flex-start; padding: 2px 0;
+  font-size: 12px; color: var(--pop-dim);
+}
+
 .etext-pop-actions {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   /* 左右と下の余白を打ち消して、区切り線を端まで伸ばす。
@@ -1910,16 +1917,62 @@ html { -webkit-text-size-adjust: 100%; }
 .wordcard-word { font-size: 26px; font-weight: 700; line-height: 1.4; }
 .wordcard-ask { margin: 14px 0 10px; color: var(--text-muted); font-size: 12.5px; }
 .wordcard-reveal { min-width: 160px; }
+/* 答え。**縦に積む。** 語の意味・文の意味・くわしく を横に並べると、
+   どれがどれだか分からない一行になる(実測) */
 .wordcard-back {
-  display: flex; flex-wrap: wrap; align-items: baseline;
-  justify-content: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
 }
 .wordcard-mean { font-size: 17px; font-weight: 600; }
 .wordcard .wordbook-seen { margin-top: 10px; text-align: left; }
 .wordcard-actions {
   display: flex; flex-wrap: wrap; align-items: center;
-  justify-content: center; gap: 10px; margin-top: 16px;
+  justify-content: center; gap: 10px; margin-top: 18px;
 }
 .wordcard-actions .btn { min-width: 96px; }
-.wordcard-actions .wordbook-when { margin: 0; flex-basis: 100%; }
+
+/* 出す側。語と Listen を**まとめて中央に**置く。
+   `.etext-listen` は本文の中では右に寄せてあるので、ここでは打ち消す */
+.wordcard-face .etext-listen, .wordcard-seen .etext-listen { margin-left: 0; }
+
+/* 出会った文。**訳なしで、答えを見る前に出す。** 音も聴ける */
+.wordcard-seen {
+  display: flex; align-items: flex-start; justify-content: center; gap: 8px;
+  margin-top: 14px; text-align: left;
+}
+.wordcard-seen .wordbook-seen { margin: 0; }
+/* 日本語 → 英語のときは、答えになる語を伏せる */
+.wordbook-blank {
+  display: inline-block; min-width: 3em;
+  border-bottom: 2px solid var(--text-muted); vertical-align: baseline;
+}
+.wordcard-answer {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: center; gap: 8px; margin: 0;
+}
+.wordcard-seen-ja {
+  margin: 0; color: var(--text-secondary); font-size: 13px;
+}
+.wordcard-when { margin: 14px 0 0; text-align: center; }
+
+/* 出す側の入れ替え(英語 → 日本語 / 日本語 → 英語)。
+   札(`.chip`)は `<label>` 用に作ってあるので、`<button>` に使うときは
+   端末の既定の書体と色を打ち消す */
+.wordbook-mode {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0;
+}
+.wordbook-mode .chip { font-family: inherit; color: inherit; }
+
+/* 単語帳からの深掘り。**吹き出しは1つで足りる。ここは腰を据えて調べる場所** */
+.wordbook-detail { list-style: none; margin: 10px 0 0; padding: 0; text-align: left; }
+.wordbook-detail > li {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  padding: 8px 0; border-top: 1px solid var(--border);
+}
+.wordbook-detail-mean { font-size: 14px; }
+.wordbook-detail-ex {
+  flex-basis: 100%; color: var(--text-secondary); font-size: 12.5px;
+}
+.wordbook-detail-note {
+  flex-basis: 100%; color: var(--text-muted); font-size: 12px;
+}

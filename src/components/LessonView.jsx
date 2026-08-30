@@ -328,7 +328,7 @@ export default function LessonView({
                       ここに無いと画面を離れて調べることになる(2026-08 の指摘)。 */}
                   {!type?.hidePromptFromLearner && it.prompt_en && (
                     <div className="lesson-en">
-                      <EnglishText text={it.prompt_en} level={material.level}
+                      <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={material.level}
                                    statuses={wordStatuses} onMark={onMarkWord}
                                    readingAt={speakingKey === key(it, i) ? readingAt : null} />
                     </div>

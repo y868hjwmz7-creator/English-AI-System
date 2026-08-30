@@ -35,7 +35,9 @@ export default function useWordStatuses() {
    * **手元の表示を先に変える。** 通信を待って色が変わるのでは、
    * 押した手ごたえが無い。失敗したら元に戻す。
    */
-  const mark = useCallback(async (norm, status, kind = 'word', sentence = null) => {
+  const mark = useCallback(async (
+    norm, status, kind = 'word', sentence = null, sentenceJa = null,
+  ) => {
     let before = null
     setStatuses((m) => {
       before = m
@@ -45,7 +47,7 @@ export default function useWordStatuses() {
       return next
     })
     const { error: e } = status
-      ? await setWordStatus(norm, status, { kind, sentence })
+      ? await setWordStatus(norm, status, { kind, sentence, sentenceJa })
       : await clearWordStatus(norm)
     if (e) { setError(e); if (before) setStatuses(before) }
   }, [])
