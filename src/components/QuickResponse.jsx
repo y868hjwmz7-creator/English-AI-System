@@ -62,13 +62,12 @@ export default function QuickResponse({
   useEffect(() => {
     const body = bodyRef.current
     if (!body) return
-    if (shown && enRef.current) {
-      // **この枠だけを動かす。** `scrollIntoView` は紙まで一緒に送ってしまい、
-      // かえって出題が画面の外へ出る。答えの**頭**を枠の上に合わせる
-      body.scrollTop = Math.max(0, enRef.current.offsetTop - body.offsetTop)
-    } else {
-      body.scrollTop = 0
-    }
+    // **入りきるなら、動かさない。** 上から積んであるので、
+    // 「問題 → 答え」の順に並んで**両方見える**(2026-08 の指摘)。
+    // 小さい画面で入りきらないときだけ、**答えが見えるところまで**送る
+    // (先頭のままだと答えが下に隠れ、開いた意味が無い)
+    const fits = body.scrollHeight <= body.clientHeight + 1
+    body.scrollTop = (shown && !fits) ? body.scrollHeight : 0
   }, [shown, at])
 
   const card = pairs[at] ?? null

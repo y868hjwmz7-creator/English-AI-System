@@ -39,11 +39,11 @@ import { prefetchGlosses } from '../lib/vocab.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
-import PhraseChips from './PhraseChips.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
-import { SIX_STEPS, blocksOf, sentencesOf, stepOf } from '../lib/sixSteps.js'
+import { PASSAGE_VIEWS, SIX_STEPS, blocksOf, sentencesOf, stepOf } from '../lib/sixSteps.js'
 import SlashReading from './SlashReading.jsx'
+import SlashedText from './SlashedText.jsx'
 import StepDictation from './StepDictation.jsx'
 import StepSentence from './StepSentence.jsx'
 import {
@@ -77,6 +77,11 @@ export default function PassagePractice({
   // ② の単位(段落 / 全体)と ① の難易度(1〜3文ずつ)。どちらも覚える
   const [slashUnit, setSlashUnit] = useState(loadSlashUnit)
   const [dictSize, setDictSize] = useState(loadDictSize)
+  // ③⑤ の見せ方(素の文章 / 区切りを出す)と、段落で区切らない通し表示
+  const [view, setView] = useState('plain')
+  const [flow, setFlow] = useState(false)
+  // 通し表示になるのは、本文を見せるステップ(③)のときだけ。
+  // ⑤ は本文を隠すので、続けて並べても意味がない
   const sessionRef = useRef(null)
   const stopAllRef = useRef(null)   // 通しの読み上げを止めるための関数
 
@@ -107,6 +112,8 @@ export default function PassagePractice({
   // ② は**段落ごと、または本文まるごと。**
   // 1文ずつでは細かすぎる(2026-08 の指摘)
   const slashBlocks = useMemo(() => blocksOf(section.items, slashUnit), [section.items, slashUnit])
+  // 通し表示にするか。**本文を見せるステップのときだけ**
+  const flowing = flow && current.script && current.unit === 'passage'
   // 話す人 → 声。**会話は1人1声。** 同じ声だと役を追えない(2026-08 の指摘)
   const cast = castVoices(voices, section.items.map((it) => it.speaker))
   // こちらで作った音声(MP3)の話者。**端末の声から換算しない。**
@@ -156,11 +163,16 @@ export default function PassagePractice({
    * **1本にまとめて読ませない。** 話す人ごとに声を変えるため、
    * 1発言ずつ順に読ませる(readAloudSequence)。
    */
-  const playAll = () => {
+  //
+  // **押したところから始められる**(2026-08 の要望)。
+  // 通しで聴いていて「ここをもう一度」と思ったとき、頭から聴き直さなくてよい。
+  const playAll = (fromId = null) => {
     stopPlaying()
     // 先に「読めるもの」だけに絞ってから並べる。絞ったあとで番号を数えないと、
     // 「いま読んでいる発言」の印が1つずれる
-    const playable = section.items.filter((it) => String(it.prompt_en ?? '').trim())
+    const all = section.items.filter((it) => String(it.prompt_en ?? '').trim())
+    const at = fromId ? all.findIndex((it) => it.id === fromId) : 0
+    const playable = at > 0 ? all.slice(at) : all
     stopAllRef.current = readAloudSequence(
       playable.map((it) => ({
         text: it.prompt_en,
@@ -310,30 +322,68 @@ export default function PassagePractice({
       {/* ── ③⑤ は本文まるごと ───────────────────────────
           ⑤ シャドーイングは**本文を見ないで**行う(利用者の指定)。
           隠すのは英語だけで、Listen も話して確かめるもそのまま使える */}
+      {/* ③⑤ の見せ方を選ぶ(2026-08 の要望)。
+          **同じ本文を、どう見ながら重ねて読むか**が変わるだけである */}
+      {current.unit === 'passage' && current.script && (
+        <div className="passage-views" role="group" aria-label="本文の見せ方">
+          {PASSAGE_VIEWS.map((v) => (
+            <button key={v.id} type="button" title={v.hint}
+                    className={`chip${view === v.id ? ' chip--on' : ''}`}
+                    onClick={() => setView(v.id)}>
+              {v.label}
+            </button>
+          ))}
+          <label className="passage-flow">
+            <input type="checkbox" checked={flow}
+                   onChange={(e) => setFlow(e.target.checked)} />
+            {/* 通しで聴くときは、段落で切れていないほうが追いやすい */}
+            段落で区切らない
+          </label>
+        </div>
+      )}
+
       {current.unit === 'passage' && (
-      <ol className={`passage-body${current.script || peek ? '' : ' is-hidden-text'}`}>
+      <ol className={`passage-body${current.script || peek ? '' : ' is-hidden-text'}`
+                     + (flowing ? ' is-flow' : '')}>
         {section.items.map((item) => {
           const result = results[item.id]
           return (
             <li key={item.id} data-part={item.id}
-                className={`passage-part${speakingId === item.id ? ' is-speaking' : ''}`}>
+                className={`passage-part${speakingId === item.id ? ' is-speaking' : ''}`}
+                {...(flowing ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  title: 'ここから通して聴く',
+                  onClick: () => playAll(item.id),
+                  onKeyDown: (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playAll(item.id) }
+                  },
+                } : {})}>
               {isDialogue && item.speaker && (
                 <div className="passage-speaker" lang="en">{item.speaker}</div>
               )}
               {current.script || peek ? (
                 <p className="passage-en">
-                  <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
-                               statuses={wordStatuses} onMark={onMarkWord}
-                               readingAt={speakingId === item.id ? readingAt : null} />
+                  {/* 通し表示では**語の意味を引かない。**
+                      押したところから読み上げを始めるので、語ごとの
+                      吹き出しと操作がぶつかる。読むことだけに集中させる */}
+                  {view === 'slash' || flowing ? (
+                    /* 区切りを見ながら重ねて読む。区切りは②と同じ決まりで出す */
+                    <SlashedText text={item.prompt_en}
+                                 level={view === 'slash' ? slashLevel : null} />
+                  ) : (
+                    <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
+                                 statuses={wordStatuses} onMark={onMarkWord}
+                                 readingAt={speakingId === item.id ? readingAt : null} />
+                  )}
                 </p>
               ) : (
                 /* 隠していても**場所は残す。** 消すと、いくつ段落があるのか
                    分からなくなり、いま何番目を追っているのかも見失う */
                 <p className="passage-en passage-en--hidden" aria-hidden="true">　</p>
               )}
-              {/* 語をまたぐ言い回しは、語1つでは拾えない。札にして横に置く */}
-              <PhraseChips phrases={item.phrases} sentence={item.prompt_en}
-                           level={level} statuses={wordStatuses} onMark={onMarkWord} />
+              {/* **要点の札は出さない。** ③⑤ は声に出す練習なので、
+                  読むものが増えると気が散る(2026-08 の指摘) */}
               {showJa && item.prompt_ja && <p className="passage-ja">{item.prompt_ja}</p>}
 
               <div className="passage-actions">
@@ -344,6 +394,12 @@ export default function PassagePractice({
                   {speakingId === item.id
                     ? <><StopIcon />Stop</>
                     : <><SpeakerIcon />Listen</>}
+                </button>
+                {/* **ここから通して聴く**(2026-08 の要望)。
+                    途中で聴き直したいとき、頭から掛け直さなくてよい */}
+                <button type="button" className="btn btn--small"
+                        onClick={() => playAll(item.id)}>
+                  <SpeakerIcon />ここから
                 </button>
                 {isRecognitionSupported() && (
                   <button

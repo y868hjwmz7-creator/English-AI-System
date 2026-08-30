@@ -438,7 +438,11 @@ input, select, textarea {
   padding: 14px; margin-bottom: 10px;
   border: 1px solid var(--qa-line, var(--border));
   border-radius: var(--radius);
+  /* **ごくうすい地色を敷く。** 枠線だけでは、どこからどこまでが1問なのか
+     ひと目で分からなかった(2026-08 の指摘)。
+     地色 + 枠線 + 間隔の3つで、1問のかたまりを示す */
   background: var(--qa-bg, var(--surface-1));
+  box-shadow: var(--shadow-1);
 }
 .qa-row:last-child { margin-bottom: 0; }
 .answer-box {
@@ -1075,6 +1079,34 @@ html { -webkit-text-size-adjust: 100%; }
 .btn--small { padding: 4px 10px; font-size: 13px; }
 .passage-notice { margin: 8px 0; }
 
+/* ③⑤ の見せ方の切り替え */
+.passage-views {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 0 0 10px;
+}
+.passage-flow {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: auto; color: var(--text-secondary); font-size: 12.5px;
+}
+.passage-flow input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+/* **段落で区切らない通し表示**(2026-08 の要望)。
+   通して聴くときは、切れ目が無いほうが目で追いやすい。
+   段落を続きの文章として並べる(操作は、触れた段落にだけ出す) */
+.passage-body.is-flow { padding: 4px 0; }
+.passage-body.is-flow > .passage-part {
+  display: inline; padding: 0; border: none; background: none; box-shadow: none;
+}
+.passage-body.is-flow .passage-en { display: inline; }
+.passage-body.is-flow .passage-speaker { display: inline; margin-right: 6px; }
+.passage-body.is-flow .passage-ja { display: block; }
+/* 通し表示では、行ごとの操作は隠す。**読むことだけに集中させる** */
+.passage-body.is-flow .passage-actions,
+.passage-body.is-flow .transcript { display: none; }
+.passage-body.is-flow > .passage-part.is-speaking {
+  background: var(--speaking-bg); box-shadow: none; border-radius: 4px;
+}
+
 /* ⑤ シャドーイング。**本文を見ないで行う**(利用者の指定)。
    隠しても行の場所は残す。消すと段落がいくつあるのか分からなくなる */
 .passage-en--hidden, .stepsent-hidden {
@@ -1576,9 +1608,9 @@ html { -webkit-text-size-adjust: 100%; }
   --ink-faint:    #8b949e;
   --rule:         #e7e3da;
   /* 練習の囲み。**紙の上では、紙の色にそろえる** */
-  --qa-bg:        transparent;
+  --qa-bg:        #faf8f3;   /* ごくうすい地色。紙より少しだけ濃い */
   --qa-line:      #e7e3da;
-  --qa-answer:    #f2efe8;
+  --qa-answer:    #f0ece2;
 
   --accent:       #2f6f86;   /* 落ち着いた青緑。見出しと区切り */
   --accent-bg:    #edf4f7;
@@ -2563,7 +2595,7 @@ html { -webkit-text-size-adjust: 100%; }
    紙の上では高さいっぱいに広げるので、まん中に落ち着く */
 .qr-card {
   display: flex; flex-direction: column;
-  min-height: 15rem; padding: 10px 0 4px; text-align: center;
+  min-height: 12rem; padding: 4px 0; text-align: center;
 }
 .qr-body {
   flex: 1 1 auto; display: flex; flex-direction: column;
@@ -2571,10 +2603,13 @@ html { -webkit-text-size-adjust: 100%; }
   /* **0 まで縮ませない。** `min-height: 0` にしていたので、窓が低いと
      ここが高さ 0 になり、**問題が真っ白になった**(2026-08 実機)。
      入りきらないときは、紙のほうが縦に送られればよい */
-  min-height: 7rem;
-  /* `center` だけだと、中身がはみ出したときに**上へ逃げて届かなくなる。**
-     `safe` を付けると、はみ出したときだけ上ぞろえに戻る */
-  justify-content: safe center;
+  min-height: 6rem;
+  /* **上に詰める。** まん中ぞろえにしていたら、問題の上が空きすぎ、
+     答えを開くと問題が上へ押し出されて**両方は見えなかった**
+     (2026-08 の指摘)。上から積めば、問題と答えが必ず並んで見える。
+     余白は上に少しだけ置いて、天井に貼り付いて見えないようにする */
+  justify-content: flex-start;
+  padding-top: 10px;
 }
 .qr-from { margin: 0 0 10px; color: var(--qr-faint); font-size: 12px; }
 /* 出す側の日本語。**大きく出す。** ここだけを見て言う */
