@@ -1472,8 +1472,11 @@ html { -webkit-text-size-adjust: 100%; }
 
 .etext-pop-close {
   position: absolute; right: 8px; top: 8px;
-  border: 0; background: none; color: var(--pop-faint);
-  font-size: 13px; line-height: 1; cursor: pointer; padding: 4px;
+  border: 0; color: var(--pop-faint);
+  font-size: 13px; line-height: 1; cursor: pointer; padding: 4px 5px;
+  /* **地の色を敷く。** 中を下まで送ると文字がこの下を通るので、
+     背景が無いと ✕ と文字が重なって両方読めなくなる(2026-08 実測) */
+  background: var(--pop-bg); border-radius: 6px;
 }
 .etext-pop-close:hover { color: var(--pop-fg); }
 
