@@ -2344,6 +2344,14 @@ html { -webkit-text-size-adjust: 100%; }
     margin: 0.52em 8px 2px 0;
   }
   .lesson-items > li::after { content: ''; display: block; clear: both; }
+  /* 会話は、**番号と話す人の名前で1行を使う。** 本文は次の行から、
+     左端にそろえる。
+
+     番号の丸は、話す人の行より**ほんの数 px だけ背が高い。**
+     そのわずかなはみ出しに本文の1行目が回り込み、
+     **発言ごとに1行目だけ字下げされて見えていた**(2026-08 実機)。
+     記事(話す人がいない)は、これまでどおり番号の横から始める。 */
+  .lesson-speaker + .lesson-en { clear: left; }
   .lesson-items > li.is-speaking { padding-left: 8px; padding-right: 6px; }
   .lesson-head { margin-bottom: 14px; }
 }
