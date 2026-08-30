@@ -2914,26 +2914,31 @@ html { -webkit-text-size-adjust: 100%; }
   padding: 0; text-align: center;
 }
 .qr-body {
-  /* **高さを決め打ちにする。**
-     伸ばすと、大きな画面で下に大きな空白ができる。
-     縮ませると、窓が低いときに高さ 0 になって**問題が真っ白になった**
-     (2026-08 実機)。決め打ちなら、**ボタンの場所も動かない。**
-     長い問題は、この中だけで送られる */
-  /* **空きすぎないように、少し低くした**(2026-08 の指摘)。
-     下限(6rem)は必ず残す。**0 まで縮むと問題が真っ白になる**(実機) */
-  flex: 0 0 auto; height: clamp(6rem, 26vh, 15rem);
+  /* **伸ばしながら、まん中を保つ**(2026-08 利用者の指定)。
+
+     > もう少し全体を下に下げて、上下の余白のバランスを良くしてください。
+     > 文字数が増えればまだ下に広げられるはずですので、
+     > 広げながら真ん中を維持する仕様にしてください
+
+     高さを決め打ちにしていたので、短い問題では下が大きく空き、
+     長い問題では枠の中で送ることになっていた。
+     **`min-height` にして、中身に合わせて下へ伸ばす。**
+
+     ・**下限は必ず残す**(6rem)。0 まで縮むと問題が真っ白になる(実機)
+     ・**上限は置かない。** 伸びたぶんはボタンが下がるだけで、
+       まん中はまん中のまま
+     ・`center` ではなく **`safe center`**。`center` だけだと、
+       はみ出したときに中身が上へ逃げて届かなくなる */
+  flex: 0 0 auto;
+  min-height: clamp(6rem, 26vh, 15rem);
   display: flex; flex-direction: column;
   gap: 6px; overflow-y: auto;
-  /* **上に詰める。**「2 / 30 のすぐ下に問題の上端」(2026-08 の指定) */
-  justify-content: flex-start;
-  padding-top: 2px;
+  justify-content: safe center;
+  padding: 6px 0;
 }
-/* **問題と答えが両方は入らないとき**だけ、まん中に寄せる(2026-08 の指定)。
-   > 同時に表示できないときは、それぞれもっと中央に配置してください
-
-   `safe center` にするのは、`center` だけだと、はみ出したときに中身が
-   **上へ逃げて届かなくなる**ため。入るときは上詰めのままにする。 */
-.qr-body.is-tight { justify-content: safe center; }
+/* いまは**いつでもまん中**なので、`is-tight` で寄せ方を変える必要はない。
+   `is-tight` は「問題と答えが両方は入らないので入れ替える」という
+   意味だけになった(`QuickResponse.jsx`)。 */
 /* 答えの囲み。**ほかのトレーニングの解答と同じ形**にそろえる(`.answer-box`)。
    紙の上では `--qa-answer` が差し替わるので、ここでは色を書かない */
 .qr-answer { width: 100%; margin-top: 8px; text-align: center; }
@@ -3058,9 +3063,11 @@ html { -webkit-text-size-adjust: 100%; }
    **出題がまん中に落ち着き、ボタンの場所が動かない。**
    長すぎる中身だけが `.qr-body` の中で送られる */
 .lesson-sheet.is-running { display: flex; flex-direction: column; }
-/* **紙いっぱいに伸ばさない。** 伸ばすと下に大きな空白ができる。
-   出題の枠の高さは決め打ちなので、そのぶんだけ縦に使う */
-.lesson-sheet.is-running > .qr { flex: 0 0 auto; }
+/* **紙の残りいっぱいを取り、その中でまん中に置く**(2026-08 の指定)。
+   以前は中身のぶんだけ縦に使っていたので、紙の上半分に寄っていた。
+   中身が増えれば下へ伸び、それでもまん中は保たれる。 */
+.lesson-sheet.is-running > .qr { flex: 1 1 auto; display: flex; flex-direction: column; }
+.lesson-sheet.is-running > .qr > .qr-card { flex: 1 1 auto; justify-content: safe center; }
 
 /* ── 練習を始める行 ────────────────────────────────────────
    **「中身を見る」タブとは別のもの。** タブは教材の中身を見るためのもので、
