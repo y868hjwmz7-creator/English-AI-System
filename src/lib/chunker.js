@@ -76,20 +76,89 @@ const DETERMINERS = new Set([
   'her', 'its', 'our', 'their', 'some', 'any', 'no', 'every', 'each', 'both',
 ])
 
+/* ────────────────────────────────────────────────────────────────
+   ★ ここから下は「ゲストに 💬 で注意する」ためだけの語のリストである。
+     上のリスト(模範を組み立てるためのもの)と**わざと別にしてある。**
+
+   【なぜ分けるのか】(2026-08 実機で誤判定を2つ出した)
+
+     ・`Apps like this / let a trader …` に **「this は名詞と離さない」**
+       → ここの `this` は**代名詞**であって冠詞ではない。区切ってよい
+     ・`pull in / more than five thousand viewers` に **「in の前で区切る」**
+       → ここの `in` は `pull in` の**副詞(句動詞の一部)**であって
+         前置詞ではない。区切ってよい
+
+   どちらも「前置詞にも副詞にもなり得る語」「冠詞にも代名詞にもなり得る語」
+   を、語のリストだけで前置詞・冠詞と決めつけたために起きた。
+   利用者が `before` について書いたことが、そのまま当てはまる。
+
+     > 他にも前置詞にも副詞にもなり得る単語で同じケースがあれば
+     > それらについても OK
+
+   **注意するのは、取り違えようのない語だけにする。**
+   見逃しても害は小さいが、**間違った注意は、何も言われないより困る**
+   (「あやふやなことを言わない」)。
+
+   模範を組み立てる側(`idealSlashes`)は、広いリストのままにしてある。
+   狭めると模範の区切りが増え、**教材に控えたカタマリごとの訳(0021)と
+   数が合わなくなって、訳が丸ごと出なくなる。**
+   ──────────────────────────────────────────────────────────────── */
+
+/**
+ * **必ず前置詞**である語。副詞にも動詞にもならない。
+ *
+ * `in` `on` `up` `down` `off` `out` `over` `by` `about` `across` `along`
+ * `around` `through` `past` `near` `behind` `under` は**句動詞の副詞**に
+ * なる(`pull in` `give up` `look over`)。
+ * `before` `after` `since` `until` は**副詞・接続詞**にもなる。
+ * `like` は**動詞**にもなる(`I like / this`)。**どれも入れない。**
+ */
+const SURE_PREPS = new Set([
+  'of', 'for', 'from', 'with', 'without', 'within', 'into', 'onto', 'upon',
+  'at', 'to', 'during', 'among', 'amongst', 'between', 'against',
+  'toward', 'towards', 'despite', 'via', 'throughout',
+  'beside', 'besides', 'beneath', 'underneath', 'unlike',
+])
+
+/**
+ * **必ず冠詞・限定詞**である語。代名詞にはならない。
+ *
+ * 利用者が挙げた NG は「**冠詞**と名詞の間」である。
+ * `this` `that` `these` `those` `some` `any` `each` `both` は**代名詞**にもなり
+ * (`Apps like this / let …`)、`his` `her` は**目的語の代名詞**にもなる。
+ * **入れない。**
+ */
+const SURE_DETERMINERS = new Set([
+  'a', 'an', 'the', 'my', 'your', 'our', 'their', 'its', 'every',
+])
+
+/**
+ * **必ず助動詞**である語。本動詞にはならない。
+ *
+ * `have` `has` `had` `do` `does` `did` は**本動詞**にもなる
+ * (`I have / two things`)。`is` `are` `was` `were` も
+ * `The problem is / that we are late.` のようにカタマリを終えてよい。
+ * **入れない。** 複数語のまとまり(`have to` など)は `AUX_GROUPS` が見る。
+ */
+const SURE_MODALS = new Set([
+  'can', 'could', 'may', 'might', 'must', 'shall', 'should', 'will', 'would',
+])
+
 /**
  * **カタマリの先頭にしか立てない語**(2026-08 利用者の指定で足した)。
  *
- * 接続詞・関係詞のうち、**副詞としては使えないもの**だけを入れてある。
+ * 接続詞・関係詞のうち、**ほかの品詞にならないもの**だけを入れてある。
  * `and / the report` のように、この語でカタマリを終えると、
  * 次のまとまりを引き連れる語だけが前に取り残される。
  *
  * `once` `before` `since` `until` `when` `where` `so` は**副詞にもなる**
  * (「以前」「そのとき」など)ので、**入れない。**
- * あやふやなことを言わない、というこの仕組みの原則どおりである。
+ * `that` も**代名詞**になる(`Apps like that / let …`)ので入れない。
+ * `while` は**名詞**にもなる(`a while`)ので、直前が冠詞のときは咎めない。
  */
 const HEAD_WORDS = new Set([
   'and', 'or', 'but', 'nor',
-  'that', 'which', 'who', 'whom', 'whose',
+  'which', 'who', 'whom', 'whose',
   'because', 'although', 'though', 'unless', 'whether', 'if', 'while', 'whereas',
 ])
 
@@ -138,7 +207,7 @@ const bare = (w) => String(w ?? '').toLowerCase().replace(/^[^a-z']+|[^a-z']+$/g
  * その位置(i 語目の**前**)が、助動詞のまとまりの内側かどうか。
  * 内側なら切ってはいけない。
  */
-function insideAux(words, i) {
+function auxGroupAt(words, i) {
   for (const group of AUX_GROUPS) {
     for (let start = Math.max(0, i - group.length + 1); start < i; start += 1) {
       if (start + group.length <= i) continue
@@ -146,6 +215,19 @@ function insideAux(words, i) {
       if (hit) return group.join(' ')
     }
   }
+  return null
+}
+
+/**
+ * 模範を組み立てるときに「ここでは切らない」とする位置。
+ *
+ * **ゲストへの注意より広い。** 模範は1つの案なので、あやしいところは
+ * はじめから出さないほうがよい。狭めると模範の区切りが増え、
+ * **教材に控えたカタマリごとの訳(0021)と数が合わなくなる。**
+ */
+function insideAux(words, i) {
+  const group = auxGroupAt(words, i)
+  if (group) return group
   // 助動詞1語 + 動詞。あいだで切らない
   if (i > 0 && MODALS.has(bare(words[i - 1]))) return bare(words[i - 1])
   return null
@@ -162,9 +244,13 @@ export function idealSlashes(sentence) {
   const out = []
   const add = (at, strength, why) => {
     if (at <= 0 || at >= words.length) return
-    // **判定は `slashProblem` 1か所。** ここに書き写すと必ず食い違い、
-    // 模範が自分の決まりを破る(`npm run test:chunk` が落ちる)
-    if (slashProblem(words, at)) return
+    // **模範の側は、広いリストのまま。** ここを狭めると模範の区切りが増え、
+    // 教材に控えたカタマリごとの訳(0021)と数が合わなくなって、
+    // 訳が丸ごと出なくなる。ゲストへの注意(`slashProblem`)より
+    // 常に厳しくしておけば、**模範が自分の決まりを破ることはない**
+    // (`npm run test:chunk` の1本目がそれを見張っている)
+    if (insideAux(words, at)) return                  // 助動詞と動詞は離さない
+    if (DETERMINERS.has(bare(words[at - 1]))) return  // 冠詞のあとで切らない
     const found = out.find((x) => x.at === at)
     if (found) { if (strength > found.strength) { found.strength = strength; found.why = why } return }
     out.push({ at, strength, why })
@@ -261,8 +347,10 @@ export function slashProblem(words, i) {
   const prev = bare(raw)
   const next = bare(words[i] ?? '')
 
-  // ① 助動詞のまとまりの途中(be going to / have to / 助動詞 + 動詞)
-  const aux = insideAux(words, i)
+  // ① 助動詞のまとまりの途中(be going to / have to / 助動詞 + 動詞)。
+  //    **複数語のまとまりと、取り違えようのない助動詞だけ。**
+  //    `have` `do` `is` は本動詞にもなるので咎めない(上の注を参照)
+  const aux = auxGroupAt(words, i) || (SURE_MODALS.has(prev) ? prev : null)
   if (aux) {
     return {
       at: i,
@@ -271,7 +359,7 @@ export function slashProblem(words, i) {
     }
   }
   // ② 区切りの最後が前置詞になっている(利用者の明示した NG)
-  if (PREPOSITIONS.has(prev)) {
+  if (SURE_PREPS.has(prev)) {
     // **前置詞と冠詞のあいだ**は、同じことだが言い方を変えたほうが分かりやすい
     const detail = DETERMINERS.has(next)
       ? `前置詞「${raw}」と冠詞「${words[i]}」のあいだで区切れています。`
@@ -280,8 +368,8 @@ export function slashProblem(words, i) {
         + `前置詞＋名詞でひとかたまりなので、${raw} の前で区切ります。`
     return { at: i, short: `${raw} の前で区切る`, text: detail }
   }
-  // ③ 冠詞・限定詞のあとで切っている
-  if (DETERMINERS.has(prev)) {
+  // ③ 冠詞のあとで切っている
+  if (SURE_DETERMINERS.has(prev)) {
     return {
       at: i,
       short: `${raw} は名詞と離さない`,
@@ -297,7 +385,9 @@ export function slashProblem(words, i) {
     }
   }
   // ⑤ 接続詞・関係詞でカタマリを終えている。**次のまとまりの先頭に置く**
-  if (HEAD_WORDS.has(prev)) {
+  //    `a while` `the while` は名詞なので、そこは咎めない
+  const nounWhile = prev === 'while' && DETERMINERS.has(bare(words[i - 2] ?? ''))
+  if (HEAD_WORDS.has(prev) && !nounWhile) {
     return {
       at: i,
       short: `${raw} の前で区切る`,

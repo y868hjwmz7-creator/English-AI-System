@@ -60,13 +60,45 @@ ok('冠詞のあとで切る', checkSlashes(S.office, [4]).length > 0)
 ok('be going to の途中で切る', checkSlashes(S.going, [3]).length > 0)
 ok('has to の途中で切る', checkSlashes(S.hasTo, [2]).length > 0)
 
-// 0 We 1 think 2 that 3 the 4 price ...
-ok('接続詞のあとで切る', checkSlashes(S.that, [3]).length > 0)
 // 0 The 1 company's 2 plan 3 and 4 the 5 budget ...
 ok("所有格('s)のあとで切る", checkSlashes(S.owner, [2]).length > 0)
 ok('and のあとで切る', checkSlashes(S.owner, [4]).length > 0)
 // 0 The 1 office 2 bought 3 a 4 new 5 coffee 6 machine 7 for 8 the ...
 ok('前置詞と冠詞のあいだで切る', checkSlashes(S.office, [8]).length > 0)
+
+/* ── 取り違えようのある語は、咎めない(2026-08 実機で誤判定を2つ出した)──
+   > 他にも前置詞にも副詞にもなり得る単語で同じケースがあれば
+   > それらについても OK
+
+   間違った注意は、何も言われないより困る(「あやふやなことを言わない」)。 */
+console.log('\n▶ 前置詞・冠詞・助動詞と取り違えやすい語は、咎めない')
+{
+  // 実機で赤い吹き出しが出た2つ(2026-08)
+  const apps = 'Apps like this let a trader share their screen.'
+  // 0 Apps 1 like 2 this 3 let ...  ← this は**代名詞**。区切ってよい
+  ok('like this / let(this は代名詞)', checkSlashes(apps, [3]).length === 0)
+  ok('I like / this(like は動詞)', checkSlashes('I like this app very much.', [2]).length === 0)
+  const pull = 'Some streams pull in more than five thousand viewers.'
+  // 0 Some 1 streams 2 pull 3 in 4 more ...  ← in は**句動詞の副詞**
+  ok('pull in / more(in は句動詞の副詞)', checkSlashes(pull, [4]).length === 0)
+  ok('give up / the plan', checkSlashes('They give up the plan today.', [3]).length === 0)
+  // 本動詞にもなる助動詞
+  ok('I have / two things(have は本動詞)',
+    checkSlashes('I have two things to do.', [2]).length === 0)
+  ok('The problem is / that we are late.',
+    checkSlashes('The problem is that we are late.', [3]).length === 0)
+  // 代名詞にもなる that
+  ok('Apps like that / let(that は代名詞)',
+    checkSlashes('Apps like that let a trader share.', [3]).length === 0)
+  // 名詞にもなる while
+  ok('after a while / they left(while は名詞)',
+    checkSlashes('They waited for a while and then left.', [5]).length === 0)
+  // それでも、取り違えようのないものは咎める
+  ok('will のあとは咎める', checkSlashes('He will finish the report today.', [2]).length > 0)
+  ok('of のあとは咎める', checkSlashes('The price of the machine is high.', [3]).length > 0)
+  ok('while(接続詞)のあとは咎める',
+    checkSlashes('They talk while they buy and sell stocks.', [3]).length > 0)
+}
 
 console.log('\n▶ 正しい区切りには、何も言わない')
 ok('前置詞の前で切る', checkSlashes(S.office, [7]).length === 0)
