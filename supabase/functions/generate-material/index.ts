@@ -351,6 +351,183 @@ const emitSectionTool = (sectionType: string, isFirst: boolean) => {
 }
 
 // ────────────────────────────────────────────────────────────────
+// カタマリごとの訳(0021)
+//
+// 【何を頼むのか】(2026-08 利用者の指定)
+//   > スラッシュリーディングの英文の下に日本語の訳が
+//   > スラッシュに分けて表示されているのが分かるはずです。
+//
+//       どれくらいの長さですか / 乗っているのは
+//       How long              / is the ride?
+//
+// 【どこで切るかは、こちらでは決めない】
+//   区切る場所は画面側の決まり(`src/lib/chunker.js`)が閉じた語のリストで
+//   決めている。ここへ届くのは**切り終わったカタマリ**である。
+//   AI がするのは訳だけ。**決まりで書けるものを AI に頼まない。**
+//
+// 【なぜ関数を増やさず、この窓口に足したのか】
+//   1関数1ファイルにしてあるのは**配置の手順を増やさないため**である
+//   (CLAUDE.md)。訳づくりは教材づくりの一部で、呼ぶのも同じトレーナーなので、
+//   関数を1つ増やすより、この窓口に頼みごとを1つ足すほうが手が少ない。
+// ────────────────────────────────────────────────────────────────
+
+const CHUNK_SYSTEM = `あなたは日本のパーソナル英語スクールのトレーナーを補助する。
+スラッシュリーディング(意味のカタマリごとに前から訳す練習)の
+**カタマリごとの訳**を作るのが仕事である。
+
+# 守ること
+
+1. **カタマリの数と順番を変えない。** 渡された数と同じ数だけ、同じ順で返す。
+   まとめない・分けない・入れ替えない
+2. **英語の語順のまま、前から訳す。** 日本語として自然な語順に直さない。
+   前から読む型を身につけるための訳である
+3. **直訳寄りにする。** 意訳して情報を足したり削ったりしない
+4. 1つのカタマリの訳は、**そのカタマリだけの意味**にする。
+   次のカタマリの意味を先に書かない
+5. カタマリは文の一部なので、**言い切らなくてよい。**
+   「乗っているのは」「もし雨が降ったら」のような、途中で終わる形でよい
+6. 前置詞のカタマリは「〜で」「〜に」「〜から」のように、
+   **助詞で終わる形**にすると前から読める
+7. **1カタマリは20字以内**を目安に短くする
+8. 英語で省かれている主語を、日本語で補わない
+
+# 例
+
+  How long / is the ride?
+  →「どれくらいの長さですか」「乗っているのは」
+
+  I have several things / to do / before the meeting.
+  →「いくつかやることがあります」「するべき」「会議の前に」
+
+# 出力
+
+emit_chunk_ja という道具だけを使って返すこと。文章での説明は要らない。`
+
+/** カタマリごとの訳を受け取る道具。`strict: true` なので形は API が保証する */
+const chunkJaTool = {
+  name: 'emit_chunk_ja',
+  description: 'カタマリごとの訳を返す',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['parts'],
+    properties: {
+      parts: {
+        type: 'array',
+        description: '渡された本文と同じ数、同じ順',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['no', 'ja'],
+          properties: {
+            no: { type: 'integer', description: '本文の番号(渡されたもの)' },
+            ja: {
+              type: 'array',
+              description: 'カタマリごとの訳。**カタマリと同じ数、同じ順**',
+              items: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  },
+}
+
+/**
+ * カタマリごとの訳を作る。
+ *
+ * **数が合わないものは返さない。** ずれた対は、無いより害が大きい
+ * (画面側の `chunkPairs()` も、数が合わなければ訳を出さない)。
+ */
+async function makeChunkJa(apiKey: string, body: Record<string, unknown>) {
+  const parts = (Array.isArray(body.parts) ? body.parts : [])
+    .map((raw) => {
+      const p = (raw ?? {}) as { no?: unknown; chunks?: unknown }
+      return {
+        no: Number(p.no ?? 0),
+        chunks: (Array.isArray(p.chunks) ? p.chunks : [])
+          .map((c) => String(c ?? '').trim()).filter(Boolean),
+      }
+    })
+    // カタマリが1つしかないものは、区切る意味がないので送らない
+    .filter((p) => Number.isInteger(p.no) && p.no > 0 && p.chunks.length > 1)
+    // 記事6段落・会話14発言を1回で賄える。これ以上は画面側が分けて呼ぶ
+    .slice(0, 30)
+
+  if (!parts.length) return { error: '訳を作る本文がありませんでした' }
+
+  const listing = parts
+    .map((p) => `## ${p.no}(${p.chunks.length} カタマリ)\n`
+      + p.chunks.map((c, i) => `${i + 1}. ${c}`).join('\n'))
+    .join('\n\n')
+
+  const client = new Anthropic({ apiKey })
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 16000,
+    output_config: { effort: 'medium' },
+    system: [{ type: 'text', text: CHUNK_SYSTEM }],
+    tools: [chunkJaTool as unknown as Anthropic.Tool],
+    tool_choice: { type: 'tool', name: 'emit_chunk_ja' },
+    messages: [{
+      role: 'user',
+      content: `# カタマリ\n\n${listing}\n\n`
+        + `**${parts.length} 件すべて**を返すこと。`
+        + `各件の訳の数は、その件に並んだ番号の数とちょうど同じにすること。`,
+    }],
+  })
+  const response = await stream.finalMessage()
+
+  if (response.stop_reason === 'refusal') {
+    return { error: '内容が安全上の理由で断られました。' }
+  }
+  if (response.stop_reason === 'max_tokens') {
+    return { error: '本文が長すぎて途中で切れました。段落を分けてお試しください。' }
+  }
+
+  const block = response.content.find((b) => b.type === 'tool_use')
+  if (!block || block.type !== 'tool_use') {
+    return { error: '訳の結果を読み取れませんでした。もう一度お試しください。' }
+  }
+  const result = block.input as { parts?: { no?: number; ja?: string[] }[] }
+
+  // **数が合ったものだけを返す。** 合わないものは黙って落とさず、数を返す
+  const want = new Map(parts.map((p) => [p.no, p.chunks.length]))
+  const kept: { no: number; ja: string[] }[] = []
+  const seen = new Set<number>()
+  for (const r of result.parts ?? []) {
+    const no = Number(r?.no ?? 0)
+    const ja = (Array.isArray(r?.ja) ? r.ja : []).map((x) => String(x ?? '').trim())
+    if (!want.has(no) || seen.has(no)) continue
+    // **数が合わないものは使わない。** ずれた対は、無いより害が大きい
+    if (ja.length !== want.get(no)) continue
+    seen.add(no)
+    kept.push({ no, ja })
+  }
+  // 頼んだのに返ってこなかった / 数が合わなかったものの数
+  const skipped = parts.length - kept.length
+
+  if (!kept.length) {
+    return {
+      error: 'カタマリの数が合う訳が1件も返りませんでした。もう一度お試しください。',
+    }
+  }
+
+  return {
+    ok: true,
+    parts: kept,
+    skipped,
+    stop_reason: response.stop_reason ?? null,
+    usage: {
+      input: response.usage.input_tokens,
+      output: response.usage.output_tokens,
+      cacheRead: response.usage.cache_read_input_tokens ?? 0,
+    },
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // ここから受付窓口の本体
 // ────────────────────────────────────────────────────────────────
 
@@ -364,6 +541,57 @@ const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status, headers: { ...cors, 'Content-Type': 'application/json' },
   })
+
+/** 例外を、原因の分かる日本語にする */
+const explain = (e: unknown) => {
+  const message = e instanceof Error ? e.message : String(e)
+  if (/authentication|invalid x-api-key|401/i.test(message)) {
+    return 'Claude の鍵が正しくありません。Secrets の ANTHROPIC_API_KEY を確認してください。'
+  }
+  if (/rate.?limit|429/i.test(message)) {
+    return '短い時間に作りすぎました。少し待ってからお試しください。'
+  }
+  if (/credit|billing|402/i.test(message)) {
+    return 'Claude の残高が不足しています。Anthropic Console でご確認ください。'
+  }
+  return `生成に失敗しました: ${message}`
+}
+
+/**
+ * 待っている間も、少しずつ返事を送り続ける。
+ *
+ * 【なぜ必要か】
+ *   Supabase の関数は、**150秒のあいだ何も返さないと切られる**。
+ *   40問の生成はそれを超えることがあり、利用者の画面では
+ *   「2分ほど待つと、何も出ずにボタンが元に戻る」状態になっていた。
+ *
+ *   そこで、答えが出るまでのあいだ**空白を1文字ずつ送り続ける**。
+ *   通信が生きていると見なされるため、途中で切られない。
+ *   空白は JSON の前に付いても読み飛ばされるので、受け取る側は
+ *   これまでどおり JSON として読める。
+ *
+ * **教材づくりと訳づくりの両方でこれが要る。** 2か所に書き写さない。
+ */
+const streamed = (run: () => Promise<unknown>) => {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const beat = setInterval(() => {
+        try { controller.enqueue(encoder.encode(' ')) } catch { /* すでに閉じている */ }
+      }, 5000)
+      try {
+        controller.enqueue(encoder.encode(JSON.stringify(await run())))
+      } catch (e) {
+        console.error(e)
+        controller.enqueue(encoder.encode(JSON.stringify({ error: explain(e) })))
+      } finally {
+        clearInterval(beat)
+        controller.close()
+      }
+    },
+  })
+  return new Response(stream, { headers: { ...cors, 'Content-Type': 'application/json' } })
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -403,6 +631,13 @@ Deno.serve(async (req) => {
   // ── 2. 送られてきた内容を確かめる ────────────────────────
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return reply({ error: '内容を読めませんでした' }, 400) }
+
+  // **頼みごとは2つある。** 教材の下書き(既定)と、カタマリごとの訳(0021)。
+  // 訳づくりは教材づくりの一部なので、関数を増やさずここで分ける
+  // (関数を増やすと、利用者が Supabase の画面で配置する手順が増える)。
+  if (String(body.mode ?? '') === 'chunk_ja') {
+    return streamed(() => makeChunkJa(apiKey, body))
+  }
 
   const sectionType = String(body.sectionType ?? '')
   const count = Math.min(Math.max(Number(body.count ?? 10), 1), 20)
@@ -607,52 +842,6 @@ Deno.serve(async (req) => {
     }
   }
 
-  /** 例外を、原因の分かる日本語にする */
-  const explain = (e: unknown) => {
-    const message = e instanceof Error ? e.message : String(e)
-    if (/authentication|invalid x-api-key|401/i.test(message)) {
-      return 'Claude の鍵が正しくありません。Secrets の ANTHROPIC_API_KEY を確認してください。'
-    }
-    if (/rate.?limit|429/i.test(message)) {
-      return '短い時間に作りすぎました。少し待ってからお試しください。'
-    }
-    if (/credit|billing|402/i.test(message)) {
-      return 'Claude の残高が不足しています。Anthropic Console でご確認ください。'
-    }
-    return `生成に失敗しました: ${message}`
-  }
-
-  // ── 4. 待っている間も、少しずつ返事を送り続ける ──────────
-  //
-  // 【なぜこれが必要か】
-  //   Supabase の関数は、**150秒のあいだ何も返さないと切られる**。
-  //   40問の生成はそれを超えることがあり、利用者の画面では
-  //   「2分ほど待つと、何も出ずにボタンが元に戻る」状態になっていた。
-  //
-  //   そこで、答えが出るまでのあいだ**空白を1文字ずつ送り続ける**。
-  //   通信が生きていると見なされるため、途中で切られない。
-  //   空白は JSON の前に付いても読み飛ばされるので、受け取る側は
-  //   これまでどおり JSON として読める。
-  const encoder = new TextEncoder()
-  const stream = new ReadableStream({
-    async start(controller) {
-      const beat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(' ')) } catch { /* すでに閉じている */ }
-      }, 5000)
-      try {
-        const payload = await generate()
-        controller.enqueue(encoder.encode(JSON.stringify(payload)))
-      } catch (e) {
-        console.error(e)
-        controller.enqueue(encoder.encode(JSON.stringify({ error: explain(e) })))
-      } finally {
-        clearInterval(beat)
-        controller.close()
-      }
-    },
-  })
-
-  return new Response(stream, {
-    headers: { ...cors, 'Content-Type': 'application/json' },
-  })
+  // ── 4. 待っている間も、少しずつ返事を送り続ける(`streamed`)──
+  return streamed(generate)
 })

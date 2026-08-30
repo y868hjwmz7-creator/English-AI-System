@@ -205,7 +205,14 @@ export function groupSentences(sentences, size = 1) {
   return out
 }
 
-/** ② の単位。段落(会話は発言)ごと、または本文まるごと1つ */
+/**
+ * ② の単位。段落(会話は発言)ごと、または本文まるごと1つ。
+ *
+ * **`parts` に、もとの項目をそのまま持たせる。**
+ * カタマリごとの訳(0021)は**項目ごと**に控えてあるので、
+ * 「文章全体」でつないだときも、訳は項目ごとに出す必要がある。
+ * つないだ文の区切りを作り直すと、控えの数と合わなくなる。
+ */
 export function blocksOf(items, unit = 'para') {
   const list = (items ?? [])
     .map((it, n) => ({
@@ -214,6 +221,7 @@ export function blocksOf(items, unit = 'para') {
       speaker: it.speaker ?? '',
       ja: it.prompt_ja ?? '',
       jaIsWhole: false,
+      parts: [it],
     }))
     .filter((x) => x.text)
   if (unit !== 'whole' || list.length < 2) return list
@@ -223,21 +231,23 @@ export function blocksOf(items, unit = 'para') {
     speaker: '',
     ja: list.map((x) => x.ja).filter(Boolean).join(''),
     jaIsWhole: true,
+    parts: list.flatMap((x) => x.parts),
   }]
 }
 
 /**
- * ③⑤ の本文の見せ方(2026-08 の要望)。
+ * ③⑤ の本文の見せ方(2026-08 の要望)。**3通り**ある。
  *
  * > 素の文章を見ながら、スラッシュを表示させた状態で、
  * > またはスラッシュと真下にスラッシュ付きの日本語を表示しながら、
  * > 合計3パターンでのオーバーラッピングができると最高だ。
  *
- * **3つめ(区切りごとの訳)は、まだ出せない。**
- * 区切る場所は決まりで分かるが、そのカタマリを日本語で何と言うかは
- * 決まりでは書けない。教材に持たせる形を仕様書 第5.29.3節に残してある。
+ * 3つめ(区切りごとの訳)は、教材に控えた訳を使う(0021)。
+ * **控えの無い教材では出せない**ので、そのときは英語だけを出す
+ * (`ChunkedText` が受け止める)。
  */
 export const PASSAGE_VIEWS = [
   { id: 'plain', label: '素の文章', hint: '区切りを出さずに読む' },
   { id: 'slash', label: '区切りを出す', hint: '意味のカタマリで区切って読む' },
+  { id: 'chunk', label: '区切り + 訳', hint: 'カタマリの上に、そのカタマリの訳を出す' },
 ]

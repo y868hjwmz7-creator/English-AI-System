@@ -20,38 +20,32 @@
  *   利用者が挙げた決まりは、どれも閉じた語のリストで判定できる
  *   (`src/lib/chunker.js`)。1文ごとに課金する理由がない。
  *
- * 【まだ無いもの】
- *   **カタマリごとの訳例。** どこで切るかは決まりで分かるが、
- *   そのカタマリを日本語で何と言うかは決まりでは書けない。
- *   いまは文ぜんぶの訳を出している(仕様書 第5.29.3節)。
+ * 【カタマリごとの訳(0021)】
+ *   利用者が紙で配っている教材と同じ形にしてある。
+ *
+ *       どれくらいの長さですか / 乗っているのは
+ *       How long              / is the ride?
+ *
+ *   **どこで切るかは決まり、何と訳すかは教材の控え。**
+ *   訳は決まりでは書けないので、教材を作るときに1回だけ作って
+ *   `material_items.chunks` に控えてある(`src/lib/chunkJa.js`)。
+ *   控えの無い教材では英語だけを出す。**無いものを、あるように見せない。**
  */
 import { Fragment, useEffect, useState } from 'react'
 import { SLASH_LEVELS, checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
+import { storedChunks } from '../lib/chunkJa.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
+import { loadChunkJa, saveChunkJa } from '../lib/slashLevel.js'
+import ChunkedText from './ChunkedText.jsx'
 import SpeakButton from './SpeakButton.jsx'
-
-/** 区切りを入れた英文を描く。`marks` は「その語の前で切る」語の番号 */
-function Slashed({ words, marks, tone = '' }) {
-  return (
-    <p className={`slash-out${tone ? ` slash-out--${tone}` : ''}`} lang="en">
-      {words.map((w, i) => (
-        <Fragment key={i}>
-          <span className="slash-w">
-            {marks.includes(i) && <span className="slash-mark" aria-label="区切り">/</span>}
-            {w}
-          </span>
-          {' '}
-        </Fragment>
-      ))}
-    </p>
-  )
-}
 
 export default function SlashReading({
   blocks, clipVoice, tier, rate, level, onLevelChange, unit, onUnitChange,
 }) {
   const [marks, setMarks] = useState({})   // 文ごとの区切り
   const [shown, setShown] = useState({})   // 「解答を見る」を押した文
+  // カタマリごとの訳を出すか(0021)。**一度決める設定は覚える** */
+  const [withJa, setWithJa] = useState(loadChunkJa)
 
   //
   // **まちがいは、次にどこかを触ったら消える**(2026-08 利用者の指定)。
@@ -97,6 +91,9 @@ export default function SlashReading({
     return () => document.removeEventListener('click', onClick)
   }, [blocks])
 
+  // 控えのある教材かどうか(0021)。無い教材で札だけ出しても迷わせる
+  const hasJa = blocks.some((b) => (b.parts ?? []).some((it) => storedChunks(it)))
+
   return (
     <div className="slash">
       <div className="slash-head">
@@ -118,6 +115,15 @@ export default function SlashReading({
             ))}
           </select>
         </label>
+        {/* **訳は隠せる**(2026-08 の要望)。
+            自分で言えるか試すときは消し、確かめるときは出す */}
+        {hasJa && (
+          <label className="passage-flow">
+            <input type="checkbox" checked={withJa}
+                   onChange={(e) => { setWithJa(e.target.checked); saveChunkJa(e.target.checked) }} />
+            カタマリの訳を出す
+          </label>
+        )}
       </div>
 
       <ol className="slash-list">
@@ -226,12 +232,24 @@ export default function SlashReading({
                       </button>
                     )}
                   </p>
-                  {/* **自分の区切りと同じ形で出す。** 形が違うと見比べられない。
+                  {/* **カタマリの真上に、そのカタマリの訳**(2026-08 利用者の指定)。
+                      文まるごとの訳を下にまとめて置いていたが、
+                      それでは「このカタマリは何と言うのか」が分からない。
+                      利用者が紙で配っている教材と同じ形にした。
+
+                      **項目(段落 / 発言)ごとに出す。** 訳の控えは項目ごとなので、
+                      「文章全体」でつないだときも、ここは項目ごとに分けて出す。
                       理由の一覧は**廃止した**(2026-08「見づらいだけ」)。
-                      長い文だと12行並び、読むものではなくなっていた。
                       理由は1本ずつ、スラッシュに触れると出る(`title`) */}
-                  <Slashed words={words} marks={model} tone="model" />
-                  {s.ja && (
+                  {(s.parts ?? [{ prompt_en: s.text }]).map((part, i) => (
+                    <p className="slash-out slash-out--model" key={part.id ?? i}>
+                      <ChunkedText text={part.prompt_en} ja={storedChunks(part)}
+                                   level={level} showJa={withJa} />
+                    </p>
+                  ))}
+                  {/* 控えが無い教材では、これまでどおり文ぜんぶの訳を出す。
+                      **無いものを、あるように見せない** */}
+                  {!hasJa && s.ja && (
                     <p className="slash-ja">
                       {s.jaIsWhole && <span className="slash-ja-label">段落の訳</span>}
                       {s.ja}

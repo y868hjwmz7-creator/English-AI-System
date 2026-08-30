@@ -10,6 +10,7 @@
 import {
   checkSlashes, chunksOf, slashesFor, wordsOf,
 } from '../src/lib/chunker.js'
+import { baseChunks, chunkPairs, storedChunks } from '../src/lib/chunkJa.js'
 
 let ng = 0
 const ok = (name, cond, detail = '') => {
@@ -63,6 +64,61 @@ for (const [name, text] of Object.entries(S)) {
     const joined = cut(text, lv).split(' / ').join(' ')
     ok(`${name} / ${lv}`, joined === wordsOf(text).join(' '), joined)
   }
+}
+
+/* ── カタマリごとの訳(0021)────────────────────────────────
+   訳は**初級の区切り**でそろえて控えてある。
+   中級・上級はその**一部**なので、隣どうしをつないで作る。
+   この前提が崩れると、**英語と訳の対がずれる**(いちばん害が大きい)。 */
+
+console.log('\n▶ 中級・上級の区切りは、初級の区切りの一部である(訳をつなげる前提)')
+for (const [name, text] of Object.entries(S)) {
+  const base = new Set(slashesFor(text, 'beginner').map((x) => x.at))
+  for (const lv of ['middle', 'advanced']) {
+    const rest = slashesFor(text, lv).map((x) => x.at).filter((i) => !base.has(i))
+    ok(`${name} / ${lv}`, rest.length === 0, `初級に無い区切り: ${rest.join(', ')}`)
+  }
+}
+
+console.log('\n▶ 控えの数は、初級のカタマリの数と同じ')
+for (const [name, text] of Object.entries(S)) {
+  ok(name, baseChunks(text).length === slashesFor(text, 'beginner').length + 1)
+}
+
+console.log('\n▶ どのレベルでも、対をつなぐともとの文と訳に戻る')
+for (const [name, text] of Object.entries(S)) {
+  // 控えの代わりに、番号を訳のかわりに入れて突き合わせる
+  const ja = baseChunks(text).map((_, i) => `＜${i}＞`)
+  for (const lv of ['beginner', 'middle', 'advanced']) {
+    const pairs = chunkPairs(text, ja, lv)
+    const en = pairs?.map((p) => p.en).join(' ')
+    const jp = pairs?.map((p) => p.ja).join('')
+    ok(`${name} / ${lv} 英語`, en === wordsOf(text).join(' '), String(en))
+    ok(`${name} / ${lv} 訳`, jp === ja.join(''), String(jp))
+    // そのレベルのカタマリの数と、対の数が合っていること
+    ok(`${name} / ${lv} 数`, pairs?.length === slashesFor(text, lv).length + 1)
+  }
+}
+
+console.log('\n▶ 数が合わない控えは、使わない(ずれた対は無いより悪い)')
+{
+  const text = S.office
+  const short = baseChunks(text).slice(1).map((_, i) => `＜${i}＞`)
+  ok('1つ足りない控え', chunkPairs(text, short, 'beginner') === null)
+  ok('控えが無い', chunkPairs(text, null, 'beginner') === null)
+  ok('控えが配列でない', chunkPairs(text, '訳', 'beginner') === null)
+}
+
+console.log('\n▶ 英文を直した教材の控えは、引き当てない')
+{
+  const text = S.office
+  const ja = baseChunks(text).map((_, i) => `＜${i}＞`)
+  ok('英文が同じなら引き当てる',
+    storedChunks({ prompt_en: text, chunks: { en: text, ja } })?.length === ja.length)
+  ok('英文が変わっていたら引き当てない',
+    storedChunks({ prompt_en: `${text} Yes.`, chunks: { en: text, ja } }) === null)
+  ok('空白の数だけの違いは同じとみなす',
+    storedChunks({ prompt_en: text.replace(' ', '  '), chunks: { en: text, ja } }) !== null)
 }
 
 console.log(ng === 0 ? '\n✅ 区切りの検証はすべて意図どおりです' : `\n❌ ${ng} 件おかしい`)

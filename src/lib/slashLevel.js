@@ -46,3 +46,16 @@ export function loadDictSize() {
 export function saveDictSize(n) {
   try { localStorage.setItem(DICT_KEY, String(n)) } catch { /* 使えなくても困らない */ }
 }
+
+/**
+ * ② の「カタマリの訳を出す」(0021)。
+ * **一度決める設定は覚える。** 自分で言えるか試すときは消し、
+ * 確かめるときは出す、という使い分けを毎回やり直させない。
+ */
+const CHUNK_JA_KEY = 'eas.chunkJa'
+export function loadChunkJa() {
+  try { return localStorage.getItem(CHUNK_JA_KEY) !== 'off' } catch { return true }
+}
+export function saveChunkJa(on) {
+  try { localStorage.setItem(CHUNK_JA_KEY, on ? 'on' : 'off') } catch { /* 使えなくても困らない */ }
+}

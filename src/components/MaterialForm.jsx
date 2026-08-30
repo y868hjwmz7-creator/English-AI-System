@@ -22,9 +22,11 @@ import {
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
-  NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost, generateSection,
+  NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
+  generateChunkJa, generateSection,
   generateSectionUnique, isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
+import { chunkPlan } from '../lib/chunkJa.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 import {
   CLIP_ACCENTS, DEFAULT_ACCENT, pickVoices,
@@ -340,6 +342,37 @@ export default function MaterialForm({
       spent.output += data.usage?.output ?? 0
       spent.cacheRead += data.usage?.cacheRead ?? 0
       made.push(data.section)
+    }
+
+    // ── カタマリごとの訳(0021)────────────────────────────
+    // **スラッシュリーディングは、これが無いと半分しか使えない。**
+    // 区切る場所は決まりで出せるが、そのカタマリを日本語で何と言うかは
+    // 決まりでは書けない(仕様書 第5.29.3節)。
+    // **作る時点で1回だけ作る。** 開くたびに作ると、同じ費用が
+    // ゲストの人数 × 開いた回数だけかかる(発音記号・要点フレーズと同じ)。
+    //
+    // ここで失敗しても**教材は捨てない。** 訳が付かないだけで、
+    // 本文も設問もそのまま使える。あとから「区切りの訳を作る」で足せる。
+    const chunkTodo = chunkPlan(made[0]?.items ?? [])
+    if (chunkTodo.length) {
+      setGenerating({ done: plan.length, total: plan.length + 1, label: 'カタマリごとの訳' })
+      const { data: cj, error: cjError } = await generateChunkJa(
+        chunkTodo.map((x) => ({ no: x.no, chunks: x.chunks })),
+      )
+      if (cjError) {
+        // **黙って落とさない。** 何が足りなかったのかは残しておく
+        console.warn(`カタマリごとの訳を作れませんでした: ${cjError}`)
+      } else {
+        const byNo = new Map(chunkTodo.map((x) => [x.no, x]))
+        for (const part of cj.parts ?? []) {
+          const src = byNo.get(part.no)
+          const item = made[0].items[part.no - 1]
+          if (src && item) item.chunks = { en: src.en, ja: part.ja }
+        }
+        spent.input += cj.usage?.input ?? 0
+        spent.output += cj.usage?.output ?? 0
+        spent.cacheRead += cj.usage?.cacheRead ?? 0
+      }
     }
 
     setGenerating(null)

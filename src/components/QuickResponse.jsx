@@ -25,7 +25,7 @@
  *   同じ語の覚え具合が2か所で動くことになる。
  *   画面に「言えた数」を出すだけにしてある。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { quickResponsePairs } from '../lib/quickResponse.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
@@ -44,12 +44,15 @@ export default function QuickResponse({
   const enRef = useRef(null)          // 開いた答え(入りきらないときに送る先)
   const bodyRef = useRef(null)        // 出題の枠。**動かすのはここだけ**
   const [finished, setFinished] = useState(false)
+  // **両方いっしょに出せるか。** 出せないときだけ入れ替えに落とす
+  // (2026-08 利用者の指定)。判断は「実際に入るかどうか」で行う
+  const [tight, setTight] = useState(false)
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
 
-  // 出題が変わったら、答えは閉じた状態から
-  useEffect(() => { setShown(false); stopReading() }, [at])
+  // 出題が変わったら、答えは閉じた状態から。**入るかどうかも測り直す**
+  useEffect(() => { setShown(false); setTight(false); stopReading() }, [at])
 
   // **開いた答えが枠に入りきらないときは、こちらで送る。**
   // 「上下にスクロールして微調整せずに」(2026-08 利用者の指定)。
@@ -65,7 +68,23 @@ export default function QuickResponse({
     // **いつも上から。** 問題と答えは入れ替えて出すので、
     // どちらも枠の先頭から始まる。送る必要そのものが無くなった
     body.scrollTop = 0
-  }, [shown, at])
+  }, [shown, at, tight])
+
+  /**
+   * **問題と答えを、いっしょに出せるかどうかを実測する**(2026-08 利用者の指定)。
+   *
+   * > 問題と解答を同時に表示できないときは、それぞれもっと中央に配置してください。
+   * > 同時に表示できるときは今のまま
+   *
+   * 文の長さは教材によって桁が違うので、**文字数で当て推量しない。**
+   * まず両方を出してみて、枠に入りきらなかったときだけ入れ替えに落とす。
+   * 枠の高さは決め打ち(`.qr-body`)なので、**ボタンの場所は動かない。**
+   */
+  useLayoutEffect(() => {
+    const body = bodyRef.current
+    if (!body || !shown || tight) return
+    if (body.scrollHeight > body.clientHeight + 1) setTight(true)
+  }, [shown, at, tight])
 
   const card = pairs[at] ?? null
   // 本文は良い声で読む。判断は `voiceTier.js` 1か所
@@ -156,25 +175,30 @@ export default function QuickResponse({
               以前は答えがボタンの下に出ていたので、画面のいちばん下へ
               押し出され、そのつど送らないと読めなかった(2026-08 の指摘)。
               **文の長さが変わっても、ボタンは動かない。** */}
-          <div className="qr-body" ref={bodyRef}>
+          {/* 入りきらないときは**まん中に寄せる。**
+              入るときは上詰めのまま(「2 / 30 のすぐ下に問題の上端」) */}
+          <div className={`qr-body${tight && shown ? ' is-tight' : ''}`} ref={bodyRef}>
             {/* 話す人だけは残す。誰のせりふかで言い方が変わる。
                 **「記事」「会話」の札は出さない**(2026-08 の指定)。
                 どの教材から出ているかは、上の題名を見れば分かる */}
             {card.speaker && <p className="qr-from">{card.speaker}</p>}
 
-            {/* **問題と答えは入れ替える**(2026-08 の指定)。
-                並べて出すと、長い文では両方が入らない。
-                入れ替えなら、いつでも上から始まり、必ず収まる */}
-            {shown ? (
-              <div className="qr-en" ref={enRef}>
-                <EnglishText text={card.en} textJa={card.ja} level={material?.level}
-                             statuses={wordStatuses} onMark={onMarkWord} />
-                <SpeakButton text={card.en} className="etext-listen"
-                             clipVoice={clipVoice} tier={tier} />
+            {/* **入るなら、問題と答えを並べて出す**(2026-08 の指定)。
+                入らないときだけ入れ替える。入れ替えなら必ず収まる。
+                出す側は日本語だけ。**開くまで英語は出さない。音も鳴らさない** */}
+            {(!shown || !tight) && <p className="qr-ja">{card.ja}</p>}
+            {shown && (
+              /* **答えはうすい色の囲みに入れる**(2026-08 の指定)。
+                 ほかのトレーニングの解答(`.answer-box`)と同じ形にそろえる。
+                 部品ごとに書くと、必ずどこかだけ違う見た目になる */
+              <div className="answer-box qr-answer" ref={enRef}>
+                <div className="qr-en">
+                  <EnglishText text={card.en} textJa={card.ja} level={material?.level}
+                               statuses={wordStatuses} onMark={onMarkWord} />
+                  <SpeakButton text={card.en} className="etext-listen"
+                               clipVoice={clipVoice} tier={tier} />
+                </div>
               </div>
-            ) : (
-              /* 出す側は日本語だけ。**英語は出さない。音も鳴らさない** */
-              <p className="qr-ja">{card.ja}</p>
             )}
           </div>
 

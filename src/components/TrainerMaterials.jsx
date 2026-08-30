@@ -20,10 +20,12 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
-import { countLabel, exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
+import { countLabel, exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
+import { storedChunks } from '../lib/chunkJa.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import {
-  NEW_MATERIAL_KINDS, assignMaterial, kindLabel, loadMyLearners, searchMaterials,
+  NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, estimateCost,
+  kindLabel, loadMyLearners, searchMaterials,
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
@@ -54,6 +56,10 @@ export default function TrainerMaterials({ me }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // カタマリごとの訳を作っている教材(0021)と、その結果
+  const [makingJa, setMakingJa] = useState(null)
+  const [jaDone, setJaDone] = useState({})
+
   const [assigningId, setAssigningId] = useState(null)   // 配信先を選んでいる教材
   const [picked, setPicked] = useState([])
   const [message, setMessage] = useState(null)
@@ -74,6 +80,35 @@ export default function TrainerMaterials({ me }) {
 
   // 絞り込みが変わったら探し直す。search 自体は毎回作り直されるので依存に入れない。
   useEffect(() => { search() }, [tagIds, level, industry, kind, genre, scene])
+
+  /** 本文があって、まだカタマリごとの訳が入っていない教材か(0021) */
+  const needsChunkJa = (m) => (m.sections ?? [])
+    .filter((sec) => isPassageSection(sec.exercise_type))
+    .flatMap((sec) => sec.items ?? [])
+    .some((it) => String(it.prompt_en ?? '').trim() && !storedChunks(it))
+
+  /**
+   * カタマリごとの訳を作って控える(0021)。
+   *
+   * **何が起きるか**を、押す前に title で、押したあとに結果で伝える。
+   * 触るのは `material_items.chunks` の1列だけで、本文・設問・配信には触れない。
+   */
+  const makeChunkJa = async (m) => {
+    setMakingJa(m.id)
+    setJaDone((v) => ({ ...v, [m.id]: null }))
+    const { data, error: e } = await addChunkJa(m)
+    setMakingJa(null)
+    if (e) { setJaDone((v) => ({ ...v, [m.id]: { ng: true, text: e } })); return }
+    setJaDone((v) => ({
+      ...v,
+      [m.id]: {
+        text: `${data.made} か所に訳を付けました`
+          + (data.skipped ? `(${data.skipped} か所は数が合わず見送りました)` : '')
+          + (data.spent ? ` / 費用 約 $${estimateCost(data.spent).toFixed(2)}` : ''),
+      },
+    }))
+    await search()   // 控えたものを画面に反映する
+  }
 
   useEffect(() => {
     loadMyLearners().then(({ data, error: e }) => {
@@ -284,7 +319,29 @@ export default function TrainerMaterials({ me }) {
                             onClick={() => printElement(document.getElementById(`material-${m.id}`))}>
                       <PrintIcon />印刷 / PDFで保存
                     </button>
+                    {/* **0021 より前に作った教材にも、あとから足せる道**を用意する。
+                        カタマリごとの訳は本来「作るときに一緒に」だが、
+                        すでにある教材を作り直させるのはもったいない。
+                        0020(発音記号)で「作り直してください」としか
+                        言えなかった反省である。
+                        **すでに訳が入っているものには、もう一度課金しない** */}
+                    {needsChunkJa(m) && (
+                      <button type="button" className="btn btn--small"
+                              disabled={makingJa === m.id}
+                              title="スラッシュリーディングで、カタマリの上に訳を出せるようになります"
+                              onClick={() => makeChunkJa(m)}>
+                        {makingJa === m.id ? '区切りの訳を作っています…' : '区切りの訳を作る'}
+                      </button>
+                    )}
                   </div>
+                  {/* **結果は、押した場所のすぐ下に出す**(2026-08 の指摘)。
+                      画面のいちばん下に出すとスマホでは見えず、
+                      「何も起きずにボタンが戻る」ようにしか見えない */}
+                  {jaDone[m.id] && (
+                    <p className={`notice no-print ${jaDone[m.id].ng ? 'notice--warn' : 'notice--ok'}`}>
+                      {jaDone[m.id].text}
+                    </p>
+                  )}
                   <Tabs
                     variant="sub"
                     ariaLabel="演習の切り替え"

@@ -10,6 +10,9 @@
   --surface-0: #f7f6f3;   /* 画面の背景 */
   --surface-1: #fcfcfb;   /* カードの背景 */
   --surface-2: #f0efec;   /* 目盛り・区切り線 */
+  /* カタマリごとの訳の帯(0021)。**解答の囲みの上に置く**ので、
+     囲みの地色(--surface-2)とは別の色でないと帯に見えない */
+  --chunk-bg: #e4e8ee;
   --border:    #e0dfda;
 
   --text-primary:   #0b0b0b;
@@ -81,6 +84,7 @@
     --surface-0: #131312;
     --surface-1: #1a1a19;
     --surface-2: #262625;
+    --chunk-bg: #303a45;
     --border:    #383835;
   
     --text-primary:   #ffffff;
@@ -126,6 +130,7 @@
   --surface-0: #131312;
   --surface-1: #1a1a19;
   --surface-2: #262625;
+  --chunk-bg: #303a45;
   --border:    #383835;
 
   --text-primary:   #ffffff;
@@ -1278,6 +1283,37 @@ html { -webkit-text-size-adjust: 100%; }
 .slash-out--model { color: var(--text-secondary); }
 .slash-out--model .slash-mark { color: var(--accent); }
 
+/* ── カタマリごとの訳(0021)────────────────────────────────
+   利用者が紙で配っている教材と同じ形。**英語の真上に、そのカタマリの訳。**
+
+       どれくらいの長さですか / 乗っているのは
+       How long              / is the ride?
+
+   【なぜ「1カタマリ = 1つの縦の組」なのか】
+   訳の行と英語の行を別々に書くと、幅が変わったときに縦がずれる。
+   カタマリごとに縦の組を作って横に流せば、**どの幅でも対応が崩れない。**
+   長い本文でも、行の途中で折り返して次の行へ続く。 */
+.chunked {
+  display: flex; flex-wrap: wrap; align-items: stretch;
+  row-gap: 10px;
+}
+.chunk { display: flex; flex-direction: column; }
+/* 訳は**うすい地色の帯**にする。カタマリどうしのあいだに隙間を作らないので、
+   1行ぶんがつながった帯に見える(紙の教材と同じ見え方) */
+.chunk-ja {
+  padding: 2px 2px 2px 0;
+  background: var(--chunk-bg);
+  color: var(--text-secondary);
+  font-size: 13px; line-height: 1.6;
+}
+.chunk-en {
+  padding: 2px 2px 0 0;
+  font-size: 17px; line-height: 1.7;
+}
+/* 区切りの棒。**訳の側にも出す。** 片方だけだと対応が読み取れない */
+.chunk-bar { margin-right: 4px; color: var(--accent); font-weight: 700; }
+.chunk-ja .chunk-bar { font-weight: 400; }
+
 .slash-copy { margin-left: auto; font-size: 12px; }
 .slash-ja {
   margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--border);
@@ -1642,6 +1678,7 @@ html { -webkit-text-size-adjust: 100%; }
   --qa-bg:        #faf8f3;   /* ごくうすい地色。紙より少しだけ濃い */
   --qa-line:      #e7e3da;
   --qa-answer:    #f0ece2;
+  --chunk-bg:     #e6e2d6;   /* カタマリごとの訳の帯(0021) */
 
   --accent:       #2f6f86;   /* 落ち着いた青緑。見出しと区切り */
   --accent-bg:    #edf4f7;
@@ -2188,6 +2225,10 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--translate-bg); font-size: .82em;
 }
 .lesson-sheet .lesson-ja { color: var(--translate); }
+/* カタマリごとの訳(0021)。**紙の上は決め打ちの色にそろえる。**
+   `.lesson-sheet *` が全部を --ink にしてしまうので、ここで戻す */
+.lesson-sheet .chunk-ja { color: var(--ink-soft); }
+.lesson-sheet .chunk-bar { color: var(--accent); }
 
 .lesson-note {
   margin-top: 5px; padding: 3px 10px;
@@ -2202,6 +2243,16 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--answer-bg); font-size: .88em; font-weight: 600;
 }
 .lesson-sheet .lesson-answer { color: var(--answer); }
+
+/* 紙の上の選び欄。**紙は暗い配色でも白のまま**なので、
+   端末の暗い色のまま出すと、白い紙に黒い箱が乗って読めない
+   (第5.22.6節① と同じ落とし穴)。値で決め打ちにする */
+.lesson-sheet select,
+.lesson-sheet input[type="text"],
+.lesson-sheet textarea {
+  background: #fff; color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 6px;
+}
 
 .lesson-sheet .btn {
   margin-top: 6px; border-color: var(--rule); background: #fff;
@@ -2371,6 +2422,8 @@ html { -webkit-text-size-adjust: 100%; }
    明るい / 暗い とは別のものなので、既存の変数(--surface-2 など)を
    借りる。そうすれば、明るい側・暗い側の両方で自動的に成り立つ。 */
 :root[data-palette="plain"] {
+  /* カタマリごとの訳の帯(0021)。色みを抜いて、明暗の差だけで帯に見せる */
+  --chunk-bg:     var(--border);
   --speaking-bg:  var(--surface-2);
   --speaking-bar: var(--text-muted);
   --reading-bg:   var(--border);
@@ -2641,6 +2694,16 @@ html { -webkit-text-size-adjust: 100%; }
   justify-content: flex-start;
   padding-top: 2px;
 }
+/* **問題と答えが両方は入らないとき**だけ、まん中に寄せる(2026-08 の指定)。
+   > 同時に表示できないときは、それぞれもっと中央に配置してください
+
+   `safe center` にするのは、`center` だけだと、はみ出したときに中身が
+   **上へ逃げて届かなくなる**ため。入るときは上詰めのままにする。 */
+.qr-body.is-tight { justify-content: safe center; }
+/* 答えの囲み。**ほかのトレーニングの解答と同じ形**にそろえる(`.answer-box`)。
+   紙の上では `--qa-answer` が差し替わるので、ここでは色を書かない */
+.qr-answer { width: 100%; margin-top: 8px; text-align: center; }
+.qr-body.is-tight .qr-answer { margin-top: 0; }
 .qr-from { margin: 0; color: var(--qr-faint); font-size: 12px; }
 /* 出す側の日本語。**大きく出す。** ここだけを見て言う */
 .qr-ja {

@@ -200,4 +200,9 @@ from (
   select '㊾ 単語・フレーズに発音記号を持てる(0020)', exists (
     select 1 from information_schema.columns
     where table_name = 'material_items' and column_name = 'phonetic'), 49
+  union all
+  select '㊿ カタマリごとの訳を持てる(0021)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'material_items' and column_name = 'chunks'
+      and data_type = 'jsonb'), 50
 ) t order by 順;

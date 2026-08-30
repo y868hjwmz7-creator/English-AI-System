@@ -21,6 +21,7 @@
  *   区切りには「強さ」を持たせてある。
  *   初級はぜんぶ、中級は強さ2以上、上級は強さ3だけを出す。
  */
+import { splitEnSentences } from './sentencePair.js'
 
 /** 前置詞。**この語の前で切る。** 区切りの最後がこれになってはいけない */
 const PREPOSITIONS = new Set([
@@ -134,6 +135,15 @@ export function idealSlashes(sentence) {
     const found = out.find((x) => x.at === at)
     if (found) { if (strength > found.strength) { found.strength = strength; found.why = why } return }
     out.push({ at, strength, why })
+  }
+
+  // **文の切れ目。** ここが切れないと、段落の中で文がつながって出る
+  // (「the ride? Can you」が1つのカタマリになっていた・2026-08 実測)。
+  // 切り方は読み上げ・Quick Response と同じものを使う。**2か所に持たない**
+  let n = 0
+  for (const sent of splitEnSentences(sentence)) {
+    n += wordsOf(sent).length
+    add(n, 3, '文の切れ目')
   }
 
   words.forEach((w, i) => {

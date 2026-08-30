@@ -36,12 +36,14 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { prefetchGlosses } from '../lib/vocab.js'
+import { storedChunks } from '../lib/chunkJa.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { PASSAGE_VIEWS, SIX_STEPS, blocksOf, sentencesOf, stepOf } from '../lib/sixSteps.js'
+import ChunkedText from './ChunkedText.jsx'
 import SlashReading from './SlashReading.jsx'
 import SlashedText from './SlashedText.jsx'
 import StepDictation from './StepDictation.jsx'
@@ -367,10 +369,15 @@ export default function PassagePractice({
                   {/* 通し表示では**語の意味を引かない。**
                       押したところから読み上げを始めるので、語ごとの
                       吹き出しと操作がぶつかる。読むことだけに集中させる */}
-                  {view === 'slash' || flowing ? (
+                  {view === 'chunk' && !flowing ? (
+                    /* **カタマリの真上に、そのカタマリの訳**(0021)。
+                       控えが無い教材では英語だけになる */
+                    <ChunkedText text={item.prompt_en} ja={storedChunks(item)}
+                                 level={slashLevel} />
+                  ) : view === 'slash' || flowing ? (
                     /* 区切りを見ながら重ねて読む。区切りは②と同じ決まりで出す */
                     <SlashedText text={item.prompt_en}
-                                 level={view === 'slash' ? slashLevel : null} />
+                                 level={view === 'plain' ? null : slashLevel} />
                   ) : (
                     <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
                                  statuses={wordStatuses} onMark={onMarkWord}

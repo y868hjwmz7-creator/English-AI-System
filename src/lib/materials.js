@@ -10,6 +10,8 @@
  * error は日本語の文字列(そのまま画面に出せる)。
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+import { isPassageSection } from '../data/exerciseTypes.js'
+import { chunkPlan, storedChunks } from './chunkJa.js'
 import { supabase } from './supabase.js'
 
 // 教材のレベルはゲストのレベルと同じ物差し(CEFR)を使う
@@ -102,7 +104,7 @@ export async function searchMaterials({
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')}${optLast('phonetic')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')} )
       )
     `)
     .order('created_at', { ascending: false })
@@ -224,7 +226,7 @@ export async function loadMaterial(materialId) {
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')}${optLast('phonetic')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')} )
       )
     `)
     .eq('id', materialId)
@@ -272,6 +274,12 @@ const cleanItems = (items) =>
         .filter((ph) => ph.text)
       // 列がまだ無いと分かっているときは送らない(挿入ごと失敗するため)
       if (phrases.length && !missingColumns.has('phrases')) row.phrases = phrases
+      // カタマリごとの訳(0021)。**文字ではなくオブジェクトなので別に扱う。**
+      // {en: 作ったときの英文, ja: [カタマリごとの訳]}
+      const chunks = it.chunks
+      if (Array.isArray(chunks?.ja) && chunks.ja.length && !missingColumns.has('chunks')) {
+        row.chunks = { en: String(chunks.en ?? '').trim(), ja: chunks.ja.map((x) => String(x ?? '')) }
+      }
       return row
     })
     .filter((row) => Object.keys(row).length > 0)
@@ -410,7 +418,7 @@ export async function loadMyAssignments() {
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                            answer, answer_alt, audio_text, note, tag_id,
-                           speaker${optLast('phrases')}${optLast('phonetic')} )
+                           speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')} )
         )
       )
     `)
@@ -647,6 +655,95 @@ export async function generateSection({
   }
   if (data?.error) return ng(data.error)
   return ok(data)
+}
+
+// ── カタマリごとの訳を作る(0021)────────────────────────────────
+
+/**
+ * スラッシュリーディングの「カタマリごとの訳」を作らせる。
+ *
+ * **どこで切るかは、こちらで決めて渡す。** 窓口がするのは訳だけである
+ * (区切りの決まりは `src/lib/chunker.js` 1か所にある)。
+ *
+ * @param {{no: number, chunks: string[]}[]} parts 切り終わったカタマリ
+ */
+export async function generateChunkJa(parts) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (!parts?.length) return ng('訳を作る本文がありません')
+
+  const { data, error } = await supabase.functions.invoke('generate-material', {
+    body: { mode: 'chunk_ja', parts },
+  })
+
+  if (error) {
+    let detail = ''
+    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      return ng('訳を作る窓口につながりませんでした。'
+        + 'Supabase の generate-material を配置し直したか確認してください。')
+    }
+    return ng(detail || `訳を作れませんでした: ${error.message}`)
+  }
+  if (data?.error) return ng(data.error)
+  return ok(data)
+}
+
+/**
+ * すでにある教材に、カタマリごとの訳を足す(0021)。
+ *
+ * 【なぜ要るか】
+ *   訳は**教材を作るときに一緒に作る**のが基本である(費用が桁で違う)。
+ *   だが 0021 より前に作った教材には入っていない。作り直させるのは
+ *   もったいないので、あとから足せる道を1つ用意しておく。
+ *   0020(発音記号)で「作り直してください」としか言えなかった反省である。
+ *
+ * 【何が起きるか】
+ *   ・本文(記事 / 会話)の段落・発言だけを対象にする
+ *   ・すでに訳が入っていて、英文も変わっていないものは**飛ばす**(課金しない)
+ *   ・`material_items.chunks` の1列だけを書き換える。**本文には触れない**
+ */
+export async function addChunkJa(material) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (missingColumns.has('chunks')) {
+    return ng('カタマリごとの訳の列(0021)がまだありません。'
+      + 'supabase/apply の SQL を貼ってからお試しください。')
+  }
+
+  // 本文の項目だけを集める。設問には区切る本文が無い
+  const items = (material?.sections ?? [])
+    .filter((sec) => isPassageSection(sec.exercise_type))
+    .flatMap((sec) => sec.items ?? [])
+    .filter((it) => String(it.prompt_en ?? '').trim())
+  if (!items.length) return ng('この教材には本文(記事・会話)がありません')
+
+  // まだ訳が無いものだけ。**すでにあるものに、もう一度課金しない**
+  const todo = items.filter((it) => !storedChunks(it))
+  if (!todo.length) return ok({ made: 0, spent: null })
+
+  const plan = chunkPlan(todo)
+  if (!plan.length) return ng('区切れる本文がありませんでした')
+
+  const { data, error } = await generateChunkJa(
+    plan.map((x) => ({ no: x.no, chunks: x.chunks })),
+  )
+  if (error) return ng(error)
+
+  // 番号で突き合わせて、1件ずつ控える
+  const byNo = new Map(plan.map((x) => [x.no, x]))
+  let made = 0
+  for (const part of data.parts ?? []) {
+    const src = byNo.get(part.no)
+    if (!src) continue
+    const item = todo[part.no - 1]
+    if (!item?.id) continue
+    const { error: e } = await supabase
+      .from('material_items')
+      .update({ chunks: { en: src.en, ja: part.ja } })
+      .eq('id', item.id)
+    if (e) return fail(e, '訳を控えられませんでした')
+    made += 1
+  }
+  return ok({ made, skipped: data.skipped ?? 0, spent: data.usage ?? null })
 }
 
 // ── アカウントを発行する ──────────────────────────────────────
