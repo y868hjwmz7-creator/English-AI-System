@@ -930,6 +930,20 @@ html { -webkit-text-size-adjust: 100%; }
   display: flex; flex-wrap: wrap; align-items: baseline;
   justify-content: space-between; gap: 8px;
 }
+/* **行そのものを押して中身を開く**(2026-08 利用者の指定)。
+   下に「中身を見る」ボタンを置いていたが、1行ぶん場所を取る。
+   宿題の一覧(`.homework-open`)で一度学んだ形にそろえた。
+   `<button>` にはできない(中に見出しや `<div>` が入るため)ので、
+   `role="button"` + Enter / Space で同じように押せるようにしてある。 */
+.material-open {
+  display: flex; flex: 1 1 auto; min-width: 0; gap: 8px; align-items: flex-start;
+  padding: 2px 4px 2px 0; margin-left: -2px;
+  border-radius: 8px; cursor: pointer;
+}
+.material-open:hover { background: var(--surface-2); }
+.material-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.material-open-mark { color: var(--text-muted); font-size: 13px; padding-top: 5px; }
+.material-open .mtitle { flex: 1 1 auto; min-width: 0; }
 /* 設問の一覧(中身を開いたとき・宿題の画面)。ここは残す */
 .material-preview {
   margin: 10px 0; padding-left: 1.4em;

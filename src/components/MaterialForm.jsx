@@ -263,8 +263,14 @@ export default function MaterialForm({
     if (tagIds.length) parts.push(tagIds.map(weaknessTagLabel).join(' + '))
     parts.push(level)
     if (industry) parts.push(industryLabel(industry))
-    const name = learners.find((l) => l.id === shareWith[0])?.display_name
-    if (name && shareWith.length === 1) parts.push(name)
+    // **ゲスト名は入れない**(2026-08 利用者の指定)。
+    //
+    //   > 教材の上の部分に表示されるゲスト名はいらないです。
+    //   > 内部のタグでどのゲストに使用したかだけを過去ログしておけばOKです。
+    //
+    // 教材は**既定で全トレーナーが共有する**ものなので、名前が入っていると
+    // 「その人専用」に見えて再利用されなくなる。誰に出したかは
+    // `assignments` に残っており、さがす画面の「ゲスト」で引ける。
     return parts.filter(Boolean).join(' / ')
   }
 

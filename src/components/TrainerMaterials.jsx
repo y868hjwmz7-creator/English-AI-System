@@ -44,6 +44,9 @@ export default function TrainerMaterials({ me }) {
   const [genre, setGenre] = useState('')       // 記事のジャンル
   const [scene, setScene] = useState('')       // 会話の場面
   const [sort, setSort] = useState('new')      // 並び順
+  // **このゲストに出したことがある教材**で絞る(2026-08 利用者の指定)。
+  // 記録は `assignments` にある。教材名にゲスト名を入れる代わりの仕組み
+  const [learnerId, setLearnerId] = useState('')
   const [openId, setOpenId] = useState(null)   // 中身を開いている教材
   const [openSection, setOpenSection] = useState({})  // 教材ごとに開いている演習
   // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
@@ -72,6 +75,7 @@ export default function TrainerMaterials({ me }) {
       kind: kind || null,
       genre: kind === 'reading' ? (genre || null) : null,
       scene: kind === 'dialogue' ? (scene || null) : null,
+      learnerId: learnerId || null,
     })
     setLoading(false)
     if (e) { setError(e); return }
@@ -79,7 +83,7 @@ export default function TrainerMaterials({ me }) {
   }
 
   // 絞り込みが変わったら探し直す。search 自体は毎回作り直されるので依存に入れない。
-  useEffect(() => { search() }, [tagIds, level, industry, kind, genre, scene])
+  useEffect(() => { search() }, [tagIds, level, industry, kind, genre, scene, learnerId])
 
   /** 本文があって、まだカタマリごとの訳が入っていない教材か(0021) */
   const needsChunkJa = (m) => (m.sections ?? [])
@@ -144,7 +148,10 @@ export default function TrainerMaterials({ me }) {
       <MaterialForm
         createdBy={me.id}
         learners={learners.filter((l) => l.status === 'active')}
-        initial={{ tagIds, level: level ?? '', industry, kind, genre, scene }}
+        initial={{ tagIds, level: level ?? '', industry, kind, genre, scene,
+          // **絞り込みの項目を足したら、`initial` にも必ず足す**(CLAUDE.md)。
+          // ゲストで絞っていたなら、そのゲストに共有する前提で作る
+          shareWith: learnerId ? [learnerId] : [] }}
         onCancel={() => setMode('search')}
         onCreated={(id, shared) => {
           setMode('search')
@@ -196,6 +203,17 @@ export default function TrainerMaterials({ me }) {
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="">すべて</option>
             {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+          </select>
+          {/* **このゲストに出したことがある教材**(2026-08 利用者の指定)。
+              教材名にゲスト名を入れるのをやめた代わりに、ここで引く。
+              > 同じようなレベルのゲストに再利用する際に便利です */}
+          <span className="filter-label">ゲスト</span>
+          <select value={learnerId} onChange={(e) => setLearnerId(e.target.value)}
+                  title="このゲストに出したことがある教材だけを出す">
+            <option value="">すべて</option>
+            {learners.map((l) => (
+              <option key={l.id} value={l.id}>{l.display_name}</option>
+            ))}
           </select>
           {kind === 'reading' && (
             <>
@@ -254,13 +272,28 @@ export default function TrainerMaterials({ me }) {
           <p className="muted">{materials.length} 件</p>
           {sorted.map((m) => (
             <div key={m.id} className="card material-card">
+              {/* **行そのものを押して開く**(2026-08 利用者の指定)。
+                  下に「中身を見る」ボタンを置いていたが、1行ぶん場所を取る。
+                  宿題の一覧で一度学んだ形にそろえた(▸ / ▾ の印を出す)。 */}
               <div className="material-head">
-                {/* 見出しは弱点だけ。レベル・業界は小さな札、日付は右上 */}
-                <MaterialTitle
-                  title={m.title}
-                  headline={m.headline}
-                  fallbackTags={[cefrLabel(m.level), kindLabel(m.kind), industryLabel(m.industry)]}
-                />
+                <div className="material-open" role="button" tabIndex={0}
+                     aria-expanded={openId === m.id}
+                     onClick={() => setOpenId(openId === m.id ? null : m.id)}
+                     onKeyDown={(e) => {
+                       if (e.key !== 'Enter' && e.key !== ' ') return
+                       e.preventDefault()
+                       setOpenId(openId === m.id ? null : m.id)
+                     }}>
+                  <span className="material-open-mark" aria-hidden="true">
+                    {openId === m.id ? '▾' : '▸'}
+                  </span>
+                  {/* 見出しは弱点だけ。レベル・業界は小さな札、日付は右上 */}
+                  <MaterialTitle
+                    title={m.title}
+                    headline={m.headline}
+                    fallbackTags={[cefrLabel(m.level), kindLabel(m.kind), industryLabel(m.industry)]}
+                  />
+                </div>
                 <span className="muted">
                   {kindLabel(m.kind)}
                   {m.visibility === 'private' && ' / 自分だけ'}
@@ -431,11 +464,7 @@ export default function TrainerMaterials({ me }) {
                     中身を閉じる
                   </button>
                 </div>
-              ) : (
-                <button type="button" className="btn btn--small" onClick={() => setOpenId(m.id)}>
-                  中身を見る(全 {m.itemCount} 問)
-                </button>
-              )}
+              ) : null}
 
               {assigningId === m.id ? (
                 <div className="assign-box">

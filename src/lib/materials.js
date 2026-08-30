@@ -79,19 +79,42 @@ export async function loadMyLearners() {
  */
 export async function searchMaterials({
   tagIds = [], level = null, keyword = '', industry = null,
-  kind = null, genre = null, scene = null,
+  kind = null, genre = null, scene = null, learnerId = null,
 } = {}) {
   if (!supabase) return ng('Supabase が設定されていません')
 
+  // 教材の id で絞り込む条件は2つある。**両方に入るものだけを残す**
+  let ids = null
+  const narrow = (list) => {
+    const next = [...new Set(list)]
+    ids = ids === null ? next : ids.filter((x) => next.includes(x))
+  }
+
   // 弱点タグで絞る場合は、まず該当する教材の id を集める
-  let idsWithTag = null
   if (tagIds.length) {
     const { data, error } = await supabase
       .from('material_tags').select('material_id').in('tag_id', tagIds)
     if (error) return fail(error, '弱点タグで絞り込めませんでした')
-    idsWithTag = [...new Set((data ?? []).map((r) => r.material_id))]
-    if (!idsWithTag.length) return ok([])
+    narrow((data ?? []).map((r) => r.material_id))
   }
+
+  // **このゲストに出したことがある教材**(2026-08 利用者の指定)。
+  //
+  //   > 内部のタグでどのゲストに使用したかだけを過去ログしておけばOKです。
+  //   > そうすればゲスト名で絞り込むことも出来ます。
+  //   > 同じようなレベルのゲストに再利用する際に便利です。
+  //
+  // 記録は**すでに `assignments` にある。表も列も増やさない。**
+  // 誰の記録を読めるかは RLS が決める(担当ゲストのぶんだけ)。
+  if (learnerId) {
+    const { data, error } = await supabase
+      .from('assignments').select('material_id').eq('learner_id', learnerId)
+    if (error) return fail(error, 'ゲストで絞り込めませんでした')
+    narrow((data ?? []).map((r) => r.material_id))
+  }
+
+  if (ids !== null && !ids.length) return ok([])
+  const idsWithTag = ids
 
   const build = () => {
     let query = supabase
