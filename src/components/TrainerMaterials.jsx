@@ -279,22 +279,25 @@ export default function TrainerMaterials({ me }) {
                 <TeachingNote text={m.teaching_point} />
               )}
 
-              <p className="muted">
-                演習 {m.sections.length} 種類 / 全 {m.itemCount} 問
-              </p>
-              <ul className="material-preview">
+              {/* **中身の抜き書きは出さない**(2026-08 利用者の指定)。
+
+                  > 教材の内容の要約のような部分、いらないです。場所を取りすぎです。
+
+                  記事の1段落目をそのまま並べていたので、1件で画面ぜんぶを
+                  食っていた。さがす画面は**見比べる**ためのものなので、
+                  1件が長いほど見比べにくくなる。
+                  中身は「中身を見る」で開ける。
+
+                  何の演習が何問あるかは、教材を選ぶのに要る。
+                  **1行に畳んで残す**(2行あった数の行も、これに1本化する)。 */}
+              <p className="muted material-parts">
                 {m.sections.map((sec) => (
-                  <li key={sec.id}>
-                    <strong>{exerciseLabel(sec.exercise_type)}</strong>({countLabel(sec.exercise_type, sec.items.length)})
-                    {sec.items[0] && (
-                      <span className="muted">
-                        {' '}— {sec.items[0].prompt_en || sec.items[0].prompt_ja
-                                || sec.items[0].question || sec.items[0].audio_text}
-                      </span>
-                    )}
-                  </li>
+                  <span key={sec.id}>
+                    {exerciseLabel(sec.exercise_type)}
+                    {' '}{countLabel(sec.exercise_type, sec.items.length)}
+                  </span>
                 ))}
-              </ul>
+              </p>
 
               {openId === m.id ? (
                 <div className="material-detail" id={`material-${m.id}`}>
