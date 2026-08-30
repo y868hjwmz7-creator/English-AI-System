@@ -565,8 +565,17 @@ Deno.serve(async (req) => {
       // どの声で作ったかを返す。**聞き比べのときに、これが手がかりになる**
       provider,
       tier,
-      // 良い声を頼まれたのに用意できなかったことを、係の人に伝える
+      // 良い声を頼まれたのに用意できなかったことを、係の人に伝える。
+      // **どの鍵が足りないのかまで書く。** 「なぜか良い声にならない」で
+      // 悩ませない(JSON の書き間違いは、これが無いと見つけられない)
       fellBack: tier === 'premium' && !usePremium,
+      detail: tier === 'premium' && !usePremium
+        ? (elevenKey
+          ? `ELEVENLABS_VOICES に "${voiceId}" が入っていないので、`
+            + '標準の声で作りました。ElevenLabs の Voice ID を足してから、'
+            + 'CLIP_REV を1つ進めてください。'
+          : 'ELEVENLABS_API_KEY が設定されていないので、標準の声で作りました。')
+        : undefined,
       ms: Date.now() - startedAt,
     })
   } catch (e) {

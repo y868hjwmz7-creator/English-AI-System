@@ -510,4 +510,42 @@ select pg_temp.ok('material_items に phrases がある',
   (select count(*)::int from information_schema.columns
    where table_name = 'material_items' and column_name = 'phrases'), 1);
 
+-- ── 出会った文を控える(0018)───────────────────────────────────
+--   人は文脈ごと覚える。**最初の1文だけを残し、あとから上書きしない。**
+--   上書きすると、覚えかけた手がかりが毎回入れ替わってしまう。
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+
+select public.mark_word('deployment', 'unknown', 'word', null,
+  '  The   deployment failed last night.  ');
+
+select pg_temp.ok('出会った文が入る(空白はそろえる)',
+  (select seen_in from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'deployment'),
+  'The deployment failed last night.');
+
+-- 2回目は別の文で付け直す。**最初の文が残らなければならない**
+select public.mark_word('deployment', 'known', 'word', null,
+  'We scheduled the deployment for Friday.');
+
+select pg_temp.ok('2度目の文で上書きされない',
+  (select seen_in from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'deployment'),
+  'The deployment failed last night.');
+
+select pg_temp.ok('復習の一覧にも出会った文が出る',
+  (select seen_in from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'known', 40, false)
+   where word_norm = 'deployment'),
+  'The deployment failed last night.');
+
+-- 文を渡さずに付けた語は、空のままでよい(古い教材から付けたとき)
+select public.mark_word('handover', 'unknown');
+select pg_temp.ok('文を渡さなければ空のまま',
+  (select coalesce(seen_in, '(なし)') from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'handover'), '(なし)');
+
 reset role;

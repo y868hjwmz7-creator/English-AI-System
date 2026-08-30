@@ -176,4 +176,13 @@ from (
   select '㊸ 教材ごとに声を選べる(0017)', exists (
     select 1 from information_schema.columns
     where table_name = 'materials' and column_name = 'voice_id'), 43
+  union all
+  select '㊹ 出会った文を控えられる(0018)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'word_reviews' and column_name = 'seen_in'), 44
+  union all
+  select '㊺ 復習の一覧が出会った文を返す(0018)', (
+    select count(*) = 1 from pg_proc p, unnest(p.proargnames) a
+    where p.proname = 'review_words' and a = 'p_due_only'
+      and pg_get_function_result(p.oid) like '%seen_in%'), 45
 ) t order by 順;

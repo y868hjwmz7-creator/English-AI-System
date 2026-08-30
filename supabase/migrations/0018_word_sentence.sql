@@ -1,93 +1,57 @@
 -- ============================================================================
--- 0015 語彙の復習 — 間隔をあけて出す / 句とイディオムも記録する
+-- 0018 単語帳を「覚えられる形」にする — 出会った文を控える
 --
--- 【なぜ要るか】(2026-08 利用者の指定)
---   0011 で「知っていた / 知らなかった」を記録できるようにしたが、
---   2つ足りなかった。
+-- 【なぜ要るか】(2026-08 利用者の指定「単語帳のパワーアップ」)
+--   語だけを並べても覚えられない。**人は文脈ごと覚える。**
+--   "consideration" を単独で覚えるより、
+--   「Thank you for your consideration.」で出会ったことを思い出せるほうが、
+--   次に会ったときに出てくる。
 --
---   ① **いつ再び出すかの仕組みが無い。**
---      一度「知っていた」にすると二度と出ず、「知らなかった」は
---      ずっと出続ける。忘れかけた頃に再会する形になっていない。
+--   いまは `material_id`(どの教材か)しか控えていない。教材を開き直さないと
+--   文にたどりつけず、復習の場では実質たどりつけない。
 --
---   ② **句・イディオム・句動詞を記録できない。**
---      look forward to / put off のような、語を並べたものが要になる。
+-- 【何をするか】
+--   ① `word_reviews` に `seen_in`(出会った文)を1列足す
+--   ② `mark_word()` に文を渡せるようにする(5つめの引数)
+--   ③ `review_words()` が `seen_in` も返すようにする
 --
--- 【どう解くか】
---   ① 箱(Leitner)。段階(box)と、次に出す日(due_on)だけを持つ。
+--   **表は増やさない。** 語1つにつき1文で足りる。
 --
---        知らなかった → 箱を 0 に戻し、翌日にまた出す
---        知っていた   → 箱を1つ上げ、1 → 2 → 4 → 7 → 14 → 30 日後
---
---      **SM-2 のような細かい方式は採らない。** レッスンは週2回で、
---      宿題の回数が細かい間隔に追いつかない。6段で足りる。
---
---      **間隔の決まりは、この関数1つだけに置く**(`mark_word`)。
---      画面側で計算すると、端末の日付や時差で食い違う。
---
---   ② 表を増やさない。`word_reviews` の鍵は (人, そろえた形) である。
---      句は語を空白ひとつでつないだ形になるので、**そのまま入る**。
---      `norm_word()` は連続する記号を空白1つにするため、
---      "look forward to" はそのまま "look forward to" になる。
---      見分けるための `kind` を1列だけ足す。
+-- 【最初の1文を残す】
+--   `material_id` と同じ考え方で、**あとから上書きしない。**
+--   最初に出会った文が、その語の思い出の手がかりになる。
+--   上書きすると、覚えかけた手がかりが毎回入れ替わってしまう。
 --
 -- 【何を消すか】
---   `review_words()` を作り直す(返す列が増えるため、置き換えではなく
---   一度落としてから作る)。表のデータは何も消さない。
+--   `mark_word()` と `review_words()` を作り直す(引数と返す列が変わるため、
+--   一度落としてから作る)。**表のデータは何も消さない。**
 --   **何度実行してもよい。**
 -- ============================================================================
 
 -- ────────────────────────────────────────────────────────────────
--- 1. word_reviews に3つ足す
---
---   既にある行には既定値が入る。box = 0 / due_on = 今日 なので、
---   これまで付けた語は**次の教材からすぐ復習に出る**。
+-- 1. 出会った文を控える列
 -- ────────────────────────────────────────────────────────────────
 alter table public.word_reviews
-  add column if not exists kind   text     not null default 'word',
-  add column if not exists box    smallint not null default 0,
-  add column if not exists due_on date     not null default current_date;
+  add column if not exists seen_in text;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'word_reviews_kind_check'
-  ) then
-    alter table public.word_reviews
-      add constraint word_reviews_kind_check check (kind in ('word', 'phrase'));
-  end if;
-  if not exists (
-    select 1 from pg_constraint where conname = 'word_reviews_box_check'
-  ) then
-    alter table public.word_reviews
-      add constraint word_reviews_box_check check (box between 0 and 6);
-  end if;
-end
-$$;
-
-comment on column public.word_reviews.kind is
-  '語(word)か、句・イディオム・句動詞(phrase)か。鍵の作り方は同じ。';
-comment on column public.word_reviews.box is
-  '箱(0〜6)。0 = 覚えていない。上がるほど次に出るまでが長くなる。';
-comment on column public.word_reviews.due_on is
-  '次に出す日。教材を作るとき、この日を過ぎたものを先に混ぜる。';
-
--- 「今日出すべきもの」を引くための索引。復習の教材を作るたびに引く
-create index if not exists word_reviews_due_idx
-  on public.word_reviews (learner_id, due_on);
+comment on column public.word_reviews.seen_in is
+  'その語に最初に出会った英文。復習のときに文脈ごと思い出すために出す。'
+  '最初の1文だけを残し、あとから上書きしない。';
 
 -- ────────────────────────────────────────────────────────────────
--- 2. 印を付ける — 間隔の決まりはここだけ
+-- 2. mark_word() に文を渡せるようにする
 --
---   security definer にしない。**RLS をそのまま効かせる。**
---   自分の行しか書けないことは、既にポリシーが保証している
---   (word_reviews_own_write / _own_update)。
---   definer にすると、その保証を関数の中で作り直すことになる。
+--   **古い形(4引数)は落とす。** 残すと、4つで呼んだときにどちらの
+--   関数か決められず PostgREST が断る。
 -- ────────────────────────────────────────────────────────────────
+drop function if exists public.mark_word(text, text, text, uuid);
+
 create or replace function public.mark_word(
   p_norm     text,
   p_status   text,
   p_kind     text default 'word',
-  p_material uuid default null
+  p_material uuid default null,
+  p_sentence text default null
 )
 returns table (word_norm text, status text, box smallint, due_on date)
 language plpgsql
@@ -99,9 +63,10 @@ as $$
 -- 迷ったら列のほうを指すと決めておく
 #variable_conflict use_column
 declare
-  v_norm text;
-  v_box  smallint;
-  v_days int;
+  v_norm     text;
+  v_box      smallint;
+  v_days     int;
+  v_sentence text;
 begin
   v_norm := public.norm_word(p_norm);
   if v_norm is null then
@@ -109,6 +74,13 @@ begin
   end if;
   if p_status is null or p_status not in ('known', 'unknown') then
     raise exception '状態は known か unknown です';
+  end if;
+
+  -- 文が長すぎると復習の画面で読みにくい。**入口で切る。**
+  -- 空白の連なりもここでそろえておく(画面によって改行の入り方が違うため)
+  v_sentence := nullif(btrim(regexp_replace(coalesce(p_sentence, ''), '\s+', ' ', 'g')), '');
+  if v_sentence is not null then
+    v_sentence := left(v_sentence, 300);
   end if;
 
   select r.box into v_box
@@ -134,10 +106,10 @@ begin
 
   return query
   insert into public.word_reviews as w
-    (learner_id, word_norm, kind, status, box, due_on, material_id, updated_at)
+    (learner_id, word_norm, kind, status, box, due_on, material_id, seen_in, updated_at)
   values
     (auth.uid(), v_norm, coalesce(p_kind, 'word'), p_status,
-     v_box, current_date + v_days, p_material, now())
+     v_box, current_date + v_days, p_material, v_sentence, now())
   on conflict (learner_id, word_norm) do update
     set status      = excluded.status,
         kind        = excluded.kind,
@@ -146,26 +118,24 @@ begin
         -- どの教材で出会ったかは、**最初のものを残す**。
         -- 上書きすると「いつ出会ったか」の手がかりが消える
         material_id = coalesce(w.material_id, excluded.material_id),
+        -- 出会った文も同じ。**最初の1文が思い出の手がかりになる**
+        seen_in     = coalesce(w.seen_in, excluded.seen_in),
         updated_at  = now()
   returning w.word_norm, w.status, w.box, w.due_on;
 end;
 $$;
 
-comment on function public.mark_word(text, text, text, uuid) is
+comment on function public.mark_word(text, text, text, uuid, text) is
   '語や句に「知っていた / 知らなかった」を付け、次に出す日を決める。'
-  '間隔の決まりはこの関数だけが持つ。';
+  '出会った文も控える(最初の1文だけ)。間隔の決まりはこの関数だけが持つ。';
 
 -- ────────────────────────────────────────────────────────────────
--- 3. 復習の材料を取り出す(作り直し)
+-- 3. 復習の材料に「出会った文」を足す(作り直し)
 --
---   返す列が増えるので、置き換えではなく一度落としてから作る。
---   `p_due_only` を true にすると、**今日出すべきものだけ**を返す。
+--   0015 の中身をそのまま写し、返す列に `seen_in` を1つ足しただけである。
+--   **並び順も権限の確かめ方も変えていない。** 返す列が変わるので、
+--   置き換えではなく一度落としてから作る。
 -- ────────────────────────────────────────────────────────────────
-drop function if exists public.review_words(uuid, text, int);
--- **いまの形(4引数)も落とす。** あとの移行(0018)が返す列を増やすので、
--- 増えたあとにこのファイルをもう一度流すと
--- 「cannot change return type of existing function」で止まる。
--- 実際、まとめて貼るファイルを2回実行して止まった(2026-08)。
 drop function if exists public.review_words(uuid, text, int, boolean);
 
 create or replace function public.review_words(
@@ -180,6 +150,7 @@ returns table (
   kind       text,
   pos        text,
   meaning_ja text,
+  seen_in    text,
   status     text,
   box        smallint,
   due_on     date,
@@ -206,6 +177,7 @@ begin
            r.kind,
            coalesce(g.pos, ''),
            coalesce(g.meaning_ja, ''),
+           r.seen_in,
            r.status,
            r.box,
            r.due_on,
@@ -230,22 +202,10 @@ $$;
 
 comment on function public.review_words(uuid, text, int, boolean) is
   'ゲストの復習語を意味付きで返す。p_due_only で「今日出すべきもの」に絞る。'
-  '担当外は拒否する。';
-
-grant execute on function public.mark_word(text, text, text, uuid)     to authenticated;
-grant execute on function public.review_words(uuid, text, int, boolean) to authenticated;
+  '出会った文(seen_in)も返す。担当外は拒否する。';
 
 -- ────────────────────────────────────────────────────────────────
--- 4. 本文の要点フレーズ
---
---   教材を作る時点で、本文の各文から要点となる句を拾っておく
---   (0〜2個)。**開くたびに AI に拾わせない。** 費用が毎回かかるうえ、
---   開くまで何が出るか分からない。作る時点なら道具の形で強制できる。
---
---   形: [{ "text": "look forward to", "note": "〜を楽しみに待つ" }, ...]
+-- 4. 権限。**作り直した関数には、もう一度付け直す**
 -- ────────────────────────────────────────────────────────────────
-alter table public.material_items
-  add column if not exists phrases jsonb;
-
-comment on column public.material_items.phrases is
-  'この項目の要点フレーズ。[{text, note}] の配列。押すと復習に入れられる。';
+grant execute on function public.mark_word(text, text, text, uuid, text) to authenticated;
+grant execute on function public.review_words(uuid, text, int, boolean)  to authenticated;

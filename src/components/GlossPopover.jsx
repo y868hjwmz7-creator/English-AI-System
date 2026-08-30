@@ -26,6 +26,10 @@ import { posKind } from '../lib/vocab.js'
 import SpeakButton from './SpeakButton.jsx'
 
 const MARGIN = 8
+/** 語と吹き出しのあいだ */
+const GAP = 6
+/** これより低くしない。低すぎると意味が1行も読めない */
+const MIN_HEIGHT = 160
 
 export default function GlossPopover({
   anchorEl, gloss, busy, error, status = null, fallbackText = '',
@@ -34,14 +38,27 @@ export default function GlossPopover({
   const popRef = useRef(null)
   const [place, setPlace] = useState(null)
 
-  /** 語の位置に合わせて置き直す。画面の外へ出さない */
+  /**
+   * 語の位置に合わせて置き直す。画面の外へ出さない。
+   *
+   * 【高さの上限も決める】(2026-08 利用者の指摘)
+   *   > 知ってる、知らないが画面の外にある時は吹き出しの外の画面を
+   *   > 下にスクロールさせないとそれらのボタンをクリックできません。
+   *   > 文が1番下までくるとそれさえできません。
+   *
+   *   吹き出しは `position: fixed` である。**画面を送っても付いてくる。**
+   *   だから中身が画面より高いと、はみ出した部分には永久に手が届かない。
+   *
+   *   入る高さを毎回測って上限にし、**中で送れるように**する。
+   *   さらに「知っていた / 知らなかった」は**中の送りから外に出す**ので、
+   *   どれだけ意味が長くても、ボタンは必ず見えている。
+   */
   const position = () => {
     const el = popRef.current
     const anchor = anchorEl
     if (!el || !anchor) return
     const a = anchor.getBoundingClientRect()
     const w = el.offsetWidth
-    const h = el.offsetHeight
     const vw = window.innerWidth
     const vh = window.innerHeight
 
@@ -49,12 +66,31 @@ export default function GlossPopover({
     if (left + w > vw - MARGIN) left = vw - MARGIN - w
     if (left < MARGIN) left = MARGIN
 
-    // 下に入らなければ上に出す。**入らないまま下に出さない**
-    let top = a.bottom + 6
-    if (top + h > vh - MARGIN && a.top - 6 - h > MARGIN) top = a.top - 6 - h
+    // 語の上と下、それぞれに残っている高さ
+    const below = vh - a.bottom - GAP - MARGIN
+    const above = a.top - GAP - MARGIN
+    // いまの中身の高さ。上限を付けたあとでも、中身の量はこれで分かる
+    const want = el.scrollHeight
+
+    // 下に入るなら下。入らないが上に入るなら上。
+    // **どちらにも入らないときは、広いほうに出して中で送らせる**
+    let top
+    let room
+    if (want <= below || below >= above) {
+      top = a.bottom + GAP
+      room = below
+    } else {
+      room = above
+      top = Math.max(MARGIN, a.top - GAP - Math.min(want, above))
+    }
     if (top < MARGIN) top = MARGIN
 
-    setPlace({ left: Math.round(left), top: Math.round(top) })
+    setPlace({
+      left: Math.round(left),
+      top: Math.round(top),
+      // 狭すぎると読めないので、下限は設けておく(画面が小さいときは画面いっぱい)
+      maxHeight: Math.round(Math.max(Math.min(room, vh - MARGIN * 2), MIN_HEIGHT)),
+    })
   }
 
   useLayoutEffect(position, [anchorEl, gloss, busy, error])
@@ -96,10 +132,14 @@ export default function GlossPopover({
       style={{
         left: place ? `${place.left}px` : 0,
         top: place ? `${place.top}px` : 0,
+        maxHeight: place ? `${place.maxHeight}px` : undefined,
         // 場所が決まるまでは見せない。左上に一瞬出るのを防ぐ
         visibility: place ? 'visible' : 'hidden',
       }}
     >
+      {/* ここだけが上下に送れる。**ボタンはこの外に置く。**
+          意味が長くても、「知っていた / 知らなかった」は必ず見えている */}
+      <span className="etext-pop-body">
       {busy && <span className="etext-pop-busy">調べています…</span>}
       {error && <span className="etext-pop-error">{error}</span>}
       {gloss && (
@@ -147,6 +187,7 @@ export default function GlossPopover({
           はじめて調べました({(gloss.lookedUpMs / 1000).toFixed(1)} 秒)
         </span>
       )}
+      </span>
       {onMark && (
         <span className="etext-pop-actions">
           <button type="button" className="btn btn--small"

@@ -229,19 +229,31 @@ export default function EnglishText({
 
   const mark = async (status) => {
     if (!onMark) return
+    // **出会った文も一緒に記録する**(0018)。人は文脈ごと覚える。
+    // 単語帳で「どこで会ったか」を出すと、思い出す手がかりになる。
+    // 語が入っている**その文だけ**を渡す(段落まるごとでは長すぎる)
+    const seen = readingSpanOf()
     if (range) {
       // なぞって選んだ言い回し。**語ではなく句として記録する**
       const head = parts[range[0]]
       const tail = parts[range[1]]
       const phrase = (text ?? '').slice(head.at, tail.at + tail.text.length).trim()
-      await onMark(normWord(phrase), status, 'phrase')
+      await onMark(normWord(phrase), status, 'phrase', seen)
       close()
       return
     }
     const part = parts[openIndex]
     if (!part) return
-    await onMark(part.norm, status)
+    await onMark(part.norm, status, 'word', seen)
     close()
+  }
+
+  /** いま開いている語が入っている**文だけ**を切り出す */
+  const readingSpanOf = () => {
+    const at = parts[range ? range[0] : openIndex]?.at
+    if (at == null) return null
+    const sp = sentences.find((x) => at >= x.start && at < x.end)
+    return ((sp ? (text ?? '').slice(sp.start, sp.end) : text) ?? '').trim() || null
   }
 
   /**

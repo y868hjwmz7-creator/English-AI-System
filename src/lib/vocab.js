@@ -413,6 +413,39 @@ export async function loadMyWordbook({ status = 'unknown', limit = 200, dueOnly 
 }
 
 /**
+ * 単語帳の進み具合。**続いていることが見えないと続かない。**
+ *
+ * 復習は「今日やることが有限で、減っていくのが見える」と続く。
+ * 数だけを3つ数える。行は読まないので軽い。
+ *
+ * @returns {{due: number, unknown: number, known: number}}
+ */
+export async function loadWordbookCounts() {
+  const empty = { due: 0, unknown: 0, known: 0 }
+  if (!supabase) return ok(empty)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return ok(empty)
+
+  const today = new Date().toISOString().slice(0, 10)
+  const base = () => supabase
+    .from('word_reviews')
+    .select('word_norm', { count: 'exact', head: true })
+    .eq('learner_id', user.id)
+
+  const [due, unknown, known] = await Promise.all([
+    base().eq('status', 'unknown').lte('due_on', today),
+    base().eq('status', 'unknown'),
+    base().eq('status', 'known'),
+  ])
+  // 数えられなくても画面は出す。**数が出ないだけで、復習はできる**
+  return ok({
+    due: due.count ?? 0,
+    unknown: unknown.count ?? 0,
+    known: known.count ?? 0,
+  })
+}
+
+/**
  * 0015 を貼る前の Supabase 向けの控えめな書き込み。
  *
  * `mark_word()` がまだ無い環境で、**押しても何も起きない**状態を避ける。
@@ -444,7 +477,9 @@ async function legacySetWordStatus(norm, status, materialId) {
  * `kind` は 'word' か 'phrase'。句・イディオム・句動詞は 'phrase'。
  * 鍵の作り方は語と同じなので、同じ表に入る。
  */
-export async function setWordStatus(word, status, { kind = 'word', materialId = null } = {}) {
+export async function setWordStatus(word, status, {
+  kind = 'word', materialId = null, sentence = null,
+} = {}) {
   const norm = normWord(word)
   if (!norm) return ng('英語の語ではありません')
   if (!supabase) return ng('Supabase が設定されていません')
@@ -455,6 +490,9 @@ export async function setWordStatus(word, status, { kind = 'word', materialId = 
     p_status: status,
     p_kind: kind === 'phrase' ? 'phrase' : 'word',
     p_material: materialId,
+    // 出会った文(0018)。**人は文脈ごと覚える。**
+    // 最初の1文だけが残る(あとから上書きしないのは SQL 側の決まり)
+    p_sentence: sentence || null,
   })
   // **0015 をまだ貼っていない Supabase でも動くようにする。**
   // 貼るまでのあいだ「押しても色が付かない」状態にしない(2026-08 実機)。

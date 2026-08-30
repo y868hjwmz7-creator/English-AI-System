@@ -100,6 +100,9 @@ export default function LearnerWordbook({ learnerId, learnerName = '' }) {
               <SpeakButton text={row.display || row.word_norm} className="etext-listen" />
             </div>
             {row.meaning_ja && <div className="wordbook-mean">{row.meaning_ja}</div>}
+            {/* 出会った文(0018)。**どの場面でつまずいたか**が分かると、
+                次の教材を作るときの手がかりになる */}
+            {row.seen_in && <p className="wordbook-seen" lang="en">{row.seen_in}</p>}
             <div className="wordbook-actions">
               <span className="wordbook-when">
                 箱 {row.box ?? 0} / 次は {whenLabel(row.due_on)}

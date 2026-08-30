@@ -107,7 +107,9 @@ export default function PhraseChips({
                 anchorEl={anchorRef.current}
                 gloss={gloss} busy={busy} error={error} status={status}
                 fallbackText={phrase.text} deps={openIndex}
-                onMark={onMark ? (next) => { onMark(norm, next, 'phrase'); close() } : null}
+                onMark={onMark
+                  ? (next) => { onMark(norm, next, 'phrase', sentence || phrase.text); close() }
+                  : null}
                 onClose={close}
               />
             )}

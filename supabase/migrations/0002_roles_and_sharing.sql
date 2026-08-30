@@ -110,6 +110,12 @@ create policy "配信された教材だけ見える" on public.materials
 -- ────────────────────────────────────────────────────────────────
 
 -- 全体の集計。生徒個人は特定できない。
+-- **先に落とす。** あとの移行(0004)が返す列を増やすので、増えたあとに
+-- このファイルをもう一度流すと
+-- 「cannot change return type of existing function」で止まる。
+-- 頭から全部を貼り直す使い方があるため、ここで備えておく(2026-08)。
+drop function if exists public.school_summary(date, date);
+
 create or replace function public.school_summary(
   from_date date default (current_date - 30),
   to_date   date default current_date

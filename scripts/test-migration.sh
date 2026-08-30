@@ -29,6 +29,41 @@ for f in supabase/migrations/*.sql; do
   run "-d $DB -f $f"
 done
 
+# ---------------------------------------------------------------------------
+# **最初からもう一度、全部を通す。**
+#
+#   上のループは「1ファイルを2回」しか試していない。ところが利用者は
+#   supabase/apply/*.sql を**まとめて貼る**ので、実際には
+#   「0001 から 0018 までを、頭からもう一度」が起きる。
+#
+#   ここを見ていなかったために、0015 が 0018 のあとに走ると
+#   「cannot change return type of existing function」で止まる、
+#   という穴を見落とした(2026-08)。**利用者の貼り方で試す。**
+# ---------------------------------------------------------------------------
+echo
+echo "▶ 最初から全部をもう一度実行(まとめて貼り直したときと同じ順序)"
+for f in supabase/migrations/*.sql; do
+  run "-d $DB -f $f"
+done
+
+# 同じ名前の関数が2つ残っていないか。残ると PostgREST が
+# 「どちらか分からない」と断り、画面からは呼べなくなる
+# 拡張機能(pgvector など)が持ち込む同名の関数は数えない。
+# あれは向こうの都合であって、こちらの移行の重複ではない
+dup=$(su postgres -c "psql -d $DB -tAc \"
+  select string_agg(proname || '(' || n || ')', ', ')
+  from (select p.proname, count(*) n from pg_proc p
+        join pg_namespace ns on ns.oid = p.pronamespace
+        where ns.nspname = 'public'
+          and not exists (select 1 from pg_depend d
+                          where d.objid = p.oid and d.deptype = 'e')
+        group by p.proname having count(*) > 1) x;\"")
+if [ -n "$dup" ]; then
+  echo "❌ 同じ名前の関数が2つ以上あります: $dup"
+  exit 1
+fi
+echo "  同じ名前の関数の重なり: なし"
+
 echo "▶ 出来たものを確認"
 su postgres -c "psql -d $DB -tAc \"
   select 'テーブル: ' || count(*) from pg_tables where schemaname='public';\""

@@ -1373,6 +1373,28 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--pop-bg); color: var(--pop-fg);
   box-shadow: 0 10px 30px rgb(0 0 0 / 20%);
   font-size: 13px; line-height: 1.7; text-align: left; white-space: normal;
+  /* 高さの上限は画面の残りに合わせて JS が決める。
+     ここは**はみ出しを切るだけ。** 角の丸みも保たれる */
+  overflow: hidden;
+}
+
+/* ── 吹き出しの中を上下に送れるようにする(2026-08 利用者の指摘)──
+   吹き出しは `position: fixed` なので、**画面を送っても付いてくる。**
+   中身が画面より高いと、はみ出した部分には永久に手が届かなかった。
+   「文が1番下までくると、外の画面を送ることさえできない」。
+
+   ・意味と例文は**ここ**に入る。ここだけが送れる
+   ・「知っていた / 知らなかった」は**この外**にある。
+     どれだけ意味が長くても、ボタンは必ず見えている
+   ・`overscroll-behavior: contain` … 端まで送っても、
+     後ろの画面まで一緒に動かない(スマホで気持ちが悪いため) */
+.etext-pop-body {
+  display: flex; flex-direction: column; gap: 10px;
+  /* flex の子は既定で縮まない。**0 を入れないと送れない** */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 見出し。**帯にしない。** 線1本で足りる。
@@ -1435,7 +1457,11 @@ html { -webkit-text-size-adjust: 100%; }
    赤い字は、間違いを責められているように見える(2026-08 の指摘) */
 .etext-pop-actions {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  padding-top: 10px; border-top: 1px solid var(--pop-rule);
+  /* 左右と下の余白を打ち消して、区切り線を端まで伸ばす。
+     **送れる場所の外に居る**ので、ここは決してスクロールで消えない */
+  margin: 0 -16px -14px; padding: 10px 16px 14px;
+  border-top: 1px solid var(--pop-rule);
+  background: var(--pop-bg);
 }
 .etext-pop-actions .btn { padding: 5px 14px; font-size: 12.5px; }
 .etext-pop-actions .btn--link { margin-left: auto; padding: 5px 2px; }
@@ -1840,3 +1866,53 @@ html { -webkit-text-size-adjust: 100%; }
 }
 /* 箱と次に出る日。**進んでいることが見えないと続かない** */
 .wordbook-when { margin-right: auto; font-size: 11.5px; color: var(--text-muted); }
+
+/* 出会った文(0018)。**思い出す手がかり**なので、意味のすぐ下に置く。
+   本文そのものではないので、控えめに(縦線1本と小さめの字) */
+.wordbook-seen {
+  margin: 6px 0 0; padding-left: 10px;
+  border-left: 2px solid var(--border);
+  color: var(--text-secondary); font-size: 13px; line-height: 1.7;
+}
+.wordbook-seen strong { color: var(--text-primary); }
+
+/* ── 進み具合 ────────────────────────────────────────────────
+   **終わりの見えない作業は続かない。** 今日の残りと覚えた数を上に出す */
+.wordbook-tally {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  margin: 2px 0 12px; color: var(--text-muted); font-size: 12px;
+}
+.wordbook-tally strong {
+  margin-right: 4px; color: var(--text-primary); font-size: 16px; font-weight: 700;
+}
+.wordbook-done { color: var(--accent); font-weight: 600; }
+
+/* ── 今日の復習は1語ずつ ──────────────────────────────────────
+   **答えを見る前に、必ず1回考える。** 記憶は思い出そうとしたときに強くなる。
+   だから語だけを大きく出し、意味は押すまで出さない。 */
+.wordcard {
+  margin-top: 12px; padding: 20px 18px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface-2); text-align: center;
+}
+.wordcard-count { margin: 0 0 10px; color: var(--text-muted); font-size: 12px; }
+.wordcard-face {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: center; gap: 10px;
+}
+.wordcard-word { font-size: 26px; font-weight: 700; line-height: 1.4; }
+.wordcard-ask { margin: 14px 0 10px; color: var(--text-muted); font-size: 12.5px; }
+.wordcard-reveal { min-width: 160px; }
+.wordcard-back {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: center; gap: 8px;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.wordcard-mean { font-size: 17px; font-weight: 600; }
+.wordcard .wordbook-seen { margin-top: 10px; text-align: left; }
+.wordcard-actions {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: center; gap: 10px; margin-top: 16px;
+}
+.wordcard-actions .btn { min-width: 96px; }
+.wordcard-actions .wordbook-when { margin: 0; flex-basis: 100%; }

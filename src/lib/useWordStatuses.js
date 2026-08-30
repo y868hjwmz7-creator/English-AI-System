@@ -30,10 +30,12 @@ export default function useWordStatuses() {
 
   /**
    * 語に「知っていた / 知らなかった」を付ける(null で取り消し)。
+   * `sentence` はその語に**出会った文**。復習のときに文脈ごと思い出せる
+   * ようにするため(0018)。渡さなくても動く。
    * **手元の表示を先に変える。** 通信を待って色が変わるのでは、
    * 押した手ごたえが無い。失敗したら元に戻す。
    */
-  const mark = useCallback(async (norm, status, kind = 'word') => {
+  const mark = useCallback(async (norm, status, kind = 'word', sentence = null) => {
     let before = null
     setStatuses((m) => {
       before = m
@@ -43,7 +45,7 @@ export default function useWordStatuses() {
       return next
     })
     const { error: e } = status
-      ? await setWordStatus(norm, status, { kind })
+      ? await setWordStatus(norm, status, { kind, sentence })
       : await clearWordStatus(norm)
     if (e) { setError(e); if (before) setStatuses(before) }
   }, [])
