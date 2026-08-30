@@ -35,6 +35,10 @@ const isTouch = (e) => e?.pointerType === 'touch'
 /** 振動の長さ(ミリ秒)。**長くしない。** 気持ち悪くなる */
 const MS = { tap: 8, hold: 18 }
 
+/** これ以上動いたら「押した」ではなく「送った」とみなす(px)。
+    語の長押し(`EnglishText.jsx` の `MOVE_SLOP`)と同じ考え方 */
+const MOVE_SLOP = 10
+
 // ── iOS 用。見えないところに1つだけ置いて、切り替える ──────────
 //
 // Safari 17.4 で `<input type="checkbox" switch>` が入り、
@@ -81,6 +85,12 @@ export function tapFeedback(kind = 'tap') {
  * 画面ごとに書いて回ると、新しいボタンで必ず抜ける
  * (`styles.css` の「どの画面にも効く決まり」と同じ考え方)。
  *
+ * 【画面を送ったときは返さない】(2026-08 利用者の指定)
+ *   指を置いた場所がボタンでも、そこから**送り始めたなら押していない。**
+ *   `pointerdown` で返すと、送るたびに振れてしまう。
+ *   そこで**指を離したときに、押しっぱなしだった場合だけ**返す。
+ *   語の長押しと同じ見張り方である(`EnglishText.jsx`)。
+ *
  * **語は外す。** 語は「軽く触れただけでは何も起きない」ので、
  * 触れた瞬間に振れると「押せた」と誤解させる。
  * 語は長押しが効いた瞬間に `tapFeedback('hold')` を呼んでいる。
@@ -88,13 +98,56 @@ export function tapFeedback(kind = 'tap') {
  * @returns {Function} 見張りをやめる関数
  */
 export function installTapFeedback() {
+  let armed = false          // いま押している最中か
+  let from = null            // 指を置いた場所
+  let off = null             // 見張りの後始末
+
+  const disarm = () => {
+    armed = false
+    from = null
+    off?.()
+    off = null
+  }
+
   const onDown = (e) => {
+    disarm()
     if (!isTouch(e)) return
     const el = e.target?.closest?.('button, [role="button"], summary, label.chip')
     if (!el || el.disabled) return
     if (el.closest('.etext-word')) return   // 語は長押しが効いたときだけ
-    tapFeedback('tap')
+
+    armed = true
+    from = { x: e.clientX, y: e.clientY }
+    const onMove = (ev) => {
+      const t = ev.touches?.[0] ?? ev
+      if (!from || t.clientX == null) return
+      if (Math.hypot(t.clientX - from.x, t.clientY - from.y) > MOVE_SLOP) disarm()
+    }
+    // **画面が動いたら、押していない。** `scroll` は伝わらないので capture で拾う
+    const onScroll = () => disarm()
+    document.addEventListener('pointermove', onMove, { passive: true })
+    document.addEventListener('touchmove', onMove, { passive: true })
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    off = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('scroll', onScroll, { capture: true })
+    }
   }
+
+  const onUp = () => {
+    const ok = armed
+    disarm()
+    if (ok) tapFeedback('tap')
+  }
+
   document.addEventListener('pointerdown', onDown, { passive: true })
-  return () => document.removeEventListener('pointerdown', onDown)
+  document.addEventListener('pointerup', onUp, { passive: true })
+  document.addEventListener('pointercancel', disarm, { passive: true })
+  return () => {
+    disarm()
+    document.removeEventListener('pointerdown', onDown)
+    document.removeEventListener('pointerup', onUp)
+    document.removeEventListener('pointercancel', disarm)
+  }
 }
