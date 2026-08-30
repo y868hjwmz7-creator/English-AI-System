@@ -1650,10 +1650,33 @@ html { -webkit-text-size-adjust: 100%; }
   border: none; background: none; padding: 0; cursor: pointer;
   font: inherit; color: var(--accent); text-decoration: underline;
 }
-.past-list { list-style: none; margin: 8px 0 0; padding: 0; }
-.past-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
-.past-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* ── 過去の宿題の一覧 ──────────────────────────────────────
+   【なぜ枠で囲うのか】(2026-08 の指摘)
+
+   > 各要素の縦の隙間が詰まりすぎなのと、
+   > 宿題と宿題の区切りがパッと見て分からないです。
+
+   細い線1本で区切って、上下の余白も詰まっていたので、
+   **どこからどこまでが1件なのか分からなかった。**
+   1問ごとのカード(`.qa-row`)で一度学んだのと同じ形にそろえる。
+   **1件 = 1枚のカード**にし、カードとカードのあいだを空ける。 */
+.past-list {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.past-item {
+  padding: 14px 16px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-1); box-shadow: var(--shadow-1);
+}
+/* 中の要素にも息をつかせる。**詰めると読む順が分からなくなる** */
+.past-head {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-bottom: 8px;
+}
 .past-date { font-size: 13px; color: var(--text-secondary); }
+.past-item .mtitle { margin-bottom: 6px; }
+.past-meta { margin: 0 0 12px; font-size: 13px; }
 .past-title { margin: 4px 0 2px; font-weight: 600; }
 
 /* ── しぼり込みの札(過去の宿題)──────────────────────────

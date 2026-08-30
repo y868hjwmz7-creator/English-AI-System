@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, scoreTestLabel } from '../data/cefr.js'
 import {
-  addLearnerScore, createAccount, kindLabel, loadLearnerAssignments, loadLearnerSummary,
+  addLearnerScore, createAccount, kindLabel, loadLearnerAssignments,
   loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
   loadMaterial,
 } from '../lib/materials.js'
@@ -57,7 +57,6 @@ export default function TrainerLearners({ me }) {
   const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
   const [lessonBusy, setLessonBusy] = useState(null)
   const [assignments, setAssignments] = useState([])
-  const [summary, setSummary] = useState(null)
   const [detailBusy, setDetailBusy] = useState(false)
   // 過去の宿題の絞り込み。
   // **出すのは、そのゲストの宿題に実際に含まれる弱点だけ。**
@@ -128,12 +127,13 @@ export default function TrainerLearners({ me }) {
     setMessage(null)
     setForm({ testType: 'toeic', score: '', takenOn: today() })
     setDetailBusy(true)
-    const [{ data: hist }, { data: past }, { data: sum }] = await Promise.all([
-      loadScoreHistory(id), loadLearnerAssignments(id), loadLearnerSummary(id),
+    // `loadLearnerSummary`(study_logs の合計)は読まない。
+    // **もう誰も入力しないので、いつも 0 になる**(2026-08 の設計変更)
+    const [{ data: hist }, { data: past }] = await Promise.all([
+      loadScoreHistory(id), loadLearnerAssignments(id),
     ])
     setHistory(hist ?? [])
     setAssignments(past ?? [])
-    setSummary(sum ?? null)
     setDetailBusy(false)
   }
 
@@ -364,12 +364,11 @@ export default function TrainerLearners({ me }) {
 
                   return (
                   <>
-                    {summary && (
-                      <p className="card-hint">
-                        学習した日 {summary.days} 日 / 合計 {Math.round(summary.minutes / 60)} 時間
-                        {summary.lastOn && ` / 最後の記録 ${summary.lastOn}`}
-                      </p>
-                    )}
+                    {/* **いつも 0 になる数字を出さない**(2026-08 の設計変更)。
+                        「学習した日 / 合計時間」はゲストが自分で入力していた
+                        `study_logs` の数字で、**もう誰も入力しない。**
+                        いまは `practice_days`(0022)を裏で数えている */}
+                    <p className="card-hint">{practiceLine(practice[l.id])}</p>
                     {detailBusy && <p className="muted">読み込み中…</p>}
                     {!detailBusy && assignments.length === 0 && (
                       <p className="card-hint">
@@ -448,29 +447,22 @@ export default function TrainerLearners({ me }) {
                             </span>
                             {a.admin_checked_at && <span className="badge">確認済</span>}
                           </div>
+                          {/* **弱点タグを2回出さない**(教材をさがす画面と同じ決まり)。
+                              弱点は教材名の中にすでに入っており、`MaterialTitle` が
+                              出す(ドリルは見出しそのもの、記事はグレーの札)。
+                              手で名前を付けた教材のために、`fallbackTags` に渡す */}
                           <MaterialTitle
                             title={a.material?.title ?? '(消された教材)'}
                             headline={a.material?.headline}
+                            fallbackTags={[(a.material?.tagIds ?? [])
+                              .map(weaknessTagLabel).join(' + ')]}
                             as="div" size="row"
                           />
-                          <div className="muted">
-                            {a.material && `${cefrLabel(a.material.level)} / `}
-                            {a.material && `${kindLabel(a.material.kind)} / `}
-                            {a.material?.itemCount ? `${a.material.itemCount} 問` : ''}
-                          </div>
-                          {!!a.material?.tagIds?.length && (
-                            <div className="tagpicker-tags">
-                              {a.material.tagIds.map((t) => (
-                                // しぼり込みで選んだ弱点だけ色を変える。
-                                // どの弱点で引っかかったのかが一目で分かる
-                                <span key={t}
-                                      className={`tagchip is-static${
-                                        pastTags.includes(t) ? ' is-hit' : ''}`}>
-                                  {weaknessTagLabel(t)}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          {/* レベルは上の札に出ているので、ここでは繰り返さない */}
+                          <p className="muted past-meta">
+                            {a.material && kindLabel(a.material.kind)}
+                            {a.material?.itemCount ? ` / ${a.material.itemCount} 問` : ''}
+                          </p>
                           {/* ここから開けば、**このゲストの教材しか映らない。**
                               「教材」タブから探すと、他のゲストに出したものも
                               画面に並んでしまう(画面共有では見せたくない) */}
