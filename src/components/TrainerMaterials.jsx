@@ -287,23 +287,28 @@ export default function TrainerMaterials({ me }) {
                   <span className="material-open-mark" aria-hidden="true">
                     {openId === m.id ? '▾' : '▸'}
                   </span>
-                  {/* 見出しは弱点だけ。レベル・業界は小さな札、日付は右上 */}
+                  {/* 見出しは弱点だけ。レベル・業界は小さな札、日付は右上。
+
+                      **弱点を2回出さない**(2026-08 利用者の指定)。
+                      以前は下に白い札の行を別に並べていたが、
+                      弱点は**教材名の中にすでに入っている。**
+                      文型ドリルでは見出しそのもの、記事では小さな札になる。
+                      > 弱点ポイントが2回表示されています。
+                      > 記事の時に表示されているグレーの部分だけに表示されるよう統一
+
+                      手で名前を付けた教材だけは、教材名から読み取れない。
+                      そのときのために `fallbackTags` の先頭に弱点を渡す。 */}
                   <MaterialTitle
                     title={m.title}
                     headline={m.headline}
-                    fallbackTags={[cefrLabel(m.level), kindLabel(m.kind), industryLabel(m.industry)]}
+                    fallbackTags={[m.tagIds.map(weaknessTagLabel).join(' + '),
+                      cefrLabel(m.level), kindLabel(m.kind), industryLabel(m.industry)]}
                   />
                 </div>
                 <span className="muted">
                   {kindLabel(m.kind)}
                   {m.visibility === 'private' && ' / 自分だけ'}
                 </span>
-              </div>
-
-              <div className="tagpicker-tags material-tags">
-                {m.tagIds.map((t) => (
-                  <span key={t} className="tagchip is-static">{weaknessTagLabel(t)}</span>
-                ))}
               </div>
 
               {m.instruction_ja && <p className="card-hint">{m.instruction_ja}</p>}
