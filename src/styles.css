@@ -2919,7 +2919,9 @@ html { -webkit-text-size-adjust: 100%; }
      縮ませると、窓が低いときに高さ 0 になって**問題が真っ白になった**
      (2026-08 実機)。決め打ちなら、**ボタンの場所も動かない。**
      長い問題は、この中だけで送られる */
-  flex: 0 0 auto; height: clamp(7rem, 30vh, 18rem);
+  /* **空きすぎないように、少し低くした**(2026-08 の指摘)。
+     下限(6rem)は必ず残す。**0 まで縮むと問題が真っ白になる**(実機) */
+  flex: 0 0 auto; height: clamp(6rem, 26vh, 15rem);
   display: flex; flex-direction: column;
   gap: 6px; overflow-y: auto;
   /* **上に詰める。**「2 / 30 のすぐ下に問題の上端」(2026-08 の指定) */
@@ -3001,7 +3003,13 @@ html { -webkit-text-size-adjust: 100%; }
 .qr--paper .qr-actions .btn--ghost { color: var(--qr-dim); }
 
 @media (max-width: 560px) {
-  .qr-ja { font-size: 17px; }
+  /* スマホでは、日本語も英語も**16px にそろえる**(2026-08 の指摘)。
+     19px / 17px では画面の幅に対して大きすぎ、
+     1文が3行に折り返されて枠からはみ出していた。
+     ※ iPhone で「これより大きい」と感じるときは、Safari の
+       ページズーム(アドレスバー左の「ぁあ」→ ズーム)を確かめる。
+       こちらの指定は 16px で、端末側の拡大はそこに掛け算される */
+  .qr-ja { font-size: 16px; line-height: 1.7; }
   /* ── スマホでの答え(英語)──────────────────────────
      【何が起きていたか】(2026-08 実機)
 
@@ -3016,7 +3024,7 @@ html { -webkit-text-size-adjust: 100%; }
      ・**文字を小さくする。** 読むのは1文なので 19px は要らない */
   .qr-en {
     flex-direction: column; align-items: center; gap: 6px;
-    font-size: 16px; line-height: 1.6;
+    font-size: 16px; line-height: 1.7;
   }
   .qr-en .etext-listen { order: 2; }
   .qr-actions { gap: 8px; }
