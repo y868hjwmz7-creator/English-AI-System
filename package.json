@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "audio": "node scripts/generate-audio.mjs",
     "test:db": "bash scripts/test-migration.sh",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:chunk": "node scripts/test-chunker.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

@@ -1,11 +1,23 @@
 /**
- * 記事・会話の本文を、声に出して練習する画面。
+ * 記事・会話の本文を、6Steps で練習する画面。
  *
- * 【なぜ「取り組み方」を切り替える形にしたか】
- *   音読・オーバーラッピング・シャドーイング・リピーティングは、
- *   **別々の教材ではなく、同じ本文に対する取り組み方**である。
- *   以前はこれを演習として分けていたため、記事にならず、
- *   短い英文が並ぶだけの教材になっていた(仕様書 第5.17節)。
+ * 【6Steps とは】(2026-08 利用者の指定)
+ *   利用者のスクールのトレーニング。①ディクテーション ②スラッシュリーディング
+ *   ③オーバーラッピング ④意味音読 ⑤シャドーイング ⑥リピーティング。
+ *
+ *   **6つは別々の教材ではない。同じ本文に対する取り組み方**である。
+ *   だから演習(セクション)として分けない。分けたために「長文」が
+ *   16個の短文になった失敗が、すでに一度ある(仕様書 第5.17節)。
+ *
+ *   もともとこの画面にあった「音読 / オーバーラッピング / シャドーイング /
+ *   リピーティング」の4つが、**そのまま 6Steps の一部**だった。
+ *   横に別のボタンを足すのではなく、**この切り替えを 6Steps に置き換えた。**
+ *   同じことをするものが2つ並ぶのを避けるためである(第5.29節)。
+ *
+ * 【単位が2通りある】
+ *   ①②④⑥ は**1文ずつ**、③⑤ は**本文まるごと**。
+ *   本文の項目は段落(記事)/ 発言(会話)なので、
+ *   1文ずつのステップでは `sentencesOf()` でさらにほどく。
  *
  * 【文字起こしのフィードバックについて】
  *   話した内容を文字にして、お手本と単語ごとに突き合わせ、色で示す。
@@ -17,7 +29,7 @@
  *   実用上通じない発音なので、練習の手がかりとしては十分に働く。
  *   この前提は画面にも書く(隠すと、点数を実力と誤解させる)。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { readAloud, readAloudSequence, stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
@@ -30,32 +42,17 @@ import EnglishText from './EnglishText.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
-
-/** 取り組み方。読む速さと、お手本の出し方が変わる */
-const MODES = [
-  {
-    id: 'read', label: '音読', rate: 0.9,
-    hint: 'お手本を聞いてから、自分のペースで読みます。まず意味と区切りをつかみます。',
-  },
-  {
-    id: 'overlap', label: 'オーバーラッピング', rate: 0.85,
-    hint: 'お手本と同時に、重ねて読みます。文字を見ながらで構いません。',
-  },
-  {
-    id: 'shadow', label: 'シャドーイング', rate: 0.85,
-    hint: 'お手本の少しあとを追いかけて読みます。慣れるまでは文字を見て構いません。',
-  },
-  {
-    id: 'repeat', label: 'リピーティング', rate: 0.9,
-    hint: 'お手本を聞き、止めてから繰り返します。1段落ずつ区切って行います。',
-  },
-]
+import { SIX_STEPS, sentencesOf, stepOf } from '../lib/sixSteps.js'
+import SlashReading from './SlashReading.jsx'
+import StepDictation from './StepDictation.jsx'
+import StepSentence from './StepSentence.jsx'
+import { loadSlashLevel, saveSlashLevel } from '../lib/slashLevel.js'
 
 export default function PassagePractice({
   section, headline, isDialogue, tags = null, voiceIds = null,
   level = 'B1', wordStatuses = null, onMarkWord = null,
 }) {
-  const [mode, setMode] = useState('read')
+  const [step, setStep] = useState('dictation')
   const [voices, setVoices] = useState([])
   const [showJa, setShowJa] = useState(false)
   // 読み上げの速さ。取り組み方ごとのもとの速さに**掛ける**ので、
@@ -66,10 +63,15 @@ export default function PassagePractice({
   // null のままで、これまでどおり発言ごとの色分けだけが残る
   const [readingAt, setReadingAt] = useState(null)
   const [listeningId, setListeningId] = useState(null)
-  const [results, setResults] = useState({})   // 段落ごとの結果
+  const [results, setResults] = useState({})   // 段落 / 文ごとの結果
   const [notice, setNotice] = useState(null)
+  // ② の区切りの細かさ。**覚えておく**(開くたびに選び直させない)
+  const [slashLevel, setSlashLevel] = useState(loadSlashLevel)
+  // ⑤ シャドーイングは本文を隠して行う。追いつけないときの逃げ道は残す
+  const [peek, setPeek] = useState(false)
   const sessionRef = useRef(null)
   const stopAllRef = useRef(null)   // 通しの読み上げを止めるための関数
+  const stepBarRef = useRef(null)   // 6Steps の帯(選んでいるものを見える位置へ寄せる)
 
   useEffect(() => {
     let alive = true
@@ -92,7 +94,9 @@ export default function PassagePractice({
       ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [speakingId])
 
-  const current = MODES.find((m) => m.id === mode) ?? MODES[0]
+  const current = stepOf(step)
+  // ①②④⑥ は1文ずつ。段落・発言をさらにほどく
+  const sentences = useMemo(() => sentencesOf(section.items), [section.items])
   // 話す人 → 声。**会話は1人1声。** 同じ声だと役を追えない(2026-08 の指摘)
   const cast = castVoices(voices, section.items.map((it) => it.speaker))
   // こちらで作った音声(MP3)の話者。**端末の声から換算しない。**
@@ -104,6 +108,19 @@ export default function PassagePractice({
   // 本文はシャドーイングの素材なので、**良い声を使う**(`voiceTier.js`)
   const tier = voiceTierFor({ exerciseType: section.exercise_type, tags })
   const voice = voices[0] ?? null
+
+  // ステップを移ったら、鳴っているものを止め、⑤ の「本文を出す」も戻す
+  useEffect(() => { stopReading(); setSpeakingId(null); setReadingAt(null); setPeek(false) }, [step])
+
+  // 6つは横に流れるので、**選んでいるものを見える位置へ寄せる。**
+  // どこにいるか分からないまま端の項目を探すことになる(タブと同じ)。
+  // **帯だけを動かす。** `scrollIntoView` は画面ごと横へずらすことがある
+  useEffect(() => {
+    const bar = stepBarRef.current
+    const on = bar?.querySelector('.chip--on')
+    if (!bar || !on) return
+    bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2)
+  }, [step])
 
   /** 読み上げを止める。通しでも1発言でも、同じところで止める */
   const stopPlaying = () => {
@@ -163,8 +180,12 @@ export default function PassagePractice({
   }
 
   /** 話して確かめる。もう一度押すと止めて、結果を出す。 */
+  //
+  // **段落でも1文でも、同じ関数を使う。** 段落は `prompt_en`、
+  // 1文は `text` に英語が入っている。呼び分けを2か所に置かない
   const checkOne = async (item) => {
     if (listeningId === item.id) { sessionRef.current?.stop(); return }
+    const model = item.prompt_en ?? item.text ?? ''
     setNotice(null)
     stopPlaying()
     setListeningId(item.id)
@@ -173,7 +194,7 @@ export default function PassagePractice({
     sessionRef.current = session
     try {
       const { text, confident } = await session.done
-      const diff = compareTranscript(item.prompt_en, text)
+      const diff = compareTranscript(model, text)
       setResults((r) => ({ ...r, [item.id]: { diff, text, confident } }))
     } catch (e) {
       setNotice(e.message)
@@ -187,23 +208,33 @@ export default function PassagePractice({
     <div className="passage">
       {headline && <h4 className="passage-headline" lang="en">{headline}</h4>}
 
-      <div className="passage-modes" role="group" aria-label="取り組み方">
-        {MODES.map((m) => (
+      {/* 6Steps。**番号を出す。** 順にやるものなので、
+          いま何番目かが分かることそのものが道しるべになる。
+          折り返さず横に流し、選んでいるものを見える位置へ寄せる
+          (タブで一度学んだこと) */}
+      <div className="passage-modes steps" role="group" aria-label="6Steps" ref={stepBarRef}>
+        {SIX_STEPS.map((m) => (
           <button
-            key={m.id} type="button"
-            className={`chip${mode === m.id ? ' chip--on' : ''}`}
-            onClick={() => { stopPlaying(); setMode(m.id) }}
+            key={m.id} type="button" title={m.hint}
+            className={`chip${step === m.id ? ' chip--on' : ''}`}
+            onClick={() => { stopPlaying(); setStep(m.id) }}
           >
-            {m.label}
+            <span className="step-no">{m.no}</span>{m.label}
           </button>
         ))}
       </div>
-      <p className="card-hint">{current.hint}</p>
+      <p className="card-hint step-hint">
+        {current.hint.split('**').map((t, i) => (i % 2 ? <strong key={i}>{t}</strong> : t))}
+      </p>
 
       <div className="passage-tools">
-        <button type="button" className="btn" onClick={playAll}>
-          <SpeakerIcon />Listen (全体)
-        </button>
+        {/* 通しの読み上げは、本文まるごとのステップ(③⑤)でだけ意味がある。
+            1文ずつのステップでは、各文の Listen を使う */}
+        {current.unit === 'passage' && (
+          <button type="button" className="btn" onClick={playAll}>
+            <SpeakerIcon />Listen (全体)
+          </button>
+        )}
         <label className="rate-pick">
           <span>速さ</span>
           <select value={rateId}
@@ -213,9 +244,17 @@ export default function PassagePractice({
             ))}
           </select>
         </label>
-        <button type="button" className="btn" onClick={() => setShowJa(!showJa)}>
-          {showJa ? '日本語を隠す' : '日本語を見る'}
-        </button>
+        {current.unit === 'passage' && (
+          <button type="button" className="btn" onClick={() => setShowJa(!showJa)}>
+            {showJa ? '日本語を隠す' : '日本語を見る'}
+          </button>
+        )}
+        {/* ⑤ は本文を見ないで行う。**追いつけないときの逃げ道は残す** */}
+        {!current.script && current.unit === 'passage' && (
+          <button type="button" className="btn" onClick={() => setPeek(!peek)}>
+            {peek ? '本文を隠す' : '本文を出す'}
+          </button>
+        )}
         <button type="button" className="btn" onClick={stopPlaying}>
           <StopIcon />Stop
         </button>
@@ -223,7 +262,38 @@ export default function PassagePractice({
 
       {notice && <div className="notice notice--warn passage-notice">{notice}</div>}
 
-      <ol className="passage-body">
+      {/* ── ①②④⑥ は1文ずつ ──────────────────────────── */}
+      {step === 'dictation' && (
+        <StepDictation
+          sentences={sentences} clipVoice={soloVoice} tier={tier}
+          rate={rateOf(rateId, current.rate)} level={level}
+          wordStatuses={wordStatuses} onMarkWord={onMarkWord}
+          listeningId={listeningId} onCheck={checkOne} results={results}
+        />
+      )}
+      {step === 'slash' && (
+        <SlashReading
+          sentences={sentences} clipVoice={soloVoice} tier={tier}
+          rate={rateOf(rateId, current.rate)}
+          level={slashLevel}
+          onLevelChange={(v) => { setSlashLevel(v); saveSlashLevel(v) }}
+        />
+      )}
+      {(step === 'meaning' || step === 'repeat') && (
+        <StepSentence
+          sentences={sentences} startVisible={current.script}
+          clipVoice={soloVoice} tier={tier}
+          rate={rateOf(rateId, current.rate)} level={level}
+          wordStatuses={wordStatuses} onMarkWord={onMarkWord}
+          listeningId={listeningId} onCheck={checkOne} results={results}
+        />
+      )}
+
+      {/* ── ③⑤ は本文まるごと ───────────────────────────
+          ⑤ シャドーイングは**本文を見ないで**行う(利用者の指定)。
+          隠すのは英語だけで、Listen も話して確かめるもそのまま使える */}
+      {current.unit === 'passage' && (
+      <ol className={`passage-body${current.script || peek ? '' : ' is-hidden-text'}`}>
         {section.items.map((item) => {
           const result = results[item.id]
           return (
@@ -232,11 +302,17 @@ export default function PassagePractice({
               {isDialogue && item.speaker && (
                 <div className="passage-speaker" lang="en">{item.speaker}</div>
               )}
-              <p className="passage-en">
-                <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
-                             statuses={wordStatuses} onMark={onMarkWord}
-                             readingAt={speakingId === item.id ? readingAt : null} />
-              </p>
+              {current.script || peek ? (
+                <p className="passage-en">
+                  <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
+                               statuses={wordStatuses} onMark={onMarkWord}
+                               readingAt={speakingId === item.id ? readingAt : null} />
+                </p>
+              ) : (
+                /* 隠していても**場所は残す。** 消すと、いくつ段落があるのか
+                   分からなくなり、いま何番目を追っているのかも見失う */
+                <p className="passage-en passage-en--hidden" aria-hidden="true">　</p>
+              )}
               {/* 語をまたぐ言い回しは、語1つでは拾えない。札にして横に置く */}
               <PhraseChips phrases={item.phrases} sentence={item.prompt_en}
                            level={level} statuses={wordStatuses} onMark={onMarkWord} />
@@ -284,6 +360,7 @@ export default function PassagePractice({
           )
         })}
       </ol>
+      )}
 
       {isRecognitionSupported() ? (
         <p className="field-hint">

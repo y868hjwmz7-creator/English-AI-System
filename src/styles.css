@@ -977,6 +977,22 @@ html { -webkit-text-size-adjust: 100%; }
   margin: 0 0 10px; font-size: 18px; line-height: 1.4; color: var(--text-primary);
 }
 .passage-modes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+
+/* 6Steps。**折り返さず横に流す。**
+   折り返すと「オーバー / ラッピング」のように割れて読めない
+   (タブで一度学んだこと)。番号を出すのは、順にやるものだからである */
+.passage-modes.steps {
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  margin: 0 -2px 8px; padding: 2px;
+}
+.passage-modes.steps::-webkit-scrollbar { display: none; }
+.passage-modes.steps > .chip {
+  flex: 0 0 auto; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px; min-height: 36px;
+}
+.step-no { font-weight: 700; font-size: 14px; opacity: 0.85; }
+.step-hint { margin-bottom: 10px; line-height: 1.7; }
 .chip {
   padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
   background: var(--surface-1); color: var(--text-secondary); font-size: 13px; cursor: pointer;
@@ -1005,6 +1021,97 @@ html { -webkit-text-size-adjust: 100%; }
 .passage-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .btn--small { padding: 4px 10px; font-size: 13px; }
 .passage-notice { margin: 8px 0; }
+
+/* ⑤ シャドーイング。**本文を見ないで行う**(利用者の指定)。
+   隠しても行の場所は残す。消すと段落がいくつあるのか分からなくなる */
+.passage-en--hidden, .stepsent-hidden {
+  margin: 0 0 4px; min-height: 1.9em; border-radius: 6px;
+  background: repeating-linear-gradient(
+    -45deg, var(--surface-2) 0 6px, transparent 6px 12px);
+  opacity: 0.7;
+}
+
+/* ── ① ディクテーション ──────────────────────────────── */
+.dictation-list, .stepsent-list { list-style: none; margin: 0; padding: 0; }
+.dictation-row, .stepsent-row {
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.dictation-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px;
+}
+/* 何文目か。**番号が要る。** どこまで書き取ったかを見失う */
+.dictation-no {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text-secondary);
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.dictation-head .etext-listen { margin-left: auto; }
+.dictation-input {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface-1); color: var(--text-primary);
+  font-family: inherit; font-size: 15px; line-height: 1.7; resize: vertical;
+}
+.dictation-answer { margin-top: 8px; }
+.dictation-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
+.stepsent-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
+
+/* ── ② スラッシュリーディング ────────────────────────── */
+.slash-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.slash-head .rate-pick { margin-left: auto; }
+.slash-list { list-style: none; margin: 0; padding: 0; }
+.slash-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.slash-line { margin: 0; line-height: 2.4; font-size: 17px; }
+.slash-w { white-space: nowrap; }
+/* 語と語のあいだ。**細く見せて、広く押させる。**
+   見た目を太くすると文が読みにくく、細いままだと指で狙えない */
+.slash-gap {
+  position: relative;
+  display: inline-block; width: 0.62em; height: 1.5em; vertical-align: -0.35em;
+  margin: 0 0.06em; padding: 0; border: none; border-radius: 4px;
+  background: none; color: transparent; cursor: pointer;
+  font: inherit; line-height: 1.5em; text-align: center;
+}
+/* 当たり判定だけを指の幅まで広げる(見た目は変えない) */
+.slash-gap::after {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 32px; height: 40px; transform: translate(-50%, -50%);
+}
+.slash-gap:hover { background: var(--surface-2); color: var(--text-muted); }
+.slash-gap.is-on {
+  color: var(--series-1); font-weight: 700; background: none;
+}
+.slash-gap.is-on:hover { background: var(--surface-2); }
+
+/* 自分の区切りを、カタマリとして並べ直す。**前から順に訳す練習** */
+.slash-mine, .slash-model {
+  display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0;
+}
+.slash-chunk {
+  padding: 3px 10px; border-radius: 6px;
+  background: var(--surface-2); font-size: 15px; line-height: 1.6;
+}
+.slash-model .slash-chunk {
+  background: color-mix(in srgb, var(--series-1) 12%, transparent);
+}
+.slash-notes {
+  margin: 8px 0 0; padding: 8px 10px 8px 26px; border-radius: 8px;
+  background: var(--unknown-bg); font-size: 13px; line-height: 1.7;
+}
+.slash-answer { margin-top: 10px; }
+.slash-answer-label { margin: 0; color: var(--text-muted); font-size: 12px; }
+.slash-why {
+  margin: 8px 0 0; padding-left: 20px;
+  color: var(--text-secondary); font-size: 12.5px; line-height: 1.8;
+}
+.slash-ja { margin: 8px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.8; }
+.slash-ja-label {
+  display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text-muted); font-size: 11px;
+}
 
 /* 文字起こしの色分け。色だけに頼らず、線でも区別する
    (色の見え方には個人差がある) */

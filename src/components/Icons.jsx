@@ -199,3 +199,13 @@ export function BoltIcon({ className = 'icon' }) {
     </svg>
   )
 }
+
+/** 段。6Steps(順に積み上げるトレーニング) */
+export function StepsIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M2.5 16.5h4v-4h4v-4h4v-4h3" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}

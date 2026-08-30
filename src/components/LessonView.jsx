@@ -25,11 +25,12 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
-import { BoltIcon, GearIcon, PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
+import { BoltIcon, GearIcon, PrintIcon, SpeakerIcon, StepsIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import QuickResponse from './QuickResponse.jsx'
+import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton from './SpeakButton.jsx'
 import PhraseChips from './PhraseChips.jsx'
@@ -85,11 +86,13 @@ export default function LessonView({
   // Esc の扱いで今の状態を見たい。`useEffect` の中から読めるように控える
   const openSettingsRef = useRef(false)
   openSettingsRef.current = openSettings
-  // Quick Response を出しているか。**教材1本を通しでやる**ので、
-  // 出しているあいだはページ送りと解答のボタンを出さない(効かないため)
-  const [qr, setQr] = useState(false)
-  const qrRef = useRef(false)
-  qrRef.current = qr
+  // 通しの練習を出しているか。null / 'qr'(Quick Response)/ 'six'(6Steps)。
+  // **教材1本 / 本文1本を通しでやる**ので、出しているあいだは
+  // ページ送りと解答のボタンを出さない(効かないため)
+  const [run, setRun] = useState(null)
+  const runRef = useRef(null)
+  runRef.current = run
+  const qr = run === 'qr'
   // 読み上げの速さ。**画面に1つだけ。** 端末に覚えさせる(2026-08 利用者の指定)
   const [rateId, setRateId] = useState(loadRateId)
   // 読み上げ。**会話は話す人ごとに声を変える**(2026-08 の指摘)。
@@ -171,12 +174,12 @@ export default function LessonView({
       if (e.key === 'Escape') {
         // **開いているものから閉じる。** いきなり画面ごと閉じない
         if (openSettingsRef.current) { setOpenSettings(false); return }
-        if (qrRef.current) { setQr(false); return }
+        if (runRef.current) { setRun(null); return }
         stopReading(); onClose?.()
         return
       }
-      // Quick Response のあいだはページという考え方が無い(教材1本を通す)
-      if (qrRef.current) return
+      // 通しの練習のあいだはページという考え方が無い(教材1本を通す)
+      if (runRef.current) return
       if (e.key === 'ArrowRight') {
         setPage((p) => Math.min(p + 1, sections.length - 1))
         resetItems()
@@ -229,6 +232,9 @@ export default function LessonView({
   // 日本語と英語が対になった文が1つでもあれば、Quick Response ができる。
   // **穴埋め・リスニング・内容の理解しか無い教材では出さない**(`quickResponse.js`)
   const qrPossible = hasQuickResponse(material)
+  // 6Steps は本文(記事・会話)に対する練習である。**本文のページを探して渡す。**
+  // いま開いているページが語句や設問でも、6Steps は本文に対して行う
+  const passageSection = sections.find((x) => isPassageSection(x.exercise_type)) ?? null
 
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
@@ -277,7 +283,7 @@ export default function LessonView({
         {/* Quick Response のあいだは出さない。**教材1本を通しでやる**ので
             ページという考え方が無く、解答は1問ずつその場で出るためである。
             効かないボタンを残しておくほうが、迷わせる */}
-        {!qr && (
+        {!run && (
           <>
             <div className="lesson-pages">
               <button type="button" className="btn btn--small"
@@ -376,19 +382,38 @@ export default function LessonView({
             紙の中に置くのは、`Listen (全体)` と同じ考え方である
             (操作欄は狭い画面で場所が無い。第5.25節)。
             共有先には見えるが、印刷には出さない */}
-        {qrPossible && (
+        {(qrPossible || passageSection) && (
           <div className="practice-row no-print">
-            <button type="button"
-                    className={`btn btn--small${qr ? ' btn--primary' : ''}`}
-                    aria-pressed={qr}
-                    onClick={() => { stopAll(); setQr(!qr) }}>
-              <BoltIcon />Quick Response
-            </button>
+            {/* 6Steps は**本文があるときだけ。**
+                文型ドリルや単語には本文が無く、音読も区切りもできない */}
+            {passageSection && (
+              <button type="button"
+                      className={`btn btn--small${run === 'six' ? ' btn--primary' : ''}`}
+                      aria-pressed={run === 'six'}
+                      onClick={() => { stopAll(); setRun(run === 'six' ? null : 'six') }}>
+                <StepsIcon />6Steps
+              </button>
+            )}
+            {qrPossible && (
+              <button type="button"
+                      className={`btn btn--small${qr ? ' btn--primary' : ''}`}
+                      aria-pressed={qr}
+                      onClick={() => { stopAll(); setRun(qr ? null : 'qr') }}>
+                <BoltIcon />Quick Response
+              </button>
+            )}
           </div>
         )}
 
-        {qr ? (
-          <QuickResponse material={material} paper onClose={() => setQr(false)} />
+        {run === 'six' ? (
+          <PassagePractice
+            section={passageSection}
+            /* 見出しは紙の上にもう出ている。**同じ英語を2行続けて並べない** */
+            isDialogue={passageSection.exercise_type === 'dialogue'}
+            tags={allTags} voiceIds={material.voiceIds} level={material.level}
+          />
+        ) : qr ? (
+          <QuickResponse material={material} paper onClose={() => setRun(null)} />
         ) : section && (
           <>
             <h3 className="lesson-section">
