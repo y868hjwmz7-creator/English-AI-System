@@ -4033,13 +4033,28 @@ Listen / 解答を見る / 区切りを消す を本文の**下**に置いてい
 上級  Please rinse the pot in the kitchen / before you leave for the day.
 ```
 
-#### 入れなかったもの ①「動詞の前に必ずスラッシュ」
+#### 入れたもの ①「動詞の前に必ずスラッシュ」— **当てられるぶんだけ**
 
 > ・初心者は動詞の前に必ずスラッシュ(動詞を先に訳す癖をつけたい)
 
-**これだけは入れていない。** どれが動詞かは、語のリストでは当てられない。
-`run` は名詞にも動詞にもなる。**あやふやなことを言わない。**
-「たぶん違う」と言われるほうが、何も言われないより困る。
+一般の動詞は、語のリストでは当てられない。`run` は名詞にも動詞にもなる。
+**あやふやなことを言わない。** 「たぶん違う」と言われるほうが、
+何も言われないより困る。
+
+ただし**助動詞と be動詞だけは数が決まっていて、しかも必ず動詞である。**
+そこだけを入れた(2026-08)。強さ1なので**初級でしか出ない。**
+初心者向けの決まりだからである。
+
+```
+初級  How long / is the ride? / Can you tell me the arrival times?
+中級  How long is the ride? / Can you tell me the arrival times?
+
+初級  I / am going to talk / to my manager / about the new plan.
+中級  I am going to talk / to my manager / about the new plan.
+```
+
+利用者が写真で示した紙の教材が、まさにこの形(`How long / is the ride?`)
+だった。**主語と動詞を切って、動詞から先に訳す**という狙いに合う。
 
 #### 入れたもの ② 文の切れ目でも区切る(2026-08)
 
