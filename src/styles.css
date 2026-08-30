@@ -22,7 +22,18 @@
   --series-4: #eda100;  /* 黄   */
   --series-5: #e87ba4;  /* 桃   */
 
-  --accent:  #2a78d6;
+  /* 落ち着いた鋼色の青。**塗りつぶしを重くしない**ため、彩度を下げてある
+     (2026-08「黒と濃い水色の塗りつぶしがダサい」)。
+     選んでいる印は、べた塗りではなく**うすい地色 + 同じ色の文字**で出す */
+  --accent:      #2c6094;
+  --accent-soft: #e7eef6;   /* 選んでいるものの地色 */
+  --accent-line: #b9cde3;   /* その枠線 */
+
+  /* 合っている / 違う。**ディクテーションの照らし合わせで使う。**
+     緑と赤は色覚特性で見分けにくい組み合わせなので、
+     **必ず線(下線・取り消し線)も併せる** */
+  --ok: #1f7a52;   --ok-bg: #e6f3ec;
+  --ng: #b8322f;   --ng-bg: #fbeae9;
   /* いま読み上げているところの色。**明るい / 暗いの両方に必ず置く** */
   /* 読み上げ中。**橙は目が疲れる**という指摘(2026-08)。
      落ち着いた青緑にし、いま読んでいる語だけを少し濃くする */
@@ -82,7 +93,11 @@
     --series-4: #c98500;
     --series-5: #d55181;
   
-    --accent: #3987e5;
+    --accent:      #6aa6de;
+    --accent-soft: #1e2c3a;
+    --accent-line: #35516d;
+    --ok: #6cc79a;   --ok-bg: #16281f;
+    --ng: #e88b88;   --ng-bg: #2e1a19;
     --speaking-bg:  #1d2a30;
     --speaking-bar: #5d8ba0;
     --reading-bg:   #2c4d5c;
@@ -123,7 +138,11 @@
   --series-4: #c98500;
   --series-5: #d55181;
 
-  --accent: #3987e5;
+  --accent:      #6aa6de;
+  --accent-soft: #1e2c3a;
+  --accent-line: #35516d;
+  --ok: #6cc79a;   --ok-bg: #16281f;
+  --ng: #e88b88;   --ng-bg: #2e1a19;
   --speaking-bg:  #1d2a30;
   --speaking-bar: #5d8ba0;
   --reading-bg:   #2c4d5c;
@@ -997,7 +1016,13 @@ html { -webkit-text-size-adjust: 100%; }
   padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
   background: var(--surface-1); color: var(--text-secondary); font-size: 13px; cursor: pointer;
 }
-.chip--on { background: var(--series-1); border-color: var(--series-1); color: #fff; }
+/* 選んでいる印。**べた塗りにしない**(2026-08「塗りつぶしがダサい」)。
+   うすい地色 + 同じ色の文字 + 枠線の3つで示す。
+   **色だけに頼らない。** 太字にもするので、プレインでも見分けられる */
+.chip--on {
+  background: var(--accent-soft); border-color: var(--accent-line);
+  color: var(--accent); font-weight: 700;
+}
 .passage-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
 
 .passage-body { list-style: none; margin: 0; padding: 0; }
@@ -1031,6 +1056,31 @@ html { -webkit-text-size-adjust: 100%; }
   opacity: 0.7;
 }
 
+/* ── 6Steps のやり方 ────────────────────────────────────
+   **1行に1つ。** 1つの段落に流すと、改行も区切りも無い棒になって
+   読めない(指導ポイントで一度学んだこと)。一度読めばしばらく要らない
+   ので、畳めるようにして覚えておく */
+.step-guide {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
+}
+.step-guide-sum {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.step-guide-sum::-webkit-details-marker { display: none; }
+.step-guide-sum::before {
+  content: '▸'; flex: 0 0 auto; color: var(--accent); font-size: 12px;
+}
+.step-guide[open] .step-guide-sum::before { content: '▾'; }
+.step-guide-aim { font-size: 13.5px; font-weight: 700; color: var(--accent); }
+.step-guide-how {
+  margin: 10px 0 0; padding-left: 22px;
+  font-size: 13px; line-height: 1.85; color: var(--text-secondary);
+}
+.step-guide-how > li { margin-bottom: 2px; }
+.step-guide-how strong { color: var(--text-primary); }
+
 /* ── ① ディクテーション ──────────────────────────────── */
 .dictation-list, .stepsent-list { list-style: none; margin: 0; padding: 0; }
 .dictation-row, .stepsent-row {
@@ -1053,61 +1103,86 @@ html { -webkit-text-size-adjust: 100%; }
   border-radius: 8px; background: var(--surface-1); color: var(--text-primary);
   font-family: inherit; font-size: 15px; line-height: 1.7; resize: vertical;
 }
+/* 照らし合わせ。**書いた欄のすぐ下に置く。**
+   解答の下に置いていたので、自分が書いたものと離れて見比べられなかった
+   (2026-08 の指摘)。合っている=緑 / まちがい=赤 */
+.dict-diff {
+  margin-top: 8px; padding: 10px 12px; border-radius: 8px;
+  background: var(--surface-1); border: 1px solid var(--border);
+}
+.dict-diff-line {
+  margin: 0; line-height: 2.1; font-size: 16px;
+  display: flex; flex-wrap: wrap; gap: 4px;
+}
+.dict-diff-score {
+  margin: 8px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.9;
+}
+.dict-key { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; }
+.dict-key .w { font-size: 11.5px; }
+
 .dictation-answer { margin-top: 8px; }
 .dictation-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
 .stepsent-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
 
-/* ── ② スラッシュリーディング ────────────────────────── */
+/* ── ② スラッシュリーディング ──────────────────────────
+   **押すのは語そのもの。** 語と語のあいだに押せる帯を置いたところ、
+   「最初から全部にスラッシュが入っているように見える」「壊滅的に
+   使いづらい」と言われた(2026-08)。語は大きいので指で確実に狙え、
+   押すまでは**素の英文のまま**である。 */
 .slash-head {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px;
 }
 .slash-head .rate-pick { margin-left: auto; }
 .slash-list { list-style: none; margin: 0; padding: 0; }
-.slash-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
-.slash-line { margin: 0; line-height: 2.4; font-size: 17px; }
+.slash-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
+/* **広げすぎない。** 広いと「もう区切られている」ように見える
+   (2026-08 の指摘)。語のあいだは、押せる幅ぶん(左右 4px)だけで足りるので、
+   `word-spacing` は足さない */
+.slash-line { margin: 0; line-height: 2.2; font-size: 17px; }
 .slash-w { white-space: nowrap; }
-/* 語と語のあいだ。**細く見せて、広く押させる。**
-   見た目を太くすると文が読みにくく、細いままだと指で狙えない */
-.slash-gap {
-  position: relative;
-  display: inline-block; width: 0.62em; height: 1.5em; vertical-align: -0.35em;
-  margin: 0 0.06em; padding: 0; border: none; border-radius: 4px;
-  background: none; color: transparent; cursor: pointer;
-  font: inherit; line-height: 1.5em; text-align: center;
+/* 語。**ふだんは、ただの文字に見せる。** 枠も地色も付けない */
+.slash-word {
+  display: inline; padding: 3px 4px; margin: 0;
+  border: none; border-radius: 4px; background: none;
+  color: inherit; font: inherit; line-height: inherit; cursor: pointer;
 }
-/* 当たり判定だけを指の幅まで広げる(見た目は変えない) */
-.slash-gap::after {
-  content: ''; position: absolute; left: 50%; top: 50%;
-  width: 32px; height: 40px; transform: translate(-50%, -50%);
+.slash-word.is-first { cursor: default; }
+.slash-word:hover { background: var(--surface-2); }
+.slash-word.is-on { color: var(--accent); font-weight: 600; }
+.slash-word.is-on:hover { background: var(--accent-soft); }
+/* 入れたスラッシュ。**ここだけを目立たせる** */
+.slash-mark {
+  color: var(--accent); font-weight: 700; margin: 0 0.15em 0 0.05em;
 }
-.slash-gap:hover { background: var(--surface-2); color: var(--text-muted); }
-.slash-gap.is-on {
-  color: var(--series-1); font-weight: 700; background: none;
-}
-.slash-gap.is-on:hover { background: var(--surface-2); }
 
-/* 自分の区切りを、カタマリとして並べ直す。**前から順に訳す練習** */
-.slash-mine, .slash-model {
-  display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0;
-}
-.slash-chunk {
-  padding: 3px 10px; border-radius: 6px;
-  background: var(--surface-2); font-size: 15px; line-height: 1.6;
-}
-.slash-model .slash-chunk {
-  background: color-mix(in srgb, var(--series-1) 12%, transparent);
-}
+/* 模範の区切り。**自分と同じ形で出す。** 形が違うと見比べられない */
+.slash-out { margin: 6px 0 0; line-height: 2.1; font-size: 17px; }
+.slash-out--model { color: var(--text-secondary); }
+.slash-out--model .slash-mark { color: var(--accent); }
+
 .slash-notes {
-  margin: 8px 0 0; padding: 8px 10px 8px 26px; border-radius: 8px;
-  background: var(--unknown-bg); font-size: 13px; line-height: 1.7;
+  margin: 10px 0 0; padding: 9px 12px 9px 28px; border-radius: 8px;
+  background: var(--ng-bg); color: var(--ng);
+  font-size: 13px; line-height: 1.75;
 }
-.slash-answer { margin-top: 10px; }
-.slash-answer-label { margin: 0; color: var(--text-muted); font-size: 12px; }
+.slash-notes strong { color: inherit; }
+.slash-answer {
+  margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+  background: var(--accent-soft);
+}
+.slash-answer-label {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  margin: 0; color: var(--text-muted); font-size: 12px;
+}
+.slash-copy { margin-left: auto; font-size: 12px; }
 .slash-why {
   margin: 8px 0 0; padding-left: 20px;
   color: var(--text-secondary); font-size: 12.5px; line-height: 1.8;
 }
-.slash-ja { margin: 8px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.8; }
+.slash-ja {
+  margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--accent-line);
+  color: var(--text-secondary); font-size: 14px; line-height: 1.8;
+}
 .slash-ja-label {
   display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 999px;
   background: var(--surface-2); color: var(--text-muted); font-size: 11px;
@@ -1117,9 +1192,22 @@ html { -webkit-text-size-adjust: 100%; }
    (色の見え方には個人差がある) */
 .transcript { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface-1); }
 .transcript-line { margin: 0 0 6px; line-height: 2; font-size: 15px; }
-.w--ok     { color: var(--text-primary); }
-.w--missed { color: var(--text-secondary); text-decoration: line-through; }
-.w--extra  { color: var(--series-3); text-decoration: underline; }
+/* **合っているところは緑、まちがいは赤。**
+   色だけでは目に入らない、という指摘(2026-08)。ただし
+   緑と赤は見分けにくい人がいるので、**地色と線も併せて**付ける */
+.w--ok {
+  color: var(--ok); background: var(--ok-bg);
+  border-radius: 4px; padding: 1px 3px;
+}
+.w--missed {
+  color: var(--ng); background: var(--ng-bg);
+  border-radius: 4px; padding: 1px 3px; text-decoration: line-through;
+}
+.w--extra {
+  color: var(--ng); background: var(--ng-bg);
+  border-radius: 4px; padding: 1px 3px;
+  text-decoration: underline wavy;
+}
 .material-headline { margin: 2px 0 6px; color: var(--text-secondary); font-size: 14px; }
 
 /* ── 指導ポイント(文法の説明)────────────────────────────────
@@ -1453,6 +1541,12 @@ html { -webkit-text-size-adjust: 100%; }
 
   --accent:       #2f6f86;   /* 落ち着いた青緑。見出しと区切り */
   --accent-bg:    #edf4f7;
+  /* 選んでいる印。**紙の上でもべた塗りにしない**(2026-08 の指摘) */
+  --accent-soft:  #e7f0f4;
+  --accent-line:  #a9c8d4;
+  /* 照らし合わせ。紙は常に白なので値で直接書く */
+  --ok: #1f7a52;   --ok-bg: #e6f3ec;
+  --ng: #b8322f;   --ng-bg: #fbeae9;
   --answer:       #38795a;   /* 解答。深い緑 */
   --answer-bg:    #ecf4ef;
   --translate:    #4c6ba8;   /* 訳。青 */
@@ -2185,11 +2279,19 @@ html { -webkit-text-size-adjust: 100%; }
   --pos-conj:   var(--text-secondary);  --pos-conj-bg:   var(--surface-2);
   --pos-phrase: var(--text-secondary);  --pos-phrase-bg: var(--surface-2);
   --phrase-bg:  var(--surface-2);       --phrase-bar:    var(--text-muted);
+  /* 色を消しても、**線(取り消し線・波線)が残るので見分けはつく** */
+  --ok: var(--text-primary);    --ok-bg: var(--surface-2);
+  --ng: var(--text-secondary);  --ng-bg: var(--surface-2);
+  --accent-soft: var(--surface-2);
+  --accent-line: var(--text-muted);
 }
 
 /* 紙(大きく表示)。紙は常に白なので、灰色は値で直接書く */
 :root[data-palette="plain"] .lesson-sheet {
   --accent:       #3a4149;   --accent-bg:    #f1f2f4;
+  --accent-soft:  #eceef0;   --accent-line:  #b9bfc6;
+  --ok: #3a4149;   --ok-bg: #eceef0;
+  --ng: #3a4149;   --ng-bg: #e2e4e7;
   --answer:       #3a4149;   --answer-bg:    #f1f2f4;
   --translate:    #5a646e;   --translate-bg: #f5f6f7;
   --note:         #5a646e;   --note-bg:      #f5f6f7;
@@ -2415,7 +2517,17 @@ html { -webkit-text-size-adjust: 100%; }
   transition: width 0.2s ease;
 }
 
-.qr-card { padding: 10px 0 4px; text-align: center; }
+/* **文の長さが変わっても、ボタンは動かない。**
+   出題はまん中、ボタンはいつも下。長すぎる中身だけが、この中で送られる。
+   紙の上では高さいっぱいに広げるので、まん中に落ち着く */
+.qr-card {
+  display: flex; flex-direction: column;
+  min-height: 15rem; padding: 10px 0 4px; text-align: center;
+}
+.qr-body {
+  flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center;
+  gap: 4px; min-height: 0; overflow-y: auto;
+}
 .qr-from { margin: 0 0 10px; color: var(--qr-faint); font-size: 12px; }
 /* 出す側の日本語。**大きく出す。** ここだけを見て言う */
 .qr-ja {
@@ -2423,15 +2535,18 @@ html { -webkit-text-size-adjust: 100%; }
   font-size: 19px; font-weight: 600; line-height: 1.7;
 }
 .qr-actions {
+  flex: 0 0 auto;
   display: flex; flex-wrap: wrap; align-items: center;
-  justify-content: center; gap: 10px; margin-top: 18px;
+  justify-content: center; gap: 10px;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--qr-rule);
 }
 .qr-actions .btn { min-width: 104px; }
 /* 開いたあとの英語。語に触れれば意味も引ける */
+/* 開いたあとの英語。**出題のすぐ下**に出す(ボタンの下ではない) */
 .qr-en {
   display: flex; align-items: flex-start; justify-content: center;
-  gap: 8px; margin-top: 16px; padding-top: 14px;
-  border-top: 1px solid var(--qr-rule);
+  gap: 8px; margin-top: 14px; padding-top: 12px;
+  border-top: 1px dashed var(--qr-rule);
   font-size: 17px; text-align: left;
 }
 .qr-en .etext-listen { margin-left: 0; flex: 0 0 auto; }
@@ -2464,17 +2579,20 @@ html { -webkit-text-size-adjust: 100%; }
    同じ見た目になり、押し分けられない。
    **色だけに頼らない。** プレイン(色を消す)でも分かるよう、
    片方は塗りつぶし・片方は枠線と太字にしてある */
+/* 答えの2つ。**べた塗りにしない。**
+   うすい地色 + 同じ色の文字 + 枠線 + 太字で押し分ける。
+   **色だけに頼らない**ので、プレイン(色を消す)でも見分けられる */
 .qr--paper .qr-actions .btn--primary {
-  background: var(--accent); border-color: var(--accent);
-  color: #fff; font-weight: 700;
+  background: var(--accent-soft); border-color: var(--accent-line);
+  color: var(--accent); font-weight: 700;
 }
 .qr--paper .qr-actions .btn--warnish {
-  background: var(--qr-ng-bg, #ffe3e0); border-color: var(--qr-ng-line, #e34948);
-  color: #23231f; font-weight: 700;
+  background: var(--ng-bg); border-color: var(--ng);
+  color: var(--ng); font-weight: 700;
 }
-/* 紙は常に白なので、プレインの灰色は値で直接書く(他の紙の色と同じ扱い) */
-:root[data-palette="plain"] .qr--paper {
-  --qr-ng-bg: #f1f2f4; --qr-ng-line: #5a646e;
+/* まん中の「英語を見る」は、答えではない。**うすく置く** */
+.qr--paper .qr-actions .btn:not(.btn--primary):not(.btn--warnish) {
+  color: var(--qr-dim);
 }
 
 @media (max-width: 560px) {
@@ -2494,13 +2612,21 @@ html { -webkit-text-size-adjust: 100%; }
   .qr-actions > .btn:not(:nth-child(2)) { flex: 1 1 0; }
 }
 
-/* 紙の上の「Quick Response」の札。
-   `.lesson-sheet .btn` が白い枠にそろえてしまうので、
-   **押している状態が分かるように**塗りを戻す */
+/* 紙の上の「6Steps」「Quick Response」の札。
+   `.lesson-sheet .btn` が白い枠にそろえてしまうので、押している状態を戻す。
+   **べた塗りにはしない**(2026-08「黒と濃い水色の塗りつぶしがダサい」)。
+   うすい地色 + 同じ色の文字 + 枠線 + 太字の4つで示す */
 .lesson-sheet .practice-row .btn.btn--primary {
-  background: var(--accent); border-color: var(--accent);
-  color: #fff; font-weight: 700;
+  background: var(--accent-soft); border-color: var(--accent-line);
+  color: var(--accent); font-weight: 700;
 }
+
+/* 通しの練習のあいだは、紙を縦いっぱいの1枚として使う。
+   **出題がまん中に落ち着き、ボタンの場所が動かない。**
+   長すぎる中身だけが `.qr-body` の中で送られる */
+.lesson-sheet.is-running { display: flex; flex-direction: column; }
+.lesson-sheet.is-running > .qr { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.lesson-sheet.is-running .qr-card { flex: 1 1 auto; min-height: 0; }
 
 /* ── 練習を始める行 ────────────────────────────────────────
    **「中身を見る」タブとは別のもの。** タブは教材の中身を見るためのもので、
@@ -2512,6 +2638,16 @@ html { -webkit-text-size-adjust: 100%; }
   border-bottom: 1px solid var(--border);
 }
 .practice-row .btn { font-weight: 600; }
+/* 紙の上では**小さくする。** 練習を始めたあとは、ずっと出しっぱなしに
+   なるので、大きいままだと本文の場所を食う(2026-08 の指摘)。
+   紙は文字を3段階に変えられるので、大きさは em で持つ */
+.lesson-sheet .practice-row {
+  gap: 6px; margin: 8px 0 0; padding-bottom: 8px;
+}
+.lesson-sheet .practice-row .btn {
+  min-height: 0; padding: 0.3em 0.7em; font-size: 0.8em; border-radius: 6px;
+}
+.lesson-sheet .practice-row .icon { font-size: 1em; }
 
 /* ── トレーナーが見る単語帳 ────────────────────────────────
    ここから語を選んで、そのまま教材を作る。

@@ -56,7 +56,36 @@ export default function StepDictation({
                 onChange={(e) => setTyped((t) => ({ ...t, [s.id]: e.target.value }))}
               />
 
+              {/* **照らし合わせは、書いた欄のすぐ下に置く。**
+                  解答の下に置いていたので、自分が書いたものと離れていて
+                  見比べられなかった(2026-08 の指摘)。
+                  合っている=緑 / まちがい=赤。線も併せて付ける */}
+              {diff && (
+                <div className="dict-diff">
+                  <p className="dict-diff-line">
+                    {diff.map((d, i) => (
+                      <span key={i} className={`w w--${d.state}`}>{d.word}</span>
+                    ))}
+                  </p>
+                  <p className="dict-diff-score">
+                    <strong>{diff.filter((d) => d.state === 'ok').length} / {diff.filter((d) => d.state !== 'extra').length} 語</strong>
+                    {' '}合っています
+                    {/* **余分な語も数える。** 数えないと、まちがいだらけでも
+                        「4 / 4 合っています」と出てしまう(実測) */}
+                    {diff.some((d) => d.state === 'extra')
+                      && `(お手本に無い語が ${diff.filter((d) => d.state === 'extra').length} つ)`}
+                    <span className="dict-key">
+                      <span className="w w--ok">緑</span>=合っている
+                      <span className="w w--missed">赤の取り消し線</span>=書けなかった
+                      <span className="w w--extra">赤の波線</span>=お手本に無い語
+                    </span>
+                  </p>
+                </div>
+              )}
+
               <div className="passage-actions">
+                {/* **べた塗りにしない。** 5文ぶん縦に並ぶので、
+                    塗ると画面が重くなる(2026-08「塗りつぶしがダサい」) */}
                 <button type="button" className="btn btn--small"
                         onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
                   {open ? '解答を隠す' : '解答を見る'}
@@ -87,21 +116,6 @@ export default function StepDictation({
                     </p>
                   )}
 
-                  {/* 打った人にだけ、語ごとの照らし合わせを出す */}
-                  {diff && (
-                    <div className="transcript">
-                      <p className="transcript-line">
-                        {diff.map((d, i) => (
-                          <span key={i} className={`w w--${d.state}`}>{d.word} </span>
-                        ))}
-                      </p>
-                      <p className="field-hint">
-                        書いたもののうち {Math.round(spokenRatio(diff) * 100)}% が合っています。
-                        {' '}<span className="w w--missed">灰色の取り消し線</span>=書けなかった /{' '}
-                        <span className="w w--extra">下線</span>=お手本に無い語
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
 

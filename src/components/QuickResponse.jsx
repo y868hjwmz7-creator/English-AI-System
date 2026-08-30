@@ -134,12 +134,28 @@ export default function QuickResponse({
         </div>
       ) : (
         <div className="qr-card">
-          <p className="qr-from">
-            {card.from}{card.speaker && ` / ${card.speaker}`}
-          </p>
+          {/* 出題と答えは**まん中**に、ボタンは**いつも同じ場所**に置く。
+              以前は答えがボタンの下に出ていたので、画面のいちばん下へ
+              押し出され、そのつど送らないと読めなかった(2026-08 の指摘)。
+              **文の長さが変わっても、ボタンは動かない。** */}
+          <div className="qr-body">
+            <p className="qr-from">
+              {card.from}{card.speaker && ` / ${card.speaker}`}
+            </p>
 
-          {/* 出す側は日本語だけ。**英語は出さない。音も鳴らさない** */}
-          <p className="qr-ja">{card.ja}</p>
+            {/* 出す側は日本語だけ。**英語は出さない。音も鳴らさない** */}
+            <p className="qr-ja">{card.ja}</p>
+
+            {/* 開いてはじめて、英語と音が出る */}
+            {shown && (
+              <div className="qr-en">
+                <EnglishText text={card.en} textJa={card.ja} level={material?.level}
+                             statuses={wordStatuses} onMark={onMarkWord} />
+                <SpeakButton text={card.en} className="etext-listen"
+                             clipVoice={clipVoice} tier={tier} />
+              </div>
+            )}
+          </div>
 
           <div className="qr-actions">
             {/* **単語帳と同じ言葉づかいにする。** あちらは「まだ / 覚えた」。
@@ -153,16 +169,6 @@ export default function QuickResponse({
             <button type="button" className="btn btn--primary"
                     onClick={() => answer(true)}>言えた</button>
           </div>
-
-          {/* 開いてはじめて、英語と音が出る */}
-          {shown && (
-            <div className="qr-en">
-              <EnglishText text={card.en} textJa={card.ja} level={material?.level}
-                           statuses={wordStatuses} onMark={onMarkWord} />
-              <SpeakButton text={card.en} className="etext-listen"
-                           clipVoice={clipVoice} tier={tier} />
-            </div>
-          )}
         </div>
       )}
     </section>

@@ -46,7 +46,7 @@ import { SIX_STEPS, sentencesOf, stepOf } from '../lib/sixSteps.js'
 import SlashReading from './SlashReading.jsx'
 import StepDictation from './StepDictation.jsx'
 import StepSentence from './StepSentence.jsx'
-import { loadSlashLevel, saveSlashLevel } from '../lib/slashLevel.js'
+import { loadGuideOpen, loadSlashLevel, saveGuideOpen, saveSlashLevel } from '../lib/slashLevel.js'
 
 export default function PassagePractice({
   section, headline, isDialogue, tags = null, voiceIds = null,
@@ -69,6 +69,8 @@ export default function PassagePractice({
   const [slashLevel, setSlashLevel] = useState(loadSlashLevel)
   // ⑤ シャドーイングは本文を隠して行う。追いつけないときの逃げ道は残す
   const [peek, setPeek] = useState(false)
+  // やり方の説明を開いているか。**一度読めば、しばらく要らない**ので覚える
+  const [guideOpen, setGuideOpen] = useState(loadGuideOpen)
   const sessionRef = useRef(null)
   const stopAllRef = useRef(null)   // 通しの読み上げを止めるための関数
   const stepBarRef = useRef(null)   // 6Steps の帯(選んでいるものを見える位置へ寄せる)
@@ -223,9 +225,22 @@ export default function PassagePractice({
           </button>
         ))}
       </div>
-      <p className="card-hint step-hint">
-        {current.hint.split('**').map((t, i) => (i % 2 ? <strong key={i}>{t}</strong> : t))}
-      </p>
+      {/* やり方。**1行に1つ。** 1つの段落に流すと、改行も区切りも無い棒になって
+          読めない(指導ポイントで一度学んだこと)。
+          狭い画面では畳めるようにする。何度も読むものではない */}
+      <details className="step-guide" open={guideOpen}
+               onToggle={(e) => { setGuideOpen(e.currentTarget.open); saveGuideOpen(e.currentTarget.open) }}>
+        <summary className="step-guide-sum">
+          <span className="step-guide-aim">{current.aim}</span>
+        </summary>
+        <ol className="step-guide-how">
+          {current.how.map((line, i) => (
+            <li key={i}>
+              {line.split('**').map((t, k) => (k % 2 ? <strong key={k}>{t}</strong> : t))}
+            </li>
+          ))}
+        </ol>
+      </details>
 
       <div className="passage-tools">
         {/* 通しの読み上げは、本文まるごとのステップ(③⑤)でだけ意味がある。

@@ -4,49 +4,64 @@
  * > 文章をスラッシュ( / )で区切り、意味ごとのカタマリで文法と意味を理解し、
  * > カタマリ毎の訳を前から言えるようにするトレーニング。
  *
- * 【どう区切らせるか】
- *   **語と語のあいだを押す。** パソコンでもスマホでも同じ操作になる。
- *   なぞって範囲を選ばせる形にしなかったのは、スマホで狙いにくく、
- *   iPhone では長押しのメニューが割り込むためである
- *   (語の意味の吹き出しで一度学んだこと)。
- *   押すところは**語のあいだの細い帯**だが、当たり判定は指の幅ぶん広げてある。
+ * 【作り直した理由】(2026-08「壊滅的に使いづらい」)
+ *   はじめは**語と語のあいだ**を押させていた。2つ駄目だった。
+ *     ・あいだに押せる帯を置いたので、**最初から全部にスラッシュが
+ *       入っているように見えた**
+ *     ・狙いが細く、スマホで押しにくい
+ *
+ *   いまは**語そのものを押す。**「この語から新しいカタマリ」という
+ *   意味なので、押すとその語の**前**にスラッシュが出る。
+ *     ・語は大きいので、指で確実に狙える
+ *     ・押すまで何も出ない。**素の英文のまま**始まる
+ *     ・スラッシュリーディングの教え方(意味の切れ目の前に入れる)とも合う
  *
  * 【模範の区切りは、決まりで出す。AI に頼まない】
  *   利用者が挙げた決まりは、どれも閉じた語のリストで判定できる
  *   (`src/lib/chunker.js`)。1文ごとに課金する理由がない。
  *
  * 【まだ無いもの】
- *   **カタマリごとの訳例**は、まだ出せない。
- *   どこで切るかは決まりで分かるが、そのカタマリを日本語で何と言うかは
- *   決まりでは書けない。いまは**文ぜんぶの訳**を下に出している。
- *   仕様書 第5.29.3節に、入れ方の案を残してある。
+ *   **カタマリごとの訳例。** どこで切るかは決まりで分かるが、
+ *   そのカタマリを日本語で何と言うかは決まりでは書けない。
+ *   いまは文ぜんぶの訳を出している(仕様書 第5.29.3節)。
  */
-import { useState } from 'react'
-import {
-  SLASH_LEVELS, checkSlashes, chunksOf, slashesFor, wordsOf,
-} from '../lib/chunker.js'
+import { Fragment, useState } from 'react'
+import { SLASH_LEVELS, checkSlashes, slashesFor, wordsOf } from '../lib/chunker.js'
 import SpeakButton from './SpeakButton.jsx'
+
+/** 区切りを入れた英文を描く。`marks` は「その語の前で切る」語の番号 */
+function Slashed({ words, marks, tone = '' }) {
+  return (
+    <p className={`slash-out${tone ? ` slash-out--${tone}` : ''}`} lang="en">
+      {words.map((w, i) => (
+        <Fragment key={i}>
+          <span className="slash-w">
+            {marks.includes(i) && <span className="slash-mark" aria-label="区切り">/</span>}
+            {w}
+          </span>
+          {' '}
+        </Fragment>
+      ))}
+    </p>
+  )
+}
 
 export default function SlashReading({
   sentences, clipVoice, tier, rate, level, onLevelChange,
 }) {
-  // 文ごとに、ゲストが入れた区切り(語のあいだの番号)
-  const [marks, setMarks] = useState({})
+  const [marks, setMarks] = useState({})   // 文ごとの区切り
   const [shown, setShown] = useState({})   // 「解答を見る」を押した文
 
   const toggle = (id, at) => setMarks((m) => {
     const now = new Set(m[id] ?? [])
     if (now.has(at)) now.delete(at)
     else now.add(at)
-    return { ...m, [id]: [...now] }
+    return { ...m, [id]: [...now].sort((a, b) => a - b) }
   })
-
-  const clear = (id) => setMarks((m) => ({ ...m, [id]: [] }))
 
   return (
     <div className="slash">
       <div className="slash-head">
-        {/* やり方はステップの説明に書いてある。**同じ文を2度書かない** */}
         <label className="rate-pick">
           <span>区切りの細かさ</span>
           <select value={level} onChange={(e) => onLevelChange(e.target.value)}>
@@ -62,39 +77,39 @@ export default function SlashReading({
           const words = wordsOf(s.text)
           const mine = marks[s.id] ?? []
           const open = shown[s.id]
-          const model = slashesFor(s.text, level)
+          const model = slashesFor(s.text, level).map((x) => x.at)
+          const why = slashesFor(s.text, level)
           const notes = checkSlashes(s.text, mine)
           return (
             <li key={s.id} className="slash-row">
               {s.speaker && <div className="passage-speaker" lang="en">{s.speaker}</div>}
 
-              {/* 自分で区切るところ */}
+              {/* 押すのは**語**。押すとその語の前にスラッシュが出る。
+                  押すまでは、ただの英文のまま */}
               <p className="slash-line" lang="en">
+                {/* 空白は**囲みの外**に置く。中に入れると `white-space: nowrap`
+                    が効いて改行できる場所が無くなり、長い文が画面から
+                    はみ出した(実測) */}
                 {words.map((w, i) => (
-                  <span key={i} className="slash-w">
-                    {i > 0 && (
-                      <button type="button"
-                              className={`slash-gap${mine.includes(i) ? ' is-on' : ''}`}
-                              aria-label={`${words[i - 1]} と ${w} のあいだで区切る`}
-                              aria-pressed={mine.includes(i)}
-                              onClick={() => toggle(s.id, i)}>
-                        <span aria-hidden="true">/</span>
-                      </button>
-                    )}
-                    {w}
-                  </span>
+                  <Fragment key={i}>
+                    <span className="slash-w">
+                      {mine.includes(i) && <span className="slash-mark" aria-hidden="true">/</span>}
+                      {i === 0 ? (
+                        <span className="slash-word is-first">{w}</span>
+                      ) : (
+                        <button type="button"
+                                className={`slash-word${mine.includes(i) ? ' is-on' : ''}`}
+                                aria-pressed={mine.includes(i)}
+                                aria-label={`${w} の前で区切る`}
+                                onClick={() => toggle(s.id, i)}>
+                          {w}
+                        </button>
+                      )}
+                    </span>
+                    {' '}
+                  </Fragment>
                 ))}
               </p>
-
-              {/* 自分の区切りを、カタマリとして並べ直す。
-                  **前から順に訳す練習なので、並びが見えることが要る** */}
-              {mine.length > 0 && (
-                <p className="slash-mine">
-                  {chunksOf(s.text, mine).map((c, i) => (
-                    <span key={i} className="slash-chunk" lang="en">{c}</span>
-                  ))}
-                </p>
-              )}
 
               {/* 決まりで確かめられることだけを言う。
                   **あやふやなことは言わない。**「たぶん違う」は、
@@ -118,7 +133,9 @@ export default function SlashReading({
                 </button>
                 {mine.length > 0 && (
                   <button type="button" className="btn btn--small btn--link"
-                          onClick={() => clear(s.id)}>区切りを消す</button>
+                          onClick={() => setMarks((m) => ({ ...m, [s.id]: [] }))}>
+                    区切りを消す
+                  </button>
                 )}
               </div>
 
@@ -126,15 +143,18 @@ export default function SlashReading({
                 <div className="slash-answer">
                   <p className="slash-answer-label">
                     模範の区切り({SLASH_LEVELS.find((l) => l.id === level)?.label})
+                    {mine.length > 0 && (
+                      <button type="button" className="btn btn--link slash-copy"
+                              onClick={() => setMarks((m) => ({ ...m, [s.id]: model }))}>
+                        この区切りに合わせる
+                      </button>
+                    )}
                   </p>
-                  <p className="slash-model">
-                    {chunksOf(s.text, model.map((x) => x.at)).map((c, i) => (
-                      <span key={i} className="slash-chunk" lang="en">{c}</span>
-                    ))}
-                  </p>
-                  {model.length > 0 && (
+                  {/* **自分の区切りと同じ形で出す。** 形が違うと見比べられない */}
+                  <Slashed words={words} marks={model} tone="model" />
+                  {why.length > 0 && (
                     <ul className="slash-why">
-                      {model.map((x, i) => <li key={i}>{x.why}</li>)}
+                      {why.map((x, i) => <li key={i}>{x.why}</li>)}
                     </ul>
                   )}
                   {s.ja && (

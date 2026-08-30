@@ -14,3 +14,17 @@ export function loadSlashLevel() {
 export function saveSlashLevel(id) {
   try { localStorage.setItem(KEY, id) } catch { /* 使えなくても困らない */ }
 }
+
+/**
+ * 6Steps の「やり方」を開いているか。
+ * **一度読めば、しばらく要らない。** 毎回たたみ直させない。
+ */
+const GUIDE_KEY = 'eas.stepGuide'
+
+export function loadGuideOpen() {
+  try { return localStorage.getItem(GUIDE_KEY) !== 'closed' } catch { return true }
+}
+
+export function saveGuideOpen(open) {
+  try { localStorage.setItem(GUIDE_KEY, open ? 'open' : 'closed') } catch { /* 使えなくても困らない */ }
+}

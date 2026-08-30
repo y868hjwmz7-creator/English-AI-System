@@ -358,7 +358,11 @@ export default function LessonView({
       </div>
 
       {/* ここが「紙」。暗い配色を選んでいても白のまま */}
-      <div className={`lesson-sheet lesson-sheet--${size}`} id="lesson-sheet">
+      {/* 通しの練習のあいだは、紙を**縦いっぱいの1枚**として使う。
+          そうすると出題がまん中に落ち着き、**文の長さが変わっても
+          ボタンの場所が動かない**(2026-08 の指摘) */}
+      <div className={`lesson-sheet lesson-sheet--${size}${run ? ' is-running' : ''}`}
+           id="lesson-sheet">
         <div className="lesson-head">
           <MaterialTitle title={material.title} headline={material.headline}
                          as="strong" size="sheet" />
