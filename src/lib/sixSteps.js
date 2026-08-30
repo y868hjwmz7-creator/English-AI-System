@@ -249,5 +249,5 @@ export function blocksOf(items, unit = 'para') {
 export const PASSAGE_VIEWS = [
   { id: 'plain', label: '素の文章', hint: '区切りを出さずに読む' },
   { id: 'slash', label: '区切りを出す', hint: '意味のカタマリで区切って読む' },
-  { id: 'chunk', label: '区切り + 訳', hint: 'カタマリの上に、そのカタマリの訳を出す' },
+  { id: 'chunk', label: '区切り + 訳', hint: 'カタマリのすぐ下に、そのカタマリの訳を出す(英語と必ず一緒に出る)' },
 ]
