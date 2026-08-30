@@ -525,6 +525,15 @@ audio { width: 100%; margin-top: 4px; }
   color: var(--accent); text-decoration: underline;
 }
 .btn--link:active { transform: none; }
+/* 「まだ」「知らなかった」「言えなかった」。
+   **正解と同じ見た目にしない。** 押し分けを一瞬で間違える。
+   赤は「知らなかった」の色(`--unknown-*`)にそろえてあり、
+   **叱る色ではない。** うすく敷くだけにする */
+.btn--warnish {
+  background: var(--unknown-bg);
+  border-color: var(--unknown-bar);
+  color: var(--text-primary);
+}
 .btn--toggle { padding: 5px 12px; font-size: 13px; }
 .btn--toggle.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
@@ -2264,6 +2273,138 @@ html { -webkit-text-size-adjust: 100%; }
   margin: 8px 0 0; padding: 7px 10px; border-radius: 8px;
   background: var(--surface-2); color: var(--text-secondary); font-size: 12.5px;
 }
+
+/* ── Quick Response ────────────────────────────────────────
+   日本語を見て、すぐ英語で言う。**開くまで英語も音も出さない。**
+   色は変数だけで持つ。レッスンの紙(白のまま)に載せるときは
+   `.qr--paper` が5つを差し替える(吹き出しと同じ考え方) */
+.qr {
+  --qr-bg: var(--surface-1);
+  --qr-fg: var(--text-primary);
+  --qr-dim: var(--text-secondary);
+  --qr-faint: var(--text-muted);
+  --qr-rule: var(--border);
+  margin-top: 12px; padding: 14px;
+  border: 1px solid var(--qr-rule); border-radius: var(--radius);
+  background: var(--qr-bg); color: var(--qr-fg);
+}
+.qr-head { display: flex; align-items: center; gap: 10px; }
+.qr-title { font-size: 15px; }
+.qr-count {
+  margin-left: auto; color: var(--qr-faint);
+  font-size: 13px; font-variant-numeric: tabular-nums;
+}
+/* 見出しを出さない紙の上でも、数だけは右に置く */
+.qr-head > .qr-count:first-child { margin-left: 0; margin-right: auto; }
+.qr-head .nav-icon-btn { width: 36px; height: 36px; margin-right: -6px; }
+
+/* どこまで来たか。**終わりが見えないと続かない** */
+.qr-bar {
+  height: 6px; margin: 10px 0 4px; border-radius: 999px;
+  background: var(--surface-2); overflow: hidden;
+}
+.qr-bar > span {
+  display: block; height: 100%; background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.qr-card { padding: 10px 0 4px; text-align: center; }
+.qr-from { margin: 0 0 10px; color: var(--qr-faint); font-size: 12px; }
+/* 出す側の日本語。**大きく出す。** ここだけを見て言う */
+.qr-ja {
+  margin: 0 auto; max-width: 34em;
+  font-size: 19px; font-weight: 600; line-height: 1.7;
+}
+.qr-actions {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: center; gap: 10px; margin-top: 18px;
+}
+.qr-actions .btn { min-width: 104px; }
+/* 開いたあとの英語。語に触れれば意味も引ける */
+.qr-en {
+  display: flex; align-items: flex-start; justify-content: center;
+  gap: 8px; margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--qr-rule);
+  font-size: 17px; text-align: left;
+}
+.qr-en .etext-listen { margin-left: 0; flex: 0 0 auto; }
+
+.qr-result { padding: 8px 0; text-align: center; }
+.qr-result-score { margin: 6px 0 12px; font-size: 17px; }
+.qr-result-list {
+  list-style: none; margin: 0 0 12px; padding: 0; text-align: left;
+}
+.qr-result-list > li {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 0; border-top: 1px solid var(--qr-rule); font-size: 14px;
+}
+.qr-result-ja { color: var(--qr-dim); font-size: 13px; }
+.qr-result .btn-row { justify-content: center; }
+
+/* レッスンの紙の上。**紙は暗い配色でも白のまま**なので、
+   文字の色を決め打ちにする(var のままだと白い紙に白い文字が載る) */
+.qr--paper {
+  --qr-bg: transparent;
+  --qr-fg: #23231f;
+  --qr-dim: #55554e;
+  --qr-faint: #6f6f66;
+  --qr-rule: #d9d7cd;
+  border: none; margin-top: 0; padding: 0;
+}
+/* 紙の上のボタン。
+   `.lesson-sheet .btn` が**全部を白い枠に**そろえてしまうので、
+   答えの2つはここで塗り直す。塗り直さないと「まだ」と「言えた」が
+   同じ見た目になり、押し分けられない。
+   **色だけに頼らない。** プレイン(色を消す)でも分かるよう、
+   片方は塗りつぶし・片方は枠線と太字にしてある */
+.qr--paper .qr-actions .btn--primary {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 700;
+}
+.qr--paper .qr-actions .btn--warnish {
+  background: var(--qr-ng-bg, #ffe3e0); border-color: var(--qr-ng-line, #e34948);
+  color: #23231f; font-weight: 700;
+}
+/* 紙は常に白なので、プレインの灰色は値で直接書く(他の紙の色と同じ扱い) */
+:root[data-palette="plain"] .qr--paper {
+  --qr-ng-bg: #f1f2f4; --qr-ng-line: #5a646e;
+}
+
+@media (max-width: 560px) {
+  .qr-ja { font-size: 17px; }
+  /* **文字を折り返させない。** 幅をそろえるために min-width を効かせていたら、
+     「言えなかった」が2行に割れた(実測)。中身の幅で置く */
+  .qr-actions { gap: 8px; }
+  .qr-actions .btn { min-width: 0; padding: 8px 12px; }
+}
+
+/* とても狭い画面(iPhone SE など)。3つは1行に入らない。
+   **「まだ」と「言えた」の左右だけは崩さない。**
+   答えの2つが上下に離れると、押し間違える。
+   開くボタンだけを上の行へ丸ごと移す */
+@media (max-width: 360px) {
+  .qr-actions > .btn:nth-child(2) { order: -1; flex-basis: 100%; }
+  .qr-actions > .btn:not(:nth-child(2)) { flex: 1 1 0; }
+}
+
+/* 紙の上の「Quick Response」の札。
+   `.lesson-sheet .btn` が白い枠にそろえてしまうので、
+   **押している状態が分かるように**塗りを戻す */
+.lesson-sheet .practice-row .btn.btn--primary {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 700;
+}
+
+/* ── 練習を始める行 ────────────────────────────────────────
+   **「中身を見る」タブとは別のもの。** タブは教材の中身を見るためのもので、
+   こちらは通しで練習を始めるためのもの。見た目もはっきり分ける
+   (画面の切り替え=下線 / 教材の中=丸い札 / これ=絵の付いたボタン) */
+.practice-row {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin: 12px 0 4px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.practice-row .btn { font-weight: 600; }
 
 /* ── トレーナーが見る単語帳 ────────────────────────────────
    ここから語を選んで、そのまま教材を作る。

@@ -25,10 +25,12 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
-import { GearIcon, PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
+import { BoltIcon, GearIcon, PrintIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import MaterialTitle from './MaterialTitle.jsx'
+import QuickResponse from './QuickResponse.jsx'
+import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton from './SpeakButton.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import { PALETTES, applyPalette, loadPalette } from '../lib/palette.js'
@@ -83,6 +85,11 @@ export default function LessonView({
   // Esc の扱いで今の状態を見たい。`useEffect` の中から読めるように控える
   const openSettingsRef = useRef(false)
   openSettingsRef.current = openSettings
+  // Quick Response を出しているか。**教材1本を通しでやる**ので、
+  // 出しているあいだはページ送りと解答のボタンを出さない(効かないため)
+  const [qr, setQr] = useState(false)
+  const qrRef = useRef(false)
+  qrRef.current = qr
   // 読み上げの速さ。**画面に1つだけ。** 端末に覚えさせる(2026-08 利用者の指定)
   const [rateId, setRateId] = useState(loadRateId)
   // 読み上げ。**会話は話す人ごとに声を変える**(2026-08 の指摘)。
@@ -153,13 +160,23 @@ export default function LessonView({
     return () => { document.body.style.overflow = before }
   }, [])
 
-  // Esc で閉じる。左右の矢印でページを送る
+  // Esc で閉じる。左右の矢印でページを送る。
+  //
+  // **`if (e.key !== 'Escape') return` を先頭に置いてはいけない。**
+  // 「表示」を先に閉じる仕組みを足したとき(2026-08)これを置いてしまい、
+  // **矢印でページを送れなくなっていた。** 早く帰る条件を足すときは、
+  // その下にある処理が何を見ているかを必ず確かめる。
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== 'Escape') return
-      // **開いているものから閉じる。** いきなり画面ごと閉じない
-      if (openSettingsRef.current) { setOpenSettings(false); return }
-      stopReading(); onClose?.()
+      if (e.key === 'Escape') {
+        // **開いているものから閉じる。** いきなり画面ごと閉じない
+        if (openSettingsRef.current) { setOpenSettings(false); return }
+        if (qrRef.current) { setQr(false); return }
+        stopReading(); onClose?.()
+        return
+      }
+      // Quick Response のあいだはページという考え方が無い(教材1本を通す)
+      if (qrRef.current) return
       if (e.key === 'ArrowRight') {
         setPage((p) => Math.min(p + 1, sections.length - 1))
         resetItems()
@@ -209,6 +226,9 @@ export default function LessonView({
   // 良い声を使うか、標準の声で足りるか(`voiceTier.js`)。
   // 記事・会話とリスニング、それに**発音・リズムの弱点**なら良い声にする
   const tier = voiceTierFor({ exerciseType: section?.exercise_type, tags: allTags })
+  // 日本語と英語が対になった文が1つでもあれば、Quick Response ができる。
+  // **穴埋め・リスニング・内容の理解しか無い教材では出さない**(`quickResponse.js`)
+  const qrPossible = hasQuickResponse(material)
 
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
@@ -254,27 +274,34 @@ export default function LessonView({
           ✕<span className="wide-text"> 閉じる</span>
         </button>
 
-        <div className="lesson-pages">
-          <button type="button" className="btn btn--small"
-                  disabled={page === 0} aria-label="前のページ"
-                  onClick={() => { setPage(page - 1); resetItems() }}>◀</button>
-          <span>{page + 1} / {sections.length}</span>
-          <button type="button" className="btn btn--small"
-                  disabled={page >= sections.length - 1} aria-label="次のページ"
-                  onClick={() => { setPage(page + 1); resetItems() }}>▶</button>
-        </div>
+        {/* Quick Response のあいだは出さない。**教材1本を通しでやる**ので
+            ページという考え方が無く、解答は1問ずつその場で出るためである。
+            効かないボタンを残しておくほうが、迷わせる */}
+        {!qr && (
+          <>
+            <div className="lesson-pages">
+              <button type="button" className="btn btn--small"
+                      disabled={page === 0} aria-label="前のページ"
+                      onClick={() => { setPage(page - 1); resetItems() }}>◀</button>
+              <span>{page + 1} / {sections.length}</span>
+              <button type="button" className="btn btn--small"
+                      disabled={page >= sections.length - 1} aria-label="次のページ"
+                      onClick={() => { setPage(page + 1); resetItems() }}>▶</button>
+            </div>
 
-        <button type="button"
-                className={`btn btn--small${showAnswers ? ' btn--primary' : ''}`}
-                onClick={() => {
-                  // 全部出す・全部隠す。1問ずつ開いたものも一緒に閉じる
-                  setShowAnswers(!showAnswers)
-                  setOpenItems(new Set())
-                  setClosedItems(new Set())
-                }}>
-          <span className="wide-text">すべての</span>
-          解答を{showAnswers ? '隠す' : '出す'}
-        </button>
+            <button type="button"
+                    className={`btn btn--small${showAnswers ? ' btn--primary' : ''}`}
+                    onClick={() => {
+                      // 全部出す・全部隠す。1問ずつ開いたものも一緒に閉じる
+                      setShowAnswers(!showAnswers)
+                      setOpenItems(new Set())
+                      setClosedItems(new Set())
+                    }}>
+              <span className="wide-text">すべての</span>
+              解答を{showAnswers ? '隠す' : '出す'}
+            </button>
+          </>
+        )}
 
         {/* ── しまっておくもの ────────────────────────────────
             速さ・配色・文字の大きさ・印刷は、**一度決めれば何度も
@@ -343,7 +370,26 @@ export default function LessonView({
           )}
         </div>
 
-        {section && (
+        {/* ── 通しで練習する ────────────────────────────────
+            **「ページを見る」とは別の行為。** ページは教材の中身を
+            順に見るもので、こちらは教材1本を通しで練習するもの。
+            紙の中に置くのは、`Listen (全体)` と同じ考え方である
+            (操作欄は狭い画面で場所が無い。第5.25節)。
+            共有先には見えるが、印刷には出さない */}
+        {qrPossible && (
+          <div className="practice-row no-print">
+            <button type="button"
+                    className={`btn btn--small${qr ? ' btn--primary' : ''}`}
+                    aria-pressed={qr}
+                    onClick={() => { stopAll(); setQr(!qr) }}>
+              <BoltIcon />Quick Response
+            </button>
+          </div>
+        )}
+
+        {qr ? (
+          <QuickResponse material={material} paper onClose={() => setQr(false)} />
+        ) : section && (
           <>
             <h3 className="lesson-section">
               {exerciseLabel(section.exercise_type)}

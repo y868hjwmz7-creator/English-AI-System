@@ -188,3 +188,14 @@ export function TrendIcon({ className = 'icon' }) {
     </svg>
   )
 }
+
+/** 稲妻。Quick Response(日本語を見て、すぐ英語で言う)
+    **学習の記録の折れ線を使い回さない。** 同じ絵は同じ意味に見える */
+export function BoltIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M11.2 2.5L4.8 11h4.3l-.8 6.5L15.4 9h-4.4z" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}

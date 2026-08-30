@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { cefrLabel } from '../data/cefr.js'
 import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
+import QuickResponse from './QuickResponse.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Tabs from './Tabs.jsx'
@@ -18,9 +19,10 @@ import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
+import { hasQuickResponse } from '../lib/quickResponse.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
-import { PrintIcon, ScreenIcon } from './Icons.jsx'
+import { BoltIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
@@ -37,6 +39,10 @@ export default function LearnerHomework() {
   // 「どこまでやったか」が分からなくなる(2026-08 の指摘)。
   const [openSection, setOpenSection] = useState({})
   const [lessonOf, setLessonOf] = useState(null)   // レッスン表示で開いている教材
+  // Quick Response を開いている宿題。**教材ごとに1つ。**
+  // 「中身を見る」タブとは別の行為なので、開いているあいだは
+  // タブの中身を出さない(注意が2つに割れる)
+  const [qrOf, setQrOf] = useState(null)
   // 読み上げの速さ。**画面に1つだけ置く。** ここで選んだものが、
   // この画面のすべての読み上げに効く(2026-08 利用者の指定)
   const [rateId, setRateId] = useState(loadRateId)
@@ -116,7 +122,7 @@ export default function LearnerHomework() {
                   type="button"
                   className="homework-open no-print"
                   aria-expanded={openId === a.id}
-                  onClick={() => setOpenId(openId === a.id ? null : a.id)}
+                  onClick={() => { setOpenId(openId === a.id ? null : a.id); setQrOf(null) }}
                 >
                   <span className="homework-open-mark">{openId === a.id ? '▾' : '▸'}</span>
                   <span className="homework-open-body">
@@ -174,6 +180,34 @@ export default function LearnerHomework() {
                     {a.material?.teaching_point && (
                       <TeachingNote text={a.material.teaching_point} title="ここに注意" />
                     )}
+
+                    {/* ── 通しで練習する ──────────────────────────
+                        **「中身を見る」タブとは、行為が違う。**
+                        タブは記事・設問・語句を見るためのもので、こちらは
+                        教材1本を通しで練習するためのもの。
+                        だから同じ形(札)にせず、絵の付いたボタンにして
+                        タブの上に置く。押すと下がその練習だけになる */}
+                    {hasQuickResponse(a.material) && (
+                      <div className="practice-row no-print">
+                        <button type="button"
+                                className={`btn${qrOf === a.id ? ' btn--primary' : ''}`}
+                                aria-pressed={qrOf === a.id}
+                                onClick={() => setQrOf(qrOf === a.id ? null : a.id)}>
+                          <BoltIcon />
+                          Quick Response
+                        </button>
+                      </div>
+                    )}
+
+                    {qrOf === a.id ? (
+                      <QuickResponse
+                        material={a.material}
+                        onClose={() => setQrOf(null)}
+                        wordStatuses={wordStatuses}
+                        onMarkWord={markWord}
+                      />
+                    ) : (
+                    <>
                     {/* **はじめはどれも開かない**(2026-08 の指摘)。
                         1つ目が開いた状態で出ると、宿題を並べて見渡せない。
                         押したタブだけを開き、同じタブをもう一度押すと閉じる。
@@ -290,8 +324,10 @@ export default function LearnerHomework() {
                         </section>
                       )
                     })}
+                    </>
+                    )}
                     <button type="button" className="btn btn--link no-print"
-                            onClick={() => setOpenId(null)}>
+                            onClick={() => { setOpenId(null); setQrOf(null) }}>
                       閉じる
                     </button>
                   </div>
