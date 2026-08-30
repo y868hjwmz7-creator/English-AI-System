@@ -42,6 +42,7 @@ import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
+import { SLASH_LEVELS } from '../lib/chunker.js'
 import { PASSAGE_VIEWS, SIX_STEPS, blocksOf, sentencesOf, stepOf } from '../lib/sixSteps.js'
 import ChunkedText from './ChunkedText.jsx'
 import SlashReading from './SlashReading.jsx'
@@ -308,8 +309,6 @@ export default function PassagePractice({
         <SlashReading
           blocks={slashBlocks} clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)}
-          level={slashLevel}
-          onLevelChange={(v) => { setSlashLevel(v); saveSlashLevel(v) }}
           unit={slashUnit}
           onUnitChange={(v) => { setSlashUnit(v); saveSlashUnit(v) }}
         />
@@ -344,6 +343,21 @@ export default function PassagePractice({
             {/* 通しで聴くときは、段落で切れていないほうが追いやすい */}
             段落で区切らない
           </label>
+          {/* **区切りの細かさは、ここでしか効かなくなった。**
+              ② スラッシュリーディングは自分で区切る画面になり、
+              決まりから作った区切り(模範)を出さなくなったためである
+              (2026-08 利用者の判断)。**効かない場所に操作を置かない** */}
+          {view !== 'plain' && (
+            <label className="rate-pick">
+              <span>区切りの細かさ</span>
+              <select value={slashLevel}
+                      onChange={(e) => { setSlashLevel(e.target.value); saveSlashLevel(e.target.value) }}>
+                {SLASH_LEVELS.map((l) => (
+                  <option key={l.id} value={l.id} title={l.hint}>{l.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       )}
 

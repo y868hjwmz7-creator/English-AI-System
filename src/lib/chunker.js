@@ -77,6 +77,32 @@ const DETERMINERS = new Set([
 ])
 
 /**
+ * **カタマリの先頭にしか立てない語**(2026-08 利用者の指定で足した)。
+ *
+ * 接続詞・関係詞のうち、**副詞としては使えないもの**だけを入れてある。
+ * `and / the report` のように、この語でカタマリを終えると、
+ * 次のまとまりを引き連れる語だけが前に取り残される。
+ *
+ * `once` `before` `since` `until` `when` `where` `so` は**副詞にもなる**
+ * (「以前」「そのとき」など)ので、**入れない。**
+ * あやふやなことを言わない、というこの仕組みの原則どおりである。
+ */
+const HEAD_WORDS = new Set([
+  'and', 'or', 'but', 'nor',
+  'that', 'which', 'who', 'whom', 'whose',
+  'because', 'although', 'though', 'unless', 'whether', 'if', 'while', 'whereas',
+])
+
+/** 文の終わり(`.` `?` `!`)。**ここでの区切りは、いつでも正しい** */
+const endsSentence = (w) => /[.!?…]["'”’)\]]*$/.test(String(w ?? ''))
+
+/** 読点(`,` `;` `:`)。ここも意味の切れ目なので、**いつでも正しい** */
+const endsClause = (w) => /[,;:]["'”’)\]]*$/.test(String(w ?? ''))
+
+/** 所有格(`the company's` の `'s`)。**次の名詞と離さない** */
+const isPossessive = (w) => /['’]s$/i.test(String(w ?? '').replace(/[^A-Za-z'’]+$/, ''))
+
+/**
  * レベルごとの出し方。
  *
  * **上級ほど区切りが減る**(利用者の指定)。減らし方は2つ組み合わせる。
@@ -136,8 +162,9 @@ export function idealSlashes(sentence) {
   const out = []
   const add = (at, strength, why) => {
     if (at <= 0 || at >= words.length) return
-    if (insideAux(words, at)) return              // 助動詞と動詞は離さない
-    if (DETERMINERS.has(bare(words[at - 1]))) return  // 冠詞のあとで切らない
+    // **判定は `slashProblem` 1か所。** ここに書き写すと必ず食い違い、
+    // 模範が自分の決まりを破る(`npm run test:chunk` が落ちる)
+    if (slashProblem(words, at)) return
     const found = out.find((x) => x.at === at)
     if (found) { if (strength > found.strength) { found.strength = strength; found.why = why } return }
     out.push({ at, strength, why })
@@ -196,50 +223,106 @@ export function slashesFor(sentence, level = 'beginner') {
 }
 
 /**
+ * その位置(i 語目の**前**)に区切りを入れてよいか。
+ * **駄目なときだけ**、理由を返す。よければ `null`。
+ *
+ * 【なぜ1か所にまとめるのか】
+ *   同じ判定を「模範を作るとき」と「ゲストの区切りを見るとき」の2か所に
+ *   書くと、必ず食い違う。**模範が自分の決まりに違反する**という形で出る。
+ *   `npm run test:chunk` はそれを見張っているが、そもそも1つにしておく。
+ *
+ * 【貫いている考え方】(2026-08 利用者の指定)
+ *   > 前置詞を区切りの最後に置く / 冠詞と名詞の間に区切りを置く /
+ *   > 前置詞と冠詞の間に区切りを置く
+ *
+ *   どれも **「うしろの語にかかる語で、カタマリを終えない」** という
+ *   1つのことの言い換えである。前置詞・冠詞・助動詞・接続詞・所有格は、
+ *   単独では意味をなさず、次の語と組になって初めて訳せる。
+ *
+ * 【文の切れ目は、いつでも正しい】(利用者の指定)
+ *   > 「以前」という意味の副詞として before が使用され、文の最後に置かれ、
+ *   > ピリオドが続き、そのピリオドとその後の文の始まりの間に区切りを
+ *   > 置くことは何ら問題はありません。他にも前置詞にも副詞にもなり得る
+ *   > 単語で同じケースがあればそれらについても OK
+ *
+ *   `before` `after` `since` `over` `in` … は前置詞にも副詞にもなる。
+ *   **どちらで使われているかは語のリストでは当てられない。**
+ *   しかし**文が終わっていれば、それは前置詞ではありえない**(前置詞なら
+ *   うしろに名詞が要る)。だから **`.` `?` `!` と読点のあとは、
+ *   何が来ていても正しい**として、いっさい咎めない。
+ *   これは当て推量ではなく、記号から確実に分かることである。
+ */
+export function slashProblem(words, i) {
+  if (i <= 0 || i >= words.length) return null
+  const raw = words[i - 1]
+  // **文の切れ目・読点のあとは、いつでも正しい。**(上記・利用者の指定)
+  if (endsSentence(raw) || endsClause(raw)) return null
+
+  const prev = bare(raw)
+  const next = bare(words[i] ?? '')
+
+  // ① 助動詞のまとまりの途中(be going to / have to / 助動詞 + 動詞)
+  const aux = insideAux(words, i)
+  if (aux) {
+    return {
+      at: i,
+      short: `${aux} は切らない`,
+      text: `「${aux}」の途中で区切れています。助動詞と動詞はひとかたまりで訳します。`,
+    }
+  }
+  // ② 区切りの最後が前置詞になっている(利用者の明示した NG)
+  if (PREPOSITIONS.has(prev)) {
+    // **前置詞と冠詞のあいだ**は、同じことだが言い方を変えたほうが分かりやすい
+    const detail = DETERMINERS.has(next)
+      ? `前置詞「${raw}」と冠詞「${words[i]}」のあいだで区切れています。`
+        + `「${raw} ${words[i]} …」でひとかたまりです。`
+      : `「${raw}」で区切りが終わっています。`
+        + `前置詞＋名詞でひとかたまりなので、${raw} の前で区切ります。`
+    return { at: i, short: `${raw} の前で区切る`, text: detail }
+  }
+  // ③ 冠詞・限定詞のあとで切っている
+  if (DETERMINERS.has(prev)) {
+    return {
+      at: i,
+      short: `${raw} は名詞と離さない`,
+      text: `冠詞「${raw}」のあとで区切れています。冠詞と名詞のあいだは切りません。`,
+    }
+  }
+  // ④ 所有格('s)のあとで切っている。冠詞と同じで、次の名詞にかかる
+  if (isPossessive(raw)) {
+    return {
+      at: i,
+      short: `${raw} は名詞と離さない`,
+      text: `「${raw}」は次の名詞にかかります。あいだでは区切りません。`,
+    }
+  }
+  // ⑤ 接続詞・関係詞でカタマリを終えている。**次のまとまりの先頭に置く**
+  if (HEAD_WORDS.has(prev)) {
+    return {
+      at: i,
+      short: `${raw} の前で区切る`,
+      text: `「${raw}」でカタマリが終わっています。`
+        + `接続詞や関係詞は、次のまとまりの先頭に置きます。`,
+    }
+  }
+  return null
+}
+
+/**
  * ゲストが入れた区切りを見て、直したほうがよいところを言う。
  *
  * **決まりで確かめられることだけを言う。** あやふやなことは言わない。
  * 「たぶん違う」と言われるほうが、何も言われないより困る。
+ *
+ * **`short` は吹き出しに出す一言。** その場に出すものなので短く。
+ * `text` は詳しい言い方で、触れたときに出す(`title`)。
  */
 export function checkSlashes(sentence, marks) {
   const words = wordsOf(sentence)
-  const at = [...new Set(marks)].sort((a, b) => a - b)
-  const notes = []
-
-  //
-  // **`short` は吹き出しに出す一言。** その場に出すものなので短く。
-  // `text` は詳しい言い方で、触れたときに出す(`title`)。
-  for (const i of at) {
-    if (i <= 0 || i >= words.length) continue
-    // ① 区切りの最後が前置詞になっている(利用者の明示した NG)
-    const prev = bare(words[i - 1])
-    if (PREPOSITIONS.has(prev)) {
-      notes.push({
-        at: i, kind: 'ng',
-        short: `${words[i - 1]} の前で区切る`,
-        text: `「${words[i - 1]}」で区切りが終わっています。`
-          + `前置詞＋名詞でひとかたまりなので、${words[i - 1]} の前で区切ります。`,
-      })
-    }
-    // ② 助動詞と動詞のあいだで切っている
-    const aux = insideAux(words, i)
-    if (aux) {
-      notes.push({
-        at: i, kind: 'ng',
-        short: `${aux} は切らない`,
-        text: `「${aux}」の途中で区切れています。助動詞と動詞はひとかたまりで訳します。`,
-      })
-    }
-    // ③ 冠詞・限定詞のあとで切っている
-    if (DETERMINERS.has(prev)) {
-      notes.push({
-        at: i, kind: 'ng',
-        short: `${words[i - 1]} は名詞と離さない`,
-        text: `「${words[i - 1]}」のあとで区切れています。名詞と離さないでください。`,
-      })
-    }
-  }
-  return notes
+  return [...new Set(marks)].sort((a, b) => a - b)
+    .map((i) => slashProblem(words, i))
+    .filter(Boolean)
+    .map((n) => ({ ...n, kind: 'ng' }))
 }
 
 /** 区切りを入れた文を、カタマリの配列にする */
@@ -258,46 +341,30 @@ export function chunksOf(sentence, marks) {
 /**
  * ゲストが入れた区切りを、**1本ずつその場で判定する**(2026-08 利用者の指定)。
  *
- * > ゲストが引いたスラッシュの位置でも間違っているか、いないか、
- * > そういったことが即座に分かるように判定したうえで
- * > フィードバックを加えれるような仕組みに
+ * 【模範と比べるのは、やめた】(2026-08 利用者の判断)
  *
- * 【3通りにしか分けない】
- *   模範と違う = まちがい、**ではない。** 切り方には幅があり、
- *   模範は決まりから作った1つの案にすぎない。
- *   **決まりに反しているものだけを「ちがう」と言う。**
- *   あやふやなことを言わない、というこの仕組みの原則どおりである。
+ *   > そもそもが区切り方を比べる自体が難しいです。視覚からパッと入って
+ *   > 来ません。比べる気も起こりません。そして、区切り方は、ルールとして
+ *   > 決めたこと以外、正解はないからです。
  *
- *   | 印 | いつ |
- *   |---|---|
- *   | `ok`    | 模範にもある。**確かに合っている** |
- *   | `ng`    | **決まりに反している**(前置詞のあと・助動詞の途中・冠詞のあと) |
- *   | `plain` | 模範には無いが、決まりにも反していない。**何も言わない** |
+ *   以前は「模範にもある(緑)/ 決まりに反する(赤)/ 模範には無い(灰)」の
+ *   3通りに分け、「あと N か所」まで出していた。**これは採点である。**
+ *   けれども区切り方に正解は無く、模範は決まりから作った1つの案にすぎない。
+ *   案と違うだけのものを灰色で並べ、足りない数まで数えると、
+ *   **決まりに反している1本**が、その中に埋もれてしまう。
  *
- * @returns {{at: {[n]: {state, why}}, ok: number, ng: number, plain: number,
- *            missing: number, model: number[]}}
+ *   **言うのは「決まりに反している」ことだけにする。** それ以外は何も言わない。
+ *
+ * @returns {{at: {[n]: {state: 'ng'|'plain', why: string, short: string}}, ng: number}}
  */
-export function judgeSlashes(sentence, marks, level = 'beginner') {
-  const model = slashesFor(sentence, level)
-  const modelAt = new Set(model.map((x) => x.at))
-  const why = new Map(model.map((x) => [x.at, x.why]))
-  const broken = new Map(checkSlashes(sentence, marks).map((n) => [n.at, n]))
-
+export function judgeSlashes(sentence, marks) {
+  const words = wordsOf(sentence)
   const at = {}
-  let ok = 0
   let ng = 0
-  let plain = 0
   for (const i of [...new Set(marks)].sort((a, b) => a - b)) {
-    if (broken.has(i)) {
-      const n = broken.get(i)
-      at[i] = { state: 'ng', why: n.text, short: n.short }
-      ng += 1
-    }
-    else if (modelAt.has(i)) { at[i] = { state: 'ok', why: why.get(i) }; ok += 1 }
-    else { at[i] = { state: 'plain', why: '' }; plain += 1 }
+    const bad = slashProblem(words, i)
+    if (bad) { at[i] = { state: 'ng', why: bad.text, short: bad.short }; ng += 1 }
+    else at[i] = { state: 'plain', why: '', short: '' }
   }
-  // まだ入れていない模範の区切りの数。**場所は言わない。**
-  // 数だけ分かれば「もう少しある」と気づける(答えは渡さない)
-  const missing = model.filter((x) => !marks.includes(x.at)).length
-  return { at, ok, ng, plain, missing, model: model.map((x) => x.at) }
+  return { at, ng }
 }

@@ -122,3 +122,55 @@ export function chunkPairs(text, ja, level = BASE_LEVEL) {
 /** 画面から呼ぶ入口。項目と細かさを渡すと、対か null が返る */
 export const chunkPairsOf = (item, level = BASE_LEVEL) =>
   chunkPairs(item?.prompt_en, storedChunks(item), level)
+
+/**
+ * **自分が入れた区切り**に、訳を当てる(2026-08 利用者の指定)。
+ *
+ *   > ③自分の区切りが反映された英文とそれに対応する日本語訳が
+ *   > 一緒に表示される
+ *
+ * 【訳を切れるのは、控えの境目だけ】
+ *   控え(0021)は**初級の区切り**でそろえて作ってある。
+ *   だから訳は、その境目でしか分けられない。
+ *   自分の区切りが控えの境目と重なっていれば、そこで分ける。
+ *   重なっていない区切り(たとえば普通の動詞の前)は、**英語には出すが、
+ *   訳はそのカタマリぶんをまとめて置く。**
+ *
+ *   ここで AI に訳し直させることもできるが、**押すたびに課金される。**
+ *   控えを組み替えれば無料で、しかも待ち時間が無い。
+ *   訳が少し大きい単位で付くだけで、対がずれるわけではない
+ *   (「ずれた対は無いより悪い」に反しない)。
+ *
+ * @param {string} text  英文(段落 / 発言まるごと)
+ * @param {string[]|null} ja  控え(**初級の区切り**の数と同じ)
+ * @param {number[]} marks 自分が入れた区切りの位置
+ * @returns {{segs: string[], ja: string}[]|null} 数が合わなければ null
+ */
+export function chunkPairsAtMarks(text, ja, marks) {
+  const words = wordsOf(text)
+  if (!words.length) return null
+  const base = slashesFor(text, BASE_LEVEL).map((x) => x.at)
+  // **数が合わなければ切らない。** ずれた対は、無いより害が大きい
+  if (!Array.isArray(ja) || ja.length !== base.length + 1) return null
+
+  const mine = new Set([...new Set(marks)].filter((i) => i > 0 && i < words.length))
+  // 訳を分けられるのは、**自分の区切りと控えの境目が重なったところ**だけ
+  const cuts = new Set(base.filter((i) => mine.has(i)))
+
+  const out = []
+  let jp = []
+  let from = 0        // いまのカタマリの先頭
+  ;[...base, words.length].forEach((at, i) => {
+    jp.push(ja[i])
+    if (at < words.length && !cuts.has(at)) return   // まだ同じカタマリの中
+    // ここで1カタマリぶん。**自分の区切りは、英語の側に残す**
+    const inner = [...mine].filter((k) => k > from && k < at).sort((a, b) => a - b)
+    const segs = []
+    let s = from
+    for (const k of [...inner, at]) { segs.push(words.slice(s, k).join(' ')); s = k }
+    out.push({ segs, ja: jp.join('').trim() })
+    jp = []
+    from = at
+  })
+  return out
+}

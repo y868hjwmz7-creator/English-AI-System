@@ -1310,7 +1310,9 @@ html { -webkit-text-size-adjust: 100%; }
   color: var(--accent); font-weight: 700; margin: 0 0.15em 0 0.05em;
   cursor: help;
 }
-.slash-mark.is-ok    { color: var(--ok); }
+/* 区切りの印。**合っている / まちがい の2色ではない。**
+   模範と比べるのをやめたので(2026-08)、色が付くのは
+   「決まりに反している」ときだけである */
 /* まちがいは**強く出す。** 赤い丸で囲み、すぐ横に吹き出しを付ける */
 .slash-mark.is-ng {
   color: #fff; background: var(--ng); border-radius: 4px;
@@ -1346,15 +1348,18 @@ html { -webkit-text-size-adjust: 100%; }
   display: flex; flex-wrap: wrap; gap: 6px 12px;
   margin: 8px 0 0; font-size: 12.5px;
 }
-.slash-score-ok { color: var(--ok); font-weight: 600; }
-.slash-score-ng { color: var(--ng); font-weight: 600; }
-.slash-score-plain, .slash-score-rest { color: var(--text-muted); }
-.slash-score-done { color: var(--ok); font-weight: 700; }
+.slash-score-done { color: var(--ok); font-weight: 600; }
 
 /* 模範の区切り。**自分と同じ形で出す。** 形が違うと見比べられない */
 .slash-out { margin: 6px 0 0; line-height: 2.1; font-size: 17px; }
-.slash-out--model { color: var(--text-secondary); }
-.slash-out--model .slash-mark { color: var(--accent); }
+/* 自分の区切りに訳を当てたもの(2026-08)。**上の英文が練習用、これが確認用** */
+.slash-out--mine .chunk-en { font-size: 1em; }
+/* 控えの境目**ではない**自分の区切り。訳はそこで分けられないので、
+   同じ緑の帯の中に立つ。**印は同じ形にする**(別の意味だと誤解させない)。
+   カタマリの先頭に立つ棒と違い、**左にも空きが要る**(語と語のあいだなので) */
+.chunk-bar--mine { margin-left: 4px; color: var(--text-muted); }
+/* やることの説明。模範と比べる画面ではなくなったので、最初に1行で言う */
+.slash-guide { margin: 0 0 10px; }
 
 /* ── カタマリごとの訳(0021)────────────────────────────────
    利用者が紙で配っている教材と同じ形。**英語の真上に、そのカタマリの訳。**
@@ -2447,6 +2452,16 @@ html { -webkit-text-size-adjust: 100%; }
   color: var(--ink-soft);
 }
 .lesson-sheet .btn:hover { background: var(--accent-bg); color: var(--accent); }
+/* **紙の上の「押して進む」ボタンを、まとめて塗り直す。**
+   `.lesson-sheet .btn` が全部を白い枠にそろえてしまうので、
+   塗り直さないと `btn--primary` が他のボタンと見分けられない。
+   **部品ごとに打ち消して回らない**(新しい部品で必ず抜ける)。
+   べた塗りにはせず、うすい地色 + 同じ色の文字 + 枠線 + 太字で示す
+   (2026-08「黒と濃い水色の塗りつぶしがダサい」)。**色だけに頼らない** */
+.lesson-sheet .btn.btn--primary {
+  background: var(--accent-soft); border-color: var(--accent-line);
+  color: var(--accent); font-weight: 700;
+}
 
 /* 紙の上に出る吹き出し。**紙は暗い配色でも白のまま**なので、
    中身も明るい側で決め打ちにする。**変数を差し替えるだけ。**

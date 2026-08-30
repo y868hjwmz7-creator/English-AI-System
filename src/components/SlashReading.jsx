@@ -4,7 +4,7 @@
  * > 文章をスラッシュ( / )で区切り、意味ごとのカタマリで文法と意味を理解し、
  * > カタマリ毎の訳を前から言えるようにするトレーニング。
  *
- * 【作り直した理由】(2026-08「壊滅的に使いづらい」)
+ * 【作り直した理由 ①】(2026-08「壊滅的に使いづらい」)
  *   はじめは**語と語のあいだ**を押させていた。2つ駄目だった。
  *     ・あいだに押せる帯を置いたので、**最初から全部にスラッシュが
  *       入っているように見えた**
@@ -12,40 +12,47 @@
  *
  *   いまは**語そのものを押す。**「この語から新しいカタマリ」という
  *   意味なので、押すとその語の**前**にスラッシュが出る。
- *     ・語は大きいので、指で確実に狙える
- *     ・押すまで何も出ない。**素の英文のまま**始まる
- *     ・スラッシュリーディングの教え方(意味の切れ目の前に入れる)とも合う
  *
- * 【模範の区切りは、決まりで出す。AI に頼まない】
- *   利用者が挙げた決まりは、どれも閉じた語のリストで判定できる
- *   (`src/lib/chunker.js`)。1文ごとに課金する理由がない。
+ * 【作り直した理由 ②】(2026-08 利用者の判断。**模範との比べっこをやめた**)
  *
- * 【カタマリごとの訳(0021)】
- *   利用者が紙で配っている教材と同じ形にしてある。
+ *   > そもそもが区切り方を比べる自体が難しいです。視覚からパッと入って
+ *   > 来ません。比べる気も起こりません。そして、区切り方は、ルールとして
+ *   > 決めたこと以外、正解はないからです。
  *
- *       どれくらいの長さですか / 乗っているのは
- *       How long              / is the ride?
+ *   以前は「模範の区切り」を出して見比べさせ、合っている数・模範には無い数・
+ *   あと何か所、まで数えていた。**これは採点である。**
+ *   けれども区切り方に正解は無い。模範は決まりから作った1つの案にすぎず、
+ *   案と違うだけのものを並べると、**決まりに反している1本**が埋もれる。
  *
+ *   いまの形は3段である(利用者が書いた設計そのまま)。
+ *
+ *     ① 自分なりに区切りを入れる
+ *        → **決まりに反する区切りだけ**、その場で赤い吹き出しが出る
+ *     ② 区切り終わったら「この区切りで訳を出す」を押す
+ *     ③ **自分の区切りが入った英文**と、それに対応する訳が一緒に出る
+ *
+ *   出したあとは、上の英文(訳なし)が**練習用**、下の対が**確認用**である。
+ *
+ * 【決まりは `chunker.js` の `slashProblem()` 1か所】
+ *   利用者が挙げた NG は、どれも閉じた語のリストで判定できる。
+ *   1文ごとに課金する理由がない。判定を画面に書き写さない。
+ *
+ * 【訳は教材の控え(0021)から組み立てる。押すたびに課金しない】
  *   **どこで切るかは決まり、何と訳すかは教材の控え。**
- *   訳は決まりでは書けないので、教材を作るときに1回だけ作って
- *   `material_items.chunks` に控えてある(`src/lib/chunkJa.js`)。
- *   控えの無い教材では英語だけを出す。**無いものを、あるように見せない。**
+ *   自分の区切りに合わせた訳は `chunkPairsAtMarks()` が控えを組み替えて作る。
+ *   控えの無い教材では出さない。**無いものを、あるように見せない。**
  */
 import { Fragment, useEffect, useState } from 'react'
-import { SLASH_LEVELS, checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
-import { storedChunks } from '../lib/chunkJa.js'
+import { checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
+import { chunkPairsAtMarks, storedChunks } from '../lib/chunkJa.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
-import { loadChunkJa, saveChunkJa } from '../lib/slashLevel.js'
-import ChunkedText from './ChunkedText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 
 export default function SlashReading({
-  blocks, clipVoice, tier, rate, level, onLevelChange, unit, onUnitChange,
+  blocks, clipVoice, tier, rate, unit, onUnitChange,
 }) {
   const [marks, setMarks] = useState({})   // 文ごとの区切り
-  const [shown, setShown] = useState({})   // 「解答を見る」を押した文
-  // カタマリごとの訳を出すか(0021)。**一度決める設定は覚える** */
-  const [withJa, setWithJa] = useState(loadChunkJa)
+  const [shown, setShown] = useState({})   // 「この区切りで訳を出す」を押した文
 
   //
   // **まちがいは、次にどこかを触ったら消える**(2026-08 利用者の指定)。
@@ -91,9 +98,6 @@ export default function SlashReading({
     return () => document.removeEventListener('click', onClick)
   }, [blocks])
 
-  // 控えのある教材かどうか(0021)。無い教材で札だけ出しても迷わせる
-  const hasJa = blocks.some((b) => (b.parts ?? []).some((it) => storedChunks(it)))
-
   return (
     <div className="slash">
       <div className="slash-head">
@@ -107,33 +111,29 @@ export default function SlashReading({
             ))}
           </select>
         </label>
-        <label className="rate-pick">
-          <span>区切りの細かさ</span>
-          <select value={level} onChange={(e) => onLevelChange(e.target.value)}>
-            {SLASH_LEVELS.map((l) => (
-              <option key={l.id} value={l.id} title={l.hint}>{l.label}</option>
-            ))}
-          </select>
-        </label>
-        {/* **訳は隠せる**(2026-08 の要望)。
-            自分で言えるか試すときは消し、確かめるときは出す */}
-        {hasJa && (
-          <label className="passage-flow">
-            <input type="checkbox" checked={withJa}
-                   onChange={(e) => { setWithJa(e.target.checked); saveChunkJa(e.target.checked) }} />
-            カタマリの訳を出す
-          </label>
-        )}
       </div>
+
+      {/* **やることを1行で言う。** 模範と比べる画面ではなくなったので、
+          何をすればよいのかを最初に書いておく */}
+      <p className="card-hint slash-guide">
+        語を押すと、その<strong>前</strong>で区切れます。
+        決まりに反する区切りだけ、その場で 💬 でお知らせします
+        (吹き出しを押すとその区切りが消えます)。
+        <br />
+        区切り終わったら<strong>「この区切りで訳を出す」</strong>を押してください。
+      </p>
 
       <ol className="slash-list">
         {blocks.map((s) => {
           const words = wordsOf(s.text)
           const mine = marks[s.id] ?? []
           const open = shown[s.id]
-          // **1本ずつ、その場で判定する**(2026-08 利用者の指定)
-          const judge = judgeSlashes(s.text, mine, level)
-          const model = judge.model
+          // **1本ずつ、その場で判定する**(2026-08 利用者の指定)。
+          // 見るのは「決まりに反していないか」だけ。模範とは比べない
+          const judge = judgeSlashes(s.text, mine)
+          // 自分の区切りに合わせた訳。控えが無い教材では null
+          const parts = s.parts ?? [{ id: s.id, prompt_en: s.text }]
+          const hasJa = parts.some((p) => storedChunks(p))
           return (
             <li key={s.id} className="qa-row slash-row">
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
@@ -143,10 +143,15 @@ export default function SlashReading({
                 <span className="row-tools">
                   <SpeakButton text={s.text} className="etext-listen"
                                clipVoice={clipVoice} tier={tier} rate={rate} />
-                  <button type="button" className="btn btn--small"
-                          onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
-                    {open ? '解答を隠す' : '解答を見る'}
-                  </button>
+                  {/* **控えのある教材にだけ出す。** 押しても何も出ない
+                      ボタンを置かない(無いものをあるように見せない) */}
+                  {hasJa && (
+                    <button type="button"
+                            className={`btn btn--small${open ? '' : ' btn--primary'}`}
+                            onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
+                      {open ? '訳を隠す' : 'この区切りで訳を出す'}
+                    </button>
+                  )}
                   {mine.length > 0 && (
                     <button type="button" className="btn btn--small btn--link"
                             onClick={() => setMarks((m) => ({ ...m, [s.id]: [] }))}>
@@ -157,7 +162,9 @@ export default function SlashReading({
               </div>
 
               {/* 押すのは**語**。押すとその語の前にスラッシュが出る。
-                  押すまでは、ただの英文のまま */}
+                  押すまでは、ただの英文のまま。
+                  **訳を出したあとも、ここは訳なしのまま**にしておく
+                  (2026-08 利用者の指定。ここが練習用、下が確認用) */}
               <p className="slash-line" lang="en">
                 {/* 空白は**囲みの外**に置く。中に入れると `white-space: nowrap`
                     が効いて改行できる場所が無くなり、長い文が画面から
@@ -168,8 +175,8 @@ export default function SlashReading({
                       {mine.includes(i) && (
                         <span className={`slash-mark is-${judge.at[i]?.state ?? 'plain'}`}
                               title={judge.at[i]?.why || ''}
-                              aria-label={judge.at[i]?.state === 'ok' ? '合っている区切り'
-                                : judge.at[i]?.state === 'ng' ? '決まりに反する区切り' : '区切り'}>
+                              aria-label={judge.at[i]?.state === 'ng'
+                                ? '決まりに反する区切り' : '区切り'}>
                           /
                         </span>
                       )}
@@ -204,49 +211,57 @@ export default function SlashReading({
                 ))}
               </p>
 
-              {/* 入れた瞬間に分かる judge。
-                  **模範と違う = まちがい、ではない。** 切り方には幅がある。
-                  決まりに反しているものだけを「ちがう」と言う */}
-              {mine.length > 0 && (
+              {/* **数えない。言うのは「決まりに反していない」ことだけ。**
+                  合っている数・模範には無い数・あと何か所、は採点であり、
+                  区切り方に正解が無い以上、意味を持たない(2026-08) */}
+              {mine.length > 0 && judge.ng === 0 && (
                 <p className="slash-score">
-                  <span className="slash-score-ok">合っている {judge.ok}</span>
-                  {judge.ng > 0 && <span className="slash-score-ng">ちがう {judge.ng}</span>}
-                  {judge.plain > 0 && <span className="slash-score-plain">模範には無い {judge.plain}</span>}
-                  {judge.missing > 0 && (
-                    <span className="slash-score-rest">あと {judge.missing} か所</span>
-                  )}
-                  {judge.missing === 0 && judge.ng === 0 && (
-                    <span className="slash-score-done">模範どおりです</span>
-                  )}
+                  <span className="slash-score-done">決まりに反する区切りはありません</span>
                 </p>
               )}
 
               {open && (
                 <div className="answer-box slash-answer">
-                  <p className="answer-box-label">
-                    模範の区切り({SLASH_LEVELS.find((l) => l.id === level)?.label})
-                    {mine.length > 0 && (
-                      <button type="button" className="btn btn--link slash-copy"
-                              onClick={() => setMarks((m) => ({ ...m, [s.id]: model }))}>
-                        この区切りに合わせる
-                      </button>
-                    )}
-                  </p>
-                  {/* **カタマリの真上に、そのカタマリの訳**(2026-08 利用者の指定)。
-                      文まるごとの訳を下にまとめて置いていたが、
-                      それでは「このカタマリは何と言うのか」が分からない。
-                      利用者が紙で配っている教材と同じ形にした。
-
-                      **項目(段落 / 発言)ごとに出す。** 訳の控えは項目ごとなので、
-                      「文章全体」でつないだときも、ここは項目ごとに分けて出す。
-                      理由の一覧は**廃止した**(2026-08「見づらいだけ」)。
-                      理由は1本ずつ、スラッシュに触れると出る(`title`) */}
-                  {(s.parts ?? [{ prompt_en: s.text }]).map((part, i) => (
-                    <p className="slash-out slash-out--model" key={part.id ?? i}>
-                      <ChunkedText text={part.prompt_en} ja={storedChunks(part)}
-                                   level={level} showJa={withJa} />
-                    </p>
-                  ))}
+                  <p className="answer-box-label">自分の区切りと訳</p>
+                  {splitMarks(parts, mine).map(({ part, local }, i) => {
+                    const pairs = chunkPairsAtMarks(
+                      part.prompt_en, storedChunks(part), local,
+                    )
+                    if (!pairs) {
+                      return (
+                        <p className="slash-out" key={part.id ?? i} lang="en">
+                          {part.prompt_en}
+                        </p>
+                      )
+                    }
+                    return (
+                      <p className="slash-out slash-out--mine" key={part.id ?? i}>
+                        <span className="chunked">
+                          {pairs.map((p, n) => (
+                            <span className="chunk" key={n}>
+                              <span className="chunk-en" lang="en">
+                                {n > 0 && (
+                                  <span className="chunk-bar" aria-hidden="true">/</span>
+                                )}
+                                {/* 控えの境目でない自分の区切りも、英語には出す。
+                                    訳はそのカタマリぶんをまとめて置く */}
+                                {p.segs.map((seg, k) => (
+                                  <Fragment key={k}>
+                                    {k > 0 && (
+                                      <span className="chunk-bar chunk-bar--mine"
+                                            aria-hidden="true">/</span>
+                                    )}
+                                    {seg}
+                                  </Fragment>
+                                ))}
+                              </span>
+                              <span className="chunk-ja">{p.ja || '　'}</span>
+                            </span>
+                          ))}
+                        </span>
+                      </p>
+                    )
+                  })}
                   {/* 控えが無い教材では、これまでどおり文ぜんぶの訳を出す。
                       **無いものを、あるように見せない** */}
                   {!hasJa && s.ja && (
@@ -263,4 +278,22 @@ export default function SlashReading({
       </ol>
     </div>
   )
+}
+
+/**
+ * ブロック全体で持っている区切りの位置を、**項目ごとに割り直す。**
+ *
+ * 「文章全体」を選ぶと、段落をつないだ1本の英文になる(`blocksOf`)。
+ * 区切りの位置はそのつないだ英文の語数で数えているが、
+ * **訳の控えは項目(段落 / 発言)ごと**にある。割り直さないと、
+ * 2段落目以降の区切りが訳と食い違う。
+ */
+function splitMarks(parts, marks) {
+  let off = 0
+  return parts.map((part) => {
+    const n = wordsOf(part.prompt_en).length
+    const local = marks.filter((k) => k > off && k < off + n).map((k) => k - off)
+    off += n
+    return { part, local }
+  })
 }
