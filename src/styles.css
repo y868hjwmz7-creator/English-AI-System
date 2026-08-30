@@ -1360,6 +1360,13 @@ html { -webkit-text-size-adjust: 100%; }
 .chunk-bar--mine { margin-left: 4px; color: var(--text-muted); }
 /* やることの説明。模範と比べる画面ではなくなったので、最初に1行で言う */
 .slash-guide { margin: 0 0 10px; }
+/* 通しの一枚(2026-08 利用者の指定)。段落ごとの箱を外し、**つないで**見せる。
+   段落の切れ目は残す — 消すと、どこからどこまでが1段落か分からなくなる
+   (⑤ シャドーイングで本文を隠すときと同じ考え方) */
+.slash-review-block + .slash-review-block {
+  margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--qa-line, var(--border));
+}
+.slash-review-block .passage-speaker { display: block; margin-bottom: 2px; }
 
 /* ── カタマリごとの訳(0021)────────────────────────────────
    利用者が紙で配っている教材と同じ形。**英語の真上に、そのカタマリの訳。**

@@ -59,6 +59,8 @@ export default function SlashReading({
 }) {
   const [marks, setMarks] = useState({})   // 文ごとの区切り
   const [shown, setShown] = useState({})   // 「この区切りで訳を出す」を押した文
+  // **通しで見る**(2026-08 利用者の指定)。段落ごとの作業と切り替える
+  const [review, setReview] = useState(false)
 
   // **まとめて出せるようにする**(2026-08 利用者の指定)。
   //
@@ -133,17 +135,36 @@ export default function SlashReading({
         </label>
         {/* **2つ以上あるときだけ出す。** 1つしかないなら、
             その段落のボタンと同じことをする札が2つ並ぶだけになる */}
-        {jaBlocks.length > 1 && (
+        {jaBlocks.length > 1 && !review && (
           <button type="button"
                   className={`btn btn--small${allOpen ? '' : ' btn--primary'}`}
                   onClick={toggleAll}>
             {allOpen ? 'すべての訳を隠す' : 'すべての区切りで訳を出す'}
           </button>
         )}
+        {/* ★ 全部の段落が終わったら、**つないだものを1枚で**見られるようにする
+            (2026-08 利用者の指定)
+
+              > 全ての段落が終わった後には、各段落の区切った文と訳を全て
+              > 繋いであるものを用意してあげて参照できるようにしたいな。
+              > ボタンを押せば切り替わるような仕組みが良い
+
+            **終わる前は出さない。** 押しても中身が虫食いになるだけで、
+            「効かないボタンを出さない」に反する(CLAUDE.md)。
+            終わったかどうかは「全段落の訳を出したか」で見る。 */}
+        {jaBlocks.length > 1 && (allOpen || review) && (
+          <button type="button"
+                  className={`btn btn--small${review ? '' : ' btn--primary'}`}
+                  onClick={() => setReview((v) => !v)}>
+            {review ? '区切りに戻る' : '通しで見る'}
+          </button>
+        )}
       </div>
 
       {/* **やることを1行で言う。** 模範と比べる画面ではなくなったので、
-          何をすればよいのかを最初に書いておく */}
+          何をすればよいのかを最初に書いておく。
+          **通しのときは出さない。** 「語を押すと」は、そこでは嘘になる */}
+      {!review && (
       <p className="card-hint slash-guide">
         語を押すと、その<strong>前</strong>で区切れます。
         決まりに反する区切りだけ、その場で 💬 でお知らせします
@@ -152,8 +173,27 @@ export default function SlashReading({
         区切り終わったら<strong>「この区切りで訳を出す」</strong>を押してください
         (段落ごとでも、上の<strong>「すべての区切りで訳を出す」</strong>で
         まとめてでも、どちらでもできます)。
+        <br />
+        全部の段落が終わったら<strong>「通しで見る」</strong>で、
+        つないだ1枚にして見返せます。
       </p>
+      )}
 
+      {/* ★ 通しの一枚。**押すところは置かない。** 参照するためのものなので、
+          区切りを触れるようにすると練習用と見分けが付かなくなる */}
+      {review ? (
+        <div className="answer-box slash-review">
+          <p className="answer-box-label">通し(自分の区切りと訳)</p>
+          {blocks.map((b) => (
+            <div className="slash-review-block" key={b.id}>
+              {b.speaker && (
+                <span className="passage-speaker" lang="en">{b.speaker}</span>
+              )}
+              <MinePairs parts={partsOf(b)} marks={marks[b.id] ?? []} />
+            </div>
+          ))}
+        </div>
+      ) : (
       <ol className="slash-list">
         {blocks.map((s) => {
           const words = wordsOf(s.text)
@@ -254,45 +294,7 @@ export default function SlashReading({
               {open && (
                 <div className="answer-box slash-answer">
                   <p className="answer-box-label">自分の区切りと訳</p>
-                  {splitMarks(parts, mine).map(({ part, local }, i) => {
-                    const pairs = chunkPairsAtMarks(
-                      part.prompt_en, storedChunks(part), local,
-                    )
-                    if (!pairs) {
-                      return (
-                        <p className="slash-out" key={part.id ?? i} lang="en">
-                          {part.prompt_en}
-                        </p>
-                      )
-                    }
-                    return (
-                      <p className="slash-out slash-out--mine" key={part.id ?? i}>
-                        <span className="chunked">
-                          {pairs.map((p, n) => (
-                            <span className="chunk" key={n}>
-                              <span className="chunk-en" lang="en">
-                                {n > 0 && (
-                                  <span className="chunk-bar" aria-hidden="true">/</span>
-                                )}
-                                {/* 控えの境目でない自分の区切りも、英語には出す。
-                                    訳はそのカタマリぶんをまとめて置く */}
-                                {p.segs.map((seg, k) => (
-                                  <Fragment key={k}>
-                                    {k > 0 && (
-                                      <span className="chunk-bar chunk-bar--mine"
-                                            aria-hidden="true">/</span>
-                                    )}
-                                    {seg}
-                                  </Fragment>
-                                ))}
-                              </span>
-                              <span className="chunk-ja">{p.ja || '　'}</span>
-                            </span>
-                          ))}
-                        </span>
-                      </p>
-                    )
-                  })}
+                  <MinePairs parts={parts} marks={mine} />
                   {/* 控えが無い教材では、これまでどおり文ぜんぶの訳を出す。
                       **無いものを、あるように見せない** */}
                   {!hasJa && s.ja && (
@@ -307,6 +309,7 @@ export default function SlashReading({
           )
         })}
       </ol>
+      )}
     </div>
   )
 }
@@ -326,5 +329,44 @@ function splitMarks(parts, marks) {
     const local = marks.filter((k) => k > off && k < off + n).map((k) => k - off)
     off += n
     return { part, local }
+  })
+}
+
+/**
+ * 自分の区切りに訳を当てたものを描く。
+ * **段落の箱からも、通しの一覧からも同じものを使う。**
+ * 見た目を2か所に書き写すと、片方だけ直り忘れる。
+ */
+function MinePairs({ parts, marks }) {
+  return splitMarks(parts, marks).map(({ part, local }, i) => {
+    const pairs = chunkPairsAtMarks(part.prompt_en, storedChunks(part), local)
+    // 控えが無い / 数が合わない。**英語だけを出す。無いものを見せない**
+    if (!pairs) {
+      return <p className="slash-out" key={part.id ?? i} lang="en">{part.prompt_en}</p>
+    }
+    return (
+      <p className="slash-out slash-out--mine" key={part.id ?? i}>
+        <span className="chunked">
+          {pairs.map((p, n) => (
+            <span className="chunk" key={n}>
+              <span className="chunk-en" lang="en">
+                {n > 0 && <span className="chunk-bar" aria-hidden="true">/</span>}
+                {/* 控えの境目でない自分の区切りも、英語には出す。
+                    訳はそのカタマリぶんをまとめて置く */}
+                {p.segs.map((seg, k) => (
+                  <Fragment key={k}>
+                    {k > 0 && (
+                      <span className="chunk-bar chunk-bar--mine" aria-hidden="true">/</span>
+                    )}
+                    {seg}
+                  </Fragment>
+                ))}
+              </span>
+              <span className="chunk-ja">{p.ja || '　'}</span>
+            </span>
+          ))}
+        </span>
+      </p>
+    )
   })
 }
