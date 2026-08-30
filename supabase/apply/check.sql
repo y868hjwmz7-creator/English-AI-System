@@ -1,0 +1,27 @@
+-- ============================================================================
+-- ★ いま Supabase に何が入っていて、何がまだかを見るだけの SQL です ★
+--
+-- 【何が起きるか】
+--   **何も書き換えません。** 見るだけです。表も行も一切さわりません。
+--
+-- 【どこで使うか】
+--   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
+--
+-- 【どうなれば成功か】
+--   4行の表が出ます。「⬜ まだです」があれば、
+--   supabase/apply/pending_2026-08-29.sql を貼れば全部そろいます。
+-- ============================================================================
+
+select 何が要るか, case when 済 then '✅ もう入っています' else '⬜ まだです' end as 状態
+from (
+  select '0013〜0019(発音記号・復習の箱・音声の置き場など)' as 何が要るか,
+         exists (select 1 from pg_tables where tablename = 'vocab_days') as 済, 1 as 順
+  union all select '0020 単語・フレーズの発音記号',
+    exists (select 1 from information_schema.columns
+            where table_name = 'material_items' and column_name = 'phonetic'), 2
+  union all select '0021 カタマリごとの訳',
+    exists (select 1 from information_schema.columns
+            where table_name = 'material_items' and column_name = 'chunks'), 3
+  union all select '0022 取り組みの記録とリマインド',
+    exists (select 1 from pg_tables where tablename = 'practice_days'), 4
+) t order by 順;
