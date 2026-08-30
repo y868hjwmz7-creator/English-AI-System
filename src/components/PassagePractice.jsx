@@ -43,7 +43,6 @@ import EnglishText from './EnglishText.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { PASSAGE_VIEWS, SIX_STEPS, blocksOf, sentencesOf, stepOf } from '../lib/sixSteps.js'
-import ChunkSideToggle from './ChunkSideToggle.jsx'
 import ChunkedText from './ChunkedText.jsx'
 import SlashReading from './SlashReading.jsx'
 import SlashedText from './SlashedText.jsx'
@@ -345,9 +344,6 @@ export default function PassagePractice({
             {/* 通しで聴くときは、段落で切れていないほうが追いやすい */}
             段落で区切らない
           </label>
-          {/* 狭い画面では、英語と訳を**同じ場所で入れ替える**(2026-08 利用者の指定)。
-              広い画面では上下に並ぶので、この札は出ない */}
-          {view === 'chunk' && !flow && <ChunkSideToggle />}
         </div>
       )}
 
