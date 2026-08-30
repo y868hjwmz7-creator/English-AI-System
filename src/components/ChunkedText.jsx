@@ -1,14 +1,21 @@
 /**
- * カタマリごとの訳を、**英語の真上**に並べて描く(2026-08 利用者の指定)。
+ * カタマリごとの訳を、**英語のすぐ下**に並べて描く(2026-08 利用者の指定)。
  *
- * 利用者が紙で配っている教材と同じ形にしてある。
+ *     How long / is the ride?
+ *     どれくらい    乗っているのは
  *
- *     どれくらいの長さですか / 乗っているのは
- *     How long              / is the ride?
+ * 【並び順】(2026-08 利用者の指定で改めた)
+ *   > スラッシュリーディングは英語が上、訳が下でお願いします。
  *
- * 【なぜ「上」なのか】
- *   利用者の紙も、訳が上・英語が下である。前から順に、
- *   **訳を先に見てから英語を確かめる**という読み方に合っている。
+ *   はじめは訳を上に置いていた(利用者の紙がその形だったため)。
+ *   画面では**英語を先に読んで、下で意味を確かめる**ほうが合う。
+ *
+ * 【訳は、そのカタマリの**まん中**に置く】(2026-08 利用者の指定)
+ *   > 日本語を英語のスラッシュとスラッシュの間の真ん中に
+ *
+ *   左に寄せると、英語が長いカタマリでどこに対応する訳なのか分かりにくい。
+ *   まん中に置けば、上の英語のどこを指しているか目で追える。
+ *   **訳の側にスラッシュは出さない。** 区切りは上の英語が示している。
  *
  * 【訳が無いときは、英語だけを出す】
  *   カタマリの訳は教材に控えてある(0021)。控えの無い教材
@@ -32,16 +39,11 @@ export default function ChunkedText({ text, ja = null, level = 'beginner', showJ
     <span className="chunked">
       {pairs.map((p, i) => (
         <span className="chunk" key={i}>
-          {showJa && (
-            <span className="chunk-ja">
-              {i > 0 && <span className="chunk-bar" aria-hidden="true">/</span>}
-              {p.ja || '　'}
-            </span>
-          )}
           <span className="chunk-en" lang="en">
             {i > 0 && <span className="chunk-bar" aria-hidden="true">/</span>}
             {p.en}
           </span>
+          {showJa && <span className="chunk-ja">{p.ja || '　'}</span>}
         </span>
       ))}
     </span>

@@ -10,9 +10,17 @@
   --surface-0: #f7f6f3;   /* 画面の背景 */
   --surface-1: #fcfcfb;   /* カードの背景 */
   --surface-2: #f0efec;   /* 目盛り・区切り線 */
-  /* カタマリごとの訳の帯(0021)。**解答の囲みの上に置く**ので、
-     囲みの地色(--surface-2)とは別の色でないと帯に見えない */
-  --chunk-bg: #e4e8ee;
+  /* カタマリごとの訳の帯(0021)。**うすい緑**(2026-08 利用者の指定)。
+     > もちょっと明るいカラーのチョイスが良いです。薄い緑やグレーなど
+     解答の囲みの上に置くので、囲みの地色とは別の色でないと帯に見えない */
+  --chunk-bg: #e7f0e7;
+  /* ボタンの地色。**カードより少しだけ明るく**しておく。
+     `--surface-0`(ページの地色)を使っていたので、暗い配色では
+     カードより**暗く**なり、黒い穴のように見えた(2026-08 実機)。
+     > 黒背景に黒ボタンは殺風景すぎる */
+  --btn-bg:   #ffffff;
+  --quiet-bg: #e4e2dc;   /* 「まだ」「共有する」など、一段うしろのボタン */
+  --on-accent: #ffffff;  /* 青の塗りつぶしの上に乗る文字 */
   --border:    #e0dfda;
 
   --text-primary:   #0b0b0b;
@@ -84,7 +92,11 @@
     --surface-0: #131312;
     --surface-1: #1a1a19;
     --surface-2: #262625;
-    --chunk-bg: #303a45;
+    --chunk-bg: #2c3a2e;
+    --btn-bg:   #2a2a28;
+    --quiet-bg: #3f3f3b;
+    /* うすい水色の上に白い文字は薄い。**暗い側は文字を濃くする** */
+    --on-accent: #10222f;
     --border:    #383835;
   
     --text-primary:   #ffffff;
@@ -130,7 +142,10 @@
   --surface-0: #131312;
   --surface-1: #1a1a19;
   --surface-2: #262625;
-  --chunk-bg: #303a45;
+  --chunk-bg: #2c3a2e;
+  --btn-bg:   #2a2a28;
+  --quiet-bg: #3f3f3b;
+  --on-accent: #10222f;
   --border:    #383835;
 
   --text-primary:   #ffffff;
@@ -571,13 +586,16 @@ audio { width: 100%; margin-top: 4px; }
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 40px;
   padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface-0); color: var(--text-primary);
+  background: var(--btn-bg); color: var(--text-primary);
   font-family: inherit; font-size: 14px; line-height: 1.4; cursor: pointer;
 }
 .btn:hover { border-color: var(--text-muted); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn--primary {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--on-accent); font-weight: 600;
+}
 .btn--danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
 .btn--link {
   display: inline; min-height: 0;
@@ -597,12 +615,12 @@ audio { width: 100%; margin-top: 4px; }
    **灰色の塗りつぶし**にして、「覚えた」(青の塗りつぶし)と
    **色ではなく明るさ**で分ける。プレインでも見分けられる。 */
 .btn--quiet {
-  /* **`--border` を借りる。** 明るい側でも暗い側でも「灰色」になり、
-     プレイン(色を消す)でもそのまま成り立つ。
+  /* **ふつうのボタンより一段明るい灰色**にする。
+     明るい側でも暗い側でも「灰色」に見え、プレイン(色を消す)でも成り立つ。
      `--surface-2` だと暗い配色でカードとの差が小さく、
      **黒い箱に見えた**(2026-08 の指摘) */
-  background: var(--border);
-  border-color: var(--border);
+  background: var(--quiet-bg);
+  border-color: var(--quiet-bg);
   color: var(--text-primary);
 }
 .btn--quiet:hover { border-color: var(--text-muted); }
@@ -1342,21 +1360,25 @@ html { -webkit-text-size-adjust: 100%; }
   row-gap: 10px;
 }
 .chunk { display: flex; flex-direction: column; }
-/* 訳は**うすい地色の帯**にする。カタマリどうしのあいだに隙間を作らないので、
-   1行ぶんがつながった帯に見える(紙の教材と同じ見え方) */
-.chunk-ja {
-  padding: 2px 2px 2px 0;
-  background: var(--chunk-bg);
-  color: var(--text-secondary);
-  font-size: 13px; line-height: 1.6;
-}
 .chunk-en {
-  padding: 2px 2px 0 0;
+  padding: 2px 6px 1px 0;
   font-size: 17px; line-height: 1.7;
 }
-/* 区切りの棒。**訳の側にも出す。** 片方だけだと対応が読み取れない */
+/* 訳は**英語のすぐ下**に、**そのカタマリのまん中**に置く
+   (2026-08 利用者の指定)。左に寄せると、英語が長いカタマリで
+   どこに対応する訳なのか分かりにくい。
+   **訳の側にスラッシュは出さない。** 区切りは上の英語が示している。
+
+   地色はうすい緑。カタマリどうしのあいだに隙間を作らないので、
+   1行ぶんがつながった帯に見える。 */
+.chunk-ja {
+  padding: 2px 6px;
+  background: var(--chunk-bg);
+  color: var(--text-secondary);
+  font-size: 13px; line-height: 1.6; text-align: center;
+}
+/* 区切りの棒。英語の側にだけ出す */
 .chunk-bar { margin-right: 4px; color: var(--accent); font-weight: 700; }
-.chunk-ja .chunk-bar { font-weight: 400; }
 
 .slash-copy { margin-left: auto; font-size: 12px; }
 .slash-ja {
@@ -1731,11 +1753,38 @@ html { -webkit-text-size-adjust: 100%; }
   --ink-soft:     #5a646e;
   --ink-faint:    #8b949e;
   --rule:         #e7e3da;
+
+  /* ★★ 紙の中は、**明るい配色の島**にする ★★
+     (2026-08 実機。暗い配色のまま教材 → 6Steps / Quick Response に入ると、
+      札もボタンも**黒い塗りつぶし**になり、白い紙の上で読めなかった)
+
+     【なぜ部品ごとに直さないか】
+       紙の上に置く部品は増え続ける(札・吹き出し・入力欄・囲み…)。
+       **部品ごとに色を打ち消して回ると、新しい部品で必ず抜ける。**
+       第5.22.6節①(白い文字が白い紙に消えた)・
+       `<select>` が黒い箱になった件と、根っこは同じである。
+
+     **土台の変数をここで差し替える。** そうすれば、紙の中に何を置いても
+     自動的に明るい側の色になる。値は明るい配色と同じものにしてあるので、
+     明るい配色で見たときの見た目は変わらない。 */
+  --btn-bg:         #ffffff;
+  --quiet-bg:       #eceae3;
+  --on-accent:      #ffffff;
+  --surface-0:      #ffffff;
+  --surface-1:      #fbfaf7;
+  --surface-2:      #f0efec;
+  --border:         #e7e3da;
+  --text-primary:   #24292f;
+  --text-secondary: #5a646e;
+  --text-muted:     #8b949e;
+  --danger:         #b8322f;
+  --shadow-1: 0 1px 2px rgb(36 41 47 / 8%);
+  --shadow-2: 0 8px 26px rgb(36 41 47 / 12%), 0 2px 6px rgb(36 41 47 / 8%);
   /* 練習の囲み。**紙の上では、紙の色にそろえる** */
   --qa-bg:        #faf8f3;   /* ごくうすい地色。紙より少しだけ濃い */
   --qa-line:      #e7e3da;
   --qa-answer:    #f0ece2;
-  --chunk-bg:     #e6e2d6;   /* カタマリごとの訳の帯(0021) */
+  --chunk-bg:     #e9f1e7;   /* カタマリごとの訳の帯(0021)。うすい緑 */
 
   --accent:       #2f6f86;   /* 落ち着いた青緑。見出しと区切り */
   --accent-bg:    #edf4f7;
