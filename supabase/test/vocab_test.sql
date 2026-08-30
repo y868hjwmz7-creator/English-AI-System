@@ -562,4 +562,57 @@ select pg_temp.ok('文を渡さなければ空のまま',
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'shortfall'), '(なし)');
 
+-- ── 続けた記録(0019)─────────────────────────────────────────
+--   **日ではなく週で数える。** 1日休んでも壊れない記録にする。
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+
+select pg_temp.ok('今日ぶんの記録が付いている',
+  (select (answered > 0) from public.vocab_days
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and done_on = current_date), true);
+
+select pg_temp.ok('今週の日数は1日',
+  (select days from public.vocab_week(
+     'e2222222-2222-2222-2222-222222222222')), 1);
+
+select pg_temp.ok('今週やったので、続いている週は1',
+  (select weeks from public.vocab_week(
+     'e2222222-2222-2222-2222-222222222222')), 1);
+
+-- 先週ぶんを足すと、続いている週が2になる
+set role postgres;
+insert into public.vocab_days (learner_id, done_on, answered, correct)
+values ('e2222222-2222-2222-2222-222222222222', current_date - 7, 5, 3)
+on conflict do nothing;
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+select pg_temp.ok('先週もやっていれば2週',
+  (select weeks from public.vocab_week(
+     'e2222222-2222-2222-2222-222222222222')), 2);
+
+-- 3週前まで飛ぶと、そこで切れる(2週のまま)
+set role postgres;
+insert into public.vocab_days (learner_id, done_on, answered, correct)
+values ('e2222222-2222-2222-2222-222222222222', current_date - 21, 5, 3)
+on conflict do nothing;
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+select pg_temp.ok('1週抜けたら、そこで切れる',
+  (select weeks from public.vocab_week(
+     'e2222222-2222-2222-2222-222222222222')), 2);
+
+-- ── 業界別の集計(0019)───────────────────────────────────────
+select pg_temp.ok('業界別に数えられる(教材の無い語は general)',
+  (select known >= 0 from public.vocab_by_industry(
+     'e2222222-2222-2222-2222-222222222222')
+   where industry = 'general' limit 1), true);
+
+-- ── 他人の記録は見られない ────────────────────────────────────
+set request.jwt.claim.sub = 'e3333333-3333-3333-3333-333333333333';
+select pg_temp.ok('担当していない人の週の記録は空',
+  (select count(*)::int from public.vocab_week(
+     'e2222222-2222-2222-2222-222222222222')
+   where days > 0), 0);
+
 reset role;

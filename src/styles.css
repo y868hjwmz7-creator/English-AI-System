@@ -1996,6 +1996,97 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .wordbook-mode .chip { font-family: inherit; color: inherit; }
 
+/* ── 4択。**1語2秒で回せることが値打ち。** 大きく、押しやすく ── */
+.wordbook-choices {
+  list-style: none; margin: 16px 0 0; padding: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.wordbook-choice {
+  width: 100%; min-height: 48px; justify-content: center;
+  white-space: normal; line-height: 1.5;
+}
+/* 答えたあと、正解がどれだったかを見せてから次へ */
+.wordbook-choice.is-right {
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-weight: 600;
+}
+@media (max-width: 480px) { .wordbook-choices { grid-template-columns: 1fr; } }
+
+/* ── つづりを書く ────────────────────────────────────────── */
+.wordbook-spell {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 16px;
+}
+.wordbook-spell input {
+  flex: 1 1 200px; max-width: 320px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-0); color: var(--text-primary);
+  /* iPhone で入力欄に寄ると画面が拡大する。16px 未満にしない */
+  font-size: 16px;
+}
+.wordbook-right { flex-basis: 100%; margin: 0; color: var(--text-secondary); font-size: 13px; }
+
+/* ── 10語ぶんの結果 ──────────────────────────────────────── */
+.wordcard--result { text-align: center; }
+.wordbook-result {
+  list-style: none; margin: 12px 0 16px; padding: 0;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px;
+}
+.wordbook-result > li { display: inline-flex; align-items: baseline; gap: 5px; font-size: 14px; }
+.wordbook-result .is-ok, .wordbook-result > li.is-ok { color: var(--text-primary); }
+.wordbook-result > li.is-ng { color: var(--series-3); }
+
+/* ── 積み上がり ──────────────────────────────────────────── */
+.wordbook-progress { margin-top: 14px; }
+.wordbook-goal-line { margin: 0 0 8px; font-size: 14px; }
+.wordbook-bar {
+  height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden;
+}
+.wordbook-bar > span { display: block; height: 100%; background: var(--accent); }
+.wordbook-sub { margin: 20px 0 8px; font-size: 14px; }
+.wordbook-industry { list-style: none; margin: 0; padding: 0; }
+.wordbook-industry > li {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 7px 0; border-top: 1px solid var(--border); font-size: 14px;
+}
+.wordbook-industry > li > span:first-child { flex: 1; }
+
+/* トレーナーが見た。**人が見ていると分かることが、いちばん効く** */
+.wordbook-seenby {
+  margin: 8px 0 0; padding: 7px 10px; border-radius: 8px;
+  background: var(--surface-2); color: var(--text-secondary); font-size: 12.5px;
+}
+
+/* ── トレーナーが見る単語帳 ────────────────────────────────
+   ここから語を選んで、そのまま教材を作る。
+   **復習が、次の宿題になる。** それがこのアプリの中心である */
+.wordbook-week {
+  margin: 8px 0 0; padding: 8px 10px; border-radius: 8px;
+  background: var(--surface-2); font-size: 13px;
+}
+.wordbook-pick { display: inline-flex; align-items: center; }
+.wordbook-pick > input { width: 18px; height: 18px; accent-color: var(--accent); }
+/* 選んだ行が見て分かること。**色だけに頼らない**(左の帯も付ける) */
+.wordbook-row.is-picked {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+/* 画面の下に貼り付ける。200語まで並ぶので、
+   下まで送ってから押すのでは遠い */
+.wordbook-pickbar {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin-top: 10px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-1); font-size: 13px;
+}
+.wordbook-pickbar > span:first-child { margin-right: auto; }
+
+/* 読み上げ機にだけ伝える文字。目には見えない */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0;
+  margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
 /* 単語帳からの深掘り。**吹き出しは1つで足りる。ここは腰を据えて調べる場所** */
 .wordbook-detail { list-style: none; margin: 10px 0 0; padding: 0; text-align: left; }
 .wordbook-detail > li {

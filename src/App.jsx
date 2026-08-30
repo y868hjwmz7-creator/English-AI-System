@@ -225,7 +225,7 @@ export default function App() {
         ) : view === 'homework' ? (
           <LearnerHomework />
         ) : view === 'wordbook' ? (
-          <Wordbook />
+          <Wordbook level={profile?.cefr ?? null} />
         ) : view === 'learner' ? (
           currentLearner ? (
             <EnglishStudyLog state={state} setState={setState} learnerId={learnerId} />

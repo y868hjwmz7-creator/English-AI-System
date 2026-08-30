@@ -473,6 +473,53 @@ export async function loadWordbookCounts() {
 }
 
 /**
+ * 今週の続き具合(0019)。**日ではなく週で数える。**
+ * 日ごとの連続記録は1日休んだだけで途切れ、途切れた瞬間にやめる理由になる。
+ */
+export async function loadVocabWeek(learnerId = null) {
+  const empty = { days: 0, answered: 0, correct: 0, weeks: 0 }
+  if (!supabase) return ok(empty)
+  const { data, error } = await supabase.rpc('vocab_week', { p_learner: learnerId })
+  // 0019 を貼る前でも画面は出す。**数が出ないだけで、復習はできる**
+  if (error) return ok(empty)
+  return ok((Array.isArray(data) ? data[0] : data) ?? empty)
+}
+
+/** 業界別に覚えた語(0019)。**自分の仕事の語が増えるのが見える** */
+export async function loadVocabByIndustry(learnerId = null) {
+  if (!supabase) return ok([])
+  const { data, error } = await supabase.rpc('vocab_by_industry', { p_learner: learnerId })
+  if (error) return ok([])
+  return ok(data ?? [])
+}
+
+/**
+ * トレーナーが単語帳を見たことを残す(0019)。
+ * **人が見ていると分かることが、どんなバッジより効く。**
+ */
+export async function noteWordbookView(learnerId) {
+  if (!supabase || !learnerId) return ok(null)
+  const { error } = await supabase.rpc('note_wordbook_view', { p_learner: learnerId })
+  if (error) return ok(null)   // 残せなくても、単語帳は見られる
+  return ok(true)
+}
+
+/** 自分の単語帳を、誰がいつ見たか(ゲストの画面に出す) */
+export async function loadWordbookViewers() {
+  if (!supabase) return ok([])
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return ok([])
+  const { data, error } = await supabase
+    .from('wordbook_views')
+    .select('trainer_id, viewed_at')
+    .eq('learner_id', user.id)
+    .order('viewed_at', { ascending: false })
+    .limit(3)
+  if (error) return ok([])
+  return ok(data ?? [])
+}
+
+/**
  * 0015 を貼る前の Supabase 向けの控えめな書き込み。
  *
  * `mark_word()` がまだ無い環境で、**押しても何も起きない**状態を避ける。

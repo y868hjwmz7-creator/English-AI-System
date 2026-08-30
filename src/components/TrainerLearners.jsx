@@ -40,6 +40,10 @@ export default function TrainerLearners({ me }) {
   // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
   // 過去の宿題を最初に開く(2026-08 の要望)。
   const [detailTab, setDetailTab] = useState('homework')
+  // 単語帳で選んだ語。「この語で教材を作る」で「作る」タブへ持って行く。
+  // **復習が、そのまま次の宿題になる**(2026-08)。
+  // ゲストを切り替えたら必ず空にする — 別の人の語を混ぜてはいけない
+  const [mustUse, setMustUse] = useState([])
   // レッスンで大きく表示している教材。**このゲストの分しか出ない。**
   // 画面共有のとき、他のゲストの情報を出さずに進められる(2026-08 の要望)
   const [lessonOf, setLessonOf] = useState(null)
@@ -92,6 +96,7 @@ export default function TrainerLearners({ me }) {
   const openDetail = async (id, tab = 'homework') => {
     setOpenId(id)
     setDetailTab(tab)
+    setMustUse([])
     setPastTags([])
     setPastDone('all')
     setMessage(null)
@@ -448,11 +453,14 @@ export default function TrainerLearners({ me }) {
                       他のゲストの名前は出ません。
                     </p>
                     <MaterialForm
+                      // 選んだ語が変わったら作り直す。
+                      // **key を変えないと、開きっぱなしの入力欄に反映されない**
+                      key={mustUse.join('|')}
                       createdBy={me.id}
                       // **この1人しか選べない。** 誤って他のゲストへ
                       // 共有することも、名前が見えることもない
                       learners={[{ id: l.id, display_name: l.display_name, status: 'active' }]}
-                      initial={{ level: l.level ?? '', shareWith: [l.id] }}
+                      initial={{ level: l.level ?? '', shareWith: [l.id], mustUse }}
                       onCancel={() => setDetailTab('homework')}
                       onCreated={(id, shared) => {
                         setMessage(shared
@@ -465,7 +473,10 @@ export default function TrainerLearners({ me }) {
                 )}
 
                 {detailTab === 'wordbook' && (
-                  <LearnerWordbook learnerId={l.id} learnerName={l.display_name} />
+                  <LearnerWordbook
+                    learnerId={l.id} learnerName={l.display_name}
+                    onMakeMaterial={(words) => { setMustUse(words); setDetailTab('create') }}
+                  />
                 )}
 
                 {detailTab === 'record' && (

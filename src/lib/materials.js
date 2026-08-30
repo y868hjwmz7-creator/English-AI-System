@@ -625,7 +625,9 @@ export async function generateSection({
       sectionType, count, topic, topics, level, industry, isFirst, avoid,
       // 記事のジャンル / 会話の場面 / 話題の指定 / すでに作った本文
       genre, scene, subject, context,
-      // 復習として必ず入れる語(単語・フレーズの教材で使う)
+      // 復習として必ず入れる語。**どの種類でも効く。**
+      // 単語・フレーズは「この語で作る」、それ以外は「本文の中で使う」
+      // (言い分けは窓口側でする)
       reviewWords,
     },
   })

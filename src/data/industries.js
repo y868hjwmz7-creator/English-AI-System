@@ -19,6 +19,8 @@ export const INDUSTRIES = [
   { id: 'finance',       label: '金融',         hint: '融資、投資、決算説明、コンプライアンス' },
   { id: 'construction',  label: '建設・不動産', hint: '図面、工程、契約、内見、施工管理' },
   { id: 'legal',         label: '法務',         hint: '契約書、条項の交渉、社内相談、コンプライアンス' },
+  { id: 'insurance',     label: '保険',         hint: '契約内容の説明、査定、請求、代理店とのやりとり' },
+  { id: 'sports',        label: 'スポーツ(トレーナー)', hint: '身体の部位、症状、動作の指示、リハビリ、施術の説明' },
 ]
 
 export const industryLabel = (id) =>

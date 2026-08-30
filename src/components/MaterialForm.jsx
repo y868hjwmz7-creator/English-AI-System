@@ -30,7 +30,7 @@ import {
   CLIP_ACCENTS, DEFAULT_ACCENT, pickVoices,
   voiceCountFor, voicePurposeFor, voicesOfAccent,
 } from '../data/clipVoices.js'
-import { collectReviewWords } from '../lib/vocab.js'
+import { collectReviewWords, normWord } from '../lib/vocab.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
 const MAX_TAGS = 3
@@ -111,6 +111,10 @@ export default function MaterialForm({
   //   ② そのままなら**おまかせ**。人を指名したいときだけ選ぶ
   // 会話は2人、それ以外は1人。**選べる声は教材の種類で絞られる**
   // (会話なら会話向き、記事やドリルならナレーション向き)。
+  // 単語帳から渡された「必ず使う語」(2026-08)。
+  // **復習が宿題に化ける。** 単語帳で「知らなかった」と付いた語から
+  // そのまま教材を作れる。消せるようにしておく(全部使う必要はない)
+  const [mustUse, setMustUse] = useState(() => (initial.mustUse ?? []).slice(0, 20))
   const [accent, setAccent] = useState(initial.accent || DEFAULT_ACCENT)
   // 指名した声。空文字のところは「おまかせ」
   const [picked, setPicked] = useState([])
@@ -176,9 +180,13 @@ export default function MaterialForm({
       if (!alive) return
       setReviewBusy(false)
       setReviewError(e ?? null)
-      setReviewPool(data ?? [])
+      // **名指しで渡された語は、ここに二重に出さない。**
+      // 同じ語が2つの欄に並ぶと、2回入るように見える(実際は1回)
+      const named = new Set(mustUse.map(normWord))
+      const pool = (data ?? []).filter((w) => !named.has(normWord(w.word)))
+      setReviewPool(pool)
       // 既定は半分。全部を復習にすると新しい語が入らず、逆に0だと復習にならない
-      setReviewCount(Math.min(data?.length ?? 0, 10))
+      setReviewCount(Math.min(pool.length, 10))
     })
     return () => { alive = false }
   }, [reviewLearner])
@@ -213,6 +221,29 @@ export default function MaterialForm({
   const topicOf = (id) => {
     const tag = weaknessTags.find((t) => t.id === id)
     return tag ? `${tag.label}${tag.hint ? `(${tag.hint})` : ''}` : id
+  }
+
+  /**
+   * AI に渡す「必ず入れる語」をまとめる。
+   *
+   * 入り口は2つある。**どちらも同じ扱いにする。**
+   *   ① 単語帳から名指しで渡された語(`initial.mustUse`)
+   *   ② これまでの宿題から拾った語(`reviewPool` のうち選んだ数)
+   * ①が先。トレーナーが見て選んだものだからである。
+   * そろえた形で重複を落とす(`don't` と `Don't` を2語と数えない)。
+   */
+  const mergedReview = () => {
+    const out = []
+    const seen = new Set()
+    const add = (w) => {
+      const key = normWord(w)
+      if (!key || seen.has(key)) return
+      seen.add(key)
+      out.push(w)
+    }
+    mustUse.forEach(add)
+    reviewPool.slice(0, reviewCount).forEach((w) => add(w.word))
+    return out
   }
 
   /**
@@ -254,6 +285,9 @@ export default function MaterialForm({
       count: bodyPlan.count,
       topic: tagIds.map(topicOf).join(' / '),
       level, industry, isFirst: true,
+      // 単語帳から渡された語は**本文に入れる**。
+      // 内容の理解・語句は、できた本文から作るので渡さなくてよい
+      reviewWords: mustUse,
       genre: kind === 'reading'
         ? [READING_GENRES.find((g) => g.id === genre)?.label,
            READING_GENRES.find((g) => g.id === genre)?.hint].filter(Boolean).join(' — ')
@@ -355,8 +389,10 @@ export default function MaterialForm({
           topic: topicOf(tagIds[0]),
           topics: tagIds.length > 1 ? tagIds.map(topicOf) : [],
           level, industry, isFirst: i === 0,
-          // 復習の語は最初の演習にだけ渡す。単語・フレーズは1演習しかない
-          reviewWords: i === 0 ? reviewPool.slice(0, reviewCount).map((w) => w.word) : [],
+          // 復習の語は最初の演習にだけ渡す。単語・フレーズは1演習しかない。
+          // **単語帳から渡された語(mustUse)が先。** トレーナーが名指しで
+          // 選んだものなので、自動で拾った語より優先する
+          reviewWords: i === 0 ? mergedReview() : [],
         },
         { usedSet, learnerIds: shareWith, tagIds },
       )
@@ -740,6 +776,35 @@ export default function MaterialForm({
           </p>
         )}
 
+        {/* ── 単語帳から名指しで渡された語 ──────────────────────
+            ゲストの単語帳で選んで「この語で教材を作る」を押すと、ここに並ぶ。
+            **復習が、そのまま次の宿題になる。** これがこのアプリの要である。
+            全部使う必要はないので、1語ずつ外せるようにしておく。
+            記事・会話でも効く(本文の中に入れさせる)。 */}
+        {mustUse.length > 0 && (
+          <div className="review-box">
+            <p className="field-hint">
+              <strong>単語帳から選んだ {mustUse.length} 語を、必ず入れます。</strong>
+              {kind === 'word' || kind === 'phrase'
+                ? ' 先頭から順に、この語で作らせます。'
+                : kind === 'reading' || kind === 'dialogue'
+                  ? ' 本文の中で使わせます。'
+                  : ' 問題文の中で使わせます。'}
+              <br />
+              外したい語は ✕ を押してください。
+            </p>
+            <div className="review-words">
+              {mustUse.map((w) => (
+                <button key={w} type="button" className="tagchip is-unknown"
+                        title="この語を外す"
+                        onClick={() => setMustUse(mustUse.filter((x) => x !== w))}>
+                  {w} <span aria-hidden="true">✕</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── これまでの宿題から復習する ──────────────────────
             毎回まったく新しい語を出していては、定着しない。
             そのゲストが「知らなかった」と付けた語を、先に入れる。
@@ -782,7 +847,7 @@ export default function MaterialForm({
                   </select>
                   <span className="field-hint">
                     残りの{Math.max(0, defaultSectionsFor(kind)
-                      .reduce((n, x) => n + x.count, 0) - reviewCount)} 語は新しく作ります
+                      .reduce((n, x) => n + x.count, 0) - mergedReview().length)} 語は新しく作ります
                   </span>
                 </label>
                 <div className="review-words">

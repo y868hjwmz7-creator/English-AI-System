@@ -99,7 +99,8 @@ export async function loadProfile(userId) {
   if (!supabase || !userId) return null
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, role')
+    // cefr も読む。単語帳が「B1 のめやすに対して何%」を出すのに使う(0019)
+    .select('id, display_name, role, cefr')
     .eq('id', userId)
     .maybeSingle()
   if (error) {

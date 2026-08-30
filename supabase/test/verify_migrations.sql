@@ -186,4 +186,14 @@ from (
     select count(*) = 1 from pg_proc p, unnest(p.proargnames) a
     where p.proname = 'review_words' and a = 'p_due_only'
       and pg_get_function_result(p.oid) like '%seen_in%'), 45
+  union all
+  select '㊻ 続けた記録を残せる(0019)', exists (
+    select 1 from pg_tables where tablename = 'vocab_days'), 46
+  union all
+  select '㊼ トレーナーが見た記録を残せる(0019)', exists (
+    select 1 from pg_tables where tablename = 'wordbook_views'), 47
+  union all
+  select '㊽ 週の続き具合と業界別を数えられる(0019)', (
+    select count(distinct proname) = 3 from pg_proc
+    where proname in ('vocab_week', 'vocab_by_industry', 'note_wordbook_view')), 48
 ) t order by 順;
