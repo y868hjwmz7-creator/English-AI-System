@@ -36,6 +36,7 @@
  *   同じ英文でも段が違えば別の音声になるので、置き場所の鍵にも段が入る
  *   (`tts/<版>/<段>/<話者>/<指紋>.mp3`)。
  */
+import { CLIP_VOICES } from '../data/clipVoices.js'
 import { isPassageSection } from '../data/exerciseTypes.js'
 import { weaknessTags } from '../data/weaknessTags.js'
 
@@ -64,8 +65,17 @@ const SOUND_TYPES = new Set(['listening'])
  * @param {Array<string>} o.tags  その教材の弱点タグ
  */
 export function voiceTierFor({ exerciseType = '', tags = [] } = {}) {
+  // **良い声を1つも登録していないなら、求めない。**
+  // 求めると「無い場所を取りに行って、窓口に作らせる」を英文ごとに
+  // 繰り返すことになる。標準の声(Google / Azure)で鳴るほうが速い。
+  // 名簿(`src/data/clipVoices.js`)に1行足せば、すぐ良い段に戻る
+  if (!hasPremiumVoices()) return STANDARD
   if (isPassageSection(exerciseType)) return PREMIUM
   if (SOUND_TYPES.has(exerciseType)) return PREMIUM
   if (hasSoundTag(tags)) return PREMIUM
   return STANDARD
 }
+
+/** ElevenLabs の Voice ID が入っている声が1つでもあるか */
+export const hasPremiumVoices = () =>
+  CLIP_VOICES.some((v) => String(v.elevenId ?? '').trim())

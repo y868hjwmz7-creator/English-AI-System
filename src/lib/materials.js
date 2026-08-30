@@ -91,41 +91,100 @@ export async function searchMaterials({
     if (!idsWithTag.length) return ok([])
   }
 
-  let query = supabase
+  const build = () => {
+    let query = supabase
     .from('materials')
     .select(`
       id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
-      teaching_point, headline, genre, scene, topic, voice_ids,
+      teaching_point, headline, genre, scene, topic, ${opt('voice_ids')}
       material_tags ( tag_id ),
       material_sections (
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                         answer, answer_alt, audio_text, note, tag_id, speaker,
-                         phrases )
+                         answer, answer_alt, audio_text, note, tag_id,
+                         speaker${optLast('phrases')} )
       )
     `)
     .order('created_at', { ascending: false })
     .limit(50)
 
-  if (idsWithTag) query = query.in('id', idsWithTag)
-  if (level) query = query.eq('level', level)
-  // 業界を選んだときは「その業界」と「汎用」の両方を出す。
-  // 汎用の教材はどのゲストにも使えるため、隠すと選択肢が不当に狭まる。
-  if (industry) query = query.or(`industry.eq.${industry},industry.is.null`)
-  if (kind) query = query.eq('kind', kind)
-  // 記事と会話は、弱点ではなくジャンル・場面で探すことが多い
-  if (genre) query = query.eq('genre', genre)
-  if (scene) query = query.eq('scene', scene)
-  // 見出しでも引けるようにする。記事は見出しで覚えているため
-  if (keyword.trim()) {
-    const k = keyword.trim()
-    query = query.or(`title.ilike.%${k}%,headline.ilike.%${k}%`)
+    if (idsWithTag) query = query.in('id', idsWithTag)
+    if (level) query = query.eq('level', level)
+    // 業界を選んだときは「その業界」と「汎用」の両方を出す。
+    // 汎用の教材はどのゲストにも使えるため、隠すと選択肢が不当に狭まる。
+    if (industry) query = query.or(`industry.eq.${industry},industry.is.null`)
+    if (kind) query = query.eq('kind', kind)
+    // 記事と会話は、弱点ではなくジャンル・場面で探すことが多い
+    if (genre) query = query.eq('genre', genre)
+    if (scene) query = query.eq('scene', scene)
+    // 見出しでも引けるようにする。記事は見出しで覚えているため
+    if (keyword.trim()) {
+      const k = keyword.trim()
+      query = query.or(`title.ilike.%${k}%,headline.ilike.%${k}%`)
+    }
+    return query
   }
 
-  const { data, error } = await query
+  // まだ貼っていない列があっても、そこだけ外して読み直す
+  const { data, error } = await runTolerant(build)
   if (error) return fail(error, '教材を読めませんでした')
 
   return ok((data ?? []).map(normalizeMaterial))
+}
+
+/**
+ * ============================================================================
+ * まだ貼っていない移行の列を、その場で外して読み直す。
+ *
+ * 【なぜ要るか】(2026-08 実機で壊した)
+ *   新しい列(`materials.voice_ids`、`material_items.phrases`)を
+ *   取り出す欄に足したところ、**移行を貼る前の Supabase では
+ *   問い合わせ全体が失敗し、教材が1件も開けなくなった。**
+ *
+ *   > 今は音声がダウンロード出来ず教材が見れなくなってしまいました
+ *
+ *   CLAUDE.md の「**DB を使うように変えるときは、貼る前でも動く道を残す**」
+ *   を、自分で破っていた。`mark_word()` で一度やった失敗と同じ形である。
+ *
+ * 【どう直すか】
+ *   「そんな列は無い」(42703)と言われたら、**その列だけを外して
+ *   もう一度読む。** 一度外したら、その画面のあいだは覚えておく。
+ *   移行を貼れば、次に開いたときから普通に読める。
+ * ============================================================================
+ */
+const missingColumns = new Set()
+
+/** 欄に足す。**うしろにカンマを付けて返す。** 外れたときは空になる */
+const opt = (name) => (missingColumns.has(name) ? '' : `${name},`)
+/** 欄に足す(前にカンマ)。並びの最後に置く列のため */
+const optLast = (name) => (missingColumns.has(name) ? '' : `, ${name}`)
+
+/** 「そんな列は無い」と言われたか。言われたなら、その列の名前 */
+const missingColumnOf = (error) => {
+  if (!error) return null
+  const text = `${error.message ?? ''} ${error.details ?? ''}`
+  if (error.code !== '42703' && !/does not exist/i.test(text)) return null
+  return text.match(/column\s+(?:[\w.]+\.)?"?([a-z0-9_]+)"?/i)?.[1] ?? null
+}
+
+/**
+ * 問い合わせを1回だけやり直せる形で走らせる。
+ * @param {Function} build 欄を組み立てて問い合わせを返す関数
+ */
+async function runTolerant(build) {
+  // **足りない列が2つ以上あることがある**(0015 の phrases と 0017 の voice_ids)。
+  // 1回しかやり直さないと、2つめで結局失敗する(2026-08 実測)。
+  // 新しく分かったものが無くなるまで繰り返す。上限は付ける
+  for (let i = 0; i < 5; i += 1) {
+    const res = await build()
+    const gone = missingColumnOf(res.error)
+    if (!gone || missingColumns.has(gone)) return res
+    // **黙って落とさない。** 何が足りないのかは残しておく
+    console.warn(`「${gone}」の列がまだありません。その列を外して読み直します`
+      + '(supabase/apply の SQL を貼ると解決します)')
+    missingColumns.add(gone)
+  }
+  return build()
 }
 
 const sortBySeq = (list) => [...(list ?? [])].sort((a, b) => a.seq - b.seq)
@@ -155,21 +214,21 @@ export async function loadMaterial(materialId) {
   if (!supabase) return ng('Supabase が設定されていません')
   if (!materialId) return ng('教材が指定されていません')
 
-  const { data, error } = await supabase
+  const { data, error } = await runTolerant(() => supabase
     .from('materials')
     .select(`
       id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
-      teaching_point, headline, genre, scene, topic, voice_ids,
+      teaching_point, headline, genre, scene, topic, ${opt('voice_ids')}
       material_tags ( tag_id ),
       material_sections (
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                         answer, answer_alt, audio_text, note, tag_id, speaker,
-                         phrases )
+                         answer, answer_alt, audio_text, note, tag_id,
+                         speaker${optLast('phrases')} )
       )
     `)
     .eq('id', materialId)
-    .maybeSingle()
+    .maybeSingle())
   if (error) return fail(error, '教材の中身を読めませんでした')
   if (!data) return ng('教材が見つかりませんでした')
   return ok(normalizeMaterial(data))
@@ -208,7 +267,8 @@ const cleanItems = (items) =>
           note: String(ph?.note ?? '').trim(),
         }))
         .filter((ph) => ph.text)
-      if (phrases.length) row.phrases = phrases
+      // 列がまだ無いと分かっているときは送らない(挿入ごと失敗するため)
+      if (phrases.length && !missingColumns.has('phrases')) row.phrases = phrases
       return row
     })
     .filter((row) => Object.keys(row).length > 0)
@@ -248,8 +308,11 @@ export async function createMaterial({
       genre: genre || null,
       scene: scene || null,
       topic: String(topic ?? '').trim() || null,
-      // 読み上げに使う声の並び(0017)。空なら既定(アメリカ英語・女性)
-      voice_ids: (voiceIds ?? []).length ? voiceIds : null,
+      // 読み上げに使う声の並び(0017)。空なら既定(アメリカ英語・女性)。
+      // **列がまだ無いと分かっているときは、送らない。**
+      // 送ると挿入ごと失敗し、教材を1本も作れなくなる
+      ...(missingColumns.has('voice_ids') || !(voiceIds ?? []).length
+        ? {} : { voice_ids: voiceIds }),
       status: 'published',
       published_at: new Date().toISOString(),
       created_by: createdBy,
@@ -331,23 +394,25 @@ export async function assignMaterial({ materialId, learnerIds, assignedBy, dueOn
 export async function loadMyAssignments() {
   if (!supabase) return ng('Supabase が設定されていません')
 
-  const { data, error } = await supabase
+  // まだ貼っていない列があっても、そこだけ外して読み直す。
+  // **ここが失敗すると、ゲストは宿題を1件も開けない**
+  const { data, error } = await runTolerant(() => supabase
     .from('assignments')
     .select(`
       id, assigned_at, due_on, learner_done_at,
       materials (
         id, title, level, kind, instruction_ja, teaching_point, headline, genre, scene, topic,
-        voice_ids,
+        ${opt('voice_ids')}
         material_sections (
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
-                           answer, answer_alt, audio_text, note, tag_id, speaker,
-                           phrases )
+                           answer, answer_alt, audio_text, note, tag_id,
+                           speaker${optLast('phrases')} )
         )
       )
     `)
     .order('assigned_at', { ascending: false })
-    .limit(50)
+    .limit(50))
   if (error) return fail(error, '宿題を読めませんでした')
 
   return ok((data ?? []).map((a) => ({
@@ -437,19 +502,19 @@ export async function loadMyLearnersDetailed() {
 export async function loadLearnerAssignments(learnerId, limit = 50) {
   if (!supabase) return ng('Supabase が設定されていません')
 
-  const { data, error } = await supabase
+  const { data, error } = await runTolerant(() => supabase
     .from('assignments')
     .select(`
       id, assigned_at, due_on, learner_done_at, admin_checked_at,
       materials (
-        id, title, level, kind, headline, teaching_point, voice_ids,
+        id, title, level, kind, headline, teaching_point, ${opt('voice_ids')}
         material_tags ( tag_id ),
         material_sections ( id, material_items ( id ) )
       )
     `)
     .eq('learner_id', learnerId)
     .order('assigned_at', { ascending: false })
-    .limit(limit)
+    .limit(limit))
   if (error) return fail(error, '過去の宿題を読めませんでした')
 
   return ok((data ?? []).map((a) => ({

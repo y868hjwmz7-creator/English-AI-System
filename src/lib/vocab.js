@@ -477,6 +477,9 @@ async function legacySetWordStatus(norm, status, materialId) {
  * `kind` は 'word' か 'phrase'。句・イディオム・句動詞は 'phrase'。
  * 鍵の作り方は語と同じなので、同じ表に入る。
  */
+/** 0018 を貼る前の Supabase では、文を渡す引数が無い。一度気づいたら覚える */
+let noSentenceArg = false
+
 export async function setWordStatus(word, status, {
   kind = 'word', materialId = null, sentence = null,
 } = {}) {
@@ -485,15 +488,24 @@ export async function setWordStatus(word, status, {
   if (!supabase) return ng('Supabase が設定されていません')
   if (!['known', 'unknown'].includes(status)) return ng('状態が正しくありません')
 
-  const { data, error } = await supabase.rpc('mark_word', {
+  const args = {
     p_norm: norm,
     p_status: status,
     p_kind: kind === 'phrase' ? 'phrase' : 'word',
     p_material: materialId,
-    // 出会った文(0018)。**人は文脈ごと覚える。**
-    // 最初の1文だけが残る(あとから上書きしないのは SQL 側の決まり)
-    p_sentence: sentence || null,
-  })
+  }
+  // 出会った文(0018)。**人は文脈ごと覚える。**
+  // 最初の1文だけが残る(あとから上書きしないのは SQL 側の決まり)。
+  // **0018 を貼る前は、この引数を受け取れない。** そのときは付けずに呼び直す
+  let { data, error } = sentence && !noSentenceArg
+    ? await supabase.rpc('mark_word', { ...args, p_sentence: sentence })
+    : await supabase.rpc('mark_word', args)
+  if (error && sentence && !noSentenceArg && /p_sentence|PGRST202|function/i.test(
+    `${error.message ?? ''} ${error.code ?? ''}`,
+  )) {
+    noSentenceArg = true
+    ;({ data, error } = await supabase.rpc('mark_word', args))
+  }
   // **0015 をまだ貼っていない Supabase でも動くようにする。**
   // 貼るまでのあいだ「押しても色が付かない」状態にしない(2026-08 実機)。
   // 箱と次に出す日は付かないが、知っていた / 知らなかったは残る
