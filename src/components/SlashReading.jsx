@@ -48,11 +48,31 @@ import { chunkPairsAtMarks, storedChunks } from '../lib/chunkJa.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
+/** そのブロックの中身(項目)。「文章全体」では複数の段落が入る */
+const partsOf = (s) => s.parts ?? [{ id: s.id, prompt_en: s.text }]
+
+/** 訳の控え(0021)があるブロックか。無ければ「訳を出す」を出さない */
+const hasJaOf = (s) => partsOf(s).some((p) => storedChunks(p))
+
 export default function SlashReading({
   blocks, clipVoice, tier, rate, unit, onUnitChange,
 }) {
   const [marks, setMarks] = useState({})   // 文ごとの区切り
   const [shown, setShown] = useState({})   // 「この区切りで訳を出す」を押した文
+
+  // **まとめて出せるようにする**(2026-08 利用者の指定)。
+  //
+  //   > これは段落ごとでも全体を一度にでもどちらでもできるようにして
+  //   > 欲しいです。
+  //
+  // 段落ごとに区切っていくと、押すボタンが段落の数だけになる。
+  // 全部入れ終わってから見直したいときは、**1回で出せたほうが早い。**
+  // 段落ごとに出す道は残す(1つずつ確かめたいときのため)。
+  const jaBlocks = blocks.filter(hasJaOf)
+  const allOpen = jaBlocks.length > 0 && jaBlocks.every((b) => shown[b.id])
+  const toggleAll = () => setShown(allOpen
+    ? {}
+    : Object.fromEntries(jaBlocks.map((b) => [b.id, true])))
 
   //
   // **まちがいは、次にどこかを触ったら消える**(2026-08 利用者の指定)。
@@ -111,6 +131,15 @@ export default function SlashReading({
             ))}
           </select>
         </label>
+        {/* **2つ以上あるときだけ出す。** 1つしかないなら、
+            その段落のボタンと同じことをする札が2つ並ぶだけになる */}
+        {jaBlocks.length > 1 && (
+          <button type="button"
+                  className={`btn btn--small${allOpen ? '' : ' btn--primary'}`}
+                  onClick={toggleAll}>
+            {allOpen ? 'すべての訳を隠す' : 'すべての区切りで訳を出す'}
+          </button>
+        )}
       </div>
 
       {/* **やることを1行で言う。** 模範と比べる画面ではなくなったので、
@@ -120,7 +149,9 @@ export default function SlashReading({
         決まりに反する区切りだけ、その場で 💬 でお知らせします
         (吹き出しを押すとその区切りが消えます)。
         <br />
-        区切り終わったら<strong>「この区切りで訳を出す」</strong>を押してください。
+        区切り終わったら<strong>「この区切りで訳を出す」</strong>を押してください
+        (段落ごとでも、上の<strong>「すべての区切りで訳を出す」</strong>で
+        まとめてでも、どちらでもできます)。
       </p>
 
       <ol className="slash-list">
@@ -132,8 +163,8 @@ export default function SlashReading({
           // 見るのは「決まりに反していないか」だけ。模範とは比べない
           const judge = judgeSlashes(s.text, mine)
           // 自分の区切りに合わせた訳。控えが無い教材では null
-          const parts = s.parts ?? [{ id: s.id, prompt_en: s.text }]
-          const hasJa = parts.some((p) => storedChunks(p))
+          const parts = partsOf(s)
+          const hasJa = hasJaOf(s)
           return (
             <li key={s.id} className="qa-row slash-row">
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
