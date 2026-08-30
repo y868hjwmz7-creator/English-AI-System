@@ -135,3 +135,92 @@ export function sentencesOf(items) {
   })
   return out
 }
+
+/* ── 練習する「かたまり」の大きさ ─────────────────────────────
+   1文ずつでは細かすぎることがある(2026-08 の指摘)。
+   ステップによって、ちょうどよい大きさが違う。 */
+
+/** **これより短いものは、次とまとめる。**
+    「Hi!」だけで1問にすると、書き取る意味がない(2026-08 実機) */
+const TOO_SHORT = 22
+
+/**
+ * ① ディクテーションの難易度。
+ * **上げるほど、一度に覚える文が増える**(2026-08 利用者の指定)。
+ */
+export const DICTATION_LEVELS = [
+  { id: 'easy', label: '初級', size: 1, hint: '1文ずつ書き取る' },
+  { id: 'mid', label: '中級', size: 2, hint: '2文つづけて聞いてから書き取る' },
+  { id: 'hard', label: '上級', size: 3, hint: '3文つづけて聞いてから書き取る' },
+]
+
+/**
+ * ② スラッシュリーディングの単位(2026-08 利用者の指定)。
+ * > 一文ずつにすると細かすぎるので「段落ごと」と「文章全体」の2種類
+ */
+export const SLASH_UNITS = [
+  { id: 'para', label: '段落ごと', hint: '段落(会話は発言)ごとに区切る' },
+  { id: 'whole', label: '文章全体', hint: '本文をまるごと1つとして区切る' },
+]
+
+/**
+ * 文をいくつかずつのかたまりにまとめる。
+ *
+ * **短すぎるものは、数に関わらず次とまとめる。**
+ * 「Hi!」だけを1問にしても、聞き取る手がかりが無い。
+ */
+export function groupSentences(sentences, size = 1) {
+  const out = []
+  let buf = []
+  const flush = () => {
+    if (!buf.length) return
+    out.push({
+      id: buf[0].id,
+      text: buf.map((x) => x.text).join(' '),
+      // 話す人が途中で変わったら、まとめて出す
+      speaker: [...new Set(buf.map((x) => x.speaker).filter(Boolean))].join(' / '),
+      ja: [...new Set(buf.map((x) => x.ja).filter(Boolean))].join(''),
+      jaIsWhole: buf.some((x) => x.jaIsWhole) || buf.length > 1,
+      count: buf.length,
+    })
+    buf = []
+  }
+  for (const s of sentences) {
+    buf.push(s)
+    const long = buf.map((x) => x.text).join(' ').length >= TOO_SHORT
+    if (buf.length >= size && long) flush()
+  }
+  // 最後に短いものが残ったら、**前のかたまりにくっつける**
+  if (buf.length) {
+    const tail = buf.map((x) => x.text).join(' ')
+    if (out.length && tail.length < TOO_SHORT) {
+      const last = out[out.length - 1]
+      last.text = `${last.text} ${tail}`
+      last.ja = [...new Set([last.ja, ...buf.map((x) => x.ja)].filter(Boolean))].join('')
+      last.jaIsWhole = true
+      last.count += buf.length
+    } else flush()
+  }
+  return out
+}
+
+/** ② の単位。段落(会話は発言)ごと、または本文まるごと1つ */
+export function blocksOf(items, unit = 'para') {
+  const list = (items ?? [])
+    .map((it, n) => ({
+      id: it.id ?? `b${n}`,
+      text: String(it.prompt_en ?? '').trim(),
+      speaker: it.speaker ?? '',
+      ja: it.prompt_ja ?? '',
+      jaIsWhole: false,
+    }))
+    .filter((x) => x.text)
+  if (unit !== 'whole' || list.length < 2) return list
+  return [{
+    id: 'whole',
+    text: list.map((x) => x.text).join(' '),
+    speaker: '',
+    ja: list.map((x) => x.ja).filter(Boolean).join(''),
+    jaIsWhole: true,
+  }]
+}

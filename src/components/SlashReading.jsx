@@ -27,6 +27,7 @@
  */
 import { Fragment, useState } from 'react'
 import { SLASH_LEVELS, checkSlashes, slashesFor, wordsOf } from '../lib/chunker.js'
+import { SLASH_UNITS } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
 /** 区切りを入れた英文を描く。`marks` は「その語の前で切る」語の番号 */
@@ -47,7 +48,7 @@ function Slashed({ words, marks, tone = '' }) {
 }
 
 export default function SlashReading({
-  sentences, clipVoice, tier, rate, level, onLevelChange,
+  blocks, clipVoice, tier, rate, level, onLevelChange, unit, onUnitChange,
 }) {
   const [marks, setMarks] = useState({})   // 文ごとの区切り
   const [shown, setShown] = useState({})   // 「解答を見る」を押した文
@@ -62,6 +63,16 @@ export default function SlashReading({
   return (
     <div className="slash">
       <div className="slash-head">
+        {/* **1文ずつでは細かすぎる**(2026-08 の指摘)。
+            段落(会話は発言)ごとか、本文まるごとかを選ぶ */}
+        <label className="rate-pick">
+          <span>単位</span>
+          <select value={unit} onChange={(e) => onUnitChange(e.target.value)}>
+            {SLASH_UNITS.map((u) => (
+              <option key={u.id} value={u.id} title={u.hint}>{u.label}</option>
+            ))}
+          </select>
+        </label>
         <label className="rate-pick">
           <span>区切りの細かさ</span>
           <select value={level} onChange={(e) => onLevelChange(e.target.value)}>
@@ -73,7 +84,7 @@ export default function SlashReading({
       </div>
 
       <ol className="slash-list">
-        {sentences.map((s) => {
+        {blocks.map((s) => {
           const words = wordsOf(s.text)
           const mine = marks[s.id] ?? []
           const open = shown[s.id]
@@ -82,7 +93,25 @@ export default function SlashReading({
           const notes = checkSlashes(s.text, mine)
           return (
             <li key={s.id} className="slash-row">
-              {s.speaker && <div className="passage-speaker" lang="en">{s.speaker}</div>}
+              {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
+                  本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
+              <div className="row-head">
+                {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
+                <span className="row-tools">
+                  <SpeakButton text={s.text} className="etext-listen"
+                               clipVoice={clipVoice} tier={tier} rate={rate} />
+                  <button type="button" className="btn btn--small"
+                          onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
+                    {open ? '解答を隠す' : '解答を見る'}
+                  </button>
+                  {mine.length > 0 && (
+                    <button type="button" className="btn btn--small btn--link"
+                            onClick={() => setMarks((m) => ({ ...m, [s.id]: [] }))}>
+                      区切りを消す
+                    </button>
+                  )}
+                </span>
+              </div>
 
               {/* 押すのは**語**。押すとその語の前にスラッシュが出る。
                   押すまでは、ただの英文のまま */}
@@ -123,21 +152,6 @@ export default function SlashReading({
                   ))}
                 </ul>
               )}
-
-              <div className="passage-actions">
-                <SpeakButton text={s.text} className="etext-listen"
-                             clipVoice={clipVoice} tier={tier} rate={rate} />
-                <button type="button" className="btn btn--small"
-                        onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
-                  {open ? '解答を隠す' : '解答を見る'}
-                </button>
-                {mine.length > 0 && (
-                  <button type="button" className="btn btn--small btn--link"
-                          onClick={() => setMarks((m) => ({ ...m, [s.id]: [] }))}>
-                    区切りを消す
-                  </button>
-                )}
-              </div>
 
               {open && (
                 <div className="slash-answer">

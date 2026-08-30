@@ -42,11 +42,14 @@ import EnglishText from './EnglishText.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
-import { SIX_STEPS, sentencesOf, stepOf } from '../lib/sixSteps.js'
+import { SIX_STEPS, blocksOf, sentencesOf, stepOf } from '../lib/sixSteps.js'
 import SlashReading from './SlashReading.jsx'
 import StepDictation from './StepDictation.jsx'
 import StepSentence from './StepSentence.jsx'
-import { loadGuideOpen, loadSlashLevel, saveGuideOpen, saveSlashLevel } from '../lib/slashLevel.js'
+import {
+  loadDictSize, loadGuideOpen, loadSlashLevel, loadSlashUnit,
+  saveDictSize, saveGuideOpen, saveSlashLevel, saveSlashUnit,
+} from '../lib/slashLevel.js'
 
 export default function PassagePractice({
   section, headline, isDialogue, tags = null, voiceIds = null,
@@ -71,6 +74,9 @@ export default function PassagePractice({
   const [peek, setPeek] = useState(false)
   // やり方の説明を開いているか。**一度読めば、しばらく要らない**ので覚える
   const [guideOpen, setGuideOpen] = useState(loadGuideOpen)
+  // ② の単位(段落 / 全体)と ① の難易度(1〜3文ずつ)。どちらも覚える
+  const [slashUnit, setSlashUnit] = useState(loadSlashUnit)
+  const [dictSize, setDictSize] = useState(loadDictSize)
   const sessionRef = useRef(null)
   const stopAllRef = useRef(null)   // 通しの読み上げを止めるための関数
   const stepBarRef = useRef(null)   // 6Steps の帯(選んでいるものを見える位置へ寄せる)
@@ -97,8 +103,11 @@ export default function PassagePractice({
   }, [speakingId])
 
   const current = stepOf(step)
-  // ①②④⑥ は1文ずつ。段落・発言をさらにほどく
+  // ①④⑥ は1文ずつ。段落・発言をさらにほどく
   const sentences = useMemo(() => sentencesOf(section.items), [section.items])
+  // ② は**段落ごと、または本文まるごと。**
+  // 1文ずつでは細かすぎる(2026-08 の指摘)
+  const slashBlocks = useMemo(() => blocksOf(section.items, slashUnit), [section.items, slashUnit])
   // 話す人 → 声。**会話は1人1声。** 同じ声だと役を追えない(2026-08 の指摘)
   const cast = castVoices(voices, section.items.map((it) => it.speaker))
   // こちらで作った音声(MP3)の話者。**端末の声から換算しない。**
@@ -284,14 +293,18 @@ export default function PassagePractice({
           rate={rateOf(rateId, current.rate)} level={level}
           wordStatuses={wordStatuses} onMarkWord={onMarkWord}
           listeningId={listeningId} onCheck={checkOne} results={results}
+          size={dictSize}
+          onSizeChange={(v) => { setDictSize(v); saveDictSize(v) }}
         />
       )}
       {step === 'slash' && (
         <SlashReading
-          sentences={sentences} clipVoice={soloVoice} tier={tier}
+          blocks={slashBlocks} clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)}
           level={slashLevel}
           onLevelChange={(v) => { setSlashLevel(v); saveSlashLevel(v) }}
+          unit={slashUnit}
+          onUnitChange={(v) => { setSlashUnit(v); saveSlashUnit(v) }}
         />
       )}
       {(step === 'meaning' || step === 'repeat') && (
@@ -377,7 +390,10 @@ export default function PassagePractice({
       </ol>
       )}
 
-      {isRecognitionSupported() ? (
+      {/* 音声認識の断り書きは、**話す仕組みがあるステップにだけ**出す。
+          ② スラッシュリーディングには話すボタンが無いので、
+          「発音の点数ではありません」は関係がない(2026-08 の指摘) */}
+      {step === 'slash' ? null : isRecognitionSupported() ? (
         <p className="field-hint">
           ※ これは<strong>発音の点数ではありません。</strong>
           音声認識が聞き取れたかどうかを見ています。

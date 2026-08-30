@@ -16,36 +16,74 @@
  *   **「to が抜けている」と見えれば直せる。**
  *   点数を1つ出しても、次に何を直せばよいか分からない。
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { MicIcon, StopIcon } from './Icons.jsx'
+import { DICTATION_LEVELS, groupSentences } from '../lib/sixSteps.js'
 
 export default function StepDictation({
   sentences, clipVoice, tier, rate, level,
   wordStatuses, onMarkWord, listeningId, onCheck, results,
+  size, onSizeChange,
 }) {
   const [typed, setTyped] = useState({})
   const [shown, setShown] = useState({})
+  // **1文ずつでは細かすぎることがある。**「Hi!」だけで1問にしても
+  // 書き取る意味がない(2026-08 実機)。難易度を上げるほど、
+  // 一度に覚える文が増える
+  const blocks = useMemo(() => groupSentences(sentences, size), [sentences, size])
 
   return (
     <div className="dictation">
+      <div className="slash-head">
+        <label className="rate-pick">
+          <span>難易度</span>
+          <select value={DICTATION_LEVELS.find((x) => x.size === size)?.id ?? 'easy'}
+                  onChange={(e) => onSizeChange(
+                    DICTATION_LEVELS.find((x) => x.id === e.target.value)?.size ?? 1,
+                  )}>
+            {DICTATION_LEVELS.map((l) => (
+              <option key={l.id} value={l.id} title={l.hint}>{l.label}({l.size}文ずつ)</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <ol className="dictation-list">
-        {sentences.map((s, n) => {
+        {blocks.map((s, n) => {
           const open = shown[s.id]
           const mine = typed[s.id] ?? ''
           const diff = open && mine.trim() ? compareTranscript(s.text, mine) : null
           const spoken = results[s.id]
           return (
             <li key={s.id} className="dictation-row">
-              <div className="dictation-head">
+              {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
+                  本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
+              <div className="row-head">
                 <span className="dictation-no">{n + 1}</span>
                 {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
-                {/* **1文だけを、何度でも。** これがこのステップの中心 */}
-                <SpeakButton text={s.text} className="etext-listen"
-                             clipVoice={clipVoice} tier={tier} rate={rate} />
+                <span className="row-tools">
+                  <SpeakButton text={s.text} className="etext-listen"
+                               clipVoice={clipVoice} tier={tier} rate={rate} />
+                  <button type="button" className="btn btn--small"
+                          onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
+                    {open ? '解答を隠す' : '解答を見る'}
+                  </button>
+                  {/* 解答を出したあとが「まね音読」。
+                      **出す前に話させない。** 何を言えばよいか分からない */}
+                  {open && isRecognitionSupported() && (
+                    <button type="button"
+                            className={`btn btn--small${listeningId === s.id ? ' btn--primary' : ''}`}
+                            onClick={() => onCheck(s)}>
+                      {listeningId === s.id
+                        ? <><StopIcon />話し終わったら押す</>
+                        : <><MicIcon />まねて言う</>}
+                    </button>
+                  )}
+                </span>
               </div>
 
               <textarea
@@ -57,8 +95,6 @@ export default function StepDictation({
               />
 
               {/* **照らし合わせは、書いた欄のすぐ下に置く。**
-                  解答の下に置いていたので、自分が書いたものと離れていて
-                  見比べられなかった(2026-08 の指摘)。
                   合っている=緑 / まちがい=赤。線も併せて付ける */}
               {diff && (
                 <div className="dict-diff">
@@ -83,26 +119,6 @@ export default function StepDictation({
                 </div>
               )}
 
-              <div className="passage-actions">
-                {/* **べた塗りにしない。** 5文ぶん縦に並ぶので、
-                    塗ると画面が重くなる(2026-08「塗りつぶしがダサい」) */}
-                <button type="button" className="btn btn--small"
-                        onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
-                  {open ? '解答を隠す' : '解答を見る'}
-                </button>
-                {/* 解答を出したあとが「まね音読」。
-                    **出す前に話させない。** 何を言えばよいか分からない */}
-                {open && isRecognitionSupported() && (
-                  <button type="button"
-                          className={`btn btn--small${listeningId === s.id ? ' btn--primary' : ''}`}
-                          onClick={() => onCheck(s)}>
-                    {listeningId === s.id
-                      ? <><StopIcon />話し終わったら押す</>
-                      : <><MicIcon />まねて言う</>}
-                  </button>
-                )}
-              </div>
-
               {open && (
                 <div className="dictation-answer">
                   <p className="dictation-en">
@@ -115,7 +131,6 @@ export default function StepDictation({
                       {s.ja}
                     </p>
                   )}
-
                 </div>
               )}
 

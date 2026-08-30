@@ -41,6 +41,7 @@ export default function QuickResponse({
   const [at, setAt] = useState(0)
   const [shown, setShown] = useState(false)
   const doneRef = useRef([])          // 言えた / 言えなかったの記録(この1回ぶん)
+  const enRef = useRef(null)          // 開いた答え(入りきらないときに送る先)
   const [finished, setFinished] = useState(false)
 
   // 画面を離れるときは、鳴っているものを止める
@@ -48,6 +49,14 @@ export default function QuickResponse({
 
   // 出題が変わったら、答えは閉じた状態から
   useEffect(() => { setShown(false); stopReading() }, [at])
+
+  // **開いた答えが枠に入りきらないときは、こちらで送る。**
+  // 「上下にスクロールして微調整せずに」(2026-08 利用者の指定)。
+  // ボタンは動かさないので、動くのはこの枠の中だけである
+  useEffect(() => {
+    if (!shown) return
+    enRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [shown, at])
 
   const card = pairs[at] ?? null
   // 本文は良い声で読む。判断は `voiceTier.js` 1か所
@@ -148,7 +157,7 @@ export default function QuickResponse({
 
             {/* 開いてはじめて、英語と音が出る */}
             {shown && (
-              <div className="qr-en">
+              <div className="qr-en" ref={enRef}>
                 <EnglishText text={card.en} textJa={card.ja} level={material?.level}
                              statuses={wordStatuses} onMark={onMarkWord} />
                 <SpeakButton text={card.en} className="etext-listen"

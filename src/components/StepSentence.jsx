@@ -43,11 +43,34 @@ export default function StepSentence({
         const spoken = results[s.id]
         return (
           <li key={s.id} className="stepsent-row">
-            <div className="dictation-head">
+            {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
+                本文をそのぶん上に寄せられる(2026-08 の指摘) */}
+            <div className="row-head">
               <span className="dictation-no">{n + 1}</span>
               {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
-              <SpeakButton text={s.text} className="etext-listen"
-                           clipVoice={clipVoice} tier={tier} rate={rate} />
+              <span className="row-tools">
+                <SpeakButton text={s.text} className="etext-listen"
+                             clipVoice={clipVoice} tier={tier} rate={rate} />
+                <button type="button" className="btn btn--small"
+                        onClick={() => setOpenEn((v) => ({ ...v, [s.id]: !en }))}>
+                  {en ? '英語を隠す' : '英語を見る'}
+                </button>
+                {s.ja && (
+                  <button type="button" className="btn btn--small"
+                          onClick={() => setOpenJa((v) => ({ ...v, [s.id]: !v[s.id] }))}>
+                    {ja ? '日本語を隠す' : '日本語を見る'}
+                  </button>
+                )}
+                {isRecognitionSupported() && (
+                  <button type="button"
+                          className={`btn btn--small${listeningId === s.id ? ' btn--primary' : ''}`}
+                          onClick={() => onCheck(s)}>
+                    {listeningId === s.id
+                      ? <><StopIcon />話し終わったら押す</>
+                      : <><MicIcon />英語で言う</>}
+                  </button>
+                )}
+              </span>
             </div>
 
             {/* 英語。**隠しているあいだは、場所だけ残す。**
@@ -67,30 +90,6 @@ export default function StepSentence({
                 {s.ja}
               </p>
             )}
-
-            <div className="passage-actions">
-              {/* 顔を上げて言う。**押す順に並べる。**
-                  英語を隠す → 日本語を言う → 英語を言う → 英語で答え合わせ */}
-              <button type="button" className="btn btn--small"
-                      onClick={() => setOpenEn((v) => ({ ...v, [s.id]: !en }))}>
-                {en ? '英語を隠す' : '英語を見る'}
-              </button>
-              {s.ja && (
-                <button type="button" className="btn btn--small"
-                        onClick={() => setOpenJa((v) => ({ ...v, [s.id]: !v[s.id] }))}>
-                  {ja ? '日本語を隠す' : '日本語を見る'}
-                </button>
-              )}
-              {isRecognitionSupported() && (
-                <button type="button"
-                        className={`btn btn--small${listeningId === s.id ? ' btn--primary' : ''}`}
-                        onClick={() => onCheck(s)}>
-                  {listeningId === s.id
-                    ? <><StopIcon />話し終わったら押す</>
-                    : <><MicIcon />英語で言う</>}
-                </button>
-              )}
-            </div>
 
             {spoken && (
               <div className="transcript">

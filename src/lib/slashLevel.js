@@ -28,3 +28,21 @@ export function loadGuideOpen() {
 export function saveGuideOpen(open) {
   try { localStorage.setItem(GUIDE_KEY, open ? 'open' : 'closed') } catch { /* 使えなくても困らない */ }
 }
+
+/** ② の単位。段落ごと(`para`)か、本文まるごと(`whole`)か */
+const UNIT_KEY = 'eas.slashUnit'
+export function loadSlashUnit() {
+  try { return localStorage.getItem(UNIT_KEY) || 'para' } catch { return 'para' }
+}
+export function saveSlashUnit(id) {
+  try { localStorage.setItem(UNIT_KEY, id) } catch { /* 使えなくても困らない */ }
+}
+
+/** ① ディクテーションの難易度(一度に書き取る文の数) */
+const DICT_KEY = 'eas.dictSize'
+export function loadDictSize() {
+  try { return Number(localStorage.getItem(DICT_KEY)) || 1 } catch { return 1 }
+}
+export function saveDictSize(n) {
+  try { localStorage.setItem(DICT_KEY, String(n)) } catch { /* 使えなくても困らない */ }
+}
