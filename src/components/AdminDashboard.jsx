@@ -1,163 +1,353 @@
-import { useMemo, useState } from 'react'
-import { categories, categoryColor, categoryLabel } from '../data/categories.js'
-import { calculateStreak, formatMinutes, lastNDays, shortDate } from '../lib/format.js'
-import BarChart from './charts/BarChart.jsx'
+/**
+ * 集計 — **管理者(owner)だけが見る、スクール全体の眺め**。
+ *
+ * 【何を数えるか】(2026-08 利用者の指定で作り直した)
+ *
+ *   > 集計だけは残してください。しかし今のままでは見にくすぎるので、
+ *   > 教材の種類と内容に準じたものに変えてください。
+ *
+ *   前は「ゲストが自分で入力した学習時間」を並べていた。その入力欄は
+ *   0022 の設計変更で無くなっている(「回数や時間を裏で記録し」)。
+ *   **入らなくなった数字のグラフを置き続けると、いつまでも 0 が並ぶ。**
+ *
+ *   数えるものを、いま実際にあるものへ移した。
+ *
+ *   | 何 | どこから |
+ *   |---|---|
+ *   | **種類**   | `materials.kind`(文型ドリル / 記事 / 会話 / 単語 / フレーズ) |
+ *   | **内容**   | 弱点タグと CEFR レベル |
+ *   | **届き方** | `assignments`(共有した回数・ゲストが済ませた回数) |
+ *   | **取り組み** | `practice_days`(0022。裏で数えたもの) |
+ *
+ * 【この画面がいちばん見せたいのは「ライブラリの穴」】
+ *   仕様書 第5.6.2節のとおり、この仕組みは**教材の再利用**が前提である。
+ *   だから管理者が見るべきなのは合計の棒グラフではなく、
+ *   **まだ1本も教材が無い弱点**と、**ゲストがいるのに教材が無いレベル**である。
+ *   0 の行を隠さない。隠すと穴が見えない。
+ *
+ * 【数え方は画面に持たない】
+ *   合計も割合も DB(0023)が返す。画面で足し直すと、期間の切り方や
+ *   端末の時差で食い違う。
+ *
+ * 【Supabase が無いときは、それをそのまま言う】
+ *   見本の数字を置かない。**測っていないものを、測れているように見せない。**
+ */
+import { useEffect, useMemo, useState } from 'react'
+import { weaknessCategoryLabel } from '../data/weaknessTags.js'
+import { kindLabel } from '../lib/materials.js'
+import { PRACTICE_KINDS } from '../lib/practice.js'
+import { NOT_APPLIED, STAT_RANGES, loadSchoolStats, rateOf } from '../lib/schoolStats.js'
+import { formatMinutes } from '../lib/format.js'
 import HBarChart from './charts/HBarChart.jsx'
 
-const RANGES = [
-  { id: 7, label: '直近7日' },
-  { id: 14, label: '直近14日' },
-  { id: 30, label: '直近30日' },
-]
+/**
+ * 棒グラフの札は**短くする。** 「リーディング(記事)」は途中で切れて
+ * 「リーディン…」になり、何の行か分からなくなった(実測)。
+ */
+const kindShort = (id) => kindLabel(id).replace(/[((].*$/, '')
 
-/** トレーナー向けの管理画面 */
-export default function AdminDashboard({ state }) {
-  const [rangeDays, setRangeDays] = useState(14)
-  const [selectedLearnerId, setSelectedLearnerId] = useState(null)
+/** 種類ごとの「中身」の数え方。記事は段落、会話は発言、あとは問 */
+const itemUnit = (kind) => (kind === 'reading' ? '段落' : kind === 'dialogue' ? '発言' : '問')
 
-  const days = useMemo(() => lastNDays(rangeDays), [rangeDays])
-  const daySet = useMemo(() => new Set(days), [days])
+/** 割合を「78%」か「—」で出す。**母数が 0 のときに 0% と書かない** */
+const pct = (part, whole) => {
+  const r = rateOf(part, whole)
+  return r === null ? '—' : `${r}%`
+}
 
-  const logsInRange = useMemo(
-    () => state.studyLogs.filter((log) => daySet.has(log.studiedOn)),
-    [state.studyLogs, daySet],
-  )
+export default function AdminDashboard() {
+  const [days, setDays] = useState(30)
+  const [stats, setStats] = useState(null)
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [holesOnly, setHolesOnly] = useState(true)
 
-  /** ゲストごとの集計 */
-  const learnerStats = useMemo(() => {
-    return state.learners
-      .map((learner) => {
-        const logs = logsInRange.filter((log) => log.learnerId === learner.id)
-        const allLogs = state.studyLogs.filter((log) => log.learnerId === learner.id)
-        const attempts = state.pronunciationAttempts.filter((a) => a.learnerId === learner.id)
-        const minutes = logs.reduce((sum, log) => sum + log.minutes, 0)
-        const scores = attempts.map((a) => a.score)
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    loadSchoolStats(days).then(({ data, error: e }) => {
+      if (!alive) return
+      setLoading(false)
+      setError(e)
+      setStats(data)
+    })
+    return () => { alive = false }
+  }, [days])
 
-        return {
-          ...learner,
-          minutes,
-          sessions: logs.length,
-          streak: calculateStreak(allLogs.map((log) => log.studiedOn)),
-          lastStudiedOn: allLogs[0]?.studiedOn ?? null,
-          averageScore: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
-          attemptCount: attempts.length,
-        }
-      })
-      .sort((a, b) => b.minutes - a.minutes)
-  }, [state, logsInRange])
+  const s = stats?.summary ?? null
 
-  const totalMinutes = logsInRange.reduce((sum, log) => sum + log.minutes, 0)
-  const activeLearners = learnerStats.filter((l) => l.minutes > 0).length
-  const selected = learnerStats.find((l) => l.id === selectedLearnerId) ?? null
+  /** 教材がまだ1本も無い弱点。**ここが穴である** */
+  const holes = useMemo(
+    () => (stats?.byTag ?? []).filter((t) => !t.materials), [stats])
+  const tagRows = useMemo(
+    () => (holesOnly ? holes : (stats?.byTag ?? [])), [stats, holes, holesOnly])
+
+  /** ゲストがいるのに教材が足りないレベル */
+  const levelGaps = useMemo(
+    () => (stats?.byLevel ?? []).filter((l) => l.learners > 0 && l.materials === 0), [stats])
+
+  if (error === 'unset') {
+    return (
+      <div className="card">
+        <h2 className="card-title">集計</h2>
+        <p className="notice notice--info">
+          Supabase につながっていないため、集計は出せません。
+          <br />
+          集計はスクール全体の数字なので、<strong>見本の数字は出しません</strong>
+          (実際と食い違うため)。
+        </p>
+      </div>
+    )
+  }
+
+  if (error === NOT_APPLIED) {
+    return (
+      <div className="card">
+        <h2 className="card-title">集計</h2>
+        <p className="notice notice--warn">
+          集計の数え方(0023)が、まだ Supabase に入っていません。
+        </p>
+        <p className="card-hint">
+          GitHub のリポジトリにあるファイル
+          <code> supabase/apply/pending_2026-08-29.sql </code>
+          を、Supabase の 左メニュー <strong>SQL Editor</strong> →{' '}
+          <strong>New query</strong> に貼って <strong>Run</strong> を押すと出るようになります。
+          <br />
+          手順は <code>docs/APPLY.md</code> にあります。
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="stack-lg">
-      {/* 絞り込みは常にグラフの上に1列で置く */}
       <div className="filter-row">
         <span className="filter-label">表示期間</span>
-        {RANGES.map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            className={`btn btn--toggle${rangeDays === r.id ? ' is-active' : ''}`}
-            onClick={() => setRangeDays(r.id)}
-          >
+        {STAT_RANGES.map((r) => (
+          <button key={r.id} type="button"
+                  className={`btn btn--toggle${days === r.id ? ' is-active' : ''}`}
+                  onClick={() => setDays(r.id)}>
             {r.label}
           </button>
         ))}
       </div>
 
+      {error && error !== 'unset' && error !== NOT_APPLIED
+        && <p className="notice notice--warn">{error}</p>}
+      {loading && <p className="muted">読み込んでいます…</p>}
+
+      {/* ── 全体の数 ─────────────────────────────────────────── */}
       <div className="stat-row">
-        <Stat label="ゲストの人数" value={state.learners.length} unit="人" />
-        <Stat label="期間中に学習した人" value={activeLearners} unit="人" />
-        <Stat label="期間中の合計学習時間" value={formatMinutes(totalMinutes)} />
-        <Stat
-          label="1人あたり平均"
-          value={formatMinutes(state.learners.length ? Math.round(totalMinutes / state.learners.length) : 0)}
-        />
+        <Stat label="ライブラリの教材" value={s?.material_count ?? 0} unit="本"
+              note="発行済み" />
+        <Stat label="この期間に作った" value={s?.material_new ?? 0} unit="本" />
+        <Stat label="この期間に共有" value={s?.assigned_count ?? 0} unit="回" />
+        <Stat label="ゲストが済ませた割合"
+              value={s?.done_rate == null ? '—' : `${s.done_rate}%`}
+              note={`${s?.done_count ?? 0} / ${s?.assigned_count ?? 0} 回`} />
+      </div>
+      <div className="stat-row">
+        <Stat label="受講中のゲスト" value={s?.learner_active ?? 0} unit="人"
+              note={`休会 ${s?.learner_paused ?? 0} / 退会 ${s?.learner_withdrawn ?? 0}`} />
+        <Stat label="トレーナー" value={s?.trainer_count ?? 0} unit="人" />
+        <Stat label="ゲスト1人あたり"
+              value={s?.practice_minutes_weekly == null ? '—' : `${s.practice_minutes_weekly}分`}
+              note="アプリでの取り組み・週あたり" />
       </div>
 
-      <div className="grid-2">
-        <section className="card">
-          <h2 className="card-title">全体の学習時間の推移</h2>
-          <BarChart
-            data={days.map((day) => ({
-              key: day,
-              label: shortDate(day),
-              axisLabel: shortDate(day),
-              value: logsInRange.filter((log) => log.studiedOn === day).reduce((sum, log) => sum + log.minutes, 0),
-            }))}
-          />
-        </section>
-
-        <section className="card">
-          <h2 className="card-title">ゲスト別の学習時間</h2>
-          <HBarChart
-            data={learnerStats.map((l) => ({ key: l.id, label: l.name, value: l.minutes }))}
-            emptyMessage="この期間に学習記録がありません。"
-          />
-        </section>
-      </div>
-
+      {/* ── 教材の種類ごと ───────────────────────────────────── */}
       <section className="card">
-        <h2 className="card-title">ゲスト一覧</h2>
-        <p className="card-hint">名前をクリックすると、そのゲストの内訳を表示します。</p>
+        <h2 className="card-title">教材の種類ごと</h2>
+        <p className="card-hint">
+          <strong>作った数と配った数は別物です。</strong>
+          再利用が効いていれば、共有した回数は教材の数よりずっと多くなります。
+        </p>
+
+        <HBarChart unit="count"
+                   data={(stats?.byKind ?? []).map((k) => ({
+                     key: k.kind, label: kindShort(k.kind), value: k.materials,
+                   }))}
+                   emptyMessage="まだ教材がありません。" />
 
         <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
-                <th>ゲスト</th>
-                <th>レベル</th>
-                <th className="num">期間中の学習時間</th>
-                <th className="num">記録件数</th>
-                <th className="num">連続学習日数</th>
-                <th>最終学習日</th>
-                <th className="num">発音スコア平均</th>
+                <th>種類</th>
+                <th className="num">教材</th>
+                <th className="num">この期間に作った</th>
+                <th className="num">中身</th>
+                <th className="num">共有</th>
+                <th className="num">済ませた</th>
+                <th className="num">達成率</th>
               </tr>
             </thead>
             <tbody>
-              {learnerStats.map((l) => (
-                <tr
-                  key={l.id}
-                  className={`is-clickable${selectedLearnerId === l.id ? ' is-selected' : ''}`}
-                  onClick={() => setSelectedLearnerId(selectedLearnerId === l.id ? null : l.id)}
-                >
-                  <td>
-                    <button type="button" className="btn btn--link">{l.name}</button>
-                  </td>
-                  <td>{l.grade}</td>
-                  <td className="num">{formatMinutes(l.minutes)}</td>
-                  <td className="num">{l.sessions}件</td>
-                  <td className="num">{l.streak}日</td>
-                  <td>
-                    {l.lastStudiedOn ?? '—'}
-                    {isStale(l.lastStudiedOn) && <span className="badge badge--alert">要フォロー</span>}
-                  </td>
-                  <td className="num">
-                    {l.averageScore === null ? '—' : `${l.averageScore}点`}
-                    {l.averageScore !== null && <small className="muted"> ※仮</small>}
-                  </td>
+              {(stats?.byKind ?? []).map((k) => (
+                <tr key={k.kind}>
+                  <td>{kindLabel(k.kind)}</td>
+                  <td className="num">{k.materials} 本</td>
+                  <td className="num">{k.fresh} 本</td>
+                  <td className="num">{k.items} {itemUnit(k.kind)}</td>
+                  <td className="num">{k.assigned} 回</td>
+                  <td className="num">{k.done} 回</td>
+                  <td className="num">{pct(k.done, k.assigned)}</td>
                 </tr>
               ))}
+              {!(stats?.byKind ?? []).length && !loading && (
+                <tr><td colSpan={7} className="muted">まだ教材がありません。</td></tr>
+              )}
             </tbody>
           </table>
         </div>
       </section>
 
-      {selected && <LearnerDetail learner={selected} state={state} days={days} />}
+      {/* ── 内容(弱点)ごと ─────────────────────────────────── */}
+      <section className="card">
+        <h2 className="card-title">弱点ごと(教材の中身)</h2>
+        <p className="card-hint">
+          レッスンで弱点を指摘しても、<strong>その弱点の教材が無ければ宿題が出せません。</strong>
+          まず「0 本」の行を埋めていくのが早道です。
+        </p>
+
+        {holes.length > 0 ? (
+          <p className="notice notice--warn">
+            教材がまだ 1 本も無い弱点が <strong>{holes.length} 件</strong>あります。
+          </p>
+        ) : (
+          <p className="notice notice--ok">すべての弱点に教材があります。</p>
+        )}
+
+        <div className="filter-row">
+          <button type="button"
+                  className={`btn btn--toggle${holesOnly ? ' is-active' : ''}`}
+                  onClick={() => setHolesOnly(true)}>
+            教材が無いものだけ({holes.length})
+          </button>
+          <button type="button"
+                  className={`btn btn--toggle${holesOnly ? '' : ' is-active'}`}
+                  onClick={() => setHolesOnly(false)}>
+            すべて({(stats?.byTag ?? []).length})
+          </button>
+        </div>
+
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>弱点</th>
+                <th>見出し</th>
+                <th className="num">教材</th>
+                <th className="num">共有</th>
+                <th className="num">達成率</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tagRows.map((t) => (
+                <tr key={t.tagId}>
+                  <td>{t.label}</td>
+                  <td className="muted">{weaknessCategoryLabel(t.category)}</td>
+                  <td className="num">
+                    {t.materials} 本
+                    {!t.materials && <span className="badge badge--alert">無し</span>}
+                  </td>
+                  <td className="num">{t.assigned} 回</td>
+                  <td className="num">{pct(t.done, t.assigned)}</td>
+                </tr>
+              ))}
+              {!tagRows.length && !loading && (
+                <tr><td colSpan={5} className="muted">該当する弱点はありません。</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* ── レベルごと ───────────────────────────────────────── */}
+      <section className="card">
+        <h2 className="card-title">レベルごと(教材とゲストの数)</h2>
+        <p className="card-hint">
+          <strong>ゲストがいるのに教材が無いレベル</strong>が、次に作るべきところです。
+        </p>
+
+        {levelGaps.length > 0 && (
+          <p className="notice notice--warn">
+            ゲストがいるのに教材が 0 本のレベル:{' '}
+            <strong>{levelGaps.map((l) => l.level).join(' / ')}</strong>
+          </p>
+        )}
+
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>レベル</th>
+                <th className="num">教材</th>
+                <th className="num">受講中のゲスト</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(stats?.byLevel ?? []).map((l) => (
+                <tr key={l.level}>
+                  <td>{l.level}</td>
+                  <td className="num">
+                    {l.materials} 本
+                    {l.learners > 0 && !l.materials
+                      && <span className="badge badge--alert">無し</span>}
+                  </td>
+                  <td className="num">{l.learners} 人</td>
+                </tr>
+              ))}
+              {!(stats?.byLevel ?? []).length && !loading && (
+                <tr><td colSpan={3} className="muted">まだ教材もゲストもありません。</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* ── アプリでの取り組み(0022 が裏で数えたもの)──────────── */}
+      <section className="card">
+        <h2 className="card-title">アプリでの取り組み</h2>
+        <p className="card-hint">
+          ゲストは何も入力していません。<strong>開いていた時間をこちらで数えています</strong>
+          (裏に回した端末の時間は数えません)。
+        </p>
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>何に</th>
+                <th className="num">人数</th>
+                <th className="num">回数</th>
+                <th className="num">時間</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(stats?.practice ?? []).map((p) => (
+                <tr key={p.kind}>
+                  <td>{PRACTICE_KINDS[p.kind] ?? p.kind}</td>
+                  <td className="num">{p.learners} 人</td>
+                  <td className="num">{p.times} 回</td>
+                  <td className="num">{formatMinutes(Math.round(p.seconds / 60))}</td>
+                </tr>
+              ))}
+              {!(stats?.practice ?? []).length && !loading && (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    この期間に取り組みの記録がありません。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   )
 }
 
-/** 最終学習日から5日以上空いていたら「要フォロー」とする */
-function isStale(lastStudiedOn) {
-  if (!lastStudiedOn) return true
-  const diffDays = (Date.now() - new Date(lastStudiedOn).getTime()) / (1000 * 60 * 60 * 24)
-  return diffDays >= 5
-}
-
-function Stat({ label, value, unit = '' }) {
+function Stat({ label, value, unit = '', note = '' }) {
   return (
     <div className="stat">
       <p className="stat-label">{label}</p>
@@ -165,90 +355,7 @@ function Stat({ label, value, unit = '' }) {
         {value}
         {unit && <span className="stat-unit">{unit}</span>}
       </p>
+      {note && <p className="stat-note">{note}</p>}
     </div>
-  )
-}
-
-/** 選ばれたゲストの詳細 */
-function LearnerDetail({ learner, state, days }) {
-  const logs = state.studyLogs.filter((log) => log.learnerId === learner.id)
-  const daySet = new Set(days)
-  const logsInRange = logs.filter((log) => daySet.has(log.studiedOn))
-  const attempts = state.pronunciationAttempts.filter((a) => a.learnerId === learner.id).slice(0, 10).reverse()
-
-  return (
-    <section className="card card--highlight">
-      <h2 className="card-title">{learner.name} さんの内訳</h2>
-
-      <div className="grid-2">
-        <div className="chart-block">
-          <h3 className="chart-title">日ごとの学習時間</h3>
-          <BarChart
-            data={days.map((day) => ({
-              key: day,
-              label: shortDate(day),
-              axisLabel: shortDate(day),
-              value: logsInRange.filter((log) => log.studiedOn === day).reduce((sum, log) => sum + log.minutes, 0),
-            }))}
-          />
-        </div>
-
-        <div className="chart-block">
-          <h3 className="chart-title">カテゴリ別(期間中)</h3>
-          <HBarChart
-            data={categories.map((cat) => ({
-              key: cat.id,
-              label: cat.label,
-              color: cat.color,
-              value: logsInRange.filter((log) => log.category === cat.id).reduce((sum, log) => sum + log.minutes, 0),
-            }))}
-            emptyMessage="この期間に学習記録がありません。"
-          />
-        </div>
-      </div>
-
-      {attempts.length > 0 && (
-        <div className="chart-block">
-          <h3 className="chart-title">
-            発音スコアの推移 <span className="badge badge--warn">シミュレーション値</span>
-          </h3>
-          <BarChart
-            unit="score"
-            height={110}
-            labelEnds
-            data={attempts.map((a, i) => ({ key: a.id, label: `${i + 1}回目`, axisLabel: '', value: a.score }))}
-          />
-        </div>
-      )}
-
-      <div className="chart-block">
-        <h3 className="chart-title">直近の記録</h3>
-        <div className="table-scroll">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>学習日</th>
-                <th>カテゴリ</th>
-                <th className="num">時間</th>
-                <th>教材</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.slice(0, 8).map((log) => (
-                <tr key={log.id}>
-                  <td>{log.studiedOn}</td>
-                  <td>
-                    <span className="chip-dot" style={{ background: categoryColor(log.category) }} aria-hidden="true" />
-                    {categoryLabel(log.category)}
-                  </td>
-                  <td className="num">{formatMinutes(log.minutes)}</td>
-                  <td>{log.material || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
   )
 }

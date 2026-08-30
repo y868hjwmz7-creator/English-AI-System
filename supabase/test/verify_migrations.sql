@@ -222,4 +222,14 @@ from (
     select count(*) = 1 from information_schema.column_privileges
     where table_name = 'reminders' and privilege_type = 'UPDATE'
       and grantee = 'authenticated' and column_name = 'seen_at'), 54
+  union all
+  select '(55) 集計を教材の種類と内容で数える(0023)', (
+    select count(distinct proname) = 4 from pg_proc
+    where proname in ('school_by_kind', 'school_by_tag',
+                      'school_by_level', 'school_practice')), 55
+  union all
+  select '(56) 全体の集計が、いまあるもので数え直されている(0023)', (
+    -- study_logs の学習時間ではなく、practice_days の分になっていること
+    select pg_get_function_result(p.oid) like '%practice_minutes_weekly%'
+    from pg_proc p where p.proname = 'school_summary'), 56
 ) t order by 順;

@@ -281,7 +281,7 @@ export default function App() {
             ) : view === 'pronunciation' ? (
               <PronunciationPractice />
             ) : (
-              <AdminDashboard state={state} />
+              <AdminDashboard />
             )}
           </main>
 

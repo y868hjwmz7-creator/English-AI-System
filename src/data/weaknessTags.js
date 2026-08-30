@@ -137,5 +137,9 @@ export const groupsOf = (tags) => {
 export const selectableWeaknessTags = () =>
   weaknessTags.filter((tag) => tag.kind === 'weakness')
 
+/** 見出しの日本語。**画面に英語の id を出さない**(pronunciation → 発音) */
+export const weaknessCategoryLabel = (id) =>
+  weaknessCategories.find((c) => c.id === id)?.label ?? id
+
 export const weaknessTagLabel = (id) =>
   weaknessTags.find((tag) => tag.id === id)?.label ?? id

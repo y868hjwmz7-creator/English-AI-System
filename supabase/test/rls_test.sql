@@ -494,6 +494,44 @@ set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.expect('よそあてのリマインドは見えない',
   (select count(*)::int from public.reminders), 0);
 
+-- ── 0023 集計は「教材の種類と内容」で数える。**管理者だけ** ──────
+--
+--   security definer で作ってあるので、`is_owner()` の判定を外すと
+--   全校のデータが誰にでも見えてしまう。**ここで毎回確かめる。**
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('管理者は種類ごとの集計を見られる',
+  (select count(*)::int from public.school_by_kind(30)) > 0, true);
+select pg_temp.expect('種類ごとに教材の中の項目も数えられている',
+  (select sum(items)::int from public.school_by_kind(30)) > 0, true);
+select pg_temp.expect('ライブラリ全体の数が集計に入る',
+  (select material_count from public.school_summary()) > 0, true);
+-- **教材が1本も無い弱点も返る。** ここが「ライブラリの穴」である
+select pg_temp.expect('弱点ごとの集計は、教材が0件のものも返る',
+  (select count(*)::int from public.school_by_tag(30) where materials = 0) > 0, true);
+select pg_temp.expect('弱点ごとの集計に見出しが入る',
+  (select count(*)::int from public.school_by_tag(30) where label is null), 0);
+select pg_temp.expect('レベルごとの集計が返る',
+  (select count(*)::int from public.school_by_level(30)) > 0, true);
+select pg_temp.expect('全校の取り組みが種類ごとに返る',
+  (select sum(times)::int from public.school_practice(30)) > 0, true);
+
+-- **トレーナーとゲストには1行も返さない**
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect('トレーナーが種類ごとの集計を呼んでも何も返らない',
+  (select count(*)::int from public.school_by_kind(30)), 0);
+select pg_temp.expect('トレーナーが弱点ごとの集計を呼んでも何も返らない',
+  (select count(*)::int from public.school_by_tag(30)), 0);
+select pg_temp.expect('トレーナーがレベルごとの集計を呼んでも何も返らない',
+  (select count(*)::int from public.school_by_level(30)), 0);
+select pg_temp.expect('トレーナーが全校の取り組みを呼んでも何も返らない',
+  (select count(*)::int from public.school_practice(30)), 0);
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('ゲストが種類ごとの集計を呼んでも何も返らない',
+  (select count(*)::int from public.school_by_kind(30)), 0);
+select pg_temp.expect('ゲストが全校の取り組みを呼んでも何も返らない',
+  (select count(*)::int from public.school_practice(30)), 0);
+
 -- 退会にする
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
 select public.set_learner_status('22222222-2222-2222-2222-222222222222',

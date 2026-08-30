@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   4行の表が出ます。「⬜ まだです」があれば、
+--   5行の表が出ます。「⬜ まだです」があれば、
 --   supabase/apply/pending_2026-08-29.sql を貼れば全部そろいます。
 -- ============================================================================
 
@@ -24,4 +24,6 @@ from (
             where table_name = 'material_items' and column_name = 'chunks'), 3
   union all select '0022 取り組みの記録とリマインド',
     exists (select 1 from pg_tables where tablename = 'practice_days'), 4
+  union all select '0023 集計を教材の種類と内容で数える',
+    exists (select 1 from pg_proc where proname = 'school_by_kind'), 5
 ) t order by 順;
