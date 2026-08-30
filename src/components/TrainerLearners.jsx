@@ -20,6 +20,7 @@ import useWordStatuses from '../lib/useWordStatuses.js'
 import LearnerWordbook from './LearnerWordbook.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import { ScreenIcon } from './Icons.jsx'
+import { loadLearnerPractice, practiceLine, sendReminder } from '../lib/practice.js'
 
 const STATUS = {
   active:   { label: '受講中', cls: 'badge--admin' },
@@ -32,6 +33,10 @@ const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '
 
 export default function TrainerLearners({ me }) {
   const [learners, setLearners] = useState([])
+  // ゲストがアプリで取り組んだこと(0022)。**1人1行でコンパクトに出す**
+  const [practice, setPractice] = useState({})
+  const [reminding, setReminding] = useState(null)
+  const [reminded, setReminded] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [message, setMessage] = useState(null)
@@ -77,6 +82,27 @@ export default function TrainerLearners({ me }) {
     setLearners(data)
   }
   useEffect(() => { reload() }, [])
+
+  // ゲストの取り組み(0022)。**数え方は DB に置いてある**ので、ここは並べるだけ。
+  // 0022 をまだ貼っていないときは空が返る(画面は壊れない)
+  useEffect(() => {
+    loadLearnerPractice(14).then(({ data }) => {
+      setPractice(Object.fromEntries((data ?? []).map((r) => [r.learnerId, r])))
+    })
+  }, [])
+
+  /**
+   * リマインドを送る。**トレーナーが押したときだけ飛ぶ**(2026-08 利用者の指定)。
+   * 自動では送らないので、ゲストの画面に「トレーナーから」と出しても嘘にならない。
+   */
+  const remind = async (l) => {
+    setReminding(l.id)
+    const { error: e } = await sendReminder(l.id)
+    setReminding(null)
+    if (e) { setError(e); return }
+    setReminded((v) => ({ ...v, [l.id]: true }))
+    setMessage(`${l.display_name} さんにリマインドを送りました。`)
+  }
 
   /**
    * 過去の宿題を「セッションで使う形」(大きく表示)で開く。
@@ -262,6 +288,25 @@ export default function TrainerLearners({ me }) {
                 </span>
               </h3>
               <span className="muted">{cefrLabel(l.cefr)}</span>
+            </div>
+
+            {/* **アプリでの取り組み**(0022)。1行に畳む。
+                ゲストが自分で入力していた「学習の記録」の代わりで、
+                こちらが裏で数えたものである(`src/lib/practice.js`)。
+
+                **やっていない人には、その場でリマインドを送れる。**
+                自動では飛ばない(利用者の指定) */}
+            <div className="practice-row">
+              <span className="muted practice-sum">{practiceLine(practice[l.id])}</span>
+              {l.status === 'active' && (
+                <button type="button" className="btn btn--small btn--quiet"
+                        disabled={reminding === l.id || reminded[l.id]}
+                        title="このゲストに「取り組みましょう」と知らせます"
+                        onClick={() => remind(l)}>
+                  {reminded[l.id] ? '送りました'
+                    : reminding === l.id ? '送っています…' : 'リマインドする'}
+                </button>
+              )}
             </div>
 
             {l.status_note && <p className="field-hint">{l.status_note}</p>}

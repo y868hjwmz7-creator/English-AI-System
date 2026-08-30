@@ -27,10 +27,23 @@ import { BoltIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
+import { loadMyReminder, markReminderSeen, usePracticeLog } from '../lib/practice.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
 export default function LearnerHomework() {
+  // 担当トレーナーからのリマインド(0022)。
+  // **トレーナーが押したときだけ届く。** 自動では飛ばないので、
+  // 「トレーナーから」と書いても嘘にならない(2026-08 利用者の指定)
+  const [reminder, setReminder] = useState(null)
+  useEffect(() => {
+    loadMyReminder().then(({ data }) => setReminder(data))
+  }, [])
+
+  // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ。
+  // 記録が付かなくても練習は止まらない(貼る前でも動く)
+  usePracticeLog('homework')
+
   const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -82,6 +95,19 @@ export default function LearnerHomework() {
 
   return (
     <div className="stack">
+      {/* **人が見てくれていると分かることが、どんなバッジより効く**
+          (単語帳の「トレーナーが見ました」と同じ考え方・第5.26節)。
+          これはトレーナーが**実際に押したとき**だけ出る */}
+      {reminder && (
+        <div className="notice notice--warn reminder" role="status">
+          <strong>担当トレーナーからのリマインドです。</strong>
+          {reminder.message ? ` ${reminder.message}` : ' 今週の宿題に取り組みましょう。'}
+          <button type="button" className="btn btn--link reminder-close"
+                  onClick={() => { markReminderSeen(reminder.id); setReminder(null) }}>
+            わかりました
+          </button>
+        </div>
+      )}
       {lessonOf && (
         <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
                     wordStatuses={wordStatuses} onMarkWord={markWord} />

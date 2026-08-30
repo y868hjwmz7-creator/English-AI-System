@@ -45,6 +45,7 @@ import { industryLabel } from '../data/industries.js'
 import { shortDate } from '../lib/format.js'
 import SpeakButton from './SpeakButton.jsx'
 import Tabs from './Tabs.jsx'
+import { usePracticeLog } from '../lib/practice.js'
 
 const VIEWS = [
   { id: 'due', label: '今日の復習', status: 'unknown', dueOnly: true },
@@ -108,6 +109,10 @@ function Detail({ wordNorm }) {
 }
 
 export default function Wordbook({ level = null }) {
+  // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ。
+  // 記録が付かなくても練習は止まらない(貼る前でも動く)
+  usePracticeLog('wordbook')
+
   const [view, setView] = useState('due')
   const [want, setWant] = useState('auto')      // 出題の形。auto は箱に合わせる
   const [rows, setRows] = useState([])          // その一覧ぜんぶ

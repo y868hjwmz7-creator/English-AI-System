@@ -2438,6 +2438,24 @@ html { -webkit-text-size-adjust: 100%; }
   .lesson-more { padding-left: 8px; padding-right: 8px; }
 }
 
+/* ── ゲストの取り組み(0022)とリマインド ───────────────────
+   ゲストが自分で入力していた「学習の記録」の代わり。**裏で数えたもの**を、
+   トレーナーの「ゲスト」画面に**1行で**出す。長くすると見比べられない。 */
+.practice-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 6px 0 2px;
+}
+.practice-sum { flex: 1 1 auto; min-width: 0; font-size: 13px; }
+
+/* トレーナーからのリマインド。**押したときだけ出る** */
+.reminder { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.reminder-close { margin-left: auto; }
+
+/* 発音練習。**1語 = 1枚のカード**(ほかの練習と同じ形にそろえる) */
+.pron-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.pron-en { margin: 2px 0; font-size: 18px; font-weight: 600; }
+.pron-ja { margin: 2px 0 0; font-size: 13px; }
+
 /* ── 宿題の行(押して開く)────────────────────────────────
    以前は下の小さなボタンでしか開けず、並んでいるだけの一覧に見えていた。
    行そのものを押せるようにし、印(▸ ▾)で押せることを示す。 */

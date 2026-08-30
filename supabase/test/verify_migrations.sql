@@ -205,4 +205,21 @@ from (
     select 1 from information_schema.columns
     where table_name = 'material_items' and column_name = 'chunks'
       and data_type = 'jsonb'), 50
+  union all
+  select '(51) 取り組みを裏で記録できる(0022)', exists (
+    select 1 from pg_tables where tablename = 'practice_days'), 51
+  union all
+  select '(52) 取り組みを足す・まとめる関数がある(0022)', (
+    select count(distinct proname) = 2 from pg_proc
+    where proname in ('log_practice', 'learner_practice')), 52
+  union all
+  select '(53) リマインドを送れる(0022)', (
+    select count(distinct proname) = 2 from pg_proc
+    where proname in ('send_reminder', 'seen_reminder')), 53
+  union all
+  select '(54) ゲストが変えられるのは「見た」だけ(0022)', (
+    -- **列単位の grant** が効いていること。行だけ絞っても列は絞れない
+    select count(*) = 1 from information_schema.column_privileges
+    where table_name = 'reminders' and privilege_type = 'UPDATE'
+      and grantee = 'authenticated' and column_name = 'seen_at'), 54
 ) t order by 順;

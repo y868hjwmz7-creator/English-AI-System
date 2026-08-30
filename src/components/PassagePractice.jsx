@@ -52,11 +52,14 @@ import {
   loadDictSize, loadGuideOpen, loadSlashLevel, loadSlashUnit,
   saveDictSize, saveGuideOpen, saveSlashLevel, saveSlashUnit,
 } from '../lib/slashLevel.js'
+import { usePracticeLog } from '../lib/practice.js'
 
 export default function PassagePractice({
   section, headline, isDialogue, tags = null, voiceIds = null,
   level = 'B1', wordStatuses = null, onMarkWord = null,
 }) {
+  // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
+  usePracticeLog('six_steps')
   const [step, setStep] = useState('dictation')
   const [voices, setVoices] = useState([])
   const [showJa, setShowJa] = useState(false)

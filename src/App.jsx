@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import AdminDashboard from './components/AdminDashboard.jsx'
-import EnglishStudyLog from './components/EnglishStudyLog.jsx'
 import LearnerHomework from './components/LearnerHomework.jsx'
 import SignIn from './components/SignIn.jsx'
 import TrainerLearners from './components/TrainerLearners.jsx'
@@ -8,7 +7,7 @@ import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import AppNav, { AppTopbar } from './components/AppNav.jsx'
 import {
-  BookIcon, CardsIcon, ChartIcon, PeopleIcon, TaskIcon, TrendIcon,
+  BookIcon, CardsIcon, ChartIcon, MicIcon, PeopleIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
@@ -16,6 +15,7 @@ import { loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } fro
 import { setViewerRole } from './lib/viewer.js'
 import { installTapFeedback } from './lib/haptics.js'
 import Wordbook from './components/Wordbook.jsx'
+import PronunciationPractice from './components/PronunciationPractice.jsx'
 import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadState, resetState, saveState } from './lib/store.js'
@@ -118,11 +118,6 @@ export default function App() {
     if (state) saveState(state)
   }, [state])
 
-  const currentLearner = useMemo(
-    () => state?.learners.find((l) => l.id === learnerId) ?? null,
-    [state, learnerId],
-  )
-
   const handleReset = () => {
     if (!window.confirm('保存されているデータをすべて消して、サンプルデータに戻します。よろしいですか?')) return
     const fresh = resetState(buildSeed())
@@ -148,12 +143,19 @@ export default function App() {
   const pages = [
     (!isSupabaseConfigured || isTrainer) && { id: 'materials', label: '教材', icon: BookIcon },
     (!isSupabaseConfigured || isTrainer) && { id: 'learners', label: 'ゲスト', icon: PeopleIcon },
-    (!isSupabaseConfigured || isTrainer) && { id: 'admin', label: '集計', icon: ChartIcon },
+    // **集計は管理者だけ**(2026-08 の設計変更)。トレーナーが見るのは
+    // 「ゲスト」画面に出る取り組みのほうで、スクール全体の数字ではない
+    (!isSupabaseConfigured || isOwner) && { id: 'admin', label: '集計', icon: ChartIcon },
     (!isSupabaseConfigured || !isTrainer) && { id: 'homework', label: '今週の宿題', icon: TaskIcon },
     // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
     // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
     { id: 'wordbook', label: '単語帳', icon: CardsIcon },
-    { id: 'learner', label: '学習の記録', icon: TrendIcon },
+    // **発音練習だけは独立した機能にする**(2026-08 利用者の指定)
+    { id: 'pronunciation', label: '発音練習', icon: MicIcon },
+    // 「学習の記録」は外した(2026-08 の設計変更)。
+    // **やったことは、こちらが裏で数える**(0022・`src/lib/practice.js`)。
+    // ゲストに何分やったかを入力させない。入力そのものが手間で、
+    // しかも入れ忘れる。数えたものはトレーナーの「ゲスト」画面に出る
   ].filter(Boolean)
   const pageLabel = pages.find((p) => p.id === view)?.label ?? 'English AI System'
 
@@ -276,12 +278,8 @@ export default function App() {
               <LearnerHomework />
             ) : view === 'wordbook' ? (
               <Wordbook level={profile?.cefr ?? null} />
-            ) : view === 'learner' ? (
-              currentLearner ? (
-                <EnglishStudyLog state={state} setState={setState} learnerId={learnerId} />
-              ) : (
-                <p>ゲストが登録されていません。</p>
-              )
+            ) : view === 'pronunciation' ? (
+              <PronunciationPractice />
             ) : (
               <AdminDashboard state={state} />
             )}

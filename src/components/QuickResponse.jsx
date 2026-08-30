@@ -33,11 +33,14 @@ import { stopReading } from '../lib/readAloud.js'
 import SpeakButton from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
 import { CloseIcon } from './Icons.jsx'
+import { usePracticeLog } from '../lib/practice.js'
 
 export default function QuickResponse({
   material, onClose, wordStatuses = null, onMarkWord = null, paper = false,
 }) {
   const pairs = useMemo(() => quickResponsePairs(material), [material])
+  // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
+  usePracticeLog('quick_response')
   const [at, setAt] = useState(0)
   const [shown, setShown] = useState(false)
   const doneRef = useRef([])          // 言えた / 言えなかったの記録(この1回ぶん)

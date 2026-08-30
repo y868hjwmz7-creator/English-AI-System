@@ -420,6 +420,80 @@ select pg_temp.expect('集計で休会中が分けて数えられる',
 select pg_temp.expect('集計で受講中の人数が減る',
   (select learner_active from public.school_summary()), 1);
 
+-- ── 0022 取り組みの記録とリマインド ─────────────────────────────
+--
+-- **ここが緩むと、ゲストが他人の取り組みを覗けたり、
+--   トレーナーになりすましてリマインドを送れたりする。**
+
+-- 生徒B(担当は トレーナー1)が取り組む
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select public.log_practice('wordbook', 120, 3);
+select public.log_practice('six_steps', 300, 1);
+select pg_temp.expect('取り組みは本人のぶんが残る',
+  (select times::int from public.practice_days
+   where learner_id = auth.uid() and kind = 'wordbook'), 3);
+select public.log_practice('wordbook', 60, 2);
+select pg_temp.expect('同じ日・同じ種類なら足される',
+  (select times::int from public.practice_days
+   where learner_id = auth.uid() and kind = 'wordbook'), 5);
+select pg_temp.expect('知らない種類は入らない',
+  (select count(*)::int from public.practice_days where kind = 'nonsense'), 0);
+select public.log_practice('wordbook', 999999, 999999);
+select pg_temp.expect('1回に足せる秒数には上限がある',
+  (select seconds::int from public.practice_days
+   where learner_id = auth.uid() and kind = 'wordbook') <= 180 + 3600, true);
+
+-- 生徒C(担当ではない)
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('よそのゲストの取り組みは見えない',
+  (select count(*)::int from public.practice_days
+   where learner_id = '22222222-2222-2222-2222-222222222222'), 0);
+
+-- **前の担当(トレーナー1)にも見えない。** 引き継ぎはここにも効く
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect('引き継ぎ後、前の担当には取り組みが見えない',
+  (select count(*)::int from public.practice_days
+   where learner_id = '22222222-2222-2222-2222-222222222222'), 0);
+select pg_temp.expect_denied('引き継ぎ後、前の担当はリマインドを送れない',
+  $$select public.send_reminder('22222222-2222-2222-2222-222222222222', 'だめ')$$);
+
+-- **いまの担当は トレーナー2**(上で引き継いである)。
+-- 引き継ぎがそのままアクセス制御に効いていることも、ここで確かめている
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select pg_temp.expect('担当ゲストの取り組みは見える',
+  (select count(*)::int from public.practice_days
+   where learner_id = '22222222-2222-2222-2222-222222222222') > 0, true);
+select pg_temp.expect('まとめは担当ゲストだけ返る',
+  (select count(*)::int from public.learner_practice(14)), 1);
+select pg_temp.expect('まとめに回数が入る',
+  (select times from public.learner_practice(14)) > 0, true);
+
+-- リマインドは、押した人が担当トレーナーのときだけ
+select public.send_reminder('22222222-2222-2222-2222-222222222222', '今週の宿題、まだですよ');
+select pg_temp.expect('リマインドが1件入る',
+  (select count(*)::int from public.reminders
+   where learner_id = '22222222-2222-2222-2222-222222222222'), 1);
+select pg_temp.expect_denied('担当していないゲストには送れない',
+  $$select public.send_reminder('33333333-3333-3333-3333-333333333333', 'だめ')$$);
+
+-- ゲストの側
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('自分あてのリマインドは読める',
+  (select message from public.reminders where learner_id = auth.uid()), '今週の宿題、まだですよ');
+select pg_temp.expect_denied('ゲストはリマインドを作れない',
+  $$insert into public.reminders (learner_id, sent_by)
+    values (auth.uid(), auth.uid())$$);
+select pg_temp.expect_denied('ゲストは文面を書き換えられない',
+  $$update public.reminders set message = 'すりかえ' where learner_id = auth.uid()$$);
+select public.seen_reminder((select id from public.reminders where learner_id = auth.uid()));
+select pg_temp.expect('「見た」だけは本人が残せる',
+  (select count(*)::int from public.reminders
+   where learner_id = auth.uid() and seen_at is not null), 1);
+
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('よそあてのリマインドは見えない',
+  (select count(*)::int from public.reminders), 0);
+
 -- 退会にする
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
 select public.set_learner_status('22222222-2222-2222-2222-222222222222',

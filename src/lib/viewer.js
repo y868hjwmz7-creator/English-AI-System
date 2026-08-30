@@ -33,3 +33,13 @@ export function setViewerRole(role) {
 export function canSeeSystemDetail() {
   return viewerRole === 'trainer' || viewerRole === 'owner'
 }
+
+/**
+ * いまの役割そのもの(`learner` / `trainer` / `owner` / 未ログインは null)。
+ *
+ * **判定の規則をここに増やさない。** 値を返すだけにしてある。
+ * 取り組みの記録(0022)が「ゲストのぶんだけ数える」ために使う。
+ */
+export function viewerRoleOf() {
+  return viewerRole
+}
