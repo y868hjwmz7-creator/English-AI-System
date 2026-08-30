@@ -1847,6 +1847,27 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--paper); color: var(--ink);
   border-radius: 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 32%);
   line-height: 1.9;
+  /* ★ 暗い側にしか無い色も、ここで明るい側に戻す ★
+     (2026-08 実機。シャドーイング中の段落が**真っ黒**になっていた)
+
+     `.passage-part.is-speaking` は `--speaking-bg` を使うが、紙が
+     持っていたのは `--speak-bg` という**別の名前**だった。
+     名前が1つ違うだけで、暗い側の色が白い紙に残る。
+     **紙に無い変数を一覧で洗い出して、まとめて置いた。** */
+  --speaking-bg:  #eef4f7;   /* 読み上げ中の段落。淡い水色 */
+  --speaking-bar: #7fa8bd;
+  --reading-bg:   #cfe3ed;   /* いま読んでいる語 */
+  --reading-fg:   #14343f;
+  --warn:         #8a6a33;
+  --unknown-bar:  #e34948;
+  --phrase-bar:   #7a51b5;
+  /* 語の品詞の色(吹き出し)。紙の上では明るい側の値にそろえる */
+  --pos-noun:   #2f6f86;  --pos-verb:   #38795a;
+  --pos-adj:    #8a5588;  --pos-adv:    #8a6a33;
+  --pos-conj:   #5c6470;  --pos-phrase: #4c6ba8;
+  /* グラフの色。紙に出すことはまず無いが、**抜けを残さない** */
+  --series-1: #2f6f86;  --series-2: #b4551f;  --series-3: #1f7a52;
+  --series-4: #8a6a33;  --series-5: #a8436b;
 }
 /* 紙の中は、暗い配色を選んでいても読める色にする。
    var(--text-*) を使っている部品が紛れ込んでも消えないようにするため */
@@ -2981,8 +3002,23 @@ html { -webkit-text-size-adjust: 100%; }
 
 @media (max-width: 560px) {
   .qr-ja { font-size: 17px; }
-  /* **文字を折り返させない。** 幅をそろえるために min-width を効かせていたら、
-     「言えなかった」が2行に割れた(実測)。中身の幅で置く */
+  /* ── スマホでの答え(英語)──────────────────────────
+     【何が起きていたか】(2026-08 実機)
+
+     > クイックレスポンス時のスマホでの英語の文字が大きすぎるのと、
+     > Listen ボタンの位置が悪いせいで文字が必要以上に折り返されてしまっています
+
+     `Listen` を英文の**横**に置いていたので、英文の使える幅が
+     6割ほどに削られ、1行が3語しか入らなかった。
+     さらに 19px と大きく、枠に収まらず途中で切れていた。
+
+     ・**Listen は英文の下に置く**(横に並べない)
+     ・**文字を小さくする。** 読むのは1文なので 19px は要らない */
+  .qr-en {
+    flex-direction: column; align-items: center; gap: 6px;
+    font-size: 16px; line-height: 1.6;
+  }
+  .qr-en .etext-listen { order: 2; }
   .qr-actions { gap: 8px; }
   .qr-answers { gap: 8px; }
   .qr-answers .btn { padding: 8px 12px; }
