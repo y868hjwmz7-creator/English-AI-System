@@ -17,7 +17,8 @@
   /* カタマリごとの訳の帯(0021)。**うすい緑**(2026-08 利用者の指定)。
      > もちょっと明るいカラーのチョイスが良いです。薄い緑やグレーなど
      解答の囲みの上に置くので、囲みの地色とは別の色でないと帯に見えない */
-  --chunk-bg: #e7f0e7;
+  --chunk-bg: #eef4ee;
+  --chunk-line: #93b89a;   /* 対応する範囲を示す線。落ち着いたセージ */
   /* ボタンの地色。**カードより少しだけ明るく**しておく。
      `--surface-0`(ページの地色)を使っていたので、暗い配色では
      カードより**暗く**なり、黒い穴のように見えた(2026-08 実機)。
@@ -101,7 +102,8 @@
     --surface-0: #0c0c0b;   /* ページの地。いちばん暗く */
     --surface-1: #1c1c1a;   /* カード */
     --surface-2: #2b2b28;   /* カードの中の面・札 */
-    --chunk-bg: #2c3a2e;
+    --chunk-bg: #232c24;
+    --chunk-line: #5d7d63;
     --btn-bg:   #303030;
     --quiet-bg: #454541;
     /* うすい水色の上に白い文字は薄い。**暗い側は文字を濃くする** */
@@ -153,7 +155,8 @@
   --surface-0: #0c0c0b;
   --surface-1: #1c1c1a;
   --surface-2: #2b2b28;
-  --chunk-bg: #2c3a2e;
+  --chunk-bg: #232c24;
+  --chunk-line: #5d7d63;
   --btn-bg:   #303030;
   --quiet-bg: #454541;
   --on-accent: #10222f;
@@ -955,9 +958,18 @@ html { -webkit-text-size-adjust: 100%; }
 .material-filter { margin-top: 12px; }
 .material-keyword { max-width: 200px; }
 .material-head {
-  display: flex; flex-wrap: wrap; align-items: baseline;
+  display: flex; flex-wrap: wrap; align-items: flex-start;
   justify-content: space-between; gap: 8px;
 }
+/* **日付を右上、その下にカテゴリー名**(2026-08 利用者の指定)。
+   横に並べると、どちらが日付でどちらが種類なのか読み取りにくい。
+   右端でそろえて縦に積む。 */
+.material-meta {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 2px; flex-shrink: 0; text-align: right; line-height: 1.4;
+}
+.material-when { color: var(--text-muted); font-size: 12px; }
+.material-kind { color: var(--text-secondary); font-size: 13px; }
 /* **行そのものを押して中身を開く**(2026-08 利用者の指定)。
    下に「中身を見る」ボタンを置いていたが、1行ぶん場所を取る。
    宿題の一覧(`.homework-open`)で一度学んだ形にそろえた。
@@ -1394,11 +1406,28 @@ html { -webkit-text-size-adjust: 100%; }
 
    地色はうすい緑。カタマリどうしのあいだに隙間を作らないので、
    1行ぶんがつながった帯に見える。 */
+/* ★ 網掛け(べた塗り)をやめた(2026-08 利用者の指定)
+
+     > スラッシュリーディングの訳の緑の網掛けのデザインですが、
+     > もう少しスタイリッシュにできないでしょうか？
+
+   蛍光ペンで塗ったように見えていた。**塗るのをやめ、細い線にする。**
+
+   この帯が伝えたい情報は「この日本語は、英語のどこからどこまでに当たるか」
+   という**範囲**である(第5.38.3節)。塗りつぶしでも線でも範囲は示せるが、
+   線のほうが本文を邪魔しない。線はカタマリの幅そのものなので、
+   隣のカタマリとのあいだに自然な切れ目ができる。
+
+   色は**うすいセージ**(利用者の指定した緑をそのまま落ち着かせたもの)。
+   地色もごくうすく残してあり、線だけでは薄い画面でも範囲が分かる。 */
 .chunk-ja {
-  padding: 2px 6px;
+  margin-top: 4px;
+  padding: 4px 6px 2px;
+  border-top: 2px solid var(--chunk-line);
+  border-radius: 0 0 3px 3px;
   background: var(--chunk-bg);
   color: var(--text-secondary);
-  font-size: 13px; line-height: 1.6; text-align: center;
+  font-size: 12.5px; line-height: 1.6; text-align: center;
 }
 /* ★ 狭い画面では**左寄せ**にする(2026-08 利用者の指定)
 
@@ -1844,7 +1873,8 @@ html { -webkit-text-size-adjust: 100%; }
   --qa-bg:        #f7f8fa;   /* ごくうすい地色。紙より少しだけ濃い */
   --qa-line:      #e3e6e9;
   --qa-answer:    #eef0f3;
-  --chunk-bg:     #e9f1e7;   /* カタマリごとの訳の帯(0021)。うすい緑 */
+  --chunk-bg:     #eef4ee;   /* カタマリごとの訳(0021)。うすいセージ */
+  --chunk-line:   #93b89a;
 
   --accent:       #2f6f86;   /* 落ち着いた青緑。見出しと区切り */
   --accent-bg:    #edf4f7;
@@ -2691,7 +2721,8 @@ html { -webkit-text-size-adjust: 100%; }
    借りる。そうすれば、明るい側・暗い側の両方で自動的に成り立つ。 */
 :root[data-palette="plain"] {
   /* カタマリごとの訳の帯(0021)。色みを抜いて、明暗の差だけで帯に見せる */
-  --chunk-bg:     var(--border);
+  --chunk-bg:     var(--surface-2);
+  --chunk-line:   var(--text-muted);
   --speaking-bg:  var(--surface-2);
   --speaking-bar: var(--text-muted);
   --reading-bg:   var(--border);

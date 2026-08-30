@@ -12,6 +12,7 @@ import MaterialForm from './MaterialForm.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
+import { parseMaterialTitle } from '../lib/format.js'
 import { printElement } from '../lib/print.js'
 import LessonView from './LessonView.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
@@ -301,14 +302,22 @@ export default function TrainerMaterials({ me }) {
                   <MaterialTitle
                     title={m.title}
                     headline={m.headline}
+                    hideDate
                     weakness={m.tagIds.map(weaknessTagLabel).join(' + ')}
                     fallbackTags={[m.tagIds.map(weaknessTagLabel).join(' + '),
                       cefrLabel(m.level), kindLabel(m.kind), industryLabel(m.industry)]}
                   />
                 </div>
-                <span className="muted">
-                  {kindLabel(m.kind)}
-                  {m.visibility === 'private' && ' / 自分だけ'}
+                {/* **日付を右上、その下にカテゴリー名**(2026-08 利用者の指定)。
+                    横に並べると、どちらが何なのか読み取りにくい。
+                    日付は `MaterialTitle` にも出せるが、**2か所に出さない**
+                    (`hideDate` を渡してある)。 */}
+                <span className="material-meta">
+                  <span className="material-when">{parseMaterialTitle(m.title).date}</span>
+                  <span className="material-kind">
+                    {kindLabel(m.kind)}
+                    {m.visibility === 'private' && ' / 自分だけ'}
+                  </span>
                 </span>
               </div>
 

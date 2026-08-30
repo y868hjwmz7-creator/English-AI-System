@@ -18,7 +18,7 @@ import { parseMaterialTitle } from '../lib/format.js'
 
 export default function MaterialTitle({
   title, fallbackTags = [], headline = null, weakness = '',
-  as: Tag = 'h3', size = 'card',
+  as: Tag = 'h3', size = 'card', hideDate = false,
 }) {
   const { date, main, tags } = parseMaterialTitle(title)
   // 教材名に条件が入っていれば、それを札にする。手で付けた名前など、
@@ -39,11 +39,16 @@ export default function MaterialTitle({
    */
   const w = String(weakness ?? '').trim()
 
+  /* `hideDate` は、**呼ぶ側が日付を別の場所に出すとき**に使う。
+     さがす画面は「日付を右上、その下にカテゴリー名」という並びにしてある
+     (2026-08 利用者の指定)ので、日付をここでは出さない。
+     **2か所に出さない。** 出すと同じ日付が2つ並ぶ。 */
+
   return (
     <div className={`mtitle mtitle--${size}`}>
       <div className="mtitle-row">
         <Tag className="mtitle-main">{main || '(名前のない教材)'}</Tag>
-        {date && <span className="mtitle-date">{date}</span>}
+        {date && !hideDate && <span className="mtitle-date">{date}</span>}
       </div>
       {/* 教材名そのものが見出しになっている古い教材では、同じ英文が2行
           続けて並んでしまう(2026-08 実機)。同じなら2行目は出さない。 */}

@@ -125,6 +125,48 @@ ok('模範もそこで切っている', slashesFor(S.seenBefore, 'beginner').som
   ok('文末の over のあと(「終わって」の意味)', checkSlashes(over, [4]).length === 0)
 }
 
+/* ── 句動詞は、動詞と副詞で1つ(2026-08 利用者の指定)──────────────
+   > 句動詞、たとえば Get up at 6am. だとしたら、Get up / at 6am です。
+   > この場合の up は前置詞ではなく、副詞であり、get とセットとして
+   > 考えるべきです。文中の pull in も同じことです。
+
+   同じ語が前置詞にもなるので、**「動詞 + 副詞」の対**で持っている。
+   掛け合わせると `look / at the sky` を咎めてしまう。 */
+console.log('\n▶ 句動詞は、動詞と副詞のあいだで切らない')
+{
+  const up = 'Get up at 6am and start the day.'
+  const pull = 'Some streams pull in more than five thousand viewers.'
+  ok('Get / up は咎める', checkSlashes(up, [1]).length > 0)
+  ok('pull / in は咎める', checkSlashes(pull, [3]).length > 0)
+  ok('活用しても当たる(filling out)',
+    checkSlashes('She is filling out the form now.', [3]).length > 0)
+  // 模範も同じ形になる
+  ok('模範が Get up / at 6am になる',
+    cut(up, 'beginner').startsWith('Get up / at'), cut(up, 'beginner'))
+  ok('模範が pull in を切らない',
+    !cut(pull, 'beginner').includes('pull /'), cut(pull, 'beginner'))
+  // **前置詞のときは咎めない。** 掛け合わせにしていたら、ここが落ちる
+  ok('look / at the sky は咎めない',
+    checkSlashes('They look at the sky every night.', [2]).length === 0)
+  ok('go / up the stairs は咎めない',
+    checkSlashes('We go up the stairs to the office.', [2]).length === 0)
+}
+
+/* ── 数字や記号が混じった語を、語のリストに当てない(2026-08 実測)──
+   前は `6am` が `am`(be動詞)に化け、`at / 6am` という
+   自分の決まりに反する区切りを模範が作っていた。 */
+console.log('\n▶ 数字混じりの語を、助動詞や前置詞と間違えない')
+{
+  const t = 'Get up at 6am and start the day.'
+  ok('6am の前で切らない', !cut(t, 'beginner').includes('at / 6am'), cut(t, 'beginner'))
+  ok('模範が決まりを破っていない',
+    checkSlashes(t, slashesFor(t, 'beginner').map((x) => x.at)).length === 0)
+  const n = 'He typed 5,000 by mistake and the 24-year-old viewer saw it.'
+  ok('5,000 や 24-year-old でも決まりを破らない',
+    checkSlashes(n, slashesFor(n, 'beginner').map((x) => x.at)).length === 0,
+    cut(n, 'beginner'))
+}
+
 console.log('\n▶ カタマリをつなぐと、もとの文に戻る')
 for (const [name, text] of Object.entries(S)) {
   for (const lv of ['beginner', 'middle', 'advanced']) {

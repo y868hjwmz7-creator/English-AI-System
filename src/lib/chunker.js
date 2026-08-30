@@ -105,6 +105,111 @@ const DETERMINERS = new Set([
    ──────────────────────────────────────────────────────────────── */
 
 /**
+ * **句動詞のかたまり**(2026-08 利用者の指定で足した)。
+ *
+ *   > 句動詞、たとえば Get up at 6am. だとしたら、Get up / at 6am です。
+ *   > この場合の up は前置詞ではなく、副詞であり、get とセットとして
+ *   > 考えるべきです。文中の pull in も同じことです。
+ *
+ * **動詞と副詞のあいだで切らない。** `Get / up at 6am.` は間違い。
+ *
+ * 【なぜ「動詞のリスト × 副詞のリスト」にしないのか】
+ *   同じ語が、句動詞の副詞にも前置詞にもなる。
+ *
+ *   | 副詞(切らない) | 前置詞(切ってよい) |
+ *   |---|---|
+ *   | `pull in` の in | `run in the park` の in |
+ *   | `get up` の up | `go up the stairs` の up |
+ *   | `look over` の over | `fly over the city` の over |
+ *
+ *   掛け合わせると、**正しい区切りを咎めてしまう。**
+ *   だから **「動詞 + 副詞」の対そのもの**を並べる。
+ *   数は多いが閉じたリストなので、AI に頼む理由はない(この仕組みの原則)。
+ *   **あやふやなものは入れない。** 見逃しても害は小さいが、
+ *   間違った注意は何も言われないより困る。
+ */
+const PHRASAL_PAIRS = new Set([
+  'get up', 'get out', 'get off', 'get back', 'get away', 'get along',
+  'give up', 'give back', 'give out', 'give away', 'give in',
+  'take off', 'take out', 'take over', 'take on', 'take back', 'take away',
+  'put on', 'put off', 'put out', 'put up', 'put away', 'put back', 'put down',
+  'pick up', 'pick out',
+  'set up', 'set out', 'set off', 'set aside',
+  'turn on', 'turn off', 'turn out', 'turn up', 'turn down', 'turn around',
+  'look up', 'look out', 'look over', 'look after', 'look forward',
+  'find out', 'figure out', 'work out', 'work on',
+  'carry out', 'carry on',
+  'bring in', 'bring up', 'bring back', 'bring about', 'bring out',
+  'hand in', 'hand out', 'hand over',
+  'call off', 'call back', 'call up',
+  'come back', 'come up', 'come out', 'come in', 'come along',
+  'go on', 'go out', 'go back', 'go over', 'go ahead',
+  'run out', 'break down', 'break up', 'break out',
+  'cut off', 'cut down', 'cut out',
+  'fill in', 'fill out', 'fill up',
+  'hold on', 'hold up', 'hold back',
+  'keep up', 'keep on', 'keep out', 'keep away',
+  'let out', 'let down', 'let in',
+  'make up', 'make out',
+  'move on', 'move in', 'move out',
+  'pass on', 'pass out', 'pay off', 'pay back', 'point out',
+  'pull in', 'pull out', 'pull up', 'pull off', 'pull back',
+  'push back', 'push through',
+  'send out', 'send back', 'send in', 'send off',
+  'shut down', 'shut off', 'sort out',
+  'stand up', 'stand out', 'stand by',
+  'start over', 'start up', 'scale up', 'scale down',
+  'throw away', 'throw out', 'try out', 'try on', 'use up', 'wake up',
+  'write down', 'write up', 'write out',
+  'clean up', 'close down', 'follow up', 'follow through',
+  'hang up', 'hang on', 'hang out', 'help out',
+  'lay off', 'lay out', 'leave out', 'leave behind', 'line up',
+  'log in', 'log out', 'log on', 'open up', 'print out', 'read out',
+  'save up', 'show up', 'show off',
+  'sign up', 'sign in', 'sign out', 'sign off',
+  'speak up', 'speak out', 'split up',
+  'switch on', 'switch off', 'switch over',
+  'tear down', 'tear up', 'tidy up', 'wrap up', 'warm up', 'wind up',
+  'back up', 'check in', 'check out', 'drop off', 'drop out',
+  'end up', 'kick off', 'knock out', 'roll out', 'sum up',
+])
+
+/** 対の先頭にある動詞(語幹)。活用を戻すときの当たり先にする */
+const PHRASAL_VERBS = new Set([...PHRASAL_PAIRS].map((p) => p.split(' ')[0]))
+
+/** 対のうしろにある副詞。ここが来たときだけ調べればよい */
+const PHRASAL_PARTICLES = new Set([...PHRASAL_PAIRS].map((p) => p.split(' ')[1]))
+
+/**
+ * 動詞の活用を語幹に戻す(`getting` → `get`)。**辞書は使わない。**
+ * 戻した先が句動詞の動詞でなければ、そのまま返す(当たらないだけ)。
+ */
+const stem = (word) => {
+  const b = String(word ?? '').toLowerCase().replace(/[^a-z]/g, '')
+  if (PHRASAL_VERBS.has(b)) return b
+  const tries = [
+    b.replace(/ies$/, 'y'), b.replace(/ied$/, 'y'),
+    b.replace(/([bcdfghjklmnpqrstvwxz])\1(ing|ed)$/, '$1'),
+    b.replace(/ing$/, ''), b.replace(/ing$/, 'e'),
+    b.replace(/ed$/, ''), b.replace(/ed$/, 'e'),
+    b.replace(/es$/, ''), b.replace(/s$/, ''),
+  ]
+  return tries.find((t) => t !== b && PHRASAL_VERBS.has(t)) ?? b
+}
+
+/**
+ * その位置(i 語目の**前**)が、句動詞のかたまりの内側かどうか。
+ * `Get up` の `up` の前なら `Get up` を返す。
+ */
+function insidePhrasal(words, i) {
+  if (i <= 0 || i >= words.length) return null
+  const here = String(words[i] ?? '').toLowerCase().replace(/[^a-z]/g, '')
+  if (!PHRASAL_PARTICLES.has(here)) return null
+  const verb = stem(words[i - 1])
+  return PHRASAL_PAIRS.has(`${verb} ${here}`) ? `${words[i - 1]} ${words[i]}` : null
+}
+
+/**
  * **必ず前置詞**である語。副詞にも動詞にもならない。
  *
  * `in` `on` `up` `down` `off` `out` `over` `by` `about` `across` `along`
@@ -200,8 +305,18 @@ export function wordsOf(sentence) {
   return String(sentence ?? '').trim().split(/\s+/).filter(Boolean)
 }
 
-/** 記号を落とした小文字。`don't` の `'` は残す */
-const bare = (w) => String(w ?? '').toLowerCase().replace(/^[^a-z']+|[^a-z']+$/g, '')
+/**
+ * 記号を落とした小文字。`don't` の `'` は残す。
+ *
+ * **数字や記号が混じった語は、語のリストに当てない**(2026-08 実測)。
+ * 前は前後の記号だけを落としていたので、`6am` が **`am`(be動詞)**になり、
+ * `at / 6am` という、自分の決まりに反する区切りを模範が作っていた。
+ * `5,000` `24-year-old` も同じ。**当たらないほうが安全**なので空を返す。
+ */
+const bare = (w) => {
+  const t = String(w ?? '').toLowerCase().replace(/^[^a-z0-9']+|[^a-z0-9']+$/g, '')
+  return /^[a-z']+$/.test(t) ? t : ''
+}
 
 /**
  * その位置(i 語目の**前**)が、助動詞のまとまりの内側かどうか。
@@ -250,6 +365,7 @@ export function idealSlashes(sentence) {
     // 常に厳しくしておけば、**模範が自分の決まりを破ることはない**
     // (`npm run test:chunk` の1本目がそれを見張っている)
     if (insideAux(words, at)) return                  // 助動詞と動詞は離さない
+    if (insidePhrasal(words, at)) return              // 句動詞は動詞と副詞で1つ
     if (DETERMINERS.has(bare(words[at - 1]))) return  // 冠詞のあとで切らない
     const found = out.find((x) => x.at === at)
     if (found) { if (strength > found.strength) { found.strength = strength; found.why = why } return }
@@ -347,6 +463,17 @@ export function slashProblem(words, i) {
   const prev = bare(raw)
   const next = bare(words[i] ?? '')
 
+  // ⓪ 句動詞のかたまりの途中(2026-08 利用者の指定)。
+  //    `Get / up at 6am.` は間違い。`Get up / at 6am.` が正しい
+  const phrasal = insidePhrasal(words, i)
+  if (phrasal) {
+    return {
+      at: i,
+      short: `${phrasal} は切らない`,
+      text: `「${phrasal}」は句動詞です。ここの「${words[i]}」は前置詞ではなく副詞で、`
+        + `動詞とセットで1つの意味になります。あいだでは区切りません。`,
+    }
+  }
   // ① 助動詞のまとまりの途中(be going to / have to / 助動詞 + 動詞)。
   //    **複数語のまとまりと、取り違えようのない助動詞だけ。**
   //    `have` `do` `is` は本動詞にもなるので咎めない(上の注を参照)

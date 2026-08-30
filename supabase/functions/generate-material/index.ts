@@ -765,7 +765,24 @@ Deno.serve(async (req) => {
 
   // 生成そのもの。**待っている間も返事の一部を送り続ける**必要があるため、
   // 実際の処理はこの関数に閉じ込め、下の ReadableStream から呼ぶ。
-  const generate = async () => {
+  //
+  // 【1回だけやり直す】(2026-08 利用者の指摘)
+  //
+  //   > 「教材が作成できません」と表示され、もう一度条件も変えずに
+  //   > そのままの状態で作成し直すと次は上手くいったりします。
+  //   > 安定させれないものでしょうか？
+  //
+  //   道具(`emit_section`)は呼ばれているのに `items` が**空の配列**で
+  //   返ってくることが、まれにある(`stop_reason: tool_use`)。
+  //   形は `strict: true` で保証されているが、**空の配列も「形としては正しい」**
+  //   ので API は通してしまう。
+  //
+  //   利用者が押し直せば直るのだから、**こちらで押し直す。**
+  //   費用は増えない(失敗した1回はどのみち課金されている)。
+  //   2回目には「前回は空だった」と伝えて、同じことを繰り返させない。
+  //   **2回で止める。** 際限なく試すと、残高切れのときに待たされ続ける
+  //   (「外部の窓口を自動で呼ぶものには、止まる条件を持たせる」)。
+  const runOnce = async (retryNote: string) => {
     // Anthropic 側は必ず streaming で受け取る。40問ぶんの長い応答を
     // 一括で待つと、SDK の HTTP タイムアウトに掛かる。
     const stream = client.messages.stream({
@@ -782,7 +799,7 @@ Deno.serve(async (req) => {
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       tools: [emitSectionTool(sectionType, isFirst) as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: 'emit_section' },
-      messages: [{ role: 'user', content: userPrompt }],
+      messages: [{ role: 'user', content: userPrompt + retryNote }],
     })
     const response = await stream.finalMessage()
 
@@ -803,7 +820,7 @@ Deno.serve(async (req) => {
 
     const block = response.content.find((b) => b.type === 'tool_use')
     if (!block || block.type !== 'tool_use') {
-      return { error: '生成の結果を読み取れませんでした。もう一度お試しください。' }
+      return { retry: true, error: '生成の結果を読み取れませんでした。もう一度お試しください。' }
     }
 
     const result = block.input as {
@@ -817,8 +834,13 @@ Deno.serve(async (req) => {
     // 呼んだ側は次の演習へ進んでしまい、失敗の場所が分からなくなる。
     if (!Array.isArray(result.items) || result.items.length === 0) {
       return {
-        error: `${sectionType} の中身が空で返ってきました`
-          + `(終了理由: ${response.stop_reason ?? '不明'})。もう一度お試しください。`,
+        // `retry` が立っていると、下の `generate` がもう一度だけ試す
+        retry: true,
+        // **仕組みの内側の言葉を画面に出さない**(2026-08 利用者の指定)。
+        // `tool_use` と書かれても、利用者にできることは何も無い。
+        // 原因の切り分けに要るので、記録にだけ残す
+        detail: `stop_reason: ${response.stop_reason ?? 'unknown'}`,
+        error: `${sectionType} の中身が空で返ってきました。もう一度お試しください。`,
       }
     }
 
@@ -840,6 +862,25 @@ Deno.serve(async (req) => {
         cacheRead: response.usage.cache_read_input_tokens ?? 0,
       },
     }
+  }
+
+  /**
+   * **空で返ってきたときだけ、1回だけやり直す。**
+   *
+   * 断られた(`refusal`)・長すぎて切れた(`max_tokens`)は、
+   * 同じことをもう一度頼んでも同じ結果になる。**やり直さない。**
+   */
+  const generate = async () => {
+    const first = await runOnce('')
+    const retryable = Boolean((first as Record<string, unknown>).retry)
+    if (!retryable) return first
+    const again = await runOnce(
+      '\n\n# 注意(やり直し)\n'
+      + '前回、items が空の配列で返ってきました。**items には必ず中身を入れること。**'
+      + '指定された数(段落数・発言数・問数)ぶんを、省略せずに書くこと。',
+    )
+    // 2回目も駄目なら、そのまま失敗として返す。**際限なく試さない**
+    return again
   }
 
   // ── 4. 待っている間も、少しずつ返事を送り続ける(`streamed`)──

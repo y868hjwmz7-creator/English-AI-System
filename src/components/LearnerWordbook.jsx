@@ -40,16 +40,6 @@ const VIEWS = [
 /** 選べる語の上限。これ以上入れても1つの教材には収まらない */
 const MAX_PICK = 20
 
-/** 次に出る日を、日数で言い換える。日付だけだと遠さが分からない */
-const whenLabel = (dueOn) => {
-  if (!dueOn) return ''
-  const days = Math.round(
-    (new Date(`${dueOn}T00:00:00`) - new Date(new Date().toDateString())) / 86400000,
-  )
-  if (days <= 0) return '今日'
-  if (days === 1) return '明日'
-  return `${days} 日後`
-}
 
 export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMaterial = null }) {
   const [view, setView] = useState('unknown')
@@ -156,7 +146,6 @@ export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMat
               {row.seen_in && <p className="wordbook-seen" lang="en">{row.seen_in}</p>}
               <div className="wordbook-actions">
                 <span className="wordbook-when">
-                  箱 {row.box ?? 0} / 次は {whenLabel(row.due_on)}
                 </span>
               </div>
             </li>

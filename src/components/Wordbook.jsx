@@ -54,16 +54,6 @@ const VIEWS = [
   { id: 'progress', label: '積み上がり' },
 ]
 
-/** 次に出る日を、日数で言い換える */
-const whenLabel = (dueOn) => {
-  if (!dueOn) return ''
-  const days = Math.round(
-    (new Date(`${dueOn}T00:00:00`) - new Date(new Date().toDateString())) / 86400000,
-  )
-  if (days <= 0) return '今日'
-  if (days === 1) return '明日'
-  return `${days} 日後`
-}
 
 /** 出会った文。その語のところを太字に。伏せるときは下線に置き換える */
 function SeenIn({ sentence, word, hide = false }) {
@@ -425,9 +415,11 @@ export default function Wordbook({ level = null }) {
               </div>
             )}
 
-            <p className="wordbook-when wordcard-when">
-              箱 {card.box} / 次は {whenLabel(card.due_on)}
-            </p>
+            {/* **「箱 0 / 次は今日」は出さない**(2026-08 利用者の指定)。
+                > 単語帳内の「箱0 / 次は今日」はバックグラウンドのデータとして
+                > 表には出さないでください。
+                箱と次に出す日は、**この仕組みが内側で使う数字**である。
+                ゲストにできることは何も無く、覚える助けにもならない。 */}
           </div>
         </>
       )}
@@ -449,9 +441,6 @@ export default function Wordbook({ level = null }) {
                 <SeenIn sentence={row.seen_in} word={row.display || row.word_norm} />
                 {row.seen_in_ja && <p className="wordcard-seen-ja">{row.seen_in_ja}</p>}
                 <div className="wordbook-actions">
-                  <span className="wordbook-when">
-                    箱 {row.box} / 次は {whenLabel(row.due_on)}
-                  </span>
                   <button type="button" className="btn btn--small"
                           disabled={busy === row.word_norm}
                           onClick={() => answer(row, 'known')}>覚えた</button>
