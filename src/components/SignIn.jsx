@@ -4,7 +4,7 @@
  * サインアップ欄は意図的に作っていない。アカウントはトレーナーが
  * Supabase の管理画面から発行する(`docs/PROJECT_SPEC.md` 第 1.2 節)。
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { signIn } from '../lib/auth.js'
 import { checkConnection, supabaseProjectRef } from '../lib/supabase.js'
 
@@ -46,6 +46,24 @@ export default function SignIn() {
     setConn(r)
     setChecking(false)
   }
+
+  /**
+   * **経過秒数を出す**(CLAUDE.md「時間のかかる処理は経過秒数も出す」)。
+   *
+   * 「ログインしています…」だけだと、動いているのか固まったのかが
+   * 分からない(2026-08 実機・スマホ)。数字が増えていれば、
+   * 少なくとも**待っている最中である**ことは分かる。
+   */
+  const [waited, setWaited] = useState(0)
+  const timer = useRef(null)
+  useEffect(() => {
+    if (!busy) { setWaited(0); return undefined }
+    const from = Date.now()
+    timer.current = window.setInterval(() => {
+      setWaited(Math.floor((Date.now() - from) / 1000))
+    }, 1000)
+    return () => window.clearInterval(timer.current)
+  }, [busy])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -111,8 +129,15 @@ export default function SignIn() {
           )}
 
           <button type="submit" className="btn btn--primary signin-submit" disabled={busy}>
-            {busy ? 'ログインしています…' : 'ログイン'}
+            {busy ? `ログインしています… ${waited} 秒` : 'ログイン'}
           </button>
+          {/* **返事が遅いときは、待っていることを言葉でも言う。**
+              黙って止まっているように見えると、何度も押すことになる */}
+          {busy && waited >= 5 && (
+            <p className="muted signin-waiting" role="status">
+              まだ返事がありません。通信を確かめています…
+            </p>
+          )}
         </form>
 
         <p className="card-hint signin-note">

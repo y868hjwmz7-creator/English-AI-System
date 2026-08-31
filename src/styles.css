@@ -914,6 +914,7 @@ html { -webkit-text-size-adjust: 100%; }
 /* **ログインできないときに押せる手**(2026-08 実機)。
    往復を1回試して、通信が届いていないのか、ID とパスワードが違うのかを
    その場で切り分ける */
+.signin-waiting { margin: 8px 0 0; font-size: 13px; }
 .signin-diag { margin-top: 12px; }
 .signin-conn { margin: 8px 0 0; font-size: 13px; }
 .signin-conn p { margin: 0; }
