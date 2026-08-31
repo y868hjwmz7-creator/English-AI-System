@@ -476,20 +476,28 @@ input, select, textarea {
    細い線1本で区切っていたので、どこからどこまでが1問なのか
    分からなかった。1問を1枚のカードにし、**答えは灰色で囲む。**
    部品ごとに書くと、必ずどこかだけ違う見た目になる。 */
+/* ★ 囲まない(2026-08 利用者の指定)
+
+     > 各トレーニング名のボタン以外の要素には枠線がない方が洗練されると
+     > 思います。6Steps 内ではオーバーラッピングとシャドーイングの
+     > デザインをデフォルトとして、他のトレーニングもこれに合わせてください。
+     > この角が丸い四角で囲むデザインが嫌です。
+
+   以前は「枠線 + 角丸 + 地色 + 影」で1問のかたまりを示していた。
+   ③⑤(`.passage-part`)は**下に細い線を引くだけ**で、そちらのほうが
+   落ち着いて見える。**そろえる。**
+
+   1問の切れ目は、**余白と1本の線**で足りる。 */
 .qa-row {
-  padding: 14px; margin-bottom: 10px;
-  border: 1px solid var(--qa-line, var(--border));
-  border-radius: var(--radius);
-  /* **ごくうすい地色を敷く。** 枠線だけでは、どこからどこまでが1問なのか
-     ひと目で分からなかった(2026-08 の指摘)。
-     地色 + 枠線 + 間隔の3つで、1問のかたまりを示す */
-  background: var(--qa-bg, var(--surface-1));
-  box-shadow: var(--shadow-1);
+  padding: 12px 10px 12px 14px;
+  border-bottom: 1px solid var(--qa-line, var(--border));
 }
-.qa-row:last-child { margin-bottom: 0; }
+.qa-row:last-child { border-bottom: none; }
+/* 解答。**箱で囲まず、左の1本線で示す。**
+   囲まなくても「本文とは別のもの」だと分かる */
 .answer-box {
-  margin-top: 10px; padding: 10px 12px; border-radius: 8px;
-  background: var(--qa-answer, var(--surface-2));
+  margin-top: 10px; padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--qa-line, var(--border));
 }
 .answer-box-label {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
@@ -1273,10 +1281,14 @@ html { -webkit-text-size-adjust: 100%; }
   margin: 0; padding: 9px 12px 2px;
   font-size: 13.5px; line-height: 1.7; color: var(--text-primary);
 }
+/* 「ねらい」の札。**塗りつぶさない**(2026-08 利用者の指定)。
+   > 「ねらい」の塗りつぶしが濃すぎます。もっとさりげない洗練された
+   > デザインにここだけ変えてください。(周囲に合うように)
+   まわりが `--accent-soft` のうすい面なので、**細い枠と文字だけ**で足りる */
 .step-guide-tag {
   padding: 1px 9px; border-radius: 999px;
-  background: var(--accent); color: var(--on-accent);
-  font-size: 12px; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--accent-line); background: none; color: var(--accent);
+  font-size: 11.5px; font-weight: 600; letter-spacing: .04em; white-space: nowrap;
 }
 .step-guide-aim { font-weight: 600; }
 
@@ -3088,7 +3100,16 @@ html { -webkit-text-size-adjust: 100%; }
    意味だけになった(`QuickResponse.jsx`)。 */
 /* 答えの囲み。**ほかのトレーニングの解答と同じ形**にそろえる(`.answer-box`)。
    紙の上では `--qa-answer` が差し替わるので、ここでは色を書かない */
-.qr-answer { width: 100%; margin-top: 8px; text-align: center; }
+/* **Quick Response の解答は、うすい色の囲みのまま**(2026-08 利用者の指定)。
+   > クイックレスポンスの正解は、以前のように、淡い色の囲みで表示される
+   > 方がよかったです。
+   6Steps の「囲まない」とは**別の指定**なので、ここで塗り直す。
+   Quick Response は 6Steps の中ではなく、並びのタブである */
+.qr-answer {
+  width: 100%; margin-top: 8px; text-align: center;
+  padding: 10px 12px; border-left: none; border-radius: 8px;
+  background: var(--qa-answer, var(--surface-2));
+}
 .qr-body.is-tight .qr-answer { margin-top: 0; }
 .qr-from { margin: 0; color: var(--qr-faint); font-size: 12px; }
 /* 出す側の日本語。**大きく出す。** ここだけを見て言う */

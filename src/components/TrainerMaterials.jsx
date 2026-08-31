@@ -129,12 +129,24 @@ export default function TrainerMaterials({ me }) {
    */
   const triedJa = useRef(new Set())
   useEffect(() => {
-    if (!openId) return
-    const m = materials.find((x) => x.id === openId)
+    // **開いたときと、セッションで使うときの両方で拾う**(2026-08 実機)。
+    // 行を開かずに「セッションで使う」を押す使い方だと、
+    // 作り直しの機会が一度も来ず、**古い訳のまま出ていた。**
+    const id = openId || lessonOf?.id
+    if (!id) return
+    const m = materials.find((x) => x.id === id) ?? (lessonOf?.id === id ? lessonOf : null)
     if (!m || !needsJa(m) || triedJa.current.has(m.id)) return
     triedJa.current.add(m.id)
     makeChunkJa(m)
-  }, [openId, materials])
+  }, [openId, lessonOf, materials])
+
+  // 訳を作り直したら、**開いたままのレッスン表示にも反映する。**
+  // 反映しないと、閉じて開き直すまで古い訳のままになる(2026-08)
+  useEffect(() => {
+    if (!lessonOf) return
+    const fresh = materials.find((x) => x.id === lessonOf.id)
+    if (fresh && fresh !== lessonOf) setLessonOf(fresh)
+  }, [materials, lessonOf])
 
   useEffect(() => {
     loadMyLearners().then(({ data, error: e }) => {
