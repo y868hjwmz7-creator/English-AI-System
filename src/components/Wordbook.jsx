@@ -46,6 +46,7 @@ import { shortDate } from '../lib/format.js'
 import SpeakButton from './SpeakButton.jsx'
 import Tabs from './Tabs.jsx'
 import { usePracticeLog } from '../lib/practice.js'
+import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 
 const VIEWS = [
   { id: 'due', label: '今日の復習', status: 'unknown', dueOnly: true },
@@ -106,6 +107,9 @@ export default function Wordbook({ level = null }) {
   const [view, setView] = useState('due')
   const [want, setWant] = useState('auto')      // 出題の形。auto は箱に合わせる
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
+  /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
+     絞り込みは手元で行う。選ぶたびに聞き直さない */
+  const [filter, setFilter] = useState({ day: null, material: null })
   const [queue, setQueue] = useState([])        // いまの10語
   const [result, setResult] = useState(null)    // 終わったときの結果
   const [counts, setCounts] = useState({ due: 0, unknown: 0, known: 0 })
@@ -148,6 +152,9 @@ export default function Wordbook({ level = null }) {
 
   useEffect(() => { reload() }, [reload])
 
+  // 見返す用の一覧に出す行。**出題(今日の復習)は絞らない。**
+  // あちらは「今日出すべきもの」なので、選んで減らすものではない
+  const shownRows = applyWordbookFilter(rows, filter)
   const card = isQuiz ? queue[0] : null
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
@@ -427,9 +434,13 @@ export default function Wordbook({ level = null }) {
       {/* ── 見返す用の一覧 ────────────────────────────────────── */}
       {!isQuiz && view !== 'progress' && !loading && (
         <>
+          <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
           {!rows.length && <p className="hint">まだありません。</p>}
+          {rows.length > 0 && !shownRows.length && (
+            <p className="hint">その絞り込みに当てはまる語はありません。</p>
+          )}
           <ul className="wordbook">
-            {rows.map((row) => (
+            {shownRows.map((row) => (
               <li key={row.word_norm} className="wordbook-row">
                 <div className="wordbook-main">
                   <span className="wordbook-word" lang="en">{row.display || row.word_norm}</span>

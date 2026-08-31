@@ -38,6 +38,8 @@ import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { storedChunks, storedParts } from '../lib/chunkJa.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
+import { progressKey, useProgress } from '../lib/progress.js'
+import { markIn } from '../lib/useWordStatuses.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
@@ -57,11 +59,23 @@ import { usePracticeLog } from '../lib/practice.js'
 
 export default function PassagePractice({
   section, headline, isDialogue, tags = null, voiceIds = null,
-  level = 'B1', wordStatuses = null, onMarkWord = null,
+  level = 'B1', wordStatuses = null, onMarkWord = null, materialId = null,
 }) {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('six_steps')
-  const [step, setStep] = useState('dictation')
+  /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る */
+  const markWord = markIn(onMarkWord, materialId)
+  /**
+   * **やりかけを覚えておく**(2026-08 利用者の指定)。
+   *
+   *   > 各種トレーニングをやり途中で他のページに行ってから戻ると
+   *   > 途中まで区切ったスラッシュリーディングや書き途中だった
+   *   > ディクテーションが消えてしまいます。
+   *
+   * どのトレーニングを開いていたかも、そのうちの1つである。
+   * 中身(区切り・書きかけ)は、それぞれの部品が同じ鍵の形で覚える。
+   */
+  const [step, setStep] = useProgress(progressKey(materialId, section.id, 'step'), 'dictation')
   const [voices, setVoices] = useState([])
   const [showJa, setShowJa] = useState(false)
   // 読み上げの速さ。取り組み方ごとのもとの速さに**掛ける**ので、
@@ -317,10 +331,12 @@ export default function PassagePractice({
         <StepDictation
           sentences={sentences} clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)} level={level}
-          wordStatuses={wordStatuses} onMarkWord={onMarkWord}
+          wordStatuses={wordStatuses} onMarkWord={markWord}
           listeningId={listeningId} onCheck={checkOne} results={results}
           size={dictSize}
           onSizeChange={(v) => { setDictSize(v); saveDictSize(v) }}
+          /* **書きかけを覚えておく**(2026-08 利用者の指定)。鍵の形は1か所 */
+          progressAt={progressKey(materialId, section.id, 'dictation')}
         />
       )}
       {step === 'slash' && (
@@ -329,6 +345,8 @@ export default function PassagePractice({
           rate={rateOf(rateId, current.rate)}
           unit={slashUnit}
           onUnitChange={(v) => { setSlashUnit(v); saveSlashUnit(v) }}
+          /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定) */
+          progressAt={progressKey(materialId, section.id, `slash-${slashUnit}`)}
         />
       )}
       {(step === 'meaning' || step === 'repeat') && (
@@ -336,8 +354,10 @@ export default function PassagePractice({
           sentences={sentences} startVisible={current.script}
           clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)} level={level}
-          wordStatuses={wordStatuses} onMarkWord={onMarkWord}
+          wordStatuses={wordStatuses} onMarkWord={markWord}
           listeningId={listeningId} onCheck={checkOne} results={results}
+          /* ④⑥ で開いた行も覚えておく(2026-08 利用者の指定) */
+          progressAt={progressKey(materialId, section.id, `sentence-${step}`)}
         />
       )}
 
@@ -415,7 +435,7 @@ export default function PassagePractice({
                                  level={view === 'plain' ? null : slashLevel} />
                   ) : (
                     <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
-                                 statuses={wordStatuses} onMark={onMarkWord}
+                                 statuses={wordStatuses} onMark={markWord}
                                  readingAt={speakingId === item.id ? readingAt : null} />
                   )}
                 </p>

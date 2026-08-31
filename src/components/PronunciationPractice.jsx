@@ -28,7 +28,7 @@ import { cefrLabel } from '../data/cefr.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import { loadMyAssignments, searchMaterials } from '../lib/materials.js'
 import { usePracticeLog } from '../lib/practice.js'
-import useWordStatuses from '../lib/useWordStatuses.js'
+import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 import EnglishText from './EnglishText.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
@@ -147,7 +147,9 @@ export default function PronunciationPractice() {
                     </div>
                     <p className="pron-en">
                       <EnglishText text={it.prompt_en} textJa={it.prompt_ja}
-                                   level={m.level} statuses={statuses} onMark={mark} />
+                                   level={m.level} statuses={statuses}
+                                   /* どの教材で会ったかを添える(0024) */
+                                   onMark={markIn(mark, m.id)} />
                     </p>
                     {/* **発音記号は、教材を作るときに一緒に作ってある**(0020)。
                         開くたびに引かない。0020 より前の教材では出ないだけ */}

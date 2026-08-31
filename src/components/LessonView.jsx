@@ -28,6 +28,7 @@ import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.
 import { BoltIcon, GearIcon, PrintIcon, SpeakerIcon, StepsIcon, StopIcon } from './Icons.jsx'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
+import { markIn } from '../lib/useWordStatuses.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import QuickResponse from './QuickResponse.jsx'
 import PassagePractice from './PassagePractice.jsx'
@@ -65,6 +66,9 @@ export default function LessonView({
   // トレーナーが開いたときは意味を見るだけ(申告はゲスト本人のもの)
   wordStatuses = null, onMarkWord = null,
 }) {
+  /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る。
+     語に触れる場所は多いので、**教材が分かるここで1回だけかぶせる** */
+  const markWord = markIn(onMarkWord, material?.id)
   const sections = material?.sections ?? []
   const [page, setPage] = useState(0)
   // 解答の出し方は2通り。**両方要る。**
@@ -425,6 +429,9 @@ export default function LessonView({
             section={passageSection}
             /* 見出しは紙の上にもう出ている。**同じ英語を2行続けて並べない** */
             isDialogue={passageSection.exercise_type === 'dialogue'}
+            /* 途中経過を教材ごとにまとめて消せるようにするため、
+               教材の id も渡す(`src/lib/progress.js`) */
+            materialId={material.id}
             tags={allTags} voiceIds={material.voiceIds} level={material.level}
           />
         ) : qr ? (
@@ -462,7 +469,7 @@ export default function LessonView({
                   {!type?.hidePromptFromLearner && it.prompt_en && (
                     <div className="lesson-en">
                       <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={material.level}
-                                   statuses={wordStatuses} onMark={onMarkWord}
+                                   statuses={wordStatuses} onMark={markWord}
                                    readingAt={speakingKey === key(it, i) ? readingAt : null} />
                     </div>
                   )}
@@ -470,7 +477,7 @@ export default function LessonView({
                   {it.prompt_en && (
                     <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
                                  level={material.level}
-                                 statuses={wordStatuses} onMark={onMarkWord} />
+                                 statuses={wordStatuses} onMark={markWord} />
                   )}
                   {/* 本文(記事・会話)の訳は、はじめは伏せる。
                       英文だけが出ていたほうがシャドーイングしやすく、
@@ -481,7 +488,7 @@ export default function LessonView({
                   {it.question && (
                     <div className="lesson-en">
                       <EnglishText text={it.question} level={material.level}
-                                   statuses={wordStatuses} onMark={onMarkWord} />
+                                   statuses={wordStatuses} onMark={markWord} />
                     </div>
                   )}
                   {it.hint && <div className="lesson-note">与える語: {it.hint}</div>}

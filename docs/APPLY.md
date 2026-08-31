@@ -27,6 +27,7 @@
 | 何 | URL |
 |---|---|
 | 貼る SQL(全部入り) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-29.sql` |
+| 貼る SQL(0024 だけ) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31.sql` |
 | 状態を見るだけの SQL | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
 | 教材を作る関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
 | 読み上げ音声の関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |

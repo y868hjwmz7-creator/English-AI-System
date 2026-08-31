@@ -562,6 +562,48 @@ select pg_temp.ok('文を渡さなければ空のまま',
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'shortfall'), '(なし)');
 
+-- ── 単語帳に入った日(0024)───────────────────────────────────
+--   **あとから動かさない。** 動くと、日付で絞ったときに
+--   「今日また答えた語」がぜんぶ今日の欄に移ってしまう。
+--   `mark_word()` の `on conflict do update` が `added_at` に触れていない
+--   ことを、ここで見張る。
+
+-- わざと古い日付にしておいて、もう一度答えても動かないことを見る
+update public.word_reviews
+   set added_at = now() - interval '10 days'
+ where learner_id = 'e2222222-2222-2222-2222-222222222222'
+   and word_norm = 'handover';
+
+select public.mark_word('handover', 'known', 'word', null,
+  'Yet another sentence.', 'さらに別の日本語。');
+
+select pg_temp.ok('単語帳に入った日は、あとから動かない',
+  (select (added_at < now() - interval '9 days') from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'handover'), true);
+
+select pg_temp.ok('最後に答えた日のほうは、いま動いている',
+  (select (updated_at > now() - interval '1 minute') from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'handover'), true);
+
+select pg_temp.ok('復習の一覧にも「入った日」が出る(0024)',
+  (select (added_at < now() - interval '9 days') from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'known', 40, false)
+   where word_norm = 'handover'), true);
+
+-- 出会った教材も返す。**教材を渡して付けた語だけ**に入る
+select public.mark_word('rollout', 'unknown', 'word',
+  'eeeeeeee-0000-0000-0000-000000000001');
+select pg_temp.ok('復習の一覧に、出会った教材の名前が出る(0024)',
+  (select (material_title is not null) from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40, false)
+   where word_norm = 'rollout'), true);
+select pg_temp.ok('教材を渡していない語は、教材名が空のまま(0024)',
+  (select (material_title is null) from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'unknown', 40, false)
+   where word_norm = 'shortfall'), true);
+
 -- ── 続けた記録(0019)─────────────────────────────────────────
 --   **日ではなく週で数える。** 1日休んでも壊れない記録にする。
 set role authenticated;

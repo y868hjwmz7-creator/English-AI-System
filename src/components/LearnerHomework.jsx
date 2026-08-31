@@ -28,6 +28,7 @@ import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
+import { markIn } from '../lib/useWordStatuses.js'
 import { loadMyReminder, markReminderSeen, usePracticeLog } from '../lib/practice.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
@@ -292,6 +293,9 @@ export default function LearnerHomework() {
                             {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
                             <PassagePractice
                               section={sec}
+                              /* 途中経過を教材ごとにまとめて消せるようにするため、
+                                 教材の id も渡す(`src/lib/progress.js`) */
+                              materialId={a.material?.id}
                               tags={a.material?.tagIds}
                               voiceIds={a.material?.voiceIds}
                               headline={a.material?.headline}
@@ -337,18 +341,18 @@ export default function LearnerHomework() {
                                 {!type?.hidePromptFromLearner && it.prompt_en && (
                                   <div className="homework-en">
                                     <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={a.material?.level}
-                                                 statuses={wordStatuses} onMark={markWord} />
+                                                 statuses={wordStatuses} onMark={markIn(markWord, a.material?.id)} />
                                     <Phonetic value={it.phonetic} />
                                     <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
                                                  level={a.material?.level}
-                                                 statuses={wordStatuses} onMark={markWord} />
+                                                 statuses={wordStatuses} onMark={markIn(markWord, a.material?.id)} />
                                   </div>
                                 )}
                                 {it.prompt_ja && <div>{it.prompt_ja}</div>}
                                 {it.question && (
                                   <div className="homework-en">
                                     <EnglishText text={it.question} level={a.material?.level}
-                                                 statuses={wordStatuses} onMark={markWord} />
+                                                 statuses={wordStatuses} onMark={markIn(markWord, a.material?.id)} />
                                   </div>
                                 )}
                                 {it.hint && <div className="field-hint">与える語: {it.hint}</div>}

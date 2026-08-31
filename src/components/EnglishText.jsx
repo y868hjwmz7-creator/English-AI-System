@@ -112,6 +112,18 @@ export default function EnglishText({
   const startPt = useRef(null)     // 指を置いた場所(動いたかを距離で見る)
   const scrolledRef = useRef(false)  // 指を置いてから画面が動いたか
   const tapRef = useRef(false)     // いまの指の動きは、まだタップでありうるか
+  /**
+   * **いまの指の動きが「送る」か「なぞる」か**(2026-08 利用者の指定)。
+   *
+   *   > 2語以上を選択しようと横に移動や、下の行にドラッグしようとすると、
+   *   > スクロールが始まってしまい上手く出来ません。
+   *   > 単語を選択してドラッグしようとしている時に画面が上下左右に
+   *   > スクロールしせずに固定されるよう改善してください。
+   *
+   * `'idle'`(指を置いていない)/ `'undecided'`(まだ決まっていない)/
+   * `'drag'`(なぞっている。画面を動かさない)/ `'scroll'`(送っている)。
+   */
+  const gesture = useRef('idle')
   const [holding, setHolding] = useState(false)  // いま指を置いているか(手応え)
   const heldRef = useRef(false)    // なぞり・タップで開いた直後か(続く click を捨てる)
   const touchRef = useRef(false)   // 直前の操作が「触る」だったか
@@ -208,6 +220,49 @@ export default function EnglishText({
   const readingSpan = readingAt == null
     ? null
     : sentences.find((sp) => readingAt >= sp.start && readingAt < sp.end) ?? null
+
+  /**
+   * **なぞっているあいだは、画面を動かさない**(2026-08 利用者の指定)。
+   *
+   * 【なぜ effect で張るのか】
+   *   React の `onTouchMove` は passive で付くので、
+   *   その中で `preventDefault()` を呼んでも**効かない。**
+   *   `{ passive: false }` で自分で付ける必要がある。
+   *
+   * 【なぜ最初の一動きで決めるのか】
+   *   iOS は**いったん画面送りを始めると、`touchmove` を取り消せなくなる。**
+   *   あとから止めることはできないので、
+   *   **動き出した最初の 10px のあいだに決める。**
+   *   その 10px は画面を動かさない(判断を保留する)。
+   *
+   *   決め方は**最初の向き**だけ。横が縦より大きければ「なぞる」。
+   *   いったん「なぞる」と決めたら、**縦に動いても画面は動かさない。**
+   *   そうしないと「横に動かしてから下の行へ」ができない。
+   *
+   * `touch-action` は使えない(インラインの箱には効かない・CLAUDE.md)。
+   */
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el) return undefined
+    const onTouchMove = (e) => {
+      if (gesture.current === 'idle' || gesture.current === 'scroll') return
+      if (gesture.current === 'drag') { if (e.cancelable) e.preventDefault(); return }
+      const t = e.touches?.[0]
+      const p = startPt.current
+      if (!t || !p) return
+      const dx = Math.abs(t.clientX - p.x)
+      const dy = Math.abs(t.clientY - p.y)
+      if (Math.max(dx, dy) < MOVE_SLOP) {
+        // まだ決まらない。**この 10px は画面を動かさず、判断を保留する**
+        if (e.cancelable) e.preventDefault()
+        return
+      }
+      gesture.current = dx > dy ? 'drag' : 'scroll'
+      if (gesture.current === 'drag' && e.cancelable) e.preventDefault()
+    }
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => el.removeEventListener('touchmove', onTouchMove)
+  }, [])
 
   /** この指の動きは、もうタップではない(動いた・送られた) */
   const cancelHold = () => {
@@ -437,6 +492,8 @@ export default function EnglishText({
                 watchScrollOnce()
                 // **画面を送った直後の1回は、送りを止めるためのもの**
                 tapRef.current = Date.now() - lastScrollAt > SCROLL_QUIET_MS
+                // まだ「送る」か「なぞる」か決まっていない。最初の一動きで決める
+                gesture.current = 'undecided'
                 watchHold(e.clientX, e.clientY)
                 // **触れていることが見て分かるようにする**(2026-08 の要望)
                 setHolding(true)
@@ -447,15 +504,19 @@ export default function EnglishText({
               onPointerUp={(e) => {
                 const scrolled = scrolledRef.current
                 const wasTap = tapRef.current
+                const dragged = gesture.current === 'drag'
                 const el = e.currentTarget
+                gesture.current = 'idle'
                 cancelHold()
                 const from = dragFrom.current
                 const to = wordAt(e.clientX, e.clientY)
                 dragFrom.current = null
                 setDragTo(null)
                 // **画面を送っただけのときは、何もしない。**
-                // 送っている途中で指が別の語に渡ると、なぞったことにされていた
-                if (scrolled) return
+                // 送っている途中で指が別の語に渡ると、なぞったことにされていた。
+                // **なぞっていたときは別。** そのあいだ画面は動いていないので、
+                // ここに来る `scrolled` は勢いの残りでしかない
+                if (scrolled && !dragged) return
                 // **2語以上をなぞったら、まとめて1つの言い回しとして引く**
                 if (from != null && to != null && to !== from) {
                   heldRef.current = true   // 続く click を捨てる
@@ -473,6 +534,7 @@ export default function EnglishText({
                 else open(i, part)
               }}
               onPointerCancel={() => {
+                gesture.current = 'idle'
                 cancelHold()
                 dragFrom.current = null
                 setDragTo(null)

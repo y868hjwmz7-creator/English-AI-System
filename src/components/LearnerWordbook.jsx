@@ -28,6 +28,7 @@
  */
 import { useEffect, useState } from 'react'
 import { loadReviewWords, loadVocabWeek, noteWordbookView } from '../lib/vocab.js'
+import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import Tabs from './Tabs.jsx'
 
@@ -44,6 +45,9 @@ const MAX_PICK = 20
 export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMaterial = null }) {
   const [view, setView] = useState('unknown')
   const [rows, setRows] = useState([])
+  /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
+     「この教材でつまずいた語だけ」で教材を作れるようにする */
+  const [filter, setFilter] = useState({ day: null, material: null })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   // 選んだ語(そろえた形をそのまま持つ)。タブを移っても消えない
@@ -76,6 +80,10 @@ export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMat
     loadVocabWeek(learnerId).then(({ data }) => { if (alive) setWeek(data ?? null) })
     return () => { alive = false }
   }, [learnerId])
+
+  // 絞ったあとの行。**選んだ語(picked)は絞り込みでは消さない。**
+  // 絞りを変えるたびに選択が消えると、集めて教材にできない
+  const shown = applyWordbookFilter(rows, filter)
 
   const toggle = (word) => {
     setPicked((prev) => (prev.includes(word)
@@ -122,8 +130,12 @@ export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMat
         </p>
       )}
 
+      <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
+      {rows.length > 0 && !shown.length && (
+        <p className="hint">その絞り込みに当てはまる語はありません。</p>
+      )}
       <ul className="wordbook">
-        {rows.map((row) => {
+        {shown.map((row) => {
           const word = row.display || row.word_norm
           const on = picked.includes(word)
           return (

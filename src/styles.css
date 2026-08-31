@@ -2879,6 +2879,59 @@ html { -webkit-text-size-adjust: 100%; }
 /* ── 単語帳 ────────────────────────────────────────────────────
    「知らなかった」と付けたものが並ぶ。**印を付けた手応えが
    本人に見えることが、続く条件である**(2026-08 の設計) */
+/* ── 単語帳の絞り込み(0024・2026-08 利用者の指定)──────────────
+   「入った日」と「出会った教材」で絞る。1行に収める。
+   **絞り込みは手元で行う**ので、押しても待ち時間は無い。 */
+.wbfilter {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 10px;
+}
+.wbfilter-pick select { max-width: 15rem; }
+
+/* カレンダーの吹き出し。**body の直下に出す**(親に切られないため)。
+   色は語の吹き出し(`.etext-pop`)と同じ考え方で、面と枠と影で浮かせる */
+.wbcal {
+  position: fixed; z-index: 200;
+  width: 288px; padding: 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface-1); color: var(--text-primary);
+  box-shadow: var(--shadow-2);
+}
+.wbcal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 8px;
+}
+.wbcal-title { font-weight: 600; font-size: 14px; }
+.wbcal-week, .wbcal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+}
+.wbcal-week span {
+  text-align: center; font-size: 11px; color: var(--text-muted); padding-bottom: 4px;
+}
+/* **語が入っている日にだけ印を付け、無い日は押せない。**
+   押せるように見せて何も起きないのが、いちばん困る */
+.wbcal-cell {
+  min-height: 34px; padding: 0;
+  border: 1px solid transparent; border-radius: 8px;
+  background: none; color: var(--text-muted);
+  font: inherit; font-size: 13px; line-height: 34px;
+}
+.wbcal-cell.is-empty { visibility: hidden; }
+.wbcal-cell:disabled { cursor: default; }
+.wbcal-cell.has-words {
+  color: var(--text-primary); font-weight: 600;
+  background: var(--surface-2); border-color: var(--border); cursor: pointer;
+}
+.wbcal-cell.has-words:hover { box-shadow: inset 0 0 0 1px var(--border); }
+/* 選んでいる印は**べた塗りにしない**(CLAUDE.md)。
+   うすい地色 + 同じ色の文字 + 枠線 + 太字の4つで示す */
+.wbcal-cell.is-on {
+  background: var(--accent-soft); color: var(--accent);
+  border-color: var(--accent); font-weight: 700;
+}
+.wbcal-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.wbcal-foot { margin-top: 8px; display: flex; justify-content: flex-end; }
+
 .wordbook { list-style: none; margin: 10px 0 0; padding: 0; }
 .wordbook-row {
   padding: 10px 12px; margin-bottom: 8px;

@@ -17,21 +17,24 @@
  * ちがいは「はじめに英文が見えているか」だけである。
  * **同じ操作を2か所に書き写さない。**
  */
-import { useEffect, useState } from 'react'
 import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { MicIcon, StopIcon } from './Icons.jsx'
 import { spokenRatio } from '../lib/transcriptDiff.js'
+import { useProgress } from '../lib/progress.js'
 
 export default function StepSentence({
   sentences, startVisible, clipVoice, tier, rate, level,
-  wordStatuses, onMarkWord, listeningId, onCheck, results,
+  wordStatuses, onMarkWord, listeningId, onCheck, results, progressAt = null,
 }) {
   // 文ごとに「英語が見えているか」。ステップを移ったら、はじめの状態に戻す
-  const [openEn, setOpenEn] = useState({})
-  const [openJa, setOpenJa] = useState({})
-  useEffect(() => { setOpenEn({}); setOpenJa({}) }, [startVisible])
+  // **開いた行を覚えておく**(2026-08 利用者の指定)
+  const [openEn, setOpenEn] = useProgress(`${progressAt}.en`, {})
+  const [openJa, setOpenJa] = useProgress(`${progressAt}.ja`, {})
+  /* **ステップごとに別の鍵で覚える**(`progressAt` に ④ / ⑥ が入っている)。
+     以前はステップが変わるたびに空へ戻していたが、覚えるようにしたので
+     戻す必要が無い。**戻すと、開き直した瞬間に消える。** */
 
   const enShown = (id) => (openEn[id] === undefined ? startVisible : openEn[id])
 

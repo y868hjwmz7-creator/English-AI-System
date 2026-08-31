@@ -36,7 +36,7 @@ export default function useWordStatuses() {
    * 押した手ごたえが無い。失敗したら元に戻す。
    */
   const mark = useCallback(async (
-    norm, status, kind = 'word', sentence = null, sentenceJa = null,
+    norm, status, kind = 'word', sentence = null, sentenceJa = null, materialId = null,
   ) => {
     let before = null
     setStatuses((m) => {
@@ -47,7 +47,7 @@ export default function useWordStatuses() {
       return next
     })
     const { error: e } = status
-      ? await setWordStatus(norm, status, { kind, sentence, sentenceJa })
+      ? await setWordStatus(norm, status, { kind, sentence, sentenceJa, materialId })
       : await clearWordStatus(norm)
     if (e) { setError(e); if (before) setStatuses(before) }
   }, [])
@@ -60,3 +60,20 @@ export default function useWordStatuses() {
 
   return { statuses, mark, reload, error }
 }
+
+/**
+ * **その教材で会った、と分かる形にして渡す**(2026-08 利用者の指定)。
+ *
+ *   > 単語帳に追加された日付、教材名で絞り込みできるようにしてください
+ *
+ * `word_reviews.material_id` の列は前からあったが、**画面から渡していなかった**
+ * ので、ずっと空のままだった(0024 で気づいた)。
+ *
+ * 語に触れる場所は多い(宿題・本文の練習・レッスン表示・教材の中身・
+ * 発音練習・Quick Response)。**同じ包み方を6か所に書き写さない。**
+ * 教材が分かるところで、これを1回かぶせるだけにする。
+ */
+export const markIn = (mark, materialId) => (
+  (norm, status, kind = 'word', sentence = null, sentenceJa = null) =>
+    mark?.(norm, status, kind, sentence, sentenceJa, materialId ?? null)
+)

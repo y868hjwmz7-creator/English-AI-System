@@ -232,4 +232,13 @@ from (
     -- study_logs の学習時間ではなく、practice_days の分になっていること
     select pg_get_function_result(p.oid) like '%practice_minutes_weekly%'
     from pg_proc p where p.proname = 'school_summary'), 56
+  union all
+  select '(57) 単語帳に「入った日」がある(0024)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'word_reviews' and column_name = 'added_at'), 57
+  union all
+  select '(58) 復習の一覧が、入った日と教材名も返す(0024)', (
+    select pg_get_function_result(p.oid) like '%material_title%'
+       and pg_get_function_result(p.oid) like '%added_at%'
+    from pg_proc p where p.proname = 'review_words'), 58
 ) t order by 順;

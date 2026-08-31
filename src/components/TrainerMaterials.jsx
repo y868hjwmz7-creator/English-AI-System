@@ -36,6 +36,8 @@ import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
+import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
+import { markIn } from '../lib/useWordStatuses.js'
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
@@ -56,6 +58,18 @@ export default function TrainerMaterials({ me }) {
   // (2026-08 利用者の指定)。担当ゲストの記録には触れない
   const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
   const [lessonOf, setLessonOf] = useState(null)      // レッスン表示で開いている教材
+  /**
+   * **教材ごとに、練習の途中経過を消す**(2026-08 利用者の指定)。
+   *
+   *   > トレーナー側の教材に関しては教材毎に記録をリセットする機能を
+   *   > つけてください。ただしこれまで単語帳に登録した単語は消えないように。
+   *
+   * 同じ教材を別のゲストにも使うので、前の人の区切りや書きかけが
+   * 残っていては困る。**押し間違いを防ぐため2段**にする
+   * (1回目で「本当に消す」に変わる)。
+   */
+  const [resetAsk, setResetAsk] = useState(null)   // 確認中の教材
+  const [resetDone, setResetDone] = useState({})   // 消したあとの知らせ
 
   const [materials, setMaterials] = useState([])
   const [learners, setLearners] = useState([])
@@ -463,7 +477,46 @@ export default function TrainerMaterials({ me }) {
                     {makingJa === m.id && (
                       <span className="muted">区切りの訳を作っています…</span>
                     )}
+                    {/* **やりかけが残っているときだけ出す。**
+                        効かないボタンを出さない(CLAUDE.md) */}
+                    {hasMaterialProgress(m.id) && (
+                      <button type="button"
+                              className={`btn btn--small ${resetAsk === m.id ? 'btn--quiet' : 'btn--ghost'}`}
+                              onClick={() => {
+                                if (resetAsk !== m.id) { setResetAsk(m.id); return }
+                                const n = clearMaterialProgress(m.id)
+                                setResetAsk(null)
+                                setResetDone((x) => ({ ...x, [m.id]: n }))
+                              }}>
+                        {resetAsk === m.id ? '本当に消す' : 'この教材の練習の記録を消す'}
+                      </button>
+                    )}
+                    {resetAsk === m.id && (
+                      <button type="button" className="btn btn--ghost btn--small"
+                              onClick={() => setResetAsk(null)}>
+                        やめる
+                      </button>
+                    )}
                   </div>
+                  {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
+                      何が消えて、何が消えていないかまで書く */}
+                  {resetAsk === m.id && (
+                    <p className="card-hint no-print">
+                      この端末に残っている、この教材の
+                      <strong>スラッシュの区切り・ディクテーションの書きかけ・
+                      Quick Response の進み具合</strong>を消します。
+                      <strong>単語帳に登録した語は消えません。</strong>
+                      ほかの教材にも触れません。
+                    </p>
+                  )}
+                  {resetDone[m.id] != null && (
+                    <p className="notice notice--ok no-print">
+                      {resetDone[m.id] > 0
+                        ? `練習の記録を消しました(${resetDone[m.id]} 件)。`
+                        : '消すものはありませんでした。'}
+                      単語帳に登録した語は消えていません。
+                    </p>
+                  )}
                   {/* **失敗したときだけ出す。** 裏で作っているので、
                       うまくいったときは訳が出るようになるだけでよい */}
                   {jaDone[m.id]?.ng && (
@@ -524,7 +577,9 @@ export default function TrainerMaterials({ me }) {
                               {it.prompt_en && (
                                 <div>
                                   <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={m.level}
-                                               statuses={wordStatuses} onMark={markWord} />
+                                               statuses={wordStatuses}
+                                               /* どの教材で会ったかを添える(0024) */
+                                               onMark={markIn(markWord, m.id)} />
                                   <Phonetic value={it.phonetic} />
                                   <PhraseChips phrases={it.phrases} sentence={it.prompt_en}
                                                level={m.level}

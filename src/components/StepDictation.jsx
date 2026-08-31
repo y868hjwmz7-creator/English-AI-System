@@ -16,21 +16,24 @@
  *   **「to が抜けている」と見えれば直せる。**
  *   点数を1つ出しても、次に何を直せばよいか分からない。
  */
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { MicIcon, StopIcon } from './Icons.jsx'
 import { DICTATION_LEVELS, groupSentences } from '../lib/sixSteps.js'
+import { useProgress } from '../lib/progress.js'
 
 export default function StepDictation({
   sentences, clipVoice, tier, rate, level,
   wordStatuses, onMarkWord, listeningId, onCheck, results,
-  size, onSizeChange,
+  size, onSizeChange, progressAt = null,
 }) {
-  const [typed, setTyped] = useState({})
-  const [shown, setShown] = useState({})
+  // **書きかけを覚えておく**(2026-08 利用者の指定)。
+  // 別のタブを見て戻ったら消えていた、という報告があった
+  const [typed, setTyped] = useProgress(`${progressAt}.typed`, {})
+  const [shown, setShown] = useProgress(`${progressAt}.shown`, {})
   // **1文ずつでは細かすぎることがある。**「Hi!」だけで1問にしても
   // 書き取る意味がない(2026-08 実機)。難易度を上げるほど、
   // 一度に覚える文が増える

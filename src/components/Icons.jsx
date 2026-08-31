@@ -128,6 +128,21 @@ export function BookIcon({ className = 'icon' }) {
   )
 }
 
+/**
+ * カレンダー。**単語帳を「入った日」で絞る**ときに使う(2026-08 利用者の指定)。
+ * ほかの絵と同じ枠(20×20)・同じ線の太さ(1.5)でそろえる。
+ */
+export function CalendarIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <rect x="2.75" y="4.25" width="14.5" height="13" rx="2"
+            fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M2.75 8.25h14.5M6.75 2.75v3M13.25 2.75v3"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** 人が2人。ゲスト */
 export function PeopleIcon({ className = 'icon' }) {
   return (

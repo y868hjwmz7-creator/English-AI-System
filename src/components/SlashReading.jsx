@@ -43,6 +43,7 @@
  *   控えの無い教材では出さない。**無いものを、あるように見せない。**
  */
 import { Fragment, useEffect, useState } from 'react'
+import { useProgress } from '../lib/progress.js'
 import { checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
 import { chunkPairsOfAtMarks, storedChunks } from '../lib/chunkJa.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
@@ -80,10 +81,13 @@ const partsOf = (s) => s.parts ?? [{ id: s.id, prompt_en: s.text }]
 const hasJaOf = (s) => partsOf(s).some((p) => storedChunks(p))
 
 export default function SlashReading({
-  blocks, clipVoice, tier, rate, unit, onUnitChange,
+  blocks, clipVoice, tier, rate, unit, onUnitChange, progressAt = null,
 }) {
-  const [marks, setMarks] = useState({})   // 文ごとの区切り
-  const [shown, setShown] = useState({})   // 「この区切りで訳を出す」を押した文
+  /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定)。
+     20か所入れたあとで別のタブを見に行くと、やり直しになっていた。
+     鍵の形は `progress.js` に1か所だけ置いてある。 */
+  const [marks, setMarks] = useProgress(`${progressAt}.marks`, {})
+  const [shown, setShown] = useProgress(`${progressAt}.shown`, {})
   // **通しで見る**(2026-08 利用者の指定)。段落ごとの作業と切り替える
   const [review, setReview] = useState(false)
 
