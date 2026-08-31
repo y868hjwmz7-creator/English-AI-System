@@ -607,11 +607,10 @@ export default function MaterialForm({
 
   return (
     <form className="card" onSubmit={handleSubmit}>
+      {/* **説明の文は置かない**(2026-08 利用者の指定)。
+          > ごちゃごちゃしすぎています。なくてもわかります。
+          欄の名前だけで分かることを、文で言わない。 */}
       <h2 className="card-title">教材を新しく作る</h2>
-      <p className="card-hint">
-        まずライブラリを探して、無いときにここへ来てください。
-        既にある教材を使うほうが、作るよりずっと速く配信できます。
-      </p>
 
       {/*
         誰に出すかは**最初に選ぶ**。あとから選ぶ形にしていたため、
@@ -639,9 +638,6 @@ export default function MaterialForm({
           {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
         </select>
       </label>
-      <p className="field-hint material-kind-hint">
-        {NEW_MATERIAL_KINDS.find((k) => k.id === kind)?.hint}
-      </p>
 
       {/* **業界と趣味は、2つのプルダウンに分けて左右に並べる**
           (2026-08 利用者の指定)。
@@ -680,10 +676,6 @@ export default function MaterialForm({
           </select>
         </label>
       </div>
-      <p className="field-hint material-kind-hint">
-        どちらも選ばなければ「汎用」。どのゲストにも使えます。
-        <strong>選べるのはどちらか一方です</strong>(片方を選ぶと、もう片方は戻ります)。
-      </p>
 
       {kind === 'reading' && (
         <label className="field">
@@ -716,12 +708,7 @@ export default function MaterialForm({
       )}
 
       <fieldset className="field">
-        <legend>
-          ゲスト
-          <span className="field-hint">
-            選ばずに作って、あとから一覧で共有することもできます
-          </span>
-        </legend>
+        <legend>ゲスト</legend>
         {learners.length === 0 ? (
           <p className="field-hint">
             担当しているゲストがまだいません。「ゲスト」タブから追加できます。
@@ -766,14 +753,7 @@ export default function MaterialForm({
           記事の朗読に感情豊かな声を当てると芝居がかって聞きづらく、
           会話に淡々とした声を当てると人と話している感じがしない。 */}
       <fieldset className="field voice-pick">
-        <legend>
-          読み上げの声
-          <span className="field-hint">
-            {kind === 'dialogue'
-              ? '会話向きの声から2人。指名しなければ、その訛りからおまかせで選びます'
-              : 'ナレーション向きの声から1人。指名しなければ、その訛りからおまかせで選びます'}
-          </span>
-        </legend>
+        <legend>読み上げの声</legend>
 
         <div className="voice-row">
           <label className="field">
@@ -808,15 +788,10 @@ export default function MaterialForm({
           ))}
         </div>
 
-        {/* 声をまだ1人も登録していないとき。**黙って標準の声にしない** */}
-        {!voicePool.length && (
-          <p className="field-hint">
-            この訛りには、まだ
-            {voicePurpose === 'conversation' ? '会話向き' : 'ナレーション向き'}
-            の声が登録されていません。標準の声(Google / Azure)で読み上げます。
-            声を足すには <code>src/data/clipVoices.js</code> に1行書き足します。
-          </p>
-        )}
+        {/* **声が1人も登録されていないときの断り書きは出さない**
+            (2026-08 利用者の指定)。訛りだけを選べばよく、
+            指名する欄が出ていなければ、おまかせで読み上げる。
+            `src/data/clipVoices.js` は**仕組みの内側の名前**でもある */}
       </fieldset>
 
       <fieldset className="field" ref={tagRef}>
