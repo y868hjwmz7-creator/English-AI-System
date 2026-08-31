@@ -393,7 +393,13 @@ export default function TrainerLearners({ me }) {
             </div>
 
             {openId === l.id ? (
-              <div className="assign-box">
+              /* **教材の画面と同じ形にする**(2026-08 利用者の指定)。
+                 > 教材モードには、一番外側の白の枠内に実線がありません。
+                 > ゲストモードの実線を消してください。そして、教材同士の間に
+                 > 隙間を確保し、教材モードと全く同じデザインにしてください
+                 `.assign-box`(青い実線の囲み)は**共有するゲストを選ぶ欄**の
+                 ものなので、ここでは使わない。`.stack` と同じ縦の並びにする */
+              <div className="learner-detail">
                 <Tabs
                   variant="sub"
                   ariaLabel="ゲストの情報の切り替え"

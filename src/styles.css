@@ -1063,6 +1063,16 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .assign-list { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0; }
 
+/* ゲストを開いたときの中身。**教材の画面と同じ形にする**(2026-08 利用者の指定)。
+   以前は `.assign-box`(青い実線の囲み)を使い回していたので、
+   ・一番外側の白いカードの中に、もう1本の実線が出ていた
+   ・中の教材カードが、隙間なく積み上がっていた
+   `.stack` と同じ縦の並びにして、囲みは出さない。 */
+.learner-detail {
+  margin-top: 12px;
+  display: flex; flex-direction: column; gap: var(--gap);
+}
+
 /* 宿題 */
 .homework-card.is-done { opacity: 0.72; }
 .homework-instruction {
