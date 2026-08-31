@@ -25,7 +25,7 @@ import LearnerWordbook from './LearnerWordbook.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
 import { ScreenIcon } from './Icons.jsx'
-import { loadLearnerPractice, practiceLine, sendReminder } from '../lib/practice.js'
+import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 
 const STATUS = {
   active:   { label: '受講中', cls: 'badge--admin' },
@@ -416,13 +416,8 @@ export default function TrainerLearners({ me, navTick = 0 }) {
               )}
             </div>
 
-            {/* 2段目。**取り組みとスコアを1本の行にまとめる**(利用者の指定)。
-                取り組み(0022)はゲストが入力したものではなく、
-                こちらが裏で数えたものである(`src/lib/practice.js`)。
-                **やっていない人には、その場でリマインドを送れる。**
-                自動では飛ばない(利用者の指定) */}
+            {/* 2段目 … スコアとレベル。**名前の真下、左寄せ**(利用者の指定) */}
             <div className="learner-meta">
-              <span className="learner-meta-item">{practiceLine(practice[l.id])}</span>
               <span className="learner-meta-item">
                 <span className="score-label">TOEIC</span>
                 <span className="score-value">{toeic ? toeic.score : '—'}</span>
@@ -434,16 +429,54 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 {versant && <span className="muted">{versant.takenOn}</span>}
               </span>
               <span className="learner-meta-item">{cefrLabel(l.cefr)}</span>
-              {l.status === 'active' && (
-                <button type="button" className="btn btn--small btn--quiet learner-remind"
-                        disabled={reminding === l.id || reminded[l.id]}
-                        title="このゲストに「取り組みましょう」と知らせます"
-                        onClick={() => remind(l)}>
-                  {reminded[l.id] ? '送りました'
-                    : reminding === l.id ? '送っています…' : 'リマインドする'}
-                </button>
-              )}
             </div>
+
+            {/* 3段目 … **取り組みを「札」で出す**(2026-08 利用者の指定)。
+
+                  > この情報はこのラップ内の右下の方、「リマインドする」の左に。
+                  > もっと情報として目がいくようなデザインにしてくれ。
+                  > 文字というより、サインみたいな。
+
+                1本の文は、読まないと分からない。レッスンの入口で見たいのは
+                「最後はいつか」「続いているか」なので、**数を大きく、
+                何の数かを小さく**添える。
+                最後に取り組んだ近さは色でも示すが、
+                **色だけに頼らず「きのう」という言葉も必ず出す**(CLAUDE.md)。
+
+                取り組み(0022)はゲストが入力したものではなく、
+                こちらが裏で数えたものである(`src/lib/practice.js`)。
+                **やっていない人には、その場でリマインドを送れる。**
+                自動では飛ばない(利用者の指定) */}
+            {(() => {
+              const st = practiceStats(practice[l.id])
+              return (
+                <div className="learner-signs">
+                  <span className={`sign sign--last is-${st.fresh}`}
+                        title="最後にアプリで取り組んだ日">
+                    <span className="sign-dot" aria-hidden="true" />
+                    <span className="sign-value">{st.last}</span>
+                    <span className="sign-label">最後</span>
+                  </span>
+                  {st.items.map((it) => (
+                    <span key={it.label} className="sign">
+                      <span className="sign-value">
+                        {it.value}<span className="sign-unit">{it.unit}</span>
+                      </span>
+                      <span className="sign-label">{it.label}</span>
+                    </span>
+                  ))}
+                  {l.status === 'active' && (
+                    <button type="button" className="btn btn--small btn--quiet learner-remind"
+                            disabled={reminding === l.id || reminded[l.id]}
+                            title="このゲストに「取り組みましょう」と知らせます"
+                            onClick={() => remind(l)}>
+                      {reminded[l.id] ? '送りました'
+                        : reminding === l.id ? '送っています…' : 'リマインドする'}
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
 
             {l.status_note && <p className="field-hint">{l.status_note}</p>}
             {l.handoverNote && (

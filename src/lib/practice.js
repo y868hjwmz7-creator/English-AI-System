@@ -219,3 +219,43 @@ export function practiceLine(row) {
   return `最後は ${when} ・ 2週間で ${row.days} 日 ${row.times} 回 ${min} 分`
     + (kinds ? ` ・ ${kinds}` : '')
 }
+
+/**
+ * 取り組みを**札(サイン)として出すための数**にほどく(2026-08 利用者の指定)。
+ *
+ *   > この情報はこのラップ内の右下の方、「リマインドする」の左に。
+ *   > もっと情報として目がいくようなデザインにしてくれ。
+ *   > 文字というより、サインみたいな。
+ *
+ * `practiceLine()` は1本の文にする。**文は読まないと分からない。**
+ * レッスンの入口で見たいのは「最後はいつか」「続いているか」なので、
+ * 数だけを取り出して、画面が札として並べられるようにする。
+ *
+ * **数え方は DB(`learner_practice()`)、言い方はここ。**
+ * 画面は並べるだけにする(数え方を2か所に持たない)。
+ *
+ * @returns {{fresh: string, items: Array<{label: string, value: string, unit?: string}>}}
+ *   `fresh` は最後に取り組んだ近さ。`'today' | 'recent' | 'stale' | 'none'`。
+ *   画面はこれで色を決める(**色だけに頼らず、言葉も必ず出す**)。
+ */
+export function practiceStats(row) {
+  if (!row || !row.lastOn) {
+    return { fresh: 'none', last: 'まだ', items: [] }
+  }
+  const days = Math.round(
+    (Date.now() - new Date(`${row.lastOn}T00:00:00`).getTime()) / 86400000,
+  )
+  const last = days <= 0 ? '今日' : days === 1 ? 'きのう' : `${days} 日前`
+  // 2日以内なら続いている、1週間以内ならまずまず、それより前は間があいている
+  const fresh = days <= 1 ? 'today' : days <= 7 ? 'recent' : 'stale'
+  const min = Math.round((row.seconds ?? 0) / 60)
+  const items = [
+    { label: '2週間', value: String(row.days ?? 0), unit: '日' },
+    { label: '回数', value: String(row.times ?? 0), unit: '回' },
+    { label: '時間', value: String(min), unit: '分' },
+  ]
+  // いちばん多く取り組んだ種類を1つだけ。**全部並べると札が読めなくなる**
+  const top = Object.entries(row.kinds ?? {}).sort((a, b) => b[1] - a[1])[0]
+  if (top) items.push({ label: PRACTICE_KINDS[top[0]] ?? top[0], value: String(top[1]), unit: '回' })
+  return { fresh, last, items }
+}

@@ -1240,11 +1240,53 @@ html { -webkit-text-size-adjust: 100%; }
 .learner-headcard { padding: 18px 20px; margin-bottom: var(--gap); }
 .learner-headcard > .learner-head { margin-bottom: 10px; }
 .learner-headcard > .learner-meta { margin-bottom: 0; }
+.learner-headcard > .learner-signs { margin-top: 12px; }
 /* 単語帳の説明も、同じように白に乗せる */
 .wordbook-intro { padding: 14px 18px; }
 .wordbook-intro > .card-hint { margin: 0; }
 .wordbook-intro > .wordbook-week { margin: 8px 0 0; }
-.learner-remind { margin-left: auto; }
+/* 取り組みの「札」(2026-08 利用者の指定)。
+     > もっと情報として目がいくようなデザインにしてくれ。
+     > 文字というより、サインみたいな。
+   **数を大きく、何の数かを小さく。** 1本の文は読まないと分からない。
+   **囲みの右下**へ寄せ、リマインドの左に並べる。 */
+.learner-signs {
+  display: flex; flex-wrap: wrap; align-items: stretch;
+  justify-content: flex-end; gap: 8px; margin-top: 14px;
+}
+.sign {
+  display: inline-flex; flex-direction: column; align-items: center;
+  min-width: 62px; padding: 6px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); line-height: 1.25;
+}
+.sign-value {
+  font-size: 15px; font-weight: 700; color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.sign-unit { margin-left: 1px; font-size: 11px; font-weight: 600; }
+.sign-label { font-size: 10px; letter-spacing: .04em; color: var(--text-muted); }
+/* 最後に取り組んだ日だけは、**近さを色でも示す。**
+   ただし色だけに頼らず、「きのう」という言葉も必ず出す(CLAUDE.md) */
+.sign--last { flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
+.sign--last .sign-label { margin-left: 2px; }
+.sign-dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: var(--text-muted); flex-shrink: 0;
+}
+.sign--last.is-today { border-color: var(--ok); background: var(--ok-bg); }
+.sign--last.is-today .sign-dot { background: var(--ok); }
+.sign--last.is-recent .sign-dot { background: var(--accent); }
+.sign--last.is-stale { border-color: var(--warn); }
+.sign--last.is-stale .sign-dot { background: var(--warn); }
+.sign--last.is-none .sign-value { color: var(--text-muted); }
+
+@media (max-width: 640px) {
+  /* 狭い画面では左から並べる。右寄せだと、折り返した行がちぐはぐに見える */
+  .learner-signs { justify-content: flex-start; }
+}
+
+.learner-remind { margin-left: 0; align-self: center; }
 .learner-level { color: var(--text-secondary); font-size: 13px; }
 
 /* **開いているゲストの名前は、大きく**(2026-08 利用者の指定)。
