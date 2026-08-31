@@ -253,6 +253,41 @@ const SURE_MODALS = new Set([
 ])
 
 /**
+ * **副詞**。`-ly` で終わる語で見分ける(2026-08 に足した)。
+ *
+ * 【なぜ足したか】(利用者の指定)
+ *   > そもそもの訳を作成するときにあらゆる可能性を考えた区切り方にして、
+ *   > 全て訳が英文に対して中央に寄るようになれば完璧です。
+ *
+ *   訳は**控えの切れ目でしか分けられない。** 自分の区切りがそこに無いと、
+ *   2つのカタマリぶんの訳がまとめて出て、英語に対して右へずれて見える
+ *   (`suddenly started asking` の前で切ったとき・実機)。
+ *   **控えを細かく作っておけば、どこで切っても真下に来る。**
+ *
+ *   `friendly` `lovely` `likely` `early` `only` `ugly` `silly` は
+ *   **形容詞**なので入れない。
+ */
+const LY_ADJECTIVES = new Set([
+  'friendly', 'lovely', 'likely', 'unlikely', 'early', 'only', 'ugly',
+  'silly', 'lonely', 'lively', 'daily', 'weekly', 'monthly', 'yearly',
+  'costly', 'deadly', 'elderly', 'orderly', 'timely', 'holy', 'ally',
+  'apply', 'reply', 'supply', 'family', 'rely', 'imply', 'multiply',
+])
+
+/** `-ly` で終わらない、よく出る副詞。ここも切れ目にしておく */
+const PLAIN_ADVERBS = new Set([
+  'almost', 'always', 'never', 'often', 'sometimes', 'still', 'already',
+  'soon', 'again', 'instead', 'together', 'however', 'therefore',
+  'meanwhile', 'nevertheless', 'moreover', 'furthermore', 'otherwise',
+])
+
+const isAdverb = (w) => PLAIN_ADVERBS.has(w)
+  || (/^[a-z]{5,}ly$/.test(w) && !LY_ADJECTIVES.has(w))
+
+/** 主語になる代名詞。**ここから新しいまとまりが始まることが多い** */
+const SUBJECT_PRONOUNS = new Set(['i', 'you', 'he', 'she', 'it', 'we', 'they'])
+
+/**
  * **形容詞**(2026-08 利用者の指定で足した)。
  *
  *   > 形容詞と名詞の間に区切りを入れても注意されません。
@@ -480,7 +515,11 @@ export function idealSlashes(sentence) {
     // (`npm run test:chunk` の1本目がそれを見張っている)
     if (insideAux(words, at)) return                  // 助動詞と動詞は離さない
     if (insidePhrasal(words, at)) return              // 句動詞は動詞と副詞で1つ
-    if (DETERMINERS.has(bare(words[at - 1]))) return  // 冠詞のあとで切らない
+    if (DETERMINERS.has(bare(words[at - 1]))) return  // 冠詞のあとで切らない(広いほう)
+    // **ゲストに注意するのと同じ決まりも通す。** 控えを細かくしたことで、
+    // `An elderly man / who / usually …` のように接続詞のあとで切れる場面が
+    // 出てきた(2026-08 実測)。模範が自分の決まりを破ってはいけない
+    if (slashProblem(words, at)) return
     const found = out.find((x) => x.at === at)
     if (found) { if (strength > found.strength) { found.strength = strength; found.why = why } return }
     out.push({ at, strength, why })
@@ -503,6 +542,10 @@ export function idealSlashes(sentence) {
     if (CONNECTORS.has(b)) add(i, 3, `${b} の前(ここから意味が変わる)`)
     // 前置詞の前。**前置詞＋名詞でひとかたまり**
     else if (PREPOSITIONS.has(b)) add(i, b === 'of' ? 1 : 2, `${b} の前(前置詞＋名詞でひとかたまり)`)
+    // 副詞の前・主語の代名詞の前(2026-08)。**控えを細かくしておく**ため。
+    // 強さ1なので初級でしか出ないが、訳を控える単位は初級である。
+    // ここが細かいほど、ゲストがどこで切っても訳が真下に来る
+    else if (isAdverb(b) || SUBJECT_PRONOUNS.has(b)) add(i, 1, `${b} の前`)
     // 助動詞・be動詞の前。**主語と動詞を切って、動詞から先に訳す**
     //
     // 利用者の指定「初心者は動詞の前に必ずスラッシュ」のうち、

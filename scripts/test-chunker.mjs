@@ -11,7 +11,7 @@ import {
   checkSlashes, chunksOf, slashesFor, wordsOf,
 } from '../src/lib/chunker.js'
 import {
-  baseChunks, chunkPairs, chunkPairsAtMarks, storedChunks,
+  baseChunks, chunkPairs, chunkPairsAtMarks, needsChunkJa, storedChunks,
 } from '../src/lib/chunkJa.js'
 
 let ng = 0
@@ -317,6 +317,43 @@ console.log('\n▶ 自分の区切りは、控えの境目でなくても英語�
     pairs?.[0]?.segs.length === 2, JSON.stringify(pairs?.[0]))
   ok('訳はまとめて1つ', typeof pairs?.[0]?.ja === 'string' && pairs[0].ja.length > 0)
   ok('控えが無ければ出さない', chunkPairsAtMarks(text, null, [2]) === null)
+}
+
+/* ── 控えの切れ目を残す・作り直しの判断(2026-08)────────────────
+   表示のたびに切れ目を計算し直していたので、決まりを直すと
+   すでに作った訳が丸ごと出なくなった。控えたときの切れ目を残せばずれない。 */
+
+console.log('\n▶ 控えた切れ目(parts)があれば、決まりを変えてもずれない')
+{
+  const text = S.office
+  // わざと**粗い**切れ目で控える(2カタマリ)。いまの決まりはもっと細かい
+  const parts = [wordsOf(text).slice(0, 7).join(' '), wordsOf(text).slice(7).join(' ')]
+  const item = { prompt_en: text, chunks: { en: text, ja: ['＜0＞', '＜1＞'], parts } }
+  const pairs = chunkPairs(text, storedChunks(item), 'beginner', parts)
+  ok('粗い控えでも対が作れる', pairs?.length === 2, JSON.stringify(pairs))
+  ok('つなぐともとの文に戻る',
+    pairs?.map((p) => p.en).join(' ') === wordsOf(text).join(' '))
+  ok('自分の区切りでも対が作れる',
+    chunkPairsAtMarks(text, storedChunks(item), [7], parts)?.length === 2)
+}
+
+console.log('\n▶ 作り直しが要るかの判断は1か所(needsChunkJa)')
+{
+  const text = S.office
+  const now = baseChunks(text)
+  const ja = now.map((_, i) => `＜${i}＞`)
+  ok('控えが無ければ作る', needsChunkJa({ prompt_en: text }) === true)
+  ok('数が合わなければ作る',
+    needsChunkJa({ prompt_en: text, chunks: { en: text, ja: ['1つだけ'] } }) === true)
+  ok('いまの決まりどおりなら、作り直さない',
+    needsChunkJa({ prompt_en: text, chunks: { en: text, ja, parts: now } }) === false)
+  // **いまのほうが細かければ、一度だけ作り直す**(訳を真下にそろえるため)
+  const long = S.rinse
+  const coarse = [wordsOf(long).slice(0, 5).join(' '), wordsOf(long).slice(5).join(' ')]
+  ok(`いまのほうが細かければ作り直す(いま ${baseChunks(long).length} > 控え 2)`,
+    baseChunks(long).length > 2 && needsChunkJa({
+      prompt_en: long, chunks: { en: long, ja: ['＜0＞', '＜1＞'], parts: coarse },
+    }) === true)
 }
 
 console.log(ng === 0 ? '\n✅ 区切りの検証はすべて意図どおりです' : `\n❌ ${ng} 件おかしい`)

@@ -7,7 +7,7 @@
  *   トレーナー1人あたり週60レッスンを抱えるため、再利用が効かないと
  *   教材づくりに週9時間かかり、この仕組みは回らない。
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import MaterialForm from './MaterialForm.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
@@ -22,10 +22,10 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { countLabel, exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
-import { storedChunks } from '../lib/chunkJa.js'
+import { needsChunkJa } from '../lib/chunkJa.js'
 import { INDUSTRIES, industryLabel } from '../data/industries.js'
 import {
-  NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, estimateCost,
+  NEW_MATERIAL_KINDS, addChunkJa, assignMaterial,
   kindLabel, loadMyLearners, searchMaterials,
 } from '../lib/materials.js'
 import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
@@ -87,10 +87,11 @@ export default function TrainerMaterials({ me }) {
   useEffect(() => { search() }, [tagIds, level, industry, kind, genre, scene, learnerId])
 
   /** 本文があって、まだカタマリごとの訳が入っていない教材か(0021) */
-  const needsChunkJa = (m) => (m.sections ?? [])
+  // **判断は `chunkJa.js` の `needsChunkJa()` 1か所。** 画面に持たない
+  const needsJa = (m) => (m.sections ?? [])
     .filter((sec) => isPassageSection(sec.exercise_type))
     .flatMap((sec) => sec.items ?? [])
-    .some((it) => String(it.prompt_en ?? '').trim() && !storedChunks(it))
+    .some(needsChunkJa)
 
   /**
    * カタマリごとの訳を作って控える(0021)。
@@ -103,17 +104,34 @@ export default function TrainerMaterials({ me }) {
     setJaDone((v) => ({ ...v, [m.id]: null }))
     const { data, error: e } = await addChunkJa(m)
     setMakingJa(null)
+    // **失敗したときだけ知らせる。** うまくいったときは、
+    // ただ訳が出るようになるだけでよい(押していないので、報告する相手がいない)
     if (e) { setJaDone((v) => ({ ...v, [m.id]: { ng: true, text: e } })); return }
-    setJaDone((v) => ({
-      ...v,
-      [m.id]: {
-        text: `${data.made} か所に訳を付けました`
-          + (data.skipped ? `(${data.skipped} か所は数が合わず見送りました)` : '')
-          + (data.spent ? ` / 費用 約 $${estimateCost(data.spent).toFixed(2)}` : ''),
-      },
-    }))
+    if (!data.made) return
     await search()   // 控えたものを画面に反映する
   }
+
+  /**
+   * **カタマリごとの訳は、押させない。開いたら裏で作る**(2026-08 利用者の指定)。
+   *
+   *   > 「区切りの訳を作る」はそもそも無くしてください。教材を作った時点で
+   *   > 区切りの訳がバックグラウンドで生成されるデザインの方が良いです。
+   *
+   * 作るときには `MaterialForm` が一緒に作っている。ここで拾うのは
+   * **それより前に作った教材**だけである(0021 より前のもの)。
+   *
+   * 【止まる条件を持たせる】(CLAUDE.md)
+   *   1つの教材につき**この画面を開いているあいだ1回だけ。**
+   *   失敗しても繰り返さない。残高が切れているときに、開くたび呼び続けない。
+   */
+  const triedJa = useRef(new Set())
+  useEffect(() => {
+    if (!openId) return
+    const m = materials.find((x) => x.id === openId)
+    if (!m || !needsJa(m) || triedJa.current.has(m.id)) return
+    triedJa.current.add(m.id)
+    makeChunkJa(m)
+  }, [openId, materials])
 
   useEffect(() => {
     loadMyLearners().then(({ data, error: e }) => {
@@ -369,28 +387,17 @@ export default function TrainerMaterials({ me }) {
                             onClick={() => printElement(document.getElementById(`material-${m.id}`))}>
                       <PrintIcon />印刷 / PDFで保存
                     </button>
-                    {/* **0021 より前に作った教材にも、あとから足せる道**を用意する。
-                        カタマリごとの訳は本来「作るときに一緒に」だが、
-                        すでにある教材を作り直させるのはもったいない。
-                        0020(発音記号)で「作り直してください」としか
-                        言えなかった反省である。
-                        **すでに訳が入っているものには、もう一度課金しない** */}
-                    {needsChunkJa(m) && (
-                      <button type="button" className="btn btn--small"
-                              disabled={makingJa === m.id}
-                              title="スラッシュリーディングで、カタマリの上に訳を出せるようになります"
-                              onClick={() => makeChunkJa(m)}>
-                        {makingJa === m.id ? '区切りの訳を作っています…' : '区切りの訳を作る'}
-                      </button>
+                    {/* **「区切りの訳を作る」ボタンは置かない**(2026-08 利用者の指定)。
+                        作るときに一緒に作り、足りないものは開いたときに裏で作る。
+                        押させるほどのことではない。 */}
+                    {makingJa === m.id && (
+                      <span className="muted">区切りの訳を作っています…</span>
                     )}
                   </div>
-                  {/* **結果は、押した場所のすぐ下に出す**(2026-08 の指摘)。
-                      画面のいちばん下に出すとスマホでは見えず、
-                      「何も起きずにボタンが戻る」ようにしか見えない */}
-                  {jaDone[m.id] && (
-                    <p className={`notice no-print ${jaDone[m.id].ng ? 'notice--warn' : 'notice--ok'}`}>
-                      {jaDone[m.id].text}
-                    </p>
+                  {/* **失敗したときだけ出す。** 裏で作っているので、
+                      うまくいったときは訳が出るようになるだけでよい */}
+                  {jaDone[m.id]?.ng && (
+                    <p className="notice notice--warn no-print">{jaDone[m.id].text}</p>
                   )}
                   <Tabs
                     variant="sub"

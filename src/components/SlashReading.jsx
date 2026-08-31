@@ -348,10 +348,10 @@ function MinePairs({ parts, marks }) {
           <p className="slash-out" lang="en">{part.prompt_en}</p>
           {storedChunks(part) && (
             <p className="notice notice--warn slash-stale">
-              区切りの決まりが変わったため、この本文の訳は数が合わなくなりました。
+              この本文の訳は、まだ用意できていません。
               <br />
-              教材をさがす画面でこの教材を開き、
-              <strong>「区切りの訳を作る」</strong>を押すと作り直せます。
+              教材をさがす画面でこの教材を開くと、<strong>裏で作り直します</strong>
+              (少し待ってから、もう一度開いてください)。
             </p>
           )}
         </div>

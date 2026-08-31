@@ -161,6 +161,33 @@ export function chunkPairs(text, ja, level = BASE_LEVEL, parts = null) {
   return out
 }
 
+/**
+ * その項目の訳を、**作り直したほうがよいか。**
+ *
+ * 3つのどれかに当てはまれば作り直す。**判断はここ1か所。**
+ *   ① まだ訳が無い
+ *   ② 数が合わず、対が作れない(英文を直した・古い決まりで作った)
+ *   ③ **いまの決まりのほうが細かい**(2026-08 利用者の指定)
+ *
+ * ③ を入れているのは、区切りを細かくしたぶんを取り込むためである。
+ *
+ *   > そもそもの訳を作成するときにあらゆる可能性を考えた区切り方にして、
+ *   > 全て訳が英文に対して中央に寄るようになれば完璧です。
+ *
+ * 控えが粗いと、ゲストがそこで切っても訳を分けられず、
+ * 2つぶんの訳がまとめて出て**右へずれて見える。**
+ * 細かくしたときに一度だけ作り直せば、そのあとはずれない。
+ * (粗いままでも**訳は出る。** 作り直しは見た目をそろえるためである)
+ */
+export function needsChunkJa(item) {
+  const text = String(item?.prompt_en ?? '').trim()
+  if (!text) return false
+  if (!chunkPairsOf(item)) return true            // ① ②
+  const parts = storedParts(item)
+  if (!parts) return false                        // 古い控え。数は合っている
+  return baseChunks(text).length > parts.length   // ③
+}
+
 /** 画面から呼ぶ入口。項目と細かさを渡すと、対か null が返る */
 export const chunkPairsOf = (item, level = BASE_LEVEL) =>
   chunkPairs(item?.prompt_en, storedChunks(item), level, storedParts(item))

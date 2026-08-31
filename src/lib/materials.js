@@ -11,7 +11,7 @@
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { isPassageSection } from '../data/exerciseTypes.js'
-import { chunkPairsOf, chunkPlan } from './chunkJa.js'
+import { chunkPlan, needsChunkJa } from './chunkJa.js'
 import { supabase } from './supabase.js'
 
 // 教材のレベルはゲストのレベルと同じ物差し(CEFR)を使う
@@ -754,8 +754,8 @@ export async function addChunkJa(material) {
   // あれは英文が同じかどうかしか見ないので、区切りの決まりを直して
   // カタマリの数が変わった教材まで「もう作ってある」と判定してしまう。
   // その結果、**訳が出ないのに作り直せない**という行き止まりになっていた。
-  // **実際に対が作れるか(`chunkPairsOf`)で見る。**
-  const todo = items.filter((it) => !chunkPairsOf(it))
+  // **判断は `needsChunkJa()` 1か所。**(無い / 合わない / いまのほうが細かい)
+  const todo = items.filter(needsChunkJa)
   if (!todo.length) return ok({ made: 0, spent: null })
 
   const plan = chunkPlan(todo)
