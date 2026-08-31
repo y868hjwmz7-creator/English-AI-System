@@ -86,6 +86,9 @@ export default function TrainerLearners({ me }) {
   const [pastTags, setPastTags] = useState([])
   const [pastDone, setPastDone] = useState('all')   // all | done | todo
   const [pastSort, setPastSort] = useState('new')   // new | old
+  // **名前で引く**(2026-08 利用者の指定。教材の画面と同じ形にする)。
+  // 宿題は多くても数十件なので、**手元で絞る。** 聞き直さない
+  const [pastKeyword, setPastKeyword] = useState('')
 
   // スコアを入れるための一時的な入力欄
   const [form, setForm] = useState({ testType: 'toeic', score: '', takenOn: today() })
@@ -165,6 +168,7 @@ export default function TrainerLearners({ me }) {
     setMustUse([])
     setPastTags([])
     setPastDone('all')
+    setPastKeyword('')
     setOpenHw(null)
     setMessage(null)
     setForm({ testType: 'toeic', score: '', takenOn: today() })
@@ -429,11 +433,16 @@ export default function TrainerLearners({ me }) {
                   }
                   const tagList = [...counts.entries()].sort((x, y) => y[1] - x[1])
 
+                  // 教材名と見出しで引く。**大文字小文字は問わない**
+                  const needle = pastKeyword.trim().toLowerCase()
                   const shown = assignments
                     .filter((a) => (pastDone === 'all'
                       || (pastDone === 'done') === !!a.learner_done_at))
                     .filter((a) => (pastTags.length === 0
                       || (a.material?.tagIds ?? []).some((t) => pastTags.includes(t))))
+                    .filter((a) => (!needle
+                      || `${a.material?.title ?? ''} ${a.material?.headline ?? ''}`
+                        .toLowerCase().includes(needle)))
                     .sort((x, y) => (pastSort === 'old'
                       ? new Date(x.assigned_at) - new Date(y.assigned_at)
                       : new Date(y.assigned_at) - new Date(x.assigned_at)))
@@ -452,9 +461,30 @@ export default function TrainerLearners({ me }) {
                       </p>
                     )}
 
-                    {/* **教材の「さがす・作る」と同じ形にする**(2026-08 利用者の指定)。
-                        たたんでおけて、開閉を覚える。中の札は、その人に出した
-                        ものしか出ないのでそのまま残す(件数が付いていて、
+                    {/* **「宿題をさがす」を先に、「宿題をしぼる」をその下に**
+                        (2026-08 利用者の指定)。
+                          > 「宿題をしぼる」を「宿題をさがす」の下に移動させて
+                          > ください。そして、教材モードと同じように、検索バーを
+                          > 入れ、その右にプルダウンの並び替えをおいてください。
+                        帯は `SearchBar.jsx` — 教材の画面と**同じ部品**である。 */}
+                    {assignments.length > 0 && (
+                      <SearchBar
+                        title="宿題をさがす"
+                        keyword={pastKeyword}
+                        onKeyword={setPastKeyword}
+                        placeholder="教材名・見出しでさがす"
+                        sort={pastSort}
+                        onSort={setPastSort}
+                        sortOptions={[
+                          { id: 'new', label: '新しい順' },
+                          { id: 'old', label: '古い順' },
+                        ]}
+                        count={shown.length}
+                      />
+                    )}
+
+                    {/* **たたんでおけて、開閉は覚える。** 中の札は、その人に
+                        出したものしか出ないのでそのまま残す(件数が付いていて、
                         押す前に結果が読める) */}
                     {assignments.length > 0 && (
                       <details className="card material-search" open={pastOpen}
@@ -508,24 +538,6 @@ export default function TrainerLearners({ me }) {
                       </details>
                     )}
 
-                    {/* **並び順は、絞り込みの箱の外に出す**(2026-08 利用者の指定)。
-                        > この配置換えはゲストモードも同じにしてください。
-                        箱はたためるので、中に入れておくとたたんだ瞬間に消える。
-                        帯は `SearchBar.jsx` — 教材の画面と**同じ部品**である。
-                        過去の宿題には名前で引く仕組みが無いので、
-                        入力欄は出さない(効かない操作を見せない)。 */}
-                    {assignments.length > 0 && (
-                      <SearchBar
-                        title="宿題をさがす"
-                        sort={pastSort}
-                        onSort={setPastSort}
-                        sortOptions={[
-                          { id: 'new', label: '新しい順' },
-                          { id: 'old', label: '古い順' },
-                        ]}
-                        count={shown.length}
-                      />
-                    )}
 
                     {assignments.length > 0 && shown.length === 0 && (
                       <p className="card-hint">
