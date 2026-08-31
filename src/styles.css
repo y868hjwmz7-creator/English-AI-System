@@ -1227,26 +1227,79 @@ html { -webkit-text-size-adjust: 100%; }
    **1行に1つ。** 1つの段落に流すと、改行も区切りも無い棒になって
    読めない(指導ポイントで一度学んだこと)。一度読めばしばらく要らない
    ので、畳めるようにして覚えておく */
+/* ── 6Steps のやり方 ────────────────────────────────────────
+   **指導ポイント(`.teaching-note`)と同じ形にそろえてある**
+   (2026-08 利用者の指定)。色だけは 6Steps の緑(`--accent`)のまま。
+
+   【なぜ値を書き写しているのか】
+     指導ポイントの見た目は「指示があるまで絶対に変えない」と
+     決まっている(CLAUDE.md)。同じ規則を共有すると、こちらを直した
+     ついでにあちらが動いてしまう。**あえて分けてある。**
+     直すときは、片方だけを直してよい。
+
+   【ちがうのは1点。中身が「手順」であること】
+     指導ポイントは並びに意味の無い箇条書きなので**丸い点**。
+     こちらは順番に意味があるので**番号の丸**にしてある。 */
 .step-guide {
-  margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
-  background: var(--accent-soft); border: 1px solid var(--accent-line);
+  margin: 0 0 12px;
+  border: 1px solid var(--accent-line); border-radius: 8px;
+  background: var(--surface-1);
 }
+/* 畳んでいるときは、ただの1行の見出しに見せる */
+.step-guide[open] { background: var(--accent-soft); }
 .step-guide-sum {
-  cursor: pointer; list-style: none;
-  display: flex; align-items: baseline; gap: 8px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; cursor: pointer; list-style: none;
+  font-size: 12.5px; letter-spacing: .03em; color: var(--text-secondary);
 }
 .step-guide-sum::-webkit-details-marker { display: none; }
-.step-guide-sum::before {
-  content: '▸'; flex: 0 0 auto; color: var(--accent); font-size: 12px;
+.step-guide-sum:hover { color: var(--text-primary); }
+.step-guide-sum:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* ▸ / ▾。**押せることが見て分かる形にする** */
+.step-guide-caret {
+  width: 0; height: 0; flex: none;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  transition: transform .12s ease;
 }
-.step-guide[open] .step-guide-sum::before { content: '▾'; }
-.step-guide-aim { font-size: 13.5px; font-weight: 700; color: var(--accent); }
+.step-guide[open] .step-guide-caret { transform: rotate(90deg); }
+.step-guide-label { font-weight: 600; color: var(--accent); }
+.step-guide-count { margin-left: auto; font-size: 11.5px; color: var(--text-muted); }
+
+.step-guide-body { border-top: 1px solid var(--accent-line); }
+/* ねらい。**何のための練習か**を、手順より先に目に入れる */
+.step-guide-aimrow {
+  display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline;
+  margin: 0; padding: 9px 12px 2px;
+  font-size: 13.5px; line-height: 1.7; color: var(--text-primary);
+}
+.step-guide-tag {
+  padding: 1px 9px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.step-guide-aim { font-weight: 600; }
+
 .step-guide-how {
-  margin: 10px 0 0; padding-left: 22px;
-  font-size: 13px; line-height: 1.85; color: var(--text-secondary);
+  list-style: none; counter-reset: step;
+  margin: 0; padding: 2px 12px 11px;
 }
-.step-guide-how > li { margin-bottom: 2px; }
-.step-guide-how strong { color: var(--text-primary); }
+.step-guide-how > li {
+  position: relative; counter-increment: step;
+  padding: 7px 0 7px 26px;
+  font-size: 14px; line-height: 1.85; color: var(--text-primary);
+}
+/* 行と行の間に細い線。1行が2行に折り返しても、どこまでが1手順か分かる */
+.step-guide-how > li + li { border-top: 1px dashed var(--accent-line); }
+/* **番号の丸。** 並びに意味があることを、印そのもので示す */
+.step-guide-how > li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: .78em;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent);
+  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+}
+.step-guide-how strong { font-weight: 700; }
 
 /* ── ① ディクテーション ──────────────────────────────── */
 .dictation-list, .stepsent-list { list-style: none; margin: 0; padding: 0; }

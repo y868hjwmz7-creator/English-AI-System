@@ -245,18 +245,34 @@ export default function PassagePractice({
       {/* やり方。**1行に1つ。** 1つの段落に流すと、改行も区切りも無い棒になって
           読めない(指導ポイントで一度学んだこと)。
           狭い画面では畳めるようにする。何度も読むものではない */}
+      {/* **指導ポイントと同じ形にそろえた**(2026-08 利用者の指定)。
+          畳んだときは1行の見出し、開くと中身の枠になる。
+          色だけは 6Steps の緑(`--accent`)のままにしてある。
+
+          ちがうのは**中身が「手順」**だという1点。指導ポイントは
+          並びに意味の無い箇条書きなので丸い点だが、こちらは順番に
+          意味があるので**番号の丸**にした。ねらいは、見出しの札にして
+          いちばん上に置く(何のための練習かが先に目に入る)。 */}
       <details className="step-guide" open={guideOpen}
                onToggle={(e) => { setGuideOpen(e.currentTarget.open); saveGuideOpen(e.currentTarget.open) }}>
         <summary className="step-guide-sum">
-          <span className="step-guide-aim">{current.aim}</span>
+          <span className="step-guide-caret" aria-hidden="true" />
+          <span className="step-guide-label">やり方</span>
+          <span className="step-guide-count">{current.how.length} 手順</span>
         </summary>
-        <ol className="step-guide-how">
-          {current.how.map((line, i) => (
-            <li key={i}>
-              {line.split('**').map((t, k) => (k % 2 ? <strong key={k}>{t}</strong> : t))}
-            </li>
-          ))}
-        </ol>
+        <div className="step-guide-body">
+          <p className="step-guide-aimrow">
+            <span className="step-guide-tag">ねらい</span>
+            <span className="step-guide-aim">{current.aim}</span>
+          </p>
+          <ol className="step-guide-how">
+            {current.how.map((line, i) => (
+              <li key={i}>
+                {line.split('**').map((t, k) => (k % 2 ? <strong key={k}>{t}</strong> : t))}
+              </li>
+            ))}
+          </ol>
+        </div>
       </details>
 
       <div className="passage-tools">
