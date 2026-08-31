@@ -56,9 +56,8 @@ export default function TrainerLearners({ me }) {
   // レッスンで大きく表示している教材。**このゲストの分しか出ない。**
   // 画面共有のとき、他のゲストの情報を出さずに進められる(2026-08 の要望)
   const [lessonOf, setLessonOf] = useState(null)
-  // トレーナー自身の語の記録(2026-08 利用者の指定)。
-  // 担当ゲストの記録には触れない — RLS が learner_id = auth.uid() で縛る
-  /* **ゲストのカードの中では、そのゲストの記録を映す**(0025)。
+  /* **ゲストのカードの中では、そのゲストの記録を映す**(0025・利用者の指定)。
+     レッスンは一緒に進めるので、そこで付けた語はゲストの学習である。
      一覧に戻れば(`openId` が空)、これまでどおりトレーナー自身のもの */
   const { statuses: wordStatuses, mark: markWord } = useWordStatuses(openId)
   const [lessonBusy, setLessonBusy] = useState(null)
@@ -440,11 +439,11 @@ export default function TrainerLearners({ me }) {
 
                   return (
                   <>
-                    {/* **いつも 0 になる数字を出さない**(2026-08 の設計変更)。
-                        「学習した日 / 合計時間」はゲストが自分で入力していた
-                        `study_logs` の数字で、**もう誰も入力しない。**
-                        いまは `practice_days`(0022)を裏で数えている */}
-                    <p className="card-hint">{practiceLine(practice[l.id])}</p>
+                    {/* **アプリでの取り組みは、ここには出さない**(2026-08 利用者の指定)。
+                        カードの上(タブの外)に同じ行がすでにあり、
+                        **同じ内容が2回並んでいた。**
+                        取り組みはこのゲストのことなので、タブの中ではなく
+                        カードの上に置く(「リマインドする」もそこにある)。 */}
                     {detailBusy && <p className="muted">読み込み中…</p>}
                     {!detailBusy && assignments.length === 0 && (
                       <p className="card-hint">
