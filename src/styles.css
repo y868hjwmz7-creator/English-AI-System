@@ -545,7 +545,7 @@ input, select, textarea {
 .voice-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .voice-row > .field { flex: 1 1 150px; min-width: 0; }
 .voice-row > .field:first-child { flex: 2 1 280px; }
-.voice-pick { max-width: 720px; }
+.voice-pick { max-width: none; }
 .voice-pick > legend { margin-bottom: 6px; }
 
 /* 入力欄。**password / email も必ず含める。**
@@ -1054,7 +1054,11 @@ html { -webkit-text-size-adjust: 100%; }
    以前は作る画面が `.field` の素のまま(欄と欄のあいだに余白が無い)、
    さがす画面が `.filter-row`(横に流す)で、**別々の作りだった。**
    1か所に寄せてあるので、片方だけ動くことがない。 */
-.material-fields { display: flex; flex-direction: column; gap: 16px; max-width: 720px; }
+/* **幅は頭打ちにしない**(2026-08 利用者の指定)。
+   > これらのプルダウンの幅は弱点などと同じ左右いっぱいに広げてください。
+   > 左右を他の要素と揃えてください。
+   720px で止めていたので、弱点タグの行より短く、右端がそろっていなかった */
+.material-fields { display: flex; flex-direction: column; gap: 16px; }
 /* **文字とプルダウンの隙間**。4px では、題が入力欄にくっついて見える */
 .material-fields .field { gap: 7px; }
 .material-fields .field > span, .material-fields .field > legend { line-height: 1.5; }
@@ -1062,7 +1066,6 @@ html { -webkit-text-size-adjust: 100%; }
 .material-fields .field-row { gap: 16px; }
 
 /* 教材を作る */
-.material-form-row { max-width: 360px; }
 .material-kind-hint { margin: -4px 0 12px; }
 .material-items { margin: 16px 0; }
 .material-item-row {
