@@ -532,6 +532,82 @@ select pg_temp.expect('ゲストが種類ごとの集計を呼んでも何も返
 select pg_temp.expect('ゲストが全校の取り組みを呼んでも何も返らない',
   (select count(*)::int from public.school_practice(30)), 0);
 
+/* ── レッスンでの取り組みは「ゲストの記録」になる(0025)──────────
+   利用者の指定で、レッスン中に付けた「知らなかった」も、書き込んだ区切りも、
+   取り組んだ時間も**ゲストの学習そのもの**として残すようにした。
+
+   **表の RLS は緩めていない。** `mark_word` / `log_practice` を
+   security definer にして、**関数の中だけ**で担当かどうかを確かめている。
+   だから、ここで確かめるのはその門番である。
+   担当していないゲストに書けてしまったら、この検証が落ちる。 */
+
+-- ここまでに引き継ぎが済んでいるので、**生徒B の担当はトレーナー2**である。
+-- 生徒C は誰の担当でもない
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+
+select public.mark_word('shortfall', 'unknown', 'word', null, null, null,
+                        '22222222-2222-2222-2222-222222222222');
+select pg_temp.expect('トレーナーが、担当ゲストの単語帳に書ける(0025)',
+  (select count(*)::int from public.word_reviews
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and word_norm = 'shortfall'), 1);
+select pg_temp.expect('トレーナー自身の単語帳には入らない(0025)',
+  (select count(*)::int from public.word_reviews
+   where learner_id = '44444444-4444-4444-4444-444444444444'
+     and word_norm = 'shortfall'), 0);
+
+-- **レッスンで一緒に取り組んだ分は、ゲストの続けた記録に数える**(利用者の指定)
+select pg_temp.expect('ゲストの「続けた記録」に数えられる(0025)',
+  (select (answered > 0) from public.vocab_days
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and done_on = current_date), true);
+
+-- **担当していないゲストには書けない。** ここが唯一の門番である
+select pg_temp.expect_denied('担当していないゲストの単語帳には書けない(0025)', $$
+  select public.mark_word('rollout', 'unknown', 'word', null, null, null,
+                          '33333333-3333-3333-3333-333333333333') $$);
+
+-- 取り組みも同じ
+select public.log_practice('six_steps', 300, 1,
+                           '22222222-2222-2222-2222-222222222222');
+select pg_temp.expect('トレーナーの取り組みが、担当ゲストの分として数えられる(0025)',
+  (select (seconds >= 300) from public.practice_days
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and done_on = current_date and kind = 'six_steps'), true);
+select public.log_practice('six_steps', 300, 1,
+                           '33333333-3333-3333-3333-333333333333');
+select pg_temp.expect('担当していないゲストの取り組みは数えない(0025)',
+  (select count(*)::int from public.practice_days
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+
+-- 途中経過(区切り・書きかけ)は表の RLS で守る
+insert into public.material_progress (learner_id, material_id, scope, data)
+values ('22222222-2222-2222-2222-222222222222',
+        'aaaaaaaa-0000-0000-0000-000000000001', 'sec1.slash.marks', '{"1":[2]}');
+select pg_temp.expect('トレーナーが、担当ゲストの途中経過を書ける(0025)',
+  (select count(*)::int from public.material_progress), 1);
+select pg_temp.expect_denied('担当していないゲストの途中経過は書けない(0025)', $$
+  insert into public.material_progress (learner_id, material_id, scope, data)
+  values ('33333333-3333-3333-3333-333333333333',
+          'aaaaaaaa-0000-0000-0000-000000000001', 'sec1.slash.marks', '{}') $$);
+
+-- ゲスト本人は、自分の途中経過を読み書きできる
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('ゲストは自分の途中経過を読める(0025)',
+  (select count(*)::int from public.material_progress), 1);
+select pg_temp.expect('ゲストは自分の単語帳に、トレーナーが付けた語がある(0025)',
+  (select count(*)::int from public.word_reviews where word_norm = 'shortfall'), 1);
+
+-- **ほかのゲストの途中経過は見えない**
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('ほかのゲストの途中経過は見えない(0025)',
+  (select count(*)::int from public.material_progress), 0);
+
+-- **担当していないトレーナーにも見えない**(トレーナー1 は引き継ぎ済み)
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect('担当していないトレーナーには途中経過が見えない(0025)',
+  (select count(*)::int from public.material_progress), 0);
+
 -- 退会にする
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
 select public.set_learner_status('22222222-2222-2222-2222-222222222222',

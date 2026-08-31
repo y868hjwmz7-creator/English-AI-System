@@ -20,13 +20,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { clearWordStatus, loadMyWordStatuses, setWordStatus } from './vocab.js'
 
-export default function useWordStatuses() {
+export default function useWordStatuses(learnerId = null) {
   const [statuses, setStatuses] = useState(() => new Map())
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    loadMyWordStatuses().then(({ data }) => { if (data) setStatuses(data) })
-  }, [])
+    // **誰の記録を映すか**(0025)。ゲストのカードの中では、そのゲストのもの
+    loadMyWordStatuses(learnerId).then(({ data }) => { if (data) setStatuses(data) })
+  }, [learnerId])
 
   /**
    * 語に「知っていた / 知らなかった」を付ける(null で取り消し)。
@@ -36,7 +37,8 @@ export default function useWordStatuses() {
    * 押した手ごたえが無い。失敗したら元に戻す。
    */
   const mark = useCallback(async (
-    norm, status, kind = 'word', sentence = null, sentenceJa = null, materialId = null,
+    norm, status, kind = 'word', sentence = null, sentenceJa = null,
+    materialId = null, forLearner = null,
   ) => {
     let before = null
     setStatuses((m) => {
@@ -47,16 +49,18 @@ export default function useWordStatuses() {
       return next
     })
     const { error: e } = status
-      ? await setWordStatus(norm, status, { kind, sentence, sentenceJa, materialId })
+      ? await setWordStatus(norm, status, {
+        kind, sentence, sentenceJa, materialId, learnerId: forLearner,
+      })
       : await clearWordStatus(norm)
     if (e) { setError(e); if (before) setStatuses(before) }
   }, [])
 
   /** 画面から読み直したいとき(単語帳で状態を変えたあとなど) */
   const reload = useCallback(async () => {
-    const { data } = await loadMyWordStatuses()
+    const { data } = await loadMyWordStatuses(learnerId)
     if (data) setStatuses(data)
-  }, [])
+  }, [learnerId])
 
   return { statuses, mark, reload, error }
 }
@@ -73,7 +77,7 @@ export default function useWordStatuses() {
  * 発音練習・Quick Response)。**同じ包み方を6か所に書き写さない。**
  * 教材が分かるところで、これを1回かぶせるだけにする。
  */
-export const markIn = (mark, materialId) => (
+export const markIn = (mark, materialId, forLearner = null) => (
   (norm, status, kind = 'word', sentence = null, sentenceJa = null) =>
-    mark?.(norm, status, kind, sentence, sentenceJa, materialId ?? null)
+    mark?.(norm, status, kind, sentence, sentenceJa, materialId ?? null, forLearner ?? null)
 )

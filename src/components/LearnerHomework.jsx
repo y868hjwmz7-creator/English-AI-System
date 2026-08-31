@@ -33,7 +33,11 @@ import { loadMyReminder, markReminderSeen, usePracticeLog } from '../lib/practic
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
-export default function LearnerHomework() {
+export default function LearnerHomework({ me = null }) {
+  /* **書き込んだものは、ゲスト自身の記録として残す**(0025)。
+     トレーナーがレッスンで書いたものと同じ置き場所になるので、
+     どちらから開いても続きから始められる */
+  const learnerId = me?.id ?? null
   // 担当トレーナーからのリマインド(0022)。
   // **トレーナーが押したときだけ届く。** 自動では飛ばないので、
   // 「トレーナーから」と書いても嘘にならない(2026-08 利用者の指定)
@@ -130,6 +134,7 @@ export default function LearnerHomework() {
       )}
       {lessonOf && (
         <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
+                    learnerId={learnerId}
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
@@ -249,6 +254,7 @@ export default function LearnerHomework() {
                     {qrOf === a.id ? (
                       <QuickResponse
                         material={a.material}
+                        learnerId={learnerId}
                         onClose={() => setQrOf(null)}
                         wordStatuses={wordStatuses}
                         onMarkWord={markWord}
@@ -296,6 +302,7 @@ export default function LearnerHomework() {
                               /* 途中経過を教材ごとにまとめて消せるようにするため、
                                  教材の id も渡す(`src/lib/progress.js`) */
                               materialId={a.material?.id}
+                              learnerId={learnerId}
                               tags={a.material?.tagIds}
                               voiceIds={a.material?.voiceIds}
                               headline={a.material?.headline}

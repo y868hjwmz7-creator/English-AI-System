@@ -82,12 +82,13 @@ const hasJaOf = (s) => partsOf(s).some((p) => storedChunks(p))
 
 export default function SlashReading({
   blocks, clipVoice, tier, rate, unit, onUnitChange, progressAt = null,
+  learnerId = null,
 }) {
   /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定)。
      20か所入れたあとで別のタブを見に行くと、やり直しになっていた。
      鍵の形は `progress.js` に1か所だけ置いてある。 */
-  const [marks, setMarks] = useProgress(`${progressAt}.marks`, {})
-  const [shown, setShown] = useProgress(`${progressAt}.shown`, {})
+  const [marks, setMarks] = useProgress(`${progressAt}.marks`, {}, learnerId)
+  const [shown, setShown] = useProgress(`${progressAt}.shown`, {}, learnerId)
   // **通しで見る**(2026-08 利用者の指定)。段落ごとの作業と切り替える
   const [review, setReview] = useState(false)
 

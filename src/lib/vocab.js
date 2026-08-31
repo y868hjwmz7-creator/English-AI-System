@@ -444,13 +444,19 @@ export function posKind(pos) {
  * 画面を開いたときに1回だけ呼び、あとは手元で持つ。
  * 語ごとに問い合わせると、1画面で何十回も往復することになる。
  */
-export async function loadMyWordStatuses() {
+export async function loadMyWordStatuses(learnerId = null) {
   if (!supabase) return ok(new Map())
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return ok(new Map())
+  // **誰の記録を映すか**(0025)。ゲストのカードの中では、そのゲストのもの。
+  // 渡さなければ自分のもの(これまでどおり)
+  let who = learnerId
+  if (!who) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return ok(new Map())
+    who = user.id
+  }
 
   const { data, error } = await supabase
-    .from('word_reviews').select('word_norm, status').eq('learner_id', user.id)
+    .from('word_reviews').select('word_norm, status').eq('learner_id', who)
   if (error) return fail(error, '語の記録を読めませんでした')
   return ok(new Map((data ?? []).map((r) => [r.word_norm, r.status])))
 }
@@ -624,6 +630,8 @@ let noSentenceArg = false
 
 export async function setWordStatus(word, status, {
   kind = 'word', materialId = null, sentence = null, sentenceJa = null,
+  // **誰の記録にするか**(0025)。レッスン中のゲスト。渡さなければ自分
+  learnerId = null,
 } = {}) {
   const norm = normWord(word)
   if (!norm) return ng('英語の語ではありません')
@@ -635,6 +643,9 @@ export async function setWordStatus(word, status, {
     p_status: status,
     p_kind: kind === 'phrase' ? 'phrase' : 'word',
     p_material: materialId,
+    // **0025 より前の関数は、この引数を受け取れない。**
+    // 誰の記録かを指定していないときは、そもそも送らない(これまでどおり動く)
+    ...(learnerId ? { p_learner: learnerId } : {}),
   }
   // 出会った文(0018)。**人は文脈ごと覚える。**
   // 最初の1文だけが残る(あとから上書きしないのは SQL 側の決まり)。
@@ -649,6 +660,15 @@ export async function setWordStatus(word, status, {
   )) {
     noSentenceArg = true
     ;({ data, error } = await supabase.rpc('mark_word', args))
+  }
+  // **0025 をまだ貼っていないのに「ゲストの記録として」と頼まれたとき。**
+  // 黙って自分の記録にすると、**間違った人の単語帳に入る。**
+  // ここは静かに落とさず、何をすればよいかまで言う
+  if (error && learnerId && /p_learner|PGRST202|function/i.test(
+    `${error.message ?? ''} ${error.code ?? ''}`,
+  )) {
+    return ng('この Supabase にはまだ 0025 の SQL が入っていません。'
+      + 'トレーナーにお知らせください(貼るまで、レッスンで付けた語は残りません)。')
   }
   // **0015 をまだ貼っていない Supabase でも動くようにする。**
   // 貼るまでのあいだ「押しても色が付かない」状態にしない(2026-08 実機)。

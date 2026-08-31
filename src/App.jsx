@@ -275,7 +275,7 @@ export default function App() {
             ) : view === 'learners' ? (
               profile ? <TrainerLearners me={profile} /> : <p className="muted">読み込み中…</p>
             ) : view === 'homework' ? (
-              <LearnerHomework />
+              <LearnerHomework me={profile} />
             ) : view === 'wordbook' ? (
               <Wordbook level={profile?.cefr ?? null} />
             ) : view === 'pronunciation' ? (

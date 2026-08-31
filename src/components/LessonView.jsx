@@ -65,10 +65,12 @@ export default function LessonView({
   // ゲストが開いたときは「知っていた / 知らなかった」も付けられる。
   // トレーナーが開いたときは意味を見るだけ(申告はゲスト本人のもの)
   wordStatuses = null, onMarkWord = null,
+  /** 誰の学習として残すか(0025)。レッスン中のゲスト / 自分 */
+  learnerId = null,
 }) {
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る。
      語に触れる場所は多いので、**教材が分かるここで1回だけかぶせる** */
-  const markWord = markIn(onMarkWord, material?.id)
+  const markWord = markIn(onMarkWord, material?.id, learnerId)
   const sections = material?.sections ?? []
   const [page, setPage] = useState(0)
   // 解答の出し方は2通り。**両方要る。**
@@ -432,10 +434,12 @@ export default function LessonView({
             /* 途中経過を教材ごとにまとめて消せるようにするため、
                教材の id も渡す(`src/lib/progress.js`) */
             materialId={material.id}
+            learnerId={learnerId}
             tags={allTags} voiceIds={material.voiceIds} level={material.level}
           />
         ) : qr ? (
-          <QuickResponse material={material} paper onClose={() => setRun(null)} />
+          <QuickResponse material={material} paper learnerId={learnerId}
+                         onClose={() => setRun(null)} />
         ) : section && (
           <>
             <h3 className="lesson-section">

@@ -228,6 +228,9 @@ export default function TrainerMaterials({ me }) {
   return (
     <div className="stack">
       {lessonOf && (
+        /* **「教材」画面はトレーナー自身のもの**(2026-08 利用者の確認)。
+           > トレーナーが「教材」画面で自分のために触った語は、
+           > これまでどおりトレーナー自身の記録でよいですか → はい */
         <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}

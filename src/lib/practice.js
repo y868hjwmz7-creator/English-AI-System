@@ -52,7 +52,7 @@ const looksMissing = (error) => {
  * 取り組みを足す。**失敗しても画面には何も出さない。**
  * 記録は本筋ではないので、これで練習が止まってはいけない。
  */
-export async function logPractice(kind, seconds = 0, times = 0) {
+export async function logPractice(kind, seconds = 0, times = 0, forLearner = null) {
   if (!supabase || missing) return
   if (!PRACTICE_KINDS[kind]) return
   const s = Math.round(Math.max(0, seconds))
@@ -61,6 +61,9 @@ export async function logPractice(kind, seconds = 0, times = 0) {
 
   const { error } = await supabase.rpc('log_practice', {
     p_kind: kind, p_seconds: s, p_times: t,
+    // **0025 より前の関数は、この引数を受け取れない。**
+    // 誰の分かを指定していないときは、そもそも送らない(これまでどおり動く)
+    ...(forLearner ? { p_learner: forLearner } : {}),
   })
   if (error && looksMissing(error)) {
     missing = true
@@ -77,13 +80,23 @@ export async function logPractice(kind, seconds = 0, times = 0) {
  * @param {string} kind    PRACTICE_KINDS のどれか
  * @param {boolean} active 数えるかどうか(開いているタブだけ数えたいときに使う)
  */
-export function usePracticeLog(kind, active = true) {
+export function usePracticeLog(kind, active = true, forLearner = null) {
   const since = useRef(null)    // いま数え始めた時刻
   const counted = useRef(false) // 回数をもう1つ数えたか
 
   useEffect(() => {
-    // **ゲストのぶんだけ数える。** 要らないものは送らない
-    if (!active || !supabase || viewerRoleOf() !== 'learner') return undefined
+    /**
+     * **数えるのは「ゲストの学習」だけ。**
+     *
+     * ・ゲスト自身が使っているとき(これまでどおり)
+     * ・**トレーナーがゲストのカードの中で使っているとき**(0025)。
+     *   レッスンで一緒に取り組んだ時間は、ゲストの学習時間である
+     *   (2026-08 利用者の指定)
+     *
+     * トレーナーが「教材」画面で自分のために触っている分は数えない。
+     */
+    const mine = viewerRoleOf() === 'learner'
+    if (!active || !supabase || (!mine && !forLearner)) return undefined
 
     const start = () => { if (since.current == null) since.current = Date.now() }
     /** いままで数えた秒を送って、時計を戻す */
@@ -95,7 +108,7 @@ export function usePracticeLog(kind, active = true) {
       if (sec < 5) return
       const first = !counted.current
       counted.current = true
-      logPractice(kind, sec, first ? 1 : 0)
+      logPractice(kind, sec, first ? 1 : 0, forLearner)
     }
 
     start()
@@ -114,7 +127,7 @@ export function usePracticeLog(kind, active = true) {
       document.removeEventListener('visibilitychange', onVisible)
       flush(true)
     }
-  }, [kind, active])
+  }, [kind, active, forLearner])
 }
 
 // ── トレーナー側から読む / 送る ────────────────────────────────

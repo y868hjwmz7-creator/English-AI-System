@@ -28,12 +28,12 @@ import { useProgress } from '../lib/progress.js'
 export default function StepDictation({
   sentences, clipVoice, tier, rate, level,
   wordStatuses, onMarkWord, listeningId, onCheck, results,
-  size, onSizeChange, progressAt = null,
+  size, onSizeChange, progressAt = null, learnerId = null,
 }) {
   // **書きかけを覚えておく**(2026-08 利用者の指定)。
   // 別のタブを見て戻ったら消えていた、という報告があった
-  const [typed, setTyped] = useProgress(`${progressAt}.typed`, {})
-  const [shown, setShown] = useProgress(`${progressAt}.shown`, {})
+  const [typed, setTyped] = useProgress(`${progressAt}.typed`, {}, learnerId)
+  const [shown, setShown] = useProgress(`${progressAt}.shown`, {}, learnerId)
   // **1文ずつでは細かすぎることがある。**「Hi!」だけで1問にしても
   // 書き取る意味がない(2026-08 実機)。難易度を上げるほど、
   // 一度に覚える文が増える

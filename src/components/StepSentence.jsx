@@ -27,11 +27,12 @@ import { useProgress } from '../lib/progress.js'
 export default function StepSentence({
   sentences, startVisible, clipVoice, tier, rate, level,
   wordStatuses, onMarkWord, listeningId, onCheck, results, progressAt = null,
+  learnerId = null,
 }) {
   // 文ごとに「英語が見えているか」。ステップを移ったら、はじめの状態に戻す
   // **開いた行を覚えておく**(2026-08 利用者の指定)
-  const [openEn, setOpenEn] = useProgress(`${progressAt}.en`, {})
-  const [openJa, setOpenJa] = useProgress(`${progressAt}.ja`, {})
+  const [openEn, setOpenEn] = useProgress(`${progressAt}.en`, {}, learnerId)
+  const [openJa, setOpenJa] = useProgress(`${progressAt}.ja`, {}, learnerId)
   /* **ステップごとに別の鍵で覚える**(`progressAt` に ④ / ⑥ が入っている)。
      以前はステップが変わるたびに空へ戻していたが、覚えるようにしたので
      戻す必要が無い。**戻すと、開き直した瞬間に消える。** */

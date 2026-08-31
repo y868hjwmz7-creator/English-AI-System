@@ -241,4 +241,13 @@ from (
     select pg_get_function_result(p.oid) like '%material_title%'
        and pg_get_function_result(p.oid) like '%added_at%'
     from pg_proc p where p.proname = 'review_words'), 58
+  union all
+  select '(59) 途中経過をゲストと共有できる(0025)', exists (
+    select 1 from pg_tables where tablename = 'material_progress'), 59
+  union all
+  select '(60) レッスンの記録をゲストのものにできる(0025)', (
+    -- mark_word / log_practice が「誰の記録にするか」を受け取れること
+    select count(*) = 2 from pg_proc p
+    where p.proname in ('mark_word', 'log_practice')
+      and pg_get_function_identity_arguments(p.oid) like '%uuid'), 60
 ) t order by 順;

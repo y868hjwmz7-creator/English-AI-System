@@ -60,11 +60,13 @@ import { usePracticeLog } from '../lib/practice.js'
 export default function PassagePractice({
   section, headline, isDialogue, tags = null, voiceIds = null,
   level = 'B1', wordStatuses = null, onMarkWord = null, materialId = null,
+  /** 誰の学習として残すか(0025)。ゲスト自身 / レッスン中のゲスト */
+  learnerId = null,
 }) {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
-  usePracticeLog('six_steps')
+  usePracticeLog('six_steps', true, learnerId)
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る */
-  const markWord = markIn(onMarkWord, materialId)
+  const markWord = markIn(onMarkWord, materialId, learnerId)
   /**
    * **やりかけを覚えておく**(2026-08 利用者の指定)。
    *
@@ -75,7 +77,9 @@ export default function PassagePractice({
    * どのトレーニングを開いていたかも、そのうちの1つである。
    * 中身(区切り・書きかけ)は、それぞれの部品が同じ鍵の形で覚える。
    */
-  const [step, setStep] = useProgress(progressKey(materialId, section.id, 'step'), 'dictation')
+  const [step, setStep] = useProgress(
+    progressKey(materialId, section.id, 'step'), 'dictation', learnerId,
+  )
   const [voices, setVoices] = useState([])
   const [showJa, setShowJa] = useState(false)
   // 読み上げの速さ。取り組み方ごとのもとの速さに**掛ける**ので、
@@ -337,6 +341,7 @@ export default function PassagePractice({
           onSizeChange={(v) => { setDictSize(v); saveDictSize(v) }}
           /* **書きかけを覚えておく**(2026-08 利用者の指定)。鍵の形は1か所 */
           progressAt={progressKey(materialId, section.id, 'dictation')}
+          learnerId={learnerId}
         />
       )}
       {step === 'slash' && (
@@ -347,6 +352,7 @@ export default function PassagePractice({
           onUnitChange={(v) => { setSlashUnit(v); saveSlashUnit(v) }}
           /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定) */
           progressAt={progressKey(materialId, section.id, `slash-${slashUnit}`)}
+          learnerId={learnerId}
         />
       )}
       {(step === 'meaning' || step === 'repeat') && (
@@ -358,6 +364,7 @@ export default function PassagePractice({
           listeningId={listeningId} onCheck={checkOne} results={results}
           /* ④⑥ で開いた行も覚えておく(2026-08 利用者の指定) */
           progressAt={progressKey(materialId, section.id, `sentence-${step}`)}
+          learnerId={learnerId}
         />
       )}
 

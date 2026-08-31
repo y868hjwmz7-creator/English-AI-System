@@ -58,7 +58,9 @@ export default function TrainerLearners({ me }) {
   const [lessonOf, setLessonOf] = useState(null)
   // トレーナー自身の語の記録(2026-08 利用者の指定)。
   // 担当ゲストの記録には触れない — RLS が learner_id = auth.uid() で縛る
-  const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
+  /* **ゲストのカードの中では、そのゲストの記録を映す**(0025)。
+     一覧に戻れば(`openId` が空)、これまでどおりトレーナー自身のもの */
+  const { statuses: wordStatuses, mark: markWord } = useWordStatuses(openId)
   const [lessonBusy, setLessonBusy] = useState(null)
   const [assignments, setAssignments] = useState([])
   const [detailBusy, setDetailBusy] = useState(false)
@@ -234,7 +236,10 @@ export default function TrainerLearners({ me }) {
   return (
     <div className="stack">
       {lessonOf && (
+        /* **レッスンで書いたものは、そのゲストの学習として残す**(0025)。
+           > セッションで一緒に取り組んでいるので学習時間に入ります */
         <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
+                    learnerId={openId}
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
       {message && <div className="notice notice--ok">{message}</div>}
@@ -592,7 +597,8 @@ export default function TrainerLearners({ me }) {
                               openSection={hwSection[body.id] ?? null}
                               onSection={(id) => setHwSection((x) => ({ ...x, [body.id]: id }))}
                               wordStatuses={wordStatuses}
-                              onMarkWord={markIn(markWord, body.id)}
+                              /* **レッスンで付けた語は、そのゲストの単語帳へ**(0025) */
+                              onMarkWord={markIn(markWord, body.id, openId)}
                               onClose={() => setOpenHw(null)}
                             />
                           )}

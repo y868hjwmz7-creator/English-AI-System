@@ -39,15 +39,18 @@ import { markIn } from '../lib/useWordStatuses.js'
 
 export default function QuickResponse({
   material, onClose, wordStatuses = null, onMarkWord = null, paper = false,
+  learnerId = null,
 }) {
   const pairs = useMemo(() => quickResponsePairs(material), [material])
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
-  usePracticeLog('quick_response')
+  usePracticeLog('quick_response', true, learnerId)
   /* **どの教材で会ったかを添える**(0024) */
-  const markWord = markIn(onMarkWord, material?.id)
+  const markWord = markIn(onMarkWord, material?.id, learnerId)
   /* **何問目まで進んだかを覚えておく**(2026-08 利用者の指定)。
      途中で別のページへ行って戻ると、1問目に戻っていた */
-  const [savedAt, setAt] = useProgress(progressKey(material?.id, 'qr', 'at'), 0)
+  const [savedAt, setAt] = useProgress(
+    progressKey(material?.id, 'qr', 'at'), 0, learnerId,
+  )
   // **控えていた場所が、範囲の外になっていることがある**(教材を直したあと)。
   // そのまま使うと問が空になるので、必ず中に収める
   const at = Math.min(Math.max(0, savedAt), Math.max(0, pairs.length - 1))
