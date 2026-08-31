@@ -21,7 +21,7 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { countLabel, exerciseLabel, isPassageSection } from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
-import { INDUSTRIES, industryLabel } from '../data/industries.js'
+import { industriesIn, industryLabel } from '../data/industries.js'
 import {
   NEW_MATERIAL_KINDS, addChunkJa, assignMaterial,
   kindLabel, loadMyLearners, searchMaterials,
@@ -40,9 +40,6 @@ export default function TrainerMaterials({ me }) {
   const [genre, setGenre] = useState('')       // 記事のジャンル
   const [scene, setScene] = useState('')       // 会話の場面
   const [sort, setSort] = useState('new')      // 並び順
-  // **このゲストに出したことがある教材**で絞る(2026-08 利用者の指定)。
-  // 記録は `assignments` にある。教材名にゲスト名を入れる代わりの仕組み
-  const [learnerId, setLearnerId] = useState('')
   const [openId, setOpenId] = useState(null)   // 中身を開いている教材
   const [openSection, setOpenSection] = useState({})  // 教材ごとに開いている演習
   // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
@@ -65,6 +62,11 @@ export default function TrainerMaterials({ me }) {
   const [picked, setPicked] = useState([])
   const [message, setMessage] = useState(null)
 
+  /* **選ぶ欄は2つ、入れ物は1つ**(作る画面と同じ考え方)。
+     いま選んでいるものが「仕事」か「趣味」かは、ここで1回だけ決める */
+  const isHobbyFilter = industriesIn('hobby').some((i) => i.id === industry)
+  const isWorkFilter = Boolean(industry) && !isHobbyFilter
+
   const search = async () => {
     setLoading(true)
     setError(null)
@@ -73,7 +75,6 @@ export default function TrainerMaterials({ me }) {
       kind: kind || null,
       genre: kind === 'reading' ? (genre || null) : null,
       scene: kind === 'dialogue' ? (scene || null) : null,
-      learnerId: learnerId || null,
     })
     setLoading(false)
     if (e) { setError(e); return }
@@ -81,7 +82,7 @@ export default function TrainerMaterials({ me }) {
   }
 
   // 絞り込みが変わったら探し直す。search 自体は毎回作り直されるので依存に入れない。
-  useEffect(() => { search() }, [tagIds, level, industry, kind, genre, scene, learnerId])
+  useEffect(() => { search() }, [tagIds, level, industry, kind, genre, scene])
 
   /** 本文があって、まだカタマリごとの訳が入っていない教材か(0021) */
   // **判断は `chunkJa.js` の `needsChunkJa()` 1か所。** 画面に持たない
@@ -199,10 +200,8 @@ export default function TrainerMaterials({ me }) {
       <MaterialForm
         createdBy={me.id}
         learners={learners.filter((l) => l.status === 'active')}
-        initial={{ tagIds, level: level ?? '', industry, kind, genre, scene,
-          // **絞り込みの項目を足したら、`initial` にも必ず足す**(CLAUDE.md)。
-          // ゲストで絞っていたなら、そのゲストに共有する前提で作る
-          shareWith: learnerId ? [learnerId] : [] }}
+        // **絞り込みの項目を足したら、`initial` にも必ず足す**(CLAUDE.md)
+        initial={{ tagIds, level: level ?? '', industry, kind, genre, scene }}
         onCancel={() => setMode('search')}
         onCreated={(id, shared) => {
           setMode('search')
@@ -268,17 +267,16 @@ export default function TrainerMaterials({ me }) {
             <option value="">すべて</option>
             {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
           </select>
-          {/* **このゲストに出したことがある教材**(2026-08 利用者の指定)。
-              教材名にゲスト名を入れるのをやめた代わりに、ここで引く。
-              > 同じようなレベルのゲストに再利用する際に便利です */}
-          <span className="filter-label">ゲスト</span>
-          <select value={learnerId} onChange={(e) => setLearnerId(e.target.value)}
-                  title="このゲストに出したことがある教材だけを出す">
-            <option value="">すべて</option>
-            {learners.map((l) => (
-              <option key={l.id} value={l.id}>{l.display_name}</option>
-            ))}
-          </select>
+          {/* **ゲストで絞る欄は置かない**(2026-08 利用者の指定)。
+
+                > 「ゲスト」の選択はここではしないです。
+                > 教材ができてから「ゲストと共有する」があれば十分です
+
+              ここは**教材をさがす**画面である。誰に出すかは、
+              使う教材が決まったあとに、その教材の
+              「ゲストと共有する」で決める。
+              あるゲストに出した教材を見たいときは、
+              「ゲスト」画面 → そのゲストのカード → 過去の宿題で見られる。 */}
           {kind === 'reading' && (
             <>
               <span className="filter-label">ジャンル</span>
@@ -297,10 +295,25 @@ export default function TrainerMaterials({ me }) {
               </select>
             </>
           )}
+          {/* **業界と趣味は、プルダウンを2つに分ける**(2026-08 利用者の指定)。
+              作る画面(`MaterialForm`)とまったく同じ形にしてある。
+              **入れ物は `materials.industry` の1列のまま。**
+              教材が持つ場面は1つなので、片方を選ぶともう片方は空に戻る。 */}
           <span className="filter-label">業界</span>
-          <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
+          <select value={isWorkFilter ? industry : ''}
+                  onChange={(e) => setIndustry(e.target.value)}>
             <option value="">すべて</option>
-            {INDUSTRIES.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+            {industriesIn('work').map((i) => (
+              <option key={i.id} value={i.id}>{i.label}</option>
+            ))}
+          </select>
+          <span className="filter-label">趣味</span>
+          <select value={isHobbyFilter ? industry : ''}
+                  onChange={(e) => setIndustry(e.target.value)}>
+            <option value="">すべて</option>
+            {industriesIn('hobby').map((i) => (
+              <option key={i.id} value={i.id}>{i.label}</option>
+            ))}
           </select>
           <input className="material-keyword" value={keyword} placeholder="教材名・見出しで絞る"
                  onChange={(e) => setKeyword(e.target.value)}
