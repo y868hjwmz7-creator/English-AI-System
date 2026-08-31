@@ -348,20 +348,27 @@ export default function TrainerLearners({ me }) {
         const toeic = l.scores.toeic
         const versant = l.scores.versant
         return (
-          <div key={l.id} className="card learner-card">
-            <div className="material-head">
-              <h3 className="card-title">
-                {/* 名前を押すと開く。カードのどこかに小さなボタンがあるより、
-                    名前そのものが入口になっているほうが迷わない */}
-                <button type="button" className="learner-name"
-                        onClick={() => (openId === l.id ? setOpenId(null) : openDetail(l.id))}>
-                  {l.display_name}
-                </button>
-                <span className={`badge ${STATUS[l.status]?.cls ?? ''}`}>
-                  {STATUS[l.status]?.label ?? l.status}
-                </span>
-              </h3>
-              <span className="muted">{cefrLabel(l.cefr)}</span>
+          /* **開いているあいだは、いちばん外側の囲みを外す**
+             (2026-08 利用者の指定)。
+               > ゲストモードの一番外側の囲み、いらないです。
+               > これを取り除いて教材モードと同じデザインにしてください。
+             教材の画面は「囲みの中にカードを入れ子にする」形をしていない。
+             一覧では1人1枚のカード、開いたら**そのまま地の上に置く。** */
+          <div key={l.id}
+               className={`learner-card${openId === l.id ? ' learner-open' : ' card'}`}>
+            <div className="learner-head">
+              {/* **名前と札を離す**(2026-08 利用者の指定)。
+                  > ゲスト名と「受講中」というアイコンが近すぎます。
+                  名前を押すと開く。カードのどこかに小さなボタンがあるより、
+                  名前そのものが入口になっているほうが迷わない */}
+              <button type="button" className="learner-name"
+                      onClick={() => (openId === l.id ? setOpenId(null) : openDetail(l.id))}>
+                {l.display_name}
+              </button>
+              <span className={`badge ${STATUS[l.status]?.cls ?? ''}`}>
+                {STATUS[l.status]?.label ?? l.status}
+              </span>
+              <span className="learner-level">{cefrLabel(l.cefr)}</span>
             </div>
 
             {/* **アプリでの取り組み**(0022)。1行に畳む。
