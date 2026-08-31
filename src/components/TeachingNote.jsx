@@ -48,9 +48,25 @@ const markEnglish = (text, keyPrefix) => {
   return parts.length ? parts : [text]
 }
 
-/** 表示用の行に分ける */
+/**
+ * 表示用の行に分ける。
+ *
+ * 【`\n` という**文字**が混じることがある】(2026-08 実機)
+ *
+ *   > 指導ポイントの中の一番左の n とスラッシュの反対のようなものが
+ *   > 映らないようにしてください。
+ *
+ *   画面には `\na few/a little は…` のように出ていた。
+ *   これは**本物の改行ではなく、バックスラッシュと n の2文字**である。
+ *   AI が JSON の中で改行を書こうとして、そのまま文字になったもの。
+ *
+ *   **すでに作った教材にも入っている。** 作り直させずに直すため、
+ *   出すときに本物の改行として扱う。`\r` も同じ。
+ */
 const toLines = (text) => {
-  const raw = String(text ?? '').trim()
+  const raw = String(text ?? '')
+    .replace(/\\r\\n|\\n|\\r/g, '\n')   // 文字としての \n を、本物の改行に
+    .trim()
   if (!raw) return []
 
   const byNewline = raw.split(/\n+/).map((l) => l.trim()).filter(Boolean)

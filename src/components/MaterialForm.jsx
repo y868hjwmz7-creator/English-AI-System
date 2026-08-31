@@ -19,7 +19,7 @@ import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import {
   EXERCISE_TYPES, FIELD_LABELS, defaultSectionsFor, exerciseLabel, exerciseType,
 } from '../data/exerciseTypes.js'
-import { INDUSTRIES, industryLabel } from '../data/industries.js'
+import { INDUSTRY_GROUPS, industriesIn, industryLabel } from '../data/industries.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
@@ -219,6 +219,20 @@ export default function MaterialForm({
    * この2つだけで、40問は AI が作る(仕様書 第5.13.5節)。
    * **生成した内容は保存しない。** 発行を押すまでは下書きのままである。
    */
+  /**
+   * **生成の窓口には、業界の「日本語の名前」を渡す。**
+   *
+   * これまでは id(`it` `hospitality` …)をそのまま渡しており、
+   * 窓口の指示文には `it の場面に寄せること` と入っていた。
+   * **AI には何のことか伝わらない。**
+   * 趣味を足して(2026-08)`listening` `watching` のような語が増えると、
+   * 「聞き取りの場面」「見る場面」と読まれかねない。
+   *
+   * データベースに入れるのは**これまでどおり id**(`materials.industry`)。
+   * 変えるのは、AI に渡す文言だけである。
+   */
+  const industryText = industry ? industryLabel(industry) : ''
+
   /** 弱点タグを、AI に渡す文言にする */
   const topicOf = (id) => {
     const tag = weaknessTags.find((t) => t.id === id)
@@ -292,7 +306,7 @@ export default function MaterialForm({
       sectionType: bodyPlan.exercise_type,
       count: bodyPlan.count,
       topic: tagIds.map(topicOf).join(' / '),
-      level, industry, isFirst: true,
+      level, industry: industryText, isFirst: true,
       // 単語帳から渡された語は**本文に入れる**。
       // 内容の理解・語句は、できた本文から作るので渡さなくてよい
       reviewWords: mustUse,
@@ -341,7 +355,7 @@ export default function MaterialForm({
         sectionType: rest[i].exercise_type,
         count: rest[i].count,
         topic: tagIds.map(topicOf).join(' / '),
-        level, industry, context,
+        level, industry: industryText, context,
       })
       if (e) { fail(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`); return }
       spent.input += data.usage?.input ?? 0
@@ -429,7 +443,7 @@ export default function MaterialForm({
           count: plan[i].count,
           topic: topicOf(tagIds[0]),
           topics: tagIds.length > 1 ? tagIds.map(topicOf) : [],
-          level, industry, isFirst: i === 0,
+          level, industry: industryText, isFirst: i === 0,
           // 復習の語は最初の演習にだけ渡す。単語・フレーズは1演習しかない。
           // **単語帳から渡された語(mustUse)が先。** トレーナーが名指しで
           // 選んだものなので、自動で拾った語より優先する
@@ -598,9 +612,84 @@ export default function MaterialForm({
         すべて指定し終えるまで選択肢が出てこず、やりにくかった。
         ここで選んでおくと、発行と同時に共有まで終わる。
       */}
+      {/* **上から「レベル → 業界 → トレーニングの種類 → 話題/場面 → ゲスト」**
+          (2026-08 利用者の指定)。ゲストモードから作るときも同じ並びである
+          (同じ部品を使っているので、1か所で決まる)。 */}
+      <div className="field-row material-form-row">
+        <label className="field">
+          <span>レベル</span>
+          <select value={level} onChange={(e) => setLevel(e.target.value)}>
+            {CEFR_LEVELS.map((l) => (
+              <option key={l.id} value={l.id}>{cefrLabel(l.id)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {/* **お仕事と趣味・娯楽を、組に分けて見せる**(2026-08 利用者の指定)。
+          > 業界を選ばない場合に選べるようにしたいのが、「趣味・娯楽」です。
+          仕事で英語を使わない人もいるし、仕事の話ばかりでは続かない。
+          **表も列も増やさない。** 同じ `materials.industry` に入る */}
+      <label className="field">
+        <span>
+          業界・趣味
+          <span className="field-hint">
+            選ばなければ「汎用」。どのゲストにも使えます
+          </span>
+        </span>
+        <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
+          <option value="">汎用(全員)</option>
+          {INDUSTRY_GROUPS.map((g) => (
+            <optgroup key={g.id} label={g.label}>
+              {industriesIn(g.id).map((i) => (
+                <option key={i.id} value={i.id}>{i.label} — {i.hint}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+
+      <label className="field">
+        <span>トレーニングの種類</span>
+        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+        </select>
+      </label>
+      <p className="field-hint material-kind-hint">
+        {NEW_MATERIAL_KINDS.find((k) => k.id === kind)?.hint}
+      </p>
+      {kind === 'reading' && (
+        <label className="field">
+          <span>
+            話題
+            <span className="field-hint">業界・趣味と組み合わせて、何の記事にするかが決まります</span>
+          </span>
+          <select value={genre} onChange={(e) => setGenre(e.target.value)}>
+            {READING_GENRES.map((g) => (
+              <option key={g.id} value={g.id}>{g.label} — {g.hint}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {kind === 'dialogue' && (
+        <label className="field">
+          <span>
+            シチュエーション
+            <span className="field-hint">
+              場面によって丁寧さと言い回しが変わります。同じ話題でも別の教材になります
+            </span>
+          </span>
+          <select value={scene} onChange={(e) => setScene(e.target.value)}>
+            {DIALOGUE_SCENES.map((x) => (
+              <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <fieldset className="field">
         <legend>
-          誰に出すか
+          ゲスト
           <span className="field-hint">
             選ばずに作って、あとから一覧で共有することもできます
           </span>
@@ -639,57 +728,6 @@ export default function MaterialForm({
           </>
         )}
       </fieldset>
-
-      <div className="field-row material-form-row">
-        <label className="field">
-          <span>レベル</span>
-          <select value={level} onChange={(e) => setLevel(e.target.value)}>
-            {CEFR_LEVELS.map((l) => (
-              <option key={l.id} value={l.id}>{cefrLabel(l.id)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>種類</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
-          </select>
-        </label>
-      </div>
-      <p className="field-hint material-kind-hint">
-        {NEW_MATERIAL_KINDS.find((k) => k.id === kind)?.hint}
-      </p>
-
-      {kind === 'reading' && (
-        <label className="field">
-          <span>
-            記事のジャンル
-            <span className="field-hint">業界と組み合わせて、何の記事にするかが決まります</span>
-          </span>
-          <select value={genre} onChange={(e) => setGenre(e.target.value)}>
-            {READING_GENRES.map((g) => (
-              <option key={g.id} value={g.id}>{g.label} — {g.hint}</option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      {kind === 'dialogue' && (
-        <label className="field">
-          <span>
-            会話の場面
-            <span className="field-hint">
-              場面によって丁寧さと言い回しが変わります。同じ話題でも別の教材になります
-            </span>
-          </span>
-          <select value={scene} onChange={(e) => setScene(e.target.value)}>
-            {DIALOGUE_SCENES.map((x) => (
-              <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
-            ))}
-          </select>
-        </label>
-      )}
-
       {/* 読み上げの声(0017)。
           **相手の訛りが聞き取れないと仕事にならない。** インドやシンガポールの
           英語は、教科書のアメリカ英語しか聞いていないと歯が立たない。
@@ -752,19 +790,6 @@ export default function MaterialForm({
           </p>
         )}
       </fieldset>
-
-      <label className="field">
-        <span>
-          業界
-          <span className="field-hint">選ばなければ「汎用」。どのゲストにも使えます</span>
-        </span>
-        <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
-          <option value="">汎用(全員)</option>
-          {INDUSTRIES.map((i) => (
-            <option key={i.id} value={i.id}>{i.label} — {i.hint}</option>
-          ))}
-        </select>
-      </label>
 
       <fieldset className="field" ref={tagRef}>
         <legend>
