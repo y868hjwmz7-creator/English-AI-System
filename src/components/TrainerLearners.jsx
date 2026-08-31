@@ -15,8 +15,12 @@ import {
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import Tabs from './Tabs.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
+import MaterialBody from './MaterialBody.jsx'
+import TeachingNote from './TeachingNote.jsx'
+import { parseMaterialTitle } from '../lib/format.js'
+import { loadPastFilterOpen, savePastFilterOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
-import useWordStatuses from '../lib/useWordStatuses.js'
+import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import LearnerWordbook from './LearnerWordbook.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import { ScreenIcon } from './Icons.jsx'
@@ -58,6 +62,22 @@ export default function TrainerLearners({ me }) {
   const [lessonBusy, setLessonBusy] = useState(null)
   const [assignments, setAssignments] = useState([])
   const [detailBusy, setDetailBusy] = useState(false)
+  /**
+   * **宿題のカードを、教材のカードと同じ形にする**(2026-08 利用者の指定)。
+   *
+   *   > 宿題の表示をトレーナーの教材の表示と統一してください。
+   *
+   * 教材と同じく、グレーの囲みを押すと中身が開く。
+   * ただし一覧(`loadLearnerAssignments`)は**中身を持っていない**
+   * (id と数だけ)ので、開いた教材だけ `loadMaterial()` で読み、
+   * ここに控える。**同じ教材を二度読まない。**
+   */
+  const [openHw, setOpenHw] = useState(null)      // 開いている宿題の id
+  const [bodies, setBodies] = useState({})        // 教材id → 読んだ中身
+  const [bodyBusy, setBodyBusy] = useState(null)  // いま読んでいる教材id
+  const [hwSection, setHwSection] = useState({})  // 教材ごとに開いている演習
+  // 絞り込みの欄を開いているか。**教材の欄とは別に覚える**(別の画面の別の欄)
+  const [pastOpen, setPastOpen] = useState(loadPastFilterOpen)
   // 過去の宿題の絞り込み。
   // **出すのは、そのゲストの宿題に実際に含まれる弱点だけ。**
   // 39個の弱点タグを全部並べても、ほとんどが0件で選びようがない。
@@ -118,12 +138,32 @@ export default function TrainerLearners({ me }) {
     setLessonOf(data)
   }
 
+  /**
+   * 宿題の中身を開く。**開いた教材だけ読む。**
+   * 一覧は軽くするため中身を持っていない(数だけ)。
+   */
+  const toggleHw = async (a) => {
+    if (openHw === a.id) { setOpenHw(null); return }
+    setOpenHw(a.id)
+    const mid = a.material?.id
+    if (!mid || bodies[mid]) return
+    setBodyBusy(mid)
+    const { data, error: e } = await loadMaterial(mid)
+    setBodyBusy(null)
+    if (e) { setError(e); return }
+    setBodies((x) => ({ ...x, [mid]: data }))
+  }
+
   const openDetail = async (id, tab = 'homework') => {
     setOpenId(id)
+    // **開いたら、いちばん上へ。** 一覧の途中から開くと、
+    // そのゲストの見出しが画面の外に残ったままになる
+    window.scrollTo({ top: 0, behavior: 'auto' })
     setDetailTab(tab)
     setMustUse([])
     setPastTags([])
     setPastDone('all')
+    setOpenHw(null)
     setMessage(null)
     setForm({ testType: 'toeic', score: '', takenOn: today() })
     setDetailBusy(true)
@@ -200,6 +240,29 @@ export default function TrainerLearners({ me }) {
       {message && <div className="notice notice--ok">{message}</div>}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
+      {/**
+        * **一人のゲストを開いているあいだは、そのゲストだけを映す**
+        * (2026-08 実機・利用者の指定)。
+        *
+        *   > Airi の情報内にいるのにスクロールしていくとテスト太郎の情報が
+        *   > 出てきます。これではレッスン中、画面共有の際にトラブルになります。
+        *
+        * レッスンは**ゲストと画面を共有しながら**行う。下へ送っただけで
+        * 他のゲストの名前・スコア・取り組みが出るのは、見せてはいけない情報が
+        * 漏れているということである。人数(「12 人 / 受講中 9 人」)も同じで、
+        * **他のゲストの情報**にあたる。
+        *
+        * 仕様書 5.5 に「他のゲストの名前は出ません」と書いてあったのは
+        * 教材を作る欄の話で、**一覧の側で破れていた。**
+        */}
+      {openId && (
+        <button type="button" className="btn btn--ghost btn--small learner-back"
+                onClick={() => setOpenId(null)}>
+          ← ゲストの一覧に戻る
+        </button>
+      )}
+
+      {!openId && (
       <div className="card">
         <div className="material-head">
           <h2 className="card-title">担当しているゲスト</h2>
@@ -220,8 +283,9 @@ export default function TrainerLearners({ me }) {
           </p>
         )}
       </div>
+      )}
 
-      {adding && (
+      {!openId && adding && (
         <form className="card" onSubmit={submitGuest}>
           <h3 className="card-title">ゲストを追加する</h3>
           <p className="card-hint">
@@ -270,7 +334,8 @@ export default function TrainerLearners({ me }) {
         </form>
       )}
 
-      {learners.map((l) => {
+      {/* **開いているゲストだけを描く。** 下へ送っても、次のゲストは出てこない */}
+      {(openId ? learners.filter((l) => l.id === openId) : learners).map((l) => {
         const toeic = l.scores.toeic
         const versant = l.scores.versant
         return (
@@ -376,8 +441,17 @@ export default function TrainerLearners({ me }) {
                       </p>
                     )}
 
+                    {/* **教材の「さがす・作る」と同じ形にする**(2026-08 利用者の指定)。
+                        たたんでおけて、開閉を覚える。中の札は、その人に出した
+                        ものしか出ないのでそのまま残す(件数が付いていて、
+                        押す前に結果が読める) */}
                     {assignments.length > 0 && (
-                      <div className="past-filters">
+                      <details className="card material-search" open={pastOpen}
+                               onToggle={(e) => {
+                                 setPastOpen(e.currentTarget.open)
+                                 savePastFilterOpen(e.currentTarget.open)
+                               }}>
+                        <summary className="card-title material-search-sum">宿題をしぼる</summary>
                         {/* 取り組みの状態。件数を添えると、押す前に結果が読める */}
                         <div className="chiprow">
                           {[
@@ -420,15 +494,17 @@ export default function TrainerLearners({ me }) {
                           </>
                         )}
 
-                        <div className="past-count">
-                          <span>{shown.length} 件</span>
+                        {/* 並び順は、教材の絞り込みと同じ `filter-row` に置く */}
+                        <div className="filter-row">
+                          <span className="filter-label">並び順</span>
                           <select value={pastSort} onChange={(e) => setPastSort(e.target.value)}>
                             <option value="new">新しい順</option>
                             <option value="old">古い順</option>
                           </select>
                         </div>
-                      </div>
+                      </details>
                     )}
+                    {assignments.length > 0 && <p className="muted">{shown.length} 件</p>}
 
                     {assignments.length > 0 && shown.length === 0 && (
                       <p className="card-hint">
@@ -436,50 +512,100 @@ export default function TrainerLearners({ me }) {
                       </p>
                     )}
 
-                    <ul className="past-list">
-                      {shown.map((a) => (
-                        <li key={a.id} className="past-item">
-                          <div className="past-head">
-                            <span className="past-date">{formatDate(a.assigned_at)}</span>
-                            <span className={`badge ${a.learner_done_at
-                              ? 'badge--admin' : 'badge--learner'}`}>
-                              {a.learner_done_at ? 'やった' : 'まだ'}
-                            </span>
-                            {a.admin_checked_at && <span className="badge">確認済</span>}
+                    {/* **教材のカードと同じ形にする**(2026-08 利用者の指定)。
+                        グレーの囲みを押すと中身が開き、印刷もできる。
+                        中身は `MaterialBody` — 教材の画面と同じ部品である。 */}
+                    {shown.map((a) => {
+                      const m = a.material
+                      const open = openHw === a.id
+                      const body = m ? bodies[m.id] : null
+                      return (
+                        <div key={a.id} className="card material-card">
+                          <div className="material-head">
+                            <div className="material-open" role="button" tabIndex={0}
+                                 aria-expanded={open}
+                                 onClick={() => m && toggleHw(a)}
+                                 onKeyDown={(e) => {
+                                   if (e.key !== 'Enter' && e.key !== ' ') return
+                                   e.preventDefault()
+                                   if (m) toggleHw(a)
+                                 }}>
+                              {/* 出した日と、取り組みの状態。**いちばん上に置く** */}
+                              <div className="past-head">
+                                <span className="past-date">{formatDate(a.assigned_at)}</span>
+                                <span className={`badge ${a.learner_done_at
+                                  ? 'badge--admin' : 'badge--learner'}`}>
+                                  {a.learner_done_at ? 'やった' : 'まだ'}
+                                </span>
+                                {a.admin_checked_at && <span className="badge">確認済</span>}
+                              </div>
+                              {/* **弱点タグを2回出さない**(教材をさがす画面と同じ決まり)。
+                                  弱点は教材名の中にすでに入っており、`MaterialTitle` が
+                                  出す(ドリルは見出しそのもの、記事はグレーの札)。
+                                  手で名前を付けた教材のために、`fallbackTags` に渡す */}
+                              <MaterialTitle
+                                title={m?.title ?? '(消された教材)'}
+                                headline={m?.headline}
+                                hideDate
+                                weakness={(m?.tagIds ?? []).map(weaknessTagLabel).join(' + ')}
+                                fallbackTags={[(m?.tagIds ?? [])
+                                  .map(weaknessTagLabel).join(' + '), cefrLabel(m?.level)]}
+                              />
+                              {/* カテゴリー名(左)と日付(右)。教材の画面と同じ並び */}
+                              <div className="material-meta">
+                                <span className="material-kind">{m && kindLabel(m.kind)}</span>
+                                <span className="material-when">
+                                  {parseMaterialTitle(m?.title ?? '').date}
+                                </span>
+                              </div>
+                              {m && (
+                                <span className="material-open-cta">
+                                  <span className="material-open-mark" aria-hidden="true">
+                                    {open ? '▾' : '▸'}
+                                  </span>
+                                  {bodyBusy === m.id ? '開いています…'
+                                    : open ? '中身を閉じる' : '中身を見る・印刷する'}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          {/* **弱点タグを2回出さない**(教材をさがす画面と同じ決まり)。
-                              弱点は教材名の中にすでに入っており、`MaterialTitle` が
-                              出す(ドリルは見出しそのもの、記事はグレーの札)。
-                              手で名前を付けた教材のために、`fallbackTags` に渡す */}
-                          <MaterialTitle
-                            title={a.material?.title ?? '(消された教材)'}
-                            headline={a.material?.headline}
-                            weakness={(a.material?.tagIds ?? [])
-                              .map(weaknessTagLabel).join(' + ')}
-                            fallbackTags={[(a.material?.tagIds ?? [])
-                              .map(weaknessTagLabel).join(' + ')]}
-                            as="div" size="row"
-                          />
-                          {/* レベルは上の札に出ているので、ここでは繰り返さない */}
-                          <p className="muted past-meta">
-                            {a.material && kindLabel(a.material.kind)}
-                            {a.material?.itemCount ? ` / ${a.material.itemCount} 問` : ''}
+
+                          {m?.teaching_point && <TeachingNote text={m.teaching_point} />}
+
+                          {/* 何が何問あるか。**1行に畳む**(教材の画面と同じ) */}
+                          <p className="muted material-parts">
+                            <span>
+                              {m && kindLabel(m.kind)}
+                              {m?.itemCount ? ` / ${m.itemCount} 問` : ''}
+                            </span>
                           </p>
+
+                          {open && body && (
+                            <MaterialBody
+                              material={body}
+                              openSection={hwSection[body.id] ?? null}
+                              onSection={(id) => setHwSection((x) => ({ ...x, [body.id]: id }))}
+                              wordStatuses={wordStatuses}
+                              onMarkWord={markIn(markWord, body.id)}
+                              onClose={() => setOpenHw(null)}
+                            />
+                          )}
+
                           {/* ここから開けば、**このゲストの教材しか映らない。**
                               「教材」タブから探すと、他のゲストに出したものも
                               画面に並んでしまう(画面共有では見せたくない) */}
-                          {a.material && (
-                            <button type="button" className="btn btn--small"
-                                    disabled={lessonBusy === a.material.id}
-                                    onClick={() => openLesson(a.material.id)}>
+                          {m && (
+                            <button type="button" className="btn btn--primary"
+                                    disabled={lessonBusy === m.id}
+                                    onClick={() => openLesson(m.id)}>
                               <ScreenIcon />
-                              {lessonBusy === a.material.id
+                              {lessonBusy === m.id
                                 ? '開いています…' : 'セッションで使う(大きく表示)'}
                             </button>
                           )}
-                        </li>
-                      ))}
-                    </ul>
+                        </div>
+                      )
+                    })}
                   </>
                   )
                 })()}

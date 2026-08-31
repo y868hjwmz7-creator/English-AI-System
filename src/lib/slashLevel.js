@@ -63,3 +63,17 @@ export function loadSearchOpen() {
 export function saveSearchOpen(open) {
   try { localStorage.setItem(SEARCH_KEY, open ? 'open' : 'closed') } catch { /* 使えなくても困らない */ }
 }
+
+/**
+ * ゲストの「過去の宿題」のしぼり込みを開いているか(2026-08 利用者の指定)。
+ *
+ * **教材の欄(`eas.materialSearch`)とは別に覚える。**
+ * 別の画面の別の欄なので、片方を閉じてもう片方まで閉じては困る。
+ */
+const PAST_KEY = 'eas.pastFilter'
+export function loadPastFilterOpen() {
+  try { return localStorage.getItem(PAST_KEY) === 'open' } catch { return false }
+}
+export function savePastFilterOpen(open) {
+  try { localStorage.setItem(PAST_KEY, open ? 'open' : 'closed') } catch { /* 使えなくても困らない */ }
+}
