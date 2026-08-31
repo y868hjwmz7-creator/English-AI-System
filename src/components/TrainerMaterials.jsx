@@ -15,6 +15,7 @@ import { loadSearchOpen, saveSearchOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
+import SearchBar from './SearchBar.jsx'
 import { ScreenIcon } from './Icons.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
@@ -334,25 +335,6 @@ export default function TrainerMaterials({ me }) {
             </label>
           )}
 
-          <label className="field">
-            <span>教材名・見出しで絞る</span>
-            <div className="filter-row">
-              <input className="material-keyword" value={keyword}
-                     onChange={(e) => setKeyword(e.target.value)}
-                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); search() } }} />
-              <button type="button" className="btn btn--small" onClick={search}>さがす</button>
-            </div>
-          </label>
-
-          <label className="field">
-            <span>並び順</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="new">新しい順</option>
-              <option value="items">問数の多い順</option>
-              <option value="title">名前順</option>
-            </select>
-          </label>
-
           {/* **弱点タグは、プルダウンの下に置く**(2026-08 利用者の指定)。
                 > 教材モードも弱点タグがプルダウン群の下に来るように。
                 > ゲストモードと同じにして
@@ -365,6 +347,27 @@ export default function TrainerMaterials({ me }) {
           </fieldset>
         </div>
       </details>
+
+      {/* **名前で引くのと並び順は、絞り込みの箱の外に出す**
+          (2026-08 利用者の指定)。箱はたためるので、中に入れておくと
+          たたんだ瞬間に、いちばんよく使う操作まで一緒に消えてしまう。
+          **一覧のすぐ上に、いつも見えている状態で置く。**
+          帯そのものは `SearchBar.jsx` 1か所。ゲストの過去の宿題でも使う */}
+      <SearchBar
+        title="教材をさがす"
+        keyword={keyword}
+        onKeyword={setKeyword}
+        onSearch={search}
+        placeholder="教材名・見出しでさがす"
+        sort={sort}
+        onSort={setSort}
+        sortOptions={[
+          { id: 'new', label: '新しい順' },
+          { id: 'items', label: '問数の多い順' },
+          { id: 'title', label: '名前順' },
+        ]}
+        count={loading ? null : materials.length}
+      />
 
       {message && <div className="notice notice--ok">{message}</div>}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
@@ -384,7 +387,6 @@ export default function TrainerMaterials({ me }) {
         </div>
       ) : (
         <>
-          <p className="muted">{materials.length} 件</p>
           {sorted.map((m) => (
             <div key={m.id} className="card material-card">
               {/* **行そのものを押して開く**(2026-08 利用者の指定)。

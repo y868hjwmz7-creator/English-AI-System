@@ -23,6 +23,7 @@ import LessonView from './LessonView.jsx'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import LearnerWordbook from './LearnerWordbook.jsx'
 import MaterialForm from './MaterialForm.jsx'
+import SearchBar from './SearchBar.jsx'
 import { ScreenIcon } from './Icons.jsx'
 import { loadLearnerPractice, practiceLine, sendReminder } from '../lib/practice.js'
 
@@ -504,17 +505,27 @@ export default function TrainerLearners({ me }) {
                           </>
                         )}
 
-                        {/* 並び順は、教材の絞り込みと同じ `filter-row` に置く */}
-                        <div className="filter-row">
-                          <span className="filter-label">並び順</span>
-                          <select value={pastSort} onChange={(e) => setPastSort(e.target.value)}>
-                            <option value="new">新しい順</option>
-                            <option value="old">古い順</option>
-                          </select>
-                        </div>
                       </details>
                     )}
-                    {assignments.length > 0 && <p className="muted">{shown.length} 件</p>}
+
+                    {/* **並び順は、絞り込みの箱の外に出す**(2026-08 利用者の指定)。
+                        > この配置換えはゲストモードも同じにしてください。
+                        箱はたためるので、中に入れておくとたたんだ瞬間に消える。
+                        帯は `SearchBar.jsx` — 教材の画面と**同じ部品**である。
+                        過去の宿題には名前で引く仕組みが無いので、
+                        入力欄は出さない(効かない操作を見せない)。 */}
+                    {assignments.length > 0 && (
+                      <SearchBar
+                        title="宿題をさがす"
+                        sort={pastSort}
+                        onSort={setPastSort}
+                        sortOptions={[
+                          { id: 'new', label: '新しい順' },
+                          { id: 'old', label: '古い順' },
+                        ]}
+                        count={shown.length}
+                      />
+                    )}
 
                     {assignments.length > 0 && shown.length === 0 && (
                       <p className="card-hint">

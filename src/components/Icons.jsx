@@ -116,6 +116,17 @@ export function CloseIcon({ className = 'icon' }) {
   )
 }
 
+/** 虫めがね。さがす */
+export function SearchIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <circle cx="9" cy="9" r="5.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M12.9 12.9L17 17" fill="none" stroke="currentColor"
+            strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** 本。教材 */
 export function BookIcon({ className = 'icon' }) {
   return (

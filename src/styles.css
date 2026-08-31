@@ -1065,6 +1065,55 @@ html { -webkit-text-size-adjust: 100%; }
 /* 業界と趣味のように、左右に並べる対 */
 .material-fields .field-row { gap: 16px; }
 
+/* さがす帯(`SearchBar.jsx`)。
+   **絞り込みの箱の外、一覧のすぐ上**に置く(2026-08 利用者の指定)。
+   箱はたためるので、中に入れておくと、たたんだ瞬間に
+   名前で引く手段も並び順も消えてしまう。 */
+.searchbar { margin: 18px 0 10px; }
+.searchbar-title {
+  margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--text-primary);
+}
+.searchbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* 入力欄。**虫めがねを中に入れ、角を丸くする。**
+   囲みそのものが枠線と影を持ち、中の `input` は透明にして重ねる */
+.searchbar-field {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1 1 260px; min-width: 0; max-width: 420px;
+  padding: 0 10px 0 12px; height: 40px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-1); box-shadow: var(--shadow-1);
+  transition: border-color .15s, box-shadow .15s;
+}
+.searchbar-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.searchbar-icon { flex-shrink: 0; color: var(--text-muted); }
+/* **枠線も背景も持たせない。** 囲みの側が持っている */
+.searchbar-field > input {
+  flex: 1 1 auto; min-width: 0;
+  border: 0; background: transparent; box-shadow: none;
+  padding: 0; height: 100%; border-radius: 0;
+}
+.searchbar-field > input:focus { outline: none; }
+/* 消す ✕。**入力があるときだけ出す** */
+.searchbar-clear {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; width: 26px; height: 26px; padding: 0;
+  border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--text-muted);
+}
+.searchbar-clear:hover { background: var(--surface-2); color: var(--text-primary); }
+.searchbar-sort > select { width: auto; min-width: 140px; height: 40px; border-radius: 999px; }
+.searchbar-count { margin-left: auto; color: var(--text-secondary); font-size: 13px; }
+
+@media (max-width: 640px) {
+  /* 狭い画面では、入力欄が1行を使い切る */
+  .searchbar-field { flex-basis: 100%; max-width: none; }
+  .searchbar-count { margin-left: 0; }
+}
+
 /* 教材を作る */
 .material-kind-hint { margin: -4px 0 12px; }
 .material-items { margin: 16px 0; }
