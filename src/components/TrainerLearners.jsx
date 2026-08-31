@@ -356,6 +356,19 @@ export default function TrainerLearners({ me }) {
              一覧では1人1枚のカード、開いたら**そのまま地の上に置く。** */
           <div key={l.id}
                className={`learner-card${openId === l.id ? ' learner-open' : ' card'}`}>
+            {/* **見出しは2段にまとめる**(2026-08 利用者の指定)。
+
+                  > この選択中で青くなっている部分、全て、ゲスト名の右手の方に
+                  > 綺麗に整理できますよね。現代的で洗練された形で
+                  > うまくまとめてください。
+
+                以前はここが縦に4段(名前 / 取り組み / スコア / タブ)あり、
+                本題の宿題が画面のずっと下にあった。**右側に寄せて2段にする。**
+
+                  1段目 … 名前・状態      …………  タブ(開いているときだけ)
+                  2段目 … 取り組み・スコア …………  リマインドする
+
+                狭い画面では自然に折り返る(タブは横に流れる)。 */}
             <div className="learner-head">
               {/* **名前と札を離す**(2026-08 利用者の指定)。
                   > ゲスト名と「受講中」というアイコンが近すぎます。
@@ -368,19 +381,45 @@ export default function TrainerLearners({ me }) {
               <span className={`badge ${STATUS[l.status]?.cls ?? ''}`}>
                 {STATUS[l.status]?.label ?? l.status}
               </span>
-              <span className="learner-level">{cefrLabel(l.cefr)}</span>
+              {openId === l.id && (
+                <div className="learner-head-tabs">
+                  <Tabs
+                    variant="sub"
+                    ariaLabel="ゲストの情報の切り替え"
+                    value={detailTab}
+                    onChange={setDetailTab}
+                    items={[
+                      { id: 'homework', label: '過去の宿題', count: assignments.length },
+                      { id: 'create', label: 'この人に教材を作る' },
+                      // 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい
+                      { id: 'wordbook', label: '単語帳' },
+                      { id: 'record', label: 'レベルとスコア' },
+                    ]}
+                  />
+                </div>
+              )}
             </div>
 
-            {/* **アプリでの取り組み**(0022)。1行に畳む。
-                ゲストが自分で入力していた「学習の記録」の代わりで、
+            {/* 2段目。**取り組みとスコアを1本の行にまとめる**(利用者の指定)。
+                取り組み(0022)はゲストが入力したものではなく、
                 こちらが裏で数えたものである(`src/lib/practice.js`)。
-
                 **やっていない人には、その場でリマインドを送れる。**
                 自動では飛ばない(利用者の指定) */}
-            <div className="practice-row">
-              <span className="muted practice-sum">{practiceLine(practice[l.id])}</span>
+            <div className="learner-meta">
+              <span className="learner-meta-item">{practiceLine(practice[l.id])}</span>
+              <span className="learner-meta-item">
+                <span className="score-label">TOEIC</span>
+                <span className="score-value">{toeic ? toeic.score : '—'}</span>
+                {toeic && <span className="muted">{toeic.takenOn}</span>}
+              </span>
+              <span className="learner-meta-item">
+                <span className="score-label">VERSANT</span>
+                <span className="score-value">{versant ? versant.score : '—'}</span>
+                {versant && <span className="muted">{versant.takenOn}</span>}
+              </span>
+              <span className="learner-meta-item">{cefrLabel(l.cefr)}</span>
               {l.status === 'active' && (
-                <button type="button" className="btn btn--small btn--quiet"
+                <button type="button" className="btn btn--small btn--quiet learner-remind"
                         disabled={reminding === l.id || reminded[l.id]}
                         title="このゲストに「取り組みましょう」と知らせます"
                         onClick={() => remind(l)}>
@@ -395,19 +434,6 @@ export default function TrainerLearners({ me }) {
               <p className="homework-instruction">引き継ぎ: {l.handoverNote}</p>
             )}
 
-            <div className="score-row">
-              <div className="score-cell">
-                <span className="score-label">TOEIC</span>
-                <span className="score-value">{toeic ? toeic.score : '—'}</span>
-                {toeic && <span className="muted">{toeic.takenOn}</span>}
-              </div>
-              <div className="score-cell">
-                <span className="score-label">VERSANT</span>
-                <span className="score-value">{versant ? versant.score : '—'}</span>
-                {versant && <span className="muted">{versant.takenOn}</span>}
-              </div>
-            </div>
-
             {openId === l.id ? (
               /* **教材の画面と同じ形にする**(2026-08 利用者の指定)。
                  > 教材モードには、一番外側の白の枠内に実線がありません。
@@ -416,19 +442,6 @@ export default function TrainerLearners({ me }) {
                  `.assign-box`(青い実線の囲み)は**共有するゲストを選ぶ欄**の
                  ものなので、ここでは使わない。`.stack` と同じ縦の並びにする */
               <div className="learner-detail">
-                <Tabs
-                  variant="sub"
-                  ariaLabel="ゲストの情報の切り替え"
-                  value={detailTab}
-                  onChange={setDetailTab}
-                  items={[
-                    { id: 'homework', label: '過去の宿題', count: assignments.length },
-                    { id: 'create', label: 'この人に教材を作る' },
-                    // 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい
-                    { id: 'wordbook', label: '単語帳' },
-                    { id: 'record', label: 'レベルとスコア' },
-                  ]}
-                />
 
                 {detailTab === 'homework' && (() => {
                   // 弱点ごとの件数。0件の弱点は出さない

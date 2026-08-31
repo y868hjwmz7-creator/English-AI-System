@@ -1208,8 +1208,35 @@ html { -webkit-text-size-adjust: 100%; }
   gap: 12px; margin-bottom: 12px;
 }
 .learner-head > .badge { margin-left: 0; padding: 3px 12px; font-size: 12px; }
-/* レベル(A2 など)は、いちばん右へ逃がす。名前・状態と役割が違う */
-.learner-level { margin-left: auto; color: var(--text-secondary); font-size: 13px; }
+
+/* **タブは、名前の右へ寄せる**(2026-08 利用者の指定)。
+     > この選択中で青くなっている部分、全て、ゲスト名の右手の方に
+     > 綺麗に整理できますよね。
+   以前は「名前 / 取り組み / スコア / タブ」が縦に4段あり、
+   本題の宿題が画面のずっと下にあった。
+   **入りきらない幅では、次の行に落ちて左端から始まる**(横には流れる)。 */
+.learner-head-tabs { margin-left: auto; min-width: 0; max-width: 100%; }
+.learner-head-tabs > .tabbar { margin: 0; }
+
+/* 2段目。取り組み・スコア・レベルを**1本の行**にまとめ、
+   リマインドは右端へ逃がす。中黒(・)で区切る */
+.learner-meta {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 6px 14px; margin-bottom: 16px;
+  color: var(--text-secondary); font-size: 13px;
+}
+.learner-meta-item { display: inline-flex; align-items: baseline; gap: 6px; }
+/* **区切りは記号で。線を増やさない。** 折り返した行の先頭には出さない */
+.learner-meta-item + .learner-meta-item::before {
+  content: '・'; color: var(--text-muted);
+}
+/* **行の中に置くので、点数は大きくしない。** `.score-value` の 20px は
+   スコアだけを並べていたころの大きさである */
+.learner-meta .score-value { font-size: 14px; font-weight: 600; }
+.learner-meta .score-label { font-size: 11px; }
+.learner-meta .muted { font-size: 12px; }
+.learner-remind { margin-left: auto; }
+.learner-level { color: var(--text-secondary); font-size: 13px; }
 
 /* **開いているゲストの名前は、大きく**(2026-08 利用者の指定)。
    その画面が誰のものかは、いちばん先に目に入るべき情報である。
@@ -1224,7 +1251,6 @@ html { -webkit-text-size-adjust: 100%; }
    (2026-08 実機・画面共有で他のゲストが見えてしまっていた)。
    戻る道を、名前の押し直し以外にも用意しておく */
 .learner-back { align-self: flex-start; margin-bottom: -4px; }
-.score-row { display: flex; flex-wrap: wrap; gap: 20px; margin: 10px 0; }
 .score-cell { display: flex; align-items: baseline; gap: 6px; }
 .score-label {
   color: var(--text-secondary); font-size: 12px;
