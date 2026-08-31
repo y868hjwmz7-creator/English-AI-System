@@ -812,19 +812,17 @@ export default function MaterialForm({
             指名する欄が出ていなければ、おまかせで読み上げる。
             `src/data/clipVoices.js` は**仕組みの内側の名前**でもある */}
       </fieldset>
-      </div>{/* .material-fields ここまで */}
 
+      {/* **弱点タグも、ほかの欄と同じ囲みの中に置く**(2026-08 利用者の指定)。
+          > そして上の余白を他の部分と同じにして
+          ここだけ `.material-fields` の外にあったので、上の余白も
+          題と中身の隙間も、ほかの欄と違っていた。
+          **説明の文は置かない。** 題だけで分かる */}
       <fieldset className="field" ref={tagRef}>
-        <legend>
-          弱点タグ
-          <span className="field-hint">
-            {isPassageKind(kind)
-              ? '任意。付けると、その表現が本文に自然に出てくるように作ります'
-              : '必須。ここで付けておかないと、次に同じ弱点のゲストが来たときに見つけられません'}
-          </span>
-        </legend>
+        <legend>弱点タグ</legend>
         <WeaknessTagPicker selected={tagIds} onChange={setTagIds} />
       </fieldset>
+      </div>{/* .material-fields ここまで */}
 
       <div className="generate-box">
         <h3 className="card-title">AI に下書きを作らせる</h3>

@@ -250,10 +250,6 @@ export default function TrainerMaterials({ me }) {
           <strong>あればそのまま配信できます。</strong>作るより速く、ゲストには同じ価値が届きます。
         </p>
 
-        {/* さがす場面では基礎練習(子音全般・母音全般)も選べる。
-            弱点として指摘する場面では出さない(粒度が違うため)。 */}
-        <WeaknessTagPicker selected={tagIds} onChange={setTagIds} includeDrills />
-
         {/* **作る画面(`MaterialForm`)とまったく同じ構成にする**
             (2026-08 利用者の指定)。
 
@@ -356,6 +352,17 @@ export default function TrainerMaterials({ me }) {
               <option value="title">名前順</option>
             </select>
           </label>
+
+          {/* **弱点タグは、プルダウンの下に置く**(2026-08 利用者の指定)。
+                > 教材モードも弱点タグがプルダウン群の下に来るように。
+                > ゲストモードと同じにして
+              作る画面(`MaterialForm`)と同じ並びである。
+              さがす場面では基礎練習(子音全般・母音全般)も選べる。
+              弱点として指摘する場面では出さない(粒度が違うため)。 */}
+          <fieldset className="field">
+            <legend>弱点タグ</legend>
+            <WeaknessTagPicker selected={tagIds} onChange={setTagIds} includeDrills />
+          </fieldset>
         </div>
       </details>
 
