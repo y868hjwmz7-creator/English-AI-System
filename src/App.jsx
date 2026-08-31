@@ -33,6 +33,9 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [authChecked, setAuthChecked] = useState(!isSupabaseConfigured)
   const [theme, setTheme] = useState(loadTheme)
+  // メニューを押した回数。**同じ画面をもう一度押したことを伝えるためだけ**に使う。
+  // **早く帰る条件より前に置く**(hook は必ず同じ順で呼ばれなければならない)
+  const [navTick, setNavTick] = useState(0)
   const [palette, setPalette] = useState(loadPalette)
 
   // 左のメニュー。広い画面(1024px 以上)では画面を押し出して並び、
@@ -212,7 +215,14 @@ export default function App() {
     <div className={`app-shell${wide ? ' is-wide' : ' is-narrow'}`
                     + (navOpen ? ' nav-open' : ' nav-closed')}>
       <AppNav
-        items={pages} value={view} onChange={setView}
+        items={pages} value={view}
+        /* **いまいる画面をもう一度押したら、その画面の先頭に戻す**
+           (2026-08 利用者の指定)。
+             > 一人のゲストの情報内でサイドバーの「ゲスト」をクリック、
+             > またはタップしたらゲスト選択画面に戻れるようにしてください
+           `view` は変わらないので、押されたことを数で伝える。
+           受け取った画面が、自分の中の「開いているもの」を閉じる */
+        onChange={(id) => { setView(id); setNavTick((n) => n + 1) }}
         open={navOpen} wide={wide}
         onClose={() => setNavOpen(false)}
         title="English AI System"
@@ -273,7 +283,8 @@ export default function App() {
             {view === 'materials' ? (
               profile ? <TrainerMaterials me={profile} /> : <p className="muted">読み込み中…</p>
             ) : view === 'learners' ? (
-              profile ? <TrainerLearners me={profile} /> : <p className="muted">読み込み中…</p>
+              profile ? <TrainerLearners me={profile} navTick={navTick} />
+                : <p className="muted">読み込み中…</p>
             ) : view === 'homework' ? (
               <LearnerHomework me={profile} />
             ) : view === 'wordbook' ? (

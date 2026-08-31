@@ -93,23 +93,28 @@ export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMat
 
   return (
     <div className="learner-wordbook">
-      <p className="card-hint">
-        {learnerName ? `${learnerName} さんが` : 'このゲストが'}
-        宿題の英文で「知らなかった」と付けた語と言い回しです。
-        <strong>ここは見るだけで、書き換えはできません。</strong>
-        語を選ぶと、その語で次の教材を作れます。
-      </p>
-
-      {/* 今週どれだけ取り組んだか(0019)。
-          レッスンの入口で「今週やりましたね」と言えるようにする。
-          **数が出ないだけで、単語帳は使える。** */}
-      {week && week.days > 0 && (
-        <p className="wordbook-week">
-          今週は <strong>{week.days} 日</strong>取り組み、
-          <strong>{week.answered} 問</strong>のうち {week.correct} 問を覚えていました。
-          {week.weeks > 1 && <> 続けて <strong>{week.weeks} 週</strong>目です。</>}
+      {/* **地の上に文字を置きっぱなしにしない**(2026-08 利用者の指定)。
+            > 青で選択されている部分、他の要素のように白でラップしてください。
+          まわりが白いカードなので、ここだけ地の色の上に文字が乗っていた */}
+      <div className="card wordbook-intro">
+        <p className="card-hint">
+          {learnerName ? `${learnerName} さんが` : 'このゲストが'}
+          宿題の英文で「知らなかった」と付けた語と言い回しです。
+          <strong>ここは見るだけで、書き換えはできません。</strong>
+          語を選ぶと、その語で次の教材を作れます。
         </p>
-      )}
+
+        {/* 今週どれだけ取り組んだか(0019)。
+            レッスンの入口で「今週やりましたね」と言えるようにする。
+            **数が出ないだけで、単語帳は使える。** */}
+        {week && week.days > 0 && (
+          <p className="wordbook-week">
+            今週は <strong>{week.days} 日</strong>取り組み、
+            <strong>{week.answered} 問</strong>のうち {week.correct} 問を覚えていました。
+            {week.weeks > 1 && <> 続けて <strong>{week.weeks} 週</strong>目です。</>}
+          </p>
+        )}
+      </div>
 
       <Tabs
         variant="sub"

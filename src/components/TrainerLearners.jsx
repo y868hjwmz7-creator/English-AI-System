@@ -36,7 +36,7 @@ const STATUS = {
 const today = () => new Date().toISOString().slice(0, 10)
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
-export default function TrainerLearners({ me }) {
+export default function TrainerLearners({ me, navTick = 0 }) {
   const [learners, setLearners] = useState([])
   // ゲストがアプリで取り組んだこと(0022)。**1人1行でコンパクトに出す**
   const [practice, setPractice] = useState({})
@@ -106,6 +106,21 @@ export default function TrainerLearners({ me }) {
     setLearners(data)
   }
   useEffect(() => { reload() }, [])
+
+  /**
+   * **メニューの「ゲスト」をもう一度押したら、一覧へ戻す**(2026-08 利用者の指定)。
+   *
+   *   > 一人のゲストの情報内でサイドバーの「ゲスト」をクリック、または
+   *   > タップしたらゲスト選択画面に戻れるようにしてください
+   *
+   * いまいる画面をもう一度押しても `view` は変わらないので、
+   * App は**押された回数**(`navTick`)で知らせてくる。
+   * 最初の描画でも動くが、そのときは開いているものが無いので何も起きない。
+   */
+  useEffect(() => {
+    setOpenId(null)
+    setLessonOf(null)
+  }, [navTick])
 
   // ゲストの取り組み(0022)。**数え方は DB に置いてある**ので、ここは並べるだけ。
   // 0022 をまだ貼っていないときは空が返る(画面は壊れない)
@@ -369,6 +384,7 @@ export default function TrainerLearners({ me }) {
                   2段目 … 取り組み・スコア …………  リマインドする
 
                 狭い画面では自然に折り返る(タブは横に流れる)。 */}
+            <div className={openId === l.id ? 'card learner-headcard' : ''}>
             <div className="learner-head">
               {/* **名前と札を離す**(2026-08 利用者の指定)。
                   > ゲスト名と「受講中」というアイコンが近すぎます。
@@ -433,6 +449,7 @@ export default function TrainerLearners({ me }) {
             {l.handoverNote && (
               <p className="homework-instruction">引き継ぎ: {l.handoverNote}</p>
             )}
+            </div>{/* .learner-headcard ここまで */}
 
             {openId === l.id ? (
               /* **教材の画面と同じ形にする**(2026-08 利用者の指定)。

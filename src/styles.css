@@ -1235,6 +1235,15 @@ html { -webkit-text-size-adjust: 100%; }
 .learner-meta .score-value { font-size: 14px; font-weight: 600; }
 .learner-meta .score-label { font-size: 11px; }
 .learner-meta .muted { font-size: 12px; }
+/* 開いているゲストの見出しは、**まわりと同じ白いカードに包む**
+   (2026-08 利用者の指定)。地の上に名前とタブが直に乗っていた */
+.learner-headcard { padding: 18px 20px; margin-bottom: var(--gap); }
+.learner-headcard > .learner-head { margin-bottom: 10px; }
+.learner-headcard > .learner-meta { margin-bottom: 0; }
+/* 単語帳の説明も、同じように白に乗せる */
+.wordbook-intro { padding: 14px 18px; }
+.wordbook-intro > .card-hint { margin: 0; }
+.wordbook-intro > .wordbook-week { margin: 8px 0 0; }
 .learner-remind { margin-left: auto; }
 .learner-level { color: var(--text-secondary); font-size: 13px; }
 
