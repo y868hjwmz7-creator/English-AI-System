@@ -621,16 +621,15 @@ export default function MaterialForm({
           話題 / シチュエーション → ゲスト」**(2026-08 利用者の指定)。
           ゲストモードから作るときも同じ並びである
           (同じ部品を使っているので、1か所で決まる)。 */}
-      <div className="field-row material-form-row">
-        <label className="field">
-          <span>レベル</span>
-          <select value={level} onChange={(e) => setLevel(e.target.value)}>
-            {CEFR_LEVELS.map((l) => (
-              <option key={l.id} value={l.id}>{cefrLabel(l.id)}</option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <div className="material-fields">
+      <label className="field">
+        <span>レベル</span>
+        <select value={level} onChange={(e) => setLevel(e.target.value)}>
+          {CEFR_LEVELS.map((l) => (
+            <option key={l.id} value={l.id}>{cefrLabel(l.id)}</option>
+          ))}
+        </select>
+      </label>
 
       <label className="field">
         <span>トレーニングの種類</span>
@@ -648,7 +647,7 @@ export default function MaterialForm({
           **入れ物は1つのまま**(`materials.industry`)で、
           **選ぶ欄だけ2つに分ける。** 片方を選ぶと、もう片方は空に戻る
           — 教材に付く分野は1つだからである。 */}
-      <div className="field-row material-form-row">
+      <div className="field-row">
         <label className="field">
           <span>
             業界
@@ -813,6 +812,7 @@ export default function MaterialForm({
             指名する欄が出ていなければ、おまかせで読み上げる。
             `src/data/clipVoices.js` は**仕組みの内側の名前**でもある */}
       </fieldset>
+      </div>{/* .material-fields ここまで */}
 
       <fieldset className="field" ref={tagRef}>
         <legend>

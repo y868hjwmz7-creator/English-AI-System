@@ -254,77 +254,108 @@ export default function TrainerMaterials({ me }) {
             弱点として指摘する場面では出さない(粒度が違うため)。 */}
         <WeaknessTagPicker selected={tagIds} onChange={setTagIds} includeDrills />
 
-        <div className="filter-row material-filter">
-          <span className="filter-label">レベル</span>
-          <select value={level ?? ''} onChange={(e) => setLevel(e.target.value || null)}>
-            <option value="">すべて</option>
-            {CEFR_LEVELS.map((l) => (
-              <option key={l.id} value={l.id}>{l.label} — {l.ja}</option>
-            ))}
-          </select>
-          <span className="filter-label">種類</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">すべて</option>
-            {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
-          </select>
+        {/* **作る画面(`MaterialForm`)とまったく同じ構成にする**
+            (2026-08 利用者の指定)。
+
+              > 教材モードの方のプルダウン周辺の構成はこれと同じにしてください。
+              > あと、プルダウンのタイトルも全て同じに。
+
+            以前は `.filter-row` で横に流していたので、題とプルダウンが
+            作る画面と別の並びになっていた。**決まりは `.material-fields`
+            1か所**(styles.css)なので、片方だけ動くことがない。
+            題も「種類」→「トレーニングの種類」にそろえてある。 */}
+        <div className="material-fields material-filter">
+          <label className="field">
+            <span>レベル</span>
+            <select value={level ?? ''} onChange={(e) => setLevel(e.target.value || null)}>
+              <option value="">すべて</option>
+              {CEFR_LEVELS.map((l) => (
+                <option key={l.id} value={l.id}>{l.label} — {l.ja}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>トレーニングの種類</span>
+            <select value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="">すべて</option>
+              {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+            </select>
+          </label>
+
+          {/* **業界と趣味は、プルダウンを2つに分けて左右に並べる**
+              (2026-08 利用者の指定)。作る画面と同じ形。
+              **入れ物は `materials.industry` の1列のまま。**
+              教材が持つ場面は1つなので、片方を選ぶともう片方は空に戻る。 */}
+          <div className="field-row">
+            <label className="field">
+              <span>
+                業界
+                <span className="field-hint">仕事の場面</span>
+              </span>
+              <select value={isWorkFilter ? industry : ''}
+                      onChange={(e) => setIndustry(e.target.value)}>
+                <option value="">すべて</option>
+                {industriesIn('work').map((i) => (
+                  <option key={i.id} value={i.id}>{i.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>
+                趣味
+                <span className="field-hint">仕事以外の場面</span>
+              </span>
+              <select value={isHobbyFilter ? industry : ''}
+                      onChange={(e) => setIndustry(e.target.value)}>
+                <option value="">すべて</option>
+                {industriesIn('hobby').map((i) => (
+                  <option key={i.id} value={i.id}>{i.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           {/* **ゲストで絞る欄は置かない**(2026-08 利用者の指定)。
-
                 > 「ゲスト」の選択はここではしないです。
-                > 教材ができてから「ゲストと共有する」があれば十分です
-
-              ここは**教材をさがす**画面である。誰に出すかは、
-              使う教材が決まったあとに、その教材の
-              「ゲストと共有する」で決める。
-              あるゲストに出した教材を見たいときは、
-              「ゲスト」画面 → そのゲストのカード → 過去の宿題で見られる。 */}
+                > 教材ができてから「ゲストと共有する」があれば十分です */}
           {kind === 'reading' && (
-            <>
-              <span className="filter-label">ジャンル</span>
+            <label className="field">
+              <span>話題</span>
               <select value={genre} onChange={(e) => setGenre(e.target.value)}>
                 <option value="">すべて</option>
                 {READING_GENRES.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
               </select>
-            </>
+            </label>
           )}
           {kind === 'dialogue' && (
-            <>
-              <span className="filter-label">場面</span>
+            <label className="field">
+              <span>シチュエーション</span>
               <select value={scene} onChange={(e) => setScene(e.target.value)}>
                 <option value="">すべて</option>
                 {DIALOGUE_SCENES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
               </select>
-            </>
+            </label>
           )}
-          {/* **業界と趣味は、プルダウンを2つに分ける**(2026-08 利用者の指定)。
-              作る画面(`MaterialForm`)とまったく同じ形にしてある。
-              **入れ物は `materials.industry` の1列のまま。**
-              教材が持つ場面は1つなので、片方を選ぶともう片方は空に戻る。 */}
-          <span className="filter-label">業界</span>
-          <select value={isWorkFilter ? industry : ''}
-                  onChange={(e) => setIndustry(e.target.value)}>
-            <option value="">すべて</option>
-            {industriesIn('work').map((i) => (
-              <option key={i.id} value={i.id}>{i.label}</option>
-            ))}
-          </select>
-          <span className="filter-label">趣味</span>
-          <select value={isHobbyFilter ? industry : ''}
-                  onChange={(e) => setIndustry(e.target.value)}>
-            <option value="">すべて</option>
-            {industriesIn('hobby').map((i) => (
-              <option key={i.id} value={i.id}>{i.label}</option>
-            ))}
-          </select>
-          <input className="material-keyword" value={keyword} placeholder="教材名・見出しで絞る"
-                 onChange={(e) => setKeyword(e.target.value)}
-                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); search() } }} />
-          <button type="button" className="btn btn--small" onClick={search}>さがす</button>
-          <span className="filter-label">並び順</span>
-          <select value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="new">新しい順</option>
-            <option value="items">問数の多い順</option>
-            <option value="title">名前順</option>
-          </select>
+
+          <label className="field">
+            <span>教材名・見出しで絞る</span>
+            <div className="filter-row">
+              <input className="material-keyword" value={keyword}
+                     onChange={(e) => setKeyword(e.target.value)}
+                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); search() } }} />
+              <button type="button" className="btn btn--small" onClick={search}>さがす</button>
+            </div>
+          </label>
+
+          <label className="field">
+            <span>並び順</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="new">新しい順</option>
+              <option value="items">問数の多い順</option>
+              <option value="title">名前順</option>
+            </select>
+          </label>
         </div>
       </details>
 
