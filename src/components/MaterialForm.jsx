@@ -741,12 +741,12 @@ export default function MaterialForm({
                 </button>
               ))}
             </div>
-            {shareWith.length === 1 && (
-              <p className="field-hint">
-                1人に絞ったので、<strong>そのゲストがこれまでに受け取った英文を1文も使いません</strong>
-                (弱点を問わず、共有済みの教材すべてと照合します)。教材名にもお名前が入ります。
-              </p>
-            )}
+            {/* **1人だけ選んだときの断り書きは出さない**(2026-08 利用者の指定)。
+                ゲストのカードから作るときは必ずこの形になるので、
+                この1文だけがゲストモードに増えていた。
+                しかも「教材名にもお名前が入ります」は**もう本当ではない**
+                (教材名にゲスト名を入れない・CLAUDE.md)。
+                同じ英文を二度出さない仕組みは、選んだ人数によらず働く。 */}
             {shareWith.length > 1 && (
               <p className="field-hint">
                 {shareWith.length}人に出します。
