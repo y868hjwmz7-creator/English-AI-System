@@ -707,6 +707,20 @@ export default function MaterialForm({
         </label>
       )}
 
+      {/* **選ぶ余地が無いときは、この欄ごと出さない**(2026-08 利用者の指定)。
+
+            > 「読み上げの声」だけ残してその周辺のこれらも消して
+            > (ゲスト / Airi / 訛り(国籍))
+
+          ゲストのカードから作るときは、**候補がその人1人で、すでに
+          選ばれている。** 押しても外れるだけで、選ぶことがない。
+
+          **「ゲストのカードかどうか」では判断しない。**
+          `候補が1人 かつ すでに選ばれている` で見る。そうすれば
+          「教材」タブでゲストを絞ってから作りに来たときも同じように隠れ、
+          複数から選ぶときは、これまでどおり出る。
+          **画面の名前ではなく、選ぶ余地があるかで決める。** */}
+      {!(learners.length === 1 && shareWith.length === 1) && (
       <fieldset className="field">
         <legend>ゲスト</legend>
         {learners.length === 0 ? (
@@ -743,6 +757,7 @@ export default function MaterialForm({
           </>
         )}
       </fieldset>
+      )}
       {/* 読み上げの声(0017)。
           **相手の訛りが聞き取れないと仕事にならない。** インドやシンガポールの
           英語は、教科書のアメリカ英語しか聞いていないと歯が立たない。
@@ -756,9 +771,14 @@ export default function MaterialForm({
         <legend>読み上げの声</legend>
 
         <div className="voice-row">
+          {/* **「訛り(国籍)」の見出しは出さない**(2026-08 利用者の指定)。
+              「読み上げの声」のすぐ下にあり、選ぶものが「アメリカ」「イギリス」
+              なので、見れば分かる。
+              **画面から消えても、読み上げソフト向けの名前は残す**
+              (`aria-label`)。目の見えない人には見出しが唯一の手がかりである */}
           <label className="field">
-            <span>訛り(国籍)</span>
-            <select value={accent} onChange={(e) => { setAccent(e.target.value); setPicked([]) }}>
+            <select value={accent} aria-label="訛り(国籍)"
+                    onChange={(e) => { setAccent(e.target.value); setPicked([]) }}>
               {CLIP_ACCENTS.map((a) => (
                 <option key={a.id} value={a.id}>{a.label} — {a.hint}</option>
               ))}
