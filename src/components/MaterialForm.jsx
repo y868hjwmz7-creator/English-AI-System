@@ -19,7 +19,7 @@ import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import {
   EXERCISE_TYPES, FIELD_LABELS, defaultSectionsFor, exerciseLabel, exerciseType,
 } from '../data/exerciseTypes.js'
-import { INDUSTRY_GROUPS, industriesIn, industryLabel } from '../data/industries.js'
+import { industriesIn, industryLabel } from '../data/industries.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
@@ -232,6 +232,12 @@ export default function MaterialForm({
    * 変えるのは、AI に渡す文言だけである。
    */
   const industryText = industry ? industryLabel(industry) : ''
+
+  /* **選ぶ欄は2つ、入れ物は1つ**(2026-08 利用者の指定)。
+     いま選んでいるものが「仕事」か「趣味」かは、ここで1回だけ決める。
+     画面の2か所で別々に判断すると、必ず食い違う */
+  const isHobby = industriesIn('hobby').some((i) => i.id === industry)
+  const isWork = Boolean(industry) && !isHobby
 
   /** 弱点タグを、AI に渡す文言にする */
   const topicOf = (id) => {
@@ -612,8 +618,9 @@ export default function MaterialForm({
         すべて指定し終えるまで選択肢が出てこず、やりにくかった。
         ここで選んでおくと、発行と同時に共有まで終わる。
       */}
-      {/* **上から「レベル → 業界 → トレーニングの種類 → 話題/場面 → ゲスト」**
-          (2026-08 利用者の指定)。ゲストモードから作るときも同じ並びである
+      {/* **上から「レベル → トレーニングの種類 → 業界 / 趣味 →
+          話題 / シチュエーション → ゲスト」**(2026-08 利用者の指定)。
+          ゲストモードから作るときも同じ並びである
           (同じ部品を使っているので、1か所で決まる)。 */}
       <div className="field-row material-form-row">
         <label className="field">
@@ -625,28 +632,6 @@ export default function MaterialForm({
           </select>
         </label>
       </div>
-      {/* **お仕事と趣味・娯楽を、組に分けて見せる**(2026-08 利用者の指定)。
-          > 業界を選ばない場合に選べるようにしたいのが、「趣味・娯楽」です。
-          仕事で英語を使わない人もいるし、仕事の話ばかりでは続かない。
-          **表も列も増やさない。** 同じ `materials.industry` に入る */}
-      <label className="field">
-        <span>
-          業界・趣味
-          <span className="field-hint">
-            選ばなければ「汎用」。どのゲストにも使えます
-          </span>
-        </span>
-        <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
-          <option value="">汎用(全員)</option>
-          {INDUSTRY_GROUPS.map((g) => (
-            <optgroup key={g.id} label={g.label}>
-              {industriesIn(g.id).map((i) => (
-                <option key={i.id} value={i.id}>{i.label} — {i.hint}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
 
       <label className="field">
         <span>トレーニングの種類</span>
@@ -657,6 +642,49 @@ export default function MaterialForm({
       <p className="field-hint material-kind-hint">
         {NEW_MATERIAL_KINDS.find((k) => k.id === kind)?.hint}
       </p>
+
+      {/* **業界と趣味は、2つのプルダウンに分けて左右に並べる**
+          (2026-08 利用者の指定)。
+
+          > 業界を選ばない場合に選べるようにしたいのが、「趣味・娯楽」です。
+
+          仕事で英語を使わない人もいるし、仕事の話ばかりでは続かない。
+          **入れ物は1つのまま**(`materials.industry`)で、
+          **選ぶ欄だけ2つに分ける。** 片方を選ぶと、もう片方は空に戻る
+          — 教材に付く分野は1つだからである。 */}
+      <div className="field-row material-form-row">
+        <label className="field">
+          <span>
+            業界
+            <span className="field-hint">仕事の場面</span>
+          </span>
+          <select value={isWork ? industry : ''}
+                  onChange={(e) => setIndustry(e.target.value)}>
+            <option value="">選ばない(汎用)</option>
+            {industriesIn('work').map((i) => (
+              <option key={i.id} value={i.id}>{i.label} — {i.hint}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>
+            趣味
+            <span className="field-hint">仕事以外の場面</span>
+          </span>
+          <select value={isHobby ? industry : ''}
+                  onChange={(e) => setIndustry(e.target.value)}>
+            <option value="">選ばない(汎用)</option>
+            {industriesIn('hobby').map((i) => (
+              <option key={i.id} value={i.id}>{i.label} — {i.hint}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="field-hint material-kind-hint">
+        どちらも選ばなければ「汎用」。どのゲストにも使えます。
+        <strong>選べるのはどちらか一方です</strong>(片方を選ぶと、もう片方は戻ります)。
+      </p>
+
       {kind === 'reading' && (
         <label className="field">
           <span>
