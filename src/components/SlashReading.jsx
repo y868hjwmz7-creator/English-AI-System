@@ -48,6 +48,31 @@ import { chunkPairsOfAtMarks, storedChunks } from '../lib/chunkJa.js'
 import { SLASH_UNITS } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
+/**
+ * 決まりに反する区切りが1つも無いときの声かけ(2026-08 利用者の指定)。
+ *
+ *   > 違反している区切りはありません、ではなくて、結果的に違反の数がゼロなら
+ *   > fantastic! などポジティブな声かけに、変えましょう
+ *
+ * 「◯◯はありません」は、**無いことの報告**であって褒め言葉ではない。
+ * うまく区切れたのだから、そう言う。
+ */
+const PRAISE = [
+  'Fantastic! きれいに区切れています',
+  'Great job! 決まりどおりです',
+  'Perfect! 迷いのない区切りです',
+  'Excellent! 前から読めるカタマリです',
+  'Nice work! この調子です',
+]
+
+/**
+ * どれを出すかは**段落ごとに決める。**
+ * 押すたびに入れ替わると、目が言葉のほうへ行って気が散る。
+ */
+const praiseFor = (id) => PRAISE[
+  [...String(id ?? '')].reduce((n, c) => n + c.charCodeAt(0), 0) % PRAISE.length
+]
+
 /** そのブロックの中身(項目)。「文章全体」では複数の段落が入る */
 const partsOf = (s) => s.parts ?? [{ id: s.id, prompt_en: s.text }]
 
@@ -287,12 +312,12 @@ export default function SlashReading({
                 ))}
               </p>
 
-              {/* **数えない。言うのは「決まりに反していない」ことだけ。**
-                  合っている数・模範には無い数・あと何か所、は採点であり、
-                  区切り方に正解が無い以上、意味を持たない(2026-08) */}
+              {/* **数えない。** 合っている数・模範には無い数・あと何か所、は
+                  採点であり、区切り方に正解が無い以上、意味を持たない(2026-08)。
+                  1つも反していなければ、**褒める**(2026-08 利用者の指定) */}
               {mine.length > 0 && judge.ng === 0 && (
                 <p className="slash-score">
-                  <span className="slash-score-done">決まりに反する区切りはありません</span>
+                  <span className="slash-score-done">{praiseFor(s.id)}</span>
                 </p>
               )}
 

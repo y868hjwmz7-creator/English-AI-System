@@ -1431,7 +1431,9 @@ html { -webkit-text-size-adjust: 100%; }
   display: flex; flex-wrap: wrap; gap: 6px 12px;
   margin: 8px 0 0; font-size: 12.5px;
 }
-.slash-score-done { color: var(--ok); font-weight: 600; }
+/* 決まりに反する区切りが1つも無いときの声かけ(2026-08 利用者の指定)。
+   **報告ではなく、褒め言葉。** 少しだけ大きく、はっきり出す */
+.slash-score-done { color: var(--ok); font-weight: 700; font-size: 13.5px; }
 
 /* 模範の区切り。**自分と同じ形で出す。** 形が違うと見比べられない */
 .slash-out { margin: 6px 0 0; line-height: 2.1; font-size: 17px; }
