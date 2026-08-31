@@ -175,6 +175,24 @@ const PHRASAL_PAIRS = new Set([
   'tear down', 'tear up', 'tidy up', 'wrap up', 'warm up', 'wind up',
   'back up', 'check in', 'check out', 'drop off', 'drop out',
   'end up', 'kick off', 'knock out', 'roll out', 'sum up',
+  // 2026-08 実機で `talking / up a stock` と割れた。**対で持つ**
+  'talk up', 'talk down', 'talk over', 'talk through',
+  'sell off', 'sell out', 'buy up', 'buy out', 'cash in', 'cash out',
+  'ramp up', 'step up', 'step down', 'beef up', 'firm up', 'top up',
+  'catch up', 'catch on', 'settle down', 'slow down', 'speed up',
+  'shake off', 'track down', 'narrow down', 'water down', 'play down',
+  'reach out', 'rule out', 'weigh in', 'single out', 'spell out',
+  'flesh out', 'map out', 'phase out', 'pile up', 'stock up', 'team up',
+  'tune in', 'zoom in', 'zoom out', 'back off', 'bail out', 'blow up',
+  'branch out', 'burn out', 'call out', 'calm down', 'cheer up',
+  'clear up', 'cover up', 'crack down', 'dress up', 'drown out',
+  'even out', 'fight back', 'gear up', 'give off', 'hurry up',
+  'iron out', 'jot down', 'lock in', 'look back', 'mess up', 'mix up',
+  'note down', 'put forward', 'rack up', 'rip off', 'round up',
+  'set back', 'settle in', 'shut out', 'sit down', 'slip up',
+  'spread out', 'stack up', 'stay up', 'stir up', 'swap out',
+  'take up', 'throw in', 'tie up', 'tip off', 'weed out', 'win over',
+  'wipe out', 'write off',
 ])
 
 /** 対の先頭にある動詞(語幹)。活用を戻すときの当たり先にする */
@@ -450,6 +468,157 @@ const isAdjective = (w) => {
 const isParticiple = (w) => /^[a-z]{4,}(ing|ed)$/.test(w) || IRREGULAR_PARTICIPLES.has(w)
 
 /**
+ * **よく出る動詞**(2026-08 利用者の指定で足した)。
+ *
+ *   > 動詞の後も初心者には区切ってもらいたいポイントです。
+ *
+ * `The office bought / a new coffee machine` `a trader places / an order` の
+ * ように、**動詞と目的語のあいだ**を切れるようにするために要る。
+ *
+ * 【なぜ「当てられない」と言っていたのに足せるのか】
+ *   ここで作るのは**控えの切れ目**であって、ゲストへの注意ではない。
+ *   控えは細かいほどよい(どこで切っても訳が真下に来る)。
+ *   取り違えたときの害も「よけいな切れ目が1つ増える」だけである。
+ *   **注意する側(`slashProblem`)には、いっさい足していない。**
+ *
+ * 【取り違えを減らす3つの条件】(`verbHere`)
+ *   ① 前が冠詞・形容詞・所有格・前置詞なら**名詞**である(`the plan` `a new place`)
+ *   ② うしろが**名詞のはじまり**(冠詞・代名詞・数)のときだけ切る
+ *   ③ 句動詞の副詞が続くときは `add()` が断る(`talking / up a stock` を防ぐ)
+ *
+ * 原形だけを並べ、活用は `verbBase()` が戻す。
+ */
+const COMMON_VERBS = new Set([
+  'accept', 'add', 'allow', 'answer', 'arrange', 'ask', 'attend', 'avoid',
+  'bake', 'become', 'begin', 'believe', 'book', 'break', 'bring', 'build',
+  'buy', 'call', 'cancel', 'carry', 'catch', 'change', 'charge', 'check',
+  'choose', 'clean', 'collect', 'compare', 'confirm', 'consider', 'contact',
+  'cook', 'copy', 'count', 'cover', 'create', 'cut', 'decide', 'deliver',
+  'describe', 'design', 'develop', 'discuss', 'draw', 'drink', 'drive',
+  'eat', 'enjoy', 'expect', 'explain', 'feed', 'feel', 'fill', 'find',
+  'finish', 'fix', 'follow', 'forget', 'gather', 'get', 'give', 'grow',
+  'handle', 'have', 'hear', 'help', 'hire', 'hit', 'hold', 'hope', 'improve',
+  'include', 'increase', 'install', 'join', 'keep', 'know', 'launch', 'lead',
+  'learn', 'leave', 'let', 'lose', 'love', 'make', 'manage', 'mean',
+  'measure', 'meet', 'mention', 'miss', 'move', 'need', 'notice', 'offer',
+  'open', 'order', 'own', 'pay', 'pick', 'place', 'plan', 'play', 'post',
+  'prepare', 'present', 'produce', 'promote', 'protect', 'provide',
+  'publish', 'raise', 'reach', 'read', 'receive', 'recommend', 'reduce',
+  'release', 'remember', 'remove', 'repair', 'replace', 'report', 'require',
+  'review', 'run', 'save', 'say', 'schedule', 'see', 'select', 'sell',
+  'send', 'serve', 'share', 'show', 'sign', 'solve', 'spend', 'start',
+  'stop', 'study', 'submit', 'suggest', 'support', 'take', 'teach', 'tell',
+  'test', 'think', 'throw', 'touch', 'train', 'try', 'understand', 'update',
+  'use', 'visit', 'want', 'watch', 'wear', 'win', 'write',
+])
+
+/** 形が変わる過去形・過去分詞。原形に戻せないと当たらない */
+const IRREGULAR_PAST = new Map([
+  ['bought', 'buy'], ['brought', 'bring'], ['caught', 'catch'],
+  ['taught', 'teach'], ['thought', 'think'], ['found', 'find'],
+  ['sold', 'sell'], ['told', 'tell'], ['held', 'hold'], ['built', 'build'],
+  ['sent', 'send'], ['spent', 'spend'], ['kept', 'keep'], ['left', 'leave'],
+  ['felt', 'feel'], ['meant', 'mean'], ['paid', 'pay'], ['said', 'say'],
+  ['made', 'make'], ['took', 'take'], ['taken', 'take'], ['gave', 'give'],
+  ['given', 'give'], ['got', 'get'], ['saw', 'see'], ['seen', 'see'],
+  ['knew', 'know'], ['known', 'know'], ['grew', 'grow'], ['grown', 'grow'],
+  ['drew', 'draw'], ['drawn', 'draw'], ['threw', 'throw'],
+  ['thrown', 'throw'], ['wrote', 'write'], ['written', 'write'],
+  ['drove', 'drive'], ['driven', 'drive'], ['chose', 'choose'],
+  ['chosen', 'choose'], ['broke', 'break'], ['broken', 'break'],
+  ['ran', 'run'], ['won', 'win'], ['lost', 'lose'], ['met', 'meet'],
+  ['heard', 'hear'], ['led', 'lead'], ['fed', 'feed'],
+  ['understood', 'understand'], ['began', 'begin'], ['begun', 'begin'],
+  ['became', 'become'], ['ate', 'eat'], ['eaten', 'eat'],
+  ['drank', 'drink'], ['drunk', 'drink'], ['wore', 'wear'],
+  ['worn', 'wear'], ['sent', 'send'], ['read', 'read'],
+])
+
+/** 活用を原形に戻す。よく出る動詞に当たらなければ空を返す */
+const verbBase = (w) => {
+  if (!w) return ''
+  if (COMMON_VERBS.has(w)) return w
+  const irr = IRREGULAR_PAST.get(w)
+  if (irr && COMMON_VERBS.has(irr)) return irr
+  for (const t of [
+    w.replace(/ies$/, 'y'), w.replace(/ied$/, 'y'),
+    // 子音を重ねる活用(`stopped` → `stop`)。`ped` → `p` にはしない
+    w.replace(/([bcdfghjklmnpqrstvwxz])\1(ing|ed)$/, '$1'),
+    w.replace(/ing$/, ''), w.replace(/ing$/, 'e'),
+    w.replace(/ed$/, ''), w.replace(/ed$/, 'e'),
+    w.replace(/es$/, ''), w.replace(/s$/, ''),
+  ]) {
+    if (t !== w && COMMON_VERBS.has(t)) return t
+  }
+  return ''
+}
+
+/** 数をあらわす語。**名詞のはじまり**として数える */
+const NUMBER_WORDS = new Set([
+  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  'ten', 'twenty', 'thirty', 'fifty', 'hundred', 'thousand', 'million',
+  'billion', 'several', 'many', 'much', 'few', 'more', 'most', 'other',
+])
+
+/** そこから**名詞のかたまりが始まる**か(冠詞・代名詞・数) */
+function startsNoun(words, i) {
+  const raw = words[i]
+  if (raw === undefined) return false
+  if (/^[0-9]/.test(String(raw))) return true
+  const b = bare(raw)
+  return DETERMINERS.has(b) || OBJECT_PRONOUNS.has(b) || NUMBER_WORDS.has(b)
+}
+
+/** 本動詞にもなる助動詞(`I have / two things` `We did / the work`) */
+const MAIN_VERB_AUX = new Set(['have', 'has', 'had', 'do', 'does', 'did'])
+
+/**
+ * i 語目が**動詞**で、そのあとで切ってよいか。
+ * 当てられないときは false(**あやふやなことはしない**)。
+ */
+function verbHere(words, i) {
+  const b = bare(words[i])
+  if (!b) return false
+  const prev = bare(words[i - 1] ?? '')
+  // 前が冠詞・形容詞・所有格・前置詞なら、それは名詞である(`the plan`)。
+  // `to` だけは例外(`to check / the report`)
+  if (DETERMINERS.has(prev) || isAdjective(prev)) return false
+  if (isPossessive(words[i - 1] ?? '')) return false
+  if (prev !== 'to' && PREPOSITIONS.has(prev)) return false
+  if (MAIN_VERB_AUX.has(b)) {
+    // 疑問文の頭(`Do the students know …?`)は助動詞。文頭では見ない
+    return i > 0 && !endsSentence(words[i - 1] ?? '')
+  }
+  return verbBase(b) !== ''
+}
+
+/**
+ * i 語目が、**前の名詞を説明する分詞**か(2026-08 利用者の指定)。
+ *
+ *   > 前の名詞を説明する分詞も初心者は分けて考えます。
+ *
+ * `Phone scams / targeting elderly people` `The money / raised by the fund`。
+ * 助動詞のあと(`has been caught` `was raised`)や冠詞・形容詞のあと
+ * (`a broken window`)は、分詞ではあっても**前の名詞の説明ではない**。
+ */
+function postModifier(words, i) {
+  const b = bare(words[i])
+  if (!b) return false
+  const ing = /^[a-z]{3,}ing$/.test(b)
+  if (!ing && !/^[a-z]{4,}ed$/.test(b) && !IRREGULAR_PARTICIPLES.has(b)) return false
+  if (isAdjective(b)) return false
+  const prev = bare(words[i - 1] ?? '')
+  if (!prev) return false
+  // 前が機能語(前置詞・接続詞・助動詞)なら、その語にかかっている
+  if (startsChunk(prev)) return false
+  if (LINKING_VERBS.has(prev)) return false
+  if (isAdverb(prev)) return false            // `quietly selling` は離さない
+  if (takesGerund(prev)) return false         // `stopped guessing` は離さない
+  if (DETERMINERS.has(prev) || isAdjective(prev)) return false
+  return true
+}
+
+/**
  * **カタマリの先頭にしか立てない語**(2026-08 利用者の指定で足した)。
  *
  * 接続詞・関係詞のうち、**ほかの品詞にならないもの**だけを入れてある。
@@ -544,7 +713,14 @@ function insideAux(words, i) {
   const group = auxGroupAt(words, i)
   if (group) return group
   // 助動詞1語 + 動詞。あいだで切らない
-  if (i > 0 && MODALS.has(bare(words[i - 1]))) return bare(words[i - 1])
+  if (i > 0 && MODALS.has(bare(words[i - 1]))) {
+    // ただし **`have` / `do` は本動詞にもなる**(2026-08 利用者の指定で足した)。
+    // うしろが名詞のはじまりなら「持っている」「する」の意味なので、
+    // 動詞と目的語のあいだで切ってよい(`the trend has / a darker side`)
+    if (MAIN_VERB_AUX.has(bare(words[i - 1])) && startsNoun(words, i)
+      && i - 1 > 0 && !endsSentence(words[i - 2] ?? '')) return null
+    return bare(words[i - 1])
+  }
   return null
 }
 
@@ -609,12 +785,12 @@ export function idealSlashes(sentence) {
     // 強さ1なので初級でしか出ないが、訳を控える単位は初級である。
     // ここが細かいほど、ゲストがどこで切っても訳が真下に来る
     else if (isAdverb(b) || SUBJECT_PRONOUNS.has(b)) add(i, 1, `${b} の前`)
-    // **名詞のうしろに立つ `-ing`**(`phone scams / targeting elderly people`)。
-    // 助動詞のあと(`is spreading`)や冠詞のあとは、`add()` が断る。
-    // **6文字から見る**(`reading` `living` `making`)。5文字までは
-    // `going` `doing` `being` のような助動詞まわりなので、切っても意味がない
-    else if (/^[a-z]{3,}ing$/.test(b) && !isAdjective(b)
-      && !takesGerund(bare(words[i - 1] ?? ''))) add(i, 1, `${b} の前`)
+    // **前の名詞を説明する分詞の前**(2026-08 利用者の指定)。
+    // `Phone scams / targeting elderly people`
+    // `The money / raised by the fund`。
+    // 助動詞のあと(`is spreading` `was raised`)や冠詞のあと
+    // (`a broken window`)は `postModifier()` と `add()` が断る
+    else if (postModifier(words, i)) add(i, 1, `${b} の前(前の名詞を説明する)`)
     // **比べる `than` の前**(`it feels safer / than reading a textbook.`)。
     // ただし `more than` `less than` は数量のひとかたまりなので切らない
     else if (b === 'than' && !['more', 'less', 'fewer'].includes(bare(words[i - 1] ?? ''))) {
@@ -628,6 +804,18 @@ export function idealSlashes(sentence) {
     // **助動詞と be動詞は数が決まっていて、しかも必ず動詞である。**
     // 強さ1なので**初級でしか出ない。** 初心者向けの決まりだからである
     else if (MODALS.has(b)) add(i, 1, `${b} の前(主語と動詞を切り、動詞から先に訳す)`)
+
+    // **動詞のあと**(2026-08 利用者の指定)。
+    //
+    //   > 動詞の後も初心者には区切ってもらいたいポイントです。
+    //
+    // 上の分岐とは別に見る。同じ語が「前で切る」と「あとで切る」の
+    // 両方に当たることがある(`the trend / has / a darker side`)。
+    // うしろが名詞のはじまりのときだけ切るので、句動詞の副詞
+    // (`talking up a stock`)は当たらない
+    if (verbHere(words, i) && startsNoun(words, i + 1)) {
+      add(i + 1, 1, `${b} のあと(動詞と目的語を切る)`)
+    }
   })
 
   return out.sort((a, b) => a.at - b.at)

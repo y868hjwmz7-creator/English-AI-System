@@ -32,6 +32,10 @@ const S = {
   seenBefore: 'I had seen the report before. Then I sent it to the client.',
   // 所有格と、接続詞でつながる文
   owner: "The company's plan and the budget were approved by the board.",
+  // 動詞のあと・前の名詞を説明する分詞(2026-08 利用者の指定)
+  trend: 'But the trend has a darker side too.',
+  caught: 'A few streamers have been caught talking up a stock while quietly selling their own shares.',
+  raised: 'The money raised by the fund went to local schools.',
 }
 
 console.log('▶ 模範の区切りが、自分の決まりを守っていること')
@@ -258,6 +262,66 @@ console.log('\n▶ ありうる切れ目を、控えに入れてある')
       checkSlashes(t, slashesFor(t, 'beginner').map((x) => x.at)).length === 0,
       cut(t, 'beginner'))
   }
+}
+
+/* ── 動詞のあとで切る(2026-08 利用者の指定)──────────────────────
+   > 動詞の後も初心者には区切ってもらいたいポイントです。
+
+   控えの切れ目としてだけ足してある。**注意する側には足していない**
+   (取り違えたときに「間違った注意」を出さないため)。 */
+console.log('\n▶ 動詞と目的語のあいだに、切れ目がある')
+{
+  const has = (t, piece) => cut(t, 'beginner').includes(piece)
+  ok('The office bought / a new coffee machine',
+    has(S.office, 'bought / a new'), cut(S.office, 'beginner'))
+  ok('the trend has / a darker side(has は本動詞)',
+    has(S.trend, 'has / a darker'), cut(S.trend, 'beginner'))
+  ok('a real trader places / an order',
+    has('They can see when a real trader places an order.', 'places / an order'),
+    cut('They can see when a real trader places an order.', 'beginner'))
+  ok('活用しても当たる(opened / a new branch)',
+    has('The company opened a new branch in Osaka.', 'opened / a new'),
+    cut('The company opened a new branch in Osaka.', 'beginner'))
+  // **句動詞の副詞は目的語ではない。** ここで切ると `talk up` が割れる
+  ok('talking up / a stock(句動詞は割らない)',
+    !cut(S.caught, 'beginner').includes('talking / up'), cut(S.caught, 'beginner'))
+  // 名詞にもなる語を、動詞と取り違えない
+  ok('the plan / のあとでは切らない(冠詞のうしろは名詞)',
+    !cut('We need the plan a week before the meeting.', 'beginner').includes('plan / a'),
+    cut('We need the plan a week before the meeting.', 'beginner'))
+  ok('a new place のあとでは切らない(形容詞のうしろは名詞)',
+    !cut('They found a new place a few days ago.', 'beginner').includes('place / a'),
+    cut('They found a new place a few days ago.', 'beginner'))
+  // 疑問文の頭の Do / Did は助動詞。ここでは切らない
+  ok('Do / the students … と切らない',
+    !cut('Do the students know the answer?', 'beginner').startsWith('Do /'),
+    cut('Do the students know the answer?', 'beginner'))
+  ok('have been caught を割らない',
+    !cut(S.caught, 'beginner').includes('have / been'), cut(S.caught, 'beginner'))
+}
+
+/* ── 前の名詞を説明する分詞(2026-08 利用者の指定)────────────────
+   > 後は、前の名詞を説明する分詞も初心者は分けて考えます。 */
+console.log('\n▶ 前の名詞を説明する分詞の前に、切れ目がある')
+{
+  const has = (t, piece) => cut(t, 'beginner').includes(piece)
+  ok('The money / raised by the fund', has(S.raised, 'money / raised'),
+    cut(S.raised, 'beginner'))
+  ok('Phone scams / targeting …(-ing も同じ)',
+    has('Phone scams targeting elderly people were spreading fast.', 'scams / targeting'))
+  ok('was raised は割らない(助動詞のうしろ)',
+    !cut('The money was raised by the fund last year.', 'beginner').includes('was / raised'),
+    cut('The money was raised by the fund last year.', 'beginner'))
+  ok('a broken window は割らない(冠詞のうしろ)',
+    !cut('He opened a broken window in the room.', 'beginner').includes('broken / window'),
+    cut('He opened a broken window in the room.', 'beginner'))
+  ok('quietly selling は割らない(副詞のうしろ)',
+    !cut(S.caught, 'beginner').includes('quietly / selling'), cut(S.caught, 'beginner'))
+  ok('by reading books は割らない(前置詞のうしろ)',
+    !cut('She learns English by reading books every night.', 'beginner').includes('by / reading'),
+    cut('She learns English by reading books every night.', 'beginner'))
+  ok('stopped guessing は割らない(-ing を取る動詞のうしろ)',
+    !cut('She stopped guessing and started copying the timing.', 'beginner').includes('stopped / guessing'))
 }
 
 console.log('\n▶ カタマリをつなぐと、もとの文に戻る')

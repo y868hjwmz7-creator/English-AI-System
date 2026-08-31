@@ -3472,6 +3472,91 @@ SDK は読めるところまでを返すので、`instruction` だけあって
 
 ---
 
+## 5.46 動詞のあと・前の名詞を説明する分詞でも切れるようにした(2026-08 利用者の指定)
+
+> 動詞の後も初心者には区切ってもらいたいポイントです。
+> 後は、前の名詞を説明する分詞も初心者は分けて考えます。
+
+### 何が足りなかったか
+
+実機の2枚の写真の文を、そのときの決まりで切ると次のようになっていた。
+
+```
+But the trend / has a darker side too.
+A few streamers / have been caught / talking / up a stock / while quietly / …
+They / can see / exactly / when a real trader places an order, / and why.
+The office bought a new coffee machine / for the meeting room last week.
+```
+
+- **動詞のあとで切れていない。** `has a darker side` `places an order`
+  `bought a new coffee machine` が、どれも1つのカタマリのままだった
+  (利用者自身は `But the trend has / a darker side too.` と切っている)
+- **`talking / up a stock` と割れていた。** `talk up` は句動詞なのに
+  対の一覧(`PHRASAL_PAIRS`)に無かった
+- **前の名詞を説明する分詞**は `-ing` しか見ていなかった。
+  `The money raised by the fund` の `raised` では切れない
+
+### 入れたもの ① 動詞のあと(控えの側だけ)
+
+`COMMON_VERBS`(よく出る動詞の原形)+ `IRREGULAR_PAST`(不規則な過去形)+
+`verbBase()`(活用を原形に戻す)で当てる。
+
+**注意する側(`slashProblem`)には、いっさい足していない。**
+控えは切れ目が1つ増えるだけで害が小さいが、注意は取り違えるとそのまま
+**間違った注意**になる。「あやふやなことを言わない」を守るための線引きである。
+
+取り違えを避ける条件は3つ(`verbHere()`)。
+
+| 条件 | 防ぐもの |
+|---|---|
+| 前が冠詞・形容詞・所有格・前置詞なら**名詞** | `the plan / a week` `a new place / a few days` |
+| うしろが**名詞のはじまり**(冠詞・代名詞・数)のときだけ切る | `They look / at the sky` |
+| 句動詞の副詞が続くときは `add()` が断る | `talking / up a stock` |
+
+**`have` `do` は本動詞にもなる。** これまで `insideAux()` が
+「助動詞のうしろでは切らない」と一律に断っていたため、
+`the trend has / a darker side` が作れなかった。
+うしろが名詞のはじまりなら本動詞だと見て、断らないようにした。
+ただし**文頭の `Do the students know …?` は疑問文の助動詞**なので、そこでは切らない。
+
+### 入れたもの ② 前の名詞を説明する分詞(`postModifier()`)
+
+`-ing` だけでなく `-ed` と不規則な分詞(`raised` `written` `broken` …)も見る。
+**前の名詞の説明ではないとき**は切らない。
+
+| 切らない | なぜ |
+|---|---|
+| `was raised` `has been caught` | 助動詞のうしろ。**本動詞**である |
+| `a broken window` | 冠詞・形容詞のうしろ。名詞の**前**に付く形容詞 |
+| `by reading books` | 前置詞のうしろ。その前置詞にかかっている |
+| `quietly selling` | 副詞のうしろ。副詞が分詞にかかっている |
+| `stopped guessing` | うしろに `-ing` を取る動詞のうしろ |
+
+このうち「前置詞のうしろ」「副詞のうしろ」は、**この機会に見つかった穴**である。
+`She learns English / by / reading books` と、`by` が1語だけのカタマリになっていた。
+
+### 入れたもの ③ 句動詞の対を増やした
+
+`talk up` をはじめ約70組を足した。**動詞と副詞の対で持つ**方針は変えていない
+(掛け合わせにすると `look / at the sky` のような正しい区切りを咎める)。
+`run up`(`run up the hill` は前置詞)のように、同じ組み合わせが
+前置詞句にもなるものは**入れていない。**
+
+### 結果
+
+```
+But the trend / has / a darker side too.
+A few streamers / have been caught / talking up / a stock / while quietly selling / …
+They / can see / exactly / when a real trader places / an order, / and why.
+The office bought / a new coffee machine / for the meeting room last week.
+The money / raised / by the fund went / to local schools.
+```
+
+`npm run test:chunk` に、この2つの決まりの分を足した(16 項目)。
+**模範が自分の決まりを破っていないこと**は、これまでどおり全文で見張っている。
+
+---
+
 ## 5.45 練習の中身から、囲みを外した(2026-08 利用者の指定)
 
 > 各トレーニング名のボタン以外の要素には枠線がない方が洗練されると思います。

@@ -783,6 +783,21 @@ Quick Response の1問が5行になり、6Steps でも1文に段落まるごと�
   ただし**助動詞と be動詞は数が決まっていて、しかも必ず動詞**なので、
   その前では切る(強さ1。**初級でしか出ない**)。
   `How long / is the ride?` — 利用者の紙の教材と同じ形になる
+- **「動詞のあとで切る」は、控えの側にだけ入れてある**(2026-08 利用者の指定)。
+
+  > 動詞の後も初心者には区切ってもらいたいポイントです。
+
+  `The office bought / a new coffee machine` `the trend has / a darker side`。
+  **注意する側(`slashProblem`)には足していない。** 控えは切れ目が増えるだけで
+  害が小さいが、注意は取り違えるとそのまま**間違った注意**になる。
+  よく出る動詞を `COMMON_VERBS` に並べ、活用は `verbBase()` が戻す
+  (不規則な過去形は `IRREGULAR_PAST`)。取り違えを避ける条件は3つ。
+  ①前が冠詞・形容詞・所有格・前置詞なら**名詞**である(`the plan` `a new place`)
+  ②うしろが**名詞のはじまり**(冠詞・代名詞・数)のときだけ切る
+  ③句動詞の副詞が続くときは `add()` が断る(`talking / up a stock` を防ぐ)。
+  **`have` `do` は本動詞にもなる**ので `insideAux()` を緩めてある
+  (うしろが名詞のはじまりなら助動詞ではない)。ただし**文頭の
+  `Do the students …?` は疑問文の助動詞**なので、そこでは切らない
 - **単位は「段落ごと」か「文章全体」。** 1文ずつでは細かすぎる
   (2026-08 の指摘)。`blocksOf()` で切り替える
 - **自分の区切りに合わせた訳は、控えを組み替えて作る**(`chunkPairsAtMarks()`)。
@@ -851,8 +866,19 @@ Quick Response の1問が5行になり、6Steps でも1文に段落まるごと�
     | 主語の代名詞 | `Last spring / she noticed` |
     | **前置詞 + 代名詞のあと** | `Apps like this / let a trader` |
     | **句動詞のあと** | `Some streams pull in / more than …` |
-    | **名詞のうしろに立つ `-ing`** | `Phone scams / targeting elderly people` |
+    | **前の名詞を説明する分詞** | `Phone scams / targeting elderly people` / `The money / raised by the fund` |
     | **比べる `than` の前** | `it feels safer / than reading a textbook.` |
+    | **動詞のあと** | `The office bought / a new coffee machine` |
+
+    **分詞は `-ing` だけではない**(2026-08 利用者の指定)。
+
+    > 前の名詞を説明する分詞も初心者は分けて考えます。
+
+    `-ed` と不規則な分詞も同じように切る(`postModifier()`)。
+    ただし**前の名詞の説明ではないとき**は切らない。
+    助動詞のうしろ(`was raised` `has been caught`)、
+    冠詞・形容詞のうしろ(`a broken window`)、
+    前置詞のうしろ(`by reading books`)、副詞のうしろ(`quietly selling`)。
 
     ただし切らないものが2つある。
     **`more than` `less than`** は数量のひとかたまり(`more / than` にしない)。
