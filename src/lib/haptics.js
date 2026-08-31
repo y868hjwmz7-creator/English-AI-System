@@ -93,7 +93,8 @@ export function tapFeedback(kind = 'tap') {
  *
  * **語は外す。** 語は「軽く触れただけでは何も起きない」ので、
  * 触れた瞬間に振れると「押せた」と誤解させる。
- * 語は長押しが効いた瞬間に `tapFeedback('hold')` を呼んでいる。
+ * 語は `EnglishText` の中で、意味が開いた瞬間に `tapFeedback('tap')` を呼ぶ
+ * (2026-08 に長押しからタップへ改めた)。
  *
  * @returns {Function} 見張りをやめる関数
  */
@@ -114,7 +115,7 @@ export function installTapFeedback() {
     if (!isTouch(e)) return
     const el = e.target?.closest?.('button, [role="button"], summary, label.chip')
     if (!el || el.disabled) return
-    if (el.closest('.etext-word')) return   // 語は長押しが効いたときだけ
+    if (el.closest('.etext-word')) return   // 語は意味が開いたときだけ
 
     armed = true
     from = { x: e.clientX, y: e.clientY }

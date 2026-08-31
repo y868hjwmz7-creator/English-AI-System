@@ -35,6 +35,7 @@ import EnglishText from './EnglishText.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import useWordStatuses from '../lib/useWordStatuses.js'
+import { prefetchGlosses } from '../lib/vocab.js'
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
@@ -139,6 +140,29 @@ export default function TrainerMaterials({ me }) {
     triedJa.current.add(m.id)
     makeChunkJa(m)
   }, [openId, lessonOf, materials])
+
+  /**
+   * **中身を開いた時点で、まだ控えに無い語を裏で引いておく**(2026-08 実機)。
+   *
+   *   > 単語の意味ですが、やはり初めて調べた時に3-5秒ほどかかるので
+   *   > レッスンの時間が無駄になります。
+   *
+   * 先読みは「レッスンで使う」(`LessonView`)と「本文の練習」
+   * (`PassagePractice`)にしか入っておらず、**この画面には無かった。**
+   * 英文が出る場所は4つある(CLAUDE.md)。ここもその1つである。
+   *
+   * `prefetchGlosses` の側が「同じ語を二度引かない」を見ているので、
+   * ここでは開いた教材を渡すだけでよい。
+   */
+  useEffect(() => {
+    const m = materials.find((x) => x.id === openId)
+    if (!m) return
+    const texts = m.sections.flatMap((sec) => sec.items
+      .map((it) => it.prompt_en || it.question || '')
+      .filter(Boolean)
+      .map((text) => ({ text })))
+    prefetchGlosses(texts, { level: m.level })
+  }, [openId, materials])
 
   // 訳を作り直したら、**開いたままのレッスン表示にも反映する。**
   // 反映しないと、閉じて開き直すまで古い訳のままになる(2026-08)
@@ -319,19 +343,33 @@ export default function TrainerMaterials({ me }) {
               {/* **行そのものを押して開く**(2026-08 利用者の指定)。
                   下に「中身を見る」ボタンを置いていたが、1行ぶん場所を取る。
                   宿題の一覧で一度学んだ形にそろえた(▸ / ▾ の印を出す)。 */}
+              {/* **見出しのまわりは、押す前からグレーの囲みにする**
+                  (2026-08 利用者の指定)。
+
+                  > タップした時にタイトル周りが薄いグレーで囲まれますが、
+                  > タップする前からその仕様にしてください。
+                  > A2 の下にフレーズ、フレーズと同じ行の右端に日付を入れ、
+                  > グレーの囲みに一緒に入れてください。
+                  > 上部のグレーの部分を押して開くことは押してみるまで
+                  > 分かりません。
+
+                  触る端末では、押したときの色が**押したあとも残る**ため、
+                  「押せる場所」が押すまで分からなかった。
+                  はじめから囲んでおけば、囲みそのものが目印になる。
+                  そのうえで、**何が起きるかを言葉で書く**
+                  (「▸ 中身を見る・印刷する」)。囲みだけでは、
+                  押すと何が出るのかまでは分からない。 */}
               <div className="material-head">
                 <div className="material-open" role="button" tabIndex={0}
                      aria-expanded={openId === m.id}
+                     aria-controls={`material-${m.id}`}
                      onClick={() => setOpenId(openId === m.id ? null : m.id)}
                      onKeyDown={(e) => {
                        if (e.key !== 'Enter' && e.key !== ' ') return
                        e.preventDefault()
                        setOpenId(openId === m.id ? null : m.id)
                      }}>
-                  <span className="material-open-mark" aria-hidden="true">
-                    {openId === m.id ? '▾' : '▸'}
-                  </span>
-                  {/* 見出しは弱点だけ。レベル・業界は小さな札、日付は右上。
+                  {/* 見出しは弱点だけ。レベル・業界は小さな札。
 
                       **弱点を2回出さない**(2026-08 利用者の指定)。
                       以前は下に白い札の行を別に並べていたが、
@@ -350,18 +388,25 @@ export default function TrainerMaterials({ me }) {
                     fallbackTags={[m.tagIds.map(weaknessTagLabel).join(' + '),
                       cefrLabel(m.level), kindLabel(m.kind), industryLabel(m.industry)]}
                   />
-                </div>
-                {/* **日付を右上、その下にカテゴリー名**(2026-08 利用者の指定)。
-                    横に並べると、どちらが何なのか読み取りにくい。
-                    日付は `MaterialTitle` にも出せるが、**2か所に出さない**
-                    (`hideDate` を渡してある)。 */}
-                <span className="material-meta">
-                  <span className="material-when">{parseMaterialTitle(m.title).date}</span>
-                  <span className="material-kind">
-                    {kindLabel(m.kind)}
-                    {m.visibility === 'private' && ' / 自分だけ'}
+                  {/* **カテゴリー名は札の下、日付は同じ行の右端**
+                      (2026-08 利用者の指定)。日付は `MaterialTitle` にも
+                      出せるが、**2か所に出さない**(`hideDate` を渡してある)。 */}
+                  <div className="material-meta">
+                    <span className="material-kind">
+                      {kindLabel(m.kind)}
+                      {m.visibility === 'private' && ' / 自分だけ'}
+                    </span>
+                    <span className="material-when">{parseMaterialTitle(m.title).date}</span>
+                  </div>
+                  {/* **何を押せばよいかを、言葉で書く**(2026-08 利用者の指定)。
+                      印刷も中身を開いた先にあるので、ここに書いておく */}
+                  <span className="material-open-cta">
+                    <span className="material-open-mark" aria-hidden="true">
+                      {openId === m.id ? '▾' : '▸'}
+                    </span>
+                    {openId === m.id ? '中身を閉じる' : '中身を見る・印刷する'}
                   </span>
-                </span>
+                </div>
               </div>
 
               {m.instruction_ja && <p className="card-hint">{m.instruction_ja}</p>}

@@ -11,11 +11,33 @@
  *   | 端末 | 開き方 |
  *   |---|---|
  *   | パソコン(マウス・ペン) | 語を**クリック**する |
- *   | スマホ・タブレット | 語を **450ms 押し続ける**(少し長めに触れる) |
+ *   | スマホ・タブレット | 語を**軽く叩く**(指を離したときに開く) |
  *
  *   **カーソルを置いただけでは開かない。** 読んでいる途中で次々に開くと、
- *   本文が読めなくなる。**軽く触れただけでも開かない。**
- *   画面を送るだけで開いてしまうため。
+ *   本文が読めなくなる。
+ *
+ *   【なぜ「長押し」をやめたか】(2026-08 実機・3度目)
+ *
+ *     > タッチで使用するデバイスだと相変わらずスクロールしようと
+ *     > タッチすると単語の意味が出てしまいます。
+ *
+ *     長押しは **押しているあいだに開く。** 指を置いて少し迷ってから
+ *     画面を送ると、送り始める前に 450ms が過ぎて開いてしまう。
+ *     動いたら取り消す見張りを足しても、**動く前に開いてしまうので
+ *     間に合わない。** 時間で判定するかぎり、この穴は塞げない。
+ *
+ *     そこで **「指を離したときに決める」**ようにした。
+ *     画面を送るときの指は**必ず動く**ので、
+ *     「動かずに離れた」ことがそのままタップの証拠になる。
+ *     押している長さは見ない(迷って長く触れても、動かなければタップ)。
+ *
+ *     ダブルタップにはしなかった。iOS では拡大の操作とぶつかり、
+ *     **2語以上をなぞって調べる道**(下記)とも両立しにくい。
+ *     1回叩くだけで開くほうが、調べる回数の多い読解では速い。
+ *
+ *   【送りを止めるための1回は、タップとみなさない】
+ *     画面が流れているときに叩くのは「止めたい」であって
+ *     「調べたい」ではない。**直前に画面が動いていたら開かない。**
  *
  *   判定は「その操作がどれで来たか」(`pointerType`)で行う。
  *   `(hover: hover)` のような**環境の当て推量に賭けない。**
@@ -40,8 +62,30 @@ import { splitSentences } from '../lib/wordTiming.js'
 import GlossPopover from './GlossPopover.jsx'
 import { tapFeedback } from '../lib/haptics.js'
 
-/** 触る端末で「少し長め」と見なす長さ。短すぎると画面送りで開いてしまう */
-const HOLD_MS = 450
+/**
+ * **画面が動いた直後は、叩いてもタップとみなさない**(ms)。
+ *
+ * 流れている画面を止めるための1回は「調べたい」ではない。
+ * 送り終えてから軽く間があけば、ふつうに開く。
+ */
+const SCROLL_QUIET_MS = 400
+
+/**
+ * **画面が最後に動いた時刻。**
+ *
+ * 語ごと・本文ごとに見張ると、同じ見張りが画面に何十個も並ぶ。
+ * ここに1つだけ置いて、どの `EnglishText` からも同じものを見る。
+ */
+let lastScrollAt = 0
+let scrollWatched = false
+function watchScrollOnce() {
+  if (scrollWatched || typeof document === 'undefined') return
+  scrollWatched = true
+  // **capture で拾う。** 紙(`.lesson-sheet`)のように、中で送る要素の
+  // `scroll` は上まで伝わらない
+  document.addEventListener('scroll', () => { lastScrollAt = Date.now() },
+    { capture: true, passive: true })
+}
 
 /**
  * これ以上動いたら「押した」ではなく「動かした」とみなす(px)。
@@ -64,12 +108,12 @@ export default function EnglishText({
   const [gloss, setGloss] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const holdTimer = useRef(null)   // 長押しの計測
-  const holdOff = useRef(null)     // 長押しの見張りをやめる後始末
+  const holdOff = useRef(null)     // 見張りをやめる後始末
   const startPt = useRef(null)     // 指を置いた場所(動いたかを距離で見る)
   const scrolledRef = useRef(false)  // 指を置いてから画面が動いたか
-  const [holding, setHolding] = useState(false)  // いま押し続けているか(手応え)
-  const heldRef = useRef(false)    // 長押しで開いた直後か(続く click を捨てる)
+  const tapRef = useRef(false)     // いまの指の動きは、まだタップでありうるか
+  const [holding, setHolding] = useState(false)  // いま指を置いているか(手応え)
+  const heldRef = useRef(false)    // なぞり・タップで開いた直後か(続く click を捨てる)
   const touchRef = useRef(false)   // 直前の操作が「触る」だったか
   const rootRef = useRef(null)
   const anchorRef = useRef(null)   // 吹き出しを出す位置(語 or なぞった範囲の先頭)
@@ -165,8 +209,9 @@ export default function EnglishText({
     ? null
     : sentences.find((sp) => readingAt >= sp.start && readingAt < sp.end) ?? null
 
+  /** この指の動きは、もうタップではない(動いた・送られた) */
   const cancelHold = () => {
-    if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null }
+    tapRef.current = false
     // 見張り(動いたか・画面が送られたか)も一緒に外す
     holdOff.current?.()
     holdOff.current = null
@@ -174,7 +219,7 @@ export default function EnglishText({
   }
 
   /**
-   * 長押しのあいだ、**動いたら・画面が送られたら、やめる。**
+   * 指を置いているあいだ、**動いたら・画面が送られたら、タップをやめる。**
    *
    * 語そのものの `onPointerMove` だけでは足りない。
    *   ・縦に送るとき、指は同じ語の上に留まる(語が変わらないので気づけない)
@@ -387,32 +432,22 @@ export default function EnglishText({
                 setDragTo(i)
                 setRange(null)
                 if (!touchRef.current) return
-                // 触る端末: 少し長めに触れたときだけ開く
+                // 触る端末: **指を離したときに決める。** 押している長さは見ない
                 cancelHold()
-                const el = e.currentTarget
+                watchScrollOnce()
+                // **画面を送った直後の1回は、送りを止めるためのもの**
+                tapRef.current = Date.now() - lastScrollAt > SCROLL_QUIET_MS
                 watchHold(e.clientX, e.clientY)
-                // **押していることが見て分かるようにする**(2026-08 の要望)。
-                // 何も変わらないと、押せているのか分からない
+                // **触れていることが見て分かるようにする**(2026-08 の要望)
                 setHolding(true)
-                holdTimer.current = window.setTimeout(() => {
-                  heldRef.current = true
-                  holdOff.current?.()
-                  holdOff.current = null
-                  holdTimer.current = null
-                  setHolding(false)
-                  // **開いた瞬間に、手応えを返す**(バイブ / 押した印)
-                  tapFeedback('hold')
-                  anchorRef.current = el.closest('.etext-run') ?? el
-                  if (isOpen) close()
-                  else if (asPhrase) openRange(asPhrase.from, asPhrase.to)
-                  else open(i, part)
-                }, HOLD_MS)
               }}
               // iPhone・iPad の長押しメニュー(コピー / Google で検索)を出さない。
               // CSS の -webkit-touch-callout と合わせて二重に止める
               onContextMenu={(e) => e.preventDefault()}
               onPointerUp={(e) => {
                 const scrolled = scrolledRef.current
+                const wasTap = tapRef.current
+                const el = e.currentTarget
                 cancelHold()
                 const from = dragFrom.current
                 const to = wordAt(e.clientX, e.clientY)
@@ -425,7 +460,17 @@ export default function EnglishText({
                 if (from != null && to != null && to !== from) {
                   heldRef.current = true   // 続く click を捨てる
                   openRange(from, to)
+                  return
                 }
+                // **触る端末は、ここで開く**(2026-08 に長押しから改めた)。
+                // 動かずに離れたときだけ。画面を送るときの指は必ず動く
+                if (!touchRef.current || !wasTap) return
+                heldRef.current = true     // 続く click を捨てる
+                tapFeedback('tap')
+                anchorRef.current = el.closest('.etext-run') ?? el
+                if (isOpen) close()
+                else if (asPhrase) openRange(asPhrase.from, asPhrase.to)
+                else open(i, part)
               }}
               onPointerCancel={() => {
                 cancelHold()

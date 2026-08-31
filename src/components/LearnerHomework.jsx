@@ -27,6 +27,7 @@ import { BoltIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
+import { prefetchGlosses } from '../lib/vocab.js'
 import { loadMyReminder, markReminderSeen, usePracticeLog } from '../lib/practice.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
@@ -76,6 +77,24 @@ export default function LearnerHomework() {
   useEffect(() => { reload() }, [])
 
   useEffect(() => { if (wordError) setError(wordError) }, [wordError])
+
+  /**
+   * **開いた時点で、まだ控えに無い語を裏で引いておく**(2026-08 実機)。
+   *
+   * 先読みは「本文の練習」(`PassagePractice`)にしか入っておらず、
+   * 宿題を開いてすぐ語に触れると、はじめての語は3〜5秒待たされていた。
+   * 英文が出る場所は4つある(CLAUDE.md)。ここもその1つである。
+   */
+  useEffect(() => {
+    const a = assignments.find((x) => x.id === openId)
+    const m = a?.material
+    if (!m) return
+    const texts = (m.sections ?? []).flatMap((sec) => (sec.items ?? [])
+      .map((it) => it.prompt_en || it.question || '')
+      .filter(Boolean)
+      .map((text) => ({ text })))
+    prefetchGlosses(texts, { level: m.level })
+  }, [openId, assignments])
 
   const toggleDone = async (assignment) => {
     const next = !assignment.learner_done_at

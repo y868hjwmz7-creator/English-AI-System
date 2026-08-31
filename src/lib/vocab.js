@@ -200,8 +200,42 @@ work works day time year people way thing things`.trim().split(/\s+/))
  *
  *   目安: 1語あたりおよそ 0.1 円。24語で 2.4 円、しかも一度きり。
  */
-const PREFETCH_LIMIT = 24
+/**
+ * 1つの本文で先読みする語の数の上限。
+ *
+ * **24 では足りなかった**(2026-08 実機)。
+ *
+ *   > 単語の意味ですが、やはり初めて調べた時に3-5秒ほどかかるので
+ *   > レッスンの時間が無駄になります。先にバックグラウンドで全て
+ *   > 読んでおく仕様にしたつもりですが、ここはまだ改善が必要なようです。
+ *
+ * 記事1本(6段落・250〜350語)には、ありふれた語を除いても
+ * 100語ほどが残る。24 で止めていたので、**後ろのほうの段落は
+ * ほとんど先読みできていなかった。**
+ *
+ * 費用は1語あたりおよそ 0.1 円。120語で **12円ほど、しかも一度きり**で、
+ * 引いた結果はスクール全体の控えに残る(2人目からは無料)。
+ * 教材1本にかかる生成費(2〜3円)より大きいが、**レッスン中に
+ * 3〜5秒待つことのほうが高くつく。**
+ */
+const PREFETCH_LIMIT = 120
+
+/** 1回に何本の問い合わせを同時に走らせるか。順番に待つと後ろが間に合わない */
+const PREFETCH_PARALLEL = 3
+
 const prefetchDone = new Set()   // 同じ本文を二度先読みしない
+
+/**
+ * **いま先読みが走っている語。**
+ *
+ * 先読みの最中にその語へ触れると、これまでは**もう1本**同じ問い合わせを
+ * 出していた。待たされるうえに、同じ語に二度払うことになる。
+ * ここに走っている約束を控えておき、触れたときはそれを待つ。
+ *
+ * (この上にある `pending` は、控えを**まとめて読む**ための別物である。
+ *  名前が近いので取り違えないこと)
+ */
+const inFlight = new Map()
 
 /**
  * **待っても直らない断りが返ったら、先読みをやめる。**
@@ -249,10 +283,12 @@ export async function prefetchGlosses(entries, { level = 'B1' } = {}) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return
 
-  // 10語ずつ、順番に。まとめて一度に投げると返りが遅くなる
-  for (let i = 0; i < missing.length; i += 10) {
-    const chunk = missing.slice(i, i + 10)
-    for (const w of chunk) prefetchDone.add(w.key)
+  // 10語ずつに分ける。まとめて一度に投げると返りが遅くなる
+  const batches = []
+  for (let i = 0; i < missing.length; i += 10) batches.push(missing.slice(i, i + 10))
+
+  /** ひとまとまりを引いて、控えに入れる */
+  const askBatch = async (chunk) => {
     const { data, error } = await supabase.functions.invoke('lookup-word', {
       body: { words: chunk.map(({ word, sentence, contextKey }) => ({ word, sentence, contextKey })), level },
       headers: { Authorization: `Bearer ${session.access_token}` },
@@ -261,12 +297,35 @@ export async function prefetchGlosses(entries, { level = 'B1' } = {}) {
     // **直らない種類の断りなら、この画面のあいだは二度と先読みしない**
     if (error || data?.error) {
       if (data?.fatal) prefetchStopped = true
-      return
+      return false
     }
     for (const g of data?.glosses ?? []) {
       memoryCache.set(cacheKey(g.word_norm, g.context_key), withSenses(g))
     }
+    return true
   }
+
+  // **何本かを同時に走らせる**(2026-08)。順番に待っていたので、
+  // うしろの段落の語は、読み終わるころになっても間に合っていなかった。
+  // 走っているあいだは `pending` に控えておき、
+  // **その語に触れたら、もう1本呼ばずにこれを待つ。**
+  let next = 0
+  const run = async () => {
+    while (next < batches.length && !prefetchStopped) {
+      const chunk = batches[next]
+      next += 1
+      for (const w of chunk) prefetchDone.add(w.key)
+      const p = askBatch(chunk)
+      for (const w of chunk) inFlight.set(w.key, p)
+      try {
+        const okAll = await p
+        if (!okAll) return
+      } finally {
+        for (const w of chunk) if (inFlight.get(w.key) === p) inFlight.delete(w.key)
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: PREFETCH_PARALLEL }, run))
 }
 
 /**
@@ -301,6 +360,15 @@ export async function lookupWord({ word, sentence = '', level = 'B1' }) {
   // ① この画面で一度引いたもの(通信なし)
   const remembered = memoryCache.get(cacheKey(norm, ctx))
   if (remembered) return ok(remembered)
+
+  // ①' **いま先読みが走っている語なら、それを待つ。**
+  //     もう1本呼ぶと、同じ待ち時間をもう一度かけたうえに二度払いになる
+  const flying = inFlight.get(cacheKey(norm, ctx))
+  if (flying) {
+    await flying
+    const arrived = memoryCache.get(cacheKey(norm, ctx))
+    if (arrived) return ok(arrived)
+  }
 
   // ② データベースの控え(窓口を通さないぶん速い)
   const { data: cached } = await supabase
