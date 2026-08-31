@@ -237,8 +237,23 @@ console.log('\n▶ ありうる切れ目を、控えに入れてある')
   ok('… week / suddenly …', has(week, 'week / suddenly'), cut(week, 'beginner'))
   const spring = 'Last spring she noticed something odd.'
   ok('Last spring / she …', has(spring, 'spring / she'), cut(spring, 'beginner'))
+  // 比べる相手を導く than の前(2026-08 利用者の指定で足した)
+  const safer = 'For beginners, it feels safer than reading a textbook.'
+  ok('safer / than reading …', has(safer, 'safer / than reading'), cut(safer, 'beginner'))
+  ok('than が1語だけのカタマリにならない',
+    !cut(safer, 'beginner').includes('/ than /'), cut(safer, 'beginner'))
+  // 数量の more than は切らない
+  const many = 'Some streams pull in more than five thousand viewers.'
+  ok('more than five thousand は切らない',
+    !cut(many, 'beginner').includes('more / than'), cut(many, 'beginner'))
+  // うしろに -ing を取る動詞は、そのあいだで切らない
+  const stopped = 'She stopped guessing and started copying the timing.'
+  ok('stopped / guessing と切らない',
+    !cut(stopped, 'beginner').includes('stopped / guessing'), cut(stopped, 'beginner'))
+  ok('keep watching も切らない',
+    !cut('They keep watching the stream every night.', 'beginner').includes('keep / watching'))
   // **どれも、自分の決まりを破っていないこと**
-  for (const t of [apps, pull, scams, week, spring]) {
+  for (const t of [apps, pull, scams, week, spring, safer, many, stopped]) {
     ok(`決まりを破っていない: ${t.slice(0, 24)}…`,
       checkSlashes(t, slashesFor(t, 'beginner').map((x) => x.at)).length === 0,
       cut(t, 'beginner'))

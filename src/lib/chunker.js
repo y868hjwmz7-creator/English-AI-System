@@ -303,6 +303,38 @@ const OBJECT_PRONOUNS = new Set([
   'this', 'that', 'these', 'those', 'it', 'them', 'him', 'us', 'me', 'you',
 ])
 
+/**
+ * **うしろに `-ing` を取る動詞。** そのあいだでは切らない。
+ *
+ * `She stopped / guessing …` と切ると、訳が「彼女はやめた」「推測すること」に
+ * 割れて意味をなさない(2026-08 実測)。`-ing` の前で切るのは
+ * **`phone scams / targeting elderly people`** のように、
+ * 名詞のうしろに立つときだけにしたい。
+ *
+ * 活用は `-ed` を落として当てる(`stopped` → `stop`)。
+ */
+const GERUND_VERBS = new Set([
+  'stop', 'start', 'begin', 'keep', 'enjoy', 'avoid', 'finish', 'continue',
+  'like', 'love', 'hate', 'mind', 'consider', 'suggest', 'practice',
+  'quit', 'try', 'remember', 'forget', 'imagine', 'risk', 'admit', 'deny',
+  'spend', 'help', 'go', 'come', 'need', 'want',
+])
+
+/** その語は「うしろに -ing を取る動詞」か。活用も見る */
+const takesGerund = (w) => {
+  if (GERUND_VERBS.has(w)) return true
+  for (const t of [
+    // 子音を重ねる活用(`stopped` → `stop`)。**`ped` を `p` に置き換えない。**
+    // それでは `stopped` が `stopp` になる(2026-08 実測)
+    w.replace(/([bcdfghjklmnpqrstvwxz])\1ed$/, '$1'),
+    w.replace(/ied$/, 'y'), w.replace(/ed$/, ''), w.replace(/ed$/, 'e'),
+    w.replace(/s$/, ''), w.replace(/es$/, ''),
+  ]) {
+    if (t !== w && GERUND_VERBS.has(t)) return true
+  }
+  return false
+}
+
 /** 主語になる代名詞。**ここから新しいまとまりが始まることが多い** */
 const SUBJECT_PRONOUNS = new Set(['i', 'you', 'he', 'she', 'it', 'we', 'they'])
 
@@ -578,8 +610,16 @@ export function idealSlashes(sentence) {
     // ここが細かいほど、ゲストがどこで切っても訳が真下に来る
     else if (isAdverb(b) || SUBJECT_PRONOUNS.has(b)) add(i, 1, `${b} の前`)
     // **名詞のうしろに立つ `-ing`**(`phone scams / targeting elderly people`)。
-    // 助動詞のあと(`is spreading`)や冠詞のあとは、`add()` が断る
-    else if (/^[a-z]{5,}ing$/.test(b) && !isAdjective(b)) add(i, 1, `${b} の前`)
+    // 助動詞のあと(`is spreading`)や冠詞のあとは、`add()` が断る。
+    // **6文字から見る**(`reading` `living` `making`)。5文字までは
+    // `going` `doing` `being` のような助動詞まわりなので、切っても意味がない
+    else if (/^[a-z]{3,}ing$/.test(b) && !isAdjective(b)
+      && !takesGerund(bare(words[i - 1] ?? ''))) add(i, 1, `${b} の前`)
+    // **比べる `than` の前**(`it feels safer / than reading a textbook.`)。
+    // ただし `more than` `less than` は数量のひとかたまりなので切らない
+    else if (b === 'than' && !['more', 'less', 'fewer'].includes(bare(words[i - 1] ?? ''))) {
+      add(i, 2, 'than の前(比べる相手)')
+    }
     // 助動詞・be動詞の前。**主語と動詞を切って、動詞から先に訳す**
     //
     // 利用者の指定「初心者は動詞の前に必ずスラッシュ」のうち、
@@ -699,6 +739,15 @@ export function slashProblem(words, i) {
       at: i,
       short: `${aux} は切らない`,
       text: `「${aux}」の途中で区切れています。助動詞と動詞はひとかたまりで訳します。`,
+    }
+  }
+  // ①' 比べる相手を導く語(`than` `as`)でカタマリを終えている。
+  //     `it feels safer / than / reading …` のように1語だけ取り残される
+  if (prev === 'than' || prev === 'as') {
+    return {
+      at: i,
+      short: `${raw} の前で区切る`,
+      text: `「${raw}」は比べる相手を導きます。あいだでは区切りません。`,
     }
   }
   // ② 区切りの最後が前置詞になっている(利用者の明示した NG)

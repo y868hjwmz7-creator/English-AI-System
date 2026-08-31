@@ -852,6 +852,15 @@ Quick Response の1問が5行になり、6Steps でも1文に段落まるごと�
     | **前置詞 + 代名詞のあと** | `Apps like this / let a trader` |
     | **句動詞のあと** | `Some streams pull in / more than …` |
     | **名詞のうしろに立つ `-ing`** | `Phone scams / targeting elderly people` |
+    | **比べる `than` の前** | `it feels safer / than reading a textbook.` |
+
+    ただし切らないものが2つある。
+    **`more than` `less than`** は数量のひとかたまり(`more / than` にしない)。
+    **うしろに `-ing` を取る動詞**(`stop` `start` `keep` `enjoy` …)は、
+    そのあいだで切らない。`She stopped / guessing` と切ると、訳が
+    「彼女はやめた」「推測すること」に割れて意味をなさない。
+    活用は語幹に戻して当てる(`stopped` → `stop`。
+    **`ped` を `p` に置き換えると `stopp` になる。** 子音の重なりで戻す)
 
     `like this` は**前の名詞にかかる2語のかたまり**なので、
     `Apps / like this` と切ると「アプリが」「このようなものは」に割れる
