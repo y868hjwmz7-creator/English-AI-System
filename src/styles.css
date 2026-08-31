@@ -911,6 +911,13 @@ html { -webkit-text-size-adjust: 100%; }
 .signin-submit { width: 100%; margin-top: 16px; }
 .signin-note { margin-top: 16px; margin-bottom: 0; line-height: 1.6; }
 .signin-ref { margin: 8px 0 0; font-size: 11px; }
+/* **ログインできないときに押せる手**(2026-08 実機)。
+   往復を1回試して、通信が届いていないのか、ID とパスワードが違うのかを
+   その場で切り分ける */
+.signin-diag { margin-top: 12px; }
+.signin-conn { margin: 8px 0 0; font-size: 13px; }
+.signin-conn p { margin: 0; }
+.signin-conn-raw { margin-top: 6px !important; font-size: 11px; word-break: break-word; }
 
 /* ---------------- ログイン中の表示 ----------------
    誰として入っているかは**左のメニューの下**に置く(`.nav-account`)。

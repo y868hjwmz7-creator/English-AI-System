@@ -9,7 +9,7 @@
  * Supabase が未設定のときは、すべて何もせずに null を返す。
  * アプリはこれまでどおり端末内のデータで動く。
  */
-import { supabase } from './supabase.js'
+import { NET_TIMEOUT_MS, TIMEOUT_MARK, supabase, withTimeout } from './supabase.js'
 
 /** いまログインしている人の情報。していなければ null。 */
 export async function getSession() {
@@ -45,10 +45,25 @@ function toJapanese(message) {
   if (/too many requests|rate limit/i.test(m)) {
     return '試行が多すぎます。しばらく待ってからもう一度お試しください。'
   }
-  if (/failed to fetch|network/i.test(m)) {
-    return 'Supabase に接続できませんでした。通信の状態をご確認ください。'
+  // Safari は `Load failed`、Chrome は `Failed to fetch` と言う
+  if (/failed to fetch|load failed|network/i.test(m)) {
+    return 'Supabase に接続できませんでした。通信の状態(電波・Wi-Fi・機内モード)を'
+      + 'ご確認のうえ、もう一度お試しください。'
   }
-  return m
+  // **黙って固まらないための知らせ**(2026-08 実機)。
+  // 押しても何も起きず「ログインしています…」のまま止まる、という報告があった
+  if (m === TIMEOUT_MARK) {
+    return `Supabase から ${Math.round(NET_TIMEOUT_MS / 1000)} 秒待っても返事がありませんでした。`
+      + '通信の状態(電波・Wi-Fi・機内モード)をご確認のうえ、もう一度お試しください。'
+      + '下の「接続を確かめる」を押すと、どこで止まっているか分かります。'
+  }
+  // 端末が保存を許していないとき(プライベートブラウズなど)。
+  // ログイン自体は通っても、次の画面へ進めない
+  if (/localstorage|quotaexceeded|securityerror|access is denied/i.test(m)) {
+    return 'この端末では、ログインの記録を保存できませんでした。'
+      + 'プライベートブラウズを使っている場合は、ふつうのタブで開いてください。'
+  }
+  return m || '原因の分からない失敗です。もう一度お試しください。'
 }
 
 /**
@@ -76,14 +91,36 @@ export const toLoginEmail = (input) => {
   return value.includes('@') ? value : `${value.toLowerCase()}@${LOGIN_DOMAIN}`
 }
 
-/** ログインする。成功なら { error: null }。 */
+/**
+ * ログインする。成功なら { error: null }。
+ *
+ * **返事が来ないときに、いつまでも待たない**(2026-08 実機)。
+ *
+ *   > もらったアプリ本体へのURL、スマホからだとログインできないぞ
+ *   > (押しても何も起きない・止まる)
+ *
+ * `fetch` は待ち時間の上限を持たない。電波が切れかけているときなど、
+ * 返事が来ないまま**永久に待つ**ことがある。画面は
+ * 「ログインしています…」のまま動かず、**何が起きたのか分からない。**
+ * 待ち時間の上限は `supabase.js` に1つだけ置いてある。
+ *
+ * **例外を外に出さない。** 投げると `SignIn` の `await` がそこで止まり、
+ * ボタンが「ログインしています…」のまま戻らず、知らせも出ない。
+ * **成功と失敗が、同じ見た目で終わってはいけない**(CLAUDE.md)。
+ */
 export async function signIn(idOrEmail, password) {
-  if (!supabase) return { error: 'Supabase が設定されていません。' }
-  const { error } = await supabase.auth.signInWithPassword({
-    email: toLoginEmail(idOrEmail),
-    password,
-  })
-  return { error: error ? toJapanese(error.message) : null }
+  if (!supabase) {
+    return { error: 'この版には Supabase の接続情報が入っていません。トレーナーにお知らせください。' }
+  }
+  try {
+    const { error } = await withTimeout(supabase.auth.signInWithPassword({
+      email: toLoginEmail(idOrEmail),
+      password,
+    }), NET_TIMEOUT_MS)
+    return { error: error ? toJapanese(error.message) : null }
+  } catch (e) {
+    return { error: toJapanese(e?.message) }
+  }
 }
 
 export async function signOut() {

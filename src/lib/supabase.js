@@ -41,6 +41,25 @@ export const supabase = isSupabaseConfigured
   : null
 
 /**
+ * **返事が来ないときに、いつまでも待たない**(2026-08 実機)。
+ *
+ * `fetch` は待ち時間の上限を持たない。Supabase まで届かない状況
+ * (電波が切れかけている・会社のネットワークが塞いでいる)では、
+ * **エラーにならず、ただ返ってこない。** 画面は「…しています」のまま止まり、
+ * **何が起きたのか分からない。**
+ * 失敗と分かるだけでも、次に何をすればよいかが決まる。
+ *
+ * **この決まりは1か所に置く。** 画面ごとに書くと、必ずどこかが抜ける。
+ */
+export const NET_TIMEOUT_MS = 15000
+export const TIMEOUT_MARK = '__timeout__'
+
+export const withTimeout = (promise, ms = NET_TIMEOUT_MS) => Promise.race([
+  promise,
+  new Promise((_, reject) => { setTimeout(() => reject(new Error(TIMEOUT_MARK)), ms) }),
+])
+
+/**
  * 接続できるかを実際に確かめます。設定ミスの切り分け用。
  * 例外は投げず、必ず結果オブジェクトを返します。
  */
@@ -49,13 +68,22 @@ export async function checkConnection() {
     return { ok: false, reason: 'unconfigured', message: '接続情報(URLと鍵)が設定されていません' }
   }
   try {
-    // 誰でも読める weakness_tags を1件だけ引いて、往復できるかを見る
-    const { error } = await supabase.from('weakness_tags').select('id').limit(1)
+    // 誰でも読める weakness_tags を1件だけ引いて、往復できるかを見る。
+    // **返事が来ないときのために、待ち時間の上限を置く**(2026-08 実機)
+    const { error } = await withTimeout(
+      supabase.from('weakness_tags').select('id').limit(1),
+    )
     if (error) {
       const missingTable = error.code === '42P01' || /does not exist/i.test(error.message)
+      // **通信が届いていない失敗は、例外ではなく `error` で返ってくる**
+      // (2026-08 実測)。ここで見分けないと「つながりましたが断られました」と
+      // 出てしまい、**電波の話なのに設定の話だと思わせる。**
+      // Safari は `Load failed`、Chrome は `Failed to fetch` と言う
+      const offline = /failed to fetch|load failed|networkerror|network request failed/i
+        .test(error.message ?? '')
       return {
         ok: false,
-        reason: missingTable ? 'no-schema' : 'error',
+        reason: missingTable ? 'no-schema' : (offline ? 'network' : 'error'),
         message: missingTable
           ? 'つながりましたが、テーブルがまだありません(SQL の実行が必要です)'
           : error.message,
@@ -63,7 +91,15 @@ export async function checkConnection() {
     }
     return { ok: true, message: '接続できました' }
   } catch (e) {
-    return { ok: false, reason: 'network', message: e?.message ?? '通信に失敗しました' }
+    const timedOut = e?.message === TIMEOUT_MARK
+    return {
+      ok: false,
+      reason: timedOut ? 'timeout' : 'network',
+      message: timedOut
+        ? `${Math.round(NET_TIMEOUT_MS / 1000)} 秒待っても返事がありませんでした`
+          + '(通信が届いていません)'
+        : (e?.message ?? '通信に失敗しました'),
+    }
   }
 }
 
