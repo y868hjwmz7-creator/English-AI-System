@@ -267,6 +267,11 @@ export default function PassagePractice({
             <SpeakerIcon />Listen (全体)
           </button>
         )}
+        {/* **止めるボタンは、鳴らすボタンのすぐ横**(2026-08 利用者の指定)。
+            対になる操作は、対に見える場所に置く */}
+        <button type="button" className="btn" onClick={stopPlaying}>
+          <StopIcon />Stop
+        </button>
         <label className="rate-pick">
           <span>速さ</span>
           <select value={rateId}
@@ -287,9 +292,6 @@ export default function PassagePractice({
             {peek ? '本文を隠す' : '本文を出す'}
           </button>
         )}
-        <button type="button" className="btn" onClick={stopPlaying}>
-          <StopIcon />Stop
-        </button>
       </div>
 
       {notice && <div className="notice notice--warn passage-notice">{notice}</div>}

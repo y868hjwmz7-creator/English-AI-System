@@ -284,6 +284,25 @@ const PLAIN_ADVERBS = new Set([
 const isAdverb = (w) => PLAIN_ADVERBS.has(w)
   || (/^[a-z]{5,}ly$/.test(w) && !LY_ADJECTIVES.has(w))
 
+/**
+ * **前置詞の目的語になる代名詞**(2026-08 利用者の指定)。
+ *
+ *   > 「アプリがこのようなものは…」の部分は、「このようなアプリは」で
+ *   > あるべきです。代名詞が目的語のパターンのカタマリも
+ *   > 事前に準備する区切りとして実装してください。
+ *
+ * `Apps / like this / let …` と切ると、`Apps` だけのカタマリができ、
+ * 訳が「アプリが」「このようなものは…」と分かれてしまう。
+ * **`like this` は前の名詞にかかる2語のかたまり**なので、
+ * `Apps like this / let …` と、うしろにまとめて切る。
+ *
+ * `her` `his` は**冠詞にもなる**(`of her regular customers`)ので入れない。
+ * `one` も `about one / of …` と切れたほうが自然なので入れない。
+ */
+const OBJECT_PRONOUNS = new Set([
+  'this', 'that', 'these', 'those', 'it', 'them', 'him', 'us', 'me', 'you',
+])
+
 /** 主語になる代名詞。**ここから新しいまとまりが始まることが多い** */
 const SUBJECT_PRONOUNS = new Set(['i', 'you', 'he', 'she', 'it', 'we', 'they'])
 
@@ -515,7 +534,11 @@ export function idealSlashes(sentence) {
     // (`npm run test:chunk` の1本目がそれを見張っている)
     if (insideAux(words, at)) return                  // 助動詞と動詞は離さない
     if (insidePhrasal(words, at)) return              // 句動詞は動詞と副詞で1つ
-    if (DETERMINERS.has(bare(words[at - 1]))) return  // 冠詞のあとで切らない(広いほう)
+    // 冠詞のあとで切らない(広いほう)。ただし **前置詞 + 代名詞** のあとは別。
+    // `Apps like this / let …` の `this` は冠詞ではなく代名詞である(2026-08)
+    const objPronoun = OBJECT_PRONOUNS.has(bare(words[at - 1]))
+      && PREPOSITIONS.has(bare(words[at - 2] ?? ''))
+    if (!objPronoun && DETERMINERS.has(bare(words[at - 1]))) return
     // **ゲストに注意するのと同じ決まりも通す。** 控えを細かくしたことで、
     // `An elderly man / who / usually …` のように接続詞のあとで切れる場面が
     // 出てきた(2026-08 実測)。模範が自分の決まりを破ってはいけない
@@ -538,14 +561,25 @@ export function idealSlashes(sentence) {
     const b = bare(w)
     // 読点のあと。**いちばん強い切れ目**
     if (/[,;:]$/.test(w)) add(i + 1, 3, '読点のあと')
+    // **句動詞のあと**(2026-08 利用者の指定)。
+    // `Some streams pull in / more than five thousand viewers` と切れるように
+    if (insidePhrasal(words, i)) add(i + 1, 1, '句動詞のあと')
     // 接続詞・関係詞の前。ここから意味が変わる
     if (CONNECTORS.has(b)) add(i, 3, `${b} の前(ここから意味が変わる)`)
+    // **前置詞 + 代名詞**は、前の名詞にかかる2語のかたまり(2026-08)。
+    // ここでは切らず、**そのうしろで切る**(`Apps like this / let …`)
+    else if (PREPOSITIONS.has(b) && OBJECT_PRONOUNS.has(bare(words[i + 1] ?? ''))) {
+      add(i + 2, 1, `${b} + 代名詞のあと`)
+    }
     // 前置詞の前。**前置詞＋名詞でひとかたまり**
     else if (PREPOSITIONS.has(b)) add(i, b === 'of' ? 1 : 2, `${b} の前(前置詞＋名詞でひとかたまり)`)
     // 副詞の前・主語の代名詞の前(2026-08)。**控えを細かくしておく**ため。
     // 強さ1なので初級でしか出ないが、訳を控える単位は初級である。
     // ここが細かいほど、ゲストがどこで切っても訳が真下に来る
     else if (isAdverb(b) || SUBJECT_PRONOUNS.has(b)) add(i, 1, `${b} の前`)
+    // **名詞のうしろに立つ `-ing`**(`phone scams / targeting elderly people`)。
+    // 助動詞のあと(`is spreading`)や冠詞のあとは、`add()` が断る
+    else if (/^[a-z]{5,}ing$/.test(b) && !isAdjective(b)) add(i, 1, `${b} の前`)
     // 助動詞・be動詞の前。**主語と動詞を切って、動詞から先に訳す**
     //
     // 利用者の指定「初心者は動詞の前に必ずスラッシュ」のうち、

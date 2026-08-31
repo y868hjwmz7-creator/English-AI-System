@@ -13,6 +13,7 @@ import TeachingNote from './TeachingNote.jsx'
 import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { parseMaterialTitle } from '../lib/format.js'
+import { loadSearchOpen, saveSearchOpen } from '../lib/slashLevel.js'
 import { printElement } from '../lib/print.js'
 import LessonView from './LessonView.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
@@ -62,6 +63,8 @@ export default function TrainerMaterials({ me }) {
 
   // カタマリごとの訳を作っている教材(0021)と、その結果
   const [makingJa, setMakingJa] = useState(null)
+  // さがす欄を開いているか。**一度決める設定は覚える**(2026-08 利用者の指定)
+  const [searchOpen, setSearchOpen] = useState(loadSearchOpen)
   const [jaDone, setJaDone] = useState({})
 
   const [assigningId, setAssigningId] = useState(null)   // 配信先を選んでいる教材
@@ -199,8 +202,18 @@ export default function TrainerMaterials({ me }) {
         <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
-      <div className="card">
-        <h2 className="card-title">教材をさがす</h2>
+      {/* **たたんでおける**(2026-08 利用者の指定)。
+          > 教材をさがすのところは「教材をさがす・作る」に変えて、
+          > クリックしたら展開するようにしてください。
+
+          絞り込みは毎回触るものではない。畳んでおけば、教材の一覧が
+          そのぶん上に来る。**開け閉めは覚える**(一度決める設定は覚える)。 */}
+      <details className="card material-search" open={searchOpen}
+               onToggle={(e) => {
+                 setSearchOpen(e.currentTarget.open)
+                 saveSearchOpen(e.currentTarget.open)
+               }}>
+        <summary className="card-title material-search-sum">教材をさがす・作る</summary>
         <p className="card-hint">
           レッスンで指摘した弱点を選ぶと、その弱点の教材が出ます。
           <strong>あればそのまま配信できます。</strong>作るより速く、ゲストには同じ価値が届きます。
@@ -268,7 +281,7 @@ export default function TrainerMaterials({ me }) {
             <option value="title">名前順</option>
           </select>
         </div>
-      </div>
+      </details>
 
       {message && <div className="notice notice--ok">{message}</div>}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}

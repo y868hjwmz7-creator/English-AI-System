@@ -217,6 +217,34 @@ console.log('\n▶ うしろから修飾する分詞は、どちらでも咎め�
     checkSlashes('We stand by the door and wait.', [2]).length === 0)
 }
 
+/* ── 控えを細かくする(2026-08 利用者の指定)──────────────────────
+   訳は控えの境目でしか分けられない。ゲストがどこで切っても真下に来るよう、
+   ありうる切れ目をあらかじめ入れておく。 */
+console.log('\n▶ ありうる切れ目を、控えに入れてある')
+{
+  const has = (t, piece) => cut(t, 'beginner').includes(piece)
+  // 前置詞 + 代名詞は、前の名詞にかかる2語のかたまり
+  const apps = 'Apps like this let a trader share their screen.'
+  ok('Apps like this / let …', has(apps, 'Apps like this / let'), cut(apps, 'beginner'))
+  // 句動詞のあと
+  const pull = 'Some streams pull in more than five thousand viewers.'
+  ok('pull in / more than …', has(pull, 'pull in / more'), cut(pull, 'beginner'))
+  // 名詞のうしろに立つ -ing
+  const scams = 'Phone scams targeting elderly people were spreading fast.'
+  ok('Phone scams / targeting …', has(scams, 'scams / targeting'), cut(scams, 'beginner'))
+  // 副詞・主語の代名詞(前に足したもの)
+  const week = 'He withdrew about 30,000 yen a week suddenly started asking.'
+  ok('… week / suddenly …', has(week, 'week / suddenly'), cut(week, 'beginner'))
+  const spring = 'Last spring she noticed something odd.'
+  ok('Last spring / she …', has(spring, 'spring / she'), cut(spring, 'beginner'))
+  // **どれも、自分の決まりを破っていないこと**
+  for (const t of [apps, pull, scams, week, spring]) {
+    ok(`決まりを破っていない: ${t.slice(0, 24)}…`,
+      checkSlashes(t, slashesFor(t, 'beginner').map((x) => x.at)).length === 0,
+      cut(t, 'beginner'))
+  }
+}
+
 console.log('\n▶ カタマリをつなぐと、もとの文に戻る')
 for (const [name, text] of Object.entries(S)) {
   for (const lv of ['beginner', 'middle', 'advanced']) {

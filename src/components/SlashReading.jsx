@@ -70,7 +70,7 @@ export default function SlashReading({
   // 段落ごとに区切っていくと、押すボタンが段落の数だけになる。
   // 全部入れ終わってから見直したいときは、**1回で出せたほうが早い。**
   // 段落ごとに出す道は残す(1つずつ確かめたいときのため)。
-  const jaBlocks = blocks.filter(hasJaOf)
+  const jaBlocks = blocks.filter((b) => hasJaOf(b) || b.ja)
   const allOpen = jaBlocks.length > 0 && jaBlocks.every((b) => shown[b.id])
   const toggleAll = () => setShown(allOpen
     ? {}
@@ -214,13 +214,18 @@ export default function SlashReading({
                 <span className="row-tools">
                   <SpeakButton text={s.text} className="etext-listen"
                                clipVoice={clipVoice} tier={tier} rate={rate} />
-                  {/* **控えのある教材にだけ出す。** 押しても何も出ない
-                      ボタンを置かない(無いものをあるように見せない) */}
-                  {hasJa && (
+                  {/* **出せる訳があるときだけ出す。** 押しても何も出ない
+                      ボタンを置かない(無いものをあるように見せない)。
+
+                      **控えが無い教材でも、段落の訳は出す**(2026-08 実機)。
+                      ② を作り直したときに `hasJa` だけで出し分けてしまい、
+                      **段落ごとに訳を見る道を落としていた。**
+                      > 各段落ごとに訳を出す機能がなくなってしまいました。 */}
+                  {(hasJa || s.ja) && (
                     <button type="button"
                             className={`btn btn--small${open ? '' : ' btn--primary'}`}
                             onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
-                      {open ? '訳を隠す' : 'この区切りで訳を出す'}
+                      {open ? '訳を隠す' : (hasJa ? 'この区切りで訳を出す' : '訳を出す')}
                     </button>
                   )}
                   {mine.length > 0 && (

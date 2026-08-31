@@ -51,3 +51,15 @@ export function saveDictSize(n) {
    ② は自分で区切って「この区切りで訳を出す」を押す形になり、
    出す / 出さないはその1つのボタンで足りる。
    **同じことをする操作を3つ置かない。** */
+
+/**
+ * 教材をさがす欄を開いているか(2026-08 利用者の指定)。
+ * **一度決める設定は覚える。** 絞り込みは毎回触るものではない。
+ */
+const SEARCH_KEY = 'eas.materialSearch'
+export function loadSearchOpen() {
+  try { return localStorage.getItem(SEARCH_KEY) !== 'closed' } catch { return true }
+}
+export function saveSearchOpen(open) {
+  try { localStorage.setItem(SEARCH_KEY, open ? 'open' : 'closed') } catch { /* 使えなくても困らない */ }
+}
