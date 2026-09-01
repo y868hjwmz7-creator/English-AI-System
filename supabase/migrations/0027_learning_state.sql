@@ -182,9 +182,20 @@ comment on function public.mark_word(text, text, text, uuid, text, text, uuid) i
 -- ────────────────────────────────────────────────────────────────
 -- 3. review_words() に 'todo'(まだ + 覚えかけ)を足す
 --
---   **返す列は変えていない**ので、drop は要らない。
 --   並びも変える。**まだ → 覚えかけ**の順に出す(利用者の指定)。
+--
+--   **先に drop を置く**(2026-09)。書いた時点では「返す列は変えていない」
+--   ので要らなかったが、**あとから 0028 が返す列を増やした。**
+--   そのため、0028 が入っている DB にこのファイルだけを貼り直すと
+--   `cannot change return type of existing function` で止まる。
+--   実際、0027〜0031 をまとめて貼るときに起きた。
+--
+--   **関数を作り直すファイルは、あとで誰かが列を足すかもしれない。**
+--   だから、返す列を変えていなくても drop を置いておく。
+--   すぐ下で作り直すので、消えたままにはならない。
 -- ────────────────────────────────────────────────────────────────
+drop function if exists public.review_words(uuid, text, int, boolean);
+
 create or replace function public.review_words(
   p_learner  uuid,
   p_status   text    default 'unknown',

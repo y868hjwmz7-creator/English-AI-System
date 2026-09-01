@@ -119,6 +119,35 @@ run_test supabase/test/vocab_test.sql          "語彙の定着(意味の控え�
 # **この確認 SQL 自体が古びる。** 移行を足したのに確認項目を足し忘れると、
 # 「全部 OK」と出ているのに入っていない、という最悪の見え方になる。
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# **利用者に渡す「貼る SQL」も、そのまま貼れるか確かめる。**
+#
+#   supabase/apply/*.sql は、移行ファイルを抜き出して並べたものである。
+#   利用者は**そろっている DB に、あとから1つだけ貼る**ことがあるので、
+#   「順番に全部流す」だけでは足りない。
+#
+#   実際、0027 は `review_words()` を drop せずに作り直していた。
+#   書いた時点では返す列が同じだったが、**あとから 0028 が列を増やした。**
+#   そのため 0027 だけを貼り直すと
+#   `cannot change return type of existing function` で止まった(2026-09)。
+#   全部を順に流す検証では、手前の 0024 が drop してくれるので気づけない。
+# ---------------------------------------------------------------------------
+echo
+echo "▶ 利用者に渡す「貼る SQL」を、そろった DB に貼ってみる"
+for f in supabase/apply/pending_*.sql; do
+  db="${DB}_apply"
+  su postgres -c "psql -q -c 'drop database if exists $db;'"
+  su postgres -c "psql -q -c 'create database $db template $DB;'"
+  out=$(su postgres -c "psql -v ON_ERROR_STOP=1 -q -d $db -f $f" 2>&1) || {
+    printf '%s\n' "$out" | grep -E 'ERROR|FATAL' || printf '%s\n' "$out"
+    su postgres -c "psql -q -c 'drop database if exists $db;'"
+    echo "❌ $f は、そろった DB に貼れませんでした"
+    exit 1
+  }
+  su postgres -c "psql -q -c 'drop database if exists $db;'"
+  echo "  ✓ $(basename "$f")"
+done
+
 echo
 echo "▶ 利用者に渡す確認 SQL(verify_migrations.sql)"
 db="${DB}_verify"

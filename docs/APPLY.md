@@ -30,12 +30,13 @@
 | **貼る SQL(0024 + 0025 まとめて・おすすめ)** | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31c.sql` |
 | 貼る SQL(0024 だけ) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31.sql` |
 | 貼る SQL(0025 だけ) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31b.sql` |
+| **貼る SQL(0027〜0031 を全部まとめたもの・おすすめ)** | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01g.sql` |
 | 貼る SQL(0026 スコアの範囲) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01.sql` |
 | 貼る SQL(0027 覚えかけ) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01b.sql` |
 | 貼る SQL(0028 単語帳の絞り込み) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01c.sql` |
 | 貼る SQL(0029 自分のアイコン) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01d.sql` |
 | 貼る SQL(0030 入れた語をその日に出す) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01e.sql` |
-| **貼る SQL(0031 ゲストのファイルの置き場)** | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
+| 貼る SQL(0031 ゲストのファイルの置き場) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
 | 状態を見るだけの SQL | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
 | 教材を作る関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
 | 読み上げ音声の関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |

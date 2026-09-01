@@ -765,8 +765,9 @@ export async function setWordStatus(word, status, {
     return ng(canSeeSystemDetail()
       // トレーナー・管理者には、どこで何をすればよいかまで言う
       ? 'この Supabase にはまだ「覚えかけ」(0027 の SQL)が入っていません。'
-        + 'supabase/apply/pending_2026-09-01b.sql を貼ってください。'
-        + '貼るまでは「まだ」と「覚えた」の2つで進みます。'
+        + 'GitHub のリポジトリにある supabase/apply/pending_2026-09-01g.sql'
+        + '(残っているものを全部まとめたもの)を、Supabase の SQL Editor に'
+        + '貼ってください。貼るまでは「まだ」と「覚えた」の2つで進みます。'
       // **ゲストには仕組みの内側を見せない。** できることが何も無い
       : '「覚えかけ」はまだ使えません。「まだ」か「覚えた」で進めてください'
         + '(トレーナーにお伝えください)。')
