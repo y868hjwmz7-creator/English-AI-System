@@ -2040,13 +2040,61 @@ html { -webkit-text-size-adjust: 100%; }
 .print-only { display: none; }
 
 @media print {
-  /* 印刷用の指定が効くのは、印刷ボタンを押したときだけ */
-  body.is-printing * { visibility: hidden; }
-  body.is-printing .print-target,
-  body.is-printing .print-target * { visibility: visible; }
+  /* ── 何を紙に出すか ────────────────────────────────────
+     印刷用の指定が効くのは、印刷ボタンを押したときだけ。
+
+     【「隠す」ではなく「消す」。位置も動かさない】(2026-09 実機)
+
+       > とりあえず印刷しようとするとデザインがずれまくってる
+
+       以前は `visibility: hidden` で他を隠し、出す部分を
+       `position: absolute` で紙の左上へ動かしていた。**これが原因。**
+
+       ・`visibility: hidden` は**場所を空けたまま**なので、
+         隠したものの高さがそっくり紙に残る(白いページが増える)
+       ・**位置を動かした箱は、ページの区切りをまたげない。**
+         2ページ目から先で、見出しの上に本文が重なり、
+         語(`<button>`)だけが消えて**句読点だけが宙に浮いていた**
+       ・レッスン表示の紙(`.lesson-sheet`)は
+         **`overflow-y: auto` の「中で送る箱」**である。
+         送る箱をそのまま刷ると、画面に見えているぶんしか正しく出ない
+
+     【いまのやり方】
+       `printElement()` が、body から出したい部分までの**道筋**に
+       `print-path` の印を付ける。
+       ①道筋から外れたものは `display: none` で**消す**(場所ごと無くす)
+       ②道筋そのものは「ただの入れ物」に戻す(位置・大きさ・送りを外す)
+       こうすると中身は**ふつうの流れ**のまま紙に並ぶので、
+       ページの区切りはブラウザが正しく決められる。 */
+  body.is-printing > *:not(.print-path):not(.print-target),
+  body.is-printing .print-path > *:not(.print-path):not(.print-target) {
+    display: none !important;
+  }
+  /* 道筋を「ただの入れ物」に戻す。**位置・大きさ・送りが残っていると崩れる。**
+     `.lesson`(画面全体にかぶせる箱)も、ここでただの `block` になる */
+  body.is-printing,
+  body.is-printing .print-path {
+    display: block !important; position: static !important; inset: auto !important;
+    overflow: visible !important;
+    width: auto !important; min-width: 0 !important; max-width: none !important;
+    height: auto !important; min-height: 0 !important; max-height: none !important;
+    margin: 0 !important; padding: 0 !important;
+    border: 0 !important; box-shadow: none !important; transform: none !important;
+    /* **地の色も落とす。** レッスン表示の外側は暗い灰色(紙を浮かせるため)
+       なので、残すと「背景のグラフィック」を入れたときに全面が灰色で刷られ、
+       黒に近い文字が読めなくなる */
+    background: none !important;
+  }
+  /* 出す部分そのもの。**中で送る箱をやめ、丈は中身なりにする。**
+     文字の大きさは、画面で選んだ「大・特大」ではなく**紙の実寸**にする
+     (`.lesson-sheet--xl` は 23px。そのまま刷ると11ページになった) */
   body.is-printing .print-target {
-    position: absolute; left: 0; top: 0; width: 100%;
-    padding: 0; margin: 0; border: none;
+    position: static !important; overflow: visible !important; flex: none !important;
+    width: auto !important; max-width: none !important;
+    height: auto !important; min-height: 0 !important; max-height: none !important;
+    margin: 0 !important; padding: 0 !important;
+    border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+    font-size: 11pt !important; line-height: 1.85 !important;
   }
   /* 紙は白。画面の色を引きずると、地の色が全面に刷られる */
   html, body.is-printing { background: #fff !important; }
