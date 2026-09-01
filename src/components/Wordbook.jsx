@@ -32,7 +32,7 @@
  *   人が見ていると分かることが、どんなバッジより効く。
  *   トレーナーが単語帳を開いた記録を、ここに出す(0019)。
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   loadGlossDetail, loadMyWordbook, loadVocabWeek,
   loadWordbookCounts, loadWordbookViewers, learningSupported,
@@ -334,7 +334,25 @@ export default function Wordbook({
   }, [card?.word_norm])
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
-  const choices = card && form === 'choice' ? makeChoices(card, rows) : null
+  /**
+   * 4択の選択肢。**1問のあいだ、並びを変えない**(2026-09 利用者の指定)。
+   *
+   *   > 正解の時に、元々の正解の選択肢のあった場所から対角線上に
+   *   > 移動してから緑になったり、ランダムに移動して緑に光るから
+   *   > 変な感じがして落ち着きません
+   *
+   * `makeChoices()` は**呼ぶたびに混ぜる。** ところが以前はレンダーのたびに
+   * 呼んでいたので、**答えた瞬間の描き直しで並びが変わり**、
+   * 正解が別の場所へ動いてから緑になっていた。
+   *
+   * 語(と出題の形)が変わったときだけ作り直す。
+   * **`rows` は見ない。** 答えると `rows` から1語外れるので、
+   * 見ていると同じことが起きる(出題を組み直さないのと同じ理由)。
+   */
+  const choices = useMemo(
+    () => (card && form === 'choice' ? makeChoices(card, rowsRef.current) : null),
+    [card?.word_norm, form],
+  )
 
   /** 1語ぶん答える。**押した語はすぐ消す。** 待たされると手ごたえが無い */
   /** 選べる語の上限。これ以上入れても1つの教材には収まらない */
