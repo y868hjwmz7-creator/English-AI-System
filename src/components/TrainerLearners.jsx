@@ -13,7 +13,6 @@ import {
   loadMaterial,
 } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
-import Tabs from './Tabs.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
 import TeachingNote from './TeachingNote.jsx'
@@ -427,24 +426,33 @@ export default function TrainerLearners({ me, navTick = 0 }) {
               {/* 右側 … タブと、スコア・レベル。
                   **上下にそろえる。** 別々の行に散らすと目が行き来する */}
               <div className="learner-side">
+                {/* **プルダウンにする**(2026-09 利用者の指定)。
+                      > 受講中マークの下、横スライドのメニューを
+                      > １つのプルダウンにしてください
+
+                    5つを横に流していたので、スマホでは最初の2つしか
+                    見えず、**残りがあることに気づけなかった。**
+                    プルダウンなら幅が中身なりに決まり、
+                    どの画面幅でも全部が一度に見える
+                    (単語帳の「見るものの切り替え」と同じ考え方)。 */}
                 {openId === l.id && (
                   <div className="learner-head-tabs">
-                    <Tabs
-                      variant="sub"
-                      ariaLabel="ゲストの情報の切り替え"
-                      value={detailTab}
-                      onChange={setDetailTab}
-                      items={[
-                        { id: 'homework', label: '過去の宿題', count: assignments.length },
-                        { id: 'create', label: 'この人に教材を作る' },
-                        // 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい
-                        { id: 'wordbook', label: '単語帳' },
-                        // 会社からもらった英文メール、テストの結果、宿題の写真。
-                        // ここに置けば、次のレッスンで必ず見つかる(0031)
-                        { id: 'files', label: 'ファイル' },
-                        { id: 'record', label: 'レベルとスコア' },
-                      ]}
-                    />
+                    <label className="tabpick">
+                      <span className="sr-only">ゲストの情報の切り替え</span>
+                      <select value={detailTab}
+                              onChange={(e) => setDetailTab(e.target.value)}>
+                        <option value="homework">
+                          過去の宿題{assignments.length ? `(${assignments.length})` : ''}
+                        </option>
+                        <option value="create">この人に教材を作る</option>
+                        {/* 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい */}
+                        <option value="wordbook">単語帳</option>
+                        {/* 会社からもらった英文メール、テストの結果、宿題の写真。
+                            ここに置けば、次のレッスンで必ず見つかる(0031) */}
+                        <option value="files">ファイル</option>
+                        <option value="record">レベルとスコア</option>
+                      </select>
+                    </label>
                   </div>
                 )}
 

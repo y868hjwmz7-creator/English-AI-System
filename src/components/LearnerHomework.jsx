@@ -251,11 +251,18 @@ export default function LearnerHomework({ me = null }) {
                         {a.material?.itemCount ? `全 ${a.material.itemCount} 問` : ''}
                       </span>
                     </div>
-                    <span className="material-open-cta">
-                      <span className="material-open-mark" aria-hidden="true">
-                        {openId === a.id ? '▾' : '▸'}
-                      </span>
-                      {openId === a.id ? '閉じる' : '中身を見る・印刷する'}
+                    {/* **「中身を見る・印刷する」の行は置かない**
+                        (2026-09 利用者の指定)。
+
+                          > 教材の欄の「中身を確認する」ボタンは不必要です。
+
+                        開いたときは下に「閉じる」があり、
+                        囲みそのものを押しても開け閉めできる。
+                        **同じことをするものを2つ見せない。**
+                        押せることは、▸ / ▾ の印と、はじめから出ている
+                        グレーの囲みが示す(CLAUDE.md)。 */}
+                    <span className="material-open-mark" aria-hidden="true">
+                      {openId === a.id ? '▾' : '▸'}
                     </span>
                   </div>
                 </div>
@@ -280,14 +287,18 @@ export default function LearnerHomework({ me = null }) {
                           ? ` / ${a.material.tagIds.map(weaknessTagLabel).join('・')}` : ''}
                       </div>
                     </div>
+                    {/* **印刷を、大きく表示するの上に置く**(2026-09 利用者の指定)。
+                          > 印刷する/PDFで保存するを大きく表示するの上に
+                          > 置いてください
+                        紙にして手元で解くほうが先に来る、という順序である */}
                     <div className="btn-row no-print">
-                      <button type="button" className="btn btn--small btn--primary"
-                              onClick={() => setLessonOf(a.material)}>
-                        <ScreenIcon />大きく表示する
-                      </button>
                       <button type="button" className="btn btn--small"
                               onClick={() => setPrintId(a.id)}>
                         <PrintIcon />印刷 / PDFで保存(問題のみ)
+                      </button>
+                      <button type="button" className="btn btn--small btn--primary"
+                              onClick={() => setLessonOf(a.material)}>
+                        <ScreenIcon />大きく表示する
                       </button>
                     </div>
                     {a.material?.teaching_point && (
