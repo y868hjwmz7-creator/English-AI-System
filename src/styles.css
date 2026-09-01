@@ -3574,6 +3574,41 @@ html { -webkit-text-size-adjust: 100%; }
   margin-top: 12px; padding: 20px 18px;
   border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface-2); text-align: center;
+  /* **カードの下に送りしろを置く**(2026-09)。
+     カードは1語ごとに画面のまん中へ寄せているが、ページの終わりに
+     余白が無いと**それ以上送れず、まん中まで来ない。**
+     実測で、4択のときに下の2つが画面の外に残った(390×700)。
+     **`.wb-run` に付けてはいけない。** あれは進み具合の帯だけの入れ物で、
+     カードはその**外**にある。付けたら帯とカードのあいだが 200px 空いた */
+  margin-bottom: 28vh;
+}
+/* **出題の枠。高さを決めて、ボタンを動かさない**(2026-09 利用者の指定)。
+
+     > 単語や解答の長さに関わらず、しっかり中央に居座るようにしてください。
+     > ４択の回答は中央に表示してください。下に表示されて
+     > 切れてしまっている時が多いです。
+
+   語の長さも、出会った文の長さも教材によって桁が違う。そのままだと
+   **答えのボタンが上下に動き**、押す場所を毎回探すことになる。
+
+   - **下限を必ず置く。** `0` にすると窓が低いとき高さ 0 まで縮み、
+     問題が真っ白になる(Quick Response で一度やった)
+   - **上限も置く。** 長い文で4択が画面の外へ押し出されないよう、
+     はみ出したぶんは**この枠の中だけ**で送る
+   - `justify-content` は **`safe center`。** `center` だけだと、
+     はみ出したときに中身が上へ逃げて届かなくなる */
+.wordcard-q {
+  display: flex; flex-direction: column; justify-content: safe center;
+  /* **高さそのものを決める**(min ではなく height)。
+     下限だけだと、長い語や長い文で枠が伸び、そのぶん4択が下へ動く。
+     実測で 112px → 224px と2倍になり、**4択が画面の外へ出た**。
+     高さを決めてしまえば、何が入っても答えの位置は動かない。
+     はみ出したぶんは、この枠の中だけで送る */
+  height: clamp(7rem, 22vh, 12rem); overflow-y: auto;
+}
+@media (max-width: 860px) {
+  /* スマホは縦が狭い。**枠を低くして、4択に場所を渡す** */
+  .wordcard-q { height: clamp(5.5rem, 19vh, 9rem); }
 }
 .wordcard-face {
   display: flex; flex-wrap: wrap; align-items: baseline;

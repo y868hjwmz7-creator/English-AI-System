@@ -174,6 +174,8 @@ export default function Wordbook({
   const [typed, setTyped] = useState('')        // つづりの入力
   const [judged, setJudged] = useState(null)    // 4択・つづりの判定
   const doneRef = useRef([])                    // この10語の結果
+  /** いま出している1語のカード。**画面のまん中に置く**ために場所を測る */
+  const cardRef = useRef(null)
   /* **いまの一覧の控え。** 出題を組むときだけ使う。
      見張りに `rows` そのものを入れると、1語答えるたびに組み直してしまう */
   const rowsRef = useRef([])
@@ -300,6 +302,27 @@ export default function Wordbook({
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
   }, [isQuiz, loading, deal, filter.day, filter.material, filter.field, filter.topic])
   const card = isQuiz ? queue[0] : null
+
+  /**
+   * **カードを画面のまん中に置く**(2026-09 利用者の指定)。
+   *
+   *   > 単語は、「覚える」や「まだ」「覚えかけ」などを押し出したら
+   *   > 画面に固定になり、単語や解答の長さに関わらず、しっかり中央に
+   *   > 居座るようにしてください。(特にスマホで)
+   *
+   * 単語帳の画面は、上に札・プルダウン・絞り込みが積まれている。
+   * スマホではカードが画面の下のほうから始まるので、**4択が画面の外**に
+   * 出てしまうことが多かった。
+   *
+   * 1語ぶん答えるたびに、そのカードを画面のまん中へ寄せる。
+   * **場所が毎回同じ**になるので、押す場所を探さなくてよい。
+   * 動きは付けない(`behavior: 'auto'`)。滑る動きが苦手な人がいる。
+   */
+  useEffect(() => {
+    if (!card || !cardRef.current) return
+    cardRef.current.scrollIntoView({ block: 'center', behavior: 'auto' })
+    // 語が変わったときだけ。中身(意味を見たなど)では動かさない
+  }, [card?.word_norm])
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
   const choices = card && form === 'choice' ? makeChoices(card, rows) : null
@@ -562,7 +585,24 @@ export default function Wordbook({
             )
           })()}
 
-          <div className="wordcard">
+          <div className="wordcard" ref={cardRef}>
+
+            {/* **出題は、高さの決まった枠に入れる**(2026-09 利用者の指定)。
+                  > 単語や解答の長さに関わらず、しっかり中央に居座るように
+                  > してください。(特にスマホで)
+                  > ４択の回答は中央に表示してください。下に表示されて
+                  > 切れてしまっている時が多いです。
+
+                語の長さも、出会った文の長さも教材によって桁が違う。
+                そのままだと**答えのボタンが上下に動き**、押す場所を
+                探すことになる。枠の高さを決めれば、ボタンは動かない。
+
+                **下限は必ず置く**(`min-height`)。0 にすると窓が低いとき
+                高さ 0 まで縮み、問題が真っ白になる(Quick Response で
+                一度やった・CLAUDE.md)。
+                **上限も置く。** 長い文で4択が画面の外へ押し出されるのを
+                防ぐため、はみ出したぶんはこの枠の中だけで送る。 */}
+            <div className="wordcard-q">
 
             {/* 出す側。
                 **答えを出しておいて答えさせない。** つづりを書く形で英語を
@@ -626,6 +666,8 @@ export default function Wordbook({
                 )}
               </div>
             )}
+
+            </div>
 
             {/* ── 4択 ───────────────────────────────────────── */}
             {form === 'choice' && choices && (
