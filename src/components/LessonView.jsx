@@ -208,7 +208,10 @@ export default function LessonView({
   const titleText = String(material.title ?? '')
   const extraTags = allTags.every((t) => titleText.includes(weaknessTagLabel(t))) ? [] : allTags
   const section = sections[page]
-  const key = (it, i) => it.id ?? `${page}-${i}`
+  /* その問を見分ける鍵。**ページ(演習)の番号を頭に置く。**
+     紙には全ページを出すので(下記)、`page` で作っていたころのままだと
+     別の演習の同じ番号の問と鍵がぶつかり、読み上げの色が2か所に付く */
+  const key = (it, i, si = page) => it.id ?? `${si}-${i}`
 
   /** その問の解答が出ているか */
   const isOpen = (k) => (showAnswers ? !closedItems.has(k) : openItems.has(k))
@@ -222,8 +225,9 @@ export default function LessonView({
     if (showAnswers) setClosedItems(next)
     else setOpenItems(next)
   }
-  const type = section ? exerciseType(section.exercise_type) : null
-  const isPassage = section ? isPassageSection(section.exercise_type) : false
+  /* いま開いているページのぶん。**通しの読み上げ(`playWhole`)だけが使う。**
+     ページごとの描き方は `renderSection()` の中で求め直す
+     (紙には全ページを出すので、ページごとに声も種類も違いうる) */
   // 話す人 → 声。会話でないときは空(既定の声が使われる)
   const cast = castVoices(voices, (section?.items ?? []).map((it) => it.speaker))
   // こちらで作った音声(MP3)の話者。端末の声から換算しない(voiceCast.js)
@@ -440,18 +444,53 @@ export default function LessonView({
         ) : qr ? (
           <QuickResponse material={material} paper learnerId={learnerId}
                          onClose={() => setRun(null)} />
-        ) : section && (
-          <>
+        ) : null}
+
+        {/* ── 演習のページ ──────────────────────────────────
+            **画面には選んだページだけ。紙には全部のページを出す**
+            (2026-09 利用者の指定「内容確認と出てきた語句のページも
+            正しく印刷できるように」)。
+
+            画面は ◀ 1 / 3 ▶ で1ページずつ見るものだが、
+            **紙は教材まるごとの控え**である。ページを送りながら
+            3回印刷させない。
+
+            描かずにいると紙にも出ないので(`src/lib/print.js`)、
+            **描いてから隠す**(`is-closed`)。紙用の指定が
+            `display: block` に戻す。 */}
+        {sections.map((sec, si) => renderSection(sec, si))}
+      </div>
+    </div>
+  )
+
+  /**
+   * 演習1つぶん。**どのページも同じ描き方**にするため、関数にしてある。
+   * 声・種類は演習ごとに違うので、ここで求め直す。
+   */
+  function renderSection(sec, si) {
+    if (!sec) return null
+    const secType = exerciseType(sec.exercise_type)
+    const secIsPassage = isPassageSection(sec.exercise_type)
+    const secCast = castVoices(voices, (sec.items ?? []).map((it) => it.speaker))
+    const secClipCast = castClipSpeakers(
+      (sec.items ?? []).map((it) => it.speaker), material.voiceIds,
+    )
+    const secTier = voiceTierFor({ exerciseType: sec.exercise_type, tags: allTags })
+    const k = (it, i) => key(it, i, si)
+    // 練習中(6Steps / Quick Response)は、どのページも画面には出さない
+    const open = si === page && !run
+    return (
+          <section key={sec.id ?? si} className={`lesson-page${open ? '' : ' is-closed'}`}>
             <h3 className="lesson-section">
-              {exerciseLabel(section.exercise_type)}
-              {`（${countLabel(section.exercise_type, section.items.length)}）`}
+              {exerciseLabel(sec.exercise_type)}
+              {`（${countLabel(sec.exercise_type, sec.items.length)}）`}
             </h3>
-            {section.instruction && <p className="lesson-instruction">{section.instruction}</p>}
+            {sec.instruction && <p className="lesson-instruction">{sec.instruction}</p>}
 
             {/* **通して聞く手段を、大きく表示したときにも置く。**
                 無いと、オーバーラッピングやシャドーイングができない
                 (2026-08 の指摘)。話す人が変わると声も変わる。 */}
-            {isPassage && (
+            {secIsPassage && (
               <div className="lesson-listen no-print">
                 <button type="button" className="btn btn--small" onClick={playWhole}>
                   {playingAll ? <><StopIcon />Stop</> : <><SpeakerIcon />Listen (全体)</>}
@@ -460,9 +499,9 @@ export default function LessonView({
             )}
 
             <ol className="lesson-items">
-              {section.items.map((it, i) => (
-                <li key={key(it, i)} data-key={key(it, i)}
-                    className={speakingKey === key(it, i) ? 'is-speaking' : undefined}>
+              {sec.items.map((it, i) => (
+                <li key={k(it, i)} data-key={k(it, i)}
+                    className={speakingKey === k(it, i) ? 'is-speaking' : undefined}>
                   {it.tag_id && <span className="lesson-tag">{weaknessTagLabel(it.tag_id)}</span>}
                   {it.speaker && <div className="lesson-speaker" lang="en">{it.speaker}</div>}
 
@@ -470,11 +509,11 @@ export default function LessonView({
                   {/* 語に触れると意味が出る。**トレーナー側にも要る。**
                       レッスン中に「この語は?」と聞かれる場所そのものなので、
                       ここに無いと画面を離れて調べることになる(2026-08 の指摘)。 */}
-                  {!type?.hidePromptFromLearner && it.prompt_en && (
+                  {!secType?.hidePromptFromLearner && it.prompt_en && (
                     <div className="lesson-en">
                       <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={material.level}
                                    statuses={wordStatuses} onMark={markWord}
-                                   readingAt={speakingKey === key(it, i) ? readingAt : null} />
+                                   readingAt={speakingKey === k(it, i) ? readingAt : null} />
                     </div>
                   )}
                   {it.phonetic && <Phonetic value={it.phonetic} />}
@@ -486,8 +525,8 @@ export default function LessonView({
                   {/* 本文(記事・会話)の訳は、はじめは伏せる。
                       英文だけが出ていたほうがシャドーイングしやすく、
                       「訳を見る」で確かめられる。設問の日本語は伏せない。 */}
-                  {it.prompt_ja && (isPassage
-                    ? isOpen(key(it, i)) && <div className="lesson-ja">{it.prompt_ja}</div>
+                  {it.prompt_ja && (secIsPassage
+                    ? isOpen(k(it, i)) && <div className="lesson-ja">{it.prompt_ja}</div>
                     : <div className="lesson-ja">{it.prompt_ja}</div>)}
                   {it.question && (
                     <div className="lesson-en">
@@ -497,15 +536,15 @@ export default function LessonView({
                   )}
                   {it.hint && <div className="lesson-note">与える語: {it.hint}</div>}
 
-                  {type?.audioFrom && it[type.audioFrom] && (
+                  {secType?.audioFrom && it[secType.audioFrom] && (
                     <SpeakButton
-                      text={it[type.audioFrom]}
-                      voice={voiceFor(cast, it.speaker)}
-                      clipVoice={voiceFor(clipCast, it.speaker, soloVoice)}
-                      tier={tier}
+                      text={it[secType.audioFrom]}
+                      voice={voiceFor(secCast, it.speaker)}
+                      clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
+                      tier={secTier}
                       rate={rateOf(rateId)}
                       onPlayingChange={(on) => {
-                        setSpeakingKey(on ? key(it, i) : null)
+                        setSpeakingKey(on ? k(it, i) : null)
                         if (!on) setReadingAt(null)
                       }}
                       onWord={(w) => setReadingAt(w ? w.charIndex : null)}
@@ -514,22 +553,22 @@ export default function LessonView({
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。
                       レッスンで1問ずつ答え合わせをするために、問ごとが要る。 */}
-                  {(it.answer || it.audio_text || (isPassage && it.prompt_ja)) && (
+                  {(it.answer || it.audio_text || (secIsPassage && it.prompt_ja)) && (
                     <button type="button" className="btn btn--small lesson-reveal"
-                            aria-expanded={isOpen(key(it, i))}
-                            onClick={() => toggleItem(key(it, i))}>
-                      {isPassage
-                        ? (isOpen(key(it, i)) ? '訳を隠す' : '訳を見る')
-                        : (isOpen(key(it, i)) ? '解答を隠す' : '解答を見る')}
+                            aria-expanded={isOpen(k(it, i))}
+                            onClick={() => toggleItem(k(it, i))}>
+                      {secIsPassage
+                        ? (isOpen(k(it, i)) ? '訳を隠す' : '訳を見る')
+                        : (isOpen(k(it, i)) ? '解答を隠す' : '解答を見る')}
                     </button>
                   )}
 
-                  {isOpen(key(it, i)) && (
+                  {isOpen(k(it, i)) && (
                     <>
                       {/* リスニングは英文を見せずに聞かせる。答え合わせでは
                           **読み上げた英文そのもの**を出す。何を言われたのかが
                           分からないと、直しようがない(2026-08 の指摘)。 */}
-                      {type?.hidePromptFromLearner && it.audio_text && (
+                      {secType?.hidePromptFromLearner && it.audio_text && (
                         <div className="lesson-heard">
                           <span className="lesson-heard-label">読み上げた英文</span>
                           <span lang="en">{it.audio_text}</span>
@@ -543,9 +582,7 @@ export default function LessonView({
                 </li>
               ))}
             </ol>
-          </>
-        )}
-      </div>
-    </div>
-  )
+          </section>
+    )
+  }
 }

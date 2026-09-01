@@ -2116,6 +2116,20 @@ html { -webkit-text-size-adjust: 100%; }
      (2026-08 実機)。紙は教材まるごとの控えなので、全部の演習を刷る。 */
   body.is-printing .print-target .exercise-view.is-closed { display: block; }
 
+  /* レッスン表示も同じ。**画面は1ページずつ、紙は教材まるごと**
+     (2026-09 利用者の指定「内容確認と出てきた語句のページも正しく印刷」)。
+     ページを送りながら3回印刷させない */
+  body.is-printing .print-target .lesson-page.is-closed { display: block; }
+  /* 見出しだけがページの終わりに残らないようにする。
+     **中身は分けてよい**(段落まるごと送ると、白い場所が大きく空く) */
+  .print-target .lesson-section,
+  .print-target .lesson-instruction { break-after: avoid; }
+  .print-target .lesson-page + .lesson-page { margin-top: 14pt; }
+  /* ただし通しの練習(6Steps / Quick Response)は紙に出さない。
+     あれは**画面でやること**で、中身は上のページがすべて持っている */
+  body.is-printing .lesson-sheet > .passage,
+  body.is-printing .lesson-sheet > .qr { display: none !important; }
+
   /* 紙は白、文字は黒とグレー。濃い背景のままだとインクを食う */
   .print-target, .print-target * {
     background: transparent !important; color: #1a1a1a !important;
@@ -2906,6 +2920,12 @@ html { -webkit-text-size-adjust: 100%; }
   padding: 1px 9px; border: 1px solid transparent; border-radius: 999px;
   background: var(--accent-bg); color: var(--accent);
 }
+/* 演習1つぶん(帯の ◀ 1 / 3 ▶ の1ページ)。
+   **画面には選んだページだけ。紙には全部のページを出す**
+   (2026-09 利用者の指定「内容確認と出てきた語句のページも正しく印刷」)。
+   描かずにいると紙にも出ないので、**描いてから隠す。**
+   紙用の指定が `display: block` に戻す */
+.lesson-page.is-closed { display: none; }
 .lesson-section {
   margin: 0 0 8px; padding-left: 10px;
   border-left: 5px solid var(--accent);
