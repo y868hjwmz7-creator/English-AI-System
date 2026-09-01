@@ -272,7 +272,7 @@ select pg_temp.denied('担当外のゲストの宿題の語は取り出せない
 set role authenticated;
 set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
 
--- ── 知らなかった → 箱は 0、翌日にまた出る ────────────────────
+-- ── 知らなかった → 箱は 0 ────────────────────────────────────
 select public.mark_word('Rollback', 'unknown');
 
 select pg_temp.ok('知らなかった語は箱 0 に入る',
@@ -280,7 +280,19 @@ select pg_temp.ok('知らなかった語は箱 0 に入る',
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'rollback'), 0);
 
-select pg_temp.ok('知らなかった語は翌日にまた出る',
+/* **単語帳に入ったばかりの語は、その日から出る**(0030)。
+
+   以前は初めて入る語も翌日からだった。間隔の決まりとしては正しいが、
+   **入れたその日に1回も出てこない**ので、手で入れた人には
+   「登録しても反映されない」ように見えた(2026-09 実機)。 */
+select pg_temp.ok('初めて入る語は、その日の復習に出る(0030)',
+  (select due_on from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'rollback'), current_date);
+
+-- **2回目からは、これまでどおり翌日。** 間隔の決まりは変えていない
+select public.mark_word('rollback', 'unknown');
+select pg_temp.ok('2回目に「まだ」と付けたら、翌日にまた出る',
   (select due_on from public.word_reviews
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'rollback'), current_date + 1);
@@ -334,6 +346,10 @@ select pg_temp.ok('分からなくなったら箱 0 まで戻る',
 -- ── 覚えかけ(0027)。**箱は 3 で止まる** ──────────────────────
 --   上限が無いと、自信が無いまま押しつづけたものが30日先へ飛ぶ。
 --   3 で止めれば、必ず4日以内に戻ってくる。
+--
+--   **先に1回入れておく。** 初めて入る語はその日から出る決まりなので
+--   (0030)、間隔そのものを見るには「すでに入っている語」で試す
+select public.mark_word('Latency', 'unknown');
 select public.mark_word('Latency', 'learning');
 select pg_temp.ok('覚えかけ 1回目 → 箱 1・1日後',
   (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
@@ -463,7 +479,7 @@ select pg_temp.ok('material_items に phrases がある',
 set role authenticated;
 set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
 
--- ── 知らなかった → 箱は 0、翌日にまた出る ────────────────────
+-- ── 知らなかった → 箱は 0 ────────────────────────────────────
 select public.mark_word('Rollback', 'unknown');
 
 select pg_temp.ok('知らなかった語は箱 0 に入る',
@@ -471,7 +487,10 @@ select pg_temp.ok('知らなかった語は箱 0 に入る',
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'rollback'), 0);
 
-select pg_temp.ok('知らなかった語は翌日にまた出る',
+/* **この節は2回目である**(上でも同じ語を入れている)。
+   **すでに入っている語**なので、ここで見るのは「翌日にまた出る」ほう。
+   初めて入る語がその日から出ることは、上の節で確かめてある(0030)。 */
+select pg_temp.ok('すでに入っている語に「まだ」を付けたら、翌日にまた出る',
   (select due_on from public.word_reviews
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'rollback'), current_date + 1);
@@ -716,6 +735,63 @@ select pg_temp.ok('業界別に数えられる(教材の無い語は general)',
   (select known >= 0 from public.vocab_by_industry(
      'e2222222-2222-2222-2222-222222222222')
    where industry = 'general' limit 1), true);
+
+-- ============================================================================
+-- 手で入れた語が、その日の復習に出る(0030・2026-09 実機)
+--
+--   > 単語を手打ちで登録しても反映されません
+--
+--   画面の「語句を手で入れる」は `mark_word()` をそのまま呼ぶ。
+--   **入れた語が、その日のうちに復習の一覧に出てくるか**を、
+--   窓口(`review_words`)まで通して確かめる。
+-- ============================================================================
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+
+-- 語 + 出会った文(画面から渡すのと同じ形)
+select public.mark_word('resilient', 'unknown', 'word', null,
+                        'She stayed resilient through the whole project.', null);
+
+select pg_temp.ok('手で入れた語は、その日から出る',
+  (select due_on from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'resilient'), current_date);
+
+select pg_temp.ok('手で入れた語が、復習の一覧に出る',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'todo', 200)
+   where word_norm = 'resilient'), 1);
+
+select pg_temp.ok('手で入れた語が、「今日出すもの」に数えられる',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'todo', 200, true)
+   where word_norm = 'resilient'), 1);
+
+select pg_temp.ok('出会った文も一緒に控えられる',
+  (select seen_in from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'resilient'),
+  'She stayed resilient through the whole project.');
+
+-- 空白を含めば言い回しとして入る(画面の判定と同じ)
+select public.mark_word('look forward to', 'unknown', 'phrase');
+select pg_temp.ok('2語以上は言い回しとして入る',
+  (select kind from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'look forward to'), 'phrase');
+
+-- **トレーナーが、担当ゲストの単語帳に手で入れられる**(2026-09 利用者の指定)
+set request.jwt.claim.sub = 'e1111111-1111-1111-1111-111111111111';
+select public.mark_word('bottleneck', 'unknown', 'word', null, null, null,
+                        'e2222222-2222-2222-2222-222222222222');
+select pg_temp.ok('トレーナーが入れた語も、その日から出る',
+  (select due_on from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'bottleneck'), current_date);
+select pg_temp.ok('入る先はゲストの単語帳(トレーナーのではない)',
+  (select count(*)::int from public.word_reviews
+   where learner_id = 'e1111111-1111-1111-1111-111111111111'
+     and word_norm = 'bottleneck'), 0);
 
 -- ── 他人の記録は見られない ────────────────────────────────────
 set request.jwt.claim.sub = 'e3333333-3333-3333-3333-333333333333';

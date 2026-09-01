@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   11行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
+--   12行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
 --   貼れば、そこがそろいます。
 --     0013〜0023 … supabase/apply/pending_2026-08-29.sql
 --     0024       … supabase/apply/pending_2026-08-31.sql
@@ -17,6 +17,7 @@
 --     0027       … supabase/apply/pending_2026-09-01b.sql
 --     0028       … supabase/apply/pending_2026-09-01c.sql
 --     0029       … supabase/apply/pending_2026-09-01d.sql
+--     0030       … supabase/apply/pending_2026-09-01e.sql
 -- ============================================================================
 
 select 何が要るか, case when 済 then '✅ もう入っています' else '⬜ まだです' end as 状態
@@ -53,4 +54,8 @@ from (
   union all select '0029 自分のアイコンを選べる',
     exists (select 1 from information_schema.columns
             where table_name = 'profiles' and column_name = 'avatar'), 11
+  union all select '0030 入れたばかりの語が、その日の復習に出る',
+    exists (select 1 from pg_proc
+            where proname = 'mark_word'
+              and pg_get_functiondef(oid) like '%v_new%'), 12
 ) t order by 順;

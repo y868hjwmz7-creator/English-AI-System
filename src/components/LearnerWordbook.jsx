@@ -115,7 +115,11 @@ export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMat
   }
 
   return (
-    <div className="learner-wordbook">
+    /* **白いカードに載せる**(2026-09 実機で「まだ同じになっていません」)。
+       自分の単語帳(`Wordbook.jsx`)は `<section className="card">` の中に
+       あるのに、こちらは地の上に直に置いていた。中身をそろえても、
+       **囲みが違えば別の画面に見える。** */
+    <section className="card learner-wordbook">
       {/* **見た目は自分の単語帳とそろえる**(2026-09 利用者の指定)。
           題と、続けている週を同じ行に置く */}
       <div className="wb-head">
@@ -229,6 +233,6 @@ export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMat
           </button>
         </div>
       )}
-    </div>
+    </section>
   )
 }

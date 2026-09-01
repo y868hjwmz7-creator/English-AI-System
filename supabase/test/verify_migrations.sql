@@ -6,7 +6,7 @@
 --   何も書き換えず、何も消しません。**見るだけ**の SQL です。
 --
 -- 【成功したときの見え方】
---   40行の表が出て、すべて「✅ OK」になります。
+--   すべての行が「✅ OK」になります。
 --   「❌ まだです」がある行は、その番号のファイルがまだ実行されていません。
 -- ============================================================================
 
@@ -273,6 +273,10 @@ from (
   select '(65) 自分のアイコンを選べる(0029)', exists (
     select 1 from information_schema.columns
     where table_name = 'profiles' and column_name = 'avatar'), 65
+  union all
+  select '(67) 入れたばかりの語が、その日の復習に出る(0030)', (
+    select pg_get_functiondef(p.oid) like '%v_new%'
+    from pg_proc p where p.proname = 'mark_word'), 67
   union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある

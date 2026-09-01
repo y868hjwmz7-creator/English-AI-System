@@ -176,7 +176,30 @@ export default function Wordbook() {
 
   useEffect(() => { reload() }, [reload])
 
+  /**
+   * 今日出すもの。
+   *
+   * **入れたばかりの語も、その日のうちに出す**(2026-09 実機)。
+   *
+   *   > 単語を手打ちで登録しても反映されません
+   *
+   * `mark_word()` は「まだ」を**翌日**に回す(間隔の決まりとしては正しい)。
+   * そのため手で入れた語は、入れた日には1回も出てこなかった。
+   * 本当の直しは 0030(初めて入る語はその日から)だが、
+   * **貼る前でも動く道を残す**(CLAUDE.md)。ここで入った日も見る。
+   */
+  const isDueNow = (r, today) => !r.due_on || r.due_on <= today
+    || String(r.added_at ?? '').slice(0, 10) === today
+
   const shownRows = applyWordbookFilter(rows, filter)
+
+  /* **札に出す「今日出す数」は、実際に出るものと同じ数え方にする。**
+     数え上げ(`counts.due`)は表を直に見ているので、0030 を貼る前は
+     「入れたばかりの語」を数えない。**出るのに 0 と書いてあると、
+     やり切ったと思ってしまう**(2026-09 実機と同じ食い違い) */
+  const dueNow = isQuiz
+    ? rows.filter((r) => isDueNow(r, todayKey())).length
+    : counts.due
 
   /**
    * 復習に出す10語を組む(2026-08 利用者の指定・0027)。
@@ -199,7 +222,7 @@ export default function Wordbook() {
     const today = todayKey()
     const pool = narrowed
       ? applyWordbookFilter(rows, filter)
-      : rows.filter((r) => !r.due_on || r.due_on <= today)
+      : rows.filter((r) => isDueNow(r, today))
     setQueue(buildSession(pool))
     doneRef.current = []
     setResult(null)
@@ -319,7 +342,7 @@ export default function Wordbook() {
               <option key={v.id} value={v.id}>
                 {/* **復習には「今日出す数」を付ける。**
                     開く前に、やることの量が分かる */}
-                {v.id === 'due' && counts.due > 0 ? `${v.label}(${counts.due})` : v.label}
+                {v.id === 'due' && dueNow > 0 ? `${v.label}(${dueNow})` : v.label}
               </option>
             ))}
           </select>
@@ -371,10 +394,10 @@ export default function Wordbook() {
               </li>
             ))}
           </ul>
-          {counts.due > 0
+          {dueNow > 0
             ? (
               <button type="button" className="btn btn--primary" onClick={reload}>
-                つぎの {Math.min(10, counts.due)} 語
+                つぎの {Math.min(10, dueNow)} 語
               </button>
             )
             : <p className="hint">今日の分は終わりです。よくできました。</p>}
@@ -395,10 +418,10 @@ export default function Wordbook() {
            **やり切ったのではなく、読めていない。** */
         narrowed
           ? <p className="hint">その絞り込みに当てはまる語はありません。</p>
-          : counts.due > 0
+          : dueNow > 0
             ? (
               <p className="notice notice--warn">
-                今日出す語が <strong>{counts.due} 語</strong>あるはずですが、
+                今日出す語が <strong>{dueNow} 語</strong>あるはずですが、
                 読み出せませんでした。しばらくしてから開き直してください。
               </p>
             )
