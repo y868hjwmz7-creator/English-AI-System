@@ -48,12 +48,31 @@ import Tabs from './Tabs.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 
+/**
+ * 画面の切り替え(2026-08 利用者の指定・0027)。
+ *
+ *   > 今日の復習というボタンにせず、復習にし、選んだら基本は今日のものから
+ *   > 出題するようにそして日付ボタンも入れます。知らなかったボタンは
+ *   > 必要ありません。
+ *
+ * 「復習」は**日を絞らなければ今日の分**を出す。日付を選ぶと、
+ * その日に単語帳へ入った語から出す。
+ * 「知らなかった」は外した(復習と役割が重なっていた)。
+ */
 const VIEWS = [
-  { id: 'due', label: '今日の復習', status: 'unknown', dueOnly: true },
-  { id: 'unknown', label: '知らなかった', status: 'unknown', dueOnly: false },
+  // **まだ + 覚えかけ**をまとめて読む(0027 の 'todo')。
+  // 日を絞れるように、ここでは due で切らずに読み、画面の側で選ぶ
+  { id: 'due', label: '復習', status: 'todo', dueOnly: false },
+  { id: 'learning', label: '覚えかけ', status: 'learning', dueOnly: false },
   { id: 'known', label: '覚えた', status: 'known', dueOnly: false },
   { id: 'progress', label: '積み上がり' },
 ]
+
+/** 今日(端末の日付)。「今日出すもの」を選ぶのに使う */
+const todayKey = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 
 /** 出会った文。その語のところを太字に。伏せるときは下線に置き換える */
@@ -149,7 +168,7 @@ export default function Wordbook({ level = null }) {
     if (list.error) { setError(list.error); return }
     setError(null)
     setRows(list.data ?? [])
-    setQueue(current.dueOnly ? buildSession(list.data ?? []) : [])
+    setQueue([])
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
@@ -157,9 +176,33 @@ export default function Wordbook({ level = null }) {
 
   useEffect(() => { reload() }, [reload])
 
-  // 見返す用の一覧に出す行。**出題(今日の復習)は絞らない。**
-  // あちらは「今日出すべきもの」なので、選んで減らすものではない
   const shownRows = applyWordbookFilter(rows, filter)
+
+  /**
+   * 復習に出す10語を組む(2026-08 利用者の指定・0027)。
+   *
+   *   > 復習にし、選んだら基本は今日のものから出題するように
+   *   > そして日付ボタンも入れます。
+   *
+   * **日を選んでいなければ、今日出すもの**(`due_on` が今日まで)。
+   * 日を選んだら、**その日に単語帳へ入った語**から出す。
+   * 並びは `buildSession()` が決める(まだ → 覚えかけ)。
+   *
+   * **絞り込みを変えたら組み直す。** 変えても前の10語のままだと、
+   * 何のために選んだのか分からない。
+   */
+  useEffect(() => {
+    if (!isQuiz || loading) return
+    const today = todayKey()
+    const pool = filter.day || filter.material
+      ? applyWordbookFilter(rows, filter)
+      : rows.filter((r) => !r.due_on || r.due_on <= today)
+    setQueue(buildSession(pool))
+    doneRef.current = []
+    setResult(null)
+    setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
+    // rows は reload で入れ替わる。中身ではなく、その入れ替わりを見ている
+  }, [isQuiz, loading, rows, filter.day, filter.material])
   const card = isQuiz ? queue[0] : null
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
@@ -215,13 +258,19 @@ export default function Wordbook({ level = null }) {
       {/* 数は**3枚の札**にする。以前は1行に流していたので、
           どれが「いま何をすればよいか」なのか分からなかった。
           **「今日出す」だけを目立たせる。** そこが行動につながる数である */}
+      {/* **札は「状態」そのものにする**(2026-08 利用者の指定・0027)。
+            > 覚えかけ、の定義をはっきりさせましょう。
+          以前は「覚えかけ」と書いておきながら、中身は「まだ」の数だった。
+          **言葉と中身が食い違っていた。**
+          いまはカードの3つのボタンと、この3枚の札が1対1で対応する。
+          「今日出す」の数は、復習のタブに付く */}
       <div className="wb-stats">
-        <span className={`wb-stat${counts.due > 0 ? ' is-due' : ''}`}>
-          <strong>{counts.due}</strong>
-          <span className="wb-stat-label">今日出す</span>
+        <span className={`wb-stat${counts.unknown > 0 ? ' is-due' : ''}`}>
+          <strong>{counts.unknown}</strong>
+          <span className="wb-stat-label">まだ</span>
         </span>
         <span className="wb-stat">
-          <strong>{counts.unknown}</strong>
+          <strong>{counts.learning}</strong>
           <span className="wb-stat-label">覚えかけ</span>
         </span>
         <span className="wb-stat">
@@ -243,7 +292,11 @@ export default function Wordbook({ level = null }) {
       <Tabs
         variant="sub" ariaLabel="単語帳の切り替え"
         value={view} onChange={setView}
-        items={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
+        items={VIEWS.map((v) => ({
+          id: v.id, label: v.label,
+          // **復習には「今日出す数」を付ける。** 押す前に、やることの量が分かる
+          count: v.id === 'due' && counts.due > 0 ? counts.due : null,
+        }))}
       />
 
       {error && <p className="notice notice--error">{error}</p>}
@@ -312,6 +365,13 @@ export default function Wordbook({ level = null }) {
             )
             : <p className="hint">今日の分は終わりです。よくできました。</p>}
         </div>
+      )}
+
+      {/* **復習にも日付の絞り込みを置く**(2026-08 利用者の指定)。
+            > 選んだら基本は今日のものから出題するようにそして日付ボタンも入れます。
+          何も選ばなければ今日の分。日を選ぶと、その日に入った語から出す */}
+      {isQuiz && !loading && (
+        <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
       )}
 
       {isQuiz && !loading && !result && !card && (
@@ -473,10 +533,19 @@ export default function Wordbook({ level = null }) {
                     ? (shown ? '英語を隠す' : '英語を見る')
                     : (shown ? '意味を隠す' : '意味を見る')}
                 </button>
+                {/* **答えは3つ**(2026-08 利用者の指定・0027)。
+                    まだ / 覚えかけ / 覚えた。
+                    「覚えかけ」は**思い出せたが自信がない**とき。
+                    箱を 3 で止めるので、必ず4日以内に戻ってくる。
+                    **3つはとなりどうしに置く**(CLAUDE.md)。
+                    「意味を見る」は答えではないので1段上にある */}
                 <div className="wordcard-answers">
                   <button type="button" className="btn btn--quiet"
                           disabled={busy === card.word_norm}
                           onClick={() => answer(card, 'unknown')}>まだ</button>
+                  <button type="button" className="btn btn--half"
+                          disabled={busy === card.word_norm}
+                          onClick={() => answer(card, 'learning')}>覚えかけ</button>
                   <button type="button" className="btn btn--primary"
                           disabled={busy === card.word_norm}
                           onClick={() => answer(card, 'known')}>覚えた</button>

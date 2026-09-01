@@ -653,6 +653,15 @@ audio { width: 100%; margin-top: 4px; }
 }
 .btn--toggle { padding: 5px 12px; font-size: 13px; }
 .btn--toggle.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* **答えの3段目**(0027)。まだ / 覚えかけ / 覚えた のまん中。
+   「まだ」(灰色の塗りつぶし)と「覚えた」(青の塗りつぶし)の**あいだ**に
+   なるよう、青の枠線だけにする。塗りつぶしを増やさない(CLAUDE.md)。
+   **色だけに頼らない。** 枠線の太さと文字の色でも見分けられる */
+.btn--half {
+  border: 2px solid var(--accent); background: transparent;
+  color: var(--accent); font-weight: 600;
+}
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 
 /* 絞り込みはグラフの上に1列で置く */
@@ -3108,6 +3117,10 @@ html { -webkit-text-size-adjust: 100%; }
   border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
+  /* **背の低い画面でも、全体が映る**(2026-08 利用者の指定)。
+     置き場所は JS が決めるが、画面より高いカレンダーはどこに置いても
+     はみ出す。そのときは**中だけを送れるようにする** */
+  max-height: calc(100vh - 16px); overflow-y: auto;
 }
 .wbcal-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -3287,8 +3300,16 @@ html { -webkit-text-size-adjust: 100%; }
   gap: 10px; margin-top: 18px;
 }
 /* **2つは同じ幅にする。** 幅が違うと、片方が「主」に見えてしまう */
-.wordcard-answers { display: flex; justify-content: center; gap: 10px; width: min(100%, 320px); }
-.wordcard-answers .btn { flex: 1 1 0; min-width: 0; }
+/* 答えの3つ(0027)。**となりどうしに置き、同じ幅で並べる。**
+   「覚えかけ」が入るぶん、囲みを少し広げてある(320 → 360px)。
+   **文字は折り返させない。** 「覚えか / け」と2行に割れると読めない */
+.wordcard-answers {
+  display: flex; justify-content: center; gap: 8px; width: min(100%, 360px);
+}
+.wordcard-answers .btn {
+  flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px;
+  white-space: nowrap;
+}
 
 /* 出す側。語と Listen を**まとめて中央に**置く。
    `.etext-listen` は本文の中では右に寄せてあるので、ここでは打ち消す */

@@ -256,4 +256,12 @@ from (
     select pg_get_constraintdef(c.oid) like '%100%990%'
        and pg_get_constraintdef(c.oid) like '%10%90%'
     from pg_constraint c where c.conname = 'learner_scores_range'), 61
+  union all
+  select '(62) 単語帳に「覚えかけ」がある(0027)', (
+    select pg_get_constraintdef(c.oid) like '%learning%'
+    from pg_constraint c where c.conname = 'word_reviews_status_check'), 62
+  union all
+  select '(63) 復習が「まだ + 覚えかけ」を返せる(0027)', (
+    select pg_get_functiondef(p.oid) like '%todo%'
+    from pg_proc p where p.proname = 'review_words'), 63
 ) t order by 順;

@@ -63,15 +63,31 @@ export function shuffle(list) {
 }
 
 /**
- * 1回ぶんの出題をつくる。
- *
- * **終わりの見えない作業は続かない。** 残り全部ではなく、
- * 10語で区切って結果を出す。終わったらまた次の10語。
+ * 1回ぶんの語数。**終わりの見えない作業は続かない。**
+ * 残り全部ではなく、10語で区切って結果を出す。終わったらまた次の10語。
  */
 export const SESSION_SIZE = 10
 
+/**
+ * 1回ぶんの出題をつくる。
+ *
+ * **「まだ」を先に、「覚えかけ」を次に**(2026-08 利用者の指定・0027)。
+ *
+ *   > まだを優先して、覚え掛けを次に優先という出題アルゴリズムが組めますよね
+ *
+ * 分かっていない語を先に出す。混ぜてしまうと、いちばん苦手な語が
+ * 10語の枠から外れて、いつまでも出てこないことがある。
+ *
+ * **それぞれの中では混ぜる。** 並び順で覚えてしまわないようにするため
+ * (単語帳の決まり・CLAUDE.md)。
+ */
 export function buildSession(rows, size = SESSION_SIZE) {
-  return shuffle(rows).slice(0, size)
+  const list = rows ?? []
+  const yet = shuffle(list.filter((r) => r.status === 'unknown'))
+  const half = shuffle(list.filter((r) => r.status === 'learning'))
+  // 状態の付いていない古い行は、いちばん後ろに置く(0027 より前のもの)
+  const rest = shuffle(list.filter((r) => r.status !== 'unknown' && r.status !== 'learning'))
+  return [...yet, ...half, ...rest].slice(0, size)
 }
 
 /** 答え合わせに使う形にそろえる。大文字小文字と前後の空白は見ない */

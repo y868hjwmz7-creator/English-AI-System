@@ -331,6 +331,73 @@ select pg_temp.ok('分からなくなったら箱 0 まで戻る',
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'rollback'), 0);
 
+-- ── 覚えかけ(0027)。**箱は 3 で止まる** ──────────────────────
+--   上限が無いと、自信が無いまま押しつづけたものが30日先へ飛ぶ。
+--   3 で止めれば、必ず4日以内に戻ってくる。
+select public.mark_word('Latency', 'learning');
+select pg_temp.ok('覚えかけ 1回目 → 箱 1・1日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'latency'), '1/1');
+
+select public.mark_word('Latency', 'learning');
+select pg_temp.ok('覚えかけ 2回目 → 箱 2・2日後',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'latency'), '2/2');
+
+select public.mark_word('Latency', 'learning');
+select public.mark_word('Latency', 'learning');
+select public.mark_word('Latency', 'learning');
+select pg_temp.ok('覚えかけは箱 3・4日後で頭打ちになる',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'latency'), '3/4');
+
+-- **覚えかけから「覚えた」に進めば、そこから先へ延びる**
+select public.mark_word('Latency', 'known');
+select pg_temp.ok('覚えかけ → 覚えた で箱 4・7日後へ進む',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'latency'), '4/7');
+
+-- **覚えかけは「正解」に数えない**(思い出せたが自信が無い状態のため)。
+-- 同じ日に「覚えた」も押しているので、**押す前後の差**で見る
+create temp table pg_temp_before as
+  select answered, correct from public.vocab_days
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and done_on = current_date;
+
+select public.mark_word('Throughput', 'learning');
+
+select pg_temp.ok('覚えかけは、答えた数だけが 1 増える',
+  (select (d.answered - b.answered)::int || '/' || (d.correct - b.correct)::int
+     from public.vocab_days d, pg_temp_before b
+    where d.learner_id = 'e2222222-2222-2222-2222-222222222222'
+      and d.done_on = current_date), '1/0');
+
+-- ── 復習は「まだ」を先に、「覚えかけ」を次に出す(0027)─────────
+--   **これが利用者の指定した出題の順である。**
+select public.mark_word('Zzfirst', 'unknown');
+select pg_temp.ok('todo は まだ と 覚えかけ の両方を返す',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'todo', 200)
+   where word_norm in ('zzfirst', 'throughput')), 2);
+
+select pg_temp.ok('まだ が 覚えかけ より先に出る',
+  (select status from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'todo', 200) limit 1), 'unknown');
+
+select pg_temp.ok('todo に「覚えた」は入らない',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'todo', 200)
+   where status = 'known'), 0);
+
+select pg_temp.ok('覚えかけだけを取り出せる',
+  (select count(*)::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'learning', 200)
+   where status <> 'learning'), 0);
+
 -- ── 句・イディオムも同じ表に入る ──────────────────────────────
 select public.mark_word('look  forward   to', 'unknown', 'phrase');
 

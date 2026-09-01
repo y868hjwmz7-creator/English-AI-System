@@ -8,12 +8,13 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   8行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
+--   9行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
 --   貼れば、そこがそろいます。
 --     0013〜0023 … supabase/apply/pending_2026-08-29.sql
 --     0024       … supabase/apply/pending_2026-08-31.sql
 --     0025       … supabase/apply/pending_2026-08-31b.sql
 --     0026       … supabase/apply/pending_2026-09-01.sql
+--     0027       … supabase/apply/pending_2026-09-01b.sql
 -- ============================================================================
 
 select 何が要るか, case when 済 then '✅ もう入っています' else '⬜ まだです' end as 状態
@@ -39,4 +40,8 @@ from (
     exists (select 1 from pg_constraint
             where conname = 'learner_scores_range'
               and pg_get_constraintdef(oid) like '%100%990%'), 8
+  union all select '0027 単語帳の「覚えかけ」',
+    exists (select 1 from pg_constraint
+            where conname = 'word_reviews_status_check'
+              and pg_get_constraintdef(oid) like '%learning%'), 9
 ) t order by 順;

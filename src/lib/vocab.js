@@ -522,7 +522,7 @@ export async function loadGlossDetail(wordNorm) {
  * @returns {{due: number, unknown: number, known: number}}
  */
 export async function loadWordbookCounts() {
-  const empty = { due: 0, unknown: 0, known: 0 }
+  const empty = { due: 0, unknown: 0, learning: 0, known: 0 }
   if (!supabase) return ok(empty)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return ok(empty)
@@ -533,15 +533,20 @@ export async function loadWordbookCounts() {
     .select('word_norm', { count: 'exact', head: true })
     .eq('learner_id', user.id)
 
-  const [due, unknown, known] = await Promise.all([
-    base().eq('status', 'unknown').lte('due_on', today),
+  /* **状態は3つ**(0027)。unknown(まだ)/ learning(覚えかけ)/ known(覚えた)。
+     「今日出す」は、まだ と 覚えかけ のうち**日が来たもの**である。
+     0027 を貼る前は learning が1件も無いので、これまでと同じ数になる */
+  const [due, unknown, learning, known] = await Promise.all([
+    base().in('status', ['unknown', 'learning']).lte('due_on', today),
     base().eq('status', 'unknown'),
+    base().eq('status', 'learning'),
     base().eq('status', 'known'),
   ])
   // 数えられなくても画面は出す。**数が出ないだけで、復習はできる**
   return ok({
     due: due.count ?? 0,
     unknown: unknown.count ?? 0,
+    learning: learning.count ?? 0,
     known: known.count ?? 0,
   })
 }
@@ -636,7 +641,8 @@ export async function setWordStatus(word, status, {
   const norm = normWord(word)
   if (!norm) return ng('英語の語ではありません')
   if (!supabase) return ng('Supabase が設定されていません')
-  if (!['known', 'unknown'].includes(status)) return ng('状態が正しくありません')
+  // **状態は3つ**(0027)。まだ / 覚えかけ / 覚えた
+  if (!['known', 'learning', 'unknown'].includes(status)) return ng('状態が正しくありません')
 
   const args = {
     p_norm: norm,
