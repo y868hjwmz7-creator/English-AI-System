@@ -269,4 +269,14 @@ from (
     select pg_get_function_result(p.oid) like '%material_industry%'
        and pg_get_function_result(p.oid) like '%material_scene%'
     from pg_proc p where p.proname = 'review_words'), 64
+  union all
+  select '(65) 自分のアイコンを選べる(0029)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'profiles' and column_name = 'avatar'), 65
+  union all
+  select '(66) アイコンは本人が書き換えられる(0029)', exists (
+    -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
+    select 1 from information_schema.column_privileges
+    where table_name = 'profiles' and column_name = 'avatar'
+      and privilege_type = 'UPDATE' and grantee = 'authenticated'), 66
 ) t order by 順;

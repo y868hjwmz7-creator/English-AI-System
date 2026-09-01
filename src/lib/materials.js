@@ -509,9 +509,12 @@ export async function loadMyLearnersDetailed() {
 
   const [{ data: people, error: peopleError }, { data: scores, error: scoreError }] =
     await Promise.all([
-      supabase.from('profiles')
-        .select('id, display_name, status, status_note, cefr, industry')
-        .in('id', ids).order('display_name'),
+      // `avatar` は 0029。**貼る前でも動く道を残す。** PostgREST は
+      // 知らない列が1つでもあると問い合わせ全体を断るので、
+      // 断られたらその列を外して読み直す(`runTolerant`)
+      runTolerant(() => supabase.from('profiles')
+        .select(`id, display_name, status, status_note, cefr, industry${optLast('avatar')}`)
+        .in('id', ids).order('display_name')),
       supabase.from('learner_latest_scores')
         .select('learner_id, test_type, score, taken_on').in('learner_id', ids),
     ])

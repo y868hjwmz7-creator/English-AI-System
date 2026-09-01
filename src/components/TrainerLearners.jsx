@@ -26,6 +26,7 @@ import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
 import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
 import { ScreenIcon } from './Icons.jsx'
+import Avatar from './Avatar.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 
 const STATUS = {
@@ -390,62 +391,84 @@ export default function TrainerLearners({ me, navTick = 0 }) {
 
                 狭い画面では自然に折り返る(タブは横に流れる)。 */}
             <div className={openId === l.id ? 'card learner-headcard' : ''}>
-            <div className="learner-head">
-              {/* **名前と札を離す**(2026-08 利用者の指定)。
-                  > ゲスト名と「受講中」というアイコンが近すぎます。
-                  名前を押すと開く。カードのどこかに小さなボタンがあるより、
-                  名前そのものが入口になっているほうが迷わない */}
-              <button type="button" className="learner-name"
-                      onClick={() => (openId === l.id ? setOpenId(null) : openDetail(l.id))}>
-                {l.display_name}
-              </button>
-              <span className={`badge ${STATUS[l.status]?.cls ?? ''}`}>
-                {STATUS[l.status]?.label ?? l.status}
-              </span>
-              {openId === l.id && (
-                <div className="learner-head-tabs">
-                  <Tabs
-                    variant="sub"
-                    ariaLabel="ゲストの情報の切り替え"
-                    value={detailTab}
-                    onChange={setDetailTab}
-                    items={[
-                      { id: 'homework', label: '過去の宿題', count: assignments.length },
-                      { id: 'create', label: 'この人に教材を作る' },
-                      // 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい
-                      { id: 'wordbook', label: '単語帳' },
-                      { id: 'record', label: 'レベルとスコア' },
-                    ]}
-                  />
+            {/* **左に「誰か」、右に「どのくらいか」**(2026-09 利用者の指定)。
+
+                  > 青でハイライトした部分を右に寄せて下さい。
+                  > そして空いたスペースには、ゲストが選んだアイコンを
+                  > 入れれるとよいです。
+
+                スコアとレベルは名前の真下(左)にあったが、右へ寄せて
+                タブの下にそろえた。空いた左側には**その人のアイコン**が入る。
+                アイコンは名前の行とスコアの行にまたがる高さなので、
+                左右が同じ背丈になり、行が余らない。 */}
+            <div className="learner-top">
+              <div className="learner-who">
+                {/* **アイコンを選ぶのは本人**(0029)。ここでは出すだけで、
+                    トレーナーが人のアイコンを変えることはできない。
+                    選んでいない人は、名前の頭文字が出る */}
+                <Avatar name={l.display_name} avatar={l.avatar}
+                        size={openId === l.id ? 'lg' : 'md'} />
+                {/* **名前と札を離す**(2026-08 利用者の指定)。
+                    > ゲスト名と「受講中」というアイコンが近すぎます。
+                    名前を押すと開く。カードのどこかに小さなボタンがあるより、
+                    名前そのものが入口になっているほうが迷わない */}
+                <div className="learner-head">
+                  <button type="button" className="learner-name"
+                          onClick={() => (openId === l.id ? setOpenId(null) : openDetail(l.id))}>
+                    {l.display_name}
+                  </button>
+                  <span className={`badge ${STATUS[l.status]?.cls ?? ''}`}>
+                    {STATUS[l.status]?.label ?? l.status}
+                  </span>
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* 2段目 … スコアとレベル。**名前の真下、左寄せ**(利用者の指定)。
+              {/* 右側 … タブと、スコア・レベル。
+                  **上下にそろえる。** 別々の行に散らすと目が行き来する */}
+              <div className="learner-side">
+                {openId === l.id && (
+                  <div className="learner-head-tabs">
+                    <Tabs
+                      variant="sub"
+                      ariaLabel="ゲストの情報の切り替え"
+                      value={detailTab}
+                      onChange={setDetailTab}
+                      items={[
+                        { id: 'homework', label: '過去の宿題', count: assignments.length },
+                        { id: 'create', label: 'この人に教材を作る' },
+                        // 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい
+                        { id: 'wordbook', label: '単語帳' },
+                        { id: 'record', label: 'レベルとスコア' },
+                      ]}
+                    />
+                  </div>
+                )}
 
-                **日付は出さない**(2026-08 利用者の指定)。
-                  > TOEIC、VERSANTのスコアの横の日付ですが、ここでは必要ありません。
-                  > 点数が表示されている状態でも3つの要素が1行にバランスよく
-                  > 並ぶように直してください。
-                いつ受けたかは「レベルとスコア」のタブで見られる。
-                ここで見たいのは**いまどのくらいか**だけである。
+                {/* スコアとレベル。**日付は出さない**(2026-08 利用者の指定)。
+                      > TOEIC、VERSANTのスコアの横の日付ですが、ここでは
+                      > 必要ありません。点数が表示されている状態でも3つの
+                      > 要素が1行にバランスよく並ぶように直してください。
+                    いつ受けたかは「レベルとスコア」のタブで見られる。
+                    ここで見たいのは**いまどのくらいか**だけである。
 
-                **3つを同じ幅で並べる**(`.learner-meta` は3列の grid)。
-                点数が入っても幅が動かないので、ゲストを切り替えても
-                同じ場所に同じものがある。 */}
-            <div className="learner-meta">
-              <span className="learner-meta-item">
-                <span className="score-label">TOEIC</span>
-                <span className="score-value">{toeic ? toeic.score : '—'}</span>
-              </span>
-              <span className="learner-meta-item">
-                <span className="score-label">VERSANT</span>
-                <span className="score-value">{versant ? versant.score : '—'}</span>
-              </span>
-              <span className="learner-meta-item">
-                <span className="score-label">レベル</span>
-                <span className="score-value">{cefrLabel(l.cefr)}</span>
-              </span>
+                    **3つを同じ幅で並べる**(`.learner-meta` は3列の grid)。
+                    点数が入っても幅が動かないので、ゲストを切り替えても
+                    同じ場所に同じものがある。 */}
+                <div className="learner-meta">
+                  <span className="learner-meta-item">
+                    <span className="score-label">TOEIC</span>
+                    <span className="score-value">{toeic ? toeic.score : '—'}</span>
+                  </span>
+                  <span className="learner-meta-item">
+                    <span className="score-label">VERSANT</span>
+                    <span className="score-value">{versant ? versant.score : '—'}</span>
+                  </span>
+                  <span className="learner-meta-item">
+                    <span className="score-label">レベル</span>
+                    <span className="score-value">{cefrLabel(l.cefr)}</span>
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* 3段目 … **取り組みを「札」で出す**(2026-08 利用者の指定)。

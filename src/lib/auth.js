@@ -134,15 +134,44 @@ export async function signOut() {
  */
 export async function loadProfile(userId) {
   if (!supabase || !userId) return null
-  const { data, error } = await supabase
-    .from('profiles')
-    // cefr も読む。単語帳が「B1 のめやすに対して何%」を出すのに使う(0019)
-    .select('id, display_name, role, cefr')
-    .eq('id', userId)
-    .maybeSingle()
+  const read = (cols) => supabase
+    .from('profiles').select(cols).eq('id', userId).maybeSingle()
+
+  // cefr も読む。単語帳が「B1 のめやすに対して何%」を出すのに使う(0019)
+  // avatar は 0029。**貼る前でも動く道を残す**(CLAUDE.md)。
+  // PostgREST は知らない列が1つでもあると問い合わせ全体を断るので、
+  // 断られたら avatar を外して読み直す。ここが読めないとログインの
+  // 直後に役割が分からなくなり、**画面が1つも出なくなる**
+  let { data, error } = await read('id, display_name, role, cefr, avatar')
+  if (error?.code === '42703' || /avatar/i.test(error?.message ?? '')) {
+    console.warn('「avatar」の列がまだありません。その列を外して読み直します'
+      + '(supabase/apply の SQL を貼ると解決します)');
+    ({ data, error } = await read('id, display_name, role, cefr'))
+  }
   if (error) {
     console.warn('プロフィールを読めませんでした:', error.message)
     return null
   }
   return data
+}
+
+/**
+ * 自分のアイコンを決める(0029)。
+ *
+ * **本人の行しか書き換えられない。** RLS(行)と列単位の権限の
+ * 両方で守られているので、ここでは `auth.uid()` の行だけを狙う。
+ *
+ * @param {string|null} avatar 選んだ印。`null` なら「使わない」
+ */
+export async function saveMyAvatar(userId, avatar) {
+  if (!supabase || !userId) return { error: null }
+  const { error } = await supabase
+    .from('profiles').update({ avatar: avatar || null }).eq('id', userId)
+  if (!error) return { error: null }
+  // 0029 を貼る前は、その列が無い。**何が足りないのかを言う**
+  if (error.code === '42703' || /avatar/i.test(error.message ?? '')) {
+    return { error: 'アイコンの置き場所がまだありません。'
+      + 'supabase/apply の SQL(0029)を貼ると使えるようになります。' }
+  }
+  return { error: toJapanese(error.message) }
 }

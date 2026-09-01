@@ -173,6 +173,21 @@ select pg_temp.expect_denied('生徒Bは自分をトレーナーに昇格でき�
   update public.profiles set role = 'admin'
   where id = '22222222-2222-2222-2222-222222222222' $$);
 
+-- ── 自分のアイコン(0029)──────────────────────────────────
+-- **選ぶのは本人。** 列単位の権限で `avatar` だけを開けてあるので、
+-- `role` を守ったまま、自分のアイコンは自分で決められる。
+update public.profiles set avatar = '🐧'
+where id = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('生徒Bは自分のアイコンを選べる',
+  (select avatar from public.profiles
+   where id = '22222222-2222-2222-2222-222222222222'), '🐧');
+-- **他人のアイコンは変えられない。** RLS が行そのものを見せないので、
+-- 更新の対象が0行になる(エラーにはならない)
+update public.profiles set avatar = '🦊'
+where id = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('生徒Bは他人のアイコンを変えられない',
+  (select count(*)::int from public.profiles where avatar = '🦊'), 0);
+
 -- ── 生徒C として(何も配信されていない) ─────────────────────
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 
