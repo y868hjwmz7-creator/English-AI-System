@@ -273,6 +273,24 @@ export const SCENES_BY_INDUSTRY = {
      **助言する側・受ける側で、場面がまるごと違う。**
      「建設・不動産」は建てる側、「コンサル(建設)」は外から見る側。
      同じ現場の話でも、立つ位置が違えば使う言葉も変わる。 */
+  ir: [
+    { id: 'ir_results',  label: '決算説明会',         hint: '数字の意味を、自分の言葉で言い切る' },
+    { id: 'ir_oneonone', label: '投資家との個別面談', hint: '突っ込んだ質問に、その場で答える' },
+    { id: 'ir_guidance', label: '見通しの説明',       hint: '約束しすぎず、根拠は示す' },
+    { id: 'ir_badnews',  label: '悪い数字の説明',     hint: '取り繕わない。原因と、次の手を言う' },
+    { id: 'ir_board',    label: '取締役会での報告',   hint: '結論から。判断に要ることだけ' },
+    { id: 'ir_roadshow', label: '海外ロードショー',   hint: '短い時間で、会社の芯を伝える' },
+    { id: 'ir_agm',      label: '株主総会',           hint: '整った言い方で、誠実に答える' },
+  ],
+  audit: [
+    { id: 'aud_plan',    label: '監査計画の打ち合わせ', hint: 'どこを、いつ、どこまで見るか' },
+    { id: 'aud_request', label: '資料の依頼',           hint: '何が要るのかを、はっきり伝える' },
+    { id: 'aud_walk',    label: '現場でのヒアリング',   hint: '手順を追い、実際どうしているかを聞く' },
+    { id: 'aud_finding', label: '指摘事項を伝える',     hint: '責めずに、事実と根拠で話す' },
+    { id: 'aud_report',  label: '経営層への報告',       hint: '重いものから順に、短く' },
+    { id: 'aud_follow',  label: '是正の確認',           hint: '直ったかを、証拠で確かめる' },
+    { id: 'aud_external', label: '会計士とのやりとり',  hint: '見解を突き合わせ、線を決める' },
+  ],
   consult_con: [
     { id: 'ccon_brief',   label: '依頼内容の聞き取り', hint: '何に困っているのかを、まず引き出す' },
     { id: 'ccon_finding', label: '調査結果の報告',     hint: '事実を並べ、言いにくいことも言う' },
@@ -536,6 +554,18 @@ export const GENRES_BY_INDUSTRY = {
   ],
 
   /* ── 2026-09 利用者の指定で足した分野 ────────────────────── */
+  ir: [
+    { id: 'irg_results', label: '決算の読まれ方',   hint: '同じ数字が、どう受け取られるか' },
+    { id: 'irg_holder',  label: '株主との関わり',   hint: '長く持つ人、すぐ売る人' },
+    { id: 'irg_account', label: '経営の説明責任',   hint: 'どこまで開示するか' },
+    { id: 'irg_market',  label: '資本市場のいま',   hint: '資金の流れ、上場の意味' },
+  ],
+  audit: [
+    { id: 'audg_fraud',  label: '不正はどう見つかるか', hint: '兆しと、見落とし' },
+    { id: 'audg_control', label: '内部統制',           hint: '仕組みで防ぐという考え方' },
+    { id: 'audg_role',   label: '監査の役割の変化',    hint: '数字だけを見る時代ではない' },
+    { id: 'audg_rule',   label: '会計基準と開示',      hint: '決まりが変わると何が変わるか' },
+  ],
   consult_con: [
     { id: 'ccong_market', label: '建設業界の動き',   hint: '受注、資材、価格' },
     { id: 'ccong_labor',  label: '人手不足と生産性', hint: '担い手をどう確保するか' },
