@@ -8,6 +8,7 @@
  *
  * id は教材に保存されるため、使い始めたら変えない。label は自由に変えられる。
  */
+import { industriesIn } from './industries.js'
 
 /** 記事のジャンル。Engoo のような「読み物」を想定している */
 export const READING_GENRES = [
@@ -22,11 +23,17 @@ export const READING_GENRES = [
 ]
 
 /**
- * 会話の場面。
+ * **どの仕事にもある場面**(2026-08 利用者の指定)。
  *
- * 「同じ内容を、どのくらいの丁寧さで話すか」が場面ごとに変わる。
- * 噂話で使う言い回しを会議で使うと浮くし、その逆も同じ。
- * 場面を変えて何本も作れることが、この機能の狙いである。
+ *   > どの業種でもあるような共通のシチュエーションはそれぞれに
+ *   > 入れておいてください。なぜなら例えば朝のミーティングでも
+ *   > 業界によって使われる単語やフレーズが異なるからです。
+ *
+ * **同じ「朝の進捗共有」でも、出てくる語は業界で変わる。**
+ * IT なら障害やリリース、製造なら歩留まりや段取りの話になる。
+ * だから業界に特化した場面だけに絞らず、**共通の場面も必ず並べる。**
+ *
+ * 分野を選んでいないときは、この一覧だけが出る。
  */
 export const DIALOGUE_SCENES = [
   { id: 'gossip',      label: '噂話・世間話', hint: '休憩中に「そういえば聞いた?」と話す調子' },
@@ -39,6 +46,26 @@ export const DIALOGUE_SCENES = [
   { id: 'onboarding',  label: '新しい人への説明', hint: '知らない相手に、噛み砕いて伝える' },
   { id: 'review',      label: '面談・振り返り', hint: '上司と部下。評価や今後の話' },
   { id: 'smalltalk',   label: '打ち合わせ前の雑談', hint: '本題に入る前の数十秒' },
+]
+
+/**
+ * **どの趣味にもある場面**(2026-08 利用者の指定)。
+ *
+ *   > 趣味についても同じ考え方を採用してください。
+ *
+ * 仕事の共通場面(会議・交渉)をそのまま趣味に出しても、
+ * その人が英語を使う場面にはならない。**趣味の側の共通形**を別に持つ。
+ * ここでも、同じ「誘う」でもゴルフとゲームでは出てくる語が違う。
+ */
+export const COMMON_HOBBY_SCENES = [
+  { id: 'hob_invite',  label: '誘う・約束する', hint: 'いつ、どこで、だれと' },
+  { id: 'hob_firsttime', label: 'はじめて会う人と', hint: 'どれくらいやっているか、きっかけ' },
+  { id: 'hob_impress', label: '感想を言い合う',  hint: '良かったところ、物足りないところ' },
+  { id: 'hob_recommend', label: 'おすすめを教える', hint: '相手の好みに合わせて選ぶ' },
+  { id: 'hob_gear',    label: '道具・買い物',    hint: '選び方、値段、使い心地' },
+  { id: 'hob_fail',    label: 'うまくいかない話', hint: 'failした話。笑いに変える言い方' },
+  { id: 'hob_chat',    label: 'メッセージのやりとり', hint: '短く、くだけた書き方' },
+  { id: 'hob_plan',    label: '次の予定を決める', hint: '候補を出して、すり合わせる' },
 ]
 
 /**
@@ -162,6 +189,15 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'con_safety',  label: '安全の指示',       hint: '事故を起こさないための声かけ' },
     { id: 'con_owner',   label: '施主への説明',     hint: '専門語を使わずに、見通しを話す' },
   ],
+  restaurant: [
+    { id: 'rst_seat',    label: '席への案内',     hint: '人数、席の希望、待ち時間' },
+    { id: 'rst_order',   label: '注文を取る',     hint: 'おすすめ、苦手なもの、焼き加減' },
+    { id: 'rst_menu',    label: 'メニューの説明', hint: '材料と作り方を、短い言葉で' },
+    { id: 'rst_kitchen', label: '厨房でのやりとり', hint: '短い指示と復唱。急ぎの伝え方' },
+    { id: 'rst_claim',   label: 'クレーム対応',   hint: 'まず受け止め、それから手を打つ' },
+    { id: 'rst_supply',  label: '仕入れ・業者と', hint: '数量、値段、納品の時間' },
+    { id: 'rst_reserve', label: '予約の電話',     hint: '日時、人数、席の希望を確かめる' },
+  ],
   hospitality: [
     { id: 'hos_checkin', label: 'チェックイン',   hint: '手続きと、部屋・設備の案内' },
     { id: 'hos_guide',   label: '道案内・おすすめ', hint: '行き方と、行く価値のある理由' },
@@ -232,6 +268,22 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'fod_host',    label: '人を招く',       hint: '献立の相談、アレルギーの確認' },
     { id: 'fod_recommend', label: '店をすすめる', hint: 'どんな店か、なぜ良いか' },
   ],
+  gourmet: [
+    { id: 'gou_find',   label: '店をさがす',     hint: '何が食べたいか、予算、場所' },
+    { id: 'gou_wait',   label: '行列・待ち時間', hint: '並ぶかどうか、店員に聞く' },
+    { id: 'gou_order',  label: '注文する',       hint: '名物、量、取り分け' },
+    { id: 'gou_taste',  label: '味の感想',       hint: '好き嫌いを、失礼にならずに' },
+    { id: 'gou_review', label: '写真とレビュー', hint: '人に伝わる書き方' },
+    { id: 'gou_hop',    label: 'はしごする',     hint: '次どこ行く?の相談' },
+  ],
+  wine: [
+    { id: 'win_shop',   label: 'お店で選ぶ',     hint: '予算と好みを伝えて、選んでもらう' },
+    { id: 'win_somm',   label: 'ソムリエと話す', hint: '料理に合わせて相談する' },
+    { id: 'win_taste',  label: 'テイスティング', hint: '香り、味わい、余韻の言い方' },
+    { id: 'win_pair',   label: '料理と合わせる', hint: 'なぜ合うのかを説明する' },
+    { id: 'win_winery', label: 'ワイナリー訪問', hint: '造り方を聞く、畑を歩く' },
+    { id: 'win_share',  label: '人にすすめる',   hint: '相手の好みから選んで渡す' },
+  ],
   movies: [
     { id: 'mov_pitch',   label: 'おすすめを伝える', hint: 'ネタバレせずに面白さを言う' },
     { id: 'mov_after',   label: '見たあとの感想',   hint: '好きな場面と、その理由' },
@@ -283,14 +335,29 @@ export const SCENES_BY_INDUSTRY = {
 }
 
 /**
- * その分野の場面を返す。**登録が無ければ「仕事全般」に落ちる**ので、
- * 分野を足して場面を足し忘れても壊れない。
+ * その分野の場面を返す。**特化した場面 + どこにでもある場面**(利用者の指定)。
+ *
+ *   > どの業種でもあるような共通のシチュエーションはそれぞれに
+ *   > 入れておいてください。
+ *
+ * **同じ「朝の進捗共有」でも、出てくる語は業界で変わる。**
+ * 特化したものだけに絞ると、いちばんよく使う場面が選べなくなる。
+ *
+ * 共通の側は**仕事と趣味で別**。仕事の「真面目な会議」を
+ * ゴルフに出しても、その人が英語を使う場面にはならない。
+ *
+ * 登録が無い分野でも、その分け方に合う共通の場面は出る。
  */
-export const scenesFor = (industry) => SCENES_BY_INDUSTRY[industry] ?? DIALOGUE_SCENES
+export const scenesFor = (industry) => {
+  const own = SCENES_BY_INDUSTRY[industry] ?? []
+  const isHobby = industriesIn('hobby').some((i) => i.id === industry)
+  return [...own, ...(isHobby ? COMMON_HOBBY_SCENES : DIALOGUE_SCENES)]
+}
 
 /** すべての場面(名前を引くときに使う)。**同じ表を2つ持たない** */
 const ALL_SCENES = [
   ...DIALOGUE_SCENES,
+  ...COMMON_HOBBY_SCENES,
   ...Object.values(SCENES_BY_INDUSTRY).flat(),
 ]
 

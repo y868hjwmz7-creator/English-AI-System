@@ -22,6 +22,7 @@ export const INDUSTRIES = [
   { id: 'it',            label: 'IT・技術',     hint: '開発、仕様説明、障害対応' },
   { id: 'medical',       label: '医療・介護',   hint: '患者対応、記録、多職種連携' },
   { id: 'hospitality',   label: '接客・観光',   hint: '案内、予約、トラブル対応' },
+  { id: 'restaurant',    label: '飲食',         hint: '接客、注文、厨房、仕入れ、クレーム対応' },
   { id: 'manufacturing', label: '製造',         hint: '工程説明、品質、安全' },
   { id: 'pharma',        label: '製薬',         hint: '治験、承認申請、品質管理、学術情報' },
   { id: 'trading',       label: '商社',         hint: '仕入交渉、見積、船積、与信、代理店' },
@@ -59,7 +60,9 @@ export const INDUSTRIES = [
      大変になる。足したくなったら、ここに1行書き足すだけでよい。 */
   { id: 'travel',   group: 'hobby', label: '旅行',            hint: '空港、ホテル、道を尋ねる、トラブル、現地の人との会話' },
   { id: 'golf',     group: 'hobby', label: 'ゴルフ',          hint: 'ラウンドの誘い、コース、スコア、道具、雑談' },
-  { id: 'food',     group: 'hobby', label: '料理・グルメ',    hint: 'レシピ、食材、店での注文、味やお店の感想' },
+  { id: 'food',     group: 'hobby', label: '料理',            hint: '自炊、レシピ、食材、キッチンでのやりとり' },
+  { id: 'gourmet',  group: 'hobby', label: '食べ歩き',        hint: '店さがし、行列、注文、感想、レビュー' },
+  { id: 'wine',     group: 'hobby', label: 'ワイン',          hint: '品種、産地、テイスティング、料理との組み合わせ' },
   { id: 'movies',   group: 'hobby', label: '映画・ドラマ',    hint: 'あらすじ、感想、俳優、配信サービス、おすすめ' },
   { id: 'watching', group: 'hobby', label: 'スポーツ観戦',    hint: '試合の展開、ルール、選手、応援、結果の話' },
   { id: 'listening', group: 'hobby', label: '音楽・ライブ',   hint: '好きな曲、ライブ、フェス、おすすめの伝え方' },

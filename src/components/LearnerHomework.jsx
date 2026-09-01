@@ -166,35 +166,62 @@ export default function LearnerHomework({ me = null }) {
           <section key={label} className="stack">
             <h3 className="section-title">{label}({list.length})</h3>
             {list.map((a) => (
-              <div key={a.id} className={`card homework-card${a.learner_done_at ? ' is-done' : ''}`}>
-                {/* 見出しの行そのものを押して開く。以前は下の小さなボタンでしか
-                    開けず、並んでいるだけの一覧に見えていた(2026-08 の指摘)。
-                    ひらく・とじるの印(▸ ▾)も出して、押せることを示す。 */}
-                <button
-                  type="button"
-                  className="homework-open no-print"
-                  aria-expanded={openId === a.id}
-                  onClick={() => { setOpenId(openId === a.id ? null : a.id); setQrOf(null) }}
-                >
-                  <span className="homework-open-mark">{openId === a.id ? '▾' : '▸'}</span>
-                  <span className="homework-open-body">
+              <div key={a.id}
+                   className={`card material-card homework-card${
+                     a.learner_done_at ? ' is-done' : ''}`}>
+                {/* **トレーナー側の教材カードと同じ形にする**(2026-08 利用者の指定)。
+                      > ゲストエンド側の教材リストのUIデザインを
+                      > トレーナーエンド側と統一してください。
+
+                    押せることは、**押す前から**分かるようにする
+                    (グレーの囲み +「中身を見る」の行・CLAUDE.md)。
+                    中の並びも同じ … 日付と状態 → 見出し → カテゴリー名と日付
+                    → 中身を見る。 */}
+                <div className="material-head no-print">
+                  <div className="material-open" role="button" tabIndex={0}
+                       aria-expanded={openId === a.id}
+                       onClick={() => { setOpenId(openId === a.id ? null : a.id); setQrOf(null) }}
+                       onKeyDown={(e) => {
+                         if (e.key !== 'Enter' && e.key !== ' ') return
+                         e.preventDefault()
+                         setOpenId(openId === a.id ? null : a.id)
+                         setQrOf(null)
+                       }}>
+                    <div className="past-head">
+                      <span className="past-date">{formatDate(a.assigned_at)}</span>
+                      <span className={`badge ${a.learner_done_at
+                        ? 'badge--admin' : 'badge--warn'}`}>
+                        {a.learner_done_at ? 'やった' : 'まだ'}
+                      </span>
+                      {a.due_on && (
+                        <span className="past-date">次のレッスン {a.due_on}</span>
+                      )}
+                    </div>
+                    {/* **弱点タグを2回出さない。** 弱点は教材名の中にすでにあり、
+                        `MaterialTitle` が出す(トレーナー側と同じ決まり) */}
                     <MaterialTitle
                       title={a.material?.title ?? '(教材が見つかりません)'}
-                      as="span" size="row"
+                      headline={a.material?.headline}
+                      hideDate
+                      weakness={(a.material?.tagIds ?? []).map(weaknessTagLabel).join(' + ')}
                       fallbackTags={a.material
-                        ? [cefrLabel(a.material.level), kindLabel(a.material.kind)] : []}
+                        ? [(a.material.tagIds ?? []).map(weaknessTagLabel).join(' + '),
+                           cefrLabel(a.material.level)] : []}
                     />
-                    <span className="card-hint">
-                      {kindLabel(a.material?.kind)}
-                      {a.material?.itemCount ? ` / 全 ${a.material.itemCount} 問` : ''}
-                      {' / 共有 '}{formatDate(a.assigned_at)}
-                      {a.due_on && ` / 次のレッスン ${a.due_on}`}
+                    <div className="material-meta">
+                      <span className="material-kind">{kindLabel(a.material?.kind)}</span>
+                      <span className="material-when">
+                        {a.material?.itemCount ? `全 ${a.material.itemCount} 問` : ''}
+                      </span>
+                    </div>
+                    <span className="material-open-cta">
+                      <span className="material-open-mark" aria-hidden="true">
+                        {openId === a.id ? '▾' : '▸'}
+                      </span>
+                      {openId === a.id ? '閉じる' : '中身を見る・印刷する'}
                     </span>
-                  </span>
-                  <span className={`badge ${a.learner_done_at ? 'badge--admin' : 'badge--warn'}`}>
-                    {a.learner_done_at ? 'やった' : 'まだ'}
-                  </span>
-                </button>
+                  </div>
+                </div>
 
                 {a.material?.instruction_ja && (
                   <TeachingNote text={a.material.instruction_ja} title="やること" tone="todo" defaultOpen />

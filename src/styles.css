@@ -2952,18 +2952,10 @@ html { -webkit-text-size-adjust: 100%; }
 /* ── 宿題の行(押して開く)────────────────────────────────
    以前は下の小さなボタンでしか開けず、並んでいるだけの一覧に見えていた。
    行そのものを押せるようにし、印(▸ ▾)で押せることを示す。 */
-.homework-open {
-  display: flex; width: 100%; gap: 10px; align-items: flex-start;
-  padding: 4px 0; border: none; background: none; cursor: pointer;
-  text-align: left; font: inherit; color: inherit;
-  border-radius: 8px;
-}
-.homework-open:hover { background: var(--surface-2); }
-.homework-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.homework-open-mark { color: var(--text-muted); font-size: 14px; padding-top: 3px; }
-.homework-open-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.homework-open-title { font-size: 16px; font-weight: 600; line-height: 1.5; }
-.homework-open .muted, .homework-open .card-hint { font-size: 13px; }
+/* 宿題のカードは、**トレーナー側の教材カードと同じ決まりを使う**
+   (2026-08 利用者の指定)。`.material-card` / `.material-open` /
+   `.material-open-cta` がそれである。**同じ見た目を2か所に書かない。**
+   ここで持つのは「やったものは少し薄くする」だけ */
 
 /* ── 教材の見出し ────────────────────────────────────────
    見出しは弱点だけ。レベル・業界・ゲスト名は小さな札にして下に並べる。
