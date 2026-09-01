@@ -50,7 +50,6 @@ export default function LearnerHomework({ me = null }) {
   const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [openId, setOpenId] = useState(null)
   const [lessonOf, setLessonOf] = useState(null)   // レッスン表示で開いている教材
   /**
    * **いま紙に出している宿題**(null なら印刷していない)。
@@ -110,22 +109,24 @@ export default function LearnerHomework({ me = null }) {
   }, [printId])
 
   /**
-   * **開いた時点で、まだ控えに無い語を裏で引いておく**(2026-08 実機)。
+   * **「大きく表示する」で開いたら、まだ控えに無い語を裏で引いておく**
+   * (2026-08 実機)。
    *
-   * 先読みは「本文の練習」(`PassagePractice`)にしか入っておらず、
-   * 宿題を開いてすぐ語に触れると、はじめての語は3〜5秒待たされていた。
-   * 英文が出る場所は4つある(CLAUDE.md)。ここもその1つである。
+   *   > 単語の意味ですが、やはり初めて調べた時に3-5秒ほどかかるので
+   *   > レッスンの時間が無駄になります。
+   *
+   * カードの開閉をやめたので(2026-09)、拾うのは**開いたとき**にした。
+   * 語に触れるのは、そこから先である。
    */
   useEffect(() => {
-    const a = assignments.find((x) => x.id === openId)
-    const m = a?.material
+    const m = lessonOf
     if (!m) return
     const texts = (m.sections ?? []).flatMap((sec) => (sec.items ?? [])
       .map((it) => it.prompt_en || it.question || '')
       .filter(Boolean)
       .map((text) => ({ text })))
     prefetchGlosses(texts, { level: m.level })
-  }, [openId, assignments])
+  }, [lessonOf])
 
   /**
    * **取り組んだことを、こちらで記録する**(2026-09 利用者の指定)。
@@ -223,14 +224,10 @@ export default function LearnerHomework({ me = null }) {
                     中の並びも同じ … 日付と状態 → 見出し → カテゴリー名と日付
                     → 中身を見る。 */}
                 <div className="material-head no-print">
-                  <div className="material-open" role="button" tabIndex={0}
-                       aria-expanded={openId === a.id}
-                       onClick={() => setOpenId(openId === a.id ? null : a.id)}
-                       onKeyDown={(e) => {
-                         if (e.key !== 'Enter' && e.key !== ' ') return
-                         e.preventDefault()
-                         setOpenId(openId === a.id ? null : a.id)
-                       }}>
+                  {/* **開く・閉じるはやめた**(2026-09 利用者の指定)。
+                      押すものははじめから出ており、囲みはただの見出しである。
+                      **教材が出るところは全部同じ形にする** */}
+                  <div className="material-open">
                     <div className="past-head">
                       <span className="past-date">{formatDate(a.assigned_at)}</span>
                       <span className={`badge ${a.learner_done_at
@@ -258,19 +255,6 @@ export default function LearnerHomework({ me = null }) {
                         {a.material?.itemCount ? `全 ${a.material.itemCount} 問` : ''}
                       </span>
                     </div>
-                    {/* **「中身を見る・印刷する」の行は置かない**
-                        (2026-09 利用者の指定)。
-
-                          > 教材の欄の「中身を確認する」ボタンは不必要です。
-
-                        開いたときは下に「閉じる」があり、
-                        囲みそのものを押しても開け閉めできる。
-                        **同じことをするものを2つ見せない。**
-                        押せることは、▸ / ▾ の印と、はじめから出ている
-                        グレーの囲みが示す(CLAUDE.md)。 */}
-                    <span className="material-open-mark" aria-hidden="true">
-                      {openId === a.id ? '▾' : '▸'}
-                    </span>
                   </div>
                 </div>
 
@@ -278,8 +262,7 @@ export default function LearnerHomework({ me = null }) {
                   <TeachingNote text={a.material.instruction_ja} title="やること" tone="todo" defaultOpen />
                 )}
 
-                {openId === a.id ? (
-                  <div id={`homework-${a.id}`}>
+                <div id={`homework-${a.id}`}>
                     <div className="print-only print-head">
                       <MaterialTitle title={a.material?.title} headline={a.material?.headline}
                                      as="strong" size="sheet" />
@@ -420,11 +403,7 @@ export default function LearnerHomework({ me = null }) {
                         </section>
                       )
                     })}
-                    {/* 「閉じる」は置かない(2026-09 利用者の指定)。
-                        閉じるのは、上のグレーの囲みをもう一度押す。
-                        教材が出るところは全部同じ形にする */}
-                  </div>
-                ) : null}
+                </div>
 
                 {/* **「やった」のボタンは置かない**(2026-09 利用者の指定)。
                     開いた時点で記録されるので、押してもらう必要がない。

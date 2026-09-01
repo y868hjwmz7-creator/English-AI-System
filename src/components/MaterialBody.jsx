@@ -1,5 +1,5 @@
 /**
- * 教材の**中身**(演習と設問)。開いたときに出る部分。
+ * 教材の**中身**(演習と設問)。**紙に出すためだけに描く。**
  *
  * 【なぜ部品にしたか】(2026-08 利用者の指定)
  *
@@ -13,6 +13,14 @@
  *   `TrainerMaterials` にあったものをそのまま移してある。
  *   **寄せたついでに直さない**(共通ルール)。
  *
+ * 【画面には出さない】(2026-09 利用者の指定)
+ *   > わざわざ開いて「印刷・PDFで保存」のボタンを出す必要がない、
+ *   > 閉じる・開く機能を排除
+ *
+ *   カードの開閉をやめたので、中身は**印刷する一瞬だけ**描く。
+ *   ボタン(印刷・共有・記録を消す)は**呼ぶ側のカードにある。**
+ *   ここに置くと、開かないと押せないものに戻ってしまう。
+ *
  * 【印刷】
  *   `id="material-<教材id>"` を持たせてあるので、呼ぶ側は
  *   `printElement(document.getElementById(...))` で紙に出せる。
@@ -23,36 +31,20 @@ import SpeakButton from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
-import { PrintIcon } from './Icons.jsx'
-import { printElement } from '../lib/print.js'
 import { cefrLabel } from '../data/cefr.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { industryLabel } from '../data/industries.js'
 import { countLabel, exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
 import { kindLabel } from '../lib/materials.js'
-import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
-import { useState } from 'react'
 import QuickResponseSheet from './QuickResponseSheet.jsx'
 
 export default function MaterialBody({
   material: m,
   wordStatuses = null,
   onMarkWord = null,
-  /** 練習の記録を消すボタンを出すか。**トレーナーの教材だけ**(利用者の指定) */
-  showReset = false,
-  /** 呼ぶ側の事情で出す知らせ(区切りの訳を作っています… など) */
-  busyNote = null,
-  errorNote = null,
 }) {
-  /**
-   * **教材ごとに、練習の途中経過を消す**(2026-08 利用者の指定)。
-   * **押し間違いを防ぐため2段**にする(1回目で「本当に消す」に変わる)。
-   */
-  const [resetAsk, setResetAsk] = useState(false)
-  const [resetDone, setResetDone] = useState(null)
-
   if (!m) return null
   const sections = m.sections ?? []
   const domId = `material-${m.id}`
@@ -71,58 +63,6 @@ export default function MaterialBody({
           {(m.tagIds ?? []).length ? ` / ${m.tagIds.map(weaknessTagLabel).join('・')}` : ''}
         </div>
       </div>
-      {/* **「セッションで使う」はここに置かない。**
-          開いていない行にも出しているので、開くと2つ並んでしまう。
-          **同じことをするボタンを2つ見せない**(CLAUDE.md)。 */}
-      <div className="btn-row no-print">
-        <button type="button" className="btn btn--small"
-                onClick={() => printElement(document.getElementById(domId))}>
-          <PrintIcon />印刷 / PDFで保存
-        </button>
-        {busyNote && <span className="muted">{busyNote}</span>}
-        {/* **やりかけが残っているときだけ出す。**
-            効かないボタンを出さない(CLAUDE.md) */}
-        {showReset && hasMaterialProgress(m.id) && (
-          <button type="button"
-                  className={`btn btn--small ${resetAsk ? 'btn--quiet' : 'btn--ghost'}`}
-                  onClick={() => {
-                    if (!resetAsk) { setResetAsk(true); return }
-                    const n = clearMaterialProgress(m.id)
-                    setResetAsk(false)
-                    setResetDone(n)
-                  }}>
-            {resetAsk ? '本当に消す' : 'この教材の練習の記録を消す'}
-          </button>
-        )}
-        {resetAsk && (
-          <button type="button" className="btn btn--ghost btn--small"
-                  onClick={() => setResetAsk(false)}>
-            やめる
-          </button>
-        )}
-      </div>
-      {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
-          何が消えて、何が消えていないかまで書く */}
-      {resetAsk && (
-        <p className="card-hint no-print">
-          この端末に残っている、この教材の
-          <strong>スラッシュの区切り・ディクテーションの書きかけ・
-          Quick Response の進み具合</strong>を消します。
-          <strong>単語帳に登録した語は消えません。</strong>
-          ほかの教材にも触れません。
-        </p>
-      )}
-      {resetDone != null && (
-        <p className="notice notice--ok no-print">
-          {resetDone > 0
-            ? `練習の記録を消しました(${resetDone} 件)。`
-            : '消すものはありませんでした。'}
-          単語帳に登録した語は消えていません。
-        </p>
-      )}
-      {/* **失敗したときだけ出す。** 裏で作っているので、
-          うまくいったときは訳が出るようになるだけでよい */}
-      {errorNote && <p className="notice notice--warn no-print">{errorNote}</p>}
       {/* **演習のタブは置かない**(2026-09 利用者の指定)。
             > 赤で囲った部分は必要ないです。
             > 教材のあるところ全てで適用してください。(ゲストエンドでも同じ)

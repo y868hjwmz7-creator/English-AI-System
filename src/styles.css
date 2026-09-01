@@ -1568,6 +1568,12 @@ html { -webkit-text-size-adjust: 100%; }
 .editor-toggle { padding: 8px 0; }
 .editor-toggle .card-hint { margin-bottom: 8px; }
 
+/* 紙に出すためだけの入れ物(2026-09)。
+   カードの開閉をやめたので、中身は**印刷する一瞬だけ**描く。
+   画面では消しておくが、`@media print` の側が `.print-path` を
+   `display: block !important` に戻すので、紙にはちゃんと出る */
+.print-holder { display: none; }
+
 /* 教材の中身。**囲みは付けない**(2026-09)。
    演習のタブと設問の一覧を出さなくなったので、中に残るのはボタンだけ。
    枠だけが空っぽで残ると、**中身が抜けているように見える。**

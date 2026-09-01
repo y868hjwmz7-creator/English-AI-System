@@ -15,7 +15,7 @@ import LessonView from './LessonView.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
 import SearchBar from './SearchBar.jsx'
-import { ScreenIcon } from './Icons.jsx'
+import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
@@ -29,6 +29,8 @@ import {
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
+import { printElement } from '../lib/print.js'
+import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
@@ -40,7 +42,11 @@ export default function TrainerMaterials({ me }) {
   const [genre, setGenre] = useState('')       // 記事のジャンル
   const [scene, setScene] = useState('')       // 会話の場面
   const [sort, setSort] = useState('new')      // 並び順
-  const [openId, setOpenId] = useState(null)   // 中身を開いている教材
+  /* **開く・閉じるはやめた**(2026-09 利用者の指定)。
+     いま持つのは「紙に出している教材」と、記録を消すときの2段だけ */
+  const [printId, setPrintId] = useState(null)   // 紙に出している教材
+  const [resetAsk, setResetAsk] = useState(null) // 「本当に消す」に変わっている教材
+  const [resetDone, setResetDone] = useState(null)
   // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
   // (2026-08 利用者の指定)。担当ゲストの記録には触れない
   const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
@@ -135,18 +141,36 @@ export default function TrainerMaterials({ me }) {
    *   1つの教材につき**この画面を開いているあいだ1回だけ。**
    *   失敗しても繰り返さない。残高が切れているときに、開くたび呼び続けない。
    */
+  /**
+   * **紙に出す。** 中身は印刷する一瞬だけ描いてあるので、
+   * 描き終わってから `printElement` を呼ぶ(`useEffect`)。
+   * ボタンの中で直接呼ぶと、描き替わる前の画面が紙になる(CLAUDE.md)。
+   */
+  useEffect(() => {
+    if (!printId) return undefined
+    const el = document.getElementById(`material-${printId}`)
+    if (!el) { setPrintId(null); return undefined }
+    const done = () => setPrintId(null)
+    window.addEventListener('afterprint', done)
+    const timer = window.setTimeout(done, 60000)
+    printElement(el)
+    return () => {
+      window.removeEventListener('afterprint', done)
+      window.clearTimeout(timer)
+    }
+  }, [printId])
+
   const triedJa = useRef(new Set())
   useEffect(() => {
-    // **開いたときと、セッションで使うときの両方で拾う**(2026-08 実機)。
-    // 行を開かずに「セッションで使う」を押す使い方だと、
-    // 作り直しの機会が一度も来ず、**古い訳のまま出ていた。**
-    const id = openId || lessonOf?.id
+    // **開閉が無くなったので、使うとき(セッションで使う・印刷)に拾う**
+    // (2026-09)。以前は「開いたとき」も見ていたが、開くこと自体が無くなった
+    const id = printId || lessonOf?.id
     if (!id) return
     const m = materials.find((x) => x.id === id) ?? (lessonOf?.id === id ? lessonOf : null)
     if (!m || !needsJa(m) || triedJa.current.has(m.id)) return
     triedJa.current.add(m.id)
     makeChunkJa(m)
-  }, [openId, lessonOf, materials])
+  }, [printId, lessonOf, materials])
 
   /**
    * **中身を開いた時点で、まだ控えに無い語を裏で引いておく**(2026-08 実機)。
@@ -162,14 +186,17 @@ export default function TrainerMaterials({ me }) {
    * ここでは開いた教材を渡すだけでよい。
    */
   useEffect(() => {
-    const m = materials.find((x) => x.id === openId)
+    // **開閉をやめたので、「セッションで使う」で開いたときに拾う**(2026-09)。
+    // `LessonView` の中でも先読みしているが、ここで先に始めておくと、
+    // 開いた直後に触れた語でも待たされない
+    const m = materials.find((x) => x.id === lessonOf?.id)
     if (!m) return
     const texts = m.sections.flatMap((sec) => sec.items
       .map((it) => it.prompt_en || it.question || '')
       .filter(Boolean)
       .map((text) => ({ text })))
     prefetchGlosses(texts, { level: m.level })
-  }, [openId, materials])
+  }, [lessonOf, materials])
 
   // 訳を作り直したら、**開いたままのレッスン表示にも反映する。**
   // 反映しないと、閉じて開き直すまで古い訳のままになる(2026-08)
@@ -440,16 +467,15 @@ export default function TrainerMaterials({ me }) {
                   そのうえで、**何が起きるかを言葉で書く**
                   (「▸ 中身を見る・印刷する」)。囲みだけでは、
                   押すと何が出るのかまでは分からない。 */}
+              {/* **開く・閉じるはやめた**(2026-09 利用者の指定)。
+                    > わざわざ開いて「印刷・PDFで保存」のボタンを出す
+                    > 必要がない、閉じる・開く機能を排除
+
+                  開いても出るのは印刷のボタンだけになっていたので、
+                  **開くこと自体が回り道**だった。いまはボタンを
+                  はじめから出し、囲みは**ただの見出し**にしてある。 */}
               <div className="material-head">
-                <div className="material-open" role="button" tabIndex={0}
-                     aria-expanded={openId === m.id}
-                     aria-controls={`material-${m.id}`}
-                     onClick={() => setOpenId(openId === m.id ? null : m.id)}
-                     onKeyDown={(e) => {
-                       if (e.key !== 'Enter' && e.key !== ' ') return
-                       e.preventDefault()
-                       setOpenId(openId === m.id ? null : m.id)
-                     }}>
+                <div className="material-open">
                   {/* 見出しは弱点だけ。レベル・業界は小さな札。
 
                       **弱点を2回出さない**(2026-08 利用者の指定)。
@@ -479,15 +505,6 @@ export default function TrainerMaterials({ me }) {
                     </span>
                     <span className="material-when">{parseMaterialTitle(m.title).date}</span>
                   </div>
-                  {/* **「中身を見る・印刷する」の行は置かない**
-                      (2026-09 利用者の指定)。
-                        > 「中身を見る」ボタン自体不必要です。
-                      **教材が出るところは全部同じ形にする。**
-                      押せることは、はじめから出ているグレーの囲みと
-                      ▸ / ▾ の印が示す。閉じるのも、同じ囲みを押す */}
-                  <span className="material-open-mark" aria-hidden="true">
-                    {openId === m.id ? '▾' : '▸'}
-                  </span>
                 </div>
               </div>
 
@@ -521,19 +538,67 @@ export default function TrainerMaterials({ me }) {
                 ))}
               </p>
 
-              {/* **中身は部品にしてある**(`MaterialBody.jsx`)。
-                  ゲストの情報の中の「過去の宿題」からも同じものを開くので、
-                  **同じ見た目を2か所に書き写さない**(2026-08 利用者の指定)。 */}
-              {openId === m.id && (
-                <MaterialBody
-                  material={m}
-                  wordStatuses={wordStatuses}
-                  /* どの教材で会ったかを添える(0024) */
-                  onMarkWord={markIn(markWord, m.id)}
-                  showReset
-                  busyNote={makingJa === m.id ? '区切りの訳を作っています…' : null}
-                  errorNote={jaDone[m.id]?.ng ? jaDone[m.id].text : null}
-                />
+              {/* **押すものは、はじめから出す**(2026-09 利用者の指定)。
+                  印刷の右に共有を置く。**強い見た目(青)は
+                  「セッションで使う」に譲る**(2026-08 の指定は生きている) */}
+              <div className="btn-row">
+                <button type="button" className="btn btn--small"
+                        onClick={() => setPrintId(m.id)}>
+                  <PrintIcon />印刷 / PDFで保存
+                </button>
+                {assigningId !== m.id && (
+                  <button type="button" className="btn btn--small btn--quiet"
+                          onClick={() => startAssign(m.id)}>
+                    この教材をゲストと共有する
+                  </button>
+                )}
+                {/* **やりかけが残っているときだけ出す。**
+                    効かないボタンを出さない(CLAUDE.md) */}
+                {hasMaterialProgress(m.id) && (
+                  <button type="button"
+                          className={`btn btn--small ${resetAsk === m.id ? 'btn--quiet' : 'btn--ghost'}`}
+                          onClick={() => {
+                            if (resetAsk !== m.id) { setResetAsk(m.id); return }
+                            const n = clearMaterialProgress(m.id)
+                            setResetAsk(null)
+                            setResetDone({ id: m.id, n })
+                          }}>
+                    {resetAsk === m.id ? '本当に消す' : '練習の記録を消す'}
+                  </button>
+                )}
+                {makingJa === m.id && <span className="muted">区切りの訳を作っています…</span>}
+              </div>
+              {/* **押した場所のすぐ下に出す**(CLAUDE.md) */}
+              {resetAsk === m.id && (
+                <p className="card-hint">
+                  この端末に残っている、この教材の
+                  <strong>スラッシュの区切り・ディクテーションの書きかけ・
+                  Quick Response の進み具合</strong>を消します。
+                  <strong>単語帳に登録した語は消えません。</strong>
+                </p>
+              )}
+              {resetDone?.id === m.id && (
+                <p className="notice notice--ok">
+                  {resetDone.n > 0
+                    ? `練習の記録を消しました(${resetDone.n} 件)。`
+                    : '消すものはありませんでした。'}
+                </p>
+              )}
+              {jaDone[m.id]?.ng && <p className="notice notice--warn">{jaDone[m.id].text}</p>}
+
+              {/* **中身は、紙に出す一瞬だけ描く。**
+                  描かないでいると、見出しだけの紙が出る(2026-08 実機)。
+                  かといって35件ぶんをいつも描くと、語は1つずつ
+                  ボタンで描いているので画面が重くなる */}
+              {printId === m.id && (
+                <div className="print-holder">
+                  <MaterialBody
+                    material={m}
+                    wordStatuses={wordStatuses}
+                    /* どの教材で会ったかを添える(0024) */
+                    onMarkWord={markIn(markWord, m.id)}
+                  />
+                </div>
               )}
 
               {/* **「中身を見る」があった場所には「セッションで使う」を置く**
@@ -585,15 +650,7 @@ export default function TrainerMaterials({ me }) {
                     </button>
                   </div>
                 </div>
-              ) : (
-                /* **共有は、一段うしろに置く**(2026-08 利用者の指定)。
-                   小さく、灰色の塗りつぶし(`btn--quiet`)にする。
-                   青の塗りつぶしは「セッションで使う」に譲った */
-                <button type="button" className="btn btn--small btn--quiet"
-                        onClick={() => startAssign(m.id)}>
-                  この教材をゲストと共有する
-                </button>
-              )}
+              ) : null}
             </div>
           ))}
         </>

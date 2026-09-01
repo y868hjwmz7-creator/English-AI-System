@@ -24,9 +24,10 @@ import LearnerFiles from './LearnerFiles.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
 import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
-import { ScreenIcon } from './Icons.jsx'
+import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
+import { printElement } from '../lib/print.js'
 
 const STATUS = {
   active:   { label: '受講中', cls: 'badge--admin' },
@@ -75,9 +76,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
    * (id と数だけ)ので、開いた教材だけ `loadMaterial()` で読み、
    * ここに控える。**同じ教材を二度読まない。**
    */
-  const [openHw, setOpenHw] = useState(null)      // 開いている宿題の id
-  const [bodies, setBodies] = useState({})        // 教材id → 読んだ中身
-  const [bodyBusy, setBodyBusy] = useState(null)  // いま読んでいる教材id
+  const [printHwId, setPrintHwId] = useState(null) // 紙に出している宿題の id
+  const [bodies, setBodies] = useState({})         // 教材id → 読んだ中身
+  const [bodyBusy, setBodyBusy] = useState(null)   // いま読んでいる教材id
   // 絞り込みの欄を開いているか。**教材の欄とは別に覚える**(別の画面の別の欄)
   const [pastOpen, setPastOpen] = useState(loadPastFilterOpen)
   // 過去の宿題の絞り込み。
@@ -167,20 +168,39 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   }
 
   /**
-   * 宿題の中身を開く。**開いた教材だけ読む。**
-   * 一覧は軽くするため中身を持っていない(数だけ)。
+   * 宿題を紙に出す。**中身は、押されてから読む。**
+   * 一覧は軽くするため中身を持っていない(id と数だけ)。
+   * 読み終えてから描き、描き終えてから `printElement` を呼ぶ(下の見張り)。
    */
-  const toggleHw = async (a) => {
-    if (openHw === a.id) { setOpenHw(null); return }
-    setOpenHw(a.id)
+  const printHw = async (a) => {
     const mid = a.material?.id
-    if (!mid || bodies[mid]) return
-    setBodyBusy(mid)
-    const { data, error: e } = await loadMaterial(mid)
-    setBodyBusy(null)
-    if (e) { setError(e); return }
-    setBodies((x) => ({ ...x, [mid]: data }))
+    if (!mid) return
+    if (!bodies[mid]) {
+      setBodyBusy(mid)
+      const { data, error: e } = await loadMaterial(mid)
+      setBodyBusy(null)
+      if (e) { setError(e); return }
+      setBodies((x) => ({ ...x, [mid]: data }))
+    }
+    setPrintHwId(a.id)
   }
+
+  /** 描き終わってから紙に出す。ボタンの中で呼ぶと、前の画面が紙になる */
+  useEffect(() => {
+    if (!printHwId) return undefined
+    const a = assignments.find((x) => x.id === printHwId)
+    const el = a?.material?.id
+      ? document.getElementById(`material-${a.material.id}`) : null
+    if (!el) { setPrintHwId(null); return undefined }
+    const done = () => setPrintHwId(null)
+    window.addEventListener('afterprint', done)
+    const timer = window.setTimeout(done, 60000)
+    printElement(el)
+    return () => {
+      window.removeEventListener('afterprint', done)
+      window.clearTimeout(timer)
+    }
+  }, [printHwId, assignments])
 
   const openDetail = async (id, tab = 'homework') => {
     setOpenId(id)
@@ -192,7 +212,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setPastFilter({ day: null, field: null, topic: null, tag: null })
     setPastDone('all')
     setPastKeyword('')
-    setOpenHw(null)
+    setPrintHwId(null)
     setMessage(null)
     setForm({ testType: 'toeic', score: '', takenOn: today() })
     setDetailBusy(true)
@@ -699,23 +719,15 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     )}
 
                     {/* **教材のカードと同じ形にする**(2026-08 利用者の指定)。
-                        グレーの囲みを押すと中身が開き、印刷もできる。
-                        中身は `MaterialBody` — 教材の画面と同じ部品である。 */}
+                        **開く・閉じるはやめた**(2026-09 利用者の指定)。
+                        押すものははじめから出ており、囲みはただの見出しである。 */}
                     {shown.map((a) => {
                       const m = a.material
-                      const open = openHw === a.id
                       const body = m ? bodies[m.id] : null
                       return (
                         <div key={a.id} className="card material-card">
                           <div className="material-head">
-                            <div className="material-open" role="button" tabIndex={0}
-                                 aria-expanded={open}
-                                 onClick={() => m && toggleHw(a)}
-                                 onKeyDown={(e) => {
-                                   if (e.key !== 'Enter' && e.key !== ' ') return
-                                   e.preventDefault()
-                                   if (m) toggleHw(a)
-                                 }}>
+                            <div className="material-open">
                               {/* 出した日と、取り組みの状態。**いちばん上に置く**。
 
                                   **いつ取り組んだかも出す**(2026-09 利用者の指定)。
@@ -756,17 +768,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                   {parseMaterialTitle(m?.title ?? '').date}
                                 </span>
                               </div>
-                              {/* 「中身を見る・印刷する」の行は置かない
-                                  (2026-09 利用者の指定)。教材が出るところは
-                                  全部同じ形にする。**読み込み中だけは言葉で出す** */}
-                              {m && (
-                                bodyBusy === m.id
-                                  ? <span className="material-open-cta">開いています…</span>
-                                  : (
-                                    <span className="material-open-mark" aria-hidden="true">
-                                      {open ? '▾' : '▸'}
-                                    </span>
-                                  )
+                              {/* **開く・閉じるはやめた**(2026-09 利用者の指定)。
+                                  教材が出るところは全部同じ形にする。
+                                  **読み込み中だけは言葉で出す** */}
+                              {bodyBusy === m?.id && (
+                                <span className="material-open-cta">開いています…</span>
                               )}
                             </div>
                           </div>
@@ -782,26 +788,40 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                             </span>
                           </p>
 
-                          {open && body && (
-                            <MaterialBody
-                              material={body}
-                              wordStatuses={wordStatuses}
-                              /* **レッスンで付けた語は、そのゲストの単語帳へ**(0025) */
-                              onMarkWord={markIn(markWord, body.id, openId)}
-                            />
+                          {/* **押すものは、はじめから出す**(2026-09 利用者の指定)。
+                              教材が出るところは全部同じ形にする。
+                              印刷は中身を読んでからなので、押すと少し待つ */}
+                          {m && (
+                            <div className="btn-row">
+                              <button type="button" className="btn btn--small"
+                                      disabled={bodyBusy === m.id}
+                                      onClick={() => printHw(a)}>
+                                <PrintIcon />
+                                {bodyBusy === m.id ? '開いています…' : '印刷 / PDFで保存'}
+                              </button>
+                              {/* ここから開けば、**このゲストの教材しか映らない。**
+                                  「教材」タブから探すと、他のゲストに出したものも
+                                  画面に並んでしまう(画面共有では見せたくない) */}
+                              <button type="button" className="btn btn--primary"
+                                      disabled={lessonBusy === m.id}
+                                      onClick={() => openLesson(m.id)}>
+                                <ScreenIcon />
+                                {lessonBusy === m.id
+                                  ? '開いています…' : 'セッションで使う(大きく表示)'}
+                              </button>
+                            </div>
                           )}
 
-                          {/* ここから開けば、**このゲストの教材しか映らない。**
-                              「教材」タブから探すと、他のゲストに出したものも
-                              画面に並んでしまう(画面共有では見せたくない) */}
-                          {m && (
-                            <button type="button" className="btn btn--primary"
-                                    disabled={lessonBusy === m.id}
-                                    onClick={() => openLesson(m.id)}>
-                              <ScreenIcon />
-                              {lessonBusy === m.id
-                                ? '開いています…' : 'セッションで使う(大きく表示)'}
-                            </button>
+                          {/* **中身は、紙に出す一瞬だけ描く** */}
+                          {printHwId === a.id && body && (
+                            <div className="print-holder">
+                              <MaterialBody
+                                material={body}
+                                wordStatuses={wordStatuses}
+                                /* **レッスンで付けた語は、そのゲストの単語帳へ**(0025) */
+                                onMarkWord={markIn(markWord, body.id, openId)}
+                              />
+                            </div>
                           )}
                         </div>
                       )
