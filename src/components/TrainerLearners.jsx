@@ -24,6 +24,7 @@ import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import LearnerWordbook from './LearnerWordbook.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
+import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
 import { ScreenIcon } from './Icons.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 
@@ -83,7 +84,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   // 過去の宿題の絞り込み。
   // **出すのは、そのゲストの宿題に実際に含まれる弱点だけ。**
   // 39個の弱点タグを全部並べても、ほとんどが0件で選びようがない。
-  const [pastTags, setPastTags] = useState([])
+  /* 苦手項目・分野・場面・日付でも絞る(2026-08 利用者の指定)。
+     **判断は `HomeworkFilter` 1か所**に置き、ここは値を持つだけ */
+  const [pastFilter, setPastFilter] = useState({
+    day: null, field: null, topic: null, tag: null,
+  })
   const [pastDone, setPastDone] = useState('all')   // all | done | todo
   const [pastSort, setPastSort] = useState('new')   // new | old
   // **名前で引く**(2026-08 利用者の指定。教材の画面と同じ形にする)。
@@ -181,7 +186,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     window.scrollTo({ top: 0, behavior: 'auto' })
     setDetailTab(tab)
     setMustUse([])
-    setPastTags([])
+    setPastFilter({ day: null, field: null, topic: null, tag: null })
     setPastDone('all')
     setPastKeyword('')
     setOpenHw(null)
@@ -506,22 +511,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
               <div className="learner-detail">
 
                 {detailTab === 'homework' && (() => {
-                  // 弱点ごとの件数。0件の弱点は出さない
-                  const counts = new Map()
-                  for (const a of assignments) {
-                    for (const t of a.material?.tagIds ?? []) {
-                      counts.set(t, (counts.get(t) ?? 0) + 1)
-                    }
-                  }
-                  const tagList = [...counts.entries()].sort((x, y) => y[1] - x[1])
-
                   // 教材名と見出しで引く。**大文字小文字は問わない**
                   const needle = pastKeyword.trim().toLowerCase()
-                  const shown = assignments
+                  const shown = applyHomeworkFilter(assignments, pastFilter)
                     .filter((a) => (pastDone === 'all'
                       || (pastDone === 'done') === !!a.learner_done_at))
-                    .filter((a) => (pastTags.length === 0
-                      || (a.material?.tagIds ?? []).some((t) => pastTags.includes(t))))
                     .filter((a) => (!needle
                       || `${a.material?.title ?? ''} ${a.material?.headline ?? ''}`
                         .toLowerCase().includes(needle)))
@@ -555,13 +549,25 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         keyword={pastKeyword}
                         onKeyword={setPastKeyword}
                         placeholder="教材名・見出しでさがす"
+                        count={shown.length}
+                      />
+                    )}
+
+                    {/* **日付・分野・場面・苦手項目で絞る**(2026-08 利用者の指定)。
+                          > ここも日付のタブを入れ、その中に新しい順、古い順の
+                          > 機能をまとめてくれ。日付タブの右に業界、趣味、
+                          > シチュエーション、話題で絞り込む機能を、
+                          > そしてもう一つは苦手項目から絞り込む機能だ
+                        並び順は**日付の吹き出しの中**に入っている。
+                        日付にまつわる操作を1か所にまとめるため。
+                        判断は `HomeworkFilter` 1か所(単語帳と同じ考え方) */}
+                    {assignments.length > 0 && (
+                      <HomeworkFilter
+                        rows={assignments}
+                        value={pastFilter}
+                        onChange={setPastFilter}
                         sort={pastSort}
                         onSort={setPastSort}
-                        sortOptions={[
-                          { id: 'new', label: '新しい順' },
-                          { id: 'old', label: '古い順' },
-                        ]}
-                        count={shown.length}
                       />
                     )}
 
@@ -592,30 +598,8 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                           ))}
                         </div>
 
-                        {tagList.length > 0 && (
-                          <>
-                            <p className="field-hint">
-                              文法・弱点でしぼる(この人に出したものだけ出ます)
-                            </p>
-                            <div className="chiprow">
-                              {tagList.map(([tag, n]) => (
-                                <button key={tag} type="button"
-                                        className={`chip${pastTags.includes(tag) ? ' chip--on' : ''}`}
-                                        onClick={() => setPastTags(pastTags.includes(tag)
-                                          ? pastTags.filter((x) => x !== tag)
-                                          : [...pastTags, tag])}>
-                                  {weaknessTagLabel(tag)} <span className="chip-count">{n}</span>
-                                </button>
-                              ))}
-                              {pastTags.length > 0 && (
-                                <button type="button" className="btn btn--link"
-                                        onClick={() => setPastTags([])}>
-                                  しぼり込みを外す
-                                </button>
-                              )}
-                            </div>
-                          </>
-                        )}
+                        {/* **苦手項目は、上の絞り込みの行へ移した**
+                            (2026-08 利用者の指定)。ここに残すと2か所になる */}
 
                       </details>
                     )}

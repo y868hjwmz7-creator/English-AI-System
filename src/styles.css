@@ -3151,6 +3151,10 @@ html { -webkit-text-size-adjust: 100%; }
   border-color: var(--accent); font-weight: 700;
 }
 .wbcal-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.wbcal-sort {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+}
 .wbcal-foot { margin-top: 8px; display: flex; justify-content: flex-end; }
 
 .wordbook { list-style: none; margin: 10px 0 0; padding: 0; }

@@ -546,7 +546,8 @@ export async function loadLearnerAssignments(learnerId, limit = 50) {
     .select(`
       id, assigned_at, due_on, learner_done_at, admin_checked_at,
       materials (
-        id, title, level, kind, headline, teaching_point, ${opt('voice_ids')}
+        id, title, level, kind, headline, teaching_point,
+        industry, genre, scene, ${opt('voice_ids')}
         material_tags ( tag_id ),
         material_sections ( id, material_items ( id ) )
       )
