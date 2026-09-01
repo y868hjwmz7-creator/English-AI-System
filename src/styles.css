@@ -3653,7 +3653,19 @@ html { -webkit-text-size-adjust: 100%; }
 }
 
 .wb-run { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+/* 進み具合の行。**出題の形は、この行の右**(2026-09 利用者の指定)。
+     > 「おまかせ」のプルダウンを 3/10語 の右の方に配置してください。
+     > いまははるか上に、おまかせ、があるのでいちいちスクロールして
+     > 出題の仕方を変更する必要があります。
+   答えているあいだ目が行っているのはこの行なので、
+   **変えたくなる場所のとなり**に置く。 */
 .wb-run-head { display: flex; align-items: center; gap: 10px; }
+.wb-run-head > .wb-formpick { margin-left: auto; }
+
+/* **狭い画面では、この行を画面の上にそろえる**(2026-09 利用者の指定)。
+   上の帯(`.app-topbar`)は貼り付いているので、そのぶん空けないと
+   帯の下に潜り込む。帯は 56px + 端末の切り欠き */
+.wb-run { scroll-margin-top: calc(56px + env(safe-area-inset-top) + 8px); }
 .wb-run-count { font-size: 13px; color: var(--text-secondary); }
 .wb-run-count > strong {
   font-size: 20px; font-weight: 700; color: var(--text-primary);

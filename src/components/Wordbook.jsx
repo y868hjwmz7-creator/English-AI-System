@@ -42,6 +42,7 @@ import {
   QUIZ_FORMS, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
 } from '../lib/wordQuiz.js'
 import { shortDate } from '../lib/format.js'
+import { useWide } from '../lib/nav.js'
 import SpeakButton from './SpeakButton.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
@@ -178,6 +179,8 @@ export default function Wordbook({
   const doneRef = useRef([])                    // この10語の結果
   /** いま出している1語のカード。**画面のまん中に置く**ために場所を測る */
   const cardRef = useRef(null)
+  /** 進み具合の行。狭い画面では、ここを画面の上にそろえる */
+  const runRef = useRef(null)
   /* **いまの一覧の控え。** 出題を組むときだけ使う。
      見張りに `rows` そのものを入れると、1語答えるたびに組み直してしまう */
   const rowsRef = useRef([])
@@ -193,6 +196,8 @@ export default function Wordbook({
      一度断られたら、その画面のあいだは出さない。
      **効かないボタンを出さない**(CLAUDE.md)。`noLearning` は
      `vocab.js` に1つだけ置いてあり、押して初めて分かる */
+  /** 広い画面か。**判断は幅だけ**(`useWide`・CLAUDE.md)。UA は見ない */
+  const wide = useWide()
   const canLearning = learningSupported()
   // 「覚えかけ」を見ている最中に使えないと分かったら、復習へ戻す。
   // 選択肢から消えたのに選ばれたままだと、プルダウンが空欄になる
@@ -329,9 +334,17 @@ export default function Wordbook({
        外すのは4択のボタンだけ。入力欄からは焦点を奪わない */
     const now = document.activeElement
     if (now?.classList?.contains('wordbook-choice')) now.blur()
-    cardRef.current.scrollIntoView({ block: 'center', behavior: 'auto' })
+    /* **狭い画面では、進み具合の行を画面の上へ持ってくる**
+       (2026-09 利用者の指定)。まん中に寄せると、上に空きができるぶん
+       4択の下が画面の外へ出やすい。上にそろえれば、
+       **進み具合・出題の形・カードが1画面に収まる。**
+       広い画面は空きが多いので、これまでどおりまん中に置く。
+       スクロールの余白は CSS の `scroll-margin-top` が受け持つ(帯のぶん) */
+    const toTop = !wide && runRef.current
+    const target = toTop ? runRef.current : cardRef.current
+    target.scrollIntoView({ block: toTop ? 'start' : 'center', behavior: 'auto' })
     // 語が変わったときだけ。中身(意味を見たなど)では動かさない
-  }, [card?.word_norm])
+  }, [card?.word_norm, wide])
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
   /**
@@ -521,20 +534,12 @@ export default function Wordbook({
             ))}
           </select>
         </label>
-        {isQuiz && (
-          <label className="wb-formpick">
-            <span className="sr-only">出題の形</span>
-            <select value={want}
-                    onChange={(e) => {
-                      setWant(e.target.value); setShown(false); setJudged(null); setPickedChoice(null)
-                    }}>
-              <option value="auto">おまかせ</option>
-              {QUIZ_FORMS.map((f) => (
-                <option key={f.id} value={f.id}>{f.label}</option>
-              ))}
-            </select>
-          </label>
-        )}
+        {/* **出題の形は、ここには置かない**(2026-09 利用者の指定)。
+              > 「おまかせ」のプルダウンを 3/10語 の右の方に配置してください。
+              > いまははるか上に、おまかせ、があるのでいちいちスクロールして
+              > 出題の仕方を変更する必要があります。
+            答えているあいだ目が行っているのは進み具合の行なので、
+            **変えたくなる場所のとなり**に置く(下の `.wb-run-head`)。 */}
       </div>
 
       {/* **手で入れる**(2026-09 利用者の指定「単語帳に手打ちで入力できる
@@ -618,13 +623,29 @@ export default function Wordbook({
             const done = doneRef.current.length
             const total = done + queue.length
             return (
-              <div className="wb-run">
+              <div className="wb-run" ref={runRef}>
                 {/* 出題の形は**タブの右**へ移した(2026-08 利用者の指定)。
                     ここに残すと、同じものが2か所に出る */}
                 <div className="wb-run-head">
                   <span className="wb-run-count">
                     <strong>{done + 1}</strong> / {total} 語
                   </span>
+                  {/* **出題の形は、進み具合の右**(2026-09 利用者の指定)。
+                      画面のはるか上にあったので、訊き方を変えるたびに
+                      上まで送り戻す必要があった */}
+                  <label className="wb-formpick">
+                    <span className="sr-only">出題の形</span>
+                    <select value={want}
+                            onChange={(e) => {
+                              setWant(e.target.value)
+                              setShown(false); setJudged(null); setPickedChoice(null)
+                            }}>
+                      <option value="auto">おまかせ</option>
+                      {QUIZ_FORMS.map((f) => (
+                        <option key={f.id} value={f.id}>{f.label}</option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 <div className="wb-run-bar" role="presentation">
                   {Array.from({ length: total }, (unused, i) => (
