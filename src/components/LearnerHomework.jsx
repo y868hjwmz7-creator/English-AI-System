@@ -127,14 +127,33 @@ export default function LearnerHomework({ me = null }) {
     prefetchGlosses(texts, { level: m.level })
   }, [openId, assignments])
 
-  const toggleDone = async (assignment) => {
-    const next = !assignment.learner_done_at
-    // 押した手ごたえをすぐ返す。失敗したら読み直して元に戻す。
+  /**
+   * **取り組んだことを、こちらで記録する**(2026-09 利用者の指定)。
+   *
+   *   > やった もいらないです
+   *   > やればトレーナー側でわかる仕組みにしてください
+   *
+   * これまではゲストが「やった」を押す申告だった。
+   * **押し忘れれば「まだ」のまま**で、押しただけでも「やった」になる。
+   * どちらにしてもトレーナーには本当のところが分からない。
+   *
+   * いまは**実際に開いたときに記録する。**
+   * 記録するのは次の2つ。どちらも「宿題に取り組む」ための操作である。
+   *
+   *   ・「大きく表示する」で教材を開いた(取り組む場所はここだけになった)
+   *   ・「印刷 / PDFで保存」で紙にした(紙で解く人はこちら)
+   *
+   * **1度だけ書く。** すでに日付が入っていれば触らない
+   * (最初に取り組んだ日を残すため)。
+   * **取り消す道は作らない。** 申告ではなく、起きたことの記録である。
+   */
+  const recordWorked = async (assignment) => {
+    if (assignment.learner_done_at) return
+    // 画面はすぐ変える。失敗したら読み直して元に戻す
     setAssignments((list) => list.map((a) =>
       a.id === assignment.id
-        ? { ...a, learner_done_at: next ? new Date().toISOString() : null }
-        : a))
-    const { error: e } = await markAssignmentDone(assignment.id, next)
+        ? { ...a, learner_done_at: new Date().toISOString() } : a))
+    const { error: e } = await markAssignmentDone(assignment.id, true)
     if (e) { setError(e); reload() }
   }
 
@@ -281,11 +300,11 @@ export default function LearnerHomework({ me = null }) {
                         紙にして手元で解くほうが先に来る、という順序である */}
                     <div className="btn-row no-print">
                       <button type="button" className="btn btn--small"
-                              onClick={() => setPrintId(a.id)}>
+                              onClick={() => { setPrintId(a.id); recordWorked(a) }}>
                         <PrintIcon />印刷 / PDFで保存(問題のみ)
                       </button>
                       <button type="button" className="btn btn--small btn--primary"
-                              onClick={() => setLessonOf(a.material)}>
+                              onClick={() => { setLessonOf(a.material); recordWorked(a) }}>
                         <ScreenIcon />大きく表示する
                       </button>
                     </div>
@@ -408,18 +427,14 @@ export default function LearnerHomework({ me = null }) {
                   </div>
                 ) : null}
 
-                <div className="btn-row">
-                  <button
-                    type="button"
-                    className={`btn ${a.learner_done_at ? '' : 'btn--primary'}`}
-                    onClick={() => toggleDone(a)}
-                  >
-                    {a.learner_done_at ? '「やった」を取り消す' : 'やった'}
-                  </button>
-                  {a.learner_done_at && (
-                    <span className="muted">{formatDate(a.learner_done_at)} に記録</span>
-                  )}
-                </div>
+                {/* **「やった」のボタンは置かない**(2026-09 利用者の指定)。
+                    開いた時点で記録されるので、押してもらう必要がない。
+                    ただし**黙って記録しない。** 記録されたことは静かに出す */}
+                {a.learner_done_at && (
+                  <p className="muted homework-worked">
+                    {formatDate(a.learner_done_at)} に取り組みました
+                  </p>
+                )}
               </div>
             ))}
           </section>

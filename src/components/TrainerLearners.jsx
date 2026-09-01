@@ -662,13 +662,25 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                    e.preventDefault()
                                    if (m) toggleHw(a)
                                  }}>
-                              {/* 出した日と、取り組みの状態。**いちばん上に置く** */}
+                              {/* 出した日と、取り組みの状態。**いちばん上に置く**。
+
+                                  **いつ取り組んだかも出す**(2026-09 利用者の指定)。
+                                    > やった もいらないです
+                                    > やればトレーナー側でわかる仕組みにしてください
+                                  ゲストの申告をやめ、**開いた時点で記録される**ように
+                                  したので、日付そのものが「いつ手を付けたか」になる。
+                                  「やった」だけでは、今日なのか3週間前なのか分からない */}
                               <div className="past-head">
                                 <span className="past-date">{formatDate(a.assigned_at)}</span>
                                 <span className={`badge ${a.learner_done_at
                                   ? 'badge--admin' : 'badge--learner'}`}>
                                   {a.learner_done_at ? 'やった' : 'まだ'}
                                 </span>
+                                {a.learner_done_at && (
+                                  <span className="past-date">
+                                    {formatDate(a.learner_done_at)} に取り組み
+                                  </span>
+                                )}
                                 {a.admin_checked_at && <span className="badge">確認済</span>}
                               </div>
                               {/* **弱点タグを2回出さない**(教材をさがす画面と同じ決まり)。

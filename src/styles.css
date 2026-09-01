@@ -4072,3 +4072,7 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .lfiles-note { margin: 6px 0 0; font-size: 0.9em; color: var(--text-secondary); }
 .lfiles-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* 「やった」のボタンを置かなくなったので、記録されたことだけを静かに出す
+   (2026-09 利用者の指定)。**黙って記録しない** */
+.homework-worked { margin: 10px 0 0; font-size: 13px; }

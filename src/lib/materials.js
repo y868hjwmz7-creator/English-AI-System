@@ -470,7 +470,14 @@ export async function loadMyAssignments() {
 }
 
 /**
- * 「やった」を記録する。
+ * 取り組んだことを記録する(`assignments.learner_done_at`)。
+ *
+ * **ゲストの申告ではない**(2026-09 利用者の指定)。
+ *   > やった もいらないです
+ *   > やればトレーナー側でわかる仕組みにしてください
+ * 宿題を「大きく表示する」で開くか、印刷した時点で**1度だけ**書く。
+ * 押し忘れも、押しただけの「やった」も起きない。
+ *
  * ゲストが書き換えられるのはこの欄だけ(列単位の権限で絞ってある)。
  */
 export async function markAssignmentDone(assignmentId, done = true) {
