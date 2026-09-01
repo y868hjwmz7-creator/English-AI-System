@@ -173,6 +173,8 @@ export default function Wordbook({
   const [deep, setDeep] = useState(false)
   const [typed, setTyped] = useState('')        // つづりの入力
   const [judged, setJudged] = useState(null)    // 4択・つづりの判定
+  /** 4択で押した選択肢。**まちがいを赤くする相手**を見分けるために持つ */
+  const [pickedChoice, setPickedChoice] = useState(null)
   const doneRef = useRef([])                    // この10語の結果
   /** いま出している1語のカード。**画面のまん中に置く**ために場所を測る */
   const cardRef = useRef(null)
@@ -223,6 +225,7 @@ export default function Wordbook({
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
+    setPickedChoice(null)
     // **読み直したときだけ組み直す。** 答えたときには組み直さない
     setDeal((n) => n + 1)
   }, [current.status, current.dueOnly, learnerId, mine])
@@ -300,6 +303,7 @@ export default function Wordbook({
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
+    setPickedChoice(null)
   }, [isQuiz, loading, deal, filter.day, filter.material, filter.field, filter.topic])
   const card = isQuiz ? queue[0] : null
 
@@ -320,6 +324,11 @@ export default function Wordbook({
    */
   useEffect(() => {
     if (!card || !cardRef.current) return
+    /* **押した跡を持ち越さない。** iPhone では押したボタンに焦点が残り、
+       次の問題でも黒い枠が見えていた(2026-09 実機)。
+       外すのは4択のボタンだけ。入力欄からは焦点を奪わない */
+    const now = document.activeElement
+    if (now?.classList?.contains('wordbook-choice')) now.blur()
     cardRef.current.scrollIntoView({ block: 'center', behavior: 'auto' })
     // 語が変わったときだけ。中身(意味を見たなど)では動かさない
   }, [card?.word_norm])
@@ -359,6 +368,7 @@ export default function Wordbook({
     doneRef.current.push({ word: row.display || row.word_norm, ok: status === 'known' })
     setRows((list) => list.filter((r) => r.word_norm !== row.word_norm))
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
+    setPickedChoice(null)
     /* **3枚の札は、押したとおりに動かす。**
        「覚えかけ」を押したのに数が動かないと、記録されていないように見える。
        いま何だったか(`row.status`)と、何にしたか(`status`)の
@@ -384,12 +394,34 @@ export default function Wordbook({
     })
   }
 
-  /** 4択・つづりは機械が判定する。**自己申告より正直な記録になる** */
-  const judge = (ok) => {
+  /**
+   * 4択・つづりは機械が判定する。**自己申告より正直な記録になる。**
+   *
+   * **答えは、下ではなく「その場」で返す**(2026-09 利用者の指定)。
+   *
+   *   > 解答が下に出るので非常に見にくいです。上の太字の単語が日本語に
+   *   > 変わるとか、真ん中に吹き出しで答えが出る、またはピンポン!て音で
+   *   > わかりやすく、選択したボタンが正解なら緑、不正解なら赤などに
+   *   > なる方がわかりやすいです
+   *
+   * 3つを同時に返す。**色だけに頼らない**(CLAUDE.md)。
+   *   ① 押したボタン … 正解=緑 / まちがい=赤(✓ ✗ の印も付ける)
+   *   ② 上の太字      … 英語から**日本語の意味**に変わる
+   *   ③ 音            … ピンポン(正解)/ 低く1つ(まちがい)
+   *
+   * @param ok      合っていたか
+   * @param chosen  4択で押した選択肢の文(色を付ける相手を見分けるため)
+   */
+  const judge = (ok, chosen = null) => {
     setJudged(ok)
-    setShown(true)
+    setPickedChoice(chosen)
+    /* **4択では、下の答えの欄を開かない。** 上の太字が意味に変わるので、
+       同じことが2か所に出る。つづりのときは正解の綴りが要るので開く */
+    if (form !== 'choice') setShown(true)
+    // 音とふるえ。**押した瞬間に返す**(通信を待たない)
+    answerFeedback(ok)
     // 少しだけ見せてから次へ。すぐ消えると、何が正解だったか分からない
-    window.setTimeout(() => answer(card, ok ? 'known' : 'unknown'), ok ? 700 : 1600)
+    window.setTimeout(() => answer(card, ok ? 'known' : 'unknown'), ok ? 900 : 1800)
   }
 
   return (
@@ -476,7 +508,7 @@ export default function Wordbook({
             <span className="sr-only">出題の形</span>
             <select value={want}
                     onChange={(e) => {
-                      setWant(e.target.value); setShown(false); setJudged(null)
+                      setWant(e.target.value); setShown(false); setJudged(null); setPickedChoice(null)
                     }}>
               <option value="auto">おまかせ</option>
               {QUIZ_FORMS.map((f) => (
@@ -611,7 +643,24 @@ export default function Wordbook({
             <div className="wordcard-face">
               {form === 'ja2en' || form === 'spell'
                 ? <span className="wordcard-word">{card.meaning_ja || '(意味の控えがありません)'}</span>
-                : (
+                : form === 'choice' && judged !== null ? (
+                  /* **答えたら、上の太字が日本語に変わる**(2026-09 利用者の指定)。
+                       > 解答が下に出るので非常に見にくいです。
+                       > 上の太字の単語が日本語に変わるとか…
+                     いちばん目が行っている場所で答えを返す。
+                     **色だけに頼らない。** ✓ / ✗ の印も添える(CLAUDE.md) */
+                  <span className={`wordcard-word wordcard-judged${
+                    judged ? ' is-ok' : ' is-ng'}`}>
+                    <span className="wordcard-mark" aria-hidden="true">
+                      {judged ? '✓' : '✗'}
+                    </span>
+                    {/* まちがえたときは「正解は」と添える。
+                        ✗ と意味を並べただけだと、**その意味が
+                        まちがいのように読める** */}
+                    {!judged && <span className="wordcard-lead">正解は</span>}
+                    {card.meaning_ja || '(意味の控えがありません)'}
+                  </span>
+                ) : (
                   <>
                     <span className="wordcard-word" lang="en">{word}</span>
                     <SpeakButton text={word} className="etext-listen" />
@@ -672,12 +721,25 @@ export default function Wordbook({
             {/* ── 4択 ───────────────────────────────────────── */}
             {form === 'choice' && choices && (
               <ul className="wordbook-choices">
-                {choices.map((c, i) => (
-                  <li key={i}>
+                {choices.map((c) => (
+                  /* **`key` に語も入れる。** 番号だけにしていたので、次の語でも
+                     React が同じボタンを使い回し、**押した跡(黒い枠)が
+                     残ったまま**次の問題に出ていた(2026-09 実機)。
+                     同じ選択肢の文が次の問でも出ることがあるので、
+                     **文だけでは足りない。** 語と組にして、
+                     問が変わったら必ず作り直されるようにする */
+                  <li key={`${card.word_norm}:${c.text}`}>
                     <button type="button" disabled={judged !== null || busy}
                             className={`btn wordbook-choice${
-                              judged !== null && c.correct ? ' is-right' : ''}`}
-                            onClick={() => judge(c.correct)}>
+                              judged === null ? ''
+                                : c.correct ? ' is-right'
+                                  : c.text === pickedChoice ? ' is-wrong' : ''}`}
+                            onClick={(e) => {
+                              // **押した跡を残さない。** iPhone では押したボタンに
+                              // 焦点が残り、黒い枠が次の問題まで見えていた
+                              e.currentTarget.blur()
+                              judge(c.correct, c.text)
+                            }}>
                       {c.text}
                     </button>
                   </li>

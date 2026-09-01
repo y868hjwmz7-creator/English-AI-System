@@ -3696,11 +3696,35 @@ html { -webkit-text-size-adjust: 100%; }
   width: 100%; min-height: 48px; justify-content: center;
   white-space: normal; line-height: 1.5;
 }
-/* 答えたあと、正解がどれだったかを見せてから次へ */
-.wordbook-choice.is-right {
-  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
-  font-weight: 600;
+/* 答えたあと、**その場で**正解・まちがいを返す(2026-09 利用者の指定)。
+
+     > 選択したボタンが正解なら緑、不正解なら赤などになる方が
+     > わかりやすいです
+
+   **合っている=緑(`--ok`)/ まちがい=赤(`--ng`)**(CLAUDE.md)。
+   ただし**色だけに頼らない。** 地色・枠線・太字に加えて
+   ✓ / ✗ の印も付ける(緑と赤は見分けにくい人がいる)。
+   押したあとのボタンは `disabled` になるので、**薄くならないように
+   `opacity` を戻す。** 薄いと、どれを押したのか分からない */
+.wordbook-choice.is-right, .wordbook-choice.is-wrong {
+  font-weight: 700; opacity: 1;
 }
+.wordbook-choice.is-right {
+  border-color: var(--ok); background: var(--ok-bg); color: var(--ok);
+}
+.wordbook-choice.is-wrong {
+  border-color: var(--ng); background: var(--ng-bg); color: var(--ng);
+  text-decoration: line-through;
+}
+.wordbook-choice.is-right::before { content: '✓ '; font-weight: 700; }
+.wordbook-choice.is-wrong::before { content: '✗ '; font-weight: 700; }
+
+/* 上の太字が、答えたあと日本語の意味に変わる。
+   **ここでも色だけに頼らない**(✓ / ✗ を添える) */
+.wordcard-judged.is-ok { color: var(--ok); }
+.wordcard-judged.is-ng { color: var(--ng); }
+.wordcard-mark { margin-right: .4em; }
+.wordcard-lead { margin-right: .4em; font-size: .62em; font-weight: 600; }
 @media (max-width: 480px) { .wordbook-choices { grid-template-columns: 1fr; } }
 
 /* ── つづりを書く ────────────────────────────────────────── */
