@@ -116,6 +116,16 @@ export function CloseIcon({ className = 'icon' }) {
   )
 }
 
+/** ＋。手で足す。**同じ枠(20×20)・同じ線の太さ(1.5)でそろえる** */
+export function PlusIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M10 4.5v11M4.5 10h11" fill="none" stroke="currentColor"
+            strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** 虫めがね。さがす */
 export function SearchIcon({ className = 'icon' }) {
   return (

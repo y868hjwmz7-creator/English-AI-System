@@ -45,6 +45,7 @@ import SpeakButton from './SpeakButton.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 import { answerFeedback } from '../lib/haptics.js'
+import WordbookAdd from './WordbookAdd.jsx'
 
 /**
  * 画面の切り替え(2026-08 利用者の指定・0027)。
@@ -338,6 +339,12 @@ export default function Wordbook() {
           </label>
         )}
       </div>
+
+      {/* **手で入れる**(2026-09 利用者の指定「単語帳に手打ちで入力できる
+          機能をつけてくれ」)。教材の外で出会った語も、その場で入れられる。
+          畳んであるのは、ふだん開く画面ではないため。
+          入れたら数え直す(`reload`)ので、札の数もすぐ合う */}
+      <WordbookAdd onAdded={reload} />
 
       {error && <p className="notice notice--error">{error}</p>}
       {loading && <p className="hint">読み込み中…</p>}
