@@ -399,6 +399,14 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 タブの下にそろえた。空いた左側には**その人のアイコン**が入る。
                 アイコンは名前の行とスコアの行にまたがる高さなので、
                 左右が同じ背丈になり、行が余らない。 */}
+            {/* **切り替えは、見出しの下に横いっぱいで置く**(2026-09 利用者の指定)。
+                  > プルダウンの機能が右にあるのも使いにくい。
+
+                右上の隅は**いちばん指が届きにくい場所**である。
+                しかもスコアの真上にあったので、押すたびに数字の列を
+                またいでいた。見出しの下に1行取れば、**左端から始まり、
+                幅も広く取れる。** スコアは右のままでよい
+                (あれは読むもので、押すものではない)。 */}
             <div className="learner-top">
               <div className="learner-who">
                 {/* **アイコンを選ぶのは本人**(0029)。ここでは出すだけで、
@@ -424,36 +432,6 @@ export default function TrainerLearners({ me, navTick = 0 }) {
               {/* 右側 … タブと、スコア・レベル。
                   **上下にそろえる。** 別々の行に散らすと目が行き来する */}
               <div className="learner-side">
-                {/* **プルダウンにする**(2026-09 利用者の指定)。
-                      > 受講中マークの下、横スライドのメニューを
-                      > １つのプルダウンにしてください
-
-                    5つを横に流していたので、スマホでは最初の2つしか
-                    見えず、**残りがあることに気づけなかった。**
-                    プルダウンなら幅が中身なりに決まり、
-                    どの画面幅でも全部が一度に見える
-                    (単語帳の「見るものの切り替え」と同じ考え方)。 */}
-                {openId === l.id && (
-                  <div className="learner-head-tabs">
-                    <label className="tabpick">
-                      <span className="sr-only">ゲストの情報の切り替え</span>
-                      <select value={detailTab}
-                              onChange={(e) => setDetailTab(e.target.value)}>
-                        <option value="homework">
-                          過去の宿題{assignments.length ? `(${assignments.length})` : ''}
-                        </option>
-                        <option value="create">この人に教材を作る</option>
-                        {/* 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい */}
-                        <option value="wordbook">単語帳</option>
-                        {/* 会社からもらった英文メール、テストの結果、宿題の写真。
-                            ここに置けば、次のレッスンで必ず見つかる(0031) */}
-                        <option value="files">ファイル</option>
-                        <option value="record">レベルとスコア</option>
-                      </select>
-                    </label>
-                  </div>
-                )}
-
                 {/* スコアとレベル。**日付は出さない**(2026-08 利用者の指定)。
                       > TOEIC、VERSANTのスコアの横の日付ですが、ここでは
                       > 必要ありません。点数が表示されている状態でも3つの
@@ -480,6 +458,38 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 </div>
               </div>
             </div>
+
+            {/* **切り替えは、見出しの下に横いっぱいで置く**(2026-09 利用者の指定)。
+                  > プルダウンの機能が右にあるのも使いにくい。
+
+                以前は右上の隅にあった。**いちばん指が届きにくい場所**で、
+                しかもスコアの真上なので、押すたびに数字の列をまたいでいた。
+                見出しの下に1行取れば、**左端から始まり、幅も広く取れる。**
+                スコアは右のままでよい(あれは読むもので、押すものではない)。
+
+                中身は5つ(過去の宿題 / この人に教材を作る / 単語帳 /
+                ファイル / レベルとスコア)。タブで横に流していたときは、
+                スマホで最初の2つしか見えなかった。 */}
+            {openId === l.id && (
+              <div className="learner-tabrow">
+                <label className="tabpick">
+                  <span className="sr-only">ゲストの情報の切り替え</span>
+                  <select value={detailTab}
+                          onChange={(e) => setDetailTab(e.target.value)}>
+                    <option value="homework">
+                      過去の宿題{assignments.length ? `(${assignments.length})` : ''}
+                    </option>
+                    <option value="create">この人に教材を作る</option>
+                    {/* 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい */}
+                    <option value="wordbook">単語帳</option>
+                    {/* 会社からもらった英文メール、テストの結果、宿題の写真。
+                        ここに置けば、次のレッスンで必ず見つかる(0031) */}
+                    <option value="files">ファイル</option>
+                    <option value="record">レベルとスコア</option>
+                  </select>
+                </label>
+              </div>
+            )}
 
             {/* 3段目 … **取り組みを「札」で出す**(2026-08 利用者の指定)。
 
