@@ -120,6 +120,11 @@ export default function Wordbook({ level = null }) {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
   const [shown, setShown] = useState(false)     // 答えを出したか
+  /* **出会った文は、畳んでおく**(2026-08 利用者の指定)。
+       > 例文は折りたたみ式で、基本はスマホで見た時に4択の全てが
+       > 画面内に収まるようにしたいです。
+     長い文が開いたままだと、答えの4択が画面の外へ出てしまう。 */
+  const [seenOpen, setSeenOpen] = useState(false)
   const [deep, setDeep] = useState(false)
   const [typed, setTyped] = useState('')        // つづりの入力
   const [judged, setJudged] = useState(null)    // 4択・つづりの判定
@@ -147,7 +152,7 @@ export default function Wordbook({ level = null }) {
     setQueue(current.dueOnly ? buildSession(list.data ?? []) : [])
     doneRef.current = []
     setResult(null)
-    setShown(false); setDeep(false); setTyped(''); setJudged(null)
+    setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
   }, [current.status, current.dueOnly])
 
   useEffect(() => { reload() }, [reload])
@@ -168,7 +173,7 @@ export default function Wordbook({ level = null }) {
     if (e) { setError(e); return }
     doneRef.current.push({ word: row.display || row.word_norm, ok: status === 'known' })
     setRows((list) => list.filter((r) => r.word_norm !== row.word_norm))
-    setShown(false); setDeep(false); setTyped(''); setJudged(null)
+    setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
     setCounts((c) => ({
       ...c,
       due: Math.max(0, c.due - 1),
@@ -368,20 +373,55 @@ export default function Wordbook({ level = null }) {
                 : (
                   <>
                     <span className="wordcard-word" lang="en">{word}</span>
-                    {card.kind === 'phrase' && <span className="wordbook-kind">言い回し</span>}
                     <SpeakButton text={word} className="etext-listen" />
                   </>
                 )}
             </div>
 
-            {/* 出会った文。訳なしで先に出す。日本語→英語のときは答えを伏せる */}
+            {/* **種類と品詞は、さりげなく**(2026-08 利用者の指定)。
+                  > 言い回し、コロケーション、単語、イディオム などの
+                  > カテゴリ表示はさりげなくオシャレに。
+                  > あと品詞の表示も欲しいね
+
+                塗りつぶした札にすると、語より目立ってしまう。
+                **細い字と中黒だけ**で並べる。
+
+                **控えにあるのは `word` か `phrase` の2つだけ。**
+                コロケーションとイディオムは、いまのデータでは見分けられない
+                (どちらも `phrase` として入る)。
+                **あやふやなことを言わない**(CLAUDE.md)ので、
+                見分けられるようになるまでは「言い回し」とだけ書く。 */}
+            <p className="wordcard-tags">
+              <span className="wc-tag">{card.kind === 'phrase' ? '言い回し' : '単語'}</span>
+              {card.pos && <span className="wc-tag wc-tag--pos">{card.pos}</span>}
+            </p>
+
+            {/* 出会った文。訳なしで先に出す。日本語→英語のときは答えを伏せる。
+
+                **畳んでおく**(2026-08 利用者の指定)。長い文が開いたままだと、
+                答えの4択が画面の外へ出る。
+
+                **Listen は文の横に置かない。**
+                  > 例文の横のlistenのせいで例文の折り返しがかなり
+                  > 窮屈になってしまってます。
+                横に置くとスマホで文の幅が半分になり、1行3語ほどで折り返す。
+                開け閉めの行へ移し、**文には幅をぜんぶ渡す。** */}
             {card.seen_in && (
-              <div className="wordcard-seen">
-                <SeenIn sentence={card.seen_in} word={word}
-                        hide={(form === 'ja2en' || form === 'spell') && !shown} />
-                {/* 答えが聞こえてしまう形では、出す前に鳴らさない */}
-                {((form !== 'ja2en' && form !== 'spell') || shown) && (
-                  <SpeakButton text={card.seen_in} className="etext-listen" />
+              <div className="wordcard-seenbox">
+                <div className="wordcard-seenbar">
+                  <button type="button" className="btn btn--ghost btn--small"
+                          aria-expanded={seenOpen}
+                          onClick={() => setSeenOpen((v) => !v)}>
+                    {seenOpen ? '▾ 出会った文' : '▸ 出会った文'}
+                  </button>
+                  {/* 答えが聞こえてしまう形では、出す前に鳴らさない */}
+                  {seenOpen && ((form !== 'ja2en' && form !== 'spell') || shown) && (
+                    <SpeakButton text={card.seen_in} className="etext-listen" />
+                  )}
+                </div>
+                {seenOpen && (
+                  <SeenIn sentence={card.seen_in} word={word}
+                          hide={(form === 'ja2en' || form === 'spell') && !shown} />
                 )}
               </div>
             )}
