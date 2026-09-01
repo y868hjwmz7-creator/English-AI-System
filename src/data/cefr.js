@@ -41,8 +41,10 @@ export const cefrIndex = (id) => CEFR_LEVELS.findIndex((l) => l.id === id)
  * ここを緩めても、登録はデータベースが弾く。
  */
 export const SCORE_TESTS = [
-  { id: 'toeic',   label: 'TOEIC',   min: 10, max: 990, step: 5 },
-  { id: 'versant', label: 'VERSANT', min: 20, max: 80,  step: 1 },
+  // **点数の幅は、実際の試験に合わせる**(2026-08 利用者の指定)。
+  //   > VERSANTの新形式は10-90点満点 / TOEICは100-990です
+  { id: 'toeic',   label: 'TOEIC',   min: 100, max: 990, step: 5 },
+  { id: 'versant', label: 'VERSANT', min: 10,  max: 90,  step: 1 },
   { id: 'other',   label: 'その他',  min: 0,  max: 9999, step: 1 },
 ]
 

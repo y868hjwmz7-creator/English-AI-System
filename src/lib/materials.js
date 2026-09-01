@@ -612,7 +612,7 @@ export async function addLearnerScore({ learnerId, testType, score, takenOn, not
   })
   if (error) {
     if (/learner_scores_range|violates check/i.test(error.message)) {
-      return ng('スコアが範囲の外です。TOEIC は 10〜990、VERSANT は 20〜80 です。')
+      return ng('スコアが範囲の外です。TOEIC は 100〜990、VERSANT は 10〜90 です。')
     }
     return fail(error, 'スコアを記録できませんでした')
   }

@@ -250,4 +250,10 @@ from (
     select count(*) = 2 from pg_proc p
     where p.proname in ('mark_word', 'log_practice')
       and pg_get_function_identity_arguments(p.oid) like '%uuid'), 60
+  union all
+  select '(61) スコアの範囲が実際の試験に合っている(0026)', (
+    -- TOEIC 100〜990 / VERSANT 10〜90(新形式)
+    select pg_get_constraintdef(c.oid) like '%100%990%'
+       and pg_get_constraintdef(c.oid) like '%10%90%'
+    from pg_constraint c where c.conname = 'learner_scores_range'), 61
 ) t order by 順;

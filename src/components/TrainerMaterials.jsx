@@ -246,11 +246,9 @@ export default function TrainerMaterials({ me }) {
                  saveSearchOpen(e.currentTarget.open)
                }}>
         <summary className="card-title material-search-sum">教材をさがす・作る</summary>
-        <p className="card-hint">
-          レッスンで指摘した弱点を選ぶと、その弱点の教材が出ます。
-          <strong>あればそのまま配信できます。</strong>作るより速く、ゲストには同じ価値が届きます。
-        </p>
-
+        {/* **説明の文は置かない**(2026-08 利用者の指定)。
+              > 目指すのはUIを見れば何ができるのかが直観的にわかるアプリです。
+            欄の名前とプルダウンを見れば、何ができるかは分かる。 */}
         {/* **作る画面(`MaterialForm`)とまったく同じ構成にする**
             (2026-08 利用者の指定)。
 

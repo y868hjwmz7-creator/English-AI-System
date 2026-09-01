@@ -1220,20 +1220,25 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 2段目。取り組み・スコア・レベルを**1本の行**にまとめ、
    リマインドは右端へ逃がす。中黒(・)で区切る */
+/* **3つ(TOEIC / VERSANT / レベル)を同じ幅で並べる**(2026-08 利用者の指定)。
+     > 点数が表示されている状態でも3つの要素が1行にバランスよく
+     > 並ぶように直してください。
+   以前は flex で詰めて中黒で区切っていたので、点数が入るたびに
+   位置が動き、ゲストを切り替えると別の場所に出ていた。
+   **列で並べれば、中身によらず同じ場所にある。**
+   幅は名前の下の見出しぶんだけ(広い画面いっぱいに引き伸ばさない)。 */
 .learner-meta {
-  display: flex; flex-wrap: wrap; align-items: center;
-  gap: 6px 14px; margin-bottom: 16px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px; margin-bottom: 16px; max-width: 420px;
   color: var(--text-secondary); font-size: 13px;
 }
-.learner-meta-item { display: inline-flex; align-items: baseline; gap: 6px; }
-/* **区切りは記号で。線を増やさない。** 折り返した行の先頭には出さない */
-.learner-meta-item + .learner-meta-item::before {
-  content: '・'; color: var(--text-muted);
+.learner-meta-item {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
 }
 /* **行の中に置くので、点数は大きくしない。** `.score-value` の 20px は
    スコアだけを並べていたころの大きさである */
-.learner-meta .score-value { font-size: 14px; font-weight: 600; }
-.learner-meta .score-label { font-size: 11px; }
+.learner-meta .score-value { font-size: 16px; font-weight: 700; }
+.learner-meta .score-label { font-size: 10px; }
 .learner-meta .muted { font-size: 12px; }
 /* 開いているゲストの見出しは、**まわりと同じ白いカードに包む**
    (2026-08 利用者の指定)。地の上に名前とタブが直に乗っていた */

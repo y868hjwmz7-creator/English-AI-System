@@ -416,19 +416,31 @@ export default function TrainerLearners({ me, navTick = 0 }) {
               )}
             </div>
 
-            {/* 2段目 … スコアとレベル。**名前の真下、左寄せ**(利用者の指定) */}
+            {/* 2段目 … スコアとレベル。**名前の真下、左寄せ**(利用者の指定)。
+
+                **日付は出さない**(2026-08 利用者の指定)。
+                  > TOEIC、VERSANTのスコアの横の日付ですが、ここでは必要ありません。
+                  > 点数が表示されている状態でも3つの要素が1行にバランスよく
+                  > 並ぶように直してください。
+                いつ受けたかは「レベルとスコア」のタブで見られる。
+                ここで見たいのは**いまどのくらいか**だけである。
+
+                **3つを同じ幅で並べる**(`.learner-meta` は3列の grid)。
+                点数が入っても幅が動かないので、ゲストを切り替えても
+                同じ場所に同じものがある。 */}
             <div className="learner-meta">
               <span className="learner-meta-item">
                 <span className="score-label">TOEIC</span>
                 <span className="score-value">{toeic ? toeic.score : '—'}</span>
-                {toeic && <span className="muted">{toeic.takenOn}</span>}
               </span>
               <span className="learner-meta-item">
                 <span className="score-label">VERSANT</span>
                 <span className="score-value">{versant ? versant.score : '—'}</span>
-                {versant && <span className="muted">{versant.takenOn}</span>}
               </span>
-              <span className="learner-meta-item">{cefrLabel(l.cefr)}</span>
+              <span className="learner-meta-item">
+                <span className="score-label">レベル</span>
+                <span className="score-value">{cefrLabel(l.cefr)}</span>
+              </span>
             </div>
 
             {/* 3段目 … **取り組みを「札」で出す**(2026-08 利用者の指定)。
@@ -777,9 +789,19 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                       <option key={t.id} value={t.id}>{t.label}</option>
                     ))}
                   </select>
-                  <input type="number" className="score-input" placeholder="スコア"
-                         value={form.score}
-                         onChange={(e) => setForm({ ...form, score: e.target.value })} />
+                  {/* **取りうる範囲を入力欄そのものに持たせる**
+                      (2026-08 利用者の指定。TOEIC 100〜990 / VERSANT 10〜90)。
+                      入れてから断られるより、入れる前に分かるほうがよい */}
+                  {(() => {
+                    const t = SCORE_TESTS.find((x) => x.id === form.testType)
+                    return (
+                      <input type="number" className="score-input"
+                             placeholder={t && t.id !== 'other' ? `${t.min}〜${t.max}` : 'スコア'}
+                             min={t?.min} max={t?.max} step={t?.step}
+                             value={form.score}
+                             onChange={(e) => setForm({ ...form, score: e.target.value })} />
+                    )
+                  })()}
                   <input type="date" value={form.takenOn}
                          onChange={(e) => setForm({ ...form, takenOn: e.target.value })} />
                   <button type="button" className="btn btn--small" onClick={() => submitScore(l)}>
