@@ -269,6 +269,55 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'flm_festival', label: '映画祭・舞台挨拶', hint: '短く、印象に残る話し方' },
   ],
 
+  /* ── 2026-09 利用者の指定で足した分野 ──────────────────────
+     **助言する側・受ける側で、場面がまるごと違う。**
+     「建設・不動産」は建てる側、「コンサル(建設)」は外から見る側。
+     同じ現場の話でも、立つ位置が違えば使う言葉も変わる。 */
+  consult_con: [
+    { id: 'ccon_brief',   label: '依頼内容の聞き取り', hint: '何に困っているのかを、まず引き出す' },
+    { id: 'ccon_finding', label: '調査結果の報告',     hint: '事実を並べ、言いにくいことも言う' },
+    { id: 'ccon_propose', label: '提案のプレゼン',     hint: '選べる案を出し、勧める理由を言う' },
+    { id: 'ccon_cost',    label: '工程とコストの見直し', hint: 'どこを削り、どこは削らないか' },
+    { id: 'ccon_client',  label: '発注者との打ち合わせ', hint: '専門語を使わずに、判断してもらう' },
+    { id: 'ccon_site',    label: '現場の視察',         hint: '見たこと・気になったことをその場で確かめる' },
+    { id: 'ccon_report',  label: '報告書の詰め',       hint: '書きぶりを、社内で読み合わせる' },
+  ],
+  consult_auto: [
+    { id: 'caut_supplier', label: 'サプライヤーの調査', hint: '作る力と、続けられるかを見る' },
+    { id: 'caut_quality',  label: '生産と品質の改善提案', hint: '数字を示し、直す順番を決める' },
+    { id: 'caut_ev',       label: '電動化の相談',       hint: '何を、いつまでに切り替えるか' },
+    { id: 'caut_dealer',   label: '販売網の見直し',     hint: '店の数、置き方、売り方' },
+    { id: 'caut_exec',     label: '経営層への報告',     hint: '結論から。判断に要ることだけ' },
+    { id: 'caut_plant',    label: '現地工場での打ち合わせ', hint: '言葉も商習慣も違う相手と' },
+  ],
+  lawyer: [
+    { id: 'lwy_intake',   label: '依頼者との初回相談', hint: '何があったのかを、順に聞き取る' },
+    { id: 'lwy_facts',    label: '事実関係の確認',     hint: '記憶と記録を突き合わせる' },
+    { id: 'lwy_outlook',  label: '見通しと費用の説明', hint: '勝てるとは言わない。範囲を示す' },
+    { id: 'lwy_negotiate', label: '相手方との交渉',    hint: '譲れる線と、譲れない線' },
+    { id: 'lwy_court',    label: '法廷・調停の場',     hint: '整った言い方で、短く筋を通す' },
+    { id: 'lwy_advice',   label: '顧問先への助言',     hint: '法律の言葉を使わずに答える' },
+    { id: 'lwy_letter',   label: '書面のやりとり',     hint: '受け取った文書に、どう返すか' },
+  ],
+  catering: [
+    { id: 'cat_inquiry', label: '問い合わせと見積',   hint: '日時、人数、予算をその場で押さえる' },
+    { id: 'cat_menu',    label: '打ち合わせ',         hint: '好み、アレルギー、宗教上の決まり' },
+    { id: 'cat_venue',   label: '会場の下見',         hint: '電源、水、動線、置ける場所' },
+    { id: 'cat_setup',   label: '当日の設営と配膳',   hint: '短い指示。時間どおりに出す' },
+    { id: 'cat_staff',   label: 'スタッフへの指示',   hint: '初めて組む人にも伝わる言い方' },
+    { id: 'cat_wrap',    label: '片づけと精算',       hint: '数の確認、追加分、次への申し送り' },
+    { id: 'cat_claim',   label: '困りごとへの対応',   hint: '足りない・遅れた。まず受け止める' },
+  ],
+  gov_jp: [
+    { id: 'gov_meeting', label: '海外の政府関係者との会談', hint: '立場を保ちつつ、要点を伝える' },
+    { id: 'gov_conf',    label: '国際会議',           hint: '発言の順番、持ち時間、言い切り方' },
+    { id: 'gov_visit',   label: '視察の受け入れ',     hint: '案内しながら、仕組みを説明する' },
+    { id: 'gov_explain', label: '制度の説明',         hint: '日本の決まりを、前提から話す' },
+    { id: 'gov_press',   label: '取材への対応',       hint: '決まっていることと、まだのことを分ける' },
+    { id: 'gov_doc',     label: '文書のやりとり',     hint: '照会と回答。書きぶりを整える' },
+    { id: 'gov_courtesy', label: '表敬訪問・儀礼',    hint: '短いあいさつと、場をなごませる一言' },
+  ],
+
   /* ── 趣味・娯楽 ─────────────────────────────────────────
      **仕事の場面をそのまま出さない。** 「朝の進捗共有」をゴルフに
      出しても、その人が実際に英語を使う場面にはならない。
@@ -484,6 +533,38 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'flmg_acting', label: '演じるということ', hint: '役に入る、離れる' },
     { id: 'flmg_industry', label: '映画界のいま',   hint: '配信、興行、資金' },
     { id: 'flmg_story',  label: '物語のつくり方',   hint: '脚本、構成、編集' },
+  ],
+
+  /* ── 2026-09 利用者の指定で足した分野 ────────────────────── */
+  consult_con: [
+    { id: 'ccong_market', label: '建設業界の動き',   hint: '受注、資材、価格' },
+    { id: 'ccong_labor',  label: '人手不足と生産性', hint: '担い手をどう確保するか' },
+    { id: 'ccong_case',   label: '大型工事の事例',   hint: 'うまくいった話、遅れた話' },
+    { id: 'ccong_green',  label: '脱炭素と規制',     hint: '基準、認証、これからの決まり' },
+  ],
+  consult_auto: [
+    { id: 'cautg_ev',     label: 'EV への移行',      hint: '電池、充電、値段' },
+    { id: 'cautg_supply', label: 'サプライチェーン', hint: '止まったとき何が起きるか' },
+    { id: 'cautg_auto',   label: '自動運転と安全',   hint: 'どこまで任せられるか' },
+    { id: 'cautg_brand',  label: '売り方とブランド', hint: '誰に、どう届けるか' },
+  ],
+  lawyer: [
+    { id: 'lwyg_case',    label: '話題になった裁判', hint: '何が争われ、どう決まったか' },
+    { id: 'lwyg_work',    label: '法律家の仕事',     hint: '一日の流れ、向き不向き' },
+    { id: 'lwyg_client',  label: '依頼者との関わり', hint: '期待をどう受け止めるか' },
+    { id: 'lwyg_new',     label: '新しい分野の法',   hint: 'AI、データ、国をまたぐ取引' },
+  ],
+  catering: [
+    { id: 'catg_event',   label: 'イベントの食',     hint: '結婚式、パーティー、屋外' },
+    { id: 'catg_safety',  label: '食の安全',         hint: '温度、時間、運び方' },
+    { id: 'catg_menu',    label: 'メニューと原価',   hint: '何を出して、いくらに収めるか' },
+    { id: 'catg_ops',     label: '段取りと人手',     hint: '限られた時間で、どう回すか' },
+  ],
+  gov_jp: [
+    { id: 'govg_system',  label: '日本の制度',       hint: '海外の人に、前提から説明する' },
+    { id: 'govg_intl',    label: '国際協力',         hint: '支援、共同事業、人の行き来' },
+    { id: 'govg_local',   label: '地方と観光',       hint: '人を呼ぶ工夫と、暮らしとの折り合い' },
+    { id: 'govg_policy',  label: '政策のいま',       hint: '少子化、防災、エネルギー' },
   ],
 
   /* ── 趣味・娯楽 ───────────────────────────────────────── */
