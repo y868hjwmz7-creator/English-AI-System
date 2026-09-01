@@ -31,6 +31,7 @@ import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import QuickResponse from './QuickResponse.jsx'
+import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton from './SpeakButton.jsx'
@@ -459,6 +460,11 @@ export default function LessonView({
             **描いてから隠す**(`is-closed`)。紙用の指定が
             `display: block` に戻す。 */}
         {sections.map((sec, si) => renderSection(sec, si))}
+
+        {/* Quick Response の控え。**紙のいちばん後ろに置く**
+            (2026-09 利用者の指定「ページは一番後ろで大丈夫です」)。
+            画面には出さない(`print-only`)。練習は上のボタンから行う */}
+        <QuickResponseSheet material={material} />
       </div>
     </div>
   )

@@ -170,3 +170,37 @@ export const DEFAULT_SECTIONS = {
 export const isPassageSection = (typeId) => !!exerciseType(typeId)?.isPassage
 
 export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SECTIONS.pattern
+
+/**
+ * **数を増やせる演習**(2026-09 利用者の指定)。
+ *
+ *   > 内容理解の質問を増やしたいとき、語句を増やしたいときは
+ *   > 教材作成のところで指定できるようにしてください。
+ *   > ディフォルトの数またはその倍という感じの2パターン指定できると最高です。
+ *
+ * **本文(記事・会話)は入れない。** あちらの count は段落数・発言数で、
+ * 増やすと読み物の長さそのものが変わる。長さは第5.13節で決めてある。
+ * 増やすのは**本文に対して作る設問と語句**だけである。
+ */
+export const SCALABLE_SECTIONS = ['comprehension', 'vocab_note']
+
+/** 増やし方は2通りだけ。**細かい数は選ばせない**(選ぶ手間が増えるだけ) */
+export const AMOUNTS = [
+  { id: 'default', label: '標準' },
+  { id: 'double', label: '倍' },
+]
+
+/**
+ * 既定の構成に、増やし方をかぶせる。
+ *
+ * @param {string} kind 教材の種類
+ * @param {object} amounts `{ comprehension: 'double', ... }`
+ *
+ * **上限は20。** 窓口(`generate-material`)が 1〜20 に丸めるので、
+ * ここで超えると画面に出した数と実際の数が食い違う。
+ */
+export const sectionsFor = (kind, amounts = null) =>
+  defaultSectionsFor(kind).map((s) => (
+    SCALABLE_SECTIONS.includes(s.exercise_type) && amounts?.[s.exercise_type] === 'double'
+      ? { ...s, count: Math.min(s.count * 2, 20) }
+      : s))

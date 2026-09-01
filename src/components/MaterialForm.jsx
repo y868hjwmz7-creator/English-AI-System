@@ -17,14 +17,18 @@ import { useEffect, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import {
-  EXERCISE_TYPES, FIELD_LABELS, defaultSectionsFor, exerciseLabel, exerciseType,
+  AMOUNTS, EXERCISE_TYPES, FIELD_LABELS, SCALABLE_SECTIONS,
+  defaultSectionsFor, exerciseLabel, exerciseType, sectionsFor,
 } from '../data/exerciseTypes.js'
 import { industriesIn, industryLabel } from '../data/industries.js'
+import {
+  cancelJob, clearJob, currentJob, startJob, takeJobResult, watchJob,
+} from '../lib/generateJob.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
   generateChunkJa, generateSection,
-  generateSectionUnique, isPassageKind, loadUsedSentences, normEn,
+  generateSectionUnique, isPassageKind, kindLabel, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { chunkPlan } from '../lib/chunkJa.js'
 import {
@@ -78,6 +82,18 @@ export default function MaterialForm({
   // ジャンル・場面)。一部だけ引き継ぐと、どれが残ってどれが消えるのか
   // 利用者には見分けられない。
   const [kind, setKind] = useState(initial.kind || 'pattern')
+  /**
+   * 内容理解・語句を**どれだけ作るか**(2026-09 利用者の指定)。
+   *
+   *   > 内容理解の質問を増やしたいとき、語句を増やしたいときは
+   *   > 教材作成のところで指定できるようにしてください。
+   *   > ディフォルトの数またはその倍という感じの2パターン
+   *
+   * `{ comprehension: 'default' | 'double', vocab_note: … }`。
+   * **本文(記事・会話)は増やさない。** あちらの数は段落・発言の数で、
+   * 読み物の長さそのものが変わってしまう(`SCALABLE_SECTIONS`)。
+   */
+  const [amounts, setAmounts] = useState({})
   const [instruction, setInstruction] = useState('')
   const [teachingPoint, setTeachingPoint] = useState('')
   const [visibility, setVisibility] = useState('school')
@@ -147,12 +163,17 @@ export default function MaterialForm({
 
   // 生成中は秒数を数える。1〜3分かかることがあるため、動いていることが
   // 分からないと「固まった」と思われる(実際にそう見えた)。
+  //
+  // **始めた時刻は仕事のほうが持っている**(`generateJob.js`)。
+  // 別の画面から戻ってきたときも、押した時からの秒数が出る
+  const startedAt = generating?.startedAt ?? null
   useEffect(() => {
-    if (!generating) { setElapsed(0); return undefined }
-    const started = Date.now()
-    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000)
+    if (!startedAt) { setElapsed(0); return undefined }
+    const tick = () => setElapsed(Math.round((Date.now() - startedAt) / 1000))
+    tick()
+    const timer = setInterval(tick, 1000)
     return () => clearInterval(timer)
-  }, [generating])
+  }, [startedAt])
 
   // 単語・フレーズの教材で、ゲストを1人だけ選んでいるときに材料を読む。
   // **複数人だと「誰の復習か」が決まらない**ので、そのときは出さない。
@@ -315,6 +336,13 @@ export default function MaterialForm({
   }
 
   /**
+   * いま作ろうとしている構成(演習と問数)。
+   * **1か所に置く。** 数を出す場所が画面に4つあるので、
+   * 別々に計算すると「40問 作ります」と実際の数が食い違う。
+   */
+  const planNow = () => sectionsFor(kind, amounts)
+
+  /**
    * 記事・会話を作る。
    *
    * **本文は1本まるごと作る。** 段落や発言を弱点ごとに分けたり、
@@ -322,12 +350,12 @@ export default function MaterialForm({
    * 内容理解と語句は、できあがった本文を渡して作らせる。
    * そうしないと本文と噛み合わない設問ができる(第5.17節)。
    */
-  const generatePassage = async () => {
-    const plan = defaultSectionsFor(kind)
+  const generatePassage = async ({ step, cancelled }) => {
+    const plan = planNow()
     const [bodyPlan, ...rest] = plan
     const { data: used } = await loadUsedSentences(tagIds)
 
-    setGenerating({ done: 0, total: plan.length, label: exerciseLabel(bodyPlan.exercise_type) })
+    step(0, exerciseLabel(bodyPlan.exercise_type))
     const { data: body, error: bodyError } = await generateSection({
       sectionType: bodyPlan.exercise_type,
       count: bodyPlan.count,
@@ -349,7 +377,7 @@ export default function MaterialForm({
     // 記事・会話は「本文 → 内容の理解 → 語句」と3回に分けて作る。
     // どこで転んだのかが分からないと、利用者には直しようがない。
     const bodyName = exerciseLabel(bodyPlan.exercise_type)
-    if (bodyError) { fail(`${bodyName}を作れませんでした。${bodyError}`); return }
+    if (bodyError) throw new Error(`${bodyName}を作れませんでした。${bodyError}`)
 
     const spent = {
       input: body.usage?.input ?? 0,
@@ -368,20 +396,22 @@ export default function MaterialForm({
     // 押したのは「会話を作る」なので、これでは何が起きたのか分からない
     // (2026-08 の指摘)。転んだ場所を、その名前で伝える。
     if (!context) {
-      fail(`${bodyName}の中身が空でした。もう一度お試しください。`
+      throw new Error(`${bodyName}の中身が空でした。もう一度お試しください。`
         + '何度も続くときは、この文言をそのままお知らせください。')
-      return
     }
 
     for (let i = 0; i < rest.length; i += 1) {
-      setGenerating({ done: i + 1, total: plan.length, label: exerciseLabel(rest[i].exercise_type) })
+      // **止まるのはキャンセルを押したときだけ**(2026-09 利用者の指定)。
+      // 段と段のあいだで見る。送ってしまった1回は取り消せない
+      if (cancelled()) return null
+      step(i + 1, exerciseLabel(rest[i].exercise_type))
       const { data, error: e } = await generateSection({
         sectionType: rest[i].exercise_type,
         count: rest[i].count,
         topic: tagIds.map(topicOf).join(' / '),
         level, industry: industryText, context,
       })
-      if (e) { fail(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`); return }
+      if (e) throw new Error(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`)
       spent.input += data.usage?.input ?? 0
       spent.output += data.usage?.output ?? 0
       spent.cacheRead += data.usage?.cacheRead ?? 0
@@ -399,7 +429,8 @@ export default function MaterialForm({
     // 本文も設問もそのまま使える。あとから「区切りの訳を作る」で足せる。
     const chunkTodo = chunkPlan(made[0]?.items ?? [])
     if (chunkTodo.length) {
-      setGenerating({ done: plan.length, total: plan.length + 1, label: 'カタマリごとの訳' })
+      if (cancelled()) return null
+      step(plan.length, 'カタマリごとの訳')
       const { data: cj, error: cjError } = await generateChunkJa(
         chunkTodo.map((x) => ({ no: x.no, chunks: x.chunks })),
       )
@@ -421,24 +452,28 @@ export default function MaterialForm({
       }
     }
 
-    setGenerating(null)
-    setSections(made)
-    if (body.headline) setHeadline(body.headline)
-    if (body.teaching_point && !teachingPoint) setTeachingPoint(body.teaching_point)
-    if (!title.trim()) setTitle(autoTitle())
-    finish(made, body.headline, spent)
+    // **できあがったものは、その場では画面に入れない。**
+    // 別の画面へ移っていることがあるので、いったん仕事の側に置いて、
+    // 教材の画面が開いたときに受け取る(`src/lib/generateJob.js`)
+    return {
+      made, spent,
+      headline: body.headline ?? null,
+      teachingPoint: body.teaching_point ?? null,
+      autoTitle: autoTitle(),
+      form: formSnapshot(),
+    }
   }
 
   /**
    * 文型ドリル・単語・フレーズを作る。
    * 弱点が複数なら問数を分けて、1問ずつ交互に並べる(第5.16.1節)。
    */
-  const generateDrill = async () => {
+  const generateDrill = async ({ step, cancelled }) => {
     // ① 生成の前に、すでに使った英文を渡して避けさせる(誘導)
     const { data: used } = await loadUsedSentences(tagIds)
     const usedSet = new Set((used ?? []).map(normEn))
 
-    const plan = defaultSectionsFor(kind)
+    const plan = planNow()
     const made = []
     const notes = []
     // 指導ポイントは最初の演習で1本だけ受け取る。演習ごとに集めていた
@@ -450,9 +485,9 @@ export default function MaterialForm({
     const spent = { input: 0, output: 0, cacheRead: 0 }
 
     for (let i = 0; i < plan.length; i += 1) {
-      setGenerating({
-        done: i, total: plan.length, label: exerciseLabel(plan[i].exercise_type),
-      })
+      // **止まるのはキャンセルを押したときだけ**(2026-09 利用者の指定)
+      if (cancelled()) return null
+      step(i, exerciseLabel(plan[i].exercise_type))
 
       // ② 生成のあとに、既出と「意味が近すぎる文」を落とし、
       //    落ちた分は作り直す。ここが「被らない」の担保。
@@ -475,7 +510,7 @@ export default function MaterialForm({
         },
         { usedSet, learnerIds: shareWith, tagIds },
       )
-      if (result.error) { fail(result.error); return }
+      if (result.error) throw new Error(result.error)
 
       droppedCount += result.dropped
       shortCount += result.short
@@ -509,15 +544,12 @@ export default function MaterialForm({
       })
     }
 
-    setGenerating(null)
-    setSections(made)
-    setTeachingPoint(point)
-    setDropped(droppedCount)
-    setShort(shortCount)
-    setSimilarNotes(notes)
-    setWarning(warn)
-    if (!title.trim()) setTitle(autoTitle())
-    finish(made, null, spent)
+    return {
+      made, spent, headline: null, teachingPoint: point,
+      dropped: droppedCount, short: shortCount, notes, warn,
+      autoTitle: autoTitle(),
+      form: formSnapshot(),
+    }
   }
 
   /**
@@ -579,9 +611,87 @@ export default function MaterialForm({
     setWarning(null)
     setDone(null)
 
-    if (isPassageKind(kind)) await generatePassage()
-    else await generateDrill()
+    /* **画面から切り離して走らせる**(2026-09 利用者の指定)。
+         > 教材の作成中に別のところに飛んでもバックグラウンドで
+         > 作業が続くようにしてください。
+       ここで `await` すると、別の画面へ移った瞬間にこの部品ごと消え、
+       返ってきた下書きの行き場が無くなる。仕事の状態は
+       `src/lib/generateJob.js` に置く(あちらは画面が消えても残る)。 */
+    const plan = planNow()
+    const started = startJob({
+      title: kindLabel(kind),
+      total: isPassageKind(kind) ? plan.length + 1 : plan.length,
+      run: (ctl) => (isPassageKind(kind) ? generatePassage(ctl) : generateDrill(ctl)),
+    })
+    if (!started) {
+      setError('いま別の教材を作っています。'
+        + '終わるまで待つか、「作るのをやめる」を押してください。')
+    }
   }
+
+  /** いまの入力を控える。**別の画面から戻ったときに、そのまま戻すため** */
+  const formSnapshot = () => ({
+    kind, level, industry, tagIds, genre, scene, subject,
+    visibility, instruction, mustUse,
+  })
+
+  /**
+   * できあがった下書きを画面に入れる。
+   *
+   * **別の画面へ移っていても受け取れるようにしてある。**
+   * 教材を作る画面が開いていなければ、仕事の側で待っている
+   * (`takeJobResult`)。戻ってきたときに、入力ごと元に戻す。
+   */
+  const applyResult = (r) => {
+    if (!r?.made) return
+    const f = r.form ?? {}
+    if (f.kind) setKind(f.kind)
+    if (f.level) setLevel(f.level)
+    setIndustry(f.industry ?? '')
+    if (f.tagIds) setTagIds(f.tagIds)
+    if (f.genre != null) setGenre(f.genre)
+    if (f.scene != null) setScene(f.scene)
+    if (f.subject != null) setSubject(f.subject)
+    if (f.visibility) setVisibility(f.visibility)
+    if (f.instruction != null) setInstruction(f.instruction)
+    if (f.mustUse) setMustUse(f.mustUse)
+
+    setSections(r.made)
+    if (r.headline) setHeadline(r.headline)
+    if (r.teachingPoint) setTeachingPoint(r.teachingPoint)
+    setDropped(r.dropped ?? 0)
+    setShort(r.short ?? 0)
+    setSimilarNotes(r.notes ?? [])
+    setWarning(r.warn ?? null)
+    setTitle((t) => (t.trim() ? t : (r.autoTitle ?? '')))
+    finish(r.made, r.headline, r.spent)
+  }
+
+  /**
+   * 走っている仕事を見張る。
+   *
+   * **この部品が消えても仕事は続く。** 戻ってきたら、ここが
+   * 途中経過を映し直し、終わっていれば下書きを受け取る。
+   */
+  // **いつも最新のものを呼べるようにしておく。**
+  // 見張りは1回だけ張る(毎回張り直すと、状態を入れ直すたびに
+  // また描き直しになり、止まらなくなる)
+  const applyRef = useRef(null)
+  const failRef = useRef(null)
+  applyRef.current = applyResult
+  failRef.current = fail
+
+  useEffect(() => {
+    const sync = (j) => {
+      setGenerating(j?.state === 'running'
+        ? { done: j.done, total: j.total, label: j.label, startedAt: j.startedAt } : null)
+      if (j?.state === 'done') applyRef.current?.(takeJobResult())
+      if (j?.state === 'error') { failRef.current?.(j.error); clearJob() }
+      if (j?.state === 'cancelled') clearJob()
+    }
+    sync(currentJob())
+    return watchJob(sync)
+  }, [])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -863,7 +973,7 @@ export default function MaterialForm({
         </p>
         {!isPassageKind(kind) && tagIds.length > 1 && (
           <p className="card-hint">
-            {defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問を
+            {planNow().reduce((n, s2) => n + s2.count, 0)} 問を
             {tagIds.map(weaknessTagLabel).join(' / ')} に分け、
             <strong>交互に並べます。</strong>
             まとめて並べると、その間は1つの弱点だけ見ていればよく、
@@ -879,6 +989,51 @@ export default function MaterialForm({
             (およそ {kind === 'reading' ? '250〜350語' : '14発言'})。
             シャドーイングやオーバーラッピングは、この本文に対して行います。
           </p>
+        )}
+
+        {/* ── 内容理解・語句をどれだけ作るか ──────────────────────
+            2026-09 利用者の指定。
+
+              > 内容理解の質問を増やしたいとき、語句を増やしたいときは
+              > 教材作成のところで指定できるようにしてください。
+              > ディフォルトの数またはその倍という感じの2パターン
+
+            **本文は増やさない。** あちらの数は段落・発言の数なので、
+            増やすと読み物の長さそのものが変わる(`SCALABLE_SECTIONS`)。
+            **細かい数は選ばせない。** 標準か倍かの2つで足りる。 */}
+        {planNow().some((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type)) && (
+          <div className="amount-row">
+            {planNow()
+              .filter((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type))
+              .map((s2) => {
+                const base = defaultSectionsFor(kind)
+                  .find((d) => d.exercise_type === s2.exercise_type)?.count ?? s2.count
+                const now = amounts[s2.exercise_type] ?? 'default'
+                return (
+                  <div key={s2.exercise_type} className="amount-pick">
+                    <span className="amount-label">
+                      {exerciseLabel(s2.exercise_type)}
+                    </span>
+                    <div className="theme-switch" role="group"
+                         aria-label={`${exerciseLabel(s2.exercise_type)}の数`}>
+                      {AMOUNTS.map((a) => (
+                        <button key={a.id} type="button"
+                                className={`theme-btn${now === a.id ? ' is-active' : ''}`}
+                                aria-pressed={now === a.id}
+                                onClick={() => setAmounts({
+                                  ...amounts, [s2.exercise_type]: a.id,
+                                })}>
+                          {a.label}
+                          <span className="amount-count">
+                            {a.id === 'double' ? Math.min(base * 2, 20) : base}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
         )}
 
         {/* ── 単語帳から名指しで渡された語 ──────────────────────
@@ -951,7 +1106,7 @@ export default function MaterialForm({
                     ))}
                   </select>
                   <span className="field-hint">
-                    残りの{Math.max(0, defaultSectionsFor(kind)
+                    残りの{Math.max(0, planNow()
                       .reduce((n, x) => n + x.count, 0) - mergedReview().length)} 語は新しく作ります
                   </span>
                 </label>
@@ -1016,14 +1171,24 @@ export default function MaterialForm({
               ? `作り直す(いまの下書きは消えます)`
               : isPassageKind(kind)
                 ? `${kind === 'reading' ? '記事' : '会話'}を作る(`
-                  + defaultSectionsFor(kind)
+                  + planNow()
                     .map((s2) => `${exerciseLabel(s2.exercise_type)}${s2.count}`).join(' + ')
                   + ')'
-                : `下書きを作る(${defaultSectionsFor(kind).reduce((n, s2) => n + s2.count, 0)} 問)`}
+                : `下書きを作る(${planNow().reduce((n, s2) => n + s2.count, 0)} 問)`}
         </button>
+        {/* **止まるのは、ここを押したときだけ**(2026-09 利用者の指定)。
+            画面を離れても、閉じても止まらない */}
+        {generating && (
+          <button type="button" className="btn btn--quiet generate-cancel"
+                  onClick={cancelJob}>
+            作るのをやめる
+          </button>
+        )}
         {generating && (
           <p className="field-hint">
-            1〜3分かかります。<strong>この画面を閉じないでください。</strong>
+            1〜3分かかります。
+            <strong>ほかの画面へ移っても、作りつづけます。</strong>
+            できあがったら音とお知らせでお伝えします。
           </p>
         )}
 

@@ -7,13 +7,15 @@ import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import AppNav, { AppTopbar } from './components/AppNav.jsx'
 import {
-  BookIcon, CardsIcon, ChartIcon, MicIcon, PeopleIcon, TaskIcon,
+  BookIcon, CardsIcon, ChartIcon, CloseIcon, MicIcon, PeopleIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
 import { loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } from './lib/nav.js'
 import { setViewerRole } from './lib/viewer.js'
 import { installTapFeedback } from './lib/haptics.js'
+import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
+import { markJobSeen, watchJob } from './lib/generateJob.js'
 import Wordbook from './components/Wordbook.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import { buildSeed } from './data/seed.js'
@@ -38,6 +40,31 @@ export default function App() {
   // **早く帰る条件より前に置く**(hook は必ず同じ順で呼ばれなければならない)
   const [navTick, setNavTick] = useState(0)
   const [palette, setPalette] = useState(loadPalette)
+  /* 押したときの音。**覚える**(`src/lib/sfx.js`)。
+     切れるようにしてあるのは、レッスン中に邪魔なことがあるため */
+  const [sound, setSound] = useState(soundOn)
+  /**
+   * 裏で作っている教材のお知らせ(2026-09 利用者の指定)。
+   *
+   *   > バックグラウンドでの作成が終わったら音やポップアップでの通知
+   *
+   * 教材の画面を離れても作りつづけるので(`src/lib/generateJob.js`)、
+   * **どの画面にいても見える場所**で終わりを伝える。
+   * **知らせるのは1回だけ**(`markJobSeen`)。何度も出しては邪魔になる。
+   */
+  const [jobNote, setJobNote] = useState(null)
+  useEffect(() => watchJob((j) => {
+    if (!j || j.seen) return
+    if (j.state === 'done') {
+      playSfx('done')
+      setJobNote({ state: 'done', text: `${j.title}の下書きができました。` })
+      markJobSeen()
+    }
+    if (j.state === 'error') {
+      setJobNote({ state: 'error', text: `${j.title}を作れませんでした。${j.error ?? ''}` })
+      markJobSeen()
+    }
+  }), [])
 
   // 左のメニュー。広い画面(1024px 以上)では画面を押し出して並び、
   // 狭い画面ではふだん隠れていて ☰ でかぶせて開く。
@@ -210,6 +237,22 @@ export default function App() {
         </div>
       </div>
 
+      {/* 押した手応え(音とふるえ)。**一度決める設定なので、ここに置く。**
+          レッスン中に鳴ると邪魔なことがあるので、切れるようにしてある
+          (2026-09 に「鳴らさない」から改めた・利用者の指定) */}
+      <div className="nav-setting">
+        <span className="nav-setting-label">押したときの音</span>
+        <div className="theme-switch" role="group" aria-label="押したときの音">
+          {[{ id: true, label: '鳴らす' }, { id: false, label: '鳴らさない' }].map((x) => (
+            <button key={String(x.id)} type="button"
+                    className={`theme-btn${sound === x.id ? ' is-active' : ''}`}
+                    onClick={() => { setSound(x.id); setSoundOn(x.id) }}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {session && (
         <div className="nav-account">
           {/* **自分のアイコンは、自分で選ぶ**(0029・2026-09 利用者の指定)。
@@ -265,6 +308,32 @@ export default function App() {
         <AppTopbar
           onToggle={toggleNav} open={navOpen} wide={wide} pageLabel={pageLabel}
         />
+
+        {/* ── 裏で作っている教材のお知らせ ────────────────────
+            2026-09 利用者の指定。
+
+              > バックグラウンドでの作成が終わったら音やポップアップでの
+              > 通知してください。
+
+            **どの画面にいても見える場所に置く。** 教材の画面を離れても
+            作りつづけるので、終わったことを伝える場所が要る。
+            音は `sfx.js` の「できました」。 */}
+        {jobNote && (
+          <div className={`jobnote${jobNote.state === 'error' ? ' is-error' : ''}`}
+               role="status" aria-live="polite">
+            <span className="jobnote-text">{jobNote.text}</span>
+            {jobNote.state === 'done' && view !== 'materials' && (
+              <button type="button" className="btn btn--small btn--primary"
+                      onClick={() => { setView('materials'); setJobNote(null) }}>
+                教材の画面を開く
+              </button>
+            )}
+            <button type="button" className="nav-icon-btn"
+                    onClick={() => setJobNote(null)} aria-label="お知らせを閉じる">
+              <CloseIcon />
+            </button>
+          </div>
+        )}
 
         <div className="app">
           {/* 本文の上に置くのは、**その画面で使うものだけ。**

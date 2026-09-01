@@ -44,6 +44,7 @@ import { shortDate } from '../lib/format.js'
 import SpeakButton from './SpeakButton.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
+import { answerFeedback } from '../lib/haptics.js'
 
 /**
  * 画面の切り替え(2026-08 利用者の指定・0027)。
@@ -211,6 +212,11 @@ export default function Wordbook() {
 
   /** 1語ぶん答える。**押した語はすぐ消す。** 待たされると手ごたえが無い */
   const answer = async (row, status) => {
+    /* **押した手応えを返す**(2026-09 利用者の指定)。
+       覚えたら**ピンポン**、まだ・覚えかけは低く1つだけ。
+       **送る前に鳴らす。** 通信を待つと、押してから間が空いて
+       「効いたのか分からない」になる */
+    answerFeedback(status === 'known')
     setBusy(row.word_norm)
     const { error: e } = await setWordStatus(row.word_norm, status, { kind: row.kind })
     setBusy(null)

@@ -30,19 +30,37 @@ import { alignedSentences } from './sentencePair.js'
  */
 const PAIR_FIELDS = {
   // 英文和訳は、和訳のほうが `answer` に入っている
-  translate_en_ja: { ja: 'answer', en: 'prompt_en' },
-  translate_ja_en: { ja: 'prompt_ja', en: 'answer' },
-  article:         { ja: 'prompt_ja', en: 'prompt_en' },
-  dialogue:        { ja: 'prompt_ja', en: 'prompt_en' },
-  vocab_note:      { ja: 'prompt_ja', en: 'prompt_en' },
-  vocabulary:      { ja: 'prompt_ja', en: 'prompt_en' },
-  phrase:          { ja: 'prompt_ja', en: 'prompt_en' },
+  translate_en_ja: { ja: 'answer', en: 'prompt_en', group: 'sentence' },
+  translate_ja_en: { ja: 'prompt_ja', en: 'answer', group: 'sentence' },
+  article:         { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
+  dialogue:        { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
+  vocab_note:      { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
+  vocabulary:      { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
+  phrase:          { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
   // 旧「長文」。既存の教材でも使えるように残す
-  read_aloud:      { ja: 'prompt_ja', en: 'prompt_en' },
-  overlapping:     { ja: 'prompt_ja', en: 'prompt_en' },
-  shadowing:       { ja: 'prompt_ja', en: 'prompt_en' },
-  repeating:       { ja: 'prompt_ja', en: 'prompt_en' },
+  read_aloud:      { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
+  overlapping:     { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
+  shadowing:       { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
+  repeating:       { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
 }
+
+/**
+ * 取り組み方は2通り(2026-09 利用者の指定)。
+ *
+ *   > クイックレスポンスを画面で取り組むときは、文章のモードと、
+ *   > 出てきたフレーズ、単語のモードを切り替えれるようにしてください。
+ *
+ * **どちらも同じ教材の同じ英文**である。違うのは長さと狙い。
+ *   ・**文章** … 本文と和訳。文を丸ごと口から出せるようにする
+ *   ・**フレーズ・単語** … 「出てきた語句」。語をすばやく引き出せるようにする
+ *
+ * 混ぜて1本にすると、長い文と1語が交互に来て、頭の切り替えが追いつかない。
+ * **どちらをやるかは、その場で決められるようにする。**
+ */
+export const QR_MODES = [
+  { id: 'sentence', label: '文章' },
+  { id: 'word', label: 'フレーズ・単語' },
+]
 
 /** その種類が Quick Response に使えるか */
 export const canQuickRespond = (exerciseType) => Boolean(PAIR_FIELDS[exerciseType])
@@ -50,14 +68,18 @@ export const canQuickRespond = (exerciseType) => Boolean(PAIR_FIELDS[exerciseTyp
 /**
  * 教材から、日本語と英語の対をぜんぶ集める。
  *
- * @returns {{ja, en, speaker, from, key}[]}
+ * @param material 教材
+ * @param mode `'sentence'`(文章)/ `'word'`(フレーズ・単語)/
+ *   省略すると**両方**。印刷の控えは両方まとめて出す
+ * @returns {{ja, en, speaker, from, group, key}[]}
  *   **1文ずつの対だけ。** 訳が段落ぶんしか無いものは入らない
  */
-export function quickResponsePairs(material) {
+export function quickResponsePairs(material, mode = null) {
   const out = []
   for (const sec of material?.sections ?? []) {
     const map = PAIR_FIELDS[sec.exercise_type]
     if (!map) continue
+    if (mode && map.group !== mode) continue
     const from = exerciseLabel(sec.exercise_type)
     ;(sec.items ?? []).forEach((it, i) => {
       const ja = String(it[map.ja] ?? '').trim()
@@ -76,13 +98,25 @@ export function quickResponsePairs(material) {
         // 「段落の訳」と断って出すくらいなら、出さないほうがよい
         if (!pair.aligned) return
         out.push({
-          ja: pair.ja, en: pair.en, from, speaker,
+          ja: pair.ja, en: pair.en, from, speaker, group: map.group,
           key: `${key}-${k}`,
         })
       })
     })
   }
   return out
+}
+
+/**
+ * 取り組み方ごとの問数。**選ぶ前に、いくつあるか分かるようにする。**
+ * 0件の取り組み方は画面に出さない(効かない操作を見せない・CLAUDE.md)。
+ */
+export function quickResponseCounts(material) {
+  const all = quickResponsePairs(material)
+  return {
+    sentence: all.filter((x) => x.group === 'sentence').length,
+    word: all.filter((x) => x.group === 'word').length,
+  }
 }
 
 /** その教材で Quick Response ができるか(1つでも対があるか) */

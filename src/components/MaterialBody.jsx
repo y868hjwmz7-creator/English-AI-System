@@ -35,6 +35,7 @@ import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { useState } from 'react'
+import QuickResponseSheet from './QuickResponseSheet.jsx'
 
 export default function MaterialBody({
   material: m,
@@ -210,8 +211,12 @@ export default function MaterialBody({
             </section>
           )
         })}
+      {/* Quick Response の控え。**紙のいちばん後ろに置く**
+          (2026-09 利用者の指定)。画面には出さない(`print-only`)。
+          紙は教材まるごとの控えなので、レッスン表示と同じものを出す */}
+      <QuickResponseSheet material={m} />
       {onClose && (
-        <button type="button" className="btn btn--link" onClick={onClose}>
+        <button type="button" className="btn btn--link no-print" onClick={onClose}>
           中身を閉じる
         </button>
       )}

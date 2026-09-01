@@ -23,14 +23,35 @@
  *   手応えの本体は「押した印(`:active` / `.is-holding`)」であって、
  *   振動はその上乗せである。
  *
- * 【音は鳴らさない】
- *   レッスン中に鳴ると邪魔になる。また iOS の音まわりは
- *   録音・読み上げと同じ資源を使うため、うかつに触ると
- *   録音が無音になる不具合(仕様書 3.3.2)を呼び戻しかねない。
+ * 【音も鳴らす】(2026-09 利用者の指定で、鳴らさない決まりを改めた)
+ *
+ *   > ボタンなどを押したときは音が鳴るように(中略)体で感じれる仕様です
+ *   > ぶるっとしたり、おとがなったり、そういうのを実装してください
+ *
+ *   **ふるえと音は、同じところから出す。** 別々に書いて回ると、
+ *   片方だけ鳴るボタンが必ずできる。音の作り方は `src/lib/sfx.js`。
+ *   **切れるようにしてある**(左のメニューの下)。レッスン中に
+ *   邪魔なときのため。
  */
+import { playSfx, unlockSfx } from './sfx.js'
 
 /** 触る端末かどうかは**その操作で**決める。端末の種類を当て推量しない */
 const isTouch = (e) => e?.pointerType === 'touch'
+
+/**
+ * **直前の操作が「触る」だったか。**
+ *
+ * 手応えを返すのは触る端末だけである(2026-09 利用者の指定
+ * 「タッチのデバイスで取り組むときは…」)。マウスで押したときは
+ * カーソルも `:active` も見えているので、要らない。
+ *
+ * 端末の種類は当て推量しない。**その操作がどれで来たか**で決める
+ * (`(hover: hover)` に賭けて何も開かなくなった件・CLAUDE.md)。
+ * 1つのパソコンでマウスと画面の両方を使う人もいるので、
+ * **押すたびに更新する。**
+ */
+let lastTouch = false
+export const cameFromTouch = () => lastTouch
 
 /** 振動の長さ(ミリ秒)。**長くしない。** 気持ち悪くなる */
 const MS = { tap: 8, hold: 18 }
@@ -68,15 +89,44 @@ function iosTap() {
 
 /**
  * 手応えを返す。**触る端末で呼ばれることだけを想定している。**
+ *
+ * **ふるえと音を、ここから両方出す**(2026-09 利用者の指定)。
+ * どちらか片方しか効かない端末があるので、両方とも試す。
+ *
  * @param {'tap'|'hold'} kind tap … ふつうに押した / hold … 長押しが効いた
  */
 export function tapFeedback(kind = 'tap') {
+  buzz(kind)
+  playSfx('tap')
+}
+
+/** ふるえだけ。音を鳴らしたくないところ(語の長押しなど)から呼ぶ */
+export function buzz(kind = 'tap') {
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       if (navigator.vibrate(MS[kind] ?? MS.tap)) return
     }
     iosTap()
   } catch { /* できない端末では、静かに何もしない */ }
+}
+
+/**
+ * **正解・不正解の手応え**(2026-09 利用者の指定)。
+ *
+ *   > 正解したらピンポンとなるようにしてほしいです
+ *
+ * 「言えた」「覚えた」で**ピンポン**、「まだ」は低く1つだけ。
+ * **まだを責めない**(2026-08「赤がいらないです」と同じ考え方)。
+ *
+ * **触って押したときだけ返す**(利用者の指定「タッチのデバイスで
+ * 取り組むときは」)。マウスで押した人には、色と文字がすでに見えている。
+ *
+ * @param {boolean} ok
+ */
+export function answerFeedback(ok) {
+  if (!lastTouch) return
+  buzz(ok ? 'hold' : 'tap')
+  playSfx(ok ? 'correct' : 'miss')
 }
 
 /**
@@ -112,6 +162,10 @@ export function installTapFeedback() {
 
   const onDown = (e) => {
     disarm()
+    // **触った流れの中で、音の入れ物を起こす。**
+    // iOS は、触っていないところで始めた音を鳴らさない(`sfx.js`)
+    unlockSfx()
+    lastTouch = isTouch(e)
     if (!isTouch(e)) return
     const el = e.target?.closest?.('button, [role="button"], summary, label.chip')
     if (!el || el.disabled) return

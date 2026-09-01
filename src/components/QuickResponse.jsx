@@ -26,7 +26,7 @@
  *   画面に「言えた数」を出すだけにしてある。
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { quickResponsePairs } from '../lib/quickResponse.js'
+import { QR_MODES, quickResponseCounts, quickResponsePairs } from '../lib/quickResponse.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { stopReading } from '../lib/readAloud.js'
@@ -36,20 +36,36 @@ import { CloseIcon } from './Icons.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import { progressKey, useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
+import { answerFeedback } from '../lib/haptics.js'
 
 export default function QuickResponse({
   material, onClose, wordStatuses = null, onMarkWord = null, paper = false,
   learnerId = null,
 }) {
-  const pairs = useMemo(() => quickResponsePairs(material), [material])
+  /* **取り組み方は2通り**(2026-09 利用者の指定)。
+       > 文章のモードと、出てきたフレーズ、単語のモードを
+       > 切り替えれるようにしてください。
+     どちらが何問あるかは先に数える。**0件の側は出さない**
+     (効かない操作を見せない・CLAUDE.md) */
+  const counts = useMemo(() => quickResponseCounts(material), [material])
+  const modes = QR_MODES.filter((m) => counts[m.id] > 0)
+  /* **選んだ取り組み方を覚えておく。** 開き直すたびに選ばせない。
+     控えが無い教材(片方しか無い)のときは、ある側に落とす */
+  const [savedMode, setMode] = useProgress(
+    progressKey(material?.id, 'qr', 'mode'), modes[0]?.id ?? 'sentence', learnerId,
+  )
+  const mode = counts[savedMode] > 0 ? savedMode : (modes[0]?.id ?? 'sentence')
+  const pairs = useMemo(() => quickResponsePairs(material, mode), [material, mode])
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('quick_response', true, learnerId)
   /* **どの教材で会ったかを添える**(0024) */
   const markWord = markIn(onMarkWord, material?.id, learnerId)
   /* **何問目まで進んだかを覚えておく**(2026-08 利用者の指定)。
-     途中で別のページへ行って戻ると、1問目に戻っていた */
+     途中で別のページへ行って戻ると、1問目に戻っていた。
+     **鍵に取り組み方を入れる。** 文章とフレーズでは問数が違うので、
+     1つの鍵で持つと切り替えたときに範囲の外を指す */
   const [savedAt, setAt] = useProgress(
-    progressKey(material?.id, 'qr', 'at'), 0, learnerId,
+    progressKey(material?.id, 'qr', `at-${mode}`), 0, learnerId,
   )
   // **控えていた場所が、範囲の外になっていることがある**(教材を直したあと)。
   // そのまま使うと問が空になるので、必ず中に収める
@@ -67,7 +83,7 @@ export default function QuickResponse({
   useEffect(() => () => stopReading(), [])
 
   // 出題が変わったら、答えは閉じた状態から。**入るかどうかも測り直す**
-  useEffect(() => { setShown(false); setTight(false); stopReading() }, [at])
+  useEffect(() => { setShown(false); setTight(false); stopReading() }, [at, mode])
 
   // **開いた答えが枠に入りきらないときは、こちらで送る。**
   // 「上下にスクロールして微調整せずに」(2026-08 利用者の指定)。
@@ -107,6 +123,9 @@ export default function QuickResponse({
   const clipVoice = resolveVoices(material?.voiceIds ?? material?.voice_ids)[0]
 
   const answer = (ok) => {
+    /* **押した手応えを返す**(2026-09 利用者の指定)。
+       言えたら**ピンポン**、まだなら低く1つだけ。触る端末のときだけ */
+    answerFeedback(ok)
     doneRef.current = [...doneRef.current, { ...card, ok }]
     if (at + 1 >= pairs.length) { setFinished(true); return }
     setAt(at + 1)
@@ -115,6 +134,19 @@ export default function QuickResponse({
   const restart = () => {
     doneRef.current = []
     setAt(0); setShown(false); setFinished(false)
+  }
+
+  /**
+   * 取り組み方を変える。
+   *
+   * **何問目まで進んだかは、取り組み方ごとに覚えている**(鍵が別)。
+   * だからここで `setAt(0)` はしない。戻ってきたら続きから始められる。
+   * この1回ぶんの数え(言えた / まだ)だけを白紙に戻す。
+   */
+  const switchMode = (next) => {
+    doneRef.current = []
+    setShown(false); setFinished(false); stopReading()
+    setMode(next)
   }
 
   if (!pairs.length) {
@@ -145,6 +177,20 @@ export default function QuickResponse({
         {/* 紙(大きく表示)では、すぐ上のボタンが「Quick Response」なので
             ここには出さない。**同じ言葉を20px 離して2度書かない** */}
         {!paper && <strong className="qr-title">Quick Response</strong>}
+        {/* **取り組み方**(2026-09 利用者の指定)。
+            両方あるときだけ出す。片方しか無い教材で選ばせても意味がない。
+            **プルダウンにする**(6Steps と同じ考え方。札を並べると
+            狭い画面で2段になり、紙の上では場所を食う) */}
+        {modes.length > 1 && (
+          <label className="qr-mode">
+            <span className="sr-only">取り組み方</span>
+            <select value={mode} onChange={(e) => switchMode(e.target.value)}>
+              {modes.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}({counts[m.id]} 問)</option>
+              ))}
+            </select>
+          </label>
+        )}
         <span className="qr-count">
           {finished ? `${pairs.length} / ${pairs.length}` : `${at + 1} / ${pairs.length}`}
         </span>

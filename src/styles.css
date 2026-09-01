@@ -2002,6 +2002,37 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 生成に失敗したときの知らせ。押したボタンのすぐ下に出す */
 .generate-error { margin-top: 10px; }
+/* **作るのをやめる。** 作っているあいだだけ、作るボタンの隣に出る
+   (2026-09 利用者の指定「止まるのはキャンセルボタン…を押したときのみ」) */
+.generate-cancel { margin-left: 8px; }
+
+/* ── 裏で作っている教材のお知らせ(2026-09 利用者の指定)──────────
+   **どの画面にいても見える場所に置く。** 教材の画面を離れても
+   作りつづけるので、終わったことを伝える場所が要る。
+   帯のすぐ下に出し、押して閉じられるようにする */
+.jobnote {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin: 0 auto; padding: 10px 14px;
+  width: min(1040px, calc(100% - 24px));
+  border: 1px solid var(--ok); border-radius: var(--radius);
+  background: var(--ok-bg); color: var(--text-primary);
+  box-shadow: var(--shadow-1);
+}
+.jobnote.is-error { border-color: var(--ng); background: var(--ng-bg); }
+.jobnote-text { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
+.jobnote .nav-icon-btn { width: 32px; height: 32px; }
+
+/* ── 内容理解・語句をどれだけ作るか(2026-09 利用者の指定)──────
+   **標準か倍かの2つだけ。** 細かい数は選ばせない(選ぶ手間が増えるだけ)。
+   見た目は配色の切り替えと同じ形(`.theme-switch`)にそろえてある。
+   **問数を札の中に出す。** 「倍」だけでは何問になるのか分からない */
+.amount-row { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 12px 0; }
+.amount-pick { display: flex; flex-direction: column; gap: 4px; }
+.amount-label { font-size: 12px; color: var(--text-secondary); }
+.amount-count {
+  margin-left: 5px; font-size: 11px; font-weight: 600; opacity: .75;
+  font-variant-numeric: tabular-nums;
+}
 
 /* 生成ボタンの近くに、いま選んでいる弱点を出す。
    選んだつもりで選べていない、を防ぐ */
@@ -2125,6 +2156,39 @@ html { -webkit-text-size-adjust: 100%; }
   .print-target .lesson-section,
   .print-target .lesson-instruction { break-after: avoid; }
   .print-target .lesson-page + .lesson-page { margin-top: 14pt; }
+
+  /* ── Quick Response の控え(紙のいちばん後ろ)────────────────
+     2026-09 利用者の指定「ページは一番後ろで大丈夫です」。
+     **新しい紙から始める。** 前のページの余りに続けて出すと、
+     本文の一部のように見える */
+  .print-target .qrsheet { break-before: page; }
+  .print-target .qrsheet-title {
+    margin: 12pt 0 4pt; font-size: 11.5pt; break-after: avoid;
+  }
+  .print-target ol.qrsheet-list {
+    margin: 0; padding-left: 0; list-style: none; counter-reset: qr;
+  }
+  .print-target ol.qrsheet-list > li {
+    position: relative;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0 10pt;
+    margin: 0 0 6pt; padding: 0 0 5pt 22pt;
+    border-bottom: 0.5pt solid #ddd;
+    break-inside: avoid; counter-increment: qr;
+  }
+  .print-target ol.qrsheet-list > li::before {
+    content: counter(qr);
+    position: absolute; left: 0; top: 1pt;
+    width: 15pt; height: 15pt; line-height: 15pt; text-align: center;
+    border: 0.5pt solid #666; border-radius: 50%;
+    font-size: 9pt; color: #333 !important;
+  }
+  /* 日本語が問題、英語が答え。**答えのほうを薄くする**(先に目が行かない) */
+  .print-target .qrsheet-ja { font-size: 10.5pt; }
+  .print-target .qrsheet-en { font-size: 11pt; color: #444 !important; }
+  /* 狭い紙(縦の A4 でも長い文がある)では、上下に積む */
+  @media (max-width: 120mm) {
+    .print-target ol.qrsheet-list > li { grid-template-columns: 1fr; }
+  }
   /* ただし通しの練習(6Steps / Quick Response)は紙に出さない。
      あれは**画面でやること**で、中身は上のページがすべて持っている */
   body.is-printing .lesson-sheet > .passage,
@@ -3643,6 +3707,18 @@ html { -webkit-text-size-adjust: 100%; }
 }
 /* 見出しを出さない紙の上でも、数だけは右に置く */
 .qr-head > .qr-count:first-child { margin-left: 0; margin-right: auto; }
+/* 取り組み方(文章 / フレーズ・単語)。**プルダウン**にする
+   (6Steps と同じ考え方。札を並べると狭い画面で2段になる) */
+.qr-mode select {
+  min-height: 34px; padding: 4px 8px;
+  border: 1px solid var(--qr-rule); border-radius: 8px;
+  background: var(--qr-bg); color: var(--qr-fg);
+  font-size: 13px; font-weight: 600;
+}
+@media (max-width: 860px) {
+  /* 860px 以下では 16px を割らない(iOS が勝手に拡大するため) */
+  .qr-mode select { font-size: 16px; }
+}
 .qr-head .nav-icon-btn { width: 36px; height: 36px; margin-right: -6px; }
 
 /* どこまで来たか。**終わりが見えないと続かない** */
