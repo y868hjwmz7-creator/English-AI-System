@@ -9,7 +9,6 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import MaterialForm from './MaterialForm.jsx'
-import TeachingNote from './TeachingNote.jsx'
 import { parseMaterialTitle } from '../lib/format.js'
 import { loadSearchOpen, saveSearchOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
@@ -42,7 +41,6 @@ export default function TrainerMaterials({ me }) {
   const [scene, setScene] = useState('')       // 会話の場面
   const [sort, setSort] = useState('new')      // 並び順
   const [openId, setOpenId] = useState(null)   // 中身を開いている教材
-  const [openSection, setOpenSection] = useState({})  // 教材ごとに開いている演習
   // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
   // (2026-08 利用者の指定)。担当ゲストの記録には触れない
   const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
@@ -494,9 +492,13 @@ export default function TrainerMaterials({ me }) {
 
               {m.instruction_ja && <p className="card-hint">{m.instruction_ja}</p>}
 
-              {m.teaching_point && (
-                <TeachingNote text={m.teaching_point} />
-              )}
+              {/* **指導ポイント(ここに注意)は、カードに出さない**
+                  (2026-09 利用者の指定)。
+                    > 赤で囲った部分は必要ないです。
+                    > 教材のあるところ全てで適用してください。(ゲストエンドでも同じ)
+                  中身は「セッションで使う(大きく表示)」か印刷で見る。
+                  **`TeachingNote` そのものの見た目は変えていない**
+                  (2026-08「指示があるまで絶対に変えない」)。出す場所だけの話 */}
 
               {/* **中身の抜き書きは出さない**(2026-08 利用者の指定)。
 
@@ -524,8 +526,6 @@ export default function TrainerMaterials({ me }) {
               {openId === m.id && (
                 <MaterialBody
                   material={m}
-                  openSection={openSection[m.id] ?? null}
-                  onSection={(id) => setOpenSection((x) => ({ ...x, [m.id]: id }))}
                   wordStatuses={wordStatuses}
                   /* どの教材で会ったかを添える(0024) */
                   onMarkWord={markIn(markWord, m.id)}

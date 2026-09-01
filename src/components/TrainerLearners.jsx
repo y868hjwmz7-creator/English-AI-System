@@ -15,7 +15,6 @@ import {
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
-import TeachingNote from './TeachingNote.jsx'
 import { parseMaterialTitle } from '../lib/format.js'
 import { loadPastFilterOpen, savePastFilterOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
@@ -79,7 +78,6 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const [openHw, setOpenHw] = useState(null)      // 開いている宿題の id
   const [bodies, setBodies] = useState({})        // 教材id → 読んだ中身
   const [bodyBusy, setBodyBusy] = useState(null)  // いま読んでいる教材id
-  const [hwSection, setHwSection] = useState({})  // 教材ごとに開いている演習
   // 絞り込みの欄を開いているか。**教材の欄とは別に覚える**(別の画面の別の欄)
   const [pastOpen, setPastOpen] = useState(loadPastFilterOpen)
   // 過去の宿題の絞り込み。
@@ -704,7 +702,8 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                             </div>
                           </div>
 
-                          {m?.teaching_point && <TeachingNote text={m.teaching_point} />}
+                          {/* 指導ポイントはカードに出さない(2026-09 利用者の指定)。
+                              教材のあるところ全てで同じにする */}
 
                           {/* 何が何問あるか。**1行に畳む**(教材の画面と同じ) */}
                           <p className="muted material-parts">
@@ -717,8 +716,6 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                           {open && body && (
                             <MaterialBody
                               material={body}
-                              openSection={hwSection[body.id] ?? null}
-                              onSection={(id) => setHwSection((x) => ({ ...x, [body.id]: id }))}
                               wordStatuses={wordStatuses}
                               /* **レッスンで付けた語は、そのゲストの単語帳へ**(0025) */
                               onMarkWord={markIn(markWord, body.id, openId)}

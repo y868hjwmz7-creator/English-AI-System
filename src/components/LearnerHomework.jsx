@@ -9,21 +9,18 @@ import { useEffect, useState } from 'react'
 import { cefrLabel } from '../data/cefr.js'
 import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
-import QuickResponse from './QuickResponse.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
-import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { printElement } from '../lib/print.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
-import { hasQuickResponse } from '../lib/quickResponse.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
-import { BoltIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
+import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
@@ -54,15 +51,7 @@ export default function LearnerHomework({ me = null }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [openId, setOpenId] = useState(null)
-  // 教材ごとに、いまどの演習を開いているか。
-  // 記事・設問・語句を縦に全部並べると、スマホでは延々と流れて
-  // 「どこまでやったか」が分からなくなる(2026-08 の指摘)。
-  const [openSection, setOpenSection] = useState({})
   const [lessonOf, setLessonOf] = useState(null)   // レッスン表示で開いている教材
-  // Quick Response を開いている宿題。**教材ごとに1つ。**
-  // 「中身を見る」タブとは別の行為なので、開いているあいだは
-  // タブの中身を出さない(注意が2つに割れる)
-  const [qrOf, setQrOf] = useState(null)
   /**
    * **いま紙に出している宿題**(null なら印刷していない)。
    *
@@ -217,12 +206,11 @@ export default function LearnerHomework({ me = null }) {
                 <div className="material-head no-print">
                   <div className="material-open" role="button" tabIndex={0}
                        aria-expanded={openId === a.id}
-                       onClick={() => { setOpenId(openId === a.id ? null : a.id); setQrOf(null) }}
+                       onClick={() => setOpenId(openId === a.id ? null : a.id)}
                        onKeyDown={(e) => {
                          if (e.key !== 'Enter' && e.key !== ' ') return
                          e.preventDefault()
                          setOpenId(openId === a.id ? null : a.id)
-                         setQrOf(null)
                        }}>
                     <div className="past-head">
                       <span className="past-date">{formatDate(a.assigned_at)}</span>
@@ -301,72 +289,25 @@ export default function LearnerHomework({ me = null }) {
                         <ScreenIcon />大きく表示する
                       </button>
                     </div>
-                    {a.material?.teaching_point && (
-                      <TeachingNote text={a.material.teaching_point} title="ここに注意" />
-                    )}
+                    {/* **「ここに注意」は出さない**(2026-09 利用者の指定)。
+                        > 赤で囲った部分は必要ないです。
+                        > 教材のあるところ全てで適用してください。
+                        **`TeachingNote` の見た目は変えていない。** 出す場所だけの話 */}
 
-                    {/* ── 通しで練習する ──────────────────────────
-                        **「中身を見る」タブとは、行為が違う。**
-                        タブは記事・設問・語句を見るためのもので、こちらは
-                        教材1本を通しで練習するためのもの。
-                        だから同じ形(札)にせず、絵の付いたボタンにして
-                        タブの上に置く。押すと下がその練習だけになる */}
-                    {hasQuickResponse(a.material) && (
-                      <div className="practice-row no-print">
-                        <button type="button"
-                                className={`btn${qrOf === a.id ? ' btn--primary' : ''}`}
-                                aria-pressed={qrOf === a.id}
-                                onClick={() => setQrOf(qrOf === a.id ? null : a.id)}>
-                          <BoltIcon />
-                          Quick Response
-                        </button>
-                      </div>
-                    )}
+                    {/* **演習のタブは置かない**(2026-09 利用者の指定)。
+                        > 赤で囲った部分は必要ないです。
+                        > 教材のあるところ全てで適用してください。(ゲストエンドでも同じ)
 
-                    {qrOf === a.id ? (
-                      <QuickResponse
-                        material={a.material}
-                        learnerId={learnerId}
-                        onClose={() => setQrOf(null)}
-                        wordStatuses={wordStatuses}
-                        onMarkWord={markWord}
-                      />
-                    ) : (
-                    <>
-                    {/* **はじめはどれも開かない**(2026-08 の指摘)。
-                        1つ目が開いた状態で出ると、宿題を並べて見渡せない。
-                        押したタブだけを開き、同じタブをもう一度押すと閉じる。
-                        演習が1種類のときはタブが出ない(Tabs は2つ未満だと
-                        描かない)ので、そのときだけ開いたままにする。 */}
-                    {(() => {
-                      const secs = a.material?.sections ?? []
-                      return (
-                        <Tabs
-                          variant="sub"
-                          ariaLabel="演習の切り替え"
-                          value={openSection[a.id] ?? null}
-                          onChange={(id) => setOpenSection((m) => ({
-                            ...m, [a.id]: m[a.id] === id ? null : id,
-                          }))}
-                          items={secs.map((sec) => ({
-                            id: sec.id,
-                            label: exerciseLabel(sec.exercise_type),
-                            count: isPassageSection(sec.exercise_type) ? null : sec.items.length,
-                          }))}
-                        />
-                      )
-                    })()}
+                        取り組むのは「大きく表示する」、持ち出すのは「印刷」。
+                        カードの中では、日付・教材名・何問あるかだけが分かればよい。
+
+                        **描くのは、紙に出す一瞬だけ**(`printId`)。
+                        隠したまま置いておくと、`PassagePractice` が
+                        **やってもいない練習の時間を数えてしまう**(CLAUDE.md)。 */}
                     {a.material?.sections
-                      /* **紙に出すときだけ、全部の演習を描く。**
-                         ふだんは押したタブの1つだけ(取り組みの時間を
-                         二重に数えないため。上の `printId` を参照) */
-                      .filter((sec, i) => sec.id === openSection[a.id]
-                        || (a.material.sections.length < 2 && i === 0)
-                        || printId === a.id)
-                      .map((sec, i) => {
-                      const open = sec.id === openSection[a.id]
-                        || (a.material.sections.length < 2 && i === 0)
-                      const cls = `exercise-view${open ? '' : ' is-closed'}`
+                      .filter(() => printId === a.id)
+                      .map((sec) => {
+                      const cls = 'exercise-view is-closed'
                       const type = exerciseType(sec.exercise_type)
                       // 記事・会話は「問」ではなく1本の読み物。
                       // 声に出す練習は、この中で取り組み方を切り替える。
@@ -460,10 +401,8 @@ export default function LearnerHomework({ me = null }) {
                         </section>
                       )
                     })}
-                    </>
-                    )}
                     <button type="button" className="btn btn--link no-print"
-                            onClick={() => { setOpenId(null); setQrOf(null) }}>
+                            onClick={() => setOpenId(null)}>
                       閉じる
                     </button>
                   </div>

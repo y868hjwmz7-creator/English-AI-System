@@ -19,7 +19,6 @@
  *   紙用の見出し(`print-only`)もここに入っている。
  */
 import MaterialTitle from './MaterialTitle.jsx'
-import Tabs from './Tabs.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
 import PhraseChips from './PhraseChips.jsx'
@@ -39,8 +38,6 @@ import QuickResponseSheet from './QuickResponseSheet.jsx'
 
 export default function MaterialBody({
   material: m,
-  openSection = null,
-  onSection = null,
   wordStatuses = null,
   onMarkWord = null,
   onClose = null,
@@ -127,30 +124,23 @@ export default function MaterialBody({
       {/* **失敗したときだけ出す。** 裏で作っているので、
           うまくいったときは訳が出るようになるだけでよい */}
       {errorNote && <p className="notice notice--warn no-print">{errorNote}</p>}
-      <Tabs
-        variant="sub"
-        ariaLabel="演習の切り替え"
-        value={openSection ?? null}
-        onChange={(id) => onSection?.(openSection === id ? null : id)}
-        items={sections.map((sec) => ({
-          id: sec.id,
-          label: exerciseLabel(sec.exercise_type),
-          count: sec.items.length,
-        }))}
-      />
-      {sections
-        .map((sec, i) => {
-          /* はじめはどれも開かない。演習が1種類のときだけ開く
-             (Tabs は2つ未満だと描かないため、押す先が無い)。
+      {/* **演習のタブは置かない**(2026-09 利用者の指定)。
+            > 赤で囲った部分は必要ないです。
+            > 教材のあるところ全てで適用してください。(ゲストエンドでも同じ)
 
-             **開いていないものも、描いてから隠す**(`is-closed`)。
-             描かないでいたので、タブを押さずに印刷すると
-             **見出しだけの紙**が出ていた(2026-08 実機)。
-             紙用の指定が `display: block` に戻し、教材まるごとを刷る。 */
-          const open = sec.id === openSection || (sections.length < 2 && i === 0)
+          中身は「セッションで使う(大きく表示)」か「印刷 / PDFで保存」で見る。
+          カードの中では、日付・教材名・何問あるかだけが分かればよい。
+
+          **描くのはやめない。隠すだけ**(`is-closed`)。
+          描かないでいたので、タブを押さずに印刷すると
+          **見出しだけの紙**が出ていた(2026-08 実機)。
+          紙用の指定(`@media print`)が `display: block` に戻し、
+          **教材まるごとを刷る。** */}
+      {sections
+        .map((sec) => {
           const type = exerciseType(sec.exercise_type)
           return (
-            <section key={sec.id} className={`exercise-view${open ? '' : ' is-closed'}`}>
+            <section key={sec.id} className="exercise-view is-closed">
               <h4 className="section-title">
                 {exerciseLabel(sec.exercise_type)}({countLabel(sec.exercise_type, sec.items.length)})
                 {!type?.audioFrom && <span className="field-hint"> 音声なし</span>}
