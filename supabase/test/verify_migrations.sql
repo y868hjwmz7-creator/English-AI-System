@@ -264,4 +264,9 @@ from (
   select '(63) 復習が「まだ + 覚えかけ」を返せる(0027)', (
     select pg_get_functiondef(p.oid) like '%todo%'
     from pg_proc p where p.proname = 'review_words'), 63
+  union all
+  select '(64) 単語帳を分野・場面でも絞れる(0028)', (
+    select pg_get_function_result(p.oid) like '%material_industry%'
+       and pg_get_function_result(p.oid) like '%material_scene%'
+    from pg_proc p where p.proname = 'review_words'), 64
 ) t order by 順;

@@ -288,7 +288,7 @@ export default function App() {
             ) : view === 'homework' ? (
               <LearnerHomework me={profile} />
             ) : view === 'wordbook' ? (
-              <Wordbook level={profile?.cefr ?? null} />
+              <Wordbook />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice />
             ) : (

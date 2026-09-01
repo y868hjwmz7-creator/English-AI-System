@@ -3099,7 +3099,11 @@ html { -webkit-text-size-adjust: 100%; }
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   margin-top: 10px;
 }
-.wbfilter-pick select { max-width: 15rem; }
+.wbfilter-pick select {
+  /* **コンパクトに。** 幅は中身なりで、長い教材名だけ頭打ちにする */
+  width: auto; max-width: 12rem; height: 34px;
+  border-radius: 999px; font-size: 13px;
+}
 
 /* カレンダーの吹き出し。**body の直下に出す**(親に切られないため)。
    色は語の吹き出し(`.etext-pop`)と同じ考え方で、面と枠と影で浮かせる */
@@ -3220,17 +3224,23 @@ html { -webkit-text-size-adjust: 100%; }
    「のこり 10 語」という小さな文字は、あってもなくても同じだった
    (2026-08 利用者の指定)。**何問目かを数で出し、帯で見せる。**
    終わりが見えるから、あと3つなら続ける気になる。 */
+/* **タブと「出題の形」を同じ行に**(2026-08 利用者の指定)。
+   タブは横に流れるので、`min-width: 0` を置かないと
+   「おまかせ」が押し出されて画面の外へ出る */
+.wb-tabrow { display: flex; align-items: center; gap: 10px; }
+.wb-tabrow > .tabbar { flex: 1 1 auto; min-width: 0; margin: 0; }
+.wb-formpick { flex: 0 0 auto; }
+.wb-formpick > select {
+  width: auto; min-width: 112px; height: 34px;
+  border-radius: 999px; font-size: 13px;
+}
+
 .wb-run { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .wb-run-head { display: flex; align-items: center; gap: 10px; }
 .wb-run-count { font-size: 13px; color: var(--text-secondary); }
 .wb-run-count > strong {
   font-size: 20px; font-weight: 700; color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-}
-.wb-run-form { margin-left: auto; }
-.wb-run-form > select {
-  width: auto; min-width: 130px; height: 34px;
-  border-radius: 999px; font-size: 13px;
 }
 /* 1問=1目盛り。**色だけに頼らず、いまの1つは太くしてある** */
 .wb-run-bar { display: flex; gap: 3px; }

@@ -47,7 +47,7 @@ export default function LearnerWordbook({ learnerId, learnerName = '', onMakeMat
   const [rows, setRows] = useState([])
   /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
      「この教材でつまずいた語だけ」で教材を作れるようにする */
-  const [filter, setFilter] = useState({ day: null, material: null })
+  const [filter, setFilter] = useState({ day: null, material: null, field: null, topic: null })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   // 選んだ語(そろえた形をそのまま持つ)。タブを移っても消えない

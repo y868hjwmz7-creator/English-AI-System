@@ -34,14 +34,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  loadGlossDetail, loadMyWordbook, loadVocabByIndustry, loadVocabWeek,
+  loadGlossDetail, loadMyWordbook, loadVocabWeek,
   loadWordbookCounts, loadWordbookViewers, setWordStatus,
 } from '../lib/vocab.js'
 import {
   QUIZ_FORMS, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
 } from '../lib/wordQuiz.js'
-import { cefrProgress } from '../data/cefrVocab.js'
-import { industryLabel } from '../data/industries.js'
 import { shortDate } from '../lib/format.js'
 import SpeakButton from './SpeakButton.jsx'
 import Tabs from './Tabs.jsx'
@@ -65,7 +63,8 @@ const VIEWS = [
   { id: 'due', label: '復習', status: 'todo', dueOnly: false },
   { id: 'learning', label: '覚えかけ', status: 'learning', dueOnly: false },
   { id: 'known', label: '覚えた', status: 'known', dueOnly: false },
-  { id: 'progress', label: '積み上がり' },
+  // **「積み上がり」はここから外した**(2026-08 利用者の指定)。
+  //   > 積み上がりは一旦そこからは削除です。
 ]
 
 /** 今日(端末の日付)。「今日出すもの」を選ぶのに使う */
@@ -118,7 +117,9 @@ function Detail({ wordNorm }) {
   )
 }
 
-export default function Wordbook({ level = null }) {
+/* `level`(CEFR)は「積み上がり」で使っていた。いったん外したので受け取らない
+   (2026-08 利用者の指定)。戻すときは App からまた渡す */
+export default function Wordbook() {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ。
   // 記録が付かなくても練習は止まらない(貼る前でも動く)
   usePracticeLog('wordbook')
@@ -128,12 +129,11 @@ export default function Wordbook({ level = null }) {
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
   /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
      絞り込みは手元で行う。選ぶたびに聞き直さない */
-  const [filter, setFilter] = useState({ day: null, material: null })
+  const [filter, setFilter] = useState({ day: null, material: null, field: null, topic: null })
   const [queue, setQueue] = useState([])        // いまの10語
   const [result, setResult] = useState(null)    // 終わったときの結果
   const [counts, setCounts] = useState({ due: 0, unknown: 0, learning: 0, known: 0 })
   const [week, setWeek] = useState({ days: 0, answered: 0, correct: 0, weeks: 0 })
-  const [byIndustry, setByIndustry] = useState([])
   const [viewers, setViewers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -154,16 +154,15 @@ export default function Wordbook({ level = null }) {
 
   const reload = useCallback(async () => {
     setLoading(true)
-    const [list, tally, wk, ind, seen] = await Promise.all([
+    const [list, tally, wk, seen] = await Promise.all([
       current.status
         ? loadMyWordbook({ status: current.status, dueOnly: current.dueOnly, limit: 200 })
         : Promise.resolve({ data: [] }),
-      loadWordbookCounts(), loadVocabWeek(), loadVocabByIndustry(), loadWordbookViewers(),
+      loadWordbookCounts(), loadVocabWeek(), loadWordbookViewers(),
     ])
     setLoading(false)
     if (tally.data) setCounts(tally.data)
     if (wk.data) setWeek(wk.data)
-    if (ind.data) setByIndustry(ind.data)
     if (seen.data) setViewers(seen.data)
     if (list.error) { setError(list.error); return }
     setError(null)
@@ -191,10 +190,13 @@ export default function Wordbook({ level = null }) {
    * **絞り込みを変えたら組み直す。** 変えても前の10語のままだと、
    * 何のために選んだのか分からない。
    */
+  /** 何かで絞っているか。**1つでも絞っていれば、日で切らない** */
+  const narrowed = Boolean(filter.day || filter.material || filter.field || filter.topic)
+
   useEffect(() => {
     if (!isQuiz || loading) return
     const today = todayKey()
-    const pool = filter.day || filter.material
+    const pool = narrowed
       ? applyWordbookFilter(rows, filter)
       : rows.filter((r) => !r.due_on || r.due_on <= today)
     setQueue(buildSession(pool))
@@ -202,7 +204,7 @@ export default function Wordbook({ level = null }) {
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
     // rows は reload で入れ替わる。中身ではなく、その入れ替わりを見ている
-  }, [isQuiz, loading, rows, filter.day, filter.material])
+  }, [isQuiz, loading, rows, filter.day, filter.material, filter.field, filter.topic])
   const card = isQuiz ? queue[0] : null
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
@@ -238,8 +240,6 @@ export default function Wordbook({ level = null }) {
     // 少しだけ見せてから次へ。すぐ消えると、何が正解だったか分からない
     window.setTimeout(() => answer(card, ok ? 'known' : 'unknown'), ok ? 700 : 1600)
   }
-
-  const cefr = level ? cefrProgress(level, counts.known) : null
 
   return (
     <section className="card">
@@ -289,56 +289,45 @@ export default function Wordbook({ level = null }) {
         </p>
       )}
 
-      <Tabs
-        variant="sub" ariaLabel="単語帳の切り替え"
-        value={view} onChange={setView}
-        items={VIEWS.map((v) => ({
-          id: v.id, label: v.label,
-          // **復習には「今日出す数」を付ける。** 押す前に、やることの量が分かる
-          count: v.id === 'due' && counts.due > 0 ? counts.due : null,
-        }))}
-      />
+      {/* **タブと「出題の形」を同じ行に**(2026-08 利用者の指定)。
+            > 復習、覚えかけ、覚えた、は同じ位置でタブにしてください。
+            > 積み上がりは一旦そこからは削除です。
+            > その右におまかせのタブを置いてください。
+          「おまかせ」は出題の形。**復習のときだけ効く**ので、
+          そのときだけ出す(効かない操作を見せない・CLAUDE.md)。 */}
+      <div className="wb-tabrow">
+        <Tabs
+          variant="sub" ariaLabel="単語帳の切り替え"
+          value={view} onChange={setView}
+          items={VIEWS.map((v) => ({
+            id: v.id, label: v.label,
+            // **復習には「今日出す数」を付ける。** 押す前に、やることの量が分かる
+            count: v.id === 'due' && counts.due > 0 ? counts.due : null,
+          }))}
+        />
+        {isQuiz && (
+          <label className="wb-formpick">
+            <span className="sr-only">出題の形</span>
+            <select value={want}
+                    onChange={(e) => {
+                      setWant(e.target.value); setShown(false); setJudged(null)
+                    }}>
+              <option value="auto">おまかせ</option>
+              {QUIZ_FORMS.map((f) => (
+                <option key={f.id} value={f.id}>{f.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
 
       {error && <p className="notice notice--error">{error}</p>}
       {loading && <p className="hint">読み込み中…</p>}
 
-      {/* ── 積み上がり ────────────────────────────────────────── */}
-      {view === 'progress' && !loading && (
-        <div className="wordbook-progress">
-          {cefr ? (
-            <div className="wordbook-goal">
-              <p className="wordbook-goal-line">
-                <strong>{level}</strong> のめやす {cefr.need} 語のうち
-                <strong> {cefr.known} 語</strong>({cefr.percent}%)
-              </p>
-              <div className="wordbook-bar"><span style={{ width: `${cefr.percent}%` }} /></div>
-              {cefr.next && (
-                <p className="hint">
-                  次の {cefr.next.level} まで あと {cefr.next.remain} 語
-                </p>
-              )}
-              <p className="hint">
-                ここに入るのは<strong>「知らなかった」と付けた語だけ</strong>です。
-                もともと知っている語は数えていません。
-              </p>
-            </div>
-          ) : (
-            <p className="hint">レベルが分かると、めやすに対する達成率が出せます。</p>
-          )}
-
-          <h3 className="wordbook-sub">業界べつ</h3>
-          {!byIndustry.length && <p className="hint">まだありません。</p>}
-          <ul className="wordbook-industry">
-            {byIndustry.map((r) => (
-              <li key={r.industry}>
-                <span>{r.industry === 'general' ? '汎用' : industryLabel(r.industry)}</span>
-                <strong>{r.known}</strong> 語
-                {r.learning > 0 && <span className="hint">(覚えかけ {r.learning})</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* 「積み上がり」は、いったんタブから外した(2026-08 利用者の指定)。
+             > 積み上がりは一旦そこからは削除です。
+          描いていた中身(CEFR のめやす・業界べつ)も一緒に外した。
+          **効かない画面のコードを残さない。** 戻すときは git から取り出す */}
 
       {/* ── 今日の復習(10語ずつ)────────────────────────────── */}
       {isQuiz && !loading && result && (
@@ -379,7 +368,7 @@ export default function Wordbook({ level = null }) {
            (CLAUDE.md)。数え上げは表を直に見ているので、
            「復習 118」と出ているのに1語も出せないなら、それは
            **やり切ったのではなく、読めていない。** */
-        (filter.day || filter.material)
+        narrowed
           ? <p className="hint">その絞り込みに当てはまる語はありません。</p>
           : counts.due > 0
             ? (
@@ -408,22 +397,12 @@ export default function Wordbook({ level = null }) {
             const total = done + queue.length
             return (
               <div className="wb-run">
+                {/* 出題の形は**タブの右**へ移した(2026-08 利用者の指定)。
+                    ここに残すと、同じものが2か所に出る */}
                 <div className="wb-run-head">
                   <span className="wb-run-count">
                     <strong>{done + 1}</strong> / {total} 語
                   </span>
-                  <label className="wb-run-form">
-                    <span className="sr-only">出題の形</span>
-                    <select value={want}
-                            onChange={(e) => {
-                              setWant(e.target.value); setShown(false); setJudged(null)
-                            }}>
-                      <option value="auto">おまかせ</option>
-                      {QUIZ_FORMS.map((f) => (
-                        <option key={f.id} value={f.id}>{f.label}</option>
-                      ))}
-                    </select>
-                  </label>
                 </div>
                 <div className="wb-run-bar" role="presentation">
                   {Array.from({ length: total }, (unused, i) => (
