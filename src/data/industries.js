@@ -8,6 +8,25 @@
  * id は変えないこと(教材との紐付けに使う)。label は自由に変えてよい。
  * 指定しない場合(NULL)は「汎用」。全員に出る。
  *
+ * 【`parent` — 同じ分野の中の「種類」】(2026-09 利用者の指定)
+ *
+ *   > 各趣味、業種は、同じ業種内に種類がある場合はさらにメニューが
+ *   > 展開して選べるようにしてください。
+ *
+ *   コンサルには建設・車・経営があり、医療には介護と外科がある。
+ *   1つの長い一覧に全部並べると、探すのが大変になる。
+ *   **1つめの欄で分野を選び、種類があるときだけ2つめの欄が出る。**
+ *
+ *   **入れ物は1つのまま**(`materials.industry`)。保存されるのは
+ *   選んだ種類の id(`consult_con` など)で、**階層は保存しない。**
+ *   だから SQL も要らないし、種類をあとから組み替えても、
+ *   すでに作った教材は壊れない。
+ *
+ *   ・`parent` … 親の id。これがある行は、2つめの欄にだけ出る
+ *   ・`kinds`  … 種類を持つ親の目印(読む人のため。判定は `kindsOf`)
+ *   ・`short`  … 2つめの欄に出す短い名前(親がすぐ左にあるので短くてよい)
+ *   ・`label`  … **それだけで通じる名前。** 教材の名前や絞り込みに出る
+ *
  * 【`group` — お仕事か、趣味・娯楽か】(2026-08 利用者の指定)
  *
  *   > 業界を選ばない場合に選べるようにしたいのが、「趣味・娯楽」です。
@@ -20,19 +39,25 @@
 export const INDUSTRIES = [
   { id: 'business',      label: 'ビジネス全般', hint: '会議、メール、電話、出張' },
   { id: 'it',            label: 'IT・技術',     hint: '開発、仕様説明、障害対応' },
-  { id: 'medical',       label: '医療・介護',   hint: '患者対応、記録、多職種連携' },
+  { id: 'med',           label: '医療', kinds: true, hint: '患者さん・ご家族・多職種とのやりとり' },
+  { id: 'medical',       parent: 'med', short: '医療・介護', label: '医療・介護', hint: '患者対応、記録、多職種連携' },
   { id: 'hospitality',   label: '接客・観光',   hint: '案内、予約、トラブル対応' },
-  { id: 'restaurant',    label: '飲食',         hint: '接客、注文、厨房、仕入れ、クレーム対応' },
+  { id: 'dining',        label: '飲食', kinds: true, hint: '料理を出す仕事' },
+  { id: 'restaurant',    parent: 'dining', short: '飲食店', label: '飲食店', hint: '接客、注文、厨房、仕入れ、クレーム対応' },
   { id: 'manufacturing', label: '製造',         hint: '工程説明、品質、安全' },
   { id: 'pharma',        label: '製薬',         hint: '治験、承認申請、品質管理、学術情報' },
   { id: 'trading',       label: '商社',         hint: '仕入交渉、見積、船積、与信、代理店' },
   { id: 'finance',       label: '金融',         hint: '融資、投資、決算説明、コンプライアンス' },
   { id: 'construction',  label: '建設・不動産', hint: '図面、工程、契約、内見、施工管理' },
-  { id: 'legal',         label: '法務',         hint: '契約書、条項の交渉、社内相談、コンプライアンス' },
+  { id: 'law',           label: '法律', kinds: true, hint: '契約・紛争・決まりごと' },
+  { id: 'legal',         parent: 'law', short: '法務(企業内)', label: '法務', hint: '契約書、条項の交渉、社内相談、コンプライアンス' },
   { id: 'insurance',     label: '保険',         hint: '契約内容の説明、査定、請求、代理店とのやりとり' },
-  { id: 'sports',        label: 'スポーツ(トレーナー)', hint: '身体の部位、症状、動作の指示、リハビリ、施術の説明' },
+  { id: 'sports_pro',    label: 'スポーツ', kinds: true, hint: '身体を使う仕事' },
+  { id: 'sports',        parent: 'sports_pro', short: 'トレーナー', label: 'スポーツ(トレーナー)', hint: '身体の部位、症状、動作の指示、リハビリ、施術の説明' },
+  { id: 'athlete',       parent: 'sports_pro', short: 'アスリート', label: 'アスリート', hint: '練習、遠征、取材、チームメイトやコーチとのやりとり' },
+  { id: 'fighter',       parent: 'sports_pro', short: '格闘家', label: '格闘家', hint: '計量、対戦相手、セコンド、試合前後のやりとり' },
   // 2026-08 利用者の指定で追加
-  { id: 'surgery',       label: '外科医',       hint: '術前術後の説明、手術の手順、カンファレンス、症例報告' },
+  { id: 'surgery',       parent: 'med', short: '外科', label: '外科医', hint: '術前術後の説明、手術の手順、カンファレンス、症例報告' },
   { id: 'manda',         label: 'M&A',          hint: 'デューデリジェンス、条件交渉、契約、統合後の引き継ぎ' },
   { id: 'research',      label: '研究者',       hint: '論文、学会発表、共同研究の相談、助成金の申請' },
   { id: 'investor',      label: '投資家',       hint: '投資先との面談、決算の読み解き、条件交渉、リスクの説明' },
@@ -47,7 +72,9 @@ export const INDUSTRIES = [
   // **DJ は趣味の側に移した**(2026-08 利用者の指定)。
   // 仕事としての音楽と、趣味としての DJ は使う言葉が違う。
   // **`id` は変えない**(すでに作った教材との紐付けに使っている)
-  { id: 'music',         label: 'ミュージシャン', hint: 'ブッキング、リハーサル、機材、ツアー、客への声かけ' },
+  { id: 'music_pro',     label: '音楽', kinds: true, hint: '音楽で人前に立つ仕事' },
+  { id: 'music',         parent: 'music_pro', short: 'ミュージシャン', label: 'ミュージシャン', hint: 'ブッキング、リハーサル、機材、ツアー、客への声かけ' },
+  { id: 'orchestra',     parent: 'music_pro', short: '音楽団', label: '音楽団', hint: '合わせ、指揮者の指示、パートごとの相談、演奏旅行' },
   { id: 'film',          label: '俳優・映画監督', hint: 'オーディション、撮影現場、脚本の読み合わせ、取材' },
   /* 2026-09 利用者の指定で追加。
      **すでにある分野と重ならないように分けてある。**
@@ -55,10 +82,12 @@ export const INDUSTRIES = [
      ・「弁護士」は外から受ける側。「法務」は会社の中の人
      ・「ケータリング」は運び込む側。「飲食」は店で出す側
      使う言葉も、話す相手も違うので、同じ分野にはしない */
-  { id: 'consult_con',   label: 'コンサル(建設)', hint: '現状の分析、提案、工程とコストの見直し、発注者との調整' },
-  { id: 'consult_auto',  label: 'コンサル(車)',   hint: 'サプライヤー、生産と品質、電動化、販売網の見直し' },
-  { id: 'lawyer',        label: '弁護士',         hint: '依頼者との相談、見通しと費用、相手方との交渉、法廷' },
-  { id: 'catering',      label: 'ケータリング',   hint: '見積、人数とアレルギー、会場の下見、当日の設営と配膳' },
+  { id: 'consult',       label: 'コンサル', kinds: true, hint: '外から見て、調べて、提案する' },
+  { id: 'consult_con',   parent: 'consult', short: '建設', label: 'コンサル(建設)', hint: '現状の分析、提案、工程とコストの見直し、発注者との調整' },
+  { id: 'consult_auto',  parent: 'consult', short: '車',   label: 'コンサル(車)',   hint: 'サプライヤー、生産と品質、電動化、販売網の見直し' },
+  { id: 'consult_biz',   parent: 'consult', short: '経営・戦略', label: 'コンサル(経営・戦略)', hint: '課題の整理、方針の提案、社内の巻き込み、実行の支援' },
+  { id: 'lawyer',        parent: 'law', short: '弁護士',   label: '弁護士',         hint: '依頼者との相談、見通しと費用、相手方との交渉、法廷' },
+  { id: 'catering',      parent: 'dining', short: 'ケータリング', label: 'ケータリング', hint: '見積、人数とアレルギー、会場の下見、当日の設営と配膳' },
   { id: 'gov_jp',        label: '政府関係(日本)', hint: '海外との会談、国際会議、視察の受け入れ、制度の説明' },
 
   /* ── 趣味・娯楽(2026-08 利用者の指定)──────────────────────────
@@ -78,15 +107,19 @@ export const INDUSTRIES = [
      **写真・車・ペット・読書などは入れていない。** 増やせば選ぶのが
      大変になる。足したくなったら、ここに1行書き足すだけでよい。 */
   { id: 'travel',   group: 'hobby', label: '旅行',            hint: '空港、ホテル、道を尋ねる、トラブル、現地の人との会話' },
-  { id: 'golf',     group: 'hobby', label: 'ゴルフ',          hint: 'ラウンドの誘い、コース、スコア、道具、雑談' },
-  { id: 'food',     group: 'hobby', label: '料理',            hint: '自炊、レシピ、食材、キッチンでのやりとり' },
-  { id: 'gourmet',  group: 'hobby', label: '食べ歩き',        hint: '店さがし、行列、注文、感想、レビュー' },
-  { id: 'wine',     group: 'hobby', label: 'ワイン',          hint: '品種、産地、テイスティング、料理との組み合わせ' },
+  { id: 'sports_fun', group: 'hobby', label: 'スポーツ', kinds: true, hint: 'する・見る・鍛える' },
+  { id: 'golf',     group: 'hobby', parent: 'sports_fun', short: 'ゴルフ', label: 'ゴルフ', hint: 'ラウンドの誘い、コース、スコア、道具、雑談' },
+  { id: 'foodie',   group: 'hobby', label: '食べること', kinds: true, hint: '作る・食べ歩く・飲む' },
+  { id: 'food',     group: 'hobby', parent: 'foodie', short: '料理',     label: '料理',     hint: '自炊、レシピ、食材、キッチンでのやりとり' },
+  { id: 'gourmet',  group: 'hobby', parent: 'foodie', short: '食べ歩き', label: '食べ歩き', hint: '店さがし、行列、注文、感想、レビュー' },
+  { id: 'wine',     group: 'hobby', parent: 'foodie', short: 'ワイン',   label: 'ワイン',   hint: '品種、産地、テイスティング、料理との組み合わせ' },
   { id: 'movies',   group: 'hobby', label: '映画・ドラマ',    hint: 'あらすじ、感想、俳優、配信サービス、おすすめ' },
-  { id: 'watching', group: 'hobby', label: 'スポーツ観戦',    hint: '試合の展開、ルール、選手、応援、結果の話' },
-  { id: 'listening', group: 'hobby', label: '音楽・ライブ',   hint: '好きな曲、ライブ、フェス、おすすめの伝え方' },
-  { id: 'dj',       group: 'hobby', label: 'DJ',              hint: '選曲、クラブ、機材、イベントの打ち合わせ、客の反応' },
-  { id: 'fitness',  group: 'hobby', label: '筋トレ・フィットネス', hint: '体の部位、動作、器具、ジムでのやりとり' },
+  { id: 'watching', group: 'hobby', parent: 'sports_fun', short: '観戦', label: 'スポーツ観戦', hint: '試合の展開、ルール、選手、応援、結果の話' },
+  { id: 'music_fun', group: 'hobby', label: '音楽', kinds: true, hint: '聴く・かける' },
+  { id: 'listening', group: 'hobby', parent: 'music_fun', short: '音楽・ライブ', label: '音楽・ライブ', hint: '好きな曲、ライブ、フェス、おすすめの伝え方' },
+  { id: 'dj',       group: 'hobby', parent: 'music_fun', short: 'DJ', label: 'DJ', hint: '選曲、クラブ、機材、イベントの打ち合わせ、客の反応' },
+  { id: 'fitness',  group: 'hobby', parent: 'sports_fun', short: '筋トレ', label: '筋トレ・フィットネス', hint: '体の部位、動作、器具、ジムでのやりとり' },
+  { id: 'martial',  group: 'hobby', parent: 'sports_fun', short: '格闘技', label: '格闘技', hint: '道場やジムでのやりとり、技の名前、スパーリング、大会' },
   { id: 'gaming',   group: 'hobby', label: 'ゲーム',          hint: 'オンラインでの声かけ、実況、ジャンル、感想' },
 ]
 
@@ -96,9 +129,53 @@ export const INDUSTRY_GROUPS = [
   { id: 'hobby', label: '趣味・娯楽' },
 ]
 
-/** その組の業界だけを返す。`group` が無いものは「お仕事」 */
-export const industriesIn = (group) =>
-  INDUSTRIES.filter((i) => (i.group ?? 'work') === group)
+const byId = (id) => INDUSTRIES.find((i) => i.id === id) ?? null
 
+/**
+ * **1つめの欄に出す分野**(種類を持つものは、親だけ)。
+ *
+ * `group` が無いものは「お仕事」。
+ * 種類のあるものは親だけを返し、その中身は `kindsOf()` で出す。
+ */
+export const industriesIn = (group) =>
+  INDUSTRIES.filter((i) => (i.group ?? 'work') === group && !i.parent)
+
+/**
+ * その分野の「種類」(2026-09 利用者の指定)。
+ *
+ *   > 各趣味、業種は、同じ業種内に種類がある場合はさらにメニューが
+ *   > 展開して選べるようにしてください。
+ *
+ * **先頭に親そのものを「全般」として入れる。** 種類を決めきれない人が
+ * 行き止まりにならないようにするため。**種類が無ければ空を返す**ので、
+ * 画面は2つめの欄そのものを出さない(効かない操作を見せない・CLAUDE.md)。
+ */
+export const kindsOf = (id) => {
+  const kids = INDUSTRIES.filter((i) => i.parent === id)
+  if (!kids.length) return []
+  return [{ id, short: '全般', label: byId(id)?.label ?? id, hint: byId(id)?.hint ?? '' }, ...kids]
+}
+
+/** その分野の親(種類のとき)。親が無ければ自分自身 */
+export const parentOf = (id) => byId(id)?.parent ?? id
+
+/**
+ * その分野が「お仕事」か「趣味・娯楽」か。
+ * **種類は親の組に従う。** 種類の側に `group` を書き忘れても食い違わない
+ */
+export const groupOf = (id) => {
+  const me = byId(id)
+  if (!me) return null
+  return me.group ?? (me.parent ? (byId(me.parent)?.group ?? 'work') : 'work')
+}
+
+/**
+ * 画面に出す名前。
+ *
+ * **種類にも、それだけで通じる名前を持たせてある**(`label`)。
+ * 「コンサル(建設)」のように、親の名前を含んだ形にしてあるので、
+ * 教材の名前や絞り込みに出しても、何の分野か分かる。
+ * 2つめの欄に出す短い名前は `short`(そこでは親がすぐ左にあるため)。
+ */
 export const industryLabel = (id) =>
-  id ? (INDUSTRIES.find((i) => i.id === id)?.label ?? id) : '汎用'
+  id ? (byId(id)?.label ?? id) : '汎用'

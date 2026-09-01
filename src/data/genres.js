@@ -8,7 +8,7 @@
  *
  * id は教材に保存されるため、使い始めたら変えない。label は自由に変えられる。
  */
-import { industriesIn } from './industries.js'
+import { groupOf, kindsOf } from './industries.js'
 
 /**
  * **どの仕事にもある話題**(2026-08 利用者の指定)。
@@ -291,6 +291,50 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'aud_follow',  label: '是正の確認',           hint: '直ったかを、証拠で確かめる' },
     { id: 'aud_external', label: '会計士とのやりとり',  hint: '見解を突き合わせ、線を決める' },
   ],
+  consult_biz: [
+    { id: 'cbiz_kickoff', label: 'キックオフ',         hint: '何を、いつまでに、誰と決めるか' },
+    { id: 'cbiz_hearing', label: '現場へのヒアリング', hint: '警戒されずに、本音を聞き出す' },
+    { id: 'cbiz_analysis', label: '分析結果の共有',    hint: '数字が言っていることを、短く' },
+    { id: 'cbiz_workshop', label: 'ワークショップ',    hint: '相手に考えさせ、案をまとめる' },
+    { id: 'cbiz_steering', label: '経営層への中間報告', hint: '判断してほしいことを、先に出す' },
+    { id: 'cbiz_pushback', label: '反対されたとき',    hint: '否定せず、前提から話し直す' },
+    { id: 'cbiz_handover', label: '実行への引き継ぎ',  hint: '離れたあとも回るように渡す' },
+  ],
+  orchestra: [
+    { id: 'orc_rehearse', label: '合わせ(リハーサル)', hint: 'テンポ、音量、入りのタイミング' },
+    { id: 'orc_conductor', label: '指揮者からの指示',   hint: '短い言葉と、身振りの補い' },
+    { id: 'orc_section',  label: 'パートごとの相談',    hint: '弓の方向、息継ぎ、指づかい' },
+    { id: 'orc_tour',     label: '演奏旅行の段取り',    hint: '移動、楽器の輸送、当日の流れ' },
+    { id: 'orc_stage',    label: '本番前の舞台裏',      hint: '短い声かけ。緊張のほぐし方' },
+    { id: 'orc_guest',    label: '客演・共演者と',      hint: '初めて組む相手との合わせ方' },
+    { id: 'orc_audience', label: '聴衆・主催者と',      hint: '曲の紹介、質問への受け答え' },
+  ],
+  athlete: [
+    { id: 'ath_training', label: '練習でのやりとり',   hint: 'メニュー、フォーム、調子の伝え方' },
+    { id: 'ath_coach',    label: 'コーチとの話し合い', hint: '目標、伸ばすところ、直すところ' },
+    { id: 'ath_team',     label: 'チームメイトと',     hint: '声かけ、役割、うまくいかないとき' },
+    { id: 'ath_away',     label: '遠征・移動',         hint: '宿、食事、時差、道具の持ち込み' },
+    { id: 'ath_media',    label: '取材を受ける',        hint: '勝った日も、負けた日も' },
+    { id: 'ath_injury',   label: 'ケガと復帰',         hint: '痛みの伝え方、戻るまでの相談' },
+    { id: 'ath_sponsor',  label: 'スポンサーと',       hint: '感謝の伝え方、依頼への受け答え' },
+  ],
+  fighter: [
+    { id: 'fgt_camp',     label: '練習キャンプ',       hint: '相手の対策、スパーリングの組み方' },
+    { id: 'fgt_weigh',    label: '計量と減量',         hint: '体重、水分、当日の段取り' },
+    { id: 'fgt_faceoff',  label: '対戦相手との場',     hint: '記者会見、にらみ合い、言葉の選び方' },
+    { id: 'fgt_corner',   label: 'セコンドの指示',     hint: 'インターバルの短い言葉' },
+    { id: 'fgt_after',    label: '試合のあと',         hint: '勝敗にかかわらず、相手をたたえる' },
+    { id: 'fgt_contract', label: '試合の交渉',         hint: '階級、日程、条件のすり合わせ' },
+    { id: 'fgt_gym',      label: 'ジムでの指導',       hint: '技の名前、動きの直し方' },
+  ],
+  martial: [
+    { id: 'mar_class',   label: '道場・ジムのクラス', hint: '準備運動、組む相手、ルールの確認' },
+    { id: 'mar_tech',    label: '技を教わる・教える', hint: '手の位置、足の運び、力の抜き方' },
+    { id: 'mar_spar',    label: 'スパーリング',       hint: '強さの加減、止めるとき、あとの一言' },
+    { id: 'mar_gear',    label: '道具の話',           hint: 'グローブ、道着、サイズと選び方' },
+    { id: 'mar_event',   label: '大会・試合を見に行く', hint: '感想、応援、選手の話' },
+    { id: 'mar_start',   label: 'はじめての人と',     hint: 'どれくらいやっているか、きっかけ' },
+  ],
   consult_con: [
     { id: 'ccon_brief',   label: '依頼内容の聞き取り', hint: '何に困っているのかを、まず引き出す' },
     { id: 'ccon_finding', label: '調査結果の報告',     hint: '事実を並べ、言いにくいことも言う' },
@@ -566,6 +610,36 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'audg_role',   label: '監査の役割の変化',    hint: '数字だけを見る時代ではない' },
     { id: 'audg_rule',   label: '会計基準と開示',      hint: '決まりが変わると何が変わるか' },
   ],
+  consult_biz: [
+    { id: 'cbizg_strategy', label: '戦略という仕事',  hint: '何を決め、何を捨てるか' },
+    { id: 'cbizg_change',   label: '変わらない組織',  hint: 'なぜ動かないのか' },
+    { id: 'cbizg_data',     label: '数字の使い方',    hint: '示し方で結論が変わる' },
+    { id: 'cbizg_career',   label: 'コンサルという働き方', hint: '時間、移動、身につくもの' },
+  ],
+  orchestra: [
+    { id: 'orcg_life',    label: '楽団の暮らし',     hint: '練習、本番、1年の流れ' },
+    { id: 'orcg_sound',   label: '音がそろうまで',   hint: '合わせるとは何をすることか' },
+    { id: 'orcg_program', label: '曲目の選び方',     hint: '客と、演奏する側の折り合い' },
+    { id: 'orcg_future',  label: 'クラシックのこれから', hint: '客を増やす工夫' },
+  ],
+  athlete: [
+    { id: 'athg_career',  label: '選手としての道のり', hint: '始めたきっかけ、転機、引退' },
+    { id: 'athg_train',   label: 'トレーニングの中身', hint: '一日、一週間の組み立て' },
+    { id: 'athg_mental',  label: '勝負どころの心',    hint: '緊張、立て直し、集中' },
+    { id: 'athg_life',    label: '競技と生活',        hint: '食事、睡眠、お金、学業や仕事' },
+  ],
+  fighter: [
+    { id: 'fgtg_prep',    label: '試合までの数か月',  hint: '合宿、減量、対策' },
+    { id: 'fgtg_style',   label: '流派とスタイル',    hint: '打つ、組む、寝る' },
+    { id: 'fgtg_safety',  label: '安全と体のケア',    hint: '頭部、休養、引き際' },
+    { id: 'fgtg_scene',   label: '格闘技のいま',      hint: '団体、興行、人気' },
+  ],
+  martial: [
+    { id: 'marg_start',   label: 'はじめてみる',      hint: '何を選び、何を買うか' },
+    { id: 'marg_tech',    label: '技のはなし',        hint: '名前の由来、効く理由' },
+    { id: 'marg_body',    label: '体づくりとケガ',    hint: '続けるための工夫' },
+    { id: 'marg_culture', label: '国ごとの文化',      hint: '礼、道場のしきたり、呼び方' },
+  ],
   consult_con: [
     { id: 'ccong_market', label: '建設業界の動き',   hint: '受注、資材、価格' },
     { id: 'ccong_labor',  label: '人手不足と生産性', hint: '担い手をどう確保するか' },
@@ -673,8 +747,8 @@ export const GENRES_BY_INDUSTRY = {
  * 場面(`scenesFor`)とまったく同じ考え方でそろえてある。
  */
 export const genresFor = (industry) => {
-  const own = GENRES_BY_INDUSTRY[industry] ?? []
-  const isHobby = industriesIn('hobby').some((i) => i.id === industry)
+  const own = ownOf(GENRES_BY_INDUSTRY, industry)
+  const isHobby = groupOf(industry) === 'hobby'
   return [...own, ...(isHobby ? COMMON_HOBBY_GENRES : READING_GENRES)]
 }
 
@@ -693,9 +767,28 @@ export const genresFor = (industry) => {
  * 登録が無い分野でも、その分け方に合う共通の場面は出る。
  */
 export const scenesFor = (industry) => {
-  const own = SCENES_BY_INDUSTRY[industry] ?? []
-  const isHobby = industriesIn('hobby').some((i) => i.id === industry)
+  const own = ownOf(SCENES_BY_INDUSTRY, industry)
+  const isHobby = groupOf(industry) === 'hobby'
   return [...own, ...(isHobby ? COMMON_HOBBY_SCENES : DIALOGUE_SCENES)]
+}
+
+/**
+ * その分野に特化したもの。
+ *
+ * **「全般」(種類を持つ親)を選んだときは、種類ぜんぶを集める**
+ * (2026-09)。親そのものには場面を持たせていないので、
+ * そのままだと共通のものしか出ず、**選んだ意味が無くなる。**
+ * 同じ id は1つにまとめる。
+ */
+function ownOf(table, industry) {
+  const own = table[industry] ?? []
+  const kinds = kindsOf(industry)
+  if (!kinds.length) return own
+  const seen = new Map()
+  for (const x of [...own, ...kinds.flatMap((k) => table[k.id] ?? [])]) {
+    if (!seen.has(x.id)) seen.set(x.id, x)
+  }
+  return [...seen.values()]
 }
 
 /** すべての場面(名前を引くときに使う)。**同じ表を2つ持たない** */

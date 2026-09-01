@@ -20,7 +20,7 @@ import {
   AMOUNTS, EXERCISE_TYPES, FIELD_LABELS, SCALABLE_SECTIONS,
   defaultSectionsFor, exerciseLabel, exerciseType, sectionsFor,
 } from '../data/exerciseTypes.js'
-import { industriesIn, industryLabel } from '../data/industries.js'
+import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   cancelJob, clearJob, currentJob, startJob, takeJobResult, watchJob,
 } from '../lib/generateJob.js'
@@ -270,8 +270,16 @@ export default function MaterialForm({
   /* **選ぶ欄は2つ、入れ物は1つ**(2026-08 利用者の指定)。
      いま選んでいるものが「仕事」か「趣味」かは、ここで1回だけ決める。
      画面の2か所で別々に判断すると、必ず食い違う */
-  const isHobby = industriesIn('hobby').some((i) => i.id === industry)
+  const isHobby = groupOf(industry) === 'hobby'
   const isWork = Boolean(industry) && !isHobby
+
+  /* **種類のある分野は、2段で選ぶ**(2026-09 利用者の指定)。
+       > 同じ業種内に種類がある場合はさらにメニューが展開して
+       > 選べるようにしてください。
+     1つめの欄では**親**を選んだことにする(種類を選んでも親は選ばれたまま)。
+     種類が無い分野では、2つめの欄そのものを出さない */
+  const topIndustry = industry ? parentOf(industry) : ''
+  const industryKinds = kindsOf(topIndustry)
 
   /* **場面は、選んだ分野で変わる**(2026-08 利用者の指定)。
        > 外科医を選んだら、手術前の説明、とか、手術方法についての話し合い、
@@ -781,7 +789,7 @@ export default function MaterialForm({
             業界
             <span className="field-hint">仕事の場面</span>
           </span>
-          <select value={isWork ? industry : ''}
+          <select value={isWork ? topIndustry : ''}
                   onChange={(e) => setIndustry(e.target.value)}>
             <option value="">選ばない(汎用)</option>
             {industriesIn('work').map((i) => (
@@ -794,7 +802,7 @@ export default function MaterialForm({
             趣味
             <span className="field-hint">仕事以外の場面</span>
           </span>
-          <select value={isHobby ? industry : ''}
+          <select value={isHobby ? topIndustry : ''}
                   onChange={(e) => setIndustry(e.target.value)}>
             <option value="">選ばない(汎用)</option>
             {industriesIn('hobby').map((i) => (
@@ -803,6 +811,23 @@ export default function MaterialForm({
           </select>
         </label>
       </div>
+
+      {/* **種類**(2026-09 利用者の指定)。分野に種類があるときだけ出す。
+          先頭は「全般」(親そのもの)。種類を決めきれない人が
+          行き止まりにならないようにしてある */}
+      {industryKinds.length > 0 && (
+        <label className="field">
+          <span>
+            {industryLabel(topIndustry)}の種類
+            <span className="field-hint">場面と話題が、その種類のものに変わります</span>
+          </span>
+          <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
+            {industryKinds.map((k) => (
+              <option key={k.id} value={k.id}>{k.short} — {k.hint}</option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {kind === 'reading' && (
         <label className="field">

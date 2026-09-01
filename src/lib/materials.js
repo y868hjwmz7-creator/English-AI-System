@@ -10,6 +10,7 @@
  * error は日本語の文字列(そのまま画面に出せる)。
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+import { kindsOf } from '../data/industries.js'
 import { isPassageSection } from '../data/exerciseTypes.js'
 import { chunkPlan, needsChunkJa } from './chunkJa.js'
 import { supabase } from './supabase.js'
@@ -137,7 +138,15 @@ export async function searchMaterials({
     if (level) query = query.eq('level', level)
     // 業界を選んだときは「その業界」と「汎用」の両方を出す。
     // 汎用の教材はどのゲストにも使えるため、隠すと選択肢が不当に狭まる。
-    if (industry) query = query.or(`industry.eq.${industry},industry.is.null`)
+    //
+    // **「全般」を選んだときは、その中の種類も全部出す**(2026-09)。
+    // コンサルを選んで「建設」「車」の教材が出てこないのでは、
+    // 全般を選んだ意味がない。種類を選んだときは、その1つだけ。
+    if (industry) {
+      const kinds = kindsOf(industry).map((k) => k.id)
+      const list = kinds.length ? kinds : [industry]
+      query = query.or(`industry.in.(${list.join(',')}),industry.is.null`)
+    }
     if (kind) query = query.eq('kind', kind)
     // 記事と会話は、弱点ではなくジャンル・場面で探すことが多い
     if (genre) query = query.eq('genre', genre)

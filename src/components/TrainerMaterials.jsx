@@ -22,7 +22,7 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { countLabel, exerciseLabel, isPassageSection } from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
-import { industriesIn, industryLabel } from '../data/industries.js'
+import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   NEW_MATERIAL_KINDS, addChunkJa, assignMaterial,
   kindLabel, loadMyLearners, searchMaterials,
@@ -73,7 +73,13 @@ export default function TrainerMaterials({ me }) {
     // scene / genre を依存に入れると、選んだそばから消えてしまう
   }, [industry])
 
-  const isHobbyFilter = industriesIn('hobby').some((i) => i.id === industry)
+  const isHobbyFilter = groupOf(industry) === 'hobby'
+  /* **種類のある分野は2段で選ぶ**(作る画面と同じ形)。
+     「全般」を選ぶと、その中の種類の教材もまとめて出る
+     (`searchMaterials`)。コンサルを選んで建設・車が出てこないのでは
+     全般を選んだ意味がない */
+  const topIndustry = industry ? parentOf(industry) : ''
+  const industryKinds = kindsOf(topIndustry)
   const isWorkFilter = Boolean(industry) && !isHobbyFilter
 
   const search = async () => {
@@ -296,7 +302,7 @@ export default function TrainerMaterials({ me }) {
                 業界
                 <span className="field-hint">仕事の場面</span>
               </span>
-              <select value={isWorkFilter ? industry : ''}
+              <select value={isWorkFilter ? topIndustry : ''}
                       onChange={(e) => setIndustry(e.target.value)}>
                 <option value="">すべて</option>
                 {industriesIn('work').map((i) => (
@@ -309,7 +315,7 @@ export default function TrainerMaterials({ me }) {
                 趣味
                 <span className="field-hint">仕事以外の場面</span>
               </span>
-              <select value={isHobbyFilter ? industry : ''}
+              <select value={isHobbyFilter ? topIndustry : ''}
                       onChange={(e) => setIndustry(e.target.value)}>
                 <option value="">すべて</option>
                 {industriesIn('hobby').map((i) => (
@@ -318,6 +324,20 @@ export default function TrainerMaterials({ me }) {
               </select>
             </label>
           </div>
+
+          {/* 種類。**作る画面と同じ形にそろえる**(2026-09 利用者の指定) */}
+          {industryKinds.length > 0 && (
+            <label className="field">
+              <span>{industryLabel(topIndustry)}の種類</span>
+              <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
+                {industryKinds.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.short}{k.id === topIndustry ? '(種類をまとめて)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {/* **ゲストで絞る欄は置かない**(2026-08 利用者の指定)。
                 > 「ゲスト」の選択はここではしないです。
