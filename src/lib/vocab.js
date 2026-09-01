@@ -694,6 +694,22 @@ async function legacySetWordStatus(norm, status, materialId) {
 /** 0018 を貼る前の Supabase では、文を渡す引数が無い。一度気づいたら覚える */
 let noSentenceArg = false
 
+/**
+ * **0027 を貼る前の Supabase には「覚えかけ」が無い**(2026-09 実機)。
+ *
+ * 古い `mark_word()` は「状態は known か unknown です」と断る。
+ * 画面には赤い知らせが出るだけで、押しても何も残らない。
+ * **効かないボタンを出しつづけない**ように、一度断られたら覚えておき、
+ * その画面のあいだは「覚えかけ」を出さない(CLAUDE.md)。
+ *
+ * 貼れば直る。**こちらで勝手に「まだ」として記録しない。**
+ * 押した言葉と残る記録が食い違うほうが困る。
+ */
+let noLearning = false
+
+/** 「覚えかけ」が使えるか。画面がボタンを出すかどうかの判断に使う */
+export const learningSupported = () => !noLearning
+
 export async function setWordStatus(word, status, {
   kind = 'word', materialId = null, sentence = null, sentenceJa = null,
   // **誰の記録にするか**(0025)。レッスン中のゲスト。渡さなければ自分
@@ -740,6 +756,21 @@ export async function setWordStatus(word, status, {
   // **0015 をまだ貼っていない Supabase でも動くようにする。**
   // 貼るまでのあいだ「押しても色が付かない」状態にしない(2026-08 実機)。
   // 箱と次に出す日は付かないが、知っていた / 知らなかったは残る
+  // **0027 をまだ貼っていない Supabase は「覚えかけ」を知らない**(2026-09 実機)。
+  // 古い `mark_word()` が「状態は known か unknown です」と断る。
+  // **一度で覚えて、次からはボタンごと出さない**(効かないボタンを出さない)
+  if (error && status === 'learning'
+      && /known|unknown|status/i.test(String(error.message ?? ''))) {
+    noLearning = true
+    return ng(canSeeSystemDetail()
+      // トレーナー・管理者には、どこで何をすればよいかまで言う
+      ? 'この Supabase にはまだ「覚えかけ」(0027 の SQL)が入っていません。'
+        + 'supabase/apply/pending_2026-09-01b.sql を貼ってください。'
+        + '貼るまでは「まだ」と「覚えた」の2つで進みます。'
+      // **ゲストには仕組みの内側を見せない。** できることが何も無い
+      : '「覚えかけ」はまだ使えません。「まだ」か「覚えた」で進めてください'
+        + '(トレーナーにお伝えください)。')
+  }
   if (error && /mark_word|function|schema cache|PGRST202/i.test(
     `${error.message ?? ''} ${error.code ?? ''}`,
   )) {

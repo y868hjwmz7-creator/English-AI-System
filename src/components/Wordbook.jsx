@@ -35,7 +35,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   loadGlossDetail, loadMyWordbook, loadVocabWeek,
-  loadWordbookCounts, loadWordbookViewers, noteWordbookView, setWordStatus,
+  loadWordbookCounts, loadWordbookViewers, learningSupported,
+  noteWordbookView, setWordStatus,
 } from '../lib/vocab.js'
 import {
   QUIZ_FORMS, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
@@ -178,8 +179,17 @@ export default function Wordbook({
      絞り込みを変えても選択は消さない(集めて教材にするため) */
   const [picked, setPicked] = useState([])
 
-  const current = VIEWS.find((v) => v.id === view) ?? VIEWS[0]
-  const isQuiz = view === 'due'
+  /* **0027 を貼る前の Supabase には「覚えかけ」が無い**(2026-09 実機)。
+     一度断られたら、その画面のあいだは出さない。
+     **効かないボタンを出さない**(CLAUDE.md)。`noLearning` は
+     `vocab.js` に1つだけ置いてあり、押して初めて分かる */
+  const canLearning = learningSupported()
+  // 「覚えかけ」を見ている最中に使えないと分かったら、復習へ戻す。
+  // 選択肢から消えたのに選ばれたままだと、プルダウンが空欄になる
+  const current = (!canLearning && view === 'learning')
+    ? VIEWS[0]
+    : VIEWS.find((v) => v.id === view) ?? VIEWS[0]
+  const isQuiz = current.id === 'due'
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -389,8 +399,8 @@ export default function Wordbook({
       <div className="wb-tabrow">
         <label className="wb-viewpick">
           <span className="sr-only">見るものの切り替え</span>
-          <select value={view} onChange={(e) => setView(e.target.value)}>
-            {VIEWS.map((v) => (
+          <select value={current.id} onChange={(e) => setView(e.target.value)}>
+            {VIEWS.filter((v) => v.id !== 'learning' || canLearning).map((v) => (
               <option key={v.id} value={v.id}>
                 {/* **復習には「今日出す数」を付ける。**
                     開く前に、やることの量が分かる */}
@@ -635,9 +645,11 @@ export default function Wordbook({
                   <button type="button" className="btn btn--quiet"
                           disabled={busy === card.word_norm}
                           onClick={() => answer(card, 'unknown')}>まだ</button>
-                  <button type="button" className="btn btn--half"
-                          disabled={busy === card.word_norm}
-                          onClick={() => answer(card, 'learning')}>覚えかけ</button>
+                  {canLearning && (
+                    <button type="button" className="btn btn--half"
+                            disabled={busy === card.word_norm}
+                            onClick={() => answer(card, 'learning')}>覚えかけ</button>
+                  )}
                   <button type="button" className="btn btn--primary"
                           disabled={busy === card.word_norm}
                           onClick={() => answer(card, 'known')}>覚えた</button>
