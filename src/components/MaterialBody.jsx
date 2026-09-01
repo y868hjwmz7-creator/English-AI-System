@@ -138,13 +138,18 @@ export default function MaterialBody({
         }))}
       />
       {sections
-        /* はじめはどれも開かない。演習が1種類のときだけ開く
-           (Tabs は2つ未満だと描かないため、押す先が無い) */
-        .filter((sec, i) => sec.id === openSection || (sections.length < 2 && i === 0))
-        .map((sec) => {
+        .map((sec, i) => {
+          /* はじめはどれも開かない。演習が1種類のときだけ開く
+             (Tabs は2つ未満だと描かないため、押す先が無い)。
+
+             **開いていないものも、描いてから隠す**(`is-closed`)。
+             描かないでいたので、タブを押さずに印刷すると
+             **見出しだけの紙**が出ていた(2026-08 実機)。
+             紙用の指定が `display: block` に戻し、教材まるごとを刷る。 */
+          const open = sec.id === openSection || (sections.length < 2 && i === 0)
           const type = exerciseType(sec.exercise_type)
           return (
-            <section key={sec.id} className="exercise-view">
+            <section key={sec.id} className={`exercise-view${open ? '' : ' is-closed'}`}>
               <h4 className="section-title">
                 {exerciseLabel(sec.exercise_type)}({countLabel(sec.exercise_type, sec.items.length)})
                 {!type?.audioFrom && <span className="field-hint"> 音声なし</span>}

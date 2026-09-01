@@ -63,6 +63,20 @@ export default function LearnerHomework({ me = null }) {
   // 「中身を見る」タブとは別の行為なので、開いているあいだは
   // タブの中身を出さない(注意が2つに割れる)
   const [qrOf, setQrOf] = useState(null)
+  /**
+   * **いま紙に出している宿題**(null なら印刷していない)。
+   *
+   * 【なぜ状態が要るか】(2026-08 実機「PDFを出力すると中身が白紙になります」)
+   *   画面では、押したタブの演習だけを描いている。だからタブを1つも
+   *   押さずに印刷すると、**見出しだけの紙**が出ていた。
+   *
+   * 【なぜ「隠して描いておく」だけで済ませないか】
+   *   ここの演習には `PassagePractice` が入っている。あれは
+   *   `usePracticeLog('six_steps')` で**取り組みの時間を数えている**ので、
+   *   隠したまま置いておくと、やってもいない練習が記録されてしまう。
+   *   **印刷する一瞬だけ**すべての演習を描き、終わったら元に戻す。
+   */
+  const [printId, setPrintId] = useState(null)
   // 読み上げの速さ。**画面に1つだけ置く。** ここで選んだものが、
   // この画面のすべての読み上げに効く(2026-08 利用者の指定)
   const [rateId, setRateId] = useState(loadRateId)
@@ -82,6 +96,29 @@ export default function LearnerHomework({ me = null }) {
   useEffect(() => { reload() }, [])
 
   useEffect(() => { if (wordError) setError(wordError) }, [wordError])
+
+  /**
+   * 印刷。**すべての演習を描き終えてから**紙に送る。
+   *
+   * `printElement()` をボタンの中で直接呼ぶと、まだ描き替わる前の
+   * 画面が紙になる(React は押した直後には描き直さない)。
+   * 状態を立てて、描き終わったこの effect で送る。
+   * 終わったら元の1演習だけの表示に戻す(`afterprint`。
+   * Safari は返さないことがあるので、時間でも戻す)。
+   */
+  useEffect(() => {
+    if (!printId) return undefined
+    const el = document.getElementById(`homework-${printId}`)
+    if (!el) { setPrintId(null); return undefined }
+    const done = () => setPrintId(null)
+    window.addEventListener('afterprint', done)
+    const timer = window.setTimeout(done, 60000)
+    printElement(el, { worksheet: true })
+    return () => {
+      window.removeEventListener('afterprint', done)
+      window.clearTimeout(timer)
+    }
+  }, [printId])
 
   /**
    * **開いた時点で、まだ控えに無い語を裏で引いておく**(2026-08 実機)。
@@ -249,10 +286,7 @@ export default function LearnerHomework({ me = null }) {
                         <ScreenIcon />大きく表示する
                       </button>
                       <button type="button" className="btn btn--small"
-                              onClick={() => printElement(
-                                document.getElementById(`homework-${a.id}`),
-                                { worksheet: true },
-                              )}>
+                              onClick={() => setPrintId(a.id)}>
                         <PrintIcon />印刷 / PDFで保存(問題のみ)
                       </button>
                     </div>
@@ -312,16 +346,22 @@ export default function LearnerHomework({ me = null }) {
                       )
                     })()}
                     {a.material?.sections
-                      .filter((sec, i) =>
-                        sec.id === openSection[a.id]
-                        || (a.material.sections.length < 2 && i === 0))
-                      .map((sec) => {
+                      /* **紙に出すときだけ、全部の演習を描く。**
+                         ふだんは押したタブの1つだけ(取り組みの時間を
+                         二重に数えないため。上の `printId` を参照) */
+                      .filter((sec, i) => sec.id === openSection[a.id]
+                        || (a.material.sections.length < 2 && i === 0)
+                        || printId === a.id)
+                      .map((sec, i) => {
+                      const open = sec.id === openSection[a.id]
+                        || (a.material.sections.length < 2 && i === 0)
+                      const cls = `exercise-view${open ? '' : ' is-closed'}`
                       const type = exerciseType(sec.exercise_type)
                       // 記事・会話は「問」ではなく1本の読み物。
                       // 声に出す練習は、この中で取り組み方を切り替える。
                       if (isPassageSection(sec.exercise_type)) {
                         return (
-                          <section key={sec.id} className="exercise-view">
+                          <section key={sec.id} className={cls}>
                             <h5 className="section-title">{exerciseLabel(sec.exercise_type)}</h5>
                             {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
                             <PassagePractice
@@ -342,7 +382,7 @@ export default function LearnerHomework({ me = null }) {
                         )
                       }
                       return (
-                        <section key={sec.id} className="exercise-view">
+                        <section key={sec.id} className={cls}>
                           <h5 className="section-title">
                             {exerciseLabel(sec.exercise_type)}({sec.items.length} 問)
                           </h5>

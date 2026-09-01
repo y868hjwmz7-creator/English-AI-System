@@ -245,21 +245,20 @@ export default function PassagePractice({
     <div className="passage">
       {headline && <h4 className="passage-headline" lang="en">{headline}</h4>}
 
-      {/* 6Steps。**番号を出す。** 順にやるものなので、
-          いま何番目かが分かることそのものが道しるべになる。
-          折り返さず横に流し、選んでいるものを見える位置へ寄せる
-          (タブで一度学んだこと) */}
-      <div className="passage-modes steps" role="group" aria-label="6Steps">
-        {SIX_STEPS.map((m) => (
-          <button
-            key={m.id} type="button" title={m.hint}
-            className={`chip${step === m.id ? ' chip--on' : ''}`}
-            onClick={() => { stopPlaying(); setStep(m.id) }}
-          >
-            <span className="step-no">{m.no}</span>{m.label}
-          </button>
-        ))}
-      </div>
+      {/* 6Steps。**プルダウンにする**(2026-08 利用者の指定)。
+          札を6つ横に並べていたが、狭い画面では2段になり、
+          紙(レッスン表示)で文字を大きくすると帯だけで場所を食っていた。
+          **番号を出す。** 順にやるものなので、いま何番目かが
+          分かることそのものが道しるべになる。 */}
+      <label className="step-pick">
+        <span className="step-pick-label">6Steps</span>
+        <select value={step} aria-label="6Steps の切り替え"
+                onChange={(e) => { stopPlaying(); setStep(e.target.value) }}>
+          {SIX_STEPS.map((m) => (
+            <option key={m.id} value={m.id}>{m.no} {m.label}</option>
+          ))}
+        </select>
+      </label>
       {/* やり方。**1行に1つ。** 1つの段落に流すと、改行も区切りも無い棒になって
           読めない(指導ポイントで一度学んだこと)。
           狭い画面では畳めるようにする。何度も読むものではない */}

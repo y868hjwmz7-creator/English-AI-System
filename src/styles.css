@@ -1349,6 +1349,10 @@ html { -webkit-text-size-adjust: 100%; }
 .exercise-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
 .exercise-fields { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
 .exercise-view { margin: 14px 0; }
+/* 選んでいない演習。**画面では隠すだけで、消さない。**
+   消す(描かない)と、印刷したときに紙が見出しだけになる
+   (2026-08 実機)。紙用の指定が `display: block` に戻す */
+.exercise-view.is-closed { display: none; }
 .answer { margin-top: 4px; font-size: 13px; }
 .answer > summary { cursor: pointer; color: var(--accent); }
 .answer > div { margin-top: 4px; }
@@ -1398,30 +1402,35 @@ html { -webkit-text-size-adjust: 100%; }
 .passage-headline {
   margin: 0 0 10px; font-size: 18px; line-height: 1.4; color: var(--text-primary);
 }
-.passage-modes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+/* 6Steps の切り替え。**プルダウンにする**(2026-08 利用者の指定)。
 
-/* 6Steps。**6つとも、どの画面幅でも見えるようにする**(2026-08 の指定)。
-   横に流すと、端の項目はなぞらないと出てこず「いくつあるか」も分からない。
-   **折り返すのは行だけ。** 札の中の文字は折り返さない
-   (折り返すと「オーバー / ラッピング」のように割れて読めない。
-   タブで一度学んだこと)。 */
-.passage-modes.steps {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  margin: 0 0 8px;
+   以前は札を6つ横に並べていた。どの画面幅でも6つとも見えるように
+   折り返させていたが、狭い画面では2段になり、紙(レッスン表示)で
+   文字を大きくすると帯だけで 105px を食っていた。
+   **プルダウンなら、幅がいくつでも1行に収まる。**
+
+   **番号(①〜⑥)は選択肢にそのまま出す。** 順にやるものなので、
+   いま何番目かが分かることそのものが道しるべになる。 */
+.step-pick {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 0 0 10px; max-width: 100%;
 }
-.passage-modes.steps > .chip {
-  flex: 0 1 auto; min-width: 0; white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 5px; min-height: 36px;
-  /* 入りきらない札は、文字を落とさず**枠のほうを詰める** */
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+.step-pick-label {
+  font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  color: var(--text-secondary);
 }
-/* 狭い画面では、札そのものを少し小さくして6つとも収める */
-@media (max-width: 420px) {
-  .passage-modes.steps { gap: 5px; }
-  .passage-modes.steps > .chip { padding: 5px 9px; font-size: 12.5px; }
+.step-pick select {
+  min-height: 40px; min-width: 0; flex: 0 1 auto;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-1); color: var(--text-primary);
+  font-size: 14px; font-weight: 600;
 }
-.step-no { font-weight: 700; font-size: 14px; opacity: 0.85; }
-.step-hint { margin-bottom: 10px; line-height: 1.7; }
+@media (max-width: 860px) {
+  /* 860px 以下では 16px を割らない(iOS が勝手に拡大するため) */
+  .step-pick select { font-size: 16px; }
+  .step-pick { display: flex; }
+  .step-pick select { flex: 1 1 auto; }
+}
 .chip {
   padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
   background: var(--surface-1); color: var(--text-secondary); font-size: 13px; cursor: pointer;
@@ -1927,9 +1936,22 @@ html { -webkit-text-size-adjust: 100%; }
   /* 紙は白。画面の色を引きずると、地の色が全面に刷られる */
   html, body.is-printing { background: #fff !important; }
 
-  /* 紙に出しても意味のないものは消す */
-  .no-print, .tabbar, .app-header nav, .btn, button { display: none !important; }
+  /* 紙に出しても意味のないものは消す。
+
+     **ただし語(`.etext-word`)は消さない。**
+     英文は1語ずつ `<button>` で描いてある(`EnglishText.jsx`)。
+     `button` をまとめて消していたので、**紙に出すと英文が丸ごと
+     消えていた**(2026-08 実機「PDFを出力すると中身が白紙になります」)。
+     語の箱は `display: inline` で枠も色も持たないので、
+     出したままでもふつうの文字にしか見えない。 */
+  .no-print, .tabbar, .app-header nav, .btn,
+  button:not(.etext-word) { display: none !important; }
   .print-only { display: block; }
+
+  /* **画面で閉じている演習も、紙には出す。**
+     タブを1つも押していない状態で印刷すると、見出しだけの紙が出ていた
+     (2026-08 実機)。紙は教材まるごとの控えなので、全部の演習を刷る。 */
+  body.is-printing .print-target .exercise-view.is-closed { display: block; }
 
   /* 紙は白、文字は黒とグレー。濃い背景のままだとインクを食う */
   .print-target, .print-target * {
