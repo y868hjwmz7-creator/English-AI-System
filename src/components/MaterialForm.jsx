@@ -27,7 +27,9 @@ import {
   generateSectionUnique, isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { chunkPlan } from '../lib/chunkJa.js'
-import { READING_GENRES, sceneHint, sceneLabel, scenesFor } from '../data/genres.js'
+import {
+  genreHint, genreLabel, genresFor, sceneHint, sceneLabel, scenesFor,
+} from '../data/genres.js'
 import {
   CLIP_ACCENTS, DEFAULT_ACCENT, pickVoices,
   voiceCountFor, voicePurposeFor, voicesOfAccent,
@@ -138,7 +140,9 @@ export default function MaterialForm({
   useEffect(() => {
     const list = scenesFor(industry)
     if (!list.some((x) => x.id === scene)) setScene(list[0]?.id ?? '')
-    // scene を依存に入れると、選んだそばから書き換わってしまう
+    const gl = genresFor(industry)
+    if (!gl.some((x) => x.id === genre)) setGenre(gl[0]?.id ?? '')
+    // scene / genre を依存に入れると、選んだそばから書き換わってしまう
   }, [industry])
 
   // 生成中は秒数を数える。1〜3分かかることがあるため、動いていることが
@@ -253,6 +257,7 @@ export default function MaterialForm({
        > とか、業界に特化した選択肢が出るようにしてください。
      登録の無い分野では「仕事全般」の場面に落ちる(`scenesFor`)。 */
   const sceneList = scenesFor(industry)
+  const genreList = genresFor(industry)
 
   /** 弱点タグを、AI に渡す文言にする */
   const topicOf = (id) => {
@@ -293,7 +298,7 @@ export default function MaterialForm({
    */
   const autoTitle = () => {
     const parts = [todayLabel()]
-    if (kind === 'reading') parts.push(READING_GENRES.find((g) => g.id === genre)?.label ?? '')
+    if (kind === 'reading') parts.push(genreLabel(genre))
     else if (kind === 'dialogue') parts.push(sceneLabel(scene))
     if (tagIds.length) parts.push(tagIds.map(weaknessTagLabel).join(' + '))
     parts.push(level)
@@ -332,8 +337,7 @@ export default function MaterialForm({
       // 内容の理解・語句は、できた本文から作るので渡さなくてよい
       reviewWords: mustUse,
       genre: kind === 'reading'
-        ? [READING_GENRES.find((g) => g.id === genre)?.label,
-           READING_GENRES.find((g) => g.id === genre)?.hint].filter(Boolean).join(' — ')
+        ? [genreLabel(genre), genreHint(genre)].filter(Boolean).join(' — ')
         : '',
       scene: kind === 'dialogue'
         ? [sceneLabel(scene), sceneHint(scene)].filter(Boolean).join(' — ')
@@ -697,7 +701,7 @@ export default function MaterialForm({
             <span className="field-hint">業界・趣味と組み合わせて、何の記事にするかが決まります</span>
           </span>
           <select value={genre} onChange={(e) => setGenre(e.target.value)}>
-            {READING_GENRES.map((g) => (
+            {genreList.map((g) => (
               <option key={g.id} value={g.id}>{g.label} — {g.hint}</option>
             ))}
           </select>

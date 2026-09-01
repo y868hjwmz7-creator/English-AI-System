@@ -10,7 +10,20 @@
  */
 import { industriesIn } from './industries.js'
 
-/** 記事のジャンル。Engoo のような「読み物」を想定している */
+/**
+ * **どの仕事にもある話題**(2026-08 利用者の指定)。
+ *
+ *   > 記事またはダイアローグを選択した際は業界、趣味どちらを選んだと
+ *   > しても話題もシチュエーションも自然なものが出るようにしっかり
+ *   > 作り込んでくれ。その上で業種、趣味ごとに最適化された選択肢が
+ *   > 出るように、かつ共通するシチュエーションや話題は共通して
+ *   > 表示されるように。
+ *
+ * 場面(`DIALOGUE_SCENES`)と同じ考え方。**共通の話題も必ず並べる。**
+ * 同じ「最新の話題」でも、出てくる語は分野で変わる。
+ *
+ * 分野を選んでいないときは、この一覧だけが出る。
+ */
 export const READING_GENRES = [
   { id: 'news',       label: '最新の話題',   hint: 'その業界でいま起きていること' },
   { id: 'trend',      label: 'ちょっとした流行', hint: '広まりつつあるやり方・道具・考え方' },
@@ -46,6 +59,23 @@ export const DIALOGUE_SCENES = [
   { id: 'onboarding',  label: '新しい人への説明', hint: '知らない相手に、噛み砕いて伝える' },
   { id: 'review',      label: '面談・振り返り', hint: '上司と部下。評価や今後の話' },
   { id: 'smalltalk',   label: '打ち合わせ前の雑談', hint: '本題に入る前の数十秒' },
+]
+
+/**
+ * **どの趣味にもある話題**(2026-08 利用者の指定)。
+ *
+ * 仕事の話題(「仕事のコツ」「賛否が分かれる話」)をそのまま趣味に出すと、
+ * 読み物として噛み合わない。**趣味の側の共通形**を別に持つ。
+ */
+export const COMMON_HOBBY_GENRES = [
+  { id: 'hg_news',     label: '最新の話題',       hint: 'その分野でいま起きていること' },
+  { id: 'hg_start',    label: 'はじめての人へ',   hint: '何から始めるか、何を用意するか' },
+  { id: 'hg_tips',     label: '上達のコツ',       hint: '経験者が知っている小さな工夫' },
+  { id: 'hg_story',    label: '体験談',           hint: 'やってみた話。失敗も含めて' },
+  { id: 'hg_compare',  label: 'くらべてみた',     hint: '2つを並べて、違いを見る' },
+  { id: 'hg_culture',  label: '国によるちがい',   hint: '海外ではこう楽しまれている' },
+  { id: 'hg_curious',  label: '意外な話',         hint: '思わず人に話したくなるネタ' },
+  { id: 'hg_pick',     label: 'おすすめを選ぶ',   hint: '選び方の基準と、その理由' },
 ]
 
 /**
@@ -335,6 +365,209 @@ export const SCENES_BY_INDUSTRY = {
 }
 
 /**
+ * 分野ごとの話題(2026-08 利用者の指定)。
+ *
+ * 場面(`SCENES_BY_INDUSTRY`)と**同じ決まり**で作ってある。
+ *   ・id は分野の名前で始める。`materials.genre` に保存されるので変えない
+ *   ・**1分野につき 4〜5 個。** 共通の話題が足されるので、これで十分
+ *   ・登録が無い分野は、共通の話題だけになる(足し忘れても壊れない)
+ */
+export const GENRES_BY_INDUSTRY = {
+  /* ── お仕事 ────────────────────────────────────────────── */
+  it: [
+    { id: 'itg_ai',      label: '現場での AI 活用', hint: '何が変わり、何が変わらないか' },
+    { id: 'itg_incident', label: '障害から学ぶ',    hint: '何が起き、どう直したか' },
+    { id: 'itg_security', label: 'セキュリティ',    hint: '狙われ方と、守り方' },
+    { id: 'itg_team',    label: 'チームの進め方',   hint: 'レビュー、見積もり、遠隔での働き方' },
+    { id: 'itg_debt',    label: '古い仕組みの作り直し', hint: 'なぜ溜まり、どう返すか' },
+  ],
+  medical: [
+    { id: 'medg_care',   label: '患者さんとの向き合い方', hint: '説明の仕方、寄り添い方' },
+    { id: 'medg_tech',   label: '新しい医療の技術', hint: '遠隔診療、機器、データの使い方' },
+    { id: 'medg_team',   label: '多職種のチーム',   hint: '看護・リハビリ・薬剤との連携' },
+    { id: 'medg_aging',  label: '高齢化と介護',     hint: '在宅、施設、家族の負担' },
+    { id: 'medg_burnout', label: '医療者の働き方',  hint: '交代制、人手不足、続けるための工夫' },
+  ],
+  surgery: [
+    { id: 'surg_tech',   label: '術式の進歩',       hint: '内視鏡、ロボット、低侵襲' },
+    { id: 'surg_case',   label: '印象に残った症例', hint: '判断が難しかったところ' },
+    { id: 'surg_team',   label: '手術室のチーム',   hint: '声かけ、確認、事故を防ぐ工夫' },
+    { id: 'surg_train',  label: '若手の育成',       hint: '見て覚える、から先へ' },
+    { id: 'surg_ethics', label: '説明と同意',       hint: 'どこまで、どう伝えるか' },
+  ],
+  pharma: [
+    { id: 'phrg_trial',  label: '治験のいま',       hint: '組み入れ、分散型、患者の負担' },
+    { id: 'phrg_reg',    label: '承認と規制',       hint: '国ごとの違い、早期承認' },
+    { id: 'phrg_quality', label: '品質と製造',      hint: '逸脱、査察、サプライチェーン' },
+    { id: 'phrg_price',  label: '薬価とアクセス',   hint: '誰に、いくらで届くか' },
+  ],
+  finance: [
+    { id: 'fing_market', label: '相場の動き',       hint: '何が起きて、どう受け止められたか' },
+    { id: 'fing_rule',   label: '規制とルール',     hint: '守る側の実務' },
+    { id: 'fing_fintech', label: '金融と技術',      hint: '決済、与信、データ' },
+    { id: 'fing_risk',   label: 'リスクの話',       hint: '想定と、外れたとき' },
+  ],
+  investor: [
+    { id: 'invg_thesis', label: '投資の考え方',     hint: 'どこを見て決めるか' },
+    { id: 'invg_startup', label: 'スタートアップ',  hint: '伸びる会社、つまずく会社' },
+    { id: 'invg_exit',   label: '出口のいま',       hint: '上場、売却、市場の空気' },
+    { id: 'invg_esg',    label: 'お金の使われ方',   hint: '環境・社会への影響' },
+  ],
+  manda: [
+    { id: 'mag_case',    label: '実際の案件',       hint: 'うまくいった話、壊れた話' },
+    { id: 'mag_dd',      label: '見極めの実務',     hint: '何を調べ、何を見落とすか' },
+    { id: 'mag_pmi',     label: '統合のむずかしさ', hint: '文化と仕組みを合わせる' },
+    { id: 'mag_cross',   label: '国をまたぐ買収',   hint: '商習慣と規制の違い' },
+  ],
+  legal: [
+    { id: 'lawg_contract', label: '契約の落とし穴', hint: '揉めてから効いてくる条項' },
+    { id: 'lawg_compliance', label: '社内の決まり', hint: '守らせる側の工夫' },
+    { id: 'lawg_dispute', label: '紛争と解決',      hint: '訴える前にできること' },
+    { id: 'lawg_ai',     label: '新しい技術と法',   hint: 'AI、データ、著作権' },
+  ],
+  insurance: [
+    { id: 'insg_claim',  label: '請求と査定',       hint: '揉めやすいところ' },
+    { id: 'insg_product', label: '商品の作られ方',  hint: '何を、いくらで引き受けるか' },
+    { id: 'insg_risk',   label: '新しいリスク',     hint: '気候、サイバー、健康' },
+    { id: 'insg_trust',  label: '信頼のつくり方',   hint: '説明と、いざというときの対応' },
+  ],
+  trading: [
+    { id: 'trdg_supply', label: '物流とサプライチェーン', hint: '止まったとき何が起きるか' },
+    { id: 'trdg_deal',   label: '交渉の現場',       hint: '値段以外で決まること' },
+    { id: 'trdg_risk',   label: '為替と与信',       hint: '損をしないための備え' },
+    { id: 'trdg_market', label: '新しい市場',       hint: 'どこへ、何を売るか' },
+  ],
+  manufacturing: [
+    { id: 'mfgg_quality', label: '品質のつくり込み', hint: '不良をどう減らすか' },
+    { id: 'mfgg_auto',   label: '自動化とロボット', hint: '人の仕事はどう変わるか' },
+    { id: 'mfgg_safety', label: '安全と事故',       hint: '起きた例と、防ぎ方' },
+    { id: 'mfgg_kaizen', label: '現場の改善',       hint: '小さな工夫が積み上がる' },
+  ],
+  construction: [
+    { id: 'cong_site',   label: '現場のいま',       hint: '人手、工期、資材' },
+    { id: 'cong_design', label: '設計とデザイン',   hint: '住み心地と、使い勝手' },
+    { id: 'cong_green',  label: '省エネと環境',     hint: '断熱、再生材、認証' },
+    { id: 'cong_market', label: '不動産の動き',     hint: '価格、需要、街の変化' },
+  ],
+  hospitality: [
+    { id: 'hosg_service', label: 'もてなしの工夫',  hint: '記憶に残る接客とは' },
+    { id: 'hosg_travel', label: '旅行のいま',       hint: '人の動き、行き先の変化' },
+    { id: 'hosg_trouble', label: '困ったお客様',    hint: '断り方、収め方' },
+    { id: 'hosg_local',  label: '地元とのつながり', hint: 'その土地らしさをどう出すか' },
+  ],
+  restaurant: [
+    { id: 'rstg_menu',   label: 'メニューづくり',   hint: '何を、いくらで出すか' },
+    { id: 'rstg_kitchen', label: '厨房のまわし方',  hint: '段取り、人手、無駄を減らす' },
+    { id: 'rstg_trend',  label: '食のはやり',       hint: '客が求めているもの' },
+    { id: 'rstg_review', label: '口コミと評判',     hint: '書かれ方と、向き合い方' },
+  ],
+  sports: [
+    { id: 'sptg_injury', label: 'ケガと復帰',       hint: '起き方と、戻るまでの道' },
+    { id: 'sptg_train',  label: 'トレーニングの科学', hint: '何が効き、何が効かないか' },
+    { id: 'sptg_mental', label: '心の側面',         hint: '緊張、集中、立ち直り' },
+    { id: 'sptg_nutrition', label: '食事と回復',    hint: '何を、いつ摂るか' },
+  ],
+  research: [
+    { id: 'resg_finding', label: '新しい発見',      hint: '何が分かったのか' },
+    { id: 'resg_method', label: '研究のやり方',     hint: '再現性、データの扱い' },
+    { id: 'resg_career', label: '研究者の道',       hint: 'ポスト、資金、進路' },
+    { id: 'resg_open',   label: '開かれた研究',     hint: '公開、共同、市民との関わり' },
+  ],
+  music: [
+    { id: 'musg_scene',  label: '音楽シーンのいま', hint: '売れ方、聴かれ方の変化' },
+    { id: 'musg_making', label: '曲づくりの裏側',   hint: '思いつきから形になるまで' },
+    { id: 'musg_live',   label: 'ライブの現場',     hint: '会場、音、お客さん' },
+    { id: 'musg_money',  label: '音楽で食べる',     hint: '配信、権利、収入' },
+  ],
+  film: [
+    { id: 'flmg_making', label: '撮影の裏側',       hint: '現場で何が起きているか' },
+    { id: 'flmg_acting', label: '演じるということ', hint: '役に入る、離れる' },
+    { id: 'flmg_industry', label: '映画界のいま',   hint: '配信、興行、資金' },
+    { id: 'flmg_story',  label: '物語のつくり方',   hint: '脚本、構成、編集' },
+  ],
+
+  /* ── 趣味・娯楽 ───────────────────────────────────────── */
+  travel: [
+    { id: 'trvg_place',  label: '行き先の紹介',     hint: 'どんな街か、何が見どころか' },
+    { id: 'trvg_tips',   label: '旅のコツ',         hint: '荷物、移動、お金' },
+    { id: 'trvg_trouble', label: '旅先のトラブル',  hint: '起きた話と、どう切り抜けたか' },
+    { id: 'trvg_food',   label: '現地の食べもの',   hint: '名物と、頼み方' },
+    { id: 'trvg_manner', label: '現地のマナー',     hint: '知らないと失礼になること' },
+  ],
+  golf: [
+    { id: 'glfg_course', label: 'コースの紹介',     hint: '難しさ、景色、攻め方' },
+    { id: 'glfg_swing',  label: 'スイングの話',     hint: '直したところと、その結果' },
+    { id: 'glfg_gear',   label: '道具えらび',       hint: 'クラブ、ボール、シューズ' },
+    { id: 'glfg_tour',   label: 'プロの試合',       hint: '勝負どころと、その判断' },
+    { id: 'glfg_manner', label: 'ゴルフのマナー',   hint: '同伴者への気づかい' },
+  ],
+  food: [
+    { id: 'fodg_recipe', label: 'つくり方',         hint: '手順と、失敗しないコツ' },
+    { id: 'fodg_ingredient', label: '食材の話',     hint: '旬、産地、選び方' },
+    { id: 'fodg_tool',   label: '道具とキッチン',   hint: '鍋、包丁、家電' },
+    { id: 'fodg_world',  label: '世界の家庭料理',   hint: '国ごとの定番' },
+  ],
+  gourmet: [
+    { id: 'goug_shop',   label: 'お店の紹介',       hint: '何が名物で、どう並ぶか' },
+    { id: 'goug_street', label: '食べ歩きの街',     hint: '歩いて回れる範囲の楽しみ' },
+    { id: 'goug_trend',  label: '流行りの一品',     hint: 'なぜ人が集まるのか' },
+    { id: 'goug_review', label: '評価のしかた',     hint: '星、口コミ、あてになるか' },
+  ],
+  wine: [
+    { id: 'wing_grape',  label: 'ぶどうの品種',     hint: '味わいの違いはどこから' },
+    { id: 'wing_region', label: '産地をたどる',     hint: '土地と気候が味を決める' },
+    { id: 'wing_pair',   label: '料理との相性',     hint: 'なぜ合うのか' },
+    { id: 'wing_buy',    label: '買い方・保管',     hint: '値段の見方、置き方' },
+  ],
+  movies: [
+    { id: 'movg_review', label: '作品を語る',       hint: '見どころと、引っかかったところ' },
+    { id: 'movg_maker',  label: 'つくり手の話',     hint: '監督、俳優、脚本' },
+    { id: 'movg_service', label: '配信サービス',    hint: '何がどこで見られるか' },
+    { id: 'movg_genre',  label: 'ジャンルの話',     hint: 'そのジャンルの型と外し方' },
+  ],
+  watching: [
+    { id: 'watg_match',  label: '試合を振り返る',   hint: '流れが変わった場面' },
+    { id: 'watg_player', label: '選手の話',         hint: '成長、移籍、引退' },
+    { id: 'watg_rule',   label: 'ルールと戦術',     hint: '見方が変わる知識' },
+    { id: 'watg_fan',    label: '応援する側',       hint: 'スタジアム、グッズ、仲間' },
+  ],
+  listening: [
+    { id: 'lisg_artist', label: 'アーティストの話', hint: '経歴と、いまの活動' },
+    { id: 'lisg_live',   label: 'ライブ・フェス',   hint: '会場の空気、回り方' },
+    { id: 'lisg_genre',  label: 'ジャンルを知る',   hint: '成り立ちと、聴きどころ' },
+    { id: 'lisg_gear',   label: '聴く道具',         hint: 'イヤホン、配信、音質' },
+  ],
+  dj: [
+    { id: 'djg_set',     label: 'プレイの組み立て', hint: '流れのつくり方' },
+    { id: 'djg_gear',    label: '機材の話',         hint: 'つなぎ方、選び方' },
+    { id: 'djg_scene',   label: 'クラブシーン',     hint: '街ごとの色、イベント' },
+    { id: 'djg_track',   label: '曲の掘り方',       hint: 'どこで見つけるか' },
+  ],
+  fitness: [
+    { id: 'fitg_train',  label: 'トレーニング法',   hint: '種目、回数、休み方' },
+    { id: 'fitg_food',   label: '食事と体づくり',   hint: 'たんぱく質、増量、減量' },
+    { id: 'fitg_gear',   label: 'ジムと器具',       hint: '選び方、使い方' },
+    { id: 'fitg_body',   label: '体の仕組み',       hint: 'なぜそうなるのか' },
+  ],
+  gaming: [
+    { id: 'gamg_title',  label: '作品の紹介',       hint: '何が面白いのか' },
+    { id: 'gamg_play',   label: '攻略と上達',       hint: '詰まりどころの越え方' },
+    { id: 'gamg_scene',  label: 'e スポーツ',       hint: '大会、選手、観戦' },
+    { id: 'gamg_gear',   label: '機材と環境',       hint: '回線、周辺機器、設定' },
+  ],
+}
+
+/**
+ * その分野の話題を返す。**特化した話題 + どこにでもある話題。**
+ * 場面(`scenesFor`)とまったく同じ考え方でそろえてある。
+ */
+export const genresFor = (industry) => {
+  const own = GENRES_BY_INDUSTRY[industry] ?? []
+  const isHobby = industriesIn('hobby').some((i) => i.id === industry)
+  return [...own, ...(isHobby ? COMMON_HOBBY_GENRES : READING_GENRES)]
+}
+
+/**
  * その分野の場面を返す。**特化した場面 + どこにでもある場面**(利用者の指定)。
  *
  *   > どの業種でもあるような共通のシチュエーションはそれぞれに
@@ -360,8 +593,16 @@ const ALL_SCENES = [
   ...COMMON_HOBBY_SCENES,
   ...Object.values(SCENES_BY_INDUSTRY).flat(),
 ]
+/** すべての話題。名前を引くときに使う */
+const ALL_GENRES = [
+  ...READING_GENRES,
+  ...COMMON_HOBBY_GENRES,
+  ...Object.values(GENRES_BY_INDUSTRY).flat(),
+]
 
-export const genreLabel = (id) => READING_GENRES.find((g) => g.id === id)?.label ?? id
+export const genreLabel = (id) => ALL_GENRES.find((g) => g.id === id)?.label ?? id
 export const sceneLabel = (id) => ALL_SCENES.find((s) => s.id === id)?.label ?? id
 /** 場面の説明。AI に渡す文言を作るのに使う */
 export const sceneHint = (id) => ALL_SCENES.find((s) => s.id === id)?.hint ?? ''
+/** 話題の説明。AI に渡す文言を作るのに使う */
+export const genreHint = (id) => ALL_GENRES.find((g) => g.id === id)?.hint ?? ''

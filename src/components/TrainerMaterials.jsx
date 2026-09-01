@@ -27,7 +27,7 @@ import {
   NEW_MATERIAL_KINDS, addChunkJa, assignMaterial,
   kindLabel, loadMyLearners, searchMaterials,
 } from '../lib/materials.js'
-import { READING_GENRES, scenesFor } from '../data/genres.js'
+import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 
@@ -69,7 +69,8 @@ export default function TrainerMaterials({ me }) {
      残すと、当てはまる教材が1件も無い状態のまま固まる */
   useEffect(() => {
     if (scene && !scenesFor(industry).some((x) => x.id === scene)) setScene('')
-    // scene を依存に入れると、選んだそばから消えてしまう
+    if (genre && !genresFor(industry).some((x) => x.id === genre)) setGenre('')
+    // scene / genre を依存に入れると、選んだそばから消えてしまう
   }, [industry])
 
   const isHobbyFilter = industriesIn('hobby').some((i) => i.id === industry)
@@ -326,7 +327,11 @@ export default function TrainerMaterials({ me }) {
               <span>話題</span>
               <select value={genre} onChange={(e) => setGenre(e.target.value)}>
                 <option value="">すべて</option>
-                {READING_GENRES.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+                {/* **話題も、選んだ分野で変わる**(2026-08 利用者の指定)。
+                    作る画面と同じ `genresFor()` を使う。2か所に持たない */}
+                {genresFor(industry).map((g) => (
+                  <option key={g.id} value={g.id}>{g.label}</option>
+                ))}
               </select>
             </label>
           )}
