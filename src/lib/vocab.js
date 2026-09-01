@@ -476,13 +476,33 @@ export async function loadMyWordbook({ status = 'unknown', limit = 200, dueOnly 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return ok([])
 
-  const { data, error } = await supabase.rpc('review_words', {
+  const call = (p_status) => supabase.rpc('review_words', {
     p_learner: user.id,
-    p_status: status,
+    p_status,
     p_limit: limit,
     p_due_only: dueOnly,
   })
+
+  const { data, error } = await call(status)
   if (error) return fail(error, '単語帳を読めませんでした')
+
+  /* **0027 を貼る前でも動く道を残す**(CLAUDE.md)。
+
+     `'todo'`(まだ + 覚えかけ)は 0027 で足した言葉である。
+     貼る前の関数は `r.status = 'todo'` と読むので**1件も返さない。**
+     それでいて数え上げ(`loadWordbookCounts`)は表を直に見ているため、
+     **「復習 118」と出ているのに中身が空**という食い違いが起きた
+     (2026-08 実機)。しかも画面には
+     「今日出すものはありません。よくできました。」と出る。**嘘になる。**
+
+     空だったときだけ、古い言葉(`unknown`)で引き直す。
+     貼ったあとは1回で返るので、余計な問い合わせは起きない。 */
+  if (status === 'todo' && !(data ?? []).length) {
+    const [yet, half] = await Promise.all([call('unknown'), call('learning')])
+    if (!yet.error) {
+      return ok([...(yet.data ?? []), ...(half.error ? [] : half.data ?? [])])
+    }
+  }
   return ok(data ?? [])
 }
 

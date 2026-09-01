@@ -131,7 +131,7 @@ export default function Wordbook({ level = null }) {
   const [filter, setFilter] = useState({ day: null, material: null })
   const [queue, setQueue] = useState([])        // いまの10語
   const [result, setResult] = useState(null)    // 終わったときの結果
-  const [counts, setCounts] = useState({ due: 0, unknown: 0, known: 0 })
+  const [counts, setCounts] = useState({ due: 0, unknown: 0, learning: 0, known: 0 })
   const [week, setWeek] = useState({ days: 0, answered: 0, correct: 0, weeks: 0 })
   const [byIndustry, setByIndustry] = useState([])
   const [viewers, setViewers] = useState([])
@@ -375,7 +375,20 @@ export default function Wordbook({ level = null }) {
       )}
 
       {isQuiz && !loading && !result && !card && (
-        <p className="hint">今日出すものはありません。よくできました。</p>
+        /* **「ありません」と「読めていません」を、同じ見た目で終わらせない**
+           (CLAUDE.md)。数え上げは表を直に見ているので、
+           「復習 118」と出ているのに1語も出せないなら、それは
+           **やり切ったのではなく、読めていない。** */
+        (filter.day || filter.material)
+          ? <p className="hint">その絞り込みに当てはまる語はありません。</p>
+          : counts.due > 0
+            ? (
+              <p className="notice notice--warn">
+                今日出す語が <strong>{counts.due} 語</strong>あるはずですが、
+                読み出せませんでした。しばらくしてから開き直してください。
+              </p>
+            )
+            : <p className="hint">今日出すものはありません。よくできました。</p>
       )}
 
       {card && (
