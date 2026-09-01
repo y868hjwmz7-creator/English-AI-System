@@ -27,7 +27,7 @@ import {
   generateSectionUnique, isPassageKind, loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { chunkPlan } from '../lib/chunkJa.js'
-import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
+import { READING_GENRES, sceneHint, sceneLabel, scenesFor } from '../data/genres.js'
 import {
   CLIP_ACCENTS, DEFAULT_ACCENT, pickVoices,
   voiceCountFor, voicePurposeFor, voicesOfAccent,
@@ -131,6 +131,15 @@ export default function MaterialForm({
   // 0011 をまだ流していないときに「まだありません」と出ると、
   // 何が足りないのか分からなくなる(この失敗を何度もした)
   const [reviewError, setReviewError] = useState(null)
+
+  /* **分野を変えたら、場面もその分野のものに入れ替える**(2026-08 利用者の指定)。
+     入れ替えないと、外科医の教材に「打ち合わせ前の雑談」が残る。
+     いまの場面がその分野にもあれば、そのままにする */
+  useEffect(() => {
+    const list = scenesFor(industry)
+    if (!list.some((x) => x.id === scene)) setScene(list[0]?.id ?? '')
+    // scene を依存に入れると、選んだそばから書き換わってしまう
+  }, [industry])
 
   // 生成中は秒数を数える。1〜3分かかることがあるため、動いていることが
   // 分からないと「固まった」と思われる(実際にそう見えた)。
@@ -239,6 +248,12 @@ export default function MaterialForm({
   const isHobby = industriesIn('hobby').some((i) => i.id === industry)
   const isWork = Boolean(industry) && !isHobby
 
+  /* **場面は、選んだ分野で変わる**(2026-08 利用者の指定)。
+       > 外科医を選んだら、手術前の説明、とか、手術方法についての話し合い、
+       > とか、業界に特化した選択肢が出るようにしてください。
+     登録の無い分野では「仕事全般」の場面に落ちる(`scenesFor`)。 */
+  const sceneList = scenesFor(industry)
+
   /** 弱点タグを、AI に渡す文言にする */
   const topicOf = (id) => {
     const tag = weaknessTags.find((t) => t.id === id)
@@ -279,7 +294,7 @@ export default function MaterialForm({
   const autoTitle = () => {
     const parts = [todayLabel()]
     if (kind === 'reading') parts.push(READING_GENRES.find((g) => g.id === genre)?.label ?? '')
-    else if (kind === 'dialogue') parts.push(DIALOGUE_SCENES.find((x) => x.id === scene)?.label ?? '')
+    else if (kind === 'dialogue') parts.push(sceneLabel(scene))
     if (tagIds.length) parts.push(tagIds.map(weaknessTagLabel).join(' + '))
     parts.push(level)
     if (industry) parts.push(industryLabel(industry))
@@ -321,8 +336,7 @@ export default function MaterialForm({
            READING_GENRES.find((g) => g.id === genre)?.hint].filter(Boolean).join(' — ')
         : '',
       scene: kind === 'dialogue'
-        ? [DIALOGUE_SCENES.find((x) => x.id === scene)?.label,
-           DIALOGUE_SCENES.find((x) => x.id === scene)?.hint].filter(Boolean).join(' — ')
+        ? [sceneLabel(scene), sceneHint(scene)].filter(Boolean).join(' — ')
         : '',
       subject,
       avoid: (used ?? []).slice(-40),
@@ -699,7 +713,7 @@ export default function MaterialForm({
             </span>
           </span>
           <select value={scene} onChange={(e) => setScene(e.target.value)}>
-            {DIALOGUE_SCENES.map((x) => (
+            {sceneList.map((x) => (
               <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
             ))}
           </select>

@@ -27,7 +27,7 @@ import {
   NEW_MATERIAL_KINDS, addChunkJa, assignMaterial,
   kindLabel, loadMyLearners, searchMaterials,
 } from '../lib/materials.js'
-import { DIALOGUE_SCENES, READING_GENRES } from '../data/genres.js'
+import { READING_GENRES, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 
@@ -65,6 +65,13 @@ export default function TrainerMaterials({ me }) {
 
   /* **選ぶ欄は2つ、入れ物は1つ**(作る画面と同じ考え方)。
      いま選んでいるものが「仕事」か「趣味」かは、ここで1回だけ決める */
+  /* 分野を変えたら、**その分野に無い場面の絞り込みは外す。**
+     残すと、当てはまる教材が1件も無い状態のまま固まる */
+  useEffect(() => {
+    if (scene && !scenesFor(industry).some((x) => x.id === scene)) setScene('')
+    // scene を依存に入れると、選んだそばから消えてしまう
+  }, [industry])
+
   const isHobbyFilter = industriesIn('hobby').some((i) => i.id === industry)
   const isWorkFilter = Boolean(industry) && !isHobbyFilter
 
@@ -328,7 +335,11 @@ export default function TrainerMaterials({ me }) {
               <span>シチュエーション</span>
               <select value={scene} onChange={(e) => setScene(e.target.value)}>
                 <option value="">すべて</option>
-                {DIALOGUE_SCENES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                {/* **場面は、選んだ分野で変わる**(2026-08 利用者の指定)。
+                    作る画面と同じ `scenesFor()` を使う。2か所に持たない */}
+                {scenesFor(industry).map((x) => (
+                  <option key={x.id} value={x.id}>{x.label}</option>
+                ))}
               </select>
             </label>
           )}
