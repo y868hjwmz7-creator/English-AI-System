@@ -3172,16 +3172,77 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .wordbook-seen strong { color: var(--text-primary); }
 
-/* ── 進み具合 ────────────────────────────────────────────────
-   **終わりの見えない作業は続かない。** 今日の残りと覚えた数を上に出す */
-.wordbook-tally {
-  display: flex; flex-wrap: wrap; gap: 6px 16px;
-  margin: 2px 0 12px; color: var(--text-muted); font-size: 12px;
+/* ── 単語帳の見出し ──────────────────────────────────────────
+   **終わりの見えない作業は続かない。** 今日の分と覚えた数を上に出す。
+   以前は1行に流していたので、どれが「いま何をすればよいか」なのか
+   分からなかった(2026-08 利用者の指定)。 */
+.wb-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  margin-bottom: 14px;
 }
-.wordbook-tally strong {
-  margin-right: 4px; color: var(--text-primary); font-size: 16px; font-weight: 700;
+.wb-head > .card-title { margin: 0; }
+/* 続けている週。**続く励みになる数なので、色を付けて右へ置く** */
+.wb-streak {
+  display: inline-flex; align-items: baseline; gap: 8px; margin-left: auto;
+  padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--accent); color: var(--accent);
+  font-size: 12px; font-weight: 700;
 }
-.wordbook-done { color: var(--accent); font-weight: 600; }
+.wb-streak-sub { color: var(--text-secondary); font-weight: 500; }
+
+/* 数は3枚の札。**「今日出す」だけを目立たせる**(そこが行動につながる) */
+.wb-stats {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px; margin-bottom: 16px;
+}
+.wb-stat {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 12px 8px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface-2);
+}
+.wb-stat > strong {
+  font-size: 24px; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; color: var(--text-primary);
+}
+.wb-stat-label { font-size: 11px; color: var(--text-muted); }
+/* **やることがある日は、そこだけ色が付く。** 0 件の日は静かなまま */
+.wb-stat.is-due { border-color: var(--accent); background: var(--accent-soft); }
+.wb-stat.is-due > strong { color: var(--accent); }
+
+/* ── この回の進み具合 ────────────────────────────────────────
+   「のこり 10 語」という小さな文字は、あってもなくても同じだった
+   (2026-08 利用者の指定)。**何問目かを数で出し、帯で見せる。**
+   終わりが見えるから、あと3つなら続ける気になる。 */
+.wb-run { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.wb-run-head { display: flex; align-items: center; gap: 10px; }
+.wb-run-count { font-size: 13px; color: var(--text-secondary); }
+.wb-run-count > strong {
+  font-size: 20px; font-weight: 700; color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.wb-run-form { margin-left: auto; }
+.wb-run-form > select {
+  width: auto; min-width: 130px; height: 34px;
+  border-radius: 999px; font-size: 13px;
+}
+/* 1問=1目盛り。**色だけに頼らず、いまの1つは太くしてある** */
+.wb-run-bar { display: flex; gap: 3px; }
+.wb-run-bar > span {
+  flex: 1 1 0; height: 5px; border-radius: 999px; background: var(--border);
+}
+.wb-run-bar > span.is-done { background: var(--accent); }
+.wb-run-bar > span.is-now { background: var(--accent); height: 8px; margin-top: -1.5px; }
+
+/* 終わったときの点数。**やり切ったことが分かるように大きく** */
+.wb-score {
+  display: flex; align-items: baseline; justify-content: center; gap: 8px;
+  margin: 0 0 14px;
+}
+.wb-score > strong {
+  font-size: 40px; font-weight: 700; line-height: 1;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.wb-score-of { font-size: 14px; color: var(--text-secondary); }
 
 /* ── 今日の復習は1語ずつ ──────────────────────────────────────
    **答えを見る前に、必ず1回考える。** 記憶は思い出そうとしたときに強くなる。
@@ -3191,7 +3252,6 @@ html { -webkit-text-size-adjust: 100%; }
   border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface-2); text-align: center;
 }
-.wordcard-count { margin: 0 0 10px; color: var(--text-muted); font-size: 12px; }
 .wordcard-face {
   display: flex; flex-wrap: wrap; align-items: baseline;
   justify-content: center; gap: 10px;
@@ -3245,10 +3305,6 @@ html { -webkit-text-size-adjust: 100%; }
 /* 出す側の入れ替え(英語 → 日本語 / 日本語 → 英語)。
    札(`.chip`)は `<label>` 用に作ってあるので、`<button>` に使うときは
    端末の既定の書体と色を打ち消す */
-.wordbook-mode {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0;
-}
-.wordbook-mode .chip { font-family: inherit; color: inherit; }
 
 /* ── 4択。**1語2秒で回せることが値打ち。** 大きく、押しやすく ── */
 .wordbook-choices {

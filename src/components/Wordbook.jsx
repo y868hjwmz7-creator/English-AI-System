@@ -195,16 +195,34 @@ export default function Wordbook({ level = null }) {
 
   return (
     <section className="card">
-      <h2 className="card-title">単語帳</h2>
-
-      {/* 進み具合。**終わりが見えない作業は続かない** */}
-      <div className="wordbook-tally">
-        <span><strong>{counts.due}</strong> 今日出す</span>
-        <span><strong>{counts.unknown}</strong> 覚えかけ</span>
-        <span><strong>{counts.known}</strong> 覚えた</span>
+      {/* **題と、続いている記録は同じ行**(2026-08 利用者の指定)。
+            > 単語帳、もっと洗練して直観的にしてください。
+            > 現代的、分かりやすく使いやすい、シンプルに変更して。 */}
+      <div className="wb-head">
+        <h2 className="card-title">単語帳</h2>
         {week.weeks > 0 && (
-          <span className="wordbook-done">{week.weeks} 週つづけて / 今週 {week.days} 日</span>
+          <span className="wb-streak" title="続けている週の数">
+            {week.weeks} 週つづけて<span className="wb-streak-sub">今週 {week.days} 日</span>
+          </span>
         )}
+      </div>
+
+      {/* 数は**3枚の札**にする。以前は1行に流していたので、
+          どれが「いま何をすればよいか」なのか分からなかった。
+          **「今日出す」だけを目立たせる。** そこが行動につながる数である */}
+      <div className="wb-stats">
+        <span className={`wb-stat${counts.due > 0 ? ' is-due' : ''}`}>
+          <strong>{counts.due}</strong>
+          <span className="wb-stat-label">今日出す</span>
+        </span>
+        <span className="wb-stat">
+          <strong>{counts.unknown}</strong>
+          <span className="wb-stat-label">覚えかけ</span>
+        </span>
+        <span className="wb-stat">
+          <strong>{counts.known}</strong>
+          <span className="wb-stat-label">覚えた</span>
+        </span>
       </div>
 
       {/* トレーナーが見た。**人が見ていると分かることが、いちばん効く** */}
@@ -267,8 +285,11 @@ export default function Wordbook({ level = null }) {
       {/* ── 今日の復習(10語ずつ)────────────────────────────── */}
       {isQuiz && !loading && result && (
         <div className="wordcard wordcard--result">
-          <p className="wordcard-count">
-            {result.filter((r) => r.ok).length} / {result.length} 語
+          {/* **終わったときの点数は、大きく出す。**
+              10語やり切ったことが分かるようにする(2026-08 利用者の指定) */}
+          <p className="wb-score">
+            <strong>{result.filter((r) => r.ok).length}</strong>
+            <span className="wb-score-of">/ {result.length} 語</span>
           </p>
           <ul className="wordbook-result">
             {result.map((r, i) => (
@@ -294,23 +315,48 @@ export default function Wordbook({ level = null }) {
 
       {card && (
         <>
-          <div className="wordbook-mode" role="group" aria-label="出題の形">
-            <button type="button"
-                    className={`chip${want === 'auto' ? ' is-selected' : ''}`}
-                    onClick={() => setWant('auto')}>おまかせ</button>
-            {QUIZ_FORMS.map((f) => (
-              <button key={f.id} type="button" title={f.hint}
-                      className={`chip${want === f.id ? ' is-selected' : ''}`}
-                      onClick={() => { setWant(f.id); setShown(false); setJudged(null) }}>
-                {f.label}
-              </button>
-            ))}
-          </div>
+          {/* **この回の進み具合**(2026-08 利用者の指定)。
+                > あと10語みたいなのも、入れるのであればしっかりメリハリを
+                > つけて存在意義があるように。
+              「のこり 10 語」という小さな文字は、あってもなくても同じだった。
+              **何問目かを数で出し、帯で見せる。**
+              終わりが見えるから、あと3つなら続ける気になる。
+
+              出題の形は**プルダウン1つ**にした。札を5つ並べていたので、
+              いちばん押す「答える」ボタンより目立っていた。
+              既定の「おまかせ」は、覚えの深さ(箱)から自動で決まる */}
+          {(() => {
+            const done = doneRef.current.length
+            const total = done + queue.length
+            return (
+              <div className="wb-run">
+                <div className="wb-run-head">
+                  <span className="wb-run-count">
+                    <strong>{done + 1}</strong> / {total} 語
+                  </span>
+                  <label className="wb-run-form">
+                    <span className="sr-only">出題の形</span>
+                    <select value={want}
+                            onChange={(e) => {
+                              setWant(e.target.value); setShown(false); setJudged(null)
+                            }}>
+                      <option value="auto">おまかせ</option>
+                      {QUIZ_FORMS.map((f) => (
+                        <option key={f.id} value={f.id}>{f.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="wb-run-bar" role="presentation">
+                  {Array.from({ length: total }, (unused, i) => (
+                    <span key={i} className={i < done ? 'is-done' : i === done ? 'is-now' : ''} />
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
 
           <div className="wordcard">
-            <p className="wordcard-count">
-              のこり {queue.length} 語(全 {counts.due})
-            </p>
 
             {/* 出す側。
                 **答えを出しておいて答えさせない。** つづりを書く形で英語を
