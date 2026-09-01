@@ -5,7 +5,7 @@
  * 最新の TOEIC / VERSANT が一目で分かるようにする。
  * レベルの物差しは教材と同じ CEFR にそろえてある。
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, scoreTestLabel } from '../data/cefr.js'
 import {
   addLearnerScore, createAccount, kindLabel, loadLearnerAssignments,
@@ -26,6 +26,7 @@ import SearchBar from './SearchBar.jsx'
 import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
 import { ScreenIcon } from './Icons.jsx'
 import Avatar from './Avatar.jsx'
+import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 
 const STATUS = {
@@ -101,6 +102,10 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const [adding, setAdding] = useState(false)
   const [newGuest, setNewGuest] = useState({ displayName: '', loginId: '', password: '' })
   const [addBusy, setAddBusy] = useState(false)
+  /* **取り組みの細かい数は、押したときだけ出す**(2026-09 利用者の指定)。
+     どのゲストの吹き出しを開いているか、と、その相手のボタン */
+  const [practiceOf, setPracticeOf] = useState(null)
+  const practiceBtn = useRef({})
 
   const reload = async () => {
     const { data, error: e } = await loadMyLearnersDetailed()
@@ -511,28 +516,62 @@ export default function TrainerLearners({ me, navTick = 0 }) {
               const st = practiceStats(practice[l.id])
               return (
                 <div className="learner-signs">
+                  {/* **いつも見えているのは「最後はいつか」だけ。**
+                      レッスンの入口でまず知りたいのはここである */}
                   <span className={`sign sign--last is-${st.fresh}`}
                         title="最後にアプリで取り組んだ日">
                     <span className="sign-dot" aria-hidden="true" />
                     <span className="sign-value">{st.last}</span>
                     <span className="sign-label">最後</span>
                   </span>
-                  {st.items.map((it) => (
-                    <span key={it.label} className="sign">
-                      <span className="sign-value">
-                        {it.value}<span className="sign-unit">{it.unit}</span>
-                      </span>
-                      <span className="sign-label">{it.label}</span>
-                    </span>
-                  ))}
-                  {l.status === 'active' && (
-                    <button type="button" className="btn btn--small btn--quiet learner-remind"
-                            disabled={reminding === l.id || reminded[l.id]}
-                            title="このゲストに「取り組みましょう」と知らせます"
-                            onClick={() => remind(l)}>
-                      {reminded[l.id] ? '送りました'
-                        : reminding === l.id ? '送っています…' : 'リマインドする'}
-                    </button>
+                  {/* **細かい数は、押したときだけ出す**(2026-09 利用者の指定)。
+                        > 日数とか取り組みの表示がたくさんある割にパッと見て
+                        > 何もわからないです。それなら「取り組みをみる」とか、
+                        > 何かいい名前のボタンを押してよりわかりやすい
+                        > 吹き出しなどで表示される方が良いです
+
+                      札を5つ並べていたので、スマホでは3行を食っていた。
+                      **数が多いほど、どれも読まれない。** */}
+                  <button type="button" ref={(el) => { practiceBtn.current[l.id] = el }}
+                          className="btn btn--small btn--ghost"
+                          aria-expanded={practiceOf === l.id}
+                          onClick={() => setPracticeOf(practiceOf === l.id ? null : l.id)}>
+                    取り組みを見る
+                  </button>
+                  {practiceOf === l.id && (
+                    <Popover anchorEl={practiceBtn.current[l.id]}
+                             onClose={() => setPracticeOf(null)}
+                             className="practice-pop" label="このゲストの取り組み">
+                      <p className="practice-pop-title">{l.display_name} さんの取り組み</p>
+                      <dl className="practice-pop-list">
+                        <div>
+                          <dt>最後に取り組んだ日</dt>
+                          <dd>{st.last}</dd>
+                        </div>
+                        {st.items.map((it) => (
+                          <div key={it.label}>
+                            {/* **吹き出しには場所がある。** 札の短い名前ではなく、
+                                言葉で説明した名前(`full`)を出す */}
+                            <dt>{it.full ?? it.label}</dt>
+                            <dd>{it.value}{it.unit}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      {/* **やっていない人には、その場で知らせを送れる。**
+                          自動では飛ばない(利用者の指定) */}
+                      {l.status === 'active' && (
+                        <button type="button" className="btn btn--small btn--quiet"
+                                disabled={reminding === l.id || reminded[l.id]}
+                                onClick={() => remind(l)}>
+                          {reminded[l.id] ? '送りました'
+                            : reminding === l.id ? '送っています…' : 'リマインドする'}
+                        </button>
+                      )}
+                      <p className="field-hint">
+                        アプリで取り組んだぶんを、こちらで数えています。
+                        ゲストが入力したものではありません。
+                      </p>
+                    </Popover>
                   )}
                 </div>
               )
@@ -894,14 +933,16 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 </div>
               </div>
             ) : (
+              /* **開く道は1つにする**(2026-09 利用者の指定)。
+                 「過去の宿題を見る」「レベル・スコアを記録する」の2つを
+                 並べていたが、開いた先の切り替えはプルダウンなので、
+                 **押したものと出てくるものが結び付かなかった。**
+                 ここは「この人を開く」だけにし、
+                 中で何を見るかは開いてからプルダウンで選ぶ */
               <div className="btn-row">
-                <button type="button" className="btn btn--small"
+                <button type="button" className="btn btn--small btn--primary"
                         onClick={() => openDetail(l.id, 'homework')}>
-                  過去の宿題を見る
-                </button>
-                <button type="button" className="btn btn--small"
-                        onClick={() => openDetail(l.id, 'record')}>
-                  レベル・スコアを記録する
+                  この人を開く
                 </button>
               </div>
             )}

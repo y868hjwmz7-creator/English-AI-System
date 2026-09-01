@@ -11,9 +11,9 @@
  *   日付にまつわる操作は、日付の吹き出しの中にまとめる。
  *   `sortOptions` を渡したときだけ出す。
  */
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import { toDateKey } from '../lib/format.js'
+import Popover from './Popover.jsx'
 
 /** 月の初日から並べた、6週ぶんのマス(前後の月は null で埋める) */
 function monthGrid(year, month) {
@@ -43,70 +43,11 @@ export default function CalendarPopover({
     const base = value ? new Date(value) : (days[0] ? new Date(days[0]) : new Date())
     return { y: base.getFullYear(), m: base.getMonth() }
   })
-  const boxRef = useRef(null)
   const has = new Set(days)
 
-  // 外側を押す・Esc で閉じる。**吹き出しの中は「外側」ではない**
-  useEffect(() => {
-    const onDown = (e) => { if (!boxRef.current?.contains(e.target)) onClose() }
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    // 開いたその指離しで閉じないよう、次の間合いから見張る
-    const t = window.setTimeout(() => {
-      document.addEventListener('pointerdown', onDown)
-    }, 0)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      window.clearTimeout(t)
-      document.removeEventListener('pointerdown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [onClose])
-
-  /* 出す場所。**紙(`.lesson-sheet`)などに切られないよう body の直下に出す。**
-
-     **画面から はみ出させない**(2026-08 利用者の指定)。
-       > スクロールが下に入っている時に日付を選ぼうとすると
-       > ちゃんと表示されません。常に全体が映るように。
-
-     以前は「ボタンの下」に決め打ちで出していたので、
-     ボタンが画面の下のほうにあると**カレンダーの下半分が画面の外**に出て、
-     日を押せなかった。`position: fixed` なので画面を送っても追いかけてくる。
-
-     ① まず自分の高さを測る(`boxRef` は描いたあとに入る)
-     ② 下に入らなければ**ボタンの上**に出す
-     ③ それでも入らなければ、入るところまで押し上げる */
-  const [pos, setPos] = useState(null)
-  useEffect(() => {
-    const place = () => {
-      const r = anchorEl?.getBoundingClientRect()
-      const h = boxRef.current?.offsetHeight ?? 320
-      const w = boxRef.current?.offsetWidth ?? 300
-      const margin = 8
-      if (!r) { setPos({ top: margin, left: margin }); return }
-      const below = window.innerHeight - r.bottom - margin
-      const top = below >= h
-        ? r.bottom + 6                                  // ① 下に入る
-        : r.top - 6 - h >= margin
-          ? r.top - 6 - h                               // ② 上に入る
-          : Math.max(margin, window.innerHeight - h - margin)  // ③ 押し上げる
-      setPos({
-        top,
-        left: Math.max(margin, Math.min(r.left, window.innerWidth - w - margin)),
-      })
-    }
-    place()
-    // 画面を送ったり、向きを変えたりしたら置き直す
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
-    return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
-    }
-  }, [anchorEl, at])
-  // **測る前は描かない。** 一度どこかに出してから動かすと、ちらつく
-  const style = pos
-    ? { ...pos, visibility: 'visible' }
-    : { top: 0, left: 0, visibility: 'hidden' }
+  /* **出す場所の決め方と閉じ方は `Popover` に置いてある。**
+     同じ決まりを2か所に持たない(CLAUDE.md)。
+     月を変えると高さが変わるので、`placeKey` で置き直させる */
 
   const cells = monthGrid(at.y, at.m)
   const move = (d) => setAt(({ y, m }) => {
@@ -114,8 +55,9 @@ export default function CalendarPopover({
     return { y: next.getFullYear(), m: next.getMonth() }
   })
 
-  return createPortal(
-    <div className="wbcal" style={style} ref={boxRef} role="dialog" aria-label="日付で絞る">
+  return (
+    <Popover anchorEl={anchorEl} onClose={onClose} className="wbcal"
+             label="日付で絞る" placeKey={`${at.y}-${at.m}`}>
       <div className="wbcal-head">
         <button type="button" className="btn btn--ghost btn--small" onClick={() => move(-1)}
                 aria-label="前の月">‹</button>
@@ -163,8 +105,7 @@ export default function CalendarPopover({
           すべての日
         </button>
       </div>
-    </div>,
-    document.body,
+    </Popover>
   )
 }
 

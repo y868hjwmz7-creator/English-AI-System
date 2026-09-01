@@ -249,13 +249,21 @@ export function practiceStats(row) {
   // 2日以内なら続いている、1週間以内ならまずまず、それより前は間があいている
   const fresh = days <= 1 ? 'today' : days <= 7 ? 'recent' : 'stale'
   const min = Math.round((row.seconds ?? 0) / 60)
+  /* `label` は狭いところ用の短い名前、`full` は**言葉で説明した名前**。
+     2026-09 実機「日数とか取り組みの表示がたくさんある割に
+     パッと見て何もわからない」。札の中では場所がないので短くするしかないが、
+     **吹き出しの中には場所がある。** 短い名前のままでは、
+     「2週間」が何の2週間なのか分からない */
   const items = [
-    { label: '2週間', value: String(row.days ?? 0), unit: '日' },
-    { label: '回数', value: String(row.times ?? 0), unit: '回' },
-    { label: '時間', value: String(min), unit: '分' },
+    { label: '2週間', full: 'この2週間で取り組んだ日', value: String(row.days ?? 0), unit: '日' },
+    { label: '回数', full: 'この2週間の回数', value: String(row.times ?? 0), unit: '回' },
+    { label: '時間', full: 'この2週間の合計時間', value: String(min), unit: '分' },
   ]
   // いちばん多く取り組んだ種類を1つだけ。**全部並べると札が読めなくなる**
   const top = Object.entries(row.kinds ?? {}).sort((a, b) => b[1] - a[1])[0]
-  if (top) items.push({ label: PRACTICE_KINDS[top[0]] ?? top[0], value: String(top[1]), unit: '回' })
+  if (top) {
+    const name = PRACTICE_KINDS[top[0]] ?? top[0]
+    items.push({ label: name, full: `いちばん多い練習 … ${name}`, value: String(top[1]), unit: '回' })
+  }
   return { fresh, last, items }
 }

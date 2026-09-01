@@ -3406,6 +3406,36 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* カレンダーの吹き出し。**body の直下に出す**(親に切られないため)。
    色は語の吹き出し(`.etext-pop`)と同じ考え方で、面と枠と影で浮かせる */
+/* ── 取り組みの吹き出し(2026-09 利用者の指定)──────────────────
+     > 日数とか取り組みの表示がたくさんある割にパッと見て何も
+     > わからないです。それなら「取り組みをみる」とか、何かいい名前の
+     > ボタンを押してよりわかりやすい吹き出しなどで表示される方が
+     > 良いです
+
+   札を5つ並べていたので、スマホでは3行を食っていた。
+   **数が多いほど、どれも読まれない。**
+   いつも見えるのは「最後はいつか」だけにして、
+   細かい数はここで**言葉と組にして**出す。
+   出す場所と閉じ方は `Popover.jsx` にある(2か所に持たない) */
+.practice-pop {
+  position: fixed; z-index: 200;
+  width: min(19rem, calc(100vw - 24px)); padding: 14px 16px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface-1); color: var(--text-primary);
+  box-shadow: var(--shadow-2);
+}
+.practice-pop-title { margin: 0 0 10px; font-weight: 700; }
+/* **数だけを並べない。** 何の数かを左に、数を右に置く */
+.practice-pop-list { margin: 0 0 12px; }
+.practice-pop-list > div {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; padding: 7px 0; border-top: 1px solid var(--border);
+}
+.practice-pop-list > div:first-child { border-top: none; }
+.practice-pop-list dt { color: var(--text-secondary); font-size: 13px; }
+.practice-pop-list dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.practice-pop > .field-hint { display: block; margin-top: 10px; line-height: 1.6; }
+
 .wbcal {
   position: fixed; z-index: 200;
   width: 288px; padding: 12px;
