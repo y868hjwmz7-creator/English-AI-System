@@ -19,8 +19,7 @@ import { markJobSeen, watchJob } from './lib/generateJob.js'
 import Wordbook from './components/Wordbook.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import { buildSeed } from './data/seed.js'
-import { getSession, loadProfile, onAuthChange, saveMyAvatar, signOut } from './lib/auth.js'
-import { AvatarPicker } from './components/Avatar.jsx'
+import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadState, resetState, saveState } from './lib/store.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 
@@ -117,21 +116,9 @@ export default function App() {
     return () => { alive = false }
   }, [session])
 
-  /**
-   * 自分のアイコンを選んだとき(0029)。
-   *
-   * **先に画面へ映してから送る。** 押した瞬間に変わらないと、
-   * 効いたのかどうかが分からない。失敗したら元に戻し、理由を出す。
-   */
-  const pickAvatar = async (avatar) => {
-    if (!session?.user?.id) return
-    const before = profile?.avatar ?? null
-    setProfile((p) => (p ? { ...p, avatar } : p))
-    const { error } = await saveMyAvatar(session.user.id, avatar)
-    if (!error) return
-    setProfile((p) => (p ? { ...p, avatar: before } : p))
-    window.alert(error)
-  }
+  /* アイコンを選ぶ欄は外した(2026-09 利用者の指定「アイコンはいらない」)。
+     **入れ物(`profiles.avatar`・0029)と保存の窓口(`saveMyAvatar`)は
+     そのまま残してある。** また要るときは、ここに欄を戻すだけでよい。 */
 
   // owner はトレーナーの権限も兼ねる(データベース側の is_trainer() と同じ考え方)
   const isTrainer = profile?.role === 'trainer' || profile?.role === 'owner'
@@ -255,15 +242,12 @@ export default function App() {
 
       {session && (
         <div className="nav-account">
-          {/* **自分のアイコンは、自分で選ぶ**(0029・2026-09 利用者の指定)。
-              置き場所は「自分の名前の隣」1か所だけにしてある。
-              ゲストもトレーナーも、ここから選ぶ。
-              **人のアイコンを、よそから変えられるようにはしない。** */}
-          <AvatarPicker
-            name={profile?.display_name || session.user.email}
-            value={profile?.avatar ?? null}
-            onPick={pickAvatar}
-          />
+          {/* **アイコンは出さない**(2026-09 利用者の指定)。
+                > アイコンはいらないって言ったのになぜ消してくれないのですか?
+              ゲストの一覧から消したあと、ここ(自分の欄)に残っていた。
+              **「アイコンはいらない」は、画面ぜんぶの話である。**
+              0029 の列(`profiles.avatar`)はそのままにしてあるので、
+              また要るときは戻せる(すでに選んだ人の印も消えない)。 */}
           <div className="nav-account-text">
             <span className="nav-account-name">
               {profile?.display_name || session.user.email}

@@ -349,18 +349,24 @@ body {
 /* **自分のアイコンは、自分の名前の隣**(0029・2026-09)。
    置き場所を1か所にしておく。画面ごとに置くと、どこで変えたのかが
    分からなくなるし、必ずどれかが古くなる */
+/* 自分の欄。**アイコンは置かない**(2026-09 利用者の指定)。
+   丸が無くなったぶん、名前を左端からまっすぐ始められる。
+   名前 → 役割とログアウト の2段。**文字だけで静かに** */
 .nav-account {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding-top: 10px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+  padding-top: 12px; border-top: 1px solid var(--border);
   font-size: 12.5px;
 }
 .nav-account-text {
-  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px;
+  min-width: 0; display: flex; flex-direction: column; gap: 6px;
 }
 .nav-account-name {
-  font-weight: 600; font-size: 13px; overflow-wrap: anywhere;
+  font-weight: 700; font-size: 14px; letter-spacing: .01em;
+  overflow-wrap: anywhere;
 }
-.nav-account-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.nav-account-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+}
 .nav-account .btn--link { margin-left: auto; }
 
 /* ---------------- タブ ----------------
@@ -1337,10 +1343,35 @@ html { -webkit-text-size-adjust: 100%; }
    **1本の行**である。上の行(名前 / スコア)と同じ「左が中身・右が操作」。 */
 .learner-signs {
   display: flex; flex-wrap: wrap; align-items: center;
-  gap: 8px; margin-top: 14px;
+  gap: 8px; margin-top: 12px;
+  padding-top: 12px; border-top: 1px solid var(--border);
 }
-/* 「最後」の札だけが左。**押すものは右へ寄せる** */
+/* **上と下を、細い線1本で分ける。**「誰か・どのくらいか」と
+   「最後・押すもの」は役割が違う。囲みを足さずに層を分ける */
+.learner-headcard > .learner-signs { border-top: 1px solid var(--border); }
+/* カードに指を載せたとき、静かに持ち上げる。
+   **色は変えない**(明るい側と暗い側で「濃くなる/薄くなる」が逆になる) */
+.learner-card.card { transition: box-shadow .15s ease; }
+.learner-card.card:hover { box-shadow: var(--shadow-2); }
+@media (prefers-reduced-motion: reduce) { .learner-card.card { transition: none; } }
+/* 「最後」だけが左。**押すものは右へ寄せる** */
 .learner-signs > .sign--last { margin-right: auto; }
+/* **囲みの中に、囲みを重ねない**(2026-09 利用者の指定
+   「もっとスタイリッシュなデザインにしてください」)。
+   カードの中に札の箱、その隣にボタンの箱…と入れ子が続くと、
+   線ばかりが目に入る。**最後に取り組んだ日は、点と文字だけで足りる。**
+   色(点)だけに頼らず「2 日前」という言葉も必ず出す(CLAUDE.md) */
+.learner-signs > .sign--last {
+  flex-direction: row; align-items: baseline; gap: 6px;
+  min-width: 0; padding: 0;
+  border: none; background: none;
+}
+.learner-signs > .sign--last .sign-value { font-size: 14px; }
+.learner-signs > .sign--last .sign-label { font-size: 11px; }
+/* 「今日」のときの地色も外す。**囲みが無いのに帯だけ残ると、
+   狭い画面では行いっぱいの緑の線に見える**(390px で実測)。
+   新しさは**点の色と言葉**で足りる */
+.learner-signs > .sign--last.is-today { background: none; border-color: transparent; }
 @media (max-width: 640px) {
   /* 狭い画面では**押すものを横いっぱいに分け合う。**
      右に寄せたままだと、折り返した行がちぐはぐに見える */
