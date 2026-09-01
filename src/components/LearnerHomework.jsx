@@ -420,10 +420,9 @@ export default function LearnerHomework({ me = null }) {
                         </section>
                       )
                     })}
-                    <button type="button" className="btn btn--link no-print"
-                            onClick={() => setOpenId(null)}>
-                      閉じる
-                    </button>
+                    {/* 「閉じる」は置かない(2026-09 利用者の指定)。
+                        閉じるのは、上のグレーの囲みをもう一度押す。
+                        教材が出るところは全部同じ形にする */}
                   </div>
                 ) : null}
 

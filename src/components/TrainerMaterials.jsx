@@ -479,13 +479,14 @@ export default function TrainerMaterials({ me }) {
                     </span>
                     <span className="material-when">{parseMaterialTitle(m.title).date}</span>
                   </div>
-                  {/* **何を押せばよいかを、言葉で書く**(2026-08 利用者の指定)。
-                      印刷も中身を開いた先にあるので、ここに書いておく */}
-                  <span className="material-open-cta">
-                    <span className="material-open-mark" aria-hidden="true">
-                      {openId === m.id ? '▾' : '▸'}
-                    </span>
-                    {openId === m.id ? '中身を閉じる' : '中身を見る・印刷する'}
+                  {/* **「中身を見る・印刷する」の行は置かない**
+                      (2026-09 利用者の指定)。
+                        > 「中身を見る」ボタン自体不必要です。
+                      **教材が出るところは全部同じ形にする。**
+                      押せることは、はじめから出ているグレーの囲みと
+                      ▸ / ▾ の印が示す。閉じるのも、同じ囲みを押す */}
+                  <span className="material-open-mark" aria-hidden="true">
+                    {openId === m.id ? '▾' : '▸'}
                   </span>
                 </div>
               </div>
@@ -529,7 +530,6 @@ export default function TrainerMaterials({ me }) {
                   wordStatuses={wordStatuses}
                   /* どの教材で会ったかを添える(0024) */
                   onMarkWord={markIn(markWord, m.id)}
-                  onClose={() => setOpenId(null)}
                   showReset
                   busyNote={makingJa === m.id ? '区切りの訳を作っています…' : null}
                   errorNote={jaDone[m.id]?.ng ? jaDone[m.id].text : null}

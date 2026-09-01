@@ -702,14 +702,17 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                   {parseMaterialTitle(m?.title ?? '').date}
                                 </span>
                               </div>
+                              {/* 「中身を見る・印刷する」の行は置かない
+                                  (2026-09 利用者の指定)。教材が出るところは
+                                  全部同じ形にする。**読み込み中だけは言葉で出す** */}
                               {m && (
-                                <span className="material-open-cta">
-                                  <span className="material-open-mark" aria-hidden="true">
-                                    {open ? '▾' : '▸'}
-                                  </span>
-                                  {bodyBusy === m.id ? '開いています…'
-                                    : open ? '中身を閉じる' : '中身を見る・印刷する'}
-                                </span>
+                                bodyBusy === m.id
+                                  ? <span className="material-open-cta">開いています…</span>
+                                  : (
+                                    <span className="material-open-mark" aria-hidden="true">
+                                      {open ? '▾' : '▸'}
+                                    </span>
+                                  )
                               )}
                             </div>
                           </div>
@@ -731,7 +734,6 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                               wordStatuses={wordStatuses}
                               /* **レッスンで付けた語は、そのゲストの単語帳へ**(0025) */
                               onMarkWord={markIn(markWord, body.id, openId)}
-                              onClose={() => setOpenHw(null)}
                             />
                           )}
 

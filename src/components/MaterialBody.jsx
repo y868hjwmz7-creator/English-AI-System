@@ -40,7 +40,6 @@ export default function MaterialBody({
   material: m,
   wordStatuses = null,
   onMarkWord = null,
-  onClose = null,
   /** 練習の記録を消すボタンを出すか。**トレーナーの教材だけ**(利用者の指定) */
   showReset = false,
   /** 呼ぶ側の事情で出す知らせ(区切りの訳を作っています… など) */
@@ -205,11 +204,9 @@ export default function MaterialBody({
           (2026-09 利用者の指定)。画面には出さない(`print-only`)。
           紙は教材まるごとの控えなので、レッスン表示と同じものを出す */}
       <QuickResponseSheet material={m} />
-      {onClose && (
-        <button type="button" className="btn btn--link no-print" onClick={onClose}>
-          中身を閉じる
-        </button>
-      )}
+      {/* **「中身を閉じる」は置かない**(2026-09 利用者の指定)。
+          閉じるのは、上のグレーの囲みをもう一度押す。
+          **同じことをするものを2つ見せない** */}
     </div>
   )
 }
