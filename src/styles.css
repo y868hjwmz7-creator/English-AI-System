@@ -1292,10 +1292,6 @@ html { -webkit-text-size-adjust: 100%; }
 .learner-headcard { padding: 18px 20px; margin-bottom: var(--gap); }
 .learner-headcard > .learner-top { margin-bottom: 0; }
 .learner-headcard > .learner-signs { margin-top: 12px; }
-/* 単語帳の説明も、同じように白に乗せる */
-.wordbook-intro { padding: 14px 18px; }
-.wordbook-intro > .card-hint { margin: 0; }
-.wordbook-intro > .wordbook-week { margin: 8px 0 0; }
 /* 取り組みの「札」(2026-08 利用者の指定)。
      > もっと情報として目がいくようなデザインにしてくれ。
      > 文字というより、サインみたいな。
@@ -3453,7 +3449,6 @@ html { -webkit-text-size-adjust: 100%; }
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
 }
 /* 箱と次に出る日。**進んでいることが見えないと続かない** */
-.wordbook-when { margin-right: auto; font-size: 11.5px; color: var(--text-muted); }
 
 /* 出会った文(0018)。**思い出す手がかり**なので、意味のすぐ下に置く。
    本文そのものではないので、控えめに(縦線1本と小さめの字) */
@@ -3979,10 +3974,6 @@ html { -webkit-text-size-adjust: 100%; }
 /* ── トレーナーが見る単語帳 ────────────────────────────────
    ここから語を選んで、そのまま教材を作る。
    **復習が、次の宿題になる。** それがこのアプリの中心である */
-.wordbook-week {
-  margin: 8px 0 0; padding: 8px 10px; border-radius: 8px;
-  background: var(--surface-2); font-size: 13px;
-}
 .wordbook-pick { display: inline-flex; align-items: center; }
 .wordbook-pick > input { width: 18px; height: 18px; accent-color: var(--accent); }
 /* 選んだ行が見て分かること。**色だけに頼らない**(左の帯も付ける) */

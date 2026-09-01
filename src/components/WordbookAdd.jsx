@@ -28,12 +28,29 @@
  *   まとめて貼り付けられるようにはしていない。
  *   出会った文を一緒に入れられるようにしてあり、
  *   **語と文は1対1**だからである。
+ *
+ * 【誰の単語帳に入るのか】(2026-09 利用者の指定)
+ *
+ *   > トレーナーエンドのゲストの単語帳にはトレーナーもゲストも手打ちで
+ *   > 単語やフレーズを入れれるようにして下さい。
+ *
+ *   `learnerId` を渡すと、**そのゲストの単語帳**に入る(0025 の `p_learner`)。
+ *   渡さなければ、これまでどおり自分の単語帳。
+ *   **どちらに入るのかは、ボタンの文言に出す。** 黙っていると、
+ *   トレーナーが自分の単語帳に入れたつもりになる。
+ *   担当していないゲストには、SQL 側(`mark_word`)が書かせない。
  */
 import { useRef, useState } from 'react'
 import { lookupWord, normWord, setWordStatus } from '../lib/vocab.js'
 import { PlusIcon } from './Icons.jsx'
 
-export default function WordbookAdd({ level = 'B1', learnerId = null, onAdded = null }) {
+export default function WordbookAdd({
+  level = 'B1', learnerId = null, learnerName = '', onAdded = null,
+}) {
+  /* **誰の単語帳に入るのかを、はっきり言う**(2026-09)。
+     トレーナーがゲストのカードから入れるときは、入る先はゲストである。
+     ここを黙っていると、自分の単語帳に入れたつもりになる */
+  const whose = learnerId ? `${learnerName || 'このゲスト'} さんの単語帳` : '単語帳'
   const [open, setOpen] = useState(false)
   const [word, setWord] = useState('')
   const [seen, setSeen] = useState('')
@@ -68,7 +85,8 @@ export default function WordbookAdd({ level = 'B1', learnerId = null, onAdded = 
 
     // **何が入ったのかを、そのまま見せる。** 「追加しました」だけでは、
     // どの形で入ったのか(語か、言い回しか)が分からない
-    setNote(`「${norm}」を${kind === 'phrase' ? '言い回し' : '語'}として入れました。`
+    setNote(`「${norm}」を${kind === 'phrase' ? '言い回し' : '語'}として`
+      + `${whose}に入れました。`
       + (lookupError ? ' 意味の控えは取れませんでした。' : ''))
     setWord('')
     setSeen('')
@@ -116,7 +134,7 @@ export default function WordbookAdd({ level = 'B1', learnerId = null, onAdded = 
           <div className="btn-row">
             <button type="button" className="btn btn--primary"
                     disabled={busy || !norm} onClick={add}>
-              {busy ? '入れています…' : '単語帳に入れる'}
+              {busy ? '入れています…' : `${whose}に入れる`}
             </button>
           </div>
 

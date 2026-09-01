@@ -475,9 +475,22 @@ export async function loadMyWordbook({ status = 'unknown', limit = 200, dueOnly 
   if (!supabase) return ok([])
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return ok([])
+  return readWordbook(user.id, { status, limit, dueOnly })
+}
+
+/**
+ * 単語帳を読む。**自分のぶんも、担当ゲストのぶんも、ここ1か所を通る。**
+ *
+ * 誰の単語帳を読んでよいかは `review_words()`(security definer)が決める。
+ * 画面ごとに書き分けると、**片方だけ古くなる**(0027 の `todo` の
+ * 落とし穴を、トレーナー側だけ踏むことになる)。
+ */
+async function readWordbook(learnerId, { status = 'unknown', limit = 200, dueOnly = false } = {}) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (!learnerId) return ok([])
 
   const call = (p_status) => supabase.rpc('review_words', {
-    p_learner: user.id,
+    p_learner: learnerId,
     p_status,
     p_limit: limit,
     p_due_only: dueOnly,
@@ -541,9 +554,31 @@ export async function loadGlossDetail(wordNorm) {
  *
  * @returns {{due: number, unknown: number, known: number}}
  */
-export async function loadWordbookCounts() {
+export async function loadWordbookCounts(learnerId = null) {
   const empty = { due: 0, unknown: 0, learning: 0, known: 0 }
   if (!supabase) return ok(empty)
+
+  /* **担当ゲストのぶんは、表を直に数えられない。**
+     `word_reviews` の RLS は `learner_id = auth.uid()` なので、
+     トレーナーからは1行も見えない。**そこは窓口(`review_words`)を通す。**
+     行を読んで数えることになるが、開いたときの1回だけである。
+     500語までを数える(それ以上ある人は、札の数が頭打ちになる) */
+  if (learnerId) {
+    const [todo, known] = await Promise.all([
+      readWordbook(learnerId, { status: 'todo', limit: 500 }),
+      readWordbook(learnerId, { status: 'known', limit: 500 }),
+    ])
+    if (todo.error) return ok(empty)
+    const list = todo.data ?? []
+    const today = new Date().toISOString().slice(0, 10)
+    return ok({
+      due: list.filter((r) => String(r.due_on ?? '').slice(0, 10) <= today).length,
+      unknown: list.filter((r) => r.status !== 'learning').length,
+      learning: list.filter((r) => r.status === 'learning').length,
+      known: (known.data ?? []).length,
+    })
+  }
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return ok(empty)
 
@@ -727,13 +762,9 @@ export async function clearWordStatus(word) {
 export async function loadReviewWords(
   learnerId, { status = 'unknown', limit = 40, dueOnly = false } = {},
 ) {
-  if (!supabase) return ng('Supabase が設定されていません')
-  if (!learnerId) return ok([])
-  const { data, error } = await supabase.rpc('review_words', {
-    p_learner: learnerId, p_status: status, p_limit: limit, p_due_only: dueOnly,
-  })
-  if (error) return fail(error, '復習する語を読めませんでした')
-  return ok(data ?? [])
+  // **自分のときと同じ道を通す**(`readWordbook`)。
+  // 別に書くと、0027 の `todo` の落とし穴をトレーナー側だけ踏む
+  return readWordbook(learnerId, { status, limit, dueOnly })
 }
 
 /** これまで配信した教材に出てきた語句(単語・フレーズ・語句の演習から) */
