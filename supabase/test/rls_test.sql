@@ -623,6 +623,65 @@ set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select pg_temp.expect('担当していないトレーナーには途中経過が見えない(0025)',
   (select count(*)::int from public.material_progress), 0);
 
+-- ── ゲストに関するファイル(0031)───────────────────────────
+--
+--   ファイルにはその人のことが書いてある。**外に漏れてはいけない。**
+--   見えてよいのは、本人と、いま担当しているトレーナー(と管理者)だけ。
+--   いまトレーナー2 が生徒Bを担当している。
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+insert into public.learner_files (learner_id, path, name, mime, size, uploaded_by)
+values ('22222222-2222-2222-2222-222222222222',
+        '22222222-2222-2222-2222-222222222222/1700000000-toeic.pdf',
+        'toeic.pdf', 'application/pdf', 12345,
+        '44444444-4444-4444-4444-444444444444');
+select pg_temp.expect('担当トレーナーはゲストのファイルを置ける(0031)',
+  (select count(*)::int from public.learner_files), 1);
+
+select pg_temp.expect_denied('担当していないゲストのファイルは置けない(0031)', $$
+  insert into public.learner_files (learner_id, path, name, uploaded_by)
+  values ('33333333-3333-3333-3333-333333333333',
+          '33333333-3333-3333-3333-333333333333/x.pdf', 'x.pdf',
+          '44444444-4444-4444-4444-444444444444') $$);
+
+-- **道が持ち主の id で始まらないものは置けない。**
+-- ここを緩めると、別の人のフォルダに置けてしまう
+select pg_temp.expect_denied('別の人のフォルダを指す道では置けない(0031)', $$
+  insert into public.learner_files (learner_id, path, name, uploaded_by)
+  values ('22222222-2222-2222-2222-222222222222',
+          '33333333-3333-3333-3333-333333333333/x.pdf', 'x.pdf',
+          '44444444-4444-4444-4444-444444444444') $$);
+
+-- **置いた人を偽れない**
+select pg_temp.expect_denied('置いた人を他人の名前にはできない(0031)', $$
+  insert into public.learner_files (learner_id, path, name, uploaded_by)
+  values ('22222222-2222-2222-2222-222222222222',
+          '22222222-2222-2222-2222-222222222222/y.pdf', 'y.pdf',
+          '11111111-1111-1111-1111-111111111111') $$);
+
+-- **書き換えはできない。** 直したいときは消して入れ直す。
+-- 書き換えのポリシーを1つも作っていないので、update は
+-- **エラーにはならず、1行も書き換わらない。**
+-- だから「拒否された」ではなく「中身が変わっていない」で確かめる
+update public.learner_files set name = 'すりかえ';
+select pg_temp.expect('ファイルの控えは書き換えられない(0031)',
+  (select name from public.learner_files), 'toeic.pdf');
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('ゲスト本人は自分のファイルが見える(0031)',
+  (select count(*)::int from public.learner_files), 1);
+
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('ほかのゲストにはファイルが見えない(0031)',
+  (select count(*)::int from public.learner_files), 0);
+
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect('担当していないトレーナーにはファイルが見えない(0031)',
+  (select count(*)::int from public.learner_files), 0);
+
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('管理者にはファイルが見える(0031)',
+  (select count(*)::int from public.learner_files), 1);
+
 -- 退会にする
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
 select public.set_learner_status('22222222-2222-2222-2222-222222222222',

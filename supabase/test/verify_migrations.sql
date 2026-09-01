@@ -278,6 +278,13 @@ from (
     select pg_get_functiondef(p.oid) like '%v_new%'
     from pg_proc p where p.proname = 'mark_word'), 67
   union all
+  select '(68) ゲストのファイルの置き場がある(0031)', exists (
+    select 1 from pg_tables
+    where schemaname = 'public' and tablename = 'learner_files'), 68
+  union all
+  select '(69) ファイルの置き場は非公開(0031)', (
+    select public = false from storage.buckets where id = 'learner-files'), 69
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

@@ -4011,3 +4011,54 @@ html { -webkit-text-size-adjust: 100%; }
 .wordbook-detail-note {
   flex-basis: 100%; color: var(--text-muted); font-size: 12px;
 }
+
+/* ── ゲストに関するファイル(0031・2026-09 利用者の指定)──────────
+   > 各ゲストの情報内に、ゲストに関するファイルをアップロードできる
+   > ようにできないですか?
+
+   **1件 = 1枚のカード。** 線1本で区切ると、どこからどこまでが1件か
+   分からない(宿題の一覧で一度学んだこと)。
+   色はすべて変数で持つ。値を直接書くとプレインでそこだけ色が残る。 */
+.lfiles-who { display: block; margin: 0 0 14px; line-height: 1.7; }
+.lfiles-add {
+  padding: 14px 16px; margin-bottom: 16px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.lfiles-add > .field { margin-bottom: 10px; }
+/* **ファイルを選ぶ欄そのものは隠す**(`.sr-only`)。
+   出したままだと「Choose File」という英語がブラウザから出るうえ、
+   既定で「およそ 240px + ファイル名」ぶんの幅を自分で主張するので、
+   狭い画面ではカードごと横に広がる(390px で実測)。
+   キーボードで選べるよう、消さずに残してある */
+.lfiles-pick {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin-bottom: 12px;
+}
+/* 選んだファイルの名前。長くても横にはみ出させない */
+.lfiles-picked {
+  min-width: 0; overflow-wrap: anywhere;
+  font-size: 0.9em; color: var(--text-secondary);
+}
+/* 欄に印が当たっているあいだは、札のほうを光らせる
+   (`:focus-visible` で輪を出す決まりと同じ考え方) */
+.lfiles-pick input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lfiles-add .notice { margin: 10px 0 0; }
+
+.lfiles-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lfiles-item {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.lfiles-main { min-width: 0; flex: 1 1 12rem; }
+/* 長いファイル名でも、横にはみ出させない */
+.lfiles-name { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.lfiles-meta {
+  margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 10px;
+  font-size: 0.85em; color: var(--text-secondary);
+}
+.lfiles-note { margin: 6px 0 0; font-size: 0.9em; color: var(--text-secondary); }
+.lfiles-tools { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -21,7 +21,8 @@ import { parseMaterialTitle } from '../lib/format.js'
 import { loadPastFilterOpen, savePastFilterOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
-import LearnerWordbook from './LearnerWordbook.jsx'
+import Wordbook from './Wordbook.jsx'
+import LearnerFiles from './LearnerFiles.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
 import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
@@ -438,6 +439,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         { id: 'create', label: 'この人に教材を作る' },
                         // 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい
                         { id: 'wordbook', label: '単語帳' },
+                        // 会社からもらった英文メール、テストの結果、宿題の写真。
+                        // ここに置けば、次のレッスンで必ず見つかる(0031)
+                        { id: 'files', label: 'ファイル' },
                         { id: 'record', label: 'レベルとスコア' },
                       ]}
                     />
@@ -766,11 +770,20 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                   </>
                 )}
 
+                {/* **単語帳は1つの部品**(2026-09 実機で3度目の指摘)。
+                    トレーナー用に別のものを持っていたので、そろえたつもりでも
+                    「おまかせ」も出題もこちらに無いままだった。
+                    **同じ部品に、誰の単語帳かを渡すだけにする。**
+                    こうすれば、片方だけ古くなることが起こりえない */}
                 {detailTab === 'wordbook' && (
-                  <LearnerWordbook
+                  <Wordbook
                     learnerId={l.id} learnerName={l.display_name}
                     onMakeMaterial={(words) => { setMustUse(words); setDetailTab('create') }}
                   />
+                )}
+
+                {detailTab === 'files' && (
+                  <LearnerFiles learnerId={l.id} learnerName={l.display_name} />
                 )}
 
                 {detailTab === 'record' && (

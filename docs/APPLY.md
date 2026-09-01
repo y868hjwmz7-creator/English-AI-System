@@ -34,7 +34,8 @@
 | 貼る SQL(0027 覚えかけ) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01b.sql` |
 | 貼る SQL(0028 単語帳の絞り込み) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01c.sql` |
 | 貼る SQL(0029 自分のアイコン) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01d.sql` |
-| **貼る SQL(0030 入れた語をその日に出す)** | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01e.sql` |
+| 貼る SQL(0030 入れた語をその日に出す) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01e.sql` |
+| **貼る SQL(0031 ゲストのファイルの置き場)** | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
 | 状態を見るだけの SQL | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
 | 教材を作る関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
 | 読み上げ音声の関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |
@@ -66,5 +67,5 @@ GitHub の中を辿らせない。
 ## 確かめ方
 
 貼ったあと、`supabase/apply/check.sql` を実行すると
-5行の表が出て、`✅ もう入っています` / `⬜ まだです` が分かる。
+13行の表が出て、`✅ もう入っています` / `⬜ まだです` が分かる。
 **何も書き換えない。見るだけ。**

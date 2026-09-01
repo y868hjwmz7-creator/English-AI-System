@@ -35,7 +35,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   loadGlossDetail, loadMyWordbook, loadVocabWeek,
-  loadWordbookCounts, loadWordbookViewers, setWordStatus,
+  loadWordbookCounts, loadWordbookViewers, noteWordbookView, setWordStatus,
 } from '../lib/vocab.js'
 import {
   QUIZ_FORMS, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
@@ -120,10 +120,34 @@ function Detail({ wordNorm }) {
 
 /* `level`(CEFR)は「積み上がり」で使っていた。いったん外したので受け取らない
    (2026-08 利用者の指定)。戻すときは App からまた渡す */
-export default function Wordbook() {
-  // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ。
-  // 記録が付かなくても練習は止まらない(貼る前でも動く)
-  usePracticeLog('wordbook')
+/**
+ * @param learnerId    **誰の単語帳か。** 渡さなければ自分のもの。
+ *   トレーナーがゲストのカードから開くときは、そのゲストの id を渡す
+ * @param learnerName  題に出す名前(ゲストのときだけ)
+ * @param onMakeMaterial 語を選んで教材を作る(トレーナーのときだけ)
+ */
+/**
+ * 名前に「さん」を付ける。**すでに付いていれば付けない**(2026-09 実機)。
+ * 実際の名前が「田内さん」で、「田内さん さんの単語帳」と出ていた。
+ */
+const honor = (name) => {
+  const s = String(name ?? '').trim()
+  if (!s) return ''
+  return /(さん|様|先生)$/.test(s) ? s : `${s} さん`
+}
+
+export default function Wordbook({
+  learnerId = null, learnerName = '', onMakeMaterial = null,
+}) {
+  /* **画面は1つだけ。** 以前はトレーナー用に別の部品を持っていたが、
+     2つあると必ず片方が古くなる。実際、見た目をそろえたつもりで
+     「おまかせ」も出題もゲスト側に無いままだった(2026-09 実機)。
+     **同じ部品に、誰の単語帳かを渡すだけにする。** */
+  const mine = !learnerId
+
+  // 取り組みを**裏で数える**(0022)。
+  // レッスン中に一緒に取り組んだぶんは**ゲストの記録**にする(0025)
+  usePracticeLog('wordbook', true, learnerId)
 
   const [view, setView] = useState('due')
   const [want, setWant] = useState('auto')      // 出題の形。auto は箱に合わせる
@@ -149,6 +173,10 @@ export default function Wordbook() {
   const [typed, setTyped] = useState('')        // つづりの入力
   const [judged, setJudged] = useState(null)    // 4択・つづりの判定
   const doneRef = useRef([])                    // この10語の結果
+  /* **選んだ語で、その場で教材を作る**(ここが循環の要)。
+     トレーナーがゲストのカードから開いたときだけ使う。
+     絞り込みを変えても選択は消さない(集めて教材にするため) */
+  const [picked, setPicked] = useState([])
 
   const current = VIEWS.find((v) => v.id === view) ?? VIEWS[0]
   const isQuiz = view === 'due'
@@ -157,9 +185,13 @@ export default function Wordbook() {
     setLoading(true)
     const [list, tally, wk, seen] = await Promise.all([
       current.status
-        ? loadMyWordbook({ status: current.status, dueOnly: current.dueOnly, limit: 200 })
+        ? loadMyWordbook({
+          status: current.status, dueOnly: current.dueOnly, limit: 200, learnerId,
+        })
         : Promise.resolve({ data: [] }),
-      loadWordbookCounts(), loadVocabWeek(), loadWordbookViewers(),
+      loadWordbookCounts(learnerId), loadVocabWeek(learnerId),
+      // 「トレーナーが見ました」は**ゲスト本人にだけ**出す知らせである
+      mine ? loadWordbookViewers() : Promise.resolve({ data: [] }),
     ])
     setLoading(false)
     if (tally.data) setCounts(tally.data)
@@ -172,9 +204,18 @@ export default function Wordbook() {
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
-  }, [current.status, current.dueOnly])
+  }, [current.status, current.dueOnly, learnerId, mine])
 
   useEffect(() => { reload() }, [reload])
+
+  /* **トレーナーが見たことを残す**(0019)。ゲストの画面に
+     「担当トレーナーが 8/29 にこの単語帳を見ました」と出る。
+     **人が見ていると分かることが、どんなバッジより効く。**
+     ゲストを切り替えたときだけ。開くたびに何度も残さない */
+  useEffect(() => {
+    if (learnerId) noteWordbookView(learnerId)
+    setPicked([])
+  }, [learnerId])
 
   /**
    * 今日出すもの。
@@ -235,6 +276,14 @@ export default function Wordbook() {
   const choices = card && form === 'choice' ? makeChoices(card, rows) : null
 
   /** 1語ぶん答える。**押した語はすぐ消す。** 待たされると手ごたえが無い */
+  /** 選べる語の上限。これ以上入れても1つの教材には収まらない */
+  const MAX_PICK = 20
+  const togglePick = (word) => {
+    setPicked((prev) => (prev.includes(word)
+      ? prev.filter((w) => w !== word)
+      : prev.length >= MAX_PICK ? prev : [...prev, word]))
+  }
+
   const answer = async (row, status) => {
     /* **押した手応えを返す**(2026-09 利用者の指定)。
        覚えたら**ピンポン**、まだ・覚えかけは低く1つだけ。
@@ -242,7 +291,8 @@ export default function Wordbook() {
        「効いたのか分からない」になる */
     answerFeedback(status === 'known')
     setBusy(row.word_norm)
-    const { error: e } = await setWordStatus(row.word_norm, status, { kind: row.kind })
+    const { error: e } = await setWordStatus(row.word_norm, status,
+      { kind: row.kind, learnerId })
     setBusy(null)
     if (e) { setError(e); return }
     doneRef.current.push({ word: row.display || row.word_norm, ok: status === 'known' })
@@ -276,7 +326,9 @@ export default function Wordbook() {
             > 単語帳、もっと洗練して直観的にしてください。
             > 現代的、分かりやすく使いやすい、シンプルに変更して。 */}
       <div className="wb-head">
-        <h2 className="card-title">単語帳</h2>
+        <h2 className="card-title">
+          {learnerName ? `${honor(learnerName)}の単語帳` : '単語帳'}
+        </h2>
         {week.weeks > 0 && (
           <span className="wb-streak" title="続けている週の数">
             {week.weeks} 週つづけて<span className="wb-streak-sub">今週 {week.days} 日</span>
@@ -367,7 +419,7 @@ export default function Wordbook() {
           機能をつけてくれ」)。教材の外で出会った語も、その場で入れられる。
           畳んであるのは、ふだん開く画面ではないため。
           入れたら数え直す(`reload`)ので、札の数もすぐ合う */}
-      <WordbookAdd onAdded={reload} />
+      <WordbookAdd learnerId={learnerId} learnerName={learnerName} onAdded={reload} />
 
       {error && <p className="notice notice--error">{error}</p>}
       {loading && <p className="hint">読み込み中…</p>}
@@ -636,8 +688,20 @@ export default function Wordbook() {
           )}
           <ul className="wordbook">
             {shownRows.map((row) => (
-              <li key={row.word_norm} className="wordbook-row">
+              <li key={row.word_norm}
+                  className={`wordbook-row${
+                    picked.includes(row.display || row.word_norm) ? ' is-picked' : ''}`}>
                 <div className="wordbook-main">
+                  {onMakeMaterial && (
+                    <label className="wordbook-pick">
+                      <input type="checkbox"
+                             checked={picked.includes(row.display || row.word_norm)}
+                             onChange={() => togglePick(row.display || row.word_norm)} />
+                      <span className="sr-only">
+                        {row.display || row.word_norm} を教材に入れる
+                      </span>
+                    </label>
+                  )}
                   <span className="wordbook-word" lang="en">{row.display || row.word_norm}</span>
                   {row.kind === 'phrase' && <span className="wordbook-kind">言い回し</span>}
                   {row.pos && <span className="etext-pos">{row.pos}</span>}
@@ -658,6 +722,25 @@ export default function Wordbook() {
             ))}
           </ul>
         </>
+      )}
+
+      {/* 選んだ語で教材を作る。**画面の下に貼り付けて、常に見えるようにする。**
+          200語まで並ぶので、下まで送ってから押すのでは遠い。
+          **ここが循環の要**(復習が、そのまま次の宿題になる) */}
+      {onMakeMaterial && picked.length > 0 && (
+        <div className="wordbook-pickbar">
+          <span>
+            <strong>{picked.length} 語</strong>選んでいます
+            {picked.length >= MAX_PICK && <>(ここまで)</>}
+          </span>
+          <button type="button" className="btn btn--link" onClick={() => setPicked([])}>
+            選び直す
+          </button>
+          <button type="button" className="btn btn--primary"
+                  onClick={() => onMakeMaterial(picked)}>
+            この語で教材を作る
+          </button>
+        </div>
       )}
     </section>
   )

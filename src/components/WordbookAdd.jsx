@@ -50,7 +50,10 @@ export default function WordbookAdd({
   /* **誰の単語帳に入るのかを、はっきり言う**(2026-09)。
      トレーナーがゲストのカードから入れるときは、入る先はゲストである。
      ここを黙っていると、自分の単語帳に入れたつもりになる */
-  const whose = learnerId ? `${learnerName || 'このゲスト'} さんの単語帳` : '単語帳'
+  const name = String(learnerName ?? '').trim()
+  const honored = /(さん|様|先生)$/.test(name) ? name : `${name} さん`
+  const whose = learnerId
+    ? `${name ? honored : 'このゲスト'}の単語帳` : '単語帳'
   const [open, setOpen] = useState(false)
   const [word, setWord] = useState('')
   const [seen, setSeen] = useState('')

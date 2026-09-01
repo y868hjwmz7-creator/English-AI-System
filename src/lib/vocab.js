@@ -471,8 +471,14 @@ export async function loadMyWordStatuses(learnerId = null) {
  * `review_words()` は本人・担当トレーナー・管理者だけが呼べる
  * (SQL 側で確かめている)。画面側で役割を判定しない。
  */
-export async function loadMyWordbook({ status = 'unknown', limit = 200, dueOnly = false } = {}) {
+export async function loadMyWordbook({
+  status = 'unknown', limit = 200, dueOnly = false,
+  // **誰の単語帳か**(2026-09)。渡さなければ自分のもの。
+  // トレーナーがゲストのカードから開いたときは、そのゲストの id が来る
+  learnerId = null,
+} = {}) {
   if (!supabase) return ok([])
+  if (learnerId) return readWordbook(learnerId, { status, limit, dueOnly })
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return ok([])
   return readWordbook(user.id, { status, limit, dueOnly })

@@ -245,3 +245,28 @@ export function StepsIcon({ className = 'icon' }) {
     </svg>
   )
 }
+
+/** 紙。ゲストに関するファイル(0031)
+    **同じ枠(20×20)・同じ線の太さ(1.5)でそろえる** */
+export function FileIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M11.5 2.5H6a1.5 1.5 0 00-1.5 1.5v12A1.5 1.5 0 006 17.5h8a1.5 1.5 0 001.5-1.5V6.5z"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M11.5 2.5v4h4" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** 上向きの矢印。ファイルを置く */
+export function UploadIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M10 14V4.5M6.2 8.3L10 4.5l3.8 3.8" fill="none" stroke="currentColor"
+            strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.5 13.5v2a1.5 1.5 0 001.5 1.5h10a1.5 1.5 0 001.5-1.5v-2"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}

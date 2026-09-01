@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   12行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
+--   13行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
 --   貼れば、そこがそろいます。
 --     0013〜0023 … supabase/apply/pending_2026-08-29.sql
 --     0024       … supabase/apply/pending_2026-08-31.sql
@@ -18,6 +18,7 @@
 --     0028       … supabase/apply/pending_2026-09-01c.sql
 --     0029       … supabase/apply/pending_2026-09-01d.sql
 --     0030       … supabase/apply/pending_2026-09-01e.sql
+--     0031       … supabase/apply/pending_2026-09-01f.sql
 -- ============================================================================
 
 select 何が要るか, case when 済 then '✅ もう入っています' else '⬜ まだです' end as 状態
@@ -58,4 +59,6 @@ from (
     exists (select 1 from pg_proc
             where proname = 'mark_word'
               and pg_get_functiondef(oid) like '%v_new%'), 12
+  union all select '0031 ゲストに関するファイルの置き場',
+    exists (select 1 from pg_tables where tablename = 'learner_files'), 13
 ) t order by 順;

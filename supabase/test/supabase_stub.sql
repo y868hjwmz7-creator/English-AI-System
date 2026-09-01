@@ -57,6 +57,19 @@ create table if not exists storage.objects (
 );
 alter table storage.objects enable row level security;
 
+-- Supabase の storage.foldername() は、置き場の中の道を「/」で切って
+-- **最後のファイル名を落とした**配列を返す。
+--   'abc-123/report.pdf' → {abc-123}
+-- 0031 の置き場のポリシーが、先頭([1])だけを見て持ち主を確かめている。
+-- 手元でも同じものが無いとポリシーそのものを作れないので、ここに置く。
+create or replace function storage.foldername(name text)
+returns text[]
+language sql
+immutable
+as $$
+  select (string_to_array(name, '/'))[1:greatest(array_length(string_to_array(name, '/'), 1) - 1, 0)];
+$$;
+
 grant usage on schema public, auth, storage to anon, authenticated, service_role;
 
 -- Supabase では、public スキーマに作られたテーブルへの権限が
