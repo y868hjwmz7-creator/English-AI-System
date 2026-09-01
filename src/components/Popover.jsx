@@ -21,6 +21,9 @@
  *
  * 【閉じ方は3つとも用意する】
  *   外側を押す / Esc / 中の操作。**吹き出しの中は「外側」ではない。**
+ *   **押したボタンの上も「外側」ではない**(2026-09 実機)。
+ *   ここで閉じると、そのあとボタンの `onClick` が「閉じているから開く」と
+ *   判断して開き直し、**もう一度押しても消えない。**
  *   開いたその指離しで閉じないよう、次の間合いから見張る。
  */
 import { useEffect, useRef, useState } from 'react'
@@ -43,7 +46,15 @@ export default function Popover({
   const [pos, setPos] = useState(null)
 
   useEffect(() => {
-    const onDown = (e) => { if (!boxRef.current?.contains(e.target)) onClose() }
+    const onDown = (e) => {
+      if (boxRef.current?.contains(e.target)) return
+      /* **押したボタンの上は「外側」ではない。**
+         ここで閉じてしまうと、そのあとボタンの `onClick` が
+         「閉じているから開く」と判断して**開き直す。**
+         もう一度押しても消えなかったのは、これが理由(2026-09 実機) */
+      if (anchorEl?.contains(e.target)) return
+      onClose()
+    }
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     const t = window.setTimeout(() => {
       document.addEventListener('pointerdown', onDown)
@@ -54,7 +65,7 @@ export default function Popover({
       document.removeEventListener('pointerdown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [onClose])
+  }, [onClose, anchorEl])
 
   useEffect(() => {
     const place = () => {

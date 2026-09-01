@@ -1301,6 +1301,12 @@ html { -webkit-text-size-adjust: 100%; }
   gap: 8px 18px; width: 100%; max-width: 300px;
   color: var(--text-secondary); font-size: 13px;
 }
+/* **カードをまたいで、列をそろえる**(2026-09 利用者の指定
+   「プロの仕事で整理してください」)。
+   幅を中身なりにしていたので、点数の桁でカードごとに左端がずれ、
+   一覧が**ぎざぎざに見えた**(実測 x=1013 / 1044 / 1080)。
+   広い画面では幅を決めてしまえば、どの行も同じ場所に同じものがある */
+@media (min-width: 641px) { .learner-meta { width: 300px; } }
 /* **中身も右へそろえる**(2026-09 利用者の指定で右へ寄せた)。
    欄の幅は同じままなので、点数が入っても位置は動かない */
 .learner-meta-item {
@@ -1322,9 +1328,24 @@ html { -webkit-text-size-adjust: 100%; }
      > 文字というより、サインみたいな。
    **数を大きく、何の数かを小さく。** 1本の文は読まないと分からない。
    **囲みの右下**へ寄せ、リマインドの左に並べる。 */
+/* **押すものは1本の行にまとめる**(2026-09 利用者の指定)。
+     > このゲストのボックス内の情報と見え方をプロの仕事で
+     > 整理してください。どのデバイスでもバランスよく…
+
+   以前は「取り組み」の札が右、「この人を開く」が左と**離れた2行**に
+   散っていた。いまは「最後はいつか」を左に、押すものを右に置いた
+   **1本の行**である。上の行(名前 / スコア)と同じ「左が中身・右が操作」。 */
 .learner-signs {
-  display: flex; flex-wrap: wrap; align-items: stretch;
-  justify-content: flex-end; gap: 8px; margin-top: 14px;
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 8px; margin-top: 14px;
+}
+/* 「最後」の札だけが左。**押すものは右へ寄せる** */
+.learner-signs > .sign--last { margin-right: auto; }
+@media (max-width: 640px) {
+  /* 狭い画面では**押すものを横いっぱいに分け合う。**
+     右に寄せたままだと、折り返した行がちぐはぐに見える */
+  .learner-signs > .sign--last { margin-right: 0; width: 100%; }
+  .learner-signs > .btn { flex: 1 1 8rem; }
 }
 .sign {
   display: inline-flex; flex-direction: column; align-items: center;
@@ -2343,11 +2364,20 @@ html { -webkit-text-size-adjust: 100%; }
 .print-head { margin-bottom: 10px; font-size: 16px; line-height: 1.5; }
 
 /* ── ゲストの詳細(過去の宿題)──────────────────────────── */
+/* **一覧の名前を大きくする**(2026-09 利用者の指定)。
+     > PC表示での名前が小さすぎる気がします。
+
+   カードの中でいちばん大事なのは「誰か」である。17px では、
+   すぐ下のスコアの数字(16px)とほとんど変わらなかった。
+   **開く道は「この人を開く」のボタンにもある**ので、
+   名前は青い下線ではなく**見出しの顔**にする。
+   押せることは、指を載せたときの下線で示す。 */
 .learner-name {
   border: none; background: none; padding: 0; cursor: pointer;
-  font: inherit; font-size: 17px; font-weight: 600;
-  color: var(--accent); text-decoration: underline;
+  font: inherit; font-size: 20px; font-weight: 700; line-height: 1.25;
+  color: var(--text-primary); text-decoration: none; text-align: left;
 }
+.learner-name:hover, .learner-name:focus-visible { text-decoration: underline; }
 /* ── 過去の宿題の一覧 ──────────────────────────────────────
    【なぜ枠で囲うのか】(2026-08 の指摘)
 

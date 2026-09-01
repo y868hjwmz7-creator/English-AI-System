@@ -25,7 +25,6 @@ import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
 import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
 import { ScreenIcon } from './Icons.jsx'
-import Avatar from './Avatar.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 
@@ -394,16 +393,15 @@ export default function TrainerLearners({ me, navTick = 0 }) {
 
                 狭い画面では自然に折り返る(タブは横に流れる)。 */}
             <div className={openId === l.id ? 'card learner-headcard' : ''}>
-            {/* **左に「誰か」、右に「どのくらいか」**(2026-09 利用者の指定)。
+            {/* **左に「誰か」、右に「どのくらいか」。**
+                スコアとレベルは名前の真下(左)にあったが、右へ寄せてある
+                (2026-09 利用者の指定)。
 
-                  > 青でハイライトした部分を右に寄せて下さい。
-                  > そして空いたスペースには、ゲストが選んだアイコンを
-                  > 入れれるとよいです。
-
-                スコアとレベルは名前の真下(左)にあったが、右へ寄せて
-                タブの下にそろえた。空いた左側には**その人のアイコン**が入る。
-                アイコンは名前の行とスコアの行にまたがる高さなので、
-                左右が同じ背丈になり、行が余らない。 */}
+                **ゲストのアイコンは出さない**(2026-09 利用者の指定)。
+                  > やはりゲストのアイコンは入りません。消してください。
+                  > 全てのデバイスで不必要です。
+                担当しているゲストは1人あたり25人ほどで、名前で足りる。
+                丸が並ぶと、そのぶん名前が右へ押し出されて読みにくい。 */}
             {/* **切り替えは、見出しの下に横いっぱいで置く**(2026-09 利用者の指定)。
                   > プルダウンの機能が右にあるのも使いにくい。
 
@@ -414,15 +412,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 (あれは読むもので、押すものではない)。 */}
             <div className="learner-top">
               <div className="learner-who">
-                {/* **アイコンを選ぶのは本人**(0029)。ここでは出すだけで、
-                    トレーナーが人のアイコンを変えることはできない。
-                    選んでいない人は、名前の頭文字が出る */}
-                <Avatar name={l.display_name} avatar={l.avatar}
-                        size={openId === l.id ? 'lg' : 'md'} />
                 {/* **名前と札を離す**(2026-08 利用者の指定)。
                     > ゲスト名と「受講中」というアイコンが近すぎます。
-                    名前を押すと開く。カードのどこかに小さなボタンがあるより、
-                    名前そのものが入口になっているほうが迷わない */}
+                    名前そのものも押せる(開く道は下のボタンにもある) */}
                 <div className="learner-head">
                   <button type="button" className="learner-name"
                           onClick={() => (openId === l.id ? setOpenId(null) : openDetail(l.id))}>
@@ -572,6 +564,19 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         ゲストが入力したものではありません。
                       </p>
                     </Popover>
+                  )}
+                  {/* **開く道も、この行に置く**(2026-09 利用者の指定)。
+                        > このゲストのボックス内の情報と見え方を
+                        > プロの仕事で整理してください。
+
+                      以前は「取り組み」の行が右、「この人を開く」が左と
+                      **離れた2行**に散っていた。**押すものは1か所にまとめる。**
+                      開いているあいだは出さない(上に「一覧に戻る」がある) */}
+                  {openId !== l.id && (
+                    <button type="button" className="btn btn--small btn--primary"
+                            onClick={() => openDetail(l.id, 'homework')}>
+                      この人を開く
+                    </button>
                   )}
                 </div>
               )
@@ -932,20 +937,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                   <button type="button" className="btn" onClick={() => setOpenId(null)}>閉じる</button>
                 </div>
               </div>
-            ) : (
-              /* **開く道は1つにする**(2026-09 利用者の指定)。
-                 「過去の宿題を見る」「レベル・スコアを記録する」の2つを
-                 並べていたが、開いた先の切り替えはプルダウンなので、
-                 **押したものと出てくるものが結び付かなかった。**
-                 ここは「この人を開く」だけにし、
-                 中で何を見るかは開いてからプルダウンで選ぶ */
-              <div className="btn-row">
-                <button type="button" className="btn btn--small btn--primary"
-                        onClick={() => openDetail(l.id, 'homework')}>
-                  この人を開く
-                </button>
-              </div>
-            )}
+            ) : null}
           </div>
         )
       })}
