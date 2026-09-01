@@ -3228,14 +3228,20 @@ html { -webkit-text-size-adjust: 100%; }
    「のこり 10 語」という小さな文字は、あってもなくても同じだった
    (2026-08 利用者の指定)。**何問目かを数で出し、帯で見せる。**
    終わりが見えるから、あと3つなら続ける気になる。 */
-/* **タブと「出題の形」を同じ行に**(2026-08 利用者の指定)。
-   タブは横に流れるので、`min-width: 0` を置かないと
-   「おまかせ」が押し出されて画面の外へ出る */
-.wb-tabrow { display: flex; align-items: center; gap: 10px; }
-.wb-tabrow > .tabbar { flex: 1 1 auto; min-width: 0; margin: 0; }
-.wb-formpick { flex: 0 0 auto; }
+/* 切り替えと「出題の形」を同じ行に(2026-08 利用者の指定)。
+   **両方ともプルダウンにする。** 一度タブで作ったが、スマホでは
+   3つのタブが「おまかせ」に押されて「覚」で切れ、重なって出た(実機)。
+   タブは折り返さず横に流れる決まりなので、右に別のものを置くと必ずこうなる。
+   プルダウンなら幅が中身なりに決まり、狭い画面でも重ならない。 */
+.wb-tabrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wb-viewpick > select {
+  width: auto; height: 38px; border-radius: 999px;
+  font-size: 15px; font-weight: 700;
+  /* **いま何を見ているか**は、この行でいちばん大事な情報 */
+  border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+}
 .wb-formpick > select {
-  width: auto; min-width: 112px; height: 34px;
+  width: auto; min-width: 108px; height: 38px;
   border-radius: 999px; font-size: 13px;
 }
 

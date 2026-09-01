@@ -42,7 +42,6 @@ import {
 } from '../lib/wordQuiz.js'
 import { shortDate } from '../lib/format.js'
 import SpeakButton from './SpeakButton.jsx'
-import Tabs from './Tabs.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 
@@ -295,16 +294,29 @@ export default function Wordbook() {
             > その右におまかせのタブを置いてください。
           「おまかせ」は出題の形。**復習のときだけ効く**ので、
           そのときだけ出す(効かない操作を見せない・CLAUDE.md)。 */}
+      {/* **切り替えもプルダウンにする**(2026-08 利用者の指定)。
+
+            > 復習がプルダウンになっていません。やり直してください
+
+          タブにしたところ、スマホでは3つのタブが「おまかせ」に押されて
+          **「覚」で切れ、重なって出た**(実機)。タブは折り返さず横に流れる
+          決まりなので、右に別のものを置くと必ずこうなる。
+
+          **同じ行に2つ置くなら、両方ともプルダウンにする。**
+          幅が中身なりに決まるので、狭い画面でも重ならない。 */}
       <div className="wb-tabrow">
-        <Tabs
-          variant="sub" ariaLabel="単語帳の切り替え"
-          value={view} onChange={setView}
-          items={VIEWS.map((v) => ({
-            id: v.id, label: v.label,
-            // **復習には「今日出す数」を付ける。** 押す前に、やることの量が分かる
-            count: v.id === 'due' && counts.due > 0 ? counts.due : null,
-          }))}
-        />
+        <label className="wb-viewpick">
+          <span className="sr-only">見るものの切り替え</span>
+          <select value={view} onChange={(e) => setView(e.target.value)}>
+            {VIEWS.map((v) => (
+              <option key={v.id} value={v.id}>
+                {/* **復習には「今日出す数」を付ける。**
+                    開く前に、やることの量が分かる */}
+                {v.id === 'due' && counts.due > 0 ? `${v.label}(${counts.due})` : v.label}
+              </option>
+            ))}
+          </select>
+        </label>
         {isQuiz && (
           <label className="wb-formpick">
             <span className="sr-only">出題の形</span>
