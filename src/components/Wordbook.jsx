@@ -174,6 +174,12 @@ export default function Wordbook({
   const [typed, setTyped] = useState('')        // つづりの入力
   const [judged, setJudged] = useState(null)    // 4択・つづりの判定
   const doneRef = useRef([])                    // この10語の結果
+  /* **いまの一覧の控え。** 出題を組むときだけ使う。
+     見張りに `rows` そのものを入れると、1語答えるたびに組み直してしまう */
+  const rowsRef = useRef([])
+  rowsRef.current = rows
+  /** 出題を組み直す合図。読み直したときだけ1つ進む */
+  const [deal, setDeal] = useState(0)
   /* **選んだ語で、その場で教材を作る**(ここが循環の要)。
      トレーナーがゲストのカードから開いたときだけ使う。
      絞り込みを変えても選択は消さない(集めて教材にするため) */
@@ -210,10 +216,13 @@ export default function Wordbook({
     if (list.error) { setError(list.error); return }
     setError(null)
     setRows(list.data ?? [])
+    rowsRef.current = list.data ?? []
     setQueue([])
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
+    // **読み直したときだけ組み直す。** 答えたときには組み直さない
+    setDeal((n) => n + 1)
   }, [current.status, current.dueOnly, learnerId, mine])
 
   useEffect(() => { reload() }, [reload])
@@ -268,18 +277,28 @@ export default function Wordbook({
   /** 何かで絞っているか。**1つでも絞っていれば、日で切らない** */
   const narrowed = Boolean(filter.day || filter.material || filter.field || filter.topic)
 
+  /* **答えるたびに組み直さない**(2026-09 実機で見つけた)。
+     以前はここの見張りに `rows` を入れていた。ところが答えると
+     `answer()` が答えた語を `rows` から外すので、**1語答えるたびに
+     10語が組み直されていた。** そのため
+     「1 / 10 語」から先へ進まず、`doneRef` も毎回空になるので
+     10語やり終えても結果が出ない。並びも毎回シャッフルされるため、
+     **押しても進んでいないように見える。**
+
+     組み直すのは「読み直したとき」と「絞り込みを変えたとき」だけにする。
+     いまの `rows` は控え(`rowsRef`)から読む。 */
   useEffect(() => {
     if (!isQuiz || loading) return
     const today = todayKey()
+    const all = rowsRef.current
     const pool = narrowed
-      ? applyWordbookFilter(rows, filter)
-      : rows.filter((r) => isDueNow(r, today))
+      ? applyWordbookFilter(all, filter)
+      : all.filter((r) => isDueNow(r, today))
     setQueue(buildSession(pool))
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
-    // rows は reload で入れ替わる。中身ではなく、その入れ替わりを見ている
-  }, [isQuiz, loading, rows, filter.day, filter.material, filter.field, filter.topic])
+  }, [isQuiz, loading, deal, filter.day, filter.material, filter.field, filter.topic])
   const card = isQuiz ? queue[0] : null
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
@@ -301,19 +320,39 @@ export default function Wordbook({
        「効いたのか分からない」になる */
     answerFeedback(status === 'known')
     setBusy(row.word_norm)
-    const { error: e } = await setWordStatus(row.word_norm, status,
-      { kind: row.kind, learnerId })
+    /* **投げられたら、そこで止まる。**
+       `try` が無いと、思わぬ失敗のときに知らせも出ず、次へも進まない。
+       **成功と失敗が、同じ見た目で終わってはいけない**(CLAUDE.md) */
+    let e = null
+    try {
+      ;({ error: e } = await setWordStatus(row.word_norm, status,
+        { kind: row.kind, learnerId }))
+    } catch (err) {
+      e = String(err?.message ?? err ?? '記録できませんでした')
+    }
     setBusy(null)
     if (e) { setError(e); return }
+    setError(null)
     doneRef.current.push({ word: row.display || row.word_norm, ok: status === 'known' })
     setRows((list) => list.filter((r) => r.word_norm !== row.word_norm))
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
-    setCounts((c) => ({
-      ...c,
-      due: Math.max(0, c.due - 1),
-      unknown: status === 'known' ? Math.max(0, c.unknown - 1) : c.unknown,
-      known: status === 'known' ? c.known + 1 : c.known,
-    }))
+    /* **3枚の札は、押したとおりに動かす。**
+       「覚えかけ」を押したのに数が動かないと、記録されていないように見える。
+       いま何だったか(`row.status`)と、何にしたか(`status`)の
+       両方を見ないと、同じ札を二度押したときに数が増えつづける */
+    setCounts((c) => {
+      // いま何だったか(`row.status`)から1つ引き、何にしたか(`status`)へ1つ足す。
+      // 同じ札を二度押しても、引いてから足すので数は動かない
+      const move = (n, key) => Math.max(0,
+        n - (row.status === key ? 1 : 0) + (status === key ? 1 : 0))
+      return {
+        ...c,
+        due: Math.max(0, c.due - 1),
+        unknown: move(c.unknown, 'unknown'),
+        learning: move(c.learning, 'learning'),
+        known: move(c.known, 'known'),
+      }
+    })
     setQueue((q) => {
       const rest = q.slice(1)
       // **10語で区切る。** 終わったら結果を出す
