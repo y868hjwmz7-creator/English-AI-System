@@ -53,12 +53,23 @@ export function saveDictSize(n) {
    **同じことをする操作を3つ置かない。** */
 
 /**
- * 教材をさがす欄を開いているか(2026-08 利用者の指定)。
+ * 教材の「条件で絞り込む」を開いているか(2026-08 利用者の指定)。
  * **一度決める設定は覚える。** 絞り込みは毎回触るものではない。
+ *
+ * 【はじめは閉じておく】(2026-09 利用者の指定)
+ *
+ *   > 「条件で絞り込む」は最初は閉じておいてください
+ *
+ *   欄が5つ縦に並ぶので、開いたままだと**教材が1件も見えない。**
+ *   まず一覧を見せ、絞りたい人だけが開く。
+ *
+ * **鍵の名前を変えてある**(`eas.materialSearch` → `eas.finderFilters`)。
+ * 前の鍵には「開いている」が入ったままの端末があり、
+ * 名前を変えないと**その人だけ開いたまま**になる。
  */
-const SEARCH_KEY = 'eas.materialSearch'
+const SEARCH_KEY = 'eas.finderFilters'
 export function loadSearchOpen() {
-  try { return localStorage.getItem(SEARCH_KEY) !== 'closed' } catch { return true }
+  try { return localStorage.getItem(SEARCH_KEY) === 'open' } catch { return false }
 }
 export function saveSearchOpen(open) {
   try { localStorage.setItem(SEARCH_KEY, open ? 'open' : 'closed') } catch { /* 使えなくても困らない */ }

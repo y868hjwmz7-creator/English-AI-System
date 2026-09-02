@@ -1111,6 +1111,25 @@ html { -webkit-text-size-adjust: 100%; }
 }
 .finder-clear { margin: 10px 0 0; }
 .finder-filters[open] > .material-fields { margin-top: 12px; }
+/* 一覧の途中にいるあいだだけ、画面の隅に出す「作る」(2026-09 利用者の指定)
+     > 探した、または絞り込んだ結果が膨大な場合には下までスクロールしないと
+     > 「新しく作る」ボタンがないのは辛いです。1番下には確保したまま
+
+   **上の箱といちばん下は残したまま**、そのどちらも見えていないあいだだけ
+   出す(同じことをするボタンを2つ見せない・CLAUDE.md)。
+   カードより明るくし、影で浮かせる。**青の塗りつぶしにはしない** —
+   既定の動線はライブラリから探すことで、作るのは2番目である(第5.5節)。 */
+.finder-float {
+  position: fixed; right: 16px; z-index: 60;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  background: var(--surface-1); border-color: var(--border);
+  box-shadow: var(--shadow-2);
+}
+@media (max-width: 560px) {
+  /* 狭い画面では、下の端に少しだけ寄せる(親指の届くところ) */
+  .finder-float { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
+
 /* 無いときと、一覧のいちばん下に出す「作る」 */
 .finder-empty, .finder-more { display: flex; flex-direction: column; gap: 10px; }
 .finder-empty > .card-hint, .finder-more > .card-hint { margin: 0; }

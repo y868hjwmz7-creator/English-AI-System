@@ -78,6 +78,40 @@ export default function TrainerMaterials({ me }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  /**
+   * **一覧が長いときも、「作る」に手が届くようにする**(2026-09 利用者の指定)。
+   *
+   *   > 探した、または絞り込んだ結果が膨大な場合には下までスクロールしないと
+   *   > 「新しく作る」ボタンがないのは辛いです。1番下には確保したまま
+   *   > 改善してください
+   *
+   * 「作る」は2か所にある。**さがす箱の中(いちばん上)**と、
+   * **一覧のいちばん下**である。ところが36件もあると、どちらも
+   * 画面の外に出てしまう時間が長い。
+   *
+   * そこで、**そのどちらも見えていないあいだだけ**、画面の隅に小さく出す。
+   * 見えているときに出すと、同じボタンが2つ並ぶ
+   * (**同じことをするボタンを2つ見せない**・CLAUDE.md)。
+   *
+   * 見えているかどうかは `IntersectionObserver` に数えさせる。
+   * **画面を送るたびに位置を測らない**(送るたびの計算は重い)。
+   */
+  const finderRef = useRef(null)
+  const moreRef = useRef(null)
+  const [floatMake, setFloatMake] = useState(false)
+  useEffect(() => {
+    const els = [finderRef.current, moreRef.current].filter(Boolean)
+    // 見張れない環境では出さない。**当てにしすぎない**(CLAUDE.md)
+    if (!els.length || !window.IntersectionObserver) return undefined
+    const seen = new Map()
+    const io = new window.IntersectionObserver((entries) => {
+      entries.forEach((e) => seen.set(e.target, e.isIntersecting))
+      setFloatMake(![...seen.values()].some(Boolean))
+    })
+    els.forEach((el) => io.observe(el))
+    return () => io.disconnect()
+  }, [loading, materials.length])
+
   // カタマリごとの訳を作っている教材(0021)と、その結果
   const [makingJa, setMakingJa] = useState(null)
   // さがす欄を開いているか。**一度決める設定は覚える**(2026-08 利用者の指定)
@@ -310,7 +344,7 @@ export default function TrainerMaterials({ me }) {
           さがす入力欄はその外にあった。**同じ「さがす」が2か所に分かれ、
           「作る」は名前だけあってボタンが無い**ので、何をする欄なのかが
           読み取れなかった。3つを1つの箱にまとめ、名前を付けて並べる。 */}
-      <section className="card finder">
+      <section className="card finder" ref={finderRef}>
         <div className="finder-head">
           <h2 className="card-title">教材をさがす</h2>
           {/* ③ 作る。**いつも見えるところに置く**(押せる場所が分かる) */}
@@ -717,7 +751,7 @@ export default function TrainerMaterials({ me }) {
           そこで画面のはるか上まで戻らせない。
           新しく作るのは2番目の動線なので、見た目は強くしない */}
       {!loading && materials.length > 0 && (
-        <div className="card finder-more">
+        <div className="card finder-more" ref={moreRef}>
           <p className="card-hint">
             {filterCount
               ? 'この中に使えるものが無ければ、いまの条件のまま作れます。'
@@ -727,6 +761,16 @@ export default function TrainerMaterials({ me }) {
             <PlusIcon />{filterCount ? 'この条件で教材を作る' : '教材を作る'}
           </button>
         </div>
+      )}
+
+      {/* 一覧の途中にいるあいだだけ、画面の隅に小さく出す。
+          **上の箱といちばん下は、これまでどおり残してある**(利用者の指定)。
+          紙には出さない */}
+      {floatMake && (
+        <button type="button" className="btn finder-float no-print"
+                onClick={() => setMode('create')}>
+          <PlusIcon />{filterCount ? 'この条件で作る' : '教材を作る'}
+        </button>
       )}
     </div>
   )
