@@ -100,8 +100,43 @@ export const VOICE_USES = [
 export const voicePurposeFor = (kind) =>
   (kind === 'dialogue' ? 'conversation' : 'narration')
 
-/** その教材に要る声の人数。会話は2人、それ以外は1人 */
-export const voiceCountFor = (kind) => (kind === 'dialogue' ? 2 : 1)
+/**
+ * 会話に出せる人数(2026-09 利用者の要望)。
+ *
+ *   > スピーカーが揃ったので、「会議」というジャンルを作りたいです。
+ *   > 3人以上、何人くらいまでが教材としてリアルですか?
+ *
+ * **上限は4人。** 理由は2つある。
+ *
+ *   ① **1人あたりの発言が少なくなりすぎる。** 会話は 14 発言なので、
+ *      3人なら1人 4〜5 回、4人なら 3〜4 回。5人だと 2〜3 回しかなく、
+ *      **その人らしさが出ないまま終わる。** 会議の練習にならない
+ *   ② **耳で聞き分けられなくなる。** 声は訛り × 男女で選ぶので、
+ *      同じ訛りの中で確実に区別できるのは4人あたりまでである
+ *      (`castClipSpeakers` は名簿の順に当てるだけで、
+ *      似た声を避ける仕組みは持っていない)
+ *
+ * 実際の会議は5人以上のこともあるが、**教材は聞き分けられることが先。**
+ */
+export const SPEAKER_COUNTS = [
+  { id: 2, label: '2人(1対1の会話)' },
+  { id: 3, label: '3人(会議・打ち合わせ)' },
+  { id: 4, label: '4人(会議・打ち合わせ)' },
+]
+
+/** 会話に出せる人数の上限。**窓口の丸めと同じ数にする** */
+export const MAX_SPEAKERS = 4
+
+/**
+ * その教材に要る声の人数。会話は 2〜4 人、それ以外は1人。
+ * **人数は教材に持たせない。** `materials.voice_ids` の長さがそのまま
+ * 人数なので、**表も列も増やさない**(CLAUDE.md)。
+ */
+export const voiceCountFor = (kind, speakers = 2) => {
+  if (kind !== 'dialogue') return 1
+  const n = Math.round(Number(speakers) || 2)
+  return Math.min(Math.max(n, 2), MAX_SPEAKERS)
+}
 
 export const accentLabel = (id) =>
   CLIP_ACCENTS.find((a) => a.id === id)?.label ?? id

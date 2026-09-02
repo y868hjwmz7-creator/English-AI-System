@@ -35,7 +35,7 @@ import {
   genreHint, genreLabel, genresFor, sceneHint, sceneLabel, scenesFor,
 } from '../data/genres.js'
 import {
-  CLIP_ACCENTS, DEFAULT_ACCENT, pickVoices,
+  CLIP_ACCENTS, DEFAULT_ACCENT, SPEAKER_COUNTS, pickVoices,
   voiceCountFor, voicePurposeFor, voicesOfAccent,
 } from '../data/clipVoices.js'
 import { collectReviewWords, normWord } from '../lib/vocab.js'
@@ -154,6 +154,13 @@ export default function MaterialForm({
   // そのまま教材を作れる。消せるようにしておく(全部使う必要はない)
   const [mustUse, setMustUse] = useState(() => (initial.mustUse ?? []).slice(0, 20))
   const [accent, setAccent] = useState(initial.accent || DEFAULT_ACCENT)
+  /*
+   * **会話に出す人数**(2026-09 利用者の要望「会議というジャンルを作りたい」)。
+   * 2人なら1対1の会話、3〜4人なら会議・打ち合わせになる。
+   * **教材に人数の列は足さない。** `materials.voice_ids` の長さが
+   * そのまま人数なので、表も列も増やさずに済む。
+   */
+  const [speakers, setSpeakers] = useState(initial.speakers ?? 2)
   // 指名した声。空文字のところは「おまかせ」
   const [picked, setPicked] = useState([])
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
@@ -197,7 +204,7 @@ export default function MaterialForm({
   // **複数人だと「誰の復習か」が決まらない**ので、そのときは出さない。
   // 声のこと。**教材の種類で、要る人数と選べる向きが決まる**
   const voicePurpose = voicePurposeFor(kind)
-  const voiceCount = voiceCountFor(kind)
+  const voiceCount = voiceCountFor(kind, speakers)
   const voicePool = voicesOfAccent(accent, voicePurpose)
 
   /**
@@ -397,6 +404,9 @@ export default function MaterialForm({
         ? [sceneLabel(scene), sceneHint(scene)].filter(Boolean).join(' — ')
         : '',
       subject,
+      // **会話に出す人数**(2026-09 利用者の要望「会議というジャンル」)。
+      // 記事には要らないので、会話のときだけ渡す
+      speakers: kind === 'dialogue' ? voiceCount : undefined,
       avoid: (used ?? []).slice(-40),
     })
     // **どの段階で失敗したのかを、必ず名前で言う。**
@@ -666,6 +676,9 @@ export default function MaterialForm({
   const formSnapshot = () => ({
     kind, level, industry, tagIds, genre, scene, subject,
     visibility, instruction, mustUse,
+    // 会話に出す人数(2026-09)。戻ってきたときに2人へ戻っていると、
+    // 会議として作ったはずの教材が1対1の会話として保存される
+    speakers,
     /* **どの演習をいくつ作ったのかも控える**(2026-09)。
        戻ってきたときにここが初期値へ戻っていると、
        外したはずの演習が「作った」ことになってしまう */
@@ -689,6 +702,7 @@ export default function MaterialForm({
     if (f.genre != null) setGenre(f.genre)
     if (f.scene != null) setScene(f.scene)
     if (f.subject != null) setSubject(f.subject)
+    if (f.speakers != null) setSpeakers(f.speakers)
     if (f.visibility) setVisibility(f.visibility)
     if (f.instruction != null) setInstruction(f.instruction)
     if (f.mustUse) setMustUse(f.mustUse)
@@ -969,6 +983,27 @@ export default function MaterialForm({
               ))}
             </select>
           </label>
+
+          {/* **会話に出す人数**(2026-09 利用者の要望)。
+              2人なら1対1、3〜4人なら会議・打ち合わせになる。
+              **会話のときだけ出す**(効かない操作を見せない)。
+              上限が4人である理由は `clipVoices.js` の `SPEAKER_COUNTS` に書いた。
+              **人数を変えたら、指名した声はいったん消す。**
+              残すと、減らしたときに「見えていない4人目」が保存される */}
+          {kind === 'dialogue' && (
+            <label className="field">
+              <span>出てくる人数</span>
+              <select value={speakers}
+                      onChange={(e) => {
+                        setSpeakers(Number(e.target.value))
+                        setPicked([])
+                      }}>
+                {SPEAKER_COUNTS.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {voicePool.length > 0 && Array.from({ length: voiceCount }, (unused, i) => (
             <label className="field" key={i}>

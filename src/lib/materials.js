@@ -677,7 +677,7 @@ export async function setLearnerStatus(learnerId, status, note) {
 export async function generateSection({
   sectionType, count = 10, topic, topics = [], level, industry = '',
   isFirst = false, avoid = [], genre = '', scene = '', subject = '', context = '',
-  reviewWords = [],
+  reviewWords = [], speakers = undefined,
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
@@ -686,6 +686,9 @@ export async function generateSection({
       sectionType, count, topic, topics, level, industry, isFirst, avoid,
       // 記事のジャンル / 会話の場面 / 話題の指定 / すでに作った本文
       genre, scene, subject, context,
+      // 会話に出す人数(2〜4)。**会話のときだけ渡す**(2026-09)。
+      // 窓口を配置し直すまでは無視されるので、これまでどおり2人になる
+      speakers,
       // 復習として必ず入れる語。**どの種類でも効く。**
       // 単語・フレーズは「この語で作る」、それ以外は「本文の中で使う」
       // (言い分けは窓口側でする)
