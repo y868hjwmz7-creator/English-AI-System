@@ -112,27 +112,21 @@ check('0.30 より下へは下げない', huge >= 0.30 - 1e-9)
 console.log('\n▶ まだ測っていない声')
 check('そのまま鳴らす(1 倍)', m3.gainFor('premium', 'unknown') === 1)
 
-// ── ⑤ CORS の許しを覚えているか ────────────────────────────
+// ── ⑤ 音の通り道を変えないこと ────────────────────────────
 //
-// **ここは自分で開けた穴である**(2026-09)。
-// 声を測るのは「まだ測っていないとき」だけなのに、
-// 「CORS の許しが出ている」という事実を**その測定でしか立てていなかった。**
-// だから全部の声を測り終えた翌日からは、ページを開いても一度も立たず、
-// `GainNode` につなぎ替えられない。すると `<audio>` の `volume` だけになり、
-// **iPhone では丸ごと無視される。**
-// 「使い込むほど効かなくなる」という、いちばん気づきにくい壊れ方だった。
-console.log('\n▶ CORS の許しを、次に開いたときも覚えているか')
-store.set('eas.loudCors', '1')
-seq += 1
-const m4 = await import(`../src/lib/loudness.js?v=${seq}`)
-check('開き直しても覚えている(測り終えた声しか無い日でも効く)',
-  m4.isCorsKnownGood() === true)
-
-store.delete('eas.loudCors')
-seq += 1
-const m5 = await import(`../src/lib/loudness.js?v=${seq}`)
-check('覚えが無ければ、安全側(つなぎ替えない)から始まる',
-  m5.isCorsKnownGood() === false)
+// **ここは実機で痛い目を見たところである**(2026-09)。
+// 一度 Web Audio(`MediaElementAudioSourceNode` → `GainNode`)を通したが、
+//
+//   > 小さな音量に合わせたはずなのに1回目の再生からバリバリ雑音だらけです
+//
+// 音を小さくする掛け算は雑音を作れない。**原因は通り道のほうだった。**
+// いまは `<audio>` の `volume` だけを使う(倍率が 1 以下なので足りる)。
+console.log('\n▶ 音の通り道を変えていないか')
+const src = await import('node:fs/promises')
+  .then((fs) => fs.readFile(new URL('../src/lib/loudness.js', import.meta.url), 'utf8'))
+for (const banned of ['createMediaElementSource', 'createGain', 'crossOrigin']) {
+  check(`\`${banned}\` を使っていない(通り道を変えない)`, !src.includes(banned))
+}
 
 console.log(failed
   ? `\n❌ ${failed} 件が意図どおりではありません`

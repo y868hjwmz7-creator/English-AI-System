@@ -52,19 +52,41 @@
  *   測るのは**黙っているところを外した平均の大きさ(RMS)**だけ。
  *   間を入れて測ると「間の多い音」ほど小さいと判定される。
  *
- * 【かける先は2通り。どちらも安全側に倒す】
- *   ① Web Audio の `GainNode` … **iPhone でも効く**
- *   ② `<audio>` の `volume`   … **小さくするだけならこれで足りる**が、
- *                                **iOS は `volume` を無視する**
+ * 【かける先は `<audio>` の `volume` **だけ**にする】
  *
- *   ①を使うには `<audio>` を Web Audio につなぎ替える必要があり、
- *   **別のドメインの音は、CORS の許しが無いと無音になる。**
- *   無音は「押しても何も起きない」に見える、いちばん困る壊れ方である。
- *   だから**測るための取得(fetch)が1回成功してはじめて**①に切り替え、
- *   **その事実は端末に覚える**(`CORS_KEY`)。覚えないと、
- *   全部の声を測り終えた翌日から二度と切り替わらない(下記)。
+ *   **一度 Web Audio(`MediaElementAudioSourceNode` → `GainNode`)を
+ *   通していたが、やめた**(2026-09 実機)。
+ *
+ *     > 小さな音量に合わせたはずなのに1回目の再生からバリバリ雑音だらけです。
+ *     > 1.25持ち上げると言う処理をやめたのに不思議です。
+ *     > ホワイトノイズが入るのであれば理解できるのですが。
+ *     > イギリス英語の音声が特に酷いです。
+ *
+ *   **利用者の疑問がそのまま答えである。**
+ *   音を小さくする掛け算(0.4倍など)は、**雑音を作れない。**
+ *   小さくすれば雑音も一緒に小さくなるだけである。
+ *   つまり**原因は音量の値ではなく、音の通り道**にある。
+ *
+ *   Web Audio を通すと、次の3つが**新しく**加わっていた。
+ *
+ *     ・**`ctx.destination` は ±1.0 で切り落とす**(ハードクリップ)。
+ *       素の `<audio>` はブラウザの出力へ直接流れる
+ *     ・**再生速度**(利用者は 120% で使っている)。
+ *       声の高さを保つ処理は山を一時的に持ち上げるので、
+ *       もともと大きく録れている音源ほど上で切られる
+ *     ・**入れ物の周波数への変換**(MP3 と `AudioContext` で違うことがある)
+ *
+ *   どれも**音源によって出方が変わる**ので、
+ *   「イギリスの声だけひどい」という偏りとも噛み合う。
+ *
+ *   **倍率は必ず 1 以下**(上げない)なので、
+ *   `<audio>` の `volume` だけで過不足なく表せる。
+ *   通り道を変えずに済むなら、変えないほうがよい。
+ *
+ *   **引き換え: iOS は `volume` を無視する。**
+ *   iPhone / iPad では音量がそろわない。
+ *   **雑音が入るより、そろわないほうがましである。**
  */
-import { audioContext } from './sfx.js'
 
 /**
  * **そろえ先の下限。**
@@ -143,32 +165,6 @@ export const isMeasured = (tier, voice) => !!load()[loudKey(tier, voice)]?.rms
 const measuring = new Set()
 
 /**
- * **CORS の許しが出ていると分かったか。**(取得に1回成功したら true)
- *
- * 【**覚えておかないと、いつまでも効かない**】(2026-09。自分で開けた穴)
- *
- *     ① 声を測るのは「まだ測っていないとき」だけ
- *     ② ところがこの印は、その**測るための取得**でしか立たない
- *     ③ だから**全部の声を測り終えた翌日**からは、
- *        ページを開いても一度も立たない
- *     ④ すると `GainNode` につなぎ替えられず、`<audio>` の `volume` だけになり、
- *        **iPhone では丸ごと無視される**
- *
- *   「使い込むほど効かなくなる」という、いちばん気づきにくい壊れ方だった。
- *   置き場所(同じ Supabase)は変わらないので、一度分かったら覚えておけばよい。
- */
-const CORS_KEY = 'eas.loudCors'
-let corsOk = (() => {
-  try { return window.localStorage.getItem(CORS_KEY) === '1' } catch { return false }
-})()
-const rememberCors = () => {
-  if (corsOk) return
-  corsOk = true
-  try { window.localStorage.setItem(CORS_KEY, '1') } catch { /* 使えなくても困らない */ }
-}
-export const isCorsKnownGood = () => corsOk
-
-/**
  * 1本の MP3 から、その声の大きさを測って覚える。
  *
  * **失敗しても何もしない。** 測れなくても読み上げは鳴る。
@@ -183,7 +179,6 @@ export async function measureClip(url, tier, voice) {
     // ここでもう一度取りに行っても、たいていは通信が起きない
     const res = await fetch(url, { mode: 'cors', cache: 'force-cache' })
     if (!res.ok) return false
-    rememberCors()                     // 取れた = CORS の許しが出ている
     const bytes = await res.arrayBuffer()
 
     // **鳴らすための入れ物は使わない。** 解くだけなので、
@@ -214,59 +209,18 @@ export async function measureClip(url, tier, voice) {
   }
 }
 
-// ── `<audio>` を Web Audio につなぎ替える ──────────────────────
-//
-// **一度つなぐと、もう戻せない。** その `<audio>` の音は、以後かならず
-// Web Audio を通って出る。だから**確かめてからつなぐ。**
-let node = null
-let gain = null
-
 /**
- * つなぎ替えを試みる。**つなげたら true。**
+ * その1本にかける。**`<audio>` の `volume` だけを使う。**
  *
- * 呼ぶ側は、**新しい `src` を入れる直前**に呼ぶこと
- * (`crossOrigin` は `src` より先に立てないと効かない)。
+ * 倍率は必ず 1 以下なので、`volume`(小さくすることしかできない)で
+ * 過不足なく表せる。**音の通り道は変えない**(上の説明を参照)。
  *
- * つながない条件は3つ。どれも「無音になるくらいなら、そろえない」である。
- *   ・CORS の許しをまだ確かめていない
- *   ・`AudioContext` が起きていない(iOS は触られるまで眠っている)
- *   ・そもそも Web Audio が無い
- */
-export function routeThroughGain(el) {
-  if (gain) return true
-  if (!el || !corsOk) return false
-  const ctx = audioContext()
-  if (!ctx || ctx.state !== 'running') return false
-  try {
-    el.crossOrigin = 'anonymous'
-    node = ctx.createMediaElementSource(el)
-    gain = ctx.createGain()
-    // **頭打ちは要らない。** 1 を超える倍率をかけないので、割れようがない
-    node.connect(gain)
-    gain.connect(ctx.destination)
-    return true
-  } catch {
-    node = null
-    gain = null
-    return false
-  }
-}
-
-/**
- * その1本にかける。**つないであれば `GainNode`、無ければ `volume`。**
- *
- * 倍率は必ず 1 以下なので、**`volume` でもそのまま表せる**
- * (`volume` は小さくすることしかできない)。
- * ただし **iOS は `volume` を無視する**ので、そこでは効かない。
+ * **iOS は `volume` を無視する。** iPhone / iPad ではそろわないが、
+ * 雑音が入るよりはましである。
  */
 export function applyGain(el, tier, voice) {
   const g = gainFor(tier, voice)
-  if (gain) {
-    gain.gain.value = g
-    try { el.volume = 1 } catch { /* iOS は無視する */ }
-  } else {
-    try { el.volume = g } catch { /* iOS は無視する */ }
-  }
+  try { el.volume = g } catch { /* iOS は無視する */ }
   return g
 }
 
