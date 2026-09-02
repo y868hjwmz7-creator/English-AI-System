@@ -41,6 +41,7 @@ import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.
 import { progressKey, useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
+import { preparingLabel } from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
@@ -90,6 +91,11 @@ export default function PassagePractice({
      `speakingId` は最初の合図が来るまで空なので、それだけで見ていると
      押しても Stop に変わらない時間ができる(`LessonView` と同じ作法) */
   const [playingAll, setPlayingAll] = useState(false)
+  /* **音が出るまでのあいだ**(2026-09 利用者の指摘「1度目に押すと反応しない」)。
+     MP3 をこれから作るときは数秒かかる。`SpeakButton` と同じ見せ方にする */
+  const [allWaiting, setAllWaiting] = useState(false)
+  const [allSecs, setAllSecs] = useState(0)
+  const allTicker = useRef(null)
   // いま読み上げている語の位置(何文字目か)。合図を出さない端末では
   // null のままで、これまでどおり発言ごとの色分けだけが残る
   const [readingAt, setReadingAt] = useState(null)
@@ -165,6 +171,9 @@ export default function PassagePractice({
     stopReading()
     setSpeakingId(null)
     setPlayingAll(false)
+    window.clearInterval(allTicker.current)
+    allTicker.current = null
+    setAllWaiting(false)
     setReadingAt(null)
   }
 
@@ -198,6 +207,21 @@ export default function PassagePractice({
   const playAll = (fromId = null) => {
     stopPlaying()
     setPlayingAll(true)
+    // **音が出るまでは「用意しています…」**(2026-09 利用者の指摘)。
+    // MP3 がまだ無いと数秒間まったく音がせず、押しても反応が無いように見える。
+    // 文言は `SpeakButton` と共通のものを使う(2か所に書き分けない)
+    setAllWaiting(true)
+    setAllSecs(0)
+    const from = Date.now()
+    window.clearInterval(allTicker.current)
+    allTicker.current = window.setInterval(() => {
+      setAllSecs(Math.round((Date.now() - from) / 1000))
+    }, 500)
+    const heard = () => {
+      window.clearInterval(allTicker.current)
+      allTicker.current = null
+      setAllWaiting(false)
+    }
     // 先に「読めるもの」だけに絞ってから並べる。絞ったあとで番号を数えないと、
     // 「いま読んでいる発言」の印が1つずれる
     const all = section.items.filter((it) => String(it.prompt_en ?? '').trim())
@@ -213,10 +237,11 @@ export default function PassagePractice({
         rate: rateOf(rateId, current.rate),
         clipTier: tier,
         onIndex: (i) => {
-          if (i === null) { stopAllRef.current = null; setPlayingAll(false) }
+          if (i === null) { stopAllRef.current = null; setPlayingAll(false); heard() }
           setSpeakingId(i === null ? null : playable[i]?.id ?? null)
           setReadingAt(null)   // 次の発言に移ったら、前の語の色を消す
         },
+        onStart: heard,
         onWord: (w) => setReadingAt(w ? w.charIndex : null),
       },
     )
@@ -313,7 +338,7 @@ export default function PassagePractice({
                   className={`btn${playingAll ? ' btn--primary' : ''}`}
                   onClick={() => (playingAll ? stopPlaying() : playAll())}>
             {playingAll
-              ? <><StopIcon />Stop (全体)</>
+              ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop (全体)'}</>
               : <><SpeakerIcon />Listen (全体)</>}
           </button>
         )}

@@ -49,6 +49,24 @@ export default function SpeakButton({
   const [auto, setAuto] = useState(null)
   const voice = given ?? auto
   const [playing, setPlaying] = useState(false)
+  /*
+   * **音が出るまでのあいだ**(2026-09 利用者の指摘)。
+   *
+   *   > Listen 全て(どこにあるものでも共通)において、
+   *   > 1度目に押すと反応しないことが多いです。
+   *
+   * その英文の MP3 がまだ無いと、窓口(`speak`)が作り終わるまで
+   * **数秒間まったく音がしない。** ボタンは Stop に変わっているだけなので、
+   * 押しても何も起きなかったように見え、もう一度押す。
+   * ところがその2度目は「止める」なので、やはり鳴らない。
+   * 鳴るのは3度目である。これが「1度目は反応しない」の正体だった。
+   *
+   * **成功と失敗(いま起きていることと、何も起きていないこと)を、
+   * 同じ見た目で終わらせない**(CLAUDE.md)。用意しているあいだは
+   * そう書き、**2秒を過ぎたら経過秒数も出す。**
+   */
+  const [waiting, setWaiting] = useState(false)
+  const [secs, setSecs] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -64,10 +82,19 @@ export default function SpeakButton({
   repeatRef.current = repeat
   const timer = useRef(null)
 
+  /** 経過秒数を数える札。**用意しているあいだだけ動かす** */
+  const ticker = useRef(null)
+  const stopTicker = () => {
+    window.clearInterval(ticker.current)
+    ticker.current = null
+  }
+
   /** 止める。**くり返しの予約も消す** */
   const stop = () => {
     playingRef.current = false
     window.clearTimeout(timer.current)
+    stopTicker()
+    setWaiting(false)
     stopReading()
     setState(false)
     onWord?.(null)
@@ -83,7 +110,19 @@ export default function SpeakButton({
    */
   const run = () => {
     const from = Date.now()
-    readAloud(text, { voice, clipVoice, clipTier: tier, rate: speed, onWord }).then(() => {
+    // **押した瞬間から「用意しています…」。** 鳴り始めたら消す
+    setWaiting(true)
+    setSecs(0)
+    stopTicker()
+    ticker.current = window.setInterval(() => {
+      setSecs(Math.round((Date.now() - from) / 1000))
+    }, 500)
+    const heard = () => { stopTicker(); setWaiting(false) }
+
+    readAloud(text, {
+      voice, clipVoice, clipTier: tier, rate: speed, onWord, onStart: heard,
+    }).then(() => {
+      heard()
       onWord?.(null)
       if (!playingRef.current) return                 // 止められた
       if (!repeatRef.current || Date.now() - from < 300) {
@@ -96,6 +135,7 @@ export default function SpeakButton({
     }).catch(() => {
       // **鳴らなかったときも、必ず Listen に戻す。**
       // 押しっぱなしの見た目で止まると、もう一度押しても止めるだけになる
+      heard()
       playingRef.current = false
       setState(false)
     })
@@ -105,6 +145,7 @@ export default function SpeakButton({
   useEffect(() => () => {
     if (playingRef.current) { playingRef.current = false; stopReading() }
     window.clearTimeout(timer.current)
+    window.clearInterval(ticker.current)
   }, [])
 
   if (!text || !canReadAloud()) return null
@@ -122,8 +163,15 @@ export default function SpeakButton({
   return (
     <button type="button" className={`btn btn--small no-print ${className}`} onClick={play}>
       {playing
-        ? <><StopIcon />Stop</>
+        ? <><StopIcon />{waiting ? preparingLabel(secs) : 'Stop'}</>
         : <><SpeakerIcon />{label}</>}
     </button>
   )
 }
+
+/**
+ * 用意しているあいだの文言。**2秒を過ぎたら経過秒数も出す。**
+ * すぐ鳴る場合(控えが効いているとき)に数字が一瞬ちらつかないよう、
+ * はじめの2秒は出さない。**ここだけに置く**(2か所に書き分けない)。
+ */
+export const preparingLabel = (secs) => (secs >= 2 ? `用意中 ${secs} 秒` : '用意しています…')

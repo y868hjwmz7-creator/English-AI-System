@@ -75,13 +75,36 @@ export const canReadAloud = () => isSpeechSupported() || canUseClips()
  * @param {string} o.clipTier  声の段(`voiceTier.js`)。既定は標準の声
  * @param {number} o.rate      速さの倍率
  * @param {Function} o.onWord  いま読んでいる語の位置({charIndex})
+ * @param {Function} o.onStart **実際に音が出た瞬間**に1回だけ呼ばれる
  * @returns {Promise<void>} 読み終わったら解決する
+ *
+ * 【`onStart` はなぜ要るか】(2026-09 利用者の指摘)
+ *
+ *   > Listen 全て(どこにあるものでも共通)において、
+ *   > 1度目に押すと反応しないことが多いです。
+ *
+ *   その英文の MP3 がまだ無いと、押してから
+ *   **窓口(`speak`)が作り終わるまでの数秒間、何の音もしない。**
+ *   ボタンは「Stop」に変わっているだけなので、
+ *   利用者には**押しても何も起きなかった**ようにしか見えない。
+ *   そこでもう一度押すと、それが「止める」になって本当に鳴らない。
+ *   2度目に押したときには MP3 が出来上がっているので、そこで初めて鳴る。
+ *   これが「1度目は反応しない」の正体である。
+ *
+ *   **押した/鳴っているを、同じ見た目で終わらせない**(CLAUDE.md)。
+ *   鳴り始めた瞬間をここから知らせ、ボタンが「用意しています…」を出せるようにする。
  */
 export async function readAloud(text, {
-  voice = null, clipVoice = null, clipTier = STANDARD, rate = 0.9, onWord = null,
+  voice = null, clipVoice = null, clipTier = STANDARD, rate = 0.9,
+  onWord = null, onStart = null,
 } = {}) {
   stopReading()
   const mine = session
+
+  // **1回しか呼ばない。** MP3 と端末の声で二度呼ぶと、
+  // 受け取る側が「用意中 → 再生中 → 用意中」と行き来する
+  let told = false
+  const started = () => { if (!told && mine === session) { told = true; onStart?.() } }
 
   const played = await playClip({
     text,
@@ -89,11 +112,13 @@ export async function readAloud(text, {
     tier: clipTier,
     rate,
     onWord,
+    onStart: started,
   })
   if (mine !== session) return          // 途中で止められた・別のものが始まった
   if (played) return
 
   // MP3 を使えなかった。端末の声に落ちる
+  started()
   await speakOnce(text, { voice, rate, onWord }).done
   if (mine === session) onWord?.(null)
 }
@@ -109,11 +134,14 @@ export async function readAloud(text, {
  *   これが無いと、発言のたびに1秒ほど黙る。
  *
  * @param {Array<{text: string, voice?: object, clipVoice?: string}>} parts
- * @param {object} o { rate, clipTier, onIndex, onWord } onIndex は再生中の番号(終わりで null)
+ * @param {object} o { rate, clipTier, onIndex, onWord, onStart }
+ *                   onIndex は再生中の番号(終わりで null)。
+ *                   onStart は**最初の1本が鳴り始めた瞬間**に1回
+ *                   (`readAloud` の `onStart` と同じ理由。上を参照)
  * @returns {Function} 止めるための関数
  */
 export function readAloudSequence(parts, {
-  rate = 0.9, clipTier = STANDARD, onIndex, onWord,
+  rate = 0.9, clipTier = STANDARD, onIndex, onWord, onStart,
 } = {}) {
   const list = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
   stopReading()
@@ -121,6 +149,11 @@ export function readAloudSequence(parts, {
   if (!list.length) return () => {}
 
   const alive = () => mine === session
+
+  // **最初の1本が鳴った瞬間だけ知らせる。** 2本目からは待ち時間が無い
+  // (`prefetchClip` で先に用意してある)ので、そのつど知らせる意味がない
+  let told = false
+  const started = () => { if (!told && alive()) { told = true; onStart?.() } }
 
   const run = async () => {
     for (let i = 0; i < list.length; i += 1) {
@@ -139,6 +172,7 @@ export function readAloudSequence(parts, {
         onWord: relay,
         // 鳴り始めたら、次のぶんを裏で用意しておく
         onStart: () => {
+          started()
           const ahead = list[i + 1]
           if (ahead) {
             prefetchClip(ahead.text, ahead.clipVoice ?? clipSpeakerFor(ahead.voice), clipTier)
@@ -149,6 +183,7 @@ export function readAloudSequence(parts, {
       if (played) continue
 
       // この1本だけ MP3 を使えなかった。端末の声で読む
+      started()
       await speakOnce(part.text, { voice: part.voice, rate, onWord: relay }).done
       if (!alive()) return
     }

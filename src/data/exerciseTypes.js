@@ -241,9 +241,13 @@ export const DEFAULT_SECTIONS = {
   ],
   // ダイアローグは「会話1本」。count は発言の数。
   // 14往復ぶんで、場面がひととおり成立する長さになる。
+  //
+  // **内容の理解は5問**(2026-09 利用者の指定「5個・10個に戻してください」)。
+  // 会話だけ 4問(倍で8問)になっていたが、記事と揃っていないと
+  // 「なぜここだけ少ないのか」が説明できない。**記事と同じ5問にする。**
   dialogue: [
     { exercise_type: 'dialogue',      count: 14 },
-    { exercise_type: 'comprehension', count: 4 },
+    { exercise_type: 'comprehension', count: 5 },
     { exercise_type: 'discussion',    count: 5 },
     { exercise_type: 'vocab_note',    count: 6 },
   ],

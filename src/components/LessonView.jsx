@@ -39,7 +39,7 @@ import QuickResponse from './QuickResponse.jsx'
 import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
-import SpeakButton from './SpeakButton.jsx'
+import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 
@@ -245,6 +245,11 @@ export default function LessonView({
   // これまでどおり「文のかたまり」の色分けだけが残る
   const [readingAt, setReadingAt] = useState(null)
   const stopAllRef = useRef(null)
+  /* **音が出るまでのあいだ**(2026-09 利用者の指摘「1度目に押すと反応しない」)。
+     `SpeakButton` と同じ見せ方にする(文言も共通のものを使う) */
+  const [allWaiting, setAllWaiting] = useState(false)
+  const [allSecs, setAllSecs] = useState(0)
+  const allTicker = useRef(null)
 
   /** 通しの読み上げを止める */
   const stopAll = () => {
@@ -252,6 +257,9 @@ export default function LessonView({
     stopAllRef.current = null
     stopReading()
     setPlayingAll(false)
+    window.clearInterval(allTicker.current)
+    allTicker.current = null
+    setAllWaiting(false)
     setSpeakingKey(null)
   }
 
@@ -381,6 +389,21 @@ export default function LessonView({
       .filter(({ it }) => String(it.prompt_en ?? '').trim())
     if (!playable.length) return
     setPlayingAll(true)
+    // **音が出るまでは「用意しています…」**(2026-09 利用者の指摘)。
+    // MP3 をこれから作るときは数秒かかる。押しても反応が無いように見え、
+    // もう一度押すとそれが「止める」になって、結局鳴らない
+    setAllWaiting(true)
+    setAllSecs(0)
+    const from = Date.now()
+    window.clearInterval(allTicker.current)
+    allTicker.current = window.setInterval(() => {
+      setAllSecs(Math.round((Date.now() - from) / 1000))
+    }, 500)
+    const heard = () => {
+      window.clearInterval(allTicker.current)
+      allTicker.current = null
+      setAllWaiting(false)
+    }
     stopAllRef.current = readAloudSequence(
       playable.map(({ it }) => ({
         text: it.prompt_en,
@@ -391,10 +414,11 @@ export default function LessonView({
         rate: rateOf(rateId),
         clipTier: tier,
         onIndex: (i) => {
-          if (i === null) { stopAllRef.current = null; setPlayingAll(false) }
+          if (i === null) { stopAllRef.current = null; setPlayingAll(false); heard() }
           setSpeakingKey(i === null ? null : playable[i]?.key ?? null)
           setReadingAt(null)   // 次の文に移ったら、前の語の色を消す
         },
+        onStart: heard,
         onWord: (w) => setReadingAt(w ? w.charIndex : null),
       },
     )
@@ -766,7 +790,9 @@ export default function LessonView({
             {secIsPassage && (
               <div className="lesson-listen no-print">
                 <button type="button" className="btn btn--small" onClick={playWhole}>
-                  {playingAll ? <><StopIcon />Stop</> : <><SpeakerIcon />Listen (全体)</>}
+                  {playingAll
+                    ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
+                    : <><SpeakerIcon />Listen (全体)</>}
                 </button>
               </div>
             )}
