@@ -3653,10 +3653,38 @@ html { -webkit-text-size-adjust: 100%; }
 /* ゲストのカードの切り替えも、同じ形のプルダウンにする(2026-09 利用者の指定)。
    **決まりを2か所に書かない。** 同じ見た目なので、同じ規則にぶら下げる */
 .tabpick > select { width: auto; max-width: 100%; }
+/* 出題の形。**読むものの邪魔をしない**(2026-09 利用者の指定
+   「ここのおまかせタブのデザインをもっと洗練してください」)。
+
+   灰色の塗りつぶしの大きな丸だったので、**この行でいちばん大事な
+   「6 / 10 語」より目立っていた。** ここは1回選んだらしばらく触らない
+   ものなので、**ふだんは文字と小さな印だけ**にする。
+   触れたときにだけ、うすい面が出て「押せる」ことが分かる。
+   矢印は自分で描く(端末ごとに形も大きさも違うため)。 */
+.wb-formpick { position: relative; display: inline-flex; align-items: center; }
 .wb-formpick > select {
-  width: auto; min-width: 108px; height: 38px;
-  border-radius: 999px; font-size: 13px;
+  appearance: none; -webkit-appearance: none;
+  width: auto; min-width: 0; height: 36px;
+  padding: 0 28px 0 12px;
+  border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: var(--text-secondary);
+  font-size: 15px; font-weight: 600; letter-spacing: .01em; cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
 }
+.wb-formpick > select:hover { background: var(--surface-2); color: var(--text-primary); }
+/* 開いているあいだも、うすい面を出したままにする */
+.wb-formpick > select:focus { background: var(--surface-2); color: var(--text-primary); }
+/* 下向きの小さな矢印。**押せる合図**なので、消さない */
+.wb-formpick::after {
+  content: ''; position: absolute; right: 12px; top: 50%;
+  width: 6px; height: 6px; margin-top: -5px;
+  border-right: 1.6px solid var(--text-muted);
+  border-bottom: 1.6px solid var(--text-muted);
+  transform: rotate(45deg); pointer-events: none;
+}
+/* iPhone は 16px 未満の欄に触れると画面を拡大する。**ここも例外にしない** */
+@media (max-width: 860px) { .wb-formpick > select { font-size: 16px; } }
+@media (prefers-reduced-motion: reduce) { .wb-formpick > select { transition: none; } }
 
 .wb-run { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 /* 進み具合の行。**出題の形は、この行の右**(2026-09 利用者の指定)。
