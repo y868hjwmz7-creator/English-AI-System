@@ -270,3 +270,14 @@ export function UploadIcon({ className = 'icon' }) {
     </svg>
   )
 }
+
+/** ペン。紙への書き込み(2026-09) */
+export function PenIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M13.4 3.1l3.5 3.5-9 9-4.2.7.7-4.2z" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M11.8 4.7l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}

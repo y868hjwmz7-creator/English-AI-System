@@ -25,7 +25,8 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
-import { BoltIcon, GearIcon, PrintIcon, SpeakerIcon, StepsIcon, StopIcon } from './Icons.jsx'
+import { BoltIcon, GearIcon, PenIcon, PrintIcon, SpeakerIcon, StepsIcon, StopIcon } from './Icons.jsx'
+import InkLayer from './InkLayer.jsx'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
@@ -61,6 +62,14 @@ const saveSize = (id) => {
   try { window.localStorage.setItem(SIZE_KEY, id) } catch { /* 使えなくても困らない */ }
 }
 
+/** 書き込みの色。**3色で足りる**(赤=直す / 青=足す / 緑=よい)。
+    色だけに頼らせない — 線は形そのものが意味を持つ */
+const INK_COLORS = [
+  { id: 'red', color: '#e0483f', label: '赤' },
+  { id: 'blue', color: '#2f6f9f', label: '青' },
+  { id: 'green', color: '#1f7a52', label: '緑' },
+]
+
 export default function LessonView({
   material, onClose,
   // ゲストが開いたときは「知っていた / 知らなかった」も付けられる。
@@ -93,6 +102,20 @@ export default function LessonView({
   const [openSettings, setOpenSettings] = useState(false)
   // Esc の扱いで今の状態を見たい。`useEffect` の中から読めるように控える
   const openSettingsRef = useRef(false)
+  /**
+   * **紙への書き込み**(2026-09 利用者の指定)。
+   *
+   * 会議アプリのペンは画面のガラス面に描くので、送ると置いていかれる。
+   * こちらは**紙の中に描く**ので、線は英文にくっついて動く。
+   *
+   * **ページごとに持つ。** 別のページの線が重なって出ると訳が分からない。
+   * **保存はしない。** 閉じれば消える板書である
+   * (残したいことは「メモ」に書く)。
+   */
+  const [pen, setPen] = useState(false)
+  const [inkColor, setInkColor] = useState(INK_COLORS[0].color)
+  const [ink, setInk] = useState({})     // ページ番号 → 線の配列
+  const sheetRef = useRef(null)
   openSettingsRef.current = openSettings
   // 通しの練習を出しているか。null / 'qr'(Quick Response)/ 'six'(6Steps)。
   // **教材1本 / 本文1本を通しでやる**ので、出しているあいだは
@@ -327,6 +350,41 @@ export default function LessonView({
           </>
         )}
 
+        {/* ── 紙への書き込み(2026-09 利用者の指定)──────────────
+            **会議アプリのペンは、送ると置いていかれる。**
+            こちらは紙の中に描くので、線は英文にくっついて動く。
+            ペンを持っているあいだは、語に触れて意味を出すことはできない
+            (線を引く手と、語に触れる手は同じである)。 */}
+        <button type="button"
+                className={`btn btn--small${pen ? ' btn--primary' : ''}`}
+                aria-pressed={pen}
+                title="紙に書き込む(閉じると消えます)"
+                onClick={() => setPen((v) => !v)}>
+          <PenIcon /><span className="mid-text">書き込む</span>
+        </button>
+        {pen && (
+          <div className="lesson-ink">
+            {INK_COLORS.map((c) => (
+              <button key={c.id} type="button"
+                      className={`ink-color${inkColor === c.color ? ' is-on' : ''}`}
+                      style={{ '--ink-color': c.color }}
+                      aria-label={`${c.label}で書く`} aria-pressed={inkColor === c.color}
+                      onClick={() => setInkColor(c.color)} />
+            ))}
+            {/* **ひとつ戻す**を先に置く。書き損じはたいてい直前の1本 */}
+            <button type="button" className="btn btn--small"
+                    disabled={!(ink[page] ?? []).length}
+                    onClick={() => setInk((m) => ({ ...m, [page]: (m[page] ?? []).slice(0, -1) }))}>
+              ひとつ戻す
+            </button>
+            <button type="button" className="btn btn--small"
+                    disabled={!(ink[page] ?? []).length}
+                    onClick={() => setInk((m) => ({ ...m, [page]: [] }))}>
+              全部消す
+            </button>
+          </div>
+        )}
+
         {/* ── しまっておくもの ────────────────────────────────
             速さ・配色・文字の大きさ・印刷は、**一度決めれば何度も
             要らない。** 狭い画面ではここに畳み、押したときだけ出す。
@@ -381,7 +439,12 @@ export default function LessonView({
           そうすると出題がまん中に落ち着き、**文の長さが変わっても
           ボタンの場所が動かない**(2026-08 の指摘) */}
       <div className={`lesson-sheet lesson-sheet--${size}${run ? ' is-running' : ''}`}
-           id="lesson-sheet">
+           id="lesson-sheet" ref={sheetRef}>
+        {/* **書き込みは、紙の中に敷く。** 送る箱の中にあるので、
+            中身と一緒に動く(会議アプリのペンとの違いはここ) */}
+        <InkLayer sheetRef={sheetRef} active={pen} color={inkColor}
+                  strokes={ink[page] ?? []}
+                  onChange={(next) => setInk((m) => ({ ...m, [page]: next }))} />
         {/* Quick Response のあいだは、題名の帯を出さない(2026-08 の指定)。
             **問題を出す場所を、そのぶん広く取る。**
             6Steps は本文を読む練習なので、題名はそのまま出す */}

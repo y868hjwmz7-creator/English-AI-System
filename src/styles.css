@@ -2627,6 +2627,43 @@ html { -webkit-text-size-adjust: 100%; }
   margin-bottom: 18px; padding-bottom: 10px;
   border-bottom: 2px solid var(--accent);
 }
+
+/* ── 紙への書き込み(2026-09 利用者の指定)──────────────────────
+     > ペンツールから画面に書き込んだ際、画面をスクロールすると
+     > 書き込んだ内容だけが同じ場所にとどまり続けてしまう
+
+   会議アプリのペンは**画面のガラス面**に描いているので、送っても動かない。
+   こちらは**紙(送る箱)の中**に敷くので、線は英文にくっついて動く。
+
+   **ふだんは触れない。** `pointer-events: none` を外すのは
+   ペンを持っているあいだだけ。そうしないと、語に触れて意味を出すことも、
+   なぞって調べることもできなくなる。 */
+.lesson-sheet { position: relative; }
+.ink-layer {
+  position: absolute; top: 0; left: 0; z-index: 5;
+  pointer-events: none;
+  /* 中身の丈は JS が測って入れる。ここでは最低限の広さだけ */
+  min-width: 100%; min-height: 100%;
+}
+.ink-layer.is-active {
+  pointer-events: auto;
+  /* ペンを持っているあいだは、指で送らせない(線が途切れる) */
+  touch-action: none;
+  cursor: crosshair;
+}
+/* 書き込みの色を選ぶ丸。**塗りつぶした丸そのものが見本**になる */
+.lesson-ink { display: flex; align-items: center; gap: 6px; }
+.ink-color {
+  width: 26px; height: 26px; padding: 0; flex: none;
+  border: 2px solid transparent; border-radius: 999px;
+  background: var(--ink-color); cursor: pointer;
+}
+/* 選んでいる印は**白い輪 + 外側の枠**。色だけに頼らない */
+.ink-color.is-on {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--ink-color);
+}
+.ink-color:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 /* ボタンの中の小さな絵。**文字に合わせて拡大縮小する。**
    px 固定にすると、レッスン表示の「特大」で絵だけ取り残される */
 .icon {
