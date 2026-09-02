@@ -272,6 +272,21 @@ export function UploadIcon({ className = 'icon' }) {
 }
 
 /** ペン。紙への書き込み(2026-09) */
+/**
+ * くり返し(ディクテーション・2026-09 利用者の指定)。
+ * **輪になった矢印。** 「同じところを回る」が形で分かる
+ */
+export function RepeatIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M5 7.5h8.5a2.5 2.5 0 0 1 2.5 2.5v0a2.5 2.5 0 0 1-2.5 2.5H5"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M7 5.2 4.6 7.5 7 9.8" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /** セッションの記録(0032)。**罫線の入った紙**。書くところだと分かる */
 export function NoteIcon({ className = 'icon' }) {
   return (

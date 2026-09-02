@@ -16,13 +16,14 @@
  *   **「to が抜けている」と見えれば直せる。**
  *   点数を1つ出しても、次に何を直せばよいか分からない。
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
-import { MicIcon, StopIcon } from './Icons.jsx'
+import { MicIcon, RepeatIcon, StopIcon } from './Icons.jsx'
 import { DICTATION_LEVELS, groupSentences } from '../lib/sixSteps.js'
+import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { useProgress } from '../lib/progress.js'
 
 export default function StepDictation({
@@ -38,6 +39,32 @@ export default function StepDictation({
   // 書き取る意味がない(2026-08 実機)。難易度を上げるほど、
   // 一度に覚える文が増える
   const blocks = useMemo(() => groupSentences(sentences, size), [sentences, size])
+
+  /**
+   * **速さとくり返しは、文ごとに持つ**(2026-09 利用者の指定)。
+   *
+   *   > stopボタンがあるのですが、これは必要ありませんので消してください。
+   *   > そしてその横の再生スピード調整タブも、削除しする代わりに
+   *   > 各文につけてください。また、同じく各文にリピート再生と
+   *   > 一度の再生を切り替えるボタンも。
+   *
+   * 書き取りは**1文ずつ**の練習である。聞き取れない文だけをゆっくりにしたい、
+   * その文だけをくり返したい、という使い方になる。
+   * 上の帯にあった速さは、**どの文を鳴らすときも同じ**になってしまう。
+   *
+   * 【最後に選んだ速さは覚える】
+   *   ほかの文を鳴らすときも、たいていは同じ速さでよい。
+   *   毎回選び直させない(`saveRateId`。ほかの画面と同じ鍵)。
+   * 【くり返しは覚えない】
+   *   鳴りっぱなしになる指定である。**次に開いたときは、必ず1回に戻す。**
+   */
+  /* **開いたときの速さ。ここは動かさない。**
+     ある文の速さを変えたら、**その文だけ**が変わる。
+     ここも一緒に動かすと「1つ変えたら全部変わった」ように見える(実測) */
+  const [rateId] = useState(loadRateId)
+  const [rateById, setRateById] = useState({})
+  const [repeatIds, setRepeatIds] = useState(() => new Set())
+  const rateFor = (id) => rateById[id] ?? rateId
 
   return (
     <div className="dictation">
@@ -70,7 +97,42 @@ export default function StepDictation({
                 {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
                 <span className="row-tools">
                   <SpeakButton text={s.text} className="etext-listen"
-                               clipVoice={clipVoice} tier={tier} rate={rate} />
+                               clipVoice={clipVoice} tier={tier}
+                               /* もとの速さ(取り組み方ごと)に、この文の倍率を掛ける */
+                               rate={rateOf(rateFor(s.id), rate)}
+                               repeat={repeatIds.has(s.id)} />
+                  {/* **くり返すか、1回だけか。** 押している印は色と文字の両方で出す
+                      (色だけに頼らない・CLAUDE.md) */}
+                  <button type="button"
+                          className={`btn btn--small${repeatIds.has(s.id) ? ' btn--primary' : ''}`}
+                          aria-pressed={repeatIds.has(s.id)}
+                          title={repeatIds.has(s.id)
+                            ? '止めるまでくり返します(押すと1回だけに戻ります)'
+                            : '1回だけ鳴らします(押すとくり返します)'}
+                          onClick={() => setRepeatIds((v) => {
+                            const next = new Set(v)
+                            if (next.has(s.id)) next.delete(s.id)
+                            else next.add(s.id)
+                            return next
+                          })}>
+                    <RepeatIcon />{repeatIds.has(s.id) ? 'くり返す' : '1回'}
+                  </button>
+                  {/* この文だけの速さ。**覚えるのは最後に選んだもの** */}
+                  <label className="row-rate">
+                    <span className="sr-only">この文を鳴らす速さ</span>
+                    <select value={rateFor(s.id)}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              // **変えるのは、この文だけ**
+                              setRateById((m) => ({ ...m, [s.id]: v }))
+                              // 次に開いたときの初めの速さとして覚える
+                              saveRateId(v)
+                            }}>
+                      {SPEECH_RATES.map((r) => (
+                        <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+                      ))}
+                    </select>
+                  </label>
                   <button type="button" className="btn btn--small"
                           onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
                     {open ? '解答を隠す' : '解答を見る'}

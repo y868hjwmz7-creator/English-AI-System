@@ -1945,6 +1945,15 @@ html { -webkit-text-size-adjust: 100%; }
   font-size: 12px; font-variant-numeric: tabular-nums;
 }
 .row-tools .etext-listen { margin-left: 0; }
+/* 文ごとの速さ(ディクテーション・2026-09 利用者の指定)。
+   **帯にあった速さを、文ごとに移した。** 聞き取れない文だけをゆっくりにできる。
+   ボタンと高さをそろえ、狭い画面では折り返して2段になる(`.row-tools` が
+   `flex-wrap: wrap`)。 */
+.row-rate > select {
+  width: auto; min-height: 40px; padding: 4px 8px;
+  font-size: 13px; border-radius: 8px;
+}
+@media (max-width: 560px) { .row-rate > select { font-size: 16px; } }
 .dictation-input {
   width: 100%; padding: 8px 10px; border: 1px solid var(--border);
   border-radius: 8px; background: var(--surface-1); color: var(--text-primary);

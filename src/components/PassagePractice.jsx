@@ -300,20 +300,38 @@ export default function PassagePractice({
             <SpeakerIcon />Listen (全体)
           </button>
         )}
-        {/* **止めるボタンは、鳴らすボタンのすぐ横**(2026-08 利用者の指定)。
-            対になる操作は、対に見える場所に置く */}
-        <button type="button" className="btn" onClick={stopPlaying}>
-          <StopIcon />Stop
-        </button>
-        <label className="rate-pick">
-          <span>速さ</span>
-          <select value={rateId}
-                  onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopPlaying() }}>
-            {SPEECH_RATES.map((r) => (
-              <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
-            ))}
-          </select>
-        </label>
+        {/* **止めると速さは、①ディクテーションでは出さない**
+            (2026-09 利用者の指定)。
+
+              > ディクテーションのデフォルト画面で、stopボタンがあるのですが、
+              > これは必要ありませんので消してください。そしてその横の
+              > 再生スピード調整タブも、削除しする代わりに各文につけてください。
+
+            書き取りは**1文ずつ**の練習で、鳴らすのは各文の Listen である。
+            その Listen は鳴っているあいだ Stop に変わるので、
+            **帯の Stop は、押しても何も鳴っていない**ことがほとんどだった。
+            速さも「どの文も同じ」になってしまうため、文ごとに移した。
+
+            ③⑤(本文まるごと)では「Listen (全体)」を鳴らすので、
+            **止めるボタンと速さはこれまでどおり要る。** */}
+        {step !== 'dictation' && (
+          <>
+            {/* **止めるボタンは、鳴らすボタンのすぐ横**(2026-08 利用者の指定)。
+                対になる操作は、対に見える場所に置く */}
+            <button type="button" className="btn" onClick={stopPlaying}>
+              <StopIcon />Stop
+            </button>
+            <label className="rate-pick">
+              <span>速さ</span>
+              <select value={rateId}
+                      onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopPlaying() }}>
+                {SPEECH_RATES.map((r) => (
+                  <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
         {current.unit === 'passage' && (
           <button type="button" className="btn" onClick={() => setShowJa(!showJa)}>
             {showJa ? '日本語を隠す' : '日本語を見る'}
@@ -333,7 +351,10 @@ export default function PassagePractice({
       {step === 'dictation' && (
         <StepDictation
           sentences={sentences} clipVoice={soloVoice} tier={tier}
-          rate={rateOf(rateId, current.rate)} level={level}
+          /* **もとの速さ(この取り組み方の速さ)をそのまま渡す**(2026-09)。
+             倍率は文ごとに掛けるので、ここで掛けてはいけない
+             (掛けると二重になる) */
+          rate={current.rate} level={level}
           wordStatuses={wordStatuses} onMarkWord={markWord}
           listeningId={listeningId} onCheck={checkOne} results={results}
           size={dictSize}

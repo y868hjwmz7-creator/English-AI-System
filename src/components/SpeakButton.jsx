@@ -14,7 +14,7 @@
  *   `readAloud.js` が決めるので、ここは呼ぶだけでよい。
  *   端末の声は、MP3 がまだ無いときの受け皿として渡している。
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { canReadAloud, readAloud, stopReading } from '../lib/readAloud.js'
 import { STANDARD } from '../lib/voiceTier.js'
@@ -35,6 +35,12 @@ const bestVoice = () => {
 export default function SpeakButton({
   text, label = 'Listen', rate = null, className = '', voice: given = null,
   clipVoice = null, tier = STANDARD, onPlayingChange = null, onWord = null,
+  /**
+   * **くり返し鳴らすか**(2026-09 利用者の指定・ディクテーション)。
+   * 止めるまで、少し間を置いて何度でも読み直す。
+   * 書き取りは1回では聞き取れないので、押し直す手間をなくす。
+   */
+  repeat = false,
 }) {
   // 速さの指定が無ければ、端末に覚えさせた速さを使う。
   // こうしておくと、速さを選ぶ場所が無い画面でも同じ速さで鳴る
@@ -50,21 +56,67 @@ export default function SpeakButton({
     return () => { alive = false }
   }, [])
 
+  /* **くり返しは、押しっぱなしの状態として持つ。**
+     `playing`(見た目)だけで見ていると、読み終わりの一瞬に false になり、
+     そこでくり返しが止まる。**「押した」ことを ref で持つ** */
+  const playingRef = useRef(false)
+  const repeatRef = useRef(repeat)
+  repeatRef.current = repeat
+  const timer = useRef(null)
+
+  /** 止める。**くり返しの予約も消す** */
+  const stop = () => {
+    playingRef.current = false
+    window.clearTimeout(timer.current)
+    stopReading()
+    setState(false)
+    onWord?.(null)
+  }
+
+  /**
+   * 1回ぶん鳴らす。**終わったら、くり返しの指定があればもう一度。**
+   *
+   * 【止まる条件を持たせる】(CLAUDE.md)
+   *   鳴らせない状況(音声が無い・切られた)では、読み上げがすぐ終わる。
+   *   そのままくり返すと、**目にも見えないまま回り続ける。**
+   *   0.3秒に満たずに終わったら、失敗とみなしてやめる。
+   */
+  const run = () => {
+    const from = Date.now()
+    readAloud(text, { voice, clipVoice, clipTier: tier, rate: speed, onWord }).then(() => {
+      onWord?.(null)
+      if (!playingRef.current) return                 // 止められた
+      if (!repeatRef.current || Date.now() - from < 300) {
+        playingRef.current = false
+        setState(false)
+        return
+      }
+      // **少し間を置く。** 続けて鳴らすと、文の切れ目が分からない
+      timer.current = window.setTimeout(() => { if (playingRef.current) run() }, 700)
+    }).catch(() => {
+      // **鳴らなかったときも、必ず Listen に戻す。**
+      // 押しっぱなしの見た目で止まると、もう一度押しても止めるだけになる
+      playingRef.current = false
+      setState(false)
+    })
+  }
+
+  /* 画面から消えるときは止める。**くり返しは、放っておくと鳴り続ける** */
+  useEffect(() => () => {
+    if (playingRef.current) { playingRef.current = false; stopReading() }
+    window.clearTimeout(timer.current)
+  }, [])
+
   if (!text || !canReadAloud()) return null
 
   // 読んでいるあいだ、親が「いまここ」を色で示せるように知らせる
   const setState = (on) => { setPlaying(on); onPlayingChange?.(on) }
 
   const play = () => {
-    if (playing) { stopReading(); setState(false); onWord?.(null); return }
+    if (playingRef.current) { stop(); return }
+    playingRef.current = true
     setState(true)
-    // いま読んでいる語の位置を親へ知らせる(色を付けるため)。
-    // **読み終わったところで Stop から Listen に戻す。**
-    // MP3 なら本当の読み終わり、端末の声なら保険の時間で戻る(speech.js)
-    readAloud(text, { voice, clipVoice, clipTier: tier, rate: speed, onWord }).then(() => {
-      setState(false)
-      onWord?.(null)
-    })
+    run()
   }
 
   return (
