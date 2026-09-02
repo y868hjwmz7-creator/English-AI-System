@@ -67,4 +67,8 @@ from (
     exists (select 1 from pg_tables where tablename = 'learner_files'), 13
   union all select '0032 セッションの記録(メモ)の置き場',
     exists (select 1 from pg_tables where tablename = 'lesson_notes'), 14
+  union all select '0033 演習の種類にディスカッションを足す',
+    exists (select 1 from pg_constraint
+            where conname = 'material_sections_type_check'
+              and pg_get_constraintdef(oid) like '%discussion%'), 15
 ) t order by 順;

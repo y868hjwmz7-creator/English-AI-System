@@ -253,3 +253,31 @@ select pg_temp.expect2('会話の場面が保てる',
 -- ── 旧「長文」は移されている ──────────────────────────────
 select pg_temp.expect2('旧「長文」の教材は残っていない(reading に移した)',
   (select count(*)::int from public.materials where kind = 'passage'), 0);
+
+-- ── ディスカッション(0033)──────────────────────────────
+--
+--   **正解が無い演習である。** 内容の理解とは違い `answer` は空のままで、
+--   `note` に日本語の手がかりが入る。表がこれを受け付けるか確かめる
+--   (0033 を貼る前は check constraint で弾かれていた・2026-09 実機)。
+insert into public.material_sections (id, material_id, seq, exercise_type)
+values ('cccccccc-0000-0000-0000-000000000013',
+        'bbbbbbbb-0000-0000-0000-000000000003', 2, 'discussion');
+
+insert into public.material_items
+  (material_id, section_id, seq, question, note)
+values
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'cccccccc-0000-0000-0000-000000000013', 1,
+   'How do you usually hear about big decisions at your company?',
+   '①社内で情報がどう伝わるかに絞る ②使える表現: word of mouth / find out from …');
+
+select pg_temp.expect2('ディスカッションの演習が入る',
+  (select count(*)::int from public.material_sections
+   where id = 'cccccccc-0000-0000-0000-000000000013'), 1);
+
+select pg_temp.expect2('ディスカッションは解答を持たない(正解が無い)',
+  (select coalesce(answer, '') from public.material_items
+   where section_id = 'cccccccc-0000-0000-0000-000000000013' and seq = 1), '');
+
+select pg_temp.expect2('ディスカッションの手がかりは note に入る',
+  (select note is not null from public.material_items
+   where section_id = 'cccccccc-0000-0000-0000-000000000013' and seq = 1), true);

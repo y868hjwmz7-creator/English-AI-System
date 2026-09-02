@@ -296,6 +296,13 @@ from (
       and indexdef like '%UNIQUE%' and indexdef like '%learner_id%'
       and indexdef like '%on_date%'), 71
   union all
+  select '(72) 演習の種類にディスカッションが入っている(0033)', exists (
+    -- ここが抜けていると、記事・会話を**発行した瞬間に**
+    -- 「violates check constraint」で止まる(2026-09 実機)
+    select 1 from pg_constraint
+    where conname = 'material_sections_type_check'
+      and pg_get_constraintdef(oid) like '%discussion%'), 72
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

@@ -64,6 +64,20 @@ if [ -n "$dup" ]; then
 fi
 echo "  同じ名前の関数の重なり: なし"
 
+# ---------------------------------------------------------------------------
+# **画面が作れる演習の種類が、表の制約に全部入っているか。**
+#
+#   ディスカッションを足したとき、画面と窓口には足したのに
+#   `material_sections_type_check` に足し忘れ、**教材を発行した瞬間に**
+#   「violates check constraint」で止まった(2026-09 実機)。
+#   lint もビルドも通るので、作ってみるまで分からない。ここで見張る。
+# ---------------------------------------------------------------------------
+echo "▶ 画面の演習の種類が、表の制約に全部入っているか確かめる"
+typedef=$(su postgres -c "psql -d $DB -tAc \"
+  select pg_get_constraintdef(oid) from pg_constraint
+  where conname = 'material_sections_type_check';\"")
+node scripts/check-exercise-types.mjs "$typedef"
+
 echo "▶ 出来たものを確認"
 su postgres -c "psql -d $DB -tAc \"
   select 'テーブル: ' || count(*) from pg_tables where schemaname='public';\""

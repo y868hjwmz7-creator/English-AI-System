@@ -230,6 +230,27 @@ Supabase の画面から行う。**1関数1ファイル**にしてあるのは�
   英語の設問で、対になる日本語が無い
 - 声は標準の段(`voiceTierFor`)。まねる手本ではなく、設問である
 
+### 演習の種類を足す場所は4つ。**表の制約を忘れない**
+
+画面と窓口には足したのに **`material_sections_type_check`(表)に
+足し忘れた。** 教材を**発行した瞬間に**こう出て止まる(2026-09 実機)。
+
+    演習を登録できませんでした: new row for relation "material_sections"
+    violates check constraint "material_sections_type_check"
+
+`npm run lint` も `npm run build` も通る。**作ってみるまで分からない。**
+
+| 足す場所 | 何を |
+|---|---|
+| `src/data/exerciseTypes.js` | `EXERCISE_TYPES` / `DEFAULT_SECTIONS` / `SCALABLE_SECTIONS` |
+| 窓口 `generate-material` | `SECTION_INSTRUCTIONS` / **`SECTION_FIELDS`** |
+| 窓口 `generate-material` | `needsContext`(本文が要る演習か) |
+| **移行(SQL)** | **`material_sections_type_check` の一覧** |
+
+**`scripts/check-exercise-types.mjs` が見張っている**
+(`npm run test:db` の中で走る)。画面の `EXERCISE_TYPES` を読み、
+表の制約に全部入っているかを機械的に確かめる。**この検証を外さない。**
+
 ### 空で返ってきたら、こちらで1回だけやり直す
 
 道具(`emit_section`)は呼ばれているのに `items` が**空の配列**で返ることが
