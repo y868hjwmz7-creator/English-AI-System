@@ -570,6 +570,52 @@ input[type='number'], select, textarea {
   font-family: inherit; font-size: 14px; width: 100%;
 }
 
+/* ★Safari のプルダウンだけ、Chrome と同じ見た目にする★
+   ─────────────────────────────────────────────────────
+   (2026-09 実機・利用者の指定)
+
+     > プルダウンがグロウでツヤツヤ光っているのが非常にダサいです。
+     > Googleと同じように表示されるように直してください。
+     > アプリ内全てのプルダウンに適用してください。
+     > ただし、変更はサファリのみです。
+
+   Safari は `<select>` を**OS の部品**として描く。こちらが背景色と
+   枠線を指定しても、上から**つやのある立体**と ⇕ の矢印が乗る。
+   Chrome は指定どおりの平らな箱に ▼ を描くので、同じ画面が別物に見える。
+
+   【Safari にだけ効かせる】
+     `-webkit-named-image` は **WebKit にしかない。**
+     Chrome(Blink)は持っていないので、この `@supports` の中は
+     **Safari でしか読まれない。** ブラウザの名前(UA)で見分けない
+     (名前は当てにならない・第5.44節と同じ考え方)。
+
+   【矢印は自分で描く】
+     `appearance: none` にすると矢印ごと消えるので、
+     **三角形を CSS の傾いた面2枚で描く。**
+     色は `currentColor` なので、明るい配色でも暗い配色でも、
+     紙の上でも**文字と同じ色**になる。
+     画像(SVG)にすると色を焼き込むことになり、
+     配色の3か所+紙に同じものを書き足すはめになる。 */
+@supports (background: -webkit-named-image(i)) {
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+    /* 矢印のぶんだけ、右にあけておく(文字が矢印の下に潜らないように) */
+    padding-right: 28px;
+    background-image:
+      linear-gradient(45deg, transparent 50%, currentColor 50%),
+      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position:
+      calc(100% - 15px) calc(50% - 1px),
+      calc(100% - 10px) calc(50% - 1px);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  /* 押している・開いているあいだも、見た目を変えない
+     (Safari は既定でつやが強くなる) */
+  select:focus { background-color: var(--surface-0); }
+}
+
 /* ★iPhone・iPad で**画面が勝手に拡大されるのを防ぐ**
    ─────────────────────────────────────────────────────
    iOS の Safari は、**16px より小さい文字の入力欄に触れると画面を拡大する。**

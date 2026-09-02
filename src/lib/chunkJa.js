@@ -26,13 +26,47 @@
  *   英文を直した教材・決まりを直したあとの教材では数が変わるので、
  *   そのときは訳を出さずに英語だけを出す。
  */
-import { slashesFor, wordsOf } from './chunker.js'
+import { postModifier, slashesFor, wordsOf } from './chunker.js'
 
 /** 控えをそろえる区切りの細かさ。**ここを変えたら、控えも作り直しになる** */
 export const BASE_LEVEL = 'beginner'
 
 /** 突き合わせ用にそろえる(空白の数だけの違いは同じものとみなす) */
 const norm = (text) => String(text ?? '').replace(/\s+/g, ' ').trim()
+
+/**
+ * 訳をつなぐ。**同じことを二度書かない**(2026-09 実機)。
+ *
+ *   are hard / to ignore.
+ *   →「無視するのは難しい」「無視するのは」
+ *
+ * 窓口(AI)が、**隣のカタマリの意味まで書いてしまう**ことがある。
+ * 指示には「そのカタマリだけの意味にする」と書いてあるが、守られない回が
+ * ある。そのまま2つをつなぐと **「無視するのは難しい無視するのは」** と
+ * 出る(利用者の写真で確認)。
+ *
+ * **すでに作ってある教材を直すために、出すときにも見る。**
+ * 窓口の指示だけを直しても、**いま入っている訳は直らない。**
+ *
+ * 【行きすぎないようにしてある】
+ *   ・見るのは**直前の1つ**だけ(離れたところの言葉は消さない)
+ *   ・**3文字以上**のときだけ(「は」「に」のような助詞は消さない)
+ *   ・長いほうを残す(短いほうは、その中に入っている)
+ */
+const joinJa = (list) => {
+  const out = []
+  for (const raw of list) {
+    const t = String(raw ?? '').trim()
+    if (!t) continue
+    const prev = out[out.length - 1]
+    if (prev && t.length >= 3 && prev.length >= 3) {
+      if (prev.includes(t)) continue              // 前がすべて含んでいる
+      if (t.includes(prev)) { out[out.length - 1] = t; continue }
+    }
+    out.push(t)
+  }
+  return out.join('').trim()
+}
 
 /**
  * その英文を、控えの単位(初級)で切る。
@@ -43,7 +77,31 @@ const norm = (text) => String(text ?? '').replace(/\s+/g, ' ').trim()
 export function baseChunks(text) {
   const words = wordsOf(text)
   if (!words.length) return []
-  const at = slashesFor(text, BASE_LEVEL).map((x) => x.at)
+  const at = slashesFor(text, BASE_LEVEL)
+    .map((x) => x.at)
+    /* ★ 前の名詞を説明する語句は、名詞と**1つにまとめる**★
+         (2026-09 利用者の指定)
+
+       > 分詞修飾の訳し方がおかしいことが多いです。
+       > the boy running in the park just said hello to me. の訳が
+       > 「男の子は走っている / がたった今私にこんにちはと言いました」
+       > 本来は、「走っている男の子」であるべきです
+
+       ここで切ると、訳す単位が「The boy」と「running」に割れる。
+       前から訳す決まりなので「男の子は」「走っている」となり、
+       つなぐと**述語のように**読める。
+       日本語では説明が名詞の**前**に来る(連体修飾)ので、
+       **1つのカタマリとして訳させる**しかない
+       (「走っている男の子は」)。
+
+       **英語の区切り(スラッシュ)は変えていない。**
+       「前の名詞を説明する分詞も初心者は分けて考えます」(2026-08)は
+       そのままである。変えたのは**訳を作る単位**だけ。
+       ゲストがそこで切っても、訳はその対のぶんがまとめて出る。 */
+    /* ただし**文の切れ目は、絶対にまたがない。**
+       前の文が分詞で終わっていると、次の文の頭が「前の名詞の説明」に
+       見えることがある。そこでまとめると、2つの文が1つのカタマリになる */
+    .filter((i) => !postModifier(words, i) || /[.!?]["')\]]*$/.test(words[i - 1] ?? ''))
   const out = []
   let from = 0
   for (const i of [...at, words.length]) {
@@ -122,7 +180,12 @@ const cutsFromParts = (parts) => {
  * ここを1か所にしておかないと、表示と作成で切れ目が食い違う。
  */
 const baseCuts = (text, parts) => (
-  parts?.length ? cutsFromParts(parts) : slashesFor(text, BASE_LEVEL).map((x) => x.at)
+  /* **控えが無いときも `baseChunks()` から出す。**
+     ここで `slashesFor()` を直に呼んでいたので、分詞修飾を名詞と
+     まとめたときに**作る側と出す側で切れ目が食い違い**、
+     数が合わずに訳が丸ごと出なくなった(2026-09)。
+     控えの単位は `baseChunks()` 1か所に置く */
+  parts?.length ? cutsFromParts(parts) : cutsFromParts(baseChunks(text))
 )
 
 /**
@@ -153,7 +216,7 @@ export function chunkPairs(text, ja, level = BASE_LEVEL, parts = null) {
     jp.push(ja[i])
     from = at
     if (at >= words.length || keep.has(at)) {
-      out.push({ en: en.join(' '), ja: jp.join('').trim() })
+      out.push({ en: en.join(' '), ja: joinJa(jp) })
       en = []
       jp = []
     }
@@ -167,9 +230,10 @@ export function chunkPairs(text, ja, level = BASE_LEVEL, parts = null) {
  * 3つのどれかに当てはまれば作り直す。**判断はここ1か所。**
  *   ① まだ訳が無い
  *   ② 数が合わず、対が作れない(英文を直した・古い決まりで作った)
- *   ③ **いまの決まりのほうが細かい**(2026-08 利用者の指定)
+ *   ③ **控えの切れ目が、いまの決まりと違う**(2026-09 に広げた)
  *
- * ③ を入れているのは、区切りを細かくしたぶんを取り込むためである。
+ * ③ ははじめ「いまのほうが**細かい**とき」だけだった(2026-08 利用者の指定)。
+ * 区切りを細かくしたぶんを取り込むためである。
  *
  *   > そもそもの訳を作成するときにあらゆる可能性を考えた区切り方にして、
  *   > 全て訳が英文に対して中央に寄るようになれば完璧です。
@@ -178,6 +242,13 @@ export function chunkPairs(text, ja, level = BASE_LEVEL, parts = null) {
  * 2つぶんの訳がまとめて出て**右へずれて見える。**
  * 細かくしたときに一度だけ作り直せば、そのあとはずれない。
  * (粗いままでも**訳は出る。** 作り直しは見た目をそろえるためである)
+ *
+ * **2026-09 に「細かいとき」から「違うとき」へ広げた。**
+ * 分詞修飾を名詞とまとめたことで、いまの決まりのほうが**粗くなる**
+ * ところができた。細かいときしか見ていないと、
+ * 「男の子は / 走っている」と割れた古い控えがそのまま残り、
+ * **直したはずの訳が直らない。**
+ * 作り直しは、その教材を使ったとき(セッションで使う・印刷)に1回だけ走る。
  */
 export function needsChunkJa(item) {
   const text = String(item?.prompt_en ?? '').trim()
@@ -185,7 +256,10 @@ export function needsChunkJa(item) {
   if (!chunkPairsOf(item)) return true            // ① ②
   const parts = storedParts(item)
   if (!parts) return false                        // 古い控え。数は合っている
-  return baseChunks(text).length > parts.length   // ③
+  // ③ 切れ目そのものを見比べる。**数だけでは足りない**
+  const now = baseChunks(text)
+  if (now.length !== parts.length) return true
+  return now.some((p, i) => norm(p) !== norm(parts[i]))
 }
 
 /** 画面から呼ぶ入口。項目と細かさを渡すと、対か null が返る */
@@ -241,7 +315,7 @@ export function chunkPairsAtMarks(text, ja, marks, parts = null) {
     const segs = []
     let s = from
     for (const k of [...inner, at]) { segs.push(words.slice(s, k).join(' ')); s = k }
-    out.push({ segs, ja: jp.join('').trim() })
+    out.push({ segs, ja: joinJa(jp) })
     jp = []
     from = at
   })

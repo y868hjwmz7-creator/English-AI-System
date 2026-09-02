@@ -8,7 +8,7 @@
  *   npm run test:chunk
  */
 import {
-  checkSlashes, chunksOf, slashesFor, wordsOf,
+  checkSlashes, chunksOf, postModifier, slashesFor, wordsOf,
 } from '../src/lib/chunker.js'
 import {
   baseChunks, chunkPairs, chunkPairsAtMarks, needsChunkJa, storedChunks,
@@ -346,9 +346,86 @@ for (const [name, text] of Object.entries(S)) {
   }
 }
 
-console.log('\n▶ 控えの数は、初級のカタマリの数と同じ')
+/* ── 控えの単位(2026-09 利用者の指定)──────────────────────────
+   > 分詞修飾の訳し方がおかしいことが多いです。
+   > the boy running in the park just said hello to me. の訳が
+   > 「男の子は走っている / がたった今私にこんにちはと言いました」
+   > 本来は、「走っている男の子」であるべきです
+
+   **英語の区切りは変えていない。** 変えたのは訳を作る単位だけで、
+   前の名詞を説明する語句は名詞と1つにまとめる。 */
+console.log('\n▶ 控えの数は、初級のカタマリの数と同じ(分詞修飾のぶんだけ少ない)')
 for (const [name, text] of Object.entries(S)) {
-  ok(name, baseChunks(text).length === slashesFor(text, 'beginner').length + 1)
+  const words = wordsOf(text)
+  const marks = slashesFor(text, 'beginner').map((x) => x.at)
+  const merged = marks.filter((i) => postModifier(words, i)).length
+  ok(name, baseChunks(text).length === marks.length + 1 - merged,
+    `控え ${baseChunks(text).length} / 区切り ${marks.length} / まとめた ${merged}`)
+}
+
+console.log('\n▶ 前の名詞を説明する語句は、名詞と1つのカタマリにする')
+{
+  const boy = 'The boy running in the park just said hello to me.'
+  ok('分詞は名詞とまとめる(走っている男の子)',
+    baseChunks(boy)[0] === 'The boy running', baseChunks(boy).join(' / '))
+  // **英語の区切りそのものは、これまでどおり出す**(初心者は分けて考える)
+  ok('英語の区切りは残っている(2026-08 の指定は変えていない)',
+    slashesFor(boy, 'beginner').some((m) => m.at === 2), '「running の前」で切る')
+
+  const scams = 'Phone scams targeting elderly people are increasing.'
+  ok('-ing の分詞',
+    baseChunks(scams)[0] === 'Phone scams targeting elderly people',
+    baseChunks(scams).join(' / '))
+  ok('-ed の分詞',
+    baseChunks(S.raised)[0] === 'The money raised', baseChunks(S.raised).join(' / '))
+  // **名詞の説明ではない分詞は、まとめない**(助動詞のあと・冠詞のあと)
+  const broken = 'He found a broken window in the office this morning.'
+  ok('冠詞のあとの分詞はまとめる相手がいない',
+    baseChunks(broken).every((c) => c !== ''), baseChunks(broken).join(' / '))
+  ok('つなぐともとの文に戻る(どの文でも)',
+    Object.values({ ...S, boy, scams, broken })
+      .every((t) => baseChunks(t).join(' ') === wordsOf(t).join(' ')))
+}
+
+/* ── 並べているもののつなぎ(2026-09 利用者の指定)──────────────
+   > 同格の and の時に二つに分けれていません。
+   > 例えば、A pair of shoes / and a water bottle を
+   > /靴一足と水筒/ となってしまいます。そうではなく、
+   > 靴一足 / と水筒一本 となるように修正してください */
+console.log('\n▶ 並べているもの(and / or)の前で切る')
+{
+  const pair = 'A pair of shoes and a water bottle are enough.'
+  ok('and の前が切れ目になる',
+    baseChunks(pair).includes('and a water bottle'), baseChunks(pair).join(' / '))
+  ok('and のところで切っても咎めない', checkSlashes(pair, [4]).length === 0)
+  ok('and のあとで切るのは、これまでどおり咎める', checkSlashes(pair, [5]).length > 0)
+  const or = 'You can bring a towel or a small mat to the class.'
+  ok('or の前も切れ目になる',
+    baseChunks(or).some((c) => c.startsWith('or ')), baseChunks(or).join(' / '))
+  // **強さ1(初級だけ)。** 並べているだけで、意味が変わるわけではない
+  ok('上級では出さない',
+    !slashesFor(pair, 'advanced').some((m) => m.at === 4),
+    slashesFor(pair, 'advanced').map((m) => m.why).join(' | '))
+}
+
+/* ── 訳を二度書かない(2026-09 実機)────────────────────────────
+   窓口が隣のカタマリの意味まで書いてしまうことがあり、
+   つなぐと「無視するのは難しい無視するのは」と出ていた。 */
+console.log('\n▶ 訳をつなぐとき、同じことを二度書かない')
+{
+  const text = 'The numbers are hard to ignore.'
+  const parts = ['The numbers', 'are hard', 'to ignore.']
+  const item = {
+    prompt_en: text,
+    chunks: { en: text, parts, ja: ['数字は', '無視するのは難しい', '無視するのは'] },
+  }
+  // 自分の区切りを入れずに通しで見る = 3つがつながる
+  const one = chunkPairsAtMarks(text, storedChunks(item), [], parts)
+  ok('重なった訳は一度だけ出す',
+    one?.[0]?.ja === '数字は無視するのは難しい', JSON.stringify(one))
+  // **短い助詞は消さない**(行きすぎないこと)
+  const keep = chunkPairsAtMarks('A B C', ['のは', 'のは です', ''], [], ['A', 'B', 'C'])
+  ok('3文字に満たない訳は消さない', keep?.[0]?.ja?.startsWith('のは'), JSON.stringify(keep))
 }
 
 console.log('\n▶ どのレベルでも、対をつなぐともとの文と訳に戻る')
@@ -361,8 +438,15 @@ for (const [name, text] of Object.entries(S)) {
     const jp = pairs?.map((p) => p.ja).join('')
     ok(`${name} / ${lv} 英語`, en === wordsOf(text).join(' '), String(en))
     ok(`${name} / ${lv} 訳`, jp === ja.join(''), String(jp))
-    // そのレベルのカタマリの数と、対の数が合っていること
-    ok(`${name} / ${lv} 数`, pairs?.length === slashesFor(text, lv).length + 1)
+    /* そのレベルのカタマリの数と、対の数が合っていること。
+       **数えるのは控えの切れ目**(`baseChunks`)である。
+       分詞修飾は名詞とまとめてあるので、区切りの数とは一致しない
+       (2026-09。訳を正しく出すために、そこは1つの単位で訳す) */
+    const words = wordsOf(text)
+    const kept = slashesFor(text, lv).map((x) => x.at)
+      .filter((i) => !postModifier(words, i)).length
+    ok(`${name} / ${lv} 数`, pairs?.length === kept + 1,
+      `対 ${pairs?.length} / 切れ目 ${kept}`)
   }
 }
 

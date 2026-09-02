@@ -48,6 +48,24 @@ const CONNECTORS = new Set([
 ])
 
 /**
+ * **並べているもののつなぎ**(2026-09 利用者の指定)。
+ *
+ *   > 同格の and の時に二つに分けれていません。
+ *   > 例えば、A pair of shoes / and a water bottle を
+ *   > /靴一足と水筒/ となってしまいます。そうではなく、
+ *   > 靴一足 / と水筒一本 となるように修正してください
+ *
+ * `and` `or` は `CONNECTORS` に入れていなかったので、**切れ目にならず**、
+ * 訳も「靴一足と水筒」と1つにまとまっていた。
+ *
+ * **強さは1**(初級だけ)。`but` `because` のような「ここから意味が変わる」
+ * 切れ目(強さ3)とは違い、並べているだけだからである。
+ * 短すぎるカタマリ(`salt / and pepper`)は `LEVEL_RULE` の
+ * 最小語数がふるい落とす。
+ */
+const COORDINATORS = new Set(['and', 'or', 'nor'])
+
+/**
  * 助動詞のまとまり。**この中では切らない。**
  * 「be going to」「have to」を途中で切ると、動詞と離れて訳せなくなる。
  * 長いものから順に見る(`have to` より `have got to` を先に当てる)。
@@ -600,8 +618,13 @@ function verbHere(words, i) {
  * `Phone scams / targeting elderly people` `The money / raised by the fund`。
  * 助動詞のあと(`has been caught` `was raised`)や冠詞・形容詞のあと
  * (`a broken window`)は、分詞ではあっても**前の名詞の説明ではない**。
+ *
+ * **区切りを入れる場所と、訳を作る単位の両方で使う**(2026-09)。
+ * 訳の側は、ここで切ると「男の子は / 走っている」と**述語のように**
+ * 訳されてしまうので、名詞と1つにまとめる(`chunkJa.js` の `baseChunks`)。
+ * **同じ判断を2か所に書かない**ので、ここから配る。
  */
-function postModifier(words, i) {
+export function postModifier(words, i) {
   const b = bare(words[i])
   if (!b) return false
   const ing = /^[a-z]{3,}ing$/.test(b)
@@ -772,6 +795,10 @@ export function idealSlashes(sentence) {
     // **句動詞のあと**(2026-08 利用者の指定)。
     // `Some streams pull in / more than five thousand viewers` と切れるように
     if (insidePhrasal(words, i)) add(i + 1, 1, '句動詞のあと')
+    // **並べているもののつなぎの前**(2026-09 利用者の指定)。
+    // `A pair of shoes / and a water bottle` と切れるように。
+    // 強さ1(初級だけ)。並べているだけで、意味が変わるわけではない
+    if (COORDINATORS.has(b)) add(i, 1, `${b} の前(並べているものの切れ目)`)
     // 接続詞・関係詞の前。ここから意味が変わる
     if (CONNECTORS.has(b)) add(i, 3, `${b} の前(ここから意味が変わる)`)
     // **前置詞 + 代名詞**は、前の名詞にかかる2語のかたまり(2026-08)。
