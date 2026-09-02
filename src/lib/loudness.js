@@ -48,13 +48,34 @@
  */
 import { audioContext } from './sfx.js'
 
-/** そろえる先の大きさ。**この値に寄せる** */
-const TARGET_RMS = 0.10
+/**
+ * そろえる先の大きさ。**この値に寄せる。**
+ *
+ * **少し大きめにそろえる**(2026-09 利用者の指定)。
+ *
+ *   > 音量は少し大きめに揃えてください。
+ *   > 気になるのはデフォルトで小さすぎる声です。
+ *
+ * 気になるのは**小さすぎる声**なので、平均に寄せるのではなく
+ * **しっかり聞こえるところ**に寄せる。0.15 は、人の話し声としては
+ * 大きめ(おおよそ -16 dBFS)にあたる。
+ */
+const TARGET_RMS = 0.15
 /** 上げ下げの上限。**上げすぎ・下げすぎで不自然にしない** */
-const MIN_GAIN = 0.35
-const MAX_GAIN = 2.5
+const MIN_GAIN = 0.45
+const MAX_GAIN = 3.0
 /** これより小さい波は「黙っている」とみなす */
 const SILENCE = 0.02
+/**
+ * **いちばん大きいところを、どこまで超えてよいか。**
+ *
+ * 小さい声を上げると、ひときわ大きい音(破裂音など)が割れる。
+ * ふつうは「割れない範囲まで」しか上げられないが、それでは
+ * **「平均は小さいのに、一発だけ大きい」声を上げられない。**
+ * うしろに頭打ちの仕組み(`DynamicsCompressorNode`)を置いてあるので、
+ * そこで抑えられる分(約 3dB = 1.4倍)までは超えてよい。
+ */
+const PEAK_ROOM = 1.4
 
 const KEY = 'eas.loud'
 
@@ -87,7 +108,10 @@ export function gainFor(tier, voice) {
   const want = TARGET_RMS / got.rms
   const capped = Math.min(Math.max(want, MIN_GAIN), MAX_GAIN)
   if (!got.peak) return capped
-  return Math.min(capped, 0.99 / got.peak)
+  // **頭打ちの仕組みがあるかどうかで、超えてよい量が変わる。**
+  // つないでいないときは `volume` しか使えず、抑える手立てが無いので割れさせない
+  const room = limiter ? PEAK_ROOM : 0.99
+  return Math.min(capped, room / got.peak)
 }
 
 /** もう測ってあるか */
@@ -154,6 +178,7 @@ export async function measureClip(url, tier, voice) {
 // Web Audio を通って出る。だから**確かめてからつなぐ。**
 let node = null
 let gain = null
+let limiter = null
 
 /**
  * つなぎ替えを試みる。**つなげたら true。**
@@ -175,12 +200,28 @@ export function routeThroughGain(el) {
     el.crossOrigin = 'anonymous'
     node = ctx.createMediaElementSource(el)
     gain = ctx.createGain()
+    /*
+     * **頭打ち。** 小さい声を上げると、ひときわ大きい音が割れる。
+     * ここで上だけを抑えれば、割れずに上げられる
+     * (2026-09「気になるのはデフォルトで小さすぎる声です」)。
+     *
+     * **音を作り変える道具ではない。** しきい値を高くし、
+     * ふだんは何もせず、はみ出したところだけを押さえる設定にしてある。
+     */
+    limiter = ctx.createDynamicsCompressor()
+    limiter.threshold.value = -3      // ここを超えたぶんだけ押さえる
+    limiter.knee.value = 0            // なだらかにしない(頭打ちとして使う)
+    limiter.ratio.value = 20          // 超えた分はほぼ通さない
+    limiter.attack.value = 0.002      // 立ち上がりに間に合わせる
+    limiter.release.value = 0.15
     node.connect(gain)
-    gain.connect(ctx.destination)
+    gain.connect(limiter)
+    limiter.connect(ctx.destination)
     return true
   } catch {
     node = null
     gain = null
+    limiter = null
     return false
   }
 }

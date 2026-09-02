@@ -11,7 +11,9 @@
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { kindsOf } from '../data/industries.js'
-import { givesAwayAnswer, isPassageSection } from '../data/exerciseTypes.js'
+import {
+  givesAwayAnswer, isBlankItem, isPassageSection, isWrongShape,
+} from '../data/exerciseTypes.js'
 import { chunkPlan, needsChunkJa } from './chunkJa.js'
 import { supabase } from './supabase.js'
 
@@ -1131,8 +1133,23 @@ export async function generateSectionUnique(params, {
     //     解答を開くまでもなく答えが見えている。
     //     窓口の指示も直したが、**指示は読み飛ばされうる。**
     //     ここで落とせば、窓口を配置し直す前でも作り直しが差し替える。
+    // ①'' **中身が空のまま出来上がった問**(2026-09 実機・利用者の指摘)
+    //     フレーズ20問のうち1問目が空だった(札だけで英文も訳も無い)。
+    //     道具の形は `strict` で保証されているが、**空文字も形としては正しい。**
+    //     落としてしまえば、下の作り直しが**足りない分だけ**別の問を作る。
     const kept = []
     for (const it of unique) {
+      if (isBlankItem(params.sectionType, it)) {
+        droppedTotal += 1
+        continue                            // 空なので、控える鍵も取れない
+      }
+      // ①''' **単語とフレーズの取り違え**(2026-09 実機)。
+      //      フレーズが1語・単語が2語以上のものを落とす
+      if (isWrongShape(params.sectionType, it)) {
+        droppedTotal += 1
+        sentencesOf(it).forEach((k) => usedSet.add(k))
+        continue
+      }
       if (givesAwayAnswer(params.sectionType, it)) {
         droppedTotal += 1
         // **同じ文をもう一度作らせない。** `dropDuplicates` が

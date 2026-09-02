@@ -211,6 +211,74 @@ export const givesAwayAnswer = (exerciseTypeId, item) => {
 }
 
 /**
+ * **無くても成り立つ欄。** これらは空でも、その問は使える。
+ *
+ * `phonetic` を必須にしないのは、**0020 を貼る前に作った教材**に
+ * 入っていないためである(その項目は発音記号が出ないだけ)。
+ * `answer_alt` は「別解があれば」の欄で、無いほうがふつうである。
+ */
+const SPARE_FIELDS = new Set(['answer_alt', 'phonetic'])
+
+/**
+ * **その問は、中身が空のまま出来上がっていないか。**
+ *
+ * 【なぜ要るか】(2026-09 実機・利用者の指摘)
+ *
+ *   フレーズ20問のうち、**1問目が空だった。** 弱点の札だけが出て、
+ *   英文も発音記号も訳も無い。それでも画面には「全 20 問」と出ていた。
+ *
+ *   窓口(`generate-material`)の道具は `strict: true` なので、
+ *   **その欄があること**までは API が保証する。ところが
+ *   **空文字も「形としては正しい」**ので、そのまま通ってしまう。
+ *   「中身が0件のまま『成功』を返さない」(CLAUDE.md)を、
+ *   **演習まるごとではなく、1問ずつにも当てはめる。**
+ *
+ * 【なぜ画面の側にも置くのか】
+ *   窓口の側でも落とすようにしたが、**利用者が配置し直すまでは直らない。**
+ *   ここに置けば、いまの窓口のままでも作り直しが別の問に差し替える
+ *   (`givesAwayAnswer` と同じ考え方)。
+ */
+export const isBlankItem = (exerciseTypeId, item) => {
+  const type = exerciseType(exerciseTypeId)
+  if (!type) return false
+  const need = type.fields.filter((f) => !SPARE_FIELDS.has(f))
+  if (!need.length) return false
+  return need.some((f) => !String(item?.[f] ?? '').trim())
+}
+
+/**
+ * **単語とフレーズを取り違えていないか。**
+ *
+ * 【なぜ要るか】(2026-09 実機・利用者の指摘)
+ *
+ *   > また、フレーズが英語的におかしいです。
+ *
+ *   実機では `crowd reads the room` が出ていた(正しくは `read the room`)。
+ *   窓口の指示を厳しくしたが、**指示は読み飛ばされうる**ので、
+ *   **こちらで確かめられることは、こちらで確かめる**
+ *   (`givesAwayAnswer` と同じ考え方)。
+ *
+ * 【当てられることだけを見る】
+ *   「主語が付いている」「動詞が三人称単数になっている」は、
+ *   **語のリストでは当てられない**(`run` は名詞にも動詞にもなる)。
+ *   スラッシュリーディングと同じで、**あやふやなことは言わない。**
+ *
+ *   確かなのは**語数**だけである。利用者の設計では、
+ *   単語(`word`)とフレーズ(`phrase`)は**別の種類の教材**なので、
+ *     ・フレーズが1語 … それは単語である
+ *     ・単語が2語以上 … それはフレーズである(ハイフン語は1語と数える)
+ *   これは取り違えようがない。
+ */
+export const isWrongShape = (exerciseTypeId, item) => {
+  const text = String(item?.prompt_en ?? '').trim()
+  if (!text) return false                       // 空は `isBlankItem` の担当
+  const words = text.split(/\s+/).length
+  if (exerciseTypeId === 'phrase') return words < 2
+  if (exerciseTypeId === 'vocabulary') return words > 1
+  return false
+}
+
+/**
  * 教材の種類ごとの、既定の演習構成と問数。
  *
  * 文型ドリルの「4演習 × 10問 = 40問」は、実物のドリルに合わせた数字

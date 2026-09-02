@@ -301,8 +301,37 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
   overlapping:  'オーバーラッピング。prompt_en に英文、prompt_ja に訳を入れる。',
   shadowing:    'シャドーイング。prompt_en に英文、prompt_ja に訳を入れる。',
   repeating:    'リピーティング。1文を短めにする。prompt_en に英文、prompt_ja に訳を入れる。',
-  vocabulary:   '単語。prompt_en に語、prompt_ja に意味と使い方を入れる。',
-  phrase:       'フレーズ。prompt_en にフレーズ、prompt_ja に意味と使う場面を入れる。',
+  /* 単語・フレーズ(2026-09 実機・利用者の指摘)。
+     **「フレーズが英語的におかしい」**という報告があり、実機ではこう出ていた。
+
+         crowd reads the room     ← 正しくは read the room
+
+     主語が付いて三人称単数になっており、**辞書にも載らず、
+     そのままでは声にも出せない**中途半端な形である。
+     原因は指示が「prompt_en にフレーズ」としか言っていなかったこと。
+     **形を言葉で決めていなければ、形は決まらない。** */
+  vocabulary:
+    '単語。prompt_en に語、prompt_ja に意味と使い方を入れる。'
+    + '\n- **prompt_en は1語**(ハイフンでつながる語は1語と数える)。'
+    + '句や文を入れない'
+    + '\n- **辞書に載る形**(見出し語)にする。動詞は原形、名詞は単数。'
+    + '主語・冠詞・時制を付けない',
+  phrase:
+    'フレーズ。prompt_en にフレーズ、prompt_ja に意味と使う場面を入れる。'
+    /* **形を3つに絞る。** 絞らないと、主語付きの平叙文と、
+       動詞句と、決まり文句が混ざって並びが読めなくなる */
+    + '\n\n**prompt_en は、次の3つのどれかの形にする。ほかの形にしない。**'
+    + '\n1. **動詞から始まるかたまり**(原形)… read the room / drop the beat'
+    + '\n2. **名詞のかたまり**… a packed dance floor / the back of the venue'
+    + '\n3. **そのまま声に出せる決まり文句**… Sorry, that\'s not really my thing.'
+    + '\n\n**守ること。**'
+    + '\n- **主語を付けない。** crowd reads the room は誤り。read the room が正しい'
+    + '\n- **動詞は必ず原形。** reads / read(過去) / reading にしない'
+    + '\n- 2〜7語。1語だけのものは入れない(それは単語である)'
+    + '\n- 3の形のときだけ、文として大文字で始めて終止符を付ける。'
+    + '1と2は小文字で始め、終止符を付けない'
+    + '\n- **本当に使われている言い方だけ**にする。'
+    + 'それらしく作った言い回しを入れない',
 }
 
 /** 1問(1段落・1発言)の欄の説明 */
@@ -410,7 +439,21 @@ const emitSectionTool = (sectionType: string, isFirst: boolean) => {
 
   const isPassage = sectionType === 'article' || sectionType === 'dialogue'
   const props: Record<string, unknown> = {
-    instruction: { type: 'string', description: 'この演習の指示文(日本語)' },
+    /* 指示文(2026-09 実機・利用者の指摘)。**内側の言葉が漏れていた。**
+
+           DJの現場を想定したフレーズ集です。…
+           tag_no 1=語彙全般、2=業界用語、3=決まり文句です。   ← これ
+
+       `tag_no` は**弱点の番号を控えるための欄**であって、
+       ゲストに読ませるものではない。**ゲストにできることは何も無い**
+       (「ゲストには、仕組みの内側を見せない」CLAUDE.md)。 */
+    instruction: {
+      type: 'string',
+      description: 'この演習の指示文(日本語)。**ゲストがそのまま読む文である。**'
+        + '何をすればよいかだけを1〜2文で書く。'
+        + '**仕組みの内側の言葉を書かない**'
+        + '(tag_no・欄の名前・弱点の番号・item・prompt_en など)。',
+    },
     items: {
       type: 'array',
       description: isPassage ? '本文(1項目 = 1段落 / 1発言)' : '設問',
@@ -1003,6 +1046,26 @@ Deno.serve(async (req) => {
       headline?: string
       teaching_point?: string
       items?: Record<string, string>[]
+    }
+
+    /*
+     * **中身の空いた項目を落とす**(2026-09 実機・利用者の指摘)。
+     *
+     * フレーズ20問のうち、**1問目が空だった**(札だけが出て、英文も訳も
+     * 発音記号も無い)。それでも画面には「全 20 問」と出ていた。
+     *
+     * `strict: true` は「その欄があること」までは保証するが、
+     * **空文字も「形としては正しい」**ので通ってしまう。
+     * 「中身が0件のまま『成功』を返さない」(CLAUDE.md)を、
+     * **1問ずつにも当てはめる。**
+     *
+     * 落とすだけでよい。足りない分は、呼んだ側
+     * (`generateSectionUnique`)が**足りない分だけ**作り直す。
+     */
+    const need = (SECTION_FIELDS[sectionType] ?? { required: [] }).required
+    if (Array.isArray(result.items)) {
+      result.items = result.items.filter((it) =>
+        need.every((f) => String((it as Record<string, unknown>)?.[f] ?? '').trim()))
     }
 
     // **中身が0件のまま「成功」を返さない。**
