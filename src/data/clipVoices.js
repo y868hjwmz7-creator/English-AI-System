@@ -109,20 +109,56 @@ export const accentLabel = (id) =>
 // ============================================================================
 // ★★★ ここに声を足してください ★★★
 //
-//   いまは空です。空のあいだは、これまでどおり標準の声(Google / Azure)で
-//   読み上げます。**壊れません。**
+//   2026-09、利用者が ElevenLabs で選んだ10人を入れた。
+//   足したい声があれば、下と同じ形で1行足すだけでよい。足した順に並ぶ。
 //
-//   ElevenLabs で選んだ声を、下の例のように1行ずつ書き足してください。
-//   足した順に画面の選択肢に出ます。
+//     { id: 'sc-1', accent: 'sc', gender: 'male', use: 'both',
+//       label: 'Angus', elevenId: 'ここに Voice ID' },
 //
-//     { id: 'us-1', accent: 'us', gender: 'female',
-//       label: 'Rachel', elevenId: 'ここに Voice ID' },
-//     { id: 'us-2', accent: 'us', gender: 'male',
-//       label: 'Brian',  elevenId: 'ここに Voice ID' },
-//     { id: 'sc-1', accent: 'sc', gender: 'male',
-//       label: 'Angus',  elevenId: 'ここに Voice ID' },
+//   **`id` は一度決めたら変えないこと。** 変えると音声の置き場所が変わり、
+//   作り直し(= 課金)になる。
+//
+//   【`use` は、いまぜんぶ `both` にしてある】
+//     ElevenLabs 側の分類(Narrative Story / Conversational)を
+//     こちらでは確かめていないので、**あやふやなことを書かず**
+//     「どちらでも使える」にしてある。
+//     使ってみて「この声は会話向きだ」と分かったら、その行の `use` を
+//     `conversation`(または `narration`)に書き換えるだけでよい。
+//     そうすると、記事を作るときの選択肢から自動的に外れる。
+//
+//   【声を**入れ替える**ときは、CLIP_REV を進める】
+//     すでにある行の `elevenId` を別の声に差し替えたときだけである。
+//     **足すだけなら進めなくてよい。** 音声の置き場所は
+//     `<版>/<段>/<声の id>/<英文の指紋>.mp3` で、声の id が道に入っている。
+//     足しただけなら新しい道になるので、前の音声とぶつからない。
+//     (進めると**すべての音声が作り直しになる。** 迂闊に進めない)
 // ============================================================================
 export const CLIP_VOICES = [
+  // ── アメリカ ────────────────────────────────────────────
+  { id: 'us-1', accent: 'us', gender: 'female', use: 'both',
+    label: 'Jessica', elevenId: 'cgSgspJ2msm6clMCkdW9' },
+  { id: 'us-2', accent: 'us', gender: 'male', use: 'both',
+    label: 'David Esposito', elevenId: 'iEw1wkYocsNy7I7pteSN' },
+
+  // ── イギリス ────────────────────────────────────────────
+  { id: 'uk-1', accent: 'uk', gender: 'female', use: 'both',
+    label: 'Sky', elevenId: 'QeRkfdkzgy4CefJ3AcII' },
+  { id: 'uk-2', accent: 'uk', gender: 'female', use: 'both',
+    label: 'Sophia', elevenId: 'LM5QaByxyWDmNhcQTYiS' },
+  { id: 'uk-3', accent: 'uk', gender: 'male', use: 'both',
+    label: 'Jofra', elevenId: 'NuRyEq0OdD9mMOyd51UZ' },
+  { id: 'uk-4', accent: 'uk', gender: 'male', use: 'both',
+    label: 'Henry', elevenId: 'KP6QbSvtyKSTfuh4UzcQ' },
+
+  // ── オーストラリア ──────────────────────────────────────
+  { id: 'au-1', accent: 'au', gender: 'female', use: 'both',
+    label: 'Brenna', elevenId: 'L4bD71zGAYHMT7a6MLwc' },
+  { id: 'au-2', accent: 'au', gender: 'female', use: 'both',
+    label: 'Emma', elevenId: '56bWURjYFHyYyVf490Dp' },
+  { id: 'au-3', accent: 'au', gender: 'male', use: 'both',
+    label: 'Tom', elevenId: 'DYkrAHD8iwork3YSUBbs' },
+  { id: 'au-4', accent: 'au', gender: 'male', use: 'both',
+    label: 'Brad', elevenId: 'vVnXvLYPFjIyE2YrjUBE' },
 ]
 
 // ── ここから下は仕組み。触らなくてよい ──────────────────────────
