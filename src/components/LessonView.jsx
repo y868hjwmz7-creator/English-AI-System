@@ -613,7 +613,11 @@ export default function LessonView({
     // 練習中(6Steps / Quick Response)は、どのページも画面には出さない
     const open = si === page && !run
     return (
-          <section key={sec.id ?? si} className={`lesson-page${open ? '' : ' is-closed'}`}>
+          /* `data-type` は**紙用の目印**(2026-09 利用者の指定)。
+             記事・会話の紙は「本文(訳なし)→ 内容理解 → ディスカッション →
+             Quick Response」で、語句は出さない。**画面の見た目は変わらない** */
+          <section key={sec.id ?? si} className={`lesson-page${open ? '' : ' is-closed'}`}
+                   data-type={sec.exercise_type}>
             <h3 className="lesson-section">
               {exerciseLabel(sec.exercise_type)}
               {`（${countLabel(sec.exercise_type, sec.items.length)}）`}

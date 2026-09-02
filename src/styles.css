@@ -2392,7 +2392,61 @@ html { -webkit-text-size-adjust: 100%; }
      **中身は分けてよい**(段落まるごと送ると、白い場所が大きく空く) */
   .print-target .lesson-section,
   .print-target .lesson-instruction { break-after: avoid; }
-  .print-target .lesson-page + .lesson-page { margin-top: 14pt; }
+
+  /* ── 記事・会話の紙の構成 ────────────────────────────
+     2026-09 利用者の指定。
+
+       > スラッシュリーディングを手書きするための少し隙間を多くとった
+       > 本文（訳なし）のページ、内容理解（今まで通り）、ディスカッション、
+       > クイックレスポンス（今まで通り） … 上記の構成にしてください
+       > ３ページ目の「本文に出てきた語句」は印刷時には入れないように
+       > あと、各項目はページごとに区切るようにしてください。
+       > 中途半端なところから次の項目を入れないで下さい。
+
+     紙は**レッスンでそのまま書き込む用紙**である。画面の控えではない。
+
+       1枚目 本文(訳なし・行間を広く)  ← ここにスラッシュを手で書く
+       2枚目 内容の理解
+       3枚目 ディスカッション
+       4枚目 Quick Response
+
+     **「本文に出てきた語句」は紙に出さない。** 語の意味は画面で触れば
+     出るので、紙に写す意味がない。そのぶんを本文の行間に回す。 */
+  body.is-printing .print-target [data-type="vocab_note"] { display: none !important; }
+
+  /* **1つの演習で1枚。** 中途半端なところから次の演習を始めない。
+     `[data-type]` を持つのは演習の箱そのものなので、
+     隠した語句の箱に指定が付いても害はない(場所ごと消えている) */
+  body.is-printing .print-target .exercise-view + .exercise-view,
+  body.is-printing .print-target .lesson-page + .lesson-page { break-before: page; }
+
+  /* 本文の紙は**訳を出さない。** 訳があると、英語を読む前に目がそちらへ行く。
+     日本語が要るときは、いちばん後ろの Quick Response の紙にそろえてある */
+  body.is-printing .print-target [data-type="article"] .preview-ja,
+  body.is-printing .print-target [data-type="dialogue"] .preview-ja,
+  body.is-printing .print-target [data-type="article"] .lesson-ja,
+  body.is-printing .print-target [data-type="dialogue"] .lesson-ja {
+    display: none !important;
+  }
+  /* **スラッシュを手で書き込むための隙間。**
+     ・行間 2.6 … 1行の上に、書き込める高さが残る
+     ・語間 0.3em … 語と語のあいだに「/」が入る
+     縦の隙間だけ広げても、語がくっついていると斜線が引けない */
+  body.is-printing .print-target [data-type="article"] .etext,
+  body.is-printing .print-target [data-type="dialogue"] .etext,
+  body.is-printing .print-target [data-type="article"] .lesson-en,
+  body.is-printing .print-target [data-type="dialogue"] .lesson-en {
+    line-height: 2.6 !important; word-spacing: 0.3em !important;
+  }
+  /* 段落・発言のあいだも空ける。**どこまでが1段落か**が分かるように */
+  body.is-printing .print-target [data-type="article"] ol.material-preview > li,
+  body.is-printing .print-target [data-type="dialogue"] ol.material-preview > li,
+  body.is-printing .print-target [data-type="article"] ol.lesson-items > li,
+  body.is-printing .print-target [data-type="dialogue"] ol.lesson-items > li {
+    /* **行の高さは、囲んでいる箱にも置く。** インラインの `.etext` だけに
+       置いても、行の高さは箱の側でも決まるので広がりきらない */
+    margin-bottom: 16pt; padding-bottom: 10pt; line-height: 2.6 !important;
+  }
 
   /* ── Quick Response の控え(紙のいちばん後ろ)────────────────
      2026-09 利用者の指定「ページは一番後ろで大丈夫です」。

@@ -79,7 +79,12 @@ export default function MaterialBody({
         .map((sec) => {
           const type = exerciseType(sec.exercise_type)
           return (
-            <section key={sec.id} className="exercise-view is-closed">
+            /* `data-type` は**紙用の目印**(2026-09 利用者の指定)。
+               記事・会話の紙は「本文(訳なし)→ 内容理解 → ディスカッション →
+               Quick Response」で、語句は出さない。どの演習かが分からないと
+               `@media print` の側で選り分けられない。**画面の見た目は変わらない** */
+            <section key={sec.id} className="exercise-view is-closed"
+                     data-type={sec.exercise_type}>
               <h4 className="section-title">
                 {exerciseLabel(sec.exercise_type)}({countLabel(sec.exercise_type, sec.items.length)})
                 {!type?.audioFrom && <span className="field-hint"> 音声なし</span>}
@@ -120,7 +125,10 @@ export default function MaterialBody({
                                      statuses={wordStatuses} onMark={onMarkWord} />
                       </div>
                     )}
-                    {it.prompt_ja && <div>{it.prompt_ja}</div>}
+                    {/* `preview-ja` は**紙用の目印。** 記事・会話の紙では
+                        訳を出さない(スラッシュを手書きするための用紙なので)。
+                        画面には指定を1つも足していないので、見た目は変わらない */}
+                    {it.prompt_ja && <div className="preview-ja">{it.prompt_ja}</div>}
                     {it.question && (
                       <div><EnglishText text={it.question} level={m.level}
                                         statuses={wordStatuses} onMark={onMarkWord} /></div>
