@@ -109,7 +109,7 @@ export const accentLabel = (id) =>
 // ============================================================================
 // ★★★ ここに声を足してください ★★★
 //
-//   2026-09、利用者が ElevenLabs で選んだ10人を入れた。
+//   2026-09、利用者が ElevenLabs で選んだ声を入れた(はじめ10人、のち12人)。
 //   足したい声があれば、下と同じ形で1行足すだけでよい。足した順に並ぶ。
 //
 //     { id: 'sc-1', accent: 'sc', gender: 'male', use: 'both',
@@ -139,6 +139,10 @@ export const CLIP_VOICES = [
     label: 'Jessica', elevenId: 'cgSgspJ2msm6clMCkdW9' },
   { id: 'us-2', accent: 'us', gender: 'male', use: 'both',
     label: 'David Esposito', elevenId: 'iEw1wkYocsNy7I7pteSN' },
+  { id: 'us-3', accent: 'us', gender: 'female', use: 'both',
+    label: 'Bella', elevenId: 'hod33eJyEU4TLqiYFttr' },
+  { id: 'us-4', accent: 'us', gender: 'female', use: 'both',
+    label: 'Nichalia', elevenId: 'XfNU2rGpBa01ckF309OY' },
 
   // ── イギリス ────────────────────────────────────────────
   { id: 'uk-1', accent: 'uk', gender: 'female', use: 'both',
