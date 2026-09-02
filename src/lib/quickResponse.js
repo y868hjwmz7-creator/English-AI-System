@@ -27,6 +27,7 @@ import { alignedSentences } from './sentencePair.js'
  *   `fill_blank`  … 日本語が無い(英文の穴埋め)
  *   `listening`   … 日本語が無い(音を聞いて答える)
  *   `comprehension` … 設問も答えも英語。訳して言うものではない
+ *   `discussion`  … 設問は英語で、**正解が無い。** 対にならない
  */
 const PAIR_FIELDS = {
   // 英文和訳は、和訳のほうが `answer` に入っている

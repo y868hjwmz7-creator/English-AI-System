@@ -61,6 +61,24 @@ export const EXERCISE_TYPES = [
     fields: ['question', 'answer'], audioFrom: 'question',
     hideAnswerFromLearner: true,
   },
+  /*
+   * ディスカッション(2026-09 利用者の指定)。
+   *
+   *   > 内容理解５問に追加して、新しいページにディスカッションというものを
+   *   > 追加してれ。これも基本は５問、設定により１０問にできるように
+   *
+   * **内容の理解とは別物である。** あちらは「本文に何が書いてあったか」を
+   * 確かめるもので、答えは本文の中にある。こちらは**本文をきっかけに
+   * 自分の考えを話す**もので、正解が無い。
+   * だから `answer` を持たない。代わりに `note` に、話を広げる観点と
+   * 使える表現を日本語で入れる(トレーナーがその場で使う手がかり)。
+   * 設問は英語なので、内容の理解と同じく読み上げを付ける。
+   */
+  {
+    id: 'discussion', label: 'ディスカッション',
+    instruction: '本文をきっかけに、自分の考えを英語で話してみてください。正解はありません。',
+    fields: ['question', 'note'], audioFrom: 'question',
+  },
   {
     id: 'vocab_note', label: '本文に出た語句',
     instruction: '本文に出てきた語句です。意味と使い方を確かめてください。',
@@ -140,9 +158,12 @@ export const DEFAULT_SECTIONS = {
   // リーディングは「記事1本」。count は段落の数であって、問題の数ではない。
   // 6段落でおよそ 250〜350 語になる。シャドーイングに使うには、
   // これくらいの長さが要る(短い文の寄せ集めでは練習にならない)。
+  // ディスカッションは**内容の理解に足す**もので、置き換えではない
+  // (2026-09 利用者の指定)。内容を確かめてから考えを話す順に並べる。
   reading: [
     { exercise_type: 'article',       count: 6 },
     { exercise_type: 'comprehension', count: 5 },
+    { exercise_type: 'discussion',    count: 5 },
     { exercise_type: 'vocab_note',    count: 8 },
   ],
   // ダイアローグは「会話1本」。count は発言の数。
@@ -150,6 +171,7 @@ export const DEFAULT_SECTIONS = {
   dialogue: [
     { exercise_type: 'dialogue',      count: 14 },
     { exercise_type: 'comprehension', count: 4 },
+    { exercise_type: 'discussion',    count: 5 },
     { exercise_type: 'vocab_note',    count: 6 },
   ],
   word:   [{ exercise_type: 'vocabulary', count: 20 }],
@@ -197,7 +219,9 @@ export const DRILL_SECTIONS = [
  * 増やすのは**本文に対して作る設問と語句**、そして**文型ドリルの4演習**である。
  */
 export const SCALABLE_SECTIONS = [
-  'comprehension', 'vocab_note',
+  // ディスカッションも「標準(5問)/ 倍(10問)」で選べる
+  // (2026-09 利用者の指定「基本は５問、設定により１０問に」)
+  'comprehension', 'discussion', 'vocab_note',
   ...DRILL_SECTIONS,
 ]
 

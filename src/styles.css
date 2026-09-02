@@ -2409,19 +2409,20 @@ html { -webkit-text-size-adjust: 100%; }
     position: relative;
     display: grid; grid-template-columns: 1fr 1fr; gap: 0 10pt;
     margin: 0 0 6pt; padding: 0 0 5pt 22pt;
-    border-bottom: 0.5pt solid #ddd;
+    border-bottom: 0.8pt solid #999;
     break-inside: avoid; counter-increment: qr;
   }
   .print-target ol.qrsheet-list > li::before {
     content: counter(qr);
     position: absolute; left: 0; top: 1pt;
     width: 15pt; height: 15pt; line-height: 15pt; text-align: center;
-    border: 0.5pt solid #666; border-radius: 50%;
-    font-size: 9pt; color: #333 !important;
+    border: 1pt solid #333; border-radius: 50%;
+    font-size: 9pt; font-weight: 700; color: #000 !important;
   }
-  /* 日本語が問題、英語が答え。**答えのほうを薄くする**(先に目が行かない) */
+  /* 日本語が問題、英語が答え。**答えのほうを少し薄くする**(先に目が行かない)。
+     ただし紙で読める濃さは保つ */
   .print-target .qrsheet-ja { font-size: 10.5pt; }
-  .print-target .qrsheet-en { font-size: 11pt; color: #444 !important; }
+  .print-target .qrsheet-en { font-size: 11pt; color: #222 !important; }
   /* 狭い紙(縦の A4 でも長い文がある)では、上下に積む */
   @media (max-width: 120mm) {
     .print-target ol.qrsheet-list > li { grid-template-columns: 1fr; }
@@ -2431,10 +2432,29 @@ html { -webkit-text-size-adjust: 100%; }
   body.is-printing .lesson-sheet > .passage,
   body.is-printing .lesson-sheet > .qr { display: none !important; }
 
-  /* 紙は白、文字は黒とグレー。濃い背景のままだとインクを食う */
+  /* 紙は白。濃い背景のままだとインクを食うので、地は落とす。
+
+     【ただし、薄くしすぎない】(2026-09 実機・利用者の指摘)
+
+       > 記事を印刷したときにアイコンやグレーの部分の色が薄いが、
+       > どうにかできないか？全体的にもう少し濃くできるとうれしいな。
+
+     画面で薄い灰色にしているのは、**光る面の上だから読める**のであって、
+     紙に載せると同じ数字でもずっと薄く見える。しかも家庭用のプリンタは
+     薄い灰色を網点で刷るので、**0.5pt の線と #ccc の灰色はほとんど消える。**
+     そこでこの節の灰色は、画面の値をそのまま持ってこず、
+     **紙で読める濃さに引き直してある。** 目安は次の3段。
+
+       | 何 | 紙での色 |
+       |---|---|
+       | 本文・見出し・英文 | `#000` |
+       | 添え物(訳・補足・日付) | `#333` 〜 `#3a3a3a` |
+       | 線・枠 | `#555` 〜 `#999`(**太さも 0.8pt 以上**) |
+
+     **これより薄い値をこの節に足さない。** */
   .print-target, .print-target * {
-    background: transparent !important; color: #1a1a1a !important;
-    box-shadow: none !important; border-color: #ccc !important;
+    background: transparent !important; color: #000 !important;
+    box-shadow: none !important; border-color: #888 !important;
   }
 
   @page { size: A4; margin: 16mm 14mm 18mm; }
@@ -2442,53 +2462,64 @@ html { -webkit-text-size-adjust: 100%; }
   .print-target {
     font-size: 11pt; line-height: 1.85;
     font-family: "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+    /* **ブラウザに色を薄めさせない。**
+       既定では印刷時に色を落とす(インク節約)ので、ここで指定どおりに
+       刷らせる。地は上で透明にしてあるので、全面が塗られることはない */
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
+
+  /* 絵(SVG)は線が細いので、紙では消えかける。**黒く、太く。** */
+  .print-target svg { color: #000 !important; }
+  .print-target svg * { stroke-width: 2 !important; }
 
   /* ── 紙の見出し(何の教材か)──────────────────────── */
   .print-target .print-head {
     margin: 0 0 10pt; padding-bottom: 6pt;
-    border-bottom: 2pt solid #1a1a1a;
+    border-bottom: 2pt solid #000;
   }
   .print-target .print-head strong { font-size: 15pt; line-height: 1.4; }
-  .print-target .print-head div { font-size: 12pt; color: #444 !important; margin-top: 2pt; }
-  .print-target .print-meta { font-size: 9.5pt; color: #666 !important; margin-top: 3pt; }
-  .print-target .mtitle-date { font-size: 10pt; color: #555 !important; }
+  .print-target .print-head div { font-size: 12pt; color: #222 !important; margin-top: 2pt; }
+  .print-target .print-meta { font-size: 9.5pt; color: #3a3a3a !important; margin-top: 3pt; }
+  .print-target .mtitle-date { font-size: 10pt; color: #333 !important; }
   .print-target .mtitle-main { font-size: 15pt; }
-  .print-target .mtitle-headline { font-size: 12pt; color: #444 !important; }
+  .print-target .mtitle-headline { font-size: 12pt; color: #222 !important; }
   .print-target .mtitle-chip {
-    font-size: 9pt; border-color: #999 !important; color: #444 !important;
+    font-size: 9pt; border-width: 0.8pt !important;
+    border-color: #555 !important; color: #222 !important;
   }
   .print-target .lesson-weakness { margin-top: 4pt; font-size: 9pt; }
-  .print-target .lesson-weakness-label { color: #666 !important; }
+  .print-target .lesson-weakness-label { color: #3a3a3a !important; }
   .print-target .lesson-weakness-tag {
-    padding: 0 5pt; border: 0.7pt solid #999 !important; color: #333 !important;
+    padding: 0 5pt; border: 1pt solid #555 !important; color: #111 !important;
   }
 
   /* ── 演習の見出し ──────────────────────────────── */
   .print-target .section-title {
     margin: 16pt 0 6pt; padding: 3pt 0 3pt 8pt;
     font-size: 12.5pt; font-weight: 700;
-    border-left: 4pt solid #1a1a1a;
+    border-left: 4pt solid #000;
     break-after: avoid;
   }
-  .print-target .card-hint { font-size: 10pt; color: #555 !important; margin: 0 0 8pt; }
+  .print-target .card-hint { font-size: 10pt; color: #333 !important; margin: 0 0 8pt; }
 
   /* ── 設問 ──────────────────────────────────────── */
   .print-target ol.material-preview { margin: 0; padding-left: 0; list-style: none; }
   .print-target ol.material-preview > li {
     position: relative;
     margin: 0 0 10pt; padding: 0 0 8pt 22pt;
-    border-bottom: 0.5pt solid #ddd;
+    border-bottom: 0.8pt solid #999;
     break-inside: avoid;
     counter-increment: q;
   }
   .print-target ol.material-preview { counter-reset: q; }
+  /* 番号の丸。**紙でいちばん薄く見えていたのがここ**(2026-09 実機)。
+     0.5pt の線は網点で消えかけるので 1pt にし、色も黒に寄せる */
   .print-target ol.material-preview > li::before {
     content: counter(q);
     position: absolute; left: 0; top: 2pt;
     width: 15pt; height: 15pt; line-height: 15pt; text-align: center;
-    border: 0.5pt solid #666; border-radius: 50%;
-    font-size: 9pt; color: #333 !important;
+    border: 1pt solid #333; border-radius: 50%;
+    font-size: 9pt; font-weight: 700; color: #000 !important;
   }
 
   /* 英文は解く対象。いちばん大きく、いちばん濃く */
@@ -2496,8 +2527,8 @@ html { -webkit-text-size-adjust: 100%; }
   .print-target [lang="en"] { font-size: 12.5pt; line-height: 1.75; color: #000 !important; }
   /* 日本語訳・補足は添え物 */
   .print-target .muted,
-  .print-target .field-hint { font-size: 9.5pt; color: #666 !important; }
-  .print-target .detail-answer { font-size: 11pt; color: #333 !important; }
+  .print-target .field-hint { font-size: 9.5pt; color: #3a3a3a !important; }
+  .print-target .detail-answer { font-size: 11pt; color: #111 !important; }
 
   /* 【解答について】
      ゲストの画面では解答が折りたたまれているので、そのまま印刷すると
@@ -2511,37 +2542,39 @@ html { -webkit-text-size-adjust: 100%; }
   .print-worksheet ol.writable > li::after {
     content: ''; display: block; margin-top: 7pt; height: 34pt;
     background-image: repeating-linear-gradient(
-      to bottom, transparent 0, transparent 16pt, #ccc 16pt, #ccc 16.4pt);
+      to bottom, transparent 0, transparent 16pt, #999 16pt, #999 16.5pt);
   }
 
   /* ── 1問ごとの弱点の札・話す人 ──────────────────── */
   .print-target .item-tag {
-    border: 0.5pt solid #999 !important; color: #444 !important;
+    border: 0.8pt solid #555 !important; color: #222 !important;
     font-size: 8.5pt; padding: 0 4pt;
   }
-  .print-target .passage-speaker { font-size: 10pt; font-weight: 700; color: #333 !important; }
+  .print-target .passage-speaker { font-size: 10pt; font-weight: 700; color: #000 !important; }
 
   /* ── 記事・会話の本文 ──────────────────────────── */
   .print-target .passage-headline {
     font-size: 14pt; font-weight: 700; margin: 0 0 8pt;
-    padding-bottom: 4pt; border-bottom: 1pt solid #999;
+    padding-bottom: 4pt; border-bottom: 1.2pt solid #333;
   }
   .print-target .passage-part {
     margin-bottom: 9pt; padding-bottom: 6pt;
-    border-bottom: 0.5pt dotted #ddd; break-inside: avoid;
+    border-bottom: 0.8pt dotted #999; break-inside: avoid;
   }
   .print-target .passage-en { font-size: 12.5pt; line-height: 1.95; color: #000 !important; }
-  .print-target .passage-ja { font-size: 10pt; color: #666 !important; }
+  .print-target .passage-ja { font-size: 10pt; color: #333 !important; }
 
   /* ── 指導ポイント ──────────────────────────────── */
+  /* **見た目の決まりは画面の話**(2026-08 利用者の指定)。
+     ここで変えているのは紙での濃さだけで、画面の `.teaching-*` は触らない */
   .print-target .teaching-note {
-    border: 0.5pt solid #999 !important; border-left: 3pt solid #1a1a1a !important;
+    border: 0.8pt solid #555 !important; border-left: 3pt solid #000 !important;
     padding: 7pt 9pt; margin: 8pt 0; break-inside: avoid;
   }
-  .print-target .teaching-note-title { font-size: 9pt; color: #666 !important; }
+  .print-target .teaching-note-title { font-size: 9pt; color: #3a3a3a !important; }
   .print-target .teaching-note-list > li { font-size: 10.5pt; line-height: 1.8; }
   .print-target .teaching-note-tag {
-    border: 0.5pt solid #666 !important; color: #1a1a1a !important;
+    border: 0.8pt solid #333 !important; color: #000 !important;
     background: transparent !important; font-size: 9pt;
   }
   .print-target .en-term { font-weight: 700; color: #000 !important; }

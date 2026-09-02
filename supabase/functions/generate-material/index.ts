@@ -197,6 +197,20 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     + 'prompt_en と prompt_ja は入れない。answer_alt に別の言い方があれば入れる。'
     + '**本文を読まないと答えられない設問**にする。一般常識で答えられるものは作らない。'
     + '最後の1問は、内容についてどう思うかを述べさせる問い(意見を言わせるもの)にする。',
+  /* ディスカッション(2026-09 利用者の指定)。
+     **内容理解とは別物である。** あちらは本文に答えが書いてあるが、
+     こちらは**正解が無い**。だから answer を持たせない。
+     代わりに note へ、話を広げる観点と使える表現を日本語で書かせる
+     (レッスン中にトレーナーがそのまま使う手がかりになる)。 */
+  discussion:
+    'ディスカッション。question に英語の設問、note に日本語の手がかりを入れる。'
+    + '**answer は入れない。正解のある問いを作らない。**'
+    + '本文の内容をきっかけに、**自分の経験・意見・提案を話させる**問いにする。'
+    + '「本文に何と書いてあったか」を答えさせる問い(内容理解)は作らない。'
+    + 'はい / いいえ で終わる問いにしない。理由や具体例まで話したくなる問いにする。'
+    + '設問はゲストのレベルで読める英語にする(本文より難しくしない)。'
+    + 'note には、①話を広げる観点(日本語)と ②答えるときに使える英語表現を'
+    + '2〜3個、80字以内で書く。',
   vocab_note:
     '本文に出た語句。**本文に実際に出てきた語句だけ**を選ぶ。出てこない語を作らない。'
     + 'prompt_en に語句、prompt_ja に意味、note にその語句を使った短い例文(英語)と'
@@ -281,6 +295,9 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
   article:         { required: ['prompt_en', 'prompt_ja'], optional: ['phrases'] },
   dialogue:        { required: ['speaker', 'prompt_en', 'prompt_ja'], optional: ['phrases'] },
   comprehension:   { required: ['question', 'answer'], optional: ['answer_alt'] },
+  // ディスカッションは**正解が無い**ので answer を出さない。
+  // 欄そのものを出さなければ、書きようがない(`strict: true`)
+  discussion:      { required: ['question', 'note'], optional: [] },
   vocab_note:      { required: ['prompt_en', 'prompt_ja', 'note'], optional: [] },
 
   // 発音記号は**必須**にする。発音の練習に使う教材なので、
@@ -711,7 +728,10 @@ Deno.serve(async (req) => {
   // 記事と会話は、弱点が無くても作れる(読み物として成立するため)。
   // 文型ドリルは何の練習か決まらないと作れない。
   const isPassage = sectionType === 'article' || sectionType === 'dialogue'
-  const needsContext = sectionType === 'comprehension' || sectionType === 'vocab_note'
+  // 本文を読まないと作れない演習。**ディスカッションもここに入る**
+  // (本文をきっかけに話させるので、本文が無いと問いが作れない)
+  const needsContext = sectionType === 'comprehension'
+    || sectionType === 'discussion' || sectionType === 'vocab_note'
   if (!topic && !isPassage && !needsContext) {
     return reply({ error: '弱点(何の練習か)を指定してください' }, 400)
   }
