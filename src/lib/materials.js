@@ -11,7 +11,7 @@
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { kindsOf } from '../data/industries.js'
-import { isPassageSection } from '../data/exerciseTypes.js'
+import { givesAwayAnswer, isPassageSection } from '../data/exerciseTypes.js'
 import { chunkPlan, needsChunkJa } from './chunkJa.js'
 import { supabase } from './supabase.js'
 
@@ -1075,8 +1075,26 @@ export async function generateSectionUnique(params, {
     usage.cacheRead += data.usage?.cacheRead ?? 0
 
     // ① 手元で分かる重複
-    const { kept, dropped } = dropDuplicates(data.section?.items ?? [], usedSet)
+    const { kept: unique, dropped } = dropDuplicates(data.section?.items ?? [], usedSet)
     droppedTotal += dropped.length
+
+    // ①' **答えが問題文の中に見えている問**(2026-09 実機・利用者の指摘)
+    //     穴埋めで「与える語: tell / 解答: tell」が出ていた。
+    //     `could you` のうしろは原形なので**形を変える必要がなく**、
+    //     解答を開くまでもなく答えが見えている。
+    //     窓口の指示も直したが、**指示は読み飛ばされうる。**
+    //     ここで落とせば、窓口を配置し直す前でも作り直しが差し替える。
+    const kept = []
+    for (const it of unique) {
+      if (givesAwayAnswer(params.sectionType, it)) {
+        droppedTotal += 1
+        // **同じ文をもう一度作らせない。** `dropDuplicates` が
+        // すでに控えているが、鍵が取れない形もあるので念のため入れる
+        sentencesOf(it).forEach((k) => usedSet.add(k))
+      } else {
+        kept.push(it)
+      }
+    }
 
     // ② 一字一句同じ英文(データベースに照合)
     //    共有する相手が複数いるときは、**全員ぶん**を見る。

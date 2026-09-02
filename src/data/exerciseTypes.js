@@ -142,6 +142,47 @@ export const FIELD_LABELS = {
 }
 
 /**
+ * **その問は、答えが問題文の中に見えてしまっていないか。**
+ *
+ * 【なぜ要るか】(2026-09 実機・利用者の指摘)
+ *
+ *   > 答えがみえてしまっているではないですか
+ *
+ *   穴埋めで、こういう問が出ていた。
+ *
+ *     Before kickoff, could you （　　　） me where the away fans usually sit?
+ *     与える語: tell
+ *     → tell
+ *
+ *   設問には「**与えられた語を必要な形に変えること**」と書いてある。
+ *   ところが `could you` のうしろは原形なので、**形を変える必要がない。**
+ *   与える語がそのまま答えになり、**解答を開くまでもなく答えが見えている。**
+ *
+ * 【なぜ画面の側で見るのか】
+ *   窓口(`generate-material`)の指示も直したが、**指示は読み飛ばされうる。**
+ *   ここで落としておけば、窓口を配置し直す前でも、
+ *   作り直しの仕組み(`generateSectionUnique`)が別の問に差し替える。
+ *   **形は指示ではなく、こちらで確かめる**(`SECTION_FIELDS` と同じ考え方)。
+ *
+ * 【穴埋めだけを見る】
+ *   与える語(`hint`)があるのは穴埋めだけである。
+ *   ほかの演習では、答えと同じ英文が問題文に出ること自体が普通にある
+ *   (英文和訳の `prompt_en` と `answer` は、そもそも別の言語)。
+ */
+const bareWord = (s) => String(s ?? '')
+  .trim().toLowerCase()
+  .replace(/[.,!?;:'"()（）　]/g, '')
+  .replace(/\s+/g, ' ')
+
+export const givesAwayAnswer = (exerciseTypeId, item) => {
+  if (exerciseTypeId !== 'fill_blank') return false
+  const hint = bareWord(item?.hint)
+  const answer = bareWord(item?.answer)
+  if (!hint || !answer) return false
+  return hint === answer
+}
+
+/**
  * 教材の種類ごとの、既定の演習構成と問数。
  *
  * 文型ドリルの「4演習 × 10問 = 40問」は、実物のドリルに合わせた数字
