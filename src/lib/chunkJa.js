@@ -227,10 +227,11 @@ export function chunkPairs(text, ja, level = BASE_LEVEL, parts = null) {
 /**
  * その項目の訳を、**作り直したほうがよいか。**
  *
- * 3つのどれかに当てはまれば作り直す。**判断はここ1か所。**
+ * 4つのどれかに当てはまれば作り直す。**判断はここ1か所。**
  *   ① まだ訳が無い
  *   ② 数が合わず、対が作れない(英文を直した・古い決まりで作った)
  *   ③ **控えの切れ目が、いまの決まりと違う**(2026-09 に広げた)
+ *   ④ **中身の空いたカタマリがある**(2026-09 実機)
  *
  * ③ ははじめ「いまのほうが**細かい**とき」だけだった(2026-08 利用者の指定)。
  * 区切りを細かくしたぶんを取り込むためである。
@@ -249,6 +250,22 @@ export function chunkPairs(text, ja, level = BASE_LEVEL, parts = null) {
  * 「男の子は / 走っている」と割れた古い控えがそのまま残り、
  * **直したはずの訳が直らない。**
  * 作り直しは、その教材を使ったとき(セッションで使う・印刷)に1回だけ走る。
+ *
+ * 【④ 中身の空いたカタマリがある】(2026-09 実機・利用者の指摘)
+ *
+ *   > やはり先ほど直したはずの区切り方のルールがしっかり適応されていません。
+ *
+ *   窓口の指示を直しても、**すでに作った訳は直らない。** 訳は教材に
+ *   控えてあるからである。ところが「主語のカタマリに全部書いてしまう」形の
+ *   訳には、**必ず空のカタマリが残る**(書く分が無くなるため)。
+ *
+ *     Last weekend's derby / gave tactics nerds / plenty to chew on,
+ *     「先週末のダービーは戦術好きたちに十分なものを与えた考えるべき材料を」「」「」
+ *
+ *   **英語があるのに訳が空、というのは、どんな場合でも正しくない。**
+ *   だからこれを見つけたら作り直す。窓口を配置し直したあとなら、
+ *   次にその教材を使ったときに**ひとりでに直る。**
+ *   (直っていれば ④ は当てはまらなくなるので、二度は走らない)
  */
 export function needsChunkJa(item) {
   const text = String(item?.prompt_en ?? '').trim()
@@ -256,6 +273,9 @@ export function needsChunkJa(item) {
   if (!chunkPairsOf(item)) return true            // ① ②
   const parts = storedParts(item)
   if (!parts) return false                        // 古い控え。数は合っている
+  // ④ 英語があるのに訳が空。**どんな場合でも正しくない**
+  const ja = storedChunks(item) ?? []
+  if (parts.some((p, i) => p.trim() && !String(ja[i] ?? '').trim())) return true
   // ③ 切れ目そのものを見比べる。**数だけでは足りない**
   const now = baseChunks(text)
   if (now.length !== parts.length) return true
