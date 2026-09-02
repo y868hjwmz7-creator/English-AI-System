@@ -181,6 +181,8 @@ export default function Wordbook({
   const cardRef = useRef(null)
   /** 進み具合の行。狭い画面では、ここを画面の上にそろえる */
   const runRef = useRef(null)
+  /** 10語やり終えたときの結果。**ここも同じ場所に置く** */
+  const resultRef = useRef(null)
   /* **いまの一覧の控え。** 出題を組むときだけ使う。
      見張りに `rows` そのものを入れると、1語答えるたびに組み直してしまう */
   const rowsRef = useRef([])
@@ -345,6 +347,24 @@ export default function Wordbook({
     target.scrollIntoView({ block: toTop ? 'start' : 'center', behavior: 'auto' })
     // 語が変わったときだけ。中身(意味を見たなど)では動かさない
   }, [card?.word_norm, wide])
+
+  /**
+   * **10語やり終えた結果も、同じ場所に置く**(2026-09 利用者の指定)。
+   *
+   *   > 単語を全て終えた後の表示ですが、スマホの時はこの配置に
+   *   > なるようにしてください。
+   *
+   * 最後の1語に答えた時点で、画面はその語のカードに合わせて送ってある。
+   * ところが結果の箱は**それより短い**ので、そのままだと
+   * 画面のずっと下に出たり、上に空きができたりしていた。
+   * **語のカードと同じ決まりで置き直す**(狭い画面は上、広い画面はまん中)。
+   */
+  useEffect(() => {
+    if (!result || !resultRef.current) return
+    resultRef.current.scrollIntoView({
+      block: wide ? 'center' : 'start', behavior: 'auto',
+    })
+  }, [result, wide])
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
   /**
@@ -558,7 +578,7 @@ export default function Wordbook({
 
       {/* ── 今日の復習(10語ずつ)────────────────────────────── */}
       {isQuiz && !loading && result && (
-        <div className="wordcard wordcard--result">
+        <div className="wordcard wordcard--result" ref={resultRef}>
           {/* **終わったときの点数は、大きく出す。**
               10語やり切ったことが分かるようにする(2026-08 利用者の指定) */}
           <p className="wb-score">
