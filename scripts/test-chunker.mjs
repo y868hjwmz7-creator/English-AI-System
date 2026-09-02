@@ -13,6 +13,7 @@ import {
 import {
   baseChunks, chunkPairs, chunkPairsAtMarks, needsChunkJa, storedChunks,
 } from '../src/lib/chunkJa.js'
+import { alignedSentences } from '../src/lib/sentencePair.js'
 
 let ng = 0
 const ok = (name, cond, detail = '') => {
@@ -426,6 +427,41 @@ console.log('\n▶ 訳をつなぐとき、同じことを二度書かない')
   // **短い助詞は消さない**(行きすぎないこと)
   const keep = chunkPairsAtMarks('A B C', ['のは', 'のは です', ''], [], ['A', 'B', 'C'])
   ok('3文字に満たない訳は消さない', keep?.[0]?.ja?.startsWith('のは'), JSON.stringify(keep))
+}
+
+/* ── 1文ずつの対(2026-09 実機)──────────────────────────────
+   > ディクテーション内での訳が、1文ずつになっていません。
+   > 段落の訳が繰り返し表示されているだけです。
+
+   英語1文がコロンのところで日本語2文に訳され、数が合わなかった。
+   長さの比で当てられるときだけまとめる(外れそうならやらない)。 */
+console.log('\n▶ 日本語のほうが文が多いときは、長さの比でまとめる')
+{
+  const en = "So you've decided to start going to the gym — nice, welcome to the club."
+    + " Before you buy anything fancy, here's the honest truth:"
+    + " you don't need a 15,000-yen pair of shoes on day one."
+    + ' A basic pair of training shoes for about 4,000 yen and a water bottle'
+    + ' are genuinely enough for your first month.'
+    + " Most beginners waste money on gear before they've even figured out"
+    + " if they'll actually show up three times a week."
+  const ja = 'ジムに通うことに決めたんですね、いいですね、ようこそ。'
+    + '派手なものを買う前に正直に言っておきます。初日から1万5千円の靴は要りません。'
+    + '4千円ほどの基本的なトレーニングシューズと水筒があれば最初の1か月は十分です。'
+    + 'ほとんどの初心者は、そもそも週3回本当に通えるか分かる前に道具にお金を'
+    + '使いすぎてしまいます。'
+  const out = alignedSentences(en, ja)
+  ok('英語4文・日本語5文でも、1文ずつの対になる',
+    out.length === 4 && out.every((p) => p.aligned),
+    out.map((p) => `${p.aligned}: ${p.ja.slice(0, 12)}`).join('\n    '))
+  ok('2文めには、コロンの前後の2文がまとまって付く',
+    out[1]?.ja.startsWith('派手なものを') && out[1]?.ja.includes('初日から'))
+  ok('4文めは最後の文だけ', out[3]?.ja.startsWith('ほとんどの初心者は'))
+
+  // **当てられないときは、これまでどおり「段落の訳」に落ちる**
+  const bad = 'Hi. ' + 'This is a very long sentence about the office. '.repeat(4) + 'End.'
+  const badJa = `${'これは'.repeat(60)}とても長い最初の文です。短い。短い。短い。`
+  ok('長さの比が合わないときは、まとめない',
+    alignedSentences(bad, badJa).every((p) => !p.aligned))
 }
 
 console.log('\n▶ どのレベルでも、対をつなぐともとの文と訳に戻る')

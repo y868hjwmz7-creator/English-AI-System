@@ -49,6 +49,66 @@ export function splitEnSentences(text) {
  *   `aligned` が false なら、**切らずにまるごと返した**という意味。
  *   画面はそれを見て「段落の訳」と札を付ける。
  */
+/**
+ * **日本語のほうが文の数が多いとき、まとめて数をそろえる**(2026-09 実機)。
+ *
+ *   > ディクテーション内での訳が、1文ずつになっていません。
+ *   > 段落の訳が繰り返し表示されているだけです。
+ *
+ * 英語1文が、日本語では2文になることがある(コロンのところで切るなど)。
+ * 実測した段落では**英語4文・日本語5文**で、数が合わないため
+ * 段落まるごとの訳が4回並んでいた。
+ *
+ * 【どうやって当てるか】
+ *   日本語と英語の**長さの比**は、同じ段落の中ではほぼ一定である。
+ *   だから「英語の何%まで来たか」と「日本語の何%まで来たか」を
+ *   突き合わせれば、どこでまとめればよいかが分かる。
+ *
+ * 【外れそうなときは、やらない】
+ *   **ずれた対は、無いより悪い**(このファイルの冒頭)。
+ *   区切りが目標から `TOLERANCE` 以上ずれたら **null を返して**、
+ *   これまでどおり「段落の訳」を出す。
+ */
+const TOLERANCE = 0.12
+
+const lenOf = (s) => String(s ?? '').trim().length
+
+function mergeJaToMatch(enParts, jaParts) {
+  const enLen = enParts.map(lenOf)
+  const jaLen = jaParts.map(lenOf)
+  const enTotal = enLen.reduce((a, b) => a + b, 0)
+  const jaTotal = jaLen.reduce((a, b) => a + b, 0)
+  if (!enTotal || !jaTotal) return null
+
+  // 英語の「ここまでで何%」。これが目標になる
+  const targets = []
+  let acc = 0
+  for (const l of enLen) { acc += l; targets.push(acc / enTotal) }
+
+  const groups = []
+  let cur = []
+  let cum = 0
+  for (let i = 0; i < jaParts.length; i += 1) {
+    cur.push(jaParts[i])
+    cum += jaLen[i]
+    const gi = groups.length
+    if (gi >= enParts.length - 1) continue        // 最後の組は残り全部
+    const ratio = cum / jaTotal
+    const next = i + 1 < jaParts.length ? (cum + jaLen[i + 1]) / jaTotal : Infinity
+    // 残りの文を1つずつ配るしかないなら、ここで閉じる
+    const mustClose = jaParts.length - i - 1 === enParts.length - gi - 1
+    if (!mustClose && Math.abs(next - targets[gi]) < Math.abs(ratio - targets[gi])) continue
+    // **外れすぎていたら、まとめない**(まちがった対を作らない)
+    if (Math.abs(ratio - targets[gi]) > TOLERANCE) return null
+    groups.push(cur.join(''))
+    cur = []
+  }
+  if (cur.length) groups.push(cur.join(''))
+  if (groups.length !== enParts.length) return null
+  if (groups.some((g) => !g.trim())) return null
+  return groups
+}
+
 export function alignedSentences(en, ja) {
   const enParts = splitEnSentences(en)
   const jaParts = splitJaSentences(ja)
@@ -58,8 +118,15 @@ export function alignedSentences(en, ja) {
   if (enParts.length <= 1) {
     return [{ en: String(en ?? '').trim(), ja: String(ja ?? '').trim(), aligned: true }]
   }
-  // **数が合わなければ切らない。** ずれた対を作るほうが害が大きい
   if (enParts.length !== jaParts.length) {
+    /* **日本語のほうが多いときは、まとめて数をそろえてみる**(2026-09)。
+       英語1文がコロンのところで2文に訳されることがある。
+       長さの比で当てられたときだけ使い、外れそうなら下へ落ちる */
+    const merged = jaParts.length > enParts.length
+      ? mergeJaToMatch(enParts, jaParts)
+      : null
+    if (merged) return enParts.map((t, i) => ({ en: t, ja: merged[i], aligned: true }))
+    // **それでも合わなければ切らない。** ずれた対を作るほうが害が大きい
     return enParts.map((t) => ({ en: t, ja: String(ja ?? '').trim(), aligned: false }))
   }
   return enParts.map((t, i) => ({ en: t, ja: jaParts[i], aligned: true }))
