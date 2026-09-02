@@ -15,7 +15,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
-import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+import { CEFR_LEVELS, cefrOption } from '../data/cefr.js'
 import {
   EXERCISE_TYPES, FIELD_LABELS, MAX_ITEMS, SCALABLE_SECTIONS, amountsFor,
   defaultSectionsFor, exerciseLabel, exerciseType, isIncluded, sectionsFor,
@@ -788,7 +788,7 @@ export default function MaterialForm({
         <span>レベル</span>
         <select value={level} onChange={(e) => setLevel(e.target.value)}>
           {CEFR_LEVELS.map((l) => (
-            <option key={l.id} value={l.id}>{cefrLabel(l.id)}</option>
+            <option key={l.id} value={l.id}>{cefrOption(l.id)}</option>
           ))}
         </select>
       </label>

@@ -18,7 +18,7 @@ import SearchBar from './SearchBar.jsx'
 import { CloseIcon, PlusIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
-import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+import { CEFR_LEVELS, cefrLabel, cefrOption } from '../data/cefr.js'
 import {
   SCALABLE_SECTIONS, amountsFor, countLabel, drillBucket,
   exerciseLabel, isPassageSection,
@@ -448,7 +448,7 @@ export default function TrainerMaterials({ me }) {
             <select value={level ?? ''} onChange={(e) => setLevel(e.target.value || null)}>
               <option value="">すべて</option>
               {CEFR_LEVELS.map((l) => (
-                <option key={l.id} value={l.id}>{l.label} — {l.ja}</option>
+                <option key={l.id} value={l.id}>{cefrOption(l.id)}</option>
               ))}
             </select>
           </label>

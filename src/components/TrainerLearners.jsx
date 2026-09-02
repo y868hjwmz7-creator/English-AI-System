@@ -6,7 +6,7 @@
  * レベルの物差しは教材と同じ CEFR にそろえてある。
  */
 import { useEffect, useRef, useState } from 'react'
-import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, scoreTestLabel } from '../data/cefr.js'
+import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, cefrOption, scoreTestLabel } from '../data/cefr.js'
 import {
   addLearnerScore, createAccount, kindLabel, loadLearnerAssignments,
   loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
@@ -892,7 +892,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 <p className="field-label">レベル(CEFR)</p>
                 <div className="btn-row">
                   {CEFR_LEVELS.map((c) => (
-                    <button key={c.id} type="button" title={c.ja}
+                    <button key={c.id} type="button" title={cefrOption(c.id)}
                             className={`btn btn--toggle${l.cefr === c.id ? ' is-active' : ''}`}
                             onClick={() => changeCefr(l, c.id)}>
                       {c.label}
