@@ -19,7 +19,9 @@ import { CloseIcon, PlusIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
-import { countLabel, exerciseLabel, isPassageSection } from '../data/exerciseTypes.js'
+import {
+  SCALABLE_SECTIONS, countLabel, drillBucket, exerciseLabel, isPassageSection,
+} from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
@@ -42,6 +44,10 @@ export default function TrainerMaterials({ me }) {
   const [genre, setGenre] = useState('')       // 記事のジャンル
   const [scene, setScene] = useState('')       // 会話の場面
   const [sort, setSort] = useState('new')      // 並び順
+  /* **1つの演習の問数で絞る**(2026-09 利用者の指定)。
+       > 各ページの問題数を10、20の2つで調整(中略)絞り込みでも指定できるように
+     手元で絞る。**表も列も増やさない**(数は取ってきた教材から数えられる) */
+  const [size, setSize] = useState('')         // '' | '10' | '20'
 
   /**
    * **いくつ条件が付いているか**(2026-09 利用者の指定)。
@@ -53,6 +59,7 @@ export default function TrainerMaterials({ me }) {
   const filterCount = tagIds.length
     + (level ? 1 : 0) + (kind ? 1 : 0)
     + (industry ? 1 : 0) + (genre ? 1 : 0) + (scene ? 1 : 0)
+    + (size ? 1 : 0)
 
   /** 絞り込みをぜんぶ外す。**1つずつ「すべて」に戻して回らせない** */
   const clearFilters = () => {
@@ -62,6 +69,7 @@ export default function TrainerMaterials({ me }) {
     setIndustry('')
     setGenre('')
     setScene('')
+    setSize('')
   }
   /* **開く・閉じるはやめた**(2026-09 利用者の指定)。
      いま持つのは「紙に出している教材」と、記録を消すときの2段だけ */
@@ -110,7 +118,10 @@ export default function TrainerMaterials({ me }) {
     })
     els.forEach((el) => io.observe(el))
     return () => io.disconnect()
-  }, [loading, materials.length])
+  /* **`shown` はここでは使えない**(まだ宣言していない・下で作る)。
+     見張り直したいのは「いちばん下の作るが出たり消えたりしたとき」なので、
+     元になる数と絞り込みを見ておけば足りる */
+  }, [loading, materials.length, size])
 
   // カタマリごとの訳を作っている教材(0021)と、その結果
   const [makingJa, setMakingJa] = useState(null)
@@ -296,7 +307,14 @@ export default function TrainerMaterials({ me }) {
         createdBy={me.id}
         learners={learners.filter((l) => l.status === 'active')}
         // **絞り込みの項目を足したら、`initial` にも必ず足す**(CLAUDE.md)
-        initial={{ tagIds, level: level ?? '', industry, kind, genre, scene }}
+        initial={{
+          tagIds, level: level ?? '', industry, kind, genre, scene,
+          /* 「20問」で絞っていたなら、作る画面も20問で始める。
+             **絞り込みの項目を足したら `initial` にも足す**(CLAUDE.md) */
+          amounts: size === '20'
+            ? Object.fromEntries(SCALABLE_SECTIONS.map((t) => [t, 'double']))
+            : {},
+        }}
         onCancel={() => setMode('search')}
         onCreated={(id, shared) => {
           setMode('search')
@@ -309,8 +327,15 @@ export default function TrainerMaterials({ me }) {
     )
   }
 
+  /* 1つの演習の問数で絞る(2026-09 利用者の指定)。**手元で絞る。**
+     数は取ってきた教材から数えられるので、表も列も増やさない。
+     数え方は `drillBucket()` 1か所(`exerciseTypes.js`)。 */
+  const shown = size
+    ? materials.filter((m) => drillBucket(m.sections) === size)
+    : materials
+
   // 並べ替え。探しやすさは、絞り込みと並び順の両方で決まる。
-  const sorted = [...materials].sort((a, b) => {
+  const sorted = [...shown].sort((a, b) => {
     if (sort === 'items') return b.itemCount - a.itemCount
     if (sort === 'title') return a.title.localeCompare(b.title, 'ja')
     return new Date(b.created_at) - new Date(a.created_at)
@@ -367,7 +392,7 @@ export default function TrainerMaterials({ me }) {
             { id: 'items', label: '問数の多い順' },
             { id: 'title', label: '名前順' },
           ]}
-          count={loading ? null : materials.length}
+          count={loading ? null : shown.length}
         />
 
         {/* ② 条件で絞り込む。**畳める。開け閉めは覚える**
@@ -422,6 +447,23 @@ export default function TrainerMaterials({ me }) {
             <select value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="">すべて</option>
               {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+            </select>
+          </label>
+
+          {/* **1つの演習の問数**(2026-09 利用者の指定)。
+                > 各ページの問題数を10、20の2つで調整できるように(中略)
+                > また、絞り込みでも指定できるように
+              数は取ってきた教材から数えるので、表も列も増やさない。
+              **本文(記事・会話)の段落数・発言数は数えない** */}
+          <label className="field">
+            <span>
+              1つの演習の問数
+              <span className="field-hint">記事・会話の段落数は数えません</span>
+            </span>
+            <select value={size} onChange={(e) => setSize(e.target.value)}>
+              <option value="">すべて</option>
+              <option value="10">10 問(標準)</option>
+              <option value="20">20 問</option>
             </select>
           </label>
 
@@ -521,7 +563,7 @@ export default function TrainerMaterials({ me }) {
 
       {loading ? (
         <p className="muted">読み込み中…</p>
-      ) : materials.length === 0 ? (
+      ) : shown.length === 0 ? (
         /* **無いときは、作る道をいちばん強く出す**(2026-09 利用者の指定)。
            何も無い画面で「作る」を探させない */
         <div className="card finder-empty">
@@ -750,7 +792,7 @@ export default function TrainerMaterials({ me }) {
           一覧を上から見ていって、無いと分かるのは**いちばん下**である。
           そこで画面のはるか上まで戻らせない。
           新しく作るのは2番目の動線なので、見た目は強くしない */}
-      {!loading && materials.length > 0 && (
+      {!loading && shown.length > 0 && (
         <div className="card finder-more" ref={moreRef}>
           <p className="card-hint">
             {filterCount

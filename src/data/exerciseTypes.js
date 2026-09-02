@@ -182,7 +182,34 @@ export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SE
  * 増やすと読み物の長さそのものが変わる。長さは第5.13節で決めてある。
  * 増やすのは**本文に対して作る設問と語句**だけである。
  */
-export const SCALABLE_SECTIONS = ['comprehension', 'vocab_note']
+export const SCALABLE_SECTIONS = [
+  'comprehension', 'vocab_note',
+  /* **文型ドリルの4演習も、10問 / 20問で選べる**(2026-09 利用者の指定)。
+       > 文型トレーニングでは、すべての設問を基本10問にしてください。
+       > 教材ひとつで40問。そして各ページの問題数を10、20の2つで
+       > 調整できるようにしてください。これは作成時に選べるように。
+
+     既定は10問のまま(4演習 × 10問 = 40問)。**既定を下げない**のは
+     第5.13.3節の決まりである。増やす道だけを足した。
+     **20問にすると、その演習の費用と待ち時間は2倍**になる。 */
+  'translate_en_ja', 'fill_blank', 'translate_ja_en', 'listening',
+]
+
+/**
+ * その教材の「1つの演習の問数」(2026-09 利用者の指定)。
+ *
+ *   > また、絞り込みでも指定できるように
+ *
+ * **本文(記事・会話)は数えない。** あちらは段落数・発言数であって、
+ * 問数ではない(`isPassageSection`)。
+ * 数え方をここに1つだけ置く。**画面ごとに書き写さない。**
+ */
+export const drillCount = (sections) => (sections ?? [])
+  .filter((s) => !isPassageSection(s.exercise_type))
+  .reduce((max, s) => Math.max(max, s.items?.length ?? s.count ?? 0), 0)
+
+/** 10問のものか、20問のものか。**細かい数では絞らせない**(選ぶ手間が増える) */
+export const drillBucket = (sections) => (drillCount(sections) >= 15 ? '20' : '10')
 
 /** 増やし方は2通りだけ。**細かい数は選ばせない**(選ぶ手間が増えるだけ) */
 export const AMOUNTS = [

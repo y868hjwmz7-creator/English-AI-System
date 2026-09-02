@@ -1032,7 +1032,15 @@ export async function findSimilarSentences(candidates, {
  * 重複で落ちた分は作り直す。落としたまま進むと、40問のはずが
  * 34問になり、「量が定着の条件」という前提が崩れる(第5.13節)。
  * ただし無限には粘らない。同じ弱点で英文が出尽くしていることも
- * あるため、3回試して足りなければ、足りないまま返して画面に出す。
+ * あるため、**5回**試して足りなければ、足りないまま返して画面に出す。
+ *
+ * **3回から5回に増やした**(2026-09 実機・利用者の指定)。
+ *
+ *   > 文型トレーニングでは、すべての設問を基本10問にしてください。
+ *
+ *   10問のはずの穴埋めが**6問**で出来上がっていた(利用者の写真)。
+ *   作り直しは**足りない分だけ**を頼むので、増やしても
+ *   うまくいっている回の費用は変わらない。
  *
  * 落とし方は3段。
  *   ① 手元で分かる重複(この生成の中の重複・すでに知っている英文)
@@ -1052,7 +1060,7 @@ export async function generateSectionUnique(params, {
   let useSimilar = similar
   const usage = { input: 0, output: 0, cacheRead: 0 }
 
-  for (let attempt = 0; attempt < 3 && items.length < wanted; attempt += 1) {
+  for (let attempt = 0; attempt < 5 && items.length < wanted; attempt += 1) {
     const { data, error } = await generateSection({
       ...params,
       count: wanted - items.length,

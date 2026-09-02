@@ -93,7 +93,9 @@ export default function MaterialForm({
    * **本文(記事・会話)は増やさない。** あちらの数は段落・発言の数で、
    * 読み物の長さそのものが変わってしまう(`SCALABLE_SECTIONS`)。
    */
-  const [amounts, setAmounts] = useState({})
+  /* さがす画面で「1つの演習の問数」を選んでいたら、その指定で始める
+     (2026-09。**絞り込みの項目を足したら `initial` にも足す**・CLAUDE.md) */
+  const [amounts, setAmounts] = useState(initial.amounts ?? {})
   const [instruction, setInstruction] = useState('')
   const [teachingPoint, setTeachingPoint] = useState('')
   const [visibility, setVisibility] = useState('school')
