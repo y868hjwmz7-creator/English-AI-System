@@ -58,6 +58,7 @@ import { DEFAULT_BASE, baseVoiceOf, elevenIdOf } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
 import { markIndexAt, wordMarks } from './wordTiming.js'
+import { applyGain, isMeasured, measureClip, routeThroughGain } from './loudness.js'
 
 /** 0016 で作るバケツ。窓口(supabase/functions/speak)と同じ名前にすること */
 const BUCKET = 'tts'
@@ -367,6 +368,10 @@ export async function playClip({
     window.setTimeout(() => done(false), 10000)
   })
 
+  // **音量をそろえる**(2026-09)。`src` を入れる**前に**つなぎ替える
+  // (`crossOrigin` は `src` より先でないと効かない)。詳しくは `loudness.js`
+  routeThroughGain(el)
+
   let ok = await tryPlay(url)
   if (mine !== generation) return true   // 止められた・別のものが始まった
   if (!ok) {
@@ -382,6 +387,12 @@ export async function playClip({
   el.playbackRate = rate
   // 速さを変えても声の高さは変えない(既定でそうなるが、明示しておく)
   if ('preservesPitch' in el) el.preservesPitch = true
+
+  // **いちばん小さい声に合わせて下げる。上げはしない**(2026-09 利用者の指定)。
+  // まだ測っていない声は 1(そのまま)なので、
+  // **その声の1本目だけはそろわない。** 鳴らし終えたあとに測って覚える
+  const pathName = pathVoice(voiceId, tier)
+  applyGain(el, tier, pathName)
 
   return new Promise((resolve) => {
     let frame = 0
@@ -422,6 +433,9 @@ export async function playClip({
       })
     }
     onStart?.()
+    // **鳴らし始めてから測る。** 先に測ると、そのぶん待たせることになる。
+    // 測るのは声ごとに1回だけで、しかも端末の控えから読むので通信は起きない
+    if (!isMeasured(tier, pathName)) measureClip(url, tier, pathName)
     if (marks.length) frame = window.requestAnimationFrame(tick)
   })
 }

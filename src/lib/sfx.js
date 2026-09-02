@@ -43,7 +43,13 @@ export function setSoundOn(next) {
   try { window.localStorage.setItem(KEY, on ? 'on' : 'off') } catch { /* 使えなくても困らない */ }
 }
 
-/** 音の入れ物。**1つだけ作り、二度と閉じない** */
+/**
+ * 音の入れ物。**1つだけ作り、二度と閉じない**
+ *
+ * **読み上げの音量そろえ(`loudness.js`)も、これを使い回す。**
+ * `AudioContext` を2つ作ると、iOS では数回で無音になる(仕様書 3.3.2)。
+ * だから `audioContext()` として外にも出してある。
+ */
 function context() {
   if (ctx) return ctx
   try {
@@ -53,6 +59,9 @@ function context() {
   } catch { return null }
   return ctx
 }
+
+/** ほかの仕組みからも、**この1つ**を使う(作らせない) */
+export const audioContext = () => context()
 
 /**
  * **押した流れの中で起こす。**
