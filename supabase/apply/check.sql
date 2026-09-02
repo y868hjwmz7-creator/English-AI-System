@@ -75,4 +75,7 @@ from (
     exists (select 1 from pg_constraint
             where conname = 'material_sections_type_check'
               and pg_get_constraintdef(oid) like '%error_correction%'), 16
+  union all select '0035 内容の理解に、設問と解答の訳を足す',
+    exists (select 1 from information_schema.columns
+            where table_name = 'material_items' and column_name = 'answer_ja'), 17
 ) t order by 順;

@@ -317,6 +317,16 @@ from (
     where conname = 'material_sections_type_check'
       and pg_get_constraintdef(oid) like '%fill_blank%'), 74
   union all
+  select '(75) 内容の理解に設問の訳がある(0035)', exists (
+    -- 内容の理解は**設問も解答も英語**である。訳が無いと、
+    -- 設問の意味が取れない人には**設問そのものが壁**になる
+    select 1 from information_schema.columns
+    where table_name = 'material_items' and column_name = 'question_ja'), 75
+  union all
+  select '(76) 内容の理解に解答の訳がある(0035)', exists (
+    select 1 from information_schema.columns
+    where table_name = 'material_items' and column_name = 'answer_ja'), 76
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

@@ -13,6 +13,7 @@ import TeachingNote from './TeachingNote.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import SpeakButton from './SpeakButton.jsx'
+import AnswerEn from './AnswerEn.jsx'
 import { printElement } from '../lib/print.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
@@ -384,12 +385,28 @@ export default function LearnerHomework({ me = null }) {
                                                  statuses={wordStatuses} onMark={markIn(markWord, a.material?.id)} />
                                   </div>
                                 )}
+                                {/* 設問の訳(0035)。**伏せない。**
+                                    設問は「何を訊かれているか」であって、答えではない */}
+                                {it.question_ja && <div className="answer-ja">{it.question_ja}</div>}
                                 {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
                                 {/* 解答は、答えを考える前に見えてはいけない */}
                                 {it.answer && type?.hideAnswerFromLearner ? (
                                   <details className="answer">
                                     <summary>解答を見る</summary>
-                                    <div>{it.answer}</div>
+                                    {/* 解答も**語に触れれば意味が出て、単語帳に入れられる。**
+                                        訳と読み上げも付く(2026-09 利用者の指定)。
+                                        **`<details>` の中なので、開くまでは鳴らせない。**
+                                        答えが先に耳から入ることはない */}
+                                    <AnswerEn
+                                      text={it.answer} ja={it.answer_ja} level={a.material?.level}
+                                      statuses={wordStatuses}
+                                      onMark={markIn(markWord, a.material?.id)}
+                                      clipVoice={resolveVoices(a.material?.voiceIds)[0]}
+                                      tier={voiceTierFor({
+                                        exerciseType: sec.exercise_type,
+                                        tags: a.material?.tagIds,
+                                      })}
+                                    />
                                     {it.answer_alt && (
                                       <div className="muted">別解: {it.answer_alt}</div>
                                     )}

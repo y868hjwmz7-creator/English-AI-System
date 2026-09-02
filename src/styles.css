@@ -1715,6 +1715,23 @@ html { -webkit-text-size-adjust: 100%; }
 .material-detail .material-preview li { margin-bottom: 10px; }
 .detail-answer { color: var(--series-3); }
 
+/* 設問・解答の訳(0035・2026-09 利用者の指定)。
+   **レッスン表示の訳(`.lesson-ja`)と同じ見せ方にそろえる。**
+   読まなくても「これは訳だ」と分かるように、
+   左の線・うすい地色・小さめの文字の3つで示す(色だけに頼らない)。
+   **色は必ず変数で持つ**(プレインを選んだときだけ色が残らないように) */
+.answer-ja {
+  margin-top: 5px; padding: 4px 10px;
+  border-left: 3px solid var(--border); border-radius: 0 6px 6px 0;
+  background: var(--surface-2); color: var(--text-secondary); font-size: .88em;
+}
+/* 紙の上では、訳の色をレッスン表示にそろえる。
+   `--translate` は**紙の中だけ**にある変数なので、ここで当てる */
+.lesson-sheet .answer-ja {
+  border-left-color: var(--translate);
+  background: var(--translate-bg); color: var(--translate);
+}
+
 /* 意味が近すぎて外した文の一覧。左が今回作った文、右が前に出した文 */
 .similar-list { list-style: none; margin: 8px 0; padding: 0; font-size: 13px; }
 .similar-list li {
@@ -2605,6 +2622,13 @@ html { -webkit-text-size-adjust: 100%; }
   .print-target .muted,
   .print-target .field-hint { font-size: 9.5pt; color: #3a3a3a !important; }
   .print-target .detail-answer { font-size: 11pt; color: #111 !important; }
+  /* 設問・解答の訳(0035)。**紙では地色も線も出さない。**
+     画面のうすい地色は紙に載せると網点になり、かえって読みにくい
+     (「紙の灰色は、画面の値をそのまま持ってこない」) */
+  .print-target .answer-ja {
+    font-size: 9.5pt; color: #333 !important;
+    background: none !important; border-left: none; padding: 0; margin-top: 2pt;
+  }
 
   /* 【解答について】
      ゲストの画面では解答が折りたたまれているので、そのまま印刷すると

@@ -273,6 +273,10 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     + '場面の指定に合わせて丁寧さを変えること。噂話と交渉で同じ話し方にしない。',
   comprehension:
     '内容理解。question に英語の設問、answer に英語の解答例を入れる。'
+    /* 訳(0035・2026-09 利用者の指定)。設問も解答も英語なので、
+       日本語が無いと**設問そのものが壁**になる */
+    + 'question_ja に設問の訳、answer_ja に解答の訳を入れる。'
+    + '**訳は自然な日本語にする。** 語をなぞっただけの直訳にしない。'
     + 'prompt_en と prompt_ja は入れない。answer_alt に別の言い方があれば入れる。'
     + '**本文を読まないと答えられない設問**にする。一般常識で答えられるものは作らない。'
     + '最後の1問は、内容についてどう思うかを述べさせる問い(意見を言わせるもの)にする。',
@@ -340,6 +344,11 @@ const ITEM_FIELDS: Record<string, { type: string; description: string }> = {
   prompt_ja:  { type: 'string', description: '日本語で提示するもの' },
   hint:       { type: 'string', description: '与える語(穴埋め)' },
   question:   { type: 'string', description: '設問(英語)' },
+  /* 設問・解答の訳(0035・2026-09 利用者の指定)。
+     内容の理解は**設問も解答も英語**なので、日本語が1つも無いと
+     設問そのものが壁になり、本文を理解できていたのか確かめられない。 */
+  question_ja: { type: 'string', description: 'question の日本語訳。自然な日本語にする' },
+  answer_ja:  { type: 'string', description: 'answer の日本語訳。自然な日本語にする' },
   answer:     { type: 'string', description: '解答 / 解答例' },
   answer_alt: { type: 'string', description: '別解。改行区切り' },
   // 以前は「prompt_en と同じにする」と指示していた。同じ英文を2回
@@ -405,7 +414,14 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
   // 本文。**英語と訳が必ず要る。** これが無いと音声も出せない
   article:         { required: ['prompt_en', 'prompt_ja'], optional: ['phrases'] },
   dialogue:        { required: ['speaker', 'prompt_en', 'prompt_ja'], optional: ['phrases'] },
-  comprehension:   { required: ['question', 'answer'], optional: ['answer_alt'] },
+  /* 内容の理解。**訳も必須にする**(0035・2026-09 利用者の指定)。
+     必須にしないと、そのときの気分で入ったり入らなかったりする
+     (発音記号を必須にしたのと同じ理由)。
+     **0035 を貼る前に作った教材には入っていない**が、
+     `isBlankItem` は訳を「無くても成り立つ欄」に入れてあるので、
+     窓口を配置し直す前の教材が落とされることはない。 */
+  comprehension:   { required: ['question', 'question_ja', 'answer', 'answer_ja'],
+    optional: ['answer_alt'] },
   // ディスカッションは**正解が無い**ので answer を出さない。
   // 欄そのものを出さなければ、書きようがない(`strict: true`)
   discussion:      { required: ['question', 'note'], optional: [] },

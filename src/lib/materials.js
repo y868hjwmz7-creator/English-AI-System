@@ -130,7 +130,7 @@ export async function searchMaterials({
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('question_ja')}${optLast('answer_ja')} )
       )
     `)
     .order('created_at', { ascending: false })
@@ -260,7 +260,7 @@ export async function loadMaterial(materialId) {
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('question_ja')}${optLast('answer_ja')} )
       )
     `)
     .eq('id', materialId)
@@ -286,6 +286,9 @@ const ITEM_FIELDS = [
   'speaker',
   // 発音記号(0020)。単語・フレーズの教材で入る
   'phonetic',
+  // 設問と解答の訳(0035)。**内容の理解で使う。**
+  // 設問も解答も英語なので、意味が取れないと設問そのものが壁になる
+  'question_ja', 'answer_ja',
 ]
 
 /** 空の欄を落として、中身のある設問だけを残す */
@@ -457,7 +460,7 @@ export async function loadMyAssignments() {
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                            answer, answer_alt, audio_text, note, tag_id,
-                           speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')} )
+                           speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('question_ja')}${optLast('answer_ja')} )
         )
       )
     `)
@@ -1104,6 +1107,22 @@ export async function generateSectionUnique(params, {
 }) {
   const wanted = params.count
   const items = []
+  /**
+   * **形がちがうという理由だけで落としたもの**(2026-09 実機)。
+   *
+   * 【なぜ取っておくのか】
+   *   落とす検査を入れた日に、**単語の教材が0問になった。**
+   *   窓口(`generate-material`)にはまだ「単語は1語」と書いていないので、
+   *   `in light of` のような**2語以上の語句が返ってくるのは当たり前**で、
+   *   それを全部落とすと、5回作り直しても1問も残らない。
+   *
+   * 【決めたこと】
+   *   **空の問は絶対に落とす**(中身が無いものは、どうやっても使えない)。
+   *   けれども**形のちがいは「使えるが望ましくない」だけ**である。
+   *   **0問になるくらいなら、形が崩れていても出す。**
+   *   落とす仕組みが、教材そのものを作れなくしてはいけない。
+   */
+  const shaped = []
   const tooSimilar = []
   let droppedTotal = 0
   let instruction = ''
@@ -1147,9 +1166,11 @@ export async function generateSectionUnique(params, {
         continue                            // 空なので、控える鍵も取れない
       }
       // ①''' **単語とフレーズの取り違え**(2026-09 実機)。
-      //      フレーズが1語・単語が2語以上のものを落とす
+      //      フレーズが1語・単語が2語以上のものを落とす。
+      //      **ただし取っておく。** 下の安全弁で戻すことがある
       if (isWrongShape(params.sectionType, it)) {
         droppedTotal += 1
+        shaped.push(it)
         sentencesOf(it).forEach((k) => usedSet.add(k))
         continue
       }
@@ -1221,9 +1242,22 @@ export async function generateSectionUnique(params, {
     })
   }
 
+  /*
+   * **安全弁。** 形がちがうという理由だけで落としすぎて足りないなら、戻す。
+   * **0問の教材より、形が崩れた教材のほうがましである**(上の `shaped` を参照)。
+   * 空の問は `shaped` に入れていないので、ここで戻ることはない。
+   */
+  if (items.length < wanted && shaped.length) {
+    for (const it of shaped) {
+      if (items.length >= wanted) break
+      items.push(it)
+      droppedTotal -= 1
+    }
+  }
+
   return {
     section: { exercise_type: params.sectionType, instruction, items },
-    dropped: droppedTotal,
+    dropped: Math.max(droppedTotal, 0),
     tooSimilar,
     warning,
     short: wanted - items.length,

@@ -86,7 +86,16 @@ export const EXERCISE_TYPES = [
     instruction: '本文の内容について、英語で答えなさい。',
     // 設問も英語なので、読み上げを付ける。「音声はどんな場面でも欲しい」
     // という要望による(2026-08)。聞き取れないと設問自体が壁になる。
-    fields: ['question', 'answer'], audioFrom: 'question',
+    //
+    // **設問も解答も訳を持つ**(0035・2026-09 利用者の指定)。
+    //
+    //   > 内容理解の設問と解答の訳を見れるようにしてください。音も聞けるように。
+    //   > そして解答や設問も単語の意味を調べて単語帳に追加できるように
+    //
+    // 日本語が1つも無いため、設問の意味が取れないと**設問そのものが壁**になり、
+    // 本文を理解できていたのかどうかが確かめられなかった。
+    // **0035 を貼る前に作った教材には入っていない**(訳が出ないだけ)。
+    fields: ['question', 'question_ja', 'answer', 'answer_ja'], audioFrom: 'question',
     hideAnswerFromLearner: true,
   },
   /*
@@ -162,7 +171,9 @@ export const FIELD_LABELS = {
   prompt_ja:  { label: '日本語(問題)', placeholder: '今日やるべきことがたくさんあります。' },
   hint:       { label: '与える語',     placeholder: 'reply to' },
   question:   { label: '設問',         placeholder: 'How many things does the speaker need to do?' },
+  question_ja: { label: '設問の訳',    placeholder: '話し手はいくつのことをする必要がありますか。' },
   answer:     { label: '解答',         placeholder: '会議の前にやるべきことがいくつかあります。' },
+  answer_ja:  { label: '解答の訳',     placeholder: '会議の前にやるべきことがいくつかあります。' },
   answer_alt: { label: '別解(改行区切り)', placeholder: 'I have many things to do today.' },
   audio_text: { label: '読み上げる英文', placeholder: 'I have three things to do before I leave.' },
   note:       { label: '補足',         placeholder: 'reply to an email なので、最後の to を落とさない。' },
@@ -217,7 +228,13 @@ export const givesAwayAnswer = (exerciseTypeId, item) => {
  * 入っていないためである(その項目は発音記号が出ないだけ)。
  * `answer_alt` は「別解があれば」の欄で、無いほうがふつうである。
  */
-const SPARE_FIELDS = new Set(['answer_alt', 'phonetic'])
+const SPARE_FIELDS = new Set([
+  'answer_alt', 'phonetic',
+  // 設問・解答の訳(0035)。**無くても、その問は使える。**
+  // ここに入れておかないと、窓口を配置し直す前に作った内容の理解が
+  // **1問残らず落ちて、教材そのものを作れなくなる**
+  'question_ja', 'answer_ja',
+])
 
 /**
  * **その問は、中身が空のまま出来上がっていないか。**

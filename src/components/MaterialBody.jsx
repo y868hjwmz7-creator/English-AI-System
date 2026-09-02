@@ -29,6 +29,7 @@
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
+import AnswerEn from './AnswerEn.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import { cefrLabel } from '../data/cefr.js'
@@ -133,11 +134,24 @@ export default function MaterialBody({
                       <div><EnglishText text={it.question} level={m.level}
                                         statuses={wordStatuses} onMark={onMarkWord} /></div>
                     )}
+                    {/* 設問の訳(0035)。**伏せない。**
+                        設問は「何を訊かれているか」であって、答えではない
+                        (レッスン表示も、設問の日本語は伏せていない) */}
+                    {it.question_ja && <div className="answer-ja">{it.question_ja}</div>}
                     {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
                     {it.audio_text && !it.prompt_en && (
                       <div lang="en" className="muted">読み上げ: {it.audio_text}</div>
                     )}
-                    {it.answer && <div className="detail-answer">→ {it.answer}</div>}
+                    {/* 解答も**語に触れれば意味が出て、単語帳に入れられる。**
+                        訳と読み上げも付く(2026-09 利用者の指定)。
+                        3か所で同じものを使う(`AnswerEn`) */}
+                    <AnswerEn
+                      text={it.answer} ja={it.answer_ja} level={m.level}
+                      statuses={wordStatuses} onMark={onMarkWord}
+                      className="detail-answer"
+                      clipVoice={resolveVoices(m.voiceIds)[0]}
+                      tier={voiceTierFor({ exerciseType: sec.exercise_type, tags: m.tagIds })}
+                    />
                     {it.answer_alt && (
                       <div className="muted">別解: {it.answer_alt}</div>
                     )}

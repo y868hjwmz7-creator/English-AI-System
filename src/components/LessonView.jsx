@@ -40,6 +40,7 @@ import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
+import AnswerEn from './AnswerEn.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 
@@ -833,6 +834,10 @@ export default function LessonView({
                                    statuses={wordStatuses} onMark={markWord} />
                     </div>
                   )}
+                  {/* 設問の訳(0035)。**伏せない。**
+                      設問は「何を訊かれているか」であって、答えではない
+                      (すぐ上の `prompt_ja` も、設問では伏せていない) */}
+                  {it.question_ja && <div className="lesson-ja">{it.question_ja}</div>}
                   {it.hint && <div className="lesson-note">与える語: {it.hint}</div>}
 
                   {secType?.audioFrom && it[secType.audioFrom] && (
@@ -873,7 +878,18 @@ export default function LessonView({
                           <span lang="en">{it.audio_text}</span>
                         </div>
                       )}
-                      {it.answer && <div className="lesson-answer">→ {it.answer}</div>}
+                      {/* 解答も**語に触れれば意味が出て、単語帳に入れられる。**
+                          訳と読み上げも付く(2026-09 利用者の指定)。
+                          **解答を開いたあとにだけ出る**ので、
+                          答えが先に耳から入ることはない */}
+                      <AnswerEn
+                        text={it.answer} ja={it.answer_ja} level={material.level}
+                        statuses={wordStatuses} onMark={markWord}
+                        className="lesson-answer" jaClassName="lesson-ja"
+                        voice={voiceFor(secCast, it.speaker)}
+                        clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
+                        tier={secTier} rate={rateOf(rateId)}
+                      />
                       {it.answer_alt && <div className="lesson-note">別解: {it.answer_alt}</div>}
                       {it.note && <div className="lesson-note">{it.note}</div>}
                     </>
