@@ -65,4 +65,6 @@ from (
               and pg_get_functiondef(oid) like '%v_new%'), 12
   union all select '0031 ゲストに関するファイルの置き場',
     exists (select 1 from pg_tables where tablename = 'learner_files'), 13
+  union all select '0032 セッションの記録(メモ)の置き場',
+    exists (select 1 from pg_tables where tablename = 'lesson_notes'), 14
 ) t order by 順;

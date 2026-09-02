@@ -25,8 +25,12 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
-import { BoltIcon, GearIcon, PenIcon, PrintIcon, SpeakerIcon, StepsIcon, StopIcon } from './Icons.jsx'
+import {
+  BoltIcon, GearIcon, NoteIcon, PenIcon, PrintIcon, SpeakerIcon, StepsIcon, StopIcon,
+} from './Icons.jsx'
 import InkLayer from './InkLayer.jsx'
+import LessonNotes from './LessonNotes.jsx'
+import { viewerRoleOf } from '../lib/viewer.js'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
@@ -116,6 +120,25 @@ export default function LessonView({
   const [inkColor, setInkColor] = useState(INK_COLORS[0].color)
   const [ink, setInk] = useState({})     // ページ番号 → 線の配列
   const sheetRef = useRef(null)
+  /**
+   * **セッションの記録**(0032・2026-09 利用者の指定)。
+   *
+   *   > トレーニング中、または個々のゲストの情報内でセッションに関する
+   *   > 記録やメモをするためのフリーボード(中略)を呼び出せると嬉しい
+   *
+   * 気づいたことは**その場で書けないと残らない。** レッスンが終わって
+   * ゲストのカードまで戻るころには、半分忘れている。
+   * 書き込み(ペン)が閉じれば消える板書であるのに対し、
+   * こちらは**日付ごとに残る記録**である。
+   */
+  const [notes, setNotes] = useState(false)
+  const notesRef = useRef(false)
+  notesRef.current = notes
+  /* **相手がいるときだけ出す。** トレーナーの「教材」画面から開いたときは
+     `learnerId` が無い(誰のセッションでもない)。役割の判定は
+     `viewer.js` の1か所に置いてある(**ここに作らない**) */
+  const canNote = !!learnerId
+    && (viewerRoleOf() === 'trainer' || viewerRoleOf() === 'owner')
   openSettingsRef.current = openSettings
   // 通しの練習を出しているか。null / 'qr'(Quick Response)/ 'six'(6Steps)。
   // **教材1本 / 本文1本を通しでやる**ので、出しているあいだは
@@ -204,6 +227,7 @@ export default function LessonView({
     const onKey = (e) => {
       if (e.key === 'Escape') {
         // **開いているものから閉じる。** いきなり画面ごと閉じない
+        if (notesRef.current) { setNotes(false); return }
         if (openSettingsRef.current) { setOpenSettings(false); return }
         if (runRef.current) { setRun(null); return }
         stopReading(); onClose?.()
@@ -362,6 +386,20 @@ export default function LessonView({
                 onClick={() => setPen((v) => !v)}>
           <PenIcon /><span className="mid-text">書き込む</span>
         </button>
+
+        {/* ── セッションの記録(0032)────────────────────────
+            **気づいたことは、その場で書けないと残らない。**
+            出すのは、ゲストと一緒に開いているときだけ
+            (トレーナーの「教材」画面には相手がいない)。 */}
+        {canNote && (
+          <button type="button"
+                  className={`btn btn--small${notes ? ' btn--primary' : ''}`}
+                  aria-pressed={notes}
+                  title="この日のセッションの記録(日付ごとに残ります)"
+                  onClick={() => setNotes((v) => !v)}>
+            <NoteIcon /><span className="mid-text">メモ</span>
+          </button>
+        )}
         {pen && (
           <div className="lesson-ink">
             {INK_COLORS.map((c) => (
@@ -434,6 +472,11 @@ export default function LessonView({
         </div>
       </div>
 
+      {/* 紙と、その横のメモ。**入れ物を1つはさむ**(0032)。
+          メモを紙の上に重ねると、教材を見ながら書けない。
+          横に並べるには、帯とは別の「行」が要る
+          (`.lesson` は縦に積む入れ物である) */}
+      <div className="lesson-body">
       {/* ここが「紙」。暗い配色を選んでいても白のまま */}
       {/* 通しの練習のあいだは、紙を**縦いっぱいの1枚**として使う。
           そうすると出題がまん中に落ち着き、**文の長さが変わっても
@@ -528,6 +571,22 @@ export default function LessonView({
             (2026-09 利用者の指定「ページは一番後ろで大丈夫です」)。
             画面には出さない(`print-only`)。練習は上のボタンから行う */}
         <QuickResponseSheet material={material} />
+      </div>
+
+      {/* ── セッションの記録(0032)────────────────────────────
+          紙の**上に重ねず、横に並べる。** 重ねると、教材を見ながら
+          書けない。狭い画面では下から出す(CSS)。
+          **紙には出さない**(`no-print`)。記録は教材の控えではない */}
+      {canNote && notes && (
+        <aside className="lesson-notes no-print" aria-label="セッションの記録">
+          <div className="lesson-notes-head">
+            <strong>セッションの記録</strong>
+            <button type="button" className="btn btn--small"
+                    onClick={() => setNotes(false)}>閉じる</button>
+          </div>
+          <LessonNotes learnerId={learnerId} bare />
+        </aside>
+      )}
       </div>
     </div>
   )

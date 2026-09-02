@@ -21,6 +21,7 @@ import LessonView from './LessonView.jsx'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import Wordbook from './Wordbook.jsx'
 import LearnerFiles from './LearnerFiles.jsx'
+import LessonNotes from './LessonNotes.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
 import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
@@ -502,6 +503,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     {/* 会社からもらった英文メール、テストの結果、宿題の写真。
                         ここに置けば、次のレッスンで必ず見つかる(0031) */}
                     <option value="files">ファイル</option>
+                    {/* レッスンで気づいたこと・次までの約束(0032)。
+                        **ゲスト本人も読める。** 書けるのはトレーナーだけ */}
+                    <option value="notes">セッションの記録</option>
                     <option value="record">レベルとスコア</option>
                   </select>
                 </label>
@@ -877,6 +881,10 @@ export default function TrainerLearners({ me, navTick = 0 }) {
 
                 {detailTab === 'files' && (
                   <LearnerFiles learnerId={l.id} learnerName={l.display_name} />
+                )}
+
+                {detailTab === 'notes' && (
+                  <LessonNotes learnerId={l.id} learnerName={l.display_name} />
                 )}
 
                 {detailTab === 'record' && (

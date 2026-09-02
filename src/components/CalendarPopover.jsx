@@ -38,6 +38,15 @@ const WEEK = ['日', '月', '火', '水', '木', '金', '土']
 export default function CalendarPopover({
   anchorEl, days, value, onPick, onClose,
   sort = null, onSort = null, sortOptions = [],
+  /**
+   * **書いていない日も押せるようにするか**(セッションの記録・0032)。
+   * 単語帳は「語が入っている日」を選ぶので押せない日があってよいが、
+   * 記録は**これから書く日**を選べないと、その日のメモが作れない。
+   * 既定は false(これまでどおり)。
+   */
+  anyDay = false,
+  /** 「すべての日」を出すか。絞り込みでないときは要らない */
+  showAll = true,
 }) {
   const [at, setAt] = useState(() => {
     const base = value ? new Date(value) : (days[0] ? new Date(days[0]) : new Date())
@@ -78,7 +87,7 @@ export default function CalendarPopover({
               key={key}
               type="button"
               className={`wbcal-cell${on ? ' has-words' : ''}${value === key ? ' is-on' : ''}`}
-              disabled={!on}
+              disabled={!on && !anyDay}
               onClick={() => { onPick(key); onClose() }}
             >
               {d.getDate()}
@@ -99,12 +108,14 @@ export default function CalendarPopover({
           ))}
         </div>
       )}
-      <div className="wbcal-foot">
-        <button type="button" className="btn btn--ghost btn--small"
-                onClick={() => { onPick(null); onClose() }}>
-          すべての日
-        </button>
-      </div>
+      {showAll && (
+        <div className="wbcal-foot">
+          <button type="button" className="btn btn--ghost btn--small"
+                  onClick={() => { onPick(null); onClose() }}>
+            すべての日
+          </button>
+        </div>
+      )}
     </Popover>
   )
 }

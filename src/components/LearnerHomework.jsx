@@ -27,6 +27,7 @@ import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { loadMyReminder, markReminderSeen, usePracticeLog } from '../lib/practice.js'
+import LessonNotes from './LessonNotes.jsx'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
@@ -418,6 +419,20 @@ export default function LearnerHomework({ me = null }) {
           </section>
         )
       ))}
+
+      {/* ── セッションの記録(0032・2026-09 利用者の判断「ゲストにも見せる」)
+          レッスンでトレーナーが書いた記録。**ここでは読むだけ。**
+          畳んである。開いたときに初めて読みに行くので、
+          見ない人には通信も起きない */}
+      {learnerId && (
+        <details className="card notes-card">
+          <summary className="card-title">セッションの記録</summary>
+          <p className="card-hint">
+            レッスンで担当トレーナーが書いた記録です。日付ごとに残ります。
+          </p>
+          <LessonNotes learnerId={learnerId} />
+        </details>
+      )}
     </div>
   )
 }

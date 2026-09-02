@@ -272,6 +272,18 @@ export function UploadIcon({ className = 'icon' }) {
 }
 
 /** ペン。紙への書き込み(2026-09) */
+/** セッションの記録(0032)。**罫線の入った紙**。書くところだと分かる */
+export function NoteIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <rect x="4" y="2.5" width="12" height="15" rx="2" fill="none"
+            stroke="currentColor" strokeWidth="1.5" />
+      <path d="M7 6.5h6M7 10h6M7 13.5h3.5" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function PenIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">

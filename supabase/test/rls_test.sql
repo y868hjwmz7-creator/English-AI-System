@@ -682,6 +682,60 @@ set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
 select pg_temp.expect('管理者にはファイルが見える(0031)',
   (select count(*)::int from public.learner_files), 1);
 
+-- ── セッションの記録(0032)─────────────────────────────────
+--
+--   **書けるのは担当トレーナーだけ。ゲスト本人は読めるが書けない。**
+--   他のゲストからは、あることさえ見えない。
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+insert into public.lesson_notes (learner_id, on_date, body, updated_by)
+values ('22222222-2222-2222-2222-222222222222', current_date,
+        '関係代名詞 which の使い分けを確認。次回は宿題の記事から。',
+        '44444444-4444-4444-4444-444444444444');
+select pg_temp.expect('担当トレーナーはゲストの記録を書ける(0032)',
+  (select count(*)::int from public.lesson_notes), 1);
+
+select pg_temp.expect_denied('担当していないゲストの記録は書けない(0032)', $$
+  insert into public.lesson_notes (learner_id, on_date, body, updated_by)
+  values ('33333333-3333-3333-3333-333333333333', current_date, 'x',
+          '44444444-4444-4444-4444-444444444444') $$);
+
+select pg_temp.expect_denied('書いた人を他人の名前にはできない(0032)', $$
+  insert into public.lesson_notes (learner_id, on_date, body, updated_by)
+  values ('22222222-2222-2222-2222-222222222222', current_date - 1, 'x',
+          '11111111-1111-1111-1111-111111111111') $$);
+
+update public.lesson_notes set body = body || ' 単語は10問正解。';
+select pg_temp.expect('担当トレーナーは記録を書き直せる(0032)',
+  (select count(*)::int from public.lesson_notes
+    where body like '%10問正解%'), 1);
+
+-- **ゲスト本人は読める。書けない**(2026-09 利用者の判断)
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('ゲスト本人は自分の記録を読める(0032)',
+  (select count(*)::int from public.lesson_notes), 1);
+select pg_temp.expect_denied('ゲストは自分の記録を書き足せない(0032)', $$
+  insert into public.lesson_notes (learner_id, on_date, body, updated_by)
+  values ('22222222-2222-2222-2222-222222222222', current_date - 2, '自分で書く',
+          '22222222-2222-2222-2222-222222222222') $$);
+-- 書き直しのポリシーが1つも当たらないので、**エラーにならず0行**である。
+-- だから「中身が変わっていない」で確かめる(ファイルの控えと同じ)
+update public.lesson_notes set body = 'ゲストが書きかえた';
+select pg_temp.expect('ゲストは記録を書き直せない(0032)',
+  (select count(*)::int from public.lesson_notes
+    where body = 'ゲストが書きかえた'), 0);
+
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('ほかのゲストには記録が見えない(0032)',
+  (select count(*)::int from public.lesson_notes), 0);
+
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect('担当していないトレーナーには記録が見えない(0032)',
+  (select count(*)::int from public.lesson_notes), 0);
+
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('管理者には記録が見える(0032)',
+  (select count(*)::int from public.lesson_notes), 1);
+
 -- 退会にする
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
 select public.set_learner_status('22222222-2222-2222-2222-222222222222',

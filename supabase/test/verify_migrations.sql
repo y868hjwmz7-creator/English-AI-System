@@ -285,6 +285,17 @@ from (
   select '(69) ファイルの置き場は非公開(0031)', (
     select public = false from storage.buckets where id = 'learner-files'), 69
   union all
+  select '(70) セッションの記録の置き場がある(0032)', exists (
+    select 1 from pg_tables
+    where schemaname = 'public' and tablename = 'lesson_notes'), 70
+  union all
+  select '(71) 記録はゲスト×日付で1枚(0032)', exists (
+    -- 同じ日に2枚できないこと。カレンダーと結び付ける前提である
+    select 1 from pg_indexes
+    where schemaname = 'public' and tablename = 'lesson_notes'
+      and indexdef like '%UNIQUE%' and indexdef like '%learner_id%'
+      and indexdef like '%on_date%'), 71
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges
