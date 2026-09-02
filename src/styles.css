@@ -2265,7 +2265,23 @@ html { -webkit-text-size-adjust: 100%; }
    **問数を札の中に出す。** 「倍」だけでは何問になるのか分からない */
 .amount-row { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 12px 0; }
 .amount-pick { display: flex; flex-direction: column; gap: 4px; }
-.amount-label { font-size: 12px; color: var(--text-secondary); }
+/* **チェックは名前と一体にする**(2026-09 利用者の指定)。
+   `<label>` で囲んであるので、名前を押しても切り替わる。
+   四角だけを狙わせない(指では小さすぎる) */
+.amount-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-secondary);
+  cursor: pointer; user-select: none;
+}
+.amount-label input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+.amount-label input:disabled { cursor: not-allowed; }
+/* 外した演習。**消さずに、薄くして残す。**
+   消すと戻せなくなり、何を外したのかも分からなくなる */
+.amount-pick.is-off .amount-label { opacity: .6; }
+.amount-off {
+  display: inline-flex; align-items: center; height: 40px;
+  font-size: 12px; color: var(--text-secondary);
+}
 .amount-count {
   margin-left: 5px; font-size: 11px; font-weight: 600; opacity: .75;
   font-variant-numeric: tabular-nums;

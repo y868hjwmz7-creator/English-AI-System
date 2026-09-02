@@ -103,12 +103,27 @@ export const INDUSTRIES = [
      ・筋トレ・フィットネス … 体の部位と動作。指示の言い方が身につく
      ・ゲーム … 若い方向け。オンラインで英語を使う場面が本当にある
      ・DJ … 2026-08 利用者の指定で、仕事の「ミュージシャン」から分けた
+     ・キャンピング / サッカー / MMA / ボクシング … 2026-09 利用者の指定
+
+     **一度入れた業種・趣味は、勝手に減らさない**(2026-09 利用者の指定)。
+
+       > 一度入れた業種や趣味は勝手に減らさないでください。
+       > 一度追加した要素は指示がない限りは勝手に変更を加えないでください。
+       > これはプロジェクトを超えたルールです。
+
+     **並べ替えや入れ子も「減らす」に当たることがある**(1つめの欄から
+     消えるため)。種類にまとめるときは、それが**同じ分野の中の種類**か
+     どうかを先に確かめること。
 
      **写真・車・ペット・読書などは入れていない。** 増やせば選ぶのが
      大変になる。足したくなったら、ここに1行書き足すだけでよい。 */
   { id: 'travel',   group: 'hobby', label: '旅行',            hint: '空港、ホテル、道を尋ねる、トラブル、現地の人との会話' },
+  // キャンピング(2026-09 利用者の指定)。**種類は持たせていない**
+  { id: 'camping',  group: 'hobby', label: 'キャンピング',    hint: '道具、設営、火おこし、キャンプ場の予約、天気、車中泊' },
   { id: 'sports_fun', group: 'hobby', label: 'スポーツ', kinds: true, hint: 'する・見る・鍛える' },
   { id: 'golf',     group: 'hobby', parent: 'sports_fun', short: 'ゴルフ', label: 'ゴルフ', hint: 'ラウンドの誘い、コース、スコア、道具、雑談' },
+  // サッカー(2026-09 利用者の指定)
+  { id: 'soccer',   group: 'hobby', parent: 'sports_fun', short: 'サッカー', label: 'サッカー', hint: '練習、ポジション、試合の振り返り、チームでの声かけ' },
   { id: 'foodie',   group: 'hobby', label: '食べること', kinds: true, hint: '作る・食べ歩く・飲む' },
   { id: 'food',     group: 'hobby', parent: 'foodie', short: '料理',     label: '料理',     hint: '自炊、レシピ、食材、キッチンでのやりとり' },
   { id: 'gourmet',  group: 'hobby', parent: 'foodie', short: '食べ歩き', label: '食べ歩き', hint: '店さがし、行列、注文、感想、レビュー' },
@@ -119,7 +134,15 @@ export const INDUSTRIES = [
   { id: 'listening', group: 'hobby', parent: 'music_fun', short: '音楽・ライブ', label: '音楽・ライブ', hint: '好きな曲、ライブ、フェス、おすすめの伝え方' },
   { id: 'dj',       group: 'hobby', parent: 'music_fun', short: 'DJ', label: 'DJ', hint: '選曲、クラブ、機材、イベントの打ち合わせ、客の反応' },
   { id: 'fitness',  group: 'hobby', parent: 'sports_fun', short: '筋トレ', label: '筋トレ・フィットネス', hint: '体の部位、動作、器具、ジムでのやりとり' },
-  { id: 'martial',  group: 'hobby', parent: 'sports_fun', short: '格闘技', label: '格闘技', hint: '道場やジムでのやりとり、技の名前、スパーリング、大会' },
+  /* 格闘技(2026-09 利用者の指定「格闘技には、MMAとボクシングを」)。
+
+     **種類を持てるのは2段までである。** 格闘技はスポーツの「種類」だった
+     ので、そのままでは MMA とボクシングを下に置けない。
+     そこで格闘技を**1つめの欄に出す分野へ上げ**、その種類として並べた。
+     格闘技が見えなくなるわけではない(むしろ上に出る)。 */
+  { id: 'martial',  group: 'hobby', kinds: true, label: '格闘技', hint: '道場やジムでのやりとり、技の名前、スパーリング、大会' },
+  { id: 'mma',      group: 'hobby', parent: 'martial', short: 'MMA', label: 'MMA(総合格闘技)', hint: '打撃と組みの切り替え、ケージ、階級、試合の組まれ方' },
+  { id: 'boxing',   group: 'hobby', parent: 'martial', short: 'ボクシング', label: 'ボクシング', hint: 'ミット打ち、フットワーク、階級、計量、試合運び' },
   { id: 'gaming',   group: 'hobby', label: 'ゲーム',          hint: 'オンラインでの声かけ、実況、ジャンル、感想' },
 ]
 

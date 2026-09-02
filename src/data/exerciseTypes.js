@@ -357,19 +357,41 @@ export const amountsFor = (typeId) => (DRILL_SECTIONS.includes(typeId)
 export const MAX_ITEMS = 30
 
 /**
- * 既定の構成に、増やし方をかぶせる。
+ * **その演習を入れるか。**(2026-09 利用者の指定)
+ *
+ *   > どの問題が何問必要なのかを都度選択できる設計にしてください。
+ *   > 今は数だけ変更できる問題を、チェックによって入れるか入れないかも
+ *   > 決めれるように。
+ *
+ * 既定は**入れる**。`include` に `false` が入っている演習だけを外す
+ * (`{ listening: false }` のように、外したものだけを持つ)。
+ *
+ * **外せるのは `SCALABLE_SECTIONS` だけ。** 本文(記事・会話)は外せない。
+ * 内容の理解・ディスカッション・語句は本文から作るので、
+ * **本文が無くなると、そもそも何も作れない。**
+ */
+export const isIncluded = (typeId, include = null) => {
+  if (!SCALABLE_SECTIONS.includes(typeId)) return true
+  return include?.[typeId] !== false
+}
+
+/**
+ * 既定の構成に、入れるかどうかと増やし方をかぶせる。
  *
  * @param {string} kind 教材の種類
  * @param {object} amounts `{ comprehension: 'double', ... }`
+ * @param {object} include `{ listening: false, ... }`(外すものだけ)
  *
  * **上限は `MAX_ITEMS`(30)。** 窓口(`generate-material`)も同じ数で
  * 丸めるので、**片方だけ変えない。**
  */
-export const sectionsFor = (kind, amounts = null) =>
-  defaultSectionsFor(kind).map((s) => {
-    if (!SCALABLE_SECTIONS.includes(s.exercise_type)) return s
-    const pick = amounts?.[s.exercise_type]
-    const times = AMOUNTS.find((a) => a.id === pick)?.times ?? 1
-    if (times === 1) return s
-    return { ...s, count: Math.min(s.count * times, MAX_ITEMS) }
-  })
+export const sectionsFor = (kind, amounts = null, include = null) =>
+  defaultSectionsFor(kind)
+    .filter((s) => isIncluded(s.exercise_type, include))
+    .map((s) => {
+      if (!SCALABLE_SECTIONS.includes(s.exercise_type)) return s
+      const pick = amounts?.[s.exercise_type]
+      const times = AMOUNTS.find((a) => a.id === pick)?.times ?? 1
+      if (times === 1) return s
+      return { ...s, count: Math.min(s.count * times, MAX_ITEMS) }
+    })

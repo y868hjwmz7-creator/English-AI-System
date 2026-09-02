@@ -327,6 +327,32 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'fgt_contract', label: '試合の交渉',         hint: '階級、日程、条件のすり合わせ' },
     { id: 'fgt_gym',      label: 'ジムでの指導',       hint: '技の名前、動きの直し方' },
   ],
+  // サッカー(2026-09 利用者の指定)
+  soccer: [
+    { id: 'soc_practice', label: '練習で',          hint: 'メニュー、組み分け、声かけ' },
+    { id: 'soc_position', label: 'ポジションの話',  hint: '役割、動き出し、守り方' },
+    { id: 'soc_match',    label: '試合の振り返り',  hint: '良かった場面、崩れた場面' },
+    { id: 'soc_team',     label: 'チームでのやりとり', hint: '指示、励まし、言い合いのあと' },
+    { id: 'soc_gear',     label: '道具の話',        hint: 'スパイク、ボール、グラウンドの状態' },
+    { id: 'soc_watch',    label: '試合を見に行く',  hint: '応援、席、感想' },
+  ],
+  // MMA / ボクシング(2026-09 利用者の指定)
+  mma: [
+    { id: 'mma_class',   label: 'ジムのクラス',     hint: '打撃と組みの日、組む相手' },
+    { id: 'mma_tech',    label: '技を教わる',       hint: '距離、テイクダウン、極め方' },
+    { id: 'mma_spar',    label: 'スパーリング',     hint: '強さの加減、止めるとき' },
+    { id: 'mma_weight',  label: '減量と階級',       hint: '体重、食事、計量までの過ごし方' },
+    { id: 'mma_card',    label: '試合の話',         hint: '対戦相手、組まれ方、勝ち筋' },
+    { id: 'mma_gear',    label: '道具の話',         hint: 'グローブ、マウスピース、サイズ' },
+  ],
+  boxing: [
+    { id: 'box_mitt',    label: 'ミット打ち',       hint: '合図、コンビネーション、直し方' },
+    { id: 'box_foot',    label: 'フットワーク',     hint: '踏み込み、下がり方、角度' },
+    { id: 'box_spar',    label: 'スパーリング',     hint: '約束事、止めるとき、あとの一言' },
+    { id: 'box_weight',  label: '減量と計量',       hint: '落とし方、当日の過ごし方' },
+    { id: 'box_match',   label: '試合の組み立て',   hint: 'ラウンドごとの狙い' },
+    { id: 'box_gear',    label: '道具の話',         hint: 'グローブ、バンテージ、シューズ' },
+  ],
   martial: [
     { id: 'mar_class',   label: '道場・ジムのクラス', hint: '準備運動、組む相手、ルールの確認' },
     { id: 'mar_tech',    label: '技を教わる・教える', hint: '手の位置、足の運び、力の抜き方' },
@@ -392,6 +418,16 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'trv_trouble', label: '困ったとき',   hint: '無くした、遅れた、体調が悪い' },
     { id: 'trv_local',   label: '現地の人と話す', hint: '出身、仕事、この街のこと' },
     { id: 'trv_friends', label: '旅先で知り合う', hint: '一緒に行かない?と誘う・誘われる' },
+  ],
+  // キャンピング(2026-09 利用者の指定)
+  camping: [
+    { id: 'cmp_book',    label: 'キャンプ場を予約する', hint: '空き、区画、チェックインの時間' },
+    { id: 'cmp_setup',   label: '設営を手伝ってもらう', hint: 'テント、ペグ、風向き' },
+    { id: 'cmp_fire',    label: '火をおこす',      hint: '薪、着火、火の始末' },
+    { id: 'cmp_cook',    label: '外で料理する',    hint: '道具、火加減、片づけ' },
+    { id: 'cmp_gear',    label: '道具を借りる・貸す', hint: '使い方、返し方' },
+    { id: 'cmp_weather', label: '天気が崩れたとき', hint: '撤収の判断、避難' },
+    { id: 'cmp_neighbor', label: '隣のサイトの人と', hint: '挨拶、音、はみ出し' },
   ],
   golf: [
     { id: 'glf_invite',  label: 'ラウンドに誘う', hint: '日程と場所を決めるまで' },
@@ -634,6 +670,24 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'fgtg_safety',  label: '安全と体のケア',    hint: '頭部、休養、引き際' },
     { id: 'fgtg_scene',   label: '格闘技のいま',      hint: '団体、興行、人気' },
   ],
+  soccer: [
+    { id: 'socg_tactics', label: '戦術のはなし',     hint: 'システム、プレスのかけ方' },
+    { id: 'socg_player',  label: '選手の話',         hint: '移籍、成長、代表' },
+    { id: 'socg_league',  label: 'リーグと大会',     hint: '日程、順位、優勝争い' },
+    { id: 'socg_youth',   label: '育成と地域クラブ', hint: '子どもの環境、指導者' },
+  ],
+  mma: [
+    { id: 'mmag_rule',    label: 'ルールと階級',     hint: '反則、判定、階級の分かれ方' },
+    { id: 'mmag_style',   label: '戦い方の系統',     hint: 'レスリング、打撃、寝技' },
+    { id: 'mmag_camp',    label: '練習キャンプ',     hint: '仕上げ方、コーチ陣' },
+    { id: 'mmag_biz',     label: '興行とビジネス',   hint: '契約、放映、報酬' },
+  ],
+  boxing: [
+    { id: 'boxg_style',   label: 'スタイルの話',     hint: 'アウトボクシング、インファイト' },
+    { id: 'boxg_weight',  label: '階級と減量',       hint: '体づくり、当日の回復' },
+    { id: 'boxg_history', label: '名勝負',           hint: '何が分かれ目だったか' },
+    { id: 'boxg_health',  label: '安全とルール',     hint: '判定、ストップ、検査' },
+  ],
   martial: [
     { id: 'marg_start',   label: 'はじめてみる',      hint: '何を選び、何を買うか' },
     { id: 'marg_tech',    label: '技のはなし',        hint: '名前の由来、効く理由' },
@@ -678,6 +732,13 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'trvg_trouble', label: '旅先のトラブル',  hint: '起きた話と、どう切り抜けたか' },
     { id: 'trvg_food',   label: '現地の食べもの',   hint: '名物と、頼み方' },
     { id: 'trvg_manner', label: '現地のマナー',     hint: '知らないと失礼になること' },
+  ],
+  camping: [
+    { id: 'cmpg_site',   label: 'キャンプ場の紹介', hint: '設備、景色、混み具合' },
+    { id: 'cmpg_gear',   label: '道具えらび',       hint: 'テント、寝袋、焚き火台' },
+    { id: 'cmpg_cook',   label: '外での料理',       hint: '定番の献立と、持ち込み方' },
+    { id: 'cmpg_style',  label: 'キャンプの流儀',   hint: 'ソロ、車中泊、グランピング' },
+    { id: 'cmpg_manner', label: '自然との付き合い方', hint: 'ごみ、火、動物' },
   ],
   golf: [
     { id: 'glfg_course', label: 'コースの紹介',     hint: '難しさ、景色、攻め方' },

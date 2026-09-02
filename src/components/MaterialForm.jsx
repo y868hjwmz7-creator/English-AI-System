@@ -18,7 +18,7 @@ import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import {
   EXERCISE_TYPES, FIELD_LABELS, MAX_ITEMS, SCALABLE_SECTIONS, amountsFor,
-  defaultSectionsFor, exerciseLabel, exerciseType, sectionsFor,
+  defaultSectionsFor, exerciseLabel, exerciseType, isIncluded, sectionsFor,
 } from '../data/exerciseTypes.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
@@ -96,6 +96,22 @@ export default function MaterialForm({
   /* さがす画面で「1つの演習の問数」を選んでいたら、その指定で始める
      (2026-09。**絞り込みの項目を足したら `initial` にも足す**・CLAUDE.md) */
   const [amounts, setAmounts] = useState(initial.amounts ?? {})
+  /**
+   * **その演習を入れるか**(2026-09 利用者の指定)。
+   *
+   *   > どの問題が何問必要なのかを都度選択できる設計にしてください。
+   *   > 今は数だけ変更できる問題を、チェックによって入れるか入れないかも
+   *   > 決めれるように。
+   *
+   * **外したものだけを持つ**(`{ listening: false }`)。既定は入れる。
+   * 空のオブジェクトが「全部入れる」を意味するので、
+   * 演習の種類を足しても、ここを触らずに済む。
+   *
+   * 外せるのは `SCALABLE_SECTIONS` だけ。**本文(記事・会話)は外せない。**
+   * 内容の理解・ディスカッション・語句は本文から作るので、
+   * 本文が無くなると、そもそも何も作れない。
+   */
+  const [include, setInclude] = useState(initial.include ?? {})
   const [instruction, setInstruction] = useState('')
   const [teachingPoint, setTeachingPoint] = useState('')
   const [visibility, setVisibility] = useState('school')
@@ -350,7 +366,7 @@ export default function MaterialForm({
    * **1か所に置く。** 数を出す場所が画面に4つあるので、
    * 別々に計算すると「40問 作ります」と実際の数が食い違う。
    */
-  const planNow = () => sectionsFor(kind, amounts)
+  const planNow = () => sectionsFor(kind, amounts, include)
 
   /**
    * 記事・会話を作る。
@@ -643,6 +659,10 @@ export default function MaterialForm({
   const formSnapshot = () => ({
     kind, level, industry, tagIds, genre, scene, subject,
     visibility, instruction, mustUse,
+    /* **どの演習をいくつ作ったのかも控える**(2026-09)。
+       戻ってきたときにここが初期値へ戻っていると、
+       外したはずの演習が「作った」ことになってしまう */
+    amounts, include,
   })
 
   /**
@@ -665,6 +685,10 @@ export default function MaterialForm({
     if (f.visibility) setVisibility(f.visibility)
     if (f.instruction != null) setInstruction(f.instruction)
     if (f.mustUse) setMustUse(f.mustUse)
+    // **どの演習をいくつ作ったのか**も戻す。ここが初期値のままだと、
+    // 外した演習が「作った」ことになり、保存の数と食い違う
+    if (f.amounts) setAmounts(f.amounts)
+    if (f.include) setInclude(f.include)
 
     setSections(r.made)
     if (r.headline) setHeadline(r.headline)
@@ -1028,42 +1052,72 @@ export default function MaterialForm({
             **本文は増やさない。** あちらの数は段落・発言の数なので、
             増やすと読み物の長さそのものが変わる(`SCALABLE_SECTIONS`)。
             **細かい数は選ばせない。** 標準か倍かの2つで足りる。 */}
-        {planNow().some((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type)) && (
+        {/* **入れるかどうかも選べる**(2026-09 利用者の指定)。
+
+              > どの問題が何問必要なのかを都度選択できる設計にしてください。
+              > 今は数だけ変更できる問題を、チェックによって入れるか
+              > 入れないかも決めれるように。
+
+            **並べるのは「既定の構成」のほう**(`defaultSectionsFor`)。
+            `planNow()` は外したものが消えているので、そちらを並べると
+            **一度外した演習が画面から消えて、戻せなくなる。** */}
+        {defaultSectionsFor(kind).some((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type)) && (
           <div className="amount-row">
-            {planNow()
+            {defaultSectionsFor(kind)
               .filter((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type))
               .map((s2) => {
-                const base = defaultSectionsFor(kind)
-                  .find((d) => d.exercise_type === s2.exercise_type)?.count ?? s2.count
+                const base = s2.count
                 const now = amounts[s2.exercise_type] ?? 'default'
+                const on = isIncluded(s2.exercise_type, include)
+                /* **最後の1つは外せない。** 全部外すと作るものが無くなる。
+                   記事・会話は本文が必ず残るので、ここが効くのは
+                   文型ドリル(4つとも外せる)のときだけである */
+                const last = on && planNow().length <= 1
                 return (
-                  <div key={s2.exercise_type} className="amount-pick">
-                    <span className="amount-label">
-                      {exerciseLabel(s2.exercise_type)}
-                    </span>
-                    <div className="theme-switch" role="group"
-                         aria-label={`${exerciseLabel(s2.exercise_type)}の数`}>
-                      {/* **3倍(30問)が出るのは文型ドリルだけ**(2026-09)。
-                          弱点が3つまで選べるので、1つあたり10問にすると30問になる */}
-                      {amountsFor(s2.exercise_type).map((a) => (
-                        <button key={a.id} type="button"
-                                className={`theme-btn${now === a.id ? ' is-active' : ''}`}
-                                aria-pressed={now === a.id}
-                                onClick={() => setAmounts({
-                                  ...amounts, [s2.exercise_type]: a.id,
-                                })}>
-                          {a.label}
-                          <span className="amount-count">
-                            {Math.min(base * a.times, MAX_ITEMS)}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                  <div key={s2.exercise_type}
+                       className={`amount-pick${on ? '' : ' is-off'}`}>
+                    <label className="amount-label">
+                      <input type="checkbox" checked={on} disabled={last}
+                             onChange={() => setInclude({
+                               ...include, [s2.exercise_type]: !on,
+                             })} />
+                      <span>{exerciseLabel(s2.exercise_type)}</span>
+                    </label>
+                    {/* **入れない演習に、問数の切り替えを出さない。**
+                        効かない操作を見せると、押して確かめることになる */}
+                    {on ? (
+                      <div className="theme-switch" role="group"
+                           aria-label={`${exerciseLabel(s2.exercise_type)}の数`}>
+                        {/* **3倍(30問)が出るのは文型ドリルだけ**(2026-09)。
+                            弱点が3つまで選べるので、1つあたり10問にすると30問になる */}
+                        {amountsFor(s2.exercise_type).map((a) => (
+                          <button key={a.id} type="button"
+                                  className={`theme-btn${now === a.id ? ' is-active' : ''}`}
+                                  aria-pressed={now === a.id}
+                                  onClick={() => setAmounts({
+                                    ...amounts, [s2.exercise_type]: a.id,
+                                  })}>
+                            {a.label}
+                            <span className="amount-count">
+                              {Math.min(base * a.times, MAX_ITEMS)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="amount-off">入れません</span>
+                    )}
                   </div>
                 )
               })}
           </div>
         )}
+        <p className="field-hint">
+          チェックを外した演習は作りません。
+          {isPassageKind(kind)
+            ? `${kind === 'reading' ? '記事' : '会話'}の本文は必ず入ります。`
+            : '最後の1つは外せません(作るものが無くなるため)。'}
+        </p>
 
         {/* ── 単語帳から名指しで渡された語 ──────────────────────
             ゲストの単語帳で選んで「この語で教材を作る」を押すと、ここに並ぶ。
