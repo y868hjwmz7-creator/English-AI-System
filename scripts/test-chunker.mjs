@@ -286,6 +286,26 @@ console.log('\n▶ 動詞と目的語のあいだに、切れ目がある')
   // **句動詞の副詞は目的語ではない。** ここで切ると `talk up` が割れる
   ok('talking up / a stock(句動詞は割らない)',
     !cut(S.caught, 'beginner').includes('talking / up'), cut(S.caught, 'beginner'))
+  /* **動詞を数え上げるのをやめた**(2026-09 利用者の指定)。
+     > 動詞の目的語を動詞とは分けて考えるのが初心者です。
+     > どうにかしてあらゆる他動詞について一括でこのルールを変えれないですか?
+
+     一覧に無い動詞でも切れること。「名詞のかたまりの始まり」から見ている */
+  ok('一覧に無い動詞でも切れる(emailed / the client)',
+    has('She emailed the client a summary after the meeting.', 'emailed / the client'),
+    cut('She emailed the client a summary after the meeting.', 'beginner'))
+  ok('一覧に無い動詞でも切れる(hired / a new designer)',
+    has('They hired a new designer last month.', 'hired / a new designer'),
+    cut('They hired a new designer last month.', 'beginner'))
+  // **それだけで名詞になる語**(2026-09 実機。`anything` が拾えていなかった)
+  ok('buy / anything fancy(不定代名詞も目的語)',
+    has("Before you buy anything fancy, here's the truth.", 'buy / anything'),
+    cut("Before you buy anything fancy, here's the truth.", 'beginner'))
+  // `-ing` で終わるだけの語を、分詞と間違えない
+  ok('anything を分詞と間違えない',
+    !postModifier(wordsOf('Before you buy anything fancy, and more.'), 3))
+  ok('morning を分詞と間違えない',
+    !postModifier(wordsOf('We met Sarah morning and evening.'), 2))
   // 名詞にもなる語を、動詞と取り違えない
   ok('the plan / のあとでは切らない(冠詞のうしろは名詞)',
     !cut('We need the plan a week before the meeting.', 'beginner').includes('plan / a'),

@@ -485,91 +485,18 @@ const isAdjective = (w) => {
 /** `-ing` / `-ed` の分詞。名詞の前に付けば形容詞のはたらきをする */
 const isParticiple = (w) => /^[a-z]{4,}(ing|ed)$/.test(w) || IRREGULAR_PARTICIPLES.has(w)
 
-/**
- * **よく出る動詞**(2026-08 利用者の指定で足した)。
- *
- *   > 動詞の後も初心者には区切ってもらいたいポイントです。
- *
- * `The office bought / a new coffee machine` `a trader places / an order` の
- * ように、**動詞と目的語のあいだ**を切れるようにするために要る。
- *
- * 【なぜ「当てられない」と言っていたのに足せるのか】
- *   ここで作るのは**控えの切れ目**であって、ゲストへの注意ではない。
- *   控えは細かいほどよい(どこで切っても訳が真下に来る)。
- *   取り違えたときの害も「よけいな切れ目が1つ増える」だけである。
- *   **注意する側(`slashProblem`)には、いっさい足していない。**
- *
- * 【取り違えを減らす3つの条件】(`verbHere`)
- *   ① 前が冠詞・形容詞・所有格・前置詞なら**名詞**である(`the plan` `a new place`)
- *   ② うしろが**名詞のはじまり**(冠詞・代名詞・数)のときだけ切る
- *   ③ 句動詞の副詞が続くときは `add()` が断る(`talking / up a stock` を防ぐ)
- *
- * 原形だけを並べ、活用は `verbBase()` が戻す。
- */
-const COMMON_VERBS = new Set([
-  'accept', 'add', 'allow', 'answer', 'arrange', 'ask', 'attend', 'avoid',
-  'bake', 'become', 'begin', 'believe', 'book', 'break', 'bring', 'build',
-  'buy', 'call', 'cancel', 'carry', 'catch', 'change', 'charge', 'check',
-  'choose', 'clean', 'collect', 'compare', 'confirm', 'consider', 'contact',
-  'cook', 'copy', 'count', 'cover', 'create', 'cut', 'decide', 'deliver',
-  'describe', 'design', 'develop', 'discuss', 'draw', 'drink', 'drive',
-  'eat', 'enjoy', 'expect', 'explain', 'feed', 'feel', 'fill', 'find',
-  'finish', 'fix', 'follow', 'forget', 'gather', 'get', 'give', 'grow',
-  'handle', 'have', 'hear', 'help', 'hire', 'hit', 'hold', 'hope', 'improve',
-  'include', 'increase', 'install', 'join', 'keep', 'know', 'launch', 'lead',
-  'learn', 'leave', 'let', 'lose', 'love', 'make', 'manage', 'mean',
-  'measure', 'meet', 'mention', 'miss', 'move', 'need', 'notice', 'offer',
-  'open', 'order', 'own', 'pay', 'pick', 'place', 'plan', 'play', 'post',
-  'prepare', 'present', 'produce', 'promote', 'protect', 'provide',
-  'publish', 'raise', 'reach', 'read', 'receive', 'recommend', 'reduce',
-  'release', 'remember', 'remove', 'repair', 'replace', 'report', 'require',
-  'review', 'run', 'save', 'say', 'schedule', 'see', 'select', 'sell',
-  'send', 'serve', 'share', 'show', 'sign', 'solve', 'spend', 'start',
-  'stop', 'study', 'submit', 'suggest', 'support', 'take', 'teach', 'tell',
-  'test', 'think', 'throw', 'touch', 'train', 'try', 'understand', 'update',
-  'use', 'visit', 'want', 'watch', 'wear', 'win', 'write',
-])
+/* **よく出る動詞の一覧(`COMMON_VERBS`)と `verbBase()` は消した**(2026-09)。
 
-/** 形が変わる過去形・過去分詞。原形に戻せないと当たらない */
-const IRREGULAR_PAST = new Map([
-  ['bought', 'buy'], ['brought', 'bring'], ['caught', 'catch'],
-  ['taught', 'teach'], ['thought', 'think'], ['found', 'find'],
-  ['sold', 'sell'], ['told', 'tell'], ['held', 'hold'], ['built', 'build'],
-  ['sent', 'send'], ['spent', 'spend'], ['kept', 'keep'], ['left', 'leave'],
-  ['felt', 'feel'], ['meant', 'mean'], ['paid', 'pay'], ['said', 'say'],
-  ['made', 'make'], ['took', 'take'], ['taken', 'take'], ['gave', 'give'],
-  ['given', 'give'], ['got', 'get'], ['saw', 'see'], ['seen', 'see'],
-  ['knew', 'know'], ['known', 'know'], ['grew', 'grow'], ['grown', 'grow'],
-  ['drew', 'draw'], ['drawn', 'draw'], ['threw', 'throw'],
-  ['thrown', 'throw'], ['wrote', 'write'], ['written', 'write'],
-  ['drove', 'drive'], ['driven', 'drive'], ['chose', 'choose'],
-  ['chosen', 'choose'], ['broke', 'break'], ['broken', 'break'],
-  ['ran', 'run'], ['won', 'win'], ['lost', 'lose'], ['met', 'meet'],
-  ['heard', 'hear'], ['led', 'lead'], ['fed', 'feed'],
-  ['understood', 'understand'], ['began', 'begin'], ['begun', 'begin'],
-  ['became', 'become'], ['ate', 'eat'], ['eaten', 'eat'],
-  ['drank', 'drink'], ['drunk', 'drink'], ['wore', 'wear'],
-  ['worn', 'wear'], ['sent', 'send'], ['read', 'read'],
-])
+   > 動詞の目的語を動詞とは分けて考えるのが初心者です。
+   > どうにかしてあらゆる他動詞について一括でこのルールを変えれないですか?
 
-/** 活用を原形に戻す。よく出る動詞に当たらなければ空を返す */
-const verbBase = (w) => {
-  if (!w) return ''
-  if (COMMON_VERBS.has(w)) return w
-  const irr = IRREGULAR_PAST.get(w)
-  if (irr && COMMON_VERBS.has(irr)) return irr
-  for (const t of [
-    w.replace(/ies$/, 'y'), w.replace(/ied$/, 'y'),
-    // 子音を重ねる活用(`stopped` → `stop`)。`ped` → `p` にはしない
-    w.replace(/([bcdfghjklmnpqrstvwxz])\1(ing|ed)$/, '$1'),
-    w.replace(/ing$/, ''), w.replace(/ing$/, 'e'),
-    w.replace(/ed$/, ''), w.replace(/ed$/, 'e'),
-    w.replace(/es$/, ''), w.replace(/s$/, ''),
-  ]) {
-    if (t !== w && COMMON_VERBS.has(t)) return t
-  }
-  return ''
-}
+   動詞を数え上げて「そのあとで切る」としていたが、**載っていない他動詞では
+   切れなかった。** 一般の動詞は語のリストでは当てられない(`run` は名詞にも
+   なる)ので、数え上げるかぎり穴は残る。
+
+   いまは `objectHere()` が**名詞のかたまりの始まり**の側から見る。
+   前の語が冠詞・形容詞・所有格・前置詞・接続詞・副詞のどれでもなければ、
+   そこが動詞と目的語の切れ目である。**一覧は要らなくなった。** */
 
 /** 数をあらわす語。**名詞のはじまり**として数える */
 const NUMBER_WORDS = new Set([
@@ -578,37 +505,103 @@ const NUMBER_WORDS = new Set([
   'billion', 'several', 'many', 'much', 'few', 'more', 'most', 'other',
 ])
 
-/** そこから**名詞のかたまりが始まる**か(冠詞・代名詞・数) */
+/**
+ * **それだけで名詞のかたまりになる語**(2026-09 実機)。
+ * `Before you buy / anything fancy,` と切れるようにするために足した。
+ * 冠詞も数も付かないので、これまでの `startsNoun` では拾えなかった。
+ */
+const INDEFINITE_PRONOUNS = new Set([
+  'anything', 'something', 'everything', 'nothing',
+  'anyone', 'someone', 'everyone', 'no-one',
+  'anybody', 'somebody', 'everybody', 'nobody',
+])
+
+/**
+ * **`-ing` で終わるが、分詞ではない語。**
+ * 形だけでは分詞と区別が付かないので、よく出るものを並べてある。
+ */
+const NOT_PARTICIPLES = new Set([
+  'morning', 'evening', 'during', 'spring', 'string', 'thing', 'king',
+  'ring', 'ceiling', 'building', 'meaning', 'feeling', 'training',
+])
+
+/** そこから**名詞のかたまりが始まる**か(冠詞・代名詞・数・不定代名詞) */
 function startsNoun(words, i) {
   const raw = words[i]
   if (raw === undefined) return false
   if (/^[0-9]/.test(String(raw))) return true
   const b = bare(raw)
   return DETERMINERS.has(b) || OBJECT_PRONOUNS.has(b) || NUMBER_WORDS.has(b)
+    || INDEFINITE_PRONOUNS.has(b)
+}
+
+/**
+ * i 語目から、**目的語(名詞のかたまり)が始まる**か(2026-09 利用者の指定)。
+ *
+ *   > 動詞の目的語を動詞とは分けて考えるのが初心者です。
+ *   > 中級者以上はまとめて理解できることが多いですが。
+ *   > どうにかしてあらゆる他動詞について一括でこのルールを変えれないですか?
+ *
+ * 【動詞を数え上げるのをやめた】
+ *   これまでは `COMMON_VERBS` に載っている動詞のあとだけ切っていた。
+ *   だから載っていない他動詞では切れず、訳もまとまったままだった。
+ *   **一般の動詞は語のリストでは当てられない**(`run` は名詞にもなる)ので、
+ *   数え上げても必ず穴が残る。
+ *
+ * 【見方を裏返す】
+ *   動詞かどうかではなく、**「ここから名詞のかたまりが始まるか」**と
+ *   **「前の語がそのかたまりの一部ではないか」**で見る。
+ *   英語では、名詞のかたまりの前に立てる語は限られている
+ *   (冠詞・形容詞・所有格・前置詞・接続詞・副詞)。
+ *   **それらのどれでもなければ、前の語は動詞である**ことがほとんどである。
+ *
+ * 【切りすぎても害が小さい側でだけ使う】
+ *   ここは**控え(模範)の側**である。CLAUDE.md のとおり、
+ *   控えは切れ目が増えるだけで害が小さいが、**注意(`slashProblem`)は
+ *   取り違えるとそのまま間違った注意になる。** だからあちらには足さない。
+ *   強さは1(初級だけ)。「中級者以上はまとめて理解できる」ため。
+ */
+function objectHere(words, i) {
+  if (i <= 0) return false
+  if (!startsNoun(words, i)) return false
+  const rawPrev = words[i - 1] ?? ''
+  const prev = bare(rawPrev)
+  if (!prev) return false
+  // 文の切れ目・読点のあとは、**別の決まりがすでに切っている**
+  if (endsSentence(rawPrev) || /[,;:]$/.test(String(rawPrev))) return false
+  // 前の語が、同じ名詞のかたまりの一部であるとき
+  if (DETERMINERS.has(prev) || isAdjective(prev)) return false
+  if (isPossessive(rawPrev)) return false
+  if (NUMBER_WORDS.has(prev) || /^[0-9]/.test(String(rawPrev))) return false
+  // 前置詞＋名詞でひとかたまり(`in / the park` とは切らない)
+  if (PREPOSITIONS.has(prev)) return false
+  // 接続詞・関係詞・並べているもの。**そちらの決まりが前で切っている**
+  if (CONNECTORS.has(prev) || COORDINATORS.has(prev) || HEAD_WORDS.has(prev)) return false
+  if (prev === 'to' || prev === 'as' || prev === 'than') return false
+  // 副詞の前でも切ってあるので、ここでは切らない(`quickly / the report`)
+  if (isAdverb(prev)) return false
+  /* **前の語が、名詞のかたまりの中身なら動詞ではない。**
+     `We need the plan / a week before …` の `plan` は名詞である
+     (`the` で始まったかたまりの中にいる)。
+     形容詞をまたいで、冠詞・所有格・数まで戻って確かめる
+     (`a new place a week` の `place` も名詞) */
+  let k = i - 2
+  while (k >= 0 && isAdjective(bare(words[k]))) k -= 1
+  if (k >= 0) {
+    const head = bare(words[k])
+    if (DETERMINERS.has(head) || NUMBER_WORDS.has(head) || isPossessive(words[k])) return false
+  }
+  return true
 }
 
 /** 本動詞にもなる助動詞(`I have / two things` `We did / the work`) */
 const MAIN_VERB_AUX = new Set(['have', 'has', 'had', 'do', 'does', 'did'])
 
-/**
- * i 語目が**動詞**で、そのあとで切ってよいか。
- * 当てられないときは false(**あやふやなことはしない**)。
- */
-function verbHere(words, i) {
-  const b = bare(words[i])
-  if (!b) return false
-  const prev = bare(words[i - 1] ?? '')
-  // 前が冠詞・形容詞・所有格・前置詞なら、それは名詞である(`the plan`)。
-  // `to` だけは例外(`to check / the report`)
-  if (DETERMINERS.has(prev) || isAdjective(prev)) return false
-  if (isPossessive(words[i - 1] ?? '')) return false
-  if (prev !== 'to' && PREPOSITIONS.has(prev)) return false
-  if (MAIN_VERB_AUX.has(b)) {
-    // 疑問文の頭(`Do the students know …?`)は助動詞。文頭では見ない
-    return i > 0 && !endsSentence(words[i - 1] ?? '')
-  }
-  return verbBase(b) !== ''
-}
+/* **`verbHere()` は消した**(2026-09)。
+   `COMMON_VERBS` に載っている動詞のあとだけを切っていたが、
+   載っていない他動詞では切れなかった。
+   いまは `objectHere()` が「名詞のかたまりの始まり」の側から見る。
+   一覧(`COMMON_VERBS`)も一緒に消した。上の覚え書きを見ること。 */
 
 /**
  * i 語目が、**前の名詞を説明する分詞**か(2026-08 利用者の指定)。
@@ -627,6 +620,11 @@ function verbHere(words, i) {
 export function postModifier(words, i) {
   const b = bare(words[i])
   if (!b) return false
+  /* **`-ing` で終わるだけの名詞・代名詞を、分詞と間違えない**(2026-09 実測)。
+     `Before you buy / anything fancy,` の `anything` が「前の名詞を説明する
+     分詞」と判定され、訳の単位が名詞とまとめられていた
+     (`baseChunks` が分詞の切れ目を落とすため)。 */
+  if (INDEFINITE_PRONOUNS.has(b) || NOT_PARTICIPLES.has(b)) return false
   const ing = /^[a-z]{3,}ing$/.test(b)
   if (!ing && !/^[a-z]{4,}ed$/.test(b) && !IRREGULAR_PARTICIPLES.has(b)) return false
   if (isAdjective(b)) return false
@@ -832,17 +830,21 @@ export function idealSlashes(sentence) {
     // 強さ1なので**初級でしか出ない。** 初心者向けの決まりだからである
     else if (MODALS.has(b)) add(i, 1, `${b} の前(主語と動詞を切り、動詞から先に訳す)`)
 
-    // **動詞のあと**(2026-08 利用者の指定)。
-    //
-    //   > 動詞の後も初心者には区切ってもらいたいポイントです。
-    //
-    // 上の分岐とは別に見る。同じ語が「前で切る」と「あとで切る」の
-    // 両方に当たることがある(`the trend / has / a darker side`)。
-    // うしろが名詞のはじまりのときだけ切るので、句動詞の副詞
-    // (`talking up a stock`)は当たらない
-    if (verbHere(words, i) && startsNoun(words, i + 1)) {
-      add(i + 1, 1, `${b} のあと(動詞と目的語を切る)`)
-    }
+    /* **目的語の前**(2026-08 / 2026-09 利用者の指定)。
+     *
+     *   > 動詞の後も初心者には区切ってもらいたいポイントです。
+     *   > 動詞の目的語を動詞とは分けて考えるのが初心者です。
+     *   > どうにかしてあらゆる他動詞について一括で
+     *
+     * はじめは `COMMON_VERBS` に載っている動詞のあとだけ切っていたが、
+     * **載っていない他動詞では切れなかった。**
+     * いまは `objectHere()` が「ここから名詞のかたまりが始まり、
+     * 前の語がその一部ではない」を見る。動詞を数え上げない。
+     *
+     * 上の分岐とは別に見る。同じ語が「前で切る」と「あとで切る」の
+     * 両方に当たることがある(`the trend / has / a darker side`)。
+     * 句動詞の副詞(`talking up a stock`)は `add()` が断る */
+    if (objectHere(words, i)) add(i, 1, '目的語の前(動詞と目的語を切る)')
   })
 
   return out.sort((a, b) => a.at - b.at)
