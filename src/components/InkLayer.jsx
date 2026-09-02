@@ -34,6 +34,12 @@ import { useEffect, useRef, useState } from 'react'
 /** 線をなめらかに見せる最小の間隔(これ未満の動きは点として捨てる) */
 const MIN_STEP = 1.5
 
+/** ハイライトは、ペンの何倍の太さにするか。**文字を覆える太さ** */
+const HIGHLIGHT_SCALE = 5
+
+/** 消しゴムの当たりの広さ(px)。線そのものより少し広く取る */
+const ERASER_REACH = 8
+
 export default function InkLayer({
   /** 描く紙(送る箱)の DOM */
   sheetRef,
@@ -41,12 +47,24 @@ export default function InkLayer({
   active = false,
   color = '#e0483f',
   width = 3,
-  /** いまの線。`[{ color, width, points: [[x, y], …] }, …]` */
+  /**
+   * 道具(2026-09 利用者の指定)。
+   *   `pen`       … ふつうの線
+   *   `highlight` … 太くて透ける線。**文字の上に重ねて引く**
+   *   `eraser`    … 触れた線を**1本まるごと**消す
+   *
+   * **消しゴムは「点で削る」ようにしない。** 部分的に削る仕組みは、
+   * 線を切り分けて持ち直すことになり、ひとつ戻すとも噛み合わない。
+   * 1本まるごとなら、押した結果が見て分かる。
+   */
+  tool = 'pen',
+  /** いまの線。`[{ color, width, kind, points: [[x, y], …] }, …]` */
   strokes = [],
   onChange,
 }) {
   const [size, setSize] = useState({ w: 0, h: 0 })
   const drawing = useRef(null)
+  const erasing = useRef(false)
 
   /* 紙の中身の丈に合わせる。**送っても足りなくならないよう `scrollHeight`。**
      文字の大きさを変えたりページを送ったりすると丈が変わるので、
@@ -75,16 +93,31 @@ export default function InkLayer({
     ]
   }
 
+  /** その点に触れている線を消す。**触れた線は1本まるごと消す** */
+  const eraseAt = (p) => {
+    const near = (s) => {
+      const r = (s.kind === 'highlight' ? s.width : s.width) / 2 + ERASER_REACH
+      return s.points.some(([x, y]) => Math.hypot(x - p[0], y - p[1]) <= r)
+    }
+    const left = strokes.filter((s) => !near(s))
+    if (left.length !== strokes.length) onChange?.(left)
+  }
+
   const down = (e) => {
     if (!active) return
     e.preventDefault()
     e.currentTarget.setPointerCapture?.(e.pointerId)
-    drawing.current = { color, width, points: [at(e)] }
+    if (tool === 'eraser') { erasing.current = true; eraseAt(at(e)); return }
+    // ハイライトは太く、透ける。**文字の上に重ねて引くため**
+    const w = tool === 'highlight' ? width * HIGHLIGHT_SCALE : width
+    drawing.current = { color, width: w, kind: tool, points: [at(e)] }
     onChange?.([...strokes, drawing.current])
   }
 
   const move = (e) => {
-    if (!active || !drawing.current) return
+    if (!active) return
+    if (erasing.current) { e.preventDefault(); eraseAt(at(e)); return }
+    if (!drawing.current) return
     e.preventDefault()
     const p = at(e)
     const last = drawing.current.points[drawing.current.points.length - 1]
@@ -94,11 +127,12 @@ export default function InkLayer({
     onChange?.([...strokes.slice(0, -1), { ...drawing.current }])
   }
 
-  const up = () => { drawing.current = null }
+  const up = () => { drawing.current = null; erasing.current = false }
 
   return (
     <svg
-      className={`ink-layer no-print${active ? ' is-active' : ''}`}
+      className={`ink-layer no-print${active ? ' is-active' : ''}`
+        + (tool === 'eraser' ? ' is-erasing' : '')}
       width={size.w || '100%'}
       height={size.h || '100%'}
       viewBox={size.w ? `0 0 ${size.w} ${size.h}` : undefined}
@@ -116,8 +150,13 @@ export default function InkLayer({
           fill="none"
           stroke={s.color}
           strokeWidth={s.width}
-          strokeLinecap="round"
+          /* ハイライトは**角のない四角い先**にする。丸いと端が細って、
+             蛍光ペンで引いた帯に見えない */
+          strokeLinecap={s.kind === 'highlight' ? 'butt' : 'round'}
           strokeLinejoin="round"
+          /* **文字を消さずに重ねる。** 透かすだけでは下の黒が濁るので、
+             掛け算(multiply)で重ねる。紙は白なので、色だけが乗る */
+          opacity={s.kind === 'highlight' ? 0.38 : 1}
           /* 1点だけのときも見えるように(点を打っただけ) */
           strokeDasharray={s.points.length === 1 ? '0.1 0' : undefined}
         />

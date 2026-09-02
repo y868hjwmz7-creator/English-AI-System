@@ -42,7 +42,6 @@ import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton from './SpeakButton.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
-import { PALETTES, applyPalette, loadPalette } from '../lib/palette.js'
 
 const SIZES = [
   { id: 'm', label: '標準' },
@@ -70,6 +69,28 @@ const WIDTHS = [
   { id: 'w120', label: '120%' },
   { id: 'w130', label: '130%' },
 ]
+/**
+ * **メモの幅**(2026-09 利用者の指定)。
+ *
+ *   > メモを開いたときには、サイドバーの幅を変えれるようにしてください。
+ *
+ * 紙とメモの境目をつまんで動かす。**覚える**(一度決めれば毎回は触らない)。
+ * 幅は px で持つ。割合にすると、画面の広さが変わったときに
+ * 紙のほうが読めない幅まで細る。
+ */
+const NOTES_KEY = 'eas.lessonNotesW'
+const NOTES_MIN = 240
+const NOTES_MAX = 720
+const loadNotesW = () => {
+  try {
+    const n = Number(window.localStorage.getItem(NOTES_KEY))
+    return Number.isFinite(n) && n >= NOTES_MIN ? Math.min(n, NOTES_MAX) : 330
+  } catch { return 330 }
+}
+const saveNotesW = (n) => {
+  try { window.localStorage.setItem(NOTES_KEY, String(n)) } catch { /* 使えなくても困らない */ }
+}
+
 const WIDTH_KEY = 'eas.lessonWidth'
 const loadWidth = () => {
   try {
@@ -97,13 +118,38 @@ const saveSize = (id) => {
   try { window.localStorage.setItem(SIZE_KEY, id) } catch { /* 使えなくても困らない */ }
 }
 
-/** 書き込みの色。**3色で足りる**(赤=直す / 青=足す / 緑=よい)。
-    色だけに頼らせない — 線は形そのものが意味を持つ */
+/** 書き込みの色(2026-09 利用者の指定で増やした)。
+    **色だけに頼らせない** — 線は形そのものが意味を持つ */
 const INK_COLORS = [
   { id: 'red', color: '#e0483f', label: '赤' },
   { id: 'blue', color: '#2f6f9f', label: '青' },
   { id: 'green', color: '#1f7a52', label: '緑' },
+  { id: 'orange', color: '#e08a1e', label: 'オレンジ' },
+  { id: 'purple', color: '#7a4fa3', label: '紫' },
+  { id: 'pink', color: '#d1478a', label: 'ピンク' },
+  { id: 'black', color: '#22262b', label: '黒' },
 ]
+
+/**
+ * 書き込みの道具(2026-09 利用者の指定)。
+ *
+ *   > 消しゴムツールとハイライトツールも追加してください。
+ *
+ * **ハイライトは色を共有する。** 別の色の組を持つと、
+ * 「いま何色か」が道具によって変わり、覚えていられない。
+ * 太さと透け方だけを変える(`InkLayer`)。
+ */
+const INK_TOOLS = [
+  { id: 'pen', label: 'ペン' },
+  { id: 'highlight', label: 'ハイライト' },
+  { id: 'eraser', label: '消しゴム' },
+]
+
+/**
+ * 線の太さ。**2026-09 に 70% にした**(利用者の指定「線の太さを70％に」)。
+ * 3px は画面共有では太く、英文の上に引くと字がつぶれていた。
+ */
+const INK_WIDTH = 2.1
 
 export default function LessonView({
   material, onClose,
@@ -123,16 +169,17 @@ export default function LessonView({
   //   ・問ごとのボタン … 1問ずつ出す / 隠す(一緒に進めるとき)
   //
   // 問ごとの状態は、右上の設定に対する「例外」として持つ。
-  //   全部隠しているとき … openItems に入っているものだけ出す
-  //   全部出しているとき … closedItems に入っているものだけ隠す
+  /* **解答は1問ずつ開く**(2026-09 利用者の指定で「すべての解答を出す」を
+     帯から外した)。まとめて出す道が無くなったので、控えも1つでよい。
+     `closedItems` と `showAnswers` は、そのとき一緒に落としてある。 */
   // こうすると、**どちらの状態からでも1問ずつ開け閉めできる。**
   // 一度見た解答をまた隠して解き直す、という使い方のため(2026-08 の要望)。
-  const [showAnswers, setShowAnswers] = useState(false)
   const [openItems, setOpenItems] = useState(() => new Set())
-  const [closedItems, setClosedItems] = useState(() => new Set())
   const [size, setSize] = useState(loadSize)
   // 紙の幅。**一度決めれば毎回選ぶものではない**ので覚える(文字の大きさと同じ)
   const [width, setWidth] = useState(loadWidth)
+  // メモの幅。境目をつまんで変える(2026-09 利用者の指定)
+  const [notesW, setNotesW] = useState(loadNotesW)
   // 画面の狭い端末では、めったに触らない設定をしまっておく。
   // **一度決めれば何度も要らないもの**(速さ・配色・文字の大きさ・印刷)。
   // パソコンでは常に出したままにする(CSS が決める。第5.22節)
@@ -151,6 +198,8 @@ export default function LessonView({
    */
   const [pen, setPen] = useState(false)
   const [inkColor, setInkColor] = useState(INK_COLORS[0].color)
+  // いま持っている道具(ペン / ハイライト / 消しゴム)
+  const [inkTool, setInkTool] = useState('pen')
   const [ink, setInk] = useState({})     // ページ番号 → 線の配列
   const sheetRef = useRef(null)
   /**
@@ -195,9 +244,6 @@ export default function LessonView({
   // 合図を出さない端末(iOS の Safari)では null のままで、
   // これまでどおり「文のかたまり」の色分けだけが残る
   const [readingAt, setReadingAt] = useState(null)
-  // 色を使うかどうか。**ここで選べることが要る。**
-  // レッスン中はこの画面から離れないので、上の見出しまで戻れない
-  const [palette, setPalette] = useState(loadPalette)
   const stopAllRef = useRef(null)
 
   /** 通しの読み上げを止める */
@@ -212,7 +258,6 @@ export default function LessonView({
   /** ページを移ったら、1問ずつの開け閉めと読み上げを元に戻す */
   const resetItems = () => {
     setOpenItems(new Set())
-    setClosedItems(new Set())
     stopAll()
   }
 
@@ -295,16 +340,14 @@ export default function LessonView({
   const key = (it, i, si = page) => it.id ?? `${si}-${i}`
 
   /** その問の解答が出ているか */
-  const isOpen = (k) => (showAnswers ? !closedItems.has(k) : openItems.has(k))
+  const isOpen = (k) => openItems.has(k)
 
   /** その問の解答を出す / 隠す */
   const toggleItem = (k) => {
-    const target = showAnswers ? closedItems : openItems
-    const next = new Set(target)
+    const next = new Set(openItems)
     if (next.has(k)) next.delete(k)
     else next.add(k)
-    if (showAnswers) setClosedItems(next)
-    else setOpenItems(next)
+    setOpenItems(next)
   }
   /* いま開いているページのぶん。**通しの読み上げ(`playWhole`)だけが使う。**
      ページごとの描き方は `renderSection()` の中で求め直す
@@ -360,7 +403,56 @@ export default function LessonView({
   return (
     <div className="lesson" role="dialog" aria-label="セッションで使う表示">
       {/* 操作するところ。共有される側にも見えるが、紙の外に置く */}
-      <div className="lesson-bar no-print">
+      <div className={`lesson-bar no-print${pen ? ' is-inking' : ''}`}>
+        {/* ── 書き込みのあいだは、**帯をまるごと入れ替える** ──────
+            2026-09 利用者の指定。
+
+              > 「書き込み」を開いたときは、2列目に機能が表示されるのでは
+              > なく、1列目にもともとのツールバーを一時的に消して
+              > 表示させてください。
+
+            2段にすると紙がそのぶん狭くなる。書いているあいだは
+            ページ送りも速さも触らないので、**入れ替えてしまってよい。**
+            **戻る道は必ず先頭に置く**(「書き込みを終える」)。
+            これが無いと、閉じ方を探すことになる。 */}
+        {pen ? (
+          <div className="lesson-ink">
+            <button type="button" className="btn btn--small btn--primary"
+                    onClick={() => setPen(false)}>
+              <PenIcon /><span className="mid-text">書き込みを終える</span>
+            </button>
+            <div className="ink-tools" role="group" aria-label="書き込みの道具">
+              {INK_TOOLS.map((t) => (
+                <button key={t.id} type="button"
+                        className={`theme-btn${inkTool === t.id ? ' is-active' : ''}`}
+                        aria-pressed={inkTool === t.id}
+                        onClick={() => setInkTool(t.id)}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {/* **消しゴムのときは色を出さない。** 効かない操作を見せない */}
+            {inkTool !== 'eraser' && INK_COLORS.map((c) => (
+              <button key={c.id} type="button"
+                      className={`ink-color${inkColor === c.color ? ' is-on' : ''}`}
+                      style={{ '--ink-color': c.color }}
+                      aria-label={`${c.label}で書く`} aria-pressed={inkColor === c.color}
+                      onClick={() => setInkColor(c.color)} />
+            ))}
+            {/* **ひとつ戻す**を先に置く。書き損じはたいてい直前の1本 */}
+            <button type="button" className="btn btn--small"
+                    disabled={!(ink[page] ?? []).length}
+                    onClick={() => setInk((m) => ({ ...m, [page]: (m[page] ?? []).slice(0, -1) }))}>
+              ひとつ戻す
+            </button>
+            <button type="button" className="btn btn--small"
+                    disabled={!(ink[page] ?? []).length}
+                    onClick={() => setInk((m) => ({ ...m, [page]: [] }))}>
+              全部消す
+            </button>
+          </div>
+        ) : (
+        <>
         {/* ── いつも要るもの。**この1行に収める** ──────────────
             **1つの囲みにまとめて、折り返さないようにしてある。**
             以前は帯ぜんぶを折り返させていたので、iPhone(390px)で
@@ -393,17 +485,6 @@ export default function LessonView({
                       onClick={() => { setPage(page + 1); resetItems() }}>▶</button>
             </div>
 
-            <button type="button"
-                    className={`btn btn--small${showAnswers ? ' btn--primary' : ''}`}
-                    onClick={() => {
-                      // 全部出す・全部隠す。1問ずつ開いたものも一緒に閉じる
-                      setShowAnswers(!showAnswers)
-                      setOpenItems(new Set())
-                      setClosedItems(new Set())
-                    }}>
-              <span className="wide-text">すべての</span>
-              解答を{showAnswers ? '隠す' : '出す'}
-            </button>
           </>
         )}
 
@@ -461,17 +542,6 @@ export default function LessonView({
               ))}
             </select>
           </label>
-          {/* 色づかい。カラー = 訳・解答・補足を色で見分ける /
-              プレイン = 黒とグレーだけ(2026-08 利用者の指定) */}
-          <div className="lesson-sizes">
-            {PALETTES.map((p) => (
-              <button key={p.id} type="button" title={p.hint}
-                      className={`theme-btn${palette === p.id ? ' is-active' : ''}`}
-                      onClick={() => { setPalette(p.id); applyPalette(p.id) }}>
-                {p.label}
-              </button>
-            ))}
-          </div>
           <div className="lesson-sizes">
             {SIZES.map((s) => (
               <button key={s.id} type="button"
@@ -497,38 +567,7 @@ export default function LessonView({
           </button>
         </div>
 
-        {/* ── 書き込みの道具は、**帯の中の別の行**に出す ──────────
-            2026-09 実機・利用者の指摘。
-
-              > 書き込みツールを開くとツールバーに収まりきらないので、
-              > これを修正してください。
-
-            以前は「表示」の並びに割り込ませていたので、色3つ +
-            ひとつ戻す + 全部消す が入った瞬間に**1行に収まらなくなった。**
-            書いているあいだだけ出る行なので、**ふだんの高さは変わらない。**
-            ペンを持っているあいだは何度も触るものなので、
-            吹き出しにはしない(外側を押すと閉じてしまい、紙に書けない)。 */}
-        {pen && (
-          <div className="lesson-ink">
-            {INK_COLORS.map((c) => (
-              <button key={c.id} type="button"
-                      className={`ink-color${inkColor === c.color ? ' is-on' : ''}`}
-                      style={{ '--ink-color': c.color }}
-                      aria-label={`${c.label}で書く`} aria-pressed={inkColor === c.color}
-                      onClick={() => setInkColor(c.color)} />
-            ))}
-            {/* **ひとつ戻す**を先に置く。書き損じはたいてい直前の1本 */}
-            <button type="button" className="btn btn--small"
-                    disabled={!(ink[page] ?? []).length}
-                    onClick={() => setInk((m) => ({ ...m, [page]: (m[page] ?? []).slice(0, -1) }))}>
-              ひとつ戻す
-            </button>
-            <button type="button" className="btn btn--small"
-                    disabled={!(ink[page] ?? []).length}
-                    onClick={() => setInk((m) => ({ ...m, [page]: [] }))}>
-              全部消す
-            </button>
-          </div>
+        </>
         )}
       </div>
 
@@ -546,6 +585,7 @@ export default function LessonView({
         {/* **書き込みは、紙の中に敷く。** 送る箱の中にあるので、
             中身と一緒に動く(会議アプリのペンとの違いはここ) */}
         <InkLayer sheetRef={sheetRef} active={pen} color={inkColor}
+                  tool={inkTool} width={INK_WIDTH}
                   strokes={ink[page] ?? []}
                   onChange={(next) => setInk((m) => ({ ...m, [page]: next }))} />
         {/* Quick Response のあいだは、題名の帯を出さない(2026-08 の指定)。
@@ -638,14 +678,55 @@ export default function LessonView({
           書けない。狭い画面では下から出す(CSS)。
           **紙には出さない**(`no-print`)。記録は教材の控えではない */}
       {canNote && notes && (
-        <aside className="lesson-notes no-print" aria-label="セッションの記録">
-          <div className="lesson-notes-head">
-            <strong>セッションの記録</strong>
-            <button type="button" className="btn btn--small"
-                    onClick={() => setNotes(false)}>閉じる</button>
-          </div>
-          <LessonNotes learnerId={learnerId} bare />
-        </aside>
+        <>
+          {/* 紙とメモの境目。**つまんで動かすと、メモの幅が変わる**
+              (2026-09 利用者の指定)。
+              ・幅は px で持つ。割合だと、画面が狭いときに紙が読めなくなる
+              ・**離した時点で覚える。** 動かしているあいだは書き込まない
+              ・キーボードでも動かせるようにする(← → で 20px ずつ)。
+                つまんで動かす操作は、それだけしか道が無いと届かない人がいる */}
+          <div className="lesson-grip no-print" role="separator"
+               aria-label="メモの幅を変える" aria-orientation="vertical"
+               tabIndex={0}
+               onKeyDown={(e) => {
+                 const d = e.key === 'ArrowLeft' ? 20 : e.key === 'ArrowRight' ? -20 : 0
+                 if (!d) return
+                 e.preventDefault()
+                 const next = Math.min(NOTES_MAX, Math.max(NOTES_MIN, notesW + d))
+                 setNotesW(next); saveNotesW(next)
+               }}
+               onPointerDown={(e) => {
+                 e.currentTarget.setPointerCapture?.(e.pointerId)
+                 const startX = e.clientX
+                 const startW = notesW
+                 const el = e.currentTarget
+                 // **右へ動かすとメモは細くなる。** メモは右側にあるため
+                 const move = (ev) => {
+                   const w = Math.min(NOTES_MAX,
+                     Math.max(NOTES_MIN, startW - (ev.clientX - startX)))
+                   setNotesW(w)
+                 }
+                 const up = (ev) => {
+                   el.removeEventListener('pointermove', move)
+                   el.removeEventListener('pointerup', up)
+                   el.removeEventListener('pointercancel', up)
+                   saveNotesW(Math.min(NOTES_MAX,
+                     Math.max(NOTES_MIN, startW - (ev.clientX - startX))))
+                 }
+                 el.addEventListener('pointermove', move)
+                 el.addEventListener('pointerup', up)
+                 el.addEventListener('pointercancel', up)
+               }} />
+          <aside className="lesson-notes no-print" aria-label="セッションの記録"
+                 style={{ '--notes-w': `${notesW}px` }}>
+            <div className="lesson-notes-head">
+              <strong>セッションの記録</strong>
+              <button type="button" className="btn btn--small"
+                      onClick={() => setNotes(false)}>閉じる</button>
+            </div>
+            <LessonNotes learnerId={learnerId} bare />
+          </aside>
+        </>
       )}
       </div>
     </div>
