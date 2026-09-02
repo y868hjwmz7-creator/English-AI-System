@@ -124,6 +124,28 @@ check('下限(0.05)より下へは合わせない', 0.10 * normal >= 0.05 * 1.25
 console.log('\n▶ まだ測っていない声')
 check('そのまま鳴らす(1 倍)', m3.gainFor('premium', 'unknown') === 1)
 
+// ── ⑤ CORS の許しを覚えているか ────────────────────────────
+//
+// **ここは自分で開けた穴である**(2026-09)。
+// 声を測るのは「まだ測っていないとき」だけなのに、
+// 「CORS の許しが出ている」という事実を**その測定でしか立てていなかった。**
+// だから全部の声を測り終えた翌日からは、ページを開いても一度も立たず、
+// `GainNode` につなぎ替えられない。すると `<audio>` の `volume` だけになり、
+// **小さくしかできず、iPhone では丸ごと無視される。**
+// 「使い込むほど効かなくなる」という、いちばん気づきにくい壊れ方だった。
+console.log('\n▶ CORS の許しを、次に開いたときも覚えているか')
+store.set('eas.loudCors', '1')
+seq += 1
+const m4 = await import(`../src/lib/loudness.js?v=${seq}`)
+check('開き直しても覚えている(測り終えた声しか無い日でも効く)',
+  m4.isCorsKnownGood() === true)
+
+store.delete('eas.loudCors')
+seq += 1
+const m5 = await import(`../src/lib/loudness.js?v=${seq}`)
+check('覚えが無ければ、安全側(つなぎ替えない)から始まる',
+  m5.isCorsKnownGood() === false)
+
 console.log(failed
   ? `\n❌ ${failed} 件が意図どおりではありません`
   : '\n✅ 音量そろえの検証はすべて意図どおりです')

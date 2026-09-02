@@ -45,6 +45,10 @@
  *   だから**測るための取得(fetch)が成功した声があってはじめて**①に切り替える。
  *   取得できたということは、CORS の許しが出ている証拠だからである。
  *   それまでと、切り替えられない端末では②で我慢する。
+ *
+ *   **そして、その事実は端末に覚えておく**(`CORS_KEY`)。覚えないと、
+ *   全部の声を測り終えた翌日から**二度と①に切り替わらない**
+ *   (測らない = 取得しない = 証拠が立たない)。下の `corsOk` を参照。
  */
 import { audioContext } from './sfx.js'
 
@@ -183,8 +187,33 @@ export const isMeasured = (tier, voice) => !!load()[loudKey(tier, voice)]?.rms
 /** いま測っているもの。**同じ声を二度測らない** */
 const measuring = new Set()
 
-/** **CORS の許しが出ていると分かったか。**(取得に1回成功したら true) */
-let corsOk = false
+/**
+ * **CORS の許しが出ていると分かったか。**(取得に1回成功したら true)
+ *
+ * 【**覚えておかないと、いつまでも効かない**】(2026-09。自分で開けた穴)
+ *
+ *   これを画面の中だけに持っていたため、こうなっていた。
+ *
+ *     ① 声を測るのは「まだ測っていないとき」だけ
+ *     ② ところが `corsOk` は、その**測るための取得**でしか立たない
+ *     ③ だから**全部の声を測り終えた翌日**からは、
+ *        ページを開いても一度も立たない
+ *     ④ すると `GainNode` につなぎ替えられず、`<audio>` の `volume` だけになる。
+ *        あれは**小さくしかできず、iPhone では丸ごと無視される**
+ *
+ *   つまり「使い込むほど効かなくなる」という、いちばん気づきにくい形の
+ *   壊れ方をしていた。**置き場所は変わらない**(同じ Supabase)ので、
+ *   一度分かったら端末に覚えておけばよい。
+ */
+const CORS_KEY = 'eas.loudCors'
+let corsOk = (() => {
+  try { return window.localStorage.getItem(CORS_KEY) === '1' } catch { return false }
+})()
+const rememberCors = () => {
+  if (corsOk) return
+  corsOk = true
+  try { window.localStorage.setItem(CORS_KEY, '1') } catch { /* 使えなくても困らない */ }
+}
 export const isCorsKnownGood = () => corsOk
 
 /**
@@ -202,7 +231,7 @@ export async function measureClip(url, tier, voice) {
     // ここでもう一度取りに行っても、たいていは通信が起きない
     const res = await fetch(url, { mode: 'cors', cache: 'force-cache' })
     if (!res.ok) return false
-    corsOk = true                      // 取れた = CORS の許しが出ている
+    rememberCors()                     // 取れた = CORS の許しが出ている
     const bytes = await res.arrayBuffer()
 
     // **鳴らすための入れ物は使わない。** 解くだけなので、
