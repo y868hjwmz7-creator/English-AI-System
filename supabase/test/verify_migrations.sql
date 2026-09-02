@@ -303,6 +303,20 @@ from (
     where conname = 'material_sections_type_check'
       and pg_get_constraintdef(oid) like '%discussion%'), 72
   union all
+  select '(73) 演習の種類に誤り訂正が入っている(0034)', exists (
+    -- 穴埋めの置き換え。ここが抜けていると、文型ドリルを
+    -- **発行した瞬間に**「violates check constraint」で止まる
+    select 1 from pg_constraint
+    where conname = 'material_sections_type_check'
+      and pg_get_constraintdef(oid) like '%error_correction%'), 73
+  union all
+  select '(74) 穴埋めは一覧に残っている(0034)', exists (
+    -- **消すと、すでに作った教材が開けなくなる。**
+    -- 新規では使わないだけで、既存の行のために残してある
+    select 1 from pg_constraint
+    where conname = 'material_sections_type_check'
+      and pg_get_constraintdef(oid) like '%fill_blank%'), 74
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

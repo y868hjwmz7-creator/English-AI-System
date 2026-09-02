@@ -2,7 +2,8 @@
  * 演習の種類。
  *
  * 実際のドリルは「教材=1つの文法ポイント」の中に、
- * 和訳・穴埋め・英訳・リスニングといった演習が並ぶ形をしている。
+ * 和訳・誤り訂正・英訳・リスニングといった演習が並ぶ形をしている
+ * (穴埋めは 2026-09 に誤り訂正へ差し替えた)。
  * 種類ごとに、使う欄とゲストへの見せ方が違う。
  *
  * fields … その演習で使う欄。作成画面はこれを見て入力欄を出し分ける。
@@ -15,6 +16,33 @@ export const EXERCISE_TYPES = [
     fields: ['prompt_en', 'answer'], audioFrom: 'prompt_en',
     hideAnswerFromLearner: true,
   },
+  /*
+   * 誤り訂正(2026-09 利用者の指定)。**穴埋めの置き換えである。**
+   *
+   *   > そもそもこの穴埋めはいらないかもしれない。
+   *   > なぜなら、穴埋めは複数の回答が考えられる場合があり、すっきりしない
+   *
+   * 穴埋めは、空欄に入りうる語が1つに決まらないことがある。
+   * しかも「与える語」がそのまま答えになると、**問題文の中に答えが見える**
+   * (2026-09 実機)。誤り訂正なら、**直すべき1か所と、直した形が
+   * どちらも1つに決まる。** 弱点をそのまま誤りにできるので、
+   * 「弱点 → 教材」の循環にもよく合う。
+   *
+   * **音声は付けない**(`audioFrom: null`)。読み上げる元になる英文が
+   * 誤った文しかなく、**誤った文を手本として聞かせてはいけない。**
+   * 直した文を読ませると、答えが耳から入ってしまう。
+   * これは穴埋めのときと同じ扱いである。
+   */
+  {
+    id: 'error_correction', label: '誤り訂正',
+    instruction: '次の英文には誤りが1か所あります。見つけて直しなさい。',
+    fields: ['prompt_en', 'answer', 'note'], audioFrom: null,
+    hideAnswerFromLearner: true,
+  },
+  /*
+   * 穴埋め。**新規では使わない**(2026-09 に誤り訂正へ差し替えた)。
+   * すでに作った教材を開くために残してある。旧「長文」と同じ扱い。
+   */
   {
     id: 'fill_blank', label: '穴埋め',
     instruction: 'カッコ内の語を使って文を完成させなさい。',
@@ -190,11 +218,15 @@ export const givesAwayAnswer = (exerciseTypeId, item) => {
  * トレーナーが増減できる。
  */
 export const DEFAULT_SECTIONS = {
+  // **穴埋めは 2026-09 に「誤り訂正」へ差し替えた**(利用者の指定)。
+  // 穴埋めは答えが1つに決まらないことがあり、しかも与える語が
+  // そのまま答えになると問題文の中に答えが見えていた。
+  // 4演習 × 10問 = 40問という数は変えていない(第5.13.3節)。
   pattern: [
-    { exercise_type: 'translate_en_ja', count: 10 },
-    { exercise_type: 'fill_blank',      count: 10 },
-    { exercise_type: 'translate_ja_en', count: 10 },
-    { exercise_type: 'listening',       count: 10 },
+    { exercise_type: 'translate_en_ja',  count: 10 },
+    { exercise_type: 'error_correction', count: 10 },
+    { exercise_type: 'translate_ja_en',  count: 10 },
+    { exercise_type: 'listening',        count: 10 },
   ],
   // リーディングは「記事1本」。count は段落の数であって、問題の数ではない。
   // 6段落でおよそ 250〜350 語になる。シャドーイングに使うには、
@@ -245,7 +277,9 @@ export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SE
  * **ここだけ3倍(30問)まで選べる**(弱点が3つまで選べるため)。
  */
 export const DRILL_SECTIONS = [
-  'translate_en_ja', 'fill_blank', 'translate_ja_en', 'listening',
+  // **`fill_blank` は入れない**(2026-09 に `error_correction` へ差し替えた)。
+  // ここは**これから作る**教材の話なので、古い種類は並べない
+  'translate_en_ja', 'error_correction', 'translate_ja_en', 'listening',
 ]
 
 /**

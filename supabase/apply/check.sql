@@ -71,4 +71,8 @@ from (
     exists (select 1 from pg_constraint
             where conname = 'material_sections_type_check'
               and pg_get_constraintdef(oid) like '%discussion%'), 15
+  union all select '0034 演習の種類に誤り訂正を足す(穴埋めの置き換え)',
+    exists (select 1 from pg_constraint
+            where conname = 'material_sections_type_check'
+              and pg_get_constraintdef(oid) like '%error_correction%'), 16
 ) t order by 順;

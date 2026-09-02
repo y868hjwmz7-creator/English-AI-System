@@ -52,10 +52,9 @@ const SYSTEM_PROMPT = `あなたは日本のパーソナル英語スクールの
    出題: I have several things to do before the meeting.
    解答: 会議の前にやるべきことがいくつかあります。
 
-② 穴埋め × 10(与える語つき)
-   出題: I have a lot of emails (　　　) today.
-   与える語: reply to
-   解答: to reply to
+② 誤り訂正 × 10(誤りは1文に1か所だけ)
+   出題: I have a lot of emails to reply today.
+   解答: I have a lot of emails to reply to today.
    補足: reply to an email なので、最後の to を落とさない。
 
 ③ 和文英訳 × 10(解答例)
@@ -79,9 +78,10 @@ const SYSTEM_PROMPT = `あなたは日本のパーソナル英語スクールの
 2. **同じ文型で、場面と語彙だけを変える。** 定着が狙いなので変化は最小限
 3. **業務で実際に使う場面にする**(会議、メール、顧客、書類、締切、報告)。
    業界が指定されていれば、その業界の場面に寄せる
-4. **穴埋めには「落とし穴」を1つ以上入れる。**
-   手本の reply to のように、間違えて初めて身につくもの。
-   落とし穴を入れた問には、なぜ間違えやすいかを補足に書く
+4. **誤り訂正は「間違えて初めて身につく1か所」を突く。**
+   手本の reply to のように、日本人の学習者が実際に落とすところにする。
+   **誤りは1文に1か所だけ**にし、なぜ間違いなのかを必ず補足に書く。
+   直し方が何通りもある文は作らない(直す形が1つに決まること)
 5. **和文英訳は「解答例」として出し、自然な別解も添える**
 6. **リスニングの設問は、英文を聞かないと答えられないものにする。**
    常識や推測で答えられる質問は意味がない
@@ -152,6 +152,29 @@ const MODEL = 'claude-sonnet-5'
 const SECTION_INSTRUCTIONS: Record<string, string> = {
   translate_en_ja:
     '英文和訳。prompt_en に英文、answer に日本語訳を入れる。',
+  /* 誤り訂正(2026-09 利用者の指定)。**穴埋めの置き換えである。**
+
+       > そもそもこの穴埋めはいらないかもしれない。
+       > なぜなら、穴埋めは複数の回答が考えられる場合があり、すっきりしない
+
+     誤り訂正なら、**直す1か所も、直した形も1つに決まる。**
+     弱点をそのまま誤りにできるので、「弱点 → 教材」の循環にもよく合う。 */
+  error_correction:
+    '誤り訂正。prompt_en に**誤りを1か所だけ含む英文**、answer に**直した英文まるごと**、'
+    + 'note に**何がどう間違っているのか**の説明(日本語)を入れる。'
+    + '**誤りは1文に1か所だけ。** 2か所あると、どちらを直すのか決まらない。'
+    + '**指定された弱点にあたる誤り**にする。関係のないところを間違えさせない。'
+    + '**日本人の学習者が実際にやる間違い**にする。'
+    + '(冠詞の抜け・三単現の s・時制の一致・前置詞の取り違え・可算/不可算・語順など)'
+    + 'ネイティブがしない不自然な壊し方(語をでたらめに並べ替えるなど)はしない。'
+    + '**直し方が1つに決まる文にする。** 直した形が何通りもある文は作らない。'
+    + '**answer には、直した英文を1文まるごと**入れる。直した語だけを入れない。'
+    + '(ゲストは書き換えた文全体を見て確かめる)'
+    + 'note は「be動詞のあとなので過去分詞にする」のように、'
+    + '**なぜそうなるのか**まで書く。「間違いです」とだけ書かない。',
+
+  // 穴埋め。**新規では使わない**(2026-09 に誤り訂正へ差し替えた)。
+  // 既存の教材を作り直せるように残してある
   fill_blank:
     '穴埋め。prompt_en に（　　　）を含む英文、hint に与える語(原形など)、answer に空欄に入る形を入れる。'
     + '落とし穴の問には note に理由を書く。'
@@ -297,6 +320,9 @@ const ITEM_FIELDS: Record<string, { type: string; description: string }> = {
  */
 const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }> = {
   translate_en_ja: { required: ['prompt_en', 'answer'], optional: ['note', 'tag_no', 'phrases'] },
+  // 誤り訂正は **note が必須。** なぜ間違いなのかが無いと、直す意味が薄い
+  error_correction: { required: ['prompt_en', 'answer', 'note'], optional: ['tag_no'] },
+  // 穴埋め。新規では使わないが、既存の教材を作り直せるように残す
   fill_blank:      { required: ['prompt_en', 'hint', 'answer'], optional: ['note', 'tag_no'] },
   translate_ja_en: { required: ['prompt_ja', 'answer'], optional: ['answer_alt', 'note', 'tag_no'] },
   listening:       { required: ['audio_text', 'question', 'answer'], optional: ['note', 'tag_no'] },

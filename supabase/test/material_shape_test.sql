@@ -281,3 +281,39 @@ select pg_temp.expect2('ディスカッションは解答を持たない(正解�
 select pg_temp.expect2('ディスカッションの手がかりは note に入る',
   (select note is not null from public.material_items
    where section_id = 'cccccccc-0000-0000-0000-000000000013' and seq = 1), true);
+
+
+-- ── 誤り訂正(0034)──────────────────────────────────────
+--
+--   **穴埋めの置き換えである**(2026-09 利用者の指定)。
+--   誤りのある英文と、直した英文まるごと、なぜ間違いかを持てるか。
+--   0034 を貼る前は check constraint で弾かれていた。
+insert into public.material_sections (id, material_id, seq, exercise_type)
+values ('cccccccc-0000-0000-0000-000000000014',
+        'bbbbbbbb-0000-0000-0000-000000000003', 3, 'error_correction');
+
+insert into public.material_items
+  (material_id, section_id, seq, prompt_en, answer, note)
+values
+  ('bbbbbbbb-0000-0000-0000-000000000003', 'cccccccc-0000-0000-0000-000000000014', 1,
+   'I have a lot of emails to reply today.',
+   'I have a lot of emails to reply to today.',
+   'reply to an email なので、最後の to を落とさない。');
+
+select pg_temp.expect2('誤り訂正の演習が入る',
+  (select count(*)::int from public.material_sections
+   where id = 'cccccccc-0000-0000-0000-000000000014'), 1);
+
+select pg_temp.expect2('誤り訂正は、直した英文を1文まるごと持つ',
+  (select answer from public.material_items
+   where section_id = 'cccccccc-0000-0000-0000-000000000014' and seq = 1),
+  'I have a lot of emails to reply to today.');
+
+-- **穴埋めは一覧から消さない。** 消すと、すでに作った教材が開けなくなる
+insert into public.material_sections (id, material_id, seq, exercise_type)
+values ('cccccccc-0000-0000-0000-000000000015',
+        'bbbbbbbb-0000-0000-0000-000000000003', 4, 'fill_blank');
+
+select pg_temp.expect2('穴埋めは残っている(既存の教材のため)',
+  (select count(*)::int from public.material_sections
+   where id = 'cccccccc-0000-0000-0000-000000000015'), 1);
