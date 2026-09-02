@@ -830,7 +830,22 @@ html { -webkit-text-size-adjust: 100%; }
   /* 「16時間30分」のような長い値が2行に折り返さないよう、少し小さくする */
   .stat-value { font-size: 22px; }
   .app-title { font-size: 19px; }   /* ログイン画面の題名 */
-  .card { padding: 16px; }
+
+  /* ★ 左右の余白を詰める(2026-09 実機・利用者の指定)★
+       > 文字が画面端から隙間が多すぎたり色々と違和感があります
+
+     囲みが**3重**になっていた。
+     画面の余白(16px)→ カード(20px)→ 見出しの囲み(12px)で
+     **左右に 48px ずつ**、iPhone(390px)では**画面の約1/4が余白**である。
+     読むところが 300px しか残らない。
+
+     3つとも少しずつ詰めて 32px にする(読むところは 326px)。
+     **1か所だけ詰めても効かない。** 重なっているものは、まとめて見る。
+     詰めすぎると窮屈になるので、いちばん外(画面の縁)を薄くして、
+     **中身とカードの縁の距離(12px)は残す。** */
+  .app { padding: 14px 10px 56px; }
+  .card { padding: 14px 12px; }
+  .material-open { padding: 10px 10px 8px; }
   .field-row { grid-template-columns: 1fr; }
 
   /* 表は横スクロールで見る。iOSで指を離したあとも滑るようにする */
@@ -1599,7 +1614,10 @@ html { -webkit-text-size-adjust: 100%; }
 .item-tag {
   display: inline-block; margin-right: 6px; padding: 1px 6px;
   border: 1px solid var(--border); border-radius: 999px;
-  font-size: 11px; color: var(--text-secondary); white-space: nowrap;
+  font-size: 11px; color: var(--text-secondary);
+  /* 弱点の名前が入るので長い。**囲みからはみ出させない**
+     (`.mtitle-chip` と同じ理由・2026-09) */
+  max-width: 100%; white-space: normal; overflow-wrap: anywhere;
 }
 
 /* ── 記事・会話の本文と、声に出す練習 ───────────────────────── */
@@ -3421,6 +3439,9 @@ html { -webkit-text-size-adjust: 100%; }
 .mtitle-main {
   flex: 1; min-width: 0; margin: 0;
   font-weight: 700; line-height: 1.45; color: var(--text-primary);
+  /* 教材名は AI が付ける。**長い1語**が来ても囲みから出さない
+     (`anywhere` ではなく `break-word`。入るときは語の途中で折らない) */
+  overflow-wrap: break-word;
 }
 .mtitle--card .mtitle-main { font-size: 17px; }
 .mtitle--row  .mtitle-main { font-size: 16px; }
@@ -3430,12 +3451,24 @@ html { -webkit-text-size-adjust: 100%; }
   color: var(--text-muted); font-size: 12px;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.mtitle-headline { margin-top: 2px; color: var(--text-secondary); font-size: 14px; }
-.mtitle-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.mtitle-headline {
+  margin-top: 2px; color: var(--text-secondary); font-size: 14px;
+  overflow-wrap: break-word;   /* 英語の見出し。長い1語ではみ出させない */
+}
+.mtitle-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; min-width: 0; }
 .mtitle-chip {
   padding: 1px 9px; border: 1px solid var(--border); border-radius: 999px;
   background: var(--surface-2); color: var(--text-secondary);
-  font-size: 12px; white-space: nowrap;
+  font-size: 12px;
+  /* ★ 折り返させる(2026-09 実機・Safari)★
+       > はみ出したり、文字が画面端から隙間が多すぎたり
+
+     弱点の札は「間の取り方 + つなぎ言葉 + 決まり文句」のように長い。
+     `white-space: nowrap` にしていたので、**札1つが囲みからはみ出し**、
+     端末の文字を大きくしている人の画面では**外へ出ていた。**
+     札の中は ` + ` で区切られているので、そこで自然に折り返る。
+     **短い札(C1・食べ歩き)は、もともと1行に収まるので変わらない。** */
+  max-width: 100%; white-space: normal; overflow-wrap: anywhere;
 }
 /* **弱点の札だけを目立たせる**(2026-08 利用者の指定)。
    何の弱点の教材かは、選ぶときにいちばん見る情報である。
