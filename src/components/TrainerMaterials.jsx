@@ -15,7 +15,7 @@ import LessonView from './LessonView.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
 import SearchBar from './SearchBar.jsx'
-import { PrintIcon, ScreenIcon } from './Icons.jsx'
+import { CloseIcon, PlusIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
@@ -42,6 +42,27 @@ export default function TrainerMaterials({ me }) {
   const [genre, setGenre] = useState('')       // 記事のジャンル
   const [scene, setScene] = useState('')       // 会話の場面
   const [sort, setSort] = useState('new')      // 並び順
+
+  /**
+   * **いくつ条件が付いているか**(2026-09 利用者の指定)。
+   *
+   * 絞り込みを畳んだままにしていると、**なぜ1件しか出ないのかが
+   * 分からない。** 数だけでも見えていれば、「何かで絞っている」と気づける。
+   * 名前で引く言葉(`keyword`)は入力欄がいつも見えているので数えない。
+   */
+  const filterCount = tagIds.length
+    + (level ? 1 : 0) + (kind ? 1 : 0)
+    + (industry ? 1 : 0) + (genre ? 1 : 0) + (scene ? 1 : 0)
+
+  /** 絞り込みをぜんぶ外す。**1つずつ「すべて」に戻して回らせない** */
+  const clearFilters = () => {
+    setTagIds([])
+    setLevel(null)
+    setKind('')
+    setIndustry('')
+    setGenre('')
+    setScene('')
+  }
   /* **開く・閉じるはやめた**(2026-09 利用者の指定)。
      いま持つのは「紙に出している教材」と、記録を消すときの2段だけ */
   const [printId, setPrintId] = useState(null)   // 紙に出している教材
@@ -273,18 +294,71 @@ export default function TrainerMaterials({ me }) {
         <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
-      {/* **たたんでおける**(2026-08 利用者の指定)。
-          > 教材をさがすのところは「教材をさがす・作る」に変えて、
-          > クリックしたら展開するようにしてください。
+      {/* ── 教材をさがす箱(2026-09 利用者の指定)──────────────────
 
-          絞り込みは毎回触るものではない。畳んでおけば、教材の一覧が
-          そのぶん上に来る。**開け閉めは覚える**(一度決める設定は覚える)。 */}
-      <details className="card material-search" open={searchOpen}
-               onToggle={(e) => {
-                 setSearchOpen(e.currentTarget.open)
-                 saveSearchOpen(e.currentTarget.open)
-               }}>
-        <summary className="card-title material-search-sum">教材をさがす・作る</summary>
+            > 教材をさがす、作るの欄で条件を入れると教材が絞り込まれますが、
+            > UIがわかりにくいです。「探す🔍」「条件で絞り込む」「作る」の
+            > 3つをベースにしつつ、絞り込み、検索結果内にも
+            > 「ないので作る」のボタンを配置してください
+
+          **できることを3つに言い切る。**
+            ① 探す      … 名前・見出しで引く(いつも見えている)
+            ② 条件で絞り込む … レベル・種類・分野・弱点(畳める)
+            ③ 作る      … 見つからなかったときに押す
+
+          以前は「教材をさがす・作る」という1つの箱の中に条件の欄が入り、
+          さがす入力欄はその外にあった。**同じ「さがす」が2か所に分かれ、
+          「作る」は名前だけあってボタンが無い**ので、何をする欄なのかが
+          読み取れなかった。3つを1つの箱にまとめ、名前を付けて並べる。 */}
+      <section className="card finder">
+        <div className="finder-head">
+          <h2 className="card-title">教材をさがす</h2>
+          {/* ③ 作る。**いつも見えるところに置く**(押せる場所が分かる) */}
+          <button type="button" className="btn btn--small"
+                  onClick={() => setMode('create')}>
+            <PlusIcon />教材を作る
+          </button>
+        </div>
+
+        {/* ① 探す。**いちばんよく使う操作なので、畳まない** */}
+        <SearchBar
+          keyword={keyword}
+          onKeyword={setKeyword}
+          onSearch={search}
+          placeholder="教材名・見出しでさがす"
+          sort={sort}
+          onSort={setSort}
+          sortOptions={[
+            { id: 'new', label: '新しい順' },
+            { id: 'items', label: '問数の多い順' },
+            { id: 'title', label: '名前順' },
+          ]}
+          count={loading ? null : materials.length}
+        />
+
+        {/* ② 条件で絞り込む。**畳める。開け閉めは覚える**
+            (一度決める設定は覚える・CLAUDE.md)。
+            **いくつ条件が付いているかを、畳んだままでも見せる。**
+            そうしないと「なぜ1件しか出ないのか」が分からない */}
+        <details className="finder-filters" open={searchOpen}
+                 onToggle={(e) => {
+                   setSearchOpen(e.currentTarget.open)
+                   saveSearchOpen(e.currentTarget.open)
+                 }}>
+          <summary className="finder-sum">
+            条件で絞り込む
+            {filterCount > 0 && <span className="finder-badge">{filterCount}</span>}
+          </summary>
+          {/* **条件を外す道を、条件が付いているときだけ出す。**
+              1つずつ「すべて」に戻して回らせない */}
+          {filterCount > 0 && (
+            <div className="finder-clear">
+              <button type="button" className="btn btn--ghost btn--small"
+                      onClick={clearFilters}>
+                <CloseIcon />絞り込みをぜんぶ外す
+              </button>
+            </div>
+          )}
         {/* **説明の文は置かない**(2026-08 利用者の指定)。
               > 目指すのはUIを見れば何ができるのかが直観的にわかるアプリです。
             欄の名前とプルダウンを見れば、何ができるかは分かる。 */}
@@ -405,28 +479,8 @@ export default function TrainerMaterials({ me }) {
             <WeaknessTagPicker selected={tagIds} onChange={setTagIds} includeDrills />
           </fieldset>
         </div>
-      </details>
-
-      {/* **名前で引くのと並び順は、絞り込みの箱の外に出す**
-          (2026-08 利用者の指定)。箱はたためるので、中に入れておくと
-          たたんだ瞬間に、いちばんよく使う操作まで一緒に消えてしまう。
-          **一覧のすぐ上に、いつも見えている状態で置く。**
-          帯そのものは `SearchBar.jsx` 1か所。ゲストの過去の宿題でも使う */}
-      <SearchBar
-        title="教材をさがす"
-        keyword={keyword}
-        onKeyword={setKeyword}
-        onSearch={search}
-        placeholder="教材名・見出しでさがす"
-        sort={sort}
-        onSort={setSort}
-        sortOptions={[
-          { id: 'new', label: '新しい順' },
-          { id: 'items', label: '問数の多い順' },
-          { id: 'title', label: '名前順' },
-        ]}
-        count={loading ? null : materials.length}
-      />
+        </details>
+      </section>
 
       {message && <div className="notice notice--ok">{message}</div>}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
@@ -434,14 +488,16 @@ export default function TrainerMaterials({ me }) {
       {loading ? (
         <p className="muted">読み込み中…</p>
       ) : materials.length === 0 ? (
-        <div className="card">
+        /* **無いときは、作る道をいちばん強く出す**(2026-09 利用者の指定)。
+           何も無い画面で「作る」を探させない */
+        <div className="card finder-empty">
           <p className="card-hint">
-            {tagIds.length
-              ? 'この弱点の教材はまだありません。最初の1つを作ると、次からは全トレーナーがすぐ使えます。'
+            {filterCount
+              ? 'この条件に合う教材はまだありません。最初の1つを作ると、次からは全トレーナーがすぐ使えます。'
               : '教材がまだありません。'}
           </p>
           <button type="button" className="btn btn--primary" onClick={() => setMode('create')}>
-            この弱点の教材を新しく作る
+            <PlusIcon />{filterCount ? 'この条件で教材を作る' : '教材を作る'}
           </button>
         </div>
       ) : (
@@ -656,13 +712,22 @@ export default function TrainerMaterials({ me }) {
         </>
       )}
 
-      {/* 新しく作るのは2番目の動線。目立たせすぎない。 */}
-      <div className="card">
-        <p className="card-hint">さがしても見つからなかったときは、新しく作ります。</p>
-        <button type="button" className="btn" onClick={() => setMode('create')}>
-          ＋ 教材を新しく作る
-        </button>
-      </div>
+      {/* **さがした結果の中にも「無いので作る」を置く**(2026-09 利用者の指定)。
+          一覧を上から見ていって、無いと分かるのは**いちばん下**である。
+          そこで画面のはるか上まで戻らせない。
+          新しく作るのは2番目の動線なので、見た目は強くしない */}
+      {!loading && materials.length > 0 && (
+        <div className="card finder-more">
+          <p className="card-hint">
+            {filterCount
+              ? 'この中に使えるものが無ければ、いまの条件のまま作れます。'
+              : 'さがしても見つからなかったときは、新しく作ります。'}
+          </p>
+          <button type="button" className="btn" onClick={() => setMode('create')}>
+            <PlusIcon />{filterCount ? 'この条件で教材を作る' : '教材を作る'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

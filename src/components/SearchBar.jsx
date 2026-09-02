@@ -24,8 +24,13 @@
 import { CloseIcon, SearchIcon } from './Icons.jsx'
 
 export default function SearchBar({
-  /** 帯の題。「教材をさがす」など */
-  title,
+  /**
+   * 帯の題。「教材をさがす」など。
+   * **渡さなければ題を出さない**(2026-09)。教材の画面では、
+   * 「探す / 条件で絞り込む / 作る」を1つの箱にまとめたので、
+   * 題は箱の側にある。**同じ題を2つ並べない。**
+   */
+  title = '',
   /** 名前で引く。渡さなければ入力欄を出さない */
   keyword = '',
   onKeyword = null,
@@ -39,8 +44,8 @@ export default function SearchBar({
   count = null,
 }) {
   return (
-    <section className="searchbar" aria-label={title}>
-      <h2 className="searchbar-title">{title}</h2>
+    <section className="searchbar" aria-label={title || placeholder}>
+      {title && <h2 className="searchbar-title">{title}</h2>}
       <div className="searchbar-row">
         {onKeyword && (
           <div className="searchbar-field">
