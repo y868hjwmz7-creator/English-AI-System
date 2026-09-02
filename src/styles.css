@@ -1782,6 +1782,10 @@ html { -webkit-text-size-adjust: 100%; }
   color: var(--accent); font-weight: 700;
 }
 .passage-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+/* **中身が無いときは、場所も取らない**(2026-09)。
+   Stop を消したことで、①ディクテーションでは帯が空になった。
+   空のまま置くと、上下の余白(20px)だけが残る */
+.passage-tools:empty { display: none; }
 
 .passage-body { list-style: none; margin: 0; padding: 0; }
 .passage-part {

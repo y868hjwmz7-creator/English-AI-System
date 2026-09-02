@@ -86,6 +86,10 @@ export default function PassagePractice({
   // 音読・シャドーイングの差は保たれる
   const [rateId, setRateId] = useState(loadRateId)
   const [speakingId, setSpeakingId] = useState(null)
+  /* **通しで鳴らしているか。** 押した瞬間に立てる(2026-09)。
+     `speakingId` は最初の合図が来るまで空なので、それだけで見ていると
+     押しても Stop に変わらない時間ができる(`LessonView` と同じ作法) */
+  const [playingAll, setPlayingAll] = useState(false)
   // いま読み上げている語の位置(何文字目か)。合図を出さない端末では
   // null のままで、これまでどおり発言ごとの色分けだけが残る
   const [readingAt, setReadingAt] = useState(null)
@@ -160,6 +164,7 @@ export default function PassagePractice({
     stopAllRef.current = null
     stopReading()
     setSpeakingId(null)
+    setPlayingAll(false)
     setReadingAt(null)
   }
 
@@ -192,6 +197,7 @@ export default function PassagePractice({
   // 通しで聴いていて「ここをもう一度」と思ったとき、頭から聴き直さなくてよい。
   const playAll = (fromId = null) => {
     stopPlaying()
+    setPlayingAll(true)
     // 先に「読めるもの」だけに絞ってから並べる。絞ったあとで番号を数えないと、
     // 「いま読んでいる発言」の印が1つずれる
     const all = section.items.filter((it) => String(it.prompt_en ?? '').trim())
@@ -207,7 +213,7 @@ export default function PassagePractice({
         rate: rateOf(rateId, current.rate),
         clipTier: tier,
         onIndex: (i) => {
-          if (i === null) stopAllRef.current = null
+          if (i === null) { stopAllRef.current = null; setPlayingAll(false) }
           setSpeakingId(i === null ? null : playable[i]?.id ?? null)
           setReadingAt(null)   // 次の発言に移ったら、前の語の色を消す
         },
@@ -294,43 +300,42 @@ export default function PassagePractice({
 
       <div className="passage-tools">
         {/* 通しの読み上げは、本文まるごとのステップ(③⑤)でだけ意味がある。
-            1文ずつのステップでは、各文の Listen を使う */}
+            1文ずつのステップでは、各文の Listen を使う。
+
+            **通しの読み上げは、同じボタンで止める**(2026-09 利用者の指定)。
+              > STOPボタンが必要ないです。削除して下さい。
+              > すべてのページで同じにしてください。
+
+            鳴っているあいだは Stop になる。**各文の Listen と同じ作法**で、
+            止める場所を探さなくてよい(`SpeakButton` も同じ形)。 */}
         {current.unit === 'passage' && (
-          <button type="button" className="btn" onClick={playAll}>
-            <SpeakerIcon />Listen (全体)
+          <button type="button"
+                  className={`btn${playingAll ? ' btn--primary' : ''}`}
+                  onClick={() => (playingAll ? stopPlaying() : playAll())}>
+            {playingAll
+              ? <><StopIcon />Stop (全体)</>
+              : <><SpeakerIcon />Listen (全体)</>}
           </button>
         )}
-        {/* **止めると速さは、①ディクテーションでは出さない**
-            (2026-09 利用者の指定)。
+        {/* **速さは、①ディクテーションでは出さない**(2026-09 利用者の指定)。
 
-              > ディクテーションのデフォルト画面で、stopボタンがあるのですが、
-              > これは必要ありませんので消してください。そしてその横の
               > 再生スピード調整タブも、削除しする代わりに各文につけてください。
 
-            書き取りは**1文ずつ**の練習で、鳴らすのは各文の Listen である。
-            その Listen は鳴っているあいだ Stop に変わるので、
-            **帯の Stop は、押しても何も鳴っていない**ことがほとんどだった。
-            速さも「どの文も同じ」になってしまうため、文ごとに移した。
+            書き取りは**1文ずつ**の練習なので、速さは文ごとに置いてある。
+            ③⑤(本文まるごと)は「Listen (全体)」を鳴らすので、ここに要る。
 
-            ③⑤(本文まるごと)では「Listen (全体)」を鳴らすので、
-            **止めるボタンと速さはこれまでどおり要る。** */}
+            **Stop はどの取り組み方でも出さない**(2026-09 利用者の指定)。
+            鳴らすボタンがそのまま Stop に変わるので、別に置く必要がない。 */}
         {step !== 'dictation' && (
-          <>
-            {/* **止めるボタンは、鳴らすボタンのすぐ横**(2026-08 利用者の指定)。
-                対になる操作は、対に見える場所に置く */}
-            <button type="button" className="btn" onClick={stopPlaying}>
-              <StopIcon />Stop
-            </button>
-            <label className="rate-pick">
-              <span>速さ</span>
-              <select value={rateId}
-                      onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopPlaying() }}>
-                {SPEECH_RATES.map((r) => (
-                  <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
-                ))}
-              </select>
-            </label>
-          </>
+          <label className="rate-pick">
+            <span>速さ</span>
+            <select value={rateId}
+                    onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopPlaying() }}>
+              {SPEECH_RATES.map((r) => (
+                <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+              ))}
+            </select>
+          </label>
         )}
         {current.unit === 'passage' && (
           <button type="button" className="btn" onClick={() => setShowJa(!showJa)}>
