@@ -374,55 +374,6 @@ export default function LessonView({
           </>
         )}
 
-        {/* ── 紙への書き込み(2026-09 利用者の指定)──────────────
-            **会議アプリのペンは、送ると置いていかれる。**
-            こちらは紙の中に描くので、線は英文にくっついて動く。
-            ペンを持っているあいだは、語に触れて意味を出すことはできない
-            (線を引く手と、語に触れる手は同じである)。 */}
-        <button type="button"
-                className={`btn btn--small${pen ? ' btn--primary' : ''}`}
-                aria-pressed={pen}
-                title="紙に書き込む(閉じると消えます)"
-                onClick={() => setPen((v) => !v)}>
-          <PenIcon /><span className="mid-text">書き込む</span>
-        </button>
-
-        {/* ── セッションの記録(0032)────────────────────────
-            **気づいたことは、その場で書けないと残らない。**
-            出すのは、ゲストと一緒に開いているときだけ
-            (トレーナーの「教材」画面には相手がいない)。 */}
-        {canNote && (
-          <button type="button"
-                  className={`btn btn--small${notes ? ' btn--primary' : ''}`}
-                  aria-pressed={notes}
-                  title="この日のセッションの記録(日付ごとに残ります)"
-                  onClick={() => setNotes((v) => !v)}>
-            <NoteIcon /><span className="mid-text">メモ</span>
-          </button>
-        )}
-        {pen && (
-          <div className="lesson-ink">
-            {INK_COLORS.map((c) => (
-              <button key={c.id} type="button"
-                      className={`ink-color${inkColor === c.color ? ' is-on' : ''}`}
-                      style={{ '--ink-color': c.color }}
-                      aria-label={`${c.label}で書く`} aria-pressed={inkColor === c.color}
-                      onClick={() => setInkColor(c.color)} />
-            ))}
-            {/* **ひとつ戻す**を先に置く。書き損じはたいてい直前の1本 */}
-            <button type="button" className="btn btn--small"
-                    disabled={!(ink[page] ?? []).length}
-                    onClick={() => setInk((m) => ({ ...m, [page]: (m[page] ?? []).slice(0, -1) }))}>
-              ひとつ戻す
-            </button>
-            <button type="button" className="btn btn--small"
-                    disabled={!(ink[page] ?? []).length}
-                    onClick={() => setInk((m) => ({ ...m, [page]: [] }))}>
-              全部消す
-            </button>
-          </div>
-        )}
-
         {/* ── しまっておくもの ────────────────────────────────
             速さ・配色・文字の大きさ・印刷は、**一度決めれば何度も
             要らない。** 狭い画面ではここに畳み、押したときだけ出す。
@@ -436,6 +387,60 @@ export default function LessonView({
 
         <div className={`lesson-settings${openSettings ? ' is-open' : ''}`}
              id="lesson-settings">
+          {/* ── 紙への書き込み(2026-09 利用者の指定でここへ移した)──
+              > 書き込む、の機能が画面に収まってません。
+              > 文字の大きさや明暗の切り替えの機能と同じところに入れてください。
+
+              いつも要るのは「閉じる・ページ送り・解答・表示」の4つだけで、
+              **その1行に5つめを足したので、iPhone(390px)で
+              画面の外へはみ出していた**(2026-09 実機)。
+              書き込みは、始めるときと終わるときに1回ずつ触るものなので、
+              **一度決める設定と同じところ**でよい。 */}
+          <button type="button"
+                  className={`btn btn--small${pen ? ' btn--primary' : ''}`}
+                  aria-pressed={pen}
+                  title="紙に書き込む(閉じると消えます)"
+                  onClick={() => setPen((v) => !v)}>
+            <PenIcon /><span className="mid-text">書き込む</span>
+          </button>
+          {pen && (
+            <div className="lesson-ink">
+              {INK_COLORS.map((c) => (
+                <button key={c.id} type="button"
+                        className={`ink-color${inkColor === c.color ? ' is-on' : ''}`}
+                        style={{ '--ink-color': c.color }}
+                        aria-label={`${c.label}で書く`} aria-pressed={inkColor === c.color}
+                        onClick={() => setInkColor(c.color)} />
+              ))}
+              {/* **ひとつ戻す**を先に置く。書き損じはたいてい直前の1本 */}
+              <button type="button" className="btn btn--small"
+                      disabled={!(ink[page] ?? []).length}
+                      onClick={() => setInk((m) => ({ ...m, [page]: (m[page] ?? []).slice(0, -1) }))}>
+                ひとつ戻す
+              </button>
+              <button type="button" className="btn btn--small"
+                      disabled={!(ink[page] ?? []).length}
+                      onClick={() => setInk((m) => ({ ...m, [page]: [] }))}>
+                全部消す
+              </button>
+            </div>
+          )}
+
+          {/* ── セッションの記録(0032)──────────────────────
+              **書き込むと同じ理由でここに置く。** いつも要る1行に
+              足すと、同じようにはみ出す。
+              出すのは、ゲストと一緒に開いているときだけ
+              (トレーナーの「教材」画面には相手がいない)。 */}
+          {canNote && (
+            <button type="button"
+                    className={`btn btn--small${notes ? ' btn--primary' : ''}`}
+                    aria-pressed={notes}
+                    title="この日のセッションの記録(日付ごとに残ります)"
+                    onClick={() => setNotes((v) => !v)}>
+              <NoteIcon /><span className="mid-text">メモ</span>
+            </button>
+          )}
+
           <label className="lesson-rate">
             <span>速さ</span>
             <select value={rateId}
