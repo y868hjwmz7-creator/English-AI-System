@@ -20,7 +20,8 @@ import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import {
-  SCALABLE_SECTIONS, countLabel, drillBucket, exerciseLabel, isPassageSection,
+  SCALABLE_SECTIONS, amountsFor, countLabel, drillBucket,
+  exerciseLabel, isPassageSection,
 } from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
@@ -33,6 +34,9 @@ import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { printElement } from '../lib/print.js'
 import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
+
+/** 絞り込みの「問数」と、作る画面の増やし方の対応。**2か所に持たない** */
+const AMOUNT_BY_SIZE = { 20: 'double', 30: 'triple' }
 
 export default function TrainerMaterials({ me }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
@@ -311,8 +315,15 @@ export default function TrainerMaterials({ me }) {
           tagIds, level: level ?? '', industry, kind, genre, scene,
           /* 「20問」で絞っていたなら、作る画面も20問で始める。
              **絞り込みの項目を足したら `initial` にも足す**(CLAUDE.md) */
-          amounts: size === '20'
-            ? Object.fromEntries(SCALABLE_SECTIONS.map((t) => [t, 'double']))
+          /* **その演習で選べない増やし方は渡さない。**
+             3倍(30問)は文型ドリルだけなので、記事・会話の設問には
+             倍までにする(選べるかどうかは `amountsFor()` 1か所) */
+          amounts: AMOUNT_BY_SIZE[size]
+            ? Object.fromEntries(SCALABLE_SECTIONS.map((t) => {
+              const want = AMOUNT_BY_SIZE[size]
+              const ok = amountsFor(t).some((a) => a.id === want)
+              return [t, ok ? want : 'double']
+            }))
             : {},
         }}
         onCancel={() => setMode('search')}
@@ -464,6 +475,7 @@ export default function TrainerMaterials({ me }) {
               <option value="">すべて</option>
               <option value="10">10 問(標準)</option>
               <option value="20">20 問</option>
+              <option value="30">30 問</option>
             </select>
           </label>
 

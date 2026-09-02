@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import {
-  AMOUNTS, EXERCISE_TYPES, FIELD_LABELS, SCALABLE_SECTIONS,
+  EXERCISE_TYPES, FIELD_LABELS, MAX_ITEMS, SCALABLE_SECTIONS, amountsFor,
   defaultSectionsFor, exerciseLabel, exerciseType, sectionsFor,
 } from '../data/exerciseTypes.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
@@ -1043,7 +1043,9 @@ export default function MaterialForm({
                     </span>
                     <div className="theme-switch" role="group"
                          aria-label={`${exerciseLabel(s2.exercise_type)}の数`}>
-                      {AMOUNTS.map((a) => (
+                      {/* **3倍(30問)が出るのは文型ドリルだけ**(2026-09)。
+                          弱点が3つまで選べるので、1つあたり10問にすると30問になる */}
+                      {amountsFor(s2.exercise_type).map((a) => (
                         <button key={a.id} type="button"
                                 className={`theme-btn${now === a.id ? ' is-active' : ''}`}
                                 aria-pressed={now === a.id}
@@ -1052,7 +1054,7 @@ export default function MaterialForm({
                                 })}>
                           {a.label}
                           <span className="amount-count">
-                            {a.id === 'double' ? Math.min(base * 2, 20) : base}
+                            {Math.min(base * a.times, MAX_ITEMS)}
                           </span>
                         </button>
                       ))}

@@ -674,7 +674,13 @@ Deno.serve(async (req) => {
   }
 
   const sectionType = String(body.sectionType ?? '')
-  const count = Math.min(Math.max(Number(body.count ?? 10), 1), 20)
+  /* **1つの演習の上限は30**(2026-09 利用者の指定)。
+       > 30問までにしてください。なぜなら弱点を3つまで指定できるからです
+     弱点は3つまで選べ、問はその弱点にできるだけ均等に配る。
+     1つの弱点に10問ずつ当てるには30問が要る。
+     **画面側(`exerciseTypes.js` の `MAX_ITEMS`)と同じ数にする。**
+     片方だけ変えると、画面に出した数と実際の数が食い違う */
+  const count = Math.min(Math.max(Number(body.count ?? 10), 1), 30)
   const topic = String(body.topic ?? '').trim()          // 弱点タグの名前と例
   // 混合ドリル。以前は弱点ごとに呼び分けていたため、弱点3つで
   // 4演習 × 3 = 12回の生成になっていた。**1回にまとめて費用を1/3にする。**

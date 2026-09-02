@@ -172,6 +172,20 @@ export const isPassageSection = (typeId) => !!exerciseType(typeId)?.isPassage
 export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SECTIONS.pattern
 
 /**
+ * **文型ドリルの4演習**(2026-09 利用者の指定)。
+ *
+ *   > 文型トレーニングでは、すべての設問を基本10問にしてください。
+ *   > 教材ひとつで40問。そして各ページの問題数を(中略)調整できるように
+ *
+ * 既定は10問のまま(4演習 × 10問 = 40問)。**既定を下げない**のは
+ * 第5.13.3節の決まりである。増やす道だけを足してある。
+ * **ここだけ3倍(30問)まで選べる**(弱点が3つまで選べるため)。
+ */
+export const DRILL_SECTIONS = [
+  'translate_en_ja', 'fill_blank', 'translate_ja_en', 'listening',
+]
+
+/**
  * **数を増やせる演習**(2026-09 利用者の指定)。
  *
  *   > 内容理解の質問を増やしたいとき、語句を増やしたいときは
@@ -180,19 +194,11 @@ export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SE
  *
  * **本文(記事・会話)は入れない。** あちらの count は段落数・発言数で、
  * 増やすと読み物の長さそのものが変わる。長さは第5.13節で決めてある。
- * 増やすのは**本文に対して作る設問と語句**だけである。
+ * 増やすのは**本文に対して作る設問と語句**、そして**文型ドリルの4演習**である。
  */
 export const SCALABLE_SECTIONS = [
   'comprehension', 'vocab_note',
-  /* **文型ドリルの4演習も、10問 / 20問で選べる**(2026-09 利用者の指定)。
-       > 文型トレーニングでは、すべての設問を基本10問にしてください。
-       > 教材ひとつで40問。そして各ページの問題数を10、20の2つで
-       > 調整できるようにしてください。これは作成時に選べるように。
-
-     既定は10問のまま(4演習 × 10問 = 40問)。**既定を下げない**のは
-     第5.13.3節の決まりである。増やす道だけを足した。
-     **20問にすると、その演習の費用と待ち時間は2倍**になる。 */
-  'translate_en_ja', 'fill_blank', 'translate_ja_en', 'listening',
+  ...DRILL_SECTIONS,
 ]
 
 /**
@@ -208,14 +214,48 @@ export const drillCount = (sections) => (sections ?? [])
   .filter((s) => !isPassageSection(s.exercise_type))
   .reduce((max, s) => Math.max(max, s.items?.length ?? s.count ?? 0), 0)
 
-/** 10問のものか、20問のものか。**細かい数では絞らせない**(選ぶ手間が増える) */
-export const drillBucket = (sections) => (drillCount(sections) >= 15 ? '20' : '10')
+/**
+ * 10問・20問・30問のどれか。**細かい数では絞らせない**(選ぶ手間が増える)。
+ * 30問まであるのは、**弱点を3つまで指定できる**からである(下記)。
+ */
+export const drillBucket = (sections) => {
+  const n = drillCount(sections)
+  if (n >= 25) return '30'
+  return n >= 15 ? '20' : '10'
+}
 
-/** 増やし方は2通りだけ。**細かい数は選ばせない**(選ぶ手間が増えるだけ) */
+/**
+ * 増やし方。**細かい数は選ばせない**(選ぶ手間が増えるだけ)。
+ *
+ * 【なぜ3倍(30問)まであるのか】(2026-09 利用者の指定)
+ *
+ *   > 30問までにしてください。なぜなら弱点を3つまで指定できるからです
+ *
+ *   弱点は3つまで選べる。窓口はその弱点に**できるだけ均等に**問を配る
+ *   (`generate-material`)ので、1つの弱点に10問ずつ当てるには
+ *   **30問**が要る。20問では、弱点3つのときに1つあたり6〜7問になる。
+ *
+ * **3倍が出るのは文型ドリルの4演習だけ**(`amountsFor`)。
+ * 記事・会話の設問と語句は、これまでどおり標準か倍の2つである
+ * (2026-09 の指定「ディフォルトの数またはその倍という感じの2パターン」)。
+ */
 export const AMOUNTS = [
-  { id: 'default', label: '標準' },
-  { id: 'double', label: '倍' },
+  { id: 'default', label: '標準', times: 1 },
+  { id: 'double', label: '倍', times: 2 },
+  { id: 'triple', label: '3倍', times: 3 },
 ]
+
+/** その演習で選べる増やし方。**3倍は文型ドリルだけ** */
+export const amountsFor = (typeId) => (DRILL_SECTIONS.includes(typeId)
+  ? AMOUNTS
+  : AMOUNTS.filter((a) => a.id !== 'triple'))
+
+/**
+ * **1つの演習の上限。** 窓口(`generate-material`)も同じ数で丸める。
+ * **片方だけ変えない。** 画面に出した数と実際の数が食い違う
+ * (窓口を配置し直すまでは、20問より多くは作られない)。
+ */
+export const MAX_ITEMS = 30
 
 /**
  * 既定の構成に、増やし方をかぶせる。
@@ -223,11 +263,14 @@ export const AMOUNTS = [
  * @param {string} kind 教材の種類
  * @param {object} amounts `{ comprehension: 'double', ... }`
  *
- * **上限は20。** 窓口(`generate-material`)が 1〜20 に丸めるので、
- * ここで超えると画面に出した数と実際の数が食い違う。
+ * **上限は `MAX_ITEMS`(30)。** 窓口(`generate-material`)も同じ数で
+ * 丸めるので、**片方だけ変えない。**
  */
 export const sectionsFor = (kind, amounts = null) =>
-  defaultSectionsFor(kind).map((s) => (
-    SCALABLE_SECTIONS.includes(s.exercise_type) && amounts?.[s.exercise_type] === 'double'
-      ? { ...s, count: Math.min(s.count * 2, 20) }
-      : s))
+  defaultSectionsFor(kind).map((s) => {
+    if (!SCALABLE_SECTIONS.includes(s.exercise_type)) return s
+    const pick = amounts?.[s.exercise_type]
+    const times = AMOUNTS.find((a) => a.id === pick)?.times ?? 1
+    if (times === 1) return s
+    return { ...s, count: Math.min(s.count * times, MAX_ITEMS) }
+  })
