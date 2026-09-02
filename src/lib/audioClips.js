@@ -102,6 +102,29 @@ const gaveUp = new Set()     // 窓口に頼んでも駄目だったもの
 export const lastClipDetail = () => lastDetail
 
 /**
+ * **音声を作れなかった理由を、係の人に知らせる。**(2026-09 実機)
+ *
+ * `speak` を配置していなかったあいだ、画面は**黙って端末の声に落ちて**
+ * いた。理由(`lastDetail`)は集めていたのに、**どこからも読んでいなかった。**
+ * そのため「良い声にならない」ことに、何日も気づけなかった。
+ *
+ * 「**成功と失敗が、同じ見た目で終わってはいけない**」(CLAUDE.md)。
+ * 出す相手はトレーナーと管理者だけで、**ゲストには出さない**
+ * (仕組みの内側の話で、ゲストにできることは何も無い)。
+ * その判断は画面側(`src/lib/viewer.js`)が持つ。ここは伝えるだけである。
+ */
+const troubleListeners = new Set()
+export const onClipTrouble = (fn) => {
+  troubleListeners.add(fn)
+  return () => troubleListeners.delete(fn)
+}
+const setDetail = (d) => {
+  lastDetail = d
+  // **知らせで画面を落とさない。** 伝えられなくても、音は鳴る
+  troubleListeners.forEach((fn) => { try { fn(d) } catch { /* 無視する */ } })
+}
+
+/**
  * そもそも取りに行けるか。
  * Supabase 未設定(手元での確認や1ファイル版)ではいつも false になり、
  * これまでどおり端末の声で読み上げる。
@@ -209,14 +232,14 @@ async function askForClip(text, pathName, tier, rosterId) {
     const body = data ?? {}
     if (body.url) return body.url
     if (body.fatal) stopped = true
-    if (body.detail) lastDetail = body.detail
-    else if (error) lastDetail = error.message
+    if (body.detail) setDetail(body.detail)
+    else if (error) setDetail(error.message)
     return null
   } catch (e) {
     // 窓口をまだ配置していないと、ここに来る。**毎回叩きに行かない**
     stopped = true
-    lastDetail = `読み上げ音声の窓口につながりません(${e?.message ?? e})。`
-      + 'Supabase の Edge Functions に speak が配置されているか確認してください。'
+    setDetail(`読み上げ音声の窓口につながりません(${e?.message ?? e})。`
+      + 'Supabase の Edge Functions に speak が配置されているか確認してください。')
     return null
   }
 }

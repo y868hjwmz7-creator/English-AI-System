@@ -2255,6 +2255,12 @@ html { -webkit-text-size-adjust: 100%; }
   background: var(--ok-bg); color: var(--text-primary);
   box-shadow: var(--shadow-1);
 }
+/* 静かな知らせ。**音は鳴っているので、邪魔をしない。**
+   係の人にだけ出る(ゲストには出さない) */
+.jobnote.is-quiet {
+  border-color: var(--border); background: var(--surface-2);
+  color: var(--text-secondary);
+}
 .jobnote.is-error { border-color: var(--ng); background: var(--ng-bg); }
 .jobnote-text { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
 .jobnote .nav-icon-btn { width: 32px; height: 32px; }

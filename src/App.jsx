@@ -16,6 +16,8 @@ import { setViewerRole } from './lib/viewer.js'
 import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 import { markJobSeen, watchJob } from './lib/generateJob.js'
+import { onClipTrouble } from './lib/audioClips.js'
+import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import { buildSeed } from './data/seed.js'
@@ -74,6 +76,24 @@ export default function App() {
   // かぶせる形なので、開いたままだと中身が読めない
   useEffect(() => { if (!wide) setNavOpen(false) }, [wide])
   // 試作版の断り書き。一度閉じたら覚えておく
+  /**
+   * **読み上げ音声を作れなかった理由**(2026-09 実機)。
+   *
+   *   `speak` を配置していなかったあいだ、画面は**黙って端末の声に落ちて**
+   *   いた。理由は集めていたのに、どこからも読んでいなかったので、
+   *   「良い声にならない」ことに何日も気づけなかった。
+   *
+   * **出すのはトレーナーと管理者だけ。** ゲストには出さない
+   * (仕組みの内側の話で、ゲストにできることは何も無い・CLAUDE.md)。
+   * **役割が分からないうちも出さない**(既定は「見せない」)。
+   */
+  const [clipNote, setClipNote] = useState(null)
+  useEffect(() => onClipTrouble((detail) => {
+    if (!detail) return
+    const role = viewerRoleOf()
+    if (role !== 'trainer' && role !== 'owner') return
+    setClipNote(String(detail))
+  }), [])
   const [noticeOpen, setNoticeOpen] = useState(loadNoticeOpen)
   const toggleNav = () => setNavOpen((v) => {
     const next = !v
@@ -314,6 +334,23 @@ export default function App() {
             )}
             <button type="button" className="nav-icon-btn"
                     onClick={() => setJobNote(null)} aria-label="お知らせを閉じる">
+              <CloseIcon />
+            </button>
+          </div>
+        )}
+
+        {/* ── 読み上げ音声を作れなかった知らせ(トレーナー・管理者だけ)──
+            **成功と失敗が、同じ見た目で終わってはいけない**(CLAUDE.md)。
+            音そのものは端末の声で鳴っているので、**邪魔をしない静かな出し方**
+            にする。閉じれば消える(直すまで毎回出したいので、覚えない)。 */}
+        {clipNote && (
+          <div className="jobnote is-quiet" role="status" aria-live="polite">
+            <span className="jobnote-text">
+              <strong>読み上げ音声を作れませんでした。</strong>
+              {' '}端末の声で鳴らしています。{clipNote}
+            </span>
+            <button type="button" className="nav-icon-btn"
+                    onClick={() => setClipNote(null)} aria-label="お知らせを閉じる">
               <CloseIcon />
             </button>
           </div>
