@@ -51,6 +51,37 @@ const SIZES = [
 ]
 
 /**
+ * **紙の幅**(2026-09 利用者の指定)。
+ *
+ *   > PCで表示する際に、紙の幅を変えれるようにしてください。
+ *   > 110% / 120% / 130% 三段階で。何故かというと、ctrl＋上下だと
+ *   > ツールバーまで拡大して2列になってしまうからです。
+ *
+ * ブラウザの拡大(Ctrl と +)は**画面ぜんぶ**を大きくするので、
+ * 上の操作欄まで太って2段になり、紙がそのぶん狭くなる。
+ * ここで変えるのは**紙の幅だけ**なので、操作欄は1段のままである。
+ *
+ * **狭い画面では出さない。** あちらは紙が画面いっぱいで、
+ * 広げる余地がそもそも無い(効かない操作を見せない・CLAUDE.md)。
+ */
+const WIDTHS = [
+  { id: 'w100', label: '100%' },
+  { id: 'w110', label: '110%' },
+  { id: 'w120', label: '120%' },
+  { id: 'w130', label: '130%' },
+]
+const WIDTH_KEY = 'eas.lessonWidth'
+const loadWidth = () => {
+  try {
+    const id = window.localStorage.getItem(WIDTH_KEY)
+    return WIDTHS.some((w) => w.id === id) ? id : 'w100'
+  } catch { return 'w100' }
+}
+const saveWidth = (id) => {
+  try { window.localStorage.setItem(WIDTH_KEY, id) } catch { /* 使えなくても困らない */ }
+}
+
+/**
  * 文字の大きさを覚えておく。
  * **一度決めれば、毎回選ぶものではない。** 覚えないから、開くたびに
  * 上の操作欄を触ることになり、それが場所を取る原因にもなっていた。
@@ -100,6 +131,8 @@ export default function LessonView({
   const [openItems, setOpenItems] = useState(() => new Set())
   const [closedItems, setClosedItems] = useState(() => new Set())
   const [size, setSize] = useState(loadSize)
+  // 紙の幅。**一度決めれば毎回選ぶものではない**ので覚える(文字の大きさと同じ)
+  const [width, setWidth] = useState(loadWidth)
   // 画面の狭い端末では、めったに触らない設定をしまっておく。
   // **一度決めれば何度も要らないもの**(速さ・配色・文字の大きさ・印刷)。
   // パソコンでは常に出したままにする(CSS が決める。第5.22節)
@@ -403,28 +436,6 @@ export default function LessonView({
                   onClick={() => setPen((v) => !v)}>
             <PenIcon /><span className="mid-text">書き込む</span>
           </button>
-          {pen && (
-            <div className="lesson-ink">
-              {INK_COLORS.map((c) => (
-                <button key={c.id} type="button"
-                        className={`ink-color${inkColor === c.color ? ' is-on' : ''}`}
-                        style={{ '--ink-color': c.color }}
-                        aria-label={`${c.label}で書く`} aria-pressed={inkColor === c.color}
-                        onClick={() => setInkColor(c.color)} />
-              ))}
-              {/* **ひとつ戻す**を先に置く。書き損じはたいてい直前の1本 */}
-              <button type="button" className="btn btn--small"
-                      disabled={!(ink[page] ?? []).length}
-                      onClick={() => setInk((m) => ({ ...m, [page]: (m[page] ?? []).slice(0, -1) }))}>
-                ひとつ戻す
-              </button>
-              <button type="button" className="btn btn--small"
-                      disabled={!(ink[page] ?? []).length}
-                      onClick={() => setInk((m) => ({ ...m, [page]: [] }))}>
-                全部消す
-              </button>
-            </div>
-          )}
 
           {/* ── セッションの記録(0032)──────────────────────
               **書き込むと同じ理由でここに置く。** いつも要る1行に
@@ -470,11 +481,55 @@ export default function LessonView({
               </button>
             ))}
           </div>
+          {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}
+          <div className="lesson-sizes lesson-widths">
+            {WIDTHS.map((w) => (
+              <button key={w.id} type="button" title={`紙の幅を ${w.label} にする`}
+                      className={`theme-btn${width === w.id ? ' is-active' : ''}`}
+                      onClick={() => { setWidth(w.id); saveWidth(w.id) }}>
+                {w.label}
+              </button>
+            ))}
+          </div>
           <button type="button" className="btn btn--small"
                   onClick={() => printElement(document.getElementById('lesson-sheet'))}>
             <PrintIcon />印刷
           </button>
         </div>
+
+        {/* ── 書き込みの道具は、**帯の中の別の行**に出す ──────────
+            2026-09 実機・利用者の指摘。
+
+              > 書き込みツールを開くとツールバーに収まりきらないので、
+              > これを修正してください。
+
+            以前は「表示」の並びに割り込ませていたので、色3つ +
+            ひとつ戻す + 全部消す が入った瞬間に**1行に収まらなくなった。**
+            書いているあいだだけ出る行なので、**ふだんの高さは変わらない。**
+            ペンを持っているあいだは何度も触るものなので、
+            吹き出しにはしない(外側を押すと閉じてしまい、紙に書けない)。 */}
+        {pen && (
+          <div className="lesson-ink">
+            {INK_COLORS.map((c) => (
+              <button key={c.id} type="button"
+                      className={`ink-color${inkColor === c.color ? ' is-on' : ''}`}
+                      style={{ '--ink-color': c.color }}
+                      aria-label={`${c.label}で書く`} aria-pressed={inkColor === c.color}
+                      onClick={() => setInkColor(c.color)} />
+            ))}
+            {/* **ひとつ戻す**を先に置く。書き損じはたいてい直前の1本 */}
+            <button type="button" className="btn btn--small"
+                    disabled={!(ink[page] ?? []).length}
+                    onClick={() => setInk((m) => ({ ...m, [page]: (m[page] ?? []).slice(0, -1) }))}>
+              ひとつ戻す
+            </button>
+            <button type="button" className="btn btn--small"
+                    disabled={!(ink[page] ?? []).length}
+                    onClick={() => setInk((m) => ({ ...m, [page]: [] }))}>
+              全部消す
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 紙と、その横のメモ。**入れ物を1つはさむ**(0032)。
@@ -486,7 +541,7 @@ export default function LessonView({
       {/* 通しの練習のあいだは、紙を**縦いっぱいの1枚**として使う。
           そうすると出題がまん中に落ち着き、**文の長さが変わっても
           ボタンの場所が動かない**(2026-08 の指摘) */}
-      <div className={`lesson-sheet lesson-sheet--${size}${run ? ' is-running' : ''}`}
+      <div className={`lesson-sheet lesson-sheet--${size} lesson-sheet--${width}${run ? ' is-running' : ''}`}
            id="lesson-sheet" ref={sheetRef}>
         {/* **書き込みは、紙の中に敷く。** 送る箱の中にあるので、
             中身と一緒に動く(会議アプリのペンとの違いはここ) */}

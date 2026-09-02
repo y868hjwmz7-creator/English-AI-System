@@ -464,6 +464,13 @@ export default function MaterialForm({
         // **黙って落とさない。** 何が足りなかったのかは残しておく
         console.warn(`カタマリごとの訳を作れませんでした: ${cjError}`)
       } else {
+        /* **足りなかった段落は、`generateChunkJa()` の中でやり直している。**
+           それでも残ったものは、教材を使うとき(セッションで使う)に
+           `needsChunkJa()` が拾って裏で作り直す。ここでは記録だけ残す */
+        if (cj.skipped) {
+          console.warn(`カタマリごとの訳が ${cj.skipped} 段落ぶん足りません`
+            + '(セッションで使うときに、裏で作り直します)')
+        }
         const byNo = new Map(chunkTodo.map((x) => [x.no, x]))
         for (const part of cj.parts ?? []) {
           const src = byNo.get(part.no)

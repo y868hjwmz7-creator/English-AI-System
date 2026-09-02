@@ -2912,6 +2912,12 @@ html { -webkit-text-size-adjust: 100%; }
    横に並べる入れ物に入れると `flex: 1` は「幅を伸ばす」意味になるので、
    上限をここで押さえておく(入れ物を1つはさんだだけで見た目を変えない) */
 .lesson-body > .lesson-sheet { max-width: min(860px, calc(100% - 24px)); }
+/* **紙の幅を広げる**(2026-09 利用者の指定)。
+   ブラウザの拡大(Ctrl と +)は操作欄まで大きくして2段にしてしまうので、
+   **紙だけを広げる道**を用意した。基準は 860px。 */
+.lesson-body > .lesson-sheet--w110 { max-width: min(946px, calc(100% - 24px)); }
+.lesson-body > .lesson-sheet--w120 { max-width: min(1032px, calc(100% - 24px)); }
+.lesson-body > .lesson-sheet--w130 { max-width: min(1118px, calc(100% - 24px)); }
 .lesson-notes {
   flex: 0 0 clamp(280px, 26vw, 380px);
   display: flex; flex-direction: column; gap: 8px;
@@ -2925,6 +2931,9 @@ html { -webkit-text-size-adjust: 100%; }
 }
 /* 狭い画面では横に置けない(紙が読めない幅になる)。**下から出す** */
 @media (max-width: 860px) {
+  /* **狭い画面では、紙の幅を選ばせない。** 紙はもともと画面いっぱいで、
+     広げる余地が無い(効かない操作を見せない・CLAUDE.md) */
+  .lesson-widths { display: none; }
   .lesson-body { flex-direction: column; }
   .lesson-notes {
     flex: 0 0 auto; margin: 0 5px 5px; max-height: 42vh;
@@ -2953,7 +2962,15 @@ html { -webkit-text-size-adjust: 100%; }
 .notes-card > summary { cursor: pointer; }
 
 /* 書き込みの色を選ぶ丸。**塗りつぶした丸そのものが見本**になる */
-.lesson-ink { display: flex; align-items: center; gap: 6px; }
+/* 書き込みの道具。**帯の中の別の行**にする(2026-09 利用者の指摘)。
+   「表示」の並びに割り込ませていたので、色3つ + ひとつ戻す + 全部消す が
+   入った瞬間に1行へ収まらなくなっていた。
+   `flex-basis: 100%` で必ず改行させ、**ふだんの帯の高さは変えない**
+   (ペンを持っているあいだしか描かない)。 */
+.lesson-ink {
+  flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding-top: 8px; margin-top: 2px; border-top: 1px solid #45453f;
+}
 .ink-color {
   width: 26px; height: 26px; padding: 0; flex: none;
   border: 2px solid transparent; border-radius: 999px;

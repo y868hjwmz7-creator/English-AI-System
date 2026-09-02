@@ -719,21 +719,68 @@ export async function generateChunkJa(parts) {
   if (!supabase) return ng('Supabase が設定されていません')
   if (!parts?.length) return ng('訳を作る本文がありません')
 
-  const { data, error } = await supabase.functions.invoke('generate-material', {
-    body: { mode: 'chunk_ja', parts },
-  })
-
-  if (error) {
-    let detail = ''
-    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
-    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-      return ng('訳を作る窓口につながりませんでした。'
-        + 'Supabase の generate-material を配置し直したか確認してください。')
+  /* 窓口を1回呼ぶ。**カタマリの数が合わない段落は、窓口が落として返す**
+     (ずれた対は無いより悪いため)。落ちた段落は下でやり直す */
+  const callOnce = async (want) => {
+    const { data, error } = await supabase.functions.invoke('generate-material', {
+      body: { mode: 'chunk_ja', parts: want },
+    })
+    if (error) {
+      let detail = ''
+      try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+      if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+        return ng('訳を作る窓口につながりませんでした。'
+          + 'Supabase の generate-material を配置し直したか確認してください。')
+      }
+      return ng(detail || `訳を作れませんでした: ${error.message}`)
     }
-    return ng(detail || `訳を作れませんでした: ${error.message}`)
+    if (data?.error) return ng(data.error)
+    return ok(data)
   }
-  if (data?.error) return ng(data.error)
-  return ok(data)
+
+  /* **足りなかった段落だけ、もう一度頼む**(2026-09 実機・利用者の指摘)。
+
+       > 途中の段落で「この区切りで訳を出す」ではなく「訳を出す」に
+       > なってしまっていて、おそらくそれが原因で区切りの訳がでません。
+
+     窓口は「カタマリの数が合った段落だけ」を返し、合わなかった数を
+     `skipped` で知らせていた。**ところが画面はそれを見ていなかった**ので、
+     6段落のうち何段落かだけ訳が入り、残りは
+     「訳を出す(段落まるごと)」に落ちていた。
+
+     **利用者が押し直せば直るのだから、こちらで押し直す**
+     (生成が空で返ったときと同じ考え方・CLAUDE.md)。
+     **2回で止める。** 際限なく試すと、残高切れのときに待たされ続ける。
+     頼み直すのは**足りない段落だけ**なので、うまくいく回の費用は変わらない。 */
+  const got = new Map()
+  const usage = { input: 0, output: 0, cacheRead: 0 }
+  let rest = parts
+  let lastError = null
+
+  for (let attempt = 0; attempt < 2 && rest.length; attempt += 1) {
+    const { data, error } = await callOnce(rest)
+    if (error) {
+      // 1回目で駄目なら、そのまま知らせる。2回目の失敗は、
+      // 1回目に取れたぶんを活かして先へ進む(部分的にでも訳は出る)
+      if (!got.size) return ng(error)
+      lastError = error
+      break
+    }
+    for (const p of data.parts ?? []) {
+      if (Array.isArray(p?.ja)) got.set(Number(p.no), p.ja)
+    }
+    usage.input += data.usage?.input ?? 0
+    usage.output += data.usage?.output ?? 0
+    usage.cacheRead += data.usage?.cacheRead ?? 0
+    rest = parts.filter((p) => !got.has(Number(p.no)))
+  }
+
+  if (!got.size) return ng(lastError || 'カタマリの数が合う訳が1件も返りませんでした。')
+  return ok({
+    parts: [...got].map(([no, ja]) => ({ no, ja })),
+    skipped: rest.length,
+    usage,
+  })
 }
 
 /**
