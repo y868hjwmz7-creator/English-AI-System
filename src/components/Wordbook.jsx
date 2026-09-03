@@ -48,6 +48,7 @@ import { usePracticeLog } from '../lib/practice.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
+import { CloseIcon, FocusIcon } from './Icons.jsx'
 
 /**
  * 画面の切り替え(2026-08 利用者の指定・0027)。
@@ -152,6 +153,22 @@ export default function Wordbook({
   usePracticeLog('wordbook', true, learnerId)
 
   const [view, setView] = useState('due')
+  /**
+   * **復習を、集中モードと同じ形で出しているか**(2026-09 利用者の指定
+   * 「単語帳モード、集中モードにしよう」)。
+   *
+   * 単語帳は上に札・プルダウン・絞り込みが積み重なっていて、
+   * スマホでは**カードが画面の下のほうから始まっていた。**
+   * 出題を画面ぴったりの1枚にすれば、送るものが無くなり、
+   * **1語だけに向き合える**(`FocusReader` と同じ考え方)。
+   *
+   * **既定は「出す」。** 復習の札を押した人は、もう答える気で来ている。
+   * 入口をもう1つ挟むと、そのぶん遠くなる
+   * (利用者の言葉「そもそも集中モードというものをおかずに
+   *  集中モードのように表示されるのが理想」)。
+   * 「とじる」で一覧に戻れる。
+   */
+  const [running, setRunning] = useState(true)
   const [want, setWant] = useState('auto')      // 出題の形。auto は箱に合わせる
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
   /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
@@ -329,7 +346,18 @@ export default function Wordbook({
    * **場所が毎回同じ**になるので、押す場所を探さなくてよい。
    * 動きは付けない(`behavior: 'auto'`)。滑る動きが苦手な人がいる。
    */
+  /* 集中モードで出しているあいだは、**うしろの画面を動かさない**
+     (`FocusReader` と同じ作法)。これが無いと外側が指で送れてしまう */
   useEffect(() => {
+    if (!running || !isQuiz) return undefined
+    const before = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = before }
+  }, [running, isQuiz])
+
+  useEffect(() => {
+    // **集中モードでは送らない。** 画面ぴったりなので、送るものが無い
+    if (running) return
     if (!card || !cardRef.current) return
     /* **押した跡を持ち越さない。** iPhone では押したボタンに焦点が残り、
        次の問題でも黒い枠が見えていた(2026-09 実機)。
@@ -360,6 +388,7 @@ export default function Wordbook({
    * **語のカードと同じ決まりで置き直す**(狭い画面は上、広い画面はまん中)。
    */
   useEffect(() => {
+    if (running) return
     if (!result || !resultRef.current) return
     resultRef.current.scrollIntoView({
       block: wide ? 'center' : 'start', behavior: 'auto',
@@ -577,7 +606,16 @@ export default function Wordbook({
           **効かない画面のコードを残さない。** 戻すときは git から取り出す */}
 
       {/* ── 今日の復習(10語ずつ)────────────────────────────── */}
-      {isQuiz && !loading && result && (
+      {isQuiz && !loading && result && running && (
+      <div className="focus wbfocus" role="dialog" aria-modal="true" aria-label="今日の復習">
+        <div className="focus-top">
+          <button type="button" className="btn btn--small btn--ghost"
+                  onClick={() => setRunning(false)}>
+            <CloseIcon />とじる
+          </button>
+          <span className="focus-count">おつかれさまでした</span>
+        </div>
+        <div className="focus-body">
         <div className="wordcard wordcard--result" ref={resultRef}>
           {/* **終わったときの点数は、大きく出す。**
               10語やり切ったことが分かるようにする(2026-08 利用者の指定) */}
@@ -601,6 +639,8 @@ export default function Wordbook({
             )
             : <p className="hint">今日の分は終わりです。よくできました。</p>}
         </div>
+        </div>
+      </div>
       )}
 
       {/* **復習にも日付の絞り込みを置く**(2026-08 利用者の指定)。
@@ -627,8 +667,17 @@ export default function Wordbook({
             : <p className="hint">今日出すものはありません。よくできました。</p>
       )}
 
-      {card && (
-        <>
+      {/* **とじたあとの戻り道**(2026-09)。集中モードは画面ぴったりなので、
+          出ていると一覧が見えない。出ていないときは、ここから入り直す */}
+      {isQuiz && !loading && !running && (card || result) && (
+        <button type="button" className="btn btn--primary wb-start"
+                onClick={() => setRunning(true)}>
+          <FocusIcon />今日の復習をつづける
+        </button>
+      )}
+
+      {card && running && (
+        <div className="focus wbfocus" role="dialog" aria-modal="true" aria-label="今日の復習">
           {/* **この回の進み具合**(2026-08 利用者の指定)。
                 > あと10語みたいなのも、入れるのであればしっかりメリハリを
                 > つけて存在意義があるように。
@@ -647,6 +696,12 @@ export default function Wordbook({
                 {/* 出題の形は**タブの右**へ移した(2026-08 利用者の指定)。
                     ここに残すと、同じものが2か所に出る */}
                 <div className="wb-run-head">
+                  {/* **戻る道は、いちばん先に置く**(集中モードと同じ作法)。
+                      画面ぴったりなので、無いと閉じ方を探すことになる */}
+                  <button type="button" className="btn btn--small btn--ghost"
+                          onClick={() => setRunning(false)}>
+                    <CloseIcon />とじる
+                  </button>
                   <span className="wb-run-count">
                     <strong>{done + 1}</strong> / {total} 語
                   </span>
@@ -676,6 +731,10 @@ export default function Wordbook({
             )
           })()}
 
+          {/* **出題は、画面の残りいっぱいの中でまん中に置く**
+              (集中モードと同じ `.focus-body`)。
+              上に積まれた札や絞り込みは、この裏に隠れている */}
+          <div className="focus-body">
           <div className="wordcard" ref={cardRef}>
 
             {/* **出題は、高さの決まった枠に入れる**(2026-09 利用者の指定)。
@@ -889,7 +948,8 @@ export default function Wordbook({
                 箱と次に出す日は、**この仕組みが内側で使う数字**である。
                 ゲストにできることは何も無く、覚える助けにもならない。 */}
           </div>
-        </>
+          </div>
+        </div>
       )}
 
       {/* ── 見返す用の一覧 ────────────────────────────────────── */}
