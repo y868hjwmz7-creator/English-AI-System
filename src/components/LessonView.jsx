@@ -684,6 +684,25 @@ export default function LessonView({
           </div>
         )}
 
+        {/* ── 右下に貼り付く「集中モード」(2026-09 利用者の指定)──────
+            > このボタンは「教材を作る」のように常に右下にも固定してください。
+
+            上のボタンの行は**紙と一緒に送られて消える。** 記事は6段落あるので、
+            読んでいる途中で「この語を調べたい」と思ったときには
+            もう画面の外にいる。**押したくなる場所に、いつでもある**ようにする
+            (さがす画面の `.finder-float` と同じ考え方)。
+
+            **入る場所と出る場所を、同じ右下にそろえる**
+            (出るほうは `FocusReader` の `.focus-exit`)。
+            通しの練習(6Steps / Quick Response)のあいだは出さない。
+            あちらはあちらで下にボタンがあり、重なる */}
+        {passageSection && !run && (
+          <button type="button" className="btn btn--small focus-float no-print"
+                  onClick={() => { stopAll(); setRun('focus') }}>
+            <FocusIcon />集中モード
+          </button>
+        )}
+
         {run === 'focus' ? (
           /* **集中モード。** 1段落だけを画面に固定して語を調べる。
              `PassagePractice` を通さず、ここから直に出す

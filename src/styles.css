@@ -4979,12 +4979,29 @@ html, body { overscroll-behavior-x: none; }
   padding: 20px 16px;
   display: flex; flex-direction: column; justify-content: safe center;
 }
+/* **広い画面では、文章を横のまん中に寄せる**(2026-09 利用者の指定
+   「パソコンではもう少し文章を真ん中に寄せてください」)。
+
+   これまで幅の上限が無かったので、パソコンでは 19px の行が
+   画面いっぱい(1400px 近く)まで伸び、**左に貼り付いて見えていた。**
+   目が行の終わりから次の行の先頭へ戻れないほど長い。
+
+   `max-width` なので、**狭い画面では何も変わらない**(いまの見え方のまま)。
+   34em は Quick Response の日本語(`.qr-ja`)と同じ読み幅である。
+   **文字そのものは左そろえのまま。** 寄せるのは「かたまり」であって、
+   本文を中央そろえにすると英語は読みにくくなる。 */
+.focus-body > * { width: 100%; max-width: 34em; margin-left: auto; margin-right: auto; }
 .focus-speaker {
   font-weight: 700; color: var(--accent); margin-bottom: 10px;
 }
 /* 英語と訳は**同じ組み方**にする。入れ替えたときに行の位置が動かない */
 .focus-en, .focus-ja {
-  margin: 0; font-size: 19px; line-height: 2.0;
+  /* **左右の余白は書かない。** 上の `.focus-body > *` が
+     `margin-left/right: auto` で横のまん中に寄せている。
+     ここで `margin: 0` と書くと、**あとに来るこちらが勝って**
+     寄せが効かなくなる(実測でそうなっていた) */
+  margin-top: 0; margin-bottom: 0;
+  font-size: 19px; line-height: 2.0;
   overflow-wrap: break-word;
 }
 .focus-ja { color: var(--text-primary); }
@@ -4999,6 +5016,18 @@ html, body { overscroll-behavior-x: none; }
   border-top: 1px solid var(--border);
   background: var(--surface-1);
 }
+/* 帯と、その上に浮かぶ「集中モードを終える」の入れ物。
+   **帯そのものには置かない。** 「次 ▶」と重なるか、320px で1行に収まらない */
+.focus-barwrap { flex: 0 0 auto; position: relative; }
+/* **入る場所と出る場所を、同じ右下にそろえる**(2026-09 利用者の指定)。
+   紙の右下の「集中モード」(`.focus-float`)と、上下だけが帯のぶん違う */
+.focus-exit {
+  position: absolute; right: 16px; bottom: 100%; margin-bottom: 10px; z-index: 1;
+  background: var(--surface-1); border-color: var(--border);
+  box-shadow: var(--shadow-2);
+}
+@media (max-width: 400px) { .focus-exit { right: 12px; } }
+
 /* 送りボタンは**縮ませない。** 名前が縮むより、押せることが先 */
 .focus-move { flex: 0 0 auto; min-width: 72px; }
 .focus-mid {
@@ -5044,6 +5073,21 @@ html, body { overscroll-behavior-x: none; }
 /* 「集中モード」への入り口。**本文のすぐ上**に置く。
    ふだんの練習の邪魔をしないよう、枠線だけの控えめな形にする */
 .passage-focus { margin-bottom: 12px; }
+
+/* 紙の右下に貼り付く「集中モード」(2026-09 利用者の指定
+   「『教材を作る』のように常に右下にも固定してください」)。
+   **さがす画面の `.finder-float` と同じ置き方**にそろえてある。
+   青の塗りつぶしにはしない — 紙でいちばん大事なのは本文である */
+.focus-float {
+  position: fixed; right: 16px; z-index: 60;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  background: var(--surface-1); border-color: var(--border);
+  box-shadow: var(--shadow-2);
+}
+@media (max-width: 560px) {
+  /* 狭い画面では、下の端に少しだけ寄せる(親指の届くところ) */
+  .focus-float { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
 
 /* 「英語を見る」と「Listen」。**どちらも答えそのものではない**ので
    同じ段に置く(答えの2つ「まだ / 言えた」は1段下でとなりどうし)。

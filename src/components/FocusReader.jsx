@@ -253,8 +253,12 @@ export default function FocusReader({
               <p className="focus-ja">{item.prompt_ja}</p>
             ) : (
               <p className="focus-en">
+                {/* **ここだけは、狭い画面でも語を押せる**(2026-09 利用者の指定)。
+                    1段落を画面に固定しているので送るものが無く、
+                    タップと画面送りが喧嘩しない。**調べるのはここでする** */}
                 <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
-                             statuses={wordStatuses} onMark={markWord} />
+                             statuses={wordStatuses} onMark={markWord}
+                             tappable="always" />
               </p>
             )}
           </>
@@ -267,6 +271,20 @@ export default function FocusReader({
       {!wrap && picked > 0 && (
         <p className="focus-picked">この{unit}で {picked} 語 入れました</p>
       )}
+
+      {/* ── すぐ元に戻る(2026-09 利用者の指定)────────────────
+          > そしてすぐに元に戻れるボタンも作ってください。
+
+          **入った場所と、出る場所を同じにする。** 紙の右下の「集中モード」を
+          押して入り、同じ右下を押して戻る。左上の「✕ 閉じる」も残してあるが、
+          スマホでは**親指がいちばん届かないのが左上**である。
+
+          **帯の上に浮かせる**(`bottom: 100%`)。帯そのものに置くと
+          「次 ▶」と重なるか、320px で1行に収まらなくなる。 */}
+      <div className="focus-barwrap">
+        <button type="button" className="btn btn--small focus-exit" onClick={onClose}>
+          <CloseIcon />集中モードを終える
+        </button>
 
       {/* ── 下の帯。**親指が届くのは下半分**。端からは離す ────── */}
       <div className="focus-bar">
@@ -308,6 +326,7 @@ export default function FocusReader({
             )}
           </>
         )}
+      </div>
       </div>
     </div>
   )

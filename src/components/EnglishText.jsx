@@ -61,6 +61,7 @@ import { lookupWord, normWord, preloadGlosses, splitWords } from '../lib/vocab.j
 import { splitSentences } from '../lib/wordTiming.js'
 import GlossPopover from './GlossPopover.jsx'
 import { tapFeedback } from '../lib/haptics.js'
+import { useWide } from '../lib/nav.js'
 
 /**
  * **画面が動いた直後は、叩いてもタップとみなさない**(ms)。
@@ -103,7 +104,33 @@ const MOVE_SLOP = 10
 export default function EnglishText({
   text, textJa = '', level = 'B1', statuses = null, onMark = null,
   className = '', lang = 'en', readingAt = null,
+  /**
+   * 語を押して意味を引けるようにするか(2026-09 利用者の指定)。
+   *
+   *   > スマホ、パッドのみ集中モード以外の時は単語を調べる機能を
+   *   > 除外してください。これでスクロールが快適になるはずです
+   *
+   * **`'auto'`(既定)… 広い画面(PC)でだけ押せる。**
+   * **`'always'` … 幅によらず押せる。** 集中モードだけがこれを渡す。
+   *
+   * 【なぜ幅で切るのか】
+   *   語のタップと画面送りは、**同じ指の動きから始まる。**
+   *   「動かずに離れたらタップ」まで詰めてもなお、送るたびに
+   *   語の上で指を止めれば意味が出る余地が残る。
+   *   **1段落だけを画面に固定する集中モードでは、送るものが無い**ので
+   *   この喧嘩そのものが起きない(`FocusReader.jsx`)。
+   *   だから**調べるのは集中モードで**、ふだんの読みは送りに徹する。
+   *
+   * 【押せないときは `<button>` にしない】
+   *   `.etext-word` は `user-select: none` と `touch-action: manipulation` を
+   *   持っている。押せないのに残すと、**選んでコピーすることまでできない。**
+   *   ただの文字に戻す。
+   */
+  tappable = 'auto',
 }) {
+  /** **判断は幅だけ**(`useWide`)。UA も `pointer` も見ない(CLAUDE.md) */
+  const wide = useWide()
+  const canTap = tappable === 'always' || wide
   const [openIndex, setOpenIndex] = useState(null)  // いま開いている語
   const [gloss, setGloss] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -465,6 +492,12 @@ export default function EnglishText({
    */
   const renderPart = (part, i, run = null) => {
         if (!part.word) return <span key={i}>{part.text}</span>
+        /* **押せないときは、ただの文字に戻す**(狭い画面 + 集中モード以外)。
+           `<button>` のまま残すと `user-select: none` が効いたままで、
+           押せないのに選ぶこともできない、いちばん困る形になる。
+           **色(知っていた / 知らなかった)は `.etext-run` が持っている**ので、
+           ここを span にしても印は消えない */
+        if (!canTap) return <span key={i}>{part.text}</span>
         const asPhrase = run?.phrase ?? null
         // 囲みが色を持つので、語そのものには色を付けない(縞にならないように)
         const status = null
