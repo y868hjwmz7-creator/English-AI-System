@@ -1796,10 +1796,10 @@ html, body { overscroll-behavior-x: none; }
   display: inline-flex; align-items: center; gap: 8px;
   margin: 0 0 10px; max-width: 100%;
 }
-.step-pick-label {
-  font-size: 12px; font-weight: 700; letter-spacing: .04em;
-  color: var(--text-secondary);
-}
+/* **「6Steps」の文字は出さなくなった**(2026-09 利用者の指定)。
+   上のボタンの行に「6Steps」があり、押して開いた先なので、
+   ここでもう一度名乗る必要がない。
+   読み上げのための名前(`aria-label`)は残してある */
 .step-pick select {
   min-height: 40px; min-width: 0; flex: 0 1 auto;
   padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px;

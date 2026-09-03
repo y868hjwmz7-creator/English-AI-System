@@ -440,6 +440,17 @@ export default function LessonView({
   /** 集中モードを、いま見ている発言から始める(`null` なら覚えている場所) */
   const [focusAt, setFocusAt] = useState(null)
   /**
+   * 6Steps の最中の集中モード(2026-09 利用者の指定)。
+   *
+   *   > ディクテーション画面でもスラッシュリーディング画面でも
+   *   > 同じにしてください
+   *
+   * ボタンの行は**この画面が持っている**ので、開いているかどうかも
+   * ここで持ち、`PassagePractice` に渡す。中にも同じボタンを置くと、
+   * **1つの画面に同じものが2つ**出る(CLAUDE.md)。
+   */
+  const [sixFocus, setSixFocus] = useState(false)
+  /**
    * 「取り組み方」を開いている演習の id(2026-09 利用者の指定)。
    * **覚えない。** 「初めは閉じてて欲しい」という指定なので、
    * 開くたびに閉じたところから始める。
@@ -467,6 +478,11 @@ export default function LessonView({
     const id = window.requestAnimationFrame(put)
     return () => window.cancelAnimationFrame(id)
   }, [run])
+
+  /* 6Steps を閉じたら、その集中モードも閉じる。
+     開いたままにしておくと、次に 6Steps を押した瞬間に
+     **いきなり集中モードで始まる** */
+  useEffect(() => { if (run !== 'six') setSixFocus(false) }, [run])
 
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
@@ -731,6 +747,14 @@ export default function LessonView({
                 <StepsIcon />6Steps
               </button>
             )}
+            {qrPossible && (
+              <button type="button"
+                      className={`btn btn--small${qr ? ' btn--primary' : ''}`}
+                      aria-pressed={qr}
+                      onClick={() => { stopAll(); setRun(qr ? null : 'qr') }}>
+                <BoltIcon />Quick Response
+              </button>
+            )}
             {/* **集中モード**(2026-09 実機「どこにも集中モードがありません」)。
 
                 はじめは `PassagePractice` の中にだけ置いていた。ところが
@@ -739,29 +763,29 @@ export default function LessonView({
                 語を調べるのは 6Steps に入る**前**の段階なので、そこにあっては
                 たどり着けない。**6Steps・Quick Response と横に並べる。**
 
-                **6Steps を開いているあいだは、こちらを引っ込める**
-                (2026-09 利用者の指定で、6Steps の中にも集中モードを作った)。
-                あちらは**いまの取り組み方**を1つずつ出すもの、
-                こちらは**本文を読んで語を調べる**もので、役目が違う。
-                けれども名前は同じ「集中モード」なので、
-                **1つの画面に2つ見せない**(CLAUDE.md)。 */}
-            {passageSection && run !== 'six' && (
+                **並びは「6Steps → Quick Response → 集中モード」**
+                (2026-09 利用者の指定)。
+
+                  > トップの画面でのボタンの並びを左から「６Steps」
+                  > 「Quick Response」「集中モード」にして、ディクテーション
+                  > 画面でもスラッシュリーディング画面でも同じにしてください。
+
+                **6Steps を開いているあいだも、同じ行のまま出す。**
+                そのときは**いまの取り組み方**の集中モード
+                (1文ずつ / 1発言ずつ)に入る。中に同じボタンを置かないので、
+                **同じことをするボタンは、どの画面でも1つだけ**である */}
+            {passageSection && (
               <button type="button"
-                      className={`btn btn--small${run === 'focus' ? ' btn--primary' : ''}`}
-                      aria-pressed={run === 'focus'}
+                      className={`btn btn--small${
+                        run === 'focus' || (run === 'six' && sixFocus) ? ' btn--primary' : ''}`}
+                      aria-pressed={run === 'focus' || (run === 'six' && sixFocus)}
                       onClick={() => {
+                        // 6Steps の最中は、**その取り組み方**を1つずつ出す
+                        if (run === 'six') { setSixFocus((v) => !v); return }
                         if (run === 'focus') { stopAll(); setRun(null); return }
                         openFocus()
                       }}>
                 <FocusIcon />集中モード
-              </button>
-            )}
-            {qrPossible && (
-              <button type="button"
-                      className={`btn btn--small${qr ? ' btn--primary' : ''}`}
-                      aria-pressed={qr}
-                      onClick={() => { stopAll(); setRun(qr ? null : 'qr') }}>
-                <BoltIcon />Quick Response
               </button>
             )}
           </div>
@@ -852,7 +876,11 @@ export default function LessonView({
                上のボタンの行にあるもの(本文を読んで語を調べる)とは別物である。
                同じ言葉が2つ並ばないよう、6Steps を開いているあいだは
                上の行のほうを引っ込めてある(すぐ上の `.practice-row`) */
-            showFocus
+            /* 集中モードのボタンは**上のボタンの行**にある(利用者の指定で、
+               6Steps を開いているあいだも同じ行のまま出す)。
+               ここにも出すと、1つの画面に同じボタンが2つ並ぶ */
+            showFocus={false}
+            focus={sixFocus} onFocusChange={setSixFocus}
             /* **紙の幅をそのまま引き継ぐ**(2026-09 実機
                「画面幅が引き継がれていません」)。130% にして読んでいた人が、
                集中モードに入った瞬間に別の幅に変わっては落ち着かない。

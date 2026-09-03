@@ -83,12 +83,19 @@ export default function PassagePractice({
    * 紙の外(ゲストの宿題など)からは指定が無いので、そのままの幅になる。
    */
   focusWidth = 'w100',
+  /** 集中モードを外から開け閉めする(渡さなければ自分で持つ) */
+  focus: focusProp = null, onFocusChange = null,
 }) {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('six_steps', true, learnerId)
   /** 集中モード(1段落ずつ調べる画面)を出しているか(2026-09 利用者の指定)。
       **覚えない。** 開くたびに本文から始めるほうが素直である */
-  const [focus, setFocus] = useState(false)
+  /* **外から開け閉めできるようにしてある**(2026-09 利用者の指定)。
+     レッスン表示では、集中モードのボタンが**上のボタンの行**にあるので、
+     開いているかどうかもあちらが持つ。渡されなければ自分で持つ */
+  const [focusOwn, setFocusOwn] = useState(false)
+  const focus = focusProp ?? focusOwn
+  const setFocus = onFocusChange ?? setFocusOwn
   /** 集中モードで、いま何番目を出しているか。**取り組み方を変えたら先頭へ戻す** */
   const [focusAt, setFocusAt] = useState(0)
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る */
@@ -420,9 +427,13 @@ export default function PassagePractice({
           **番号を出す。** 順にやるものなので、いま何番目かが
           分かることそのものが道しるべになる。 */}
       {/* 集中モードでは、上の帯にある(`StepFocus`)。**2つ見せない** */}
+      {/* **「6Steps」の文字は出さない**(2026-09 利用者の指定)。
+            > その他のトレーニングのタブの左の6Stepsの文字を削除してください
+          上のボタンの行に「6Steps」があり、押して開いた先なので、
+          ここでもう一度名乗る必要がない。
+          **読み上げには残す**(`aria-label`)。目で見えるものが減るだけ */}
       {!focus && (
         <label className="step-pick">
-          <span className="step-pick-label">6Steps</span>
           <select value={step} aria-label="6Steps の切り替え"
                   onChange={(e) => { stopPlaying(); setStep(e.target.value) }}>
             {SIX_STEPS.map((m) => (
