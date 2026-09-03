@@ -105,6 +105,19 @@ export default function FocusReader({
   section, isDialogue = false, voiceIds = null, tier,
   level = 'B1', wordStatuses = null, onMarkWord = null,
   materialId = null, learnerId = null, onClose,
+  /**
+   * **どこから始めるか**(2026-09 利用者の指定)。
+   *
+   *   > KENJI が大体画面の中心に来ている時は集中モードを押したら
+   *   > ②KENJI の集中モードに入り…
+   *
+   * 呼ぶ側(`LessonView`)が「いま紙のまん中に出ている発言」を渡す。
+   * **これは「どこまで見たか」の控えより強い。** 目はいまその発言の上に
+   * あるので、別のところから始まると探し直すことになる。
+   * `null`(見えていない・呼ばれ方が違う)のときは、これまでどおり
+   * **覚えている場所**から始まる。
+   */
+  startAt = null,
 }) {
   const items = useMemo(
     () => (section?.items ?? []).filter((it) => String(it?.prompt_en ?? '').trim()),
@@ -118,9 +131,22 @@ export default function FocusReader({
   /** 見終わった段落。**印を付けて、どこまでやったか一目で分かるようにする** */
   const [done, setDone] = useProgress(`${key}.done`, [], learnerId)
 
+  /**
+   * **入ってきたときに指定された場所**(紙のまん中に出ていた発言)。
+   *
+   * 控え(`at`)より**こちらが強い。** ただし効くのは入った直後だけで、
+   * ◀ ▶ を1度でも押したら控えの側に戻す(`go` が `null` にする)。
+   * **控えそのものは書き換えない。** 覗いただけで
+   * 「ここまで見た」が動くと、次に開いたときに話が飛ぶ。
+   */
+  const [from, setFrom] = useState(
+    () => (Number.isFinite(startAt) && startAt >= 0 ? startAt : null),
+  )
   // **控えていた場所が範囲の外になっていることがある**(教材を直したあと)。
   // そのまま使うと空の段落になるので、必ず中に収める(CLAUDE.md)
-  const index = Math.min(Math.max(Number(at) || 0, 0), Math.max(items.length - 1, 0))
+  const index = Math.min(
+    Math.max(Number(from ?? at) || 0, 0), Math.max(items.length - 1, 0),
+  )
   const item = items[index] ?? null
 
   /** いま訳を出しているか。**段落を送ったら必ず英語に戻す** */
@@ -141,6 +167,8 @@ export default function FocusReader({
     const n = Math.min(Math.max(next, 0), items.length - 1)
     setShowJa(false)
     setWrap(false)
+    // 送った時点で、控えの側に戻す(以後は「どこまで見たか」が効く)
+    setFrom(null)
     setAt(n)
     // 見た段落に印を付ける(重ねて入れない)
     const list = Array.isArray(done) ? done : []

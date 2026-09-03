@@ -15,7 +15,7 @@
  *     答え合わせのときに出す。トレーナーが手元で決める
  *   ・文字の大きさを3段階で変えられる。共有先の画面の大きさが分からないため
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { countLabel, exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
@@ -397,6 +397,71 @@ export default function LessonView({
   // いま開いているページが語句や設問でも、6Steps は本文に対して行う
   const passageSection = sections.find((x) => isPassageSection(x.exercise_type)) ?? null
 
+  /**
+   * **いま紙のまん中に出ているのは、どの発言(段落)か**
+   * (2026-09 利用者の指定)。
+   *
+   *   > KENJI が大体画面の中心に来ている時は集中モードを押したら
+   *   > ②KENJI の集中モードに入り、解除したら同じ場所に戻るようにしてください。
+   *
+   * 集中モードは「どこまで見たか」を覚えているが、**紙を読んでいる途中で
+   * 押したときは、そちらのほうが強い。** 目はいまその発言の上にあるので、
+   * 別のところから始まると、探し直すことになる。
+   *
+   * 中心からの近さで選ぶ。**まん中にかかっていれば距離 0** なので、
+   * 画面をまたぐ長い発言でも正しく当たる。
+   * 見えていない(ページを閉じている)ときは `null` を返し、
+   * **覚えている場所のまま**にする。
+   */
+  const centeredFocusIndex = () => {
+    const el = sheetRef.current
+    if (!el || !passageSection) return null
+    const box = el.getBoundingClientRect()
+    const mid = box.top + box.height / 2
+    let best = null
+    let bestGap = Infinity
+    el.querySelectorAll('li[data-focus]').forEach((node) => {
+      const r = node.getBoundingClientRect()
+      if (r.height === 0) return          // 閉じているページは高さが 0
+      const gap = r.top > mid ? r.top - mid : (r.bottom < mid ? mid - r.bottom : 0)
+      if (gap < bestGap) { bestGap = gap; best = Number(node.dataset.focus) }
+    })
+    return Number.isFinite(best) ? best : null
+  }
+
+  /**
+   * **集中モードに入る前の場所**(利用者の指定「解除したら同じ場所に戻る」)。
+   *
+   * 紙は `overflow-y: auto` の箱なので、送った量は `scrollTop` に入っている。
+   * ただし練習中は `.lesson-sheet.is-running` で**並べ方が変わる**ため、
+   * 戻ってきたときには送りの量が落ちていることがある。だから控えておく。
+   */
+  const backTo = useRef(null)
+  /** 集中モードを、いま見ている発言から始める(`null` なら覚えている場所) */
+  const [focusAt, setFocusAt] = useState(null)
+
+  const openFocus = () => {
+    stopAll()
+    backTo.current = sheetRef.current?.scrollTop ?? null
+    setFocusAt(centeredFocusIndex())
+    setRun('focus')
+  }
+
+  /* 練習をやめて紙に戻ったら、**入る前とぴったり同じ場所**へ送り直す。
+     `useLayoutEffect` にしてあるのは、**描き直しのあと・目に映る前**に
+     戻すため。`useEffect` だと、いったん頭に戻ったのが見えてしまう。
+     並べ方が落ち着くのは次の1コマ先のことがあるので、そこでも念のため戻す */
+  useLayoutEffect(() => {
+    if (run !== null) return undefined
+    const y = backTo.current
+    if (y == null) return undefined
+    backTo.current = null
+    const put = () => { if (sheetRef.current) sheetRef.current.scrollTop = y }
+    put()
+    const id = window.requestAnimationFrame(put)
+    return () => window.cancelAnimationFrame(id)
+  }, [run])
+
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
     if (playingAll) { stopAll(); setReadingAt(null); return }
@@ -672,7 +737,10 @@ export default function LessonView({
               <button type="button"
                       className={`btn btn--small${run === 'focus' ? ' btn--primary' : ''}`}
                       aria-pressed={run === 'focus'}
-                      onClick={() => { stopAll(); setRun(run === 'focus' ? null : 'focus') }}>
+                      onClick={() => {
+                        if (run === 'focus') { stopAll(); setRun(null); return }
+                        openFocus()
+                      }}>
                 <FocusIcon />集中モード
               </button>
             )}
@@ -701,7 +769,7 @@ export default function LessonView({
             あちらはあちらで下にボタンがあり、重なる */}
         {passageSection && !run && (
           <button type="button" className="btn btn--small focus-float no-print"
-                  onClick={() => { stopAll(); setRun('focus') }}>
+                  onClick={openFocus}>
             <FocusIcon />集中モード
           </button>
         )}
@@ -716,6 +784,9 @@ export default function LessonView({
             voiceIds={material.voiceIds}
             tier={voiceTierFor({ exerciseType: passageSection.exercise_type, tags: allTags })}
             level={material.level}
+            /* **紙のまん中に出ていた発言から始める**(2026-09 利用者の指定)。
+               `null` のときだけ、覚えている場所から始まる */
+            startAt={focusAt}
             wordStatuses={wordStatuses} onMarkWord={onMarkWord}
             materialId={material.id} learnerId={learnerId}
             onClose={() => setRun(null)}
@@ -832,6 +903,26 @@ export default function LessonView({
     )
     const secTier = voiceTierFor({ exerciseType: sec.exercise_type, tags: allTags })
     const k = (it, i) => key(it, i, si)
+    /**
+     * **集中モードでの番号**(2026-09 利用者の指定)。
+     *
+     *   > KENJI が大体画面の中心に来ている時は集中モードを押したら
+     *   > ②KENJI の集中モードに入り…
+     *
+     * 「いま画面のまん中にあるのはどの発言か」を、押した瞬間に
+     * 引き当てるための目印である。**`data-key` では足りない。**
+     * あれは演習をまたいで一意なだけで、集中モードは
+     * **本文が空の項目を外した番号**で数えているためである。
+     */
+    const focusNo = new Map()
+    if (sec === passageSection) {
+      let fi = 0
+      ;(sec.items ?? []).forEach((it, i) => {
+        if (!String(it?.prompt_en ?? '').trim()) return
+        focusNo.set(i, fi)
+        fi += 1
+      })
+    }
     // 練習中(6Steps / Quick Response)は、どのページも画面には出さない
     const open = si === page && !run
     return (
@@ -862,6 +953,7 @@ export default function LessonView({
             <ol className="lesson-items">
               {sec.items.map((it, i) => (
                 <li key={k(it, i)} data-key={k(it, i)}
+                    data-focus={focusNo.has(i) ? String(focusNo.get(i)) : undefined}
                     className={speakingKey === k(it, i) ? 'is-speaking' : undefined}>
                   {it.tag_id && <span className="lesson-tag">{weaknessTagLabel(it.tag_id)}</span>}
                   {it.speaker && <div className="lesson-speaker" lang="en">{it.speaker}</div>}
