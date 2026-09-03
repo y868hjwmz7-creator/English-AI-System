@@ -347,6 +347,16 @@ from (
     select 1 from information_schema.columns
     where table_name = 'word_reviews' and column_name = 'learn_streak'), 79
   union all
+  select '(80) 一覧にも続けて思い出せた回数を渡している(0039)', exists (
+    -- 単語帳の一覧(見返す用)の「覚えた」を、
+    -- **十分に「覚えかけ」を積んだ語にだけ**出すために要る。
+    -- 0038 で足した欄を、`review_words()` が返しているか
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'review_words'
+      and 'learn_streak' = any (p.proargnames)), 80
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

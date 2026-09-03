@@ -428,6 +428,15 @@ select pg_temp.ok('数えが戻ったので、また箱 1・1日後から',
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'payload'), '1/1');
 
+-- ── その数えを、一覧の側にも渡している(0039)────────────────
+--   単語帳の一覧(見返す用)の「覚えた」を、
+--   **十分に「覚えかけ」を積んだ語にだけ**出すために要る。
+--   画面が判断するので、**数えが届いていなければ何も出せない**
+select pg_temp.ok('review_words() が続けて思い出せた回数を返す(0039)',
+  (select learn_streak::int from public.review_words(
+     'e2222222-2222-2222-2222-222222222222', 'todo', 200)
+   where word_norm = 'payload'), 1);
+
 -- ── 復習は「まだ」を先に、「覚えかけ」を次に出す(0027)─────────
 --   **これが利用者の指定した出題の順である。**
 select public.mark_word('Zzfirst', 'unknown');

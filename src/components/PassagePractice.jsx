@@ -49,7 +49,8 @@ import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { SLASH_LEVELS } from '../lib/chunker.js'
 import {
-  PASSAGE_VIEWS, SIX_STEPS, blocksOf, groupSentences, sentencesOf, stepOf,
+  PASSAGE_VIEWS, SIX_STEPS, blocksOf, bodyUnitWord, groupSentences, sentencesOf,
+  stepOf,
 } from '../lib/sixSteps.js'
 import ChunkedText from './ChunkedText.jsx'
 import SlashReading from './SlashReading.jsx'
@@ -546,6 +547,8 @@ export default function PassagePractice({
           wordStatuses={wordStatuses} onMarkWord={markWord}
           listeningId={listeningId} onCheck={checkOne} results={results}
           size={dictSize}
+          /* **訳の札を「発言の訳」にする**(2026-09 利用者の指定) */
+          isDialogue={isDialogue}
           /* **番号は、ぜんぶの中での番号**(2026-09 利用者の指定)。
              集中モードでは1つしか渡さないので、外から番号を渡さないと
              何番目でも「1」になってしまう */
@@ -577,6 +580,8 @@ export default function PassagePractice({
           wordStatuses={wordStatuses} onMarkWord={markWord}
           listeningId={listeningId} onCheck={checkOne} results={results}
           startNo={focus ? at + 1 : 1}
+          /* **訳の札を「発言の訳」にする**(2026-09 利用者の指定) */
+          isDialogue={isDialogue}
           /* ④⑥ で開いた行も覚えておく(2026-08 利用者の指定) */
           progressAt={progressKey(materialId, section.id, `sentence-${step}`)}
           learnerId={learnerId}
@@ -604,8 +609,10 @@ export default function PassagePractice({
             <label className="passage-flow">
               <input type="checkbox" checked={flow}
                      onChange={(e) => setFlow(e.target.checked)} />
-              {/* 通しで聴くときは、段落で切れていないほうが追いやすい */}
-              段落で区切らない
+              {/* 通しで聴くときは、切れていないほうが追いやすい。
+                  **会話・会議では「発言で区切らない」**(2026-09 利用者の指定)。
+                  言葉は `bodyUnitWord()` 1か所で決める */}
+              {bodyUnitWord(isDialogue)}で区切らない
             </label>
           )}
           {/* **区切りの細かさは、ここでしか効かなくなった。**
@@ -700,12 +707,16 @@ export default function PassagePractice({
                                 else next.add(item.id)
                                 return next
                               })} />
-                {/* **ここから通して聴く**(2026-08 の要望)。
-                    途中で聴き直したいとき、頭から掛け直さなくてよい */}
-                <button type="button" className="btn btn--small"
-                        onClick={() => playAll(item.id)}>
-                  <SpeakerIcon />ここから
-                </button>
+                {/* ★ **「ここから」は置かない**(2026-09 利用者の指定)。
+
+                    > 「ここから」ボタンは Listen があるところでは全て排除して
+                    > ください。全体で共通です。(ゲストエンドでも)
+
+                    Listen のとなりに「ここから」を並べると、
+                    **どちらも「鳴らすボタン」に見えて選ばせることになる。**
+                    通しで聴きたいときは右下の「Listen (全体)」があり、
+                    通し表示(段落で区切らない)では**段落そのものを押せば**
+                    そこから鳴る(`playAll(item.id)`)。道は残してある。 */}
                 {isRecognitionSupported() && (
                   <button
                     type="button"

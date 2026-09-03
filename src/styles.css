@@ -43,6 +43,15 @@
   --accent:      #2c6094;
   --accent-soft: #e7eef6;   /* 選んでいるものの地色 */
   --accent-line: #b9cde3;   /* その枠線 */
+  /* ★ **集中モードでも使う色**(2026-09)。
+     集中モードは紙の中から呼ばれるが、`createPortal` で body の直下に出す
+     ようにしたので(左右の余白を「普通の画面」と同じ暗さにするため)、
+     **紙(`.lesson-sheet`)にしか無い色は届かなくなる。**
+     番号の丸(`--accent-bg`)と話す人の色(`--voice-a` / `--voice-b`)を
+     アプリ側にも置く。**3か所すべてに書く**(CLAUDE.md) */
+  --accent-bg:   #edf4f7;   /* 番号の丸などの、うすい地色 */
+  --voice-a:     #2c6094;   /* 会話の1人目 */
+  --voice-b:     #8a5588;   /* 会話の2人目 */
 
   /* 合っている / 違う。**ディクテーションの照らし合わせで使う。**
      緑と赤は色覚特性で見分けにくい組み合わせなので、
@@ -121,6 +130,10 @@
     --accent:      #6aa6de;
     --accent-soft: #1e2c3a;
     --accent-line: #35516d;
+    /* 集中モードでも使う色(`:root` と同じ並び。**1か所でも抜くと食い違う**) */
+    --accent-bg:   #1e2c3a;
+    --voice-a:     #6aa6de;
+    --voice-b:     #c491c2;
     --ok: #6cc79a;   --ok-bg: #16281f;
     --ng: #e88b88;   --ng-bg: #2e1a19;
     --speaking-bg:  #1d2a30;
@@ -172,6 +185,10 @@
   --accent:      #6aa6de;
   --accent-soft: #1e2c3a;
   --accent-line: #35516d;
+  /* 集中モードでも使う色(上の @media と**同じ値**にする) */
+  --accent-bg:   #1e2c3a;
+  --voice-a:     #6aa6de;
+  --voice-b:     #c491c2;
   --ok: #6cc79a;   --ok-bg: #16281f;
   --ng: #e88b88;   --ng-bg: #2e1a19;
   --speaking-bg:  #1d2a30;
@@ -4045,6 +4062,10 @@ html, body { overscroll-behavior-x: none; }
   --ng: var(--text-secondary);  --ng-bg: var(--surface-2);
   --accent-soft: var(--surface-2);
   --accent-line: var(--text-muted);
+  /* 集中モードの番号と話す人も、色を消して灰色にそろえる */
+  --accent-bg:   var(--surface-2);
+  --voice-a:     var(--text-primary);
+  --voice-b:     var(--text-secondary);
 }
 
 /* 紙(大きく表示)。紙は常に白なので、灰色は値で直接書く */
@@ -4196,6 +4217,9 @@ html, body { overscroll-behavior-x: none; }
 .wordbook-actions {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
 }
+/* 「覚えた」が出るまでの積み上がり(0039)。**押すものではない**ので、
+   ボタンの形にしない。数えているだけだと分かるよう、静かに置く */
+.wordbook-streak { font-size: 12px; color: var(--text-muted); }
 /* 箱と次に出る日。**進んでいることが見えないと続かない** */
 
 /* 出会った文(0018)。**思い出す手がかり**なので、意味のすぐ下に置く。
@@ -5108,6 +5132,13 @@ html, body { overscroll-behavior-x: none; }
   position: fixed; inset: 0; z-index: 120;
   display: flex; flex-direction: column;
   height: 100vh; height: 100dvh;
+  /* ★ **地はアプリの色**(2026-09 利用者の指定
+       「濃さについては、普通の画面と同じように、左右の空白部分は黒に」)。
+
+     集中モードはレッスン表示の**紙の中**から呼ばれるが、
+     `createPortal` で **body の直下**に出している(`FocusReader` /
+     `StepFocus`)。紙は `--surface-*` を差し替えて明るい配色の島に
+     してあるので、中に描くと**暗い配色でも左右が真っ白**だった。 */
   background: var(--surface-0); color: var(--text-primary);
   overscroll-behavior: contain;
   touch-action: manipulation;
@@ -5250,6 +5281,23 @@ html, body { overscroll-behavior-x: none; }
   flex-wrap: wrap; row-gap: 6px;
 }
 .focus-wide { flex: 1 1 auto; }
+
+/* ★ **パソコンでは、送るボタンを Listen のとなりへ寄せる**
+     (2026-09 利用者の指定)。
+
+     > PCでは「次」「戻る」ボタンをもっと Listen ボタンの近くに
+     > 配置してください。
+
+   スマホでは**親指が届く両端**に置くのが正しいが、パソコンでは
+   画面が広いぶん「◀ 前」と「次 ▶」が左右の隅まで離れ、
+   まん中の Listen とのあいだが数百 px 空く。目とカーソルが
+   そのたびに端まで往復することになる。
+   **広い画面でだけ、3つをまん中にまとめる**(判断は幅だけ・CLAUDE.md)。
+   `.focus-mid` を伸ばさないようにするだけで、両端のボタンが寄ってくる。 */
+@media (min-width: 1024px) {
+  .focus-bar { justify-content: center; gap: 16px; }
+  .focus-mid { flex: 0 1 auto; }
+}
 
 /* 最後の1枚。調べた語をまとめて見る */
 .focus-wrap { display: flex; flex-direction: column; gap: 12px; }

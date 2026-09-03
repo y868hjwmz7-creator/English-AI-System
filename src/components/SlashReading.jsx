@@ -46,7 +46,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { useProgress } from '../lib/progress.js'
 import { checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
 import { chunkPairsOfAtMarks, storedChunks } from '../lib/chunkJa.js'
-import { slashUnitsFor } from '../lib/sixSteps.js'
+import { bodyUnitWord, slashUnitsFor } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
 /**
@@ -345,7 +345,10 @@ export default function SlashReading({
                       **無いものを、あるように見せない** */}
                   {!hasJa && s.ja && (
                     <p className="slash-ja">
-                      {s.jaIsWhole && <span className="slash-ja-label">段落の訳</span>}
+                      {/* **会話・会議では「発言の訳」**(2026-09 利用者の指定) */}
+                      {s.jaIsWhole && (
+                        <span className="slash-ja-label">{bodyUnitWord(isDialogue)}の訳</span>
+                      )}
                       {s.ja}
                     </p>
                   )}

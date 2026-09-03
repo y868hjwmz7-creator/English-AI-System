@@ -62,6 +62,7 @@
  *   端のスワイプは「戻る」とも誤爆する。**ボタンだけにする。**
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
@@ -235,7 +236,18 @@ export default function FocusReader({
   const clipVoice = voiceFor(cast, item.speaker, soloVoice)
   const last = index >= total - 1
 
-  return (
+  /* ★ **body の直下に出す**(2026-09 利用者の指定)。
+
+       > 濃さについては、普通の画面と同じように、
+       > 左右の空白部分は黒にしてください。
+
+     この画面はレッスン表示の**紙の中**から呼ばれる。紙は `--surface-*` を
+     差し替えて**明るい配色の島**にしてあるので(`.lesson-sheet`)、
+     そのまま描くと画面ぜんぶを覆うこの画面まで紙の白になり、
+     暗い配色を選んでいても左右の余白が真っ白だった。
+     body の直下に出せば**アプリの配色に戻る**(吹き出しと同じ理由)。
+     **集中モードはどこから入っても同じ見た目**になる。 */
+  return createPortal(
     <div className={`focus focus--${width}`}
          role="dialog" aria-modal="true" aria-label="集中モード">
       {/* ── 上の帯。**細く1行。** 送るものを増やさない ────────── */}
@@ -370,6 +382,7 @@ export default function FocusReader({
         )}
       </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

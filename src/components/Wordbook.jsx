@@ -34,6 +34,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  KNOWN_AFTER, canMarkKnown,
   loadGlossDetail, loadMyWordbook, loadVocabWeek,
   loadWordbookCounts, loadWordbookViewers, learningSupported,
   noteWordbookView, setWordStatus,
@@ -1025,7 +1026,12 @@ export default function Wordbook({
                       **「思い出す」の Listen も、ここに置く**(2026-09)。
                       上の枠は意味と入れ替わるので、そこに置いたままだと
                       **意味を見たとたんに Listen が消える。** */}
-                  <SpeakButton text={word} className="btn--ghost" />
+                  {/* ★ **文言は「英語を聴く」**(2026-09 利用者の指定)。
+                      となりが「英語を見る」なので、「Listen」だけでは
+                      **何の音か**が分からない。ここは英語が伏せてある
+                      場所なので、「英語」と名指しする。
+                      鳴っているあいだ `Stop` に変わるのは、どの画面とも同じ */}
+                  <SpeakButton text={word} label="英語を聴く" className="btn--ghost" />
                 </div>
                 {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。
                     まだ / 覚えかけ。
@@ -1103,9 +1109,28 @@ export default function Wordbook({
                 <SeenIn sentence={row.seen_in} word={row.display || row.word_norm} />
                 {row.seen_in_ja && <p className="wordcard-seen-ja">{row.seen_in_ja}</p>}
                 <div className="wordbook-actions">
-                  <button type="button" className="btn btn--small"
-                          disabled={busy === row.word_norm}
-                          onClick={() => answer(row, 'known')}>覚えた</button>
+                  {/* ★ **「覚えた」は、積んだ語にだけ出す**
+                      (2026-09 利用者の指定「ある程度の回数『覚えかけ』を
+                      押さないと『覚えた』は出ない仕様にしましょう」)。
+
+                      復習のカードからは「覚えた」を外してある(0038)。
+                      **自分で申告する道は当てにならない**からである。
+                      ところが一覧に残っていると、そこから1回で卒業でき、
+                      外した意味がなくなっていた。
+                      判断は `canMarkKnown()` 1か所(`vocab.js`)。
+                      **効かないボタンを出さない**ので、足りない語では
+                      「まだ」だけになる。 */}
+                  {canMarkKnown(row) ? (
+                    <button type="button" className="btn btn--small"
+                            disabled={busy === row.word_norm}
+                            onClick={() => answer(row, 'known')}>覚えた</button>
+                  ) : (
+                    /* **なぜ出ないのかを、その場に書く。** 何も無いと
+                       「消えた」のか「まだなのか」が分からない */
+                    <span className="wordbook-streak">
+                      覚えかけ {Number(row.learn_streak) || 0} / {KNOWN_AFTER} 回
+                    </span>
+                  )}
                   <button type="button" className="btn btn--small btn--quiet"
                           disabled={busy === row.word_norm}
                           onClick={() => answer(row, 'unknown')}>まだ</button>

@@ -23,7 +23,7 @@ import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { MicIcon, StopIcon } from './Icons.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
-import { DICTATION_LEVELS, groupSentences } from '../lib/sixSteps.js'
+import { DICTATION_LEVELS, bodyUnitWord, groupSentences } from '../lib/sixSteps.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { useProgress } from '../lib/progress.js'
 
@@ -37,6 +37,8 @@ export default function StepDictation({
    * なってしまう。**いま何番目か**を外から渡す。
    */
   startNo = 1,
+  /** 会話・会議か。**訳の札の言葉が「段落」か「発言」かを決める** */
+  isDialogue = false,
 }) {
   // **書きかけを覚えておく**(2026-08 利用者の指定)。
   // 別のタブを見て戻ったら消えていた、という報告があった
@@ -194,7 +196,10 @@ export default function StepDictation({
                   </p>
                   {s.ja && (
                     <p className="passage-ja">
-                      {s.jaIsWhole && <span className="slash-ja-label">段落の訳</span>}
+                      {/* **会話・会議では「発言の訳」**(2026-09 利用者の指定) */}
+                      {s.jaIsWhole && (
+                        <span className="slash-ja-label">{bodyUnitWord(isDialogue)}の訳</span>
+                      )}
                       {s.ja}
                     </p>
                   )}

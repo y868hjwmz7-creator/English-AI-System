@@ -710,6 +710,41 @@ let noLearning = false
 /** 「覚えかけ」が使えるか。画面がボタンを出すかどうかの判断に使う */
 export const learningSupported = () => !noLearning
 
+/**
+ * 単語帳の**一覧**に「覚えた」を出してよい、続けて思い出せた回数(0039)。
+ *
+ * 2026-09 利用者の指定。
+ *
+ *   > はい、ある程度の回数「覚えかけ」を押さないと「覚えた」は
+ *   > 出ない仕様にしましょう。
+ *
+ * 復習のカードからは「覚えた」を外した(0038)。**自分で申告する道は
+ * 当てにならない**からである。一覧にだけ残っていると、そこから1回で
+ * 卒業できてしまい、外した意味がなくなる。
+ *
+ * かといって一覧から丸ごと外すこともできない。本文の中で語に触れて押す
+ * 「知っていた」がこの状態を使っており、すでに `known` の語もある。
+ * だから**十分に積んだ語にだけ**出す。
+ *
+ * **25回で自動的に卒業する**(0038)ので、ここはその手前の目安である。
+ * 早くしたい・遅くしたいときは**この1行**を変える。
+ */
+export const KNOWN_AFTER = 10
+
+/**
+ * その行に、一覧の「覚えた」を出してよいか。
+ *
+ * **0039 を貼る前の Supabase では、回数そのものが返ってこない。**
+ * そのときは**これまでどおり出す**(貼る前でも動く道を残す・CLAUDE.md)。
+ * すでに「覚えた」が付いている語にも、押し直せるよう出す。
+ */
+export function canMarkKnown(row) {
+  if (row?.status === 'known') return true
+  const n = row?.learn_streak
+  if (n === undefined || n === null) return true   // 0039 を貼る前
+  return Number(n) >= KNOWN_AFTER
+}
+
 export async function setWordStatus(word, status, {
   kind = 'word', materialId = null, sentence = null, sentenceJa = null,
   // **誰の記録にするか**(0025)。レッスン中のゲスト。渡さなければ自分

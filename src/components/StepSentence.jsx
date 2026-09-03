@@ -25,6 +25,7 @@ import RepeatToggle from './RepeatToggle.jsx'
 import { MicIcon, StopIcon } from './Icons.jsx'
 import { spokenRatio } from '../lib/transcriptDiff.js'
 import { useProgress } from '../lib/progress.js'
+import { bodyUnitWord } from '../lib/sixSteps.js'
 
 export default function StepSentence({
   sentences, startVisible, clipVoice, tier, rate, level,
@@ -32,6 +33,8 @@ export default function StepSentence({
   learnerId = null,
   /** 何番から数えるか。集中モードでは1つだけ渡すので、外から番号をもらう */
   startNo = 1,
+  /** 会話・会議か。**訳の札の言葉が「段落」か「発言」かを決める** */
+  isDialogue = false,
 }) {
   // 文ごとに「英語が見えているか」。ステップを移ったら、はじめの状態に戻す
   // **開いた行を覚えておく**(2026-08 利用者の指定)
@@ -109,7 +112,11 @@ export default function StepSentence({
 
             {ja && s.ja && (
               <p className="passage-ja">
-                {s.jaIsWhole && <span className="slash-ja-label">段落の訳</span>}
+                {/* **会話・会議では「発言の訳」**(2026-09 利用者の指定)。
+                    言葉は `bodyUnitWord()` 1か所で決める */}
+                {s.jaIsWhole && (
+                  <span className="slash-ja-label">{bodyUnitWord(isDialogue)}の訳</span>
+                )}
                 {s.ja}
               </p>
             )}
