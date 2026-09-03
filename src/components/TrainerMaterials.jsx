@@ -683,19 +683,20 @@ export default function TrainerMaterials({ me }) {
               </p>
 
               {/* **押すものは、はじめから出す**(2026-09 利用者の指定)。
-                  印刷の右に共有を置く。**強い見た目(青)は
-                  「セッションで使う」に譲る**(2026-08 の指定は生きている) */}
-              <div className="btn-row">
+                  **強い見た目(青)は「セッションで使う」に譲る**
+                  (2026-08 の指定は生きている)。
+
+                  **並びは 印刷 → 練習の記録を消す → 共有**
+                  (2026-09 利用者の指定「練習の記録を消す、を印刷ボタンの
+                  右に置いてください」)。前の2つは**同じ教材を手元で扱う**
+                  操作(紙にする / この端末の書きかけを消す)で、
+                  共有だけが**人に渡す**操作である。だから前の2つを1つの行に
+                  まとめ、共有はその下に置く(`.card-tools`)。 */}
+              <div className="btn-row card-tools">
                 <button type="button" className="btn btn--small"
                         onClick={() => setPrintId(m.id)}>
                   <PrintIcon />印刷 / PDFで保存
                 </button>
-                {assigningId !== m.id && (
-                  <button type="button" className="btn btn--small btn--quiet"
-                          onClick={() => startAssign(m.id)}>
-                    この教材をゲストと共有する
-                  </button>
-                )}
                 {/* **やりかけが残っているときだけ出す。**
                     効かないボタンを出さない(CLAUDE.md) */}
                 {hasMaterialProgress(m.id) && (
@@ -708,6 +709,14 @@ export default function TrainerMaterials({ me }) {
                             setResetDone({ id: m.id, n })
                           }}>
                     {resetAsk === m.id ? '本当に消す' : '練習の記録を消す'}
+                  </button>
+                )}
+              </div>
+              <div className="btn-row">
+                {assigningId !== m.id && (
+                  <button type="button" className="btn btn--small btn--quiet"
+                          onClick={() => startAssign(m.id)}>
+                    この教材をゲストと共有する
                   </button>
                 )}
                 {makingJa === m.id && <span className="muted">区切りの訳を作っています…</span>}

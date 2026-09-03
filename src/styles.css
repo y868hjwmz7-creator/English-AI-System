@@ -635,7 +635,7 @@ input[type='number'], select, textarea {
   input[type='search'], input[type='tel'], input[type='date'],
   input[type='number'] { font-size: 16px; }
   button { font-size: 16px; }
-  .rate-pick select, .lesson-rate select { font-size: 16px; }
+  .rate-pick select { font-size: 16px; }
   .btn--small { font-size: 14px; }   /* ボタンは拡大の対象外なので戻す */
   .theme-btn, .tagchip { font-size: 13px; }
 }
@@ -721,6 +721,16 @@ audio { width: 100%; margin-top: 4px; }
   color: var(--accent); font-weight: 600;
 }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+/* **同じ教材を手元で扱う操作は、1つの行に並べる**(2026-09 利用者の指定
+   「練習の記録を消す、を印刷ボタンの右に置いてください」)。
+
+   `.btn-row` は折り返すので、そのままでは狭い画面で縦に積まれ、
+   **「右」にならない。** ここは折り返さず、入りきらないときは
+   ボタンのほうを縮める(`.btn--small` の `flex-shrink: 0` を戻す)。
+   縮んでも文言は削らない — 何のボタンか分からなくなる。 */
+.card-tools { flex-wrap: nowrap; gap: 6px; margin-bottom: 0; }
+.card-tools > .btn { flex: 0 1 auto; min-width: 0; }
+.card-tools + .btn-row { margin-top: 8px; }
 
 /* 絞り込みはグラフの上に1列で置く */
 .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -2898,8 +2908,48 @@ html, body { overscroll-behavior-x: none; }
 .lesson-settings {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto;
 }
-.lesson-sizes { display: inline-flex; border: 1px solid #55554e; border-radius: 999px; overflow: hidden; }
-.lesson-sizes .theme-btn { color: #d8d8d2; }
+
+/* ── ◀ いまの設定 ▶(2026-09 利用者の指定)────────────────────
+   速さ・文字の大きさ・紙の幅の3つを、**同じ形にそろえた。**
+   選択肢を全部並べると段の数だけ横に伸びるが(速さは13段、幅は7段)、
+   三角なら**いまの1つ分**しか場所を取らない。 */
+/* **色は変数で持つ**(CLAUDE.md)。決め打ちにすると、
+   プレインを選んだときや別の場所に置いたときに、そこだけ色が残る */
+.stepper {
+  display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 1px 4px 1px 8px;
+}
+/* 何の設定か。**3つとも同じ形になったので、見出しが要る**
+   (しかも2つは「%」で、値だけでは見分けられない) */
+.stepper-label { font-size: 12px; color: var(--text-secondary); margin-right: 2px; }
+/* 三角。**小さく見えるが、押せる面は 26 × 30px 取る。**
+   **三角は文字で描く**(絵文字は端末ごとに形も大きさも違う・CLAUDE.md) */
+.stepper-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; min-height: 30px; padding: 0;
+  border: 0; background: none; color: var(--text-primary);
+  font-size: 11px; line-height: 1; cursor: pointer;
+}
+/* **端まで来たら押せなくする。** ぐるっと回すと、端にいることが分からない */
+.stepper-arrow:disabled { opacity: 0.28; cursor: default; }
+/* いまの値。**幅をそろえる**(そろえないと押すたびに三角が左右にずれる) */
+.stepper-now {
+  min-width: 4.2em; text-align: center;
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+/* 紙の幅だけは「画面いっぱい」という長い値があるので、
+   そのぶんの幅を先に取っておく。**押すたびに隣の印刷が動かない** */
+.lesson-widths .stepper-now { min-width: 6.2em; }
+
+/* 帯の上。**帯の色は決め打ちである**(`.lesson-bar .btn` と同じ作法)。
+   暗い配色を選んでいなくても、この帯だけはいつも暗い */
+.lesson-bar .stepper { border-color: #55554e; }
+.lesson-bar .stepper-label { color: #b9b9b2; }
+.lesson-bar .stepper-arrow { color: #e6e6e0; }
+.lesson-bar .stepper-arrow:hover:not(:disabled) { color: #fff; }
+.lesson-bar .stepper-now { color: #f2f2ee; }
 /* 「表示」の札。**広い画面では出さない**(設定は常に並んでいるため) */
 .lesson-more { display: none; }
 
@@ -3063,6 +3113,13 @@ html, body { overscroll-behavior-x: none; }
 .lesson-body > .lesson-sheet--w110 { max-width: min(946px, calc(100% - 24px)); }
 .lesson-body > .lesson-sheet--w120 { max-width: min(1032px, calc(100% - 24px)); }
 .lesson-body > .lesson-sheet--w130 { max-width: min(1118px, calc(100% - 24px)); }
+.lesson-body > .lesson-sheet--w140 { max-width: min(1204px, calc(100% - 24px)); }
+.lesson-body > .lesson-sheet--w150 { max-width: min(1290px, calc(100% - 24px)); }
+/* **画面いっぱい**(2026-09 利用者の指定「その上の最大値はそのデバイスの
+   画面幅に合わせる設定に」)。**割合ではない。** 使える幅をそのまま使い、
+   左右の余白 24px だけを残す。%で足していっても、
+   どの端末でも「ちょうどいっぱい」にはならない */
+.lesson-body > .lesson-sheet--wfit { max-width: calc(100% - 24px); }
 /* 紙とメモの境目。**つまんで動かす**(2026-09 利用者の指定)。
    細すぎると狙えないので 8px 取り、触れたときだけ色を出す */
 .lesson-grip {
@@ -3562,13 +3619,6 @@ html, body { overscroll-behavior-x: none; }
   white-space: nowrap; flex: none;
 }
 .rate-pick select { font-size: 13px; padding: 3px 6px; }
-.lesson-rate {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; color: #ddd;
-  /* 「速さ」が「速 / さ」と縦に割れていた(2026-08)。ラベルは折り返さない */
-  white-space: nowrap; flex: none;
-}
-.lesson-rate select { font-size: 12px; padding: 3px 4px; max-width: 8.5em; }
 
 /* いま読み上げているところ。
    通しで聞いているとき、どこを読んでいるのか目で追えないと

@@ -396,7 +396,7 @@ export default function PassagePractice({
             <select value={rateId}
                     onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopPlaying() }}>
               {SPEECH_RATES.map((r) => (
-                <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+                <option key={r.id} value={r.id}>{r.label}</option>
               ))}
             </select>
           </label>

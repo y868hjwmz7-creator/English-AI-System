@@ -129,7 +129,7 @@ export default function StepDictation({
                               saveRateId(v)
                             }}>
                       {SPEECH_RATES.map((r) => (
-                        <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+                        <option key={r.id} value={r.id}>{r.label}</option>
                       ))}
                     </select>
                   </label>

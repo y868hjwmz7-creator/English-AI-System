@@ -16,13 +16,22 @@
  *   選んだ速さは端末に覚えさせる(localStorage)。
  *   毎回選び直すのでは、置く意味がない。
  */
-export const SPEECH_RATES = [
-  { id: '120', label: '速い',        factor: 1.2 },
-  { id: '110', label: 'やや速い',    factor: 1.1 },
-  { id: '100', label: '普通',        factor: 1.0 },
-  { id: '90',  label: '少しゆっくり', factor: 0.9 },
-  { id: '80',  label: 'ゆっくり',    factor: 0.8 },
-]
+/**
+ * **70% から 130% まで、5% 刻み**(2026-09 利用者の指定)。
+ *
+ *   > 読み上げスピードは70%から5％刻みで最大130%までにしてください。
+ *
+ * もとは5段階(80〜120%)で、**言葉の名前**(速い / 普通 …)が付いていた。
+ * 13段になると名前は付けられないので、**数字だけ**にする。
+ * どのみち「速い」が何%かは書いてあり、二重に言っていた。
+ *
+ * **並びは遅い順。** ◀ で遅く、▶ で速くなる(`Stepper`)。
+ * 数直線と同じ向きにしておかないと、押すたびに迷う。
+ */
+export const SPEECH_RATES = Array.from({ length: 13 }, (_, i) => {
+  const pct = 70 + i * 5
+  return { id: String(pct), label: `${pct}%`, factor: pct / 100 }
+})
 
 export const DEFAULT_RATE_ID = '100'
 

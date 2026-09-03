@@ -203,7 +203,7 @@ export default function LearnerHomework({ me = null }) {
           <select value={rateId}
                   onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value) }}>
             {SPEECH_RATES.map((r) => (
-              <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
+              <option key={r.id} value={r.id}>{r.label}</option>
             ))}
           </select>
         </label>

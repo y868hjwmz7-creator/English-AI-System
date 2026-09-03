@@ -45,6 +45,7 @@ import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
 import AnswerEn from './AnswerEn.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
+import Stepper from './Stepper.jsx'
 
 const SIZES = [
   { id: 'm', label: '標準' },
@@ -65,12 +66,25 @@ const SIZES = [
  *
  * **狭い画面では出さない。** あちらは紙が画面いっぱいで、
  * 広げる余地がそもそも無い(効かない操作を見せない・CLAUDE.md)。
+ *
+ * **100% から 150% まで 10% 刻み、その上が「画面いっぱい」**
+ * (2026-09 利用者の指定)。
+ *
+ *   > 画面幅も100％から10%刻みで150%まで、そしてその上の最大値は
+ *   > そのデバイスの画面幅に合わせる設定にしてください
+ *
+ * 「画面に合わせる」は**割合ではない。** 使える幅をそのまま使う
+ * (紙の左右の余白 24px だけを残す)。%で足していくと、
+ * どの端末でも「ちょうどいっぱい」にはならない。
  */
 const WIDTHS = [
   { id: 'w100', label: '100%' },
   { id: 'w110', label: '110%' },
   { id: 'w120', label: '120%' },
   { id: 'w130', label: '130%' },
+  { id: 'w140', label: '140%' },
+  { id: 'w150', label: '150%' },
+  { id: 'wfit', label: '画面いっぱい' },
 ]
 /**
  * **メモの幅**(2026-09 利用者の指定)。
@@ -561,34 +575,23 @@ export default function LessonView({
             </button>
           )}
 
-          <label className="lesson-rate">
-            <span>速さ</span>
-            <select value={rateId}
-                    onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopAll() }}>
-              {SPEECH_RATES.map((r) => (
-                <option key={r.id} value={r.id}>{r.label}({r.id}%)</option>
-              ))}
-            </select>
-          </label>
-          <div className="lesson-sizes">
-            {SIZES.map((s) => (
-              <button key={s.id} type="button"
-                      className={`theme-btn${size === s.id ? ' is-active' : ''}`}
-                      onClick={() => { setSize(s.id); saveSize(s.id) }}>
-                {s.label}
-              </button>
-            ))}
-          </div>
+          {/* ── 3つとも「◀ いま ▶」にそろえる(2026-09 利用者の指定)──
+              > 画面幅、文字の大きさ、そして読み上げの速さ、全てを
+              > 画面幅と文字の大きさのUIに統一し、そして、現在の設定の
+              > 左右に三角を置くデザインにしてください。
+              > そうすればスペースを有効に使えます。◀︎標準▶︎
+
+              選択肢を全部並べる形は**段の数だけ横に伸びる。** 速さは13段、
+              紙の幅は7段になったので、並べるやり方はもう成り立たない。
+              **見出し(速さ / 文字 / 幅)は残す。** 3つとも同じ形になったので、
+              見出しが無いとどれがどれか分からない(しかも2つは「%」である) */}
+          <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
+                   onChange={(id) => { setRateId(id); saveRateId(id); stopAll() }} />
+          <Stepper label="文字" options={SIZES} value={size}
+                   onChange={(id) => { setSize(id); saveSize(id) }} />
           {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}
-          <div className="lesson-sizes lesson-widths">
-            {WIDTHS.map((w) => (
-              <button key={w.id} type="button" title={`紙の幅を ${w.label} にする`}
-                      className={`theme-btn${width === w.id ? ' is-active' : ''}`}
-                      onClick={() => { setWidth(w.id); saveWidth(w.id) }}>
-                {w.label}
-              </button>
-            ))}
-          </div>
+          <Stepper label="幅" options={WIDTHS} value={width} className="lesson-widths"
+                   onChange={(id) => { setWidth(id); saveWidth(id) }} />
           <button type="button" className="btn btn--small"
                   onClick={() => printElement(document.getElementById('lesson-sheet'))}>
             <PrintIcon />印刷
