@@ -4333,7 +4333,12 @@ html, body { overscroll-behavior-x: none; }
    **出題の枠の高さ(`.wordcard-q`)は、決め打ちのままにする。**
    語や文の長さで枠が伸びると、そのぶん答えのボタンが動く。
    「文の長さが変わってもボタンが動かない」は、この画面でも同じである。 */
-.wbfocus .wordcard { margin: 0; }
+/* **広い画面では、カードを細い1本の柱にする**(2026-09)。
+   `.focus-body > *` の上限(860px)のままだと、1語しか載っていない
+   カードが画面いっぱいに広がり、**まん中の語が左右にぽつんと浮く。**
+   読み物ではないので、これ以上広げても得るものが無い。
+   `margin: 0 auto` にしておかないと、幅を絞ったときに左へ寄る */
+.wbfocus .wordcard { margin: 0 auto; max-width: 34rem; }
 /* とじたあとの戻り道 */
 .wb-start { margin-top: 14px; }
 @media (max-width: 400px) {
@@ -4384,9 +4389,15 @@ html, body { overscroll-behavior-x: none; }
    **答えを見る前に、必ず1回考える。** 記憶は思い出そうとしたときに強くなる。
    だから語だけを大きく出し、意味は押すまで出さない。 */
 .wordcard {
-  margin-top: 12px; padding: 20px 18px;
-  border: 1px solid var(--border); border-radius: 12px;
-  background: var(--surface-2); text-align: center;
+  /* **この画面の主役なので、輪郭をはっきりさせる**(2026-09 利用者の指定
+     「もっとデザイン性を持たせて」)。
+     地(`--surface-0`)の上に置くので、面はカードの段(`--surface-1`)に
+     上げ、角を丸め、影を一段付ける(「面の段差」で情報を分ける・CLAUDE.md)。
+     **色は必ず変数で持つ**(プレインを選んだときに色だけが残らないように) */
+  margin-top: 12px; padding: 26px 20px 20px;
+  border: 1px solid var(--border); border-radius: 18px;
+  background: var(--surface-1); box-shadow: var(--shadow-1);
+  text-align: center;
   /* **カードの下に送りしろを置く**(2026-09)。
      カードは1語ごとに画面のまん中へ寄せているが、ページの終わりに
      余白が無いと**それ以上送れず、まん中まで来ない。**
@@ -4427,13 +4438,24 @@ html, body { overscroll-behavior-x: none; }
   display: flex; flex-wrap: wrap; align-items: baseline;
   justify-content: center; gap: 10px;
 }
-.wordcard-word { font-size: 26px; font-weight: 700; line-height: 1.4; }
+/* **行が2〜3行に割れても、きれいに割れるようにする。**
+   `balance` の効かない端末では、これまでどおり素直に折り返すだけ */
+.wordcard-word {
+  font-size: 26px; font-weight: 700; line-height: 1.45;
+  text-wrap: balance;
+}
+/* 入れ替えで出す英語。**日本語より一段大きく。**
+   英語は日本語より字数が少ないので、同じ大きさだと小さく見える */
+.wordcard-word--en { font-size: clamp(26px, 6.4vw, 31px); letter-spacing: .005em; }
 /* 種類(単語 / 言い回し)と品詞。**さりげなく**(2026-08 利用者の指定)。
    塗りつぶした札にすると、語より目立ってしまう。
-   細い字と中黒だけで並べる。品詞は斜体にして、種類と役割を分ける */
+   細い字と中黒だけで並べる。品詞は斜体にして、種類と役割を分ける。
+
+   **置き場所は語の上**(2026-09 利用者の指定「上に持ってこう」)。
+   字間を広げて小さくすると、見出しの前置き(眉)として読める */
 .wordcard-tags {
   display: flex; justify-content: center; align-items: baseline; gap: 8px;
-  margin: 6px 0 0; font-size: 11.5px; letter-spacing: .06em;
+  margin: 0 0 14px; font-size: 11px; letter-spacing: .14em;
   color: var(--text-muted);
 }
 .wc-tag + .wc-tag::before { content: '·'; margin-right: 8px; }
@@ -4446,6 +4468,9 @@ html, body { overscroll-behavior-x: none; }
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
 }
+/* **問題の枠の中に入れたときは、線を引かない**(日本語 → 英語)。
+   すぐ下の操作の行にも線があるので、**細い線が2本**並んで見える */
+.wordcard-q .wordcard-back { margin-top: 10px; padding-top: 0; border-top: 0; }
 .wordcard-mean { font-size: 17px; font-weight: 600; }
 .wordcard .wordbook-seen { text-align: left; }
 /* **答えの2つは、となりどうし。**「意味を見る」は1段上に置く
@@ -4453,7 +4478,15 @@ html, body { overscroll-behavior-x: none; }
    [まだ][意味を見る] / [覚えた] と折り返し、答えが上下に分かれていた */
 .wordcard-actions {
   display: flex; flex-direction: column; align-items: center;
-  gap: 10px; margin-top: 18px;
+  gap: 12px; margin-top: 18px;
+}
+/* **「見る」と「聴く」は、問題のすぐ下に横並び**(2026-09 利用者の指定)。
+   どちらも答えそのものではないので、答えの2つとは段を分ける。
+   上に細い線を1本引いて、**問題と操作の境目**をはっきりさせる */
+.wordcard-peek {
+  display: flex; justify-content: center; align-items: center;
+  flex-wrap: wrap; gap: 8px;
+  width: 100%; padding-top: 14px; border-top: 1px solid var(--border);
 }
 /* **2つは同じ幅にする。** 幅が違うと、片方が「主」に見えてしまう */
 /* 答えの3つ(0027)。**となりどうしに置き、同じ幅で並べる。**

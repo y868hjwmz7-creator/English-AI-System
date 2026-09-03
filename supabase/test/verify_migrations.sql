@@ -340,6 +340,13 @@ from (
     select 1 from information_schema.columns
     where table_name = 'materials' and column_name = 'headline_ja'), 77
   union all
+  select '(79) 続けて思い出せた回数を数えている(0038)', exists (
+    -- 「覚えた」のボタンを外した代わりに、**25回続けて「覚えかけ」**を
+    -- 押した語だけが卒業する(しばらく出てこない)。
+    -- 箱では代われない — 覚えかけの箱は 3 で頭打ちだからである
+    select 1 from information_schema.columns
+    where table_name = 'word_reviews' and column_name = 'learn_streak'), 79
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

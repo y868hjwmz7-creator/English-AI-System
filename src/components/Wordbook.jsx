@@ -396,6 +396,48 @@ export default function Wordbook({
   }, [result, wide])
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
+  /* **日本語 → 英語では、答えを同じ場所に入れ替える**(2026-09 利用者の指定)。
+     足すのではなく入れ替えるので、カードの高さが変わらない */
+  const swapped = form === 'ja2en' && shown
+  /**
+   * 答えを開いたときに出す、うしろ側。
+   *
+   * **置き場所が2つある。** 日本語 → 英語では**問題の枠の中**(高さが
+   * 決まっている箱)に入れ、それ以外ではこれまでどおりカードの下に置く。
+   *
+   * 枠の外に置くと、開いた瞬間にカードが 49px 伸びる。カードは上下の
+   * まん中に置いてあるので、**その半分だけ全体が上へ動き**、
+   * いま押そうとしている「まだ / 覚えかけ」がずれる(実測 24px)。
+   * 高さの決まった枠の中なら、はみ出したぶんはその中で送れるだけで、
+   * **カードは 1px も動かない。**
+   */
+  const backBlock = card && shown ? (
+    <div className="wordcard-back">
+      {/* **日本語 → 英語では、ここに英語を出さない。**
+          上の問題の枠が日本語と入れ替わって英語になっているので、
+          ここにも出すと**同じ答えが2か所**に出る(2026-09)。
+          つづりを書く形は入れ替えないので、これまでどおり出す */}
+      {form === 'ja2en' ? null : form === 'spell' ? (
+        <p className="wordcard-answer">
+          <span className="wordcard-mean" lang="en">{word}</span>
+          <SpeakButton text={word} className="etext-listen" />
+        </p>
+      ) : (
+        <p className="wordcard-answer">
+          {card.pos && <span className="etext-pos">{card.pos}</span>}
+          <span className="wordcard-mean">
+            {card.meaning_ja || '(意味の控えがありません)'}
+          </span>
+        </p>
+      )}
+      {card.seen_in_ja && <p className="wordcard-seen-ja">{card.seen_in_ja}</p>}
+      <button type="button" className="btn btn--link"
+              onClick={() => setDeep((v) => !v)}>
+        {deep ? 'とじる' : 'くわしく'}
+      </button>
+      {deep && <Detail wordNorm={card.word_norm} />}
+    </div>
+  ) : null
   /**
    * 4択の選択肢。**1問のあいだ、並びを変えない**(2026-09 利用者の指定)。
    *
@@ -427,10 +469,13 @@ export default function Wordbook({
 
   const answer = async (row, status) => {
     /* **押した手応えを返す**(2026-09 利用者の指定)。
-       覚えたら**ピンポン**、まだ・覚えかけは低く1つだけ。
+       思い出せたら**ピンポン**、「まだ」は低く1つだけ。
        **送る前に鳴らす。** 通信を待つと、押してから間が空いて
-       「効いたのか分からない」になる */
-    answerFeedback(status === 'known')
+       「効いたのか分からない」になる。
+
+       **「覚えた」を外した(2026-09)ので、`known` だけを見ない。**
+       見ていると、いちばんよく押す「覚えかけ」でピンポンが鳴らなくなる */
+    answerFeedback(status !== 'unknown')
     setBusy(row.word_norm)
     /* **投げられたら、そこで止まる。**
        `try` が無いと、思わぬ失敗のときに知らせも出ず、次へも進まない。
@@ -445,7 +490,9 @@ export default function Wordbook({
     setBusy(null)
     if (e) { setError(e); return }
     setError(null)
-    doneRef.current.push({ word: row.display || row.word_norm, ok: status === 'known' })
+    /* 結果の ○ × は「思い出せたか」で付ける。**`known` だけを見ない**
+       (2026-09 に「覚えた」を外したので、見ていると全部 × になる) */
+    doneRef.current.push({ word: row.display || row.word_norm, ok: status !== 'unknown' })
     setRows((list) => list.filter((r) => r.word_norm !== row.word_norm))
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
     setPickedChoice(null)
@@ -500,8 +547,16 @@ export default function Wordbook({
     if (form !== 'choice') setShown(true)
     // 音とふるえ。**押した瞬間に返す**(通信を待たない)
     answerFeedback(ok)
-    // 少しだけ見せてから次へ。すぐ消えると、何が正解だったか分からない
-    window.setTimeout(() => answer(card, ok ? 'known' : 'unknown'), ok ? 900 : 1800)
+    /* 少しだけ見せてから次へ。すぐ消えると、何が正解だったか分からない。
+
+       **合っていたら「覚えかけ」として残す**(2026-09)。
+       「覚えた」を外したので、ここだけ `known` を書いていると
+       **4択で当たった語だけが卒業の数え(0038)から外れる。**
+       0027 を貼っていない Supabase では、これまでどおり `known` */
+    window.setTimeout(
+      () => answer(card, ok ? (canLearning ? 'learning' : 'known') : 'unknown'),
+      ok ? 900 : 1800,
+    )
   }
 
   return (
@@ -754,13 +809,47 @@ export default function Wordbook({
                 防ぐため、はみ出したぶんはこの枠の中だけで送る。 */}
             <div className="wordcard-q">
 
+            {/* **種類と品詞は、いちばん上**(2026-09 利用者の指定
+                  「言い回し、名詞というのは上に持ってこう」)。
+
+                以前は語の**下**にあったので、目が語 → 下の札 → また上の
+                ボタン、と行き来していた。上に置けば
+                **「何の語か」を先に受け取ってから本題に入れる。**
+
+                塗りつぶした札にすると、語より目立ってしまう。
+                **細い字と中黒だけ**で並べる。
+
+                **控えにあるのは `word` か `phrase` の2つだけ。**
+                コロケーションとイディオムは、いまのデータでは見分けられない
+                (どちらも `phrase` として入る)。
+                **あやふやなことを言わない**(CLAUDE.md)ので、
+                見分けられるようになるまでは「言い回し」とだけ書く。 */}
+            <p className="wordcard-tags">
+              <span className="wc-tag">{card.kind === 'phrase' ? '言い回し' : '単語'}</span>
+              {card.pos && <span className="wc-tag wc-tag--pos">{card.pos}</span>}
+            </p>
+
             {/* 出す側。
                 **答えを出しておいて答えさせない。** つづりを書く形で英語を
                 そのまま見せていたので、写すだけで正解できた(2026-08 の実測)。
-                日本語 → 英語と同じく、意味だけを出す */}
+                日本語 → 英語と同じく、意味だけを出す。
+
+                **日本語 → 英語では、答えを「同じ場所」に入れ替える**
+                (2026-09 利用者の指定)。
+
+                  > 英語を見るにすると日本語と入れ替えで同じ場所に
+                  > 表示してください。
+
+                以前は日本語の下に英語を**足して**いたので、
+                そのぶんカードが伸びて答えのボタンが下へ動いていた。
+                入れ替えなら**箱の高さが変わらない**ので、
+                押す場所も、目を向ける場所も動かない
+                (集中モードの「訳は並べるのではなく入れ替える」と同じ考え方)。 */}
             <div className="wordcard-face">
               {form === 'ja2en' || form === 'spell'
-                ? <span className="wordcard-word">{card.meaning_ja || '(意味の控えがありません)'}</span>
+                ? (swapped
+                  ? <span className="wordcard-word wordcard-word--en" lang="en">{word}</span>
+                  : <span className="wordcard-word">{card.meaning_ja || '(意味の控えがありません)'}</span>)
                 : form === 'choice' && judged !== null ? (
                   /* **答えたら、上の太字が日本語に変わる**(2026-09 利用者の指定)。
                        > 解答が下に出るので非常に見にくいです。
@@ -785,24 +874,6 @@ export default function Wordbook({
                   </>
                 )}
             </div>
-
-            {/* **種類と品詞は、さりげなく**(2026-08 利用者の指定)。
-                  > 言い回し、コロケーション、単語、イディオム などの
-                  > カテゴリ表示はさりげなくオシャレに。
-                  > あと品詞の表示も欲しいね
-
-                塗りつぶした札にすると、語より目立ってしまう。
-                **細い字と中黒だけ**で並べる。
-
-                **控えにあるのは `word` か `phrase` の2つだけ。**
-                コロケーションとイディオムは、いまのデータでは見分けられない
-                (どちらも `phrase` として入る)。
-                **あやふやなことを言わない**(CLAUDE.md)ので、
-                見分けられるようになるまでは「言い回し」とだけ書く。 */}
-            <p className="wordcard-tags">
-              <span className="wc-tag">{card.kind === 'phrase' ? '言い回し' : '単語'}</span>
-              {card.pos && <span className="wc-tag wc-tag--pos">{card.pos}</span>}
-            </p>
 
             {/* 出会った文。訳なしで先に出す。日本語→英語のときは答えを伏せる。
 
@@ -833,6 +904,11 @@ export default function Wordbook({
                 )}
               </div>
             )}
+
+            {/* **日本語 → 英語の「うしろ側」は、この枠の中に入れる。**
+                枠の高さは決まっているので、開いてもカードが伸びない。
+                はみ出したぶんは、この枠の中だけで送れる */}
+            {form === 'ja2en' && backBlock}
 
             </div>
 
@@ -884,63 +960,74 @@ export default function Wordbook({
             {/* ── 思い出す / 日本語 → 英語 ───────────────────── */}
             {isSelfGraded(form) && (
               <div className="wordcard-actions">
-                {/* **答えの2つを、となりどうしに置く**(2026-08 利用者の指定)。
-                    以前は「意味を見る」をまん中に挟んでいたが、狭い画面では
-                    [まだ][意味を見る] / [覚えた] と折り返して、
-                    **答えの2つが上下に分かれていた**(実機)。
-                    見るほうを1段上に出せば、どの幅でも2つは並ぶ */}
-                <button type="button" className="btn btn--ghost btn--small"
-                        aria-expanded={shown}
-                        onClick={() => setShown((v) => !v)}>
-                  {form === 'ja2en'
-                    ? (shown ? '英語を隠す' : '英語を見る')
-                    : (shown ? '意味を隠す' : '意味を見る')}
-                </button>
-                {/* **答えは3つ**(2026-08 利用者の指定・0027)。
-                    まだ / 覚えかけ / 覚えた。
-                    「覚えかけ」は**思い出せたが自信がない**とき。
-                    箱を 3 で止めるので、必ず4日以内に戻ってくる。
-                    **3つはとなりどうしに置く**(CLAUDE.md)。
-                    「意味を見る」は答えではないので1段上にある */}
+                {/* **「見る」と「聴く」は、問題のすぐ下に2つ並べる**
+                    (2026-09 利用者の指定)。
+
+                      > 英語をみる、英語を聴くの２つを日本語の問題の下に。
+                      > その際も聴くボタンをすぐ下に。
+
+                    どちらも**答えそのものではなく、答えを確かめる道**なので
+                    同じ段に置く(Quick Response と同じ考え方)。
+                    答えの2つ(まだ / 覚えかけ)は1段下にある。
+
+                    **日本語 → 英語でも音を鳴らす**(2026-09 利用者の指定・
+                    **方針の変更**)。もとは「鳴らせば答えが聞こえてしまう」
+                    ので伏せていたが、この向きは**口に出して言う**練習なので、
+                    自分で言ってから**耳で答え合わせをする**ほうが素直である
+                    (Quick Response で同じ判断をしている)。 */}
+                <div className="wordcard-peek">
+                  <button type="button" className="btn btn--ghost btn--small"
+                          aria-expanded={shown}
+                          onClick={() => setShown((v) => !v)}>
+                    {form === 'ja2en'
+                      ? (shown ? '英語を隠す' : '英語を見る')
+                      : (shown ? '意味を隠す' : '意味を見る')}
+                  </button>
+                  {/* 「思い出す」の向きは英語が出ているので、
+                      Listen は語のとなりにある。**同じものを2つ見せない** */}
+                  {/* **見た目は「英語を見る」とそろえる**(どちらも枠線だけ)。
+                      答えそのものではない操作は `btn--ghost`(CLAUDE.md)。
+                      `etext-listen` は本文の中に埋める用の小さい形なので、
+                      ここで使うと**2つの背丈がそろわない** */}
+                  {form === 'ja2en' && (
+                    <SpeakButton text={word} className="btn--ghost" />
+                  )}
+                </div>
+                {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。
+                    まだ / 覚えかけ。
+
+                    自分で「覚えた」と申告する道をなくし、代わりに
+                    **「覚えかけ」を続けて押した回数**で卒業を決める(0038)。
+                    申告は当てにならない — 1回思い出せただけで押してしまうし、
+                    押した瞬間に30日先へ飛んでいた。
+
+                    **0027 を貼っていない Supabase では「覚えかけ」が使えない。**
+                    そのときだけ、これまでの「覚えた」を出す
+                    (**貼る前でも動く道を残す**・CLAUDE.md)。 */}
                 <div className="wordcard-answers">
                   <button type="button" className="btn btn--quiet"
                           disabled={busy === card.word_norm}
                           onClick={() => answer(card, 'unknown')}>まだ</button>
-                  {canLearning && (
-                    <button type="button" className="btn btn--half"
-                            disabled={busy === card.word_norm}
-                            onClick={() => answer(card, 'learning')}>覚えかけ</button>
-                  )}
-                  <button type="button" className="btn btn--primary"
-                          disabled={busy === card.word_norm}
-                          onClick={() => answer(card, 'known')}>覚えた</button>
+                  {canLearning
+                    ? (
+                      <button type="button" className="btn btn--primary"
+                              disabled={busy === card.word_norm}
+                              onClick={() => answer(card, 'learning')}>覚えかけ</button>
+                    )
+                    : (
+                      <button type="button" className="btn btn--primary"
+                              disabled={busy === card.word_norm}
+                              onClick={() => answer(card, 'known')}>覚えた</button>
+                    )}
                 </div>
               </div>
             )}
 
-            {shown && (
-              <div className="wordcard-back">
-                {form === 'ja2en' || form === 'spell' ? (
-                  <p className="wordcard-answer">
-                    <span className="wordcard-mean" lang="en">{word}</span>
-                    <SpeakButton text={word} className="etext-listen" />
-                  </p>
-                ) : (
-                  <p className="wordcard-answer">
-                    {card.pos && <span className="etext-pos">{card.pos}</span>}
-                    <span className="wordcard-mean">
-                      {card.meaning_ja || '(意味の控えがありません)'}
-                    </span>
-                  </p>
-                )}
-                {card.seen_in_ja && <p className="wordcard-seen-ja">{card.seen_in_ja}</p>}
-                <button type="button" className="btn btn--link"
-                        onClick={() => setDeep((v) => !v)}>
-                  {deep ? 'とじる' : 'くわしく'}
-                </button>
-                {deep && <Detail wordNorm={card.word_norm} />}
-              </div>
-            )}
+            {/* **日本語 → 英語では、ここに出さない。**
+                答えは上の枠で入れ替わっているので、
+                この箱ごと**問題の枠の中**へ入れてある(すぐ上)。
+                外に置くとカードが伸び、答えのボタンが動く */}
+            {form !== 'ja2en' && backBlock}
 
             {/* **「箱 0 / 次は今日」は出さない**(2026-08 利用者の指定)。
                 > 単語帳内の「箱0 / 次は今日」はバックグラウンドのデータとして

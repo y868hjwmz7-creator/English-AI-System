@@ -377,8 +377,9 @@ select pg_temp.ok('覚えかけ → 覚えた で箱 4・7日後へ進む',
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
      and word_norm = 'latency'), '4/7');
 
--- **覚えかけは「正解」に数えない**(思い出せたが自信が無い状態のため)。
--- 同じ日に「覚えた」も押しているので、**押す前後の差**で見る
+-- **「思い出せたか」で数える**(0038)。ボタンから「覚えた」を外したので、
+-- `known` だけを正解に数えると**いつも 0** になる。
+-- 同じ日にほかの語も押しているので、**押す前後の差**で見る
 create temp table pg_temp_before as
   select answered, correct from public.vocab_days
    where learner_id = 'e2222222-2222-2222-2222-222222222222'
@@ -386,11 +387,46 @@ create temp table pg_temp_before as
 
 select public.mark_word('Throughput', 'learning');
 
-select pg_temp.ok('覚えかけは、答えた数だけが 1 増える',
+select pg_temp.ok('覚えかけは、答えた数も正解の数も 1 増える(0038)',
   (select (d.answered - b.answered)::int || '/' || (d.correct - b.correct)::int
      from public.vocab_days d, pg_temp_before b
     where d.learner_id = 'e2222222-2222-2222-2222-222222222222'
-      and d.done_on = current_date), '1/0');
+      and d.done_on = current_date), '1/1');
+
+-- ── 25回続けて「覚えかけ」を押したら、しばらく出てこない(0038)─────
+--   2026-09 利用者の指定「20-30回くらい連続で覚えかけを押すと
+--   しばらくは出てこない仕様にしましょう」。
+--   **回数そのものを、ここで確かめる。** 画面には持たせない決まりである
+select public.mark_word('Payload', 'unknown');
+do $$ begin
+  for i in 1..24 loop perform public.mark_word('Payload', 'learning'); end loop;
+end $$;
+select pg_temp.ok('24回目までは卒業しない(箱 3・4日後のまま)',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'payload'), '3/4');
+select pg_temp.ok('24回ぶん数えている',
+  (select learn_streak::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'payload'), 24);
+
+select public.mark_word('Payload', 'learning');
+select pg_temp.ok('25回続けたら、箱 6・30日後(しばらく出てこない)',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'payload'), '6/30');
+
+-- **「まだ」を押したら、数えは 0 に戻る。**「続けて」の意味である
+select public.mark_word('Payload', 'unknown');
+select pg_temp.ok('「まだ」で、続けた数えは 0 に戻る',
+  (select learn_streak::int from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'payload'), 0);
+select public.mark_word('Payload', 'learning');
+select pg_temp.ok('数えが戻ったので、また箱 1・1日後から',
+  (select box::int || '/' || (due_on - current_date)::text from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'payload'), '1/1');
 
 -- ── 復習は「まだ」を先に、「覚えかけ」を次に出す(0027)─────────
 --   **これが利用者の指定した出題の順である。**
