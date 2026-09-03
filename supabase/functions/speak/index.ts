@@ -452,6 +452,8 @@ Deno.serve(async (req) => {
 
     // 良い段。**Voice ID を入れていない声は、標準の段の音で作る。**
     // 失敗にはしない。鳴らないより、標準の声で鳴るほうがよい
+    // **作り直すか。** あっても上書きする(下の「すでにあるなら」を飛ばす)
+    const force = body.force === true
     const elevenVoice = elevenKey ? cleanElevenId(body.elevenVoice) : ''
     const usePremium = tier === 'premium' && !!elevenVoice
 
@@ -492,9 +494,25 @@ Deno.serve(async (req) => {
     //   画面も先に同じ場所を見に行くので、ここへ来る時点では普通は無い。
     //   それでも見るのは、**同じ英文を2人が同時に開いたとき**に
     //   二重に作って二重に課金されるのを防ぐためである。
-    const already = await fetch(publicUrl, { method: 'HEAD' })
-    if (already.ok) {
-      return reply({ url: publicUrl, cached: true, ms: Date.now() - startedAt })
+    /* **作り直しを頼まれたときは、あるかどうかを見ない**(2026-09 実機)。
+     *
+     *   > Mika のひとつ目の発言だけ、明らかに ElevenLabs ではない
+     *   > 酷い音声になってしまいます。
+     *
+     * 上の `madeTier` を入れる前の窓口は、良い声で作れなかったときも
+     * **良い段の場所に標準の声で置いていた。** そこにいったん置かれると、
+     * 画面はその場所を見て「ある」ので鳴らして終わり、
+     * **窓口はもう呼ばれない。** だから鍵を入れても、その英文だけ直らない。
+     *
+     * 直す道が要る。`force` が来たら、あっても作り直して上書きする
+     * (置くときの `x-upsert` はもともと付いている)。
+     * **頼まれたときだけ。** 自動では作り直さない —
+     * 作り直しはそのまま ElevenLabs への課金になる。 */
+    if (!force) {
+      const already = await fetch(publicUrl, { method: 'HEAD' })
+      if (already.ok) {
+        return reply({ url: publicUrl, cached: true, ms: Date.now() - startedAt })
+      }
     }
 
     // ── 4. 作らせる ────────────────────────────────────────

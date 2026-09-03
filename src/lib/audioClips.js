@@ -217,12 +217,15 @@ if (typeof document !== 'undefined') {
  * 窓口に作らせる。**ここだけが Azure を使わせる入口である。**
  * 駄目だった理由が「待っても直らない」ものなら、以後は取りに行かない。
  */
-async function askForClip(text, pathName, tier, rosterId) {
+async function askForClip(text, pathName, tier, rosterId, force = false) {
   if (!supabase) return null
   try {
     const { data, error } = await supabase.functions.invoke('speak', {
       body: {
         text, voice: pathName, tier,
+        // **作り直す**(2026-09 実機)。あっても上書きさせる。
+        // 頼まれたときだけ — 作り直しはそのまま課金になる
+        ...(force ? { force: true } : {}),
         // 標準の段での代役。**声の名簿は画面側だけが持つ**ので、
         // 窓口が知らない声を選んでも、これを見れば読み上げられる
         base: baseVoiceOf(rosterId),
@@ -233,7 +236,9 @@ async function askForClip(text, pathName, tier, rosterId) {
     })
     // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある
     const body = data ?? {}
-    if (body.url) return body.url
+    // **`cached` も返す。** 作り直しを頼んだのに「もうある」で返ってきたら、
+    // それは**窓口がまだ古い**という意味である(下の `remakeClip`)
+    if (body.url) return { url: body.url, cached: !!body.cached }
     if (body.fatal) stopped = true
     if (body.detail) setDetail(body.detail)
     else if (error) setDetail(error.message)
@@ -275,10 +280,51 @@ export async function makeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDA
   const voice = pathVoice(voiceId, tier)
   const key = `${tier}|${voice}|${body}`
   if (gaveUp.has(key)) return null
-  const url = await askForClip(body, voice, tier, voiceId)
-  if (!url) { gaveUp.add(key); urlCache.delete(key); return null }
-  urlCache.set(key, url)
-  return url
+  const made = await askForClip(body, voice, tier, voiceId)
+  if (!made?.url) { gaveUp.add(key); urlCache.delete(key); return null }
+  urlCache.set(key, made.url)
+  return made.url
+}
+
+/**
+ * **もう一度作り直す**(2026-09 実機)。
+ *
+ *   > Mika のひとつ目の発言だけ、明らかに ElevenLabs ではない
+ *   > 酷い音声になってしまいます。
+ *
+ * 良い段の場所に**標準の声の MP3 が居座っている**ことがある
+ * (窓口を直す前に一度でも鳴らした英文。`speak` の `madeTier` の説明)。
+ * 画面はその場所を見て「ある」ので鳴らして終わり、窓口はもう呼ばれない。
+ * だから**こちらから作り直させる道**が要る。
+ *
+ * 【置き場所は同じなので、控えを外す】
+ *   同じ URL のまま中身だけが変わる。ブラウザにも CDN にも
+ *   **1年もつ**指定(`max-age=31536000`)で入っているので、
+ *   そのままでは古い音のまま鳴る。**うしろに印を足して別の URL にする。**
+ */
+export async function remakeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
+  if (!canUseClips()) return null
+  const body = normText(text)
+  if (!body) return null
+  const voice = pathVoice(voiceId, tier)
+  const key = `${tier}|${voice}|${body}`
+  const made = await askForClip(body, voice, tier, voiceId, true)
+  if (!made?.url) return null
+  /* **「もうあるので作りませんでした」で返ってきたら、作り直せていない。**
+     窓口がまだ古い(`force` を知らない)ということなので、
+     **成功として返さない。** 成功と失敗を同じ見た目で終わらせない
+     (CLAUDE.md)。押した人は「直したのに直らない」で悩むことになる */
+  if (made.cached) {
+    setDetail('読み上げ音声を作り直せませんでした。Supabase の Edge Functions →'
+      + ' speak を、いまのコードで配置し直してください'
+      + '(いまの窓口は「作り直す」に対応していません)。')
+    return null
+  }
+  // **控えを素通りさせる。** 印は作り直した時刻(必ず毎回ちがう値になる)
+  const fresh = `${made.url}?v=${Date.now()}`
+  gaveUp.delete(key)
+  urlCache.set(key, fresh)
+  return fresh
 }
 
 /**

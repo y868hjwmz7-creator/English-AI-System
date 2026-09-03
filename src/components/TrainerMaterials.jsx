@@ -34,6 +34,10 @@ import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { printElement } from '../lib/print.js'
 import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
+/* **読み上げ音声を作り直す**(2026-09 実機)。良い段の場所に標準の声が
+   居座っている英文を、こちらから作り直させる(`remakeClips.js` の冒頭) */
+import { premiumClipsOf, remakeMaterialClips } from '../lib/remakeClips.js'
+import { lastClipDetail } from '../lib/audioClips.js'
 
 /** 絞り込みの「問数」と、作る画面の増やし方の対応。**2か所に持たない** */
 const AMOUNT_BY_SIZE = { 20: 'double', 30: 'triple' }
@@ -80,6 +84,11 @@ export default function TrainerMaterials({ me }) {
   const [printId, setPrintId] = useState(null)   // 紙に出している教材
   const [resetAsk, setResetAsk] = useState(null) // 「本当に消す」に変わっている教材
   const [resetDone, setResetDone] = useState(null)
+  /* **読み上げ音声を作り直す**(2026-09 実機)。
+     「本当に作り直す」の2段にしてある — 押し間違いがそのまま課金になる */
+  const [voiceAsk, setVoiceAsk] = useState(null)
+  const [voiceBusy, setVoiceBusy] = useState(null)   // {id, done, total}
+  const [voiceDone, setVoiceDone] = useState(null)   // {id, done, failed, total}
   // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
   // (2026-08 利用者の指定)。担当ゲストの記録には触れない
   const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
@@ -282,6 +291,24 @@ export default function TrainerMaterials({ me }) {
       else setLearners(data)
     })
   }, [])
+
+  /**
+   * その教材の読み上げ音声を作り直す(2026-09 実機)。
+   * **2段で押させる。** 1回目は「本当に作り直す」に変わるだけ。
+   */
+  const remakeVoices = async (m) => {
+    if (voiceAsk !== m.id) { setVoiceAsk(m.id); setVoiceDone(null); return }
+    setVoiceAsk(null)
+    setVoiceBusy({ id: m.id, done: 0, total: premiumClipsOf(m).length })
+    const r = await remakeMaterialClips(m, ({ done, total }) => {
+      setVoiceBusy({ id: m.id, done, total })
+    })
+    setVoiceBusy(null)
+    /* **1本も作り直せなかったときは、理由まで出す。**
+       トレーナーの画面なので、どこで何をすればよいかまで書いてよい
+       (ゲストには出さない・CLAUDE.md) */
+    setVoiceDone({ id: m.id, ...r, detail: r.done === 0 ? lastClipDetail() : null })
+  }
 
   const startAssign = (materialId) => {
     setAssigningId(materialId)
@@ -711,6 +738,29 @@ export default function TrainerMaterials({ me }) {
                     {resetAsk === m.id ? '本当に消す' : '練習の記録を消す'}
                   </button>
                 )}
+                {/* **読み上げ音声を作り直す**(2026-09 実機)。
+
+                      > Mika のひとつ目の発言だけ、明らかに ElevenLabs では
+                      > ない酷い音声になってしまいます。
+
+                    直す前の窓口が、良い声で作れなかった MP3 を
+                    **良い段の場所に置いていた**ため、その英文だけ
+                    永久に標準の声のままになる(`remakeClips.js`)。
+                    画面は「ある」ものを鳴らすだけなので、放っておいても
+                    直らない。**こちらから作り直させる道**を置く。
+
+                    **良い声を使う教材のときだけ出す**(効かない操作を
+                    見せない)。**2段にする** — 押し間違いがそのまま課金になる */}
+                {premiumClipsOf(m).length > 0 && (
+                  <button type="button"
+                          className={`btn btn--small ${voiceAsk === m.id ? 'btn--quiet' : 'btn--ghost'}`}
+                          disabled={!!voiceBusy}
+                          onClick={() => remakeVoices(m)}>
+                    {voiceBusy?.id === m.id
+                      ? `作り直しています… ${voiceBusy.done} / ${voiceBusy.total}`
+                      : voiceAsk === m.id ? '本当に作り直す' : '読み上げ音声を作り直す'}
+                  </button>
+                )}
               </div>
               <div className="btn-row">
                 {assigningId !== m.id && (
@@ -721,6 +771,23 @@ export default function TrainerMaterials({ me }) {
                 )}
                 {makingJa === m.id && <span className="muted">区切りの訳を作っています…</span>}
               </div>
+              {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
+                  作り直しは課金になるので、**押す前に本数と費用を書く** */}
+              {voiceAsk === m.id && !voiceBusy && (
+                <p className="notice notice--warn">
+                  この教材の読み上げ音声 <strong>{premiumClipsOf(m).length} 本</strong>を、
+                  もう一度作り直します(ElevenLabs に課金されます)。
+                  <br />
+                  良い声にならない英文があるときだけ押してください。
+                </p>
+              )}
+              {voiceDone?.id === m.id && (
+                <p className={`notice${voiceDone.done === 0 ? ' notice--error' : ''}`}>
+                  読み上げ音声を <strong>{voiceDone.done} 本</strong>作り直しました。
+                  {voiceDone.failed > 0 && `(${voiceDone.failed} 本は作れませんでした)`}
+                  {voiceDone.detail && <><br />{voiceDone.detail}</>}
+                </p>
+              )}
               {/* **押した場所のすぐ下に出す**(CLAUDE.md) */}
               {resetAsk === m.id && (
                 <p className="card-hint">
