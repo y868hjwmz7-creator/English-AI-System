@@ -42,7 +42,8 @@ import { SIX_STEPS } from '../lib/sixSteps.js'
  * @param onClose     集中モードを終える
  */
 export default function StepFocus({
-  step, onStepChange, at, total, unit = '文', onMove, onClose, children,
+  step, onStepChange, at, total, unit = '文', width = 'w100',
+  onMove, onClose, children,
 }) {
   const bodyRef = useRef(null)
 
@@ -79,7 +80,10 @@ export default function StepFocus({
   }, [])
 
   return (
-    <div className="focus stepfocus" role="dialog" aria-modal="true" aria-label="集中モード">
+    /* **紙の幅を引き継ぐ**(2026-09 実機「画面幅が引き継がれていません」)。
+       `FocusReader` とまったく同じ `.focus--w*` を使う。**2か所に持たない** */
+    <div className={`focus stepfocus focus--${width}`}
+         role="dialog" aria-modal="true" aria-label="集中モード">
       {/* ── 上の帯。**細く1行。** ここが太ると中身が下へ押し出される ── */}
       <div className="focus-top">
         <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>

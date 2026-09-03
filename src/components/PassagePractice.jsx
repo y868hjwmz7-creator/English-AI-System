@@ -76,6 +76,13 @@ export default function PassagePractice({
    * **同じことをするボタンを、1つの画面に2つ見せない**(CLAUDE.md)。
    */
   showFocus = true,
+  /**
+   * 集中モードの幅(`w100`〜`w150` / `wfit`・2026-09 実機)。
+   * レッスン表示の紙で選んでいる幅を、そのまま引き継ぐ。
+   * **数字は `.lesson-sheet--w*` と同じもの**(`FocusReader` と共通)。
+   * 紙の外(ゲストの宿題など)からは指定が無いので、そのままの幅になる。
+   */
+  focusWidth = 'w100',
 }) {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('six_steps', true, learnerId)
@@ -539,7 +546,7 @@ export default function PassagePractice({
           blocks={focus ? slashBlocks.slice(at, at + 1) : slashBlocks}
           clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)}
-          unit={slashUnit}
+          unit={slashUnit} isDialogue={isDialogue}
           onUnitChange={(v) => { setSlashUnit(v); saveSlashUnit(v) }}
           /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定) */
           progressAt={progressKey(materialId, section.id, `slash-${slashUnit}`)}
@@ -734,7 +741,7 @@ export default function PassagePractice({
   if (focus) {
     return (
       <StepFocus step={step} onStepChange={(v) => { stopPlaying(); setStep(v) }}
-                 at={at} total={focusTotal} unit={focusUnitLabel}
+                 at={at} total={focusTotal} unit={focusUnitLabel} width={focusWidth}
                  onMove={(n) => { stopPlaying(); setFocusAt(Math.min(Math.max(0, n), focusTotal - 1)) }}
                  onClose={() => { stopPlaying(); setFocus(false) }}>
         {body}

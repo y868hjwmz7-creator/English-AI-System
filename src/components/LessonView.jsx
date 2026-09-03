@@ -853,6 +853,11 @@ export default function LessonView({
                同じ言葉が2つ並ばないよう、6Steps を開いているあいだは
                上の行のほうを引っ込めてある(すぐ上の `.practice-row`) */
             showFocus
+            /* **紙の幅をそのまま引き継ぐ**(2026-09 実機
+               「画面幅が引き継がれていません」)。130% にして読んでいた人が、
+               集中モードに入った瞬間に別の幅に変わっては落ち着かない。
+               `FocusReader` に渡しているものと**同じ値**である */
+            focusWidth={width}
             /* 見出しは紙の上にもう出ている。**同じ英語を2行続けて並べない** */
             isDialogue={passageSection.exercise_type === 'dialogue'}
             /* 途中経過を教材ごとにまとめて消せるようにするため、

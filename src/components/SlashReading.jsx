@@ -46,7 +46,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { useProgress } from '../lib/progress.js'
 import { checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
 import { chunkPairsOfAtMarks, storedChunks } from '../lib/chunkJa.js'
-import { SLASH_UNITS } from '../lib/sixSteps.js'
+import { slashUnitsFor } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
 /**
@@ -83,6 +83,8 @@ const hasJaOf = (s) => partsOf(s).some((p) => storedChunks(p))
 export default function SlashReading({
   blocks, clipVoice, tier, rate, unit, onUnitChange, progressAt = null,
   learnerId = null,
+  /** 会話・会議か。**単位の言葉が変わる**(段落ごと / 発言ごと・2026-09) */
+  isDialogue = false,
 }) {
   /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定)。
      20か所入れたあとで別のタブを見に行くと、やり直しになっていた。
@@ -154,11 +156,13 @@ export default function SlashReading({
     <div className="slash">
       <div className="slash-head">
         {/* **1文ずつでは細かすぎる**(2026-08 の指摘)。
-            段落(会話は発言)ごとか、本文まるごとかを選ぶ */}
+            段落(会話・会議は発言)ごとか、本文まるごとかを選ぶ。
+            **言葉は教材の形から決める**(2026-09 利用者の指定)。
+            会話なのに「段落ごと」と出ていた */}
         <label className="rate-pick">
           <span>単位</span>
           <select value={unit} onChange={(e) => onUnitChange(e.target.value)}>
-            {SLASH_UNITS.map((u) => (
+            {slashUnitsFor(isDialogue).map((u) => (
               <option key={u.id} value={u.id} title={u.hint}>{u.label}</option>
             ))}
           </select>
