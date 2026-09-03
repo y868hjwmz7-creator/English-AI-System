@@ -3633,7 +3633,11 @@ html, body { overscroll-behavior-x: none; }
 .lesson-items > li.is-speaking {
   background: var(--speak-bg);
   box-shadow: inset 5px 0 0 var(--speak-bar);
-  border-radius: 6px;
+  /* **左側は角を落とさない**(2026-09 利用者の指定
+     「この左側の色の線は真っ直ぐにして欲しいです」)。
+     角を丸めると、内側に敷いた帯もその丸みに沿って**両端が細る。**
+     右側だけ丸めれば、帯はまっすぐのまま柔らかさも残る */
+  border-radius: 0 6px 6px 0;
   border-bottom-color: transparent;
 }
 .lesson-items > li.is-speaking .lesson-en { font-weight: 600; }
@@ -3804,7 +3808,17 @@ html, body { overscroll-behavior-x: none; }
     padding: 16px 12px 40px;
     margin: 5px auto;
   }
-  .lesson-items > li { padding: 6px 2px 14px 2px; }
+  /* ★ **余白は、再生中かどうかで変えない**(2026-09 実機・利用者の指摘)。
+       > 普通のモードで再生されている時と通常時で数px横に表示がズレる
+
+     以前は `.is-speaking` のときだけ `padding-left: 8px` を足していた。
+     色の帯(5px)が番号の丸にかぶらないようにしたためだが、
+     **足したぶんだけ行が右へ動いていた**(実測 6px)。
+     「色が付くときだけ余白を足すと行が横に動く」は
+     `.passage-part` の側にコメントで書いてあったのに、こちらで破っていた。
+
+     **はじめからその余白で置く。** 帯のぶん(8px)を常に空ける */
+  .lesson-items > li { padding: 6px 6px 14px 8px; }
   /* 番号は左に浮かせる。1行目は番号の横から始まり、2行目からは
      左端いっぱいまで使える。ぶら下げと違って、深い余白ができない */
   .lesson-items > li::before {
@@ -3822,7 +3836,6 @@ html, body { overscroll-behavior-x: none; }
      **発言ごとに1行目だけ字下げされて見えていた**(2026-08 実機)。
      記事(話す人がいない)は、これまでどおり番号の横から始める。 */
   .lesson-speaker + .lesson-en { clear: left; }
-  .lesson-items > li.is-speaking { padding-left: 8px; padding-right: 6px; }
   .lesson-head { margin-bottom: 14px; }
 }
 
@@ -5118,6 +5131,13 @@ html, body { overscroll-behavior-x: none; }
 .focus-mid {
   flex: 1 1 auto; min-width: 0;
   display: flex; align-items: center; justify-content: center; gap: 8px;
+  /* ★ **入らないときは、この中で折り返す**(2026-09 実機)。
+     くり返しのボタンを足したことで、**文字を大きくしている端末**では
+     3つが入りきらず、`.btn--small` は縮まないので**外へあふれて
+     隣のボタンと重なっていた**(利用者の写真で分かった)。
+     ここだけ折り返せば、重なりはしない。
+     帯が一段高くなるが、**重なって押せないよりはよい** */
+  flex-wrap: wrap; row-gap: 6px;
 }
 .focus-wide { flex: 1 1 auto; }
 
@@ -5134,6 +5154,26 @@ html, body { overscroll-behavior-x: none; }
   font-size: 15px;
 }
 .focus-wrap-none { margin: 0; color: var(--text-secondary); font-size: 14px; }
+
+/* ★ 下の帯は、**狭い画面では詰める**(2026-09 実機)。
+
+   くり返しのボタンを足したことで、Listen・1回・訳を見る の3つが
+   iPhone(390px)の中の段に収まらなくなり、**折り返して帯が2段**になっていた
+   (文字を大きくしている端末では、さらに重なっていた)。
+
+   詰め方は**言葉を短く → 余白を詰める → 絵だけにする**の順(CLAUDE.md)。
+   ここは**どれも短くできない言葉**(Listen / 1回 / 訳を見る)なので、
+   余白のほうを詰める。**絵だけにはしない** — 3つとも意味が違う。
+
+   実測: 390px は 107px(2段)→ **67px(1段)。**
+   文字を 1.25 倍にしている端末でも 67px の1段に収まる。
+   320px はどうやっても入らないので2段(107px)。**重なりはしない** */
+@media (max-width: 480px) {
+  .focus-bar { gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .focus-bar .btn { font-size: 12px; padding: 5px 8px; }
+  .focus-mid { gap: 6px; }
+  .focus-move { min-width: 60px; }
+}
 
 /* 狭い画面。**言葉を短く → 余白を詰める**の順(CLAUDE.md) */
 @media (max-width: 400px) {
