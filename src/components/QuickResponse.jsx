@@ -182,14 +182,16 @@ export default function QuickResponse({
             **プルダウンにする**(6Steps と同じ考え方。札を並べると
             狭い画面で2段になり、紙の上では場所を食う) */}
         {modes.length > 1 && (
-          <label className="qr-mode">
-            <span className="sr-only">取り組み方</span>
-            <select value={mode} onChange={(e) => switchMode(e.target.value)}>
-              {modes.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}({counts[m.id]} 問)</option>
-              ))}
-            </select>
-          </label>
+          <div className="qr-mode" role="group" aria-label="取り組み方">
+            {modes.map((m) => (
+              <button key={m.id} type="button"
+                      className={`qr-modebtn${mode === m.id ? ' is-active' : ''}`}
+                      aria-pressed={mode === m.id}
+                      onClick={() => switchMode(m.id)}>
+                {m.label} <span className="qr-modecount">{counts[m.id]}</span>
+              </button>
+            ))}
+          </div>
         )}
         <span className="qr-count">
           {finished ? `${pairs.length} / ${pairs.length}` : `${at + 1} / ${pairs.length}`}
@@ -269,11 +271,26 @@ export default function QuickResponse({
               「言えなかった」は6文字あり、スマホで2行に割れた(実測)ので
               「まだ」にしてある */}
           <div className="qr-actions">
-            <button type="button" className="btn btn--ghost btn--small"
-                    aria-expanded={shown}
-                    onClick={() => setShown((v) => !v)}>
-              {shown ? '英語を隠す' : '英語を見る'}
-            </button>
+            <div className="qr-peek">
+              <button type="button" className="btn btn--ghost btn--small"
+                      aria-expanded={shown}
+                      onClick={() => setShown((v) => !v)}>
+                {shown ? '英語を隠す' : '英語を見る'}
+              </button>
+              {/* **英語を出さなくても、答えの音は聞ける**(2026-09 利用者の指定)。
+                  > 英語を表示させなくても答えの音声が聞けるようにしたいです
+
+                  **これまでの決まりを、利用者の指定で変えた。**
+                  もとは「答えを見る前に音を鳴らさない(鳴らせば答えが
+                  聞こえてしまう)」だった。けれども Quick Response は
+                  **口に出して言う**練習なので、自分で言ってから
+                  **耳で答え合わせをする**ほうが素直である。
+                  読んで確かめるより、聞いて確かめるほうが力が付く。
+
+                  **単語帳の「日本語 → 英語」は変えていない**(言われた場所だけを直す) */}
+              <SpeakButton text={card.en} className="btn--ghost"
+                           clipVoice={clipVoice} tier={tier} />
+            </div>
             <div className="qr-answers">
               <button type="button" className="btn btn--quiet"
                       onClick={() => answer(false)}>まだ</button>
