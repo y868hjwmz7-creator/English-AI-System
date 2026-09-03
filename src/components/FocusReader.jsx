@@ -64,6 +64,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
+import RepeatToggle from './RepeatToggle.jsx'
 import { CloseIcon } from './Icons.jsx'
 import { castClipSpeakers, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
@@ -84,22 +85,11 @@ function wordsOf(text) {
   return seen
 }
 
-/**
- * その段落で「知らなかった」と付けた語を数える(2026-09 利用者の指定)。
- *
- * **集めた手応えが見えると、最後まで進みやすい。**
- * 数えるだけで、記録は単語帳(`word_reviews`)のまま。**入れ物は増やさない。**
- *
- * **`statuses` は Map である**(`useWordStatuses`)。`statuses[w]` と書くと
- * 常に `undefined` になり、**黙って 0 が並ぶ。**
- * ここは実際に間違えて、Playwright で描かせて気づいた(2026-09)。
- */
-function pickedIn(text, statuses) {
-  if (!statuses?.get || !text) return 0
-  let n = 0
-  for (const w of wordsOf(text)) if (statuses.get(w) === 'unknown') n += 1
-  return n
-}
+/* **段落ごとの「◯語入れました」は出さない**(2026-09 利用者の指定
+   「集中モード内の、この段落、発言で〜語入れましたみたいのはやはりいらない」)。
+   数えるだけの行で、読むものが1行増えるほうの害が大きかった。
+   **まとめの1枚(`allPicked`)は残してある** — あちらは教材ぜんぶの控えである。
+   `statuses` が Map だという注意は、その `allPicked` の側に効いている */
 
 export default function FocusReader({
   section, isDialogue = false, voiceIds = null, tier,
@@ -153,6 +143,8 @@ export default function FocusReader({
   const [showJa, setShowJa] = useState(false)
   /** 最後の1枚(調べた語のまとめ)を出しているか */
   const [wrap, setWrap] = useState(false)
+  /** 読み上げをくり返すか(2026-09 利用者の指定)。**覚えない** */
+  const [loop, setLoop] = useState(false)
 
   const bodyRef = useRef(null)
 
@@ -229,7 +221,6 @@ export default function FocusReader({
   const total = items.length
   const unit = isDialogue ? '発言' : '段落'
   const seen = Array.isArray(done) ? done : []
-  const picked = pickedIn(item.prompt_en, wordStatuses)
   const clipVoice = voiceFor(cast, item.speaker, soloVoice)
   const last = index >= total - 1
 
@@ -284,7 +275,7 @@ export default function FocusReader({
                 **話す人がいなくても出す**(記事の段落にも紙は番号を振っている)。
                 英語と訳のどちらでも出すので、**切り替えても行は動かない** */}
             <div className="focus-who">
-              <span className="focus-no" aria-hidden="true">{index + 1}</span>
+              <span className="num-badge" aria-hidden="true">{index + 1}</span>
               {isDialogue && item.speaker && (
                 <span className="focus-speaker" lang="en">{item.speaker}</span>
               )}
@@ -306,13 +297,6 @@ export default function FocusReader({
           </>
         )}
       </div>
-
-      {/* 集めた手応え。**数えるだけ。入れ物は増やさない**(利用者の指定)。
-          **帯より上に置く。** 帯を最後にしておかないと、iPhone の
-          ホームバー用の余白が二重に入る */}
-      {!wrap && picked > 0 && (
-        <p className="focus-picked">この{unit}で {picked} 語 入れました</p>
-      )}
 
       {/* ── すぐ元に戻る(2026-09 利用者の指定)────────────────
           > そしてすぐに元に戻れるボタンも作ってください。
@@ -345,7 +329,11 @@ export default function FocusReader({
             <div className="focus-mid">
               {/* **音も訳も両方出す**(2026-09 利用者の指定) */}
               <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
-                           className="btn--small" />
+                           className="btn--small" repeat={loop} />
+              {/* **くり返し**(2026-09 利用者の指定
+                  「これは集中モードで、全てのデバイスで同じにしてください」)。
+                  まねて言うには、同じ発言を何度も聴く */}
+              <RepeatToggle on={loop} onChange={setLoop} />
               {/* 訳が無い段落では出さない(効かない操作を見せない) */}
               {item.prompt_ja && (
                 <button type="button" className="btn btn--small btn--ghost"

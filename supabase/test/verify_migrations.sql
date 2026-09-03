@@ -327,6 +327,12 @@ from (
     select 1 from information_schema.columns
     where table_name = 'material_items' and column_name = 'answer_ja'), 76
   union all
+  select '(77) 見出しに訳がある(0036)', exists (
+    -- 記事・会話の英語の見出しに、小さな訳を添えるための欄。
+    -- **作るときに1回だけ控える**(開くたびに訳させると課金が続く)
+    select 1 from information_schema.columns
+    where table_name = 'materials' and column_name = 'headline_ja'), 77
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

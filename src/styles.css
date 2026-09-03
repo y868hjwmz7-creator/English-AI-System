@@ -2699,6 +2699,8 @@ html, body { overscroll-behavior-x: none; }
   .print-target .mtitle-date { font-size: 10pt; color: #333 !important; }
   .print-target .mtitle-main { font-size: 15pt; }
   .print-target .mtitle-headline { font-size: 12pt; color: #222 !important; }
+  /* 見出しの訳(0036)。**紙では薄い灰色が消える**ので、濃く引き直す */
+  .print-target .mtitle-headline-ja { font-size: 9.5pt; color: #333 !important; }
   .print-target .mtitle-chip {
     font-size: 9pt; border-width: 0.8pt !important;
     border-color: #555 !important; color: #222 !important;
@@ -3919,6 +3921,13 @@ html, body { overscroll-behavior-x: none; }
   margin-top: 2px; color: var(--text-secondary); font-size: 14px;
   overflow-wrap: break-word;   /* 英語の見出し。長い1語ではみ出させない */
 }
+/* 見出しの訳(0036・2026-09 利用者の指定「小さな訳をつけてください」)。
+   **添え物なので、見出しより先に目が行ってはいけない。**
+   英語のすぐ下に、一段小さく静かに置く */
+.mtitle-headline-ja {
+  margin-top: 1px; color: var(--text-muted); font-size: 12px; line-height: 1.5;
+  overflow-wrap: break-word;
+}
 .mtitle-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; min-width: 0; }
 .mtitle-chip {
   padding: 1px 9px; border: 1px solid var(--border); border-radius: 999px;
@@ -4663,7 +4672,16 @@ html, body { overscroll-behavior-x: none; }
   background: var(--qa-answer, var(--surface-2));
 }
 .qr-body.is-tight .qr-answer { margin-top: 0; }
-.qr-from { margin: 0; color: var(--qr-faint); font-size: 12px; }
+/* 何問目か + 話す人。**丸の番号は集中モード・紙と同じもの**
+   (2026-09 利用者の指定「クイックレスポンスの文章にも番号を。おしゃれにね」)。
+   上の「2 / 25」は**どこまで来たか**の目安で、役目が違う */
+.qr-from {
+  margin: 0 0 4px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--qr-faint); font-size: 12px;
+}
+/* 紙の上では、丸も紙の色にそろえる(帯の色を持ち込まない) */
+.qr--paper .qr-from .num-badge { background: var(--accent-bg); color: var(--accent); }
 /* 出す側の日本語。**大きく出す。** ここだけを見て言う */
 .qr-ja {
   margin: 0 auto; max-width: 34em;
@@ -5047,11 +5065,12 @@ html, body { overscroll-behavior-x: none; }
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 10px;
 }
-/* 番号の丸。**紙と同じ見た目にそろえる**(`.lesson-items > li::before`)。
+/* 番号の丸は **`.num-badge` 1か所**(集中モード・Quick Response で使う)。
+   **紙の番号と同じ見た目にそろえてある**(`.lesson-items > li::before`)。
    レッスンは紙を見ながら話すので、「2番のところ」でどちらも同じ場所を指せる。
    **数字は自分で丸に入れる。** ①②③ の文字は端末ごとに形も大きさも違い、
    50 を超えると尽きる(絵文字を使わないのと同じ理由・CLAUDE.md) */
-.focus-no {
+.num-badge {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.75em; height: 1.75em;
@@ -5102,15 +5121,6 @@ html, body { overscroll-behavior-x: none; }
 }
 .focus-wide { flex: 1 1 auto; }
 
-/* 集めた手応え。**数えるだけ**(記録は単語帳のまま)。
-   **帯より上に置く。** 帯を最後にしないと、iPhone のホームバー用の
-   余白が二重に入る(実測して気づいた) */
-.focus-picked {
-  flex: 0 0 auto; margin: 0;
-  padding: 6px 16px 0;
-  text-align: center; font-size: 12px; color: var(--text-secondary);
-}
-
 /* 最後の1枚。調べた語をまとめて見る */
 .focus-wrap { display: flex; flex-direction: column; gap: 12px; }
 .focus-wrap-lead { margin: 0; font-size: 15px; }
@@ -5140,19 +5150,61 @@ html, body { overscroll-behavior-x: none; }
    ふだんの練習の邪魔をしないよう、枠線だけの控えめな形にする */
 .passage-focus { margin-bottom: 12px; }
 
-/* 紙の右下に貼り付く「集中モード」(2026-09 利用者の指定
-   「『教材を作る』のように常に右下にも固定してください」)。
+/* 紙の右下に貼り付くボタン(2026-09 利用者の指定
+   「『教材を作る』のように常に右下にも固定してください」/
+   「右下の集中モードの横あたりに再生中なら stop、停止中なら listen」)。
    **さがす画面の `.finder-float` と同じ置き方**にそろえてある。
-   青の塗りつぶしにはしない — 紙でいちばん大事なのは本文である */
-.focus-float {
+   青の塗りつぶしにはしない — 紙でいちばん大事なのは本文である。
+
+   **1つの行にまとめて、折り返させない。** 別々に `fixed` で置くと、
+   片方が消えたときにもう片方が飛ぶ(実測で確かめた) */
+.sheet-floats {
   position: fixed; right: 16px; z-index: 60;
   bottom: calc(16px + env(safe-area-inset-bottom));
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
+  max-width: calc(100% - 32px);
+}
+.sheet-float {
+  flex: 0 1 auto; min-width: 0;
   background: var(--surface-1); border-color: var(--border);
   box-shadow: var(--shadow-2);
 }
 @media (max-width: 560px) {
   /* 狭い画面では、下の端に少しだけ寄せる(親指の届くところ) */
-  .focus-float { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .sheet-floats {
+    right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+    gap: 6px; max-width: calc(100% - 20px);
+  }
+  .sheet-float { padding: 5px 9px; }
+}
+
+/* 取り組み方の説明。**畳んでおく**(2026-09 利用者の指定
+   「初めは閉じてて欲しいです」)。
+   見た目は静かに — 本文より先に目に入ってはいけない */
+.lesson-guide { margin: 6px 0 10px; }
+.lesson-guide-sum {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 0; border: 0; background: none; cursor: pointer;
+  font-family: inherit; font-size: .8em; color: var(--ink-soft);
+}
+/* **印は自分で描く。** 端末ごとに形も大きさも違う三角に頼らない */
+.lesson-guide-sum::before {
+  content: '▸'; font-size: .9em; transition: transform .15s ease;
+}
+.lesson-guide-sum.is-open::before { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .lesson-guide-sum::before { transition: none; }
+}
+.lesson-guide > .lesson-instruction { margin-top: 4px; }
+/* **描いてから隠す**(`.lesson-page` と同じ作法)。
+   `<details>` を使わないのは、閉じている中身が**紙にも出せない**ためである
+   (いまのブラウザは `content-visibility` で消す) */
+.lesson-guide > .lesson-instruction.is-closed { display: none; }
+/* **紙には開いて出す。** 紙で解く人には説明が要る */
+@media print {
+  body.is-printing .print-target .lesson-guide > .lesson-instruction.is-closed {
+    display: block;
+  }
 }
 
 /* 「英語を見る」と「Listen」。**どちらも答えそのものではない**ので

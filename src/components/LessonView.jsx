@@ -439,6 +439,12 @@ export default function LessonView({
   const backTo = useRef(null)
   /** 集中モードを、いま見ている発言から始める(`null` なら覚えている場所) */
   const [focusAt, setFocusAt] = useState(null)
+  /**
+   * 「取り組み方」を開いている演習の id(2026-09 利用者の指定)。
+   * **覚えない。** 「初めは閉じてて欲しい」という指定なので、
+   * 開くたびに閉じたところから始める。
+   */
+  const [howOpen, setHowOpen] = useState(null)
 
   const openFocus = () => {
     stopAll()
@@ -688,7 +694,10 @@ export default function LessonView({
             **問題を出す場所を、そのぶん広く取る。**
             6Steps は本文を読む練習なので、題名はそのまま出す */}
         <div className={`lesson-head${qr ? ' is-hidden' : ''}`}>
+          {/* **見出しには、小さな訳を添える**(0036・2026-09 利用者の指定)。
+              0036 を貼る前に作った教材には入っていない(訳が出ないだけ) */}
           <MaterialTitle title={material.title} headline={material.headline}
+                         headlineJa={material.headlineJa ?? material.headline_ja}
                          as="strong" size="sheet" />
           {/* **何の練習かを、紙の上に必ず残す。**
               記事・会話は場面の題名が主役になるため、弱点(文法事項)が
@@ -768,10 +777,47 @@ export default function LessonView({
             通しの練習(6Steps / Quick Response)のあいだは出さない。
             あちらはあちらで下にボタンがあり、重なる */}
         {passageSection && !run && (
-          <button type="button" className="btn btn--small focus-float no-print"
-                  onClick={openFocus}>
-            <FocusIcon />集中モード
-          </button>
+          <div className="sheet-floats no-print">
+            {/* ── 通しの読み上げも、右下に置く(2026-09 利用者の指定)──────
+                > 全体を再生を一度押すと、どこにも再生を止めるボタンがないので、
+                > 右下の集中モードの横あたりに再生中ならstop、
+                > 停止中ならlistenが出てる仕様にしてください。
+
+                「Listen (全体)」は**本文のいちばん上**にある。押したあと
+                読み進めると、**止めるボタンごと画面の外へ出ていく。**
+                鳴らすボタンがそのまま Stop に変わる作法(CLAUDE.md)は
+                合っていても、**その1つが見えないところにあっては止められない。**
+
+                **同じことをするボタンを2つ見せない**のが決まりだが、これは
+                「上のと同じもの」ではなく、**送っていったときの居場所**である
+                (`.finder-float` と同じ考え方)。
+                本文のページを開いているときだけ出す — ほかのページでは
+                通しで鳴らすものが無い(効かない操作を見せない)。 */}
+            {isPassageSection(section?.exercise_type) && (
+              <button type="button" className="btn btn--small sheet-float"
+                      onClick={playWhole}>
+                {playingAll
+                  ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
+                  : <><SpeakerIcon />Listen (全体)</>}
+              </button>
+            )}
+
+            {/* ── 右下に貼り付く「集中モード」(2026-09 利用者の指定)──────
+                > このボタンは「教材を作る」のように常に右下にも固定してください。
+
+                上のボタンの行は**紙と一緒に送られて消える。** 記事は6段落あるので、
+                読んでいる途中で「この語を調べたい」と思ったときには
+                もう画面の外にいる。**押したくなる場所に、いつでもある**ようにする。
+
+                **入る場所と出る場所を、同じ右下にそろえる**
+                (出るほうは `FocusReader` の `.focus-exit`)。
+                通しの練習(6Steps / Quick Response)のあいだは出さない。
+                あちらはあちらで下にボタンがあり、重なる */}
+            <button type="button" className="btn btn--small sheet-float"
+                    onClick={openFocus}>
+              <FocusIcon />集中モード
+            </button>
+          </div>
         )}
 
         {run === 'focus' ? (
@@ -935,7 +981,37 @@ export default function LessonView({
               {exerciseLabel(sec.exercise_type)}
               {`（${countLabel(sec.exercise_type, sec.items.length)}）`}
             </h3>
-            {sec.instruction && <p className="lesson-instruction">{sec.instruction}</p>}
+            {/* ── 取り組み方の説明。**畳んでおく**(2026-09 利用者の指定)──
+                > 文章の前の指導のような内容、開いたり閉じたりできるように
+                > してください。初めは閉じてて欲しいです。
+
+                このページは**まず聞いて、読んで、集中モードで語に印を付けて、
+                内容を確かめる**——いろいろなことを続けて行う場所である
+                (利用者の説明)。そのたびに同じ説明を読むことはない。
+                けれども**消してはいけない。** 初めて開いた人には要る。
+
+                **開け閉めは覚えない**(「初めは閉じてて欲しい」)。
+                6Steps の「やり方」は開閉を覚えているが、あちらは
+                **ステップごとに中身が違う**ので、開いたまま次へ進みたい。
+                こちらは1つの教材に1つなので、毎回閉じたところから始める。
+
+                **紙には出す**(`open` を付ける)。紙で解く人には説明が要る */}
+            {sec.instruction && (
+              <div className="lesson-guide">
+                <button type="button"
+                        className={`lesson-guide-sum no-print${howOpen === sec.id ? ' is-open' : ''}`}
+                        aria-expanded={howOpen === sec.id}
+                        onClick={() => setHowOpen(howOpen === sec.id ? null : sec.id)}>
+                  取り組み方
+                </button>
+                {/* **`<details>` は使わない。** 閉じている中身は、いまのブラウザでは
+                    紙にも出せない(`content-visibility` で消える)。
+                    **描いてから隠す**——`.lesson-page` と同じ作法にする */}
+                <p className={`lesson-instruction${howOpen === sec.id ? '' : ' is-closed'}`}>
+                  {sec.instruction}
+                </p>
+              </div>
+            )}
 
             {/* **通して聞く手段を、大きく表示したときにも置く。**
                 無いと、オーバーラッピングやシャドーイングができない

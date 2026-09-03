@@ -489,6 +489,14 @@ const emitSectionTool = (sectionType: string, isFirst: boolean) => {
       description: '記事の見出し / 会話の題名(英語、8語以内、内容が分かるもの)',
     }
     required.push('headline')
+    // **見出しの訳**(0036・2026-09 利用者の指定「1番上のタイトルに小さな訳を」)。
+    // **作るときに1回だけ作って控える。** 開くたびに訳させると課金が続く
+    // (発音記号・要点フレーズ・カタマリの訳と同じ考え方)
+    props.headline_ja = {
+      type: 'string',
+      description: 'headline の日本語訳(25字以内。見出しらしく短く。句点は付けない)',
+    }
+    required.push('headline_ja')
   }
   if (isFirst) {
     props.teaching_point = {
@@ -1083,6 +1091,7 @@ Deno.serve(async (req) => {
     const result = block.input as {
       instruction?: string
       headline?: string
+      headline_ja?: string
       teaching_point?: string
       items?: Record<string, string>[]
     }
@@ -1129,6 +1138,8 @@ Deno.serve(async (req) => {
         items: result.items ?? [],
       },
       headline: result.headline ?? null,
+      // 見出しの訳(0036)。**作るときに1回だけ**控える
+      headline_ja: result.headline_ja ?? null,
       teaching_point: result.teaching_point ?? null,
       // 何が起きたのかを追えるようにしておく。原因の切り分けに要る
       stop_reason: response.stop_reason ?? null,

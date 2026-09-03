@@ -43,6 +43,7 @@ import { markIn } from '../lib/useWordStatuses.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import { preparingLabel } from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
+import RepeatToggle from './RepeatToggle.jsx'
 import FocusReader from './FocusReader.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
@@ -100,6 +101,24 @@ export default function PassagePractice({
   // 音読・シャドーイングの差は保たれる
   const [rateId, setRateId] = useState(loadRateId)
   const [speakingId, setSpeakingId] = useState(null)
+  /* いま鳴らしている段落。**`useEffect` の外から読むので ref でも持つ。**
+     くり返しの判定は読み上げが終わった瞬間に行うので、
+     そのときの状態が要る(state はまだ古いことがある) */
+  const speakingRef = useRef(null)
+  /**
+   * くり返して鳴らす段落(2026-09 利用者の指定)。
+   *
+   *   > 意味音読、オーバーラッピング、シャドーイングも段落内の
+   *   > 再生ボタンの横にはリピートボタンを配置してください。
+   *
+   * ③⑤ は**本文まるごと**を見ながらまねる練習なので、
+   * 同じ段落を何度も聴く。押し直していては口が追いつかない。
+   * **覚えない**(鳴りっぱなしになる指定・CLAUDE.md)。
+   * ①②④⑥ は文ごとの部品(`StepDictation` / `StepSentence`)が持つ。
+   */
+  const [loopIds, setLoopIds] = useState(() => new Set())
+  const loopRef = useRef(loopIds)
+  loopRef.current = loopIds
   /* **通しで鳴らしているか。** 押した瞬間に立てる(2026-09)。
      `speakingId` は最初の合図が来るまで空なので、それだけで見ていると
      押しても Stop に変わらない時間ができる(`LessonView` と同じ作法) */
@@ -183,6 +202,7 @@ export default function PassagePractice({
     stopAllRef.current = null
     stopReading()
     setSpeakingId(null)
+    speakingRef.current = null
     setPlayingAll(false)
     window.clearInterval(allTicker.current)
     allTicker.current = null
@@ -190,11 +210,12 @@ export default function PassagePractice({
     setReadingAt(null)
   }
 
-  const playOne = (item) => {
-    // 鳴っているものをもう一度押したら、止める(Listen ⇄ Stop)
-    if (speakingId === item.id) { stopPlaying(); return }
-    stopPlaying()
-    setSpeakingId(item.id)
+  /**
+   * 1段落を1回鳴らす。**押し分けはしない**(下の `playOne` が受け持つ)。
+   * くり返す指定なら、鳴り終わったところで自分をもう一度呼ぶ。
+   */
+  const speakOnce = (item) => {
+    const from = Date.now()
     // 読み終わったら Listen に戻す。**MP3 なら本当の読み終わりで戻る。**
     // 端末の声のときは、合図が来ない端末のための保険が speakOnce にある
     readAloud(item.audio_text || item.prompt_en, {
@@ -204,9 +225,27 @@ export default function PassagePractice({
       rate: rateOf(rateId, current.rate),
       onWord: (w) => setReadingAt(w ? w.charIndex : null),
     }).then(() => {
+      /* **くり返す指定なら、もう一度鳴らす**(2026-09 利用者の指定)。
+         止まる条件は `SpeakButton` と同じ考え方で3つ。
+         ① 押して止めた(`speakingRef` がもうこの段落ではない)
+         ② くり返しを切った
+         ③ **0.3秒に満たずに終わった** — 鳴っていないのに回り続けるのを防ぐ */
+      if (speakingRef.current !== item.id) { setReadingAt(null); return }
+      const quick = Date.now() - from < 300
+      if (!quick && loopRef.current.has(item.id)) { speakOnce(item); return }
+      speakingRef.current = null
       setSpeakingId((id) => (id === item.id ? null : id))
       setReadingAt(null)
     })
+  }
+
+  const playOne = (item) => {
+    // 鳴っているものをもう一度押したら、止める(Listen ⇄ Stop)
+    if (speakingRef.current === item.id) { stopPlaying(); return }
+    stopPlaying()
+    setSpeakingId(item.id)
+    speakingRef.current = item.id
+    speakOnce(item)
   }
 
   /**
@@ -553,6 +592,14 @@ export default function PassagePractice({
                     ? <><StopIcon />Stop</>
                     : <><SpeakerIcon />Listen</>}
                 </button>
+                {/* **Listen のとなりに、くり返し**(2026-09 利用者の指定) */}
+                <RepeatToggle on={loopIds.has(item.id)}
+                              onChange={() => setLoopIds((v) => {
+                                const next = new Set(v)
+                                if (next.has(item.id)) next.delete(item.id)
+                                else next.add(item.id)
+                                return next
+                              })} />
                 {/* **ここから通して聴く**(2026-08 の要望)。
                     途中で聴き直したいとき、頭から掛け直さなくてよい */}
                 <button type="button" className="btn btn--small"

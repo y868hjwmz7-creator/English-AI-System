@@ -142,6 +142,9 @@ export default function MaterialForm({
   const doneRef = useRef(null)                         // できあがりの知らせ
   const submitRef = useRef(null)                       // 発行ボタン
   const [headline, setHeadline] = useState('')         // 記事の見出し / 会話の題名
+  // 見出しの訳(0036・2026-09 利用者の指定「1番上のタイトルに小さな訳を」)。
+  // **作るときに1回だけ控える。** 開くたびに訳させると課金が続く
+  const [headlineJa, setHeadlineJa] = useState('')
   const [genre, setGenre] = useState(initial.genre || 'news')   // 記事のジャンル
   const [scene, setScene] = useState(initial.scene || 'casual')  // 会話の場面
   // 読み上げに使う声(0017)。
@@ -501,6 +504,7 @@ export default function MaterialForm({
     return {
       made, spent,
       headline: body.headline ?? null,
+      headlineJa: body.headline_ja ?? null,
       teachingPoint: body.teaching_point ?? null,
       autoTitle: autoTitle(),
       form: formSnapshot(),
@@ -588,7 +592,7 @@ export default function MaterialForm({
     }
 
     return {
-      made, spent, headline: null, teachingPoint: point,
+      made, spent, headline: null, headlineJa: null, teachingPoint: point,
       dropped: droppedCount, short: shortCount, notes, warn,
       autoTitle: autoTitle(),
       form: formSnapshot(),
@@ -713,6 +717,7 @@ export default function MaterialForm({
 
     setSections(r.made)
     if (r.headline) setHeadline(r.headline)
+    if (r.headlineJa) setHeadlineJa(r.headlineJa)
     if (r.teachingPoint) setTeachingPoint(r.teachingPoint)
     setDropped(r.dropped ?? 0)
     setShort(r.short ?? 0)
@@ -759,7 +764,8 @@ export default function MaterialForm({
       title: title.trim() || autoTitle(),
       level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
       visibility, industry, sections, tagIds, createdBy,
-      headline, genre: kind === 'reading' ? genre : '', scene: kind === 'dialogue' ? scene : '',
+      headline, headlineJa,
+      genre: kind === 'reading' ? genre : '', scene: kind === 'dialogue' ? scene : '',
       // **おまかせは、ここで1回だけ決めて保存する。**
       // 開くたびに選び直すと、同じ教材なのに毎回ちがう声になり、
       // そのたびに音声を作り直す(= 課金される)

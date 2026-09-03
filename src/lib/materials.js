@@ -124,7 +124,7 @@ export async function searchMaterials({
     .from('materials')
     .select(`
       id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
-      teaching_point, headline, genre, scene, topic, ${opt('voice_ids')}
+      teaching_point, headline, ${opt('headline_ja')} genre, scene, topic, ${opt('voice_ids')}
       material_tags ( tag_id ),
       material_sections (
         id, seq, exercise_type, instruction,
@@ -234,6 +234,9 @@ const normalizeMaterial = (m) => {
     tagIds: (m.material_tags ?? []).map((t) => t.tag_id),
     // 読み上げに使う声の並び(0017)。空なら画面側が既定に丸める
     voiceIds: m.voice_ids ?? [],
+    // 見出しの訳(0036)。**0036 を貼る前に作った教材には入っていない**ので、
+    // 空のことがある。そのときは訳が出ないだけ
+    headlineJa: m.headline_ja ?? '',
     sections,
     // 教材全体で何問あるか(一覧の目安に出す)
     itemCount: sections.reduce((n, sec) => n + sec.items.length, 0),
@@ -254,7 +257,7 @@ export async function loadMaterial(materialId) {
     .from('materials')
     .select(`
       id, title, level, kind, status, visibility, industry, instruction_ja, created_by, created_at,
-      teaching_point, headline, genre, scene, topic, ${opt('voice_ids')}
+      teaching_point, headline, ${opt('headline_ja')} genre, scene, topic, ${opt('voice_ids')}
       material_tags ( tag_id ),
       material_sections (
         id, seq, exercise_type, instruction,
@@ -329,7 +332,7 @@ const cleanItems = (items) =>
 export async function createMaterial({
   title, level, kind, instruction_ja = '', teaching_point = '',
   visibility = 'school', industry = null,
-  headline = '', genre = '', scene = '', topic = '', voiceIds = null,
+  headline = '', headlineJa = '', genre = '', scene = '', topic = '', voiceIds = null,
   sections = [], tagIds = [], createdBy,
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
@@ -358,6 +361,10 @@ export async function createMaterial({
       industry: industry || null,
       // 記事・会話のときだけ入る。文型ドリルでは空のまま
       headline: String(headline ?? '').trim() || null,
+      // 見出しの訳(0036)。**列がまだ無いと分かっているときは送らない。**
+      // 送ると挿入ごと失敗し、教材を1本も作れなくなる(`voice_ids` と同じ)
+      ...(missingColumns.has('headline_ja') || !String(headlineJa ?? '').trim()
+        ? {} : { headline_ja: String(headlineJa).trim() }),
       genre: genre || null,
       scene: scene || null,
       topic: String(topic ?? '').trim() || null,
@@ -455,7 +462,7 @@ export async function loadMyAssignments() {
       id, assigned_at, due_on, learner_done_at,
       materials (
         id, title, level, kind, instruction_ja, teaching_point, headline, genre, scene, topic,
-        ${opt('voice_ids')}
+        ${opt('headline_ja')} ${opt('voice_ids')}
         material_sections (
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
@@ -570,7 +577,7 @@ export async function loadLearnerAssignments(learnerId, limit = 50) {
     .select(`
       id, assigned_at, due_on, learner_done_at, admin_checked_at,
       materials (
-        id, title, level, kind, headline, teaching_point,
+        id, title, level, kind, headline, ${opt('headline_ja')} teaching_point,
         industry, genre, scene, ${opt('voice_ids')}
         material_tags ( tag_id ),
         material_sections ( id, material_items ( id ) )

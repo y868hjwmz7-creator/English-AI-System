@@ -17,9 +17,11 @@
  * ちがいは「はじめに英文が見えているか」だけである。
  * **同じ操作を2か所に書き写さない。**
  */
+import { useState } from 'react'
 import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
+import RepeatToggle from './RepeatToggle.jsx'
 import { MicIcon, StopIcon } from './Icons.jsx'
 import { spokenRatio } from '../lib/transcriptDiff.js'
 import { useProgress } from '../lib/progress.js'
@@ -36,6 +38,10 @@ export default function StepSentence({
   /* **ステップごとに別の鍵で覚える**(`progressAt` に ④ / ⑥ が入っている)。
      以前はステップが変わるたびに空へ戻していたが、覚えるようにしたので
      戻す必要が無い。**戻すと、開き直した瞬間に消える。** */
+
+  /** くり返し(2026-09 利用者の指定)。**覚えない。**
+      鳴りっぱなしになる指定なので、次に開いたときは必ず1回に戻す */
+  const [loop, setLoop] = useState(() => new Set())
 
   const enShown = (id) => (openEn[id] === undefined ? startVisible : openEn[id])
 
@@ -54,7 +60,18 @@ export default function StepSentence({
               {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
               <span className="row-tools">
                 <SpeakButton text={s.text} className="etext-listen"
-                             clipVoice={clipVoice} tier={tier} rate={rate} />
+                             clipVoice={clipVoice} tier={tier} rate={rate}
+                             repeat={loop.has(s.id)} />
+                {/* **くり返し**(2026-09 利用者の指定。意味音読・リピーティング)。
+                    口が追いつくまで、同じ文を何度も聴く。
+                    **文ごとに持つ** — ディクテーションと同じ作法 */}
+                <RepeatToggle on={loop.has(s.id)}
+                              onChange={() => setLoop((v) => {
+                                const next = new Set(v)
+                                if (next.has(s.id)) next.delete(s.id)
+                                else next.add(s.id)
+                                return next
+                              })} />
                 <button type="button" className="btn btn--small"
                         onClick={() => setOpenEn((v) => ({ ...v, [s.id]: !en }))}>
                   {en ? '英語を隠す' : '英語を見る'}

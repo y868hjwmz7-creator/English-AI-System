@@ -31,6 +31,7 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { stopReading } from '../lib/readAloud.js'
 import SpeakButton from './SpeakButton.jsx'
+import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
 import { CloseIcon } from './Icons.jsx'
 import { usePracticeLog } from '../lib/practice.js'
@@ -78,6 +79,8 @@ export default function QuickResponse({
   // **両方いっしょに出せるか。** 出せないときだけ入れ替えに落とす
   // (2026-08 利用者の指定)。判断は「実際に入るかどうか」で行う
   const [tight, setTight] = useState(false)
+  /** 答えの音をくり返すか。**覚えない**(次に開いたときは1回に戻す) */
+  const [loop, setLoop] = useState(false)
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
@@ -244,7 +247,14 @@ export default function QuickResponse({
             {/* 話す人だけは残す。誰のせりふかで言い方が変わる。
                 **「記事」「会話」の札は出さない**(2026-08 の指定)。
                 どの教材から出ているかは、上の題名を見れば分かる */}
-            {card.speaker && <p className="qr-from">{card.speaker}</p>}
+            {/* **何問目か、丸の番号で出す**(2026-09 利用者の指定
+                「クイックレスポンスの文章にも番号をつけてください。おしゃれにね」)。
+                上の「2 / 25」は**どこまで来たか**の目安で、役目が違う。
+                集中モード・紙と**同じ丸**にそろえてある(`.num-badge`) */}
+            <p className="qr-from">
+              <span className="num-badge">{at + 1}</span>
+              {card.speaker && <span>{card.speaker}</span>}
+            </p>
 
             {/* **入るなら、問題と答えを並べて出す**(2026-08 の指定)。
                 入らないときだけ入れ替える。入れ替えなら必ず収まる。
@@ -255,11 +265,16 @@ export default function QuickResponse({
                  ほかのトレーニングの解答(`.answer-box`)と同じ形にそろえる。
                  部品ごとに書くと、必ずどこかだけ違う見た目になる */
               <div className="answer-box qr-answer" ref={enRef}>
+                {/* **答えのすぐ横に Listen を置かない**(2026-09 利用者の指定
+                    「正解の英文のすぐ横の listen ボタン、排除しましょう。
+                     これはスマホでも同じです」)。
+
+                    下のボタンの行にも Listen がある。**同じことをするボタンを
+                    2つ見せない**(CLAUDE.md)。英文の途中に押すものが挟まると、
+                    読むときに目が引っかかるうえ、長い英文では位置が毎回変わる */}
                 <div className="qr-en">
                   <EnglishText text={card.en} textJa={card.ja} level={material?.level}
                                statuses={wordStatuses} onMark={markWord} />
-                  <SpeakButton text={card.en} className="etext-listen"
-                               clipVoice={clipVoice} tier={tier} />
                 </div>
               </div>
             )}
@@ -289,7 +304,10 @@ export default function QuickResponse({
 
                   **単語帳の「日本語 → 英語」は変えていない**(言われた場所だけを直す) */}
               <SpeakButton text={card.en} className="btn--ghost"
-                           clipVoice={clipVoice} tier={tier} />
+                           clipVoice={clipVoice} tier={tier} repeat={loop} />
+              {/* **くり返し**(2026-09 利用者の指定「オートリピートのボタン」)。
+                  口が追いつくまで、同じ英文を何度も聴く練習である */}
+              <RepeatToggle on={loop} onChange={setLoop} className="btn--ghost" />
             </div>
             <div className="qr-answers">
               <button type="button" className="btn btn--quiet"

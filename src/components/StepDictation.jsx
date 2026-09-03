@@ -21,7 +21,8 @@ import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
-import { MicIcon, RepeatIcon, StopIcon } from './Icons.jsx'
+import { MicIcon, StopIcon } from './Icons.jsx'
+import RepeatToggle from './RepeatToggle.jsx'
 import { DICTATION_LEVELS, groupSentences } from '../lib/sixSteps.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { useProgress } from '../lib/progress.js'
@@ -101,22 +102,16 @@ export default function StepDictation({
                                /* もとの速さ(取り組み方ごと)に、この文の倍率を掛ける */
                                rate={rateOf(rateFor(s.id), rate)}
                                repeat={repeatIds.has(s.id)} />
-                  {/* **くり返すか、1回だけか。** 押している印は色と文字の両方で出す
-                      (色だけに頼らない・CLAUDE.md) */}
-                  <button type="button"
-                          className={`btn btn--small${repeatIds.has(s.id) ? ' btn--primary' : ''}`}
-                          aria-pressed={repeatIds.has(s.id)}
-                          title={repeatIds.has(s.id)
-                            ? '止めるまでくり返します(押すと1回だけに戻ります)'
-                            : '1回だけ鳴らします(押すとくり返します)'}
-                          onClick={() => setRepeatIds((v) => {
-                            const next = new Set(v)
-                            if (next.has(s.id)) next.delete(s.id)
-                            else next.add(s.id)
-                            return next
-                          })}>
-                    <RepeatIcon />{repeatIds.has(s.id) ? 'くり返す' : '1回'}
-                  </button>
+                  {/* **くり返すか、1回だけか。** 見た目も文言も
+                      `RepeatToggle` 1か所に置いてある(2026-09 に部品へ出した)。
+                      同じボタンが Quick Response・集中モード・③④⑤ にも並ぶ */}
+                  <RepeatToggle on={repeatIds.has(s.id)}
+                                onChange={() => setRepeatIds((v) => {
+                                  const next = new Set(v)
+                                  if (next.has(s.id)) next.delete(s.id)
+                                  else next.add(s.id)
+                                  return next
+                                })} />
                   {/* この文だけの速さ。**覚えるのは最後に選んだもの** */}
                   <label className="row-rate">
                     <span className="sr-only">この文を鳴らす速さ</span>
