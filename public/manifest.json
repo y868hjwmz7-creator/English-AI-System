@@ -1,0 +1,17 @@
+{
+  "name": "English AI System",
+  "short_name": "English AI",
+  "lang": "ja",
+  "description": "レッスンと宿題の循環を支える道具",
+  "display": "standalone",
+  "orientation": "any",
+  "start_url": ".",
+  "scope": ".",
+  "background_color": "#eaecef",
+  "theme_color": "#eaecef",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

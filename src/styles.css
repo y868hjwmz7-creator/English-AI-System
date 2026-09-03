@@ -4816,3 +4816,136 @@ html { -webkit-text-size-adjust: 100%; }
 /* 「やった」のボタンを置かなくなったので、記録されたことだけを静かに出す
    (2026-09 利用者の指定)。**黙って記録しない** */
 .homework-worked { margin: 10px 0 0; font-size: 13px; }
+
+/* ════════════════════════════════════════════════════════════════════
+   1段落ずつ調べる(`FocusReader.jsx`・2026-09 利用者の指定)
+
+     > 段落ごとに画面を固定し、ブラウザの機能をシャットアウトできる
+     > ようにしたいです
+
+   **考え方: 送らせないのではなく、送る必要をなくす。**
+   1段落を画面ぴったりに出せば、ページは動かず、アドレスバーも出入りせず、
+   引っぱって更新も起きない。**戦わずに消える。**
+
+   ・`100dvh` … スマホのアドレスバーが出入りしても高さが狂わない
+     (`100vh` は隠れている前提の値なので、下が切れる)
+   ・`overscroll-behavior: contain` … 端まで送っても外へ漏れない
+   ・`touch-action: manipulation` … 二度叩いての拡大を止める
+   ・**吹き出し(`.etext-pop` は z-index 200)より下**に置く。
+     語の意味がこの画面の裏に隠れては意味がない
+   ════════════════════════════════════════════════════════════════════ */
+.focus {
+  position: fixed; inset: 0; z-index: 120;
+  display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh;
+  background: var(--surface-0); color: var(--text-primary);
+  overscroll-behavior: contain;
+  touch-action: manipulation;
+}
+
+/* 上の帯。**細く1行にする。** ここが太ると本文が下へ押し出される */
+.focus-top {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border);
+}
+.focus-count {
+  font-size: 13px; font-weight: 700; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 見終わった段落の印。**どこまでやったか一目で分かる**(利用者の指定)。
+   数が多い教材でも1行に収まるよう、折り返して縮める */
+.focus-dots {
+  margin-left: auto;
+  display: flex; flex-wrap: wrap; justify-content: flex-end;
+  gap: 4px; max-width: 40%;
+}
+.focus-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border);
+}
+.focus-dot.is-done { background: var(--accent); opacity: 0.45; }
+/* いま見ているところ。**色だけに頼らず、大きさでも分かるようにする** */
+.focus-dot.is-now {
+  background: var(--accent); opacity: 1;
+  width: 9px; height: 9px; margin: -1px 0;
+}
+
+/* 本文。**ここだけが送れる。** 入りきる段落では、そもそも送れない */
+.focus-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 16px;
+  display: flex; flex-direction: column; justify-content: safe center;
+}
+.focus-speaker {
+  font-weight: 700; color: var(--accent); margin-bottom: 10px;
+}
+/* 英語と訳は**同じ組み方**にする。入れ替えたときに行の位置が動かない */
+.focus-en, .focus-ja {
+  margin: 0; font-size: 19px; line-height: 2.0;
+  overflow-wrap: break-word;
+}
+.focus-ja { color: var(--text-primary); }
+
+/* 下の帯。**親指が届くのは下半分。** 端からは離して、
+   iOS の「端からの戻るスワイプ」を誤爆させない */
+.focus-bar {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+}
+/* 送りボタンは**縮ませない。** 名前が縮むより、押せることが先 */
+.focus-move { flex: 0 0 auto; min-width: 72px; }
+.focus-mid {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.focus-wide { flex: 1 1 auto; }
+
+/* 集めた手応え。**数えるだけ**(記録は単語帳のまま)。
+   **帯より上に置く。** 帯を最後にしないと、iPhone のホームバー用の
+   余白が二重に入る(実測して気づいた) */
+.focus-picked {
+  flex: 0 0 auto; margin: 0;
+  padding: 6px 16px 0;
+  text-align: center; font-size: 12px; color: var(--text-secondary);
+}
+
+/* 最後の1枚。調べた語をまとめて見る */
+.focus-wrap { display: flex; flex-direction: column; gap: 12px; }
+.focus-wrap-lead { margin: 0; font-size: 15px; }
+.focus-wrap-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.focus-wrap-list li {
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  font-size: 15px;
+}
+.focus-wrap-none { margin: 0; color: var(--text-secondary); font-size: 14px; }
+
+/* 狭い画面。**言葉を短く → 余白を詰める**の順(CLAUDE.md) */
+@media (max-width: 400px) {
+  .focus-top, .focus-bar { padding-left: 12px; padding-right: 12px; }
+  .focus-body { padding: 16px 12px; }
+  .focus-move { min-width: 60px; }
+  .focus-en, .focus-ja { font-size: 18px; line-height: 1.9; }
+}
+
+/* 紙には出さない。画面の中でやることである */
+@media print { .focus { display: none !important; } }
+
+/* 「1段落ずつ調べる」への入り口。**本文のすぐ上**に置く。
+   ふだんの練習の邪魔をしないよう、枠線だけの控えめな形にする */
+.passage-focus { margin-bottom: 12px; }

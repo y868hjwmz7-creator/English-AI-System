@@ -43,6 +43,7 @@ import { markIn } from '../lib/useWordStatuses.js'
 import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import { preparingLabel } from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
+import FocusReader from './FocusReader.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { SLASH_LEVELS } from '../lib/chunker.js'
@@ -66,6 +67,9 @@ export default function PassagePractice({
 }) {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('six_steps', true, learnerId)
+  /** 1段落ずつ調べる画面を出しているか(2026-09 利用者の指定)。
+      **覚えない。** 開くたびに本文から始めるほうが素直である */
+  const [focus, setFocus] = useState(false)
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る */
   const markWord = markIn(onMarkWord, materialId, learnerId)
   /**
@@ -272,9 +276,29 @@ export default function PassagePractice({
     }
   }
 
+  if (focus) {
+    return (
+      <FocusReader
+        section={section} isDialogue={isDialogue} voiceIds={voiceIds} tier={tier}
+        level={level} wordStatuses={wordStatuses} onMarkWord={onMarkWord}
+        materialId={materialId} learnerId={learnerId}
+        onClose={() => setFocus(false)}
+      />
+    )
+  }
+
   return (
     <div className="passage">
       {headline && <h4 className="passage-headline" lang="en">{headline}</h4>}
+
+      {/* **1段落ずつ調べる**(2026-09 利用者の指定)。
+          ここに置けば、トレーナーの「セッションで使う」とゲストの
+          「今週の宿題」の**両方に入る**(どちらもこの部品を呼んでいる)。
+          **同じものを2か所に書き写さない。** */}
+      <button type="button" className="btn btn--small btn--ghost passage-focus"
+              onClick={() => setFocus(true)}>
+        {isDialogue ? '1発言ずつ調べる' : '1段落ずつ調べる'}
+      </button>
 
       {/* 6Steps。**プルダウンにする**(2026-08 利用者の指定)。
           札を6つ横に並べていたが、狭い画面では2段になり、

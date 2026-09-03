@@ -19,12 +19,30 @@
     <meta http-equiv="Cache-Control" content="no-cache, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
 
-    <!-- iPhone で「ホーム画面に追加」したときに、アプリのように全画面で開く -->
+    <!--
+      **ホーム画面に追加すると、ブラウザの枠がほぼ全部外れる**
+      (2026-09 利用者の指定「ブラウザの機能をシャットアウトしたい」)。
+
+      アドレスバーが消え、引っぱって更新も無くなる。
+      **1段落ずつ調べる画面(`FocusReader`)には、これがいちばん効く。**
+      指2本の拡大と、端からの戻るスワイプは iOS の仕様で止められないが、
+      それ以外はここでまとめて外れる。
+
+      `manifest.json` は Android(Chrome)側、`apple-` の3行は iPhone 側。
+      **両方要る。** 片方だけでは片方の端末で効かない。
+      道は相対(`start_url: "."`)にしてあるので、
+      GitHub Pages のサブパスでもそのまま動く。
+    -->
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="English AI" />
-    <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#131312" media="(prefers-color-scheme: dark)" />
+    <!-- **地色に合わせる。** `styles.css` を直したら、ここも直す
+         (2026-08 に地色を変えたとき、ここが古いまま残っていた) -->
+    <meta name="theme-color" content="#eaecef" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c0c0b" media="(prefers-color-scheme: dark)" />
     <title>English AI System</title>
   </head>
   <body>
