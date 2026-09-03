@@ -396,9 +396,14 @@ export default function Wordbook({
   }, [result, wide])
   const word = card ? (card.display || card.word_norm) : ''
   const form = card ? pickForm(card, rows, want) : 'recall'
-  /* **日本語 → 英語では、答えを同じ場所に入れ替える**(2026-09 利用者の指定)。
-     足すのではなく入れ替えるので、カードの高さが変わらない */
-  const swapped = form === 'ja2en' && shown
+  /* **答えは、出題と同じ場所に入れ替える**(2026-09 利用者の指定)。
+     足すのではなく入れ替えるので、カードの高さが変わらない。
+
+     はじめは「日本語 → 英語」だけにしていたが、
+     **「思い出す」も同じ要領で**という指定を受けた(利用者の言葉)。
+     どちらも「出題を見て、答えを思い出し、確かめる」形なので、
+     **同じものは同じ動きにする。** */
+  const swapped = shown && form !== 'choice'
   /**
    * 答えを開いたときに出す、うしろ側。
    *
@@ -413,23 +418,10 @@ export default function Wordbook({
    */
   const backBlock = card && shown ? (
     <div className="wordcard-back">
-      {/* **日本語 → 英語では、ここに英語を出さない。**
-          上の問題の枠が日本語と入れ替わって英語になっているので、
-          ここにも出すと**同じ答えが2か所**に出る(2026-09)。
-          つづりを書く形は入れ替えないので、これまでどおり出す */}
-      {form === 'ja2en' ? null : form === 'spell' ? (
-        <p className="wordcard-answer">
-          <span className="wordcard-mean" lang="en">{word}</span>
-          <SpeakButton text={word} className="etext-listen" />
-        </p>
-      ) : (
-        <p className="wordcard-answer">
-          {card.pos && <span className="etext-pos">{card.pos}</span>}
-          <span className="wordcard-mean">
-            {card.meaning_ja || '(意味の控えがありません)'}
-          </span>
-        </p>
-      )}
+      {/* **答えそのものは、ここに出さない。**
+          上の枠が答えと入れ替わっているので、ここにも出すと
+          **同じ答えが2か所**に出る(2026-09)。
+          残すのは、文の訳と「くわしく」だけである */}
       {card.seen_in_ja && <p className="wordcard-seen-ja">{card.seen_in_ja}</p>}
       <button type="button" className="btn btn--link"
               onClick={() => setDeep((v) => !v)}>
@@ -848,7 +840,25 @@ export default function Wordbook({
             <div className="wordcard-face">
               {form === 'ja2en' || form === 'spell'
                 ? (swapped
-                  ? <span className="wordcard-word wordcard-word--en" lang="en">{word}</span>
+                  ? (
+                    /* つづりを書く形では、**合っていたかも同じ場所で返す。**
+                       ✗ と綴りを並べただけだと、**その綴りが
+                       まちがいのように読める**ので「正解は」を添える
+                       (4択と同じ作法・CLAUDE.md) */
+                    <span className={`wordcard-word wordcard-word--en${
+                      form === 'spell' && judged !== null
+                        ? (judged ? ' wordcard-judged is-ok' : ' wordcard-judged is-ng') : ''}`}>
+                      {form === 'spell' && judged !== null && (
+                        <span className="wordcard-mark" aria-hidden="true">
+                          {judged ? '✓' : '✗'}
+                        </span>
+                      )}
+                      {form === 'spell' && judged === false && (
+                        <span className="wordcard-lead">正解は</span>
+                      )}
+                      <span lang="en">{word}</span>
+                    </span>
+                  )
                   : <span className="wordcard-word">{card.meaning_ja || '(意味の控えがありません)'}</span>)
                 : form === 'choice' && judged !== null ? (
                   /* **答えたら、上の太字が日本語に変わる**(2026-09 利用者の指定)。
@@ -867,10 +877,21 @@ export default function Wordbook({
                     {!judged && <span className="wordcard-lead">正解は</span>}
                     {card.meaning_ja || '(意味の控えがありません)'}
                   </span>
+                ) : swapped ? (
+                  /* **「思い出す」も、日本語 → 英語と同じ要領**(2026-09 利用者の指定)。
+                     英語のあった場所が、そのまま意味に入れ替わる */
+                  <span className="wordcard-word">
+                    {card.meaning_ja || '(意味の控えがありません)'}
+                  </span>
                 ) : (
                   <>
                     <span className="wordcard-word" lang="en">{word}</span>
-                    <SpeakButton text={word} className="etext-listen" />
+                    {/* **4択では、ここに Listen を置く。**
+                        「思い出す」は入れ替わるので、Listen は下の行にある
+                        (入れ替わったときに、押すものが消えないようにするため) */}
+                    {form === 'choice' && (
+                      <SpeakButton text={word} className="etext-listen" />
+                    )}
                   </>
                 )}
             </div>
@@ -905,10 +926,19 @@ export default function Wordbook({
               </div>
             )}
 
-            {/* **日本語 → 英語の「うしろ側」は、この枠の中に入れる。**
-                枠の高さは決まっているので、開いてもカードが伸びない。
-                はみ出したぶんは、この枠の中だけで送れる */}
-            {form === 'ja2en' && backBlock}
+            {/* **答えは、どの形でも「この枠の中」に出す**(2026-09 利用者の指定)。
+
+                  > この意味を元々の日本語の下、または日本語も含めた意味に
+                  > 入れ替えて同じ場所に表示してください。下に出るのはみづらいです
+
+                以前は「意味を見る」で開いた答えを**ボタンの下**に足していた。
+                目は出題(いちばん上の太字)にあるので、そこから離れた場所に
+                出しても見ない。しかも下に足すぶんカードが伸び、
+                **いま押そうとしているボタンが動く。**
+
+                枠の高さは決まっているので、ここに入れれば**カードは伸びない。**
+                はみ出したぶんは、この枠の中だけで送れる。 */}
+            {backBlock}
 
             </div>
 
@@ -951,9 +981,9 @@ export default function Wordbook({
                        onChange={(e) => setTyped(e.target.value)} />
                 <button type="submit" className="btn btn--primary"
                         disabled={judged !== null || !typed.trim()}>答える</button>
-                {judged === false && (
-                  <p className="wordbook-right" lang="en">正しくは <strong>{word}</strong></p>
-                )}
+                {/* **「正しくは …」は、ここに出さない**(2026-09)。
+                    答えたとたんに、上の枠が正しい綴りと入れ替わる。
+                    ここにも出すと**同じ答えが2か所**に出る */}
               </form>
             )}
 
@@ -988,10 +1018,12 @@ export default function Wordbook({
                   {/* **見た目は「英語を見る」とそろえる**(どちらも枠線だけ)。
                       答えそのものではない操作は `btn--ghost`(CLAUDE.md)。
                       `etext-listen` は本文の中に埋める用の小さい形なので、
-                      ここで使うと**2つの背丈がそろわない** */}
-                  {form === 'ja2en' && (
-                    <SpeakButton text={word} className="btn--ghost" />
-                  )}
+                      ここで使うと**2つの背丈がそろわない**。
+
+                      **「思い出す」の Listen も、ここに置く**(2026-09)。
+                      上の枠は意味と入れ替わるので、そこに置いたままだと
+                      **意味を見たとたんに Listen が消える。** */}
+                  <SpeakButton text={word} className="btn--ghost" />
                 </div>
                 {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。
                     まだ / 覚えかけ。
@@ -1023,11 +1055,8 @@ export default function Wordbook({
               </div>
             )}
 
-            {/* **日本語 → 英語では、ここに出さない。**
-                答えは上の枠で入れ替わっているので、
-                この箱ごと**問題の枠の中**へ入れてある(すぐ上)。
-                外に置くとカードが伸び、答えのボタンが動く */}
-            {form !== 'ja2en' && backBlock}
+            {/* **答えをボタンの下に出さない**(2026-09 利用者の指定
+                「下に出るのはみづらいです」)。答えは出題と同じ枠の中にある */}
 
             {/* **「箱 0 / 次は今日」は出さない**(2026-08 利用者の指定)。
                 > 単語帳内の「箱0 / 次は今日」はバックグラウンドのデータとして
