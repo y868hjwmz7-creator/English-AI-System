@@ -739,10 +739,13 @@ export default function LessonView({
                 語を調べるのは 6Steps に入る**前**の段階なので、そこにあっては
                 たどり着けない。**6Steps・Quick Response と横に並べる。**
 
-                そのぶん `PassagePractice` の側では出さない
-                (`showFocus={false}`)。**同じことをするボタンを、
-                1つの画面に2つ見せない**(CLAUDE.md)。 */}
-            {passageSection && (
+                **6Steps を開いているあいだは、こちらを引っ込める**
+                (2026-09 利用者の指定で、6Steps の中にも集中モードを作った)。
+                あちらは**いまの取り組み方**を1つずつ出すもの、
+                こちらは**本文を読んで語を調べる**もので、役目が違う。
+                けれども名前は同じ「集中モード」なので、
+                **1つの画面に2つ見せない**(CLAUDE.md)。 */}
+            {passageSection && run !== 'six' && (
               <button type="button"
                       className={`btn btn--small${run === 'focus' ? ' btn--primary' : ''}`}
                       aria-pressed={run === 'focus'}
@@ -843,9 +846,13 @@ export default function LessonView({
         ) : run === 'six' ? (
           <PassagePractice
             section={passageSection}
-            /* 集中モードは**上のボタンの行**に出してある。
-               ここにも出すと、1つの画面に同じボタンが2つ並ぶ */
-            showFocus={false}
+            /* **6Steps の中にも集中モードを出す**(2026-09 利用者の指定
+               「6steps全てに集中モードを作ってください」)。
+               こちらは**いまの取り組み方**を1つずつ出すもので、
+               上のボタンの行にあるもの(本文を読んで語を調べる)とは別物である。
+               同じ言葉が2つ並ばないよう、6Steps を開いているあいだは
+               上の行のほうを引っ込めてある(すぐ上の `.practice-row`) */
+            showFocus
             /* 見出しは紙の上にもう出ている。**同じ英語を2行続けて並べない** */
             isDialogue={passageSection.exercise_type === 'dialogue'}
             /* 途中経過を教材ごとにまとめて消せるようにするため、

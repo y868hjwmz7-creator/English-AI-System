@@ -411,7 +411,20 @@ function MinePairs({ parts, marks }) {
                   </Fragment>
                 ))}
               </span>
-              <span className="chunk-ja">{p.ja || '　'}</span>
+              {/* **訳がいくつも重なったときは、行を分ける**(2026-09 実機)。
+                  自分の区切りが控えの境目と重ならないと、そのカタマリには
+                  **いくつもの訳がまとまって入る。** つないで1本にすると
+                  「今日時間を作ってくれて話しておきたかったスケジュールに…」と、
+                  日本語として読めない棒になっていた(利用者の写真)。
+                  **区切り記号は足さない**(訳の側にスラッシュは出さない
+                  ・2026-08 利用者の指定)。行を分けるだけで読めるようになる */}
+              {(p.jaParts?.length ?? 0) > 1 ? (
+                <span className="chunk-ja chunk-ja--many">
+                  {p.jaParts.map((t, k) => <span key={k}>{t}</span>)}
+                </span>
+              ) : (
+                <span className="chunk-ja">{p.ja || '　'}</span>
+              )}
             </span>
           ))}
         </span>

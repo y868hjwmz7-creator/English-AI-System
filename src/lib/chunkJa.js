@@ -53,7 +53,7 @@ const norm = (text) => String(text ?? '').replace(/\s+/g, ' ').trim()
  *   ・**3文字以上**のときだけ(「は」「に」のような助詞は消さない)
  *   ・長いほうを残す(短いほうは、その中に入っている)
  */
-const joinJa = (list) => {
+export const joinJaParts = (list) => {
   const out = []
   for (const raw of list) {
     const t = String(raw ?? '').trim()
@@ -65,8 +65,11 @@ const joinJa = (list) => {
     }
     out.push(t)
   }
-  return out.join('').trim()
+  return out
 }
+
+/** つないで1つの文字列にする(1つのカタマリに1つの訳が付くとき) */
+const joinJa = (list) => joinJaParts(list).join('').trim()
 
 /**
  * その英文を、控えの単位(初級)で切る。
@@ -335,7 +338,19 @@ export function chunkPairsAtMarks(text, ja, marks, parts = null) {
     const segs = []
     let s = from
     for (const k of [...inner, at]) { segs.push(words.slice(s, k).join(' ')); s = k }
-    out.push({ segs, ja: joinJa(jp) })
+    /* **訳は「いくつぶんか」も一緒に返す**(2026-09 実機)。
+       自分の区切りが控えの境目と重ならないと、ここで**いくつもの訳が
+       1つのカタマリにまとまる。** つないで1本の文字列にすると、
+
+         今日時間を作ってくれて話しておきたかったスケジュールについて…
+
+       のように**日本語として読めない棒**になっていた(利用者の写真)。
+       つなぐ前の姿を渡して、**画面が行を分けて出す。**
+       ここで区切り記号を入れないのは、
+       **訳の側にスラッシュを出さない**と決めてあるからである
+       (2026-08 利用者の指定)。 */
+    const jaParts = joinJaParts(jp)
+    out.push({ segs, ja: jaParts.join('').trim(), jaParts })
     jp = []
     from = at
   })

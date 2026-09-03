@@ -44,11 +44,13 @@ import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import { preparingLabel } from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
-import FocusReader from './FocusReader.jsx'
+import StepFocus from './StepFocus.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { SLASH_LEVELS } from '../lib/chunker.js'
-import { PASSAGE_VIEWS, SIX_STEPS, blocksOf, sentencesOf, stepOf } from '../lib/sixSteps.js'
+import {
+  PASSAGE_VIEWS, SIX_STEPS, blocksOf, groupSentences, sentencesOf, stepOf,
+} from '../lib/sixSteps.js'
 import ChunkedText from './ChunkedText.jsx'
 import SlashReading from './SlashReading.jsx'
 import SlashedText from './SlashedText.jsx'
@@ -80,6 +82,8 @@ export default function PassagePractice({
   /** 集中モード(1段落ずつ調べる画面)を出しているか(2026-09 利用者の指定)。
       **覚えない。** 開くたびに本文から始めるほうが素直である */
   const [focus, setFocus] = useState(false)
+  /** 集中モードで、いま何番目を出しているか。**取り組み方を変えたら先頭へ戻す** */
+  const [focusAt, setFocusAt] = useState(0)
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る */
   const markWord = markIn(onMarkWord, materialId, learnerId)
   /**
@@ -178,6 +182,10 @@ export default function PassagePractice({
   // ② は**段落ごと、または本文まるごと。**
   // 1文ずつでは細かすぎる(2026-08 の指摘)
   const slashBlocks = useMemo(() => blocksOf(section.items, slashUnit), [section.items, slashUnit])
+  /* ① は**短すぎる文を次とまとめて**から出す(`StepDictation` と同じ数え方)。
+     集中モードで「何個あるか」を数えるのに要るので、ここでも作る。
+     **数え方を2通り持たない** — 同じ `groupSentences()` を通す */
+  const dictGroups = useMemo(() => groupSentences(sentences, dictSize), [sentences, dictSize])
   // 通し表示にするか。**本文を見せるステップのときだけ**
   const flowing = flow && current.script && current.unit === 'passage'
   // 話す人 → 声。**会話は1人1声。** 同じ声だと役を追えない(2026-08 の指摘)
@@ -194,6 +202,10 @@ export default function PassagePractice({
 
   // ステップを移ったら、鳴っているものを止め、⑤ の「本文を出す」も戻す
   useEffect(() => { stopReading(); setSpeakingId(null); setReadingAt(null); setPeek(false) }, [step])
+  /* 取り組み方を変えたら、集中モードは**先頭へ戻す。**
+     数え方も個数も変わるので、前の番号をそのまま使うと別の場所に飛ぶ。
+     ②の単位(段落 / 文章全体)と①の難易度でも数が変わる */
+  useEffect(() => { setFocusAt(0) }, [step, slashUnit, dictSize])
 
 
   /** 読み上げを止める。通しでも1発言でも、同じところで止める */
@@ -334,32 +346,63 @@ export default function PassagePractice({
     }
   }
 
-  if (focus) {
-    return (
-      <FocusReader
-        section={section} isDialogue={isDialogue} voiceIds={voiceIds} tier={tier}
-        level={level} wordStatuses={wordStatuses} onMarkWord={onMarkWord}
-        materialId={materialId} learnerId={learnerId}
-        onClose={() => setFocus(false)}
-      />
-    )
+  /**
+   * 集中モードで出す「1つ」の並び。**取り組み方ごとに単位が違う。**
+   *
+   *   ① ディクテーション … 文(短いものは次とまとめてある)
+   *   ② スラッシュリーディング … 段落 / 発言、または文章まるごと
+   *   ③⑤ 本文まるごと … 段落 / 発言
+   *   ④⑥ 1文ずつ … 文
+   *
+   * **数え方を2通り持たない。** どれも、ふだんの画面が並べているものと
+   * まったく同じ並びから1つを取り出しているだけである。
+   */
+  const focusUnits = step === 'dictation' ? dictGroups
+    : step === 'slash' ? slashBlocks
+      : current.unit === 'passage' ? section.items
+        : sentences
+  const focusTotal = focusUnits.length
+  /* **範囲の外に出さない。** 取り組み方や難易度を変えると数が変わる
+     (やりかけの控えと同じ注意・CLAUDE.md) */
+  const at = Math.min(Math.max(0, focusAt), Math.max(0, focusTotal - 1))
+  const partWord = isDialogue ? '発言' : '段落'
+  const focusUnitLabel = step === 'slash'
+    ? (slashUnit === 'all' ? '文章' : partWord)
+    : current.unit === 'passage' ? partWord : '文'
+
+  /* ① は「まとめたかたまり」で数えているので、そのかたまりに入っている
+     文だけを渡す(`StepDictation` が同じ決まりでまとめ直す)。
+     **かたまりそのものを渡さない。** あちらは文の一覧を受け取る作りである */
+  const dictSlice = () => {
+    let off = 0
+    for (let k = 0; k < at; k += 1) off += dictGroups[k]?.count ?? 1
+    return sentences.slice(off, off + (dictGroups[at]?.count ?? 1))
   }
 
-  return (
-    <div className="passage">
-      {headline && <h4 className="passage-headline" lang="en">{headline}</h4>}
+  const body = (
+    <div className={`passage${focus ? ' passage--focus' : ''}`}>
+      {!focus && headline && <h4 className="passage-headline" lang="en">{headline}</h4>}
 
       {/* **集中モード**(2026-09 利用者の指定。名前も利用者が選んだ)。
           ここに置けば、トレーナーの「セッションで使う」とゲストの
           「今週の宿題」の**両方に入る**(どちらもこの部品を呼んでいる)。
           **同じものを2か所に書き写さない。**
 
-          **単位(段落 / 発言)を名前に入れない。** 名前は1つにしておき、
-          いま何番目かは中の「3 / 6 段落」が言う。
-          コードの中の名前(`FocusReader` / `.focus-*`)は変えていない */}
-      {showFocus && (
+          **開くのは「いまの取り組み方」の集中モード**(2026-09 利用者の指定)。
+
+            > 6steps全てに集中モードを作ってください。今は形式的にはボタンが
+            > あっても、押すとトップの単語チェックのページの集中モードに
+            > 飛ばされてしまいます。
+
+          以前はここから `FocusReader`(**本文を読んで語を調べる**画面)を
+          開いていた。書き取りの途中でも、区切りを入れる途中でも、
+          **同じ「語を調べる画面」に飛ばされていた。**
+
+          **単位(段落 / 発言 / 文)を名前に入れない。** 名前は1つにしておき、
+          いま何番目かは中の「3 / 14 文」が言う */}
+      {!focus && showFocus && focusTotal > 0 && (
         <button type="button" className="btn btn--small btn--ghost passage-focus"
-                onClick={() => setFocus(true)}>
+                onClick={() => { stopPlaying(); setFocus(true) }}>
           集中モード
         </button>
       )}
@@ -369,15 +412,18 @@ export default function PassagePractice({
           紙(レッスン表示)で文字を大きくすると帯だけで場所を食っていた。
           **番号を出す。** 順にやるものなので、いま何番目かが
           分かることそのものが道しるべになる。 */}
-      <label className="step-pick">
-        <span className="step-pick-label">6Steps</span>
-        <select value={step} aria-label="6Steps の切り替え"
-                onChange={(e) => { stopPlaying(); setStep(e.target.value) }}>
-          {SIX_STEPS.map((m) => (
-            <option key={m.id} value={m.id}>{m.no} {m.label}</option>
-          ))}
-        </select>
-      </label>
+      {/* 集中モードでは、上の帯にある(`StepFocus`)。**2つ見せない** */}
+      {!focus && (
+        <label className="step-pick">
+          <span className="step-pick-label">6Steps</span>
+          <select value={step} aria-label="6Steps の切り替え"
+                  onChange={(e) => { stopPlaying(); setStep(e.target.value) }}>
+            {SIX_STEPS.map((m) => (
+              <option key={m.id} value={m.id}>{m.no} {m.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
       {/* やり方。**1行に1つ。** 1つの段落に流すと、改行も区切りも無い棒になって
           読めない(指導ポイントで一度学んだこと)。
           狭い画面では畳めるようにする。何度も読むものではない */}
@@ -389,6 +435,9 @@ export default function PassagePractice({
           並びに意味の無い箇条書きなので丸い点だが、こちらは順番に
           意味があるので**番号の丸**にした。ねらいは、見出しの札にして
           いちばん上に置く(何のための練習かが先に目に入る)。 */}
+      {/* **集中モードでは出さない。** 何度も読むものではないので、
+          1つのことに向き合っている場所を、そのぶん狭めない */}
+      {!focus && (
       <details className="step-guide" open={guideOpen}
                onToggle={(e) => { setGuideOpen(e.currentTarget.open); saveGuideOpen(e.currentTarget.open) }}>
         <summary className="step-guide-sum">
@@ -410,6 +459,7 @@ export default function PassagePractice({
           </ol>
         </div>
       </details>
+      )}
 
       <div className="passage-tools">
         {/* 通しの読み上げは、本文まるごとのステップ(③⑤)でだけ意味がある。
@@ -468,7 +518,9 @@ export default function PassagePractice({
       {/* ── ①②④⑥ は1文ずつ ──────────────────────────── */}
       {step === 'dictation' && (
         <StepDictation
-          sentences={sentences} clipVoice={soloVoice} tier={tier}
+          /* 集中モードでは**1つだけ**渡す。中身の描き方は変えない
+             (**同じ見た目を2か所に書き写さない**・CLAUDE.md) */
+          sentences={focus ? dictSlice() : sentences} clipVoice={soloVoice} tier={tier}
           /* **もとの速さ(この取り組み方の速さ)をそのまま渡す**(2026-09)。
              倍率は文ごとに掛けるので、ここで掛けてはいけない
              (掛けると二重になる) */
@@ -484,7 +536,8 @@ export default function PassagePractice({
       )}
       {step === 'slash' && (
         <SlashReading
-          blocks={slashBlocks} clipVoice={soloVoice} tier={tier}
+          blocks={focus ? slashBlocks.slice(at, at + 1) : slashBlocks}
+          clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)}
           unit={slashUnit}
           onUnitChange={(v) => { setSlashUnit(v); saveSlashUnit(v) }}
@@ -495,7 +548,8 @@ export default function PassagePractice({
       )}
       {(step === 'meaning' || step === 'repeat') && (
         <StepSentence
-          sentences={sentences} startVisible={current.script}
+          sentences={focus ? sentences.slice(at, at + 1) : sentences}
+          startVisible={current.script}
           clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)} level={level}
           wordStatuses={wordStatuses} onMarkWord={markWord}
@@ -512,7 +566,8 @@ export default function PassagePractice({
       {/* ③⑤ の見せ方を選ぶ(2026-08 の要望)。
           **同じ本文を、どう見ながら重ねて読むか**が変わるだけである */}
       {current.unit === 'passage' && current.script && (
-        <div className="passage-views" role="group" aria-label="本文の見せ方">
+        <div className="passage-views" role="group" aria-label="本文の見せ方"
+             data-focus={focus ? 'on' : undefined}>
           {PASSAGE_VIEWS.map((v) => (
             <button key={v.id} type="button" title={v.hint}
                     className={`chip${view === v.id ? ' chip--on' : ''}`}
@@ -520,12 +575,16 @@ export default function PassagePractice({
               {v.label}
             </button>
           ))}
-          <label className="passage-flow">
-            <input type="checkbox" checked={flow}
-                   onChange={(e) => setFlow(e.target.checked)} />
-            {/* 通しで聴くときは、段落で切れていないほうが追いやすい */}
-            段落で区切らない
-          </label>
+          {/* **集中モードでは出さない。** 1つしか出していないので、
+              「段落で区切らない」は効きようがない(効かない操作を見せない) */}
+          {!focus && (
+            <label className="passage-flow">
+              <input type="checkbox" checked={flow}
+                     onChange={(e) => setFlow(e.target.checked)} />
+              {/* 通しで聴くときは、段落で切れていないほうが追いやすい */}
+              段落で区切らない
+            </label>
+          )}
           {/* **区切りの細かさは、ここでしか効かなくなった。**
               ② スラッシュリーディングは自分で区切る画面になり、
               決まりから作った区切り(模範)を出さなくなったためである
@@ -547,7 +606,7 @@ export default function PassagePractice({
       {current.unit === 'passage' && (
       <ol className={`passage-body${current.script || peek ? '' : ' is-hidden-text'}`
                      + (flowing ? ' is-flow' : '')}>
-        {section.items.map((item) => {
+        {(focus ? section.items.slice(at, at + 1) : section.items).map((item) => {
           const result = results[item.id]
           return (
             <li key={item.id} data-part={item.id}
@@ -654,7 +713,7 @@ export default function PassagePractice({
       {/* 音声認識の断り書きは、**話す仕組みがあるステップにだけ**出す。
           ② スラッシュリーディングには話すボタンが無いので、
           「発音の点数ではありません」は関係がない(2026-08 の指摘) */}
-      {step === 'slash' ? null : isRecognitionSupported() ? (
+      {focus ? null : step === 'slash' ? null : isRecognitionSupported() ? (
         <p className="field-hint">
           ※ これは<strong>発音の点数ではありません。</strong>
           音声認識が聞き取れたかどうかを見ています。
@@ -669,4 +728,18 @@ export default function PassagePractice({
       )}
     </div>
   )
+
+  /* **集中モードは、同じ中身をそのまま画面いっぱいに出すだけ。**
+     中身を別に作らない(作ると、片方だけ直り忘れる) */
+  if (focus) {
+    return (
+      <StepFocus step={step} onStepChange={(v) => { stopPlaying(); setStep(v) }}
+                 at={at} total={focusTotal} unit={focusUnitLabel}
+                 onMove={(n) => { stopPlaying(); setFocusAt(Math.min(Math.max(0, n), focusTotal - 1)) }}
+                 onClose={() => { stopPlaying(); setFocus(false) }}>
+        {body}
+      </StepFocus>
+    )
+  }
+  return body
 }

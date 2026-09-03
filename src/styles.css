@@ -2181,6 +2181,11 @@ html, body { overscroll-behavior-x: none; }
   font-size: .72em; line-height: 1.5; letter-spacing: .02em;
   text-align: center;
 }
+/* **いくつもの訳が1つのカタマリに入ったときは、行を分ける**(2026-09 実機)。
+   つないで1本にすると、日本語として読めない棒になっていた。
+   **区切り記号は足さない**(訳の側にスラッシュは出さない・2026-08 の指定)。
+   行が分かれているだけで、別々の意味だと分かる */
+.chunk-ja--many > span { display: block; }
 /* ★ 狭い画面では**左寄せ**にする(2026-08 利用者の指定)
 
      > このように毎回改行するのであれば日本語は左寄せでお願いします。
@@ -5294,6 +5299,33 @@ html, body { overscroll-behavior-x: none; }
 /* 「集中モード」への入り口。**本文のすぐ上**に置く。
    ふだんの練習の邪魔をしないよう、枠線だけの控えめな形にする */
 .passage-focus { margin-bottom: 12px; }
+
+/* ── 6Steps の集中モード(2026-09 利用者の指定)────────────────
+   「6steps全てに集中モードを作ってください。…ディクテーションや
+     スラッシュリーディングでこれをできるようにしてください」
+
+   **骨組みは `.focus` をそのまま使う**(`FocusReader` と同じもの)。
+   ここで足すのは「上の帯の右にプルダウンを置く」1点だけ。
+   **同じ見た目を2か所に書き写さない**(CLAUDE.md)。 */
+/* **プルダウンは、いちばん長い選択肢の幅になる**(「② スラッシュリーディング」)。
+   そのままだと iPhone(390px)で 20px はみ出し、**画面が横に送れる**
+   状態になっていた(実測 410 > 390)。横のゆらゆらの正体はこれである。
+   **縮められるようにして、入らないぶんは「…」で切る。**
+   切っても番号(①〜⑥)は必ず見えるので、どれを選んでいるかは分かる */
+.stepfocus-pick { margin-left: auto; min-width: 0; flex: 0 1 auto; }
+.stepfocus-pick > select {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 中身は、ふだんの画面とまったく同じものを渡している。
+   上に余白を足すと、帯とのあいだが二重に空く */
+.passage--focus { margin-top: 0; }
+/* 集中モードでは、1つだけを大きく出す。
+   ふだんの一覧では「1問 = 1枚のカード」の間隔が要るが、
+   ここは1枚しかないので、外側の余白は `.focus-body` が持つ */
+.passage--focus > .stepsent-list,
+.passage--focus > .dictation,
+.passage--focus > .slash,
+.passage--focus > .passage-body { margin-top: 0; }
 
 /* 紙の右下に貼り付くボタン(2026-09 利用者の指定
    「『教材を作る』のように常に右下にも固定してください」/
