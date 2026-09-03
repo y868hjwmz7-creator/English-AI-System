@@ -13,8 +13,9 @@
  * 使い方: `npm run test:gap`
  */
 import { GAP_VALUES, turnGapMs } from '../src/lib/turnGap.js'
+import { voiceRateOf } from '../src/data/clipVoices.js'
 
-const { BASE, QUICK, THINK, MAX_GAP } = GAP_VALUES
+const { BASE, QUICK, THINK, BREATH, MAX_GAP } = GAP_VALUES
 
 let failed = 0
 const check = (label, ok, detail = '') => {
@@ -124,6 +125,52 @@ check('長い問いは、ちゃんと上限まで伸びている',
 check('どんな組み合わせでも、間は必ず 0 より大きい',
   [['', ''], ['a', 'b'], ['?', '?'], ['—', '—']]
     .every(([p, n]) => turnGapMs(p, n) > 0))
+
+// ── ⑥ 同じ人が続けて話すとき(記事の段落)────────────────
+//
+// **受け答えの規則を当てない。** 相づちも付加疑問も「相手がいる」話であって、
+// 一人で読んでいるところには無い。当てると
+// 「段落が Right, で始まったので食い気味」という、意味のない間になる。
+console.log('\n▶ 記事の段落(同じ人が続けて話す)')
+
+const same = (prev, next) => turnGapMs(prev, next, { sameVoice: true })
+
+check('段落の切れ目には、受け答えより長い息継ぎを置く',
+  same('The market moved sharply last week.', 'Analysts had expected a slower shift.')
+  === BREATH && BREATH > BASE,
+  `${same('The market moved sharply last week.', 'Analysts had expected a slower shift.')}ms`)
+
+check('相づちの語で始まっても、食い気味にしない',
+  same('The market moved sharply last week.', 'Right of way was the next issue.') === BREATH,
+  `${same('The market moved sharply last week.', 'Right of way was the next issue.')}ms`)
+
+check('付加疑問で終わっても、食い気味にしない',
+  same("It was a fair price, right?", 'The buyers thought otherwise.') > QUICK,
+  `${same("It was a fair price, right?", 'The buyers thought otherwise.')}ms`)
+
+check('問いかけで終わっていれば、一拍おく',
+  same('So what changed?', 'Three things, mostly.') > BREATH,
+  `${same('So what changed?', 'Three things, mostly.')}ms`)
+
+check('言い終わっていなければ、続きなので詰める',
+  same('The plan was simple —', 'buy low, wait, and sell.') === QUICK,
+  `${same('The plan was simple —', 'buy low, wait, and sell.')}ms`)
+
+check('段落でも上限を超えない',
+  same(veryLongQ, 'The answer is complicated.') <= MAX_GAP,
+  `${same(veryLongQ, 'The answer is complicated.')}ms`)
+
+// ── ⑦ 声ごとの速さの補正 ──────────────────────────────────
+//
+// **v3 は `speed` に対応していない**ので、鳴らすときの playbackRate で直す。
+// MP3 は作り直さないため、費用はかからない。
+console.log('\n▶ 声ごとの速さの補正')
+
+check('Jofra は 1.2 倍', voiceRateOf('uk-3') === 1.2, `${voiceRateOf('uk-3')}`)
+check('Henry は 1.2 倍', voiceRateOf('uk-4') === 1.2, `${voiceRateOf('uk-4')}`)
+check('指定していない声は 1 倍のまま(全員を速くしない)',
+  ['us-1', 'us-2', 'uk-1', 'uk-2', 'au-1', 'au-3'].every((id) => voiceRateOf(id) === 1))
+check('名簿に無い声でも落ちない', voiceRateOf('us-female') === 1)
 
 console.log(failed
   ? `\n❌ ${failed} 件が意図どおりではありません`

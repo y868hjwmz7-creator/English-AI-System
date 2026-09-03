@@ -181,19 +181,21 @@ export function readAloudSequence(parts, {
   }
 
   const run = async () => {
-    let lastVoice = null
     for (let i = 0; i < list.length; i += 1) {
       if (!alive()) return
       const part = list[i]
       const clipVoice = part.clipVoice ?? clipSpeakerFor(part.voice)
 
-      // 話す人が替わるところにだけ、間を置く。
+      // **どの継ぎ目にも間を置く**(2026-09 利用者の指定「記事でも同じ仕様に」)。
+      // はじめは話す人が替わるときだけにしていたが、記事も段落と段落が
+      // 詰まって聞こえる。同じ声が続くところは `turnGap.js` が短めに返す。
       // **速さに合わせて縮める。** 120% で聞いている人には、間も 120% で来る
-      if (lastVoice !== null && clipVoice !== lastVoice) {
-        await pause(turnGapMs(list[i - 1].text, part.text) / (rate || 1))
+      if (i > 0) {
+        const sameVoice = clipVoice === (list[i - 1].clipVoice
+          ?? clipSpeakerFor(list[i - 1].voice))
+        await pause(turnGapMs(list[i - 1].text, part.text, { sameVoice }) / (rate || 1))
         if (!alive()) return
       }
-      lastVoice = clipVoice
 
       onIndex?.(i)
 

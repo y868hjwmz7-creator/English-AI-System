@@ -190,10 +190,11 @@ export const CLIP_VOICES = [
     label: 'Sky', elevenId: 'QeRkfdkzgy4CefJ3AcII' },
   { id: 'uk-2', accent: 'uk', gender: 'female', use: 'both',
     label: 'Sophia', elevenId: 'LM5QaByxyWDmNhcQTYiS' },
+  // **この2人はもともと遅い**ので、既定で 1.2 倍にする(2026-09 利用者の指定)
   { id: 'uk-3', accent: 'uk', gender: 'male', use: 'both',
-    label: 'Jofra', elevenId: 'NuRyEq0OdD9mMOyd51UZ' },
+    label: 'Jofra', elevenId: 'NuRyEq0OdD9mMOyd51UZ', rate: 1.2 },
   { id: 'uk-4', accent: 'uk', gender: 'male', use: 'both',
-    label: 'Henry', elevenId: 'KP6QbSvtyKSTfuh4UzcQ' },
+    label: 'Henry', elevenId: 'KP6QbSvtyKSTfuh4UzcQ', rate: 1.2 },
 
   // ── オーストラリア ──────────────────────────────────────
   { id: 'au-1', accent: 'au', gender: 'female', use: 'both',
@@ -229,6 +230,26 @@ export const baseVoiceOf = (id) => {
 
 /** その声で ElevenLabs を使えるか(Voice ID が入っているか) */
 export const elevenIdOf = (id) => String(findVoice(id)?.elevenId ?? '').trim()
+
+/**
+ * **その声だけの速さの補正**(2026-09 利用者の指定)。
+ *
+ *   > Jofra と Henry のスピードのデフォルトを 120% にしてください。
+ *
+ * 声によって、もともとの話す速さがまるで違う。ElevenLabs の **v3 は
+ * `speed` の指定に対応していない**ので、窓口では直せない。
+ * そこで**鳴らすときの `playbackRate`** で補正する。
+ *
+ * - **MP3 を作り直さない。** だから費用は1円もかからず、`CLIP_REV` も進めない
+ * - **利用者が選んだ速さに掛ける。** 120% で聞いている人には、
+ *   この2人だけがさらに 1.2 倍になる(全体はそのまま)
+ * - **上限を置く**(`MAX_RATE`)。掛け算が重なると聞き取れなくなる
+ */
+const MAX_RATE = 2.5
+export const voiceRateOf = (id) => {
+  const r = Number(findVoice(id)?.rate)
+  return Number.isFinite(r) && r > 0 ? Math.min(r, MAX_RATE) : 1
+}
 
 /** 画面に出す名前。「Rachel(アメリカ・女性)」 */
 export const voiceLabel = (id) => {

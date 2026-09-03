@@ -54,7 +54,9 @@
  *   無音を鳴らして解錠しておく。** 以後は待ちを挟んでも鳴らせる。
  *   録音の `AudioContext` で学んだ作法(1つだけ作り、作り直さない)と同じ。
  */
-import { DEFAULT_BASE, baseVoiceOf, elevenIdOf } from '../data/clipVoices.js'
+import {
+  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceRateOf,
+} from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
 import { markIndexAt, wordMarks } from './wordTiming.js'
@@ -380,7 +382,11 @@ export async function playClip({
     if (mine !== generation) return true
   }
 
-  el.playbackRate = rate
+  // **声ごとの速さの補正を掛ける**(2026-09 利用者の指定)。
+  // もともと遅い声(Jofra / Henry)がある。ElevenLabs の v3 は `speed` に
+  // 対応していないので窓口では直せず、鳴らすときに直す。
+  // **MP3 は作り直さない**ので、費用はかからない
+  el.playbackRate = rate * voiceRateOf(voiceId)
   // 速さを変えても声の高さは変えない(既定でそうなるが、明示しておく)
   if ('preservesPitch' in el) el.preservesPitch = true
 

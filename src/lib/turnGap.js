@@ -25,11 +25,20 @@
  *   判断はできない。**あやふやな間は、無い間より気持ちが悪い**ので入れない。
  *
  * ============================================================================
- * 【声が変わったときだけ入れる】
+ * 【記事にも同じように入れる】(2026-09 利用者の指定)
  *
- *   間を入れるのは**話す人が替わったとき**だけである。
- *   同じ声が続くのは「一人が続けて話している」ので、そこは今までどおり詰める。
- *   記事(全部同じ声)の段落と段落のあいだも、**これまでのまま**変わらない。
+ *   > 記事でも同じ仕様にしてください。
+ *
+ *   はじめは**話す人が替わるときだけ**にしていたが、記事も段落と段落が
+ *   詰まって聞こえる。いまは**どの継ぎ目にも**間を置く。
+ *
+ *   ただし**同じ人が続けて話すとき**(記事の段落・一人が続けて話す発言)は、
+ *   受け答えの規則を当てない。相づちも付加疑問も**相手がいる話**であって、
+ *   一人で読んでいるところには無い。当てると
+ *   「段落が Right, で始まったので食い気味」という、意味のない間になる。
+ *
+ *   同じ人が続けるときに要るのは**息継ぎ**である。少し長めの一定の間を置き、
+ *   問いかけで終わっていれば一拍足す(問いかけたまま次へ流さない)。
  * ============================================================================
  */
 
@@ -41,6 +50,12 @@ const QUICK = 120
 
 /** 考えてから答える */
 const THINK = 900
+
+/**
+ * **息継ぎ。** 同じ人が続けて話すとき(記事の段落の切れ目など)。
+ * 受け答えより少し長い。段落は「話がひとまとまり終わった」ところだからである。
+ */
+const BREATH = 600
 
 /** どんなに長くても、ここで止める(待たされている感じになる) */
 const MAX_GAP = 1400
@@ -127,11 +142,25 @@ const wordCount = (text) => String(text ?? '').trim().split(/\s+/).filter(Boolea
  *
  * @param {string} prev 直前の発言
  * @param {string} next これから鳴らす発言
+ * @param {object} [o]
+ * @param {boolean} [o.sameVoice] 同じ人が続けて話すか(記事の段落など)
  * @returns {number} ミリ秒
  */
-export function turnGapMs(prev, next) {
+export function turnGapMs(prev, next, { sameVoice = false } = {}) {
   // ① 言い終わっていない → 相手が引き取る。**いちばん短い**
   if (trailsOff(prev)) return QUICK
+
+  // ── 同じ人が続けて話すとき(記事の段落・続けての発言)──────────
+  //
+  //   **受け答えの規則は当てない。** 相づちも付加疑問も「相手がいる」話で、
+  //   一人で読んでいるところには無い。要るのは息継ぎである。
+  if (sameVoice) {
+    // 問いかけて終わっていれば一拍おく(問うたまま次へ流さない)
+    if (isQuestion(prev)) return Math.min(BREATH + 300, MAX_GAP)
+    const words = wordCount(prev)
+    if (words >= 40) return Math.min(BREATH + 200, MAX_GAP)
+    return BREATH
+  }
 
   // ② 相づち・即答で始まる → 聞いた瞬間に口が動いている
   if (startsWithAny(next, QUICK_STARTS)) return QUICK
@@ -155,4 +184,4 @@ export function turnGapMs(prev, next) {
   return BASE
 }
 
-export const GAP_VALUES = { BASE, QUICK, THINK, MAX_GAP }
+export const GAP_VALUES = { BASE, QUICK, THINK, BREATH, MAX_GAP }
