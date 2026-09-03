@@ -46,7 +46,8 @@ import {
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { STANDARD } from './voiceTier.js'
 import { clipSpeakerFor } from './voiceCast.js'
-import { turnGapMs } from './turnGap.js'
+import { speedPadMs, turnGapMs } from './turnGap.js'
+import { voiceRateOf } from '../data/clipVoices.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
 let session = 0
@@ -189,11 +190,28 @@ export function readAloudSequence(parts, {
       // **どの継ぎ目にも間を置く**(2026-09 利用者の指定「記事でも同じ仕様に」)。
       // はじめは話す人が替わるときだけにしていたが、記事も段落と段落が
       // 詰まって聞こえる。同じ声が続くところは `turnGap.js` が短めに返す。
-      // **速さに合わせて縮める。** 120% で聞いている人には、間も 120% で来る
       if (i > 0) {
-        const sameVoice = clipVoice === (list[i - 1].clipVoice
-          ?? clipSpeakerFor(list[i - 1].voice))
-        await pause(turnGapMs(list[i - 1].text, part.text, { sameVoice }) / (rate || 1))
+        const prevVoice = list[i - 1].clipVoice ?? clipSpeakerFor(list[i - 1].voice)
+        const sameVoice = clipVoice === prevVoice
+
+        // ① 内容から決める間。**速さに合わせて縮める**
+        //    (120% で聞いている人には、間も 120% で来る)
+        const byContent = turnGapMs(list[i - 1].text, part.text, { sameVoice }) / (rate || 1)
+
+        /* ② 速くした声のぶんの余白(2026-09 利用者の指定)。
+         *
+         *   > 速くした分と同じだけ前後に余白を入れてください。
+         *   > そしてその余白は内容とは別に必ず入れるようにしてください。
+         *
+         * **再生速度は、音声の中の無音まで一緒に縮める。** だから
+         * 1.2 倍にした声のまわりだけ詰まって聞こえる。
+         *
+         * **①とは足し算にする。** 詰まっているのは音声そのものであって、
+         * 話の中身とは関係がない。「相づちだから短く」と打ち消し合わせない。
+         * **前の声のうしろ + 次の声の前**の両方を足す(あいだの無音は1つ)。 */
+        const bySpeed = speedPadMs(voiceRateOf(prevVoice)) + speedPadMs(voiceRateOf(clipVoice))
+
+        await pause(byContent + bySpeed)
         if (!alive()) return
       }
 

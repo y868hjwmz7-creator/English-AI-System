@@ -12,10 +12,10 @@
  *
  * 使い方: `npm run test:gap`
  */
-import { GAP_VALUES, turnGapMs } from '../src/lib/turnGap.js'
+import { GAP_VALUES, speedPadMs, turnGapMs } from '../src/lib/turnGap.js'
 import { voiceRateOf } from '../src/data/clipVoices.js'
 
-const { BASE, QUICK, THINK, BREATH, MAX_GAP } = GAP_VALUES
+const { BASE, QUICK, THINK, BREATH, MAX_GAP, PAD_BASE } = GAP_VALUES
 
 let failed = 0
 const check = (label, ok, detail = '') => {
@@ -171,6 +171,35 @@ check('Henry は 1.2 倍', voiceRateOf('uk-4') === 1.2, `${voiceRateOf('uk-4')}`
 check('指定していない声は 1 倍のまま(全員を速くしない)',
   ['us-1', 'us-2', 'uk-1', 'uk-2', 'au-1', 'au-3'].every((id) => voiceRateOf(id) === 1))
 check('名簿に無い声でも落ちない', voiceRateOf('us-female') === 1)
+
+// ── ⑧ 速くした声のぶんの余白 ──────────────────────────────
+//
+// **再生速度は音声の中の無音まで縮める。** だから 1.2 倍にした声の
+// まわりだけ詰まって聞こえる(2026-09 実機)。
+//
+//   > 速くした分と同じだけ前後に余白を入れてください。
+//   > そしてその余白は内容とは別に必ず入れるようにしてください。
+console.log('\n▶ 速くした声のぶんの余白')
+
+const pad12 = speedPadMs(1.2)
+console.log(`   1.2 倍 → 片側 ${pad12}ms(両側で ${pad12 * 2}ms)`)
+
+check('速くした声には余白が付く', pad12 > 0, `${pad12}ms`)
+check('速くしていない声には付かない(0)', speedPadMs(1) === 0)
+check('遅くした声にも付かない(もともと間も伸びている)', speedPadMs(0.8) === 0)
+check('名簿に無い・数字でない値でも落ちない',
+  speedPadMs(undefined) === 0 && speedPadMs(NaN) === 0 && speedPadMs('x') === 0)
+check('速いほど余白も増える', speedPadMs(1.5) > pad12,
+  `1.5 倍 ${speedPadMs(1.5)}ms > 1.2 倍 ${pad12}ms`)
+check('縮んだ割合ぶんになっている(基準 × (1 - 1/R))',
+  pad12 === Math.round(PAD_BASE * (1 - 1 / 1.2)))
+
+// **ここがこの節でいちばん大事。** 内容の規則と打ち消し合ってはいけない。
+// 詰まっているのは音声そのもので、話の中身とは関係がない
+const quickGap = turnGapMs('The cap is too high.', "Right, that's my concern.")
+check('**内容から決める間とは足し算になる**(相づちでも余白は消えない)',
+  quickGap + pad12 * 2 > quickGap && quickGap === QUICK,
+  `相づち ${quickGap}ms ＋ 余白 ${pad12 * 2}ms = ${quickGap + pad12 * 2}ms`)
 
 console.log(failed
   ? `\n❌ ${failed} 件が意図どおりではありません`
