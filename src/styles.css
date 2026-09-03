@@ -5041,9 +5041,25 @@ html, body { overscroll-behavior-x: none; }
    **文字そのものは左そろえのまま。** 寄せるのは「かたまり」であって、
    本文を中央そろえにすると英語は読みにくくなる。 */
 .focus-body > * { width: 100%; max-width: 34em; margin-left: auto; margin-right: auto; }
-.focus-speaker {
-  font-weight: 700; color: var(--accent); margin-bottom: 10px;
+/* 何番目か + 話す人。**1行にまとめる**(2026-09 利用者の指定で番号を足した)。
+   英語のときも訳のときも出すので、**切り替えても行は動かない** */
+.focus-who {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
 }
+/* 番号の丸。**紙と同じ見た目にそろえる**(`.lesson-items > li::before`)。
+   レッスンは紙を見ながら話すので、「2番のところ」でどちらも同じ場所を指せる。
+   **数字は自分で丸に入れる。** ①②③ の文字は端末ごとに形も大きさも違い、
+   50 を超えると尽きる(絵文字を使わないのと同じ理由・CLAUDE.md) */
+.focus-no {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.75em; height: 1.75em;
+  border-radius: 50%; font-size: 13px; font-weight: 600;
+  background: var(--accent-bg); color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.focus-speaker { min-width: 0; font-weight: 700; color: var(--accent); }
 /* 英語と訳は**同じ組み方**にする。入れ替えたときに行の位置が動かない */
 .focus-en, .focus-ja {
   /* **左右の余白は書かない。** 上の `.focus-body > *` が

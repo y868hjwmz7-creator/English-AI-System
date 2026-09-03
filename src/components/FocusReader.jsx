@@ -272,9 +272,23 @@ export default function FocusReader({
           </div>
         ) : (
           <>
-            {isDialogue && item.speaker && (
-              <div className="focus-speaker" lang="en">{item.speaker}</div>
-            )}
+            {/* ── 何番目か(2026-09 利用者の指定)──────────────────
+                > 集中モード内も①や②のような番号を入れてください。
+
+                **紙と同じ丸の番号にそろえる**(`.lesson-items > li::before`)。
+                レッスンは紙を見ながら話すので、「2番のところ」と言えば
+                どちらを見ていても同じ場所を指せる。
+                上の帯の「3 / 14 発言」は**どこまで来たか**の目安であって、
+                本文の隣にある番号とは役目が違う。
+
+                **話す人がいなくても出す**(記事の段落にも紙は番号を振っている)。
+                英語と訳のどちらでも出すので、**切り替えても行は動かない** */}
+            <div className="focus-who">
+              <span className="focus-no" aria-hidden="true">{index + 1}</span>
+              {isDialogue && item.speaker && (
+                <span className="focus-speaker" lang="en">{item.speaker}</span>
+              )}
+            </div>
             {/* **入れ替える。並べない。**
                 訳のときは語を押せない(英語がそこに無いので、引くものが無い) */}
             {showJa ? (
