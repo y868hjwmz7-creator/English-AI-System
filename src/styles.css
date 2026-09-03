@@ -5316,9 +5316,35 @@ html, body { overscroll-behavior-x: none; }
 .stepfocus-pick > select {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* 中身は、ふだんの画面とまったく同じものを渡している。
-   上に余白を足すと、帯とのあいだが二重に空く */
-.passage--focus { margin-top: 0; }
+/* ★ **1つだけを出すのだから、読みやすい幅にまとめる**(2026-09 実機
+     「文章が真ん中になっていなくて、UIとデザインが崩れています。
+       これはPCでの表示をしている所です」)。
+
+   紙の幅を引き継ぐようにしたところ、150% では中身が 1,290px に広がり、
+   **1文しか無いのに画面いっぱいへ散らばって**いた。
+   左に本文、いちばん右に操作、あいだは空白 — 読むところが定まらない。
+
+   - 幅は **`min(100%, 48rem)`。** 紙の 100% の本文の幅とほぼ同じにしてある。
+     `max-width`(引き継いだ紙の幅)はそのまま残してあるので、
+     **紙が細いときは紙に合わせて縮む**
+   - **1枚のカードにする**(単語帳の集中モードと同じ考え方)。
+     地(`--surface-0`)の上に面(`--surface-1`)を置くと、
+     どこからどこまでが「いま向き合うもの」かが分かる
+   - 上に余白を足さない。帯とのあいだが二重に空く */
+.passage--focus {
+  width: min(100%, 48rem);
+  margin: 0 auto;
+  padding: 22px 20px;
+  border: 1px solid var(--border); border-radius: 16px;
+  background: var(--surface-1); box-shadow: var(--shadow-1);
+}
+@media (max-width: 600px) {
+  /* 狭い画面では、囲みの余白がそのまま読む幅を削る(第5.63節と同じ話) */
+  .passage--focus { padding: 14px 12px; border-radius: 12px; }
+}
+/* 1つしか出さないので、**下の区切り線は引かない。**
+   次が無いのに線だけが残ると、続きがあるように見える */
+.passage--focus .passage-part { border-bottom: 0; padding-bottom: 0; }
 /* 集中モードでは、1つだけを大きく出す。
    ふだんの一覧では「1問 = 1枚のカード」の間隔が要るが、
    ここは1枚しかないので、外側の余白は `.focus-body` が持つ */
