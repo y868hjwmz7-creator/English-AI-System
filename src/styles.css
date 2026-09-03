@@ -864,6 +864,21 @@ audio { width: 100%; margin-top: 4px; }
 /* iOS で横向きにしたときに文字が勝手に拡大されるのを防ぐ */
 html { -webkit-text-size-adjust: 100%; }
 
+/* **横には揺らさない**(2026-09 実機・利用者の指定)。
+
+   > スマホやパッドでスクロールすると、横方向にゆらゆらと画面がズレる
+
+   横にはみ出す中身は**その場で直す**のが本筋である(この回の原因は
+   紙に敷いた板が自分の幅を測っていたこと・`InkLayer.jsx`)。
+   ただし、**どこか1か所が横にはみ出しただけで画面全体が左右に揺れる**のは
+   使う人にはどうにもできない。上下に送るたびに揺れるので、
+   読んでいる場所を見失う。
+
+   `overscroll-behavior-x: none` は、**端まで来たときの跳ね返りと、
+   親へ送りが伝わるのを止める。** 中身を切り落とさないので、
+   横に送れる箱(タブ・表)はこれまでどおり送れる。 */
+html, body { overscroll-behavior-x: none; }
+
 /* ノッチ(画面上部の切り欠き)にコンテンツが隠れないようにする。
    上の切り欠きは帯(`.app-topbar`)が受け持つので、ここは左右と下だけ */
 .app {
@@ -4544,6 +4559,23 @@ html { -webkit-text-size-adjust: 100%; }
        はみ出したときに中身が上へ逃げて届かなくなる */
   flex: 0 0 auto;
   min-height: clamp(6rem, 26vh, 15rem);
+  /* ★ **上限も置く**(2026-09 実機「quick response で英語を見ると、
+       その後閉じられません」)。
+
+     上限を置いていなかったので、長い英文を開くと**枠がそのぶん下へ伸び、
+     「英語を隠す」「まだ」「言えた」の行を画面の外へ押し出していた。**
+     押した本人からは「開いたら閉じられない」に見える。
+
+     しかも `.qr-body` は伸びる一方なので `scrollHeight > clientHeight` が
+     **一度も成り立たず**、入れ替えに落とす判断(`is-tight`)も
+     永久に働いていなかった。
+
+     **上限を置けば、はみ出したぶんは枠の中で送られる**
+     (`overflow-y: auto` はもとからある)。ボタンの行は必ず見えている。
+     引いている 15rem は、下のボタンの行(約 121px)と上の帯のぶんである。
+     **`min-height` のほうが強い**ので、窓がごく低いときも
+     問題が真っ白になることはない(下限は残る)。 */
+  max-height: calc(100dvh - 15rem);
   display: flex; flex-direction: column;
   gap: 6px; overflow-y: auto;
   justify-content: safe center;
@@ -4706,6 +4738,31 @@ html { -webkit-text-size-adjust: 100%; }
    中身が増えれば下へ伸び、それでもまん中は保たれる。 */
 .lesson-sheet.is-running > .qr { flex: 1 1 auto; display: flex; flex-direction: column; }
 .lesson-sheet.is-running > .qr > .qr-card { flex: 1 1 auto; justify-content: safe center; }
+/* ★ **紙の上では、余った高さのぶんだけ広げる**(2026-09 実機
+     「quick response で英語を見ると、その後閉じられません」)。
+
+   紙は高さが決まっているので、**残りを計算で当てる必要はない。**
+   出題の枠を `flex: 1 1 auto` にすれば、下のボタンの行(`flex: 0 0 auto`)を
+   置いた**残り**にひとりでに収まる。長い英文を開いても、
+   はみ出すのは枠の中だけで、「英語を隠す」「まだ」「言えた」は必ず見えている。
+
+   **下限は残す**(5rem)。0 まで縮むと問題が真っ白になる(CLAUDE.md)。 */
+.lesson-sheet.is-running .qr-body {
+  flex: 1 1 auto;
+  min-height: 5rem;
+  max-height: none;
+}
+/* **縮めるには、途中の箱に「中身より小さくなってよい」と言う必要がある。**
+
+   flex の箱は、既定では**中身の高さより小さくならない**(`min-height: auto`)。
+   そのため、長い英文を開くと `.qr` と `.qr-card` が紙より背が高くなり、
+   下のボタンの行を押し出していた(実測 320×568 で 404px → 659px)。
+
+   **`min-height: 0` を置くのは、この途中の2つだけ。**
+   いちばん中の出題の枠(`.qr-body`)には**下限を残してある**(上の 5rem)ので、
+   「窓が低いと問題が真っ白になる」(2026-08 実機)は起きない。 */
+.lesson-sheet.is-running > .qr,
+.lesson-sheet.is-running > .qr > .qr-card { min-height: 0; }
 
 /* ── 練習を始める行 ────────────────────────────────────────
    **「中身を見る」タブとは別のもの。** タブは教材の中身を見るためのもので、
@@ -4739,7 +4796,24 @@ html { -webkit-text-size-adjust: 100%; }
 @media (max-width: 600px) {
   .practice-row { flex-wrap: nowrap; }
   .practice-row .btn { white-space: nowrap; }
-  .lesson-sheet .practice-row .btn { font-size: 13px; padding: 6px 10px; }
+  /* ★ **3つになったので、さらに詰める**(2026-09 実機)。
+
+     集中モードを足して**入口が3つ**になり、iPhone(390px)で
+     6Steps・集中モード・Quick Response が**1行に収まらなくなった**
+     (実測 382px / 入る幅 342px)。はみ出した分だけ**紙が横に送れる状態**
+     になり、指で上下に送るたびに左右へ揺れる(利用者の「横方向のゆらゆら」)。
+
+     **落とすのは絵のほうである。** 詰め方は
+     「言葉を短く → 余白を詰める → 絵だけにする」の順だが、
+     この3つは**名前でしか見分けられない**(どれも「練習の入口」で、
+     絵は 6Steps の段・稲妻・枠と、それぞれ意味が違う)。
+     名前を削れば何のボタンか分からなくなるので、絵を落とす。
+
+     実測: 320px → 272px(ちょうど入る)/ 390px → 342px。
+     どちらも1行 44px に収まる。 */
+  .lesson-sheet .practice-row { gap: 3px; }
+  .lesson-sheet .practice-row .btn { font-size: 12px; padding: 5px 6px; }
+  .lesson-sheet .practice-row .icon { display: none; }
 }
 
 /* ── トレーナーが見る単語帳 ────────────────────────────────

@@ -63,16 +63,43 @@ export default function InkLayer({
   onChange,
 }) {
   const [size, setSize] = useState({ w: 0, h: 0 })
+  const svgRef = useRef(null)
   const drawing = useRef(null)
   const erasing = useRef(false)
 
   /* 紙の中身の丈に合わせる。**送っても足りなくならないよう `scrollHeight`。**
      文字の大きさを変えたりページを送ったりすると丈が変わるので、
-     見張って測り直す */
+     見張って測り直す。
+
+     ★ **測るあいだ、自分を数に入れない**(2026-09 実機
+        「スマホやパッドでスクロールすると、横方向にゆらゆらと画面がズレる」)。
+
+        この板は紙の**中**にあるので、`el.scrollWidth` には**この板自身の幅も
+        入る。** すると
+
+            測った幅 → 板の幅 → 次に測る幅 …
+
+        と**一度広がった幅が二度と縮まなくなる**(戻る道が無い)。
+        紙の中身が一瞬でも横にはみ出すと——練習の入口が1行に収まらない、
+        長い1語が来る、文字を「特大」にする——その幅が板に焼き付き、
+        **紙がずっと横に送れる状態のまま残る。**
+        指で上下に送るたびに左右へ揺れるのは、これである。
+
+        測るあいだだけ板を消す。**属性は見張っていない**
+        (`MutationObserver` は `childList` / `characterData` だけ)ので、
+        これで測り直しが繰り返されることはない。 */
   useEffect(() => {
     const el = sheetRef?.current
     if (!el) return undefined
-    const measure = () => setSize({ w: el.scrollWidth, h: el.scrollHeight })
+    const measure = () => {
+      const svg = svgRef.current
+      const keep = svg ? svg.style.display : null
+      if (svg) svg.style.display = 'none'
+      const w = el.scrollWidth
+      const h = el.scrollHeight
+      if (svg) svg.style.display = keep ?? ''
+      setSize({ w, h })
+    }
     measure()
     const ro = new window.ResizeObserver(measure)
     ro.observe(el)
@@ -131,6 +158,7 @@ export default function InkLayer({
 
   return (
     <svg
+      ref={svgRef}
       className={`ink-layer no-print${active ? ' is-active' : ''}`
         + (tool === 'eraser' ? ' is-erasing' : '')}
       width={size.w || '100%'}

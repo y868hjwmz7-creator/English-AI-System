@@ -246,6 +246,20 @@ export function StepsIcon({ className = 'icon' }) {
   )
 }
 
+/** 枠の四隅。集中モード(1段落だけを画面に固定して調べる)。
+    **枠にはめる**という形そのものが、この機能の中身である */
+export function FocusIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M2.5 6.5v-3a1 1 0 011-1h3M13.5 2.5h3a1 1 0 011 1v3M17.5 13.5v3a1 1 0 01-1 1h-3M6.5 17.5h-3a1 1 0 01-1-1v-3"
+            fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 10h6" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** 紙。ゲストに関するファイル(0031)
     **同じ枠(20×20)・同じ線の太さ(1.5)でそろえる** */
 export function FileIcon({ className = 'icon' }) {

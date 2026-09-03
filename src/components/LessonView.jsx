@@ -26,8 +26,10 @@ import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import {
-  BoltIcon, GearIcon, NoteIcon, PenIcon, PrintIcon, SpeakerIcon, StepsIcon, StopIcon,
+  BoltIcon, FocusIcon, GearIcon, NoteIcon, PenIcon, PrintIcon,
+  SpeakerIcon, StepsIcon, StopIcon,
 } from './Icons.jsx'
+import FocusReader from './FocusReader.jsx'
 import InkLayer from './InkLayer.jsx'
 import LessonNotes from './LessonNotes.jsx'
 import { viewerRoleOf } from '../lib/viewer.js'
@@ -223,7 +225,8 @@ export default function LessonView({
   const canNote = !!learnerId
     && (viewerRoleOf() === 'trainer' || viewerRoleOf() === 'owner')
   openSettingsRef.current = openSettings
-  // 通しの練習を出しているか。null / 'qr'(Quick Response)/ 'six'(6Steps)。
+  // 通しの練習を出しているか。
+  // null / 'qr'(Quick Response)/ 'six'(6Steps)/ 'focus'(集中モード)。
   // **教材1本 / 本文1本を通しでやる**ので、出しているあいだは
   // ページ送りと解答のボタンを出さない(効かないため)
   const [run, setRun] = useState(null)
@@ -651,6 +654,25 @@ export default function LessonView({
                 <StepsIcon />6Steps
               </button>
             )}
+            {/* **集中モード**(2026-09 実機「どこにも集中モードがありません」)。
+
+                はじめは `PassagePractice` の中にだけ置いていた。ところが
+                この画面では `PassagePractice` は **6Steps を押したときにしか
+                描かれない**ので、集中モードは 6Steps の**中に埋もれていた。**
+                語を調べるのは 6Steps に入る**前**の段階なので、そこにあっては
+                たどり着けない。**6Steps・Quick Response と横に並べる。**
+
+                そのぶん `PassagePractice` の側では出さない
+                (`showFocus={false}`)。**同じことをするボタンを、
+                1つの画面に2つ見せない**(CLAUDE.md)。 */}
+            {passageSection && (
+              <button type="button"
+                      className={`btn btn--small${run === 'focus' ? ' btn--primary' : ''}`}
+                      aria-pressed={run === 'focus'}
+                      onClick={() => { stopAll(); setRun(run === 'focus' ? null : 'focus') }}>
+                <FocusIcon />集中モード
+              </button>
+            )}
             {qrPossible && (
               <button type="button"
                       className={`btn btn--small${qr ? ' btn--primary' : ''}`}
@@ -662,9 +684,26 @@ export default function LessonView({
           </div>
         )}
 
-        {run === 'six' ? (
+        {run === 'focus' ? (
+          /* **集中モード。** 1段落だけを画面に固定して語を調べる。
+             `PassagePractice` を通さず、ここから直に出す
+             (6Steps の中の1つではなく、6Steps と並ぶもう1つの取り組み方) */
+          <FocusReader
+            section={passageSection}
+            isDialogue={passageSection.exercise_type === 'dialogue'}
+            voiceIds={material.voiceIds}
+            tier={voiceTierFor({ exerciseType: passageSection.exercise_type, tags: allTags })}
+            level={material.level}
+            wordStatuses={wordStatuses} onMarkWord={onMarkWord}
+            materialId={material.id} learnerId={learnerId}
+            onClose={() => setRun(null)}
+          />
+        ) : run === 'six' ? (
           <PassagePractice
             section={passageSection}
+            /* 集中モードは**上のボタンの行**に出してある。
+               ここにも出すと、1つの画面に同じボタンが2つ並ぶ */
+            showFocus={false}
             /* 見出しは紙の上にもう出ている。**同じ英語を2行続けて並べない** */
             isDialogue={passageSection.exercise_type === 'dialogue'}
             /* 途中経過を教材ごとにまとめて消せるようにするため、

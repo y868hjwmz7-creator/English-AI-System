@@ -64,6 +64,15 @@ export default function PassagePractice({
   level = 'B1', wordStatuses = null, onMarkWord = null, materialId = null,
   /** 誰の学習として残すか(0025)。ゲスト自身 / レッスン中のゲスト */
   learnerId = null,
+  /**
+   * 集中モードのボタンをここに出すか(2026-09 実機)。
+   *
+   * レッスン表示(`LessonView`)は、集中モードを **6Steps と並ぶ
+   * もう1つの取り組み方**として上のボタンの行に置いている。
+   * この部品はその 6Steps の中身なので、**そこでは出さない。**
+   * **同じことをするボタンを、1つの画面に2つ見せない**(CLAUDE.md)。
+   */
+  showFocus = true,
 }) {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('six_steps', true, learnerId)
@@ -299,10 +308,12 @@ export default function PassagePractice({
           **単位(段落 / 発言)を名前に入れない。** 名前は1つにしておき、
           いま何番目かは中の「3 / 6 段落」が言う。
           コードの中の名前(`FocusReader` / `.focus-*`)は変えていない */}
-      <button type="button" className="btn btn--small btn--ghost passage-focus"
-              onClick={() => setFocus(true)}>
-        集中モード
-      </button>
+      {showFocus && (
+        <button type="button" className="btn btn--small btn--ghost passage-focus"
+                onClick={() => setFocus(true)}>
+          集中モード
+        </button>
+      )}
 
       {/* 6Steps。**プルダウンにする**(2026-08 利用者の指定)。
           札を6つ横に並べていたが、狭い画面では2段になり、
