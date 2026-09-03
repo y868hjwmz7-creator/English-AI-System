@@ -546,6 +546,10 @@ export default function PassagePractice({
           wordStatuses={wordStatuses} onMarkWord={markWord}
           listeningId={listeningId} onCheck={checkOne} results={results}
           size={dictSize}
+          /* **番号は、ぜんぶの中での番号**(2026-09 利用者の指定)。
+             集中モードでは1つしか渡さないので、外から番号を渡さないと
+             何番目でも「1」になってしまう */
+          startNo={focus ? at + 1 : 1}
           onSizeChange={(v) => { setDictSize(v); saveDictSize(v) }}
           /* **書きかけを覚えておく**(2026-08 利用者の指定)。鍵の形は1か所 */
           progressAt={progressKey(materialId, section.id, 'dictation')}
@@ -557,7 +561,7 @@ export default function PassagePractice({
           blocks={focus ? slashBlocks.slice(at, at + 1) : slashBlocks}
           clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)}
-          unit={slashUnit} isDialogue={isDialogue}
+          unit={slashUnit} isDialogue={isDialogue} startNo={focus ? at + 1 : 1}
           onUnitChange={(v) => { setSlashUnit(v); saveSlashUnit(v) }}
           /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定) */
           progressAt={progressKey(materialId, section.id, `slash-${slashUnit}`)}
@@ -572,6 +576,7 @@ export default function PassagePractice({
           rate={rateOf(rateId, current.rate)} level={level}
           wordStatuses={wordStatuses} onMarkWord={markWord}
           listeningId={listeningId} onCheck={checkOne} results={results}
+          startNo={focus ? at + 1 : 1}
           /* ④⑥ で開いた行も覚えておく(2026-08 利用者の指定) */
           progressAt={progressKey(materialId, section.id, `sentence-${step}`)}
           learnerId={learnerId}
@@ -624,7 +629,7 @@ export default function PassagePractice({
       {current.unit === 'passage' && (
       <ol className={`passage-body${current.script || peek ? '' : ' is-hidden-text'}`
                      + (flowing ? ' is-flow' : '')}>
-        {(focus ? section.items.slice(at, at + 1) : section.items).map((item) => {
+        {(focus ? section.items.slice(at, at + 1) : section.items).map((item, n) => {
           const result = results[item.id]
           return (
             <li key={item.id} data-part={item.id}
@@ -638,9 +643,17 @@ export default function PassagePractice({
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playAll(item.id) }
                   },
                 } : {})}>
-              {isDialogue && item.speaker && (
-                <div className="passage-speaker" lang="en">{item.speaker}</div>
-              )}
+              {/* **番号を出す**(2026-09 利用者の指定
+                  「どのページでも段落番号とか全て入れてください」)。
+                  紙にも同じ番号が振ってあるので、「2番のところ」と言えば
+                  どちらを見ていても同じ場所を指せる。
+                  通し表示のときは出さない(1本の文章として続けて読むため) */}
+              <div className="passage-head">
+                <span className="dictation-no">{(focus ? at : n) + 1}</span>
+                {isDialogue && item.speaker && (
+                  <span className="passage-speaker" lang="en">{item.speaker}</span>
+                )}
+              </div>
               {current.script || peek ? (
                 <p className="passage-en">
                   {/* 通し表示では**語の意味を引かない。**

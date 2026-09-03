@@ -85,6 +85,8 @@ export default function SlashReading({
   learnerId = null,
   /** 会話・会議か。**単位の言葉が変わる**(段落ごと / 発言ごと・2026-09) */
   isDialogue = false,
+  /** 何番から数えるか。集中モードでは1つだけ渡すので、外から番号をもらう */
+  startNo = 1,
 }) {
   /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定)。
      20か所入れたあとで別のタブを見に行くと、やり直しになっていた。
@@ -230,7 +232,7 @@ export default function SlashReading({
         </div>
       ) : (
       <ol className="slash-list">
-        {blocks.map((s) => {
+        {blocks.map((s, n) => {
           const words = wordsOf(s.text)
           const mine = marks[s.id] ?? []
           const open = shown[s.id]
@@ -245,6 +247,10 @@ export default function SlashReading({
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                   本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
               <div className="row-head">
+                {/* **番号を出す**(2026-09 利用者の指定
+                    「どのページでも段落番号とか全て入れてください」)。
+                    紙とレッスンで「2番のところ」と同じ場所を指せる */}
+                <span className="dictation-no">{startNo + n}</span>
                 {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
                 <span className="row-tools">
                   <SpeakButton text={s.text} className="etext-listen"

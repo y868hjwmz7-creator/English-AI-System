@@ -30,6 +30,8 @@ export default function StepSentence({
   sentences, startVisible, clipVoice, tier, rate, level,
   wordStatuses, onMarkWord, listeningId, onCheck, results, progressAt = null,
   learnerId = null,
+  /** 何番から数えるか。集中モードでは1つだけ渡すので、外から番号をもらう */
+  startNo = 1,
 }) {
   // 文ごとに「英語が見えているか」。ステップを移ったら、はじめの状態に戻す
   // **開いた行を覚えておく**(2026-08 利用者の指定)
@@ -56,7 +58,7 @@ export default function StepSentence({
             {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                 本文をそのぶん上に寄せられる(2026-08 の指摘) */}
             <div className="row-head">
-              <span className="dictation-no">{n + 1}</span>
+              <span className="dictation-no">{startNo + n}</span>
               {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
               <span className="row-tools">
                 <SpeakButton text={s.text} className="etext-listen"

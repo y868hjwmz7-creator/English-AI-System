@@ -31,6 +31,12 @@ export default function StepDictation({
   sentences, clipVoice, tier, rate, level,
   wordStatuses, onMarkWord, listeningId, onCheck, results,
   size, onSizeChange, progressAt = null, learnerId = null,
+  /**
+   * 何番から数えるか(2026-09 利用者の指定「段落番号とか全て入れてください」)。
+   * 集中モードでは**1つだけ**を渡すので、そのままだと何番目でも「1」に
+   * なってしまう。**いま何番目か**を外から渡す。
+   */
+  startNo = 1,
 }) {
   // **書きかけを覚えておく**(2026-08 利用者の指定)。
   // 別のタブを見て戻ったら消えていた、という報告があった
@@ -94,7 +100,7 @@ export default function StepDictation({
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                   本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
               <div className="row-head">
-                <span className="dictation-no">{n + 1}</span>
+                <span className="dictation-no">{startNo + n}</span>
                 {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
                 <span className="row-tools">
                   <SpeakButton text={s.text} className="etext-listen"

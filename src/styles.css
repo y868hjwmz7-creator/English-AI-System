@@ -5332,7 +5332,12 @@ html, body { overscroll-behavior-x: none; }
      どこからどこまでが「いま向き合うもの」かが分かる
    - 上に余白を足さない。帯とのあいだが二重に空く */
 .passage--focus {
-  width: min(100%, 48rem);
+  /* **幅は、もとの紙と同じ**(2026-09 利用者の指定
+     「元々の幅に合わせてください」)。上限は `.focus--w*` が持っている。
+     一度 48rem で頭打ちにしたが、**紙より細くなる**ので戻した。
+     `margin: 0 auto` を必ず残す — これが無いと、画面を広げたぶんだけ
+     中身が左に寄って見える(「どんどん左に寄ってしまう」) */
+  width: 100%;
   margin: 0 auto;
   padding: 22px 20px;
   border: 1px solid var(--border); border-radius: 16px;
@@ -5345,6 +5350,39 @@ html, body { overscroll-behavior-x: none; }
 /* 1つしか出さないので、**下の区切り線は引かない。**
    次が無いのに線だけが残ると、続きがあるように見える */
 .passage--focus .passage-part { border-bottom: 0; padding-bottom: 0; }
+
+/* ── 集中モードは「濃く、色でメリハリ」(2026-09 利用者の指摘)─────
+     > 全体的にコンテンツの文字などが薄すぎて少し見づらいです。
+     > メリハリと色をつけて見やすくしてください
+
+   1つだけに向き合う場所なので、**紙の一覧より一段はっきり**させる。
+   色はすべて変数から取る(プレインを選べば、そのまま灰色になる)。 */
+/* 本文。**紙と同じ大きさでは小さい** — ここには1つしか無い */
+.passage--focus .passage-en,
+.passage--focus .stepsent-en,
+.passage--focus .slash-line { font-size: 17px; }
+/* 話す人。**紙と同じように色で分ける**(奇数・偶数で交互)。
+   声を分けたのと同じ理由で、目でも役を追える */
+.passage--focus .passage-speaker {
+  color: var(--voice-a); font-weight: 700; font-size: 14px;
+}
+.passage--focus li:nth-child(even) .passage-speaker { color: var(--voice-b); }
+/* 番号。うすい灰色の丸だったので、いちばん見たい本文より先に沈んでいた。
+   紙の番号(`.lesson-items > li::before`)と同じ、うすい青の丸にそろえる */
+.passage--focus .dictation-no {
+  background: var(--accent-bg); color: var(--accent); font-weight: 700;
+}
+/* 「速さ」「単位」「難易度」の見出し。**うすい灰色をやめる** */
+.passage--focus .rate-pick > span { color: var(--text-primary); font-weight: 600; }
+/* 本文と、その上の帯を分ける線。1本あるだけで、どこからが本文か分かる */
+.passage--focus .slash-head,
+.passage--focus .dictation-head { padding-bottom: 10px; }
+
+/* 段落・発言の番号と、話す人(③⑤)。**どのページでも番号を出す**
+   (2026-09 利用者の指定「どのページでも段落番号とか全て入れてください」) */
+.passage-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+/* 通し表示では出さない。1本の文章として続けて読むためのものである */
+.passage-body.is-flow .passage-head { display: none; }
 /* 集中モードでは、1つだけを大きく出す。
    ふだんの一覧では「1問 = 1枚のカード」の間隔が要るが、
    ここは1枚しかないので、外側の余白は `.focus-body` が持つ */
