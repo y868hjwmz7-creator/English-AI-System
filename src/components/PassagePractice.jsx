@@ -67,7 +67,7 @@ export default function PassagePractice({
 }) {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('six_steps', true, learnerId)
-  /** 1段落ずつ調べる画面を出しているか(2026-09 利用者の指定)。
+  /** 集中モード(1段落ずつ調べる画面)を出しているか(2026-09 利用者の指定)。
       **覚えない。** 開くたびに本文から始めるほうが素直である */
   const [focus, setFocus] = useState(false)
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る */
@@ -291,13 +291,17 @@ export default function PassagePractice({
     <div className="passage">
       {headline && <h4 className="passage-headline" lang="en">{headline}</h4>}
 
-      {/* **1段落ずつ調べる**(2026-09 利用者の指定)。
+      {/* **集中モード**(2026-09 利用者の指定。名前も利用者が選んだ)。
           ここに置けば、トレーナーの「セッションで使う」とゲストの
           「今週の宿題」の**両方に入る**(どちらもこの部品を呼んでいる)。
-          **同じものを2か所に書き写さない。** */}
+          **同じものを2か所に書き写さない。**
+
+          **単位(段落 / 発言)を名前に入れない。** 名前は1つにしておき、
+          いま何番目かは中の「3 / 6 段落」が言う。
+          コードの中の名前(`FocusReader` / `.focus-*`)は変えていない */}
       <button type="button" className="btn btn--small btn--ghost passage-focus"
               onClick={() => setFocus(true)}>
-        {isDialogue ? '1発言ずつ調べる' : '1段落ずつ調べる'}
+        集中モード
       </button>
 
       {/* 6Steps。**プルダウンにする**(2026-08 利用者の指定)。

@@ -4818,7 +4818,7 @@ html { -webkit-text-size-adjust: 100%; }
 .homework-worked { margin: 10px 0 0; font-size: 13px; }
 
 /* ════════════════════════════════════════════════════════════════════
-   1段落ずつ調べる(`FocusReader.jsx`・2026-09 利用者の指定)
+   集中モード — 1段落ずつ調べる(`FocusReader.jsx`・2026-09 利用者の指定)
 
      > 段落ごとに画面を固定し、ブラウザの機能をシャットアウトできる
      > ようにしたいです
@@ -4946,6 +4946,6 @@ html { -webkit-text-size-adjust: 100%; }
 /* 紙には出さない。画面の中でやることである */
 @media print { .focus { display: none !important; } }
 
-/* 「1段落ずつ調べる」への入り口。**本文のすぐ上**に置く。
+/* 「集中モード」への入り口。**本文のすぐ上**に置く。
    ふだんの練習の邪魔をしないよう、枠線だけの控えめな形にする */
 .passage-focus { margin-bottom: 12px; }

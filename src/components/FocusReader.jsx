@@ -1,5 +1,8 @@
 /**
- * **1段落ずつ、画面に固定して語を調べる**(2026-09 利用者の指定)。
+ * **集中モード** — 1段落ずつ、画面に固定して語を調べる(2026-09 利用者の指定)。
+ *
+ * **画面に出す名前は「集中モード」**(利用者が選んだ)。
+ * コードの中の名前(`FocusReader` / `.focus-*`)は変えていない。
  *
  *   > スマホやパッド、タッチのデバイスで取り組む際に、教材、特に記事と
  *   > ダイアローグ、会議で、はじめに単語を調べて単語帳に飛ばす段階では
@@ -203,7 +206,7 @@ export default function FocusReader({
   const last = index >= total - 1
 
   return (
-    <div className="focus" role="dialog" aria-modal="true" aria-label={`${unit}ごとに調べる`}>
+    <div className="focus" role="dialog" aria-modal="true" aria-label="集中モード">
       {/* ── 上の帯。**細く1行。** 送るものを増やさない ────────── */}
       <div className="focus-top">
         <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>
