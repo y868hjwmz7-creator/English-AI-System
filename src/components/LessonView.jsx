@@ -1069,7 +1069,26 @@ export default function LessonView({
                   {it.question_ja && <div className="lesson-ja">{it.question_ja}</div>}
                   {it.hint && <div className="lesson-note">与える語: {it.hint}</div>}
 
-                  {secType?.audioFrom && it[secType.audioFrom] && (
+                  {/* ── 通しで鳴らしているあいだは、**その段落の Listen が Stop になる**
+                      (2026-09 利用者の指定)。
+
+                      > そもそも全体を再生を押した後は、再生中の段落の
+                      > listen ボタンは Stop ボタンになっているべきです
+
+                      **鳴らすボタンがそのまま Stop に変わる**のがこのアプリの作法
+                      (CLAUDE.md)。ところが通しの読み上げは `SpeakButton` の
+                      外側で鳴らしているので、**その段落が鳴っていることを
+                      ボタンが知らなかった。** 目はいま光っている段落にあるのに、
+                      そこには「Listen」と書いてあり、押すと**二重に鳴り出す。**
+
+                      押したら通しごと止める。**止める場所を探させない** */}
+                  {secType?.audioFrom && it[secType.audioFrom]
+                    && playingAll && speakingKey === k(it, i) ? (
+                    <button type="button" className="btn btn--small"
+                            onClick={() => { stopAll(); setReadingAt(null) }}>
+                      <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
+                    </button>
+                  ) : secType?.audioFrom && it[secType.audioFrom] && (
                     <SpeakButton
                       text={it[secType.audioFrom]}
                       voice={voiceFor(secCast, it.speaker)}

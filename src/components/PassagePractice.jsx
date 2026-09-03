@@ -290,7 +290,17 @@ export default function PassagePractice({
         clipTier: tier,
         onIndex: (i) => {
           if (i === null) { stopAllRef.current = null; setPlayingAll(false); heard() }
-          setSpeakingId(i === null ? null : playable[i]?.id ?? null)
+          const id = i === null ? null : playable[i]?.id ?? null
+          setSpeakingId(id)
+          /* **控えの側も一緒に動かす**(2026-09 利用者の指定)。
+             > 全体を再生を押した後は、再生中の段落の listen ボタンは
+             > Stop ボタンになっているべきです
+
+             その段落のボタンは `speakingId` を見て Stop になるが、
+             **押したときに止まるかどうかは `speakingRef` が決めている。**
+             ここを動かさないでいると、Stop と書いてあるボタンを押しても
+             止まらず、**通しの上にもう1本重ねて鳴らして**いた */
+          speakingRef.current = id
           setReadingAt(null)   // 次の発言に移ったら、前の語の色を消す
         },
         onStart: heard,
