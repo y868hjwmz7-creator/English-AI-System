@@ -133,10 +133,27 @@ export const MAX_SPEAKERS = 4
  * 人数なので、**表も列も増やさない**(CLAUDE.md)。
  */
 export const voiceCountFor = (kind, speakers = 2) => {
-  if (kind !== 'dialogue') return 1
-  const n = Math.round(Number(speakers) || 2)
-  return Math.min(Math.max(n, 2), MAX_SPEAKERS)
+  /* **会議も会話と同じ形である**(2026-09 利用者の指定で `meeting` を足した)。
+     ちがうのは**下限が3人**だという1点だけ。
+     2人では「会議」にならない(それはただの1対1の会話である)。 */
+  const meeting = kind === 'meeting'
+  if (kind !== 'dialogue' && !meeting) return 1
+  const least = meeting ? MIN_MEETING_SPEAKERS : 2
+  const n = Math.round(Number(speakers) || least)
+  return Math.min(Math.max(n, least), MAX_SPEAKERS)
 }
+
+/** 会議に出す人数の下限。**2人では会議にならない** */
+export const MIN_MEETING_SPEAKERS = 3
+
+/**
+ * その種類で選べる人数(2026-09)。
+ * 会話は 2〜4 人、**会議は 3〜4 人**(効かない選択肢を見せない)。
+ */
+export const speakerCountsFor = (kind) =>
+  (kind === 'meeting'
+    ? SPEAKER_COUNTS.filter((s) => s.id >= MIN_MEETING_SPEAKERS)
+    : SPEAKER_COUNTS)
 
 export const accentLabel = (id) =>
   CLIP_ACCENTS.find((a) => a.id === id)?.label ?? id

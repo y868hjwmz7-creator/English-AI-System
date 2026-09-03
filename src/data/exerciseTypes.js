@@ -336,6 +336,24 @@ export const DEFAULT_SECTIONS = {
     { exercise_type: 'discussion',    count: 5 },
     { exercise_type: 'vocab_note',    count: 6 },
   ],
+  /**
+   * **会議**(2026-09 利用者の指定「会議の教材が追加されていない」)。
+   *
+   * 中身は**会話とまったく同じ**である。ちがうのは
+   * **出てくる人数が3〜4人**だという1点だけ
+   * (立場の違う人が集まり、その場で決めていく)。
+   *
+   * **演習の種類(`dialogue`)は増やしていない。** 増やすと
+   * `material_sections_type_check` も窓口も触ることになり、
+   * すでに作った会話と別物になってしまう。
+   * **足したのは `materials.kind` の値1つだけ**(0037)。
+   */
+  meeting: [
+    { exercise_type: 'dialogue',      count: 14 },
+    { exercise_type: 'comprehension', count: 5 },
+    { exercise_type: 'discussion',    count: 5 },
+    { exercise_type: 'vocab_note',    count: 6 },
+  ],
   word:   [{ exercise_type: 'vocabulary', count: 20 }],
   phrase: [{ exercise_type: 'phrase',     count: 20 }],
   // 旧「長文」。新規では選べないが、既存の教材を開くために残す

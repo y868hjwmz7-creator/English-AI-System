@@ -32,6 +32,12 @@ export const MATERIAL_KINDS = [
     hint: '業界別のニュースや読み物を1本。音読・シャドーイングに使う' },
   { id: 'dialogue', label: 'ダイアローグ(会話)',
     hint: '場面を決めた会話を1本。役を決めて声に出す' },
+  /* **会議**(2026-09 利用者の指定「会議の教材が追加されていない」)。
+     中身は会話とまったく同じで、**出てくる人数が3〜4人**という1点だけが違う。
+     人数は `materials.voice_ids` の長さがそのまま持つので、
+     **表も列も増やしていない**(足したのは `kind` の値1つだけ・0037)。 */
+  { id: 'meeting',  label: '会議',
+    hint: '3〜4人の打ち合わせを1本。立場の違う人が集まり、その場で決めていく' },
   { id: 'word',     label: '単語', hint: '単語学習で使う' },
   { id: 'phrase',   label: 'フレーズ', hint: 'フレーズ学習で使う' },
   // 旧「長文」。新規では選べないが、既存の教材の表示に使う
@@ -41,8 +47,22 @@ export const MATERIAL_KINDS = [
 /** 新しく作れる種類(旧いものを除く) */
 export const NEW_MATERIAL_KINDS = MATERIAL_KINDS.filter((k) => !k.legacy)
 
-/** 本文を1本作る種類(記事・会話)かどうか。問数ではなく長さで考える */
-export const isPassageKind = (kind) => kind === 'reading' || kind === 'dialogue'
+/** 本文を1本作る種類(記事・会話・会議)かどうか。問数ではなく長さで考える */
+export const isPassageKind = (kind) =>
+  kind === 'reading' || kind === 'dialogue' || kind === 'meeting'
+
+/**
+ * **会話の形をした種類**(会話・会議)かどうか。
+ *
+ * この2つは中身が同じで、**出てくる人数だけが違う。**
+ * だから「話す人を選ぶ」「場面を選ぶ」「発言で数える」は、どちらにも要る。
+ * **`kind === 'dialogue'` と書かない。** 書くと会議で必ず抜ける。
+ */
+export const isDialogueKind = (kind) => kind === 'dialogue' || kind === 'meeting'
+
+/** 画面に出す短い呼び名(「記事」「会話」「会議」)。文の中で使う */
+export const bodyWord = (kind) =>
+  (kind === 'reading' ? '記事' : kind === 'meeting' ? '会議' : '会話')
 
 export const kindLabel = (id) => MATERIAL_KINDS.find((k) => k.id === id)?.label ?? id
 

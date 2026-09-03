@@ -26,7 +26,7 @@ import {
 import { needsChunkJa } from '../lib/chunkJa.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
-  NEW_MATERIAL_KINDS, addChunkJa, assignMaterial,
+  NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, isDialogueKind,
   kindLabel, loadMyLearners, searchMaterials,
 } from '../lib/materials.js'
 import { genresFor, scenesFor } from '../data/genres.js'
@@ -163,7 +163,7 @@ export default function TrainerMaterials({ me }) {
       tagIds, level, keyword, industry,
       kind: kind || null,
       genre: kind === 'reading' ? (genre || null) : null,
-      scene: kind === 'dialogue' ? (scene || null) : null,
+      scene: isDialogueKind(kind) ? (scene || null) : null,
     })
     setLoading(false)
     if (e) { setError(e); return }
@@ -542,7 +542,7 @@ export default function TrainerMaterials({ me }) {
               </select>
             </label>
           )}
-          {kind === 'dialogue' && (
+          {isDialogueKind(kind) && (
             <label className="field">
               <span>シチュエーション</span>
               <select value={scene} onChange={(e) => setScene(e.target.value)}>

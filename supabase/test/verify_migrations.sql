@@ -327,6 +327,13 @@ from (
     select 1 from information_schema.columns
     where table_name = 'material_items' and column_name = 'answer_ja'), 76
   union all
+  select '(78) 教材の種類に「会議」がある(0037)', exists (
+    -- 中身は会話と同じで、**出てくる人数が3〜4人**という1点だけが違う。
+    -- 演習の種類は増やしていない(足したのは kind の値1つだけ)
+    select 1 from pg_constraint
+    where conname = 'materials_kind_check'
+      and pg_get_constraintdef(oid) like '%meeting%'), 78
+  union all
   select '(77) 見出しに訳がある(0036)', exists (
     -- 記事・会話の英語の見出しに、小さな訳を添えるための欄。
     -- **作るときに1回だけ控える**(開くたびに訳させると課金が続く)

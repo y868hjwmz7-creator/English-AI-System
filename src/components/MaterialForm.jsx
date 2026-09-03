@@ -28,14 +28,15 @@ import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
   generateChunkJa, generateSection,
-  generateSectionUnique, isPassageKind, kindLabel, loadUsedSentences, normEn,
+  bodyWord, generateSectionUnique, isDialogueKind, isPassageKind, kindLabel,
+  loadUsedSentences, normEn,
 } from '../lib/materials.js'
 import { chunkPlan } from '../lib/chunkJa.js'
 import {
   genreHint, genreLabel, genresFor, sceneHint, sceneLabel, scenesFor,
 } from '../data/genres.js'
 import {
-  CLIP_ACCENTS, DEFAULT_ACCENT, SPEAKER_COUNTS, pickVoices,
+  CLIP_ACCENTS, DEFAULT_ACCENT, MIN_MEETING_SPEAKERS, pickVoices, speakerCountsFor,
   voiceCountFor, voicePurposeFor, voicesOfAccent,
 } from '../data/clipVoices.js'
 import { collectReviewWords, normWord } from '../lib/vocab.js'
@@ -356,7 +357,7 @@ export default function MaterialForm({
   const autoTitle = () => {
     const parts = [todayLabel()]
     if (kind === 'reading') parts.push(genreLabel(genre))
-    else if (kind === 'dialogue') parts.push(sceneLabel(scene))
+    else if (isDialogueKind(kind)) parts.push(sceneLabel(scene))
     if (tagIds.length) parts.push(tagIds.map(weaknessTagLabel).join(' + '))
     parts.push(level)
     if (industry) parts.push(industryLabel(industry))
@@ -403,13 +404,13 @@ export default function MaterialForm({
       genre: kind === 'reading'
         ? [genreLabel(genre), genreHint(genre)].filter(Boolean).join(' — ')
         : '',
-      scene: kind === 'dialogue'
+      scene: isDialogueKind(kind)
         ? [sceneLabel(scene), sceneHint(scene)].filter(Boolean).join(' — ')
         : '',
       subject,
       // **会話に出す人数**(2026-09 利用者の要望「会議というジャンル」)。
       // 記事には要らないので、会話のときだけ渡す
-      speakers: kind === 'dialogue' ? voiceCount : undefined,
+      speakers: isDialogueKind(kind) ? voiceCount : undefined,
       avoid: (used ?? []).slice(-40),
     })
     // **どの段階で失敗したのかを、必ず名前で言う。**
@@ -765,7 +766,7 @@ export default function MaterialForm({
       level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
       visibility, industry, sections, tagIds, createdBy,
       headline, headlineJa,
-      genre: kind === 'reading' ? genre : '', scene: kind === 'dialogue' ? scene : '',
+      genre: kind === 'reading' ? genre : '', scene: isDialogueKind(kind) ? scene : '',
       // **おまかせは、ここで1回だけ決めて保存する。**
       // 開くたびに選び直すと、同じ教材なのに毎回ちがう声になり、
       // そのたびに音声を作り直す(= 課金される)
@@ -822,7 +823,18 @@ export default function MaterialForm({
 
       <label className="field">
         <span>トレーニングの種類</span>
-        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+        <select value={kind}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setKind(next)
+                  /* **会議に切り替えたら、人数を3人以上にそろえる**(2026-09)。
+                     2人のままだと、選択肢に無い値がプルダウンに残り、
+                     **空欄に見える。** 逆(会議 → 会話)は 3人のままでよい */
+                  if (next === 'meeting' && speakers < MIN_MEETING_SPEAKERS) {
+                    setSpeakers(MIN_MEETING_SPEAKERS)
+                    setPicked([])
+                  }
+                }}>
           {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
         </select>
       </label>
@@ -896,7 +908,7 @@ export default function MaterialForm({
         </label>
       )}
 
-      {kind === 'dialogue' && (
+      {isDialogueKind(kind) && (
         <label className="field">
           <span>
             シチュエーション
@@ -994,9 +1006,10 @@ export default function MaterialForm({
               2人なら1対1、3〜4人なら会議・打ち合わせになる。
               **会話のときだけ出す**(効かない操作を見せない)。
               上限が4人である理由は `clipVoices.js` の `SPEAKER_COUNTS` に書いた。
+              **会議では 2人を出さない**(それはただの1対1の会話である)。
               **人数を変えたら、指名した声はいったん消す。**
               残すと、減らしたときに「見えていない4人目」が保存される */}
-          {kind === 'dialogue' && (
+          {isDialogueKind(kind) && (
             <label className="field">
               <span>出てくる人数</span>
               <select value={speakers}
@@ -1004,7 +1017,7 @@ export default function MaterialForm({
                         setSpeakers(Number(e.target.value))
                         setPicked([])
                       }}>
-                {SPEAKER_COUNTS.map((s) => (
+                {speakerCountsFor(kind).map((s) => (
                   <option key={s.id} value={s.id}>{s.label}</option>
                 ))}
               </select>
@@ -1084,7 +1097,7 @@ export default function MaterialForm({
           <p className="card-hint">
             <strong>本文は1本まるごと作ります。</strong>
             短い英文を並べるのではなく、前を受けて話が進む
-            {kind === 'reading' ? '記事' : '会話'}になります
+            {bodyWord(kind)}になります
             (およそ {kind === 'reading' ? '250〜350語' : '14発言'})。
             シャドーイングやオーバーラッピングは、この本文に対して行います。
           </p>
@@ -1163,7 +1176,7 @@ export default function MaterialForm({
         <p className="field-hint">
           チェックを外した演習は作りません。
           {isPassageKind(kind)
-            ? `${kind === 'reading' ? '記事' : '会話'}の本文は必ず入ります。`
+            ? `${bodyWord(kind)}の本文は必ず入ります。`
             : '最後の1つは外せません(作るものが無くなるため)。'}
         </p>
 
@@ -1178,7 +1191,7 @@ export default function MaterialForm({
               <strong>単語帳から選んだ {mustUse.length} 語を、必ず入れます。</strong>
               {kind === 'word' || kind === 'phrase'
                 ? ' 先頭から順に、この語で作らせます。'
-                : kind === 'reading' || kind === 'dialogue'
+                : kind === 'reading' || isDialogueKind(kind)
                   ? ' 本文の中で使わせます。'
                   : ' 問題文の中で使わせます。'}
               <br />
@@ -1301,7 +1314,7 @@ export default function MaterialForm({
               // 押してよいのか分からず、二重に作ってしまう。
               ? `作り直す(いまの下書きは消えます)`
               : isPassageKind(kind)
-                ? `${kind === 'reading' ? '記事' : '会話'}を作る(`
+                ? `${bodyWord(kind)}を作る(`
                   + planNow()
                     .map((s2) => `${exerciseLabel(s2.exercise_type)}${s2.count}`).join(' + ')
                   + ')'
