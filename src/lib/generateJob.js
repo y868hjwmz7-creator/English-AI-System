@@ -31,6 +31,8 @@
  *   **知らせるのは1回だけ。** `seen` を立てて二度出さない。
  */
 
+import { useEffect, useState } from 'react'
+
 /**
  * いまの仕事。無ければ `null`。
  *
@@ -55,6 +57,56 @@ const emit = () => { for (const fn of [...subs]) fn(job) }
 export function watchJob(fn) {
   subs.add(fn)
   return () => subs.delete(fn)
+}
+
+/**
+ * いまの仕事を、画面から見る。**経過秒数も一緒に数える。**
+ *
+ * 走っているあいだは1秒ごとに数え直す。**止まっているあいだは数えない**
+ * (仕事が無いのに毎秒描き直すと、そのぶん無駄になる)。
+ *
+ * @returns {{job: object|null, secs: number}}
+ */
+export function useJob() {
+  const [current, setCurrent] = useState(currentJob)
+  const [secs, setSecs] = useState(0)
+
+  useEffect(() => watchJob(setCurrent), [])
+
+  const running = current?.state === 'running'
+  const startedAt = current?.startedAt ?? 0
+  useEffect(() => {
+    if (!running) { setSecs(0); return undefined }
+    const tick = () => setSecs(Math.max(0, Math.round((Date.now() - startedAt) / 1000)))
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [running, startedAt])
+
+  return { job: current, secs }
+}
+
+/**
+ * 進み具合の文言。**1か所に置く**(帯と、作る画面のボタンの両方が使う)。
+ * 3か所に書き分けると、必ずどれかが古くなる(「用意しています…」と同じ作法)。
+ */
+export const jobProgressLabel = (j, secs = 0, { showLabel = true } = {}) => {
+  if (!j) return ''
+  // **名前を二度書かない。** 帯はすでに「記事を作っています…」と出しているので、
+  // そこへ `記事(1/3)` を続けると「記事…記事」になる(2026-09 実測)
+  const name = showLabel && j.label && j.label !== j.title ? j.label : ''
+  return `${name}(${Math.min(j.done + 1, j.total)}/${j.total})${secs ? ` ${secs}秒` : ''}`
+}
+
+/**
+ * 進み具合を 0〜1 で返す。**まだ終わっていない段は、半分だけ進んだものとみなす。**
+ * `done` は「終わった段の数」なので、そのままだと最初の段のあいだ
+ * ずっと 0 のままになり、動いていないように見える。
+ */
+export function jobRatio(j) {
+  if (!j || !j.total) return 0
+  if (j.state === 'done') return 1
+  return Math.min((j.done + 0.5) / j.total, 0.98)
 }
 
 /** いまの仕事(無ければ null) */

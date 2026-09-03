@@ -26,6 +26,30 @@
 import { useEffect, useRef } from 'react'
 import { CloseIcon, MenuIcon } from './Icons.jsx'
 
+/**
+ * **青い小さな丸**(2026-09 利用者の指定)。
+ *
+ *   > 完成した際も音に加えて視覚的にもわかるサインをください。
+ *   > 例えばサイドバーとトップバーの教材の横に青い小さな丸が点灯する、など
+ *
+ * 音は聞こえないことがある(音を切っている・レッスン中・席を外している)。
+ * **目でも分かる印を、同じ場所に残しておく。**
+ *
+ * - `running` … 作っている最中。**ゆっくり息をする**
+ * - `done`    … できあがって、まだ受け取っていない。**点きっぱなし**
+ *
+ * **色だけに頼らない**(CLAUDE.md)。読み上げにも言葉で伝える。
+ */
+const DOT_TEXT = { running: '作っています', done: '下書きができました' }
+
+function NavDot({ kind, onIcon = false }) {
+  return (
+    <span className={`nav-dot nav-dot--${kind}${onIcon ? ' nav-dot--on-icon' : ''}`}>
+      <span className="visually-hidden">{DOT_TEXT[kind] ?? ''}</span>
+    </span>
+  )
+}
+
 export default function AppNav({
   items, value, onChange, open, onClose, wide, title, footer,
 }) {
@@ -89,12 +113,18 @@ export default function AppNav({
             const on = value === item.id
             return (
               <li key={item.id}>
-                <button type="button" title={item.label}
+                <button type="button" title={item.badgeTitle ?? item.label}
                         aria-current={on ? 'page' : undefined}
                         className={`app-nav-item${on ? ' is-active' : ''}`}
                         onClick={() => pick(item.id)}>
-                  <span className="app-nav-icon">{Icon ? <Icon /> : null}</span>
+                  <span className="app-nav-icon">
+                    {Icon ? <Icon /> : null}
+                    {/* **絵の隅にも出す。** 細くたたむと名前が消えるので、
+                        名前の横だけに置くと見えなくなる */}
+                    {item.badge && <NavDot kind={item.badge} onIcon />}
+                  </span>
                   <span className="app-nav-label">{item.label}</span>
+                  {item.badge && <NavDot kind={item.badge} />}
                 </button>
               </li>
             )
@@ -112,7 +142,9 @@ export default function AppNav({
  * 名前(いまどの画面か)も出す。スマホでは左のメニューが隠れているので、
  * ここだけが「いまどこか」を伝える場所になる。
  */
-export function AppTopbar({ onToggle, open, wide, pageLabel, right = null }) {
+export function AppTopbar({
+  onToggle, open, wide, pageLabel, badge = null, right = null,
+}) {
   return (
     <div className="app-topbar">
       <button type="button" className="nav-icon-btn nav-burger"
@@ -121,7 +153,13 @@ export function AppTopbar({ onToggle, open, wide, pageLabel, right = null }) {
               aria-label={open && wide ? 'メニューをたたむ' : 'メニューを開く'}>
         <MenuIcon />
       </button>
-      <span className="app-topbar-title">{pageLabel}</span>
+      <span className="app-topbar-title">
+        {pageLabel}
+        {/* いま見ている画面に印が付いているときだけ。
+            **ほかの画面の印を、この帯に出さない。**
+            「単語帳」の横に青い丸が出ると、何の印か分からない */}
+        {badge && <NavDot kind={badge} />}
+      </span>
       {right && <div className="app-topbar-right">{right}</div>}
     </div>
   )

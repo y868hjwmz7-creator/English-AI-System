@@ -15,7 +15,8 @@ import { loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } fro
 import { setViewerRole } from './lib/viewer.js'
 import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
-import { markJobSeen, watchJob } from './lib/generateJob.js'
+import { markJobSeen, useJob, watchJob } from './lib/generateJob.js'
+import JobBar from './components/JobBar.jsx'
 import { onClipTrouble } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
@@ -54,6 +55,9 @@ export default function App() {
    * **知らせるのは1回だけ**(`markJobSeen`)。何度も出しては邪魔になる。
    */
   const [jobNote, setJobNote] = useState(null)
+  /* 進み具合の帯と、メニューの青い丸のもと(2026-09 利用者の指定)。
+     **経過秒数もここで数える**(`useJob`)。走っていないあいだは数えない */
+  const { job, secs: jobSecs } = useJob()
   useEffect(() => watchJob((j) => {
     if (!j || j.seen) return
     if (j.state === 'done') {
@@ -211,6 +215,26 @@ export default function App() {
     // ゲストに何分やったかを入力させない。入力そのものが手間で、
     // しかも入れ忘れる。数えたものはトレーナーの「ゲスト」画面に出る
   ].filter(Boolean)
+
+  /* 教材の画面に付ける印(2026-09 利用者の指定)。
+     **できあがったことを、音だけで伝えない。**
+     音は切れるし、レッスン中や席を外しているときは聞こえない。
+
+     ・作っている最中 … `running`(ゆっくり息をする)
+     ・下書きができた … `done`(点きっぱなし)
+
+     **受け取るまで消えない。** `takeJobResult()` が仕事を片づけた時点で
+     消えるので、「見たのに何も無い」が起こらない。
+     `markJobSeen()`(お知らせを出した印)とは別物である。 */
+  const jobBadge = job?.state === 'running' ? 'running'
+    : (job?.state === 'done' ? 'done' : null)
+  const navItems = jobBadge
+    ? pages.map((p) => (p.id === 'materials'
+      ? { ...p,
+        badge: jobBadge,
+        badgeTitle: `${p.label} — ${job.title}${jobBadge === 'done' ? 'の下書きができました' : 'を作っています'}` }
+      : p))
+    : pages
   const pageLabel = pages.find((p) => p.id === view)?.label ?? 'English AI System'
 
   /* 左のメニューの下に置くもの。
@@ -292,7 +316,7 @@ export default function App() {
     <div className={`app-shell${wide ? ' is-wide' : ' is-narrow'}`
                     + (navOpen ? ' nav-open' : ' nav-closed')}>
       <AppNav
-        items={pages} value={view}
+        items={navItems} value={view}
         /* **いまいる画面をもう一度押したら、その画面の先頭に戻す**
            (2026-08 利用者の指定)。
              > 一人のゲストの情報内でサイドバーの「ゲスト」をクリック、
@@ -311,6 +335,23 @@ export default function App() {
             スマホでメニューが隠れていても「いまどこか」が分かる */}
         <AppTopbar
           onToggle={toggleNav} open={navOpen} wide={wide} pageLabel={pageLabel}
+          /* **いま見ている画面の印だけ**を出す。
+             「単語帳」の横に青い丸が出ても、何の印か分からない */
+          badge={view === 'materials' ? jobBadge : null}
+        />
+
+        {/* ── 進み具合の帯 ────────────────────────────────────
+            2026-09 利用者の指定。
+
+              > 作成中の進行度合いを示すバーを作成して、
+              > どのページにいても見えるように
+
+            **帯の下・お知らせの上に置く。** 教材の画面を離れても
+            作りつづけるので、移った先にも手がかりが要る。 */}
+        <JobBar
+          job={job} secs={jobSecs}
+          showOpen={view !== 'materials'}
+          onOpen={() => setView('materials')}
         />
 
         {/* ── 裏で作っている教材のお知らせ ────────────────────
