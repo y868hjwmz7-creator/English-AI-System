@@ -46,6 +46,7 @@ import {
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { STANDARD } from './voiceTier.js'
 import { clipSpeakerFor } from './voiceCast.js'
+import { turnGapMs } from './turnGap.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
 let session = 0
@@ -129,9 +130,20 @@ export async function readAloud(text, {
  * 会話は話す人ごとに声を変えるため、1本にまとめて読ませることができない。
  * 1つ終わったら次を始める。
  *
- * 【間をあけない】
+ * 【読み込みでは黙らせない】
  *   MP3 は1本ずつ取りに行くので、**鳴らしているあいだに次を用意する。**
  *   これが無いと、発言のたびに1秒ほど黙る。
+ *
+ * 【ただし、人が替わるときは間を置く】(2026-09 実機・利用者の指摘)
+ *
+ *   > 女性の発話が不自然なくらい早いタイミングで食い気味に入ってきます。
+ *
+ *   以前はここで**間を 0 ミリ秒**にしていた。読み込み待ちを嫌ったためだが、
+ *   v3 の音声は前後の無音がほとんど無いので、**息継ぎも無しに次が来る。**
+ *   どれだけの間を置くかは `turnGap.js` が内容から決める。**判断を2か所に置かない。**
+ *
+ *   **入れるのは声が替わるときだけ。** 同じ声が続くのは一人が話し続けて
+ *   いるところで、記事の段落と段落のあいだも同じ声なので、**これまでのまま**である。
  *
  * @param {Array<{text: string, voice?: object, clipVoice?: string}>} parts
  * @param {object} o { rate, clipTier, onIndex, onWord, onStart }
@@ -155,11 +167,34 @@ export function readAloudSequence(parts, {
   let told = false
   const started = () => { if (!told && alive()) { told = true; onStart?.() } }
 
+  /**
+   * 間を置く。**止められるようにする。**
+   * まとめて待つと、Stop を押しても最大 1.4 秒黙って動かない。
+   * 50 ミリ秒ずつに刻んで、そのつど生きているかを見る。
+   */
+  const pause = async (ms) => {
+    const until = Date.now() + ms
+    while (Date.now() < until) {
+      if (!alive()) return
+      await new Promise((r) => { setTimeout(r, Math.min(50, until - Date.now())) })
+    }
+  }
+
   const run = async () => {
+    let lastVoice = null
     for (let i = 0; i < list.length; i += 1) {
       if (!alive()) return
       const part = list[i]
       const clipVoice = part.clipVoice ?? clipSpeakerFor(part.voice)
+
+      // 話す人が替わるところにだけ、間を置く。
+      // **速さに合わせて縮める。** 120% で聞いている人には、間も 120% で来る
+      if (lastVoice !== null && clipVoice !== lastVoice) {
+        await pause(turnGapMs(list[i - 1].text, part.text) / (rate || 1))
+        if (!alive()) return
+      }
+      lastVoice = clipVoice
+
       onIndex?.(i)
 
       const relay = onWord ? (at) => onWord(at ? { ...at, index: i } : null) : null

@@ -14,7 +14,8 @@
     "test:db": "bash scripts/test-migration.sh",
     "lint": "eslint .",
     "test:chunk": "node scripts/test-chunker.mjs",
-    "test:audio": "node scripts/test-loudness.mjs"
+    "test:audio": "node scripts/test-loudness.mjs",
+    "test:gap": "node scripts/test-turngap.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
