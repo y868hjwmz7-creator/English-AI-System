@@ -89,25 +89,46 @@
  */
 
 /**
- * **そろえ先の下限。**
+ * **明らかに測り損ねたもの。** これより小さければ、人の声ではない
+ * (鳴り終わる前に取れた・ほとんど無音だった、など)。
  *
- * そろえ先は「測った中でいちばん小さい声」だが、
- * **1つでも極端に小さい測定が混じると、全部がそこまで下がる。**
- * (間の多い音声・一部しか鳴らなかった MP3 など)
- * そうなると全体が聞こえないほど小さくなるので、下限を置く。
+ * **そろえ先の計算から外す。** 以前は「下限 0.05」で押し上げていたが、
+ * **それがそろえるのを壊していた**(2026-09)。
+ * 本当にいちばん小さい声が 0.04 だと、そろえ先が 0.05 になり、
+ *
+ *     いちばん小さい声 … 0.05/0.04 は 1 を超えるので 1 倍のまま → 0.04
+ *     ほかの声         … 0.05 まで下がる                       → 0.05
+ *
+ * **いちばん小さい声だけが、いちばん小さいまま残る。**
+ * 人の声の平均は 0.03〜0.08 あたりなので、これは日常的に起きていた。
+ * **押し上げるのではなく、外す。**
  */
-const FLOOR_RMS = 0.05
+const BROKEN_RMS = 0.01
 
 /**
- * **下げすぎない。** ここまで下げても足りないなら、
- * それは測定のほうを疑うべきである(まともな声どうしで3倍を超える差は出ない)。
+ * **下げすぎの歯止め。** ここまで来たら測定のほうを疑う。
+ *
+ * **0.30 から 0.20 へ下げた**(2026-09)。3.3 倍ひらいた声が
+ * ここで止まってそろわなかったため。まともな声どうしなら、まず届かない。
  */
-const MIN_GAIN = 0.30
+const MIN_GAIN = 0.20
 
 /** これより小さい波は「黙っている」とみなす */
 const SILENCE = 0.02
 
-const KEY = 'eas.loud'
+/**
+ * **測り方の版。** 変えたら**必ず1つ進める。**
+ *
+ * 進めないと、**古いやり方で測った値と新しい値が混ざる。**
+ * 混ざったまま比べると、そろえ先が実際とずれる。
+ * 進めれば、次に鳴らしたときに測り直される(1声につき1回だけ)。
+ *
+ *   1 … 波形をそのまま二乗した平均(素の RMS)
+ *   2 … **耳の感じ方に合わせてから**測る(下記)
+ */
+const MEASURE_REV = 2
+
+const KEY = `eas.loud.${MEASURE_REV}`
 
 /** 測った結果(声ごと)。`{ "premium|cgSg…": { rms } }` */
 let table = null
@@ -128,34 +149,57 @@ function save() {
 export const loudKey = (tier, voice) => `${tier}|${voice}`
 
 /**
- * **これまでに測った中で、いちばん小さい声の大きさ。** ここへ全員をそろえる。
+ * 測った声の**平均**と、**いちばん小さい声**。
  *
- * **測るたびに動く。** 新しく、より小さい声を測ると、そのぶん
- * ほかの声は次に鳴らすときから下がる。**そういう作りである。**
- * 動かないようにするには全部の声を先に測るしかなく、
- * それは鳴らしてもいない音声を取りに行くことになる。
+ * **明らかに測り損ねたものは外す**(`BROKEN_RMS`)。
+ * 押し上げて帳尻を合わせると、**いちばん小さい声だけがそろわない**
+ * (`BROKEN_RMS` の説明を参照)。
  */
-function quietest() {
-  let min = Infinity
-  for (const v of Object.values(load())) {
-    if (v?.rms > 0 && v.rms < min) min = v.rms
+function stats() {
+  const list = Object.values(load())
+    .map((v) => v?.rms)
+    .filter((r) => r > BROKEN_RMS)
+  if (!list.length) return null
+  return {
+    avg: list.reduce((a, b) => a + b, 0) / list.length,
+    min: Math.min(...list),
   }
-  if (!Number.isFinite(min)) return null
-  return Math.max(min, FLOOR_RMS)
 }
 
 /**
  * その声にかける倍率。**必ず 1 以下。** 測っていなければ 1(そのまま)。
  *
- * 上げないので、**割れることも、息の音が大きくなることも起こらない。**
+ * ============================================================================
+ * 【そろえ先は「全部の声の平均」】(2026-09 利用者の指定)
+ *
+ *   > コンプレッションやリミッターをかけるのではなく、ボリューム調整だけで、
+ *   > 全ての声の音量の平均値をとり、そこに全てを合わせてみてください
+ *
+ *   まず**平均に合わせる倍率**を出す(`平均 ÷ その声`)。
+ *   平均より小さい声では、これは **1 を超える**。
+ *
+ *   ところが `<audio>` の `volume` は**下げることしかできない。**
+ *   そこで**全体を「いちばん大きい倍率」で割って**、どれも 1 以下に収める。
+ *
+ *   **声どうしの比は、これでまったく変わらない。** 変わるのは全体の音量だけ
+ *   (結果として「いちばん小さい声にそろえた」のと同じ値になる)。
+ *   上げられるようになった日には、割るのをやめれば平均そのものに合う。
+ * ============================================================================
  */
 export function gainFor(tier, voice) {
   const got = load()[loudKey(tier, voice)]
   if (!got?.rms) return 1
-  const target = quietest()
-  if (!target) return 1
-  const down = Math.min(target / got.rms, 1)   // **1 を超えさせない**
-  return Math.max(down, MIN_GAIN)
+  const s = stats()
+  if (!s) return 1
+
+  // ① 平均に合わせる(平均より小さい声では 1 を超える)
+  const want = s.avg / got.rms
+  // ② いちばん大きい倍率で全体を割り、1 以下に収める。**比は変わらない**
+  const loudestNeed = s.avg / s.min
+  const scaled = loudestNeed > 1 ? want / loudestNeed : want
+
+  // 上げられないので必ず 1 以下に。下げすぎの歯止めも置く
+  return Math.max(Math.min(scaled, 1), MIN_GAIN)
 }
 
 /** もう測ってあるか */
@@ -163,6 +207,44 @@ export const isMeasured = (tier, voice) => !!load()[loudKey(tier, voice)]?.rms
 
 /** いま測っているもの。**同じ声を二度測らない** */
 const measuring = new Set()
+
+/**
+ * **耳の感じ方に合わせた波**を返す(測るためだけに使う)。
+ *
+ * 放送の決まり(ITU-R BS.1770 の K特性)と同じ形。
+ * **外に出してあるのは、実機で効きを確かめるため**(`npm run test:audio` は
+ * 素の node なので Web Audio を持たない。ブラウザでしか確かめられない)。
+ *
+ * 通せなかった端末では `null` を返し、呼んだ側は測るのをやめる
+ * (**素の波で測ると、低音の多い声を下げすぎる**ので、
+ * 中途半端に測るくらいなら測らないほうがよい)。
+ */
+export async function weighted(OAC, buf) {
+  try {
+    const off = new OAC(1, buf.length, buf.sampleRate)
+    const src = off.createBufferSource()
+    src.buffer = buf
+
+    // ① 高い側を +4dB(耳の感度に合わせる)
+    const shelf = off.createBiquadFilter()
+    shelf.type = 'highshelf'
+    shelf.frequency.value = 1500
+    shelf.gain.value = 4
+
+    // ② とても低いところを落とす(声ではない揺れ)
+    const hp = off.createBiquadFilter()
+    hp.type = 'highpass'
+    hp.frequency.value = 38
+    hp.Q.value = 0.5
+
+    src.connect(shelf).connect(hp).connect(off.destination)
+    src.start()
+    const out = await off.startRendering()
+    return out.getChannelData(0)
+  } catch {
+    return null
+  }
+}
 
 /**
  * 1本の MP3 から、その声の大きさを測って覚える。
@@ -188,7 +270,29 @@ export async function measureClip(url, tier, voice) {
     const off = new OAC(1, 1, 44100)
     const buf = await off.decodeAudioData(bytes)
 
-    const data = buf.getChannelData(0)
+    /*
+     * **耳の感じ方に合わせてから測る**(2026-09 実機)。
+     *
+     *   > 音の通り道が整った今、あらためて…全ての声の音量の平均値をとり、
+     *   > そこに全てを合わせてみてください
+     *
+     * 平均に合わせても差が残るなら、**測り方そのものを疑う。**
+     * これまでは波形をそのまま二乗した平均(素の RMS)だったが、
+     * **耳は低い音に鈍く、中〜高音に敏感である。**
+     * だから低音の多い声(男性に多い)は、
+     * **数字上は大きいのに、そう聞こえない。** 下げすぎていた。
+     *
+     * 放送で使われている決まり(ITU-R BS.1770 の K特性)と同じ形に整える。
+     *   ・**高い側を +4dB 持ち上げる**(1.5kHz からの棚)… 耳の感度に合わせる
+     *   ・**とても低いところを落とす**(38Hz からの高域通過)… 声ではない揺れ
+     *
+     * **ここは測るためだけの処理である。** 鳴らす音には一切かからない
+     * (通り道を変えると雑音が出た。上の説明を参照)。
+     */
+    const shaped = await weighted(OAC, buf)
+    if (!shaped) return false
+
+    const data = shaped
     let sum = 0
     let heard = 0
     // 全部の波を見なくてよい。**間引いて測る**(長い記事でも一瞬で終わる)

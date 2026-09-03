@@ -11,7 +11,11 @@
  *
  * 【いまのやり方】(2026-09 利用者の指定)
  *
- *   > 1番小さな声に合わせて、それ以上大きくしない
+ *   > 全ての声の音量の平均値をとり、そこに全てを合わせてみてください
+ *
+ *   平均に合わせる倍率を出し、**全体を割って 1 以下に収める。**
+ *   `volume` は下げることしかできないためで、
+ *   **声どうしの比は変わらない。**
  *
  *   **倍率が必ず 1 以下であること**が、この版のいちばん大事な性質である。
  *   1 を超えた瞬間に、息の音も破裂音も一緒に大きくなる。
@@ -28,6 +32,9 @@ globalThis.window = {
   },
 }
 
+/** 控えの鍵。**測り方の版が入っている**(`MEASURE_REV`) */
+const LOUD_KEY = 'eas.loud.2'
+
 /**
  * **毎回まっさらな控えで読み直す。**
  * `loudness.js` は測った結果をモジュールの中に控える(ブラウザではそれでよい)。
@@ -41,7 +48,7 @@ async function withVoices(voices) {
   const mod = await import(`../src/lib/loudness.js?v=${seq}`)
   const table = {}
   for (const [voice, rms] of voices) table[mod.loudKey('premium', voice)] = { rms }
-  store.set('eas.loud', JSON.stringify(table))
+  store.set(LOUD_KEY, JSON.stringify(table))
   return mod
 }
 
@@ -91,22 +98,31 @@ const solo = m2.gainFor('premium', 'solo')
 console.log(`   solo   倍率 ${solo.toFixed(3)}`)
 check('比べる相手がいないので、触らない(1 倍)', solo === 1)
 
-// ── ③ 極端に小さい測定が混じったとき ───────────────────────
+// ── ③ 明らかに測り損ねたものが混じったとき ─────────────────
 //
-// 間の多い音声・一部しか鳴らなかった MP3 で起こりうる。
-// **そこへ全員を合わせると、何も聞こえなくなる**ので下限を置いてある
-console.log('\n▶ 極端に小さい測定が混じったとき(下限が効くか)')
-const m3 = await withVoices([['broken', 0.005], ['normal', 0.10]])
-const normal = m3.gainFor('premium', 'normal')
-console.log(`   normal 倍率 ${normal.toFixed(3)} → 大きさ ${(0.10 * normal).toFixed(4)}`)
-check('下限(0.05)より下へは合わせない', 0.10 * normal >= 0.05 - 1e-9)
+// **ここは実際にそろえるのを壊していた**(2026-09)。
+// 以前は「そろえ先の下限 0.05」で押し上げていたので、
+// 本当にいちばん小さい声が 0.04 だと、
+//   小さい声 … 1 倍のまま 0.04 / ほかの声 … 0.05 まで下がる
+// となり、**いちばん小さい声だけがそろわなかった。**
+// いまは押し上げずに、**測り損ねたものを外す。**
+console.log('\n▶ 測り損ねたものが混じったとき')
+const m3 = await withVoices([['broken', 0.005], ['a', 0.04], ['b', 0.10]])
+const g3 = ['broken', 'a', 'b'].map((v) => ({ v, g: m3.gainFor('premium', v) }))
+for (const r of g3) console.log(`   ${r.v.padEnd(6)} 倍率 ${r.g.toFixed(3)}`)
+check('まともな2声はそろう(0.04 と 0.10)',
+  Math.abs(0.04 * g3[1].g - 0.10 * g3[2].g) < 1e-6,
+  `${(0.04 * g3[1].g).toFixed(4)} と ${(0.10 * g3[2].g).toFixed(4)}`)
+check('いちばん小さい声(0.04)は、まったく触らない', g3[1].g === 1)
+check('測り損ねたものに引きずられない(0.005 に合わせない)',
+  0.10 * g3[2].g > 0.01)
 
 // ── ③' 下げすぎない ───────────────────────────────────────
 console.log('\n▶ 差が開きすぎているとき(下げすぎないか)')
 const m3b = await withVoices([['tiny', 0.05], ['huge', 0.50]])
 const huge = m3b.gainFor('premium', 'huge')
 console.log(`   huge   倍率 ${huge.toFixed(3)}`)
-check('0.30 より下へは下げない', huge >= 0.30 - 1e-9)
+check('0.20 より下へは下げない', huge >= 0.20 - 1e-9)
 
 // ── ④ 測っていない声 ──────────────────────────────────────
 console.log('\n▶ まだ測っていない声')
