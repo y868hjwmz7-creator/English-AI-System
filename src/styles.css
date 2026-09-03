@@ -4453,13 +4453,24 @@ html, body { overscroll-behavior-x: none; }
 
    **置き場所は語の上**(2026-09 利用者の指定「上に持ってこう」)。
    字間を広げて小さくすると、見出しの前置き(眉)として読める */
+/* **細い字と中黒だけでは地味すぎた**(2026-09 利用者の指摘
+   「なんか地味でダサいです」)。**2つの小さな札**にして輪郭を与える。
+   ただし語(26px の太字)より目立たせない — 大きさは 11px のままで、
+   色は変数から取る(プレインを選んだときに色だけが残らないように)。
+
+   - 種類(単語 / 言い回し)… うすい地色 + 同じ色の文字。
+     「選んでいる印」と同じ組み合わせ(`--accent-soft` + `--accent`)
+   - 品詞(名詞 …)… 細い枠線だけ。**塗りを2つ並べない** */
 .wordcard-tags {
-  display: flex; justify-content: center; align-items: baseline; gap: 8px;
-  margin: 0 0 14px; font-size: 11px; letter-spacing: .14em;
-  color: var(--text-muted);
+  display: flex; justify-content: center; align-items: center; gap: 6px;
+  margin: 0 0 16px;
 }
-.wc-tag + .wc-tag::before { content: '·'; margin-right: 8px; }
-.wc-tag--pos { font-style: italic; }
+.wordcard-tags .wc-tag {
+  padding: 3px 11px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: .09em; line-height: 1.7;
+}
+.wc-tag--kind { background: var(--accent-soft); color: var(--accent); }
+.wc-tag--pos { border: 1px solid var(--border); color: var(--text-muted); }
 .wordcard-ask { margin: 14px 0 10px; color: var(--text-muted); font-size: 12.5px; }
 .wordcard-reveal { min-width: 160px; }
 /* 答え。**縦に積む。** 語の意味・文の意味・くわしく を横に並べると、

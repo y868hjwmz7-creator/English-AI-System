@@ -817,7 +817,9 @@ export default function Wordbook({
                 **あやふやなことを言わない**(CLAUDE.md)ので、
                 見分けられるようになるまでは「言い回し」とだけ書く。 */}
             <p className="wordcard-tags">
-              <span className="wc-tag">{card.kind === 'phrase' ? '言い回し' : '単語'}</span>
+              <span className="wc-tag wc-tag--kind">
+                {card.kind === 'phrase' ? '言い回し' : '単語'}
+              </span>
               {card.pos && <span className="wc-tag wc-tag--pos">{card.pos}</span>}
             </p>
 
