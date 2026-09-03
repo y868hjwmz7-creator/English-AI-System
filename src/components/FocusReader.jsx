@@ -108,6 +108,17 @@ export default function FocusReader({
    * **覚えている場所**から始まる。
    */
   startAt = null,
+  /**
+   * **紙の幅をそのまま引き継ぐ**(2026-09 利用者の指定
+   * 「PCで集中モードに入った時は、それまでの画面幅を引き継いでください」)。
+   *
+   * `w100`〜`w150` / `wfit`(`LessonView` の `WIDTHS`)。
+   * 紙で 130% にして読んでいた人が、集中モードに入った瞬間に
+   * **別の幅に変わっては落ち着かない。** 同じ1本の教材を、
+   * 同じ幅で読み続けられるようにする。
+   * 狭い画面では紙がもともと画面いっぱいなので、見た目は変わらない。
+   */
+  width = 'w100',
 }) {
   const items = useMemo(
     () => (section?.items ?? []).filter((it) => String(it?.prompt_en ?? '').trim()),
@@ -225,7 +236,8 @@ export default function FocusReader({
   const last = index >= total - 1
 
   return (
-    <div className="focus" role="dialog" aria-modal="true" aria-label="集中モード">
+    <div className={`focus focus--${width}`}
+         role="dialog" aria-modal="true" aria-label="集中モード">
       {/* ── 上の帯。**細く1行。** 送るものを増やさない ────────── */}
       <div className="focus-top">
         <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>

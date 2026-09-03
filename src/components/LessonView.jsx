@@ -833,6 +833,9 @@ export default function LessonView({
             /* **紙のまん中に出ていた発言から始める**(2026-09 利用者の指定)。
                `null` のときだけ、覚えている場所から始まる */
             startAt={focusAt}
+            /* **紙の幅をそのまま引き継ぐ**(2026-09 利用者の指定)。
+               同じ教材を、同じ幅で読み続けられるようにする */
+            width={width}
             wordStatuses={wordStatuses} onMarkWord={onMarkWord}
             materialId={material.id} learnerId={learnerId}
             onClose={() => setRun(null)}
