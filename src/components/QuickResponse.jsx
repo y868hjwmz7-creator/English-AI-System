@@ -34,6 +34,7 @@ import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
 import { CloseIcon } from './Icons.jsx'
+import FocusFrame from './FocusFrame.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import { progressKey, useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
@@ -42,6 +43,19 @@ import { answerFeedback } from '../lib/haptics.js'
 export default function QuickResponse({
   material, onClose, wordStatuses = null, onMarkWord = null, paper = false,
   learnerId = null,
+  /**
+   * **集中モード**(2026-09 実機・利用者の指摘
+   * 「Quick Response で集中モードを押すと違うトレーニングになってしまいます」)。
+   *
+   * 押すと**本文を読んで語を調べる画面**(`FocusReader`)が開いていた。
+   * 6Steps で一度直したのと**同じ取り違え**である —
+   * 集中モードは「いま取り組んでいることを、1つずつ画面に固定する」もので、
+   * 別のトレーニングへ移るものではない。
+   * ここは**もともと1問ずつ**なので、骨組み(`FocusFrame`)に載せるだけでよい。
+   *
+   * 開いているかどうかは**レッスン表示の側が持つ**(ボタンがあちらの行にある)。
+   */
+  focus = false, focusWidth = 'w100', onFocusClose = null,
 }) {
   /* **取り組み方は2通り**(2026-09 利用者の指定)。
        > 文章のモードと、出てきたフレーズ、単語のモードを
@@ -174,12 +188,17 @@ export default function QuickResponse({
 
   const ok = doneRef.current.filter((x) => x.ok).length
 
-  return (
-    <section className={`qr${paper ? ' qr--paper' : ''}`}>
+  /* 集中モードでは、**紙の上と同じ見た目**にする(`.focus-paper` の中なので、
+     囲みも地色も要らない)。自分の ✕ も出さない —
+     出る道は上の帯の「閉じる」と、右下の「集中モードを終える」である
+     (**同じことをするものを2つ見せない**) */
+  const onPaper = paper || focus
+  const body = (
+    <section className={`qr${onPaper ? ' qr--paper' : ''}`}>
       <div className="qr-head">
         {/* 紙(大きく表示)では、すぐ上のボタンが「Quick Response」なので
             ここには出さない。**同じ言葉を20px 離して2度書かない** */}
-        {!paper && <strong className="qr-title">Quick Response</strong>}
+        {!onPaper && <strong className="qr-title">Quick Response</strong>}
         {/* **取り組み方**(2026-09 利用者の指定)。
             両方あるときだけ出す。片方しか無い教材で選ばせても意味がない。
             **プルダウンにする**(6Steps と同じ考え方。札を並べると
@@ -199,7 +218,7 @@ export default function QuickResponse({
         <span className="qr-count">
           {finished ? `${pairs.length} / ${pairs.length}` : `${at + 1} / ${pairs.length}`}
         </span>
-        {onClose && (
+        {onClose && !focus && (
           <button type="button" className="nav-icon-btn" onClick={onClose}
                   aria-label="Quick Response を閉じる"><CloseIcon /></button>
         )}
@@ -319,5 +338,24 @@ export default function QuickResponse({
         </div>
       )}
     </section>
+  )
+
+  /* **骨組みは `FocusFrame` 1つ**(`FocusReader` / `StepFocus` と共通)。
+     下の帯は**渡さない** — Quick Response は「まだ / 言えた」で進むので、
+     ◀ 前 / 次 ▶ を置くと進め方が2つになる */
+  if (!focus) return body
+  return (
+    <FocusFrame
+      className="qrfocus"
+      /* **紙の幅をそのまま引き継ぐ**(ほかの集中モードと同じ) */
+      width={focusWidth}
+      learnerId={learnerId}
+      /* 線は**取り組み方 × 何問目**ごとに持つ */
+      page={`${mode}:${at}`}
+      scrollKey={`${mode}:${at}`}
+      onClose={onFocusClose}
+    >
+      {body}
+    </FocusFrame>
   )
 }

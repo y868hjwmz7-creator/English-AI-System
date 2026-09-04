@@ -395,7 +395,7 @@ export default function PassagePractice({
   }
 
   const body = (
-    <div className={`passage${focus ? ' passage--focus focus-paper' : ''}`}>
+    <div className={`passage${focus ? ' passage--focus' : ''}`}>
       {!focus && headline && <h4 className="passage-headline" lang="en">{headline}</h4>}
 
       {/* **集中モード**(2026-09 利用者の指定。名前も利用者が選んだ)。

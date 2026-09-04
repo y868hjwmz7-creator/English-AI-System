@@ -421,11 +421,27 @@ export default function LessonView({
    */
   const [sixFocus, setSixFocus] = useState(false)
   /**
+   * Quick Response の集中モードを開いているか(2026-09 実機・利用者の指摘)。
+   *
+   *   > Quick Response で集中モードを押すと違うトレーニングになってしまいます。
+   *
+   * 6Steps と**まったく同じ取り違え**だった。集中モードは
+   * 「**いま取り組んでいることを1つずつ画面に固定する**」ものであって、
+   * 別のトレーニングへ移るものではない。開いているかどうかは
+   * ボタンのある**この画面**が持ち、`QuickResponse` へ渡す。
+   */
+  const [qrFocus, setQrFocus] = useState(false)
+  /**
    * 「取り組み方」を開いている演習の id(2026-09 利用者の指定)。
    * **覚えない。** 「初めは閉じてて欲しい」という指定なので、
    * 開くたびに閉じたところから始める。
    */
   const [howOpen, setHowOpen] = useState(null)
+
+  /* 練習をやめたら、集中モードも閉じる。**開きっぱなしにしない**
+     (次に Quick Response を開いたとき、いきなり集中モードに入って驚く) */
+  useEffect(() => { if (run !== 'six') setSixFocus(false) }, [run])
+  useEffect(() => { if (run !== 'qr') setQrFocus(false) }, [run])
 
   const openFocus = () => {
     stopAll()
@@ -448,11 +464,6 @@ export default function LessonView({
     const id = window.requestAnimationFrame(put)
     return () => window.cancelAnimationFrame(id)
   }, [run])
-
-  /* 6Steps を閉じたら、その集中モードも閉じる。
-     開いたままにしておくと、次に 6Steps を押した瞬間に
-     **いきなり集中モードで始まる** */
-  useEffect(() => { if (run !== 'six') setSixFocus(false) }, [run])
 
   /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
   const playWhole = () => {
@@ -744,14 +755,21 @@ export default function LessonView({
                 そのときは**いまの取り組み方**の集中モード
                 (1文ずつ / 1発言ずつ)に入る。中に同じボタンを置かないので、
                 **同じことをするボタンは、どの画面でも1つだけ**である */}
-            {passageSection && (
+            {(passageSection || qr) && (
               <button type="button"
                       className={`btn btn--small${
-                        run === 'focus' || (run === 'six' && sixFocus) ? ' btn--primary' : ''}`}
-                      aria-pressed={run === 'focus' || (run === 'six' && sixFocus)}
+                        run === 'focus' || (run === 'six' && sixFocus)
+                        || (qr && qrFocus) ? ' btn--primary' : ''}`}
+                      aria-pressed={run === 'focus' || (run === 'six' && sixFocus)
+                        || (qr && qrFocus)}
                       onClick={() => {
                         // 6Steps の最中は、**その取り組み方**を1つずつ出す
                         if (run === 'six') { setSixFocus((v) => !v); return }
+                        /* Quick Response の最中は、**その1問**を画面に固定する
+                           (2026-09 実機「違うトレーニングになってしまいます」)。
+                           ここで `openFocus()` を呼ぶと、本文を読んで語を調べる
+                           画面へ飛ばされる — それが報告された不具合である */
+                        if (qr) { setQrFocus((v) => !v); return }
                         if (run === 'focus') { stopAll(); setRun(null); return }
                         openFocus()
                       }}>
@@ -866,6 +884,11 @@ export default function LessonView({
           />
         ) : qr ? (
           <QuickResponse material={material} paper learnerId={learnerId}
+                         /* **集中モードは、この画面のボタンが持つ**
+                            (中にも同じボタンを置くと2つ並ぶ) */
+                         focus={qrFocus} onFocusClose={() => setQrFocus(false)}
+                         /* 紙の幅をそのまま引き継ぐ(ほかの集中モードと同じ) */
+                         focusWidth={width}
                          onClose={() => setRun(null)} />
         ) : null}
 

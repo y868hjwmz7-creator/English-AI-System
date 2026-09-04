@@ -62,12 +62,10 @@
  *   端のスワイプは「戻る」とも誤爆する。**ボタンだけにする。**
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
-import { CloseIcon } from './Icons.jsx'
-import { useFocusBoard } from './FocusBoard.jsx'
+import FocusFrame from './FocusFrame.jsx'
 import { castClipSpeakers, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { useProgress } from '../lib/progress.js'
@@ -160,10 +158,6 @@ export default function FocusReader({
   const [loop, setLoop] = useState(false)
 
   const bodyRef = useRef(null)
-  /* **書き込みとメモ**(2026-09 利用者の指定
-     「集中モードでも上部のバーに『書き込む』や『メモ』を配置してください」)。
-     `StepFocus` と同じものを分け合う(**2か所に書き写さない**) */
-  const board = useFocusBoard({ learnerId, page: index, bodyRef })
 
   const cast = useMemo(
     () => castClipSpeakers(items.map((it) => it.speaker), voiceIds),
@@ -204,15 +198,6 @@ export default function FocusReader({
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  /* 開いているあいだは、**うしろの画面を動かさない。**
-     かぶせて開くメニュー(`AppNav`)と同じ作法。
-     これが無いと、この画面の外側が指で送れてしまう */
-  useEffect(() => {
-    const before = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = before }
-  }, [])
-
   /**
    * 教材ぜんぶで「知らなかった」と付けた語(まとめの1枚)。
    *
@@ -241,34 +226,26 @@ export default function FocusReader({
   const clipVoice = voiceFor(cast, item.speaker, soloVoice)
   const last = index >= total - 1
 
-  /* ★ **body の直下に出す**(2026-09 利用者の指定)。
-
-       > 濃さについては、普通の画面と同じように、
-       > 左右の空白部分は黒にしてください。
-
-     この画面はレッスン表示の**紙の中**から呼ばれる。紙は `--surface-*` を
-     差し替えて**明るい配色の島**にしてあるので(`.lesson-sheet`)、
-     そのまま描くと画面ぜんぶを覆うこの画面まで紙の白になり、
-     暗い配色を選んでいても左右の余白が真っ白だった。
-     body の直下に出せば**アプリの配色に戻る**(吹き出しと同じ理由)。
-     **集中モードはどこから入っても同じ見た目**になる。 */
-  return createPortal(
-    <div className={`focus focus--${width}`}
-         role="dialog" aria-modal="true" aria-label="集中モード">
-      {/* ── 上の帯。**細く1行。** 送るものを増やさない ────────── */}
-      <div className="focus-top">
-        {board.pen ? board.penBar : (
-          <>
-        <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>
-          <CloseIcon />閉じる
-        </button>
+  /* **骨組みは `FocusFrame` 1つ**(`StepFocus` / Quick Response と共通)。
+     中身と、上下の帯の中だけをここが渡す */
+  return (
+    <FocusFrame
+      /* **紙の幅をそのまま引き継ぐ**(2026-09 利用者の指定) */
+      width={width}
+      /* **メモを出すかどうかは、相手がいるかで決まる** */
+      learnerId={learnerId}
+      /* 線は**段落ごと**に持つ(別の段落の線が重なると訳が分からない) */
+      page={index}
+      /* 送り戻しに使うので、送る箱はこちらでも持つ(`go`) */
+      bodyRef={bodyRef}
+      onClose={onClose}
+      top={(
         <span className="focus-count">
           {wrap ? '調べた語' : `${index + 1} / ${total} ${unit}`}
         </span>
-        {/* 見終わった段落の印。**どこまでやったか一目で分かる** */}
-        {/* **書き込む / メモ**(2026-09 利用者の指定)。
-            語を調べている最中こそ、線を引きたくなる場所である */}
-        {board.tools}
+      )}
+      topEnd={(
+        /* 見終わった段落の印。**どこまでやったか一目で分かる** */
         <span className="focus-dots" aria-hidden="true">
           {items.map((it, i) => (
             <span key={it.id ?? i}
@@ -276,139 +253,100 @@ export default function FocusReader({
                     + (seen.includes(i) ? ' is-done' : '')} />
           ))}
         </span>
-          </>
-        )}
-      </div>
+      )}
+      bar={wrap ? (
+        <button type="button" className="btn btn--primary focus-wide"
+                onClick={() => setWrap(false)}>
+          本文に戻る
+        </button>
+      ) : (
+        <>
+          <button type="button" className="btn focus-move"
+                  onClick={() => go(index - 1)} disabled={index === 0}>
+            ◀ 前
+          </button>
 
-      {/* ── 本文とメモを横に並べる。**送れるのは本文の側だけ** ────── */}
-      <div className="focus-main">
-      {/* ── 本文。**ここだけが送れる**(`overscroll-behavior: contain`)──
-          中身は**白い紙**(`.focus-paper`)に載せる(2026-09 利用者の指定
-          「真ん中に紙があり、コンテンツは基本白ベース、
-            幅により余る左右のスペースが黒」)。
-          紙があると、**どこからどこまでが読むところか**が目で分かる。
-          幅は `.focus-body > *` が紙と同じ数字で決めている */}
-      <div className="focus-body" ref={bodyRef}>
-        <div className="focus-paper">
-        {wrap ? (
-          <div className="focus-wrap">
-            <p className="focus-wrap-lead">
-              この教材で <strong>{allPicked.length} 語</strong> を単語帳に入れました。
-            </p>
-            {allPicked.length > 0 ? (
-              <ul className="focus-wrap-list" lang="en">
-                {allPicked.map((w) => <li key={w}>{w}</li>)}
-              </ul>
-            ) : (
-              <p className="focus-wrap-none">
-                まだ1語も入れていません。語を叩くと意味が出て、そこから入れられます。
-              </p>
+          <div className="focus-mid">
+            {/* **音も訳も両方出す**(2026-09 利用者の指定) */}
+            <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
+                         className="btn--small" repeat={loop} />
+            {/* **くり返し**(2026-09 利用者の指定
+                「これは集中モードで、全てのデバイスで同じにしてください」)。
+                まねて言うには、同じ発言を何度も聴く */}
+            <RepeatToggle on={loop} onChange={setLoop} />
+            {/* 訳が無い段落では出さない(効かない操作を見せない) */}
+            {item.prompt_ja && (
+              <button type="button" className="btn btn--small btn--ghost"
+                      onClick={() => setShowJa((v) => !v)}>
+                {showJa ? '英語に戻す' : '訳を見る'}
+              </button>
             )}
           </div>
-        ) : (
-          <>
-            {/* ── 何番目か(2026-09 利用者の指定)──────────────────
-                > 集中モード内も①や②のような番号を入れてください。
 
-                **紙と同じ丸の番号にそろえる**(`.lesson-items > li::before`)。
-                レッスンは紙を見ながら話すので、「2番のところ」と言えば
-                どちらを見ていても同じ場所を指せる。
-                上の帯の「3 / 14 発言」は**どこまで来たか**の目安であって、
-                本文の隣にある番号とは役目が違う。
-
-                **話す人がいなくても出す**(記事の段落にも紙は番号を振っている)。
-                英語と訳のどちらでも出すので、**切り替えても行は動かない** */}
-            <div className="focus-who">
-              <span className="num-badge" aria-hidden="true">{index + 1}</span>
-              {isDialogue && item.speaker && (
-                <span className="focus-speaker" lang="en">{item.speaker}</span>
-              )}
-            </div>
-            {/* **入れ替える。並べない。**
-                訳のときは語を押せない(英語がそこに無いので、引くものが無い) */}
-            {showJa ? (
-              <p className="focus-ja">{item.prompt_ja}</p>
-            ) : (
-              <p className="focus-en">
-                {/* **ここだけは、狭い画面でも語を押せる**(2026-09 利用者の指定)。
-                    1段落を画面に固定しているので送るものが無く、
-                    タップと画面送りが喧嘩しない。**調べるのはここでする** */}
-                <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
-                             statuses={wordStatuses} onMark={markWord}
-                             tappable="always" />
-              </p>
-            )}
-          </>
-        )}
-        </div>
-        {/* **板は送る箱の中に敷く。** 外に置くと、送ったときに
-            線だけが取り残される(会議アプリのペンと同じ失敗) */}
-        {board.inkLayer}
-      </div>
-        {board.notesPane}
-      </div>
-
-      {/* ── すぐ元に戻る(2026-09 利用者の指定)────────────────
-          > そしてすぐに元に戻れるボタンも作ってください。
-
-          **入った場所と、出る場所を同じにする。** 紙の右下の「集中モード」を
-          押して入り、同じ右下を押して戻る。左上の「✕ 閉じる」も残してあるが、
-          スマホでは**親指がいちばん届かないのが左上**である。
-
-          **帯の上に浮かせる**(`bottom: 100%`)。帯そのものに置くと
-          「次 ▶」と重なるか、320px で1行に収まらなくなる。 */}
-      <div className="focus-barwrap">
-        <button type="button" className="btn btn--small focus-exit" onClick={onClose}>
-          <CloseIcon />集中モードを終える
-        </button>
-
-      {/* ── 下の帯。**親指が届くのは下半分**。端からは離す ────── */}
-      <div className="focus-bar">
-        {wrap ? (
-          <button type="button" className="btn btn--primary focus-wide"
-                  onClick={() => setWrap(false)}>
-            本文に戻る
-          </button>
-        ) : (
-          <>
-            <button type="button" className="btn focus-move"
-                    onClick={() => go(index - 1)} disabled={index === 0}>
-              ◀ 前
+          {last ? (
+            <button type="button" className="btn btn--primary focus-move"
+                    onClick={() => { go(index); setWrap(true) }}>
+              まとめ
             </button>
+          ) : (
+            <button type="button" className="btn focus-move"
+                    onClick={() => go(index + 1)}>
+              次 ▶
+            </button>
+          )}
+        </>
+      )}
+    >
+      {wrap ? (
+        <div className="focus-wrap">
+          <p className="focus-wrap-lead">
+            この教材で <strong>{allPicked.length} 語</strong> を単語帳に入れました。
+          </p>
+          {allPicked.length > 0 ? (
+            <ul className="focus-wrap-list" lang="en">
+              {allPicked.map((w) => <li key={w}>{w}</li>)}
+            </ul>
+          ) : (
+            <p className="focus-wrap-none">
+              まだ1語も入れていません。語を叩くと意味が出て、そこから入れられます。
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* ── 何番目か(2026-09 利用者の指定)──────────────────
+              > 集中モード内も①や②のような番号を入れてください。
 
-            <div className="focus-mid">
-              {/* **音も訳も両方出す**(2026-09 利用者の指定) */}
-              <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
-                           className="btn--small" repeat={loop} />
-              {/* **くり返し**(2026-09 利用者の指定
-                  「これは集中モードで、全てのデバイスで同じにしてください」)。
-                  まねて言うには、同じ発言を何度も聴く */}
-              <RepeatToggle on={loop} onChange={setLoop} />
-              {/* 訳が無い段落では出さない(効かない操作を見せない) */}
-              {item.prompt_ja && (
-                <button type="button" className="btn btn--small btn--ghost"
-                        onClick={() => setShowJa((v) => !v)}>
-                  {showJa ? '英語に戻す' : '訳を見る'}
-                </button>
-              )}
-            </div>
+              **紙と同じ丸の番号にそろえる**(`.lesson-items > li::before`)。
+              レッスンは紙を見ながら話すので、「2番のところ」と言えば
+              どちらを見ていても同じ場所を指せる。
+              上の帯の「3 / 14 発言」は**どこまで来たか**の目安であって、
+              本文の隣にある番号とは役目が違う。
 
-            {last ? (
-              <button type="button" className="btn btn--primary focus-move"
-                      onClick={() => { go(index); setWrap(true) }}>
-                まとめ
-              </button>
-            ) : (
-              <button type="button" className="btn focus-move"
-                      onClick={() => go(index + 1)}>
-                次 ▶
-              </button>
+              **話す人がいなくても出す**(記事の段落にも紙は番号を振っている)。
+              英語と訳のどちらでも出すので、**切り替えても行は動かない** */}
+          <div className="focus-who">
+            <span className="num-badge" aria-hidden="true">{index + 1}</span>
+            {isDialogue && item.speaker && (
+              <span className="focus-speaker" lang="en">{item.speaker}</span>
             )}
-          </>
-        )}
-      </div>
-      </div>
-    </div>,
-    document.body,
+          </div>
+          {/* **入れ替える。並べない。**
+              訳のときは語を押せない(英語がそこに無いので、引くものが無い) */}
+          {showJa ? (
+            <p className="focus-ja">{item.prompt_ja}</p>
+          ) : (
+            <p className="focus-en">
+              {/* **ここだけは、狭い画面でも語を押せる**(2026-09 利用者の指定)。
+                  1段落を画面に固定しているので送るものが無く、
+                  タップと画面送りが喧嘩しない。**調べるのはここでする** */}
+              <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
+                           statuses={wordStatuses} onMark={markWord}
+                           tappable="always" />
+            </p>
+          )}
+        </>
+      )}
+    </FocusFrame>
   )
 }

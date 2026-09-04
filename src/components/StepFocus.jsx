@@ -28,10 +28,8 @@
  *   描き方は `PassagePractice` が持っている。ここへは**そのまま**渡す。
  *   書き写すと、片方だけ古くなる(単語帳で一度やった失敗)。
  */
-import { useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
-import { CloseIcon } from './Icons.jsx'
-import { useFocusBoard } from './FocusBoard.jsx'
+import { useEffect } from 'react'
+import FocusFrame from './FocusFrame.jsx'
 import { SIX_STEPS } from '../lib/sixSteps.js'
 
 /**
@@ -49,17 +47,6 @@ export default function StepFocus({
   /** 誰のセッションか。**メモを出すかどうかを決める**(`FocusBoard`) */
   learnerId = null,
 }) {
-  const bodyRef = useRef(null)
-  /* **書き込みとメモ**(2026-09 利用者の指定)。
-     `FocusReader` と同じものを分け合う(**2か所に書き写さない**) */
-  const board = useFocusBoard({ learnerId, page: `${step}:${at}`, bodyRef })
-
-  /* 送ったら、**中身の先頭へ戻す。** 前の1つを下まで読んでいると、
-     次の1つが途中から始まって見える(`FocusReader` と同じ作法) */
-  useEffect(() => {
-    if (bodyRef.current) bodyRef.current.scrollTop = 0
-  }, [at, step])
-
   /* Esc で終える。矢印で送る。
      **早く帰る条件を足したら、その下を必ず見る**(CLAUDE.md)。
      ただし**書き込んでいる最中は、矢印を横取りしない。**
@@ -79,76 +66,34 @@ export default function StepFocus({
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  /* 開いているあいだは、**うしろの画面を動かさない**(`FocusReader` と同じ) */
-  useEffect(() => {
-    const before = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = before }
-  }, [])
-
-  /* ★ **body の直下に出す**(2026-09 利用者の指定)。
-
-       > 濃さについては、普通の画面と同じように、
-       > 左右の空白部分は黒にしてください。
-
-     集中モードはレッスン表示の**紙の中**から呼ばれる。紙は
-     `--surface-*` などを差し替えて**明るい配色の島**にしてあるので、
-     そのまま描くと、画面ぜんぶを覆うこの画面まで**紙の白**になり、
-     暗い配色を選んでいても左右の余白が真っ白だった。
-
-     `createPortal` で body の直下に出せば、**アプリの配色に戻る**
-     (吹き出し `.etext-pop` を紙の外に出しているのと同じ理由・CLAUDE.md)。
-     こうすると、どこから入っても集中モードは同じ見た目になる。 */
-  return createPortal(
-    /* **紙の幅を引き継ぐ**(2026-09 実機「画面幅が引き継がれていません」)。
-       `FocusReader` とまったく同じ `.focus--w*` を使う。**2か所に持たない** */
-    <div className={`focus stepfocus focus--${width}`}
-         role="dialog" aria-modal="true" aria-label="集中モード">
-      {/* ── 上の帯。**細く1行。** ここが太ると中身が下へ押し出される ──
-          **書き込みのあいだは、まるごと入れ替える**(レッスン表示と同じ作法)。
-          2段にすると、読むところがそのぶん狭くなる */}
-      <div className="focus-top">
-        {board.pen ? board.penBar : (
-          <>
-            <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>
-              <CloseIcon />閉じる
-            </button>
-            <span className="focus-count">{at + 1} / {total} {unit}</span>
-            {/* **書き込む / メモ**(2026-09 利用者の指定)。
-                1つだけに向き合う場所なので、線を引きたくなるのも
-                気づいたことを残したくなるのも、まさにこの最中である */}
-            {board.tools}
-            {/* **6Steps は、ここで切り替えられる**(利用者の指定「6steps全てに」)。
-                いちいち出て、選び直して、また入る…では続かない */}
-            <label className="wb-formpick stepfocus-pick">
-              <span className="sr-only">6Steps の切り替え</span>
-              <select value={step} onChange={(e) => onStepChange?.(e.target.value)}>
-                {SIX_STEPS.map((m) => (
-                  <option key={m.id} value={m.id}>{m.no} {m.label}</option>
-                ))}
-              </select>
-            </label>
-          </>
-        )}
-      </div>
-
-      {/* ── 中身とメモを横に並べる。**送れるのは中身の側だけ** ─────── */}
-      <div className="focus-main">
-        <div className="focus-body" ref={bodyRef}>
-          {children}
-          {/* **板は送る箱の中に敷く。** 外に置くと、送ったときに
-              線だけが取り残される(会議アプリのペンと同じ失敗) */}
-          {board.inkLayer}
-        </div>
-        {board.notesPane}
-      </div>
-
-      {/* ── 下の帯。**出る場所は、入った場所と同じ右下**(`FocusReader` と同じ) */}
-      <div className="focus-barwrap">
-        <button type="button" className="btn btn--small focus-exit" onClick={onClose}>
-          <CloseIcon />集中モードを終える
-        </button>
-        <div className="focus-bar">
+  /* **骨組みは `FocusFrame` 1つ**(`FocusReader` / Quick Response と共通)。
+     足すのは「上の帯の右に 6Steps のプルダウンを置く」1点だけである */
+  return (
+    <FocusFrame
+      className="stepfocus"
+      /* **紙の幅を引き継ぐ**(2026-09 実機「画面幅が引き継がれていません」) */
+      width={width}
+      /* **メモを出すかどうかは、相手がいるかで決まる** */
+      learnerId={learnerId}
+      /* 線は**取り組み方 × 何番目**ごとに持つ(重なって出ると訳が分からない) */
+      page={`${step}:${at}`}
+      scrollKey={`${step}:${at}`}
+      onClose={onClose}
+      top={<span className="focus-count">{at + 1} / {total} {unit}</span>}
+      topEnd={(
+        /* **6Steps は、ここで切り替えられる**(利用者の指定「6steps全てに」)。
+           いちいち出て、選び直して、また入る…では続かない */
+        <label className="wb-formpick stepfocus-pick">
+          <span className="sr-only">6Steps の切り替え</span>
+          <select value={step} onChange={(e) => onStepChange?.(e.target.value)}>
+            {SIX_STEPS.map((m) => (
+              <option key={m.id} value={m.id}>{m.no} {m.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      bar={(
+        <>
           <button type="button" className="btn focus-move"
                   onClick={() => onMove?.(at - 1)} disabled={at === 0}>
             ◀ 前
@@ -158,9 +103,10 @@ export default function StepFocus({
                   onClick={() => onMove?.(at + 1)} disabled={at >= total - 1}>
             次 ▶
           </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </>
+      )}
+    >
+      {children}
+    </FocusFrame>
   )
 }
