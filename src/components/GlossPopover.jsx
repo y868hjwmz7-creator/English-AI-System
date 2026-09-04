@@ -145,8 +145,10 @@ export default function GlossPopover({
   })
 
   // 紙の上では、紙に合わせた明るい色にする。
-  // body の直下に出すので、`.lesson-sheet .etext-pop` では届かない
-  const onPaper = !!anchorEl?.closest?.('.lesson-sheet')
+  // body の直下に出すので、`.lesson-sheet .etext-pop` では届かない。
+  // **集中モードの紙(`.focus-paper`)も同じ扱いにする**(2026-09)。
+  // あちらも白い紙なので、暗い吹き出しが載ると浮く
+  const onPaper = !!anchorEl?.closest?.('.lesson-sheet, .focus-paper')
 
   return createPortal(
     <span
