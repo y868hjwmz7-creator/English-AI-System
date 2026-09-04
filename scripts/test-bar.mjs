@@ -90,11 +90,16 @@ const dir = mkdtempSync(join(tmpdir(), 'eas-bar-'))
 // **設定はリポジトリの中に置く。** 外に置くと `vite` を見つけられない
 // (node_modules をたどれないため)。読み込む `.env` の場所だけ外へ逃がす
 const CFG = join(ROOT, 'vite.bar.config.js')
+// **控え(`cacheDir`)も外に逃がす。** 既定は `node_modules/.vite` で、
+// ふだんの開発サーバーと**同じ場所**である。中身が食い違うと
+// 「`createRoot` が無い」のような**この検証とは関係のない失敗**が出て、
+// 赤くなる(実際に一度出た)。**検証が、検証と関係ない理由で赤くならない**
 writeFileSync(CFG, `
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 export default defineConfig({
   envDir: ${JSON.stringify(dir)},
+  cacheDir: ${JSON.stringify(join(dir, 'vite'))},
   plugins: [react()],
   server: { port: ${PORT}, strictPort: true },
 })

@@ -241,11 +241,11 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
         // 無ければ窓口は標準の声で作る
         elevenVoice: elevenIdOf(rosterId) || undefined,
         /* **訛りを最大限に活かす指定**(2026-09 利用者の指定)。
-           付いている声にだけ添える(`keep: true`)。
-           付いていない声には送らない ——
-           **いまの音を変えないため**である。
+           **どの声にも必ず添える**(「全てのスピーカーに適用してください。
+           アメリカのスピーカーでもです」)。
+           名簿に無い id(代役)でも同じものが返る。
            判断は `voiceSettingsOf()` 1か所(名簿の側) */
-        elevenSettings: voiceSettingsOf(rosterId) ?? undefined,
+        elevenSettings: voiceSettingsOf(rosterId),
       },
     })
     // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある

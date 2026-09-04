@@ -176,25 +176,54 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 //    > この人を音声として使用する際は、必ず元のアクセントを最大限
 //    > 生かしすようなコードを必ず使用してください。
 //
-//    「必ず」なので、**渡す道が1本でも切れていたら赤くする。**
+//    > 今回作った訛り、つまり話者の話し方の特徴を最大限反映させる指定は、
+//    > 全てのスピーカーに適用してくれますか? アメリカのスピーカーでもです。
+//
+//    「必ず」「全て」なので、**1人でも抜けていたら赤くする。**
+//    そして**渡す道が1本でも切れていたら赤くする。**
 //    渡らなくても音は鳴る(既定で作られる)ので、**気づけない。**
 {
-  const keep = CLIP_VOICES.filter((v) => v.keep)
-  if (!keep.length) ok('いま「訛りを活かす」を付けた声は無い')
-  else {
-    for (const v of keep) {
-      const st = voiceSettingsOf(v.id)
-      if (!st) ng(`${v.label} に、訛りを活かす指定が付いていない`)
-      else if (Number(st.similarity_boost) < 1) {
-        ng(`${v.label} の similarity_boost が最大でない`,
-          'もとの録音に寄せるほど訛りが残る。1 にする')
-      } else ok(`${v.label} … 訛りを活かす指定が付いている`)
-    }
-    // **付けていない声には送らない**(いまの音を変えないため)
-    const plain = CLIP_VOICES.find((v) => !v.keep)
-    if (plain && voiceSettingsOf(plain.id)) {
-      ng('付けていない声にまで指定が付いている', `${plain.label} に付いている`)
-    } else if (plain) ok('付けていない声には、何も添えない')
+  /* **全員に付いているか。** はじめはスコットランドの声にだけ
+     `keep: true` を付けていたので、ここもその印を数えていた。
+     ところが印を外して全員に広げたとき、**数えるものが 0 件になり、
+     検証はそれでも緑のまま**だった(空の一覧を回しても何も起きない)。
+     **「無ければ素通り」する形の検証を書かない。**
+     いまは名簿の全員を1人ずつ見る。 */
+  const missing = []
+  const weak = []
+  for (const v of CLIP_VOICES) {
+    const st = voiceSettingsOf(v.id)
+    if (!st) missing.push(v.label)
+    else if (Number(st.similarity_boost) < 1) weak.push(`${v.label}=${st.similarity_boost}`)
+    else if (st.use_speaker_boost !== true) weak.push(`${v.label}(話者らしさが off)`)
+  }
+  if (missing.length) {
+    ng('訛りを活かす指定が付いていない声がいる', missing.join(' / '))
+  } else if (weak.length) {
+    ng('訛りを活かす指定が弱い声がいる',
+      `${weak.join(' / ')}\n    もとの録音に寄せるほど訛りが残る。similarity_boost は 1 にする`)
+  } else {
+    ok(`名簿の ${CLIP_VOICES.length} 人**全員**に、訛りを活かす指定が付いている`)
+  }
+
+  /* **名簿に無い id でも落ちない。** 代役(`us-female` など)の名前が
+     来ることがあるので、そこで `undefined` を返すと窓口へ渡らない */
+  const fallback = voiceSettingsOf('us-female')
+  if (!fallback || Number(fallback.similarity_boost) !== 1) {
+    ng('名簿に無い声に、指定が付かない', '代役(us-female など)でも同じ指定を添える')
+  } else ok('名簿に無い声(代役)にも、同じ指定が添う')
+
+  /* **1人だけ違う値にする道**が生きているか、その場で試す。
+     全員が同じ値でも、外す道が壊れていないことを確かめる(`retired` と同じ) */
+  {
+    const probe = CLIP_VOICES[0]
+    probe.settings = { stability: 0.9 }
+    const st = voiceSettingsOf(probe.id)
+    delete probe.settings
+    if (Number(st?.stability) !== 0.9) ng('その行の `settings` で上書きできない')
+    else if (Number(st.similarity_boost) !== 1) {
+      ng('`settings` を足すと、書いていない欄まで消える', '書いた欄だけを差し替える')
+    } else ok('その行に `settings` を足せば、書いた欄だけを差し替えられる')
   }
 
   // **渡す道**(画面 → 窓口 → ElevenLabs)が切れていないか
