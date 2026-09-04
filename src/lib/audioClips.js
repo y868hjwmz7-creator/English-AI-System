@@ -55,7 +55,7 @@
  *   録音の `AudioContext` で学んだ作法(1つだけ作り、作り直さない)と同じ。
  */
 import {
-  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceRateOf, voiceSettingsOf, voiceTrimMs,
+  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceRateOf, voiceSettingsOf,
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
@@ -591,22 +591,6 @@ export async function playClip({
     const marks = wordMarks(body, (el.duration || 0) * 1000)
     const from = Number(el.currentTime) || 0   // 鳴らし始めた場所(続きから鳴らすとき)
 
-    /**
-     * **終わりを切り落とす声がある**(`voiceTrimMs`・2026-09 利用者の指摘)。
-     *
-     *   > 発言の終わりでほぼ必ずプチっという音が入ります。
-     *
-     * 鳴り終わりはすでに `fadeGain` でなだらかに下げているが、
-     * あれは **`<audio>` の `volume`** を動かすものである。
-     * **iPhone は `volume` を無視する**ので、あちらでは1ミリも効かない。
-     * だから**鳴らすのをやめる場所そのもの**を早める。
-     *
-     * **元の MP3 は書き換えない。** すでに作った音声にも効き、
-     * **課金もかからない**(作り直さないため)。
-     */
-    const trimSec = voiceTrimMs(voiceId) / 1000
-    const endOf = (len) => (trimSec > 0 ? Math.max(0, len - trimSec) : len)
-
     /* **画面の描き替え(約 16ms)ではなく、10ms ごとに回す**(2026-09 実測)。
        rAF だと鳴り終わりの最後のコマが「残り 41ms」で、
        **音量 0.205 のまま終わっていた** — 半分の高さから急に切れていた。
@@ -636,9 +620,7 @@ export async function playClip({
       const len = Number(el.duration) || 0
       // 鳴り始めてから何ミリ秒か / 終わりまで何ミリ秒か(どちらも実際の時間)
       const inMs = ((now - from) / r) * 1000
-      /* **切り落とす声では、そこを「終わり」と見なす**(`voiceTrimMs`)。
-         こうしないと、切る場所を過ぎてからなだらかに下がり始める */
-      const outMs = len ? ((endOf(len) - now) / r) * 1000 : Infinity
+      const outMs = len ? ((len - now) / r) * 1000 : Infinity
       // **決め方は `loudness.js` 1か所**(手元で確かめられる形にしてある)
       const v = fadeGain(gain, inMs, outMs)
       // 0.005 より細かい差は耳に届かない。入れ直す回数を減らす
@@ -651,15 +633,6 @@ export async function playClip({
     const tick = () => {
       if (mine !== generation) { stopTrack(); return }
       fade()
-      /* **切る場所まで来たら、そこで終わりにする。**
-         `ended` を待つと、切りたかったところが鳴ってしまう。
-         `pause()` は `volume` と違って **iPhone でも効く** */
-      const len = Number(el.duration) || 0
-      if (trimSec > 0 && len && el.currentTime >= endOf(len)) {
-        try { el.volume = 0; el.pause() } catch { /* 無視 */ }
-        finish()
-        return
-      }
       const next = markIndexAt(marks, el.currentTime * 1000)
       if (next >= 0 && next !== index) {
         index = next
