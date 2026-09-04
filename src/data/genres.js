@@ -238,6 +238,20 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'rst_supply',  label: '仕入れ・業者と', hint: '数量、値段、納品の時間' },
     { id: 'rst_reserve', label: '予約の電話',     hint: '日時、人数、席の希望を確かめる' },
   ],
+  /* ホテル経営(2026-09 利用者の指定)。**相手は「お客様」ではない。**
+     支配人・オーナー・運営会社・予約サイト・現地スタッフ・役所と話す。
+     接客の場面(`hospitality`)とは、出てくる語がまるごと違う */
+  hotel: [
+    { id: 'hot_gm',      label: '支配人との打ち合わせ', hint: '今月の数字、人手、困っていること' },
+    { id: 'hot_owner',   label: 'オーナー・投資家への報告', hint: '収支と、次に何へ使うか' },
+    { id: 'hot_site',    label: '物件を見に行く', hint: '立地、部屋数、直すところ' },
+    { id: 'hot_operator', label: '運営会社との交渉', hint: '委託か直営か。条件のすり合わせ' },
+    { id: 'hot_hire',    label: '現地スタッフの採用', hint: '面接、シフト、育て方' },
+    { id: 'hot_ota',     label: '予約サイト・旅行会社と', hint: '手数料、送客、料金の出し方' },
+    { id: 'hot_rate',    label: '料金と稼働の相談', hint: '繁忙期の値付けと、空室の埋め方' },
+    { id: 'hot_reno',    label: '改装の打ち合わせ', hint: '工期、費用、開けたまま直せるか' },
+    { id: 'hot_permit',  label: '現地の許認可・税', hint: '営業の届け出、宿泊税、決まりの確かめ方' },
+  ],
   hospitality: [
     { id: 'hos_checkin', label: 'チェックイン',   hint: '手続きと、部屋・設備の案内' },
     { id: 'hos_guide',   label: '道案内・おすすめ', hint: '行き方と、行く価値のある理由' },
@@ -605,6 +619,17 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'cong_design', label: '設計とデザイン',   hint: '住み心地と、使い勝手' },
     { id: 'cong_green',  label: '省エネと環境',     hint: '断熱、再生材、認証' },
     { id: 'cong_market', label: '不動産の動き',     hint: '価格、需要、街の変化' },
+  ],
+  /* ホテル経営(2026-09 利用者の指定)。
+     **読み物の話題も、経営する側から見たものにする。**
+     「もてなしの工夫」(`hospitality`)は現場から見た話である */
+  hotel: [
+    { id: 'hotg_expand', label: '海外への出店',     hint: '場所の選び方と、現地との組み方' },
+    { id: 'hotg_rate',   label: '稼働率と料金',     hint: '需要の読み方、値付け、閑散期' },
+    { id: 'hotg_staff',  label: '人手と育成',       hint: '集まらない、辞めてしまう、どう防ぐか' },
+    { id: 'hotg_model',  label: '直営か、委託か',   hint: '運営の形と、ブランドの借り方' },
+    { id: 'hotg_resort', label: 'リゾート地での運営', hint: '季節の波、島や離れた土地ならではの苦労' },
+    { id: 'hotg_guest',  label: '客層の変化',       hint: 'どこから来て、何を求めているか' },
   ],
   hospitality: [
     { id: 'hosg_service', label: 'もてなしの工夫',  hint: '記憶に残る接客とは' },
