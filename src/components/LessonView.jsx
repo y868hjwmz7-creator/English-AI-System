@@ -132,16 +132,24 @@ const saveWidth = (id) => {
  *   > 音声プレーヤーのUIを入れるのも良いですね。
  *   > (上部バーもしくはフロート(切り替えられると最高))
  *
- * **既定は右下(`float`)。** これまで「Listen (全体)」が置いてあった
- * 場所そのものなので、切り替えない人には何も変わったように見えない。
+ * **既定は上の帯(`bar`)。** 2026-09 の指定で右下から改めた。
+ *
+ *   > スマホ、パッド上のフロート再生UIはディフォルトでは
+ *   > 上部バーに配置してください。幅が入らない場合はフロートUIを
+ *   > 起動するスイッチのみを配置してください。
+ *   > これはデバイスの画面幅により最適化される仕様にしてください
+ *
  * **一度決めれば毎回選ぶものではない**ので、覚える(文字の大きさと同じ)。
+ * ただし**幅が足りないときは、覚えている値によらず上の帯**にする
+ * (下の `spot`)。狭い画面には切り替えのボタンを出していないので、
+ * 右下のまま覚えていると**戻す道が無くなる。**
  */
 const PLAYER_KEY = 'eas.playerPlace'
 const loadPlace = () => {
   try {
     const v = window.localStorage.getItem(PLAYER_KEY)
-    return v === 'bar' ? 'bar' : 'float'
-  } catch { return 'float' }
+    return v === 'float' ? 'float' : 'bar'
+  } catch { return 'bar' }
 }
 const savePlace = (v) => {
   try { window.localStorage.setItem(PLAYER_KEY, v) } catch { /* 使えなくても困らない */ }
@@ -291,11 +299,24 @@ export default function LessonView({
    *
    * **広いほう(1380px)に合わせる。** 狭いほうに合わせると、
    * ゲストと開いたときだけ2行になる。
-   * これより狭い窓では**右下に出す**(既定の場所)。
-   * あわせて**切り替えのボタンも出さない** —
-   * 押しても右下のままなら、効かない操作である(CLAUDE.md)。
+   * **これより狭い窓では、上の帯には「スイッチだけ」を置く**
+   * (2026-09 利用者の指定)。押すと右下の操作盤が開く。
+   * 操作盤ごと入れようとすれば帯が2行になり、紙がそのぶん狭くなる。
+   * **スイッチ1つ(絵だけ)なら、320px でも1行に収まる。**
    */
-  const wideBar = useWide(1380)
+  const fitsInBar = useWide(1380)
+  /**
+   * 幅が足りないときに、右下の操作盤を開いているか。
+   * **覚えない。** 押すたびに開け閉めするものである
+   * (置き場所そのものは `place` が覚えている)。
+   */
+  const [floatOpen, setFloatOpen] = useState(false)
+  /**
+   * 実際にどこへ出すか。**幅が足りなければ、覚えている値によらず帯。**
+   * 狭い画面には切り替えのボタンを出していないので、
+   * 右下のまま覚えていると**戻す道が無くなる**(行き止まりを作らない)。
+   */
+  const spot = fitsInBar ? place : 'bar'
   const allTicker = useRef(null)
 
   /** 通しの読み上げを止める */
@@ -747,6 +768,31 @@ export default function LessonView({
                       onClick={() => { setPage(page + 1); resetItems() }}>▶</button>
             </div>
 
+            {/* ── 読み上げの操作盤を呼ぶスイッチ(2026-09 利用者の指定)──
+                > 幅が入らない場合はフロートUIを起動するスイッチのみを
+                > 配置してください。これはデバイスの画面幅により
+                > 最適化される仕様にしてください
+
+                操作盤ごと帯に入れようとすれば、狭い窓では2行に折り返し、
+                紙がそのぶん狭くなる。**スイッチ1つ(絵だけ)なら、
+                320px でも1行に収まる。**
+
+                **いつも見える行に置く。** 「表示」の中に畳むと、
+                鳴らすまでに2回押すことになる(あそこは
+                「一度決める設定」のための場所である)。
+
+                **鳴っているあいだは押している印を出す。** 開いていなくても
+                「いま鳴っている」ことが、この1つで分かる */}
+            {isPassageSection(section?.exercise_type) && !fitsInBar && (
+              <button type="button"
+                      className={`btn btn--small player-launch${
+                        floatOpen || playingAll ? ' is-on' : ''}`}
+                      aria-label={floatOpen ? '読み上げの操作を閉じる' : '読み上げの操作を開く'}
+                      aria-pressed={floatOpen}
+                      onClick={() => setFloatOpen((v) => !v)}>
+                <SpeakerIcon />
+              </button>
+            )}
           </>
         )}
 
@@ -774,10 +820,11 @@ export default function LessonView({
               置き場所は `.lesson-settings` の**先頭** —
               「書き込む」のすぐ左である(利用者の指定どおり)。
 
-              **狭い窓では出さない**(`wideBar`・上に実測の表がある)。
+              **狭い窓では出さない**(`fitsInBar`・上に実測の表がある)。
               足すと帯が2行に折り返し、紙がそのぶん狭くなる。
-              そのときは右下に出す(下の `place === 'float' || !wideBar`)。 */}
-          {isPassageSection(section?.exercise_type) && place === 'bar' && wideBar && (
+              そのときは、いつも見える行に**スイッチだけ**を置く
+              (`.player-launch`)。 */}
+          {isPassageSection(section?.exercise_type) && spot === 'bar' && fitsInBar && (
             <PlayerBar
               place="bar" onPlace={(v) => { setPlace(v); savePlace(v) }}
               playing={playingAll}
@@ -988,13 +1035,17 @@ export default function LessonView({
             {/* **右下に出す。** 選ばれているときと、**狭い画面のとき。**
                 狭い画面では上の帯の設定が「表示」に畳まれるので、
                 そちらに置くと鳴らすボタンがしまい込まれてしまう */}
-            {isPassageSection(section?.exercise_type) && (place === 'float' || !wideBar) && (
+            {/* **`!fitsInBar` を必ず添える。** 添えないと、右下を開いたまま
+                窓を広げたときに**帯と右下の2つ**が出る(実測で確かめた) */}
+            {isPassageSection(section?.exercise_type)
+              && (spot === 'float' || (!fitsInBar && floatOpen)) && (
               <PlayerBar
                 place="float"
-                /* **狭い画面では切り替えを出さない。** あちらは
-                   「表示」に畳まれてしまうので、押しても右下のまま
+                /* **狭い画面では切り替えを出さない。** そこでは
+                   上の帯にスイッチがあり、それが開け閉めを受け持つ。
+                   置き場所を選べないので、選ばせない
                    ——効かない操作を見せない(CLAUDE.md) */
-                onPlace={wideBar ? (v) => { setPlace(v); savePlace(v) } : null}
+                onPlace={fitsInBar ? (v) => { setPlace(v); savePlace(v) } : null}
                 playing={playingAll}
                 label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
                 at={playAt} total={playableAll.length}

@@ -5640,6 +5640,15 @@ html, body { overscroll-behavior-x: none; }
    色は `.lesson-bar .btn` などが受け持つので、ここには書かない
    (**同じ色を2か所に持たない**・CLAUDE.md)。 */
 .player--bar { flex: 0 0 auto; }
+
+/* ③ 幅が入らないときは、**スイッチだけ**を帯に置く(2026-09 利用者の指定)。
+   押すと右下の操作盤が開く。**絵だけ**なので 320px でも1行に収まる。
+   押している印は `.lesson-bar .btn--primary` と同じ青
+   (**色だけに頼らない** — `aria-pressed` も付けてある) */
+.player-launch { flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
+.lesson-bar .player-launch.is-on {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
 /* **縮ませない**(`flex-shrink: 0`)。`flex: 0 1 40px` にしていたら、
    幅に余裕がある 1440px でも**進み具合の帯が 0px に潰れていた**(実測)。
    flex の箱の中の箱は、`flex-basis` を「いちばん広いときの幅」として
