@@ -281,6 +281,9 @@ export default function PassagePractice({
       clipTier: tier,
       rate: rateOf(rateId, current.rate),
       onWord: (w) => setReadingAt(w ? w.charIndex : null),
+      /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
+         目印の付け方は `SpeakButton` とそろえてある */
+      resumeKey: `one|${voiceFor(clipCast, item.speaker, soloVoice) ?? ''}|${item.audio_text || item.prompt_en}`,
     }).then(() => {
       /* **くり返す指定なら、もう一度鳴らす**(2026-09 利用者の指定)。
          止まる条件は `SpeakButton` と同じ考え方で3つ。
@@ -333,9 +336,11 @@ export default function PassagePractice({
     }
     // 先に「読めるもの」だけに絞ってから並べる。絞ったあとで番号を数えないと、
     // 「いま読んでいる発言」の印が1つずれる
-    const all = section.items.filter((it) => String(it.prompt_en ?? '').trim())
-    const at = fromId ? all.findIndex((it) => it.id === fromId) : 0
-    const playable = at > 0 ? all.slice(at) : all
+    const playable = section.items.filter((it) => String(it.prompt_en ?? '').trim())
+    /* **一覧は丸ごと渡し、始める場所だけを言う**(2026-09)。
+       以前はここで切り取っていたが、切ると番号がずれるので
+       「止めた場所」の控えが**別の段落を指す** */
+    const at = fromId ? playable.findIndex((it) => it.id === fromId) : 0
     stopAllRef.current = readAloudSequence(
       playable.map((it) => ({
         text: it.prompt_en,
@@ -345,6 +350,11 @@ export default function PassagePractice({
       {
         rate: rateOf(rateId, current.rate),
         clipTier: tier,
+        // 押した段落から鳴らす。**切り取らずに、始める場所だけを言う**
+        startIndex: at > 0 ? at : 0,
+        /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
+           目印は**教材 + 演習**。段落の番号と秒数は `readAloud.js` が覚える */
+        resumeKey: `all|${materialId ?? ''}|${section.id}`,
         onIndex: (i) => {
           if (i === null) { stopAllRef.current = null; setPlayingAll(false); heard() }
           const id = i === null ? null : playable[i]?.id ?? null

@@ -48,15 +48,44 @@ import { STANDARD } from './voiceTier.js'
 import { clipSpeakerFor } from './voiceCast.js'
 import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
+import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
 let session = 0
 
-/** 読み上げを止める。**両方の経路を止める** */
+/* ── 止めた場所を覚えておく(2026-09 利用者の指定)─────────────────
+ *
+ *   > 全文を聞いている途中にストップを押し、もう一度再生を押すと、
+ *   > また元に戻ってしまいます。止めた場所から再び再生する機能がほしいです。
+ *   > これは段落ごとの再生ボタンでも同じ仕様にしてください。
+ *
+ * 記事は6段落あるので、4段落目で止めて押し直すと**また1段落目から**に
+ * なっていた。聞き直したいのは止めたところであって、頭ではない。
+ *
+ * 【覚えるのはここ1か所】
+ *   `audioClips.js` は「いま鳴っている MP3」しか知らず、
+ *   それが何番目の段落なのかを知らない。画面ごとに覚えると、
+ *   本文・宿題・レッスン表示で**別々にずれる。**
+ *   だからここに1つだけ置き、**画面は `resumeKey` を渡すだけ**にする。
+ *
+ * 【`resumeKey` は「同じものを聴き直したか」の目印】
+ *   段落ごとの Listen なら「教材 + 演習 + 段落」、通しなら「教材 + 演習」。
+ *   **渡さなければ、これまでどおり頭から鳴る**(古い呼び出しは壊れない)。
+ */
+
+/* 控えそのものは `playMark.js` に置いてある。**何にも依存しないので、
+   素の node で確かめられる**(`npm run test:play`)。ここに書くと
+   Supabase を引き連れてしまい、手元で一度も走らせられない */
+
+/**
+ * 読み上げを止める。**両方の経路を止める。**
+ * あわせて、**どこまで鳴っていたか**を覚える(上記)。
+ */
 export function stopReading() {
   session += 1
-  stopClip()
+  const at = stopClip()
   stopSpeaking()
+  stopped(at)
 }
 
 /**
@@ -99,9 +128,16 @@ export const canReadAloud = () => isSpeechSupported() || canUseClips()
 export async function readAloud(text, {
   voice = null, clipVoice = null, clipTier = STANDARD, rate = 0.9,
   onWord = null, onStart = null,
+  /** 止めた場所から鳴らすための目印。**渡さなければ、いつも頭から** */
+  resumeKey = null,
 } = {}) {
+  /* **止めるより先に、控えを取り出す。** `stopReading()` は
+     いま鳴っているものの控えを作り直すので、順を逆にすると
+     自分の控えを自分で消してしまう */
+  const from = takeMark(resumeKey)
   stopReading()
   const mine = session
+  nowPlaying(resumeKey, 0)
 
   // **1回しか呼ばない。** MP3 と端末の声で二度呼ぶと、
   // 受け取る側が「用意中 → 再生中 → 用意中」と行き来する
@@ -115,14 +151,15 @@ export async function readAloud(text, {
     rate,
     onWord,
     onStart: started,
+    startAt: from?.at ?? 0,
   })
   if (mine !== session) return          // 途中で止められた・別のものが始まった
-  if (played) return
+  if (played) { if (mine === session) finished(); return }
 
   // MP3 を使えなかった。端末の声に落ちる
   started()
   await speakOnce(text, { voice, rate, onWord }).done
-  if (mine === session) onWord?.(null)
+  if (mine === session) { finished(); onWord?.(null) }
 }
 
 /**
@@ -155,11 +192,43 @@ export async function readAloud(text, {
  */
 export function readAloudSequence(parts, {
   rate = 0.9, clipTier = STANDARD, onIndex, onWord, onStart,
+  /** **最後まで鳴りきったときだけ**呼ばれる(止めたときは来ない) */
+  onDone = null,
+  /**
+   * 止めた場所から鳴らすための目印(2026-09 利用者の指定)。
+   * **何番目の段落の、何秒めか**まで覚えてある。
+   * 渡さなければ、これまでどおり頭から鳴る。
+   */
+  resumeKey = null,
+  /**
+   * **どこから始めるか**(押した段落から鳴らすとき)。
+   *
+   * **一覧そのものを切り取って渡さないこと。** 切り取ると番号がずれ、
+   * 「止めた場所」の控え(`resumeKey`)が別の段落を指してしまう。
+   * 一覧はいつも丸ごと渡し、始める場所だけをここで言う。
+   */
+  startIndex = 0,
+  /**
+   * **控えを使うか**(2026-09)。
+   *
+   * 「次の段落へ」を押したときは、行き先をこちらが決めている。
+   * そこへ控えを当てると、**押したのに動かない**ように見える。
+   * だからそのときだけ `false` を渡す。控えは**取り出して捨てる**
+   * (残すと、そのあと ▶ を押したときに古い場所へ飛ぶ)。
+   */
+  resume = true,
 } = {}) {
   const list = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
+  // **止めるより先に控えを取り出す**(`readAloud` と同じ理由)
+  const taken = takeMark(resumeKey)
+  const from = resume ? taken : null
   stopReading()
   const mine = session
   if (!list.length) return () => {}
+  /* 続きから始める番号。**一覧より外に出ていたら、言われた場所から**
+     (教材を直すと段落の数が変わる。CLAUDE.md「範囲の外になっていることがある」) */
+  const head = Math.min(Math.max(startIndex | 0, 0), list.length - 1)
+  const first = (from && from.index >= 0 && from.index < list.length) ? from.index : head
 
   const alive = () => mine === session
 
@@ -182,15 +251,19 @@ export function readAloudSequence(parts, {
   }
 
   const run = async () => {
-    for (let i = 0; i < list.length; i += 1) {
+    for (let i = first; i < list.length; i += 1) {
       if (!alive()) return
       const part = list[i]
       const clipVoice = part.clipVoice ?? clipSpeakerFor(part.voice)
+      // **いま何番目を鳴らしているか**を控える(`stopReading()` が使う)
+      nowPlaying(resumeKey, i)
 
       // **どの継ぎ目にも間を置く**(2026-09 利用者の指定「記事でも同じ仕様に」)。
       // はじめは話す人が替わるときだけにしていたが、記事も段落と段落が
       // 詰まって聞こえる。同じ声が続くところは `turnGap.js` が短めに返す。
-      if (i > 0) {
+      // **続きから始めた1本目には間を置かない**(`i > first`)。
+      // 前の発言は鳴っていないので、そこに息継ぎを入れる理由がない
+      if (i > first) {
         const prevVoice = list[i - 1].clipVoice ?? clipSpeakerFor(list[i - 1].voice)
         const sameVoice = clipVoice === prevVoice
 
@@ -225,6 +298,8 @@ export function readAloudSequence(parts, {
         tier: clipTier,
         rate,
         onWord: relay,
+        // **続きから始めた1本目だけ、その途中から**(2本目からは頭から)
+        startAt: (i === first ? (from?.at ?? 0) : 0),
         // 鳴り始めたら、次のぶんを裏で用意しておく
         onStart: () => {
           started()
@@ -242,6 +317,14 @@ export function readAloudSequence(parts, {
       await speakOnce(part.text, { voice: part.voice, rate, onWord: relay }).done
       if (!alive()) return
     }
+    // **最後まで鳴りきった。** 控えを持ったままにすると、
+    // 次に押したときに終わりぎわから始まってしまう
+    finished()
+    /* **最後まで鳴りきったときだけ**知らせる(2026-09)。
+       `onIndex(null)` は止めたときにも来るので、これだけでは
+       「止めた」と「終わった」を見分けられない。操作盤は
+       **止めたときは番号を残し、終わったら消す**ので、両方が要る */
+    onDone?.()
     onIndex?.(null)
     onWord?.(null)
   }

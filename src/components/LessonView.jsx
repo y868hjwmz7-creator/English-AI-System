@@ -16,7 +16,9 @@
  *   ・文字の大きさを3段階で変えられる。共有先の画面の大きさが分からないため
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { countLabel, exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
+import {
+  countLabel, countUnit, exerciseLabel, exerciseType, isPassageSection,
+} from '../data/exerciseTypes.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
 import { loadEnglishVoices } from '../lib/speech.js'
@@ -49,6 +51,7 @@ import AnswerEn from './AnswerEn.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import Stepper from './Stepper.jsx'
+import PlayerBar from './PlayerBar.jsx'
 
 const SIZES = [
   { id: 'm', label: '標準' },
@@ -120,6 +123,27 @@ const loadWidth = () => {
 }
 const saveWidth = (id) => {
   try { window.localStorage.setItem(WIDTH_KEY, id) } catch { /* 使えなくても困らない */ }
+}
+
+/**
+ * 読み上げの操作盤を、どこに出すか(2026-09 利用者の指定)。
+ *
+ *   > 音声プレーヤーのUIを入れるのも良いですね。
+ *   > (上部バーもしくはフロート(切り替えられると最高))
+ *
+ * **既定は右下(`float`)。** これまで「Listen (全体)」が置いてあった
+ * 場所そのものなので、切り替えない人には何も変わったように見えない。
+ * **一度決めれば毎回選ぶものではない**ので、覚える(文字の大きさと同じ)。
+ */
+const PLAYER_KEY = 'eas.playerPlace'
+const loadPlace = () => {
+  try {
+    const v = window.localStorage.getItem(PLAYER_KEY)
+    return v === 'bar' ? 'bar' : 'float'
+  } catch { return 'float' }
+}
+const savePlace = (v) => {
+  try { window.localStorage.setItem(PLAYER_KEY, v) } catch { /* 使えなくても困らない */ }
 }
 
 /**
@@ -237,6 +261,17 @@ export default function LessonView({
      `SpeakButton` と同じ見せ方にする(文言も共通のものを使う) */
   const [allWaiting, setAllWaiting] = useState(false)
   const [allSecs, setAllSecs] = useState(0)
+  /**
+   * **いま通しで何番目を鳴らしているか**(操作盤のため・2026-09)。
+   *
+   * `speakingKey` は色を付けるための目印で、番号ではない。
+   * 送り戻し(◀◀ ▶▶)には番号が要るので、別に持つ。
+   * **止めても消さない。** 止めた場所から再開するので、
+   * どこで止めたのかは出しておくほうが正しい。
+   */
+  const [playAt, setPlayAt] = useState(null)
+  /** 操作盤の置き場所(右下 / 上の帯の下)。**覚える** */
+  const [place, setPlace] = useState(loadPlace)
   const allTicker = useRef(null)
 
   /** 通しの読み上げを止める */
@@ -521,15 +556,24 @@ export default function LessonView({
     return () => window.cancelAnimationFrame(id)
   }, [run])
 
-  /** 本文を頭から通して読み上げる。話す人が変わると声も変わる */
-  const playWhole = () => {
-    if (playingAll) { stopAll(); setReadingAt(null); return }
+  /** 通しで鳴らせる段落・発言(色を付ける目印つき) */
+  const playableAll = (section?.items ?? [])
+    .map((it, i) => ({ it, key: key(it, i) }))
+    .filter(({ it }) => String(it.prompt_en ?? '').trim())
+
+  /**
+   * 本文を通して読み上げる。話す人が変わると声も変わる。
+   *
+   * @param jumpTo 番号を渡すと**そこから**鳴らす(操作盤の ◀◀ ▶▶)。
+   *               渡さなければ、**止めた場所から**続ける(2026-09 利用者の指定)。
+   */
+  const playFrom = (jumpTo = null) => {
     // 先に「読めるもの」だけに絞る。絞ったあとで番号を数えないと、
     // 色を付ける場所が1つずれる
-    const playable = (section?.items ?? [])
-      .map((it, i) => ({ it, key: key(it, i) }))
-      .filter(({ it }) => String(it.prompt_en ?? '').trim())
+    const playable = playableAll
     if (!playable.length) return
+    const jump = Number.isFinite(jumpTo)
+      ? Math.min(Math.max(jumpTo, 0), playable.length - 1) : null
     setPlayingAll(true)
     // **音が出るまでは「用意しています…」**(2026-09 利用者の指摘)。
     // MP3 をこれから作るときは数秒かかる。押しても反応が無いように見え、
@@ -555,15 +599,43 @@ export default function LessonView({
       {
         rate: rateOf(rateId),
         clipTier: tier,
+        /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
+
+             > 全文を聞いている途中にストップを押し、もう一度再生を押すと、
+             > また元に戻ってしまいます。
+
+           目印は**教材 + 演習**。何段落目の何秒めかは
+           `readAloud.js` が1か所で覚える(画面ごとに持たない) */
+        resumeKey: `all|${material.id}|${section?.id ?? ''}`,
+        /* 送り戻しのときは、行き先をこちらが決めている。
+           控えを当てると**押したのに動かない**ように見える */
+        ...(jump == null ? {} : { startIndex: jump, resume: false }),
         onIndex: (i) => {
           if (i === null) { stopAllRef.current = null; setPlayingAll(false); heard() }
           setSpeakingKey(i === null ? null : playable[i]?.key ?? null)
+          // **止めても番号は消さない。** どこで止めたかを操作盤が出す
+          if (i !== null) setPlayAt(i)
           setReadingAt(null)   // 次の文に移ったら、前の語の色を消す
         },
         onStart: heard,
+        // **最後まで鳴りきったら、番号を消す。** 次に押したときは頭から
+        onDone: () => setPlayAt(null),
         onWord: (w) => setReadingAt(w ? w.charIndex : null),
       },
     )
+  }
+
+  /** 鳴らす・止める(右下のボタンと操作盤の ▶ / ■ は同じもの) */
+  const playWhole = () => {
+    if (playingAll) { stopAll(); setReadingAt(null); return }
+    playFrom(null)
+  }
+
+  /** その段落から鳴らし直す(操作盤の ◀◀ ▶▶) */
+  const jumpTo = (i) => {
+    stopAll()
+    setReadingAt(null)
+    playFrom(i)
   }
 
   return (
@@ -726,6 +798,25 @@ export default function LessonView({
         )}
       </div>
 
+      {/* ── 読み上げの操作盤(上の帯の下)──────────────────────────
+          2026-09 利用者の指定「上部バーもしくはフロート
+          (切り替えられると最高)」。**選んだほうだけを出す** —
+          同じことをするものを2つ見せない(CLAUDE.md)。
+
+          **いつも要る1行(閉じる・ページ送り・解答・表示)には足さない。**
+          あそこは 390px でぎりぎり1行なので、5つめを足すと2段になり、
+          紙がそのぶん狭くなる。`JobBar` と同じく**すぐ下に貼り付ける。** */}
+      {isPassageSection(section?.exercise_type) && place === 'bar' && (
+        <PlayerBar
+          place="bar" onPlace={(v) => { setPlace(v); savePlace(v) }}
+          playing={playingAll}
+          label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
+          at={playAt} total={playableAll.length}
+          unit={countUnit(section?.exercise_type)}
+          onToggle={playWhole} onJump={jumpTo}
+        />
+      )}
+
       {/* 紙と、その横のメモ。**入れ物を1つはさむ**(0032)。
           メモを紙の上に重ねると、教材を見ながら書けない。
           横に並べるには、帯とは別の「行」が要る
@@ -864,13 +955,15 @@ export default function LessonView({
                 (`.finder-float` と同じ考え方)。
                 本文のページを開いているときだけ出す — ほかのページでは
                 通しで鳴らすものが無い(効かない操作を見せない)。 */}
-            {isPassageSection(section?.exercise_type) && (
-              <button type="button" className="btn btn--small sheet-float"
-                      onClick={playWhole}>
-                {playingAll
-                  ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
-                  : <><SpeakerIcon />Listen (全体)</>}
-              </button>
+            {isPassageSection(section?.exercise_type) && place === 'float' && (
+              <PlayerBar
+                place="float" onPlace={(v) => { setPlace(v); savePlace(v) }}
+                playing={playingAll}
+                label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
+                at={playAt} total={playableAll.length}
+                unit={countUnit(section?.exercise_type)}
+                onToggle={playWhole} onJump={jumpTo}
+              />
             )}
 
             {/* ── 右下に貼り付く「集中モード」(2026-09 利用者の指定)──────

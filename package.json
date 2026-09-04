@@ -15,6 +15,7 @@
     "lint": "eslint .",
     "test:chunk": "node scripts/test-chunker.mjs",
     "test:audio": "node scripts/test-loudness.mjs",
+    "test:play": "node scripts/test-playmark.mjs",
     "test:gap": "node scripts/test-turngap.mjs"
   },
   "dependencies": {

@@ -121,6 +121,14 @@ export default function SpeakButton({
 
     readAloud(text, {
       voice, clipVoice, clipTier: tier, rate: speed, onWord, onStart: heard,
+      /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
+         > これは段落ごとの再生ボタンでも同じ仕様にしてください。
+
+         目印は**英文と声**そのものにしてある。この部品はアプリ中の
+         Listen をすべて受け持っているので、ここに1つ書けば
+         **紙・宿題・単語帳・ディクテーション、どこでも同じように効く。**
+         呼ぶ側に鍵を配らせると、必ずどこかが渡し忘れる(CLAUDE.md)。 */
+      resumeKey: `one|${clipVoice ?? ''}|${text}`,
     }).then(() => {
       heard()
       onWord?.(null)

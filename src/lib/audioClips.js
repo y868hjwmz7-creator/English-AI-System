@@ -355,17 +355,33 @@ export function prefetchClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD
  */
 let endCurrent = null
 
+/**
+ * @returns {number} **止めた時点で、どこまで鳴っていたか**(秒)。
+ *
+ * 【なぜ返すのか】(2026-09 利用者の指定)
+ *
+ *   > 全文を聞いている途中にストップを押し、もう一度再生を押すと、
+ *   > また元に戻ってしまいます。止めた場所から再び再生する機能がほしいです。
+ *
+ * **控えるのはここではない。** ここは「いま鳴っているもの」しか知らず、
+ * それが何番目の段落なのかも、どの教材のものなのかも分からない。
+ * だから**数字だけを返し、覚えるのは `readAloud.js` 1か所**にする
+ * (判断を2か所に置かない・CLAUDE.md)。
+ */
 export function stopClip() {
   generation += 1
   const end = endCurrent
   endCurrent = null
+  let at = 0
   if (element) {
     try {
+      at = Number(element.currentTime) || 0
       element.pause()
       element.currentTime = 0
     } catch { /* 止められなくても困らない */ }
   }
   end?.()
+  return at
 }
 
 /**
@@ -383,6 +399,11 @@ export function stopClip() {
 export async function playClip({
   text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD,
   rate = 1, onWord = null, onStart = null,
+  /**
+   * **途中から鳴らす**(秒・2026-09 利用者の指定「止めた場所から再び再生」)。
+   * 終わりぎわは 0 に落とす(残り 0.3 秒から鳴らしても意味がない)。
+   */
+  startAt = 0,
 } = {}) {
   if (!canUseClips()) return false
   const body = normText(text)
@@ -441,6 +462,15 @@ export async function playClip({
   // **その声の1本目だけはそろわない。** 鳴らし終えたあとに測って覚える
   const pathName = pathVoice(voiceId, tier)
   applyGain(el, tier, pathName)
+
+  /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
+     `loadeddata` まで来ているので、ここでは長さが分かっている。
+     **終わりぎわは頭から鳴らす** — 残り 0.3 秒から再開しても、
+     押した人には「鳴らなかった」ようにしか見えない。 */
+  if (startAt > 0) {
+    const len = Number(el.duration) || 0
+    try { el.currentTime = (len && startAt >= len - 0.3) ? 0 : startAt } catch { /* 無視 */ }
+  }
 
   return new Promise((resolve) => {
     let frame = 0
