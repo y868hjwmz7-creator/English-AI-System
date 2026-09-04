@@ -163,21 +163,95 @@ for (const banned of ['createMediaElementSource', 'createGain', 'crossOrigin']) 
 console.log('\n▶ 差し替えの前に、止めて黙らせているか')
 const clips = await import('node:fs/promises')
   .then((fs) => fs.readFile(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8'))
-const iPause = clips.indexOf('el.pause()')
-const iMute = clips.indexOf('el.volume = 0')
-const iSrc = clips.indexOf('el.src = src')
-check('差し替えの前に `pause()` している', iPause >= 0 && iSrc >= 0 && iPause < iSrc,
+// **`tryPlay` の中だけを見る。** ファイル全体から探すと、
+// 止めるところの `el.pause()` を拾ってしまう(実際に拾って、
+// 通っているように見えていた)
+const iTry = clips.indexOf('const tryPlay =')
+const iPause = clips.indexOf('el.pause()', iTry)
+const iMute = clips.indexOf('el.volume = 0', iTry)
+const iSrc = clips.indexOf('el.src = src', iTry)
+check('差し替えの前に `pause()` している', iTry >= 0 && iPause >= 0 && iSrc >= 0 && iPause < iSrc,
   `pause=${iPause} / src=${iSrc}`)
 check('差し替えの前に `volume = 0` にしている', iMute >= 0 && iSrc >= 0 && iMute < iSrc,
   `volume=${iMute} / src=${iSrc}`)
 check('そのあとで本当の音量を入れ直している(`applyGain`)',
-  clips.indexOf('applyGain(el') > iSrc)
-// 止めるときも同じ。鳴っている途中で止めると、そこに段差ができる
-const iStop = clips.indexOf('export function stopClip')
-const iStopMute = clips.indexOf('element.volume = 0', iStop)
-const iStopPause = clips.indexOf('element.pause()', iStop)
-check('止めるときも、黙らせてから止めている',
-  iStop >= 0 && iStopMute > iStop && iStopPause > iStopMute)
+  clips.indexOf('applyGain(el', iSrc) > iSrc)
+
+// ── ⑦ 入りと終わりを、なだらかにしているか ──────────────────
+//
+// 2026-09 利用者の指摘。
+//
+//   > まだ会話の発言と発言の間にプチっと入りますね。入る時と入らない時が
+//   > あります。…音の終わりをなだらかなフェードアウトにするとか、
+//   > 何かできるはずです。ここは音に関することで、このアプリのキモです
+//
+// **「プチッ」は、波形が途中の値のまま急に途切れると鳴る。**
+// 一度は「差し替える前に `volume = 0`」で直したつもりだったが、
+// **0 に跳ぶこと自体が段差**なので、鳴る場所を移しただけだった。
+// **こちらには音が聞こえない。** だから曲線そのものを数字で見張る。
+console.log('\n▶ 入りと終わりが、なだらかか')
+const { FADE_IN, FADE_OUT, FADE_STEP, FADE_TAIL, fadeGain } = m3
+const G = 0.4
+
+check('鳴り始めは 0 から', fadeGain(G, 0, 9999) === 0)
+check('入りきったら、その声の音量になる', fadeGain(G, FADE_IN, 9999) === G)
+check('鳴り終わりは 0 になる', fadeGain(G, 9999, 0) === 0)
+// **終わりの手前で 0 に届いていること。** 10ms 刻みにしてもなお、
+// 最後の一刻みは「残り 33ms」で終わっていた(音量 0.11 のまま切れる)。
+// 時計の揺らぎと、`ended` が長さぴったりでは来ないためである
+check('終わりの手前で、もう 0 になっている', fadeGain(G, 9999, FADE_TAIL) === 0,
+  `残り ${FADE_TAIL}ms の時点で 0`)
+// **実測では、最後の一刻みが「残り 33ms」で終わっていた。**
+// そこまで遅れても、残る音量が小さければ段差にならない
+check('最後の一刻みが遅れても、残るのは音量の1割以下',
+  fadeGain(G, 9999, 35) <= G * 0.1,
+  `残り 35ms で ${(fadeGain(G, 9999, 35) / G * 100).toFixed(1)}%`)
+check('終わりに向かって下がる',
+  fadeGain(G, 9999, FADE_OUT * 0.25) < fadeGain(G, 9999, FADE_OUT * 0.75))
+check('まん中はそのままの音量', fadeGain(G, 5000, 5000) === G)
+
+// **段差が残っていないか。** いちばん大事なところ。
+// 音量は 10ms ごとに動かすので、その刻みで見て
+// **1回の変わり幅が音量の 1/3 を超えない**こと(超えると段差として聞こえる)
+const steps = []
+for (let t = 0; t <= FADE_OUT + FADE_TAIL + 20; t += FADE_STEP) {
+  steps.push(fadeGain(G, 9999, FADE_OUT + FADE_TAIL - t))
+}
+let worst = 0
+for (let i = 1; i < steps.length; i += 1) worst = Math.max(worst, Math.abs(steps[i] - steps[i - 1]))
+check('1回に変わる幅が小さい(段差にならない)', worst <= G / 3,
+  `いちばん大きい変わり幅 ${worst.toFixed(3)} / 音量 ${G}`)
+
+// **鳴り始めも同じ。** 実測では最初の一刻みが 17〜21ms に来る。
+// そこでいきなり音量の3割を超えて持ち上がると、そこが段差になる
+check('鳴り始めの1刻みめが、持ち上がりすぎない', fadeGain(G, 21, 9999) <= G / 3,
+  `21ms の時点で ${(fadeGain(G, 21, 9999) / G * 100).toFixed(1)}%`)
+
+// **短い音では、入りと終わりが重なる。** 足し合わせず、小さいほうを採る
+check('短い音でも 1 を超えない', fadeGain(1, 5, 5) <= 1)
+check('短い音では、小さいほうを採る',
+  fadeGain(G, 10, 10) === Math.min(fadeGain(G, 10, 9999), fadeGain(G, 9999, 10)))
+
+// **測っていない声(1 倍)でも、ちゃんと下がる**
+check('1 倍の声でも終わりは 0 になる', fadeGain(1, 9999, 0) === 0)
+// 値がおかしくても落ちない
+check('数字でない値でも落ちない', fadeGain(NaN, 10, 10) === 0)
+check('0 の声は 0 のまま', fadeGain(0, 10, 10) === 0)
+
+// **入りは短く、終わりは長く。** 頭の子音を削らないため
+check('入りより終わりのほうが長い', FADE_OUT > FADE_IN, `入り ${FADE_IN}ms / 終わり ${FADE_OUT}ms`)
+check('終わりが長すぎない(語尾が痩せる)', FADE_OUT + FADE_TAIL <= 200,
+  `${FADE_OUT} + ${FADE_TAIL} = ${FADE_OUT + FADE_TAIL}ms`)
+
+// **画面側でも、`fade` を毎コマ回していること。**
+// 語の印が無いときだけ回さない、では終わりが急に切れる
+check('印が無くても、10ms ごとに音量を見ている',
+  !/if \(marks\.length\) frame = /.test(clips)
+  && clips.includes('window.setInterval(tick, FADE_STEP)'))
+check('画面の描き替え(rAF)には頼っていない(粗すぎた)',
+  !clips.includes('requestAnimationFrame'))
+check('止めるときもなだらかに下げている(`FADE_STOP`)',
+  clips.includes('FADE_STOP') && clips.includes('setInterval'))
 
 console.log(failed
   ? `\n❌ ${failed} 件が意図どおりではありません`

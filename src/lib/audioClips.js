@@ -60,7 +60,9 @@ import {
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
 import { markIndexAt, wordMarks } from './wordTiming.js'
-import { applyGain, isMeasured, measureClip } from './loudness.js'
+import {
+  FADE_STEP, FADE_STOP, applyGain, fadeGain, isMeasured, measureClip,
+} from './loudness.js'
 
 /** 0016 で作るバケツ。窓口(supabase/functions/speak)と同じ名前にすること */
 const BUCKET = 'tts'
@@ -169,6 +171,12 @@ const publicUrlOf = (tier, voiceId, hash) =>
 // iPhone のために、**作り直さない。** 作り直すと解錠がやり直しになる。
 let element = null
 let primed = false
+
+/** 止めるときのなだらかな下げ。**割り込まれたら捨てる** */
+let stopFade = 0
+const cancelStopFade = () => {
+  if (stopFade) { window.clearInterval(stopFade); stopFade = 0 }
+}
 /** 再生の世代。新しい再生が始まったら、古い再生の後始末は何もしない */
 let generation = 0
 
@@ -374,14 +382,34 @@ export function stopClip() {
   endCurrent = null
   let at = 0
   if (element) {
+    const el = element
     try {
-      at = Number(element.currentTime) || 0
-      // **止める前に黙らせる**(2026-09「プチっというノイズ」と同じ理由)。
-      // 鳴っている途中で止めると、そこに段差ができる。
-      // 本当の音量は、次に鳴らすとき `applyGain()` が入れ直す
-      element.volume = 0
-      element.pause()
-      element.currentTime = 0
+      at = Number(el.currentTime) || 0
+      cancelStopFade()
+      /* **鳴っている途中で止めるときも、なだらかに下げる**
+         (2026-09 利用者の指摘)。いきなり止めると、波形が途中の値のまま
+         途切れて「プチッ」と鳴る。**60ms かけて 0 まで下げてから止める。**
+
+         止めたこと自体はすぐに効く(`generation` はもう進めてある)ので、
+         押した人を待たせてはいない。鳴っていなければ、その場で止める。 */
+      if (!el.paused && el.volume > 0) {
+        const from = el.volume
+        const step = 10
+        let left = FADE_STOP
+        stopFade = window.setInterval(() => {
+          left -= step
+          if (left <= 0) {
+            cancelStopFade()
+            try { el.volume = 0; el.pause(); el.currentTime = 0 } catch { /* 無視 */ }
+            return
+          }
+          try { el.volume = Math.max(0, from * (left / FADE_STOP)) } catch { cancelStopFade() }
+        }, step)
+      } else {
+        el.volume = 0
+        el.pause()
+        el.currentTime = 0
+      }
     } catch { /* 止められなくても困らない */ }
   }
   end?.()
@@ -458,6 +486,8 @@ export async function playClip({
     el.addEventListener('loadeddata', onLoaded)
     el.addEventListener('error', onError)
     try {
+      // 止めるときの下げが走っていたら捨てる(これから別の音を鳴らす)
+      cancelStopFade()
       // ① 鳴っている最中に作り直させない
       el.pause()
       // ② 差し替えのあいだは黙らせる。**段差ができても聞こえない。**
@@ -494,7 +524,11 @@ export async function playClip({
   // まだ測っていない声は 1(そのまま)なので、
   // **その声の1本目だけはそろわない。** 鳴らし終えたあとに測って覚える
   const pathName = pathVoice(voiceId, tier)
-  applyGain(el, tier, pathName)
+  /* **この声の音量。** すぐには入れず、下の `tick` が**なだらかに上げる。**
+     いきなり 0 から本来の音量へ跳ぶと、そこに段差ができて「プチッ」と鳴る
+     (2026-09 利用者の指摘。下の `FADE_IN` / `FADE_OUT`) */
+  const gain = applyGain(el, tier, pathName)
+  el.volume = 0
 
   /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
      `loadeddata` まで来ているので、ここでは長さが分かっている。
@@ -508,17 +542,57 @@ export async function playClip({
   return new Promise((resolve) => {
     let frame = 0
     let index = -1
+    let shown = -1                       // いま入れてある音量(入れ直しを減らす)
     const marks = wordMarks(body, (el.duration || 0) * 1000)
+    const from = Number(el.currentTime) || 0   // 鳴らし始めた場所(続きから鳴らすとき)
 
-    const stopTrack = () => { if (frame) { window.cancelAnimationFrame(frame); frame = 0 } }
+    /* **画面の描き替え(約 16ms)ではなく、10ms ごとに回す**(2026-09 実測)。
+       rAF だと鳴り終わりの最後のコマが「残り 41ms」で、
+       **音量 0.205 のまま終わっていた** — 半分の高さから急に切れていた。
+       語の色もここで進めるが、10ms は 16ms より細かいので損はしない */
+    const stopTrack = () => { if (frame) { window.clearInterval(frame); frame = 0 } }
+
+    /**
+     * **入りと終わりを、なだらかにする**(2026-09 利用者の指摘)。
+     *
+     *   > まだ会話の発言と発言の間にプチっと入りますね。
+     *   > 音の終わりをなだらかなフェードアウトにするとか、何かできるはずです。
+     *
+     * **前の直しでは足りなかった。** 差し替えの前に `volume = 0` にしたが、
+     * **0 に「跳ぶ」こと自体が段差である。** 波形が途中の値のまま
+     * いきなり 0 になれば、そこで「プチッ」と鳴る。
+     * 音量を**時間をかけて**下げれば、段差そのものが無くなる。
+     *
+     * **音の通り道は変えない**(CLAUDE.md でいちばん高くついた失敗)。
+     * 動かすのは、もともと使っている `<audio>` の `volume` だけである。
+     *
+     * **速さで割る。** `currentTime` は音声の中の時間なので、
+     * 1.2 倍で鳴らしていれば、実際の時間はその 1/1.2 で過ぎる。
+     */
+    const fade = () => {
+      const r = el.playbackRate || 1
+      const now = Number(el.currentTime) || 0
+      const len = Number(el.duration) || 0
+      // 鳴り始めてから何ミリ秒か / 終わりまで何ミリ秒か(どちらも実際の時間)
+      const inMs = ((now - from) / r) * 1000
+      const outMs = len ? ((len - now) / r) * 1000 : Infinity
+      // **決め方は `loudness.js` 1か所**(手元で確かめられる形にしてある)
+      const v = fadeGain(gain, inMs, outMs)
+      // 0.005 より細かい差は耳に届かない。入れ直す回数を減らす
+      if (Math.abs(v - shown) >= 0.005 || (v === 0 && shown !== 0)) {
+        shown = v
+        try { el.volume = v } catch { /* iOS は volume を無視する */ }
+      }
+    }
+
     const tick = () => {
       if (mine !== generation) { stopTrack(); return }
+      fade()
       const next = markIndexAt(marks, el.currentTime * 1000)
       if (next >= 0 && next !== index) {
         index = next
         onWord?.({ charIndex: marks[index].at, charLength: 0 })
       }
-      frame = window.requestAnimationFrame(tick)
     }
 
     const finish = () => {
@@ -526,6 +600,16 @@ export async function playClip({
       el.removeEventListener('ended', finish)
       el.removeEventListener('error', finish)
       stopTrack()
+      /* **測るのは、鳴り終わってから**(2026-09)。
+         測る側は Web Audio で MP3 をほどく(`weighted()`)。
+         **鳴っている最中にそれを始めると、音が一瞬途切れることがある。**
+         「入る時と入らない時がある」に合う — 測るのは
+         **声ごとに1回だけ**なので、その1本のときだけ起きる。
+
+         **先に測らない**という決まりはそのままである(待たせない)。
+         変えたのは「鳴らし始めた瞬間」から「鳴り終わった瞬間」へ、
+         という**いつ**だけで、測る中身は1つも変えていない。 */
+      if (!isMeasured(tier, pathName)) measureClip(url, tier, pathName)
       if (mine === generation) onWord?.(null)
       resolve(true)
     }
@@ -544,9 +628,8 @@ export async function playClip({
       })
     }
     onStart?.()
-    // **鳴らし始めてから測る。** 先に測ると、そのぶん待たせることになる。
-    // 測るのは声ごとに1回だけで、しかも端末の控えから読むので通信は起きない
-    if (!isMeasured(tier, pathName)) measureClip(url, tier, pathName)
-    if (marks.length) frame = window.requestAnimationFrame(tick)
+    /* **印が無くても回す。** 語の色だけでなく、入りと終わりの
+       なだらかさ(`fade`)もここが受け持っている */
+    frame = window.setInterval(tick, FADE_STEP)
   })
 }
