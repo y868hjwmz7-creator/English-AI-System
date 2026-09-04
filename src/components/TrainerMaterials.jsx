@@ -753,14 +753,6 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                   はじめから出し、囲みは**ただの見出し**にしてある。 */}
               <div className="material-head">
                 <div className="material-open">
-                  {/* ── 誰がどの声で読むか(2026-09 利用者の指定)────────────
-                        > 各教材のトップにスピーカーが確認できるタブを
-                        > つけてください
-
-                      **囲みの中のいちばん上**に置く。ふだんは畳んであるので
-                      「読み上げの声」の札1つぶんしか場所を取らない。
-                      話す人がいない教材(記事・ドリル・単語)では出ない */}
-                  <CastChip material={m} />
                   {/* 見出しは弱点だけ。レベル・業界は小さな札。
 
                       **弱点を2回出さない**(2026-08 利用者の指定)。
@@ -814,14 +806,26 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
 
                   何の演習が何問あるかは、教材を選ぶのに要る。
                   **1行に畳んで残す**(2行あった数の行も、これに1本化する)。 */}
-              <p className="muted material-parts">
+              {/* **`<div>` にしてある。** 中に札(`CastChip`)を入れるので、
+                  `<p>` のままだと**中身がはみ出して**並びが崩れる
+                  (`<p>` に箱を入れると、ブラウザがそこで段落を閉じる) */}
+              <div className="muted material-parts">
                 {m.sections.map((sec) => (
                   <span key={sec.id}>
                     {exerciseLabel(sec.exercise_type)}
                     {' '}{countLabel(sec.exercise_type, sec.items.length)}
                   </span>
                 ))}
-              </p>
+                {/* ── 誰がどの声で読むか(2026-09 実機・利用者の指定)────
+                      > 読み上げの声、のタブはこの場所ではなく、
+                      > 会話14発言の右に、同じ高さくらいのタブで十分です。
+
+                    はじめはグレーの囲みのいちばん上に置いていたが、
+                    **教材名より先に目が行っていた。** ふだん読むものではないので、
+                    問数の行の右端へ寄せ、**その行と同じ背丈**にする。
+                    押して開いたときだけ、次の行に名前が出る */}
+                <CastChip material={m} className="cast-chip--inline" />
+              </div>
 
               {/* **押すものは、はじめから出す**(2026-09 利用者の指定)。
                   **強い見た目(青)は「セッションで使う」に譲る**

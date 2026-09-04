@@ -3935,6 +3935,20 @@ html, body { overflow-x: clip; }
    値を直に書くと**暗い配色の集中モードで、黒い紙に黒い文字**になる
    (2026-09 に `.qr--paper` で実際に踏んだ失敗)。 */
 .cast-chip { margin: 0 0 8px; }
+/* **問数の行の右に、その行と同じ背丈で置く**(2026-09 実機・利用者の指定)。
+     > 読み上げの声、のタブはこの場所ではなく、会話14発言の右に、
+     > 同じ高さくらいのタブで十分です。
+
+   `display: contents` にして、**札そのものを問数の行の一員にする。**
+   囲みを1つ挟むと、開いたときに名前が右の細い柱に押し込まれる。
+   ・札 … `margin-left: auto` でその行の右端へ
+   ・名前 … `flex: 1 0 100%` で**次の行いっぱい**に落ちる */
+.cast-chip--inline { display: contents; }
+.cast-chip--inline .cast-chip-btn {
+  margin-left: auto; align-self: center;
+  padding: 1px 10px; font-size: 1em; line-height: 1.5;
+}
+.cast-chip--inline .cast-chip-list { flex: 1 0 100%; margin-top: 4px; font-size: 1em; }
 /* **地色は `--btn-bg`。** グレーの囲み(`--surface-2`)の上に置くので、
    `--surface-1` のままだと**囲みより暗くなり、黒い穴のように見える**
    (2026-08「黒背景に黒ボタンは殺風景」と同じ話)。
