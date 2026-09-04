@@ -377,6 +377,17 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'box_match',   label: '試合の組み立て',   hint: 'ラウンドごとの狙い' },
     { id: 'box_gear',    label: '道具の話',         hint: 'グローブ、バンテージ、シューズ' },
   ],
+  /* 柔術(2026-09 利用者の指定で追加)。**打撃が無く、寝技が中心**なので、
+     MMA ともボクシングとも出てくる語がまるごと違う */
+  jiujitsu: [
+    { id: 'bjj_class',   label: 'クラスに出る',     hint: '今日の技、組む相手、ローテーション' },
+    { id: 'bjj_drill',   label: '技を教わる',       hint: 'ガード、パス、極めまでの順番' },
+    { id: 'bjj_roll',    label: 'スパーリング(ロール)', hint: '強さの加減、タップ、けがを避ける' },
+    { id: 'bjj_belt',    label: '帯とストライプ',   hint: '昇帯、どれくらい続けたか' },
+    { id: 'bjj_comp',    label: '大会に出る',       hint: '階級、計量、ブラケット、ポイント' },
+    { id: 'bjj_gear',    label: '道具の話',         hint: '道着、ラッシュガード、サイズ、洗い方' },
+    { id: 'bjj_open',    label: 'オープンマット',   hint: '他のジムから来た人と、初めましての一言' },
+  ],
   martial: [
     { id: 'mar_class',   label: '道場・ジムのクラス', hint: '準備運動、組む相手、ルールの確認' },
     { id: 'mar_tech',    label: '技を教わる・教える', hint: '手の位置、足の運び、力の抜き方' },
@@ -722,6 +733,14 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'boxg_weight',  label: '階級と減量',       hint: '体づくり、当日の回復' },
     { id: 'boxg_history', label: '名勝負',           hint: '何が分かれ目だったか' },
     { id: 'boxg_health',  label: '安全とルール',     hint: '判定、ストップ、検査' },
+  ],
+  /* 柔術(2026-09 利用者の指定で追加) */
+  jiujitsu: [
+    { id: 'bjjg_gi',      label: '道着ありと無し',    hint: '組み方が変わる。どちらから始めるか' },
+    { id: 'bjjg_belt',    label: '帯と上達',          hint: '何年かかるか、何が身につくか' },
+    { id: 'bjjg_style',   label: '流派とスタイル',    hint: 'ガードの型、押す人・待つ人' },
+    { id: 'bjjg_comp',    label: 'ルールと大会',      hint: 'ポイント、アドバンテージ、団体ごとの違い' },
+    { id: 'bjjg_body',    label: '体づくりとケガ',    hint: '長く続けるための工夫' },
   ],
   martial: [
     { id: 'marg_start',   label: 'はじめてみる',      hint: '何を選び、何を買うか' },
