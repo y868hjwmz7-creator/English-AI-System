@@ -893,6 +893,25 @@ Deno.serve(async (req) => {
      `SPEAKER_COUNTS` に書いてある)。**画面と同じ数で丸める。**
      渡ってこなければ、これまでどおり2人。 */
   const speakers = Math.min(Math.max(Math.round(Number(body.speakers ?? 2) || 2), 2), 4)
+  /* **話す人の性別**(2026-09 利用者の指摘
+       「音声が女性なのに、会話の中では男性役だったり、その反対も起きています」)。
+
+     読み上げの声は**最初に話す人から順に**当てられる(`castClipSpeakers`)。
+     ところが名前は AI が自由に付けていたので、女性の声に Tom が乗った。
+
+     **声に名前を合わせる。** 逆(名前から性別を読んで声を当て直す)は
+     しない — 名前で性別は当てられないし、指名した声が無視されてしまう。
+     画面から渡ってこないときは、これまでどおり何も言わない。 */
+  const genders = (Array.isArray(body.speakerGenders) ? body.speakerGenders : [])
+    .filter((g: unknown) => g === 'male' || g === 'female')
+    .slice(0, speakers) as string[]
+  const genderLine = genders.length === speakers
+    ? `\n- **登場人物の性別は決まっている。最初に話す人から順に、`
+      + genders.map((g, i) => `${i + 1}人目は${g === 'male' ? '男性' : '女性'}`).join('、')
+      + `。** 名前もその性別に合う一般的なものにする`
+      + `\n- **この順番を入れ替えない。** 読み上げの声がこの順で当たるので、`
+      + `入れ替えると女性の声が男性役をしゃべることになる`
+    : ''
   // 本文。内容理解と語句は、本文を読まないと作れない
   const context = String(body.context ?? '').trim().slice(0, 8000)
   // すでに使われている英文。同じ文章が二度出ると、ゲストは
@@ -979,6 +998,7 @@ Deno.serve(async (req) => {
       ? `\n# 登場人物(${speakers}人)\n`
         + `**登場人物はちょうど ${speakers} 人。** 増やしても減らしてもいけない。`
         + `\n- 名前と肩書きは最初から最後まで変えない`
+        + genderLine
         + (speakers === 2
           ? `\n- 2人が交互に話す`
           : `\n- **${speakers} 人が全員、${Math.floor(count / speakers)} 回以上話す。**`

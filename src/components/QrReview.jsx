@@ -32,6 +32,7 @@ import {
 } from '../lib/qrReviews.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 import QrCard from './QrCard.jsx'
+import FocusFrame from './FocusFrame.jsx'
 import { stopReading } from '../lib/readAloud.js'
 import { usePracticeLog } from '../lib/practice.js'
 import { answerFeedback } from '../lib/haptics.js'
@@ -137,21 +138,24 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   }
 
   // ── 解いているあいだ ───────────────────────────────────────
+  //
+  // **集中モードで出す**(2026-09 利用者の指定)。
+  //
+  //   > Quick Response は集中モード扱いなので、
+  //   > 上下の余計な情報は表示しないでください。
+  //
+  // これまでは**ふつうのページの中**に置いていたので、上には左メニュー・
+  // 上の帯・接続の知らせ・試作版の断り書き、下には版とサンプルデータの
+  // ボタンが残っていた。**1問だけに向き合う場所なのに、まわりが騒がしい。**
+  //
+  // 骨組みは `FocusFrame` 1つ(`FocusReader` / `StepFocus` /
+  // 教材の中の Quick Response と同じもの)。**書き写さない。**
+  // portal で body の直下に出るので、**まわりのものは自動的に消える。**
   if (run && run.length) {
     const finished = at >= run.length
     const okCount = done.filter((x) => x.ok).length
-    return (
-      <section className="qr">
-        <div className="qr-head">
-          <strong className="qr-title">Quick Response(復習)</strong>
-          <span className="qr-count">
-            {finished ? `${run.length} / ${run.length}` : `${at + 1} / ${run.length}`}
-          </span>
-          <button type="button" className="btn btn--ghost btn--small" onClick={stop}>
-            とじる
-          </button>
-        </div>
-
+    const body = (
+      <section className="qr qr--paper">
         {/* どこまで来たか。**終わりが見えないと続かない**(単語帳と同じ) */}
         <div className="qr-bar" aria-hidden="true">
           <span style={{ width: `${Math.round((Math.min(at, run.length) / run.length) * 100)}%` }} />
@@ -197,6 +201,25 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
           />
         )}
       </section>
+    )
+
+    /* **下の帯は渡さない。** Quick Response は「まだ / 言える」で進むので、
+       ◀ 前 / 次 ▶ を置くと進め方が2つになる(教材の中の Quick Response と同じ) */
+    return (
+      <FocusFrame
+        className="qrfocus"
+        learnerId={learnerId}
+        page={`qrrev:${at}`}
+        scrollKey={`qrrev:${at}`}
+        onClose={stop}
+        top={(
+          <span className="focus-count">
+            {finished ? `${run.length} / ${run.length}` : `${at + 1} / ${run.length}`}
+          </span>
+        )}
+      >
+        {body}
+      </FocusFrame>
     )
   }
 

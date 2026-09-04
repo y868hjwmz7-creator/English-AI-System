@@ -13,7 +13,7 @@
  * 手入力は「AI 生成がまだ無い間のつなぎ」と「AI の下書きを直す土台」。
  * 1教材40問を毎回ここで打つことは想定していない。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrOption } from '../data/cefr.js'
 import {
@@ -36,8 +36,8 @@ import {
   genreHint, genreLabel, genresFor, sceneHint, sceneLabel, scenesFor,
 } from '../data/genres.js'
 import {
-  CLIP_ACCENTS, DEFAULT_ACCENT, MIN_MEETING_SPEAKERS, pickVoices, speakerCountsFor,
-  voiceCountFor, voicePurposeFor, voicesOfAccent,
+  CLIP_ACCENTS, DEFAULT_ACCENT, MIN_MEETING_SPEAKERS, findVoice, pickVoices,
+  speakerCountsFor, voiceCountFor, voicePurposeFor, voicesOfAccent,
 } from '../data/clipVoices.js'
 import { collectReviewWords, normWord } from '../lib/vocab.js'
 
@@ -212,11 +212,20 @@ export default function MaterialForm({
   const voicePool = voicesOfAccent(accent, voicePurpose)
 
   /**
-   * 保存する声の並びを決める。
+   * 保存する声の並び。
    * 指名されていないところは、その場で**おまかせ**で埋める。
-   * 声を1人も登録していないときは空のまま返す(標準の声で読み上げる)。
+   * 声を1人も登録していないときは空のまま(標準の声で読み上げる)。
+   *
+   * **1回だけ決めて、作るときも保存するときも同じものを使う**
+   * (2026-09 利用者の指摘「音声が女性なのに会話の中では男性役」)。
+   *
+   *   以前は呼ぶたびに `pickVoices()` を回していた。あれは**毎回混ぜる**ので、
+   *   ①作るときに使った並びと ②保存した並びが**別物になりえた。**
+   *   窓口へ性別を伝えても、保存された声がそれと違えば意味がない。
+   *
+   * 訛り・人数・指名が変わったときだけ選び直す(`useMemo`)。
    */
-  const resolvedVoices = () => {
+  const cast = useMemo(() => {
     if (!voicePool.length) return []
     const chosen = []
     for (let i = 0; i < voiceCount; i += 1) {
@@ -232,7 +241,25 @@ export default function MaterialForm({
       if (!chosen.includes(id)) chosen.push(id)
     }
     return chosen
-  }
+    /* **`voicePool` を見張りに入れない。** あれは `filter` の返り値なので
+       **描き直すたびに別の配列**になり、そのたびにおまかせを引き直す
+       (= 保存する声が毎回変わる)。中身は `accent` と `voicePurpose` で
+       決まっているので、その2つを見ていれば足りる。
+       「見張りに、自分が書き換えるものを入れない」と同じ落とし穴である */
+  }, [accent, voiceCount, voicePurpose, picked])
+
+  /**
+   * 窓口へ渡す「話す人の性別」。**声の並びと同じ順**である。
+   *
+   * `castClipSpeakers()` は**最初に話す人から順に**声を当てるので、
+   * ここで「1人目は男性、2人目は女性」と決めておけば、
+   * **名前のほうが声に合う。**
+   * 逆(名前から性別を読んで声を当て直す)はしない —
+   * 名前で性別は当てられないし、指名した声が無視されることになる。
+   */
+  const castGenders = () => cast
+    .map((id) => findVoice(id)?.gender)
+    .filter((g) => g === 'male' || g === 'female')
 
   const reviewLearner = (kind === 'word' || kind === 'phrase') && shareWith.length === 1
     ? shareWith[0] : null
@@ -411,6 +438,11 @@ export default function MaterialForm({
       // **会話に出す人数**(2026-09 利用者の要望「会議というジャンル」)。
       // 記事には要らないので、会話のときだけ渡す
       speakers: isDialogueKind(kind) ? voiceCount : undefined,
+      /* **話す人の性別を、声の並びと同じ順で渡す**(2026-09 利用者の指摘)。
+         これが無いと、窓口は名前を自由に付けるので
+         「女性の声が男性役をしゃべる」が起きる。
+         **声に名前を合わせる**(逆は当てられない) */
+      speakerGenders: isDialogueKind(kind) ? castGenders() : undefined,
       avoid: (used ?? []).slice(-40),
     })
     // **どの段階で失敗したのかを、必ず名前で言う。**
@@ -770,7 +802,7 @@ export default function MaterialForm({
       // **おまかせは、ここで1回だけ決めて保存する。**
       // 開くたびに選び直すと、同じ教材なのに毎回ちがう声になり、
       // そのたびに音声を作り直す(= 課金される)
-      voiceIds: resolvedVoices(),
+      voiceIds: cast,
       topic: subject,
     })
     if (message) { setBusy(false); setError(message); return }
