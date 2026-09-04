@@ -24,7 +24,7 @@ import {
   exerciseLabel, isPassageSection,
 } from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
-import { castLine } from '../lib/voiceCast.js'
+import CastChip from './CastChip.jsx'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, isDialogueKind,
@@ -216,14 +216,7 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
     return () => window.clearTimeout(timer)
   }, [justId, loading, materials])
 
-  /**
-   * 「Mika = Jessica(アメリカ・女性)」の行を作る。
-   *
-   * 声は**最初に話す人から順に**当たる(`castClipSpeakers` 1か所)。
-   * **ここで数え直さない** — 数え方を2つ持つと、画面と音がずれる。
-   * 話す人がいない教材(記事・ドリル・単語)では `null` を返し、行ごと出さない。
-   */
-  /* **中身は `castLine()`(`voiceCast.js`)1か所。**
+  /* 「誰がどの声で読むか」は **`CastChip`(`castList()`)1か所。**
      画面に書くと、素の node で一度も確かめられない
      (`npm run test:voice` が見張っている) */
 
@@ -698,6 +691,14 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                   はじめから出し、囲みは**ただの見出し**にしてある。 */}
               <div className="material-head">
                 <div className="material-open">
+                  {/* ── 誰がどの声で読むか(2026-09 利用者の指定)────────────
+                        > 各教材のトップにスピーカーが確認できるタブを
+                        > つけてください
+
+                      **囲みの中のいちばん上**に置く。ふだんは畳んであるので
+                      「読み上げの声」の札1つぶんしか場所を取らない。
+                      話す人がいない教材(記事・ドリル・単語)では出ない */}
+                  <CastChip material={m} />
                   {/* 見出しは弱点だけ。レベル・業界は小さな札。
 
                       **弱点を2回出さない**(2026-08 利用者の指定)。
@@ -759,26 +760,6 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                   </span>
                 ))}
               </p>
-
-              {/* ── 誰がどの声で読むか(2026-09 利用者の指定)────────────
-                    > この「クラスに出る」の Mika 役の声を今後使用しないように
-                    > 変更を加えてください。この人の時だけ発言の終わりに
-                    > 必ずノイズが入ります。
-
-                  **声に癖があることは、聞いた人にしか分からない。**
-                  ところが**どの声だったのかを知る道が、どこにも無かった**
-                  (声は教材に id で保存されているだけ)。
-                  だから「あの声を外して」と言うことができなかった。
-
-                  ・出すのは**会話・会議だけ**(話す人がいる教材)
-                  ・**さがす画面にだけ出す。** ここはトレーナーの画面で、
-                    レッスンの画面共有には映らない
-                  ・1行に畳む(**一覧に足すものは、1行に収まるかで決める**) */}
-              {castLine(m) && (
-                <p className="muted material-parts material-cast">
-                  <span>読み上げ {castLine(m)}</span>
-                </p>
-              )}
 
               {/* **押すものは、はじめから出す**(2026-09 利用者の指定)。
                   **強い見た目(青)は「セッションで使う」に譲る**

@@ -27,7 +27,7 @@
  * **こちらの側の食い違いは、ここで全部止まる。**
  */
 import { readFileSync } from 'node:fs'
-import { castClipSpeakers, castLine } from '../src/lib/voiceCast.js'
+import { castClipSpeakers, castLine, castList } from '../src/lib/voiceCast.js'
 import {
   CLIP_VOICES, findVoice, voiceSettingsOf, voicesOfAccent,
 } from '../src/data/clipVoices.js'
@@ -225,12 +225,35 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     ng('記事にまで、読み上げの行が出ている')
   } else ok('記事(話す人がいない教材)には出さない')
 
-  // **画面に書き写していないか。** 書き写すと、片方だけ古くなる
-  const tm = read('src/components/TrainerMaterials.jsx')
-  if (/castClipSpeakers\(/.test(tm)) {
-    ng('画面が、当て方を自分で数え直している',
-      '`castLine()` に任せる。数え直すと、出す名前と鳴る声がずれる')
-  } else ok('画面は `castLine()` に任せている')
+  // **1人ずつに分けて取り出せるか**(3人・4人の会議では、
+  // つないだ1本の棒では読み取れない)
+  const list = castList(material([us[0].id, us[1].id]))
+  if (list?.length !== 2) ng('`castList()` が話す人ぶん返っていない')
+  else if (list[0].speaker !== 'Mika' || !list[0].label.startsWith(us[0].label)) {
+    ng('`castList()` の中身がずれている', JSON.stringify(list[0]))
+  } else ok('`castList()` は、話す人ごとに1つずつ返す')
+
+  /* **札は「読み上げの声」1つ**(`CastChip.jsx`)。
+     さがす画面のカードと、レッスン表示の紙の**両方**に出る
+     (2026-09 利用者の指定「各教材のトップに」)。
+     **書き写すと、必ずどちらかだけ古くなる** */
+  const chip = read('src/components/CastChip.jsx')
+  if (!/castList\(/.test(chip)) ng('札が `castList()` を使っていない')
+  else if (!/no-print/.test(chip)) {
+    ng('札が紙に刷られてしまう', '記事・会話の紙は「書き込むための用紙」(仕様書 5.70)')
+  } else ok('札は `castList()` を使い、紙には刷らない')
+
+  for (const [where, file] of [
+    ['さがす画面のカード', 'src/components/TrainerMaterials.jsx'],
+    ['レッスン表示の紙', 'src/components/LessonView.jsx'],
+  ]) {
+    const src = read(file)
+    if (!/<CastChip\b/.test(src)) ng(`${where}に、読み上げの声の札が無い`)
+    else if (/castClipSpeakers\(\s*\[?names/.test(src)) {
+      ng(`${where}が、当て方を自分で数え直している`,
+        '`CastChip` に任せる。数え直すと、出す名前と鳴る声がずれる')
+    } else ok(`${where} … 読み上げの声の札がある`)
+  }
 }
 
 // ── 訛りを最大限に活かす指定(2026-09 利用者の指定)────────────────

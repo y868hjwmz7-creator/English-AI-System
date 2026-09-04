@@ -43,6 +43,7 @@ import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import MaterialTitle from './MaterialTitle.jsx'
+import CastChip from './CastChip.jsx'
 import QuickResponse from './QuickResponse.jsx'
 import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
@@ -942,6 +943,15 @@ export default function LessonView({
             **問題を出す場所を、そのぶん広く取る。**
             6Steps は本文を読む練習なので、題名はそのまま出す */}
         <div className={`lesson-head${qr ? ' is-hidden' : ''}`}>
+          {/* ── 誰がどの声で読むか(2026-09 利用者の指定)────────────
+                > 各教材のトップにスピーカーが確認できるタブをつけてください
+
+              **紙のいちばん上**に置く。ふだんは畳んであるので、
+              「読み上げの声」の札1つぶんしか場所を取らない。
+              話す人がいない教材(記事・ドリル・単語)では出ない。
+              **紙には刷らない**(`no-print`)—— 記事・会話の紙は
+              「書き込むための用紙」で、中身は決まっている(仕様書 5.70) */}
+          <CastChip material={material} />
           {/* **見出しには、小さな訳を添える**(0036・2026-09 利用者の指定)。
               0036 を貼る前に作った教材には入っていない(訳が出ないだけ) */}
           <MaterialTitle title={material.title} headline={material.headline}

@@ -3877,6 +3877,42 @@ html, body { overscroll-behavior-x: none; }
 .lesson-sheet .mtitle-chip { border-color: var(--rule); color: var(--ink-soft); background: #fff; }
 
 /* 何の練習か(弱点)。主役ではないので小さく、しかし必ず見えるように */
+/* ── 「読み上げの声」の札(2026-09 利用者の指定)──────────────────
+     > 各教材のトップにスピーカーが確認できるタブをつけてください
+
+   さがす画面のカードと、レッスン表示の紙の**両方**に出る
+   (`CastChip.jsx` 1つ。**2か所に書き写さない**)。
+
+   **色はすべて変数から取る。** 紙の中は「配色の島」なので、
+   値を直に書くと**暗い配色の集中モードで、黒い紙に黒い文字**になる
+   (2026-09 に `.qr--paper` で実際に踏んだ失敗)。 */
+.cast-chip { margin: 0 0 8px; }
+/* **地色は `--btn-bg`。** グレーの囲み(`--surface-2`)の上に置くので、
+   `--surface-1` のままだと**囲みより暗くなり、黒い穴のように見える**
+   (2026-08「黒背景に黒ボタンは殺風景」と同じ話)。
+   紙の上では、紙の島の `--btn-bg`(明るい)がそのまま効く */
+.cast-chip-btn { font-size: .8em; line-height: 1.4; }
+/* **`:not(.chip--on)` を必ず付ける。** こちらはあとに書いてあるので、
+   付けないと**開いている印(`chip--on` のうすい青)を打ち消す** */
+.cast-chip-btn:not(.chip--on) { background: var(--btn-bg); }
+.cast-chip-mark { font-size: .85em; }
+.cast-chip-list {
+  list-style: none; margin: 6px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: .78em; line-height: 1.6;
+}
+/* **1人ずつ行を分ける。** つないで1本にすると、
+   3人・4人の会議では読み取れない棒になる */
+.cast-chip-list li {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+}
+.cast-chip-who { font-weight: 700; }
+.cast-chip-eq { color: var(--text-muted); }
+.cast-chip-voice { color: var(--text-secondary); }
+/* 紙の上では、紙の色から取る(島の変数) */
+.lesson-sheet .cast-chip-eq, .focus-paper .cast-chip-eq { color: var(--ink-faint); }
+.lesson-sheet .cast-chip-voice, .focus-paper .cast-chip-voice { color: var(--ink-soft); }
+
 .lesson-weakness {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   margin-top: 6px; font-size: .72em;

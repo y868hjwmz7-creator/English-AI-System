@@ -200,9 +200,9 @@ export function clipSpeakerFor(voice) {
  *   (`npm run test:voice`)。画面の中に書くと、一度も走らせられない。
  *
  * @param {object} material `normalizeMaterial()` を通した教材
- * @returns {string|null} 「Mika = Jessica(アメリカ・女性) / …」
+ * @returns {Array<{speaker: string, voice: string, label: string}>|null}
  */
-export function castLine(material) {
+export function castList(material) {
   /* **会議の本文も `dialogue` である**(演習の種類は増やしていない)。
      だから、ここは1つ見るだけで会話にも会議にも効く */
   const body = (material?.sections ?? [])
@@ -221,7 +221,20 @@ export function castLine(material) {
 
   const ids = material?.voiceIds ?? material?.voice_ids
   const cast = castClipSpeakers(names, ids)
-  return names
-    .map((n) => `${n.split(' (')[0]} = ${voiceLabel(voiceFor(cast, n))}`)
-    .join(' / ')
+  return names.map((n) => {
+    const voice = voiceFor(cast, n)
+    return { speaker: n.split(' (')[0], voice, label: voiceLabel(voice) }
+  })
+}
+
+/**
+ * 同じものを**1行の文字**にしたもの。
+ * **数え方を2通り持たない** —— `castList()` をつないでいるだけである。
+ *
+ * @returns {string|null} 「Mika = Jessica(アメリカ・女性) / …」
+ */
+export function castLine(material) {
+  const list = castList(material)
+  if (!list) return null
+  return list.map((c) => `${c.speaker} = ${c.label}`).join(' / ')
 }
