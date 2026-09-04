@@ -236,8 +236,27 @@ export const CLIP_VOICES = [
      **標準の段(Google / Azure)にスコットランドの声は無い。**
      ドリルや単語では `uk-male` が代役になる(`baseOf`)。
      訛りが要るのは記事・会話の本文なので、そこは ElevenLabs が読む。 */
+  /* **この声だけ、値を変えて試している**(2026-09 利用者の指定)。
+     利用者から「雑音が入る」「結構区切って読む」という報告があったため。
+
+       > 似せ具合を 0.1、話者らしさを Off、stability を 0.8 にしてみてください。
+       > 一度 Ally だけで実験してみたいです
+
+     ねらいは2つ。
+
+     ・**雑音**… `similarity_boost` と `use_speaker_boost` は、どちらも
+       「もとの録音にどれだけ寄せるか」を上げる指定である。もとの録音に
+       息の音や部屋鳴りが入っていると、**その雑音ごと寄せる。**
+       下げれば雑音も薄まる(引き換えに訛りも薄まりうる)
+     ・**区切って読む**… `stability` は読み方をどれだけ揃えるか。
+       低いと間の取り方が回ごとにばらつく。上げると平らに流れる
+
+     **聞いて確かめたのは利用者である。** こちらには音が聞こえないので、
+     良くなったかどうかは実機で確かめてもらう。
+     戻すときは、この `settings` の行を消せばよい(全員と同じ値に戻る)。 */
   { id: 'sc-1', accent: 'sc', gender: 'male', use: 'both',
-    label: 'Ally', elevenId: 'v2zbX16tJNtRIx8rSHDM' },
+    label: 'Ally', elevenId: 'v2zbX16tJNtRIx8rSHDM',
+    settings: { similarity_boost: 0.1, stability: 0.8, use_speaker_boost: false } },
 ]
 
 /**

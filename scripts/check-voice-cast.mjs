@@ -31,7 +31,7 @@ import {
   castClipSpeakers, castLine, castList, remakeModeOf, sameVoices,
 } from '../src/lib/voiceCast.js'
 import {
-  CLIP_VOICES, findVoice, voiceSettingsOf, voicesOfAccent,
+  ACCENT_KEEP, CLIP_VOICES, findVoice, voiceSettingsOf, voicesOfAccent,
 } from '../src/data/clipVoices.js'
 
 let bad = 0
@@ -323,22 +323,51 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
      検証はそれでも緑のまま**だった(空の一覧を回しても何も起きない)。
      **「無ければ素通り」する形の検証を書かない。**
      いまは名簿の全員を1人ずつ見る。 */
+  /* **「1人だけ値を変える」道があるので、ただ 1 かどうかでは見ない。**
+     見るのは2つ。
+
+     ① **4つの欄が、全員に必ず揃っている**(渡す道が切れていない)
+     ② **既定から外れてよいのは、その行に `settings` を書いた声だけ。**
+        書いていない声が既定からずれていたら、それは事故である
+
+     ①を「値が 1 か」で代表させると、実験のために1人下げた日に
+     **検証そのものを緩める**ことになり、そのまま全員に広がっても
+     気づけない。だから**欄の有無**と**既定からのずれの出どころ**を分けて見る。 */
+  const KEYS = ['similarity_boost', 'stability', 'style', 'use_speaker_boost']
   const missing = []
-  const weak = []
+  const drifted = []
+  const tuned = []
   for (const v of CLIP_VOICES) {
     const st = voiceSettingsOf(v.id)
-    if (!st) missing.push(v.label)
-    else if (Number(st.similarity_boost) < 1) weak.push(`${v.label}=${st.similarity_boost}`)
-    else if (st.use_speaker_boost !== true) weak.push(`${v.label}(話者らしさが off)`)
+    if (!st || KEYS.some((k) => st[k] === undefined)) { missing.push(v.label); continue }
+    const own = v.settings ?? {}
+    /* 書いていない欄が既定と食い違っていたら、事故である */
+    const bad = KEYS.filter((k) => !(k in own) && st[k] !== ACCENT_KEEP[k])
+    if (bad.length) drifted.push(`${v.label}(${bad.join(' / ')})`)
+    const named = KEYS.filter((k) => k in own)
+    if (named.length) tuned.push(`${v.label}: ${named.map((k) => `${k}=${st[k]}`).join(' ')}`)
   }
   if (missing.length) {
     ng('訛りを活かす指定が付いていない声がいる', missing.join(' / '))
-  } else if (weak.length) {
-    ng('訛りを活かす指定が弱い声がいる',
-      `${weak.join(' / ')}\n    もとの録音に寄せるほど訛りが残る。similarity_boost は 1 にする`)
+  } else if (drifted.length) {
+    ng('名簿に書いていないのに、既定からずれている声がいる',
+      `${drifted.join(' / ')}\n    1人だけ変えるなら、その行に settings を書く`)
   } else {
-    ok(`名簿の ${CLIP_VOICES.length} 人**全員**に、訛りを活かす指定が付いている`)
+    ok(`名簿の ${CLIP_VOICES.length} 人**全員**に、4つの欄がそろって付いている`)
+    /* **変えた声は必ず名前を出す。** 黙って効いていると、
+       あとから「なぜこの声だけ音が違うのか」をたどれない */
+    if (tuned.length) ok(`このうち値を変えてあるのは … ${tuned.join(' / ')}`)
   }
+
+  /* **範囲の外を送ると窓口が 422 で断られる。** 数の欄は 0〜1 に収める */
+  const outOfRange = CLIP_VOICES.filter((v) => {
+    const st = voiceSettingsOf(v.id)
+    return ['similarity_boost', 'stability', 'style']
+      .some((k) => !(Number(st[k]) >= 0 && Number(st[k]) <= 1))
+  })
+  if (outOfRange.length) {
+    ng('0〜1 の外の値がある', outOfRange.map((v) => v.label).join(' / '))
+  } else ok('数の欄は、全員 0〜1 に収まっている')
 
   /* **名簿に無い id でも落ちない。** 代役(`us-female` など)の名前が
      来ることがあるので、そこで `undefined` を返すと窓口へ渡らない */
