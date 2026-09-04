@@ -437,6 +437,17 @@ export default function LessonView({
    * 開くたびに閉じたところから始める。
    */
   const [howOpen, setHowOpen] = useState(null)
+  /**
+   * **集中モードから 6Steps へ移るときの、行き先**(2026-09 利用者の指定)。
+   *
+   *   > 黒がメインの画面にも6stepsに行くためのタブを上部バーに
+   *   > 実装してください。
+   *
+   * 「本文を読んで語を調べる」集中モード(`FocusReader`)で選ばれた
+   * 取り組み方を、`PassagePractice` へ**1回だけ**渡す。
+   * そのあとは中のプルダウンで自由に切り替えられる。
+   */
+  const [startStep, setStartStep] = useState(null)
 
   /* 練習をやめたら、集中モードも閉じる。**開きっぱなしにしない**
      (次に Quick Response を開いたとき、いきなり集中モードに入って驚く) */
@@ -449,6 +460,51 @@ export default function LessonView({
     setFocusAt(centeredFocusIndex())
     setRun('focus')
   }
+
+  /**
+   * 集中モードから 6Steps へ移る(`FocusReader` のプルダウン)。
+   * **紙に戻る場所は控えたまま**にしておく — 6Steps を閉じれば、
+   * 入る前と同じところへ戻れる。
+   */
+  const goStep = (id) => {
+    stopAll()
+    setStartStep(id)
+    setRun('six')
+    setSixFocus(true)
+  }
+
+  /**
+   * **どの集中モードでも、上の帯に同じものを置く**(2026-09 利用者の指定)。
+   *
+   *   > 全ての集中モードにおいて、音声の速さ、画面の幅、印刷、
+   *   > 文字の大きさのUIはこの写真のように黒のデザインで
+   *   > 上部バーに配置しておいてください。
+   *
+   * **中身はここ1か所で作る。** 3つの集中モードそれぞれに書き写すと、
+   * 必ずどれかだけ古くなる(CLAUDE.md)。
+   * 押したときの動きも、レッスン表示の帯とまったく同じものを使う
+   * ——「速さを変えたら読み上げを止める」「選んだ値は覚える」——
+   * ので、**判断が2か所に分かれない。**
+   *
+   * 印刷は**紙(`#lesson-sheet`)を刷る。** 集中モードで見えているのは
+   * 1つだけだが、紙は教材まるごとの控えである(CLAUDE.md
+   * 「紙は教材まるごとの控え」)。
+   */
+  const focusSettings = (
+    <>
+      <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
+               onChange={(id) => { setRateId(id); saveRateId(id); stopAll() }} />
+      <Stepper label="文字" options={SIZES} value={size}
+               onChange={(id) => { setSize(id); saveSize(id) }} />
+      {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}
+      <Stepper label="幅" options={WIDTHS} value={width} className="lesson-widths"
+               onChange={(id) => { setWidth(id); saveWidth(id) }} />
+      <button type="button" className="btn btn--small"
+              onClick={() => printElement(document.getElementById('lesson-sheet'))}>
+        <PrintIcon />印刷
+      </button>
+    </>
+  )
 
   /* 練習をやめて紙に戻ったら、**入る前とぴったり同じ場所**へ送り直す。
      `useLayoutEffect` にしてあるのは、**描き直しのあと・目に映る前**に
@@ -853,6 +909,10 @@ export default function LessonView({
             width={width}
             wordStatuses={wordStatuses} onMarkWord={onMarkWord}
             materialId={material.id} learnerId={learnerId}
+            /* **6Steps へは、上の帯から移れる**(2026-09 利用者の指定) */
+            onGoStep={passageSection ? goStep : null}
+            /* 速さ・文字・幅・印刷。**3つの集中モードで同じもの** */
+            settings={focusSettings}
             onClose={() => setRun(null)}
           />
         ) : run === 'six' ? (
@@ -874,6 +934,10 @@ export default function LessonView({
                集中モードに入った瞬間に別の幅に変わっては落ち着かない。
                `FocusReader` に渡しているものと**同じ値**である */
             focusWidth={width}
+            /* 速さ・文字・幅・印刷。**3つの集中モードで同じもの** */
+            focusSettings={focusSettings}
+            /* 集中モードのプルダウンから来たときの行き先(1回だけ効く) */
+            startStep={startStep}
             /* 見出しは紙の上にもう出ている。**同じ英語を2行続けて並べない** */
             isDialogue={passageSection.exercise_type === 'dialogue'}
             /* 途中経過を教材ごとにまとめて消せるようにするため、
@@ -889,6 +953,8 @@ export default function LessonView({
                          focus={qrFocus} onFocusClose={() => setQrFocus(false)}
                          /* 紙の幅をそのまま引き継ぐ(ほかの集中モードと同じ) */
                          focusWidth={width}
+                         /* 速さ・文字・幅・印刷。**3つの集中モードで同じもの** */
+                         focusSettings={focusSettings}
                          onClose={() => setRun(null)} />
         ) : null}
 

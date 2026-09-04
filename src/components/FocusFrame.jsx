@@ -30,9 +30,9 @@
  *   ・Quick Response は矢印で送らない(答えて進む)
  *   **同じに見えて同じではないものを、無理に1つにしない。**
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CloseIcon } from './Icons.jsx'
+import { CloseIcon, GearIcon } from './Icons.jsx'
 import { useFocusBoard } from './FocusBoard.jsx'
 
 /**
@@ -47,12 +47,18 @@ import { useFocusBoard } from './FocusBoard.jsx'
  * @param topEnd     上の帯の右端(6Steps のプルダウン・見た印の点)
  * @param bar        下の帯の中身。**渡さなければ帯を出さない**
  *                   (Quick Response は自分の答えボタンで進む)
+ * @param settings   速さ・文字・幅・印刷(2026-09 利用者の指定)。
+ *                   **書き込む / メモと同じかたまりにして、右へ寄せる。**
+ *                   狭い画面では「表示」に畳む(レッスン表示と同じ作法)
  */
 export default function FocusFrame({
   className = '', width = 'w100', learnerId = null, page = 0,
   bodyRef = null, scrollKey = null, onClose,
-  top = null, topEnd = null, bar = null, children,
+  top = null, topEnd = null, bar = null, settings = null, children,
 }) {
+  /* 狭い画面で「表示」を開いているか。**覚えない** —
+     一度決める設定なので、開くたびに畳んだところから始めてよい */
+  const [openSettings, setOpenSettings] = useState(false)
   const ownRef = useRef(null)
   const ref = bodyRef ?? ownRef
   const board = useFocusBoard({ learnerId, page, bodyRef: ref })
@@ -81,15 +87,44 @@ export default function FocusFrame({
       <div className="focus-top">
         {board.pen ? board.penBar : (
           <>
-            <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>
-              <CloseIcon />閉じる
+            {/* **いつも要るものは、1つの囲みにまとめて折り返させない**
+                (レッスン表示の `.lesson-bar-main` と同じ作法)。
+                帯ぜんぶを折り返させていたので、iPhone(390px)で
+                6Steps のプルダウンが2段目に落ち、**帯の高さが2倍**に
+                なっていた(実測 95px)。囲みにまとめれば、入らないぶんは
+                プルダウンのほうが縮む(「…」で切れる) */}
+            <div className="focus-top-main">
+              {/* **狭い画面では絵だけになる**(`.wide-text`)ので、
+                  読み上げのための名前を必ず添える */}
+              <button type="button" className="btn btn--small btn--ghost"
+                      aria-label="閉じる" onClick={onClose}>
+                <CloseIcon /><span className="wide-text">閉じる</span>
+              </button>
+              {top}
+              {topEnd}
+            </div>
+            {/* ── しまっておくもの(2026-09 利用者の指定)──────────
+                > 速さ、画面の幅、印刷、文字の大きさのUIはこの写真のように
+                > 黒のデザインで上部バーに配置しておいてください。
+                > 「書き込む」も同じように他のUIと同じく右に寄せて
+
+                レッスン表示の帯とまったく同じ形にする。
+                **一度決めれば何度も要らない**ので、狭い画面では
+                「表示」に畳み、押したときだけ2段目に出す。
+                パソコンでは畳まない(CSS が決めるので、この札も出ない) */}
+            <button type="button" className="btn btn--small lesson-more"
+                    aria-expanded={openSettings} aria-controls="focus-settings"
+                    onClick={() => setOpenSettings((v) => !v)}>
+              <GearIcon /><span className="mid-text">表示</span>
             </button>
-            {top}
-            {/* **書き込む / メモ**(2026-09 利用者の指定)。
-                1つだけに向き合う場所なので、線を引きたくなるのも
-                気づいたことを残したくなるのも、まさにこの最中である */}
-            {board.tools}
-            {topEnd}
+            <div id="focus-settings"
+                 className={`lesson-settings${openSettings ? ' is-open' : ''}`}>
+              {/* **書き込む / メモ**(2026-09 利用者の指定)。
+                  1つだけに向き合う場所なので、線を引きたくなるのも
+                  気づいたことを残したくなるのも、まさにこの最中である */}
+              {board.tools}
+              {settings}
+            </div>
           </>
         )}
       </div>

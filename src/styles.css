@@ -5176,19 +5176,64 @@ html, body { overscroll-behavior-x: none; }
   touch-action: manipulation;
 }
 
-/* 上の帯。**細く1行にする。** ここが太ると本文が下へ押し出される */
+/* 上の帯。**細く1行にする。** ここが太ると本文が下へ押し出される。
+   **色はレッスン表示の帯と同じ黒**(2026-09 利用者の指定
+   「速さ、画面の幅、印刷、文字の大きさのUIはこの写真のように
+     黒のデザインで上部バーに配置しておいてください」)。
+   `.lesson-bar` と同じく**決め打ち**にする —
+   明るい配色を選んでいても、この帯だけはいつも暗い。
+   狭い画面では設定が2段目に落ちるので `flex-wrap: wrap` にする */
 .focus-top {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
   padding: 8px 16px;
   padding-top: max(8px, env(safe-area-inset-top));
-  border-bottom: 1px solid var(--border);
+  background: #24241f; color: #f2f2ee;
+  border-bottom: 1px solid #45453f;
 }
 .focus-count {
-  font-size: 13px; font-weight: 700; color: var(--text-secondary);
+  font-size: 13px; font-weight: 700; color: #cfcfc8;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* 帯の上のボタン・プルダウン・設定。**`.lesson-bar` と同じ作法**で、
+   色は決め打ちにする(変数のままだと明るい配色でこの帯だけ浮く) */
+.focus-top .btn, .focus-bar .btn {
+  border-color: #55554e; background: #33332d; color: #f2f2ee;
+}
+.focus-top .btn--primary, .focus-bar .btn--primary {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.focus-top .btn:disabled, .focus-bar .btn:disabled { opacity: .4; }
+.focus-top select {
+  background: #33332d; color: #f2f2ee; border-color: #55554e;
+}
+.focus-top .stepper { border-color: #55554e; }
+.focus-top .stepper-label { color: #b9b9b2; }
+.focus-top .stepper-arrow { color: #e6e6e0; }
+.focus-top .stepper-arrow:hover:not(:disabled) { color: #fff; }
+.focus-top .stepper-now { color: #f2f2ee; }
+/* 右に寄せるのは**設定のかたまり**(`.lesson-settings` の margin-left: auto)。
+   6Steps のプルダウンと、見た印の点は、数のすぐ横に並べる */
+.focus-top .stepfocus-pick, .focus-top .focus-dots { margin-left: 0; }
+/* **いつも要るものは1行に収める**(`.lesson-bar-main` と同じ作法)。
+   flex は**縮める前に折り返す**ので、囲みでまとめないと
+   iPhone(390px)で 6Steps のプルダウンが2段目に落ち、
+   **帯の高さが2倍**になっていた(実測 95px → 53px)。
+   `min-width: 0` を置いてはじめて、入らないぶんがプルダウン側で縮む */
+/* **基準の幅は 0 にする**(`flex: 1 1 0`)。`auto` にすると
+   flex は「中身の幅」で行を割ってから縮めるので、
+   **縮められるのに先に「表示」が2段目へ落ちる。**
+   0 にしておけば必ず同じ行に収まり、残りを分け合ったうえで
+   入らないぶんだけプルダウンが縮む(「…」で切れる) */
+.focus-top-main {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 10px;
+}
+/* 6Steps のプルダウン。**縮むのはここ**(ほかは縮めようがない)。
+   広い画面で伸びすぎないよう、上限も置く */
+.focus-top .stepfocus-pick { flex: 0 1 auto; min-width: 0; max-width: 15em; }
+.focus-top .stepfocus-pick > select { width: 100%; min-width: 0; }
 
 /* 見終わった段落の印。**どこまでやったか一目で分かる**(利用者の指定)。
    数が多い教材でも1行に収まるよう、折り返して縮める */
@@ -5300,8 +5345,9 @@ html, body { overscroll-behavior-x: none; }
   display: flex; align-items: center; gap: 10px;
   padding: 10px 16px;
   padding-bottom: max(10px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border);
-  background: var(--surface-1);
+  /* 上の帯と同じ黒。**明るい配色でも、この帯はいつも暗い** */
+  border-top: 1px solid #45453f;
+  background: #24241f; color: #f2f2ee;
 }
 /* 帯と、その上に浮かぶ「集中モードを終える」の入れ物。
    **帯そのものには置かない。** 「次 ▶」と重なるか、320px で1行に収まらない */

@@ -86,6 +86,17 @@ export default function PassagePractice({
   focusWidth = 'w100',
   /** 集中モードを外から開け閉めする(渡さなければ自分で持つ) */
   focus: focusProp = null, onFocusChange = null,
+  /**
+   * 集中モードの上の帯に置く、速さ・文字の大きさ・紙の幅・印刷
+   * (2026-09 利用者の指定)。**中身は `LessonView` が作る。**
+   * 紙の外(ゲストの宿題など)からは渡されないので、そのときは出ない。
+   */
+  focusSettings = null,
+  /**
+   * 開いたときに、この取り組み方から始める(`FocusReader` の 6Steps 選び)。
+   * **効くのは値が変わったときの1回だけ**(下の `askedStep`)。
+   */
+  startStep = null,
 }) {
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('six_steps', true, learnerId)
@@ -114,6 +125,25 @@ export default function PassagePractice({
   const [step, setStep] = useProgress(
     progressKey(materialId, section.id, 'step'), 'dictation', learnerId,
   )
+
+  /**
+   * **外から取り組み方を指定して開く**(2026-09 利用者の指定)。
+   *
+   *   > 黒がメインの画面にも6stepsに行くためのタブを上部バーに
+   *   > 実装してください。
+   *
+   * 「本文を読んで語を調べる」集中モード(`FocusReader`)から
+   * 6Steps を選ぶと、`LessonView` がこの値を渡してくる。
+   * **効くのは、値が変わったときの1回だけ。** そのあとは
+   * ふだんどおり、覚えている取り組み方が続く
+   * (押すたびに戻されると、中で切り替えられなくなる)。
+   */
+  const askedStep = useRef(null)
+  useEffect(() => {
+    if (!startStep || startStep === askedStep.current) return
+    askedStep.current = startStep
+    setStep(startStep)
+  }, [startStep])
   const [voices, setVoices] = useState([])
   const [showJa, setShowJa] = useState(false)
   // 読み上げの速さ。取り組み方ごとのもとの速さに**掛ける**ので、
@@ -779,6 +809,7 @@ export default function PassagePractice({
                  at={at} total={focusTotal} unit={focusUnitLabel} width={focusWidth}
                  /* **メモを出すかどうかは、相手がいるかで決まる**(`FocusBoard`) */
                  learnerId={learnerId}
+                 settings={focusSettings}
                  onMove={(n) => { stopPlaying(); setFocusAt(Math.min(Math.max(0, n), focusTotal - 1)) }}
                  onClose={() => { stopPlaying(); setFocus(false) }}>
         {body}

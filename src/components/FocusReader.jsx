@@ -71,6 +71,7 @@ import { resolveVoices } from '../data/clipVoices.js'
 import { useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { normWord } from '../lib/vocab.js'
+import { SIX_STEPS } from '../lib/sixSteps.js'
 
 /**
  * 英文から、そろえた形(`normWord`)の語を重複なく取り出す。
@@ -119,6 +120,25 @@ export default function FocusReader({
    * 狭い画面では紙がもともと画面いっぱいなので、見た目は変わらない。
    */
   width = 'w100',
+  /**
+   * **6Steps へ移る**(2026-09 利用者の指定)。
+   *
+   *   > 黒がメインの画面にも6stepsに行くためのタブを上部バーに
+   *   > 実装してください。
+   *
+   * この画面は「本文を読んで語を調べる」ための集中モードだが、
+   * **調べ終えたらそのまま取り組みたくなる。** いったん出て、
+   * 6Steps を開いて、また集中モードに入る…では続かない。
+   * `StepFocus` が持っているのと**同じプルダウン**を上の帯に置く。
+   * 渡されなければ出さない(効かない操作を見せない)。
+   */
+  onGoStep = null,
+  /**
+   * 速さ・文字の大きさ・紙の幅・印刷(2026-09 利用者の指定)。
+   * **どの集中モードでも同じものを、同じ場所に置く。**
+   * 中身は `LessonView` が作る(判断を2か所に持たない)。
+   */
+  settings = null,
 }) {
   const items = useMemo(
     () => (section?.items ?? []).filter((it) => String(it?.prompt_en ?? '').trim()),
@@ -239,10 +259,30 @@ export default function FocusReader({
       /* 送り戻しに使うので、送る箱はこちらでも持つ(`go`) */
       bodyRef={bodyRef}
       onClose={onClose}
+      settings={settings}
       top={(
-        <span className="focus-count">
-          {wrap ? '調べた語' : `${index + 1} / ${total} ${unit}`}
-        </span>
+        <>
+          <span className="focus-count">
+            {wrap ? '調べた語' : `${index + 1} / ${total} ${unit}`}
+          </span>
+          {/* **6Steps へは、ここから移れる**(2026-09 利用者の指定)。
+              `StepFocus` と**同じ見た目のプルダウン**にしてある。
+              先頭は「読んで調べる」= いまの画面そのもので、
+              **選び直しても何も起きない**(戻る先がここだから) */}
+          {onGoStep && (
+            <label className="wb-formpick stepfocus-pick">
+              <span className="sr-only">6Steps へ移る</span>
+              <select value="" onChange={(e) => {
+                if (e.target.value) onGoStep(e.target.value)
+              }}>
+                <option value="">読んで調べる</option>
+                {SIX_STEPS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.no} {m.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+        </>
       )}
       topEnd={(
         /* 見終わった段落の印。**どこまでやったか一目で分かる** */

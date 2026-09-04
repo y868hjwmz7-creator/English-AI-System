@@ -249,6 +249,85 @@ function insidePhrasal(words, i) {
 }
 
 /**
+ * **目的語をはさんだ句動詞**の、副詞の位置か(2026-09 実機・利用者の指摘)。
+ *
+ *   > 前からの訳において、初心者がやるように細かく分けると
+ *   > まだ対応しきれていない部分があります。
+ *
+ * `we'll set that up / for you.` `I'll write that down.`
+ * `Thanks for working this out / with me,` — どれも**動詞と副詞のあいだに
+ * 短い目的語**がはさまる形である。`insidePhrasal()` は隣どうししか見ないので、
+ * ここで切れてしまい(`set / that up for you`)、
+ * **訳がその手前でまとまって**出ていた。
+ *
+ * 【前置詞と取り違えない】
+ *   同じ語が前置詞にもなる(`keep it on the table` の `on`)。
+ *   **見分けるのはうしろである** — 副詞なら、そこで句が終わるか、
+ *   次に前置詞・接続詞が来る(`up for you` / `out with me` / `down.`)。
+ *   名詞のかたまりが続くなら、それは前置詞である。
+ *
+ * @returns {string|null} 当たったときは「動詞 … 副詞」
+ */
+function splitPhrasalAt(words, i) {
+  if (i <= 1 || i >= words.length) return null
+  const here = String(words[i] ?? '').toLowerCase().replace(/[^a-z]/g, '')
+  if (!PHRASAL_PARTICLES.has(here)) return null
+  const obj = String(words[i - 1] ?? '').toLowerCase().replace(/[^a-z]/g, '')
+  if (!OBJECT_PRONOUNS.has(obj)) return null
+  const verb = stem(words[i - 2])
+  if (!PHRASAL_PAIRS.has(`${verb} ${here}`)) return null
+  const raw = String(words[i] ?? '')
+  const closes = /[.!?…,;:]["'”’)\]]*$/.test(raw)
+  const next = words[i + 1]
+  if (!closes && next !== undefined) {
+    const nb = String(next).toLowerCase().replace(/[^a-z]/g, '')
+    // うしろに名詞のかたまりが続くなら、**それは前置詞**である
+    if (!PREPOSITIONS.has(nb) && !CONNECTORS.has(nb) && !COORDINATORS.has(nb)) return null
+  }
+  return `${words[i - 2]} … ${words[i]}`
+}
+
+/**
+ * その位置(i 語目の**前**)が、目的語をはさんだ句動詞の内側か。
+ *
+ * **`slashProblem()` では使わない。** 同じ形でも前置詞のことがあり、
+ * 取り違えるとそのまま**間違った注意**になる(CLAUDE.md)。
+ * ここは控え(模範)の側だけで使う — 切れ目が1つ減るだけで害が小さい。
+ */
+function insideSplitPhrasal(words, i) {
+  return !!(splitPhrasalAt(words, i) || splitPhrasalAt(words, i + 1))
+}
+
+/**
+ * **文のうしろに付く「いつ・どこ」**(2026-09 実機・利用者の指摘)。
+ *
+ * `for making time / today.` `before the event / next month.`
+ * `by email / tomorrow morning.` `the headliner / tonight.`
+ * `a table / backstage.` — 初心者はここで必ず切る。ところが控えは
+ * 名詞とくっつけたままだったので、**そこで切っても訳が分かれなかった。**
+ *
+ * 冠詞も前置詞も付かないので、これまでの決まりでは1つも拾えていない。
+ */
+const TAIL_ADVERBS = new Set([
+  'today', 'tonight', 'tomorrow', 'yesterday', 'tomorrow.', 'now',
+  'backstage', 'onstage', 'offstage', 'overseas', 'abroad',
+  'upstairs', 'downstairs', 'outside', 'inside', 'nearby',
+  'afterwards', 'beforehand', 'nowadays', 'worldwide', 'everywhere',
+])
+
+/** 「いつ」を作る先頭の語(`next month` `last night` `this morning`) */
+const TIME_HEADS = new Set(['next', 'last', 'this', 'every', 'each'])
+
+/** 「いつ」の中身になる名詞 */
+const TIME_NOUNS = new Set([
+  'morning', 'afternoon', 'evening', 'night', 'noon',
+  'day', 'week', 'month', 'year', 'weekend', 'time',
+  'spring', 'summer', 'fall', 'autumn', 'winter',
+  'quarter', 'semester', 'season', 'monday', 'tuesday', 'wednesday',
+  'thursday', 'friday', 'saturday', 'sunday',
+])
+
+/**
  * **必ず前置詞**である語。副詞にも動詞にもならない。
  *
  * `in` `on` `up` `down` `off` `out` `over` `by` `about` `across` `along`
@@ -503,6 +582,12 @@ const NUMBER_WORDS = new Set([
   'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
   'ten', 'twenty', 'thirty', 'fifty', 'hundred', 'thousand', 'million',
   'billion', 'several', 'many', 'much', 'few', 'more', 'most', 'other',
+  /* **抜けていた数**(2026-09 実機)。`Ninety thousand` の `ninety` が
+     数と見なされず、`Ninety / thousand sounds fair.` と1つの数の途中で
+     切れていた。**数え上げるものは、最後まで数え上げる** */
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+  'seventeen', 'eighteen', 'nineteen', 'forty', 'sixty', 'seventy',
+  'eighty', 'ninety',
 ])
 
 /**
@@ -569,6 +654,12 @@ function objectHere(words, i) {
   if (!prev) return false
   // 文の切れ目・読点のあとは、**別の決まりがすでに切っている**
   if (endsSentence(rawPrev) || /[,;:]$/.test(String(rawPrev))) return false
+  /* **そこで句が終わる裸の代名詞の前では切らない**(2026-09 実機)。
+     `Got / it,` と切れたため、訳まで「わかり」「ました」に割れていた。
+     1語しか残らないところに、訳を分けて置く意味がない */
+  const rawHere = String(words[i] ?? '')
+  if (OBJECT_PRONOUNS.has(bare(rawHere))
+      && (endsSentence(rawHere) || endsClause(rawHere))) return false
   // 前の語が、同じ名詞のかたまりの一部であるとき
   if (DETERMINERS.has(prev) || isAdjective(prev)) return false
   if (isPossessive(rawPrev)) return false
@@ -751,6 +842,20 @@ function insideAux(words, i) {
  *
  * @returns {{at: number, strength: number, why: string}[]}
  */
+/**
+ * その1つ前が「動詞が来る場所」か(`we'd like` `I like` `they don't like`)。
+ * **`like` を前置詞と取り違えないため**だけに使う(2026-09 実機)。
+ */
+function verbBefore(words, i) {
+  const prevRaw = String(words[i - 1] ?? '')
+  const prev = bare(prevRaw)
+  if (!prev) return false
+  if (SUBJECT_PRONOUNS.has(prev)) return true
+  if (MODALS.has(prev)) return true
+  // `we'd` `I'll` `they've` のような短縮。**主語 + 助動詞**が1語になっている
+  return /['’](d|ll|ve|m|re|s)$/i.test(prevRaw.replace(/[^A-Za-z'’]+$/, ''))
+}
+
 export function idealSlashes(sentence) {
   const words = wordsOf(sentence)
   const out = []
@@ -763,6 +868,14 @@ export function idealSlashes(sentence) {
     // (`npm run test:chunk` の1本目がそれを見張っている)
     if (insideAux(words, at)) return                  // 助動詞と動詞は離さない
     if (insidePhrasal(words, at)) return              // 句動詞は動詞と副詞で1つ
+    // **目的語をはさんだ句動詞**(`set that up` `write that down`)。
+    // 隣どうしではないので `insidePhrasal()` では拾えない(2026-09 実機)
+    if (insideSplitPhrasal(words, at)) return
+    // **数の途中では切らない**(`Ninety / thousand` は1つの数である)
+    if (NUMBER_WORDS.has(bare(words[at - 1])) && NUMBER_WORDS.has(bare(words[at]))) return
+    // **`this one` `that one` は1つのかたまり。** 割ると `one` だけが残り、
+    // 窓口がそれを数字と読んで「4つを」と訳していた(2026-09 実機)
+    if (['one', 'ones'].includes(bare(words[at])) && DETERMINERS.has(bare(words[at - 1]))) return
     // 冠詞のあとで切らない(広いほう)。ただし **前置詞 + 代名詞** のあとは別。
     // `Apps like this / let …` の `this` は冠詞ではなく代名詞である(2026-08)
     const objPronoun = OBJECT_PRONOUNS.has(bare(words[at - 1]))
@@ -793,6 +906,21 @@ export function idealSlashes(sentence) {
     // **句動詞のあと**(2026-08 利用者の指定)。
     // `Some streams pull in / more than five thousand viewers` と切れるように
     if (insidePhrasal(words, i)) add(i + 1, 1, '句動詞のあと')
+    // **目的語をはさんだ句動詞のあと**(`we'll set that up / for you.`)
+    if (splitPhrasalAt(words, i)) add(i + 1, 1, '句動詞のあと(目的語をはさむ)')
+    /* **文のうしろに付く「いつ・どこ」の前**(2026-09 実機・利用者の指摘)。
+       `by email / tomorrow morning.` `the headliner / tonight.`
+       初心者はここで必ず切るのに、控えはくっつけたままだった。
+       **前が前置詞・冠詞のときは切らない** — `by tomorrow` の `by` が
+       ひとりぼっちになる(`add()` の冠詞の決まりと同じ考え方) */
+    if (i > 0 && !endsSentence(words[i - 1]) && !endsClause(words[i - 1])
+        && !PREPOSITIONS.has(bare(words[i - 1])) && !DETERMINERS.has(bare(words[i - 1]))
+        && !CONNECTORS.has(bare(words[i - 1])) && !COORDINATORS.has(bare(words[i - 1]))) {
+      if (TAIL_ADVERBS.has(b)) add(i, 1, `${b} の前(いつ・どこ)`)
+      else if (TIME_HEADS.has(b) && TIME_NOUNS.has(bare(words[i + 1] ?? ''))) {
+        add(i, 1, `${b} ${bare(words[i + 1])} の前(いつ)`)
+      }
+    }
     // **並べているもののつなぎの前**(2026-09 利用者の指定)。
     // `A pair of shoes / and a water bottle` と切れるように。
     // 強さ1(初級だけ)。並べているだけで、意味が変わるわけではない
@@ -801,15 +929,33 @@ export function idealSlashes(sentence) {
     if (CONNECTORS.has(b)) add(i, 3, `${b} の前(ここから意味が変わる)`)
     // **前置詞 + 代名詞**は、前の名詞にかかる2語のかたまり(2026-08)。
     // ここでは切らず、**そのうしろで切る**(`Apps like this / let …`)
-    else if (PREPOSITIONS.has(b) && OBJECT_PRONOUNS.has(bare(words[i + 1] ?? ''))) {
+    else if (PREPOSITIONS.has(b) && OBJECT_PRONOUNS.has(bare(words[i + 1] ?? ''))
+             && !['one', 'ones'].includes(bare(words[i + 2] ?? ''))) {
+      // `to this one` のように `one` が続くときは、**そこが名詞**である。
+      // 切ると `one` だけが残り、訳が数字になる(2026-09 実機)
       add(i + 2, 1, `${b} + 代名詞のあと`)
     }
-    // 前置詞の前。**前置詞＋名詞でひとかたまり**
-    else if (PREPOSITIONS.has(b)) add(i, b === 'of' ? 1 : 2, `${b} の前(前置詞＋名詞でひとかたまり)`)
+    /* 前置詞の前。**前置詞＋名詞でひとかたまり**
+       ただし `like` は**動詞にもなる**(2026-09 実機
+       「and we'd / like your set」と割れていた)。
+       主語や助動詞のうしろに立っていれば、それは動詞である */
+    else if (PREPOSITIONS.has(b)
+             && !(b === 'like' && verbBefore(words, i))) {
+      add(i, b === 'of' ? 1 : 2, `${b} の前(前置詞＋名詞でひとかたまり)`)
+    }
     // 副詞の前・主語の代名詞の前(2026-08)。**控えを細かくしておく**ため。
     // 強さ1なので初級でしか出ないが、訳を控える単位は初級である。
     // ここが細かいほど、ゲストがどこで切っても訳が真下に来る
-    else if (isAdverb(b) || SUBJECT_PRONOUNS.has(b)) add(i, 1, `${b} の前`)
+    else if (isAdverb(b) || SUBJECT_PRONOUNS.has(b)) {
+      /* **接続詞のすぐうしろでは切らない**(2026-09 実機)。
+         `since / you mentioned` と切ると `since` が1語で残る。
+         接続詞の**前**ではすでに切ってあるので、そこで足りている
+         (「接続詞・関係詞のあと、次のまとまりの先頭に置く」・CLAUDE.md) */
+      const prev = bare(words[i - 1] ?? '')
+      if (!CONNECTORS.has(prev) && !COORDINATORS.has(prev) && !HEAD_WORDS.has(prev)) {
+        add(i, 1, `${b} の前`)
+      }
+    }
     // **前の名詞を説明する分詞の前**(2026-08 利用者の指定)。
     // `Phone scams / targeting elderly people`
     // `The money / raised by the fund`。

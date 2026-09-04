@@ -46,6 +46,12 @@ export default function StepFocus({
   onMove, onClose, children,
   /** 誰のセッションか。**メモを出すかどうかを決める**(`FocusBoard`) */
   learnerId = null,
+  /**
+   * 速さ・文字の大きさ・紙の幅・印刷(2026-09 利用者の指定)。
+   * **どの集中モードでも同じものを、同じ場所に置く。**
+   * 中身は `LessonView` が作る(判断を2か所に持たない)。
+   */
+  settings = null,
 }) {
   /* Esc で終える。矢印で送る。
      **早く帰る条件を足したら、その下を必ず見る**(CLAUDE.md)。
@@ -79,18 +85,23 @@ export default function StepFocus({
       page={`${step}:${at}`}
       scrollKey={`${step}:${at}`}
       onClose={onClose}
-      top={<span className="focus-count">{at + 1} / {total} {unit}</span>}
-      topEnd={(
-        /* **6Steps は、ここで切り替えられる**(利用者の指定「6steps全てに」)。
-           いちいち出て、選び直して、また入る…では続かない */
-        <label className="wb-formpick stepfocus-pick">
-          <span className="sr-only">6Steps の切り替え</span>
-          <select value={step} onChange={(e) => onStepChange?.(e.target.value)}>
-            {SIX_STEPS.map((m) => (
-              <option key={m.id} value={m.id}>{m.no} {m.label}</option>
-            ))}
-          </select>
-        </label>
+      settings={settings}
+      top={(
+        <>
+          <span className="focus-count">{at + 1} / {total} {unit}</span>
+          {/* **6Steps は、ここで切り替えられる**(利用者の指定「6steps全てに」)。
+              いちいち出て、選び直して、また入る…では続かない。
+              **置き場所は「閉じる」のとなり**(`FocusReader` と同じ)。
+              あちらにも同じプルダウンがあるので、**場所を変えない** */}
+          <label className="wb-formpick stepfocus-pick">
+            <span className="sr-only">6Steps の切り替え</span>
+            <select value={step} onChange={(e) => onStepChange?.(e.target.value)}>
+              {SIX_STEPS.map((m) => (
+                <option key={m.id} value={m.id}>{m.no} {m.label}</option>
+              ))}
+            </select>
+          </label>
+        </>
       )}
       bar={(
         <>

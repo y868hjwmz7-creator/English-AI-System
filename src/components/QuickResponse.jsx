@@ -56,6 +56,11 @@ export default function QuickResponse({
    * 開いているかどうかは**レッスン表示の側が持つ**(ボタンがあちらの行にある)。
    */
   focus = false, focusWidth = 'w100', onFocusClose = null,
+  /**
+   * 速さ・文字の大きさ・紙の幅・印刷(2026-09 利用者の指定)。
+   * **どの集中モードでも同じものを、同じ場所に置く。**
+   */
+  focusSettings = null,
 }) {
   /* **取り組み方は2通り**(2026-09 利用者の指定)。
        > 文章のモードと、出てきたフレーズ、単語のモードを
@@ -354,6 +359,7 @@ export default function QuickResponse({
       page={`${mode}:${at}`}
       scrollKey={`${mode}:${at}`}
       onClose={onFocusClose}
+      settings={focusSettings}
     >
       {body}
     </FocusFrame>
