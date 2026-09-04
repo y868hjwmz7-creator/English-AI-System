@@ -331,8 +331,17 @@ export const voiceRateOf = (id) => {
 /** 画面に出す名前。「Rachel(アメリカ・女性)」 */
 export const voiceLabel = (id) => {
   const v = findVoice(id)
-  if (!v) return id
-  return `${v.label}(${accentLabel(v.accent)}・${v.gender === 'male' ? '男性' : '女性'})`
+  if (v) {
+    return `${v.label}(${accentLabel(v.accent)}・${v.gender === 'male' ? '男性' : '女性'})`
+  }
+  /* **代役(標準の段)にも、読める名前を付ける**(2026-09 実機)。
+     教材に声を選んでいないときは `us-female` のような代役が鳴る。
+     id をそのまま出すと**何のことか分からない**ので、
+     「標準の声」であることと、訛り・性別を日本語で言う。
+     `baseOf()` の作りに合わせて `<訛り>-<性別>` を読み解く */
+  const m = /^([a-z]{2})-(male|female)$/.exec(String(id ?? ''))
+  if (m) return `標準の声(${accentLabel(m[1])}・${m[2] === 'male' ? '男性' : '女性'})`
+  return id
 }
 
 /**

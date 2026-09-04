@@ -16,7 +16,7 @@
  *   確実にするなら、生成のときに人物の性別も返させる必要がある
  *   (いまは行っていない。出力が増えるため)。
  */
-import { DEFAULT_BASE, baseOf, resolveVoices } from '../data/clipVoices.js'
+import { DEFAULT_BASE, baseOf, resolveVoices, voiceLabel } from '../data/clipVoices.js'
 import { genderOf } from '../data/speakers.js'
 
 /** 女性名としてよく使われるもの(手がかり。網羅は目指さない) */
@@ -166,4 +166,62 @@ export function clipSpeakerFor(voice) {
   const gender = genderOf(voice) === 'male' ? 'male' : 'female'
   const accent = /^en-gb/i.test(voice.lang ?? '') ? 'uk' : 'us'
   return baseOf(accent, gender)
+}
+
+/**
+ * ============================================================================
+ * 教材のカードに出す **「誰がどの声で読むか」の1行。**
+ *
+ * 【なぜ要るか】(2026-09 利用者の指定)
+ *
+ *   > この「クラスに出る」の Mika 役の声を今後使用しないように
+ *   > 変更を加えてください。
+ *
+ *   声そのものに癖があることは、**聞いた人にしか分からない。**
+ *   ところが声は教材に id で保存されているだけで、
+ *   **どの声だったのかを見る場所がどこにも無かった。**
+ *
+ * 【なぜここに置くか】(2026-09 実機・2手め)
+ *
+ *   > Mikaの音声が誰なのか確認できません
+ *
+ *   はじめは `TrainerMaterials.jsx` の中に書き、
+ *   **`voice_ids` が空なら何も出さない**ことにしていた。
+ *   けれども空でも音は鳴る —— `castClipSpeakers()` が
+ *   `resolveVoices()` で**代役に落とす**からである。
+ *   つまり「出す声はあるのに、名前だけが出ない」状態で、
+ *   **いちばん知りたいときに何も出なかった。**
+ *
+ *   **鳴るなら、必ず名前が出る。** 判断は `castClipSpeakers()` に任せ、
+ *   ここでは何も数え直さない(数え直すと、画面に出す名前と
+ *   実際に鳴る声がずれる)。
+ *
+ *   画面から切り離してあるので、**素の node で確かめられる**
+ *   (`npm run test:voice`)。画面の中に書くと、一度も走らせられない。
+ *
+ * @param {object} material `normalizeMaterial()` を通した教材
+ * @returns {string|null} 「Mika = Jessica(アメリカ・女性) / …」
+ */
+export function castLine(material) {
+  /* **会議の本文も `dialogue` である**(演習の種類は増やしていない)。
+     だから、ここは1つ見るだけで会話にも会議にも効く */
+  const body = (material?.sections ?? [])
+    .find((sec) => sec.exercise_type === 'dialogue')
+  if (!body) return null
+
+  /* 出てきた順に、**元の表記のまま**並べる。
+     `castClipSpeakers()` が返す鍵は小文字にそろえた形なので、
+     そのまま出すと「mika」になってしまう */
+  const names = []
+  for (const it of body.items ?? []) {
+    const sp = String(it.speaker ?? '').trim()
+    if (sp && !names.includes(sp)) names.push(sp)
+  }
+  if (!names.length) return null
+
+  const ids = material?.voiceIds ?? material?.voice_ids
+  const cast = castClipSpeakers(names, ids)
+  return names
+    .map((n) => `${n.split(' (')[0]} = ${voiceLabel(voiceFor(cast, n))}`)
+    .join(' / ')
 }

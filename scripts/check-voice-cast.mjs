@@ -27,7 +27,7 @@
  * **こちらの側の食い違いは、ここで全部止まる。**
  */
 import { readFileSync } from 'node:fs'
-import { castClipSpeakers } from '../src/lib/voiceCast.js'
+import { castClipSpeakers, castLine } from '../src/lib/voiceCast.js'
 import {
   CLIP_VOICES, findVoice, voiceSettingsOf, voicesOfAccent,
 } from '../src/data/clipVoices.js'
@@ -169,6 +169,68 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     else if (!still) ng('`retired` を付けると、引けなくなる')
     else ok('`retired` を付ければ、選択肢から外れて、引くことはできる')
   }
+}
+
+// ── どの声かを知る道(2026-09 実機・利用者の指摘)──────────────────
+//
+//    > Mikaの音声が誰なのか確認できません
+//
+//    声に癖があることは**聞いた人にしか分からない**ので、
+//    「あの声を外して」と言うには**名前が見えていなければならない。**
+//    ところが `voice_ids` が空のときに何も出さないようにしていたため、
+//    **鳴っているのに名前だけが出ない**状態になっていた。
+//    空でも音は鳴る(`resolveVoices()` が代役に落とす)。
+{
+  const material = (voiceIds) => ({
+    voiceIds,
+    sections: [{
+      exercise_type: 'dialogue',
+      items: [
+        { speaker: 'Mika (Coach)', prompt_en: 'Line one.' },
+        { speaker: 'Kenji', prompt_en: 'Line two.' },
+        { speaker: 'Mika (Coach)', prompt_en: 'Line three.' },
+      ],
+    }],
+  })
+
+  const us = voicesOfAccent('us')
+  const line = castLine(material([us[0].id, us[1].id]))
+  if (!line) ng('声を選んだ会話で、読み上げの行が出ない')
+  else if (!line.includes(`Mika = ${us[0].label}`)) {
+    ng('1人目に、1つめの声が出ていない', line)
+  } else if (!line.includes(`Kenji = ${us[1].label}`)) {
+    ng('2人目に、2つめの声が出ていない', line)
+  } else ok(`読み上げの行 … ${line}`)
+
+  /* **声を選んでいない教材でも出す。** ここが 2026-09 の実機で
+     「確認できません」と言われたところである。**鳴るなら、名前が出る** */
+  for (const empty of [[], null, undefined]) {
+    const l = castLine(material(empty))
+    if (!l) {
+      ng('声を選んでいない会話で、読み上げの行が出ない',
+        '空でも代役の声が鳴る。鳴るなら名前が出ないといけない')
+      break
+    }
+    if (/\bus-female\b|\buk-male\b/.test(l)) {
+      ng('代役の声が、id のまま出ている', `${l}\n    「標準の声(アメリカ・女性)」と読める形にする`)
+      break
+    }
+  }
+  if (castLine(material([])) && !/\bus-female\b/.test(castLine(material([])))) {
+    ok(`声を選んでいない会話でも出る … ${castLine(material([]))}`)
+  }
+
+  // **話す人がいない教材では出さない**(効かない行を見せない)
+  if (castLine({ voiceIds: [], sections: [{ exercise_type: 'reading', items: [{}] }] })) {
+    ng('記事にまで、読み上げの行が出ている')
+  } else ok('記事(話す人がいない教材)には出さない')
+
+  // **画面に書き写していないか。** 書き写すと、片方だけ古くなる
+  const tm = read('src/components/TrainerMaterials.jsx')
+  if (/castClipSpeakers\(/.test(tm)) {
+    ng('画面が、当て方を自分で数え直している',
+      '`castLine()` に任せる。数え直すと、出す名前と鳴る声がずれる')
+  } else ok('画面は `castLine()` に任せている')
 }
 
 // ── 訛りを最大限に活かす指定(2026-09 利用者の指定)────────────────

@@ -24,8 +24,7 @@ import {
   exerciseLabel, isPassageSection,
 } from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
-import { castClipSpeakers, voiceFor } from '../lib/voiceCast.js'
-import { voiceLabel } from '../data/clipVoices.js'
+import { castLine } from '../lib/voiceCast.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, isDialogueKind,
@@ -224,31 +223,9 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
    * **ここで数え直さない** — 数え方を2つ持つと、画面と音がずれる。
    * 話す人がいない教材(記事・ドリル・単語)では `null` を返し、行ごと出さない。
    */
-  const castLineOf = (m) => {
-    /* **選んだ声が無い教材では出さない。** 標準の声(Google / Azure)で
-       読み上げるので、名簿の名前で呼べるものが無い */
-    const ids = m.voiceIds ?? m.voice_ids
-    if (!ids?.length) return null
-    /* **会議の本文も `dialogue` である**(演習の種類は増やしていない)。
-       だから、ここは1つ見るだけで会話にも会議にも効く */
-    const body = (m.sections ?? []).find((sec) => sec.exercise_type === 'dialogue')
-    if (!body) return null
-    /* 出てきた順に、**元の表記のまま**並べる。
-       `castClipSpeakers()` が返す鍵は小文字にそろえた形なので、
-       そのまま出すと「mika」になってしまう */
-    const names = []
-    for (const it of body.items ?? []) {
-      const sp = String(it.speaker ?? '').trim()
-      if (sp && !names.includes(sp)) names.push(sp)
-    }
-    if (!names.length) return null
-    /* **当て方は `castClipSpeakers` に任せる。** ここで数え直すと、
-       画面に出す名前と、実際に鳴る声がずれる */
-    const cast = castClipSpeakers(names, ids)
-    return names
-      .map((n) => `${n.split(' (')[0]} = ${voiceLabel(voiceFor(cast, n))}`)
-      .join(' / ')
-  }
+  /* **中身は `castLine()`(`voiceCast.js`)1か所。**
+     画面に書くと、素の node で一度も確かめられない
+     (`npm run test:voice` が見張っている) */
 
   /** 本文があって、まだカタマリごとの訳が入っていない教材か(0021) */
   // **判断は `chunkJa.js` の `needsChunkJa()` 1か所。** 画面に持たない
@@ -797,9 +774,9 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                   ・**さがす画面にだけ出す。** ここはトレーナーの画面で、
                     レッスンの画面共有には映らない
                   ・1行に畳む(**一覧に足すものは、1行に収まるかで決める**) */}
-              {castLineOf(m) && (
+              {castLine(m) && (
                 <p className="muted material-parts material-cast">
-                  <span>読み上げ {castLineOf(m)}</span>
+                  <span>読み上げ {castLine(m)}</span>
                 </p>
               )}
 
