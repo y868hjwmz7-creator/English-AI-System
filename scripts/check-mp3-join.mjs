@@ -18,9 +18,12 @@
  *   ③ 無音が**元の音声と同じ形**になるか — ここが食い違うと音が壊れる
  *   ④ つないだ結果が、**フレームだけの並び**になっているか
  *   ⑤ 中身が**1バイトも書き換わっていない**か(作り直さない、という指定)
+ *   ⑥ どの教材で何本集まるか(`audioPlaylist.js`)
+ *   ⑦ **長さの札**が、全体の長さを指しているか(2026-09 実機)
  */
 import {
-  audioFileName, dropId3v1, firstFrame, joinMp3, silenceFor, skipId3,
+  audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
+  silenceFor, skipId3, vbrTagFrame, vbrTagOf,
 } from '../src/lib/mp3Join.js'
 
 let bad = 0
@@ -31,7 +34,13 @@ const ng = (s, d = '') => { bad += 1; console.log(`✗ ${s}${d ? `\n    ${d}` : 
  * 本物と同じ形の MP3 をこしらえる。
  * **中身は何でもよい**(ここで見るのは並べ方であって、音ではない)。
  */
-function fakeMp3({ mpeg1 = true, kbps = 128, hz = 44100, frames = 4, id3 = false } = {}) {
+function fakeMp3({
+  mpeg1 = true, kbps = 128, hz = 44100, frames = 4, id3 = false,
+  /* **長さの札**(先頭の1枚)を付ける。本物の MP3 にはたいてい付いている。
+     ここに書いた枚数を、再生機は「この音声の長さ」として読む。
+     **わざと嘘の枚数を書ける**ようにしてある(落とせているかを見るため) */
+  xing = 0,
+} = {}) {
   const brTable = mpeg1
     ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320]
     : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]
@@ -47,12 +56,35 @@ function fakeMp3({ mpeg1 = true, kbps = 128, hz = 44100, frames = 4, id3 = false
     out.push(0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, size)
     for (let i = 0; i < size; i += 1) out.push(0x41)
   }
+  const head = () => out.push(
+    0xff, 0xe0 | (verBits << 3) | (1 << 1) | 1, (brIndex << 4) | (srIndex << 2), 0xc4,
+  )
+  if (xing) {
+    /* 頭 → 副情報(0 で埋める)→ `Xing` → 旗 → 枚数 → 大きさ。
+       **ここは手で組む。** 検証する側と同じ関数で作ると、
+       その関数が間違っていても気づけない。
+       **ちょうど1枚(len バイト)にする** */
+    const side = mpeg1 ? 17 : 9        // 0xc4 はモノラル
+    const at = 4 + side
+    const f = new Array(len).fill(0)
+    f[0] = 0xff
+    f[1] = 0xe0 | (verBits << 3) | (1 << 1) | 1
+    f[2] = (brIndex << 4) | (srIndex << 2)
+    f[3] = 0xc4
+    ;[0x58, 0x69, 0x6e, 0x67].forEach((b, i) => { f[at + i] = b })   // "Xing"
+    f[at + 7] = 0x03                   // 枚数と大きさを書いた、という印
+    f[at + 8] = (xing >>> 24) & 0xff
+    f[at + 9] = (xing >>> 16) & 0xff
+    f[at + 10] = (xing >>> 8) & 0xff
+    f[at + 11] = xing & 0xff
+    out.push(...f)
+  }
   for (let f = 0; f < frames; f += 1) {
-    out.push(0xff, 0xe0 | (verBits << 3) | (1 << 1) | 1, (brIndex << 4) | (srIndex << 2), 0xc4)
+    head()
     // 中身。**0 以外を入れておく**(無音と見分けるため)
     for (let i = 4; i < len; i += 1) out.push((i + f) % 251 + 1)
   }
-  return { bytes: new Uint8Array(out), len, spf, hz, frames }
+  return { bytes: new Uint8Array(out), len, spf, hz, frames, xing }
 }
 
 // ── ① 頭を正しく読めるか ──────────────────────────────────────
@@ -152,10 +184,12 @@ function fakeMp3({ mpeg1 = true, kbps = 128, hz = 44100, frames = 4, id3 = false
   // **頭から終わりまで、フレームだけが並んでいる**(隙間が無い)
   const f = firstFrame(a.bytes)
   const gapFrames = Math.round(300 / ((f.samplesPerFrame / f.sampleRate) * 1000))
-  const wantLen = a.len * 3 + f.len * gapFrames + b.len * 2
+  // 先頭には**長さの札が1枚**付く(2026-09。下の⑦)
+  const tagLen = f.len
+  const wantLen = tagLen + a.len * 3 + f.len * gapFrames + b.len * 2
   if (joined.length !== wantLen) {
     ng('つないだ長さが合わない', `${joined.length} ≠ ${wantLen}`)
-  } else ok(`つないだ長さ … ${joined.length} バイト(本編 5 枚 + 無音 ${gapFrames} 枚)`)
+  } else ok(`つないだ長さ … ${joined.length} バイト(札 1 + 本編 5 + 無音 ${gapFrames} 枚)`)
 
   let at = 0
   let count = 0
@@ -174,7 +208,10 @@ function fakeMp3({ mpeg1 = true, kbps = 128, hz = 44100, frames = 4, id3 = false
      本編のバイト列が、そのままの形で入っていること */
   const head = a.bytes.subarray(30)      // 札のうしろ = 本編
   let same = true
-  for (let i = 0; i < head.length; i += 1) if (joined[i] !== head[i]) { same = false; break }
+  // **長さの札のぶんだけ、うしろから**(本編そのものは1バイトも変えない)
+  for (let i = 0; i < head.length; i += 1) {
+    if (joined[tagLen + i] !== head[i]) { same = false; break }
+  }
   if (!same) ng('本編の中身が書き換わっている', '作り直さない、という指定である')
   else ok('本編の中身は1バイトも書き換わっていない')
 
@@ -273,6 +310,99 @@ function fakeMp3({ mpeg1 = true, kbps = 128, hz = 44100, frames = 4, id3 = false
   if (materialAudioClips(null).length || materialAudioClips({}).length) {
     ng('教材が無いのに何か返している')
   } else ok('教材が無ければ 0 本')
+}
+
+// ── ⑦ 長さの札 ────────────────────────────────────────────────
+/* 【なぜ要るか】(2026-09 実機・利用者の指摘)
+ *
+ *   > 実際は2分29秒の音声が、プレーヤーでは22秒として表示されます。
+ *   > 22秒のところで再生バーは終了するのに音声だけは続く
+ *
+ *   **22秒は、1つめの発言の長さである。** MP3 そのものには長さが
+ *   書かれていないので、多くの作り手は先頭に音の出ないフレームを1枚
+ *   置き、そこに「全部で何枚あるか」を書く。つないだあとも
+ *   **1本目のその札がそのまま先頭に残っていた。**
+ *
+ *   **こちらには音が聞こえず、再生機も無い。** だから数字で見る。 */
+{
+  const one = fakeMp3({ frames: 10, xing: 10 })   // 札に「10枚」と書いてある
+  const two = fakeMp3({ frames: 20, xing: 20 })
+
+  // まず、札を見つけられるか(見つけられなければ落とせない)
+  const tagged = firstFrame(one.bytes)
+  if (vbrTagOf(one.bytes, tagged) !== 'Xing') {
+    ng('長さの札を見つけられない', '落とせないので、1本目の長さが全体になる')
+  } else ok('長さの札(Xing)を見分けられる')
+
+  const plain = fakeMp3({ frames: 3 })
+  if (vbrTagOf(plain.bytes, firstFrame(plain.bytes))) {
+    ng('札が無いのに「ある」と言っている', 'ふつうのフレームを1枚捨ててしまう')
+  } else ok('札が無ければ「無い」と返す')
+
+  const joined = joinMp3([{ bytes: one.bytes, gapMs: 0 }, { bytes: two.bytes, gapMs: 0 }])
+
+  /* **元の札は1枚も残っていない。** 中ほどに残ると、そこで数え直す
+     再生機を混乱させる。先頭の1枚は、こちらが作り直したものである */
+  let stale = 0
+  let at = 0
+  while (at < joined.length) {
+    const fr = firstFrame(joined.subarray(at))
+    if (!fr || fr.at !== 0) break
+    if (at > 0 && vbrTagOf(joined.subarray(at), fr)) stale += 1
+    at += fr.len
+  }
+  if (stale) ng(`元の長さの札が ${stale} 枚残っている`)
+  else ok('元の長さの札は、1枚も残っていない')
+
+  // 先頭は、こちらが作った札
+  const lead = firstFrame(joined)
+  const kind = vbrTagOf(joined, lead)
+  if (!kind) ng('先頭に長さの札が無い', '再生機が長さを見積もれない')
+  else ok(`先頭に長さの札がある(${kind} … ビットレートが最後まで同じ)`)
+
+  /* **書いてある枚数が、本当の枚数と合っているか。**
+     ここがこの検証のかなめである。合っていなければ、
+     再生バーはまた途中で終わる */
+  const sideLen = 4 + 17               // MPEG1・モノラル
+  const readU32 = (o) => (joined[o] << 24 | joined[o + 1] << 16
+    | joined[o + 2] << 8 | joined[o + 3]) >>> 0
+  const wroteFrames = readU32(sideLen + 8)
+  const wroteBytes = readU32(sideLen + 12)
+  const realFrames = countFrames(joined.subarray(lead.len))
+  if (wroteFrames !== 30) {
+    ng('札に書いた枚数がちがう', `${wroteFrames} ≠ 30(10 + 20)`)
+  } else if (realFrames !== 30) {
+    ng('本当に並んでいる枚数がちがう', `${realFrames} ≠ 30`)
+  } else if (wroteBytes !== joined.length) {
+    ng('札に書いた大きさがちがう', `${wroteBytes} ≠ ${joined.length}`)
+  } else {
+    const secs = (wroteFrames * one.spf) / one.hz
+    ok(`札の枚数 ${wroteFrames} 枚 = 実際の枚数(${secs.toFixed(2)} 秒ぶん)`)
+  }
+
+  // 間(ま)の無音も、枚数に入る。**入れ忘れると、そのぶん短く出る**
+  const withGap = joinMp3([{ bytes: one.bytes, gapMs: 300 }, { bytes: two.bytes, gapMs: 0 }])
+  const gapFrames = Math.round(300 / ((one.spf / one.hz) * 1000))
+  const lead2 = firstFrame(withGap)
+  const wrote2 = ((withGap[sideLen + 8] << 24 | withGap[sideLen + 9] << 16
+    | withGap[sideLen + 10] << 8 | withGap[sideLen + 11]) >>> 0)
+  if (wrote2 !== 30 + gapFrames) {
+    ng('間(ま)の無音が、枚数に入っていない', `${wrote2} ≠ ${30 + gapFrames}`)
+  } else if (countFrames(withGap.subarray(lead2.len)) !== wrote2) {
+    ng('間を入れると、枚数と中身が食い違う')
+  } else ok(`間(ま)の無音 ${gapFrames} 枚も、枚数に入っている`)
+
+  // 数え損ねたら、**札は付けない**(間違った長さを書くくらいなら書かない)
+  const broken = new Uint8Array([...one.bytes.subarray(0, one.len * 3), 9, 9, 9])
+  const out = joinMp3([{ bytes: broken, gapMs: 0 }])
+  if (vbrTagOf(out, firstFrame(out))) {
+    ng('数え損ねたのに札を付けている', '間違った長さを書くほうが悪い')
+  } else ok('枚数を数え損ねたときは、札を付けない')
+
+  // 札そのものを作れるか(入りきらない形では作らない)
+  if (!vbrTagFrame(lead, 30, 1234, true).length) ng('札を作れていない')
+  else if (vbrTagFrame(lead, 0, 0, true).length) ng('0 枚なのに札を作っている')
+  else ok('札は、枚数があるときだけ作る')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
