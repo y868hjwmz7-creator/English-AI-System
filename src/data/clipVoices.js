@@ -191,7 +191,11 @@ export const CLIP_VOICES = [
     label: 'Jessica', elevenId: 'cgSgspJ2msm6clMCkdW9' },
   { id: 'us-2', accent: 'us', gender: 'male', use: 'both',
     label: 'David Esposito', elevenId: 'iEw1wkYocsNy7I7pteSN' },
-  { id: 'us-3', accent: 'us', gender: 'female', use: 'both',
+  /* **使わない**(2026-09 利用者の指定)。「クラスに出る」の Mika 役が
+     この声で、**発言の終わりに必ずノイズが入る。**
+     行ごと消さない —— id は音声の置き場所に入っているので、消すと
+     この声で作った教材の話す人に声が当たらなくなる(`isRetired`) */
+  { id: 'us-3', accent: 'us', gender: 'female', use: 'both', retired: true,
     label: 'Bella', elevenId: 'hod33eJyEU4TLqiYFttr' },
   { id: 'us-4', accent: 'us', gender: 'female', use: 'both',
     label: 'Nichalia', elevenId: 'XfNU2rGpBa01ckF309OY' },

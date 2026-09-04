@@ -15,6 +15,7 @@
     "lint": "eslint .",
     "test:chunk": "node scripts/test-chunker.mjs",
     "test:audio": "node scripts/test-loudness.mjs",
+    "test:mp3": "node scripts/check-mp3-join.mjs",
     "test:play": "node scripts/test-playmark.mjs",
     "test:gap": "node scripts/test-turngap.mjs",
     "test:paper": "node scripts/check-paper-vars.mjs",
