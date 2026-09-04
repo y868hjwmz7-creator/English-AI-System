@@ -16,6 +16,7 @@ import {
 } from '../data/exerciseTypes.js'
 import { chunkPlan, needsChunkJa } from './chunkJa.js'
 import { supabase } from './supabase.js'
+import { copyTitleFor } from './format.js'
 
 // 教材のレベルはゲストのレベルと同じ物差し(CEFR)を使う
 export { CEFR_LEVELS, cefrLabel }
@@ -438,6 +439,88 @@ export async function createMaterial({
   }
 
   return ok({ id: material.id })
+}
+
+// ── 声を選び直す(2026-09 利用者の指定)────────────────────────────
+//
+//   > また、音声を作り直す際も、国とスピーカーを選択できるように
+//   > してください。そして、元あるものも残せるようにしたいです。
+//   > つまり同じ内容の教材を違うアクセントに作り直すことが出来る仕様です。
+//
+//   道は2つある。**どちらも「作り直し」だが、残るものが違う。**
+//
+//   | | もとの教材 | 音声 |
+//   |---|---|---|
+//   | 声を入れ替える | **声が変わる** | 新しい声で作る |
+//   | 別の教材として複製する | **そのまま残る** | 複製のぶんを作る |
+//
+//   **もとの MP3 は、どちらでも消えない。** 置き場所は
+//   `<版>/<段>/<声の id>/<英文の指紋>.mp3` で**声の id が道に入っている**
+//   ので、別の声を選べば別の道になる。だから声を戻せば、元の音がそのまま鳴る。
+
+/**
+ * その教材の読み上げの声を入れ替える(0017 の `voice_ids`)。
+ *
+ * **`created_by` が自分の教材だけ**(0001 のポリシー)。
+ * 人の作った教材は書き換えられないので、そのときは複製を使う。
+ */
+export async function setMaterialVoices(materialId, voiceIds) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (missingColumns.has('voice_ids')) {
+    return ng('この Supabase にはまだ voice_ids の列がありません(0017 を貼ってください)')
+  }
+  const { data, error } = await supabase
+    .from('materials')
+    .update({ voice_ids: voiceIds ?? [] })
+    .eq('id', materialId)
+    .select('id')
+  if (error) return fail(error, '読み上げの声を入れ替えられませんでした')
+  /* **0件で返ることがある。** RLS は「書けない」を error ではなく
+     「1行も当たらなかった」で返す。**成功と失敗を同じ見た目で終わらせない** */
+  if (!data?.length) {
+    return ng('この教材は自分が作ったものではないので、声を入れ替えられません'
+      + '(「別の教材として複製する」を選んでください)')
+  }
+  return ok({ id: materialId })
+}
+
+/**
+ * **同じ中身のまま、別の声で作り直した教材**を1本足す。
+ *
+ * 中身(本文・設問・訳・カタマリの訳・要点フレーズ)は**そのまま写す。**
+ * AI は1回も呼ばないので、**生成の費用はかからない**
+ * (かかるのは、そのあと音声を作るぶんだけ)。
+ *
+ * @param material 一覧から取ってきた教材(`normalizeMaterial` を通したもの)
+ * @param voiceIds 新しい声の並び
+ * @param accentName 教材名に添える訛りの名前(「イギリス」など)
+ */
+export async function duplicateMaterial(material, { voiceIds, accentName, createdBy }) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  return createMaterial({
+    title: copyTitleFor(material.title, accentName),
+    level: material.level,
+    kind: material.kind,
+    instruction_ja: material.instruction_ja ?? '',
+    teaching_point: material.teaching_point ?? '',
+    /* **共有のしかたは写す。** 自分だけの教材の複製が、
+       いきなり全トレーナーに見えるようになってはいけない */
+    visibility: material.visibility ?? 'school',
+    industry: material.industry ?? null,
+    headline: material.headline ?? '',
+    headlineJa: material.headlineJa ?? material.headline_ja ?? '',
+    genre: material.genre ?? '',
+    scene: material.scene ?? '',
+    topic: material.topic ?? '',
+    voiceIds,
+    sections: (material.sections ?? []).map((sec) => ({
+      exercise_type: sec.exercise_type,
+      instruction: sec.instruction ?? '',
+      items: sec.items ?? [],
+    })),
+    tagIds: material.tagIds ?? [],
+    createdBy,
+  })
 }
 
 // ── 配信する ──────────────────────────────────────────────────

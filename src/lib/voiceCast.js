@@ -238,3 +238,36 @@ export function castLine(material) {
   if (!list) return null
   return list.map((c) => `${c.speaker} = ${c.label}`).join(' / ')
 }
+
+/**
+ * 選んだ声が、**いまの声とまったく同じか。**
+ * 同じなら、していることは「作り直し」であって「選び直し」ではない。
+ */
+export const sameVoices = (a, b) => {
+  const x = a ?? []
+  const y = b ?? []
+  return x.length === y.length && x.every((id, i) => id === y[i])
+}
+
+/**
+ * **音声を作り直すとき、実際に走る道**(2026-09 利用者の指定)。
+ *
+ *   > 音声を作り直す際も、国とスピーカーを選択できるようにしてください。
+ *   > そして、元あるものも残せるようにしたいです。
+ *
+ * | 道 | いつ | 教材はどうなるか |
+ * |---|---|---|
+ * | `refresh` | 声を変えていない | **手を触れない**(MP3 を作り直すだけ) |
+ * | `copy`    | 声を変えた(既定) | **もとはそのまま。** 複製が1本増える |
+ * | `replace` | 声を変えて、入れ替えを選んだ | もとの `voice_ids` が変わる |
+ *
+ * **判断はここ1か所。** 画面に散らすと、出しているボタンと
+ * 実際に走る道が食い違う。
+ *
+ * `mine`(自分が作った教材か)を見るのは、**人の教材は書き換えられない**
+ * ためである(0001 のポリシー)。選ばせてから断らない。
+ */
+export function remakeModeOf({ same, mode = 'copy', mine = false }) {
+  if (same) return 'refresh'
+  return mode === 'replace' && mine ? 'replace' : 'copy'
+}

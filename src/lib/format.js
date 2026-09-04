@@ -97,3 +97,17 @@ export function splitTitleDate(title) {
   const { date, main, tags } = parseMaterialTitle(title)
   return { date, title: [main, ...tags].join(' / ') }
 }
+
+/**
+ * 複製の教材名。**日付は今日にし、うしろに訛りを添える。**
+ *
+ * 教材名は `YYYY-MM-DD / 主題 / 弱点…` の形をしている
+ * (`parseMaterialTitle`)。同じ主題の教材が2本並ぶので、
+ * **どちらがどの訛りかが名前で分かる**ようにしておく。
+ */
+export function copyTitleFor(title, accentName, today = new Date()) {
+  const { main, tags } = parseMaterialTitle(title)
+  const ymd = today.toISOString().slice(0, 10)
+  const name = accentName ? `${main}(${accentName})` : main
+  return [ymd, name, ...tags].join(' / ')
+}

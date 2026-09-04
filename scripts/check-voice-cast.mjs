@@ -27,7 +27,9 @@
  * **こちらの側の食い違いは、ここで全部止まる。**
  */
 import { readFileSync } from 'node:fs'
-import { castClipSpeakers, castLine, castList } from '../src/lib/voiceCast.js'
+import {
+  castClipSpeakers, castLine, castList, remakeModeOf, sameVoices,
+} from '../src/lib/voiceCast.js'
 import {
   CLIP_VOICES, findVoice, voiceSettingsOf, voicesOfAccent,
 } from '../src/data/clipVoices.js'
@@ -254,6 +256,53 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
         '`CastChip` に任せる。数え直すと、出す名前と鳴る声がずれる')
     } else ok(`${where} … 読み上げの声の札がある`)
   }
+}
+
+// ── 音声を作り直すときの「走る道」(2026-09 利用者の指定)──────────
+//
+//    > 音声を作り直す際も、国とスピーカーを選択できるようにしてください。
+//    > そして、元あるものも残せるようにしたいです。
+//    > つまり同じ内容の教材を違うアクセントに作り直すことが出来る仕様です。
+//
+//    **押したボタンと、実際に起きることが食い違ってはいけない。**
+//    しかも間違えると**そのまま課金になる**ので、ここで止める。
+{
+  const cases = [
+    ['声を変えていない → 教材に手を触れない',
+      { same: true, mode: 'copy', mine: true }, 'refresh'],
+    ['声を変えていない(人の教材でも同じ)',
+      { same: true, mode: 'replace', mine: false }, 'refresh'],
+    ['声を変えた → 既定は複製(もとが残る)',
+      { same: false, mode: 'copy', mine: true }, 'copy'],
+    ['声を変えて「入れ替える」を選んだ',
+      { same: false, mode: 'replace', mine: true }, 'replace'],
+    ['人の教材では、入れ替えを選んでも複製になる',
+      { same: false, mode: 'replace', mine: false }, 'copy'],
+  ]
+  let bad2 = 0
+  for (const [what, input, want] of cases) {
+    const got = remakeModeOf(input)
+    if (got !== want) { ng(`${what}(${want} のはずが ${got})`); bad2 += 1 }
+  }
+  if (!bad2) ok(`作り直しの道は、${cases.length} とおりとも意図どおり`)
+
+  // **同じかどうかは、並びまで見る**(順が違えば当たる声が変わる)
+  if (!sameVoices(['a', 'b'], ['a', 'b'])) ng('同じ並びを「違う」と言っている')
+  else if (sameVoices(['a', 'b'], ['b', 'a'])) {
+    ng('並びが違うのに「同じ」と言っている', '順が変わると、当たる声が入れ替わる')
+  } else if (sameVoices(['a'], ['a', 'b'])) ng('数が違うのに「同じ」と言っている')
+  else ok('いまの声と同じかどうかは、並びまで見る')
+
+  /* **判断を画面に持たせない。** 出しているボタンと走る道が食い違うと、
+     押した本人には**何が起きたのか分からない**まま課金される */
+  const vr = read('src/components/VoiceRemake.jsx')
+  if (!/remakeModeOf\(/.test(vr)) {
+    ng('画面が、走る道を自分で決めている', '`remakeModeOf()` 1か所に任せる')
+  } else ok('画面は `remakeModeOf()` に任せている')
+  // **押す前に、本数と課金になることを書く**(見えない費用は管理できない)
+  if (!/課金/.test(vr) || !/clipCount/.test(vr)) {
+    ng('作り直す本数と、課金になることを書いていない')
+  } else ok('押す前に、本数と課金になることが書いてある')
 }
 
 // ── 訛りを最大限に活かす指定(2026-09 利用者の指定)────────────────

@@ -27,8 +27,8 @@ import { needsChunkJa } from '../lib/chunkJa.js'
 import CastChip from './CastChip.jsx'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
-  NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, isDialogueKind,
-  kindLabel, loadMyLearners, searchMaterials,
+  NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, duplicateMaterial, isDialogueKind,
+  kindLabel, loadMyLearners, searchMaterials, setMaterialVoices,
 } from '../lib/materials.js'
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
@@ -38,6 +38,7 @@ import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
 /* **読み上げ音声を作り直す**(2026-09 実機)。良い段の場所に標準の声が
    居座っている英文を、こちらから作り直させる(`remakeClips.js` の冒頭) */
 import { premiumClipsOf, remakeMaterialClips } from '../lib/remakeClips.js'
+import VoiceRemake from './VoiceRemake.jsx'
 import { lastClipDetail } from '../lib/audioClips.js'
 
 /** 絞り込みの「問数」と、作る画面の増やし方の対応。**2か所に持たない** */
@@ -331,21 +332,50 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
   }, [])
 
   /**
-   * その教材の読み上げ音声を作り直す(2026-09 実機)。
-   * **2段で押させる。** 1回目は「本当に作り直す」に変わるだけ。
+   * その教材の読み上げ音声を作り直す(2026-09 実機 → 利用者の指定で作り替え)。
+   *
+   *   > 音声を作り直す際も、国とスピーカーを選択できるようにしてください。
+   *   > そして、元あるものも残せるようにしたいです。
+   *
+   * **2段のままである。** 1回目で欄が開き(`VoiceRemake`)、
+   * 国と話す人を選んでから、その中のボタンで走り出す。
+   * 押し間違いがそのまま課金になるので、**1回では走らせない。**
    */
-  const remakeVoices = async (m) => {
-    if (voiceAsk !== m.id) { setVoiceAsk(m.id); setVoiceDone(null); return }
+  const runRemake = async (m, { voiceIds, mode, accentName }) => {
     setVoiceAsk(null)
+    setVoiceDone(null)
     setVoiceBusy({ id: m.id, done: 0, total: premiumClipsOf(m).length })
-    const r = await remakeMaterialClips(m, ({ done, total }) => {
+
+    /* **声を先に決めてから、音声を作る。**
+       逆にすると、作った音声の置き場所と教材の声が食い違う。
+       `refresh`(声を変えていない)のときは、教材に手を触れない */
+    let target = { ...m, voiceIds }
+    if (mode === 'copy') {
+      const { data, error: e } = await duplicateMaterial(m, {
+        voiceIds, accentName, createdBy: me.id,
+      })
+      if (e) { setVoiceBusy(null); setVoiceDone({ id: m.id, done: 0, failed: 0, total: 0, detail: e }); return }
+      target = { ...m, id: data.id, voiceIds }
+    } else if (mode === 'replace') {
+      const { error: e } = await setMaterialVoices(m.id, voiceIds)
+      if (e) { setVoiceBusy(null); setVoiceDone({ id: m.id, done: 0, failed: 0, total: 0, detail: e }); return }
+    }
+
+    const r = await remakeMaterialClips(target, ({ done, total }) => {
       setVoiceBusy({ id: m.id, done, total })
     })
     setVoiceBusy(null)
     /* **1本も作り直せなかったときは、理由まで出す。**
        トレーナーの画面なので、どこで何をすればよいかまで書いてよい
        (ゲストには出さない・CLAUDE.md) */
-    setVoiceDone({ id: m.id, ...r, detail: r.done === 0 ? lastClipDetail() : null })
+    setVoiceDone({
+      id: m.id, ...r, copied: mode === 'copy',
+      detail: r.done === 0 ? lastClipDetail() : null,
+    })
+    /* **一覧を読み直して、できたものを目の前に出す**(発行と同じ作法)。
+       複製は新しい1本なので、読み直さないと画面に出てこない */
+    if (mode === 'copy') setJustId(target.id)
+    await search()
   }
 
   const startAssign = (materialId) => {
@@ -807,10 +837,13 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                   <button type="button"
                           className={`btn btn--small ${voiceAsk === m.id ? 'btn--quiet' : 'btn--ghost'}`}
                           disabled={!!voiceBusy}
-                          onClick={() => remakeVoices(m)}>
+                          onClick={() => {
+                            setVoiceDone(null)
+                            setVoiceAsk(voiceAsk === m.id ? null : m.id)
+                          }}>
                     {voiceBusy?.id === m.id
-                      ? `作り直しています… ${voiceBusy.done} / ${voiceBusy.total}`
-                      : voiceAsk === m.id ? '本当に作り直す' : '読み上げ音声を作り直す'}
+                      ? `作っています… ${voiceBusy.done} / ${voiceBusy.total}`
+                      : voiceAsk === m.id ? '閉じる' : '読み上げ音声を作り直す'}
                   </button>
                 )}
               </div>
@@ -825,17 +858,21 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
               </div>
               {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
                   作り直しは課金になるので、**押す前に本数と費用を書く** */}
+              {/* **国と話す人を選んでから走らせる**(2026-09 利用者の指定)。
+                  1回目の押下でこの欄が開き、中のボタンで走り出す。
+                  **2段のままである** — 押し間違いがそのまま課金になる */}
               {voiceAsk === m.id && !voiceBusy && (
-                <p className="notice notice--warn">
-                  この教材の読み上げ音声 <strong>{premiumClipsOf(m).length} 本</strong>を、
-                  もう一度作り直します(ElevenLabs に課金されます)。
-                  <br />
-                  良い声にならない英文があるときだけ押してください。
-                </p>
+                <VoiceRemake material={m}
+                             clipCount={premiumClipsOf(m).length}
+                             mine={m.created_by === me.id}
+                             busy={!!voiceBusy}
+                             onRun={(opt) => runRemake(m, opt)} />
               )}
               {voiceDone?.id === m.id && (
                 <p className={`notice${voiceDone.done === 0 ? ' notice--error' : ''}`}>
-                  読み上げ音声を <strong>{voiceDone.done} 本</strong>作り直しました。
+                  {voiceDone.copied && voiceDone.done > 0
+                    && <><strong>別の教材として複製しました。</strong>いまの教材はそのまま残っています。<br /></>}
+                  読み上げ音声を <strong>{voiceDone.done} 本</strong>作りました。
                   {voiceDone.failed > 0 && `(${voiceDone.failed} 本は作れませんでした)`}
                   {voiceDone.detail && <><br />{voiceDone.detail}</>}
                 </p>
