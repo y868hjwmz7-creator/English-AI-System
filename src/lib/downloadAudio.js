@@ -27,52 +27,14 @@
  * ============================================================================
  */
 import { clipUrl } from './audioClips.js'
-import { castClipSpeakers, voiceFor } from './voiceCast.js'
-import { resolveVoices } from '../data/clipVoices.js'
-import { voiceTierFor } from './voiceTier.js'
-import { turnGapMs } from './turnGap.js'
 import { audioFileName, joinMp3 } from './mp3Join.js'
+import { materialAudioClips } from './audioPlaylist.js'
 
-/** 本文の演習(記事・会話・会議)。**「Listen (全体)」が鳴らすもの** */
-const bodyOf = (material) => (material?.sections ?? [])
-  .find((sec) => sec.exercise_type === 'reading' || sec.exercise_type === 'dialogue')
-
-/**
- * 通しで鳴るものを、順に並べる。
- *
- * @returns {Array<{text, voiceId, tier, gapMs}>} `gapMs` は**そのあとの間**
- */
-export function materialAudioClips(material) {
-  const body = bodyOf(material)
-  if (!body) return []
-  const voiceIds = material?.voiceIds ?? material?.voice_ids ?? null
-  const solo = resolveVoices(voiceIds)[0]
-  const cast = castClipSpeakers((body.items ?? []).map((it) => it.speaker), voiceIds)
-  const tier = voiceTierFor({
-    exerciseType: body.exercise_type,
-    tags: material?.tags ?? [],
-  })
-
-  const items = (body.items ?? [])
-    .filter((it) => String(it.audio_text || it.prompt_en || '').trim())
-  return items.map((it, i) => {
-    const next = items[i + 1]
-    /* **間の決め方も、鳴らすときと同じ。**
-       前の発言と次の発言の中身から決まる(`turnGap.js`)。
-       同じ人が続けて話すときは、受け答えの規則を当てない */
-    const gapMs = next
-      ? turnGapMs(it.prompt_en, next.prompt_en, {
-        sameVoice: String(it.speaker ?? '') === String(next.speaker ?? ''),
-      })
-      : 0
-    return {
-      text: String(it.audio_text || it.prompt_en).trim(),
-      voiceId: voiceFor(cast, it.speaker, solo),
-      tier,
-      gapMs,
-    }
-  })
-}
+/* 並べるところは `audioPlaylist.js` にある。
+   あちらは Supabase を持たないので、**素の node で確かめられる**
+   (`npm run test:mp3`)。ここから出しておくのは、
+   呼ぶ側(`TrainerMaterials.jsx`)がどちらを読むか迷わないようにするため */
+export { materialAudioClips }
 
 /**
  * 集めて、つないで、渡す。

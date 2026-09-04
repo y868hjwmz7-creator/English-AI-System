@@ -194,5 +194,86 @@ function fakeMp3({ mpeg1 = true, kbps = 128, hz = 44100, frames = 4, id3 = false
   if (audioFileName('') !== '教材の音声.mp3') ng('名前が空のときの控えが無い')
 }
 
+// ── ⑥ どの教材で「音声をダウンロード」が出るか ────────────────
+/* 【なぜ要るか】(2026-09 実機)
+ *
+ *   > あれ？先ほど作成した「ダイアローグ」では音声のダウンロードが
+ *   > できるのですが、その後に作成した「記事」ではダメでした。
+ *
+ *   本文の演習かどうかを、`exercise_type === 'reading'` と**直に書いて**
+ *   いた。記事の演習の id は **`article`** なので、記事だけ 0 件になり、
+ *   ボタンそのものが出なかった。`npm run lint` も `npm run build` も通る。
+ *
+ *   利用者の指定は「**記事・会話・会議**に付ける。短文だけのトレーニングは要らない」。
+ *   会議は本文が `dialogue` なので、本文かどうかで数えれば3つとも入る。 */
+{
+  const { materialAudioClips } = await import('../src/lib/audioPlaylist.js')
+
+  const body = (type, items) => ({
+    sections: [{ exercise_type: type, items }],
+    voiceIds: [],
+    tags: [],
+  })
+  const para = (n) => Array.from({ length: n }, (_, i) => ({
+    prompt_en: `This is paragraph ${i + 1}.`, speaker: null,
+  }))
+  const turns = (n) => Array.from({ length: n }, (_, i) => ({
+    prompt_en: `Line ${i + 1}, right?`, speaker: i % 2 ? 'Mika' : 'Josh',
+  }))
+
+  const cases = [
+    ['記事', body('article', para(6)), 6],
+    ['会話', body('dialogue', turns(14)), 14],
+    // 会議は「種類」であって演習ではない。本文は会話と同じ `dialogue`
+    ['会議(3人)', { ...body('dialogue', turns(14)), kind: 'meeting' }, 14],
+    // **短文だけのトレーニングには要らない**(利用者の指定)
+    ['文型ドリル', body('translate_en_ja', para(10)), 0],
+    ['単語', body('vocabulary', para(20)), 0],
+    ['フレーズ', body('phrase', para(20)), 0],
+    ['内容の理解', body('comprehension', para(5)), 0],
+  ]
+  for (const [what, material, want] of cases) {
+    const got = materialAudioClips(material).length
+    if (got !== want) ng(`${what} … 集める本数がちがう`, `${got} ≠ ${want}`)
+    else ok(`${what} … ${want} 本${want ? '' : '(ボタンを出さない)'}`)
+  }
+
+  // 中身が無い項目は数えない(空の無音を挟まないため)
+  const holes = materialAudioClips(body('article', [
+    { prompt_en: 'One.' }, { prompt_en: '   ' }, { prompt_en: 'Two.' },
+  ]))
+  if (holes.length !== 2) ng('中身の空いた項目を数えている', `${holes.length} 本`)
+  else ok('中身の空いた項目は数えない')
+
+  // 最後のあとに間は要らない / 間は 0 以上
+  if (holes.at(-1).gapMs !== 0) ng('いちばん最後のあとにも間を入れている')
+  else if (holes.some((c) => !(c.gapMs >= 0))) ng('間が数になっていない')
+  else ok('間は、最後のあとだけ 0')
+
+  /* 声と段が、1本ずつちゃんと決まっている。
+     **声は教材に保存されているもの**を渡す(`castClipSpeakers` が
+     最初に話す人から順に当てる)。選んでいない教材は
+     代役1つに落ちるので、そちらは声の数を見ない */
+  const talk = materialAudioClips({
+    ...body('dialogue', turns(4)), voiceIds: ['us-2', 'us-1'],
+  })
+  if (talk.some((c) => !c.voiceId)) ng('声が当たっていない本がある')
+  else if (talk.map((c) => c.voiceId).join(',') !== 'us-2,us-1,us-2,us-1') {
+    ng('話す人ごとの声が、選んだ順になっていない', talk.map((c) => c.voiceId).join(','))
+  } else if (talk.some((c) => c.tier !== 'premium')) {
+    ng('本文なのに、良い声の段になっていない')
+  } else ok('会話 … 選んだ声が、最初に話す人から順に当たる(段は premium)')
+
+  // 声を選んでいない教材でも、鳴る(代役に落ちる)。**0本にしない**
+  const noVoice = materialAudioClips(body('dialogue', turns(4)))
+  if (noVoice.length !== 4 || noVoice.some((c) => !c.voiceId)) {
+    ng('声を選んでいない会話で、集められなくなっている')
+  } else ok('声を選んでいない会話も、代役の声で集められる')
+
+  if (materialAudioClips(null).length || materialAudioClips({}).length) {
+    ng('教材が無いのに何か返している')
+  } else ok('教材が無ければ 0 本')
+}
+
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
