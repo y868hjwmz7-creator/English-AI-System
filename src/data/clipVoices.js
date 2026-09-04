@@ -257,7 +257,12 @@ export const CLIP_VOICES = [
   { id: 'sc-1', accent: 'sc', gender: 'male', use: 'both',
     label: 'Ally', elevenId: 'v2zbX16tJNtRIx8rSHDM',
     settings: { similarity_boost: 0.1, stability: 0.8, use_speaker_boost: false },
-    trimMs: 150 },
+    /* 150ms では**大幅に減ったが、まだ散見される**(2026-09 実機)。
+       全部に出るなら切り足りない、まったく出ないなら足りている。
+       **発言によって出たり出なかったり**するのは、雑音の位置が音声ごとに
+       少しずつ違うということなので、1枚ぶん(26ms)伸ばして拾いにいく。
+       **一度に1枚しか動かさない** — 行き過ぎたときに戻す場所が分からなくなる */
+    trimMs: 200 },
 ]
 
 /**
