@@ -7,7 +7,7 @@ import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import AppNav, { AppTopbar } from './components/AppNav.jsx'
 import {
-  BookIcon, CardsIcon, ChartIcon, CloseIcon, MicIcon, PeopleIcon, TaskIcon,
+  BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, MicIcon, PeopleIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
@@ -20,6 +20,7 @@ import JobBar from './components/JobBar.jsx'
 import { onClipTrouble } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
+import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
@@ -208,6 +209,12 @@ export default function App() {
     // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
     // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
     { id: 'wordbook', label: '単語帳', icon: CardsIcon },
+    /* **Quick Response の復習**(0040・2026-09 利用者の指定)。
+       教材の中で「まだ」を押した文が、**1つのアカウントに1つ**溜まる。
+       単語帳のとなりに置く — あちらは**語**、こちらは**文**で、
+       やることは同じ(思い出して、口から出す)である。
+       トレーナーも使う(単語帳と同じ理由。トレーナーも日々英語を学んでいる) */
+    { id: 'qr', label: 'Quick Response', icon: BoltIcon },
     // **発音練習だけは独立した機能にする**(2026-08 利用者の指定)
     { id: 'pronunciation', label: '発音練習', icon: MicIcon },
     // 「学習の記録」は外した(2026-08 の設計変更)。
@@ -450,6 +457,8 @@ export default function App() {
               <LearnerHomework me={profile} />
             ) : view === 'wordbook' ? (
               <Wordbook />
+            ) : view === 'qr' ? (
+              <QrReview />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice />
             ) : (

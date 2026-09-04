@@ -4157,6 +4157,15 @@ html, body { overscroll-behavior-x: none; }
   border-radius: 999px; font-size: 13px;
 }
 
+/* ── Quick Response の復習の選び方(0040)───────────────────────
+     並べ方(混ぜる / 教材の順)と、どれを出すか(今日ぶん / ぜんぶ)。
+     **絞り込みの行(`.wbfilter`)と同じ形にそろえる。**
+     どちらも「始める前に一度決めるもの」で、役目が同じである。 */
+.qrrev-opts {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 10px;
+}
+
 /* カレンダーの吹き出し。**body の直下に出す**(親に切られないため)。
    色は語の吹き出し(`.etext-pop`)と同じ考え方で、面と枠と影で浮かせる */
 /* ── 取り組みの吹き出し(2026-09 利用者の指定)──────────────────
@@ -5715,4 +5724,11 @@ html, body { overscroll-behavior-x: none; }
 /* 「英語を見る」と「Listen」。**どちらも答えそのものではない**ので
    同じ段に置く(答えの2つ「まだ / 言えた」は1段下でとなりどうし)。
    英語を出さなくても音だけで答え合わせができる(2026-09 利用者の指定) */
-.qr-peek { display: flex; align-items: center; justify-content: center; gap: 8px; }
+/* **折り返しを許す**(0040)。復習の画面では「もう出さない」が1つ増えるので、
+   iPhone(390px)では4つが1行に入らず、**文言が切れて読めなかった**(実測)。
+   縮めて切るより、1行増えるほうがましである(取り組み方の札と同じ判断)。
+   教材の中は3つのままなので、**見た目は1px も変わらない**(撮り比べで確認) */
+.qr-peek {
+  display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; gap: 8px;
+}

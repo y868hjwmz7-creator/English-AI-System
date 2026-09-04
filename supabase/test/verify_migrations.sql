@@ -357,6 +357,19 @@ from (
     where n.nspname = 'public' and p.proname = 'review_words'
       and 'learn_streak' = any (p.proargnames)), 80
   union all
+  select '(81) Quick Response の復習が溜まる(0040)', exists (
+    -- 教材の Quick Response で「まだ」を押した文を溜める入れ物。
+    -- 間隔の決まりは単語帳(0038)とまったく同じにしてある
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'qr_reviews'), 81
+  union all
+  select '(82) Quick Response の復習を読み出せる(0040)', exists (
+    -- 絞り込みの手がかり(教材名・分野・場面・話題)も一緒に返す窓口。
+    -- 担当しているゲストのぶんは、表ではなくこの関数を通して読む
+    select 1
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'qr_items'), 82
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

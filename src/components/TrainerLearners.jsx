@@ -20,6 +20,7 @@ import { loadPastFilterOpen, savePastFilterOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import Wordbook from './Wordbook.jsx'
+import QrReview from './QrReview.jsx'
 import LearnerFiles from './LearnerFiles.jsx'
 import LessonNotes from './LessonNotes.jsx'
 import MaterialForm from './MaterialForm.jsx'
@@ -500,6 +501,10 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     <option value="create">この人に教材を作る</option>
                     {/* 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい */}
                     <option value="wordbook">単語帳</option>
+                    {/* **Quick Response の復習**(0040)。教材の中で「まだ」を
+                        押した文が溜まる。単語帳と同じで、レッスン中に
+                        一緒に取り組めば、それはゲストの学習として残る */}
+                    <option value="qr">Quick Response</option>
                     {/* 会社からもらった英文メール、テストの結果、宿題の写真。
                         ここに置けば、次のレッスンで必ず見つかる(0031) */}
                     <option value="files">ファイル</option>
@@ -877,6 +882,13 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     learnerId={l.id} learnerName={l.display_name}
                     onMakeMaterial={(words) => { setMustUse(words); setDetailTab('create') }}
                   />
+                )}
+
+                {/* **復習の画面は1つ**(`QrReview`)。単語帳と同じ考え方で、
+                    「誰の復習か」を渡すだけにする。**似たものを2つ持たない**
+                    (単語帳で `LearnerWordbook` を別に持って踏んだ失敗) */}
+                {detailTab === 'qr' && (
+                  <QrReview learnerId={l.id} learnerName={l.display_name} />
                 )}
 
                 {detailTab === 'files' && (

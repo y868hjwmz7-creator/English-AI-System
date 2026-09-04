@@ -20,24 +20,31 @@
  *   ・**順番は教材のまま。** 記事と会話には話の流れがあり、混ぜると場面が飛ぶ
  *     (単語帳は逆に毎回混ぜる。あちらは並び順で覚えてしまうため)
  *
- * 【記録は残さない】
- *   単語帳の「箱」とは別のものである。ここで残すと、
- *   同じ語の覚え具合が2か所で動くことになる。
- *   画面に「言えた数」を出すだけにしてある。
+ * 【「まだ」を押した文は残す】(0040・2026-09 利用者の指定・**方針の変更**)
+ *   もとは「記録は残さない」だった(単語帳の箱と2か所で動くのを避けるため)。
+ *   けれども**言えなかった文は、その教材を開き直さないと二度と出てこない。**
+ *
+ *   > 教材の中で取り組んだ Quick Response の中で「まだ」を押したものは、
+ *   > Quick Response という復習用の機能を独立して作り、
+ *   > ひとつのアカウントにつきひとつ持たせてください。
+ *
+ *   溜める先は単語帳とは**別のもの**(あちらは語、こちらは文)なので、
+ *   同じものが2か所で動くことにはならない。
+ *   溜めるのは**文章だけ**で、単語・フレーズは単語帳に任せる。
+ *   仕組みは `src/lib/qrReviews.js` 1か所。
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { QR_MODES, quickResponseCounts, quickResponsePairs } from '../lib/quickResponse.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { stopReading } from '../lib/readAloud.js'
-import SpeakButton from './SpeakButton.jsx'
-import RepeatToggle from './RepeatToggle.jsx'
-import EnglishText from './EnglishText.jsx'
+import QrCard from './QrCard.jsx'
 import { CloseIcon } from './Icons.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import { progressKey, useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
+import { markQr } from '../lib/qrReviews.js'
 import { answerFeedback } from '../lib/haptics.js'
 
 export default function QuickResponse({
@@ -90,54 +97,14 @@ export default function QuickResponse({
   // **控えていた場所が、範囲の外になっていることがある**(教材を直したあと)。
   // そのまま使うと問が空になるので、必ず中に収める
   const at = Math.min(Math.max(0, savedAt), Math.max(0, pairs.length - 1))
-  const [shown, setShown] = useState(false)
   const doneRef = useRef([])          // 言えた / 言えなかったの記録(この1回ぶん)
-  const enRef = useRef(null)          // 開いた答え(入りきらないときに送る先)
-  const bodyRef = useRef(null)        // 出題の枠。**動かすのはここだけ**
   const [finished, setFinished] = useState(false)
-  // **両方いっしょに出せるか。** 出せないときだけ入れ替えに落とす
-  // (2026-08 利用者の指定)。判断は「実際に入るかどうか」で行う
-  const [tight, setTight] = useState(false)
-  /** 答えの音をくり返すか。**覚えない**(次に開いたときは1回に戻す) */
-  const [loop, setLoop] = useState(false)
+
+  /* 出題の枠まわり(開く・入るかどうかを測る・送りを戻す・くり返し)は
+     **`QrCard` が持つ**(0040)。復習の画面と同じ部品にするためである */
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
-
-  // 出題が変わったら、答えは閉じた状態から。**入るかどうかも測り直す**
-  useEffect(() => { setShown(false); setTight(false); stopReading() }, [at, mode])
-
-  // **開いた答えが枠に入りきらないときは、こちらで送る。**
-  // 「上下にスクロールして微調整せずに」(2026-08 利用者の指定)。
-  // ボタンは動かさないので、動くのはこの枠の中だけである
-  //
-  // **送りの面倒は、この1つの effect に集める。**
-  // 「開いたら送る」と「問が変わったら戻す」を別々に書いたら、
-  // 問を進めた瞬間に前の状態のまま送られ、**次の問の日本語が枠の外から
-  // 始まった**(2026-08 の実測。scrollTop が 40 のまま残っていた)。
-  useEffect(() => {
-    const body = bodyRef.current
-    if (!body) return
-    // **いつも上から。** 問題と答えは入れ替えて出すので、
-    // どちらも枠の先頭から始まる。送る必要そのものが無くなった
-    body.scrollTop = 0
-  }, [shown, at, tight])
-
-  /**
-   * **問題と答えを、いっしょに出せるかどうかを実測する**(2026-08 利用者の指定)。
-   *
-   * > 問題と解答を同時に表示できないときは、それぞれもっと中央に配置してください。
-   * > 同時に表示できるときは今のまま
-   *
-   * 文の長さは教材によって桁が違うので、**文字数で当て推量しない。**
-   * まず両方を出してみて、枠に入りきらなかったときだけ入れ替えに落とす。
-   * 枠の高さは決め打ち(`.qr-body`)なので、**ボタンの場所は動かない。**
-   */
-  useLayoutEffect(() => {
-    const body = bodyRef.current
-    if (!body || !shown || tight) return
-    if (body.scrollHeight > body.clientHeight + 1) setTight(true)
-  }, [shown, at, tight])
 
   const card = pairs[at] ?? null
   // 本文は良い声で読む。判断は `voiceTier.js` 1か所
@@ -148,6 +115,21 @@ export default function QuickResponse({
     /* **押した手応えを返す**(2026-09 利用者の指定)。
        言えたら**ピンポン**、まだなら低く1つだけ。触る端末のときだけ */
     answerFeedback(ok)
+    /* **「まだ」を押した文は、復習に溜める**(0040・2026-09 利用者の指定)。
+       これまでは「記録は残さない」と決めていたが、利用者の指定で変えた。
+       溜める先は単語帳とは別(あちらは語、こちらは文)なので、
+       同じものが2か所で動くことにはならない。
+       ・**まだ**   → 溜める
+       ・**言えた** → **すでに溜まっている文だけ**箱を1つ上げる
+         (`onlyExisting`)。言えた文をわざわざ溜めない
+       溜めるのは**文章だけ**(単語・フレーズは単語帳に任せる・利用者の指定)。
+       誰の記録になるかは `learnerId` が決める(0025 と同じ考え方)。
+       **待たない。** 溜めるのは裏の仕事で、次の問へ進むのを止める理由がない */
+    if (card?.group === 'sentence') {
+      markQr(card, ok ? 'learning' : 'unknown', {
+        materialId: material?.id ?? null, learnerId, onlyExisting: ok,
+      })
+    }
     doneRef.current = [...doneRef.current, { ...card, ok }]
     if (at + 1 >= pairs.length) { setFinished(true); return }
     setAt(at + 1)
@@ -155,7 +137,7 @@ export default function QuickResponse({
 
   const restart = () => {
     doneRef.current = []
-    setAt(0); setShown(false); setFinished(false)
+    setAt(0); setFinished(false)
   }
 
   /**
@@ -167,7 +149,7 @@ export default function QuickResponse({
    */
   const switchMode = (next) => {
     doneRef.current = []
-    setShown(false); setFinished(false); stopReading()
+    setFinished(false); stopReading()
     setMode(next)
   }
 
@@ -260,87 +242,15 @@ export default function QuickResponse({
           </div>
         </div>
       ) : (
-        <div className="qr-card">
-          {/* 出題と答えは**まん中**に、ボタンは**いつも同じ場所**に置く。
-              以前は答えがボタンの下に出ていたので、画面のいちばん下へ
-              押し出され、そのつど送らないと読めなかった(2026-08 の指摘)。
-              **文の長さが変わっても、ボタンは動かない。** */}
-          {/* 入りきらないときは**まん中に寄せる。**
-              入るときは上詰めのまま(「2 / 30 のすぐ下に問題の上端」) */}
-          <div className={`qr-body${tight && shown ? ' is-tight' : ''}`} ref={bodyRef}>
-            {/* 話す人だけは残す。誰のせりふかで言い方が変わる。
-                **「記事」「会話」の札は出さない**(2026-08 の指定)。
-                どの教材から出ているかは、上の題名を見れば分かる */}
-            {/* **何問目か、丸の番号で出す**(2026-09 利用者の指定
-                「クイックレスポンスの文章にも番号をつけてください。おしゃれにね」)。
-                上の「2 / 25」は**どこまで来たか**の目安で、役目が違う。
-                集中モード・紙と**同じ丸**にそろえてある(`.num-badge`) */}
-            <p className="qr-from">
-              <span className="num-badge">{at + 1}</span>
-              {card.speaker && <span>{card.speaker}</span>}
-            </p>
-
-            {/* **入るなら、問題と答えを並べて出す**(2026-08 の指定)。
-                入らないときだけ入れ替える。入れ替えなら必ず収まる。
-                出す側は日本語だけ。**開くまで英語は出さない。音も鳴らさない** */}
-            {(!shown || !tight) && <p className="qr-ja">{card.ja}</p>}
-            {shown && (
-              /* **答えはうすい色の囲みに入れる**(2026-08 の指定)。
-                 ほかのトレーニングの解答(`.answer-box`)と同じ形にそろえる。
-                 部品ごとに書くと、必ずどこかだけ違う見た目になる */
-              <div className="answer-box qr-answer" ref={enRef}>
-                {/* **答えのすぐ横に Listen を置かない**(2026-09 利用者の指定
-                    「正解の英文のすぐ横の listen ボタン、排除しましょう。
-                     これはスマホでも同じです」)。
-
-                    下のボタンの行にも Listen がある。**同じことをするボタンを
-                    2つ見せない**(CLAUDE.md)。英文の途中に押すものが挟まると、
-                    読むときに目が引っかかるうえ、長い英文では位置が毎回変わる */}
-                <div className="qr-en">
-                  <EnglishText text={card.en} textJa={card.ja} level={material?.level}
-                               statuses={wordStatuses} onMark={markWord} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* **単語帳と同じ形にそろえる**(言葉づかいも見た目も並べ方も)。
-              「英語を見る」は答えではないので1段上に出し、
-              **答えの2つはとなりどうし**に置く(2026-08 利用者の指定)。
-              「言えなかった」は6文字あり、スマホで2行に割れた(実測)ので
-              「まだ」にしてある */}
-          <div className="qr-actions">
-            <div className="qr-peek">
-              <button type="button" className="btn btn--ghost btn--small"
-                      aria-expanded={shown}
-                      onClick={() => setShown((v) => !v)}>
-                {shown ? '英語を隠す' : '英語を見る'}
-              </button>
-              {/* **英語を出さなくても、答えの音は聞ける**(2026-09 利用者の指定)。
-                  > 英語を表示させなくても答えの音声が聞けるようにしたいです
-
-                  **これまでの決まりを、利用者の指定で変えた。**
-                  もとは「答えを見る前に音を鳴らさない(鳴らせば答えが
-                  聞こえてしまう)」だった。けれども Quick Response は
-                  **口に出して言う**練習なので、自分で言ってから
-                  **耳で答え合わせをする**ほうが素直である。
-                  読んで確かめるより、聞いて確かめるほうが力が付く。
-
-                  **単語帳の「日本語 → 英語」は変えていない**(言われた場所だけを直す) */}
-              <SpeakButton text={card.en} className="btn--ghost"
-                           clipVoice={clipVoice} tier={tier} repeat={loop} />
-              {/* **くり返し**(2026-09 利用者の指定「オートリピートのボタン」)。
-                  口が追いつくまで、同じ英文を何度も聴く練習である */}
-              <RepeatToggle on={loop} onChange={setLoop} className="btn--ghost" />
-            </div>
-            <div className="qr-answers">
-              <button type="button" className="btn btn--quiet"
-                      onClick={() => answer(false)}>まだ</button>
-              <button type="button" className="btn btn--primary"
-                      onClick={() => answer(true)}>言えた</button>
-            </div>
-          </div>
-        </div>
+        /* **1問ぶんの見た目は `QrCard` 1か所**(0040)。
+           復習の画面(`QrReview`)と**同じ部品**を使う。
+           書き写すと必ず片方だけ古くなる(単語帳で踏んだ失敗)。
+           教材の中では言葉づかいを「まだ / 言えた」のままにする
+           (2026-09 利用者の指定。復習の画面だけ「まだ / 言える」) */
+        <QrCard pair={card} no={at + 1} level={material?.level}
+                clipVoice={clipVoice} tier={tier}
+                wordStatuses={wordStatuses} onMarkWord={markWord}
+                onAnswer={answer} yetLabel="まだ" okLabel="言えた" />
       )}
     </section>
   )

@@ -846,3 +846,171 @@ select pg_temp.ok('担当していない人の週の記録は空',
    where days > 0), 0);
 
 reset role;
+
+-- ============================================================================
+-- Quick Response の復習(0040)
+--
+--   「まだ」を押した文を溜め、単語帳とまったく同じ間隔で出し直す。
+--   **数字(卒業25回・休み30日)が単語帳とずれていないか**まで見る。
+--   ずれると、覚え方の話が2つになる。
+-- ============================================================================
+set role authenticated;
+set request.jwt.claim.sub = 'e2222222-2222-2222-2222-222222222222';
+
+-- ── 英文のそろえ方(0008 の norm_en をそのまま使っているか)─────
+--    **新しい規則を作らない。** 画面(materials.js の normEn)と
+--    データベース(0008 の norm_en)にすでに同じものがある
+select pg_temp.ok('大文字小文字をそろえる',
+  public.norm_en('Could you TELL me?') = public.norm_en('could you tell me'), true);
+select pg_temp.ok('記号は落とす(ピリオド・コンマ・疑問符)',
+  public.norm_en('Well, could you tell me?'), 'well could you tell me');
+select pg_temp.ok('空白は1つにまとめる',
+  public.norm_en('  I   see   '), 'i see');
+select pg_temp.ok('空なら null(鍵にならない)', public.norm_en('...'), null);
+
+-- ── 「まだ」で溜まる ──────────────────────────────────────────
+select public.mark_qr('Could you tell me where the away fans sit?',
+                      'アウェーのファンがどこに座るか教えてもらえますか?');
+select pg_temp.ok('「まだ」を押した文が溜まる',
+  (select count(*)::int from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), 1);
+select pg_temp.ok('溜めたその日から出る(単語帳と同じ)',
+  (select due_on from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), current_date);
+select pg_temp.ok('溜めた文は復習の一覧に出る',
+  (select count(*)::int from public.qr_items(
+     'e2222222-2222-2222-2222-222222222222', 'todo', 200)), 1);
+select pg_temp.ok('日本語も一緒に溜まる(教材を読み直さずに復習できる)',
+  (select ja from public.qr_items('e2222222-2222-2222-2222-222222222222', 'todo', 200)),
+  'アウェーのファンがどこに座るか教えてもらえますか?');
+
+-- **記号だけが違う同じ文は、1行にまとまる**(教材をまたいで1つ・利用者の指定)
+select public.mark_qr('COULD YOU TELL ME WHERE THE AWAY FANS SIT!!', '別の訳');
+select pg_temp.ok('記号と大文字が違うだけの文は、1行にまとまる',
+  (select count(*)::int from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), 1);
+
+-- ── 「言える」で箱が上がる ────────────────────────────────────
+select public.mark_qr('Could you tell me where the away fans sit?', 'x', 'learning');
+select pg_temp.ok('「言える」で箱が1つ上がる',
+  (select box from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), 1::smallint);
+select pg_temp.ok('次は翌日',
+  (select due_on from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), current_date + 1);
+
+select public.mark_qr('Could you tell me where the away fans sit?', 'x', 'learning');
+select pg_temp.ok('2回目は2日後',
+  (select due_on from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), current_date + 2);
+
+select public.mark_qr('Could you tell me where the away fans sit?', 'x', 'learning');
+select pg_temp.ok('箱は 3 で止まる(必ず4日以内に戻ってくる)',
+  (select box from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), 3::smallint);
+select pg_temp.ok('3回目からは4日後',
+  (select due_on from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), current_date + 4);
+
+-- ── 「まだ」を押すと、数えは 0 に戻る ─────────────────────────
+select public.mark_qr('Could you tell me where the away fans sit?', 'x', 'unknown');
+select pg_temp.ok('「まだ」で箱が 0 に戻る',
+  (select box from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), 0::smallint);
+select pg_temp.ok('「まだ」で数えも 0 に戻る',
+  (select learn_streak from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), 0::smallint);
+select pg_temp.ok('「まだ」の次は翌日',
+  (select due_on from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), current_date + 1);
+
+-- ── 25回続けたら卒業する(単語帳と同じ数字)───────────────────
+do $$
+begin
+  for i in 1..25 loop
+    perform public.mark_qr('Could you tell me where the away fans sit?', 'x', 'learning');
+  end loop;
+end $$;
+select pg_temp.ok('25回続けて「言える」を押したら、30日先へ送られる',
+  (select due_on from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), current_date + 30);
+select pg_temp.ok('卒業しても status は learning のまま(しばらく、であって永久ではない)',
+  (select status from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), 'learning');
+
+-- **単語帳と同じ数字か。** ずれると覚え方の話が2つになる
+select public.mark_word('perseverance', 'unknown');
+do $$
+begin
+  for i in 1..25 loop
+    perform public.mark_word('perseverance', 'learning');
+  end loop;
+end $$;
+select pg_temp.ok('卒業までの回数・休む日数が、単語帳とそろっている',
+  (select due_on from public.word_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and word_norm = 'perseverance')
+  = (select due_on from public.qr_reviews
+     where learner_id = 'e2222222-2222-2222-2222-222222222222'), true);
+
+-- ── 「言えた」だけでは溜めない(p_only_existing)───────────────
+select public.mark_qr('This one was easy for me.', 'これは簡単でした',
+                      'learning', null, null, null, true);
+select pg_temp.ok('教材で「言えた」を押しただけの文は、溜まらない',
+  (select count(*)::int from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and en_norm = public.norm_en('This one was easy for me.')), 0);
+
+-- **すでに溜まっている文なら、教材の中の「言えた」でも箱が上がる**(利用者の確認)
+select public.mark_qr('I have to check the schedule.', 'スケジュールを確認しないと');
+select public.mark_qr('I have to check the schedule.', 'x',
+                      'learning', null, null, null, true);
+select pg_temp.ok('すでに溜まっている文は、教材の「言えた」でも箱が上がる',
+  (select box from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and en_norm = public.norm_en('I have to check the schedule.')), 1::smallint);
+
+-- ── 復習から外せる ───────────────────────────────────────────
+select public.drop_qr('I have to check the schedule.');
+select pg_temp.ok('間違えて溜めた文は外せる',
+  (select count(*)::int from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'
+     and en_norm = public.norm_en('I have to check the schedule.')), 0);
+
+-- ── 誰の記録になるか(0025 と同じ考え方)──────────────────────
+set request.jwt.claim.sub = 'e1111111-1111-1111-1111-111111111111';
+select public.mark_qr('Let us go over the numbers again.', 'もう一度数字を見ましょう',
+                      'unknown', null, null, 'e2222222-2222-2222-2222-222222222222');
+-- **トレーナーからは、表そのものは見えない**(RLS は自分の行だけ)。
+-- 担当ゲストのぶんは窓口(`qr_items`)を通して読む。0025 と同じ形である
+select pg_temp.ok('トレーナーがゲストのページで押したら、ゲストの記録になる',
+  (select count(*)::int from public.qr_items(
+     'e2222222-2222-2222-2222-222222222222', 'todo', 200)
+   where en_norm = public.norm_en('Let us go over the numbers again.')), 1);
+select pg_temp.ok('トレーナー自身の記録には入らない',
+  (select count(*)::int from public.qr_reviews
+   where learner_id = 'e1111111-1111-1111-1111-111111111111'), 0);
+
+-- トレーナーが自分の「教材」で押したら、トレーナー自身の記録
+select public.mark_qr('That is a fair point.', 'それはもっともです');
+select pg_temp.ok('トレーナーが自分の教材で押したら、自分の記録になる',
+  (select count(*)::int from public.qr_reviews
+   where learner_id = 'e1111111-1111-1111-1111-111111111111'), 1);
+
+-- ── 担当していないゲストには書けない・読めない ───────────────
+set request.jwt.claim.sub = 'e9999999-9999-9999-9999-999999999999';
+select pg_temp.denied('担当外のトレーナーは、ゲストの復習に書けない',
+  $$select public.mark_qr('No way.', 'まさか', 'unknown', null, null,
+                          'e2222222-2222-2222-2222-222222222222')$$);
+select pg_temp.denied('担当外のトレーナーは、ゲストの復習を読めない',
+  $$select * from public.qr_items('e2222222-2222-2222-2222-222222222222')$$);
+
+set request.jwt.claim.sub = 'e3333333-3333-3333-3333-333333333333';
+select pg_temp.denied('ほかのゲストの復習には書けない',
+  $$select public.mark_qr('No way.', 'まさか', 'unknown', null, null,
+                          'e2222222-2222-2222-2222-222222222222')$$);
+select pg_temp.ok('ほかのゲストの行は、表からも見えない',
+  (select count(*)::int from public.qr_reviews
+   where learner_id = 'e2222222-2222-2222-2222-222222222222'), 0);
+
+reset role;
