@@ -144,6 +144,41 @@ for (const banned of ['createMediaElementSource', 'createGain', 'crossOrigin']) 
   check(`\`${banned}\` を使っていない(通り道を変えない)`, !src.includes(banned))
 }
 
+// ── ⑥ 差し替えのときに「プチッ」と鳴らさないこと ──────────────
+//
+// 2026-09 利用者の指摘。
+//
+//   > 発言と発言の間、特に、ひとつの発言の終わりに小さく
+//   > 「プチっ」というノイズが入ってます。
+//
+// `<audio>` は**1つだけを使い回している**(iPhone の解錠をやり直さない
+// ため)。次の発言に移るとき、鳴り終わったままの `<audio>` に新しい
+// `src` を入れて `load()` する。**これは再生の仕組みをいったん壊して
+// 作り直す操作**で、そのとき音の出口に段差ができる。
+//
+// だから **`pause()` して `volume = 0` にしてから差し替える。**
+// 段差ができても、音量が 0 なら聞こえない。
+// **順番が命なので、順番そのものを見張る**(入れ替わっても
+// `npm run lint` にも `npm run build` にも引っかからない)。
+console.log('\n▶ 差し替えの前に、止めて黙らせているか')
+const clips = await import('node:fs/promises')
+  .then((fs) => fs.readFile(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8'))
+const iPause = clips.indexOf('el.pause()')
+const iMute = clips.indexOf('el.volume = 0')
+const iSrc = clips.indexOf('el.src = src')
+check('差し替えの前に `pause()` している', iPause >= 0 && iSrc >= 0 && iPause < iSrc,
+  `pause=${iPause} / src=${iSrc}`)
+check('差し替えの前に `volume = 0` にしている', iMute >= 0 && iSrc >= 0 && iMute < iSrc,
+  `volume=${iMute} / src=${iSrc}`)
+check('そのあとで本当の音量を入れ直している(`applyGain`)',
+  clips.indexOf('applyGain(el') > iSrc)
+// 止めるときも同じ。鳴っている途中で止めると、そこに段差ができる
+const iStop = clips.indexOf('export function stopClip')
+const iStopMute = clips.indexOf('element.volume = 0', iStop)
+const iStopPause = clips.indexOf('element.pause()', iStop)
+check('止めるときも、黙らせてから止めている',
+  iStop >= 0 && iStopMute > iStop && iStopPause > iStopMute)
+
 console.log(failed
   ? `\n❌ ${failed} 件が意図どおりではありません`
   : '\n✅ 音量そろえの検証はすべて意図どおりです')

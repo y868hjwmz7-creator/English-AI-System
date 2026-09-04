@@ -376,6 +376,10 @@ export function stopClip() {
   if (element) {
     try {
       at = Number(element.currentTime) || 0
+      // **止める前に黙らせる**(2026-09「プチっというノイズ」と同じ理由)。
+      // 鳴っている途中で止めると、そこに段差ができる。
+      // 本当の音量は、次に鳴らすとき `applyGain()` が入れ直す
+      element.volume = 0
       element.pause()
       element.currentTime = 0
     } catch { /* 止められなくても困らない */ }
@@ -415,7 +419,31 @@ export async function playClip({
   const mine = (generation += 1)
   const el = audioElement()
 
-  /** 1回だけ鳴らしてみる。鳴らせなければ false */
+  /**
+   * 1回だけ鳴らしてみる。鳴らせなければ false。
+   *
+   * 【差し替えは、必ず「止めて・黙らせて」から】(2026-09 利用者の指摘)
+   *
+   *   > 発言と発言の間、特に、ひとつの発言の終わりに小さく
+   *   > 「プチっ」というノイズが入ってます。
+   *
+   *   `<audio>` は**1つだけを使い回している**(iPhone の解錠をやり直さない
+   *   ため)。次の発言に移るとき、鳴り終わったままの `<audio>` に
+   *   新しい `src` を入れて `load()` している。**これは再生の仕組みを
+   *   いったん壊して作り直す操作**で、そのとき音の出口に段差ができる。
+   *   これが発言の切れ目で「プチッ」と鳴っていた正体である。
+   *
+   *   **鳴らす音そのものは変えない**(音の通り道を変えない・CLAUDE.md)。
+   *   することは2つだけ。
+   *
+   *   ① 先に `pause()`。鳴っている最中に作り直させない
+   *   ② **`volume` を 0 にしてから差し替える。** 段差ができても、
+   *      音量が 0 なら**聞こえない。** 本当の音量は、読み込みが
+   *      終わったあと `applyGain()` が入れ直す(この順は変えない)
+   *
+   *   ②は**すでに使っている `<audio>` の `volume`** であって、
+   *   `GainNode` ではない。通り道は1ミリも増えていない。
+   */
   const tryPlay = (src) => new Promise((resolve) => {
     let settled = false
     const done = (ok) => {
@@ -430,6 +458,11 @@ export async function playClip({
     el.addEventListener('loadeddata', onLoaded)
     el.addEventListener('error', onError)
     try {
+      // ① 鳴っている最中に作り直させない
+      el.pause()
+      // ② 差し替えのあいだは黙らせる。**段差ができても聞こえない。**
+      //    本当の音量は、下の `applyGain()` が読み込みのあとに入れ直す
+      el.volume = 0
       el.src = src
       el.load()
     } catch { done(false) }

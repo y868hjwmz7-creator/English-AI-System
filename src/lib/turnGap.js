@@ -42,23 +42,37 @@
  * ============================================================================
  */
 
-/** ふつうの受け答え。ここが基準 */
-const BASE = 380
+/**
+ * ふつうの受け答え。ここが基準。
+ *
+ * **2026-09、利用者の指定で半分にした。**
+ *
+ *   > 会話の発言と発言の間、記事の段落と段落の間の間が少し長いです。
+ *   > 意味や感情の流れにより間を調整するにしても、
+ *   > 今の半分近くにして良いと思います
+ *
+ * **比はそのまま、値だけを半分にする。** 相づちは短く、
+ * 問われたら長く、という関係は残したままにしたいので、
+ * 5つ(BASE / QUICK / THINK / BREATH / MAX_GAP)と、
+ * 長さに応じて足す分を**そろって半分**にした。
+ * 片方だけ縮めると、そこだけ不自然に詰まる。
+ */
+const BASE = 190
 
-/** 食い気味。相づち・即答・割り込み */
-const QUICK = 120
+/** 食い気味。相づち・即答・割り込み(2026-09 に半分) */
+const QUICK = 60
 
-/** 考えてから答える */
-const THINK = 900
+/** 考えてから答える(2026-09 に半分) */
+const THINK = 450
 
 /**
  * **息継ぎ。** 同じ人が続けて話すとき(記事の段落の切れ目など)。
  * 受け答えより少し長い。段落は「話がひとまとまり終わった」ところだからである。
  */
-const BREATH = 600
+const BREATH = 300
 
-/** どんなに長くても、ここで止める(待たされている感じになる) */
-const MAX_GAP = 1400
+/** どんなに長くても、ここで止める(待たされている感じになる。2026-09 に半分) */
+const MAX_GAP = 700
 
 /**
  * **速くした声のぶん、前後に足す余白の基準**(2026-09 利用者の指定)。
@@ -174,9 +188,9 @@ export function turnGapMs(prev, next, { sameVoice = false } = {}) {
   //   一人で読んでいるところには無い。要るのは息継ぎである。
   if (sameVoice) {
     // 問いかけて終わっていれば一拍おく(問うたまま次へ流さない)
-    if (isQuestion(prev)) return Math.min(BREATH + 300, MAX_GAP)
+    if (isQuestion(prev)) return Math.min(BREATH + 150, MAX_GAP)
     const words = wordCount(prev)
-    if (words >= 40) return Math.min(BREATH + 200, MAX_GAP)
+    if (words >= 40) return Math.min(BREATH + 100, MAX_GAP)
     return BREATH
   }
 
@@ -191,14 +205,14 @@ export function turnGapMs(prev, next, { sameVoice = false } = {}) {
 
   // ⑤ 問われた → 考えてから答える。**長い問いほど、飲み込むのに時間がいる**
   if (isQuestion(prev)) {
-    const extra = Math.min(Math.floor(wordCount(prev) / 10) * 100, MAX_GAP - THINK)
+    const extra = Math.min(Math.floor(wordCount(prev) / 10) * 50, MAX_GAP - THINK)
     return THINK + extra
   }
 
   // ⑥ それ以外。**前が長ければ、少しだけ足す**
   const n = wordCount(prev)
-  if (n >= 40) return Math.min(BASE + 300, MAX_GAP)
-  if (n >= 25) return BASE + 150
+  if (n >= 40) return Math.min(BASE + 150, MAX_GAP)
+  if (n >= 25) return BASE + 80
   return BASE
 }
 
