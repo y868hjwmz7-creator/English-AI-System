@@ -571,7 +571,15 @@ input, select, textarea {
    数が変わるので、列を決め打ちする grid ではなく flex で並べる。
    訛りは説明が長いので広めに、話す人は狭くてよい。
    狭い画面では自然に折り返る(`.field-row` の指定は使わない)。 */
-.voice-row { display: flex; flex-wrap: wrap; gap: 12px; }
+/* **下端でそろえる**(2026-09 実機・利用者の指摘
+   「話者を指定するタブが縦にずれて表示されます」)。
+
+   訛りの欄には**見出しを出していない**(2026-08 利用者の指定)ので、
+   「話す人」の欄より見出しの1行(16px + 隙間 4px)だけ背が低い。
+   既定の `stretch` では中の `<select>` がそれぞれの箱の**上**に置かれ、
+   **訛りだけが 20px 高い位置**に出ていた。
+   下でそろえれば、見出しの有る無しにかかわらず入力欄が1直線に並ぶ。 */
+.voice-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 .voice-row > .field { flex: 1 1 150px; min-width: 0; }
 .voice-row > .field:first-child { flex: 2 1 280px; }
 .voice-pick { max-width: none; }
