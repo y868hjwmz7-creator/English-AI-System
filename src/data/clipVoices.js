@@ -226,6 +226,25 @@ export const CLIP_VOICES = [
     label: 'Tom', elevenId: 'DYkrAHD8iwork3YSUBbs' },
   { id: 'au-4', accent: 'au', gender: 'male', use: 'both',
     label: 'Brad', elevenId: 'vVnXvLYPFjIyE2YrjUBE' },
+  /* 2026-09、利用者が女性を8人足した。
+     **オーストラリアは女性10・男性2** になったので、会話のおまかせ
+     (男女交互)は男性が2人で尽きる。3人以上の会議では女性が続く */
+  { id: 'au-5', accent: 'au', gender: 'female', use: 'both',
+    label: 'Charlotte', elevenId: 'aRlmTYIQo6Tlg5SlulGC' },
+  { id: 'au-6', accent: 'au', gender: 'female', use: 'both',
+    label: 'Dee', elevenId: '5TZtQYDIn8M40udRnoVI' },
+  { id: 'au-7', accent: 'au', gender: 'female', use: 'both',
+    label: 'Kylie', elevenId: 'e1nbKcfTL4XYy71tZn9J' },
+  { id: 'au-8', accent: 'au', gender: 'female', use: 'both',
+    label: 'Isabel', elevenId: 'XEQBC9sleaE3f5ff82UR' },
+  { id: 'au-9', accent: 'au', gender: 'female', use: 'both',
+    label: 'Helenrzz', elevenId: 'U0ryXq06j9IEookC0qwV' },
+  { id: 'au-10', accent: 'au', gender: 'female', use: 'both',
+    label: 'Krystal', elevenId: 'jVaO0tjr2YWfUw1xLmB2' },
+  { id: 'au-11', accent: 'au', gender: 'female', use: 'both',
+    label: 'Hannah', elevenId: 'M7ya1YbaeFaPXljg9BpK' },
+  { id: 'au-12', accent: 'au', gender: 'female', use: 'both',
+    label: 'AImie', elevenId: 'fCqNx624ZlenYx5PXk6M' },
 
   // ── スコットランド ──────────────────────────────────────
   /* 2026-09 利用者が選定。
@@ -308,7 +327,7 @@ export const CLIP_VOICES = [
  * | 欄 | 何をするか | ここで選んだ値の理由 |
  * |---|---|---|
  * | `similarity_boost` | もとの録音にどれだけ寄せるか | **1(最大)。** 訛りは声そのものの特徴なので、寄せるほど残る |
- * | `stability`        | 読み方をどれだけ揃えるか   | **0.4。** 上げすぎると平板になり、抑揚ごと訛りが薄れる |
+ * | `stability`        | 読み方をどれだけ揃えるか   | **0.35。** 低いほど感情が出る(2026-09 利用者の指定) |
  * | `style`            | 誇張の強さ                 | **0。** 誇張は元の話し方から離れる方向に効く |
  * | `use_speaker_boost`| その話者らしさを強める     | **true** |
  *
@@ -324,9 +343,19 @@ export const CLIP_VOICES = [
  *   置き場所は英文と声から決まるので、**設定を変えても自動では作り直らない。**
  *   さがす画面の「読み上げ音声を作り直す」を押す。
  */
+/* **`stability` は 0.4 → 0.35**(2026-09 利用者の指定)。
+
+     > 0.75か何かにあげたものも元の0.45もしくは0.35くらいに戻してほしいです。
+     > 感情が豊かな方が良いです。
+
+   **このリポジトリでは 0.75 にしたことは一度も無い**(ずっと 0.4 だった。
+   0.8 は Ally だけの実験値で、すでに消してある)。
+   利用者が言う 0.35〜0.45 の帯の**いちばん感情が出る側**に置く。
+   **低いほど読み方が回ごとにばらつき、抑揚が大きくなる。**
+   これ以上下げると、同じ英文でも鳴らすたびに読み方が変わりすぎる */
 export const ACCENT_KEEP = {
   similarity_boost: 1,
-  stability: 0.4,
+  stability: 0.35,
   style: 0,
   use_speaker_boost: true,
 }
