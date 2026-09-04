@@ -28,7 +28,7 @@
  *   **見えているかどうかは、描かせないと分からない。**
  */
 import { spawn } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs'
@@ -209,6 +209,57 @@ for (const [label, want] of Object.entries(WANT)) {
     if (m.over) ng(`${w}px で横にはみ出している`)
   }
   await page.close()
+}
+
+// ── ページそのものが横に送れないこと(2026-09 実機・利用者の指摘)────
+//
+//    > スマホで教材ページやその他のページを表示しスクロールする際に
+//    > 左右にブレるので、これも固定されて動かないようにしてください。
+//    > ただし、スマホやパッドを横向きにした時はその幅に
+//    > レスポンシブに適合するように
+//
+//    `html, body { overflow-x: clip }` が効いているかを、**実際に
+//    横へ送ってみて**確かめる。**`hidden` にすると貼り付く帯
+//    (`position: sticky`)が効かなくなる**ので、そこも一緒に見る。
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 700 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(300)
+  for (const [what, w, h] of [['スマホ 縦', 390, 700], ['スマホ 横', 844, 390], ['320px', 320, 700]]) {
+    await page.setViewportSize({ width: w, height: h })
+    await page.waitForTimeout(200)
+    const m = await page.evaluate(() => {
+      // **わざと画面より広い箱を差し込んで**、横へ送れるかを試す
+      const probe = document.createElement('div')
+      probe.style.cssText = 'width:2000px;height:1px'
+      document.body.appendChild(probe)
+      window.scrollTo(500, 0)
+      const x = window.scrollX
+      probe.remove()
+      window.scrollTo(0, 0)
+      return { x, 幅: document.documentElement.clientWidth }
+    })
+    if (m.x !== 0) {
+      ng(`${what} … 横に送れてしまう(${m.x}px)`,
+        '`html, body { overflow-x: clip }` が効いていない')
+    } else if (m.幅 !== w) {
+      ng(`${what} … 幅が窓に合っていない`, `${m.幅} ≠ ${w}。横向きに広がらない`)
+    } else ok(`${what} … 横に送れない / 幅は窓どおり(${m.幅}px)`)
+  }
+  await page.close()
+}
+
+/* **`hidden` にしていないこと**を、書いてあるものからも確かめる。
+   `hidden` は箱を「送れる箱」に変えるので、貼り付く帯が効かなくなる */
+{
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+  if (/html,\s*body\s*\{[^}]*overflow-x:\s*hidden/.test(css)) {
+    ng('`html, body` を `overflow-x: hidden` にしている',
+      '`clip` にする。`hidden` は送れる箱を作るので `position: sticky` が効かなくなる')
+  } else if (!/html,\s*body\s*\{\s*overflow-x:\s*clip/.test(css)) {
+    ng('`html, body { overflow-x: clip }` が無い', 'ページが横に送れて、左右に揺れる')
+  } else ok('`html, body` は `clip`(送れる箱を作らない)')
 }
 
 await browser.close()

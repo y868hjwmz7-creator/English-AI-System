@@ -37,7 +37,7 @@ import { castList, remakeModeOf, sameVoices } from '../lib/voiceCast.js'
 export const voiceCountOf = (material) => castList(material)?.length || 1
 
 export default function VoiceRemake({
-  material, clipCount, mine, busy, onRun,
+  material, clipCount, mine, busy, onRun, onCancel,
 }) {
   const n = voiceCountOf(material)
   const purpose = voicePurposeFor(material.kind)
@@ -164,11 +164,23 @@ export default function VoiceRemake({
         </span>
       </p>
 
+      {/* **やめる道を、必ず並べて置く**(2026-09 実機・利用者の指摘)。
+            > 作り直しを「やめる」ボタンも作ってください。今はないので戻れません。
+
+          上の「読み上げ音声を作り直す」がもう一度押せば閉じるのだが、
+          **そこは画面を送ると見えなくなる**うえ、
+          「作り直す」と書いてあるものを押して閉じるとは思えない。
+          **押した場所のすぐ下に、そのままの言葉で置く。**
+          `btn--ghost`(枠線だけ)にして、走らせるボタンと見分けさせる */}
       <div className="btn-row">
         <button type="button" className="btn btn--small btn--quiet" disabled={busy}
                 onClick={() => onRun({ voiceIds, mode: run, accentName: accentLabel(accent) })}>
           {run === 'copy' ? '複製して音声を作る'
             : run === 'replace' ? '声を入れ替えて音声を作る' : '本当に作り直す'}
+        </button>
+        <button type="button" className="btn btn--small btn--ghost" disabled={busy}
+                onClick={onCancel}>
+          やめる
         </button>
       </div>
     </div>

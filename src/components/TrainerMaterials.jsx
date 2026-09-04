@@ -866,7 +866,8 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                              clipCount={premiumClipsOf(m).length}
                              mine={m.created_by === me.id}
                              busy={!!voiceBusy}
-                             onRun={(opt) => runRemake(m, opt)} />
+                             onRun={(opt) => runRemake(m, opt)}
+                             onCancel={() => setVoiceAsk(null)} />
               )}
               {voiceDone?.id === m.id && (
                 <p className={`notice${voiceDone.done === 0 ? ' notice--error' : ''}`}>
