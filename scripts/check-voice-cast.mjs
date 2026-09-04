@@ -28,7 +28,9 @@
  */
 import { readFileSync } from 'node:fs'
 import { castClipSpeakers } from '../src/lib/voiceCast.js'
-import { CLIP_VOICES, findVoice, voicesOfAccent } from '../src/data/clipVoices.js'
+import {
+  CLIP_VOICES, findVoice, voiceSettingsOf, voicesOfAccent,
+} from '../src/data/clipVoices.js'
 
 let bad = 0
 const ok = (s) => console.log(`✓ ${s}`)
@@ -167,6 +169,51 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     else if (!still) ng('`retired` を付けると、引けなくなる')
     else ok('`retired` を付ければ、選択肢から外れて、引くことはできる')
   }
+}
+
+// ── 訛りを最大限に活かす指定(2026-09 利用者の指定)────────────────
+//
+//    > この人を音声として使用する際は、必ず元のアクセントを最大限
+//    > 生かしすようなコードを必ず使用してください。
+//
+//    「必ず」なので、**渡す道が1本でも切れていたら赤くする。**
+//    渡らなくても音は鳴る(既定で作られる)ので、**気づけない。**
+{
+  const keep = CLIP_VOICES.filter((v) => v.keep)
+  if (!keep.length) ok('いま「訛りを活かす」を付けた声は無い')
+  else {
+    for (const v of keep) {
+      const st = voiceSettingsOf(v.id)
+      if (!st) ng(`${v.label} に、訛りを活かす指定が付いていない`)
+      else if (Number(st.similarity_boost) < 1) {
+        ng(`${v.label} の similarity_boost が最大でない`,
+          'もとの録音に寄せるほど訛りが残る。1 にする')
+      } else ok(`${v.label} … 訛りを活かす指定が付いている`)
+    }
+    // **付けていない声には送らない**(いまの音を変えないため)
+    const plain = CLIP_VOICES.find((v) => !v.keep)
+    if (plain && voiceSettingsOf(plain.id)) {
+      ng('付けていない声にまで指定が付いている', `${plain.label} に付いている`)
+    } else if (plain) ok('付けていない声には、何も添えない')
+  }
+
+  // **渡す道**(画面 → 窓口 → ElevenLabs)が切れていないか
+  const clip = read('src/lib/audioClips.js')
+  if (!/elevenSettings:\s*voiceSettingsOf\(/.test(clip)) {
+    ng('画面が、訛りの指定を窓口へ渡していない',
+      '`elevenSettings: voiceSettingsOf(rosterId)` が要る')
+  } else ok('画面は、訛りの指定を窓口へ渡している')
+
+  const fn = read('supabase/functions/speak/index.ts')
+  if (!/body\.elevenSettings/.test(fn)) ng('窓口が、訛りの指定を読んでいない')
+  else ok('窓口は、訛りの指定を読んでいる')
+  if (!/voice_settings:\s*settings/.test(fn)) {
+    ng('窓口が、ElevenLabs へ voice_settings を渡していない',
+      '読んだだけで、頼みに入れていない')
+  } else ok('窓口は、ElevenLabs へ voice_settings を渡している')
+  if (!/cleanElevenSettings/.test(fn)) {
+    ng('窓口が、来た値を確かめていない', '範囲の外を送ると 422 で断られる')
+  } else ok('窓口は、来た値を 0〜1 に丸めている')
 }
 
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

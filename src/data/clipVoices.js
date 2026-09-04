@@ -222,7 +222,62 @@ export const CLIP_VOICES = [
     label: 'Tom', elevenId: 'DYkrAHD8iwork3YSUBbs' },
   { id: 'au-4', accent: 'au', gender: 'male', use: 'both',
     label: 'Brad', elevenId: 'vVnXvLYPFjIyE2YrjUBE' },
+
+  // ── スコットランド ──────────────────────────────────────
+  /* 2026-09 利用者が選定。**訛りをいちばん活かしたい声**である。
+
+       > この人を音声として使用する際は、必ず元のアクセントを
+       > 最大限生かしすようなコードを必ず使用してください。
+
+     ElevenLabs は、**もとの録音にどれだけ寄せるか**を数字で指定できる。
+     何も渡さないと ElevenLabs 側の既定で作られ、**訛りが薄まることがある。**
+     だから `keep` を付けた声には、寄せる指定を必ず添えて頼む
+     (`ACCENT_KEEP`・下)。
+
+     **標準の段(Google / Azure)にスコットランドの声は無い。**
+     ドリルや単語では `uk-male` が代役になる(`baseOf`)。
+     訛りが要るのは記事・会話の本文なので、そこは ElevenLabs が読む。 */
+  { id: 'sc-1', accent: 'sc', gender: 'male', use: 'both',
+    label: 'Ally', elevenId: 'v2zbX16tJNtRIx8rSHDM', keep: true },
 ]
+
+/**
+ * **訛りを最大限に活かすための指定**(2026-09 利用者の指定)。
+ *
+ * ElevenLabs の `voice_settings` に渡す。意味は次のとおり。
+ *
+ * | 欄 | 何をするか | ここで選んだ値の理由 |
+ * |---|---|---|
+ * | `similarity_boost` | もとの録音にどれだけ寄せるか | **1(最大)。** 訛りは声そのものの特徴なので、寄せるほど残る |
+ * | `stability`        | 読み方をどれだけ揃えるか   | **0.4。** 上げすぎると平板になり、抑揚ごと訛りが薄れる |
+ * | `style`            | 誇張の強さ                 | **0。** 誇張は元の話し方から離れる方向に効く |
+ * | `use_speaker_boost`| その話者らしさを強める     | **true** |
+ *
+ * **`keep: true` の声にだけ付ける。** ほかの声はこれまでどおり、
+ * 何も渡さない(ElevenLabs の既定のまま)。
+ * **いまの音を変えないため**である。
+ *
+ * 【聞いて確かめていない】
+ *   こちらには音が聞こえない。**数字の意味から選んだ値**であって、
+ *   「これがいちばん良い」と確かめたものではない。
+ *   物足りなければ、この4つを書き換えて作り直せばよい。
+ *
+ * 【値を変えたら、音声を作り直す】
+ *   置き場所は英文と声から決まるので、**設定を変えても自動では作り直らない。**
+ *   さがす画面の「読み上げ音声を作り直す」を押す。
+ */
+export const ACCENT_KEEP = {
+  similarity_boost: 1,
+  stability: 0.4,
+  style: 0,
+  use_speaker_boost: true,
+}
+
+/**
+ * その声に添える ElevenLabs の指定。無ければ `null`(既定のまま作る)。
+ * **判断はここ1か所。** 画面ごとに書くと必ず食い違う。
+ */
+export const voiceSettingsOf = (id) => (findVoice(id)?.keep ? ACCENT_KEEP : null)
 
 // ── ここから下は仕組み。触らなくてよい ──────────────────────────
 

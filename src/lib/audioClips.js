@@ -55,7 +55,7 @@
  *   録音の `AudioContext` で学んだ作法(1つだけ作り、作り直さない)と同じ。
  */
 import {
-  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceRateOf,
+  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceRateOf, voiceSettingsOf,
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
@@ -240,6 +240,12 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
         // ElevenLabs の Voice ID。名簿(`src/data/clipVoices.js`)にある。
         // 無ければ窓口は標準の声で作る
         elevenVoice: elevenIdOf(rosterId) || undefined,
+        /* **訛りを最大限に活かす指定**(2026-09 利用者の指定)。
+           付いている声にだけ添える(`keep: true`)。
+           付いていない声には送らない ——
+           **いまの音を変えないため**である。
+           判断は `voiceSettingsOf()` 1か所(名簿の側) */
+        elevenSettings: voiceSettingsOf(rosterId) ?? undefined,
       },
     })
     // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある

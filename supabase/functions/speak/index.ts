@@ -308,7 +308,36 @@ async function synthGoogle(
  * **速さも高さも指定しない。** 自然な速さで作り、遅く・速くするのは
  * 画面側(`playbackRate`)の仕事である。
  */
-async function synthEleven(text: string, voiceId: string, key: string, model: string) {
+/**
+ * 画面から来た ElevenLabs の指定を、そのまま渡せる形にする。
+ *
+ * **窓口は声の名簿を持たない**(訛りの一覧は画面側だけが持つ)。
+ * だからここでは「どの声か」ではなく、**中身が正しいか**だけを見る。
+ *
+ *   ・知らない欄は捨てる
+ *   ・0〜1 の数に丸める(範囲の外を送ると 422 で断られる)
+ *   ・1つも残らなければ `null`(= 何も添えない。これまでどおり)
+ */
+const ELEVEN_SETTING_KEYS = ['stability', 'similarity_boost', 'style'] as const
+
+function cleanElevenSettings(raw: unknown): Record<string, number | boolean> | null {
+  if (!raw || typeof raw !== 'object') return null
+  const src = raw as Record<string, unknown>
+  const out: Record<string, number | boolean> = {}
+  for (const k of ELEVEN_SETTING_KEYS) {
+    const n = Number(src[k])
+    if (Number.isFinite(n)) out[k] = Math.min(Math.max(n, 0), 1)
+  }
+  if (typeof src.use_speaker_boost === 'boolean') {
+    out.use_speaker_boost = src.use_speaker_boost
+  }
+  return Object.keys(out).length ? out : null
+}
+
+async function synthEleven(
+  text: string, voiceId: string, key: string, model: string,
+  settings: Record<string, number | boolean> | null = null,
+) {
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`,
     {
@@ -318,7 +347,13 @@ async function synthEleven(text: string, voiceId: string, key: string, model: st
         'Content-Type': 'application/json',
         Accept: 'audio/mpeg',
       },
-      body: JSON.stringify({ text, model_id: model }),
+      /* **指定が来たときだけ添える。**
+         付けない声には、これまでどおり何も送らない(ElevenLabs の既定)。
+         いまの音を変えないためである(2026-09 利用者の指定) */
+      body: JSON.stringify(
+        settings ? { text, model_id: model, voice_settings: settings }
+          : { text, model_id: model },
+      ),
     },
   )
   if (!res.ok) {
@@ -455,6 +490,11 @@ Deno.serve(async (req) => {
     // **作り直すか。** あっても上書きする(下の「すでにあるなら」を飛ばす)
     const force = body.force === true
     const elevenVoice = elevenKey ? cleanElevenId(body.elevenVoice) : ''
+    /* **訛りを最大限に活かす指定**(2026-09 利用者の指定)。
+       画面(`src/data/clipVoices.js` の `voiceSettingsOf`)が決めて渡す。
+       **窓口は名簿を持たない**ので、ここでは中身だけを確かめる。
+       知らない欄は捨て、数は 0〜1 に丸める(そのまま渡すと 422 で断られる) */
+    const elevenSettings = cleanElevenSettings(body.elevenSettings)
     const usePremium = tier === 'premium' && !!elevenVoice
 
     // 標準の段。代役の話者ごとに会社を決めてある。
@@ -536,6 +576,7 @@ Deno.serve(async (req) => {
       made = await synthEleven(
         text, elevenVoice, elevenKey!,
         Deno.env.get('ELEVENLABS_MODEL') ?? ELEVEN_MODEL_DEFAULT,
+        elevenSettings,
       )
     } else if (provider === 'google') {
       made = await synthGoogle(text, GOOGLE_VOICES[base], googleKey!)
