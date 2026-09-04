@@ -284,6 +284,10 @@ export const CLIP_VOICES = [
      何人選んでも全員が男性だった */
   { id: 'sc-7', accent: 'sc', gender: 'female', use: 'both',
     label: 'Bonnie Makenzie', elevenId: 'AMNzDFTtLuyoKAL3YPnu' },
+  { id: 'sc-8', accent: 'sc', gender: 'female', use: 'both',
+    label: 'Isla Skye', elevenId: 'TVmbglAk3F1GkiCoOq47' },
+  { id: 'sc-9', accent: 'sc', gender: 'female', use: 'both',
+    label: 'Caroline', elevenId: 'GItJI30LSRkzJQjuHqkk' },
 ]
 
 
