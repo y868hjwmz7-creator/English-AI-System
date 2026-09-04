@@ -79,7 +79,9 @@ export default function FocusFrame({
   }, [])
 
   return createPortal(
-    <div className={`focus${className ? ` ${className}` : ''} focus--${width}`}
+    /* `focus--sheet` … **紙がある集中モード**の印(2026-09 利用者の指定)。
+       地をいつも黒にする。単語帳の集中モードには紙が無いので付かない */
+    <div className={`focus focus--sheet${className ? ` ${className}` : ''} focus--${width}`}
          role="dialog" aria-modal="true" aria-label="集中モード">
       {/* ── 上の帯。**細く1行。** ここが太ると中身が下へ押し出される ──
           **書き込みのあいだは、まるごと入れ替える**(レッスン表示と同じ作法)。

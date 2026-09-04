@@ -983,7 +983,25 @@ export default function LessonView({
               <button type="button"
                       className={`btn btn--small${qr ? ' btn--primary' : ''}`}
                       aria-pressed={qr}
-                      onClick={() => { stopAll(); setRun(qr ? null : 'qr') }}>
+                      onClick={() => {
+                        stopAll()
+                        /* **押したら、そのまま集中モードで始まる**
+                           (2026-09 利用者の指定)。
+
+                             > Quick Response も、自動的に集中モードで
+                             > 開始される仕様にしてください。
+
+                           単語帳の復習と同じ考え方である
+                           (**入口をもう1つ挟まない**)。ここを押した人は
+                           もう答える気で来ているのに、これまでは
+                           「Quick Response」→「集中モード」と2回押す
+                           必要があった。**1問ずつ画面に固定するのが、
+                           この練習の既定の形**である。
+                           集中モードのボタンは残してあるので、
+                           出たければそちらで閉じられる */
+                        setQrFocus(!qr)
+                        setRun(qr ? null : 'qr')
+                      }}>
                 <BoltIcon />Quick Response
               </button>
             )}

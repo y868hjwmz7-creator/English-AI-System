@@ -144,11 +144,19 @@ export default function GlossPopover({
     }
   })
 
-  // 紙の上では、紙に合わせた明るい色にする。
-  // body の直下に出すので、`.lesson-sheet .etext-pop` では届かない。
-  // **集中モードの紙(`.focus-paper`)も同じ扱いにする**(2026-09)。
-  // あちらも白い紙なので、暗い吹き出しが載ると浮く
-  const onPaper = !!anchorEl?.closest?.('.lesson-sheet, .focus-paper')
+  /* レッスン表示の紙の上では、紙に合わせた明るい色にする。
+     body の直下に出すので、`.lesson-sheet .etext-pop` では届かない。
+
+     **集中モードの紙(`.focus-paper`)は、もう対象にしない**(2026-09)。
+     あちらは**配色に従って暗くなる**ようになった(利用者の指定
+     「配色が『暗い』の時は紙も黒です」)ので、明るい色に決め打ちすると
+     **黒い紙の上に白い吹き出し**が載る。
+     何も足さなければ、吹き出しはアプリの配色に従う —
+     明るい配色なら明るいまま、暗い配色なら暗くなり、どちらも紙とそろう。
+
+     **レッスン表示の紙は白のままなので、そちらは変えない**
+     (画面共有では明るいほうが見やすい、という別の決まりがある)。 */
+  const onPaper = !!anchorEl?.closest?.('.lesson-sheet')
 
   return createPortal(
     <span
