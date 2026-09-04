@@ -67,6 +67,7 @@ import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import { CloseIcon } from './Icons.jsx'
+import { useFocusBoard } from './FocusBoard.jsx'
 import { castClipSpeakers, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { useProgress } from '../lib/progress.js'
@@ -159,6 +160,10 @@ export default function FocusReader({
   const [loop, setLoop] = useState(false)
 
   const bodyRef = useRef(null)
+  /* **書き込みとメモ**(2026-09 利用者の指定
+     「集中モードでも上部のバーに『書き込む』や『メモ』を配置してください」)。
+     `StepFocus` と同じものを分け合う(**2か所に書き写さない**) */
+  const board = useFocusBoard({ learnerId, page: index, bodyRef })
 
   const cast = useMemo(
     () => castClipSpeakers(items.map((it) => it.speaker), voiceIds),
@@ -252,6 +257,8 @@ export default function FocusReader({
          role="dialog" aria-modal="true" aria-label="集中モード">
       {/* ── 上の帯。**細く1行。** 送るものを増やさない ────────── */}
       <div className="focus-top">
+        {board.pen ? board.penBar : (
+          <>
         <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>
           <CloseIcon />閉じる
         </button>
@@ -259,6 +266,9 @@ export default function FocusReader({
           {wrap ? '調べた語' : `${index + 1} / ${total} ${unit}`}
         </span>
         {/* 見終わった段落の印。**どこまでやったか一目で分かる** */}
+        {/* **書き込む / メモ**(2026-09 利用者の指定)。
+            語を調べている最中こそ、線を引きたくなる場所である */}
+        {board.tools}
         <span className="focus-dots" aria-hidden="true">
           {items.map((it, i) => (
             <span key={it.id ?? i}
@@ -266,10 +276,20 @@ export default function FocusReader({
                     + (seen.includes(i) ? ' is-done' : '')} />
           ))}
         </span>
+          </>
+        )}
       </div>
 
-      {/* ── 本文。**ここだけが送れる**(`overscroll-behavior: contain`)── */}
+      {/* ── 本文とメモを横に並べる。**送れるのは本文の側だけ** ────── */}
+      <div className="focus-main">
+      {/* ── 本文。**ここだけが送れる**(`overscroll-behavior: contain`)──
+          中身は**白い紙**(`.focus-paper`)に載せる(2026-09 利用者の指定
+          「真ん中に紙があり、コンテンツは基本白ベース、
+            幅により余る左右のスペースが黒」)。
+          紙があると、**どこからどこまでが読むところか**が目で分かる。
+          幅は `.focus-body > *` が紙と同じ数字で決めている */}
       <div className="focus-body" ref={bodyRef}>
+        <div className="focus-paper">
         {wrap ? (
           <div className="focus-wrap">
             <p className="focus-wrap-lead">
@@ -320,6 +340,12 @@ export default function FocusReader({
             )}
           </>
         )}
+        </div>
+        {/* **板は送る箱の中に敷く。** 外に置くと、送ったときに
+            線だけが取り残される(会議アプリのペンと同じ失敗) */}
+        {board.inkLayer}
+      </div>
+        {board.notesPane}
       </div>
 
       {/* ── すぐ元に戻る(2026-09 利用者の指定)────────────────

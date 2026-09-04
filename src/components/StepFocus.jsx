@@ -31,6 +31,7 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { CloseIcon } from './Icons.jsx'
+import { useFocusBoard } from './FocusBoard.jsx'
 import { SIX_STEPS } from '../lib/sixSteps.js'
 
 /**
@@ -45,8 +46,13 @@ import { SIX_STEPS } from '../lib/sixSteps.js'
 export default function StepFocus({
   step, onStepChange, at, total, unit = '文', width = 'w100',
   onMove, onClose, children,
+  /** 誰のセッションか。**メモを出すかどうかを決める**(`FocusBoard`) */
+  learnerId = null,
 }) {
   const bodyRef = useRef(null)
+  /* **書き込みとメモ**(2026-09 利用者の指定)。
+     `FocusReader` と同じものを分け合う(**2か所に書き写さない**) */
+  const board = useFocusBoard({ learnerId, page: `${step}:${at}`, bodyRef })
 
   /* 送ったら、**中身の先頭へ戻す。** 前の1つを下まで読んでいると、
      次の1つが途中から始まって見える(`FocusReader` と同じ作法) */
@@ -98,26 +104,44 @@ export default function StepFocus({
        `FocusReader` とまったく同じ `.focus--w*` を使う。**2か所に持たない** */
     <div className={`focus stepfocus focus--${width}`}
          role="dialog" aria-modal="true" aria-label="集中モード">
-      {/* ── 上の帯。**細く1行。** ここが太ると中身が下へ押し出される ── */}
+      {/* ── 上の帯。**細く1行。** ここが太ると中身が下へ押し出される ──
+          **書き込みのあいだは、まるごと入れ替える**(レッスン表示と同じ作法)。
+          2段にすると、読むところがそのぶん狭くなる */}
       <div className="focus-top">
-        <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>
-          <CloseIcon />閉じる
-        </button>
-        <span className="focus-count">{at + 1} / {total} {unit}</span>
-        {/* **6Steps は、ここで切り替えられる**(利用者の指定「6steps全てに」)。
-            いちいち出て、選び直して、また入る…では続かない */}
-        <label className="wb-formpick stepfocus-pick">
-          <span className="sr-only">6Steps の切り替え</span>
-          <select value={step} onChange={(e) => onStepChange?.(e.target.value)}>
-            {SIX_STEPS.map((m) => (
-              <option key={m.id} value={m.id}>{m.no} {m.label}</option>
-            ))}
-          </select>
-        </label>
+        {board.pen ? board.penBar : (
+          <>
+            <button type="button" className="btn btn--small btn--ghost" onClick={onClose}>
+              <CloseIcon />閉じる
+            </button>
+            <span className="focus-count">{at + 1} / {total} {unit}</span>
+            {/* **書き込む / メモ**(2026-09 利用者の指定)。
+                1つだけに向き合う場所なので、線を引きたくなるのも
+                気づいたことを残したくなるのも、まさにこの最中である */}
+            {board.tools}
+            {/* **6Steps は、ここで切り替えられる**(利用者の指定「6steps全てに」)。
+                いちいち出て、選び直して、また入る…では続かない */}
+            <label className="wb-formpick stepfocus-pick">
+              <span className="sr-only">6Steps の切り替え</span>
+              <select value={step} onChange={(e) => onStepChange?.(e.target.value)}>
+                {SIX_STEPS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.no} {m.label}</option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
       </div>
 
-      {/* ── 中身。**ここだけが送れる** ────────────────────── */}
-      <div className="focus-body" ref={bodyRef}>{children}</div>
+      {/* ── 中身とメモを横に並べる。**送れるのは中身の側だけ** ─────── */}
+      <div className="focus-main">
+        <div className="focus-body" ref={bodyRef}>
+          {children}
+          {/* **板は送る箱の中に敷く。** 外に置くと、送ったときに
+              線だけが取り残される(会議アプリのペンと同じ失敗) */}
+          {board.inkLayer}
+        </div>
+        {board.notesPane}
+      </div>
 
       {/* ── 下の帯。**出る場所は、入った場所と同じ右下**(`FocusReader` と同じ) */}
       <div className="focus-barwrap">

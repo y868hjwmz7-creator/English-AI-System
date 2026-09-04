@@ -3000,7 +3000,16 @@ html, body { overscroll-behavior-x: none; }
 
    値は**決め打ちにする。** 紙は暗い配色を選んでいても白のままなので、
    `var(--text-*)` を使うと暗い配色のとき文字が消える(第5.22.6節①)。 */
-.lesson-sheet {
+/* ★ **紙の島は、集中モードでも使う**(2026-09 利用者の指定)。
+
+     > 集中モード、全てを黒にしてほしかった訳ではないです。
+     > 普通のモード時は、真ん中に紙があり、コンテンツは基本白ベース、
+     > 幅により余る左右のスペースが黒。このようにして欲しいのです。
+
+   だから**変数の島だけを `.focus-paper` と分け合う。**
+   置き方(送る箱かどうか・余白・幅)は下でそれぞれ書く。
+   **同じ色を2か所に書き写さない** — 書き写すと、片方だけ古くなる。 */
+.lesson-sheet, .focus-paper {
   --paper:        #fcfcfd;   /* ほんのり冷たい白。真っ白はまぶしい */
   --ink:          #24292f;   /* 真っ黒にしない */
   --ink-soft:     #5a646e;
@@ -3065,12 +3074,6 @@ html, body { overscroll-behavior-x: none; }
   --phrase-bg:    #ece4f7;   --phrase-bar:   #7a51b5;
   --mark-hover-bg:   #e6eef2;  --mark-hover-line: #2f6f86;
 
-  flex: 1; overflow-y: auto;
-  margin: 16px auto; padding: 28px 32px 60px;
-  width: min(860px, calc(100% - 24px));
-  background: var(--paper); color: var(--ink);
-  border-radius: 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 32%);
-  line-height: 1.9;
   /* ★ 暗い側にしか無い色も、ここで明るい側に戻す ★
      (2026-08 実機。シャドーイング中の段落が**真っ黒**になっていた)
 
@@ -3093,10 +3096,33 @@ html, body { overscroll-behavior-x: none; }
   --series-1: #2f6f86;  --series-2: #b4551f;  --series-3: #1f7a52;
   --series-4: #8a6a33;  --series-5: #a8436b;
 }
+/* 紙そのもの(レッスン表示)。**送る箱はこちらだけが持つ** */
+.lesson-sheet {
+  flex: 1; overflow-y: auto;
+  margin: 16px auto; padding: 28px 32px 60px;
+  width: min(860px, calc(100% - 24px));
+  background: var(--paper); color: var(--ink);
+  border-radius: 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 32%);
+  line-height: 1.9;
+}
+/* 集中モードの紙。**送るのは外側(`.focus-body`)なので、ここは送らない。**
+   幅は `.focus-body > *` が紙と同じ数字で決めている(`.focus--w*`) */
+.focus-paper {
+  padding: 22px 24px;
+  background: var(--paper); color: var(--ink);
+  border-radius: 12px; box-shadow: 0 6px 24px rgb(0 0 0 / 32%);
+  line-height: 1.9;
+}
+@media (max-width: 600px) {
+  /* 狭い画面では、囲みの余白がそのまま読む幅を削る(第5.63節と同じ話) */
+  .focus-paper { padding: 14px 12px; border-radius: 10px; }
+}
 /* 紙の中は、暗い配色を選んでいても読める色にする。
    var(--text-*) を使っている部品が紛れ込んでも消えないようにするため */
-.lesson-sheet, .lesson-sheet * { color: var(--ink); }
-.lesson-sheet .muted, .lesson-sheet .field-hint, .lesson-sheet .card-hint { color: var(--ink-soft); }
+.lesson-sheet, .lesson-sheet *,
+.focus-paper, .focus-paper * { color: var(--ink); }
+.lesson-sheet .muted, .lesson-sheet .field-hint, .lesson-sheet .card-hint,
+.focus-paper .muted, .focus-paper .field-hint, .focus-paper .card-hint { color: var(--ink-soft); }
 .lesson-sheet--m  { font-size: 16px; }
 .lesson-sheet--l  { font-size: 19px; }
 .lesson-sheet--xl { font-size: 23px; }
@@ -3779,23 +3805,29 @@ html, body { overscroll-behavior-x: none; }
    (第5.22.6節① と同じ落とし穴)。値で決め打ちにする */
 .lesson-sheet select,
 .lesson-sheet input[type="text"],
-.lesson-sheet textarea {
+.lesson-sheet textarea,
+.focus-paper select,
+.focus-paper input[type="text"],
+.focus-paper textarea {
   background: #fff; color: var(--ink); border: 1px solid var(--rule);
   border-radius: 6px;
 }
 
-.lesson-sheet .btn {
+.lesson-sheet .btn,
+.focus-paper .btn {
   margin-top: 6px; border-color: var(--rule); background: #fff;
   color: var(--ink-soft);
 }
-.lesson-sheet .btn:hover { background: var(--accent-bg); color: var(--accent); }
+.lesson-sheet .btn:hover,
+.focus-paper .btn:hover { background: var(--accent-bg); color: var(--accent); }
 /* **紙の上の「押して進む」ボタンを、まとめて塗り直す。**
    `.lesson-sheet .btn` が全部を白い枠にそろえてしまうので、
    塗り直さないと `btn--primary` が他のボタンと見分けられない。
    **部品ごとに打ち消して回らない**(新しい部品で必ず抜ける)。
    べた塗りにはせず、うすい地色 + 同じ色の文字 + 枠線 + 太字で示す
    (2026-08「黒と濃い水色の塗りつぶしがダサい」)。**色だけに頼らない** */
-.lesson-sheet .btn.btn--primary {
+.lesson-sheet .btn.btn--primary,
+.focus-paper .btn.btn--primary {
   background: var(--accent-soft); border-color: var(--accent-line);
   color: var(--accent); font-weight: 700;
 }
@@ -5176,8 +5208,21 @@ html, body { overscroll-behavior-x: none; }
   width: 9px; height: 9px; margin: -1px 0;
 }
 
-/* 本文。**ここだけが送れる。** 入りきる段落では、そもそも送れない */
+/* 本文とメモを横に並べる行(2026-09 利用者の指定
+   「集中モードでも上部のバーに『書き込む』や『メモ』を配置してください」)。
+   レッスン表示の `.lesson-body` と同じ組み方。**送るのは本文の側だけ** */
+.focus-main { flex: 1 1 auto; min-height: 0; display: flex; }
+@media (max-width: 860px) {
+  /* 狭い画面では横に置けない(紙が読めない幅になる)。**下から出す** */
+  .focus-main { flex-direction: column; }
+}
+/* 本文。**ここだけが送れる。** 入りきる段落では、そもそも送れない。
+   **書き込み(ペン)の板は、この中に敷く** — 送る箱の中にあるので、
+   線が紙と一緒に動く(`.lesson-sheet` と同じ理由・CLAUDE.md)。
+   そのために `position: relative` が要る */
 .focus-body {
+  position: relative;
+  min-width: 0;
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -5213,6 +5258,9 @@ html, body { overscroll-behavior-x: none; }
 .focus--w140 .focus-body > * { max-width: 1204px; }
 .focus--w150 .focus-body > * { max-width: 1290px; }
 .focus--wfit .focus-body > * { max-width: none; }
+/* **書き込みの板は、この幅の決まりから外す。** 板は送る箱いっぱいに
+   敷くもので、読む幅とは関係がない(挟まれると線がずれる) */
+.focus-body > .ink-layer { max-width: none; margin: 0; width: auto; }
 /* 何番目か + 話す人。**1行にまとめる**(2026-09 利用者の指定で番号を足した)。
    英語のときも訳のときも出すので、**切り替えても行は動かない** */
 .focus-who {
@@ -5266,6 +5314,18 @@ html, body { overscroll-behavior-x: none; }
   box-shadow: var(--shadow-2);
 }
 @media (max-width: 400px) { .focus-exit { right: 12px; } }
+
+/* ★ **狭い画面では、上の帯を絵だけにする**(2026-09 実測)。
+   「書き込む」「メモ」を足したので、iPhone(390px)で帯が横にはみ出した
+   (実測 400 > 390)。詰め方は**言葉を短く → 余白を詰める**の順
+   (CLAUDE.md)。ペンとメモは**絵が別物**なので、絵だけでも取り違えない
+   (読み上げのための名前は `aria-label` ではなく中の文字が担うので、
+   `.wide-text` で隠すだけにして、要素そのものは残す)。
+   判断は**幅だけ**(レッスン表示の帯と同じ 860px) */
+@media (max-width: 860px) {
+  .focus-top .wide-text { display: none; }
+  .focus-top { gap: 8px; }
+}
 
 /* 送りボタンは**縮ませない。** 名前が縮むより、押せることが先 */
 .focus-move { flex: 0 0 auto; min-width: 72px; }
@@ -5384,16 +5444,13 @@ html, body { overscroll-behavior-x: none; }
      「元々の幅に合わせてください」)。上限は `.focus--w*` が持っている。
      一度 48rem で頭打ちにしたが、**紙より細くなる**ので戻した。
      `margin: 0 auto` を必ず残す — これが無いと、画面を広げたぶんだけ
-     中身が左に寄って見える(「どんどん左に寄ってしまう」) */
+     中身が左に寄って見える(「どんどん左に寄ってしまう」)。
+
+     **地色・余白・角丸・影は `.focus-paper` が持つ**(2026-09 利用者の指定
+     「真ん中に紙があり、コンテンツは基本白ベース」)。
+     ここに書くと、紙と2か所で色を持つことになる */
   width: 100%;
   margin: 0 auto;
-  padding: 22px 20px;
-  border: 1px solid var(--border); border-radius: 16px;
-  background: var(--surface-1); box-shadow: var(--shadow-1);
-}
-@media (max-width: 600px) {
-  /* 狭い画面では、囲みの余白がそのまま読む幅を削る(第5.63節と同じ話) */
-  .passage--focus { padding: 14px 12px; border-radius: 12px; }
 }
 /* 1つしか出さないので、**下の区切り線は引かない。**
    次が無いのに線だけが残ると、続きがあるように見える */

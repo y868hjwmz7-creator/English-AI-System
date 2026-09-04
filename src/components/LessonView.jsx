@@ -32,6 +32,9 @@ import {
 import FocusReader from './FocusReader.jsx'
 import InkLayer from './InkLayer.jsx'
 import LessonNotes from './LessonNotes.jsx'
+/* 書き込みの色・道具・太さは `src/data/inkTools.js` 1か所。
+   **集中モードでも同じものを出す**ので、ここには持たない */
+import { INK_COLORS, INK_TOOLS, INK_WIDTH } from '../data/inkTools.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
@@ -134,39 +137,6 @@ const loadSize = () => {
 const saveSize = (id) => {
   try { window.localStorage.setItem(SIZE_KEY, id) } catch { /* 使えなくても困らない */ }
 }
-
-/** 書き込みの色(2026-09 利用者の指定で増やした)。
-    **色だけに頼らせない** — 線は形そのものが意味を持つ */
-const INK_COLORS = [
-  { id: 'red', color: '#e0483f', label: '赤' },
-  { id: 'blue', color: '#2f6f9f', label: '青' },
-  { id: 'green', color: '#1f7a52', label: '緑' },
-  { id: 'orange', color: '#e08a1e', label: 'オレンジ' },
-  { id: 'purple', color: '#7a4fa3', label: '紫' },
-  { id: 'pink', color: '#d1478a', label: 'ピンク' },
-  { id: 'black', color: '#22262b', label: '黒' },
-]
-
-/**
- * 書き込みの道具(2026-09 利用者の指定)。
- *
- *   > 消しゴムツールとハイライトツールも追加してください。
- *
- * **ハイライトは色を共有する。** 別の色の組を持つと、
- * 「いま何色か」が道具によって変わり、覚えていられない。
- * 太さと透け方だけを変える(`InkLayer`)。
- */
-const INK_TOOLS = [
-  { id: 'pen', label: 'ペン' },
-  { id: 'highlight', label: 'ハイライト' },
-  { id: 'eraser', label: '消しゴム' },
-]
-
-/**
- * 線の太さ。**2026-09 に 70% にした**(利用者の指定「線の太さを70％に」)。
- * 3px は画面共有では太く、英文の上に引くと字がつぶれていた。
- */
-const INK_WIDTH = 2.1
 
 export default function LessonView({
   material, onClose,

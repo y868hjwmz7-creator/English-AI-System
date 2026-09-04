@@ -395,7 +395,7 @@ export default function PassagePractice({
   }
 
   const body = (
-    <div className={`passage${focus ? ' passage--focus' : ''}`}>
+    <div className={`passage${focus ? ' passage--focus focus-paper' : ''}`}>
       {!focus && headline && <h4 className="passage-headline" lang="en">{headline}</h4>}
 
       {/* **集中モード**(2026-09 利用者の指定。名前も利用者が選んだ)。
@@ -777,6 +777,8 @@ export default function PassagePractice({
     return (
       <StepFocus step={step} onStepChange={(v) => { stopPlaying(); setStep(v) }}
                  at={at} total={focusTotal} unit={focusUnitLabel} width={focusWidth}
+                 /* **メモを出すかどうかは、相手がいるかで決まる**(`FocusBoard`) */
+                 learnerId={learnerId}
                  onMove={(n) => { stopPlaying(); setFocusAt(Math.min(Math.max(0, n), focusTotal - 1)) }}
                  onClose={() => { stopPlaying(); setFocus(false) }}>
         {body}
