@@ -274,6 +274,16 @@ export const CLIP_VOICES = [
      (2026-09 に一度直した不具合そのもの)。**利用者に確かめて直す。** */
   { id: 'sc-4', accent: 'sc', gender: 'male', use: 'both',
     label: 'Rob', elevenId: 'JdanfwfOBtHuVRJhsamV' },
+  { id: 'sc-5', accent: 'sc', gender: 'male', use: 'both',
+    label: 'Mark', elevenId: 'pp4ihOlfDr2MgdTALvoR' },
+  { id: 'sc-6', accent: 'sc', gender: 'male', use: 'both',
+    label: 'Archie', elevenId: 'aMdQCEO9kwP77QH1DiFy' },
+  /* **スコットランドで初めての女性の声**(2026-09)。
+     これで会話のおまかせが**男女交互**に当たるようになる
+     (`pickVoices`)。それまでは男性しかいなかったので、
+     何人選んでも全員が男性だった */
+  { id: 'sc-7', accent: 'sc', gender: 'female', use: 'both',
+    label: 'Bonnie Makenzie', elevenId: 'AMNzDFTtLuyoKAL3YPnu' },
 ]
 
 
