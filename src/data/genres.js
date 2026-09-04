@@ -377,7 +377,60 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'box_match',   label: '試合の組み立て',   hint: 'ラウンドごとの狙い' },
     { id: 'box_gear',    label: '道具の話',         hint: 'グローブ、バンテージ、シューズ' },
   ],
-  /* 柔術(2026-09 利用者の指定で追加)。**打撃が無く、寝技が中心**なので、
+  /* ── 格闘技の種類ごとの場面(2026-09 利用者の指定)────────────────
+     **同じ「格闘技」でも、ジムで交わす言葉は別物である。**
+     ボクシングは手だけ、ムエタイは肘膝と首相撲、柔術は寝技と帯、
+     レスリングはタックル、柔道は投げと一本。だからまとめずに1つずつ。
+     **「全般」を選べば、ここのぜんぶが並ぶ**(`ownOf`)。 */
+  kickbox: [
+    { id: 'kick_class',  label: 'クラスに出る',     hint: 'その日のコンビネーション、ペアの組み方' },
+    { id: 'kick_mitt',   label: 'ミットとサンドバッグ', hint: '合図、当て方、力の抜き方' },
+    { id: 'kick_low',    label: 'ローキックの受け方', hint: '脚を上げる、痛みの伝え方' },
+    { id: 'kick_spar',   label: 'スパーリング',     hint: '強さの加減、止めるとき、あとの一言' },
+    { id: 'kick_gear',   label: '道具の話',         hint: 'グローブ、レガース、バンテージ' },
+    { id: 'kick_match',  label: '試合の話',         hint: '階級、ラウンド、判定' },
+  ],
+  muaythai: [
+    { id: 'mt_gym',      label: 'タイのジムで',     hint: '滞在、1日の流れ、料金の払い方' },
+    { id: 'mt_clinch',   label: '首相撲(クリンチ)', hint: '首の取り方、崩し、膝の入れ方' },
+    { id: 'mt_pad',      label: 'パッドを持ってもらう', hint: 'トレーナーへの合図、直され方' },
+    { id: 'mt_elbow',    label: '肘と膝',           hint: '距離、当てる角度、練習での加減' },
+    { id: 'mt_ritual',   label: 'ワイクルーと礼',   hint: '試合前の作法、ジムでの敬い方' },
+    { id: 'mt_fight',    label: '試合を見に行く',   hint: 'スタジアム、賭け、実況の言い回し' },
+  ],
+  judo: [
+    { id: 'judo_dojo',   label: '道場の作法',       hint: '礼、並び方、先生への言葉づかい' },
+    { id: 'judo_grip',   label: '組み手',           hint: '袖と襟、切り方、有利な組み方' },
+    { id: 'judo_throw',  label: '投げ技を教わる',   hint: '崩し、体さばき、受け身' },
+    { id: 'judo_ne',     label: '寝技',             hint: '抑え込み、返し方、抜け方' },
+    { id: 'judo_score',  label: '一本と技あり',     hint: '判定、指導、試合の流れ' },
+    { id: 'judo_gi',     label: '道着の話',         hint: 'サイズ、縮み、洗い方、帯' },
+  ],
+  wrestling: [
+    { id: 'wr_practice', label: '練習に出る',       hint: 'ドリル、パートナー、走り込み' },
+    { id: 'wr_takedown', label: 'タックル',         hint: '入り方、切り方、距離の詰め方' },
+    { id: 'wr_ground',   label: 'グラウンド',       hint: '返し、逃げ方、ポイントの取り方' },
+    { id: 'wr_weight',   label: '減量と階級',       hint: '落とし方、当日の戻し方' },
+    { id: 'wr_style',    label: 'フリーとグレコ',   hint: '何が違うか、どちらをやるか' },
+    { id: 'wr_meet',     label: '大会',             hint: '計量、ブラケット、応援' },
+  ],
+  karate: [
+    { id: 'kar_dojo',    label: '道場のクラス',     hint: '並び方、号令、礼の順番' },
+    { id: 'kar_kata',    label: '型(かた)',        hint: '順番、止め方、直され方' },
+    { id: 'kar_kumite',  label: '組手',             hint: '間合い、当て方、寸止めかフルコンタクトか' },
+    { id: 'kar_belt',    label: '帯と昇級審査',     hint: '何が要るか、どれくらいで上がるか' },
+    { id: 'kar_style',   label: '流派の話',         hint: '違い、どこで習うか' },
+    { id: 'kar_gear',    label: '道具の話',         hint: '道着、防具、サイズ' },
+  ],
+  taekwondo: [
+    { id: 'tkd_class',   label: 'クラスに出る',     hint: '準備運動、ステップ、蹴りの反復' },
+    { id: 'tkd_kick',    label: '蹴り技を教わる',   hint: '高さ、回転、踏みかえ' },
+    { id: 'tkd_poomsae', label: 'プムセ(型)',      hint: '順番、見られ方、審査' },
+    { id: 'tkd_spar',    label: '組手と電子防具',   hint: '当たり方、ポイントの入り方' },
+    { id: 'tkd_belt',    label: '帯と昇級',         hint: '審査の内容、次に何をやるか' },
+    { id: 'tkd_comp',    label: '大会',             hint: '階級、コート、応援' },
+  ],
+  /* 柔術。**打撃が無く、寝技が中心**なので、
      MMA ともボクシングとも出てくる語がまるごと違う */
   jiujitsu: [
     { id: 'bjj_class',   label: 'クラスに出る',     hint: '今日の技、組む相手、ローテーション' },
@@ -733,6 +786,44 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'boxg_weight',  label: '階級と減量',       hint: '体づくり、当日の回復' },
     { id: 'boxg_history', label: '名勝負',           hint: '何が分かれ目だったか' },
     { id: 'boxg_health',  label: '安全とルール',     hint: '判定、ストップ、検査' },
+  ],
+  /* 格闘技の種類ごとの話題(2026-09 利用者の指定)。
+     **「全般」を選べば、ここのぜんぶが並ぶ**(`ownOf`) */
+  kickbox: [
+    { id: 'kickg_start',  label: 'はじめてみる',     hint: '何を買い、どこへ通うか' },
+    { id: 'kickg_style',  label: '流派とルール',     hint: '団体ごとの違い、肘の有無' },
+    { id: 'kickg_body',   label: '体づくりとケガ',   hint: '脛、拳、続けるための工夫' },
+    { id: 'kickg_scene',  label: '日本と海外の違い', hint: '興行、練習の仕方' },
+  ],
+  muaythai: [
+    { id: 'mtg_history',  label: 'タイでの位置づけ', hint: '国技としての重み、少年たちの道' },
+    { id: 'mtg_ritual',   label: '音楽と儀式',       hint: 'ワイクルー、生演奏、意味' },
+    { id: 'mtg_train',    label: '練習の組み立て',   hint: '1日2回、走り込み、休み方' },
+    { id: 'mtg_biz',      label: '興行と賭け',       hint: 'スタジアム、賭けの仕組み' },
+  ],
+  judo: [
+    { id: 'judog_rule',   label: 'ルールの移り変わり', hint: '禁止技、指導、判定の変化' },
+    { id: 'judog_edu',    label: '教育としての柔道', hint: '学校での扱い、礼の意味' },
+    { id: 'judog_world',  label: '世界の柔道',       hint: '国ごとの色、五輪' },
+    { id: 'judog_body',   label: '体づくりとケガ',   hint: '受け身、肩と膝、長く続ける' },
+  ],
+  wrestling: [
+    { id: 'wrg_style',    label: 'フリーとグレコ',   hint: '何が違い、どちらが向くか' },
+    { id: 'wrg_school',   label: '学校の部活と進路', hint: 'アメリカの大学、日本の高校' },
+    { id: 'wrg_cross',    label: '他の競技との相性', hint: 'MMA へ進む人が多い理由' },
+    { id: 'wrg_weight',   label: '減量の是非',       hint: '体への負担、決まりの変化' },
+  ],
+  karate: [
+    { id: 'karg_style',   label: '流派のちがい',     hint: '寸止めとフルコンタクト' },
+    { id: 'karg_kata',    label: '型は何のためか',   hint: '実戦との関係、見せ方' },
+    { id: 'karg_olympic', label: '競技としての空手', hint: '採点、五輪での扱い' },
+    { id: 'karg_kids',    label: '子どもと空手',     hint: '礼儀、続け方、親の関わり' },
+  ],
+  taekwondo: [
+    { id: 'tkdg_origin',  label: '成り立ち',         hint: '韓国での位置づけ、広まり方' },
+    { id: 'tkdg_rule',    label: '電子防具と判定',   hint: '何が変わったか、賛否' },
+    { id: 'tkdg_kick',    label: '蹴りの科学',       hint: '速さ、高さ、体の使い方' },
+    { id: 'tkdg_school',  label: '道場と昇級',       hint: '帯の制度、通い方' },
   ],
   /* 柔術(2026-09 利用者の指定で追加) */
   jiujitsu: [
