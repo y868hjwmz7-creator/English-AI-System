@@ -429,10 +429,12 @@ export default function App() {
             にする。閉じれば消える(直すまで毎回出したいので、覚えない)。 */}
         {clipNote && (
           <div className="jobnote is-quiet" role="status" aria-live="polite">
-            <span className="jobnote-text">
-              <strong>読み上げ音声を作れませんでした。</strong>
-              {' '}端末の声で鳴らしています。{clipNote}
-            </span>
+            {/* **文言はここに決め打ちしない**(2026-09 実機)。
+                「作れませんでした」と固定していたので、**版が古いことを
+                伝えるだけの知らせ**にもその文が付き、作りに行ってすら
+                いないのに「作れませんでした」と出ていた。
+                起きたことは `audioClips.js` の側が書く */}
+            <span className="jobnote-text">{clipNote}</span>
             <button type="button" className="nav-icon-btn"
                     onClick={() => setClipNote(null)} aria-label="お知らせを閉じる">
               <CloseIcon />

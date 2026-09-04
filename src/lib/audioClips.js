@@ -207,6 +207,14 @@ export const onClipTrouble = (fn) => {
   troubleListeners.add(fn)
   return () => troubleListeners.delete(fn)
 }
+/**
+ * **本当に音声を作れなかったとき**だけ添える1文。
+ *
+ * 版が古いことを伝えるだけの知らせ(`noteFnRev`)には**付けない。**
+ * あちらは音声を作りに行ってすらいない。
+ */
+const FAILED = '読み上げ音声を作れませんでした。端末の声で鳴らしています。'
+
 const setDetail = (d) => {
   lastDetail = d
   // **知らせで画面を落とさない。** 伝えられなくても、音は鳴る
@@ -339,13 +347,18 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
     // それは**窓口がまだ古い**という意味である(下の `remakeClip`)
     if (body.url) return { url: body.url, cached: !!body.cached }
     if (body.fatal) stopped = true
-    if (body.detail) setDetail(body.detail)
-    else if (error) setDetail(error.message)
+    /* **知らせは、それだけで意味が通る1文にする**(2026-09 実機)。
+       画面の側に「作れませんでした」と決め打ちしていたので、
+       **版が古いことを伝えるだけの知らせにも**その文が付き、
+       **作ろうともしていないのに「作れませんでした」**と出ていた。
+       起きたことは呼んだ側がいちばんよく知っている。ここで書く */
+    if (body.detail) setDetail(`${FAILED} ${body.detail}`)
+    else if (error) setDetail(`${FAILED} ${error.message}`)
     return null
   } catch (e) {
     // 窓口をまだ配置していないと、ここに来る。**毎回叩きに行かない**
     stopped = true
-    setDetail(`読み上げ音声の窓口につながりません(${e?.message ?? e})。`
+    setDetail(`${FAILED} 読み上げ音声の窓口につながりません(${e?.message ?? e})。`
       + 'Supabase の Edge Functions に speak が配置されているか確認してください。')
     return null
   }
