@@ -131,5 +131,43 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   if (broken.length) ng('名簿の id が引けない', broken.map((v) => v.id).join(' / '))
 }
 
+// ── もう使わない声(2026-09 利用者の指定)─────────────────────────
+//
+//    > この「クラスに出る」の Mika 役の声を今後使用しないように
+//    > 変更を加えてください。この人の時だけ発言の終わりに必ず
+//    > ノイズが入ります。
+//
+//    外した声が **①これから選ばれないこと** と
+//    **②すでに作った教材からは引けること** の両方を確かめる。
+//    行ごと消すと②が壊れ、その声で作った会話の話す人に声が当たらなくなる。
+{
+  const retired = CLIP_VOICES.filter((v) => v.retired)
+  for (const v of retired) {
+    if (voicesOfAccent(v.accent).some((x) => x.id === v.id)) {
+      ng(`外した声が、まだ選択肢に出る(${v.label})`, '`voicesOfAccent` から外れていない')
+    }
+    if (!findVoice(v.id)) {
+      ng(`外した声が、引けなくなっている(${v.label})`,
+        '行ごと消してはいけない。その声で作った教材の話す人に、声が当たらなくなる')
+    }
+  }
+  if (!retired.length) ok('いま「使わない」にしている声は無い')
+  else ok(`使わない声 ${retired.length} 人 … 選択肢から外れ、引くことはできる`)
+
+  /* **仕組みそのものが効くか**を、その場で試す。
+     名簿が全員現役でも、外す道が壊れていないことを確かめる */
+  const probe = CLIP_VOICES.find((v) => !v.retired)
+  if (probe) {
+    const was = probe.retired
+    probe.retired = true
+    const gone = !voicesOfAccent(probe.accent).some((x) => x.id === probe.id)
+    const still = Boolean(findVoice(probe.id))
+    probe.retired = was
+    if (!gone) ng('`retired` を付けても、選択肢から外れない')
+    else if (!still) ng('`retired` を付けると、引けなくなる')
+    else ok('`retired` を付ければ、選択肢から外れて、引くことはできる')
+  }
+}
+
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
