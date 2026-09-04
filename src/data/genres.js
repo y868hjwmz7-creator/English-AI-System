@@ -332,6 +332,22 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'oil_stock',   label: '備蓄と在庫',       hint: '何日分あるか、入れ替え' },
     { id: 'oil_trouble', label: '船が遅れた',       hint: '知らせ方、代わりの手当て' },
   ],
+  /* VAT還付代行(2026-09 利用者の指定)。
+     日本企業が海外で払った付加価値税を、代わりに還付申請する会社。
+     **相手は3方向**にいる — 依頼してくる日本企業、書類を出す海外の役所、
+     領収書を出した現地の取引先。英語を使うのは後ろの2つである */
+  vatrefund: [
+    { id: 'vat_intake',   label: '依頼を受ける打ち合わせ', hint: 'どの国で、いつ、いくら払ったか' },
+    { id: 'vat_docs',     label: '書類をそろえる',       hint: '原本、インボイス、足りないものの催促' },
+    { id: 'vat_vendor',   label: '現地の取引先に問い合わせる', hint: 'インボイスの出し直し、番号の記載漏れ' },
+    { id: 'vat_authority', label: '海外の税務当局とのやりとり', hint: '追加の質問、証明書、返事の督促' },
+    { id: 'vat_deadline', label: '期限の相談',           hint: '締め切りまでに間に合うか、次の期に回すか' },
+    { id: 'vat_status',   label: '進み具合の報告',       hint: 'いまどこまで進み、いつ入金されるか' },
+    { id: 'vat_reject',   label: '却下されたときの説明', hint: 'なぜ通らなかったか、次にどうするか' },
+    { id: 'vat_fee',      label: '料金・成功報酬の説明', hint: '何%か、いつ請求するか、経費の扱い' },
+    { id: 'vat_agent',    label: '現地の代理人と組む',   hint: '委任状、役割分担、進め方の確認' },
+    { id: 'vat_audit',    label: '税務調査への対応',     hint: '根拠の示し方、追加資料、立ち会い' },
+  ],
   hotel: [
     { id: 'hot_gm',      label: '支配人との打ち合わせ', hint: '今月の数字、人手、困っていること' },
     { id: 'hot_owner',   label: 'オーナー・投資家への報告', hint: '収支と、次に何へ使うか' },
@@ -845,6 +861,15 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'oilg_lng',     label: 'LNG の取り合い',   hint: '長期契約と、その場での売買' },
     { id: 'oilg_shift',   label: '石油会社の転換',   hint: '何に投資しているか' },
     { id: 'oilg_secure',  label: 'エネルギー安全保障', hint: 'どこから買うか、備えるか' },
+  ],
+  /* VAT還付代行の話題。**制度そのものが話の中身**になる仕事である */
+  vatrefund: [
+    { id: 'vatg_rule',    label: '国ごとに違う決まり',   hint: '対象になる費用、税率、必要な書類' },
+    { id: 'vatg_deadline', label: '期限と時効',          hint: 'いつまでに出すか、逃すとどうなるか' },
+    { id: 'vatg_digital', label: '電子インボイス',       hint: '紙から電子へ。国ごとの進み方の差' },
+    { id: 'vatg_travel',  label: '出張・展示会の費用',   hint: 'ホテル、交通、ブース代。戻るもの戻らないもの' },
+    { id: 'vatg_reject',  label: '通らない理由',         hint: 'よくある不備と、防ぎ方' },
+    { id: 'vatg_change',  label: '制度の変わり目',       hint: '税率の改定、離脱や加盟による影響' },
   ],
   hotel: [
     { id: 'hotg_expand', label: '海外への出店',     hint: '場所の選び方と、現地との組み方' },
