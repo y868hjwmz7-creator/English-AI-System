@@ -122,9 +122,13 @@ export const lastClipDetail = () => lastDetail
  *   だから窓口に版を返させ、**古ければ係の人に知らせる。**
  *   「検証を頼む前に、版が分かるようにする」(共通ルール)。
  *
+ *   **2026-09-04b から、モデルの既定が v3 になった**(利用者が選んだ声は
+ *   すべて v3 である)。置き直していない窓口は、いまも v2 で作っている。
+ *   **音は鳴るので、これも黙っていると気づけない。**
+ *
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  */
-export const NEED_FN_REV = '2026-09-04'
+export const NEED_FN_REV = '2026-09-04b'
 
 let fnRev = null
 /** 窓口の版。まだ一度も呼んでいなければ `null` */
@@ -138,8 +142,8 @@ const noteFnRev = (rev) => {
   fnRev = got
   if (!clipFnStale()) return
   /* **黙って落とさない。** 音は鳴ってしまうので、言わないと気づけない */
-  setDetail('読み上げの窓口(speak)が古いため、声の細かい指定'
-    + '(訛りの強さ・雑音の出やすさ)が反映されていません。'
+  setDetail('読み上げの窓口(speak)が古いため、ElevenLabs の v3 と、'
+    + '声の細かい指定(訛りの強さ・雑音の出やすさ)が反映されていません。'
     + `いま置かれているのは ${got}、必要なのは ${NEED_FN_REV} 以降です。`
     + ' Supabase → Edge Functions → speak を置き直してください。')
 }

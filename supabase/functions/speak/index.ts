@@ -87,7 +87,7 @@ const reply = (body: unknown, status = 200) =>
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-04'
+const FN_REV = '2026-09-04b'
 
 /** 置き場所(Storage のバケツ)。0016 で作る */
 const BUCKET = 'tts'
@@ -204,11 +204,46 @@ const cleanElevenId = (raw: unknown) => {
 
 /**
  * ElevenLabs のモデル。**Secrets の ELEVENLABS_MODEL で差し替えられる。**
- * 既定は実績のある `eleven_multilingual_v2`。
- * v3 を試すときは Secrets に `eleven_v3` を入れる(プランによっては
- * 使えないことがあるため、既定にはしない)。
+ *
+ * 【既定は v3。利用者が選んだ声が v3 だからである】(2026-09 利用者の指定)
+ *
+ *   > 私は全ての音声サンプルをV3からのみ選んでいます。
+ *   > 忘れないように記録してください。私が使うのはV3の音声のみです。
+ *
+ *   **名簿(`src/data/clipVoices.js`)の声は、すべて ElevenLabs の
+ *   v3 で聴いて選ばれている。** ところがここは長らく
+ *   `eleven_multilingual_v2` を頼んでいた。つまり
+ *   **利用者が聴いた音と、このアプリが鳴らす音は、別のモデルの出力**
+ *   だった。これは二度と尋ねない決まりごとなので、既定に据える。
+ *
+ * 【落ちる道は用意しておく】
+ *   v3 が使えるかどうかは**プランによる**。こちらからは確かめられない
+ *   (この環境から ElevenLabs へは鍵が無く、Supabase にも届かない)。
+ *   断られたら v2 で作り直し、**どちらで作ったかを返す**
+ *   (`madeModel`)。**黙って別のモデルに落ちない。**
  */
-const ELEVEN_MODEL_DEFAULT = 'eleven_multilingual_v2'
+const ELEVEN_MODEL_DEFAULT = 'eleven_v3'
+
+/** 断られたときに落ちる先。**ここまでで止める**(際限なく試さない) */
+const ELEVEN_MODEL_FALLBACK = 'eleven_multilingual_v2'
+
+/** v3 かどうか。落ち方と `stability` の丸め方が変わる。
+    **区切りは `_`。** `[^\w]` にすると `_` が語の文字なので当たらない
+    (`eleven_v3` が v3 でないことになる。実際に間違えた) */
+const isV3 = (model: string) => /(^|_)v3($|_)/.test(model)
+
+/**
+ * v3 が受け取る `stability` は、**とびとびの3つ**だと言われている
+ * (0 / 0.5 / 1)。**こちらでは確かめられない**ので、
+ * **先回りして丸めない。**
+ *
+ * 断られたときにだけ、いちばん近い値に寄せてもう一度試す。
+ * 先に丸めると、v3 が 0.35 を受け取れる場合に
+ * **利用者の指定(0.35)を勝手に書き換える**ことになる。
+ */
+const V3_STABILITY = [0, 0.5, 1]
+const snapStability = (v: number) =>
+  V3_STABILITY.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a))
 
 const DEFAULT_VOICE = 'us-female'
 
@@ -384,6 +419,60 @@ async function synthEleven(
     return { error: humanTtsError('ElevenLabs', res.status, await res.text().catch(() => '')) }
   }
   return { audio: await res.arrayBuffer() }
+}
+
+/**
+ * **v3 で作る。断られたら落ちる。** そして**どれで作ったかを返す。**
+ *
+ * 上から順に試して、通った時点で終わり。**3回で止める。**
+ *
+ *   ① 頼まれたモデル(既定は v3)＋ 画面から来た指定そのまま
+ *   ② v3 のときだけ … `stability` をとびとびの値(0 / 0.5 / 1)に寄せて
+ *   ③ v2 ＋ 指定そのまま
+ *
+ * ②があるのは、v3 が `stability` に 0.35 のような値を受け取らない
+ * という話があるためである。**確かめていない**ので先回りはせず、
+ * 断られたときにだけ寄せる。
+ *
+ * **黙って落ちない。** 返した `model` は応答に載せる(`madeModel`)ので、
+ * 「v3 のはずが v2 だった」を画面から見分けられる。
+ */
+async function synthElevenBest(
+  text: string, voiceId: string, key: string, model: string,
+  settings: Record<string, number | boolean> | null,
+) {
+  const tries: Array<{ model: string; settings: typeof settings; why: string }> = [
+    { model, settings, why: '頼まれたまま' },
+  ]
+  if (isV3(model) && settings && typeof settings.stability === 'number') {
+    const snapped = snapStability(settings.stability as number)
+    if (snapped !== settings.stability) {
+      tries.push({
+        model,
+        settings: { ...settings, stability: snapped },
+        why: `stability を ${snapped} に寄せた`,
+      })
+    }
+  }
+  if (model !== ELEVEN_MODEL_FALLBACK) {
+    tries.push({ model: ELEVEN_MODEL_FALLBACK, settings, why: 'v3 が使えなかった' })
+  }
+
+  let last: { error?: unknown } = {}
+  for (const t of tries) {
+    const made = await synthEleven(text, voiceId, key, t.model, t.settings)
+    if (made.audio) {
+      return {
+        audio: made.audio,
+        madeModel: t.model,
+        madeStability: typeof t.settings?.stability === 'number'
+          ? (t.settings.stability as number) : undefined,
+        modelNote: t === tries[0] ? undefined : t.why,
+      }
+    }
+    last = made
+  }
+  return last
 }
 
 /**
@@ -595,9 +684,12 @@ Deno.serve(async (req) => {
       }, 503)
     }
 
-    let made: { audio?: ArrayBuffer; error?: unknown }
+    let made: {
+      audio?: ArrayBuffer; error?: unknown
+      madeModel?: string; madeStability?: number; modelNote?: string
+    }
     if (provider === 'eleven') {
-      made = await synthEleven(
+      made = await synthElevenBest(
         text, elevenVoice, elevenKey!,
         Deno.env.get('ELEVENLABS_MODEL') ?? ELEVEN_MODEL_DEFAULT,
         elevenSettings,
@@ -654,6 +746,12 @@ Deno.serve(async (req) => {
       tier,
       // **実際に作った段。** 頼まれた段と違うことがある(上の `madeTier`)
       madeTier,
+      /* **実際に作ったモデル。** 既定は v3(利用者が選んだ声は v3 である)。
+         プランで使えなければ v2 に落ちるので、**落ちたことが分かるように返す。**
+         `modelNote` は、落ちた理由(v3 が使えなかった / stability を寄せた) */
+      madeModel: made.madeModel,
+      madeStability: made.madeStability,
+      modelNote: made.modelNote,
       // 良い声を頼まれたのに用意できなかったことを、係の人に伝える。
       // **どの鍵が足りないのかまで書く。** 「なぜか良い声にならない」で
       // 悩ませない(JSON の書き間違いは、これが無いと見つけられない)

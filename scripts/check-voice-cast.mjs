@@ -406,6 +406,42 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   if (!/cleanElevenSettings/.test(fn)) {
     ng('窓口が、来た値を確かめていない', '範囲の外を送ると 422 で断られる')
   } else ok('窓口は、来た値を 0〜1 に丸めている')
+
+  /* 【モデルは v3】(2026-09 利用者の指定)
+   *
+   *   > 私は全ての音声サンプルをV3からのみ選んでいます。
+   *
+   *   名簿の声はすべて v3 で聴いて選ばれている。ところが窓口は
+   *   長らく `eleven_multilingual_v2` を頼んでいた。
+   *   **利用者が聴いた音と、アプリが鳴らす音が別物**だったのに、
+   *   音は鳴るので気づけない。だから機械で見張る。 */
+  const def = /const ELEVEN_MODEL_DEFAULT = '([^']+)'/.exec(fn)?.[1]
+  if (!def) ng('窓口に、既定のモデルが無い')
+  else if (!/v3/.test(def)) {
+    ng('窓口の既定モデルが v3 でない', `いまは ${def}。利用者が選ぶ声はすべて v3 である`)
+  } else ok(`窓口の既定モデルは ${def}(利用者が選ぶ声は v3 のみ)`)
+
+  /* **落ちたことが分かるように返しているか。**
+     v3 が使えないプランでは v2 に落ちるが、**音は鳴る**ので、
+     返さないと「v3 のはずが v2 だった」に気づけない */
+  if (!/madeModel/.test(fn)) {
+    ng('窓口が、実際に作ったモデルを返していない', 'v2 に落ちても気づけない')
+  } else ok('窓口は、実際に作ったモデルを返す')
+
+  /* 【`isV3` は、**実際に当ててみる**】
+     はじめ `[^\w]` を区切りにしていたが、`_` は語の文字なので
+     **`eleven_v3` が「v3 ではない」**ことになっていた。
+     読むだけでは気づけないので、**その場で走らせて確かめる。** */
+  const v3re = /const isV3 = \(model: string\) => (\/.+?\/)\.test\(model\)/.exec(fn)?.[1]
+  if (!v3re) ng('窓口に、v3 かどうかを見分ける決まりが無い')
+  else {
+    const re = new RegExp(v3re.slice(1, -1))
+    const want = [['eleven_v3', true], ['eleven_v3_alpha', true],
+      ['eleven_multilingual_v2', false], ['eleven_turbo_v2_5', false]]
+    const bads = want.filter(([m, y]) => re.test(m) !== y).map(([m]) => m)
+    if (bads.length) ng('v3 かどうかの見分けが違う', bads.join(' / '))
+    else ok('v3 かどうかの見分けは、4とおりとも意図どおり')
+  }
 }
 
 // ── 窓口の版(置き直したかどうか) ────────────────────────────
@@ -424,8 +460,10 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
   // 窓口が版を返し、画面がそれを見ているか
   const fn = readFileSync('supabase/functions/speak/index.ts', 'utf8')
-  const rev = /const FN_REV = '([\d-]+)'/.exec(fn)?.[1]
-  const need = /NEED_FN_REV = '([\d-]+)'/.exec(clips)?.[1]
+  /* 版は日付だが、同じ日に2度直すことがあるので**うしろに印が付く**
+     (`2026-09-04b`)。`[\d-]+` だと、その日は素通りしていた */
+  const rev = /const FN_REV = '([^']+)'/.exec(fn)?.[1]
+  const need = /NEED_FN_REV = '([^']+)'/.exec(clips)?.[1]
   if (!rev) ng('窓口が版を返していない')
   else if (!need) ng('画面が、要る版を持っていない')
   else if (rev < need) ng('窓口の版が、画面の求める版より古い', `${rev} < ${need}`)
