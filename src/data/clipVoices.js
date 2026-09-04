@@ -253,11 +253,19 @@ export const CLIP_VOICES = [
      **どちらの値も残していない。** 0.1 は訛りを薄めるだけで雑音は消えず、
      切り落としは語尾を削る。**残せば「悪い音を、別の悪さで隠す」ことになる。**
 
-     いまは既定(`ACCENT_KEEP`)のまま。**外してはいない** ——
-     スコットランド訛りを練習したいゲストが実在するためで、
-     外すかどうかは利用者が決める。 */
-  { id: 'sc-1', accent: 'sc', gender: 'male', use: 'both',
+     **2026-09、利用者の指定で外した**(「Ally は消してください」)。
+     行ごと消さない —— id は音声の置き場所
+     (`<版>/<段>/<声の id>/<指紋>.mp3`)に入っているので、消すと
+     この声で作った教材の話す人に声が当たらなくなる(`isRetired`)。
+     **代わりに Hugh が入っている**(下)。スコットランド訛りを
+     練習したいゲストは実在するので、訛りそのものは残す。 */
+  { id: 'sc-1', accent: 'sc', gender: 'male', use: 'both', retired: true,
     label: 'Ally', elevenId: 'v2zbX16tJNtRIx8rSHDM' },
+  /* 2026-09 利用者が選定(Ally の代わり)。
+     **`CLIP_REV` は進めない** —— 足すだけなら、すでに作った音声は
+     1本も作り直しにならない(置き場所に声の id が入っているため)。 */
+  { id: 'sc-2', accent: 'sc', gender: 'male', use: 'both',
+    label: 'Hugh', elevenId: 'y6p0SvBlfEe2MH4XN7BP' },
 ]
 
 
