@@ -343,12 +343,39 @@ export default function LessonView({
     return () => { alive = false; stopReading() }
   }, [])
 
-  // 読んでいるところが画面の外に出ないよう、そこまで送る。
-  // `nearest` なので、すでに見えていれば動かない(押した直後に飛ばない)。
+  /**
+   * **いま読んでいるところを、紙のまん中に置く**(2026-09 利用者の指定)。
+   *
+   *   > 全体を再生中に、今再生している段落や発言がハイライトされるのですが、
+   *   > その段落や発言のボックスが画面中央に表示されるようにしてください。
+   *   > 今も追ってはくれるのですが、下の方に表示されてしまいます。
+   *
+   * 以前は `scrollIntoView({ block: 'nearest' })` だった。**あれは
+   * 「見えるところまで、いちばん少なく動かす」**ので、下から入ってきた
+   * 発言は**下端に貼り付いたまま**になる。そこは右下の操作盤と重なるうえ、
+   * 次の発言が見えないので、話の流れが追えない。
+   *
+   * **`scrollIntoView` は使わない**(CLAUDE.md)。あれは紙だけでなく
+   * 外側まで送ってしまう。紙は `overflow-y: auto` の箱なので、
+   * **その箱の `scrollTop` だけ**を動かす。
+   */
   useEffect(() => {
     if (!speakingKey) return
-    document.querySelector(`[data-key="${window.CSS.escape(speakingKey)}"]`)
-      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    const sheet = sheetRef.current
+    const box = sheet?.querySelector(`[data-key="${window.CSS.escape(speakingKey)}"]`)
+    if (!sheet || !box) return
+    const s = sheet.getBoundingClientRect()
+    const r = box.getBoundingClientRect()
+    /* まん中に置くための送り。
+       **画面より背の高い発言は、上をそろえる。** まん中に置くと
+       頭が切れて、読み始めが見えなくなる(長い段落で起きる) */
+    const room = s.height - r.height
+    const want = (r.top - s.top) - (room > 0 ? room / 2 : 16)
+    const max = Math.max(0, sheet.scrollHeight - sheet.clientHeight)
+    const top = Math.max(0, Math.min(sheet.scrollTop + want, max))
+    // **滑る動きが苦手な人がいる**(CLAUDE.md「`prefers-reduced-motion` を尊重」)
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    sheet.scrollTo({ top, behavior: calm ? 'auto' : 'smooth' })
   }, [speakingKey])
 
   // **開いた時点で、まだ控えに無い語を裏で引いておく。**
