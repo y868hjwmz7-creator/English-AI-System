@@ -133,6 +133,38 @@ export function silenceFor(frame, ms) {
  * @param {Array<{bytes: Uint8Array, gapMs?: number}>} parts
  * @returns {Uint8Array}
  */
+/**
+ * **終わりを、指定のミリ秒ぶん切り落とす。**(2026-09 利用者の指摘)
+ *
+ * MP3 は同じ長さのフレームが並んだだけの形なので、
+ * **うしろのフレームを落とすだけ**で短くできる。
+ * 中身は1バイトも書き換わらない(作り直さない、という指定)。
+ *
+ * - **フレームの切れ目でだけ切る。** 途中で切ると、そのフレームが壊れる
+ * - **全部は落とさない。** 1枚は必ず残す(0 バイトの MP3 を作らない)
+ * - 0 以下なら何もしない(**書いた声だけが切られる**)
+ */
+export function trimTail(bytes, ms) {
+  if (!bytes?.length || !(ms > 0)) return bytes
+  const f = firstFrame(bytes)
+  if (!f || !f.len || !f.sampleRate) return bytes
+  const perFrame = (f.samplesPerFrame / f.sampleRate) * 1000
+  const drop = Math.floor(ms / perFrame)
+  if (drop < 1) return bytes
+  /* **枚数は、実際に並んでいるぶんから数える。**
+     ビットレートが途中で変わる MP3 もあるので、割り算で決め打ちしない */
+  let at = 0
+  const starts = []
+  while (at < bytes.length) {
+    const one = firstFrame(bytes.subarray(at))
+    if (!one || one.at !== 0 || !one.len) break
+    starts.push(at)
+    at += one.len
+  }
+  if (starts.length <= drop) return bytes      // 1枚も残らないなら切らない
+  return bytes.subarray(0, starts[starts.length - drop])
+}
+
 export function joinMp3(parts) {
   const chunks = []
   for (const part of parts ?? []) {
@@ -143,7 +175,11 @@ export function joinMp3(parts) {
     const from = skipId3(raw)
     const to = dropId3v1(raw)
     if (to <= from) continue
-    chunks.push(raw.subarray(from, to))
+    /* **終わりを切り落とす声がある**(`trimMs`・2026-09 利用者の指摘
+       「発言の終わりでほぼ必ずプチっという音が入ります」)。
+       鳴らすときと**同じだけ**切らないと、落とした MP3 にだけ音が残る。
+       **数え方を2通り持たない。** */
+    chunks.push(trimTail(raw.subarray(from, to), Number(part.trimMs) || 0))
     const gap = Number(part.gapMs) || 0
     if (gap > 0) {
       const frame = firstFrame(raw)

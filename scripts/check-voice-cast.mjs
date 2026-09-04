@@ -31,7 +31,7 @@ import {
   castClipSpeakers, castLine, castList, remakeModeOf, sameVoices,
 } from '../src/lib/voiceCast.js'
 import {
-  ACCENT_KEEP, CLIP_VOICES, findVoice, voiceSettingsOf, voicesOfAccent,
+  ACCENT_KEEP, CLIP_VOICES, findVoice, voiceSettingsOf, voiceTrimMs, voicesOfAccent,
 } from '../src/data/clipVoices.js'
 
 let bad = 0
@@ -406,6 +406,74 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   if (!/cleanElevenSettings/.test(fn)) {
     ng('窓口が、来た値を確かめていない', '範囲の外を送ると 422 で断られる')
   } else ok('窓口は、来た値を 0〜1 に丸めている')
+}
+
+// ── 終わりの切り落としと、窓口の版 ────────────────────────────
+/* 【なぜ要るか】(2026-09 実機・利用者の指摘)
+ *
+ *   > さーっという音はずっと入っています。そして発言の終わりで
+ *   > ほぼ必ずプチっという音が入ります。
+ *   > Ally で既に試した 0.1 の値も効いていませんでした。
+ *
+ *   **0.1 にして何も変わらない**のは、指定が ElevenLabs まで
+ *   届いていないということである。窓口は利用者が Supabase の画面から
+ *   置くので、古いままなら `elevenSettings` は黙って捨てられる。
+ *   **しかも音は鳴る**ので、誰も気づけない。だから版を返させる。 */
+{
+  // ① 切り落としは、書いた声だけに効く
+  const trimmed = CLIP_VOICES.filter((v) => voiceTrimMs(v.id) > 0)
+  if (!trimmed.length) {
+    ng('終わりを切り落とす声が1人もいない', 'Ally に trimMs を入れてある')
+  } else ok(`終わりを切る声 … ${trimmed.map((v) => `${v.label} ${voiceTrimMs(v.id)}ms`).join(' / ')}`)
+
+  const others = CLIP_VOICES.filter((v) => v.trimMs === undefined && voiceTrimMs(v.id) !== 0)
+  if (others.length) {
+    ng('書いていない声まで切られている', others.map((v) => v.label).join(' / '))
+  } else ok('書いていない声は 0ms(ほかの声のリズムは1ミリも変わらない)')
+
+  // 名簿に無い声(代役)でも落ちない
+  if (voiceTrimMs('us-female') !== 0 || voiceTrimMs(undefined) !== 0) {
+    ng('名簿に無い声で、切り落としが 0 にならない')
+  } else ok('名簿に無い声(代役)は 0ms')
+
+  // **上限を置く。** 切りすぎると最後の子音が丸ごと消える
+  if (voiceTrimMs('sc-1') > 400) ng('切り落としが大きすぎる')
+
+  // ② 鳴らす側が、切り落としを使っているか
+  const clips = readFileSync('src/lib/audioClips.js', 'utf8')
+  if (!/voiceTrimMs/.test(clips)) ng('鳴らす側が、切り落としを見ていない')
+  else if (!/pause\(\)/.test(clips)) ng('鳴らす側が、切る場所で止めていない')
+  else ok('鳴らす側は、切る場所で止めている(iPhone は volume を無視するため)')
+
+  // ③ 落とす MP3 にも、同じだけ効いているか(**数え方を2通り持たない**)
+  /* **名前が出てくるだけでは足りない。** import が残っているだけで
+     素通りした(実際に外して確かめた)。**使っているか**を見る */
+  const dl = readFileSync('src/lib/downloadAudio.js', 'utf8')
+  if (!/parts\.push\(\{[^}]*trimMs/.test(dl)) {
+    ng('落とす MP3 に、切り落としが効いていない', '鳴らす音とだけ食い違う')
+  } else ok('落とす MP3 にも、同じだけ切り落としが効く')
+
+  // ④ 窓口が版を返し、画面がそれを見ているか
+  const fn = readFileSync('supabase/functions/speak/index.ts', 'utf8')
+  const rev = /const FN_REV = '([\d-]+)'/.exec(fn)?.[1]
+  const need = /NEED_FN_REV = '([\d-]+)'/.exec(clips)?.[1]
+  if (!rev) ng('窓口が版を返していない')
+  else if (!need) ng('画面が、要る版を持っていない')
+  else if (rev < need) ng('窓口の版が、画面の求める版より古い', `${rev} < ${need}`)
+  else ok(`窓口の版 ${rev} … 画面が求める ${need} を満たしている`)
+
+  // **版は、どの応答にも付ける**(失敗のときだけ付かないと、そこで誤診する)
+  if (!/JSON\.stringify\(\{ \.\.\.\(body as object\), fnRev/.test(fn)) {
+    ng('版が、一部の応答にしか付いていない', 'reply() の1か所で付ける')
+  } else ok('版は、どの応答にも必ず付く')
+
+  /* ここも**呼んでいるか**まで見る。`const noteFnRev =` を
+     `const unusedNoteFnRev =` に変えただけでは、名前が残るので素通りした */
+  if (!/noteFnRev\(\s*body\.fnRev\s*\)/.test(clips)) {
+    ng('画面が、窓口の返した版を読んでいない', '定義だけあって呼んでいない')
+  } else if (!/const noteFnRev = /.test(clips)) {
+    ng('版を見る関数そのものが無い')
+  } else ok('画面は、窓口が古ければ係の人に知らせる')
 }
 
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

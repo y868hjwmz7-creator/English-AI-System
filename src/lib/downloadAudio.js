@@ -28,6 +28,7 @@
  */
 import { clipUrl } from './audioClips.js'
 import { audioFileName, joinMp3 } from './mp3Join.js'
+import { voiceTrimMs } from '../data/clipVoices.js'
 import { materialAudioClips } from './audioPlaylist.js'
 
 /* 並べるところは `audioPlaylist.js` にある。
@@ -61,7 +62,9 @@ export async function downloadMaterialAudio(material, onProgress = null) {
         if (res.ok) bytes = new Uint8Array(await res.arrayBuffer())
       } catch { /* 届かなければ、無いものとして数える */ }
     }
-    if (bytes?.length) parts.push({ bytes, gapMs })
+    /* **鳴らすときと同じだけ、終わりを切る**(`voiceTrimMs`)。
+       切らないと、落とした MP3 にだけ「プチっ」が残る */
+    if (bytes?.length) parts.push({ bytes, gapMs, trimMs: voiceTrimMs(voiceId) })
     else missing += 1
     onProgress?.({ done: i + 1, total: list.length })
   }

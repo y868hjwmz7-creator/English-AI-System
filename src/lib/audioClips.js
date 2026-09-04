@@ -55,7 +55,7 @@
  *   録音の `AudioContext` で学んだ作法(1つだけ作り、作り直さない)と同じ。
  */
 import {
-  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceRateOf, voiceSettingsOf,
+  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceRateOf, voiceSettingsOf, voiceTrimMs,
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
@@ -105,6 +105,44 @@ const gaveUp = new Set()     // 窓口に頼んでも駄目だったもの
 
 /** 係の人向けの、直近の原因。ゲストには出さない */
 export const lastClipDetail = () => lastDetail
+
+/**
+ * **窓口(`speak`)が、いつの版か。**(2026-09 実機)
+ *
+ * 【なぜ要るか】
+ *   Ally の似せ具合を 1 → 0.1 に振っても、利用者の耳では
+ *   **音が1つも変わらなかった。** ここまで振れば声そのものが変わるので、
+ *   **指定が ElevenLabs まで届いていない**と考えるのが自然である。
+ *
+ *   窓口は Supabase の画面から**利用者が置く。**
+ *   `elevenSettings` を読む版が入ったのは 2026-09-04 なので、
+ *   それより前のものが置かれていれば、**指定は黙って捨てられる。**
+ *   しかも**音は鳴る**(既定で作られる)ので、**誰も気づけない。**
+ *
+ *   だから窓口に版を返させ、**古ければ係の人に知らせる。**
+ *   「検証を頼む前に、版が分かるようにする」(共通ルール)。
+ *
+ * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
+ */
+export const NEED_FN_REV = '2026-09-04'
+
+let fnRev = null
+/** 窓口の版。まだ一度も呼んでいなければ `null` */
+export const clipFnRev = () => fnRev
+/** 置き直しが要るか。**まだ分からないうちは false**(既定は騒がない) */
+export const clipFnStale = () => fnRev !== null && fnRev < NEED_FN_REV
+
+const noteFnRev = (rev) => {
+  const got = typeof rev === 'string' && rev ? rev : '(版なし)'
+  if (got === fnRev) return
+  fnRev = got
+  if (!clipFnStale()) return
+  /* **黙って落とさない。** 音は鳴ってしまうので、言わないと気づけない */
+  setDetail('読み上げの窓口(speak)が古いため、声の細かい指定'
+    + '(訛りの強さ・雑音の出やすさ)が反映されていません。'
+    + `いま置かれているのは ${got}、必要なのは ${NEED_FN_REV} 以降です。`
+    + ' Supabase → Edge Functions → speak を置き直してください。')
+}
 
 /**
  * **音声を作れなかった理由を、係の人に知らせる。**(2026-09 実機)
@@ -250,6 +288,7 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
     })
     // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある
     const body = data ?? {}
+    noteFnRev(body.fnRev)
     // **`cached` も返す。** 作り直しを頼んだのに「もうある」で返ってきたら、
     // それは**窓口がまだ古い**という意味である(下の `remakeClip`)
     if (body.url) return { url: body.url, cached: !!body.cached }
@@ -552,6 +591,22 @@ export async function playClip({
     const marks = wordMarks(body, (el.duration || 0) * 1000)
     const from = Number(el.currentTime) || 0   // 鳴らし始めた場所(続きから鳴らすとき)
 
+    /**
+     * **終わりを切り落とす声がある**(`voiceTrimMs`・2026-09 利用者の指摘)。
+     *
+     *   > 発言の終わりでほぼ必ずプチっという音が入ります。
+     *
+     * 鳴り終わりはすでに `fadeGain` でなだらかに下げているが、
+     * あれは **`<audio>` の `volume`** を動かすものである。
+     * **iPhone は `volume` を無視する**ので、あちらでは1ミリも効かない。
+     * だから**鳴らすのをやめる場所そのもの**を早める。
+     *
+     * **元の MP3 は書き換えない。** すでに作った音声にも効き、
+     * **課金もかからない**(作り直さないため)。
+     */
+    const trimSec = voiceTrimMs(voiceId) / 1000
+    const endOf = (len) => (trimSec > 0 ? Math.max(0, len - trimSec) : len)
+
     /* **画面の描き替え(約 16ms)ではなく、10ms ごとに回す**(2026-09 実測)。
        rAF だと鳴り終わりの最後のコマが「残り 41ms」で、
        **音量 0.205 のまま終わっていた** — 半分の高さから急に切れていた。
@@ -581,7 +636,9 @@ export async function playClip({
       const len = Number(el.duration) || 0
       // 鳴り始めてから何ミリ秒か / 終わりまで何ミリ秒か(どちらも実際の時間)
       const inMs = ((now - from) / r) * 1000
-      const outMs = len ? ((len - now) / r) * 1000 : Infinity
+      /* **切り落とす声では、そこを「終わり」と見なす**(`voiceTrimMs`)。
+         こうしないと、切る場所を過ぎてからなだらかに下がり始める */
+      const outMs = len ? ((endOf(len) - now) / r) * 1000 : Infinity
       // **決め方は `loudness.js` 1か所**(手元で確かめられる形にしてある)
       const v = fadeGain(gain, inMs, outMs)
       // 0.005 より細かい差は耳に届かない。入れ直す回数を減らす
@@ -594,6 +651,15 @@ export async function playClip({
     const tick = () => {
       if (mine !== generation) { stopTrack(); return }
       fade()
+      /* **切る場所まで来たら、そこで終わりにする。**
+         `ended` を待つと、切りたかったところが鳴ってしまう。
+         `pause()` は `volume` と違って **iPhone でも効く** */
+      const len = Number(el.duration) || 0
+      if (trimSec > 0 && len && el.currentTime >= endOf(len)) {
+        try { el.volume = 0; el.pause() } catch { /* 無視 */ }
+        finish()
+        return
+      }
       const next = markIndexAt(marks, el.currentTime * 1000)
       if (next >= 0 && next !== index) {
         index = next

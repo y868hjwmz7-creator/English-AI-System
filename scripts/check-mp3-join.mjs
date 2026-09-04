@@ -20,7 +20,7 @@
  *   ⑤ 中身が**1バイトも書き換わっていない**か(作り直さない、という指定)
  */
 import {
-  audioFileName, dropId3v1, firstFrame, joinMp3, silenceFor, skipId3,
+  audioFileName, dropId3v1, firstFrame, joinMp3, silenceFor, skipId3, trimTail,
 } from '../src/lib/mp3Join.js'
 
 let bad = 0
@@ -273,6 +273,65 @@ function fakeMp3({ mpeg1 = true, kbps = 128, hz = 44100, frames = 4, id3 = false
   if (materialAudioClips(null).length || materialAudioClips({}).length) {
     ng('教材が無いのに何か返している')
   } else ok('教材が無ければ 0 本')
+}
+
+// ── ⑦ 終わりを切り落とす(プチっを消す) ──────────────────────
+/* 【なぜ要るか】(2026-09 利用者の指摘)
+ *
+ *   > 発言の終わりでほぼ必ずプチっという音が入ります。
+ *
+ *   鳴り終わりは `fadeGain` でなだらかに下げてあるが、あれは
+ *   **`<audio>` の `volume`** を動かすもので、**iPhone は volume を無視する。**
+ *   だから鳴らす場所そのものを短くする。
+ *   落とした MP3 にも同じだけ効かないと、**そちらにだけ音が残る。** */
+{
+  const src = fakeMp3({ mpeg1: true, kbps: 128, hz: 44100, frames: 20 })
+  const f = firstFrame(src.bytes)
+  const perFrame = (f.samplesPerFrame / f.sampleRate) * 1000    // 26.12ms
+
+  const cut = trimTail(src.bytes, 150)
+  const want = 20 - Math.floor(150 / perFrame)                  // 20 - 5 = 15 枚
+  if (cut.length !== want * f.len) {
+    ng('切り落とす長さが合わない', `${cut.length} ≠ ${want} 枚 × ${f.len}`)
+  } else ok(`終わりを 150ms 切る … 20 枚 → ${want} 枚`)
+
+  // **フレームの切れ目で切る**(途中で切るとそのフレームが壊れる)
+  let at = 0
+  let frames = 0
+  while (at < cut.length) {
+    const one = firstFrame(cut.subarray(at))
+    if (!one || one.at !== 0) break
+    at += one.len; frames += 1
+  }
+  if (at !== cut.length) ng('切ったあと、フレームの並びが壊れている')
+  else ok(`切ったあとも、フレームだけが ${frames} 枚そろっている`)
+
+  // **残った中身は1バイトも書き換わっていない**
+  let same = true
+  for (let i = 0; i < cut.length; i += 1) if (cut[i] !== src.bytes[i]) { same = false; break }
+  if (!same) ng('切ったら中身まで書き換わっている')
+  else ok('切っても、残った中身は1バイトも変わらない')
+
+  // **0 や未指定では、何もしない**(書いた声だけが切られる)
+  if (trimTail(src.bytes, 0).length !== src.bytes.length) ng('0 なのに切っている')
+  else if (trimTail(src.bytes).length !== src.bytes.length) ng('未指定なのに切っている')
+  else ok('0・未指定では、1バイトも切らない')
+
+  // **全部は落とさない**(0 バイトの MP3 を作らない)
+  const tiny = fakeMp3({ frames: 2 })
+  if (trimTail(tiny.bytes, 99_999).length !== tiny.bytes.length) {
+    ng('切りすぎて、1枚も残らないことがある')
+  } else ok('1枚も残らなくなる指定では、切らない')
+
+  // 1フレームに満たない指定では切らない(26.12ms より短い)
+  if (trimTail(src.bytes, 10).length !== src.bytes.length) ng('1枚に満たないのに切っている')
+  else ok('1枚に満たない指定(10ms)では切らない')
+
+  // **つないだ結果にも効く**(落とした MP3 にだけ音が残らない)
+  const joined = joinMp3([{ bytes: src.bytes, gapMs: 0, trimMs: 150 }])
+  if (joined.length !== want * f.len) {
+    ng('つなぐときに、切り落としが効いていない', `${joined.length}`)
+  } else ok('つないだ結果にも、切り落としが効いている')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

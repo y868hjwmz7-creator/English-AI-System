@@ -256,8 +256,36 @@ export const CLIP_VOICES = [
      戻すときは、この `settings` の行を消せばよい(全員と同じ値に戻る)。 */
   { id: 'sc-1', accent: 'sc', gender: 'male', use: 'both',
     label: 'Ally', elevenId: 'v2zbX16tJNtRIx8rSHDM',
-    settings: { similarity_boost: 0.1, stability: 0.8, use_speaker_boost: false } },
+    settings: { similarity_boost: 0.1, stability: 0.8, use_speaker_boost: false },
+    trimMs: 150 },
 ]
+
+/**
+ * **その声の音声の、終わりを何ミリ秒切り落とすか**(2026-09 利用者の指摘)。
+ *
+ *   > 発言の終わりでほぼ必ずプチっという音が入ります。
+ *
+ * **なぜ音量を下げるだけでは足りなかったか。**
+ * 鳴り終わりはすでに `fadeGain` でなだらかに下げてある。
+ * ところがあれは **`<audio>` の `volume` を動かすもの**で、
+ * **iPhone は `volume` を無視する**(CLAUDE.md)。
+ * つまり **iPhone では、なだらかにする直しが1ミリも効いていない。**
+ *
+ * 切り落とせば、**鳴らす場所そのものが無くなる**ので、
+ * `volume` が効かない端末でも消える。
+ *
+ * - **元の MP3 は1バイトも書き換えない。** 鳴らすのをやめる場所を
+ *   早めるだけなので、**すでに作った音声にも効き、課金もかからない**
+ * - **`CLIP_REV` は進めない**(音声そのものは変わっていない)
+ * - **既定は 0。** 書いた声だけが切られる。
+ *   ほかの声のリズムは1ミリも変わらない
+ * - 切りすぎると**最後の子音が欠ける。** 聞いて決めるものなので、
+ *   物足りなければこの数字を動かす。**こちらには音が聞こえない**
+ */
+export const voiceTrimMs = (id) => {
+  const n = Number(findVoice(id)?.trimMs)
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 400) : 0
+}
 
 /**
  * **訛りを最大限に活かすための指定**(2026-09 利用者の指定)。
