@@ -5618,17 +5618,30 @@ html, body { overscroll-behavior-x: none; }
 /* ② 上の帯のすぐ下に貼り付ける(`.jobbar` と同じ作法)。
    **いつも要る1行には足さない** — あそこは 390px でぎりぎり1行で、
    5つめを足すと2段になり、紙がそのぶん狭くなる */
-.player--bar {
-  position: sticky; top: 0; z-index: 30;
-  padding: 8px 14px;
-  /* **色は上の帯とそろえる**(`.lesson-bar` と同じ決め打ち)。
-     ここは上の帯の続きなので、地の色のままだと**黒い帯の下に
-     明るい帯が1本挟まって**見える。明るい配色を選んでいても暗いまま */
-  background: #24241f; color: #f2f2ee;
-  border-bottom: 1px solid #45453f;
-}
-.player--bar .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
-.player--bar .btn:disabled { opacity: .4; }
+/* ② 上の帯の中(2026-09 利用者の指定)。
+     > 上部のバーに配置している際もフロート時と同じ幅、同じUIにして、
+     > 2行にならないようにしてください。つまり、「書き込む」など
+     > 他のUIの左側に1行に並んで収まるようにしてください
+
+   はじめは**帯の下にもう1本、横いっぱいの行**を足していた。
+   けれども上の帯はもともと1行に収まっているので、
+   **そこへ入れれば行は増えない。**
+
+   **中身は右下とまったく同じ**(`PlayerBar.jsx` 1つ)。
+   ここで足すのは「縮まない」ことだけで、**幅も並びも変えない。**
+   色は `.lesson-bar .btn` などが受け持つので、ここには書かない
+   (**同じ色を2か所に持たない**・CLAUDE.md)。 */
+.player--bar { flex: 0 0 auto; }
+/* **縮ませない**(`flex-shrink: 0`)。`flex: 0 1 40px` にしていたら、
+   幅に余裕がある 1440px でも**進み具合の帯が 0px に潰れていた**(実測)。
+   flex の箱の中の箱は、`flex-basis` を「いちばん広いときの幅」として
+   数えてくれないことがある。**入る幅は `flex-basis` ではなく、
+   縮まない指定で押さえる。**
+   狭い窓ではそもそも上の帯に出さない(`wideBar`)ので、縮む必要がない */
+.player--bar .player-track { flex: 0 0 40px; min-width: 0; }
+/* **色は帯に合わせて決め打ち**(`.lesson-bar .btn` と同じ作法)。
+   変数のままだと、**明るい配色のときだけ黒い帯に黒い文字**が乗る
+   (実測 rgb(74,78,84) on rgb(36,36,31))。明るい側でも暗いまま */
 .player--bar .player-at { color: #cfcfc8; }
 .player--bar .player-track { background: #55554e; }
 

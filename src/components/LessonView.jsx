@@ -38,6 +38,7 @@ import LessonNotes from './LessonNotes.jsx'
    **集中モードでも同じものを出す**ので、ここには持たない */
 import { INK_COLORS, INK_TOOLS, INK_WIDTH } from '../data/inkTools.js'
 import { viewerRoleOf } from '../lib/viewer.js'
+import { useWide } from '../lib/nav.js'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
@@ -272,6 +273,29 @@ export default function LessonView({
   const [playAt, setPlayAt] = useState(null)
   /** 操作盤の置き場所(右下 / 上の帯の下)。**覚える** */
   const [place, setPlace] = useState(loadPlace)
+  /**
+   * 上の帯に置けるか。**判断は幅だけ**(CLAUDE.md)。
+   *
+   *   > 上部のバーに配置している際も…2行にならないようにしてください。
+   *
+   * **この数字は実測で決めた。** 帯にはもともと
+   * 閉じる・ページ送り・解答・書き込む・メモ・速さ・文字・幅・印刷が
+   * 並んでいて、そこへ操作盤(約 380px)を足すと、狭い窓では
+   * **2行に折り返してしまう。** 折り返せば紙がそのぶん狭くなり、
+   * 「2行にならないように」という指定に反する。
+   *
+   *   | 何が出ているか | 1行に収まる幅 |
+   *   |---|---|
+   *   | メモあり(担当ゲストと開いているとき) | **1380px 以上** |
+   *   | メモなし(教材の画面から開いたとき)   | 1300px 以上 |
+   *
+   * **広いほう(1380px)に合わせる。** 狭いほうに合わせると、
+   * ゲストと開いたときだけ2行になる。
+   * これより狭い窓では**右下に出す**(既定の場所)。
+   * あわせて**切り替えのボタンも出さない** —
+   * 押しても右下のままなら、効かない操作である(CLAUDE.md)。
+   */
+  const wideBar = useWide(1380)
   const allTicker = useRef(null)
 
   /** 通しの読み上げを止める */
@@ -739,6 +763,31 @@ export default function LessonView({
 
         <div className={`lesson-settings${openSettings ? ' is-open' : ''}`}
              id="lesson-settings">
+          {/* ── 読み上げの操作盤(2026-09 利用者の指定)──────────────
+              > 上部のバーに配置している際もフロート時と同じ幅、同じUIに
+              > して、2行にならないようにしてください。つまり、「書き込む」
+              > など他のUIの左側に1行に並んで収まるようにしてください
+
+              はじめは**帯の下にもう1本、横いっぱいの行**を足していた。
+              けれども上の帯はもともと1行に収まっているので、
+              **そこへ入れれば行は増えない。**
+              置き場所は `.lesson-settings` の**先頭** —
+              「書き込む」のすぐ左である(利用者の指定どおり)。
+
+              **狭い窓では出さない**(`wideBar`・上に実測の表がある)。
+              足すと帯が2行に折り返し、紙がそのぶん狭くなる。
+              そのときは右下に出す(下の `place === 'float' || !wideBar`)。 */}
+          {isPassageSection(section?.exercise_type) && place === 'bar' && wideBar && (
+            <PlayerBar
+              place="bar" onPlace={(v) => { setPlace(v); savePlace(v) }}
+              playing={playingAll}
+              label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
+              at={playAt} total={playableAll.length}
+              unit={countUnit(section?.exercise_type)}
+              onToggle={playWhole} onJump={jumpTo}
+            />
+          )}
+
           {/* ── 紙への書き込み(2026-09 利用者の指定でここへ移した)──
               > 書き込む、の機能が画面に収まってません。
               > 文字の大きさや明暗の切り替えの機能と同じところに入れてください。
@@ -797,25 +846,6 @@ export default function LessonView({
         </>
         )}
       </div>
-
-      {/* ── 読み上げの操作盤(上の帯の下)──────────────────────────
-          2026-09 利用者の指定「上部バーもしくはフロート
-          (切り替えられると最高)」。**選んだほうだけを出す** —
-          同じことをするものを2つ見せない(CLAUDE.md)。
-
-          **いつも要る1行(閉じる・ページ送り・解答・表示)には足さない。**
-          あそこは 390px でぎりぎり1行なので、5つめを足すと2段になり、
-          紙がそのぶん狭くなる。`JobBar` と同じく**すぐ下に貼り付ける。** */}
-      {isPassageSection(section?.exercise_type) && place === 'bar' && (
-        <PlayerBar
-          place="bar" onPlace={(v) => { setPlace(v); savePlace(v) }}
-          playing={playingAll}
-          label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
-          at={playAt} total={playableAll.length}
-          unit={countUnit(section?.exercise_type)}
-          onToggle={playWhole} onJump={jumpTo}
-        />
-      )}
 
       {/* 紙と、その横のメモ。**入れ物を1つはさむ**(0032)。
           メモを紙の上に重ねると、教材を見ながら書けない。
@@ -955,9 +985,16 @@ export default function LessonView({
                 (`.finder-float` と同じ考え方)。
                 本文のページを開いているときだけ出す — ほかのページでは
                 通しで鳴らすものが無い(効かない操作を見せない)。 */}
-            {isPassageSection(section?.exercise_type) && place === 'float' && (
+            {/* **右下に出す。** 選ばれているときと、**狭い画面のとき。**
+                狭い画面では上の帯の設定が「表示」に畳まれるので、
+                そちらに置くと鳴らすボタンがしまい込まれてしまう */}
+            {isPassageSection(section?.exercise_type) && (place === 'float' || !wideBar) && (
               <PlayerBar
-                place="float" onPlace={(v) => { setPlace(v); savePlace(v) }}
+                place="float"
+                /* **狭い画面では切り替えを出さない。** あちらは
+                   「表示」に畳まれてしまうので、押しても右下のまま
+                   ——効かない操作を見せない(CLAUDE.md) */
+                onPlace={wideBar ? (v) => { setPlace(v); savePlace(v) } : null}
                 playing={playingAll}
                 label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
                 at={playAt} total={playableAll.length}
