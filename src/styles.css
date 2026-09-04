@@ -2382,6 +2382,10 @@ html, body { overscroll-behavior-x: none; }
   font-variant-numeric: tabular-nums;
 }
 .jobbar-open { margin-left: auto; }
+/* できあがりの帯。**ボタンは右端に、縮まないで置く。**
+   題(「記事の下書きができました」)のほうが縮む(入らなければ「…」で切る) */
+.jobbar--done .jobbar-row { padding-bottom: 8px; }
+.jobbar-go { margin-left: auto; flex: 0 0 auto; }
 /* 「教材の画面へ」が無いとき(教材の画面にいるとき)は、
    「作るのをやめる」を右端へ寄せる */
 .jobbar-row > .btn--quiet:first-of-type { margin-left: auto; }
@@ -2403,6 +2407,10 @@ html, body { overscroll-behavior-x: none; }
   .jobbar { padding: 8px 10px 0; }
   .jobbar-row { gap: 8px; }
   .jobbar-open { display: none; }
+  /* **「発行する画面へ」は、狭い画面でも畳まない**(2026-09 利用者の指定)。
+     ここを隠すと、スマホからは発行の画面へ戻る道が無くなる。
+     畳むのは、作っているあいだの「教材の画面へ」だけ */
+  .jobbar-go { display: inline-flex; }
   .jobbar-step { flex: 0 0 auto; }
 }
 
@@ -5966,4 +5974,21 @@ html, body { overscroll-behavior-x: none; }
 .qr-peek {
   display: flex; align-items: center; justify-content: center;
   flex-wrap: wrap; gap: 8px;
+}
+
+/* ── 発行した直後の教材(2026-09 利用者の指定)────────────────────
+     > 教材を発行した直後、発行した教材が画面上に来るように調整して
+     > ください。今は全然違う場所に飛ばされ、上までスクロールして
+     > 戻る必要があります。
+
+   画面を送るだけでは足りない。**同じ形のカードが並ぶ中で、どれが
+   いま発行したものか見分けられない。** うすい地色と枠で少しのあいだ示す。
+   **べた塗りにしない**(選んでいる印と同じ作法・CLAUDE.md)。
+   数秒で消えるので、あとから見たときに「何の印だろう」と迷わせない。 */
+.material-card.is-just {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .material-card.is-just { transition: box-shadow .3s ease, border-color .3s ease; }
 }

@@ -32,6 +32,17 @@ export default function App() {
   const [view, setView] = useState('learner')
   const [state, setState] = useState(null)
   const [learnerId, setLearnerId] = useState(null)
+  /* **「発行する画面へ」を押した合図**(2026-09 利用者の指定)。
+     数を1つ増やすだけ。`TrainerMaterials` がこれを見て、
+     作る画面(下書きが入った状態)を開く。
+     真偽値にすると、2度目に押したときに変わらず効かない */
+  const [askCreate, setAskCreate] = useState(0)
+  /** どこにいても、ワンタッチで発行の画面へ */
+  const goPublish = () => {
+    setView('materials')
+    setAskCreate((n) => n + 1)
+    setJobNote(null)
+  }
 
   // ログイン状態。Supabase 未設定のときは最初から「確認済み・未ログイン」にする
   // (その場合はログインを求めず、これまでどおり端末内のデータで動かす)。
@@ -359,6 +370,10 @@ export default function App() {
           job={job} secs={jobSecs}
           showOpen={view !== 'materials'}
           onOpen={() => setView('materials')}
+          /* できあがったら、**どこからでもワンタッチで発行の画面へ。**
+             教材の画面にいても出す — あそこは「さがす」画面なので、
+             下書きは**まだ目の前に無い**(2026-09 利用者の指定) */
+          onPublish={goPublish}
         />
 
         {/* ── 裏で作っている教材のお知らせ ────────────────────
@@ -374,10 +389,13 @@ export default function App() {
           <div className={`jobnote${jobNote.state === 'error' ? ' is-error' : ''}`}
                role="status" aria-live="polite">
             <span className="jobnote-text">{jobNote.text}</span>
-            {jobNote.state === 'done' && view !== 'materials' && (
+            {/* **お知らせからも、同じ場所へ行けるようにする。**
+                「教材の画面を開く」では、さがす画面に着くだけだった
+                (そこから「教材を作る」をもう一度押す必要があった) */}
+            {jobNote.state === 'done' && (
               <button type="button" className="btn btn--small btn--primary"
-                      onClick={() => { setView('materials'); setJobNote(null) }}>
-                教材の画面を開く
+                      onClick={goPublish}>
+                発行する画面へ
               </button>
             )}
             <button type="button" className="nav-icon-btn"
@@ -449,7 +467,8 @@ export default function App() {
 
           <main className="app-main">
             {view === 'materials' ? (
-              profile ? <TrainerMaterials me={profile} /> : <p className="muted">読み込み中…</p>
+              profile ? <TrainerMaterials me={profile} askCreate={askCreate} />
+                : <p className="muted">読み込み中…</p>
             ) : view === 'learners' ? (
               profile ? <TrainerLearners me={profile} navTick={navTick} />
                 : <p className="muted">読み込み中…</p>

@@ -23,8 +23,43 @@
  */
 import { cancelJob, jobProgressLabel, jobRatio } from '../lib/generateJob.js'
 
-export default function JobBar({ job, secs, onOpen, showOpen = false }) {
-  if (!job || job.state !== 'running') return null
+export default function JobBar({ job, secs, onOpen, onPublish, showOpen = false }) {
+  if (!job) return null
+
+  /* ── できあがったら、**そのまま発行へ行ける1つのボタン**を出す ──
+       2026-09 利用者の指定。
+
+         > 教材を作りかけの状態で他のページに移った時に、どこに戻れば
+         > 最終的な「発行する」を確定できるのかが非常に分かりにくいです。
+         > どのページにいても教材の準備ができたらワンタッチで「発行」前の
+         > 画面に遷移できるよう設計しなおしてください。
+         > ※作成中であることはどのページにいてもしっかり見えていて、
+         >   そこは、ばっちりです。
+
+       **作っているあいだは見えていた。** ところが**できあがった瞬間に
+       この帯が消えて**いた(以前は `state !== 'running'` で何も出さなかった)。
+       残るのはメニューの青い丸だけで、そこから
+       「教材 → 教材を作る」と2回たどらないと発行できなかった。
+
+       ・**できあがっても帯は残す。** 消えるのは、下書きを受け取ったとき
+       ・**ボタンは1つだけ**(「発行する画面へ」)。押した先が分かる言葉にする
+       ・**狭い画面でも出す。** ここを畳んだら、この直しの意味がなくなる
+         (作っているあいだの「教材の画面へ」は、これまでどおり畳む) */
+  if (job.state === 'done') {
+    return (
+      <div className="jobbar jobbar--done" role="status" aria-live="polite">
+        <div className="jobbar-row">
+          <span className="jobbar-title">{job.title}の下書きができました</span>
+          <button type="button" className="btn btn--small btn--primary jobbar-go"
+                  onClick={onPublish}>
+            発行する画面へ
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (job.state !== 'running') return null
 
   const ratio = jobRatio(job)
   const pct = Math.round(ratio * 100)

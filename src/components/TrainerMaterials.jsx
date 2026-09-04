@@ -42,8 +42,15 @@ import { lastClipDetail } from '../lib/audioClips.js'
 /** 絞り込みの「問数」と、作る画面の増やし方の対応。**2か所に持たない** */
 const AMOUNT_BY_SIZE = { 20: 'double', 30: 'triple' }
 
-export default function TrainerMaterials({ me }) {
+export default function TrainerMaterials({ me, askCreate = 0 }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
+  /* **発行した直後の教材**(2026-09 利用者の指定)。
+       > 教材を発行した直後、発行した教材が画面上に来るように調整して
+       > ください。今は全然違う場所に飛ばされ、上までスクロールして
+       > 戻る必要があります。
+     一覧は新しい順に並ぶが、**絞り込みや並び順によっては下のほうに出る。**
+     id を控えて、読み直したあとにそこまで送る */
+  const [justId, setJustId] = useState(null)
   const [tagIds, setTagIds] = useState([])
   const [level, setLevel] = useState(null)
   const [keyword, setKeyword] = useState('')
@@ -181,6 +188,32 @@ export default function TrainerMaterials({ me }) {
 
   // 絞り込みが変わったら探し直す。search 自体は毎回作り直されるので依存に入れない。
   useEffect(() => { search() }, [tagIds, level, industry, kind, genre, scene])
+
+  /* **「発行する画面へ」で来たら、作る画面を開く**(2026-09 利用者の指定)。
+     下書きは `MaterialForm` が受け取る(走っている仕事を見張っている)ので、
+     ここは**開くだけ**でよい。開いたあと、あちらが
+     「できました」の知らせまで画面を送る。
+     **0 のときは何もしない**(ふつうに教材の画面を開いただけのとき) */
+  useEffect(() => {
+    if (!askCreate) return
+    setMode('create')
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [askCreate])
+
+  /* **発行した教材まで画面を送る**(2026-09 利用者の指定)。
+     一覧を読み直したあとに動かす — 読み直す前に送っても、
+     まだそのカードが描かれていない。
+     **送ったら印を消す**(次に一覧を読み直したときにまた飛ばない) */
+  useEffect(() => {
+    if (!justId || loading) return
+    const el = document.querySelector(`[data-mid="${justId}"]`)
+    if (!el) return
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    // **どれが今のものか、目でも分かるようにする。**
+    // 送っただけでは、同じ形のカードが並ぶ中で見分けられない
+    const timer = window.setTimeout(() => setJustId(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [justId, loading, materials])
 
   /** 本文があって、まだカタマリごとの訳が入っていない教材か(0021) */
   // **判断は `chunkJa.js` の `needsChunkJa()` 1か所。** 画面に持たない
@@ -359,6 +392,9 @@ export default function TrainerMaterials({ me }) {
           setMessage(shared
             ? `教材を発行し、${shared}人と共有しました。`
             : '教材を発行しました。一覧から共有できます。')
+          /* **発行したものを、目の前に出す**(2026-09 利用者の指定)。
+             読み直しが終わってから送るので、ここでは印を付けるだけ */
+          setJustId(id)
           search()
         }}
       />
@@ -618,7 +654,10 @@ export default function TrainerMaterials({ me }) {
       ) : (
         <>
           {sorted.map((m) => (
-            <div key={m.id} className="card material-card">
+            /* `data-mid` … **発行した直後に、ここまで画面を送る**ための目印
+               (2026-09 利用者の指定)。`is-just` は少しのあいだだけ光る */
+            <div key={m.id} data-mid={m.id}
+                 className={`card material-card${justId === m.id ? ' is-just' : ''}`}>
               {/* **行そのものを押して開く**(2026-08 利用者の指定)。
                   下に「中身を見る」ボタンを置いていたが、1行ぶん場所を取る。
                   宿題の一覧で一度学んだ形にそろえた(▸ / ▾ の印を出す)。 */}

@@ -21,3 +21,7 @@ npm-debug.log*
 # 一時ファイル(Artifact公開用に生成したもの)
 .artifact.html
 .artifact-mictest.html
+
+# 帯の検証(`npm run test:bar`)が一時的に作るもの
+__bar.html
+vite.bar.config.js
