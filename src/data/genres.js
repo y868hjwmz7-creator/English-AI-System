@@ -241,6 +241,97 @@ export const SCENES_BY_INDUSTRY = {
   /* ホテル経営(2026-09 利用者の指定)。**相手は「お客様」ではない。**
      支配人・オーナー・運営会社・予約サイト・現地スタッフ・役所と話す。
      接客の場面(`hospitality`)とは、出てくる語がまるごと違う */
+  /* ── エネルギー(2026-09 利用者の指定)────────────────────────
+     **同じ「発電」でも、現場で交わす言葉がまるごと違う。** だから
+     1つずつ持つ。「全般」を選べば、ここのぜんぶが並ぶ(`ownOf`)。 */
+  ene_re: [
+    { id: 'ren_policy',  label: '制度と買取の話',   hint: '入札、固定価格、期限、書類' },
+    { id: 'ren_invest',  label: '投資の相談',       hint: '採算、回収年数、リスク' },
+    { id: 'ren_target',  label: '脱炭素の目標',     hint: 'いつまでに、どこまで下げるか' },
+    { id: 'ren_cert',    label: '証書の売り買い',   hint: '何を買うと、何が言えるのか' },
+    { id: 'ren_local',   label: '地元への説明',     hint: '景観、雇用、支払い、心配ごと' },
+    { id: 'ren_report',  label: '進み具合の報告',   hint: '数字と、遅れの理由' },
+  ],
+  ene_solar: [
+    { id: 'sol_site',    label: '設置場所を見に行く', hint: '日射、影、傾き、地面の強さ' },
+    { id: 'sol_install', label: '据付の打ち合わせ', hint: '架台、配線、工期、人手' },
+    { id: 'sol_output',  label: '出力が落ちた',     hint: '汚れ、影、故障の切り分け' },
+    { id: 'sol_om',      label: '保守の相談',       hint: '見回り、洗浄、部品の交換' },
+    { id: 'sol_roof',    label: '屋根に載せる',     hint: '荷重、防水、持ち主との調整' },
+    { id: 'sol_buy',     label: 'パネルの仕入れ',   hint: '型、保証、納期、値段' },
+  ],
+  ene_wind: [
+    { id: 'wnd_survey',  label: '風況を調べる',     hint: '観測、年ごとの差、見込み' },
+    { id: 'wnd_offshore', label: '洋上の工事',      hint: '船、天候待ち、基礎、係留' },
+    { id: 'wnd_blade',   label: 'ブレードの点検',   hint: '傷、ひび、登る段取り' },
+    { id: 'wnd_noise',   label: '音と影の苦情',     hint: '住民の訴え、測り方、手の打ち方' },
+    { id: 'wnd_crane',   label: '据付とクレーン',   hint: '搬入路、揚重、風で止まる日' },
+    { id: 'wnd_grid',    label: '系統につなぐ',     hint: '空き容量、順番待ち、費用' },
+  ],
+  ene_hydro: [
+    { id: 'hyd_dam',     label: 'ダムの運用',       hint: '水位、放流、下流への連絡' },
+    { id: 'hyd_water',   label: '水利権の話',       hint: '取水の量、期間、地元との約束' },
+    { id: 'hyd_pump',    label: '揚水の運転',       hint: '夜に汲み上げ、昼に流す' },
+    { id: 'hyd_repair',  label: '水車の点検',       hint: '摩耗、土砂、止める段取り' },
+    { id: 'hyd_flood',   label: '大雨のとき',       hint: '事前の放流、連絡の順番' },
+    { id: 'hyd_small',   label: '小水力の相談',     hint: '用水路、落差、小さく作る' },
+  ],
+  ene_therm: [
+    { id: 'thm_start',   label: '起動と停止',       hint: '手順、時間、注意するところ' },
+    { id: 'thm_fuel',    label: '燃料の手配',       hint: '種類、在庫、船の着く日' },
+    { id: 'thm_boiler',  label: 'ボイラーの不具合', hint: '症状、原因の切り分け、止める判断' },
+    { id: 'thm_shut',    label: '定期点検の段取り', hint: '工期、人手、部品' },
+    { id: 'thm_emit',    label: '排出の測定',       hint: '数値、決まり、報告' },
+    { id: 'thm_load',    label: '出力の調整',       hint: '需要に合わせて上げ下げする' },
+  ],
+  ene_nuke: [
+    { id: 'nuc_reg',     label: '規制当局とのやりとり', hint: '書類、質問、追加の求め' },
+    { id: 'nuc_outage',  label: '定期検査',         hint: '工程、人の出入り、再稼働まで' },
+    { id: 'nuc_safety',  label: '安全の手順',       hint: '確認の声出し、二重の確かめ' },
+    { id: 'nuc_waste',   label: '廃棄物の話',       hint: '保管、運搬、行き先' },
+    { id: 'nuc_local',   label: '地元への説明',     hint: '不安に、正直に答える' },
+    { id: 'nuc_drill',   label: '訓練',             hint: '想定、役割、振り返り' },
+  ],
+  ene_geo: [
+    { id: 'geo_drill',   label: '掘削の打ち合わせ', hint: '深さ、費用、当たり外れ' },
+    { id: 'geo_steam',   label: '蒸気の量',         hint: '出方、落ち方、井戸の追加' },
+    { id: 'geo_onsen',   label: '温泉との調整',     hint: '影響の心配、測り方、約束' },
+    { id: 'geo_site',    label: '立地を探す',       hint: '国立公園、道、送電線' },
+    { id: 'geo_scale',   label: 'スケール(付着物)', hint: '詰まり、掃除、薬' },
+    { id: 'geo_bind',    label: '許認可',           hint: '順番、かかる年数' },
+  ],
+  ene_grid: [
+    { id: 'grid_connect', label: '連系の申し込み',  hint: '空き容量、工事、いつつながるか' },
+    { id: 'grid_balance', label: '需給の調整',      hint: '足りない日、余る日、指令' },
+    { id: 'grid_out',    label: '停電の対応',       hint: '原因、復旧、知らせ方' },
+    { id: 'grid_sub',    label: '変電所の工事',     hint: '停止の予定、切り替え' },
+    { id: 'grid_plan',   label: '増強の計画',       hint: 'どこが詰まっているか、費用の分担' },
+    { id: 'grid_market', label: '市場での取引',     hint: '入札、値段、時間帯' },
+  ],
+  ene_batt: [
+    { id: 'bat_spec',    label: '仕様を決める',     hint: '容量、出力、何時間もつか' },
+    { id: 'bat_site',    label: '置き場所と工事',   hint: '消防、離隔、基礎' },
+    { id: 'bat_life',    label: '寿命と保証',       hint: '劣化、回数、保証の中身' },
+    { id: 'bat_ops',     label: '充放電の運用',     hint: 'いつ貯め、いつ出すか' },
+    { id: 'bat_safe',    label: '安全の話',         hint: '発熱、消火、点検' },
+    { id: 'bat_market',  label: '市場に出す',       hint: '調整力、入札、収入' },
+  ],
+  ene_h2: [
+    { id: 'h2_make',     label: '作り方の相談',     hint: '電解、原料、電気の出どころ' },
+    { id: 'h2_move',     label: '運ぶ・貯める',     hint: '圧縮、液化、アンモニアに変える' },
+    { id: 'h2_mix',      label: '混ぜて燃やす',     hint: '割合、設備の手直し、試験' },
+    { id: 'h2_cost',     label: 'コストの話',       hint: 'いくらで作れるか、いつ下がるか' },
+    { id: 'h2_trial',    label: '実証の打ち合わせ', hint: '期間、測ること、報告' },
+    { id: 'h2_safe',     label: '安全の決まり',     hint: '漏れ、換気、資格' },
+  ],
+  ene_oil: [
+    { id: 'oil_buy',     label: '調達の交渉',       hint: '数量、期間、値段の決め方' },
+    { id: 'oil_lng',     label: 'LNG の受け入れ',   hint: '船、タンク、気化、着桟' },
+    { id: 'oil_price',   label: '価格の話',         hint: '指標、変動、ヘッジ' },
+    { id: 'oil_contract', label: '契約の詰め',      hint: '引き取り義務、行き先の縛り' },
+    { id: 'oil_stock',   label: '備蓄と在庫',       hint: '何日分あるか、入れ替え' },
+    { id: 'oil_trouble', label: '船が遅れた',       hint: '知らせ方、代わりの手当て' },
+  ],
   hotel: [
     { id: 'hot_gm',      label: '支配人との打ち合わせ', hint: '今月の数字、人手、困っていること' },
     { id: 'hot_owner',   label: 'オーナー・投資家への報告', hint: '収支と、次に何へ使うか' },
@@ -687,6 +778,74 @@ export const GENRES_BY_INDUSTRY = {
   /* ホテル経営(2026-09 利用者の指定)。
      **読み物の話題も、経営する側から見たものにする。**
      「もてなしの工夫」(`hospitality`)は現場から見た話である */
+  /* エネルギーの種類ごとの話題(2026-09 利用者の指定)。
+     **「全般」を選べば、ここのぜんぶが並ぶ**(`ownOf`) */
+  ene_re: [
+    { id: 'reng_cost',    label: '発電コストの行方', hint: '安くなったもの、まだ高いもの' },
+    { id: 'reng_policy',  label: '制度と補助',       hint: '国ごとのやり方、変わり目' },
+    { id: 'reng_land',    label: '土地と景観',       hint: '置く場所が足りない話' },
+    { id: 'reng_green',   label: '「脱炭素」の中身', hint: '数え方、見せかけとの線引き' },
+  ],
+  ene_solar: [
+    { id: 'solg_tech',    label: 'パネルの進化',     hint: '変換効率、両面、薄い型' },
+    { id: 'solg_reuse',   label: '古いパネルの行方', hint: '寿命、外し方、再利用' },
+    { id: 'solg_farm',    label: '農地と組み合わせる', hint: '作物の上に載せる試み' },
+    { id: 'solg_home',    label: '家に付ける',       hint: '元が取れるか、蓄電池と一緒に' },
+  ],
+  ene_wind: [
+    { id: 'wndg_offshore', label: '洋上風力のいま',  hint: '大型化、浮かせる方式' },
+    { id: 'wndg_cost',    label: '採算の話',         hint: '建設費、金利、入札' },
+    { id: 'wndg_bird',    label: '鳥と生き物',       hint: '調べ方、避け方' },
+    { id: 'wndg_local',   label: '地元との合意',     hint: '賛成と反対、分け前' },
+  ],
+  ene_hydro: [
+    { id: 'hydg_old',     label: '古い設備の作り直し', hint: '何十年も使う、直しながら' },
+    { id: 'hydg_pump',    label: '揚水は電池になるか', hint: '貯める手段としての見方' },
+    { id: 'hydg_river',   label: '川の生き物',       hint: '魚道、流量、折り合い' },
+    { id: 'hydg_small',   label: '小水力の広がり',   hint: '用水路や上水道で作る' },
+  ],
+  ene_therm: [
+    { id: 'thmg_role',    label: '火力の役割は残るか', hint: '足りない時間を埋める働き' },
+    { id: 'thmg_fuel',    label: '燃料を替える',     hint: '石炭からガス、水素の混焼' },
+    { id: 'thmg_ccs',     label: '出た炭素を埋める', hint: '仕組み、費用、置き場所' },
+    { id: 'thmg_old',     label: '古い設備を閉じる', hint: '人と地域をどうするか' },
+  ],
+  ene_nuke: [
+    { id: 'nucg_restart', label: '再稼働の議論',     hint: '賛否、審査、地元の同意' },
+    { id: 'nucg_smr',     label: '小型炉',           hint: '何が違うのか、いつ来るか' },
+    { id: 'nucg_waste',   label: '廃棄物の行き場',   hint: '何万年という話' },
+    { id: 'nucg_cost',    label: '費用と工期',       hint: 'なぜ延びるのか' },
+  ],
+  ene_geo: [
+    { id: 'geog_japan',   label: '日本の地熱',       hint: '資源は多いのに、進まない理由' },
+    { id: 'geog_onsen',   label: '温泉との共存',     hint: '心配ごとと、確かめ方' },
+    { id: 'geog_tech',    label: '新しい掘り方',     hint: '深く掘る、閉じた回路' },
+    { id: 'geog_base',    label: '止まらない電気',   hint: '天気に左右されない強み' },
+  ],
+  ene_grid: [
+    { id: 'gridg_full',   label: '系統がいっぱい',   hint: 'つなげない、順番待ち' },
+    { id: 'gridg_flex',   label: '需要を動かす',     hint: '使う側でならす考え方' },
+    { id: 'gridg_link',   label: '地域をつなぐ',     hint: '連系線、国をまたぐ送電' },
+    { id: 'gridg_black',  label: '大停電はなぜ起きる', hint: '過去の例と、学んだこと' },
+  ],
+  ene_batt: [
+    { id: 'batg_price',   label: '値段の下がり方',   hint: 'どこまで下がるか' },
+    { id: 'batg_mine',    label: '材料をどこから取るか', hint: 'リチウム、コバルト、産地' },
+    { id: 'batg_reuse',   label: '使い終わった電池', hint: '車から据置へ、そして再生' },
+    { id: 'batg_grid',    label: '系統用蓄電池',     hint: '何時間ぶん貯めるのか' },
+  ],
+  ene_h2: [
+    { id: 'h2g_color',    label: '「色」で呼ぶ話',   hint: 'グリーン、ブルー、何が違うか' },
+    { id: 'h2g_use',      label: 'どこで使うか',     hint: '製鉄、船、発電、車' },
+    { id: 'h2g_cost',     label: 'いつ安くなるか',   hint: '見込みと、その根拠' },
+    { id: 'h2g_ship',     label: '運ぶ工夫',         hint: 'アンモニア、有機ハイドライド' },
+  ],
+  ene_oil: [
+    { id: 'oilg_price',   label: '価格が動く理由',   hint: '産油国、在庫、為替' },
+    { id: 'oilg_lng',     label: 'LNG の取り合い',   hint: '長期契約と、その場での売買' },
+    { id: 'oilg_shift',   label: '石油会社の転換',   hint: '何に投資しているか' },
+    { id: 'oilg_secure',  label: 'エネルギー安全保障', hint: 'どこから買うか、備えるか' },
+  ],
   hotel: [
     { id: 'hotg_expand', label: '海外への出店',     hint: '場所の選び方と、現地との組み方' },
     { id: 'hotg_rate',   label: '稼働率と料金',     hint: '需要の読み方、値付け、閑散期' },
