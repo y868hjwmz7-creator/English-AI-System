@@ -17,7 +17,7 @@ import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 import { markJobSeen, useJob, watchJob } from './lib/generateJob.js'
 import JobBar from './components/JobBar.jsx'
-import { onClipTrouble } from './lib/audioClips.js'
+import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
 import QrReview from './components/QrReview.jsx'
@@ -127,6 +127,24 @@ export default function App() {
   // 仕組みの内側の事情(鍵・残高)を出してよい相手かどうかの判断に使う。
   // **ゲストには内側の話を見せない**(2026-08 利用者の指定)
   useEffect(() => { setViewerRole(profile?.role ?? null) }, [profile])
+
+  /**
+   * **読み上げの窓口が古くないかを、こちらから訊きに行く**(2026-09 実機)。
+   *
+   *   > トレーナーの画面に赤い知らせが出なくなってます
+   *
+   * 版の見比べは、これまで**音声を作ったときにしか起きていなかった。**
+   * すでに MP3 のある教材を聴くだけでは窓口が呼ばれないので、
+   * 古いままでも何も出ない。だから開いたときに1度だけ訊く。
+   *
+   * **音声は作らないので1円もかからない。**
+   * **トレーナー・管理者のときだけ**(知らせを出す相手が他にいない)。
+   */
+  useEffect(() => {
+    const role = profile?.role
+    if (role !== 'trainer' && role !== 'owner') return
+    checkClipGateway()
+  }, [profile])
 
   // 起動時に一度、以降はログイン状態が変わるたびに追いかける
   useEffect(() => {

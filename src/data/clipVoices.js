@@ -287,10 +287,10 @@ export const CLIP_VOICES = [
     label: 'Hugh', elevenId: 'y6p0SvBlfEe2MH4XN7BP' },
   { id: 'sc-3', accent: 'sc', gender: 'male', use: 'both',
     label: 'Chris', elevenId: 's07KcA1KjfdDAsyJ87HW' },
-  /* **性別は利用者から伝わっていない**(名前だけで足された)。
-     いまは男性として置いてあるが、**名前から性別は当てられない。**
+  /* 性別は名前だけで足されたので、**利用者に確かめた**(2026-09
+     「Rob は男です」)。**名前から性別は当てられない** ——
      ここがずれると、会話で「女性の声に男性の役名」が乗る
-     (2026-09 に一度直した不具合そのもの)。**利用者に確かめて直す。** */
+     (2026-09 に一度直した不具合そのもの)。だから訊いて決める。 */
   { id: 'sc-4', accent: 'sc', gender: 'male', use: 'both',
     label: 'Rob', elevenId: 'JdanfwfOBtHuVRJhsamV' },
   { id: 'sc-5', accent: 'sc', gender: 'male', use: 'both',

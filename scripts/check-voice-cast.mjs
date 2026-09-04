@@ -481,6 +481,31 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   } else if (!/const noteFnRev = /.test(clips)) {
     ng('版を見る関数そのものが無い')
   } else ok('画面は、窓口が古ければ係の人に知らせる')
+
+  /* 【版は、こちらから訊きに行く】(2026-09 実機・利用者の指摘)
+   *
+   *   > トレーナーの画面に赤い知らせが出なくなってます
+   *
+   *   版の見比べが `askForClip()` の中にしか無かったので、
+   *   **その英文の MP3 がまだ無いときにしか起きていなかった。**
+   *   すでに音声のある教材を聴くだけでは窓口が呼ばれず、
+   *   古いままでも何も出ない。「無ければ素通り」そのものだった。 */
+  if (!/export async function checkClipGateway/.test(clips)) {
+    ng('版を訊きに行く道が無い', '音声を作ったときにしか版が分からない')
+  } else if (!/\{\s*ping:\s*true\s*\}/.test(clips)) {
+    ng('版を訊く呼び出しが、音声を作らせてしまう', 'ping を送ること')
+  } else ok('画面は、窓口の版を自分から訊きに行く(音声は作らない)')
+
+  if (!/body\.ping/.test(fn)) {
+    ng('窓口が ping を知らない', '訊きに行っても版が返らない')
+  } else ok('窓口は ping に版だけを返す')
+
+  /* **呼んでいるかまで見る。** 定義だけでは、誰も呼ばなければ同じことである
+     (`noteFnRev` で一度踏んだ落とし穴) */
+  const app = readFileSync('src/App.jsx', 'utf8')
+  if (!/checkClipGateway\(\)/.test(app)) {
+    ng('画面が、版を訊きに行っていない', '定義だけあって呼んでいない')
+  } else ok('開いたときに1度だけ、版を訊きに行く')
 }
 
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

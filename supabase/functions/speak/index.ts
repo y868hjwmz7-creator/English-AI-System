@@ -566,6 +566,25 @@ Deno.serve(async (req) => {
     let body: Record<string, unknown>
     try { body = await req.json() } catch { return reply({ error: '内容を読めませんでした' }, 400) }
 
+    /* ── 版を訊くだけの呼び出し(2026-09 実機)─────────────────
+     *
+     *   > トレーナーの画面に赤い知らせが出なくなってます
+     *
+     *   版の見比べは**音声を作ったときにしか起きていなかった。**
+     *   MP3 がすでに置いてあれば画面は窓口を呼ばないので
+     *   (`clipUrl` は場所を計算するだけ)、**古い窓口のまま
+     *   何も知らせが出ない。**「無ければ素通り」する検証そのもの
+     *   だった(CLAUDE.md)。
+     *
+     *   だから**訊くためだけの呼び出し**を用意する。
+     *   ここで返るのは版だけ。**音声は作らないので1円もかからない。**
+     *
+     *   古い窓口はこの `ping` を知らないので、下の
+     *   「読み上げる英文がありません」で 400 を返す。
+     *   **それでよい** —— 版が付いていないことが、そのまま
+     *   「古い」という答えになる。 */
+    if (body.ping) return reply({ ok: true })
+
     const text = normText(String(body.text ?? ''))
     if (!text) return reply({ error: '読み上げる英文がありません' }, 400)
     if (text.length > MAX_CHARS) {
