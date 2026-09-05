@@ -1496,10 +1496,24 @@ export default function LessonView({
                   {secIsPassage && floating ? null
                     : secType?.audioFrom && it[secType.audioFrom]
                     && playingAll && speakingKey === k(it, i) ? (
-                    <button type="button" className="btn btn--small"
-                            onClick={() => { stopAll(); setReadingAt(null) }}>
-                      <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
-                    </button>
+                    /* **止めるときも、錠剤のまま**(2026-09 実機・利用者の指定)。
+
+                         > 上部バーのプレーヤーUIで全体の再生を始めると、
+                         > 段落ごとのUIが「Stop」しか表示されなくなります。
+                         > 上部バーになるのと同じUIをしっかり確保してください。
+
+                       鳴り出した瞬間に**素のボタン1つ**へ変えていたので、
+                       1文ずつの ◀ ▶ が消えていた。
+                       **いちばん使いたいのは、鳴っているあいだ**である
+                       (聞き逃した文へ戻る・先へ飛ばす)。
+                       **鳴らす前と後で、形を変えない。** 変わるのは
+                       中の言葉(Listen ⇄ Stop)だけにする */
+                    withSkip(secIsPassage, (
+                      <button type="button" className="btn btn--small"
+                              onClick={() => { stopAll(); setReadingAt(null) }}>
+                        <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
+                      </button>
+                    ))
                   ) : secType?.audioFrom && it[secType.audioFrom] && (
                     /* **三角を添えるのは本文だけ**(2026-09)。
                        内容の理解や語句は1本の音声に入っていないので、

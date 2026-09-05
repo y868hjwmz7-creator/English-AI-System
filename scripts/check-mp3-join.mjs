@@ -955,6 +955,20 @@ function fakeMp3({
       ['スマホでは、はじめから開いている', /const \[floatOpen, setFloatOpen\] = useState\(true\)/],
     ]
     for (const [what, re] of want2) if (!re.test(lv)) ng(`入れ替え: ${what}`)
+    /* **鳴らす前と後で、形を変えない**(2026-09 実機・利用者の指摘)。
+
+         > 上部バーのプレーヤーUIで全体の再生を始めると、
+         > 段落ごとのUIが「Stop」しか表示されなくなります。
+
+       通しで鳴り出した瞬間、その段落のボタンを**素の1つ**に差し替えて
+       いたので、1文ずつの ◀ ▶ が消えていた。**いちばん使いたいのは
+       鳴っているあいだ**である。錠剤は Listen のときも Stop のときも要る
+       —— だから `withSkip(secIsPassage,` は**2か所**なければおかしい */
+    {
+      const n = (lv.match(/withSkip\(secIsPassage, \(/g) ?? []).length
+      if (n !== 2) ng(`段落の錠剤が ${n} か所(Listen と Stop の2か所であってほしい)`)
+      else ok('段落の錠剤は、鳴らす前も鳴っている最中も出る')
+    }
     if (bad === bad0) ok('◀ ▶ は、操作盤と段落のどちらか一方だけに出る')
   }
 
