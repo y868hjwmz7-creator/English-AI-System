@@ -6229,6 +6229,10 @@ html, body { overflow-x: clip; }
    押している印は `.lesson-bar .btn--primary` と同じ青
    (**色だけに頼らない** — `aria-pressed` も付けてある) */
 .player-launch { flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
+/* 帯の中の「集中モード」。**狭い画面でだけ出す**(2026-09 利用者の指定)。
+   広い画面では、これまでどおり右下に固定してある(`.sheet-float`)。
+   **同時に2つは出さない** —— 出し分けは幅だけで決める */
+.lesson-focus { display: none; flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
 .lesson-bar .player-launch.is-on {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
@@ -6260,21 +6264,21 @@ html, body { overflow-x: clip; }
      「別々に `fixed` で置かない」という決まりはそのままである
      (片方が消えたときにもう片方が飛ぶのを防ぐため)。
      **同じ囲みの中で折り返すぶんには、2つは一緒に動く。** */
-  /* **「集中モード」は、操作盤の左へ寄せる**(2026-09 実機・利用者の指摘)。
+  /* **「集中モード」は、上の帯へ移す**(2026-09 実機・利用者の指定)。
 
-       > スマホではプレーヤーの下に「集中モード」のボタンがきてしまいますが、
-       > もう少し気の利いた場所にどけることはできませんか?
+       > スマホでのこの集中モードの位置はダメです。
+       > 画面上部のバーに収める方が良くないですか?
+       > **再生プレーヤーが2行になるのは絶対にダメです**
 
-     折り返させていたので、操作盤(2段)の**下にもう1段**積まれて、
-     右下が3段になっていた。**言葉を落として絵だけにし、左へ寄せる。**
-     操作盤は残りの幅で自分の中を折り返すので、全体は2段に収まる。
+     右下で場所を取り合い、操作盤を**2行に折らせていた。**
+     帯なら絵1つぶんで収まる(`.lesson-focus`)。
+     **同時に2つは出さない** —— 出し分けは**幅だけ**で決める。
 
-     **同じ囲みの中にいるままである**(「別々に `fixed` で置かない」)。
-     片方が消えても、もう片方は飛ばない。 */
+     操作盤は**絶対に1行**(利用者の指定)。折り返しは許さない。 */
   .sheet-floats { flex-wrap: nowrap; align-items: center; }
-  .sheet-float { order: -1; flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
-  .sheet-float .wide-text { display: none; }
-  .player--float { flex: 1 1 auto; min-width: 0; }
+  .sheet-float { display: none; }
+  .lesson-focus { display: inline-flex; }
+  .player--float { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; }
   /* 進み具合の帯は落とす。**切り替えのボタンは残す** —
      消すと、右下にしたあと上へ戻す道が無くなる(行き止まりを作らない)。
 
@@ -6290,14 +6294,26 @@ html, body { overflow-x: clip; }
   .player--float .player-at { min-width: 0; }
   .player--float .listenpill-arrow { min-width: 32px; padding: 0 7px; }
   .player .btn { padding: 5px 9px; }
-  /* **入らないぶんは、折り返す**(2026-09 実測)。
-     くり返しのボタンを足したら、iPhone(390px)で**右端が
-     画面の外へ出ていた**(実測 395 > 390)。押せないものになる。
-     `.player .btn` は縮まない指定なので、詰めても入らない。
-     **文言を削って1行に見せかけない**(何のボタンか分からなくなる)——
-     外側の `.sheet-floats` がすでに折り返す作りなので、そろえる。
-     実測: 390 / 375 / 320px とも、はみ出しは無くなる */
-  .player--float { flex-wrap: wrap; justify-content: flex-end; }
+}
+
+/* ── いちばん狭いところ(360px 以下)。**それでも1行に収める** ───────
+   (2026-09 実機・利用者の指定「2行になるのは絶対にダメです」)
+   削るのは**余白と三角の幅**だけで、押せる大きさ(28px)は割らない */
+@media (max-width: 360px) {
+  .player--float { gap: 4px; padding: 4px; }
+  .player--float .listenpill-arrow { min-width: 28px; padding: 0 5px; }
+  .player--float .btn { padding: 5px 6px; }
+  .player--float .player-at { font-size: 11px; }
+  .player--float .player-place { padding-left: 5px; padding-right: 5px; }
+  /* **操作盤は、絶対に折り返さない**(2026-09 実機・利用者の指定)。
+
+       > 再生プレーヤーが2行になるのは絶対にダメです
+
+     いったんは折り返させていたが、**2行になること自体が駄目**である。
+     入れるために減らしたのは3つ ——
+     ①「集中モード」を上の帯へ移した(場所の取り合いをやめる)
+     ②「Listen (全体)」の**添えの言葉**を落とす(`Listen` は残す)
+     ③ もっと狭いところでは、くり返しを**絵と単位だけ**にする(下記) */
 
   /* ── 集中モードの下の帯も、同じだけ詰める(2026-09 実測)────────
      文の ◀ ▶ とくり返しを足したぶん、iPhone(390px)で

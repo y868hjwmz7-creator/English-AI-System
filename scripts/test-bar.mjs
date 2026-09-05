@@ -54,6 +54,9 @@ const ROOT = new URL('..', import.meta.url).pathname
  *   狭い画面では**はじめから右下に出している**ので、
  *   スイッチは「閉じる」から始まる。**既定を閉じるに戻すと、ここが赤くなる**
  *   —— そのときは、戻してよいのかを1度考えることになる
+ * ・`集中モード` … **狭い画面だけ**(2026-09 利用者の指定
+ *   「スマホでのこの集中モードの位置はダメです。画面上部のバーに収める方が
+ *   良くないですか?」)。広い画面ではこれまでどおり右下に固定してある
  * ・`速さ` `文字` `幅` … 「◀ いま ▶」の3つ
  */
 const WANT = {
@@ -64,7 +67,7 @@ const WANT = {
     /* スマホ(390px)。「表示」に畳まれる(検証は開いてから数える)。
        通しの読み上げは**右下に浮く**ので帯には無く、帯にはスイッチだけ */
     narrow: ['閉じる', '表示', '書き込む', 'メモ', '印刷', '速さ', '文字', '幅',
-      '読み上げの操作を閉じる'],
+      '読み上げの操作を閉じる', '集中モード'],
     hasNot: [],
   },
   'トレーナーが「教材」の画面から開いている': {
@@ -79,14 +82,14 @@ const WANT = {
        いまは**開いた中で相手を選ばせる**(担当ゲストだけが並ぶ)。 */
     wide: ['閉じる', '書き込む', 'メモ', '印刷', 'Listen (全体)', 'しない', '速さ', '文字', '幅'],
     narrow: ['閉じる', '表示', '書き込む', 'メモ', '印刷', '速さ', '文字', '幅',
-      '読み上げの操作を閉じる'],
+      '読み上げの操作を閉じる', '集中モード'],
     hasNot: [],
   },
   'ゲスト自身が開いている': {
     q: '?role=learner&who=g1',
     wide: ['閉じる', '書き込む', '印刷', 'Listen (全体)', 'しない', '速さ', '文字', '幅'],
     narrow: ['閉じる', '表示', '書き込む', '印刷', '速さ', '文字', '幅',
-      '読み上げの操作を閉じる'],
+      '読み上げの操作を閉じる', '集中モード'],
     // メモを書けるのは担当トレーナー(と管理者)だけ(0032)
     hasNot: ['メモ'],
   },
@@ -223,6 +226,37 @@ for (const [label, want] of Object.entries(WANT)) {
     if (m.h > 80) ng(`${w}px で帯が折り返している`, `高さ ${m.h}px(1行なら 50px ほど)`)
     else ok(`${w}px … 帯は1行(${m.h}px)`)
     if (m.over) ng(`${w}px で横にはみ出している`)
+  }
+  await page.close()
+}
+
+/* ── **右下の操作盤は、絶対に1行**(2026-09 実機・利用者の指定)──────
+ *
+ *    > 再生プレーヤーが2行になるのは絶対にダメです
+ *
+ *    押すものを1つ足すたびに折り返しやすくなるが、**折り返すこと自体が
+ *    駄目**である。だから幅を変えて**実際に描かせ、高さで数える。**
+ *    1行はおよそ 50px。2行になると倍になるので、そこで見分ける。
+ *    右端が画面から出ていないかも一緒に見る(押せなくなるため)。
+ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(300)
+  for (const w of [560, 430, 390, 375, 360, 320]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(250)
+    const m = await page.evaluate(() => {
+      const p = document.querySelector('.player--float')
+      if (!p) return null
+      const r = p.getBoundingClientRect()
+      return { h: Math.round(r.height), right: Math.round(r.right), win: window.innerWidth }
+    })
+    if (!m) { ng(`${w}px で右下の操作盤が出ていない`); continue }
+    if (m.h > 70) ng(`${w}px で操作盤が2行になっている`, `高さ ${m.h}px(1行なら 50px ほど)`)
+    else if (m.right > m.win) ng(`${w}px で操作盤が画面からはみ出している`, `右端 ${m.right} > ${m.win}`)
+    else ok(`${w}px … 操作盤は1行(${m.h}px)`)
   }
   await page.close()
 }

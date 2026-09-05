@@ -71,7 +71,13 @@ export default function PlayerBar({
         <button type="button"
                 className={`btn btn--small player-play${playing ? ' is-on' : ''}`}
                 onClick={onToggle}>
-          {playing ? <><StopIcon />{label ?? 'Stop'}</> : <><SpeakerIcon />{label ?? 'Listen (全体)'}</>}
+          {playing
+            ? <><StopIcon />{label ?? 'Stop'}</>
+            /* **狭い画面では「(全体)」を落とす**(2026-09 実機・利用者の指定
+                 「再生プレーヤーが2行になるのは絶対にダメです」)。
+               すぐ右に「3 / 6 段落」があるので、通しであることは伝わる。
+               **落とすのは添えの言葉だけ** —— 「Listen」は必ず残る */
+            : <><SpeakerIcon />{label ?? (<>Listen<span className="wide-text"> (全体)</span></>)}</>}
         </button>
       </SentenceSkip>
 
