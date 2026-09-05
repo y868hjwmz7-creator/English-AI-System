@@ -197,7 +197,7 @@ export const lastClipDetail = () => lastDetail
  *
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  */
-export const NEED_FN_REV = '2026-09-05'
+export const NEED_FN_REV = '2026-09-05b'
 
 let fnRev = null
 /** 窓口の版。まだ一度も呼んでいなければ `null` */

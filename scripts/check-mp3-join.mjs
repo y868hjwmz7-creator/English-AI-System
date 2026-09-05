@@ -20,7 +20,9 @@
  *   ⑤ 中身が**1バイトも書き換わっていない**か(作り直さない、という指定)
  *   ⑥ どの教材で何本集まるか(`audioPlaylist.js`)
  *   ⑦ **長さの札**が、全体の長さを指しているか(2026-09 実機)
+ *   ⑧ **発言の終わり**をなだらかに下げているか(2026-09 実機・プチッ)
  */
+import { readFileSync } from 'node:fs'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
@@ -403,6 +405,132 @@ function fakeMp3({
   if (!vbrTagFrame(lead, 30, 1234, true).length) ng('札を作れていない')
   else if (vbrTagFrame(lead, 0, 0, true).length) ng('0 枚なのに札を作っている')
   else ok('札は、枚数があるときだけ作る')
+}
+
+
+// ── ⑧ 発言の終わりを、なだらかに下げているか ──────────────────
+//
+//   2026-09 利用者の指定「本気で解決策を考えてください」。
+//
+//   実測したところ、**ElevenLabs が返す MP3 そのもの**が、音のある途中で
+//   ぶつりと終わっていた(14発言のうち6発言。最大 0.11 = -19dBFS)。
+//   だから窓口(`speak`)が、置く前に**終わりだけを段々小さくする。**
+//
+//   ここでは**その中身を、窓口のソースから取り出して**確かめる。
+//   窓口は1ファイルで完結させる決まり(配置の手順を増やさないため)なので、
+//   同じものを `src/lib/` にも置くと**2か所でそろえること**になる。
+//   だから「取り出して走らせる」。**書き写さない。**
+{
+  const src = readFileSync(new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8')
+  const a = src.indexOf('// ── ここから mp3-fade')
+  const b = src.indexOf('// ── ここまで mp3-fade')
+  if (a < 0 || b < 0) {
+    ng('窓口(speak)に mp3-fade の印が無い', '印を消すと、この検証が何も見なくなる')
+  } else {
+    const block = src.slice(a, b)
+    const { fadeMp3Tail, FADE_RAMP } = new Function(
+      `${block}\nreturn { fadeMp3Tail, FADE_RAMP }`,
+    )()
+
+    // 窓口が**実際に呼んでいる**か。定義だけあって誰も呼ばなければ同じこと
+    if (!/const stored = provider === 'eleven' \? fadeMp3Tail\(audio\) : audio/.test(src)) {
+      ng('窓口が fadeMp3Tail を呼んでいない')
+    } else if (!/body: stored,/.test(src)) {
+      ng('なだらかにしたほうを置いていない', 'body: audio のままでは何も変わらない')
+    } else ok('窓口は、置く前になだらかにしている(ElevenLabs のときだけ)')
+
+    /** MPEG1・モノラルの global_gain(グラニュール 0 / 1)を読む */
+    const gainAt = (bytes, at, gr) => {
+      const base = at + 4
+      const off = gr ? 98 : 39
+      let v = 0
+      for (let k = 0; k < 8; k += 1) {
+        const p = off + k
+        v = (v << 1) | ((bytes[base + (p >> 3)] >> (7 - (p & 7))) & 1)
+      }
+      return v
+    }
+    /** フレームの頭の場所を並べる */
+    const spots = (bytes) => {
+      const out = []
+      let i = 0
+      while (i < bytes.length) {
+        const f = firstFrame(bytes.subarray(i))
+        if (!f) break
+        out.push(i + f.at)
+        i += f.at + f.len
+      }
+      return out
+    }
+
+    const src1 = fakeMp3({ frames: 8 })
+    const done = fadeMp3Tail(src1.bytes)
+
+    if (done.length !== src1.bytes.length) {
+      ng('長さが変わっている', `${src1.bytes.length} → ${done.length}`)
+    } else ok(`1バイトも増えていない(${done.length} バイト)`)
+
+    const before = spots(src1.bytes)
+    const after = spots(done)
+    if (before.join() !== after.join() || before.length !== src1.frames) {
+      ng('フレームの並びが崩れている', `${before.length} → ${after.length}`)
+    } else ok(`フレームは ${after.length} 枚のまま、場所も動いていない`)
+
+    // 下げたのは**終わりの数グラニュールだけ**か
+    const grains = []
+    for (const at of after) { grains.push([at, 0], [at, 1]) }
+    let moved = 0
+    let wrong = 0
+    for (let k = 0; k < grains.length; k += 1) {
+      const [at, gr] = grains[k]
+      const was = gainAt(src1.bytes, at, gr)
+      const now = gainAt(done, at, gr)
+      const back = grains.length - 1 - k              // 終わりから何番目か
+      const want = back < FADE_RAMP.length
+        ? Math.max(0, was - Math.round(FADE_RAMP[back] / 1.5)) : was
+      if (now !== want) wrong += 1
+      if (now !== was) moved += 1
+    }
+    if (wrong) ng(`${wrong} 個のグラニュールが、思ったとおりに下がっていない`)
+    else if (moved !== FADE_RAMP.length) {
+      ng(`下げた数が合わない`, `${moved} ≠ ${FADE_RAMP.length}`)
+    } else ok(`終わりの ${FADE_RAMP.length} グラニュール(約 ${Math.round(FADE_RAMP.length * 13)}ms)だけを下げている`)
+
+    // **段々**下がっているか(いちばん最後がいちばん小さい)
+    const ramp = FADE_RAMP.slice()
+    const desc = ramp.every((v, k) => k === 0 || v < ramp[k - 1])
+    if (!desc) ng('下げ方が段々になっていない', '終わりに近いほど大きく下げる')
+    else ok(`下げ方 … ${ramp.join('dB → ')}dB(終わりから遡って)`)
+
+    // 中身(音のデータ)は1バイトも書き換えていない。
+    // 変わってよいのは side info の中の global_gain だけである
+    let touched = 0
+    for (let i = 0; i < done.length; i += 1) if (done[i] !== src1.bytes[i]) touched += 1
+    const last3 = after.slice(-3)
+    let outside = 0
+    for (let i = 0; i < done.length; i += 1) {
+      if (done[i] === src1.bytes[i]) continue
+      // 4 + side info(17 バイト)の中か
+      if (!last3.some((at) => i >= at + 4 && i < at + 4 + 17)) outside += 1
+    }
+    if (outside) ng(`side info の外を ${outside} バイト書き換えている`)
+    else ok(`書き換えたのは side info の中だけ(${touched} バイト)`)
+
+    // 触れない形は、そのまま返す
+    const m2 = fakeMp3({ mpeg1: false, kbps: 48, hz: 24000, frames: 8 })
+    const kept = fadeMp3Tail(m2.bytes)
+    if (kept.some((v, i) => v !== m2.bytes[i])) {
+      ng('MPEG2(24kHz)を書き換えている', 'Azure / Google の音声には触らない')
+    } else ok('MPEG2(24kHz・Azure / Google)には何もしない')
+
+    const tiny = fakeMp3({ frames: 2 })
+    const kept2 = fadeMp3Tail(tiny.bytes)
+    if (kept2.some((v, i) => v !== tiny.bytes[i])) ng('短すぎるものを書き換えている')
+    else ok('フレームが足りないものには何もしない')
+
+    if (fadeMp3Tail(new Uint8Array(0)).length !== 0) ng('空を渡すと落ちる')
+    else ok('空を渡しても落ちない')
+  }
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

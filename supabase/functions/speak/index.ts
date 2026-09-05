@@ -87,7 +87,7 @@ const reply = (body: unknown, status = 200) =>
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-05'
+const FN_REV = '2026-09-05b'
 
 /** 置き場所(Storage のバケツ)。0016 で作る */
 const BUCKET = 'tts'
@@ -479,6 +479,145 @@ async function synthElevenBest(
   return last
 }
 
+// ── ここから mp3-fade ────────────────────────────────────────────────
+//    (`scripts/check-mp3-fade.mjs` が**この印のあいだを取り出して**
+//     素の node で走らせる。型注釈を書かないこと)
+/**
+ * ============================================================================
+ * 【発言の終わりの「プチッ」を消す】(2026-09 利用者の指定)
+ *
+ *   > またアツゲン(発言)の後ろにプチッと入ります。
+ *   > まるでトランシーバーで通信しているようです。本気で解決策を考えてください
+ *
+ * 【何が起きていたか】(実測してから書いている)
+ *   利用者が落とした MP3(14発言・50秒)を波形にほどいて、
+ *   **発言の終わりが「いくつ」で終わっているか**を1つずつ数えた。
+ *
+ *   14発言のうち **6発言が、音のある途中でぶつりと 0 に落ちていた。**
+ *   いちばん大きいもので **0.11(-19dBFS)** — 1点で 0 まで落ちる。
+ *   波形が途中の値のまま急に途切れれば、そこで「プチッ」と鳴る。
+ *
+ *   **これは ElevenLabs が返す MP3 そのものの中にある。**
+ *   落ちたところから、その MP3 が終わるまでは 11〜25ms しかない
+ *   (フレーム1枚 = 26ms より短い)。つまり**音が鳴っている最中に、
+ *   その音声ファイルが終わっている。**
+ *
+ * 【だから「切り落とし」では直せなかった】(2026-09・取り下げ済み)
+ *   プチッの手前まで削るには**実音声を削る**しかない。実際、
+ *   150ms では残り、200ms では「発言の最後が消えました。ダメです」だった。
+ *   **削る場所に答えは無い。**
+ *
+ * 【`fadeGain` でも直せない】
+ *   あれは `<audio>` の `volume` を動かすもので、
+ *   **iPhone は `volume` を無視する**(CLAUDE.md)。
+ *   つまり利用者の端末では1ミリも効いていない。
+ *
+ * 【ここでやること】
+ *   **音のデータには一切触れずに、終わりだけを段々小さくする。**
+ *
+ *   MP3 は「グラニュール」(約13ms)ごとに、
+ *   **その塊全体の大きさを表す `global_gain` という 8 ビットの数**を持つ。
+ *   1 減らすと 1.5dB 小さくなる(mp3gain と同じ考え方)。
+ *   ここだけを書き換えるので、
+ *
+ *   - **音は1ビットも作り直していない**(利用者の指定と矛盾しない)
+ *   - **1バイトも増えない**(長さも中身の並びもそのまま)
+ *   - **1ミリ秒も削っていない**(小さくするだけ。語尾は消えない)
+ *   - グラニュールどうしは重ねて復号されるので、**段差にならない**
+ *
+ * 【実測(利用者が落とした,その MP3 で確かめた)】
+ *   いちばん大きな段差 **0.1117(-19.0dBFS)→ 0.0033(-49.6dBFS)。**
+ *   6発言とも直り、終わりの音量はほとんど変わっていない。
+ *
+ * 【効く範囲】
+ *   ElevenLabs の MP3(44.1kHz・モノラル・CRC 無し)だけ。
+ *   Azure / Google は 24kHz(MPEG2)なので**何もしない。**
+ *   言われたのは発言(会話)の話であり、あちらは元から後ろに無音がある。
+ * ============================================================================
+ */
+/** 終わりのグラニュールから遡って、何 dB 下げるか */
+const FADE_RAMP = [66, 42, 24, 12, 5]
+
+/** MPEG1・モノラルの side info における `global_gain` のビット位置 */
+const FADE_GAIN_BITS = [39, 98]
+
+const FADE_BITRATES = [
+  0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0,
+]
+
+/** その場所に「MPEG1・モノラル・CRC 無し」のフレームの頭があるか */
+function fadeFrameAt(b, i) {
+  if (i + 4 > b.length) return null
+  if (b[i] !== 0xff || (b[i + 1] & 0xe0) !== 0xe0) return null
+  const b1 = b[i + 1]
+  const b2 = b[i + 2]
+  if (((b1 >> 3) & 3) !== 3) return null        // MPEG1 だけ
+  if (((b1 >> 1) & 3) !== 1) return null        // Layer III だけ
+  if ((b1 & 1) === 0) return null               // CRC 付きは触らない
+  if (((b[i + 3] >> 6) & 3) !== 3) return null  // モノラルだけ
+  const bi = (b2 >> 4) & 15
+  const si = (b2 >> 2) & 3
+  if (bi === 0 || bi === 15 || si === 3) return null
+  const rate = [44100, 48000, 32000][si]
+  const bitrate = FADE_BITRATES[bi] * 1000
+  if (!bitrate) return null
+  const len = Math.floor((1152 / 8) * bitrate / rate) + ((b2 >> 1) & 1)
+  return { at: i, len }
+}
+
+function fadeReadBits(b, base, off, n) {
+  let v = 0
+  for (let k = 0; k < n; k += 1) {
+    const p = off + k
+    v = (v << 1) | ((b[base + (p >> 3)] >> (7 - (p & 7))) & 1)
+  }
+  return v
+}
+
+function fadeWriteBits(b, base, off, n, v) {
+  for (let k = 0; k < n; k += 1) {
+    const p = off + k
+    const idx = base + (p >> 3)
+    const mask = 1 << (7 - (p & 7))
+    if ((v >> (n - 1 - k)) & 1) b[idx] |= mask
+    else b[idx] &= ~mask
+  }
+}
+
+/**
+ * MP3 の**終わりだけ**をなだらかに下げた写しを返す。
+ *
+ * 触れない形(MPEG2・ステレオ・CRC 付き)のときは、
+ * **元のものをそのまま返す。**「直せないなら、何もしない」
+ */
+function fadeMp3Tail(input) {
+  const bytes = new Uint8Array(input)
+  const frames = []
+  let i = 0
+  while (i < bytes.length) {
+    const f = fadeFrameAt(bytes, i)
+    if (!f) { i += 1; continue }
+    frames.push(f)
+    i += f.len
+  }
+  // フレームが少なすぎるものは触らない(下げる余地がない)
+  if (frames.length < FADE_RAMP.length) return bytes
+  const out = new Uint8Array(bytes)
+  let g = 0
+  for (let k = frames.length - 1; k >= 0 && g < FADE_RAMP.length; k -= 1) {
+    const base = frames[k].at + 4
+    for (let gr = 1; gr >= 0 && g < FADE_RAMP.length; gr -= 1) {
+      const off = FADE_GAIN_BITS[gr]
+      const cur = fadeReadBits(out, base, off, 8)
+      const cut = Math.round(FADE_RAMP[g] / 1.5)
+      fadeWriteBits(out, base, off, 8, Math.max(0, cur - cut))
+      g += 1
+    }
+  }
+  return out
+}
+// ── ここまで mp3-fade ────────────────────────────────────────────────
+
 /**
  * Azure からの断りを、**画面に出せる日本語**にする。
  *
@@ -746,6 +885,23 @@ Deno.serve(async (req) => {
       }, 502)
     }
 
+    /*
+     * ── 4.5 発言の終わりを、なだらかに下げる ───────────────
+     *
+     *   **置く前に1回だけ**行う(上の `fadeMp3Tail` を見よ)。
+     *   ここでやっておけば、
+     *
+     *   - 画面はこれまでどおり**置いてある MP3 をそのまま鳴らす**だけ。
+     *     音の通り道は1ミリも増えない(③で高くついた失敗をくり返さない)
+     *   - **iPhone でも効く**(`volume` を使っていないため)
+     *   - 1本にまとめて落とす音声も、これをつなぐので**同じように直る**
+     *
+     *   ElevenLabs のときだけにしてある。**言われたのは発言の話**であり、
+     *   標準の段(Azure / Google)は 24kHz なので `fadeMp3Tail` は
+     *   どのみち何もしない。
+     */
+    const stored = provider === 'eleven' ? fadeMp3Tail(audio) : audio
+
     // ── 5. 置く ────────────────────────────────────────────
     //
     //   書き込めるのはここだけ(service_role)。x-upsert を付けるのは、
@@ -759,7 +915,7 @@ Deno.serve(async (req) => {
         'Cache-Control': 'public, max-age=31536000, immutable',
         'x-upsert': 'true',
       },
-      body: audio,
+      body: stored,
     })
     if (!put.ok) {
       const raw = await put.text().catch(() => '')
