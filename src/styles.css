@@ -6030,14 +6030,25 @@ html, body { overflow-x: clip; }
    **暗いのは上の帯だけ**である(`.player--bar` は帯の中にいる)。
    `.player--bar .player-at` が同じ作法で書かれていたのに、
    こちらは `.player` に広げてしまっていた。**そろえる。** */
-.lesson-bar .listenpill, .player--bar .listenpill {
+/* **集中モードの下の帯も、同じく暗い**(2026-09 実機・利用者の指摘)。
+
+     > プレーヤーの真ん中の文字が薄すぎて見えないですよ
+
+   `.focus-bar` を書き忘れていたので、錠剤だけが `--btn-bg`(アプリの色)の
+   ままだった。**明るい配色では、白い錠剤に白い文字**が乗って
+   まったく読めない(実測 rgb(242,242,238) on rgb(255,255,255))。
+   暗い配色では読めていたので、**片方の配色でしか出ない**形だった。
+   **色を決め打ちする帯を足したら、その中に置く部品もそろえる。** */
+.lesson-bar .listenpill, .player--bar .listenpill, .focus-bar .listenpill {
   border-color: #55554e; background: #24241f;
 }
-.lesson-bar .listenpill-arrow, .player--bar .listenpill-arrow {
+.lesson-bar .listenpill-arrow, .player--bar .listenpill-arrow,
+.focus-bar .listenpill-arrow {
   color: #f2f2ee; background: #34342e; border-color: #55554e;
 }
 .lesson-bar .listenpill-arrow:hover:not(:disabled),
-.player--bar .listenpill-arrow:hover:not(:disabled) { background: #45453d; }
+.player--bar .listenpill-arrow:hover:not(:disabled),
+.focus-bar .listenpill-arrow:hover:not(:disabled) { background: #45453d; }
 
 /* ── 右下に浮かせたときは、**錠剤を二重にしない** ───────────────
    `.player--float` そのものが、すでに角丸・枠線・影を持った錠剤である。
@@ -6050,6 +6061,18 @@ html, body { overflow-x: clip; }
 .player--float .listenpill { border: 0; background: transparent; }
 .player--float .listenpill-arrow { color: var(--text-primary); }
 .player--float .listenpill-arrow:hover:not(:disabled) { background: var(--border); }
+/* **まん中の文字を、三角より薄くしない**(2026-09 実機・利用者の指摘)。
+
+     > プレーヤーの真ん中の文字が薄すぎて見えないですよ
+
+   右下の操作盤は**紙の中**にいるので、`.lesson-sheet .btn` が
+   全部を「うすい墨」(`--ink-soft`)にそろえていた。ところが
+   三角のほうは `--text-primary` を明に指定してあるので、
+   **まん中だけが目に見えて薄い**(実測 rgb(90,100,110) 対 rgb(36,41,47))。
+   いちばん押すものが、いちばん読みにくい形になっていた。
+   **三角と同じ濃さにそろえる。** */
+.player--float .listenpill .btn,
+.player--float .repeat-unit { color: var(--text-primary); }
 
 /* 紙の中(明るい配色の島)。**変数から取っているので、そのままで正しい** */
 .lesson-sheet .listenpill, .focus-paper .listenpill {
@@ -6196,6 +6219,14 @@ html, body { overflow-x: clip; }
   .player--float .player-at { min-width: 0; }
   .player--float .listenpill-arrow { min-width: 32px; padding: 0 7px; }
   .player .btn { padding: 5px 9px; }
+  /* **入らないぶんは、折り返す**(2026-09 実測)。
+     くり返しのボタンを足したら、iPhone(390px)で**右端が
+     画面の外へ出ていた**(実測 395 > 390)。押せないものになる。
+     `.player .btn` は縮まない指定なので、詰めても入らない。
+     **文言を削って1行に見せかけない**(何のボタンか分からなくなる)——
+     外側の `.sheet-floats` がすでに折り返す作りなので、そろえる。
+     実測: 390 / 375 / 320px とも、はみ出しは無くなる */
+  .player--float { flex-wrap: wrap; justify-content: flex-end; }
 
   /* ── 集中モードの下の帯も、同じだけ詰める(2026-09 実測)────────
      文の ◀ ▶ とくり返しを足したぶん、iPhone(390px)で
