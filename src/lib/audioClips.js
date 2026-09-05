@@ -58,7 +58,8 @@ import {
   DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceModelOf, voiceRateOf, voiceSettingsOf,
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
-import { STANDARD } from './voiceTier.js'
+import { PREMIUM, STANDARD } from './voiceTier.js'
+import { spansOf, wholeMark } from './wholeAudio.js'
 import { markIndexAt, wordMarks } from './wordTiming.js'
 import {
   FADE_STEP, FADE_STOP, applyGain, fadeGain, isMeasured, measureClip,
@@ -197,7 +198,7 @@ export const lastClipDetail = () => lastDetail
  *
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  */
-export const NEED_FN_REV = '2026-09-05b'
+export const NEED_FN_REV = '2026-09-05c'
 
 let fnRev = null
 /** 窓口の版。まだ一度も呼んでいなければ `null` */
@@ -525,6 +526,127 @@ export async function remakeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STAN
   return fresh
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ * 本文を**1本で**取りに行く(2026-09 利用者の指定)
+ *
+ *   > 会話は、話者ごとに個別MP3を生成してアプリ側で連結せず、
+ *   > ElevenLabs の Text to Dialogue API を使い…1本の音声として生成する。
+ *
+ *   継ぎ目が無くなるので、発言と発言のあいだの「プチッ」も無くなる。
+ *   区切り(何番目が何秒から何秒か)は `wholeAudio.js` が出す。
+ *   **判断を2か所に置かない。**
+ *
+ *   **失敗しても行き止まりにしない。** ここが null を返したら、
+ *   呼んだ側(`readAloud.js`)は**これまでどおり発言ごと**に鳴らす。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** 一度取れたものは覚えておく(同じ教材を開くたびに問い合わせない) */
+const wholeCache = new Map()
+/** 作れないと分かったもの。**この画面のあいだ、二度と頼まない** */
+const wholeGaveUp = new Set()
+
+/** 置き場所。**窓口と同じ規則にすること**(ずれると二重に課金される) */
+const wholeUrlOf = (hash, ext) =>
+  `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${CLIP_REV}/premium/whole/${hash}.${ext}`
+
+/** 控えた時刻(JSON)を読む。**無ければ null**(まだ作られていない) */
+async function readWholeJson(url) {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    return await res.json()
+  } catch { return null }
+}
+
+/**
+ * 本文まるごとの音声を取りに行く。
+ *
+ * @param {object} o
+ * @param {string[]} o.texts    段落 / 発言の英文(並び順そのまま)
+ * @param {string[]} o.voiceIds その項目を読む声(名簿の id)。texts と同じ長さ
+ * @param {boolean} o.force     あっても作り直す(課金される)
+ * @returns {Promise<{url: string, spans: Array}|null>}
+ */
+export async function wholeClip({ texts, voiceIds, force = false }) {
+  if (!canUseClips() || !supabase) return null
+  const body = (texts ?? []).map((t) => normText(t))
+  const voices = voiceIds ?? []
+  if (body.length < 2 || voices.length !== body.length) return null
+  if (body.some((t) => !t)) return null
+
+  // **名簿に無い声が混じっていたら、1本にはできない**(Voice ID が要る)
+  const elevenIds = voices.map((v) => elevenIdOf(v))
+  if (elevenIds.some((v) => !v)) return null
+
+  const mark = wholeMark(voices, body)
+  if (!force && wholeCache.has(mark)) return wholeCache.get(mark)
+  if (!force && wholeGaveUp.has(mark)) return null
+
+  const hash = await fingerprint('whole', mark)
+  const mp3 = wholeUrlOf(hash, 'mp3')
+  const json = wholeUrlOf(hash, 'json')
+
+  // ① すでに置いてあれば、窓口を呼ばない(1円もかからない)
+  if (!force) {
+    const had = await readWholeJson(json)
+    if (had) {
+      const spans = spansOf(had.alignment, body)
+      const out = spans ? { url: mp3, spans } : null
+      if (!out) {
+        /* **時刻が当てはまらない。** 区切れないものを当てずっぽうで
+           区切ると、別の発言の場所を指す。1本にするのはあきらめる */
+        setDetail('読み上げ音声の時刻が本文と合いません。'
+          + '発言ごとの音声で鳴らします(教材を作り直すと直ることがあります)。')
+        wholeGaveUp.add(mark)
+        return null
+      }
+      wholeCache.set(mark, out)
+      return out
+    }
+  }
+
+  // ② 無いので作らせる
+  try {
+    const { data, error } = await supabase.functions.invoke('speak', {
+      body: {
+        tier: PREMIUM,
+        ...(force ? { force: true } : {}),
+        // **設定は先頭の声のもの。** Text to Dialogue は全体に1つしか取らない
+        elevenSettings: voiceSettingsOf(voices[0]),
+        whole: { mark, texts: body, elevenIds },
+      },
+    })
+    const res = data ?? {}
+    noteFnRev(res.fnRev)
+    if (!res.url) {
+      /* **黙って落ちない。** ここで諦めても、呼んだ側は
+         これまでどおり発言ごとに鳴らすので、音は出る */
+      if (res.detail) setDetail(`${FAILED} ${res.detail}`)
+      else if (error) setDetail(`${FAILED} ${error.message}`)
+      wholeGaveUp.add(mark)
+      return null
+    }
+    const made = await readWholeJson(force ? `${json}?v=${Date.now()}` : json)
+    const spans = spansOf(made?.alignment, body)
+    if (!spans) {
+      setDetail(`${FAILED} 読み上げ音声の時刻を読めませんでした。`)
+      wholeGaveUp.add(mark)
+      return null
+    }
+    /* **作り直したときは、控えを素通りさせる。** 置き場所は同じままで、
+       1年もつ指定で入っているため(`remakeClip` と同じ落とし穴) */
+    const stamp = force ? `?v=${Date.now()}` : ''
+    const out = { url: `${res.url}${stamp}`, spans }
+    wholeCache.set(mark, out)
+    wholeGaveUp.delete(mark)
+    return out
+  } catch (e) {
+    setDetail(`${FAILED} 読み上げ音声の窓口につながりません(${e?.message ?? e})。`)
+    wholeGaveUp.add(mark)
+    return null
+  }
+}
+
 /**
  * 次に鳴らすものを、いま鳴らしているあいだに用意しておく。
  * 会話は発言ごとに1本なので、これが無いと発言のたびに間があく。
@@ -626,12 +748,25 @@ export async function playClip({
    * 終わりぎわは 0 に落とす(残り 0.3 秒から鳴らしても意味がない)。
    */
   startAt = 0,
+  /**
+   * **すでに分かっている音声を、そのまま鳴らす**(2026-09)。
+   * 本文まるごとの1本(`wholeClip`)はここから渡す。
+   * 渡されたときは、置き場所を計算しないし、窓口にも作らせない。
+   */
+  srcUrl = null,
+  /**
+   * **途中で止める**(秒)。1本の中の「その発言だけ」を鳴らすために使う。
+   * 0 なら最後まで鳴らす。
+   */
+  stopAt = 0,
+  /** いま何秒めか(1本の中で、いま何番目かを知らせるために使う) */
+  onTime = null,
 } = {}) {
   if (!canUseClips()) return false
   const body = normText(text)
-  if (!body) return false
+  if (!body && !srcUrl) return false
 
-  let url = await clipUrl(body, voiceId, tier)
+  let url = srcUrl || await clipUrl(body, voiceId, tier)
   if (!url) return false
 
   const mine = (generation += 1)
@@ -693,6 +828,8 @@ export async function playClip({
   let ok = await tryPlay(url)
   if (mine !== generation) return true   // 止められた・別のものが始まった
   if (!ok) {
+    // **渡された音声が鳴らせないなら、そこで諦める**(作り直させない)
+    if (srcUrl) return false
     // その場所には無かった。窓口に作らせる
     url = await makeClip(body, voiceId, tier)
     if (!url) return false
@@ -765,7 +902,11 @@ export async function playClip({
       const len = Number(el.duration) || 0
       // 鳴り始めてから何ミリ秒か / 終わりまで何ミリ秒か(どちらも実際の時間)
       const inMs = ((now - from) / r) * 1000
-      const outMs = len ? ((len - now) / r) * 1000 : Infinity
+      /* **終わりは「止める場所」から数える。** 1本の中の1発言だけを
+         鳴らすとき、ファイルの終わりまで数えると
+         **下げ始める前に切れて「プチッ」と鳴る** */
+      const until = stopAt > 0 ? stopAt : len
+      const outMs = until ? ((until - now) / r) * 1000 : Infinity
       // **決め方は `loudness.js` 1か所**(手元で確かめられる形にしてある)
       const v = fadeGain(gain, inMs, outMs)
       // 0.005 より細かい差は耳に届かない。入れ直す回数を減らす
@@ -778,6 +919,15 @@ export async function playClip({
     const tick = () => {
       if (mine !== generation) { stopTrack(); return }
       fade()
+      onTime?.(Number(el.currentTime) || 0)
+      /* **区間の終わりで止める**(2026-09)。1本にまとめた音声から
+         「その発言だけ」を鳴らすときに使う。**`ended` は来ない**ので、
+         ここで終わりを見て、自分で終わらせる */
+      if (stopAt > 0 && (Number(el.currentTime) || 0) >= stopAt) {
+        try { el.pause() } catch { /* 止められなくても困らない */ }
+        finish()
+        return
+      }
       const next = markIndexAt(marks, el.currentTime * 1000)
       if (next >= 0 && next !== index) {
         index = next
@@ -799,7 +949,11 @@ export async function playClip({
          **先に測らない**という決まりはそのままである(待たせない)。
          変えたのは「鳴らし始めた瞬間」から「鳴り終わった瞬間」へ、
          という**いつ**だけで、測る中身は1つも変えていない。 */
-      if (!isMeasured(tier, pathName)) measureClip(url, tier, pathName)
+      /* **1本にまとめた音声は測らない**(2026-09)。
+         あれは声が2人ぶん混ざっているので、「その声の大きさ」にならない。
+         しかも 50 秒ぶんをほどくことになる。
+         **ElevenLabs の側でそろえてくれている**ので、そのまま鳴らす */
+      if (!srcUrl && !isMeasured(tier, pathName)) measureClip(url, tier, pathName)
       if (mine === generation) onWord?.(null)
       resolve(true)
     }

@@ -87,7 +87,7 @@ const reply = (body: unknown, status = 200) =>
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-05b'
+const FN_REV = '2026-09-05c'
 
 /** 置き場所(Storage のバケツ)。0016 で作る */
 const BUCKET = 'tts'
@@ -619,6 +619,157 @@ function fadeMp3Tail(input) {
 // ── ここまで mp3-fade ────────────────────────────────────────────────
 
 /**
+ * ============================================================================
+ * 【本文を1本で作る】(2026-09 利用者の指定)
+ *
+ *   > 会話は、話者ごとに個別MP3を生成してアプリ側で連結せず、
+ *   > ElevenLabs の Text to Dialogue API を使い、複数の voice_id を指定して
+ *   > 会話全体を1本の音声として生成する。
+ *   > 可能なら with-timestamps を使用し、各発話の開始・終了時刻を保存する。
+ *
+ *   発言と発言の「プチッ」は、**つなぎ目があるから出る。**
+ *   1本で作れば、つなぎ目そのものが無くなる。
+ *
+ * 【2つの窓口を使い分ける】
+ *   声が2人以上 … `/v1/text-to-dialogue/with-timestamps`(会話・会議)
+ *   声が1人     … `/v1/text-to-speech/{id}/with-timestamps`(記事)
+ *
+ * 【確かめた決まりごと】(2026-09 に ElevenLabs の説明で確認)
+ *   ・Text to Dialogue は **v3 専用**。声は **10人まで**
+ *   ・`settings` は **stability だけ**を受け取る
+ *   ・**全ターン合わせて 2,000 文字**が目安。超えると途中で切れる
+ *   ・時刻は `alignment` に**文字ごと**で返る
+ *
+ * 【区切りの計算は、ここでやらない】
+ *   `alignment` を**そのまま**控えて、画面側(`src/lib/wholeAudio.js`)が
+ *   「何番目は何秒から何秒か」を出す。窓口に置くと、
+ *   **窓口を配置し直すまで直せない**うえ、素の node で確かめられない。
+ * ============================================================================
+ */
+
+/** 会話(Text to Dialogue)で、全ターン合わせて出せる文字数 */
+const MAX_DIALOGUE_CHARS = 2000
+
+/** 記事(1人が通しで読む)で出せる文字数 */
+const MAX_NARRATION_CHARS = 2800
+
+/** ElevenLabs から「音声 + 文字ごとの時刻」を受け取る */
+async function synthElevenTimed(
+  url: string, key: string, payload: Record<string, unknown>,
+) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'xi-api-key': key,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const raw = await res.text().catch(() => '')
+    return { error: humanTtsError('ElevenLabs', res.status, raw) }
+  }
+  let json: Record<string, unknown>
+  try { json = await res.json() } catch {
+    return {
+      error: {
+        error: GENERIC,
+        detail: 'ElevenLabs の返事を読めませんでした(JSON ではありません)。',
+        fatal: false,
+      },
+    }
+  }
+  const b64 = String(json.audio_base64 ?? '')
+  if (!b64) {
+    return {
+      error: {
+        error: GENERIC,
+        detail: 'ElevenLabs が音声を返しませんでした(audio_base64 が空)。',
+        fatal: false,
+      },
+    }
+  }
+  const bin = atob(b64)
+  const audio = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i += 1) audio[i] = bin.charCodeAt(i)
+  return { audio, alignment: json.alignment ?? null }
+}
+
+/**
+ * 1本にまとめて作る。**会話は Text to Dialogue、記事は通常の窓口。**
+ *
+ * v3 で断られたら v2 に落ちる…という道は**作らない。**
+ * Text to Dialogue は v3 専用なので、落ちる先が無い。
+ * 失敗したら画面が**これまでどおり発言ごと**に作る(行き止まりにしない)。
+ */
+async function synthWhole(
+  texts: string[], elevenIds: string[], key: string,
+  settings: Record<string, number | boolean> | null,
+) {
+  const unique = [...new Set(elevenIds)]
+  const total = texts.reduce((n, t) => n + t.length, 0)
+
+  if (unique.length > 1) {
+    if (unique.length > 10) {
+      return {
+        error: {
+          error: GENERIC,
+          detail: `話す人が ${unique.length} 人います。Text to Dialogue は 10 人までです。`,
+          fatal: false,
+        },
+      }
+    }
+    if (total > MAX_DIALOGUE_CHARS) {
+      return {
+        error: {
+          error: GENERIC,
+          detail: `会話が長すぎます(${total} 文字)。`
+            + `1本にまとめられるのは ${MAX_DIALOGUE_CHARS} 文字までです。`,
+          fatal: false,
+        },
+      }
+    }
+    const made = await synthElevenTimed(
+      'https://api.elevenlabs.io/v1/text-to-dialogue/with-timestamps?output_format=mp3_44100_128',
+      key,
+      {
+        inputs: texts.map((t, i) => ({ text: t, voice_id: elevenIds[i] })),
+        model_id: ELEVEN_MODEL_DEFAULT,
+        // **stability しか受け取らない**(確認済み)。ほかは送らない
+        ...(settings && typeof settings.stability === 'number'
+          ? { settings: { stability: settings.stability } } : {}),
+      },
+    )
+    return { ...made, madeModel: ELEVEN_MODEL_DEFAULT, kind: 'dialogue' }
+  }
+
+  if (total > MAX_NARRATION_CHARS) {
+    return {
+      error: {
+        error: GENERIC,
+        detail: `本文が長すぎます(${total} 文字)。`
+          + `1本にまとめられるのは ${MAX_NARRATION_CHARS} 文字までです。`,
+        fatal: false,
+      },
+    }
+  }
+  const made = await synthElevenTimed(
+    `https://api.elevenlabs.io/v1/text-to-speech/${unique[0]}/with-timestamps`
+      + '?output_format=mp3_44100_128',
+    key,
+    {
+      // **段落の切れ目は空行で渡す。** 区切りは `alignment` から出すので、
+      // ここで印を入れる必要はない(印を入れると、それも読まれてしまう)
+      text: texts.join('\n\n'),
+      model_id: ELEVEN_MODEL_DEFAULT,
+      ...(settings ? { voice_settings: settings } : {}),
+    },
+  )
+  return { ...made, madeModel: ELEVEN_MODEL_DEFAULT, kind: 'narration' }
+}
+
+/**
  * Azure からの断りを、**画面に出せる日本語**にする。
  *
  * 【ゲストには、仕組みの内側を見せない】(`lookup-word` と同じ考え方)
@@ -727,6 +878,115 @@ Deno.serve(async (req) => {
      *   **それでよい** —— 版が付いていないことが、そのまま
      *   「古い」という答えになる。 */
     if (body.ping) return reply({ ok: true })
+
+    /* ── 本文を1本で作る(2026-09 利用者の指定)──────────────────
+     *
+     *   会話は Text to Dialogue、記事は通常の窓口を
+     *   **with-timestamps** で呼び、MP3 と**文字ごとの時刻**を置く。
+     *   つなぎ目が無くなるので、発言のあいだの「プチッ」も無くなる。
+     *
+     *   **区切りの計算はしない。** `alignment` をそのまま控えて、
+     *   画面側(`src/lib/wholeAudio.js`)が「何番目は何秒から何秒か」を出す。
+     *
+     *   ここで失敗しても、画面は**これまでどおり発言ごと**に作る。
+     *   だから行き止まりにはならない。 */
+    if (body.whole) {
+      const w = body.whole as Record<string, unknown>
+      const texts = (Array.isArray(w.texts) ? w.texts : [])
+        .map((t) => normText(String(t ?? ''))).filter(Boolean)
+      const elevenIds = (Array.isArray(w.elevenIds) ? w.elevenIds : [])
+        .map((v) => cleanElevenId(v))
+      const mark = String(w.mark ?? '')
+      const wantForce = !!body.force
+
+      if (texts.length < 2 || elevenIds.length !== texts.length
+        || elevenIds.some((v) => !v) || !mark || mark.length > 20000) {
+        return reply({ error: GENERIC, detail: '1本にまとめる材料がそろっていません。', fatal: false }, 400)
+      }
+
+      const wholeKey = Deno.env.get('ELEVENLABS_API_KEY')
+      if (!wholeKey) {
+        // **鍵が無いだけ。** 画面はこれまでどおり発言ごとに作る
+        return reply({
+          error: GENERIC,
+          detail: '1本にまとめるには ElevenLabs の鍵が要ります'
+            + '(Supabase の Edge Functions → Secrets → ELEVENLABS_API_KEY)。',
+          fatal: false,
+        }, 502)
+      }
+
+      const wholePath = `${CLIP_REV}/premium/whole/${await fingerprint('whole', mark)}`
+      const mp3Url = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${wholePath}.mp3`
+      const jsonUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${wholePath}.json`
+
+      if (!wantForce) {
+        const already = await fetch(mp3Url, { method: 'HEAD' })
+        if (already.ok) {
+          return reply({ url: mp3Url, jsonUrl, cached: true, ms: Date.now() - startedAt })
+        }
+      }
+
+      const made = await synthWhole(
+        texts, elevenIds, wholeKey, cleanElevenSettings(body.elevenSettings),
+      )
+      if (made.error) return reply(made.error, 502)
+      if (!made.audio?.byteLength) {
+        return reply({
+          error: GENERIC,
+          detail: 'ElevenLabs が空の音声を返しました。',
+          fatal: false,
+        }, 502)
+      }
+
+      // **終わりだけをなだらかに下げる**(1本になっても、最後の1回は残る)
+      const wholeAudio = fadeMp3Tail(made.audio)
+      const put = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${wholePath}.mp3`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          apikey: serviceKey,
+          'Content-Type': 'audio/mpeg',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'x-upsert': 'true',
+        },
+        body: wholeAudio,
+      })
+      if (!put.ok) {
+        const raw = await put.text().catch(() => '')
+        return reply({
+          error: GENERIC,
+          detail: `音声を置けませんでした(${put.status})。${raw.slice(0, 200)}`,
+          fatal: /bucket not found/i.test(raw),
+        }, 502)
+      }
+
+      /* **時刻は、そのまま控える。** ここで区切りに直すと、
+         直したくなったときに**窓口の置き直しが要る**ことになる */
+      await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${wholePath}.json`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          apikey: serviceKey,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'x-upsert': 'true',
+        },
+        body: JSON.stringify({
+          rev: FN_REV, kind: made.kind, texts, alignment: made.alignment ?? null,
+        }),
+      })
+
+      return reply({
+        url: mp3Url,
+        jsonUrl,
+        cached: false,
+        kind: made.kind,
+        parts: texts.length,
+        chars: texts.reduce((n, t) => n + t.length, 0),
+        madeModel: made.madeModel,
+        ms: Date.now() - startedAt,
+      })
+    }
 
     const text = normText(String(body.text ?? ''))
     if (!text) return reply({ error: '読み上げる英文がありません' }, 400)

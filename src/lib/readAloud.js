@@ -41,14 +41,15 @@
  *   `playbackRate`。速さの段階ごとに作ると、費用も置き場所も5倍になる。
  */
 import {
-  DEFAULT_CLIP_VOICE, canUseClips, playClip, prefetchClip, stopClip,
+  DEFAULT_CLIP_VOICE, canUseClips, playClip, prefetchClip, stopClip, wholeClip,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
-import { STANDARD } from './voiceTier.js'
 import { clipSpeakerFor } from './voiceCast.js'
 import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
+import { indexAtTime, wholeOn } from './wholeAudio.js'
+import { PREMIUM, STANDARD } from './voiceTier.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
 let session = 0
@@ -250,6 +251,75 @@ export function readAloudSequence(parts, {
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════
+   * **本文まるごとを1本で鳴らす**(2026-09 利用者の指定)
+   *
+   *   > 話者ごとに個別MP3を生成してアプリ側で連結せず、
+   *   > …会話全体を1本の音声として生成する。
+   *   > timestamps を使って全文再生・発話単位再生を可能にする。
+   *
+   *   発言と発言の「プチッ」は**つなぎ目があるから**出る。
+   *   1本なら、つなぎ目そのものが無い。
+   *
+   * 【今までの形にも戻せる】(利用者の指定)
+   *   左のメニューの下の切り替えで、いつでも発言ごとに戻せる。
+   *   **1本を作れなかったときも、黙って今までの形に落ちる。**
+   *   だから行き止まりにはならない。
+   *
+   * 【1本にすると効かなくなるもの】
+   *   ・`turnGap.js`(内容から決める間)… 間を作るのは ElevenLabs になる
+   *   ・語ごとの色 … 文字ごとの時刻は控えてあるが、まだ使っていない
+   *   段落 / 発言ごとの色(`onIndex`)は、時刻から出すのでこれまでどおり。
+   * ══════════════════════════════════════════════════════════════ */
+  const canWhole = wholeOn() && clipTier === PREMIUM && list.length >= 2
+
+  const runWhole = async () => {
+    if (!canWhole) return false
+    const got = await wholeClip({
+      texts: list.map((p) => p.text),
+      voiceIds: list.map((p) => p.clipVoice ?? clipSpeakerFor(p.voice)),
+    })
+    if (!alive()) return true                 // 待っているあいだに止められた
+    if (!got?.spans?.length || got.spans.length !== list.length) return false
+
+    const { spans } = got
+    /* **どこから鳴らすか。** 控えの秒は「1本の中の秒」なので、
+       その項目の中に収まっているときだけ使う(今までの形で覚えた秒が
+       混ざっても、変なところから鳴らさない) */
+    const s = spans[first]
+    const at = (from && from.index === first
+      && from.at > s.start && from.at < s.end) ? from.at : s.start
+
+    let shown = -1
+    const seen = (i) => {
+      if (i < 0 || i === shown) return
+      shown = i
+      nowPlaying(resumeKey, i)
+      onIndex?.(i)
+    }
+    seen(first)
+    started()
+
+    const played = await playClip({
+      srcUrl: got.url,
+      // 1本には声が2人ぶん入っている。**声ごとの速さの補正は当てない**
+      voiceId: 'whole',
+      tier: clipTier,
+      rate,
+      startAt: at,
+      onStart: started,
+      onTime: (sec) => { if (alive()) seen(indexAtTime(spans, sec)) },
+    })
+    if (!alive()) return true
+    if (!played) return false                 // 鳴らせなかった。今までの形へ
+
+    finished()
+    onDone?.()
+    onIndex?.(null)
+    onWord?.(null)
+    return true
+  }
+
   const run = async () => {
     for (let i = first; i < list.length; i += 1) {
       if (!alive()) return
@@ -328,7 +398,9 @@ export function readAloudSequence(parts, {
     onIndex?.(null)
     onWord?.(null)
   }
-  run()
+  /* **まず1本を試し、駄目なら今までどおり発言ごとに鳴らす。**
+     どちらに落ちても、押した人には同じに見える */
+  runWhole().then((done) => { if (!done && alive()) run() })
 
   return () => {
     if (!alive()) return

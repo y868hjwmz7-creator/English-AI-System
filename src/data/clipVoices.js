@@ -354,8 +354,15 @@ export const CLIP_VOICES = [
      **モデルは声の性質ではなく、こちらが呼ぶときの指定である。**
      同じ Voice ID を v2 でも v3 でも鳴らせるので、黙って v3 で作ると
      **利用者が聴いて選んだ音とは別物**になる。
-     だから**聴いたモデルを、その行に書く**(`voiceModelOf`)。 */
-  { id: 'sc-10', accent: 'sc', gender: 'female', use: 'both',
+     だから**聴いたモデルを、その行に書く**(`voiceModelOf`)。
+
+     【会話には出さない】(2026-09 利用者の指定)
+       会話・会議は **Text to Dialogue** で1本にまとめて作るようになった。
+       あれは **v3 専用**なので、v2 で聴いて選ばれたこの声は入れられない。
+       **消すのではなく、記事の朗読(`narration`)に回す。**
+       ここで `both` のままにすると、会話で選べてしまい、
+       選んだのに1本にできない — **選ばせてから断らない**(CLAUDE.md)。 */
+  { id: 'sc-10', accent: 'sc', gender: 'female', use: 'narration',
     label: 'Sophie', elevenId: 'iePvrB4HtMcAormXZou7', model: V2 },
 ]
 

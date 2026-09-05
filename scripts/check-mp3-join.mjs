@@ -21,8 +21,12 @@
  *   ⑥ どの教材で何本集まるか(`audioPlaylist.js`)
  *   ⑦ **長さの札**が、全体の長さを指しているか(2026-09 実機)
  *   ⑧ **発言の終わり**をなだらかに下げているか(2026-09 実機・プチッ)
+ *   ⑨ **本文を1本にまとめる**(つなぎ目そのものを無くす・2026-09)
  */
 import { readFileSync } from 'node:fs'
+import {
+  indexAtTime, rangeOf, spansOf, wholeMark,
+} from '../src/lib/wholeAudio.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
@@ -530,6 +534,132 @@ function fakeMp3({
 
     if (fadeMp3Tail(new Uint8Array(0)).length !== 0) ng('空を渡すと落ちる')
     else ok('空を渡しても落ちない')
+  }
+}
+
+
+// ── ⑨ 本文を1本にまとめる(2026-09 利用者の指定)────────────────
+//
+//   > 会話は…ElevenLabs の Text to Dialogue API を使い、
+//   > 会話全体を1本の音声として生成する。
+//   > 可能なら with-timestamps を使用し、各発話の開始・終了時刻を保存する。
+//
+//   **つなぎ目が無くなるので、「プチッ」も無くなる。**
+//   ここで見るのは「時刻から、何番目が何秒から何秒かを正しく出せるか」。
+//   **ずれた区切りは、無いより悪い**(別の発言の場所を指す)。
+{
+  const src = readFileSync(new URL('../src/lib/wholeAudio.js', import.meta.url), 'utf8')
+
+  /** 英文から、それらしい `alignment` を作る(1文字 0.1 秒) */
+  const fakeAlign = (texts, join = ' ') => {
+    const whole = texts.join(join)
+    const characters = [...whole]
+    const character_start_times_seconds = characters.map((_, i) => i * 0.1)
+    const character_end_times_seconds = characters.map((_, i) => (i + 1) * 0.1)
+    return { characters, character_start_times_seconds, character_end_times_seconds }
+  }
+
+  const texts = ['Hello there.', 'How are you?', 'Fine, thanks.']
+
+  // 区切れるか(空白でつないだとき)
+  {
+    const spans = spansOf(fakeAlign(texts), texts)
+    if (!spans || spans.length !== 3) {
+      ng('3つに区切れていない', String(spans && spans.length))
+    } else if (Math.abs(spans[0].start - 0) > 1e-9) {
+      ng('1つめの始まりがずれている', String(spans[0].start))
+    } else if (Math.abs(spans[0].end - 1.2) > 1e-9) {
+      ng('1つめの終わりがずれている', `${spans[0].end} ≠ 1.2`)
+    } else if (!(spans[1].start > spans[0].end && spans[2].start > spans[1].end)) {
+      ng('区切りが前後している')
+    } else ok(`3つに区切れる(1つめ ${spans[0].start}〜${spans[0].end} 秒)`)
+  }
+
+  // **空白の入り方が変わっても揺るがない**(向こうが改行を足すことがある)
+  {
+    const a = spansOf(fakeAlign(texts, ' '), texts)
+    const b = spansOf(fakeAlign(texts, '\n\n'), texts)
+    if (!a || !b) ng('空白を変えると区切れなくなる')
+    else if (a.length !== b.length) ng('空白で区切りの数が変わる')
+    else ok('空白(改行)が足されても、区切りの数は変わらない')
+  }
+
+  // **数が合わなければ、何も返さない**(当てずっぽうで区切らない)
+  {
+    const short = spansOf(fakeAlign(['Hello there.']), texts)
+    if (short) ng('足りないのに区切っている', '別の発言の場所を指してしまう')
+    else ok('文字が足りなければ、区切らない')
+
+    const extra = spansOf(fakeAlign([...texts, 'And a lot more text here.']), texts)
+    if (extra) ng('余っているのに区切っている')
+    else ok('文字が余っていれば、区切らない')
+
+    if (spansOf(null, texts)) ng('時刻が無いのに区切っている')
+    else if (spansOf(fakeAlign(texts), [])) ng('英文が無いのに区切っている')
+    else ok('材料が欠けていれば、区切らない')
+  }
+
+  // いま何番目か / その区間
+  {
+    const spans = spansOf(fakeAlign(texts), texts)
+    const at = (t) => indexAtTime(spans, t)
+    if (at(0) !== 0 || at(0.5) !== 0) ng('始めが1つめになっていない')
+    else if (at(spans[1].start + 0.01) !== 1) ng('2つめに入っていない')
+    else if (at(spans[2].end + 5) !== 2) ng('終わったあとが最後になっていない')
+    else if (at((spans[0].end + spans[1].start) / 2) !== 0
+      && at((spans[0].end + spans[1].start) / 2) !== 1) ng('間(ま)の上で番号が壊れる')
+    else ok('秒から「いま何番目か」が出せる')
+
+    const r = rangeOf(spans, 1)
+    if (!r || r.start !== spans[1].start || r.end !== spans[1].end) ng('区間を取り出せない')
+    else if (rangeOf(spans, 9)) ng('無い番号でも区間を返している')
+    else ok('「その発言だけ」の区間を取り出せる')
+  }
+
+  // 置き場所の材料。**声か英文が変われば、別の音声になる**
+  {
+    const m1 = wholeMark(['us-1', 'uk-2'], texts)
+    const m2 = wholeMark(['us-1', 'uk-3'], texts)
+    const m3 = wholeMark(['us-1', 'uk-2'], [...texts.slice(0, 2), 'Fine, thanks!'])
+    if (m1 === m2 || m1 === m3) ng('声や英文を変えても同じ置き場所になる', '前の音声が返り続ける')
+    else if (wholeMark(['us-1', 'uk-2'], texts) !== m1) ng('同じ材料で違う置き場所になる')
+    else ok('置き場所は、声と英文の両方から決まる')
+  }
+
+  // 既定は「1本」。**戻せる道が要る**(利用者の指定)
+  {
+    if (!/const v = window\.localStorage\.getItem\(WHOLE_KEY\)/.test(src)) {
+      ng('切り替えを端末に覚えていない')
+    } else if (!/return v === null \? true : v === '1'/.test(src)) {
+      ng('既定が「1本」になっていない')
+    } else ok('既定は1本。切り替えは端末に覚える')
+  }
+
+  // 窓口が、**実際に**新しい API を呼んでいるか
+  {
+    const fn = readFileSync(new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8')
+    const want = [
+      ['会話は Text to Dialogue', /v1\/text-to-dialogue\/with-timestamps/],
+      ['記事は with-timestamps', /v1\/text-to-speech\/\$\{unique\[0\]\}\/with-timestamps/],
+      ['1本の入り口がある', /if \(body\.whole\) \{/],
+      ['時刻をそのまま控える', /alignment: made\.alignment/],
+      ['終わりをなだらかに下げる', /fadeMp3Tail\(made\.audio\)/],
+    ]
+    let bad0 = bad
+    for (const [what, re] of want) if (!re.test(fn)) ng(`窓口: ${what}`)
+    if (bad === bad0) ok('窓口は、1本にまとめる道を持っている')
+  }
+
+  // 画面が、**呼んでいる**か(定義だけあって誰も呼ばなければ同じこと)
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    if (!/await wholeClip\(\{/.test(read)) ng('読み上げが wholeClip を呼んでいない')
+    else if (!/runWhole\(\)\.then\(/.test(read)) ng('1本を試してから今までの形に落ちていない')
+    else if (!/export async function wholeClip\(/.test(clips)) ng('wholeClip が無い')
+    else if (!/whole: \{ mark, texts: body, elevenIds \}/.test(clips)) ng('窓口へ材料を渡していない')
+    else if (!/stopAt > 0 &&/.test(clips)) ng('区間の終わりで止められない')
+    else ok('画面は1本を試し、駄目なら今までの形に落ちる')
   }
 }
 
