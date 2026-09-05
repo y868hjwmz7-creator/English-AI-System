@@ -821,6 +821,12 @@ function fakeMp3({
       ['操作盤も同じ式で出す', /isPassageSection\(section\?\.exercise_type\) && floating && \(/],
       ['浮いていれば段落のボタンを出さない', /secIsPassage && floating \? null/],
       ['帯にあるときは段落に錠剤を出す', /withSkip\(secIsPassage, \(/],
+      /* **スマホでは、はじめから右下に出す**(2026-09 利用者の指定)。
+           > 各段落にプレーヤーがある始めの画面は少しうるさいです
+
+         `false` に戻すと、開いた瞬間に段落の数だけプレーヤーが並ぶ。
+         記事は6段落あるので、そこがいちばん騒がしくなる */
+      ['スマホでは、はじめから開いている', /const \[floatOpen, setFloatOpen\] = useState\(true\)/],
     ]
     for (const [what, re] of want2) if (!re.test(lv)) ng(`入れ替え: ${what}`)
     if (bad === bad0) ok('◀ ▶ は、操作盤と段落のどちらか一方だけに出る')
