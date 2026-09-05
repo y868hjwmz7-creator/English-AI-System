@@ -32,7 +32,7 @@
  * ============================================================================
  */
 import { useEffect, useState } from 'react'
-import { wholeClip } from './audioClips.js'
+import { lastWholeDetail, wholeClip } from './audioClips.js'
 import { materialAudioClips } from './audioPlaylist.js'
 import { prefetchGlosses } from './vocab.js'
 import { PREMIUM } from './voiceTier.js'
@@ -83,7 +83,14 @@ export function cancelPrepare() {
 export function startPrepare(material, { title = '', level = 'B1' } = {}) {
   const id = String(material?.id ?? '')
   if (!id || done.has(id)) return false
-  if (prepareRunning()) return false
+  /* **走っているあいだは、順番待ちにする**(2026-09 実機)。
+     以前はここで `false` を返して**そのまま捨てて**いた。
+     呼ぶ側(画面)は同じ条件では二度と呼ばないので、
+     **その教材の支度は永久に行われない。** 落とさずに並べる */
+  if (prepareRunning()) {
+    if (!queue.some((q) => q.id === id)) queue.push({ material, title, level, id })
+    return true
+  }
 
   const clips = materialAudioClips(material)
   // 本文の無い教材(ドリル・単語・フレーズ)には、支度することが無い
@@ -96,6 +103,10 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
     id: mine, materialId: id, title, state: 'running',
     step: 0, total: 2, label: '読み上げ音声', startedAt: Date.now(),
     cancelled: false, error: null,
+    /* **何ができたのかを残す。** 「支度ができました」だけでは、
+       **本当に用意できたのか、素通りしたのかが分からない**
+       (成功と失敗を、同じ見た目で終わらせない・CLAUDE.md) */
+    audio: null, words: 0, note: null,
   }
   emit()
 
@@ -107,34 +118,53 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
   }
 
   ;(async () => {
+    let audio = 'skip'
+    let note = null
     try {
       // ① 本文の音声を1本ぶん。**押す前に作っておく**
       if (clips.length >= 2 && clips[0].tier === PREMIUM && wholeOn()) {
-        await wholeClip({
+        const got = await wholeClip({
           texts: clips.map((c) => c.text),
           voiceIds: clips.map((c) => c.voiceId),
         })
+        /* **できたかどうかを、必ず持ち帰る。** `wholeClip` は
+           駄目なときに `null` を返すだけなので、そのままだと
+           「支度ができました」と出しながら**何も用意できていない** */
+        audio = got ? 'ok' : 'ng'
+        if (!got) note = lastWholeDetail()
       }
       if (!alive()) return
 
       // ② 語の意味。**開いてから引くと、レッスン中に待つことになる**
       step(1, '語の意味')
-      await prefetchGlosses(
-        (clips.length ? clips : words).map((c) => ({ text: c.text })),
-        { level },
-      )
+      const list = (clips.length ? clips : words).map((c) => ({ text: c.text }))
+      await prefetchGlosses(list, { level })
       if (!alive()) return
-      task = { ...task, state: 'done', step: 2, label: '' }
+      task = { ...task, state: 'done', step: 2, label: '', audio, words: list.length, note }
       emit()
     } catch (e) {
       if (!alive()) return
       /* **やり直さない。** 失敗しても、初めて押したときに作られる。
          成功と失敗を同じ見た目で終わらせないため、理由は残す */
-      task = { ...task, state: 'done', error: e?.message ?? String(e) }
+      task = { ...task, state: 'done', audio, error: e?.message ?? String(e), note }
       emit()
     }
+    runNext()
   })()
   return true
+}
+
+/** 順番待ち。**落とさない**(落とすと、その教材は永久に支度されない) */
+const queue = []
+
+/** 待っている次のものを始める。**終わってから呼ぶ** */
+function runNext() {
+  const next = queue.shift()
+  if (!next) return
+  /* すでに `done` に入っているので、そのままでは始まらない。
+     並べたときに一度だけ外す */
+  done.delete(next.id)
+  startPrepare(next.material, { title: next.title, level: next.level })
 }
 
 /** 本文の演習が無いときのための、英文の拾い方(語の意味だけ支度する) */
@@ -157,8 +187,19 @@ export function prepareLabel(t, secs = 0) {
     return `${t.title ? `${t.title} の` : ''}${what}を用意しています…`
       + (secs > 2 ? `(${secs} 秒)` : '')
   }
-  if (t.error) return '用意できませんでした(初めて押したときに作られます)'
-  return `${t.title ? `${t.title} の` : ''}支度ができました`
+  /* **何ができたのかを、数で出す。**「できました」だけでは、
+     本当に用意できたのか素通りしたのかが分からない */
+  const head = t.title ? `${t.title} の` : ''
+  if (t.error) return `${head}支度でつまずきました(初めて押したときに作られます)`
+  if (t.audio === 'ng') {
+    return `${head}読み上げ音声を用意できませんでした`
+      + `(初めて押したときに作られます)${t.note ? ` — ${t.note}` : ''}`
+  }
+  const made = [
+    t.audio === 'ok' ? '読み上げ音声 1本' : null,
+    t.words ? `語の意味 ${t.words} か所ぶん` : null,
+  ].filter(Boolean).join(' / ')
+  return `${head}支度ができました${made ? `(${made})` : ''}`
 }
 
 /** 進み具合(0〜1)。**終わった段 + 0.5** で出す(動いて見えるように) */

@@ -545,6 +545,10 @@ const wholeCache = new Map()
 /** 作れないと分かったもの。**この画面のあいだ、二度と頼まない** */
 const wholeGaveUp = new Set()
 
+/** 直近の「1本にまとめられなかった理由」。**支度の帯がそのまま出す** */
+let wholeNote = null
+export const lastWholeDetail = () => wholeNote
+
 /** 置き場所。**窓口と同じ規則にすること**(ずれると二重に課金される) */
 const wholeUrlOf = (hash, ext) =>
   `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${CLIP_REV}/premium/whole/${hash}.${ext}`
@@ -571,12 +575,19 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
   if (!canUseClips() || !supabase) return null
   const body = (texts ?? []).map((t) => normText(t))
   const voices = voiceIds ?? []
-  if (body.length < 2 || voices.length !== body.length) return null
-  if (body.some((t) => !t)) return null
+  if (body.length < 2 || voices.length !== body.length) {
+    wholeNote = '本文が2つ以上ありません'
+    return null
+  }
+  if (body.some((t) => !t)) { wholeNote = '空の本文があります'; return null }
 
   // **名簿に無い声が混じっていたら、1本にはできない**(Voice ID が要る)
   const elevenIds = voices.map((v) => elevenIdOf(v))
-  if (elevenIds.some((v) => !v)) return null
+  if (elevenIds.some((v) => !v)) {
+    /* 名簿に無い声(代役)が混じっている。**Voice ID が無いと1本にできない** */
+    wholeNote = '名簿に無い声が混じっています(教材の声を選び直すと1本にできます)'
+    return null
+  }
 
   const mark = wholeMark(voices, body)
   if (!force && wholeCache.has(mark)) return wholeCache.get(mark)
@@ -598,9 +609,11 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
         setDetail('読み上げ音声の時刻が本文と合いません。'
           + '発言ごとの音声で鳴らします(教材を作り直すと直ることがあります)。')
         wholeGaveUp.add(mark)
+        wholeNote = '控えた時刻が本文と合いません'
         return null
       }
       wholeCache.set(mark, out)
+      wholeNote = null
       return out
     }
   }
@@ -621,6 +634,7 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     if (!res.url) {
       /* **黙って落ちない。** ここで諦めても、呼んだ側は
          これまでどおり発言ごとに鳴らすので、音は出る */
+      wholeNote = res.detail || error?.message || '窓口が音声を返しませんでした'
       if (res.detail) setDetail(`${FAILED} ${res.detail}`)
       else if (error) setDetail(`${FAILED} ${error.message}`)
       wholeGaveUp.add(mark)
@@ -629,7 +643,8 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     const made = await readWholeJson(force ? `${json}?v=${Date.now()}` : json)
     const spans = spansOf(made?.alignment, body)
     if (!spans) {
-      setDetail(`${FAILED} 読み上げ音声の時刻を読めませんでした。`)
+      wholeNote = '読み上げ音声の時刻を読めませんでした'
+      setDetail(`${FAILED} ${wholeNote}。`)
       wholeGaveUp.add(mark)
       return null
     }
@@ -639,9 +654,11 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     const out = { url: `${res.url}${stamp}`, spans }
     wholeCache.set(mark, out)
     wholeGaveUp.delete(mark)
+    wholeNote = null
     return out
   } catch (e) {
-    setDetail(`${FAILED} 読み上げ音声の窓口につながりません(${e?.message ?? e})。`)
+    wholeNote = `窓口につながりません(${e?.message ?? e})`
+    setDetail(`${FAILED} 読み上げ音声の${wholeNote}。`)
     wholeGaveUp.add(mark)
     return null
   }

@@ -678,14 +678,39 @@ function fakeMp3({
       ['音声を先に作る', prep, /await wholeClip\(\{/],
       ['語の意味も先に引く', prep, /await prefetchGlosses\(/],
       ['同じ教材は二度やらない', prep, /if \(!id \|\| done\.has\(id\)\) return false/],
-      ['1度に1つだけ', prep, /if \(prepareRunning\(\)\) return false/],
-      ['失敗してもやり直さない', prep, /state: 'done', error:/],
+      ['走っているあいだは始めない', prep, /if \(prepareRunning\(\)\) \{/],
+      ['失敗してもやり直さない', prep, /state: 'done', audio, error:/],
       ['発行したら支度する', form, /startPrepare\(\s*\{ id: data\.id/],
       ['「セッションで使う」でも支度する', finder, /startPrepare\(m, \{ title: m\.title/],
+      ['走っていたら順番待ちにする', prep, /queue\.push\(\{ material, title, level, id \}\)/],
+      ['終わったら次を始める', prep, /runNext\(\)/],
+      ['何ができたかを持ち帰る', prep, /audio = got \? 'ok' : 'ng'/],
+      ['できなかった理由を出す', prep, /lastWholeDetail\(\)/],
     ]
     let before = bad
     for (const [what, src2, re] of want) if (!re.test(src2)) ng(`支度: ${what}`)
     if (bad === before) ok('発行と「セッションで使う」で、裏で支度している')
+  }
+
+  /* **鳴り始める前に「鳴った」と言わない**(2026-09 実機・こちらの入れ違い)。
+   *
+   *   > バックグラウンドでの再生準備が全然できていません。
+   *
+   * 1本目を作っている 30 秒のあいだに `started()` を呼んでいたので、
+   * ボタンの「用意しています…」が**すぐ消えて Stop になり**、
+   * そのあと 30 秒黙っていた。押した人には無反応にしか見えない。
+   * 2026-09 に直した「Listen の1度目が反応しない」の作り直しである。 */
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const from = read.indexOf('const runWhole = async')
+    const to = read.indexOf('await playClip({', from)
+    const head = from >= 0 && to > from ? read.slice(from, to) : ''
+    if (!head) ng('1本で鳴らすところが見つからない')
+    else if (/^\s*started\(\)\s*$/m.test(head)) {
+      ng('音が出る前に「鳴った」と知らせている', '「用意しています…」が消えてしまう')
+    } else if (!/onStart: started/.test(read)) {
+      ng('鳴り始めたときの知らせが無い')
+    } else ok('「鳴った」と言うのは、本当に音が出た瞬間だけ')
   }
 }
 

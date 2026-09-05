@@ -298,7 +298,18 @@ export function readAloudSequence(parts, {
       onIndex?.(i)
     }
     seen(first)
-    started()
+    /* **ここで `started()` を呼ばない**(2026-09 実機・こちらの入れ違い)。
+     *
+     *   > バックグラウンドでの再生準備が全然できていません。
+     *
+     * `started()` は「**実際に音が出た**」という合図で、これを呼ぶと
+     * ボタンの「用意しています…」が消えて Stop に変わる。
+     * ところが 1本目を作っている 30 秒のあいだはまだ何も鳴っていないので、
+     * **押した人には「無反応のまま黙っている」ようにしか見えない。**
+     * 2026-09 に直したはずの「Listen の1度目が反応しない」を、
+     * こちらで作り直していた(CLAUDE.md)。
+     *
+     * 合図は `playClip` の `onStart` が、**本当に鳴り始めた瞬間**に出す。 */
 
     const played = await playClip({
       srcUrl: got.url,
