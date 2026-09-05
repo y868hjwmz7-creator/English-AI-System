@@ -33,6 +33,7 @@ import {
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
+import { startPrepare } from '../lib/prepareJob.js'
 import { printElement } from '../lib/print.js'
 import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
 /* **読み上げ音声を作り直す**(2026-09 実機)。良い段の場所に標準の声が
@@ -321,6 +322,18 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
       .filter(Boolean)
       .map((text) => ({ text })))
     prefetchGlosses(texts, { level: m.level })
+    /* **読み上げ音声も、ここで支度しておく**(2026-09 利用者の指定)。
+     *
+     *   > 初めて再生するときの待ち時間が３０秒近くあり…
+     *
+     * 発行のときにも支度している(`MaterialForm`)が、
+     * **それより前に作った教材には、まだ音声が無い。**
+     * 「セッションで使う」は「これから使う」という合図なので、
+     * ここで用意しておけば、Listen を押したときには鳴り始められる。
+     *
+     * **費用は増えない。** どのみち初めて押したときに作られるものを、
+     * 早めに作っているだけである(`prepareJob.js` が同じ教材を二度やらない)。 */
+    startPrepare(m, { title: m.title, level: m.level })
   }, [lessonOf, materials])
 
   // 訳を作り直したら、**開いたままのレッスン表示にも反映する。**

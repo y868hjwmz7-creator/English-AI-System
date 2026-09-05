@@ -17,6 +17,7 @@ import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 import { setWholeOn, wholeOn } from './lib/wholeAudio.js'
 import { markJobSeen, useJob, watchJob } from './lib/generateJob.js'
+import { usePrepare } from './lib/prepareJob.js'
 import JobBar from './components/JobBar.jsx'
 import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
@@ -73,6 +74,8 @@ export default function App() {
   /* 進み具合の帯と、メニューの青い丸のもと(2026-09 利用者の指定)。
      **経過秒数もここで数える**(`useJob`)。走っていないあいだは数えない */
   const { job, secs: jobSecs } = useJob()
+  /* 発行したあとの支度(音声と語の意味)。**教材を作る仕事とは別の枠** */
+  const { prep, secs: prepSecs } = usePrepare()
   useEffect(() => watchJob((j) => {
     if (!j || j.seen) return
     if (j.state === 'done') {
@@ -412,6 +415,7 @@ export default function App() {
             作りつづけるので、移った先にも手がかりが要る。 */}
         <JobBar
           job={job} secs={jobSecs}
+          prep={prep} prepSecs={prepSecs}
           showOpen={view !== 'materials'}
           onOpen={() => setView('materials')}
           /* できあがったら、**どこからでもワンタッチで発行の画面へ。**

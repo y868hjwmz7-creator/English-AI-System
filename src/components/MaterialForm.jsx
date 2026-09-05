@@ -40,6 +40,7 @@ import {
   speakerCountsFor, voiceCountFor, voicePurposeFor, voicesOfAccent,
 } from '../data/clipVoices.js'
 import { collectReviewWords, normWord } from '../lib/vocab.js'
+import { startPrepare } from '../lib/prepareJob.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
 const MAX_TAGS = 3
@@ -824,6 +825,25 @@ export default function MaterialForm({
     }
 
     setBusy(false)
+
+    /* ── 発行したら、**裏で支度しておく**(2026-09 利用者の指定)────
+     *
+     *   > 初めて再生するときの待ち時間が３０秒近くあり、これは、教材が
+     *   > 完成した際にバックグランドで準備する仕様にできないでしょうか？
+     *   > 単語の意味についても同様の仕様にできないでしょうか？
+     *
+     *   本文の音声は**1本にまとめて**作るようになったので、初めて
+     *   「Listen (全体)」を押した人が、その場で 50 秒ぶんの生成を待っていた。
+     *   トレーナーは発行のあと次の教材へ移ることが多いので、
+     *   **その時間を支度に使う。** レッスンで開くころにはできている。
+     *
+     *   **待たない。** 支度は裏で走り、画面はすぐ次へ進む
+     *   (`prepareJob.js` がモジュールに1つだけ持つので、画面が消えても続く)。 */
+    startPrepare(
+      { id: data.id, sections, voiceIds: cast, tags: tagIds },
+      { title: title.trim() || autoTitle(), level },
+    )
+
     onCreated?.(data.id, shared)
   }
 

@@ -661,6 +661,32 @@ function fakeMp3({
     else if (!/stopAt > 0 &&/.test(clips)) ng('区間の終わりで止められない')
     else ok('画面は1本を試し、駄目なら今までの形に落ちる')
   }
+
+  /* **発行したら、裏で支度しておく**(2026-09 利用者の指定)。
+   *
+   *   > 初めて再生するときの待ち時間が３０秒近くあり、これは、教材が
+   *   > 完成した際にバックグランドで準備する仕様にできないでしょうか？
+   *   > 単語の意味についても同様の仕様にできないでしょうか？
+   *
+   * **定義だけあって誰も呼ばなければ、何も起きない**(`noteFnRev` と
+   * 同じ落とし穴)。だから**呼んでいる形**で見る。 */
+  {
+    const prep = readFileSync(new URL('../src/lib/prepareJob.js', import.meta.url), 'utf8')
+    const form = readFileSync(new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+    const finder = readFileSync(new URL('../src/components/TrainerMaterials.jsx', import.meta.url), 'utf8')
+    const want = [
+      ['音声を先に作る', prep, /await wholeClip\(\{/],
+      ['語の意味も先に引く', prep, /await prefetchGlosses\(/],
+      ['同じ教材は二度やらない', prep, /if \(!id \|\| done\.has\(id\)\) return false/],
+      ['1度に1つだけ', prep, /if \(prepareRunning\(\)\) return false/],
+      ['失敗してもやり直さない', prep, /state: 'done', error:/],
+      ['発行したら支度する', form, /startPrepare\(\s*\{ id: data\.id/],
+      ['「セッションで使う」でも支度する', finder, /startPrepare\(m, \{ title: m\.title/],
+    ]
+    let before = bad
+    for (const [what, src2, re] of want) if (!re.test(src2)) ng(`支度: ${what}`)
+    if (bad === before) ok('発行と「セッションで使う」で、裏で支度している')
+  }
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

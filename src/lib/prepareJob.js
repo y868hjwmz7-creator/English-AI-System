@@ -1,0 +1,192 @@
+/**
+ * ============================================================================
+ * 教材ができたら、**裏で「支度」しておく**(2026-09 利用者の指定)
+ *
+ *   > 初めて再生するときの待ち時間が３０秒近くあり、これは、教材が完成した際に
+ *   > バックグランドで準備する仕様にできないでしょうか？
+ *   > 単語の意味についても同様の仕様にできないでしょうか？
+ *
+ * 【なぜ 30 秒かかっていたか】
+ *   本文の音声を**1本にまとめて作る**ようにしたので(第 5.97 節)、
+ *   初めて「Listen (全体)」を押したときに、**その場で 50 秒ぶんの音声を
+ *   ElevenLabs に作らせていた。** 押した人はそのあいだ待つことになる。
+ *
+ *   語の意味も同じで、開いてから 10 語ずつ引いていた。
+ *
+ * 【だから、発行した瞬間に用意する】
+ *   トレーナーは発行したあと、たいてい次の教材を作るか、別の画面へ行く。
+ *   **その時間を支度に使う。** レッスンで開いたときには、もうできている。
+ *
+ * 【費用は増えない。ただし「早くなる」だけではない】
+ *   作る量は同じ(どのみち初回に作られる)ので、**課金は前倒しになるだけ**
+ *   である。ただし**一度も使わなかった教材のぶんは、無駄になる。**
+ *   教材はスクール全体で共有して使い回す前提なので、ふつうは使われる。
+ *
+ * 【止まる条件を持たせる】(CLAUDE.md)
+ *   ・**1度に1つだけ。** 走っているあいだは、次の支度を始めない
+ *   ・**やり直さない。** 失敗したら、そこで終わり
+ *     (どのみち初めて押したときに作られる)
+ *   ・**同じ教材の支度は1回だけ**(`done`)
+ *   ・**教材の生成(`generateJob.js`)とは別の枠。**
+ *     支度のせいで「次の教材を作る」が始められないのでは、本末転倒である
+ * ============================================================================
+ */
+import { useEffect, useState } from 'react'
+import { wholeClip } from './audioClips.js'
+import { materialAudioClips } from './audioPlaylist.js'
+import { prefetchGlosses } from './vocab.js'
+import { PREMIUM } from './voiceTier.js'
+import { wholeOn } from './wholeAudio.js'
+
+/** いまの支度。**画面が消えても残る**(モジュールに1つだけ) */
+let task = null
+
+/** すでに支度した教材。**同じものを二度やらない** */
+const done = new Set()
+
+const subs = new Set()
+const emit = () => { for (const fn of [...subs]) fn(task) }
+
+/** 支度の様子を見張る。返った関数を呼べば見張りをやめる */
+export function watchPrepare(fn) {
+  subs.add(fn)
+  fn(task)
+  return () => { subs.delete(fn) }
+}
+
+export const currentPrepare = () => task
+export const prepareRunning = () => task?.state === 'running'
+
+/** 出来上がりの知らせを消す(押されたとき・次の支度が始まったとき) */
+export function clearPrepare() {
+  if (!task || task.state === 'running') return
+  task = null
+  emit()
+}
+
+/** やめる。**通信そのものは取り消さない**(送った1回はどのみち課金される) */
+export function cancelPrepare() {
+  if (!task) return
+  task = { ...task, cancelled: true, state: 'done' }
+  emit()
+}
+
+/**
+ * 支度を始める。
+ *
+ * @param {object} material 発行した教材(`sections` と `voiceIds` を持つ形)
+ * @param {object} o
+ * @param {string} o.title 画面に出す名前
+ * @param {string} o.level 語の意味を引くときのレベル
+ * @returns {boolean} 始めたか
+ */
+export function startPrepare(material, { title = '', level = 'B1' } = {}) {
+  const id = String(material?.id ?? '')
+  if (!id || done.has(id)) return false
+  if (prepareRunning()) return false
+
+  const clips = materialAudioClips(material)
+  // 本文の無い教材(ドリル・単語・フレーズ)には、支度することが無い
+  const words = clips.length ? clips : bodyTextsOf(material)
+  if (!words.length) return false
+
+  done.add(id)
+  const mine = `${Date.now()}`
+  task = {
+    id: mine, materialId: id, title, state: 'running',
+    step: 0, total: 2, label: '読み上げ音声', startedAt: Date.now(),
+    cancelled: false, error: null,
+  }
+  emit()
+
+  const alive = () => task?.id === mine && !task.cancelled
+  const step = (n, label) => {
+    if (!alive()) return
+    task = { ...task, step: n, label }
+    emit()
+  }
+
+  ;(async () => {
+    try {
+      // ① 本文の音声を1本ぶん。**押す前に作っておく**
+      if (clips.length >= 2 && clips[0].tier === PREMIUM && wholeOn()) {
+        await wholeClip({
+          texts: clips.map((c) => c.text),
+          voiceIds: clips.map((c) => c.voiceId),
+        })
+      }
+      if (!alive()) return
+
+      // ② 語の意味。**開いてから引くと、レッスン中に待つことになる**
+      step(1, '語の意味')
+      await prefetchGlosses(
+        (clips.length ? clips : words).map((c) => ({ text: c.text })),
+        { level },
+      )
+      if (!alive()) return
+      task = { ...task, state: 'done', step: 2, label: '' }
+      emit()
+    } catch (e) {
+      if (!alive()) return
+      /* **やり直さない。** 失敗しても、初めて押したときに作られる。
+         成功と失敗を同じ見た目で終わらせないため、理由は残す */
+      task = { ...task, state: 'done', error: e?.message ?? String(e) }
+      emit()
+    }
+  })()
+  return true
+}
+
+/** 本文の演習が無いときのための、英文の拾い方(語の意味だけ支度する) */
+function bodyTextsOf(material) {
+  const out = []
+  for (const sec of material?.sections ?? []) {
+    for (const it of sec.items ?? []) {
+      const t = String(it?.prompt_en ?? '').trim()
+      if (t) out.push({ text: t })
+    }
+  }
+  return out
+}
+
+/** 画面に出す1行。**帯の文言は1か所で決める**(2か所に書き分けない) */
+export function prepareLabel(t, secs = 0) {
+  if (!t) return ''
+  if (t.state === 'running') {
+    const what = t.label || '読み上げ音声'
+    return `${t.title ? `${t.title} の` : ''}${what}を用意しています…`
+      + (secs > 2 ? `(${secs} 秒)` : '')
+  }
+  if (t.error) return '用意できませんでした(初めて押したときに作られます)'
+  return `${t.title ? `${t.title} の` : ''}支度ができました`
+}
+
+/** 進み具合(0〜1)。**終わった段 + 0.5** で出す(動いて見えるように) */
+export function prepareRatio(t) {
+  if (!t) return 0
+  if (t.state !== 'running') return 1
+  return Math.min(1, (t.step + 0.5) / Math.max(1, t.total))
+}
+
+/**
+ * いまの支度を、画面から見る。**経過秒数も一緒に数える**
+ * (`useJob()` とまったく同じ作法。走っていないあいだは数えない)。
+ */
+export function usePrepare() {
+  const [current, setCurrent] = useState(currentPrepare)
+  const [secs, setSecs] = useState(0)
+
+  useEffect(() => watchPrepare(setCurrent), [])
+
+  const running = current?.state === 'running'
+  const startedAt = current?.startedAt ?? 0
+  useEffect(() => {
+    if (!running) { setSecs(0); return undefined }
+    const tick = () => setSecs(Math.max(0, Math.round((Date.now() - startedAt) / 1000)))
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [running, startedAt])
+
+  return { prep: current, secs }
+}

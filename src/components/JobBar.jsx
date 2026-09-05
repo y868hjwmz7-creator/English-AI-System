@@ -22,8 +22,47 @@
  *   ・文言は `jobProgressLabel()` 1か所(作る画面のボタンと同じもの)
  */
 import { cancelJob, jobProgressLabel, jobRatio } from '../lib/generateJob.js'
+import {
+  cancelPrepare, clearPrepare, prepareLabel, prepareRatio,
+} from '../lib/prepareJob.js'
 
-export default function JobBar({ job, secs, onOpen, onPublish, showOpen = false }) {
+export default function JobBar({
+  job, secs, onOpen, onPublish, showOpen = false,
+  /** 発行したあとの「支度」(2026-09 利用者の指定)。`prepareJob.js` */
+  prep = null, prepSecs = 0,
+}) {
+  /* ── 発行したあとの支度(音声と語の意味)──────────────────
+   *
+   *   > 初めて再生するときの待ち時間が３０秒近くあり、これは、教材が
+   *   > 完成した際にバックグランドで準備する仕様にできないでしょうか？
+   *
+   *   **教材を作る仕事とは別の枠**なので、この帯にも別に出す。
+   *   **同時には出さない** —— 作っている最中は、そちらが先である
+   *   (支度は発行のあとに始まるので、ふつうは重ならない)。 */
+  if (!job && prep) {
+    const pct = Math.round(prepareRatio(prep) * 100)
+    const running = prep.state === 'running'
+    return (
+      <div className={`jobbar${running ? '' : ' jobbar--done'}`}
+           role="status" aria-live="polite">
+        <div className="jobbar-row">
+          <span className="jobbar-title">{prepareLabel(prep, prepSecs)}</span>
+          <button type="button" className="btn btn--small btn--quiet"
+                  onClick={running ? cancelPrepare : clearPrepare}>
+            {running ? '支度をやめる' : '閉じる'}
+          </button>
+        </div>
+        {running && (
+          <div className="jobbar-track"
+               role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}
+               aria-label="支度の進み具合">
+            <div className="jobbar-fill" style={{ width: `${pct}%` }} />
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (!job) return null
 
   /* ── できあがったら、**そのまま発行へ行ける1つのボタン**を出す ──
