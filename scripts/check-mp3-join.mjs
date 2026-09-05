@@ -772,8 +772,8 @@ function fakeMp3({
       ['動かす道がある', read, /export function skipSentence\(/],
       ['鳴らしたまま場所だけ移す', clips, /export function seekClip\(/],
       ['いまの秒を返す', clips, /export function clipTime\(/],
-      ['部品が呼んでいる', skip, /skipSentence\(-1\)/],
-      ['部品が見張っている', skip, /watchSentenceSkip\(setReady\)/],
+      ['部品が呼んでいる', skip, /skipSentence\(d\)/],
+      ['部品が見張っている', skip, /watchSentenceSkip\(setBySentence\)/],
     ]
     let bad0 = bad
     for (const [what, text, re] of want) if (!re.test(text)) ng(`1文ずつ: ${what}`)
@@ -787,9 +787,9 @@ function fakeMp3({
     ]
     for (const [what, file] of spots) {
       const t = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
-      if (!/<SentenceSkip\s*\/>/.test(t)) ng(`1文ずつの ◁▷ が ${what}(${file})に無い`)
+      if (!/<SentenceSkip[\s>]/.test(t)) ng(`◀ [Listen] ▶ の錠剤が ${what}(${file})に無い`)
     }
-    if (bad === bad0) ok(`1文ずつの ◁▷ … 道は1本も切れていない(出す場所 ${spots.length} つ)`)
+    if (bad === bad0) ok(`◀ [Listen] ▶ … 道は1本も切れていない(出す場所 ${spots.length} つ)`)
   }
 
   // 窓口が、**実際に**新しい API を呼んでいるか

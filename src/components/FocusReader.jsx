@@ -310,14 +310,13 @@ export default function FocusReader({
 
           <div className="focus-mid">
             {/* **音も訳も両方出す**(2026-09 利用者の指定) */}
-            <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
-                         className="btn--small" repeat={loop}
-                         /* **1本の中の、その区間だけを鳴らす**(2026-09) */
-                         whole={wholeSliceOf(section, cast, soloVoice, item)} />
-            {/* **1文ずつ、飛ばす / 戻す**(2026-09 利用者の指定)。
-                ここは1つしか出していないので、鳴っているあいだだけ出る
-                (部品の側が自分で引っ込む) */}
-            <SentenceSkip />
+            {/* **◀ [Listen] ▶ を1つの錠剤に**(2026-09 利用者の指定) */}
+            <SentenceSkip>
+              <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
+                           className="btn--small" repeat={loop}
+                           /* **1本の中の、その区間だけを鳴らす**(2026-09) */
+                           whole={wholeSliceOf(section, cast, soloVoice, item)} />
+            </SentenceSkip>
             {/* **くり返し**(2026-09 利用者の指定
                 「これは集中モードで、全てのデバイスで同じにしてください」)。
                 まねて言うには、同じ発言を何度も聴く */}

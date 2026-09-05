@@ -35,6 +35,7 @@ import {
 import FocusReader from './FocusReader.jsx'
 import InkLayer from './InkLayer.jsx'
 import LessonNotes from './LessonNotes.jsx'
+import { loadMyLearners } from '../lib/materials.js'
 /* 書き込みの色・道具・太さは `src/data/inkTools.js` 1か所。
    **集中モードでも同じものを出す**ので、ここには持たない */
 import { INK_COLORS, INK_TOOLS, INK_WIDTH } from '../data/inkTools.js'
@@ -242,8 +243,32 @@ export default function LessonView({
   /* **相手がいるときだけ出す。** トレーナーの「教材」画面から開いたときは
      `learnerId` が無い(誰のセッションでもない)。役割の判定は
      `viewer.js` の1か所に置いてある(**ここに作らない**) */
-  const canNote = !!learnerId
-    && (viewerRoleOf() === 'trainer' || viewerRoleOf() === 'owner')
+  /* **「教材」の画面からでもメモを出す**(2026-09 実機・利用者の指摘)。
+   *
+   *   > 教材を開いている時のメモが消えたままです
+   *
+   * もとは `learnerId` があるとき(ゲストのページから開いたとき)だけ
+   * 出していた。**セッションの記録は「ゲスト × 日付」で1枚**なので、
+   * 相手が決まらないと書けない、という理由である。
+   *
+   * **それは書けない理由であって、ボタンを消す理由ではなかった。**
+   * 利用者はふだん「教材」の画面から開くので、そこにメモが無いと
+   * **一度も出てこない。** 3度言わせてしまった。
+   *
+   * いまは**ボタンは必ず出し、相手が決まっていなければ中で選ばせる。**
+   * 選ぶ相手は「自分の担当ゲスト」だけである(RLS がそれ以外を断る)。 */
+  const canNote = viewerRoleOf() === 'trainer' || viewerRoleOf() === 'owner'
+  /** メモを書く相手。**渡されていれば、それが答え**(選ばせない) */
+  const [notesFor, setNotesFor] = useState(learnerId ?? null)
+  /** 選ぶための担当ゲスト。**開いたときに1回だけ読む**(要らなければ読まない) */
+  const [notePeople, setNotePeople] = useState(null)
+  useEffect(() => { setNotesFor(learnerId ?? null) }, [learnerId])
+  useEffect(() => {
+    if (!notes || learnerId || notePeople) return undefined
+    let alive = true
+    loadMyLearners().then(({ data }) => { if (alive) setNotePeople(data ?? []) })
+    return () => { alive = false }
+  }, [notes, learnerId, notePeople])
   openSettingsRef.current = openSettings
   // 通しの練習を出しているか。
   // null / 'qr'(Quick Response)/ 'six'(6Steps)/ 'focus'(集中モード)。
@@ -1267,7 +1292,32 @@ export default function LessonView({
               <button type="button" className="btn btn--small"
                       onClick={() => setNotes(false)}>閉じる</button>
             </div>
-            <LessonNotes learnerId={learnerId} bare />
+            {notesFor ? (
+              <LessonNotes learnerId={notesFor} bare />
+            ) : (
+              /* **相手が決まっていない。** 教材の画面から開いたときは、
+                 誰のセッションの記録かをここで選ぶ。
+                 **選ばせてから断らない** —— 出るのは担当ゲストだけである */
+              <div className="lesson-notes-pick">
+                <label className="field">
+                  <span>誰のセッションの記録ですか</span>
+                  <select value="" onChange={(e) => setNotesFor(e.target.value || null)}>
+                    <option value="">選んでください</option>
+                    {(notePeople ?? []).map((p) => (
+                      <option key={p.id} value={p.id}>{p.display_name}</option>
+                    ))}
+                  </select>
+                </label>
+                {notePeople === null && <p className="card-hint">読んでいます…</p>}
+                {notePeople?.length === 0 && (
+                  <p className="card-hint">担当しているゲストがいません。</p>
+                )}
+                <p className="card-hint">
+                  記録はゲストごと・日付ごとに1枚残ります。
+                  ゲストのページから教材を開いたときは、ここは出ません。
+                </p>
+              </div>
+            )}
           </aside>
         </>
       )}
@@ -1358,15 +1408,15 @@ export default function LessonView({
                 (2026-08 の指摘)。話す人が変わると声も変わる。 */}
             {secIsPassage && (
               <div className="lesson-listen no-print">
-                <button type="button" className="btn btn--small" onClick={playWhole}>
-                  {playingAll
-                    ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
-                    : <><SpeakerIcon />Listen (全体)</>}
-                </button>
-                {/* **1文ずつ、飛ばす / 戻す**(2026-09 利用者の指定)。
-                    通しでは**本文ぜんぶ**を行き来できる。
-                    鳴っていないあいだは出ない(効かない操作を見せない) */}
-                {playingAll && <SentenceSkip />}
+                {/* **◀ [Listen] ▶ を1つの錠剤に**(2026-09 利用者の指定)。
+                    通しでは**本文ぜんぶ**を1文ずつ行き来できる */}
+                <SentenceSkip>
+                  <button type="button" className="btn btn--small" onClick={playWhole}>
+                    {playingAll
+                      ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
+                      : <><SpeakerIcon />Listen (全体)</>}
+                  </button>
+                </SentenceSkip>
               </div>
             )}
 
@@ -1433,6 +1483,7 @@ export default function LessonView({
                       <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
                     </button>
                   ) : secType?.audioFrom && it[secType.audioFrom] && (
+                    <SentenceSkip>
                     <SpeakButton
                       text={it[secType.audioFrom]}
                       voice={voiceFor(secCast, it.speaker)}
@@ -1449,12 +1500,7 @@ export default function LessonView({
                       }}
                       onWord={(w) => setReadingAt(w ? w.charIndex : null)}
                     />
-                  )}
-                  {/* **その段落を鳴らしているときだけ**出す。
-                      全部の段落に出すと、同じものが並ぶ(CLAUDE.md) */}
-                  {secType?.audioFrom && it[secType.audioFrom]
-                    && speakingKey === k(it, i) && (
-                    <SentenceSkip />
+                    </SentenceSkip>
                   )}
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。

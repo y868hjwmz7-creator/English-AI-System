@@ -62,30 +62,21 @@ export default function PlayerBar({
   return (
     <div className={`player player--${place} no-print`}
          role="group" aria-label="読み上げの操作">
-      <button type="button" className="btn btn--small player-move"
-              aria-label={`前の${unit}`}
-              disabled={!onJump || now == null || now <= 0}
-              onClick={() => onJump?.(now - 1)}>
-        ◀◀
-      </button>
-
-      <button type="button"
-              className={`btn btn--small player-play${playing ? ' is-on' : ''}`}
-              onClick={onToggle}>
-        {playing ? <><StopIcon />{label ?? 'Stop'}</> : <><SpeakerIcon />{label ?? 'Listen (全体)'}</>}
-      </button>
-
-      {/* **1文ずつ、飛ばす / 戻す**(2026-09 利用者の指定)。
-          すぐ隣の ◀◀ ▶▶ は**段落**を送るもので、こちらは**文**である。
-          鳴っていないあいだは出ない(部品の側が自分で引っ込む) */}
-      <SentenceSkip />
-
-      <button type="button" className="btn btn--small player-move"
-              aria-label={`次の${unit}`}
-              disabled={!onJump || now == null || now >= total - 1}
-              onClick={() => onJump?.(now + 1)}>
-        ▶▶
-      </button>
+      {/* **◀ [Listen] ▶ を、1つの錠剤にまとめる**(2026-09 利用者の指定)。
+          三角は**1組だけ。** 鳴っているあいだは1文ずつ、
+          1本にまとめられていない教材では、これまでどおり段落を送る */}
+      <SentenceSkip
+        unit={unit}
+        onStep={onJump && now != null ? (d) => onJump(now + d) : null}
+        canBack={now != null && now > 0}
+        canNext={now != null && now < total - 1}
+      >
+        <button type="button"
+                className={`btn btn--small player-play${playing ? ' is-on' : ''}`}
+                onClick={onToggle}>
+          {playing ? <><StopIcon />{label ?? 'Stop'}</> : <><SpeakerIcon />{label ?? 'Listen (全体)'}</>}
+        </button>
+      </SentenceSkip>
 
       {/* いまどこか。**幅をそろえる**(そろえないと、送るたびに隣が動く) */}
       <span className="player-at">
