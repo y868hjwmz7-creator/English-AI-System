@@ -294,9 +294,29 @@ for (const [label, want] of Object.entries(WANT)) {
     }
   })
 
-  for (const w of [560, 430, 390, 375, 360, 320]) {
+  /* **境目でない幅も混ぜる。** 決め打ちの境目で詰めていたころは、
+     360px は入るのに **375px だけ余りが 8px** という穴があった。
+     いまは測って詰めるので、**どの幅でも入る**はずである。
+     あわせて **端末の「表示を大きく」** も模す(帯の文字を 1.25 倍)。
+     幅が同じでも入るかどうかは変わる —— そこが幅の境目では拾えない */
+  for (const [w, big] of [
+    [560, false], [430, false], [402, false], [393, false], [390, false],
+    [384, false], [375, false], [368, false], [360, false], [344, false], [320, false],
+    [430, true], [402, true], [390, true], [375, true], [360, true], [320, true],
+  ]) {
     await page.setViewportSize({ width: w, height: 900 })
     await page.waitForTimeout(200)
+    await page.evaluate((on) => {
+      const id = 'eas-bigtext'
+      document.getElementById(id)?.remove()
+      if (!on) return
+      const st = document.createElement('style')
+      st.id = id
+      st.textContent = '.focus-bar .btn, .focus-bar .player-at { font-size: 15px !important }'
+      document.head.appendChild(st)
+    }, big)
+    await page.waitForTimeout(150)
+    const 印 = big ? `${w}px(文字 1.25 倍)` : `${w}px`
     // 集中モードへ入る(紙の「練習の行」から)
     const opened = await page.evaluate(() => {
       const b = [...document.querySelectorAll('.practice-row button')]
@@ -304,20 +324,20 @@ for (const [label, want] of Object.entries(WANT)) {
       if (!b) return false
       b.click(); return true
     })
-    if (!opened) { ng(`${w}px で集中モードの入り口が無い`); continue }
+    if (!opened) { ng(`${印} で集中モードの入り口が無い`); continue }
     await page.waitForTimeout(350)
 
     let bad = false
     for (let step = 0; step < 12; step++) {
       const m = await look()
-      if (!m) { ng(`${w}px で集中モードの下の帯が出ていない`); bad = true; break }
+      if (!m) { ng(`${印} で集中モードの下の帯が出ていない`); bad = true; break }
       if (m.h > 70) {
-        ng(`${w}px で集中モードの下の帯が2段になっている(${m.末})`,
+        ng(`${印} で集中モードの下の帯が2段になっている(${m.末})`,
           `高さ ${m.h}px(1行なら 61px ほど)`)
         bad = true; break
       }
       if (m.over) {
-        ng(`${w}px で集中モードの下の帯があふれている(${m.末})`,
+        ng(`${印} で集中モードの下の帯があふれている(${m.末})`,
           '折り返さない指定なので、あふれると隠れて押せなくなる')
         bad = true; break
       }
@@ -330,7 +350,7 @@ for (const [label, want] of Object.entries(WANT)) {
       if (!moved) break
       await page.waitForTimeout(150)
     }
-    if (!bad) ok(`${w}px … 集中モードの下の帯は1行(最後の段落まで)`)
+    if (!bad) ok(`${印} … 集中モードの下の帯は1行(最後の段落まで)`)
 
     await page.evaluate(() => {
       const x = [...document.querySelectorAll('.focus button')]

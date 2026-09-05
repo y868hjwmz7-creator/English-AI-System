@@ -55,6 +55,9 @@ export default function FocusFrame({
   className = '', width = 'w100', learnerId = null, page = 0,
   bodyRef = null, scrollKey = null, onClose,
   top = null, topEnd = null, bar = null, settings = null, children,
+  /* 下の帯そのもの。**「入るまで詰める」を掛けたい画面だけが渡す**
+     (`useFitRow`・2026-09 利用者の指定「レスポンシブに幅に収まるように」) */
+  barRef = null,
 }) {
   /* 狭い画面で「表示」を開いているか。**覚えない** —
      一度決める設定なので、開くたびに畳んだところから始めてよい */
@@ -159,7 +162,7 @@ export default function FocusFrame({
           <CloseIcon />集中モードを終える
         </button>
         {/* 下の帯。**渡されなければ出さない**(効かない場所を作らない) */}
-        {bar && <div className="focus-bar">{bar}</div>}
+        {bar && <div className="focus-bar" ref={barRef}>{bar}</div>}
       </div>
     </div>,
     document.body,

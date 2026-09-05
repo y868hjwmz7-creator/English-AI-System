@@ -77,6 +77,7 @@ import { useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { normWord } from '../lib/vocab.js'
 import { SIX_STEPS } from '../lib/sixSteps.js'
+import { useFitRow } from '../lib/fitRow.js'
 
 /**
  * 英文から、そろえた形(`normWord`)の語を重複なく取り出す。
@@ -183,6 +184,11 @@ export default function FocusReader({
   const [readingAt, setReadingAt] = useState(null)
 
   const bodyRef = useRef(null)
+  /* **下の帯は、入るまで詰める**(2026-09 利用者の指定
+     「レスポンシブに幅に収まるように」)。幅の境目では決めない —
+     端末の文字の大きさでも、最後の段落の「まとめ」でも変わるためである */
+  const barRef = useRef(null)
+  useFitRow(barRef)
 
   /* ══════════════════════════════════════════════════════════════
    * **読み上げは、紙とまったく同じ道具で鳴らす**(2026-09 利用者の指定)
@@ -303,6 +309,7 @@ export default function FocusReader({
      中身と、上下の帯の中だけをここが渡す */
   return (
     <FocusFrame
+      barRef={barRef}
       /* **紙の幅をそのまま引き継ぐ**(2026-09 利用者の指定) */
       width={width}
       /* **メモを出すかどうかは、相手がいるかで決まる** */
@@ -392,11 +399,20 @@ export default function FocusReader({
             {canReadAloud() && (
               <RepeatUnit value={player.repeat} unit={unit} onChange={player.setRepeat} />
             )}
-            {/* 訳が無い段落では出さない(効かない操作を見せない) */}
+            {/* 訳が無い段落では出さない(効かない操作を見せない)。
+                **いちばん詰まったときは「訳」だけになる**(`is-fit4`)。
+                320px で端末の文字を大きくしていると、ここまで削らないと
+                入らない。**名前は `aria-label` が持っている** */}
             {item.prompt_ja && (
               <button type="button" className="btn btn--small btn--ghost"
+                      aria-label={showJa ? '英語に戻す' : '訳を見る'}
                       onClick={() => setShowJa((v) => !v)}>
-                {showJa ? '英語に戻す' : '訳を見る'}
+                {/* **1つの塊にする。** ボタンは `gap` を持つので、
+                    ばらばらに置くと「訳 を見る」と隙間が空く(実測) */}
+                <span>
+                  {showJa ? '英語' : '訳'}
+                  <span className="ja-word">{showJa ? 'に戻す' : 'を見る'}</span>
+                </span>
               </button>
             )}
           </div>

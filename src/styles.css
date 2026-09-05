@@ -5783,7 +5783,11 @@ html, body { overflow-x: clip; }
      隣のボタンと重なっていた**(利用者の写真で分かった)。
      ここだけ折り返せば、重なりはしない。
      帯が一段高くなるが、**重なって押せないよりはよい** */
-  flex-wrap: wrap; row-gap: 6px;
+  /* ★ **折り返さない**(2026-09 実機・利用者の指定
+     「2行ではなく1行にまとめてください」)。以前はここで折り返させて
+     いたが、**2行になること自体が駄目**である。入らないときは
+     `useFitRow` が言葉を落として詰める(`src/lib/fitRow.js`) */
+  flex-wrap: nowrap;
 }
 .focus-wide { flex: 1 1 auto; }
 
@@ -5846,79 +5850,64 @@ html, body { overflow-x: clip; }
   .focus-en, .focus-ja { font-size: 18px; line-height: 1.9; }
 }
 
-/* ★★ **集中モードの下の帯は、1行に収める**(2026-09 実機・利用者の指定)
+/* ★★ **集中モードの下の帯は、どの幅でも1行に収める** ─────────────
+     (2026-09 実機・利用者の指定)
 
      > このスマホのプレーヤーのUI、2行ではなく1行にまとめてください
+     > レスポンシブに幅に収まるように
 
-   文の ◀ ▶ とくり返しを足したぶん、iPhone(390px)で **97px の2段**に
-   なっていた。ここには以前「押すものが1つ増えたのだから2段でよい」と
-   書いていたが、**利用者の判断で1行に改めた。**
+   はじめは**決め打ちの境目**(560 / 480 / 400 / 370px)で言葉を
+   落としていた。ところが**境目のあいだが、いちばん危ない** ——
+   375px(iPhone SE)だけ余りが 8px しか残っていなかった。
 
-   実測(390px): まん中に要る幅 356px に対し、空いているのは 234px しか
-   なかった。**122px 足りない。** 削った順は CLAUDE.md のとおり
-   **言葉を短く → 余白を詰める → 絵だけにする。**
+   しかも**幅だけでは決まらないものが3つある。**
+   端末の「表示を大きく」・端末ごとの字形・そして**中身そのもの**
+   (最後の段落だけ「次 ▶」が「まとめ」に変わる)。
 
-   | 何 | どうしたか | 効き |
+   だから**幅から当てるのをやめた。**
+   `useFitRow`(`src/lib/fitRow.js`)が**実際にあふれているかを測り、
+   入るまで下の印を1つずつ足す。** ここは「その印で何を削るか」だけを持つ。
+
+   | 印 | 何を削るか | なぜその順か |
    |---|---|---|
-   | 前 / 次 | **◀ ▶ の絵だけ**(両端なので、何を送るかは場所で分かる) | −70px |
-   | くり返し | 「くり返し:」を落とす(**単位そのものは必ず見える**) | −57px |
-   | 余白・三角の幅 | 詰める(**押せる大きさ 32px は割らない**) | −20px |
+   | `is-fit1` | `Listen` の言葉 | speaker の絵だけで通じる |
+   | `is-fit2` | 「前 / 次」の言葉 | **三角が4つ並ぶので、これは後回し**(下記) |
+   | `is-fit3` | 余白・三角の幅 | **押せる大きさ(28px)は割らない** |
 
-   **`.focus-mid` は折り返させない。** あの折り返しは「重なるよりまし」と
-   して入れたものだが、入るようになったのだから要らない。 */
+   **落とす順は「どちらが分かりにくくなるか」で決める。**
+   三角は2組ある(外 = 段落を送る / 内 = 文を送る)。両方を絵にすると
+   **三角が4つ並んで、どちらが何を送るのか見分けられない。**
+   だから外の「前 / 次」は**いちばん最後まで残す。**
+
+   **`Listen` を消しても「用意しています…」は残る**(JSX 側で別の欄)。
+   音が出るまで何も起きていないように見えるためである。 */
 @media (max-width: 560px) {
-  .focus-mid { flex-wrap: nowrap; gap: 6px; }
-  /* 絵だけにする。**名前は `aria-label` が持っている**(FocusReader) */
-  /* **言葉を落とす順は「どちらが分かりにくくなるか」で決める。**
-     三角は2組ある(外=段落を送る / 内=文を送る)。両方とも絵だけにすると
-     **三角が4つ並んで、どちらが何を送るのか見分けられない。**
-     外の「前 / 次」はいちばんよく押す送りなので**言葉を残し**、
-     中の `Listen` を絵にする(speaker の絵は、それだけで通じる)。
-     幅は詰めても、指で狙える大きさ(44px)は残す */
+  /* 幅によらず要る土台。**ここでは言葉を落とさない**(落とすのは印の役) */
   .focus-move { min-width: 44px; }
   .focus-bar { gap: 6px; }
   .focus-bar .btn { font-size: 12px; padding: 5px 8px; }
+  .focus-mid { gap: 6px; }
   .focus-mid .listenpill-arrow { min-width: 32px; padding: 0 7px; }
   .focus-mid .repeat-unit .wide-text { display: none; }
   .focus-mid .repeat-unit .repeat-unit-now { min-width: 0; }
 }
 
-/* **`Listen` の言葉を絵にする**(2026-09 実測)。
-   speaker の絵と、その両脇の三角だけで「鳴らす」は通じる。
-   **「用意しています…」は消さない**(JSX 側で別の欄にしてある)。
-
-   境目は **480px。** 430px でも言葉を出したままにすると余りが 11px しか
-   残らず、**端末の文字がこちらより少し広いだけで外へあふれる**
-   (折り返さない指定なので、あふれ方は「隠れる」である)。
-   **ぎりぎり入る**ことを、入る根拠にしない */
-@media (max-width: 480px) {
-  .focus-mid .listen-word { display: none; }
-}
-
-/* 400px 以下は、余白と三角の幅をまとめて詰める。
-   **375px を境目にしない。** iPhone SE(375)は 390 より狭いのに、
-   ここを 360px にしていたら**そこだけ余りが 8px**になっていた
-   (段が変わる幅のあいだが、いちばん危ない) */
-@media (max-width: 400px) {
-  .focus-bar { gap: 4px; padding-left: 10px; padding-right: 10px; }
-  .focus-mid { gap: 4px; }
-  .focus-mid .listenpill-arrow { min-width: 28px; padding: 0 5px; }
-  .focus-mid .btn { padding: 5px 6px; }
-  /* 「前 / 次」は言葉のぶんだけあれば足りる(実測 41px)。
-     44px のままだと、いちばん狭いところで 8px を無駄に取る */
-  .focus-move { min-width: 40px; }
-}
-
-/* いちばん小さい端末(320px)。**最後の段落だけ、13px あふれていた。**
-   「次 ▶」がそこだけ**「まとめ」という言葉のボタン**に変わるためで、
-   ふだんの段落を測っているだけでは気づけない(実測して見つけた)。
-   ここでは余白だけをもう一段詰める。**言葉は1つも削っていない** */
-@media (max-width: 340px) {
-  .focus-bar { padding-left: 6px; padding-right: 6px; }
-  .focus-bar .btn { padding: 5px 5px; }
-  .focus-mid .btn { padding: 5px 4px; }
-  .focus-move { min-width: 30px; }
-}
+/* ── 入るまで詰める段(`useFitRow` が付け外しする)──────────────
+     **幅は書かない。** どの幅で効くかは、測った結果が決める */
+.focus-bar.is-fit1 .listen-word { display: none; }
+.focus-bar.is-fit2 .focus-move--tight .wide-text { display: none; }
+.focus-bar.is-fit3 { gap: 4px; padding-left: 8px; padding-right: 8px; }
+.focus-bar.is-fit3 .btn { padding: 5px 5px; }
+.focus-bar.is-fit3 .focus-mid { gap: 4px; }
+.focus-bar.is-fit3 .focus-mid .btn { padding: 5px 4px; }
+.focus-bar.is-fit3 .focus-mid .listenpill-arrow { min-width: 28px; padding: 0 5px; }
+.focus-bar.is-fit3 .focus-move { min-width: 30px; }
+/* いちばん詰まったところ。320px で端末の文字を大きくしていると、
+   `is-fit3` まで詰めてもなお入らない。**「訳を見る」を「訳」にする**
+   (名前は `aria-label` が持っている)。これでも入らなければ、
+   **あふれたままにする** —— 言葉を削り続けて、何のボタンか
+   分からなくするほうが悪い(`fitRow.js`) */
+.focus-bar.is-fit4 .ja-word { display: none; }
 
 /* 紙には出さない。画面の中でやることである */
 @media print { .focus { display: none !important; } }
