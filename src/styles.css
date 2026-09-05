@@ -5846,6 +5846,80 @@ html, body { overflow-x: clip; }
   .focus-en, .focus-ja { font-size: 18px; line-height: 1.9; }
 }
 
+/* ★★ **集中モードの下の帯は、1行に収める**(2026-09 実機・利用者の指定)
+
+     > このスマホのプレーヤーのUI、2行ではなく1行にまとめてください
+
+   文の ◀ ▶ とくり返しを足したぶん、iPhone(390px)で **97px の2段**に
+   なっていた。ここには以前「押すものが1つ増えたのだから2段でよい」と
+   書いていたが、**利用者の判断で1行に改めた。**
+
+   実測(390px): まん中に要る幅 356px に対し、空いているのは 234px しか
+   なかった。**122px 足りない。** 削った順は CLAUDE.md のとおり
+   **言葉を短く → 余白を詰める → 絵だけにする。**
+
+   | 何 | どうしたか | 効き |
+   |---|---|---|
+   | 前 / 次 | **◀ ▶ の絵だけ**(両端なので、何を送るかは場所で分かる) | −70px |
+   | くり返し | 「くり返し:」を落とす(**単位そのものは必ず見える**) | −57px |
+   | 余白・三角の幅 | 詰める(**押せる大きさ 32px は割らない**) | −20px |
+
+   **`.focus-mid` は折り返させない。** あの折り返しは「重なるよりまし」と
+   して入れたものだが、入るようになったのだから要らない。 */
+@media (max-width: 560px) {
+  .focus-mid { flex-wrap: nowrap; gap: 6px; }
+  /* 絵だけにする。**名前は `aria-label` が持っている**(FocusReader) */
+  /* **言葉を落とす順は「どちらが分かりにくくなるか」で決める。**
+     三角は2組ある(外=段落を送る / 内=文を送る)。両方とも絵だけにすると
+     **三角が4つ並んで、どちらが何を送るのか見分けられない。**
+     外の「前 / 次」はいちばんよく押す送りなので**言葉を残し**、
+     中の `Listen` を絵にする(speaker の絵は、それだけで通じる)。
+     幅は詰めても、指で狙える大きさ(44px)は残す */
+  .focus-move { min-width: 44px; }
+  .focus-bar { gap: 6px; }
+  .focus-bar .btn { font-size: 12px; padding: 5px 8px; }
+  .focus-mid .listenpill-arrow { min-width: 32px; padding: 0 7px; }
+  .focus-mid .repeat-unit .wide-text { display: none; }
+  .focus-mid .repeat-unit .repeat-unit-now { min-width: 0; }
+}
+
+/* **`Listen` の言葉を絵にする**(2026-09 実測)。
+   speaker の絵と、その両脇の三角だけで「鳴らす」は通じる。
+   **「用意しています…」は消さない**(JSX 側で別の欄にしてある)。
+
+   境目は **480px。** 430px でも言葉を出したままにすると余りが 11px しか
+   残らず、**端末の文字がこちらより少し広いだけで外へあふれる**
+   (折り返さない指定なので、あふれ方は「隠れる」である)。
+   **ぎりぎり入る**ことを、入る根拠にしない */
+@media (max-width: 480px) {
+  .focus-mid .listen-word { display: none; }
+}
+
+/* 400px 以下は、余白と三角の幅をまとめて詰める。
+   **375px を境目にしない。** iPhone SE(375)は 390 より狭いのに、
+   ここを 360px にしていたら**そこだけ余りが 8px**になっていた
+   (段が変わる幅のあいだが、いちばん危ない) */
+@media (max-width: 400px) {
+  .focus-bar { gap: 4px; padding-left: 10px; padding-right: 10px; }
+  .focus-mid { gap: 4px; }
+  .focus-mid .listenpill-arrow { min-width: 28px; padding: 0 5px; }
+  .focus-mid .btn { padding: 5px 6px; }
+  /* 「前 / 次」は言葉のぶんだけあれば足りる(実測 41px)。
+     44px のままだと、いちばん狭いところで 8px を無駄に取る */
+  .focus-move { min-width: 40px; }
+}
+
+/* いちばん小さい端末(320px)。**最後の段落だけ、13px あふれていた。**
+   「次 ▶」がそこだけ**「まとめ」という言葉のボタン**に変わるためで、
+   ふだんの段落を測っているだけでは気づけない(実測して見つけた)。
+   ここでは余白だけをもう一段詰める。**言葉は1つも削っていない** */
+@media (max-width: 340px) {
+  .focus-bar { padding-left: 6px; padding-right: 6px; }
+  .focus-bar .btn { padding: 5px 5px; }
+  .focus-mid .btn { padding: 5px 4px; }
+  .focus-move { min-width: 30px; }
+}
+
 /* 紙には出さない。画面の中でやることである */
 @media print { .focus { display: none !important; } }
 
@@ -6316,19 +6390,20 @@ html, body { overflow-x: clip; }
      ③ もっと狭いところでは、くり返しを**絵と単位だけ**にする(下記) */
 
   /* ── 集中モードの下の帯も、同じだけ詰める(2026-09 実測)────────
-     文の ◀ ▶ とくり返しを足したぶん、iPhone(390px)で
-     **帯が 61px → 97px** になっていた。読むところがそのぶん狭くなる。
+     **1行に収めるための指定は、上の `560px` / `480px` / `400px` にある。**
+     ここでは左右の余白だけを、もう一段詰める */
+  .focus-bar { padding-left: 8px; padding-right: 8px; }
+}
 
-     **削るのは余白と、説明の言葉だけ。**
-     単位そのもの(しない / 文 / 発言 / 全文)は必ず見えている。
-     それでも 390px では2段になる —— 押すものが1つ増えたのだから、
-     **入らないものを切って1行に見せかけない**(文言を削ると
-     何のボタンか分からなくなる・CLAUDE.md)。
-     実測: 390px 97px / 320px 97px(3段だったのを2段に) */
-  .focus-mid .listenpill-arrow { min-width: 32px; padding: 0 7px; }
-  .focus-mid .repeat-unit .wide-text { display: none; }
-  .focus-mid .repeat-unit .repeat-unit-now { min-width: 0; }
-  .focus-mid .btn { padding: 5px 9px; }
+/* 370px より狭いと、ここまで詰めても「前 / 次」の言葉が入らない。
+   **ここから下でだけ、外の三角も絵にする。**
+   **折り返さない指定なので、足りなくなると外へあふれる**(隠れる)。
+   端末の文字がこちらより少し広く出るだけで崩れるので、余白ももう一段詰める */
+@media (max-width: 370px) {
+  .focus-move--tight .wide-text { display: none; }
+  .focus-move { min-width: 32px; }
+  .focus-bar { gap: 2px; }
+  .focus-mid { gap: 2px; }
 }
 
 /* 取り組み方の説明。**畳んでおく**(2026-09 利用者の指定

@@ -261,6 +261,87 @@ for (const [label, want] of Object.entries(WANT)) {
   await page.close()
 }
 
+/* ── **集中モードの下の帯も、絶対に1行**(2026-09 実機・利用者の指定)──
+ *
+ *    > このスマホのプレーヤーのUI、2行ではなく1行にまとめてください
+ *
+ *    こちらは右下の操作盤とは**別の帯**である(集中モードの下)。
+ *    文の ◀ ▶ とくり返しを足したぶん、iPhone(390px)で
+ *    **61px → 97px の2段**になっていた。
+ *
+ *    **最後の段落も必ず測る。** そこだけ「次 ▶」が
+ *    **「まとめ」という言葉のボタン**に変わるので、ふだんの段落を
+ *    測っているだけでは気づけない(実際に 320px で 13px あふれていた)。
+ *
+ *    折り返さない指定にしてあるので、**足りなくなると外へあふれる**
+ *    (隠れる)。だから高さだけでなく `scrollWidth` も見る。
+ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(300)
+
+  const look = () => page.evaluate(() => {
+    const bar = document.querySelector('.focus-bar')
+    if (!bar) return null
+    const mid = bar.querySelector('.focus-mid')
+    const last = [...bar.children].pop()
+    return {
+      h: Math.round(bar.getBoundingClientRect().height),
+      over: mid ? mid.scrollWidth > mid.clientWidth + 1 : false,
+      末: last ? (last.textContent || '').trim() : '',
+    }
+  })
+
+  for (const w of [560, 430, 390, 375, 360, 320]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(200)
+    // 集中モードへ入る(紙の「練習の行」から)
+    const opened = await page.evaluate(() => {
+      const b = [...document.querySelectorAll('.practice-row button')]
+        .find((e) => (e.textContent || '').includes('集中モード'))
+      if (!b) return false
+      b.click(); return true
+    })
+    if (!opened) { ng(`${w}px で集中モードの入り口が無い`); continue }
+    await page.waitForTimeout(350)
+
+    let bad = false
+    for (let step = 0; step < 12; step++) {
+      const m = await look()
+      if (!m) { ng(`${w}px で集中モードの下の帯が出ていない`); bad = true; break }
+      if (m.h > 70) {
+        ng(`${w}px で集中モードの下の帯が2段になっている(${m.末})`,
+          `高さ ${m.h}px(1行なら 61px ほど)`)
+        bad = true; break
+      }
+      if (m.over) {
+        ng(`${w}px で集中モードの下の帯があふれている(${m.末})`,
+          '折り返さない指定なので、あふれると隠れて押せなくなる')
+        bad = true; break
+      }
+      if (m.末.includes('まとめ')) break        // 最後の段落まで見た
+      const moved = await page.evaluate(() => {
+        const b = [...document.querySelectorAll('.focus-bar .focus-move')].pop()
+        if (!b || b.disabled) return false
+        b.click(); return true
+      })
+      if (!moved) break
+      await page.waitForTimeout(150)
+    }
+    if (!bad) ok(`${w}px … 集中モードの下の帯は1行(最後の段落まで)`)
+
+    await page.evaluate(() => {
+      const x = [...document.querySelectorAll('.focus button')]
+        .find((e) => (e.textContent || '').includes('集中モードを終える'))
+      if (x) x.click()
+    })
+    await page.waitForTimeout(200)
+  }
+  await page.close()
+}
+
 // ── ページそのものが横に送れないこと(2026-09 実機・利用者の指摘)────
 //
 //    > スマホで教材ページやその他のページを表示しスクロールする際に

@@ -354,9 +354,14 @@ export default function FocusReader({
         </button>
       ) : (
         <>
-          <button type="button" className="btn focus-move"
+          {/* **狭い画面では、絵だけにする**(2026-09 実機・利用者の指定
+              「このスマホのプレーヤーのUI、2行ではなく1行にまとめてください」)。
+              両端にあるので、何を送るかは**場所**で分かる。
+              **読み上げのための名前は `aria-label` が持つ** */}
+          <button type="button" className="btn focus-move focus-move--tight"
+                  aria-label="前へ" title="前へ"
                   onClick={() => go(index - 1)} disabled={index === 0}>
-            ◀ 前
+            ◀<span className="wide-text"> 前</span>
           </button>
 
           <div className="focus-mid">
@@ -367,10 +372,16 @@ export default function FocusReader({
               <SentenceSkip>
                 <button type="button"
                         className="btn btn--small"
+                        aria-label={player.playing ? 'Stop' : 'Listen'}
                         onClick={() => player.toggle(playOpts())}>
+                  {/* **「用意しています…」だけは、どんなに狭くても消さない**
+                      (音が出るまで何も起きていないように見えるため・CLAUDE.md)。
+                      絵だけにしてよいのは `Listen` / `Stop` の2語だけ */}
                   {player.playing
-                    ? <><StopIcon />{player.waiting ? preparingLabel(player.secs) : 'Stop'}</>
-                    : <><SpeakerIcon />Listen</>}
+                    ? <><StopIcon />{player.waiting
+                        ? preparingLabel(player.secs)
+                        : <span className="listen-word">Stop</span>}</>
+                    : <><SpeakerIcon /><span className="listen-word">Listen</span></>}
                 </button>
               </SentenceSkip>
             )}
@@ -396,9 +407,10 @@ export default function FocusReader({
               まとめ
             </button>
           ) : (
-            <button type="button" className="btn focus-move"
+            <button type="button" className="btn focus-move focus-move--tight"
+                    aria-label="次へ" title="次へ"
                     onClick={() => go(index + 1)}>
-              次 ▶
+              <span className="wide-text">次 </span>▶
             </button>
           )}
         </>
