@@ -787,6 +787,45 @@ export async function setLearnerStatus(learnerId, status, note) {
  * 1回に1演習だけ作るのは、40問を一度に作らせると応答が長くなり
  * 時間切れになりやすいため。10問ずつなら失敗しても作り直しが軽い。
  */
+/**
+ * ============================================================================
+ * **生成の窓口(`generate-material`)が、いつの版か**(2026-09 実機)
+ *
+ *   > 記事、会話、会議の中で音声の性別と登場人物の性別が
+ *   > あっていないことが多々あることです。
+ *
+ * 声に名前を合わせる仕組み(`speakerGenders`)は 2026-09 に入れたが、
+ * **窓口は利用者が Supabase の画面から置く。** 置き直していなければ
+ * 画面が渡した性別は**黙って捨てられ**、AI が名前を自由に付ける。
+ * おまかせの声は男女交互に選ばれるので、**半分の確率でずれる。**
+ * しかも**教材は普通にできあがる**ので、誰も気づけない。
+ *
+ * `speak` でまったく同じことが起きたのに(値を変えても音が変わらない)、
+ * **こちらには版を付けていなかった。** 同じ失敗を二度した。
+ *
+ * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
+ * ============================================================================
+ */
+export const NEED_GEN_REV = '2026-09-05'
+
+let genRev = null
+/** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
+export const genGatewayRev = () => genRev
+/** 置き直しが要るか。**まだ分からないうちは false**(既定は騒がない) */
+export const genGatewayStale = () => genRev !== null && genRev < NEED_GEN_REV
+
+/** 古いときに、押した場所へ出す1文。**新しければ `null`** */
+export const genGatewayNote = () => (genGatewayStale()
+  ? '生成の窓口(generate-material)が古いため、'
+    + '**会話の登場人物の性別が、読み上げの声と合わないこと**があります'
+    + `(いま置かれているのは ${genRev}、必要なのは ${NEED_GEN_REV} 以降)。`
+    + ' Supabase → Edge Functions → generate-material を置き直してください。'
+  : null)
+
+const noteGenRev = (rev) => {
+  genRev = typeof rev === 'string' && rev ? rev : '(版なし)'
+}
+
 export async function generateSection({
   sectionType, count = 10, topic, topics = [], level, industry = '',
   isFirst = false, avoid = [], genre = '', scene = '', subject = '', context = '',
@@ -819,6 +858,7 @@ export async function generateSection({
     }
     return ng(detail || `生成に失敗しました: ${error.message}`)
   }
+  noteGenRev(data?.genRev)
   if (data?.error) return ng(data.error)
   return ok(data)
 }

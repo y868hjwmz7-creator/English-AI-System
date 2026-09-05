@@ -30,6 +30,7 @@ import {
   generateChunkJa, generateSection,
   bodyWord, generateSectionUnique, isDialogueKind, isPassageKind, kindLabel,
   loadUsedSentences, normEn,
+  genGatewayNote,
 } from '../lib/materials.js'
 import { chunkPlan } from '../lib/chunkJa.js'
 import {
@@ -258,9 +259,12 @@ export default function MaterialForm({
    * 逆(名前から性別を読んで声を当て直す)はしない —
    * 名前で性別は当てられないし、指名した声が無視されることになる。
    */
-  const castGenders = () => cast
-    .map((id) => findVoice(id)?.gender)
-    .filter((g) => g === 'male' || g === 'female')
+  /* **並びを崩さない**(2026-09)。以前は `filter` で落としていたので、
+     名簿に無い声が1つ混じるだけで**配列が縮み、2人目以降がずれた**
+     (声の2人目に、3人目の性別が渡る)。
+     長さは声の数のまま保ち、分からないものは空にする —— 窓口は
+     「人数ぶん揃っているとき」だけ使うので、**ずれた指定は渡らない。** */
+  const castGenders = () => cast.map((id) => findVoice(id)?.gender ?? '')
 
   const reviewLearner = (kind === 'word' || kind === 'phrase') && shareWith.length === 1
     ? shareWith[0] : null
@@ -1406,6 +1410,18 @@ export default function MaterialForm({
           ボタンが元に戻るだけでは、失敗したのか成功したのか分からない。
           問数だけでなく最初の1問も出す。数字だけでは中身の有無が分からない。
         */}
+        {/* **窓口が古いときは、押した場所で知らせる**(2026-09 実機)。
+
+              > 記事、会話、会議の中で音声の性別と登場人物の性別が
+              > あっていないことが多々あることです。
+
+            声に名前を合わせる指定(`speakerGenders`)は渡しているが、
+            **窓口を置き直していないと黙って捨てられる。**
+            教材は普通にできあがるので、**言わないと誰も気づけない。**
+            `speak` と同じ考え方(CLAUDE.md「窓口が古いを先に疑う」)。 */}
+        {!generating && genGatewayNote() && (
+          <div className="notice notice--warn" role="alert">{genGatewayNote()}</div>
+        )}
         {done && !generating && (
           <div className="notice notice--ok generate-done" ref={doneRef}>
             <strong>✓ 下書きができました（全 {done.total} 問）</strong>

@@ -109,6 +109,30 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   const fn = read('supabase/functions/generate-material/index.ts')
   if (!/body\.speakerGenders/.test(fn)) ng('窓口が、話す人の性別を読んでいない')
   else ok('窓口は、話す人の性別を読んでいる')
+  /* **窓口が古いと、この指定は黙って捨てられる**(2026-09 実機)。
+     しかも教材は普通にできあがるので、誰も気づけない。
+     だから版を返させ、画面が見比べて知らせる(`speak` と同じ作法)。 */
+  if (!/const FN_REV = /.test(fn)) {
+    ng('生成の窓口が版を持っていない', '古いまま置かれていても気づけない')
+  } else if (!/genRev: FN_REV/.test(fn)) {
+    ng('生成の窓口が版を返していない')
+  } else ok('生成の窓口は、どの応答にも版を付ける')
+
+  {
+    const mats = readFileSync(new URL('../src/lib/materials.js', import.meta.url), 'utf8')
+    const form2 = readFileSync(new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+    if (!/noteGenRev\(data\?\.genRev\)/.test(mats)) ng('画面が、生成の窓口の版を読んでいない')
+    else if (!/export const genGatewayStale = /.test(mats)) ng('版を見比べていない')
+    else if (!/genGatewayNote\(\)/.test(form2)) {
+      ng('古いことを画面に出していない', '出さないと、誰も気づけない')
+    } else ok('古い窓口は、教材を作った場所で知らせる')
+
+    /* **性別の並びを崩さない。** `filter` で落とすと、名簿に無い声が
+       1つ混じるだけで配列が縮み、2人目以降がずれる */
+    if (/castGenders = \(\) => cast[\s\S]{0,200}?\.filter\(/.test(form2)) {
+      ng('性別の一覧を filter で縮めている', '2人目以降がずれる')
+    } else ok('性別の一覧は、声の数だけ並ぶ(縮めない)')
+  }
   if (!/最初に話す人から順に/.test(fn)) {
     ng('窓口が「最初に話す人から順に」と言っていない',
       '声はその順で当たるので、順番を決めないと意味がない')

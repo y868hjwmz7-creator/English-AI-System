@@ -763,8 +763,29 @@ const cors = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+/**
+ * **この窓口の版。どの応答にも必ず付ける**(2026-09 実機・利用者の指摘)。
+ *
+ *   > 記事、会話、会議の中で音声の性別と登場人物の性別が
+ *   > あっていないことが多々あることです。
+ *
+ * 【なぜ要るか】
+ *   声に名前を合わせる仕組み(`speakerGenders`)は 2026-09 に入れたが、
+ *   **窓口は利用者が Supabase の画面から置く。** 置き直していなければ
+ *   画面が渡した性別は**黙って捨てられ**、AI が名前を自由に付ける。
+ *   おまかせの声は男女交互に選ばれるので、**半分の確率でずれる。**
+ *   しかも**教材は普通にできあがる**ので、誰も気づけない。
+ *
+ *   `speak` でまったく同じことが起きた(値を変えても音が変わらなかった)。
+ *   あちらには版を付けて解決したのに、**こちらには付けていなかった。**
+ *   「検証を頼む前に、版が分かるようにする」(共通ルール)。
+ *
+ * **窓口に手を入れたら、必ず1つ進める。**
+ */
+const FN_REV = '2026-09-05'
+
 const reply = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
+  new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
     status, headers: { ...cors, 'Content-Type': 'application/json' },
   })
 
@@ -806,10 +827,15 @@ const streamed = (run: () => Promise<unknown>) => {
         try { controller.enqueue(encoder.encode(' ')) } catch { /* すでに閉じている */ }
       }, 5000)
       try {
-        controller.enqueue(encoder.encode(JSON.stringify(await run())))
+        /* **版は、どの応答にも付ける**(失敗のときも)。
+           付け忘れた道が1本でもあると、そこだけ「古い」と誤って知らせる */
+        const out = await run()
+        controller.enqueue(encoder.encode(
+          JSON.stringify({ ...(out as object), genRev: FN_REV }),
+        ))
       } catch (e) {
         console.error(e)
-        controller.enqueue(encoder.encode(JSON.stringify({ error: explain(e) })))
+        controller.enqueue(encoder.encode(JSON.stringify({ error: explain(e), genRev: FN_REV })))
       } finally {
         clearInterval(beat)
         controller.close()
