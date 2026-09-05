@@ -8,10 +8,11 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   13行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
+--   23行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
 --   貼れば、そこがそろいます。
 --   **「⬜ まだです」が2つ以上あるときは、まとめた1つを貼れば済みます。**
 --     0026〜0031 … supabase/apply/pending_2026-09-01g.sql(まとめて)
+--     0034〜0040 … supabase/apply/pending_2026-09-04.sql(まとめて)
 --
 --   1つずつ貼りたいときは、こちら。
 --     0013〜0023 … supabase/apply/pending_2026-08-29.sql
@@ -23,6 +24,9 @@
 --     0029       … supabase/apply/pending_2026-09-01d.sql
 --     0030       … supabase/apply/pending_2026-09-01e.sql
 --     0031       … supabase/apply/pending_2026-09-01f.sql
+--     0032       … supabase/apply/pending_2026-09-02.sql
+--     0034〜0040 … supabase/apply/pending_2026-09-04.sql
+--     0041       … supabase/apply/pending_2026-09-05.sql
 -- ============================================================================
 
 select 何が要るか, case when 済 then '✅ もう入っています' else '⬜ まだです' end as 状態
@@ -78,4 +82,22 @@ from (
   union all select '0035 内容の理解に、設問と解答の訳を足す',
     exists (select 1 from information_schema.columns
             where table_name = 'material_items' and column_name = 'answer_ja'), 17
+  union all select '0036 見出しに、小さな訳を添える',
+    exists (select 1 from information_schema.columns
+            where table_name = 'materials' and column_name = 'headline_ja'), 18
+  union all select '0037 教材の種類に「会議」を足す',
+    exists (select 1 from pg_constraint
+            where conname = 'materials_kind_check'
+              and pg_get_constraintdef(oid) like '%meeting%'), 19
+  union all select '0038 単語帳を「続けて押した回数」で卒業させる',
+    exists (select 1 from information_schema.columns
+            where table_name = 'word_reviews' and column_name = 'learn_streak'), 20
+  union all select '0039 一覧の「覚えた」を、積んだ語にだけ出す',
+    exists (select 1 from pg_proc
+            where proname = 'review_words'
+              and pg_get_function_result(oid) like '%learn_streak%'), 21
+  union all select '0040 Quick Response の復習',
+    exists (select 1 from pg_tables where tablename = 'qr_reviews'), 22
+  union all select '0041 ゲストの記録を、まとめて消せるようにする',
+    exists (select 1 from pg_proc where proname = 'erase_learner'), 23
 ) t order by 順;
