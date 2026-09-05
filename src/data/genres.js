@@ -165,6 +165,46 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'phr_audit',   label: '監査・査察',       hint: '見られる側。記録と手順を説明する' },
     { id: 'phr_launch',  label: '発売の準備',       hint: '各部署と段取りを合わせる' },
   ],
+  /* 医療機器(2026-09 利用者の指定)。**役割ごとに場面が違う。**
+     親(`medtech` = 全般)には持たせない —— `ownOf` が
+     種類ぜんぶを集めて出すので、そうしないと共通しか出ない */
+  medtech_sales: [
+    { id: 'mds_visit',   label: '病院への訪問',     hint: '診療科をまわる。次につながる一言' },
+    { id: 'mds_demo',    label: '製品の説明・デモ', hint: '何ができて、何ができないか' },
+    { id: 'mds_tender',  label: '入札・価格の交渉', hint: '条件、納期、値引きの線引き' },
+    { id: 'mds_stock',   label: '在庫と貸出の手配', hint: 'どこに何があるか。返却と補充' },
+    { id: 'mds_trouble', label: '不具合の連絡',     hint: '起きたこと、いまの手当て、次の手' },
+    { id: 'mds_dealer',  label: '販売店との打ち合わせ', hint: '担当の分担、引き合い、教育' },
+  ],
+  medtech_ortho: [
+    { id: 'mdo_or',      label: '手術室での立ち会い', hint: '器械出しへの受け渡し、サイズの読み上げ' },
+    { id: 'mdo_size',    label: 'インプラントのサイズ選び', hint: '術前計画と、実際とのずれ' },
+    { id: 'mdo_set',     label: '貸出セットの手配', hint: '何を何セット、いつまでに。洗浄と返却' },
+    { id: 'mdo_surgeon', label: '整形外科医への新製品説明', hint: '手技の違い、症例、文献' },
+    { id: 'mdo_case',    label: '症例の振り返り',   hint: 'うまくいったこと、次に気をつけること' },
+    { id: 'mdo_train',   label: '手技研修の段取り', hint: '会場、道具、参加する先生への案内' },
+  ],
+  medtech_dev: [
+    { id: 'mdd_review',  label: '設計の検討会',     hint: '案を出し、危ないところを潰す' },
+    { id: 'mdd_proto',   label: '試作と評価',       hint: '作って、測って、直す' },
+    { id: 'mdd_voice',   label: '使う人の声を聞く', hint: '医師・看護師・技師からの要望' },
+    { id: 'mdd_risk',    label: 'リスクの洗い出し', hint: '何が起きうるか、どう防ぐか' },
+    { id: 'mdd_supplier', label: '部材メーカーとの相談', hint: '材料、加工、コスト、納期' },
+  ],
+  medtech_mfg: [
+    { id: 'mdm_line',    label: '工程の立ち上げ',   hint: '手順、治具、人の配置' },
+    { id: 'mdm_steril',  label: '滅菌とクリーンルーム', hint: '手順、記録、逸脱' },
+    { id: 'mdm_insp',    label: '検査と合否',       hint: '基準、測り方、外れたとき' },
+    { id: 'mdm_lot',     label: 'ロットの追跡・回収', hint: 'どこまで出たか、どう戻すか' },
+    { id: 'mdm_audit',   label: '監査・査察',       hint: '見られる側。記録と手順を説明する' },
+  ],
+  medtech_ra: [
+    { id: 'mdr_submit',  label: '承認・認証の申請', hint: '出す書類と、想定される問い' },
+    { id: 'mdr_query',   label: '当局からの照会への回答', hint: '何を訊かれ、どう答えるか' },
+    { id: 'mdr_label',   label: '添付文書・表示',   hint: '使い方、禁忌、注意' },
+    { id: 'mdr_pms',     label: '市販後の報告',     hint: '不具合、回収、改善' },
+    { id: 'mdr_intl',    label: '国ごとの違い',     hint: '日本・米国・欧州で何が変わるか' },
+  ],
   finance: [
     { id: 'fin_loan',    label: '融資の相談',   hint: '使いみち、返済、担保の話' },
     { id: 'fin_pitch',   label: '投資の提案',   hint: '見込みと危険を、正直に並べる' },
@@ -742,6 +782,28 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'phrg_reg',    label: '承認と規制',       hint: '国ごとの違い、早期承認' },
     { id: 'phrg_quality', label: '品質と製造',      hint: '逸脱、査察、サプライチェーン' },
     { id: 'phrg_price',  label: '薬価とアクセス',   hint: '誰に、いくらで届くか' },
+  ],
+  medtech_sales: [
+    { id: 'mdsg_market',   label: '医療機器の市場',   hint: '誰が買い、どう決まるか' },
+    { id: 'mdsg_hospital', label: '病院の購買',       hint: '価格、入札、まとめ買い、値下げの圧力' },
+    { id: 'mdsg_service',  label: '売ったあとの支え', hint: '保守、教育、立ち会い' },
+  ],
+  medtech_ortho: [
+    { id: 'mdog_implant', label: 'インプラントの進歩', hint: '材料、固定、長もち' },
+    { id: 'mdog_robot',   label: '手術を支える機械',   hint: 'できること、費用、慣れるまで' },
+    { id: 'mdog_aging',   label: '高齢化と関節',       hint: '人工関節、骨折、リハビリ' },
+  ],
+  medtech_dev: [
+    { id: 'mddg_design', label: '使いやすさの設計',   hint: '間違えにくい形にする' },
+    { id: 'mddg_soft',   label: '機器とソフトウェア', hint: '更新、安全、AI' },
+  ],
+  medtech_mfg: [
+    { id: 'mdmg_quality', label: '品質のしくみ',     hint: '決まり、記録、是正' },
+    { id: 'mdmg_supply',  label: '部材と供給',       hint: '途切れたときにどうするか' },
+  ],
+  medtech_ra: [
+    { id: 'mdrg_reg', label: '規制のいま',       hint: '国ごとの制度、承認までの道のり' },
+    { id: 'mdrg_pms', label: '市販後の安全',     hint: '集めて、直して、知らせる' },
   ],
   finance: [
     { id: 'fing_market', label: '相場の動き',       hint: '何が起きて、どう受け止められたか' },

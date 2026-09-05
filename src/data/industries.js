@@ -46,6 +46,26 @@ export const INDUSTRIES = [
   { id: 'restaurant',    parent: 'dining', short: '飲食店', label: '飲食店', hint: '接客、注文、厨房、仕入れ、クレーム対応' },
   { id: 'manufacturing', label: '製造',         hint: '工程説明、品質、安全' },
   { id: 'pharma',        label: '製薬',         hint: '治験、承認申請、品質管理、学術情報' },
+  /* 医療機器(2026-09 利用者の指定)。
+
+       > 業種に医療用の器具の開発・製造・販売・営業を入れてください。
+       > 私のゲストは営業として、整形外科用の商品を販売しているようです
+
+     **医療(`med`)とは別の分野にする。** あちらは患者さんと向き合う仕事で、
+     こちらは**作って、確かめて、届ける側**である。相手も、使う言葉も違う
+     (病院の購買、入札、手術室での立ち会い、薬事…)。
+
+     種類は**仕事の役割**で分けた。開発・製造・薬事・営業では、
+     出てくる場面がまるで違うためである。
+     **営業を先頭に置く** —— いま使うゲストが営業だからである。
+     ほかの診療科(循環器・脳外科…)が要るときは、`medtech_ortho` と
+     同じ形で1行足す(**すでにある行は動かさない**)。 */
+  { id: 'medtech',       label: '医療機器', kinds: true, hint: '医療用の器具を、作って・確かめて・届ける' },
+  { id: 'medtech_sales', parent: 'medtech', short: '営業・販売', label: '医療機器(営業)', hint: '病院への提案、立ち会い、入札、在庫と貸出' },
+  { id: 'medtech_ortho', parent: 'medtech', short: '営業(整形外科)', label: '医療機器(整形外科の営業)', hint: 'インプラント、手術室での立ち会い、サイズとセット、整形外科医とのやりとり' },
+  { id: 'medtech_dev',   parent: 'medtech', short: '開発・設計', label: '医療機器(開発)', hint: '設計、試作、評価、使う人からの声' },
+  { id: 'medtech_mfg',   parent: 'medtech', short: '製造・品質', label: '医療機器(製造・品質)', hint: '工程、滅菌、検査、不具合とロットの追跡' },
+  { id: 'medtech_ra',    parent: 'medtech', short: '薬事・規制', label: '医療機器(薬事)', hint: '承認と認証、添付文書、当局への回答、市販後の報告' },
   { id: 'trading',       label: '商社',         hint: '仕入交渉、見積、船積、与信、代理店' },
   { id: 'finance',       label: '金融',         hint: '融資、投資、決算説明、コンプライアンス' },
   { id: 'construction',  label: '建設・不動産', hint: '図面、工程、契約、内見、施工管理' },
