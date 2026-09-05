@@ -645,7 +645,14 @@ export default function LessonView({
   useEffect(() => { if (run !== 'qr') setQrFocus(false) }, [run])
 
   const openFocus = () => {
-    stopAll()
+    /* **鳴っている音は止めない**(2026-09 利用者の指定)。
+
+         > 再生中に集中モードに入ったとしても、
+         > 再生中の音はそのまま続くようにして下さい。
+
+       以前はここで `stopAll()` を呼んでいたので、**入った瞬間に黙って**
+       いた。聴きながら語を調べたいのだから、切る理由がない。
+       止めたいときは、集中モードの Listen を押せば入れ替わる。 */
     backTo.current = sheetRef.current?.scrollTop ?? null
     setFocusAt(centeredFocusIndex())
     setRun('focus')

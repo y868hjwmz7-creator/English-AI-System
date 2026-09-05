@@ -6009,7 +6009,17 @@ html, body { overflow-x: clip; }
      箱として見えるので、押せるものだと伝わる */
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--btn-bg);
+  /* ── **面は1枚。3つの色に割らない**(2026-09 実機・利用者の指摘)────
+       > この段落ごとのプレーヤーの色のバランス、ダサすぎるので
+       > 調整してスタイリッシュにして下さい。
+
+     まん中が白・両端が灰色で、**1つの箱が3つの色に割れて**いた。
+     いちばん大事な「押す」ものが、いちばん薄い色になっていたことになる。
+
+     いまは**箱ぜんぶが1枚の面**(`--surface-2`)で、区切りは**細い線**
+     だけ。段のある錠剤(セグメント)は、面が1枚のときにいちばん静かに
+     見える。**濃さは文字と線が受け持つ。** */
+  background: var(--surface-2);
   overflow: hidden;
   /* 箱そのものが1つのまとまりに見えるよう、影は付けない */
 }
@@ -6039,9 +6049,12 @@ html, body { overflow-x: clip; }
   min-width: 38px; padding: 0 10px;
   font-size: 14px; line-height: 1;
   color: var(--text-primary);
-  background: var(--surface-2);
+  /* **地は持たない。** 面は錠剤の1枚だけ(上記)。
+     押せることは**細い線と、触れたときの濃さ**が伝える */
+  background: transparent;
   cursor: pointer;
 }
+/* 区切りは**髪の毛1本**。両側が同じ面なので、線だけで段が分かる */
 .listenpill-arrow:first-child { border-right: 1px solid var(--border); }
 .listenpill-arrow:last-child { border-left: 1px solid var(--border); }
 /* **消えるほど薄くしない。** 押せないことは分かってほしいが、
@@ -6073,12 +6086,15 @@ html, body { overflow-x: clip; }
    まったく読めない(実測 rgb(242,242,238) on rgb(255,255,255))。
    暗い配色では読めていたので、**片方の配色でしか出ない**形だった。
    **色を決め打ちする帯を足したら、その中に置く部品もそろえる。** */
+/* **暗い帯でも、面は1枚**(2026-09 実機・利用者の指摘
+     「暗いモードの時のプレーヤーも変なふうにならないように」)。
+   明るい側と同じ考え方で、色だけ帯に合わせて決め打ちする */
 .lesson-bar .listenpill, .player--bar .listenpill, .focus-bar .listenpill {
-  border-color: #55554e; background: #24241f;
+  border-color: #55554e; background: #31312b;
 }
 .lesson-bar .listenpill-arrow, .player--bar .listenpill-arrow,
 .focus-bar .listenpill-arrow {
-  color: #f2f2ee; background: #34342e; border-color: #55554e;
+  color: #f2f2ee; background: transparent; border-color: #55554e;
 }
 .lesson-bar .listenpill-arrow:hover:not(:disabled),
 .player--bar .listenpill-arrow:hover:not(:disabled),
@@ -6092,20 +6108,27 @@ html, body { overflow-x: clip; }
    角丸と枠を持っているので、二重にしない。
    **三角の地色と仕切りは残す** —— あれが「押せる」の合図である
    (2026-09 実機「文章を飛ばすボタンが白過ぎで見にくい」) */
-.player--float .listenpill { border: 0; background: transparent; }
+/* **右下でも、面は1枚**(2026-09 実機・利用者の指摘)。
+   外側の `.player--float` がすでに角丸と枠を持っているので**枠だけ外す。**
+   面(`--surface-2`)は残す —— これが「押せるひとかたまり」の合図である */
+.player--float .listenpill { border: 0; background: var(--surface-2); }
 .player--float .listenpill-arrow { color: var(--text-primary); }
 .player--float .listenpill-arrow:hover:not(:disabled) { background: var(--border); }
 /* **まん中の文字を、三角より薄くしない**(2026-09 実機・利用者の指摘)。
 
      > プレーヤーの真ん中の文字が薄すぎて見えないですよ
 
-   右下の操作盤は**紙の中**にいるので、`.lesson-sheet .btn` が
-   全部を「うすい墨」(`--ink-soft`)にそろえていた。ところが
-   三角のほうは `--text-primary` を明に指定してあるので、
-   **まん中だけが目に見えて薄い**(実測 rgb(90,100,110) 対 rgb(36,41,47))。
+   紙の中のボタンは `.lesson-sheet .btn` が全部を「うすい墨」
+   (`--ink-soft`)にそろえる。ところが三角のほうは濃い色を明に
+   指定してあるので、**まん中だけが目に見えて薄い**
+   (実測 rgb(90,100,110) 対 rgb(36,41,47))。
    いちばん押すものが、いちばん読みにくい形になっていた。
-   **三角と同じ濃さにそろえる。** */
-.player--float .listenpill .btn,
+
+   **紙の上の錠剤は、まとめて三角と同じ濃さにそろえる**
+   —— 右下の操作盤も、段落ごとの Listen も、どちらも紙の中にいる
+   (**片方だけ直さない**。実際、右下だけ直して段落を見落としていた)。 */
+.lesson-sheet .listenpill .btn,
+.focus-paper .listenpill .btn { color: var(--ink); }
 .player--float .repeat-unit { color: var(--text-primary); }
 
 /* 紙の中(明るい配色の島)。**変数から取っているので、そのままで正しい** */
