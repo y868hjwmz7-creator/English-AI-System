@@ -26,38 +26,51 @@
 
 | 何 | URL |
 |---|---|
-| 貼る SQL(全部入り) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-29.sql` |
-| **貼る SQL(0024 + 0025 まとめて・おすすめ)** | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31c.sql` |
-| 貼る SQL(0024 だけ) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31.sql` |
-| 貼る SQL(0025 だけ) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31b.sql` |
-| **貼る SQL(0026〜0031 を全部まとめたもの・おすすめ)** | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01g.sql` |
-| 貼る SQL(0026 スコアの範囲) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01.sql` |
-| 貼る SQL(0027 覚えかけ) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01b.sql` |
-| 貼る SQL(0028 単語帳の絞り込み) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01c.sql` |
-| 貼る SQL(0029 自分のアイコン) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01d.sql` |
-| 貼る SQL(0030 入れた語をその日に出す) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01e.sql` |
-| 貼る SQL(0031 ゲストのファイルの置き場) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
-| 貼る SQL(0032 セッションの記録) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02.sql` |
-| 貼る SQL(0033 ディスカッション・0034 に含まれるので不要) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02b.sql` |
-| **★いま貼っていただくもの(0041 ゲストの記録をまとめて消す)** | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-05.sql` |
-| 貼る SQL⑧(0034〜0040 をまとめたもの。まだなら先にこちら) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-04.sql` |
-| 貼る SQL①(0034 誤り訂正 + ディスカッション) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02c.sql` |
-| 貼る SQL②(0035 内容の理解の訳・①のあとに貼る) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03.sql` |
-| 貼る SQL③(0036 見出しの訳・②のあとに貼る) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03b.sql` |
-| 貼る SQL④(0037 会議の種類・③のあとに貼る) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03c.sql` |
-| 貼る SQL⑤(0038 25回で卒業・④のあとに貼る) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03d.sql` |
-| 貼る SQL⑥(0039 一覧の「覚えた」・⑤のあとに貼る) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03e.sql` |
-| 貼る SQL⑦(0040 Quick Response の復習・⑥のあとに貼る) | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-04.sql` |
-| 状態を見るだけの SQL | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
-| 教材を作る関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
-| 読み上げ音声の関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |
-| 語の意味を引く関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/lookup-word/index.ts` |
-| 似た英文を弾く関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/check-similar/index.ts` |
-| アカウントを作る関数 | `https://raw.githubusercontent.com/y868hjwmz7-creator/English-AI-System/claude/project-spec-document-k5wmwy/supabase/functions/create-user/index.ts` |
+| 貼る SQL(全部入り) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-29.sql` |
+| **貼る SQL(0024 + 0025 まとめて・おすすめ)** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31c.sql` |
+| 貼る SQL(0024 だけ) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31.sql` |
+| 貼る SQL(0025 だけ) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-08-31b.sql` |
+| **貼る SQL(0026〜0031 を全部まとめたもの・おすすめ)** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01g.sql` |
+| 貼る SQL(0026 スコアの範囲) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01.sql` |
+| 貼る SQL(0027 覚えかけ) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01b.sql` |
+| 貼る SQL(0028 単語帳の絞り込み) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01c.sql` |
+| 貼る SQL(0029 自分のアイコン) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01d.sql` |
+| 貼る SQL(0030 入れた語をその日に出す) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01e.sql` |
+| 貼る SQL(0031 ゲストのファイルの置き場) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
+| 貼る SQL(0032 セッションの記録) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02.sql` |
+| 貼る SQL(0033 ディスカッション・0034 に含まれるので不要) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02b.sql` |
+| **★いま貼っていただくもの(0041 ゲストの記録をまとめて消す)** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-05.sql` |
+| 貼る SQL⑧(0034〜0040 をまとめたもの。まだなら先にこちら) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-04.sql` |
+| 貼る SQL①(0034 誤り訂正 + ディスカッション) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02c.sql` |
+| 貼る SQL②(0035 内容の理解の訳・①のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03.sql` |
+| 貼る SQL③(0036 見出しの訳・②のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03b.sql` |
+| 貼る SQL④(0037 会議の種類・③のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03c.sql` |
+| 貼る SQL⑤(0038 25回で卒業・④のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03d.sql` |
+| 貼る SQL⑥(0039 一覧の「覚えた」・⑤のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03e.sql` |
+| 貼る SQL⑦(0040 Quick Response の復習・⑥のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-04.sql` |
+| 状態を見るだけの SQL | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
+| 教材を作る関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
+| 読み上げ音声の関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |
+| 語の意味を引く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/lookup-word/index.ts` |
+| 似た英文を弾く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/check-similar/index.ts` |
+| アカウントを作る関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/create-user/index.ts` |
 
-`raw.githubusercontent.com` を開くと、**文字だけの画面**が出る。
-そこで ⌘A(全部選ぶ)→ ⌘C(コピー)すればよい。
+この URL を開くと、そのファイルの中身がそのまま出る。
+右上の**コピーの絵(四角が2枚重なった印)**を押せば、**全部がコピーされる。**
 GitHub の中を辿らせない。
+
+### **`raw.githubusercontent.com` は、もう使えない**(2026-09)
+
+リポジトリを**非公開にした**ので、`raw.githubusercontent.com` の URL は
+**ログインしていても 404 になる**(あちらは合言葉付きの URL でないと開かない)。
+実測で確かめてある。
+
+- **`github.com/…/blob/…` を渡す。** GitHub にログインしている本人なら開ける
+- **⌘A → ⌘C ではなく、右上のコピーの絵**を押してもらう
+  (画面には行番号なども出ているので、全部選ぶと余計なものが混ざる)
+- **短い SQL は、チャットにそのまま貼る。** ファイルを探させない
+- **開けない**と言われたら、その中身をこちらがチャットに貼る。
+  **利用者を GitHub の中で迷わせない**
 
 ## 書き方の決まり
 
