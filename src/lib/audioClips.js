@@ -718,14 +718,30 @@ export function clipTime() {
 }
 
 /**
+ * いま鳴っているものの「なだらかな上げ下げの起点」を書き換える窓口。
+ * **鳴らしているあいだだけ入っている**(`playClip` が入れ、終わりで外す)。
+ */
+let fadeOrigin = null
+
+/**
  * **鳴らしたまま、場所だけを移す**(2026-09 利用者の指定・1文ずつの ◁▷)。
  *
  * **止めて鳴らし直さない。** 止めると `stopClip()` が
  * 「どこまで聴いたか」を控えてしまううえ、鳴らし直しのあいだ黙る。
  * `currentTime` を動かすだけなら、その場で続きが鳴る。
  *
- * **なだらかな上げ下げ(`fadeGain`)には触らない。** あちらは
- * 鳴り始めと鳴り終わりのためのもので、途中で場所を移すのは別の話である。
+ * ────────────────────────────────────────────────────────────────
+ * **戻したら、なだらかな上げ下げの起点も一緒に戻す**(2026-09)
+ *
+ *   `fadeGain` は「鳴らし始めてから何ミリ秒か」で入りの音量を決める。
+ *   その起点(`from`)は**鳴らし始めた場所**に固定してあったので、
+ *   **そこより前へ戻すと、経過が負になって音量が 0 のまま**になる。
+ *   30 秒戻せば、30 秒間まるごと無音である。
+ *
+ *   ◁ で1文戻したときも、くり返しで文の頭へ戻すときも、必ず起きる。
+ *   **音は「鳴っている」ので、押した人には固まったようにしか見えない。**
+ *   戻した先を新しい起点にすれば、そこから 70ms で入り直す。
+ * ────────────────────────────────────────────────────────────────
  *
  * @returns {boolean} 移せたか(鳴っていなければ false)
  */
@@ -734,11 +750,13 @@ export function seekClip(sec) {
   const t = Number(sec)
   if (!Number.isFinite(t) || t < 0) return false
   try { element.currentTime = t } catch { return false }
+  fadeOrigin?.(t)
   return true
 }
 
 export function stopClip() {
   generation += 1
+  fadeOrigin = null
   const end = endCurrent
   endCurrent = null
   let at = 0
@@ -920,7 +938,11 @@ export async function playClip({
     let index = -1
     let shown = -1                       // いま入れてある音量(入れ直しを減らす)
     const marks = wordMarks(body, (el.duration || 0) * 1000)
-    const from = Number(el.currentTime) || 0   // 鳴らし始めた場所(続きから鳴らすとき)
+    /* 鳴らし始めた場所(続きから鳴らすとき)。
+       **戻したときは書き換える** — `seekClip()` を参照 */
+    let from = Number(el.currentTime) || 0
+    const moveOrigin = (t) => { from = Number(t) || 0 }
+    fadeOrigin = moveOrigin
 
     /* **画面の描き替え(約 16ms)ではなく、10ms ごとに回す**(2026-09 実測)。
        rAF だと鳴り終わりの最後のコマが「残り 41ms」で、
@@ -986,6 +1008,8 @@ export async function playClip({
 
     const finish = () => {
       if (endCurrent === finish) endCurrent = null
+      // **鳴り終わったら、起点の窓口を閉じる**(次の1本のものと混ざらない)
+      if (fadeOrigin === moveOrigin) fadeOrigin = null
       el.removeEventListener('ended', finish)
       el.removeEventListener('error', finish)
       stopTrack()

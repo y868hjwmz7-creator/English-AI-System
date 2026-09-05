@@ -35,6 +35,7 @@
  */
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
 import SentenceSkip from './SentenceSkip.jsx'
+import RepeatUnit from './RepeatUnit.jsx'
 
 /**
  * @param place     'float'(右下)/ 'bar'(上の帯の下)
@@ -46,11 +47,13 @@ import SentenceSkip from './SentenceSkip.jsx'
  * @param unit      数え方の名前(段落 / 発言)
  * @param onToggle  鳴らす・止める
  * @param onJump    その番号から鳴らす(送り戻し)
+ * @param repeat    くり返しの単位('off' / 'sentence' / 'item' / 'all')
+ * @param onRepeat  単位を変える
  */
 export default function PlayerBar({
   place = 'float', onPlace = null,
   playing = false, label = null, at = null, total = 0, unit = '段落',
-  onToggle, onJump = null,
+  onToggle, onJump = null, repeat = null, onRepeat = null,
 }) {
   if (!total) return null
   const now = Number.isFinite(at) ? at : null
@@ -91,6 +94,15 @@ export default function PlayerBar({
           <span className="wide-text"> {unit}</span>
         </span>
       </SentenceSkip>
+
+      {/* **くり返し**(2026-09 利用者の指定)。
+            > 文章単位、段落単位、全文単位、三つ選べるような。
+
+          押すたびに単位が移る。**渡されなければ出さない**
+          (効かない操作を見せない) */}
+      {onRepeat && (
+        <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
+      )}
 
       {/* 進み具合。**段落の単位**である(秒までは数えていない) */}
       <span className="player-track" aria-hidden="true">

@@ -50,7 +50,7 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  indexAtTime, rangeOf, seekSentence, sentenceSpansOf,
+  REPEAT_UNITS, indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf,
 } from './wholeAudio.js'
 import { splitSentences } from './wordTiming.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
@@ -402,6 +402,26 @@ export function readAloudSequence(parts, {
    * (残すと、そのあと ▶ を押したときに古い場所へ飛ぶ)。
    */
   resume = true,
+  /**
+   * **始める場所を、控えより優先する**(2026-09・集中モード)。
+   *
+   * 集中モードは「いま開いている段落」から鳴らす。ところが控えには
+   * **別の段落の秒**が残っていることがあり、そのまま当てると
+   * **開いていない段落が鳴り出す。** `pinned` を渡すと、
+   * 始めるのは必ず `startIndex` で、控えの秒は
+   * **その段落のものだったときだけ**使う(そこで止めた続きから鳴る)。
+   */
+  pinned = false,
+  /**
+   * **くり返しの単位**(2026-09 利用者の指定)。
+   *
+   *   > 文章単位、段落単位、全文単位、三つ選べるような。
+   *
+   * `() => 'off' | 'sentence' | 'item' | 'all'` を渡す。
+   * **値ではなく、訊きに行く形にしてある** —— 鳴らしている最中に
+   * 切り替えても、次のひと刻みから効く(押し直させない)。
+   */
+  repeatOf = null,
 } = {}) {
   const list = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
   // **止めるより先に控えを取り出す**(`readAloud` と同じ理由)
@@ -413,7 +433,17 @@ export function readAloudSequence(parts, {
   /* 続きから始める番号。**一覧より外に出ていたら、言われた場所から**
      (教材を直すと段落の数が変わる。CLAUDE.md「範囲の外になっていることがある」) */
   const head = Math.min(Math.max(startIndex | 0, 0), list.length - 1)
-  const first = (from && from.index >= 0 && from.index < list.length) ? from.index : head
+  const first = (!pinned && from && from.index >= 0 && from.index < list.length)
+    ? from.index : head
+  /* 控えの秒を当ててよいのは、**その段落のものだったときだけ**
+     (`pinned` のときは、控えが別の段落を指していることがある) */
+  const fromAt = (from && from.index === first) ? (from.at ?? 0) : 0
+
+  /** いまのくり返しの単位。**知らない値は「しない」に落とす** */
+  const repeatNow = () => {
+    const u = repeatOf?.()
+    return REPEAT_UNITS.includes(u) ? u : 'off'
+  }
 
   const alive = () => mine === session
 
@@ -471,8 +501,7 @@ export function readAloudSequence(parts, {
        その項目の中に収まっているときだけ使う(今までの形で覚えた秒が
        混ざっても、変なところから鳴らさない) */
     const s = spans[first]
-    const at = (from && from.index === first
-      && from.at > s.start && from.at < s.end) ? from.at : s.start
+    const at = (fromAt > s.start && fromAt < s.end) ? fromAt : s.start
 
     let shown = -1
     const seen = (i) => {
@@ -512,6 +541,15 @@ export function readAloudSequence(parts, {
       onStart: started,
       onTime: (sec) => {
         if (!alive()) return
+        /* ── **くり返し**(2026-09 利用者の指定)──────────────────
+           > 文章単位、段落単位、全文単位、三つ選べるような。
+
+           **止めて鳴らし直さない。** 1本の中を戻すだけなので、
+           そのまま続けて鳴る(1文ずつの ◁▷ と同じ道具)。
+           戻したら、そのひと刻みは何もしない —— 秒がもう古いので、
+           そのまま数えると**一瞬だけ次の段落が光る** */
+        const back = repeatSeek(repeatNow(), sec, { spans, sentences: sent })
+        if (back !== null && seekClip(back)) return
         seen(indexAtTime(spans, sec))
         tellSentence(sent, sec, () => shown, seenSent, onWord)
       },
@@ -526,72 +564,106 @@ export function readAloudSequence(parts, {
     return true
   }
 
+  /* ══════════════════════════════════════════════════════════════
+   * **1本にできなかったときの、くり返し**
+   *
+   *   こちらは英文ごとに別の MP3 を鳴らすので、**文の区間が無い。**
+   *   だから「文」と言われても、こちらの知っているいちばん細かい単位は
+   *   段落である。**近い単位で回す**(何も起きないより、そのほうがよい)。
+   *   `repeatSeek()` が同じ考え方で落としているのと合わせてある。
+   *
+   *   **止まる条件を持たせる**(CLAUDE.md)。鳴らせない状況では
+   *   読み上げがすぐ終わる。そのまま回すと**目に見えないまま回り続ける。**
+   *   0.3 秒に満たずに終わったら、失敗とみなしてやめる
+   *   (`SpeakButton` のくり返しとまったく同じ歯止め)。
+   * ══════════════════════════════════════════════════════════════ */
   const run = async () => {
-    for (let i = first; i < list.length; i += 1) {
-      if (!alive()) return
-      const part = list[i]
-      const clipVoice = part.clipVoice ?? clipSpeakerFor(part.voice)
-      // **いま何番目を鳴らしているか**を控える(`stopReading()` が使う)
-      nowPlaying(resumeKey, i)
-
-      // **どの継ぎ目にも間を置く**(2026-09 利用者の指定「記事でも同じ仕様に」)。
-      // はじめは話す人が替わるときだけにしていたが、記事も段落と段落が
-      // 詰まって聞こえる。同じ声が続くところは `turnGap.js` が短めに返す。
-      // **続きから始めた1本目には間を置かない**(`i > first`)。
-      // 前の発言は鳴っていないので、そこに息継ぎを入れる理由がない
-      if (i > first) {
-        const prevVoice = list[i - 1].clipVoice ?? clipSpeakerFor(list[i - 1].voice)
-        const sameVoice = clipVoice === prevVoice
-
-        // ① 内容から決める間。**速さに合わせて縮める**
-        //    (120% で聞いている人には、間も 120% で来る)
-        const byContent = turnGapMs(list[i - 1].text, part.text, { sameVoice }) / (rate || 1)
-
-        /* ② 速くした声のぶんの余白(2026-09 利用者の指定)。
-         *
-         *   > 速くした分と同じだけ前後に余白を入れてください。
-         *   > そしてその余白は内容とは別に必ず入れるようにしてください。
-         *
-         * **再生速度は、音声の中の無音まで一緒に縮める。** だから
-         * 1.2 倍にした声のまわりだけ詰まって聞こえる。
-         *
-         * **①とは足し算にする。** 詰まっているのは音声そのものであって、
-         * 話の中身とは関係がない。「相づちだから短く」と打ち消し合わせない。
-         * **前の声のうしろ + 次の声の前**の両方を足す(あいだの無音は1つ)。 */
-        const bySpeed = speedPadMs(voiceRateOf(prevVoice)) + speedPadMs(voiceRateOf(clipVoice))
-
-        await pause(byContent + bySpeed)
+    let start = first
+    /* **鳴らせないまま回り続けない。** ひと周のあいだに
+       1本も 0.3 秒以上鳴らなければ、そこでやめる */
+    let heard = false
+    for (;;) {
+      for (let i = start; i < list.length; i += 1) {
         if (!alive()) return
-      }
+        const part = list[i]
+        const began = Date.now()
+        const clipVoice = part.clipVoice ?? clipSpeakerFor(part.voice)
+        // **いま何番目を鳴らしているか**を控える(`stopReading()` が使う)
+        nowPlaying(resumeKey, i)
 
-      onIndex?.(i)
+        // **どの継ぎ目にも間を置く**(2026-09 利用者の指定「記事でも同じ仕様に」)。
+        // はじめは話す人が替わるときだけにしていたが、記事も段落と段落が
+        // 詰まって聞こえる。同じ声が続くところは `turnGap.js` が短めに返す。
+        // **続きから始めた1本目には間を置かない**(`i > first`)。
+        // 前の発言は鳴っていないので、そこに息継ぎを入れる理由がない
+        if (i > start) {
+          const prevVoice = list[i - 1].clipVoice ?? clipSpeakerFor(list[i - 1].voice)
+          const sameVoice = clipVoice === prevVoice
 
-      const relay = onWord ? (at) => onWord(at ? { ...at, index: i } : null) : null
+          // ① 内容から決める間。**速さに合わせて縮める**
+          //    (120% で聞いている人には、間も 120% で来る)
+          const byContent = turnGapMs(list[i - 1].text, part.text, { sameVoice }) / (rate || 1)
 
-      const played = await playClip({
-        text: part.text,
-        voiceId: clipVoice,
-        tier: clipTier,
-        rate,
-        onWord: relay,
-        // **続きから始めた1本目だけ、その途中から**(2本目からは頭から)
-        startAt: (i === first ? (from?.at ?? 0) : 0),
-        // 鳴り始めたら、次のぶんを裏で用意しておく
-        onStart: () => {
+          /* ② 速くした声のぶんの余白(2026-09 利用者の指定)。
+           *
+           *   > 速くした分と同じだけ前後に余白を入れてください。
+           *   > そしてその余白は内容とは別に必ず入れるようにしてください。
+           *
+           * **再生速度は、音声の中の無音まで一緒に縮める。** だから
+           * 1.2 倍にした声のまわりだけ詰まって聞こえる。
+           *
+           * **①とは足し算にする。** 詰まっているのは音声そのものであって、
+           * 話の中身とは関係がない。「相づちだから短く」と打ち消し合わせない。
+           * **前の声のうしろ + 次の声の前**の両方を足す(あいだの無音は1つ)。 */
+          const bySpeed = speedPadMs(voiceRateOf(prevVoice)) + speedPadMs(voiceRateOf(clipVoice))
+
+          await pause(byContent + bySpeed)
+          if (!alive()) return
+        }
+
+        onIndex?.(i)
+
+        const relay = onWord ? (at) => onWord(at ? { ...at, index: i } : null) : null
+
+        const played = await playClip({
+          text: part.text,
+          voiceId: clipVoice,
+          tier: clipTier,
+          rate,
+          onWord: relay,
+          // **続きから始めた1本目だけ、その途中から**(2本目からは頭から)。
+          // くり返しで頭へ戻ったあとも、控えは当てない(`start === first`)
+          startAt: (i === first && start === first ? fromAt : 0),
+          // 鳴り始めたら、次のぶんを裏で用意しておく
+          onStart: () => {
+            started()
+            const ahead = list[i + 1]
+            if (ahead) {
+              prefetchClip(ahead.text, ahead.clipVoice ?? clipSpeakerFor(ahead.voice), clipTier)
+            }
+          },
+        })
+        if (!alive()) return
+        if (!played) {
+          // この1本だけ MP3 を使えなかった。端末の声で読む
           started()
-          const ahead = list[i + 1]
-          if (ahead) {
-            prefetchClip(ahead.text, ahead.clipVoice ?? clipSpeakerFor(ahead.voice), clipTier)
-          }
-        },
-      })
-      if (!alive()) return
-      if (played) continue
+          await speakOnce(part.text, { voice: part.voice, rate, onWord: relay }).done
+          if (!alive()) return
+        }
 
-      // この1本だけ MP3 を使えなかった。端末の声で読む
-      started()
-      await speakOnce(part.text, { voice: part.voice, rate, onWord: relay }).done
+        /* **同じところをもう一度**(文 / 段落)。0.3 秒に満たずに終わったら、
+           鳴らせていないので回さない(上の歯止め) */
+        const ok = Date.now() - began >= 300
+        if (ok) heard = true
+        const unit = repeatNow()
+        if ((unit === 'sentence' || unit === 'item') && ok) i -= 1
+      }
       if (!alive()) return
+      // **全文をくり返す。** 次の周は、本文の頭から。
+      // **1本も鳴らなかった周のあとは回さない**(目に見えないまま回り続ける)
+      if (repeatNow() !== 'all' || !heard) break
+      heard = false
+      start = 0
     }
     // **最後まで鳴りきった。** 控えを持ったままにすると、
     // 次に押したときに終わりぎわから始まってしまう

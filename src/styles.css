@@ -6074,6 +6074,33 @@ html, body { overflow-x: clip; }
 }
 .player-place { flex: 0 0 auto; padding-left: 8px; padding-right: 8px; }
 
+/* ── くり返しの単位(2026-09 利用者の指定)────────────────────────
+   > 反復ボタンを作って欲しいです。
+   > 文章単位、段落単位、全文単位、三つ選べるような。
+
+   **押すたびに次の単位へ移る、1つのボタン。** 4つ並べると、
+   めったに触らないものが帯の場所を食う(`Stepper` を作ったときと同じ話)。
+
+   **幅をそろえる。** そろえないと、押すたびに隣のものが左右に動く
+   (`.player-at` と同じ作法)。いちばん長いのは「しない」の3文字なので、
+   そのぶんを先に取っておく。**言葉は削らない** —— 何の単位かが
+   分からなくなる。狭い画面で落とすのは「くり返し」の側だけである。 */
+.repeat-unit { padding-left: 8px; padding-right: 8px; }
+.repeat-unit .repeat-unit-now {
+  display: inline-block; min-width: 3em; text-align: center;
+}
+/* **上の帯では「くり返し」を落とす**(2026-09 実測)。
+   帯にはもともと9つ並んでいて、1440px でぎりぎり1行だった。
+   そのまま足すと**折り返して2行になり、紙がそのぶん狭くなる**
+   (実測 96px。1行なら 50px)。
+   **落とすのは説明の側だけ** —— 単位そのもの(しない / 文 / 段落 / 全文)は
+   必ず見えているので、何をくり返すのかは分かる。
+   丸い矢印の絵も「くり返し」を言っている。 */
+.player--bar .repeat-unit .wide-text { display: none; }
+/* あわせて、単位の幅ぞろえも解く(帯では左右に動くものが隣にない) */
+.player--bar .repeat-unit .repeat-unit-now { min-width: 0; }
+.player--bar .repeat-unit { padding-left: 7px; padding-right: 7px; }
+
 /* ① 右下に浮かべる(既定)。**これまで Listen (全体) があった場所**
    **自分では貼り付かない。** 貼り付く役は `.sheet-floats`(親)が持って
    いる。ここでも `position: fixed` にすると、同じ隅に2枚重なり、
@@ -6107,6 +6134,15 @@ html, body { overflow-x: clip; }
    色は `.lesson-bar .btn` などが受け持つので、ここには書かない
    (**同じ色を2か所に持たない**・CLAUDE.md)。 */
 .player--bar { flex: 0 0 auto; }
+/* **帯の中では、余白を1段詰める**(2026-09 実測)。
+   くり返しのボタンを足したぶん、1440px で 20px ほど足りなかった。
+   **削るのは余白だけ** —— 文言も、押せるものの数も減らさない
+   (「詰め方は 言葉を短く → 余白を詰める → 絵だけに」の順だが、
+   ここは言葉を短くすると何のボタンか分からなくなる)。
+   実測: 1440px で 50px の1行に収まる */
+.player--bar { gap: 6px; }
+.player--bar .listenpill-arrow { min-width: 32px; padding: 0 7px; }
+.player--bar .listenpill .btn { padding-left: 8px; padding-right: 8px; }
 
 /* ③ 幅が入らないときは、**スイッチだけ**を帯に置く(2026-09 利用者の指定)。
    押すと右下の操作盤が開く。**絵だけ**なので 320px でも1行に収まる。
@@ -6116,13 +6152,16 @@ html, body { overflow-x: clip; }
 .lesson-bar .player-launch.is-on {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
-/* **縮ませない**(`flex-shrink: 0`)。`flex: 0 1 40px` にしていたら、
-   幅に余裕がある 1440px でも**進み具合の帯が 0px に潰れていた**(実測)。
-   flex の箱の中の箱は、`flex-basis` を「いちばん広いときの幅」として
-   数えてくれないことがある。**入る幅は `flex-basis` ではなく、
-   縮まない指定で押さえる。**
-   狭い窓ではそもそも上の帯に出さない(`wideBar`)ので、縮む必要がない */
-.player--bar .player-track { flex: 0 0 40px; min-width: 0; }
+/* **上の帯では、進み具合の帯を出さない**(2026-09 実測)。
+   くり返しのボタンを足したら、**1440px で帯が2行になった**
+   (実測 96px。1行なら 50px)。紙がそのぶん狭くなる。
+
+   落とすものは**同じことを2つ言っているほう**にする。
+   すぐ左に「3 / 6 段落」があり、進み具合はそれとまったく同じことを、
+   40px の細い線で言い直しているだけである。
+   **右下(`player--float`)では、これまでどおり出す**
+   —— あちらは幅の取り合いをしていない。 */
+.player--bar .player-track { display: none; }
 /* **色は帯に合わせて決め打ち**(`.lesson-bar .btn` と同じ作法)。
    変数のままだと、**明るい配色のときだけ黒い帯に黒い文字**が乗る
    (実測 rgb(74,78,84) on rgb(36,36,31))。明るい側でも暗いまま */
@@ -6157,6 +6196,21 @@ html, body { overflow-x: clip; }
   .player--float .player-at { min-width: 0; }
   .player--float .listenpill-arrow { min-width: 32px; padding: 0 7px; }
   .player .btn { padding: 5px 9px; }
+
+  /* ── 集中モードの下の帯も、同じだけ詰める(2026-09 実測)────────
+     文の ◀ ▶ とくり返しを足したぶん、iPhone(390px)で
+     **帯が 61px → 97px** になっていた。読むところがそのぶん狭くなる。
+
+     **削るのは余白と、説明の言葉だけ。**
+     単位そのもの(しない / 文 / 発言 / 全文)は必ず見えている。
+     それでも 390px では2段になる —— 押すものが1つ増えたのだから、
+     **入らないものを切って1行に見せかけない**(文言を削ると
+     何のボタンか分からなくなる・CLAUDE.md)。
+     実測: 390px 97px / 320px 97px(3段だったのを2段に) */
+  .focus-mid .listenpill-arrow { min-width: 32px; padding: 0 7px; }
+  .focus-mid .repeat-unit .wide-text { display: none; }
+  .focus-mid .repeat-unit .repeat-unit-now { min-width: 0; }
+  .focus-mid .btn { padding: 5px 9px; }
 }
 
 /* 取り組み方の説明。**畳んでおく**(2026-09 利用者の指定

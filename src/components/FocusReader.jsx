@@ -63,12 +63,16 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import EnglishText from './EnglishText.jsx'
-import SpeakButton from './SpeakButton.jsx'
-import RepeatToggle from './RepeatToggle.jsx'
+import SentenceSkip from './SentenceSkip.jsx'
+import RepeatUnit from './RepeatUnit.jsx'
 import FocusFrame from './FocusFrame.jsx'
+import { SpeakerIcon, StopIcon } from './Icons.jsx'
+import { preparingLabel } from './SpeakButton.jsx'
 import { castClipSpeakers, voiceFor } from '../lib/voiceCast.js'
-import { wholeSliceOf } from '../lib/audioPlaylist.js'
 import { resolveVoices } from '../data/clipVoices.js'
+import useBodyAudio from '../lib/useBodyAudio.js'
+import { canReadAloud } from '../lib/readAloud.js'
+import { loadRateId, rateOf } from '../lib/speechRate.js'
 import { useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { normWord } from '../lib/vocab.js'
@@ -175,10 +179,40 @@ export default function FocusReader({
   const [showJa, setShowJa] = useState(false)
   /** 最後の1枚(調べた語のまとめ)を出しているか */
   const [wrap, setWrap] = useState(false)
-  /** 読み上げをくり返すか(2026-09 利用者の指定)。**覚えない** */
-  const [loop, setLoop] = useState(false)
+  /** いま読んでいる文の位置(もとの英文の何文字目か)。**紙と同じ色づけ** */
+  const [readingAt, setReadingAt] = useState(null)
 
   const bodyRef = useRef(null)
+
+  /* ══════════════════════════════════════════════════════════════
+   * **読み上げは、紙とまったく同じ道具で鳴らす**(2026-09 利用者の指定)
+   *
+   *   > 集中モードでも普通の画面と全く同じように文章送りができ、
+   *   > 再生中の文章がハイライトされ、反復も同じようにできるのUIにして
+   *   > 欲しいです。普通の画面との統一感が欲しいところです。
+   *
+   *   これまでは `SpeakButton` で**その段落だけ**を鳴らしていた。
+   *   だから1文ずつの ◁▷ も、いま読んでいる文の色も、
+   *   文 / 段落 / 全文のくり返しも、ここには無かった。
+   *
+   *   いまは紙と同じ `useBodyAudio`(= `readAloudSequence`)で
+   *   **本文ぜんぶを、いま開いている段落から**鳴らす。
+   *
+   * 【鳴っている段落を、そのまま開く】
+   *   通しで進めば、画面もその段落へ移る。**紙で光る段落が
+   *   まん中に来るのと同じこと**である(役目が同じなら、動きもそろえる)。
+   *   「その段落だけを回したい」ときは、くり返しを「段落」にする。
+   * ══════════════════════════════════════════════════════════════ */
+  const atRef = useRef(index)
+  atRef.current = index
+  const goRef = useRef(null)
+  const player = useBodyAudio({
+    onIndex: (i) => {
+      setReadingAt(null)
+      if (i !== null && i !== atRef.current) goRef.current?.(i)
+    },
+    onWord: (w) => setReadingAt(w ? w.charIndex : null),
+  })
 
   const cast = useMemo(
     () => castClipSpeakers(items.map((it) => it.speaker), voiceIds),
@@ -199,6 +233,25 @@ export default function FocusReader({
     if (!list.includes(index)) setDone([...list, index])
     if (bodyRef.current) bodyRef.current.scrollTop = 0
   }
+  // 鳴っている段落へ移るために、読み上げ側から呼べるようにしておく
+  goRef.current = go
+
+  /**
+   * 読み上げに渡すもの。**紙(`LessonView`)とまったく同じ形**である。
+   * 本文ぜんぶを渡し、**始めるのはいま開いている段落**から
+   * (`keep` … そこで止めた続きがあれば、そこから)。
+   */
+  const playOpts = () => ({
+    parts: items.map((it) => ({
+      text: it.prompt_en,
+      clipVoice: voiceFor(cast, it.speaker, soloVoice),
+    })),
+    rate: rateOf(loadRateId()),
+    tier,
+    resumeKey: `all|${materialId ?? 'x'}|${section?.id ?? ''}`,
+    startIndex: index,
+    keep: true,
+  })
 
   // Esc で閉じる。**開いているものから閉じる**(まとめ → 本体)
   useEffect(() => {
@@ -244,7 +297,6 @@ export default function FocusReader({
   const total = items.length
   const unit = isDialogue ? '発言' : '段落'
   const seen = Array.isArray(done) ? done : []
-  const clipVoice = voiceFor(cast, item.speaker, soloVoice)
   const last = index >= total - 1
 
   /* **骨組みは `FocusFrame` 1つ**(`StepFocus` / Quick Response と共通)。
@@ -308,15 +360,27 @@ export default function FocusReader({
           </button>
 
           <div className="focus-mid">
-            {/* **音も訳も両方出す**(2026-09 利用者の指定) */}
-            <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
-                         className="btn--small" repeat={loop}
-                         /* **1本の中の、その区間だけを鳴らす**(2026-09) */
-                         whole={wholeSliceOf(section, cast, soloVoice, item)} />
+            {/* **紙とまったく同じ形**(2026-09 利用者の指定)。
+                ◀ ▶ は1文ずつの送り戻し、その中が Listen である
+                (`PlayerBar` と同じ `SentenceSkip` を使っている) */}
+            {canReadAloud() && (
+              <SentenceSkip>
+                <button type="button"
+                        className="btn btn--small"
+                        onClick={() => player.toggle(playOpts())}>
+                  {player.playing
+                    ? <><StopIcon />{player.waiting ? preparingLabel(player.secs) : 'Stop'}</>
+                    : <><SpeakerIcon />Listen</>}
+                </button>
+              </SentenceSkip>
+            )}
             {/* **くり返し**(2026-09 利用者の指定
                 「これは集中モードで、全てのデバイスで同じにしてください」)。
-                まねて言うには、同じ発言を何度も聴く */}
-            <RepeatToggle on={loop} onChange={setLoop} />
+                まねて言うには、同じ発言を何度も聴く。
+                単位は**文 / 段落(発言)/ 全文**の3つ(紙と同じ部品) */}
+            {canReadAloud() && (
+              <RepeatUnit value={player.repeat} unit={unit} onChange={player.setRepeat} />
+            )}
             {/* 訳が無い段落では出さない(効かない操作を見せない) */}
             {item.prompt_ja && (
               <button type="button" className="btn btn--small btn--ghost"
@@ -385,7 +449,9 @@ export default function FocusReader({
                   タップと画面送りが喧嘩しない。**調べるのはここでする** */}
               <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
                            statuses={wordStatuses} onMark={markWord}
-                           tappable="always" />
+                           tappable="always"
+                           /* **いま読んでいる文を光らせる**(紙と同じ) */
+                           readingAt={player.now === index ? readingAt : null} />
             </p>
           )}
         </>

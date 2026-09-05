@@ -233,6 +233,72 @@ export function seekSentence(spans, sec, delta, bound = null) {
   return at < list.length - 1 ? list[at + 1].start : null
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ * **くり返しは、3つの単位から選ぶ**(2026-09 利用者の指定)
+ *
+ *   > 反復ボタンを作って欲しいです。
+ *   > 文章単位、段落単位、全文単位、三つ選べるような。
+ *
+ * これまでの「くり返す / 1回」(`RepeatToggle`)は**段落単位しか無かった。**
+ * まねて言う練習は、1文だけを何度も回したいことのほうが多い。
+ *
+ * 【止めて鳴らし直さない】
+ *   1本にまとめた音声の中を **`seekClip()` で戻すだけ**にする
+ *   (1文ずつの ◁▷ とまったく同じ道具)。止めて鳴らし直すと、
+ *   そのあいだ黙るうえ、「どこまで聴いたか」の控えが動く。
+ *
+ * 【判断はここに置く。**素の node で確かめられる**】
+ *   `readAloud.js` は Supabase を引き連れているので、手元で走らせられない。
+ *   区間を選ぶ算段だけをここへ出しておけば、`npm run test:mp3` が
+ *   **押してみなくても**確かめられる(`playMark.js` と同じ考え方)。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** くり返しの単位。**並びがそのまま押したときの順**である */
+export const REPEAT_UNITS = ['off', 'sentence', 'item', 'all']
+
+/**
+ * 折り返しの手前。**10ms ごとに見ている**ので、これだけあれば取りこぼさない
+ * (`audioClips.js` の `FADE_STEP`)。速さ 2.5 倍でも 25ms しか進まない。
+ */
+const REPEAT_EPS = 0.04
+
+/**
+ * **くり返しの折り返し先の秒。** まだ終わりに来ていなければ `null`。
+ *
+ * @param {string} unit 'off' / 'sentence' / 'item' / 'all'
+ * @param {number} sec  いまの秒
+ * @param {object} o
+ * @param {Array} o.spans     項目(段落 / 発言)の区間
+ * @param {Array} o.sentences 文の区間(`sentenceSpansOf()`)
+ * @returns {number|null} 戻る先の秒
+ *
+ * 【文の区間が無いときは、段落で回す】
+ *   文の区間は1本にまとめた音声の時刻から出す。出せないのは
+ *   **1本そのものが作れていないとき**で、そのときは段落が
+ *   こちらの知っているいちばん細かい単位である。
+ *   **何も起きないより、近い単位で回すほうがよい**(行き止まりを作らない)。
+ */
+export function repeatSeek(unit, sec, { spans = null, sentences = null } = {}) {
+  if (!REPEAT_UNITS.includes(unit) || unit === 'off') return null
+  const t = Number(sec) || 0
+  const items = Array.isArray(spans) && spans.length ? spans : null
+  const sents = Array.isArray(sentences) && sentences.length ? sentences : null
+
+  let span = null
+  if (unit === 'sentence') {
+    span = sents ? sents[indexAtTime(sents, t)] : null
+    if (!span && items) span = items[indexAtTime(items, t)]
+  } else if (unit === 'item') {
+    span = items ? items[indexAtTime(items, t)] : null
+  } else if (unit === 'all') {
+    // **全文は、いつも頭へ戻す。** 途中から鳴らし始めていても、
+    // 「全文をくり返す」と言った以上は本文の頭から回る
+    if (items) span = { start: items[0].start, end: items[items.length - 1].end }
+  }
+  if (!span || !Number.isFinite(span.start) || !Number.isFinite(span.end)) return null
+  return t >= span.end - REPEAT_EPS ? span.start : null
+}
+
 /**
  * その項目を鳴らす区間。**終わりは次の項目が始まる手前まで**にしない。
  *

@@ -22,7 +22,7 @@ import {
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
 import { loadEnglishVoices } from '../lib/speech.js'
-import { readAloudSequence, stopReading } from '../lib/readAloud.js'
+import { stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { wholeSliceOf } from '../lib/audioPlaylist.js'
@@ -57,6 +57,7 @@ import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import Stepper from './Stepper.jsx'
 import PlayerBar from './PlayerBar.jsx'
+import useBodyAudio from '../lib/useBodyAudio.js'
 
 /** 本文のときだけ ◀ ▶ で挟む。**呼ぶ側に条件を書き散らさない** */
 const withSkip = (on, node) => (on ? <SentenceSkip>{node}</SentenceSkip> : node)
@@ -286,7 +287,24 @@ export default function LessonView({
   // 読み上げ。**会話は話す人ごとに声を変える**(2026-08 の指摘)。
   // 同じ声だと、どちらが話しているのか耳で分からない。
   const [voices, setVoices] = useState([])
-  const [playingAll, setPlayingAll] = useState(false)
+  /**
+   * **通しの読み上げは `useBodyAudio` が受け持つ**(2026-09)。
+   *
+   * 鳴っているか / どこまで来たか / 用意しています… / くり返しの単位は、
+   * **紙(ここ)と集中モード(`FocusReader`)でまったく同じもの**である。
+   * 書き写すと必ず片方だけ古くなるので、持ちものごと1つにまとめてある
+   * (利用者の指定「普通の画面との統一感が欲しいところです」)。
+   *
+   * **何を鳴らすかは押したときに渡す**(声も速さも段もページで変わる)。
+   */
+  const player = useBodyAudio({
+    onIndex: (i) => {
+      setSpeakingKey(i === null ? null : playRef.current[i]?.key ?? null)
+      setReadingAt(null)   // 次の文に移ったら、前の色を消す
+    },
+    onWord: (w) => setReadingAt(w ? w.charIndex : null),
+  })
+  const playingAll = player.playing
   // いま読み上げている項目。**色で示す。**
   // 通しで聞いているとき、どこを読んでいるのか目で追えないと
   // オーバーラッピングもシャドーイングもできない(2026-08 の要望)。
@@ -296,11 +314,10 @@ export default function LessonView({
   // 合図を出さない端末(iOS の Safari)では null のままで、
   // これまでどおり「文のかたまり」の色分けだけが残る
   const [readingAt, setReadingAt] = useState(null)
-  const stopAllRef = useRef(null)
   /* **音が出るまでのあいだ**(2026-09 利用者の指摘「1度目に押すと反応しない」)。
      `SpeakButton` と同じ見せ方にする(文言も共通のものを使う) */
-  const [allWaiting, setAllWaiting] = useState(false)
-  const [allSecs, setAllSecs] = useState(0)
+  const allWaiting = player.waiting
+  const allSecs = player.secs
   /**
    * **いま通しで何番目を鳴らしているか**(操作盤のため・2026-09)。
    *
@@ -309,7 +326,10 @@ export default function LessonView({
    * **止めても消さない。** 止めた場所から再開するので、
    * どこで止めたのかは出しておくほうが正しい。
    */
-  const [playAt, setPlayAt] = useState(null)
+  const playAt = player.at
+  /* 鳴っている番号 → 色を付ける鍵。**一覧は控えで渡す** ——
+     `playableAll` はこれより下(`section` が決まってから)で作られる */
+  const playRef = useRef([])
   /** 操作盤の置き場所(右下 / 上の帯の下)。**覚える** */
   const [place, setPlace] = useState(loadPlace)
   /**
@@ -381,19 +401,9 @@ export default function LessonView({
    * **この式は下の操作盤の出し分けと同じもの**(2か所に書かない)。
    */
   const floating = spot === 'float' || (!fitsInBar && floatOpen)
-  const allTicker = useRef(null)
 
   /** 通しの読み上げを止める */
-  const stopAll = () => {
-    stopAllRef.current?.()
-    stopAllRef.current = null
-    stopReading()
-    setPlayingAll(false)
-    window.clearInterval(allTicker.current)
-    allTicker.current = null
-    setAllWaiting(false)
-    setSpeakingKey(null)
-  }
+  const stopAll = player.stop
 
   /** ページを移ったら、1問ずつの開け閉めと読み上げを元に戻す */
   const resetItems = () => {
@@ -697,81 +707,43 @@ export default function LessonView({
     .map((it, i) => ({ it, key: key(it, i) }))
     .filter(({ it }) => String(it.prompt_en ?? '').trim())
 
+  playRef.current = playableAll
+
   /**
    * 本文を通して読み上げる。話す人が変わると声も変わる。
    *
-   * @param jumpTo 番号を渡すと**そこから**鳴らす(操作盤の ◀◀ ▶▶)。
-   *               渡さなければ、**止めた場所から**続ける(2026-09 利用者の指定)。
+   * **持ちものは `useBodyAudio` にある。** ここで渡すのは
+   * 「何を・どの声で・どの速さで」だけである。
    */
-  const playFrom = (jumpTo = null) => {
-    // 先に「読めるもの」だけに絞る。絞ったあとで番号を数えないと、
-    // 色を付ける場所が1つずれる
-    const playable = playableAll
-    if (!playable.length) return
-    const jump = Number.isFinite(jumpTo)
-      ? Math.min(Math.max(jumpTo, 0), playable.length - 1) : null
-    setPlayingAll(true)
-    // **音が出るまでは「用意しています…」**(2026-09 利用者の指摘)。
-    // MP3 をこれから作るときは数秒かかる。押しても反応が無いように見え、
-    // もう一度押すとそれが「止める」になって、結局鳴らない
-    setAllWaiting(true)
-    setAllSecs(0)
-    const from = Date.now()
-    window.clearInterval(allTicker.current)
-    allTicker.current = window.setInterval(() => {
-      setAllSecs(Math.round((Date.now() - from) / 1000))
-    }, 500)
-    const heard = () => {
-      window.clearInterval(allTicker.current)
-      allTicker.current = null
-      setAllWaiting(false)
-    }
-    stopAllRef.current = readAloudSequence(
-      playable.map(({ it }) => ({
-        text: it.prompt_en,
-        voice: voiceFor(cast, it.speaker),
-        clipVoice: voiceFor(clipCast, it.speaker, soloVoice),
-      })),
-      {
-        rate: rateOf(rateId),
-        clipTier: tier,
-        /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
+  const playOpts = (startIndex = null) => ({
+    parts: playableAll.map(({ it }) => ({
+      text: it.prompt_en,
+      voice: voiceFor(cast, it.speaker),
+      clipVoice: voiceFor(clipCast, it.speaker, soloVoice),
+    })),
+    rate: rateOf(rateId),
+    tier,
+    /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
 
-             > 全文を聞いている途中にストップを押し、もう一度再生を押すと、
-             > また元に戻ってしまいます。
+         > 全文を聞いている途中にストップを押し、もう一度再生を押すと、
+         > また元に戻ってしまいます。
 
-           目印は**教材 + 演習**。何段落目の何秒めかは
-           `readAloud.js` が1か所で覚える(画面ごとに持たない) */
-        resumeKey: `all|${material.id}|${section?.id ?? ''}`,
-        /* 送り戻しのときは、行き先をこちらが決めている。
-           控えを当てると**押したのに動かない**ように見える */
-        ...(jump == null ? {} : { startIndex: jump, resume: false }),
-        onIndex: (i) => {
-          if (i === null) { stopAllRef.current = null; setPlayingAll(false); heard() }
-          setSpeakingKey(i === null ? null : playable[i]?.key ?? null)
-          // **止めても番号は消さない。** どこで止めたかを操作盤が出す
-          if (i !== null) setPlayAt(i)
-          setReadingAt(null)   // 次の文に移ったら、前の語の色を消す
-        },
-        onStart: heard,
-        // **最後まで鳴りきったら、番号を消す。** 次に押したときは頭から
-        onDone: () => setPlayAt(null),
-        onWord: (w) => setReadingAt(w ? w.charIndex : null),
-      },
-    )
-  }
+       目印は**教材 + 演習**。何段落目の何秒めかは
+       `readAloud.js` が1か所で覚える(画面ごとに持たない) */
+    resumeKey: `all|${material.id}|${section?.id ?? ''}`,
+    startIndex,
+  })
 
   /** 鳴らす・止める(右下のボタンと操作盤の ▶ / ■ は同じもの) */
   const playWhole = () => {
-    if (playingAll) { stopAll(); setReadingAt(null); return }
-    playFrom(null)
+    if (!playableAll.length) return
+    player.toggle(playOpts(null))
   }
 
   /** その段落から鳴らし直す(操作盤の ◀◀ ▶▶) */
   const jumpTo = (i) => {
-    stopAll()
-    setReadingAt(null)
-    playFrom(i)
+    if (!playableAll.length) return
+    player.jump(playOpts(i))
   }
 
   return (
@@ -923,6 +895,7 @@ export default function LessonView({
               at={playAt} total={playableAll.length}
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}
+              repeat={player.repeat} onRepeat={player.setRepeat}
             />
           )}
 
@@ -1168,6 +1141,7 @@ export default function LessonView({
                 at={playAt} total={playableAll.length}
                 unit={countUnit(section?.exercise_type)}
                 onToggle={playWhole} onJump={jumpTo}
+                repeat={player.repeat} onRepeat={player.setRepeat}
               />
             )}
 

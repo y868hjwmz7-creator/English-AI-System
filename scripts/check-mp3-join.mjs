@@ -25,7 +25,7 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  indexAtTime, rangeOf, seekSentence, sentenceSpansOf, spansOf, wholeMark,
+  indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
@@ -692,6 +692,59 @@ function fakeMp3({
     if (seekSentence(null, 0, 1) !== null || seekSentence([], 0, 1) !== null) {
       ng('区間が無いのに動かそうとしている')
     } else ok('区間が無ければ、何も返さない')
+
+    /* ══════════════════════════════════════════════════════════
+     * **くり返しは3つの単位から選ぶ**(2026-09 利用者の指定)
+     *
+     *   > 反復ボタンを作って欲しいです。
+     *   > 文章単位、段落単位、全文単位、三つ選べるような。
+     *
+     * 間違えても `npm run lint` にも `npm run build` にも引っかからず、
+     * **押して聴いてみるまで分からない。** だから区間を選ぶ算段だけを
+     * `wholeAudio.js` に出して、ここで数字として確かめる。
+     * ══════════════════════════════════════════════════════════ */
+    const items = spansOf(fakeAlign(groups.map((g) => g.join(' '))),
+      groups.map((g) => g.join(' ')))
+    const o = { spans: items, sentences: sent }
+
+    // ① しない … いつまでも戻らない
+    if (repeatSeek('off', sent[1].end, o) !== null) ng('「しない」なのに戻している')
+    else ok('「しない」では、どこまで来ても戻らない')
+
+    // ② 文 … その文の終わりまで来たら、その文の頭へ
+    if (repeatSeek('sentence', sent[1].start + 0.5, o) !== null) {
+      ng('文の途中なのに戻している')
+    } else if (repeatSeek('sentence', sent[1].end, o) !== sent[1].start) {
+      ng('文の終わりで、その文の頭に戻らない')
+    } else ok('文をくり返す(その文の頭へ)')
+
+    // ③ 段落 … その段落の終わりまで来たら、その段落の頭へ
+    if (repeatSeek('item', sent[1].end, o) !== items[0].start) {
+      ng('段落の終わりで、その段落の頭に戻らない')
+    } else if (repeatSeek('item', sent[0].end, o) !== null) {
+      ng('段落の途中(1文目の終わり)で戻している')
+    } else ok('段落をくり返す(その段落の頭へ)')
+
+    // ④ 全文 … いちばん最後まで来たら、本文の頭へ
+    if (repeatSeek('all', items[0].end, o) !== null) {
+      ng('1段落目の終わりで、全文を戻している')
+    } else if (repeatSeek('all', items[items.length - 1].end, o) !== items[0].start) {
+      ng('本文の終わりで、頭に戻らない')
+    } else ok('全文をくり返す(本文の頭へ)')
+
+    /* **文の区間が出せないときは、段落で回す。**
+       1本にできなかった教材では文の区間が無い。
+       **何も起きないより、近い単位で回すほうがよい**(行き止まりを作らない) */
+    if (repeatSeek('sentence', items[0].end, { spans: items }) !== items[0].start) {
+      ng('文の区間が無いときに、段落で回していない')
+    } else ok('文の区間が無ければ、段落で回す')
+
+    // **知らない単位は「しない」に落とす**(渡し間違いで鳴り続けない)
+    if (repeatSeek('paragraph', sent[1].end, o) !== null) {
+      ng('知らない単位で回してしまう')
+    } else if (repeatSeek('all', 0, { spans: null }) !== null) {
+      ng('区間が無いのに回そうとしている')
+    } else ok('知らない単位・区間が無いときは、回さない')
   }
 
   // 置き場所の材料。**声か英文が変われば、別の音声になる**
@@ -747,7 +800,6 @@ function fakeMp3({
     const screens = [
       ['レッスン表示', 'LessonView'],
       ['教材の中身', 'MaterialBody'],
-      ['集中モード', 'FocusReader'],
       ['6Steps(③⑤ の段落再生)', 'PassagePractice'],
     ]
     let bad0 = bad
@@ -756,6 +808,24 @@ function fakeMp3({
       if (!/wholeSliceOf\(/.test(s)) ng(`${what}(${file})が区間を渡していない`)
     }
     if (bad === bad0) ok(`本文を鳴らす ${screens.length} つの画面が、すべて区間を渡している`)
+
+    /* **集中モードは、紙とまったく同じ道具で鳴らす**(2026-09 利用者の指定)。
+     *
+     *   > 集中モードでも普通の画面と全く同じように文章送りができ、
+     *   > 再生中の文章がハイライトされ、反復も同じようにできるのUIに
+     *
+     * こちらは `wholeSliceOf`(その段落だけ)ではなく、
+     * **紙と同じ `useBodyAudio`**(= 通しの読み上げ)を使う。
+     * どちらも 1本にまとめた音声を鳴らすので、**課金は増えない。**
+     * 別々に書くと、必ず片方だけ古くなる(CLAUDE.md)。 */
+    {
+      const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
+      const lv = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
+      if (!/useBodyAudio\(\{/.test(fr)) ng('集中モードが、紙と同じ道具で鳴らしていない')
+      else if (!/useBodyAudio\(\{/.test(lv)) ng('紙(レッスン表示)が、共通の道具を使っていない')
+      else if (/wholeSliceOf\(/.test(fr)) ng('集中モードに、段落だけを鳴らす道が残っている')
+      else ok('集中モードと紙は、同じ道具で鳴らしている')
+    }
   }
 
   /* **◁▷ が、本当につながっているか**(2026-09 利用者の指定)。
@@ -801,10 +871,66 @@ function fakeMp3({
     }
     for (const [what, file] of [
       ['6Steps(③⑤)', 'PassagePractice'],
-      ['集中モード', 'FocusReader'],
     ]) {
       const t = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
       if (/<SentenceSkip[\s>]/.test(t)) ng(`${what}(${file})に、段落ごとの三角が残っている`)
+    }
+
+    /* **集中モードには、1組だけ置く**(2026-09 利用者の指定)。
+         > 集中モードでも普通の画面と全く同じように文章送りができ…
+         > 普通の画面との統一感が欲しいところです。
+
+       段落を送るのは下の帯の「◀ 前 / 次 ▶」が受け持っているので、
+       **文の三角は Listen の両脇の1組だけ。**
+       2組になると、同じ行に三角が2つ並んで押し分けられない */
+    {
+      const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
+      const n = (fr.match(/<SentenceSkip[\s>]/g) ?? []).length
+      if (n !== 1) ng(`集中モードの文の三角が ${n} 組ある(1組であってほしい)`)
+      else if (!/readingAt=\{player\.now === index \? readingAt : null\}/.test(fr)) {
+        ng('集中モードで、いま読んでいる文が光らない')
+      } else ok('集中モードにも、文の三角とハイライトがある')
+    }
+
+    /* ══════════════════════════════════════════════════════════
+     * **くり返しの道が、1本も切れていないか**(2026-09 利用者の指定)
+     *
+     *   > 反復ボタンを作って欲しいです。
+     *   > 文章単位、段落単位、全文単位、三つ選べるような。
+     *
+     * 押しても**何も起きない**形で切れると、`npm run lint` にも
+     * `npm run build` にも引っかからない。**押して待ってみるまで
+     * 分からない**ので、ここで道そのものを数える。
+     * ══════════════════════════════════════════════════════════ */
+    {
+      const hook = readFileSync(new URL('../src/lib/useBodyAudio.js', import.meta.url), 'utf8')
+      const ru = readFileSync(new URL('../src/components/RepeatUnit.jsx', import.meta.url), 'utf8')
+      const bar2 = readFileSync(new URL('../src/components/PlayerBar.jsx', import.meta.url), 'utf8')
+      const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
+      const lv2 = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
+      const want3 = [
+        ['単位は4つ(しない + 3つ)', ru, /REPEAT_UNITS/],
+        ['押すたびに次へ移る', ru, /export const nextRepeat/],
+        ['部品が単位を渡す', ru, /onChange\?\.\(nextRepeat\(value\)\)/],
+        ['操作盤が出す', bar2, /<RepeatUnit value=\{repeat \?\? 'off'\}/],
+        ['集中モードも出す', fr, /<RepeatUnit value=\{player\.repeat\}/],
+        ['紙が渡す', lv2, /repeat=\{player\.repeat\} onRepeat=\{player\.setRepeat\}/],
+        /* **値ではなく、訊きに行く形で渡す。** 値で渡すと、
+           鳴らしている最中に切り替えても押し直すまで効かない */
+        ['訊きに行く形で渡す', hook, /repeatOf: \(\) => repeatRef\.current/],
+        ['読み上げが受け取る', read, /repeatOf = null,/],
+        ['1本のときは戻して回す', read, /const back = repeatSeek\(repeatNow\(\), sec, \{ spans, sentences: sent \}\)/],
+        ['戻せたら、そのひと刻みは何もしない', read, /if \(back !== null && seekClip\(back\)\) return/],
+        ['発言ごとのときも回す', read, /if \(\(unit === 'sentence' \|\| unit === 'item'\) && ok\) i -= 1/],
+        ['全文は頭から回す', read, /if \(repeatNow\(\) !== 'all' \|\| !heard\) break/],
+        /* **戻したら、なだらかな上げ下げの起点も戻す。**
+           戻さないと「鳴っているのに音が出ない」になる(音量 0 のまま) */
+        ['戻したら起点も戻す', clips, /fadeOrigin\?\.\(t\)/],
+        ['起点を書き換える窓口がある', clips, /fadeOrigin = moveOrigin/],
+      ]
+      let bad1 = bad
+      for (const [what, text, re] of want3) if (!re.test(text)) ng(`くり返し: ${what}`)
+      if (bad === bad1) ok('くり返しは、画面から音まで道が1本もつながっている')
     }
 
     /* **レッスン表示だけは、入れ替えで出す**(2026-09 利用者の指定)。
