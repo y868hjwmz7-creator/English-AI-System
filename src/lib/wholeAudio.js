@@ -170,6 +170,70 @@ export function indexAtTime(spans, sec) {
 }
 
 /**
+ * **文ごとの区間**(2026-09 利用者の指定)。
+ *
+ *   > 「全体を聞く」「段落ごと」りょうほうの横に◁▷をおいて、
+ *   > 1文ずつ飛ばしたり戻したりできる仕様です
+ *
+ * **`spansOf()` をそのまま使う。** 渡すものを「項目」から「文」に
+ * 変えるだけで、**数え方は1つのまま**である
+ * (文に切っても、空白でない文字の並びは1文字も変わらない)。
+ *
+ * **文に切るのは呼ぶ側**(`splitEnSentences`)。ここに切り方を持ち込むと、
+ * このファイルが素の node で走らせられなくなる(`playMark.js` と同じ考え方)。
+ *
+ * @param {object} alignment 窓口が控えた `alignment` そのもの
+ * @param {string[][]} groups 項目ごとの文の一覧(`[[文,文],[文],…]`)
+ * @returns {Array<{start:number,end:number,item:number}>|null}
+ */
+export function sentenceSpansOf(alignment, groups) {
+  const list = Array.isArray(groups) ? groups : []
+  const flat = []
+  list.forEach((sentences, item) => {
+    for (const s of sentences ?? []) flat.push({ item, text: String(s ?? '') })
+  })
+  if (!flat.length) return null
+  const spans = spansOf(alignment, flat.map((f) => f.text))
+  if (!spans) return null
+  return spans.map((s, i) => ({ ...s, item: flat[i].item }))
+}
+
+/**
+ * いまの秒から、**1つ先 / 1つ前の文の頭**を出す。
+ *
+ * **いま鳴っている文の頭に戻るのではなく、1つ前の文へ**戻す
+ * (音楽プレーヤーの ◀◀ と同じにすると、押しても同じ文が鳴り直すだけで
+ * 「戻った」と感じられない)。ただし**文の途中まで来ていたら
+ * その文の頭へ**戻す —— 聞き逃したのはたいていその文である。
+ *
+ * @param {Array} spans `sentenceSpansOf()` の返り値
+ * @param {number} sec  いまの秒
+ * @param {number} delta -1(前へ)/ +1(次へ)
+ * @param {object} [bound] `{start, end}` を渡すと、その中だけで動く
+ * @returns {number|null} 飛ぶ先の秒。**行き先が無ければ null**
+ */
+export function seekSentence(spans, sec, delta, bound = null) {
+  if (!Array.isArray(spans) || !spans.length) return null
+  const list = bound
+    ? spans.filter((s) => s.start >= bound.start - 0.001 && s.start < bound.end)
+    : spans
+  if (!list.length) return null
+  const t = Number(sec) || 0
+  // いま何番目の文か(まだ始まっていなければ先頭)
+  let at = 0
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (t >= list[i].start - 0.001) { at = i; break }
+  }
+  if (delta < 0) {
+    /* **その文に入って 1.2 秒を過ぎていたら、その文の頭へ。**
+       頭から 1.2 秒以内なら、押した人は「もう1つ前」を求めている */
+    if (t - list[at].start > 1.2) return list[at].start
+    return at > 0 ? list[at - 1].start : null
+  }
+  return at < list.length - 1 ? list[at + 1].start : null
+}
+
+/**
  * その項目を鳴らす区間。**終わりは次の項目が始まる手前まで**にしない。
  *
  * 間(ま)まで鳴らすと、1つだけ聴いたときに最後が間延びする。

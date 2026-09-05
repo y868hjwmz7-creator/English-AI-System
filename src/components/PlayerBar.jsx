@@ -34,6 +34,7 @@
  *   絵文字は端末ごとに形も大きさも違う(`Stepper.jsx` と同じ理由)。
  */
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
+import SentenceSkip from './SentenceSkip.jsx'
 
 /**
  * @param place     'float'(右下)/ 'bar'(上の帯の下)
@@ -73,6 +74,11 @@ export default function PlayerBar({
               onClick={onToggle}>
         {playing ? <><StopIcon />{label ?? 'Stop'}</> : <><SpeakerIcon />{label ?? 'Listen (全体)'}</>}
       </button>
+
+      {/* **1文ずつ、飛ばす / 戻す**(2026-09 利用者の指定)。
+          すぐ隣の ◀◀ ▶▶ は**段落**を送るもので、こちらは**文**である。
+          鳴っていないあいだは出ない(部品の側が自分で引っ込む) */}
+      <SentenceSkip />
 
       <button type="button" className="btn btn--small player-move"
               aria-label={`次の${unit}`}

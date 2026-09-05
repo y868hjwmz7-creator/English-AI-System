@@ -602,7 +602,9 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     const had = await readWholeJson(json)
     if (had) {
       const spans = spansOf(had.alignment, body)
-      const out = spans ? { url: mp3, spans } : null
+      /* **時刻そのものも返す。** 1文ずつの ◁▷ は、同じ時刻から
+         文の区間を出す(`sentenceSpansOf`)。**二度取りに行かない** */
+      const out = spans ? { url: mp3, spans, alignment: had.alignment } : null
       if (!out) {
         /* **時刻が当てはまらない。** 区切れないものを当てずっぽうで
            区切ると、別の発言の場所を指す。1本にするのはあきらめる */
@@ -651,7 +653,7 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     /* **作り直したときは、控えを素通りさせる。** 置き場所は同じままで、
        1年もつ指定で入っているため(`remakeClip` と同じ落とし穴) */
     const stamp = force ? `?v=${Date.now()}` : ''
-    const out = { url: `${res.url}${stamp}`, spans }
+    const out = { url: `${res.url}${stamp}`, spans, alignment: made.alignment }
     wholeCache.set(mark, out)
     wholeGaveUp.delete(mark)
     wholeNote = null
@@ -705,6 +707,36 @@ let endCurrent = null
  * だから**数字だけを返し、覚えるのは `readAloud.js` 1か所**にする
  * (判断を2か所に置かない・CLAUDE.md)。
  */
+/**
+ * **いま鳴っているものの、いまの秒**。鳴っていなければ `null`。
+ * 1文ずつの送り戻し(◁▷)が、飛ぶ先を決めるために使う。
+ */
+export function clipTime() {
+  if (!element || element.paused) return null
+  const t = Number(element.currentTime)
+  return Number.isFinite(t) ? t : null
+}
+
+/**
+ * **鳴らしたまま、場所だけを移す**(2026-09 利用者の指定・1文ずつの ◁▷)。
+ *
+ * **止めて鳴らし直さない。** 止めると `stopClip()` が
+ * 「どこまで聴いたか」を控えてしまううえ、鳴らし直しのあいだ黙る。
+ * `currentTime` を動かすだけなら、その場で続きが鳴る。
+ *
+ * **なだらかな上げ下げ(`fadeGain`)には触らない。** あちらは
+ * 鳴り始めと鳴り終わりのためのもので、途中で場所を移すのは別の話である。
+ *
+ * @returns {boolean} 移せたか(鳴っていなければ false)
+ */
+export function seekClip(sec) {
+  if (!element || element.paused) return false
+  const t = Number(sec)
+  if (!Number.isFinite(t) || t < 0) return false
+  try { element.currentTime = t } catch { return false }
+  return true
+}
+
 export function stopClip() {
   generation += 1
   const end = endCurrent

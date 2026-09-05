@@ -41,18 +41,90 @@
  *   `playbackRate`。速さの段階ごとに作ると、費用も置き場所も5倍になる。
  */
 import {
-  DEFAULT_CLIP_VOICE, canUseClips, playClip, prefetchClip, stopClip, wholeClip,
+  DEFAULT_CLIP_VOICE, canUseClips, clipTime, playClip, prefetchClip, seekClip,
+  stopClip, wholeClip,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
 import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
-import { indexAtTime, rangeOf } from './wholeAudio.js'
+import {
+  indexAtTime, rangeOf, seekSentence, sentenceSpansOf,
+} from './wholeAudio.js'
+import { splitEnSentences } from './sentencePair.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
 let session = 0
+
+/* ══════════════════════════════════════════════════════════════════
+ * **1文ずつ、飛ばす / 戻す**(2026-09 利用者の指定)
+ *
+ *   > 「全体を聞く」「段落ごと」りょうほうの横に◁▷をおいて、
+ *   > 1文ずつ飛ばしたり戻したりできる仕様です
+ *
+ * **1本にまとめた音声だからできる。** 文の区間は、通しの音声と一緒に
+ * 控えてある時刻(`alignment`)から出す(`sentenceSpansOf`)。
+ *
+ * 【止めて鳴らし直さない】
+ *   `seekClip()` が `currentTime` を動かすだけなので、その場で続きが鳴る。
+ *   止めると「どこまで聴いたか」の控えが動くうえ、鳴らし直しで黙る。
+ *
+ * 【控えを、画面ごとに持たせない】
+ *   いま鳴っているものは1つだけなので、**ここに1つ**置く
+ *   (`playMark.js` と同じ考え方)。画面は `skipSentence(±1)` を呼ぶだけ。
+ *
+ * 【1本にできなかったときは、動かせない】
+ *   区間が無いので `null` のまま。画面は `sentenceSkip()` を見て
+ *   **押せなくする**(効かない操作を見せない・CLAUDE.md)。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** いま鳴っているものの文の区間。`{ spans, bound, session }` */
+let cursor = null
+const cursorSubs = new Set()
+const tellCursor = () => { for (const fn of [...cursorSubs]) fn(!!cursor) }
+
+const setCursor = (next) => {
+  const had = !!cursor
+  cursor = next
+  if (had !== !!cursor) tellCursor()
+}
+
+/** 1文ずつの送り戻しが使えるか。**変わったら知らせる** */
+export function watchSentenceSkip(fn) {
+  cursorSubs.add(fn)
+  fn(!!cursor)
+  return () => { cursorSubs.delete(fn) }
+}
+
+/** いま、1文ずつ動かせるか */
+export const canSkipSentence = () => !!cursor
+
+/**
+ * 1文ぶん、飛ばす / 戻す。
+ *
+ * @param {number} delta -1(前の文へ)/ +1(次の文へ)
+ * @returns {boolean} 動かせたか
+ */
+export function skipSentence(delta) {
+  if (!cursor || cursor.session !== session) return false
+  const at = clipTime()
+  if (at === null) return false
+  const to = seekSentence(cursor.spans, at, delta, cursor.bound)
+  if (to === null) return false
+  return seekClip(to)
+}
+
+/** 文の区間を、鳴らし始めるときに控える。**止めたら捨てる** */
+function holdCursor(spans, bound) {
+  setCursor(spans?.length ? { spans, bound, session } : null)
+}
+
+/** 項目の英文から、文の区間を出す。**切り方は `splitEnSentences` 1か所** */
+const sentenceSpansFor = (got, texts) => sentenceSpansOf(
+  got?.alignment, texts.map((t) => splitEnSentences(t)),
+)
 
 /* ── 止めた場所を覚えておく(2026-09 利用者の指定)─────────────────
  *
@@ -83,6 +155,7 @@ let session = 0
  * あわせて、**どこまで鳴っていたか**を覚える(上記)。
  */
 export function stopReading() {
+  setCursor(null)
   session += 1
   const at = stopClip()
   stopSpeaking()
@@ -178,6 +251,9 @@ export async function readAloud(text, {
          鳴らさない)。`readAloudSequence` とまったく同じ守り */
       const at = (from && from.at > span.start && from.at < span.end)
         ? from.at : span.start
+      /* **文の区間を控える**(1文ずつの ◁▷)。段落ごとに押したときは、
+         **その段落の中だけ**で動かす(押した段落から出ていかない) */
+      holdCursor(sentenceSpansFor(got, whole.texts), span)
       const cut = await playClip({
         srcUrl: got.url,
         // 1本には声が何人ぶんも入っている。**声ごとの速さの補正は当てない**
@@ -360,6 +436,9 @@ export function readAloudSequence(parts, {
      *
      * 合図は `playClip` の `onStart` が、**本当に鳴り始めた瞬間**に出す。 */
 
+    /* **文の区間を控える**(1文ずつの ◁▷)。通しでは**本文ぜんぶ**を
+       行き来できる(段落をまたいでも構わない) */
+    holdCursor(sentenceSpansFor(got, list.map((p) => p.text)), null)
     const played = await playClip({
       srcUrl: got.url,
       // 1本には声が2人ぶん入っている。**声ごとの速さの補正は当てない**

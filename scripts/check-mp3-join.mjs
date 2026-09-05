@@ -25,7 +25,7 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  indexAtTime, rangeOf, spansOf, wholeMark,
+  indexAtTime, rangeOf, seekSentence, sentenceSpansOf, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
@@ -616,6 +616,84 @@ function fakeMp3({
     else ok('「その発言だけ」の区間を取り出せる')
   }
 
+  /* ── **1文ずつ、飛ばす / 戻す**(2026-09 利用者の指定)──────────────
+   *
+   *   > 「全体を聞く」「段落ごと」りょうほうの横に◁▷をおいて、
+   *   > 1文ずつ飛ばしたり戻したりできる仕様です
+   *
+   * **`spansOf()` をそのまま使う**ので、数え方は1つのままである。
+   * ここが壊れると**押しても動かない / 別の場所へ飛ぶ**が、
+   * `npm run lint` にも `npm run build` にも引っかからない。 */
+  {
+    // 3項目・全部で5文(1つめが2文、2つめが2文、3つめが1文)
+    const groups = [
+      ['One two three.', 'Four five.'],
+      ['Six seven.', 'Eight nine ten.'],
+      ['Eleven twelve.'],
+    ]
+    const flat = groups.flat()
+    const sent = sentenceSpansOf(fakeAlign(flat), groups)
+    if (!sent) ng('文で区切れない')
+    else if (sent.length !== 5) ng(`文の数が合わない(${sent.length} ≠ 5)`)
+    else if (sent.map((x) => x.item).join(',') !== '0,0,1,1,2') {
+      ng('どの項目の文かがずれている', sent.map((x) => x.item).join(','))
+    } else if (!(sent[1].start > sent[0].start && sent[4].start > sent[3].start)) {
+      ng('文の区間が前後している')
+    } else ok(`文ごとに区切れる(全 ${sent.length} 文 / 3 項目)`)
+
+    // **数が合わなければ、何も返さない**(項目のときと同じ守り)
+    if (sentenceSpansOf(fakeAlign(['One two three.']), groups)) {
+      ng('文字が足りないのに文で区切っている')
+    } else if (sentenceSpansOf(null, groups)) {
+      ng('時刻が無いのに文で区切っている')
+    } else if (sentenceSpansOf(fakeAlign(flat), [])) {
+      ng('英文が無いのに文で区切っている')
+    } else ok('文でも、合わなければ区切らない')
+  }
+
+  // 飛ぶ先の決め方
+  {
+    /* **1文を長めにする。** この検証の時刻は「1文字 = 0.1 秒」なので、
+       短い文だと1文まるごとが 1.2 秒に満たず、
+       「その文の頭へ戻す」の枝を一度も通れない */
+    const groups = [
+      ['Alpha bravo charlie delta.', 'Echo foxtrot golf hotel.'],
+      ['India juliett kilo lima.', 'Mike november oscar papa.'],
+    ]
+    const sent = sentenceSpansOf(fakeAlign(groups.flat()), groups)
+    const s0 = sent[0].start
+    const s1 = sent[1].start
+    const s2 = sent[2].start
+
+    if (seekSentence(sent, s0, 1) !== s1) ng('次の文へ進めない')
+    else if (seekSentence(sent, s1, -1) !== s0) ng('前の文へ戻れない')
+    else ok('◁▷ で1文ずつ動く')
+
+    /* **文の途中まで来ていたら、その文の頭へ戻す。**
+       聞き逃したのは、たいていいま鳴っている文である */
+    if (seekSentence(sent, s1 + 1.5, -1) !== s1) ng('途中から、その文の頭に戻らない')
+    else if (seekSentence(sent, s1 + 0.3, -1) !== s0) ng('入った直後なのに、もう1つ前へ行かない')
+    else ok('入って間もなければ1つ前、途中ならその文の頭へ')
+
+    // **端では動かさない**(`null` を返す → 画面は何もしない)
+    if (seekSentence(sent, s0, -1) !== null) ng('先頭より前へ行こうとしている')
+    else if (seekSentence(sent, sent[3].start, 1) !== null) ng('最後より先へ行こうとしている')
+    else ok('端では動かない')
+
+    /* **段落ごとに押したときは、その段落の中だけ。**
+       押した段落から出ていってしまうと、押した意味がなくなる */
+    const bound = { start: s2, end: sent[3].end }
+    if (seekSentence(sent, s2, -1, bound) !== null) ng('段落の外へ戻れてしまう(境目を見ていない)')
+    else if (seekSentence(sent, s2, 1, bound) !== sent[3].start) ng('段落の中で進めない')
+    else if (seekSentence(sent, sent[3].start, 1, bound) !== null) {
+      ng('段落の終わりを越えて進んでいる')
+    } else ok('段落ごとに押したときは、その段落の中だけで動く')
+
+    if (seekSentence(null, 0, 1) !== null || seekSentence([], 0, 1) !== null) {
+      ng('区間が無いのに動かそうとしている')
+    } else ok('区間が無ければ、何も返さない')
+  }
+
   // 置き場所の材料。**声か英文が変われば、別の音声になる**
   {
     const m1 = wholeMark(['us-1', 'uk-2'], texts)
@@ -678,6 +756,40 @@ function fakeMp3({
       if (!/wholeSliceOf\(/.test(s)) ng(`${what}(${file})が区間を渡していない`)
     }
     if (bad === bad0) ok(`本文を鳴らす ${screens.length} つの画面が、すべて区間を渡している`)
+  }
+
+  /* **◁▷ が、本当につながっているか**(2026-09 利用者の指定)。
+     定義だけあって誰も呼ばなければ、何も起きない
+     (`noteFnRev` を定義だけして呼んでいなかったのと同じ落とし穴) */
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    const skip = readFileSync(new URL('../src/components/SentenceSkip.jsx', import.meta.url), 'utf8')
+    const want = [
+      ['区間を控える', read, /holdCursor\(sentenceSpansFor\(/],
+      ['通しでも控える', read, /holdCursor\(sentenceSpansFor\(got, list\.map/],
+      ['止めたら捨てる', read, /stopReading\(\) \{\s+setCursor\(null\)/],
+      ['動かす道がある', read, /export function skipSentence\(/],
+      ['鳴らしたまま場所だけ移す', clips, /export function seekClip\(/],
+      ['いまの秒を返す', clips, /export function clipTime\(/],
+      ['部品が呼んでいる', skip, /skipSentence\(-1\)/],
+      ['部品が見張っている', skip, /watchSentenceSkip\(setReady\)/],
+    ]
+    let bad0 = bad
+    for (const [what, text, re] of want) if (!re.test(text)) ng(`1文ずつ: ${what}`)
+    /* **出す場所は4つ。** 「全体を聞く」の横(操作盤・レッスン表示・6Steps)と、
+       段落ごとの Listen の横。1つ抜けても lint / build は通る */
+    const spots = [
+      ['読み上げの操作盤', 'PlayerBar'],
+      ['レッスン表示', 'LessonView'],
+      ['6Steps(③⑤)', 'PassagePractice'],
+      ['集中モード', 'FocusReader'],
+    ]
+    for (const [what, file] of spots) {
+      const t = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
+      if (!/<SentenceSkip\s*\/>/.test(t)) ng(`1文ずつの ◁▷ が ${what}(${file})に無い`)
+    }
+    if (bad === bad0) ok(`1文ずつの ◁▷ … 道は1本も切れていない(出す場所 ${spots.length} つ)`)
   }
 
   // 窓口が、**実際に**新しい API を呼んでいるか

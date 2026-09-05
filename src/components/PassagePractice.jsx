@@ -45,6 +45,7 @@ import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import { preparingLabel } from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
+import SentenceSkip from './SentenceSkip.jsx'
 import StepFocus from './StepFocus.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
@@ -543,6 +544,8 @@ export default function PassagePractice({
               : <><SpeakerIcon />Listen (全体)</>}
           </button>
         )}
+        {/* 通しでは**本文ぜんぶ**を1文ずつ行き来できる(2026-09) */}
+        {playingAll && <SentenceSkip />}
         {/* **速さは、①ディクテーションでは出さない**(2026-09 利用者の指定)。
 
               > 再生スピード調整タブも、削除しする代わりに各文につけてください。
@@ -743,6 +746,10 @@ export default function PassagePractice({
                     ? <><StopIcon />Stop</>
                     : <><SpeakerIcon />Listen</>}
                 </button>
+                {/* **1文ずつ、飛ばす / 戻す**(2026-09 利用者の指定)。
+                    **その段落を鳴らしているときだけ**出す。
+                    全部の段落に出すと、同じものが並ぶ */}
+                {speakingId === item.id && <SentenceSkip />}
                 {/* **Listen のとなりに、くり返し**(2026-09 利用者の指定) */}
                 <RepeatToggle on={loopIds.has(item.id)}
                               onChange={() => setLoopIds((v) => {

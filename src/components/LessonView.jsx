@@ -50,6 +50,7 @@ import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
+import SentenceSkip from './SentenceSkip.jsx'
 import AnswerEn from './AnswerEn.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
@@ -1362,6 +1363,10 @@ export default function LessonView({
                     ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
                     : <><SpeakerIcon />Listen (全体)</>}
                 </button>
+                {/* **1文ずつ、飛ばす / 戻す**(2026-09 利用者の指定)。
+                    通しでは**本文ぜんぶ**を行き来できる。
+                    鳴っていないあいだは出ない(効かない操作を見せない) */}
+                {playingAll && <SentenceSkip />}
               </div>
             )}
 
@@ -1444,6 +1449,12 @@ export default function LessonView({
                       }}
                       onWord={(w) => setReadingAt(w ? w.charIndex : null)}
                     />
+                  )}
+                  {/* **その段落を鳴らしているときだけ**出す。
+                      全部の段落に出すと、同じものが並ぶ(CLAUDE.md) */}
+                  {secType?.audioFrom && it[secType.audioFrom]
+                    && speakingKey === k(it, i) && (
+                    <SentenceSkip />
                   )}
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。
