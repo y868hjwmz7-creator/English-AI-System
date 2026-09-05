@@ -55,7 +55,7 @@
  *   録音の `AudioContext` で学んだ作法(1つだけ作り、作り直さない)と同じ。
  */
 import {
-  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceRateOf, voiceSettingsOf,
+  DEFAULT_BASE, baseVoiceOf, elevenIdOf, voiceModelOf, voiceRateOf, voiceSettingsOf,
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { STANDARD } from './voiceTier.js'
@@ -197,7 +197,7 @@ export const lastClipDetail = () => lastDetail
  *
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  */
-export const NEED_FN_REV = '2026-09-04b'
+export const NEED_FN_REV = '2026-09-05'
 
 let fnRev = null
 /** 窓口の版。まだ一度も呼んでいなければ `null` */
@@ -407,6 +407,12 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
            名簿に無い id(代役)でも同じものが返る。
            判断は `voiceSettingsOf()` 1か所(名簿の側) */
         elevenSettings: voiceSettingsOf(rosterId),
+        /* **その声を、どのモデルで鳴らすか**(2026-09 利用者の指定)。
+           利用者は ElevenLabs の画面で**聴いてから**選んでいるので、
+           **聴いたモデルで鳴らさないと別物になる。**
+           名簿に書いていない声は v3(`voiceModelOf` が既定を返す)。
+           **判断は名簿の側1か所** —— 窓口は受け取って渡すだけである */
+        elevenModel: voiceModelOf(rosterId),
       },
     })
     // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある

@@ -31,7 +31,8 @@ import {
   castClipSpeakers, castLine, castList, remakeModeOf, sameVoices,
 } from '../src/lib/voiceCast.js'
 import {
-  ACCENT_KEEP, CLIP_VOICES, findVoice, voiceSettingsOf, voicesOfAccent,
+  ACCENT_KEEP, CLIP_VOICES, V2, V3, findVoice, voiceModelOf, voiceSettingsOf,
+  voicesOfAccent,
 } from '../src/data/clipVoices.js'
 
 let bad = 0
@@ -123,6 +124,51 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     ng('性別の指示が、頼み文に入っていない',
       '`genderLine` を作っただけで、登場人物の指示に足していない')
   } else ok('性別の指示は、頼み文に入っている')
+}
+
+/* ============================================================================
+ * **名簿から声が消えていないこと**(2026-09。実際に落とした)
+ *
+ *   Sophie を足すときに、**そのすぐ上にいた Caroline を消してしまった。**
+ *   `npm run lint` も `npm run build` も通り、**画面を開いても
+ *   「1人少ない」だけ**なので、誰も気づけない。
+ *
+ *   > 一度入れた業種や趣味は勝手に減らさないでください。
+ *   > 一度追加した要素は指示がない限りは勝手に変更を加えないでください。
+ *   > これはプロジェクトを超えたルールです。(2026-09 利用者の指定)
+ *
+ *   声もまったく同じである。しかも消すと**その声で作った教材の
+ *   話す人に声が当たらなくなる**ので、害は業種より大きい。
+ *
+ * 【だから、id を控えておく】
+ *   ここに並べた id が1つでも名簿から消えたら赤くなる。
+ *   **足したときは、ここにも書き足すことになる** ——
+ *   そのぶん、必ず1回は自分の目で数えることになる(`test:bar` の `WANT` と同じ)。
+ *
+ *   **消してよいのは、利用者が「消して」と言ったときだけ。**
+ *   そのときはこの一覧からも消す(`retired` は消すことではない。
+ *   選択肢から外すだけなので、id は名簿に残る)。
+ */
+{
+  const KNOWN = [
+    'us-1', 'us-2', 'us-3', 'us-4', 'us-5', 'us-6', 'us-7',
+    'uk-1', 'uk-2', 'uk-3', 'uk-4',
+    'au-1', 'au-2', 'au-3', 'au-4', 'au-5', 'au-6', 'au-7', 'au-8',
+    'au-9', 'au-10', 'au-11', 'au-12',
+    'sc-1', 'sc-2', 'sc-3', 'sc-4', 'sc-5',
+    'sc-6', 'sc-7', 'sc-8', 'sc-9', 'sc-10',
+  ]
+  const gone = KNOWN.filter((id) => !findVoice(id))
+  if (gone.length) {
+    ng(`名簿から声が消えている: ${gone.join(' / ')}`,
+      '一度入れた声を勝手に減らさない。その声で作った教材の話す人に、声が当たらなくなる')
+  } else ok(`控えてある ${KNOWN.length} 人は、全員まだ名簿にいる`)
+
+  const added = CLIP_VOICES.filter((v) => !KNOWN.includes(v.id))
+  if (added.length) {
+    ng(`名簿に足した声が、控えに入っていない: ${added.map((v) => v.id).join(' / ')}`,
+      'scripts/check-voice-cast.mjs の KNOWN にも足すこと(数え直す機会になる)')
+  }
 }
 
 // ── 名簿そのもの ──────────────────────────────────────────────
@@ -581,9 +627,12 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
  *   ここで止めるのは**その行の `settings` で値をいじること**だけである。
  */
 {
+  /* **v2 の声では、この3つは効く。** だから止めるのは v3 の声だけである
+     (2026-09、利用者が v2 の声を1人採ったので、モデル別に分けた) */
   const DEAD_ON_V3 = ['similarity_boost', 'use_speaker_boost', 'speed']
   const found = []
   for (const v of CLIP_VOICES) {
+    if (voiceModelOf(v.id) !== V3) continue
     for (const k of DEAD_ON_V3) {
       if (v.settings && v.settings[k] !== undefined) found.push(`${v.label}.${k}`)
     }
@@ -592,6 +641,60 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     ng(`v3 が読まない欄を名簿でいじっている: ${found.join(', ')}`,
       '作り直しても音は変わらず、課金だけがかかる。動かすなら stability')
   } else ok('名簿の settings は、v3 が読む欄だけを触っている')
+}
+
+/* ============================================================================
+ * ⑪ **声ごとのモデルが、ElevenLabs まで届いていること**(2026-09 利用者の指定)
+ *
+ *   > ScotlandSophie (V2 / female) : …
+ *
+ *   利用者は ElevenLabs の画面で**聴いてから**声を選ぶ。
+ *   v2 で聴いた声を黙って v3 で鳴らせば、**聴いた音とは別物**になる。
+ *   しかも**音は鳴る**ので、**誰も気づけない**(`elevenSettings` で
+ *   まったく同じ失敗を2度している)。
+ */
+{
+  const clips = read('src/lib/audioClips.js')
+  const fn = read('supabase/functions/speak/index.ts')
+
+  // 名簿に書けるのは、知っているモデルだけ
+  const wrong = CLIP_VOICES.filter((v) => v.model && ![V2, V3].includes(v.model))
+  if (wrong.length) {
+    ng(`名簿に知らないモデルがある: ${wrong.map((v) => v.label).join(', ')}`,
+      'ElevenLabs に 422 で断られ、その声だけ音が鳴らなくなる')
+  } else ok('名簿のモデルは、どれも知っている名前である')
+
+  // 書いていない声は v3。**既定を静かに変えない**
+  const noModel = CLIP_VOICES.find((v) => !v.model)
+  if (noModel && voiceModelOf(noModel.id) !== V3) {
+    ng('モデルを書いていない声の既定が v3 ではない',
+      '利用者が使う声は原則すべて v3(CLAUDE.md)')
+  } else ok(`モデルを書いていない声は v3 のまま(${V3})`)
+
+  // 渡す道が切れていないか。**切れても音は鳴る**ので気づけない
+  if (!/elevenModel:\s*voiceModelOf\(/.test(clips)) {
+    ng('画面が、声ごとのモデルを窓口へ渡していない',
+      'v2 で聴いた声が v3 で鳴る。音は鳴るので気づけない')
+  } else ok('画面は、声ごとのモデルを窓口へ渡している')
+
+  if (!/body\.elevenModel/.test(fn)) {
+    ng('窓口が、渡されたモデルを読んでいない')
+  } else if (!/ELEVEN_MODELS\.includes\(/.test(fn)) {
+    ng('窓口が、知らないモデル名をそのまま流している',
+      '書き間違いが 422 になり、その声だけ鳴らなくなる')
+  } else ok('窓口は、渡されたモデルを読み、知らない名前は既定に落とす')
+
+  // 実際にモデルを渡して合成しているか(受け取って捨てていないか)
+  if (!/synthElevenBest\([\s\S]{0,200}?elevenModel,/.test(fn)) {
+    ng('窓口が、読んだモデルを ElevenLabs へ渡していない',
+      '受け取っただけで捨てている。既定のモデルで作られる')
+  } else ok('窓口は、そのモデルで ElevenLabs に作らせている')
+
+  // モデルを変えてある声は、名前を読み上げる(黙って効かせない)
+  const named = CLIP_VOICES.filter((v) => v.model && v.model !== V3)
+  if (named.length) {
+    ok(`既定(v3)と違うモデルの声: ${named.map((v) => `${v.label}=${v.model}`).join(' / ')}`)
+  }
 }
 
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

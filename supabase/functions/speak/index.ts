@@ -87,7 +87,7 @@ const reply = (body: unknown, status = 200) =>
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-04b'
+const FN_REV = '2026-09-05'
 
 /** 置き場所(Storage のバケツ)。0016 で作る */
 const BUCKET = 'tts'
@@ -226,6 +226,10 @@ const ELEVEN_MODEL_DEFAULT = 'eleven_v3'
 
 /** 断られたときに落ちる先。**ここまでで止める**(際限なく試さない) */
 const ELEVEN_MODEL_FALLBACK = 'eleven_multilingual_v2'
+
+/** 画面から受け取ってよいモデル。**知らない名前は既定に落とす。**
+    書き間違いをそのまま ElevenLabs へ流すと 422 で断られ、音が鳴らなくなる */
+const ELEVEN_MODELS = [ELEVEN_MODEL_DEFAULT, ELEVEN_MODEL_FALLBACK]
 
 /** v3 かどうか。落ち方と `stability` の丸め方が変わる。
     **区切りは `_`。** `[^\w]` にすると `_` が語の文字なので当たらない
@@ -627,6 +631,18 @@ Deno.serve(async (req) => {
        **窓口は名簿を持たない**ので、ここでは中身だけを確かめる。
        知らない欄は捨て、数は 0〜1 に丸める(そのまま渡すと 422 で断られる) */
     const elevenSettings = cleanElevenSettings(body.elevenSettings)
+    /* **どのモデルで作るか**(2026-09 利用者の指定)。
+       利用者は ElevenLabs の画面で**聴いてから**声を選ぶので、
+       **聴いたモデルで作らないと別物になる。**
+       声ごとの指定は名簿(`src/data/clipVoices.js` の `voiceModelOf`)が持ち、
+       ここへ渡ってくる。**窓口は名簿を持たない。**
+
+       知らない名前は受けない。**画面の書き間違いを、そのまま
+       ElevenLabs へ流さない**(422 で断られて、音が鳴らなくなる)。
+       環境変数(`ELEVENLABS_MODEL`)は**すべてに優先する逃げ道**として残す。 */
+    const elevenModel = Deno.env.get('ELEVENLABS_MODEL')
+      ?? (ELEVEN_MODELS.includes(String(body.elevenModel ?? ''))
+        ? String(body.elevenModel) : ELEVEN_MODEL_DEFAULT)
     const usePremium = tier === 'premium' && !!elevenVoice
 
     // 標準の段。代役の話者ごとに会社を決めてある。
@@ -710,7 +726,7 @@ Deno.serve(async (req) => {
     if (provider === 'eleven') {
       made = await synthElevenBest(
         text, elevenVoice, elevenKey!,
-        Deno.env.get('ELEVENLABS_MODEL') ?? ELEVEN_MODEL_DEFAULT,
+        elevenModel,
         elevenSettings,
       )
     } else if (provider === 'google') {
