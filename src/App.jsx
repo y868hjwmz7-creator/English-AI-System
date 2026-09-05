@@ -15,7 +15,6 @@ import { loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } fro
 import { setViewerRole } from './lib/viewer.js'
 import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
-import { setWholeOn, wholeOn } from './lib/wholeAudio.js'
 import { markJobSeen, useJob, watchJob } from './lib/generateJob.js'
 import { prepareAllOn, setPrepareAllOn, usePrepare } from './lib/prepareJob.js'
 import JobBar from './components/JobBar.jsx'
@@ -60,7 +59,6 @@ export default function App() {
      切れるようにしてあるのは、レッスン中に邪魔なことがあるため */
   const [sound, setSound] = useState(soundOn)
   /* 本文の読み上げを1本にまとめるか。**戻せる道を残す**(利用者の指定) */
-  const [whole, setWhole] = useState(wholeOn)
   /**
    * 裏で作っている教材のお知らせ(2026-09 利用者の指定)。
    *
@@ -348,29 +346,6 @@ export default function App() {
               <button key={String(x.id)} type="button" title={x.hint}
                       className={`theme-btn${prepAll === x.id ? ' is-active' : ''}`}
                       onClick={() => { setPrepAll(x.id); setPrepareAllOn(x.id) }}>
-                {x.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 本文の読み上げを「1本にまとめる」か(2026-09 利用者の指定)。
-          **今までの形にも戻せるようにしながら、一度試す。**
-          既定は1本(会話は Text to Dialogue、記事は通しで1回)。
-          戻すと、これまでどおり発言ごとに1本ずつ作って順に鳴らす。
-          **一度決める設定なので、ここに置く。** */}
-      {(profile?.role === 'trainer' || profile?.role === 'owner') && (
-        <div className="nav-setting">
-          <span className="nav-setting-label">本文の読み上げ</span>
-          <div className="theme-switch" role="group" aria-label="本文の読み上げ">
-            {[
-              { id: true, label: '1本', hint: '会話も記事も、まとめて1本で作る(継ぎ目が無い)' },
-              { id: false, label: '発言ごと', hint: '今までの形。発言ごとに1本ずつ作ってつなぐ' },
-            ].map((x) => (
-              <button key={String(x.id)} type="button" title={x.hint}
-                      className={`theme-btn${whole === x.id ? ' is-active' : ''}`}
-                      onClick={() => { setWhole(x.id); setWholeOn(x.id) }}>
                 {x.label}
               </button>
             ))}

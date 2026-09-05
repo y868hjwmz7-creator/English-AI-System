@@ -626,13 +626,58 @@ function fakeMp3({
     else ok('置き場所は、声と英文の両方から決まる')
   }
 
-  // 既定は「1本」。**戻せる道が要る**(利用者の指定)
+  /* **切り替えは廃止された**(2026-09 利用者の指定)。
+     「1本にまとめる」に統一したので、選ばせる道が残っていてはいけない。
+     **戻ってきたら赤くする** —— 聴き比べのために置いていたものである */
   {
-    if (!/const v = window\.localStorage\.getItem\(WHOLE_KEY\)/.test(src)) {
-      ng('切り替えを端末に覚えていない')
-    } else if (!/return v === null \? true : v === '1'/.test(src)) {
-      ng('既定が「1本」になっていない')
-    } else ok('既定は1本。切り替えは端末に覚える')
+    const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+    /* **書き出しているかどうかで見る。** 経緯を残したコメントに
+       名前が出てくるので、ただの部分一致では消したのに赤くなる */
+    if (/export\s+(function|const)\s+(wholeOn|setWholeOn|WHOLE_KEY)/.test(src)) {
+      ng('1本 / 発言ごと の切り替えが残っている', '仕様は1本に統一した')
+    } else if (/wholeOn|setWholeOn/.test(app)) {
+      ng('メニューに切り替えが残っている')
+    } else ok('切り替えは廃止。いつでも1本で作る')
+  }
+
+  /* **段落ごとの Listen も、1本の中の区間を鳴らす**(利用者の指定)。
+     ここが切れると**別の MP3 を作って二度課金する**が、
+     **音は鳴る**ので画面には何も出ない。だから道を1本ずつ見る */
+  {
+    const play = readFileSync(new URL('../src/lib/audioPlaylist.js', import.meta.url), 'utf8')
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const btn = readFileSync(new URL('../src/components/SpeakButton.jsx', import.meta.url), 'utf8')
+    const want = [
+      ['区間を出す道具がある', play, /export function wholeSliceOf\(/],
+      ['本文でなければ null を返す', play, /if \(!isPassageSection\(section\?\.exercise_type\)\) return null/],
+      ['番号は audioItemsOf で数える', play, /const list = audioItemsOf\(section\.items\)/],
+      ['通しの一覧も同じ絞り方', play, /const items = audioItemsOf\(body\.items\)/],
+      ['読み上げが区間を受け取る', read, /whole = null,/],
+      ['読み上げが区間を鳴らす', read, /rangeOf\(got\.spans, whole\.index\)/],
+      ['終わりで止める', read, /stopAt: span\.end/],
+      ['ボタンが素通しで渡す', btn, /onStart: heard, whole,/],
+    ]
+    let bad0 = bad
+    for (const [what, text, re] of want) if (!re.test(text)) ng(`区間で鳴らす: ${what}`)
+    if (bad === bad0) ok('段落ごとの Listen は、1本の中の区間を鳴らす')
+  }
+
+  /* **渡す側が1つでも抜けると、そこだけ別の MP3 を作る。**
+     `npm run lint` にも `npm run build` にも引っかからず、
+     **音は鳴る**ので気づけない。だから画面を名指しで数える */
+  {
+    const screens = [
+      ['レッスン表示', 'LessonView'],
+      ['教材の中身', 'MaterialBody'],
+      ['集中モード', 'FocusReader'],
+      ['6Steps(③⑤ の段落再生)', 'PassagePractice'],
+    ]
+    let bad0 = bad
+    for (const [what, file] of screens) {
+      const s = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
+      if (!/wholeSliceOf\(/.test(s)) ng(`${what}(${file})が区間を渡していない`)
+    }
+    if (bad === bad0) ok(`本文を鳴らす ${screens.length} つの画面が、すべて区間を渡している`)
   }
 
   // 窓口が、**実際に**新しい API を呼んでいるか

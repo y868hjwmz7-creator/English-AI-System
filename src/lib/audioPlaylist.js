@@ -44,6 +44,55 @@ export const bodySectionOf = (material) => (material?.sections ?? [])
   .find((sec) => isPassageSection(sec.exercise_type)) ?? null
 
 /**
+ * 音声になる項目だけ。**絞り方をここ1か所に置く。**
+ *
+ * 通しの一覧も、段落ごとの Listen が使う番号も、**同じこの絞り方**で
+ * 数える。片方だけ変えると**番号が1つずれて、別の発言が鳴る。**
+ */
+export const audioItemsOf = (items) => (items ?? [])
+  .filter((it) => String(it.audio_text || it.prompt_en || '').trim())
+
+/** その項目の、読み上げる英文。**`audioItemsOf` と対で使う** */
+export const audioTextOf = (it) => String(it.audio_text || it.prompt_en).trim()
+
+/**
+ * **1本にまとめた音声の、どこを鳴らせばよいか**(2026-09 利用者の指定)。
+ *
+ *   > 音声については「1本にまとめる」の仕様に統一しましょう。
+ *   > 「段落ごと」は廃止です
+ *
+ * 本文の音声は**1本だけ**作る。段落ごと・発言ごとの Listen は、
+ * **その1本の中の区間**を鳴らす(別の MP3 を作らない = 二度課金しない)。
+ *
+ * **番号は `audioItemsOf` で数える。** 描くときの番号(空の項目も混じる)を
+ * そのまま渡すと、**別の発言の区間を鳴らす。**
+ *
+ * **本文の演習でなければ、必ず `null` を返す。** 内容の理解や語句は
+ * 1本の中に入っていないので、区間を当てようがない。
+ * **その判断は `isPassageSection` 1か所に任せる** —— 呼ぶ側に
+ * 「本文のときだけ渡してください」と約束させると、必ずどこかが破る。
+ *
+ * @param {object} section  演習(**項目の一覧ごと**渡す)
+ * @param {object} cast     話す人 → 声(`castClipSpeakers` の返り値)
+ * @param {string} solo     話す人がいないときの声
+ * @param {object} item     いま鳴らそうとしている項目(**同じ実物**)
+ * @returns {{texts: string[], voiceIds: string[], index: number}|null}
+ */
+export function wholeSliceOf(section, cast, solo, item) {
+  if (!isPassageSection(section?.exercise_type)) return null
+  const list = audioItemsOf(section.items)
+  // **2つ以上ないと、1本にまとめる意味がない**(`wholeClip` も同じ条件)
+  if (list.length < 2) return null
+  const index = list.indexOf(item)
+  if (index < 0) return null
+  return {
+    texts: list.map(audioTextOf),
+    voiceIds: list.map((it) => voiceFor(cast, it.speaker, solo)),
+    index,
+  }
+}
+
+/**
  * 通しで鳴るものを、順に並べる。
  *
  * @returns {Array<{text, voiceId, tier, gapMs}>} `gapMs` は**そのあとの間**
@@ -59,8 +108,7 @@ export function materialAudioClips(material) {
     tags: material?.tags ?? [],
   })
 
-  const items = (body.items ?? [])
-    .filter((it) => String(it.audio_text || it.prompt_en || '').trim())
+  const items = audioItemsOf(body.items)
   return items.map((it, i) => {
     const next = items[i + 1]
     /* **間の決め方も、鳴らすときと同じ。**

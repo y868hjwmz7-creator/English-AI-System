@@ -25,6 +25,7 @@ import { loadEnglishVoices } from '../lib/speech.js'
 import { readAloudSequence, stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
+import { wholeSliceOf } from '../lib/audioPlaylist.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import {
@@ -1433,6 +1434,10 @@ export default function LessonView({
                       clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                       tier={secTier}
                       rate={rateOf(rateId)}
+                      /* **1本の中の、その区間だけを鳴らす**
+                         (2026-09 利用者の指定で統一)。本文の演習でだけ
+                         渡す —— 内容の理解や語句は1本に入っていない */
+                      whole={wholeSliceOf(sec, secClipCast, soloVoice, it)}
                       onPlayingChange={(on) => {
                         setSpeakingKey(on ? k(it, i) : null)
                         if (!on) setReadingAt(null)

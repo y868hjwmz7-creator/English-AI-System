@@ -39,6 +39,8 @@ import { countLabel, exerciseLabel, exerciseType } from '../data/exerciseTypes.j
 import { kindLabel } from '../lib/materials.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
+import { castClipSpeakers } from '../lib/voiceCast.js'
+import { wholeSliceOf } from '../lib/audioPlaylist.js'
 import QuickResponseSheet from './QuickResponseSheet.jsx'
 
 export default function MaterialBody({
@@ -109,6 +111,16 @@ export default function MaterialBody({
                             exerciseType: sec.exercise_type,
                             tags: m.tagIds,
                           })}
+                          /* **1本の中の、その区間だけを鳴らす**(2026-09)。
+                             本文でなければ null が返るので、そのまま渡してよい */
+                          whole={wholeSliceOf(
+                            sec,
+                            castClipSpeakers(
+                              (sec.items ?? []).map((x) => x.speaker), m.voiceIds,
+                            ),
+                            resolveVoices(m.voiceIds)[0],
+                            it,
+                          )}
                         />
                       </div>
                     )}

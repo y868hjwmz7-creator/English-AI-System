@@ -67,6 +67,7 @@ import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import { castClipSpeakers, voiceFor } from '../lib/voiceCast.js'
+import { wholeSliceOf } from '../lib/audioPlaylist.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
@@ -309,7 +310,9 @@ export default function FocusReader({
           <div className="focus-mid">
             {/* **音も訳も両方出す**(2026-09 利用者の指定) */}
             <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
-                         className="btn--small" repeat={loop} />
+                         className="btn--small" repeat={loop}
+                         /* **1本の中の、その区間だけを鳴らす**(2026-09) */
+                         whole={wholeSliceOf(section, cast, soloVoice, item)} />
             {/* **くり返し**(2026-09 利用者の指定
                 「これは集中モードで、全てのデバイスで同じにしてください」)。
                 まねて言うには、同じ発言を何度も聴く */}

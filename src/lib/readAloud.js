@@ -48,7 +48,7 @@ import { clipSpeakerFor } from './voiceCast.js'
 import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
-import { indexAtTime, wholeOn } from './wholeAudio.js'
+import { indexAtTime, rangeOf } from './wholeAudio.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
@@ -131,6 +131,22 @@ export async function readAloud(text, {
   onWord = null, onStart = null,
   /** 止めた場所から鳴らすための目印。**渡さなければ、いつも頭から** */
   resumeKey = null,
+  /**
+   * **1本にまとめた音声の、どこを鳴らすか**(2026-09 利用者の指定)。
+   *
+   *   > 音声については「1本にまとめる」の仕様に統一しましょう。
+   *   > 「段落ごと」は廃止です
+   *
+   * `{ texts, voiceIds, index }`(`wholeSliceOf()` が作る)。
+   * 渡すと、**その教材の1本の音声の中の、その区間だけ**を鳴らす。
+   * **別の MP3 を作らないので、二度課金にならない**うえ、
+   * 通しで聴いたときとまったく同じ音になる(継ぎ目が無い)。
+   *
+   * **作れなかったときは、これまでどおり1本ずつ作って鳴らす。**
+   * 鍵が無い・文字数が多すぎる・名簿に無い声が混じっている・
+   * 時刻が本文と合わない、のどれかである。**行き止まりを作らない。**
+   */
+  whole = null,
 } = {}) {
   /* **止めるより先に、控えを取り出す。** `stopReading()` は
      いま鳴っているものの控えを作り直すので、順を逆にすると
@@ -144,6 +160,39 @@ export async function readAloud(text, {
   // 受け取る側が「用意中 → 再生中 → 用意中」と行き来する
   let told = false
   const started = () => { if (!told && mine === session) { told = true; onStart?.() } }
+
+  /* ── 1本の中の区間を鳴らす(2026-09 利用者の指定で、こちらに統一)──
+   *
+   *   **`started()` をここで呼ばない。** 1本目を作っている 30 秒のあいだは
+   *   まだ何も鳴っていないので、呼ぶと「用意しています…」が消えて
+   *   **無反応のまま黙っている**ように見える(`readAloudSequence` と同じ)。
+   *   合図は `playClip` の `onStart` が、本当に鳴り始めた瞬間に出す。 */
+  if (whole && clipTier === PREMIUM && whole.texts?.length >= 2) {
+    const got = await wholeClip({ texts: whole.texts, voiceIds: whole.voiceIds })
+    if (mine !== session) return              // 待っているあいだに止められた
+    const span = got?.spans?.length === whole.texts.length
+      ? rangeOf(got.spans, whole.index) : null
+    if (span) {
+      /* 控えの秒は「1本の中の秒」なので、**その区間に収まっているときだけ**
+         使う(発言ごとに作っていた頃の秒が残っていても、変な場所から
+         鳴らさない)。`readAloudSequence` とまったく同じ守り */
+      const at = (from && from.at > span.start && from.at < span.end)
+        ? from.at : span.start
+      const cut = await playClip({
+        srcUrl: got.url,
+        // 1本には声が何人ぶんも入っている。**声ごとの速さの補正は当てない**
+        voiceId: 'whole',
+        tier: clipTier,
+        rate,
+        startAt: at,
+        stopAt: span.end,
+        onStart: started,
+      })
+      if (mine !== session) return
+      if (cut) { finished(); return }
+      // 鳴らせなかった。**下へ落ちて、これまでどおり1本ずつ作る**
+    }
+  }
 
   const played = await playClip({
     text,
@@ -271,7 +320,7 @@ export function readAloudSequence(parts, {
    *   ・語ごとの色 … 文字ごとの時刻は控えてあるが、まだ使っていない
    *   段落 / 発言ごとの色(`onIndex`)は、時刻から出すのでこれまでどおり。
    * ══════════════════════════════════════════════════════════════ */
-  const canWhole = wholeOn() && clipTier === PREMIUM && list.length >= 2
+  const canWhole = clipTier === PREMIUM && list.length >= 2
 
   const runWhole = async () => {
     if (!canWhole) return false

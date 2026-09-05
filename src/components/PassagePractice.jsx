@@ -35,6 +35,7 @@ import { readAloud, readAloudSequence, stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
+import { wholeSliceOf } from '../lib/audioPlaylist.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { storedChunks, storedParts } from '../lib/chunkJa.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
@@ -284,6 +285,9 @@ export default function PassagePractice({
       /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
          目印の付け方は `SpeakButton` とそろえてある */
       resumeKey: `one|${voiceFor(clipCast, item.speaker, soloVoice) ?? ''}|${item.audio_text || item.prompt_en}`,
+      /* **1本の中の、その区間だけを鳴らす**(2026-09 利用者の指定で統一)。
+         段落ごとに別の MP3 を作らないので、二度課金にならない */
+      whole: wholeSliceOf(section, clipCast, soloVoice, item),
     }).then(() => {
       /* **くり返す指定なら、もう一度鳴らす**(2026-09 利用者の指定)。
          止まる条件は `SpeakButton` と同じ考え方で3つ。

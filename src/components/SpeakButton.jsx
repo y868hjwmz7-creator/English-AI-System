@@ -41,6 +41,13 @@ export default function SpeakButton({
    * 書き取りは1回では聞き取れないので、押し直す手間をなくす。
    */
   repeat = false,
+  /**
+   * **1本にまとめた音声の、どこを鳴らすか**(2026-09 利用者の指定で統一)。
+   * `wholeSliceOf()` が作ったものをそのまま渡す。渡さなければ、
+   * これまでどおりその英文だけの MP3 を作って鳴らす
+   * (単語帳・ディクテーションなど、本文の段落ではない Listen)。
+   */
+  whole = null,
 }) {
   // 速さの指定が無ければ、端末に覚えさせた速さを使う。
   // こうしておくと、速さを選ぶ場所が無い画面でも同じ速さで鳴る
@@ -120,7 +127,7 @@ export default function SpeakButton({
     const heard = () => { stopTicker(); setWaiting(false) }
 
     readAloud(text, {
-      voice, clipVoice, clipTier: tier, rate: speed, onWord, onStart: heard,
+      voice, clipVoice, clipTier: tier, rate: speed, onWord, onStart: heard, whole,
       /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
          > これは段落ごとの再生ボタンでも同じ仕様にしてください。
 

@@ -36,7 +36,6 @@ import { lastWholeDetail, wholeClip } from './audioClips.js'
 import { materialAudioClips } from './audioPlaylist.js'
 import { prefetchGlosses } from './vocab.js'
 import { PREMIUM } from './voiceTier.js'
-import { wholeOn } from './wholeAudio.js'
 
 /**
  * **過去に作った教材も、裏で順に支度する**(2026-09 利用者の指定)。
@@ -155,7 +154,7 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
     let note = null
     try {
       // ① 本文の音声を1本ぶん。**押す前に作っておく**
-      if (clips.length >= 2 && clips[0].tier === PREMIUM && wholeOn()) {
+      if (clips.length >= 2 && clips[0].tier === PREMIUM) {
         const got = await wholeClip({
           texts: clips.map((c) => c.text),
           voiceIds: clips.map((c) => c.voiceId),
