@@ -17,7 +17,7 @@ import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 import { setWholeOn, wholeOn } from './lib/wholeAudio.js'
 import { markJobSeen, useJob, watchJob } from './lib/generateJob.js'
-import { usePrepare } from './lib/prepareJob.js'
+import { prepareAllOn, setPrepareAllOn, usePrepare } from './lib/prepareJob.js'
 import JobBar from './components/JobBar.jsx'
 import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
@@ -76,6 +76,8 @@ export default function App() {
   const { job, secs: jobSecs } = useJob()
   /* 発行したあとの支度(音声と語の意味)。**教材を作る仕事とは別の枠** */
   const { prep, secs: prepSecs } = usePrepare()
+  /* 過去の教材も裏で支度するか。**費用が出ていくので切れるようにする** */
+  const [prepAll, setPrepAll] = useState(prepareAllOn)
   useEffect(() => watchJob((j) => {
     if (!j || j.seen) return
     if (j.state === 'done') {
@@ -325,6 +327,33 @@ export default function App() {
           ))}
         </div>
       </div>
+
+      {/* **過去の教材も、裏で順に支度するか**(2026-09 利用者の指定)。
+
+            > 過去に作成したものも常にバックグラウンドで再生準備を
+            > 進められないでしょうか？
+
+          教材の画面を開いているあいだ、まだ音声の無い教材を1本ずつ
+          用意していく。**費用が出ていく**ので、切れるようにしてある
+          (「見えない費用は管理できない」・CLAUDE.md)。
+          いま何本待っているかは、上の帯がいつも出している。 */}
+      {(profile?.role === 'trainer' || profile?.role === 'owner') && (
+        <div className="nav-setting">
+          <span className="nav-setting-label">教材の支度</span>
+          <div className="theme-switch" role="group" aria-label="教材の支度">
+            {[
+              { id: true, label: '自動', hint: '過去の教材も、裏で順に用意しておく' },
+              { id: false, label: '使うときだけ', hint: '発行と「セッションで使う」のときだけ' },
+            ].map((x) => (
+              <button key={String(x.id)} type="button" title={x.hint}
+                      className={`theme-btn${prepAll === x.id ? ' is-active' : ''}`}
+                      onClick={() => { setPrepAll(x.id); setPrepareAllOn(x.id) }}>
+                {x.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 本文の読み上げを「1本にまとめる」か(2026-09 利用者の指定)。
           **今までの形にも戻せるようにしながら、一度試す。**

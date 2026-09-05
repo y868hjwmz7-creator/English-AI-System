@@ -686,10 +686,24 @@ function fakeMp3({
       ['終わったら次を始める', prep, /runNext\(\)/],
       ['何ができたかを持ち帰る', prep, /audio = got \? 'ok' : 'ng'/],
       ['できなかった理由を出す', prep, /lastWholeDetail\(\)/],
+      ['過去の教材もまとめて積める', prep, /export function startPrepareAll\(/],
+      ['一覧を開いたら積む', finder, /startPrepareAll\(materials\)/],
+      ['やめたら順番待ちも空にする', prep, /queue\.length = 0/],
+      ['やめたあとに次を始めない', prep, /if \(task\?\.id === mine && !task\.cancelled\) runNext\(\)/],
+      ['あと何本かを出す', prep, /export const prepareQueued = /],
+      ['自動にするかを切り替えられる', prep, /export function setPrepareAllOn\(/],
     ]
     let before = bad
     for (const [what, src2, re] of want) if (!re.test(src2)) ng(`支度: ${what}`)
-    if (bad === before) ok('発行と「セッションで使う」で、裏で支度している')
+    if (bad === before) ok('発行・「セッションで使う」・一覧で、裏で支度している')
+
+    /* **既定は自動。** ただし**費用が出ていく**ので、切れる道を必ず残す
+       (「見えない費用は管理できない」・CLAUDE.md) */
+    if (!/return v === null \? true : v === '1'/.test(prep)) {
+      ng('支度: 既定が自動になっていない')
+    } else if (!/if \(queue\.length >= 50\) break/.test(prep)) {
+      ng('支度: 順番待ちに上限が無い')
+    } else ok('支度は既定で自動。1本ずつ・上限つき・いつでも止められる')
   }
 
   /* **鳴り始める前に「鳴った」と言わない**(2026-09 実機・こちらの入れ違い)。

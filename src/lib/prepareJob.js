@@ -38,6 +38,33 @@ import { prefetchGlosses } from './vocab.js'
 import { PREMIUM } from './voiceTier.js'
 import { wholeOn } from './wholeAudio.js'
 
+/**
+ * **過去に作った教材も、裏で順に支度する**(2026-09 利用者の指定)。
+ *
+ *   > 過去に作成したものも常にバックグラウンドで再生準備を
+ *   > 進められないでしょうか？
+ *
+ * 【費用が出ていくので、見えるようにする】(CLAUDE.md「見えない費用は管理できない」)
+ *   ・**1本ずつしか走らせない。** まとめて投げると、いくらかかったのか
+ *     分からないうちに終わる
+ *   ・**あと何本かを、いつも帯に出す**(「支度 3 / 12 本」)
+ *   ・**「やめる」を、その帯に置く。** 押せばそこで止まる
+ *   ・**切り替えを用意する**(左のメニューの下)。既定は自動
+ *   ・**すでに音声がある教材は、ただの問い合わせで終わる**(1円もかからない)
+ */
+const AUTO_KEY = 'eas.prepareAll'
+
+export function prepareAllOn() {
+  try {
+    const v = window.localStorage.getItem(AUTO_KEY)
+    return v === null ? true : v === '1'
+  } catch { return true }
+}
+
+export function setPrepareAllOn(on) {
+  try { window.localStorage.setItem(AUTO_KEY, on ? '1' : '0') } catch { /* 無視 */ }
+}
+
 /** いまの支度。**画面が消えても残る**(モジュールに1つだけ) */
 let task = null
 
@@ -64,8 +91,14 @@ export function clearPrepare() {
   emit()
 }
 
-/** やめる。**通信そのものは取り消さない**(送った1回はどのみち課金される) */
+/**
+ * やめる。**通信そのものは取り消さない**(送った1回はどのみち課金される)。
+ *
+ * **順番待ちも空にする。** 押した人は「もうやらないで」と言っている。
+ * 1本だけ止めて次が始まったら、止めた意味がない。
+ */
 export function cancelPrepare() {
+  queue.length = 0
   if (!task) return
   task = { ...task, cancelled: true, state: 'done' }
   emit()
@@ -149,13 +182,43 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
       task = { ...task, state: 'done', audio, error: e?.message ?? String(e), note }
       emit()
     }
-    runNext()
+    /* **やめると言われていたら、次を始めない。**
+       `cancelPrepare()` が順番待ちも空にしているので、
+       ここは念のための二重の歯止めである */
+    if (task?.id === mine && !task.cancelled) runNext()
   })()
   return true
 }
 
 /** 順番待ち。**落とさない**(落とすと、その教材は永久に支度されない) */
 const queue = []
+
+/** あと何本待っているか。**帯がそのまま出す** */
+export const prepareQueued = () => queue.length
+
+/**
+ * **一覧まるごとを、順番待ちに積む**(2026-09 利用者の指定)。
+ *
+ * すでに支度した教材と、本文の無い教材は積まない。
+ * **1本ずつしか走らない**ので、押しっぱなしにはならない。
+ *
+ * @returns {number} 積んだ本数
+ */
+export function startPrepareAll(list, { level = 'B1' } = {}) {
+  if (!prepareAllOn()) return 0
+  let added = 0
+  for (const m of list ?? []) {
+    const id = String(m?.id ?? '')
+    if (!id || done.has(id) || queue.some((q) => q.id === id)) continue
+    /* **入れ物が膨らまないように上限を置く。** 積みきれなかったぶんは、
+       次にこの画面を開いたときに続きから積まれる */
+    if (queue.length >= 50) break
+    queue.push({ material: m, title: m.title ?? '', level: m.level ?? level, id })
+    added += 1
+  }
+  if (added && !prepareRunning()) runNext()
+  return added
+}
 
 /** 待っている次のものを始める。**終わってから呼ぶ** */
 function runNext() {
@@ -184,8 +247,9 @@ export function prepareLabel(t, secs = 0) {
   if (!t) return ''
   if (t.state === 'running') {
     const what = t.label || '読み上げ音声'
+    const left = queue.length ? `　ほかにあと ${queue.length} 本` : ''
     return `${t.title ? `${t.title} の` : ''}${what}を用意しています…`
-      + (secs > 2 ? `(${secs} 秒)` : '')
+      + (secs > 2 ? `(${secs} 秒)` : '') + left
   }
   /* **何ができたのかを、数で出す。**「できました」だけでは、
      本当に用意できたのか素通りしたのかが分からない */

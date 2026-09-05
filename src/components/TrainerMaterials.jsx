@@ -33,7 +33,7 @@ import {
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
-import { startPrepare } from '../lib/prepareJob.js'
+import { startPrepare, startPrepareAll } from '../lib/prepareJob.js'
 import { printElement } from '../lib/print.js'
 import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
 /* **読み上げ音声を作り直す**(2026-09 実機)。良い段の場所に標準の声が
@@ -335,6 +335,22 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
      * 早めに作っているだけである(`prepareJob.js` が同じ教材を二度やらない)。 */
     startPrepare(m, { title: m.title, level: m.level })
   }, [lessonOf, materials])
+
+  /* **過去に作った教材も、裏で順に支度する**(2026-09 利用者の指定)。
+   *
+   *   > 過去に作成したものも常にバックグラウンドで再生準備を
+   *   > 進められないでしょうか？
+   *
+   * いま一覧に出ているものを、まるごと順番待ちに積む。
+   * **1本ずつしか走らない**ので、押しっぱなしにはならないし、
+   * **すでに音声がある教材は問い合わせだけで終わる**(1円もかからない)。
+   *
+   * **止めたいときは帯の「支度をやめる」**、そもそも自動でやりたくない
+   * ときは**左のメニューの下**で切り替えられる(`prepareAllOn`)。 */
+  useEffect(() => {
+    if (loading || !materials.length) return
+    startPrepareAll(materials)
+  }, [loading, materials])
 
   // 訳を作り直したら、**開いたままのレッスン表示にも反映する。**
   // 反映しないと、閉じて開き直すまで古い訳のままになる(2026-08)
