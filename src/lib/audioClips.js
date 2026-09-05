@@ -103,6 +103,75 @@ let lastDetail = null        // 係の人にだけ見せる原因(`src/lib/viewe
 const urlCache = new Map()   // 指紋 → 鳴らせる URL
 const gaveUp = new Set()     // 窓口に頼んでも駄目だったもの
 
+/**
+ * ============================================================================
+ * **作り直した印は、ページを読み込み直しても残す。**(2026-09 実機)
+ *
+ * 【何が起きていたか】
+ *   利用者が「読み上げ音声を作り直す」を押し、ElevenLabs に課金までして
+ *   作り直したのに、**耳では何も変わらなかった。**
+ *
+ *   作り直した MP3 は**元と同じ場所に上書き**される
+ *   (置き場所は `<版>/<段>/<声の id>/<英文の指紋>.mp3` で、
+ *   設定もモデルも道に入っていない)。ところが窓口は、置くときに
+ *
+ *       Cache-Control: public, max-age=31536000, immutable
+ *
+ *   を付けている。**`immutable` は「1年のあいだ、問い合わせすらするな」**
+ *   という意味なので、端末に残った**古い MP3 がそのまま鳴り続ける。**
+ *
+ *   `remakeClip()` は `?v=<時刻>` を付けて別の URL にしていたが、
+ *   **その印は `urlCache`(このモジュールの中)にしか無かった。**
+ *   画面を読み込み直せば消えるので、**次に開いた人には古い音が鳴る。**
+ *   しかも**音は鳴る**ので、「作り直したのに直っていない」としか見えない。
+ *
+ * 【だから、印を端末に残す】
+ *   `clipUrl()` は、その英文を作り直したことがあれば `?v=` を付けて返す。
+ *   **1年もちの控えを必ず素通りする。**
+ *
+ *   ・**作り直した英文だけ**に付く。ほかは素の URL のままなので、
+ *     控えはこれまでどおり効く(通信も費用も増えない)
+ *   ・**時刻は上書きする。** 2回作り直せば、2回とも新しい URL になる
+ *   ・入れ物が膨らまないよう、**新しいものから 4000 件**だけ残す
+ *   ・localStorage が使えない端末では、その画面のあいだだけ覚える
+ *     (**印が無くても音は鳴る。** 作り直しが届かないだけ)
+ */
+const REMADE_KEY = 'eas.clipRemade'
+const REMADE_MAX = 4000
+let remade = null
+
+const loadRemade = () => {
+  if (remade) return remade
+  remade = {}
+  try {
+    const raw = window.localStorage.getItem(REMADE_KEY)
+    const got = raw ? JSON.parse(raw) : null
+    if (got && typeof got === 'object') remade = got
+  } catch { /* 使えない端末では、この画面のあいだだけ覚える */ }
+  return remade
+}
+
+/** その英文を作り直したか。作り直していれば、控えを外すための印を返す */
+const remadeMark = (mark) => {
+  const v = loadRemade()[mark]
+  return typeof v === 'number' && v > 0 ? String(v) : ''
+}
+
+const noteRemade = (mark, stamp) => {
+  const map = loadRemade()
+  map[mark] = stamp
+  const keys = Object.keys(map)
+  if (keys.length > REMADE_MAX) {
+    // 古いものから落とす。**新しいほうが、いま鳴らしたいものである**
+    keys.sort((a, b) => map[a] - map[b])
+      .slice(0, keys.length - REMADE_MAX)
+      .forEach((k) => { delete map[k] })
+  }
+  try {
+    window.localStorage.setItem(REMADE_KEY, JSON.stringify(map))
+  } catch { /* 入らなくても、この画面のあいだは効く */ }
+}
+
 /** 係の人向けの、直近の原因。ゲストには出さない */
 export const lastClipDetail = () => lastDetail
 
@@ -380,9 +449,15 @@ export async function clipUrl(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDAR
   if (urlCache.has(key)) return urlCache.get(key)
   if (gaveUp.has(key)) return null
 
-  const url = publicUrlOf(tier, voice, await fingerprint(voice, body))
-  urlCache.set(key, url)
-  return url
+  const hash = await fingerprint(voice, body)
+  const url = publicUrlOf(tier, voice, hash)
+  /* **作り直した英文なら、控えを素通りさせる。**
+     置き場所は同じままなので、印が無いと端末に残った1年もちの
+     古い MP3 が鳴り、**作り直しが永久に届かない**(上の節) */
+  const mark = remadeMark(`${tier}|${hash}`)
+  const out = mark ? `${url}?v=${mark}` : url
+  urlCache.set(key, out)
+  return out
 }
 
 /** 「その場所には無かった」と分かったときに呼ぶ。窓口に作らせて場所を返す */
@@ -432,8 +507,13 @@ export async function remakeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STAN
       + '(いまの窓口は「作り直す」に対応していません)。')
     return null
   }
-  // **控えを素通りさせる。** 印は作り直した時刻(必ず毎回ちがう値になる)
-  const fresh = `${made.url}?v=${Date.now()}`
+  /* **控えを素通りさせる。** 印は作り直した時刻(必ず毎回ちがう値になる)。
+     **端末にも残す**(`noteRemade`)。ここだけに置いていたので、
+     画面を読み込み直すと素の URL に戻り、1年もちの古い MP3 が
+     鳴っていた —— **課金して作り直したものが、誰にも届いていなかった** */
+  const stamp = Date.now()
+  noteRemade(`${tier}|${await fingerprint(voice, body)}`, stamp)
+  const fresh = `${made.url}?v=${stamp}`
   gaveUp.delete(key)
   urlCache.set(key, fresh)
   return fresh

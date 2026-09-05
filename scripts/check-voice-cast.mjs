@@ -525,5 +525,74 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   } else ok('知らせの文言は、起きたことを知っている側が書く')
 }
 
+/* ============================================================================
+ * ⑨ **作り直した音声が、控えに隠されないこと**(2026-09 実機)
+ *
+ *   利用者が課金までして作り直したのに、**耳では何も変わらなかった。**
+ *   作り直した MP3 は元と同じ場所に上書きされるが、窓口が
+ *   `immutable` 付きで1年もつ指定を付けているので、
+ *   **端末に残った古い MP3 が鳴り続ける。**
+ *
+ *   `remakeClip()` は `?v=` を付けていたが、その印は
+ *   **モジュールの中(`urlCache`)にしか無かった。**
+ *   画面を読み込み直せば消えるので、次に開いた人には古い音が鳴る。
+ *   **しかも音は鳴るので、誰も気づけない。**
+ *
+ *   この間違いは `npm run lint` にも `npm run build` にも引っかからない。
+ *   **鳴らしてみるまで分からず、しかも1回ごとに課金される。**
+ */
+{
+  const clips = read('src/lib/audioClips.js')
+
+  if (!/const noteRemade = /.test(clips) || !/localStorage\.setItem\(REMADE_KEY/.test(clips)) {
+    ng('作り直した印を、端末に残していない',
+      '画面を読み込み直すと、1年もちの古い MP3 が鳴る')
+  } else ok('作り直した印は、端末に残る(読み込み直しても効く)')
+
+  /* **`clipUrl()` が印を見ていること。** 残すだけで見なければ同じである
+     (`noteFnRev` を定義だけして誰も呼んでいなかったのと同じ落とし穴) */
+  const urlFn = clips.match(/export async function clipUrl[\s\S]*?\n}/)?.[0] ?? ''
+  if (!/remadeMark\(/.test(urlFn) || !/\?v=/.test(urlFn)) {
+    ng('`clipUrl()` が、作り直した印を見ていない',
+      '印を残しても、鳴らすときに使わなければ古い音のまま')
+  } else ok('`clipUrl()` は、作り直した英文だけ控えを素通りさせる')
+
+  const remakeFn = clips.match(/export async function remakeClip[\s\S]*?\n}/)?.[0] ?? ''
+  if (!/noteRemade\(/.test(remakeFn)) {
+    ng('作り直したときに、印を残していない')
+  } else ok('作り直したら、その英文の印を残す')
+}
+
+/* ============================================================================
+ * ⑩ **v3 が読まない欄を、名簿でいじらないこと**(2026-09 実機)
+ *
+ *   利用者の指定で Ally だけ `similarity_boost` を下げ、
+ *   作り直してもらったが**何も変わらなかった。**
+ *   ElevenLabs の説明にこうある。
+ *
+ *     Similarity is not available for the Eleven v3 model.
+ *     Speaker Boost is not available for the Eleven v3 model.
+ *
+ *   **利用者が使う声はすべて v3** なので(CLAUDE.md)、この2つと `speed` は
+ *   渡っても捨てられる。**効かない欄を書いて作り直すと、課金だけがかかる。**
+ *
+ *   **既定(`ACCENT_KEEP`)から外さない。** あちらは
+ *   「渡す道が切れていないか」を見るためのもので、v2 に落ちたときには効く。
+ *   ここで止めるのは**その行の `settings` で値をいじること**だけである。
+ */
+{
+  const DEAD_ON_V3 = ['similarity_boost', 'use_speaker_boost', 'speed']
+  const found = []
+  for (const v of CLIP_VOICES) {
+    for (const k of DEAD_ON_V3) {
+      if (v.settings && v.settings[k] !== undefined) found.push(`${v.label}.${k}`)
+    }
+  }
+  if (found.length) {
+    ng(`v3 が読まない欄を名簿でいじっている: ${found.join(', ')}`,
+      '作り直しても音は変わらず、課金だけがかかる。動かすなら stability')
+  } else ok('名簿の settings は、v3 が読む欄だけを触っている')
+}
+
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
