@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, cefrOption, scoreTestLabel } from '../data/cefr.js'
 import {
   addLearnerScore, createAccount, kindLabel, loadLearnerAssignments,
-  loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
+  eraseLearner, loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
   loadMaterial,
 } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
@@ -30,6 +30,7 @@ import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 import { printElement } from '../lib/print.js'
+import { viewerRoleOf } from '../lib/viewer.js'
 
 const STATUS = {
   active:   { label: '受講中', cls: 'badge--admin' },
@@ -50,6 +51,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const [error, setError] = useState(null)
   const [message, setMessage] = useState(null)
   const [openId, setOpenId] = useState(null)
+  /* 記録をすべて消すとき(0041)。**名前を打ち込ませる**ので、
+     どのゲストの、いま何を入力しているかまで覚える */
+  const [erasing, setErasing] = useState(null)
   const [history, setHistory] = useState([])
   // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
   // 過去の宿題を最初に開く(2026-08 の要望)。
@@ -233,6 +237,30 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     if (e) { setError(e); return }
     setError(null)
     setMessage(`${learner.display_name} さんのレベルを ${cefr || '未判定'} にしました。`)
+    reload()
+  }
+
+  /**
+   * 記録をすべて消す(0041)。**管理者だけ。**
+   *
+   * 消したあとは、そのゲストのカードごと一覧から消えるので、
+   * **開いている画面も閉じて**一覧を読み直す。
+   */
+  const eraseNow = async (learner) => {
+    setErasing({ ...erasing, busy: true })
+    const { data, error: e } = await eraseLearner(learner.id)
+    if (e) { setErasing({ ...erasing, busy: false }); setError(e); return }
+    /* **何件消したかを、そのまま出す。**「消しました」だけだと、
+       本当に消えたのか、何も無かったのかが分からない */
+    const counts = Object.entries(data ?? {})
+      .filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`).join(' / ')
+    setErasing(null)
+    setOpenId(null)
+    setError(null)
+    setMessage(`${learner.display_name} さんの記録を消しました`
+      + `${counts ? `(${counts})` : ''}。`
+      + ' ログインそのものは残っています —— Supabase の Authentication → Users から'
+      + ' その人を Delete user してください。')
     reload()
   }
 
@@ -969,6 +997,54 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     </button>
                   ))}
                 </div>
+
+                {/* ── 記録をすべて消す(0041・管理者だけ)────────────────
+                    2026-09 の安全性レビュー 03-3位。
+
+                      > 退会したときに、まとめて消す手順がありません。
+                      > 「消してほしい」と言われたときに応えられない状態です。
+
+                    **取り返しがつかないので、押し間違いでは進めない。**
+                    ・出すのは管理者だけ(判定は `viewer.js` を通す。
+                      守っているのは画面ではなく `erase_learner()` の中である)
+                    ・**名前を打ち込ませる。** 2段(「本当に消す」)だけでは、
+                      並んだカードの取り違えを防げない
+                    ・**何件消したかを返して、そのまま出す**
+                      (成功と失敗を、同じ見た目で終わらせない) */}
+                {viewerRoleOf() === 'owner' && (
+                  <div className="erase-box">
+                    <p className="field-label">記録をすべて消す</p>
+                    {erasing?.id !== l.id ? (
+                      <button type="button" className="btn btn--small"
+                              onClick={() => { setErasing({ id: l.id, typed: '' }); setError(null) }}>
+                        このゲストの記録をすべて消す…
+                      </button>
+                    ) : (
+                      <>
+                        <p className="field-hint">
+                          <strong>取り消せません。</strong>
+                          名前・スコア・セッションの記録・単語帳・置いたファイルまで、
+                          すべて消えます(教材そのものは残ります)。
+                          進めるには <strong>{l.display_name}</strong> と入力してください。
+                        </p>
+                        <div className="card-tools">
+                          <input type="text" value={erasing.typed}
+                                 aria-label="消すゲストの名前"
+                                 placeholder={l.display_name}
+                                 onChange={(e) => setErasing({ ...erasing, typed: e.target.value })} />
+                          <button type="button" className="btn btn--small btn--danger"
+                                  disabled={erasing.typed.trim() !== (l.display_name ?? '').trim()
+                                    || erasing.busy}
+                                  onClick={() => eraseNow(l)}>
+                            {erasing.busy ? '消しています…' : '消す'}
+                          </button>
+                          <button type="button" className="btn btn--small"
+                                  onClick={() => setErasing(null)}>やめる</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 </>
                 )}

@@ -774,3 +774,86 @@ select pg_temp.expect('未ログインでは弱点タグも見えない',
   (select count(*)::int from public.weakness_tags), 0);
 
 reset role;
+
+-- ════════════════════════════════════════════════════════════════
+-- 0041 ゲストの記録を、まとめて消す(管理者だけ)
+--
+--   > 退会したときに、まとめて消す手順がありません。
+--   > 「消してほしい」と言われたときに応えられない状態です。
+--
+--   **消す機能は取り返しがつかない。** だから
+--   「誰ができないか」を、できることより先に確かめる。
+--   **いちばん最後に置いてある** —— ここから先は行が消えるので、
+--   上の数え上げに影響を与えないようにするため。
+-- ════════════════════════════════════════════════════════════════
+reset role;
+
+-- 消える先の記録を、いくつか置いておく(消えたことを数えられるように)
+insert into public.learner_scores (learner_id, taken_on, test_type, score)
+  values ('33333333-3333-3333-3333-333333333333', current_date, 'toeic', 700)
+  on conflict do nothing;
+insert into public.word_reviews (learner_id, word_norm, status)
+  values ('33333333-3333-3333-3333-333333333333', 'holdback', 'unknown')
+  on conflict do nothing;
+insert into public.lesson_notes (learner_id, on_date, body)
+  values ('33333333-3333-3333-3333-333333333333', current_date, 'セッションの記録')
+  on conflict do nothing;
+insert into storage.buckets (id, name, public) values ('learner-files', 'learner-files', false)
+  on conflict do nothing;
+insert into storage.objects (bucket_id, name)
+  values ('learner-files', '33333333-3333-3333-3333-333333333333/toeic.pdf')
+  on conflict do nothing;
+-- **ほかのゲスト**にも同じものを置く。消しすぎていないことを確かめるため
+insert into public.word_reviews (learner_id, word_norm, status)
+  values ('22222222-2222-2222-2222-222222222222', 'escrow', 'unknown')
+  on conflict do nothing;
+
+set role authenticated;
+
+-- ① トレーナーにはできない。**担当ゲストを持つ人が1人でも消せると、事故が大きすぎる**
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select pg_temp.expect_denied('トレーナーはゲストの記録を消せない',
+  $$select public.erase_learner('33333333-3333-3333-3333-333333333333')$$);
+
+-- ② ゲスト本人にもできない(自分の記録でも、消すのは管理者の操作)
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect_denied('ゲスト本人も消せない',
+  $$select public.erase_learner('33333333-3333-3333-3333-333333333333')$$);
+
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+
+-- ③ **ゲスト以外は消せない。** トレーナーをまちがって消さないための歯止め
+select pg_temp.expect_denied('管理者でも、トレーナーは消せない',
+  $$select public.erase_learner('44444444-4444-4444-4444-444444444444')$$);
+select pg_temp.expect_denied('いない人は消せない',
+  $$select public.erase_learner('99999999-9999-9999-9999-999999999999')$$);
+
+-- ④ 管理者はゲストを消せる。**何件消したかを返す**
+select pg_temp.expect('管理者はゲストの記録を消せる(スコア1件)',
+  ((select public.erase_learner('33333333-3333-3333-3333-333333333333'))
+    ->> 'スコア')::int, 1);
+
+reset role;
+select pg_temp.expect('単語帳が消えている',
+  (select count(*)::int from public.word_reviews
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+select pg_temp.expect('セッションの記録が消えている',
+  (select count(*)::int from public.lesson_notes
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+select pg_temp.expect('置いたファイルの中身も消えている',
+  (select count(*)::int from storage.objects
+   where bucket_id = 'learner-files'
+     and name like '33333333-3333-3333-3333-333333333333/%'), 0);
+select pg_temp.expect('ゲストの欄そのものが消えている',
+  (select count(*)::int from public.profiles
+   where id = '33333333-3333-3333-3333-333333333333'), 0);
+
+-- ⑤ **消しすぎていない。** ほかのゲストと、共有の教材は残る
+select pg_temp.expect('ほかのゲストの単語帳は残っている',
+  (select count(*)::int from public.word_reviews
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and word_norm = 'escrow'), 1);
+select pg_temp.expect('教材そのものは消えない(スクールの共有物)',
+  (select count(*)::int > 0 from public.materials), true);
+
+reset role;

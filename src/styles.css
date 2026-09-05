@@ -6090,3 +6090,21 @@ html, body { overflow-x: clip; }
 @media (prefers-reduced-motion: no-preference) {
   .material-card.is-just { transition: box-shadow .3s ease, border-color .3s ease; }
 }
+
+/* ── 記録をすべて消す(0041・管理者だけ)──────────────────────
+   **取り返しがつかない操作**なので、まわりから見て分かるように
+   赤い枠で囲う。ただし**塗りつぶさない** —— 押す前から赤く塗ると、
+   まだ押していないのに事故が起きたように見える(選んでいる印と同じ作法)。 */
+.erase-box {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--ng);
+  border-radius: 8px;
+  background: var(--ng-bg);
+}
+.erase-box .field-label { margin-top: 0; color: var(--ng); }
+.erase-box .field-hint { margin: 0 0 10px; }
+.erase-box input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}

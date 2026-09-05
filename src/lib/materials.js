@@ -776,6 +776,45 @@ export async function setLearnerStatus(learnerId, status, note) {
   return ok(true)
 }
 
+/**
+ * **ゲストの記録を、まとめて消す**(0041・2026-09 安全性レビュー 03-3位)。
+ *
+ *   > 退会したときに、まとめて消す手順がありません。
+ *   > 「消してほしい」と言われたときに応えられない状態です。
+ *
+ * 【取り返しがつかない】
+ *   名前・スコア・セッションの記録・単語帳・置いたファイルまで消える。
+ *   **画面から順に消させない** —— 表をまたいで15か所以上あるので、
+ *   途中で失敗すると「どこまで消えたのか」が誰にも分からなくなる。
+ *   SQL の関数1つにまとめてあり、**まるごと成功するか、まるごと失敗する。**
+ *
+ * 【できるのは管理者だけ】
+ *   判定は `erase_learner()` の中(`is_owner()`)。**画面に持たせない。**
+ *   画面がボタンを隠すのは見た目の話で、守っているのはデータベースである。
+ *
+ * 【ログインそのものは消えない】
+ *   `auth.users` を消すには管理者の鍵(service_role)が要る。
+ *   **鍵を扱わないという決まりを、この機能のために曲げない。**
+ *   プロフィールが消えるのでアプリは使えなくなるが、ログインの行は
+ *   Supabase の画面から消してもらう(呼んだ側にそう伝えさせる)。
+ *
+ * @returns {{data: object}} 表ごとに何件消したか(そのまま画面に出せる)
+ */
+export async function eraseLearner(learnerId) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  const { data, error } = await supabase.rpc('erase_learner', { p_learner: learnerId })
+  if (error) {
+    /* 0041 をまだ貼っていない Supabase でも、**行き止まりにしない。**
+       何が足りないのかを、貼るファイル名まで書いて伝える */
+    if (/function .*erase_learner.* does not exist|PGRST202/i.test(error.message ?? '')) {
+      return ng('記録を消す仕組みが、まだデータベースに入っていません。'
+        + 'supabase/apply/pending_2026-09-05.sql を Supabase の SQL Editor に貼ってください。')
+    }
+    return fail(error, '記録を消せませんでした')
+  }
+  return ok(data ?? {})
+}
+
 // ── AI に下書きを作らせる ─────────────────────────────────────
 
 /**
