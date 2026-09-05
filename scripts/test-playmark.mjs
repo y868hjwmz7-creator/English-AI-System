@@ -19,6 +19,7 @@
 import {
   finished, hasMark, nowPlaying, stopped, takeMark,
 } from '../src/lib/playMark.js'
+import { SESSION_SIZE, buildSession } from '../src/lib/wordQuiz.js'
 
 let ng = 0
 const ok = (cond, name, extra = '') => {
@@ -108,6 +109,63 @@ console.log('\n▶ 鳴っていないのに止めても、控えを作らない'
 reset()
 stopped(20)
 ok(takeMark('all|m1|s1') === null, '何も鳴っていなければ控えない')
+
+/* ══════════════════════════════════════════════════════════════════
+ * **おさらい**(2026-09 利用者の指定)
+ *
+ *   > 一巡しただけで「今日はもう出すものがありません」となってしまいます。
+ *   > 反復してランダムに出題するよう変更してください。
+ *
+ * ふだんの復習は「まだ」を先に出す(苦手な語が枠から外れないように)。
+ * ところが**おさらいは何度も回すもの**なので、その並びのままだと
+ * **毎回おなじ「まだ」の語ばかり**が出て、ほかが一度も出てこない。
+ * ここが壊れても `npm run lint` にも `npm run build` にも
+ * 引っかからず、**何度か回してみるまで分からない。**
+ * ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ おさらいは、まるごと混ぜて出す')
+{
+  const rows = []
+  for (let i = 0; i < 30; i += 1) {
+    rows.push({
+      word_norm: `w${i}`,
+      // 3語だけ「まだ」。ふだんはこの3語が必ず先に来る
+      status: i < 3 ? 'unknown' : 'learning',
+    })
+  }
+
+  // ふだん(おさらいではない)… 「まだ」が必ず先頭に来る
+  const normal = buildSession(rows)
+  ok(normal.length === SESSION_SIZE, `1回は ${SESSION_SIZE} 語`)
+  ok(normal.slice(0, 3).every((r) => r.status === 'unknown'),
+    'ふだんは「まだ」が先に出る')
+
+  /* おさらい … **先頭が「まだ」に固定されていないこと**を見る。
+     「出てきた語の種類を数える」だけでは足りない —— ふだんの並びでも
+     残りの枠は混ざるので、何回か回せば全部が顔を出してしまう。
+     **実際にそれで、外しても赤くならなかった。**
+
+     30語のうち「まだ」は3語なので、まるごと混ぜていれば
+     先頭が「まだ」になるのは10回に1回ほど。20回すべてが「まだ」なら、
+     それは**混ぜていない**(ふだんの並びのまま)ということである。 */
+  let headYet = 0
+  const seen = new Set()
+  for (let n = 0; n < 20; n += 1) {
+    const s = buildSession(rows, SESSION_SIZE, { shuffleAll: true })
+    if (s[0].status === 'unknown') headYet += 1
+    for (const r of s) seen.add(r.word_norm)
+  }
+  ok(headYet < 20, `おさらいは先頭も混ざる(20回のうち「まだ」が先頭 ${headYet} 回)`)
+  ok(seen.size > 20, `おさらいは毎回ちがう顔ぶれ(20回で ${seen.size} / 30 語)`)
+
+  // **同じ語を2つ入れない**(混ぜても重ならない)
+  const one = buildSession(rows, SESSION_SIZE, { shuffleAll: true })
+  ok(new Set(one.map((r) => r.word_norm)).size === one.length,
+    'おさらいでも、同じ語は1回しか出ない')
+
+  // 語が少なければ、あるだけ出す(足りないと言って止まらない)
+  const few = buildSession(rows.slice(0, 4), SESSION_SIZE, { shuffleAll: true })
+  ok(few.length === 4, '語が足りなければ、あるだけ出す')
+}
 
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`

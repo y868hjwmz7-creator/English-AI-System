@@ -59,6 +59,18 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const [order, setOrder] = useState(loadOrder)
   /** **今日出すぶんだけ**が既定。箱(間隔)を置いている意味がそこにある */
   const [dueOnly, setDueOnly] = useState(true)
+  /**
+   * **おさらい**(2026-09 利用者の指定・単語帳とまったく同じ考え方)。
+   *
+   *   > 一巡しただけで「今日はもう出すものがありません」となってしまいます。
+   *   > 反復してランダムに出題するよう変更してください。
+   *
+   * 溜まっている文ぜんぶから、期限に関わらずランダムに出す。
+   * **「言える」を押しても、次に出す日は動かさない** —— 同じ日に
+   * 何度も押して先へ飛ぶと、**明日の復習が空になる。**
+   * **「まだ」だけは記録する**(早く出す方へは、いつ動かしてもよい)。
+   */
+  const [extra, setExtra] = useState(false)
   /** いま解いている一覧。`null` なら、まだ始めていない */
   const [run, setRun] = useState(null)
   const [at, setAt] = useState(0)
@@ -92,8 +104,13 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
 
   const dueCount = rows.filter((r) => String(r.due_on ?? '').slice(0, 10) <= today).length
 
-  const start = () => {
-    setRun(orderQrPairs(shown.map(qrPairOf), order))
+  const start = (asExtra = false) => {
+    /* **おさらいは、溜まっているものぜんぶから混ぜて出す。**
+       期限も並び順の指定も見ない(何度も回すものなので、
+       同じ並びだと同じ文ばかりが出る) */
+    const list = asExtra ? applyWordbookFilter(rows, filter) : shown
+    setExtra(asExtra)
+    setRun(orderQrPairs(list.map(qrPairOf), asExtra ? 'shuffle' : order))
     setAt(0)
     setDone([])
   }
@@ -111,7 +128,9 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
     answerFeedback(ok)
     /* 「まだ」は箱を 0 に戻して翌日、「言える」は箱を1つ上げる。
        **何日後に出すかは SQL(`mark_qr`)が決める。** 画面には持たない */
-    await markQr(card, ok ? 'learning' : 'unknown', { learnerId })
+    /* **おさらいでは、遅く出す方へ動かさない**(上記)。
+       「まだ」は記録する(早く出す方なので、いつでも正しい) */
+    if (!extra || !ok) await markQr(card, ok ? 'learning' : 'unknown', { learnerId })
     setDone((d) => [...d, { ...card, ok }])
     setAt((i) => i + 1)
   }
@@ -291,16 +310,35 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
 
           <div className="btn-row">
             <button type="button" className="btn btn--primary"
-                    disabled={shown.length === 0} onClick={start}>
+                    disabled={shown.length === 0} onClick={() => start(false)}>
               {shown.length ? `はじめる(${shown.length} 問)` : '出すものがありません'}
             </button>
           </div>
           {shown.length === 0 && (
-            <p className="hint">
-              {dueOnly
-                ? '今日出すものはありません。よくできました。'
-                : 'この絞り込みに当てはまる文がありません。'}
-            </p>
+            /* **行き止まりを作らない**(2026-09 利用者の指定)。
+               やり切ったことは伝えたうえで、続けたい人の道をその場に置く */
+            <div className="wb-again">
+              <p className="hint">
+                {dueOnly
+                  ? '今日出すものはありません。よくできました。'
+                  : 'この絞り込みに当てはまる文がありません。'}
+              </p>
+              {rows.length > 0 && (
+                <>
+                  <button type="button" className="btn btn--primary"
+                          onClick={() => start(true)}>
+                    おさらいをする(ランダム {rows.length} 問)
+                  </button>
+                  <p className="card-hint">
+                    溜まっている文ぜんぶから、期限に関わらずランダムに出します。
+                    何度でも続けられます。
+                    <strong>「言える」を押しても、次に出す日は動きません</strong>
+                    (同じ日に何度も押して先へ飛ぶと、明日の復習が空になるため)。
+                    「まだ」だけは記録して、翌日また出します。
+                  </p>
+                </>
+              )}
+            </div>
           )}
         </>
       )}

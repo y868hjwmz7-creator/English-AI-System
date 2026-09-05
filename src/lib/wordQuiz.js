@@ -81,8 +81,16 @@ export const SESSION_SIZE = 10
  * **それぞれの中では混ぜる。** 並び順で覚えてしまわないようにするため
  * (単語帳の決まり・CLAUDE.md)。
  */
-export function buildSession(rows, size = SESSION_SIZE) {
+export function buildSession(rows, size = SESSION_SIZE, { shuffleAll = false } = {}) {
   const list = rows ?? []
+  /* **おさらいでは、まるごと混ぜる**(2026-09 利用者の指定)。
+     > 反復してランダムに出題するよう変更してください
+
+     ふだんは「まだ」を先に出す(いちばん苦手な語が枠から外れないように)。
+     ところが**おさらいは何度も回すもの**なので、その並びだと
+     **毎回おなじ「まだ」の語ばかり**が出て、ほかが一度も出てこない。
+     おさらいのときだけ、順ではなく**まるごとランダム**にする。 */
+  if (shuffleAll) return shuffle(list).slice(0, size)
   const yet = shuffle(list.filter((r) => r.status === 'unknown'))
   const half = shuffle(list.filter((r) => r.status === 'learning'))
   // 状態の付いていない古い行は、いちばん後ろに置く(0027 より前のもの)

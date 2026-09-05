@@ -40,7 +40,7 @@ import {
   noteWordbookView, setWordStatus,
 } from '../lib/vocab.js'
 import {
-  QUIZ_FORMS, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
+  QUIZ_FORMS, SESSION_SIZE, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
 } from '../lib/wordQuiz.js'
 import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
@@ -207,6 +207,29 @@ export default function Wordbook({
   rowsRef.current = rows
   /** 出題を組み直す合図。読み直したときだけ1つ進む */
   const [deal, setDeal] = useState(0)
+  /**
+   * **おさらい**(2026-09 利用者の指定)。
+   *
+   *   > 単語帳やクイックレスポンスを練習すると、一巡しただけで
+   *   > 「今日はもう出すものがありません」となってしまいます。
+   *   > 反復してランダムに出題するよう変更してください。
+   *
+   * ふだんの復習は**その日に出す語だけ**で組む(間隔をあけて出すため)。
+   * だから一巡すると空になり、そこで行き止まりになっていた。
+   *
+   * **おさらいは、単語帳ぜんぶから10語をランダムに出す。**
+   * 期限は見ない。何度でも続けられる。
+   *
+   * 【間隔は動かさない】
+   *   おさらいで「覚えかけ」を押しても**箱も次に出す日も動かさない。**
+   *   動かすと、同じ日に何度も押すだけで 30 日先へ飛んでしまい、
+   *   **明日の復習が空になる** —— 反復したい人が、いちばん困る形になる。
+   *
+   *   **「まだ」だけは、いつでも記録する。** 思い出せなかったことは
+   *   確かな手がかりで、記録すれば翌日また出てくる。
+   *   **早く出す方へは動かしてよい。遅く出す方へは動かさない。**
+   */
+  const [extra, setExtra] = useState(false)
   /* **選んだ語で、その場で教材を作る**(ここが循環の要)。
      トレーナーがゲストのカードから開いたときだけ使う。
      絞り込みを変えても選択は消さない(集めて教材にするため) */
@@ -323,13 +346,15 @@ export default function Wordbook({
     const all = rowsRef.current
     const pool = narrowed
       ? applyWordbookFilter(all, filter)
-      : all.filter((r) => isDueNow(r, today))
-    setQueue(buildSession(pool))
+      /* **おさらいでは期限を見ない。** 単語帳ぜんぶから選ぶ */
+      : (extra ? all : all.filter((r) => isDueNow(r, today)))
+    setQueue(buildSession(pool, SESSION_SIZE, { shuffleAll: extra }))
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
     setPickedChoice(null)
-  }, [isQuiz, loading, deal, filter.day, filter.material, filter.field, filter.topic])
+  }, [isQuiz, loading, deal, extra,
+    filter.day, filter.material, filter.field, filter.topic])
   const card = isQuiz ? queue[0] : null
 
   /**
@@ -475,8 +500,12 @@ export default function Wordbook({
        **成功と失敗が、同じ見た目で終わってはいけない**(CLAUDE.md) */
     let e = null
     try {
-      ;({ error: e } = await setWordStatus(row.word_norm, status,
-        { kind: row.kind, learnerId }))
+      /* **おさらいでは、遅く出す方へ動かさない**(上記)。
+         「まだ」は記録する(早く出す方なので、いつでも正しい) */
+      if (!extra || status === 'unknown') {
+        ;({ error: e } = await setWordStatus(row.word_norm, status,
+          { kind: row.kind, learnerId }))
+      }
     } catch (err) {
       e = String(err?.message ?? err ?? '記録できませんでした')
     }
@@ -712,7 +741,33 @@ export default function Wordbook({
                 読み出せませんでした。しばらくしてから開き直してください。
               </p>
             )
-            : <p className="hint">今日出すものはありません。よくできました。</p>
+            : (
+              /* **行き止まりを作らない**(2026-09 利用者の指定)。
+                 > 一巡しただけで「今日はもう出すものがありません」と
+                 > なってしまいます。反復してランダムに出題するよう
+                 > 変更してください
+
+                 やり切ったことは、まず伝える。そのうえで
+                 **続けたい人のための道**を、その場に置く。 */
+              <div className="wb-again">
+                <p className="hint">今日出すものはありません。よくできました。</p>
+                {rows.length > 0 && (
+                  <>
+                    <button type="button" className="btn btn--primary"
+                            onClick={() => { setExtra(true); setRunning(true) }}>
+                      <FocusIcon />おさらいをする(ランダム {SESSION_SIZE} 語)
+                    </button>
+                    <p className="card-hint">
+                      単語帳ぜんぶから、期限に関わらずランダムに出します。
+                      何度でも続けられます。
+                      <strong>「覚えかけ」を押しても、次に出す日は動きません</strong>
+                      (同じ日に何度も押して先へ飛ぶと、明日の復習が空になるため)。
+                      「まだ」だけは記録して、翌日また出します。
+                    </p>
+                  </>
+                )}
+              </div>
+            )
       )}
 
       {/* **とじたあとの戻り道**(2026-09)。集中モードは画面ぴったりなので、
@@ -720,7 +775,7 @@ export default function Wordbook({
       {isQuiz && !loading && !running && (card || result) && (
         <button type="button" className="btn btn--primary wb-start"
                 onClick={() => setRunning(true)}>
-          <FocusIcon />今日の復習をつづける
+          <FocusIcon />{extra ? 'おさらいをつづける' : '今日の復習をつづける'}
         </button>
       )}
 
