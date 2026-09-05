@@ -3462,14 +3462,17 @@ html, body { overflow-x: clip; }
 .lesson-ink {
   flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
 }
-/* **紙の上では、まん中に寄せる**(2026-09 実機・利用者の指定)。
+/* **まん中に寄せる**(2026-09 実機・利用者の指定)。
      > 書き込みのUIを開いた時、真ん中に寄るようにしてください
+     > (集中モードの帯も)はい、揃えてください
 
    帯は横いっぱいあるのに、道具は左に固まって**右半分が空いていた。**
    線を引くのは紙のまん中あたりなので、道具もそこに近いほうが手が短い。
-   **並びは変えていない**(「書き込みを終える」は先頭のまま)。
-   **集中モードの帯(`.focus-ink`)には効かせない** —— 言われた場所だけを直す */
-.lesson-bar .lesson-ink { justify-content: center; }
+
+   **レッスン表示と集中モードの両方**に効かせる(利用者の指定)。
+   もともと「同じ並び」にしてある帯なので、**片方だけ寄せると食い違う。**
+   **並びは変えていない**(「書き込みを終える」は先頭のまま)。 */
+.lesson-ink { justify-content: center; }
 .ink-tools {
   display: inline-flex; border: 1px solid #55554e; border-radius: 999px;
   overflow: hidden;
@@ -6234,7 +6237,21 @@ html, body { overflow-x: clip; }
      「別々に `fixed` で置かない」という決まりはそのままである
      (片方が消えたときにもう片方が飛ぶのを防ぐため)。
      **同じ囲みの中で折り返すぶんには、2つは一緒に動く。** */
-  .sheet-floats { flex-wrap: wrap; justify-content: flex-end; }
+  /* **「集中モード」は、操作盤の左へ寄せる**(2026-09 実機・利用者の指摘)。
+
+       > スマホではプレーヤーの下に「集中モード」のボタンがきてしまいますが、
+       > もう少し気の利いた場所にどけることはできませんか?
+
+     折り返させていたので、操作盤(2段)の**下にもう1段**積まれて、
+     右下が3段になっていた。**言葉を落として絵だけにし、左へ寄せる。**
+     操作盤は残りの幅で自分の中を折り返すので、全体は2段に収まる。
+
+     **同じ囲みの中にいるままである**(「別々に `fixed` で置かない」)。
+     片方が消えても、もう片方は飛ばない。 */
+  .sheet-floats { flex-wrap: nowrap; align-items: center; }
+  .sheet-float { order: -1; flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
+  .sheet-float .wide-text { display: none; }
+  .player--float { flex: 1 1 auto; min-width: 0; }
   /* 進み具合の帯は落とす。**切り替えのボタンは残す** —
      消すと、右下にしたあと上へ戻す道が無くなる(行き止まりを作らない)。
 

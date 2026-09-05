@@ -400,7 +400,16 @@ export default function LessonView({
    * **開いているあいだだけ**「浮いている」と数える。
    * **この式は下の操作盤の出し分けと同じもの**(2か所に書かない)。
    */
-  const floating = spot === 'float' || (!fitsInBar && floatOpen)
+  /* **書き込みのあいだは、必ず右下に出す**(2026-09 利用者の指定)。
+
+       > 書き込みモードを起動したら、プレーヤーは自動的にフロートに
+       > なるようにしてください。
+
+     書き込み中は**帯がまるごと道具に入れ替わる**ので、上の帯に入れて
+     いた操作盤は**そのまま消えていた。** 線を引きながら聴きたいのに、
+     止める場所も送る場所も無くなる。**行き止まりを作らない。**
+     書き込みを終えれば、覚えている置き場所へ戻る(値は書き換えない)。 */
+  const floating = pen || spot === 'float' || (!fitsInBar && floatOpen)
 
   /** 通しの読み上げを止める */
   const stopAll = player.stop
@@ -1162,9 +1171,19 @@ export default function LessonView({
                 (出るほうは `FocusReader` の `.focus-exit`)。
                 通しの練習(6Steps / Quick Response)のあいだは出さない。
                 あちらはあちらで下にボタンがあり、重なる */}
+            {/* **狭い画面では絵だけにする**(2026-09 実機・利用者の指摘)。
+
+                  > スマホではプレーヤーの下に「集中モード」のボタンが
+                  > きてしまいますが、もう少し気の利いた場所にどけることは
+                  > できませんか?
+
+                操作盤とこのボタンを縦に積んでいたので、右下が3段になって
+                いた。**言葉を落として絵だけにし、操作盤の左へ寄せる**
+                (CSS)。同じ囲みの中にいるままなので、2つは一緒に動く。
+                **読み上げのための名前を必ず添える**(絵だけになるため) */}
             <button type="button" className="btn btn--small sheet-float"
-                    onClick={openFocus}>
-              <FocusIcon />集中モード
+                    aria-label="集中モード" onClick={openFocus}>
+              <FocusIcon /><span className="wide-text">集中モード</span>
             </button>
           </div>
         )}

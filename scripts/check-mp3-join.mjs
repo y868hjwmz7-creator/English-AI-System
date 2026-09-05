@@ -943,7 +943,9 @@ function fakeMp3({
        2か所に書くと、**両方出る / 両方消える**が起きる */
     const lv = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
     const want2 = [
-      ['浮いているかを1か所で決める', /const floating = spot === 'float' \|\| \(!fitsInBar && floatOpen\)/],
+      /* **書き込み中は必ず右下**(2026-09 利用者の指定)。
+         帯は道具にまるごと入れ替わるので、`pen` を外すと操作盤が消える */
+      ['浮いているかを1か所で決める', /const floating = pen \|\| spot === 'float' \|\| \(!fitsInBar && floatOpen\)/],
       ['操作盤も同じ式で出す', /isPassageSection\(section\?\.exercise_type\) && floating && \(/],
       ['浮いていれば段落のボタンを出さない', /secIsPassage && floating \? null/],
       ['帯にあるときは段落に錠剤を出す', /withSkip\(secIsPassage, \(/],
