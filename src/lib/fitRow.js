@@ -39,13 +39,13 @@
  *   - **描き直すたびに測る。** 中身が変わる(Listen ⇄ Stop、
  *     次 ▶ ⇄ まとめ、訳を見る が出たり消えたり)ので、
  *     幅が同じでも入るかどうかは変わる
- *   - **足すのは4つまで。** それでも入らないなら、あふれたままにする。
+ *   - **足すのは3つまで。** それでも入らないなら、あふれたままにする。
  *     **言葉を削り続けて、何のボタンか分からなくするほうが悪い**
  */
 import { useLayoutEffect } from 'react'
 
 /** 詰める段。**順に足す。** 何を削るかは `styles.css` が持つ */
-export const FIT_STAGES = ['is-fit1', 'is-fit2', 'is-fit3', 'is-fit4']
+export const FIT_STAGES = ['is-fit1', 'is-fit2', 'is-fit3']
 
 /** その箱(と直の子)が、幅からあふれているか */
 function over(row) {

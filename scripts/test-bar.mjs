@@ -284,13 +284,17 @@ for (const [label, want] of Object.entries(WANT)) {
 
   const look = () => page.evaluate(() => {
     const bar = document.querySelector('.focus-bar')
-    if (!bar) return null
+    const top = document.querySelector('.focus-top')
+    if (!bar || !top) return null
+    const spill = (el) => [el, ...el.children].some((b) => b.scrollWidth > b.clientWidth + 1)
     const mid = bar.querySelector('.focus-mid')
-    const last = [...bar.children].pop()
     return {
       h: Math.round(bar.getBoundingClientRect().height),
-      over: mid ? mid.scrollWidth > mid.clientWidth + 1 : false,
-      末: last ? (last.textContent || '').trim() : '',
+      上: Math.round(top.getBoundingClientRect().height),
+      // **上の帯も一緒に見る。** 最後の段落では「まとめ」がそちらに増える
+      over: spill(bar) || spill(top) || (mid ? spill(mid) : false),
+      // 最後の段落だけ「まとめ」が出る。**そこまで送って測る**
+      末: /まとめ/.test(top.textContent || '') ? 'まとめ' : '中ほど',
     }
   })
 
@@ -331,9 +335,9 @@ for (const [label, want] of Object.entries(WANT)) {
     for (let step = 0; step < 12; step++) {
       const m = await look()
       if (!m) { ng(`${印} で集中モードの下の帯が出ていない`); bad = true; break }
-      if (m.h > 70) {
-        ng(`${印} で集中モードの下の帯が2段になっている(${m.末})`,
-          `高さ ${m.h}px(1行なら 61px ほど)`)
+      if (m.h > 70 || m.上 > 70) {
+        ng(`${印} で集中モードの帯が2段になっている(${m.末})`,
+          `下 ${m.h}px / 上 ${m.上}px(どちらも1行なら 60px ほど)`)
         bad = true; break
       }
       if (m.over) {
@@ -342,15 +346,18 @@ for (const [label, want] of Object.entries(WANT)) {
         bad = true; break
       }
       if (m.末.includes('まとめ')) break        // 最後の段落まで見た
+      // 段落を送るのは**プレーヤーの「◀ 3 / 6 段落 ▶」**(2026-09 利用者の指定
+      // 「これと同じにすれば収まりますよね?」で、両端の「前 / 次」は無くした)
       const moved = await page.evaluate(() => {
-        const b = [...document.querySelectorAll('.focus-bar .focus-move')].pop()
+        const pill = document.querySelector('.focus-mid .player-at')?.closest('.listenpill')
+        const b = pill ? [...pill.querySelectorAll('.listenpill-arrow')].pop() : null
         if (!b || b.disabled) return false
         b.click(); return true
       })
       if (!moved) break
       await page.waitForTimeout(150)
     }
-    if (!bad) ok(`${印} … 集中モードの下の帯は1行(最後の段落まで)`)
+    if (!bad) ok(`${印} … 集中モードの帯は上下とも1行(最後の段落まで)`)
 
     await page.evaluate(() => {
       const x = [...document.querySelectorAll('.focus button')]

@@ -322,9 +322,10 @@ export default function FocusReader({
       settings={settings}
       top={(
         <>
-          <span className="focus-count">
-            {wrap ? '調べた語' : `${index + 1} / ${total} ${unit}`}
-          </span>
+          {/* **どこまで来たかは、下の帯のプレーヤーが出す**(2026-09 利用者の指定
+              「これと同じにすれば収まりますよね?」)。同じ「3 / 6 段落」を
+              上と下の2か所に出さない(帯の進み具合の線を消したのと同じ話) */}
+          {wrap && <span className="focus-count">調べた語</span>}
           {/* **6Steps へは、ここから移れる**(2026-09 利用者の指定)。
               `StepFocus` と**同じ見た目のプルダウン**にしてある。
               先頭は「読んで調べる」= いまの画面そのもので、
@@ -345,14 +346,27 @@ export default function FocusReader({
         </>
       )}
       topEnd={(
-        /* 見終わった段落の印。**どこまでやったか一目で分かる** */
-        <span className="focus-dots" aria-hidden="true">
+        <>
+          {/* **まとめは、上の帯に置く**(2026-09 実機・実測)。
+              下の帯は「紙の右下のプレーヤーと同じ形」にすると決めたので
+              (利用者の指定)、押すものは3つ + 訳を見るで埋まっている。
+              **5つめを足すと、狭い画面であふれる。**
+              最後の段落に着いたときだけ出す(それまでは行き先が無い) */}
+          {last && !wrap && (
+            <button type="button" className="btn btn--small btn--primary"
+                    onClick={() => { go(index); setWrap(true) }}>
+              まとめ
+            </button>
+          )}
+          {/* 見終わった段落の印。**どこまでやったか一目で分かる** */}
+          <span className="focus-dots" aria-hidden="true">
           {items.map((it, i) => (
             <span key={it.id ?? i}
                   className={`focus-dot${i === index ? ' is-now' : ''}`
                     + (seen.includes(i) ? ' is-done' : '')} />
           ))}
         </span>
+        </>
       )}
       bar={wrap ? (
         <button type="button" className="btn btn--primary focus-wide"
@@ -360,76 +374,75 @@ export default function FocusReader({
           本文に戻る
         </button>
       ) : (
-        <>
-          {/* **狭い画面では、絵だけにする**(2026-09 実機・利用者の指定
-              「このスマホのプレーヤーのUI、2行ではなく1行にまとめてください」)。
-              両端にあるので、何を送るかは**場所**で分かる。
-              **読み上げのための名前は `aria-label` が持つ** */}
-          <button type="button" className="btn focus-move focus-move--tight"
-                  aria-label="前へ" title="前へ"
-                  onClick={() => go(index - 1)} disabled={index === 0}>
-            ◀<span className="wide-text"> 前</span>
-          </button>
+        /* ★ **紙の右下のプレーヤーと、まったく同じ形にする**
+             (2026-09 実機・利用者の指定)
 
-          <div className="focus-mid">
-            {/* **紙とまったく同じ形**(2026-09 利用者の指定)。
-                ◀ ▶ は1文ずつの送り戻し、その中が Listen である
-                (`PlayerBar` と同じ `SentenceSkip` を使っている) */}
-            {canReadAloud() && (
-              <SentenceSkip>
-                <button type="button"
-                        className="btn btn--small"
-                        aria-label={player.playing ? 'Stop' : 'Listen'}
-                        onClick={() => player.toggle(playOpts())}>
-                  {/* **「用意しています…」だけは、どんなに狭くても消さない**
-                      (音が出るまで何も起きていないように見えるため・CLAUDE.md)。
-                      絵だけにしてよいのは `Listen` / `Stop` の2語だけ */}
-                  {player.playing
-                    ? <><StopIcon />{player.waiting
-                        ? preparingLabel(player.secs)
-                        : <span className="listen-word">Stop</span>}</>
-                    : <><SpeakerIcon /><span className="listen-word">Listen</span></>}
-                </button>
-              </SentenceSkip>
-            )}
-            {/* **くり返し**(2026-09 利用者の指定
-                「これは集中モードで、全てのデバイスで同じにしてください」)。
-                まねて言うには、同じ発言を何度も聴く。
-                単位は**文 / 段落(発言)/ 全文**の3つ(紙と同じ部品) */}
-            {canReadAloud() && (
-              <RepeatUnit value={player.repeat} unit={unit} onChange={player.setRepeat} />
-            )}
-            {/* 訳が無い段落では出さない(効かない操作を見せない)。
-                **いちばん詰まったときは「訳」だけになる**(`is-fit4`)。
-                320px で端末の文字を大きくしていると、ここまで削らないと
-                入らない。**名前は `aria-label` が持っている** */}
-            {item.prompt_ja && (
-              <button type="button" className="btn btn--small btn--ghost"
-                      aria-label={showJa ? '英語に戻す' : '訳を見る'}
-                      onClick={() => setShowJa((v) => !v)}>
-                {/* **1つの塊にする。** ボタンは `gap` を持つので、
-                    ばらばらに置くと「訳 を見る」と隙間が空く(実測) */}
-                <span>
-                  {showJa ? '英語' : '訳'}
-                  <span className="ja-word">{showJa ? 'に戻す' : 'を見る'}</span>
-                </span>
+             > これと同じにすれば収まりますよね?色は黒くしたいですが
+
+           あちらが1行に収まっているのは、押すものが3つ
+           (Listen / 段落の送り / くり返し)しかないからである。
+           こちらには**両端の「前 / 次」**が加わっていて、そのぶん入らなかった。
+
+           **段落の送りは、プレーヤーの「◀ 3 / 6 段落 ▶」に一本化した**
+           (利用者の判断)。両端の大きなボタンは無くなるが、
+           **送るところが1か所になり、紙とまったく同じ操作**になる。
+           色はこの帯のもの(黒)のまま —— `.focus-bar` が塗り直している。 */
+        <div className="focus-mid">
+          {/* 文で送る ◀ ▶ のあいだに Listen。**紙と同じ `SentenceSkip`** */}
+          {canReadAloud() && (
+            <SentenceSkip>
+              <button type="button"
+                      className="btn btn--small"
+                      aria-label={player.playing ? 'Stop' : 'Listen'}
+                      onClick={() => player.toggle(playOpts())}>
+                {/* **「用意しています…」だけは、どんなに狭くても消さない**
+                    (音が出るまで何も起きていないように見えるため) */}
+                {player.playing
+                  ? <><StopIcon />{player.waiting
+                      ? preparingLabel(player.secs)
+                      : <span className="listen-word">Stop</span>}</>
+                  : <><SpeakerIcon /><span className="listen-word">Listen</span></>}
               </button>
-            )}
-          </div>
+            </SentenceSkip>
+          )}
 
-          {last ? (
-            <button type="button" className="btn btn--primary focus-move"
-                    onClick={() => { go(index); setWrap(true) }}>
-              まとめ
-            </button>
-          ) : (
-            <button type="button" className="btn focus-move focus-move--tight"
-                    aria-label="次へ" title="次へ"
-                    onClick={() => go(index + 1)}>
-              <span className="wide-text">次 </span>▶
+          {/* **段落の送り。** ここが「前 / 次」の代わりである。
+              数の両脇に三角を置くのも、紙のプレーヤーとまったく同じ */}
+          <SentenceSkip
+            label={`${unit}を`}
+            onStep={(d) => go(index + d)}
+            canBack={index > 0}
+            canNext={index < total - 1}
+          >
+            <span className="player-at">
+              {index + 1} / {total}
+              <span className="wide-text"> {unit}</span>
+            </span>
+          </SentenceSkip>
+
+          {/* **くり返し**(2026-09 利用者の指定
+              「これは集中モードで、全てのデバイスで同じにしてください」)。
+              単位は**文 / 段落(発言)/ 全文**の3つ(紙と同じ部品) */}
+          {canReadAloud() && (
+            <RepeatUnit value={player.repeat} unit={unit} onChange={player.setRepeat} />
+          )}
+
+          {/* 訳が無い段落では出さない(効かない操作を見せない)。
+              **詰まったときは「訳」だけになる**(`is-fit2`)。
+              名前は `aria-label` が持っている */}
+          {item.prompt_ja && (
+            <button type="button" className="btn btn--small btn--ghost"
+                    aria-label={showJa ? '英語に戻す' : '訳を見る'}
+                    onClick={() => setShowJa((v) => !v)}>
+              {/* **1つの塊にする。** ボタンは `gap` を持つので、
+                  ばらばらに置くと「訳 を見る」と隙間が空く(実測) */}
+              <span>
+                {showJa ? '英語' : '訳'}
+                <span className="ja-word">{showJa ? 'に戻す' : 'を見る'}</span>
+              </span>
             </button>
           )}
-        </>
+        </div>
       )}
     >
       {wrap ? (

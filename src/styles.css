@@ -5871,13 +5871,12 @@ html, body { overflow-x: clip; }
    | 印 | 何を削るか | なぜその順か |
    |---|---|---|
    | `is-fit1` | `Listen` の言葉 | speaker の絵だけで通じる |
-   | `is-fit2` | 「前 / 次」の言葉 | **三角が4つ並ぶので、これは後回し**(下記) |
+   | `is-fit2` | 「訳**を見る**」 | 「訳」だけでも、何のボタンかは分かる |
    | `is-fit3` | 余白・三角の幅 | **押せる大きさ(28px)は割らない** |
 
    **落とす順は「どちらが分かりにくくなるか」で決める。**
-   三角は2組ある(外 = 段落を送る / 内 = 文を送る)。両方を絵にすると
-   **三角が4つ並んで、どちらが何を送るのか見分けられない。**
-   だから外の「前 / 次」は**いちばん最後まで残す。**
+   数(3 / 6 段落)と、くり返しの単位(しない / 文 / 段落 / 全文)は
+   **1文字も削らない** —— そこが読めないと、何をしているのか分からない。
 
    **`Listen` を消しても「用意しています…」は残る**(JSX 側で別の欄)。
    音が出るまで何も起きていないように見えるためである。 */
@@ -5888,26 +5887,22 @@ html, body { overflow-x: clip; }
   .focus-bar .btn { font-size: 12px; padding: 5px 8px; }
   .focus-mid { gap: 6px; }
   .focus-mid .listenpill-arrow { min-width: 32px; padding: 0 7px; }
-  .focus-mid .repeat-unit .wide-text { display: none; }
+  /* 添えの言葉(「くり返し:」と、数のうしろの「段落 / 発言」)を落とす。
+     **数と単位そのものは必ず見えている**(紙のプレーヤーと同じ作法) */
+  .focus-mid .wide-text { display: none; }
   .focus-mid .repeat-unit .repeat-unit-now { min-width: 0; }
 }
 
 /* ── 入るまで詰める段(`useFitRow` が付け外しする)──────────────
      **幅は書かない。** どの幅で効くかは、測った結果が決める */
 .focus-bar.is-fit1 .listen-word { display: none; }
-.focus-bar.is-fit2 .focus-move--tight .wide-text { display: none; }
+.focus-bar.is-fit2 .ja-word { display: none; }
 .focus-bar.is-fit3 { gap: 4px; padding-left: 8px; padding-right: 8px; }
 .focus-bar.is-fit3 .btn { padding: 5px 5px; }
 .focus-bar.is-fit3 .focus-mid { gap: 4px; }
 .focus-bar.is-fit3 .focus-mid .btn { padding: 5px 4px; }
 .focus-bar.is-fit3 .focus-mid .listenpill-arrow { min-width: 28px; padding: 0 5px; }
 .focus-bar.is-fit3 .focus-move { min-width: 30px; }
-/* いちばん詰まったところ。320px で端末の文字を大きくしていると、
-   `is-fit3` まで詰めてもなお入らない。**「訳を見る」を「訳」にする**
-   (名前は `aria-label` が持っている)。これでも入らなければ、
-   **あふれたままにする** —— 言葉を削り続けて、何のボタンか
-   分からなくするほうが悪い(`fitRow.js`) */
-.focus-bar.is-fit4 .ja-word { display: none; }
 
 /* 紙には出さない。画面の中でやることである */
 @media print { .focus { display: none !important; } }
@@ -6312,7 +6307,10 @@ html, body { overflow-x: clip; }
 /* **色は帯に合わせて決め打ち**(`.lesson-bar .btn` と同じ作法)。
    変数のままだと、**明るい配色のときだけ黒い帯に黒い文字**が乗る
    (実測 rgb(74,78,84) on rgb(36,36,31))。明るい側でも暗いまま */
-.player--bar .player-at { color: #cfcfc8; }
+/* **色を決め打ちする帯は3つある**(`.lesson-bar` / `.player--bar` /
+   `.focus-bar`)。**3つとも同じ行に書く** —— 前に `.focus-bar` を
+   書き忘れて、明るい配色のときだけ読めない錠剤になった(2026-09 実機) */
+.player--bar .player-at, .focus-bar .player-at { color: #cfcfc8; }
 .player--bar .player-track { background: #55554e; }
 
 /* 狭い画面。**文言は削らない**(何のボタンか分からなくなる)。
