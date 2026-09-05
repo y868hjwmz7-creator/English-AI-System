@@ -62,15 +62,9 @@ export default function PlayerBar({
   return (
     <div className={`player player--${place} no-print`}
          role="group" aria-label="読み上げの操作">
-      {/* **◀ [Listen] ▶ を、1つの錠剤にまとめる**(2026-09 利用者の指定)。
-          三角は**1組だけ。** 鳴っているあいだは1文ずつ、
-          1本にまとめられていない教材では、これまでどおり段落を送る */}
-      <SentenceSkip
-        unit={unit}
-        onStep={onJump && now != null ? (d) => onJump(now + d) : null}
-        canBack={now != null && now > 0}
-        canNext={now != null && now < total - 1}
-      >
+      {/* **鳴らすボタンの両脇は「文」**(2026-09 利用者の指定)。
+          1本にまとめた音声のときだけ効く(時刻を控えてあるため) */}
+      <SentenceSkip>
         <button type="button"
                 className={`btn btn--small player-play${playing ? ' is-on' : ''}`}
                 onClick={onToggle}>
@@ -78,10 +72,25 @@ export default function PlayerBar({
         </button>
       </SentenceSkip>
 
-      {/* いまどこか。**幅をそろえる**(そろえないと、送るたびに隣が動く) */}
-      <span className="player-at">
-        {shown == null ? `— / ${total} ${unit}` : `${shown} / ${total} ${unit}`}
-      </span>
+      {/* **段落の数の両脇は「段落」**(2026-09 利用者の指定)。
+            > 段落の数字の左右に◁▷を配置して、一つのプレーヤーで
+            > 段落と文章どちらも飛ばせるようにしてください
+
+          いまどこか。**幅をそろえる**(そろえないと、送るたびに隣が動く) */}
+      <SentenceSkip
+        label={`${unit}を`}
+        onStep={(d) => onJump?.(now + d)}
+        canBack={!!onJump && now != null && now > 0}
+        canNext={!!onJump && now != null && now < total - 1}
+      >
+        <span className="player-at">
+          {shown == null ? `— / ${total}` : `${shown} / ${total}`}
+          {/* **単位の言葉だけを、狭い画面で落とす**(2026-09 実測)。
+              数ごと消していたので、**中身の無い ◀ ▶** になっていた。
+              数が残っていれば、何を送っているかは分かる */}
+          <span className="wide-text"> {unit}</span>
+        </span>
+      </SentenceSkip>
 
       {/* 進み具合。**段落の単位**である(秒までは数えていない) */}
       <span className="player-track" aria-hidden="true">

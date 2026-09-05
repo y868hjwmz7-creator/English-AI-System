@@ -766,30 +766,48 @@ function fakeMp3({
     const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
     const skip = readFileSync(new URL('../src/components/SentenceSkip.jsx', import.meta.url), 'utf8')
     const want = [
-      ['区間を控える', read, /holdCursor\(sentenceSpansFor\(/],
-      ['通しでも控える', read, /holdCursor\(sentenceSpansFor\(got, list\.map/],
+      ['区間を控える', read, /const sent = sentenceSpansFor\(got, whole\.texts\)/],
+      ['通しでも控える', read, /const sent = sentenceSpansFor\(got, list\.map/],
       ['止めたら捨てる', read, /stopReading\(\) \{\s+setCursor\(null\)/],
       ['動かす道がある', read, /export function skipSentence\(/],
       ['鳴らしたまま場所だけ移す', clips, /export function seekClip\(/],
       ['いまの秒を返す', clips, /export function clipTime\(/],
       ['部品が呼んでいる', skip, /skipSentence\(d\)/],
       ['部品が見張っている', skip, /watchSentenceSkip\(setBySentence\)/],
+      /* **いま読んでいる文を光らせる**(2026-09 実機・利用者の指摘)。
+         1本にまとめて鳴らすようにしたとき `onWord` を渡し忘れ、
+         **文のハイライトが消えていた。** 音は鳴るので気づけない */
+      ['文の位置を持ち帰る', read, /charIndex: parts\[sp\.item\]/],
+      ['段落ごとに光らせる', read, /tellSentence\(sent, sec, \(\) => whole\.index/],
+      ['通しでも光らせる', read, /tellSentence\(sent, sec, \(\) => shown/],
     ]
     let bad0 = bad
     for (const [what, text, re] of want) if (!re.test(text)) ng(`1文ずつ: ${what}`)
     /* **出す場所は4つ。** 「全体を聞く」の横(操作盤・レッスン表示・6Steps)と、
        段落ごとの Listen の横。1つ抜けても lint / build は通る */
-    const spots = [
-      ['読み上げの操作盤', 'PlayerBar'],
+    /* **置き場所は操作盤の1つだけ**(2026-09 利用者の指定)。
+         > 各段落のプレーヤー、いらないですね。
+         > 上部バーのプレーヤーの段落の数字の左右に◁▷を配置して、
+         > 一つのプレーヤーで段落と文章どちらも飛ばせるように
+
+       記事は6段落あるので、段落ごとに置くと**同じものが6組**並ぶ。
+       **戻ってきたら赤くする** */
+    const bar = readFileSync(new URL('../src/components/PlayerBar.jsx', import.meta.url), 'utf8')
+    if ((bar.match(/<SentenceSkip[\s>]/g) ?? []).length !== 2) {
+      ng('操作盤の錠剤が2つ(文 / 段落)になっていない')
+    }
+    if (!/onStep=\{\(d\) => onJump\?\.\(now \+ d\)\}/.test(bar)) {
+      ng('段落の数の両脇が、段落を送っていない')
+    }
+    for (const [what, file] of [
       ['レッスン表示', 'LessonView'],
       ['6Steps(③⑤)', 'PassagePractice'],
       ['集中モード', 'FocusReader'],
-    ]
-    for (const [what, file] of spots) {
+    ]) {
       const t = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
-      if (!/<SentenceSkip[\s>]/.test(t)) ng(`◀ [Listen] ▶ の錠剤が ${what}(${file})に無い`)
+      if (/<SentenceSkip[\s>]/.test(t)) ng(`${what}(${file})に、段落ごとの三角が残っている`)
     }
-    if (bad === bad0) ok(`◀ [Listen] ▶ … 道は1本も切れていない(出す場所 ${spots.length} つ)`)
+    if (bad === bad0) ok('◀ ▶ は操作盤の1つだけ(文 / 段落の2組)')
   }
 
   // 窓口が、**実際に**新しい API を呼んでいるか

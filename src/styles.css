@@ -6107,11 +6107,20 @@ html, body { overflow-x: clip; }
      (片方が消えたときにもう片方が飛ぶのを防ぐため)。
      **同じ囲みの中で折り返すぶんには、2つは一緒に動く。** */
   .sheet-floats { flex-wrap: wrap; justify-content: flex-end; }
-  /* 帯と「何番目か」は落とす。**切り替えのボタンは残す** —
+  /* 進み具合の帯は落とす。**切り替えのボタンは残す** —
      消すと、右下にしたあと上へ戻す道が無くなる(行き止まりを作らない)。
-     何番目かは、紙の上で光っている段落が示している */
-  .player--float .player-track,
-  .player--float .player-at { display: none; }
+
+     **「何番目か」は落とさない**(2026-09 実測)。
+     段落を送る ◀ ▶ がこの数をはさんでいるので、消すと
+     **中身の無い三角**になり、何を送るのか分からなくなる。
+     落とすのは**単位の言葉だけ**(`.wide-text`)。 */
+  .player--float .player-track { display: none; }
+  /* **数は残し、単位の言葉だけを落とす。** 320px では
+     「— / 2 発言」まで出すと**右端が切れて、送る ▶ が画面の外**へ出る
+     (実測。切れたことに気づけないのがいちばん困る) */
+  .player--float .wide-text { display: none; }
+  .player--float .player-at { min-width: 0; }
+  .player--float .listenpill-arrow { min-width: 32px; padding: 0 7px; }
   .player .btn { padding: 5px 9px; }
 }
 

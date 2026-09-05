@@ -45,7 +45,6 @@ import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import { preparingLabel } from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
-import SentenceSkip from './SentenceSkip.jsx'
 import StepFocus from './StepFocus.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
@@ -536,7 +535,6 @@ export default function PassagePractice({
             鳴っているあいだは Stop になる。**各文の Listen と同じ作法**で、
             止める場所を探さなくてよい(`SpeakButton` も同じ形)。 */}
         {current.unit === 'passage' && (
-          <SentenceSkip>
           <button type="button"
                   className={`btn${playingAll ? ' btn--primary' : ''}`}
                   onClick={() => (playingAll ? stopPlaying() : playAll())}>
@@ -544,7 +542,6 @@ export default function PassagePractice({
               ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop (全体)'}</>
               : <><SpeakerIcon />Listen (全体)</>}
           </button>
-          </SentenceSkip>
         )}
         {/* **速さは、①ディクテーションでは出さない**(2026-09 利用者の指定)。
 
@@ -738,8 +735,6 @@ export default function PassagePractice({
               {showJa && item.prompt_ja && <p className="passage-ja">{item.prompt_ja}</p>}
 
               <div className="passage-actions">
-                {/* **◀ [Listen] ▶ を1つの錠剤に**(2026-09 利用者の指定) */}
-                <SentenceSkip>
                 <button
                   type="button" className="btn btn--small"
                   onClick={() => playOne(item)}
@@ -748,7 +743,6 @@ export default function PassagePractice({
                     ? <><StopIcon />Stop</>
                     : <><SpeakerIcon />Listen</>}
                 </button>
-                </SentenceSkip>
                 {/* **Listen のとなりに、くり返し**(2026-09 利用者の指定) */}
                 <RepeatToggle on={loopIds.has(item.id)}
                               onChange={() => setLoopIds((v) => {

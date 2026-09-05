@@ -65,7 +65,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
-import SentenceSkip from './SentenceSkip.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import { castClipSpeakers, voiceFor } from '../lib/voiceCast.js'
 import { wholeSliceOf } from '../lib/audioPlaylist.js'
@@ -310,13 +309,10 @@ export default function FocusReader({
 
           <div className="focus-mid">
             {/* **音も訳も両方出す**(2026-09 利用者の指定) */}
-            {/* **◀ [Listen] ▶ を1つの錠剤に**(2026-09 利用者の指定) */}
-            <SentenceSkip>
-              <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
-                           className="btn--small" repeat={loop}
-                           /* **1本の中の、その区間だけを鳴らす**(2026-09) */
-                           whole={wholeSliceOf(section, cast, soloVoice, item)} />
-            </SentenceSkip>
+            <SpeakButton text={item.prompt_en} clipVoice={clipVoice} tier={tier}
+                         className="btn--small" repeat={loop}
+                         /* **1本の中の、その区間だけを鳴らす**(2026-09) */
+                         whole={wholeSliceOf(section, cast, soloVoice, item)} />
             {/* **くり返し**(2026-09 利用者の指定
                 「これは集中モードで、全てのデバイスで同じにしてください」)。
                 まねて言うには、同じ発言を何度も聴く */}

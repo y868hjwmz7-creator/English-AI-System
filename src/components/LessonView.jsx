@@ -51,7 +51,6 @@ import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
-import SentenceSkip from './SentenceSkip.jsx'
 import AnswerEn from './AnswerEn.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
@@ -1408,15 +1407,14 @@ export default function LessonView({
                 (2026-08 の指摘)。話す人が変わると声も変わる。 */}
             {secIsPassage && (
               <div className="lesson-listen no-print">
-                {/* **◀ [Listen] ▶ を1つの錠剤に**(2026-09 利用者の指定)。
-                    通しでは**本文ぜんぶ**を1文ずつ行き来できる */}
-                <SentenceSkip>
-                  <button type="button" className="btn btn--small" onClick={playWhole}>
-                    {playingAll
-                      ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
-                      : <><SpeakerIcon />Listen (全体)</>}
-                  </button>
-                </SentenceSkip>
+                {/* **三角は付けない**(2026-09 利用者の指定)。
+                    送り戻しは**操作盤の1つ**に集めた(下の `PlayerBar`)。
+                    同じことをするものを、画面のあちこちに置かない */}
+                <button type="button" className="btn btn--small" onClick={playWhole}>
+                  {playingAll
+                    ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
+                    : <><SpeakerIcon />Listen (全体)</>}
+                </button>
               </div>
             )}
 
@@ -1483,7 +1481,6 @@ export default function LessonView({
                       <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
                     </button>
                   ) : secType?.audioFrom && it[secType.audioFrom] && (
-                    <SentenceSkip>
                     <SpeakButton
                       text={it[secType.audioFrom]}
                       voice={voiceFor(secCast, it.speaker)}
@@ -1500,7 +1497,6 @@ export default function LessonView({
                       }}
                       onWord={(w) => setReadingAt(w ? w.charIndex : null)}
                     />
-                    </SentenceSkip>
                   )}
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。

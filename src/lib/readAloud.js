@@ -52,7 +52,7 @@ import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
   indexAtTime, rangeOf, seekSentence, sentenceSpansOf,
 } from './wholeAudio.js'
-import { splitEnSentences } from './sentencePair.js'
+import { splitSentences } from './wordTiming.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
@@ -121,10 +121,62 @@ function holdCursor(spans, bound) {
   setCursor(spans?.length ? { spans, bound, session } : null)
 }
 
-/** 項目の英文から、文の区間を出す。**切り方は `splitEnSentences` 1か所** */
-const sentenceSpansFor = (got, texts) => sentenceSpansOf(
-  got?.alignment, texts.map((t) => splitEnSentences(t)),
-)
+/**
+ * 項目の英文から、文の区間を出す。**切り方は `splitSentences` 1か所**
+ * (`splitEnSentences` が中で使っているのと同じもの)。
+ *
+ * **文字の位置(`charIndex`)も一緒に持ち帰る**(2026-09 実機・利用者の指摘)。
+ *
+ *   > 今再生している文章をハイライトしてください。
+ *   > いつの間にか再生中の文章がハイライトされなくなりました。
+ *
+ * 1本にまとめた音声で鳴らすようにしたとき、**`onWord` を渡し忘れていた。**
+ * 画面は「いま何文字目を読んでいるか」から文を光らせるので
+ * (`EnglishText` の `readingAt`)、渡さないと**光らない。**
+ * 音は鳴るので、**気づけない形の抜け**だった。
+ *
+ * 位置は**その項目の英文の中での文字数**である(段落ごとに 0 から数える)。
+ * 画面はその項目の英文をそのまま描いているので、これで文が当たる。
+ */
+function sentenceSpansFor(got, texts) {
+  /* **切って、位置も覚える。** `splitEnSentences` は位置を捨てるので、
+     ここでは元の `splitSentences` を使う(**切り方は同じ**)。
+     空白だけの文を落とすところまで、あちらとそろえる */
+  const parts = texts.map((t) => {
+    const src = String(t ?? '')
+    return splitSentences(src)
+      .map((m) => ({ at: m.start, text: src.slice(m.start, m.end).trim() }))
+      .filter((x) => x.text)
+  })
+  const spans = sentenceSpansOf(got?.alignment, parts.map((g) => g.map((x) => x.text)))
+  if (!spans) return null
+  /* 何番目の項目の、何番目の文か。**`sentenceSpansOf` と同じ順**に
+     並んでいるので、項目ごとに数え上げれば当たる */
+  const seen = new Map()
+  return spans.map((sp) => {
+    const n = seen.get(sp.item) ?? 0
+    seen.set(sp.item, n + 1)
+    return { ...sp, charIndex: parts[sp.item]?.[n]?.at ?? 0 }
+  })
+}
+
+/**
+ * いま鳴っている秒から、**光らせる文の位置**を出して知らせる。
+ * **同じ文のあいだは、何度も呼ばない**(描き直しが増えるだけ)。
+ */
+function tellSentence(spans, sec, only, state, onWord) {
+  if (!onWord || !spans) return
+  let hit = -1
+  for (let i = spans.length - 1; i >= 0; i -= 1) {
+    if (sec >= spans[i].start - 0.001) { hit = i; break }
+  }
+  if (hit < 0 || hit === state.at) return
+  state.at = hit
+  const sp = spans[hit]
+  // 通しでは、いま光っている項目のものだけを送る(別の段落を光らせない)
+  if (only != null && sp.item !== only()) return
+  onWord({ charIndex: sp.charIndex, index: sp.item })
+}
 
 /* ── 止めた場所を覚えておく(2026-09 利用者の指定)─────────────────
  *
@@ -253,7 +305,11 @@ export async function readAloud(text, {
         ? from.at : span.start
       /* **文の区間を控える**(1文ずつの ◁▷)。段落ごとに押したときは、
          **その段落の中だけ**で動かす(押した段落から出ていかない) */
-      holdCursor(sentenceSpansFor(got, whole.texts), span)
+      const sent = sentenceSpansFor(got, whole.texts)
+      holdCursor(sent, span)
+      /* **いま読んでいる文を光らせる**(2026-09 実機・利用者の指摘)。
+         この項目の文だけを送る(ほかの段落を光らせない) */
+      const mine2 = { at: -1 }
       const cut = await playClip({
         srcUrl: got.url,
         // 1本には声が何人ぶんも入っている。**声ごとの速さの補正は当てない**
@@ -263,9 +319,12 @@ export async function readAloud(text, {
         startAt: at,
         stopAt: span.end,
         onStart: started,
+        onTime: (sec) => {
+          if (mine === session) tellSentence(sent, sec, () => whole.index, mine2, onWord)
+        },
       })
       if (mine !== session) return
-      if (cut) { finished(); return }
+      if (cut) { finished(); onWord?.(null); return }
       // 鳴らせなかった。**下へ落ちて、これまでどおり1本ずつ作る**
     }
   }
@@ -438,7 +497,11 @@ export function readAloudSequence(parts, {
 
     /* **文の区間を控える**(1文ずつの ◁▷)。通しでは**本文ぜんぶ**を
        行き来できる(段落をまたいでも構わない) */
-    holdCursor(sentenceSpansFor(got, list.map((p) => p.text)), null)
+    const sent = sentenceSpansFor(got, list.map((p) => p.text))
+    holdCursor(sent, null)
+    /* **いま読んでいる文を光らせる**(2026-09 実機・利用者の指摘)。
+       通しでは、**いま光っている段落の文だけ**を送る */
+    const seenSent = { at: -1 }
     const played = await playClip({
       srcUrl: got.url,
       // 1本には声が2人ぶん入っている。**声ごとの速さの補正は当てない**
@@ -447,7 +510,11 @@ export function readAloudSequence(parts, {
       rate,
       startAt: at,
       onStart: started,
-      onTime: (sec) => { if (alive()) seen(indexAtTime(spans, sec)) },
+      onTime: (sec) => {
+        if (!alive()) return
+        seen(indexAtTime(spans, sec))
+        tellSentence(sent, sec, () => shown, seenSent, onWord)
+      },
     })
     if (!alive()) return true
     if (!played) return false                 // 鳴らせなかった。今までの形へ
