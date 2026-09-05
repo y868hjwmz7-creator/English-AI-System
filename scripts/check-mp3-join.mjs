@@ -800,14 +800,30 @@ function fakeMp3({
       ng('段落の数の両脇が、段落を送っていない')
     }
     for (const [what, file] of [
-      ['レッスン表示', 'LessonView'],
       ['6Steps(③⑤)', 'PassagePractice'],
       ['集中モード', 'FocusReader'],
     ]) {
       const t = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
       if (/<SentenceSkip[\s>]/.test(t)) ng(`${what}(${file})に、段落ごとの三角が残っている`)
     }
-    if (bad === bad0) ok('◀ ▶ は操作盤の1つだけ(文 / 段落の2組)')
+
+    /* **レッスン表示だけは、入れ替えで出す**(2026-09 利用者の指定)。
+         > プレーヤーがフロートした時は各段落の再生ボタンは隠してください。
+         > また、プレーヤーが上部バーに格納されている時は
+         > 各段落にプレーヤーを配置してください
+
+       押すところを、いつも1か所だけにする。
+       **式は1つ**(`floating`)で、操作盤の出し分けにも同じものを使う。
+       2か所に書くと、**両方出る / 両方消える**が起きる */
+    const lv = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
+    const want2 = [
+      ['浮いているかを1か所で決める', /const floating = spot === 'float' \|\| \(!fitsInBar && floatOpen\)/],
+      ['操作盤も同じ式で出す', /isPassageSection\(section\?\.exercise_type\) && floating && \(/],
+      ['浮いていれば段落のボタンを出さない', /secIsPassage && floating \? null/],
+      ['帯にあるときは段落に錠剤を出す', /withSkip\(secIsPassage, \(/],
+    ]
+    for (const [what, re] of want2) if (!re.test(lv)) ng(`入れ替え: ${what}`)
+    if (bad === bad0) ok('◀ ▶ は、操作盤と段落のどちらか一方だけに出る')
   }
 
   // 窓口が、**実際に**新しい API を呼んでいるか

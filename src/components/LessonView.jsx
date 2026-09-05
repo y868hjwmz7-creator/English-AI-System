@@ -51,11 +51,15 @@ import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
+import SentenceSkip from './SentenceSkip.jsx'
 import AnswerEn from './AnswerEn.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import Stepper from './Stepper.jsx'
 import PlayerBar from './PlayerBar.jsx'
+
+/** 本文のときだけ ◀ ▶ で挟む。**呼ぶ側に条件を書き散らさない** */
+const withSkip = (on, node) => (on ? <SentenceSkip>{node}</SentenceSkip> : node)
 
 const SIZES = [
   { id: 'm', label: '標準' },
@@ -344,6 +348,25 @@ export default function LessonView({
    * 右下のまま覚えていると**戻す道が無くなる**(行き止まりを作らない)。
    */
   const spot = fitsInBar ? place : 'bar'
+  /**
+   * **いま、操作盤が右下に浮いているか**(2026-09 利用者の指定)。
+   *
+   *   > プレーヤーがフロートした時は各段落の再生ボタンは隠してください。
+   *   > また、プレーヤーが上部バーに格納されている時は
+   *   > 各段落にプレーヤーを配置してください
+   *
+   * **ちょうど入れ替えである。** 押すところは、いつも1か所だけにする。
+   *
+   * | 操作盤の居場所 | 段落ごと |
+   * |---|---|
+   * | **右下に浮いている** | **出さない**(すぐ手元に操作盤がある) |
+   * | 上の帯にしまってある | **出す**(帯は遠いので、読んでいる場所で押せるように) |
+   *
+   * 狭い画面ではスイッチだけを帯に置いてあるので、
+   * **開いているあいだだけ**「浮いている」と数える。
+   * **この式は下の操作盤の出し分けと同じもの**(2か所に書かない)。
+   */
+  const floating = spot === 'float' || (!fitsInBar && floatOpen)
   const allTicker = useRef(null)
 
   /** 通しの読み上げを止める */
@@ -1118,8 +1141,7 @@ export default function LessonView({
                 そちらに置くと鳴らすボタンがしまい込まれてしまう */}
             {/* **`!fitsInBar` を必ず添える。** 添えないと、右下を開いたまま
                 窓を広げたときに**帯と右下の2つ**が出る(実測で確かめた) */}
-            {isPassageSection(section?.exercise_type)
-              && (spot === 'float' || (!fitsInBar && floatOpen)) && (
+            {isPassageSection(section?.exercise_type) && floating && (
               <PlayerBar
                 place="float"
                 /* **狭い画面では切り替えを出さない。** そこでは
@@ -1474,29 +1496,38 @@ export default function LessonView({
                       そこには「Listen」と書いてあり、押すと**二重に鳴り出す。**
 
                       押したら通しごと止める。**止める場所を探させない** */}
-                  {secType?.audioFrom && it[secType.audioFrom]
+                  {/* **右下に浮いているあいだは出さない**(2026-09 利用者の指定)。
+                      操作盤がすぐ手元にあるので、同じことをするものを
+                      段落の数だけ並べない(記事なら6組になる) */}
+                  {secIsPassage && floating ? null
+                    : secType?.audioFrom && it[secType.audioFrom]
                     && playingAll && speakingKey === k(it, i) ? (
                     <button type="button" className="btn btn--small"
                             onClick={() => { stopAll(); setReadingAt(null) }}>
                       <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
                     </button>
                   ) : secType?.audioFrom && it[secType.audioFrom] && (
-                    <SpeakButton
-                      text={it[secType.audioFrom]}
-                      voice={voiceFor(secCast, it.speaker)}
-                      clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
-                      tier={secTier}
-                      rate={rateOf(rateId)}
-                      /* **1本の中の、その区間だけを鳴らす**
-                         (2026-09 利用者の指定で統一)。本文の演習でだけ
-                         渡す —— 内容の理解や語句は1本に入っていない */
-                      whole={wholeSliceOf(sec, secClipCast, soloVoice, it)}
-                      onPlayingChange={(on) => {
-                        setSpeakingKey(on ? k(it, i) : null)
-                        if (!on) setReadingAt(null)
-                      }}
-                      onWord={(w) => setReadingAt(w ? w.charIndex : null)}
-                    />
+                    /* **三角を添えるのは本文だけ**(2026-09)。
+                       内容の理解や語句は1本の音声に入っていないので、
+                       文で送る先が無い(効かない操作を見せない) */
+                    withSkip(secIsPassage, (
+                      <SpeakButton
+                        text={it[secType.audioFrom]}
+                        voice={voiceFor(secCast, it.speaker)}
+                        clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
+                        tier={secTier}
+                        rate={rateOf(rateId)}
+                        /* **1本の中の、その区間だけを鳴らす**
+                           (2026-09 利用者の指定で統一)。本文の演習でだけ
+                           渡す —— 内容の理解や語句は1本に入っていない */
+                        whole={wholeSliceOf(sec, secClipCast, soloVoice, it)}
+                        onPlayingChange={(on) => {
+                          setSpeakingKey(on ? k(it, i) : null)
+                          if (!on) setReadingAt(null)
+                        }}
+                        onWord={(w) => setReadingAt(w ? w.charIndex : null)}
+                      />
+                    ))
                   )}
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。
