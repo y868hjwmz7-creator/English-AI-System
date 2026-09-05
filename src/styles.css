@@ -3935,6 +3935,29 @@ html, body { overflow-x: clip; }
    値を直に書くと**暗い配色の集中モードで、黒い紙に黒い文字**になる
    (2026-09 に `.qr--paper` で実際に踏んだ失敗)。 */
 .cast-chip { margin: 0 0 8px; }
+/* ── 紙の上では、**日付と同じ右側に、控えめに**(2026-09 実機・利用者の指定)
+     > このタイトルの上の「読み上げの声」の位置ですが、
+     > 右の方の日付の下の方にもう少し控えめにおいてくれませんか
+
+   はじめは教材名の**上**に置いていたので、いちばん先に目が行っていた。
+   ふだん読むものではないので、右へ寄せて字も一段落とす。
+   **消さない** —— 「あの声を外して」と言うときには必ず要る。
+
+   **色はすべて変数から取る**(紙の中は配色の島。値を直に書くと
+   暗い配色の集中モードで黒い紙に黒い文字になる)。 */
+.cast-chip--quiet {
+  display: flex; flex-direction: column; align-items: flex-end;
+  margin: 4px 0 0; text-align: right;
+}
+.cast-chip--quiet .cast-chip-btn:not(.chip--on) {
+  border-color: transparent; background: transparent;
+  color: var(--ink-faint, var(--text-muted)); font-size: .62em; padding: 2px 4px;
+}
+.cast-chip--quiet .cast-chip-btn:not(.chip--on):hover {
+  color: var(--ink-soft, var(--text-secondary));
+}
+.cast-chip--quiet .cast-chip-btn.chip--on { font-size: .62em; padding: 2px 8px; }
+.cast-chip--quiet .cast-chip-list { font-size: .7em; margin-top: 3px; }
 /* **問数の行の右に、その行と同じ背丈で置く**(2026-09 実機・利用者の指定)。
      > 読み上げの声、のタブはこの場所ではなく、会話14発言の右に、
      > 同じ高さくらいのタブで十分です。
