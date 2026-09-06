@@ -322,6 +322,70 @@ function fakeMp3({
   } else ok('教材が無ければ 0 本')
 }
 
+/* ── 通しで鳴らすものは、演習ごとに違う欄から取る(2026-09 利用者の指定)──
+ *
+ *   > 文型トレーニングに上のバーのプレーヤーが出ません。
+ *   > どんなトレーニングでも出るようにして下さい。
+ *
+ *   以前は `audio_text || prompt_en` と決め打ちしていた。本文(記事・会話)は
+ *   それで正しかったが、**本文以外では1本も拾えない。**
+ *   和文英訳は `answer`、リスニングは `audio_text`、内容の理解は `question`
+ *   から読む。**どれも `audioFrom` 1か所が決めている。**
+ *
+ *   逆に**誤り訂正と穴埋めは、絶対に拾ってはいけない**(`audioFrom: null`)。
+ *   誤った英文を手本として聞かせることになる(CLAUDE.md)。
+ *   ここが緩むと、**音は鳴るので誰も気づけない。** */
+{
+  const { audioItemsOf, audioTextOf } = await import('../src/lib/audioPlaylist.js')
+  console.log('\n── どの演習でも、読む欄を間違えない ──')
+
+  const it = {
+    prompt_en: 'She has finished.', prompt_ja: '彼女は終えた。',
+    answer: 'She has already finished.', audio_text: 'Listen carefully.',
+    question: 'What did she finish?', note: 'メモ',
+  }
+  const cases = [
+    ['記事', 'article', 'She has finished.'],
+    ['会話', 'dialogue', 'She has finished.'],
+    ['英文和訳', 'translate_en_ja', 'She has finished.'],
+    // **和文英訳は解答を読む。** 問題文は日本語なので、読み上げようがない
+    ['和文英訳', 'translate_ja_en', 'She has already finished.'],
+    ['リスニング', 'listening', 'Listen carefully.'],
+    ['内容の理解', 'comprehension', 'What did she finish?'],
+    ['ディスカッション', 'discussion', 'What did she finish?'],
+    ['想定される質問', 'audience_qa', 'What did she finish?'],
+    ['単語', 'vocabulary', 'She has finished.'],
+    ['フレーズ', 'phrase', 'She has finished.'],
+    // **音声を付けない演習**。誤った英文を手本にできない
+    ['誤り訂正', 'error_correction', ''],
+    ['穴埋め', 'fill_blank', ''],
+    // 知らない種類でも落ちない(**空を返す**)
+    ['知らない種類', 'no_such_type', ''],
+    ['種類を渡していない', undefined, ''],
+  ]
+  for (const [what, typeId, want] of cases) {
+    const got = audioTextOf(it, typeId)
+    if (got !== want) ng(`${what} … 読む欄がちがう`, `「${got}」≠「${want}」`)
+    else ok(`${what} … ${want ? `「${want}」を読む` : '読み上げない'}`)
+  }
+
+  // 数え上げも同じ絞り方。**空の項目は数えない**
+  const drill = [
+    { prompt_en: 'One.' }, { prompt_en: '  ' }, { prompt_en: 'Two.' }, {},
+  ]
+  const n = audioItemsOf(drill, 'translate_en_ja').length
+  if (n !== 2) ng('文型ドリルの数え上げがちがう', `${n} ≠ 2`)
+  else ok('文型ドリル … 中身のある2問だけを数える')
+
+  if (audioItemsOf(drill, 'error_correction').length !== 0) {
+    ng('誤り訂正を数えている(誤った英文を読み上げてしまう)')
+  } else ok('誤り訂正 … 1問も数えない(操作盤そのものが出ない)')
+
+  if (audioItemsOf(null, 'article').length || audioItemsOf(undefined).length) {
+    ng('項目が無いのに何か返している')
+  } else ok('項目が無ければ 0 件')
+}
+
 // ── ⑦ 長さの札 ────────────────────────────────────────────────
 /* 【なぜ要るか】(2026-09 実機・利用者の指摘)
  *
@@ -785,8 +849,13 @@ function fakeMp3({
     const want = [
       ['区間を出す道具がある', play, /export function wholeSliceOf\(/],
       ['本文でなければ null を返す', play, /if \(!isPassageSection\(section\?\.exercise_type\)\) return null/],
-      ['番号は audioItemsOf で数える', play, /const list = audioItemsOf\(section\.items\)/],
-      ['通しの一覧も同じ絞り方', play, /const items = audioItemsOf\(body\.items\)/],
+      /* **演習の種類ごと渡す**(2026-09)。どの欄を読むかは `audioFrom` が
+         決めるので、種類を渡さないと**本文以外で1本も拾えない** */
+      ['番号は audioItemsOf で数える',
+        play, /const list = audioItemsOf\(section\.items, section\.exercise_type\)/],
+      ['通しの一覧も同じ絞り方',
+        play, /const items = audioItemsOf\(body\.items, body\.exercise_type\)/],
+      ['読む欄は audioFrom 1か所が決める', play, /exerciseType\(typeId\)\?\.audioFrom/],
       ['読み上げが区間を受け取る', read, /whole = null,/],
       ['読み上げが区間を鳴らす', read, /rangeOf\(got\.spans, whole\.index\)/],
       ['終わりで止める', read, /stopAt: span\.end/],
@@ -958,7 +1027,18 @@ function fakeMp3({
       /* **書き込み中は必ず右下**(2026-09 利用者の指定)。
          帯は道具にまるごと入れ替わるので、`pen` を外すと操作盤が消える */
       ['浮いているかを1か所で決める', /const floating = pen \|\| spot === 'float' \|\| \(!fitsInBar && floatOpen\)/],
-      ['操作盤も同じ式で出す', /isPassageSection\(section\?\.exercise_type\) && floating && \(/],
+      /* **「本文かどうか」で出し分けない**(2026-09 利用者の指定
+           「文型トレーニングに上のバーのプレーヤーが出ません。
+             どんなトレーニングでも出るようにして下さい」)。
+         鳴らせるものが1つでもあれば出す(`canPlayAll`) */
+      ['操作盤も同じ式で出す', /canPlayAll && floating && \(/],
+      ['出すかどうかは「鳴らせるものがあるか」で決める',
+        /const canPlayAll = playableAll\.length > 0/],
+      ['上の帯の操作盤も同じ判断', /\{canPlayAll && spot === 'bar' && fitsInBar && \(/],
+      ['狭い画面のスイッチも同じ判断', /\{canPlayAll && !fitsInBar && \(/],
+      /* **読む英文も `audioFrom` から取る。** `prompt_en` を直に見ると、
+         和文英訳・リスニング・内容の理解が1本も鳴らない */
+      ['通しの英文も audioFrom から取る', /text: audioTextOf\(it, section\?\.exercise_type\)/],
       ['浮いていれば段落のボタンを出さない', /secIsPassage && floating \? null/],
       ['帯にあるときは段落に錠剤を出す', /withSkip\(secIsPassage, \(/],
       /* **スマホでは、はじめから右下に出す**(2026-09 利用者の指定)。

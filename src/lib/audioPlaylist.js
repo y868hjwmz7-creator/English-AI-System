@@ -35,7 +35,7 @@
  */
 import { castClipSpeakers, voiceFor } from './voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
-import { isPassageSection } from '../data/exerciseTypes.js'
+import { exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import { voiceTierFor } from './voiceTier.js'
 import { turnGapMs } from './turnGap.js'
 
@@ -49,11 +49,28 @@ export const bodySectionOf = (material) => (material?.sections ?? [])
  * 通しの一覧も、段落ごとの Listen が使う番号も、**同じこの絞り方**で
  * 数える。片方だけ変えると**番号が1つずれて、別の発言が鳴る。**
  */
-export const audioItemsOf = (items) => (items ?? [])
-  .filter((it) => String(it.audio_text || it.prompt_en || '').trim())
+export const audioItemsOf = (items, typeId) => (items ?? [])
+  .filter((it) => audioTextOf(it, typeId))
 
-/** その項目の、読み上げる英文。**`audioItemsOf` と対で使う** */
-export const audioTextOf = (it) => String(it.audio_text || it.prompt_en).trim()
+/**
+ * その項目の、読み上げる英文。
+ *
+ * **どの欄を読むかは `audioFrom` 1か所が決める**(`exerciseTypes.js`)。
+ * 演習ごとに違う —— 和文英訳は `answer`、リスニングは `audio_text`、
+ * 内容の理解と想定される質問は `question` である。
+ *
+ * **`audioFrom` が `null` の演習は、必ず空を返す。**
+ * 誤り訂正と穴埋めがそれで、**誤った英文を手本として聞かせられない**
+ * (CLAUDE.md)。ここを緩めると、通しの読み上げが誤文を読み上げる。
+ *
+ * 以前は `audio_text || prompt_en` と書いてあった。本文(記事・会話)は
+ * それで正しかったが、**本文以外では当たらない**(和文英訳には
+ * `prompt_en` が無く、誤り訂正では読んではいけない英文が入っている)。
+ */
+export const audioTextOf = (it, typeId) => {
+  const from = exerciseType(typeId)?.audioFrom
+  return from ? String(it?.[from] ?? '').trim() : ''
+}
 
 /**
  * **1本にまとめた音声の、どこを鳴らせばよいか**(2026-09 利用者の指定)。
@@ -80,13 +97,13 @@ export const audioTextOf = (it) => String(it.audio_text || it.prompt_en).trim()
  */
 export function wholeSliceOf(section, cast, solo, item) {
   if (!isPassageSection(section?.exercise_type)) return null
-  const list = audioItemsOf(section.items)
+  const list = audioItemsOf(section.items, section.exercise_type)
   // **2つ以上ないと、1本にまとめる意味がない**(`wholeClip` も同じ条件)
   if (list.length < 2) return null
   const index = list.indexOf(item)
   if (index < 0) return null
   return {
-    texts: list.map(audioTextOf),
+    texts: list.map((x) => audioTextOf(x, section.exercise_type)),
     voiceIds: list.map((it) => voiceFor(cast, it.speaker, solo)),
     index,
   }
@@ -108,19 +125,20 @@ export function materialAudioClips(material) {
     tags: material?.tags ?? [],
   })
 
-  const items = audioItemsOf(body.items)
+  const items = audioItemsOf(body.items, body.exercise_type)
   return items.map((it, i) => {
     const next = items[i + 1]
+    const text = audioTextOf(it, body.exercise_type)
     /* **間の決め方も、鳴らすときと同じ。**
        前の発言と次の発言の中身から決まる(`turnGap.js`)。
        同じ人が続けて話すときは、受け答えの規則を当てない */
     const gapMs = next
-      ? turnGapMs(it.prompt_en, next.prompt_en, {
+      ? turnGapMs(text, audioTextOf(next, body.exercise_type), {
         sameVoice: String(it.speaker ?? '') === String(next.speaker ?? ''),
       })
       : 0
     return {
-      text: String(it.audio_text || it.prompt_en).trim(),
+      text,
       voiceId: voiceFor(cast, it.speaker, solo),
       tier,
       gapMs,

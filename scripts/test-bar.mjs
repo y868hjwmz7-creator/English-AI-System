@@ -272,6 +272,90 @@ for (const [label, want] of Object.entries(WANT)) {
   await page.close()
 }
 
+/* ── **どのトレーニングでも、読み上げの操作盤が出る**(2026-09 利用者の指定)──
+ *
+ *    > 文型トレーニングに上のバーのプレーヤーが出ません。
+ *    > どんなトレーニングでも出るようにして下さい。
+ *
+ *    以前は「本文(記事・会話)の演習か」で出し分けていたので、
+ *    **文型ドリル・単語・フレーズ・内容の理解では1つも出なかった。**
+ *    いまは**鳴らせるものが1つでもあるか**で決める(`canPlayAll`)。
+ *
+ *    **誤り訂正と穴埋めだけは、出ないのが正しい**(`audioFrom: null`)。
+ *    誤った英文を手本として聞かせられないので、鳴らすものが無い。
+ *    **出す / 出さないの両方を見る** —— 片方だけだと、
+ *    「全部に出す」と書き換えても緑のままになる。
+ */
+{
+  const page = await browser.newPage({ viewport: { width: 1500, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1&kind=drill`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(400)
+  console.log('\n── 文型ドリルでも、読み上げの操作盤が出る ──')
+
+  /** いま出ている操作盤(帯の中 / 右下)と、そこに出ている数 */
+  const seen = () => page.evaluate(() => ({
+    bar: !!document.querySelector('.player--bar'),
+    float: !!document.querySelector('.player--float'),
+    launch: !!document.querySelector('.player-launch'),
+    at: document.querySelector('.player-at')?.textContent?.trim() ?? null,
+  }))
+  /** ページを送る(◀ ▶ は帯の中にある) */
+  const go = async (n) => {
+    for (let i = 0; i < n; i += 1) {
+      await page.click('[aria-label="次のページ"]')
+      await page.waitForTimeout(200)
+    }
+  }
+
+  // ① 英文和訳(`prompt_en` を読む)。**広い画面では帯の中に出る**
+  {
+    const m = await seen()
+    if (!m.bar) ng('文型ドリル(英文和訳)で、上の帯に操作盤が出ていない')
+    else if (!/3/.test(m.at ?? '')) ng('問数が出ていない', `「${m.at}」`)
+    else ok(`英文和訳 … 上の帯に操作盤が出る(${m.at})`)
+  }
+
+  // ② 和文英訳。**読むのは `answer`** —— `prompt_en` は無い
+  await go(1)
+  {
+    const m = await seen()
+    if (!m.bar) ng('和文英訳で操作盤が出ていない(読むのは answer である)')
+    else if (!/2/.test(m.at ?? '')) ng('和文英訳の問数がちがう', `「${m.at}」`)
+    else ok(`和文英訳 … 解答を読む形でも出る(${m.at})`)
+  }
+
+  // ③ 誤り訂正。**出ないのが正しい**(誤った英文を手本にできない)
+  await go(1)
+  {
+    const m = await seen()
+    if (m.bar || m.float || m.launch) {
+      ng('誤り訂正で操作盤が出ている', '誤った英文を読み上げてしまう')
+    } else ok('誤り訂正 … 操作盤そのものが出ない(効かない操作を見せない)')
+  }
+
+  // ④ 狭い画面では、いつも見える行に**スイッチ**が出て、右下が開く
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.waitForTimeout(200)
+  await page.click('[aria-label="前のページ"]')
+  await page.waitForTimeout(250)
+  {
+    const m = await seen()
+    if (!m.launch) ng('狭い画面の文型ドリルで、操作盤のスイッチが出ていない')
+    else if (!m.float) ng('狭い画面の文型ドリルで、右下の操作盤が開いていない')
+    else ok('狭い画面 … スイッチと右下の操作盤が出る')
+  }
+
+  /* ⑤ **集中モードは本文だけ。** ドリルには読む本文が無いので、
+        右下に出しても行き止まりになる */
+  {
+    const n = await page.$$eval('.sheet-float', (xs) => xs.length)
+    if (n) ng('本文の無い教材に、右下の「集中モード」が出ている')
+    else ok('文型ドリル … 右下に集中モードは出さない(読む本文が無い)')
+  }
+  await page.close()
+}
+
 /* ── **右下の操作盤は、絶対に1行**(2026-09 実機・利用者の指定)──────
  *
  *    > 再生プレーヤーが2行になるのは絶対にダメです

@@ -25,7 +25,7 @@ import { loadEnglishVoices } from '../lib/speech.js'
 import { stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
-import { wholeSliceOf } from '../lib/audioPlaylist.js'
+import { audioTextOf, wholeSliceOf } from '../lib/audioPlaylist.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import {
@@ -752,10 +752,37 @@ export default function LessonView({
     return () => window.cancelAnimationFrame(id)
   }, [run])
 
-  /** 通しで鳴らせる段落・発言(色を付ける目印つき) */
+  /**
+   * 通しで鳴らせるもの(色を付ける目印つき)。
+   *
+   * **本文だけではない**(2026-09 利用者の指定
+   * 「文型トレーニングに上のバーのプレーヤーが出ません。
+   *   どんなトレーニングでも出るようにして下さい」)。
+   *
+   * 以前はここで `prompt_en` を直に見ていたので、
+   * **和文英訳(読むのは `answer`)もリスニング(`audio_text`)も
+   * 内容の理解(`question`)も、1本も拾えなかった。**
+   * どの欄を読むかは **`audioFrom` 1か所**が決める(`audioTextOf`)。
+   *
+   * **誤り訂正と穴埋ては空になる**(`audioFrom: null`)。
+   * 誤った英文を手本として聞かせられないので、そこには
+   * 操作盤そのものが出ない —— **効かない操作を見せない。**
+   *
+   * **番号は元の並びで振る。** 先に `map` してから絞るのは、
+   * 目印(`key`)が **`section.items` の中の何番目か**で決まるためである。
+   * 絞ってから振ると、空の項目がある教材で色が別の行に付く。
+   */
   const playableAll = (section?.items ?? [])
-    .map((it, i) => ({ it, key: key(it, i) }))
-    .filter(({ it }) => String(it.prompt_en ?? '').trim())
+    .map((it, i) => ({ it, key: key(it, i), text: audioTextOf(it, section?.exercise_type) }))
+    .filter((x) => x.text)
+
+  /**
+   * 操作盤を出すか。**「本文かどうか」では決めない**(2026-09 利用者の指定)。
+   *
+   * 鳴らせるものが1つでもあれば出す。そうすれば、演習を1つ足すたびに
+   * ここを書き足す必要がない(**判断を2か所に置かない**)。
+   */
+  const canPlayAll = playableAll.length > 0
 
   playRef.current = playableAll
 
@@ -766,8 +793,8 @@ export default function LessonView({
    * 「何を・どの声で・どの速さで」だけである。
    */
   const playOpts = (startIndex = null) => ({
-    parts: playableAll.map(({ it }) => ({
-      text: it.prompt_en,
+    parts: playableAll.map(({ it, text }) => ({
+      text,
       voice: voiceFor(cast, it.speaker),
       clipVoice: voiceFor(clipCast, it.speaker, soloVoice),
     })),
@@ -896,7 +923,7 @@ export default function LessonView({
 
                 **鳴っているあいだは押している印を出す。** 開いていなくても
                 「いま鳴っている」ことが、この1つで分かる */}
-            {isPassageSection(section?.exercise_type) && !fitsInBar && (
+            {canPlayAll && !fitsInBar && (
               <button type="button"
                       className={`btn btn--small player-launch${
                         floatOpen || playingAll ? ' is-on' : ''}`}
@@ -956,7 +983,7 @@ export default function LessonView({
               足すと帯が2行に折り返し、紙がそのぶん狭くなる。
               そのときは、いつも見える行に**スイッチだけ**を置く
               (`.player-launch`)。 */}
-          {isPassageSection(section?.exercise_type) && spot === 'bar' && fitsInBar && (
+          {canPlayAll && spot === 'bar' && fitsInBar && (
             <PlayerBar
               place="bar" onPlace={(v) => { setPlace(v); savePlace(v) }}
               playing={playingAll}
@@ -1185,7 +1212,7 @@ export default function LessonView({
             (出るほうは `FocusReader` の `.focus-exit`)。
             通しの練習(6Steps / Quick Response)のあいだは出さない。
             あちらはあちらで下にボタンがあり、重なる */}
-        {passageSection && !run && (
+        {(passageSection || canPlayAll) && !run && (
           <div className="sheet-floats no-print">
             {/* ── 通しの読み上げも、右下に置く(2026-09 利用者の指定)──────
                 > 全体を再生を一度押すと、どこにも再生を止めるボタンがないので、
@@ -1207,7 +1234,7 @@ export default function LessonView({
                 そちらに置くと鳴らすボタンがしまい込まれてしまう */}
             {/* **`!fitsInBar` を必ず添える。** 添えないと、右下を開いたまま
                 窓を広げたときに**帯と右下の2つ**が出る(実測で確かめた) */}
-            {isPassageSection(section?.exercise_type) && floating && (
+            {canPlayAll && floating && (
               <PlayerBar
                 place="float"
                 /* **狭い画面では切り替えを出さない。** そこでは
@@ -1244,10 +1271,17 @@ export default function LessonView({
                 操作盤と場所を取り合い、**操作盤を2行に折らせていた。**
                 狭い画面では上の帯へ移してある(`.lesson-focus`)。
                 消すのは CSS の幅だけで、**同時に2つは出ない** */}
-            <button type="button" className="btn btn--small sheet-float"
-                    onClick={openFocus}>
-              <FocusIcon />集中モード
-            </button>
+            {/* **集中モードは本文だけ。** ドリルには読む本文が無いので、
+                ここに出しても行き止まりになる(効かない操作を見せない)。
+                以前は囲みそのものが本文のときしか描かれなかったので、
+                この判定は要らなかった —— 操作盤を**どの演習でも**出すように
+                した日(2026-09)に、こちらへ移した */}
+            {passageSection && (
+              <button type="button" className="btn btn--small sheet-float"
+                      onClick={openFocus}>
+                <FocusIcon />集中モード
+              </button>
+            )}
           </div>
         )}
 

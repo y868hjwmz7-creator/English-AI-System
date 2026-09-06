@@ -38,6 +38,11 @@ setViewerRole(q.get('role') || null)
 /* **Speech練習を確かめるとき**は、本文を1人の記事(`article`)にする。
    声は `?voice=us-4` のように渡す(名簿の id) */
 const asSpeech = q.get('kind') === 'speech'
+/* **文型ドリルの帯も確かめる**(2026-09 利用者の指定
+   「文型トレーニングに上のバーのプレーヤーが出ません」)。
+   本文が無い教材で、読み上げの操作盤が出るかどうかは
+   **描かせないと分からない**(`npm run test:bar`) */
+const asDrill = q.get('kind') === 'drill'
 
 /** 検証に使う教材。**本文(会話)が1つあれば、帯はすべて出そろう** */
 const material = asSpeech ? {
@@ -82,6 +87,36 @@ const material = asSpeech ? {
         question_ja: '予定が遅れた場合はどうなりますか。',
         note: '遅れる前提で答える。何を先に守るかを1つ決めて言う。'
           + 'If that happens, we would … / Our first priority is …',
+      },
+    ],
+  }],
+} : asDrill ? {
+  /* **本文が1つも無い教材。** 文型ドリルは「問」が並ぶだけである。
+     和文英訳を混ぜてあるのは、**読み上げるのが `answer`** だからで、
+     `prompt_en` を直に見ていると1本も拾えない。
+     誤り訂正は **`audioFrom: null`** —— 読み上げてはいけない演習である */
+  id: 'test-drill', level: 'B1', title: '現在完了', kind: 'drill',
+  headline: '', tagIds: ['present_perfect'],
+  sections: [{
+    id: 'sec-1', exercise_type: 'translate_en_ja', title: '英文和訳',
+    items: [
+      { id: 'd-1', prompt_en: 'She has just finished her report.', answer: '彼女はちょうど報告書を書き終えた。' },
+      { id: 'd-2', prompt_en: 'They have known each other for ten years.', answer: '二人は10年来の知り合いだ。' },
+      { id: 'd-3', prompt_en: 'I have never been to Osaka.', answer: '大阪へ行ったことがない。' },
+    ],
+  }, {
+    id: 'sec-2', exercise_type: 'translate_ja_en', title: '和文英訳',
+    items: [
+      { id: 'd-4', prompt_ja: 'もう昼食は済ませましたか。', answer: 'Have you had lunch yet?' },
+      { id: 'd-5', prompt_ja: '荷物はまだ届いていません。', answer: 'The package has not arrived yet.' },
+    ],
+  }, {
+    id: 'sec-3', exercise_type: 'error_correction', title: '誤り訂正',
+    items: [
+      {
+        id: 'd-6', prompt_en: 'I have went to the office already.',
+        answer: 'I have gone to the office already.',
+        note: 'have のうしろは過去分詞。went は過去形である',
       },
     ],
   }],
