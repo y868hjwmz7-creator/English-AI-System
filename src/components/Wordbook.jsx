@@ -35,6 +35,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SessionResult from './SessionResult.jsx'
 import CollectRows from './CollectRows.jsx'
+import GoalBar from './GoalBar.jsx'
 import {
   KNOWN_AFTER, canMarkKnown,
   loadGlossDetail, loadMyWordbook, loadVocabWeek, loadVocabByIndustry,
@@ -44,6 +45,7 @@ import {
 import {
   QUIZ_FORMS, SESSION_SIZE, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
 } from '../lib/wordQuiz.js'
+import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
 import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
 import SpeakButton from './SpeakButton.jsx'
@@ -184,6 +186,8 @@ export default function Wordbook({
   const [viewers, setViewers] = useState([])
   /** 業界別のそろい具合(0019 の `vocab_by_industry`)。**集める楽しみ** */
   const [fields, setFields] = useState([])
+  /** 週の目標(0042)。**決めるのはトレーナー。** ここは出すだけ */
+  const [goal, setGoal] = useState(NO_GOAL)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
@@ -255,7 +259,7 @@ export default function Wordbook({
 
   const reload = useCallback(async () => {
     setLoading(true)
-    const [list, tally, wk, seen, byField] = await Promise.all([
+    const [list, tally, wk, seen, byField, aim] = await Promise.all([
       current.status
         ? loadMyWordbook({
           status: current.status, dueOnly: current.dueOnly, limit: 200, learnerId,
@@ -267,12 +271,15 @@ export default function Wordbook({
       /* **集める楽しみ**(2026-09 利用者の指定)。0019 からある窓口だが、
          **どこからも呼んでいなかった。** 読むのは開いたときの1回だけ */
       loadVocabByIndustry(learnerId),
+      /* **週の目標**(0042)。0042 を貼る前は 0 が返るので、何も出ない */
+      loadWeeklyGoal(learnerId),
     ])
     setLoading(false)
     if (tally.data) setCounts(tally.data)
     if (wk.data) setWeek(wk.data)
     if (seen.data) setViewers(seen.data)
     if (byField.data) setFields(byField.data)
+    if (aim.data) setGoal(aim.data)
     if (list.error) { setError(list.error); return }
     setError(null)
     setRows(list.data ?? [])
@@ -711,7 +718,13 @@ export default function Wordbook({
             unit="語"
             week={week}
             missLead="上に出ているのが、思い出せなかった語です。また明日出ます。"
-            extra={<CollectRows rows={fields} />}
+            extra={(
+              <>
+                {/* **週の目標**(0042)。決めていなければ、行ごと出ない */}
+                <GoalBar goal={goal.wordsGoal} done={goal.wordsDone} unit="語" />
+                <CollectRows rows={fields} />
+              </>
+            )}
           >
             {dueNow > 0
               ? (

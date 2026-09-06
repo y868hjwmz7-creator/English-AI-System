@@ -33,7 +33,9 @@ import {
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
+import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
+import { NO_GOAL, NO_WEEK, loadQrWeek, loadWeeklyGoal } from '../lib/goals.js'
 import { stopReading } from '../lib/readAloud.js'
 import { usePracticeLog } from '../lib/practice.js'
 import { answerFeedback } from '../lib/haptics.js'
@@ -76,15 +78,26 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const [run, setRun] = useState(null)
   const [at, setAt] = useState(0)
   const [done, setDone] = useState([])
+  /* **続けた記録と、週の目標**(0042・2026-09 利用者の指定)。
+     単語帳と**同じ形**にそろえてある。**日ではなく週で数える** */
+  const [week, setWeek] = useState(NO_WEEK)
+  const [goal, setGoal] = useState(NO_GOAL)
 
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('quick_response', Boolean(run), learnerId)
 
   const reload = async () => {
     setBusy(true)
-    const { data, error: e } = await loadQrReviews(learnerId, { status: 'todo', limit: 500 })
-    if (e) setError(e); else setError(null)
-    setRows(data ?? [])
+    const [list, wk, aim] = await Promise.all([
+      loadQrReviews(learnerId, { status: 'todo', limit: 500 }),
+      /* 0042 を貼る前は 0 が返る。**数が出ないだけで、復習はできる** */
+      loadQrWeek(learnerId),
+      loadWeeklyGoal(learnerId),
+    ])
+    if (list.error) setError(list.error); else setError(null)
+    setRows(list.data ?? [])
+    if (wk.data) setWeek(wk.data)
+    if (aim.data) setGoal(aim.data)
     setBusy(false)
   }
 
@@ -189,6 +202,8 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
             <SessionResult
               items={done.map((x) => ({ ok: x.ok, main: x.en, sub: x.ja }))}
               unit="文"
+              week={week}
+              extra={<GoalBar goal={goal.sentGoal} done={goal.sentDone} unit="文" />}
               missLead="上に出ているのが、言えなかった文です。また明日出ます。"
             >
               <div className="btn-row">

@@ -29,6 +29,7 @@ import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
+import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
 import { printElement } from '../lib/print.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 
@@ -55,6 +56,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
      どのゲストの、いま何を入力しているかまで覚える */
   const [erasing, setErasing] = useState(null)
   const [history, setHistory] = useState([])
+  /* **週の目標**(0042・2026-09 利用者の指定「週の目標と、達成の印」)。
+     **決めるのはトレーナー。ゲスト本人ではない** ——
+     自分で下げられる目標は、目標にならない。判定は `set_weekly_goal()` の中 */
+  const [goal, setGoal] = useState({ words: '', sentences: '' })
+  const [goalBusy, setGoalBusy] = useState(false)
   // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
   // 過去の宿題を最初に開く(2026-08 の要望)。
   const [detailTab, setDetailTab] = useState('homework')
@@ -221,15 +227,43 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setPrintHwId(null)
     setMessage(null)
     setForm({ testType: 'toeic', score: '', takenOn: today() })
+    setGoal({ words: '', sentences: '' })
     setDetailBusy(true)
     // `loadLearnerSummary`(study_logs の合計)は読まない。
     // **もう誰も入力しないので、いつも 0 になる**(2026-08 の設計変更)
-    const [{ data: hist }, { data: past }] = await Promise.all([
+    const [{ data: hist }, { data: past }, { data: aim }] = await Promise.all([
       loadScoreHistory(id), loadLearnerAssignments(id),
+      /* 0042 を貼る前は 0 が返る。**欄が空になるだけで、画面は壊れない** */
+      loadWeeklyGoal(id),
     ])
     setHistory(hist ?? [])
     setAssignments(past ?? [])
+    setGoal({
+      words: aim?.wordsGoal ? String(aim.wordsGoal) : '',
+      sentences: aim?.sentGoal ? String(aim.sentGoal) : '',
+    })
     setDetailBusy(false)
+  }
+
+  /**
+   * 週の目標を決める(0042)。
+   * **0(空欄)は「決めていない」。** 消す道を別に作らない ——
+   * 空にすれば、ゲストの画面から目標そのものが消える。
+   */
+  const submitGoal = async (learner) => {
+    if (goalBusy) return
+    setGoalBusy(true)
+    const { error: e } = await setWeeklyGoal(
+      learner.id, Number(goal.words) || 0, Number(goal.sentences) || 0,
+    )
+    setGoalBusy(false)
+    if (e) { setError(e); return }
+    setError(null)
+    const w = Number(goal.words) || 0
+    const t = Number(goal.sentences) || 0
+    setMessage(w || t
+      ? `${learner.display_name} さんの今週の目標を、語 ${w} / 文 ${t} にしました。`
+      : `${learner.display_name} さんの週の目標を外しました。`)
   }
 
   const changeCefr = async (learner, cefr) => {
@@ -986,6 +1020,40 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     </ul>
                   </>
                 )}
+
+                {/* ── 週の目標(0042・2026-09 利用者の指定)──────────────
+                    > 週の目標と、達成の印
+
+                    **決めるのはトレーナー。ゲスト本人ではない。**
+                    自分で下げられる目標は、目標にならない。
+                    守っているのは画面ではなく `set_weekly_goal()` の中である。
+
+                    **空欄(0)は「決めていない」。** 外す道を別に作らない ——
+                    空にして押せば、ゲストの画面から目標そのものが消える。 */}
+                <p className="field-label">週の目標</p>
+                <div className="filter-row">
+                  <label className="filter-label">
+                    単語帳
+                    <input type="number" className="score-input" min="0" max="2000"
+                           placeholder="語" value={goal.words}
+                           onChange={(e) => setGoal({ ...goal, words: e.target.value })} />
+                  </label>
+                  <label className="filter-label">
+                    Quick Response
+                    <input type="number" className="score-input" min="0" max="2000"
+                           placeholder="文" value={goal.sentences}
+                           onChange={(e) => setGoal({ ...goal, sentences: e.target.value })} />
+                  </label>
+                  <button type="button" className="btn btn--small"
+                          disabled={goalBusy} onClick={() => submitGoal(l)}>
+                    {goalBusy ? '決めています…' : '決める'}
+                  </button>
+                </div>
+                <p className="field-hint">
+                  1週間に答える数です。ゲストの単語帳と Quick Response に、
+                  あと何問かが出ます。空にして押せば外れます。
+                  日ではなく週で数えるので、1日休んでも途切れません。
+                </p>
 
                 <p className="field-label">在籍状態</p>
                 <div className="btn-row">

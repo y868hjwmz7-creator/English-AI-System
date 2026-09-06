@@ -374,6 +374,26 @@ from (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'erase_learner'), 83
   union all
+  select '(84) Quick Response の続けた記録(0042)', exists (
+    -- 何日やったかを数えるための、日ごとの記録。**単語帳と同じ形**
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'qr_days'), 84
+  union all
+  select '(85) Quick Response の続き具合を読める(0042)', exists (
+    -- **日ではなく週で数える**(vocab_week と同じ数え方)
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'qr_week'), 85
+  union all
+  select '(86) 週の目標を置ける(0042)', exists (
+    -- トレーナーがゲストごとに決める。ゲスト本人は読むだけ
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'weekly_goals'), 86
+  union all
+  select '(87) 週の目標と進み具合を1回で読める(0042)', exists (
+    -- **数え方は DB に置く。** 画面で足し直さない
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'weekly_goal'), 87
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

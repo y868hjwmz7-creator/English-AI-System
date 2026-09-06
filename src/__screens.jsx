@@ -26,6 +26,7 @@ import { createRoot } from 'react-dom/client'
 import LessonView from './components/LessonView.jsx'
 import SessionResult from './components/SessionResult.jsx'
 import CollectRows from './components/CollectRows.jsx'
+import GoalBar from './components/GoalBar.jsx'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
 
@@ -72,11 +73,16 @@ const RESULT = (
       unit="語"
       week={{ days: 3, weeks: 5 }}
       extra={(
+        <>
+        {/* 週の目標(0042)。**達成の前と後**を見比べられるように、
+            届いていない側を出しておく */}
+        <GoalBar goal={50} done={38} unit="語" />
         <CollectRows rows={[
           { industry: 'med', known: 30, learning: 10 },
           { industry: 'it', known: 12, learning: 20 },
           { industry: 'golf', known: 4, learning: 12 },
         ]} />
+        </>
       )}
     >
       <button type="button" className="btn btn--primary">つぎの 10 語</button>

@@ -736,6 +736,80 @@ set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
 select pg_temp.expect('管理者には記録が見える(0032)',
   (select count(*)::int from public.lesson_notes), 1);
 
+-- ── 週の目標(0042)────────────────────────────────────────────
+--
+--   **決められるのは担当トレーナー(と管理者)だけ。**
+--   自分で下げられる目標は、目標にならない。ゲスト本人は読めるが書けない。
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select public.set_weekly_goal('22222222-2222-2222-2222-222222222222', 100, 50);
+select pg_temp.expect('担当トレーナーは週の目標を決められる(0042)',
+  (select words from public.weekly_goals
+    where learner_id = '22222222-2222-2222-2222-222222222222'), 100);
+
+select pg_temp.expect_denied('担当していないゲストの目標は決められない(0042)',
+  $$select public.set_weekly_goal('33333333-3333-3333-3333-333333333333', 10, 10)$$);
+
+-- **とんでもない数は丸める**(0 未満・上限より上)
+select public.set_weekly_goal('22222222-2222-2222-2222-222222222222', -5, 99999);
+select pg_temp.expect('目標は 0 未満にならない(0042)',
+  (select words from public.weekly_goals
+    where learner_id = '22222222-2222-2222-2222-222222222222'), 0);
+select pg_temp.expect('目標には上限がある(0042)',
+  (select sentences from public.weekly_goals
+    where learner_id = '22222222-2222-2222-2222-222222222222'), 2000);
+select public.set_weekly_goal('22222222-2222-2222-2222-222222222222', 100, 50);
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('ゲスト本人は自分の目標を読める(0042)',
+  (select words_goal from public.weekly_goal()), 100);
+select pg_temp.expect_denied('ゲストは自分の目標を決められない(0042)',
+  $$select public.set_weekly_goal('22222222-2222-2222-2222-222222222222', 1, 1)$$);
+-- 書き換えのポリシーが1つも当たらないので、**エラーにならず0行**である。
+-- だから「中身が変わっていない」で確かめる(セッションの記録と同じ)
+update public.weekly_goals set words = 1;
+select pg_temp.expect('ゲストは目標を直に書き換えられない(0042)',
+  (select words_goal from public.weekly_goal()), 100);
+
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('ほかのゲストの目標は見えない(0042)',
+  (select count(*)::int from public.weekly_goals), 0);
+
+-- ── Quick Response の続けた記録(0042)──────────────────────────
+--
+--   `mark_qr()` が日ごとの記録を1つ増やす。**単語帳と同じ形**。
+--   「もう出さない」(known)は**答えたことにしない**(片づける操作である)。
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select public.mark_qr('We need the numbers by Friday.', '金曜までに数字が要ります。',
+                      'learning');
+select public.mark_qr('Could you walk me through it?', '順を追って説明してもらえますか?',
+                      'unknown');
+select pg_temp.expect('答えるたびに、日ごとの記録が増える(0042)',
+  (select answered from public.qr_days
+    where learner_id = '22222222-2222-2222-2222-222222222222'
+      and done_on = current_date), 2);
+select pg_temp.expect('「言える」だけが正解に数えられる(0042)',
+  (select correct from public.qr_days
+    where learner_id = '22222222-2222-2222-2222-222222222222'
+      and done_on = current_date), 1);
+
+select public.mark_qr('We need the numbers by Friday.', '金曜までに数字が要ります。',
+                      'known');
+select pg_temp.expect('「もう出さない」は答えたことにしない(0042)',
+  (select answered from public.qr_days
+    where learner_id = '22222222-2222-2222-2222-222222222222'
+      and done_on = current_date), 2);
+
+select pg_temp.expect('今週の続き具合が読める(0042)',
+  (select days from public.qr_week()), 1);
+
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('ほかのゲストの続けた記録は見えない(0042)',
+  (select count(*)::int from public.qr_days), 0);
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select pg_temp.expect('担当トレーナーには続けた記録が見える(0042)',
+  (select days from public.qr_week('22222222-2222-2222-2222-222222222222')), 1);
+
 -- 退会にする
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
 select public.set_learner_status('22222222-2222-2222-2222-222222222222',
@@ -798,6 +872,14 @@ insert into public.word_reviews (learner_id, word_norm, status)
 insert into public.lesson_notes (learner_id, on_date, body)
   values ('33333333-3333-3333-3333-333333333333', current_date, 'セッションの記録')
   on conflict do nothing;
+-- 0042 で足した2つ。**表を足したら、消す側にも足す**(CLAUDE.md)
+insert into public.qr_days (learner_id, done_on, answered, correct)
+  values ('33333333-3333-3333-3333-333333333333', current_date, 3, 2)
+  on conflict do nothing;
+insert into public.weekly_goals (learner_id, words, sentences, set_by)
+  values ('33333333-3333-3333-3333-333333333333', 50, 20,
+          '55555555-5555-5555-5555-555555555555')
+  on conflict do nothing;
 insert into storage.buckets (id, name, public) values ('learner-files', 'learner-files', false)
   on conflict do nothing;
 insert into storage.objects (bucket_id, name)
@@ -844,6 +926,12 @@ select pg_temp.expect('置いたファイルの中身も消えている',
   (select count(*)::int from storage.objects
    where bucket_id = 'learner-files'
      and name like '33333333-3333-3333-3333-333333333333/%'), 0);
+select pg_temp.expect('文の日ごとの記録が消えている(0042)',
+  (select count(*)::int from public.qr_days
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+select pg_temp.expect('週の目標が消えている(0042)',
+  (select count(*)::int from public.weekly_goals
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
 select pg_temp.expect('ゲストの欄そのものが消えている',
   (select count(*)::int from public.profiles
    where id = '33333333-3333-3333-3333-333333333333'), 0);

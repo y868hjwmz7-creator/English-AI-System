@@ -130,3 +130,40 @@ export function collectRows(rows = [], { limit = 3 } = {}) {
       || a.industry.localeCompare(b.industry))
     .slice(0, Math.max(0, limit))
 }
+
+/**
+ * **週の目標に、どれだけ届いたか**(0042・2026-09 利用者の指定
+ * 「週の目標と、達成の印」)。
+ *
+ * **「決めていない」と「まだ届いていない」は別物である。**
+ * 目標が 0 のときに「0 / 0」と出すと、何もしていないように見えるので、
+ * `null` を返して**行ごと出さない**ことにする。
+ *
+ * ここに置いてあるのは、`goals.js` が Supabase を引き連れていて
+ * **素の node で一度も走らせられない**ためである
+ * (`playMark.js` / `mp3Join.js` と同じ考え方)。
+ *
+ * @returns `null`(目標なし)/ `{ done, goal, hit }`
+ */
+export function goalPart(goal, done) {
+  const g = Number(goal) || 0
+  if (g <= 0) return null
+  const d = Math.max(0, Number(done) || 0)
+  return { done: d, goal: g, hit: d >= g }
+}
+
+/**
+ * 目標の1行(画面に出す言葉)。**この1か所で決める。**
+ * 単語帳と Quick Response で書き分けると、必ず片方だけ古くなる。
+ *
+ * **責めない・煽らない。** 届いていないときに出すのは「あと ◯」だけで、
+ * 遅れも、できていないことも数えない
+ * (「まだ」を赤くしない、と同じ考え方・CLAUDE.md)。
+ */
+export function goalLine(goal, done, unit = '語') {
+  const p = goalPart(goal, done)
+  if (!p) return ''
+  return p.hit
+    ? `今週の目標 ${p.goal} ${unit} — 達成しました`
+    : `今週の目標まで あと ${p.goal - p.done} ${unit}(${p.done} / ${p.goal})`
+}

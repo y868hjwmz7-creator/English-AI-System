@@ -1754,6 +1754,11 @@ html, body { overflow-x: clip; }
   font-variant-numeric: tabular-nums; color: var(--text-primary);
 }
 .score-input { max-width: 110px; }
+/* 週の目標の入力(0042)。**見出しと欄を1つの `<label>` にまとめる** ——
+   見出しを押せば欄に入るので、狭い画面でも狙いやすい。
+   `.filter-label` はもともと見出しの `<span>` に付ける決まりなので、
+   中に欄を置いたときのために、あいだの余白だけをここで足す */
+.filter-label > .score-input { margin-left: 6px; }
 .score-history {
   margin: 6px 0 12px; padding-left: 1.2em;
   font-size: 13px; line-height: 1.9; color: var(--text-secondary);
@@ -5279,6 +5284,28 @@ html, body { overflow-x: clip; }
 }
 .collect-num { font-variant-numeric: tabular-nums; font-weight: 700; }
 .collect-of { font-weight: 500; color: var(--ink-soft, var(--text-secondary)); }
+
+/* ── 週の目標(`GoalBar`・0042)────────────────────────────────
+     **決めるのはトレーナー、出すのはここ。**
+     目標が 0 のときは部品ごと出さない(「決めていない」と
+     「まだ届いていない」は別物である)。
+     **色だけに頼らない** —— 達成は ✓ の印と言葉でも示す(CLAUDE.md) */
+.goalbar { margin: 4px 0 12px; text-align: left; }
+.goalbar-line {
+  margin: 0 0 6px; font-size: 12.5px; font-weight: 700;
+  display: flex; align-items: center; gap: 6px;
+  color: var(--ink-soft, var(--text-secondary));
+}
+.goalbar.is-hit .goalbar-line { color: var(--ok); }
+.goalbar-hit { font-weight: 900; }
+.goalbar-track {
+  display: block; height: 6px; border-radius: 999px; overflow: hidden;
+  background: var(--qa-bg, var(--surface-2));
+}
+.goalbar-track > span {
+  display: block; height: 100%; border-radius: 999px; background: var(--accent);
+}
+.goalbar.is-hit .goalbar-track > span { background: var(--ok); }
 
 /* 紙の上の Quick Response。**紙の色をそのまま受け取る。**
    以前は値で決め打ちにしていた(「紙は暗い配色でも白のまま」だったため)。

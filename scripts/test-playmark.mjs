@@ -21,7 +21,8 @@ import {
 } from '../src/lib/playMark.js'
 import { SESSION_SIZE, buildSession } from '../src/lib/wordQuiz.js'
 import {
-  bestStreak, collectRows, praiseFor, streakLine, weekLine, STREAK_FROM,
+  bestStreak, collectRows, goalLine, goalPart,
+  praiseFor, streakLine, weekLine, STREAK_FROM,
 } from '../src/lib/gamify.js'
 import { readFileSync } from 'node:fs'
 
@@ -263,6 +264,63 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
       '単語帳が、集まり具合を出している')
     ok(/loadVocabByIndustry/.test(read('components/Wordbook.jsx')),
       '集まり具合のもとを、実際に読みに行っている')
+  }
+
+  /* ── 週の目標(0042)──────────────────────────────────────────
+       **「決めていない」と「まだ届いていない」は別物である。**
+       0 のときに「0 / 0」と出すと、何もしていないように見える。
+       だから `goalPart()` は `null` を返し、画面は行ごと出さない。 */
+  {
+    ok(goalPart(0, 5) === null, '目標を決めていなければ、何も出さない')
+    ok(goalPart(null, 5) === null, '目標が無い(null)ときも、何も出さない')
+    ok(goalLine(0, 5, '語') === '', '目標が無ければ、1行も書かない')
+
+    const yet = goalPart(50, 20)
+    ok(yet !== null && yet.hit === false, '届いていないときは、達成にしない')
+    ok(goalLine(50, 20, '語').includes('あと 30'), '残りの数を出す',
+      goalLine(50, 20, '語'))
+
+    const hit = goalPart(50, 50)
+    ok(hit.hit === true, 'ちょうど届いたら達成')
+    ok(goalPart(50, 80).hit === true, '超えても達成のまま')
+    ok(goalLine(50, 80, '文').includes('達成'), '達成したと書く',
+      goalLine(50, 80, '文'))
+    /* **責めない・煽らない**(「まだ」を赤くしないのと同じ考え方) */
+    ok(!/遅れ|足りません|できていません/.test(goalLine(50, 1, '語')),
+      '届いていなくても、責める言葉を使わない', goalLine(50, 1, '語'))
+    /* 数え方の言葉は、呼ぶ側が決める(語 / 文) */
+    ok(goalLine(10, 3, '文').includes('文') && !goalLine(10, 3, '文').includes('語'),
+      '数え方の言葉が、そのまま出る')
+    ok(goalPart(50, -3).done === 0, 'ありえない数(負)でも落ちない')
+
+    /* **画面が、本当にこれを使っているか。**
+       定義だけあって誰も呼ばなければ、目標は決められても出てこない */
+    const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    const gb = read('components/GoalBar.jsx')
+    ok(/goalPart|goalLine/.test(gb), '目標の帯が、決まりを1か所から読んでいる')
+    for (const [what, file] of [
+      ['単語帳', 'components/Wordbook.jsx'],
+      ['Quick Response の復習', 'components/QrReview.jsx'],
+    ]) {
+      const t = read(file)
+      ok(/<GoalBar/.test(t), `${what}が、週の目標を出している`)
+      ok(/loadWeeklyGoal/.test(t), `${what}が、週の目標を読みに行っている`)
+    }
+    /* **続けた記録は、Quick Response にも。** 週で数える(0042) */
+    ok(/loadQrWeek/.test(read('components/QrReview.jsx')),
+      'Quick Response が、続けた記録を読みに行っている')
+    ok(/week=\{week\}/.test(read('components/QrReview.jsx')),
+      'Quick Response の終わりの1枚に、週の続きが渡っている')
+    /* **決めるのはトレーナー。** ゲストの画面から呼ばない */
+    ok(/setWeeklyGoal/.test(read('components/TrainerLearners.jsx')),
+      'トレーナーの画面から、週の目標を決められる')
+    for (const [what, file] of [
+      ['単語帳', 'components/Wordbook.jsx'],
+      ['Quick Response の復習', 'components/QrReview.jsx'],
+    ]) {
+      ok(!/setWeeklyGoal/.test(read(file)),
+        `${what}からは、目標を決められない(自分で下げられる目標は目標にならない)`)
+    }
   }
 }
 
