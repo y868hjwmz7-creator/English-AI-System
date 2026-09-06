@@ -777,6 +777,197 @@ async function makeChunkJa(apiKey: string, body: Record<string, unknown>) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// 書いた答えの添削(`mode: 'review_writing'`・2026-09 利用者の指定)
+// ────────────────────────────────────────────────────────────────
+
+/**
+ *   > ディスカッションや質問に対する回答をライティングで記入できるように
+ *   > してください。その記入した内容を添削する機能を…
+ *   > フィードバック内の単語やフレーズは単語帳に登録できる。
+ *   > 文章ごと、または回答全てもそのままクイックレスポンスに登録し、
+ *   > 自動的に文章ごとに分けてくれる。
+ *
+ * 【文に切るのは、ここでやる】
+ *   Quick Response へ入れるには「英文 + 訳」の対が要る。
+ *   画面側で英文と訳を別々に切って対にすると、**数が合わないことがある**
+ *   (`sentencePair.js` で何度も踏んだ)。だから**はじめから文ごとに返させる。**
+ *   画面に出す英文も、Quick Response に入れる対も**同じ配列**である。
+ *
+ * 【直しすぎない】
+ *   書いた人の考えを、こちらの言葉に置き換えてしまっては添削にならない。
+ *   **中身は変えず、言い方だけを直す。**
+ */
+const WRITING_SYSTEM = `あなたは、日本人の英語学習者の書いた英文を添削する講師です。
+
+# いちばん大事なこと
+
+**書いた人の考えを、別の内容に書き換えないこと。**
+言いたいことはそのままに、**通じる英語・その場に合う言い方**へ直します。
+内容を足したり、立派な意見に作り替えたりしてはいけません。
+
+# 直す観点(この順で見る)
+
+1. **通じるかどうか**(語順・時制・冠詞・単複・前置詞)
+2. **その場に合う調子か**(下の「調子」に従う)
+3. **自然な言い回しか**(日本語をなぞった英語を、英語らしい形に)
+
+短すぎる答え・1文だけの答えでも、**足して長くしない。**
+書かれていないことは書かない。
+
+# 出力
+
+- **sentences** … 直した英文を、**1文ずつ**に分けて並べる。
+  それぞれに**日本語の訳**を付ける。
+  ここに並べたものが、そのまま学習者の Quick Response(日本語を見て
+  英語を言う練習)になるので、**1文で1つの意味**になるようにする。
+  訳は、その英文だけを見て言えるような自然な日本語にする。
+- **notes** … 直したところ。**多くても5つまで。**
+  before(書かれていた形)/ after(直した形)/ why(**日本語**で、
+  なぜそう直したのか)。書き間違いを1つずつ並べるのではなく、
+  **同じ種類の間違いはまとめて1つ**にする。
+  直すところが無ければ空の配列でよい。
+- **phrases** … この答えを言うために**覚えておくとよい語句**を 3〜8。
+  en は**直した英文の中に実際に出てくる形**にする(単語帳に入れるため)。
+  ja はその語句の日本語。**文まるごとを入れない**(語か言い回しにする)。
+- **good** … **日本語**で、できていたところを1〜2文。
+  直すところしか言わないと、次に書く気が起きない。
+  お世辞ではなく、**実際にできていたこと**を具体的に言う。
+
+emit_writing_review という道具だけを使って返すこと。文章での説明は要らない。`
+
+/** 添削の結果を受け取る道具。`strict: true` なので形は API が保証する */
+const writingTool = {
+  name: 'emit_writing_review',
+  description: '添削した英文と、その説明を返す',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['sentences', 'notes', 'phrases', 'good'],
+    properties: {
+      sentences: {
+        type: 'array',
+        description: '直した英文。**1文ずつ**に分け、それぞれに訳を付ける',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['en', 'ja'],
+          properties: {
+            en: { type: 'string', description: '直した英文(1文)' },
+            ja: { type: 'string', description: 'その1文の日本語訳' },
+          },
+        },
+      },
+      notes: {
+        type: 'array',
+        description: '直したところ。多くても5つ',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['before', 'after', 'why'],
+          properties: {
+            before: { type: 'string', description: '書かれていた形' },
+            after: { type: 'string', description: '直した形' },
+            why: { type: 'string', description: 'なぜそう直したのか(日本語)' },
+          },
+        },
+      },
+      phrases: {
+        type: 'array',
+        description: '覚えておくとよい語句(3〜8)。単語帳に入れる',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['en', 'ja'],
+          properties: {
+            en: { type: 'string', description: '直した英文の中に出てくる語句' },
+            ja: { type: 'string', description: 'その語句の日本語' },
+          },
+        },
+      },
+      good: { type: 'string', description: 'できていたところ(日本語で1〜2文)' },
+    },
+  },
+}
+
+/**
+ * 書いた答えを添削する。
+ *
+ * **中身が空のまま「成功」を返さない**(CLAUDE.md)。
+ * 直した英文が1つも無ければ、失敗として返す。
+ */
+async function reviewWriting(apiKey: string, body: Record<string, unknown>) {
+  /* **上限は窓口でも見る。** 画面側(`MAX_WRITING_CHARS`)と同じ数。
+     ここが最後の関所なので、どこから来た文でも必ず収まる */
+  const answer = String(body.answer ?? '').trim().slice(0, 1500)
+  if (!answer) return { error: '添削する英文がありませんでした' }
+
+  // どう直すか(調子)。**文言は画面から渡ってくる**ので、
+  // 調子を足したり言い回しを変えたりしても、窓口の置き直しは要らない
+  // (`speechBrief` と同じ考え方)
+  const tone = String(body.toneBrief ?? '').trim().slice(0, 400)
+  // 何を訊かれているか。**答えが問いに合っているか**を見るために要る
+  const question = String(body.question ?? '').trim().slice(0, 600)
+  const questionJa = String(body.questionJa ?? '').trim().slice(0, 600)
+  // 本文(記事・会話・スピーチ)。長いので頭だけ
+  const context = String(body.context ?? '').trim().slice(0, 3000)
+  const level = String(body.level ?? 'B1').trim().slice(0, 20)
+
+  const parts = [
+    tone ? `# 調子(この言い方に直す)\n${tone}` : '',
+    question ? `# 設問\n${question}${questionJa ? `\n(${questionJa})` : ''}` : '',
+    context ? `# 本文(参考。ここから引用しなくてよい)\n${context}` : '',
+    `# 学習者のレベル\n${level}(CEFR)。この段で自分でも言える言い方に直すこと。`,
+    `# 学習者が書いた答え\n${answer}`,
+  ].filter(Boolean)
+
+  const client = new Anthropic({ apiKey })
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 8000,
+    output_config: { effort: 'medium' },
+    system: [{ type: 'text', text: WRITING_SYSTEM }],
+    tools: [writingTool as unknown as Anthropic.Tool],
+    tool_choice: { type: 'tool', name: 'emit_writing_review' },
+    messages: [{
+      role: 'user',
+      content: `${parts.join('\n\n')}\n\n`
+        + '**内容は変えずに**、言い方だけを直してください。'
+        + '直した英文は**1文ずつ**に分けて、それぞれに訳を付けてください。',
+    }],
+  })
+  const response = await stream.finalMessage()
+
+  if (response.stop_reason === 'refusal') {
+    return { error: '内容が安全上の理由で断られました。' }
+  }
+  if (response.stop_reason === 'max_tokens') {
+    return { error: '答えが長すぎて途中で切れました。短く分けてお試しください。' }
+  }
+
+  const block = response.content.find((b) => b.type === 'tool_use')
+  if (!block || block.type !== 'tool_use') {
+    return { error: '添削の結果を読み取れませんでした。もう一度お試しください。' }
+  }
+  const result = block.input as { sentences?: { en?: string; ja?: string }[] }
+  // **中身が0件のまま「成功」を返さない**(CLAUDE.md)
+  if (!(result.sentences ?? []).some((s) => String(s?.en ?? '').trim())) {
+    return { error: '直した英文が返りませんでした。もう一度お試しください。' }
+  }
+
+  return {
+    ok: true,
+    review: result,
+    stop_reason: response.stop_reason ?? null,
+    usage: {
+      input: response.usage.input_tokens,
+      output: response.usage.output_tokens,
+      cacheRead: response.usage.cache_read_input_tokens ?? 0,
+    },
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // ここから受付窓口の本体
 // ────────────────────────────────────────────────────────────────
 
@@ -805,7 +996,7 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-06'
+const FN_REV = '2026-09-06b'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
@@ -892,6 +1083,12 @@ Deno.serve(async (req) => {
   const { data: { user: caller } } = await asCaller.auth.getUser()
   if (!caller) return reply({ error: 'ログインの情報が確認できませんでした' }, 401)
 
+  // ── 2. 送られてきた内容を確かめる ────────────────────────
+  // **役割を見る前に読む。** 頼みごとによって、呼べる人が違うためである
+  let body: Record<string, unknown>
+  try { body = await req.json() } catch { return reply({ error: '内容を読めませんでした' }, 400) }
+  const mode = String(body.mode ?? '')
+
   // 役割はサーバー側で確かめる。ブラウザから送られた値は信用しない。
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { persistSession: false },
@@ -899,19 +1096,38 @@ Deno.serve(async (req) => {
   const { data: profile } = await admin
     .from('profiles').select('role, status').eq('id', caller.id).maybeSingle()
 
-  if (!['trainer', 'owner'].includes(profile?.role ?? '') || profile?.status !== 'active') {
+  /* **やめた人は、どの頼みごとも呼べない。** ここは今までどおり */
+  if (profile?.status !== 'active') {
+    return reply({ error: '教材を作る権限がありません' }, 403)
+  }
+  /* **添削(`review_writing`)だけは、ゲストも呼べる**(2026-09 利用者の指定)。
+
+       > ディスカッションや質問に対する回答をライティングで記入できるように
+       > してください。その記入した内容を添削する機能を…
+
+     宿題は**ゲストが1人で取り組むもの**なので、ここをトレーナーだけに
+     すると、この機能はレッスン中にしか使えない。それでは頼まれたことに
+     ならない。**この窓口で Claude の課金が発生する道が、初めてゲストに開く。**
+     長さは `reviewWriting()` が 1,500 文字で切る。
+     **戻すときは、この1行を消せばよい**(そうするとゲストは添削を頼めなくなる)。
+
+     ゲストに開いていない頼みごと(教材の下書き・カタマリの訳)は、
+     これまでどおりトレーナーと管理者だけである。 */
+  const forLearner = mode === 'review_writing'
+  const allowed = forLearner ? ['learner', 'trainer', 'owner'] : ['trainer', 'owner']
+  if (!allowed.includes(profile?.role ?? '')) {
     return reply({ error: '教材を作る権限がありません' }, 403)
   }
 
-  // ── 2. 送られてきた内容を確かめる ────────────────────────
-  let body: Record<string, unknown>
-  try { body = await req.json() } catch { return reply({ error: '内容を読めませんでした' }, 400) }
-
-  // **頼みごとは2つある。** 教材の下書き(既定)と、カタマリごとの訳(0021)。
-  // 訳づくりは教材づくりの一部なので、関数を増やさずここで分ける
+  // **頼みごとは3つある。** 教材の下書き(既定)・カタマリごとの訳(0021)・
+  // 書いた答えの添削(2026-09)。どれも教材づくりの一部なので、
+  // 関数を増やさずここで分ける
   // (関数を増やすと、利用者が Supabase の画面で配置する手順が増える)。
-  if (String(body.mode ?? '') === 'chunk_ja') {
+  if (mode === 'chunk_ja') {
     return streamed(() => makeChunkJa(apiKey, body))
+  }
+  if (mode === 'review_writing') {
+    return streamed(() => reviewWriting(apiKey, body))
   }
 
   const sectionType = String(body.sectionType ?? '')

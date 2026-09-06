@@ -878,7 +878,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-06'
+export const NEED_GEN_REV = '2026-09-06b'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -889,7 +889,8 @@ export const genGatewayStale = () => genRev !== null && genRev < NEED_GEN_REV
 /** 古いときに、押した場所へ出す1文。**新しければ `null`** */
 export const genGatewayNote = () => (genGatewayStale()
   ? '生成の窓口(generate-material)が古いため、'
-    + '**会話の登場人物の性別が、読み上げの声と合わないこと**があります'
+    + '**会話の登場人物の性別が、読み上げの声と合わないこと**があります。'
+    + 'また、**書いた答えの添削が使えません**'
     + `(いま置かれているのは ${genRev}、必要なのは ${NEED_GEN_REV} 以降)。`
     + ' Supabase → Edge Functions → generate-material を置き直してください。'
   : null)
@@ -1011,6 +1012,57 @@ export async function generateChunkJa(parts) {
     skipped: rest.length,
     usage,
   })
+}
+
+// ── 書いた答えを添削する(2026-09 利用者の指定)────────────────────
+
+/**
+ * ディスカッション・想定される質問に書いた答えを、添削してもらう。
+ *
+ * **窓口は増やさない。** `generate-material` に `mode` を1つ足しただけである
+ * (カタマリの訳と同じ考え方)。利用者が Supabase の画面で配置する
+ * 手順を増やさないため。
+ *
+ * **調子の文言(`toneBrief`)は画面から渡す。** 言い回しを直したくなっても
+ * 窓口の置き直しが要らない(`speechBrief` と同じ考え方)。
+ *
+ * @param opt.answer     書いた英文(**1,500 文字まで**)
+ * @param opt.toneBrief  どう直すか(`toneBrief()` が組み立てる)
+ * @param opt.question   設問(英語)
+ * @param opt.questionJa 設問の訳
+ * @param opt.context    本文(参考)
+ * @param opt.level      CEFR
+ */
+export async function reviewWriting({
+  answer, toneBrief = '', question = '', questionJa = '', context = '', level = 'B1',
+}) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (!String(answer ?? '').trim()) return ng('添削する英文がありません')
+
+  const { data, error } = await supabase.functions.invoke('generate-material', {
+    body: { mode: 'review_writing', answer, toneBrief, question, questionJa, context, level },
+  })
+  if (error) {
+    let detail = ''
+    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      return ng('添削の窓口につながりませんでした。'
+        + 'Supabase の generate-material を配置し直したか確認してください。')
+    }
+    /* **古い窓口は、この頼みごとを知らない。**
+       ゲストなら 403「教材を作る権限がありません」、
+       トレーナーなら 400「演習の種類が正しくありません」で断られる。
+       どちらも**添削とは関係のない文**なので、そのまま出すと誤診させる */
+    if (/権限がありません|演習の種類が正しくありません/.test(detail)) {
+      return ng('添削の窓口が古いため、まだ使えません。'
+        + 'Supabase → Edge Functions → generate-material を置き直してください。')
+    }
+    return ng(detail || `添削に失敗しました: ${error.message}`)
+  }
+  noteGenRev(data?.genRev)
+  if (data?.error) return ng(data.error)
+  if (!data?.review) return ng('添削の結果を読み取れませんでした。もう一度お試しください。')
+  return ok(data)
 }
 
 /**

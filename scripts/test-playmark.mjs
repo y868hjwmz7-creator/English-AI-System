@@ -842,6 +842,141 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
   }
 }
 
+/* ============================================================================
+   ⑫ 書いた答えの添削(2026-09 利用者の指定)
+
+     > ディスカッションや質問に対する回答をライティングで記入できるように
+     > してください。その記入した内容を添削する機能を…
+     > フィードバック内の単語やフレーズは単語帳に登録できる。
+     > 文章ごと、または回答全てもそのままクイックレスポンスに登録し、
+     > 自動的に文章ごとに分けてくれる。
+     > また、添削の仕方の指定もスーパーカジュアル、カジュアル、
+     > ビジネスカジュアル、ビジネスで選べると良いですね
+
+   **窓口の置き直しが要る仕組みなので、渡す道が1本でも切れると
+   「押しても何も起きない」になる。** しかも `npm run lint` にも
+   `npm run build` にも引っかからない。だから機械的に見張る。
+   ============================================================================ */
+{
+  console.log('\n── ⑫ 書いた答えの添削 ──')
+  const { DEFAULT_TONE, WRITING_TONES, writingToneOf } =
+    await import('../src/data/writingTones.js')
+  const {
+    MAX_WRITING_CHARS, isBlankAnswer, normalizeReview, phraseKind,
+    reviewPairs, reviewText, seenSentenceFor, toneBrief, tooLongAnswer,
+  } = await import('../src/lib/writingReview.js')
+
+  // ── 調子は、利用者が挙げた4つ。並びも変えない ──
+  const want = ['スーパーカジュアル', 'カジュアル', 'ビジネスカジュアル', 'ビジネス']
+  ok(WRITING_TONES.length === 4, '調子は4つ', `${WRITING_TONES.length} 件`)
+  ok(WRITING_TONES.map((t) => t.label).join('/') === want.join('/'),
+    '利用者が挙げた4つが、その並びで入っている',
+    WRITING_TONES.map((t) => t.label).join('/'))
+  for (const t of WRITING_TONES) {
+    // `hint` は `<option>` にそのまま出る。Markdown として解釈されない
+    ok(!/\*\*/.test(`${t.label}${t.hint}`),
+      `${t.label}: 画面に出す文字列に ** を混ぜていない`)
+    ok(Boolean(t.brief), `${t.label}: 窓口へ渡す指定がある`)
+  }
+  // **知らない id で落ちない。** 既定に落とす(行き止まりを作らない)
+  ok(writingToneOf('nope')?.id === DEFAULT_TONE, '知らない id では既定に落ちる')
+  ok(WRITING_TONES.some((t) => t.id === DEFAULT_TONE), '既定の調子が一覧にある')
+  ok(/カジュアル/.test(toneBrief('casual')) && toneBrief('casual').length > 20,
+    '調子は、窓口へ渡す1文になる')
+
+  // ── 添削の結果のそろえ方 ──
+  ok(normalizeReview(null) === null, '空の結果は null(成功として扱わない)')
+  ok(normalizeReview({ sentences: [] }) === null,
+    '直した英文が0件なら null(中身が0件のまま「成功」を返さない)')
+  {
+    const r = normalizeReview({
+      sentences: [
+        { en: 'I think remote work helps.', ja: 'リモートワークは役に立つと思います。' },
+        { en: 'It saves time.', ja: '' },
+        { en: '', ja: '捨てられる' },
+      ],
+      notes: [{ before: 'helps to', after: 'helps', why: 'help のあとに to は要らない' },
+        { before: 'x', after: 'y', why: '' }],
+      phrases: [{ en: 'save time', ja: '時間を節約する' },
+        { en: 'Save Time', ja: '重なり' },
+        { en: 'no ja', ja: '' }],
+      good: '言いたいことがはっきりしています。',
+    })
+    ok(r.sentences.length === 2, '英文の無い文は落とす', `${r.sentences.length} 件`)
+    ok(r.notes.length === 1, '理由の無い直しは落とす', `${r.notes.length} 件`)
+    ok(r.phrases.length === 1, '同じ語句を二度出さない・訳の無い語句は落とす',
+      JSON.stringify(r.phrases))
+    // **訳の無い文は Quick Response に入れない**(日本語を見て英語を言う練習)
+    ok(reviewPairs(r).length === 1, '訳の無い文は Quick Response に入れない',
+      `${reviewPairs(r).length} 件`)
+    ok(reviewText(r) === 'I think remote work helps. It saves time.',
+      '画面に出す英文は、文の配列からしか作らない')
+    // **単語帳の「出会った文」** は、その語句が出てくる1文
+    ok(seenSentenceFor(r, 'save') === 'It saves time.',
+      'その語句が出てくる1文を、出会った文にする', seenSentenceFor(r, 'save'))
+    ok(seenSentenceFor(r, 'zzz') === reviewText(r),
+      '見つからなければ、つないだ英文を返す(空にしない)')
+  }
+  ok(phraseKind('save time') === 'phrase' && phraseKind('resilient') === 'word',
+    '空白を含めば言い回し(WordbookAdd と同じ判定)')
+  ok(isBlankAnswer('   ') && !isBlankAnswer('hi'), '空白だけは「書いていない」')
+  ok(!tooLongAnswer('a'.repeat(MAX_WRITING_CHARS))
+    && tooLongAnswer('a'.repeat(MAX_WRITING_CHARS + 1)),
+  `${MAX_WRITING_CHARS} 文字までは通り、超えたら断る`)
+
+  // ── 画面が本当に呼んでいるか(定義だけあって誰も呼ばなければ同じ)──
+  {
+    const view = readFileSync(
+      new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
+    ok(/<WritingAnswer/.test(view), 'レッスン表示が、書く欄を出している')
+    ok(/secNoteIsAnswer && \(\s*<WritingAnswer/.test(view),
+      'ディスカッションと想定される質問だけに出している(noteIsAnswer)')
+    ok(/learnerId=\{learnerId\}/.test(view),
+      '誰の記録になるかを渡している(0025)')
+  }
+  {
+    const w = readFileSync(
+      new URL('../src/components/WritingAnswer.jsx', import.meta.url), 'utf8')
+    ok(/useProgress\(/.test(w), '書いたものを material_progress に残している')
+    ok(/markQr\(/.test(w), 'Quick Response に入れられる')
+    ok(/setWordStatus\(/.test(w) && /lookupWord\(/.test(w),
+      '単語帳に入れられる(意味も1回だけ引く)')
+    ok(/REVIEW_COST_YEN/.test(w),
+      '費用を画面に出している(見えない費用は管理できない)')
+  }
+
+  // ── 窓口(generate-material)へ、道が通っているか ──
+  {
+    const fn = readFileSync(
+      new URL('../supabase/functions/generate-material/index.ts', import.meta.url), 'utf8')
+    ok(/mode === 'review_writing'/.test(fn), '窓口が、添削の頼みごとを受けている')
+    ok(/reviewWriting\(apiKey, body\)/.test(fn), '窓口が、添削を実際に走らせている')
+    ok(/emit_writing_review/.test(fn), '形は道具で強制している(strict)')
+    for (const f of ['sentences', 'notes', 'phrases', 'good']) {
+      ok(new RegExp(`required: \\[[^\\]]*'${f}'`).test(fn)
+        || new RegExp(`'${f}'`).test(fn), `道具に ${f} がある`)
+    }
+    // **ゲストも呼べるのは、この頼みごとだけ**(ほかは今までどおり)
+    ok(/forLearner \? \['learner', 'trainer', 'owner'\] : \['trainer', 'owner'\]/.test(fn),
+      '添削だけゲストも呼べる。ほかはトレーナーと管理者だけ')
+    ok(/const forLearner = mode === 'review_writing'/.test(fn),
+      'ゲストに開いているのは添削だけである')
+    ok(/status !== 'active'/.test(fn), 'やめた人は、どの頼みごとも呼べない')
+    ok(/slice\(0, 1500\)/.test(fn), '窓口でも長さを切っている(最後の関所)')
+
+    // **版がそろっているか。** ずれると「窓口が古い」を出せない
+    const fnRev = /const FN_REV = '([^']+)'/.exec(fn)?.[1]
+    const mats = readFileSync(
+      new URL('../src/lib/materials.js', import.meta.url), 'utf8')
+    const need = /NEED_GEN_REV = '([^']+)'/.exec(mats)?.[1]
+    ok(Boolean(fnRev) && fnRev === need,
+      '窓口の版と、画面が求める版がそろっている', `窓口 ${fnRev} / 画面 ${need}`)
+    ok(/mode: 'review_writing'/.test(mats), '画面が、添削を頼む道を持っている')
+    ok(/export async function reviewWriting\(/.test(mats),
+      '添削を頼む窓口の呼び方が、materials.js にある')
+  }
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')

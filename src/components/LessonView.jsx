@@ -53,6 +53,7 @@ import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
 import SentenceSkip from './SentenceSkip.jsx'
 import AnswerEn from './AnswerEn.jsx'
+import WritingAnswer from './WritingAnswer.jsx'
 import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import Stepper from './Stepper.jsx'
@@ -556,6 +557,10 @@ export default function LessonView({
   // 6Steps は本文(記事・会話)に対する練習である。**本文のページを探して渡す。**
   // いま開いているページが語句や設問でも、6Steps は本文に対して行う
   const passageSection = sections.find((x) => isPassageSection(x.exercise_type)) ?? null
+  /* 添削のときに窓口へ渡す本文(**参考**)。何について書いているのかが
+     分からないと、話の中身に合った直し方ができない */
+  const bodyText = (passageSection?.items ?? [])
+    .map((x) => String(x?.prompt_en ?? '').trim()).filter(Boolean).join('\n\n')
 
   /**
    * **いま紙のまん中に出ているのは、どの発言(段落)か**
@@ -1630,6 +1635,24 @@ export default function LessonView({
                       {it.answer_alt && <div className="lesson-note">別解: {it.answer_alt}</div>}
                       {it.note && <div className="lesson-note">{it.note}</div>}
                     </>
+                  )}
+
+                  {/* ── 書いた答えと、その添削(2026-09 利用者の指定)──
+                      **ディスカッションと想定される質問だけ。** あちらは
+                      正解が無いので `answer` の欄そのものを持っておらず、
+                      **自分で書いてみるまで英語がどこにも出てこない。**
+                      内容の理解には足していない(言われた場所だけを直す) */}
+                  {secNoteIsAnswer && (
+                    <WritingAnswer
+                      materialId={material.id} sectionId={sec.id ?? si}
+                      itemKey={it.id ?? i}
+                      question={it.question} questionJa={it.question_ja}
+                      context={bodyText} level={material.level}
+                      learnerId={learnerId}
+                      statuses={wordStatuses} onMark={markWord}
+                      clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
+                      tier={secTier} rate={rateOf(rateId)}
+                    />
                   )}
                 </li>
               ))}
