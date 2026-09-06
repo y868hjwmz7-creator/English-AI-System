@@ -19,7 +19,7 @@ import { CEFR_LEVELS, cefrOption } from '../data/cefr.js'
 import {
   EXERCISE_TYPES, FIELD_LABELS, MAX_ITEMS, SCALABLE_SECTIONS, amountsFor,
   defaultSectionsFor, exerciseLabel, exerciseType, isIncluded, isPassageSection,
-  sectionsFor,
+  sectionLabel, sectionsFor,
 } from '../data/exerciseTypes.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
@@ -821,7 +821,8 @@ export default function MaterialForm({
     setDone({
       total: made.reduce((n, sec) => n + sec.items.length, 0),
       parts: made.map((sec) => ({
-        label: exerciseLabel(sec.exercise_type), count: sec.items.length,
+        // **本文の名前は種類に合わせる**(Speech練習で「記事」と出ていた)
+        label: sectionLabel(kind, sec.exercise_type), count: sec.items.length,
       })),
       headline: head ?? null,
       sample: first ?? null,
@@ -1793,7 +1794,7 @@ export default function MaterialForm({
             {totalItems > 0 ? (
               <>
                 <p className="card-hint">
-                  {sections.map((sec) => `${exerciseLabel(sec.exercise_type)} ${sec.items.length}問`)
+                  {sections.map((sec) => `${sectionLabel(kind, sec.exercise_type)} ${sec.items.length}問`)
                     .join(' / ')}
                 </p>
                 <button type="button" className="btn btn--small"

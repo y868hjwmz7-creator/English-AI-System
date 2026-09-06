@@ -17,7 +17,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  countLabel, countUnit, exerciseLabel, exerciseType, isPassageSection,
+  countLabel, countUnit, exerciseType, isPassageSection, sectionLabel,
 } from '../data/exerciseTypes.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
@@ -1427,7 +1427,9 @@ export default function LessonView({
           <section key={sec.id ?? si} className={`lesson-page${open ? '' : ' is-closed'}`}
                    data-type={sec.exercise_type}>
             <h3 className="lesson-section">
-              {exerciseLabel(sec.exercise_type)}
+              {/* **本文の名前は、種類に合わせる**(2026-09 実機・利用者の指摘)。
+                  そのまま出すと Speech練習でも「記事」と書かれる */}
+              {sectionLabel(material.kind, sec.exercise_type)}
               {`（${countLabel(sec.exercise_type, sec.items.length)}）`}
             </h3>
             {/* ── 取り組み方の説明。**畳んでおく**(2026-09 利用者の指定)──

@@ -35,7 +35,7 @@ import Phonetic from './Phonetic.jsx'
 import { cefrLabel } from '../data/cefr.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { industryLabel } from '../data/industries.js'
-import { countLabel, exerciseLabel, exerciseType } from '../data/exerciseTypes.js'
+import { countLabel, exerciseType, sectionLabel } from '../data/exerciseTypes.js'
 import { kindLabel } from '../lib/materials.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
@@ -89,7 +89,8 @@ export default function MaterialBody({
             <section key={sec.id} className="exercise-view is-closed"
                      data-type={sec.exercise_type}>
               <h4 className="section-title">
-                {exerciseLabel(sec.exercise_type)}({countLabel(sec.exercise_type, sec.items.length)})
+                {/* **本文の名前は種類に合わせる**(Speech練習で「記事」と出ていた) */}
+                {sectionLabel(m.kind, sec.exercise_type)}({countLabel(sec.exercise_type, sec.items.length)})
                 {!type?.audioFrom && <span className="field-hint"> 音声なし</span>}
               </h4>
               {sec.instruction && <p className="card-hint">{sec.instruction}</p>}

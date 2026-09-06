@@ -9,6 +9,10 @@
  * fields … その演習で使う欄。作成画面はこれを見て入力欄を出し分ける。
  * audioFrom … お手本音声を作る元にする欄。null なら音声を作らない。
  */
+/* **本文の呼び名**(記事 / 会話 / 会議 / スピーチ)。
+   `sectionLabel()` で使う。**種類の一覧は持たない**(あちらが1か所) */
+import { bodyWord } from './materialKinds.js'
+
 export const EXERCISE_TYPES = [
   {
     id: 'translate_en_ja', label: '英文和訳',
@@ -391,6 +395,26 @@ export const DEFAULT_SECTIONS = {
  * 弱点で分割してはいけないのも、この演習である。
  */
 export const isPassageSection = (typeId) => !!exerciseType(typeId)?.isPassage
+
+/**
+ * **画面に出す演習の名前。**
+ *
+ * 【なぜ種類(`kind`)も見るのか】(2026-09 実機・利用者の指摘)
+ *
+ *   > また、サブタイトルが「記事」というのも直して下さい。
+ *
+ *   Speech練習の本文は、**記事とまったく同じ演習(`article`)**である
+ *   (だから `material_sections_type_check` も窓口も触っていない)。
+ *   ところが名前をそのまま出すと、Speech練習でも「記事(5 段落)」と
+ *   書かれる。**会議でも同じことが起きる**(本文は `dialogue` なので
+ *   「会話」と出る)。
+ *
+ *   **本文の呼び名は `bodyWord()` が持っている。**
+ *   演習の名前をそのまま出してよいのは、本文でない演習だけである。
+ *   **この判断を画面ごとに書き写さない** —— 出す場所は6か所ある。
+ */
+export const sectionLabel = (kind, typeId) =>
+  (isPassageSection(typeId) ? bodyWord(kind) : exerciseLabel(typeId))
 
 export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SECTIONS.pattern
 

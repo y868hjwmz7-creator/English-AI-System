@@ -25,8 +25,9 @@ import {
   praiseFor, streakLine, weekLine, STREAK_FROM,
 } from '../src/lib/gamify.js'
 import {
-  MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
+  MAX_CHARS, MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
 } from '../src/lib/speechDraft.js'
+import { exerciseLabel, sectionLabel } from '../src/data/exerciseTypes.js'
 import {
   MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
 } from '../src/data/materialKinds.js'
@@ -368,6 +369,49 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
   // 段落の上限。**際限なく作らせない**
   const many = pastedParagraphs(Array.from({ length: 80 }, (_, i) => `S${i}.`).join('\n'))
   ok(many.length === MAX_PARTS, `段落は ${MAX_PARTS} で止まる`)
+
+  /* **1段落の長さの上限**(2026-09 実機・利用者の指摘)。
+       > 音声をアメリカ女性…を選んだのに、本当に質の悪い男性の声になりました。
+
+     読み上げの窓口(`speak`)は1回に 2,000 文字までしか受け取らない。
+     超えると 400 で断られ、**端末の声**に落ちる —— 選んだ声とは
+     何の関係もない声で鳴る。**自分で書いた原稿は1段落が桁違いに長い**ので、
+     ここで必ず収める。**どの切り方で来たものも通る**ことまで見る */
+  {
+    const sen = 'This is one sentence that carries a fair number of words in it. '
+    const huge = sen.repeat(40)                       // 約 2,500 文字の1段落
+    const cases = [
+      ['空行で切った道', `${huge}\n\n${huge}`],
+      ['改行で切った道', `${huge}\n${huge}`],
+      ['1段落だけの道', huge],
+    ]
+    for (const [name, src] of cases) {
+      const got = pastedParagraphs(src)
+      const longest = Math.max(...got.map((x) => x.length))
+      ok(longest <= MAX_CHARS, `${name}でも、1段落は ${MAX_CHARS} 文字を超えない`,
+        `いちばん長い段落 ${longest} 文字 / ${got.length} 段落`)
+      // **1語も落とさない。** 収めるために捨てては、原稿が変わってしまう
+      ok(got.join(' ').split(/\s+/).filter(Boolean).length
+        === src.split(/\s+/).filter(Boolean).length, `${name}で、1語も落ちない`)
+    }
+    ok(MAX_CHARS < 2000, '窓口の上限(2,000)に、余裕を持って収まっている')
+    // **ふつうの長さの段落は、1文字も動かさない**(言われた場所だけを直す)
+    const plain = 'A short paragraph. It stays exactly as it is.'
+    ok(pastedParagraphs(plain)[0] === plain, '短い段落は、1文字も動かさない')
+  }
+
+  /* **本文の呼び名は、教材の種類から決める**(2026-09 実機・利用者の指摘)。
+       > また、サブタイトルが「記事」というのも直して下さい。
+
+     Speech練習の本文は演習としては `article` なので、そのまま名前を出すと
+     「記事(5 段落)」になっていた。**判断は `sectionLabel` 1か所** */
+  ok(sectionLabel('speech', 'article') === 'スピーチ',
+    'Speech練習の本文は「スピーチ」と出る', sectionLabel('speech', 'article'))
+  ok(sectionLabel('reading', 'article') === '記事', '記事は、これまでどおり「記事」')
+  ok(sectionLabel('dialogue', 'dialogue') === '会話', '会話も変わっていない')
+  ok(sectionLabel('meeting', 'dialogue') === '会議', '会議も変わっていない')
+  ok(sectionLabel('speech', 'listening') === exerciseLabel('listening'),
+    '本文でない演習の名前は、種類で変わらない')
 
   // ② 話し手の1行。**空の欄は出さない**
   ok(speakerLine({}) === '', '何も入れなければ、1文字も出さない')

@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import { cefrLabel } from '../data/cefr.js'
-import { exerciseLabel, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
+import { exerciseType, isPassageSection, sectionLabel } from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import PhraseChips from './PhraseChips.jsx'
@@ -318,7 +318,10 @@ export default function LearnerHomework({ me = null }) {
                       if (isPassageSection(sec.exercise_type)) {
                         return (
                           <section key={sec.id} className={cls}>
-                            <h5 className="section-title">{exerciseLabel(sec.exercise_type)}</h5>
+                            {/* **本文の名前は種類に合わせる**(Speech練習で「記事」と出ていた) */}
+                            <h5 className="section-title">
+                              {sectionLabel(a.material?.kind, sec.exercise_type)}
+                            </h5>
                             {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
                             <PassagePractice
                               section={sec}
@@ -340,7 +343,7 @@ export default function LearnerHomework({ me = null }) {
                       return (
                         <section key={sec.id} className={cls}>
                           <h5 className="section-title">
-                            {exerciseLabel(sec.exercise_type)}({sec.items.length} 問)
+                            {sectionLabel(a.material?.kind, sec.exercise_type)}({sec.items.length} 問)
                           </h5>
                           {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
                           {/* 解答を隠す演習は、紙に書き込む余白を出す */}

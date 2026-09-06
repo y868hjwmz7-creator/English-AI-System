@@ -35,8 +35,23 @@ import './styles.css'
 const q = new window.URLSearchParams(window.location.search)
 setViewerRole(q.get('role') || null)
 
+/* **Speech練習を確かめるとき**は、本文を1人の記事(`article`)にする。
+   声は `?voice=us-4` のように渡す(名簿の id) */
+const asSpeech = q.get('kind') === 'speech'
+
 /** 検証に使う教材。**本文(会話)が1つあれば、帯はすべて出そろう** */
-const material = {
+const material = asSpeech ? {
+  id: 'test-speech', level: 'C1', title: '講演(考えを伝える)', kind: 'speech',
+  headline: 'My research', tagIds: [],
+  voiceIds: (q.get('voice') || 'us-4').split(','),
+  sections: [{
+    id: 'sec-1', exercise_type: 'article', title: '記事',
+    items: [
+      { id: 'it-1', prompt_en: 'Good afternoon, everyone.', prompt_ja: 'みなさん、こんにちは。' },
+      { id: 'it-2', prompt_en: 'I would like to thank you for being here.', prompt_ja: '来てくださって、ありがとうございます。' },
+    ],
+  }],
+} : {
   id: 'test-material', level: 'B1', title: 'クラスに出る', kind: 'dialogue',
   headline: 'Going to class', tagIds: [],
   sections: [{

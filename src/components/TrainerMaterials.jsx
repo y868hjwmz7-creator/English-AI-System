@@ -20,8 +20,8 @@ import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel, cefrOption } from '../data/cefr.js'
 import {
-  SCALABLE_SECTIONS, amountsFor, countLabel, drillBucket,
-  exerciseLabel, isPassageSection,
+  SCALABLE_SECTIONS, amountsFor, countLabel, drillBucket, sectionLabel,
+  isPassageSection,
 } from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
 import CastChip from './CastChip.jsx'
@@ -841,7 +841,8 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
               <div className="muted material-parts">
                 {m.sections.map((sec) => (
                   <span key={sec.id}>
-                    {exerciseLabel(sec.exercise_type)}
+                    {/* **本文の名前は種類に合わせる**(Speech練習で「記事」と出ていた) */}
+                    {sectionLabel(m.kind, sec.exercise_type)}
                     {' '}{countLabel(sec.exercise_type, sec.items.length)}
                   </span>
                 ))}
