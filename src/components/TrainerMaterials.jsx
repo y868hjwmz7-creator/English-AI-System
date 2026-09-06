@@ -29,7 +29,7 @@ import CastChip from './CastChip.jsx'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, duplicateMaterial, isDialogueKind,
-  kindLabel, loadMyLearners, searchMaterials, setMaterialVoices,
+  kindLabel, loadMyLearners, searchMaterials, setMaterialVoices, wordsAddedNote,
 } from '../lib/materials.js'
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
@@ -455,7 +455,9 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
     })
     if (e) { setError(e); return }
     setError(null)
-    setMessage(`${data.count} 人と共有しました。`)
+    /* **語句の演習がある教材は、そのままゲストの単語帳に入る**(0047)。
+       黙って入れない —— 何語入ったかを、共有の知らせに添える */
+    setMessage(`${data.count} 人と共有しました。${wordsAddedNote(data.words)}`)
     setAssigningId(null)
     setPicked([])
   }
@@ -487,10 +489,10 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
             : {},
         }}
         onCancel={() => setMode('search')}
-        onCreated={(id, shared) => {
+        onCreated={(id, shared, words) => {
           setMode('search')
           setMessage(shared
-            ? `教材を発行し、${shared}人と共有しました。`
+            ? `教材を発行し、${shared}人と共有しました。${wordsAddedNote(words)}`
             : '教材を発行しました。一覧から共有できます。')
           /* **発行したものを、目の前に出す**(2026-09 利用者の指定)。
              読み直しが終わってから送るので、ここでは印を付けるだけ */

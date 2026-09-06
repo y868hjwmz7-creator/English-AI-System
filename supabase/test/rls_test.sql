@@ -623,6 +623,102 @@ set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select pg_temp.expect('担当していないトレーナーには途中経過が見えない(0025)',
   (select count(*)::int from public.material_progress), 0);
 
+/* ── 教材の語句を、ゲストの単語帳へ入れる(0047)────────────────
+   2026-09 利用者の指定「ゲストの単語帳に課題としてアサインできる方が良い」。
+
+   **門番は `add_material_words()` の中だけ。** 画面には持たせない。
+   だから、ここで確かめるのはその門番である。
+
+   ・担当ゲストには入る
+   ・**担当していないゲストには入らない**(生徒C は誰の担当でもない)
+   ・**すでに入っている語には触らない**(箱を 0 に戻さない)
+   ・語句の演習(単語 / フレーズ)だけを入れる。本文は入れない */
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+
+insert into public.materials (id, title, level, kind, status, visibility, created_by)
+values ('aaaaaaaa-0000-0000-0000-00000000004a', '単語 / フレーズの教材', 'B1',
+        'vocab', 'published', 'school', '44444444-4444-4444-4444-444444444444');
+insert into public.material_sections (id, material_id, exercise_type, seq)
+values ('bbbbbbbb-0000-0000-0000-00000000004a',
+        'aaaaaaaa-0000-0000-0000-00000000004a', 'vocabulary', 1),
+       ('bbbbbbbb-0000-0000-0000-00000000004b',
+        'aaaaaaaa-0000-0000-0000-00000000004a', 'phrase', 2),
+       ('bbbbbbbb-0000-0000-0000-00000000004c',
+        'aaaaaaaa-0000-0000-0000-00000000004a', 'article', 3);
+insert into public.material_items (material_id, section_id, seq, prompt_en, prompt_ja)
+values ('aaaaaaaa-0000-0000-0000-00000000004a', 'bbbbbbbb-0000-0000-0000-00000000004a',
+        1, 'Shortfall', '不足'),
+       ('aaaaaaaa-0000-0000-0000-00000000004a', 'bbbbbbbb-0000-0000-0000-00000000004a',
+        2, 'Backlog', '積み残し'),
+       ('aaaaaaaa-0000-0000-0000-00000000004a', 'bbbbbbbb-0000-0000-0000-00000000004b',
+        3, 'take it offline', 'この場では決めずに別途話す'),
+       ('aaaaaaaa-0000-0000-0000-00000000004a', 'bbbbbbbb-0000-0000-0000-00000000004c',
+        4, 'This paragraph must not become a word.', 'この段落は語にならない');
+
+/* **`shortfall` は、すぐ上で「まだ」として入っている**(0025 の検証)。
+   そこに触らないことを確かめたいので、先に「覚えかけ」を1回押しておく
+   (箱が 0 → 1 に上がる)。
+
+   **表を直に `update` しない。** `word_reviews` の RLS は
+   `learner_id = auth.uid()` なので、トレーナーからは1行も書き換えられない。
+   ここは `mark_word()`(門番つき)を通す。 */
+select public.mark_word('shortfall', 'learning', 'word', null, null, null,
+                        '22222222-2222-2222-2222-222222222222');
+select pg_temp.expect('下ごしらえ … 箱が 1 に上がっている(0047)',
+  (select box::int from public.word_reviews
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and word_norm = 'shortfall'), 1);
+
+select pg_temp.expect('担当ゲストの単語帳に、語句が2語入る(0047)',
+  (select added from public.add_material_words(
+     array['22222222-2222-2222-2222-222222222222']::uuid[],
+     'aaaaaaaa-0000-0000-0000-00000000004a')), 2);
+
+select pg_temp.expect('本文(記事)は単語帳に入らない(0047)',
+  (select count(*)::int from public.word_reviews
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and word_norm like 'this paragraph%'), 0);
+
+select pg_temp.expect('フレーズは phrase として入る(0047)',
+  (select kind from public.word_reviews
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and word_norm = 'take it offline'), 'phrase');
+
+-- **すでに入っている語には触らない。** 箱を 0 に戻すと、
+-- 共有しなおすたびに覚えかけが振り出しへ戻る
+select pg_temp.expect('すでにある語の箱は、そのまま(0047)',
+  (select box::int from public.word_reviews
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and word_norm = 'shortfall'), 1);
+
+/* **答えた記録は増やさない。** まだ誰も答えていない。
+   ここまでに `mark_word()` を2回押しているので 2 のままであること */
+select pg_temp.expect('答えた記録(vocab_days)は増やさない(0047)',
+  (select answered from public.vocab_days
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and done_on = current_date), 2);
+
+-- 2度目は0語(**同じ語を二度入れない**)
+select pg_temp.expect('もう一度共有しても、増えない(0047)',
+  (select added from public.add_material_words(
+     array['22222222-2222-2222-2222-222222222222']::uuid[],
+     'aaaaaaaa-0000-0000-0000-00000000004a')), 0);
+
+-- **担当していないゲストには入れられない**(ここが唯一の門番)
+select pg_temp.expect_denied('担当していないゲストの単語帳には入れられない(0047)', $$
+  select public.add_material_words(
+    array['33333333-3333-3333-3333-333333333333']::uuid[],
+    'aaaaaaaa-0000-0000-0000-00000000004a') $$);
+select pg_temp.expect('担当していないゲストには1語も入っていない(0047)',
+  (select count(*)::int from public.word_reviews
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+
+-- **控えがまだ無い語でも、教材に書いてある訳が出る**(0047 の review_words)
+select pg_temp.expect('意味の控えが無くても、教材の訳が出る(0047)',
+  (select meaning_ja from public.review_words(
+     '22222222-2222-2222-2222-222222222222', 'todo', 200, false)
+   where word_norm = 'backlog'), '積み残し');
+
 -- ── ゲストに関するファイル(0031)───────────────────────────
 --
 --   ファイルにはその人のことが書いてある。**外に漏れてはいけない。**

@@ -45,6 +45,7 @@ import {
 import {
   QUIZ_FORMS, SESSION_SIZE, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
 } from '../lib/wordQuiz.js'
+import { clozeAt } from '../lib/clozeSentence.js'
 import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
 import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
@@ -86,17 +87,50 @@ const todayKey = () => {
 /** 出会った文。その語のところを太字に。伏せるときは下線に置き換える */
 function SeenIn({ sentence, word, hide = false }) {
   if (!sentence) return null
-  const needle = String(word ?? '').trim()
-  const at = needle ? sentence.toLowerCase().indexOf(needle.toLowerCase()) : -1
-  if (at < 0) return <p className="wordbook-seen" lang="en">{sentence}</p>
+  /* **どこを伏せるかは `clozeAt()` 1か所**(`clozeSentence.js`)。
+     ここで `indexOf` を使っていたので、`in` が **`internal` の中**に当たり、
+     `___ternal` という問題にならない伏せ方になっていた(2026-09)。
+     穴埋めの形を足したついでに、探し方を1つにそろえてある */
+  const found = clozeAt(sentence, word)
+  if (!found) return <p className="wordbook-seen" lang="en">{sentence}</p>
   return (
     <p className="wordbook-seen" lang="en">
-      {sentence.slice(0, at)}
+      {found.before}
       {hide
         ? <span className="wordbook-blank" aria-label="ここに入る語">　　　</span>
-        : <strong>{sentence.slice(at, at + needle.length)}</strong>}
-      {sentence.slice(at + needle.length)}
+        : <strong>{found.hit}</strong>}
+      {found.after}
     </p>
+  )
+}
+
+/**
+ * **穴埋めの出題**(2026-09 利用者の指定)。
+ *
+ * 出会った文(`seen_in`)の、その語だけを伏せて出す。
+ * **答えは足すのではなく、同じ場所で入れ替える**(カードが伸びない・
+ * CLAUDE.md)。開いたら、伏せていたところに語が戻り、意味が下に付く。
+ *
+ * **材料は新しく作らない。** `seen_in` は 0018 から入っているので、
+ * **AI を1回も呼ばず、費用は1円もかからない。**
+ */
+function ClozeFace({ sentence, word, meaning, shown }) {
+  const found = clozeAt(sentence, word)
+  // ここへ来るのは `pickForm()` が落とし損ねたときだけ。**当てずっぽうで出さない**
+  if (!found) return null
+  return (
+    <div className="wordcard-cloze">
+      <p className="wordcard-cloze-en" lang="en">
+        {found.before}
+        {shown
+          ? <strong className="wordcard-cloze-hit">{found.hit}</strong>
+          : <span className="wordbook-blank" aria-label="ここに入る語">　　　</span>}
+        {found.after}
+      </p>
+      {shown && (
+        <p className="wordcard-cloze-ja">{meaning || '(意味の控えがありません)'}</p>
+      )}
+    </div>
   )
 }
 
@@ -921,8 +955,16 @@ export default function Wordbook({
                 入れ替えなら**箱の高さが変わらない**ので、
                 押す場所も、目を向ける場所も動かない
                 (集中モードの「訳は並べるのではなく入れ替える」と同じ考え方)。 */}
-            <div className="wordcard-face">
-              {form === 'ja2en' || form === 'spell'
+            <div className={`wordcard-face${form === 'cloze' ? ' wordcard-face--cloze' : ''}`}>
+              {/* **穴埋め**(2026-09)。出会った文の、その語だけを伏せる。
+                  下の「出会った文」は出さない —— 同じ文が2つ並ぶうえ、
+                  そちらには答えがそのまま見えている */}
+              {form === 'cloze'
+                ? (
+                  <ClozeFace sentence={card.seen_in} word={word}
+                             meaning={card.meaning_ja} shown={swapped} />
+                )
+                : form === 'ja2en' || form === 'spell'
                 ? (swapped
                   ? (
                     /* つづりを書く形では、**合っていたかも同じ場所で返す。**
@@ -990,7 +1032,7 @@ export default function Wordbook({
                   > 窮屈になってしまってます。
                 横に置くとスマホで文の幅が半分になり、1行3語ほどで折り返す。
                 開け閉めの行へ移し、**文には幅をぜんぶ渡す。** */}
-            {card.seen_in && (
+            {card.seen_in && form !== 'cloze' && (
               <div className="wordcard-seenbox">
                 <div className="wordcard-seenbar">
                   <button type="button" className="btn btn--ghost btn--small"
@@ -1093,7 +1135,9 @@ export default function Wordbook({
                   <button type="button" className="btn btn--ghost btn--small"
                           aria-expanded={shown}
                           onClick={() => setShown((v) => !v)}>
-                    {form === 'ja2en'
+                    {/* **穴埋めも「英語を見る」**(2026-09)。
+                        伏せてあるのは語そのものなので、出てくるのは英語である */}
+                    {form === 'ja2en' || form === 'cloze'
                       ? (shown ? '英語を隠す' : '英語を見る')
                       : (shown ? '意味を隠す' : '意味を見る')}
                   </button>

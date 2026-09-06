@@ -10,7 +10,7 @@ import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, cefrOption, scoreTestLabel } from 
 import {
   addLearnerScore, createAccount, kindLabel, loadLearnerAssignments,
   eraseLearner, loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
-  loadMaterial,
+  loadMaterial, wordsAddedNote,
 } from '../lib/materials.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import MaterialTitle from './MaterialTitle.jsx'
@@ -937,9 +937,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                       learners={[{ id: l.id, display_name: l.display_name, status: 'active' }]}
                       initial={{ level: l.level ?? '', shareWith: [l.id], mustUse }}
                       onCancel={() => setDetailTab('homework')}
-                      onCreated={(id, shared) => {
+                      onCreated={(id, shared, words) => {
                         setMessage(shared
-                          ? `${l.display_name} さんに共有しました。`
+                          ? `${l.display_name} さんに共有しました。${wordsAddedNote(words)}`
                           : '教材を発行しました。');
                         openDetail(l.id, 'homework')
                       }}

@@ -4942,6 +4942,25 @@ html, body { overflow-x: clip; }
 /* 入れ替えで出す英語。**日本語より一段大きく。**
    英語は日本語より字数が少ないので、同じ大きさだと小さく見える */
 .wordcard-word--en { font-size: clamp(26px, 6.4vw, 31px); letter-spacing: .005em; }
+
+/* ── 穴埋め(2026-09 利用者の指定)────────────────────────────
+   出会った文の、その語だけを伏せて出す。
+
+   **1語ではなく1文なので、`.wordcard-word`(26px)では大きすぎる。**
+   読める大きさに落とし、行間を広く取る(声に出して読む場所である)。
+   **左そろえ。** 文をまん中に置くと、行が変わるたびに行頭が動いて
+   目が迷う(カタマリの訳を狭い画面で左寄せにしたのと同じ理由)。 */
+.wordcard-face--cloze { display: block; }
+.wordcard-cloze-en {
+  margin: 0; text-align: left;
+  font-size: clamp(17px, 4.4vw, 20px); line-height: 1.9;
+}
+/* 答えを開いたときに戻る語。**色ではなく太さで示す**(プレインでも分かる) */
+.wordcard-cloze-hit { color: var(--accent); font-weight: 700; }
+.wordcard-cloze-ja {
+  margin: 12px 0 0; text-align: left;
+  color: var(--text-secondary); font-size: 15px; font-weight: 600;
+}
 /* 種類(単語 / 言い回し)と品詞。**さりげなく**(2026-08 利用者の指定)。
    塗りつぶした札にすると、語より目立ってしまう。
    細い字と中黒だけで並べる。品詞は斜体にして、種類と役割を分ける。

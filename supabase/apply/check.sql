@@ -117,4 +117,6 @@ from (
   union all select '0046 教材に「切り口」と「何の話だったか」を控える(pending_matome.sql)',
     exists (select 1 from information_schema.columns
             where table_name = 'materials' and column_name = 'gist'), 28
+  union all select '0047 単語 / フレーズをまとめ、共有したら単語帳に入れる(pending_matome.sql)',
+    exists (select 1 from pg_proc where proname = 'add_material_words'), 29
 ) t order by 順;

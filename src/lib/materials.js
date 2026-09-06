@@ -38,7 +38,7 @@ const fail = (e, fallback) => ng(e?.message ? `${fallback}: ${e.message}` : fall
  * (`playMark.js` / `gamify.js` / `speechDraft.js` と同じ考え方)。
  */
 export {
-  MATERIAL_KINDS, NEW_MATERIAL_KINDS, isPassageKind, isDialogueKind,
+  MATERIAL_KINDS, NEW_MATERIAL_KINDS, isPassageKind, isDialogueKind, isVocabKind,
   bodyWord, usesScene, canPasteBody, kindLabel,
 } from '../data/materialKinds.js'
 // このファイルの中でも使うので、出し直すだけでなく取り込む
@@ -590,7 +590,50 @@ export async function assignMaterial({ materialId, learnerIds, assignedBy, dueOn
     }
     return fail(error, '共有できませんでした')
   }
-  return ok({ count: learnerIds.length })
+  /* **共有したら、その教材の語句をゲストの単語帳へ入れる**(0047・2026-09)。
+     教材の中で20問を1回解いて終わりにせず、**間隔をあけた復習に乗せる。**
+     すでに入っている語には触らない(箱を戻さない)。
+     語句の演習(単語 / フレーズ)が無い教材では 0 語になるだけである。 */
+  const { data: added } = await addMaterialWords({ materialId, learnerIds })
+  return ok({ count: learnerIds.length, words: added })
+}
+
+/**
+ * 教材の語句(単語 / フレーズの演習)を、共有先ゲストの単語帳へ入れる(0047)。
+ *
+ * 【なぜ単語帳へ入れるのか】(2026-09 利用者の指定)
+ *
+ *   > 単語、、、例えば、こういうふうに教材にするというより、
+ *   > ゲストの単語帳に課題としてアサインできる方が良いですね。
+ *
+ *   単語の教材は「20問を1回解いて終わり」だった。単語帳のほうには
+ *   **間隔をあけた復習(0015〜0039)と、箱に応じた4つの出題形式**が
+ *   すでにある。練習の実体をそちらへ移す。
+ *
+ * 【0047 を貼る前でも壊れない】
+ *
+ *   関数が無ければ断られるだけで、**共有そのものはできている。**
+ *   だから知らせも出さず、**入った語数を `null` で返す**
+ *   (0 と取り違えると「1語も入りませんでした」という嘘になる)。
+ */
+/**
+ * 「単語帳に N 語入れました」の1文。**文言はここ1か所**(出す場所は3つある)。
+ *
+ * **`null` のときは何も言わない。** 0047 を貼る前は数えられないので、
+ * 「0 語入れました」と出すと嘘になる(**数えられなかったら `null`**)。
+ * 0 語のときも黙る —— 語句の演習が無い教材では、入らないのが正しい。
+ */
+export const wordsAddedNote = (words) =>
+  (Number(words) > 0 ? ` 単語帳に ${words} 語入れました。` : '')
+
+export async function addMaterialWords({ materialId, learnerIds }) {
+  if (!supabase || !materialId || !learnerIds?.length) return ok(null)
+  const { data, error } = await supabase.rpc('add_material_words', {
+    p_learners: learnerIds, p_material: materialId,
+  })
+  // **数えられなかったら `null`。** 0 と取り違えない(CLAUDE.md)
+  if (error) return ok(null)
+  return ok((data ?? []).reduce((sum, r) => sum + (Number(r.added) || 0), 0))
 }
 
 // ── ゲスト側:自分の宿題 ────────────────────────────────────────

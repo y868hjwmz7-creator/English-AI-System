@@ -19,7 +19,10 @@
 import {
   finished, hasMark, nowPlaying, stopped, takeMark,
 } from '../src/lib/playMark.js'
-import { SESSION_SIZE, buildSession } from '../src/lib/wordQuiz.js'
+import {
+  QUIZ_FORMS, SESSION_SIZE, buildSession, formForBox, isSelfGraded, pickForm,
+} from '../src/lib/wordQuiz.js'
+import { clozeAt, hasCloze } from '../src/lib/clozeSentence.js'
 import {
   bestStreak, collectRows, goalLine, goalPart,
   praiseFor, streakLine, weekLine, STREAK_FROM,
@@ -1137,6 +1140,144 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(/add column if not exists gist/.test(matome), 'まとめた1つに 0046 が入っている')
     ok(/column_name = 'gist'/.test(check), 'check.sql が 0046 を見ている')
   }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   単語帳の「穴埋め」(0047・2026-09 利用者の指定)
+
+     > ２つ目のトレーニングに穴埋めがあったり、３つ目が日→英になっていたり、
+     > そういう仕組みで単語が覚えられるような仕組みにしたいです。
+
+   **材料は出会った文(`seen_in`・0018)をそのまま伏せるだけ**なので、
+   AI を1回も呼ばない = 費用は1円もかからない。
+   間違えても `npm run lint` にも `npm run build` にも引っかからず、
+   しかも**その語が出るまで分からない**ので、ここで数字で見張る。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 穴埋め — 出会った文の、その語だけを伏せる')
+{
+  const S = 'The new intern stayed quiet during the internal meeting.'
+  const hit = clozeAt(S, 'intern')
+  ok(!!hit, '語が見つかる')
+  ok(hit && hit.hit === 'intern', '当たったのは intern そのもの', hit?.hit)
+  /* **`indexOf` で探さない。** `in` が `internal` の中に当たると
+     `___ternal` になり、問題として成り立たない */
+  ok(clozeAt('This is an internal memo.', 'in') === null,
+    '語の途中には当たらない(internal の in を拾わない)')
+  ok(clozeAt(S, 'INTERN')?.hit === 'intern', '大文字小文字は見ない')
+  // 句(2語以上)でも当たる。空白が2つでも改行でも受ける
+  ok(clozeAt('We look  forward\nto it.', 'look forward to')?.hit === 'look  forward\nto',
+    '句でも当たる(空白や改行が違っていても)')
+  // ハイフンの語を、途中で切らない
+  ok(clozeAt('A well-known case.', 'well') === null, 'well-known の途中では切らない')
+  // **見つからなければ、何も返さない**(当てずっぽうで伏せない)
+  ok(clozeAt(S, 'quarterly') === null, '無い語では何も返さない')
+  ok(clozeAt('', 'intern') === null && clozeAt(S, '') === null, '空でも落ちない')
+
+  ok(hasCloze({ seen_in: S, display: 'intern' }), '出会った文があれば作れる')
+  ok(!hasCloze({ seen_in: null, display: 'intern' }), '出会った文が無ければ作れない')
+  ok(!hasCloze({ seen_in: S, display: 'quarterly' }), '文の中に無ければ作れない')
+
+  // ── 箱ごとの形。**段が飛ばないこと** ──
+  ok(formForBox(0) === 'choice' && formForBox(1) === 'choice', '箱0〜1 は4択')
+  ok(formForBox(2) === 'recall', '箱2 は思い出す')
+  ok(formForBox(3) === 'cloze', '箱3 は穴埋め')
+  ok(formForBox(4) === 'ja2en' && formForBox(5) === 'ja2en', '箱4〜5 は日本語 → 英語')
+  ok(formForBox(6) === 'spell', '箱6 はつづり')
+  ok(QUIZ_FORMS.some((f) => f.id === 'cloze'), '選べる形の一覧にも入っている')
+
+  /* **出会った文が無い語では「思い出す」に落ちる。**
+     0047 で単語帳に入れた語には、出会った文が無い */
+  ok(pickForm({ box: 3, seen_in: S, display: 'intern', meaning_ja: '研修生' }, [])
+     === 'cloze', '文があれば穴埋めで出る')
+  ok(pickForm({ box: 3, seen_in: null, display: 'intern', meaning_ja: '研修生' }, [])
+     === 'recall', '文が無ければ思い出すに落ちる(行き止まりを作らない)')
+
+  /* **自分で答え合わせをする形。** ここが
+     「カードを画面いっぱいに伸ばすか」も決めている(`wordcard--recall`) */
+  ok(isSelfGraded('cloze'), '穴埋めは自分で答え合わせをする形')
+  ok(!isSelfGraded('choice') && !isSelfGraded('spell'),
+    '4択とつづりは機械が判定する(伸ばさない)')
+
+  // **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、何も起きない
+  const wb = readFileSync(
+    new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
+  ok(/from '\.\.\/lib\/clozeSentence\.js'/.test(wb), '単語帳が clozeSentence を読んでいる')
+  ok(/<ClozeFace sentence=\{card\.seen_in\}/.test(wb), '穴埋めのカードを描いている')
+  /* **「出会った文」の箱を、穴埋めでは出さない。**
+     出すと同じ文が2つ並び、しかもそちらには答えが見えている */
+  ok(/card\.seen_in && form !== 'cloze' && \(/.test(wb),
+    '穴埋めでは「出会った文」の箱を出さない')
+  // **探し方を2つ持たない**(`SeenIn` も同じ道具を通る)
+  ok(/const found = clozeAt\(sentence, word\)/.test(wb),
+    '「出会った文」の伏せ方も、同じ道具を通っている')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   単語 / フレーズを1つの種類にまとめる(0047)
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 単語 / フレーズ — 1つの種類にまとめる')
+{
+  ok(MATERIAL_KINDS.some((k) => k.id === 'vocab'), '教材の種類に「単語 / フレーズ」がある')
+  // **旧い2つを消さない。** 消すと、その種類で作った教材の呼び名が出なくなる
+  ok(MATERIAL_KINDS.some((k) => k.id === 'word' && k.legacy),
+    '旧「単語」は残っている(新しくは作れない)')
+  ok(MATERIAL_KINDS.some((k) => k.id === 'phrase' && k.legacy),
+    '旧「フレーズ」は残っている(新しくは作れない)')
+
+  const secs = defaultSectionsFor('vocab')
+  ok(secs.length === 2, '演習は2つ(単語とフレーズ)', `${secs.length} 個`)
+  ok(secs[0].exercise_type === 'vocabulary' && secs[0].count === 10, '単語10問')
+  ok(secs[1].exercise_type === 'phrase' && secs[1].count === 10, 'フレーズ10問')
+
+  /* **片方だけにも戻せる。** 外したうえで「倍」を選べば、
+     もとの「単語20問」とまったく同じになる(こちらで勝手に減らさない) */
+  ok(SCALABLE_SECTIONS.includes('vocabulary') && SCALABLE_SECTIONS.includes('phrase'),
+    '単語もフレーズも、数を変えられて外せる')
+  const only = sectionsFor('vocab', { vocabulary: 'double' }, { phrase: false })
+  ok(only.length === 1 && only[0].exercise_type === 'vocabulary' && only[0].count === 20,
+    'フレーズを外して「倍」にすると、もとの単語20問と同じになる')
+  // **3倍は文型ドリルだけ**(弱点が3つまで選べるため)
+  ok(!amountsFor('vocabulary').some((a) => a.id === 'triple'),
+    '単語に3倍は出さない(3倍は文型ドリルだけ)')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   共有したら、その教材の語がゲストの単語帳に入る(0047)
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 共有したら、語が単語帳に入る')
+{
+  const mat = readFileSync(
+    new URL('../src/lib/materials.js', import.meta.url), 'utf8')
+  ok(/rpc\('add_material_words'/.test(mat), '窓口(SQL の関数)を呼んでいる')
+  // **共有したときに必ず呼ぶ。** 定義だけあって誰も呼ばなければ何も起きない
+  ok(/await addMaterialWords\(\{ materialId, learnerIds \}\)/.test(mat),
+    '共有したときに呼んでいる')
+  /* **数えられなかったら `null`。** 0 と取り違えると
+     「1語も入りませんでした」という嘘の説明になる */
+  ok(/if \(error\) return ok\(null\)/.test(mat), '数えられなかったら null(0 にしない)')
+  ok(/Number\(words\) > 0 \? ` 単語帳に \$\{words\} 語入れました。` : ''/.test(mat),
+    '文言は1か所(wordsAddedNote)')
+
+  // **出す場所は3つ。** 書き写すと、必ずどこかが黙ったままになる
+  for (const [f, what] of [
+    ['../src/components/TrainerMaterials.jsx', 'さがす画面'],
+    ['../src/components/MaterialForm.jsx', '教材を作る画面'],
+    ['../src/components/TrainerLearners.jsx', 'ゲストの画面'],
+  ]) {
+    const src = readFileSync(new URL(f, import.meta.url), 'utf8')
+    ok(/wordsAddedNote|addedWords/.test(src), `${what} が、入った語数を伝えている`)
+  }
+
+  // ── 貼る SQL がそろっているか ──
+  const matome = readFileSync(
+    new URL('../supabase/apply/pending_matome.sql', import.meta.url), 'utf8')
+  const check = readFileSync(
+    new URL('../supabase/apply/check.sql', import.meta.url), 'utf8')
+  ok(/create or replace function public\.add_material_words/.test(matome),
+    'まとめた1つに 0047 が入っている')
+  ok(/'vocab',/.test(matome), 'まとめた1つが、教材の種類に vocab を足している')
+  ok(/proname = 'add_material_words'/.test(check), 'check.sql が 0047 を見ている')
 }
 
 console.log(ng

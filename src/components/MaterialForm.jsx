@@ -36,7 +36,7 @@ import {
 import {
   NEW_MATERIAL_KINDS, assignMaterial, countMaterialsLike, createMaterial, estimateCost,
   generateChunkJa, generateSection,
-  bodyWord, canPasteBody, generateSectionUnique, isDialogueKind, isPassageKind,
+  bodyWord, canPasteBody, generateSectionUnique, isDialogueKind, isPassageKind, isVocabKind,
   kindLabel, usesScene,
   loadRecentStories, loadUsedSentences, loadUsedSentencesLike, normEn,
   genGatewayNote,
@@ -334,7 +334,7 @@ export default function MaterialForm({
      「人数ぶん揃っているとき」だけ使うので、**ずれた指定は渡らない。** */
   const castGenders = () => cast.map((id) => findVoice(id)?.gender ?? '')
 
-  const reviewLearner = (kind === 'word' || kind === 'phrase') && shareWith.length === 1
+  const reviewLearner = isVocabKind(kind) && shareWith.length === 1
     ? shareWith[0] : null
 
   useEffect(() => {
@@ -1143,8 +1143,9 @@ export default function MaterialForm({
     // 上で選んでおいたゲストに、そのまま共有する。
     // 発行と共有が別の操作だと、作ったのに届いていない教材が生まれる。
     let shared = 0
+    let addedWords = null
     if (shareWith.length) {
-      const { error: shareError } = await assignMaterial({
+      const { data: shareInfo, error: shareError } = await assignMaterial({
         materialId: data.id, learnerIds: shareWith, assignedBy: createdBy,
       })
       if (shareError) {
@@ -1154,6 +1155,9 @@ export default function MaterialForm({
         return
       }
       shared = shareWith.length
+      /* **共有した語は、そのままゲストの単語帳に入る**(0047)。
+         何語入ったかを、発行の知らせに添える(黙って入れない) */
+      addedWords = shareInfo?.words ?? null
     }
 
     setBusy(false)
@@ -1176,7 +1180,7 @@ export default function MaterialForm({
       { title: title.trim() || autoTitle(), level },
     )
 
-    onCreated?.(data.id, shared)
+    onCreated?.(data.id, shared, addedWords)
   }
 
   return (
@@ -1761,7 +1765,7 @@ export default function MaterialForm({
           <div className="review-box">
             <p className="field-hint">
               <strong>単語帳から選んだ {mustUse.length} 語を、必ず入れます。</strong>
-              {kind === 'word' || kind === 'phrase'
+              {isVocabKind(kind)
                 ? ' 先頭から順に、この語で作らせます。'
                 : isPassageKind(kind)
                   ? ' 本文の中で使わせます。'
@@ -1786,7 +1790,7 @@ export default function MaterialForm({
             そのゲストが「知らなかった」と付けた語を、先に入れる。
             ゲストを1人だけ選んでいるときにだけ出す。
             **複数人だと「誰の復習か」が決まらない。** */}
-        {(kind === 'word' || kind === 'phrase') && (
+        {isVocabKind(kind) && (
           <div className="review-box">
             {shareWith.length !== 1 ? (
               <p className="field-hint">

@@ -590,8 +590,14 @@ for (const [label, want] of Object.entries(WANT)) {
  *   語の中身は窓口の応答を差し替えて渡す(この環境から Supabase へは届かない)。
  */
 {
+  /* **語は、出会った文の中に実際に出てくるものにする**(0047)。
+     でたらめな語(`w0` など)にしていると、穴埋めが作れず
+     `pickForm()` が「思い出す」に落ちる —— **穴埋めを測っているつもりで、
+     ずっと思い出すを測っていた**(2026-09 に実際にそうなっていた)。 */
+  const IN_SENTENCE = ['answer', 'engineer', 'stayed', 'quiet', 'during', 'whole',
+    'review', 'meeting', 'later', 'admitted', 'nervous', 'anything']
   const WORDS = (box) => Array.from({ length: 12 }, (_, i) => ({
-    word_norm: `w${i}`, word: `word${i}`, kind: 'phrase', pos: '熟語',
+    word_norm: IN_SENTENCE[i], display: IN_SENTENCE[i], kind: 'phrase', pos: '熟語',
     status: 'learning', box, learn_streak: 4,
     due_on: '2020-01-01', added_at: '2026-09-01',
     meaning_ja: `意味${i}`,
@@ -602,7 +608,8 @@ for (const [label, want] of Object.entries(WANT)) {
     material_id: null, material_title: null, industry: 'it', topic: null,
   }))
   /* **箱で出題の形が決まる**(`formForBox`)。
-     0〜1 = 4択 / 2〜3 = 思い出す / 4〜5 = 日本語 → 英語 / 6 = つづり */
+     0〜1 = 4択 / 2 = 思い出す / **3 = 穴埋め**(0047)/
+     4〜5 = 日本語 → 英語 / 6 = つづり */
   let box = 2
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   await page.route('**/rest/v1/**', (route) => {
@@ -623,6 +630,10 @@ for (const [label, want] of Object.entries(WANT)) {
   const CASES = [
     ['スマホ / 思い出す', 390, 844, 2, true],
     ['320px / 思い出す', 320, 568, 2, true],
+    /* **穴埋め**(0047)。出会った文をまるごと出すので、いちばん背が高い。
+       ここが伸びないと、答えの2つが画面の外へ出る */
+    ['スマホ / 穴埋め', 390, 844, 3, true],
+    ['320px / 穴埋め', 320, 568, 3, true],
     ['スマホ / 日本語 → 英語', 390, 844, 4, true],
     ['スマホ / 4択', 390, 844, 0, false],
     ['スマホ / つづり', 390, 844, 6, false],
@@ -659,13 +670,19 @@ for (const [label, want] of Object.entries(WANT)) {
         答えの下端: ans ? Math.round(ans.getBoundingClientRect().bottom) : null,
         本体を送るか: body ? body.scrollHeight > body.clientHeight + 1 : null,
         横: document.documentElement.scrollWidth > window.innerWidth,
+        // **本当に穴埋めが出ているか。** 出ていなければ「思い出す」に
+        // 落ちており、伸ばす印だけを見ていると**気づけない**
+        穴埋め: !!box('.wordcard-cloze-en'),
       }
     })
     /* **高さの割合で「伸ばしていない」を見ない。** 4択は選択肢が4つ並ぶので、
        伸ばさなくても画面の半分ほどになる(実測 424 / 844px)。
        見るのは**印が付いている形かどうか**と、
        付いている形が**本当に画面を使い切っているか**の2つである */
-    if (m.伸ばす印 !== wantTall) {
+    if (useBox === 3 && !m.穴埋め) {
+      ng(`${what} … 穴埋めになっていない`,
+        '`pickForm()` が「思い出す」に落ちている(出会った文にその語が無い)')
+    } else if (m.伸ばす印 !== wantTall) {
       ng(`${what} … 伸ばす印(\`wordcard--recall\`)が ${m.伸ばす印 ? '付いている' : '付いていない'}`,
         wantTall
           ? '「思い出す」と「日本語 → 英語」には付ける'
@@ -682,6 +699,16 @@ for (const [label, want] of Object.entries(WANT)) {
     } else {
       ok(`${what} … カード ${m.カード} / ${m.画面}px`
         + `(${wantTall ? '伸ばす' : '伸ばさない'})・画面は送らない`)
+    }
+    /* **穴埋めは、目でも1枚だけ確かめる**(こちらには画面が見えないので、
+       せめて絵にして残す)。答えを開いた形も撮る */
+    if (process.env.SHOT && useBox === 3 && w === 390) {
+      await page.screenshot({ path: `${process.env.SHOT}/cloze-q.png` })
+      for (const btn of await page.$$('button')) {
+        if (((await btn.textContent()) ?? '').includes('英語を見る')) { await btn.click(); break }
+      }
+      await page.waitForTimeout(200)
+      await page.screenshot({ path: `${process.env.SHOT}/cloze-a.png` })
     }
   }
   await page.close()
