@@ -26,46 +26,23 @@ const ng = (error) => ({ data: null, error })
 
 const fail = (e, fallback) => ng(e?.message ? `${fallback}: ${e.message}` : fallback)
 
-export const MATERIAL_KINDS = [
-  { id: 'pattern',  label: '文型ドリル',
-    hint: '同じ文法で違う文章をくり返す。定着が狙い。4演習 × 10問 = 40問' },
-  { id: 'reading',  label: 'リーディング(記事)',
-    hint: '業界別のニュースや読み物を1本。音読・シャドーイングに使う' },
-  { id: 'dialogue', label: 'ダイアローグ(会話)',
-    hint: '場面を決めた会話を1本。役を決めて声に出す' },
-  /* **会議**(2026-09 利用者の指定「会議の教材が追加されていない」)。
-     中身は会話とまったく同じで、**出てくる人数が3〜4人**という1点だけが違う。
-     人数は `materials.voice_ids` の長さがそのまま持つので、
-     **表も列も増やしていない**(足したのは `kind` の値1つだけ・0037)。 */
-  { id: 'meeting',  label: '会議',
-    hint: '3〜4人の打ち合わせを1本。立場の違う人が集まり、その場で決めていく' },
-  { id: 'word',     label: '単語', hint: '単語学習で使う' },
-  { id: 'phrase',   label: 'フレーズ', hint: 'フレーズ学習で使う' },
-  // 旧「長文」。新規では選べないが、既存の教材の表示に使う
-  { id: 'passage',  label: '長文(旧)', hint: '作り直す前の形。新しくは作れない', legacy: true },
-]
-
-/** 新しく作れる種類(旧いものを除く) */
-export const NEW_MATERIAL_KINDS = MATERIAL_KINDS.filter((k) => !k.legacy)
-
-/** 本文を1本作る種類(記事・会話・会議)かどうか。問数ではなく長さで考える */
-export const isPassageKind = (kind) =>
-  kind === 'reading' || kind === 'dialogue' || kind === 'meeting'
-
-/**
- * **会話の形をした種類**(会話・会議)かどうか。
+/*
+ * 教材の種類と、その呼び分けは **`src/data/materialKinds.js`** に置いてある。
+ * ここから読んでいる場所を1つも変えずに済むよう、そのまま出し直す。
  *
- * この2つは中身が同じで、**出てくる人数だけが違う。**
- * だから「話す人を選ぶ」「場面を選ぶ」「発言で数える」は、どちらにも要る。
- * **`kind === 'dialogue'` と書かない。** 書くと会議で必ず抜ける。
+ * **なぜ分けたか。** このファイルは Supabase(`import.meta.env`)を
+ * 引き連れているので、**素の node で一度も読み込めない。**
+ * ところが「画面の種類が、表の制約に全部入っているか」を見張る検証
+ * (`scripts/check-exercise-types.mjs`)は素の node で走る。
+ * 種類の一覧だけを、何にも依存しない形へ出してある
+ * (`playMark.js` / `gamify.js` / `speechDraft.js` と同じ考え方)。
  */
-export const isDialogueKind = (kind) => kind === 'dialogue' || kind === 'meeting'
-
-/** 画面に出す短い呼び名(「記事」「会話」「会議」)。文の中で使う */
-export const bodyWord = (kind) =>
-  (kind === 'reading' ? '記事' : kind === 'meeting' ? '会議' : '会話')
-
-export const kindLabel = (id) => MATERIAL_KINDS.find((k) => k.id === id)?.label ?? id
+export {
+  MATERIAL_KINDS, NEW_MATERIAL_KINDS, isPassageKind, isDialogueKind,
+  bodyWord, usesScene, canPasteBody, kindLabel,
+} from '../data/materialKinds.js'
+// このファイルの中でも使うので、出し直すだけでなく取り込む
+import { isPassageKind } from '../data/materialKinds.js'
 
 // ── ゲストの一覧 ────────────────────────────────────────────────
 

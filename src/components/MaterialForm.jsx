@@ -18,23 +18,30 @@ import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrOption } from '../data/cefr.js'
 import {
   EXERCISE_TYPES, FIELD_LABELS, MAX_ITEMS, SCALABLE_SECTIONS, amountsFor,
-  defaultSectionsFor, exerciseLabel, exerciseType, isIncluded, sectionsFor,
+  defaultSectionsFor, exerciseLabel, exerciseType, isIncluded, isPassageSection,
+  sectionsFor,
 } from '../data/exerciseTypes.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   cancelJob, clearJob, currentJob, startJob, takeJobResult, watchJob,
 } from '../lib/generateJob.js'
 import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
+/* **Speech練習**(2026-09 利用者の指定)。貼った原稿の切り方と、
+   窓口へ渡す「スピーチとして書く」指定は、**素の node で確かめられる形**
+   に切り出してある(`playMark.js` / `gamify.js` と同じ考え方) */
+import { MAX_PARTS, pastedParagraphs, speechBrief } from '../lib/speechDraft.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
   generateChunkJa, generateSection,
-  bodyWord, generateSectionUnique, isDialogueKind, isPassageKind, kindLabel,
+  bodyWord, canPasteBody, generateSectionUnique, isDialogueKind, isPassageKind,
+  kindLabel, usesScene,
   loadUsedSentences, normEn,
   genGatewayNote,
 } from '../lib/materials.js'
 import { chunkPlan } from '../lib/chunkJa.js'
 import {
   genreHint, genreLabel, genresFor, sceneHint, sceneLabel, scenesFor,
+  speechScenesFor,
 } from '../data/genres.js'
 import {
   CLIP_ACCENTS, DEFAULT_ACCENT, MIN_MEETING_SPEAKERS, findVoice, pickVoices,
@@ -63,6 +70,29 @@ const interleave = (lists) => {
 
 /** 今日の日付。教材名を自動で付けるのに使う。 */
 const todayLabel = () => new Date().toISOString().slice(0, 10)
+
+/**
+ * **話し手の欄**(2026-09 利用者の指定)。
+ *
+ *   > その際に「会社名」「自分の名前」「役職」「部署名」なども任意で
+ *   > 指定すればそれに沿って Speech(モノローグ)を作成してくれる機能です
+ *
+ * **どれも任意。** 1つも入れなくてもスピーチは作れる。
+ * 並びは「自分 → 所属 → 立場」。名乗るときの順そのものにしてある。
+ */
+const SPEAKER_FIELDS = [
+  { id: 'name',    label: '自分の名前', hint: '例: Taro Yamada' },
+  { id: 'company', label: '会社名',     hint: '例: ABC Corporation' },
+  { id: 'dept',    label: '部署名',     hint: '例: Sales Division' },
+  { id: 'role',    label: '役職',       hint: '例: Head of Sales' },
+]
+
+/** 貼る欄の見本。**空行で段落が分かれる**ことを、見本そのもので示す */
+const SCRIPT_HINT = `Good morning, everyone. Thank you for making time today.
+
+I want to talk about one thing: how we shorten our delivery time.
+
+Last quarter we shipped in twelve days on average. Our goal is eight.`
 
 const newSection = (typeId = 'translate_en_ja') => ({
   exercise_type: typeId,
@@ -170,6 +200,17 @@ export default function MaterialForm({
   // 指名した声。空文字のところは「おまかせ」
   const [picked, setPicked] = useState([])
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
+  /* **Speech練習**(2026-09 利用者の指定)。
+       > 内容は、自分で手入力が基本
+     貼ってあれば、**本文は AI に作らせない**(そのぶん課金されない) */
+  const [script, setScript] = useState(initial.script ?? '')
+  /* 話し手(任意)。
+       > その際に「会社名」「自分の名前」「役職」「部署名」なども任意で
+       > 指定すればそれに沿って Speech(モノローグ)を作成してくれる機能です
+     **入れなくても作れる。** 入れたぶんだけ、原稿がその人のものになる */
+  const [who, setWho] = useState(initial.who ?? {
+    name: '', company: '', dept: '', role: '',
+  })
   // ── 復習の材料(単語・フレーズの教材だけで使う)──────────────
   //   これまでの宿題に出た語のうち、ゲストが「知らなかった」と付けたものを
   //   混ぜる。**毎回まったく新しい語を出していては、定着しない**(第5.23節)。
@@ -185,12 +226,14 @@ export default function MaterialForm({
      入れ替えないと、外科医の教材に「打ち合わせ前の雑談」が残る。
      いまの場面がその分野にもあれば、そのままにする */
   useEffect(() => {
-    const list = scenesFor(industry)
+    // **スピーチは別の一覧を持つ**(会話の場面を出すと噛み合わない)。
+    // 種類を変えたときも入れ替えるので、`kind` も見る
+    const list = kind === 'speech' ? speechScenesFor(industry) : scenesFor(industry)
     if (!list.some((x) => x.id === scene)) setScene(list[0]?.id ?? '')
     const gl = genresFor(industry)
     if (!gl.some((x) => x.id === genre)) setGenre(gl[0]?.id ?? '')
     // scene / genre を依存に入れると、選んだそばから書き換わってしまう
-  }, [industry])
+  }, [industry, kind])
 
   // 生成中は秒数を数える。1〜3分かかることがあるため、動いていることが
   // 分からないと「固まった」と思われる(実際にそう見えた)。
@@ -346,7 +389,19 @@ export default function MaterialForm({
        > 外科医を選んだら、手術前の説明、とか、手術方法についての話し合い、
        > とか、業界に特化した選択肢が出るようにしてください。
      登録の無い分野では「仕事全般」の場面に落ちる(`scenesFor`)。 */
-  const sceneList = scenesFor(industry)
+  /* **スピーチの場面は、会話の場面とは別の一覧**(2026-09 利用者の指定
+     「場面などはあなたが考えて実装して下さい」)。
+     会話の場面は「相手がいて、やりとりが続く」ものなので、
+     1人が話しきるスピーチには当てはまらない(`speechScenesFor`) */
+  /* **貼った原稿の段落。** 何段落になるかを、貼った時点で出すために持つ。
+     `useMemo` にしてあるのは、描き直すたびに切り直さないため
+     (切り方そのものは `pastedParagraphs()` の中・素の node で確かめてある) */
+  const scriptParts = useMemo(
+    () => (canPasteBody(kind) ? pastedParagraphs(script) : []),
+    [kind, script],
+  )
+
+  const sceneList = kind === 'speech' ? speechScenesFor(industry) : scenesFor(industry)
   const genreList = genresFor(industry)
 
   /** 弱点タグを、AI に渡す文言にする */
@@ -389,7 +444,7 @@ export default function MaterialForm({
   const autoTitle = () => {
     const parts = [todayLabel()]
     if (kind === 'reading') parts.push(genreLabel(genre))
-    else if (isDialogueKind(kind)) parts.push(sceneLabel(scene))
+    else if (usesScene(kind)) parts.push(sceneLabel(scene))
     if (tagIds.length) parts.push(tagIds.map(weaknessTagLabel).join(' + '))
     parts.push(level)
     if (industry) parts.push(industryLabel(industry))
@@ -412,6 +467,105 @@ export default function MaterialForm({
   const planNow = () => sectionsFor(kind, amounts, include)
 
   /**
+   * 作るものの並びを、そのまま文にする(「記事6 + 内容の理解5 + …」)。
+   *
+   * **本文の名前は、種類に合わせる。** 演習の名前は `article` なので
+   * そのまま出すと Speech練習でも「記事6」と書かれる(実測)。
+   * 何を作るのかを押す前に読めることが、この文言の役目である。
+   */
+  const planLabel = (plan) => plan
+    .map((s2) => `${isPassageSection(s2.exercise_type)
+      ? bodyWord(kind) : exerciseLabel(s2.exercise_type)}${s2.count}`)
+    .join(' + ')
+
+  /**
+   * **スピーチとして書かせるための指定**(2026-09 利用者の指定)。
+   *
+   * 中身は `speechBrief()`(`src/lib/speechDraft.js`)が組み立てる。
+   * ここに書かないのは、**素の node で確かめられなくなる**ためである。
+   */
+  const speechSubject = () => speechBrief({
+    scene: sceneLabel(scene), hint: sceneHint(scene), who, subject,
+  })
+
+  /**
+   * **貼った原稿から教材を作る**(2026-09 利用者の指定)。
+   *
+   *   > 自分でスピーチなどを考えてもらったものをそのままコピペして
+   *   > 指定する音声で text to speech をして…
+   *
+   * **本文は AI に作らせない。** 貼ったものがそのまま本文になるので、
+   * 一字一句、書いたとおりに読ませられる。
+   *
+   * 残りの演習(内容の理解・ディスカッション・語句)は、
+   * **貼った本文をそのまま渡して**作る。AI が書いた本文のときと
+   * まったく同じ道なので、書き分けは1つも増えていない。
+   * 演習をぜんぶ外していれば、**AI は1回も呼ばれない**(0円)。
+   *
+   * 訳(`prompt_ja`)は付かない。**貼ったのは英文だけ**なので、
+   * 無いものをあるように見せない —— スラッシュリーディングの
+   * カタマリごとの訳は、下で作る。
+   */
+  const generateFromScript = async ({ step, cancelled }, plan, parts) => {
+    const [bodyPlan, ...rest] = plan
+    const made = [{
+      exercise_type: bodyPlan.exercise_type,
+      items: parts.map((en) => ({ prompt_en: en, prompt_ja: '' })),
+    }]
+    const spent = { input: 0, output: 0, cacheRead: 0 }
+    const context = parts.join('\n\n')
+
+    // 段落ごとの本文を渡して、設問と語句を作る(AI の本文のときと同じ)
+    for (let i = 0; i < rest.length; i += 1) {
+      if (cancelled()) return null
+      step(i + 1, exerciseLabel(rest[i].exercise_type))
+      const { data, error: e } = await generateSection({
+        sectionType: rest[i].exercise_type,
+        count: rest[i].count,
+        topic: tagIds.map(topicOf).join(' / '),
+        level, industry: industryText, context,
+      })
+      if (e) throw new Error(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`)
+      spent.input += data.usage?.input ?? 0
+      spent.output += data.usage?.output ?? 0
+      spent.cacheRead += data.usage?.cacheRead ?? 0
+      made.push(data.section)
+    }
+
+    /* カタマリごとの訳(0021)。**貼った原稿でも要る** ——
+       スラッシュリーディングは、これが無いと半分しか使えない。
+       ここで失敗しても教材は捨てない(訳が付かないだけ)。
+       あとから「区切りの訳を作る」で足せる */
+    const chunkTodo = chunkPlan(made[0].items)
+    if (chunkTodo.length && !cancelled()) {
+      step(plan.length, 'カタマリごとの訳')
+      const { data: cj, error: cjError } = await generateChunkJa(
+        chunkTodo.map((x) => ({ no: x.no, chunks: x.chunks })),
+      )
+      if (cjError) {
+        console.warn(`カタマリごとの訳を作れませんでした: ${cjError}`)
+      } else {
+        const byNo = new Map(chunkTodo.map((x) => [x.no, x]))
+        for (const part of cj.parts ?? []) {
+          const src = byNo.get(part.no)
+          const item = made[0].items[part.no - 1]
+          if (src && item) item.chunks = { en: src.en, ja: part.ja, parts: src.chunks }
+        }
+        spent.input += cj.usage?.input ?? 0
+        spent.output += cj.usage?.output ?? 0
+        spent.cacheRead += cj.usage?.cacheRead ?? 0
+      }
+    }
+
+    return {
+      made, spent,
+      headline: null, headlineJa: null, teachingPoint: null,
+      autoTitle: autoTitle(),
+      form: formSnapshot(),
+    }
+  }
+
+  /**
    * 記事・会話を作る。
    *
    * **本文は1本まるごと作る。** 段落や発言を弱点ごとに分けたり、
@@ -422,6 +576,17 @@ export default function MaterialForm({
   const generatePassage = async ({ step, cancelled }) => {
     const plan = planNow()
     const [bodyPlan, ...rest] = plan
+
+    /* ── **貼った原稿があれば、本文は作らない**(2026-09 利用者の指定)──
+       > 内容は、自分で手入力が基本
+
+       ここで AI を1回も呼ばないので、**本文ぶんの課金がまるごと無くなる。**
+       段落の切り方は `pastedParagraphs()`(素の node で確かめてある)。
+       残りの演習(内容の理解・語句など)は、**貼った本文をそのまま渡して**
+       作る —— AI が書いた本文のときとまったく同じ道を通る。 */
+    const pasted = canPasteBody(kind) ? pastedParagraphs(script) : []
+    if (pasted.length) return generateFromScript({ step, cancelled }, plan, pasted)
+
     const { data: used } = await loadUsedSentences(tagIds)
 
     step(0, exerciseLabel(bodyPlan.exercise_type))
@@ -439,7 +604,13 @@ export default function MaterialForm({
       scene: isDialogueKind(kind)
         ? [sceneLabel(scene), sceneHint(scene)].filter(Boolean).join(' — ')
         : '',
-      subject,
+      /* **スピーチは「話題の指定」に、書き方ごと組み立てて渡す**(2026-09)。
+         窓口(`generate-material`)は `article` の指示のままなので、
+         何も言わないと**記事の文体**で書かれてしまう。
+         窓口に手を入れずに済ませるため、画面が指定を作る
+         (`speechBrief`・会議を `kind` の値1つで足したのと同じ考え方)。
+         **`FN_REV` は進めない。窓口の置き直しは要らない。** */
+      subject: kind === 'speech' ? speechSubject() : subject,
       // **会話に出す人数**(2026-09 利用者の要望「会議というジャンル」)。
       // 記事には要らないので、会話のときだけ渡す
       speakers: isDialogueKind(kind) ? voiceCount : undefined,
@@ -725,6 +896,9 @@ export default function MaterialForm({
        戻ってきたときにここが初期値へ戻っていると、
        外したはずの演習が「作った」ことになってしまう */
     amounts, include,
+    // **貼った原稿と話し手も控える**(2026-09)。別の画面から戻ったときに
+    // 空へ戻っていると、何を貼ったのか分からなくなる
+    script, who,
   })
 
   /**
@@ -752,6 +926,8 @@ export default function MaterialForm({
     // 外した演習が「作った」ことになり、保存の数と食い違う
     if (f.amounts) setAmounts(f.amounts)
     if (f.include) setInclude(f.include)
+    if (f.script != null) setScript(f.script)
+    if (f.who) setWho(f.who)
 
     setSections(r.made)
     if (r.headline) setHeadline(r.headline)
@@ -964,7 +1140,11 @@ export default function MaterialForm({
         </label>
       )}
 
-      {isDialogueKind(kind) && (
+      {/* **スピーチでも場面を選ぶ**(2026-09 利用者の指定)。
+          出す一覧は会話とは別(`speechScenesFor`)。
+          **`isDialogueKind` を流用しない** —— あれは「話す人が2人以上」の
+          意味で、当てると人数の欄まで一緒に出てしまう */}
+      {usesScene(kind) && (
         <label className="field">
           <span>
             シチュエーション
@@ -978,6 +1158,67 @@ export default function MaterialForm({
             ))}
           </select>
         </label>
+      )}
+
+      {/* ── Speech練習(2026-09 利用者の指定)────────────────────────
+
+            > 自分でスピーチなどを考えてもらったものをそのままコピペして
+            > 指定する音声で text to speech をして、オーバーラッピングや
+            > シャドーイングのように練習できるモードが欲しいです。
+            > 内容は、自分で手入力が基本、業界とシチュエーションなどを
+            > 選べばそれに合わせた Speech を作ってくれるのも最高です。
+
+          **貼るのが基本、AI は2番目。** だから貼る欄を先に置く。
+          貼ってあれば本文は AI に作らせないので、**そのぶん課金されない。** */}
+      {canPasteBody(kind) && (
+        <>
+          <label className="field">
+            <span>
+              自分の原稿(英語)
+              <span className="field-hint">
+                貼れば、そのまま本文になります。空行で段落が分かれます
+              </span>
+            </span>
+            <textarea rows={8} value={script} placeholder={SCRIPT_HINT}
+                      onChange={(e) => setScript(e.target.value)} />
+          </label>
+          {/* **何段落になるかを、貼った時点で出す。**
+              段落は「Listen」「オーバーラッピング」「シャドーイング」の
+              単位そのものなので、押す前に分かっていてほしい */}
+          <p className="field-hint">
+            {scriptParts.length
+              ? `${scriptParts.length} 段落になります。`
+                + 'この原稿をそのまま読ませるので、AI は本文を書き直しません'
+                + `${scriptParts.length >= MAX_PARTS
+                  ? `(段落は ${MAX_PARTS} までです)` : ''}`
+              : '空のままなら、下の場面と話し手から AI がスピーチを作ります'}
+          </p>
+
+          {/* 話し手(任意)。
+                > その際に「会社名」「自分の名前」「役職」「部署名」なども
+                > 任意で指定すればそれに沿って Speech を作成してくれる機能です
+              **原稿を貼ったときは使わない**(貼ったものがすべてである)ので、
+              AI に作らせるときだけ出す。**効かない欄を見せない** */}
+          {!scriptParts.length && (
+            <fieldset className="field">
+              <legend>
+                話し手(任意)
+                <span className="field-hint">
+                  入れたぶんだけ、その人が話す原稿になります。空でも作れます
+                </span>
+              </legend>
+              <div className="filter-row">
+                {SPEAKER_FIELDS.map((f) => (
+                  <label key={f.id} className="filter-label">
+                    {f.label}
+                    <input type="text" value={who[f.id]} placeholder={f.hint}
+                           onChange={(e) => setWho({ ...who, [f.id]: e.target.value })} />
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+        </>
       )}
 
       {/* 読み上げの声(0017)。
@@ -1164,11 +1405,25 @@ export default function MaterialForm({
         )}
         {isPassageKind(kind) && (
           <p className="card-hint">
-            <strong>本文は1本まるごと作ります。</strong>
-            短い英文を並べるのではなく、前を受けて話が進む
-            {bodyWord(kind)}になります
-            (およそ {kind === 'reading' ? '250〜350語' : '14発言'})。
-            シャドーイングやオーバーラッピングは、この本文に対して行います。
+            {/* **貼った原稿があれば、そう言う。** 「作ります」と出ていると、
+                書き直されるのではないかと思わせる */}
+            {scriptParts.length ? (
+              <>
+                <strong>貼った原稿を、そのまま本文にします。</strong>
+                {scriptParts.length} 段落。
+                <strong>AI は本文を書き直しません。</strong>
+                シャドーイングやオーバーラッピングは、この本文に対して行います。
+              </>
+            ) : (
+              <>
+                <strong>本文は1本まるごと作ります。</strong>
+                短い英文を並べるのではなく、前を受けて話が進む
+                {bodyWord(kind)}になります
+                {/* **数え方は種類で変わる。** 会話だけが「発言」である */}
+                (およそ {isDialogueKind(kind) ? '14発言' : '250〜350語'})。
+                シャドーイングやオーバーラッピングは、この本文に対して行います。
+              </>
+            )}
           </p>
         )}
 
@@ -1260,7 +1515,7 @@ export default function MaterialForm({
               <strong>単語帳から選んだ {mustUse.length} 語を、必ず入れます。</strong>
               {kind === 'word' || kind === 'phrase'
                 ? ' 先頭から順に、この語で作らせます。'
-                : kind === 'reading' || isDialogueKind(kind)
+                : isPassageKind(kind)
                   ? ' 本文の中で使わせます。'
                   : ' 問題文の中で使わせます。'}
               <br />
@@ -1383,10 +1638,14 @@ export default function MaterialForm({
               // 押してよいのか分からず、二重に作ってしまう。
               ? `作り直す(いまの下書きは消えます)`
               : isPassageKind(kind)
-                ? `${bodyWord(kind)}を作る(`
-                  + planNow()
-                    .map((s2) => `${exerciseLabel(s2.exercise_type)}${s2.count}`).join(' + ')
-                  + ')'
+                /* **貼った原稿があるときは、本文を数に入れない。**
+                   作らないものを「作る」と書くと、押す前に分からない。
+                   演習をぜんぶ外していれば「この原稿で教材にする」になる */
+                ? scriptParts.length
+                  ? (planNow().length > 1
+                    ? `この原稿で教材にする(${planLabel(planNow().slice(1))})`
+                    : 'この原稿で教材にする')
+                  : `${bodyWord(kind)}を作る(${planLabel(planNow())})`
                 : `下書きを作る(${planNow().reduce((n, s2) => n + s2.count, 0)} 問)`}
         </button>
         {/* **止まるのは、ここを押したときだけ**(2026-09 利用者の指定)。

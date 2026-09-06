@@ -354,6 +354,27 @@ export const DEFAULT_SECTIONS = {
     { exercise_type: 'discussion',    count: 5 },
     { exercise_type: 'vocab_note',    count: 6 },
   ],
+  /**
+   * **Speech練習**(2026-09 利用者の指定)。
+   *
+   *   > 基本的に「記事」と同じで大丈夫なのですが、タイトルを
+   *   > 「Speech練習」などにしてほしいです。
+   *
+   * **中身は記事とまったく同じにしてある**(言われたとおり)。
+   * 本文は `article`(1人が話す・段落が並ぶ)なので、
+   * **演習の種類を増やしていない。**
+   * `material_sections_type_check` も窓口も触らずに済む。
+   *
+   * 内容の理解・ディスカッション・語句が要らないときは、
+   * 作る画面のチェックで外せる(`SCALABLE_SECTIONS`)。
+   * **こちらで勝手に減らさない** —— 外すかどうかはトレーナーが決める。
+   */
+  speech: [
+    { exercise_type: 'article',       count: 6 },
+    { exercise_type: 'comprehension', count: 5 },
+    { exercise_type: 'discussion',    count: 5 },
+    { exercise_type: 'vocab_note',    count: 8 },
+  ],
   word:   [{ exercise_type: 'vocabulary', count: 20 }],
   phrase: [{ exercise_type: 'phrase',     count: 20 }],
   // 旧「長文」。新規では選べないが、既存の教材を開くために残す

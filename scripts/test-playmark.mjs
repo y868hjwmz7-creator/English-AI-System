@@ -24,6 +24,15 @@ import {
   bestStreak, collectRows, goalLine, goalPart,
   praiseFor, streakLine, weekLine, STREAK_FROM,
 } from '../src/lib/gamify.js'
+import {
+  MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
+} from '../src/lib/speechDraft.js'
+import {
+  MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
+} from '../src/data/materialKinds.js'
+import {
+  COMMON_HOBBY_SPEECH_SCENES, SPEECH_SCENES, sceneLabel, speechScenesFor,
+} from '../src/data/genres.js'
 import { readFileSync } from 'node:fs'
 
 let ng = 0
@@ -321,6 +330,110 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
       ok(!/setWeeklyGoal/.test(read(file)),
         `${what}からは、目標を決められない(自分で下げられる目標は目標にならない)`)
     }
+  }
+}
+
+/*
+ * ============================================================================
+ * **Speech練習**(2026-09 利用者の指定)
+ *
+ *   > 自分でスピーチなどを考えてもらったものをそのままコピペして
+ *   > 指定する音声で text to speech をして…
+ *
+ * 貼った原稿の切り方も、窓口へ渡す指定も、**画面の中に書くと
+ * 素の node で一度も確かめられない。** だから切り出してある
+ * (`playMark.js` / `gamify.js` と同じ考え方)。ここで見張る。
+ * ============================================================================
+ */
+{
+  console.log('\n▶ Speech練習(貼った原稿・窓口へ渡す指定)')
+
+  // ① 段落の切り方。**上から順に見て、当てはまった時点で決める**
+  ok(pastedParagraphs('A.\n\nB.\n\nC.').length === 3, '空行で段落が分かれる')
+  ok(pastedParagraphs('A.\n\n\n\nB.').length === 2, '空行が続いても、増えない')
+  ok(pastedParagraphs('A.\nB.\nC.').length === 3, '空行が無ければ、改行で分かれる')
+  ok(pastedParagraphs('  \n  ').length === 0, '空っぽなら 0 段落')
+  ok(pastedParagraphs(null).length === 0, '何も渡されなくても落ちない')
+  ok(pastedParagraphs('Hello.').length === 1, '1文だけなら、切らない')
+
+  // **1本の長い塊は、文で切ってまとめる。**
+  // 切らないと「全部を一度に」しか練習できず、段落ごとの Listen も効かない
+  const long = Array.from({ length: 12 },
+    (_, i) => `This is sentence number ${i} and it carries a few more words.`).join(' ')
+  const parts = pastedParagraphs(long)
+  ok(parts.length > 1, '長い1本の原稿は、文で切ってまとめる', `${parts.length} 段落`)
+  ok(parts.join(' ').split(/\s+/).length === long.split(/\s+/).length,
+    '1語も落とさない(余りを捨てない)')
+
+  // 段落の上限。**際限なく作らせない**
+  const many = pastedParagraphs(Array.from({ length: 80 }, (_, i) => `S${i}.`).join('\n'))
+  ok(many.length === MAX_PARTS, `段落は ${MAX_PARTS} で止まる`)
+
+  // ② 話し手の1行。**空の欄は出さない**
+  ok(speakerLine({}) === '', '何も入れなければ、1文字も出さない')
+  ok(speakerLine({ name: 'Taro' }) === 'Taro', '名前だけでも成り立つ')
+  ok(speakerLine({ company: 'ABC' }) === 'ABC', '会社名だけでも成り立つ')
+  ok(speakerLine({ name: 'Taro', company: 'ABC', dept: 'Sales', role: 'Head' })
+    === 'Taro(ABC Sales Head)', '4つそろえば、括弧でまとめる',
+  speakerLine({ name: 'Taro', company: 'ABC', dept: 'Sales', role: 'Head' }))
+
+  // ③ 窓口へ渡す指定。**ここが記事とスピーチを分ける唯一の場所**
+  const brief = speechBrief({ scene: '乾杯のあいさつ', hint: '30秒', who: { name: 'Taro' } })
+  ok(/記事ではありません/.test(brief), '「記事ではない」と、はっきり言う')
+  ok(/1人/.test(brief), '1人が話しきる、と言う')
+  ok(/乾杯のあいさつ/.test(brief), '場面が入る')
+  ok(/Taro/.test(brief), '話し手が入る')
+  /* **`/話し手/` では見分けられない。** 「話し手を切り替えないでください」
+     という決まり文句が、いつも入っているためである(実測で気づいた)。
+     見るのは**その行の頭**(`・話し手:`)にする */
+  ok(!/・話し手:/.test(speechBrief({ scene: '乾杯のあいさつ' })),
+    '話し手を入れていなければ、その行ごと出さない')
+  ok(/夏祭り/.test(speechBrief({ subject: '夏祭り' })), '自分で書いた話題も入る')
+
+  // ④ 場面。**会話の場面を混ぜない**(1人が話しきる場面ではない)
+  ok(SPEECH_SCENES.length >= 10, 'スピーチの場面がひととおりある',
+    `${SPEECH_SCENES.length} 件`)
+  const ids = SPEECH_SCENES.map((x) => x.id)
+  ok(new Set(ids).size === ids.length, '場面の id が重なっていない')
+  ok(!ids.includes('negotiation') && !ids.includes('trouble'),
+    '会話の場面(交渉・トラブル対応)は混ざっていない')
+  ok(speechScenesFor('golf') === COMMON_HOBBY_SPEECH_SCENES,
+    '趣味では、趣味のスピーチの場面が出る')
+  ok(speechScenesFor('it') === SPEECH_SCENES, '仕事では、仕事のスピーチの場面が出る')
+  // **名前を引けること。** 引けないと、教材の名前に id がそのまま出る
+  ok(sceneLabel('sp_toast') === '乾杯のあいさつ', '場面の名前を引ける',
+    sceneLabel('sp_toast'))
+  ok(sceneLabel('sph_wedding') === '結婚式のスピーチ', '趣味の場面の名前も引ける')
+  // **画面にそのまま出る文字列に、強調の書き方(**)を混ぜない**(実測で見つけた)
+  ok(![...SPEECH_SCENES, ...COMMON_HOBBY_SPEECH_SCENES]
+    .some((x) => /\*\*/.test(x.hint) || /\*\*/.test(x.label)),
+  '場面の名前と説明に、強調の記号が混ざっていない')
+
+  // ⑤ 種類としての Speech練習
+  ok(MATERIAL_KINDS.some((k) => k.id === 'speech'), '教材の種類に Speech練習がある')
+  ok(isPassageKind('speech'), '本文を1本作る種類として数える')
+  ok(usesScene('speech'), '場面を選ぶ種類として数える')
+  ok(canPasteBody('speech'), '原稿を貼れる種類である')
+  ok(!canPasteBody('reading') && !canPasteBody('dialogue'),
+    '記事・会話には貼る欄を出さない(言われた場所だけを直す)')
+  ok(bodyWord('speech') === 'スピーチ', '呼び名は「スピーチ」')
+  ok(bodyWord('reading') === '記事' && bodyWord('dialogue') === '会話'
+    && bodyWord('meeting') === '会議', 'ほかの呼び名は1つも変わっていない')
+
+  // ⑥ **画面が、本当にこれを使っているか**
+  {
+    const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    const form = read('components/MaterialForm.jsx')
+    ok(/pastedParagraphs/.test(form), '作る画面が、貼った原稿を段落に切っている')
+    /* **「名前が出てくるか」では足りない**(CLAUDE.md)。
+       本文を作る道から分岐を外しても、`scriptParts` の側に名前が残るので
+       緑のままだった(実測)。**呼んでいる形**で見る */
+    ok(/if \(pasted\.length\) return generateFromScript/.test(form),
+      '貼ってあれば、本文を AI に作らせない道へ分かれている')
+    ok(/speechBrief/.test(form), '作る画面が、スピーチとしての指定を渡している')
+    ok(/speechScenesFor/.test(form), '作る画面が、スピーチの場面を出している')
+    ok(/generateFromScript/.test(form), '貼った原稿から作る道がある')
+    ok(/canPasteBody\(kind\)/.test(form), '貼れるかどうかを、判断1か所に任せている')
   }
 }
 

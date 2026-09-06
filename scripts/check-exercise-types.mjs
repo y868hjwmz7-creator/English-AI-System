@@ -20,7 +20,10 @@
  * 制約の定義は `pg_get_constraintdef()` の文字列。そこから
  * `'...'` を取り出したものが「表が受け付ける種類」である。
  */
-import { EXERCISE_TYPES, isBlankItem, isWrongShape } from '../src/data/exerciseTypes.js'
+import { EXERCISE_TYPES, DEFAULT_SECTIONS, isBlankItem, isWrongShape } from '../src/data/exerciseTypes.js'
+// **`src/lib/materials.js` からは読まない。** あちらは Supabase を
+// 引き連れているので、素の node では読み込めない(だから種類だけ分けてある)
+import { MATERIAL_KINDS } from '../src/data/materialKinds.js'
 
 const def = process.argv[2] ?? ''
 if (!def) {
@@ -28,8 +31,10 @@ if (!def) {
   process.exit(1)
 }
 
-// 定義の中の 'xxx' を全部拾う
-const allowed = new Set([...def.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]))
+/** 制約の定義の中の 'xxx' を全部拾う */
+const listOf = (text) => new Set([...text.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]))
+
+const allowed = listOf(def)
 const missing = EXERCISE_TYPES.map((t) => t.id).filter((id) => !allowed.has(id))
 
 if (missing.length) {
@@ -40,6 +45,41 @@ if (missing.length) {
 }
 
 console.log(`  画面の演習の種類 ${EXERCISE_TYPES.length} 個は、すべて表の制約に入っています`)
+
+/*
+ * ============================================================================
+ * **教材の「種類」も、まったく同じ形で抜ける**(2026-09)。
+ *
+ *   演習の種類は上で見張っていたが、**`materials.kind` は見ていなかった。**
+ *   画面(`MATERIAL_KINDS`)に足して `materials_kind_check` に足し忘れると、
+ *   やはり**発行した瞬間に**「violates check constraint」で止まる。
+ *   lint もビルドも通る。**同じ落とし穴を2つめの場所に空けておかない。**
+ *
+ *   あわせて「その種類で作る演習の構成があるか」も見る。
+ *   `DEFAULT_SECTIONS` に無いと `defaultSectionsFor()` が
+ *   **黙って文型ドリルに落ちる**(記事のつもりが40問のドリルになる)。
+ * ============================================================================
+ */
+const kindDef = process.argv[3] ?? ''
+if (!kindDef) {
+  console.error('❌ 制約 materials_kind_check が見つかりません')
+  process.exit(1)
+}
+const kindsOk = listOf(kindDef)
+const kindMissing = MATERIAL_KINDS.map((k) => k.id).filter((id) => !kindsOk.has(id))
+if (kindMissing.length) {
+  console.error(`❌ 表の制約に入っていない教材の種類があります: ${kindMissing.join(', ')}`)
+  console.error('   supabase/migrations の制約 materials_kind_check に足してください。')
+  process.exit(1)
+}
+const noPlan = MATERIAL_KINDS.map((k) => k.id).filter((id) => !DEFAULT_SECTIONS[id])
+if (noPlan.length) {
+  console.error(`❌ 演習の構成が無い教材の種類があります: ${noPlan.join(', ')}`)
+  console.error('   src/data/exerciseTypes.js の DEFAULT_SECTIONS に足してください。')
+  console.error('   (無いと、黙って文型ドリルの構成に落ちます)')
+  process.exit(1)
+}
+console.log(`  画面の教材の種類 ${MATERIAL_KINDS.length} 個も、すべて表の制約に入っています`)
 
 /*
  * ============================================================================

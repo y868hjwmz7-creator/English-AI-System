@@ -394,6 +394,12 @@ from (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'weekly_goal'), 87
   union all
+  select '(88) 教材の種類に「Speech練習」がある(0043)', exists (
+    -- **足したのは `kind` の値1つだけ。** 演習の種類も表も増やしていない
+    select 1 from pg_constraint
+    where conname = 'materials_kind_check'
+      and pg_get_constraintdef(oid) like '%speech%'), 88
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

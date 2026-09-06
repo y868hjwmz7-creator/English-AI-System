@@ -27,6 +27,7 @@ import LessonView from './components/LessonView.jsx'
 import SessionResult from './components/SessionResult.jsx'
 import CollectRows from './components/CollectRows.jsx'
 import GoalBar from './components/GoalBar.jsx'
+import MaterialForm from './components/MaterialForm.jsx'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
 
@@ -90,8 +91,19 @@ const RESULT = (
   </div>
 )
 
+/* Speech練習の欄を、実際に描いて確かめるための入り口(2026-09)。
+   **利用者の画面には出ない**(`index.html` はこのファイルを読み込まない) */
+const FORM = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <MaterialForm createdBy="t1" initial={{ kind: q.get('kind') || 'speech' }}
+                  onCreated={() => {}} onCancel={() => {}} />
+  </div>
+)
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'result'
-    ? RESULT
-    : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
+  q.get('screen') === 'form'
+    ? FORM
+    : q.get('screen') === 'result'
+      ? RESULT
+      : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
 )
