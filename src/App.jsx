@@ -31,6 +31,17 @@ import { isSupabaseConfigured } from './lib/supabase.js'
 export default function App() {
   // 'materials' 教材 / 'homework' 今週の宿題 / 'learner' 学習の記録 / 'admin' 集計
   const [view, setView] = useState('learner')
+  /**
+   * **「この教材の語だけ練習する」で渡ってきた語**(0047・2026-09)。
+   *
+   *   > とりあえずその単語とフレーズだけに取り組めるよう(任意)に
+   *   > しないと、今のままでは何も気づかない
+   *
+   * 「今週の宿題」のカードから押すと、単語帳がその語だけになる。
+   * **教材の id では絞れない** —— すでに単語帳にあった語は
+   * 前の教材の名前を持ったままなので、**語そのもの**で渡す。
+   */
+  const [onlyWords, setOnlyWords] = useState(null)
   const [state, setState] = useState(null)
   const [learnerId, setLearnerId] = useState(null)
   /* **「発行する画面へ」を押した合図**(2026-09 利用者の指定)。
@@ -530,9 +541,17 @@ export default function App() {
               profile ? <TrainerLearners me={profile} navTick={navTick} />
                 : <p className="muted">読み込み中…</p>
             ) : view === 'homework' ? (
-              <LearnerHomework me={profile} />
+              <LearnerHomework
+                me={profile}
+                onPracticeWords={(words, label) => {
+                  setOnlyWords({ words, label })
+                  setView('wordbook')
+                }}
+              />
             ) : view === 'wordbook' ? (
-              <Wordbook />
+              <Wordbook only={onlyWords?.words ?? null}
+                        onlyLabel={onlyWords?.label ?? ''}
+                        onClearOnly={() => setOnlyWords(null)} />
             ) : view === 'qr' ? (
               <QrReview />
             ) : view === 'pronunciation' ? (

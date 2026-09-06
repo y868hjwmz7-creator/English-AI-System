@@ -23,6 +23,7 @@ import {
   QUIZ_FORMS, SESSION_SIZE, buildSession, formForBox, isSelfGraded, pickForm,
 } from '../src/lib/wordQuiz.js'
 import { clozeAt, hasCloze } from '../src/lib/clozeSentence.js'
+import { hasMaterialWords, materialWordsOf } from '../src/lib/materialWords.js'
 import {
   bestStreak, collectRows, goalLine, goalPart,
   praiseFor, streakLine, weekLine, STREAK_FROM,
@@ -1278,6 +1279,74 @@ console.log('\n▶ 共有したら、語が単語帳に入る')
     'まとめた1つに 0047 が入っている')
   ok(/'vocab',/.test(matome), 'まとめた1つが、教材の種類に vocab を足している')
   ok(/proname = 'add_material_words'/.test(check), 'check.sql が 0047 を見ている')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   届いた語に、ゲストが気づけるか(0047・2026-09 利用者の指摘)
+
+     > 単語・フレーズの宿題をアサインされたことがゲスト側でわかるように
+     > し、とりあえずその単語とフレーズだけに取り組めるよう(任意)に
+     > しないと、今のままでは何も気づかない
+
+   共有した語は単語帳に入っていたが、**ゲストの画面には1文字も
+   出していなかった。**「黙って入れない」を、こちら側で破っていた。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 届いた語に、ゲストが気づけるか')
+{
+  const mat = {
+    kind: 'vocab',
+    sections: [
+      { exercise_type: 'vocabulary', items: [
+        { prompt_en: 'Shortfall', prompt_ja: '不足' },
+        { prompt_en: 'Backlog', prompt_ja: '積み残し' },
+        // 同じ語が2度並んでいても、単語帳では1行になる
+        { prompt_en: 'shortfall', prompt_ja: '不足' },
+        { prompt_en: '   ', prompt_ja: '空の問' },
+      ] },
+      { exercise_type: 'phrase', items: [
+        { prompt_en: 'take it offline', prompt_ja: 'この場では決めない' },
+      ] },
+      // **本文は語句ではない。** 段落を語として入れない
+      { exercise_type: 'article', items: [{ prompt_en: 'A long paragraph.' }] },
+    ],
+  }
+  const words = materialWordsOf(mat)
+  ok(words.length === 3, '語句だけを、重複を除いて拾う', `${words.length} 個`)
+  ok(words.every((w) => w.en.trim()), '空の問は拾わない')
+  ok(words.find((w) => w.en === 'take it offline')?.kind === 'phrase',
+    'フレーズは phrase として拾う')
+  ok(words.find((w) => w.en === 'Shortfall')?.kind === 'word', '単語は word')
+  ok(!materialWordsOf({ sections: [{ exercise_type: 'article', items: [{ prompt_en: 'x' }] }] })
+    .length, '記事からは1語も拾わない(vocab_note も入れない)')
+  ok(materialWordsOf(null).length === 0, '教材が無くても落ちない')
+  ok(hasMaterialWords(mat) && !hasMaterialWords({ sections: [] }), '行を出すかの判断も1か所')
+
+  /* **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、
+     いまと同じ「何も気づかない」に戻る */
+  const hw = readFileSync(
+    new URL('../src/components/LearnerHomework.jsx', import.meta.url), 'utf8')
+  ok(/materialWordsOf\(a\.material\)/.test(hw), '今週の宿題が、その教材の語句を数えている')
+  /* **教材の項目数を、そのまま「入りました」と書かない。**
+     0047 を貼る前は1語も入っていないので、嘘になる */
+  ok(/wordStatuses\.has\(n\)/.test(hw), '数えるのは自分の単語帳(教材の項目数ではない)')
+  ok(/if \(!inBook\.length\) return null/.test(hw), '1語も入っていなければ黙る(0 と書かない)')
+  ok(/この教材の語だけ練習する/.test(hw), 'その語だけ練習する道がある')
+
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  ok(/onPracticeWords=\{/.test(app), 'App が受け取っている')
+  ok(/setView\('wordbook'\)/.test(app), '押したら単語帳へ移る')
+  ok(/only=\{onlyWords\?\.words/.test(app), '単語帳へ、その語を渡している')
+  ok(/onClearOnly=\{\(\) => setOnlyWords\(null\)\}/.test(app),
+    '単語帳ぜんぶに戻す道がある(行き止まりを作らない)')
+
+  const wb = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
+  /* **絞るのは読み込んだ直後の1か所。** 画面のあちこちで絞り直すと、
+     出題・4択・数え上げのどれかが必ず食い違う */
+  ok(/onlySet\s*\n?\s*\?\s*\(list\.data \?\? \[\]\)\.filter/.test(wb),
+    '絞るのは読み込んだ直後の1か所')
+  // **期限で切らない。** 20語のうち今日出るのが2語では、練習にならない
+  ok(/\|\| onlySet,/.test(wb), 'その語だけのときは、期限で切らない')
 }
 
 console.log(ng

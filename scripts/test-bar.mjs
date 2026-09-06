@@ -711,6 +711,45 @@ for (const [label, want] of Object.entries(WANT)) {
       await page.screenshot({ path: `${process.env.SHOT}/cloze-a.png` })
     }
   }
+  /* ── **その教材の語だけに絞る**(0047・2026-09 利用者の指摘)──────
+     > とりあえずその単語とフレーズだけに取り組めるよう(任意)に
+     > しないと、今のままでは何も気づかない
+
+     絞れているか・**絞っていることが画面に出ているか**・
+     **外す道があるか**の3つを、実際に描いて数える。
+     ソースを読むだけでは「絞れている」までしか言えない */
+  box = 2
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(
+    `http://localhost:${PORT}/__bar.html?screen=wordbook&only=answer,engineer,quiet`,
+    { waitUntil: 'networkidle' },
+  )
+  try {
+    await page.waitForSelector('.wbfocus .wordcard', { timeout: 8000 })
+  } catch {
+    ng('その教材の語だけ … 集中モードが開かない')
+  }
+  const onlyM = await page.evaluate(() => {
+    const total = document.querySelector('.wb-run-count')?.textContent ?? ''
+    const chip = document.querySelector('.wb-only-label')?.textContent ?? ''
+    const back = [...document.querySelectorAll('.wb-only button')]
+      .some((b) => (b.textContent ?? '').includes('ぜんぶ'))
+    return { total, chip, back }
+  })
+  // 語は12語あるが、`only` で3語に絞ってある
+  if (!/\/\s*3\s*語/.test(onlyM.total)) {
+    ng(`その教材の語だけ … 3語に絞れていない(${onlyM.total.trim()})`,
+      '読み込んだ直後に落としているか(`onlySet`)')
+  } else if (!onlyM.chip.includes('この教材の語だけ') || !/3\s*語/.test(onlyM.chip)) {
+    ng(`その教材の語だけ … 絞っている札が出ていない(${onlyM.chip.trim()})`,
+      '黙って絞ると、単語帳がまるごと減ったように見える')
+  } else if (!onlyM.back) {
+    ng('その教材の語だけ … 単語帳ぜんぶに戻す道が無い', '行き止まりを作らない')
+  } else {
+    ok(`その教材の語だけ … ${onlyM.total.trim()}・札「${onlyM.chip.trim()}」・戻る道あり`)
+  }
+  if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}/only.png` })
+
   await page.close()
 }
 

@@ -40,7 +40,7 @@ import {
   KNOWN_AFTER, canMarkKnown,
   loadGlossDetail, loadMyWordbook, loadVocabWeek, loadVocabByIndustry,
   loadWordbookCounts, loadWordbookViewers, learningSupported,
-  noteWordbookView, setWordStatus,
+  noteWordbookView, normWord, setWordStatus,
 } from '../lib/vocab.js'
 import {
   QUIZ_FORMS, SESSION_SIZE, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
@@ -180,12 +180,43 @@ const honor = (name) => {
 
 export default function Wordbook({
   learnerId = null, learnerName = '', onMakeMaterial = null,
+  /**
+   * **その教材の語だけに絞る**(0047・2026-09 利用者の指摘)。
+   *
+   *   > とりあえずその単語とフレーズだけに取り組めるよう(任意)に
+   *   > しないと、今のままでは何も気づかない
+   *
+   * 「今週の宿題」から「この教材の語だけ練習する」を押すと、ここへ来る。
+   * **教材の id では絞れない** —— すでに単語帳にあった語は
+   * `add_material_words()` が触らないので(箱を戻さないため)、
+   * **前の教材の名前を持ったまま**である。だから**語そのもの**で絞る。
+   *
+   * `only`(教材に並んでいる語句)と `onlyLabel`(教材名)。
+   * **絞っていることは必ず画面に出し、外す道もその場に置く**(行き止まりを作らない)。
+   */
+  only = null, onlyLabel = '', onClearOnly = null,
 }) {
   /* **画面は1つだけ。** 以前はトレーナー用に別の部品を持っていたが、
      2つあると必ず片方が古くなる。実際、見た目をそろえたつもりで
      「おまかせ」も出題もゲスト側に無いままだった(2026-09 実機)。
      **同じ部品に、誰の単語帳かを渡すだけにする。** */
   const mine = !learnerId
+
+  /* **その教材の語だけに絞る**(0047)。そろえ方は `normWord` 1か所を通す
+     (SQL / 窓口 / 画面の3か所でそろえてある規則を、ここで書き写さない)。
+
+     **見張りは「つないだ文字列」にする。** 親から毎回 `[...]` が
+     渡ってくると、配列そのものは描き直すたびに別のものになり、
+     読み直しが止まらなくなる(`useMemo` の見張りに `voicePool` を
+     入れて引き直しが止まらなくなったのと同じ落とし穴)。 */
+  const onlyKey = (only ?? []).join('\u0000')
+  const onlySet = useMemo(
+    () => {
+      const norms = (only ?? []).map(normWord).filter(Boolean)
+      return norms.length ? new Set(norms) : null
+    },
+    [onlyKey],
+  )
 
   // 取り組みを**裏で数える**(0022)。
   // レッスン中に一緒に取り組んだぶんは**ゲストの記録**にする(0025)
@@ -316,8 +347,15 @@ export default function Wordbook({
     if (aim.data) setGoal(aim.data)
     if (list.error) { setError(list.error); return }
     setError(null)
-    setRows(list.data ?? [])
-    rowsRef.current = list.data ?? []
+    /* **絞るのは、ここ1か所**(0047)。読み込んだ直後に落としておけば、
+       出題(`buildSession`)も4択のまちがいも札の数え上げも、
+       **下流はいっさい触らずに**その教材の語だけになる。
+       画面のあちこちで `rows` を絞り直すと、必ずどこかが食い違う */
+    const got = onlySet
+      ? (list.data ?? []).filter((r) => onlySet.has(r.word_norm))
+      : (list.data ?? [])
+    setRows(got)
+    rowsRef.current = got
     setQueue([])
     doneRef.current = []
     setResult(null)
@@ -325,7 +363,7 @@ export default function Wordbook({
     setPickedChoice(null)
     // **読み直したときだけ組み直す。** 答えたときには組み直さない
     setDeal((n) => n + 1)
-  }, [current.status, current.dueOnly, learnerId, mine])
+  }, [current.status, current.dueOnly, learnerId, mine, onlySet])
 
   useEffect(() => { reload() }, [reload])
 
@@ -377,7 +415,38 @@ export default function Wordbook({
    * 何のために選んだのか分からない。
    */
   /** 何かで絞っているか。**1つでも絞っていれば、日で切らない** */
-  const narrowed = Boolean(filter.day || filter.material || filter.field || filter.topic)
+  /**
+   * **「その教材の語だけ」を出していることを、必ず画面に出す**(0047)。
+   *
+   * 黙って絞ると、単語帳がまるごと減ったように見える。
+   * **外す道も、その場に置く**(行き止まりを作らない・CLAUDE.md)。
+   * 中身は1つだけ書き、**集中モードの帯と一覧の2か所に置く。**
+   */
+  const onlyNote = onlySet ? (
+    <p className="wb-only">
+      <span className="wb-only-label">
+        この教材の語だけ
+        <span className="wb-only-n">{rows.length} 語</span>
+      </span>
+      {/* **教材の名前は、札の外に置く。** AI が付ける名前は長いことがあり、
+          札の中に入れると狭い画面で折り返して読めなくなる
+          (弱点の札で踏んだのと同じ話・CLAUDE.md) */}
+      {onlyLabel && <span className="wb-only-name">{onlyLabel}</span>}
+      {onClearOnly && (
+        <button type="button" className="btn btn--ghost btn--small" onClick={onClearOnly}>
+          単語帳ぜんぶに戻す
+        </button>
+      )}
+    </p>
+  ) : null
+
+  const narrowed = Boolean(
+    filter.day || filter.material || filter.field || filter.topic
+    /* **その教材の語だけ**に絞っているときは、期限で切らない(0047)。
+       20語のうち今日出るのが2語だと、押した人には
+       「その教材の語を練習する」に見えないためである */
+    || onlySet,
+  )
 
   /* **答えるたびに組み直さない**(2026-09 実機で見つけた)。
      以前はここの見張りに `rows` を入れていた。ところが答えると
@@ -883,6 +952,8 @@ export default function Wordbook({
                     <span key={i} className={i < done ? 'is-done' : i === done ? 'is-now' : ''} />
                   ))}
                 </div>
+                {/* **絞っていることを、絞った画面に出す**(0047) */}
+                {onlyNote}
               </div>
             )
           })()}
@@ -1204,6 +1275,7 @@ export default function Wordbook({
       {/* ── 見返す用の一覧 ────────────────────────────────────── */}
       {!isQuiz && view !== 'progress' && !loading && (
         <>
+          {onlyNote}
           <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
           {!rows.length && <p className="hint">まだありません。</p>}
           {rows.length > 0 && !shownRows.length && (

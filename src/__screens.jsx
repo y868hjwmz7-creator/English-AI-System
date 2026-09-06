@@ -188,7 +188,17 @@ const FORM = (
 /* 単語帳の集中モードを、実際に描いて確かめるための入り口(2026-09)。
    語の中身は Playwright が窓口の応答を差し替えて渡す
    (**本物の部品と本物の CSS で測る**。写した HTML では測らない) */
-const WORDBOOK = <div className="app-main"><Wordbook learnerId="g1" learnerName="Airi" /></div>
+/* **その教材の語だけに絞ったとき**(0047・`?only=a,b,c`)。
+   絞れているか・札が出ているか・外す道があるかを、実際に描いて数える */
+const only = (q.get('only') || '').split(',').map((w) => w.trim()).filter(Boolean)
+const WORDBOOK = (
+  <div className="app-main">
+    <Wordbook learnerId="g1" learnerName="Airi"
+              only={only.length ? only : null}
+              onlyLabel={only.length ? '業界の語' : ''}
+              onClearOnly={only.length ? () => {} : null} />
+  </div>
+)
 
 createRoot(document.getElementById('root')).render(
   q.get('screen') === 'wordbook'

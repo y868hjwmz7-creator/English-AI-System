@@ -25,14 +25,16 @@ import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
-import { prefetchGlosses } from '../lib/vocab.js'
+import { normWord, prefetchGlosses } from '../lib/vocab.js'
+/* **その教材に並んでいる語句**(0047)。素の node で確かめられる形にしてある */
+import { materialWordsOf } from '../lib/materialWords.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { loadMyReminder, markReminderSeen, usePracticeLog } from '../lib/practice.js'
 import LessonNotes from './LessonNotes.jsx'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
-export default function LearnerHomework({ me = null }) {
+export default function LearnerHomework({ me = null, onPracticeWords = null }) {
   /* **書き込んだものは、ゲスト自身の記録として残す**(0025)。
      トレーナーがレッスンで書いたものと同じ置き場所になるので、
      どちらから開いても続きから始められる */
@@ -259,6 +261,47 @@ export default function LearnerHomework({ me = null }) {
                     </div>
                   </div>
                 </div>
+
+                {/* **語句が単語帳に届いたことを、必ず出す**(0047・2026-09
+                      利用者の指摘「今のままでは何も気づかない」)。
+
+                    共有した時点で `add_material_words()` が単語帳へ入れて
+                    いるのに、**ゲストの画面には1文字も出していなかった。**
+                    「黙って入れない」を、こちら側で破っていた。
+
+                    **数えるのは、教材の項目数ではなく自分の単語帳。**
+                    0047 を貼る前は1語も入っていないので、
+                    教材の数をそのまま書くと**嘘になる**(CLAUDE.md)。
+                    `wordStatuses` は同じ画面がすでに読んでいるので、
+                    **問い合わせは1つも増えない。** */}
+                {(() => {
+                  const words = materialWordsOf(a.material)
+                  if (!words.length) return null
+                  const norms = words.map((w) => normWord(w.en)).filter(Boolean)
+                  const inBook = norms.filter((n) => wordStatuses.has(n))
+                  // **入っていなければ黙る。** 0 を「0 語入りました」と言わない
+                  if (!inBook.length) return null
+                  const todo = inBook.filter((n) => wordStatuses.get(n) !== 'known').length
+                  return (
+                    <div className="hw-words no-print">
+                      <p className="hw-words-line">
+                        この教材の <strong>{inBook.length} 語</strong>が、
+                        あなたの単語帳に入っています。
+                        {todo > 0 && <> まだ <strong>{todo} 語</strong>あります。</>}
+                      </p>
+                      {/* **とりあえずこの語だけ、という道を置く**(利用者の指定)。
+                          単語帳ぜんぶに混ざると、どれが届いた語か分からない */}
+                      {onPracticeWords && (
+                        <button type="button" className="btn btn--small btn--primary"
+                                onClick={() => onPracticeWords(
+                                  words.map((w) => w.en), a.material?.title ?? '',
+                                )}>
+                          この教材の語だけ練習する
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {a.material?.instruction_ja && (
                   <TeachingNote text={a.material.instruction_ja} title="やること" tone="todo" defaultOpen />
