@@ -963,14 +963,20 @@ function fakeMp3({
       const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
       const n = (fr.match(/<SentenceSkip[\s>]/g) ?? []).length
       if (n !== 2) ng(`集中モードの錠剤が ${n} 組ある(文 / 段落 の2組であってほしい)`)
-      else if (!/onStep=\{\(d\) => go\(index \+ d\)\}/.test(fr)) {
-        ng('集中モードで、段落の数の両脇が段落を送っていない')
+      /* **1枚ずつ動く**(2026-09 利用者の指定で、長い段落を割るようになった)。
+         割れている段落では、まず段落の中を進む。
+         `go(index + d)` に戻すと、**割った段落の 2 枚目以降へ行けなくなる** */
+      else if (!/onStep=\{step\}/.test(fr)) {
+        ng('集中モードで、段落の数の両脇が1枚ずつ送っていない')
+      } else if (!/const step = \(d\) => \{[\s\S]{0,400}go\(index \+ d, d < 0 \? 'tail' : 'head'\)/.test(fr)) {
+        ng('集中モードで、段落をまたぐときに端の1枚へ着けていない')
       } else if (/focus-move--tight/.test(fr)) {
         ng('集中モードに、両端の「前 / 次」が戻っている',
           'プレーヤーに一本化したはずである(狭い画面で入らなくなる)')
-      } else if (!/readingAt=\{player\.now === index \? readingAt : null\}/.test(fr)) {
-        ng('集中モードで、いま読んでいる文が光らない')
-      } else ok('集中モードの下の帯は、操作盤と同じ2組 + ハイライト')
+      } else if (!/readingAt=\{inPiece \? readingAt - \(piece\?\.at \?\? 0\) : null\}/.test(fr)) {
+        ng('集中モードで、いま読んでいる文が光らない',
+          'かけらの頭(`at`)を引かないと、段落の先頭に戻って光る')
+      } else ok('集中モードの下の帯は、操作盤と同じ2組 + ハイライト(1枚ずつ送る)')
     }
 
     /* ══════════════════════════════════════════════════════════

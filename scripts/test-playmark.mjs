@@ -38,6 +38,7 @@ import {
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
+import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import {
   DIALOGUE_ANGLES, READING_ANGLES, angleBrief, angleLabel, anglesFor, pickAngle,
 } from '../src/data/materialAngles.js'
@@ -1443,6 +1444,72 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(/if \(byItem && id\) \{[\s\S]{0,120}section\.items\.findIndex/.test(pp),
     '番号は section.items から数え直す(鳴らす側の並びは英文の無い項目を落としている)')
   ok(/setFocusAt\(n\)/.test(pp), '鳴っている段落を、そのまま開く')
+}
+
+/* ── 長い段落は、入るまで割る(2026-09 利用者の指定)────────────────
+
+     > 段落が長い場合、せっかく集中モードに入ってもそこでスクロールが
+     > 発生してしまっています。ちょうど良い単語数、内容で区切る仕様に
+     > しないと通常モードと同じ操作感の悪さを引き継いでしまい、
+     > 集中モードの存在意義が問われてしまいます
+
+   ここで見るのは**算段だけ**(1語も落とさないか・文の切れ目で切るか・
+   訳がずれないか)。**何枚に割るかは画面が測って決める**ので、
+   そちらは `npm run test:bar` が実際に描いて数えている。 */
+{
+  const T = 'Good morning. I want to start with a number. Our team handled four '
+    + 'thousand tickets. Almost a third came from three screens. They worked as '
+    + 'designed. Nobody could tell what would happen next.'
+
+  // **1語も落とさない。** つなぐと元に戻る
+  let allBack = true
+  for (let n = 1; n <= 10; n += 1) {
+    if (splitInto(T, n).map((p) => p.text).join('') !== T) allBack = false
+  }
+  ok(allBack, '割ってつなぐと、元の英文に1文字も違わず戻る')
+
+  // **文の数より多くは割れない**(行き止まりを作らない)
+  ok(maxPieces(T) === 6, `文は 6 つ(${maxPieces(T)})`)
+  ok(splitInto(T, 6).length === 6, '6つには割れる')
+  ok(splitInto(T, 10).length === 6, '文の数より多くは割れない(そのまま返す)')
+  ok(splitInto('Only one sentence here.', 3).length === 1, '1文なら割らない')
+  ok(splitInto(T, 1).length === 1, '1を渡したら、そのまま')
+
+  // **`at` は元の英文の何文字目か。** 足さないと、色が段落の先頭に戻る
+  const three = splitInto(T, 3)
+  ok(three.every((p) => T.slice(p.at, p.at + p.text.length) === p.text),
+    'at が元の英文の位置を指している')
+  ok(three[0].at === 0, '1枚目は先頭から')
+
+  // **文の途中では切らない**
+  ok(three.slice(1).every((p) => /^[A-Z]/.test(p.text.trim())),
+    '切れ目は文の切れ目(かけらは大文字で始まる)')
+
+  // **訳は、数が合ったときだけ割る**(ずれた対は、無いより悪い)
+  const pair = piecesOf(
+    { prompt_en: 'One two. Three four. Five six.', prompt_ja: 'いち に。さん し。ご ろく。' }, 3)
+  ok(pair.length === 3 && pair[1].ja === 'さん し。' && !pair[1].jaWhole,
+    '文の数が合えば、訳も一緒に割る')
+  const whole = piecesOf(
+    { prompt_en: 'One two. Three four. Five six.', prompt_ja: 'まとめた訳です。' }, 3)
+  ok(whole.every((p) => p.ja === 'まとめた訳です。' && p.jaWhole),
+    '数が合わなければ、段落の訳をそのまま添える(印を立てる)')
+  const noJa = piecesOf({ prompt_en: 'One two. Three four.', prompt_ja: '' }, 2)
+  ok(noJa.every((p) => !p.jaWhole), '訳が無い段落では、印を立てない')
+
+  /* **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、
+     長い段落はこれまでどおり中で送ることになる */
+  const fr = readFileSync(
+    new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
+  ok(/piecesOf\(item, cut\)/.test(fr), '集中モードが piecesOf を呼んでいる')
+  ok(/if \(cut >= maxPieces\(item\.prompt_en\)\) return/.test(fr),
+    '文の数より多くは割らない(止まる条件がある)')
+  ok(/b\.scrollHeight <= b\.clientHeight \+ 1/.test(fr),
+    '**測って**決めている(語数の決め打ちではない)')
+  ok(/readingAt - \(piece\?\.at \?\? 0\)/.test(fr),
+    'かけらの頭を引いてから色を付けている')
+  ok(!/text=\{item\.prompt_en\}/.test(fr),
+    '段落まるごとを描いていない(割ったかけらを描いている)')
 }
 
 console.log(ng

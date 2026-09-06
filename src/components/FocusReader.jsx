@@ -61,7 +61,7 @@
  *   自然に見えるが、**2語以上をなぞって調べる操作**とぶつかる。
  *   端のスワイプは「戻る」とも誤爆する。**ボタンだけにする。**
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import EnglishText from './EnglishText.jsx'
 import SentenceSkip from './SentenceSkip.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
@@ -78,6 +78,7 @@ import { markIn } from '../lib/useWordStatuses.js'
 import { normWord } from '../lib/vocab.js'
 import { SIX_STEPS } from '../lib/sixSteps.js'
 import { useFitRow } from '../lib/fitRow.js'
+import { maxPieces, piecesOf } from '../lib/focusChunks.js'
 
 /**
  * 英文から、そろえた形(`normWord`)の語を重複なく取り出す。
@@ -183,7 +184,73 @@ export default function FocusReader({
   /** いま読んでいる文の位置(もとの英文の何文字目か)。**紙と同じ色づけ** */
   const [readingAt, setReadingAt] = useState(null)
 
+  /* ══════════════════════════════════════════════════════════════
+   * **長い段落は、入るまで割る**(2026-09 利用者の指定)
+   *
+   *   > 段落が長い場合、せっかく集中モードに入ってもそこで
+   *   > スクロールが発生してしまっています。ちょうど良い単語数、
+   *   > 内容で区切る仕様にしないと通常モードと同じ操作感の悪さを
+   *   > 引き継いでしまい、集中モードの存在意義が問われてしまいます
+   *
+   *   この画面は**送るものを無くす**ことで成り立っている。
+   *   ところが貼った原稿は1段落が桁違いに長く、その1段落だけで
+   *   画面に入らないので、**中で送ることになっていた。**
+   *
+   * 【語数を決め打ちにしない。**入るまで割る**】
+   *   実測(Chromium)では、同じ 146 語の段落が
+   *   iPhone(390×844)では入らず、パッド(820×1180)では余った。
+   *   紙の文字は3段、幅は7段ある。**「◯語で切る」と決めた瞬間に、
+   *   どこかで外れる。** 320px に合わせて切れば、ふつうの記事
+   *   (1段落 55 語ほど)まで真っ二つになる。
+   *   だから `useFitRow` と同じく、**測って、入るまで1つずつ増やす。**
+   *
+   * 【段落の番号は動かさない】
+   *   紙の丸番号と一致していることは、レッスンで「2番のところ」と
+   *   言えるための決まりである(CLAUDE.md)。だから
+   *   **`index`(段落)はそのまま**で、その中の何枚目かを `part` が持つ。
+   *   下の帯の「9 / 17 段落」も段落のままで、
+   *   何枚目かは**本文の番号のとなり**に小さく出す。
+   * ══════════════════════════════════════════════════════════════ */
   const bodyRef = useRef(null)
+  /** いまの段落を何枚に割っているか。**段落が変わったら 1 に戻す** */
+  const [cut, setCut] = useState(1)
+  /** その段落の何枚目を見ているか */
+  const [part, setPart] = useState(0)
+  /** 一度測った段落の枚数(◀ で戻ったとき、**最後の1枚**に着けるため) */
+  const cuts = useRef(new Map())
+
+  const pieces = useMemo(() => (item ? piecesOf(item, cut) : []), [item, cut])
+  const piece = pieces[Math.min(part, Math.max(pieces.length - 1, 0))] ?? null
+  const partNo = Math.min(part, Math.max(pieces.length - 1, 0))
+
+  /* **入るまで1枚ずつ増やす。** 描き終えたあと、目に映る前に測る
+     (`useLayoutEffect`)ので、ちらつかない。
+     **訳を出しているあいだは測らない** — 割る基準は英文のほうである */
+  useLayoutEffect(() => {
+    if (!item || showJa || wrap) return
+    const b = bodyRef.current
+    if (!b) return
+    if (b.scrollHeight <= b.clientHeight + 1) {
+      cuts.current.set(index, pieces.length)
+      return
+    }
+    // **文の数より多くは割れない。** 割れないならそのまま(行き止まりを作らない)
+    if (cut >= maxPieces(item.prompt_en)) return
+    setCut(cut + 1)
+  })
+
+  /* 窓が変わったら(向きを変えた・文字の大きさを変えた)、測り直す。
+     **1に戻してから測る** — 広くなったのに割れたままでは、割りすぎになる。
+     **見ている場所(`part`)は動かさない。** 割り直した枚数より
+     大きければ、下の `partNo` が中に収める */
+  useEffect(() => {
+    const b = bodyRef.current
+    if (!b || typeof window.ResizeObserver !== 'function') return undefined
+    const ro = new window.ResizeObserver(() => setCut(1))
+    ro.observe(b)
+    return () => ro.disconnect()
+  }, [])
+
   /* **下の帯は、入るまで詰める**(2026-09 利用者の指定
      「レスポンシブに幅に収まるように」)。幅の境目では決めない —
      端末の文字の大きさでも、最後の段落の「まとめ」でも変わるためである */
@@ -226,19 +293,56 @@ export default function FocusReader({
   )
   const soloVoice = useMemo(() => resolveVoices(voiceIds)[0], [voiceIds])
 
-  /** 段落を移る。**英語に戻し、箱のいちばん上へ送る** */
-  const go = (next) => {
+  /* **鳴っているかけらを、そのまま開く。**
+     段落を追うのと同じ考え方である(役目が同じなら、動きもそろえる)。
+     追わないと、割った段落では**残りの2枚のあいだ何も光らない。**
+     位置は `onWord` が持ち帰る「その段落の何文字目か」で決まる */
+  useEffect(() => {
+    if (player.now !== index || readingAt == null || pieces.length < 2) return
+    const i = pieces.findIndex((p, k) => readingAt >= p.at
+      && (k === pieces.length - 1 || readingAt < pieces[k + 1].at))
+    if (i >= 0 && i !== partNo) { setShowJa(false); setPart(i) }
+  }, [player.now, readingAt, pieces, index, partNo])
+
+  /**
+   * 段落を移る。**英語に戻し、箱のいちばん上へ送る**
+   * @param {number} next 段落の番号
+   * @param {'head'|'tail'} where その段落の何枚目から始めるか
+   */
+  const go = (next, where = 'head') => {
     const n = Math.min(Math.max(next, 0), items.length - 1)
     setShowJa(false)
     setWrap(false)
     // 送った時点で、控えの側に戻す(以後は「どこまで見たか」が効く)
     setFrom(null)
     setAt(n)
+    if (n !== index) setCut(1)
+    /* **◀ で戻ったら、その段落の最後の1枚に着く。**
+       頭に着けると、割れている段落を戻り切れない。
+       まだ測っていない段落は分からないので、頭から(**当てずっぽうに飛ばさない**) */
+    setPart(where === 'tail' ? Math.max((cuts.current.get(n) ?? 1) - 1, 0) : 0)
     // 見た段落に印を付ける(重ねて入れない)
     const list = Array.isArray(done) ? done : []
     if (!list.includes(index)) setDone([...list, index])
     if (bodyRef.current) bodyRef.current.scrollTop = 0
   }
+
+  /**
+   * ◀ ▶ で1枚ずつ動く。**段落の中に次の1枚があれば、そちらが先。**
+   * 無ければ、隣の段落へ移る。
+   */
+  const step = (d) => {
+    const to = partNo + d
+    if (to >= 0 && to < pieces.length) {
+      setShowJa(false)
+      if (bodyRef.current) bodyRef.current.scrollTop = 0
+      setPart(to)
+      return
+    }
+    go(index + d, d < 0 ? 'tail' : 'head')
+  }
+  const canBack = partNo > 0 || index > 0
+  const canNext = partNo < pieces.length - 1 || index < items.length - 1
   // 鳴っている段落へ移るために、読み上げ側から呼べるようにしておく
   goRef.current = go
 
@@ -271,8 +375,8 @@ export default function FocusReader({
       // **早く帰る条件を足したら、その下を必ず見る**(CLAUDE.md)。
       // 矢印での送りは、この下にある
       if (wrap) return
-      if (e.key === 'ArrowRight') go(index + 1)
-      if (e.key === 'ArrowLeft') go(index - 1)
+      if (e.key === 'ArrowRight') step(1)
+      if (e.key === 'ArrowLeft') step(-1)
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -303,7 +407,11 @@ export default function FocusReader({
   const total = items.length
   const unit = isDialogue ? '発言' : '段落'
   const seen = Array.isArray(done) ? done : []
-  const last = index >= total - 1
+  // **いちばん最後の1枚に着いたときだけ**「まとめ」を出す(割った段落も含めて)
+  const last = index >= total - 1 && partNo >= pieces.length - 1
+  /** 鳴っている場所が、いま出しているかけらの中にあるか */
+  const inPiece = player.now === index && readingAt != null && piece
+    && readingAt >= piece.at && readingAt < piece.at + piece.en.length
 
   /* **骨組みは `FocusFrame` 1つ**(`StepFocus` / Quick Response と共通)。
      中身と、上下の帯の中だけをここが渡す */
@@ -410,9 +518,12 @@ export default function FocusReader({
               数の両脇に三角を置くのも、紙のプレーヤーとまったく同じ */}
           <SentenceSkip
             label={`${unit}を`}
-            onStep={(d) => go(index + d)}
-            canBack={index > 0}
-            canNext={index < total - 1}
+            /* **1枚ずつ動く。** 割れている段落では、まず段落の中を進む
+               (数は段落のままなので、そのあいだ数字は動かない。
+               何枚目かは**本文の番号のとなり**に出ている) */
+            onStep={step}
+            canBack={canBack}
+            canNext={canNext}
           >
             <span className="player-at">
               {index + 1} / {total}
@@ -475,6 +586,13 @@ export default function FocusReader({
               英語と訳のどちらでも出すので、**切り替えても行は動かない** */}
           <div className="focus-who">
             <span className="num-badge" aria-hidden="true">{index + 1}</span>
+            {/* **割った段落だけ、何枚目かを出す**(2026-09 利用者の指定)。
+                番号(丸)は**紙と同じ段落の番号のまま**なので、
+                これが無いと ◀ ▶ を押しても何も動いていないように見える。
+                割っていない段落では出さない(**効かない印を見せない**) */}
+            {pieces.length > 1 && (
+              <span className="focus-part">{partNo + 1} / {pieces.length}</span>
+            )}
             {isDialogue && item.speaker && (
               <span className="focus-speaker" lang="en">{item.speaker}</span>
             )}
@@ -482,17 +600,24 @@ export default function FocusReader({
           {/* **入れ替える。並べない。**
               訳のときは語を押せない(英語がそこに無いので、引くものが無い) */}
           {showJa ? (
-            <p className="focus-ja">{item.prompt_ja}</p>
+            <p className="focus-ja">
+              {piece?.ja}
+              {/* 訳を割れなかったときは、そう書く。**無いものをあるように
+                  見せない**(6Steps の「段落の訳」と同じ札) */}
+              {piece?.jaWhole && <span className="slash-ja-label">{unit}の訳</span>}
+            </p>
           ) : (
             <p className="focus-en">
               {/* **ここだけは、狭い画面でも語を押せる**(2026-09 利用者の指定)。
                   1段落を画面に固定しているので送るものが無く、
                   タップと画面送りが喧嘩しない。**調べるのはここでする** */}
-              <EnglishText text={item.prompt_en} textJa={item.prompt_ja} level={level}
+              <EnglishText text={piece?.en ?? ''} textJa={piece?.ja} level={level}
                            statuses={wordStatuses} onMark={markWord}
                            tappable="always"
-                           /* **いま読んでいる文を光らせる**(紙と同じ) */
-                           readingAt={player.now === index ? readingAt : null} />
+                           /* **いま読んでいる文を光らせる**(紙と同じ)。
+                              **かけらの頭(`at`)を引く** — 引かないと
+                              段落の先頭に戻って光る(`speakChunks` と同じ穴) */
+                           readingAt={inPiece ? readingAt - (piece?.at ?? 0) : null} />
             </p>
           )}
         </>

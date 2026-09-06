@@ -43,6 +43,10 @@ const asSpeech = q.get('kind') === 'speech'
    本文が無い教材で、読み上げの操作盤が出るかどうかは
    **描かせないと分からない**(`npm run test:bar`) */
 const asDrill = q.get('kind') === 'drill'
+/* **長い段落**(`?kind=long`)。貼った原稿はこうなる —— 1段落が
+   桁違いに長く、集中モードに入ってもそこで送ることになっていた
+   (2026-09 利用者の指摘)。**この形でしか確かめられない** */
+const asLong = q.get('kind') === 'long'
 
 /** 検証に使う教材。**本文(会話)が1つあれば、帯はすべて出そろう** */
 const material = asSpeech ? {
@@ -87,6 +91,40 @@ const material = asSpeech ? {
         question_ja: '予定が遅れた場合はどうなりますか。',
         note: '遅れる前提で答える。何を先に守るかを1つ決めて言う。'
           + 'If that happens, we would … / Our first priority is …',
+      },
+    ],
+  }],
+} : asLong ? {
+  /* 1段落が **129 語**。貼った原稿はこの形で来る(実機は 1,000 文字超)。
+     2段落目はふつうの長さにしてある —— **短い段落は1つも切らない**
+     ことを、同じ教材の中で確かめられるようにするため */
+  id: 'test-long', level: 'B1', title: '長い原稿', kind: 'speech',
+  headline: 'A long draft', tagIds: [],
+  voiceIds: ['us-4'],
+  sections: [{
+    id: 'sec-1', exercise_type: 'article', title: '記事',
+    items: [
+      {
+        id: 'lg-1',
+        prompt_en: 'Good morning, everyone, and thank you for making time today. '
+          + 'I want to start with a number that surprised me last quarter. '
+          + 'Our support team handled four thousand tickets in ninety days, '
+          + 'and almost a third of them came from the same three screens. '
+          + 'When I first saw that, I assumed the screens were simply broken. '
+          + 'They were not. They worked exactly as we had designed them. '
+          + 'The problem was that nobody could tell what would happen next. '
+          + 'People pressed a button, nothing moved, and they wrote to us. '
+          + 'So this year we are changing how we measure a screen. '
+          + 'We are not asking whether it works. We are asking whether a person '
+          + 'can predict what it will do before they touch it. '
+          + 'That single question has already changed four of our releases, '
+          + 'and I would like to show you what it looked like in practice.',
+        prompt_ja: 'みなさん、おはようございます。今日はお時間をいただきありがとうございます。',
+      },
+      {
+        id: 'lg-2',
+        prompt_en: 'Let me start with the first release. It shipped in March.',
+        prompt_ja: '最初のリリースから始めます。3月に出したものです。',
       },
     ],
   }],

@@ -942,6 +942,86 @@ for (const [label, want] of Object.entries(WANT)) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   ⑨-1 集中モードで、**長い段落を送らずに読めるか**(2026-09 利用者の指定)
+
+     > 段落が長い場合、せっかく集中モードに入ってもそこでスクロールが
+     > 発生してしまっています。ちょうど良い単語数、内容で区切る仕様に
+     > しないと通常モードと同じ操作感の悪さを引き継いでしまい、
+     > 集中モードの存在意義が問われてしまいます
+
+   **語数を決め打ちにしていない**ので、入るかどうかは描かないと分からない。
+   見るのは3つ。**「割れる」だけを見ない** —— ふつうの段落まで
+   割るようになったら、それも赤くならなければいけない。
+   ══════════════════════════════════════════════════════════════ */
+{
+  /** 集中モードを開く(狭い画面ではボタンが絵だけなので `aria-label` も見る) */
+  const enter = async (page, kind) => {
+    await page.goto(`http://localhost:${PORT}/__bar.html?kind=${kind}&role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    for (const b of await page.$$('button')) {
+      const t = ((await b.textContent()) ?? '') + ' ' + ((await b.getAttribute('aria-label')) ?? '')
+      if (t.includes('集中モード') && await b.isVisible()) { await b.click(); break }
+    }
+    await page.waitForSelector('.focus-body', { timeout: 15000 })
+    await page.waitForTimeout(400)
+  }
+  const look = (page) => page.evaluate(() => {
+    const b = document.querySelector('.focus-body')
+    const en = document.querySelector('.focus-en')
+    const part = document.querySelector('.focus-part')
+    return {
+      over: b.scrollHeight > b.clientHeight + 1,
+      sh: b.scrollHeight, ch: b.clientHeight,
+      words: en ? (en.innerText.trim().match(/\S+/g) || []).length : 0,
+      part: part ? part.innerText.replace(/\s+/g, '') : '',
+      text: en ? en.innerText.trim() : '',
+    }
+  })
+
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
+  for (const [w, h] of [[390, 844], [320, 568], [820, 1180]]) {
+    await page.setViewportSize({ width: w, height: h })
+    await enter(page, 'long')
+    const seen = []
+    for (let i = 0; i < 10; i += 1) {
+      seen.push(await look(page))
+      const pills = await page.$$('.focus-mid .listenpill')
+      const next = pills.length ? await pills[pills.length - 1].$('.listenpill-arrow:last-child') : null
+      if (!next || await next.isDisabled()) break
+      await next.click()
+      await page.waitForTimeout(300)
+    }
+    const over = seen.filter((m) => m.over)
+    // 1段落目(146 語)ぶんの語を数える。**1語も落としていないこと**
+    const first = seen.filter((m) => m.part || m.words > 100)
+    const words = first.reduce((n, m) => n + m.words, 0)
+    if (over.length) {
+      ng(`集中モード ${w}x${h} … ${over.length} 枚が送れてしまう`
+        + `(${over.map((m) => `${m.words}語 ${m.sh}/${m.ch}`).join(' / ')})`,
+      '長い段落は、入るまで割る')
+    } else if (words !== 146) {
+      ng(`集中モード ${w}x${h} … 1段落目の語が ${words} 語(146 のはず)`,
+        '割るときに1語も落とさない')
+    } else {
+      ok(`集中モード ${w}x${h} … ${seen.length} 枚・どれも送らない`
+        + `(1段落目 ${first.length} 枚 ${first.map((m) => m.words).join('+')} 語)`)
+    }
+  }
+
+  /* **ふつうの段落は、1つも割らない。** ここが赤くなるのは
+     「割りすぎ」のときで、**入るまで割る**の裏返しである */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await enter(page, 'dialogue')
+  const m = await look(page)
+  if (m.part) ng(`集中モード … ふつうの会話まで割っている(${m.part})`)
+  else if (m.over) ng('集中モード … ふつうの会話で送れてしまう')
+  else ok(`集中モード … ふつうの会話(${m.words} 語)は割らない`)
+
+  await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════
    ⑨-2 語を長押ししたら、調べ方を教える(2026-09 利用者の指定)
 
      > 単語に長押しした時に表示が出るようにしましょう

@@ -6179,6 +6179,15 @@ html, body { overflow-x: clip; }
   background: var(--accent-bg); color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
+/* **割った段落の「何枚目か」**(2026-09 利用者の指定)。
+   丸の番号は**紙と同じ段落の番号**のままなので、これが無いと
+   ◀ ▶ を押しても何も動いていないように見える。
+   ただし**番号より目立たせない** —— 添え物である */
+.focus-part {
+  flex: 0 0 auto;
+  font-size: var(--fs-12); color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
 .focus-speaker { min-width: 0; font-weight: 700; color: var(--accent); }
 /* 英語と訳は**同じ組み方**にする。入れ替えたときに行の位置が動かない */
 .focus-en, .focus-ja {
