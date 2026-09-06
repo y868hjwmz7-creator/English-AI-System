@@ -188,12 +188,23 @@ export function speakerLine(who = {}) {
  *   ・**話し手の肩書きは、名乗るのではなく中身に効かせる。**
  *     毎段落で会社名を繰り返されると、練習にならない
  *
+ * 【話し方の型(`style`)は、ここで足す】(2026-09 利用者の指定)
+ *
+ *   有名なスピーチの**原稿そのもの**は著作物なので入れられない
+ *   (`src/data/speechStyles.js`)。入れられるのは**話し方**である。
+ *   型を渡されたら、その特徴を書いたうえで
+ *   **「実在の人物の名前と、その人の言葉をそのまま使わない」**と
+ *   はっきり書く。書かないと、AI は名前を出そうとする。
+ *
  * @param opt.scene    場面の名前(`sceneLabel`)
  * @param opt.hint     場面の説明(`sceneHint`)
  * @param opt.who      `{ name, company, role, dept }`
  * @param opt.subject  利用者が自分で書いた話題(任意)
+ * @param opt.style    話し方の型 `{ label, hint }`(任意)
  */
-export function speechBrief({ scene = '', hint = '', who = {}, subject = '' } = {}) {
+export function speechBrief({
+  scene = '', hint = '', who = {}, subject = '', style = null,
+} = {}) {
   const lines = [
     'これは記事ではありません。**1人が聴衆の前で話すスピーチ(モノローグ)の原稿**です。',
     '・最初から最後まで、同じ1人が話します。話し手を切り替えないでください。',
@@ -208,6 +219,18 @@ export function speechBrief({ scene = '', hint = '', who = {}, subject = '' } = 
     lines.push(`・話し手: ${speaker}`)
     lines.push('　この肩書きに合う立場・話し方にしてください。'
       + '**毎段落で名乗らせないこと**(名乗るとしても最初の1回だけ)。')
+  }
+
+  /* **話し方の型。** 場面(どこで話すか)とは別で、掛け合わせられる。
+     **人の名前は出させない** —— 学ぶのは話し方であって、
+     その人の言葉をなぞることではない(著作権の問題にもなる) */
+  const styleLabel = String(style?.label ?? '').trim()
+  if (styleLabel) {
+    const how = String(style?.hint ?? '').trim()
+    lines.push(`・話し方: ${styleLabel}${how ? ` — ${how}` : ''}`)
+    lines.push('　この話し方の特徴を、原稿そのものに反映させてください。'
+      + '**実在の人物の名前や、その人が実際に言った言葉は使わないでください。**'
+      + 'まねるのは話し方だけで、中身はこの場面に合わせて新しく書きます。')
   }
 
   const own = String(subject ?? '').trim()

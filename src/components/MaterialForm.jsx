@@ -30,6 +30,7 @@ import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
    窓口へ渡す「スピーチとして書く」指定は、**素の node で確かめられる形**
    に切り出してある(`playMark.js` / `gamify.js` と同じ考え方) */
 import { MAX_PARTS, pastedParagraphs, speechBrief } from '../lib/speechDraft.js'
+import { SPEECH_STYLES, speechStyleOf } from '../data/speechStyles.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
   generateChunkJa, generateSection,
@@ -208,6 +209,9 @@ export default function MaterialForm({
        > その際に「会社名」「自分の名前」「役職」「部署名」なども任意で
        > 指定すればそれに沿って Speech(モノローグ)を作成してくれる機能です
      **入れなくても作れる。** 入れたぶんだけ、原稿がその人のものになる */
+  /* **話し方の型**(2026-09 利用者の指定)。**保存しない** ——
+     原稿の書き方に効くだけで、出来上がった本文は教材に残る */
+  const [style, setStyle] = useState(initial.style ?? '')
   const [who, setWho] = useState(initial.who ?? {
     name: '', company: '', dept: '', role: '',
   })
@@ -486,6 +490,7 @@ export default function MaterialForm({
    */
   const speechSubject = () => speechBrief({
     scene: sceneLabel(scene), hint: sceneHint(scene), who, subject,
+    style: speechStyleOf(style),
   })
 
   /**
@@ -899,7 +904,7 @@ export default function MaterialForm({
     amounts, include,
     // **貼った原稿と話し手も控える**(2026-09)。別の画面から戻ったときに
     // 空へ戻っていると、何を貼ったのか分からなくなる
-    script, who,
+    script, who, style,
   })
 
   /**
@@ -929,6 +934,7 @@ export default function MaterialForm({
     if (f.include) setInclude(f.include)
     if (f.script != null) setScript(f.script)
     if (f.who) setWho(f.who)
+    if (f.style != null) setStyle(f.style)
 
     setSections(r.made)
     if (r.headline) setHeadline(r.headline)
@@ -1200,6 +1206,38 @@ export default function MaterialForm({
                 > 任意で指定すればそれに沿って Speech を作成してくれる機能です
               **原稿を貼ったときは使わない**(貼ったものがすべてである)ので、
               AI に作らせるときだけ出す。**効かない欄を見せない** */}
+          {/* **話し方の型**(2026-09 利用者の指定)。
+
+                > あと、著名人のスピーチなどを教材にできませんか?
+                > イーロンマスク、スティーブ・ジョブスなどビジネスから
+                > 映画スター、スポーツ選手など
+
+              **原稿そのものには著作権がある。** だから入れるのは
+              「どう話すか」だけにして、**中身は AI が新しく書く**
+              (`src/data/speechStyles.js`)。学びたいのは文言ではなく
+              話し方そのものなので、これで足りる。
+
+              **場面とは役目が違う**ので、掛け合わせられる
+              (学会発表を、物語で語る、など)。
+              **原稿を貼ったときは出さない** —— 貼ったものがすべてである */}
+          {!scriptParts.length && (
+            <label className="field">
+              <span>
+                話し方の型(任意)
+                <span className="field-hint">
+                  有名なスピーチの原稿は使えませんが、話し方はまねられます
+                </span>
+              </span>
+              <select value={style} onChange={(e) => setStyle(e.target.value)}>
+                {SPEECH_STYLES.map((s) => (
+                  <option key={s.id || 'none'} value={s.id}>
+                    {s.label}{s.hint ? ` — ${s.hint}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {!scriptParts.length && (
             <fieldset className="field">
               <legend>

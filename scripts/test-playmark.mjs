@@ -36,7 +36,8 @@ import {
   MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
 } from '../src/data/materialKinds.js'
 import {
-  COMMON_HOBBY_SPEECH_SCENES, SPEECH_SCENES, sceneLabel, speechScenesFor,
+  COMMON_HOBBY_SPEECH_SCENES, DIALOGUE_SCENES, SPEECH_SCENES,
+  genresFor, sceneLabel, scenesFor, speechScenesFor,
 } from '../src/data/genres.js'
 import { readFileSync } from 'node:fs'
 
@@ -686,6 +687,92 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(new Set(ids).size === ids.length, '場面の id が重なっていない')
     ok(!SPEECH_SCENES.some((x) => /\*\*/.test(x.hint) || /\*\*/.test(x.label)),
       '足した場面にも、強調の記号(**)が混ざっていない')
+  }
+}
+
+/* ===========================================================================
+ * ⑪ 話し方の型・面接の練習・ファッション(2026-09 利用者の指定)
+ *
+ *   > 著名人のスピーチなどを教材にできませんか?
+ *   > 「面接の練習」を全ての業種に入れて下さい
+ *   > 趣味に「ファッション」を追加
+ *
+ * **原稿そのものには著作権がある。** だから入れたのは「話し方の型」だけで、
+ * 中身は AI が新しく書く。ここは**人の名前が混ざっていないこと**まで見る。
+ * =========================================================================== */
+{
+  const { SPEECH_STYLES, speechStyleOf } =
+    await import('../src/data/speechStyles.js')
+
+  console.log('\n▶ ⑪ 話し方の型・面接の練習・ファッション')
+
+  // ── 話し方の型 ──
+  const sids = SPEECH_STYLES.map((s) => s.id)
+  ok(sids[0] === '', '先頭は「指定しない」(選ばずに作れる道が残る)')
+  ok(new Set(sids).size === sids.length, '型の id が重なっていない')
+  ok(SPEECH_STYLES.length >= 10, '型がひととおりある', `${SPEECH_STYLES.length} 件`)
+  ok(SPEECH_STYLES.every((s) => s.label && s.hint), 'どの型にも名前と説明がある')
+  // **画面にそのまま出る文字列に、強調の書き方(**)を混ぜない**
+  ok(!SPEECH_STYLES.some((s) => /\*\*/.test(s.label) || /\*\*/.test(s.hint)),
+    '型の名前と説明に、強調の記号が混ざっていない')
+
+  /* **実在の人物の名前を書かない。** 型は「どの世界の話し方か」で示す ——
+     人名を入れると、その人の言葉をなぞらせることになる */
+  const PEOPLE = ['ジョブズ', 'マスク', 'Jobs', 'Musk', 'ゲイツ', 'オバマ',
+    'キング', 'ベゾス', 'Bezos', 'Obama']
+  const named = SPEECH_STYLES.filter((s) =>
+    PEOPLE.some((n) => `${s.label}${s.hint}`.includes(n)))
+  ok(!named.length, '型に実在の人物の名前が入っていない',
+    named.map((s) => s.label).join(' / '))
+
+  ok(speechStyleOf('st_keynote')?.label, 'id から型を引ける')
+  ok(speechStyleOf('') === null && speechStyleOf('nope') === null,
+    '知らない id では null を返す(落ちない)')
+
+  // **窓口へ届いているか。** 届かなければ、選んでも何も変わらない
+  const styled = speechBrief({ style: speechStyleOf('st_locker') })
+  ok(/・話し方: /.test(styled), '型が、窓口へ渡す指定に入る')
+  ok(/実在の人物の名前/.test(styled),
+    '「実在の人物の言葉は使わない」と、必ず添えている')
+  ok(!/・話し方:/.test(speechBrief({})), '選ばなければ、何も足さない')
+
+  // **画面が本当に渡しているか**(定義だけあって誰も呼ばなければ同じである)
+  {
+    const form = readFileSync(
+      new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+    ok(/speechStyleOf\(style\)/.test(form), '作る画面が、選んだ型を渡している')
+    ok(/SPEECH_STYLES\.map/.test(form), '作る画面が、型の一覧を出している')
+    ok(/script, who, style,/.test(form),
+      '別の画面から戻っても、選んだ型が残る(控えに入っている)')
+  }
+
+  // ── 面接の練習(どの業種にも出る) ──
+  const dids = DIALOGUE_SCENES.map((x) => x.id)
+  ok(dids.includes('jobinterview'), '「面接の練習」が共通の場面にある')
+  for (const ind of ['it', 'manufacturing', 'surgery', '']) {
+    const has = scenesFor(ind).some((x) => x.id === 'jobinterview')
+    ok(has, `${ind || '(分野なし)'} でも面接の練習が出る`)
+  }
+  ok(sceneLabel('jobinterview') === '面接の練習', '面接の練習の名前を引ける')
+
+  // ── ファッション ──
+  {
+    const { INDUSTRIES, industriesIn, industryLabel } =
+      await import('../src/data/industries.js')
+    ok(industriesIn('hobby').some((i) => i.id === 'fashion'),
+      '趣味の一覧にファッションがある')
+    ok(industryLabel('fashion') === 'ファッション', 'ファッションの名前を引ける')
+    // **一度入れた業種・趣味を減らさない**(CLAUDE.md・プロジェクトを超えた決まり)
+    ok(INDUSTRIES.filter((i) => (i.group ?? 'work') === 'hobby').length >= 25,
+      '趣味の数が減っていない',
+      `${INDUSTRIES.filter((i) => (i.group ?? 'work') === 'hobby').length} 件`)
+    ok(scenesFor('fashion').some((x) => x.id.startsWith('fas_')),
+      'ファッションに、その分野の場面がある')
+    ok(genresFor('fashion').some((x) => x.id.startsWith('fasg_')),
+      'ファッションに、その分野の話題がある')
+    // 趣味なので、仕事の共通場面(交渉)ではなく趣味の共通場面が付く
+    ok(scenesFor('fashion').some((x) => x.id === 'hob_gear'),
+      'ファッションには、趣味の共通場面が付く')
   }
 }
 

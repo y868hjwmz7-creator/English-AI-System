@@ -69,6 +69,20 @@ export const DIALOGUE_SCENES = [
     hint: '思いつきを出し合い、乗っかり、削っていく。3人以上向き' },
   { id: 'crossteam',   label: '部署をまたぐ会議',
     hint: '立場が違う人が集まる。それぞれの都合を出し合う。3人以上向き' },
+  /* **面接の練習**(2026-09 利用者の指定「『面接の練習』を全ての業種に入れて下さい」)。
+
+     **どの業種にもある場面**なので、業種ごとに書かず共通に置く。
+     出てくる語は業種で変わる(IT なら設計や障害対応、製造なら
+     現場や歩留まりの話になる)ので、**共通に置いても中身は分かれる** ——
+     `DIALOGUE_SCENES` をここに持っている理由そのものである。
+
+     **`review`(面談・振り返り)とは別物。** あちらは上司と部下の
+     評価の話で、相手はもう自分を知っている。こちらは**初対面**で、
+     経歴を自分から説明しなければならない。
+     **いちばん下に足してある**(上の13件は1つも消していないし、
+     並びも動かしていない・CLAUDE.md)。 */
+  { id: 'jobinterview', label: '面接の練習',
+    hint: '初対面。志望動機、経歴、強みと弱み、逆質問まで' },
 ]
 
 /**
@@ -843,6 +857,16 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'gam_stream',  label: '配信・実況',     hint: '見ている人へのひとこと' },
     { id: 'gam_gear',    label: '機材・設定の話', hint: 'コントローラー、回線、画質' },
   ],
+  /* **ファッション**(2026-09 利用者の指定「趣味に『ファッション』を追加」)。
+     いちばん下に足してある(既存の分野は1つも動かしていない) */
+  fashion: [
+    { id: 'fas_shop',    label: '店で買う',       hint: '試着、サイズ、在庫、値段' },
+    { id: 'fas_fit',     label: 'サイズと直し',   hint: '丈、肩幅、お直しの相談' },
+    { id: 'fas_style',   label: '着こなしの相談', hint: '合わせ方、色、その場に合うか' },
+    { id: 'fas_vintage', label: '古着屋で',       hint: '年代、状態、値切り、掘り出し物' },
+    { id: 'fas_online',  label: 'ネットで買う',   hint: '返品、交換、届いたら違った' },
+    { id: 'fas_compli',  label: 'ほめる・ほめられる', hint: '「それいいね」から広げる' },
+  ],
 }
 
 /**
@@ -1290,6 +1314,12 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'gamg_play',   label: '攻略と上達',       hint: '詰まりどころの越え方' },
     { id: 'gamg_scene',  label: 'e スポーツ',       hint: '大会、選手、観戦' },
     { id: 'gamg_gear',   label: '機材と環境',       hint: '回線、周辺機器、設定' },
+  ],
+  fashion: [
+    { id: 'fasg_trend',  label: 'いまの流行',       hint: '何が来ていて、何が去ったか' },
+    { id: 'fasg_basic',  label: '定番と長く着る',   hint: '素材、手入れ、選び方' },
+    { id: 'fasg_brand',  label: 'ブランドの話',     hint: '成り立ち、作り手、値段の理由' },
+    { id: 'fasg_sustain', label: '古着とサステナブル', hint: 'second-hand、直して着る' },
   ],
 }
 

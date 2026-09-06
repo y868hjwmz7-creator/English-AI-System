@@ -253,6 +253,11 @@ export const INDUSTRIES = [
   { id: 'karate',   group: 'hobby', parent: 'martial', short: '空手', label: '空手', hint: '型、組手、帯、道場の作法、寸止めとフルコンタクト' },
   { id: 'taekwondo', group: 'hobby', parent: 'martial', short: 'テコンドー', label: 'テコンドー', hint: '蹴り技、ステップ、プムセ、電子防具、階級' },
   { id: 'gaming',   group: 'hobby', label: 'ゲーム',          hint: 'オンラインでの声かけ、実況、ジャンル、感想' },
+  /* **ファッション**(2026-09 利用者の指定「趣味に『ファッション』を追加」)。
+     **いちばん下に足してある**(既存の分野は1つも消していないし、
+     並びも動かしていない・CLAUDE.md)。種類(`kinds`)は作らない ——
+     利用者が言ったのは1つだけである。 */
+  { id: 'fashion',  group: 'hobby', label: 'ファッション',    hint: '買い物、サイズ、素材、着こなし、ブランド、古着' },
 ]
 
 /** 選ぶときの組。**表には出さない。見せ方だけの話である** */
