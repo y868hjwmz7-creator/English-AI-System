@@ -81,3 +81,94 @@ export const SPEECH_STYLES = [
 /** id から型を引く。**無ければ `null`**(消えた id で落ちない) */
 export const speechStyleOf = (id) =>
   SPEECH_STYLES.find((s) => s.id && s.id === id) ?? null
+
+/**
+ * **場面ごとに、噛み合う型**(2026-09 実機・利用者の指摘)。
+ *
+ *   > 業界IT→面接→ここで話の型に「社長のように」とかがあること自体
+ *   > ナンセンスです。選ぶものにより最適な選択肢だけが残るように
+ *   > してください。これはシチュエーションから選ぼうと、
+ *   > 話の型から選ぼうと同じです
+ *
+ * **場面と型は掛け合わせられる、と書いたのは言い過ぎだった。**
+ * 学会発表を物語で語ることはあっても、**面接で「創業者のように
+ * 大きな絵を語る」ことはない。** 組み合わせの数だけ見せると、
+ * 選ぶ人が意味のない組を自分で外すことになる。
+ *
+ * 【なぜ「場面の側」に持つのか】
+ *
+ *   **場面のほうが増える**(2026-09 に利用者の指定で6件足した)。
+ *   ここに載っていない場面は**全部の型が出る**ので、
+ *   **足し忘れても壊れない**(`genres.js` の「登録の無い分野は
+ *   共通だけになる」とまったく同じ考え方)。
+ *
+ *   逆に**型を足したときは、ここに書き足さないとどこにも出ない。**
+ *   `npm run test:play` が「どの場面からも選べない型」を赤くする。
+ *
+ * 【絞り方は両方向】
+ *   ・場面を選ぶ → 型が絞られる(`stylesForScene`)
+ *   ・型を選ぶ  → 場面が絞られる(`scenesForStyle`)
+ *   **「指定しない」はどちらも絞らない**(行き止まりを作らない)。
+ */
+export const SCENE_STYLES = {
+  /* ── 仕事(SPEECH_SCENES)── */
+  sp_intro:      ['st_story', 'st_talkshow', 'st_onepoint'],
+  sp_newjob:     ['st_vision', 'st_plain', 'st_story'],
+  sp_standup:    ['st_keynote', 'st_plain', 'st_locker'],
+  sp_progress:   ['st_numbers', 'st_keynote', 'st_plain'],
+  sp_proposal:   ['st_keynote', 'st_numbers', 'st_story'],
+  sp_product:    ['st_keynote', 'st_numbers', 'st_talkshow'],
+  sp_booth:      ['st_keynote', 'st_plain', 'st_talkshow'],
+  sp_pitch:      ['st_keynote', 'st_vision', 'st_numbers'],
+  sp_conference: ['st_numbers', 'st_onepoint', 'st_story'],
+  sp_training:   ['st_coach', 'st_plain', 'st_onepoint'],
+  sp_townhall:   ['st_plain', 'st_vision', 'st_locker'],
+  sp_award:      ['st_award', 'st_story', 'st_talkshow'],
+  sp_toast:      ['st_award', 'st_talkshow', 'st_story'],
+  sp_farewell:   ['st_retire', 'st_story', 'st_award'],
+  sp_apology:    ['st_apology', 'st_plain'],
+  /* **利用者が挙げた例。** 面接に「創業者のように」は出さない */
+  sp_interview:  ['st_story', 'st_onepoint', 'st_numbers'],
+  sp_talk:       ['st_onepoint', 'st_story', 'st_vision', 'st_talkshow'],
+  sp_deck:       ['st_keynote', 'st_numbers', 'st_plain'],
+  sp_demo:       ['st_coach', 'st_keynote', 'st_plain'],
+  sp_kickoff:    ['st_plain', 'st_coach', 'st_vision'],
+  sp_result:     ['st_numbers', 'st_plain', 'st_keynote'],
+  sp_webinar:    ['st_plain', 'st_coach', 'st_talkshow'],
+  sp_handover:   ['st_coach', 'st_plain'],
+
+  /* ── 趣味(COMMON_HOBBY_SPEECH_SCENES)── */
+  sph_intro:   ['st_talkshow', 'st_story', 'st_onepoint'],
+  sph_wedding: ['st_story', 'st_talkshow', 'st_award'],
+  sph_toast:   ['st_award', 'st_talkshow', 'st_story'],
+  sph_club:    ['st_plain', 'st_numbers', 'st_onepoint'],
+  sph_award:   ['st_award', 'st_locker', 'st_retire'],
+  sph_share:   ['st_talkshow', 'st_onepoint', 'st_keynote'],
+  sph_travel:  ['st_story', 'st_talkshow', 'st_plain'],
+}
+
+/**
+ * その場面で選べる型。**「指定しない」は必ず残す。**
+ * 載っていない場面は**絞らない**(足し忘れても行き止まりにならない)。
+ */
+export const stylesForScene = (sceneId) => {
+  const ids = SCENE_STYLES[sceneId]
+  if (!ids?.length) return SPEECH_STYLES
+  return SPEECH_STYLES.filter((s) => !s.id || ids.includes(s.id))
+}
+
+/**
+ * その型で選べる場面。**「指定しない」なら絞らない。**
+ *
+ * @param list  いま出している場面の一覧(仕事 / 趣味で中身が変わる)
+ * @param styleId 選んでいる型の id
+ */
+export const scenesForStyle = (list, styleId) => {
+  if (!styleId) return list
+  const hit = (list ?? []).filter((x) => {
+    const ids = SCENE_STYLES[x.id]
+    return !ids?.length || ids.includes(styleId)
+  })
+  // **1つも無ければ絞らない。** 空の一覧を出すと行き止まりになる
+  return hit.length ? hit : list
+}

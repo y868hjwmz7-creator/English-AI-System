@@ -726,6 +726,72 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     named.map((s) => s.label).join(' / '))
 
   ok(speechStyleOf('st_keynote')?.label, 'id から型を引ける')
+
+  /* ── 場面と型は、互いに絞り込む(2026-09 実機・利用者の指摘)──
+       > 業界IT→面接→ここで話の型に「社長のように」とかがあること自体
+       > ナンセンスです。…シチュエーションから選ぼうと、話の型から
+       > 選ぼうと同じです */
+  {
+    const { SCENE_STYLES, stylesForScene, scenesForStyle } =
+      await import('../src/data/speechStyles.js')
+
+    // **利用者が挙げた例そのもの**
+    const ivStyles = stylesForScene('sp_interview').map((s) => s.id)
+    ok(!ivStyles.includes('st_vision'),
+      '面接に「創業者のように大きな絵を語る」は出ない')
+    ok(ivStyles.includes('st_story'), '面接には、物語で語る型が出る')
+    ok(ivStyles[0] === '', 'どの場面でも「指定しない」は残る(行き止まりを作らない)')
+    ok(ivStyles.length < SPEECH_STYLES.length, '場面を選ぶと、型が減る',
+      `${ivStyles.length} / ${SPEECH_STYLES.length}`)
+
+    // **逆向きも同じように効く**(型から選んでも絞られる)
+    const all = [...SPEECH_SCENES, ...COMMON_HOBBY_SPEECH_SCENES]
+    const forVision = scenesForStyle(SPEECH_SCENES, 'st_vision').map((x) => x.id)
+    ok(!forVision.includes('sp_interview'),
+      '「創業者のように」を選ぶと、面接は場面から消える')
+    ok(forVision.includes('sp_pitch'), '「創業者のように」に、ピッチは残る')
+    ok(scenesForStyle(SPEECH_SCENES, '') === SPEECH_SCENES,
+      '「指定しない」では、場面を1つも絞らない')
+
+    // **知らない場面は絞らない**(足し忘れても行き止まりにならない)
+    ok(stylesForScene('nope').length === SPEECH_STYLES.length,
+      '対応表に無い場面では、型を絞らない')
+    ok(scenesForStyle([], 'st_story').length === 0
+      && scenesForStyle(SPEECH_SCENES, 'nope').length === SPEECH_SCENES.length,
+      '当てはまる場面が無ければ、絞らずにそのまま出す')
+
+    // **どの型も、どこかの場面から選べる**(型を足して書き忘れると埋もれる)
+    const used = new Set(Object.values(SCENE_STYLES).flat())
+    const orphan = SPEECH_STYLES.filter((s) => s.id && !used.has(s.id))
+    ok(!orphan.length, 'どこからも選べない型が無い',
+      orphan.map((s) => s.label).join(' / '))
+    // **書き間違えた id が混ざっていないか**(混ざると黙って絞りすぎる)
+    const known = new Set(SPEECH_STYLES.map((s) => s.id))
+    const bad = [...used].filter((id) => !known.has(id))
+    ok(!bad.length, '対応表に、知らない型の id が無い', bad.join(' / '))
+    // **どの場面にも、指定しない以外の型が1つは残る**
+    const empty = all.filter((x) => stylesForScene(x.id).length < 2)
+    ok(!empty.length, 'どの場面にも、選べる型が1つ以上ある',
+      empty.map((x) => x.label).join(' / '))
+
+    // **画面が本当に絞っているか**(定義だけあって誰も呼ばなければ同じ)
+    const form = readFileSync(
+      new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+    ok(/stylesForScene\(scene\)/.test(form), '作る画面が、場面で型を絞っている')
+    ok(/scenesForStyle\(speechScenes, style\)/.test(form),
+      '作る画面が、型で場面を絞っている')
+    ok(/pickScene/.test(form) && /pickStyle/.test(form),
+      '噛み合わなくなった選択を、その場で入れ替えている')
+    // **話す中身は、話し方の型の下**(利用者の指定)
+    const iStyle = form.indexOf('話し方の型(任意)')
+    const iSubj = form.indexOf('話す中身(任意)')
+    const iWho = form.indexOf('話し手(任意)\n')
+    ok(iStyle > 0 && iSubj > iStyle, '話す中身の欄は、話し方の型の下にある')
+    ok(iWho < 0 || iSubj < form.lastIndexOf('話し手(任意)'),
+      '話し手より前にある(場面 → 型 → 中身 の流れ)')
+    ok(/isPassageKind\(kind\) && kind !== 'speech'/.test(form),
+      'スピーチでは、話題の欄を2か所に出さない')
+  }
   ok(speechStyleOf('') === null && speechStyleOf('nope') === null,
     '知らない id では null を返す(落ちない)')
 
@@ -741,7 +807,7 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     const form = readFileSync(
       new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
     ok(/speechStyleOf\(style\)/.test(form), '作る画面が、選んだ型を渡している')
-    ok(/SPEECH_STYLES\.map/.test(form), '作る画面が、型の一覧を出している')
+    ok(/styleList\.map/.test(form), '作る画面が、型の一覧を出している')
     ok(/script, who, style,/.test(form),
       '別の画面から戻っても、選んだ型が残る(控えに入っている)')
   }

@@ -30,7 +30,9 @@ import { weaknessTagLabel, weaknessTags } from '../data/weaknessTags.js'
    窓口へ渡す「スピーチとして書く」指定は、**素の node で確かめられる形**
    に切り出してある(`playMark.js` / `gamify.js` と同じ考え方) */
 import { MAX_PARTS, pastedParagraphs, speechBrief } from '../lib/speechDraft.js'
-import { SPEECH_STYLES, speechStyleOf } from '../data/speechStyles.js'
+import {
+  scenesForStyle, speechStyleOf, stylesForScene,
+} from '../data/speechStyles.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
   generateChunkJa, generateSection,
@@ -405,7 +407,36 @@ export default function MaterialForm({
     [kind, script],
   )
 
-  const sceneList = kind === 'speech' ? speechScenesFor(industry) : scenesFor(industry)
+  /* **場面と型は、互いに絞り込む**(2026-09 実機・利用者の指摘)。
+
+       > 業界IT→面接→ここで話の型に「社長のように」とかがあること自体
+       > ナンセンスです。選ぶものにより最適な選択肢だけが残るように。
+       > これはシチュエーションから選ぼうと、話の型から選ぼうと同じです
+
+     **どちらから選んでも同じように効く。** 対応表は
+     `SCENE_STYLES`(`src/data/speechStyles.js`)1か所で、
+     **画面には組み合わせの判断を持たせない。** */
+  const speechScenes = kind === 'speech' ? speechScenesFor(industry) : []
+  const sceneList = kind === 'speech'
+    ? scenesForStyle(speechScenes, style)
+    : scenesFor(industry)
+  const styleList = stylesForScene(scene)
+
+  /* 場面を選んだら、噛み合わない型は外す。
+     **黙って残さない** —— 残すと、出ていない型で作られる */
+  const pickScene = (id) => {
+    setScene(id)
+    if (style && !stylesForScene(id).some((s) => s.id === style)) setStyle('')
+  }
+
+  /* 型を選んだら、噛み合わない場面は入れ替える。
+     **空にしない** —— 場面は必ず1つ選ばれている必要がある */
+  const pickStyle = (id) => {
+    setStyle(id)
+    const ok = scenesForStyle(speechScenes, id)
+    if (!ok.some((x) => x.id === scene)) setScene(ok[0]?.id ?? scene)
+  }
+
   const genreList = genresFor(industry)
 
   /** 弱点タグを、AI に渡す文言にする */
@@ -1159,7 +1190,7 @@ export default function MaterialForm({
               場面によって丁寧さと言い回しが変わります。同じ話題でも別の教材になります
             </span>
           </span>
-          <select value={scene} onChange={(e) => setScene(e.target.value)}>
+          <select value={scene} onChange={(e) => pickScene(e.target.value)}>
             {sceneList.map((x) => (
               <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
             ))}
@@ -1201,11 +1232,6 @@ export default function MaterialForm({
               : '空のままなら、下の場面と話し手から AI がスピーチを作ります'}
           </p>
 
-          {/* 話し手(任意)。
-                > その際に「会社名」「自分の名前」「役職」「部署名」なども
-                > 任意で指定すればそれに沿って Speech を作成してくれる機能です
-              **原稿を貼ったときは使わない**(貼ったものがすべてである)ので、
-              AI に作らせるときだけ出す。**効かない欄を見せない** */}
           {/* **話し方の型**(2026-09 利用者の指定)。
 
                 > あと、著名人のスピーチなどを教材にできませんか?
@@ -1217,19 +1243,21 @@ export default function MaterialForm({
               (`src/data/speechStyles.js`)。学びたいのは文言ではなく
               話し方そのものなので、これで足りる。
 
-              **場面とは役目が違う**ので、掛け合わせられる
-              (学会発表を、物語で語る、など)。
+              **場面と型は、互いに絞り込む**(2026-09 実機・利用者の指摘)。
+              面接に「創業者のように大きな絵を語る」は出さない。
+              対応表は `SCENE_STYLES` 1か所で、ここでは判断しない。
               **原稿を貼ったときは出さない** —— 貼ったものがすべてである */}
           {!scriptParts.length && (
             <label className="field">
               <span>
                 話し方の型(任意)
                 <span className="field-hint">
-                  有名なスピーチの原稿は使えませんが、話し方はまねられます
+                  上の場面に合うものだけが出ます。有名なスピーチの原稿は
+                  使えませんが、話し方はまねられます
                 </span>
               </span>
-              <select value={style} onChange={(e) => setStyle(e.target.value)}>
-                {SPEECH_STYLES.map((s) => (
+              <select value={style} onChange={(e) => pickStyle(e.target.value)}>
+                {styleList.map((s) => (
                   <option key={s.id || 'none'} value={s.id}>
                     {s.label}{s.hint ? ` — ${s.hint}` : ''}
                   </option>
@@ -1237,6 +1265,33 @@ export default function MaterialForm({
               </select>
             </label>
           )}
+
+          {/* **話す中身は、話し方の型のすぐ下**(2026-09 利用者の指定
+              「自由テキスト入力欄は、話の型の下に置いてください」)。
+
+              ほかの種類では「詳しく設定する(任意)」の中にあるが、
+              スピーチでは**場面 → 型 → 中身**が1つの流れなので、
+              畳んだ中に隠すと最後の一手が見えない。
+              **同じ入れ物(`subject`)を使う。欄は増やさない** */}
+          {!scriptParts.length && (
+            <label className="field">
+              <span>
+                話す中身(任意)
+                <span className="field-hint">
+                  空のままなら、業界と場面に合う中身を AI が決めます
+                </span>
+              </span>
+              <input type="text" value={subject}
+                     onChange={(e) => setSubject(e.target.value)}
+                     placeholder="例: 新しい勤怠システムを来月から使ってもらう話" />
+            </label>
+          )}
+
+          {/* 話し手(任意)。
+                > その際に「会社名」「自分の名前」「役職」「部署名」なども
+                > 任意で指定すればそれに沿って Speech を作成してくれる機能です
+              **原稿を貼ったときは使わない**(貼ったものがすべてである)ので、
+              AI に作らせるときだけ出す。**効かない欄を見せない** */}
 
           {!scriptParts.length && (
             <fieldset className="field">
@@ -1935,7 +1990,7 @@ export default function MaterialForm({
         {!showDetails && (
           <p className="field-hint">
             教材名・取り組み方・指導ポイント
-            {isPassageKind(kind) && '・話題・見出し'}
+            {isPassageKind(kind) && (kind === 'speech' ? '・見出し' : '・話題・見出し')}
             。ふだんは触らなくて構いません(自動で入ります)。
           </p>
         )}
@@ -1951,7 +2006,9 @@ export default function MaterialForm({
                      placeholder="作ると自動で入ります" />
             </label>
 
-            {isPassageKind(kind) && (
+            {/* **スピーチでは、話題は上(話し方の型の下)に出してある。**
+                ここにも出すと、同じ欄が2か所に並ぶ */}
+            {isPassageKind(kind) && kind !== 'speech' && (
               <>
                 <label className="field">
                   <span>
@@ -1965,16 +2022,20 @@ export default function MaterialForm({
                          placeholder="例: 生成AIを社内で使うときのルール作り" />
                 </label>
 
-                <label className="field">
-                  <span>
-                    見出し
-                    <span className="field-hint">作ると自動で入ります。直しても構いません</span>
-                  </span>
-                  <input type="text" value={headline} lang="en"
-                         onChange={(e) => setHeadline(e.target.value)}
-                         placeholder="作ると自動で入ります" />
-                </label>
               </>
+            )}
+
+            {/* **見出しは、スピーチでも要る**(教材の顔になる) */}
+            {isPassageKind(kind) && (
+              <label className="field">
+                <span>
+                  見出し
+                  <span className="field-hint">作ると自動で入ります。直しても構いません</span>
+                </span>
+                <input type="text" value={headline} lang="en"
+                       onChange={(e) => setHeadline(e.target.value)}
+                       placeholder="作ると自動で入ります" />
+              </label>
             )}
 
             <label className="field">
