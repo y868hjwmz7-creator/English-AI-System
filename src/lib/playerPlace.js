@@ -20,7 +20,7 @@
  *   |---|---|---|
  *   | `bar`   | 上の帯の中 | 画面共有。相手にも見える。**広い窓だけ** |
  *   | `dock`  | **画面の下の黒帯** | スマホ・パッドの既定。親指が届く |
- *   | `float` | 浮かせる(右下) | 紙の見たいところを空けたいとき |
+ *   | `float` | 浮かせる(右下) | 紙の見たいところを空けたいとき。**パッド以上だけ** |
  *
  * 【`bar` は広い窓にしか置けない】
  *   上の帯は 1380px より狭いと1行に収まらない(`fitsInBar`・実測)。
@@ -51,14 +51,43 @@ export const PLACE_TO = {
 }
 
 /**
+ * 【スマホには「浮かせる」を出さない】(2026-09 実機・利用者の指定)
+ *
+ *   > フロートさせると下に変な隙間ができる、しかも戻せない。
+ *   > フロートさせると機能を無くしてくださいと先ほど頼みませんでしたか?
+ *
+ * **一度読み違えている。経緯ごと残す。**
+ *
+ *   > 移動式のプレーヤーは、PCやパッドでは残しましょう。
+ *   > スマホでは狭すぎて意味がありません。
+ *
+ * これを「**つまんで動かす**のをスマホでやめる」と読み、`dragBox` の
+ * つまみだけを外した。ところが利用者が言っていたのは
+ * **浮かせること自体**である。「狭すぎて意味がない」のは、
+ * つまみではなく**浮いた錠剤そのもの**だった。実際こうなっていた。
+ *
+ *   ・押すものが画面の幅に入りきらず、**置き場所のボタンが画面の外**へ出る
+ *     → **黒帯へ戻す道が無くなる**(行き止まり)
+ *   ・浮いた錠剤の下に、黒帯のぶんの余白だけが残って**変な隙間**になる
+ *
+ * だから**スマホでは `float` を持たせない。** そうすれば
+ * `nextPlace()` が `null` を返し、**切り替えのボタンごと出なくなる**
+ * (効かない操作を見せない)。行き止まりも隙間も、根から消える。
+ */
+
+/**
  * いま実際にどこへ出すか。
  *
  * @param saved      覚えている値
  * @param fitsInBar  上の帯に入る広さか(1380px 以上)
+ * @param padUp      パッド以上か(768px 以上)。**スマホは黒帯だけ**
  */
-export function placeFor(saved, fitsInBar) {
+export function placeFor(saved, fitsInBar, padUp = true) {
   const v = PLACES.includes(saved) ? saved : 'bar'
   if (fitsInBar) return v
+  // **スマホには浮かせる道が無い**(覚えている値によらず黒帯)。
+  // 行き止まりにならないよう、`nextPlace()` も `null` を返す
+  if (!padUp) return 'dock'
   // 狭い窓に「上の帯」は無い。**既定は画面の下**(利用者の指定)
   return v === 'float' ? 'float' : 'dock'
 }
@@ -68,10 +97,16 @@ export function placeFor(saved, fitsInBar) {
  *
  * **4つ並べない。** めったに触らないものが帯の場所を食う
  * (`Stepper` を作ったときと同じ話)。多くても3回で戻る。
+ *
+ * **行き先が無ければ `null`。** スマホは黒帯しか無いので、
+ * 呼ぶ側はこれを見て**ボタンごと出さない**(`PlayerBar`)。
  */
-export function nextPlace(place, fitsInBar) {
-  const now = placeFor(place, fitsInBar)
-  if (!fitsInBar) return now === 'dock' ? 'float' : 'dock'
+export function nextPlace(place, fitsInBar, padUp = true) {
+  const now = placeFor(place, fitsInBar, padUp)
+  if (!fitsInBar) {
+    if (!padUp) return null           // スマホ … 黒帯だけ。移す先が無い
+    return now === 'dock' ? 'float' : 'dock'
+  }
   if (now === 'bar') return 'dock'
   if (now === 'dock') return 'float'
   return 'bar'

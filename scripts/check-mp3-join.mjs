@@ -1029,7 +1029,8 @@ function fakeMp3({
       /* **置き場所は3つになった**(2026-09 利用者の指定)。
          上の帯 / **画面の下の黒帯** / 浮かせる。
          「紙の外に出ているか」は `outside` 1か所で決める */
-      ['どこへ出すかは playerPlace.js が決める', /const spot = placeFor\(place, fitsInBar\)/],
+      ['どこへ出すかは playerPlace.js が決める',
+        /const spot = placeFor\(place, fitsInBar, padUp\)/],
       ['紙の外に出ているかを1か所で決める',
         /const outside = spot !== 'bar' && \(fitsInBar \|\| floatOpen \|\| pen\)/],
       ['浮いているかを1か所で決める', /const floating = outside \|\| \(pen && spot === 'bar'\)/],
@@ -1079,6 +1080,15 @@ function fakeMp3({
         /const playerLabel = playingAll && allWaiting && padUp/],
       ['3つとも同じものを使う', /label=\{playerLabel\}[\s\S]*label=\{playerLabel\}[\s\S]*label=\{playerLabel\}/],
       ['つまみを操作盤へ渡す', /onGrab=\{drag\.onGrab\} moved=\{drag\.moved\} onResetPos=\{drag\.reset\}/],
+      /* **置き場所の切り替えも1組で持つ**(2026-09 実機・利用者の指摘
+         「フロートさせると下に変な隙間ができる、しかも戻せない」)。
+         出す場所は3つあるので、行き先と押したときを書き写すと
+         必ずどこかだけ古くなる。**`placeNext` が `null` のときは
+         ボタンごと出ない** —— スマホには浮かせる道が無い */
+      ['行き先と押したときを1組で持つ',
+        /const placeNext = PLACE_TO\[nextPlace\(spot, fitsInBar, padUp\)\] \?\? null/],
+      ['3つとも同じ切り替えを使う',
+        /placeNext=\{placeNext\}[\s\S]*placeNext=\{placeNext\}[\s\S]*placeNext=\{placeNext\}/],
     ]
     for (const [what, re] of want2) if (!re.test(lv)) ng(`入れ替え: ${what}`)
     /* **鳴らす前と後で、形を変えない**(2026-09 実機・利用者の指摘)。

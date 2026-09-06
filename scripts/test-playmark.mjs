@@ -1368,16 +1368,30 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   // **狭い窓に「上の帯」は無い**(1行に収まらない)。既定は画面の下
   ok(placeFor('bar', false) === 'dock', '狭い窓では、上の帯を選んでいても画面の下')
   ok(placeFor('dock', false) === 'dock', '狭い窓の既定は画面の下')
-  ok(placeFor('float', false) === 'float', '狭い窓でも、浮かせるは選べる')
+  ok(placeFor('float', false) === 'float', 'パッドでは、浮かせるも選べる')
   ok(placeFor('bar', true) === 'bar', '広い窓では、上の帯のまま')
   ok(placeFor(null, true) === 'bar', '知らない値は上の帯に落とす')
   ok(placeFor('nowhere', false) === 'dock', '知らない値は、狭い窓では画面の下')
+
+  /* ── **スマホには「浮かせる」を持たせない**(2026-09 実機・利用者の指定)
+         > フロートさせると下に変な隙間ができる、しかも戻せない。
+         > フロートさせると機能を無くしてくださいと先ほど頼みませんでしたか?
+
+       浮かせると、押すものが画面の幅に入りきらず
+       **置き場所のボタンが画面の外**へ出て、黒帯へ戻せなくなっていた。
+       だから**選べる場所そのものを黒帯だけ**にする。
+       ここを「スマホでも float を返す」に戻すと、この3行が赤くなる */
+  ok(placeFor('float', false, false) === 'dock', 'スマホでは、覚えていても黒帯')
+  ok(placeFor('dock', false, false) === 'dock', 'スマホの既定も黒帯')
+  ok(nextPlace('dock', false, false) === null
+    && nextPlace('float', false, false) === null,
+  'スマホには行き先が無い(切り替えのボタンごと出ない)')
 
   // **押すたびに次へ移る。** 3回で必ず元へ戻る(行き止まりを作らない)
   ok(nextPlace('bar', true) === 'dock' && nextPlace('dock', true) === 'float'
     && nextPlace('float', true) === 'bar', '広い窓は3つを回る')
   ok(nextPlace('dock', false) === 'float' && nextPlace('float', false) === 'dock',
-    '狭い窓は2つを行き来する(上の帯へは行かない)')
+    'パッドは2つを行き来する(上の帯へは行かない)')
   ok(PLACES.every((p) => PLACE_TO[p] && !PLACE_TO[p].includes('undefined')),
     'どの行き先にも、読める言葉が付いている')
 
@@ -1402,8 +1416,14 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      いまと同じ「右下に浮いたまま」に戻る */
   const lv = readFileSync(
     new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
-  ok(/placeFor\(place, fitsInBar\)/.test(lv), 'レッスン表示が placeFor に任せている')
-  ok(/nextPlace\(spot, fitsInBar\)/.test(lv), '次の行き先も nextPlace に任せている')
+  ok(/placeFor\(place, fitsInBar, padUp\)/.test(lv),
+    'レッスン表示が placeFor に任せている(スマホかどうかも渡している)')
+  ok(/nextPlace\(spot, fitsInBar, padUp\)/.test(lv),
+    '次の行き先も nextPlace に任せている')
+  /* **行き先が無いときに押せてしまわないか。** `placeNext` が `null` なら
+     `PlayerBar` はボタンを描かないが、押されたときの受け皿も要る */
+  ok(/const v = nextPlace\(spot, fitsInBar, padUp\)\s*\n\s*if \(!v\) return/.test(lv),
+    '行き先が無ければ、置き場所を書き換えない')
   ok(/className="player-dock no-print"/.test(lv), '画面の下の黒帯を描いている')
   ok(!/spot === 'float' \|\| \(!fitsInBar && floatOpen\)/.test(lv),
     '古い出し分け(右下だけ)が残っていない')

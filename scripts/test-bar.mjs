@@ -440,47 +440,70 @@ for (const [label, want] of Object.entries(WANT)) {
   }
   await page.evaluate(() => document.getElementById('eas-bigplayer')?.remove())
 
-  /* ── **浮かせる形も、狭い画面で1行に収まる**(2026-09 利用者の指定)
-         > パッドでもデフォルトは同じ仕様で、任意でフロート型にして
-         > 移動できるように
+  /* ── **スマホには「浮かせる」を出さない**(2026-09 実機・利用者の指定)
+         > フロートさせると下に変な隙間ができる、しかも戻せない。
+         > フロートさせると機能を無くしてくださいと先ほど頼みませんでしたか?
 
-       黒帯から1回押すと浮く。**スマホにはつまみを出さない**
-       (2026-09 利用者の判断「移動式のプレーヤーは、PCやパッドでは
-       残しましょう。スマホでは狭すぎて意味がありません」)。
-       動かす余地が無いので、出しても効かない操作になる */
-  await page.setViewportSize({ width: 390, height: 900 })
-  await page.waitForTimeout(200)
-  await page.click('.player-place')
-  await page.waitForTimeout(300)
-  {
+       浮かせると押すものが画面の幅に入りきらず、
+       **置き場所のボタンが画面の外**へ出て黒帯へ戻せなくなっていた。
+       しかも浮いた錠剤の下に、黒帯のぶんの余白だけが残る。
+
+       だから**選べる場所そのものを黒帯だけ**にした。
+       切り替えのボタンが1つも無いことを、ここで数える
+       (`placeFor` を「スマホでも float」に戻すと赤くなる)。 */
+  for (const w of [390, 375, 320]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(300)
     const m = await page.evaluate(() => {
-      const p = document.querySelector('.player--float')
-      if (!p) return null
-      const r = p.getBoundingClientRect()
+      const p = document.querySelector('.player--dock')
       return {
-        h: Math.round(r.height), right: Math.round(r.right), win: window.innerWidth,
-        grip: !!document.querySelector('.player-grip'),
-        dock: !!document.querySelector('.player--dock'),
-        spill: [p, ...p.children].some((b) => b.scrollWidth > b.clientWidth + 1),
+        float: !!document.querySelector('.player--float'),
+        dock: !!p,
+        place: document.querySelectorAll('.player-place').length,
+        grip: document.querySelectorAll('.player-grip').length,
+        h: p ? Math.round(p.getBoundingClientRect().height) : null,
       }
     })
-    if (!m) ng('狭い画面で、浮かせる形に切り替えられない')
-    else if (m.dock) ng('浮かせたのに、画面の下の黒帯も出ている', '同じものを2つ見せない')
-    else if (m.grip) ng('スマホに、つまんで動かすつまみが出ている', '動かす余地が無い')
-    else if (m.h > 70) ng('浮かせた操作盤が2行になっている', `高さ ${m.h}px`)
-    else if (m.right > m.win || m.spill) ng('浮かせた操作盤があふれている')
-    else ok(`390px … 浮かせても1行(${m.h}px)・つまみは出さない`)
+    if (m.float) ng(`${w}px で、浮かせた操作盤が出ている`, 'スマホには浮かせる道を持たせない')
+    else if (!m.dock) ng(`${w}px で、画面の下の黒帯が出ていない`)
+    else if (m.place) ng(`${w}px に、置き場所の切り替えが出ている`, '行き先が無い(効かない操作)')
+    else if (m.grip) ng(`${w}px に、つまんで動かすつまみが出ている`)
+    else ok(`${w}px … 黒帯だけ・切り替えもつまみも出さない`)
   }
 
-  /* **パッド以上では、つまんで動かせる**(利用者の判断)。
+  /* **パッド以上では、これまでどおり浮かせられる**(利用者の判断
+     「移動式のプレーヤーは、PCやパッドでは残しましょう」)。
      **出す / 出さないの両方を見る** —— 片方だけだと、
      「全部に出す」と書き換えても緑のままになる */
   await page.setViewportSize({ width: 900, height: 900 })
   await page.waitForTimeout(300)
   {
-    const grip = await page.$$eval('.player-grip', (xs) => xs.length)
-    if (!grip) ng('パッドで、つまんで動かすつまみが出ていない')
-    else ok('900px … 浮かせるとつまみが出る(パッド以上)')
+    const has = await page.$$eval('.player-place', (xs) => xs.length)
+    if (!has) ng('パッドで、置き場所の切り替えが出ていない', '浮かせる道が無くなっている')
+    else {
+      await page.click('.player-place')
+      await page.waitForTimeout(300)
+      const m = await page.evaluate(() => {
+        const p = document.querySelector('.player--float')
+        if (!p) return null
+        const r = p.getBoundingClientRect()
+        return {
+          h: Math.round(r.height), right: Math.round(r.right), win: window.innerWidth,
+          grip: !!document.querySelector('.player-grip'),
+          dock: !!document.querySelector('.player--dock'),
+          back: document.querySelectorAll('.player-place').length,
+          spill: [p, ...p.children].some((b) => b.scrollWidth > b.clientWidth + 1),
+        }
+      })
+      if (!m) ng('パッドで、浮かせる形に切り替えられない')
+      else if (m.dock) ng('浮かせたのに、画面の下の黒帯も出ている', '同じものを2つ見せない')
+      else if (!m.grip) ng('パッドで、つまんで動かすつまみが出ていない')
+      /* **戻す道が要る。** これが 0 だと、浮かせたきり黒帯へ帰れない */
+      else if (!m.back) ng('浮かせたあと、黒帯へ戻す道が無い')
+      else if (m.h > 70) ng('浮かせた操作盤が2行になっている', `高さ ${m.h}px`)
+      else if (m.right > m.win || m.spill) ng('浮かせた操作盤があふれている')
+      else ok(`900px … 浮かせても1行(${m.h}px)・つまみと戻る道がある`)
+    }
   }
   await page.close()
 }

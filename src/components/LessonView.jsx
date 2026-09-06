@@ -409,20 +409,28 @@ export default function LessonView({
    */
   const [floatOpen, setFloatOpen] = useState(true)
   /**
-   * 実際にどこへ出すか。**幅が足りなければ、覚えている値によらず帯。**
-   * 狭い画面には切り替えのボタンを出していないので、
-   * 右下のまま覚えていると**戻す道が無くなる**(行き止まりを作らない)。
+   * **パッド以上か**(`NAV_PUSH_AT` = 768px)。**判断は幅だけ。**
+   *
+   * ここが偽(= スマホ)のときは、**浮かせる道そのものを持たない**
+   * (2026-09 実機・利用者の指定「フロートさせると機能を無くして」)。
+   * `spot` より先に要るので、ここで出しておく。
    */
+  const padUp = useWide(NAV_PUSH_AT)
   /**
    * 実際にどこへ出すか。**判断は `placeFor()` 1か所**(`playerPlace.js`)。
    *
    * **狭い窓に「上の帯」は無い**(1380px より狭いと1行に収まらない)。
-   * そこでは**画面の下の黒帯**が既定で、浮かせることもできる
+   * そこでは**画面の下の黒帯**が既定で、
+   * **パッド以上でだけ**浮かせることもできる
    * (2026-09 利用者の指定「スマホ…画面下部に黒帯にした中に固定に。
    * パッドでもデフォルトは同じ仕様で、任意でフロート型にして移動できる
-   * ように」)。
+   * ように」/「スマホでは狭すぎて意味がありません」)。
+   *
+   * **スマホでは、覚えている値によらず黒帯**である。
+   * 切り替えのボタンも出ない(`nextPlace()` が `null` を返す)ので、
+   * **戻す道が無くなることも、浮いた錠剤の下に隙間が残ることもない。**
    */
-  const spot = placeFor(place, fitsInBar)
+  const spot = placeFor(place, fitsInBar, padUp)
   /**
    * **いま、操作盤が右下に浮いているか**(2026-09 利用者の指定)。
    *
@@ -473,11 +481,23 @@ export default function LessonView({
      並んでいるので、操作盤だけを動かすと**別々に `fixed` で置く**ことに
      なり、片方が消えたときにもう片方が飛ぶ(CLAUDE.md)。
 
-     **スマホでは、つまみを出さない。** 浮いた操作盤だけで画面幅の
-     ほとんどを使うので、動かす余地が無い(効かない操作を見せない)。
-     **判断は幅だけ**(`NAV_PUSH_AT` = 768px。パッド以上)。 */
-  const padUp = useWide(NAV_PUSH_AT)
+     **スマホには、そもそも浮かせる道が無い**(`placeFor` が黒帯に落とす)
+     ので、ここも自然につまみが出ない。`padUp` は上で出してある。 */
   const floatsRef = useRef(null)
+
+  /* ── 置き場所の切り替え。**行き先と押したときを、1組で持つ** ────────
+       出す場所は3つ(上の帯 / 黒帯 / 浮かせたもの)ある。
+       書き写すと必ずどこかだけ古くなるので、ここで1度だけ決める。
+
+       **`placeNext` が `null` なら、ボタンごと出ない**(`PlayerBar`)。
+       スマホは黒帯しか無いので、そこが `null` になる ——
+       **効かない操作を見せない。** */
+  const placeNext = PLACE_TO[nextPlace(spot, fitsInBar, padUp)] ?? null
+  const movePlayer = () => {
+    const v = nextPlace(spot, fitsInBar, padUp)
+    if (!v) return          // 行き先が無い(スマホ)。何もしない
+    setPlace(v); savePlace(v)
+  }
   const drag = useDragBox(floatsRef, { enabled: shownSpot === 'float' && padUp })
 
   /* ── **スマホでは「用意しています…」を出さない**(2026-09 利用者の指定)
@@ -1055,10 +1075,8 @@ export default function LessonView({
           {canPlayAll && shownSpot === 'bar' && fitsInBar && (
             <PlayerBar
               place="bar"
-              placeNext={PLACE_TO[nextPlace(spot, fitsInBar)]}
-              onPlace={() => {
-                const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
-              }}
+              placeNext={placeNext}
+              onPlace={movePlayer}
               playing={playingAll}
               label={playerLabel}
               at={playAt} total={playableAll.length}
@@ -1324,10 +1342,8 @@ export default function LessonView({
                 /* **狭い窓でも切り替えを出す**(2026-09 利用者の指定
                    「パッドでも…任意でフロート型にして移動できるように」)。
                    行き先は `nextPlace()` が決める(判断を2か所に置かない) */
-                placeNext={PLACE_TO[nextPlace(spot, fitsInBar)]}
-                onPlace={() => {
-                  const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
-                }}
+                placeNext={placeNext}
+                onPlace={movePlayer}
                 onGrab={drag.onGrab} moved={drag.moved} onResetPos={drag.reset}
                 playing={playingAll}
                 label={playerLabel}
@@ -1474,10 +1490,8 @@ export default function LessonView({
           <div className="player-dock no-print">
             <PlayerBar
               place="dock"
-              placeNext={PLACE_TO[nextPlace(spot, fitsInBar)]}
-              onPlace={() => {
-                const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
-              }}
+              placeNext={placeNext}
+              onPlace={movePlayer}
               playing={playingAll}
               label={playerLabel}
               at={playAt} total={playableAll.length}
