@@ -1057,7 +1057,19 @@ function fakeMp3({
       /* **つまんで動かせる**(2026-09 利用者の指定)。動かすのは
          箱ぜんぶ(`.sheet-floats`)—— 操作盤だけを動かすと、
          「別々に `fixed` で置かない」を破ることになる */
-      ['浮かせた箱は、つまんで動かせる', /useDragBox\(floatsRef, \{ enabled: shownSpot === 'float' \}\)/],
+      /* **つまんで動かせるのはパッド以上だけ**(2026-09 利用者の判断
+         「移動式のプレーヤーは、PCやパッドでは残しましょう。
+           スマホでは狭すぎて意味がありません」)。
+         スマホでは浮いた操作盤だけで画面幅のほとんどを使う */
+      ['つまめるのはパッド以上だけ', /const canDrag = useWide\(NAV_PUSH_AT\)/],
+      ['浮かせた箱は、つまんで動かせる',
+        /useDragBox\(floatsRef, \{ enabled: shownSpot === 'float' && canDrag \}\)/],
+      /* **黒帯は、紙の外に描く**(2026-09 実機・利用者の指摘
+         「再生のマークが黒字に黒なので見えない」)。
+         紙(`.lesson-sheet`)は明るい配色の島なので、中に置くと
+         `.lesson-sheet .listenpill .btn { color: var(--ink) }` が勝ち、
+         **黒地に黒**になる(実測 rgb(36,41,47) on rgb(51,51,45)) */
+      ['黒帯は紙のうしろに置く', /<\/div>\s*\n\s*\{\/\* ── 画面の下の黒帯/],
       ['つまみを操作盤へ渡す', /onGrab=\{drag\.onGrab\} moved=\{drag\.moved\} onResetPos=\{drag\.reset\}/],
     ]
     for (const [what, re] of want2) if (!re.test(lv)) ng(`入れ替え: ${what}`)

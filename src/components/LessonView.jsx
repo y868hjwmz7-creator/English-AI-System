@@ -40,7 +40,7 @@ import { loadMyLearners } from '../lib/materials.js'
    **集中モードでも同じものを出す**ので、ここには持たない */
 import { INK_COLORS, INK_TOOLS, INK_WIDTH } from '../data/inkTools.js'
 import { viewerRoleOf } from '../lib/viewer.js'
-import { useWide } from '../lib/nav.js'
+import { NAV_PUSH_AT, useWide } from '../lib/nav.js'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
@@ -466,11 +466,20 @@ export default function LessonView({
        > PCの画面でもフロートにした時は端っこにドラッグできる部分を作って
        > 移動させれるようにしたいです
 
+       > 移動式のプレーヤーは、PCやパッドでは残しましょう。
+       > スマホでは狭すぎて意味がありません。
+
      **動かすのは箱ぜんぶ**(`.sheet-floats`)。中には「集中モード」も
      並んでいるので、操作盤だけを動かすと**別々に `fixed` で置く**ことに
-     なり、片方が消えたときにもう片方が飛ぶ(CLAUDE.md)。 */
+     なり、片方が消えたときにもう片方が飛ぶ(CLAUDE.md)。
+
+     **スマホでは、つまみを出さない。** 浮いた操作盤だけで画面幅の
+     ほとんどを使うので、動かす余地が無い(効かない操作を見せない)。
+     **判断は幅だけ**(`NAV_PUSH_AT` = 768px。パッド以上)。 */
+  const canDrag = useWide(NAV_PUSH_AT)
   const floatsRef = useRef(null)
-  const drag = useDragBox(floatsRef, { enabled: shownSpot === 'float' })
+  const drag = useDragBox(floatsRef, { enabled: shownSpot === 'float' && canDrag })
+
 
   /** 通しの読み上げを止める */
   const stopAll = player.stop
@@ -1251,42 +1260,14 @@ export default function LessonView({
             (出るほうは `FocusReader` の `.focus-exit`)。
             通しの練習(6Steps / Quick Response)のあいだは出さない。
             あちらはあちらで下にボタンがあり、重なる */}
-        {/* ── 画面の下の黒帯(2026-09 利用者の指定)────────────────────
-              > いっそのこと画面の下部に黒帯にした中に固定にした方が
-              > スタイリッシュな気がします。パッドでもデフォルトは同じ仕様で
-
-            **右下に浮く錠剤ではなく、横いっぱいの帯にする。**
-            浮いた錠剤は場所が足りず、`useFitRow` で言葉を削って収めていた
-            (削るほど何のボタンか分からなくなる)。横いっぱいなら、
-            **削る理由がそもそも無い。**
-
-            **`.sheet-floats` の外に置く。** あちらは右下に固定した箱で、
-            こちらは画面の下いっぱいである。中に入れると幅を取り合う。 */}
-        {canPlayAll && outside && shownSpot === 'dock' && !run && (
-          <div className="player-dock no-print">
-            <PlayerBar
-              place="dock"
-              placeNext={PLACE_TO[nextPlace(spot, fitsInBar)]}
-              onPlace={() => {
-                const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
-              }}
-              playing={playingAll}
-              label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
-              at={playAt} total={playableAll.length}
-              unit={countUnit(section?.exercise_type)}
-              onToggle={playWhole} onJump={jumpTo}
-              repeat={player.repeat} onRepeat={player.setRepeat}
-            />
-          </div>
-        )}
-
         {(passageSection || canPlayAll) && !run && (
           <div
             ref={floatsRef}
             /* つまんでいるあいだ、指が箱の外へ出ても追いかける
                (`setPointerCapture` はつまみに付けてある) */
-            onPointerMove={drag.onGrab ? drag.onMove : undefined}
-            onPointerUp={drag.onDrop} onPointerCancel={drag.onDrop}
+            onPointerMove={drag.enabled ? drag.onMove : undefined}
+            onPointerUp={drag.enabled ? drag.onDrop : undefined}
+            onPointerCancel={drag.enabled ? drag.onDrop : undefined}
             style={drag.style}
             /* **黒帯に隠されないよう、そのぶん上へ逃がす** */
             className={`sheet-floats no-print${
@@ -1452,6 +1433,36 @@ export default function LessonView({
             画面には出さない(`print-only`)。練習は上のボタンから行う */}
         <QuickResponseSheet material={material} />
       </div>
+
+        {/* ── 画面の下の黒帯(2026-09 利用者の指定)────────────────────
+              > いっそのこと画面の下部に黒帯にした中に固定にした方が
+              > スタイリッシュな気がします。パッドでもデフォルトは同じ仕様で
+
+            **右下に浮く錠剤ではなく、横いっぱいの帯にする。**
+            浮いた錠剤は場所が足りず、`useFitRow` で言葉を削って収めていた
+            (削るほど何のボタンか分からなくなる)。横いっぱいなら、
+            **削る理由がそもそも無い。**
+
+            **`.sheet-floats` の外に置く。** あちらは右下に固定した箱で、
+            こちらは画面の下いっぱいである。中に入れると幅を取り合う。 */}
+        {canPlayAll && outside && shownSpot === 'dock' && !run && (
+          <div className="player-dock no-print">
+            <PlayerBar
+              place="dock"
+              placeNext={PLACE_TO[nextPlace(spot, fitsInBar)]}
+              onPlace={() => {
+                const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
+              }}
+              playing={playingAll}
+              label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
+              at={playAt} total={playableAll.length}
+              unit={countUnit(section?.exercise_type)}
+              onToggle={playWhole} onJump={jumpTo}
+              repeat={player.repeat} onRepeat={player.setRepeat}
+            />
+          </div>
+        )}
+
 
       {/* ── セッションの記録(0032)────────────────────────────
           紙の**上に重ねず、横に並べる。** 重ねると、教材を見ながら

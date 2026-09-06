@@ -4,7 +4,16 @@
  *   > PCの画面でもフロートにした時は端っこにドラッグできる部分を作って
  *   > 移動させれるようにしたいです
  *
+ *   > 移動式のプレーヤーは、PCやパッドでは残しましょう。
+ *   > スマホでは狭すぎて意味がありません。
+ *
  * ============================================================================
+ * 【スマホでは動かせない】(2026-09 利用者の判断)
+ *   iPhone(390px)では、浮いた操作盤だけで画面幅のほとんどを使う。
+ *   動かす余地が無いので、**つまみを出しても意味がない**
+ *   (効かない操作を見せない)。**出す / 出さないの判断は呼ぶ側**が
+ *   幅で決める(`enabled`)。ここは幅を知らない。
+ *
  * 【動かすのは、箱ぜんぶ】
  *   浮いているのは操作盤だけではない。**右下には「集中モード」も一緒に
  *   並んでいる**(`.sheet-floats`)。片方だけ動かすと、
@@ -63,7 +72,7 @@ function save(pos) {
 
 /**
  * @param ref      動かす箱(`.sheet-floats`)
- * @param enabled  浮かせているときだけ動かせる
+ * @param enabled  浮かせていて、しかも**動かす余地がある広さ**のときだけ
  */
 export default function useDragBox(ref, { enabled = true } = {}) {
   const [pos, setPos] = useState(() => load())
@@ -120,5 +129,8 @@ export default function useDragBox(ref, { enabled = true } = {}) {
     ? { left: `${pos.x}px`, top: `${pos.y}px`, right: 'auto', bottom: 'auto' }
     : undefined
 
-  return { pos, style, moved: !!(enabled && pos), onGrab, onMove, onDrop, reset }
+  return {
+    pos, style, moved: !!(enabled && pos), enabled,
+    onGrab: enabled ? onGrab : null, onMove, onDrop, reset,
+  }
 }

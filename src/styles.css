@@ -6807,12 +6807,14 @@ html, body { overflow-x: clip; }
 .player--dock .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
 .player--dock .btn:disabled { opacity: .4; }
 .player--dock .repeat-unit { color: #f2f2ee; }
-/* 進み具合は、広いぶん出せる。**押すものより先に縮む** */
-.player--dock .player-track { flex: 0 1 160px; }
+/* **進み具合の線は出さない**(上の帯とまったく同じ理由)。
+   すぐ左の「3 / 6 段落」と**同じことを2つ言っている**うえ、
+   帯の上に細い線が1本だけ浮いて、まわりの錠剤と釣り合わない
+   (2026-09 実機・利用者の指摘「黒のプレーヤーのデザインの破綻」)。 */
+.player--dock .player-track { display: none; }
 @media (max-width: 560px) {
   .player-dock { padding-left: 10px; padding-right: 10px; }
   .player--dock { gap: var(--sp-6); }
-  .player--dock .player-track { display: none; }
 }
 /* いちばん狭い端末。**左右の余白だけを詰める**(押せる大きさは割らない)。
    実測 320px で、詰める前は 4px あふれていた */
@@ -6832,7 +6834,6 @@ html, body { overflow-x: clip; }
 .player--dock.is-fit1 .repeat-unit .wide-text { display: none; }
 .player--dock.is-fit2 { gap: var(--sp-4); }
 .player--dock.is-fit2 .btn { padding: 5px 6px; }
-.player--dock.is-fit2 .player-track { display: none; }
 .player--dock.is-fit3 { gap: var(--sp-2); }
 .player--dock.is-fit3 .listenpill-arrow { min-width: 28px; padding: 0 5px; }
 .player--dock.is-fit3 .player-at { font-size: var(--fs-11); }
