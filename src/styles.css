@@ -6802,8 +6802,14 @@ html, body { overflow-x: clip; }
   background: #24241f; color: #f2f2ee;
   box-shadow: 0 -6px 24px rgb(0 0 0 / 22%);
 }
-/* **まん中にまとめる。** 横いっぱいなので、端に寄せると指が届かない */
-.player--dock { justify-content: center; gap: var(--sp-10); }
+/* **まん中にまとめる。** 横いっぱいなので、端に寄せると指が届かない。
+
+   **隙間は 16px**(2026-09 実機・利用者の指定「各機能の間にバランスよく
+   マージンを入れてください。触れすぎていて押し間違えをしそうな緊張感が
+   あります」)。広い窓では 272px 余っているので、詰める理由が無かった。
+   **狭い窓の隙間(実測 16px)と同じ数**にそろえてある —— 広い端末のほうが
+   狭い、という逆さまにしない。 */
+.player--dock { justify-content: center; gap: var(--sp-16); }
 .player--dock .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
 .player--dock .btn:disabled { opacity: .4; }
 .player--dock .repeat-unit { color: #f2f2ee; }
@@ -6814,7 +6820,25 @@ html, body { overflow-x: clip; }
 .player--dock .player-track { display: none; }
 @media (max-width: 560px) {
   .player-dock { padding-left: 10px; padding-right: 10px; }
-  .player--dock { gap: var(--sp-6); }
+  /* **余った幅は、機能と機能のあいだへ配る**(2026-09 実機・利用者の指定)
+
+       > せっかくスペースに余裕ができたので、各機能の間にバランスよく
+       > マージンを入れてください。触れすぎていて押し間違えをしそうな
+       > 緊張感があります
+
+     スマホから置き場所の切り替えを外したので、**390px で 33px 余った。**
+     ところが `gap` は決め打ちなので、余りはただの空白として
+     まん中に溜まり、押すものどうしは 6px のまま隣り合っていた。
+
+     **`space-between` にすると、余りがそのまま隙間になる。**
+     決め打ちの数を1つも増やさずに、端末の幅ぶんだけ広がる
+     (実測: 390px で 16px / 375px で 9px / 320px で 31px)。
+     **あふれる心配も無い** —— 配るのは「余っているぶん」だけなので、
+     余りが 0 になれば下の `gap` まで自然に詰まる。
+
+     `gap` は**いちばん詰まったときの下限**として残す。
+     `useFitRow` の `is-fit2` / `is-fit3` がここをさらに縮める。 */
+  .player--dock { justify-content: space-between; gap: var(--sp-6); }
 }
 /* いちばん狭い端末。**左右の余白だけを詰める**(押せる大きさは割らない)。
    実測 320px で、詰める前は 4px あふれていた */

@@ -1071,14 +1071,6 @@ function fakeMp3({
          `.lesson-sheet .listenpill .btn { color: var(--ink) }` が勝ち、
          **黒地に黒**になる(実測 rgb(36,41,47) on rgb(51,51,45)) */
       ['黒帯は紙のうしろに置く', /<\/div>\s*\n\s*\{\/\* ── 画面の下の黒帯/],
-      /* **スマホでは「用意しています…」を出さない**(2026-09 利用者の指定)。
-         押すボタンが 30px → 141px と 4.7 倍に伸び縮みし、
-         黒帯はまん中寄せなので両隣も一緒に動く(実測)。
-         **文言は1か所で決める** —— 出す場所が3つあるので、
-         書き写すと必ずどこかだけ残る */
-      ['用意しています…は1か所で決める',
-        /const playerLabel = playingAll && allWaiting && padUp/],
-      ['3つとも同じものを使う', /label=\{playerLabel\}[\s\S]*label=\{playerLabel\}[\s\S]*label=\{playerLabel\}/],
       ['つまみを操作盤へ渡す', /onGrab=\{drag\.onGrab\} moved=\{drag\.moved\} onResetPos=\{drag\.reset\}/],
       /* **置き場所の切り替えも1組で持つ**(2026-09 実機・利用者の指摘
          「フロートさせると下に変な隙間ができる、しかも戻せない」)。
@@ -1091,6 +1083,38 @@ function fakeMp3({
         /placeNext=\{placeNext\}[\s\S]*placeNext=\{placeNext\}[\s\S]*placeNext=\{placeNext\}/],
     ]
     for (const [what, re] of want2) if (!re.test(lv)) ng(`入れ替え: ${what}`)
+
+    /* ── **「用意しています…」を、操作盤には出さない**(2026-09 利用者の指定)
+           > どのデバイスでも段落送りをした時に再生ツールに
+           > 「用意しています」が表示されて幅が広くなると、
+           > 連続で押すときに押しにくいです。
+           > 全てスマホと同じ、幅が変わらない仕様にして下さい
+
+         押すボタンが 123px → 149px(スマホでは 30px → 141px)伸び縮みし、
+         **まん中寄せなので両隣も一緒に動く**(実測)。段落を続けて送ると、
+         押すたびに ◀ ▶ が左右へ逃げる。
+
+         **`PlayerBar` に文言の欄そのものを持たせない。**
+         そうすると「渡し忘れ」も「片方だけ残る」も起こりえない ——
+         戻したくなったら、まず prop を足すことになる。
+
+         **段落ごとの Listen には、これまでどおり出す**(言われた場所だけを
+         直す)。あちらは押しっぱなしにするボタンではないので、
+         `preparingLabel` を使っている行が消えていないことも一緒に見る。 */
+    const pb = readFileSync(
+      new URL('../src/components/PlayerBar.jsx', import.meta.url), 'utf8')
+    /* **受け取る欄の並びだけ**を見る(`aria-label` や、
+       中で使っている `label={…}` に当てない) */
+    const props = pb.slice(pb.indexOf('PlayerBar({'), pb.indexOf('}) {'))
+    if (/(^|[,{\s])label\s*[=,]/.test(props))
+      ng('操作盤が文言の欄を持っている', '幅が伸び縮みして、押し間違えのもとになる')
+    else ok('操作盤は「用意しています…」を持たない(幅が変わらない)')
+    if (/label=\{playerLabel\}/.test(lv))
+      ng('操作盤に「用意しています…」を渡している')
+    if (!/allWaiting \? preparingLabel\(allSecs\) : 'Stop'/.test(lv))
+      ng('段落ごとの Listen から「用意しています…」まで消えている',
+        '言われたのは操作盤だけである')
+    else ok('段落ごとの Listen には、これまでどおり出す')
     /* **鳴らす前と後で、形を変えない**(2026-09 実機・利用者の指摘)。
 
          > 上部バーのプレーヤーUIで全体の再生を始めると、

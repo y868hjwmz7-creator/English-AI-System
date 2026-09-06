@@ -500,31 +500,37 @@ export default function LessonView({
   }
   const drag = useDragBox(floatsRef, { enabled: shownSpot === 'float' && padUp })
 
-  /* ── **スマホでは「用意しています…」を出さない**(2026-09 利用者の指定)
+  /* ── **「用意しています…」は、操作盤には出さない**(2026-09 利用者の指定)
+
+       まずスマホだけで外し、そのあと**どの端末でも**外した。
 
        > プレイヤーの再生ボタンを押した際にいちいち用意していますと
        > 切り替えで表示されるとその度にプレイヤーの幅が広がり、
        > そしてすぐ元に戻るので、単語などが連続で再生される時に
        > 見ていて目が疲れます。これもスマホでは排除してください
 
-     実測(押すボタンの幅)。スマホでは**絵だけ**まで詰めてあるので、
-     文言が入った瞬間にいちばん大きく伸びる。
+       > どのデバイスでも段落送りをした時に再生ツールに「用意しています」が
+       > 表示されて幅が広くなると、連続で押すときに押しにくいです。
+       > 全てスマホと同じ、幅が変わらない仕様にして下さい
+
+     実測(押すボタンの幅)。**どの端末でも伸びる。**
 
        | 幅 | 押す前 | 用意しています… | 用意中 N 秒 |
        |---|---|---|---|
        | スマホ 390px | **30px** | **141px** | 104px |
-       | パッド 820px | 123px | 149px | 112px |
+       | パッド 820px | 123px | **149px** | 112px |
+       | PC 1200px | 123px | **149px** | 112px |
 
-     しかも黒帯は**まん中寄せ**なので、両隣もそのつど横へ動く。
-     単語の教材を通しで鳴らすと、これが何度もくり返される。
+     しかも黒帯は**まん中寄せ**なので、伸びると**両隣もそのつど横へ動く。**
+     段落を続けて送ると、押すたびに ◀ ▶ が左右に逃げる。
 
      **「音が出るまで何も起きていないように見える」への答えは残っている** ——
      絵がスピーカーから Stop に変わる(**幅は1px も動かない**)。
-     CLAUDE.md の「どんなに狭くても消さない」は、
-     **この指定で上書きした**(経緯ごと残す)。 */
-  const playerLabel = playingAll && allWaiting && padUp
-    ? preparingLabel(allSecs) : null
+     文言は `PlayerBar` が持たない形にしたので、
+     ここで組み立てるものも無い(**判断も文言も、1か所に無い = 事故が無い**)。
 
+     **段落ごとの Listen には、これまでどおり出す**(言われた場所だけを直す)。
+     あちらは押しっぱなしにするボタンではない。 */
 
   /** 通しの読み上げを止める */
   const stopAll = player.stop
@@ -1078,7 +1084,6 @@ export default function LessonView({
               placeNext={placeNext}
               onPlace={movePlayer}
               playing={playingAll}
-              label={playerLabel}
               at={playAt} total={playableAll.length}
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}
@@ -1346,7 +1351,6 @@ export default function LessonView({
                 onPlace={movePlayer}
                 onGrab={drag.onGrab} moved={drag.moved} onResetPos={drag.reset}
                 playing={playingAll}
-                label={playerLabel}
                 at={playAt} total={playableAll.length}
                 unit={countUnit(section?.exercise_type)}
                 onToggle={playWhole} onJump={jumpTo}
@@ -1493,7 +1497,6 @@ export default function LessonView({
               placeNext={placeNext}
               onPlace={movePlayer}
               playing={playingAll}
-              label={playerLabel}
               at={playAt} total={playableAll.length}
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}

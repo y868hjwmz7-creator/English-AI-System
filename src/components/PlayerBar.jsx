@@ -54,7 +54,6 @@ import { useFitRow } from '../lib/fitRow.js'
  * @param onGrab    つまんで動かすためのつまみ。**渡されたときだけ出す**
  *                  (スマホでは渡ってこない —— 動かす余地が無い)
  * @param playing   いま鳴っているか
- * @param label     ボタンの文言(用意しています… を出すため)
  * @param at        いま何番目(0 から)。鳴っていなければ null
  * @param total     ぜんぶで何個か
  * @param unit      数え方の名前(段落 / 発言)
@@ -66,7 +65,7 @@ import { useFitRow } from '../lib/fitRow.js'
 export default function PlayerBar({
   place = 'float', onPlace = null, placeNext = null,
   onGrab = null, moved = false, onResetPos = null,
-  playing = false, label = null, at = null, total = 0, unit = '段落',
+  playing = false, at = null, total = 0, unit = '段落',
   onToggle, onJump = null, repeat = null, onRepeat = null,
 }) {
   /**
@@ -125,17 +124,28 @@ export default function PlayerBar({
           {/* **言葉は `.listen-word` に入れておく。** それでも入らないときは
               絵だけになる(`.player--float.is-fit1`)。すぐ右に「3 / 6」が
               あるので、鳴らすボタンだと分かる。
-              **「用意しています…」は消さない** —— あれは `label` の側で、
-              音が出るまで何も起きていないように見えてしまう */}
+
+              **「用意しています…」は、どの端末でも出さない**
+              (2026-09 実機・利用者の指定)。
+
+                > どのデバイスでも段落送りをした時に再生ツールに
+                > 「用意しています」が表示されて幅が広くなると、
+                > 連続で押すときに押しにくいです。
+                > 全てスマホと同じ、幅が変わらない仕様にして下さい
+
+              **押したことは、絵が Speaker → Stop に変わることで伝わる。**
+              ここで文言を出すと**ボタンの幅が伸び縮みし**、
+              ◀ ▶ が左右に動いて押し間違える(実測 30 → 141px)。
+              段落を続けて送るときにいちばん困る形になる */}
           {playing
-            ? <><StopIcon />{label ?? <span className="listen-word">Stop</span>}</>
+            ? <><StopIcon /><span className="listen-word">Stop</span></>
             /* **狭い画面では「(全体)」を落とす**(2026-09 実機・利用者の指定
                  「再生プレーヤーが2行になるのは絶対にダメです」)。
                すぐ右に「3 / 6 段落」があるので、通しであることは伝わる。
                **落とすのは添えの言葉だけ** —— 「Listen」は必ず残る */
-            : <><SpeakerIcon />{label ?? (
+            : <><SpeakerIcon />
               <span className="listen-word">Listen<span className="wide-text"> (全体)</span></span>
-            )}</>}
+            </>}
         </button>
       </SentenceSkip>
 

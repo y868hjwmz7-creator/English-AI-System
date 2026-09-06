@@ -469,6 +469,35 @@ for (const [label, want] of Object.entries(WANT)) {
     else if (m.place) ng(`${w}px に、置き場所の切り替えが出ている`, '行き先が無い(効かない操作)')
     else if (m.grip) ng(`${w}px に、つまんで動かすつまみが出ている`)
     else ok(`${w}px … 黒帯だけ・切り替えもつまみも出さない`)
+
+    /* ── **余った幅は、機能と機能のあいだへ配る**(2026-09 利用者の指定)
+           > せっかくスペースに余裕ができたので、各機能の間にバランスよく
+           > マージンを入れてください。触れすぎていて押し間違えをしそうな
+           > 緊張感があります
+
+         `space-between` にしてあるので、**余りがそのまま隙間になる。**
+         決め打ちの数を足していないので、ここでは
+         「**余っているのに詰まったままではないか**」だけを見る
+         (`justify-content` を `center` に戻すと赤くなる)。 */
+    const g = await page.evaluate(() => {
+      const p = document.querySelector('.player--dock')
+      const kids = [...p.children].filter((c) => c.getBoundingClientRect().width > 0)
+      const 器 = p.parentElement
+      const cs = window.getComputedStyle(器)
+      const 内側 = 器.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+      const 中身 = kids.reduce((s, c) => s + c.getBoundingClientRect().width, 0)
+      return {
+        余り: Math.round(内側 - 中身),
+        隙間: kids.slice(1).map((c, i) =>
+          Math.round(c.getBoundingClientRect().left - kids[i].getBoundingClientRect().right)),
+      }
+    })
+    const 最小 = Math.min(...g.隙間)
+    /* **余りのほとんどが隙間になっているか。** 端数(1px)は数えない */
+    if (最小 * g.隙間.length < g.余り - 1) {
+      ng(`${w}px … 余った幅が隙間になっていない`,
+        `余り ${g.余り}px なのに 隙間 ${g.隙間.join(' / ')}px`)
+    } else ok(`${w}px … 余り ${g.余り}px を隙間へ配った(${g.隙間.join(' / ')}px)`)
   }
 
   /* **パッド以上では、これまでどおり浮かせられる**(利用者の判断
