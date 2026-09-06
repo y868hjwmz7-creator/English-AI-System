@@ -34,13 +34,18 @@ import {
   scenesForStyle, speechStyleOf, stylesForScene,
 } from '../data/speechStyles.js'
 import {
-  NEW_MATERIAL_KINDS, assignMaterial, createMaterial, estimateCost,
+  NEW_MATERIAL_KINDS, assignMaterial, countMaterialsLike, createMaterial, estimateCost,
   generateChunkJa, generateSection,
   bodyWord, canPasteBody, generateSectionUnique, isDialogueKind, isPassageKind,
   kindLabel, usesScene,
-  loadUsedSentences, normEn,
+  loadRecentStories, loadUsedSentences, loadUsedSentencesLike, normEn,
   genGatewayNote,
 } from '../lib/materials.js'
+/* **話の切り口**(0046・2026-09 利用者の指定
+     「選んだシチュエーションや場面が同じでも、全然違う感じになって欲しい」)。
+   一覧も、窓口へ渡す文の組み立ても**画面が持つ**(`speechBrief` と同じ考え方)。
+   窓口の中に置くと、切り口を1つ足すたびに置き直してもらうことになる */
+import { angleBrief, anglesFor, pickAngle } from '../data/materialAngles.js'
 import { chunkPlan } from '../lib/chunkJa.js'
 import {
   genreHint, genreLabel, genresFor, sceneHint, sceneLabel, scenesFor,
@@ -203,6 +208,20 @@ export default function MaterialForm({
   // 指名した声。空文字のところは「おまかせ」
   const [picked, setPicked] = useState([])
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
+  /* **話の切り口**(0046・2026-09 利用者の指定)。
+     空なら「おまかせ」=**まだ使っていない切り口から1枚引く。**
+     同じ場面でも、切り口が違えばまったく別の話になる */
+  const [angle, setAngle] = useState(initial.angle ?? '')
+  /* **実際に使った切り口と、何の話だったか。**
+     入力の `angle`(おまかせのまま)とは別に持つ。
+     ここへ入れてしまうと、「作り直す」を押したときに
+     **同じ切り口に固定されてしまう**(おまかせが効かなくなる) */
+  const [usedAngle, setUsedAngle] = useState('')
+  const [gist, setGist] = useState('')
+  /* **同じ組み合わせの教材が、もう何本あるか**(0046)。
+     **そもそも新しく作らないのが、いちばん被らない。**
+     数えられなかったら `null`(0 と取り違えると嘘の説明になる) */
+  const [likeCount, setLikeCount] = useState(null)
   /* **Speech練習**(2026-09 利用者の指定)。
        > 内容は、自分で手入力が基本
      貼ってあれば、**本文は AI に作らせない**(そのぶん課金されない) */
@@ -337,6 +356,27 @@ export default function MaterialForm({
     return () => { alive = false }
   }, [reviewLearner])
 
+  /* **同じ組み合わせの教材が、もう何本あるか**(0046・2026-09 利用者の指定)。
+
+     **そもそも新しく作らないのが、いちばん被らない。**
+     この仕組みは教材ライブラリの再利用が前提なので(CLAUDE.md)、
+     「もう7本あります」と分かれば、別の場面を選ぶことも、
+     すでにある教材を使い回すこともできる。
+
+     **数えるだけ。表も列も増やさない。**
+     数えられなかったら `null` のまま出さない(0 と取り違えると
+     「まだ1本もありません」という嘘の説明になる)。 */
+  useEffect(() => {
+    if (!isPassageKind(kind)) { setLikeCount(null); return undefined }
+    let alive = true
+    countMaterialsLike(likeQuery()).then(({ data }) => {
+      if (alive) setLikeCount(data)
+    })
+    return () => { alive = false }
+    // **見張るのは、絞り込みに使う4つだけ。**(`likeQuery` は毎回作り直される
+    // 関数なので、見張りに入れると数え直しが止まらなくなる)
+  }, [kind, industry, genre, scene])
+
   const patchSection = (si, patch) =>
     setSections(sections.map((sec, i) => (i === si ? { ...sec, ...patch } : sec)))
 
@@ -438,6 +478,29 @@ export default function MaterialForm({
   }
 
   const genreList = genresFor(industry)
+
+  /* **その組み合わせで選べる切り口**(0046)。
+     記事とスピーチは1人が書く / 話すので記事の側、
+     会話と会議は相手がいるので会話の側。
+     **`kind === 'dialogue'` と書かない**(会議で必ず抜ける)。
+     **スピーチには出さない** —— あちらには話し方の型がすでにある */
+  const angleList = anglesFor(kind)
+
+  /* **いまの組み合わせを、そのまま渡すための1か所。**
+     過去の話を引くのも、本数を数えるのも、同じ絞り方でなければ
+     「7本あります」と言いながら別のものを避けさせることになる */
+  const likeQuery = () => ({
+    kind,
+    industry,
+    /* **保存しているとおりに絞る**(下の `createMaterial` と同じ形)。
+       ここだけ広げても狭めても、「7本あります」と言いながら
+       別のものを避けさせることになる。
+       **スピーチの場面は、いまは保存していない** ——
+       だから業界と種類だけで絞る(絞りすぎて0本になるより、
+       同じ業界のスピーチを避けるほうが役に立つ) */
+    genre: kind === 'reading' ? genre : '',
+    scene: isDialogueKind(kind) ? scene : '',
+  })
 
   /** 弱点タグを、AI に渡す文言にする */
   const topicOf = (id) => {
@@ -623,7 +686,33 @@ export default function MaterialForm({
     const pasted = canPasteBody(kind) ? pastedParagraphs(script) : []
     if (pasted.length) return generateFromScript({ step, cancelled }, plan, pasted)
 
-    const { data: used } = await loadUsedSentences(tagIds)
+    /* **①すでに使った英文を渡して避けさせる。**
+       弱点タグからしか引けなかったので、**タグを付けない記事・会話では
+       1本も渡っていなかった**(0046 で気づいた)。
+       タグが無ければ、**同じ業界・同じ場面の教材**から集める */
+    const { data: used } = tagIds.length
+      ? await loadUsedSentences(tagIds)
+      : await loadUsedSentencesLike(likeQuery())
+
+    /* **同じ「話」を二度作らない**(0046・2026-09 利用者の指定)。
+
+         > 選んだシチュエーションや場面が同じでも、
+         > 全然違う感じになって欲しいわけです。
+
+       上の `used` は**英文**である。英文が1つも一致しなくても、
+       「会議に遅れた新人が上司に謝る話」と「打ち合わせに遅れた新人が
+       先輩に謝る話」は、ゲストから見れば同じ話である。
+       **見る単位を、文から話へ上げる。**
+
+       渡すのは同じ業界・同じ場面の過去15本の筋(数百トークン=0.1円未満)。
+       **0046 を貼る前でも効く** —— 見出しと話題は前から入っている */
+    const { data: stories } = await loadRecentStories(likeQuery())
+    const past = stories ?? []
+    /* **切り口を1枚引く。** おまかせのときは、
+       **その組み合わせでまだ使っていない切り口**から選ぶ。
+       Sonnet 5 は `temperature` を指定できないので、
+       **ばらつきは入力の側で作るしかない**(`materialAngles.js`) */
+    const angleId = angle || pickAngle(kind, past.map((x) => x.angle))?.id || ''
 
     step(0, exerciseLabel(bodyPlan.exercise_type))
     const { data: body, error: bodyError } = await generateSection({
@@ -656,6 +745,9 @@ export default function MaterialForm({
          **声に名前を合わせる**(逆は当てられない) */
       speakerGenders: isDialogueKind(kind) ? castGenders() : undefined,
       avoid: (used ?? []).slice(-40),
+      // **話の重複を避ける2つ**(0046)。窓口の置き直しが要る
+      avoidTopics: past.map((x) => x.text).filter(Boolean),
+      angle: angleBrief(angleId),
     })
     // **どの段階で失敗したのかを、必ず名前で言う。**
     // 記事・会話は「本文 → 内容の理解 → 語句」と3回に分けて作る。
@@ -750,6 +842,12 @@ export default function MaterialForm({
       made, spent,
       headline: body.headline ?? null,
       headlineJa: body.headline_ja ?? null,
+      /* **実際に使った切り口と、何の話だったか**(0046)。
+         次に同じ場面で作るとき、これを渡して避けさせる。
+         `gist` は窓口を置き直すまで返ってこない —— そのときは空のまま
+         保存され、**見出しと話題で代わりに避けさせる** */
+      angle: angleId || null,
+      gist: body.gist ?? null,
       teachingPoint: body.teaching_point ?? null,
       autoTitle: autoTitle(),
       form: formSnapshot(),
@@ -903,6 +1001,10 @@ export default function MaterialForm({
     setSimilarNotes([])
     setWarning(null)
     setDone(null)
+    // 前の下書きの控えを残さない(0046)。
+    // 残すと、別の切り口で作り直したのに前の切り口が保存される
+    setUsedAngle('')
+    setGist('')
 
     /* **画面から切り離して走らせる**(2026-09 利用者の指定)。
          > 教材の作成中に別のところに飛んでもバックグラウンドで
@@ -925,6 +1027,9 @@ export default function MaterialForm({
   /** いまの入力を控える。**別の画面から戻ったときに、そのまま戻すため** */
   const formSnapshot = () => ({
     kind, level, industry, tagIds, genre, scene, subject,
+    // 話の切り口(0046)。**選んだものだけを控える** ——
+    // 実際に引いた切り口を入れると、戻ったときにおまかせが効かなくなる
+    angle,
     visibility, instruction, mustUse,
     // 会話に出す人数(2026-09)。戻ってきたときに2人へ戻っていると、
     // 会議として作ったはずの教材が1対1の会話として保存される
@@ -955,6 +1060,7 @@ export default function MaterialForm({
     if (f.genre != null) setGenre(f.genre)
     if (f.scene != null) setScene(f.scene)
     if (f.subject != null) setSubject(f.subject)
+    if (f.angle != null) setAngle(f.angle)
     if (f.speakers != null) setSpeakers(f.speakers)
     if (f.visibility) setVisibility(f.visibility)
     if (f.instruction != null) setInstruction(f.instruction)
@@ -970,6 +1076,10 @@ export default function MaterialForm({
     setSections(r.made)
     if (r.headline) setHeadline(r.headline)
     if (r.headlineJa) setHeadlineJa(r.headlineJa)
+    /* **実際に使った切り口と筋**(0046)。入力の `angle` とは別に持つ。
+       ここを入力へ入れてしまうと、「作り直す」で同じ切り口に固定される */
+    setUsedAngle(r.angle ?? '')
+    setGist(r.gist ?? '')
     if (r.teachingPoint) setTeachingPoint(r.teachingPoint)
     setDropped(r.dropped ?? 0)
     setShort(r.short ?? 0)
@@ -1018,6 +1128,10 @@ export default function MaterialForm({
       visibility, industry, sections, tagIds, createdBy,
       headline, headlineJa,
       genre: kind === 'reading' ? genre : '', scene: isDialogueKind(kind) ? scene : '',
+      /* **どの切り口で、何の話を書いたか**(0046)。
+         次に同じ業界・場面で作るとき、これを渡して避けさせる。
+         **0046 を貼る前は送らない**(`createMaterial` が外す) */
+      angle: usedAngle || angle, gist,
       // **おまかせは、ここで1回だけ決めて保存する。**
       // 開くたびに選び直すと、同じ教材なのに毎回ちがう声になり、
       // そのたびに音声を作り直す(= 課金される)
@@ -1196,6 +1310,46 @@ export default function MaterialForm({
             ))}
           </select>
         </label>
+      )}
+
+      {/* ── 話の切り口(0046・2026-09 利用者の指定)────────────────
+
+            > 選んだシチュエーションや場面が同じでも、
+            > 全然違う感じになって欲しいわけです。
+
+          同じ場面でも、切り口が違えばまったく別の話になる。
+          **既定は「おまかせ」** —— そのとき、まだ使っていない切り口から
+          1枚引く。押すたびに違う話になるのは、ここが効いているためである。
+
+          **スピーチには出さない**(話し方の型がその役をしている)。 */}
+      {angleList.length > 0 && (
+        <label className="field">
+          <span>
+            話の切り口
+            <span className="field-hint">
+              同じ場面でも、切り口が違えば別の話になります。
+              おまかせなら、まだ使っていない切り口から選びます
+            </span>
+          </span>
+          <select value={angle} onChange={(e) => setAngle(e.target.value)}>
+            <option value="">おまかせ(毎回ちがう切り口)</option>
+            {angleList.map((a) => (
+              <option key={a.id} value={a.id}>{a.label} — {a.hint}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {/* **もう何本あるか。** そもそも新しく作らないのが、いちばん被らない。
+          **数えられなかったときは出さない**(0 と取り違えさせない) */}
+      {isPassageKind(kind) && likeCount != null && (
+        <p className="field-hint">
+          {likeCount > 0
+            ? `この組み合わせの教材は、すでに ${likeCount} 本あります。`
+              + '同じ話にならないよう、過去の内容を避けて作ります'
+              + '(「教材をさがす」から使い回すこともできます)'
+            : 'この組み合わせの教材は、まだありません'}
+        </p>
       )}
 
       {/* ── Speech練習(2026-09 利用者の指定)────────────────────────

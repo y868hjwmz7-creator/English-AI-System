@@ -331,6 +331,8 @@ export async function createMaterial({
   title, level, kind, instruction_ja = '', teaching_point = '',
   visibility = 'school', industry = null,
   headline = '', headlineJa = '', genre = '', scene = '', topic = '', voiceIds = null,
+  // 話の切り口と、何の話だったか(0046)。**似た教材を作らないための控え**
+  angle = '', gist = '',
   sections = [], tagIds = [], createdBy,
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
@@ -366,6 +368,15 @@ export async function createMaterial({
       genre: genre || null,
       scene: scene || null,
       topic: String(topic ?? '').trim() || null,
+      /* 話の切り口と、何の話だったか(0046)。
+         **列がまだ無いと分かっているときは送らない**(`headline_ja` と同じ)。
+         送ると挿入ごと失敗し、教材を1本も作れなくなる。
+         0046 を貼る前は、ここが空のまま教材ができる —— それでよい。
+         見出しと話題は前から入っているので、避けさせる側は効く */
+      ...(missingColumns.has('angle') || !String(angle ?? '').trim()
+        ? {} : { angle: String(angle).trim() }),
+      ...(missingColumns.has('gist') || !String(gist ?? '').trim()
+        ? {} : { gist: String(gist).trim() }),
       // 読み上げに使う声の並び(0017)。空なら既定(アメリカ英語・女性)。
       // **列がまだ無いと分かっているときは、送らない。**
       // 送ると挿入ごと失敗し、教材を1本も作れなくなる
@@ -878,7 +889,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-06c'
+export const NEED_GEN_REV = '2026-09-06d'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -903,6 +914,8 @@ export async function generateSection({
   sectionType, count = 10, topic, topics = [], level, industry = '',
   isFirst = false, avoid = [], genre = '', scene = '', subject = '', context = '',
   reviewWords = [], speakers = undefined,
+  // **被らないための2つ**(0046)。`avoid` は英文、こちらは話である
+  avoidTopics = [], angle = '',
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
@@ -918,6 +931,12 @@ export async function generateSection({
       // 単語・フレーズは「この語で作る」、それ以外は「本文の中で使う」
       // (言い分けは窓口側でする)
       reviewWords,
+      /* **同じ話を二度作らない**(0046・2026-09 利用者の指定)。
+         `avoid`(英文)とは別物である。英文が1つも一致しなくても、
+         筋が同じなら「また同じ話」になる。
+         **窓口の置き直しが要る**(それまでは無視される。
+         `NEED_GEN_REV` を見て画面が赤く知らせる) */
+      avoidTopics, angle,
     },
   })
 
@@ -1217,8 +1236,42 @@ export async function loadUsedSentences(tagIds, limit = 120) {
   const { data: tagged, error: tagError } = await supabase
     .from('material_tags').select('material_id').in('tag_id', tagIds).limit(60)
   if (tagError) return fail(tagError, 'すでにある英文を読めませんでした')
-  const ids = [...new Set((tagged ?? []).map((r) => r.material_id))]
-  if (!ids.length) return ok([])
+  return sentencesFromMaterials([...new Set((tagged ?? []).map((r) => r.material_id))], limit)
+}
+
+/**
+ * **同じ組み合わせの教材から、英文を集める**(①の誘導用・0046)。
+ *
+ * 【なぜ要るのか】
+ *   `loadUsedSentences()` は**弱点タグからしか**教材を引けない。
+ *   ところが **記事・会話では弱点タグは任意**(CLAUDE.md)なので、
+ *   タグを付けずに作ると**渡す英文が1本も無かった。**
+ *   いちばん被りやすい記事・会話が、いちばん守られていなかったことになる。
+ *
+ *   同じ業界・同じ場面の教材が、いちばん似た英文を持っている。
+ *   **そこから集める。**
+ */
+export async function loadUsedSentencesLike({
+  kind = '', industry = '', genre = '', scene = '', limit = 120,
+} = {}) {
+  if (!supabase || !kind) return ok([])
+  let query = supabase
+    .from('materials').select('id').eq('kind', kind)
+    .order('created_at', { ascending: false }).limit(20)
+  query = industry ? query.eq('industry', industry) : query.is('industry', null)
+  if (genre) query = query.eq('genre', genre)
+  if (scene) query = query.eq('scene', scene)
+  const { data: rows, error: listError } = await query
+  if (listError) return fail(listError, 'すでにある英文を読めませんでした')
+  return sentencesFromMaterials((rows ?? []).map((m) => m.id), limit)
+}
+
+/**
+ * 教材の id から、英語の文だけを集める。
+ * **2か所に書き写さない**(上の2つが同じものを使う)。
+ */
+async function sentencesFromMaterials(ids, limit) {
+  if (!ids?.length) return ok([])
 
   const { data, error } = await supabase
     .from('material_items')
@@ -1238,6 +1291,102 @@ export async function loadUsedSentences(tagIds, limit = 120) {
     }
   }
   return ok([...seen].slice(-limit))
+}
+
+/**
+ * **同じ組み合わせで、これまでに何を書いたか**(0046)。
+ *
+ * ============================================================================
+ * 【なぜ要るのか】(2026-09 利用者の指定)
+ *
+ *   > 選んだシチュエーションや場面が同じでも、全然違う感じになって欲しい
+ *
+ *   これまで「被らない」を守っていたのは**英文の単位だけ**だった。
+ *   ところが英文が1つも一致しなくても、
+ *
+ *     A: 会議に遅れた新人が、上司に謝りに行く話
+ *     B: 打ち合わせに遅れた新人が、先輩に謝りに行く話
+ *
+ *   この2本はゲストから見れば**同じような話**である。
+ *   だから**見る単位を「文」から「話」へ上げる。**
+ *
+ * 【0046 を貼る前でも効く】
+ *
+ *   `gist`(何の話だったか)は 0046 で足す列だが、
+ *   **見出し(`headline`)と話題(`topic`)は 0010 から入っている。**
+ *   だから貼る前でも、見出しを渡して避けさせられる
+ *   (`runTolerant` と同じ考え方で、無い列は外して読み直す)。
+ *
+ * 【範囲は「同じ業界 × 同じ本文の種類 × 同じ場面(話題)」】
+ *
+ *   場面まで同じなら、いちばん被りやすい。逆に業界も場面も違えば、
+ *   そもそも似ようがない(避けさせる指示を長くするだけ損である)。
+ *
+ * @returns {{data: {text: string, angle: string}[]}} 新しい順
+ */
+export async function loadRecentStories({
+  kind = '', industry = '', genre = '', scene = '', limit = 15,
+} = {}) {
+  if (!supabase || !kind) return ok([])
+
+  /* **0046 を貼る前は、`gist` と `angle` の列が無い。**
+     PostgREST は知らない列が1つでもあると問い合わせ全体を断るので、
+     `runTolerant` に外して読み直させる(`voice_ids` と同じ作法)。
+     ここで `missingColumns` に覚えるので、`createMaterial` も
+     その2列を送らなくなる。 */
+  const { data, error } = await runTolerant(() => {
+    let query = supabase
+      .from('materials')
+      .select(`headline, topic${optLast('gist')}${optLast('angle')}`)
+      .eq('kind', kind)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    // **業界を指定していない教材どうしも、互いに見える。**
+    // `industry` が空なら「指定なし」の教材だけを見る
+    query = industry ? query.eq('industry', industry) : query.is('industry', null)
+    if (genre) query = query.eq('genre', genre)
+    if (scene) query = query.eq('scene', scene)
+    return query
+  })
+  if (error) return fail(error, 'これまでの教材を読めませんでした')
+
+  const rows = []
+  for (const m of data ?? []) {
+    // **筋があればそれを使う。** 無ければ見出しと話題で代える
+    const text = [String(m.gist ?? '').trim(), String(m.headline ?? '').trim(),
+      String(m.topic ?? '').trim()].filter(Boolean).join(' / ')
+    if (text) rows.push({ text, angle: String(m.angle ?? '').trim() })
+    else if (m.angle) rows.push({ text: '', angle: String(m.angle).trim() })
+  }
+  return ok(rows)
+}
+
+/**
+ * **同じ組み合わせの教材が、もう何本あるか**(0046)。
+ *
+ * 作る前に見せる。**そもそも新しく作らないのが、いちばん被らない。**
+ * 教材ライブラリの再利用がこの仕組みの前提なので(CLAUDE.md)、
+ * 「もう7本あります」と分かれば、別の場面を選ぶか、既存を使い回せる。
+ *
+ * **表も列も増やさない。** 数えるだけである。
+ */
+export async function countMaterialsLike({
+  kind = '', industry = '', genre = '', scene = '', level = '',
+} = {}) {
+  if (!supabase || !kind) return ok(null)
+  let query = supabase
+    .from('materials')
+    .select('id', { count: 'exact', head: true })
+    .eq('kind', kind)
+  query = industry ? query.eq('industry', industry) : query.is('industry', null)
+  if (genre) query = query.eq('genre', genre)
+  if (scene) query = query.eq('scene', scene)
+  if (level) query = query.eq('level', level)
+  const { count, error } = await query
+  // **数えられなかったら `null`。** 0 と取り違えると
+  // 「まだ1本もありません」という**嘘の説明**になる(`materialShareCount` と同じ)
+  if (error) return ok(null)
+  return ok(count ?? null)
 }
 
 /**

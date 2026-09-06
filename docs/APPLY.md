@@ -39,7 +39,7 @@
 | 貼る SQL(0031 ゲストのファイルの置き場) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
 | 貼る SQL(0032 セッションの記録) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02.sql` |
 | 貼る SQL(0033 ディスカッション・0034 に含まれるので不要) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02b.sql` |
-| (済)0041〜0045 を全部まとめたもの | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_matome.sql` |
+| **★いま貼っていただくもの … 0041〜0046 を全部まとめたもの** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_matome.sql` |
 | (参考)0045 想定される質問だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-09.sql` |
 | (参考)0044 教材を消すだけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-08.sql` |
 | (参考)0043 Speech練習だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-07.sql` |
@@ -54,7 +54,7 @@
 | 貼る SQL⑥(0039 一覧の「覚えた」・⑤のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03e.sql` |
 | 貼る SQL⑦(0040 Quick Response の復習・⑥のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-04.sql` |
 | 状態を見るだけの SQL | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
-| **★いま置き直していただくもの … 教材を作る関数**(添削の機能を足しました) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
+| **★いま置き直していただくもの … 教材を作る関数**(似た教材を作らないようにしました) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
 | 読み上げ音声の関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |
 | 語の意味を引く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/lookup-word/index.ts` |
 | 似た英文を弾く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/check-similar/index.ts` |

@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   27行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   28行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -16,8 +16,8 @@
 --     https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/
 --     ↑ のうしろに、下のファイル名をつなげると開けます。
 --
---   **0041〜0045 のどれかが「まだです」なら、まとめた1つで済みます。**
---     supabase/apply/pending_matome.sql   ← これ1つで 0041〜0045 が全部入ります
+--   **0041〜0046 のどれかが「まだです」なら、まとめた1つで済みます。**
+--     supabase/apply/pending_matome.sql   ← これ1つで 0041〜0046 が全部入ります
 --
 --   それより古いところが「まだです」のときは、こちら。
 --     0013〜0023 … supabase/apply/pending_2026-08-29.sql
@@ -114,4 +114,7 @@ from (
     exists (select 1 from pg_constraint
             where conname = 'material_sections_type_check'
               and pg_get_constraintdef(oid) like '%audience_qa%'), 27
+  union all select '0046 教材に「切り口」と「何の話だったか」を控える(pending_matome.sql)',
+    exists (select 1 from information_schema.columns
+            where table_name = 'materials' and column_name = 'gist'), 28
 ) t order by 順;

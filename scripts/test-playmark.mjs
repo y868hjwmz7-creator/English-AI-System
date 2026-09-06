@@ -33,6 +33,9 @@ import {
 } from '../src/data/exerciseTypes.js'
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import {
+  DIALOGUE_ANGLES, READING_ANGLES, angleBrief, angleLabel, anglesFor, pickAngle,
+} from '../src/data/materialAngles.js'
+import {
   MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
 } from '../src/data/materialKinds.js'
 import {
@@ -1002,6 +1005,137 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(/mode: 'review_writing'/.test(mats), '画面が、添削を頼む道を持っている')
     ok(/export async function reviewWriting\(/.test(mats),
       '添削を頼む窓口の呼び方が、materials.js にある')
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// 話の切り口(0046・2026-09 利用者の指定)
+//
+//   > 全て同じ条件で教材を作成した時に過去の内容に被らないものを
+//   > 作成できるシステムである必要があります。似たようなシチュエーションと
+//   > いうのも避けたいです。選んだシチュエーションや場面が同じでも、
+//   > 全然違う感じになって欲しいわけです。
+//
+//   **Sonnet 5 は `temperature` を指定できない**ので、ばらつきは
+//   出力の側では作れない。**入力そのものを毎回変えるしかない。**
+//   ここが黙って効かなくなると、**教材は普通にできあがるので誰も気づけない。**
+// ────────────────────────────────────────────────────────────────
+{
+  console.log('\n── 話の切り口(似た教材を作らない)──')
+
+  /* **知っている切り口を控える**(声の名簿と同じ考え方)。
+     1つでも消えたら赤くなる。**足したらここにも書き足す**ので、
+     必ず1回は自分の目で数えることになる */
+  const KNOWN = {
+    reading: ['an_success', 'an_failure', 'an_numbers', 'an_debate', 'an_day',
+      'an_thennow', 'an_myth', 'an_small', 'an_abroad', 'an_next'],
+    dialogue: ['an_split', 'an_ask', 'an_badnews', 'an_undecided', 'an_mixup',
+      'an_first', 'an_deadline', 'an_report', 'an_decline', 'an_handover'],
+  }
+  for (const [name, list] of [['記事', READING_ANGLES], ['会話', DIALOGUE_ANGLES]]) {
+    const ids = list.map((a) => a.id)
+    const want = name === '記事' ? KNOWN.reading : KNOWN.dialogue
+    for (const id of want) ok(ids.includes(id), `${name}の切り口が残っている: ${id}`)
+    ok(ids.length === new Set(ids).size, `${name}の切り口に、同じ id が2つない`)
+    for (const a of list) {
+      // **`hint` は `<option>` にそのまま出る。** Markdown にはならない
+      ok(!/\*\*/.test(`${a.label}${a.hint}`),
+        `${a.id} の名前と説明に、強調の書き方が混ざっていない`)
+      // **窓口へ渡すのは `brief`。** 空だと、切り口を選んでも何も効かない
+      ok(a.brief && a.brief.length > 10, `${a.id} に、窓口へ渡す指定がある`)
+    }
+  }
+
+  // **種類で分ける。`kind === 'dialogue'` と書くと会議で抜ける**
+  ok(anglesFor('reading') === READING_ANGLES, '記事には記事の切り口が出る')
+  ok(anglesFor('dialogue') === DIALOGUE_ANGLES, '会話には会話の切り口が出る')
+  ok(anglesFor('meeting') === DIALOGUE_ANGLES, '**会議にも**会話の切り口が出る')
+  // **スピーチには出さない**(話し方の型がその役をしている)
+  ok(anglesFor('speech').length === 0, 'スピーチには切り口を出さない(話し方の型がある)')
+  ok(anglesFor('word').length === 0, '単語の教材には切り口を出さない')
+
+  // **まだ使っていないものから引く。** ここが効かないと、
+  // おまかせが同じ切り口を続けて引き、似た教材が量産される
+  {
+    const used = DIALOGUE_ANGLES.slice(0, 9).map((a) => a.id)
+    const got = pickAngle('dialogue', used, () => 0.5)
+    ok(got?.id === DIALOGUE_ANGLES[9].id,
+      'まだ使っていない切り口から引く', `引いたのは ${got?.id}`)
+  }
+  {
+    // **使い切ったら、また全部から引く**(行き止まりを作らない)
+    const all = DIALOGUE_ANGLES.map((a) => a.id)
+    const got = pickAngle('dialogue', all, () => 0)
+    ok(got != null, '全部使い切っても、行き止まりにならない')
+  }
+  ok(pickAngle('speech', [], () => 0) === null, 'スピーチでは切り口を引かない')
+  // **端でも落ちない**(1 を返す乱数で、配列の外に出ない)
+  ok(pickAngle('reading', [], () => 0.999999) != null, '端の値でも切り口を引ける')
+
+  // 窓口へ渡す文。**名前と指定の両方が入る**
+  {
+    const brief = angleBrief('an_badnews')
+    ok(brief.includes('悪い知らせ') && brief.length > 20,
+      '窓口へ渡す文に、名前と指定の両方が入っている')
+    ok(angleBrief('') === '', '切り口を選んでいなければ、何も渡さない')
+    ok(angleBrief('an_nothing') === '', '知らない id では、何も渡さない')
+    ok(angleLabel('an_split') === '意見が割れる', 'id から名前を引ける')
+    ok(angleLabel('an_nothing') === 'an_nothing', '知らない id は、そのまま返す')
+  }
+
+  // ── 画面が本当に呼んでいるか ──
+  //   **定義だけあって誰も呼ばなければ、いまと同じことになる**
+  //   (`noteFnRev` を定義だけして呼んでいなかったのと同じ落とし穴)
+  {
+    const form = readFileSync(
+      new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+    ok(/pickAngle\(kind, past\.map/.test(form),
+      '画面が、まだ使っていない切り口から引いている')
+    ok(/angle: angleBrief\(angleId\)/.test(form), '画面が、切り口を窓口へ渡している')
+    ok(/loadRecentStories\(likeQuery\(\)\)/.test(form),
+      '画面が、同じ組み合わせの過去の話を引いている')
+    ok(/avoidTopics: past\.map/.test(form), '画面が、過去の話を窓口へ渡している')
+    ok(/angle: usedAngle \|\| angle, gist/.test(form),
+      '実際に使った切り口と筋を保存している')
+    // **タグが無い記事・会話でも、英文を渡す**(0046 で塞いだ穴)
+    ok(/loadUsedSentencesLike\(likeQuery\(\)\)/.test(form),
+      '弱点タグが無いときも、同じ組み合わせの英文を避けさせている')
+    ok(/countMaterialsLike\(likeQuery\(\)\)/.test(form),
+      '作る前に「もう何本あるか」を数えている')
+    // **入力の切り口を、使った切り口で上書きしない**
+    // (上書きすると「作り直す」で同じ切り口に固定される)
+    ok(/setUsedAngle\(r\.angle \?\? ''\)/.test(form),
+      '実際に使った切り口は、入力とは別に持っている')
+  }
+
+  // ── 窓口が受け取っているか ──
+  {
+    const fn = readFileSync(
+      new URL('../supabase/functions/generate-material/index.ts', import.meta.url), 'utf8')
+    ok(/const avoidTopics = /.test(fn), '窓口が、避ける話を受け取っている')
+    ok(/const angle = String\(body\.angle/.test(fn), '窓口が、切り口を受け取っている')
+    ok(/すでにある話/.test(fn), '窓口が、避ける話を指示に入れている')
+    ok(/切り口\(この角度から書くこと\)/.test(fn), '窓口が、切り口を指示に入れている')
+    // **具体を先に決めさせる。** 一般論が、いちばん量産っぽく読める
+    ok(/一般論で書き出さない/.test(fn), '窓口が、一般論で書き出さないよう言っている')
+    ok(/実在の人物・企業・商品の名前は使わない/.test(fn),
+      '窓口が、実在の名前を使わないよう言っている')
+    // **何の話だったかを書かせる。** 次に避けさせる材料になる
+    ok(/props\.gist = \{/.test(fn), '道具に「何の話か」の欄がある')
+    ok(/required\.push\('gist'\)/.test(fn), '「何の話か」は必須にしてある')
+    ok(/gist: result\.gist/.test(fn), '窓口が、それを返している')
+  }
+
+  // ── 貼る SQL がそろっているか ──
+  //   **移行を足したのに `check.sql` に足し忘れると、
+  //   本当は足りないのに「全部 ✅」と出る**(いちばん悪い壊れ方)
+  {
+    const matome = readFileSync(
+      new URL('../supabase/apply/pending_matome.sql', import.meta.url), 'utf8')
+    const check = readFileSync(
+      new URL('../supabase/apply/check.sql', import.meta.url), 'utf8')
+    ok(/add column if not exists gist/.test(matome), 'まとめた1つに 0046 が入っている')
+    ok(/column_name = 'gist'/.test(check), 'check.sql が 0046 を見ている')
   }
 }
 
