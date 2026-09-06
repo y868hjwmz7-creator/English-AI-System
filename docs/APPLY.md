@@ -39,7 +39,8 @@
 | 貼る SQL(0031 ゲストのファイルの置き場) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
 | 貼る SQL(0032 セッションの記録) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02.sql` |
 | 貼る SQL(0033 ディスカッション・0034 に含まれるので不要) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02b.sql` |
-| **★いま貼っていただくもの(0044 教材を消す)** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-08.sql` |
+| **★いま貼っていただくもの(0045 想定される質問)** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-09.sql` |
+| 貼る SQL(0044 教材を消す。まだならこちらが先) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-08.sql` |
 | 貼る SQL(0043 Speech練習。まだならこちらが先) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-07.sql` |
 | 貼る SQL(0042 続けた記録と週の目標。まだならこちらが先) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-06.sql` |
 | 貼る SQL(0041 ゲストの記録をまとめて消す。まだならこちらが先) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-05.sql` |

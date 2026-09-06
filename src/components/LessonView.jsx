@@ -17,7 +17,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  countLabel, countUnit, exerciseType, isPassageSection, sectionLabel,
+  countLabel, countUnit, exerciseType, isPassageSection, noteIsAnswer, sectionLabel,
 } from '../data/exerciseTypes.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
@@ -1392,6 +1392,10 @@ export default function LessonView({
     if (!sec) return null
     const secType = exerciseType(sec.exercise_type)
     const secIsPassage = isPassageSection(sec.exercise_type)
+    /* **ディスカッションと想定される質問には、解答が無い。**
+       答え合わせで出したいのは `note`(日本語の手がかり)のほうである
+       (`noteIsAnswer`・`exerciseTypes.js` 1か所) */
+    const secNoteIsAnswer = noteIsAnswer(sec.exercise_type)
     const secCast = castVoices(voices, (sec.items ?? []).map((it) => it.speaker))
     const secClipCast = castClipSpeakers(
       (sec.items ?? []).map((it) => it.speaker), material.voiceIds,
@@ -1586,13 +1590,17 @@ export default function LessonView({
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。
                       レッスンで1問ずつ答え合わせをするために、問ごとが要る。 */}
-                  {(it.answer || it.audio_text || (secIsPassage && it.prompt_ja)) && (
+                  {(it.answer || it.audio_text || (secNoteIsAnswer && it.note)
+                    || (secIsPassage && it.prompt_ja)) && (
                     <button type="button" className="btn btn--small lesson-reveal"
                             aria-expanded={isOpen(k(it, i))}
                             onClick={() => toggleItem(k(it, i))}>
                       {secIsPassage
                         ? (isOpen(k(it, i)) ? '訳を隠す' : '訳を見る')
-                        : (isOpen(k(it, i)) ? '解答を隠す' : '解答を見る')}
+                        /* **「解答」と書かない。** 正解が無いものに解答は無い */
+                        : secNoteIsAnswer
+                          ? (isOpen(k(it, i)) ? '手がかりを隠す' : '手がかりを見る')
+                          : (isOpen(k(it, i)) ? '解答を隠す' : '解答を見る')}
                     </button>
                   )}
 

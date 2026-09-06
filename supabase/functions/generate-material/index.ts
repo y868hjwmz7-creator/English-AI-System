@@ -294,6 +294,24 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     + '設問はゲストのレベルで読める英語にする(本文より難しくしない)。'
     + 'note には、①話を広げる観点(日本語)と ②答えるときに使える英語表現を'
     + '2〜3個、80字以内で書く。',
+  /* 想定される質問(2026-09 利用者の指定)。
+     **ディスカッションとは向きが逆である。** あちらは自分から考えを話す
+     問いだが、こちらは**話し終えたあとに聴衆から投げられる**質問である。
+     だから answer を持たせない —— 答えるのは話し手本人で、正解は1つに
+     決まらない。note には「どう答えるか」の筋道を日本語で書かせる。 */
+  audience_qa:
+    '想定される質問。question に英語の質問、question_ja にその訳、'
+    + 'note に日本語の答え方の手がかりを入れる。'
+    + '**answer は入れない。模範解答を書かない。**'
+    + '**本文(スピーチ)を聞いた聴衆が、話し終わったあとに実際に投げそうな'
+    + '質問**にする。本文に書いていないところを突く質問を必ず混ぜる'
+    + '(数字の根拠・費用・期間・うまくいかなかったとき・他社との違いなど)。'
+    + '「本文に何と書いてあったか」を確かめる問い(内容理解)は作らない。'
+    + '話し手が答えに詰まりそうな、少し意地の悪い質問を1〜2問入れる。'
+    + '質問はその場で口に出される言葉にする(1〜2文。書き言葉にしない)。'
+    + 'question_ja は自然な日本語にする。語をなぞっただけの直訳にしない。'
+    + 'note には、①どの筋道で答えるか(日本語)と ②答えるときに使える'
+    + '英語表現を2〜3個、80字以内で書く。',
   vocab_note:
     '本文に出た語句。**本文に実際に出てきた語句だけ**を選ぶ。出てこない語を作らない。'
     + 'prompt_en に語句、prompt_ja に意味、note にその語句を使った短い例文(英語)と'
@@ -425,6 +443,11 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
   // ディスカッションは**正解が無い**ので answer を出さない。
   // 欄そのものを出さなければ、書きようがない(`strict: true`)
   discussion:      { required: ['question', 'note'], optional: [] },
+  /* 想定される質問。**ディスカッションと同じく answer を出さない**
+     (答えるのは話し手本人で、正解が1つに決まらない)。
+     ただし**設問の訳は必須**にする —— 日本語が1つも無いと、
+     答えられなかったのか聞き取れなかったのかが分からない(0035 と同じ理由) */
+  audience_qa:     { required: ['question', 'question_ja', 'note'], optional: [] },
   vocab_note:      { required: ['prompt_en', 'prompt_ja', 'note'], optional: [] },
 
   // 発音記号は**必須**にする。発音の練習に使う教材なので、
@@ -782,7 +805,7 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-05'
+const FN_REV = '2026-09-06'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
@@ -957,8 +980,11 @@ Deno.serve(async (req) => {
   const isPassage = sectionType === 'article' || sectionType === 'dialogue'
   // 本文を読まないと作れない演習。**ディスカッションもここに入る**
   // (本文をきっかけに話させるので、本文が無いと問いが作れない)
+  // **想定される質問もここに入る**(2026-09)。聴衆はスピーチを聞いた人なので、
+  // 本文が無ければ「その話に対する質問」は作りようがない
   const needsContext = sectionType === 'comprehension'
-    || sectionType === 'discussion' || sectionType === 'vocab_note'
+    || sectionType === 'discussion' || sectionType === 'audience_qa'
+    || sectionType === 'vocab_note'
   if (!topic && !isPassage && !needsContext) {
     return reply({ error: '弱点(何の練習か)を指定してください' }, 400)
   }

@@ -50,6 +50,26 @@ const material = asSpeech ? {
       { id: 'it-1', prompt_en: 'Good afternoon, everyone.', prompt_ja: 'みなさん、こんにちは。' },
       { id: 'it-2', prompt_en: 'I would like to thank you for being here.', prompt_ja: '来てくださって、ありがとうございます。' },
     ],
+  }, {
+    /* **想定される質問**(0045・2026-09 利用者の指定)。
+       話し終えたあとに聴衆から投げられる質問。**解答は持たない** */
+    id: 'sec-2', exercise_type: 'audience_qa', title: '想定される質問',
+    items: [
+      {
+        id: 'qa-1',
+        question: 'How much would this cost us in the first year?',
+        question_ja: '初年度、こちらの費用はどれくらいになりますか。',
+        note: '数字が無ければ「まだ出せない」と言い切り、いつ出せるかを添える。'
+          + 'I don\'t have the exact figure yet, but … / I can send you that by Friday.',
+      },
+      {
+        id: 'qa-2',
+        question: 'What happens if the schedule slips?',
+        question_ja: '予定が遅れた場合はどうなりますか。',
+        note: '遅れる前提で答える。何を先に守るかを1つ決めて言う。'
+          + 'If that happens, we would … / Our first priority is …',
+      },
+    ],
   }],
 } : {
   id: 'test-material', level: 'B1', title: 'クラスに出る', kind: 'dialogue',

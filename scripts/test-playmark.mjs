@@ -27,7 +27,10 @@ import {
 import {
   MAX_CHARS, MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
 } from '../src/lib/speechDraft.js'
-import { exerciseLabel, sectionLabel } from '../src/data/exerciseTypes.js'
+import {
+  EXERCISE_TYPES, SCALABLE_SECTIONS, amountsFor, defaultSectionsFor,
+  exerciseLabel, isPassageSection, noteIsAnswer, sectionLabel, sectionsFor,
+} from '../src/data/exerciseTypes.js'
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import {
   MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
@@ -577,6 +580,112 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(/using \(public\.is_owner\(\)\)/.test(sql), '足すのは管理者だけ(is_owner)')
     ok(!/is_trainer|is_admin/.test(sql.replace(/--.*$/gm, '')),
       'トレーナーには足していない(人の教材を消せない)')
+  }
+}
+
+/**
+ * ============================================================================
+ * ⑩ 想定される質問(0045・2026-09 利用者の指定)
+ *
+ *   > 作成したスピーチに対して、聴衆から想定される質問を作る機能を
+ *   > 実装して下さい。質問は、他の演習と同じように個数を5個、10個と
+ *   > 選べるようにして下さい。
+ *
+ * **演習の種類を足す場所は4つある**(画面・窓口の指示・窓口の欄・表の制約)。
+ * 1か所でも抜けると、**発行した瞬間に**止まるか、その演習だけ作られない。
+ * `npm run lint` も `npm run build` も通るので、機械で見張る。
+ * ============================================================================
+ */
+{
+  console.log('\n▶ 想定される質問(スピーチの質疑)')
+
+  const qa = EXERCISE_TYPES.find((t) => t.id === 'audience_qa')
+  ok(!!qa, '演習の種類に「想定される質問」がある')
+  ok(qa?.label === '想定される質問', '名前は「想定される質問」', qa?.label)
+  /* **正解が無いので `answer` を持たない**(ディスカッションと同じ)。
+     欄を出せば AI は必ず何かを書く */
+  ok(!qa?.fields.includes('answer'), '解答の欄を持たない(正解が無い)')
+  ok(qa?.fields.includes('question') && qa?.fields.includes('question_ja'),
+    '質問と、その訳を持つ(訳が無いと質問そのものが壁になる)')
+  ok(qa?.fields.includes('note'), '答え方の手がかり(日本語)を持つ')
+  ok(qa?.audioFrom === 'question', '質問には読み上げが付く(質疑は聞き取りから始まる)')
+  ok(!isPassageSection('audience_qa'), '本文の演習ではない(問で数える)')
+
+  // **`note` が答えの側に来るのは、質問があって解答が無い演習だけ**
+  ok(noteIsAnswer('audience_qa') && noteIsAnswer('discussion'),
+    '想定される質問とディスカッションは、手がかりが答えの側に来る')
+  ok(!noteIsAnswer('vocab_note'), '語句の補足は「答え」ではない(例文と使いどころ)')
+  ok(!noteIsAnswer('comprehension') && !noteIsAnswer('article'),
+    '解答のある演習・本文は、これまでどおり')
+
+  // 5問 → 倍で 10問。**外すこともできる**
+  {
+    const of = (kind, amounts, include) => sectionsFor(kind, amounts, include)
+      .find((s) => s.exercise_type === 'audience_qa')
+    ok(of('speech')?.count === 5, '既定は5問')
+    ok(of('speech', { audience_qa: 'double' })?.count === 10, '「倍」で10問')
+    ok(!of('speech', null, { audience_qa: false }), 'チェックを外せば作らない')
+    ok(SCALABLE_SECTIONS.includes('audience_qa'), '問数を選べる演習に入っている')
+    ok(amountsFor('audience_qa').length === 2,
+      '選べるのは標準と倍の2つ(3倍は文型ドリルだけ)')
+  }
+
+  /* **Speech練習だけに入れる。** 記事にも会話にも、話し終えたあとの聴衆はいない */
+  {
+    const has = (kind) => defaultSectionsFor(kind)
+      .some((s) => s.exercise_type === 'audience_qa')
+    ok(has('speech'), 'Speech練習には入っている')
+    ok(!has('reading') && !has('dialogue') && !has('meeting') && !has('pattern'),
+      'ほかの種類には入れていない(言われた場所だけを直す)')
+    // 並びは「本文 → 内容の理解 → ディスカッション → 想定される質問 → 語句」
+    const order = defaultSectionsFor('speech').map((s) => s.exercise_type)
+    ok(order.indexOf('audience_qa') > order.indexOf('discussion')
+      && order.indexOf('audience_qa') < order.indexOf('vocab_note'),
+    '話し終えたあとに来るので、設問のうしろ・語句の前に置く', order.join(' → '))
+  }
+
+  // **足す場所は4つ。1か所でも抜けると、発行した瞬間に止まる**
+  {
+    const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    const gw = read('supabase/functions/generate-material/index.ts')
+    ok(/audience_qa:\s*\n?\s*'想定される質問/.test(gw), '窓口に、書き方の指示がある')
+    ok(/audience_qa:\s+\{ required: \['question', 'question_ja', 'note'\]/.test(gw),
+      '窓口の欄に、解答が入っていない(strict で形を縛る)')
+    ok(/sectionType === 'audience_qa'/.test(gw),
+      '窓口が「本文が要る演習」として数えている(本文が無いと質問は作れない)')
+    const sql = read('supabase/migrations/0045_audience_qa.sql')
+    ok(/'comprehension', 'discussion', 'audience_qa', 'vocab_note'/.test(sql),
+      '表の制約に入っている(0045)')
+    /* **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、
+       ディスカッションのときと同じで**手がかりがどこからも開けない** */
+    const lv = read('src/components/LessonView.jsx')
+    ok(/secNoteIsAnswer && it\.note/.test(lv),
+      'レッスン表示が、手がかりを開けるようにしている')
+    ok(/手がかりを見る/.test(lv), '「解答」と書かない(正解が無いものに解答は無い)')
+  }
+
+  /* **場面を足した**(利用者の指定「『プレゼン』などを追加して下さい」)。
+     **上の17件は1つも消していない。** 声の名簿と同じで、
+     知っている id を控えておかないと**黙って減っても気づけない** */
+  {
+    const KNOWN = [
+      'sp_intro', 'sp_newjob', 'sp_standup', 'sp_progress', 'sp_proposal',
+      'sp_product', 'sp_booth', 'sp_pitch', 'sp_conference', 'sp_training',
+      'sp_townhall', 'sp_award', 'sp_toast', 'sp_farewell', 'sp_apology',
+      'sp_interview', 'sp_talk',
+      // ここから 2026-09 に足したプレゼンまわり
+      'sp_deck', 'sp_demo', 'sp_kickoff', 'sp_result', 'sp_webinar', 'sp_handover',
+    ]
+    const ids = SPEECH_SCENES.map((s) => s.id)
+    const gone = KNOWN.filter((id) => !ids.includes(id))
+    ok(!gone.length, '知っている場面が1つも消えていない', gone.join(', '))
+    ok(ids.length === KNOWN.length,
+      `場面は ${KNOWN.length} 件(足したら KNOWN にも書き足す)`, `${ids.length} 件`)
+    ok(ids.includes('sp_deck') && sceneLabel('sp_deck').includes('プレゼン'),
+      '「プレゼン」がある', sceneLabel('sp_deck'))
+    ok(new Set(ids).size === ids.length, '場面の id が重なっていない')
+    ok(!SPEECH_SCENES.some((x) => /\*\*/.test(x.hint) || /\*\*/.test(x.label)),
+      '足した場面にも、強調の記号(**)が混ざっていない')
   }
 }
 

@@ -405,6 +405,12 @@ from (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'materials' and cmd = 'DELETE'), 89
   union all
+  select '(90) 演習の種類に「想定される質問」がある(0045)', exists (
+    -- **足したのは exercise_type の値1つだけ。** 表も列も増やしていない
+    select 1 from pg_constraint
+    where conname = 'material_sections_type_check'
+      and pg_get_constraintdef(oid) like '%audience_qa%'), 90
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

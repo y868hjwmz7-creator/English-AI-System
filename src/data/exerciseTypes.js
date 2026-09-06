@@ -120,6 +120,36 @@ export const EXERCISE_TYPES = [
     instruction: '本文をきっかけに、自分の考えを英語で話してみてください。正解はありません。',
     fields: ['question', 'note'], audioFrom: 'question',
   },
+  /*
+   * **想定される質問**(2026-09 利用者の指定)。
+   *
+   *   > 作成したスピーチに対して、聴衆から想定される質問を作る機能を
+   *   > 実装して下さい。質問は、他の演習と同じように個数を5個、10個と
+   *   > 選べるようにして下さい。
+   *
+   * **ディスカッションとは、向きが逆である。**
+   *   ・ディスカッション … 本文をきっかけに**自分から**考えを話す
+   *   ・想定される質問   … 話し終えたあと、**相手から**投げられる
+   *
+   * スピーチは、本番で怖いのは原稿そのものより**そのあとの質疑**である。
+   * だから「答えを読む」のではなく「答えを用意しておく」ための演習にする。
+   *
+   * **`answer` を持たない**(ディスカッションと同じ理由)。
+   * 答えるのは話し手自身であって、正解は1つに決まらない。
+   * **欄を出せば AI は必ず何かを書く**ので、最初から作らない。
+   * 代わりに `note` へ、どう答えるかの筋道を日本語で入れる。
+   *
+   * **設問の訳は出す**(`question_ja`)。0035 と同じ理由で、
+   * 日本語が1つも無いと**質問そのものが壁**になり、
+   * 答えられなかったのか聞き取れなかったのかが分からない。
+   *
+   * 音声は付ける(`audioFrom: 'question'`)。**質疑は聞き取りから始まる。**
+   */
+  {
+    id: 'audience_qa', label: '想定される質問',
+    instruction: 'スピーチのあと、聴衆から来そうな質問です。声に出して答えてみてください。',
+    fields: ['question', 'question_ja', 'note'], audioFrom: 'question',
+  },
   {
     id: 'vocab_note', label: '本文に出た語句',
     instruction: '本文に出てきた語句です。意味と使い方を確かめてください。',
@@ -377,6 +407,12 @@ export const DEFAULT_SECTIONS = {
     { exercise_type: 'article',       count: 6 },
     { exercise_type: 'comprehension', count: 5 },
     { exercise_type: 'discussion',    count: 5 },
+    /* **想定される質問**(2026-09 利用者の指定)。
+       話し終えたあとに来るものなので、**本文と設問のうしろ**に置く。
+       語句より前なのは、質疑まででスピーチが1本終わるためである。
+       **Speech練習だけに入れる** —— 記事や会話には聴衆がいない
+       (言われた場所だけを直す・CLAUDE.md) */
+    { exercise_type: 'audience_qa',   count: 5 },
     { exercise_type: 'vocab_note',    count: 8 },
   ],
   word:   [{ exercise_type: 'vocabulary', count: 20 }],
@@ -395,6 +431,30 @@ export const DEFAULT_SECTIONS = {
  * 弱点で分割してはいけないのも、この演習である。
  */
 export const isPassageSection = (typeId) => !!exerciseType(typeId)?.isPassage
+
+/**
+ * **`note` が「答えの側」に来る演習かどうか。**
+ *
+ * ディスカッションと想定される質問には**正解が無い**ので `answer` を持たない
+ * (欄を出せば AI は必ず何かを書く)。代わりに `note` へ日本語の手がかりが入り、
+ * **それが答え合わせのときに出したいもの**である。
+ *
+ * 【なぜ要るか】(2026-09 実機)
+ *
+ *   レッスン表示は「解答を見る」を
+ *   **`answer` か `audio_text` か、本文の訳があるときだけ**出していた。
+ *   だからディスカッションの手がかりは、**どこからも開けなかった。**
+ *   `MaterialBody`(紙)と「今週の宿題」では出ていたので、
+ *   **レッスン表示だけが取りこぼしていた。**
+ *
+ * 【`vocab_note` は入らない】
+ *   あちらの `note` は例文と使いどころで、**答えではない。**
+ *   だから `question` を持つ演習だけに絞ってある。
+ */
+export const noteIsAnswer = (typeId) => {
+  const fields = exerciseType(typeId)?.fields ?? []
+  return fields.includes('question') && !fields.includes('answer')
+}
 
 /**
  * **画面に出す演習の名前。**
@@ -449,6 +509,9 @@ export const SCALABLE_SECTIONS = [
   // ディスカッションも「標準(5問)/ 倍(10問)」で選べる
   // (2026-09 利用者の指定「基本は５問、設定により１０問に」)
   'comprehension', 'discussion', 'vocab_note',
+  // 想定される質問も「標準(5問)/ 倍(10問)」で選べる
+  // (2026-09 利用者の指定「個数を5個、10個と選べるようにして下さい」)
+  'audience_qa',
   ...DRILL_SECTIONS,
 ]
 
