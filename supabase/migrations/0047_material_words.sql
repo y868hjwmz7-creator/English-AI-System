@@ -50,6 +50,9 @@
 alter table public.materials drop constraint if exists materials_kind_check;
 alter table public.materials
   add constraint materials_kind_check check (kind in (
+    -- **一覧はどのファイルでも同じにする。**あとの移行で足した値も、
+    -- ここに書く。狭いままだと、その値を使っている DB に貼り直したとき
+    -- "violated by some row" で止まる(scripts/check-constraint-lists.mjs)
     'pattern',    -- 文型ドリル(4演習 × 10問 = 40問)
     'reading',    -- リーディング(記事1本 + 内容理解 + ディスカッション + 語句)
     'dialogue',   -- ダイアローグ(会話1本。2人)

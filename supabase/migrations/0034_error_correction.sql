@@ -35,14 +35,18 @@
 alter table public.material_sections drop constraint if exists material_sections_type_check;
 alter table public.material_sections
   add constraint material_sections_type_check check (exercise_type in (
+    -- **一覧はどのファイルでも同じにする。**あとの移行で足した値も、
+    -- ここに書く。狭いままだと、その値を使っている DB に貼り直したとき
+    -- "violated by some row" で止まる(scripts/check-constraint-lists.mjs)
     -- 文型ドリル
     --   error_correction … 誤りを1か所直す。**穴埋めの置き換え**(0034)
     'translate_en_ja', 'error_correction', 'translate_ja_en', 'listening',
     -- 本文(まとまった1本)
     'article', 'dialogue',
     -- 本文に対する設問と語句
-    --   discussion … 本文をきっかけに自分の考えを話す。**正解が無い**(0033)
-    'comprehension', 'discussion', 'vocab_note',
+    --   discussion  … 本文をきっかけに自分の考えを話す。**正解が無い**(0033)
+    --   audience_qa … 話し終えたあと、聴衆から投げられる質問。**正解が無い**(0045)
+    'comprehension', 'discussion', 'audience_qa', 'vocab_note',
     -- 旧「長文」で使っていたもの。既存の行のために残す
     'read_aloud', 'overlapping', 'shadowing', 'repeating',
     -- 穴埋め。**新規では使わない**(0034 で誤り訂正へ差し替えた)。

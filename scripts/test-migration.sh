@@ -165,6 +165,76 @@ for f in supabase/apply/pending_*.sql; do
   echo "  ✓ $(basename "$f")"
 done
 
+# ---------------------------------------------------------------------------
+# **行のある DB に貼り直してみる。**
+#
+#   ここまでの検証は、どれも**行が1つも無い DB**で行っている。
+#   ところが `check (… in (…))` を書き直す SQL は、**すでにある行と
+#   食い違ったときにだけ**止まる。空の表なら、どんなに狭い一覧でも通る。
+#
+#   実際、`pending_matome.sql` の中で `materials_kind_check` が2回
+#   書き直されており、**前のほう(0043 の段)に `vocab` が無かった。**
+#   利用者の DB には `kind = 'vocab'` の教材があったので、
+#
+#       ERROR: 23514: check constraint "materials_kind_check"
+#       of relation "materials" is violated by some row
+#
+#   で止まった(2026-09 実機)。**検証はそのとき全部緑だった。**
+#   空の表で試すのは、試したことにならない。
+#
+#   だから、許されている値を**1つずつ実際に入れてから**
+#   ①移行を頭から全部 ②貼る SQL を1つずつ、もう一度流す。
+# ---------------------------------------------------------------------------
+echo
+echo "▶ 行のある DB を作る(許されている種類を1つずつ入れる)"
+seed="${DB}_seed"
+su postgres -c "psql -q -c 'drop database if exists $seed;'"
+su postgres -c "psql -q -c 'create database $seed template $DB;'"
+run "-d $seed -f supabase/test/seed_rows.sql"
+su postgres -c "psql -d $seed -tAc \"
+  select '  教材 ' || count(*) || ' 本 / 演習 '
+    || (select count(*) from public.material_sections) || ' 個' from public.materials;\""
+
+echo "▶ 行のある DB に、移行を頭からもう一度流す"
+db="${DB}_seed_mig"
+su postgres -c "psql -q -c 'drop database if exists $db;'"
+su postgres -c "psql -q -c 'create database $db template $seed;'"
+for f in supabase/migrations/*.sql; do
+  out=$(su postgres -c "psql -v ON_ERROR_STOP=1 -q -d $db -f $f" 2>&1) || {
+    printf '%s\n' "$out" | grep -E 'ERROR|FATAL' || printf '%s\n' "$out"
+    echo "❌ $f は、行のある DB に流せませんでした"
+    echo "   一覧を狭めていないか確かめてください(node scripts/check-constraint-lists.mjs)"
+    exit 1
+  }
+done
+su postgres -c "psql -q -c 'drop database if exists $db;'"
+echo "  ✓ 移行 $(ls supabase/migrations/*.sql | wc -l) ファイル"
+
+echo "▶ 行のある DB に、貼る SQL を1つずつ貼ってみる"
+for f in supabase/apply/pending_*.sql; do
+  db="${DB}_seed_apply"
+  su postgres -c "psql -q -c 'drop database if exists $db;'"
+  su postgres -c "psql -q -c 'create database $db template $seed;'"
+  out=$(su postgres -c "psql -v ON_ERROR_STOP=1 -q -d $db -f $f" 2>&1) || {
+    printf '%s\n' "$out" | grep -E 'ERROR|FATAL' || printf '%s\n' "$out"
+    su postgres -c "psql -q -c 'drop database if exists $db;'"
+    echo "❌ $f は、行のある DB に貼れませんでした"
+    echo "   一覧を狭めていないか確かめてください(node scripts/check-constraint-lists.mjs)"
+    exit 1
+  }
+  su postgres -c "psql -q -c 'drop database if exists $db;'"
+done
+su postgres -c "psql -q -c 'drop database if exists $seed;'"
+echo "  ✓ 貼る SQL $(ls supabase/apply/pending_*.sql | wc -l) ファイル"
+
+# **値の一覧が、どのファイルでも同じか。**
+# 上の検証は「いま許されている値」でしか試せない。
+# こちらは書いてある文字そのものを突き合わせるので、
+# **まだ誰も使っていない値**の食い違いも見つかる。
+echo
+echo "▶ 値の一覧が、どのファイルでもそろっているか"
+node scripts/check-constraint-lists.mjs
+
 echo
 echo "▶ 利用者に渡す確認 SQL(verify_migrations.sql)"
 db="${DB}_verify"

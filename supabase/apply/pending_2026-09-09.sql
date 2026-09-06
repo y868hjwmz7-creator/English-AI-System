@@ -42,6 +42,9 @@
 alter table public.material_sections drop constraint if exists material_sections_type_check;
 alter table public.material_sections
   add constraint material_sections_type_check check (exercise_type in (
+    -- **一覧はどのファイルでも同じにする。**あとの移行で足した値も、
+    -- ここに書く。狭いままだと、その値を使っている DB に貼り直したとき
+    -- "violated by some row" で止まる(scripts/check-constraint-lists.mjs)
     -- 文型ドリル
     --   error_correction … 誤りを1か所直す。**穴埋めの置き換え**(0034)
     'translate_en_ja', 'error_correction', 'translate_ja_en', 'listening',

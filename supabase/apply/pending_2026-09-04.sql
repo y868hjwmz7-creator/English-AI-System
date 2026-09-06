@@ -82,14 +82,18 @@
 alter table public.material_sections drop constraint if exists material_sections_type_check;
 alter table public.material_sections
   add constraint material_sections_type_check check (exercise_type in (
+    -- **一覧はどのファイルでも同じにする。**あとの移行で足した値も、
+    -- ここに書く。狭いままだと、その値を使っている DB に貼り直したとき
+    -- "violated by some row" で止まる(scripts/check-constraint-lists.mjs)
     -- 文型ドリル
     --   error_correction … 誤りを1か所直す。**穴埋めの置き換え**(0034)
     'translate_en_ja', 'error_correction', 'translate_ja_en', 'listening',
     -- 本文(まとまった1本)
     'article', 'dialogue',
     -- 本文に対する設問と語句
-    --   discussion … 本文をきっかけに自分の考えを話す。**正解が無い**(0033)
-    'comprehension', 'discussion', 'vocab_note',
+    --   discussion  … 本文をきっかけに自分の考えを話す。**正解が無い**(0033)
+    --   audience_qa … 話し終えたあと、聴衆から投げられる質問。**正解が無い**(0045)
+    'comprehension', 'discussion', 'audience_qa', 'vocab_note',
     -- 旧「長文」で使っていたもの。既存の行のために残す
     'read_aloud', 'overlapping', 'shadowing', 'repeating',
     -- 穴埋め。**新規では使わない**(0034 で誤り訂正へ差し替えた)。
@@ -248,13 +252,18 @@ comment on column public.materials.headline_ja is
 alter table public.materials drop constraint if exists materials_kind_check;
 alter table public.materials
   add constraint materials_kind_check check (kind in (
+    -- **一覧はどのファイルでも同じにする。**あとの移行で足した値も、
+    -- ここに書く。狭いままだと、その値を使っている DB に貼り直したとき
+    -- "violated by some row" で止まる(scripts/check-constraint-lists.mjs)
     'pattern',    -- 文型ドリル(4演習 × 10問 = 40問)
     'reading',    -- リーディング(記事1本 + 内容理解 + ディスカッション + 語句)
     'dialogue',   -- ダイアローグ(会話1本。2人)
     'meeting',    -- 会議(会話と同じ形。**3〜4人**・0037)
-    'word',       -- 単語
-    'phrase',     -- フレーズ
-    'passage'     -- 旧「長文」。新規では使わないが、既存の行のために残す
+    'speech',     -- Speech練習(記事と同じ形。**1人が話しきる**・0043)
+    'vocab',      -- 単語 / フレーズ(単語10 + フレーズ10・**0047**)
+    'word',       -- 旧「単語」。新規では使わないが、既存の行のために残す
+    'phrase',     -- 旧「フレーズ」。同上
+    'passage'     -- 旧「長文」。同上
   ));
 
 

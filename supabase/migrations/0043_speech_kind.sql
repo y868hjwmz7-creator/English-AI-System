@@ -40,14 +40,18 @@
 alter table public.materials drop constraint if exists materials_kind_check;
 alter table public.materials
   add constraint materials_kind_check check (kind in (
+    -- **一覧はどのファイルでも同じにする。**あとの移行で足した値も、
+    -- ここに書く。狭いままだと、その値を使っている DB に貼り直したとき
+    -- "violated by some row" で止まる(scripts/check-constraint-lists.mjs)
     'pattern',    -- 文型ドリル(4演習 × 10問 = 40問)
     'reading',    -- リーディング(記事1本 + 内容理解 + ディスカッション + 語句)
     'dialogue',   -- ダイアローグ(会話1本。2人)
     'meeting',    -- 会議(会話と同じ形。**3〜4人**・0037)
     'speech',     -- Speech練習(記事と同じ形。**1人が話しきる**・0043)
-    'word',       -- 単語
-    'phrase',     -- フレーズ
-    'passage'     -- 旧「長文」。新規では使わないが、既存の行のために残す
+    'vocab',      -- 単語 / フレーズ(単語10 + フレーズ10・**0047**)
+    'word',       -- 旧「単語」。新規では使わないが、既存の行のために残す
+    'phrase',     -- 旧「フレーズ」。同上
+    'passage'     -- 旧「長文」。同上
   ));
 
 comment on column public.materials.kind is
