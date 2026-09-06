@@ -1184,7 +1184,9 @@ export default function MaterialForm({
   }
 
   return (
-    <form className="card" onSubmit={handleSubmit}>
+    /* `card--form` … **欄を1本の柱にする**(2026-09・第2週)。
+       幅の上限は `styles.css` が持つ。ここでは名前を付けるだけ */
+    <form className="card card--form" onSubmit={handleSubmit}>
       {/* **説明の文は置かない**(2026-08 利用者の指定)。
           > ごちゃごちゃしすぎています。なくてもわかります。
           欄の名前だけで分かることを、文で言わない。 */}

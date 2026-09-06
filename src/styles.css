@@ -83,8 +83,102 @@
   --warn:    #eda100;
   --danger:  #e34948;
 
-  --radius: 10px;
-  --gap: 16px;
+  /* ================================================================
+     字・角・間の「段」(2026-09・第1週)
+
+     【なぜ挟むか】
+       実測すると、`font-size` の px 直書きが **22種・284か所**、
+       `border-radius` が **16種**、`gap` が **28種**あった。
+       同じ役目のものが 12px だったり 12.5px だったり 13px だったりして、
+       **どれが正しいのかコードからは決められない。**
+       画面ごとに書き足してきた結果で、誰も間違えていない。
+
+     【この節の値は、いまの見た目そのままである】
+       第1週は**トークンに置き換えるだけ**で、値は1つも動かしていない。
+       だから**見た目は1ドットも変わらない**(撮り比べで確かめてある)。
+
+     【第2週で、ここの値だけを寄せる】
+       名前は**いまの値**にしてある(`--fs-12h` = 12.5px)。
+       段を減らすときは、たとえば
+
+           --fs-12h: var(--fs-12);   ← 12.5px を 12px に寄せる
+
+       と**この1行を書き換えるだけ**で、その段を使っている場所が
+       まとめて動く。**284か所を探して回らなくてよい**し、
+       気に入らなければ**その1行を戻すだけ**で元に戻る。
+
+     【触ってはいけない段が1つある】
+       **`--fs-16` は入力欄の大きさ**である。860px 以下でこれを割ると
+       **iOS が勝手に画面を拡大する**(CLAUDE.md)。下げない。
+     ================================================================ */
+
+  /* 字の段(第2週で 22 → 17 段にした。**下の「なぜ7段にしなかったか」を読むこと**)
+
+     ── 見た目のための段(ここを触ると印象が変わる) ──────────── */
+  --fs-10:  10px;   /* いちばん小さい札・軸の数字 */
+  --fs-11:  11px;   /* 札の数・単位 */
+  --fs-12:  12px;   /* ラベル・注記 */
+  --fs-13:  13px;   /* 小さめの本文・札・吹き出し */
+  --fs-14:  14px;   /* ボタン・選ぶ欄・段落の訳 */
+  --fs-15:  15px;   /* 本文(`body`)*/
+  --fs-17:  17px;   /* 見出し */
+  --fs-20:  20px;   /* 大見出し・名前 */
+  --fs-26:  26px;   /* 数字を見せるところ */
+  --fs-40:  40px;   /* スコア */
+
+  /* ── 半端な段は無くした(2026-09・第2週)────────────────────
+     10.5 / 11.5 / 12.5 / 13.5 / 15.5 という段が **31 か所**あった。
+     0.5px の違いは**誰にも見えない**のに、同じ役目のものが
+     場所によって 12px だったり 12.5px だったりしていた。
+     **段を1つ上に寄せて、無くした。**
+     名前は残してある —— 消すと 31 か所を書き換えることになり、
+     戻したくなったときに元がどこだったか分からなくなる */
+  --fs-10h: var(--fs-10);
+  --fs-11h: var(--fs-11);
+  --fs-12h: var(--fs-12);
+  --fs-13h: var(--fs-13);
+  --fs-15h: var(--fs-15);
+  --fs-18:  var(--fs-17);   /* 3か所だけだった。見出しの段に寄せる */
+  --fs-22:  var(--fs-20);   /* 1か所だけ */
+  --fs-24:  var(--fs-26);   /* 1か所だけ */
+  --fs-28:  var(--fs-26);   /* 1か所だけ(アイコンの大) */
+
+  /* ── 見た目ではなく、決まりで値が決まっている段 ──────────────
+     **ここは寄せてはいけない。** 段の数には数えない */
+  --fs-16:  16px;   /* ★ 入力欄。860px 以下でこれを割ると iOS が画面を拡大する */
+  --fs-19:  19px;   /* 紙の文字「大」(16 / 19 / 23 の3段は利用者が選ぶ) */
+  --fs-23:  23px;   /* 紙の文字「特大」 */
+
+  /* 角の丸み。いまは 8 段ある */
+  --r-2:  2px;
+  --r-4:  4px;
+  --r-6:  6px;
+  --r-8:  8px;
+  --r-10: 10px;
+  --r-12: 12px;
+  --r-14: 14px;
+  --r-18: 18px;
+  --r-pill:   999px;   /* 錠剤・札 */
+  --r-circle: 50%;     /* 丸 */
+
+  /* 間(`gap`)。いまは 12 段ある */
+  --sp-1:  1px;
+  --sp-2:  2px;
+  --sp-3:  3px;
+  --sp-4:  4px;
+  --sp-5:  5px;
+  --sp-6:  6px;
+  --sp-7:  7px;
+  --sp-8:  8px;
+  --sp-10: 10px;
+  --sp-12: 12px;
+  --sp-14: 14px;
+  --sp-16: 16px;
+  --sp-18: 18px;
+
+  /* 前からある2つは、段を指すようにしておく(呼ぶ側は1行も変わらない) */
+  --radius: var(--r-10);
+  --gap: var(--sp-16);
 
   /* 浮き上がり。**紙の上に置いた紙**に見えるだけの、ごく薄い影。
      色と同じく**変数で持つ。** 暗い側では影がほとんど見えないので、
@@ -92,6 +186,9 @@
   /* カードを少しだけ浮かせる。**面の段差と合わせて輪郭を出す** */
   --shadow-1: 0 1px 2px rgba(16, 15, 12, 0.07), 0 1px 1px rgba(16, 15, 12, 0.05);
   --shadow-2: 0 6px 20px rgba(16, 15, 12, 0.13), 0 2px 6px rgba(16, 15, 12, 0.08);
+  /* 集中モードの紙。**地はいつも黒**なので、明暗で値を変えない
+     (`.lesson-sheet` / `.focus-paper` の2か所で同じ値を書いていた) */
+  --shadow-paper: 0 6px 24px rgb(0 0 0 / 32%);
   /* キーボードで移動している人に、いまどこにいるかを見せる輪 */
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
 }
@@ -218,7 +315,7 @@ body {
   background: var(--surface-0);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Meiryo', system-ui, sans-serif;
-  font-size: 15px;
+  font-size: var(--fs-15);
   line-height: 1.7;
 }
 
@@ -248,25 +345,25 @@ body {
    名前も出すので、メニューが隠れていても「いまどこか」が分かる */
 .app-topbar {
   position: sticky; top: 0; z-index: 30;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--sp-10);
   min-height: 56px; padding: 8px 12px;
   padding-top: max(8px, env(safe-area-inset-top));
   border-bottom: 1px solid var(--border);
   background: var(--surface-0);
 }
 .app-topbar-title {
-  font-size: 16px; font-weight: 700; letter-spacing: 0.01em;
+  font-size: var(--fs-16); font-weight: 700; letter-spacing: 0.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.app-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.app-topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-8); }
 
 /* 絵だけのボタン。**指で押せる大きさ(44px)を割らない** */
 .nav-icon-btn {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   width: 44px; height: 44px; padding: 0;
-  border: none; border-radius: 10px; background: none; cursor: pointer;
-  color: var(--text-secondary); font-size: 20px;
+  border: none; border-radius: var(--r-10); background: none; cursor: pointer;
+  color: var(--text-secondary); font-size: var(--fs-20);
 }
 .nav-icon-btn:hover { background: var(--surface-2); color: var(--text-primary); }
 
@@ -320,22 +417,22 @@ body {
 @keyframes nav-scrim-in { from { opacity: 0; } to { opacity: 1; } }
 
 .app-nav-head {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: var(--sp-8);
   min-height: 56px; padding: 8px 10px 8px 16px;
   border-bottom: 1px solid var(--border);
 }
 .app-nav-brand {
   flex: 1 1 auto; min-width: 0;
-  font-size: 15px; font-weight: 700; line-height: 1.25;
+  font-size: var(--fs-15); font-weight: 700; line-height: 1.25;
 }
 .app-nav-head .nav-icon-btn { margin-left: auto; }
 
 .app-nav-list { list-style: none; margin: 0; padding: 10px 8px; }
 .app-nav-item {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: var(--sp-12);
   width: 100%; min-height: 44px; padding: 10px 12px;
-  border: none; border-radius: 10px; background: none; cursor: pointer;
-  color: var(--text-secondary); font-size: 15px; text-align: left;
+  border: none; border-radius: var(--r-10); background: none; cursor: pointer;
+  color: var(--text-secondary); font-size: var(--fs-15); text-align: left;
 }
 .app-nav-item:hover { background: var(--surface-2); color: var(--text-primary); }
 /* いまいる画面。**色だけに頼らない。** 太字と左の帯も付ける */
@@ -346,7 +443,7 @@ body {
 }
 .app-nav-icon {
   flex: 0 0 auto; display: inline-flex; align-items: center;
-  width: 20px; font-size: 20px;
+  width: 20px; font-size: var(--fs-20);
 }
 .app-nav-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
 
@@ -355,12 +452,12 @@ body {
   margin-top: auto; padding: 12px 16px;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: var(--sp-10);
 }
 /* 配色・色づかい。**見出しは上に置く。**
    横に並べると「色づかい」が2行に割れ、札とぶつかった(2026-08 の実測) */
-.nav-setting { display: flex; flex-direction: column; gap: 4px; }
-.nav-setting-label { color: var(--text-muted); font-size: 11.5px; }
+.nav-setting { display: flex; flex-direction: column; gap: var(--sp-4); }
+.nav-setting-label { color: var(--text-muted); font-size: var(--fs-11h); }
 .nav-setting .theme-switch { margin-left: 0; align-self: flex-start; }
 .nav-setting .theme-btn { padding: 6px 12px; }
 /* **自分のアイコンは、自分の名前の隣**(0029・2026-09)。
@@ -370,19 +467,19 @@ body {
    丸が無くなったぶん、名前を左端からまっすぐ始められる。
    名前 → 役割とログアウト の2段。**文字だけで静かに** */
 .nav-account {
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: var(--sp-6);
   padding-top: 12px; border-top: 1px solid var(--border);
-  font-size: 12.5px;
+  font-size: var(--fs-12h);
 }
 .nav-account-text {
-  min-width: 0; display: flex; flex-direction: column; gap: 6px;
+  min-width: 0; display: flex; flex-direction: column; gap: var(--sp-6);
 }
 .nav-account-name {
-  font-weight: 700; font-size: 14px; letter-spacing: .01em;
+  font-weight: 700; font-size: var(--fs-14); letter-spacing: .01em;
   overflow-wrap: anywhere;
 }
 .nav-account-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
 }
 .nav-account .btn--link { margin-left: auto; }
 
@@ -390,7 +487,7 @@ body {
    スマホでは折り返さず、横に流す。折り返すと「教」「材」のように
    縦に割れて読めなくなる(実機で確認、2026-08)。 */
 .tabbar {
-  display: flex; gap: 2px;
+  display: flex; gap: var(--sp-2);
   overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none; -webkit-overflow-scrolling: touch;
 }
@@ -398,20 +495,20 @@ body {
 .tabbar-tab {
   flex: 0 0 auto; white-space: nowrap;
   border: none; background: none; cursor: pointer;
-  color: var(--text-secondary); font-size: 15px;
+  color: var(--text-secondary); font-size: var(--fs-15);
 }
 .tabbar-count {
   /* 選ばれたタブは背景が濃くなるので、色を固定せず親に合わせる。
      固定すると、濃い背景の上で白い丸だけが浮いて見える */
-  margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  margin-left: 6px; padding: 0 6px; border-radius: var(--r-pill);
   background: color-mix(in srgb, currentColor 14%, transparent);
-  color: inherit; font-size: 12px; font-variant-numeric: tabular-nums;
+  color: inherit; font-size: var(--fs-12); font-variant-numeric: tabular-nums;
 }
 
 /* 画面の切り替え(下線で示す)。上に貼り付いて、どこにいても切り替えられる */
 .tabbar--main {
   position: sticky; top: 0; z-index: 20;
-  gap: 4px; border-bottom: 1px solid var(--border);
+  gap: var(--sp-4); border-bottom: 1px solid var(--border);
   background: var(--surface-0, var(--bg, #fff));
   margin: 0 -4px; padding: 0 4px;
 }
@@ -423,10 +520,10 @@ body {
 }
 
 /* 教材の中の切り替え(丸い札で示す)。画面の切り替えと見分けるため形を変える */
-.tabbar--sub { gap: 6px; margin: 8px 0 10px; }
+.tabbar--sub { gap: var(--sp-6); margin: 8px 0 10px; }
 .tabbar--sub .tabbar-tab {
-  padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
-  background: var(--surface-1); font-size: 14px;
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--r-pill);
+  background: var(--surface-1); font-size: var(--fs-14);
 }
 .tabbar--sub .tabbar-tab.is-active {
   background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
@@ -443,10 +540,10 @@ body {
 .app-footer {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px var(--gap);
   margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border);
-  color: var(--text-muted); font-size: 12px;
+  color: var(--text-muted); font-size: var(--fs-12);
 }
 .app-footer > p { margin: 0; }
-.app-footer > .btn--link { margin-left: auto; font-size: 12px; }
+.app-footer > .btn--link { margin-left: auto; font-size: var(--fs-12); }
 
 .stack-lg { display: flex; flex-direction: column; gap: var(--gap); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
@@ -465,7 +562,7 @@ body {
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: var(--r-6);
 }
 
 /* 入力欄。**押せる高さをボタンとそろえる。**
@@ -475,7 +572,7 @@ input, select, textarea {
 }
 @media (max-width: 860px) {
   input:not([type="checkbox"]):not([type="radio"]), select, textarea {
-    font-size: 16px;
+    font-size: var(--fs-16);
   }
 }
 
@@ -529,8 +626,8 @@ input, select, textarea {
   border-left: 2px solid var(--qa-line, var(--border));
 }
 .answer-box-label {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
-  margin: 0 0 6px; color: var(--text-muted); font-size: 12px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-8);
+  margin: 0 0 6px; color: var(--text-muted); font-size: var(--fs-12);
 }
 
 /* ---------------- カード ---------------- */
@@ -543,8 +640,14 @@ input, select, textarea {
   box-shadow: var(--shadow-1);
 }
 .card--highlight { border-color: var(--accent); }
-.card-title { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
-.card-hint { margin: 0 0 12px; color: var(--text-muted); font-size: 12px; }
+/* カードの題(2026-09・第2週)
+   本文(`body`)と**同じ 15px** だったので、題として立っていなかった。
+   実測した「教材を新しく作る」は、すぐ下の説明文と同じ大きさで、
+   ページのいちばん上にあるのに**いちばん目立たない**状態だった。
+   見出しの段(17px)へ上げる。**大きくするのはここ1つだけ** ——
+   段を増やすのではなく、**すでにある段を正しく使う** */
+.card-title { margin: 0 0 4px; font-size: var(--fs-17); font-weight: 600; }
+.card-hint { margin: 0 0 12px; color: var(--text-muted); font-size: var(--fs-12); }
 
 /* ---------------- 数字の表示 ---------------- */
 
@@ -552,20 +655,36 @@ input, select, textarea {
 @media (max-width: 780px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 
 .stat { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-.stat-label { margin: 0; color: var(--text-secondary); font-size: 12px; }
-.stat-value { margin: 2px 0 0; font-size: 26px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; }
-.stat-unit { margin-left: 3px; font-size: 14px; font-weight: 500; color: var(--text-secondary); }
-.stat-note { margin: 2px 0 0; font-size: 11px; color: var(--text-muted); }
+.stat-label { margin: 0; color: var(--text-secondary); font-size: var(--fs-12); }
+.stat-value { margin: 2px 0 0; font-size: var(--fs-26); font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; }
+.stat-unit { margin-left: 3px; font-size: var(--fs-14); font-weight: 500; color: var(--text-secondary); }
+.stat-note { margin: 2px 0 0; font-size: var(--fs-11); color: var(--text-muted); }
 
 /* ---------------- フォーム ---------------- */
 
-.form { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
-.field { display: flex; flex-direction: column; gap: 4px; border: 0; padding: 0; margin: 0; }
-.field--inline { flex-direction: row; align-items: center; gap: 8px; }
+.form { display: flex; flex-direction: column; gap: var(--sp-12); margin-top: 12px; }
+.field { display: flex; flex-direction: column; gap: var(--sp-4); border: 0; padding: 0; margin: 0; }
+.field--inline { flex-direction: row; align-items: center; gap: var(--sp-8); }
 .field--inline > span { white-space: nowrap; }
-.field > span, .field > legend, .field-label { color: var(--text-secondary); font-size: 12px; }
-.field-hint { margin-left: 6px; color: var(--text-muted); font-weight: normal; }
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* 欄の名前と、その説明(2026-09・第2週)
+   ─────────────────────────────────────────────────
+   実測すると、名前(「レベル」)も説明(「場面によって丁寧さと言い回しが
+   変わります」)も **どちらも 12px の灰色**で、色だけが
+   `#4a4e54` と `#767b82` と、わずかに違うだけだった。
+   横に並べてあるので、**どこまでが名前でどこからが説明か分からない。**
+
+   **大きさは変えない**(12px のまま。ここを大きくすると欄が縦に伸びる)。
+   名前を**濃く・太く**し、説明は**薄いまま**にして、
+   字づかいだけで層を分ける(カタマリの訳と同じ考え方)。 */
+.field > span, .field > legend, .field-label {
+  color: var(--text-primary); font-size: var(--fs-12);
+  font-weight: 600; letter-spacing: .02em;
+}
+.field-hint {
+  margin-left: 8px; color: var(--text-muted);
+  font-weight: 400; letter-spacing: 0;
+}
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-12); }
 /* 読み上げの声(0017)。**欄の数が教材の種類で変わる。**
    会話なら「訛り + 話す人1 + 話す人2」で3つ、記事なら2つ。
    数が変わるので、列を決め打ちする grid ではなく flex で並べる。
@@ -579,7 +698,7 @@ input, select, textarea {
    既定の `stretch` では中の `<select>` がそれぞれの箱の**上**に置かれ、
    **訛りだけが 20px 高い位置**に出ていた。
    下でそろえれば、見出しの有る無しにかかわらず入力欄が1直線に並ぶ。 */
-.voice-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.voice-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-12); }
 .voice-row > .field { flex: 1 1 150px; min-width: 0; }
 .voice-row > .field:first-child { flex: 2 1 280px; }
 .voice-pick { max-width: none; }
@@ -593,13 +712,13 @@ input, select, textarea {
    足すのは「どちらの道で作るか」の2択と、そのすぐ下の断り書きだけ。 */
 .voice-remake {
   margin: 8px 0 4px; padding: 12px;
-  border: 1px solid var(--border); border-radius: 10px;
+  border: 1px solid var(--border); border-radius: var(--r-10);
   background: var(--surface-2);
 }
-.voice-mode { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.voice-mode { display: flex; flex-wrap: wrap; gap: var(--sp-8); margin-top: 10px; }
 /* **丸ぽち(radio)は隠さない。** どちらを選んでいるかは、
    色だけでなく丸ぽちでも分かるようにする(色だけに頼らない) */
-.voice-mode .chip { gap: 6px; }
+.voice-mode .chip { gap: var(--sp-6); }
 .voice-mode .chip input { position: static; opacity: 1; width: auto; height: auto; }
 /* 選んだ声の並び。**押す前に、何で作られるのかが読める** */
 .voice-remake-cast { font-weight: 700; }
@@ -609,10 +728,41 @@ input, select, textarea {
 input[type='text'], input[type='password'], input[type='email'],
 input[type='search'], input[type='tel'], input[type='date'],
 input[type='number'], select, textarea {
-  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-8);
   background: var(--surface-0); color: var(--text-primary);
-  font-family: inherit; font-size: 14px; width: 100%;
+  font-family: inherit; font-size: var(--fs-14); width: 100%;
+  /* ★ 横いっぱいに伸ばさない(2026-09・第2週)
+     ─────────────────────────────────────────────────
+     実測すると、1440px の画面で「B1 (GSE 43-50)」という **14文字**を
+     出すためのプルダウンが **1366px** あった(教材を作る画面に8つ)。
+     選ぶ欄は「いま選んでいる1つ」を見せるためのもので、
+     伸ばしても読めるものは増えない。**灰色の帯が縦に並ぶだけ**になる。
+
+     34rem(544px)は、日本語で 30 文字ほど・英語で 60 字ほど。
+     いちばん長い選択肢(シチュエーションの説明つき)が入る幅である。
+
+     **狭い画面では何も変わらない**(`max-width` なので、
+     画面のほうが狭ければこれまでどおり横いっぱい)。
+     広げたい欄には `.input--wide` を付ける */
+  max-width: 34rem;
 }
+/* 横いっぱいに使いたい欄(長い文を書くところ) */
+.input--wide, textarea { max-width: none; }
+
+/* ★ 欄がたくさん並ぶ画面は、**1本の柱にする**(2026-09・第2週)
+   ─────────────────────────────────────────────────
+   教材を作る画面には**選ぶ欄が8つ**あり、どれも横いっぱいだった。
+   欄を狭めるだけだと、今度は**カードの右半分が空く**。
+   だから欄ではなく**カードのほうを柱にして**、中の部品は柱いっぱいに使う。
+
+   52rem(832px)は、日本語で 45 文字ほど。
+   説明文(「本文は1本まるごと作ります。短い英文を並べるのではなく…」)が
+   **1行 45 文字**で折り返る幅である。1400px のままだと1行 90 文字を超え、
+   目が行の頭に戻れない(読み幅の決まりは Quick Response と同じ)。
+
+   **狭い画面では何も変わらない**(`max-width` なので)。 */
+.card--form { max-width: 52rem; }
+.card--form input, .card--form select, .card--form textarea { max-width: none; }
 
 /* ★Safari のプルダウンだけ、Chrome と同じ見た目にする★
    ─────────────────────────────────────────────────────
@@ -677,38 +827,38 @@ input[type='number'], select, textarea {
   input, textarea, select,
   input[type='text'], input[type='password'], input[type='email'],
   input[type='search'], input[type='tel'], input[type='date'],
-  input[type='number'] { font-size: 16px; }
-  button { font-size: 16px; }
-  .rate-pick select { font-size: 16px; }
-  .btn--small { font-size: 14px; }   /* ボタンは拡大の対象外なので戻す */
-  .theme-btn, .tagchip { font-size: 13px; }
+  input[type='number'] { font-size: var(--fs-16); }
+  button { font-size: var(--fs-16); }
+  .rate-pick select { font-size: var(--fs-16); }
+  .btn--small { font-size: var(--fs-14); }   /* ボタンは拡大の対象外なので戻す */
+  .theme-btn, .tagchip { font-size: var(--fs-13); }
 }
 textarea { resize: vertical; }
 audio { width: 100%; margin-top: 4px; }
 
-.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
 .chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px;
-  background: var(--surface-0); cursor: pointer; font-size: 13px;
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--r-pill);
+  background: var(--surface-0); cursor: pointer; font-size: var(--fs-13);
 }
 .chip input { position: absolute; opacity: 0; width: 0; height: 0; }
 .chip.is-selected { border-color: var(--accent); background: var(--surface-1); font-weight: 600; }
-.chip-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; margin-right: 4px; }
+.chip-dot { width: 9px; height: 9px; border-radius: var(--r-circle); display: inline-block; flex-shrink: 0; margin-right: 4px; }
 
-.form-actions { display: flex; align-items: center; gap: 12px; }
-.form-message { color: var(--series-3); font-size: 13px; }
+.form-actions { display: flex; align-items: center; gap: var(--sp-12); }
+.form-message { color: var(--series-3); font-size: var(--fs-13); }
 
 /* ---------------- ボタン ---------------- */
 
 .btn {
   /* **指で押せる高さ(40px)を割らない。** 小さいボタンは押し損ねる。
      `btn--small` / `btn--link` のように、意図して小さくするものは別に指定する */
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-6);
   min-height: 40px;
-  padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--r-8);
   background: var(--btn-bg); color: var(--text-primary);
-  font-family: inherit; font-size: 14px; line-height: 1.4; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-14); line-height: 1.4; cursor: pointer;
 }
 .btn:hover { border-color: var(--text-muted); }
 .btn:active { transform: translateY(1px); }
@@ -753,7 +903,7 @@ audio { width: 100%; margin-top: 4px; }
   border-color: var(--border);
   color: var(--text-secondary);
 }
-.btn--toggle { padding: 5px 12px; font-size: 13px; }
+.btn--toggle { padding: 5px 12px; font-size: var(--fs-13); }
 .btn--toggle.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* **答えの3段目**(0027)。まだ / 覚えかけ / 覚えた のまん中。
@@ -764,7 +914,7 @@ audio { width: 100%; margin-top: 4px; }
   border: 2px solid var(--accent); background: transparent;
   color: var(--accent); font-weight: 600;
 }
-.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.btn-row { display: flex; flex-wrap: wrap; gap: var(--sp-8); margin: 12px 0; }
 /* **同じ教材を手元で扱う操作は、1つの行に並べる**(2026-09 利用者の指定
    「練習の記録を消す、を印刷ボタンの右に置いてください」)。
 
@@ -772,7 +922,7 @@ audio { width: 100%; margin-top: 4px; }
    **「右」にならない。** ここは折り返さず、入りきらないときは
    ボタンのほうを縮める(`.btn--small` の `flex-shrink: 0` を戻す)。
    縮んでも文言は削らない — 何のボタンか分からなくなる。 */
-.card-tools { flex-wrap: nowrap; gap: 6px; margin-bottom: 0; }
+.card-tools { flex-wrap: nowrap; gap: var(--sp-6); margin-bottom: 0; }
 .card-tools > .btn { flex: 0 1 auto; min-width: 0; }
 .card-tools + .btn-row { margin-top: 8px; }
 
@@ -790,12 +940,12 @@ audio { width: 100%; margin-top: 4px; }
 .material-danger + .card-hint { text-align: right; }
 
 /* 絞り込みはグラフの上に1列で置く */
-.filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.filter-label { color: var(--text-secondary); font-size: 12px; margin-right: 4px; }
+.filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); }
+.filter-label { color: var(--text-secondary); font-size: var(--fs-12); margin-right: 4px; }
 
 /* ---------------- お知らせ ---------------- */
 
-.notice { border-radius: 8px; padding: 10px 14px; font-size: 13px; line-height: 1.6; }
+.notice { border-radius: var(--r-8); padding: 10px 14px; font-size: var(--fs-13); line-height: 1.6; }
 .notice--warn {
   background: var(--surface-1); /* color-mix 非対応ブラウザ向けの代替 */
   background: color-mix(in srgb, var(--warn) 12%, var(--surface-1));
@@ -821,10 +971,10 @@ audio { width: 100%; margin-top: 4px; }
 .app-notice-close { position: absolute; top: 10px; right: 12px; }
 .app-notice-open {
   display: inline-block; margin-bottom: var(--gap);
-  padding: 0; font-size: 12.5px;
+  padding: 0; font-size: var(--fs-12h);
 }
 
-.badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: var(--r-pill); font-size: var(--fs-11); font-weight: 600; }
 .badge--warn {
   background: var(--surface-2);
   background: color-mix(in srgb, var(--warn) 20%, var(--surface-1));
@@ -836,30 +986,30 @@ audio { width: 100%; margin-top: 4px; }
   color: var(--text-primary); border: 1px solid var(--danger);
 }
 
-.hint { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; }
+.hint { color: var(--text-muted); font-size: var(--fs-12); margin: 6px 0 0; }
 .muted { color: var(--text-muted); }
-.error { color: var(--danger); font-size: 13px; margin: 8px 0 0; }
-.recording-indicator { color: var(--danger); font-weight: 600; font-size: 13px; margin: 8px 0 0; }
+.error { color: var(--danger); font-size: var(--fs-13); margin: 8px 0 0; }
+.recording-indicator { color: var(--danger); font-weight: 600; font-size: var(--fs-13); margin: 8px 0 0; }
 
 /* ---------------- 発音練習 ---------------- */
 
-.phrase { margin: 12px 0; padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--surface-0); border-radius: 0 8px 8px 0; }
-.phrase-en { margin: 0; font-size: 17px; font-weight: 600; }
-.phrase-ja { margin: 4px 0 0; color: var(--text-secondary); font-size: 13px; }
+.phrase { margin: 12px 0; padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--surface-0); border-radius: 0 var(--r-8) var(--r-8) 0; }
+.phrase-en { margin: 0; font-size: var(--fs-17); font-weight: 600; }
+.phrase-ja { margin: 4px 0 0; color: var(--text-secondary); font-size: var(--fs-13); }
 
 .score { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
-.score-main { display: flex; align-items: baseline; gap: 4px; margin-bottom: 12px; }
-.score-value { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
-.score-unit { font-size: 15px; color: var(--text-secondary); }
+.score-main { display: flex; align-items: baseline; gap: var(--sp-4); margin-bottom: 12px; }
+.score-value { font-size: var(--fs-40); font-weight: 700; letter-spacing: -0.02em; }
+.score-unit { font-size: var(--fs-15); color: var(--text-secondary); }
 
 /* ---------------- グラフ ---------------- */
 
 .chart-block { margin-top: 16px; }
-.chart-title { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.chart-title { margin: 0 0 8px; font-size: var(--fs-13); font-weight: 600; color: var(--text-secondary); }
 
 .chart { margin-top: 12px; }
 .chart--labeled .chart-plot { margin-top: 14px; }  /* 棒の上の数値ラベル用の余白 */
-.chart-plot { position: relative; display: flex; align-items: flex-end; gap: 2px; }
+.chart-plot { position: relative; display: flex; align-items: flex-end; gap: var(--sp-2); }
 
 .chart-grid { position: absolute; inset: 0; pointer-events: none; }
 .chart-grid span { position: absolute; left: 0; right: 0; height: 1px; background: var(--surface-2); }
@@ -871,16 +1021,16 @@ audio { width: 100%; margin-top: 4px; }
   width: 100%; min-height: 2px;
   background: var(--series-1);
   max-width: 48px;
-  border-radius: 4px 4px 0 0;   /* 上端だけ丸め、下端は基線に接地させる */
+  border-radius: var(--r-4) var(--r-4) 0 0;   /* 上端だけ丸め、下端は基線に接地させる */
   transition: opacity 0.12s ease;
 }
 .chart-bar.is-hover { opacity: 0.75; }
 
 .chart-tooltip {
   position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 8px; align-items: baseline;
-  background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
-  padding: 4px 10px; font-size: 12px; white-space: nowrap; pointer-events: none;
+  display: flex; gap: var(--sp-8); align-items: baseline;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-6);
+  padding: 4px 10px; font-size: var(--fs-12); white-space: nowrap; pointer-events: none;
   box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
 }
 .chart-tooltip strong { font-weight: 600; }
@@ -888,33 +1038,33 @@ audio { width: 100%; margin-top: 4px; }
 
 .chart-endlabel {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-  margin-bottom: 3px; font-size: 10px; color: var(--text-secondary);
+  margin-bottom: 3px; font-size: var(--fs-10); color: var(--text-secondary);
   white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 
-.chart-axis { display: flex; gap: 2px; margin-top: 6px; }
-.chart-axis span { flex: 1; text-align: center; font-size: 10px; color: var(--text-muted); overflow: hidden; }
+.chart-axis { display: flex; gap: var(--sp-2); margin-top: 6px; }
+.chart-axis span { flex: 1; text-align: center; font-size: var(--fs-10); color: var(--text-muted); overflow: hidden; }
 
 .chart-empty {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: var(--text-muted); font-size: 13px; margin: 0; text-align: center; padding: 0 12px;
+  color: var(--text-muted); font-size: var(--fs-13); margin: 0; text-align: center; padding: 0 12px;
 }
 .chart-empty--block { position: static; padding: 24px 0; }
 
 /* 横棒グラフ */
-.hbar { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.hbar-row { display: grid; grid-template-columns: 84px 1fr auto; gap: 10px; align-items: center; }
-.hbar-label { font-size: 12px; color: var(--text-secondary); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hbar-track { height: 14px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
-.hbar-fill { display: block; height: 100%; border-radius: 4px; min-width: 2px; }
-.hbar-value { font-size: 12px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hbar { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-6); }
+.hbar-row { display: grid; grid-template-columns: 84px 1fr auto; gap: var(--sp-10); align-items: center; }
+.hbar-label { font-size: var(--fs-12); color: var(--text-secondary); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-track { height: 14px; background: var(--surface-2); border-radius: var(--r-4); overflow: hidden; }
+.hbar-fill { display: block; height: 100%; border-radius: var(--r-4); min-width: 2px; }
+.hbar-value { font-size: var(--fs-12); color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* ---------------- 表 ---------------- */
 
 .table-scroll { overflow-x: auto; margin-top: 12px; }
-.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
 .table th, .table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.table th { color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+.table th { color: var(--text-secondary); font-weight: 600; font-size: var(--fs-12); }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table tr.is-clickable { cursor: pointer; }
 .table tr.is-clickable:hover { background: var(--surface-0); }
@@ -985,8 +1135,8 @@ html, body { overflow-x: clip; }
 
 @media (max-width: 560px) {
   /* 「16時間30分」のような長い値が2行に折り返さないよう、少し小さくする */
-  .stat-value { font-size: 22px; }
-  .app-title { font-size: 19px; }   /* ログイン画面の題名 */
+  .stat-value { font-size: var(--fs-22); }
+  .app-title { font-size: var(--fs-19); }   /* ログイン画面の題名 */
 
   /* ★ 左右の余白を詰める(2026-09 実機・利用者の指定)★
        > 文字が画面端から隙間が多すぎたり色々と違和感があります
@@ -1019,7 +1169,7 @@ html, body { overflow-x: clip; }
   /* iOS Safari は文字が16px未満の入力欄をタップすると画面を勝手に拡大する。
      16px にしておくとその拡大が起きない。 */
   input[type='text'], input[type='date'], input[type='number'], select, textarea {
-    font-size: 16px;
+    font-size: var(--fs-16);
   }
 }
 
@@ -1027,23 +1177,23 @@ html, body { overflow-x: clip; }
 /* 保存の切り替え(チェックの状態が見えるようにする)
    .chip の中の入力欄は隠す指定があるため、専用の見た目を用意している */
 .toggle {
-  display: flex; align-items: center; gap: 8px; cursor: pointer;
-  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface-0); font-size: 14px; min-height: 44px;
+  display: flex; align-items: center; gap: var(--sp-8); cursor: pointer;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-8);
+  background: var(--surface-0); font-size: var(--fs-14); min-height: 44px;
 }
 .toggle input[type='checkbox'] {
   width: 20px; height: 20px; flex-shrink: 0; margin: 0; accent-color: var(--accent);
 }
 
 /* 保存した録音の一覧 */
-.saved-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.saved-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
 .saved-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-10);
+  padding: 6px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-13);
 }
 .saved-row:last-child { border-bottom: 0; }
 .saved-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn--small { padding: 5px 12px; font-size: 13px; min-height: 34px; flex-shrink: 0; }
+.btn--small { padding: 5px 12px; font-size: var(--fs-13); min-height: 34px; flex-shrink: 0; }
 
 /* ------------------------------------------------------------------
    お手本 / 自分の録音 の枠
@@ -1051,38 +1201,38 @@ html, body { overflow-x: clip; }
    ------------------------------------------------------------------ */
 .panel {
   margin-top: 14px; padding: 14px;
-  border: 1px solid var(--border); border-radius: 10px;
+  border: 1px solid var(--border); border-radius: var(--r-10);
   background: var(--surface-0);
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: var(--sp-10);
 }
 .panel--model { border-left: 4px solid var(--series-1); }
 .panel--mine  { border-left: 4px solid var(--series-2); }
 
 .panel-title {
-  margin: 0; display: flex; align-items: center; gap: 7px;
-  font-size: 13px; font-weight: 700; letter-spacing: 0.02em;
+  margin: 0; display: flex; align-items: center; gap: var(--sp-7);
+  font-size: var(--fs-13); font-weight: 700; letter-spacing: 0.02em;
 }
 .panel--model .panel-title { color: var(--series-1); }
 .panel--mine  .panel-title { color: var(--series-2); }
 
-.panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.panel-actions { display: flex; flex-wrap: wrap; gap: var(--sp-8); }
 .panel-actions .btn { flex: 0 0 auto; }
 /* 主となるボタンだけ幅を広げ、補助のボタンと差をつける */
 .btn--panel { flex: 1 1 auto; min-width: 160px; }
 
-.panel-note { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+.panel-note { margin: 0; color: var(--text-secondary); font-size: var(--fs-12); line-height: 1.6; }
 .panel audio { width: 100%; margin: 0; }
 
 /* たたんでおける設定 */
 .settings { border-top: 1px solid var(--border); padding-top: 8px; }
 .settings > summary {
-  cursor: pointer; font-size: 12px; color: var(--text-secondary);
+  cursor: pointer; font-size: var(--fs-12); color: var(--text-secondary);
   list-style: none; padding: 4px 0; min-height: 32px; display: flex; align-items: center;
 }
 .settings > summary::-webkit-details-marker { display: none; }
 .settings > summary::before { content: '▸ '; margin-right: 4px; }
 .settings[open] > summary::before { content: '▾ '; }
-.settings-body { display: flex; flex-direction: column; gap: 10px; padding: 8px 0 4px; }
+.settings-body { display: flex; flex-direction: column; gap: var(--sp-10); padding: 8px 0 4px; }
 
 /* 枠の色と揃えた主ボタン。どちらの操作か色でも分かるようにする。 */
 .btn--model {
@@ -1097,10 +1247,10 @@ html, body { overflow-x: clip; }
 
 /* 事前生成の音声を使っていることを示す印 */
 .badge-quality {
-  margin-left: auto; padding: 2px 8px; border-radius: 999px;
+  margin-left: auto; padding: 2px 8px; border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--series-3) 16%, var(--surface-1));
   border: 1px solid var(--series-3); color: var(--text-secondary);
-  font-size: 10px; font-weight: 600; letter-spacing: 0;
+  font-size: var(--fs-10); font-weight: 600; letter-spacing: 0;
 }
 
 /* ---------------- ログイン画面 ---------------- */
@@ -1111,15 +1261,15 @@ html, body { overflow-x: clip; }
 .signin-error { margin-top: 12px; }
 .signin-submit { width: 100%; margin-top: 16px; }
 .signin-note { margin-top: 16px; margin-bottom: 0; line-height: 1.6; }
-.signin-ref { margin: 8px 0 0; font-size: 11px; }
+.signin-ref { margin: 8px 0 0; font-size: var(--fs-11); }
 /* **ログインできないときに押せる手**(2026-08 実機)。
    往復を1回試して、通信が届いていないのか、ID とパスワードが違うのかを
    その場で切り分ける */
-.signin-waiting { margin: 8px 0 0; font-size: 13px; }
+.signin-waiting { margin: 8px 0 0; font-size: var(--fs-13); }
 .signin-diag { margin-top: 12px; }
-.signin-conn { margin: 8px 0 0; font-size: 13px; }
+.signin-conn { margin: 8px 0 0; font-size: var(--fs-13); }
 .signin-conn p { margin: 0; }
-.signin-conn-raw { margin-top: 6px !important; font-size: 11px; word-break: break-word; }
+.signin-conn-raw { margin-top: 6px !important; font-size: var(--fs-11); word-break: break-word; }
 
 /* ---------------- ログイン中の表示 ----------------
    誰として入っているかは**左のメニューの下**に置く(`.nav-account`)。
@@ -1141,22 +1291,22 @@ html, body { overflow-x: clip; }
 /* ---------------- 教材と宿題 ---------------- */
 
 .stack { display: flex; flex-direction: column; gap: var(--gap); }
-.section-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+.section-title { margin: 0; font-size: var(--fs-14); font-weight: 600; color: var(--text-secondary); }
 
 /* 弱点タグを選ぶ */
-.tagpicker { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 4px; }
-.tagpicker-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
+.tagpicker { display: flex; flex-direction: column; gap: var(--sp-10); margin: 8px 0 4px; }
+.tagpicker-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-6) var(--sp-8); }
 /* 「子音」「母音」のような小見出し。
    **幅を広く取らない。** 8.5em 確保していたため、2文字の見出しと
    最初の札のあいだが大きく空いていた(2026-08 の指摘)。
    2つとも2文字なので、3em あれば頭がそろう */
 .tagpicker-label {
   min-width: 3em; flex-shrink: 0;
-  color: var(--text-secondary); font-size: 12px;
+  color: var(--text-secondary); font-size: var(--fs-12);
 }
-.tagpicker-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tagpicker-tags { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
 .tagchip {
-  padding: 3px 10px; border-radius: 999px; font-size: 12px; line-height: 1.5;
+  padding: 3px 10px; border-radius: var(--r-pill); font-size: var(--fs-12); line-height: 1.5;
   background: var(--surface-1); border: 1px solid var(--border);
   color: var(--text-secondary); cursor: pointer;
 }
@@ -1187,24 +1337,24 @@ html, body { overflow-x: clip; }
    **できることを3つに言い切る。** 以前は「教材をさがす・作る」という
    1つの箱の中に条件の欄だけが入り、さがす入力欄はその外にあった。
    同じ「さがす」が2か所に分かれ、「作る」は名前だけでボタンが無かった。 */
-.finder { display: flex; flex-direction: column; gap: 12px; }
+.finder { display: flex; flex-direction: column; gap: var(--sp-12); }
 /* 題と「作る」を同じ行に。**作るは、いつも見えるところに置く** */
 .finder-head {
   display: flex; flex-wrap: wrap; align-items: center;
-  justify-content: space-between; gap: 8px 12px;
+  justify-content: space-between; gap: var(--sp-8) var(--sp-12);
 }
-.finder-head > .card-title { margin: 0; font-size: 16px; }
+.finder-head > .card-title { margin: 0; font-size: var(--fs-16); }
 /* 箱の中に入れたので、さがす帯の上下の余白は要らない */
 .finder .searchbar { margin: 0; }
 /* ② 条件で絞り込む。**畳める。押せることが押す前から分かるようにする** */
 .finder-filters {
-  border: 1px solid var(--border); border-radius: 10px;
+  border: 1px solid var(--border); border-radius: var(--r-10);
   background: var(--surface-2); padding: 10px 12px;
 }
 .finder-filters[open] { background: var(--surface-1); }
 .finder-sum {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 14px; font-weight: 600; cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: var(--sp-8);
+  font-size: var(--fs-14); font-weight: 600; cursor: pointer; list-style: none;
   color: var(--text-primary);
 }
 .finder-sum::-webkit-details-marker { display: none; }
@@ -1216,9 +1366,9 @@ html, body { overflow-x: clip; }
    (なぜ1件しか出ないのかが分からなくならないように) */
 .finder-badge {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-pill);
   background: var(--accent-soft); border: 1px solid var(--accent-line);
-  color: var(--accent); font-size: 12px; font-weight: 700;
+  color: var(--accent); font-size: var(--fs-12); font-weight: 700;
 }
 .finder-clear { margin: 10px 0 0; }
 .finder-filters[open] > .material-fields { margin-top: 12px; }
@@ -1242,7 +1392,7 @@ html, body { overflow-x: clip; }
 }
 
 /* 無いときと、一覧のいちばん下に出す「作る」 */
-.finder-empty, .finder-more { display: flex; flex-direction: column; gap: 10px; }
+.finder-empty, .finder-more { display: flex; flex-direction: column; gap: var(--sp-10); }
 .finder-empty > .card-hint, .finder-more > .card-hint { margin: 0; }
 .finder-empty > .btn, .finder-more > .btn { align-self: flex-start; }
 @media (max-width: 560px) {
@@ -1253,8 +1403,8 @@ html, body { overflow-x: clip; }
 .material-search { padding: 12px 16px; box-shadow: none; }
 .material-search[open] { padding: 16px; box-shadow: var(--shadow-1); }
 .material-search-sum {
-  display: flex; align-items: center; gap: 8px;
-  margin: 0; padding: 2px 0; font-size: 14px;
+  display: flex; align-items: center; gap: var(--sp-8);
+  margin: 0; padding: 2px 0; font-size: var(--fs-14);
   cursor: pointer; list-style: none;
   color: var(--text-secondary);
 }
@@ -1291,7 +1441,7 @@ html, body { overflow-x: clip; }
   display: block; min-width: 0;
   padding: 10px 12px 8px;
   background: var(--surface-2);
-  border-radius: 10px; cursor: pointer;
+  border-radius: var(--r-10); cursor: pointer;
 }
 /* 囲みはもう付いているので、**カーソルでは色を変えず、輪郭を出す。**
    色をもう一段足すと、明るい側と暗い側で「濃くなる / 薄くなる」が
@@ -1303,10 +1453,10 @@ html, body { overflow-x: clip; }
    縦に積んでいたので、どちらが日付でどちらが種類なのか読み取りにくかった。 */
 .material-meta {
   display: flex; align-items: baseline; justify-content: space-between;
-  gap: 8px; margin-top: 6px; line-height: 1.4;
+  gap: var(--sp-8); margin-top: 6px; line-height: 1.4;
 }
-.material-when { color: var(--text-muted); font-size: 12px; flex-shrink: 0; }
-.material-kind { color: var(--text-secondary); font-size: 13px; min-width: 0; }
+.material-when { color: var(--text-muted); font-size: var(--fs-12); flex-shrink: 0; }
+.material-kind { color: var(--text-secondary); font-size: var(--fs-13); min-width: 0; }
 /* **何を押せばよいかを、言葉で書く**(2026-08 利用者の指定)。
 
    > 印刷や、内容確認をする際はもっと何を押すべきか分かりやすくしてください。
@@ -1315,12 +1465,12 @@ html, body { overflow-x: clip; }
    囲みだけでは「押せる」ことしか分からない。**押すと何が出るのか**は
    言葉でしか書けない。細い線で区切って、見出しと役割を分ける。 */
 .material-open-cta {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: var(--sp-6);
   margin-top: 8px; padding-top: 8px;
   border-top: 1px solid var(--border);
-  color: var(--accent); font-size: 14px; font-weight: 600;
+  color: var(--accent); font-size: var(--fs-14); font-weight: 600;
 }
-.material-open-mark { color: var(--accent); font-size: 12px; }
+.material-open-mark { color: var(--accent); font-size: var(--fs-12); }
 /* 「中身を見る・印刷する」の行を置かない画面(今週の宿題・2026-09 利用者の指定)。
    **印だけは残す。** 押せることが分からなくなるので消さない。
    囲みの右端に小さく置く */
@@ -1330,7 +1480,7 @@ html, body { overflow-x: clip; }
 /* 設問の一覧(中身を開いたとき・宿題の画面)。ここは残す */
 .material-preview {
   margin: 10px 0; padding-left: 1.4em;
-  font-size: 13px; line-height: 1.8; color: var(--text-secondary);
+  font-size: var(--fs-13); line-height: 1.8; color: var(--text-secondary);
 }
 .material-preview li { margin-bottom: 4px; }
 
@@ -1339,8 +1489,8 @@ html, body { overflow-x: clip; }
    並べていたので、1件で画面ぜんぶを食っていた。
    さがす画面は**見比べる**ためのものなので、1件が長いほど見比べにくい。 */
 .material-parts {
-  display: flex; flex-wrap: wrap; gap: 4px 10px;
-  margin: 8px 0; font-size: 13px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-10);
+  margin: 8px 0; font-size: var(--fs-13);
 }
 .material-parts > span { white-space: nowrap; }
 
@@ -1359,12 +1509,12 @@ html, body { overflow-x: clip; }
    > これらのプルダウンの幅は弱点などと同じ左右いっぱいに広げてください。
    > 左右を他の要素と揃えてください。
    720px で止めていたので、弱点タグの行より短く、右端がそろっていなかった */
-.material-fields { display: flex; flex-direction: column; gap: 16px; }
+.material-fields { display: flex; flex-direction: column; gap: var(--sp-16); }
 /* **文字とプルダウンの隙間**。4px では、題が入力欄にくっついて見える */
-.material-fields .field { gap: 7px; }
+.material-fields .field { gap: var(--sp-7); }
 .material-fields .field > span, .material-fields .field > legend { line-height: 1.5; }
 /* 業界と趣味のように、左右に並べる対 */
-.material-fields .field-row { gap: 16px; }
+.material-fields .field-row { gap: var(--sp-16); }
 
 /* さがす帯(`SearchBar.jsx`)。
    **絞り込みの箱の外、一覧のすぐ上**に置く(2026-08 利用者の指定)。
@@ -1372,17 +1522,17 @@ html, body { overflow-x: clip; }
    名前で引く手段も並び順も消えてしまう。 */
 .searchbar { margin: 18px 0 10px; }
 .searchbar-title {
-  margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--text-primary);
+  margin: 0 0 8px; font-size: var(--fs-15); font-weight: 600; color: var(--text-primary);
 }
-.searchbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.searchbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10); }
 
 /* 入力欄。**虫めがねを中に入れ、角を丸くする。**
    囲みそのものが枠線と影を持ち、中の `input` は透明にして重ねる */
 .searchbar-field {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: var(--sp-8);
   flex: 1 1 260px; min-width: 0; max-width: 420px;
   padding: 0 10px 0 12px; height: 40px;
-  border: 1px solid var(--border); border-radius: 999px;
+  border: 1px solid var(--border); border-radius: var(--r-pill);
   background: var(--surface-1); box-shadow: var(--shadow-1);
   transition: border-color .15s, box-shadow .15s;
 }
@@ -1402,12 +1552,12 @@ html, body { overflow-x: clip; }
 .searchbar-clear {
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0; width: 26px; height: 26px; padding: 0;
-  border: 0; border-radius: 999px; cursor: pointer;
+  border: 0; border-radius: var(--r-pill); cursor: pointer;
   background: transparent; color: var(--text-muted);
 }
 .searchbar-clear:hover { background: var(--surface-2); color: var(--text-primary); }
-.searchbar-sort > select { width: auto; min-width: 140px; height: 40px; border-radius: 999px; }
-.searchbar-count { margin-left: auto; color: var(--text-secondary); font-size: 13px; }
+.searchbar-sort > select { width: auto; min-width: 140px; height: 40px; border-radius: var(--r-pill); }
+.searchbar-count { margin-left: auto; color: var(--text-secondary); font-size: var(--fs-13); }
 
 @media (max-width: 640px) {
   /* 狭い画面では、入力欄が1行を使い切る */
@@ -1419,11 +1569,11 @@ html, body { overflow-x: clip; }
 .material-kind-hint { margin: -4px 0 12px; }
 .material-items { margin: 16px 0; }
 .material-item-row {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  display: flex; align-items: center; gap: var(--sp-8); margin-bottom: 6px;
 }
 .material-item-no {
   min-width: 1.6em; flex-shrink: 0;
-  color: var(--text-muted); font-size: 12px; text-align: right;
+  color: var(--text-muted); font-size: var(--fs-12); text-align: right;
 }
 .material-item-row input { min-width: 0; flex: 1 1 40%; }
 
@@ -1432,7 +1582,7 @@ html, body { overflow-x: clip; }
   margin-top: 12px; padding: 12px;
   border: 1px solid var(--accent); border-radius: var(--radius);
 }
-.assign-list { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0; }
+.assign-list { display: flex; flex-wrap: wrap; gap: var(--sp-6) var(--sp-16); margin: 8px 0; }
 
 /* ゲストを開いたときの中身。**教材の画面と同じ形にする**(2026-08 利用者の指定)。
    以前は `.assign-box`(青い実線の囲み)を使い回していたので、
@@ -1448,10 +1598,10 @@ html, body { overflow-x: clip; }
 .homework-card.is-done { opacity: 0.72; }
 .homework-instruction {
   margin: 8px 0; padding: 8px 12px;
-  border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0;
-  background: var(--surface-1); font-size: 13px;
+  border-left: 3px solid var(--accent); border-radius: 0 var(--r-6) var(--r-6) 0;
+  background: var(--surface-1); font-size: var(--fs-13);
 }
-.homework-en { font-size: 15px; color: var(--text-primary); }
+.homework-en { font-size: var(--fs-15); color: var(--text-primary); }
 
 @media (max-width: 640px) {
   .material-item-row { flex-wrap: wrap; }
@@ -1488,12 +1638,12 @@ html, body { overflow-x: clip; }
    またがる高さ**なので、左右が同じ背丈になり、行が余らない。 */
 .learner-top {
   display: flex; flex-wrap: wrap; align-items: center;
-  gap: 12px 16px; margin-bottom: 12px;
+  gap: var(--sp-12) var(--sp-16); margin-bottom: 12px;
 }
-.learner-who { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.learner-who { display: flex; align-items: center; gap: var(--sp-14); min-width: 0; }
 .learner-side {
   margin-left: auto; display: flex; flex-direction: column;
-  align-items: flex-end; gap: 10px; min-width: 0; max-width: 100%;
+  align-items: flex-end; gap: var(--sp-10); min-width: 0; max-width: 100%;
 }
 
 /* **名前と札を離す**(2026-08 利用者の指定)。
@@ -1512,10 +1662,10 @@ html, body { overflow-x: clip; }
    長い名前で札が次の行へ落ちても崩れないよう、折り返しは許す。 */
 .learner-head {
   display: flex; flex-wrap: wrap; align-items: center;
-  gap: 4px 12px; min-width: 0;
+  gap: var(--sp-4) var(--sp-12); min-width: 0;
 }
 .learner-head > .badge {
-  margin-left: 0; padding: 2px 10px; font-size: 11px; letter-spacing: .04em;
+  margin-left: 0; padding: 2px 10px; font-size: var(--fs-11); letter-spacing: .04em;
 }
 
 /* **タブは、名前の右へ寄せる**(2026-08 利用者の指定)。
@@ -1548,8 +1698,8 @@ html, body { overflow-x: clip; }
    幅は名前の下の見出しぶんだけ(広い画面いっぱいに引き伸ばさない)。 */
 .learner-meta {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px 18px; width: 100%; max-width: 300px;
-  color: var(--text-secondary); font-size: 13px;
+  gap: var(--sp-8) var(--sp-18); width: 100%; max-width: 300px;
+  color: var(--text-secondary); font-size: var(--fs-13);
 }
 /* **カードをまたいで、列をそろえる**(2026-09 利用者の指定
    「プロの仕事で整理してください」)。
@@ -1560,14 +1710,14 @@ html, body { overflow-x: clip; }
 /* **中身も右へそろえる**(2026-09 利用者の指定で右へ寄せた)。
    欄の幅は同じままなので、点数が入っても位置は動かない */
 .learner-meta-item {
-  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+  display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0;
   align-items: flex-end; text-align: right;
 }
 /* **行の中に置くので、点数は大きくしない。** `.score-value` の 20px は
    スコアだけを並べていたころの大きさである */
-.learner-meta .score-value { font-size: 16px; font-weight: 700; }
-.learner-meta .score-label { font-size: 10px; }
-.learner-meta .muted { font-size: 12px; }
+.learner-meta .score-value { font-size: var(--fs-16); font-weight: 700; }
+.learner-meta .score-label { font-size: var(--fs-10); }
+.learner-meta .muted { font-size: var(--fs-12); }
 /* 開いているゲストの見出しは、**まわりと同じ白いカードに包む**
    (2026-08 利用者の指定)。地の上に名前とタブが直に乗っていた */
 .learner-headcard { padding: 18px 20px; margin-bottom: var(--gap); }
@@ -1587,7 +1737,7 @@ html, body { overflow-x: clip; }
    **1本の行**である。上の行(名前 / スコア)と同じ「左が中身・右が操作」。 */
 .learner-signs {
   display: flex; flex-wrap: wrap; align-items: center;
-  gap: 8px; margin-top: 12px;
+  gap: var(--sp-8); margin-top: 12px;
   padding-top: 12px; border-top: 1px solid var(--border);
 }
 /* **上と下を、細い線1本で分ける。**「誰か・どのくらいか」と
@@ -1606,12 +1756,12 @@ html, body { overflow-x: clip; }
    線ばかりが目に入る。**最後に取り組んだ日は、点と文字だけで足りる。**
    色(点)だけに頼らず「2 日前」という言葉も必ず出す(CLAUDE.md) */
 .learner-signs > .sign--last {
-  flex-direction: row; align-items: baseline; gap: 6px;
+  flex-direction: row; align-items: baseline; gap: var(--sp-6);
   min-width: 0; padding: 0;
   border: none; background: none;
 }
-.learner-signs > .sign--last .sign-value { font-size: 14px; }
-.learner-signs > .sign--last .sign-label { font-size: 11px; }
+.learner-signs > .sign--last .sign-value { font-size: var(--fs-14); }
+.learner-signs > .sign--last .sign-label { font-size: var(--fs-11); }
 /* 「今日」のときの地色も外す。**囲みが無いのに帯だけ残ると、
    狭い画面では行いっぱいの緑の線に見える**(390px で実測)。
    新しさは**点の色と言葉**で足りる */
@@ -1625,21 +1775,21 @@ html, body { overflow-x: clip; }
 .sign {
   display: inline-flex; flex-direction: column; align-items: center;
   min-width: 62px; padding: 6px 12px;
-  border: 1px solid var(--border); border-radius: 10px;
+  border: 1px solid var(--border); border-radius: var(--r-10);
   background: var(--surface-2); line-height: 1.25;
 }
 .sign-value {
-  font-size: 15px; font-weight: 700; color: var(--text-primary);
+  font-size: var(--fs-15); font-weight: 700; color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
-.sign-unit { margin-left: 1px; font-size: 11px; font-weight: 600; }
-.sign-label { font-size: 10px; letter-spacing: .04em; color: var(--text-muted); }
+.sign-unit { margin-left: 1px; font-size: var(--fs-11); font-weight: 600; }
+.sign-label { font-size: var(--fs-10); letter-spacing: .04em; color: var(--text-muted); }
 /* 最後に取り組んだ日だけは、**近さを色でも示す。**
    ただし色だけに頼らず、「きのう」という言葉も必ず出す(CLAUDE.md) */
-.sign--last { flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
+.sign--last { flex-direction: row; align-items: center; gap: var(--sp-6); min-width: 0; }
 .sign--last .sign-label { margin-left: 2px; }
 .sign-dot {
-  width: 8px; height: 8px; border-radius: 999px;
+  width: 8px; height: 8px; border-radius: var(--r-pill);
   background: var(--text-muted); flex-shrink: 0;
 }
 .sign--last.is-today { border-color: var(--ok); background: var(--ok-bg); }
@@ -1669,7 +1819,7 @@ html, body { overflow-x: clip; }
    色はこちらで持たない(表も列も増やさない)。 */
 .avatar {
   display: inline-flex; align-items: center; justify-content: center;
-  flex-shrink: 0; border-radius: 999px; overflow: hidden;
+  flex-shrink: 0; border-radius: var(--r-pill); overflow: hidden;
   line-height: 1; user-select: none;
   /* 頭文字のとき。**色だけに頼らない**ので、地色はうすく、文字は濃く */
   background: hsl(var(--avatar-hue, 210) 45% 88%);
@@ -1679,9 +1829,9 @@ html, body { overflow-x: clip; }
 }
 /* 絵を選んでいるときは、地色を付けない。**絵そのものが目印**である */
 .avatar--pic { background: var(--surface-2); border-color: var(--border); color: inherit; }
-.avatar--sm { width: 32px; height: 32px; font-size: 16px; }
-.avatar--md { width: 40px; height: 40px; font-size: 20px; }
-.avatar--lg { width: 56px; height: 56px; font-size: 28px; }
+.avatar--sm { width: 32px; height: 32px; font-size: var(--fs-16); }
+.avatar--md { width: 40px; height: 40px; font-size: var(--fs-20); }
+.avatar--lg { width: 56px; height: 56px; font-size: var(--fs-28); }
 
 /* 暗い配色では、うすい地色に濃い文字だと沈む。**明るさを入れ替える。**
    **3か所すべてに書く**(media / [data-theme] / plain)。1か所でも
@@ -1706,32 +1856,32 @@ html, body { overflow-x: clip; }
 /* アイコンを選ぶ(本人だけ)。左のメニューの下、自分の名前の隣に置く */
 .avatar-pick { position: relative; display: inline-flex; }
 .avatar-pick-btn {
-  padding: 0; border: 0; background: none; cursor: pointer; border-radius: 999px;
+  padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--r-pill);
 }
 .avatar-menu {
   position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 40;
   width: min(280px, calc(100vw - 32px));
-  padding: 12px; border: 1px solid var(--border); border-radius: 14px;
+  padding: 12px; border: 1px solid var(--border); border-radius: var(--r-14);
   background: var(--surface-1); box-shadow: var(--shadow-2);
 }
 .avatar-menu-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 8px;
 }
-.avatar-menu-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.avatar-menu-title { font-size: var(--fs-13); font-weight: 700; color: var(--text-primary); }
 /* **中だけを送らせる。** 高くなっても、うしろの画面を動かさない */
 .avatar-menu-body { max-height: 46vh; overflow-y: auto; }
 .avatar-group + .avatar-group { margin-top: 10px; }
 .avatar-group-label {
   display: block; margin-bottom: 4px;
-  font-size: 11px; letter-spacing: .04em; color: var(--text-muted);
+  font-size: var(--fs-11); letter-spacing: .04em; color: var(--text-muted);
 }
-.avatar-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.avatar-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--sp-4); }
 .avatar-opt {
   display: flex; align-items: center; justify-content: center;
   aspect-ratio: 1 / 1; padding: 0;
-  border: 1px solid transparent; border-radius: 10px;
-  background: none; font-size: 20px; line-height: 1; cursor: pointer;
+  border: 1px solid transparent; border-radius: var(--r-10);
+  background: none; font-size: var(--fs-20); line-height: 1; cursor: pointer;
 }
 .avatar-opt:hover { background: var(--surface-2); }
 /* 選んでいる印。**べた塗りにしない**(うすい地色 + 枠線 + 太字) */
@@ -1741,14 +1891,14 @@ html, body { overflow-x: clip; }
 .avatar-clear { width: 100%; margin-top: 10px; }
 
 .learner-remind { margin-left: 0; align-self: center; }
-.learner-level { color: var(--text-secondary); font-size: 13px; }
+.learner-level { color: var(--text-secondary); font-size: var(--fs-13); }
 
 /* **開いているゲストの名前は、大きく**(2026-08 利用者の指定)。
    その画面が誰のものかは、いちばん先に目に入るべき情報である。
    開いているときは押しても閉じるだけなので、下線は出さない */
-.learner-open .learner-head { gap: 14px; }
+.learner-open .learner-head { gap: var(--sp-14); }
 .learner-open .learner-name {
-  font-size: 26px; font-weight: 700; line-height: 1.2;
+  font-size: var(--fs-26); font-weight: 700; line-height: 1.2;
   letter-spacing: .01em;
   color: var(--text-primary); text-decoration: none;
 }
@@ -1757,13 +1907,13 @@ html, body { overflow-x: clip; }
    (2026-08 実機・画面共有で他のゲストが見えてしまっていた)。
    戻る道を、名前の押し直し以外にも用意しておく */
 .learner-back { align-self: flex-start; margin-bottom: -4px; }
-.score-cell { display: flex; align-items: baseline; gap: 6px; }
+.score-cell { display: flex; align-items: baseline; gap: var(--sp-6); }
 .score-label {
-  color: var(--text-secondary); font-size: 12px;
+  color: var(--text-secondary); font-size: var(--fs-12);
   letter-spacing: 0.04em; text-transform: uppercase;
 }
 .score-value {
-  font-size: 20px; font-weight: 600;
+  font-size: var(--fs-20); font-weight: 600;
   font-variant-numeric: tabular-nums; color: var(--text-primary);
 }
 .score-input { max-width: 110px; }
@@ -1774,7 +1924,7 @@ html, body { overflow-x: clip; }
 .filter-label > .score-input { margin-left: 6px; }
 .score-history {
   margin: 6px 0 12px; padding-left: 1.2em;
-  font-size: 13px; line-height: 1.9; color: var(--text-secondary);
+  font-size: var(--fs-13); line-height: 1.9; color: var(--text-secondary);
 }
 .badge--warn { margin-left: 6px; }
 
@@ -1784,22 +1934,22 @@ html, body { overflow-x: clip; }
   margin: 12px 0; padding: 12px;
   border: 1px solid var(--border); border-radius: var(--radius);
 }
-.exercise-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.exercise-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .exercise-no {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; flex-shrink: 0;
-  border-radius: 999px; background: var(--accent); color: #fff;
-  font-size: 12px; font-weight: 600;
+  border-radius: var(--r-pill); background: var(--accent); color: #fff;
+  font-size: var(--fs-12); font-weight: 600;
 }
 .exercise-instruction { width: 100%; margin: 8px 0; }
-.exercise-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
-.exercise-fields { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.exercise-item { display: flex; align-items: flex-start; gap: var(--sp-8); margin-bottom: 8px; }
+.exercise-fields { display: flex; flex-direction: column; gap: var(--sp-4); flex: 1 1 auto; min-width: 0; }
 .exercise-view { margin: 14px 0; }
 /* 選んでいない演習。**画面では隠すだけで、消さない。**
    消す(描かない)と、印刷したときに紙が見出しだけになる
    (2026-08 実機)。紙用の指定が `display: block` に戻す */
 .exercise-view.is-closed { display: none; }
-.answer { margin-top: 4px; font-size: 13px; }
+.answer { margin-top: 4px; font-size: var(--fs-13); }
 .answer > summary { cursor: pointer; color: var(--accent); }
 .answer > div { margin-top: 4px; }
 
@@ -1838,7 +1988,7 @@ html, body { overflow-x: clip; }
    **色は必ず変数で持つ**(プレインを選んだときだけ色が残らないように) */
 .answer-ja {
   margin-top: 5px; padding: 4px 10px;
-  border-left: 3px solid var(--border); border-radius: 0 6px 6px 0;
+  border-left: 3px solid var(--border); border-radius: 0 var(--r-6) var(--r-6) 0;
   background: var(--surface-2); color: var(--text-secondary); font-size: .88em;
 }
 /* 紙の上では、訳の色をレッスン表示にそろえる。
@@ -1849,9 +1999,9 @@ html, body { overflow-x: clip; }
 }
 
 /* 意味が近すぎて外した文の一覧。左が今回作った文、右が前に出した文 */
-.similar-list { list-style: none; margin: 8px 0; padding: 0; font-size: 13px; }
+.similar-list { list-style: none; margin: 8px 0; padding: 0; font-size: var(--fs-13); }
 .similar-list li {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+  display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: baseline;
   padding: 6px 0; border-bottom: 1px solid var(--border);
 }
 .similar-new { color: var(--text-primary); }
@@ -1862,8 +2012,8 @@ html, body { overflow-x: clip; }
 /* 混合ドリルで、1問がどの弱点のものかを示す小さな札 */
 .item-tag {
   display: inline-block; margin-right: 6px; padding: 1px 6px;
-  border: 1px solid var(--border); border-radius: 999px;
-  font-size: 11px; color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: var(--r-pill);
+  font-size: var(--fs-11); color: var(--text-secondary);
   /* 弱点の名前が入るので長い。**囲みからはみ出させない**
      (`.mtitle-chip` と同じ理由・2026-09) */
   max-width: 100%; white-space: normal; overflow-wrap: anywhere;
@@ -1872,7 +2022,7 @@ html, body { overflow-x: clip; }
 /* ── 記事・会話の本文と、声に出す練習 ───────────────────────── */
 .passage { margin-top: 8px; }
 .passage-headline {
-  margin: 0 0 10px; font-size: 18px; line-height: 1.4; color: var(--text-primary);
+  margin: 0 0 10px; font-size: var(--fs-18); line-height: 1.4; color: var(--text-primary);
 }
 /* 6Steps の切り替え。**プルダウンにする**(2026-08 利用者の指定)。
 
@@ -1884,7 +2034,7 @@ html, body { overflow-x: clip; }
    **番号(①〜⑥)は選択肢にそのまま出す。** 順にやるものなので、
    いま何番目かが分かることそのものが道しるべになる。 */
 .step-pick {
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; gap: var(--sp-8);
   margin: 0 0 10px; max-width: 100%;
 }
 /* **「6Steps」の文字は出さなくなった**(2026-09 利用者の指定)。
@@ -1893,19 +2043,19 @@ html, body { overflow-x: clip; }
    読み上げのための名前(`aria-label`)は残してある */
 .step-pick select {
   min-height: 40px; min-width: 0; flex: 0 1 auto;
-  padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-10);
   background: var(--surface-1); color: var(--text-primary);
-  font-size: 14px; font-weight: 600;
+  font-size: var(--fs-14); font-weight: 600;
 }
 @media (max-width: 860px) {
   /* 860px 以下では 16px を割らない(iOS が勝手に拡大するため) */
-  .step-pick select { font-size: 16px; }
+  .step-pick select { font-size: var(--fs-16); }
   .step-pick { display: flex; }
   .step-pick select { flex: 1 1 auto; }
 }
 .chip {
-  padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
-  background: var(--surface-1); color: var(--text-secondary); font-size: 13px; cursor: pointer;
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--r-pill);
+  background: var(--surface-1); color: var(--text-secondary); font-size: var(--fs-13); cursor: pointer;
 }
 /* 選んでいる印。**べた塗りにしない**(2026-08「塗りつぶしがダサい」)。
    うすい地色 + 同じ色の文字 + 枠線の3つで示す。
@@ -1914,7 +2064,7 @@ html, body { overflow-x: clip; }
   background: var(--accent-soft); border-color: var(--accent-line);
   color: var(--accent); font-weight: 700;
 }
-.passage-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.passage-tools { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin: 8px 0 12px; }
 /* **中身が無いときは、場所も取らない**(2026-09)。
    Stop を消したことで、①ディクテーションでは帯が空になった。
    空のまま置くと、上下の余白(20px)だけが残る */
@@ -1929,27 +2079,27 @@ html, body { overflow-x: clip; }
 .passage-part.is-speaking {
   background: var(--speaking-bg);
   box-shadow: inset 5px 0 0 var(--speaking-bar);
-  border-radius: 6px;
+  border-radius: var(--r-6);
   border-bottom-color: transparent;
 }
 .passage-part.is-speaking .passage-en { font-weight: 600; }
 @media print { .passage-part.is-speaking { background: none; box-shadow: none; } }
 
-.passage-speaker { font-size: 13px; color: var(--series-1); margin-bottom: 2px; }
-.passage-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
-.passage-ja { margin: 0 0 4px; color: var(--text-secondary); font-size: 14px; line-height: 1.8; }
-.passage-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.btn--small { padding: 4px 10px; font-size: 13px; }
+.passage-speaker { font-size: var(--fs-13); color: var(--series-1); margin-bottom: 2px; }
+.passage-en { margin: 0 0 4px; line-height: 1.9; font-size: var(--fs-16); }
+.passage-ja { margin: 0 0 4px; color: var(--text-secondary); font-size: var(--fs-14); line-height: 1.8; }
+.passage-actions { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: 6px; }
+.btn--small { padding: 4px 10px; font-size: var(--fs-13); }
 .passage-notice { margin: 8px 0; }
 
 /* ③⑤ の見せ方の切り替え */
 .passage-views {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
   margin: 0 0 10px;
 }
 .passage-flow {
-  display: inline-flex; align-items: center; gap: 6px;
-  margin-left: auto; color: var(--text-secondary); font-size: 12.5px;
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  margin-left: auto; color: var(--text-secondary); font-size: var(--fs-12h);
 }
 .passage-flow input { width: 16px; height: 16px; accent-color: var(--accent); }
 
@@ -1978,13 +2128,13 @@ html, body { overflow-x: clip; }
 .passage-body.is-flow .passage-actions,
 .passage-body.is-flow .transcript { display: none; }
 .passage-body.is-flow > .passage-part.is-speaking {
-  background: var(--speaking-bg); box-shadow: none; border-radius: 4px;
+  background: var(--speaking-bg); box-shadow: none; border-radius: var(--r-4);
 }
 
 /* ⑤ シャドーイング。**本文を見ないで行う**(利用者の指定)。
    隠しても行の場所は残す。消すと段落がいくつあるのか分からなくなる */
 .passage-en--hidden, .stepsent-hidden {
-  margin: 0 0 4px; min-height: 1.9em; border-radius: 6px;
+  margin: 0 0 4px; min-height: 1.9em; border-radius: var(--r-6);
   background: repeating-linear-gradient(
     -45deg, var(--surface-2) 0 6px, transparent 6px 12px);
   opacity: 0.7;
@@ -2009,15 +2159,15 @@ html, body { overflow-x: clip; }
      こちらは順番に意味があるので**番号の丸**にしてある。 */
 .step-guide {
   margin: 0 0 12px;
-  border: 1px solid var(--accent-line); border-radius: 8px;
+  border: 1px solid var(--accent-line); border-radius: var(--r-8);
   background: var(--surface-1);
 }
 /* 畳んでいるときは、ただの1行の見出しに見せる */
 .step-guide[open] { background: var(--accent-soft); }
 .step-guide-sum {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: var(--sp-8);
   padding: 7px 12px; cursor: pointer; list-style: none;
-  font-size: 12.5px; letter-spacing: .03em; color: var(--text-secondary);
+  font-size: var(--fs-12h); letter-spacing: .03em; color: var(--text-secondary);
 }
 .step-guide-sum::-webkit-details-marker { display: none; }
 .step-guide-sum:hover { color: var(--text-primary); }
@@ -2031,23 +2181,23 @@ html, body { overflow-x: clip; }
 }
 .step-guide[open] .step-guide-caret { transform: rotate(90deg); }
 .step-guide-label { font-weight: 600; color: var(--accent); }
-.step-guide-count { margin-left: auto; font-size: 11.5px; color: var(--text-muted); }
+.step-guide-count { margin-left: auto; font-size: var(--fs-11h); color: var(--text-muted); }
 
 .step-guide-body { border-top: 1px solid var(--accent-line); }
 /* ねらい。**何のための練習か**を、手順より先に目に入れる */
 .step-guide-aimrow {
-  display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline;
+  display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-8); align-items: baseline;
   margin: 0; padding: 9px 12px 2px;
-  font-size: 13.5px; line-height: 1.7; color: var(--text-primary);
+  font-size: var(--fs-13h); line-height: 1.7; color: var(--text-primary);
 }
 /* 「ねらい」の札。**塗りつぶさない**(2026-08 利用者の指定)。
    > 「ねらい」の塗りつぶしが濃すぎます。もっとさりげない洗練された
    > デザインにここだけ変えてください。(周囲に合うように)
    まわりが `--accent-soft` のうすい面なので、**細い枠と文字だけ**で足りる */
 .step-guide-tag {
-  padding: 1px 9px; border-radius: 999px;
+  padding: 1px 9px; border-radius: var(--r-pill);
   border: 1px solid var(--accent-line); background: none; color: var(--accent);
-  font-size: 11.5px; font-weight: 600; letter-spacing: .04em; white-space: nowrap;
+  font-size: var(--fs-11h); font-weight: 600; letter-spacing: .04em; white-space: nowrap;
 }
 .step-guide-aim { font-weight: 600; }
 
@@ -2058,7 +2208,7 @@ html, body { overflow-x: clip; }
 .step-guide-how > li {
   position: relative; counter-increment: step;
   padding: 7px 0 7px 26px;
-  font-size: 14px; line-height: 1.85; color: var(--text-primary);
+  font-size: var(--fs-14); line-height: 1.85; color: var(--text-primary);
 }
 /* 行と行の間に細い線。1行が2行に折り返しても、どこまでが1手順か分かる */
 .step-guide-how > li + li { border-top: 1px dashed var(--accent-line); }
@@ -2066,9 +2216,9 @@ html, body { overflow-x: clip; }
 .step-guide-how > li::before {
   content: counter(step);
   position: absolute; left: 0; top: .78em;
-  width: 18px; height: 18px; border-radius: 50%;
+  width: 18px; height: 18px; border-radius: var(--r-circle);
   background: var(--accent); color: var(--on-accent);
-  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+  font-size: var(--fs-11); font-weight: 700; line-height: 18px; text-align: center;
 }
 .step-guide-how strong { font-weight: 700; }
 
@@ -2078,19 +2228,19 @@ html, body { overflow-x: clip; }
    操作を下に置いていたので、本文と解答が下へ押し下げられていた
    (2026-08 の指摘)。右上へ寄せたぶん、中身を上に寄せられる */
 .row-head {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); margin-bottom: 6px;
 }
 .row-tools {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6);
   margin-left: auto;
 }
 /* 何文目か。**番号が要る。** どこまで書き取ったかを見失う */
 .dictation-no {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 50%;
+  width: 22px; height: 22px; border-radius: var(--r-circle);
   background: var(--surface-2); color: var(--text-secondary);
-  font-size: 12px; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-12); font-variant-numeric: tabular-nums;
 }
 .row-tools .etext-listen { margin-left: 0; }
 /* 文ごとの速さ(ディクテーション・2026-09 利用者の指定)。
@@ -2099,34 +2249,34 @@ html, body { overflow-x: clip; }
    `flex-wrap: wrap`)。 */
 .row-rate > select {
   width: auto; min-height: 40px; padding: 4px 8px;
-  font-size: 13px; border-radius: 8px;
+  font-size: var(--fs-13); border-radius: var(--r-8);
 }
-@media (max-width: 560px) { .row-rate > select { font-size: 16px; } }
+@media (max-width: 560px) { .row-rate > select { font-size: var(--fs-16); } }
 .dictation-input {
   width: 100%; padding: 8px 10px; border: 1px solid var(--border);
-  border-radius: 8px; background: var(--surface-1); color: var(--text-primary);
-  font-family: inherit; font-size: 15px; line-height: 1.7; resize: vertical;
+  border-radius: var(--r-8); background: var(--surface-1); color: var(--text-primary);
+  font-family: inherit; font-size: var(--fs-15); line-height: 1.7; resize: vertical;
 }
 /* 照らし合わせ。**書いた欄のすぐ下に置く。**
    解答の下に置いていたので、自分が書いたものと離れて見比べられなかった
    (2026-08 の指摘)。合っている=緑 / まちがい=赤 */
 .dict-diff {
-  margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--r-8);
   background: var(--qa-answer, var(--surface-2));
 }
 .dict-diff-line {
-  margin: 0; line-height: 2.1; font-size: 16px;
-  display: flex; flex-wrap: wrap; gap: 4px;
+  margin: 0; line-height: 2.1; font-size: var(--fs-16);
+  display: flex; flex-wrap: wrap; gap: var(--sp-4);
 }
 .dict-diff-score {
-  margin: 8px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.9;
+  margin: 8px 0 0; color: var(--text-secondary); font-size: var(--fs-12); line-height: 1.9;
 }
-.dict-key { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; }
-.dict-key .w { font-size: 11.5px; }
+.dict-key { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-10); margin-top: 6px; }
+.dict-key .w { font-size: var(--fs-11h); }
 
 
-.dictation-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
-.stepsent-en { margin: 0 0 4px; line-height: 1.9; font-size: 16px; }
+.dictation-en { margin: 0 0 4px; line-height: 1.9; font-size: var(--fs-16); }
+.stepsent-en { margin: 0 0 4px; line-height: 1.9; font-size: var(--fs-16); }
 
 /* ── ② スラッシュリーディング ──────────────────────────
    **押すのは語そのもの。** 語と語のあいだに押せる帯を置いたところ、
@@ -2134,19 +2284,19 @@ html, body { overflow-x: clip; }
    使いづらい」と言われた(2026-08)。語は大きいので指で確実に狙え、
    押すまでは**素の英文のまま**である。 */
 .slash-head {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10) var(--sp-16); margin-bottom: 10px;
 }
 .slash-head .rate-pick:first-child { margin-left: auto; }
 .slash-list { list-style: none; margin: 0; padding: 0; }
 /* **広げすぎない。** 広いと「もう区切られている」ように見える
    (2026-08 の指摘)。語のあいだは、押せる幅ぶん(左右 4px)だけで足りるので、
    `word-spacing` は足さない */
-.slash-line { margin: 0; line-height: 2.2; font-size: 17px; }
+.slash-line { margin: 0; line-height: 2.2; font-size: var(--fs-17); }
 .slash-w { white-space: nowrap; }
 /* 語。**ふだんは、ただの文字に見せる。** 枠も地色も付けない */
 .slash-word {
   display: inline; padding: 3px 4px; margin: 0;
-  border: none; border-radius: 4px; background: none;
+  border: none; border-radius: var(--r-4); background: none;
   color: inherit; font: inherit; line-height: inherit; cursor: pointer;
 }
 .slash-word.is-first { cursor: default; }
@@ -2166,7 +2316,7 @@ html, body { overflow-x: clip; }
    「決まりに反している」ときだけである */
 /* まちがいは**強く出す。** 赤い丸で囲み、すぐ横に吹き出しを付ける */
 .slash-mark.is-ng {
-  color: #fff; background: var(--ng); border-radius: 4px;
+  color: #fff; background: var(--ng); border-radius: var(--r-4);
   padding: 0 0.28em; text-decoration: none;
 }
 .slash-mark.is-plain { color: var(--text-muted); }
@@ -2178,9 +2328,9 @@ html, body { overflow-x: clip; }
   position: relative;
   display: inline-block; vertical-align: middle;
   margin: 0 0.35em 0 0.5em; padding: 3px 9px;
-  border: 1px solid var(--ng); border-radius: 8px;
+  border: 1px solid var(--ng); border-radius: var(--r-8);
   background: var(--ng-bg); color: var(--ng);
-  font-size: 12px; font-weight: 700; line-height: 1.5;
+  font-size: var(--fs-12); font-weight: 700; line-height: 1.5;
   white-space: nowrap; cursor: pointer;
   font-family: inherit;
 }
@@ -2196,15 +2346,15 @@ html, body { overflow-x: clip; }
 
 /* その場の判定。**数だけ言う。場所は言わない**(答えを渡さない) */
 .slash-score {
-  display: flex; flex-wrap: wrap; gap: 6px 12px;
-  margin: 8px 0 0; font-size: 12.5px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-6) var(--sp-12);
+  margin: 8px 0 0; font-size: var(--fs-12h);
 }
 /* 決まりに反する区切りが1つも無いときの声かけ(2026-08 利用者の指定)。
    **報告ではなく、褒め言葉。** 少しだけ大きく、はっきり出す */
-.slash-score-done { color: var(--ok); font-weight: 700; font-size: 13.5px; }
+.slash-score-done { color: var(--ok); font-weight: 700; font-size: var(--fs-13h); }
 
 /* 模範の区切り。**自分と同じ形で出す。** 形が違うと見比べられない */
-.slash-out { margin: 6px 0 0; line-height: 2.1; font-size: 17px; }
+.slash-out { margin: 6px 0 0; line-height: 2.1; font-size: var(--fs-17); }
 /* 自分の区切りに訳を当てたもの(2026-08)。**上の英文が練習用、これが確認用** */
 .slash-out--mine .chunk-en { font-size: 1em; }
 /* 控えの境目**ではない**自分の区切り。訳はそこで分けられないので、
@@ -2212,7 +2362,7 @@ html, body { overflow-x: clip; }
    カタマリの先頭に立つ棒と違い、**左にも空きが要る**(語と語のあいだなので) */
 .chunk-bar--mine { margin-left: 4px; color: var(--text-muted); }
 /* 訳の数が合わなくなったときの知らせ。**黙って英語だけを出さない** */
-.slash-stale { margin: 6px 0 0; font-size: 13px; }
+.slash-stale { margin: 6px 0 0; font-size: var(--fs-13); }
 /* やることの説明。模範と比べる画面ではなくなったので、最初に1行で言う */
 .slash-guide { margin: 0 0 10px; }
 /* 通しの一枚(2026-08 利用者の指定)。段落ごとの箱を外し、**つないで**見せる。
@@ -2242,7 +2392,7 @@ html, body { overflow-x: clip; }
 .chunk { display: flex; flex-direction: column; }
 .chunk-en {
   padding: 2px 6px 1px 0;
-  font-size: 17px; line-height: 1.7;
+  font-size: var(--fs-17); line-height: 1.7;
 }
 /* 訳は**英語のすぐ下**に、**そのカタマリのまん中**に置く
    (2026-08 利用者の指定)。左に寄せると、英語が長いカタマリで
@@ -2294,53 +2444,53 @@ html, body { overflow-x: clip; }
 /* 区切りの棒。英語の側にだけ出す */
 .chunk-bar { margin-right: 4px; color: var(--accent); font-weight: 700; }
 
-.slash-copy { margin-left: auto; font-size: 12px; }
+.slash-copy { margin-left: auto; font-size: var(--fs-12); }
 .slash-ja {
   margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--border);
-  color: var(--text-secondary); font-size: 14px; line-height: 1.8;
+  color: var(--text-secondary); font-size: var(--fs-14); line-height: 1.8;
 }
 .slash-ja-label {
-  display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 999px;
-  background: var(--surface-2); color: var(--text-muted); font-size: 11px;
+  display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: var(--r-pill);
+  background: var(--surface-2); color: var(--text-muted); font-size: var(--fs-11);
 }
 
 /* 文字起こしの色分け。色だけに頼らず、線でも区別する
    (色の見え方には個人差がある) */
-.transcript { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface-1); }
-.transcript-line { margin: 0 0 6px; line-height: 2; font-size: 15px; }
+.transcript { margin-top: 8px; padding: 8px 10px; border-radius: var(--r-8); background: var(--surface-1); }
+.transcript-line { margin: 0 0 6px; line-height: 2; font-size: var(--fs-15); }
 /* **合っているところは緑、まちがいは赤。**
    色だけでは目に入らない、という指摘(2026-08)。ただし
    緑と赤は見分けにくい人がいるので、**地色と線も併せて**付ける */
 .w--ok {
   color: var(--ok); background: var(--ok-bg);
-  border-radius: 4px; padding: 1px 3px;
+  border-radius: var(--r-4); padding: 1px 3px;
 }
 .w--missed {
   color: var(--ng); background: var(--ng-bg);
-  border-radius: 4px; padding: 1px 3px; text-decoration: line-through;
+  border-radius: var(--r-4); padding: 1px 3px; text-decoration: line-through;
 }
 .w--extra {
   color: var(--ng); background: var(--ng-bg);
-  border-radius: 4px; padding: 1px 3px;
+  border-radius: var(--r-4); padding: 1px 3px;
   text-decoration: underline wavy;
 }
-.material-headline { margin: 2px 0 6px; color: var(--text-secondary); font-size: 14px; }
+.material-headline { margin: 2px 0 6px; color: var(--text-secondary); font-size: var(--fs-14); }
 
 /* ── 指導ポイント(文法の説明)────────────────────────────────
    長い日本語を1つの段落で流すと読めない。行で区切り、
    見出しと英語の例が目に入るようにする。 */
 .teaching-note {
   margin: 10px 0;
-  border: 1px solid var(--border); border-radius: 8px;
+  border: 1px solid var(--border); border-radius: var(--r-8);
   background: var(--surface-1);
 }
 /* 畳んでいるときは、ただの1行の見出しに見えるようにする。
    囲みの主張を弱め、開いたときだけ中身の枠に見せる */
 .teaching-note[open] { background: var(--surface-2); }
 .teaching-note-title {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: var(--sp-8);
   padding: 7px 12px; cursor: pointer; list-style: none;
-  font-size: 12.5px; letter-spacing: .03em; color: var(--text-secondary);
+  font-size: var(--fs-12h); letter-spacing: .03em; color: var(--text-secondary);
 }
 .teaching-note-title::-webkit-details-marker { display: none; }
 .teaching-note-title:hover { color: var(--text-primary); }
@@ -2355,7 +2505,7 @@ html, body { overflow-x: clip; }
 .teaching-note-label { font-weight: 600; }
 .teaching-note--point .teaching-note-label { color: var(--series-1); }
 .teaching-note--todo  .teaching-note-label { color: var(--series-2); }
-.teaching-note-count { margin-left: auto; font-size: 11.5px; color: var(--text-muted); }
+.teaching-note-count { margin-left: auto; font-size: var(--fs-11h); color: var(--text-muted); }
 
 .teaching-note-list {
   list-style: none; margin: 0; padding: 2px 12px 11px;
@@ -2363,24 +2513,24 @@ html, body { overflow-x: clip; }
 }
 .teaching-note-list > li {
   position: relative; padding: 7px 0 7px 15px;
-  font-size: 14px; line-height: 1.85; color: var(--text-primary);
+  font-size: var(--fs-14); line-height: 1.85; color: var(--text-primary);
 }
 /* 行と行の間に細い線を引く。1行が2行に折り返しても、
    どこまでが1つの指摘なのかが分かる */
 .teaching-note-list > li + li { border-top: 1px dashed var(--border); }
 .teaching-note-list > li::before {
   content: ''; position: absolute; left: 2px; top: 1.05em;
-  width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted);
+  width: 5px; height: 5px; border-radius: var(--r-circle); background: var(--text-muted);
 }
 .teaching-note-head {
-  display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline;
+  display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-8); align-items: baseline;
   padding-left: 0;
 }
 .teaching-note-head::before { display: none; }
 .teaching-note-tag {
-  padding: 1px 9px; border-radius: 999px;
+  padding: 1px 9px; border-radius: var(--r-pill);
   background: var(--series-1); color: #fff;
-  font-size: 12px; font-weight: 600; white-space: nowrap;
+  font-size: var(--fs-12); font-weight: 600; white-space: nowrap;
 }
 .teaching-note--todo .teaching-note-tag { background: var(--series-2); }
 /* 日本語の中の英語。地の文に埋もれさせない */
@@ -2397,7 +2547,7 @@ html, body { overflow-x: clip; }
    作りつづけるので、終わったことを伝える場所が要る。
    帯のすぐ下に出し、押して閉じられるようにする */
 .jobnote {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
   margin: 0 auto; padding: 10px 14px;
   width: min(1040px, calc(100% - 24px));
   border: 1px solid var(--ok); border-radius: var(--radius);
@@ -2411,7 +2561,7 @@ html, body { overflow-x: clip; }
   color: var(--text-secondary);
 }
 .jobnote.is-error { border-color: var(--ng); background: var(--ng-bg); }
-.jobnote-text { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
+.jobnote-text { flex: 1 1 auto; min-width: 0; font-size: var(--fs-14); font-weight: 600; }
 .jobnote .nav-icon-btn { width: 32px; height: 32px; }
 
 /* ── 進み具合の帯(2026-09 利用者の指定)──────────────────────
@@ -2430,9 +2580,9 @@ html, body { overflow-x: clip; }
    折り返すと帯の高さが2倍になり、そのぶん中身が下へ押し出される
    (2026-09 実測。iPhone の幅で「作るのをやめる」だけが2段目に落ちていた) */
 .jobbar-row {
-  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px 12px;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-8) var(--sp-12);
   margin: 0 auto 8px; width: min(1040px, 100%);
-  font-size: 13px;
+  font-size: var(--fs-13);
 }
 /* 名前は縮んでよい。**押すものは縮ませない** */
 .jobbar-title {
@@ -2459,10 +2609,10 @@ html, body { overflow-x: clip; }
 
 .jobbar-track {
   margin: 0 auto; width: min(1040px, 100%); height: 4px;
-  border-radius: 999px; background: var(--surface-2); overflow: hidden;
+  border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden;
 }
 .jobbar-fill {
-  height: 100%; border-radius: 999px; background: var(--accent);
+  height: 100%; border-radius: var(--r-pill); background: var(--accent);
   transition: width 0.4s ease;
 }
 
@@ -2471,7 +2621,7 @@ html, body { overflow-x: clip; }
    **同じことをするものを2つ見せない** */
 @media (max-width: 640px) {
   .jobbar { padding: 8px 10px 0; }
-  .jobbar-row { gap: 8px; }
+  .jobbar-row { gap: var(--sp-8); }
   .jobbar-open { display: none; }
   /* **「発行する画面へ」は、狭い画面でも畳まない**(2026-09 利用者の指定)。
      ここを隠すと、スマホからは発行の画面へ戻る道が無くなる。
@@ -2488,7 +2638,7 @@ html, body { overflow-x: clip; }
    目でも分かる印を、同じ場所に残しておく。 */
 .nav-dot {
   flex: 0 0 auto;
-  width: 8px; height: 8px; border-radius: 50%;
+  width: 8px; height: 8px; border-radius: var(--r-circle);
   background: var(--accent);
   /* 暗い帯の上でも輪郭が出るように、薄い輪を付ける
      (書き込みの色の丸と同じ考え方) */
@@ -2524,14 +2674,14 @@ html, body { overflow-x: clip; }
    **標準か倍かの2つだけ。** 細かい数は選ばせない(選ぶ手間が増えるだけ)。
    見た目は配色の切り替えと同じ形(`.theme-switch`)にそろえてある。
    **問数を札の中に出す。** 「倍」だけでは何問になるのか分からない */
-.amount-row { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 12px 0; }
-.amount-pick { display: flex; flex-direction: column; gap: 4px; }
+.amount-row { display: flex; flex-wrap: wrap; gap: var(--sp-10) var(--sp-18); margin: 12px 0; }
+.amount-pick { display: flex; flex-direction: column; gap: var(--sp-4); }
 /* **チェックは名前と一体にする**(2026-09 利用者の指定)。
    `<label>` で囲んであるので、名前を押しても切り替わる。
    四角だけを狙わせない(指では小さすぎる) */
 .amount-label {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--text-secondary);
+  display: flex; align-items: center; gap: var(--sp-6);
+  font-size: var(--fs-12); color: var(--text-secondary);
   cursor: pointer; user-select: none;
 }
 .amount-label input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
@@ -2541,17 +2691,17 @@ html, body { overflow-x: clip; }
 .amount-pick.is-off .amount-label { opacity: .6; }
 .amount-off {
   display: inline-flex; align-items: center; height: 40px;
-  font-size: 12px; color: var(--text-secondary);
+  font-size: var(--fs-12); color: var(--text-secondary);
 }
 .amount-count {
-  margin-left: 5px; font-size: 11px; font-weight: 600; opacity: .75;
+  margin-left: 5px; font-size: var(--fs-11); font-weight: 600; opacity: .75;
   font-variant-numeric: tabular-nums;
 }
 
 /* 生成ボタンの近くに、いま選んでいる弱点を出す。
    選んだつもりで選べていない、を防ぐ */
 .generate-chosen {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: center;
   margin: 10px 0;
 }
 
@@ -2563,11 +2713,11 @@ html, body { overflow-x: clip; }
 
 /* 下書きができたことの知らせ。押したボタンのすぐ下に出す */
 .generate-done { margin-top: 12px; }
-.generate-done-headline { margin: 6px 0; font-size: 15px; font-weight: 600; }
-.generate-done-parts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.generate-done-headline { margin: 6px 0; font-size: var(--fs-15); font-weight: 600; }
+.generate-done-parts { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin: 8px 0; }
 .generate-done-sample {
-  margin: 8px 0; padding: 8px 10px; border-radius: 8px;
-  background: var(--surface-1); font-size: 14px; line-height: 1.7;
+  margin: 8px 0; padding: 8px 10px; border-radius: var(--r-8);
+  background: var(--surface-1); font-size: var(--fs-14); line-height: 1.7;
 }
 .generate-done-sample .field-hint { display: block; margin-bottom: 2px; }
 .item-audio { margin: 4px 0; }
@@ -2747,7 +2897,7 @@ html, body { overflow-x: clip; }
     content: counter(qr);
     position: absolute; left: 0; top: 1pt;
     width: 15pt; height: 15pt; line-height: 15pt; text-align: center;
-    border: 1pt solid #333; border-radius: 50%;
+    border: 1pt solid #333; border-radius: var(--r-circle);
     font-size: 9pt; font-weight: 700; color: #000 !important;
   }
   /* 日本語が問題、英語が答え。**答えのほうを少し薄くする**(先に目が行かない)。
@@ -2851,7 +3001,7 @@ html, body { overflow-x: clip; }
     content: counter(q);
     position: absolute; left: 0; top: 2pt;
     width: 15pt; height: 15pt; line-height: 15pt; text-align: center;
-    border: 1pt solid #333; border-radius: 50%;
+    border: 1pt solid #333; border-radius: var(--r-circle);
     font-size: 9pt; font-weight: 700; color: #000 !important;
   }
 
@@ -2920,7 +3070,7 @@ html, body { overflow-x: clip; }
   .print-target .en-term { font-weight: 700; color: #000 !important; }
 }
 
-.print-head { margin-bottom: 10px; font-size: 16px; line-height: 1.5; }
+.print-head { margin-bottom: 10px; font-size: var(--fs-16); line-height: 1.5; }
 
 /* ── ゲストの詳細(過去の宿題)──────────────────────────── */
 /* **一覧の名前を大きくする**(2026-09 利用者の指定)。
@@ -2933,7 +3083,7 @@ html, body { overflow-x: clip; }
    押せることは、指を載せたときの下線で示す。 */
 .learner-name {
   border: none; background: none; padding: 0; cursor: pointer;
-  font: inherit; font-size: 20px; font-weight: 700; line-height: 1.25;
+  font: inherit; font-size: var(--fs-20); font-weight: 700; line-height: 1.25;
   color: var(--text-primary); text-decoration: none; text-align: left;
 }
 .learner-name:hover, .learner-name:focus-visible { text-decoration: underline; }
@@ -2953,21 +3103,21 @@ html, body { overflow-x: clip; }
    どちらが生きているのか分からなくなる。
    残っているのは、グレーの囲みの中に入れた「日付 + やった/まだ」の行だけ。 */
 .past-head {
-  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center;
   margin-bottom: 6px;
 }
-.past-date { font-size: 13px; color: var(--text-secondary); }
+.past-date { font-size: var(--fs-13); color: var(--text-secondary); }
 
 /* ── しぼり込みの札(過去の宿題)──────────────────────────
    選べるのは「実際に当てはまるものだけ」。39個の弱点を全部並べても
    ほとんどが0件で、選びようがない。件数を添えると押す前に結果が読める。 */
 .chiprow {
-  display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-6); margin: 4px 0 8px;
 }
 .chip-count {
-  margin-left: 4px; padding: 0 5px; border-radius: 999px;
+  margin-left: 4px; padding: 0 5px; border-radius: var(--r-pill);
   background: color-mix(in srgb, currentColor 14%, transparent);
-  font-size: 11px; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-11); font-variant-numeric: tabular-nums;
 }
 /* しぼり込みで当たった弱点だけ、色を変えて目立たせる */
 .tagchip.is-hit {
@@ -2976,19 +3126,19 @@ html, body { overflow-x: clip; }
 
 /* 生成にかかった費用。見えないと使いすぎに気づけない */
 .generate-cost {
-  margin: 8px 0; padding: 6px 10px; border-radius: 8px;
-  background: var(--surface-1); font-size: 14px;
+  margin: 8px 0; padding: 6px 10px; border-radius: var(--r-8);
+  background: var(--surface-1); font-size: var(--fs-14);
 }
 .generate-cost .field-hint { display: block; margin-top: 2px; }
 
 /* ── 配色の切り替え ────────────────────────────────────────── */
 .theme-switch {
   display: inline-flex; margin-left: auto;
-  border: 1px solid var(--border); border-radius: 999px; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--r-pill); overflow: hidden;
 }
 .theme-btn {
   border: none; background: none; cursor: pointer;
-  padding: 4px 10px; font-size: 12px; color: var(--text-secondary);
+  padding: 4px 10px; font-size: var(--fs-12); color: var(--text-secondary);
 }
 .theme-btn.is-active { background: var(--accent); color: #fff; font-weight: 600; }
 
@@ -3004,7 +3154,7 @@ html, body { overflow-x: clip; }
 /* 帯そのものは折り返してよい(「表示」を開いたとき、設定が2段目に出る)。
    **いつも要る操作だけは、絶対に折り返させない。** */
 .lesson-bar {
-  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  display: flex; flex-wrap: wrap; gap: var(--sp-10); align-items: center;
   padding: 8px 12px; background: #24241f; color: #f2f2ee;
 }
 /* **閉じる・ページ送り・解答・表示。この4つは必ず1行に収める。**
@@ -3015,15 +3165,15 @@ html, body { overflow-x: clip; }
    (`.lesson-settings` の `margin-left: auto`)を2段目へ押し出してしまう */
 .lesson-bar-main {
   flex: 0 1 auto; min-width: 0;
-  display: flex; flex-wrap: nowrap; align-items: center; gap: 10px;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-10);
 }
 .lesson-bar .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
 .lesson-bar .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .lesson-bar .btn:disabled { opacity: .4; }
-.lesson-pages { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; font-size: 14px; }
+.lesson-pages { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-8); font-size: var(--fs-14); }
 .lesson-pages > span { white-space: nowrap; }
 .lesson-settings {
-  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto;
+  display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center; margin-left: auto;
 }
 
 /* ── 帯は、入るまで詰める(`useFitRow`)──────────────────────────
@@ -3046,9 +3196,9 @@ html, body { overflow-x: clip; }
       **絵が別物で、`aria-label` も付いている**ので取り違えない */
 .lesson-bar.is-fit2 .mid-text { display: none; }
 /* ③ 余白を詰める。**押せる大きさ(34px)は割らない** */
-.lesson-bar.is-fit3 { gap: 6px; padding-left: 8px; padding-right: 8px; }
+.lesson-bar.is-fit3 { gap: var(--sp-6); padding-left: 8px; padding-right: 8px; }
 .lesson-bar.is-fit3 .lesson-bar-main,
-.lesson-bar.is-fit3 .lesson-settings { gap: 6px; }
+.lesson-bar.is-fit3 .lesson-settings { gap: var(--sp-6); }
 .lesson-bar.is-fit3 .btn { padding-left: 9px; padding-right: 9px; }
 
 /* **測るあいだだけ、折り返しを止める**(`fitRow.js` の `overWrapping`)。
@@ -3084,27 +3234,27 @@ html, body { overflow-x: clip; }
 /* **色は変数で持つ**(CLAUDE.md)。決め打ちにすると、
    プレインを選んだときや別の場所に置いたときに、そこだけ色が残る */
 .stepper {
-  display: inline-flex; align-items: center; gap: 2px;
-  border: 1px solid var(--border); border-radius: 999px;
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  border: 1px solid var(--border); border-radius: var(--r-pill);
   padding: 1px 4px 1px 8px;
 }
 /* 何の設定か。**3つとも同じ形になったので、見出しが要る**
    (しかも2つは「%」で、値だけでは見分けられない) */
-.stepper-label { font-size: 12px; color: var(--text-secondary); margin-right: 2px; }
+.stepper-label { font-size: var(--fs-12); color: var(--text-secondary); margin-right: 2px; }
 /* 三角。**小さく見えるが、押せる面は 26 × 30px 取る。**
    **三角は文字で描く**(絵文字は端末ごとに形も大きさも違う・CLAUDE.md) */
 .stepper-arrow {
   display: inline-flex; align-items: center; justify-content: center;
   width: 26px; min-height: 30px; padding: 0;
   border: 0; background: none; color: var(--text-primary);
-  font-size: 11px; line-height: 1; cursor: pointer;
+  font-size: var(--fs-11); line-height: 1; cursor: pointer;
 }
 /* **端まで来たら押せなくする。** ぐるっと回すと、端にいることが分からない */
 .stepper-arrow:disabled { opacity: 0.28; cursor: default; }
 /* いまの値。**幅をそろえる**(そろえないと押すたびに三角が左右にずれる) */
 .stepper-now {
   min-width: 4.2em; text-align: center;
-  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  font-size: var(--fs-13); font-weight: 600; color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 /* 紙の幅だけは「画面いっぱい」という長い値があるので、
@@ -3235,7 +3385,7 @@ html, body { overflow-x: clip; }
   margin: 16px auto; padding: 28px 32px 60px;
   width: min(860px, calc(100% - 24px));
   background: var(--paper); color: var(--ink);
-  border-radius: 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 32%);
+  border-radius: var(--r-10); box-shadow: var(--shadow-paper);
   line-height: 1.9;
 }
 /* 集中モードの紙。**送るのは外側(`.focus-body`)なので、ここは送らない。**
@@ -3243,7 +3393,7 @@ html, body { overflow-x: clip; }
 .focus-paper {
   padding: 22px 24px;
   background: var(--paper); color: var(--ink);
-  border-radius: 12px; box-shadow: 0 6px 24px rgb(0 0 0 / 32%);
+  border-radius: var(--r-12); box-shadow: var(--shadow-paper);
   line-height: 1.9;
 }
 /* ── 暗い配色のときは、集中モードの紙も暗くする ──────────────────
@@ -3400,7 +3550,7 @@ html, body { overflow-x: clip; }
 }
 @media (max-width: 600px) {
   /* 狭い画面では、囲みの余白がそのまま読む幅を削る(第5.63節と同じ話) */
-  .focus-paper { padding: 14px 12px; border-radius: 10px; }
+  .focus-paper { padding: 14px 12px; border-radius: var(--r-10); }
 }
 /* 紙の中は、暗い配色を選んでいても読める色にする。
    var(--text-*) を使っている部品が紛れ込んでも消えないようにするため */
@@ -3408,9 +3558,9 @@ html, body { overflow-x: clip; }
 .focus-paper, .focus-paper * { color: var(--ink); }
 .lesson-sheet .muted, .lesson-sheet .field-hint, .lesson-sheet .card-hint,
 .focus-paper .muted, .focus-paper .field-hint, .focus-paper .card-hint { color: var(--ink-soft); }
-.lesson-sheet--m  { font-size: 16px; }
-.lesson-sheet--l  { font-size: 19px; }
-.lesson-sheet--xl { font-size: 23px; }
+.lesson-sheet--m  { font-size: var(--fs-16); }
+.lesson-sheet--l  { font-size: var(--fs-19); }
+.lesson-sheet--xl { font-size: var(--fs-23); }
 
 .lesson-head {
   margin-bottom: 18px; padding-bottom: 10px;
@@ -3470,7 +3620,7 @@ html, body { overflow-x: clip; }
    細すぎると狙えないので 8px 取り、触れたときだけ色を出す */
 .lesson-grip {
   flex: 0 0 8px; cursor: col-resize; align-self: stretch;
-  margin: 16px 0; border-radius: 999px;
+  margin: 16px 0; border-radius: var(--r-pill);
   background: var(--border); opacity: .5;
   touch-action: none;   /* つまんでいるあいだ、指で画面を送らせない */
 }
@@ -3479,14 +3629,14 @@ html, body { overflow-x: clip; }
 .lesson-notes {
   /* 幅は JS が `--notes-w` で渡す。**覚えるので、開くたびに同じ幅になる** */
   flex: 0 0 var(--notes-w, clamp(280px, 26vw, 380px));
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: var(--sp-8);
   margin: 16px 12px 16px 0; padding: 12px;
   background: var(--surface-1); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: 10px;
+  border: 1px solid var(--border); border-radius: var(--r-10);
   overflow-y: auto;
 }
 .lesson-notes-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8);
 }
 /* 狭い画面では横に置けない(紙が読めない幅になる)。**下から出す** */
 @media (max-width: 860px) {
@@ -3502,23 +3652,23 @@ html, body { overflow-x: clip; }
 }
 
 /* 記録そのもの。**ただの白い紙。** 書式は持たない */
-.notes-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.notes-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .notes-date { font-weight: 600; }
-.notes-state { font-size: 13px; }
+.notes-state { font-size: var(--fs-13); }
 .notes-board {
   width: 100%; min-height: clamp(10rem, 40vh, 24rem);
   padding: 12px; line-height: 1.9;
-  border: 1px solid var(--border); border-radius: 8px;
+  border: 1px solid var(--border); border-radius: var(--r-8);
   background: var(--surface-0); color: var(--text-primary);
   resize: vertical;
 }
 /* ゲストは読むだけ。**改行はそのまま出す**(書いたとおりに見える) */
 .notes-read {
   white-space: pre-wrap; line-height: 1.9;
-  padding: 12px; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; border: 1px solid var(--border); border-radius: var(--r-8);
   background: var(--surface-0);
 }
-.notes-foot { font-size: 13px; }
+.notes-foot { font-size: var(--fs-13); }
 /* ゲストの「今週の宿題」では畳んでおく。開いたときに初めて読みに行く */
 .notes-card > summary { cursor: pointer; }
 
@@ -3529,7 +3679,7 @@ html, body { overflow-x: clip; }
    速さも触らないので、入れ替えてしまってよい。
    **戻る道(「書き込みを終える」)は必ず先頭に置く。** */
 .lesson-ink {
-  flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
 }
 /* **まん中に寄せる**(2026-09 実機・利用者の指定)。
      > 書き込みのUIを開いた時、真ん中に寄るようにしてください
@@ -3543,13 +3693,13 @@ html, body { overflow-x: clip; }
    **並びは変えていない**(「書き込みを終える」は先頭のまま)。 */
 .lesson-ink { justify-content: center; }
 .ink-tools {
-  display: inline-flex; border: 1px solid #55554e; border-radius: 999px;
+  display: inline-flex; border: 1px solid #55554e; border-radius: var(--r-pill);
   overflow: hidden;
 }
 .ink-tools .theme-btn { color: #d8d8d2; }
 .ink-color {
   width: 26px; height: 26px; padding: 0; flex: none;
-  border: 2px solid transparent; border-radius: 999px;
+  border: 2px solid transparent; border-radius: var(--r-pill);
   background: var(--ink-color); cursor: pointer;
   /* **暗い色(黒)が、暗い帯の上で消えないようにする。**
      枠ではなく薄い輪を外に出す。枠にすると選んだ印と見分けが付かない */
@@ -3582,7 +3732,7 @@ html, body { overflow-x: clip; }
 .etext-word-wrap { position: relative; }
 .etext-word {
   display: inline; padding: 0; margin: 0;
-  border: 0; border-bottom: 1px solid transparent; border-radius: 2px;
+  border: 0; border-bottom: 1px solid transparent; border-radius: var(--r-2);
   background: none; color: inherit;
   font: inherit; line-height: inherit; cursor: pointer;
   /* iPhone・iPad では、長押しすると本来の「範囲選択・コピー・Google で検索」が
@@ -3671,7 +3821,7 @@ html, body { overflow-x: clip; }
 .etext-run.is-phrase:hover,
 .etext-run.is-phrase.is-open {
   background: color-mix(in srgb, var(--phrase-bar) 15%, transparent);
-  border-radius: 4px;
+  border-radius: var(--r-4);
   box-shadow: 0 2px 0 0 var(--phrase-bar);
   cursor: pointer;
 }
@@ -3679,7 +3829,7 @@ html, body { overflow-x: clip; }
 .etext-run.is-word.is-unknown:hover,
 .etext-run.is-word.is-unknown.is-open {
   background: color-mix(in srgb, var(--unknown-bar) 15%, transparent);
-  border-radius: 4px;
+  border-radius: var(--r-4);
   box-shadow: 0 2px 0 0 var(--unknown-bar);
 }
 
@@ -3732,18 +3882,18 @@ html, body { overflow-x: clip; }
    本文のすぐ下に札で置き、押すと語と同じ吹き出しが出る。
    **札なので、ひと押しで開く。** 本文の語とは触り方を変えてある */
 .phrases {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6);
   margin: 6px 0 2px;
 }
 .phrases-label {
-  font-size: 11.5px; color: var(--text-muted); letter-spacing: .03em;
+  font-size: var(--fs-11h); color: var(--text-muted); letter-spacing: .03em;
   margin-right: 2px;
 }
 .phrase-wrap { position: relative; }
 .phrase-chip {
-  padding: 2px 10px; border-radius: 999px;
+  padding: 2px 10px; border-radius: var(--r-pill);
   border: 1px dashed var(--border); background: var(--surface-1);
-  color: var(--text-secondary); font: inherit; font-size: 13px; line-height: 1.6;
+  color: var(--text-secondary); font: inherit; font-size: var(--fs-13); line-height: 1.6;
   cursor: pointer;
 }
 .phrase-chip:hover, .phrase-chip.is-open {
@@ -3783,13 +3933,13 @@ html, body { overflow-x: clip; }
   --pop-rule:  var(--border);
 
   position: fixed; z-index: 200;
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: var(--sp-10);
   min-width: 260px; max-width: min(92vw, 380px);
   padding: 14px 16px;
-  border: 1px solid var(--pop-rule); border-radius: 12px;
+  border: 1px solid var(--pop-rule); border-radius: var(--r-12);
   background: var(--pop-bg); color: var(--pop-fg);
   box-shadow: 0 10px 30px rgb(0 0 0 / 20%);
-  font-size: 13px; line-height: 1.7; text-align: left; white-space: normal;
+  font-size: var(--fs-13); line-height: 1.7; text-align: left; white-space: normal;
   /* 高さの上限は画面の残りに合わせて JS が決める。
      ここは**はみ出しを切るだけ。** 角の丸みも保たれる */
   overflow: hidden;
@@ -3806,7 +3956,7 @@ html, body { overflow-x: clip; }
    ・`overscroll-behavior: contain` … 端まで送っても、
      後ろの画面まで一緒に動かない(スマホで気持ちが悪いため) */
 .etext-pop-body {
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: var(--sp-10);
   /* flex の子は既定で縮まない。**0 を入れないと送れない** */
   min-height: 0;
   overflow-y: auto;
@@ -3817,26 +3967,26 @@ html, body { overflow-x: clip; }
 /* 見出し。**帯にしない。** 線1本で足りる。
    語と発音記号はひとつの塊にして、Listen は常に右上に置く */
 .etext-pop-head {
-  display: flex; align-items: flex-start; gap: 10px; padding-right: 18px;
+  display: flex; align-items: flex-start; gap: var(--sp-10); padding-right: 18px;
 }
 .etext-pop-word {
-  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; min-width: 0;
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-8); min-width: 0;
 }
 .etext-pop-head strong {
-  font-size: 17px; font-weight: 650; letter-spacing: .01em; color: var(--pop-fg);
+  font-size: var(--fs-17); font-weight: 650; letter-spacing: .01em; color: var(--pop-fg);
 }
 /* 発音記号。読み方が分からないと声に出せない */
-.etext-phonetic { color: var(--pop-faint); font-size: 12.5px; letter-spacing: .02em; }
+.etext-phonetic { color: var(--pop-faint); font-size: var(--fs-12h); letter-spacing: .02em; }
 .etext-listen {
-  margin-left: auto; flex: none; padding: 3px 10px; font-size: 11.5px;
+  margin-left: auto; flex: none; padding: 3px 10px; font-size: var(--fs-11h);
 }
 .etext-listen .icon { margin-right: .3em; }
 
 /* 品詞。**ここだけが色を持つ。** 見ただけで名詞か動詞か分かる。
    彩度は低く保つ。並んだときに目が疲れないようにするため */
 .etext-pos {
-  padding: 1px 8px; border-radius: 999px;
-  font-size: 10.5px; flex: none; font-weight: 600; line-height: 1.6;
+  padding: 1px 8px; border-radius: var(--r-pill);
+  font-size: var(--fs-10h); flex: none; font-weight: 600; line-height: 1.6;
   background: var(--surface-2); color: var(--pop-dim);
 }
 .etext-pos--noun   { background: var(--pos-noun-bg);   color: var(--pos-noun); }
@@ -3848,26 +3998,26 @@ html, body { overflow-x: clip; }
 
 /* 意味の並び。**先頭がその文での意味**なので大きく、以降は静かに。
    大きさで「どれがいま効いている意味か」が一目で分かる(2026-08 の指定) */
-.etext-sense { display: flex; flex-direction: column; gap: 3px; }
-.etext-sense-line { display: flex; align-items: baseline; gap: 7px; }
-.etext-sense-mean { font-size: 13px; color: var(--pop-dim); }
+.etext-sense { display: flex; flex-direction: column; gap: var(--sp-3); }
+.etext-sense-line { display: flex; align-items: baseline; gap: var(--sp-7); }
+.etext-sense-mean { font-size: var(--fs-13); color: var(--pop-dim); }
 .etext-sense.is-main .etext-sense-mean {
-  font-size: 15.5px; font-weight: 650; color: var(--pop-fg); line-height: 1.55;
+  font-size: var(--fs-15h); font-weight: 650; color: var(--pop-fg); line-height: 1.55;
 }
 /* 2つめから下は、線1本で区切る。囲みは増やさない */
 .etext-sense + .etext-sense { padding-top: 9px; border-top: 1px solid var(--pop-rule); }
-.etext-sense-no { min-width: 1.1em; color: var(--pop-faint); font-size: 11px; flex: none; }
-.etext-sense:not(.is-main) .etext-pos { font-size: 10px; padding: 0 6px; }
+.etext-sense-no { min-width: 1.1em; color: var(--pop-faint); font-size: var(--fs-11); flex: none; }
+.etext-sense:not(.is-main) .etext-pos { font-size: var(--fs-10); padding: 0 6px; }
 
 /* 例文。**英語だと分かるように、色ではなく細い縦線で示す** */
 .etext-pop-ex {
-  color: var(--pop-dim); font-size: 12px; line-height: 1.6;
+  color: var(--pop-dim); font-size: var(--fs-12); line-height: 1.6;
   padding-left: 9px; border-left: 2px solid var(--pop-rule);
 }
-.etext-sense:not(.is-main) .etext-pop-ex { font-size: 11.5px; color: var(--pop-faint); }
+.etext-sense:not(.is-main) .etext-pop-ex { font-size: var(--fs-11h); color: var(--pop-faint); }
 /* 使い方の一言。**囲まない。** 囲みが増えるほど、目が休まらない */
-.etext-pop-note { color: var(--pop-faint); font-size: 11.5px; line-height: 1.6; }
-.etext-pop-time { color: var(--pop-faint); font-size: 11px; }
+.etext-pop-note { color: var(--pop-faint); font-size: var(--fs-11h); line-height: 1.6; }
+.etext-pop-time { color: var(--pop-faint); font-size: var(--fs-11); }
 .etext-pop-busy, .etext-pop-error { color: var(--pop-dim); }
 
 /* 「知っていた / 知らなかった」。**どちらも同じ重さ。**
@@ -3876,27 +4026,27 @@ html, body { overflow-x: clip; }
    いま要るのは1つめの意味であって、これは寄り道である */
 .etext-more {
   align-self: flex-start; padding: 2px 0;
-  font-size: 12px; color: var(--pop-dim);
+  font-size: var(--fs-12); color: var(--pop-dim);
 }
 
 .etext-pop-actions {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
   /* 左右と下の余白を打ち消して、区切り線を端まで伸ばす。
      **送れる場所の外に居る**ので、ここは決してスクロールで消えない */
   margin: 0 -16px -14px; padding: 10px 16px 14px;
   border-top: 1px solid var(--pop-rule);
   background: var(--pop-bg);
 }
-.etext-pop-actions .btn { padding: 5px 14px; font-size: 12.5px; }
+.etext-pop-actions .btn { padding: 5px 14px; font-size: var(--fs-12h); }
 .etext-pop-actions .btn--link { margin-left: auto; padding: 5px 2px; }
 
 .etext-pop-close {
   position: absolute; right: 8px; top: 8px;
   border: 0; color: var(--pop-faint);
-  font-size: 13px; line-height: 1; cursor: pointer; padding: 4px 5px;
+  font-size: var(--fs-13); line-height: 1; cursor: pointer; padding: 4px 5px;
   /* **地の色を敷く。** 中を下まで送ると文字がこの下を通るので、
      背景が無いと ✕ と文字が重なって両方読めなくなる(2026-08 実測) */
-  background: var(--pop-bg); border-radius: 6px;
+  background: var(--pop-bg); border-radius: var(--r-6);
 }
 .etext-pop-close:hover { color: var(--pop-fg); }
 
@@ -3912,40 +4062,40 @@ html, body { overflow-x: clip; }
 /* ── 弱点タグを選ぶ(見出しごとに開く)──────────────────────
    タグは44個ある。全部並べるとスマホでは画面3つ分になり、
    下の「作る」ボタンまで届かない。はじめは見出しだけを出す。 */
-.tagpicker { display: flex; flex-direction: column; gap: 6px; }
+.tagpicker { display: flex; flex-direction: column; gap: var(--sp-6); }
 
 /* 選んでいるもの。**閉じていても見える場所に置く** */
 .tagpicker-chosen {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
   padding: 8px 10px; margin-bottom: 2px;
   border: 1px solid var(--accent); border-radius: var(--radius);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
-.tagpicker-chosen-label { font-size: 12px; color: var(--text-secondary); }
-.tagchip-x { margin-left: 6px; opacity: .7; font-size: 11px; }
+.tagpicker-chosen-label { font-size: var(--fs-12); color: var(--text-secondary); }
+.tagchip-x { margin-left: 6px; opacity: .7; font-size: var(--fs-11); }
 
 .tagcat { border: 1px solid var(--border); border-radius: var(--radius); }
 .tagcat.is-open { border-color: var(--text-muted); }
 .tagcat-head {
-  display: flex; align-items: center; gap: 8px; width: 100%;
+  display: flex; align-items: center; gap: var(--sp-8); width: 100%;
   padding: 10px 12px; border: 0; border-radius: var(--radius);
   background: none; color: var(--text-primary);
-  font-family: inherit; font-size: 14px; text-align: left; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-14); text-align: left; cursor: pointer;
 }
 .tagcat-head:hover { background: var(--surface-0); }
 .tagcat-mark { color: var(--text-muted); flex: none; width: 1em; }
 .tagcat-name { font-weight: 700; flex: none; }
 .tagcat-count {
   flex: none; min-width: 1.5em; padding: 0 6px;
-  border-radius: 999px; background: var(--accent); color: #fff;
-  font-size: 11px; line-height: 1.6; text-align: center;
+  border-radius: var(--r-pill); background: var(--accent); color: #fff;
+  font-size: var(--fs-11); line-height: 1.6; text-align: center;
 }
 .tagcat-hint {
-  color: var(--text-muted); font-size: 11.5px;
+  color: var(--text-muted); font-size: var(--fs-11h);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tagcat-body {
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: var(--sp-10);
   padding: 2px 12px 12px;
 }
 @media (max-width: 600px) {
@@ -3959,8 +4109,8 @@ html, body { overflow-x: clip; }
   margin: 12px 0; padding: 10px 12px;
   border: 1px dashed var(--border); border-radius: var(--radius);
 }
-.review-count { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
-.review-words { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.review-count { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); margin: 6px 0; }
+.review-words { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin: 6px 0; }
 .tagchip.is-unknown {
   background: var(--unknown-bg); border-color: var(--unknown-bar);
 }
@@ -3971,11 +4121,11 @@ html, body { overflow-x: clip; }
 
 /* 読み上げの速さ。画面に1つだけ置く */
 .rate-pick {
-  display: inline-flex; align-items: center; gap: 6px;
-  margin-top: 10px; font-size: 13px; color: var(--text-secondary);
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  margin-top: 10px; font-size: var(--fs-13); color: var(--text-secondary);
   white-space: nowrap; flex: none;
 }
-.rate-pick select { font-size: 13px; padding: 3px 6px; }
+.rate-pick select { font-size: var(--fs-13); padding: 3px 6px; }
 
 /* いま読み上げているところ。
    通しで聞いているとき、どこを読んでいるのか目で追えないと
@@ -3992,7 +4142,7 @@ html, body { overflow-x: clip; }
      「この左側の色の線は真っ直ぐにして欲しいです」)。
      角を丸めると、内側に敷いた帯もその丸みに沿って**両端が細る。**
      右側だけ丸めれば、帯はまっすぐのまま柔らかさも残る */
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--r-6) var(--r-6) 0;
   border-bottom-color: transparent;
 }
 .lesson-items > li.is-speaking .lesson-en { font-weight: 600; }
@@ -4063,13 +4213,13 @@ html, body { overflow-x: clip; }
 .cast-chip-mark { font-size: .85em; }
 .cast-chip-list {
   list-style: none; margin: 6px 0 0; padding: 0;
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: var(--sp-2);
   font-size: .78em; line-height: 1.6;
 }
 /* **1人ずつ行を分ける。** つないで1本にすると、
    3人・4人の会議では読み取れない棒になる */
 .cast-chip-list li {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+  display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: baseline;
 }
 .cast-chip-who { font-weight: 700; }
 .cast-chip-eq { color: var(--text-muted); }
@@ -4079,12 +4229,12 @@ html, body { overflow-x: clip; }
 .lesson-sheet .cast-chip-voice, .focus-paper .cast-chip-voice { color: var(--ink-soft); }
 
 .lesson-weakness {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6);
   margin-top: 6px; font-size: .72em;
 }
 .lesson-weakness-label { color: var(--ink-faint); letter-spacing: .04em; }
 .lesson-weakness-tag {
-  padding: 1px 9px; border: 1px solid transparent; border-radius: 999px;
+  padding: 1px 9px; border: 1px solid transparent; border-radius: var(--r-pill);
   background: var(--accent-bg); color: var(--accent);
 }
 /* 演習1つぶん(帯の ◀ 1 / 3 ▶ の1ページ)。
@@ -4101,7 +4251,7 @@ html, body { overflow-x: clip; }
 .lesson-sheet .lesson-section { color: var(--accent); }
 .lesson-instruction {
   margin: 0 0 18px; padding: 8px 12px;
-  border-radius: 8px; background: var(--accent-bg);
+  border-radius: var(--r-8); background: var(--accent-bg);
   color: var(--ink-soft); font-size: .82em; line-height: 1.75;
 }
 
@@ -4124,13 +4274,13 @@ html, body { overflow-x: clip; }
   content: counter(lq);
   position: absolute; left: 14px; top: calc(8px + 0.52em);
   width: 1.75em; height: 1.75em; line-height: 1.68em; text-align: center;
-  border: 1px solid transparent; border-radius: 50%; font-size: .68em;
+  border: 1px solid transparent; border-radius: var(--r-circle); font-size: .68em;
   background: var(--accent-bg);
 }
 .lesson-sheet .lesson-items > li::before { color: var(--accent); }
 .lesson-tag {
   display: inline-block; margin-bottom: 4px; padding: 1px 9px;
-  border: 1px solid transparent; border-radius: 999px; font-size: .6em;
+  border: 1px solid transparent; border-radius: var(--r-pill); font-size: .6em;
   background: var(--note-bg);
 }
 .lesson-sheet .lesson-tag { color: var(--note); }
@@ -4146,7 +4296,7 @@ html, body { overflow-x: clip; }
    色だけに頼らず、左の線と文字の大きさでも区別している */
 .lesson-ja {
   margin-top: 5px; padding: 4px 10px;
-  border-left: 3px solid var(--translate); border-radius: 0 6px 6px 0;
+  border-left: 3px solid var(--translate); border-radius: 0 var(--r-6) var(--r-6) 0;
   background: var(--translate-bg); font-size: .82em;
 }
 .lesson-sheet .lesson-ja { color: var(--translate); }
@@ -4157,14 +4307,14 @@ html, body { overflow-x: clip; }
 
 .lesson-note {
   margin-top: 5px; padding: 3px 10px;
-  border-left: 3px solid var(--note); border-radius: 0 6px 6px 0;
+  border-left: 3px solid var(--note); border-radius: 0 var(--r-6) var(--r-6) 0;
   background: var(--note-bg); font-size: .74em;
 }
 .lesson-sheet .lesson-note { color: var(--note); }
 
 .lesson-answer {
   margin-top: 6px; padding: 5px 10px;
-  border-left: 4px solid var(--answer); border-radius: 0 6px 6px 0;
+  border-left: 4px solid var(--answer); border-radius: 0 var(--r-6) var(--r-6) 0;
   background: var(--answer-bg); font-size: .88em; font-weight: 600;
 }
 .lesson-sheet .lesson-answer { color: var(--answer); }
@@ -4183,7 +4333,7 @@ html, body { overflow-x: clip; }
      これまでどおり白(島の値が #ffffff)、集中モードの紙では配色に従う。
      **同じ1行で、両方が正しくなる** */
   background: var(--btn-bg); color: var(--ink); border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--r-6);
 }
 
 .lesson-sheet .btn,
@@ -4305,11 +4455,11 @@ html, body { overflow-x: clip; }
 @media (max-width: 860px) {
   /* 言葉を短くする。「✕ 閉じる」→「✕」、「すべての解答を出す」→「解答を出す」 */
   .lesson-bar .wide-text { display: none; }
-  .lesson-bar { gap: 8px; padding: 6px 8px; }
+  .lesson-bar { gap: var(--sp-8); padding: 6px 8px; }
   /* 狭い画面では**横いっぱい**に広げる。そうしないと「表示」が
      解答ボタンのすぐ隣に来て、右端が空く */
-  .lesson-bar-main { flex: 1 1 auto; gap: 6px; }
-  .lesson-pages { gap: 6px; }
+  .lesson-bar-main { flex: 1 1 auto; gap: var(--sp-6); }
+  .lesson-pages { gap: var(--sp-6); }
   /* 狭い画面では、ボタンの左右の余白も詰める。
      **4つを1行に収めるため**で、押せる高さ(34px)は変えない */
   .lesson-bar .btn { padding: 5px 10px; }
@@ -4339,19 +4489,19 @@ html, body { overflow-x: clip; }
    ゲストが自分で入力していた「学習の記録」の代わり。**裏で数えたもの**を、
    トレーナーの「ゲスト」画面に**1行で**出す。長くすると見比べられない。 */
 .practice-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
   margin: 6px 0 2px;
 }
-.practice-sum { flex: 1 1 auto; min-width: 0; font-size: 13px; }
+.practice-sum { flex: 1 1 auto; min-width: 0; font-size: var(--fs-13); }
 
 /* トレーナーからのリマインド。**押したときだけ出る** */
-.reminder { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.reminder { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-8); }
 .reminder-close { margin-left: auto; }
 
 /* 発音練習。**1語 = 1枚のカード**(ほかの練習と同じ形にそろえる) */
 .pron-list { list-style: none; margin: 10px 0 0; padding: 0; }
-.pron-en { margin: 2px 0; font-size: 18px; font-weight: 600; }
-.pron-ja { margin: 2px 0 0; font-size: 13px; }
+.pron-en { margin: 2px 0; font-size: var(--fs-18); font-weight: 600; }
+.pron-ja { margin: 2px 0 0; font-size: var(--fs-13); }
 
 /* ── 宿題の行(押して開く)────────────────────────────────
    以前は下の小さなボタンでしか開けず、並んでいるだけの一覧に見えていた。
@@ -4365,7 +4515,7 @@ html, body { overflow-x: clip; }
    見出しは弱点だけ。レベル・業界・ゲスト名は小さな札にして下に並べる。
    日付は右上。教材名を1行で出すと、何の教材かが読み取れない。 */
 .mtitle { min-width: 0; }
-.mtitle-row { display: flex; gap: 12px; align-items: baseline; }
+.mtitle-row { display: flex; gap: var(--sp-12); align-items: baseline; }
 .mtitle-main {
   flex: 1; min-width: 0; margin: 0;
   font-weight: 700; line-height: 1.45; color: var(--text-primary);
@@ -4373,30 +4523,30 @@ html, body { overflow-x: clip; }
      (`anywhere` ではなく `break-word`。入るときは語の途中で折らない) */
   overflow-wrap: break-word;
 }
-.mtitle--card .mtitle-main { font-size: 17px; }
-.mtitle--row  .mtitle-main { font-size: 16px; }
+.mtitle--card .mtitle-main { font-size: var(--fs-17); }
+.mtitle--row  .mtitle-main { font-size: var(--fs-16); }
 .mtitle--sheet .mtitle-main { font-size: 1.15em; }
 .mtitle-date {
   flex: 0 0 auto; margin-left: auto;
-  color: var(--text-muted); font-size: 12px;
+  color: var(--text-muted); font-size: var(--fs-12);
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .mtitle-headline {
-  margin-top: 2px; color: var(--text-secondary); font-size: 14px;
+  margin-top: 2px; color: var(--text-secondary); font-size: var(--fs-14);
   overflow-wrap: break-word;   /* 英語の見出し。長い1語ではみ出させない */
 }
 /* 見出しの訳(0036・2026-09 利用者の指定「小さな訳をつけてください」)。
    **添え物なので、見出しより先に目が行ってはいけない。**
    英語のすぐ下に、一段小さく静かに置く */
 .mtitle-headline-ja {
-  margin-top: 1px; color: var(--text-muted); font-size: 12px; line-height: 1.5;
+  margin-top: 1px; color: var(--text-muted); font-size: var(--fs-12); line-height: 1.5;
   overflow-wrap: break-word;
 }
-.mtitle-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; min-width: 0; }
+.mtitle-chips { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin-top: 6px; min-width: 0; }
 .mtitle-chip {
-  padding: 1px 9px; border: 1px solid var(--border); border-radius: 999px;
+  padding: 1px 9px; border: 1px solid var(--border); border-radius: var(--r-pill);
   background: var(--surface-2); color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--fs-12);
   /* ★ 折り返させる(2026-09 実機・Safari)★
        > はみ出したり、文字が画面端から隙間が多すぎたり
 
@@ -4439,7 +4589,7 @@ html, body { overflow-x: clip; }
 .lesson-reveal { margin-top: 6px; margin-left: 8px; }
 .lesson-heard {
   margin-top: 6px; padding: 6px 10px;
-  border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0;
+  border-left: 4px solid var(--accent); border-radius: 0 var(--r-6) var(--r-6) 0;
   background: var(--accent-bg); font-size: .9em;
 }
 .lesson-heard-label {
@@ -4526,13 +4676,13 @@ html, body { overflow-x: clip; }
    「入った日」と「出会った教材」で絞る。1行に収める。
    **絞り込みは手元で行う**ので、押しても待ち時間は無い。 */
 .wbfilter {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
   margin-top: 10px;
 }
 .wbfilter-pick select {
   /* **コンパクトに。** 幅は中身なりで、長い教材名だけ頭打ちにする */
   width: auto; max-width: 12rem; height: 34px;
-  border-radius: 999px; font-size: 13px;
+  border-radius: var(--r-pill); font-size: var(--fs-13);
 }
 
 /* ── Quick Response の復習の選び方(0040)───────────────────────
@@ -4540,7 +4690,7 @@ html, body { overflow-x: clip; }
      **絞り込みの行(`.wbfilter`)と同じ形にそろえる。**
      どちらも「始める前に一度決めるもの」で、役目が同じである。 */
 .qrrev-opts {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
   margin-top: 10px;
 }
 
@@ -4560,7 +4710,7 @@ html, body { overflow-x: clip; }
 .practice-pop {
   position: fixed; z-index: 200;
   width: min(19rem, calc(100vw - 24px)); padding: 14px 16px;
-  border: 1px solid var(--border); border-radius: 12px;
+  border: 1px solid var(--border); border-radius: var(--r-12);
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
 }
@@ -4569,17 +4719,17 @@ html, body { overflow-x: clip; }
 .practice-pop-list { margin: 0 0 12px; }
 .practice-pop-list > div {
   display: flex; align-items: baseline; justify-content: space-between;
-  gap: 12px; padding: 7px 0; border-top: 1px solid var(--border);
+  gap: var(--sp-12); padding: 7px 0; border-top: 1px solid var(--border);
 }
 .practice-pop-list > div:first-child { border-top: none; }
-.practice-pop-list dt { color: var(--text-secondary); font-size: 13px; }
+.practice-pop-list dt { color: var(--text-secondary); font-size: var(--fs-13); }
 .practice-pop-list dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .practice-pop > .field-hint { display: block; margin-top: 10px; line-height: 1.6; }
 
 .wbcal {
   position: fixed; z-index: 200;
   width: 288px; padding: 12px;
-  border: 1px solid var(--border); border-radius: 12px;
+  border: 1px solid var(--border); border-radius: var(--r-12);
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
   /* **背の低い画面でも、全体が映る**(2026-08 利用者の指定)。
@@ -4588,23 +4738,23 @@ html, body { overflow-x: clip; }
   max-height: calc(100vh - 16px); overflow-y: auto;
 }
 .wbcal-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8);
   margin-bottom: 8px;
 }
-.wbcal-title { font-weight: 600; font-size: 14px; }
+.wbcal-title { font-weight: 600; font-size: var(--fs-14); }
 .wbcal-week, .wbcal-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-2);
 }
 .wbcal-week span {
-  text-align: center; font-size: 11px; color: var(--text-muted); padding-bottom: 4px;
+  text-align: center; font-size: var(--fs-11); color: var(--text-muted); padding-bottom: 4px;
 }
 /* **語が入っている日にだけ印を付け、無い日は押せない。**
    押せるように見せて何も起きないのが、いちばん困る */
 .wbcal-cell {
   min-height: 34px; padding: 0;
-  border: 1px solid transparent; border-radius: 8px;
+  border: 1px solid transparent; border-radius: var(--r-8);
   background: none; color: var(--text-muted);
-  font: inherit; font-size: 13px; line-height: 34px;
+  font: inherit; font-size: var(--fs-13); line-height: 34px;
 }
 .wbcal-cell.is-empty { visibility: hidden; }
 .wbcal-cell:disabled { cursor: default; }
@@ -4621,7 +4771,7 @@ html, body { overflow-x: clip; }
 }
 .wbcal-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .wbcal-sort {
-  display: flex; flex-wrap: wrap; gap: 6px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-6);
   margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
 }
 .wbcal-foot { margin-top: 8px; display: flex; justify-content: flex-end; }
@@ -4632,21 +4782,21 @@ html, body { overflow-x: clip; }
   border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--surface-1);
 }
-.wordbook-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-.wordbook-word { font-size: 17px; font-weight: 600; }
+.wordbook-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-8); }
+.wordbook-word { font-size: var(--fs-17); font-weight: 600; }
 /* 種類(単語 / 言い回し)。**さりげなく**(2026-08 利用者の指定)。
    塗りつぶした札にしていたので、語より目立っていた。細い字だけにする。
    一覧と出題カードで**同じ見え方**にそろえてある */
 .wordbook-kind {
-  color: var(--text-muted); font-size: 11.5px; letter-spacing: .06em;
+  color: var(--text-muted); font-size: var(--fs-11h); letter-spacing: .06em;
 }
-.wordbook-mean { margin-top: 3px; color: var(--text-secondary); font-size: 14px; }
+.wordbook-mean { margin-top: 3px; color: var(--text-secondary); font-size: var(--fs-14); }
 .wordbook-actions {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); margin-top: 8px;
 }
 /* 「覚えた」が出るまでの積み上がり(0039)。**押すものではない**ので、
    ボタンの形にしない。数えているだけだと分かるよう、静かに置く */
-.wordbook-streak { font-size: 12px; color: var(--text-muted); }
+.wordbook-streak { font-size: var(--fs-12); color: var(--text-muted); }
 /* 箱と次に出る日。**進んでいることが見えないと続かない** */
 
 /* 出会った文(0018)。**思い出す手がかり**なので、意味のすぐ下に置く。
@@ -4654,7 +4804,7 @@ html, body { overflow-x: clip; }
 .wordbook-seen {
   margin: 6px 0 0; padding-left: 10px;
   border-left: 2px solid var(--border);
-  color: var(--text-secondary); font-size: 13px; line-height: 1.7;
+  color: var(--text-secondary); font-size: var(--fs-13); line-height: 1.7;
 }
 .wordbook-seen strong { color: var(--text-primary); }
 
@@ -4663,34 +4813,34 @@ html, body { overflow-x: clip; }
    以前は1行に流していたので、どれが「いま何をすればよいか」なのか
    分からなかった(2026-08 利用者の指定)。 */
 .wb-head {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-12);
   margin-bottom: 14px;
 }
 .wb-head > .card-title { margin: 0; }
 /* 続けている週。**続く励みになる数なので、色を付けて右へ置く** */
 .wb-streak {
-  display: inline-flex; align-items: baseline; gap: 8px; margin-left: auto;
-  padding: 5px 12px; border-radius: 999px;
+  display: inline-flex; align-items: baseline; gap: var(--sp-8); margin-left: auto;
+  padding: 5px 12px; border-radius: var(--r-pill);
   border: 1px solid var(--accent); color: var(--accent);
-  font-size: 12px; font-weight: 700;
+  font-size: var(--fs-12); font-weight: 700;
 }
 .wb-streak-sub { color: var(--text-secondary); font-weight: 500; }
 
 /* 数は3枚の札。**「今日出す」だけを目立たせる**(そこが行動につながる) */
 .wb-stats {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px; margin-bottom: 16px;
+  gap: var(--sp-10); margin-bottom: 16px;
 }
 .wb-stat {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 12px 8px; border: 1px solid var(--border); border-radius: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
+  padding: 12px 8px; border: 1px solid var(--border); border-radius: var(--r-12);
   background: var(--surface-2);
 }
 .wb-stat > strong {
-  font-size: 24px; font-weight: 700; line-height: 1.1;
+  font-size: var(--fs-24); font-weight: 700; line-height: 1.1;
   font-variant-numeric: tabular-nums; color: var(--text-primary);
 }
-.wb-stat-label { font-size: 11px; color: var(--text-muted); }
+.wb-stat-label { font-size: var(--fs-11); color: var(--text-muted); }
 /* **やることがある日は、そこだけ色が付く。** 0 件の日は静かなまま */
 .wb-stat.is-due { border-color: var(--accent); background: var(--accent-soft); }
 .wb-stat.is-due > strong { color: var(--accent); }
@@ -4718,11 +4868,11 @@ html, body { overflow-x: clip; }
 .wb-add-note { margin: 10px 0 0; }
 .wb-add-body > .field-hint { display: block; margin-top: 10px; line-height: 1.7; }
 
-.wb-tabrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wb-tabrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .wb-viewpick > select,
 .tabpick > select {
-  width: auto; height: 38px; border-radius: 999px;
-  font-size: 15px; font-weight: 700;
+  width: auto; height: 38px; border-radius: var(--r-pill);
+  font-size: var(--fs-15); font-weight: 700;
   /* **いま何を見ているか**は、この行でいちばん大事な情報 */
   border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
 }
@@ -4742,9 +4892,9 @@ html, body { overflow-x: clip; }
   appearance: none; -webkit-appearance: none;
   width: auto; min-width: 0; height: 36px;
   padding: 0 28px 0 12px;
-  border: 1px solid transparent; border-radius: 999px;
+  border: 1px solid transparent; border-radius: var(--r-pill);
   background: transparent; color: var(--text-secondary);
-  font-size: 15px; font-weight: 600; letter-spacing: .01em; cursor: pointer;
+  font-size: var(--fs-15); font-weight: 600; letter-spacing: .01em; cursor: pointer;
   transition: background-color .12s ease, color .12s ease;
 }
 .wb-formpick > select:hover { background: var(--surface-2); color: var(--text-primary); }
@@ -4759,7 +4909,7 @@ html, body { overflow-x: clip; }
   transform: rotate(45deg); pointer-events: none;
 }
 /* iPhone は 16px 未満の欄に触れると画面を拡大する。**ここも例外にしない** */
-@media (max-width: 860px) { .wb-formpick > select { font-size: 16px; } }
+@media (max-width: 860px) { .wb-formpick > select { font-size: var(--fs-16); } }
 @media (prefers-reduced-motion: reduce) { .wb-formpick > select { transition: none; } }
 
 /* ── 単語帳の復習を、集中モードと同じ形で出す(2026-09 利用者の指定)──
@@ -4840,14 +4990,14 @@ html, body { overflow-x: clip; }
   .wbfocus > .wb-run { padding-left: 12px; padding-right: 12px; }
 }
 
-.wb-run { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.wb-run { display: flex; flex-direction: column; gap: var(--sp-8); margin-top: 14px; }
 /* 進み具合の行。**出題の形は、この行の右**(2026-09 利用者の指定)。
      > 「おまかせ」のプルダウンを 3/10語 の右の方に配置してください。
      > いまははるか上に、おまかせ、があるのでいちいちスクロールして
      > 出題の仕方を変更する必要があります。
    答えているあいだ目が行っているのはこの行なので、
    **変えたくなる場所のとなり**に置く。 */
-.wb-run-head { display: flex; align-items: center; gap: 10px; }
+.wb-run-head { display: flex; align-items: center; gap: var(--sp-10); }
 .wb-run-head > .wb-formpick { margin-left: auto; }
 
 /* **狭い画面では、この行を画面の上にそろえる**(2026-09 利用者の指定)。
@@ -4856,29 +5006,29 @@ html, body { overflow-x: clip; }
 .wb-run,
 /* 結果の箱も同じ場所に置く(2026-09 利用者の指定) */
 .wordcard--result { scroll-margin-top: calc(56px + env(safe-area-inset-top) + 8px); }
-.wb-run-count { font-size: 13px; color: var(--text-secondary); }
+.wb-run-count { font-size: var(--fs-13); color: var(--text-secondary); }
 .wb-run-count > strong {
-  font-size: 20px; font-weight: 700; color: var(--text-primary);
+  font-size: var(--fs-20); font-weight: 700; color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 /* 1問=1目盛り。**色だけに頼らず、いまの1つは太くしてある** */
-.wb-run-bar { display: flex; gap: 3px; }
+.wb-run-bar { display: flex; gap: var(--sp-3); }
 .wb-run-bar > span {
-  flex: 1 1 0; height: 5px; border-radius: 999px; background: var(--border);
+  flex: 1 1 0; height: 5px; border-radius: var(--r-pill); background: var(--border);
 }
 .wb-run-bar > span.is-done { background: var(--accent); }
 .wb-run-bar > span.is-now { background: var(--accent); height: 8px; margin-top: -1.5px; }
 
 /* 終わったときの点数。**やり切ったことが分かるように大きく** */
 .wb-score {
-  display: flex; align-items: baseline; justify-content: center; gap: 8px;
+  display: flex; align-items: baseline; justify-content: center; gap: var(--sp-8);
   margin: 0 0 14px;
 }
 .wb-score > strong {
-  font-size: 40px; font-weight: 700; line-height: 1;
+  font-size: var(--fs-40); font-weight: 700; line-height: 1;
   color: var(--accent); font-variant-numeric: tabular-nums;
 }
-.wb-score-of { font-size: 14px; color: var(--text-secondary); }
+.wb-score-of { font-size: var(--fs-14); color: var(--text-secondary); }
 
 /* ── 今日の復習は1語ずつ ──────────────────────────────────────
    **答えを見る前に、必ず1回考える。** 記憶は思い出そうとしたときに強くなる。
@@ -4890,7 +5040,7 @@ html, body { overflow-x: clip; }
      上げ、角を丸め、影を一段付ける(「面の段差」で情報を分ける・CLAUDE.md)。
      **色は必ず変数で持つ**(プレインを選んだときに色だけが残らないように) */
   margin-top: 12px; padding: 26px 20px 20px;
-  border: 1px solid var(--border); border-radius: 18px;
+  border: 1px solid var(--border); border-radius: var(--r-18);
   background: var(--surface-1); box-shadow: var(--shadow-1);
   text-align: center;
   /* **カードの下に送りしろを置く**(2026-09)。
@@ -4931,12 +5081,12 @@ html, body { overflow-x: clip; }
 }
 .wordcard-face {
   display: flex; flex-wrap: wrap; align-items: baseline;
-  justify-content: center; gap: 10px;
+  justify-content: center; gap: var(--sp-10);
 }
 /* **行が2〜3行に割れても、きれいに割れるようにする。**
    `balance` の効かない端末では、これまでどおり素直に折り返すだけ */
 .wordcard-word {
-  font-size: 26px; font-weight: 700; line-height: 1.45;
+  font-size: var(--fs-26); font-weight: 700; line-height: 1.45;
   text-wrap: balance;
 }
 /* 入れ替えで出す英語。**日本語より一段大きく。**
@@ -4959,7 +5109,7 @@ html, body { overflow-x: clip; }
 .wordcard-cloze-hit { color: var(--accent); font-weight: 700; }
 .wordcard-cloze-ja {
   margin: 12px 0 0; text-align: left;
-  color: var(--text-secondary); font-size: 15px; font-weight: 600;
+  color: var(--text-secondary); font-size: var(--fs-15); font-weight: 600;
 }
 /* 種類(単語 / 言い回し)と品詞。**さりげなく**(2026-08 利用者の指定)。
    塗りつぶした札にすると、語より目立ってしまう。
@@ -4976,41 +5126,41 @@ html, body { overflow-x: clip; }
      「選んでいる印」と同じ組み合わせ(`--accent-soft` + `--accent`)
    - 品詞(名詞 …)… 細い枠線だけ。**塗りを2つ並べない** */
 .wordcard-tags {
-  display: flex; justify-content: center; align-items: center; gap: 6px;
+  display: flex; justify-content: center; align-items: center; gap: var(--sp-6);
   margin: 0 0 16px;
 }
 .wordcard-tags .wc-tag {
-  padding: 3px 11px; border-radius: 999px;
-  font-size: 11px; font-weight: 600; letter-spacing: .09em; line-height: 1.7;
+  padding: 3px 11px; border-radius: var(--r-pill);
+  font-size: var(--fs-11); font-weight: 600; letter-spacing: .09em; line-height: 1.7;
 }
 .wc-tag--kind { background: var(--accent-soft); color: var(--accent); }
 .wc-tag--pos { border: 1px solid var(--border); color: var(--text-muted); }
-.wordcard-ask { margin: 14px 0 10px; color: var(--text-muted); font-size: 12.5px; }
+.wordcard-ask { margin: 14px 0 10px; color: var(--text-muted); font-size: var(--fs-12h); }
 .wordcard-reveal { min-width: 160px; }
 /* 答え。**縦に積む。** 語の意味・文の意味・くわしく を横に並べると、
    どれがどれだか分からない一行になる(実測) */
 .wordcard-back {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-8);
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
 }
 /* **問題の枠の中に入れたときは、線を引かない**(日本語 → 英語)。
    すぐ下の操作の行にも線があるので、**細い線が2本**並んで見える */
 .wordcard-q .wordcard-back { margin-top: 10px; padding-top: 0; border-top: 0; }
-.wordcard-mean { font-size: 17px; font-weight: 600; }
+.wordcard-mean { font-size: var(--fs-17); font-weight: 600; }
 .wordcard .wordbook-seen { text-align: left; }
 /* **答えの2つは、となりどうし。**「意味を見る」は1段上に置く
    (2026-08 利用者の指定)。1列に3つ並べると、狭い画面で
    [まだ][意味を見る] / [覚えた] と折り返し、答えが上下に分かれていた */
 .wordcard-actions {
   display: flex; flex-direction: column; align-items: center;
-  gap: 12px; margin-top: 18px;
+  gap: var(--sp-12); margin-top: 18px;
 }
 /* **「見る」と「聴く」は、問題のすぐ下に横並び**(2026-09 利用者の指定)。
    どちらも答えそのものではないので、答えの2つとは段を分ける。
    上に細い線を1本引いて、**問題と操作の境目**をはっきりさせる */
 .wordcard-peek {
   display: flex; justify-content: center; align-items: center;
-  flex-wrap: wrap; gap: 8px;
+  flex-wrap: wrap; gap: var(--sp-8);
   width: 100%; padding-top: 14px; border-top: 1px solid var(--border);
 }
 /* **2つは同じ幅にする。** 幅が違うと、片方が「主」に見えてしまう */
@@ -5018,7 +5168,7 @@ html, body { overflow-x: clip; }
    「覚えかけ」が入るぶん、囲みを少し広げてある(320 → 360px)。
    **文字は折り返させない。** 「覚えか / け」と2行に割れると読めない */
 .wordcard-answers {
-  display: flex; justify-content: center; gap: 8px; width: min(100%, 360px);
+  display: flex; justify-content: center; gap: var(--sp-8); width: min(100%, 360px);
 }
 .wordcard-answers .btn {
   flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px;
@@ -5037,7 +5187,7 @@ html, body { overflow-x: clip; }
    **文には幅をぜんぶ渡す。** */
 .wordcard-seenbox { margin-top: 14px; }
 .wordcard-seenbar {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-8);
 }
 .wordcard-seenbox .wordbook-seen { margin: 10px 0 0; text-align: left; }
 /* 日本語 → 英語のときは、答えになる語を伏せる */
@@ -5048,32 +5198,32 @@ html, body { overflow-x: clip; }
    **青の塗りつぶしにしない** —— 宿題そのものより目立ってはいけない。
    うすい地色と細い枠だけにして、静かに置く(「選んでいる印」と同じ作法)。 */
 .hw-words {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
   margin: 12px 0 0; padding: 10px 12px;
   background: var(--accent-soft); border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-8);
 }
-.hw-words-line { margin: 0; flex: 1 1 14rem; font-size: 13.5px; line-height: 1.7; }
+.hw-words-line { margin: 0; flex: 1 1 14rem; font-size: var(--fs-13h); line-height: 1.7; }
 
 /* **その教材の語だけに絞っている、という札**(0047)。
    絞っていることを画面に出し、**外す道もその場に置く**
    (行き止まりを作らない)。置く場所は2つ(集中モードの帯 / 一覧)だが、
    中身は `onlyNote` 1つである */
 .wb-only {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
   margin: 10px 0 0;
 }
 .wb-only-label {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 11px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  padding: 4px 11px; border-radius: var(--r-pill);
   background: var(--accent-soft); color: var(--accent);
   border: 1px solid currentColor;
-  font-size: 12px; font-weight: 600; line-height: 1.7;
+  font-size: var(--fs-12); font-weight: 600; line-height: 1.7;
 }
 .wb-only-n { font-variant-numeric: tabular-nums; opacity: .85; }
 /* 教材の名前。**札の外**(長い名前が折り返しても札が崩れない) */
 .wb-only-name {
-  color: var(--text-secondary); font-size: 12.5px;
+  color: var(--text-secondary); font-size: var(--fs-12h);
   overflow-wrap: break-word; min-width: 0;
 }
 /* 集中モードの帯は暗いので、そこだけ色を塗り直す(`.lesson-bar` と同じ作法) */
@@ -5085,10 +5235,10 @@ html, body { overflow-x: clip; }
 }
 .wordcard-answer {
   display: flex; flex-wrap: wrap; align-items: baseline;
-  justify-content: center; gap: 8px; margin: 0;
+  justify-content: center; gap: var(--sp-8); margin: 0;
 }
 .wordcard-seen-ja {
-  margin: 0; color: var(--text-secondary); font-size: 13px;
+  margin: 0; color: var(--text-secondary); font-size: var(--fs-13);
 }
 .wordcard-when { margin: 14px 0 0; text-align: center; }
 
@@ -5099,7 +5249,7 @@ html, body { overflow-x: clip; }
 /* ── 4択。**1語2秒で回せることが値打ち。** 大きく、押しやすく ── */
 .wordbook-choices {
   list-style: none; margin: 16px 0 0; padding: 0;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-8);
 }
 .wordbook-choice {
   width: 100%; min-height: 48px; justify-content: center;
@@ -5138,46 +5288,46 @@ html, body { overflow-x: clip; }
 
 /* ── つづりを書く ────────────────────────────────────────── */
 .wordbook-spell {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 16px;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-8); margin-top: 16px;
 }
 .wordbook-spell input {
   flex: 1 1 200px; max-width: 320px; padding: 10px 12px;
-  border: 1px solid var(--border); border-radius: 8px;
+  border: 1px solid var(--border); border-radius: var(--r-8);
   background: var(--surface-0); color: var(--text-primary);
   /* iPhone で入力欄に寄ると画面が拡大する。16px 未満にしない */
-  font-size: 16px;
+  font-size: var(--fs-16);
 }
-.wordbook-right { flex-basis: 100%; margin: 0; color: var(--text-secondary); font-size: 13px; }
+.wordbook-right { flex-basis: 100%; margin: 0; color: var(--text-secondary); font-size: var(--fs-13); }
 
 /* ── 10語ぶんの結果 ──────────────────────────────────────── */
 .wordcard--result { text-align: center; }
 .wordbook-result {
   list-style: none; margin: 12px 0 16px; padding: 0;
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-6) var(--sp-12);
 }
-.wordbook-result > li { display: inline-flex; align-items: baseline; gap: 5px; font-size: 14px; }
+.wordbook-result > li { display: inline-flex; align-items: baseline; gap: var(--sp-5); font-size: var(--fs-14); }
 .wordbook-result .is-ok, .wordbook-result > li.is-ok { color: var(--text-primary); }
 .wordbook-result > li.is-ng { color: var(--series-3); }
 
 /* ── 積み上がり ──────────────────────────────────────────── */
 .wordbook-progress { margin-top: 14px; }
-.wordbook-goal-line { margin: 0 0 8px; font-size: 14px; }
+.wordbook-goal-line { margin: 0 0 8px; font-size: var(--fs-14); }
 .wordbook-bar {
-  height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden;
+  height: 10px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden;
 }
 .wordbook-bar > span { display: block; height: 100%; background: var(--accent); }
-.wordbook-sub { margin: 20px 0 8px; font-size: 14px; }
+.wordbook-sub { margin: 20px 0 8px; font-size: var(--fs-14); }
 .wordbook-industry { list-style: none; margin: 0; padding: 0; }
 .wordbook-industry > li {
-  display: flex; align-items: baseline; gap: 8px;
-  padding: 7px 0; border-top: 1px solid var(--border); font-size: 14px;
+  display: flex; align-items: baseline; gap: var(--sp-8);
+  padding: 7px 0; border-top: 1px solid var(--border); font-size: var(--fs-14);
 }
 .wordbook-industry > li > span:first-child { flex: 1; }
 
 /* トレーナーが見た。**人が見ていると分かることが、いちばん効く** */
 .wordbook-seenby {
-  margin: 8px 0 0; padding: 7px 10px; border-radius: 8px;
-  background: var(--surface-2); color: var(--text-secondary); font-size: 12.5px;
+  margin: 8px 0 0; padding: 7px 10px; border-radius: var(--r-8);
+  background: var(--surface-2); color: var(--text-secondary); font-size: var(--fs-12h);
 }
 
 /* ── Quick Response ────────────────────────────────────────
@@ -5196,11 +5346,11 @@ html, body { overflow-x: clip; }
 }
 /* **折り返しを許す。** 狭い画面では取り組み方の札が自分の行に落ちる。
    名前を切って「文...」にするより、1行増えるほうがましである(実測) */
-.qr-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
-.qr-title { font-size: 15px; }
+.qr-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-8) var(--sp-10); }
+.qr-title { font-size: var(--fs-15); }
 .qr-count {
   margin-left: auto; color: var(--qr-faint);
-  font-size: 13px; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-13); font-variant-numeric: tabular-nums;
 }
 /* 見出しを出さない紙の上でも、数だけは右に置く */
 .qr-head > .qr-count:first-child { margin-left: 0; margin-right: auto; }
@@ -5217,15 +5367,15 @@ html, body { overflow-x: clip; }
    (6Steps を選ぶプルダウンは6つあるので、あちらはそのまま)。
    見た目は配色の切り替え(`.theme-switch`)と同じ考え方。
    **選んでいる印をべた塗りにしない**(うすい地色 + 同じ色の文字 + 枠線 + 太字) */
-.qr-mode { display: flex; gap: 4px; flex-wrap: nowrap; min-width: 0; }
+.qr-mode { display: flex; gap: var(--sp-4); flex-wrap: nowrap; min-width: 0; }
 /* **名前は切らない。** 「文...」では何の札か分からない(実測)。
    縮めるのではなく、`.qr-head` の側で行を分ける */
 .qr-modebtn {
   flex: 0 0 auto;
-  padding: 5px 9px; border-radius: 999px;
+  padding: 5px 9px; border-radius: var(--r-pill);
   border: 1px solid var(--qr-rule); background: transparent;
   color: var(--text-secondary);
-  font-size: 12px; font-weight: 600; line-height: 1.3;
+  font-size: var(--fs-12); font-weight: 600; line-height: 1.3;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -5239,7 +5389,7 @@ html, body { overflow-x: clip; }
 
 /* どこまで来たか。**終わりが見えないと続かない** */
 .qr-bar {
-  height: 6px; margin: 8px 0 2px; border-radius: 999px;
+  height: 6px; margin: 8px 0 2px; border-radius: var(--r-pill);
   background: var(--surface-2); overflow: hidden;
 }
 .qr-bar > span {
@@ -5290,7 +5440,7 @@ html, body { overflow-x: clip; }
      問題が真っ白になることはない(下限は残る)。 */
   max-height: calc(100dvh - 15rem);
   display: flex; flex-direction: column;
-  gap: 6px; overflow-y: auto;
+  gap: var(--sp-6); overflow-y: auto;
   justify-content: safe center;
   padding: 6px 0;
 }
@@ -5322,7 +5472,7 @@ html, body { overflow-x: clip; }
    Quick Response は 6Steps の中ではなく、並びのタブである */
 .qr-answer {
   width: 100%; margin-top: 8px; text-align: center;
-  padding: 10px 12px; border-left: none; border-radius: 8px;
+  padding: 10px 12px; border-left: none; border-radius: var(--r-8);
   background: var(--qa-answer, var(--surface-2));
 }
 .qr-body.is-tight .qr-answer { margin-top: 0; }
@@ -5331,45 +5481,45 @@ html, body { overflow-x: clip; }
    上の「2 / 25」は**どこまで来たか**の目安で、役目が違う */
 .qr-from {
   margin: 0 0 4px;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  color: var(--qr-faint); font-size: 12px;
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-8);
+  color: var(--qr-faint); font-size: var(--fs-12);
 }
 /* 紙の上では、丸も紙の色にそろえる(帯の色を持ち込まない) */
 .qr--paper .qr-from .num-badge { background: var(--accent-bg); color: var(--accent); }
 /* 出す側の日本語。**大きく出す。** ここだけを見て言う */
 .qr-ja {
   margin: 0 auto; max-width: 34em;
-  font-size: 19px; font-weight: 600; line-height: 1.7;
+  font-size: var(--fs-19); font-weight: 600; line-height: 1.7;
 }
 /* 単語帳と同じ並べ方。**答えの2つはとなりどうし**(2026-08 利用者の指定) */
 .qr-actions {
   flex: 0 0 auto;
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-10);
   margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--qr-rule);
 }
-.qr-answers { display: flex; justify-content: center; gap: 10px; width: min(100%, 320px); }
+.qr-answers { display: flex; justify-content: center; gap: var(--sp-10); width: min(100%, 320px); }
 .qr-answers .btn { flex: 1 1 0; min-width: 0; }
 /* 開いたあとの英語。語に触れれば意味も引ける */
 /* 答え。**問題と入れ替えて**同じ場所に出す。
    出す場所が同じなので、目が迷わない */
 .qr-en {
   display: flex; align-items: flex-start; justify-content: center;
-  gap: 10px; margin: 0;
+  gap: var(--sp-10); margin: 0;
   /* 問題(日本語)と同じ場所・同じそろえ方にする。**目が迷わない** */
-  font-size: 19px; font-weight: 600; line-height: 1.7; text-align: center;
+  font-size: var(--fs-19); font-weight: 600; line-height: 1.7; text-align: center;
 }
 .qr-en .etext-listen { margin-left: 0; flex: 0 0 auto; }
 
 .qr-result { padding: 8px 0; text-align: center; }
-.qr-result-score { margin: 6px 0 12px; font-size: 17px; }
+.qr-result-score { margin: 6px 0 12px; font-size: var(--fs-17); }
 .qr-result-list {
   list-style: none; margin: 0 0 12px; padding: 0; text-align: left;
 }
 .qr-result-list > li {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 8px 0; border-top: 1px solid var(--qr-rule); font-size: 14px;
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: 8px 0; border-top: 1px solid var(--qr-rule); font-size: var(--fs-14);
 }
-.qr-result-ja { color: var(--qr-dim); font-size: 13px; }
+.qr-result-ja { color: var(--qr-dim); font-size: var(--fs-13); }
 .qr-result .btn-row { justify-content: center; }
 
 /* ── **やり終えたときの1枚**(`SessionResult` / `CollectRows`)─────────
@@ -5391,21 +5541,21 @@ html, body { overflow-x: clip; }
   color: var(--ink, var(--text-primary));
 }
 .sresult-score > strong {
-  font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-40); font-weight: 800; font-variant-numeric: tabular-nums;
 }
 .sresult-of {
-  margin-left: 6px; font-size: 14px; font-weight: 600;
+  margin-left: 6px; font-size: var(--fs-14); font-weight: 600;
   color: var(--ink-soft, var(--text-secondary));
 }
 /* 声かけ。**責めない。** 点が低い回にも、責める言葉は出さない */
 .sresult-praise {
-  margin: 0 0 8px; font-size: 15px; font-weight: 700;
+  margin: 0 0 8px; font-size: var(--fs-15); font-weight: 700;
   color: var(--accent);
 }
 /* 連続と、週の続き。**添えもの**なので、点数より先に目が行ってはいけない */
 .sresult-lines {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px;
-  margin: 0 0 12px; font-size: 12.5px;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-6) var(--sp-12);
+  margin: 0 0 12px; font-size: var(--fs-12h);
   color: var(--ink-soft, var(--text-secondary));
 }
 /* **絵文字は使わない**(端末ごとに形も大きさも違う・CLAUDE.md)。
@@ -5415,12 +5565,12 @@ html, body { overflow-x: clip; }
   list-style: none; margin: 0 0 10px; padding: 0; text-align: left;
 }
 .sresult-miss > li {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 8px 0; font-size: 14px;
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: 8px 0; font-size: var(--fs-14);
   border-top: 1px solid var(--qr-rule, var(--border));
   color: var(--ink, var(--text-primary));
 }
-.sresult-sub { font-size: 13px; color: var(--ink-soft, var(--text-secondary)); }
+.sresult-sub { font-size: var(--fs-13); color: var(--ink-soft, var(--text-secondary)); }
 
 /* ── 集まり具合(`CollectRows`)────────────────────────────────
      **数字ではなく、そろい具合を出す。**「建設 40 語」だけでは、
@@ -5429,22 +5579,22 @@ html, body { overflow-x: clip; }
      **色だけに頼らない** —— 数(40 / 52)も必ず添える(CLAUDE.md) */
 .collect { margin: 4px 0 12px; text-align: left; }
 .collect-head {
-  margin: 0 0 6px; font-size: 12px; font-weight: 700;
+  margin: 0 0 6px; font-size: var(--fs-12); font-weight: 700;
   color: var(--ink-soft, var(--text-secondary));
 }
-.collect-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.collect-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-6); }
 .collect-list > li {
   display: grid; grid-template-columns: minmax(0, 5.5em) 1fr auto;
-  align-items: center; gap: 8px; font-size: 12.5px;
+  align-items: center; gap: var(--sp-8); font-size: var(--fs-12h);
   color: var(--ink, var(--text-primary));
 }
 .collect-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .collect-bar {
-  height: 6px; border-radius: 999px; overflow: hidden;
+  height: 6px; border-radius: var(--r-pill); overflow: hidden;
   background: var(--qa-bg, var(--surface-2));
 }
 .collect-bar > span {
-  display: block; height: 100%; border-radius: 999px; background: var(--accent);
+  display: block; height: 100%; border-radius: var(--r-pill); background: var(--accent);
 }
 .collect-num { font-variant-numeric: tabular-nums; font-weight: 700; }
 .collect-of { font-weight: 500; color: var(--ink-soft, var(--text-secondary)); }
@@ -5456,18 +5606,18 @@ html, body { overflow-x: clip; }
      **色だけに頼らない** —— 達成は ✓ の印と言葉でも示す(CLAUDE.md) */
 .goalbar { margin: 4px 0 12px; text-align: left; }
 .goalbar-line {
-  margin: 0 0 6px; font-size: 12.5px; font-weight: 700;
-  display: flex; align-items: center; gap: 6px;
+  margin: 0 0 6px; font-size: var(--fs-12h); font-weight: 700;
+  display: flex; align-items: center; gap: var(--sp-6);
   color: var(--ink-soft, var(--text-secondary));
 }
 .goalbar.is-hit .goalbar-line { color: var(--ok); }
 .goalbar-hit { font-weight: 900; }
 .goalbar-track {
-  display: block; height: 6px; border-radius: 999px; overflow: hidden;
+  display: block; height: 6px; border-radius: var(--r-pill); overflow: hidden;
   background: var(--qa-bg, var(--surface-2));
 }
 .goalbar-track > span {
-  display: block; height: 100%; border-radius: 999px; background: var(--accent);
+  display: block; height: 100%; border-radius: var(--r-pill); background: var(--accent);
 }
 .goalbar.is-hit .goalbar-track > span { background: var(--ok); }
 
@@ -5512,7 +5662,7 @@ html, body { overflow-x: clip; }
      ※ iPhone で「これより大きい」と感じるときは、Safari の
        ページズーム(アドレスバー左の「ぁあ」→ ズーム)を確かめる。
        こちらの指定は 16px で、端末側の拡大はそこに掛け算される */
-  .qr-ja { font-size: 16px; line-height: 1.7; }
+  .qr-ja { font-size: var(--fs-16); line-height: 1.7; }
   /* ── スマホでの答え(英語)──────────────────────────
      【何が起きていたか】(2026-08 実機)
 
@@ -5526,12 +5676,12 @@ html, body { overflow-x: clip; }
      ・**Listen は英文の下に置く**(横に並べない)
      ・**文字を小さくする。** 読むのは1文なので 19px は要らない */
   .qr-en {
-    flex-direction: column; align-items: center; gap: 6px;
-    font-size: 16px; line-height: 1.7;
+    flex-direction: column; align-items: center; gap: var(--sp-6);
+    font-size: var(--fs-16); line-height: 1.7;
   }
   .qr-en .etext-listen { order: 2; }
-  .qr-actions { gap: 8px; }
-  .qr-answers { gap: 8px; }
+  .qr-actions { gap: var(--sp-8); }
+  .qr-answers { gap: var(--sp-8); }
   .qr-answers .btn { padding: 8px 12px; }
 }
 
@@ -5597,7 +5747,7 @@ html, body { overflow-x: clip; }
    こちらは通しで練習を始めるためのもの。見た目もはっきり分ける
    (画面の切り替え=下線 / 教材の中=丸い札 / これ=絵の付いたボタン) */
 .practice-row {
-  display: flex; flex-wrap: wrap; gap: 8px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-8);
   margin: 12px 0 4px; padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -5606,10 +5756,10 @@ html, body { overflow-x: clip; }
    なるので、大きいままだと本文の場所を食う(2026-08 の指摘)。
    紙は文字を3段階に変えられるので、大きさは em で持つ */
 .lesson-sheet .practice-row {
-  gap: 6px; margin: 8px 0 0; padding-bottom: 8px;
+  gap: var(--sp-6); margin: 8px 0 0; padding-bottom: 8px;
 }
 .lesson-sheet .practice-row .btn {
-  min-height: 0; padding: 0.3em 0.7em; font-size: 0.8em; border-radius: 6px;
+  min-height: 0; padding: 0.3em 0.7em; font-size: 0.8em; border-radius: var(--r-6);
 }
 .lesson-sheet .practice-row .icon { font-size: 1em; }
 
@@ -5639,8 +5789,8 @@ html, body { overflow-x: clip; }
 
      実測: 320px → 272px(ちょうど入る)/ 390px → 342px。
      どちらも1行 44px に収まる。 */
-  .lesson-sheet .practice-row { gap: 3px; }
-  .lesson-sheet .practice-row .btn { font-size: 12px; padding: 5px 6px; }
+  .lesson-sheet .practice-row { gap: var(--sp-3); }
+  .lesson-sheet .practice-row .btn { font-size: var(--fs-12); padding: 5px 6px; }
   .lesson-sheet .practice-row .icon { display: none; }
 }
 
@@ -5658,10 +5808,10 @@ html, body { overflow-x: clip; }
    下まで送ってから押すのでは遠い */
 .wordbook-pickbar {
   position: sticky; bottom: 0; z-index: 2;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
   margin-top: 10px; padding: 10px 12px;
   border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--surface-1); font-size: 13px;
+  background: var(--surface-1); font-size: var(--fs-13);
 }
 .wordbook-pickbar > span:first-child { margin-right: auto; }
 
@@ -5674,15 +5824,15 @@ html, body { overflow-x: clip; }
 /* 単語帳からの深掘り。**吹き出しは1つで足りる。ここは腰を据えて調べる場所** */
 .wordbook-detail { list-style: none; margin: 10px 0 0; padding: 0; text-align: left; }
 .wordbook-detail > li {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-6);
   padding: 8px 0; border-top: 1px solid var(--border);
 }
-.wordbook-detail-mean { font-size: 14px; }
+.wordbook-detail-mean { font-size: var(--fs-14); }
 .wordbook-detail-ex {
-  flex-basis: 100%; color: var(--text-secondary); font-size: 12.5px;
+  flex-basis: 100%; color: var(--text-secondary); font-size: var(--fs-12h);
 }
 .wordbook-detail-note {
-  flex-basis: 100%; color: var(--text-muted); font-size: 12px;
+  flex-basis: 100%; color: var(--text-muted); font-size: var(--fs-12);
 }
 
 /* ── ゲストに関するファイル(0031・2026-09 利用者の指定)──────────
@@ -5705,7 +5855,7 @@ html, body { overflow-x: clip; }
    狭い画面ではカードごと横に広がる(390px で実測)。
    キーボードで選べるよう、消さずに残してある */
 .lfiles-pick {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
   margin-bottom: 12px;
 }
 /* 選んだファイルの名前。長くても横にはみ出させない */
@@ -5718,9 +5868,9 @@ html, body { overflow-x: clip; }
 .lfiles-pick input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
 .lfiles-add .notice { margin: 10px 0 0; }
 
-.lfiles-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lfiles-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-10); }
 .lfiles-item {
-  display: flex; flex-wrap: wrap; gap: 10px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-10);
   align-items: center; justify-content: space-between;
   padding: 12px 14px;
   border: 1px solid var(--border); border-radius: var(--radius);
@@ -5730,15 +5880,15 @@ html, body { overflow-x: clip; }
 /* 長いファイル名でも、横にはみ出させない */
 .lfiles-name { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
 .lfiles-meta {
-  margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 10px;
+  margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: var(--sp-10);
   font-size: 0.85em; color: var(--text-secondary);
 }
 .lfiles-note { margin: 6px 0 0; font-size: 0.9em; color: var(--text-secondary); }
-.lfiles-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.lfiles-tools { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
 
 /* 「やった」のボタンを置かなくなったので、記録されたことだけを静かに出す
    (2026-09 利用者の指定)。**黙って記録しない** */
-.homework-worked { margin: 10px 0 0; font-size: 13px; }
+.homework-worked { margin: 10px 0 0; font-size: var(--fs-13); }
 
 /* ════════════════════════════════════════════════════════════════════
    集中モード — 1段落ずつ調べる(`FocusReader.jsx`・2026-09 利用者の指定)
@@ -5852,14 +6002,14 @@ html, body { overflow-x: clip; }
    狭い画面では設定が2段目に落ちるので `flex-wrap: wrap` にする */
 .focus-top {
   flex: 0 0 auto;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
   padding: 8px 16px;
   padding-top: max(8px, env(safe-area-inset-top));
   background: #24241f; color: #f2f2ee;
   border-bottom: 1px solid #45453f;
 }
 .focus-count {
-  font-size: 13px; font-weight: 700; color: #cfcfc8;
+  font-size: var(--fs-13); font-weight: 700; color: #cfcfc8;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -5895,7 +6045,7 @@ html, body { overflow-x: clip; }
    入らないぶんだけプルダウンが縮む(「…」で切れる) */
 .focus-top-main {
   flex: 1 1 0; min-width: 0;
-  display: flex; flex-wrap: nowrap; align-items: center; gap: 10px;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-10);
 }
 /* 6Steps のプルダウン。**縮むのはここ**(ほかは縮めようがない)。
    広い画面で伸びすぎないよう、上限も置く */
@@ -5907,10 +6057,10 @@ html, body { overflow-x: clip; }
 .focus-dots {
   margin-left: auto;
   display: flex; flex-wrap: wrap; justify-content: flex-end;
-  gap: 4px; max-width: 40%;
+  gap: var(--sp-4); max-width: 40%;
 }
 .focus-dot {
-  width: 7px; height: 7px; border-radius: 50%;
+  width: 7px; height: 7px; border-radius: var(--r-circle);
   background: var(--border);
 }
 .focus-dot.is-done { background: var(--accent); opacity: 0.45; }
@@ -5976,7 +6126,7 @@ html, body { overflow-x: clip; }
 /* 何番目か + 話す人。**1行にまとめる**(2026-09 利用者の指定で番号を足した)。
    英語のときも訳のときも出すので、**切り替えても行は動かない** */
 .focus-who {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--sp-10);
   margin-bottom: 10px;
 }
 /* 番号の丸は **`.num-badge` 1か所**(集中モード・Quick Response で使う)。
@@ -5988,7 +6138,7 @@ html, body { overflow-x: clip; }
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.75em; height: 1.75em;
-  border-radius: 50%; font-size: 13px; font-weight: 600;
+  border-radius: var(--r-circle); font-size: var(--fs-13); font-weight: 600;
   background: var(--accent-bg); color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
@@ -6000,7 +6150,7 @@ html, body { overflow-x: clip; }
      ここで `margin: 0` と書くと、**あとに来るこちらが勝って**
      寄せが効かなくなる(実測でそうなっていた) */
   margin-top: 0; margin-bottom: 0;
-  font-size: 19px; line-height: 2.0;
+  font-size: var(--fs-19); line-height: 2.0;
   overflow-wrap: break-word;
 }
 .focus-ja { color: var(--text-primary); }
@@ -6009,7 +6159,7 @@ html, body { overflow-x: clip; }
    iOS の「端からの戻るスワイプ」を誤爆させない */
 .focus-bar {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--sp-10);
   padding: 10px 16px;
   padding-bottom: max(10px, env(safe-area-inset-bottom));
   /* 上の帯と同じ黒。**明るい配色でも、この帯はいつも暗い** */
@@ -6037,14 +6187,14 @@ html, body { overflow-x: clip; }
    判断は**幅だけ**(レッスン表示の帯と同じ 860px) */
 @media (max-width: 860px) {
   .focus-top .wide-text { display: none; }
-  .focus-top { gap: 8px; }
+  .focus-top { gap: var(--sp-8); }
 }
 
 /* 送りボタンは**縮ませない。** 名前が縮むより、押せることが先 */
 .focus-move { flex: 0 0 auto; min-width: 72px; }
 .focus-mid {
   flex: 1 1 auto; min-width: 0;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-8);
   /* ★ **入らないときは、この中で折り返す**(2026-09 実機)。
      くり返しのボタンを足したことで、**文字を大きくしている端末**では
      3つが入りきらず、`.btn--small` は縮まないので**外へあふれて
@@ -6072,23 +6222,23 @@ html, body { overflow-x: clip; }
    **広い画面でだけ、3つをまん中にまとめる**(判断は幅だけ・CLAUDE.md)。
    `.focus-mid` を伸ばさないようにするだけで、両端のボタンが寄ってくる。 */
 @media (min-width: 1024px) {
-  .focus-bar { justify-content: center; gap: 16px; }
+  .focus-bar { justify-content: center; gap: var(--sp-16); }
   .focus-mid { flex: 0 1 auto; }
 }
 
 /* 最後の1枚。調べた語をまとめて見る */
-.focus-wrap { display: flex; flex-direction: column; gap: 12px; }
-.focus-wrap-lead { margin: 0; font-size: 15px; }
+.focus-wrap { display: flex; flex-direction: column; gap: var(--sp-12); }
+.focus-wrap-lead { margin: 0; font-size: var(--fs-15); }
 .focus-wrap-list {
   margin: 0; padding: 0; list-style: none;
-  display: flex; flex-wrap: wrap; gap: 8px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-8);
 }
 .focus-wrap-list li {
-  padding: 6px 12px; border-radius: 999px;
+  padding: 6px 12px; border-radius: var(--r-pill);
   border: 1px solid var(--border); background: var(--surface-2);
-  font-size: 15px;
+  font-size: var(--fs-15);
 }
-.focus-wrap-none { margin: 0; color: var(--text-secondary); font-size: 14px; }
+.focus-wrap-none { margin: 0; color: var(--text-secondary); font-size: var(--fs-14); }
 
 /* ★ 下の帯は、**狭い画面では詰める**(2026-09 実機)。
 
@@ -6104,9 +6254,9 @@ html, body { overflow-x: clip; }
    文字を 1.25 倍にしている端末でも 67px の1段に収まる。
    320px はどうやっても入らないので2段(107px)。**重なりはしない** */
 @media (max-width: 480px) {
-  .focus-bar { gap: 6px; padding-left: 10px; padding-right: 10px; }
-  .focus-bar .btn { font-size: 12px; padding: 5px 8px; }
-  .focus-mid { gap: 6px; }
+  .focus-bar { gap: var(--sp-6); padding-left: 10px; padding-right: 10px; }
+  .focus-bar .btn { font-size: var(--fs-12); padding: 5px 8px; }
+  .focus-mid { gap: var(--sp-6); }
   .focus-move { min-width: 60px; }
 }
 
@@ -6115,7 +6265,7 @@ html, body { overflow-x: clip; }
   .focus-top, .focus-bar { padding-left: 12px; padding-right: 12px; }
   .focus-body { padding: 16px 12px; }
   .focus-move { min-width: 60px; }
-  .focus-en, .focus-ja { font-size: 18px; line-height: 1.9; }
+  .focus-en, .focus-ja { font-size: var(--fs-18); line-height: 1.9; }
 }
 
 /* ★★ **集中モードの下の帯は、どの幅でも1行に収める** ─────────────
@@ -6151,9 +6301,9 @@ html, body { overflow-x: clip; }
 @media (max-width: 560px) {
   /* 幅によらず要る土台。**ここでは言葉を落とさない**(落とすのは印の役) */
   .focus-move { min-width: 44px; }
-  .focus-bar { gap: 6px; }
-  .focus-bar .btn { font-size: 12px; padding: 5px 8px; }
-  .focus-mid { gap: 6px; }
+  .focus-bar { gap: var(--sp-6); }
+  .focus-bar .btn { font-size: var(--fs-12); padding: 5px 8px; }
+  .focus-mid { gap: var(--sp-6); }
   .focus-mid .listenpill-arrow { min-width: 32px; padding: 0 7px; }
   /* 添えの言葉(「くり返し:」と、数のうしろの「段落 / 発言」)を落とす。
      **数と単位そのものは必ず見えている**(紙のプレーヤーと同じ作法) */
@@ -6165,9 +6315,9 @@ html, body { overflow-x: clip; }
      **幅は書かない。** どの幅で効くかは、測った結果が決める */
 .focus-bar.is-fit1 .listen-word { display: none; }
 .focus-bar.is-fit2 .ja-word { display: none; }
-.focus-bar.is-fit3 { gap: 4px; padding-left: 8px; padding-right: 8px; }
+.focus-bar.is-fit3 { gap: var(--sp-4); padding-left: 8px; padding-right: 8px; }
 .focus-bar.is-fit3 .btn { padding: 5px 5px; }
-.focus-bar.is-fit3 .focus-mid { gap: 4px; }
+.focus-bar.is-fit3 .focus-mid { gap: var(--sp-4); }
 .focus-bar.is-fit3 .focus-mid .btn { padding: 5px 4px; }
 .focus-bar.is-fit3 .focus-mid .listenpill-arrow { min-width: 28px; padding: 0 5px; }
 .focus-bar.is-fit3 .focus-move { min-width: 30px; }
@@ -6236,11 +6386,11 @@ html, body { overflow-x: clip; }
 /* 本文。**紙と同じ大きさでは小さい** — ここには1つしか無い */
 .passage--focus .passage-en,
 .passage--focus .stepsent-en,
-.passage--focus .slash-line { font-size: 17px; }
+.passage--focus .slash-line { font-size: var(--fs-17); }
 /* 話す人。**紙と同じように色で分ける**(奇数・偶数で交互)。
    声を分けたのと同じ理由で、目でも役を追える */
 .passage--focus .passage-speaker {
-  color: var(--voice-a); font-weight: 700; font-size: 14px;
+  color: var(--voice-a); font-weight: 700; font-size: var(--fs-14);
 }
 .passage--focus li:nth-child(even) .passage-speaker { color: var(--voice-b); }
 /* 番号。うすい灰色の丸だったので、いちばん見たい本文より先に沈んでいた。
@@ -6256,7 +6406,7 @@ html, body { overflow-x: clip; }
 
 /* 段落・発言の番号と、話す人(③⑤)。**どのページでも番号を出す**
    (2026-09 利用者の指定「どのページでも段落番号とか全て入れてください」) */
-.passage-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.passage-head { display: flex; align-items: center; gap: var(--sp-8); margin-bottom: 4px; }
 /* 通し表示では出さない。1本の文章として続けて読むためのものである */
 .passage-body.is-flow .passage-head { display: none; }
 /* 集中モードでは、1つだけを大きく出す。
@@ -6278,7 +6428,7 @@ html, body { overflow-x: clip; }
 .sheet-floats {
   position: fixed; right: 16px; z-index: 60;
   bottom: calc(16px + env(safe-area-inset-bottom));
-  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-8);
   max-width: calc(100% - 32px);
 }
 .sheet-float {
@@ -6290,7 +6440,7 @@ html, body { overflow-x: clip; }
   /* 狭い画面では、下の端に少しだけ寄せる(親指の届くところ) */
   .sheet-floats {
     right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
-    gap: 6px; max-width: calc(100% - 20px);
+    gap: var(--sp-6); max-width: calc(100% - 20px);
   }
   .sheet-float { padding: 5px 9px; }
 }
@@ -6303,7 +6453,7 @@ html, body { overflow-x: clip; }
    ここで変えるのは**貼り付く場所と、地の色**だけである。
    書き写すと、片方だけ古くなる(CLAUDE.md)。 */
 .player {
-  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-8);
   min-width: 0;
 }
 /* **押すものは縮ませない。** 縮むのは進み具合の帯だけ */
@@ -6334,7 +6484,7 @@ html, body { overflow-x: clip; }
      何のボタンか分からなかった。** 四角なら、三角の居場所が
      箱として見えるので、押せるものだと伝わる */
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-10);
   /* ── **面は1枚。3つの色に割らない**(2026-09 実機・利用者の指摘)────
        > この段落ごとのプレーヤーの色のバランス、ダサすぎるので
        > 調整してスタイリッシュにして下さい。
@@ -6373,7 +6523,7 @@ html, body { overflow-x: clip; }
   display: inline-flex; align-items: center; justify-content: center;
   /* **押せる大きさは保つ**(`.btn` の 40px は箱の高さが受け持つ) */
   min-width: 38px; padding: 0 10px;
-  font-size: 14px; line-height: 1;
+  font-size: var(--fs-14); line-height: 1;
   color: var(--text-primary);
   /* **地は持たない。** 面は錠剤の1枚だけ(上記)。
      押せることは**細い線と、触れたときの濃さ**が伝える */
@@ -6461,21 +6611,21 @@ html, body { overflow-x: clip; }
 .lesson-sheet .listenpill, .focus-paper .listenpill {
   border-color: var(--qa-line, var(--border));
 }
-.player-move { padding-left: 9px; padding-right: 9px; font-size: 12px; }
+.player-move { padding-left: 9px; padding-right: 9px; font-size: var(--fs-12); }
 /* いまどこか。**幅をそろえる**(そろえないと、送るたびに隣が動く)。
    数字は等幅で出す(`Stepper` と同じ作法) */
 .player-at {
   flex: 0 0 auto; white-space: nowrap;
-  font-size: 12px; font-weight: 700; color: var(--text-secondary);
+  font-size: var(--fs-12); font-weight: 700; color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 /* 進み具合。**段落の単位**である(秒までは数えていない) */
 .player-track {
-  flex: 1 1 60px; min-width: 40px; height: 4px; border-radius: 999px;
+  flex: 1 1 60px; min-width: 40px; height: 4px; border-radius: var(--r-pill);
   background: var(--border); overflow: hidden;
 }
 .player-fill {
-  display: block; height: 100%; border-radius: 999px;
+  display: block; height: 100%; border-radius: var(--r-pill);
   background: var(--accent);
 }
 .player-place { flex: 0 0 auto; padding-left: 8px; padding-right: 8px; }
@@ -6516,7 +6666,7 @@ html, body { overflow-x: clip; }
   /* **角の丸い四角にそろえる**(2026-09 実機・利用者の指定)。
      中の三角が四角い箱になったので、外側が楕円のままだと
      **端の三角が丸みに食われて**形が合わない(実測して気づいた) */
-  padding: 5px 7px; border-radius: 12px;
+  padding: 5px 7px; border-radius: var(--r-12);
   background: var(--surface-1); border: 1px solid var(--border);
   box-shadow: var(--shadow-2);
 }
@@ -6545,10 +6695,10 @@ html, body { overflow-x: clip; }
    **置き場所の切り替え(▲)も消さない** —— 消すと上の帯へ戻す道が
    無くなる(行き止まりを作らない)。 */
 .player--float.is-fit1 .listen-word { display: none; }
-.player--float.is-fit2 { gap: 4px; padding: 4px; }
+.player--float.is-fit2 { gap: var(--sp-4); padding: 4px; }
 .player--float.is-fit2 .btn { padding: 5px 6px; }
 .player--float.is-fit3 .listenpill-arrow { min-width: 28px; padding: 0 5px; }
-.player--float.is-fit3 .player-at { font-size: 11px; }
+.player--float.is-fit3 .player-at { font-size: var(--fs-11); }
 .player--float.is-fit3 .player-place { padding-left: 5px; padding-right: 5px; }
 
 /* ② 上の帯のすぐ下に貼り付ける(`.jobbar` と同じ作法)。
@@ -6574,7 +6724,7 @@ html, body { overflow-x: clip; }
    (「詰め方は 言葉を短く → 余白を詰める → 絵だけに」の順だが、
    ここは言葉を短くすると何のボタンか分からなくなる)。
    実測: 1440px で 50px の1行に収まる */
-.player--bar { gap: 6px; }
+.player--bar { gap: var(--sp-6); }
 .player--bar .listenpill-arrow { min-width: 32px; padding: 0 7px; }
 .player--bar .listenpill .btn { padding-left: 8px; padding-right: 8px; }
 
@@ -6612,7 +6762,7 @@ html, body { overflow-x: clip; }
 /* 狭い画面。**文言は削らない**(何のボタンか分からなくなる)。
    削るのは余白と、いちばん端の置き場所の切り替えだけ */
 @media (max-width: 560px) {
-  .player--float { gap: 6px; padding: 4px 6px; }
+  .player--float { gap: var(--sp-6); padding: 4px 6px; }
   /* **狭い画面では、右下の行を折り返させる**(2026-09 実測)。
      操作盤と「集中モード」を 320px の1行に入れると、
      操作盤の中身がはみ出して**「集中モード」の下に潜り込み、
@@ -6657,10 +6807,10 @@ html, body { overflow-x: clip; }
    (2026-09 実機・利用者の指定「2行になるのは絶対にダメです」)
    削るのは**余白と三角の幅**だけで、押せる大きさ(28px)は割らない */
 @media (max-width: 360px) {
-  .player--float { gap: 4px; padding: 4px; }
+  .player--float { gap: var(--sp-4); padding: 4px; }
   .player--float .listenpill-arrow { min-width: 28px; padding: 0 5px; }
   .player--float .btn { padding: 5px 6px; }
-  .player--float .player-at { font-size: 11px; }
+  .player--float .player-at { font-size: var(--fs-11); }
   .player--float .player-place { padding-left: 5px; padding-right: 5px; }
   /* **操作盤は、絶対に折り返さない**(2026-09 実機・利用者の指定)。
 
@@ -6685,8 +6835,8 @@ html, body { overflow-x: clip; }
 @media (max-width: 370px) {
   .focus-move--tight .wide-text { display: none; }
   .focus-move { min-width: 32px; }
-  .focus-bar { gap: 2px; }
-  .focus-mid { gap: 2px; }
+  .focus-bar { gap: var(--sp-2); }
+  .focus-mid { gap: var(--sp-2); }
 }
 
 /* 取り組み方の説明。**畳んでおく**(2026-09 利用者の指定
@@ -6694,7 +6844,7 @@ html, body { overflow-x: clip; }
    見た目は静かに — 本文より先に目に入ってはいけない */
 .lesson-guide { margin: 6px 0 10px; }
 .lesson-guide-sum {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: var(--sp-6);
   padding: 2px 0; border: 0; background: none; cursor: pointer;
   font-family: inherit; font-size: .8em; color: var(--ink-soft);
 }
@@ -6727,7 +6877,7 @@ html, body { overflow-x: clip; }
    教材の中は3つのままなので、**見た目は1px も変わらない**(撮り比べで確認) */
 .qr-peek {
   display: flex; align-items: center; justify-content: center;
-  flex-wrap: wrap; gap: 8px;
+  flex-wrap: wrap; gap: var(--sp-8);
 }
 
 /* ── 発行した直後の教材(2026-09 利用者の指定)────────────────────
@@ -6755,7 +6905,7 @@ html, body { overflow-x: clip; }
   margin-top: 20px;
   padding: 14px 16px;
   border: 1px solid var(--ng);
-  border-radius: 8px;
+  border-radius: var(--r-8);
   background: var(--ng-bg);
 }
 .erase-box .field-label { margin-top: 0; color: var(--ng); }
@@ -6772,7 +6922,7 @@ html, body { overflow-x: clip; }
    やり切ったことを伝える1行と、**続けたい人のためのボタン**を
    1つのかたまりにする(ばらけると、断りだけが目に入る)。 */
 .wb-again {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-10);
   margin-top: 12px;
 }
 .wb-again .card-hint { margin: 0; max-width: 34em; }
@@ -6800,9 +6950,9 @@ html, body { overflow-x: clip; }
 /* 調子のプルダウンと「添削してもらう」は同じ行。**折り返しは許す**
    (調子の名前は長く、狭い画面では1行に入らない) */
 .writing-tools {
-  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px;
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-8) var(--sp-12);
 }
-.writing-tone { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 14rem; }
+.writing-tone { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; flex: 1 1 14rem; }
 .writing-tone > span { font-size: 0.78em; color: var(--ink-soft, var(--text-secondary)); }
 .writing-tone select { max-width: 100%; }
 .writing-note { margin: 8px 0 0; }
@@ -6812,7 +6962,7 @@ html, body { overflow-x: clip; }
   margin-top: 12px;
   padding: 12px 14px;
   border: 1px solid var(--qa-line, var(--border));
-  border-radius: 8px;
+  border-radius: var(--r-8);
   background: var(--qa-bg, var(--surface-2));
 }
 /* **できていたところを先に出す。** 責めない(「まだ」を赤くしないのと同じ) */
@@ -6820,7 +6970,7 @@ html, body { overflow-x: clip; }
   margin: 0 0 10px;
   padding: 8px 10px;
   border-left: 4px solid var(--ok);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--r-6) var(--r-6) 0;
   background: var(--ok-bg, transparent);
   font-size: 0.92em;
 }
@@ -6832,13 +6982,13 @@ html, body { overflow-x: clip; }
 }
 .writing-head:first-child { margin-top: 0; }
 
-.writing-sentences { margin: 0; padding-left: 1.4em; display: grid; gap: 10px; }
+.writing-sentences { margin: 0; padding-left: 1.4em; display: grid; gap: var(--sp-10); }
 .writing-sentences > li { margin: 0; }
 .writing-en { line-height: 1.7; }
 .writing-ja { font-size: 0.86em; color: var(--ink-soft, var(--text-secondary)); }
-.writing-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.writing-row { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: 4px; }
 
-.writing-notes { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; }
+.writing-notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--sp-8); }
 .writing-notes > li { margin: 0; }
 .writing-diff { font-size: 0.9em; }
 /* **色だけに頼らない。** 消した側には取り消し線、直した側には下線 */
@@ -6846,9 +6996,9 @@ html, body { overflow-x: clip; }
 .writing-after { color: var(--ok); text-decoration: underline; }
 .writing-why { font-size: 0.86em; color: var(--ink-soft, var(--text-secondary)); }
 
-.writing-phrases { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.writing-phrases { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--sp-6); }
 .writing-phrases > li {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-10);
 }
 .writing-phrase-en { font-weight: 600; }
 .writing-phrase-ja { font-size: 0.86em; color: var(--ink-soft, var(--text-secondary)); }
