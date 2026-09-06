@@ -8,25 +8,26 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   23行の表が出ます。「⬜ まだです」があれば、その行に書いてあるファイルを
---   貼れば、そこがそろいます。
---   **「⬜ まだです」が2つ以上あるときは、まとめた1つを貼れば済みます。**
---     0026〜0031 … supabase/apply/pending_2026-09-01g.sql(まとめて)
---     0034〜0040 … supabase/apply/pending_2026-09-04.sql(まとめて)
+--   27行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
---   1つずつ貼りたいときは、こちら。
+--   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
+--   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
+--
+--     https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/
+--     ↑ のうしろに、下のファイル名をつなげると開けます。
+--
+--   **0041〜0045 のどれかが「まだです」なら、まとめた1つで済みます。**
+--     supabase/apply/pending_matome.sql   ← これ1つで 0041〜0045 が全部入ります
+--
+--   それより古いところが「まだです」のときは、こちら。
 --     0013〜0023 … supabase/apply/pending_2026-08-29.sql
 --     0024       … supabase/apply/pending_2026-08-31.sql
 --     0025       … supabase/apply/pending_2026-08-31b.sql
---     0026       … supabase/apply/pending_2026-09-01.sql
---     0027       … supabase/apply/pending_2026-09-01b.sql
---     0028       … supabase/apply/pending_2026-09-01c.sql
---     0029       … supabase/apply/pending_2026-09-01d.sql
---     0030       … supabase/apply/pending_2026-09-01e.sql
---     0031       … supabase/apply/pending_2026-09-01f.sql
+--     0026〜0031 … supabase/apply/pending_2026-09-01g.sql(まとめて)
 --     0032       … supabase/apply/pending_2026-09-02.sql
---     0034〜0040 … supabase/apply/pending_2026-09-04.sql
---     0041       … supabase/apply/pending_2026-09-05.sql
+--     0034〜0040 … supabase/apply/pending_2026-09-04.sql(まとめて)
+--
+--   どのファイルも、**何度貼っても安全です。**
 -- ============================================================================
 
 select 何が要るか, case when 済 then '✅ もう入っています' else '⬜ まだです' end as 状態
@@ -98,6 +99,19 @@ from (
               and pg_get_function_result(oid) like '%learn_streak%'), 21
   union all select '0040 Quick Response の復習',
     exists (select 1 from pg_tables where tablename = 'qr_reviews'), 22
-  union all select '0041 ゲストの記録を、まとめて消せるようにする',
+  union all select '0041 ゲストの記録を、まとめて消せるようにする(pending_matome.sql)',
     exists (select 1 from pg_proc where proname = 'erase_learner'), 23
+  union all select '0042 続けた記録(Quick Response)と、週の目標(pending_matome.sql)',
+    exists (select 1 from pg_tables where tablename = 'weekly_goals'), 24
+  union all select '0043 教材の種類に「Speech練習」を足す(pending_matome.sql)',
+    exists (select 1 from pg_constraint
+            where conname = 'materials_kind_check'
+              and pg_get_constraintdef(oid) like '%speech%'), 25
+  union all select '0044 管理者は、どの教材でも消せる(pending_matome.sql)',
+    exists (select 1 from pg_policies
+            where schemaname = 'public' and tablename = 'materials' and cmd = 'DELETE'), 26
+  union all select '0045 演習の種類に「想定される質問」を足す(pending_matome.sql)',
+    exists (select 1 from pg_constraint
+            where conname = 'material_sections_type_check'
+              and pg_get_constraintdef(oid) like '%audience_qa%'), 27
 ) t order by 順;

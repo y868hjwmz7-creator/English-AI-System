@@ -182,5 +182,55 @@ if [ "$ng" -ne 0 ]; then
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# **利用者が自分で見る `check.sql` も、ここで毎回まわす。**
+#
+#   あちらは「いま何が入っていて、何がまだか」を利用者が確かめるためのもの。
+#   移行を足したのに項目を足し忘れると、**本当は足りないのに「全部 ✅」**と
+#   出る。いちばん悪い壊れ方である(実際 0042〜0045 のあいだ、そうなっていた)。
+#
+#   ①そろった DB … 全部 ✅ になるか(項目の書き方が合っているか)
+#   ②0040 までの DB に、まとめた1つを貼る … 全部 ✅ になるか
+#     (**まとめたファイルが、本当に 0041 以降を全部含んでいるか**)
+# ---------------------------------------------------------------------------
+check_all_green() {    # check_all_green <DB名> <見出し>
+  local db=$1 title=$2 out
+  out=$(su postgres -c "psql -v ON_ERROR_STOP=1 -d $db -tA -f supabase/apply/check.sql" 2>&1) || {
+    printf '%s\n' "$out"; echo "❌ check.sql が実行できませんでした($title)"; exit 1; }
+  local ng total
+  ng=$(printf '%s\n' "$out" | grep -c 'まだです' || true)
+  total=$(printf '%s\n' "$out" | grep -c '|' || true)
+  echo "  $title … $total 件 / まだのもの $ng 件"
+  if [ "$ng" -ne 0 ]; then
+    printf '%s\n' "$out" | grep 'まだです'
+    echo "❌ check.sql に「まだです」が残りました($title)"
+    exit 1
+  fi
+}
+
+echo
+echo "▶ 利用者が見る確認 SQL(check.sql)"
+db="${DB}_check"
+su postgres -c "psql -q -c 'drop database if exists $db;'"
+su postgres -c "psql -q -c 'create database $db template $DB;'"
+check_all_green "$db" "そろった DB"
+su postgres -c "psql -q -c 'drop database if exists $db;'"
+
+echo
+echo "▶ まとめた1つ(pending_matome.sql)だけで、0041 以降がそろうか"
+db="${DB}_matome"
+su postgres -c "psql -q -c 'drop database if exists $db;'"
+su postgres -c "psql -q -c 'create database $db;'"
+run "-d $db -f supabase/test/supabase_stub.sql"
+for f in supabase/migrations/*.sql; do
+  case "$(basename "$f")" in
+    004[1-9]_*|00[5-9][0-9]_*|0[1-9][0-9][0-9]_*) continue ;;
+  esac
+  run "-d $db -f $f"
+done
+run "-d $db -f supabase/apply/pending_matome.sql"
+check_all_green "$db" "0040 まで + まとめた1つ"
+su postgres -c "psql -q -c 'drop database if exists $db;'"
+
 echo
 echo "✅ 検証はすべて意図どおりです"
