@@ -1198,5 +1198,81 @@ function fakeMp3({
   }
 }
 
+/**
+ * ============================================================================
+ * ⑪ **直ったら、知らせを引っ込める**(2026-09 実機・利用者の指摘)
+ *
+ *   > そして、音声がちゃんと作られているのにいまだにこの表示が
+ *   > 消えないです。
+ *
+ *   知らせは**出しっぱなし**だった。一度でも失敗すると、そのあと
+ *   音声が作れるようになっても ✕ を押すまで居座る。
+ *
+ *   しかも**1本にまとめられなかっただけ**のときにまで
+ *   「読み上げ音声を作れませんでした。端末の声で鳴らしています。」と
+ *   出していた。**どちらも本当ではない** —— 段落ごとの音声は作られるし、
+ *   端末の声にも落ちていない。1本にできないときは
+ *   **黙って今までの形に落ちる**というのが、もともとの決まりである。
+ * ============================================================================
+ */
+{
+  console.log('\n▶ 音声の知らせは、直ったら引っ込む')
+
+  const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+
+  if (!/const clearDetail = \(\) => \{/.test(clips)) ng('知らせを引っ込める道が無い')
+  else ok('知らせを引っ込める道がある')
+
+  /* **作れたら引っ込める。** 窓口が URL を返した時点で、
+     「作れませんでした」はもう本当ではない */
+  if (!/if \(body\.url\) \{ clearDetail\(\);/.test(clips)) {
+    ng('音声を作れても、知らせを引っ込めていない')
+  } else ok('窓口が音声を返したら、知らせを引っ込める')
+  if (!/wholeNote = null\n\s*clearDetail\(\)/.test(clips)) {
+    ng('1本にまとめられても、知らせを引っ込めていない')
+  } else ok('1本にまとめられたら、知らせを引っ込める')
+
+  /* **「窓口が古い」だけは残す。** 古くても音は鳴るので、
+     引っ込めると永久に気づけない(だから版を返させるようにした) */
+  if (!/const staleNote = \(\) => \(clipFnStale\(\)/.test(clips)) {
+    ng('「窓口が古い」を1か所で作っていない')
+  } else if (!/const keep = staleNote\(\)/.test(clips)) {
+    ng('引っ込めるときに「窓口が古い」まで消している')
+  } else ok('「窓口が古い」だけは残る(音は鳴るので、言わないと気づけない)')
+
+  /* **1本にできなかっただけで「端末の声」と言わない。**
+     `FAILED` を添えてよいのは、本当に MP3 を作れなかったときだけ */
+  {
+    const from = clips.indexOf('export async function wholeClip')
+    const to = clips.indexOf('export function prefetchClip', from)
+    const body = from >= 0 && to > from ? clips.slice(from, to) : ''
+    if (!body) ng('1本にまとめるところが見つからない')
+    else if (/FAILED/.test(body)) {
+      ng('1本にできないだけで「端末の声で鳴らしています」と出している',
+        '段落ごとの音声は作られるので、どちらも本当ではない')
+    } else if (/setDetail\(/.test(body)) {
+      ng('1本にできないだけで、画面に知らせを出している',
+        '黙って今までの形に落ちる、が決まりである(CLAUDE.md)')
+    } else ok('1本にできないときは黙って落ちる(理由は支度の帯が出す)')
+  }
+
+  /* **画面が `null` を受け取って消しているか。**
+     以前は `if (!detail) return` で捨てていたので、引っ込められなかった */
+  if (/onClipTrouble\(\(detail\) => \{\s*\n\s*if \(!detail\) return/.test(app)) {
+    ng('画面が「直った」の知らせを捨てている')
+  } else if (!/setClipNote\(detail \? String\(detail\) : null\)/.test(app)) {
+    ng('画面が `null` で知らせを消していない')
+  } else ok('画面は「直った」を受け取って、知らせを消す')
+
+  /* 支度の帯は、これまでどおり理由まで出す(**出す場所はそちら**) */
+  {
+    const prep = readFileSync(new URL('../src/lib/prepareJob.js', import.meta.url), 'utf8')
+    if (!/t\.note \? ` — \$\{t\.note\}` : ''/.test(prep)) {
+      ng('支度の帯が、用意できなかった理由を出していない')
+    } else ok('用意できなかった理由は、支度の帯が出す')
+  }
+}
+
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

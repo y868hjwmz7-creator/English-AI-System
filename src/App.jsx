@@ -111,10 +111,13 @@ export default function App() {
    */
   const [clipNote, setClipNote] = useState(null)
   useEffect(() => onClipTrouble((detail) => {
-    if (!detail) return
     const role = viewerRoleOf()
     if (role !== 'trainer' && role !== 'owner') return
-    setClipNote(String(detail))
+    /* **`null` は「直った」という知らせである**(2026-09 実機・利用者の指摘)。
+       以前はここで捨てていたので、一度出た知らせが
+       **音声が作れるようになっても居座っていた。**
+       「音声がちゃんと作られているのにいまだにこの表示が消えない」 */
+    setClipNote(detail ? String(detail) : null)
   }), [])
   const [noticeOpen, setNoticeOpen] = useState(loadNoticeOpen)
   const toggleNav = () => setNavOpen((v) => {

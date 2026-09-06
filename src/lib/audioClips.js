@@ -206,16 +206,26 @@ export const clipFnRev = () => fnRev
 /** 置き直しが要るか。**まだ分からないうちは false**(既定は騒がない) */
 export const clipFnStale = () => fnRev !== null && fnRev < NEED_FN_REV
 
+/**
+ * 窓口が古いことを伝える1文。古くなければ `null`。
+ *
+ * **音声を作れたときも、これだけは残す。** 古い窓口でも音は鳴るので
+ * (既定の設定で作られる)、引っ込めると**永久に気づけない。**
+ */
+const staleNote = () => (clipFnStale()
+  ? '読み上げの窓口(speak)が古いため、ElevenLabs の v3 と、'
+    + '声の細かい指定(訛りの強さ・雑音の出やすさ)が反映されていません。'
+    + `いま置かれているのは ${fnRev}、必要なのは ${NEED_FN_REV} 以降です。`
+    + ' Supabase → Edge Functions → speak を置き直してください。'
+  : null)
+
 const noteFnRev = (rev) => {
   const got = typeof rev === 'string' && rev ? rev : '(版なし)'
   if (got === fnRev) return
   fnRev = got
-  if (!clipFnStale()) return
   /* **黙って落とさない。** 音は鳴ってしまうので、言わないと気づけない */
-  setDetail('読み上げの窓口(speak)が古いため、ElevenLabs の v3 と、'
-    + '声の細かい指定(訛りの強さ・雑音の出やすさ)が反映されていません。'
-    + `いま置かれているのは ${got}、必要なのは ${NEED_FN_REV} 以降です。`
-    + ' Supabase → Edge Functions → speak を置き直してください。')
+  const note = staleNote()
+  if (note) setDetail(note)
 }
 
 /**
@@ -289,6 +299,30 @@ const setDetail = (d) => {
   lastDetail = d
   // **知らせで画面を落とさない。** 伝えられなくても、音は鳴る
   troubleListeners.forEach((fn) => { try { fn(d) } catch { /* 無視する */ } })
+}
+
+/**
+ * **直ったら、知らせを引っ込める**(2026-09 実機・利用者の指摘)。
+ *
+ *   > そして、音声がちゃんと作られているのにいまだにこの表示が消えないです。
+ *
+ * 知らせは**出しっぱなし**だった。一度でも失敗すると、そのあと
+ * 音声がちゃんと作られるようになっても、✕ を押すまで居座る。
+ * **利用者から見れば「直したのに直っていない」にしか見えない。**
+ *
+ * **成功と失敗を同じ見た目で終わらせない**(CLAUDE.md)のは、
+ * 裏返せば**直ったことも同じだけはっきり見せる**ということである。
+ * 窓口が音声を返せた時点で、その知らせはもう本当ではない。
+ *
+ * **`null` を送る。** 受け取る画面(`App.jsx`)がそれで消す。
+ *
+ * **ただし「窓口が古い」だけは残す。** あちらは音が鳴っても本当のままで、
+ * 引っ込めると**永久に気づけない**(だから版を返させるようにした)。
+ */
+const clearDetail = () => {
+  const keep = staleNote()
+  if (lastDetail === keep) return
+  setDetail(keep)
 }
 
 /**
@@ -421,7 +455,9 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
     noteFnRev(body.fnRev)
     // **`cached` も返す。** 作り直しを頼んだのに「もうある」で返ってきたら、
     // それは**窓口がまだ古い**という意味である(下の `remakeClip`)
-    if (body.url) return { url: body.url, cached: !!body.cached }
+    /* **作れたら、前の知らせを引っ込める。** 一度失敗しても、
+       次に作れたのなら「作れませんでした」はもう本当ではない */
+    if (body.url) { clearDetail(); return { url: body.url, cached: !!body.cached } }
     if (body.fatal) stopped = true
     /* **知らせは、それだけで意味が通る1文にする**(2026-09 実機)。
        画面の側に「作れませんでした」と決め打ちしていたので、
@@ -607,9 +643,8 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
       const out = spans ? { url: mp3, spans, alignment: had.alignment } : null
       if (!out) {
         /* **時刻が当てはまらない。** 区切れないものを当てずっぽうで
-           区切ると、別の発言の場所を指す。1本にするのはあきらめる */
-        setDetail('読み上げ音声の時刻が本文と合いません。'
-          + '発言ごとの音声で鳴らします(教材を作り直すと直ることがあります)。')
+           区切ると、別の発言の場所を指す。1本にするのはあきらめる。
+           **知らせは出さない**(下記・段落ごとの音声でちゃんと鳴る) */
         wholeGaveUp.add(mark)
         wholeNote = '控えた時刻が本文と合いません'
         return null
@@ -637,8 +672,6 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
       /* **黙って落ちない。** ここで諦めても、呼んだ側は
          これまでどおり発言ごとに鳴らすので、音は出る */
       wholeNote = res.detail || error?.message || '窓口が音声を返しませんでした'
-      if (res.detail) setDetail(`${FAILED} ${res.detail}`)
-      else if (error) setDetail(`${FAILED} ${error.message}`)
       wholeGaveUp.add(mark)
       return null
     }
@@ -646,7 +679,6 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     const spans = spansOf(made?.alignment, body)
     if (!spans) {
       wholeNote = '読み上げ音声の時刻を読めませんでした'
-      setDetail(`${FAILED} ${wholeNote}。`)
       wholeGaveUp.add(mark)
       return null
     }
@@ -657,10 +689,10 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     wholeCache.set(mark, out)
     wholeGaveUp.delete(mark)
     wholeNote = null
+    clearDetail()
     return out
   } catch (e) {
     wholeNote = `窓口につながりません(${e?.message ?? e})`
-    setDetail(`${FAILED} 読み上げ音声の${wholeNote}。`)
     wholeGaveUp.add(mark)
     return null
   }
