@@ -28,6 +28,7 @@ import SessionResult from './components/SessionResult.jsx'
 import CollectRows from './components/CollectRows.jsx'
 import GoalBar from './components/GoalBar.jsx'
 import MaterialForm from './components/MaterialForm.jsx'
+import Wordbook from './components/Wordbook.jsx'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
 
@@ -100,10 +101,17 @@ const FORM = (
   </div>
 )
 
+/* 単語帳の集中モードを、実際に描いて確かめるための入り口(2026-09)。
+   語の中身は Playwright が窓口の応答を差し替えて渡す
+   (**本物の部品と本物の CSS で測る**。写した HTML では測らない) */
+const WORDBOOK = <div className="app-main"><Wordbook learnerId="g1" learnerName="Airi" /></div>
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'form'
-    ? FORM
-    : q.get('screen') === 'result'
-      ? RESULT
-      : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
+  q.get('screen') === 'wordbook'
+    ? WORDBOOK
+    : q.get('screen') === 'form'
+      ? FORM
+      : q.get('screen') === 'result'
+        ? RESULT
+        : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
 )

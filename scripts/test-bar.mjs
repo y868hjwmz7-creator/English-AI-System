@@ -123,6 +123,17 @@ export default defineConfig({
   server: { port: ${PORT}, strictPort: true },
 })
 `)
+/* **仮の接続先を置く**(2026-09)。単語帳の集中モードは、語が1つも
+   無いと開かない。`supabase` が `null` だと `loadMyWordbook()` は
+   何も返さないので、**形だけ**の接続先を作っておく。
+   実際の通信は Playwright が差し替えるので、外へは1度も出ない
+   (**この環境から Supabase へは、そもそも届かない**)。
+   ほかの検証は窓口を呼ばないので、これで見え方は変わらない */
+writeFileSync(join(dir, '.env'), [
+  'VITE_SUPABASE_URL=https://example.invalid',
+  'VITE_SUPABASE_ANON_KEY=sb_publishable_dummy_for_test',
+].join('\n'))
+
 writeFileSync(join(ROOT, '__bar.html'), `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -418,6 +429,92 @@ for (const [label, want] of Object.entries(WANT)) {
   } else if (!/html,\s*body\s*\{\s*overflow-x:\s*clip/.test(css)) {
     ng('`html, body { overflow-x: clip }` が無い', 'ページが横に送れて、左右に揺れる')
   } else ok('`html, body` は `clip`(送れる箱を作らない)')
+}
+
+/* ── **単語帳の集中モードは、カードで画面を使い切る**(2026-09 利用者の指定)──
+ *
+ *   > もっと大きく画面を使ってください。出会った英文を押した際に
+ *   > いちいちスクロールしなければいけない回数が減るからです
+ *
+ *   直す前は iPhone(390×844)でカードが **311px**(画面の 1/3 強)しか
+ *   使っておらず、出題の枠は **144px** だった。だから「出会った文」を
+ *   開くと、その狭い枠の中で送ることになっていた。
+ *
+ *   ここが元に戻っても `npm run lint` にも `npm run build` にも
+ *   引っかからない。**開いてみるまで分からない**ので、実際に描いて測る。
+ *   語の中身は窓口の応答を差し替えて渡す(この環境から Supabase へは届かない)。
+ */
+{
+  const WORDS = Array.from({ length: 12 }, (_, i) => ({
+    word_norm: `w${i}`, word: `word${i}`, kind: 'phrase', pos: '熟語',
+    status: 'learning', box: 2, learn_streak: 4,
+    due_on: '2020-01-01', added_at: '2026-09-01',
+    meaning_ja: `意味${i}`,
+    seen_in: 'Not knowing the answer, the new engineer stayed quiet during the'
+      + ' whole review meeting, and later admitted that she had been too nervous'
+      + ' to ask anything at all.',
+    seen_in_ja: '答えを知らなかったので、その新人は会議のあいだ黙っていた。',
+    material_id: null, material_title: null, industry: 'it', topic: null,
+  }))
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  await page.route('**/rest/v1/**', (route) => {
+    const u = route.request().url()
+    let body = []
+    if (u.includes('review_words')) body = WORDS
+    if (u.includes('vocab_week')) body = [{ days: 3, answered: 20, correct: 15, weeks: 5 }]
+    if (u.includes('weekly_goal')) body = [{ words_goal: 0, words_done: 0, sent_goal: 0, sent_done: 0 }]
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
+  }))
+
+  for (const [what, w, h] of [['スマホ', 390, 844], ['320px', 320, 568]]) {
+    await page.setViewportSize({ width: w, height: h })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
+      { waitUntil: 'networkidle' })
+    /* **入口をもう1つ挟まない**(CLAUDE.md)ので、語がそろえば
+       集中モードは**開いた瞬間から出る。** 押すものは無い */
+    try {
+      await page.waitForSelector('.wbfocus .wordcard', { timeout: 8000 })
+    } catch {
+      ng(`${what} … 集中モードが開かない`, '語を読めていないか、開く道が変わった')
+      continue
+    }
+    // 「出会った文」を開いた状態で測る(いちばん背が高くなる形)
+    for (const btn of await page.$$('button')) {
+      if (((await btn.textContent()) ?? '').includes('出会った文')) { await btn.click(); break }
+    }
+    await page.waitForTimeout(300)
+
+    const m = await page.evaluate(() => {
+      const box = (s) => document.querySelector(s)
+      const card = box('.wbfocus .wordcard')
+      const ans = box('.wordcard-answers')
+      const body = box('.focus-body')
+      return {
+        画面: window.innerHeight,
+        カード: card ? Math.round(card.getBoundingClientRect().height) : 0,
+        答えの下端: ans ? Math.round(ans.getBoundingClientRect().bottom) : null,
+        本体を送るか: body ? body.scrollHeight > body.clientHeight + 1 : null,
+        横: document.documentElement.scrollWidth > window.innerWidth,
+      }
+    })
+    // **画面の半分以上**を使っていること(直す前は 1/3 強しか無かった)
+    if (m.カード < m.画面 * 0.5) {
+      ng(`${what} … カードが画面の半分も使っていない(${m.カード} / ${m.画面}px)`,
+        '`.wbfocus .wordcard` を伸ばす指定が外れている')
+    } else if (m.答えの下端 !== null && m.答えの下端 > m.画面) {
+      ng(`${what} … 答えの行が画面の外に出ている(${m.答えの下端} > ${m.画面})`)
+    } else if (m.本体を送るか) {
+      ng(`${what} … 集中モードなのに画面を送ることになっている`)
+    } else if (m.横) {
+      ng(`${what} … 横にはみ出している`)
+    } else {
+      ok(`${what} … カード ${m.カード} / ${m.画面}px・答えは画面の中・送らない`)
+    }
+  }
+  await page.close()
 }
 
 await browser.close()
