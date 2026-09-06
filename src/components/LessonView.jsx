@@ -51,7 +51,6 @@ import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
 import { hasQuickResponse } from '../lib/quickResponse.js'
 import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
-import SentenceSkip from './SentenceSkip.jsx'
 import AnswerEn from './AnswerEn.jsx'
 import WritingAnswer from './WritingAnswer.jsx'
 import PhraseChips from './PhraseChips.jsx'
@@ -64,7 +63,6 @@ import { PLACES, PLACE_TO, nextPlace, placeFor } from '../lib/playerPlace.js'
 import useDragBox from '../lib/dragBox.js'
 
 /** 本文のときだけ ◀ ▶ で挟む。**呼ぶ側に条件を書き散らさない** */
-const withSkip = (on, node) => (on ? <SentenceSkip>{node}</SentenceSkip> : node)
 
 const SIZES = [
   { id: 'm', label: '標準' },
@@ -399,9 +397,10 @@ export default function LessonView({
    *   > 出ている状態をデフォルトにしましょう。
    *   > 各段落にプレーヤーがある始めの画面は少しうるさいです
    *
-   * 段落ごとと操作盤は**入れ替え**なので(下の `floating`)、
-   * 閉じたまま始めると**段落の数だけプレーヤーが並ぶ。**
-   * 記事は6段落あるので、開いた瞬間の画面が騒がしくなる。
+   * **段落ごとの Listen は 2026-09 に廃止した**(利用者の指定
+   * 「段落ごとの listen も全てのデバイスで廃止にしましょう」)ので、
+   * 閉じたままだと**鳴らす道が画面から消える。** 開けておく。
+   * **行き止まりにはならない** —— 上の帯のスイッチで開き直せる。
    *
    * **`true` にしても、広い画面には効かない。** あちらは `spot` が
    * 決めており、この値は `!fitsInBar` のときしか見ないためである。
@@ -460,15 +459,17 @@ export default function LessonView({
      書き込みを終えれば、覚えている置き場所へ戻る(値は書き換えない)。 */
   /**
    * 操作盤が**紙の外(画面の下の黒帯、または浮いた錠剤)に出ているか。**
-   * ここが真なら、段落ごとのプレーヤーは出さない(入れ替えである)。
    *
    * 狭い窓では、上の帯のスイッチ(`.player-launch`)で開け閉めする。
    * 書き込みのあいだは、帯がまるごと道具に入れ替わるので**必ず出す。**
+   *
+   * **もとは「段落ごとのプレーヤーとの入れ替え」も兼ねていた**が、
+   * 段落ごとは 2026-09 に廃止した(利用者の指定)。
+   * いまは**操作盤をどこに描くか**だけを決める。
    */
   const outside = spot !== 'bar' && (fitsInBar || floatOpen || pen)
   /** 書き込み中に上の帯へ入れていたら、行き場が無くなる。**画面の下へ逃がす** */
   const shownSpot = pen && spot === 'bar' ? 'dock' : spot
-  const floating = outside || (pen && spot === 'bar')
 
   /* ── 浮かせた箱は、つまんで動かせる(2026-09 利用者の指定)──────────
        > PCの画面でもフロートにした時は端っこにドラッグできる部分を作って
@@ -1746,10 +1747,26 @@ export default function LessonView({
                       そこには「Listen」と書いてあり、押すと**二重に鳴り出す。**
 
                       押したら通しごと止める。**止める場所を探させない** */}
-                  {/* **右下に浮いているあいだは出さない**(2026-09 利用者の指定)。
-                      操作盤がすぐ手元にあるので、同じことをするものを
-                      段落の数だけ並べない(記事なら6組になる) */}
-                  {secIsPassage && floating ? null
+                  {/* ── **段落ごとの Listen は、どの端末でも出さない**
+                        (2026-09 実機・利用者の指定)
+
+                        > 段落ごとの listen も全てのデバイスで廃止にしましょう
+
+                      もとは**操作盤との入れ替え**だった(浮いていれば隠し、
+                      上の帯にしまってあれば出す)。ところが記事は6段落・
+                      会話は14発言あるので、**同じものが6組も14組も並ぶ。**
+                      操作盤の「◀ 3 / 6 段落 ▶」で同じことができるので、
+                      **押すところを1か所に絞る。**
+
+                      **行き止まりにはならない。** 段落を選ぶ道は操作盤に
+                      残っており、狭い画面で操作盤を閉じても、
+                      上の帯のスイッチでいつでも開き直せる。
+
+                      **本文以外(内容の理解・語句・単語・フレーズ)は
+                      これまでどおり。** あちらは「段落」ではなく、
+                      1問ずつ聴き比べるためのものである
+                      (言われた場所だけを直す)。 */}
+                  {secIsPassage ? null
                     : secType?.audioFrom && it[secType.audioFrom]
                     && playingAll && speakingKey === k(it, i) ? (
                     /* **止めるときも、錠剤のまま**(2026-09 実機・利用者の指定)。
@@ -1764,34 +1781,30 @@ export default function LessonView({
                        (聞き逃した文へ戻る・先へ飛ばす)。
                        **鳴らす前と後で、形を変えない。** 変わるのは
                        中の言葉(Listen ⇄ Stop)だけにする */
-                    withSkip(secIsPassage, (
-                      <button type="button" className="btn btn--small"
-                              onClick={() => { stopAll(); setReadingAt(null) }}>
-                        <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
-                      </button>
-                    ))
+                    <button type="button" className="btn btn--small"
+                            onClick={() => { stopAll(); setReadingAt(null) }}>
+                      <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
+                    </button>
                   ) : secType?.audioFrom && it[secType.audioFrom] && (
-                    /* **三角を添えるのは本文だけ**(2026-09)。
-                       内容の理解や語句は1本の音声に入っていないので、
-                       文で送る先が無い(効かない操作を見せない) */
-                    withSkip(secIsPassage, (
-                      <SpeakButton
-                        text={it[secType.audioFrom]}
-                        voice={voiceFor(secCast, it.speaker)}
-                        clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
-                        tier={secTier}
-                        rate={rateOf(rateId)}
-                        /* **1本の中の、その区間だけを鳴らす**
-                           (2026-09 利用者の指定で統一)。本文の演習でだけ
-                           渡す —— 内容の理解や語句は1本に入っていない */
-                        whole={wholeSliceOf(sec, secClipCast, soloVoice, it)}
-                        onPlayingChange={(on) => {
-                          setSpeakingKey(on ? k(it, i) : null)
-                          if (!on) setReadingAt(null)
-                        }}
-                        onWord={(w) => setReadingAt(w ? w.charIndex : null)}
-                      />
-                    ))
+                    /* **三角は添えない。** ここへ来るのは本文以外
+                       (内容の理解・語句・単語・フレーズ)だけで、
+                       1本の音声に入っていないので文で送る先が無い
+                       (効かない操作を見せない) */
+                    <SpeakButton
+                      text={it[secType.audioFrom]}
+                      voice={voiceFor(secCast, it.speaker)}
+                      clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
+                      tier={secTier}
+                      rate={rateOf(rateId)}
+                      /* **区間は渡らない。** 本文以外は1本にまとめた
+                         音声に入っていないので、必ず null が返る */
+                      whole={wholeSliceOf(sec, secClipCast, soloVoice, it)}
+                      onPlayingChange={(on) => {
+                        setSpeakingKey(on ? k(it, i) : null)
+                        if (!on) setReadingAt(null)
+                      }}
+                      onWord={(w) => setReadingAt(w ? w.charIndex : null)}
+                    />
                   )}
 
                   {/* 解答は「全部出す」と「この問だけ出す」の両方から開ける。

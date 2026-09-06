@@ -323,12 +323,22 @@ for (const [label, want] of Object.entries(WANT)) {
     }
   }
 
+  /** 設問ごとに出ている Listen の数 */
+  const listens = () => page.evaluate(() => [...document.querySelectorAll('.lesson-items button')]
+    .filter((b) => /^(Listen|Stop)/.test(b.textContent.trim())).length)
+
   // ① 英文和訳(`prompt_en` を読む)。**広い画面では帯の中に出る**
   {
     const m = await seen()
     if (!m.bar) ng('文型ドリル(英文和訳)で、上の帯に操作盤が出ていない')
     else if (!/3/.test(m.at ?? '')) ng('問数が出ていない', `「${m.at}」`)
     else ok(`英文和訳 … 上の帯に操作盤が出る(${m.at})`)
+
+    /* **本文以外の Listen は残す**(2026-09 利用者の指定は「段落ごと」だけ)。
+       ここが 0 になったら、削りすぎている */
+    const n = await listens()
+    if (!n) ng('本文以外(設問ごと)の Listen まで消えている', '言われたのは段落ごとだけ')
+    else ok(`英文和訳 … 設問ごとの Listen は残っている(${n} 個)`)
   }
 
   // ② 和文英訳。**読むのは `answer`** —— `prompt_en` は無い
@@ -369,6 +379,44 @@ for (const [label, want] of Object.entries(WANT)) {
     const n = await page.$$eval('.sheet-float', (xs) => xs.length)
     if (n) ng('本文の無い教材に、右下の「集中モード」が出ている')
     else ok('文型ドリル … 右下に集中モードは出さない(読む本文が無い)')
+  }
+  await page.close()
+}
+
+/* ── **段落ごとの Listen は、どの端末でも出さない**(2026-09 利用者の指定)
+ *
+ *    > 段落ごとの listen も全てのデバイスで廃止にしましょう
+ *
+ *    もとは**操作盤との入れ替え**だった(浮いていれば隠し、上の帯に
+ *    しまってあれば出す)。ところが記事は6段落・会話は14発言あるので、
+ *    同じものが6組も14組も並ぶ。操作盤の「◀ 3 / 6 段落 ▶」で同じことが
+ *    できるので、**押すところを1か所に絞った。**
+ *
+ *    **出る側は上の文型ドリルで数えている**(設問ごとの Listen は残す)。
+ *    ここでは**出ない側**を、幅を変えて数える。
+ */
+{
+  const page = await browser.newPage({ viewport: { width: 1500, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(400)
+  console.log('\n── 段落ごとの Listen は、どの端末でも出さない ──')
+  for (const w of [1500, 1200, 900, 390]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(300)
+    const m = await page.evaluate(() => ({
+      /* 本文の各段落に付いていたもの。**言葉で数える**
+         (Listen / Stop のどちらの形でも拾う) */
+      段落: [...document.querySelectorAll('.lesson-items button')]
+        .filter((b) => /^(Listen|Stop)/.test(b.textContent.trim())).length,
+      /* **通しの読み上げは残す。** 上の「Listen (全体)」と操作盤は別物 */
+      全体: !!document.querySelector('.lesson-listen'),
+      操作盤: !!document.querySelector('.player'),
+    }))
+    if (m.段落) ng(`${w}px … 段落ごとの Listen が ${m.段落} 個 出ている`)
+    else if (!m.全体) ng(`${w}px … 「Listen (全体)」まで消えている`)
+    else if (!m.操作盤) ng(`${w}px … 操作盤が出ていない`, '鳴らす道が無くなる')
+    else ok(`${w}px … 段落ごとは0個・通しと操作盤は残っている`)
   }
   await page.close()
 }
