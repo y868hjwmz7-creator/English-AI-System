@@ -311,6 +311,7 @@ for (const [label, want] of Object.entries(WANT)) {
   const seen = () => page.evaluate(() => ({
     bar: !!document.querySelector('.player--bar'),
     float: !!document.querySelector('.player--float'),
+    dock: !!document.querySelector('.player--dock'),
     launch: !!document.querySelector('.player-launch'),
     at: document.querySelector('.player-at')?.textContent?.trim() ?? null,
   }))
@@ -343,7 +344,7 @@ for (const [label, want] of Object.entries(WANT)) {
   await go(1)
   {
     const m = await seen()
-    if (m.bar || m.float || m.launch) {
+    if (m.bar || m.float || m.dock || m.launch) {
       ng('誤り訂正で操作盤が出ている', '誤った英文を読み上げてしまう')
     } else ok('誤り訂正 … 操作盤そのものが出ない(効かない操作を見せない)')
   }
@@ -356,8 +357,10 @@ for (const [label, want] of Object.entries(WANT)) {
   {
     const m = await seen()
     if (!m.launch) ng('狭い画面の文型ドリルで、操作盤のスイッチが出ていない')
-    else if (!m.float) ng('狭い画面の文型ドリルで、右下の操作盤が開いていない')
-    else ok('狭い画面 … スイッチと右下の操作盤が出る')
+    /* **狭い画面の既定は「画面の下の黒帯」**(2026-09 利用者の指定)。
+       右下に浮く錠剤ではない —— 戻すと、ここが赤くなる */
+    else if (!m.dock) ng('狭い画面の文型ドリルで、画面の下の黒帯が出ていない')
+    else ok('狭い画面 … スイッチと画面の下の黒帯が出る')
   }
 
   /* ⑤ **集中モードは本文だけ。** ドリルには読む本文が無いので、
@@ -370,7 +373,7 @@ for (const [label, want] of Object.entries(WANT)) {
   await page.close()
 }
 
-/* ── **右下の操作盤は、絶対に1行**(2026-09 実機・利用者の指定)──────
+/* ── **狭い画面の操作盤は、絶対に1行**(2026-09 実機・利用者の指定)──────
  *
  *    > 再生プレーヤーが2行になるのは絶対にダメです
  *
@@ -405,13 +408,16 @@ for (const [label, want] of Object.entries(WANT)) {
       if (!on) return
       const st = document.createElement('style')
       st.id = 'eas-bigplayer'
-      st.textContent = '.player--float .btn, .player--float .player-at'
+      st.textContent = '.player--dock .btn, .player--dock .player-at,'
+        + ' .player--float .btn, .player--float .player-at'
         + ' { font-size: 16px !important }'
       document.head.appendChild(st)
     }, big)
     await page.waitForTimeout(180)
     const m = await page.evaluate(() => {
-      const p = document.querySelector('.player--float')
+      /* **既定は「画面の下の黒帯」**(2026-09 利用者の指定)。
+         浮かせているときは、そちらを測る */
+      const p = document.querySelector('.player--dock') ?? document.querySelector('.player--float')
       if (!p) return null
       const r = p.getBoundingClientRect()
       return {
@@ -421,13 +427,43 @@ for (const [label, want] of Object.entries(WANT)) {
       }
     })
     const 印 = big ? `${w}px(文字 1.25 倍)` : `${w}px`
-    if (!m) { ng(`${印} で右下の操作盤が出ていない`); continue }
+    if (!m) { ng(`${印} で操作盤が出ていない`); continue }
     if (m.h > 70) ng(`${印} で操作盤が2行になっている`, `高さ ${m.h}px(1行なら 50px ほど)`)
     else if (m.right > m.win) ng(`${印} で操作盤が画面からはみ出している`, `右端 ${m.right} > ${m.win}`)
     else if (m.spill) ng(`${印} で操作盤の中身があふれている`, 'くり返しの単位が画面の外へ切れる')
     else ok(`${印} … 操作盤は1行(${m.h}px)・あふれ無し`)
   }
   await page.evaluate(() => document.getElementById('eas-bigplayer')?.remove())
+
+  /* ── **浮かせる形も、狭い画面で1行に収まる**(2026-09 利用者の指定)
+         > パッドでもデフォルトは同じ仕様で、任意でフロート型にして
+         > 移動できるように
+
+       黒帯から1回押すと浮く。**つまみが出ること**も一緒に見る
+       (出ないと、動かす道が無い) */
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.waitForTimeout(200)
+  await page.click('.player-place')
+  await page.waitForTimeout(300)
+  {
+    const m = await page.evaluate(() => {
+      const p = document.querySelector('.player--float')
+      if (!p) return null
+      const r = p.getBoundingClientRect()
+      return {
+        h: Math.round(r.height), right: Math.round(r.right), win: window.innerWidth,
+        grip: !!document.querySelector('.player-grip'),
+        dock: !!document.querySelector('.player--dock'),
+        spill: [p, ...p.children].some((b) => b.scrollWidth > b.clientWidth + 1),
+      }
+    })
+    if (!m) ng('狭い画面で、浮かせる形に切り替えられない')
+    else if (m.dock) ng('浮かせたのに、画面の下の黒帯も出ている', '同じものを2つ見せない')
+    else if (!m.grip) ng('浮かせたのに、つまみが出ていない', '動かす道が無い')
+    else if (m.h > 70) ng('浮かせた操作盤が2行になっている', `高さ ${m.h}px`)
+    else if (m.right > m.win || m.spill) ng('浮かせた操作盤があふれている')
+    else ok(`390px … 浮かせても1行(${m.h}px)・つまみあり`)
+  }
   await page.close()
 }
 

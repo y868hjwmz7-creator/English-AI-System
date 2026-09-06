@@ -60,6 +60,8 @@ import Stepper from './Stepper.jsx'
 import PlayerBar from './PlayerBar.jsx'
 import useBodyAudio from '../lib/useBodyAudio.js'
 import { FIT_STAGES, overWrapping, useFitRow } from '../lib/fitRow.js'
+import { PLACES, PLACE_TO, nextPlace, placeFor } from '../lib/playerPlace.js'
+import useDragBox from '../lib/dragBox.js'
 
 /** 本文のときだけ ◀ ▶ で挟む。**呼ぶ側に条件を書き散らさない** */
 const withSkip = (on, node) => (on ? <SentenceSkip>{node}</SentenceSkip> : node)
@@ -158,7 +160,7 @@ const PLAYER_KEY = 'eas.playerPlace'
 const loadPlace = () => {
   try {
     const v = window.localStorage.getItem(PLAYER_KEY)
-    return v === 'float' ? 'float' : 'bar'
+    return PLACES.includes(v) ? v : 'bar'
   } catch { return 'bar' }
 }
 const savePlace = (v) => {
@@ -411,7 +413,16 @@ export default function LessonView({
    * 狭い画面には切り替えのボタンを出していないので、
    * 右下のまま覚えていると**戻す道が無くなる**(行き止まりを作らない)。
    */
-  const spot = fitsInBar ? place : 'bar'
+  /**
+   * 実際にどこへ出すか。**判断は `placeFor()` 1か所**(`playerPlace.js`)。
+   *
+   * **狭い窓に「上の帯」は無い**(1380px より狭いと1行に収まらない)。
+   * そこでは**画面の下の黒帯**が既定で、浮かせることもできる
+   * (2026-09 利用者の指定「スマホ…画面下部に黒帯にした中に固定に。
+   * パッドでもデフォルトは同じ仕様で、任意でフロート型にして移動できる
+   * ように」)。
+   */
+  const spot = placeFor(place, fitsInBar)
   /**
    * **いま、操作盤が右下に浮いているか**(2026-09 利用者の指定)。
    *
@@ -439,7 +450,27 @@ export default function LessonView({
      いた操作盤は**そのまま消えていた。** 線を引きながら聴きたいのに、
      止める場所も送る場所も無くなる。**行き止まりを作らない。**
      書き込みを終えれば、覚えている置き場所へ戻る(値は書き換えない)。 */
-  const floating = pen || spot === 'float' || (!fitsInBar && floatOpen)
+  /**
+   * 操作盤が**紙の外(画面の下の黒帯、または浮いた錠剤)に出ているか。**
+   * ここが真なら、段落ごとのプレーヤーは出さない(入れ替えである)。
+   *
+   * 狭い窓では、上の帯のスイッチ(`.player-launch`)で開け閉めする。
+   * 書き込みのあいだは、帯がまるごと道具に入れ替わるので**必ず出す。**
+   */
+  const outside = spot !== 'bar' && (fitsInBar || floatOpen || pen)
+  /** 書き込み中に上の帯へ入れていたら、行き場が無くなる。**画面の下へ逃がす** */
+  const shownSpot = pen && spot === 'bar' ? 'dock' : spot
+  const floating = outside || (pen && spot === 'bar')
+
+  /* ── 浮かせた箱は、つまんで動かせる(2026-09 利用者の指定)──────────
+       > PCの画面でもフロートにした時は端っこにドラッグできる部分を作って
+       > 移動させれるようにしたいです
+
+     **動かすのは箱ぜんぶ**(`.sheet-floats`)。中には「集中モード」も
+     並んでいるので、操作盤だけを動かすと**別々に `fixed` で置く**ことに
+     なり、片方が消えたときにもう片方が飛ぶ(CLAUDE.md)。 */
+  const floatsRef = useRef(null)
+  const drag = useDragBox(floatsRef, { enabled: shownSpot === 'float' })
 
   /** 通しの読み上げを止める */
   const stopAll = player.stop
@@ -824,7 +855,11 @@ export default function LessonView({
   }
 
   return (
-    <div className="lesson" role="dialog" aria-label="セッションで使う表示">
+    /* **黒帯のぶん、紙の下に余白を足す**(下記の CSS)。
+       足さないと、いちばん下の段落が帯に隠れて読めない */
+    <div className={`lesson${
+      canPlayAll && outside && shownSpot === 'dock' && !run ? ' lesson--dock' : ''}`}
+         role="dialog" aria-label="セッションで使う表示">
       {/* 操作するところ。共有される側にも見えるが、紙の外に置く */}
       <div className={`lesson-bar no-print${pen ? ' is-inking' : ''}`} ref={barRef}>
         {/* ── 書き込みのあいだは、**帯をまるごと入れ替える** ──────
@@ -983,9 +1018,13 @@ export default function LessonView({
               足すと帯が2行に折り返し、紙がそのぶん狭くなる。
               そのときは、いつも見える行に**スイッチだけ**を置く
               (`.player-launch`)。 */}
-          {canPlayAll && spot === 'bar' && fitsInBar && (
+          {canPlayAll && shownSpot === 'bar' && fitsInBar && (
             <PlayerBar
-              place="bar" onPlace={(v) => { setPlace(v); savePlace(v) }}
+              place="bar"
+              placeNext={PLACE_TO[nextPlace(spot, fitsInBar)]}
+              onPlace={() => {
+                const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
+              }}
               playing={playingAll}
               label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
               at={playAt} total={playableAll.length}
@@ -1212,8 +1251,47 @@ export default function LessonView({
             (出るほうは `FocusReader` の `.focus-exit`)。
             通しの練習(6Steps / Quick Response)のあいだは出さない。
             あちらはあちらで下にボタンがあり、重なる */}
+        {/* ── 画面の下の黒帯(2026-09 利用者の指定)────────────────────
+              > いっそのこと画面の下部に黒帯にした中に固定にした方が
+              > スタイリッシュな気がします。パッドでもデフォルトは同じ仕様で
+
+            **右下に浮く錠剤ではなく、横いっぱいの帯にする。**
+            浮いた錠剤は場所が足りず、`useFitRow` で言葉を削って収めていた
+            (削るほど何のボタンか分からなくなる)。横いっぱいなら、
+            **削る理由がそもそも無い。**
+
+            **`.sheet-floats` の外に置く。** あちらは右下に固定した箱で、
+            こちらは画面の下いっぱいである。中に入れると幅を取り合う。 */}
+        {canPlayAll && outside && shownSpot === 'dock' && !run && (
+          <div className="player-dock no-print">
+            <PlayerBar
+              place="dock"
+              placeNext={PLACE_TO[nextPlace(spot, fitsInBar)]}
+              onPlace={() => {
+                const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
+              }}
+              playing={playingAll}
+              label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
+              at={playAt} total={playableAll.length}
+              unit={countUnit(section?.exercise_type)}
+              onToggle={playWhole} onJump={jumpTo}
+              repeat={player.repeat} onRepeat={player.setRepeat}
+            />
+          </div>
+        )}
+
         {(passageSection || canPlayAll) && !run && (
-          <div className="sheet-floats no-print">
+          <div
+            ref={floatsRef}
+            /* つまんでいるあいだ、指が箱の外へ出ても追いかける
+               (`setPointerCapture` はつまみに付けてある) */
+            onPointerMove={drag.onGrab ? drag.onMove : undefined}
+            onPointerUp={drag.onDrop} onPointerCancel={drag.onDrop}
+            style={drag.style}
+            /* **黒帯に隠されないよう、そのぶん上へ逃がす** */
+            className={`sheet-floats no-print${
+              outside && shownSpot === 'dock' ? ' is-above-dock' : ''}`}
+          >
             {/* ── 通しの読み上げも、右下に置く(2026-09 利用者の指定)──────
                 > 全体を再生を一度押すと、どこにも再生を止めるボタンがないので、
                 > 右下の集中モードの横あたりに再生中ならstop、
@@ -1234,14 +1312,17 @@ export default function LessonView({
                 そちらに置くと鳴らすボタンがしまい込まれてしまう */}
             {/* **`!fitsInBar` を必ず添える。** 添えないと、右下を開いたまま
                 窓を広げたときに**帯と右下の2つ**が出る(実測で確かめた) */}
-            {canPlayAll && floating && (
+            {canPlayAll && outside && shownSpot === 'float' && (
               <PlayerBar
                 place="float"
-                /* **狭い画面では切り替えを出さない。** そこでは
-                   上の帯にスイッチがあり、それが開け閉めを受け持つ。
-                   置き場所を選べないので、選ばせない
-                   ——効かない操作を見せない(CLAUDE.md) */
-                onPlace={fitsInBar ? (v) => { setPlace(v); savePlace(v) } : null}
+                /* **狭い窓でも切り替えを出す**(2026-09 利用者の指定
+                   「パッドでも…任意でフロート型にして移動できるように」)。
+                   行き先は `nextPlace()` が決める(判断を2か所に置かない) */
+                placeNext={PLACE_TO[nextPlace(spot, fitsInBar)]}
+                onPlace={() => {
+                  const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
+                }}
+                onGrab={drag.onGrab} moved={drag.moved} onResetPos={drag.reset}
                 playing={playingAll}
                 label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
                 at={playAt} total={playableAll.length}

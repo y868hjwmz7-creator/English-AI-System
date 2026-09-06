@@ -322,6 +322,10 @@ export default function PassagePractice({
   // 通しで聴いていて「ここをもう一度」と思ったとき、頭から聴き直さなくてよい。
   const playAll = (fromId = null) => {
     stopPlaying()
+    /* 集中モードで、段落 / 発言を1つずつ出しているか。
+       **③⑤(本文まるごと)だけ**である。①②④⑥ は単位が違うので、
+       通しの番号をそのまま当てると別のものを開く */
+    const byItem = focus && current.unit === 'passage'
     setPlayingAll(true)
     // **音が出るまでは「用意しています…」**(2026-09 利用者の指摘)。
     // MP3 がまだ無いと数秒間まったく音がせず、押しても反応が無いように見える。
@@ -373,6 +377,30 @@ export default function PassagePractice({
              止まらず、**通しの上にもう1本重ねて鳴らして**いた */
           speakingRef.current = id
           setReadingAt(null)   // 次の発言に移ったら、前の語の色を消す
+          /* ★ **集中モードでは、鳴っている段落をそのまま開く**
+                (2026-09 利用者の指定)
+
+               > 集中モードでも再生中の文章がハイライトされるようにして
+               > 下さい。何もしなければ次の段落、または発言などに
+               > 進むようにして下さい。
+
+             集中モードは**1つだけ**を描く(`section.items.slice(at, at + 1)`)
+             が、鳴らすのは**本文ぜんぶ**である。だから音が次の発言へ移った
+             とき、**その発言は画面に出ていない。** 色を付ける相手がいないので
+             ハイライトも消え、画面は1つめのまま止まって見えていた
+             (実測: 音は2発言目・画面は「1 / 2 発言」・光っているもの 0)。
+
+             **`FocusReader` はもともとこうしている**(あちらは `goRef` で
+             鳴っている段落へ移る)。役目が同じなら、動きもそろえる。
+
+             **番号は `section.items` から数え直す。** 鳴らす側の並び
+             (`playable`)は英文の無い項目を落としてあるので、
+             そのまま渡すと**別の段落を開く**(CLAUDE.md「描くときの番号を
+             渡すと、別の発言が鳴る」の裏返し)。 */
+          if (byItem && id) {
+            const n = section.items.findIndex((it) => it.id === id)
+            if (n >= 0) setFocusAt(n)
+          }
         },
         onStart: heard,
         onWord: (w) => setReadingAt(w ? w.charIndex : null),

@@ -36,6 +36,8 @@ import {
   exerciseLabel, isPassageSection, noteIsAnswer, sectionLabel, sectionsFor,
 } from '../src/data/exerciseTypes.js'
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
+import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
+import { clampPos } from '../src/lib/dragBox.js'
 import {
   DIALOGUE_ANGLES, READING_ANGLES, angleBrief, angleLabel, anglesFor, pickAngle,
 } from '../src/data/materialAngles.js'
@@ -1347,6 +1349,75 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '絞るのは読み込んだ直後の1か所')
   // **期限で切らない。** 20語のうち今日出るのが2語では、練習にならない
   ok(/\|\| onlySet,/.test(wb), 'その語だけのときは、期限で切らない')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   読み上げの操作盤を、どこに置くか(2026-09 利用者の指定)
+
+     > いっそのこと画面の下部に黒帯にした中に固定にした方が
+     > スタイリッシュな気がします。パッドでもデフォルトは同じ仕様で、
+     > 任意でフロート型にして移動できるように。PCの画面でもフロートに
+     > した時は端っこにドラッグできる部分を作って移動させれるように
+
+   **判断は `playerPlace.js` 1か所。** 画面に持たせると、
+   出す場所の数だけ食い違う(`remakeModeOf()` と同じ考え方)。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── 操作盤の置き場所 ──')
+  ok(PLACES.length === 3, '置き場所は3つ(上の帯 / 画面の下 / 浮かせる)')
+  // **狭い窓に「上の帯」は無い**(1行に収まらない)。既定は画面の下
+  ok(placeFor('bar', false) === 'dock', '狭い窓では、上の帯を選んでいても画面の下')
+  ok(placeFor('dock', false) === 'dock', '狭い窓の既定は画面の下')
+  ok(placeFor('float', false) === 'float', '狭い窓でも、浮かせるは選べる')
+  ok(placeFor('bar', true) === 'bar', '広い窓では、上の帯のまま')
+  ok(placeFor(null, true) === 'bar', '知らない値は上の帯に落とす')
+  ok(placeFor('nowhere', false) === 'dock', '知らない値は、狭い窓では画面の下')
+
+  // **押すたびに次へ移る。** 3回で必ず元へ戻る(行き止まりを作らない)
+  ok(nextPlace('bar', true) === 'dock' && nextPlace('dock', true) === 'float'
+    && nextPlace('float', true) === 'bar', '広い窓は3つを回る')
+  ok(nextPlace('dock', false) === 'float' && nextPlace('float', false) === 'dock',
+    '狭い窓は2つを行き来する(上の帯へは行かない)')
+  ok(PLACES.every((p) => PLACE_TO[p] && !PLACE_TO[p].includes('undefined')),
+    'どの行き先にも、読める言葉が付いている')
+
+  /* **画面の外に残さない。** 窓を小さくしたあと外に出ると、
+     二度と掴めなくなる */
+  const box = { w: 300, h: 50 }
+  ok(clampPos({ x: 999, y: 999 }, box, { w: 400, h: 300 })?.x === 100,
+    '窓の外へ出したら、右端で止める')
+  ok(clampPos({ x: -50, y: -50 }, box, { w: 400, h: 300 })?.y === 0,
+    '左上より外へは出さない')
+  ok(clampPos({ x: 10, y: 10 }, { w: 500, h: 400 }, { w: 400, h: 300 })?.x === 0,
+    '箱が窓より大きいときは、左上にそろえる')
+  ok(clampPos(null, box, { w: 400, h: 300 }) === null, '決めていなければ何も返さない')
+  ok(clampPos({ x: NaN, y: 0 }, box, { w: 400, h: 300 }) === null, '数でなければ何も返さない')
+
+  /* **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、
+     いまと同じ「右下に浮いたまま」に戻る */
+  const lv = readFileSync(
+    new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
+  ok(/placeFor\(place, fitsInBar\)/.test(lv), 'レッスン表示が placeFor に任せている')
+  ok(/nextPlace\(spot, fitsInBar\)/.test(lv), '次の行き先も nextPlace に任せている')
+  ok(/className="player-dock no-print"/.test(lv), '画面の下の黒帯を描いている')
+  ok(!/spot === 'float' \|\| \(!fitsInBar && floatOpen\)/.test(lv),
+    '古い出し分け(右下だけ)が残っていない')
+
+  /* 集中モードでも、鳴っている段落をそのまま開く(2026-09 利用者の指定)
+
+       > 集中モードでも再生中の文章がハイライトされるようにして下さい。
+       > 何もしなければ次の段落、または発言などに進むようにして下さい。
+
+     集中モードは1つだけを描くので、音が次の発言へ移ると
+     **その発言は画面に出ていない。** 色を付ける相手がいないので
+     ハイライトも消え、画面は1つめのまま止まって見えていた(実測)。 */
+  const pp = readFileSync(
+    new URL('../src/components/PassagePractice.jsx', import.meta.url), 'utf8')
+  ok(/const byItem = focus && current\.unit === 'passage'/.test(pp),
+    '段落 / 発言を1つずつ出しているときだけ動かす')
+  ok(/if \(byItem && id\) \{[\s\S]{0,120}section\.items\.findIndex/.test(pp),
+    '番号は section.items から数え直す(鳴らす側の並びは英文の無い項目を落としている)')
+  ok(/setFocusAt\(n\)/.test(pp), '鳴っている段落を、そのまま開く')
 }
 
 console.log(ng

@@ -1026,15 +1026,22 @@ function fakeMp3({
     const want2 = [
       /* **書き込み中は必ず右下**(2026-09 利用者の指定)。
          帯は道具にまるごと入れ替わるので、`pen` を外すと操作盤が消える */
-      ['浮いているかを1か所で決める', /const floating = pen \|\| spot === 'float' \|\| \(!fitsInBar && floatOpen\)/],
+      /* **置き場所は3つになった**(2026-09 利用者の指定)。
+         上の帯 / **画面の下の黒帯** / 浮かせる。
+         「紙の外に出ているか」は `outside` 1か所で決める */
+      ['どこへ出すかは playerPlace.js が決める', /const spot = placeFor\(place, fitsInBar\)/],
+      ['紙の外に出ているかを1か所で決める',
+        /const outside = spot !== 'bar' && \(fitsInBar \|\| floatOpen \|\| pen\)/],
+      ['浮いているかを1か所で決める', /const floating = outside \|\| \(pen && spot === 'bar'\)/],
       /* **「本文かどうか」で出し分けない**(2026-09 利用者の指定
            「文型トレーニングに上のバーのプレーヤーが出ません。
              どんなトレーニングでも出るようにして下さい」)。
          鳴らせるものが1つでもあれば出す(`canPlayAll`) */
-      ['操作盤も同じ式で出す', /canPlayAll && floating && \(/],
+      ['浮いた操作盤も同じ式で出す', /canPlayAll && outside && shownSpot === 'float' && \(/],
+      ['画面の下の黒帯も同じ式で出す', /canPlayAll && outside && shownSpot === 'dock' && !run && \(/],
       ['出すかどうかは「鳴らせるものがあるか」で決める',
         /const canPlayAll = playableAll\.length > 0/],
-      ['上の帯の操作盤も同じ判断', /\{canPlayAll && spot === 'bar' && fitsInBar && \(/],
+      ['上の帯の操作盤も同じ判断', /\{canPlayAll && shownSpot === 'bar' && fitsInBar && \(/],
       ['狭い画面のスイッチも同じ判断', /\{canPlayAll && !fitsInBar && \(/],
       /* **読む英文も `audioFrom` から取る。** `prompt_en` を直に見ると、
          和文英訳・リスニング・内容の理解が1本も鳴らない */
@@ -1047,6 +1054,11 @@ function fakeMp3({
          `false` に戻すと、開いた瞬間に段落の数だけプレーヤーが並ぶ。
          記事は6段落あるので、そこがいちばん騒がしくなる */
       ['スマホでは、はじめから開いている', /const \[floatOpen, setFloatOpen\] = useState\(true\)/],
+      /* **つまんで動かせる**(2026-09 利用者の指定)。動かすのは
+         箱ぜんぶ(`.sheet-floats`)—— 操作盤だけを動かすと、
+         「別々に `fixed` で置かない」を破ることになる */
+      ['浮かせた箱は、つまんで動かせる', /useDragBox\(floatsRef, \{ enabled: shownSpot === 'float' \}\)/],
+      ['つまみを操作盤へ渡す', /onGrab=\{drag\.onGrab\} moved=\{drag\.moved\} onResetPos=\{drag\.reset\}/],
     ]
     for (const [what, re] of want2) if (!re.test(lv)) ng(`入れ替え: ${what}`)
     /* **鳴らす前と後で、形を変えない**(2026-09 実機・利用者の指摘)。

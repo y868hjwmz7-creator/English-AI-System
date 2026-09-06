@@ -15,15 +15,23 @@
  *   押した結果を確かめられない。あわせて**段落を送り戻す**道も要る
  *   (聞き逃した1つ前へ戻るのに、いちいち紙を探して押すことになる)。
  *
- * 【置き場所は2通り。**覚える**】(利用者の指定「切り替えられると最高」)
+ * 【置き場所は3通り。**覚える**】(利用者の指定「切り替えられると最高」)
  *
  *   | どこ | いつ向くか |
  *   |---|---|
- *   | **右下**(`float`・既定) | 紙を読みながら。押したいときに手元にある |
- *   | **上の帯の下**(`bar`)  | 画面共有のとき。相手にも見える場所に出る |
+ *   | **上の帯の中**(`bar`)  | 画面共有のとき。相手にも見える。**広い窓だけ** |
+ *   | **画面の下の黒帯**(`dock`) | スマホ・パッドの既定。親指が届く |
+ *   | **浮かせる**(`float`) | 紙の見たいところを空けたいとき。**つまんで動かせる** |
  *
- *   既定は右下。**これまでと同じ場所**なので、切り替えない人には
- *   何も変わったように見えない(2026-09 の「Listen (全体) を右下に」)。
+ *   2026-09、利用者の指定で**画面の下の黒帯**を足した。
+ *
+ *     > スマホの再生プレーヤーがダサいですね。。。いっそのこと画面の下部に
+ *     > 黒帯にした中に固定にした方がスタイリッシュな気がします。
+ *     > パッドでもデフォルトは同じ仕様で、任意でフロート型にして移動できる
+ *     > ように。PCの画面でもフロートにした時は端っこにドラッグできる部分を
+ *     > 作って移動させれるようにしたいです
+ *
+ *   **どこへ出すかの判断は `playerPlace.js` 1か所**(画面に持たせない)。
  *
  * 【出す数字は「段落」まで】
  *   1つの段落の中で何秒めか、までは出さない。**数えていないものを、
@@ -40,8 +48,10 @@ import RepeatUnit from './RepeatUnit.jsx'
 import { useFitRow } from '../lib/fitRow.js'
 
 /**
- * @param place     'float'(右下)/ 'bar'(上の帯の下)
- * @param onPlace   置き場所を変える
+ * @param place     'bar'(上の帯)/ 'dock'(画面の下の黒帯)/ 'float'(浮かせる)
+ * @param onPlace   置き場所を変える(次の行き先を渡してくる)
+ * @param placeNext 次に移る先の名前(ボタンの説明に出す)
+ * @param onGrab    浮かせているとき、つまんで動かすためのつまみ
  * @param playing   いま鳴っているか
  * @param label     ボタンの文言(用意しています… を出すため)
  * @param at        いま何番目(0 から)。鳴っていなければ null
@@ -53,7 +63,8 @@ import { useFitRow } from '../lib/fitRow.js'
  * @param onRepeat  単位を変える
  */
 export default function PlayerBar({
-  place = 'float', onPlace = null,
+  place = 'float', onPlace = null, placeNext = null,
+  onGrab = null, moved = false, onResetPos = null,
   playing = false, label = null, at = null, total = 0, unit = '段落',
   onToggle, onJump = null, repeat = null, onRepeat = null,
 }) {
@@ -69,6 +80,10 @@ export default function PlayerBar({
    *
    * **上の帯のときは測らない。** あちらは `.lesson-bar` の側が
    * 帯まるごとを測って詰めており、**二重に詰めると食い違う。**
+   *
+   * **画面の下の黒帯でも測る**(2026-09)。横いっぱいでも、
+   * iPhone(390px)では押すものが入りきらず、
+   * **くり返しが画面の外へ切れていた**(実測して気づいた)。
    */
   const boxRef = useRef(null)
   useFitRow(boxRef)
@@ -82,8 +97,23 @@ export default function PlayerBar({
 
   return (
     <div className={`player player--${place} no-print`}
-         ref={place === 'float' ? boxRef : null}
+         ref={place === 'bar' ? null : boxRef}
          role="group" aria-label="読み上げの操作">
+      {/* ── つまみ(2026-09 利用者の指定)────────────────────────────
+            > フロートにした時は端っこにドラッグできる部分を作って
+            > 移動させれるようにしたいです
+
+          **浮かせているときだけ出す。** 帯の中や画面の下の黒帯は
+          動かしようがないので、出しても効かない(効かない操作を見せない)。
+
+          **押すボタンにしない。** ここは掴む場所であって、押しても何も
+          起きない。だから `<span>` のまま `aria-hidden` にし、
+          **戻す道はとなりの置き場所ボタン**が受け持つ */}
+      {onGrab && (
+        <span className="player-grip" aria-hidden="true"
+              title="つまんで動かす" onPointerDown={onGrab} />
+      )}
+
       {/* **鳴らすボタンの両脇は「文」**(2026-09 利用者の指定)。
           1本にまとめた音声のときだけ効く(時刻を控えてあるため) */}
       <SentenceSkip>
@@ -141,13 +171,25 @@ export default function PlayerBar({
         <span className="player-fill" style={{ width: `${Math.round(ratio * 100)}%` }} />
       </span>
 
-      {/* 置き場所。**一度決めれば触らない**ので、いちばん端に小さく置く */}
-      {onPlace && (
+      {/* 動かした位置を元へ戻す。**動かしたときだけ出す**
+          (押す前から出すと、何が「元」なのか分からない) */}
+      {moved && onResetPos && (
+        <button type="button" className="btn btn--small btn--ghost player-home"
+                aria-label="元の場所へ戻す" title="元の場所へ戻す"
+                onClick={onResetPos}>
+          ⌖
+        </button>
+      )}
+
+      {/* 置き場所。**一度決めれば触らない**ので、いちばん端に小さく置く。
+          **押すたびに次へ移る**(上の帯 → 画面の下 → 浮かせる)。
+          4つ並べると、めったに触らないものが場所を食う(`Stepper` と同じ)。
+          **行き先を名前で言う** —— ▲▼ だけでは、3つあることが伝わらない */}
+      {onPlace && placeNext && (
         <button type="button" className="btn btn--small btn--ghost player-place"
-                aria-label={place === 'float' ? '上の帯に出す' : '右下に出す'}
-                title={place === 'float' ? '上の帯に出す' : '右下に出す'}
-                onClick={() => onPlace(place === 'float' ? 'bar' : 'float')}>
-          {place === 'float' ? '▲' : '▼'}
+                aria-label={placeNext} title={placeNext}
+                onClick={onPlace}>
+          {place === 'bar' ? '▼' : place === 'dock' ? '◱' : '▲'}
         </button>
       )}
     </div>
