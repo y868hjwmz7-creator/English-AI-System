@@ -34,6 +34,7 @@ import {
 import {
   markIndexAt, sentenceShares, sharesToTimes, splitSentences, wordMarks,
 } from '../src/lib/wordTiming.js'
+import { SPEAK_MAX, speakChunks } from '../src/lib/speakChunks.js'
 
 let bad = 0
 const ok = (s) => console.log(`✓ ${s}`)
@@ -932,7 +933,7 @@ function fakeMp3({
         ['読み上げが受け取る', read, /repeatOf = null,/],
         ['1本のときは戻して回す', read, /const back = repeatSeek\(repeatNow\(\), sec, \{ spans, sentences: sent \}\)/],
         ['戻せたら、そのひと刻みは何もしない', read, /if \(back !== null && seekClip\(back\)\) return/],
-        ['発言ごとのときも回す', read, /if \(\(unit === 'sentence' \|\| unit === 'item'\) && ok\) i -= 1/],
+        ['発言ごとのときも回す', read, /if \(\(unit === 'sentence' \|\| unit === 'item'\) && ok\) i = pieceOf/],
         ['全文は頭から回す', read, /if \(repeatNow\(\) !== 'all' \|\| !heard\) break/],
         /* **戻したら、なだらかな上げ下げの起点も戻す。**
            戻さないと「鳴っているのに音が出ない」になる(音量 0 のまま) */
@@ -1175,9 +1176,9 @@ function fakeMp3({
     const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
     const want = [
       ['段落ごとに文の区間を見積もる', /const shares = sentenceShares\(part\.text\)/],
-      ['段落ごとの Listen でも控える', /holdCursor\(sentenceShares\(text\), null, true\)/],
+      ['段落ごとの Listen でも控える', /holdCursor\(sentenceShares\(piece\.text\), null, true\)/],
       ['割合として控えている', /holdCursor\(shares, null, true\)/],
-      ['控えるのは、鳴り出したときだけ', /onStart: \(\) => \{ holdCursor\(sentenceShares\(text\)/],
+      ['控えるのは、鳴り出したときだけ', /onStart: \(\) => \{ holdCursor\(sentenceShares\(piece\.text\)/],
       ['押された瞬間に秒へ直す', /sharesToTimes\(cursor\.spans, clipDuration\(\)\)/],
       ['文のくり返しを、周回の中でも見る', /repeatSeek\(repeatNow\(\), sec, \{ sentences: sentSecs \}\)/],
     ]
@@ -1226,7 +1227,7 @@ function fakeMp3({
 
   /* **作れたら引っ込める。** 窓口が URL を返した時点で、
      「作れませんでした」はもう本当ではない */
-  if (!/if \(body\.url\) \{ clearDetail\(\);/.test(clips)) {
+  if (!/if \(body\.url\) \{ lastReason = ''; clearDetail\(\);/.test(clips)) {
     ng('音声を作れても、知らせを引っ込めていない')
   } else ok('窓口が音声を返したら、知らせを引っ込める')
   if (!/wholeNote = null\n\s*clearDetail\(\)/.test(clips)) {
@@ -1271,6 +1272,104 @@ function fakeMp3({
     if (!/t\.note \? ` — \$\{t\.note\}` : ''/.test(prep)) {
       ng('支度の帯が、用意できなかった理由を出していない')
     } else ok('用意できなかった理由は、支度の帯が出す')
+  }
+}
+
+/**
+ * ============================================================================
+ * ⑫ **窓口が受け取れる長さを、絶対に超えない**(2026-09 実機・利用者の指摘)
+ *
+ *   > このspeech練習の教材、9段落目だけ最低な質の日本語英語の女性の
+ *   > 音声になっているので直してください。
+ *
+ *   窓口(`speak`)は1回に 2,000 文字まで。超えると 400 で断られ、
+ *   **その段落だけ端末の声**(iPhone では日本語の声が英語を読む)に落ちる。
+ *   しかも**黙って**落ちるので、17 段落を聴き通すまで気づけない。
+ *
+ *   貼るときの上限(`speechDraft.js` の 900)では足りない ——
+ *   あれは**貼った原稿にしか効かず**、AI が書いた段落も、
+ *   **すでに作った教材**も素通りする。だから**窓口へ渡す直前**で切る。
+ * ============================================================================
+ */
+{
+  console.log('\n▶ 窓口へ渡す英文は、必ず受け取れる長さに収まる')
+
+  const sen = (n) => `We collected maternal plasma and extracted cfDNA number ${n}.`
+  const long = Array.from({ length: 60 }, (_, i) => sen(i)).join(' ')
+
+  /* **収まっていれば1文字も動かさない。** ふつうの段落は今までどおり */
+  const one = sen(1)
+  const kept = speakChunks(one)
+  if (kept.length !== 1 || kept[0].text !== one || kept[0].at !== 0) {
+    ng('収まっている英文まで切っている')
+  } else ok('収まっていれば、1文字も動かさない')
+
+  {
+    const cs = speakChunks(long)
+    if (cs.length < 2) ng(`長すぎる英文を切っていない(${long.length} 文字)`)
+    else if (!cs.every((c) => c.text.length <= SPEAK_MAX)) {
+      ng('切ったあとも上限を超えている', cs.map((c) => c.text.length).join(' / '))
+    } else if (!cs.every((c) => long.slice(c.at, c.at + c.text.length) === c.text)) {
+      ng('位置(at)が本文と合っていない', '語の色が別の場所を指す')
+    } else if (cs.map((c) => c.text).join(' ').replace(/\s+/g, ' ')
+      !== long.replace(/\s+/g, ' ')) {
+      ng('切ったときに文字が落ちている')
+    } else {
+      ok(`長すぎる英文は分ける(${long.length} 文字 → ${cs.map((c) => c.text.length).join(' / ')})`)
+    }
+  }
+
+  /* **1文で超えるもの・切れ目が無いもの**でも、必ず収める */
+  {
+    const huge = `${'a'.repeat(1200)} ${'b'.repeat(1200)}.`
+    const none = `${'x'.repeat(4000)}.`
+    const okAll = [huge, none].every((t) =>
+      speakChunks(t).every((c) => c.text.length <= SPEAK_MAX))
+    if (!okAll) ng('1文で超えるもの・語の切れ目が無いものが収まっていない')
+    else ok('1文で超えても、語の切れ目が無くても、必ず収まる')
+  }
+
+  /* 窓口の上限より**手前**で切っているか(少し変えても足りなくなることがない) */
+  {
+    const fn = readFileSync(
+      new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8')
+    const m = /const MAX_CHARS = (\d+)/.exec(fn)
+    const limit = m ? Number(m[1]) : 0
+    if (!limit) ng('窓口の上限が読めない')
+    else if (SPEAK_MAX >= limit) ng(`切る長さ(${SPEAK_MAX})が窓口の上限(${limit})以上`)
+    else ok(`窓口の上限 ${limit} より手前(${SPEAK_MAX})で切っている`)
+  }
+
+  /* **画面が本当に使っているか。** 切る道があっても、渡す側が
+     素の本文をそのまま渡していたら、いままでと何も変わらない */
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const want = [
+      ['通しの読み上げで分けている', /for \(const c of speakChunks\(p\.text\)\)/],
+      ['段落ごとの Listen でも分けている', /const pieces = speakChunks\(text\)/],
+      ['番号は元の段落のまま知らせる', /onIndex\?\.\(part\.index\)/],
+      ['語の色は段落の中の位置で送る', /charIndex: \(w\.charIndex \?\? 0\) \+ part\.at/],
+      ['段落でくり返すと、段落の頭へ戻る', /i = pieceOf\[part\.index\] - 1/],
+      ['端末の声に落ちたら、何段落目かを言う', /noteFellBack\(`\$\{part\.index \+ 1\} 段落目の`\)/],
+    ]
+    const before = bad
+    for (const [what, re] of want) if (!re.test(read)) ng(`長い段落: ${what}`)
+    if (bad === before) ok('画面が、窓口へ渡す前に必ず分けている')
+  }
+
+  /* **断られた理由を読めているか。**「non-2xx」は supabase-js の
+     決まり文句であって、理由ではない(窓口は `detail` を返している) */
+  {
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    if (!/async function errBody\(error\)/.test(clips)) {
+      ng('窓口が断った理由を読む道が無い')
+    } else if (!/const body = data \?\? await errBody\(error\)/.test(clips)) {
+      ng('断られたときに、理由を読んでいない', '「non-2xx」しか出ない')
+    } else if (!/const noteFnRev = \(rev, absentIsOld = false\)/.test(clips)) {
+      ng('版が付いてこないだけで「窓口が古い」と言い出す')
+    } else if (!/noteFnRev\(rev, true\)/.test(clips)) {
+      ng('ping のときに「版なし = 古い」と読めていない')
+    } else ok('断られた理由をそのまま出す(「版なし」と取り違えない)')
   }
 }
 

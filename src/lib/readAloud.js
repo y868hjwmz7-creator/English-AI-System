@@ -41,8 +41,8 @@
  *   `playbackRate`。速さの段階ごとに作ると、費用も置き場所も5倍になる。
  */
 import {
-  DEFAULT_CLIP_VOICE, canUseClips, clipDuration, clipTime, playClip, prefetchClip,
-  seekClip, stopClip, wholeClip,
+  DEFAULT_CLIP_VOICE, canUseClips, clipDuration, clipTime, noteFellBack, playClip,
+  prefetchClip, seekClip, stopClip, wholeClip,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
@@ -53,6 +53,7 @@ import {
   REPEAT_UNITS, indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf,
 } from './wholeAudio.js'
 import { sentenceShares, sharesToTimes, splitSentences } from './wordTiming.js'
+import { speakChunks } from './speakChunks.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
@@ -361,24 +362,38 @@ export async function readAloud(text, {
     }
   }
 
-  const played = await playClip({
-    text,
-    voiceId: clipVoice ?? clipSpeakerFor(voice),
-    tier: clipTier,
-    rate,
-    onWord,
-    /* **1本にできなかったときも、1文ずつ動かせるようにする**
-       (2026-09 実機・利用者の指摘)。時刻が無いので、語の色と同じ重みから
-       見積もった**割合**を控える。秒に直すのは押された瞬間。
-       **控えるのは MP3 が鳴り出したときだけ** —— 端末の声に落ちたときは
-       途中から鳴らす手段が無いので、押せるように見せてはいけない */
-    onStart: () => { holdCursor(sentenceShares(text), null, true); started() },
-    startAt: from?.at ?? 0,
-  })
-  if (mine !== session) return          // 途中で止められた・別のものが始まった
+  /* **窓口が受け取れる長さを超える段落は、分けて続けて鳴らす**(2026-09 実機)。
+     超えたまま渡すと 400 で断られ、**その段落だけ端末の声**
+     (iPhone では日本語の声)に落ちる。詳しくは `speakChunks.js` */
+  const pieces = speakChunks(text)
+  let played = false
+  for (const [n, piece] of pieces.entries()) {
+    played = await playClip({
+      text: piece.text,
+      voiceId: clipVoice ?? clipSpeakerFor(voice),
+      tier: clipTier,
+      rate,
+      /* 語の色は**段落の中の位置**で送る。分けたかけらは 0 から数え直すので、
+         そのかけらの頭を足さないと**段落の先頭に戻って光る** */
+      onWord: onWord
+        ? (w) => onWord(w ? { ...w, charIndex: (w.charIndex ?? 0) + piece.at } : null)
+        : null,
+      /* **1本にできなかったときも、1文ずつ動かせるようにする**
+         (2026-09 実機・利用者の指摘)。時刻が無いので、語の色と同じ重みから
+         見積もった**割合**を控える。秒に直すのは押された瞬間。
+         **控えるのは MP3 が鳴り出したときだけ** —— 端末の声に落ちたときは
+         途中から鳴らす手段が無いので、押せるように見せてはいけない */
+      onStart: () => { holdCursor(sentenceShares(piece.text), null, true); started() },
+      // **分けたときは頭から。** 控えの秒がどのかけらのものか決められない
+      startAt: (n === 0 && pieces.length < 2) ? (from?.at ?? 0) : 0,
+    })
+    if (mine !== session) return        // 途中で止められた・別のものが始まった
+    if (!played) break                 // 1つでも鳴らせなければ、端末の声へ
+  }
   if (played) { if (mine === session) finished(); return }
 
-  // MP3 を使えなかった。端末の声に落ちる
+  // MP3 を使えなかった。端末の声に落ちる。**黙って落ちない**
+  noteFellBack('')
   started()
   await speakOnce(text, { voice, rate, onWord }).done
   if (mine === session) { finished(); onWord?.(null) }
@@ -460,7 +475,25 @@ export function readAloudSequence(parts, {
    */
   repeatOf = null,
 } = {}) {
-  const list = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
+  const shown = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
+  /* ── **窓口が受け取れる長さを超える段落は、ここで分ける**(2026-09 実機)
+   *
+   *   > このspeech練習の教材、9段落目だけ最低な質の日本語英語の女性の
+   *   > 音声になっているので直してください。
+   *
+   *   窓口(`speak`)は1回に 2,000 文字まで。超えると 400 で断られ、
+   *   **その段落だけ端末の声**(iPhone では日本語の声)に落ちる。
+   *
+   *   **画面に出す段落は1つも変えない。** 分けるのは
+   *   「窓口へ何を渡すか」だけである。だから
+   *   **番号(`index`)は元の段落のまま**で、色も送りも今までどおり当たる。
+   *   `at` は元の段落の何文字目か —— 語の色をここでずらす。 */
+  const list = []
+  const pieceOf = []                       // 段落の番号 → 最初のかけらの番号
+  shown.forEach((p, index) => {
+    pieceOf[index] = list.length
+    for (const c of speakChunks(p.text)) list.push({ ...p, text: c.text, index, at: c.at })
+  })
   // **止めるより先に控えを取り出す**(`readAloud` と同じ理由)
   const taken = takeMark(resumeKey)
   const from = resume ? taken : null
@@ -468,13 +501,18 @@ export function readAloudSequence(parts, {
   const mine = session
   if (!list.length) return () => {}
   /* 続きから始める番号。**一覧より外に出ていたら、言われた場所から**
-     (教材を直すと段落の数が変わる。CLAUDE.md「範囲の外になっていることがある」) */
-  const head = Math.min(Math.max(startIndex | 0, 0), list.length - 1)
-  const first = (!pinned && from && from.index >= 0 && from.index < list.length)
-    ? from.index : head
-  /* 控えの秒を当ててよいのは、**その段落のものだったときだけ**
-     (`pinned` のときは、控えが別の段落を指していることがある) */
-  const fromAt = (from && from.index === first) ? (from.at ?? 0) : 0
+     (教材を直すと段落の数が変わる。CLAUDE.md「範囲の外になっていることがある」)。
+     **控えも `startIndex` も「段落の番号」である**(かけらの番号ではない) */
+  const at = (d) => pieceOf[Math.min(Math.max(d | 0, 0), shown.length - 1)] ?? 0
+  const head = at(startIndex)
+  const first = (!pinned && from && from.index >= 0 && from.index < shown.length)
+    ? at(from.index) : head
+  /* 控えの秒を当ててよいのは、**その段落のものだったときだけ。**
+     **分けた段落では頭から鳴らす** —— 控えの秒は「段落の音声の何秒め」で、
+     分けたあとはどのかけらの秒なのかが決められない。
+     **当てずっぽうで飛ばすより、頭から鳴らすほうが説明できる** */
+  const split = list[first] && list[first + 1]?.index === list[first].index
+  const fromAt = (!split && from && at(from.index) === first) ? (from.at ?? 0) : 0
 
   /** いまのくり返しの単位。**知らない値は「しない」に落とす** */
   const repeatNow = () => {
@@ -625,15 +663,21 @@ export function readAloudSequence(parts, {
         const part = list[i]
         const began = Date.now()
         const clipVoice = part.clipVoice ?? clipSpeakerFor(part.voice)
-        // **いま何番目を鳴らしているか**を控える(`stopReading()` が使う)
-        nowPlaying(resumeKey, i)
+        /* **いま何番目を鳴らしているか**を控える(`stopReading()` が使う)。
+           **控えるのは段落の番号**(かけらの番号ではない) —— 次に開いた
+           ときに段落の分け方が変わっても、指す先がずれない */
+        nowPlaying(resumeKey, part.index)
 
         // **どの継ぎ目にも間を置く**(2026-09 利用者の指定「記事でも同じ仕様に」)。
         // はじめは話す人が替わるときだけにしていたが、記事も段落と段落が
         // 詰まって聞こえる。同じ声が続くところは `turnGap.js` が短めに返す。
         // **続きから始めた1本目には間を置かない**(`i > first`)。
         // 前の発言は鳴っていないので、そこに息継ぎを入れる理由がない
-        if (i > start) {
+        /* **同じ段落を分けたかけらのあいだには、段落の間を置かない。**
+           分けたのはこちらの都合で、話のうえでは文と文の切れ目である */
+        const joined = i > start && list[i - 1].index === part.index
+        if (joined) { await pause(90 / (rate || 1)); if (!alive()) return }
+        if (i > start && !joined) {
           const prevVoice = list[i - 1].clipVoice ?? clipSpeakerFor(list[i - 1].voice)
           const sameVoice = clipVoice === prevVoice
 
@@ -658,9 +702,15 @@ export function readAloudSequence(parts, {
           if (!alive()) return
         }
 
-        onIndex?.(i)
+        onIndex?.(part.index)
 
-        const relay = onWord ? (at) => onWord(at ? { ...at, index: i } : null) : null
+        /* 語の色は**段落の中の位置**で送る。分けたかけらは 0 から数え直すので、
+           そのかけらの頭(`part.at`)を足さないと**段落の先頭に戻って光る** */
+        const relay = onWord
+          ? (w) => onWord(w
+            ? { ...w, charIndex: (w.charIndex ?? 0) + part.at, index: part.index }
+            : null)
+          : null
 
         /* ── **1本にできなかったときの、文の単位**(2026-09 実機)──────
          *
@@ -716,7 +766,11 @@ export function readAloudSequence(parts, {
         })
         if (!alive()) return
         if (!played) {
-          // この1本だけ MP3 を使えなかった。端末の声で読む
+          /* この1本だけ MP3 を使えなかった。端末の声で読む。
+             **どの段落かを必ず言う**(2026-09 実機・利用者の指摘)。
+             iPhone の端末の声は日本語の声が英語を読むので、
+             **黙って落ちると「最低な質の音声」として耳に入るまで気づけない** */
+          noteFellBack(`${part.index + 1} 段落目の`)
           started()
           await speakOnce(part.text, { voice: part.voice, rate, onWord: relay }).done
           if (!alive()) return
@@ -727,7 +781,10 @@ export function readAloudSequence(parts, {
         const ok = Date.now() - began >= 300
         if (ok) heard = true
         const unit = repeatNow()
-        if ((unit === 'sentence' || unit === 'item') && ok) i -= 1
+        /* **段落でくり返すときは、段落の頭へ戻す。**
+           長すぎて分けた段落では、いま鳴らしたかけらだけを回すと
+           **段落の後ろ半分だけが延々と鳴る** */
+        if ((unit === 'sentence' || unit === 'item') && ok) i = pieceOf[part.index] - 1
       }
       if (!alive()) return
       // **全文をくり返す。** 次の周は、本文の頭から。

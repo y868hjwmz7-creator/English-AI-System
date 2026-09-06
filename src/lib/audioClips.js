@@ -219,13 +219,50 @@ const staleNote = () => (clipFnStale()
     + ' Supabase → Edge Functions → speak を置き直してください。'
   : null)
 
-const noteFnRev = (rev) => {
-  const got = typeof rev === 'string' && rev ? rev : '(版なし)'
+/**
+ * @param {string|undefined} rev 窓口が返した版
+ * @param {boolean} absentIsOld
+ *   **版が付いてこないことを「古い」と読んでよいか。**
+ *
+ *   `ping` だけが `true` である —— あちらは版を訊きに行く道なので、
+ *   返ってこなければ版を付ける前のものだと分かる。
+ *
+ *   **ふつうの呼び出しでは `false`。**(2026-09 実機・こちらの見落とし)
+ *   窓口が 400 を返すと、supabase-js は **`data` を `null` にして、
+ *   中身を `error` の側に入れる。** そのため `body.fnRev` が
+ *   いつも `undefined` になり、**英文が1つ長すぎただけで
+ *   「窓口が古い」と言い出していた。** 版とは何の関係もない。
+ */
+const noteFnRev = (rev, absentIsOld = false) => {
+  const has = typeof rev === 'string' && rev
+  if (!has && !absentIsOld) return
+  const got = has ? rev : '(版なし)'
   if (got === fnRev) return
   fnRev = got
   /* **黙って落とさない。** 音は鳴ってしまうので、言わないと気づけない */
   const note = staleNote()
   if (note) setDetail(note)
+}
+
+/**
+ * **窓口が断ったときの、本当の理由を読む。**(2026-09 実機・利用者の指摘)
+ *
+ *   > 読み上げ音声を作れませんでした。端末の声で鳴らしています。
+ *   > Edge Function returned a non-2xx status code
+ *
+ * この「non-2xx」は **supabase-js の決まり文句**であって、理由ではない。
+ * 窓口はちゃんと `detail`(「英文が長すぎます(2,340 文字)」など)を
+ * 返しているのに、**2xx でないときは `data` が `null` になる**ため、
+ * こちらが**それを一度も読んでいなかった。**
+ *
+ * つまり**画面にも、こちらにも、本当の理由が一度も届いていなかった。**
+ * どこがどう駄目なのか分からないまま、何日でも見当違いを直せる。
+ */
+async function errBody(error) {
+  try {
+    const got = await error?.context?.json?.()
+    return got && typeof got === 'object' ? got : {}
+  } catch { return {} }
 }
 
 /**
@@ -260,13 +297,10 @@ export async function checkClipGateway() {
   asked = true
   try {
     const { data, error } = await supabase.functions.invoke('speak', { body: { ping: true } })
-    let rev = data?.fnRev
-    /* 400 のときは、版が本文ではなく `error` の側に入ることがある。
-       **読むのは版だけ。** ほかの欄には触らない */
-    if (!rev && error?.context?.json) {
-      try { rev = (await error.context.json())?.fnRev } catch { /* 版なし扱い */ }
-    }
-    noteFnRev(rev)
+    const rev = data?.fnRev ?? (await errBody(error)).fnRev
+    /* **ここだけは「版が付いてこない = 古い」と読んでよい。**
+       `ping` は版を訊きに行く道なので、返らないのは付ける前のものである */
+    noteFnRev(rev, true)
   } catch { /* 届かなくても、読み上げは止めない */ }
 }
 
@@ -294,6 +328,30 @@ export const onClipTrouble = (fn) => {
  * あちらは音声を作りに行ってすらいない。
  */
 const FAILED = '読み上げ音声を作れませんでした。端末の声で鳴らしています。'
+
+/**
+ * **窓口が言った理由だけ**(決まり文句を除いたもの)。
+ * どの段落で落ちたかを添えて出し直すときに使う。
+ */
+let lastReason = ''
+
+/**
+ * **端末の声に落ちたことを、場所つきで知らせる。**(2026-09 実機・利用者の指摘)
+ *
+ *   > このspeech練習の教材、9段落目だけ最低な質の日本語英語の女性の
+ *   > 音声になっているので直してください。
+ *
+ * これまでは「読み上げ音声を作れませんでした」としか出なかったので、
+ * **17 段落のどれが落ちたのか、聴き通すまで分からなかった。**
+ * iPhone の端末の声は**日本語の声が英語を読む**ので、
+ * 気づいたときには「最低な質の音声」として耳に入っている。
+ *
+ * **場所を言う。** 呼ぶのは、実際に端末の声へ落ちた側である
+ * (`readAloud.js`)—— 何段落目かを知っているのはあちらだけである。
+ */
+export function noteFellBack(where) {
+  setDetail(`${where}${FAILED}${lastReason ? ` ${lastReason}` : ''}`)
+}
 
 const setDetail = (d) => {
   lastDetail = d
@@ -450,28 +508,31 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
         elevenModel: voiceModelOf(rosterId),
       },
     })
-    // 窓口が 4xx / 5xx を返すと error に入る。中身は data 側にある
-    const body = data ?? {}
+    /* **窓口が断ったときは、中身が `error` の側に入る。**
+       `data ?? {}` だけで済ませていたので、**理由を一度も読めていなかった**
+       (2026-09 実機。画面には「non-2xx」という決まり文句しか出ていなかった) */
+    const body = data ?? await errBody(error)
     noteFnRev(body.fnRev)
     // **`cached` も返す。** 作り直しを頼んだのに「もうある」で返ってきたら、
     // それは**窓口がまだ古い**という意味である(下の `remakeClip`)
     /* **作れたら、前の知らせを引っ込める。** 一度失敗しても、
        次に作れたのなら「作れませんでした」はもう本当ではない */
-    if (body.url) { clearDetail(); return { url: body.url, cached: !!body.cached } }
+    if (body.url) { lastReason = ''; clearDetail(); return { url: body.url, cached: !!body.cached } }
     if (body.fatal) stopped = true
     /* **知らせは、それだけで意味が通る1文にする**(2026-09 実機)。
        画面の側に「作れませんでした」と決め打ちしていたので、
        **版が古いことを伝えるだけの知らせにも**その文が付き、
        **作ろうともしていないのに「作れませんでした」**と出ていた。
        起きたことは呼んだ側がいちばんよく知っている。ここで書く */
-    if (body.detail) setDetail(`${FAILED} ${body.detail}`)
-    else if (error) setDetail(`${FAILED} ${error.message}`)
+    lastReason = body.detail || error?.message || ''
+    if (lastReason) setDetail(`${FAILED} ${lastReason}`)
     return null
   } catch (e) {
     // 窓口をまだ配置していないと、ここに来る。**毎回叩きに行かない**
     stopped = true
-    setDetail(`${FAILED} 読み上げ音声の窓口につながりません(${e?.message ?? e})。`
-      + 'Supabase の Edge Functions に speak が配置されているか確認してください。')
+    lastReason = `読み上げ音声の窓口につながりません(${e?.message ?? e})。`
+      + 'Supabase の Edge Functions に speak が配置されているか確認してください。'
+    setDetail(`${FAILED} ${lastReason}`)
     return null
   }
 }
@@ -666,7 +727,7 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
         whole: { mark, texts: body, elevenIds },
       },
     })
-    const res = data ?? {}
+    const res = data ?? await errBody(error)
     noteFnRev(res.fnRev)
     if (!res.url) {
       /* **黙って落ちない。** ここで諦めても、呼んだ側は
