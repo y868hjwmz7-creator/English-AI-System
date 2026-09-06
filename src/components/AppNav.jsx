@@ -158,13 +158,18 @@ export function AppTopbar({
               aria-label={open && wide ? 'メニューをたたむ' : 'メニューを開く'}>
         <MenuIcon />
       </button>
-      <span className="app-topbar-title">
+      {/* **ページの見出し**(2026-09・第4週)。
+          実測すると `<h1>` がどの画面にも1つも無く、**見出しの階層が
+          いちばん上から欠けていた。** 読み上げソフトは見出しをたどって
+          画面を移るので、`<h1>` が無いと「いまどのページか」を拾えない。
+          **見た目は1ドットも変えない**(`margin: 0` を置いてある)。 */}
+      <h1 className="app-topbar-title">
         {pageLabel}
         {/* いま見ている画面に印が付いているときだけ。
             **ほかの画面の印を、この帯に出さない。**
             「単語帳」の横に青い丸が出ると、何の印か分からない */}
         {badge && <NavDot kind={badge} />}
-      </span>
+      </h1>
       {right && <div className="app-topbar-right">{right}</div>}
     </div>
   )
