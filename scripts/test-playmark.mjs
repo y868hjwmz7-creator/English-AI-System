@@ -20,6 +20,10 @@ import {
   finished, hasMark, nowPlaying, stopped, takeMark,
 } from '../src/lib/playMark.js'
 import { SESSION_SIZE, buildSession } from '../src/lib/wordQuiz.js'
+import {
+  bestStreak, collectRows, praiseFor, streakLine, weekLine, STREAK_FROM,
+} from '../src/lib/gamify.js'
+import { readFileSync } from 'node:fs'
 
 let ng = 0
 const ok = (cond, name, extra = '') => {
@@ -165,6 +169,101 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
   // 語が少なければ、あるだけ出す(足りないと言って止まらない)
   const few = buildSession(rows.slice(0, 4), SESSION_SIZE, { shuffleAll: true })
   ok(few.length === 4, '語が足りなければ、あるだけ出す')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * やり終えたときの手応え(`gamify.js`)
+ *
+ *   > 単語帳とクイックレスポンス帳にゲーミフィケーションを追加したいです
+ *
+ *   画面の中に書くと**素の node で一度も確かめられない**ので、
+ *   `playMark.js` と同じく何にも依存しない形へ切り出してある。
+ *   ここでは**決まりそのもの**を見る ——
+ *   ①短い連続で騒がない ②責めない ③日ではなく週 ④0で割らない
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ やり終えたときの手応え(gamify)')
+
+  const of = (...flags) => flags.map((f) => ({ ok: !!f }))
+
+  // ── いちばん長い連続 ────────────────────────────────────────
+  ok(bestStreak([]) === 0, '答えが無ければ 0')
+  ok(bestStreak(of(1, 1, 0, 1, 1, 1, 0)) === 3, 'いちばん長いところを数える(3)')
+  ok(bestStreak(of(0, 0, 0)) === 0, '1つも無ければ 0')
+  ok(bestStreak(of(1, 1, 1, 1)) === 4, '全部つながれば、その数')
+  ok(bestStreak(null) === 0, '一覧でないものを渡されても落ちない')
+
+  /* **短い連続では出さない。** 2連続で「2 連続!」と出しても、
+     うれしくないうえ場所を食うだけである(数を並べない・CLAUDE.md) */
+  ok(streakLine(of(1, 1)) === '', `${STREAK_FROM} より短い連続では、何も言わない`)
+  ok(streakLine(of(1, 1, 1)).includes('3'), '3 連続からは言う')
+
+  // ── 声かけ。**結果から決める**(押すたびに変わらない)────────────
+  {
+    // **押すたびに言葉が入れ替わらない**(スラッシュリーディングの
+    // `praiseFor()` と同じ作法。混ぜると、目が言葉のほうへ行って気が散る)
+    const said = new Set()
+    for (let i = 0; i < 20; i += 1) said.add(praiseFor(7, 10))
+    ok(said.size === 1, '同じ結果なら、いつも同じ言葉(混ぜない)')
+  }
+  ok(praiseFor(10, 10).includes('Perfect'), '全部そろえば Perfect')
+  ok(praiseFor(9, 10) !== praiseFor(5, 10), '点数で言葉が変わる')
+  ok(praiseFor(0, 0) === '', '答えが無ければ、何も言わない')
+  /* **いちばん下でも責めない。** 知らないことは失敗ではない
+     (「まだ」を赤くしないのと同じ考え方・CLAUDE.md) */
+  {
+    const worst = praiseFor(0, 10)
+    const 責める = ['だめ', 'ダメ', '悪い', 'もっと', '足りない', '残念']
+    ok(worst.length > 0 && !責める.some((w) => worst.includes(w)),
+      `0点でも責めない(「${worst}」)`)
+  }
+
+  // ── 週の続き。**日ではなく週**(0019 の決まり)──────────────────
+  ok(weekLine({ days: 0, weeks: 0 }) === '', '記録が無ければ、行ごと出さない')
+  ok(weekLine({ days: 3, weeks: 5 }).includes('週'), '週で数えている')
+  ok(!/連続\s*\d+\s*日|\d+\s*日連続/.test(weekLine({ days: 3, weeks: 5 })),
+    '「◯日連続」とは書かない(1日休んだだけで途切れ、やめる理由になる)')
+
+  // ── 集まり具合 ──────────────────────────────────────────────
+  {
+    const rows = [
+      { industry: 'it', known: 10, learning: 10 },
+      { industry: 'med', known: 30, learning: 10 },
+      { industry: 'law', known: 0, learning: 0 },   // 出会っていない分野
+      { industry: '', known: 5, learning: 5 },      // 名前が無い
+    ]
+    const got = collectRows(rows, { limit: 3 })
+    ok(got.length === 2, '出会っていない分野と、名前の無い行は出さない')
+    ok(got[0].industry === 'med', '覚えた語が多い順に並ぶ')
+    ok(Math.abs(got[0].ratio - 0.75) < 1e-9, 'そろい具合は 覚えた / 出会った')
+    ok(collectRows([{ industry: 'x', known: 0, learning: 0 }]).length === 0,
+      '0で割らない(出会っていない分野は落とす)')
+    ok(collectRows(rows, { limit: 1 }).length === 1, '出す数を絞れる')
+    ok(collectRows(null).length === 0, '一覧でないものを渡されても落ちない')
+  }
+
+  /* ── **画面が、本当にこれを使っているか** ───────────────────────
+       定義だけあって誰も呼ばなければ、何も起きない
+       (`noteFnRev` を定義だけして呼んでいなかったのと同じ落とし穴)。
+       **終わりの1枚は、単語帳と Quick Response で同じ部品**である —— 
+       書き写すと、必ず片方だけ古くなる(CLAUDE.md) */
+  {
+    const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    const sr = read('components/SessionResult.jsx')
+    ok(/praiseFor|streakLine|weekLine/.test(sr), '終わりの1枚が、手応えの決まりを使っている')
+    ok(/playSfx\(/.test(sr), 'やり切った合図(音)を鳴らしている')
+    for (const [what, file] of [
+      ['単語帳', 'components/Wordbook.jsx'],
+      ['Quick Response の復習', 'components/QrReview.jsx'],
+    ]) {
+      const t = read(file)
+      ok(/<SessionResult/.test(t), `${what}が、終わりの1枚を同じ部品で出している`)
+    }
+    ok(/<CollectRows/.test(read('components/Wordbook.jsx')),
+      '単語帳が、集まり具合を出している')
+    ok(/loadVocabByIndustry/.test(read('components/Wordbook.jsx')),
+      '集まり具合のもとを、実際に読みに行っている')
+  }
 }
 
 console.log(ng

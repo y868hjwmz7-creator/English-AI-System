@@ -33,9 +33,11 @@
  *   トレーナーが単語帳を開いた記録を、ここに出す(0019)。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import SessionResult from './SessionResult.jsx'
+import CollectRows from './CollectRows.jsx'
 import {
   KNOWN_AFTER, canMarkKnown,
-  loadGlossDetail, loadMyWordbook, loadVocabWeek,
+  loadGlossDetail, loadMyWordbook, loadVocabWeek, loadVocabByIndustry,
   loadWordbookCounts, loadWordbookViewers, learningSupported,
   noteWordbookView, setWordStatus,
 } from '../lib/vocab.js'
@@ -180,6 +182,8 @@ export default function Wordbook({
   const [counts, setCounts] = useState({ due: 0, unknown: 0, learning: 0, known: 0 })
   const [week, setWeek] = useState({ days: 0, answered: 0, correct: 0, weeks: 0 })
   const [viewers, setViewers] = useState([])
+  /** 業界別のそろい具合(0019 の `vocab_by_industry`)。**集める楽しみ** */
+  const [fields, setFields] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
@@ -251,7 +255,7 @@ export default function Wordbook({
 
   const reload = useCallback(async () => {
     setLoading(true)
-    const [list, tally, wk, seen] = await Promise.all([
+    const [list, tally, wk, seen, byField] = await Promise.all([
       current.status
         ? loadMyWordbook({
           status: current.status, dueOnly: current.dueOnly, limit: 200, learnerId,
@@ -260,11 +264,15 @@ export default function Wordbook({
       loadWordbookCounts(learnerId), loadVocabWeek(learnerId),
       // 「トレーナーが見ました」は**ゲスト本人にだけ**出す知らせである
       mine ? loadWordbookViewers() : Promise.resolve({ data: [] }),
+      /* **集める楽しみ**(2026-09 利用者の指定)。0019 からある窓口だが、
+         **どこからも呼んでいなかった。** 読むのは開いたときの1回だけ */
+      loadVocabByIndustry(learnerId),
     ])
     setLoading(false)
     if (tally.data) setCounts(tally.data)
     if (wk.data) setWeek(wk.data)
     if (seen.data) setViewers(seen.data)
+    if (byField.data) setFields(byField.data)
     if (list.error) { setError(list.error); return }
     setError(null)
     setRows(list.data ?? [])
@@ -694,27 +702,25 @@ export default function Wordbook({
         </div>
         <div className="focus-body">
         <div className="wordcard wordcard--result" ref={resultRef}>
-          {/* **終わったときの点数は、大きく出す。**
-              10語やり切ったことが分かるようにする(2026-08 利用者の指定) */}
-          <p className="wb-score">
-            <strong>{result.filter((r) => r.ok).length}</strong>
-            <span className="wb-score-of">/ {result.length} 語</span>
-          </p>
-          <ul className="wordbook-result">
-            {result.map((r, i) => (
-              <li key={i} className={r.ok ? 'is-ok' : 'is-ng'}>
-                <span aria-hidden="true">{r.ok ? '○' : '×'}</span>
-                <span lang="en">{r.word}</span>
-              </li>
-            ))}
-          </ul>
-          {dueNow > 0
-            ? (
-              <button type="button" className="btn btn--primary" onClick={reload}>
-                つぎの {Math.min(10, dueNow)} 語
-              </button>
-            )
-            : <p className="hint">今日の分は終わりです。よくできました。</p>}
+          {/* **終わりの1枚は、Quick Response とまったく同じ部品**
+              (`SessionResult`・2026-09 利用者の指定「ゲーミフィケーションを
+              追加したいです」)。点数・声かけ・連続・週の続き・
+              できなかったものを、**書き写さずに1か所で持つ** */}
+          <SessionResult
+            items={result.map((r) => ({ ok: r.ok, main: r.word }))}
+            unit="語"
+            week={week}
+            missLead="上に出ているのが、思い出せなかった語です。また明日出ます。"
+            extra={<CollectRows rows={fields} />}
+          >
+            {dueNow > 0
+              ? (
+                <button type="button" className="btn btn--primary" onClick={reload}>
+                  つぎの {Math.min(10, dueNow)} 語
+                </button>
+              )
+              : <p className="hint">今日の分は終わりです。</p>}
+          </SessionResult>
         </div>
         </div>
       </div>

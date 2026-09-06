@@ -32,6 +32,7 @@ import {
 } from '../lib/qrReviews.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 import QrCard from './QrCard.jsx'
+import SessionResult from './SessionResult.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import { stopReading } from '../lib/readAloud.js'
 import { usePracticeLog } from '../lib/practice.js'
@@ -172,7 +173,6 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   // portal で body の直下に出るので、**まわりのものは自動的に消える。**
   if (run && run.length) {
     const finished = at >= run.length
-    const okCount = done.filter((x) => x.ok).length
     const body = (
       <section className="qr qr--paper">
         {/* どこまで来たか。**終わりが見えないと続かない**(単語帳と同じ) */}
@@ -181,26 +181,22 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
         </div>
 
         {finished ? (
+          /* **終わりの1枚は、単語帳とまったく同じ部品**(`SessionResult`・
+             2026-09 利用者の指定「ゲーミフィケーションを追加したいです」)。
+             点数・声かけ・連続・できなかったものを、
+             **書き写さずに1か所で持つ**(単語帳で踏んだ失敗) */
           <div className="qr-result">
-            <p className="qr-result-score">
-              <strong>{okCount} / {run.length} 言えました。</strong>
-            </p>
-            <ul className="qr-result-list">
-              {done.filter((x) => !x.ok).map((x, i) => (
-                <li key={i}>
-                  <span className="qr-result-ja">{x.ja}</span>
-                  <span lang="en">{x.en}</span>
-                </li>
-              ))}
-            </ul>
-            {okCount === run.length
-              ? <p className="hint">全部言えました。</p>
-              : <p className="hint">上に出ているのが、言えなかった文です。また明日出ます。</p>}
-            <div className="btn-row">
-              <button type="button" className="btn btn--primary" onClick={stop}>
-                おわる
-              </button>
-            </div>
+            <SessionResult
+              items={done.map((x) => ({ ok: x.ok, main: x.en, sub: x.ja }))}
+              unit="文"
+              missLead="上に出ているのが、言えなかった文です。また明日出ます。"
+            >
+              <div className="btn-row">
+                <button type="button" className="btn btn--primary" onClick={stop}>
+                  おわる
+                </button>
+              </div>
+            </SessionResult>
           </div>
         ) : (
           /* **1問ぶんは、教材の中の Quick Response とまったく同じ部品**(`QrCard`)。

@@ -24,6 +24,8 @@
  */
 import { createRoot } from 'react-dom/client'
 import LessonView from './components/LessonView.jsx'
+import SessionResult from './components/SessionResult.jsx'
+import CollectRows from './components/CollectRows.jsx'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
 
@@ -51,6 +53,39 @@ const material = {
   }],
 }
 
+/**
+ * **やり終えたときの1枚**(`?screen=result`)。
+ *
+ * 単語帳と Quick Response の終わりの画面は、どちらも `SessionResult` である。
+ * ここに出せば、**Supabase に届かないこの環境でも見た目を確かめられる。**
+ */
+const RESULT = (
+  <div style={{ maxWidth: 420, margin: '24px auto', padding: 16 }}>
+    <SessionResult
+      items={[
+        { ok: true, main: 'deliberately' }, { ok: true, main: 'concern' },
+        { ok: true, main: 'issue' }, { ok: false, main: 'retraction' },
+        { ok: true, main: 'oversight' }, { ok: true, main: 'integrity' },
+        { ok: true, main: 'misconduct' }, { ok: false, main: 'peer review' },
+        { ok: true, main: 'replicate' }, { ok: true, main: 'flag' },
+      ]}
+      unit="語"
+      week={{ days: 3, weeks: 5 }}
+      extra={(
+        <CollectRows rows={[
+          { industry: 'med', known: 30, learning: 10 },
+          { industry: 'it', known: 12, learning: 20 },
+          { industry: 'golf', known: 4, learning: 12 },
+        ]} />
+      )}
+    >
+      <button type="button" className="btn btn--primary">つぎの 10 語</button>
+    </SessionResult>
+  </div>
+)
+
 createRoot(document.getElementById('root')).render(
-  <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
+  q.get('screen') === 'result'
+    ? RESULT
+    : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
 )
