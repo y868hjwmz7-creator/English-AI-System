@@ -45,7 +45,7 @@ import { reviewWriting } from '../lib/materials.js'
 import { markQr, qrReviewSupported } from '../lib/qrReviews.js'
 import { lookupWord, normWord, setWordStatus } from '../lib/vocab.js'
 import {
-  MAX_WRITING_CHARS, REVIEW_COST_YEN, isBlankAnswer, loadWritingTone,
+  MAX_WRITING_CHARS, REVIEW_COST_YEN, canAskReview, isBlankAnswer, loadWritingTone,
   normalizeReview, phraseKind, reviewPairs, saveWritingTone,
   seenSentenceFor, toneBrief, tooLongAnswer,
 } from '../lib/writingReview.js'
@@ -75,6 +75,11 @@ export default function WritingAnswer({
   const [note, setNote] = useState(null)
   const [added, setAdded] = useState(() => new Set())
   const areaRef = useRef(null)
+
+  /* **添削を走らせられるのはトレーナーと管理者だけ**(2026-09 利用者の指定)。
+     ゲストは書くところまでで、書いたものはそのままトレーナーに届く
+     (`material_progress`・0025)。判断は `canAskReview()` 1か所 */
+  const mayAsk = canAskReview()
 
   /* **開いた時点で書いたものがあれば、開いたまま始める。**
      書いたことを見せずに畳んでおくと、書いたこと自体を忘れる */
@@ -180,28 +185,38 @@ export default function WritingAnswer({
                       onChange={(e) => setSaved({ ...saved, text: e.target.value, tone })} />
           </label>
 
-          <div className="writing-tools">
-            <label className="writing-tone">
-              <span>添削の調子</span>
-              <select value={tone}
-                      onChange={(e) => {
-                        setTone(e.target.value)
-                        saveWritingTone(e.target.value)
-                        setSaved({ ...saved, tone: e.target.value })
-                      }}>
-                {WRITING_TONES.map((t) => (
-                  <option key={t.id} value={t.id}>{t.label} — {t.hint}</option>
-                ))}
-              </select>
-            </label>
-            {/* **費用を出す**(見えない費用は管理できない・CLAUDE.md) */}
-            <button type="button" className="btn btn--primary btn--small"
-                    disabled={busy || !text.trim() || long} onClick={ask}>
-              {busy ? `添削してもらっています…（${secs} 秒）`
-                : review ? `もう一度 添削してもらう（およそ ${REVIEW_COST_YEN} 円）`
-                  : `添削してもらう（およそ ${REVIEW_COST_YEN} 円）`}
-            </button>
-          </div>
+          {/* ── 添削を走らせるのは、トレーナーと管理者だけ ──
+              ゲストには**効かない操作を見せない**(CLAUDE.md)。
+              代わりに「書いたものはどこへ行くのか」を1行で伝える */}
+          {mayAsk ? (
+            <div className="writing-tools">
+              <label className="writing-tone">
+                <span>添削の調子</span>
+                <select value={tone}
+                        onChange={(e) => {
+                          setTone(e.target.value)
+                          saveWritingTone(e.target.value)
+                          setSaved({ ...saved, tone: e.target.value })
+                        }}>
+                  {WRITING_TONES.map((t) => (
+                    <option key={t.id} value={t.id}>{t.label} — {t.hint}</option>
+                  ))}
+                </select>
+              </label>
+              {/* **費用を出す**(見えない費用は管理できない・CLAUDE.md) */}
+              <button type="button" className="btn btn--primary btn--small"
+                      disabled={busy || !text.trim() || long} onClick={ask}>
+                {busy ? `添削してもらっています…（${secs} 秒）`
+                  : review ? `もう一度 添削してもらう（およそ ${REVIEW_COST_YEN} 円）`
+                    : `添削してもらう（およそ ${REVIEW_COST_YEN} 円）`}
+              </button>
+            </div>
+          ) : (
+            <p className="field-hint writing-handoff">
+              書いたものは<strong>そのままトレーナーに届きます。</strong>
+              添削はトレーナーが行い、結果はこの場所に出ます。
+            </p>
+          )}
 
           {long && (
             <p className="notice notice--error writing-note">

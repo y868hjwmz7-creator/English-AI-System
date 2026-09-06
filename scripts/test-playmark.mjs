@@ -934,6 +934,28 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(/learnerId=\{learnerId\}/.test(view),
       '誰の記録になるかを渡している(0025)')
   }
+
+  // ── 走らせられるのは、トレーナーと管理者だけ ──
+  {
+    const { canAskReview } = await import('../src/lib/writingReview.js')
+    const { setViewerRole } = await import('../src/lib/viewer.js')
+    for (const [role, want] of [
+      [null, false], ['learner', false], ['trainer', true], ['owner', true],
+    ]) {
+      setViewerRole(role)
+      ok(canAskReview() === want,
+        `${role ?? '(役割が分からない)'} は添削を${want ? '走らせられる' : '走らせられない'}`)
+    }
+    setViewerRole(null)
+    const w = readFileSync(
+      new URL('../src/components/WritingAnswer.jsx', import.meta.url), 'utf8')
+    // **画面が判断を持たない。** 持つと、置く場所の数だけ食い違う
+    ok(/canAskReview\(\)/.test(w), '画面が canAskReview() に任せている')
+    ok(!/viewerRoleOf\(\)/.test(w), '画面の中で役割を数え直していない')
+    ok(/mayAsk \?/.test(w), 'ゲストには、添削のボタンそのものを出さない')
+    ok(/トレーナーに届きます/.test(w),
+      '書いたものがどこへ行くのかを、ゲストに伝えている')
+  }
   {
     const w = readFileSync(
       new URL('../src/components/WritingAnswer.jsx', import.meta.url), 'utf8')
@@ -956,11 +978,17 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
       ok(new RegExp(`required: \\[[^\\]]*'${f}'`).test(fn)
         || new RegExp(`'${f}'`).test(fn), `道具に ${f} がある`)
     }
-    // **ゲストも呼べるのは、この頼みごとだけ**(ほかは今までどおり)
+    /* **ゲストは添削を走らせられない**(2026-09 利用者の指定・方針の変更)。
+       道は残してあるが、Secrets を足したときだけ開く。**既定は閉じている** */
+    ok(/LEARNER_WRITING_REVIEW/.test(fn),
+      'ゲストへ開く道が、Secrets 1つで切り替えられる形で残っている')
+    ok(/const forLearner = mode === 'review_writing' && LEARNER_REVIEW/.test(fn),
+      '既定では開かない(Secrets が無ければゲストは通らない)')
     ok(/forLearner \? \['learner', 'trainer', 'owner'\] : \['trainer', 'owner'\]/.test(fn),
-      '添削だけゲストも呼べる。ほかはトレーナーと管理者だけ')
-    ok(/const forLearner = mode === 'review_writing'/.test(fn),
-      'ゲストに開いているのは添削だけである')
+      '開いていないときは、トレーナーと管理者だけ')
+    // **ゲストに仕組みの内側を見せない**(CLAUDE.md)
+    ok(/添削はトレーナーが行います/.test(fn),
+      '断り方が、ゲストにも意味の分かる文になっている')
     ok(/status !== 'active'/.test(fn), 'やめた人は、どの頼みごとも呼べない')
     ok(/slice\(0, 1500\)/.test(fn), '窓口でも長さを切っている(最後の関所)')
 

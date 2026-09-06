@@ -996,7 +996,7 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-06b'
+const FN_REV = '2026-09-06c'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
@@ -1100,23 +1100,34 @@ Deno.serve(async (req) => {
   if (profile?.status !== 'active') {
     return reply({ error: '教材を作る権限がありません' }, 403)
   }
-  /* **添削(`review_writing`)だけは、ゲストも呼べる**(2026-09 利用者の指定)。
+  /* **ゲストは添削を走らせられない**(2026-09 利用者の指定・方針の変更)。
 
-       > ディスカッションや質問に対する回答をライティングで記入できるように
-       > してください。その記入した内容を添削する機能を…
+       > いや、ゲストには実行にしてください。ゲストから下書きをもらったら
+       > トレーナー側だけでできるようにしたいです。もしくは課金プランなど、
+       > 将来的に課金さしたときのみアンロックできるように、
+       > 裏では取っておいてください。
 
-     宿題は**ゲストが1人で取り組むもの**なので、ここをトレーナーだけに
-     すると、この機能はレッスン中にしか使えない。それでは頼まれたことに
-     ならない。**この窓口で Claude の課金が発生する道が、初めてゲストに開く。**
-     長さは `reviewWriting()` が 1,500 文字で切る。
-     **戻すときは、この1行を消せばよい**(そうするとゲストは添削を頼めなくなる)。
+     ゲストが書いた英文は `material_progress`(0025)に残るので、
+     **トレーナーがそのゲストのページで同じ教材を開けばそのまま出てくる。**
+     受け渡しの仕組みを新しく作る必要はない。
 
-     ゲストに開いていない頼みごと(教材の下書き・カタマリの訳)は、
-     これまでどおりトレーナーと管理者だけである。 */
-  const forLearner = mode === 'review_writing'
+     **道はそのまま残してある。** 開けるのは Secrets に
+     `LEARNER_WRITING_REVIEW` を `on` と入れたときだけで、**既定は閉じている。**
+     課金プランを入れた日に Supabase の画面でその1つを足せば開く ——
+     **コードも置き直しも要らない。**
+     (`1` / `on` / `true` / `yes` のどれでもよい。大文字小文字は問わない) */
+  const LEARNER_REVIEW = /^\s*(1|on|true|yes)\s*$/i
+    .test(Deno.env.get('LEARNER_WRITING_REVIEW') ?? '')
+  const forLearner = mode === 'review_writing' && LEARNER_REVIEW
   const allowed = forLearner ? ['learner', 'trainer', 'owner'] : ['trainer', 'owner']
   if (!allowed.includes(profile?.role ?? '')) {
-    return reply({ error: '教材を作る権限がありません' }, 403)
+    /* **ゲストに、仕組みの内側を見せない**(CLAUDE.md)。
+       「権限がありません」だけだと、書いたものが無駄になったように見える */
+    return reply({
+      error: mode === 'review_writing'
+        ? '添削はトレーナーが行います。書いた英文はトレーナーに届いています。'
+        : '教材を作る権限がありません',
+    }, 403)
   }
 
   // **頼みごとは3つある。** 教材の下書き(既定)・カタマリごとの訳(0021)・

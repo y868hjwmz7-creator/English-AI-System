@@ -49,6 +49,36 @@
  *   (`playMark.js` / `gamify.js` / `speechDraft.js` と同じ考え方)。
  */
 import { DEFAULT_TONE, writingToneOf } from '../data/writingTones.js'
+import { viewerRoleOf } from './viewer.js'
+
+/**
+ * **添削を走らせられるのは、トレーナーと管理者だけ**
+ * (2026-09 利用者の指定・**方針の変更**)。
+ *
+ *   > いや、ゲストには実行にしてください。ゲストから下書きをもらったら
+ *   > トレーナー側だけでできるようにしたいです。もしくは課金プランなど、
+ *   > 将来的に課金さしたときのみアンロックできるように、裏では取っておいてください。
+ *
+ * 【ゲストは「書く」まで。走らせるのはトレーナー】
+ *
+ *   ゲストが書いた英文は `material_progress`(0025)に残るので、
+ *   **トレーナーがそのゲストのページで同じ教材を開けば、そのまま出てくる。**
+ *   だから受け渡しの仕組みを新しく作る必要がない。
+ *
+ * 【裏に取ってある道】
+ *
+ *   窓口(`generate-material`)には、ゲストにも開ける道が**そのまま残して
+ *   ある。** ただし **Secrets の `LEARNER_WRITING_REVIEW` が `on` の
+ *   ときだけ**通る(既定は通らない)。課金プランを入れた日に、
+ *   Supabase の画面でその1つを足せば開く。**コードは触らなくてよい。**
+ *
+ * 【判断はここ1か所】
+ *   画面ごとに `viewerRoleOf() === 'learner'` と書くと、
+ *   置く場所の数だけ食い違う(`remakeModeOf()` と同じ考え方)。
+ *   **既定は「できない」** —— 役割が分からないうちは走らせない。
+ */
+export const canAskReview = () =>
+  viewerRoleOf() === 'trainer' || viewerRoleOf() === 'owner'
 
 /**
  * **1回に添削できる長さの上限。**

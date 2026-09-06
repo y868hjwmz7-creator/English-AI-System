@@ -878,7 +878,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-06b'
+export const NEED_GEN_REV = '2026-09-06c'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
