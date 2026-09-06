@@ -776,6 +776,19 @@ audio { width: 100%; margin-top: 4px; }
 .card-tools > .btn { flex: 0 1 auto; min-width: 0; }
 .card-tools + .btn-row { margin-top: 8px; }
 
+/* **教材を消す**(2026-09 利用者の指定)。
+   元に戻せない操作なので、**ふだん押すものから離して**カードのいちばん下に
+   置く。細い線で上と分け、右へ寄せる。**赤くしない** ——
+   「まだ」を赤くしないのと同じで、押す前から責める必要はない
+   (何が起きるかは、押したあとの一文が書く) */
+.material-danger {
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.material-danger + .card-hint { text-align: right; }
+
 /* 絞り込みはグラフの上に1列で置く */
 .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .filter-label { color: var(--text-secondary); font-size: 12px; margin-right: 4px; }

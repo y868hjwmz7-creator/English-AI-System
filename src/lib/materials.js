@@ -462,6 +462,59 @@ export async function setMaterialVoices(materialId, voiceIds) {
 }
 
 /**
+ * この教材を**何人のゲストに共有しているか**を数える。
+ *
+ * 消す前に出すためだけのもの。**中身は1件も取ってこない**
+ * (`head: true` なので、返るのは数だけである)。
+ *
+ * **数えられなかったら `null` を返す。** 0 と取り違えると
+ * 「まだ誰にも共有していません」と**嘘の説明**になる。
+ */
+export async function materialShareCount(materialId) {
+  if (!supabase) return null
+  const { count, error } = await supabase
+    .from('assignments')
+    .select('id', { count: 'exact', head: true })
+    .eq('material_id', materialId)
+  if (error) return null
+  return typeof count === 'number' ? count : null
+}
+
+/**
+ * **教材を1本、まるごと消す**(2026-09 利用者の指定)。
+ *
+ *   > また、ゲストに作った教材を消す方法を作って下さい。
+ *   > 全ての場面にて「教材を消す」の機能を追加したいです。
+ *   > トレーナーだけの機能です。ゲストには消せません
+ *
+ * **SQL は1行も要らない**(0044 は管理者に delete を足しただけ)。
+ * `materials` を参照している表はどれも `on delete cascade` か
+ * `set null` なので、**表を1つずつ消して回らない** ——
+ * 途中で失敗すると「どこまで消えたのか」が誰にも分からなくなる
+ * (`erase_learner()` と同じ考え方)。
+ *
+ * **誰が消せるかは RLS が決める。** ここでは数えない
+ * (画面に出すかどうかだけ `canDeleteMaterial()` が決める)。
+ */
+export async function deleteMaterial(materialId) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  const { data, error } = await supabase
+    .from('materials')
+    .delete()
+    .eq('id', materialId)
+    .select('id')
+  if (error) return fail(error, '教材を消せませんでした')
+  /* **0件で返ることがある。** RLS は「消せない」を error ではなく
+     「1行も当たらなかった」で返す。**成功と失敗を同じ見た目で終わらせない**
+     (`setMaterialVoices()` とまったく同じ作法) */
+  if (!data?.length) {
+    return ng('この教材は自分が作ったものではないので、消せません'
+      + '(消せるのは作った本人と管理者だけです)')
+  }
+  return ok({ id: materialId })
+}
+
+/**
  * **同じ中身のまま、別の声で作り直した教材**を1本足す。
  *
  * 中身(本文・設問・訳・カタマリの訳・要点フレーズ)は**そのまま写す。**
@@ -652,13 +705,16 @@ export async function loadMyLearnersDetailed() {
 export async function loadLearnerAssignments(learnerId, limit = 50) {
   if (!supabase) return ng('Supabase が設定されていません')
 
+  /* **`created_by` も取ってくる**(2026-09)。「教材を消す」を出すかどうかは
+     `canDeleteMaterial()` が見るので、無いと**自分で作った教材でも
+     ボタンが出ない。** 0001 からある列なので `opt()` は要らない */
   const { data, error } = await runTolerant(() => supabase
     .from('assignments')
     .select(`
       id, assigned_at, due_on, learner_done_at, admin_checked_at,
       materials (
         id, title, level, kind, headline, ${opt('headline_ja')} teaching_point,
-        industry, genre, scene, ${opt('voice_ids')}
+        industry, genre, scene, created_by, ${opt('voice_ids')}
         material_tags ( tag_id ),
         material_sections ( id, material_items ( id ) )
       )

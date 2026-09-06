@@ -14,6 +14,7 @@ import { loadSearchOpen, saveSearchOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
+import MaterialDelete from './MaterialDelete.jsx'
 import SearchBar from './SearchBar.jsx'
 import { CloseIcon, PlusIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
@@ -97,6 +98,9 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
   const [printId, setPrintId] = useState(null)   // 紙に出している教材
   const [resetAsk, setResetAsk] = useState(null) // 「本当に消す」に変わっている教材
   const [resetDone, setResetDone] = useState(null)
+  /* **教材を消したときの知らせ**(2026-09 利用者の指定)。
+     カードごと消えるので、**一覧の上に出す** —— 押した場所は無くなっている */
+  const [deleted, setDeleted] = useState(null)   // {id, title}
   /* **読み上げ音声を作り直す**(2026-09 実機)。
      「本当に作り直す」の2段にしてある — 押し間違いがそのまま課金になる */
   const [voiceAsk, setVoiceAsk] = useState(null)
@@ -731,6 +735,13 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
 
       {message && <div className="notice notice--ok">{message}</div>}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
+      {/* **消したことは、必ず知らせる**(成功と失敗を同じ見た目で終わらせない)。
+          カードごと消えているので、押した場所には出せない */}
+      {deleted && (
+        <div className="notice notice--ok">
+          <strong>{deleted.title}</strong> を消しました。
+        </div>
+      )}
 
       {loading ? (
         <p className="muted">読み込み中…</p>
@@ -1060,6 +1071,17 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                   </div>
                 </div>
               ) : null}
+
+              {/* **教材を消す**(2026-09 利用者の指定)。
+                  **いちばん下に、1つだけ。** ふだん押すものと同じ行に
+                  並べない —— 元に戻せない操作である。
+                  消せない人には**ボタンごと出ない**(部品の中で決める) */}
+              <MaterialDelete
+                material={m} me={me}
+                onDeleted={(id) => {
+                  setMaterials((list) => list.filter((x) => x.id !== id))
+                  setDeleted({ id, title: m.title })
+                }} />
             </div>
           ))}
         </>

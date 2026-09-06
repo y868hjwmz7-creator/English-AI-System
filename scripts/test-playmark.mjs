@@ -28,6 +28,7 @@ import {
   MAX_CHARS, MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
 } from '../src/lib/speechDraft.js'
 import { exerciseLabel, sectionLabel } from '../src/data/exerciseTypes.js'
+import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import {
   MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
 } from '../src/data/materialKinds.js'
@@ -478,6 +479,104 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(/speechScenesFor/.test(form), '作る画面が、スピーチの場面を出している')
     ok(/generateFromScript/.test(form), '貼った原稿から作る道がある')
     ok(/canPasteBody\(kind\)/.test(form), '貼れるかどうかを、判断1か所に任せている')
+  }
+}
+
+/**
+ * ============================================================================
+ * ⑨ 教材を消す(2026-09 利用者の指定)
+ *
+ *   > また、ゲストに作った教材を消す方法を作って下さい。
+ *   > 全ての場面にて「教材を消す」の機能を追加したいです。
+ *   > トレーナーだけの機能です。ゲストには消せません
+ *
+ * **消せる人を1人でも増やしたら、それは事故である。**
+ * 画面が間違えても RLS が断るが、**断られるまで気づけない**ので
+ * ここで表そのものを見張る。
+ * ============================================================================
+ */
+{
+  console.log('\n▶ 教材を消す(誰が消せるか・何を伝えるか)')
+
+  const mine = { id: 'm1', created_by: 't1' }
+  const other = { id: 'm2', created_by: 't2' }
+  const trainer = { id: 't1', role: 'trainer' }
+  const owner = { id: 'o1', role: 'owner' }
+  const guest = { id: 'g1', role: 'learner' }
+
+  ok(canDeleteMaterial(mine, trainer), '作った本人は消せる')
+  ok(!canDeleteMaterial(other, trainer), '人の教材は、トレーナーには消せない')
+  ok(canDeleteMaterial(other, owner), '管理者は、人の教材でも消せる(0044)')
+  ok(canDeleteMaterial(mine, owner), '管理者は、自分の教材も消せる')
+  // **ゲストは、どうやっても消せない**(言われたことの中心)
+  ok(!canDeleteMaterial(mine, guest) && !canDeleteMaterial(other, guest),
+    'ゲストには消せない(自分あて・人のものとも)')
+  ok(!canDeleteMaterial({ id: 'm3', created_by: 'g1' }, guest),
+    '「自分が作ったこと」になっていても、ゲストには消せない')
+  // **役割が分からないうちは出さない**(既定は見せない)
+  ok(!canDeleteMaterial(mine, { id: 't1' }), '役割が分からなければ、消せない')
+  ok(!canDeleteMaterial(null, trainer) && !canDeleteMaterial(mine, null),
+    '何も渡されなくても落ちない')
+  // **`created_by` を取ってこないと、自分の教材でもボタンが出ない**
+  ok(!canDeleteMaterial({ id: 'm4' }, trainer),
+    '`created_by` が無ければ、トレーナーには出さない(取り違えて消さない)')
+
+  // 消す前の一文。**何が消えて、何が残るのかを書く**
+  {
+    const w0 = deleteWarning(0)
+    const w3 = deleteWarning(3)
+    const wNull = deleteWarning(null)
+    ok(/3 人/.test(w3), '共有している人数を出す', w3)
+    ok(/まだ誰にも/.test(w0), '0 人なら「まだ誰にも共有していない」と言う')
+    /* **数えられなかったときを 0 と取り違えない。**
+       「まだ誰にも共有していません」は、そのとき嘘になる */
+    ok(!/まだ誰にも/.test(wNull), '数えられなければ、0 人とは言わない', wNull)
+    ok(/元には戻せません/.test(w3), '元に戻せないことを、必ず書く')
+    ok(/単語帳/.test(w3), '単語帳の語は消えないことを書く')
+    /* **画面にそのまま出る文字列に、強調の記号を混ぜない**
+       (場面の説明で実際にやってしまった) */
+    ok(![w0, w3, wNull].some((x) => /\*\*/.test(x)),
+      '強調の記号(**)が混ざっていない')
+  }
+
+  // **画面が、本当にこれを使っているか。** 定義だけあって誰も呼ばなければ同じ
+  {
+    const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    const del = read('components/MaterialDelete.jsx')
+    ok(/canDeleteMaterial\(material, me\)/.test(del),
+      '部品が、消せるかどうかを判断1か所に任せている')
+    ok(/if \(!canDeleteMaterial\(material, me\)\) return null/.test(del),
+      '消せない人には、ボタンごと出さない(選ばせてから断らない)')
+    ok(/deleteWarning\(shared\)/.test(del), '押したら、何が消えるかを出す')
+    ok(/ask \? run\(\) : start\(\)/.test(del), '2段で押させる(押し間違いを受け止める)')
+    ok(/materialShareCount\(material\.id\)/.test(del),
+      '共有している人数を、押したときに数える')
+
+    /* **置く場所は2つ**(教材の画面 / ゲストのカードの過去の宿題)。
+       ゲストの「今週の宿題」には置かない —— あちらはゲストの画面である */
+    for (const f of ['components/TrainerMaterials.jsx', 'components/TrainerLearners.jsx']) {
+      ok(/<MaterialDelete/.test(read(f)), `${f.split('/').pop()} に置いてある`)
+    }
+    ok(!/MaterialDelete/.test(read('components/LearnerHomework.jsx')),
+      'ゲストの「今週の宿題」には置いていない(ゲストには消せません)')
+
+    /* **`created_by` を取ってこないと、宿題のカードでボタンが出ない。**
+       画面もライブラリも lint を通るので、**開くまで分からない** */
+    const lib = read('lib/materials.js')
+    ok(/industry, genre, scene, created_by,/.test(lib),
+      '過去の宿題の問い合わせが `created_by` を取ってきている')
+    ok(/if \(!data\?\.length\)[\s\S]{0,200}消せません/.test(lib),
+      'RLS の「0件」を、失敗として返している(成功と同じ見た目で終わらせない)')
+  }
+
+  /* **表の側も見張る。** 画面を直しても、ポリシーが無ければ管理者は消せない */
+  {
+    const sql = readFileSync(
+      new URL('../supabase/migrations/0044_delete_material.sql', import.meta.url), 'utf8')
+    ok(/for delete/.test(sql), '0044 が delete のポリシーを足している')
+    ok(/using \(public\.is_owner\(\)\)/.test(sql), '足すのは管理者だけ(is_owner)')
+    ok(!/is_trainer|is_admin/.test(sql.replace(/--.*$/gm, '')),
+      'トレーナーには足していない(人の教材を消せない)')
   }
 }
 

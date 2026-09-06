@@ -400,6 +400,11 @@ from (
     where conname = 'materials_kind_check'
       and pg_get_constraintdef(oid) like '%speech%'), 88
   union all
+  select '(89) 管理者はどの教材でも消せる(0044)', exists (
+    -- **足したのは delete のポリシー1つだけ。** 作った本人は 0001 のまま
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'materials' and cmd = 'DELETE'), 89
+  union all
   select '(66) アイコンは本人が書き換えられる(0029)', exists (
     -- 列単位の権限。`role` を守ったまま `avatar` だけを開けてある
     select 1 from information_schema.column_privileges

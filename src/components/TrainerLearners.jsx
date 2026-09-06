@@ -15,6 +15,7 @@ import {
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
+import MaterialDelete from './MaterialDelete.jsx'
 import { parseMaterialTitle } from '../lib/format.js'
 import { loadPastFilterOpen, savePastFilterOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
@@ -881,6 +882,18 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                   ? '開いています…' : 'セッションで使う(大きく表示)'}
                               </button>
                             </div>
+                          )}
+
+                          {/* **教材を消す**(2026-09 利用者の指定
+                              「全ての場面にて」)。部品は教材の画面と同じ1つで、
+                              消せない人にはボタンごと出ない。
+                              **消えるのは教材そのもの**なので、この宿題も
+                              道連れになる(`assignments` は cascade) */}
+                          {m && (
+                            <MaterialDelete
+                              material={m} me={me}
+                              onDeleted={(id) => setAssignments((list) => list
+                                .filter((x) => x.material?.id !== id))} />
                           )}
 
                           {/* **中身は、紙に出す一瞬だけ描く** */}

@@ -945,3 +945,91 @@ select pg_temp.expect('教材そのものは消えない(スクールの共有�
   (select count(*)::int > 0 from public.materials), true);
 
 reset role;
+
+-- ────────────────────────────────────────────────────────────────
+-- 教材を消す(0044・2026-09 利用者の指定)
+--
+--   > また、ゲストに作った教材を消す方法を作って下さい。
+--   > 全ての場面にて「教材を消す」の機能を追加したいです。
+--   > トレーナーだけの機能です。ゲストには消せません
+--
+-- **消せる人を1人でも増やしたら事故になる。** RLS は「消せない」を
+-- エラーではなく「1行も当たらなかった」で返すので、
+-- **消したあとに残っているかを数える。**
+--
+-- トレーナー1 はこの時点で退職済み(教材が1本も見えない)なので、
+-- **この節のためだけに、現役のトレーナー3を1人足してある。**
+-- ────────────────────────────────────────────────────────────────
+reset role;
+
+insert into auth.users (id, email)
+  values ('66666666-6666-6666-6666-666666666666', 'trainer3@example.com');
+update public.profiles set role = 'trainer', display_name = 'トレーナー3'
+  where id = '66666666-6666-6666-6666-666666666666';
+
+-- 使い捨ての教材を1本。**中身と、配った先も付ける**(道連れを確かめるため)
+insert into public.materials (id, title, level, kind, status, visibility, created_by)
+values ('aaaaaaaa-0000-0000-0000-0000000000de', '消される教材', 'B1', 'passage',
+        'published', 'school', '66666666-6666-6666-6666-666666666666');
+insert into public.material_items (id, material_id, seq, text_en)
+values ('bbbbbbbb-0000-0000-0000-0000000000de',
+        'aaaaaaaa-0000-0000-0000-0000000000de', 1, 'This will be deleted.');
+insert into public.assignments (id, material_id, learner_id, assigned_by)
+values ('cccccccc-0000-0000-0000-0000000000de',
+        'aaaaaaaa-0000-0000-0000-0000000000de',
+        '22222222-2222-2222-2222-222222222222',
+        '66666666-6666-6666-6666-666666666666');
+
+set role authenticated;
+
+-- ① **ゲストには消せない**(言われたことの中心)
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+delete from public.materials where id = 'aaaaaaaa-0000-0000-0000-0000000000de';
+set request.jwt.claim.sub = '66666666-6666-6666-6666-666666666666';
+select pg_temp.expect('ゲストには教材を消せない',
+  (select count(*)::int from public.materials
+   where id = 'aaaaaaaa-0000-0000-0000-0000000000de'), 1);
+
+-- ② **人の教材は、ほかのトレーナーには消せない。**
+--    共有されているので見えてはいるが、消せてはいけない
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select pg_temp.expect('別のトレーナーにも、その教材は見えている',
+  (select count(*)::int from public.materials
+   where id = 'aaaaaaaa-0000-0000-0000-0000000000de'), 1);
+delete from public.materials where id = 'aaaaaaaa-0000-0000-0000-0000000000de';
+set request.jwt.claim.sub = '66666666-6666-6666-6666-666666666666';
+select pg_temp.expect('人の教材は、別のトレーナーには消せない',
+  (select count(*)::int from public.materials
+   where id = 'aaaaaaaa-0000-0000-0000-0000000000de'), 1);
+
+-- ③ **作った本人は消せる。** 中身も配った先も道連れになる
+delete from public.materials where id = 'aaaaaaaa-0000-0000-0000-0000000000de';
+select pg_temp.expect('作った本人は教材を消せる',
+  (select count(*)::int from public.materials
+   where id = 'aaaaaaaa-0000-0000-0000-0000000000de'), 0);
+reset role;
+select pg_temp.expect('教材の英文も道連れで消える',
+  (select count(*)::int from public.material_items
+   where id = 'bbbbbbbb-0000-0000-0000-0000000000de'), 0);
+select pg_temp.expect('配った先(宿題)も道連れで消える',
+  (select count(*)::int from public.assignments
+   where id = 'cccccccc-0000-0000-0000-0000000000de'), 0);
+
+-- ④ **管理者は、人の教材でも消せる**(0044)。
+--    作った人が退会すると、誰にも消せない教材が残ってしまう
+insert into public.materials (id, title, level, kind, status, visibility, created_by)
+values ('aaaaaaaa-0000-0000-0000-0000000000df', '管理者が消す教材', 'B1', 'passage',
+        'published', 'school', '66666666-6666-6666-6666-666666666666');
+set role authenticated;
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+delete from public.materials where id = 'aaaaaaaa-0000-0000-0000-0000000000df';
+set request.jwt.claim.sub = '66666666-6666-6666-6666-666666666666';
+select pg_temp.expect('管理者は、人の教材でも消せる(0044)',
+  (select count(*)::int from public.materials
+   where id = 'aaaaaaaa-0000-0000-0000-0000000000df'), 0);
+
+-- ⑤ **消しすぎていない。** ほかの教材は1本も減っていない
+select pg_temp.expect('ほかの教材は残っている',
+  (select count(*)::int > 0 from public.materials), true);
+
+reset role;
