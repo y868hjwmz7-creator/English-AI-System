@@ -476,9 +476,34 @@ export default function LessonView({
      **スマホでは、つまみを出さない。** 浮いた操作盤だけで画面幅の
      ほとんどを使うので、動かす余地が無い(効かない操作を見せない)。
      **判断は幅だけ**(`NAV_PUSH_AT` = 768px。パッド以上)。 */
-  const canDrag = useWide(NAV_PUSH_AT)
+  const padUp = useWide(NAV_PUSH_AT)
   const floatsRef = useRef(null)
-  const drag = useDragBox(floatsRef, { enabled: shownSpot === 'float' && canDrag })
+  const drag = useDragBox(floatsRef, { enabled: shownSpot === 'float' && padUp })
+
+  /* ── **スマホでは「用意しています…」を出さない**(2026-09 利用者の指定)
+
+       > プレイヤーの再生ボタンを押した際にいちいち用意していますと
+       > 切り替えで表示されるとその度にプレイヤーの幅が広がり、
+       > そしてすぐ元に戻るので、単語などが連続で再生される時に
+       > 見ていて目が疲れます。これもスマホでは排除してください
+
+     実測(押すボタンの幅)。スマホでは**絵だけ**まで詰めてあるので、
+     文言が入った瞬間にいちばん大きく伸びる。
+
+       | 幅 | 押す前 | 用意しています… | 用意中 N 秒 |
+       |---|---|---|---|
+       | スマホ 390px | **30px** | **141px** | 104px |
+       | パッド 820px | 123px | 149px | 112px |
+
+     しかも黒帯は**まん中寄せ**なので、両隣もそのつど横へ動く。
+     単語の教材を通しで鳴らすと、これが何度もくり返される。
+
+     **「音が出るまで何も起きていないように見える」への答えは残っている** ——
+     絵がスピーカーから Stop に変わる(**幅は1px も動かない**)。
+     CLAUDE.md の「どんなに狭くても消さない」は、
+     **この指定で上書きした**(経緯ごと残す)。 */
+  const playerLabel = playingAll && allWaiting && padUp
+    ? preparingLabel(allSecs) : null
 
 
   /** 通しの読み上げを止める */
@@ -1035,7 +1060,7 @@ export default function LessonView({
                 const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
               }}
               playing={playingAll}
-              label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
+              label={playerLabel}
               at={playAt} total={playableAll.length}
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}
@@ -1305,7 +1330,7 @@ export default function LessonView({
                 }}
                 onGrab={drag.onGrab} moved={drag.moved} onResetPos={drag.reset}
                 playing={playingAll}
-                label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
+                label={playerLabel}
                 at={playAt} total={playableAll.length}
                 unit={countUnit(section?.exercise_type)}
                 onToggle={playWhole} onJump={jumpTo}
@@ -1454,7 +1479,7 @@ export default function LessonView({
                 const v = nextPlace(spot, fitsInBar); setPlace(v); savePlace(v)
               }}
               playing={playingAll}
-              label={playingAll && allWaiting ? preparingLabel(allSecs) : null}
+              label={playerLabel}
               at={playAt} total={playableAll.length}
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}

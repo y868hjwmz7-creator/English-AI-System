@@ -1061,15 +1061,23 @@ function fakeMp3({
          「移動式のプレーヤーは、PCやパッドでは残しましょう。
            スマホでは狭すぎて意味がありません」)。
          スマホでは浮いた操作盤だけで画面幅のほとんどを使う */
-      ['つまめるのはパッド以上だけ', /const canDrag = useWide\(NAV_PUSH_AT\)/],
+      ['パッド以上かを1か所で決める', /const padUp = useWide\(NAV_PUSH_AT\)/],
       ['浮かせた箱は、つまんで動かせる',
-        /useDragBox\(floatsRef, \{ enabled: shownSpot === 'float' && canDrag \}\)/],
+        /useDragBox\(floatsRef, \{ enabled: shownSpot === 'float' && padUp \}\)/],
       /* **黒帯は、紙の外に描く**(2026-09 実機・利用者の指摘
          「再生のマークが黒字に黒なので見えない」)。
          紙(`.lesson-sheet`)は明るい配色の島なので、中に置くと
          `.lesson-sheet .listenpill .btn { color: var(--ink) }` が勝ち、
          **黒地に黒**になる(実測 rgb(36,41,47) on rgb(51,51,45)) */
       ['黒帯は紙のうしろに置く', /<\/div>\s*\n\s*\{\/\* ── 画面の下の黒帯/],
+      /* **スマホでは「用意しています…」を出さない**(2026-09 利用者の指定)。
+         押すボタンが 30px → 141px と 4.7 倍に伸び縮みし、
+         黒帯はまん中寄せなので両隣も一緒に動く(実測)。
+         **文言は1か所で決める** —— 出す場所が3つあるので、
+         書き写すと必ずどこかだけ残る */
+      ['用意しています…は1か所で決める',
+        /const playerLabel = playingAll && allWaiting && padUp/],
+      ['3つとも同じものを使う', /label=\{playerLabel\}[\s\S]*label=\{playerLabel\}[\s\S]*label=\{playerLabel\}/],
       ['つまみを操作盤へ渡す', /onGrab=\{drag\.onGrab\} moved=\{drag\.moved\} onResetPos=\{drag\.reset\}/],
     ]
     for (const [what, re] of want2) if (!re.test(lv)) ng(`入れ替え: ${what}`)
