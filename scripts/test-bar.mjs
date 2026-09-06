@@ -445,9 +445,9 @@ for (const [label, want] of Object.entries(WANT)) {
  *   語の中身は窓口の応答を差し替えて渡す(この環境から Supabase へは届かない)。
  */
 {
-  const WORDS = Array.from({ length: 12 }, (_, i) => ({
+  const WORDS = (box) => Array.from({ length: 12 }, (_, i) => ({
     word_norm: `w${i}`, word: `word${i}`, kind: 'phrase', pos: '熟語',
-    status: 'learning', box: 2, learn_streak: 4,
+    status: 'learning', box, learn_streak: 4,
     due_on: '2020-01-01', added_at: '2026-09-01',
     meaning_ja: `意味${i}`,
     seen_in: 'Not knowing the answer, the new engineer stayed quiet during the'
@@ -456,11 +456,14 @@ for (const [label, want] of Object.entries(WANT)) {
     seen_in_ja: '答えを知らなかったので、その新人は会議のあいだ黙っていた。',
     material_id: null, material_title: null, industry: 'it', topic: null,
   }))
+  /* **箱で出題の形が決まる**(`formForBox`)。
+     0〜1 = 4択 / 2〜3 = 思い出す / 4〜5 = 日本語 → 英語 / 6 = つづり */
+  let box = 2
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   await page.route('**/rest/v1/**', (route) => {
     const u = route.request().url()
     let body = []
-    if (u.includes('review_words')) body = WORDS
+    if (u.includes('review_words')) body = WORDS(box)
     if (u.includes('vocab_week')) body = [{ days: 3, answered: 20, correct: 15, weeks: 5 }]
     if (u.includes('weekly_goal')) body = [{ words_goal: 0, words_done: 0, sent_goal: 0, sent_done: 0 }]
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
@@ -469,7 +472,18 @@ for (const [label, want] of Object.entries(WANT)) {
     status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
   }))
 
-  for (const [what, w, h] of [['スマホ', 390, 844], ['320px', 320, 568]]) {
+  /* **伸ばすのは「思い出す」と「日本語 → 英語」だけ**(利用者の指定)。
+     4択とつづりは、下に選択肢や入力欄があるので**もともと空いていない** ——
+     伸ばすと語と選択肢が数百 px 離れる。**両方向を見る** */
+  const CASES = [
+    ['スマホ / 思い出す', 390, 844, 2, true],
+    ['320px / 思い出す', 320, 568, 2, true],
+    ['スマホ / 日本語 → 英語', 390, 844, 4, true],
+    ['スマホ / 4択', 390, 844, 0, false],
+    ['スマホ / つづり', 390, 844, 6, false],
+  ]
+  for (const [what, w, h, useBox, wantTall] of CASES) {
+    box = useBox
     await page.setViewportSize({ width: w, height: h })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
       { waitUntil: 'networkidle' })
@@ -494,16 +508,26 @@ for (const [label, want] of Object.entries(WANT)) {
       const body = box('.focus-body')
       return {
         画面: window.innerHeight,
+        // **伸ばす印**。付いている形が変わったら、そこで気づけるようにする
+        伸ばす印: card ? card.className.includes('wordcard--recall') : false,
         カード: card ? Math.round(card.getBoundingClientRect().height) : 0,
         答えの下端: ans ? Math.round(ans.getBoundingClientRect().bottom) : null,
         本体を送るか: body ? body.scrollHeight > body.clientHeight + 1 : null,
         横: document.documentElement.scrollWidth > window.innerWidth,
       }
     })
-    // **画面の半分以上**を使っていること(直す前は 1/3 強しか無かった)
-    if (m.カード < m.画面 * 0.5) {
+    /* **高さの割合で「伸ばしていない」を見ない。** 4択は選択肢が4つ並ぶので、
+       伸ばさなくても画面の半分ほどになる(実測 424 / 844px)。
+       見るのは**印が付いている形かどうか**と、
+       付いている形が**本当に画面を使い切っているか**の2つである */
+    if (m.伸ばす印 !== wantTall) {
+      ng(`${what} … 伸ばす印(\`wordcard--recall\`)が ${m.伸ばす印 ? '付いている' : '付いていない'}`,
+        wantTall
+          ? '「思い出す」と「日本語 → 英語」には付ける'
+          : '4択とつづりには付けない(下に選択肢や入力欄がある)')
+    } else if (wantTall && m.カード < m.画面 * 0.5) {
       ng(`${what} … カードが画面の半分も使っていない(${m.カード} / ${m.画面}px)`,
-        '`.wbfocus .wordcard` を伸ばす指定が外れている')
+        '`.wbfocus .wordcard--recall` を伸ばす指定が外れている')
     } else if (m.答えの下端 !== null && m.答えの下端 > m.画面) {
       ng(`${what} … 答えの行が画面の外に出ている(${m.答えの下端} > ${m.画面})`)
     } else if (m.本体を送るか) {
@@ -511,7 +535,8 @@ for (const [label, want] of Object.entries(WANT)) {
     } else if (m.横) {
       ng(`${what} … 横にはみ出している`)
     } else {
-      ok(`${what} … カード ${m.カード} / ${m.画面}px・答えは画面の中・送らない`)
+      ok(`${what} … カード ${m.カード} / ${m.画面}px`
+        + `(${wantTall ? '伸ばす' : '伸ばさない'})・画面は送らない`)
     }
   }
   await page.close()

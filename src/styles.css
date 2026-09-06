@@ -4752,13 +4752,18 @@ html, body { overflow-x: clip; }
      語と答えのボタンが数百 px 離れて目が行き来する。
      44rem は iPhone(844px)で残る高さとほぼ同じなので、
      **スマホとパッドでは実質いっぱいまで広がる**
-   - **結果の1枚(`--result`)には効かせない。** あれは点数と
-     できなかった語を出すもので、伸ばす意味が無い */
-.wbfocus .wordcard:not(.wordcard--result) {
+   - **効かせるのは「思い出す」と「日本語 → 英語」だけ**
+     (`--recall`・2026-09 利用者の指定)。この2つは答えが
+     **2つのボタンだけ**なので、下がまるごと空いていた。
+     **4択とつづりは、下に選択肢や入力欄があるので、もともと空いていない** ——
+     伸ばすと語と選択肢が数百 px 離れて、目が行き来することになる
+   - **結果の1枚(`--result`)にも効かない**(`--recall` が付かない)。
+     あれは点数とできなかった語を出すもので、伸ばす意味が無い */
+.wbfocus .wordcard--recall {
   flex: 1 1 auto; min-height: 0; max-height: 44rem;
   display: flex; flex-direction: column;
 }
-.wbfocus .wordcard:not(.wordcard--result) .wordcard-q {
+.wbfocus .wordcard--recall .wordcard-q {
   flex: 1 1 auto; min-height: 5rem; height: auto;
 }
 /* とじたあとの戻り道 */

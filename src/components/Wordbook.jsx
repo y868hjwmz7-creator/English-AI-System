@@ -857,7 +857,14 @@ export default function Wordbook({
               (集中モードと同じ `.focus-body`)。
               上に積まれた札や絞り込みは、この裏に隠れている */}
           <div className="focus-body">
-          <div className="wordcard" ref={cardRef}>
+          {/* **「思い出す」と「日本語 → 英語」だけ、カードで画面を使い切る**
+              (2026-09 利用者の指定)。この2つは答えが**2つのボタンだけ**
+              なので、下がまるごと空いていた。4択とつづりは、下に
+              選択肢や入力欄があるので**もともと空いていない** ——
+              伸ばすと語と選択肢が数百 px 離れて、目が行き来する。
+              **判断は `isSelfGraded()` 1か所**(形の一覧を2か所に持たない) */}
+          <div className={`wordcard${isSelfGraded(form) ? ' wordcard--recall' : ''}`}
+               ref={cardRef}>
 
             {/* **出題は、高さの決まった枠に入れる**(2026-09 利用者の指定)。
                   > 単語や解答の長さに関わらず、しっかり中央に居座るように
