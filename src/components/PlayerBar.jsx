@@ -33,9 +33,11 @@
  * 【三角は文字で描く】
  *   絵文字は端末ごとに形も大きさも違う(`Stepper.jsx` と同じ理由)。
  */
+import { useRef } from 'react'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
 import SentenceSkip from './SentenceSkip.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
+import { useFitRow } from '../lib/fitRow.js'
 
 /**
  * @param place     'float'(右下)/ 'bar'(上の帯の下)
@@ -55,6 +57,22 @@ export default function PlayerBar({
   playing = false, label = null, at = null, total = 0, unit = '段落',
   onToggle, onJump = null, repeat = null, onRepeat = null,
 }) {
+  /**
+   * **右下では、入るまで詰める**(2026-09 実機・利用者の指摘
+   * 「スマホで『繰り返す』がはみ出てしまう」)。
+   *
+   * 狭い画面の詰め方は **560px / 360px の境目**で書いてあった。
+   * ところが端末の「表示を大きく」で文字が 1.25 倍になると、
+   * **390px でも入らない**(くり返しの単位が画面の外へ切れる)。
+   * **幅だけでは決まらない**ので、`useFitRow` で実際に測って詰める
+   * (集中モードの下の帯・レッスン表示の帯と同じ考え方)。
+   *
+   * **上の帯のときは測らない。** あちらは `.lesson-bar` の側が
+   * 帯まるごとを測って詰めており、**二重に詰めると食い違う。**
+   */
+  const boxRef = useRef(null)
+  useFitRow(boxRef)
+
   if (!total) return null
   const now = Number.isFinite(at) ? at : null
   // **鳴っていないときは、どこまで来たかを 0 にしない。**
@@ -64,6 +82,7 @@ export default function PlayerBar({
 
   return (
     <div className={`player player--${place} no-print`}
+         ref={place === 'float' ? boxRef : null}
          role="group" aria-label="読み上げの操作">
       {/* **鳴らすボタンの両脇は「文」**(2026-09 利用者の指定)。
           1本にまとめた音声のときだけ効く(時刻を控えてあるため) */}
@@ -71,13 +90,20 @@ export default function PlayerBar({
         <button type="button"
                 className={`btn btn--small player-play${playing ? ' is-on' : ''}`}
                 onClick={onToggle}>
+          {/* **言葉は `.listen-word` に入れておく。** それでも入らないときは
+              絵だけになる(`.player--float.is-fit1`)。すぐ右に「3 / 6」が
+              あるので、鳴らすボタンだと分かる。
+              **「用意しています…」は消さない** —— あれは `label` の側で、
+              音が出るまで何も起きていないように見えてしまう */}
           {playing
-            ? <><StopIcon />{label ?? 'Stop'}</>
+            ? <><StopIcon />{label ?? <span className="listen-word">Stop</span>}</>
             /* **狭い画面では「(全体)」を落とす**(2026-09 実機・利用者の指定
                  「再生プレーヤーが2行になるのは絶対にダメです」)。
                すぐ右に「3 / 6 段落」があるので、通しであることは伝わる。
                **落とすのは添えの言葉だけ** —— 「Listen」は必ず残る */
-            : <><SpeakerIcon />{label ?? (<>Listen<span className="wide-text"> (全体)</span></>)}</>}
+            : <><SpeakerIcon />{label ?? (
+              <span className="listen-word">Listen<span className="wide-text"> (全体)</span></span>
+            )}</>}
         </button>
       </SentenceSkip>
 

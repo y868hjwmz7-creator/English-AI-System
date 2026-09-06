@@ -6466,6 +6466,34 @@ html, body { overflow-x: clip; }
 /* 右下では、進み具合の帯は場所を取らせない(押すものが先) */
 .player--float .player-track { flex: 0 1 48px; }
 
+/* ── 右下の操作盤は、入るまで詰める(`useFitRow`)──────────────────
+   2026-09 実機・利用者の指摘「スマホで『繰り返す』がはみ出てしまう」。
+
+   狭い画面の詰め方は **560px / 360px の境目**で書いてあった。
+   ところが端末の「表示を大きく」で文字が 1.25 倍になると、
+   **390px でも入らない** —— くり返しの単位(「段落」)が
+   **画面の外へ切れて**いた。**幅だけでは決まらない。**
+
+   だから幅から当てるのをやめ、**実際にあふれているかを測って**
+   入るまで印を1つずつ足す(集中モードの下の帯と同じ考え方)。
+
+   | 印 | 何を削るか | なぜその順か |
+   |---|---|---|
+   | `is-fit1` | `Listen` / `Stop` の言葉 | 絵と、すぐ右の「3 / 6」で通じる |
+   | `is-fit2` | 余白 | 押せる大きさは割らない |
+   | `is-fit3` | 三角の幅・字の大きさ | **28px は割らない** |
+
+   **数(3 / 6)と、くり返しの単位は1文字も削らない。**
+   そこが読めないと、何をしているのか分からない。
+   **置き場所の切り替え(▲)も消さない** —— 消すと上の帯へ戻す道が
+   無くなる(行き止まりを作らない)。 */
+.player--float.is-fit1 .listen-word { display: none; }
+.player--float.is-fit2 { gap: 4px; padding: 4px; }
+.player--float.is-fit2 .btn { padding: 5px 6px; }
+.player--float.is-fit3 .listenpill-arrow { min-width: 28px; padding: 0 5px; }
+.player--float.is-fit3 .player-at { font-size: 11px; }
+.player--float.is-fit3 .player-place { padding-left: 5px; padding-right: 5px; }
+
 /* ② 上の帯のすぐ下に貼り付ける(`.jobbar` と同じ作法)。
    **いつも要る1行には足さない** — あそこは 390px でぎりぎり1行で、
    5つめを足すと2段になり、紙がそのぶん狭くなる */

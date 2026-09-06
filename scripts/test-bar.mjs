@@ -280,26 +280,56 @@ for (const [label, want] of Object.entries(WANT)) {
  *    駄目**である。だから幅を変えて**実際に描かせ、高さで数える。**
  *    1行はおよそ 50px。2行になると倍になるので、そこで見分ける。
  *    右端が画面から出ていないかも一緒に見る(押せなくなるため)。
+ *
+ *    **高さと右端だけでは足りない**(2026-09 実機・利用者の指摘
+ *    「スマホで『繰り返す』がはみ出てしまう」)。操作盤は
+ *    `flex: 0 1 auto; min-width: 0` で**自分は縮む**ので、右端は画面の
+ *    内側のままでも、**中身がその箱からあふれて切れる。**
+ *    だから `scrollWidth` も見る。
+ *
+ *    あわせて**端末の「表示を大きく」**も模す(操作盤の文字を 1.25 倍)。
+ *    幅が同じでも入るかどうかは変わるので、**幅の一覧では拾えない。**
  */
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
   await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
     { waitUntil: 'networkidle' })
   await page.waitForTimeout(300)
-  for (const w of [560, 430, 390, 375, 360, 320]) {
+  for (const [w, big] of [
+    [560, false], [430, false], [402, false], [393, false], [390, false],
+    [384, false], [375, false], [368, false], [360, false], [344, false], [320, false],
+    [430, true], [402, true], [390, true], [375, true], [360, true], [320, true],
+  ]) {
     await page.setViewportSize({ width: w, height: 900 })
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(180)
+    await page.evaluate((on) => {
+      document.getElementById('eas-bigplayer')?.remove()
+      if (!on) return
+      const st = document.createElement('style')
+      st.id = 'eas-bigplayer'
+      st.textContent = '.player--float .btn, .player--float .player-at'
+        + ' { font-size: 16px !important }'
+      document.head.appendChild(st)
+    }, big)
+    await page.waitForTimeout(180)
     const m = await page.evaluate(() => {
       const p = document.querySelector('.player--float')
       if (!p) return null
       const r = p.getBoundingClientRect()
-      return { h: Math.round(r.height), right: Math.round(r.right), win: window.innerWidth }
+      return {
+        h: Math.round(r.height), right: Math.round(r.right), win: window.innerWidth,
+        // **自分は縮むので、中身のあふれも見る**(切れても高さは変わらない)
+        spill: [p, ...p.children].some((b) => b.scrollWidth > b.clientWidth + 1),
+      }
     })
-    if (!m) { ng(`${w}px で右下の操作盤が出ていない`); continue }
-    if (m.h > 70) ng(`${w}px で操作盤が2行になっている`, `高さ ${m.h}px(1行なら 50px ほど)`)
-    else if (m.right > m.win) ng(`${w}px で操作盤が画面からはみ出している`, `右端 ${m.right} > ${m.win}`)
-    else ok(`${w}px … 操作盤は1行(${m.h}px)`)
+    const 印 = big ? `${w}px(文字 1.25 倍)` : `${w}px`
+    if (!m) { ng(`${印} で右下の操作盤が出ていない`); continue }
+    if (m.h > 70) ng(`${印} で操作盤が2行になっている`, `高さ ${m.h}px(1行なら 50px ほど)`)
+    else if (m.right > m.win) ng(`${印} で操作盤が画面からはみ出している`, `右端 ${m.right} > ${m.win}`)
+    else if (m.spill) ng(`${印} で操作盤の中身があふれている`, 'くり返しの単位が画面の外へ切れる')
+    else ok(`${印} … 操作盤は1行(${m.h}px)・あふれ無し`)
   }
+  await page.evaluate(() => document.getElementById('eas-bigplayer')?.remove())
   await page.close()
 }
 
