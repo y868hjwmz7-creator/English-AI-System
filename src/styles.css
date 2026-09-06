@@ -3026,6 +3026,57 @@ html, body { overflow-x: clip; }
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto;
 }
 
+/* ── 帯は、入るまで詰める(`useFitRow`)──────────────────────────
+   2026-09 実機・利用者の指摘「またずれました。直して下さい」。
+
+   帯は**幅の境目**(1380px)で操作盤を出し入れしていた。ところが
+   実測すると、操作盤を入れた帯は **1403px** 要る。**23px 足りない。**
+   しかも端末の「表示を大きく」で帯の文字が 1.25 倍になると **1514px**
+   要るので、1440px のパソコンでも2行になっていた
+   (実測 96px。1行なら 50px)。1024px あたりにも同じ穴があった。
+
+   **幅から当てるのをやめる**(`useFitRow` の考え方・第5.94節)。
+   実際にあふれているかを測り、入るまで印を1つずつ足す。
+   削る順は**言葉を短く → 余白を詰める**で、
+   **数(3 / 6)と設定の値(120% など)は1文字も削らない。** */
+/* ① 添えの言葉を落とす。「✕ 閉じる」→「✕」/「Listen (全体)」→「Listen」/
+      「3 / 6 段落」→「3 / 6」。**すぐ隣に手がかりが残る**ものだけ */
+.lesson-bar.is-fit1 .wide-text { display: none; }
+/* ② 絵だけにする(書き込む / メモ / 表示)。
+      **絵が別物で、`aria-label` も付いている**ので取り違えない */
+.lesson-bar.is-fit2 .mid-text { display: none; }
+/* ③ 余白を詰める。**押せる大きさ(34px)は割らない** */
+.lesson-bar.is-fit3 { gap: 6px; padding-left: 8px; padding-right: 8px; }
+.lesson-bar.is-fit3 .lesson-bar-main,
+.lesson-bar.is-fit3 .lesson-settings { gap: 6px; }
+.lesson-bar.is-fit3 .btn { padding-left: 9px; padding-right: 9px; }
+
+/* **測るあいだだけ、折り返しを止める**(`fitRow.js` の `overWrapping`)。
+   折り返す箱は「あふれない」ので、そのままでは `scrollWidth` で
+   分からない。止めてあふれさせ、測り終えたらすぐ戻す
+   (1コマの中で足して外すので、目には映らない) */
+/* 測るあいだは、**幅を動かすものを全部止める。** 止めないと、
+   中身が「ちょうど収まっているように」見えてしまう。
+
+   | 止めるもの | 止めないと何が起きるか |
+   |---|---|
+   | 折り返し | 入らないぶんが2段目へ落ち、あふれない |
+   | 縮み | 縮む箱(操作盤)が、中身を自分の中へあふれさせる |
+   | 伸び | `flex: 1 1 auto` の箱が横いっぱいに伸びる |
+   | 寄せ(`margin-left: auto`) | 右端に貼り付くので、**いつも右端ぴったり**になる |
+
+   最後の2つを止めていなかったために、**どの幅でも「あふれている」**と
+   読まれ、詰めた形のまま戻らなくなっていた(実測して気づいた)。 */
+/* 折り返しだけは**中まで**止める(中で折り返されると、そこであふれが消える)。
+   **伸び縮みと寄せは、直の子だけ。** 中まで当てると、絵とその隣の言葉の
+   あいだの余白まで消えて、**要る幅を小さく見誤る**(実測でボタン1つ 5px) */
+.is-measuring-row,
+.is-measuring-row * { flex-wrap: nowrap !important; }
+.is-measuring-row > * {
+  flex-shrink: 0 !important; flex-grow: 0 !important;
+  margin-left: 0 !important; margin-right: 0 !important;
+}
+
 /* ── ◀ いまの設定 ▶(2026-09 利用者の指定)────────────────────
    速さ・文字の大きさ・紙の幅の3つを、**同じ形にそろえた。**
    選択肢を全部並べると段の数だけ横に伸びるが(速さは13段、幅は7段)、
@@ -4270,6 +4321,10 @@ html, body { overflow-x: clip; }
     display: flex; flex-basis: 100%; margin-left: 0;
     padding-top: 8px; border-top: 1px solid #45453f;
   }
+  /* **「表示」の中は、わざと2段目に出している。** 測るときに数に入れると
+     「あふれている」と読まれ、意味のない詰めが入る(`fitRow.js`)。
+     狭い画面で1行に収めるのは、いつも見える `.lesson-bar-main` だけである */
+  .is-measuring-row .lesson-settings { display: none !important; }
 }
 
 /* いちばん狭い端末(iPhone SE = 320px)では、「表示」を**絵だけ**にする。

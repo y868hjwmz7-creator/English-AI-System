@@ -95,8 +95,26 @@ const WANT = {
   },
 }
 
-/** 帯が1行に収まっていてほしい幅(第5.80節の実測) */
-const WIDTHS = [1440, 1280, 390, 320]
+/**
+ * 帯が1行に収まっていてほしい幅(第5.80節の実測)。
+ *
+ * **境目でない幅も混ぜる。** 決め打ちの境目(1380px)で操作盤を
+ * 出し入れしていたころは、**1380〜1400px と 861〜1024px に穴**があった
+ * (2026-09 実機「またずれました」)。いまは `useFitRow` が測って詰めるので、
+ * **どの幅でも入る**はずである。
+ *
+ * あわせて**端末の「表示を大きく」**も模す(帯の文字を 1.25 倍)。
+ * 幅が同じでも入るかどうかは変わるので、**幅の一覧では拾えない。**
+ */
+const WIDTHS = [
+  [1600, false], [1500, false], [1440, false], [1420, false], [1400, false],
+  [1380, false], [1360, false], [1280, false], [1100, false], [1024, false],
+  [900, false], [861, false], [860, false], [768, false], [560, false],
+  [430, false], [390, false], [375, false], [320, false],
+  [1600, true], [1500, true], [1440, true], [1400, true], [1380, true],
+  [1100, true], [1024, true], [900, true], [861, true], [560, true],
+  [390, true], [320, true],
+]
 
 let bad = 0
 const ok = (s) => console.log(`✓ ${s}`)
@@ -223,9 +241,20 @@ for (const [label, want] of Object.entries(WANT)) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
     { waitUntil: 'networkidle' })
-  for (const w of WIDTHS) {
+  for (const [w, big] of WIDTHS) {
     await page.setViewportSize({ width: w, height: 900 })
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(200)
+    // 端末の「表示を大きく」を模す(13px → 16px。およそ 1.25 倍)
+    await page.evaluate((on) => {
+      document.getElementById('eas-bigbar')?.remove()
+      if (!on) return
+      const st = document.createElement('style')
+      st.id = 'eas-bigbar'
+      st.textContent = '.lesson-bar .btn, .lesson-bar .player-at,'
+        + ' .lesson-bar .stepper { font-size: 16px !important }'
+      document.head.appendChild(st)
+    }, big)
+    await page.waitForTimeout(200)
     const m = await page.evaluate(() => {
       const bar = document.querySelector('.lesson-bar')
       return {
@@ -233,11 +262,13 @@ for (const [label, want] of Object.entries(WANT)) {
         over: document.documentElement.scrollWidth > window.innerWidth,
       }
     })
+    const 印 = big ? `${w}px(文字 1.25 倍)` : `${w}px`
     // 1行はおよそ 50px。**2行になると倍**になるので、そこで見分ける
-    if (m.h > 80) ng(`${w}px で帯が折り返している`, `高さ ${m.h}px(1行なら 50px ほど)`)
-    else ok(`${w}px … 帯は1行(${m.h}px)`)
-    if (m.over) ng(`${w}px で横にはみ出している`)
+    if (m.h > 80) ng(`${印} で帯が折り返している`, `高さ ${m.h}px(1行なら 50px ほど)`)
+    else ok(`${印} … 帯は1行(${m.h}px)`)
+    if (m.over) ng(`${印} で横にはみ出している`)
   }
+  await page.evaluate(() => document.getElementById('eas-bigbar')?.remove())
   await page.close()
 }
 

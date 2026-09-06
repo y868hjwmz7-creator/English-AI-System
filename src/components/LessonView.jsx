@@ -59,6 +59,7 @@ import Phonetic from './Phonetic.jsx'
 import Stepper from './Stepper.jsx'
 import PlayerBar from './PlayerBar.jsx'
 import useBodyAudio from '../lib/useBodyAudio.js'
+import { FIT_STAGES, overWrapping, useFitRow } from '../lib/fitRow.js'
 
 /** 本文のときだけ ◀ ▶ で挟む。**呼ぶ側に条件を書き散らさない** */
 const withSkip = (on, node) => (on ? <SentenceSkip>{node}</SentenceSkip> : node)
@@ -180,6 +181,16 @@ const saveSize = (id) => {
   try { window.localStorage.setItem(SIZE_KEY, id) } catch { /* 使えなくても困らない */ }
 }
 
+/**
+ * 帯が1行に収まっていないか。
+ *
+ * **書き込みのあいだは測らない。** あのときは帯がまるごと道具に
+ * 入れ替わっており(`.lesson-ink`)、**あちらは折り返してよい**
+ * 作りになっている。測ると、意味のない詰めが入る。
+ */
+const barOverflows = (row) =>
+  (row.classList.contains('is-inking') ? false : overWrapping(row))
+
 export default function LessonView({
   material, onClose,
   // ゲストが開いたときは「知っていた / 知らなかった」も付けられる。
@@ -231,6 +242,24 @@ export default function LessonView({
   const [inkTool, setInkTool] = useState('pen')
   const [ink, setInk] = useState({})     // ページ番号 → 線の配列
   const sheetRef = useRef(null)
+  /**
+   * **帯は、入るまで詰める**(2026-09 実機・利用者の指摘
+   * 「またずれました。直して下さい」)。
+   *
+   * 帯は**幅の境目**(1380px)で操作盤を出し入れしていた。ところが
+   * 実測すると、操作盤を入れた帯は **1403px** 要る。**23px 足りない。**
+   * しかも端末の「表示を大きく」で文字が 1.25 倍になると **1514px** 要る
+   * ので、1440px のパソコンでも2行になっていた。
+   *
+   * **幅から当てるのをやめる**(`useFitRow`・第5.94節)。
+   * 実際にあふれているかを測り、入るまで印を1つずつ足す。
+   * 何を削るかは `styles.css` が持つ(ここに px を書かない)。
+   *
+   * **折り返す帯なので `overWrapping` を渡す。** ふつうの `over()` は
+   * `scrollWidth` を見るが、**折り返す箱はあふれない**ので気づけない。
+   */
+  const barRef = useRef(null)
+  useFitRow(barRef, FIT_STAGES, barOverflows)
   /**
    * **セッションの記録**(0032・2026-09 利用者の指定)。
    *
@@ -770,7 +799,7 @@ export default function LessonView({
   return (
     <div className="lesson" role="dialog" aria-label="セッションで使う表示">
       {/* 操作するところ。共有される側にも見えるが、紙の外に置く */}
-      <div className={`lesson-bar no-print${pen ? ' is-inking' : ''}`}>
+      <div className={`lesson-bar no-print${pen ? ' is-inking' : ''}`} ref={barRef}>
         {/* ── 書き込みのあいだは、**帯をまるごと入れ替える** ──────
             2026-09 利用者の指定。
 
@@ -988,9 +1017,13 @@ export default function LessonView({
           {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}
           <Stepper label="幅" options={WIDTHS} value={width} className="lesson-widths"
                    onChange={(id) => { setWidth(id); saveWidth(id) }} />
+          {/* **言葉は `.mid-text` に入れておく。** 帯が入らないときは
+              絵だけになる(`.lesson-bar.is-fit2`)。絵は別物なので
+              取り違えないが、**`aria-label` は必ず添える** */}
           <button type="button" className="btn btn--small"
+                  aria-label="印刷 / PDFで保存"
                   onClick={() => printElement(document.getElementById('lesson-sheet'))}>
-            <PrintIcon />印刷
+            <PrintIcon /><span className="mid-text">印刷</span>
           </button>
         </div>
 
