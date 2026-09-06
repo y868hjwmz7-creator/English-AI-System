@@ -942,6 +942,71 @@ for (const [label, want] of Object.entries(WANT)) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   ⑨-2 語を長押ししたら、調べ方を教える(2026-09 利用者の指定)
+
+     > 単語に長押しした時に表示が出るようにしましょう
+
+   狭い画面では語を押せない(送りとぶつかるため・CLAUDE.md)。
+   ところが**押しても何も起きない**ので、調べられないのか
+   壊れているのかが、利用者には分からなかった。
+
+   見るのは4つ。**「出る」だけを見ない** ——
+   広い画面でも出るようにしてしまったら、緑のままになる。
+   ══════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 780 }, hasTouch: true })
+  /** 指を置いて、動かさずに待つ。`.etext-sent` は必ずある(文の箱) */
+  const hold = async (scroll = false) => {
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.etext-sent', { timeout: 15000 })
+    const b = await (await page.$('.etext-sent')).boundingBox()
+    await page.dispatchEvent('.etext-sent', 'pointerdown',
+      { pointerType: 'touch', clientX: b.x + 3, clientY: b.y + 3 })
+    if (scroll) await page.evaluate(() => { document.querySelector('.lesson-sheet').scrollTop += 120 })
+    await page.waitForTimeout(700)
+    return page.$('.etext-hint')
+  }
+
+  // ① 狭い画面では出る。**行き先(集中モード)まで届く**
+  let hint = await hold()
+  if (!hint) {
+    ng('長押しの案内 … 390px で出ない',
+      '押しても何も起きないと、調べられないのか壊れているのか分からない')
+  } else {
+    const r = await hint.boundingBox()
+    if (r.x < 0 || r.x + r.width > 390) {
+      ng(`長押しの案内 … 画面からはみ出している(${Math.round(r.x)}〜${Math.round(r.x + r.width)} / 390)`)
+    } else {
+      await page.click('.etext-hint .btn')
+      await page.waitForTimeout(400)
+      if (!await page.$('.focus')) ng('長押しの案内 … 押しても集中モードに入らない')
+      else if (await page.$('.etext-hint')) ng('長押しの案内 … 押しても消えない')
+      else ok(`長押しの案内 … 390px で出て、集中モードへ入る(${Math.round(r.width)}px)`)
+    }
+  }
+
+  // ② 送ろうとして指を置いただけでは出ない
+  if (await hold(true)) {
+    ng('長押しの案内 … 画面を送っているのに出た',
+      '`watchHold` の取り消しが効いていない')
+  } else {
+    ok('長押しの案内 … 送っているあいだは出ない')
+  }
+
+  // ③ 広い画面では出さない(語をそのまま押せるので要らない)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  if (await hold()) {
+    ng('長押しの案内 … 1440px でも出た',
+      '広い画面では語を押せば意味が出る。**同じことを2つ見せない**')
+  } else {
+    ok('長押しの案内 … 1440px では出ない')
+  }
+
+  await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════
    ⑩ 骨組み — **どこにいるかが、いつでも画面に出ているか**(2026-09・第3週)
 
    実測して2つ見つけた。

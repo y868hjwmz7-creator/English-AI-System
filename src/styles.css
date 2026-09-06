@@ -4065,6 +4065,28 @@ html, body { overflow-x: clip; }
 }
 .etext-pop-close:hover { color: var(--pop-fg); }
 
+/* ── 語を長押ししたときの案内(2026-09 利用者の指定)
+      > 単語に長押しした時に表示が出るようにしましょう
+
+   狭い画面では語を押せない(送りとぶつかるため・CLAUDE.md)。
+   ところが**押しても何も起きない**ので、調べられないのか
+   壊れているのかが分からなかった。**行き先を、その場で教える。**
+
+   **色は決め打ちしない。** `createPortal` で body の直下に出るので、
+   何も足さなければアプリの配色に従い、集中モードの紙ともそろう
+   (`.focus-paper` と同じ考え方)。 */
+.etext-hint {
+  position: fixed; z-index: 200;
+  max-width: min(20rem, calc(100vw - 16px));
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-8);
+  padding: 12px;
+  border: 1px solid var(--border); border-radius: var(--r-12);
+  background: var(--surface-1); color: var(--text-primary);
+  box-shadow: var(--shadow-2);
+}
+.etext-hint-line { margin: 0; font-size: var(--fs-13); line-height: 1.6; }
+.etext-hint-line b { color: var(--accent); }
+
 /* 以前は「知らなかった」だけ赤枠にしていたが、責められているように
    見えるとの指摘(2026-08)。どちらの選択も同じ重さで置く */
 

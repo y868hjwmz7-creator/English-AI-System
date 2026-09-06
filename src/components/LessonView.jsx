@@ -1707,6 +1707,11 @@ export default function LessonView({
                     <div className="lesson-en">
                       <EnglishText text={it.prompt_en} textJa={it.prompt_ja} level={material.level}
                                    statuses={wordStatuses} onMark={markWord}
+                                   /* 狭い画面で語を長押ししたら、調べ方を教える。
+                                      **本文のときだけ** — 集中モードは本文を出す画面
+                                      なので、ドリルや単語では行き先が無い
+                                      (右下の「集中モード」を出す条件と同じ) */
+                                   onNeedFocus={secIsPassage ? openFocus : null}
                                    readingAt={speakingKey === k(it, i) ? readingAt : null} />
                     </div>
                   )}

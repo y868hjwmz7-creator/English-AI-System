@@ -60,6 +60,7 @@ import { useEffect, useRef, useState } from 'react'
 import { lookupWord, normWord, preloadGlosses, splitWords } from '../lib/vocab.js'
 import { splitSentences } from '../lib/wordTiming.js'
 import GlossPopover from './GlossPopover.jsx'
+import Popover from './Popover.jsx'
 import { tapFeedback } from '../lib/haptics.js'
 import { useWide } from '../lib/nav.js'
 
@@ -101,6 +102,24 @@ function watchScrollOnce() {
  */
 const MOVE_SLOP = 10
 
+/**
+ * **語を長押ししたら、調べ方を教える**(2026-09 実機・利用者の指定)。
+ *
+ *   > 単語に長押しした時に表示が出るようにしましょう
+ *
+ * 狭い画面では、語を押しても意味が出ない(`tappable`)。ところが
+ * **何も起きないだけ**で、理由も、どこへ行けばよいかも出していなかった。
+ * 「効かない操作を見せない」の裏返しで、**効かないことを黙っていた。**
+ *
+ * 【長押しで出すのは、意味ではなく「道」である】
+ *   長押しで**意味を開く**のは 2026-08 に3度踏んで取り下げた ——
+ *   送ろうとして指を置いただけで開いてしまい、時間で判定するかぎり
+ *   塞げない穴だった(CLAUDE.md)。
+ *   **ここで出すのは案内の1行**なので、誤って出ても
+ *   **動かす・送るだけで消える。** 読むものを覆い隠さない。
+ */
+const HINT_HOLD_MS = 450
+
 export default function EnglishText({
   text, textJa = '', level = 'B1', statuses = null, onMark = null,
   className = '', lang = 'en', readingAt = null,
@@ -127,6 +146,12 @@ export default function EnglishText({
    *   ただの文字に戻す。
    */
   tappable = 'auto',
+  /**
+   * **語が押せないときに、行き先を教える**(2026-09 利用者の指定)。
+   * 渡されたときだけ、長押しで案内が出る。
+   * **渡されなければ何も出さない** —— 行き先が無いのに誘わない。
+   */
+  onNeedFocus = null,
 }) {
   /** **判断は幅だけ**(`useWide`)。UA も `pointer` も見ない(CLAUDE.md) */
   const wide = useWide()
@@ -152,6 +177,8 @@ export default function EnglishText({
    */
   const gesture = useRef('idle')
   const [holding, setHolding] = useState(false)  // いま指を置いているか(手応え)
+  const [hintAt, setHintAt] = useState(null)     // 調べ方の案内を出す場所
+  const hintTimer = useRef(null)                 // 長押しを数えている最中
   const heldRef = useRef(false)    // なぞり・タップで開いた直後か(続く click を捨てる)
   const touchRef = useRef(false)   // 直前の操作が「触る」だったか
   const rootRef = useRef(null)
@@ -294,6 +321,8 @@ export default function EnglishText({
   /** この指の動きは、もうタップではない(動いた・送られた) */
   const cancelHold = () => {
     tapRef.current = false
+    // **長押しの数えも一緒にやめる。** 動いた指は「調べたい」ではない
+    if (hintTimer.current) { clearTimeout(hintTimer.current); hintTimer.current = null }
     // 見張り(動いたか・画面が送られたか)も一緒に外す
     holdOff.current?.()
     holdOff.current = null
@@ -329,6 +358,15 @@ export default function EnglishText({
       document.removeEventListener('scroll', onScroll, { capture: true })
     }
   }
+
+  /* **案内は、送ったら消える。** 誤って出ても読むものを覆い隠さない
+     (長押しで意味を開いて3度踏んだ穴を、ここでは繰り返さない) */
+  useEffect(() => {
+    if (!hintAt) return undefined
+    const off = () => setHintAt(null)
+    document.addEventListener('scroll', off, { capture: true, passive: true })
+    return () => document.removeEventListener('scroll', off, { capture: true })
+  }, [hintAt])
 
   const close = () => {
     cancelHold()
@@ -647,13 +685,57 @@ export default function EnglishText({
   })
 
   return (
-    <span className={`etext ${className}`} lang={lang} ref={rootRef}>
+    <span className={`etext ${className}`} lang={lang} ref={rootRef}
+          /* ── **語を長押ししたら、調べ方を教える**(2026-09 利用者の指定)
+                 > 単語に長押しした時に表示が出るようにしましょう
+
+               語が押せるときは出さない(調べられるのだから要らない)。
+               行き先(`onNeedFocus`)が無いときも出さない ——
+               **行き先が無いのに誘わない。**
+
+               見張りは `watchHold` を使い回す。あれは
+               **動いた・画面が送られたら取り消す**ので、
+               送ろうとして指を置いただけでは出ない。 */
+          onPointerDown={!canTap && onNeedFocus ? (e) => {
+            if (e.pointerType !== 'touch') return
+            /* 出す場所は**指を置いた文**。段落まるごとを基準にすると、
+               長い段落では案内が画面の外まで押し出される。
+               `.etext-run`(印の付いたまとまり)が無いことのほうが多いので、
+               **必ずある `.etext-sent` まで落とす** */
+            const el = e.target?.closest?.('.etext-run')
+              ?? e.target?.closest?.('.etext-sent')
+              ?? rootRef.current
+            watchScrollOnce()
+            watchHold(e.clientX, e.clientY)
+            hintTimer.current = setTimeout(() => {
+              hintTimer.current = null
+              if (scrolledRef.current) return   // 送っていた。案内は出さない
+              setHintAt(el)
+            }, HINT_HOLD_MS)
+          } : undefined}
+          onPointerUp={!canTap && onNeedFocus ? cancelHold : undefined}
+          onPointerCancel={!canTap && onNeedFocus ? cancelHold : undefined}>
       {groups.map((rs, gi) => (
         <span key={`sent-${gi}`}
               className={`etext-sent${sentences[gi] === readingSpan ? ' is-reading' : ''}`}>
           {rs.map(renderRun)}
         </span>
       ))}
+
+      {/* **出すのは1行と、行き先だけ。** 概念の説明はしない ——
+          一度入れば「1つずつ大きく出る」ことは体で分かる */}
+      {hintAt && (
+        <Popover anchorEl={hintAt} onClose={() => setHintAt(null)}
+                 className="etext-hint" label="語の調べ方">
+          <p className="etext-hint-line">
+            語の意味は<b>集中モード</b>で調べられます。
+          </p>
+          <button type="button" className="btn btn--small btn--primary"
+                  onClick={() => { setHintAt(null); onNeedFocus?.() }}>
+            集中モードで開く
+          </button>
+        </Popover>
+      )}
     </span>
   )
 }
