@@ -498,6 +498,26 @@ for (const [label, want] of Object.entries(WANT)) {
       ng(`${w}px … 余った幅が隙間になっていない`,
         `余り ${g.余り}px なのに 隙間 ${g.隙間.join(' / ')}px`)
     } else ok(`${w}px … 余り ${g.余り}px を隙間へ配った(${g.隙間.join(' / ')}px)`)
+
+    /* ── **並ぶものの背丈をそろえる**(2026-09 実機・利用者の指定)
+           > 段落送りの枠だけ細いのを、他のやつと同じにしてください
+
+         錠剤の背丈は**中身なり**である。Listen のまん中は
+         `.btn--small`(34px)なので 36px になるが、段落送りのまん中は
+         `.player-at` という**ただの文字**なので 22.4px しかなく、
+         隣に並ぶと1つだけ細く見えていた(実測)。
+
+         **1つでも背丈が違えば赤くする。** `.listenpill-mid` の
+         `min-height` を外すと、ここが 36 / 22 / 36 になる。 */
+    const hs = await page.evaluate(() => {
+      const p = document.querySelector('.player--dock')
+      return [...p.children]
+        .filter((c) => c.getBoundingClientRect().width > 0)
+        .map((c) => Math.round(c.getBoundingClientRect().height))
+    })
+    if (new Set(hs).size !== 1) {
+      ng(`${w}px … 操作盤に並ぶものの背丈がそろっていない`, `${hs.join(' / ')}px`)
+    } else ok(`${w}px … 並ぶものは全部 ${hs[0]}px(背丈がそろっている)`)
   }
 
   /* **パッド以上では、これまでどおり浮かせられる**(利用者の判断
