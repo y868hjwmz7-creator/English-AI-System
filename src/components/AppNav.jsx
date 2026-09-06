@@ -51,7 +51,7 @@ function NavDot({ kind, onIcon = false }) {
 }
 
 export default function AppNav({
-  items, value, onChange, open, onClose, wide, title, footer,
+  items, value, onChange, open, onClose, wide, compact = false, title, footer,
 }) {
   const panelRef = useRef(null)
   const list = (items ?? []).filter(Boolean)
@@ -79,7 +79,12 @@ export default function AppNav({
     if (drawer) panelRef.current?.querySelector('button')?.focus()
   }, [drawer])
 
-  const pick = (id) => { onChange(id); if (!wide) onClose() }
+  /* 選んだら閉じるかどうか。
+     ・スマホ … かぶせているので、選んだら必ず閉じる
+     ・**パッド**(768〜1023px)… 押し出しているが、開いていると本文が
+       520px まで狭まる。**選んだら細い柱へ戻す**(`compact`)
+     ・PC … 開いたまま。次の画面へすぐ移れる */
+  const pick = (id) => { onChange(id); if (!wide || compact) onClose() }
 
   return (
     <>

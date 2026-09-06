@@ -11,7 +11,7 @@ import {
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
-import { loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } from './lib/nav.js'
+import { NAV_PUSH_AT, loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } from './lib/nav.js'
 import { setViewerRole } from './lib/viewer.js'
 import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
@@ -29,8 +29,27 @@ import { loadState, resetState, saveState } from './lib/store.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 
 export default function App() {
-  // 'materials' 教材 / 'homework' 今週の宿題 / 'learner' 学習の記録 / 'admin' 集計
-  const [view, setView] = useState('learner')
+  /**
+   * いま開いている画面。'materials' 教材 / 'learners' ゲスト / 'admin' 集計 /
+   * 'homework' 今週の宿題 / 'wordbook' 単語帳 / 'qr' Quick Response /
+   * 'pronunciation' 発音練習。
+   *
+   * 【`'learner'` から始めない】(2026-09・第3週に実測して気づいた)
+   *
+   *   ここは長く `'learner'`(学習の記録)から始まっていた。
+   *   ところが**その画面は 0022 で外してある。** つまり
+   *   **開いた瞬間の画面が、メニューのどれでもない**状態だった。
+   *
+   *   - 左のメニューで**どこにいるかの印が1つも点かない**
+   *   - 上の帯の名前も出ない(`pageLabel` が控えの
+   *     「English AI System」に落ちる)
+   *   - 中身は最後の枝(集計)に落ち、その上にゲストを選ぶ欄だけが残る
+   *
+   *   パソコンでは名前が並んでいるので気づけなかったが、
+   *   **パッドの細い柱は絵だけ**なので、印が無いと本当に分からない。
+   *   下の `useEffect` が「メニューに無い画面なら、先頭へ移す」ようにしてある。
+   */
+  const [view, setView] = useState('materials')
   /**
    * **「この教材の語だけ練習する」で渡ってきた語**(0047・2026-09)。
    *
@@ -43,7 +62,6 @@ export default function App() {
    */
   const [onlyWords, setOnlyWords] = useState(null)
   const [state, setState] = useState(null)
-  const [learnerId, setLearnerId] = useState(null)
   /* **「発行する画面へ」を押した合図**(2026-09 利用者の指定)。
      数を1つ増やすだけ。`TrainerMaterials` がこれを見て、
      作る画面(下書きが入った状態)を開く。
@@ -104,6 +122,13 @@ export default function App() {
   // 狭い画面ではふだん隠れていて ☰ でかぶせて開く。
   // **たたんだかどうかは覚える**(毎回たたみ直すのでは意味がない)。
   const wide = useWide()
+  /* **パッドの縦向き(768〜1023px)には、絵だけの細い柱を出す**(2026-09・第3週)。
+     実測すると 1024px 未満はすべて「スマホと同じ」扱いで、
+     **メニューが丸ごと隠れていた。** 768px でも残り 700px あるので、
+     68px の柱を置く幅は十分にある。
+     **`wide`(1024)はそのまま。** あちらは語のタップなど**メニュー以外**も
+     見ている値なので、動かすと関係のないところが変わる */
+  const navPush = useWide(NAV_PUSH_AT)
   const [navOpen, setNavOpen] = useState(loadNavOpen)
   // 狭い画面へ移ったときは、開いたままにしない。
   // かぶせる形なので、開いたままだと中身が読めない
@@ -218,7 +243,6 @@ export default function App() {
   useEffect(() => {
     const loaded = loadState(buildSeed())
     setState(loaded)
-    setLearnerId(loaded.learners[0]?.id ?? null)
   }, [])
 
   // データが変わるたびに保存する
@@ -230,17 +254,6 @@ export default function App() {
     if (!window.confirm('保存されているデータをすべて消して、サンプルデータに戻します。よろしいですか?')) return
     const fresh = resetState(buildSeed())
     setState(fresh)
-    setLearnerId(fresh.learners[0]?.id ?? null)
-  }
-
-  if (!authChecked || !state) {
-    return <div className="loading">読み込み中…</div>
-  }
-
-  // Supabase が設定されているならログインを必須にする。
-  // 未設定のときは従来どおり、ログインなしで動く。
-  if (isSupabaseConfigured && !session) {
-    return <SignIn />
   }
 
   // 画面の一覧。**メニューも、帯に出す名前も、これ1つを見る。**
@@ -272,6 +285,41 @@ export default function App() {
     // しかも入れ忘れる。数えたものはトレーナーの「ゲスト」画面に出る
   ].filter(Boolean)
 
+  /**
+   * **メニューに無い画面を開いたままにしない**(2026-09・第3週)。
+   *
+   * 並ぶ項目は役割で変わる(ゲストに「教材」は無い)。役割が分かるのは
+   * ログインしたあとなので、**開いたときの画面がそのままでは合わないことがある。**
+   * そのときは**先頭の画面へ移す。**
+   *
+   * ここが無いと、左のメニューの印も上の帯の名前も出ないまま、
+   * 中身だけが最後の枝に落ちる —— それが 0022 から続いていた状態である。
+   *
+   * **見張るのは id の並びだけ。** `pages` は描くたびに新しい配列になるので、
+   * そのまま渡すと**毎回動いてしまう**(「見張りに、自分が書き換えるものを
+   * 入れない」と同じ落とし穴)。
+   *
+   * **早く帰る条件より前に置く**(hook は必ず同じ順で呼ばれなければならない)。
+   * 後ろに置いて、実際に画面が真っ白になった。
+   */
+  const pageIds = pages.map((p) => p.id).join(',')
+  useEffect(() => {
+    const ids = pageIds ? pageIds.split(',') : []
+    if (!ids.length || ids.includes(view)) return
+    setView(ids[0])
+  }, [pageIds, view])
+
+  if (!authChecked || !state) {
+    return <div className="loading">読み込み中…</div>
+  }
+
+  // Supabase が設定されているならログインを必須にする。
+  // 未設定のときは従来どおり、ログインなしで動く。
+  if (isSupabaseConfigured && !session) {
+    return <SignIn />
+  }
+
+
   /* 教材の画面に付ける印(2026-09 利用者の指定)。
      **できあがったことを、音だけで伝えない。**
      音は切れるし、レッスン中や席を外しているときは聞こえない。
@@ -292,6 +340,7 @@ export default function App() {
       : p))
     : pages
   const pageLabel = pages.find((p) => p.id === view)?.label ?? 'English AI System'
+
 
   /* 左のメニューの下に置くもの。
      **配色も色づかいも、一度決めたら何度も触るものではない。**
@@ -396,7 +445,7 @@ export default function App() {
   )
 
   return (
-    <div className={`app-shell${wide ? ' is-wide' : ' is-narrow'}`
+    <div className={`app-shell${navPush ? ' is-wide' : ' is-narrow'}`
                     + (navOpen ? ' nav-open' : ' nav-closed')}>
       <AppNav
         items={navItems} value={view}
@@ -407,7 +456,7 @@ export default function App() {
            `view` は変わらないので、押されたことを数で伝える。
            受け取った画面が、自分の中の「開いているもの」を閉じる */
         onChange={(id) => { setView(id); setNavTick((n) => n + 1) }}
-        open={navOpen} wide={wide}
+        open={navOpen} wide={navPush} compact={!wide}
         onClose={() => setNavOpen(false)}
         title="English AI System"
         footer={navFooter}
@@ -417,7 +466,7 @@ export default function App() {
         {/* どこにいても ☰ が同じ場所にある。名前も出すので、
             スマホでメニューが隠れていても「いまどこか」が分かる */}
         <AppTopbar
-          onToggle={toggleNav} open={navOpen} wide={wide} pageLabel={pageLabel}
+          onToggle={toggleNav} open={navOpen} wide={navPush} pageLabel={pageLabel}
           /* **いま見ている画面の印だけ**を出す。
              「単語帳」の横に青い丸が出ても、何の印か分からない */
           badge={view === 'materials' ? jobBadge : null}
@@ -494,20 +543,11 @@ export default function App() {
           {/* 本文の上に置くのは、**その画面で使うものだけ。**
               「サンプルデータに戻す」はどの画面にも要らないので下へ移した
               (試作版の後始末であって、日々の操作ではない) */}
-          {view === 'learner' && (
-            <div className="app-toolbar">
-              <label className="field field--inline">
-                <span>ゲスト</span>
-                <select value={learnerId ?? ''} onChange={(e) => setLearnerId(e.target.value)}>
-                  {state.learners.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}({l.grade})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
+          {/* ここには「ゲスト」を選ぶ欄があった。**外した**(2026-09・第3週)。
+              `view === 'learner'`(学習の記録)のときだけ出す作りだったが、
+              **その画面は 0022 で無くなっている。** 選んだ値(`learnerId`)も
+              どこからも読まれていなかった —— つまり**押しても何も起きない欄**が、
+              開いた瞬間の画面に1つ置かれていた。 */}
 
           <SupabaseStatus />
 

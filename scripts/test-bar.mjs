@@ -152,6 +152,19 @@ writeFileSync(join(dir, '.env'), [
   'VITE_SUPABASE_ANON_KEY=sb_publishable_dummy_for_test',
 ].join('\n'))
 
+/* **本物のアプリ**(左のメニュー込み)を描く入り口。
+   `__screens.jsx` は部品を1つずつ描くだけなので、
+   **骨組み(メニュー・上の帯)はそちらには無い。**
+   `.env` を空にしてあるので Supabase 未設定として立ち上がり、
+   ログインを通さずに中の画面が開く(CLAUDE.md) */
+writeFileSync(join(ROOT, '__shell.html'), `<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>骨組みの検証</title></head>
+<body><div id="root"></div>
+<script type="module" src="/src/main.jsx"></script></body></html>
+`)
+
 writeFileSync(join(ROOT, '__bar.html'), `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -165,6 +178,7 @@ const vite = spawn('npx', ['vite', '--config', CFG], { cwd: ROOT, stdio: 'ignore
 const cleanup = () => {
   try { vite.kill('SIGTERM') } catch { /* もう止まっている */ }
   try { rmSync(join(ROOT, '__bar.html')) } catch { /* もう無い */ }
+  try { rmSync(join(ROOT, '__shell.html')) } catch { /* もう無い */ }
   try { rmSync(CFG) } catch { /* もう無い */ }
   try { rmSync(dir, { recursive: true, force: true }) } catch { /* もう無い */ }
 }
@@ -751,6 +765,94 @@ for (const [label, want] of Object.entries(WANT)) {
   if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}/only.png` })
 
   await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ⑩ 骨組み — **どこにいるかが、いつでも画面に出ているか**(2026-09・第3週)
+
+   実測して2つ見つけた。
+
+   ①**メニューが 1024px 未満で丸ごと隠れていた。** パッドの縦向き(768px)
+     でも、画面を移るたびに ☰ を押すことになっていた。
+     いまは **768〜1023px では絵だけの細い柱(68px)**を出す。
+
+   ②**開いた瞬間の画面が、メニューのどれでもなかった。**
+     `view` が `'learner'`(0022 で外した画面)から始まっていたので、
+     **メニューの印も、上の帯の名前も出ない。**
+     パソコンでは名前が並ぶので気づけなかったが、
+     **絵だけの柱では本当に分からない。**
+
+   どちらも `npm run lint` にも `npm run build` にも引っかからない。
+   **描かせて、数えるしかない。**
+   ══════════════════════════════════════════════════════════════ */
+{
+  /* **Supabase を設定した状態では、この検証はできない。**
+     設定してあるとログインを求められ(`<SignIn />`)、骨組みが描かれない。
+     だから**空の `.env` を持つ開発サーバーをもう1本**立てる
+     (ほかの検証は窓口を呼ばないので、あちらの `.env` はそのままでよい)。 */
+  const dir2 = mkdtempSync(join(tmpdir(), 'eas-shell-'))
+  const CFG2 = join(ROOT, 'vite.shell.config.js')
+  const PORT2 = PORT + 7   // 手元の使い捨てとぶつからない番号にする
+  writeFileSync(CFG2, `
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+export default defineConfig({
+  envDir: ${JSON.stringify(dir2)},
+  cacheDir: ${JSON.stringify(join(dir2, 'vite'))},
+  plugins: [react()],
+  server: { port: ${PORT2}, strictPort: true },
+})
+`)
+  writeFileSync(join(dir2, '.env'), '\n')
+  const vite2 = spawn('npx', ['vite', '--config', CFG2], { cwd: ROOT, stdio: 'ignore' })
+  const drop2 = () => {
+    try { vite2.kill('SIGTERM') } catch { /* もう止まっている */ }
+    try { rmSync(CFG2) } catch { /* もう無い */ }
+    try { rmSync(dir2, { recursive: true, force: true }) } catch { /* もう無い */ }
+  }
+  process.on('exit', drop2)
+  let up = false
+  for (let i = 0; i < 150 && !up; i += 1) {
+    try { const r = await fetch(`http://localhost:${PORT2}/__shell.html`); up = r.ok } catch { /* まだ */ }
+    if (!up) await new Promise((r) => setTimeout(r, 200))
+  }
+  if (!up) ng('骨組み … 開発サーバーが立ち上がらなかった')
+
+  const page = await browser.newPage()
+  for (const [w, want] of up ? [[1280, 248], [900, 68], [768, 68], [390, 0]] : []) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.goto(`http://localhost:${PORT2}/__shell.html`, { waitUntil: 'networkidle' })
+    await page.waitForTimeout(600)
+    const m = await page.evaluate(() => {
+      const nav = document.querySelector('.app-nav')
+      const shown = nav && window.getComputedStyle(nav).visibility !== 'hidden'
+      const title = document.querySelector('.app-topbar-title')
+      return {
+        幅: shown ? Math.round(nav.getBoundingClientRect().width) : 0,
+        印: !!document.querySelector('.app-nav-item.is-active'),
+        名前: title ? title.textContent.trim() : '',
+        はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+      }
+    })
+    if (m.幅 !== want) {
+      ng(`骨組み ${w}px … メニューの幅が ${m.幅}px(${want}px のはず)`,
+        want === 68 ? 'パッドでは絵だけの細い柱を出す(`NAV_PUSH_AT`)'
+          : want === 0 ? 'スマホではかぶせる形。ふだんは隠す'
+            : 'PC では名前つきで並ぶ')
+    } else if (!m.印) {
+      ng(`骨組み ${w}px … 「いまどこにいるか」の印が1つも点いていない`,
+        '`view` の初めの値が、メニューに無い id になっていないか')
+    } else if (!m.名前 || m.名前 === 'English AI System') {
+      ng(`骨組み ${w}px … 上の帯に画面の名前が出ていない(${m.名前 || '空'})`,
+        '`pageLabel` が控えに落ちている = その画面はメニューに無い')
+    } else if (m.はみ出し) {
+      ng(`骨組み ${w}px … 横にはみ出している`)
+    } else {
+      ok(`骨組み ${w}px … メニュー ${m.幅}px・印あり・帯に「${m.名前}」`)
+    }
+  }
+  await page.close()
+  drop2()
 }
 
 await browser.close()
