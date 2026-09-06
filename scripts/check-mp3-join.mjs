@@ -31,6 +31,9 @@ import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
 } from '../src/lib/mp3Join.js'
+import {
+  markIndexAt, sentenceShares, sharesToTimes, splitSentences, wordMarks,
+} from '../src/lib/wordTiming.js'
 
 let bad = 0
 const ok = (s) => console.log(`✓ ${s}`)
@@ -1072,6 +1075,126 @@ function fakeMp3({
     } else if (!/onStart: started/.test(read)) {
       ng('鳴り始めたときの知らせが無い')
     } else ok('「鳴った」と言うのは、本当に音が出た瞬間だけ')
+  }
+}
+
+/**
+ * ============================================================================
+ * ⑩ **1本にまとめられない教材でも、文の単位が使える**(2026-09 実機)
+ *
+ *   > 文を飛ばす機能、リピート機能などが一部機能しません。
+ *   > これは、スピーチで自前で長い文を生成したものだけで、
+ *   > 他の教材では機能しています。
+ *
+ *   1本にまとめられるのは **2,800 文字まで**(ElevenLabs の上限)。
+ *   貼った原稿はそれを超えるので段落ごとの MP3 に落ちる。
+ *   そこには時刻(`alignment`)が無いので、**◀ ▶ もくり返しも
+ *   文の単位が丸ごと死んでいた。**
+ *
+ *   いまは語の重みから**割合**で見積もる(`sentenceShares`)。
+ *   **語の色ももともと同じ重みで動いている**ので、
+ *   色と送り先が食い違うことがない —— そこまで数字で確かめる。
+ * ============================================================================
+ */
+{
+  console.log('\n▶ 1本にできない教材の、文の単位')
+
+  const TEXT = 'Good afternoon, everyone. First, I would like to thank everyone '
+    + 'for being here today. Before I talk about my research, I would like to '
+    + 'introduce my background. I am originally from Chiba in Japan.'
+  const DUR = 20
+  const shares = sentenceShares(TEXT)
+  const secs = sharesToTimes(shares, DUR)
+  const cuts = splitSentences(TEXT)
+
+  if (shares.length !== cuts.length) {
+    ng(`文の数が合わない(区間 ${shares.length} / 文 ${cuts.length})`)
+  } else ok(`文の数だけ区間が出る(${shares.length} 文)`)
+
+  /* **控えるのは割合。** 長さは読み込んだあとにしか分からないので、
+     秒で控えると段落の切れ目で ◀ ▶ が一瞬押せなくなる */
+  if (shares[0].start !== 0 || shares[shares.length - 1].end !== 1) {
+    ng('割合が 0〜1 に収まっていない', '最後は必ず終わりまで(丸めの余りを残さない)')
+  } else ok('区間は 0〜1 の割合。最後は必ず終わりまで')
+
+  if (!secs || secs[secs.length - 1].end !== DUR) {
+    ng('秒に直せていない')
+  } else ok(`長さを掛ければ秒になる(${DUR} 秒ぶん)`)
+  if (sharesToTimes(shares, 0) !== null) ng('長さが分からないのに秒を返している')
+  else ok('長さが分からなければ、何も返さない')
+
+  /* **いちばん大事なところ。** 飛んだ先で光る文が、飛ぼうとした文と同じか。
+     語の色は `wordMarks`、送り先は `sentenceShares` —— **同じ重み**から
+     出しているので必ず一致する。ここがずれると、
+     「押したのに別の文が光る」という、いちばん気持ちの悪い形になる */
+  {
+    const marks = wordMarks(TEXT, DUR * 1000)
+    let bad2 = 0
+    secs.forEach((s, k) => {
+      const at = marks[markIndexAt(marks, (s.start + 0.01) * 1000)].at
+      if (!(at >= cuts[k].start && at < cuts[k].end)) bad2 += 1
+    })
+    if (bad2) ng(`飛んだ先と光る文が食い違う(${bad2} / ${secs.length} 文)`)
+    else ok('飛んだ先で光るのは、その文である(色と同じ重みから出している)')
+  }
+
+  /* 送り戻しの作法は、1本にまとめたときとまったく同じ(`seekSentence`)。
+     **文の途中まで来ていたらその文の頭へ、頭すぐなら1つ前へ** */
+  {
+    const back = seekSentence(secs, secs[1].start + 2, -1)
+    const backHead = seekSentence(secs, secs[1].start + 0.1, -1)
+    if (back !== secs[1].start) ng('文の途中から戻ると、その文の頭に来ない')
+    else if (backHead !== secs[0].start) ng('文の頭すぐから戻ると、1つ前に来ない')
+    else if (seekSentence(secs, 0, 1) !== secs[1].start) ng('次の文へ進めない')
+    else if (seekSentence(secs, 0, -1) !== null) ng('先頭より前へ戻ろうとしている')
+    else if (seekSentence(secs, DUR - 0.01, 1) !== null) ng('最後より先へ進もうとしている')
+    else ok('送り戻しの作法は、1本にまとめたときと同じ')
+  }
+
+  /* くり返しは**文だけ**をここで受け持つ。段落・全文は周回のほうが
+     受け持つので、`repeatSeek` に文の区間だけ渡しても動いてはいけない */
+  {
+    const end = secs[1].end - 0.01
+    if (repeatSeek('sentence', end, { sentences: secs }) !== secs[1].start) {
+      ng('文の終わりで、その文の頭へ戻らない')
+    } else if (repeatSeek('item', end, { sentences: secs }) !== null
+      || repeatSeek('all', end, { sentences: secs }) !== null
+      || repeatSeek('off', end, { sentences: secs }) !== null) {
+      ng('文いがいの単位まで、ここで折り返している')
+    } else ok('文でだけ折り返す(段落・全文は周回が受け持つ)')
+  }
+
+  /* **語が1つも無いときは、当てずっぽうで区切らない** */
+  if (sentenceShares('...').length || sentenceShares('').length) {
+    ng('語が無いのに区間を作っている')
+  } else ok('語が無ければ、区間を作らない(段落で回るほうへ落ちる)')
+
+  /* **画面がほんとうに使っているか。** 定義だけあって誰も呼ばなければ、
+     いままでと何も変わらない(`noteFnRev` と同じ落とし穴・CLAUDE.md) */
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const want = [
+      ['段落ごとに文の区間を見積もる', /const shares = sentenceShares\(part\.text\)/],
+      ['段落ごとの Listen でも控える', /holdCursor\(sentenceShares\(text\), null, true\)/],
+      ['割合として控えている', /holdCursor\(shares, null, true\)/],
+      ['控えるのは、鳴り出したときだけ', /onStart: \(\) => \{ holdCursor\(sentenceShares\(text\)/],
+      ['押された瞬間に秒へ直す', /sharesToTimes\(cursor\.spans, clipDuration\(\)\)/],
+      ['文のくり返しを、周回の中でも見る', /repeatSeek\(repeatNow\(\), sec, \{ sentences: sentSecs \}\)/],
+    ]
+    const before = bad
+    for (const [what, re] of want) if (!re.test(read)) ng(`文の単位: ${what}`)
+    if (bad === before) ok('1本にできないときも、画面から文の単位が使える')
+  }
+
+  /* **長さを渡す道が切れていないか。** `onTime` が秒だけを渡していた頃の
+     形に戻すと、割合を秒に直せなくなる(**音は鳴るので気づけない**) */
+  {
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    if (!/onTime\?\.\(Number\(el\.currentTime\) \|\| 0, Number\(el\.duration\) \|\| 0\)/.test(clips)) {
+      ng('鳴らす側が、長さを渡していない')
+    } else if (!/export function clipDuration\(/.test(clips)) {
+      ng('いま鳴っているものの長さを訊く道が無い')
+    } else ok('鳴らす側が、いまの秒と長さの両方を渡している')
   }
 }
 

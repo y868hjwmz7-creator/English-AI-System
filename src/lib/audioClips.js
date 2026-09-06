@@ -718,6 +718,18 @@ export function clipTime() {
 }
 
 /**
+ * **いま鳴っているものの長さ(秒)**。鳴っていなければ `null`。
+ *
+ * 1本にまとめられなかった教材では、文の区間を**割合**で控えてある
+ * (`sentenceShares`)。押された瞬間にこれを掛けて秒に直す。
+ */
+export function clipDuration() {
+  if (!element || element.paused) return null
+  const d = Number(element.duration)
+  return Number.isFinite(d) && d > 0 ? d : null
+}
+
+/**
  * いま鳴っているものの「なだらかな上げ下げの起点」を書き換える窓口。
  * **鳴らしているあいだだけ入っている**(`playClip` が入れ、終わりで外す)。
  */
@@ -990,7 +1002,9 @@ export async function playClip({
     const tick = () => {
       if (mine !== generation) { stopTrack(); return }
       fade()
-      onTime?.(Number(el.currentTime) || 0)
+      // **長さも一緒に渡す。** 1本にまとめられなかった教材では、
+      // 文の区間を割合で持っているので、秒に直すのにこれが要る
+      onTime?.(Number(el.currentTime) || 0, Number(el.duration) || 0)
       /* **区間の終わりで止める**(2026-09)。1本にまとめた音声から
          「その発言だけ」を鳴らすときに使う。**`ended` は来ない**ので、
          ここで終わりを見て、自分で終わらせる */

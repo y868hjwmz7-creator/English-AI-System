@@ -41,8 +41,8 @@
  *   `playbackRate`。速さの段階ごとに作ると、費用も置き場所も5倍になる。
  */
 import {
-  DEFAULT_CLIP_VOICE, canUseClips, clipTime, playClip, prefetchClip, seekClip,
-  stopClip, wholeClip,
+  DEFAULT_CLIP_VOICE, canUseClips, clipDuration, clipTime, playClip, prefetchClip,
+  seekClip, stopClip, wholeClip,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
@@ -52,7 +52,7 @@ import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
   REPEAT_UNITS, indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf,
 } from './wholeAudio.js'
-import { splitSentences } from './wordTiming.js'
+import { sentenceShares, sharesToTimes, splitSentences } from './wordTiming.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
 
 /** いまの読み上げ。あとから始まったものだけが有効 */
@@ -75,12 +75,29 @@ let session = 0
  *   いま鳴っているものは1つだけなので、**ここに1つ**置く
  *   (`playMark.js` と同じ考え方)。画面は `skipSentence(±1)` を呼ぶだけ。
  *
- * 【1本にできなかったときは、動かせない】
- *   区間が無いので `null` のまま。画面は `sentenceSkip()` を見て
- *   **押せなくする**(効かない操作を見せない・CLAUDE.md)。
+ * 【1本にできなかったときも、動かせる】(2026-09 実機・利用者の指摘)
+ *
+ *   > 文を飛ばす機能、リピート機能などが一部機能しません。
+ *   > これは、スピーチで自前で長い文を生成したものだけで、
+ *   > 他の教材では機能しています。
+ *
+ *   **1本にまとめられるのは 2,800 文字まで**(ElevenLabs の上限)。
+ *   貼った原稿はそれを軽く超えるので段落ごとの MP3 に落ち、
+ *   そこには時刻が無いので**この控えが空のままだった。**
+ *   ◀ ▶ が押せず、文のくり返しも段落で回っていた。
+ *
+ *   いまは**語の重みから見積もった割合**を控える(`sentenceShares`)。
+ *   語の色ももともと同じ重みで動いているので、
+ *   **色と送り先が食い違うことがない。**
+ *   `relative` を立てて控え、押された瞬間に長さを掛けて秒に直す。
  * ══════════════════════════════════════════════════════════════════ */
 
-/** いま鳴っているものの文の区間。`{ spans, bound, session }` */
+/**
+ * いま鳴っているものの文の区間。`{ spans, bound, session, relative }`
+ *
+ * `relative` が立っているとき、`spans` は**秒ではなく 0〜1 の割合**である
+ * (1本にまとめられなかったとき。長さは鳴らしてみるまで分からない)。
+ */
 let cursor = null
 const cursorSubs = new Set()
 const tellCursor = () => { for (const fn of [...cursorSubs]) fn(!!cursor) }
@@ -111,14 +128,29 @@ export function skipSentence(delta) {
   if (!cursor || cursor.session !== session) return false
   const at = clipTime()
   if (at === null) return false
-  const to = seekSentence(cursor.spans, at, delta, cursor.bound)
+  const spans = cursorSpans()
+  if (!spans) return false
+  const to = seekSentence(spans, at, delta, cursor.bound)
   if (to === null) return false
   return seekClip(to)
 }
 
+/**
+ * 控えてある区間を、**秒**にして返す。
+ *
+ * 1本にまとめた音声では、控えがそのまま秒である。
+ * 1本にできなかったときは**割合**なので、いま鳴っている MP3 の長さを掛ける
+ * (長さが分かるのは読み込んだあとなので、控えるのは割合にしてある)。
+ */
+function cursorSpans() {
+  if (!cursor?.spans?.length) return null
+  if (!cursor.relative) return cursor.spans
+  return sharesToTimes(cursor.spans, clipDuration())
+}
+
 /** 文の区間を、鳴らし始めるときに控える。**止めたら捨てる** */
-function holdCursor(spans, bound) {
-  setCursor(spans?.length ? { spans, bound, session } : null)
+function holdCursor(spans, bound, relative = false) {
+  setCursor(spans?.length ? { spans, bound, session, relative } : null)
 }
 
 /**
@@ -335,7 +367,12 @@ export async function readAloud(text, {
     tier: clipTier,
     rate,
     onWord,
-    onStart: started,
+    /* **1本にできなかったときも、1文ずつ動かせるようにする**
+       (2026-09 実機・利用者の指摘)。時刻が無いので、語の色と同じ重みから
+       見積もった**割合**を控える。秒に直すのは押された瞬間。
+       **控えるのは MP3 が鳴り出したときだけ** —— 端末の声に落ちたときは
+       途中から鳴らす手段が無いので、押せるように見せてはいけない */
+    onStart: () => { holdCursor(sentenceShares(text), null, true); started() },
     startAt: from?.at ?? 0,
   })
   if (mine !== session) return          // 途中で止められた・別のものが始まった
@@ -625,17 +662,51 @@ export function readAloudSequence(parts, {
 
         const relay = onWord ? (at) => onWord(at ? { ...at, index: i } : null) : null
 
+        /* ── **1本にできなかったときの、文の単位**(2026-09 実機)──────
+         *
+         *   > 文を飛ばす機能、リピート機能などが一部機能しません。
+         *   > これは、スピーチで自前で長い文を生成したものだけで、
+         *   > 他の教材では機能しています。
+         *
+         * 貼った原稿は 2,800 文字を超えるので1本にまとめられず、
+         * ここへ落ちる。そこには時刻が無いため、**◀ ▶ もくり返しも
+         * 文の単位が丸ごと死んでいた。** 語の色と同じ重みから見積もる。
+         *
+         * **控えるのは鳴らす前**(割合なので長さが要らない)。
+         * こうすると段落の切れ目で ◀ ▶ が一瞬押せなくなることがない ——
+         * 鳴っていないあいだは `clipTime()` が `null` を返すので、
+         * **前の段落の区間で誤って飛ぶこともない。** */
+        const shares = sentenceShares(part.text)
+        let sentSecs = null
+
         const played = await playClip({
           text: part.text,
           voiceId: clipVoice,
           tier: clipTier,
           rate,
           onWord: relay,
+          onTime: (sec, dur) => {
+            if (!alive()) return
+            /* **文でくり返す。** 段落・全文はこの下の周回が受け持つので、
+               `repeatSeek` には文の区間だけを渡す(単位が違えば `null`)。
+               見積もれなかったときも `null` になり、
+               これまでどおり**段落で回る**(行き止まりを作らない) */
+            if (!sentSecs) sentSecs = sharesToTimes(shares, dur)
+            if (!sentSecs) return
+            const back = repeatSeek(repeatNow(), sec, { sentences: sentSecs })
+            if (back !== null) seekClip(back)
+          },
           // **続きから始めた1本目だけ、その途中から**(2本目からは頭から)。
           // くり返しで頭へ戻ったあとも、控えは当てない(`start === first`)
           startAt: (i === first && start === first ? fromAt : 0),
           // 鳴り始めたら、次のぶんを裏で用意しておく
           onStart: () => {
+            /* **控えるのは MP3 が鳴り出したときだけ。** 端末の声に落ちたら
+               途中から鳴らす手段が無いので、押せるように見せてはいけない。
+               **段落の切れ目では、前の控えをそのまま残す** ——
+               鳴っていないあいだは `clipTime()` が `null` を返すので
+               誤って飛ぶことはなく、◀ ▶ が一瞬押せなくなることもない */
+            holdCursor(shares, null, true)
             started()
             const ahead = list[i + 1]
             if (ahead) {

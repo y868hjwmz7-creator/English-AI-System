@@ -45,10 +45,24 @@ const material = asSpeech ? {
   headline: 'My research', tagIds: [],
   voiceIds: (q.get('voice') || 'us-4').split(','),
   sections: [{
+    /* **貼った原稿と同じ形にしてある**(2026-09 実機)。
+       1段落に文がいくつも入る —— 1文ずつの ◀ ▶ とくり返しは、
+       **この形でしか確かめられない**(1文だけの段落では行き先が無い)。
+       訳(`prompt_ja`)を付けていないのも、貼った原稿と同じである */
     id: 'sec-1', exercise_type: 'article', title: '記事',
     items: [
-      { id: 'it-1', prompt_en: 'Good afternoon, everyone.', prompt_ja: 'みなさん、こんにちは。' },
-      { id: 'it-2', prompt_en: 'I would like to thank you for being here.', prompt_ja: '来てくださって、ありがとうございます。' },
+      {
+        id: 'it-1',
+        prompt_en: 'Good afternoon, everyone. First, I would like to thank you all '
+          + 'for being here today. Before I talk about my research, I would like to '
+          + 'introduce my background.',
+      },
+      {
+        id: 'it-2',
+        prompt_en: 'I am originally from Chiba in Japan. I graduated from Kanagawa '
+          + 'Medical University in 2014. After that, I worked at a small clinic for '
+          + 'three years.',
+      },
     ],
   }, {
     /* **想定される質問**(0045・2026-09 利用者の指定)。

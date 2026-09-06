@@ -111,3 +111,66 @@ export const sentenceAt = (text, at) => {
   if (at == null) return null
   return splitSentences(text).find((s) => at >= s.start && at < s.end) ?? null
 }
+
+/**
+ * **1本の MP3 の中で、文がどこからどこまでか**を「割合」で出す(2026-09)。
+ *
+ * ════════════════════════════════════════════════════════════════
+ * 【なぜ要るか】(2026-09 実機・利用者の指摘)
+ *
+ *   > 文を飛ばす機能、リピート機能などが一部機能しません。
+ *   > これは、スピーチで自前で長い文を生成したものだけで、
+ *   > 他の教材では機能しています。
+ *
+ *   文の区間は、これまで**1本にまとめた音声の時刻(`alignment`)からしか**
+ *   出していなかった。ところがその1本は**2,800 文字まで**しか作れない
+ *   (ElevenLabs の上限)。貼った原稿は桁違いに長いので1本にできず、
+ *   段落ごとの MP3 に落ちる。そこには時刻が無いので、
+ *   **1文ずつの ◀ ▶ も、文のくり返しも、丸ごと死んでいた。**
+ *
+ * 【なぜ見積もりでよいか】
+ *   **語の色は、もともとこの重みで動いている**(`wordMarks`)。
+ *   同じ物差しで区間を出せば、**色と送り先が必ず一致する** ——
+ *   見た目に「いま光っている文の頭へ戻った」と映る。
+ *   このファイルの冒頭の決まり(**経路ごとに書かない**)そのままである。
+ *
+ * 【なぜ秒ではなく割合か】
+ *   秒にするには MP3 の長さが要るが、それが分かるのは**読み込んだあと**で
+ *   ある。割合で持てば**鳴らす前に控えられる**ので、段落の切れ目で
+ *   ◀ ▶ が一瞬押せなくなる、ということが起きない。
+ *   秒に直すのは、押された瞬間に長さを掛けるだけでよい。
+ * ════════════════════════════════════════════════════════════════
+ *
+ * @param {string} text その MP3 で読み上げる英文
+ * @returns {Array<{start:number,end:number,charIndex:number}>}
+ *   `start` / `end` は **0〜1 の割合**。`charIndex` は本文の何文字目か
+ */
+export const sentenceShares = (text) => {
+  const src = String(text ?? '')
+  const words = weighWords(src)
+  const total = totalWeight(words)
+  // 語が1つも無い(記号だけ)。**当てずっぽうで区切らない**
+  if (!words.length || total <= 0) return []
+
+  let acc = 0
+  let w = 0
+  const out = []
+  for (const c of splitSentences(src)) {
+    const start = acc / total
+    // その文の終わりまでに含まれる語の重みを足す
+    while (w < words.length && words[w].at < c.end) { acc += words[w].weight; w += 1 }
+    const end = acc / total
+    // 語を1つも含まない切れ端(空白だけ)は落とす
+    if (end > start) out.push({ start, end, charIndex: c.start })
+  }
+  // **最後は必ず終わりまで。** 丸めの余りを残すと、最後の文だけ回らない
+  if (out.length) out[out.length - 1].end = 1
+  return out
+}
+
+/** 割合の区間を、その MP3 の長さ(秒)に直す */
+export const sharesToTimes = (shares, seconds) => {
+  const dur = Number(seconds)
+  if (!Array.isArray(shares) || !shares.length || !(dur > 0)) return null
+  return shares.map((s) => ({ ...s, start: s.start * dur, end: s.end * dur }))
+}
