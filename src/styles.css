@@ -1000,6 +1000,45 @@ audio { width: 100%; margin-top: 4px; }
 }
 .material-danger + .card-hint { text-align: right; }
 
+/* ── カードのいちばん下の行(2026-09 利用者の指定)────────────────
+     > 「音声を作り直す」「学習の記録を消す」を教材を消すの左側に並べて
+
+   3つとも**一度きり・後戻りの利かない**操作である(作り直しは課金、
+   あとの2つは元に戻らない)。ふだん使う「印刷 / PDF」「音声ダウンロード」
+   から離して、ここにまとめる。
+
+   `MaterialDelete` は**自分の `.btn-row.material-danger` を持ったまま**
+   ここに入る(消せない人には何も描かないので、**外から包むと
+   線だけが残る**)。だから中の余白と線はここで打ち消す。 */
+.material-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-6);
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.material-foot .material-danger {
+  margin: 0; padding: 0; border-top: 0; gap: var(--sp-6);
+}
+/* **説明と知らせは、次の行いっぱいに落とす。**
+   そのままだとボタンの横に並び、細い柱に押し込まれて読めなくなる */
+.material-foot > .card-hint,
+.material-foot > .notice { flex: 1 0 100%; margin: 8px 0 0; text-align: right; }
+
+/* 控えに入れられなかったときに、リンクをそのまま出す(手で選んでもらう)。
+   **長い1本の文字列なので、必ず折り返させる** */
+.share-url {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 4px;
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
 /* 絞り込みはグラフの上に1列で置く */
 .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); }
 .filter-label { color: var(--text-secondary); font-size: var(--fs-12); margin-right: 4px; }

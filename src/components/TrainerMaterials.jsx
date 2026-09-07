@@ -17,9 +17,15 @@ import MaterialBody from './MaterialBody.jsx'
 import MaterialDelete from './MaterialDelete.jsx'
 import SearchBar from './SearchBar.jsx'
 import {
-  CloseIcon, DownloadIcon, EraserIcon, PlusIcon, PrintIcon, RefreshIcon, ScreenIcon,
+  CloseIcon, DownloadIcon, EraserIcon, LinkIcon, PlusIcon, PrintIcon, RefreshIcon, ScreenIcon,
 } from './Icons.jsx'
 import IconButton from './IconButton.jsx'
+/* **教材へのリンク**(2026-09 利用者の指定)。作り方も読み方も
+   `materialLink.js` 1か所。画面には持たせない */
+import { materialLinkFor } from '../lib/materialLink.js'
+/* **消せる人かどうか**は `materialDelete.js` 1か所。ここでは
+   「下の行に出すものがあるか」を数えるためだけに呼ぶ */
+import { canDeleteMaterial } from '../lib/materialDelete.js'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel, cefrOption } from '../data/cefr.js'
@@ -52,7 +58,7 @@ import { lastClipDetail } from '../lib/audioClips.js'
 /** 絞り込みの「問数」と、作る画面の増やし方の対応。**2か所に持たない** */
 const AMOUNT_BY_SIZE = { 20: 'double', 30: 'triple' }
 
-export default function TrainerMaterials({ me, askCreate = 0 }) {
+export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
   /* **発行した直後の教材**(2026-09 利用者の指定)。
        > 教材を発行した直後、発行した教材が画面上に来るように調整して
@@ -169,6 +175,14 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
   const [assigningId, setAssigningId] = useState(null)   // 配信先を選んでいる教材
   const [picked, setPicked] = useState([])
   const [message, setMessage] = useState(null)
+  /* **教材をシェアした結果**(2026-09 利用者の指定)。
+     `{ id, how: 'share' | 'copy' | 'show', url }`。
+     **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md) —— 押しても
+     何も変わらないと、リンクが取れたのかどうか分からない */
+  const [shared, setShared] = useState(null)
+  /* **リンクで来た教材**(`?m=…`)。一覧に見つかるまで控えておく */
+  const [linkAsk, setLinkAsk] = useState(null)
+  const [linkMiss, setLinkMiss] = useState(false)
 
   /* **選ぶ欄は2つ、入れ物は1つ**(作る画面と同じ考え方)。
      いま選んでいるものが「仕事」か「趣味」かは、ここで1回だけ決める */
@@ -231,6 +245,79 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
     const timer = window.setTimeout(() => setJustId(null), 4000)
     return () => window.clearTimeout(timer)
   }, [justId, loading, materials])
+
+  /**
+   * **リンク(`?m=…`)で来たら、その教材を目の前に出す**(2026-09 利用者の指定)。
+   *
+   *   > 「教材をシェア」ボタンをつけてトレーナー間でシェアできるように
+   *   > してください。これで教材へのリンクをシェアできるようにします。
+   *
+   * **絞り込みを外してから**さがす。外さないと、受け取った人が
+   * たまたま別の条件で絞っていたときに**その教材が一覧に出てこない。**
+   * 名前で引く言葉(`keyword`)も同じ理由で空にする。
+   */
+  useEffect(() => {
+    if (!askOpenId) return
+    setMode('search')
+    setLinkMiss(false)
+    setLinkAsk(askOpenId)
+    clearFilters()
+    setKeyword('')
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    // clearFilters / setKeyword は毎回作り直されるので依存に入れない
+  }, [askOpenId])
+
+  /**
+   * 一覧が届いたら、その教材まで送る。
+   *
+   * **見つからなければ、黙らない**(CLAUDE.md)。消されたのか、
+   * 共有されていないのか、リンクが古いのかは分からないが、
+   * **何も起きなかったように見えるのがいちばん困る。**
+   */
+  useEffect(() => {
+    if (!linkAsk || loading) return
+    if (materials.some((m) => m.id === linkAsk)) {
+      setJustId(linkAsk)          // 送る・光らせるのは、発行の直後とまったく同じ道
+    } else {
+      setLinkMiss(true)
+    }
+    setLinkAsk(null)
+  }, [linkAsk, loading, materials])
+
+  /**
+   * **教材へのリンクを渡す**(2026-09 利用者の指定)。
+   *
+   * 渡し方は端末で変わるので、**行き止まりを作らない**ように3段にする。
+   *
+   *   ① 端末に「共有」の仕組みがあれば、それを開く(iPhone の共有シート)
+   *   ② 無ければ、リンクを控え(クリップボード)に入れる
+   *   ③ それも断られたら、**リンクをそのまま画面に出す**(手で選んでもらう)
+   *
+   * **やめたときは何も言わない**(`AbortError`)。共有シートを閉じたのに
+   * 「コピーしました」と出るのは嘘である。
+   */
+  const shareMaterial = async (m) => {
+    const url = materialLinkFor(m.id, window.location)
+    if (!url) { setShared({ id: m.id, how: 'none', url: null }); return }
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: m.title, url })
+        setShared({ id: m.id, how: 'share', url })
+        return
+      } catch (e) {
+        // 利用者が閉じただけ。**押していないので、報告する相手がいない**
+        if (e?.name === 'AbortError') return
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      setShared({ id: m.id, how: 'copy', url })
+      return
+    } catch {
+      /* 控えに入れられない環境(古い Safari・http)。下で手渡しする */
+    }
+    setShared({ id: m.id, how: 'show', url })
+  }
 
   /* 「誰がどの声で読むか」は **`CastChip`(`castList()`)1か所。**
      画面に書くと、素の node で一度も確かめられない
@@ -747,6 +834,18 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
           <strong>{deleted.title}</strong> を消しました。
         </div>
       )}
+      {/* **リンクで来たのに見つからなかった**(2026-09)。
+          **黙って一覧を出さない** —— 何も起きなかったように見えるのが
+          いちばん困る。原因は決めつけない(消された・共有されていない・
+          リンクが古い、のどれかは、こちらには分からない) */}
+      {linkMiss && (
+        <div className="notice notice--warn" role="alert">
+          リンクの教材が見つかりませんでした。
+          消されたか、共有されていない可能性があります。
+          <button type="button" className="btn btn--small btn--ghost"
+                  onClick={() => setLinkMiss(false)}>閉じる</button>
+        </div>
+      )}
 
       {loading ? (
         <p className="muted">読み込み中…</p>
@@ -873,47 +972,24 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                 <CastChip material={m} className="cast-chip--inline" />
               </div>
 
-              {/* **押すものは、はじめから出す**(2026-09 利用者の指定)。
-                  **強い見た目(青)は「セッションで使う」に譲る**
-                  (2026-08 の指定は生きている)。
+              {/* ── ふだん使う2つ(2026-09 利用者の指定)────────────────
+                    > 「音声を作り直す」「学習の記録を消す」を教材を消すの
+                    > 左側に並べて、「印刷 / PDF」と「音声ダウンロード」
+                    > アイコンを今の位置に並べてください
+                    > 「🖨️」だけでは PDF が出せることがわからないので、
+                    > 「印刷 / PDF」として、音声ダウンロードもそのまま
+                    > 「音声ダウンロード」としましょう。
+                    > もともとスペースの問題だったのでこれで解決です。
 
-                  **並びは 印刷 → 練習の記録を消す → 共有**
-                  (2026-09 利用者の指定「練習の記録を消す、を印刷ボタンの
-                  右に置いてください」)。前の2つは**同じ教材を手元で扱う**
-                  操作(紙にする / この端末の書きかけを消す)で、
-                  共有だけが**人に渡す**操作である。だから前の2つを1つの行に
-                  まとめ、共有はその下に置く(`.card-tools`)。 */}
+                  **絵だけに戻さない。** 印刷の絵からは「PDF でも出せる」が
+                  読み取れず、下向きの矢印からは「何を落とすのか」が
+                  分からない。**2つに減ったので、言葉が入る。**
+                  (めったに押さない2つは、下の「教材を消す」の行へ移した) */}
               <div className="btn-row card-tools">
-                <IconButton icon={<PrintIcon />} label="印刷 / PDFで保存"
-                            onClick={() => setPrintId(m.id)} />
-                {/* **やりかけが残っているときだけ出す。**
-                    効かないボタンを出さない(CLAUDE.md) */}
-                {hasMaterialProgress(m.id) && (
-                  <IconButton icon={<EraserIcon />} label="練習の記録を消す"
-                              // **2段めは言葉で出す。** 元に戻せない操作なので、
-                              // 「いま押したら本当に消える」が絵では言えない
-                              text={resetAsk === m.id ? '本当に消す' : null}
-                              pressed={resetAsk === m.id}
-                              onClick={() => {
-                                if (resetAsk !== m.id) { setResetAsk(m.id); return }
-                                const n = clearMaterialProgress(m.id)
-                                setResetAsk(null)
-                                setResetDone({ id: m.id, n })
-                              }} />
-                )}
-                {/* **読み上げ音声を作り直す**(2026-09 実機)。
-
-                      > Mika のひとつ目の発言だけ、明らかに ElevenLabs では
-                      > ない酷い音声になってしまいます。
-
-                    直す前の窓口が、良い声で作れなかった MP3 を
-                    **良い段の場所に置いていた**ため、その英文だけ
-                    永久に標準の声のままになる(`remakeClips.js`)。
-                    画面は「ある」ものを鳴らすだけなので、放っておいても
-                    直らない。**こちらから作り直させる道**を置く。
-
-                    **良い声を使う教材のときだけ出す**(効かない操作を
-                    見せない)。**2段にする** — 押し間違いがそのまま課金になる */}
+                <button type="button" className="btn btn--small"
+                        onClick={() => setPrintId(m.id)}>
+                  <PrintIcon />印刷 / PDF
+                </button>
                 {/* **音声を1本にまとめて落とす**(2026-09 利用者の指定)。
                     > 各教材の音声をダウンロード出来るようにしてください。
                     > 全体の音声をひとつ。
@@ -921,28 +997,20 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                     **本文がある教材だけ**に出す(効かない操作を見せない)。
                     すでにある MP3 を集めてつなぐだけなので、**課金されない** */}
                 {materialAudioClips(m).length > 0 && (
-                  <IconButton icon={<DownloadIcon />} label="音声をダウンロード"
-                              // **進み具合は、必ず数で出す**(CLAUDE.md)。
-                              // 14 本を集めるあいだ、絵だけでは止まって見える
-                              text={dlBusy?.id === m.id
-                                ? `集めています… ${dlBusy.done} / ${dlBusy.total}` : null}
-                              disabled={!!dlBusy}
-                              onClick={() => downloadAudio(m)} />
-                )}
-                {premiumClipsOf(m).length > 0 && (
-                  <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
-                              text={voiceBusy?.id === m.id
-                                ? `作っています… ${voiceBusy.done} / ${voiceBusy.total}` : null}
-                              // 下に欄が開くので、**開いている印**だけでよい
-                              // (「閉じる」と書かなくても、開いた欄が見えている)
-                              pressed={voiceAsk === m.id}
-                              disabled={!!voiceBusy}
-                              onClick={() => {
-                                setVoiceDone(null)
-                                setVoiceAsk(voiceAsk === m.id ? null : m.id)
-                              }} />
+                  <button type="button" className="btn btn--small"
+                          disabled={!!dlBusy} onClick={() => downloadAudio(m)}>
+                    <DownloadIcon />
+                    {/* **進み具合は、必ず数で出す**(CLAUDE.md)。
+                        14 本を集めるあいだ、名前のままでは止まって見える */}
+                    {dlBusy?.id === m.id
+                      ? `集めています… ${dlBusy.done} / ${dlBusy.total}`
+                      : '音声ダウンロード'}
+                  </button>
                 )}
               </div>
+              {/* **人に渡す操作は、その下に1行**(2026-09)。
+                  ゲストへ配るのと、トレーナーへリンクを渡すのは
+                  **渡す相手が違うだけ**なので、同じ行に並べる */}
               <div className="btn-row">
                 {assigningId !== m.id && (
                   <button type="button" className="btn btn--small btn--quiet"
@@ -950,20 +1018,30 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                     この教材をゲストと共有する
                   </button>
                 )}
+                {/* **教材をシェア**(2026-09 利用者の指定)。
+                    こちらは**トレーナー間**。教材は既定で全トレーナーの
+                    共有物なので、リンクを開けばその教材がそのまま出る。
+                    **ゲストに配るのとは別物**なので、絵で見分けられるようにする */}
+                <button type="button" className="btn btn--small btn--quiet"
+                        onClick={() => shareMaterial(m)}>
+                  <LinkIcon />教材をシェア
+                </button>
                 {makingJa === m.id && <span className="muted">区切りの訳を作っています…</span>}
               </div>
               {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
-                  作り直しは課金になるので、**押す前に本数と費用を書く** */}
-              {/* **国と話す人を選んでから走らせる**(2026-09 利用者の指定)。
-                  1回目の押下でこの欄が開き、中のボタンで走り出す。
-                  **2段のままである** — 押し間違いがそのまま課金になる */}
-              {voiceAsk === m.id && !voiceBusy && (
-                <VoiceRemake material={m}
-                             clipCount={premiumClipsOf(m).length}
-                             mine={m.created_by === me.id}
-                             busy={!!voiceBusy}
-                             onRun={(opt) => runRemake(m, opt)}
-                             onCancel={() => setVoiceAsk(null)} />
+                  **成功と失敗を、同じ見た目で終わらせない** */}
+              {shared?.id === m.id && (
+                <p className={`notice${shared.how === 'none' ? ' notice--warn' : ' notice--ok'}`}>
+                  {shared.how === 'share'
+                    ? 'リンクを渡しました。'
+                    : shared.how === 'copy'
+                      ? <>リンクをコピーしました。<strong>トレーナーがこのリンクを開くと、
+                          この教材が出ます。</strong></>
+                      : shared.how === 'show'
+                        ? <>このリンクを渡してください(長押しでコピーできます)。
+                            <br /><code className="share-url">{shared.url}</code></>
+                        : 'リンクを作れませんでした。'}
+                </p>
               )}
               {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
                   **足りないときは、どうすればよいかまで書く** */}
@@ -981,31 +1059,6 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                           <strong>Listen (全体)</strong> を通して聴くか、
                           「読み上げ音声を作り直す」で作ってから、もう一度押してください。</>
                       : <>音声をまとめられませんでした。{dlDone.error}</>}
-                </p>
-              )}
-              {voiceDone?.id === m.id && (
-                <p className={`notice${voiceDone.done === 0 ? ' notice--error' : ''}`}>
-                  {voiceDone.copied && voiceDone.done > 0
-                    && <><strong>別の教材として複製しました。</strong>いまの教材はそのまま残っています。<br /></>}
-                  読み上げ音声を <strong>{voiceDone.done} 本</strong>作りました。
-                  {voiceDone.failed > 0 && `(${voiceDone.failed} 本は作れませんでした)`}
-                  {voiceDone.detail && <><br />{voiceDone.detail}</>}
-                </p>
-              )}
-              {/* **押した場所のすぐ下に出す**(CLAUDE.md) */}
-              {resetAsk === m.id && (
-                <p className="card-hint">
-                  この端末に残っている、この教材の
-                  <strong>スラッシュの区切り・ディクテーションの書きかけ・
-                  Quick Response の進み具合</strong>を消します。
-                  <strong>単語帳に登録した語は消えません。</strong>
-                </p>
-              )}
-              {resetDone?.id === m.id && (
-                <p className="notice notice--ok">
-                  {resetDone.n > 0
-                    ? `練習の記録を消しました(${resetDone.n} 件)。`
-                    : '消すものはありませんでした。'}
                 </p>
               )}
               {jaDone[m.id]?.ng && <p className="notice notice--warn">{jaDone[m.id].text}</p>}
@@ -1076,16 +1129,112 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                 </div>
               ) : null}
 
-              {/* **教材を消す**(2026-09 利用者の指定)。
-                  **いちばん下に、1つだけ。** ふだん押すものと同じ行に
-                  並べない —— 元に戻せない操作である。
-                  消せない人には**ボタンごと出ない**(部品の中で決める) */}
-              <MaterialDelete
-                material={m} me={me}
-                onDeleted={(id) => {
-                  setMaterials((list) => list.filter((x) => x.id !== id))
-                  setDeleted({ id, title: m.title })
-                }} />
+              {/* ── めったに押さない3つ(2026-09 利用者の指定)──────────
+                    > 「音声を作り直す」「学習の記録を消す」を
+                    > 教材を消すの左側に並べて
+
+                  どれも**一度きり・後戻りの利かない**操作である
+                  (作り直しは課金、記録を消すのとカードを消すのは元に戻らない)。
+                  だから**ふだん使う「印刷 / PDF」「音声ダウンロード」から
+                  離して**、カードのいちばん下に3つまとめる。
+
+                  **この2つは絵のまま。** 「読み上げ音声を作り直す」は
+                  11文字あり、言葉にすると iPhone では3つが1行に入らない。
+                  長押しすれば名前が出る(`IconButton`)。
+
+                  **中身が1つも無ければ、行ごと出さない** ——
+                  線だけが残ると、何かが消えたように見える */}
+              {(premiumClipsOf(m).length > 0
+                || hasMaterialProgress(m.id)
+                || canDeleteMaterial(m, me)) && (
+                <div className="material-foot">
+                  {/* **読み上げ音声を作り直す**(2026-09 実機)。
+
+                        > Mika のひとつ目の発言だけ、明らかに ElevenLabs では
+                        > ない酷い音声になってしまいます。
+
+                      直す前の窓口が、良い声で作れなかった MP3 を
+                      **良い段の場所に置いていた**ため、その英文だけ
+                      永久に標準の声のままになる(`remakeClips.js`)。
+                      画面は「ある」ものを鳴らすだけなので、放っておいても
+                      直らない。**こちらから作り直させる道**を置く。
+
+                      **良い声を使う教材のときだけ出す**(効かない操作を
+                      見せない)。**2段にする** — 押し間違いがそのまま課金になる */}
+                  {premiumClipsOf(m).length > 0 && (
+                    <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
+                                // **進み具合は、必ず数で出す**(CLAUDE.md)
+                                text={voiceBusy?.id === m.id
+                                  ? `作っています… ${voiceBusy.done} / ${voiceBusy.total}` : null}
+                                // 下に欄が開くので、**開いている印**だけでよい
+                                // (「閉じる」と書かなくても、開いた欄が見えている)
+                                pressed={voiceAsk === m.id}
+                                disabled={!!voiceBusy}
+                                onClick={() => {
+                                  setVoiceDone(null)
+                                  setVoiceAsk(voiceAsk === m.id ? null : m.id)
+                                }} />
+                  )}
+                  {/* **やりかけが残っているときだけ出す。**
+                      効かないボタンを出さない(CLAUDE.md) */}
+                  {hasMaterialProgress(m.id) && (
+                    <IconButton icon={<EraserIcon />} label="練習の記録を消す"
+                                // **2段めは言葉で出す。** 元に戻せない操作なので、
+                                // 「いま押したら本当に消える」が絵では言えない
+                                text={resetAsk === m.id ? '本当に消す' : null}
+                                pressed={resetAsk === m.id}
+                                onClick={() => {
+                                  if (resetAsk !== m.id) { setResetAsk(m.id); return }
+                                  const n = clearMaterialProgress(m.id)
+                                  setResetAsk(null)
+                                  setResetDone({ id: m.id, n })
+                                }} />
+                  )}
+                  {/* **教材を消す。** 消せない人には**ボタンごと出ない**
+                      (判断は `canDeleteMaterial()` 1か所・部品の中) */}
+                  <MaterialDelete
+                    material={m} me={me}
+                    onDeleted={(id) => {
+                      setMaterials((list) => list.filter((x) => x.id !== id))
+                      setDeleted({ id, title: m.title })
+                    }} />
+                </div>
+              )}
+              {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
+                  作り直しは課金になるので、**押す前に本数と費用を書く**。
+                  **国と話す人を選んでから走らせる**(2026-09 利用者の指定) */}
+              {voiceAsk === m.id && !voiceBusy && (
+                <VoiceRemake material={m}
+                             clipCount={premiumClipsOf(m).length}
+                             mine={m.created_by === me.id}
+                             busy={!!voiceBusy}
+                             onRun={(opt) => runRemake(m, opt)}
+                             onCancel={() => setVoiceAsk(null)} />
+              )}
+              {voiceDone?.id === m.id && (
+                <p className={`notice${voiceDone.done === 0 ? ' notice--error' : ''}`}>
+                  {voiceDone.copied && voiceDone.done > 0
+                    && <><strong>別の教材として複製しました。</strong>いまの教材はそのまま残っています。<br /></>}
+                  読み上げ音声を <strong>{voiceDone.done} 本</strong>作りました。
+                  {voiceDone.failed > 0 && `(${voiceDone.failed} 本は作れませんでした)`}
+                  {voiceDone.detail && <><br />{voiceDone.detail}</>}
+                </p>
+              )}
+              {resetAsk === m.id && (
+                <p className="card-hint">
+                  この端末に残っている、この教材の
+                  <strong>スラッシュの区切り・ディクテーションの書きかけ・
+                  Quick Response の進み具合</strong>を消します。
+                  <strong>単語帳に登録した語は消えません。</strong>
+                </p>
+              )}
+              {resetDone?.id === m.id && (
+                <p className="notice notice--ok">
+                  {resetDone.n > 0
+                    ? `練習の記録を消しました(${resetDone.n} 件)。`
+                    : '消すものはありませんでした。'}
+                </p>
+              )}
             </div>
           ))}
         </>

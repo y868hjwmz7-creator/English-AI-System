@@ -1175,77 +1175,108 @@ export default defineConfig({
 }
 
 /* ══════════════════════════════════════════════════════════════
-   ⑩ 教材のカードの操作は、**絵だけで1行に収まるか**(2026-09 利用者の指定)
+   ⑩ 教材のカードの操作は、**役目ごとに2つの行へ**(2026-09 利用者の指定)
 
-     > 印刷/PDF・練習の記録を消す・音声ダウンロード・読み上げ音声を作り直す
-     > この4つはアイコン化して省スペースしてください。無理やり並べすぎて
-     > いてプロの仕事とは思えません。…見やすくコンパクトに、移遷しやすく、
-     > を徹底してください。アイコン化して、触れると説明が出る仕様で
-     > よくないですか?
+     > 「音声を作り直す」「学習の記録を消す」を教材を消すの左側に並べて、
+     > 「印刷 / PDF」と「音声ダウンロード」アイコンを今の位置に並べて
+     > ください。…「🖨️」だけでは PDF が出せることがわからないので、
+     > 「印刷 / PDF」として、音声ダウンロードもそのまま「音声ダウンロード」
+     > としましょう。もともとスペースの問題だったのでこれで解決です。
 
-   iPhone(390px)では、4つのボタンが文字を1字ずつ縦に割って
-   **4本の棒**になっていた(`.card-tools` は `nowrap` で、`.btn--small` は
-   縮まない指定なので、行に入らないぶんは**文字が縦に積まれる**)。
+   4つを1行に詰めていたので、iPhone(390px)で文字が1字ずつ縦に割れ、
+   **4本の棒**になっていた。**絵にして詰める**のが前の直しだったが、
+   それでは印刷の絵から「PDF でも出せる」が読み取れない。
+   いまは**役目で2つの行に分ける。**
+
+     `.card-tools`     ふだん使う2つ。**言葉つき**
+     `.material-foot`  めったに押さない3つ。**絵のまま**(11文字は入らない)
 
    **両側を見る。**
-     ①1行に収まっているか・はみ出していないか
-     ②**押せる大きさ(40px)を割っていないか**
-     ③**読み上げ機に名前が渡っているか**(絵だけのボタンの決まり)
-     ④**長押しで名前が出るか**(触る端末にはカーソルが無い)
-     ⑤**言葉が要る状態では、言葉が出るか**(進み具合・2段めの確認)
-   ①だけを見ると、**絵を小さくして押せなくしても緑のまま**になる。
+     ①上の行に**言葉が出ているか**(絵だけに戻すと、この指定が消える)
+     ②下の行の3つが**同じ1行に並んでいるか**(「教材を消すの左側」)
+     ③**押せる大きさ(40px)を割っていないか**
+     ④**読み上げ機に名前が渡っているか**(絵だけのボタンの決まり)
+     ⑤**長押しで名前が出るか**(触る端末にはカーソルが無い)
+     ⑥**言葉が要る状態では、言葉が出るか**(進み具合・2段めの確認)
+     ⑦**「教材をシェア」があるか**(トレーナー間でリンクを渡す)
+   ①だけを見ると、**下の行を消しても緑のまま**になる。
    ══════════════════════════════════════════════════════════════ */
 {
   // **触る端末として開く。** 絵だけのボタンは、そこでしか名前を出せない
   const page = await browser.newPage({ hasTouch: true })
-  const WANT = ['印刷 / PDFで保存', '練習の記録を消す', '音声をダウンロード',
-    '読み上げ音声を作り直す']
+  /** 下の行(絵のまま)。**名前が渡っていること**を見る */
+  const FOOT = ['読み上げ音声を作り直す', '練習の記録を消す']
+  /** 上の行(言葉つき)。**画面に見えていること**を見る */
+  const TOOLS = ['印刷 / PDF', '音声ダウンロード']
 
   for (const w of [390, 375, 360, 320]) {
     await page.setViewportSize({ width: w, height: 844 })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
       { waitUntil: 'networkidle' })
     try {
-      await page.waitForSelector('.card-tools .iconbtn', { timeout: 8000 })
-    } catch { ng(`教材の操作 ${w}px … 絵のボタンが1つも描かれない`); continue }
+      await page.waitForSelector('.material-foot .iconbtn', { timeout: 8000 })
+    } catch { ng(`教材の操作 ${w}px … 下の行の絵のボタンが描かれない`); continue }
 
     const m = await page.evaluate(() => {
       const row = document.querySelector('.card-tools')
-      const btns = [...row.querySelectorAll('.iconbtn')]
+      const foot = document.querySelector('.material-foot')
+      const icons = [...foot.querySelectorAll('.iconbtn')]
+      const del = foot.querySelector('.material-danger .btn')
+      const line = [...icons, del].filter(Boolean)
       return {
-        高さ: Math.round(row.getBoundingClientRect().height),
-        あふれ: row.scrollWidth > row.clientWidth + 1,
+        上の文字: [...row.querySelectorAll('.btn')].map((b) => (b.textContent ?? '').trim()),
+        上の高さ: Math.round(row.getBoundingClientRect().height),
+        上のあふれ: row.scrollWidth > row.clientWidth + 1,
         はみ出し: document.documentElement.scrollWidth > window.innerWidth,
-        名前: btns.map((b) => b.getAttribute('aria-label') ?? ''),
-        小さい: btns
+        名前: icons.map((b) => b.getAttribute('aria-label') ?? ''),
+        /* **同じ1行に並んでいるか。**
+           上端では見られない —— 絵のボタンは 40px、「教材を消す」は 34px
+           なので、まん中でそろえてある行では上端が 3px ずれる(実測)。
+           **背の高さが違うものを、上端で比べない。** 見るのはまん中 */
+        段: [...new Set(line.map((b) => {
+          const r = b.getBoundingClientRect()
+          return Math.round((r.top + r.bottom) / 2)
+        }))].length,
+        // **教材を消すが、いちばん右か**(「その左側に並べて」)
+        消すが右端: del
+          ? Math.round(del.getBoundingClientRect().left)
+            >= Math.max(...icons.map((b) => Math.round(b.getBoundingClientRect().left)))
+          : false,
+        小さい: icons
           .filter((b) => {
             const r = b.getBoundingClientRect()
             return Math.round(r.width) < 40 || Math.round(r.height) < 40
           })
           .map((b) => b.getAttribute('aria-label')),
-        // 絵だけの行では、ボタンの中に読める文字を出さない(出すと折り返す)
-        文字: btns.map((b) => (b.textContent ?? '').trim()).filter(Boolean),
       }
     })
 
-    const missing = WANT.filter((t) => !m.名前.includes(t))
-    if (missing.length) {
-      ng(`教材の操作 ${w}px … 名前が渡っていない(${missing.join(' / ')})`,
+    const noWord = TOOLS.filter((t) => !m.上の文字.some((s) => s.includes(t)))
+    const missing = FOOT.filter((t) => !m.名前.includes(t))
+    if (noWord.length) {
+      ng(`教材の操作 ${w}px … 上の行に言葉が無い(${noWord.join(' / ')})`,
+        '絵だけでは「PDF も出せる」「何を落とすのか」が読めない(利用者の指定)')
+    } else if (missing.length) {
+      ng(`教材の操作 ${w}px … 下の行に名前が渡っていない(${missing.join(' / ')})`,
         '絵だけのボタンには `aria-label` を必ず添える(CLAUDE.md)')
-    } else if (m.高さ > 48) {
-      ng(`教材の操作 ${w}px … 行が ${m.高さ}px(1行なら 40px)`,
-        '絵だけにしても入らないなら、`.iconbtn` の幅を見直す')
-    } else if (m.あふれ || m.はみ出し) {
+    } else if (m.上の高さ > 48) {
+      ng(`教材の操作 ${w}px … 上の行が ${m.上の高さ}px(1行なら 34〜40px)`,
+        '2つに減らしたのだから、言葉つきでも1行に収まるはず')
+    } else if (m.上のあふれ || m.はみ出し) {
       ng(`教材の操作 ${w}px … はみ出している`,
         '`.card-tools` は `nowrap`。入らないぶんは外へ出て切れる')
+    } else if (m.段 !== 1) {
+      ng(`教材の操作 ${w}px … 下の3つが ${m.段} 段に割れている`,
+        '「音声を作り直す」「記録を消す」は**教材を消すの左**(利用者の指定)')
+    } else if (!m.消すが右端) {
+      ng(`教材の操作 ${w}px … 「教材を消す」が右端にいない`,
+        '2つは「教材を消すの左側」に並べる(利用者の指定)')
     } else if (m.小さい.length) {
       ng(`教材の操作 ${w}px … 40px を割っている(${m.小さい.join(' / ')})`,
         '押せる大きさ(40px)は割らない(CLAUDE.md)')
-    } else if (m.文字.length) {
-      ng(`教材の操作 ${w}px … 絵だけの行に文字が出ている(${m.文字.join(' / ')})`,
-        'ふだんは絵だけ。言葉が出るのは状態のあいだだけ')
     } else {
-      ok(`教材の操作 ${w}px … 絵4つ・${m.高さ}px の1行・はみ出しなし`)
+      ok(`教材の操作 ${w}px … 上は言葉つき2つ(${m.上の高さ}px)・`
+        + '下は絵2つ + 教材を消すの1行')
     }
   }
 
@@ -1261,16 +1292,37 @@ export default defineConfig({
     await page.locator('.card').screenshot({ path: `${process.env.SHOT}/tools-busy.png` })
   }
 
-  /* ── ④ **長押しで名前が出るか**(触る端末にはカーソルが無い)──── */
+  /* ── ⑦ **教材をシェア**(トレーナー間でリンクを渡す)─────────── */
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
     { waitUntil: 'networkidle' })
-  await page.waitForSelector('.card-tools .iconbtn')
-  const box = await page.locator('.card-tools .iconbtn').nth(2).boundingBox()
+  await page.waitForSelector('.material-foot .iconbtn')
+  const share = await page.evaluate(() => {
+    const all = [...document.querySelectorAll('.btn')].map((b) => (b.textContent ?? '').trim())
+    return {
+      シェア: all.some((t) => t.includes('教材をシェア')),
+      ゲスト: all.some((t) => t.includes('この教材をゲストと共有する')),
+      はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+    }
+  })
+  if (!share.シェア) {
+    ng('教材の操作 … 「教材をシェア」が無い',
+      'トレーナー間でリンクを渡す道(2026-09 利用者の指定)')
+  } else if (!share.ゲスト) {
+    ng('教材の操作 … 「この教材をゲストと共有する」が消えている',
+      '**渡す相手が違う2つ**。片方を足したついでに、もう片方を消さない')
+  } else if (share.はみ出し) {
+    ng('教材の操作 … シェアを足したらはみ出した')
+  } else {
+    ok('教材の操作 … 「教材をシェア」と「ゲストと共有する」が両方ある')
+  }
+
+  /* ── ⑤ **長押しで名前が出るか**(触る端末にはカーソルが無い)──── */
+  const box = await page.locator('.material-foot .iconbtn').nth(0).boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   // **触る端末として押す。** カーソルのときは `title` があるので出さない
   await page.evaluate(() => {
-    const b = document.querySelectorAll('.card-tools .iconbtn')[2]
+    const b = document.querySelectorAll('.material-foot .iconbtn')[0]
     b.dispatchEvent(new window.PointerEvent('pointerdown', {
       bubbles: true, pointerType: 'touch',
       clientX: b.getBoundingClientRect().x + 10,
@@ -1290,7 +1342,7 @@ export default defineConfig({
   if (!hint.出た) {
     ng('教材の操作 … 長押しで名前が出ない',
       '触る端末には「カーソルを載せる」が無い。`title` だけでは伝わらない')
-  } else if (hint.文 !== '音声をダウンロード') {
+  } else if (hint.文 !== '読み上げ音声を作り直す') {
     ng(`教材の操作 … 長押しで出た名前が違う(${hint.文})`)
   } else if (hint.右 > hint.幅) {
     ng(`教材の操作 … 名前が画面からはみ出す(${hint.右} > ${hint.幅})`)
@@ -1299,9 +1351,9 @@ export default defineConfig({
   }
 
   /* **長押しのあとの指離しは、押したことにしない。**
-     名前を読もうとしただけで印刷が始まっては困る */
+     名前を読もうとしただけで作り直しが始まっては困る(そのまま課金になる) */
   await page.evaluate(() => {
-    const b = document.querySelectorAll('.card-tools .iconbtn')[2]
+    const b = document.querySelectorAll('.material-foot .iconbtn')[0]
     b.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }))
     b.click()
   })
@@ -1327,9 +1379,9 @@ export default defineConfig({
      ここが壊れると**どのボタンも押せなくなる**(絵にした日の最悪の壊れ方) */
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
     { waitUntil: 'networkidle' })
-  await page.waitForSelector('.card-tools .iconbtn')
-  await page.locator('.card-tools .iconbtn').nth(0).tap()
-  await page.locator('.card-tools .iconbtn').nth(3).tap()
+  await page.waitForSelector('.material-foot .iconbtn')
+  await page.locator('.card-tools .btn').nth(0).tap()
+  await page.locator('.material-foot .iconbtn').nth(0).tap()
   const hits = await page.evaluate(() => document.querySelector('.card-tools').dataset.hits)
   if (hits !== '2') {
     ng(`教材の操作 … タップが効かない(${hits} / 2)`,
@@ -1338,42 +1390,53 @@ export default defineConfig({
     ok('教材の操作 … ふつうのタップは効く(2 / 2)')
   }
 
-  /* ── ⑤ **言葉が要る状態では、言葉を出す**──────────────────── */
+  /* ── ⑥ **言葉が要る状態では、言葉を出す**──────────────────── */
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools&state=busy`,
     { waitUntil: 'networkidle' })
-  await page.waitForSelector('.card-tools .iconbtn')
-  const busyM = await page.evaluate(() => {
-    const row = document.querySelector('.card-tools')
-    return {
-      文字: [...row.querySelectorAll('.iconbtn-text')].map((s) => s.textContent.trim()),
-      はみ出し: document.documentElement.scrollWidth > window.innerWidth,
-    }
-  })
-  if (!busyM.文字.some((t) => t.includes('3 / 14'))) {
-    ng(`教材の操作 … 集めているあいだ、進み具合が出ない(${busyM.文字.join(' / ')})`,
-      '進み具合は必ず数で出す。絵だけでは止まって見える(CLAUDE.md)')
-  } else if (!busyM.文字.includes('本当に消す')) {
+  await page.waitForSelector('.material-foot .iconbtn')
+  const busyM = await page.evaluate(() => ({
+    上: [...document.querySelectorAll('.card-tools .btn')].map((b) => b.textContent.trim()),
+    下: [...document.querySelectorAll('.material-foot .iconbtn-text')]
+      .map((s) => s.textContent.trim()),
+    はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+  }))
+  if (!busyM.上.some((t) => t.includes('集めています… 3 / 14'))) {
+    ng(`教材の操作 … 集めているあいだ、進み具合が出ない(${busyM.上.join(' / ')})`,
+      '進み具合は必ず数で出す(CLAUDE.md)')
+  } else if (!busyM.下.some((t) => t.includes('作っています… 3 / 14'))) {
+    ng(`教材の操作 … 作っているあいだ、進み具合が出ない(${busyM.下.join(' / ')})`,
+      '作り直しは課金が走っている。絵だけでは止まって見える')
+  } else if (!busyM.下.includes('本当に消す')) {
     ng('教材の操作 … 2段めの「本当に消す」が言葉で出ない',
       '元に戻せない操作は、絵では言えない')
   } else if (busyM.はみ出し) {
     ng('教材の操作 … 言葉を出したらはみ出した')
   } else {
-    ok(`教材の操作 … 状態のときだけ言葉が出る(${busyM.文字.join(' / ')})`)
+    ok(`教材の操作 … 状態のときだけ言葉が出る(${busyM.下.join(' / ')})`)
   }
 
   /* ── 画面が本当に使っているか(検証だけが緑にならないように)──── */
   const src = readFileSync(new URL('../src/components/TrainerMaterials.jsx',
     import.meta.url), 'utf8')
-  const notUsed = WANT.filter((t) => !src.includes(`<IconButton`) || !src.includes(t))
-  if (!src.includes("import IconButton from './IconButton.jsx'")) {
-    ng('教材の操作 … `TrainerMaterials` が `IconButton` を読み込んでいない',
-      '検証の入り口(`__screens.jsx`)だけ絵にしても、利用者の画面は変わらない')
-  } else if (notUsed.length) {
-    ng(`教材の操作 … 画面に無い(${notUsed.join(' / ')})`)
-  } else if ((src.match(/<IconButton/g) ?? []).length < 4) {
-    ng('教材の操作 … `IconButton` が4つ揃っていない')
+  const want = [
+    ['印刷 / PDF', '上の行は言葉つき(絵だけでは PDF が読めない)'],
+    ['音声ダウンロード', '同上'],
+    ['教材をシェア', 'トレーナー間でリンクを渡す(2026-09 利用者の指定)'],
+    ['materialLinkFor', 'リンクの作り方は `materialLink.js` 1か所'],
+    ['material-foot', 'めったに押さない3つは、教材を消すと同じ行'],
+    ['読み上げ音声を作り直す', '下の行(絵のまま)'],
+    ['練習の記録を消す', '同上'],
+  ]
+  const gone = want.filter(([t]) => !src.includes(t))
+  if (gone.length) {
+    ng(`教材の操作 … 画面に無い(${gone.map(([t]) => t).join(' / ')})`,
+      gone[0][1])
+  } else if ((src.match(/<IconButton/g) ?? []).length < 2) {
+    ng('教材の操作 … 下の行の `IconButton` が2つ揃っていない')
+  } else if (!src.includes('<MaterialDelete')) {
+    ng('教材の操作 … `MaterialDelete` が消えている')
   } else {
-    ok('教材の操作 … `TrainerMaterials` が4つとも `IconButton` で描いている')
+    ok('教材の操作 … `TrainerMaterials` が同じ形で書いている')
   }
 
   await page.close()

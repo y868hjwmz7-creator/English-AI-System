@@ -42,6 +42,9 @@ import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import { spanForRange } from '../src/lib/wholeAudio.js'
 import { ABBREVIATIONS, splitSentences } from '../src/lib/wordTiming.js'
 import {
+  MATERIAL_PARAM, materialIdFromUrl, materialLinkFor, urlWithoutMaterial,
+} from '../src/lib/materialLink.js'
+import {
   DIALOGUE_ANGLES, READING_ANGLES, angleBrief, angleLabel, anglesFor, pickAngle,
 } from '../src/data/materialAngles.js'
 import {
@@ -1572,6 +1575,75 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   const bad = ABBREVIATIONS.filter((w) => RISKY.includes(w))
   ok(bad.length === 0, `文末に立つ語を一覧に入れていない${bad.length ? `(${bad})` : ''}`)
   ok(ABBREVIATIONS.every((w) => w === w.toLowerCase()), '一覧は小文字でそろえてある')
+}
+
+/* ── 教材へのリンク(`?m=…`・2026-09 利用者の指定)────────────────
+
+     > 「教材をシェア」ボタンをつけてトレーナー間でシェアできるように
+     > してください。これで教材へのリンクをシェアできるようにします。
+
+   このアプリには**ルーティングが無い**(画面はタブで切り替える)ので、
+   道は増やさず、印を1つ付けるだけにしてある。
+
+   見るのは4つ。
+     ①いま開いている URL を土台にするか(決め打ちにしない)
+     ②**UUID 以外を受け取らないか**(`[data-mid="…"]` にそのまま入る)
+     ③**`m` だけを外し、`?v=` は残すか**
+     ④**画面が本当に呼んでいるか**(作っただけでは何も起きない) */
+{
+  const ID = '11111111-2222-3333-4444-555555555555'
+  const loc = (search = '', pathname = '/English-AI-System/') => ({
+    origin: 'https://y868hjwmz7-creator.github.io', pathname, search, hash: '',
+  })
+
+  ok(materialLinkFor(ID, loc()) === `https://y868hjwmz7-creator.github.io/English-AI-System/?${MATERIAL_PARAM}=${ID}`,
+    'リンクは、いま開いている URL を土台にする')
+  ok(materialLinkFor(ID, { origin: 'http://localhost:5173', pathname: '/' })
+    === `http://localhost:5173/?${MATERIAL_PARAM}=${ID}`,
+    '手元の開発サーバーでも、そこを指す')
+  ok(materialLinkFor(ID, { pathname: '/' }) === null,
+    '**当てずっぽうの URL を返さない**(origin が無ければ null)')
+  ok(materialLinkFor('drop table', loc()) === null, 'id の形が違えば作らない')
+
+  ok(materialIdFromUrl(`?${MATERIAL_PARAM}=${ID}`) === ID, '印から id を読む')
+  ok(materialIdFromUrl(`${MATERIAL_PARAM}=${ID}`) === ID, '`?` は有っても無くてもよい')
+  ok(materialIdFromUrl(`?v=1cfc831&${MATERIAL_PARAM}=${ID}`) === ID,
+    '`?v=` と一緒に付いていても読める')
+  ok(materialIdFromUrl('?v=1cfc831') === null, '印が無ければ null')
+  ok(materialIdFromUrl('') === null, '空でも落ちない')
+  // **選択子ごと壊れるものを、受け取らない**
+  ok(materialIdFromUrl(`?${MATERIAL_PARAM}=" ]. x`) === null, '引用符の混じった id は落とす')
+  ok(materialIdFromUrl(`?${MATERIAL_PARAM}=1234`) === null, 'UUID の形でなければ落とす')
+
+  ok(urlWithoutMaterial(loc(`?${MATERIAL_PARAM}=${ID}`)) === '/English-AI-System/',
+    '取り出したら、印を外す')
+  ok(urlWithoutMaterial(loc(`?v=1cfc831&${MATERIAL_PARAM}=${ID}`)) === '/English-AI-System/?v=1cfc831',
+    '**`?v=` は残す**(消してよいのは `m` だけ)')
+  ok(urlWithoutMaterial(loc('?v=1cfc831')) === '/English-AI-System/?v=1cfc831',
+    '印が無ければ、そのまま')
+
+  /* **画面が本当に呼んでいるか。**
+     作っただけで誰も呼んでいなければ、リンクは一度も開けない
+     (`noteFnRev` を定義だけして呼んでいなかったのと同じ落とし穴) */
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  ok(app.includes('materialIdFromUrl(window.location.search)'),
+    'App が、開いた瞬間に印を読んでいる')
+  ok(app.includes('urlWithoutMaterial(window.location)'),
+    'App が、読んだあと印を外している')
+  ok(app.includes('askOpenId={askOpenId}'),
+    'App が、`TrainerMaterials` へ渡している')
+  const tm = readFileSync(new URL('../src/components/TrainerMaterials.jsx',
+    import.meta.url), 'utf8')
+  ok(tm.includes('materialLinkFor(m.id, window.location)'),
+    '画面が `materialLinkFor()` でリンクを作っている')
+  ok(tm.includes('navigator.share') && tm.includes('navigator.clipboard.writeText'),
+    '渡し方は3段(共有シート → 控え → 画面に出す)。**行き止まりを作らない**')
+  ok(tm.includes("e?.name === 'AbortError'"),
+    '**やめたときは何も言わない**(閉じたのに「コピーしました」は嘘)')
+  ok(tm.includes('setLinkMiss(true)'),
+    '見つからなければ、**黙らない**')
+  ok(!tm.includes("?m=") || tm.includes('materialLinkFor'),
+    'リンクの形を画面に書き写していない')
 }
 
 console.log(ng

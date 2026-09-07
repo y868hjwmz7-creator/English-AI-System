@@ -31,7 +31,7 @@ import MaterialForm from './components/MaterialForm.jsx'
 import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
 import {
-  DownloadIcon, EraserIcon, PrintIcon, RefreshIcon, ScreenIcon,
+  DownloadIcon, EraserIcon, LinkIcon, PrintIcon, RefreshIcon, ScreenIcon,
 } from './components/Icons.jsx'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
@@ -242,16 +242,19 @@ const WORDBOOK = (
   </div>
 )
 
-/* 教材のカードの操作の行(`?screen=tools`・2026-09 利用者の指定)。
+/* 教材のカードの操作(`?screen=tools`・2026-09 利用者の指定)。
 
-   > この4つはアイコン化して省スペースしてください。無理やり並べすぎて
-   > いてプロの仕事とは思えません。
+   > 「音声を作り直す」「学習の記録を消す」を教材を消すの左側に並べて、
+   > 「印刷 / PDF」と「音声ダウンロード」アイコンを今の位置に並べて
+   > ください。…「🖨️」だけでは PDF が出せることがわからないので、
+   > 「印刷 / PDF」として、音声ダウンロードもそのまま「音声ダウンロード」
+   > としましょう。
 
-   **本物の `IconButton` と本物の CSS で測る**(写した HTML では測らない)。
+   **本物の部品と本物の CSS で測る**(写した HTML では測らない)。
    `TrainerMaterials` そのものは Supabase を引き連れていて、この環境からは
    1件も読めない。だから**行だけ**を同じ組み立てで描く。
    ずれないよう、`npm run test:bar` が
-   **`TrainerMaterials` が本当に `IconButton` を使っているか**も見る。
+   **`TrainerMaterials` が本当に同じ形で書いているか**も見る。
 
    `?state=busy` … 言葉が要る状態(集めています… / 本当に消す)を出す */
 const busy = q.get('state') === 'busy'
@@ -265,26 +268,41 @@ const hit = () => {
 const TOOLS = (
   <div className="app-main" style={{ padding: 16 }}>
     <section className="card">
+      {/* ふだん使う2つ。**言葉つき**(絵だけでは「PDF も出せる」が読めない) */}
       <div className="btn-row card-tools" data-hits="0">
-        <IconButton icon={<PrintIcon />} label="印刷 / PDFで保存" onClick={hit} />
-        <IconButton icon={<EraserIcon />} label="練習の記録を消す"
-                    text={busy ? '本当に消す' : null} pressed={busy}
-                    onClick={hit} />
-        <IconButton icon={<DownloadIcon />} label="音声をダウンロード"
-                    text={busy ? '集めています… 3 / 14' : null}
-                    onClick={hit} />
-        <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
-                    onClick={hit} />
+        <button type="button" className="btn btn--small" onClick={hit}>
+          <PrintIcon />印刷 / PDF
+        </button>
+        <button type="button" className="btn btn--small" onClick={hit}>
+          <DownloadIcon />
+          {busy ? '集めています… 3 / 14' : '音声ダウンロード'}
+        </button>
       </div>
+      {/* 人に渡す2つ */}
       <div className="btn-row">
         <button type="button" className="btn btn--small btn--quiet">
           この教材をゲストと共有する
+        </button>
+        <button type="button" className="btn btn--small btn--quiet">
+          <LinkIcon />教材をシェア
         </button>
       </div>
       <div className="btn-row">
         <button type="button" className="btn btn--primary">
           <ScreenIcon />セッションで使う(大きく表示)
         </button>
+      </div>
+      {/* めったに押さない3つ。**絵のまま**(言葉にすると1行に入らない) */}
+      <div className="material-foot">
+        <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
+                    text={busy ? '作っています… 3 / 14' : null}
+                    onClick={hit} />
+        <IconButton icon={<EraserIcon />} label="練習の記録を消す"
+                    text={busy ? '本当に消す' : null} pressed={busy}
+                    onClick={hit} />
+        <div className="btn-row material-danger">
+          <button type="button" className="btn btn--small btn--ghost">教材を消す</button>
+        </div>
       </div>
     </section>
   </div>

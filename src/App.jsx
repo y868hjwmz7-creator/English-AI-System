@@ -13,6 +13,9 @@ import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
 import { NAV_PUSH_AT, loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } from './lib/nav.js'
 import { setViewerRole } from './lib/viewer.js'
+/* **教材へのリンク**(`?m=…`・2026-09 利用者の指定)。
+   読み方も外し方も `materialLink.js` 1か所 */
+import { materialIdFromUrl, urlWithoutMaterial } from './lib/materialLink.js'
 import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 import { markJobSeen, useJob, watchJob } from './lib/generateJob.js'
@@ -67,6 +70,23 @@ export default function App() {
      作る画面(下書きが入った状態)を開く。
      真偽値にすると、2度目に押したときに変わらず効かない */
   const [askCreate, setAskCreate] = useState(0)
+  /**
+   * **リンクで指された教材**(`?m=…`・2026-09 利用者の指定)。
+   *
+   *   > 「教材をシェア」ボタンをつけてトレーナー間でシェアできるように
+   *   > してください。これで教材へのリンクをシェアできるようにします。
+   *
+   * **読むのは、開いた瞬間の1回だけ。** `useState` の初期値として読み、
+   * そのあと URL からは外す(`urlWithoutMaterial`)。残しておくと、
+   * 別の教材を発行して一覧を読み直すたびに**リンクの教材へ引き戻される**
+   * (`playMark.js` の「取り出したら消す」と同じ作法)。
+   */
+  const [askOpenId] = useState(() => materialIdFromUrl(window.location.search))
+  useEffect(() => {
+    if (!askOpenId) return
+    // 印だけを外す。**`?v=` などほかの印は残す**
+    window.history.replaceState(null, '', urlWithoutMaterial(window.location))
+  }, [askOpenId])
   /** どこにいても、ワンタッチで発行の画面へ */
   const goPublish = () => {
     setView('materials')
@@ -575,7 +595,8 @@ export default function App() {
 
           <main className="app-main">
             {view === 'materials' ? (
-              profile ? <TrainerMaterials me={profile} askCreate={askCreate} />
+              profile ? <TrainerMaterials me={profile} askCreate={askCreate}
+                                          askOpenId={askOpenId} />
                 : <p className="muted">読み込み中…</p>
             ) : view === 'learners' ? (
               profile ? <TrainerLearners me={profile} navTick={navTick} />

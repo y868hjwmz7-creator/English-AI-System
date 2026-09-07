@@ -370,3 +370,22 @@ export function RefreshIcon({ className = 'icon' }) {
     </svg>
   )
 }
+
+/**
+ * リンク(教材をシェア)。
+ *
+ * **`ScreenIcon`(セッションで使う)や `UploadIcon` と取り違えない。**
+ * 鎖の輪が2つ —— 「場所そのものを渡す」という意味である。
+ * 同じカードの中に「この教材をゲストと共有する」が並ぶので、
+ * **絵で見分けられるようにしておく。**
+ */
+export function LinkIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M8.4 11.6a3 3 0 0 0 4.3 0l2.6-2.6a3 3 0 0 0-4.3-4.3l-1 1"
+            fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M11.6 8.4a3 3 0 0 0-4.3 0l-2.6 2.6a3 3 0 0 0 4.3 4.3l1-1"
+            fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
