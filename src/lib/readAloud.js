@@ -41,8 +41,8 @@
  *   `playbackRate`。速さの段階ごとに作ると、費用も置き場所も5倍になる。
  */
 import {
-  DEFAULT_CLIP_VOICE, canUseClips, clipDuration, clipTime, noteFellBack, playClip,
-  prefetchClip, seekClip, stopClip, wholeClip,
+  DEFAULT_CLIP_VOICE, canUseClips, clipAlignment, clipDuration, clipTime,
+  noteFellBack, playClip, prefetchClip, seekClip, stopClip, wholeClip,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
@@ -50,10 +50,12 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  REPEAT_UNITS, indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf,
-  spanForRange,
+  REPEAT_UNITS, charTimesOf, indexAtTime, rangeOf, repeatSeek, seekSentence,
+  sentenceSpansOf, spanForRange,
 } from './wholeAudio.js'
-import { sentenceShares, sharesToTimes, splitSentences } from './wordTiming.js'
+import {
+  sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
+} from './wordTiming.js'
 import { speakChunks } from './speakChunks.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
 
@@ -194,6 +196,39 @@ function sentenceSpansFor(got, texts) {
   })
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ * **1本にできなかったときも、見積もりをやめる**(2026-09 利用者の指摘)
+ *
+ *   > 再生中の文章のハイライトのタイミングをもっと正確にできないですか?
+ *
+ * 段落ごとの MP3 で鳴らすとき、色も文の区間も**語の重みからの見積もり**
+ * だった(`wordMarks` / `sentenceShares`)。合っているのは合計だけである。
+ *
+ * ところが ElevenLabs は、音声と一緒に**文字ごとの時刻**を返す。
+ * 課金は文字数なので、**受け取っても1円も増えない。**
+ * 窓口(`speak`)がそれを MP3 のとなりに `.json` で控えるようにしたので、
+ * ここでは**読むだけ**でよい(窓口は呼ばない = 0円)。
+ *
+ * 【控えが無ければ、これまでどおり見積もる】
+ *   置き直す前の窓口で作った MP3 には控えが無い。**行き止まりを作らない。**
+ *
+ * 【`part.text` に当てる。控えの英文ではない】
+ *   控えは空白をそろえた英文(`normText`)で作られているが、
+ *   非空白の並びは同じなので `charTimesOf()` はそのまま当てはまる。
+ *   **画面が描いている文字列で数えないと、`charIndex` がずれる**
+ *   (集中モードのかけらは、その文字数で範囲を言う)。
+ *
+ * @returns {{alignment:object,sents:Array}|null}
+ */
+async function exactTimesFor(text, voiceId, tier) {
+  // 控えがあるのは ElevenLabs の段だけ(標準の段は Google / Azure)
+  if (tier !== PREMIUM) return null
+  const alignment = await clipAlignment(text, voiceId, tier)
+  if (!alignment) return null
+  const sents = sentenceTimesOf(text, charTimesOf(alignment, text))
+  return sents ? { alignment, sents } : null
+}
+
 /**
  * いま鳴っている秒から、**光らせる文の位置**を出して知らせる。
  * **同じ文のあいだは、何度も呼ばない**(描き直しが増えるだけ)。
@@ -205,10 +240,13 @@ function tellSentence(spans, sec, only, state, onWord) {
     if (sec >= spans[i].start - 0.001) { hit = i; break }
   }
   if (hit < 0 || hit === state.at) return
-  state.at = hit
   const sp = spans[hit]
-  // 通しでは、いま光っている項目のものだけを送る(別の段落を光らせない)
+  /* 通しでは、いま光っている項目のものだけを送る(別の段落を光らせない)。
+     **送れなかったときは、控えを進めない**(2026-09)。進めてしまうと、
+     その項目が画面に出た瞬間には「もう送った文」になっていて、
+     **その段落の1文目だけが永久に光らない。** */
   if (only != null && sp.item !== only()) return
+  state.at = hit
   onWord({ charIndex: sp.charIndex, index: sp.item })
 }
 
@@ -367,13 +405,19 @@ export async function readAloud(text, {
      超えたまま渡すと 400 で断られ、**その段落だけ端末の声**
      (iPhone では日本語の声)に落ちる。詳しくは `speakChunks.js` */
   const pieces = speakChunks(text)
+  const pieceVoice = clipVoice ?? clipSpeakerFor(voice)
   let played = false
   for (const [n, piece] of pieces.entries()) {
+    /* **文字ごとの本当の時刻を、先に読む**(2026-09 利用者の指摘)。
+       無ければ `null` で、これまでどおり見積もりに戻る */
+    const exact = await exactTimesFor(piece.text, pieceVoice, clipTier)
+    if (mine !== session) return
     played = await playClip({
       text: piece.text,
-      voiceId: clipVoice ?? clipSpeakerFor(voice),
+      voiceId: pieceVoice,
       tier: clipTier,
       rate,
+      alignment: exact?.alignment ?? null,
       /* 語の色は**段落の中の位置**で送る。分けたかけらは 0 から数え直すので、
          そのかけらの頭を足さないと**段落の先頭に戻って光る** */
       onWord: onWord
@@ -384,7 +428,11 @@ export async function readAloud(text, {
          見積もった**割合**を控える。秒に直すのは押された瞬間。
          **控えるのは MP3 が鳴り出したときだけ** —— 端末の声に落ちたときは
          途中から鳴らす手段が無いので、押せるように見せてはいけない */
-      onStart: () => { holdCursor(sentenceShares(piece.text), null, true); started() },
+      onStart: () => {
+        if (exact) holdCursor(exact.sents, null)
+        else holdCursor(sentenceShares(piece.text), null, true)
+        started()
+      },
       // **分けたときは頭から。** 控えの秒がどのかけらのものか決められない
       startAt: (n === 0 && pieces.length < 2) ? (from?.at ?? 0) : 0,
     })
@@ -771,6 +819,11 @@ export function readAloudSequence(parts, {
          * 鳴っていないあいだは `clipTime()` が `null` を返すので、
          * **前の段落の区間で誤って飛ぶこともない。** */
         const shares = sentenceShares(part.text)
+        /* **控えがあるなら、見積もらない**(2026-09 利用者の指摘)。
+           窓口が MP3 のとなりに控えた、文字ごとの本当の時刻である。
+           **窓口は呼ばない = 0円。** 無ければ上の見積もりに戻る */
+        const exact = await exactTimesFor(part.text, clipVoice, clipTier)
+        if (!alive()) return
         let sentSecs = null
         /* 「段落」でくり返すとき、**どこから鳴らし直すか**(かけらの頭)。
            鳴らし終わってしまったときの受け皿である —— 中で戻せていれば
@@ -788,6 +841,7 @@ export function readAloudSequence(parts, {
           tier: clipTier,
           rate,
           onWord: relay,
+          alignment: exact?.alignment ?? null,
           onTime: (sec, dur) => {
             if (!alive()) return
             /* **文でくり返す。** 全文はこの下の周回が受け持つので、
@@ -798,7 +852,16 @@ export function readAloudSequence(parts, {
                **「段落」は、集中モードが出しているかけたぶんに狭める**
                (2026-09 利用者の指定)。狭められなければ `null` で、
                下の周回が段落まるごとを回す */
-            if (!sentSecs) sentSecs = sharesToTimes(shares, dur)
+            /* **最後の文だけ、終わりを音声の終わりまで伸ばす。**
+               本当の時刻は「最後の文字が鳴り終わった秒」なので、
+               うしろの余韻のぶん短い。伸ばさないと、文でくり返すときに
+               **言い終わる前に戻る** */
+            if (!sentSecs) {
+              sentSecs = exact
+                ? exact.sents.map((s, n) => (n === exact.sents.length - 1
+                  ? { ...s, end: Math.max(s.end, Number(dur) || s.end) } : s))
+                : sharesToTimes(shares, dur)
+            }
             if (!sentSecs) return
             const only = partSpan(part.index, sentSecs, part.at)
             backTo = only ? only[0].start : 0
@@ -815,7 +878,8 @@ export function readAloudSequence(parts, {
                **段落の切れ目では、前の控えをそのまま残す** ——
                鳴っていないあいだは `clipTime()` が `null` を返すので
                誤って飛ぶことはなく、◀ ▶ が一瞬押せなくなることもない */
-            holdCursor(shares, null, true)
+            if (exact) holdCursor(exact.sents, null)
+            else holdCursor(shares, null, true)
             started()
             const ahead = list[i + 1]
             if (ahead) {

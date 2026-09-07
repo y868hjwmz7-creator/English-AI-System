@@ -1336,9 +1336,12 @@ function fakeMp3({
     const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
     const want = [
       ['段落ごとに文の区間を見積もる', /const shares = sentenceShares\(part\.text\)/],
-      ['段落ごとの Listen でも控える', /holdCursor\(sentenceShares\(piece\.text\), null, true\)/],
-      ['割合として控えている', /holdCursor\(shares, null, true\)/],
-      ['控えるのは、鳴り出したときだけ', /onStart: \(\) => \{ holdCursor\(sentenceShares\(piece\.text\)/],
+      ['段落ごとの Listen でも控える', /else holdCursor\(sentenceShares\(piece\.text\), null, true\)/],
+      ['割合として控えている', /else holdCursor\(shares, null, true\)/],
+      /* **控えるのは鳴り出したときだけ。** 端末の声に落ちたら途中から
+         鳴らす手段が無いので、押せるように見せてはいけない */
+      ['控えるのは、鳴り出したときだけ',
+        /onStart: \(\) => \{\s*\n\s*if \(exact\) holdCursor\(exact\.sents, null\)\s*\n\s*else holdCursor\(sentenceShares\(piece\.text\)/],
       ['押された瞬間に秒へ直す', /sharesToTimes\(cursor\.spans, clipDuration\(\)\)/],
       /* 段落ごとの MP3 でも、文でくり返す。**`spans` は集中モードが
          かけらに狭めるためのもの**で、渡さなければ `null`(段落で回る) */
@@ -1534,6 +1537,65 @@ function fakeMp3({
     } else ok('断られた理由をそのまま出す(「版なし」と取り違えない)')
   }
 }
+
+  /* ── **ハイライトのタイミング**(2026-09 利用者の指摘)────────────
+   *
+   *   > 再生中の文章のハイライトのタイミングをもっと正確にできないですか?
+   *
+   * 1本にまとめた音声は前から `/with-timestamps` で作っており、正確だった。
+   * **段落ごとの MP3 だけが、ただでもらえる時刻を捨てていた。**
+   * 道は「窓口 → Storage の `.json` → 画面 → `playClip`」の4つ。
+   * **1本でも切れると、音は鳴るのに色だけがずれる**(気づけない形) */
+  {
+    const speak = readFileSync(
+      new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8')
+    const clips = readFileSync(
+      new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    const read = readFileSync(
+      new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+
+    const before = bad
+    // ① 窓口が、段落ごとの1本でも時刻ごと受け取る
+    const one = speak.slice(speak.indexOf('async function synthEleven('))
+    const body = one.slice(0, one.indexOf('\n}\n'))
+    if (!body.includes('/with-timestamps') || !body.includes('synthElevenTimed(')) {
+      ng('段落ごとの1本が、時刻を捨てている', '課金は変わらないのに、もらわない')
+    }
+    // ② MP3 のとなりに `.json` で置く。**失敗しても音は落とさない**
+    if (!/\$\{path\.replace\(\/\\\.mp3\$\/, '\.json'\)\}/.test(speak)) {
+      ng('時刻を、MP3 のとなりに置いていない')
+    }
+    if (!/body: JSON\.stringify\(\{ rev: FN_REV, text, alignment \}\),[\s\S]{0,200}?\.catch\(\(\) => null\)/
+      .test(speak)) {
+      ng('時刻を置けなかったときに、音声まで落としている')
+    }
+    // ③ 画面が読む。**窓口は呼ばない = 0円**
+    if (!/export async function clipAlignment/.test(clips)) {
+      ng('画面に、時刻を読む道が無い')
+    }
+    if (!/normText\(got\.text\) === body/.test(clips)) {
+      ng('別の英文の時刻で光りかねない', '同じ英文か確かめていない')
+    }
+    if (!/timesCache\.delete\(key\)/.test(clips)) {
+      ng('作り直したのに、古い時刻を覚えたまま')
+    }
+    // ④ `playClip` が、あれば見積もらない
+    if (!/const exact = alignment \? marksFromTimes\(body, charTimesOf\(alignment, body\)\) : \[\]/
+      .test(clips)) {
+      ng('時刻があっても、色は見積もりのまま')
+    }
+    if (!/const marks = exact\.length \? exact : wordMarks\(/.test(clips)) {
+      ng('時刻が無いときに、見積もりへ戻れない', '行き止まりを作らない')
+    }
+    // ⑤ 呼ぶ側(通し・段落ごとの両方)
+    if ((read.match(/exactTimesFor\(/g) ?? []).length < 3) {
+      ng('時刻を読みに行っていない経路がある')
+    }
+    if ((read.match(/alignment: exact\?\.alignment \?\? null/g) ?? []).length !== 2) {
+      ng('`playClip` へ時刻を渡していない経路がある')
+    }
+    if (bad === before) ok('ハイライトは、見積もりではなく本当の時刻で動く')
+  }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

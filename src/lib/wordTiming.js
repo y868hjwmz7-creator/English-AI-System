@@ -23,17 +23,72 @@
  */
 export const weighWords = (text) => {
   const src = String(text ?? '')
+  const out = []
+  for (const w of wordSpans(src)) {
+    const after = src.slice(w.end, w.end + 2)
+    // 語そのもの + 続く空白 + 句読点の間
+    let weight = (w.end - w.at) + 1
+    if (/^[,;:]/.test(after)) weight += 3
+    if (/^[.!?]/.test(after)) weight += 6
+    out.push({ at: w.at, weight })
+  }
+  return out
+}
+
+/**
+ * 語の**位置と終わり**(何文字目から何文字目の手前まで)。
+ *
+ * **語の見つけ方は、ここ1か所。** 見積もる側(`weighWords`)と、
+ * 本当の時刻を当てはめる側(`marksFromTimes`)が**別々に語を探すと、
+ * 同じ本文なのに語の数が食い違う。**
+ */
+export const wordSpans = (text) => {
+  const src = String(text ?? '')
   const re = /[A-Za-z][A-Za-z'-]*/g
   const out = []
   let m = re.exec(src)
   while (m) {
-    const after = src.slice(m.index + m[0].length, m.index + m[0].length + 2)
-    // 語そのもの + 続く空白 + 句読点の間
-    let weight = m[0].length + 1
-    if (/^[,;:]/.test(after)) weight += 3
-    if (/^[.!?]/.test(after)) weight += 6
-    out.push({ at: m.index, weight })
+    out.push({ at: m.index, end: m.index + m[0].length })
     m = re.exec(src)
+  }
+  return out
+}
+
+/**
+ * **本当の時刻から、語の印を作る**(2026-09 利用者の指摘)。
+ *
+ *   > 再生中の文章のハイライトのタイミングをもっと正確にできないですか?
+ *
+ * `wordMarks()` は**見積もり**である(語の長さと句読点から、全体の長さを
+ * 比で割る)。合っているのは合計だけで、途中はどこもずれている。
+ * ElevenLabs から文字ごとの時刻を控えてあるなら、**割る必要がない。**
+ *
+ * **返す形は `wordMarks()` とまったく同じ**(`{at, until}` のミリ秒)。
+ * だから鳴らす側は、どちらが来たのかを知らなくてよい。
+ *
+ * @param {string} text その英文
+ * @param {{start:number[],end:number[]}|null} times `charTimesOf()` の返り値
+ * @returns {Array<{at:number,until:number}>} 当てはめられなければ空
+ */
+export const marksFromTimes = (text, times) => {
+  const src = String(text ?? '')
+  const end = times?.end
+  if (!Array.isArray(end) || end.length !== src.length) return []
+  const out = []
+  for (const w of wordSpans(src)) {
+    // その語の**最後の文字**が終わった秒。空白は入っていない
+    let sec = NaN
+    for (let i = w.end - 1; i >= w.at; i -= 1) {
+      if (Number.isFinite(end[i])) { sec = end[i]; break }
+    }
+    // **1語でも当てはまらなければ、見積もりに戻す**(混ぜると途中で飛ぶ)
+    if (!Number.isFinite(sec)) return []
+    out.push({ at: w.at, until: sec * 1000 })
+  }
+  /* **時刻が前後していたら使わない。** `markIndexAt()` は
+     「まだ来ていない最初の語」を探すので、並びが乱れると**戻って光る** */
+  for (let i = 1; i < out.length; i += 1) {
+    if (out[i].until < out[i - 1].until) return []
   }
   return out
 }
@@ -251,4 +306,58 @@ export const sharesToTimes = (shares, seconds) => {
   const dur = Number(seconds)
   if (!Array.isArray(shares) || !shares.length || !(dur > 0)) return null
   return shares.map((s) => ({ ...s, start: s.start * dur, end: s.end * dur }))
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * **文の区間も、見積もりをやめる**(2026-09 利用者の指摘)
+ *
+ *   > 再生中の文章のハイライトのタイミングをもっと正確にできないですか?
+ *
+ * `sentenceShares()` は**語の重みで割った見積もり**である。
+ * 合っているのは合計だけで、途中はどこもずれている。
+ * ElevenLabs から文字ごとの時刻を控えてあるなら、**割る必要がない。**
+ *
+ * 【返す形は `sharesToTimes()` とまったく同じ】
+ *   `{start, end, charIndex}` の**秒**。だから呼ぶ側は、
+ *   どちらが来たのかを知らなくてよい(`repeatSeek` も `seekSentence` も
+ *   `spanForRange` も、1行も変わらない)。
+ *
+ * 【当てはまらなければ `null`。**当てずっぽうで区切らない**】
+ *   ずれた区間は、無いより悪い —— ◀ ▶ が**別の文へ飛ぶ**からである
+ *   (`sentencePair.js` の「数が合わなければ切らない」と同じ決まり)。
+ *   `null` のときは、これまでどおり見積もりに戻る。
+ * ════════════════════════════════════════════════════════════════
+ *
+ * @param {string} text その MP3 で読み上げる英文
+ * @param {{start:number[],end:number[]}|null} times `charTimesOf()` の返り値
+ * @returns {Array<{start:number,end:number,charIndex:number}>|null}
+ */
+export const sentenceTimesOf = (text, times) => {
+  const src = String(text ?? '')
+  const from = times?.start
+  const to = times?.end
+  if (!Array.isArray(from) || from.length !== src.length) return null
+  if (!Array.isArray(to) || to.length !== src.length) return null
+
+  const out = []
+  for (const c of splitSentences(src)) {
+    // その文の中で、**いちばん初めに音になる文字**と、いちばん終わりの文字
+    let start = NaN
+    for (let i = c.start; i < c.end; i += 1) {
+      if (Number.isFinite(from[i])) { start = from[i]; break }
+    }
+    let end = NaN
+    for (let i = c.end - 1; i >= c.start; i -= 1) {
+      if (Number.isFinite(to[i])) { end = to[i]; break }
+    }
+    // 音になる文字が1つも無い切れ端(空白・記号だけ)は落とす
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue
+    out.push({ start, end, charIndex: c.start })
+  }
+  if (!out.length) return null
+  // **前へ戻る並びは当てにしない。** 当てはめ方そのものが崩れている
+  for (let i = 1; i < out.length; i += 1) {
+    if (out[i].start < out[i - 1].start) return null
+  }
+  return out
 }

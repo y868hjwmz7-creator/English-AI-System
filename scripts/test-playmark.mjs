@@ -38,6 +38,10 @@ import {
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
+import {
+  marksFromTimes, sentenceShares, sentenceTimesOf, wordSpans,
+} from '../src/lib/wordTiming.js'
+import { charTimesOf } from '../src/lib/wholeAudio.js'
 import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import { spanForRange } from '../src/lib/wholeAudio.js'
 import { ABBREVIATIONS, splitSentences } from '../src/lib/wordTiming.js'
@@ -1705,6 +1709,146 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(ms.includes('やめる'), '**やめるを、走らせるボタンのとなりに置く**')
   ok(!ms.includes('navigator.share'),
     '**2つから選ぶ。** 共有シートを3つめとして足さない(利用者の指定)')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * **ハイライトのタイミングを、見積もりから本当の時刻へ**(2026-09)
+ *
+ *   > 再生中の文章のハイライトのタイミングをもっと正確にできないですか?
+ *
+ * 段落ごとの MP3 では、語の色も文の区間も**語の重みで割った見積もり**
+ * だった(`wordMarks` / `sentenceShares`)。合っているのは合計だけである。
+ *
+ * ElevenLabs は音声と一緒に**文字ごとの時刻**を返す(課金は文字数なので
+ * **1円も増えない**)。窓口がそれを MP3 のとなりに控えるようにしたので、
+ * ここでは読むだけでよい。
+ *
+ * **当てはまらないときは `null` / 空を返して、見積もりに戻す。**
+ * ずれた区間は無いより悪い —— ◀ ▶ が**別の文へ飛ぶ**からである。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  /** その英文の、1文字ずつの時刻を作る(空白は飛ばす・窓口の返す形) */
+  const align = (text, per = 0.1) => {
+    const chars = []
+    const from = []
+    const to = []
+    let t = 0
+    for (const ch of text) {
+      chars.push(ch)
+      if (/\s/.test(ch)) { from.push(t); to.push(t); continue }
+      from.push(t); t += per; to.push(t)
+    }
+    return {
+      characters: chars,
+      character_start_times_seconds: from,
+      character_end_times_seconds: to,
+    }
+  }
+
+  const TEXT = 'Hi there. How are you?'
+
+  // ── ① 文字ごとの時刻を、画面が描く英文に当てはめる ──────────────
+  const times = charTimesOf(align(TEXT), TEXT)
+  ok(times && times.start.length === TEXT.length, '英文と同じ長さで返る')
+  ok(Number.isNaN(times.start[2]), '空白は NaN(音になっていない)')
+  ok(times.start[0] === 0, '1文字目は 0 秒から')
+
+  /* **空白のそろえ方が違っても当てはまる**(控えは `normText` で作られる)。
+     非空白の並びが同じなら、`charTimesOf` はそのまま当たる */
+  const LOOSE = '  Hi   there.\nHow are you?  '
+  const loose = charTimesOf(align('Hi there. How are you?'), LOOSE)
+  ok(loose && loose.start.length === LOOSE.length,
+    '**画面が描いている文字列で数える**(空白のそろえ方が違ってもよい)')
+  ok(Number.isNaN(loose.start[0]) && loose.start[2] === 0,
+    '前の空白は飛ばして、`H` から数える')
+
+  // ── ② 語の印(色)は、割り算ではなく本当の時刻から ────────────────
+  const marks = marksFromTimes(TEXT, times)
+  ok(marks.length === wordSpans(TEXT).length, '語の数だけ印が出る')
+  ok(marks[0].at === 0, '1つめの印は英文の頭を指す')
+  ok(marks.every((m, i) => i === 0 || m.until >= marks[i - 1].until),
+    '**時刻は前へ戻らない**(戻る並びは当てにしない)')
+  ok(Math.abs(marks[0].until - 200) < 1, '`Hi` は 2 文字ぶん = 0.2 秒')
+  ok(marksFromTimes(TEXT, null).length === 0,
+    '**控えが無ければ空。** 見積もりに戻る(行き止まりを作らない)')
+  ok(marksFromTimes(TEXT, { start: [], end: [] }).length === 0,
+    '長さが合わなければ空(当てずっぽうで色を付けない)')
+
+  // ── ③ 文の区間も、本当の時刻から ────────────────────────────────
+  const sents = sentenceTimesOf(TEXT, times)
+  ok(sents && sents.length === 2, '2文に分かれる')
+  ok(sents[0].charIndex === 0 && sents[1].charIndex === TEXT.indexOf('How'),
+    '**`charIndex` は画面が描いている英文の位置**(集中モードが範囲で使う)')
+  ok(sents[0].start === 0, '1文目は 0 秒から')
+  ok(Math.abs(sents[1].start - 0.8) < 0.001,
+    '2文目は `Hi there.` の 8 文字ぶん = 0.8 秒から')
+  ok(sents[0].end <= sents[1].start, '文どうしが重ならない')
+
+  /* **返す形は `sharesToTimes()` とそろえる。**
+     そろっていないと `repeatSeek` / `seekSentence` / `spanForRange` が
+     経路ごとに違う動きをする */
+  const shape = sentenceShares(TEXT)
+  ok(shape.length === sents.length, '見積もりと同じ数の区間になる')
+  ok(sents.every((s) => 'start' in s && 'end' in s && 'charIndex' in s),
+    '見積もりとまったく同じ形(呼ぶ側はどちらか知らなくてよい)')
+
+  ok(sentenceTimesOf(TEXT, null) === null, '控えが無ければ null')
+  ok(sentenceTimesOf(TEXT, { start: [1], end: [1] }) === null,
+    '長さが合わなければ null(**当てずっぽうで区切らない**)')
+  ok(sentenceTimesOf('...', charTimesOf(align('...'), '...')) !== null
+    || true, '記号だけでも落ちない')
+
+  // 前へ戻る時刻(当てはめが崩れている)は、まるごと断る
+  const broken = charTimesOf(align(TEXT), TEXT)
+  for (let i = 0; i < TEXT.indexOf('How'); i += 1) {   // 1文目だけ、うしろへ
+    if (Number.isFinite(broken.start[i])) { broken.start[i] += 5; broken.end[i] += 5 }
+  }
+  ok(sentenceTimesOf(TEXT, broken) === null,
+    '**時刻が前へ戻る並びは断る**(ずれた区間は、無いより悪い)')
+
+  // ── ④ 画面(readAloud)が、本当に使っているか ────────────────────
+  const ra = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+  ok(ra.includes('async function exactTimesFor'),
+    '控えを読む窓口が1か所にある')
+  ok(/tier !== PREMIUM/.test(ra.slice(ra.indexOf('async function exactTimesFor'))),
+    '**標準の段では読みに行かない**(控えがあるのは ElevenLabs だけ)')
+  ok((ra.match(/exactTimesFor\(/g) ?? []).length >= 3,
+    '**段落ごと・通しの両方で呼んでいる**(片方だけだと、そこだけ見積もり)')
+  ok((ra.match(/alignment: exact\?\.alignment \?\? null/g) ?? []).length === 2,
+    '`playClip` に控えを渡している(渡し忘れても音は鳴るので気づけない)')
+  ok(ra.includes('holdCursor(exact.sents, null)'),
+    '文の区間も、控えがあれば本当の時刻で控える')
+  ok(ra.includes('sentenceShares(piece.text)') && ra.includes('sharesToTimes(shares, dur)'),
+    '**控えが無いときの見積もりは残す**(行き止まりを作らない)')
+
+  /* **送れなかったときに、控えを進めない**(2026-09)。
+     進めると、その段落が画面に出た瞬間には「もう送った文」になっていて、
+     **1文目だけが永久に光らない** */
+  const tell = ra.slice(ra.indexOf('function tellSentence'))
+  const cut = tell.slice(0, tell.indexOf('\n}\n'))
+  ok(cut.indexOf('sp.item !== only()') < cut.indexOf('state.at = hit'),
+    '**送れたときだけ控えを進める**(順を戻すと1文目が光らなくなる)')
+
+  // ── ⑤ 窓口が、控えを作って置いているか ──────────────────────────
+  const sp = readFileSync(new URL('../supabase/functions/speak/index.ts',
+    import.meta.url), 'utf8')
+  ok(sp.includes('/with-timestamps'),
+    '**時刻ごと受け取る。** 課金は文字数なので1円も増えない')
+  ok(sp.includes(".replace(/\\.mp3$/, '.json')"),
+    'MP3 と同じ道の `.json` に控える(画面と同じ規則)')
+  ok(sp.includes("FN_REV = '2026-09-07'"), '窓口の版を1つ進めてある')
+
+  const ac = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+  ok(ac.includes("NEED_FN_REV = '2026-09-07'"),
+    '画面が求める版も、そろえてある(古ければ赤く知らせる)')
+  ok(ac.includes('export async function clipAlignment'),
+    '控えを読む道がある')
+  ok(!/clipAlignment[\s\S]{0,600}askForClip/.test(ac),
+    '**控えを読むだけ。窓口は呼ばない**(0円)')
+  ok(/prefetchClip[\s\S]{0,400}clipAlignment\(/.test(ac),
+    '**次の段落の控えも温めておく**(段落の切れ目で待たせない)')
+  ok(ac.includes('marksFromTimes(body, charTimesOf(alignment, body))'),
+    '`playClip` が、控えがあれば見積もらない')
 }
 
 console.log(ng

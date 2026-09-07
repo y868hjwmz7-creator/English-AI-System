@@ -59,8 +59,8 @@ import {
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
-import { spansOf, wholeMark } from './wholeAudio.js'
-import { markIndexAt, wordMarks } from './wordTiming.js'
+import { charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
+import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
   FADE_STEP, FADE_STOP, applyGain, fadeGain, isMeasured, measureClip,
 } from './loudness.js'
@@ -196,9 +196,13 @@ export const lastClipDetail = () => lastDetail
  *   すべて v3 である)。置き直していない窓口は、いまも v2 で作っている。
  *   **音は鳴るので、これも黙っていると気づけない。**
  *
+ *   **2026-09-07 から、文字ごとの時刻を `.json` に控える**(`with-timestamps`)。
+ *   置き直していない窓口は控えを作らないので、**色は見積もりのまま**である。
+ *   やはり**音は鳴る**ので、黙っていると気づけない。
+ *
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  */
-export const NEED_FN_REV = '2026-09-05c'
+export const NEED_FN_REV = '2026-09-07'
 
 let fnRev = null
 /** 窓口の版。まだ一度も呼んでいなければ `null` */
@@ -564,6 +568,71 @@ export async function clipUrl(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDAR
   return out
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ * **文字ごとの、本当の時刻**(2026-09 利用者の指摘)
+ *
+ *   > 再生中の文章のハイライトのタイミングをもっと正確にできないですか?
+ *
+ * 段落ごとの MP3 では、色は **`wordMarks()` の見積もり**で動いていた
+ * (語の長さと句読点から、全体の長さを比で割る)。**合っているのは
+ * 合計だけ**で、途中はどこもずれる —— 長い語・数字・固有名詞が来ると、
+ * そこから先がまとめて前後する。
+ *
+ * 窓口(`speak`・`2026-09-07` から)は、ElevenLabs から返ってくる
+ * **文字ごとの時刻**を MP3 のとなりに `.json` で置くようになった。
+ * あるなら読んで、**見積もりをやめる。**
+ *
+ * 【無くても壊れない】
+ *   **作り直すまで、すでにある MP3 には `.json` が無い。**
+ *   そのときは `null` を返し、これまでどおり見積もりで動く
+ *   (行き止まりを作らない)。
+ *
+ * 【一度読んだら覚える。無かったことも覚える】
+ *   段落を行き来するたびに取りに行かない。**無かった**ことも覚える ——
+ *   古い教材で、段落を送るたびに 404 を出し続けない。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** 読んだ時刻(と、無かったという答え)。この画面のあいだだけ */
+const timesCache = new Map()
+
+/**
+ * その英文の「文字ごとの時刻」を取りに行く。
+ *
+ * **窓口は呼ばない。** 置いてある `.json` を読むだけなので、
+ * **1円もかからない**(まだ無ければ、ただ無いと分かるだけ)。
+ *
+ * @returns {Promise<object|null>} `alignment` そのもの。無ければ `null`
+ */
+export async function clipAlignment(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
+  if (!canUseClips()) return null
+  const body = normText(text)
+  if (!body) return null
+  const voice = pathVoice(voiceId, tier)
+  const key = `${tier}|${voice}|${body}`
+  if (timesCache.has(key)) return timesCache.get(key)
+
+  const hash = await fingerprint(voice, body)
+  // **MP3 と同じ道の `.json`。** 窓口と同じ規則にすること
+  const base = publicUrlOf(tier, voice, hash).replace(/\.mp3$/, '.json')
+  /* **作り直した英文なら、控えを素通りさせる**(`clipUrl` とまったく同じ印)。
+     作り直すと音が変わるので、**古い時刻のまま光ると、音とずれる** */
+  const mark = remadeMark(`${tier}|${hash}`)
+  const url = mark ? `${base}?v=${mark}` : base
+  let out = null
+  try {
+    const res = await fetch(url)
+    if (res.ok) {
+      const got = await res.json()
+      /* **同じ英文のものか、必ず確かめる。** 置き場所は英文の指紋で
+         決まるので、ふつうはずれない。それでも念のため見る ——
+         **別の英文の時刻で光るのは、光らないより悪い** */
+      out = (got && normText(got.text) === body) ? (got.alignment ?? null) : null
+    }
+  } catch { /* 読めなくても困らない。見積もりに戻るだけ */ }
+  timesCache.set(key, out)
+  return out
+}
+
 /** 「その場所には無かった」と分かったときに呼ぶ。窓口に作らせて場所を返す */
 export async function makeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return null
@@ -620,6 +689,10 @@ export async function remakeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STAN
   const fresh = `${made.url}?v=${stamp}`
   gaveUp.delete(key)
   urlCache.set(key, fresh)
+  /* **時刻の控えも忘れる。** 作り直すと音が変わるので、
+     覚えたままだと**古い時刻で光り、音とずれる。**
+     ここで消せば、次に鳴らすときに新しい `.json` を読みに行く */
+  timesCache.delete(key)
   return fresh
 }
 
@@ -766,6 +839,11 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
  */
 export function prefetchClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return
+  /* **文字ごとの時刻も、ここで温めておく**(2026-09)。
+     控えに入っていれば、次の段落は**待たずに**正確な色で鳴らせる。
+     `.json` は数十 KB で、しかも同じ CDN から来る。
+     読めなくても困らない —— これまでどおり見積もりに戻るだけである */
+  clipAlignment(text, voiceId, tier).catch(() => {})
   clipUrl(text, voiceId, tier).then((url) => {
     if (!url) return
     // **`fetch` では取りに行かない。** 別のドメインなので CORS の許しが要る。
@@ -933,6 +1011,12 @@ export async function playClip({
   stopAt = 0,
   /** いま何秒めか(1本の中で、いま何番目かを知らせるために使う) */
   onTime = null,
+  /**
+   * **文字ごとの本当の時刻**(`clipAlignment()` の返り値・2026-09)。
+   * 渡されたら、語の色は**見積もりではなくこれ**で動く。
+   * 渡さなければ、これまでどおり `wordMarks()` で見積もる。
+   */
+  alignment = null,
 } = {}) {
   if (!canUseClips()) return false
   const body = normText(text)
@@ -1042,7 +1126,13 @@ export async function playClip({
     let frame = 0
     let index = -1
     let shown = -1                       // いま入れてある音量(入れ直しを減らす)
-    const marks = wordMarks(body, (el.duration || 0) * 1000)
+    /* **本当の時刻があるなら、見積もらない**(2026-09 利用者の指摘)。
+       `wordMarks()` は語の長さと句読点から全体の長さを比で割るので、
+       **合っているのは合計だけ**である。窓口が控えた文字ごとの時刻
+       (`clipAlignment`)を渡してもらえたら、そちらをそのまま使う。
+       当てはめられなければ空が返るので、**そのときは見積もりに戻る** */
+    const exact = alignment ? marksFromTimes(body, charTimesOf(alignment, body)) : []
+    const marks = exact.length ? exact : wordMarks(body, (el.duration || 0) * 1000)
     /* 鳴らし始めた場所(続きから鳴らすとき)。
        **戻したときは書き換える** — `seekClip()` を参照 */
     let from = Number(el.currentTime) || 0

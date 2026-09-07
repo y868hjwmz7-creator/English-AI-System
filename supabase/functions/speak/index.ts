@@ -87,7 +87,7 @@ const reply = (body: unknown, status = 200) =>
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-05c'
+const FN_REV = '2026-09-07'
 
 /** 置き場所(Storage のバケツ)。0016 で作る */
 const BUCKET = 'tts'
@@ -397,32 +397,41 @@ function cleanElevenSettings(raw: unknown): Record<string, number | boolean> | n
   return Object.keys(out).length ? out : null
 }
 
+/**
+ * 段落ごとの1本を作る。
+ *
+ * 【**文字ごとの時刻も一緒に受け取る**】(2026-09 利用者の指摘)
+ *
+ *   > 再生中の文章のハイライトのタイミングをもっと正確にできないですか?
+ *
+ * これまでは素の `/v1/text-to-speech` を呼んで**音だけ**を受け取っていた。
+ * だから画面は「いまどの文を読んでいるか」を**語の長さと句読点から
+ * 見積もる**しかなく(`wordMarks`)、合っているのは合計だけだった。
+ *
+ * **`/with-timestamps` は、同じ音声に文字ごとの時刻を添えて返す。**
+ * 読ませる文字数は1文字も変わらないので、**課金は1円も増えない。**
+ * 1本にまとめる側(`synthWhole`)は前からこちらを呼んでいる ——
+ * **段落ごとの側だけが、ただでもらえるものを捨てていた。**
+ *
+ * 音声そのものは変わらないので、**`CLIP_REV` は進めない**
+ * (進めると、すでに作った MP3 が全部作り直し = 再課金になる)。
+ */
 async function synthEleven(
   text: string, voiceId: string, key: string, model: string,
   settings: Record<string, number | boolean> | null = null,
 ) {
-  const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`,
-    {
-      method: 'POST',
-      headers: {
-        'xi-api-key': key,
-        'Content-Type': 'application/json',
-        Accept: 'audio/mpeg',
-      },
-      /* **指定が来たときだけ添える。**
-         付けない声には、これまでどおり何も送らない(ElevenLabs の既定)。
-         いまの音を変えないためである(2026-09 利用者の指定) */
-      body: JSON.stringify(
-        settings ? { text, model_id: model, voice_settings: settings }
-          : { text, model_id: model },
-      ),
-    },
+  /* **指定が来たときだけ添える。**
+     付けない声には、これまでどおり何も送らない(ElevenLabs の既定)。
+     いまの音を変えないためである(2026-09 利用者の指定) */
+  const payload: Record<string, unknown> = settings
+    ? { text, model_id: model, voice_settings: settings }
+    : { text, model_id: model }
+  return await synthElevenTimed(
+    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`
+    + '/with-timestamps',
+    key,
+    payload,
   )
-  if (!res.ok) {
-    return { error: humanTtsError('ElevenLabs', res.status, await res.text().catch(() => '')) }
-  }
-  return { audio: await res.arrayBuffer() }
 }
 
 /**
@@ -468,6 +477,8 @@ async function synthElevenBest(
     if (made.audio) {
       return {
         audio: made.audio,
+        // **文字ごとの時刻。** 画面はこれで色を動かす(見積もりをやめる)
+        alignment: made.alignment ?? null,
         madeModel: t.model,
         madeStability: typeof t.settings?.stability === 'number'
           ? (t.settings.stability as number) : undefined,
@@ -1120,6 +1131,8 @@ Deno.serve(async (req) => {
 
     let made: {
       audio?: ArrayBuffer; error?: unknown
+      // **文字ごとの時刻**(ElevenLabs のときだけ。Azure / Google には無い)
+      alignment?: unknown
       madeModel?: string; madeStability?: number; modelNote?: string
     }
     if (provider === 'eleven') {
@@ -1161,6 +1174,8 @@ Deno.serve(async (req) => {
      *   どのみち何もしない。
      */
     const stored = provider === 'eleven' ? fadeMp3Tail(audio) : audio
+    // **文字ごとの時刻**(ElevenLabs のときだけ返ってくる)
+    const alignment = made.alignment ?? null
 
     // ── 5. 置く ────────────────────────────────────────────
     //
@@ -1186,6 +1201,39 @@ Deno.serve(async (req) => {
           + '(0016 の SQL で作られます)。' + raw.slice(0, 200),
         fatal: /bucket not found/i.test(raw),
       }, 502)
+    }
+
+    /*
+     * ── 5.5 文字ごとの時刻を、MP3 のとなりに置く ───────────
+     *
+     *   **音声と同じ道に `.json` で置く**(1本にまとめた音声と同じ作法)。
+     *   画面はこれを読んで、**見積もりをやめて本当の時刻で色を動かす。**
+     *
+     *   【失敗しても、何も言わない】
+     *     置けなくても**音は鳴る。** 色が見積もりに戻るだけである。
+     *     ここで 502 を返すと、**時刻のために音声そのものを落とす**
+     *     ことになり、本末転倒になる(行き止まりを作らない)。
+     *
+     *   【すでにある MP3 には、これが無い】
+     *     置き場所に「時刻があるか」は入っていないので、
+     *     **作り直すまで見積もりのまま**である。さがす画面の
+     *     「読み上げ音声を作り直す」を押した教材だけが正確になる。
+     */
+    if (alignment) {
+      await fetch(
+        `${supabaseUrl}/storage/v1/object/${BUCKET}/${path.replace(/\.mp3$/, '.json')}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${serviceKey}`,
+            apikey: serviceKey,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+            'x-upsert': 'true',
+          },
+          body: JSON.stringify({ rev: FN_REV, text, alignment }),
+        },
+      ).catch(() => null)
     }
 
     return reply({

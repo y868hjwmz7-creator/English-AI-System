@@ -154,6 +154,62 @@ export function spansOf(alignment, texts) {
 }
 
 /**
+ * **文字ごとの、本当の時刻**(2026-09 利用者の指摘)。
+ *
+ *   > 再生中の文章のハイライトのタイミングをもっと正確にできないですか?
+ *
+ * 段落ごとの MP3 で鳴らすとき、色は **`wordMarks()` の見積もり**で
+ * 動いていた(語の長さと句読点から、全体の長さを比で割ったもの)。
+ * **合っているのは合計だけ**で、途中はどこもずれている。
+ *
+ * ところが ElevenLabs は、頼めば**文字ごとの時刻をただで返す。**
+ * だから見積もりをやめて、**返ってきた時刻をそのまま使う。**
+ *
+ * 【ここは「当てはめ」だけを担う】
+ *   `alignment.characters` は**向こうが実際に読んだ文字**なので、
+ *   こちらが渡した英文と**空白の入り方だけが違う**ことがある
+ *   (`spansOf` と同じ事情)。だから**空白を数えずに突き合わせる。**
+ *
+ * 【合わなければ、何も返さない】
+ *   当てずっぽうで当てはめると、**別の語の時刻で光る。**
+ *   ずれた対は、無いより悪い(`spansOf` と同じ考え方)。
+ *
+ * @param {object} alignment 窓口が控えた `alignment` そのもの
+ * @param {string} text その英文(画面が描いているものと同じ文字列)
+ * @returns {{start:number[],end:number[]}|null}
+ *   英文の**何文字目**が何秒に始まり、何秒に終わるか(空白は `NaN`)
+ */
+export function charTimesOf(alignment, text) {
+  const chars = alignment?.characters
+  const from = alignment?.character_start_times_seconds
+  const to = alignment?.character_end_times_seconds
+  if (!Array.isArray(chars) || !Array.isArray(from) || !Array.isArray(to)) return null
+  if (chars.length !== from.length || chars.length !== to.length) return null
+  const src = String(text ?? '')
+  if (!src || !chars.length) return null
+
+  const start = new Array(src.length).fill(NaN)
+  const end = new Array(src.length).fill(NaN)
+  let k = 0
+  for (let i = 0; i < src.length; i += 1) {
+    if (isSpace(src[i])) continue
+    while (k < chars.length && isSpace(chars[k])) k += 1
+    if (k >= chars.length) return null      // 足りない。当てはめが崩れている
+    const a = Number(from[k])
+    const b = Number(to[k])
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null
+    start[i] = a
+    end[i] = b
+    k += 1
+  }
+  // 余りが多いときは、当てはめ方そのものが崩れている(`spansOf` と同じ目安)
+  let left = 0
+  for (let j = k; j < chars.length; j += 1) if (!isSpace(chars[j])) left += 1
+  if (left > 2) return null
+  return { start, end }
+}
+
+/**
  * いま何番目を鳴らしているか(秒 → 番号)。
  *
  * **間(ま)の上に来たら、次の項目とみなす。** 発言と発言のあいだは
