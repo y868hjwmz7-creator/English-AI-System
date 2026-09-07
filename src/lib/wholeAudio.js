@@ -87,6 +87,109 @@ const solidCount = (s) => {
   return n
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ * **当てはめは「ぴったり同じ」を前提にしない**(2026-09 利用者の指摘)
+ *
+ *   > 普段使っている教材の再生のハイライトが正確でないから頼んだのです。
+ *   > 元々正確ではないです。スピーチもですが。
+ *
+ * **ここが元の穴だった。** これまでの当てはめは
+ *
+ *   「向こうが読んだ文字」と「こちらが渡した英文」は、
+ *    空白を除けば**1文字ずつ、同じ順で、同じ数**である
+ *
+ * を前提に、**数えるだけ**で区切っていた。ところが ElevenLabs は
+ * **読むために文字を書き換える**(`apply_text_normalization` の既定は
+ * `auto`)。数字・記号・略語がそうなる。
+ *
+ *   こちらが渡した英文 … `It grew 12% in 2026.`
+ *   向こうが読んだ文字 … `It grew twelve percent in twenty twenty-six.`
+ *
+ * **これは音のためには正しい。**(`2026` を「に、ぜろ、に、ろく」と
+ * 読まれては困る)。困るのは、こちらが**数えて区切っていた**ことである。
+ *
+ * 【何が起きていたか。2つに分かれる】
+ *
+ *   ①ずれが大きい … 末尾の余りが増えるので `null` を返し、
+ *                    **黙って見積もりに戻っていた**(不正確)
+ *   ②ずれが小さい … 末尾では帳尻が合うので**通ってしまい**、
+ *                    書き換えのあった場所から先の区切りが**全部ずれる**
+ *
+ * **どちらも「音は鳴る」ので、気づけない。**
+ *
+ * 【直し方 — 数えるのをやめて、突き合わせる】
+ *   1文字ずつ**同じ文字を探しながら**進む。すぐ次が同じ文字なら
+ *   そのまま進む(**書き換えが無いときは、これまでと1つも変わらない**)。
+ *   食い違ったら、向こうの側だけを先へ送って**同じ文字が出るまで待つ。**
+ *
+ *   `12%` の `1` `2` `%` は当てはまらないが、そのすぐあとの `in` で
+ *   **必ず追いつく。** 文の頭と終わりはほとんどが文字なので、
+ *   区切りはこれで取れる。
+ *
+ * 【当てはまらなかった文字は `-1`。捨てずに残す】
+ *   呼ぶ側が「その範囲で**最初に当てはまった文字**」を使えるようにする。
+ *   **当てずっぽうで埋めない**(ずれた時刻は、無いより悪い)。
+ *
+ * 【どれだけ当てはまったかも返す】
+ *   半分も当てはまらないなら、当てはめ方そのものが崩れている。
+ *   そのときは**これまでどおり見積もりに戻す。**
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** 追いかける範囲(向こうの文字を、これだけ先まで見て探す) */
+const LOOKAHEAD = 60
+
+/** 当てはまったと認める最低の割合。これを下回ったら使わない */
+const MIN_HIT = 0.6
+
+/**
+ * 向こうの読んだ文字の上を、順に歩く道具を作る。
+ *
+ * **1つの道具を使い回す**(項目をまたいでも位置を持ち越す)。
+ * 作り直すと、2つめの項目が先頭から探し直して**前へ戻る。**
+ */
+function walker(chars) {
+  let k = 0
+  /**
+   * @param {string} text 当てはめたい英文
+   * @returns {{list:Array<{at:number,k:number}>, hit:number}}
+   *   `at` は英文の何文字目か、`k` は向こうの何文字目か(-1 = 当たらず)
+   */
+  return (text) => {
+    const src = String(text ?? '')
+    const list = []
+    let hit = 0
+    for (let i = 0; i < src.length; i += 1) {
+      const c = src[i]
+      if (isSpace(c)) continue
+      const want = c.toLowerCase()
+      let j = k
+      let hops = 0
+      let found = -1
+      while (j < chars.length && hops <= LOOKAHEAD) {
+        const d = chars[j]
+        if (isSpace(d)) { j += 1; continue }
+        if (String(d).toLowerCase() === want) { found = j; break }
+        j += 1
+        hops += 1
+      }
+      if (found >= 0) { list.push({ at: i, k: found }); k = found + 1; hit += 1 }
+      else list.push({ at: i, k: -1 })
+    }
+    return { list, hit }
+  }
+}
+
+/** `alignment` から、使える3つの並びを取り出す。形が違えば `null` */
+function partsOf(alignment) {
+  const chars = alignment?.characters
+  const from = alignment?.character_start_times_seconds
+  const to = alignment?.character_end_times_seconds
+  if (!Array.isArray(chars) || !Array.isArray(from) || !Array.isArray(to)) return null
+  if (chars.length !== from.length || chars.length !== to.length) return null
+  if (!chars.length) return null
+  return { chars, from, to }
+}
+
 /**
  * **文字ごとの時刻から、項目ごとの「何秒から何秒か」を出す。**
  *
@@ -111,40 +214,29 @@ const solidCount = (s) => {
  * @returns {Array<{start:number,end:number}>|null}
  */
 export function spansOf(alignment, texts) {
-  const chars = alignment?.characters
-  const from = alignment?.character_start_times_seconds
-  const to = alignment?.character_end_times_seconds
+  const got = partsOf(alignment)
   const list = (texts ?? []).map((t) => String(t ?? ''))
-  if (!Array.isArray(chars) || !Array.isArray(from) || !Array.isArray(to)) return null
-  if (chars.length !== from.length || chars.length !== to.length) return null
-  if (!list.length || !chars.length) return null
+  if (!got || !list.length) return null
+  if (list.some((t) => solidCount(t) === 0)) return null
 
-  const want = list.map(solidCount)
-  if (want.some((n) => n === 0)) return null
-
+  const walk = walker(got.chars)
   const out = []
-  let at = 0
-  for (const need of want) {
-    // その項目の最初の文字まで進む(空白は読み飛ばす)
-    while (at < chars.length && isSpace(chars[at])) at += 1
-    if (at >= chars.length) return null
-    const start = Number(from[at])
-    let got = 0
-    let last = -1
-    while (at < chars.length && got < need) {
-      if (!isSpace(chars[at])) { got += 1; last = at }
-      at += 1
+  for (const text of list) {
+    const { list: marks, hit } = walk(text)
+    if (!marks.length || hit / marks.length < MIN_HIT) return null
+    /* **その項目で、最初に当てはまった文字と最後に当てはまった文字。**
+       書き換えられた場所(数字・記号)は当たらないので飛ばす */
+    const first = marks.find((m) => m.k >= 0)
+    let last = null
+    for (let i = marks.length - 1; i >= 0; i -= 1) {
+      if (marks[i].k >= 0) { last = marks[i]; break }
     }
-    if (got < need || last < 0) return null
-    const end = Number(to[last])
+    if (!first || !last) return null
+    const start = Number(got.from[first.k])
+    const end = Number(got.to[last.k])
     if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null
     out.push({ start, end })
   }
-
-  // 余りが多いときは、当てはめ方そのものが崩れている
-  let left = 0
-  for (let k = at; k < chars.length; k += 1) if (!isSpace(chars[k])) left += 1
-  if (left > 2) return null
 
   // 前後が入れ替わっていないか(向こうの時刻が乱れていたら使わない)
   for (let i = 1; i < out.length; i += 1) {
@@ -180,32 +272,23 @@ export function spansOf(alignment, texts) {
  *   英文の**何文字目**が何秒に始まり、何秒に終わるか(空白は `NaN`)
  */
 export function charTimesOf(alignment, text) {
-  const chars = alignment?.characters
-  const from = alignment?.character_start_times_seconds
-  const to = alignment?.character_end_times_seconds
-  if (!Array.isArray(chars) || !Array.isArray(from) || !Array.isArray(to)) return null
-  if (chars.length !== from.length || chars.length !== to.length) return null
+  const got = partsOf(alignment)
   const src = String(text ?? '')
-  if (!src || !chars.length) return null
+  if (!got || !src) return null
+
+  const { list: marks, hit } = walker(got.chars)(src)
+  if (!marks.length || hit / marks.length < MIN_HIT) return null
 
   const start = new Array(src.length).fill(NaN)
   const end = new Array(src.length).fill(NaN)
-  let k = 0
-  for (let i = 0; i < src.length; i += 1) {
-    if (isSpace(src[i])) continue
-    while (k < chars.length && isSpace(chars[k])) k += 1
-    if (k >= chars.length) return null      // 足りない。当てはめが崩れている
-    const a = Number(from[k])
-    const b = Number(to[k])
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return null
-    start[i] = a
-    end[i] = b
-    k += 1
+  for (const m of marks) {
+    if (m.k < 0) continue                 // 書き換えられた文字。**埋めない**
+    const a = Number(got.from[m.k])
+    const b = Number(got.to[m.k])
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue
+    start[m.at] = a
+    end[m.at] = b
   }
-  // 余りが多いときは、当てはめ方そのものが崩れている(`spansOf` と同じ目安)
-  let left = 0
-  for (let j = k; j < chars.length; j += 1) if (!isSpace(chars[j])) left += 1
-  if (left > 2) return null
   return { start, end }
 }
 

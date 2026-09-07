@@ -25,14 +25,16 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf, spansOf, wholeMark,
+  charTimesOf, indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf,
+  spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
 } from '../src/lib/mp3Join.js'
 import {
-  markIndexAt, sentenceShares, sharesToTimes, splitSentences, wordMarks,
+  markIndexAt, marksFromTimes, sentenceShares, sentenceTimesOf, sharesToTimes,
+  splitSentences, wordMarks,
 } from '../src/lib/wordTiming.js'
 import { SPEAK_MAX, speakChunks } from '../src/lib/speakChunks.js'
 
@@ -658,9 +660,23 @@ function fakeMp3({
     if (short) ng('足りないのに区切っている', '別の発言の場所を指してしまう')
     else ok('文字が足りなければ、区切らない')
 
+    /* **うしろに余りがあるのは、断る理由にならない**(2026-09)。
+       求めているのは**文ごとの区切り**であって、1文字ずつの照合ではない。
+       こちらの英文が頭から順に当てはまっているなら、
+       そのぶんの区切りは正しい —— **うしろに何が続いていようと関係ない。**
+       別の中身かどうかは、下の「当てはまった割合」が見ている */
     const extra = spansOf(fakeAlign([...texts, 'And a lot more text here.']), texts)
-    if (extra) ng('余っているのに区切っている')
-    else ok('文字が余っていれば、区切らない')
+    const base = spansOf(fakeAlign(texts), texts)
+    if (!extra || extra.length !== 3) {
+      ng('うしろに余りがあるだけで、区切りを捨てている')
+    } else if (extra.some((sp, i) => Math.abs(sp.start - base[i].start) > 1e-9)) {
+      ng('うしろの余りで、区切りがずれている')
+    } else ok('うしろに余りがあっても、区切りはずれない')
+
+    // **中身がまるで違えば、当てずっぽうで区切らない**
+    const other = spansOf(fakeAlign(['Completely different words over here.']), texts)
+    if (other) ng('別の中身の時刻で区切っている', 'ずれた区間は、無いより悪い')
+    else ok('別の中身なら、区切らない')
 
     if (spansOf(null, texts)) ng('時刻が無いのに区切っている')
     else if (spansOf(fakeAlign(texts), [])) ng('英文が無いのに区切っている')
@@ -1595,6 +1611,85 @@ function fakeMp3({
       ng('`playClip` へ時刻を渡していない経路がある')
     }
     if (bad === before) ok('ハイライトは、見積もりではなく本当の時刻で動く')
+  }
+
+  /* ── **向こうは「読むために文字を書き換える」**(2026-09 利用者の指摘)──
+   *
+   *   > 普段使っている教材の再生のハイライトが正確でないから頼んだのです。
+   *   > 元々正確ではないです。スピーチもですが。
+   *
+   * **1本にまとめた側にも、同じ穴があった。** 当てはめが
+   * 「空白を除けば1文字ずつ同じ」を前提に**数えるだけ**だったので、
+   * `12%` や `2026` が `twelve percent` `twenty twenty-six` と
+   * 読み替えられた時点で崩れ、**黙って見積もりに落ちていた。** */
+  {
+    const align = (read) => {
+      const characters = [...read]
+      const from = []
+      const to = []
+      let t = 0
+      for (const ch of characters) {
+        if (/\s/.test(ch)) { from.push(t); to.push(t); continue }
+        from.push(t); t = Number((t + 0.1).toFixed(6)); to.push(t)
+      }
+      return {
+        characters,
+        character_start_times_seconds: from,
+        character_end_times_seconds: to,
+      }
+    }
+    const MINE = ['Sales grew 12% in 2026.', 'That is a big jump.']
+    const READ = 'Sales grew twelve percent in twenty twenty-six.\n\nThat is a big jump.'
+    const A = align(READ)
+    const before = bad
+
+    // ① 書き換えがあっても、項目の区切りが出せる
+    const sp = spansOf(A, MINE)
+    if (!sp || sp.length !== 2) {
+      ng('書き換えがあると、区切りが出せない', '見積もりに落ちる')
+    } else {
+      // 2つめの本当の開始秒(向こうの文字を数えて出した答え)
+      const at = READ.indexOf('That is a big jump.')
+      const want = Number(
+        ([...READ.slice(0, at)].filter((c) => !/\s/.test(c)).length * 0.1).toFixed(6),
+      )
+      if (Math.abs(sp[1].start - want) > 0.001) {
+        ng(`2つめの発言の開始秒がずれている(${sp[1].start} / ${want})`)
+      }
+    }
+
+    // ② 文の区切りも、同じ時刻から正しく出る
+    const ONE = 'Sales grew 12% in 2026. That is a big jump.'
+    const A2 = align('Sales grew twelve percent in twenty twenty-six. That is a big jump.')
+    const st = sentenceTimesOf(ONE, charTimesOf(A2, ONE))
+    if (!st || st.length !== 2) {
+      ng('書き換えがあると、文の区切りが出せない')
+    } else if (st[1].charIndex !== ONE.indexOf('That')) {
+      ng('文の頭の位置が、画面の英文とずれている')
+    }
+
+    // ③ 語の印も残る(**書き換えられた語だけ飛ばす**)
+    if (marksFromTimes(ONE, charTimesOf(A2, ONE)).length < 6) {
+      ng('書き換えがあると、語の印が丸ごと消える')
+    }
+
+    // ④ **書き換えが無いときは、これまでと1つも変わらない**
+    const plain = ['Hello there.', 'How are you?']
+    const ps = spansOf(align(plain.join('\n\n')), plain)
+    if (!ps || ps.length !== 2 || ps[0].start !== 0) {
+      ng('ふつうの本文で、区切りが出せなくなっている')
+    }
+
+    // ⑤ **まったく別の英文なら、当てずっぽうで区切らない**
+    if (spansOf(align('Completely unrelated words here.'), MINE)) {
+      ng('別の英文の時刻で区切っている', 'ずれた区間は、無いより悪い')
+    }
+    /* **半分も当てはまらないなら、使わない。**
+       頭だけ合っていて残りが別物、というときに効く */
+    if (spansOf(align('Hello xxxxxxx.'), ['Hello there.'])) {
+      ng('半分も当てはまらないのに区切っている')
+    }
+    if (bad === before) ok('読み替えられても、時刻を正しく当てはめる')
   }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

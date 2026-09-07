@@ -75,16 +75,22 @@ export const marksFromTimes = (text, times) => {
   const end = times?.end
   if (!Array.isArray(end) || end.length !== src.length) return []
   const out = []
-  for (const w of wordSpans(src)) {
+  const words = wordSpans(src)
+  for (const w of words) {
     // その語の**最後の文字**が終わった秒。空白は入っていない
     let sec = NaN
     for (let i = w.end - 1; i >= w.at; i -= 1) {
       if (Number.isFinite(end[i])) { sec = end[i]; break }
     }
-    // **1語でも当てはまらなければ、見積もりに戻す**(混ぜると途中で飛ぶ)
-    if (!Number.isFinite(sec)) return []
+    /* **当てはまらない語は飛ばす**(2026-09)。ElevenLabs は読むために
+       文字を書き換えるので(`12%` → `twelve percent`)、そこだけ
+       時刻が付かない。**飛ばしても前の語の色がそのまま伸びるだけ**で、
+       戻ったり飛んだりはしない。**当てずっぽうで埋めない** */
+    if (!Number.isFinite(sec)) continue
     out.push({ at: w.at, until: sec * 1000 })
   }
+  // **半分も当てはまらないなら、当てはめ方そのものが崩れている**
+  if (!out.length || out.length < words.length * 0.6) return []
   /* **時刻が前後していたら使わない。** `markIndexAt()` は
      「まだ来ていない最初の語」を探すので、並びが乱れると**戻って光る** */
   for (let i = 1; i < out.length; i += 1) {
