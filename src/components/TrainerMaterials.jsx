@@ -16,7 +16,10 @@ import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
 import MaterialDelete from './MaterialDelete.jsx'
 import SearchBar from './SearchBar.jsx'
-import { CloseIcon, PlusIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
+import {
+  CloseIcon, DownloadIcon, EraserIcon, PlusIcon, PrintIcon, RefreshIcon, ScreenIcon,
+} from './Icons.jsx'
+import IconButton from './IconButton.jsx'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CEFR_LEVELS, cefrLabel, cefrOption } from '../data/cefr.js'
@@ -881,23 +884,22 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                   共有だけが**人に渡す**操作である。だから前の2つを1つの行に
                   まとめ、共有はその下に置く(`.card-tools`)。 */}
               <div className="btn-row card-tools">
-                <button type="button" className="btn btn--small"
-                        onClick={() => setPrintId(m.id)}>
-                  <PrintIcon />印刷 / PDFで保存
-                </button>
+                <IconButton icon={<PrintIcon />} label="印刷 / PDFで保存"
+                            onClick={() => setPrintId(m.id)} />
                 {/* **やりかけが残っているときだけ出す。**
                     効かないボタンを出さない(CLAUDE.md) */}
                 {hasMaterialProgress(m.id) && (
-                  <button type="button"
-                          className={`btn btn--small ${resetAsk === m.id ? 'btn--quiet' : 'btn--ghost'}`}
-                          onClick={() => {
-                            if (resetAsk !== m.id) { setResetAsk(m.id); return }
-                            const n = clearMaterialProgress(m.id)
-                            setResetAsk(null)
-                            setResetDone({ id: m.id, n })
-                          }}>
-                    {resetAsk === m.id ? '本当に消す' : '練習の記録を消す'}
-                  </button>
+                  <IconButton icon={<EraserIcon />} label="練習の記録を消す"
+                              // **2段めは言葉で出す。** 元に戻せない操作なので、
+                              // 「いま押したら本当に消える」が絵では言えない
+                              text={resetAsk === m.id ? '本当に消す' : null}
+                              pressed={resetAsk === m.id}
+                              onClick={() => {
+                                if (resetAsk !== m.id) { setResetAsk(m.id); return }
+                                const n = clearMaterialProgress(m.id)
+                                setResetAsk(null)
+                                setResetDone({ id: m.id, n })
+                              }} />
                 )}
                 {/* **読み上げ音声を作り直す**(2026-09 実機)。
 
@@ -919,26 +921,26 @@ export default function TrainerMaterials({ me, askCreate = 0 }) {
                     **本文がある教材だけ**に出す(効かない操作を見せない)。
                     すでにある MP3 を集めてつなぐだけなので、**課金されない** */}
                 {materialAudioClips(m).length > 0 && (
-                  <button type="button" className="btn btn--small btn--ghost"
-                          disabled={!!dlBusy}
-                          onClick={() => downloadAudio(m)}>
-                    {dlBusy?.id === m.id
-                      ? `集めています… ${dlBusy.done} / ${dlBusy.total}`
-                      : '音声をダウンロード'}
-                  </button>
+                  <IconButton icon={<DownloadIcon />} label="音声をダウンロード"
+                              // **進み具合は、必ず数で出す**(CLAUDE.md)。
+                              // 14 本を集めるあいだ、絵だけでは止まって見える
+                              text={dlBusy?.id === m.id
+                                ? `集めています… ${dlBusy.done} / ${dlBusy.total}` : null}
+                              disabled={!!dlBusy}
+                              onClick={() => downloadAudio(m)} />
                 )}
                 {premiumClipsOf(m).length > 0 && (
-                  <button type="button"
-                          className={`btn btn--small ${voiceAsk === m.id ? 'btn--quiet' : 'btn--ghost'}`}
-                          disabled={!!voiceBusy}
-                          onClick={() => {
-                            setVoiceDone(null)
-                            setVoiceAsk(voiceAsk === m.id ? null : m.id)
-                          }}>
-                    {voiceBusy?.id === m.id
-                      ? `作っています… ${voiceBusy.done} / ${voiceBusy.total}`
-                      : voiceAsk === m.id ? '閉じる' : '読み上げ音声を作り直す'}
-                  </button>
+                  <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
+                              text={voiceBusy?.id === m.id
+                                ? `作っています… ${voiceBusy.done} / ${voiceBusy.total}` : null}
+                              // 下に欄が開くので、**開いている印**だけでよい
+                              // (「閉じる」と書かなくても、開いた欄が見えている)
+                              pressed={voiceAsk === m.id}
+                              disabled={!!voiceBusy}
+                              onClick={() => {
+                                setVoiceDone(null)
+                                setVoiceAsk(voiceAsk === m.id ? null : m.id)
+                              }} />
                 )}
               </div>
               <div className="btn-row">

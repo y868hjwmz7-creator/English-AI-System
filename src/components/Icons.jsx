@@ -322,3 +322,51 @@ export function PenIcon({ className = 'icon' }) {
     </svg>
   )
 }
+
+/**
+ * 消しゴム(練習の記録を消す・2026-09 利用者の指定でアイコンにした)。
+ *
+ * **ゴミ箱にしない。** すぐ下に「教材を消す」があり、
+ * **消える相手がまったく違う**(あちらは教材そのもの、こちらは
+ * この端末に残っている書きかけ)。同じ絵にすると取り違える。
+ */
+export function EraserIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M8.4 16.5 3.9 12a1.4 1.4 0 0 1 0-2l6-6a1.4 1.4 0 0 1 2 0l4.2 4.2a1.4 1.4 0 0 1 0 2l-6.3 6.3z"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M7 7 13 13M8.4 16.5H17" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** 落とす(音声をダウンロード)。`UploadIcon` の矢印を逆にしただけ */
+export function DownloadIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M10 3.5V13M6.2 9.2 10 13l3.8-3.8" fill="none" stroke="currentColor"
+            strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.5 13.5v2a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-2"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/**
+ * 作り直す(読み上げ音声を作り直す)。
+ *
+ * **`RepeatIcon` とは別に描く。** あちらは平たい輪(同じところを回る)で、
+ * こちらは**円をぐるりと回る矢印**(もう一度作る)。
+ * 同じ画面に並ぶことは無いが、意味が違うものを同じ形にしない。
+ */
+export function RefreshIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M16.2 10a6.2 6.2 0 1 1-1.9-4.5" fill="none" stroke="currentColor"
+            strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M16.4 2.6v3.6h-3.6" fill="none" stroke="currentColor"
+            strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}

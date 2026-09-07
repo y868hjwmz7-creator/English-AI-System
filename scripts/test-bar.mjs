@@ -1174,6 +1174,211 @@ export default defineConfig({
   drop2()
 }
 
+/* ══════════════════════════════════════════════════════════════
+   ⑩ 教材のカードの操作は、**絵だけで1行に収まるか**(2026-09 利用者の指定)
+
+     > 印刷/PDF・練習の記録を消す・音声ダウンロード・読み上げ音声を作り直す
+     > この4つはアイコン化して省スペースしてください。無理やり並べすぎて
+     > いてプロの仕事とは思えません。…見やすくコンパクトに、移遷しやすく、
+     > を徹底してください。アイコン化して、触れると説明が出る仕様で
+     > よくないですか?
+
+   iPhone(390px)では、4つのボタンが文字を1字ずつ縦に割って
+   **4本の棒**になっていた(`.card-tools` は `nowrap` で、`.btn--small` は
+   縮まない指定なので、行に入らないぶんは**文字が縦に積まれる**)。
+
+   **両側を見る。**
+     ①1行に収まっているか・はみ出していないか
+     ②**押せる大きさ(40px)を割っていないか**
+     ③**読み上げ機に名前が渡っているか**(絵だけのボタンの決まり)
+     ④**長押しで名前が出るか**(触る端末にはカーソルが無い)
+     ⑤**言葉が要る状態では、言葉が出るか**(進み具合・2段めの確認)
+   ①だけを見ると、**絵を小さくして押せなくしても緑のまま**になる。
+   ══════════════════════════════════════════════════════════════ */
+{
+  // **触る端末として開く。** 絵だけのボタンは、そこでしか名前を出せない
+  const page = await browser.newPage({ hasTouch: true })
+  const WANT = ['印刷 / PDFで保存', '練習の記録を消す', '音声をダウンロード',
+    '読み上げ音声を作り直す']
+
+  for (const w of [390, 375, 360, 320]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
+      { waitUntil: 'networkidle' })
+    try {
+      await page.waitForSelector('.card-tools .iconbtn', { timeout: 8000 })
+    } catch { ng(`教材の操作 ${w}px … 絵のボタンが1つも描かれない`); continue }
+
+    const m = await page.evaluate(() => {
+      const row = document.querySelector('.card-tools')
+      const btns = [...row.querySelectorAll('.iconbtn')]
+      return {
+        高さ: Math.round(row.getBoundingClientRect().height),
+        あふれ: row.scrollWidth > row.clientWidth + 1,
+        はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+        名前: btns.map((b) => b.getAttribute('aria-label') ?? ''),
+        小さい: btns
+          .filter((b) => {
+            const r = b.getBoundingClientRect()
+            return Math.round(r.width) < 40 || Math.round(r.height) < 40
+          })
+          .map((b) => b.getAttribute('aria-label')),
+        // 絵だけの行では、ボタンの中に読める文字を出さない(出すと折り返す)
+        文字: btns.map((b) => (b.textContent ?? '').trim()).filter(Boolean),
+      }
+    })
+
+    const missing = WANT.filter((t) => !m.名前.includes(t))
+    if (missing.length) {
+      ng(`教材の操作 ${w}px … 名前が渡っていない(${missing.join(' / ')})`,
+        '絵だけのボタンには `aria-label` を必ず添える(CLAUDE.md)')
+    } else if (m.高さ > 48) {
+      ng(`教材の操作 ${w}px … 行が ${m.高さ}px(1行なら 40px)`,
+        '絵だけにしても入らないなら、`.iconbtn` の幅を見直す')
+    } else if (m.あふれ || m.はみ出し) {
+      ng(`教材の操作 ${w}px … はみ出している`,
+        '`.card-tools` は `nowrap`。入らないぶんは外へ出て切れる')
+    } else if (m.小さい.length) {
+      ng(`教材の操作 ${w}px … 40px を割っている(${m.小さい.join(' / ')})`,
+        '押せる大きさ(40px)は割らない(CLAUDE.md)')
+    } else if (m.文字.length) {
+      ng(`教材の操作 ${w}px … 絵だけの行に文字が出ている(${m.文字.join(' / ')})`,
+        'ふだんは絵だけ。言葉が出るのは状態のあいだだけ')
+    } else {
+      ok(`教材の操作 ${w}px … 絵4つ・${m.高さ}px の1行・はみ出しなし`)
+    }
+  }
+
+  if (process.env.SHOT) {
+    for (const [n, w] of [['tools-390', 390], ['tools-1440', 1440]]) {
+      await page.setViewportSize({ width: w, height: 700 })
+      await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
+        { waitUntil: 'networkidle' })
+      await page.locator('.card').screenshot({ path: `${process.env.SHOT}/${n}.png` })
+    }
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools&state=busy`,
+      { waitUntil: 'networkidle' })
+    await page.locator('.card').screenshot({ path: `${process.env.SHOT}/tools-busy.png` })
+  }
+
+  /* ── ④ **長押しで名前が出るか**(触る端末にはカーソルが無い)──── */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
+    { waitUntil: 'networkidle' })
+  await page.waitForSelector('.card-tools .iconbtn')
+  const box = await page.locator('.card-tools .iconbtn').nth(2).boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  // **触る端末として押す。** カーソルのときは `title` があるので出さない
+  await page.evaluate(() => {
+    const b = document.querySelectorAll('.card-tools .iconbtn')[2]
+    b.dispatchEvent(new window.PointerEvent('pointerdown', {
+      bubbles: true, pointerType: 'touch',
+      clientX: b.getBoundingClientRect().x + 10,
+      clientY: b.getBoundingClientRect().y + 10,
+    }))
+  })
+  await page.waitForTimeout(700)
+  const hint = await page.evaluate(() => {
+    const el = document.querySelector('.iconbtn-hint')
+    return {
+      出た: !!el,
+      文: el ? (el.textContent ?? '').trim() : '',
+      右: el ? Math.round(el.getBoundingClientRect().right) : 0,
+      幅: window.innerWidth,
+    }
+  })
+  if (!hint.出た) {
+    ng('教材の操作 … 長押しで名前が出ない',
+      '触る端末には「カーソルを載せる」が無い。`title` だけでは伝わらない')
+  } else if (hint.文 !== '音声をダウンロード') {
+    ng(`教材の操作 … 長押しで出た名前が違う(${hint.文})`)
+  } else if (hint.右 > hint.幅) {
+    ng(`教材の操作 … 名前が画面からはみ出す(${hint.右} > ${hint.幅})`)
+  } else {
+    ok(`教材の操作 … 長押しで「${hint.文}」が出る(右端 ${hint.右} ≦ ${hint.幅})`)
+  }
+
+  /* **長押しのあとの指離しは、押したことにしない。**
+     名前を読もうとしただけで印刷が始まっては困る */
+  await page.evaluate(() => {
+    const b = document.querySelectorAll('.card-tools .iconbtn')[2]
+    b.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }))
+    b.click()
+  })
+  if (await page.evaluate(() => document.querySelector('.card-tools').dataset.hits) !== '0') {
+    ng('教材の操作 … 長押しで名前を読んだだけで、押したことになる',
+      '`skip` が効いていない')
+  } else {
+    ok('教材の操作 … 長押しのあとの指離しは、押したことにしない')
+  }
+
+  /* **送ったら消える。** 誤って出ても、読むものを覆い隠さない */
+  await page.evaluate(() => {
+    document.dispatchEvent(new window.Event('scroll', { bubbles: false }))
+  })
+  await page.waitForTimeout(120)
+  if (await page.evaluate(() => !!document.querySelector('.iconbtn-hint'))) {
+    ng('教材の操作 … 画面を送っても名前が消えない')
+  } else {
+    ok('教材の操作 … 送ったら名前は消える')
+  }
+
+  /* **ふつうのタップは、これまでどおり効く。**
+     ここが壊れると**どのボタンも押せなくなる**(絵にした日の最悪の壊れ方) */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
+    { waitUntil: 'networkidle' })
+  await page.waitForSelector('.card-tools .iconbtn')
+  await page.locator('.card-tools .iconbtn').nth(0).tap()
+  await page.locator('.card-tools .iconbtn').nth(3).tap()
+  const hits = await page.evaluate(() => document.querySelector('.card-tools').dataset.hits)
+  if (hits !== '2') {
+    ng(`教材の操作 … タップが効かない(${hits} / 2)`,
+      '長押しの見張りが、ふつうの指離しまで捨てていないか')
+  } else {
+    ok('教材の操作 … ふつうのタップは効く(2 / 2)')
+  }
+
+  /* ── ⑤ **言葉が要る状態では、言葉を出す**──────────────────── */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools&state=busy`,
+    { waitUntil: 'networkidle' })
+  await page.waitForSelector('.card-tools .iconbtn')
+  const busyM = await page.evaluate(() => {
+    const row = document.querySelector('.card-tools')
+    return {
+      文字: [...row.querySelectorAll('.iconbtn-text')].map((s) => s.textContent.trim()),
+      はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+    }
+  })
+  if (!busyM.文字.some((t) => t.includes('3 / 14'))) {
+    ng(`教材の操作 … 集めているあいだ、進み具合が出ない(${busyM.文字.join(' / ')})`,
+      '進み具合は必ず数で出す。絵だけでは止まって見える(CLAUDE.md)')
+  } else if (!busyM.文字.includes('本当に消す')) {
+    ng('教材の操作 … 2段めの「本当に消す」が言葉で出ない',
+      '元に戻せない操作は、絵では言えない')
+  } else if (busyM.はみ出し) {
+    ng('教材の操作 … 言葉を出したらはみ出した')
+  } else {
+    ok(`教材の操作 … 状態のときだけ言葉が出る(${busyM.文字.join(' / ')})`)
+  }
+
+  /* ── 画面が本当に使っているか(検証だけが緑にならないように)──── */
+  const src = readFileSync(new URL('../src/components/TrainerMaterials.jsx',
+    import.meta.url), 'utf8')
+  const notUsed = WANT.filter((t) => !src.includes(`<IconButton`) || !src.includes(t))
+  if (!src.includes("import IconButton from './IconButton.jsx'")) {
+    ng('教材の操作 … `TrainerMaterials` が `IconButton` を読み込んでいない',
+      '検証の入り口(`__screens.jsx`)だけ絵にしても、利用者の画面は変わらない')
+  } else if (notUsed.length) {
+    ng(`教材の操作 … 画面に無い(${notUsed.join(' / ')})`)
+  } else if ((src.match(/<IconButton/g) ?? []).length < 4) {
+    ng('教材の操作 … `IconButton` が4つ揃っていない')
+  } else {
+    ok('教材の操作 … `TrainerMaterials` が4つとも `IconButton` で描いている')
+  }
+
+  await page.close()
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

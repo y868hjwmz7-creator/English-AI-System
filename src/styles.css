@@ -941,6 +941,52 @@ audio { width: 100%; margin-top: 4px; }
 .card-tools > .btn { flex: 0 1 auto; min-width: 0; }
 .card-tools + .btn-row { margin-top: 8px; }
 
+/* ── 絵だけのボタン(`IconButton.jsx`)────────────────────────────
+   2026-09 実機・利用者の指定。
+
+     > この4つはアイコン化して省スペースしてください。無理やり並べすぎて
+     > いてプロの仕事とは思えません。…見やすくコンパクトに、移遷しやすく、
+     > を徹底してください。
+
+   iPhone(390px)では、4つのボタンが文字を1字ずつ縦に割って
+   **4本の棒**になっていた。カード1枚で画面の高さを丸ごと食う。
+
+   **押せる大きさ(40px)は割らない**(CLAUDE.md)。`btn--small` を
+   下敷きにしているので `min-height` を戻す。 */
+/* **`.btn.iconbtn` と2つ重ねる。** `.btn--small`(`min-height: 34px`)は
+   この行より**あと**に書いてあるので、`.iconbtn` 1つでは負ける
+   (同じ強さなら、あとに来たほうが勝つ)。実測して気づいた */
+.btn.iconbtn {
+  min-width: 40px; min-height: 40px; padding: 0 10px;
+  /* **縮めない。** 縮むと絵が切れて、何のボタンか分からなくなる */
+  flex: 0 0 auto;
+}
+/* 絵だけのときは、右の余白を落として真四角に置く */
+.iconbtn .icon { width: 18px; height: 18px; margin-right: 0; vertical-align: 0; }
+/* **言葉が要る状態のときだけ、横に出す**(「本当に消す」「集めています…」)。
+   ふだんは絵だけに戻るので、幅は状態のあいだしか広がらない */
+.btn.iconbtn--wide { padding: 0 12px; }
+.iconbtn--wide .icon { margin-right: var(--sp-6); }
+.iconbtn-text { font-size: var(--fs-13); white-space: nowrap; }
+/* 開いている印。**べた塗りにしない**(選んでいる印と同じ作法) */
+.iconbtn--on {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+}
+
+/* 長押しで出る名前。**色は決め打ちしない** ——
+   body の直下に出るので、何も足さなければアプリの配色に従う */
+.iconbtn-hint {
+  position: fixed; z-index: 200;
+  max-width: min(19rem, calc(100vw - 16px));
+  padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: var(--r-12);
+  background: var(--surface-1); color: var(--text-primary);
+  box-shadow: var(--shadow-2);
+}
+.iconbtn-hint-line {
+  margin: 0; font-size: var(--fs-13); line-height: 1.5; font-weight: 600;
+}
+
 /* **教材を消す**(2026-09 利用者の指定)。
    元に戻せない操作なので、**ふだん押すものから離して**カードのいちばん下に
    置く。細い線で上と分け、右へ寄せる。**赤くしない** ——

@@ -29,6 +29,10 @@ import CollectRows from './components/CollectRows.jsx'
 import GoalBar from './components/GoalBar.jsx'
 import MaterialForm from './components/MaterialForm.jsx'
 import Wordbook from './components/Wordbook.jsx'
+import IconButton from './components/IconButton.jsx'
+import {
+  DownloadIcon, EraserIcon, PrintIcon, RefreshIcon, ScreenIcon,
+} from './components/Icons.jsx'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
 
@@ -238,6 +242,54 @@ const WORDBOOK = (
   </div>
 )
 
+/* 教材のカードの操作の行(`?screen=tools`・2026-09 利用者の指定)。
+
+   > この4つはアイコン化して省スペースしてください。無理やり並べすぎて
+   > いてプロの仕事とは思えません。
+
+   **本物の `IconButton` と本物の CSS で測る**(写した HTML では測らない)。
+   `TrainerMaterials` そのものは Supabase を引き連れていて、この環境からは
+   1件も読めない。だから**行だけ**を同じ組み立てで描く。
+   ずれないよう、`npm run test:bar` が
+   **`TrainerMaterials` が本当に `IconButton` を使っているか**も見る。
+
+   `?state=busy` … 言葉が要る状態(集めています… / 本当に消す)を出す */
+const busy = q.get('state') === 'busy'
+/* **押したら本当に効くか**を数える。`IconButton` は長押しのあとの
+   `click` を1回捨てるので、ここを間違えると**どのボタンも押せなくなる。**
+   絵にした日にいちばん怖い壊れ方なので、数で確かめられるようにしておく */
+const hit = () => {
+  const el = document.querySelector('.card-tools')
+  el.dataset.hits = String(Number(el.dataset.hits ?? 0) + 1)
+}
+const TOOLS = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <section className="card">
+      <div className="btn-row card-tools" data-hits="0">
+        <IconButton icon={<PrintIcon />} label="印刷 / PDFで保存" onClick={hit} />
+        <IconButton icon={<EraserIcon />} label="練習の記録を消す"
+                    text={busy ? '本当に消す' : null} pressed={busy}
+                    onClick={hit} />
+        <IconButton icon={<DownloadIcon />} label="音声をダウンロード"
+                    text={busy ? '集めています… 3 / 14' : null}
+                    onClick={hit} />
+        <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
+                    onClick={hit} />
+      </div>
+      <div className="btn-row">
+        <button type="button" className="btn btn--small btn--quiet">
+          この教材をゲストと共有する
+        </button>
+      </div>
+      <div className="btn-row">
+        <button type="button" className="btn btn--primary">
+          <ScreenIcon />セッションで使う(大きく表示)
+        </button>
+      </div>
+    </section>
+  </div>
+)
+
 createRoot(document.getElementById('root')).render(
   q.get('screen') === 'wordbook'
     ? WORDBOOK
@@ -245,5 +297,7 @@ createRoot(document.getElementById('root')).render(
       ? FORM
       : q.get('screen') === 'result'
         ? RESULT
-        : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
+        : q.get('screen') === 'tools'
+          ? TOOLS
+          : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
 )
