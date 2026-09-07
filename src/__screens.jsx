@@ -31,8 +31,9 @@ import MaterialForm from './components/MaterialForm.jsx'
 import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
 import {
-  DownloadIcon, EraserIcon, LinkIcon, PrintIcon, RefreshIcon, ScreenIcon,
+  DownloadIcon, EraserIcon, PrintIcon, RefreshIcon, ScreenIcon,
 } from './components/Icons.jsx'
+import MaterialShare from './components/MaterialShare.jsx'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
 
@@ -283,9 +284,10 @@ const TOOLS = (
         <button type="button" className="btn btn--small btn--quiet">
           この教材をゲストと共有する
         </button>
-        <button type="button" className="btn btn--small btn--quiet">
-          <LinkIcon />教材をシェア
-        </button>
+        {/* **本物の部品で測る。**「メールで送る」「リンクをコピー」の
+            2つが並んで出るか、狭い画面ではみ出さないかを見る */}
+        <MaterialShare material={{ id: '11111111-2222-3333-4444-555555555555',
+                                   title: '2026-09-07 / 会議に出る / 業界の語' }} />
       </div>
       <div className="btn-row">
         <button type="button" className="btn btn--primary">

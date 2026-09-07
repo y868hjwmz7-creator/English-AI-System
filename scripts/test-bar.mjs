@@ -1317,6 +1317,81 @@ export default defineConfig({
     ok('教材の操作 … 「教材をシェア」と「ゲストと共有する」が両方ある')
   }
 
+  /* **渡し方は2つ。並べて出す**(2026-09 利用者の指定)
+
+       > シェアする際はメールアドレスを入れる、またはリンクを生成して
+       > 好きなところに貼り付けれるように、2つから選べると良いですね
+
+     **狭い画面でも確かめる。** 欄が2つ増えるので、
+     iPhone(390px)ではみ出さないかは**描いてみないと分からない** */
+  for (const w of [390, 320]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
+      { waitUntil: 'networkidle' })
+    await page.getByRole('button', { name: '教材をシェア' }).click()
+    try {
+      await page.waitForSelector('.share-box', { timeout: 4000 })
+    } catch { ng(`教材をシェア ${w}px … 押しても欄が開かない`); continue }
+
+    const sh = await page.evaluate(() => {
+      const box = document.querySelector('.share-box')
+      const link = box.querySelector('input.share-url')
+      const mailBtn = [...box.querySelectorAll('a.btn')]
+        .find((a) => a.textContent.trim() === 'メールを開く')
+      return {
+        文: (box.textContent ?? ''),
+        リンク: link ? link.value : '',
+        宛先の欄: !!box.querySelector('input[type="email"]'),
+        // **形が違ううちは押せない**(選ばせてから断らない)
+        押せる: mailBtn ? !mailBtn.classList.contains('is-off') : null,
+        はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+        あふれ: box.scrollWidth > box.clientWidth + 1,
+        やめる: !!([...box.querySelectorAll('button')]
+          .find((b) => b.textContent.trim() === 'やめる')),
+      }
+    })
+
+    if (!sh.宛先の欄 || !sh.文.includes('① メールで送る')) {
+      ng(`教材をシェア ${w}px … ①メールで送るが無い`)
+    } else if (!sh.リンク.includes('?m=') || !sh.文.includes('② リンクをコピー')) {
+      ng(`教材をシェア ${w}px … ②リンクが出ていない(${sh.リンク})`,
+        'コピーを断る端末でも手で選べるよう、いつも見えるところに出す')
+    } else if (sh.押せる !== false) {
+      ng(`教材をシェア ${w}px … 宛先が空でも「メールを開く」が押せる`,
+        '**選ばせてから断らない**(CLAUDE.md)')
+    } else if (!sh.やめる) {
+      ng(`教材をシェア ${w}px … 「やめる」が無い`,
+        '走らせるボタンのとなりに置く(CLAUDE.md)')
+    } else if (sh.はみ出し || sh.あふれ) {
+      ng(`教材をシェア ${w}px … はみ出している`)
+    } else {
+      ok(`教材をシェア ${w}px … 2つとも出る・宛先が空なら押せない・やめるがある`)
+    }
+
+    if (process.env.SHOT) {
+      await page.locator('.card').screenshot({ path: `${process.env.SHOT}/share-${w}.png` })
+    }
+
+    // **宛先を書いたら押せるようになる**(行き止まりを作らない)
+    await page.locator('.share-box input[type="email"]').fill('a@b.com')
+    const on = await page.evaluate(() => {
+      const a = [...document.querySelectorAll('.share-box a.btn')]
+        .find((x) => x.textContent.trim() === 'メールを開く')
+      return { 押せる: !a.classList.contains('is-off'), 行き先: a.getAttribute('href') ?? '' }
+    })
+    if (!on.押せる) {
+      ng(`教材をシェア ${w}px … 宛先を書いても押せないまま`)
+    } else if (!on.行き先.startsWith('mailto:a@b.com?')) {
+      ng(`教材をシェア ${w}px … 行き先が mailto ではない(${on.行き先.slice(0, 40)})`)
+    } else {
+      ok(`教材をシェア ${w}px … 宛先を書くと mailto: が入る`)
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
+    { waitUntil: 'networkidle' })
+  await page.waitForSelector('.material-foot .iconbtn')
+
   /* ── ⑤ **長押しで名前が出るか**(触る端末にはカーソルが無い)──── */
   const box = await page.locator('.material-foot .iconbtn').nth(0).boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -1421,8 +1496,8 @@ export default defineConfig({
   const want = [
     ['印刷 / PDF', '上の行は言葉つき(絵だけでは PDF が読めない)'],
     ['音声ダウンロード', '同上'],
-    ['教材をシェア', 'トレーナー間でリンクを渡す(2026-09 利用者の指定)'],
-    ['materialLinkFor', 'リンクの作り方は `materialLink.js` 1か所'],
+    ['<MaterialShare material={m} />',
+      'トレーナー間でリンクを渡す(2026-09 利用者の指定)。渡し方は `MaterialShare` が持つ'],
     ['material-foot', 'めったに押さない3つは、教材を消すと同じ行'],
     ['読み上げ音声を作り直す', '下の行(絵のまま)'],
     ['練習の記録を消す', '同上'],

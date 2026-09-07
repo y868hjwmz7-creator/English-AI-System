@@ -15,14 +15,12 @@ import LessonView from './LessonView.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
 import MaterialDelete from './MaterialDelete.jsx'
+import MaterialShare from './MaterialShare.jsx'
 import SearchBar from './SearchBar.jsx'
 import {
-  CloseIcon, DownloadIcon, EraserIcon, LinkIcon, PlusIcon, PrintIcon, RefreshIcon, ScreenIcon,
+  CloseIcon, DownloadIcon, EraserIcon, PlusIcon, PrintIcon, RefreshIcon, ScreenIcon,
 } from './Icons.jsx'
 import IconButton from './IconButton.jsx'
-/* **教材へのリンク**(2026-09 利用者の指定)。作り方も読み方も
-   `materialLink.js` 1か所。画面には持たせない */
-import { materialLinkFor } from '../lib/materialLink.js'
 /* **消せる人かどうか**は `materialDelete.js` 1か所。ここでは
    「下の行に出すものがあるか」を数えるためだけに呼ぶ */
 import { canDeleteMaterial } from '../lib/materialDelete.js'
@@ -175,11 +173,6 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
   const [assigningId, setAssigningId] = useState(null)   // 配信先を選んでいる教材
   const [picked, setPicked] = useState([])
   const [message, setMessage] = useState(null)
-  /* **教材をシェアした結果**(2026-09 利用者の指定)。
-     `{ id, how: 'share' | 'copy' | 'show', url }`。
-     **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md) —— 押しても
-     何も変わらないと、リンクが取れたのかどうか分からない */
-  const [shared, setShared] = useState(null)
   /* **リンクで来た教材**(`?m=…`)。一覧に見つかるまで控えておく */
   const [linkAsk, setLinkAsk] = useState(null)
   const [linkMiss, setLinkMiss] = useState(false)
@@ -283,45 +276,6 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
     }
     setLinkAsk(null)
   }, [linkAsk, loading, materials])
-
-  /**
-   * **教材へのリンクを渡す**(2026-09 利用者の指定)。
-   *
-   * 渡し方は端末で変わるので、**行き止まりを作らない**ように3段にする。
-   *
-   *   ① 端末に「共有」の仕組みがあれば、それを開く(iPhone の共有シート)
-   *   ② 無ければ、リンクを控え(クリップボード)に入れる
-   *   ③ それも断られたら、**リンクをそのまま画面に出す**(手で選んでもらう)
-   *
-   * **やめたときは何も言わない**(`AbortError`)。共有シートを閉じたのに
-   * 「コピーしました」と出るのは嘘である。
-   */
-  const shareMaterial = async (m) => {
-    const url = materialLinkFor(m.id, window.location)
-    if (!url) { setShared({ id: m.id, how: 'none', url: null }); return }
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: m.title, url })
-        setShared({ id: m.id, how: 'share', url })
-        return
-      } catch (e) {
-        // 利用者が閉じただけ。**押していないので、報告する相手がいない**
-        if (e?.name === 'AbortError') return
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url)
-      setShared({ id: m.id, how: 'copy', url })
-      return
-    } catch {
-      /* 控えに入れられない環境(古い Safari・http)。下で手渡しする */
-    }
-    setShared({ id: m.id, how: 'show', url })
-  }
-
-  /* 「誰がどの声で読むか」は **`CastChip`(`castList()`)1か所。**
-     画面に書くと、素の node で一度も確かめられない
-     (`npm run test:voice` が見張っている) */
 
   /** 本文があって、まだカタマリごとの訳が入っていない教材か(0021) */
   // **判断は `chunkJa.js` の `needsChunkJa()` 1か所。** 画面に持たない
@@ -1021,28 +975,11 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
                 {/* **教材をシェア**(2026-09 利用者の指定)。
                     こちらは**トレーナー間**。教材は既定で全トレーナーの
                     共有物なので、リンクを開けばその教材がそのまま出る。
-                    **ゲストに配るのとは別物**なので、絵で見分けられるようにする */}
-                <button type="button" className="btn btn--small btn--quiet"
-                        onClick={() => shareMaterial(m)}>
-                  <LinkIcon />教材をシェア
-                </button>
+                    **ゲストに配るのとは別物**なので、絵で見分けられるようにする。
+                    渡し方(メール / リンクをコピー)は `MaterialShare` が持つ */}
+                <MaterialShare material={m} />
                 {makingJa === m.id && <span className="muted">区切りの訳を作っています…</span>}
               </div>
-              {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
-                  **成功と失敗を、同じ見た目で終わらせない** */}
-              {shared?.id === m.id && (
-                <p className={`notice${shared.how === 'none' ? ' notice--warn' : ' notice--ok'}`}>
-                  {shared.how === 'share'
-                    ? 'リンクを渡しました。'
-                    : shared.how === 'copy'
-                      ? <>リンクをコピーしました。<strong>トレーナーがこのリンクを開くと、
-                          この教材が出ます。</strong></>
-                      : shared.how === 'show'
-                        ? <>このリンクを渡してください(長押しでコピーできます)。
-                            <br /><code className="share-url">{shared.url}</code></>
-                        : 'リンクを作れませんでした。'}
-                </p>
-              )}
               {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
                   **足りないときは、どうすればよいかまで書く** */}
               {dlDone?.id === m.id && (

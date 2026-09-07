@@ -42,7 +42,8 @@ import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import { spanForRange } from '../src/lib/wholeAudio.js'
 import { ABBREVIATIONS, splitSentences } from '../src/lib/wordTiming.js'
 import {
-  MATERIAL_PARAM, materialIdFromUrl, materialLinkFor, urlWithoutMaterial,
+  MATERIAL_PARAM, isEmailLike, mailtoFor, materialIdFromUrl, materialLinkFor,
+  urlWithoutMaterial,
 } from '../src/lib/materialLink.js'
 import {
   DIALOGUE_ANGLES, READING_ANGLES, angleBrief, angleLabel, anglesFor, pickAngle,
@@ -1634,16 +1635,76 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     'App が、`TrainerMaterials` へ渡している')
   const tm = readFileSync(new URL('../src/components/TrainerMaterials.jsx',
     import.meta.url), 'utf8')
-  ok(tm.includes('materialLinkFor(m.id, window.location)'),
-    '画面が `materialLinkFor()` でリンクを作っている')
-  ok(tm.includes('navigator.share') && tm.includes('navigator.clipboard.writeText'),
-    '渡し方は3段(共有シート → 控え → 画面に出す)。**行き止まりを作らない**')
-  ok(tm.includes("e?.name === 'AbortError'"),
-    '**やめたときは何も言わない**(閉じたのに「コピーしました」は嘘)')
+  ok(tm.includes('<MaterialShare material={m} />'),
+    '画面が `MaterialShare` を置いている')
   ok(tm.includes('setLinkMiss(true)'),
     '見つからなければ、**黙らない**')
-  ok(!tm.includes("?m=") || tm.includes('materialLinkFor'),
-    'リンクの形を画面に書き写していない')
+  // **リンクの作り方は `MaterialShare` に預けた。**
+  // さがす画面が自分でも作っていたら、直したときに片方だけ古くなる
+  ok(!tm.includes("from '../lib/materialLink.js'"),
+    'さがす画面は、リンクを自分では作らない')
+}
+
+/* ── 渡し方は2つ(2026-09 利用者の指定)──────────────────────────
+
+     > シェアする際はメールアドレスを入れる、またはリンクを生成して
+     > 好きなところに貼り付けれるように、2つから選べると良いですね
+
+   ①メールで送る … **こちらからは送らない。** 利用者のメールソフトを開く
+   ②リンクをコピー … リンクをそのまま出す
+
+   宛先の形を**厳しく見ない。** 正しい住所を弾くほうが害が大きい。 */
+{
+  const URL2 = 'https://x.example/App/?m=11111111-2222-3333-4444-555555555555'
+
+  ok(isEmailLike('a@b.com'), 'ふつうのメールアドレス')
+  ok(isEmailLike(' a@b.com '), '前後の空白は落とす')
+  ok(isEmailLike('a@b.com, c@d.co.jp'), 'コンマで区切れば複数書ける')
+  ok(isEmailLike('a+tag@b.co.jp'), '**厳しく見ない**(`+` を弾かない)')
+  ok(!isEmailLike(''), '空は宛先ではない')
+  ok(!isEmailLike('   '), '空白だけも宛先ではない')
+  ok(!isEmailLike('abc'), '`@` が無ければ宛先ではない')
+  ok(!isEmailLike('a@b'), 'ドットが無ければ宛先ではない')
+  ok(!isEmailLike('a@b.com, おかしい'), '1つでも形が違えば、まとめて断る')
+
+  const mail = mailtoFor({ to: 'a@b.com', title: '会議に出る', url: URL2 })
+  ok(mail.startsWith('mailto:a@b.com?'), '宛先はそのまま(`@` を壊さない)')
+  ok(mail.includes(`subject=${encodeURIComponent('教材のリンク: 会議に出る')}`),
+    '件名に教材名が入る')
+  ok(mail.includes(encodeURIComponent(URL2)), '本文にリンクが入る')
+  ok(mail.includes(encodeURIComponent('\r\n')),
+    '改行は `\\r\\n`(`\\n` だけでは行が変わらないメールソフトがある)')
+  ok(mailtoFor({ to: 'a@b.com, c@d.jp', title: 'x', url: URL2 })
+    .startsWith('mailto:a@b.com,c@d.jp?'), '複数の宛先はコンマでつなぐ')
+  ok(mailtoFor({ to: 'abc', title: 'x', url: URL2 }) === null,
+    '**選ばせてから断らない**(形が違えば null → 画面は押せなくする)')
+  ok(mailtoFor({ to: 'a@b.com', title: 'x', url: null }) === null,
+    'リンクが無ければ作らない')
+  ok(mailtoFor({ to: 'a@b.com', title: '', url: URL2 })
+    .includes(encodeURIComponent('教材のリンク')),
+    '教材名が無くても件名は空にしない')
+
+  /* **画面が本当に2つとも出しているか。**
+     片方だけになっても `npm run build` は通る */
+  const ms = readFileSync(new URL('../src/components/MaterialShare.jsx',
+    import.meta.url), 'utf8')
+  ok(ms.includes('materialLinkFor(material.id, window.location)')
+    && !/[`'"]\?m=/.test(ms), '`MaterialShare` もリンクの形を書き写していない')
+  /* **「名前が出てくるか」で見ない**(CLAUDE.md)。この部品は説明の中でも
+     同じ言葉を使っているので、**書いてある形**まで見ないと、
+     見出しを消しても緑のままになる(実際にそうなった)。
+     **画面に本当に出ているか**は `npm run test:bar` が描いて確かめる */
+  ok(ms.includes('mailtoFor(')
+    && ms.includes('<p className="field-label">① メールで送る</p>'),
+    '①メールで送るがある')
+  ok(ms.includes('navigator.clipboard.writeText')
+    && ms.includes('<p className="field-label">② リンクをコピー'),
+    '②リンクをコピーがある')
+  ok(ms.includes('readOnly'),
+    '**リンクはいつも見えるところに出す**(コピーを断る端末でも手で選べる)')
+  ok(ms.includes('やめる'), '**やめるを、走らせるボタンのとなりに置く**')
+  ok(!ms.includes('navigator.share'),
+    '**2つから選ぶ。** 共有シートを3つめとして足さない(利用者の指定)')
 }
 
 console.log(ng

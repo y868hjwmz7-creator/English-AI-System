@@ -1028,15 +1028,38 @@ audio { width: 100%; margin-top: 4px; }
 .material-foot > .card-hint,
 .material-foot > .notice { flex: 1 0 100%; margin: 8px 0 0; text-align: right; }
 
-/* 控えに入れられなかったときに、リンクをそのまま出す(手で選んでもらう)。
-   **長い1本の文字列なので、必ず折り返させる** */
-.share-url {
-  display: inline-block;
-  max-width: 100%;
-  margin-top: 4px;
+/* ── 教材をシェア(2026-09 利用者の指定)──────────────────────────
+     > シェアする際はメールアドレスを入れる、またはリンクを生成して
+     > 好きなところに貼り付けれるように、2つから選べると良いですね
+
+   **2つとも出しておく。**「どちらにしますか」を先に訊くと、
+   押す回数が1つ増えるだけである。囲みは `.assign-box` と同じ作法。 */
+.share-box {
+  margin-top: 12px; padding: 12px;
+  border: 1px solid var(--accent); border-radius: var(--radius);
+}
+.share-box .field-label { margin: 12px 0 4px; }
+.share-box .field-label:first-of-type { margin-top: 4px; }
+.share-box .field-hint { margin: 4px 0 0; }
+.share-box .notice { margin: 8px 0 0; }
+.share-box .btn-row { margin-bottom: 0; }
+/* **入力欄とボタンを、同じ行に。** 狭い画面では下へ積む
+   (欄を切り詰めると、宛先もリンクも読めなくなる) */
+.share-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); }
+.share-row .input { flex: 1 1 14rem; min-width: 0; max-width: 34rem; }
+.share-row .btn { flex: 0 0 auto; }
+/* **リンクは、いつも見えるところに出す。** コピーを断る端末でも
+   手で選んで写せる(**行き止まりを作らない**) */
+input.share-url {
   font-size: var(--fs-12);
-  overflow-wrap: anywhere;
-  user-select: all;
+  /* 長い1本の文字列なので、**うしろが読めるように**しておく */
+  text-overflow: ellipsis;
+}
+/* 押せないボタン(宛先の形が違ううち)。**選ばせてから断らない** */
+.btn.is-off { opacity: 0.5; pointer-events: none; }
+/* 開いている印。**べた塗りにしない**(選んでいる印と同じ作法) */
+.btn--quiet.is-on {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
 }
 
 /* 絞り込みはグラフの上に1列で置く */
