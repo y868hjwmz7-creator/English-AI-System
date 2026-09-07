@@ -300,6 +300,37 @@ export function repeatSeek(unit, sec, { spans = null, sentences = null } = {}) {
 }
 
 /**
+ * **その範囲に入る文だけの区間**(2026-09 利用者の指定・集中モード)。
+ *
+ *   > 長い段落を集中モードの一塊として区切った場合、集中モード内では
+ *   > それらを段落として扱い、繰り返し再生できるようにしてください。
+ *
+ * 集中モードは長い段落を**文の切れ目で**割って1枚ずつ出す
+ * (`focusChunks`)。くり返し「段落」が元の段落を回すと、
+ * **画面は次のかけらへ進んでしまう。** そこで、いま出しているかけらの
+ * 「何文字目から何文字目まで」を渡して、回す区間をそこに狭める。
+ *
+ * **範囲は文字で言う。** 秒で言うと、鳴らす側と画面で数え方が2通りになる。
+ * かけらの端は必ず文の端と重なる(文の切れ目でしか割らない)ので、
+ * 中に入る文を拾えば、そのまま区間になる。
+ *
+ * @param {Array} sentences `{ start, end, charIndex }` の並び(秒でも割合でもよい)
+ * @param {{from:number,to:number}|null} range その段落の何文字目から何文字目まで
+ * @param {number} base その並びが数え始めている、段落の中の文字位置
+ * @returns {{start:number,end:number}|null} 狭められないときは `null`
+ */
+export function spanForRange(sentences, range, base = 0) {
+  if (!Array.isArray(sentences) || !sentences.length) return null
+  if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null
+  const inside = sentences.filter((s) => {
+    const c = (s.charIndex ?? 0) + base
+    return c >= range.from && c < range.to
+  })
+  if (!inside.length) return null
+  return { start: inside[0].start, end: inside[inside.length - 1].end }
+}
+
+/**
  * その項目を鳴らす区間。**終わりは次の項目が始まる手前まで**にしない。
  *
  * 間(ま)まで鳴らすと、1つだけ聴いたときに最後が間延びする。

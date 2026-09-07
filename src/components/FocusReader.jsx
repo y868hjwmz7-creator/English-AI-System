@@ -223,6 +223,32 @@ export default function FocusReader({
   const piece = pieces[Math.min(part, Math.max(pieces.length - 1, 0))] ?? null
   const partNo = Math.min(part, Math.max(pieces.length - 1, 0))
 
+  /* ══════════════════════════════════════════════════════════════
+   * **割ったかけらは、この画面では「段落」である**(2026-09 利用者の指定)
+   *
+   *   > 長い段落を集中モードの一塊として区切った場合、集中モード内では
+   *   > それらを段落として扱い、繰り返し再生できるようにしてください。
+   *   > 現状では文ごとのリピートは効きますが、段落は元々の段落を
+   *   > 参照してしまい、次のページに進んでしまいます
+   *
+   * 【**鳴らす英文は割らない。** 割ると、そのぶん課金される】
+   *   読み上げの置き場所は**英文の指紋**で決まる(CLAUDE.md)。
+   *   かけらを渡すと**かけらごとに別の MP3 が作られ、
+   *   同じ本文の音声代を二度払う。** 1本にまとめた音声も
+   *   「声と英文の並び」で指紋を取るので、やはり作り直しになる。
+   *   **見えない費用は管理できない。**
+   *
+   *   だから渡すのは**これまでどおり段落まるごと**で、
+   *   **くり返す範囲だけ**を「いま出しているかけら」に狭める
+   *   (`partRangeOf`)。範囲は**その段落の英文の何文字目から何文字目まで**で
+   *   言う —— 秒で言うと、鳴らす側の数え方を2通り持つことになる。
+   * ══════════════════════════════════════════════════════════════ */
+  const partRange = (pieces.length > 1 && piece)
+    ? { from: piece.at, to: piece.at + piece.en.length }
+    : null
+  const rangeRef = useRef(null)
+  rangeRef.current = partRange
+
   /* **入るまで1枚ずつ増やす。** 描き終えたあと、目に映る前に測る
      (`useLayoutEffect`)ので、ちらつかない。
      **訳を出しているあいだは測らない** — 割る基準は英文のほうである */
@@ -242,7 +268,7 @@ export default function FocusReader({
   /* 窓が変わったら(向きを変えた・文字の大きさを変えた)、測り直す。
      **1に戻してから測る** — 広くなったのに割れたままでは、割りすぎになる。
      **見ている場所(`part`)は動かさない。** 割り直した枚数より
-     大きければ、下の `partNo` が中に収める */
+     大きければ、上の `partNo` が中に収める */
   useEffect(() => {
     const b = bodyRef.current
     if (!b || typeof window.ResizeObserver !== 'function') return undefined
@@ -350,6 +376,9 @@ export default function FocusReader({
    * 読み上げに渡すもの。**紙(`LessonView`)とまったく同じ形**である。
    * 本文ぜんぶを渡し、**始めるのはいま開いている段落**から
    * (`keep` … そこで止めた続きがあれば、そこから)。
+   *
+   * **`partRangeOf` だけが、紙と違う。** くり返し「段落」を、
+   * いま出しているかけらの範囲に狭める(鳴らす英文は1文字も変えない)。
    */
   const playOpts = () => ({
     parts: items.map((it) => ({
@@ -361,6 +390,9 @@ export default function FocusReader({
     resumeKey: `all|${materialId ?? 'x'}|${section?.id ?? ''}`,
     startIndex: index,
     keep: true,
+    /* **いま開いている段落のときだけ**範囲を返す。
+       ほかの段落が鳴っているあいだは、これまでどおり段落まるごと回る */
+    partRangeOf: (i) => (i === atRef.current ? rangeRef.current : null),
   })
 
   // Esc で閉じる。**開いているものから閉じる**(まとめ → 本体)

@@ -1006,9 +1006,24 @@ function fakeMp3({
            鳴らしている最中に切り替えても押し直すまで効かない */
         ['訊きに行く形で渡す', hook, /repeatOf: \(\) => repeatRef\.current/],
         ['読み上げが受け取る', read, /repeatOf = null,/],
-        ['1本のときは戻して回す', read, /const back = repeatSeek\(repeatNow\(\), sec, \{ spans, sentences: sent \}\)/],
+        ['1本のときは戻して回す', read, /spans: only \?\? spans, sentences: sent,/],
         ['戻せたら、そのひと刻みは何もしない', read, /if \(back !== null && seekClip\(back\)\) return/],
-        ['発言ごとのときも回す', read, /if \(\(unit === 'sentence' \|\| unit === 'item'\) && ok\) i = pieceOf/],
+        ['発言ごとのときも回す', read, /if \(\(unit === 'sentence' \|\| unit === 'item'\) && ok\) \{/],
+        /* ── **かけらを「段落」としてくり返す**(2026-09 利用者の指定)──
+             > 集中モード内ではそれらを段落として扱い、繰り返し再生できる
+             > ようにしてください。…段落は元々の段落を参照してしまい、
+             > 次のページに進んでしまいます
+
+           **道が1本でも切れると、段落まるごとが回って画面が進む。**
+           しかも**音は鳴る**ので、聴いていても気づけない */
+        ['集中モードが範囲を渡す', fr, /partRangeOf: \(i\) =>/],
+        ['持ちものが受け取って渡す', hook, /partRangeOf = null,/],
+        ['持ちものが読み上げへ渡す', hook, /^\s+partRangeOf,$/m],
+        ['読み上げが受け取る', read, /partRangeOf = null,/],
+        ['狭める算段は1か所', read, /const span = spanForRange\(sents, r, base\)/],
+        ['1本のときも狭める', read, /const only = shown >= 0/],
+        ['発言ごとのときも狭める', read, /const only = partSpan\(part\.index, sentSecs, part\.at\)/],
+        ['鳴らし直すのは、かけらの頭から', read, /replayAt = unit === 'item' \? backTo : 0/],
         ['全文は頭から回す', read, /if \(repeatNow\(\) !== 'all' \|\| !heard\) break/],
         /* **戻したら、なだらかな上げ下げの起点も戻す。**
            戻さないと「鳴っているのに音が出ない」になる(音量 0 のまま) */
@@ -1325,7 +1340,9 @@ function fakeMp3({
       ['割合として控えている', /holdCursor\(shares, null, true\)/],
       ['控えるのは、鳴り出したときだけ', /onStart: \(\) => \{ holdCursor\(sentenceShares\(piece\.text\)/],
       ['押された瞬間に秒へ直す', /sharesToTimes\(cursor\.spans, clipDuration\(\)\)/],
-      ['文のくり返しを、周回の中でも見る', /repeatSeek\(repeatNow\(\), sec, \{ sentences: sentSecs \}\)/],
+      /* 段落ごとの MP3 でも、文でくり返す。**`spans` は集中モードが
+         かけらに狭めるためのもの**で、渡さなければ `null`(段落で回る) */
+      ['文のくり返しを、周回の中でも見る', /spans: only, sentences: sentSecs,/],
     ]
     const before = bad
     for (const [what, re] of want) if (!re.test(read)) ng(`文の単位: ${what}`)

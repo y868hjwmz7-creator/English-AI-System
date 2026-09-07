@@ -99,10 +99,12 @@ export default function useBodyAudio({ onIndex = null, onWord = null } = {}) {
    * @param {number|null} o.startIndex そこから鳴らす。`null` なら**止めた場所から**
    * @param {boolean} o.keep     `startIndex` を優先しつつ、
    *                             **その段落で止めた続き**があれば使う(集中モード)
+   * @param {Function|null} o.partRangeOf くり返し「段落」で回す範囲を狭める
+   *   (集中モードが、いま出しているかけらを渡す)
    */
   const play = useCallback(({
     parts = [], resumeKey = null, rate = 0.9, tier = STANDARD,
-    startIndex = null, keep = false,
+    startIndex = null, keep = false, partRangeOf = null,
   } = {}) => {
     const list = parts ?? []
     if (!list.length) return
@@ -128,6 +130,7 @@ export default function useBodyAudio({ onIndex = null, onWord = null } = {}) {
       resumeKey,
       /* **単位は訊きに行く。** 鳴らしている最中に切り替えられる */
       repeatOf: () => repeatRef.current,
+      partRangeOf,
       ...(jump == null ? {} : (keep
         /* 集中モード … いま開いている段落から。控えの秒は
            **その段落のものだったときだけ**使う */

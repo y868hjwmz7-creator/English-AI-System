@@ -51,6 +51,7 @@ import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
   REPEAT_UNITS, indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf,
+  spanForRange,
 } from './wholeAudio.js'
 import { sentenceShares, sharesToTimes, splitSentences } from './wordTiming.js'
 import { speakChunks } from './speakChunks.js'
@@ -474,6 +475,20 @@ export function readAloudSequence(parts, {
    * 切り替えても、次のひと刻みから効く(押し直させない)。
    */
   repeatOf = null,
+  /**
+   * **くり返し「段落」で回す範囲を狭める**(2026-09 利用者の指定・集中モード)。
+   *
+   *   > 長い段落を集中モードの一塊として区切った場合、集中モード内では
+   *   > それらを段落として扱い、繰り返し再生できるようにしてください。
+   *
+   * `(段落の番号) => { from, to } | null`。**単位は「その段落の英文の
+   * 何文字目か」**である。秒で受け取ると、鳴らす側と画面で
+   * 数え方を2通り持つことになる(`sentenceShares` と同じ物差しに乗せる)。
+   *
+   * **鳴らす英文は1文字も変えない。** かけらを別々に鳴らすと、
+   * 置き場所は英文の指紋で決まるので**そのぶん課金される**(CLAUDE.md)。
+   */
+  partRangeOf = null,
 } = {}) {
   const shown = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
   /* ── **窓口が受け取れる長さを超える段落は、ここで分ける**(2026-09 実機)
@@ -518,6 +533,27 @@ export function readAloudSequence(parts, {
   const repeatNow = () => {
     const u = repeatOf?.()
     return REPEAT_UNITS.includes(u) ? u : 'off'
+  }
+
+  /**
+   * くり返し「段落」で回す区間。**いま出しているかけたぶんに狭める。**
+   *
+   * 文の区間(`sents`)から、その範囲に入る文の頭と終わりを取る。
+   * **文の切れ目でしか割っていない**(`focusChunks`)ので、
+   * かけらの端は必ずどれかの文の端と重なる。
+   * 呼ぶ側が範囲を出さなければ `null` を返し、
+   * これまでどおり**段落まるごと**が回る。
+   *
+   * @param {number} idx 段落の番号
+   * @param {Array} sents `{ start, end, charIndex }` の並び(秒でも割合でもよい)
+   * @param {number} base その並びが数え始めている、段落の中の文字位置
+   */
+  const partSpan = (idx, sents, base = 0) => {
+    if (repeatNow() !== 'item' || !partRangeOf || !sents?.length) return null
+    const r = partRangeOf(idx)
+    if (!r || !Number.isFinite(r.from) || !Number.isFinite(r.to)) return null
+    const span = spanForRange(sents, r, base)
+    return span ? [span] : null
   }
 
   const alive = () => mine === session
@@ -623,7 +659,13 @@ export function readAloudSequence(parts, {
            そのまま続けて鳴る(1文ずつの ◁▷ と同じ道具)。
            戻したら、そのひと刻みは何もしない —— 秒がもう古いので、
            そのまま数えると**一瞬だけ次の段落が光る** */
-        const back = repeatSeek(repeatNow(), sec, { spans, sentences: sent })
+        /* **「段落」は、集中モードが出しているかけたぶんに狭める。**
+           狭められないときは、これまでどおり段落まるごと */
+        const only = shown >= 0
+          ? partSpan(shown, sent.filter((s) => s.item === shown)) : null
+        const back = repeatSeek(repeatNow(), sec, {
+          spans: only ?? spans, sentences: sent,
+        })
         if (back !== null && seekClip(back)) return
         seen(indexAtTime(spans, sec))
         tellSentence(sent, sec, () => shown, seenSent, onWord)
@@ -657,6 +699,8 @@ export function readAloudSequence(parts, {
     /* **鳴らせないまま回り続けない。** ひと周のあいだに
        1本も 0.3 秒以上鳴らなければ、そこでやめる */
     let heard = false
+    /* かけらでくり返すときの、鳴らし直す頭(秒)。**次の段落へは持ち越さない** */
+    let replayAt = 0
     for (;;) {
       for (let i = start; i < list.length; i += 1) {
         if (!alive()) return
@@ -728,6 +772,15 @@ export function readAloudSequence(parts, {
          * **前の段落の区間で誤って飛ぶこともない。** */
         const shares = sentenceShares(part.text)
         let sentSecs = null
+        /* 「段落」でくり返すとき、**どこから鳴らし直すか**(かけらの頭)。
+           鳴らし終わってしまったときの受け皿である —— 中で戻せていれば
+           ここまで来ない */
+        let backTo = 0
+        /* **続きから始めた1本目だけ、その途中から**(2本目からは頭から)。
+           くり返しで頭へ戻ったあとも、控えは当てない(`start === first`)。
+           `replayAt` は「かけらでくり返す」ための頭で、**使ったら消す** */
+        const startSec = (i === first && start === first) ? fromAt : replayAt
+        replayAt = 0
 
         const played = await playClip({
           text: part.text,
@@ -737,18 +790,24 @@ export function readAloudSequence(parts, {
           onWord: relay,
           onTime: (sec, dur) => {
             if (!alive()) return
-            /* **文でくり返す。** 段落・全文はこの下の周回が受け持つので、
-               `repeatSeek` には文の区間だけを渡す(単位が違えば `null`)。
+            /* **文でくり返す。** 全文はこの下の周回が受け持つので、
+               `repeatSeek` には文の区間を渡す(単位が違えば `null`)。
                見積もれなかったときも `null` になり、
-               これまでどおり**段落で回る**(行き止まりを作らない) */
+               これまでどおり**段落で回る**(行き止まりを作らない)。
+
+               **「段落」は、集中モードが出しているかけたぶんに狭める**
+               (2026-09 利用者の指定)。狭められなければ `null` で、
+               下の周回が段落まるごとを回す */
             if (!sentSecs) sentSecs = sharesToTimes(shares, dur)
             if (!sentSecs) return
-            const back = repeatSeek(repeatNow(), sec, { sentences: sentSecs })
+            const only = partSpan(part.index, sentSecs, part.at)
+            backTo = only ? only[0].start : 0
+            const back = repeatSeek(repeatNow(), sec, {
+              spans: only, sentences: sentSecs,
+            })
             if (back !== null) seekClip(back)
           },
-          // **続きから始めた1本目だけ、その途中から**(2本目からは頭から)。
-          // くり返しで頭へ戻ったあとも、控えは当てない(`start === first`)
-          startAt: (i === first && start === first ? fromAt : 0),
+          startAt: startSec,
           // 鳴り始めたら、次のぶんを裏で用意しておく
           onStart: () => {
             /* **控えるのは MP3 が鳴り出したときだけ。** 端末の声に落ちたら
@@ -782,9 +841,16 @@ export function readAloudSequence(parts, {
         if (ok) heard = true
         const unit = repeatNow()
         /* **段落でくり返すときは、段落の頭へ戻す。**
-           長すぎて分けた段落では、いま鳴らしたかけらだけを回すと
-           **段落の後ろ半分だけが延々と鳴る** */
-        if ((unit === 'sentence' || unit === 'item') && ok) i = pieceOf[part.index] - 1
+           長すぎて**窓口の都合で**分けた段落(`speakChunks`)では、
+           いま鳴らしたかけらだけを回すと**後ろ半分だけが延々と鳴る**。
+
+           **集中モードが範囲を言っているときは、そのかけらの頭へ**
+           (2026-09 利用者の指定)。ふつうは上の `onTime` が中で戻すので
+           ここまで来ないが、**最後のかけらは戻す前に鳴り終わる**ことがある */
+        if ((unit === 'sentence' || unit === 'item') && ok) {
+          replayAt = unit === 'item' ? backTo : 0
+          i = pieceOf[part.index] - 1
+        }
       }
       if (!alive()) return
       // **全文をくり返す。** 次の周は、本文の頭から。

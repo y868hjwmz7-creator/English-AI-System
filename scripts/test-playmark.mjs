@@ -39,6 +39,8 @@ import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
 import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
+import { spanForRange } from '../src/lib/wholeAudio.js'
+import { ABBREVIATIONS, splitSentences } from '../src/lib/wordTiming.js'
 import {
   DIALOGUE_ANGLES, READING_ANGLES, angleBrief, angleLabel, anglesFor, pickAngle,
 } from '../src/data/materialAngles.js'
@@ -1510,6 +1512,66 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     'かけらの頭を引いてから色を付けている')
   ok(!/text=\{item\.prompt_en\}/.test(fr),
     '段落まるごとを描いていない(割ったかけらを描いている)')
+
+  /* ── **かけらを「段落」としてくり返す**(2026-09 利用者の指定)────
+       > 集中モード内ではそれらを段落として扱い、繰り返し再生できるように
+       > してください。現状では…段落は元々の段落を参照してしまい、
+       > 次のページに進んでしまいます */
+  const S = [
+    { start: 0, end: 3, charIndex: 0 },
+    { start: 3, end: 7, charIndex: 20 },
+    { start: 7, end: 9, charIndex: 55 },
+  ]
+  const r1 = spanForRange(S, { from: 0, to: 55 })
+  ok(r1 && r1.start === 0 && r1.end === 7, '1枚目は、その中の文の頭から終わりまで')
+  const r2 = spanForRange(S, { from: 55, to: 90 })
+  ok(r2 && r2.start === 7 && r2.end === 9, '2枚目は、2枚目の文だけ')
+  ok(spanForRange(S, null) === null, '範囲が無ければ狭めない(段落まるごと)')
+  ok(spanForRange(S, { from: 500, to: 900 }) === null, '入る文が無ければ狭めない')
+  ok(spanForRange([], { from: 0, to: 9 }) === null, '文が無ければ狭めない')
+  /* **かけらの中で数え直している並び**(窓口の都合で分けた段落)にも効く */
+  const CH = [{ start: 0, end: 2, charIndex: 0 }, { start: 2, end: 5, charIndex: 30 }]
+  const r3 = spanForRange(CH, { from: 100, to: 140 }, 100)
+  ok(r3 && r3.start === 0 && r3.end === 5, 'かけらの頭(base)を足してから当てる')
+
+  ok(/partRangeOf: \(i\) => \(i === atRef\.current \? rangeRef\.current : null\)/.test(fr),
+    '集中モードが、いま開いている段落のときだけ範囲を渡している')
+  ok(/from: piece\.at, to: piece\.at \+ piece\.en\.length/.test(fr),
+    '範囲は「その段落の英文の何文字目から何文字目まで」')
+  ok(/pieces\.length > 1 && piece/.test(fr),
+    '割っていない段落では範囲を渡さない(段落まるごと回る)')
+  ok(/parts: items\.map\(\(it\) => \(\{[\s\S]{0,80}text: it\.prompt_en/.test(fr),
+    '**鳴らす英文は段落まるごとのまま**(かけらを鳴らすと、そのぶん課金される)')
+}
+
+/* ── ピリオドが付いても、文の終わりではない語(2026-09 利用者の指定)──
+
+     > Ph. D / Dr. Hara など、ピリオドが含まれるが文の終わりを示すわけでは
+     > ない語句のリストを作り、これらのピリオドを文の終わりとして
+     > 捉えないよう改善してください。 */
+{
+  const cut = (t) => splitSentences(t).map((s) => t.slice(s.start, s.end).trim())
+  const one = (t, why) => ok(cut(t).length === 1, `${why} … ${JSON.stringify(cut(t))}`)
+  const two = (t, why) => ok(cut(t).length === 2, `${why} … ${JSON.stringify(cut(t))}`)
+
+  one('Dr. Hara joined us today.', '敬称のあとで切らない(Dr.)')
+  one('She has a Ph. D in physics.', '離して書いた学位でも切らない(Ph. D)')
+  one('He has a Ph.D. in physics.', '**次が小文字**なら切らない')
+  one('The U.S. team met at 9 a.m. and left.', 'つないだ形の途中で切らない')
+  one('The cost rose 3.5 percent.', '小数点で切らない')
+  one('Mr. Smith met Mrs. Lee at St. Paul.', '1文の中に3つあっても切らない')
+  two('She holds a Ph.D. Everyone applauded.', '**学位で本当に文が終わる**ときは切る')
+  two('The U.S. team met at 9 a.m. Then they left.', '同上(a.m. のあと)')
+  two('Choose option A. Then press start.', '**1文字だけ**は略語にしない')
+  two('The answer is no. We move on.', 'ふつうの語(no)は略語にしない')
+  two('Wait! Really?', '`!` `?` はこれまでどおり')
+  one('No full stop here', '句点が無ければ1文のまま')
+
+  // **ふつうの語として文末に立つものを、一覧に入れていないか**
+  const RISKY = ['no', 'apt', 'etc', 'al', 'sun', 'sat', 'mon', 'sec', 'min', 'max']
+  const bad = ABBREVIATIONS.filter((w) => RISKY.includes(w))
+  ok(bad.length === 0, `文末に立つ語を一覧に入れていない${bad.length ? `(${bad})` : ''}`)
+  ok(ABBREVIATIONS.every((w) => w === w.toLowerCase()), '一覧は小文字でそろえてある')
 }
 
 console.log(ng

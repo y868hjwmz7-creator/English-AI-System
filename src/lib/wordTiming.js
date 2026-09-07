@@ -84,25 +84,103 @@ export const markIndexAt = (marks, elapsedMs) => {
  * 【どこで切るか】
  *   `. ! ?` の並びと、そのあとに続く閉じ引用符・閉じ括弧までを1つの文に含める。
  *   区切りの記号を次の文の頭に付けると、色が1文字だけ先に動いて見える。
- *   **略語(Mr. / U.S.)では切れてしまう。** それでも困らない見せ方なので、
- *   辞書は持たない(持てば、その辞書の抜けが新しい不具合になる)。
+ *
+ * 【略語のピリオドでは切らない】(2026-09 利用者の指定)
+ *
+ *   > Ph. D / Dr. Hara など、ピリオドが含まれるが文の終わりを示すわけでは
+ *   > ない語句のリストを作り、これらのピリオドを文の終わりとして
+ *   > 捉えないよう改善してください。
+ *
+ *   以前は「辞書は持たない(抜けが新しい不具合になる)」としていたが、
+ *   **`Dr. Hara` が2つの文に割れると、色も送りも名前の途中で切れる。**
+ *   見落とし(切らないまま長い1文になる)より害が大きい。
  *
  * @returns {Array<{start: number, end: number}>} 本文の何文字目から何文字目まで
  */
+
+/**
+ * **ピリオドが付いても、文の終わりではない語**(ピリオドを除いた形・小文字)。
+ *
+ * **ほかの品詞にならない語だけを入れる**(`chunker.js` の
+ * `SURE_PREPS` とまったく同じ考え方)。`no.`(No. 5)や `apt.`(apt)、
+ * `etc.` や `sun.` のように**ふつうの語として文末に立つもの**は
+ * **入れない** —— 入れると `The answer is no.` が次の文とつながる。
+ * **見落としは長い1文になるだけだが、取り違えは文をつなげてしまう。**
+ *
+ * `U.S.` `e.g.` `a.m.` `Ph.D.` のような**ドットでつないだ形は、
+ * 一覧に並べない。** 形だけで見分けられるうえ(下の②)、
+ * **最後のドットは本当に文を終えることがある**(`She holds a Ph.D. Everyone…`)。
+ * 一覧に入れると、そこで永久に切れなくなる。
+ */
+export const ABBREVIATIONS = [
+  // 敬称・肩書き
+  'mr', 'mrs', 'ms', 'mx', 'dr', 'prof', 'rev', 'hon', 'gov', 'sen', 'rep',
+  'capt', 'lt', 'sgt', 'col', 'gen', 'maj', 'adm', 'messrs', 'mme', 'mlle',
+  'jr', 'sr', 'st',
+  // 学位(`Ph. D` のように離して書かれることがある)
+  'ph',
+  // 会社・組織
+  'inc', 'ltd', 'co', 'corp', 'llc', 'plc', 'bros', 'dept', 'univ',
+  // 場所
+  'ave', 'blvd', 'rd', 'mt', 'ste',
+  // 月(**曜日は入れない** —— `sun.` `sat.` はふつうの語である)
+  'jan', 'feb', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
+  // そのほか
+  'vol', 'chap', 'approx', 'cf', 'viz', 'vs',
+]
+
+const ABBREV = new Set(ABBREVIATIONS)
+
+/**
+ * その `.` は**文の終わりではない**か。見るのは4つ。
+ *
+ *   ⓪ すぐ次が数字 … `3.5`(小数点)
+ *   ① 次のことばが**小文字で始まる** … `a Ph.D. in physics`
+ *      **英語の文は小文字では始まらない。** ここは確かなので、
+ *      一覧に無い略語(`etc. and …`)も、これで拾える
+ *   ② `U.S.` `a.m.` の**途中**のドット(次が「1文字 + ドット」)。
+ *      **最後のドットは見ない** —— あれは文を終えることがある
+ *   ③ 上の一覧にある語
+ *
+ * **`!` `?` は見ない。** 略語に使われることがないためである。
+ */
+function abbrevAt(src, end) {
+  let i = end - 1
+  while (i >= 0 && /[\s"'’”)\]]/.test(src[i])) i -= 1
+  if (i < 0 || src[i] !== '.') return false
+  const rest = src.slice(i + 1)
+  if (/^\d/.test(rest)) return true                       // ⓪ 小数点
+  if (/^["'’”)\]\s]*[a-z]/.test(rest)) return true        // ① 次が小文字
+  if (/^\s?[A-Za-z]\./.test(rest)) return true            // ② つないだ形の途中
+  let j = i
+  while (j > 0 && /[A-Za-z.]/.test(src[j - 1])) j -= 1     // ③ 一覧
+  const raw = src.slice(j, i)
+  return !!raw && ABBREV.has(raw.toLowerCase())
+}
+
 export const splitSentences = (text) => {
   const src = String(text ?? '')
   const out = []
   const re = /[^.!?]*[.!?]+["'’”)\]]*\s*/g
   let last = 0
+  let from = null                          // 略語でつないでいる最中の頭
   let m = re.exec(src)
   while (m) {
     if (!m[0].length) break
-    out.push({ start: m.index, end: m.index + m[0].length })
-    last = m.index + m[0].length
+    const end = m.index + m[0].length
+    if (from === null) from = m.index
+    /* **略語のピリオドなら、次のかたまりとつなぐ。**
+       いちばん最後のかたまりは、つなぐ先が無いのでそのまま出す */
+    if (!(abbrevAt(src, end) && (re.lastIndex < src.length))) {
+      out.push({ start: from, end })
+      from = null
+    }
+    last = end
     m = re.exec(src)
   }
   // 最後が句点で終わっていない本文(見出し・言いさし)も1つの文として扱う
-  if (last < src.length) out.push({ start: last, end: src.length })
+  if (last < src.length) out.push({ start: from ?? last, end: src.length })
+  else if (from !== null) out.push({ start: from, end: last })
   return out.length ? out : [{ start: 0, end: src.length }]
 }
 
