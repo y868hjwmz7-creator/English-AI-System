@@ -324,6 +324,98 @@ function fakeMp3({
   } else ok('教材が無ければ 0 本')
 }
 
+// ── ⑥b 落とすときも、**鳴らすときと同じ「かけら」**で集める ──────────
+/* 【なぜ要るか】(2026-09 実機)
+ *
+ *   読み上げは長い段落を `speakChunks()` で**かけらに分けてから**窓口へ
+ *   渡すので、MP3 の置き場所は**かけらの英文の指紋**で決まる。ところが
+ *   ダウンロードは**段落まるごとの英文**で探していた。その指紋の MP3 は
+ *   どこにも無いので、貼った原稿(Speech練習)では
+ *
+ *     音声が ◯ 本足りません
+ *
+ *   としか出ず、**1本も落とせなかった。** 作り直し(`remakeClips.js`)で
+ *   踏んだのと**まったく同じ根**である。
+ *
+ *   `npm run lint` も `npm run build` も通る。**ふつうの教材では起きない**
+ *   (AI が書く段落は 300 文字ほどで、分けても1つのまま)ので、
+ *   長い原稿を貼った人にしか見えない。 */
+{
+  const { materialAudioClips, materialClipPieces, PIECE_GAP_MS } =
+    await import('../src/lib/audioPlaylist.js')
+
+  const art = (items) => ({
+    sections: [{ exercise_type: 'article', items }],
+    voiceIds: ['us-1'],
+    tags: [],
+  })
+  // 窓口の上限を超える段落。**貼った原稿だけがこうなる**
+  const longText = Array.from({ length: 90 },
+    (unused, i) => `Sentence number ${i + 1} of this pasted script.`).join(' ')
+  if (longText.length <= SPEAK_MAX) throw new Error('検証の英文が短すぎる')
+
+  const one = materialClipPieces(art([{ prompt_en: longText }]))
+  const want = speakChunks(longText).map((p) => p.text.trim()).filter(Boolean)
+  if (one.length < 2) ng('長い段落を分けていない', `${one.length} 本`)
+  else if (one.map((c) => c.text).join(' ') !== want.join(' ')) {
+    ng('鳴らすときと違う英文で集めている(`speakChunks` を通っていない)')
+  } else ok(`長い段落は、鳴らすときと同じ ${one.length} 本のかけらで集める`)
+
+  // 1語も落ちない(つなげば元の英文に戻る)
+  if (one.map((c) => c.text).join(' ').replace(/\s+/g, ' ')
+      !== longText.replace(/\s+/g, ' ')) {
+    ng('かけらをつないでも、元の英文に戻らない')
+  } else ok('分けても1語も落ちない')
+
+  // **段落の間は、最後のかけらのうしろにだけ。** 途中は 90ms
+  const two = materialClipPieces(art([
+    { prompt_en: longText }, { prompt_en: 'And that is the whole story.' },
+  ]))
+  const mid = two.slice(0, one.length)
+  if (mid.slice(0, -1).some((c) => c.gapMs !== PIECE_GAP_MS)) {
+    ng('かけらのあいだに、段落の間を入れている', mid.map((c) => c.gapMs).join(','))
+  } else if (!(mid.at(-1).gapMs > PIECE_GAP_MS)) {
+    ng('段落の切れ目に、段落の間が入っていない', String(mid.at(-1).gapMs))
+  } else if (two.at(-1).gapMs !== 0) {
+    ng('いちばん最後のあとにも間を入れている')
+  } else ok(`かけらのあいだは ${PIECE_GAP_MS}ms、段落の切れ目だけ長い`)
+
+  /* **ふつうの教材では、これまでと1本も変わらない。**
+     ここが変わると、すでにある音声が全部作り直し(= 再課金)になる */
+  const normal = art(Array.from({ length: 6 },
+    (unused, i) => ({ prompt_en: `This is paragraph ${i + 1}. It is short.` })))
+  const before = JSON.stringify(materialAudioClips(normal))
+  const after = JSON.stringify(materialClipPieces(normal))
+  if (before !== after) ng('ふつうの段落まで分けている(すでにある音声が無駄になる)')
+  else ok('ふつうの段落は、1文字も変わらない')
+
+  if (materialClipPieces(null).length || materialClipPieces({}).length) {
+    ng('教材が無いのに何かを返している')
+  } else ok('教材が無ければ 0 本')
+
+  /* 【呼んでいるか】**定義だけあって誰も呼ばなければ、何も直らない。**
+     しかも**音は鳴る**ので、押してみても気づけない。
+     **コメントを落としてから、使っている形で見る** ——
+     説明の中にも同じ名前が出てくるので、名前だけを探すと
+     呼び出しを外しても緑のままになる(この回、2度踏んだ落とし穴) */
+  const bare = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+
+  const dl = bare('../src/lib/downloadAudio.js')
+  if (!/=\s*materialClipPieces\(material\)/.test(dl)) {
+    ng('ダウンロードが、かけらではなく段落まるごとで集めている')
+  } else ok('ダウンロードは `materialClipPieces(material)` で集めている')
+
+  /* 画面が数える本数も、同じものでなければならない ——
+     違うと**「3 / 14」と出ているのに 22 本目まで進む** */
+  const tm = bare('../src/components/TrainerMaterials.jsx')
+  if (/materialAudioClips\(m\)/.test(tm)) {
+    ng('画面が、段落まるごとの本数を出している(進み具合が実際と食い違う)')
+  } else if ((tm.match(/materialClipPieces\(m\)\.length/g) ?? []).length < 2) {
+    ng('画面が `materialClipPieces` で数えていない')
+  } else ok('画面も、同じかけらの数で出している(ボタンの出し分けと進み具合)')
+}
+
 /* ── 通しで鳴らすものは、演習ごとに違う欄から取る(2026-09 利用者の指定)──
  *
  *   > 文型トレーニングに上のバーのプレーヤーが出ません。

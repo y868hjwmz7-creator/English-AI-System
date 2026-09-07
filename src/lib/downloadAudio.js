@@ -12,6 +12,11 @@
  *   声の当て方も間(ま)の決め方も、鳴らすときと同じ道具を通す
  *   (`castClipSpeakers` / `turnGapMs`)。**数え方を2通り持たない。**
  *
+ *   **長い段落は、鳴らすときと同じように分ける**(`materialClipPieces`)。
+ *   MP3 の置き場所は**かけらの英文の指紋**で決まるので、
+ *   段落まるごとの英文で探すと**どこにも無く**、
+ *   貼った原稿(Speech練習)で「◯本足りません」としか出なかった。
+ *
  * 【作り直さない。課金もしない】
  *   **すでに作ってある MP3 を集めてつなぐだけ**である。
  *   窓口(`speak`)は呼ばないので、**1円もかからない。**
@@ -28,13 +33,17 @@
  */
 import { clipUrl } from './audioClips.js'
 import { audioFileName, joinMp3 } from './mp3Join.js'
-import { materialAudioClips } from './audioPlaylist.js'
+import { materialAudioClips, materialClipPieces } from './audioPlaylist.js'
 
 /* 並べるところは `audioPlaylist.js` にある。
    あちらは Supabase を持たないので、**素の node で確かめられる**
    (`npm run test:mp3`)。ここから出しておくのは、
-   呼ぶ側(`TrainerMaterials.jsx`)がどちらを読むか迷わないようにするため */
-export { materialAudioClips }
+   呼ぶ側(`TrainerMaterials.jsx`)がどちらを読むか迷わないようにするため。
+
+   **呼ぶ側が使うのは `materialClipPieces`(かけら)のほう。**
+   本数もそちらで数えないと、**進み具合が「3 / 14」と出ているのに
+   22 本目まで進む**ことになる(出した数と、実際に集める数は同じにする) */
+export { materialAudioClips, materialClipPieces }
 
 /**
  * 集めて、つないで、渡す。
@@ -44,7 +53,10 @@ export { materialAudioClips }
  * @returns {{ok: boolean, total: number, missing: number, bytes: number, error?: string}}
  */
 export async function downloadMaterialAudio(material, onProgress = null) {
-  const list = materialAudioClips(material)
+  /* **鳴らすときとまったく同じ「かけら」で集める**(2026-09 実機)。
+     段落まるごとの英文で探すと、貼った原稿(Speech練習)では
+     その指紋の MP3 がどこにも無く、「◯本足りません」としか出なかった */
+  const list = materialClipPieces(material)
   if (!list.length) return { ok: false, total: 0, missing: 0, bytes: 0, error: '本文がありません' }
 
   const parts = []

@@ -50,7 +50,7 @@ import { premiumClipsOf, remakeMaterialClips, remakeSizeOf } from '../lib/remake
 import VoiceRemake from './VoiceRemake.jsx'
 /* **音声を1本にまとめて渡す**(2026-09 利用者の指定)。
    すでにある MP3 を集めてつなぐだけで、窓口は呼ばない(課金しない) */
-import { downloadMaterialAudio, materialAudioClips } from '../lib/downloadAudio.js'
+import { downloadMaterialAudio, materialClipPieces } from '../lib/downloadAudio.js'
 import { lastClipDetail } from '../lib/audioClips.js'
 
 /** 絞り込みの「問数」と、作る画面の増やし方の対応。**2か所に持たない** */
@@ -474,7 +474,7 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
    */
   const downloadAudio = async (m) => {
     setDlDone(null)
-    setDlBusy({ id: m.id, done: 0, total: materialAudioClips(m).length })
+    setDlBusy({ id: m.id, done: 0, total: materialClipPieces(m).length })
     let r
     try {
       r = await downloadMaterialAudio(m, ({ done, total }) => {
@@ -950,7 +950,7 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
 
                     **本文がある教材だけ**に出す(効かない操作を見せない)。
                     すでにある MP3 を集めてつなぐだけなので、**課金されない** */}
-                {materialAudioClips(m).length > 0 && (
+                {materialClipPieces(m).length > 0 && (
                   <button type="button" className="btn btn--small"
                           disabled={!!dlBusy} onClick={() => downloadAudio(m)}>
                     <DownloadIcon />

@@ -38,6 +38,7 @@ import { resolveVoices } from '../data/clipVoices.js'
 import { exerciseType, isPassageSection } from '../data/exerciseTypes.js'
 import { voiceTierFor } from './voiceTier.js'
 import { turnGapMs } from './turnGap.js'
+import { speakChunks } from './speakChunks.js'
 
 /** 本文の演習(記事・会話・会議)。**「Listen (全体)」が鳴らすもの** */
 export const bodySectionOf = (material) => (material?.sections ?? [])
@@ -144,4 +145,66 @@ export function materialAudioClips(material) {
       gapMs,
     }
   })
+}
+
+/**
+ * かけらとかけらのあいだの間(ま)。**鳴らすときと同じ 90ms**
+ * (`readAloud.js` の `if (joined) await pause(90 / rate)`)。
+ *
+ * 分けたのは**こちらの都合**であって、話のうえでは文と文の切れ目である。
+ * だから段落の間(`turnGapMs`)は置かない。
+ */
+export const PIECE_GAP_MS = 90
+
+/**
+ * **実際に鳴る「かけら」を、鳴る順に並べる**(2026-09 実機)。
+ *
+ * ── なぜ要るのか ───────────────────────────────────────────────
+ *
+ * 読み上げは、長い段落を `speakChunks()` で**かけらに分けてから**
+ * 窓口へ渡す。だから MP3 の置き場所は**かけらの英文の指紋**で決まる。
+ *
+ *     <版>/<段>/<声の id>/<かけらの英文の指紋>.mp3
+ *
+ * ところが音声のダウンロードは `materialAudioClips()` の
+ * **段落まるごとの英文**で集めていた。その指紋の MP3 は
+ * **どこにも存在しない**ので、
+ *
+ *   > 音声が ◯ 本足りません
+ *
+ * と出て、**1本も落とせない。** 作り直し(`remakeClips.js`)で踏んだのと
+ * **まったく同じ根**である。
+ *
+ * **貼った原稿(Speech練習)だけで起きる。** AI が書く段落は 300 文字ほど
+ * なので `speakChunks()` を通っても1つのままで、
+ * **ふつうの教材では、これまでと1本も変わらない。**
+ *
+ * ── なぜ `materialAudioClips()` の側で分けないか ────────────────
+ *
+ * あちらは **`prepareJob.js` も使っている。** そちらは英文を
+ * **段落まるごとのまま** `wholeClip({texts, voiceIds})` へ渡す
+ * (1本にまとめた音声は、本文ぜんぶを1回で作る)。
+ * ここで分けてしまうと、**1本にまとめる側の指紋まで変わり、
+ * すでにある音声が全部作り直しになる**(= 再課金)。
+ *
+ * **分けるのは「あるものを集める側」だけ。**
+ *
+ * @returns {Array<{text, voiceId, tier, gapMs}>} `gapMs` は**そのあとの間**
+ */
+export function materialClipPieces(material) {
+  const out = []
+  for (const clip of materialAudioClips(material)) {
+    /* **鳴らすときとまったく同じ分け方。** ここを書き写すと、
+       別の場所の MP3 を探して「足りません」と言うことになる */
+    const pieces = speakChunks(clip.text)
+      .map((p) => ({ ...clip, text: p.text.trim() }))
+      .filter((p) => p.text)
+    if (!pieces.length) continue
+    pieces.forEach((p, i) => {
+      /* **段落の間は、最後のかけらのうしろにだけ置く。**
+         途中に置くと、1つの段落の途中で話が切れて聞こえる */
+      out.push({ ...p, gapMs: i === pieces.length - 1 ? clip.gapMs : PIECE_GAP_MS })
+    })
+  }
+  return out
 }
