@@ -34,6 +34,7 @@ import {
   ACCENT_KEEP, CLIP_VOICES, V2, V3, findVoice, voiceModelOf, voiceSettingsOf,
   voicesOfAccent,
 } from '../src/data/clipVoices.js'
+import { SPEAK_MAX, speakChunks } from '../src/lib/speakChunks.js'
 
 let bad = 0
 const ok = (s) => console.log(`✓ ${s}`)
@@ -373,6 +374,44 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   if (!/課金/.test(vr) || !/clipCount/.test(vr)) {
     ng('作り直す本数と、課金になることを書いていない')
   } else ok('押す前に、本数と課金になることが書いてある')
+
+  /* ── **作り直すのは、鳴らすのとまったく同じ英文**(2026-09 実機)──────
+   *
+   *   > 長いSpeech練習は直っていませんでした。ずれ方としては、
+   *   > 音に対してハイライトがどんどん遅れていきます。
+   *
+   * 読み上げは `speakChunks()` で**かけらに分けてから**窓口へ渡すので、
+   * MP3 の置き場所は**かけらの指紋**で決まる。作り直しが段落まるごとで
+   * 作ると、**誰も鳴らさない場所**に置いて課金し、
+   * **鳴らすほうは永久に作り直されない**(= 時刻の控えもできない)。
+   *
+   * **音は鳴る**ので、これは押してみても気づけない。 */
+  /* **コメントを落としてから見る。** この節の説明にも `speakChunks()` と
+     書いてあるので、そのまま探すと**呼び出しを外しても緑のまま**になる
+     (「名前が出てくるか」で見ない・CLAUDE.md。実際に一度そうなった) */
+  const rc = read('src/lib/remakeClips.js')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  if (!/of speakChunks\(/.test(rc) || !/from '\.\/speakChunks\.js'/.test(rc)) {
+    ng('作り直しが、鳴らすときと違う英文で作っている',
+      '`speakChunks()` を通す —— 長い段落は、かけらごとに置かれている')
+  } else ok('作り直しは、鳴らすときと同じ `speakChunks()` を通している')
+
+  // 分けなければ意味が変わることを、実物で確かめておく
+  const one = 'This is a plain sentence. '
+  const long = one.repeat(Math.ceil((SPEAK_MAX + 400) / one.length)).trim()
+  const pieces = speakChunks(long)
+  if (pieces.length < 2) {
+    ng('長い段落が、かけらに分かれていない', `${long.length} 文字で ${pieces.length} 個`)
+  } else if (pieces[0].text === long) {
+    ng('かけらが、段落まるごとと同じ英文になっている')
+  } else ok(`長い段落は ${pieces.length} 個のかけらになる(置き場所が別々になる)`)
+
+  // **ふつうの段落は、1本も変わらない**(AI が書く段落は 300 文字ほど)
+  const short = 'The team met on Tuesday. Sales grew twelve percent. Nobody expected it.'
+  const only = speakChunks(short)
+  if (only.length !== 1 || only[0].text !== short) {
+    ng('ふつうの長さの段落まで分けている', 'これまでの教材が、まるごと作り直しになる')
+  } else ok('ふつうの長さの段落は、これまでと1文字も変わらない')
 }
 
 // ── 訛りを最大限に活かす指定(2026-09 利用者の指定)────────────────

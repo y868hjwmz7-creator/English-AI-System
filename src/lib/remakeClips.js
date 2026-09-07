@@ -35,6 +35,7 @@
 import { remakeClip } from './audioClips.js'
 import { castClipSpeakers, voiceFor } from './voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
+import { speakChunks } from './speakChunks.js'
 import { PREMIUM, voiceTierFor } from './voiceTier.js'
 
 /**
@@ -43,6 +44,24 @@ import { PREMIUM, voiceTierFor } from './voiceTier.js'
  * 標準の声(ドリル・単語・フレーズ)は作り直さない。
  * あちらは Google / Azure の無料枠で作られていて、
  * **段を取り違える不具合そのものが起きない**(良い段に落ちようがない)。
+ *
+ * ── **長い段落は、鳴らすときと同じように分ける**(2026-09 実機)──────
+ *
+ *   > 長いSpeech練習は直っていませんでした。ずれ方としては、
+ *   > 音に対してハイライトがどんどん遅れていきます。
+ *
+ * 読み上げは `speakChunks()` で**かけらに分けてから**窓口へ渡すので、
+ * MP3 の置き場所は**かけらの英文の指紋**で決まる。ところがここは
+ * **段落まるごとの英文**で作り直していた。つまり
+ *
+ *   ・**誰も鳴らさない場所**の MP3 を作って課金していた
+ *   ・**鳴らすほうのかけら**は、いつまでも作り直されない
+ *     (だから時刻の控え `.json` も、永久にできない)
+ *   ・段落が 1,700 文字を超えると、窓口に断られてただ失敗していた
+ *
+ * **貼った原稿(Speech練習)だけで起きる。** AI が書く段落は
+ * 300 文字ほどなので、`speakChunks` を通っても1つのままである
+ * (**ふつうの教材では、これまでと1本も変わらない**)。
  *
  * @returns {{text: string, voiceId: string}[]}
  */
@@ -64,10 +83,16 @@ export function premiumClipsOf(material) {
       const text = String(it.audio_text || it.prompt_en || '').trim()
       if (!text) continue
       const voiceId = voiceFor(cast, it.speaker, solo)
-      const key = `${voiceId}|${text}`
-      if (seen.has(key)) continue      // 同じ英文を二度作らない(二度課金しない)
-      seen.add(key)
-      out.push({ text, voiceId })
+      /* **鳴らすときとまったく同じ分け方。** ここを書き写すと、
+         別の場所の MP3 を作り直して二度課金することになる */
+      for (const piece of speakChunks(text)) {
+        const body = piece.text.trim()
+        if (!body) continue
+        const key = `${voiceId}|${body}`
+        if (seen.has(key)) continue    // 同じ英文を二度作らない(二度課金しない)
+        seen.add(key)
+        out.push({ text: body, voiceId })
+      }
     }
   }
   return out
