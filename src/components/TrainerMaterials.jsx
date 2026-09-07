@@ -46,7 +46,7 @@ import { printElement } from '../lib/print.js'
 import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
 /* **読み上げ音声を作り直す**(2026-09 実機)。良い段の場所に標準の声が
    居座っている英文を、こちらから作り直させる(`remakeClips.js` の冒頭) */
-import { premiumClipsOf, remakeMaterialClips } from '../lib/remakeClips.js'
+import { premiumClipsOf, remakeMaterialClips, remakeSizeOf } from '../lib/remakeClips.js'
 import VoiceRemake from './VoiceRemake.jsx'
 /* **音声を1本にまとめて渡す**(2026-09 利用者の指定)。
    すでにある MP3 を集めてつなぐだけで、窓口は呼ばない(課金しない) */
@@ -1142,7 +1142,8 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
                   **国と話す人を選んでから走らせる**(2026-09 利用者の指定) */}
               {voiceAsk === m.id && !voiceBusy && (
                 <VoiceRemake material={m}
-                             clipCount={premiumClipsOf(m).length}
+                             clipCount={remakeSizeOf(m).clips}
+                             clipChars={remakeSizeOf(m).chars}
                              mine={m.created_by === me.id}
                              busy={!!voiceBusy}
                              onRun={(opt) => runRemake(m, opt)}

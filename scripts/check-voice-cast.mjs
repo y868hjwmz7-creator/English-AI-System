@@ -367,13 +367,31 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   /* **判断を画面に持たせない。** 出しているボタンと走る道が食い違うと、
      押した本人には**何が起きたのか分からない**まま課金される */
   const vr = read('src/components/VoiceRemake.jsx')
+  const vrCode = vr.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
   if (!/remakeModeOf\(/.test(vr)) {
     ng('画面が、走る道を自分で決めている', '`remakeModeOf()` 1か所に任せる')
   } else ok('画面は `remakeModeOf()` に任せている')
   // **押す前に、本数と課金になることを書く**(見えない費用は管理できない)
+  /* **本数だけでは足りない**(2026-09 実機)。
+       > え? 作り直してません。長くてお金がかかるので
+     **ElevenLabs の課金は文字数**なので、そちらを必ず並べて出す
+     (見えない費用は管理できない・CLAUDE.md) */
   if (!/課金/.test(vr) || !/clipCount/.test(vr)) {
     ng('作り直す本数と、課金になることを書いていない')
-  } else ok('押す前に、本数と課金になることが書いてある')
+  /* **コメントと props の名前に当たらないよう、出している形で見る。**
+     はじめ `/clipChars/` と `/文字/` で探していたので、**画面に出す行を
+     丸ごと消しても緑のまま**だった(説明にも props にも同じ語がある) */
+  } else if (!/\{clipChars\.toLocaleString\(\)\}\s*文字/.test(vrCode)) {
+    ng('押す前に、何文字ぶんかを出していない',
+      'ElevenLabs の課金は文字数。本数だけでは高いか安いか判断できない')
+  } else ok('押す前に、本数・文字数・課金になることが書いてある')
+
+  // **画面が数え直していないか**(出した数と、実際に作る数が食い違う)
+  const tm = read('src/components/TrainerMaterials.jsx')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  if (!/clipChars=\{remakeSizeOf\(/.test(tm)) {
+    ng('画面が文字数を自分で数えている', '`remakeSizeOf()` 1か所に任せる')
+  } else ok('文字数は `remakeSizeOf()` 1か所が数えている')
 
   /* ── **作り直すのは、鳴らすのとまったく同じ英文**(2026-09 実機)──────
    *

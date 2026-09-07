@@ -99,6 +99,29 @@ export function premiumClipsOf(material) {
 }
 
 /**
+ * **押す前に、どれだけ課金されるかを言えるようにする**(2026-09 実機)。
+ *
+ *   > え? 作り直してません。長くてお金がかかるので
+ *
+ * それまで画面に出していたのは**本数だけ**だった。ところが
+ * **ElevenLabs の課金は文字数**なので、「20 本」では高いのか安いのかが
+ * 判断できない。**貼った原稿は1本が桁違いに長い**(ふつうの段落 300 文字に
+ * 対し、かけらは 1,700 文字まで)ので、本数はまったく当てにならない。
+ *
+ * **見えない費用は管理できない**(CLAUDE.md)。数え方は
+ * `premiumClipsOf()` と同じ1か所に置く —— 画面で数え直すと、
+ * **出した数と実際に作る数が食い違う。**
+ *
+ * @returns {{clips: number, chars: number}}
+ */
+export function remakeSizeOf(material) {
+  const list = premiumClipsOf(material)
+  let chars = 0
+  for (const c of list) chars += c.text.length
+  return { clips: list.length, chars }
+}
+
+/**
  * 作り直す。**1本ずつ順に。**
  *
  * まとめて投げると、窓口(Edge Function)が同時に何本も立ち上がり、

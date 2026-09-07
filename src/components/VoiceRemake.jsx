@@ -37,7 +37,7 @@ import { castList, remakeModeOf, sameVoices } from '../lib/voiceCast.js'
 export const voiceCountOf = (material) => castList(material)?.length || 1
 
 export default function VoiceRemake({
-  material, clipCount, mine, busy, onRun, onCancel,
+  material, clipCount, clipChars = 0, mine, busy, onRun, onCancel,
 }) {
   const n = voiceCountOf(material)
   const purpose = voicePurposeFor(material.kind)
@@ -156,8 +156,15 @@ export default function VoiceRemake({
             いまの声で作った音声は消えないので、選び直せば元に戻せます。</>
         )}
         <br />
-        読み上げ音声 <strong>{clipCount} 本</strong>を作ります
-        (ElevenLabs に課金されます)。
+        {/* **本数だけでは、高いのか安いのか判断できない**(2026-09 実機)。
+              > え? 作り直してません。長くてお金がかかるので
+            **ElevenLabs の課金は文字数**なので、そちらを必ず並べて出す。
+            貼った原稿は1本が桁違いに長く(かけらは 1,700 文字まで)、
+            本数はまったく当てにならない */}
+        読み上げ音声 <strong>{clipCount} 本</strong>
+        {clipChars > 0 && <>・<strong>{clipChars.toLocaleString()} 文字</strong></>}
+        を作ります(ElevenLabs に課金されます。
+        <strong>課金は文字数で決まります</strong>)。
         <br />
         <span className="voice-remake-cast">
           {accentLabel(accent)} … {voiceIds.map((id) => findVoice(id)?.label ?? id).join(' / ')}
