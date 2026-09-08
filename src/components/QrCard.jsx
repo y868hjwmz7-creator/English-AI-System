@@ -15,10 +15,12 @@
  *   囲みの外(取り組み方の札 / 絞り込み)は役目が違うので、
  *   **1問ぶんだけ**をここに置く。
  *
- * 【見た目も振る舞いも、切り出す前と1つも変えていない】
- *   ・入るなら問題と答えを並べる。**入るかどうかは実測する**
- *     (`scrollHeight > clientHeight`)。入らないときだけ入れ替える
- *   ・枠の高さは決め打ちなので、**文の長さが変わってもボタンは動かない**
+ 【決まりごと】
+ *   ・**答えは同じ場所で入れ替える**(2026-09・単語帳とそろえた)
+ *   ・**枠の高さは、入れ物が決める**(中身では決まらない)。だから
+ *     文の長さが変わってもボタンは動かない。紙の上は
+ *     `.lesson-sheet.is-running`、集中モードは `.qrfocus` が
+ *     「残りいっぱいを取る」を渡している(`styles.css`)
  *   ・答えはうすい色の囲み(`.answer-box`)。ほかのトレーニングと同じ形
  *   ・**答えのすぐ横に Listen を置かない。** 下の行に1つだけ
  *
@@ -30,7 +32,7 @@
  *   教材の中は**その場で言えたか**、復習は**これから言えるか**を訊いている。
  *   単語帳が「まだ」/「覚えかけ」と訊くのと同じ関係である。
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -46,8 +48,6 @@ export default function QrCard({
   extra = null,
 }) {
   const [shown, setShown] = useState(false)
-  // **両方いっしょに出せるか。** 出せないときだけ入れ替えに落とす
-  const [tight, setTight] = useState(false)
   /** 答えの音をくり返すか。**覚えない**(次に開いたときは1回に戻す) */
   const [loop, setLoop] = useState(false)
   const bodyRef = useRef(null)        // 出題の枠。**動かすのはここだけ**
@@ -55,8 +55,8 @@ export default function QrCard({
 
   const key = pair?.key ?? pair?.en ?? ''
 
-  // 出題が変わったら、答えは閉じた状態から。**入るかどうかも測り直す**
-  useEffect(() => { setShown(false); setTight(false); stopReading() }, [key])
+  // 出題が変わったら、答えは閉じた状態から
+  useEffect(() => { setShown(false); stopReading() }, [key])
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
@@ -69,19 +69,7 @@ export default function QrCard({
   useEffect(() => {
     const body = bodyRef.current
     if (body) body.scrollTop = 0
-  }, [shown, key, tight])
-
-  /**
-   * **問題と答えを、いっしょに出せるかどうかを実測する**(2026-08 利用者の指定)。
-   *
-   * 文の長さは教材によって桁が違うので、**文字数で当て推量しない。**
-   * まず両方を出してみて、枠に入りきらなかったときだけ入れ替えに落とす。
-   */
-  useLayoutEffect(() => {
-    const body = bodyRef.current
-    if (!body || !shown || tight) return
-    if (body.scrollHeight > body.clientHeight + 1) setTight(true)
-  }, [shown, key, tight])
+  }, [shown, key])
 
   if (!pair) return null
 
@@ -90,10 +78,10 @@ export default function QrCard({
       {/* 出題と答えは**まん中**に、ボタンは**いつも同じ場所**に置く。
           以前は答えがボタンの下に出ていたので、画面のいちばん下へ
           押し出され、そのつど送らないと読めなかった(2026-08 の指摘)。
-          **文の長さが変わっても、ボタンは動かない。** */}
-      {/* 入りきらないときは**まん中に寄せる。**
-          入るときは上詰めのまま(「2 / 30 のすぐ下に問題の上端」) */}
-      <div className={`qr-body${tight && shown ? ' is-tight' : ''}`} ref={bodyRef}>
+          **枠の高さは入れ物が決める**(中身では決まらない)ので、
+          文の長さが変わってもボタンは動かない。長すぎる英文だけが、
+          この中で送られる。 */}
+      <div className="qr-body" ref={bodyRef}>
         {/* 話す人だけは残す。誰のせりふかで言い方が変わる。
             **「記事」「会話」の札は出さない**(2026-08 の指定)。
             **何問目か、丸の番号で出す**(2026-09 利用者の指定)。
@@ -103,10 +91,21 @@ export default function QrCard({
           {pair.speaker && <span>{pair.speaker}</span>}
         </p>
 
-        {/* **入るなら、問題と答えを並べて出す**(2026-08 の指定)。
-            入らないときだけ入れ替える。入れ替えなら必ず収まる。
-            出す側は日本語だけ。**開くまで英語は出さない** */}
-        {(!shown || !tight) && <p className="qr-ja">{pair.ja}</p>}
+        {/* **答えは「足す」のではなく、同じ場所で入れ替える**
+            (2026-09 利用者の指定・**方針の変更**)。
+
+              > quick reponse内の表示だが、単語帳と同じにしてくれ
+
+            2026-08 は「入るなら問題と答えを並べる。入らないときだけ
+            入れ替える」だった。ところが**単語帳は入れ替えである**
+            (「英語を見るにすると日本語と入れ替えで同じ場所に表示して
+            ください」)。同じことをする2つの画面で、**開いたときの
+            動きが違っていた。**
+
+            入れ替えなら箱の高さが変わらないので、
+            **押す場所も、目を向ける場所も動かない。**
+            測って出し分ける必要もなくなった(`is-tight` ごと消した)。 */}
+        {!shown && <p className="qr-ja">{pair.ja}</p>}
         {shown && (
           /* **答えはうすい色の囲みに入れる**(2026-08 の指定)。
              ほかのトレーニングの解答(`.answer-box`)と同じ形にそろえる */

@@ -5754,9 +5754,9 @@ html, body { overflow-x: clip; }
   /* 4rem = 1行(19px × 1.7 ≒ 32px)の2倍。実測で 378px → 346px */
   .qr-card { padding-bottom: 4rem; }
 }
-/* いまは**いつでもまん中**なので、`is-tight` で寄せ方を変える必要はない。
-   `is-tight` は「問題と答えが両方は入らないので入れ替える」という
-   意味だけになった(`QuickResponse.jsx`)。 */
+/* **答えは同じ場所で入れ替える**(2026-09・単語帳とそろえた)ので、
+   「両方は入らないから入れ替える」という出し分け(`is-tight`)は
+   道具ごと消した。いつでも入れ替えなら、必ず収まる。 */
 /* 答えの囲み。**ほかのトレーニングの解答と同じ形**にそろえる(`.answer-box`)。
    紙の上では `--qa-answer` が差し替わるので、ここでは色を書かない */
 /* **Quick Response の解答は、うすい色の囲みのまま**(2026-08 利用者の指定)。
@@ -5765,11 +5765,11 @@ html, body { overflow-x: clip; }
    6Steps の「囲まない」とは**別の指定**なので、ここで塗り直す。
    Quick Response は 6Steps の中ではなく、並びのタブである */
 .qr-answer {
-  width: 100%; margin-top: 8px; text-align: center;
+  /* **入れ替えなので、上に足す余白は要らない**(2026-09) */
+  width: 100%; text-align: center;
   padding: 10px 12px; border-left: none; border-radius: var(--r-8);
   background: var(--qa-answer, var(--surface-2));
 }
-.qr-body.is-tight .qr-answer { margin-top: 0; }
 /* 何問目か + 話す人。**丸の番号は集中モード・紙と同じもの**
    (2026-09 利用者の指定「クイックレスポンスの文章にも番号を。おしゃれにね」)。
    上の「2 / 25」は**どこまで来たか**の目安で、役目が違う */
@@ -6035,6 +6035,46 @@ html, body { overflow-x: clip; }
    「窓が低いと問題が真っ白になる」(2026-08 実機)は起きない。 */
 .lesson-sheet.is-running > .qr,
 .lesson-sheet.is-running > .qr > .qr-card { min-height: 0; }
+
+/* ★ **集中モードでも、紙の上とまったく同じ形にする**(2026-09 利用者の指定)
+
+     > quick reponse内の表示だが、単語帳と同じにしてくれ
+
+   紙の上(`.lesson-sheet.is-running`)では、出題の枠が**残りの高さ**を
+   取るので、**文の長さが変わってもボタンは1px も動かない。**
+   ところが**集中モードには、この決まりが無かった。**
+   `.focus-body` は送る箱で、中身は**そのぶんの高さ**を取るだけなので、
+   出題の枠は下の base の `min-height` に落ちて**中身なりに伸びる。**
+
+   実測(390×844・本物の部品と本物の CSS)。長い英文を開くと
+
+       枠 219px → 238px。**ボタンの行が 19px 下がっていた**
+
+   **Quick Response の復習は、いつも集中モードである**(`QrReview`)。
+   つまり利用者が毎日見るほうが、ずっとこうなっていた。
+
+   直し方は**紙とまったく同じ**で、`.focus-paper` → `.qr` → `.qr-card` に
+   「残りいっぱいを取る」と「中身より小さくなってよい」を渡すだけ。
+   **新しい決まりを作っていない**(数え方を2通り持たない)。
+   下限(5rem)も紙と同じ値で、0 まで縮んで問題が真っ白になることはない。
+
+   **`.qrfocus` にだけ効かせる。** ほかの集中モード
+   (`FocusReader` / `StepFocus`)は読み物なので、中身なりに伸びてよい。 */
+.qrfocus .focus-body { justify-content: stretch; }
+.qrfocus .focus-body > .focus-paper,
+.qrfocus .qr,
+.qrfocus .qr-card {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+}
+.qrfocus .qr-card { justify-content: safe center; }
+/* 題の行と進み具合の線は**縮ませない**(6px の線が潰れて見えなくなる) */
+.qrfocus .qr-head, .qrfocus .qr-bar { flex: 0 0 auto; }
+.qrfocus .qr-body {
+  flex: 1 1 auto;
+  min-height: 5rem;
+  max-height: none;
+}
 
 /* ── 練習を始める行 ────────────────────────────────────────
    **「中身を見る」タブとは別のもの。** タブは教材の中身を見るためのもので、

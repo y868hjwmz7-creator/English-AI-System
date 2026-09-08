@@ -31,6 +31,8 @@ import MaterialForm from './components/MaterialForm.jsx'
 import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
+import QrCard from './components/QrCard.jsx'
+import FocusFrame from './components/FocusFrame.jsx'
 import {
   BoltIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
   PrintIcon, RefreshIcon, ScreenIcon, TaskIcon,
@@ -381,8 +383,48 @@ const TABS = (
   </>
 )
 
+/* Quick Response の1問(`?screen=qr`・2026-09 利用者の指定)。
+
+     > quick reponse内の表示だが、単語帳と同じにしてくれ
+
+   **単語帳と同じで、答えは「足す」のではなく入れ替える。**
+   だから「英語を見る」を押しても**ボタンは1px も動かない。**
+   長い英文で確かめる —— 短い文では、足しても動かないので分からない。
+
+   **本物の部品と本物の CSS で測る**(写した HTML では測らない)。
+   しかも**本物の置かれ方**にする —— `FocusFrame` の中に
+   `<section className="qr">` を入れる形は、`QuickResponse.jsx` と
+   `QrReview.jsx` がそのまま書いているものである。
+
+   **裸の `<div>` に置いて測らない。** 高さの決まりは置かれ方で変わるので、
+   本物と違う入れ物で測ると**壊れていても緑になる**(実際、はじめ
+   `div.app-main` に置いていたので、集中モードで枠が伸びることに
+   気づけるまでに一手よけいにかかった)。 */
+const QR = (
+  <FocusFrame className="qrfocus" width="w100" page="qr" onClose={() => {}}>
+    <section className="qr qr--paper">
+      <div className="qr-bar" aria-hidden="true"><span style={{ width: '20%' }} /></div>
+      <QrCard
+        pair={{
+          key: 'q1',
+          ja: '会議に遅れそうなときは、できるだけ早く連絡してください。',
+          en: 'If you think you are going to be late for the meeting, '
+            + 'please let us know as early as you possibly can, '
+            + 'so that we can move the agenda around and start with '
+            + 'the items that do not need you in the room.',
+          speaker: 'Mika',
+        }}
+        no={2}
+        onAnswer={() => {}}
+      />
+    </section>
+  </FocusFrame>
+)
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'tabs'
+  q.get('screen') === 'qr'
+    ? QR
+    : q.get('screen') === 'tabs'
     ? TABS
     : q.get('screen') === 'search'
     ? SEARCH

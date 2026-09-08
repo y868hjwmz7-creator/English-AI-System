@@ -1908,6 +1908,67 @@ export default defineConfig({
     ok('下の行き先 … 押すとその画面へ移る')
   }
 
+  /* ══ **Quick Response の表示は、単語帳と同じ**(2026-09 利用者の指定)══
+       > quick reponse内の表示だが、単語帳と同じにしてくれ
+
+     単語帳は**答えを同じ場所で入れ替える。** Quick Response は
+     「入るなら並べる」だったので、**開いたときの動きが違っていた。**
+
+     **見るのは2つ。** ①日本語と英語が同時に出ていないか(=入れ替え)
+     ②**押したあともボタンが動かないか。** ②を見ないと、
+     入れ替えても枠が伸びる形に書き換えたときに気づけない。
+     **長い英文で測る** —— 短い文では、足しても動かないので分からない。
+
+     **本物の置かれ方(集中モード)で測る。** 高さの決まりは置かれ方で
+     変わるので、裸の `<div>` に置いて測ると**壊れていても緑になる。**
+     実際、はじめ `div.app-main` に置いていたので 390px で 19px 動いたが、
+     それが「入れ物が本物と違うせい」なのか「本当に壊れている」のかを
+     切り分けるのに一手よけいにかかった(答えは**本当に壊れていた**)。 */
+  for (const w of [390, 1280]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qr`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.qr-card')
+    const before = await page.evaluate(() => {
+      const r = document.querySelector('.qr-answers').getBoundingClientRect()
+      const b = document.querySelector('.qr-body')
+      return {
+        答えの行: Math.round(r.top),
+        日本語: !!document.querySelector('.qr-ja'),
+        枠: Math.round(b.getBoundingClientRect().height),
+        中身: b.scrollHeight,
+      }
+    })
+    await page.locator('.qr-peek .btn').first().click()
+    await page.waitForTimeout(250)
+    const after = await page.evaluate(() => {
+      const r = document.querySelector('.qr-answers').getBoundingClientRect()
+      const b = document.querySelector('.qr-body')
+      return {
+        答えの行: Math.round(r.top),
+        日本語: !!document.querySelector('.qr-ja'),
+        英語: !!document.querySelector('.qr-en'),
+        枠: Math.round(b.getBoundingClientRect().height),
+        中身: b.scrollHeight,
+      }
+    })
+    const ずれ = Math.abs(after.答えの行 - before.答えの行)
+    if (!before.日本語 || !after.英語) {
+      ng(`QR ${w}px … 出題か答えが出ていない`)
+    } else if (after.日本語) {
+      ng(`QR ${w}px … 日本語と英語が同時に出ている`,
+        '単語帳と同じで、答えは同じ場所で入れ替える(足さない)')
+    } else if (ずれ > 1) {
+      ng(`QR ${w}px … 開いたらボタンが ${ずれ}px 動いた`
+        + `(枠 ${before.枠} → ${after.枠}px)`,
+        '出題の枠は**残りの高さ**を取る。中身なりに伸ばさない'
+        + '(`.qrfocus .qr-body { flex: 1 1 auto; max-height: none }`)')
+    } else {
+      ok(`QR ${w}px … 入れ替えで出て、ボタンは動かない`
+        + `(枠 ${before.枠}px・ボタン ${before.答えの行}px)`)
+    }
+  }
+
   /* ── **「AI が作っています」の1行は、教材の中に出る**(2026-09 利用者の問い)──
        > 音声や教材を「AIで作成してます」という注意書きはいらないのか？
 
