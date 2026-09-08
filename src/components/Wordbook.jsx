@@ -43,8 +43,13 @@ import {
   noteWordbookView, normWord, setWordStatus,
 } from '../lib/vocab.js'
 import {
-  QUIZ_FORMS, SESSION_SIZE, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
+  QUIZ_FORMS, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
 } from '../lib/wordQuiz.js'
+import ReviewScope from './ReviewScope.jsx'
+import {
+  SCOPES, loadScope, loadSize, saveScope, saveSize,
+  scopeCounts, scopePool, shouldRecord, takeCount, todayKey, isDueNow,
+} from '../lib/reviewScope.js'
 import { clozeAt } from '../lib/clozeSentence.js'
 import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
 import { shortDate } from '../lib/format.js'
@@ -78,11 +83,9 @@ const VIEWS = [
   //   > 積み上がりは一旦そこからは削除です。
 ]
 
-/** 今日(端末の日付)。「今日出すもの」を選ぶのに使う */
-const todayKey = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+/* **`todayKey` と `isDueNow` は `reviewScope.js` から来る**(2026-09)。
+   ここに同じものを書いていたが、Quick Response の復習でも同じ判定が要る。
+   **数え方を2通り持たない**(CLAUDE.md)。 */
 
 
 /** 出会った文。その語のところを太字に。伏せるときは下線に置き換える */
@@ -238,8 +241,18 @@ export default function Wordbook({
    * (利用者の言葉「そもそも集中モードというものをおかずに
    *  集中モードのように表示されるのが理想」)。
    * 「とじる」で一覧に戻れる。
+   *
+   * **既定は「まだ始めていない」に変えた**(2026-09 利用者の指定)。
+   *
+   *   > 結局ただランダムに出てくるだけですごく仕組みが分かりにくい。
+   *   > ここを意図をもって練習できるように変更したい。
+   *
+   * 開いた瞬間に出題が始まると、**何が出ているのかを選ぶ機会がない。**
+   * いまは範囲と語数の札(`ReviewScope`)を先に出し、押したらそのまま
+   * 集中モードに入る。**入口が2つになったわけではない** ——
+   * 「集中モードを開く」という段は、いまも1つも挟んでいない。
    */
-  const [running, setRunning] = useState(true)
+  const [running, setRunning] = useState(false)
   const [want, setWant] = useState('auto')      // 出題の形。auto は箱に合わせる
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
   /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
@@ -282,28 +295,36 @@ export default function Wordbook({
   /** 出題を組み直す合図。読み直したときだけ1つ進む */
   const [deal, setDeal] = useState(0)
   /**
-   * **おさらい**(2026-09 利用者の指定)。
+   * **出題範囲と、1回ぶんの語数**(2026-09 利用者の指定)。
    *
-   *   > 単語帳やクイックレスポンスを練習すると、一巡しただけで
-   *   > 「今日はもう出すものがありません」となってしまいます。
-   *   > 反復してランダムに出題するよう変更してください。
+   *   > 出題範囲の時系列での絞りかた(例:１週間以内・２週間以内…)、
+   *   > その時に復習したい単語やフレーズ、文章の個数だ。
    *
-   * ふだんの復習は**その日に出す語だけ**で組む(間隔をあけて出すため)。
-   * だから一巡すると空になり、そこで行き止まりになっていた。
+   * もとは**カレンダーで1日**しか選べず、語数は10で固定だった。
+   * 「先週ぜんぶ」を選ぶ道が、どこにも無かった。
    *
-   * **おさらいは、単語帳ぜんぶから10語をランダムに出す。**
-   * 期限は見ない。何度でも続けられる。
+   * 算段は `reviewScope.js`、見た目は `ReviewScope.jsx` **1か所**。
+   * Quick Response の復習とまったく同じものを使う。**書き写さない。**
    *
-   * 【間隔は動かさない】
-   *   おさらいで「覚えかけ」を押しても**箱も次に出す日も動かさない。**
-   *   動かすと、同じ日に何度も押すだけで 30 日先へ飛んでしまい、
-   *   **明日の復習が空になる** —— 反復したい人が、いちばん困る形になる。
-   *
-   *   **「まだ」だけは、いつでも記録する。** 思い出せなかったことは
-   *   確かな手がかりで、記録すれば翌日また出てくる。
-   *   **早く出す方へは動かしてよい。遅く出す方へは動かさない。**
+   * 【「おさらい」は、この札の「ぜんぶ」に吸収した】
+   *   あちらは「期限を見ずに、単語帳ぜんぶからランダム」で、
+   *   **`scope = 'all'` とまったく同じもの**である。
+   *   ボタンを別に置くと**同じことをするものが2つ**になる。
+   *   機能は消えていない —— これまでは**0件になるまで見えなかった**ので、
+   *   むしろ届きやすくなる。
    */
-  const [extra, setExtra] = useState(false)
+  const [scope, setScope] = useState(() => loadScope('word'))
+  const [size, setSize] = useState(() => loadSize('word'))
+  /** 始めたか。**札を選んでから始める**ので、開いた瞬間には出さない */
+  const [started, setStarted] = useState(false)
+  /**
+   * **この回で「覚えかけ」を記録した語。**
+   *
+   * 同じ範囲を続けて回したときに、同じ語を二度進めないための控え
+   * (`shouldRecord` の `already`)。読み直せば消える —— そのときには
+   * `due_on` が新しくなっているので、控えが無くても正しく判定できる。
+   */
+  const gradedRef = useRef(new Set())
   /* **選んだ語で、その場で教材を作る**(ここが循環の要)。
      トレーナーがゲストのカードから開いたときだけ使う。
      絞り込みを変えても選択は消さない(集めて教材にするため) */
@@ -377,20 +398,11 @@ export default function Wordbook({
     setPicked([])
   }, [learnerId])
 
-  /**
-   * 今日出すもの。
-   *
-   * **入れたばかりの語も、その日のうちに出す**(2026-09 実機)。
-   *
-   *   > 単語を手打ちで登録しても反映されません
-   *
-   * `mark_word()` は「まだ」を**翌日**に回す(間隔の決まりとしては正しい)。
-   * そのため手で入れた語は、入れた日には1回も出てこなかった。
-   * 本当の直しは 0030(初めて入る語はその日から)だが、
-   * **貼る前でも動く道を残す**(CLAUDE.md)。ここで入った日も見る。
-   */
-  const isDueNow = (r, today) => !r.due_on || r.due_on <= today
-    || String(r.added_at ?? '').slice(0, 10) === today
+  /* 「今日出すもの」の判定は **`isDueNow()`(`reviewScope.js`)1か所。**
+     入れたばかりの語もその日のうちに出す、という決まりもそちらにある
+     (2026-09 実機「単語を手打ちで登録しても反映されません」)。
+     Quick Response の復習でもまったく同じ判定が要るので、
+     **数え方を2通り持たない**(CLAUDE.md)。 */
 
   const shownRows = applyWordbookFilter(rows, filter)
 
@@ -441,39 +453,62 @@ export default function Wordbook({
     </p>
   ) : null
 
-  const narrowed = Boolean(
-    filter.day || filter.material || filter.field || filter.topic
-    /* **その教材の語だけ**に絞っているときは、期限で切らない(0047)。
-       20語のうち今日出るのが2語だと、押した人には
-       「その教材の語を練習する」に見えないためである */
-    || onlySet,
-  )
-
-  /* **答えるたびに組み直さない**(2026-09 実機で見つけた)。
-     以前はここの見張りに `rows` を入れていた。ところが答えると
-     `answer()` が答えた語を `rows` から外すので、**1語答えるたびに
-     10語が組み直されていた。** そのため
-     「1 / 10 語」から先へ進まず、`doneRef` も毎回空になるので
-     10語やり終えても結果が出ない。並びも毎回シャッフルされるため、
-     **押しても進んでいないように見える。**
-
-     組み直すのは「読み直したとき」と「絞り込みを変えたとき」だけにする。
-     いまの `rows` は控え(`rowsRef`)から読む。 */
+  /* **「その教材の語だけ」に絞っているときは、期限で切らない**(0047)。
+     20語のうち今日出るのが2語だと、押した人には
+     「その教材の語を練習する」に見えないためである。
+     いまは**範囲の札そのもの**が期限を見るかどうかを決めるので、
+     ここでは**開いた瞬間の札**を「ぜんぶ」にしておくだけでよい */
   useEffect(() => {
-    if (!isQuiz || loading) return
-    const today = todayKey()
-    const all = rowsRef.current
-    const pool = narrowed
-      ? applyWordbookFilter(all, filter)
-      /* **おさらいでは期限を見ない。** 単語帳ぜんぶから選ぶ */
-      : (extra ? all : all.filter((r) => isDueNow(r, today)))
-    setQueue(buildSession(pool, SESSION_SIZE, { shuffleAll: extra }))
+    setScope(onlySet ? 'all' : loadScope('word'))
+  }, [onlySet])
+
+  /** 絞り込みを当てたあとの一覧。**範囲の数え上げも出題も、ここから** */
+  const forScope = shownRows
+
+  /* **選んでいた札が0件になったら、押せる札へ移す。**
+     黙って空のまま置くと「出すものがありません」だけが残る
+     (`pickScene` と同じ作法・CLAUDE.md) */
+  const scopeN = scopeCounts(forScope, todayKey())
+  /** いま選んでいる範囲の残り。**札の数え上げと同じ道を通す**(2通り持たない) */
+  const restInScope = scopeN[scope] ?? 0
+  useEffect(() => {
+    if (!isQuiz || loading || forScope.length === 0) return
+    if ((scopeN[scope] ?? 0) > 0) return
+    const next = SCOPES.find((s) => (scopeN[s.id] ?? 0) > 0)
+    if (next) setScope(next.id)
+  }, [isQuiz, loading, forScope.length, scopeN[scope], scope])
+
+  /**
+   * **選んだ範囲から、選んだ語数だけ組む**(2026-09 利用者の指定)。
+   *
+   * **答えるたびに組み直さない**(2026-09 実機で見つけた)。
+   * 以前は `useEffect` の見張りに `rows` を入れていた。ところが答えると
+   * `answer()` が答えた語を `rows` から外すので、**1語答えるたびに
+   * 組み直されていた。**「1 / 10 語」から先へ進まず、結果も出なかった。
+   * いまの `rows` は控え(`rowsRef`)から読む。
+   *
+   * **並びは、期限で出すときだけ「まだ」を先にする。**
+   * 範囲で出すときは何度も回すものなので、まるごと混ぜないと
+   * **毎回おなじ「まだ」の語ばかり**が出る(おさらいで踏んだのと同じ)。
+   */
+  const start = useCallback(() => {
+    const pool = scopePool(applyWordbookFilter(rowsRef.current, filter), scope, todayKey())
+    setQueue(buildSession(pool, takeCount(size, pool.length), { shuffleAll: scope !== 'due' }))
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
     setPickedChoice(null)
-  }, [isQuiz, loading, deal, extra,
-    filter.day, filter.material, filter.field, filter.topic])
+    setStarted(true)
+    setRunning(true)
+  }, [filter.day, filter.material, filter.field, filter.topic, scope, size])
+
+  /* **読み直したあとは、そのまま次の回へ進む。**「つぎの ◯ 語」を押した人に、
+     もう一度「始める」を押させない(押すものが2つになる) */
+  useEffect(() => {
+    if (!isQuiz || loading || !started) return
+    if (queue.length || result) return
+    start()
+  }, [isQuiz, loading, started, deal])
   const card = isQuiz ? queue[0] : null
 
   /**
@@ -617,9 +652,17 @@ export default function Wordbook({
        **成功と失敗が、同じ見た目で終わってはいけない**(CLAUDE.md) */
     let e = null
     try {
-      /* **おさらいでは、遅く出す方へ動かさない**(上記)。
-         「まだ」は記録する(早く出す方なので、いつでも正しい) */
-      if (!extra || status === 'unknown') {
+      /* **記録するかどうかは `shouldRecord()` 1か所**(`reviewScope.js`)。
+         「まだ」はいつでも、それ以外は**期限が来ていて、この回でまだ
+         進めていないとき**だけ。**遅く出す方へは動かさない** ——
+         同じ範囲を1日に何度も回すと、明日の復習が空になるためである */
+      const ok = status !== 'unknown'
+      if (shouldRecord(ok, {
+        dueOn: row.due_on,
+        addedAt: row.added_at,
+        already: gradedRef.current.has(row.word_norm),
+      })) {
+        if (ok) gradedRef.current.add(row.word_norm)
         ;({ error: e } = await setWordStatus(row.word_norm, status,
           { kind: row.kind, learnerId }))
       }
@@ -828,13 +871,15 @@ export default function Wordbook({
               </>
             )}
           >
-            {dueNow > 0
+            {/* **選んだ範囲の残りから、選んだ語数だけ続ける。**
+                読み直してから組み直すので、箱が動いたぶんも映る */}
+            {restInScope > 0
               ? (
                 <button type="button" className="btn btn--primary" onClick={reload}>
-                  つぎの {Math.min(10, dueNow)} 語
+                  つぎの {takeCount(size, restInScope)} 語
                 </button>
               )
-              : <p className="hint">今日の分は終わりです。</p>}
+              : <p className="hint">この範囲は終わりです。</p>}
           </SessionResult>
         </div>
         </div>
@@ -848,55 +893,40 @@ export default function Wordbook({
         <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
       )}
 
-      {isQuiz && !loading && !result && !card && (
+      {isQuiz && !loading && !card && (
         /* **「ありません」と「読めていません」を、同じ見た目で終わらせない**
            (CLAUDE.md)。数え上げは表を直に見ているので、
            「復習 118」と出ているのに1語も出せないなら、それは
            **やり切ったのではなく、読めていない。** */
-        narrowed
+        rows.length === 0
           ? <p className="hint">その絞り込みに当てはまる語はありません。</p>
-          : dueNow > 0
-            ? (
-              <p className="notice notice--warn">
-                今日出す語が <strong>{dueNow} 語</strong>あるはずですが、
-                読み出せませんでした。しばらくしてから開き直してください。
-              </p>
-            )
-            : (
-              /* **行き止まりを作らない**(2026-09 利用者の指定)。
-                 > 一巡しただけで「今日はもう出すものがありません」と
-                 > なってしまいます。反復してランダムに出題するよう
-                 > 変更してください
+          : (
+            /* **いつのぶんを、何語ずつ**(2026-09 利用者の指定)。
+               Quick Response の復習とまったく同じ部品。**書き写さない。**
 
-                 やり切ったことは、まず伝える。そのうえで
-                 **続けたい人のための道**を、その場に置く。 */
-              <div className="wb-again">
-                <p className="hint">今日出すものはありません。よくできました。</p>
-                {rows.length > 0 && (
-                  <>
-                    <button type="button" className="btn btn--primary"
-                            onClick={() => { setExtra(true); setRunning(true) }}>
-                      <FocusIcon />おさらいをする(ランダム {SESSION_SIZE} 語)
-                    </button>
-                    <p className="card-hint">
-                      単語帳ぜんぶから、期限に関わらずランダムに出します。
-                      何度でも続けられます。
-                      <strong>「覚えかけ」を押しても、次に出す日は動きません</strong>
-                      (同じ日に何度も押して先へ飛ぶと、明日の復習が空になるため)。
-                      「まだ」だけは記録して、翌日また出します。
-                    </p>
-                  </>
-                )}
-              </div>
-            )
+               **「おさらい」のボタンは、この札の「ぜんぶ」に吸収した。**
+               あちらは「期限を見ずに単語帳ぜんぶからランダム」で、
+               `scope = 'all'` とまったく同じものである。
+               しかも**0件になるまで見えなかった**ので、
+               ここに常に出るほうが届きやすい(行き止まりも作らない)。 */
+            <ReviewScope
+              rows={forScope}
+              unit="語"
+              scope={scope}
+              size={size}
+              onScope={(id) => { setScope(id); saveScope('word', id) }}
+              onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
+              onStart={start}
+            />
+          )
       )}
 
       {/* **とじたあとの戻り道**(2026-09)。集中モードは画面ぴったりなので、
           出ていると一覧が見えない。出ていないときは、ここから入り直す */}
-      {isQuiz && !loading && !running && (card || result) && (
+      {isQuiz && !loading && !running && card && (
         <button type="button" className="btn btn--primary wb-start"
                 onClick={() => setRunning(true)}>
-          <FocusIcon />{extra ? 'おさらいをつづける' : '今日の復習をつづける'}
+          <FocusIcon />つづける
         </button>
       )}
 

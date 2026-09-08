@@ -7549,6 +7549,42 @@ html, body { overflow-x: clip; }
 }
 .wb-again .card-hint { margin: 0; max-width: 34em; }
 
+/* ── 復習の「いつのぶん・何問ずつ」(2026-09 利用者の指定)──────────
+   > 結局ただランダムに出てくるだけですごく仕組みが分かりにくい。
+   > …出題範囲の時系列での絞りかた…その時に復習したい…個数だ。
+   > これを直感的に選択できる仕組みを作り上げたい。
+
+   **直感的の核心は、数を札の中に出すこと。** 「1週間以内に23問ある」と
+   見えて初めて、範囲を選べる。だから札は `.chip` + `.chip-count` を
+   そのまま使い回す —— **ここで新しい配色を作らない**(CLAUDE.md)。 */
+.rscope { margin: 12px 0 0; }
+/* 欄の名前は**濃く・太く**、説明は薄いまま(CLAUDE.md の作法)。
+   大きさは 12px のまま —— ここを大きくすると帯が縦に伸びる */
+.rscope-head {
+  margin: 12px 0 4px; font-size: var(--fs-12); font-weight: 600;
+  color: var(--text-primary);
+}
+.rscope-head:first-child { margin-top: 0; }
+/* 札は**指で狙える大きさ**にする。`.chip` の既定(約31px)は、
+   ここでは**いちばん押すもの**なので少し大きくする */
+.rscope-chip { display: inline-flex; align-items: center; min-height: 36px; }
+/* **0件の札は押せない。ただし消えるほど薄くしない** ——
+   押せないことは分かってほしいが、そこに札があることも見えていてほしい
+   (右下の操作盤の三角と同じ考え方・CLAUDE.md) */
+.rscope-chip:disabled { opacity: 0.45; cursor: default; }
+/* **狭い画面では、札そのものを詰める**(2026-09 実測)。
+   8つの札は 390px で**3行(帯ぜんぶで 301px)**になり、
+   そのぶん「始める」が画面の下へ押し出されていた。
+   字を1段(13→12px)落として左右の余白を詰めると**2行**に収まる。
+   **押せる大きさ(36px)は割らない** —— 削るのは横だけである。
+   **名前は切らない**(「今日出す」を「今日」にしない・CLAUDE.md) */
+@media (max-width: 560px) {
+  .rscope-chip { padding: 5px 9px; font-size: var(--fs-12); }
+  .rscope .chip-count { margin-left: 3px; padding: 0 4px; }
+}
+.rscope .btn-row { margin-top: 12px; }
+.rscope-lead { margin: 8px 0 0; max-width: 34em; }
+
 /* ── 書いた答えと、その添削(2026-09 利用者の指定)─────────────────
    > ディスカッションや質問に対する回答をライティングで記入できるように
    > してください。その記入した内容を添削する機能を…

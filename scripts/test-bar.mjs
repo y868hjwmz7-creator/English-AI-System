@@ -840,9 +840,12 @@ for (const [label, want] of Object.entries(WANT)) {
     await page.setViewportSize({ width: w, height: h })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
       { waitUntil: 'networkidle' })
-    /* **入口をもう1つ挟まない**(CLAUDE.md)ので、語がそろえば
-       集中モードは**開いた瞬間から出る。** 押すものは無い */
+    /* **範囲と個数を選んでから始める形になった**(2026-09 利用者の指定)。
+       「集中モードを開く」という段は**いまも1つも挟んでいない** ——
+       押すのは「◯語を出す」で、そのまま集中モードに入る */
     try {
+      await page.waitForSelector('.rscope .btn--primary:not([disabled])', { timeout: 8000 })
+      await page.click('.rscope .btn--primary')
       await page.waitForSelector('.wbfocus .wordcard', { timeout: 8000 })
     } catch {
       ng(`${what} … 集中モードが開かない`, '語を読めていないか、開く道が変わった')
@@ -939,6 +942,12 @@ for (const [label, want] of Object.entries(WANT)) {
     `http://localhost:${PORT}/__bar.html?screen=wordbook&only=answer,engineer,quiet`,
     { waitUntil: 'networkidle' },
   )
+  /* 範囲と個数を選んでから始める(上と同じ)。**絞ったときは「ぜんぶ」**に
+     なるので、期限で切られず3語とも出る(0047 の決まり) */
+  try {
+    await page.waitForSelector('.rscope .btn--primary:not([disabled])', { timeout: 8000 })
+    await page.click('.rscope .btn--primary')
+  } catch { /* 下の待ちで赤くなる */ }
   try {
     await page.waitForSelector('.wbfocus .wordcard', { timeout: 8000 })
   } catch {
@@ -2382,6 +2391,98 @@ export default defineConfig({
   }
 
   await page.close()
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 復習の「いつのぶん・何問ずつ」(2026-09 利用者の指定)
+//
+//   > 結局ただランダムに出てくるだけですごく仕組みが分かりにくい。
+//   > …これを直感的に選択できる仕組みを作り上げたい。
+//
+// **描いて測る。** 8つの札が狭い画面で何行になるか、押せる大きさを
+// 割っていないか、0件の札が押せないかは、**ソースを読んでも分からない。**
+//
+// **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+// `?rows=old` は今日出すものが1つも無い状態で、そこでは札が押せない。
+// ══════════════════════════════════════════════════════════════════════
+{
+  const 測る = async (w, extra = '') => {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=rscope${extra}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.rscope', { timeout: 8000 })
+    const r = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.rscope .chiprow')]
+      const chips = [...document.querySelectorAll('.rscope-chip')]
+      const top = (el) => Math.round(el.getBoundingClientRect().top)
+      const 行数 = (row) => new Set([...row.querySelectorAll('.rscope-chip')].map(top)).size
+      const doc = document.documentElement
+      return {
+        高さ: Math.round(document.querySelector('.rscope').getBoundingClientRect().height),
+        範囲の行数: 行数(rows[0]),
+        札の数: chips.length,
+        低い札: Math.min(...chips.map((c) => Math.round(c.getBoundingClientRect().height))),
+        押せない札: chips.filter((c) => c.disabled).length,
+        数を出している: [...document.querySelectorAll('.rscope .chip-count')].length,
+        ボタン: document.querySelector('.rscope .btn--primary').textContent.trim(),
+        説明: document.querySelector('.rscope-lead').textContent.trim(),
+        横あふれ: doc.scrollWidth > doc.clientWidth,
+      }
+    })
+    await page.close()
+    return r
+  }
+
+  for (const w of [1280, 390, 375, 360, 320]) {
+    const r = await 測る(w)
+    /* **押せる大きさを割らない。** 狭い画面で詰めるときに削るのは
+       横だけである(CLAUDE.md「押せる大きさは割らない」) */
+    if (r.低い札 < 36) ng(`復習の範囲 ${w}px … 札が小さすぎる(${r.低い札}px)`)
+    else if (r.横あふれ) ng(`復習の範囲 ${w}px … 横にはみ出している`)
+    /* **数が札の中に出ているか。** ここが「直感的」の核心で、
+       消すと「1週間以内に何問あるか」が分からないまま選ぶことになる */
+    else if (r.数を出している < 8) {
+      ng(`復習の範囲 ${w}px … 札に数が出ていない(${r.数を出している} 個)`,
+        '「1週間以内に23問ある」と見えて初めて、範囲を選べる')
+    } else if (r.札の数 !== 13) {
+      ng(`復習の範囲 ${w}px … 札が 13 個(範囲8 + 個数5)ではない`, `${r.札の数} 個`)
+    /* **狭い画面で場所を取りすぎない。** 8つの札が3行になると帯だけで
+       301px になり、「始める」が画面の下へ押し出される(実測) */
+    } else if (w >= 360 && r.高さ > 270) {
+      ng(`復習の範囲 ${w}px … 帯が高すぎる(${r.高さ}px・${r.範囲の行数} 行)`,
+        '狭い画面では札を詰めて2行に収める')
+    } else {
+      ok(`復習の範囲 ${w}px … ${r.範囲の行数} 行・${r.高さ}px`
+        + `・札 ${r.低い札}px(${r.ボタン})`)
+    }
+  }
+
+  /* **0件の札は押せない**(効かない操作を見せない)。
+     「出ない」側を見ないと、**全部押せる形に壊しても緑のまま**になる */
+  const old = await 測る(390, '&rows=old')
+  if (old.押せない札 < 7) {
+    ng('復習の範囲 … 0件の札が押せてしまう', `押せない札 ${old.押せない札} 個`)
+  } else if (!old.ボタン.includes('ありません')) {
+    ng('復習の範囲 … 出すものが無いのに、始められる', old.ボタン)
+  } else {
+    ok(`復習の範囲 … 0件の札は押せない(${old.押せない札} 個)`)
+  }
+
+  /* **押す前に、何が起きるかを言う。** ここが
+     「仕組みが分かりにくい」への答えである */
+  const one = await 測る(390)
+  if (!one.説明.includes('今日出すぶんから出します')) {
+    ng('復習の範囲 … 押す前の説明が出ていない', one.説明)
+  } else ok('復習の範囲 … 押す前に、何が出るのかを1行で言う')
+
+  /* **画面が本当に使っているか。** 検証の入り口(`__screens.jsx`)だけ
+     直しても、利用者の画面は変わらない */
+  for (const f of ['Wordbook', 'QrReview']) {
+    const src = readFileSync(new URL(`../src/components/${f}.jsx`, import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<ReviewScope\b/.test(src)) ng(`復習の範囲 … ${f} が札を出していない`)
+    else ok(`復習の範囲 … ${f} が同じ札を出している`)
+  }
 }
 
 await browser.close()

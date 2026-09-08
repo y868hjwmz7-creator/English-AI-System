@@ -22,6 +22,7 @@
  *   `?role=trainer`        … トレーナーが「教材」画面から開いている
  *   `?role=learner&who=g1` … ゲスト自身が開いている
  */
+import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import LessonView from './components/LessonView.jsx'
 import SessionResult from './components/SessionResult.jsx'
@@ -32,6 +33,7 @@ import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
+import ReviewScope from './components/ReviewScope.jsx'
 import FocusFrame from './components/FocusFrame.jsx'
 import JobBar from './components/JobBar.jsx'
 import CastChip from './components/CastChip.jsx'
@@ -477,6 +479,46 @@ const qrScreen = (plain) => (
   </FocusFrame>
 )
 
+/* 復習の「いつのぶん・何問ずつ」(`?screen=rscope`・2026-09 利用者の指定)。
+
+     > 結局ただランダムに出てくるだけですごく仕組みが分かりにくい。
+     > …これを直感的に選択できる仕組みを作り上げたい。
+
+   **札そのものを、本物の部品と本物の CSS で測る。**
+   写した HTML では、狭い画面で何行になるかが分からない。
+
+   日付は**測る日から数えて**作る。決め打ちにすると、
+   日が変わった翌日に「1週間以内」が 0 件になって赤くなる。 */
+const RSCOPE = (() => {
+  const day = (n) => {
+    const d = new Date()
+    d.setDate(d.getDate() - n)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  const row = (n, dueIn) => ({
+    word_norm: `w${n}`,
+    added_at: `${day(n)}T09:00:00`,
+    due_on: day(-dueIn),
+  })
+  /* **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+     `?rows=old` は**ぜんぶ古くて、今日出すものが1つも無い**状態。
+     0件の札が押せなくなることを、ここで測る */
+  const rows = q.get('rows') === 'old'
+    // ぜんぶ半年より前。「ぜんぶ」以外はすべて0件になる
+    ? [row(300, 30), row(400, 30)]
+    // 今日が期限のもの2件 + 先取りをいろいろな日に
+    : [
+      row(0, 0), row(2, 0),
+      row(4, 30), row(9, 30), row(17, 30), row(40, 30), row(120, 30),
+    ]
+  return (
+    <section className="card">
+      <h2 className="card-title">復習</h2>
+      <RScopeDemo rows={rows} />
+    </section>
+  )
+})()
+
 /* 支度の帯(`?screen=jobbar&role=…`・2026-09 実機・利用者の指定)。
 
      > そもそもゲストには出さない(役割で判定する)
@@ -503,8 +545,21 @@ const JOBBAR = (
   />
 )
 
+function RScopeDemo({ rows }) {
+  const [scope, setScope] = useState('due')
+  const [size, setSize] = useState(10)
+  return (
+    <ReviewScope
+      rows={rows} unit="問" scope={scope} size={size}
+      onScope={setScope} onSize={setSize} onStart={() => {}}
+    />
+  )
+}
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'jobbar'
+  q.get('screen') === 'rscope'
+    ? RSCOPE
+    : q.get('screen') === 'jobbar'
     ? JOBBAR
     : q.get('screen') === 'qr'
     ? qrScreen(false)

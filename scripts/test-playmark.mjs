@@ -61,6 +61,10 @@ import {
   COMMON_HOBBY_SPEECH_SCENES, DIALOGUE_SCENES, SPEECH_SCENES,
   genresFor, sceneLabel, scenesFor, speechScenesFor,
 } from '../src/data/genres.js'
+import {
+  DEFAULT_SIZE, SCOPES, SIZES,
+  isDueOn, scopeCounts, scopeLead, scopePool, shouldRecord, takeCount,
+} from '../src/lib/reviewScope.js'
 import { readFileSync } from 'node:fs'
 
 let ng = 0
@@ -1360,8 +1364,11 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      出題・4択・数え上げのどれかが必ず食い違う */
   ok(/onlySet\s*\n?\s*\?\s*\(list\.data \?\? \[\]\)\.filter/.test(wb),
     '絞るのは読み込んだ直後の1か所')
-  // **期限で切らない。** 20語のうち今日出るのが2語では、練習にならない
-  ok(/\|\| onlySet,/.test(wb), 'その語だけのときは、期限で切らない')
+  /* **期限で切らない。** 20語のうち今日出るのが2語では、練習にならない。
+     2026-09 に**範囲の札**を入れたので、`narrowed` ではなく
+     **範囲を「ぜんぶ」にする**という形で同じことをしている */
+  ok(/setScope\(onlySet \? 'all' : loadScope\('word'\)\)/.test(wb),
+    'その語だけのときは、期限で切らない(範囲を「ぜんぶ」にする)')
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1935,6 +1942,111 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(app.includes('if (id === view) setNavTick'),
     'ゲストの控え … **同じ画面をもう一度押したときだけ**数える'
     + '(教材を見に行って戻るだけでは一覧に飛ばない)')
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 復習の「いつのぶん・何問ずつ」(2026-09 利用者の指定)
+//
+//   > 結局ただランダムに出てくるだけですごく仕組みが分かりにくい。
+//   > …出題範囲の時系列での絞りかた…その時に復習したい…個数だ。
+//
+// **算段は `reviewScope.js` 1か所。** 画面(`Wordbook` / `QrReview`)は
+// Supabase を引き連れていて素の node で走らせられないので、
+// ここで数字として見張る。
+// ══════════════════════════════════════════════════════════════════════
+{
+  console.log('\n▶ 復習の範囲と個数')
+
+  const T = '2026-08-30'
+  /** その日に入った1件を作る */
+  const row = (day, due = null) => ({
+    added_at: `${day}T09:00:00+09:00`, due_on: due, word_norm: `w-${day}-${due}`,
+  })
+  const rows = [
+    row('2026-08-30', '2026-08-30'),   // 今日入って、今日が期限
+    row('2026-08-28', '2026-08-30'),   // 2日前・今日が期限
+    row('2026-08-25', '2026-09-20'),   // 5日前・先取り
+    row('2026-08-20', '2026-09-20'),   // 10日前・先取り
+    row('2026-07-25', '2026-09-20'),   // 36日前
+    row('2026-03-01', '2026-09-20'),   // 半年に近い
+    { word_norm: 'old', added_at: null, due_on: '2026-09-20' }, // 出会った日が分からない
+  ]
+
+  const n = (id) => scopePool(rows, id, T).length
+  ok(n('due') === 2, '範囲 … 「今日出す」は期限が来ているものだけ', `${n('due')} 件`)
+  ok(n('d7') === 3, '範囲 … 「1週間」は7日前の日付以降', `${n('d7')} 件`)
+  ok(n('d14') === 4, '範囲 … 「2週間」', `${n('d14')} 件`)
+  ok(n('d30') === 4, '範囲 … 「1か月」(36日前は入らない)', `${n('d30')} 件`)
+  ok(n('d90') === 5, '範囲 … 「3か月」', `${n('d90')} 件`)
+  ok(n('all') === rows.length,
+    '範囲 … 「ぜんぶ」は期限も出会った日も見ない(いまの「おさらい」と同じ)')
+  ok(n('d182') === 6 && n('all') === 7,
+    '範囲 … **出会った日が分からない古い行は、時系列の札に入らない**'
+    + '(当てずっぽうで入れない)')
+
+  /* **数え上げと、実際に出るものが食い違わない。**
+     食い違うと「23 問あります」と書いてあるのに別の数が出る */
+  const counts = scopeCounts(rows, T)
+  ok(SCOPES.every((s) => counts[s.id] === scopePool(rows, s.id, T).length),
+    '範囲 … 札に出す数と、実際に出るものが**同じ道**を通っている')
+
+  // ── 個数 ───────────────────────────────────────────────
+  ok(takeCount(10, 23) === 10 && takeCount(30, 23) === 23,
+    '個数 … 選んだ数と、範囲にある数の**小さいほう**')
+  ok(takeCount('all', 23) === 23, '個数 … 「ぜんぶ」は範囲にあるだけ出す')
+  ok(SIZES.length === 5 && SIZES.includes(5) && SIZES.includes(10)
+    && SIZES.includes(20) && SIZES.includes(30) && SIZES.includes('all'),
+    '個数 … 5 / 10 / 20 / 30 / ぜんぶ(利用者の指定)')
+  ok(DEFAULT_SIZE === SESSION_SIZE,
+    '個数 … 既定は `SESSION_SIZE` から取る(同じ数を2か所に書かない)')
+
+  // ── 遅く出す方へは動かさない ─────────────────────────────
+  const due = { dueOn: '2026-08-30', addedAt: '2026-08-01T00:00:00Z' }
+  const ahead = { dueOn: '2026-09-20', addedAt: '2026-08-01T00:00:00Z' }
+  ok(shouldRecord(false, { ...ahead, today: T }) === true,
+    '記録 … **「まだ」はいつでも記録する**(早く出す方へ動かすだけ)')
+  ok(shouldRecord(true, { ...due, today: T }) === true,
+    '記録 … 「言える」は、期限が来ていればふつうどおり進む')
+  ok(shouldRecord(true, { ...ahead, today: T }) === false,
+    '記録 … **先取りでは進めない**(次に出る日を動かさない)')
+  ok(shouldRecord(true, { ...due, today: T, already: true }) === false,
+    '記録 … この回でもう進めたものは、二度進めない')
+  ok(shouldRecord(false, { ...due, today: T, already: true }) === true,
+    '記録 … それでも「まだ」は記録する')
+  /* **入れたばかりのものは、その日のうちに出す**(2026-09 実機の直し)。
+     ここが落ちると、手で入れた語が入れた日に1回も出てこない */
+  ok(isDueOn('2026-08-31', '2026-08-30T22:00:00+09:00', T) === true,
+    '記録 … 入れたばかりのものは、その日のうちに出す(0030 を貼る前の道)')
+
+  // ── 押す前に、何が起きるかを言う ────────────────────────
+  ok(scopeLead('d7', '問').includes('1週間以内に出会った問'),
+    '説明 … 押す前に、その札で何が出るのかを1行で言う')
+  ok(scopeLead('all', '語').includes('期限は見ません'),
+    '説明 … 「ぜんぶ」は期限を見ないことを、はっきり書く')
+
+  // ── 画面が本当に使っているか(定義だけあって誰も呼ばなければ同じ)──
+  const rs = readFileSync(new URL('../src/components/ReviewScope.jsx',
+    import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  ok(/disabled=\{n === 0\}/.test(rs),
+    '札 … **0件の札は押せない**(効かない操作を見せない)')
+  ok(rs.includes('<span className="chip-count">{n}</span>'),
+    '札 … **数を札の中に出す**(数が見えないと範囲を選べない)')
+
+  for (const [file, where, unit] of [
+    ['Wordbook', 'word', '語'], ['QrReview', 'qr', '問'],
+  ]) {
+    const src = readFileSync(new URL(`../src/components/${file}.jsx`,
+      import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    ok(/<ReviewScope/.test(src) && src.includes(`unit="${unit}"`),
+      `${file} … 同じ部品(ReviewScope)を使っている`)
+    ok(src.includes(`saveScope('${where}'`) && src.includes(`loadScope('${where}'`),
+      `${file} … 選んだ範囲を覚える(単語帳と Quick Response で別に)`)
+    ok(/shouldRecord\(/.test(src),
+      `${file} … 記録するかどうかを shouldRecord() に任せている`)
+    ok(!/\bsetExtra\(/.test(src),
+      `${file} … 「おさらい」の特別扱い(extra)は残っていない`)
+  }
 }
 
 console.log(ng

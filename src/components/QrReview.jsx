@@ -26,11 +26,16 @@
  *   トレーナーがゲストのページから開いたときは、そのゲストのもの。
  *   **見てよいかどうかは SQL(`qr_items`)が決める。** 画面で判定しない。
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   QR_ORDERS, loadQrReviews, markQr, orderQrPairs, qrPairOf, qrReviewSupported,
 } from '../lib/qrReviews.js'
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
+import ReviewScope from './ReviewScope.jsx'
+import {
+  SCOPES, loadScope, loadSize, saveScope, saveSize,
+  scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
+} from '../lib/reviewScope.js'
 import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
@@ -60,24 +65,36 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState({ day: null, material: null, field: null, topic: null })
   const [order, setOrder] = useState(loadOrder)
-  /** **今日出すぶんだけ**が既定。箱(間隔)を置いている意味がそこにある */
-  const [dueOnly, setDueOnly] = useState(true)
   /**
-   * **おさらい**(2026-09 利用者の指定・単語帳とまったく同じ考え方)。
+   * **出題範囲と、1回ぶんの個数**(2026-09 利用者の指定)。
    *
-   *   > 一巡しただけで「今日はもう出すものがありません」となってしまいます。
-   *   > 反復してランダムに出題するよう変更してください。
+   *   > 出題範囲の時系列での絞りかた…その時に復習したい単語やフレーズ、
+   *   > 文章の個数だ。これを直感的に選択できる仕組みを作り上げたい。
    *
-   * 溜まっている文ぜんぶから、期限に関わらずランダムに出す。
-   * **「言える」を押しても、次に出す日は動かさない** —— 同じ日に
-   * 何度も押して先へ飛ぶと、**明日の復習が空になる。**
-   * **「まだ」だけは記録する**(早く出す方へは、いつ動かしてもよい)。
+   * もとは「今日出すぶん / 溜まっているぶん全部」のプルダウン1つで、
+   * **1回ぶんの区切りが無かった。** 87問溜まっていれば87問続く
+   * (単語帳には10語で区切る決まりがあるのに、こちらで破っていた)。
+   *
+   * 算段は `reviewScope.js`、見た目は `ReviewScope.jsx` **1か所**。
+   * 単語帳とまったく同じものを使う。**書き写さない。**
+   * 選んだものは覚える(`eas.review.qr.*`)。
    */
-  const [extra, setExtra] = useState(false)
-  /** いま解いている一覧。`null` なら、まだ始めていない */
+  const [scope, setScope] = useState(() => loadScope('qr'))
+  const [size, setSize] = useState(() => loadSize('qr'))
+  /** いま解いている一覧(**この回のぶんだけ**)。`null` なら、まだ始めていない */
   const [run, setRun] = useState(null)
+  /** まだ出していない残り。「つづける」で次の区切りへ進む */
+  const [pending, setPending] = useState([])
   const [at, setAt] = useState(0)
   const [done, setDone] = useState([])
+  /**
+   * **この回で「言える」を記録した文。**
+   *
+   * 同じ範囲を続けて回したときに、同じ文を二度進めないための控えである
+   * (`shouldRecord` の `already`)。読み直せば消える —— そのときには
+   * `due_on` が新しくなっているので、控えが無くても正しく判定できる。
+   */
+  const gradedRef = useRef(new Set())
   /* **続けた記録と、週の目標**(0042・2026-09 利用者の指定)。
      単語帳と**同じ形**にそろえてある。**日ではなく週で数える** */
   const [week, setWeek] = useState(NO_WEEK)
@@ -106,25 +123,43 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayKey()
   /* 絞り込みは**手元で行う**(単語帳と同じ)。`qr_items()` は 500 件まで
      返しているので、選ぶたびに Supabase へ聞き直さない。待ち時間も費用も増えない */
-  const shown = useMemo(() => {
-    const list = applyWordbookFilter(rows, filter)
-    return dueOnly
-      ? list.filter((r) => String(r.due_on ?? '').slice(0, 10) <= today)
-      : list
-  }, [rows, filter, dueOnly, today])
+  const filtered = useMemo(() => applyWordbookFilter(rows, filter), [rows, filter])
+  /** いま選んでいる範囲にあてはまるもの。**数え上げと同じ道を通す** */
+  const shown = useMemo(() => scopePool(filtered, scope, today), [filtered, scope, today])
 
   const dueCount = rows.filter((r) => String(r.due_on ?? '').slice(0, 10) <= today).length
 
-  const start = (asExtra = false) => {
-    /* **おさらいは、溜まっているものぜんぶから混ぜて出す。**
-       期限も並び順の指定も見ない(何度も回すものなので、
-       同じ並びだと同じ文ばかりが出る) */
-    const list = asExtra ? applyWordbookFilter(rows, filter) : shown
-    setExtra(asExtra)
-    setRun(orderQrPairs(list.map(qrPairOf), asExtra ? 'shuffle' : order))
+  /* **選んでいた札が0件になったら、押せる札へ移す**(絞り込みを変えたとき)。
+     黙って空のまま置くと、「出すものがありません」だけが残って
+     何を押せばよいのか分からない(`pickScene` と同じ作法・CLAUDE.md) */
+  const counts = scopeCounts(filtered, today)
+  useEffect(() => {
+    if (busy || filtered.length === 0) return
+    if ((counts[scope] ?? 0) > 0) return
+    const next = SCOPES.find((s) => (counts[s.id] ?? 0) > 0)
+    if (next) setScope(next.id)
+  }, [busy, filtered.length, counts[scope], scope])
+
+  const start = () => {
+    const list = orderQrPairs(shown.map(qrPairOf), order)
+    const take = takeCount(size, list.length)
+    setRun(list.slice(0, take))
+    /* **残りは捨てない。**「つづける」で次の区切りへ進む。
+       ここで切り落とすと、「教材の順」を選んだ人は
+       **いつまでも先頭の10問しか出てこない** */
+    setPending(list.slice(take))
+    setAt(0)
+    setDone([])
+  }
+
+  /** 次の区切りへ。**読み直さない** —— 並びと残りをそのまま持っている */
+  const next = () => {
+    const take = takeCount(size, pending.length)
+    setRun(pending.slice(0, take))
+    setPending(pending.slice(take))
     setAt(0)
     setDone([])
   }
@@ -132,6 +167,8 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const stop = () => {
     stopReading()
     setRun(null)
+    setPending([])
+    gradedRef.current = new Set()
     // **答えた結果を映し直す。** 箱が動いているので、残り数が変わる
     reload()
   }
@@ -141,10 +178,19 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
     /* **押した手応えを返す。** 言えたらピンポン、まだなら低く1つだけ */
     answerFeedback(ok)
     /* 「まだ」は箱を 0 に戻して翌日、「言える」は箱を1つ上げる。
-       **何日後に出すかは SQL(`mark_qr`)が決める。** 画面には持たない */
-    /* **おさらいでは、遅く出す方へ動かさない**(上記)。
-       「まだ」は記録する(早く出す方なので、いつでも正しい) */
-    if (!extra || !ok) await markQr(card, ok ? 'learning' : 'unknown', { learnerId })
+       **何日後に出すかは SQL(`mark_qr`)が決める。** 画面には持たない
+
+       **記録するかどうかは `shouldRecord()` 1か所**(`reviewScope.js`)。
+       「まだ」はいつでも、「言える」は**期限が来ていて、この回でまだ
+       進めていないとき**だけ。**遅く出す方へは動かさない** ——
+       同じ範囲を1日に何度も回すと、明日の復習が空になるためである */
+    const key = card.key || card.en
+    if (shouldRecord(ok, {
+      dueOn: card.due_on, addedAt: card.added_at, today, already: gradedRef.current.has(key),
+    })) {
+      if (ok) gradedRef.current.add(key)
+      await markQr(card, ok ? 'learning' : 'unknown', { learnerId })
+    }
     setDone((d) => [...d, { ...card, ok }])
     setAt((i) => i + 1)
   }
@@ -210,11 +256,23 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
               extra={<GoalBar goal={goal.sentGoal} done={goal.sentDone} unit="文" />}
               missLead="上に出ているのが、言えなかった文です。また明日出ます。"
             >
+              {/* **行き止まりを作らない。** 範囲に残りがあれば、
+                  読み直さずにそのまま次の区切りへ進める(並びも保たれる) */}
               <div className="btn-row">
-                <button type="button" className="btn btn--primary" onClick={stop}>
+                {pending.length > 0 && (
+                  <button type="button" className="btn btn--primary" onClick={next}>
+                    つぎの {takeCount(size, pending.length)} 問
+                  </button>
+                )}
+                <button type="button"
+                        className={`btn ${pending.length > 0 ? 'btn--quiet' : 'btn--primary'}`}
+                        onClick={stop}>
                   おわる
                 </button>
               </div>
+              {pending.length > 0 && (
+                <p className="card-hint">この範囲に、あと {pending.length} 問あります。</p>
+              )}
             </SessionResult>
           </div>
         ) : (
@@ -319,47 +377,22 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
                 ))}
               </select>
             </label>
-            <label className="wbfilter-pick">
-              <span className="sr-only">どれを出すか</span>
-              <select value={dueOnly ? 'due' : 'all'}
-                      onChange={(e) => setDueOnly(e.target.value === 'due')}>
-                <option value="due">今日出すぶん</option>
-                <option value="all">溜まっているぶん全部</option>
-              </select>
-            </label>
           </div>
 
-          <div className="btn-row">
-            <button type="button" className="btn btn--primary"
-                    disabled={shown.length === 0} onClick={() => start(false)}>
-              {shown.length ? `はじめる(${shown.length} 問)` : '出すものがありません'}
-            </button>
-          </div>
-          {shown.length === 0 && (
-            /* **行き止まりを作らない**(2026-09 利用者の指定)。
-               やり切ったことは伝えたうえで、続けたい人の道をその場に置く */
-            <div className="wb-again">
-              <p className="hint">
-                {dueOnly
-                  ? '今日出すものはありません。よくできました。'
-                  : 'この絞り込みに当てはまる文がありません。'}
-              </p>
-              {rows.length > 0 && (
-                <>
-                  <button type="button" className="btn btn--primary"
-                          onClick={() => start(true)}>
-                    おさらいをする(ランダム {rows.length} 問)
-                  </button>
-                  <p className="card-hint">
-                    溜まっている文ぜんぶから、期限に関わらずランダムに出します。
-                    何度でも続けられます。
-                    <strong>「言える」を押しても、次に出す日は動きません</strong>
-                    (同じ日に何度も押して先へ飛ぶと、明日の復習が空になるため)。
-                    「まだ」だけは記録して、翌日また出します。
-                  </p>
-                </>
-              )}
-            </div>
+          {/* **いつのぶんを、何問ずつ**(2026-09 利用者の指定)。
+              単語帳とまったく同じ部品。**書き写さない** */}
+          <ReviewScope
+            rows={filtered}
+            unit="問"
+            scope={scope}
+            size={size}
+            onScope={(id) => { setScope(id); saveScope('qr', id) }}
+            onSize={(s) => { setSize(s); saveSize('qr', s) }}
+            onStart={start}
+          />
+
+          {shown.length === 0 && filtered.length === 0 && (
+            <p className="hint">この絞り込みに当てはまる文がありません。</p>
           )}
         </>
       )}
