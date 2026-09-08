@@ -20,17 +20,43 @@
  *   ・**走っているあいだだけ出す。** 終わったことは、お知らせ(`jobnote`)と
  *     メニューの青い丸が伝える。**同じことを3つ出さない**
  *   ・文言は `jobProgressLabel()` 1か所(作る画面のボタンと同じもの)
+ *
+ * 【ゲストには出さない】(2026-09 実機・利用者の指定)
+ *
+ *   ゲストの画面のいちばん上に、支度の帯が
+ *   「2026-09-04 / 食事の話 / 決まり文句 …  閉じる」として残っていた。
+ *
+ *   **教材を作るのも、支度を始めるのもトレーナーだけ**である
+ *   (`MaterialForm` と `TrainerMaterials` の2か所からしか始まらない)。
+ *   ところが**帯そのものには役割の判定が1つも無かった**ので、
+ *   トレーナーで開いたまま画面を読み込み直さずにゲストでログインし直すと、
+ *   帯だけが残っていた(帯の状態は画面の中にあり、読み込み直すまで消えない)。
+ *
+ *   「**ゲストには、仕組みの内側を見せない**」(CLAUDE.md)。
+ *   教材の名前も、支度の進み具合も、ゲストにできることが何も無い
+ *   スクールの内側の話である。
+ *
+ *   ・**判定は `canSeeSystemDetail()` 1か所**(`SupabaseStatus` と同じ作法)。
+ *     **既定は「見せない」**なので、役割が分からないうちも出ない
+ *   ・**部品の中に置く。** 呼ぶ側(`App.jsx`)に書くと、
+ *     置く場所が増えたときに必ずどこかが抜ける
+ *   ・**仕組みは1つも止めていない。** 支度も生成も裏で走ったまま。
+ *     消したのは**見せ方**だけである(残すのと、見せるのは別のこと)
  */
 import { cancelJob, jobProgressLabel, jobRatio } from '../lib/generateJob.js'
 import {
   cancelPrepare, clearPrepare, prepareLabel, prepareRatio,
 } from '../lib/prepareJob.js'
+import { canSeeSystemDetail } from '../lib/viewer.js'
 
 export default function JobBar({
   job, secs, onOpen, onPublish, showOpen = false,
   /** 発行したあとの「支度」(2026-09 利用者の指定)。`prepareJob.js` */
   prep = null, prepSecs = 0,
 }) {
+  /* 仕組みの内側の話なので、ゲストには出さない(既定は「見せない」) */
+  if (!canSeeSystemDetail()) return null
+
   /* ── 発行したあとの支度(音声と語の意味)──────────────────
    *
    *   > 初めて再生するときの待ち時間が３０秒近くあり、これは、教材が

@@ -2030,6 +2030,48 @@ export default defineConfig({
     ok('AI の断り … 色は変数から取っている')
   }
 
+  /* ══ **支度の帯は、ゲストには出さない**(2026-09 実機・利用者の指定)══
+       > そもそもゲストには出さない(役割で判定する)
+
+     ゲストの画面のいちばん上に、支度の帯が
+     「2026-09-04 / 食事の話 / 決まり文句 …  閉じる」として残っていた。
+     教材を作るのも支度を始めるのもトレーナーだけなのに、
+     **帯そのものには役割の判定が1つも無かった。**
+
+     **「出ない」だけを見ない** —— それだと**誰にも出さない形に壊しても
+     緑のまま**になる。トレーナーに出ることも一緒に数える。 */
+  await page.setViewportSize({ width: 390, height: 844 })
+  for (const [role, 出るべきか] of [['learner', false], ['trainer', true], ['owner', true]]) {
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=jobbar&role=${role}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(120)
+    const 出た = await page.evaluate(() => !!document.querySelector('.jobbar'))
+    const 教材名 = await page.evaluate(
+      () => document.querySelector('.jobbar-title')?.textContent ?? '')
+    if (出た !== 出るべきか) {
+      ng(`支度の帯 ${role} … ${出た ? '出ている' : '出ていない'}`,
+        出た
+          ? 'ゲストには仕組みの内側を見せない(教材の名前も、支度の進み具合も)'
+          : 'トレーナーには出す。**「出ない」だけを見ると、消しすぎても緑になる**')
+    } else if (出るべきか && !教材名.includes('食事の話')) {
+      ng(`支度の帯 ${role} … 出ているが、何の支度か分からない(${教材名})`)
+    } else {
+      ok(`支度の帯 ${role} … ${出た ? `出る(${教材名.slice(0, 20)}…)` : '出ない'}`)
+    }
+  }
+  /* 役割の判定を、部品の中に置いているか(呼ぶ側に書くと必ずどこかが抜ける)。
+     **説明の文には引っかからないよう、書いてある形で見る** */
+  {
+    const src = readFileSync(new URL('../src/components/JobBar.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')
+    if (!/if\s*\(!canSeeSystemDetail\(\)\)\s*return null/.test(src)) {
+      ng('支度の帯 … `canSeeSystemDetail()` で帰っていない',
+        '判定は1か所。**既定は「見せない」**(役割が分からないうちも出さない)')
+    } else {
+      ok('支度の帯 … 判定は `canSeeSystemDetail()` 1か所(部品の中)')
+    }
+  }
+
   /* ── 画面が本当に出しているか(検証だけが緑にならないように)──── */
   const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')

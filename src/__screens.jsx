@@ -33,6 +33,7 @@ import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import FocusFrame from './components/FocusFrame.jsx'
+import JobBar from './components/JobBar.jsx'
 import {
   BoltIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
   PrintIcon, RefreshIcon, ScreenIcon, TaskIcon,
@@ -421,8 +422,36 @@ const QR = (
   </FocusFrame>
 )
 
+/* 支度の帯(`?screen=jobbar&role=…`・2026-09 実機・利用者の指定)。
+
+     > そもそもゲストには出さない(役割で判定する)
+
+   **ゲストの画面のいちばん上に、支度の帯が残っていた。**
+   教材を作るのも支度を始めるのもトレーナーだけなのに、
+   帯そのものには役割の判定が1つも無かった。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+   「出ない」だけを見ると**誰にも出さない形に壊しても緑のまま**になる。
+   だから `?role=` を変えて2回描き、トレーナーには出ることも数える。
+
+   支度の中身は**終わった状態**にしてある —— 利用者の写真がその形で、
+   しかも「閉じる」を押すまで居座るぶん、いちばん目に触れる。 */
+const JOBBAR = (
+  <JobBar
+    job={null}
+    secs={0}
+    prep={{
+      state: 'done', title: '2026-09-04 / 食事の話 / 決まり文句',
+      audio: 'ok', words: 12,
+    }}
+    prepSecs={0}
+  />
+)
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'qr'
+  q.get('screen') === 'jobbar'
+    ? JOBBAR
+    : q.get('screen') === 'qr'
     ? QR
     : q.get('screen') === 'tabs'
     ? TABS
