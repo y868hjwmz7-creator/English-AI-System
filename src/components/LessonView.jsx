@@ -61,6 +61,7 @@ import useBodyAudio from '../lib/useBodyAudio.js'
 import { FIT_STAGES, overWrapping, useFitRow } from '../lib/fitRow.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../lib/playerPlace.js'
 import useDragBox from '../lib/dragBox.js'
+import { lockScroll } from '../lib/scrollLock.js'
 
 /** 本文のときだけ ◀ ▶ で挟む。**呼ぶ側に条件を書き散らさない** */
 
@@ -596,12 +597,8 @@ export default function LessonView({
     prefetchGlosses(texts, { level: material?.level })
   }, [page, sections, material?.level])
 
-  // 開いているあいだは、後ろの画面を動かさない
-  useEffect(() => {
-    const before = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = before }
-  }, [])
+  // 開いているあいだは、後ろの画面を動かさない(鍵は `scrollLock.js` 1か所)
+  useEffect(() => lockScroll(), [])
 
   // Esc で閉じる。左右の矢印でページを送る。
   //

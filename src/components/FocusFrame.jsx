@@ -34,6 +34,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CloseIcon, GearIcon } from './Icons.jsx'
 import { useFocusBoard } from './FocusBoard.jsx'
+import { lockScroll } from '../lib/scrollLock.js'
 
 /**
  * @param className  足すクラス(`stepfocus` / `qrfocus`)
@@ -75,11 +76,7 @@ export default function FocusFrame({
   /* 開いているあいだは、**うしろの画面を動かさない。**
      かぶせて開くメニュー(`AppNav`)と同じ作法。
      これが無いと、この画面の外側が指で送れてしまう */
-  useEffect(() => {
-    const before = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = before }
-  }, [])
+  useEffect(() => lockScroll(), [])
 
   return createPortal(
     /* `focus--sheet` … **紙がある集中モード**の印(2026-09 利用者の指定)。

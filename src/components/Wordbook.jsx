@@ -55,6 +55,7 @@ import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
 import { CloseIcon, FocusIcon } from './Icons.jsx'
+import { lockScroll } from '../lib/scrollLock.js'
 
 /**
  * 画面の切り替え(2026-08 利用者の指定・0027)。
@@ -494,9 +495,7 @@ export default function Wordbook({
      (`FocusReader` と同じ作法)。これが無いと外側が指で送れてしまう */
   useEffect(() => {
     if (!running || !isQuiz) return undefined
-    const before = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = before }
+    return lockScroll()
   }, [running, isQuiz])
 
   useEffect(() => {

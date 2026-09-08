@@ -1199,6 +1199,54 @@ export default defineConfig({
     } else {
       ok(`骨組み ${w}px … メニュー ${m.幅}px・印あり・帯に「${m.名前}」`)
     }
+
+    /* ── ☰ は、**送ったあとも押せる**(2026-09 実機・利用者の指摘)──────
+         > スクロールを始めるとサイドバーのハンバーガーが触れなくなる
+
+       上の帯は `position: sticky` で貼り付いている。ところが
+       `body` に `overflow: hidden` が**取り残される**と、
+       あそこが「送れる箱」に変わって**貼り付かなくなる**
+       (CLAUDE.md に書いてあるとおり)。すると帯ごと画面の外へ流れ出て、
+       ☰ に手が届かない。**端末によらない**(実測 上端 8px → −592px)。
+
+       だから**ここで両方を測る。**
+         ①ふつうに送ったとき … 貼り付いて、押せる
+         ②`hidden` が残ったとき … 押せなくなる(壊れ方そのものを確かめる)
+       ②が「押せる」に変わったら、この検証は用をなしていない */
+    const s = await page.evaluate(() => {
+      const host = document.querySelector('.app')
+      const tall = document.createElement('div')
+      tall.style.height = '3000px'
+      tall.dataset.probe = '1'
+      host.appendChild(tall)
+      const btn = document.querySelector('.app-topbar .nav-icon-btn')
+      const look = () => {
+        const se = document.scrollingElement
+        se.scrollTop = 600; window.scrollTo(0, 600)
+        const r = btn.getBoundingClientRect()
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+        return { 上端: Math.round(r.top), 押せる: !!(hit && btn.contains(hit)) }
+      }
+      const 素直 = look()
+      document.scrollingElement.scrollTop = 0; window.scrollTo(0, 0)
+      document.body.style.overflow = 'hidden'
+      const 取り残し = look()
+      document.body.style.overflow = ''
+      tall.remove()
+      return { 素直, 取り残し }
+    })
+    if (!s.素直.押せる) {
+      ng(`☰ ${w}px … 送ったあと押せない(帯の上端 ${s.素直.上端}px)`,
+        '上の帯が貼り付いていない。`body` に `overflow: hidden` が'
+        + ' 取り残されていないか(鍵は `src/lib/scrollLock.js` 1か所)')
+    } else if (s.取り残し.押せる) {
+      ng(`☰ ${w}px … \`overflow: hidden\` が残っても押せてしまう`,
+        'この検証が壊れ方を捕まえられていない。'
+        + '**押せることだけを見ると、貼り付きが外れても気づけない**')
+    } else {
+      ok(`☰ ${w}px … 送っても押せる(上端 ${s.素直.上端}px)`
+        + `・hidden が残ると押せなくなる(${s.取り残し.上端}px)`)
+    }
   }
   await page.close()
   drop2()

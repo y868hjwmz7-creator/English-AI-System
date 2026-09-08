@@ -3210,6 +3210,12 @@ html, body { overflow-x: clip; }
   color: var(--text-primary); text-decoration: none; text-align: left;
 }
 .learner-name:hover, .learner-name:focus-visible { text-decoration: underline; }
+/* **開いているあいだは、ただの見出しに戻す**(2026-09 実機・利用者の指摘)。
+   ここは名前でいちばん大きい字なので、画面共有中に触れただけで
+   一覧へ飛んでいた。押せなくなるので、指の形も下線も出さない。
+   **見た目(大きさ・太さ・色)は1ドットも変えない** */
+.learner-name.is-open { cursor: default; }
+.learner-name.is-open:hover { text-decoration: none; }
 /* ── 過去の宿題の一覧 ──────────────────────────────────────
    【なぜ枠で囲うのか】(2026-08 の指摘)
 

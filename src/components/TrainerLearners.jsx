@@ -5,8 +5,9 @@
  * 最新の TOEIC / VERSANT が一目で分かるようにする。
  * レベルの物差しは教材と同じ CEFR にそろえてある。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, cefrOption, scoreTestLabel } from '../data/cefr.js'
+import { lastLearner, rememberLearner } from '../lib/lastLearner.js'
 import {
   addLearnerScore, createAccount, kindLabel, loadLearnerAssignments,
   eraseLearner, loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
@@ -52,7 +53,12 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [message, setMessage] = useState(null)
-  const [openId, setOpenId] = useState(null)
+  /* **開いているゲスト。控えは `lastLearner.js` 1か所**(2026-09 実機)。
+     ほかの画面へ移るとこの部品ごと外れるので、`useState` だけだと
+     戻ってきたときに一覧に立っている。**設定ではなく居場所**なので、
+     端末には残さない(読み込み直せば消える) */
+  const [openId, setOpenIdRaw] = useState(null)
+  const setOpenId = useCallback((id) => { rememberLearner(id); setOpenIdRaw(id) }, [])
   /* 記録をすべて消すとき(0041)。**名前を打ち込ませる**ので、
      どのゲストの、いま何を入力しているかまで覚える */
   const [erasing, setErasing] = useState(null)
@@ -129,6 +135,14 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   }
   useEffect(() => { reload() }, [])
 
+  /* 控えていたゲストが、いまの担当から外れていることがある(退会・担当替え)。
+     そのときは**黙って一覧へ戻す** —— 絞り込むと0件になり、
+     「← ゲストの一覧に戻る」だけが浮いた白い画面が残る */
+  useEffect(() => {
+    if (loading || !openId) return
+    if (!learners.some((l) => l.id === openId)) setOpenId(null)
+  }, [loading, learners, openId, setOpenId])
+
   /**
    * **メニューの「ゲスト」をもう一度押したら、一覧へ戻す**(2026-08 利用者の指定)。
    *
@@ -137,9 +151,15 @@ export default function TrainerLearners({ me, navTick = 0 }) {
    *
    * いまいる画面をもう一度押しても `view` は変わらないので、
    * App は**押された回数**(`navTick`)で知らせてくる。
-   * 最初の描画でも動くが、そのときは開いているものが無いので何も起きない。
+   * **App が数えるのは「同じ画面をもう一度押したとき」だけ**なので、
+   * 教材を見に行って戻ってきただけでは、ここは動かない(2026-09 実機)。
+   *
+   * **最初の描画では動かさない**(`first`)。開いていたゲストを
+   * 開き直す(下の `useEffect`)ので、そこで打ち消してしまう。
    */
+  const first = useRef(true)
   useEffect(() => {
+    if (first.current) { first.current = false; return }
     setOpenId(null)
     setLessonOf(null)
   }, [navTick])
@@ -245,6 +265,17 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     })
     setDetailBusy(false)
   }
+
+  /* **開いていたゲストのまま戻る**(2026-09 実機・利用者の指定)。
+     ほかの画面から戻ってきたときは、名前を探し直させない。
+     **開くのは `openDetail` に任せる** —— 中身(スコア・宿題・目標)を
+     読み込むのはあちらなので、`openId` だけ戻しても欄が空のままになる。
+     一覧に戻る道(メニューの「ゲスト」・「← 一覧に戻る」・「閉じる」)は
+     どれも `setOpenId(null)` を通り、控えも一緒に消える */
+  useEffect(() => {
+    const back = lastLearner()
+    if (back) openDetail(back)
+  }, [])
 
   /**
    * 週の目標を決める(0042)。
@@ -501,10 +532,20 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     > ゲスト名と「受講中」というアイコンが近すぎます。
                     名前そのものも押せる(開く道は下のボタンにもある) */}
                 <div className="learner-head">
-                  <button type="button" className="learner-name"
-                          onClick={() => (openId === l.id ? setOpenId(null) : openDetail(l.id))}>
-                    {l.display_name}
-                  </button>
+                  {/* **開いているあいだは、名前で閉じない**(2026-09 実機)。
+                      ここは見出しでいちばん大きい字(20px 太字)なので、
+                      画面共有中に触れただけで一覧へ飛んでいた。
+                        > 何か一つ間違えるとすぐにゲスト一覧に飛んでしまい
+                      閉じる道は「← ゲストの一覧に戻る」と下の「閉じる」の
+                      2つ残る。**行き止まりにはならない** */}
+                  {openId === l.id ? (
+                    <span className="learner-name is-open">{l.display_name}</span>
+                  ) : (
+                    <button type="button" className="learner-name"
+                            onClick={() => openDetail(l.id)}>
+                      {l.display_name}
+                    </button>
+                  )}
                   <span className={`badge ${STATUS[l.status]?.cls ?? ''}`}>
                     {STATUS[l.status]?.label ?? l.status}
                   </span>

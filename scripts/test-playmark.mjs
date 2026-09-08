@@ -42,6 +42,8 @@ import {
   marksFromTimes, sentenceShares, sentenceTimesOf, wordSpans,
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
+import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
+import { lastLearner, rememberLearner } from '../src/lib/lastLearner.js'
 import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import { spanForRange } from '../src/lib/wholeAudio.js'
 import { ABBREVIATIONS, splitSentences } from '../src/lib/wordTiming.js'
@@ -1849,6 +1851,90 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '**次の段落の控えも温めておく**(段落の切れ目で待たせない)')
   ok(ac.includes('marksFromTimes(body, charTimesOf(alignment, body))'),
     '`playClip` が、控えがあれば見積もらない')
+}
+
+/* ══════════════════════════════════════════════════════════════
+   うしろを送れなくする鍵は、**数える**(2026-09 実機・利用者の指摘)
+
+     > スクロールを始めるとサイドバーのハンバーガーが触れなくなる
+
+   画面ぜんぶを覆うものが4つあり(かぶせて開くメニュー・レッスン表示・
+   集中モード・単語帳の集中モード)、**それぞれが勝手に `body` の
+   `overflow` を控えて戻していた。** 入れ子になると `hidden` が
+   取り残され、`position: sticky` が効かなくなって
+   **上の帯ごと ☰ が画面の外へ流れ出る**(実測 上端 8px → −592px)。
+   ══════════════════════════════════════════════════════════════ */
+{
+  const fake = { body: { style: { overflow: '' } } }
+  const has = () => fake.body.style.overflow
+
+  ok(lockDepth() === 0, '鍵 … はじめは1枚も掛かっていない')
+
+  const a = lockScroll(fake)
+  ok(has() === 'hidden' && lockDepth() === 1, '鍵 … 1枚めで送れなくなる')
+  const b = lockScroll(fake)
+  ok(has() === 'hidden' && lockDepth() === 2, '鍵 … 2枚めも重ねて掛かる')
+
+  /* **ここが本命。** 外す順が入れ替わっても、最後は元へ戻る ——
+     単語帳の復習を開いた状態で ☰ を開き、メニューから別の画面へ移ると
+     この順になる(先に開いたほうが先に外れる) */
+  a()
+  ok(has() === 'hidden' && lockDepth() === 1,
+    '鍵 … **逆順で外しても**、まだ1枚残っているあいだは送れないまま')
+  b()
+  ok(has() === '' && lockDepth() === 0,
+    '鍵 … **最後の1枚が外れたときだけ元へ戻る**(hidden が取り残されない)')
+
+  a(); b()
+  ok(has() === '' && lockDepth() === 0, '鍵 … 二度外しても数がずれない')
+
+  /* 元が空でないときも、**その値へ戻す**(勝手に空にしない) */
+  fake.body.style.overflow = 'auto'
+  const c = lockScroll(fake)
+  const d = lockScroll(fake)
+  d(); c()
+  ok(has() === 'auto', '鍵 … 元の値が空でなくても、そこへ戻す')
+
+  ok(typeof lockScroll(null) === 'function' && lockDepth() === 0,
+    '鍵 … `document` が無くても落ちない(素の node でも読み込める)')
+
+  /* **画面が自前で `body` を触っていないか。**
+     ここが1つでも残ると、また同じ取り残しが起きる */
+  for (const f of ['AppNav', 'FocusFrame', 'Wordbook', 'LessonView']) {
+    const src = readFileSync(new URL(`../src/components/${f}.jsx`, import.meta.url), 'utf8')
+    ok(!src.includes('body.style.overflow'),
+      `鍵 … ${f} は自前で \`body\` を触っていない`)
+    ok(src.includes('lockScroll()'), `鍵 … ${f} は \`lockScroll()\` を呼んでいる`)
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   開いていたゲストのまま戻る(2026-09 実機・利用者の指摘)
+
+     > 何か一つ間違えるとすぐにゲスト一覧に飛んでしまい、
+     > ゲストと画面共有中に非常にやりにくい
+   ══════════════════════════════════════════════════════════════ */
+{
+  rememberLearner(null)
+  ok(lastLearner() === null, 'ゲストの控え … はじめは空(一覧から始まる)')
+  rememberLearner('abc')
+  ok(lastLearner() === 'abc', 'ゲストの控え … 開いた人を覚える')
+  rememberLearner(null)
+  ok(lastLearner() === null, 'ゲストの控え … 一覧に戻ったら忘れる')
+
+  const src = readFileSync(new URL('../src/components/TrainerLearners.jsx',
+    import.meta.url), 'utf8')
+  ok(src.includes('rememberLearner(id); setOpenIdRaw(id)'),
+    'ゲストの控え … **開け閉めの5か所すべて**が控えを通る(1か所で包む)')
+  ok(/const back = lastLearner\(\)[\s\S]{0,40}openDetail\(back\)/.test(src),
+    'ゲストの控え … 戻ってきたら `openDetail` で**中身ごと**開き直す')
+  ok(!src.includes("openId === l.id ? setOpenId(null) : openDetail(l.id)"),
+    'ゲストの控え … **名前をもう一度押しても閉じない**(誤タップの元だった)')
+
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  ok(app.includes('if (id === view) setNavTick'),
+    'ゲストの控え … **同じ画面をもう一度押したときだけ**数える'
+    + '(教材を見に行って戻るだけでは一覧に飛ばない)')
 }
 
 console.log(ng

@@ -25,6 +25,7 @@
  */
 import { useEffect, useRef } from 'react'
 import { CloseIcon, MenuIcon } from './Icons.jsx'
+import { lockScroll } from '../lib/scrollLock.js'
 
 /**
  * **青い小さな丸**(2026-09 利用者の指定)。
@@ -59,11 +60,12 @@ export default function AppNav({
 
   // かぶせて開いているあいだは、後ろの画面を動かさない。
   // 動くと「どっちを触っているのか」が分からなくなる。
+  // **鍵は `scrollLock.js` 1か所。** 自前で `body` を触らない ——
+  // 4か所がそれぞれ控えて戻していたので、入れ子になると
+  // `hidden` が取り残され、**上の帯が貼り付かなくなっていた**(2026-09 実機)
   useEffect(() => {
     if (!drawer) return undefined
-    const before = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = before }
+    return lockScroll()
   }, [drawer])
 
   // Esc で閉じる。**開いているものから閉じる**(画面ごと閉じない)
