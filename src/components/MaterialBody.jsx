@@ -26,6 +26,7 @@
  *   `printElement(document.getElementById(...))` で紙に出せる。
  *   紙用の見出し(`print-only`)もここに入っている。
  */
+import AiNote from './AiNote.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -175,6 +176,11 @@ export default function MaterialBody({
             </section>
           )
         })}
+      {/* **AI が作っていることを、教材の中で1行だけ言う**
+          (2026-09 利用者の問い)。ここは**刷った用紙**にも出る ——
+          その紙もゲストの手に渡る。文言は `AiNote.jsx` 1か所 */}
+      <AiNote />
+
       {/* Quick Response の控え。**紙のいちばん後ろに置く**
           (2026-09 利用者の指定)。画面には出さない(`print-only`)。
           紙は教材まるごとの控えなので、レッスン表示と同じものを出す */}

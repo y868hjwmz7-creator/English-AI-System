@@ -19,6 +19,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   countLabel, countUnit, exerciseType, isPassageSection, noteIsAnswer, sectionLabel,
 } from '../data/exerciseTypes.js'
+import AiNote from './AiNote.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
 import { loadEnglishVoices } from '../lib/speech.js'
@@ -1470,6 +1471,16 @@ export default function LessonView({
             **描いてから隠す**(`is-closed`)。紙用の指定が
             `display: block` に戻す。 */}
         {sections.map((sec, si) => renderSection(sec, si))}
+
+        {/* **AI が作っていることを、教材の中で1行だけ言う**
+            (2026-09 利用者の問い「音声や教材を『AIで作成してます』という
+            注意書きはいらないのか？」)。
+
+            **読むもののそばに置く** —— 変な英文に出会ったその場で、
+            トレーナーに訊けばよいと分かる。画面のいちばん上に居座る帯は、
+            まさにこの回で外したところなので、**作り直さない。**
+            文言は `AiNote.jsx` 1か所(出す場所は2つある) */}
+        <AiNote />
 
         {/* Quick Response の控え。**紙のいちばん後ろに置く**
             (2026-09 利用者の指定「ページは一番後ろで大丈夫です」)。

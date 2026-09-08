@@ -1248,6 +1248,48 @@ export default defineConfig({
         + `・hidden が残ると押せなくなる(${s.取り残し.上端}px)`)
     }
 
+    /* **メニューを開いた状態でも貼り付くか**(2026-09 実機・利用者の指摘
+         「PCでは相変わらず下にスクロールすると上部バーが消えてしまい
+         『ハンバーガー』が消えてしまいます」)。
+       前の検証は**既定の状態しか見ていなかった** —— PC では
+       メニューを開いて使うことが多く、そこは一度も測っていない */
+    /* **かぶせて開く幅(768px 未満)では測らない。** あそこは
+       開いているあいだ、うしろの画面をわざと動かさない(`lockScroll`)ので、
+       「送っても押せる」を問うこと自体が的外れである */
+    const opened = w < 768 ? null : await page.evaluate(() => {
+      const burger = document.querySelector('.app-topbar .nav-burger')
+      if (!burger) return null
+      burger.click()
+      return true
+    })
+    if (opened) {
+      await page.waitForTimeout(250)
+      const s2 = await page.evaluate(() => {
+        const tall = document.createElement('div')
+        tall.style.height = '3000px'
+        document.querySelector('.app').appendChild(tall)
+        const btn = document.querySelector('.app-topbar .nav-burger')
+        document.scrollingElement.scrollTop = 600
+        window.scrollTo(0, 600)
+        const r = btn.getBoundingClientRect()
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+        const out = { 上端: Math.round(r.top), 押せる: !!(hit && btn.contains(hit)) }
+        document.scrollingElement.scrollTop = 0
+        window.scrollTo(0, 0)
+        tall.remove()
+        return out
+      })
+      // もとに戻す(次の幅の測りに引きずらない)
+      await page.evaluate(() => document.querySelector('.app-topbar .nav-burger')?.click())
+      await page.waitForTimeout(200)
+      if (!s2.押せる) {
+        ng(`☰ ${w}px(メニューを開いた状態)… 送ったあと押せない(上端 ${s2.上端}px)`,
+          'PC ではメニューを開いて使うことが多い。その状態でも貼り付くこと')
+      } else {
+        ok(`☰ ${w}px(メニューを開いた状態)… 送っても押せる(上端 ${s2.上端}px)`)
+      }
+    }
+
     /* **画面のいちばん上に、読まないものを置かない**(2026-09 利用者の指定)。
 
          > 上部のsupabaseと試作版うんぬん、、をたたむ。というくだりを
@@ -1859,6 +1901,67 @@ export default defineConfig({
     ng(`下の行き先 … 押しても移らない(${picked ?? 'なし'} / qr)`)
   } else {
     ok('下の行き先 … 押すとその画面へ移る')
+  }
+
+  /* ── **「AI が作っています」の1行は、教材の中に出る**(2026-09 利用者の問い)──
+       > 音声や教材を「AIで作成してます」という注意書きはいらないのか？
+
+     **画面のいちばん上の帯に戻さない。** まさにこの回で外したところである。
+     読むもののそばに、静かに1行だけ置く。
+     **色は紙の変数から取る**(値を直に書くと、暗い配色の紙で黒に黒になる) */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=learner&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForSelector('.lesson-sheet')
+  const ai = await page.evaluate(() => {
+    const el = document.querySelector('.ai-note')
+    if (!el) return { 無い: true }
+    const cs = window.getComputedStyle(el)
+    const paper = window.getComputedStyle(document.querySelector('.lesson-sheet'))
+    const num = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).map(Number)
+    const [r, g, bl] = num(cs.color)
+    const [pr, pg, pb] = num(paper.backgroundColor)
+    return {
+      文: el.textContent.replace(/\s+/g, ''),
+      // **紙の地色と、読めるだけ離れているか**(黒い紙に黒い文字を作らない)
+      差: Math.abs(r - pr) + Math.abs(g - pg) + Math.abs(bl - pb),
+      大きさ: Math.round(parseFloat(cs.fontSize)),
+      上に居る: !!el.closest('.app-topbar'),
+    }
+  })
+  if (ai.無い) {
+    ng('AI の断り … 教材の中に出ていない', '読むもののそばに1行だけ置く')
+  } else if (!ai.文.includes('AIが作っています') || !ai.文.includes('トレーナーに知らせて')) {
+    ng(`AI の断り … 文言が違う(${ai.文})`,
+      '「AI が作っています」だけでは、読んだ人にできることが無い')
+  } else if (ai.上に居る) {
+    ng('AI の断り … 画面のいちばん上の帯に出ている',
+      'まさにこの回で外したところである。作り直さない')
+  } else if (ai.差 < 60) {
+    ng(`AI の断り … 紙の地色と近すぎて読めない(差 ${ai.差})`,
+      '色は紙の変数から取る(値を直に書くと、暗い紙で黒に黒になる)')
+  } else if (ai.大きさ > 13) {
+    ng(`AI の断り … 本文より先に目が行く大きさ(${ai.大きさ}px)`)
+  } else {
+    ok(`AI の断り … 教材の中に静かに1行(${ai.大きさ}px・紙との差 ${ai.差})`)
+  }
+
+  /* **色を決め打ちしていないか**は、描いて測っても分からない ——
+     明るい紙の上では、黒く決め打ちしても「読める」ので通ってしまう
+     (実際に `#1c1c1a` に戻して、緑のままだった)。
+     **書いてある形で見る。** 紙は配色の島なので、値を直に書くと
+     暗い側で黒に黒になる(CLAUDE.md) */
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+  const block = css.match(/\.ai-note \{[^}]*\}/)?.[0] ?? ''
+  const decls = [...block.matchAll(/(color|border-top-color)\s*:\s*([^;]+);/g)]
+  const 直書き = decls.filter(([, , v]) => !v.includes('var(')).map(([, k]) => k)
+  if (!block) {
+    ng('AI の断り … `.ai-note` の指定が無い')
+  } else if (直書き.length) {
+    ng(`AI の断り … 色を決め打ちしている(${直書き.join(' / ')})`,
+      '紙は配色の島である。値を直に書くと、暗い側で黒い紙に黒い文字になる')
+  } else {
+    ok('AI の断り … 色は変数から取っている')
   }
 
   /* ── 画面が本当に出しているか(検証だけが緑にならないように)──── */

@@ -425,6 +425,28 @@ body {
    **足さないと、いちばん下の行が帯に隠れて読めない** */
 .app-shell.has-tabs .app { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 
+/* ── 「この教材は AI が作っています」の1行(2026-09 利用者の問い)──────
+   **添え物なので、本文より先に目が行ってはいけない。**
+   一段小さく、うすく、上に細い線1本だけで区切る。
+
+   **色は変数から取る。** ここは紙(`.lesson-sheet` / `.focus-paper`)の
+   中にも置かれる —— 値を直に書くと、暗い配色の集中モードで
+   **黒い紙に黒い文字**になる(CLAUDE.md)。
+   `--ink-faint` / `--rule` は紙が差し替え、紙の外では控えが効く。
+
+   **紙にも刷る**(`no-print` にしない)。刷った用紙もゲストの手に渡る。 */
+.ai-note {
+  margin: 20px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule, var(--border));
+  color: var(--ink-faint, var(--text-muted));
+  font-size: var(--fs-12); line-height: 1.6;
+}
+@media print {
+  /* 紙のうすい灰色は消えかける。**紙で読める濃さに引き直す**(CLAUDE.md) */
+  .ai-note { border-top-color: #999; color: #333; }
+}
+
 /* 絵だけのボタン。**指で押せる大きさ(44px)を割らない** */
 .nav-icon-btn {
   flex: 0 0 auto;
