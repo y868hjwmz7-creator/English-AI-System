@@ -139,16 +139,31 @@ export default function WordbookAdd({
                     disabled={busy || !norm} onClick={add}>
               {busy ? '入れています…' : `${whose}に入れる`}
             </button>
+            {/* **「やめる」を、入れるボタンのとなりに置く**
+                (2026-09 実機・利用者の指摘)。
+
+                  > 自分で単語帳に書き込みをしようとすると、
+                  > 戻るボタンがないのが困ります。
+
+                閉じる道は上の「手で入れるのをやめる」にもあるのだが、
+                **入力欄まで送ると、そこは画面の外**である。
+                「読み上げ音声を作り直す」でまったく同じ指摘を受けている
+                (「今はないので戻れません」)——
+                **押した場所のすぐ下に、そのままの言葉で置く**(CLAUDE.md) */}
+            <button type="button" className="btn btn--ghost"
+                    disabled={busy} onClick={() => setOpen(false)}>
+              やめる
+            </button>
           </div>
 
           {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
               うまくいったかどうかが、その場で分かるようにする */}
           {note && <p className="notice notice--ok wb-add-note">{note}</p>}
           {error && <p className="notice notice--error wb-add-note">{error}</p>}
-          <p className="field-hint">
-            入れた語は<strong>「まだ」</strong>から始まります。
-            復習に出てくるので、そこで「覚えた」まで持っていきます。
-          </p>
+          {/* **下の説明は出さない**(2026-09 実機・利用者の指定
+              「上下の説明が不要です。これはquick response、単語帳に共通です」)。
+              「入れた語は『まだ』から始まります」は一度読めば足りるもので、
+              入れるたびに読むものではない */}
         </div>
       )}
     </div>

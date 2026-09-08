@@ -463,6 +463,9 @@ export default function Wordbook({
   }, [onlySet])
 
   /** 絞り込みを当てたあとの一覧。**範囲の数え上げも出題も、ここから** */
+  /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
+  const narrowed = ['day', 'material', 'field', 'topic']
+    .filter((k) => filter[k]).length
   const forScope = shownRows
 
   /* **選んでいた札が0件になったら、押せる札へ移す。**
@@ -886,13 +889,6 @@ export default function Wordbook({
       </div>
       )}
 
-      {/* **復習にも日付の絞り込みを置く**(2026-08 利用者の指定)。
-            > 選んだら基本は今日のものから出題するようにそして日付ボタンも入れます。
-          何も選ばなければ今日の分。日を選ぶと、その日に入った語から出す */}
-      {isQuiz && !loading && (
-        <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
-      )}
-
       {isQuiz && !loading && !card && (
         /* **「ありません」と「読めていません」を、同じ見た目で終わらせない**
            (CLAUDE.md)。数え上げは表を直に見ているので、
@@ -914,10 +910,17 @@ export default function Wordbook({
               unit="語"
               scope={scope}
               size={size}
+              narrowed={narrowed}
               onScope={(id) => { setScope(id); saveScope('word', id) }}
               onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
               onStart={start}
-            />
+            >
+              {/* **絞り込みも「出しかた」の中へ**(2026-09 利用者の指定)。
+                  画面に散らばっていたので、設定は1か所にまとめた。
+                  日付の絞り込みは 2026-08 の指定で置いたもので、
+                  **消していない** —— 場所が変わっただけである */}
+              <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
+            </ReviewScope>
           )
       )}
 

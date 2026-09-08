@@ -579,8 +579,33 @@ function RScopeDemo({ rows }) {
   return (
     <ReviewScope
       rows={rows} unit="問" scope={scope} size={size}
+      narrowed={0}
       onScope={setScope} onSize={setSize} onStart={() => {}}
-    />
+    >
+      {/* **絞り込みも「出しかた」の中**(2026-09 利用者の指定)。
+          名前を左・欄を右にそろえた行が、同じ幅で並ぶかを測る。
+
+          **中身の長さは、わざとばらばらにしてある。**
+          「すべて」だけを並べると、幅をそろえるのをやめても
+          **同じ幅になってしまい、壊れたままでも緑になる**
+          (実際にそうなった)。利用者の画面では「すべて」と
+          長い教材名が混ざり、実測で 84 / 152 / 178 / 233 / 161px と
+          ばらついていた —— **その形で測る** */}
+      <label className="wbfilter-row">
+        <span className="wbfilter-name">分野</span>
+        <select className="wbfilter-ctl"><option>すべて</option></select>
+      </label>
+      <label className="wbfilter-row">
+        <span className="wbfilter-name">場面・話題</span>
+        <select className="wbfilter-ctl"><option>打ち合わせ前の雑談</option></select>
+      </label>
+      <label className="wbfilter-row">
+        <span className="wbfilter-name">教材</span>
+        <select className="wbfilter-ctl">
+          <option>2026-09-07 / 仕入れ先との交渉 / B1</option>
+        </select>
+      </label>
+    </ReviewScope>
   )
 }
 

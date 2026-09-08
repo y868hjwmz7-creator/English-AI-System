@@ -5014,6 +5014,38 @@ html, body { overflow-x: clip; }
   border-radius: var(--r-pill); font-size: var(--fs-13);
 }
 
+/* ── 名前を左、選ぶ欄を右(2026-09 実機・利用者の指摘)──────────────
+   > 日付絞り込みのアイコンの位置が悪いです。
+   > 全体的にもっとプロっぽいデザインにできませんか？
+
+   直す前は、**中身なりの幅の錠剤がばらばらに折り返して4行**になっていた
+   (実測 390px: 日付 84 / 分野 152 / 場面・話題 178 / 教材 233 /
+   並べ方 161)。**幅がそろっていないことが、いちばん散らかって見える原因。**
+
+   名前を左の柱にそろえ、**選ぶ欄はぜんぶ同じ幅**にする。
+   こうすると日付も「1行のうちの1つ」に収まるので、
+   **アイコンの置き場所という問題そのものが消える。** */
+.wbfilter { display: block; margin-top: 0; }
+.wbfilter-row {
+  display: flex; align-items: center; gap: var(--sp-10);
+  min-height: 40px;
+}
+/* **名前の柱。** ここがそろっていないと、欄の左端がぎざぎざになる */
+.wbfilter-name {
+  flex: 0 0 5.5em;
+  font-size: var(--fs-12); font-weight: 600; color: var(--text-primary);
+}
+/* **欄はぜんぶ同じ幅。** 中身の長さ(「すべて」と長い教材名)で
+   幅が変わらないよう、残りいっぱいを取って `min-width: 0` で縮める */
+.wbfilter-ctl {
+  flex: 1 1 auto; min-width: 0; max-width: none;
+  height: 36px; justify-content: flex-start;
+  font-size: var(--fs-13);
+}
+/* 日付だけはボタンなので、中身が左に寄るようにそろえる */
+button.wbfilter-ctl { text-align: left; }
+.wbfilter-clear { margin-top: var(--sp-8); }
+
 /* ── Quick Response の復習の選び方(0040)───────────────────────
      並べ方(混ぜる / 教材の順)と、どれを出すか(今日ぶん / ぜんぶ)。
      **絞り込みの行(`.wbfilter`)と同じ形にそろえる。**
@@ -7619,21 +7651,67 @@ html, body { overflow-x: clip; }
 
    箱は `.wbcal`(カレンダー)と同じ作法。**ここで新しい配色を作らない** */
 .rscope-go { align-items: center; }
-.rscope-pop {
+/* ── 設定は「下から出るシート」/ 広い画面では吹き出し ────────────────
+   2026-09 実機・利用者の指定。
+
+   > 選択肢が多すぎて、どちらかというと設定の吹き出しなどを作って
+   > そこで設定できるとよさそうです
+
+   中身は範囲8 + 個数5 + 絞り込み5 で **450px** ある。吹き出しは
+   押したボタンの近くに出るものなので、狭い画面では収まらない。
+   スマホでは**下から出るシート** —— ①親指が届く ②横いっぱい使える
+   ③中が長ければそこだけ送れる。**判断は幅だけ**(`SettingsSheet.jsx`)。 */
+.sheet-back {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: flex-end;
+  background: rgba(0, 0, 0, 0.42);
+}
+.sheet {
+  width: 100%; max-height: 86dvh;
+  display: flex; flex-direction: column;
+  /* **上の角だけ丸める。** 下は画面の端にぴったり付く */
+  border-radius: var(--r-12) var(--r-12) 0 0;
+  background: var(--surface-1); color: var(--text-primary);
+  box-shadow: var(--shadow-2);
+  /* **端末の下の切り欠きぶんを空ける。** 足さないと、
+     いちばん下の欄がホームバーに隠れる */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+/* つまみ(見た目だけ)。下から出てきたことが目で分かる */
+.sheet-grip {
+  width: 40px; height: 4px; margin: 8px auto 0;
+  border-radius: var(--r-pill); background: var(--border);
+}
+.sheet-head {
+  display: flex; align-items: center; gap: var(--sp-8);
+  padding: 8px 14px; border-bottom: 1px solid var(--rule, var(--border));
+}
+.sheet-title { font-size: var(--fs-15); font-weight: 700; }
+.sheet-head > .nav-icon-btn { margin-left: auto; }
+/* **中が長ければ、ここだけを送る。** シートそのものは動かない */
+.sheet-body { padding: 12px 14px 16px; overflow-y: auto; }
+
+/* 広い画面の吹き出し。**箱は `.wbcal` と同じ作法** */
+.setpop {
   position: fixed; z-index: 200;
-  width: 300px; padding: 12px;
+  width: 320px; padding: 12px;
   border: 1px solid var(--border); border-radius: var(--r-12);
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
-  /* **背の低い画面でも、全体が映る**(`.wbcal` と同じ決まり)。
-     置き場所は `Popover` が決めるが、画面より高い箱はどこに置いても
-     はみ出す。そのときは**中だけを送れるようにする** */
+  /* **背の低い画面でも、全体が映る。** 画面より高い箱はどこに置いても
+     はみ出すので、そのときは**中だけを送れるようにする** */
   max-height: calc(100dvh - 16px); overflow-y: auto;
 }
-/* 吹き出しの中では、いちばん上の見出しの余白を落とす
-   (箱の余白と二重になる) */
-.rscope-pop .rscope-head:first-child { margin-top: 0; }
-/* **紙の上でも、この吹き出しは配色に従う。**
+.setpop-head {
+  display: flex; align-items: center; gap: var(--sp-8);
+  margin: -2px 0 8px;
+}
+.setpop-title { font-size: var(--fs-14); font-weight: 700; }
+.setpop-head > .nav-icon-btn { margin-left: auto; }
+/* どちらの箱でも、いちばん上の見出しの余白を落とす(箱の余白と二重になる) */
+.setpop .rscope-head:first-child,
+.sheet-body .rscope-head:first-child { margin-top: 0; }
+/* **紙の上でも、この箱は配色に従う。**
    `.focus-paper` の上では明るい色に決め打ちしない(CLAUDE.md) */
 
 /* ── 書いた答えと、その添削(2026-09 利用者の指定)─────────────────

@@ -2501,21 +2501,22 @@ export default defineConfig({
       await page.click('.rscope-go .btn--small')
       await page.waitForTimeout(140)
       開 = await page.evaluate(() => {
-        const pop = document.querySelector('.rscope-pop')
+        /* **狭い画面は下から出るシート、広い画面は吹き出し**
+           (2026-09 利用者の指定)。どちらの形かも一緒に持ち帰る */
+        const pop = document.querySelector('.sheet') || document.querySelector('.setpop')
         if (!pop) return null
         const r = pop.getBoundingClientRect()
         const chips = [...pop.querySelectorAll('.rscope-chip')]
-        const top = (el) => Math.round(el.getBoundingClientRect().top)
         return {
+          形: document.querySelector('.sheet') ? 'シート' : '吹き出し',
           札の数: chips.length,
           低い札: Math.min(...chips.map((c) => Math.round(c.getBoundingClientRect().height))),
           押せない札: chips.filter((c) => c.disabled).length,
           数を出している: pop.querySelectorAll('.chip-count').length,
-          範囲の行数: new Set(
-            [...pop.querySelectorAll('.chiprow')][0]
-              .querySelectorAll('.rscope-chip')).size && new Set(
-            [...[...pop.querySelectorAll('.chiprow')][0]
-              .querySelectorAll('.rscope-chip')].map(top)).size,
+          /* **絞り込みの欄が、ぜんぶ同じ幅か。** ここがそろっていないと
+             ぎざぎざに折り返して「素人っぽい」見た目になる(利用者の指摘) */
+          欄の幅: [...pop.querySelectorAll('.wbfilter-ctl')]
+            .map((e) => Math.round(e.getBoundingClientRect().width)),
           画面内: r.left >= -1 && r.right <= window.innerWidth + 1
             && r.top >= -1 && r.bottom <= window.innerHeight + 1,
           幅: Math.round(r.width), 高さ: Math.round(r.height),
@@ -2554,11 +2555,25 @@ export default defineConfig({
     /* **吹き出しが画面からはみ出さない。** はみ出すと、
        いちばん下の札に永久に手が届かない(語の意味の吹き出しと同じ話) */
     } else if (!開.画面内) {
-      ng(`復習の範囲 ${w}px … 吹き出しが画面からはみ出している`
+      ng(`復習の範囲 ${w}px … ${開.形}が画面からはみ出している`
         + `(${開.幅}×${開.高さ})`)
+    /* **狭い画面は下から出るシート**(利用者の指定)。
+       **「シートが出る」だけを見ない** —— 広い画面まで
+       シートにしても緑のままになる */
+    } else if (開.形 !== (w < 768 ? 'シート' : '吹き出し')) {
+      ng(`復習の範囲 ${w}px … ${開.形}で出ている`,
+        w < 768 ? 'スマホでは下から出るシート' : '広い画面では吹き出し')
+    /* **絞り込みの欄は、ぜんぶ同じ幅。** 直す前は中身なりの幅で
+       ばらばらに折り返していた(実測 84 / 152 / 178 / 233 / 161) */
+    } else if (開.欄の幅.length < 3) {
+      ng(`復習の範囲 ${w}px … 絞り込みが「出しかた」の中に無い`,
+        `欄 ${開.欄の幅.length} 個。設定は1か所にまとめる`)
+    } else if (new Set(開.欄の幅).size !== 1) {
+      ng(`復習の範囲 ${w}px … 絞り込みの欄の幅がそろっていない`,
+        `${開.欄の幅.join(' / ')}px`)
     } else {
       ok(`復習の範囲 ${w}px … 畳んで ${閉.高さ}px(${閉.ボタン})`
-        + `・開くと ${開.幅}×${開.高さ}・札 ${開.低い札}px`)
+        + `・${開.形} ${開.幅}×${開.高さ}・欄 ${開.欄の幅[0]}px でそろう`)
     }
   }
 
@@ -2586,8 +2601,63 @@ export default defineConfig({
   for (const f of ['Wordbook', 'QrReview']) {
     const src = readFileSync(new URL(`../src/components/${f}.jsx`, import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-    if (!/<ReviewScope\b/.test(src)) ng(`復習の範囲 … ${f} が札を出していない`)
-    else ok(`復習の範囲 … ${f} が同じ札を出している`)
+    if (!/<ReviewScope\b/.test(src)) {
+      ng(`復習の範囲 … ${f} が札を出していない`)
+    /* **絞り込みも中へ入れているか**(2026-09 利用者の指定)。
+       外に出したままだと、設定がまた2か所に分かれる */
+    } else if (!/<ReviewScope[\s\S]{0,400}<WordbookFilter\b/.test(src)) {
+      ng(`復習の範囲 … ${f} が絞り込みを「出しかた」の外に置いている`,
+        '設定は1か所。押すものは「出す」と「出しかた」の2つだけにする')
+    } else {
+      ok(`復習の範囲 … ${f} が札も絞り込みも同じ場所に出している`)
+    }
+  }
+
+  /* ══ **上下の説明は出さない**(2026-09 実機・利用者の指定)══════════
+       > 上下の説明が不要です。これはquick response、単語帳に共通です。
+
+     一度読めば足りるものが、毎日いちばん上に居座っていた。
+     **消したことを、書いてある形で見張る** —— 戻すと赤くなる */
+  {
+    /* **空のときの案内は消さない** —— 「まだ1問も溜まっていません。
+       教材の Quick Response で『まだ』を押すと…」は、
+       **何も無いときに何をすればよいか**を言うものである
+       (行き止まりを作らない・CLAUDE.md)。消したのは
+       **毎日いちばん上に居座っていた説明**だけなので、
+       そちらにしか無い言い回しで見る */
+    const 消したもの = [
+      ['QrReview', '出てくる間隔があきます'],
+      ['QrReview', '今日出す<'],
+      ['QrReview', '溜まっている<'],
+      ['WordbookAdd', '入れた語は'],
+    ]
+    let 残り = []
+    for (const [f, 文] of 消したもの) {
+      const src = readFileSync(new URL(`../src/components/${f}.jsx`, import.meta.url), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+      if (src.includes(文)) 残り.push(`${f}:${文}`)
+    }
+    if (残り.length) {
+      ng('復習の説明 … 消したはずの文が残っている', 残り.join(' / '))
+    } else {
+      ok('復習の説明 … 上下の説明も、古い数え方の文言も残っていない')
+    }
+  }
+
+  /* ══ **「やめる」を、入れるボタンのとなりに**(2026-09 実機)══════════
+       > 自分で単語帳に書き込みをしようとすると、戻るボタンがないのが困ります。
+
+     閉じる道は上にもあるが、**入力欄まで送るとそこは画面の外**である。
+     「読み上げ音声を作り直す」でまったく同じ指摘を受けている */
+  {
+    const src = readFileSync(new URL('../src/components/WordbookAdd.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<div className="btn-row">[\s\S]{0,700}setOpen\(false\)[\s\S]{0,80}やめる/.test(src)) {
+      ng('語句を手で入れる … 「やめる」が入れるボタンのとなりに無い',
+        '上のボタンは、入力欄まで送ると画面の外にいる')
+    } else {
+      ok('語句を手で入れる … 「やめる」が入れるボタンのとなりにある')
+    }
   }
 }
 

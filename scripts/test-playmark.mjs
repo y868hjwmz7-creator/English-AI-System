@@ -63,7 +63,7 @@ import {
 } from '../src/data/genres.js'
 import {
   DEFAULT_SIZE, SCOPES, SIZES,
-  isDueOn, scopeCounts, scopeLead, scopePool, shouldRecord, takeCount,
+  isDueOn, qrTally, scopeCounts, scopeLead, scopePool, shouldRecord, takeCount,
 } from '../src/lib/reviewScope.js'
 import { readFileSync } from 'node:fs'
 
@@ -1956,6 +1956,41 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
 // ここで数字として見張る。
 // ══════════════════════════════════════════════════════════════════════
 {
+  /* ── Quick Response の3つの数(2026-09 実機・利用者の指定)──────────
+     > 「今日出す」「溜まっている」の意味が私にも分からないので、
+     > そもそも文言を変えたいですね。
+
+     調べたところ「帳面ぜんぶの数」を大きく出すアプリはほとんど無く、
+     しかも**この単語帳にはすでに「まだ / 覚えかけ / 覚えた」**があった。
+     利用者がそちらにそろえることを選んだ。
+
+     **SQL は1行も要らない** —— `qr_items` が返す箱から数える。
+     **箱の番号そのものは画面に出さない**(仕組みの内側の数字)。 */
+  {
+    const t = qrTally([
+      { box: 0 }, { box: 0 },              // まだ 2
+      { box: 1 }, { box: 3 }, { box: 5 },  // 言えかけ 3
+      { box: 6 },                          // 言える 1
+    ])
+    ok(t.まだ === 2 && t.言えかけ === 3 && t.言える === 1,
+      '復習の数 … 箱から3つに束ねる', `まだ ${t.まだ} / 言えかけ ${t.言えかけ} / 言える ${t.言える}`)
+    ok(qrTally([]).まだ === 0 && qrTally(null).言える === 0,
+      '復習の数 … 空のときは 0')
+    /* **箱が無い行も「まだ」に数える。** 0040 を貼る前や古い行で
+       `box` が来なくても、**数え落とさない** */
+    ok(qrTally([{}]).まだ === 1, '復習の数 … 箱の無い行も数える')
+
+    /* **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、
+       古い「今日出す / 溜まっている」のままになる */
+    const qr = readFileSync(new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    ok(/qrTally\(rows\)/.test(qr), '復習の数 … QrReview が `qrTally()` を呼んでいる')
+    ok(/wb-stat-label">まだ</.test(qr)
+      && /wb-stat-label">言えかけ</.test(qr)
+      && /wb-stat-label">言える</.test(qr),
+      '復習の数 … 文言が「まだ / 言えかけ / 言える」(単語帳と同じ数え方)')
+  }
+
   console.log('\n▶ 復習の範囲と個数')
 
   const T = '2026-08-30'

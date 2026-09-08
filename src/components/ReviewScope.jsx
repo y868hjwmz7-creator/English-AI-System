@@ -41,7 +41,7 @@ import { useRef, useState } from 'react'
 import {
   SCOPES, SIZES, scopeCounts, scopeLead, scopePool, sizeLabel, takeCount, todayKey, isDueNow,
 } from '../lib/reviewScope.js'
-import Popover from './Popover.jsx'
+import SettingsSheet from './SettingsSheet.jsx'
 import { FocusIcon, GearIcon } from './Icons.jsx'
 
 /**
@@ -54,6 +54,14 @@ import { FocusIcon, GearIcon } from './Icons.jsx'
  */
 export default function ReviewScope({
   rows, unit = '問', scope, size, onScope, onSize, onStart,
+  /* **絞り込みも、ここに入れる**(2026-09 実機・利用者の指定)。
+     日付・分野・場面・教材・並べ方は、画面に散らばっていた。
+     **設定は1か所**にまとめ、押すものを「出す」と「出しかた」の
+     2つだけにする。中身は呼ぶ側が渡す —— 単語帳と Quick Response で
+     並ぶものが違う(教材の絞り込みは復習にだけある)ためである */
+  children = null,
+  /** いま何で絞っているか(0 なら絞っていない)。札の数として出す */
+  narrowed = 0,
 }) {
   const today = todayKey()
   const counts = scopeCounts(rows, today)
@@ -147,19 +155,28 @@ export default function ReviewScope({
         >
           <GearIcon />
           出しかた
+          {/* **絞っていることは、畳んでいても分かるようにする。**
+              黙って絞ると「なぜ1件しか出ないのか」が分からない
+              (さがす画面の `.finder-badge` と同じ考え方) */}
+          {narrowed > 0 && <span className="chip-count">{narrowed}</span>}
         </button>
       </div>
       {open && (
-        <Popover
+        <SettingsSheet
           anchorEl={gearRef.current}
           onClose={() => setOpen(false)}
-          className="rscope-pop"
-          label="出しかたを選ぶ"
+          title="出しかた"
           /* 札を押すと数が変わり、箱の高さも変わる。**置き直す合図を渡す** */
-          placeKey={`${scope}/${size}`}
+          placeKey={`${scope}/${size}/${narrowed}`}
         >
           {選ぶ欄}
-        </Popover>
+          {children && (
+            <>
+              <p className="rscope-head">しぼる</p>
+              {children}
+            </>
+          )}
+        </SettingsSheet>
       )}
 
       <p className="card-hint rscope-lead">

@@ -33,7 +33,7 @@ import {
 import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import {
-  SCOPES, loadScope, loadSize, saveScope, saveSize,
+  SCOPES, loadScope, loadSize, qrTally, saveScope, saveSize,
   scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import QrCard from './QrCard.jsx'
@@ -130,7 +130,17 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   /** いま選んでいる範囲にあてはまるもの。**数え上げと同じ道を通す** */
   const shown = useMemo(() => scopePool(filtered, scope, today), [filtered, scope, today])
 
-  const dueCount = rows.filter((r) => String(r.due_on ?? '').slice(0, 10) <= today).length
+  /**
+   * 3つの数(2026-09 実機・利用者の指定で「今日出す / 溜まっている」から改めた)。
+   *
+   * **SQL は1行も要らない。** `qr_items` は箱(`box`)を返しているので、
+   * 読み込んだ行から数えられる。数え方は **`qrTally()` 1か所**
+   * (`qrReviews.js`)—— 画面で数え直すと、単語帳とずれる。
+   */
+  const tally = useMemo(() => qrTally(rows), [rows])
+  /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
+  const narrowed = ['day', 'material', 'field', 'topic']
+    .filter((k) => filter[k]).length
 
   /* **選んでいた札が0件になったら、押せる札へ移す**(絞り込みを変えたとき)。
      黙って空のまま置くと、「出すものがありません」だけが残って
@@ -324,11 +334,10 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   // ── 始める前 ───────────────────────────────────────────────
   return (
     <section className="card">
+      {/* **上の説明は出さない**(2026-09 実機・利用者の指定
+          「上下の説明が不要です。これはquick response、単語帳に共通です」)。
+          一度読めば足りるものが、毎日いちばん上に居座っていた */}
       <h2 className="card-title">{who}Quick Response(復習)</h2>
-      <p className="hint">
-        教材の Quick Response で<strong>「まだ」を押した文</strong>が、ここに溜まります。
-        単語帳と同じで、<strong>言えるようになるほど出てくる間隔があきます。</strong>
-      </p>
 
       {!qrReviewSupported() && (
         <p className="notice notice--warn">
@@ -348,48 +357,71 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
         </p>
       ) : (
         <>
-          {/* 数の札は**単語帳と同じ見た目**(`.wb-stats`)。
-              「今日出す」だけを目立たせる。そこが行動につながる数である */}
+          {/* **数え方を、単語帳とそろえる**(2026-09 実機・利用者の指定)。
+
+                > 「今日出す」「溜まっている」の意味が私にも分からないので、
+                > そもそも文言を変えたいですね。
+
+              調べたところ、Anki(新規 / 学習中 / 復習)も WaniKani も
+              mikan(今日の目標 / 覚えた単語数)も、**「帳面ぜんぶの数」を
+              大きく出しているアプリはほとんど無かった。** 出しているのは
+              「今日やる数」か「覚えた数」(=進み具合)である。
+
+              しかも**このアプリの単語帳には、すでに
+              「まだ / 覚えかけ / 覚えた」**があった。こちらだけが
+              「今日出す / 溜まっている」という**別の数え方**をしていた。
+              利用者が単語帳にそろえることを選んだ。
+
+              **「今日いくつやるか」は、すぐ下の「6 問を出す」が言っている。**
+              だからここでは言わない(同じものを2か所に出さない)。
+
+              箱(0〜6)は**仕組みの内側の数字なので画面に出さない**が、
+              **どの段にいるか**を3つに束ねて言うことはできる。
+              言葉は Quick Response の言い方にそろえる(「覚えた」ではなく
+              「言える」)—— あちらは語、こちらは文である */}
           <div className="wb-stats">
-            <span className={`wb-stat${dueCount > 0 ? ' is-due' : ''}`}>
-              <strong>{dueCount}</strong>
-              <span className="wb-stat-label">今日出す</span>
+            <span className={`wb-stat${tally.まだ > 0 ? ' is-due' : ''}`}>
+              <strong>{tally.まだ}</strong>
+              <span className="wb-stat-label">まだ</span>
             </span>
             <span className="wb-stat">
-              <strong>{rows.length}</strong>
-              <span className="wb-stat-label">溜まっている</span>
+              <strong>{tally.言えかけ}</strong>
+              <span className="wb-stat-label">言えかけ</span>
+            </span>
+            <span className="wb-stat">
+              <strong>{tally.言える}</strong>
+              <span className="wb-stat-label">言える</span>
             </span>
           </div>
 
-          {/* **絞り込みは単語帳と同じ部品**(`WordbookFilter`)。
-              ちがうのは、**教材名のプルダウンを出す**という1点だけ
-              (2026-09 利用者の指定「『テキスト』= 教材の名前で絞る」)。
-              単語帳のほうは、利用者の指定で出さないままにしてある */}
-          <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
-
-          <div className="qrrev-opts">
-            <label className="wbfilter-pick">
-              <span className="sr-only">並べ方</span>
-              <select value={order}
-                      onChange={(e) => { setOrder(e.target.value); saveOrder(e.target.value) }}>
-                {QR_ORDERS.map((o) => (
-                  <option key={o.id} value={o.id}>並べ方: {o.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {/* **いつのぶんを、何問ずつ**(2026-09 利用者の指定)。
-              単語帳とまったく同じ部品。**書き写さない** */}
+          {/* **いつのぶんを、何問ずつ、何で絞るか**(2026-09 利用者の指定)。
+              単語帳とまったく同じ部品。**書き写さない。**
+              絞り込みと並べ方も、**この中(「出しかた」)に入れる** ——
+              設定が画面の3か所に散っていたのを1か所にまとめた */}
           <ReviewScope
             rows={filtered}
             unit="問"
             scope={scope}
             size={size}
+            narrowed={narrowed}
             onScope={(id) => { setScope(id); saveScope('qr', id) }}
             onSize={(s) => { setSize(s); saveSize('qr', s) }}
             onStart={start}
-          />
+          >
+            {/* **絞り込みは単語帳と同じ部品**(`WordbookFilter`)。
+                ちがうのは、**教材名のプルダウンを出す**という1点だけ
+                (2026-09 利用者の指定「『テキスト』= 教材の名前で絞る」) */}
+            <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
+            <label className="wbfilter-row">
+              <span className="wbfilter-name">並べ方</span>
+              <select className="wbfilter-ctl" value={order}
+                      onChange={(e) => { setOrder(e.target.value); saveOrder(e.target.value) }}>
+                {QR_ORDERS.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </select>
+            </label>
+          </ReviewScope>
 
           {shown.length === 0 && filtered.length === 0 && (
             <p className="hint">この絞り込みに当てはまる文がありません。</p>
