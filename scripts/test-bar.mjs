@@ -1922,6 +1922,80 @@ export default defineConfig({
     ok('宿題をさがす・しぼる … 1つの箱・絞り込みはその下・教材の側は変えていない')
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     ゲスト自身の「今週の宿題」にも、同じさがす・しぼるを置く
+     (2026-09 利用者の指定「今日の宿題のところにも実装してください」)
+
+     **トレーナーの教材画面をそのまま置かない。** あちらには
+     **押すと課金になる操作**(読み上げ音声を作り直す)が並んでいるうえ、
+     宿題のカードは**もう出ている**ので二重になる。
+     置くのは**同じ形のさがす・しぼる**だけである。
+
+     **描かないと分からないこと**を測る —— 絞り込みの欄が
+     狭い画面で押せる大きさに収まるか・横にはみ出さないか・
+     **取り組みの札が入っていないか**(すぐ下の見出しと二重になる)。
+     ══════════════════════════════════════════════════════════════ */
+  const hw = await page.evaluate(() => {
+    const box = document.querySelector('[data-hw]')
+    const fold = box.querySelector('details')
+    const filter = box.querySelector('.wbfilter')
+    /* **押すものそのものを測る。** `.wbfilter` は `display: block` なので、
+       包んでいる `<label>` は**行の高さ(18px)しか無い** ——
+       そこを測ると、押せる大きさを割っていないのに赤くなる(実測して気づいた) */
+    const parts = filter ? [...filter.querySelectorAll('button, select')] : []
+    return {
+      札の行: !!box.querySelector('.chiprow'),
+      絞り込みがある: !!filter,
+      絞り込みの数: parts.length,
+      いちばん低い: parts.length
+        ? Math.round(Math.min(...parts.map((el) => el.getBoundingClientRect().height))) : 0,
+      絞り込みの下: filter ? Math.round(filter.getBoundingClientRect().bottom) : 0,
+      箱の下: Math.round(fold.getBoundingClientRect().bottom),
+      はみ出し: filter
+        ? Math.round(Math.max(...parts.map((el) => el.getBoundingClientRect().right)))
+        : 0,
+      窓: window.innerWidth,
+    }
+  })
+  if (hw.札の行) {
+    ng('今週の宿題 … 取り組みの札が入っている',
+      'すぐ下の「取り組む(3)」「やったもの(5)」と同じことを2か所に出さない')
+  } else if (!hw.絞り込みがある || hw.絞り込みの数 < 3) {
+    ng(`今週の宿題 … 絞り込みの欄が出ていない(${hw.絞り込みの数} 個)`,
+      '日付・分野・場面・苦手項目で絞れるようにする')
+  } else if (hw.絞り込みの下 < hw.箱の下) {
+    ng('今週の宿題 … 絞り込みが、さがす箱より上にいる')
+  } else if (hw.いちばん低い < 32) {
+    ng(`今週の宿題 … 絞り込みが押せる大きさを割っている(${hw.いちばん低い}px)`)
+  } else if (hw.はみ出し > hw.窓) {
+    ng(`今週の宿題 … 絞り込みが横にはみ出している(${hw.はみ出し} > ${hw.窓})`)
+  } else {
+    ok(`今週の宿題 … さがす箱の下に絞り込み ${hw.絞り込みの数} 個`
+      + `(${hw.いちばん低い}px・${hw.窓}px に収まる)`)
+  }
+
+  /* ── 画面が本当に呼んでいるか。**検証だけが緑にならないように** ── */
+  const lh = readFileSync(new URL('../src/components/LearnerHomework.jsx',
+    import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  if (!/title="宿題をさがす・しぼる"[\s\S]{0,400}collapsible/.test(lh)) {
+    ng('今週の宿題 … 画面がさがす帯を出していない',
+      '部品に足しても、渡さなければ利用者の画面は変わらない')
+  /* **「名前が出てくるか」で見ない。** `{false && (<HomeworkFilter` のように
+     出さなくしても、名前は残る(実際に試して素通りした)。
+     **本当に描いている形**で見る */
+  } else if (!/assignments\.length > 0 && \(\s*<HomeworkFilter/.test(lh)) {
+    ng('今週の宿題 … 絞り込みを出していない')
+  } else if (lh.indexOf('<HomeworkFilter') < lh.indexOf('<SearchBar')) {
+    ng('今週の宿題 … 絞り込みが、さがす箱より先に書いてある')
+  } else if (!lh.includes('saveHwSearchOpen(')) {
+    ng('今週の宿題 … 開け閉めを覚えていない', '一度決める設定は覚える(CLAUDE.md)')
+  } else if (/<TrainerMaterials|VoiceRemake|MaterialDelete/.test(lh)) {
+    ng('今週の宿題 … トレーナー向けの操作が混ざっている',
+      '作り直す(課金)・消す・共有するは、ゲストの画面に出さない')
+  } else {
+    ok('今週の宿題 … 画面が同じ部品を出している(課金になる操作は混ざっていない)')
+  }
+
   await page.close()
 }
 

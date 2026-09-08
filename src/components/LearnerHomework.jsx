@@ -31,6 +31,15 @@ import { materialWordsOf } from '../lib/materialWords.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { loadMyReminder, markReminderSeen, usePracticeLog } from '../lib/practice.js'
 import LessonNotes from './LessonNotes.jsx'
+/* **さがす・しぼるは、トレーナーの画面とまったく同じ部品**(2026-09
+   利用者の指定「今日の宿題のところにも実装してください」)。
+   帯は `SearchBar`、絞り込みは `HomeworkFilter`、
+   絞る・引く・並べるは `narrowHomework()` —— どれも
+   トレーナーの「過去の宿題」と分け合っている。**書き写さない** */
+import SearchBar from './SearchBar.jsx'
+import HomeworkFilter from './HomeworkFilter.jsx'
+import { emptyHomeworkFilter, narrowHomework } from '../lib/homeworkFilter.js'
+import { loadHwSearchOpen, saveHwSearchOpen } from '../lib/slashLevel.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
 
@@ -72,6 +81,14 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
   // 読み上げの速さ。**画面に1つだけ置く。** ここで選んだものが、
   // この画面のすべての読み上げに効く(2026-08 利用者の指定)
   const [rateId, setRateId] = useState(loadRateId)
+  /* ── さがす・しぼる(2026-09 利用者の指定)──────────────────────
+     宿題は溜まっていく(50件まで読む)。並んでいるだけでは、
+     先週の記事をもう一度やり直したくても探せない。
+     **トレーナーの「過去の宿題」とまったく同じ形**にする */
+  const [keyword, setKeyword] = useState('')
+  const [filter, setFilter] = useState(emptyHomeworkFilter)
+  const [sort, setSort] = useState('new')            // new | old
+  const [searchOpen, setSearchOpen] = useState(loadHwSearchOpen)
   // 語の「知っていた / 知らなかった」。**画面を開いたときに1回だけ読む。**
   // 語ごとに問い合わせると、1画面で何十回も往復することになる。
   // 「知っていた / 知らなかった」。中身は useWordStatuses.js にある
@@ -164,8 +181,18 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
 
   if (loading) return <p className="muted">読み込み中…</p>
 
-  const todo = assignments.filter((a) => !a.learner_done_at)
-  const done = assignments.filter((a) => a.learner_done_at)
+  /* **絞る・引く・並べるは `narrowHomework()` 1か所**(トレーナーの
+     画面と分け合っている)。ここで数え直すと必ず食い違う */
+  const shown = narrowHomework(assignments, { filter, keyword, sort })
+  const todo = shown.filter((a) => !a.learner_done_at)
+  const done = shown.filter((a) => a.learner_done_at)
+  /* 絞り込みで1件も残らなかったのか、そもそも宿題が無いのかを分ける。
+     **黙って空にしない** */
+  const narrowed = assignments.length > 0 && shown.length === 0
+  /* **上の「残り N 件」は、絞り込みに引きずられない。**
+     あれは「宿題がどれだけ残っているか」で、絞り込みとは別の話である
+     (絞ったぶんの数は、さがす帯の札が出す) */
+  const restAll = assignments.filter((a) => !a.learner_done_at).length
 
   return (
     <div className="stack">
@@ -197,7 +224,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
           </p>
         ) : (
           <p className="card-hint">
-            残り <strong>{todo.length}</strong> 件 / 全 {assignments.length} 件
+            残り <strong>{restAll}</strong> 件 / 全 {assignments.length} 件
           </p>
         )}
         <label className="rate-pick">
@@ -210,6 +237,55 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
           </select>
         </label>
       </div>
+
+      {/* ── さがす・しぼる(2026-09 利用者の指定)──────────────────
+            > ③ ゲストのページの中で、教材をさがせます(中略)
+            > これを、ゲストとしてログインし、
+            > 今日の宿題のところにも実装してください
+
+          **トレーナーの画面をそのまま持ってこない。**
+          あちらは**スクールの教材ライブラリぜんぶ**を引く画面で、
+          中には**押すと課金になる操作**(読み上げ音声を作り直す)や、
+          ゲストにできない操作(教材を作る・ゲストと共有する)が並んでいる。
+          しかもこの画面には、同じ教材のカードが**もう出ている** ——
+          並べると**同じものが2か所に出る**(CLAUDE.md)。
+
+          だから**いま並んでいる宿題の上に、同じ形のさがす・しぼるを置く。**
+          部品はトレーナーの「過去の宿題」と同じ(`SearchBar` /
+          `HomeworkFilter`)なので、**見た目も操作もそろっている。**
+
+          **取り組みの札(すべて / やった / まだ)は置かない。**
+          すぐ下の「取り組む(3)」「やったもの(5)」が同じことを
+          言っている(同じものを2か所に出さない)。 */}
+      {assignments.length > 0 && (
+        <SearchBar
+          title="宿題をさがす・しぼる"
+          keyword={keyword}
+          onKeyword={setKeyword}
+          placeholder="教材名・見出しでさがす"
+          count={shown.length}
+          collapsible
+          open={searchOpen}
+          onOpenChange={(v) => { setSearchOpen(v); saveHwSearchOpen(v) }}
+        />
+      )}
+      {/* 日付・分野・場面・苦手項目。**並び順は日付の吹き出しの中**。
+          選択肢は**自分に届いた宿題にあるものだけ**が出るので、
+          押しても0件、ということが起きない */}
+      {assignments.length > 0 && (
+        <HomeworkFilter
+          rows={assignments}
+          value={filter}
+          onChange={setFilter}
+          sort={sort}
+          onSort={setSort}
+        />
+      )}
+      {narrowed && (
+        <p className="card-hint">
+          この条件に当てはまる宿題はありません。しぼり込みを外してください。
+        </p>
+      )}
 
       {[['取り組む', todo], ['やったもの', done]].map(([label, list]) => (
         list.length > 0 && (

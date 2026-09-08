@@ -50,6 +50,8 @@ import {
 } from './components/Icons.jsx'
 import MaterialShare from './components/MaterialShare.jsx'
 import SearchBar from './components/SearchBar.jsx'
+import HomeworkFilter from './components/HomeworkFilter.jsx'
+import { emptyHomeworkFilter } from './lib/homeworkFilter.js'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
 
@@ -400,8 +402,47 @@ const SEARCH = (
         count={35}
       />
     </div>
+    {/* ゲスト自身の「今週の宿題」(2026-09 利用者の指定
+        「今日の宿題のところにも実装してください」)。
+        **取り組みの札は入らない** —— すぐ下の「取り組む(3)」
+        「やったもの(5)」が同じことを言っている。
+        絞り込みは箱の下に、トレーナーの画面とまったく同じ形で並ぶ */}
+    <div data-hw="1">
+      <SearchBar
+        title="宿題をさがす・しぼる"
+        keyword="" onKeyword={() => {}}
+        placeholder="教材名・見出しでさがす"
+        count={3}
+        collapsible
+        open={q.get('open') === '1'}
+        onOpenChange={() => {}}
+      />
+      <HwFilterDemo />
+    </div>
   </div>
 )
+
+/* 宿題の絞り込み。**選択肢は「その人に届いた宿題にあるもの」だけ**なので、
+   分野・場面・苦手項目を2種類ずつ持たせないと、その行が出ない。
+   **苦手項目の名前は、わざと長いものを混ぜてある** ——
+   短い言葉ばかりだと、はみ出しても緑のままになる */
+function HwFilterDemo() {
+  const [filter, setFilter] = useState(emptyHomeworkFilter)
+  const [sort, setSort] = useState('new')
+  const rows = [
+    { id: 'a', assigned_at: '2026-09-01T09:00:00.000Z', learner_done_at: null,
+      material: { title: '朝の打ち合わせ', industry: 'it', scene: 'daily_standup',
+        tagIds: ['fillers'] } },
+    { id: 'b', assigned_at: '2026-09-03T09:00:00.000Z',
+      learner_done_at: '2026-09-04T09:00:00.000Z',
+      material: { title: 'Kickoff meeting', industry: 'const', scene: 'jobinterview',
+        tagIds: ['articles'] } },
+  ]
+  return (
+    <HomeworkFilter rows={rows} value={filter} onChange={setFilter}
+                    sort={sort} onSort={setSort} />
+  )
+}
 
 /* 画面の下の行き先(`?screen=tabs`・2026-09 利用者の指定)。
 

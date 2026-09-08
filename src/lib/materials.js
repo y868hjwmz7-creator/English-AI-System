@@ -643,13 +643,21 @@ export async function loadMyAssignments() {
 
   // まだ貼っていない列があっても、そこだけ外して読み直す。
   // **ここが失敗すると、ゲストは宿題を1件も開けない**
+  //
+  // **`industry` と `material_tags` は 2026-09 に足した**(利用者の指定
+  // 「今日の宿題のところにも実装してください」)。宿題を分野・苦手項目で
+  // 絞るには、その2つが要る。取れなかった弱点タグは、これまで
+  // カードの札にも出ていなかった(`tagIds` が空のままだった)。
+  // **ゲストも、自分に共有された教材のタグは読める**(0001 の
+  // 「教材のタグ … is_assigned_material(material_id)」)。SQL は要らない
   const { data, error } = await runTolerant(() => supabase
     .from('assignments')
     .select(`
       id, assigned_at, due_on, learner_done_at,
       materials (
-        id, title, level, kind, instruction_ja, teaching_point, headline, genre, scene, topic,
+        id, title, level, kind, industry, instruction_ja, teaching_point, headline, genre, scene, topic,
         ${opt('headline_ja')} ${opt('voice_ids')}
+        material_tags ( tag_id ),
         material_sections (
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,

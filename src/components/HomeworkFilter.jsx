@@ -22,46 +22,21 @@
  *   **同じ見た目を2か所に書き写さない。**
  */
 import { useRef, useState } from 'react'
-import { toDateKey } from '../lib/format.js'
 import CalendarPopover from './CalendarPopover.jsx'
-import { industryLabel } from '../data/industries.js'
-import { genreLabel, sceneLabel } from '../data/genres.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { CalendarIcon, CloseIcon } from './Icons.jsx'
+/* **絞る・引く・並べるの中身は `src/lib/homeworkFilter.js` 1か所。**
+   同じ絞り込みが2つの画面に出る(トレーナーの「過去の宿題」と、
+   ゲストの「今週の宿題」)ので、画面ごとに書くと必ず食い違う。
+   **素の node で確かめられる形**にしてある(`npm run test:play`)。
+   ここから出し直しているので、**呼ぶ側は1行も変わらない** */
+import {
+  applyHomeworkFilter, assignedDayOf, emptyHomeworkFilter,
+  fieldOfAssignment, homeworkFilterOn, topicOfAssignment,
+} from '../lib/homeworkFilter.js'
 
-/** 出した日("2026-08-29")。無ければ null */
-export const assignedDayOf = (a) => (a?.assigned_at
-  ? toDateKey(new Date(a.assigned_at)) : null)
-
-/** その宿題の分野(業界・趣味) */
-export const fieldOfAssignment = (a) => (a?.material?.industry
-  ? { key: a.material.industry, label: industryLabel(a.material.industry) }
-  : null)
-
-/** その宿題の場面・話題。**教材はどちらか一方しか持たない** */
-export const topicOfAssignment = (a) => {
-  const m = a?.material
-  if (m?.scene) return { key: `s:${m.scene}`, label: sceneLabel(m.scene), group: 'シチュエーション' }
-  if (m?.genre) return { key: `g:${m.genre}`, label: genreLabel(m.genre), group: '話題' }
-  return null
-}
-
-/**
- * 絞り込みを当てる。**判断はここ1か所。** 画面ごとに書くとずれる。
- *
- * @param {Array} rows 宿題ぜんぶ
- * @param {{day, field, topic, tag}} filter
- */
-export function applyHomeworkFilter(rows, filter) {
-  const { day = null, field = null, topic = null, tag = null } = filter ?? {}
-  if (!day && !field && !topic && !tag) return rows
-  return (rows ?? []).filter((a) => {
-    if (day && assignedDayOf(a) !== day) return false
-    if (field && fieldOfAssignment(a)?.key !== field) return false
-    if (topic && topicOfAssignment(a)?.key !== topic) return false
-    if (tag && !(a.material?.tagIds ?? []).includes(tag)) return false
-    return true
-  })
+export {
+  applyHomeworkFilter, assignedDayOf, fieldOfAssignment, topicOfAssignment,
 }
 
 export default function HomeworkFilter({
@@ -107,7 +82,7 @@ export default function HomeworkFilter({
   if (onSort && days.length > 0) show.day = true
   if (!Object.values(show).some(Boolean)) return null
 
-  const on = Boolean(day || field || topic || tag)
+  const on = homeworkFilterOn(value)
   const set = (patch) => onChange({ ...value, ...patch })
 
   return (
@@ -165,7 +140,7 @@ export default function HomeworkFilter({
 
       {on && (
         <button type="button" className="btn btn--ghost btn--small"
-                onClick={() => onChange({ day: null, field: null, topic: null, tag: null })}>
+                onClick={() => onChange(emptyHomeworkFilter())}>
           <CloseIcon />すべて
         </button>
       )}

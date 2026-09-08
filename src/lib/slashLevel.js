@@ -105,3 +105,26 @@ export function savePastSearchOpen(open) {
     localStorage.setItem(PAST_SEARCH_KEY, open ? 'open' : 'closed')
   } catch { /* 使えなくても困らない */ }
 }
+
+/**
+ * ゲスト自身の「今週の宿題」の、さがす・しぼるを開いているか
+ * (2026-09 利用者の指定「今日の宿題のところにも実装してください」)。
+ *
+ * **上の `eas.pastSearch` とは別に覚える。** あちらはトレーナーが
+ * ゲストのページで開く「過去の宿題」で、**別の画面の別の欄**である。
+ * 1つの鍵にすると、トレーナーが自分の都合で閉じたときに
+ * ゲストの画面まで閉じる(逆も同じ)。
+ *
+ * **既定は閉じている。** 開いたままだと、検索の欄と絞り込みで
+ * 画面の上が埋まり、**宿題が1件も見えない。**
+ * 何件あるかは、畳んだままでも札が言う。
+ */
+const HW_SEARCH_KEY = 'eas.hwSearch'
+export function loadHwSearchOpen() {
+  try { return localStorage.getItem(HW_SEARCH_KEY) === 'open' } catch { return false }
+}
+export function saveHwSearchOpen(open) {
+  try {
+    localStorage.setItem(HW_SEARCH_KEY, open ? 'open' : 'closed')
+  } catch { /* 使えなくても困らない */ }
+}

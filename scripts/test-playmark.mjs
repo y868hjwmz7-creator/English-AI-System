@@ -71,6 +71,10 @@ import {
 import {
   BGM_PLACES, RADIO_MODES, bgmPlaysIn, bgmVolume, nextIndex, radioSteps,
 } from '../src/lib/wordRadio.js'
+import {
+  applyHomeworkFilter, assignedDayOf, emptyHomeworkFilter,
+  homeworkFilterOn, narrowHomework, topicOfAssignment,
+} from '../src/lib/homeworkFilter.js'
 import { readFileSync } from 'node:fs'
 
 let ng = 0
@@ -2372,6 +2376,124 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   /* **「配信する」と書かない**(CLAUDE.md の呼び方) */
   ok(!/'配信する'/.test(tm) && !/>配信する</.test(tm),
     '呼び方 … 「配信する」ではなく「共有する」と書いている')
+}
+
+/* ==========================================================================
+ * ゲストの「今週の宿題」にも、さがす・しぼるを置く(2026-09 利用者の指定)
+ *
+ *   > ③ ゲストのページの中で、教材をさがせます(中略)
+ *   > これを、ゲストとしてログインし、今日の宿題のところにも実装してください
+ *
+ * 【なぜトレーナーの画面をそのまま置かないか】
+ *   あちらは**スクールの教材ライブラリぜんぶ**を引く画面で、
+ *   **押すと課金になる操作**(読み上げ音声を作り直す)と、
+ *   ゲストにできない操作(作る・共有する・消す)が並んでいる。
+ *   しかも宿題のカードは**もう出ている**ので、並べると二重になる。
+ * ========================================================================== */
+{
+  console.log('\n▶ 今週の宿題の、さがす・しぼる')
+
+  const 落とす = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const hw = 落とす(readFileSync(
+    new URL('../src/components/LearnerHomework.jsx', import.meta.url), 'utf8'))
+  const tl = 落とす(readFileSync(
+    new URL('../src/components/TrainerLearners.jsx', import.meta.url), 'utf8'))
+  const mat = readFileSync(
+    new URL('../src/lib/materials.js', import.meta.url), 'utf8')
+
+  const 宿題 = (id, opt = {}) => ({
+    id,
+    assigned_at: opt.at ?? '2026-09-01T09:00:00.000Z',
+    learner_done_at: opt.done ? '2026-09-02T09:00:00.000Z' : null,
+    material: {
+      title: opt.title ?? '教材',
+      headline: opt.headline ?? '',
+      industry: opt.industry ?? null,
+      scene: opt.scene ?? null,
+      genre: opt.genre ?? null,
+      tagIds: opt.tags ?? [],
+    },
+  })
+
+  const rows = [
+    宿題('a', { at: '2026-09-01T09:00:00.000Z', title: '朝の打ち合わせ', industry: 'it', tags: ['articles'] }),
+    宿題('b', { at: '2026-09-03T09:00:00.000Z', title: 'Kickoff meeting', headline: 'New Site', industry: 'const', done: true }),
+    宿題('c', { at: '2026-09-05T09:00:00.000Z', title: '食事の話', industry: 'it', tags: ['prepositions'] }),
+  ]
+
+  /* ── 絞る ── */
+  ok(applyHomeworkFilter(rows, emptyHomeworkFilter()).length === 3,
+    'さがす・しぼる … 何も絞らなければ、そのまま全部')
+  ok(applyHomeworkFilter(rows, { field: 'it' }).map((a) => a.id).join('') === 'ac',
+    'さがす・しぼる … 分野で絞れる')
+  ok(applyHomeworkFilter(rows, { tag: 'articles' }).map((a) => a.id).join('') === 'a',
+    'さがす・しぼる … 苦手項目で絞れる')
+  ok(applyHomeworkFilter(rows, { day: assignedDayOf(rows[1]) })
+    .map((a) => a.id).join('') === 'b',
+    'さがす・しぼる … 日付で絞れる')
+  ok(!homeworkFilterOn(emptyHomeworkFilter()) && homeworkFilterOn({ tag: 'x' }),
+    'さがす・しぼる … 絞り込みが掛かっているかを1か所で見る')
+  /* **場面と話題は1つの欄。** 教材はどちらか一方しか持たない */
+  ok(topicOfAssignment(宿題('x', { scene: 'meeting' }))?.key === 's:meeting'
+    && topicOfAssignment(宿題('y', { genre: 'business' }))?.key === 'g:business'
+    && topicOfAssignment(宿題('z')) === null,
+    'さがす・しぼる … 場面と話題は1つの鍵にまとめている')
+
+  /* ── 引く ── */
+  ok(narrowHomework(rows, { keyword: 'きっく' }).length === 0
+    && narrowHomework(rows, { keyword: 'KICKOFF' }).map((a) => a.id).join('') === 'b',
+    'さがす・しぼる … 教材名は大文字小文字を問わずに引ける')
+  ok(narrowHomework(rows, { keyword: 'new site' }).map((a) => a.id).join('') === 'b',
+    'さがす・しぼる … 見出しでも引ける')
+
+  /* ── 並べる ── */
+  ok(narrowHomework(rows, {}).map((a) => a.id).join('') === 'cba',
+    'さがす・しぼる … 既定は新しい順')
+  ok(narrowHomework(rows, { sort: 'old' }).map((a) => a.id).join('') === 'abc',
+    'さがす・しぼる … 古い順にもできる')
+  ok(narrowHomework(rows, { done: 'todo' }).map((a) => a.id).join('') === 'ca'
+    && narrowHomework(rows, { done: 'done' }).map((a) => a.id).join('') === 'b',
+    'さがす・しぼる … やった / まだ でも絞れる(トレーナーの画面が使う)')
+  /* **元の一覧を並べ替えてしまわない**(`sort` は破壊的である) */
+  ok(rows.map((a) => a.id).join('') === 'abc',
+    'さがす・しぼる … 渡された一覧そのものを並べ替えない')
+
+  /* ── 画面が本当に呼んでいるか ──
+     **「名前が出てくるか」で見ない。** 説明の中にも同じ語が出てくる */
+  ok(/<SearchBar\s/.test(hw) && /collapsible/.test(hw),
+    '今週の宿題 … 畳めるさがす帯(`SearchBar`)を出している')
+  ok(/<HomeworkFilter\s/.test(hw),
+    '今週の宿題 … 絞り込み(`HomeworkFilter`)を出している')
+  ok(/= narrowHomework\(assignments, \{/.test(hw),
+    '今週の宿題 … 絞る・引く・並べるは `narrowHomework()` に任せている')
+  ok(/= narrowHomework\(assignments, \{/.test(tl),
+    '過去の宿題 … トレーナーの画面も同じ `narrowHomework()` を通っている')
+  /* **控えは別に持つ。** 片方を閉じて、もう片方まで閉じては困る */
+  ok(/loadHwSearchOpen/.test(hw) && /saveHwSearchOpen/.test(hw)
+    && !/loadPastSearchOpen/.test(hw),
+    '今週の宿題 … 開け閉ての控えは、トレーナーの画面と別に持っている')
+  /* **絞り込みで消えたのか、そもそも無いのかを分ける** */
+  ok(/しぼり込みを外してください/.test(hw),
+    '今週の宿題 … 絞り込みで0件になったら、そう言う')
+
+  /* ── ゲストに、課金になる操作を見せない ──
+     トレーナーの「教材」画面をそのまま置くと、
+     「読み上げ音声を作り直す」(そのまま ElevenLabs への課金)や
+     教材を作る・共有する・消すが、ゲストの画面に出る */
+  ok(!/<TrainerMaterials/.test(hw),
+    '今週の宿題 … トレーナーの教材画面を、そのまま置いていない')
+  ok(!/VoiceRemake|MaterialDelete|MaterialShare|startPrepareAll/.test(hw),
+    '今週の宿題 … 作り直す・消す・共有する・裏で支度する、を出していない')
+
+  /* ── 絞り込みが引くものを、本当に取ってきているか ──
+     取ってこないと**選択肢が1つも出ず、絞り込みごと消える**。
+     しかも**画面は普通に出る**ので気づけない */
+  const 宿題の欄 = mat.slice(mat.indexOf('export async function loadMyAssignments'),
+    mat.indexOf('export async function markAssignmentDone'))
+  ok(/\bindustry\b/.test(宿題の欄),
+    '今週の宿題 … 分野(`industry`)を取ってきている')
+  ok(/material_tags \( tag_id \)/.test(宿題の欄),
+    '今週の宿題 … 苦手項目(`material_tags`)を取ってきている')
 }
 
 console.log(ng

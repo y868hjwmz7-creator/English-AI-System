@@ -33,7 +33,10 @@ import LearnerFiles from './LearnerFiles.jsx'
 import LessonNotes from './LessonNotes.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
-import HomeworkFilter, { applyHomeworkFilter } from './HomeworkFilter.jsx'
+import HomeworkFilter from './HomeworkFilter.jsx'
+/* **絞る・引く・並べるは `homeworkFilter.js` 1か所**(ゲストの
+   「今週の宿題」と分け合っている)。画面ごとに書くと必ず食い違う */
+import { narrowHomework } from '../lib/homeworkFilter.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
@@ -778,17 +781,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
               <div className="learner-detail">
 
                 {detailTab === 'homework' && (() => {
-                  // 教材名と見出しで引く。**大文字小文字は問わない**
-                  const needle = pastKeyword.trim().toLowerCase()
-                  const shown = applyHomeworkFilter(assignments, pastFilter)
-                    .filter((a) => (pastDone === 'all'
-                      || (pastDone === 'done') === !!a.learner_done_at))
-                    .filter((a) => (!needle
-                      || `${a.material?.title ?? ''} ${a.material?.headline ?? ''}`
-                        .toLowerCase().includes(needle)))
-                    .sort((x, y) => (pastSort === 'old'
-                      ? new Date(x.assigned_at) - new Date(y.assigned_at)
-                      : new Date(y.assigned_at) - new Date(x.assigned_at)))
+                  // 絞る・引く・並べるは `narrowHomework()` 1か所
+                  const shown = narrowHomework(assignments, {
+                    filter: pastFilter, keyword: pastKeyword,
+                    done: pastDone, sort: pastSort,
+                  })
 
                   return (
                   <>
