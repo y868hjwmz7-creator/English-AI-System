@@ -213,6 +213,26 @@ export function shouldRecord(ok, {
 }
 
 /**
+ * **出しかたが変わったか**を1つの文字列で表す(2026-09 利用者の指定
+ * 「そして中に入ってからも絞り込みができるように」)。
+ *
+ * 復習に入ったあとで範囲・個数・絞り込みを変えたら、**その場で出し直す。**
+ * ところが `setFilter` のすぐあとに組み直そうとしても、まだ古い値しか
+ * 読めない(React は次の描き直しで反映する)。だから
+ * **「変わったかどうか」を見張って、変わったら組み直す。**
+ *
+ * **単語帳と Quick Response で同じものを使う。** 鍵を書き写すと、
+ * レベルを足したときに片方だけ組み直さない、という形になる。
+ */
+export function runKeyOf({ scope = '', size = '', filter = {}, group = null } = {}) {
+  const f = filter ?? {}
+  return [
+    scope, size, group ?? '',
+    f.day ?? '', f.material ?? '', f.field ?? '', f.topic ?? '', f.level ?? '',
+  ].join(' ')
+}
+
+/**
  * 選んだものを覚えておく。**一度決めれば、毎回選ぶものではない**
  * (紙の幅・文字の大きさと同じ作法)。
  *
@@ -243,6 +263,79 @@ export function loadSize(where) {
 
 export function saveSize(where, size) {
   try { localStorage.setItem(KEY(where, 'size'), String(size)) } catch { /* 同上 */ }
+}
+
+/**
+ * ============================================================================
+ * 【段(まだ / 覚えかけ / 覚えた)を選べるようにする】(2026-09 利用者の指定)
+ *
+ *   > 学習者の心理としては、覚えた、を押すのは少し勇気がいるものです。
+ *   > なので、それぞれ数を示すだけではなく、
+ *   > タッチすればそれらを復習できるようにしたいです。
+ *
+ * **数を出しておいて、押せないのがいちばん惜しい。**
+ * 「覚えた」を押すのに勇気が要るのは、**押したらもう出てこない**と思うから
+ * である。いつでも呼び出して確かめられるなら、押すのは怖くなくなる。
+ *
+ * 【単語帳と Quick Response で、段の決め方が違う】
+ *
+ *   | | 何で分けるか | なぜ |
+ *   |---|---|---|
+ *   | 単語帳 | `status`(unknown / learning / known) | 表がその3つで持っている |
+ *   | Quick Response | **箱の番号**(0 / 1〜5 / 6) | あちらは status が learning のまま卒業する(0038) |
+ *
+ *   **そろえない。** 数え方をどちらかに寄せると、いま画面に出ている数が
+ *   変わってしまう。**変えるのは「押せるかどうか」だけ**である。
+ *   ちがうのは分け方だけなので、**見た目は `ReviewStats.jsx` 1つ**にする。
+ *
+ * 【覚えない】
+ *   範囲(`scope`)と個数(`size`)は覚えるが、**段は覚えない。**
+ *   あれは「今日はこれをさらう」というその場の選択で、
+ *   覚えていると次に開いたとき**覚えた語ばかりが出てきて**、
+ *   なぜそうなったのか分からない。
+ */
+
+/** 単語帳の段。**id は `word_reviews.status` そのもの**(対応表を持たない) */
+export const WORD_GROUPS = [
+  { id: 'unknown', label: 'まだ' },
+  { id: 'learning', label: '覚えかけ' },
+  { id: 'known', label: '覚えた' },
+]
+
+/**
+ * Quick Response の段。**箱の番号で分ける。**
+ *
+ * `qr_items` の status は「まだ」を押しても `unknown`、卒業しても `learning`
+ * のままなので(0038 と同じ考え方)、**箱でしか段を見分けられない。**
+ */
+export const QR_GROUPS = [
+  { id: 'yet', label: 'まだ', has: (box) => box < 1 },
+  { id: 'mid', label: '言えかけ', has: (box) => box >= 1 && box < 6 },
+  { id: 'done', label: '言える', has: (box) => box >= 6 },
+]
+
+/** その行がどの段か(Quick Response) */
+export const qrGroupOf = (row) => {
+  const box = Number(row?.box ?? 0)
+  return (QR_GROUPS.find((g) => g.has(box)) ?? QR_GROUPS[0]).id
+}
+
+/**
+ * その段だけを取り出す(Quick Response)。**`null` なら全部。**
+ * 単語帳は読み込むときの `status` で段が決まるので、こちらは要らない。
+ */
+export const qrGroupPool = (rows, groupId) => (groupId
+  ? (rows ?? []).filter((r) => qrGroupOf(r) === groupId)
+  : (rows ?? []))
+
+/**
+ * 段を選んだら何が起きるのかを、1行の日本語で言う。
+ * **押す前に分かるようにする**(`scopeLead` と同じ作法)。
+ */
+export function groupLead(groups, groupId, unit = '語') {
+  const g = (groups ?? []).find((x) => x.id === groupId)
+  if (!g) return `押すと、その段だけを復習できます。`
+  return `「${g.label}」だけを復習します。もう一度押すと、ぜんぶに戻ります。`
 }
 
 /**
@@ -289,12 +382,10 @@ export function saveSize(where, size) {
  * @param {Array} rows `qr_items` が返した行
  */
 export function qrTally(rows) {
-  const out = { まだ: 0, 言えかけ: 0, 言える: 0 }
-  for (const r of rows ?? []) {
-    const box = Number(r?.box ?? 0)
-    if (box >= 6) out.言える += 1
-    else if (box >= 1) out.言えかけ += 1
-    else out.まだ += 1
-  }
+  /* **段の一覧は `QR_GROUPS` 1か所。** ここで箱の境目を書き直すと、
+     数えた段と、押して出てくる段が食い違う(`qrGroupOf` と同じ道を通す) */
+  const out = {}
+  for (const g of QR_GROUPS) out[g.id] = 0
+  for (const r of rows ?? []) out[qrGroupOf(r)] += 1
   return out
 }

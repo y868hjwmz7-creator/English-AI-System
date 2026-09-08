@@ -34,6 +34,9 @@ import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
+import ReviewStats from './components/ReviewStats.jsx'
+import WordbookFilter, { countNarrowed, emptyFilter } from './components/WordbookFilter.jsx'
+import { QR_GROUPS, groupLead, qrTally } from './lib/reviewScope.js'
 import FocusFrame from './components/FocusFrame.jsx'
 import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
@@ -496,10 +499,23 @@ const RSCOPE = (() => {
     d.setDate(d.getDate() - n)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
+  /* **絞り込みの手がかりも持たせる。** 分野・場面・教材名・レベルが
+     2種類ずつ無いと、その行は出ない(選べるものしか出さない)。
+     **教材名だけをわざと長くしてある** —— 欄の幅をそろえるのをやめても、
+     短い言葉ばかりだと**同じ幅になって緑のまま**になるためである */
+  const FACET = [
+    { material_industry: 'it', material_scene: 'daily_standup',
+      material_title: '2026-09-07 / 仕入れ先との交渉 / B1', material_level: 'B1' },
+    { material_industry: 'med', material_scene: 'jobinterview',
+      material_title: '会議', material_level: 'A2' },
+  ]
   const row = (n, dueIn) => ({
     word_norm: `w${n}`,
     added_at: `${day(n)}T09:00:00`,
     due_on: day(-dueIn),
+    /* **箱もばらす。** 段の札(まだ / 言えかけ / 言える)を数えるため */
+    box: n % 3 === 0 ? 0 : n % 3 === 1 ? 3 : 6,
+    ...FACET[n % 2],
   })
   /* **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
      `?rows=old` は**ぜんぶ古くて、今日出すものが1つも無い**状態。
@@ -576,10 +592,23 @@ const STICKY = (
 function RScopeDemo({ rows }) {
   const [scope, setScope] = useState('due')
   const [size, setSize] = useState(10)
+  /* **段の札**(2026-09 利用者の指定「タッチすればそれらを復習できるように」)。
+     押せるか・押した印が出るか・0件の札が押せないかを、実際に描いて測る */
+  const [group, setGroup] = useState(null)
+  const [filter, setFilter] = useState(emptyFilter)
+  const tally = qrTally(rows)
   return (
+    <>
+    <ReviewStats
+      items={QR_GROUPS.map((g) => ({ ...g, n: tally[g.id] ?? 0 }))}
+      value={group}
+      onPick={setGroup}
+      dueId="yet"
+      lead={groupLead(QR_GROUPS, group, '問')}
+    />
     <ReviewScope
       rows={rows} unit="問" scope={scope} size={size}
-      narrowed={0}
+      narrowed={countNarrowed(filter)}
       onScope={setScope} onSize={setSize} onStart={() => {}}
     >
       {/* **絞り込みも「出しかた」の中**(2026-09 利用者の指定)。
@@ -591,21 +620,12 @@ function RScopeDemo({ rows }) {
           (実際にそうなった)。利用者の画面では「すべて」と
           長い教材名が混ざり、実測で 84 / 152 / 178 / 233 / 161px と
           ばらついていた —— **その形で測る** */}
-      <label className="wbfilter-row">
-        <span className="wbfilter-name">分野</span>
-        <select className="wbfilter-ctl"><option>すべて</option></select>
-      </label>
-      <label className="wbfilter-row">
-        <span className="wbfilter-name">場面・話題</span>
-        <select className="wbfilter-ctl"><option>打ち合わせ前の雑談</option></select>
-      </label>
-      <label className="wbfilter-row">
-        <span className="wbfilter-name">教材</span>
-        <select className="wbfilter-ctl">
-          <option>2026-09-07 / 仕入れ先との交渉 / B1</option>
-        </select>
-      </label>
+      {/* **本物の絞り込みを描く。** 手で書いた行を並べていたが、それだと
+          **レベルの行を消しても緑のまま**になる(0048)。
+          中身は上の `rows` が持っており、教材名だけがわざと長い */}
+      <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
     </ReviewScope>
+    </>
   )
 }
 

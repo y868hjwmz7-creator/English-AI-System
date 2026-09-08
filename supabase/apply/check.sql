@@ -119,4 +119,8 @@ from (
             where table_name = 'materials' and column_name = 'gist'), 28
   union all select '0047 単語 / フレーズをまとめ、共有したら単語帳に入れる(pending_matome.sql)',
     exists (select 1 from pg_proc where proname = 'add_material_words'), 29
+  union all select '0048 復習の絞り込みに「レベル」を足す(pending_matome.sql)',
+    exists (select 1 from pg_proc
+            where proname = 'qr_items'
+              and pg_get_function_result(oid) like '%material_level%'), 30
 ) t order by 順;

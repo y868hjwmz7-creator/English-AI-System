@@ -63,7 +63,8 @@ import {
 } from '../src/data/genres.js'
 import {
   DEFAULT_SIZE, SCOPES, SIZES,
-  isDueOn, qrTally, scopeCounts, scopeLead, scopePool, shouldRecord, takeCount,
+  QR_GROUPS, WORD_GROUPS, groupLead, isDueOn, qrGroupPool, qrTally, runKeyOf,
+  scopeCounts, scopeLead, scopePool, shouldRecord, takeCount,
 } from '../src/lib/reviewScope.js'
 import { readFileSync } from 'node:fs'
 
@@ -1972,23 +1973,73 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       { box: 1 }, { box: 3 }, { box: 5 },  // 言えかけ 3
       { box: 6 },                          // 言える 1
     ])
-    ok(t.まだ === 2 && t.言えかけ === 3 && t.言える === 1,
-      '復習の数 … 箱から3つに束ねる', `まだ ${t.まだ} / 言えかけ ${t.言えかけ} / 言える ${t.言える}`)
-    ok(qrTally([]).まだ === 0 && qrTally(null).言える === 0,
+    ok(t.yet === 2 && t.mid === 3 && t.done === 1,
+      '復習の数 … 箱から3つに束ねる', `まだ ${t.yet} / 言えかけ ${t.mid} / 言える ${t.done}`)
+    ok(qrTally([]).yet === 0 && qrTally(null).done === 0,
       '復習の数 … 空のときは 0')
     /* **箱が無い行も「まだ」に数える。** 0040 を貼る前や古い行で
        `box` が来なくても、**数え落とさない** */
-    ok(qrTally([{}]).まだ === 1, '復習の数 … 箱の無い行も数える')
+    ok(qrTally([{}]).yet === 1, '復習の数 … 箱の無い行も数える')
+
+    /* **文言は `QR_GROUPS` 1か所**(2026-09)。画面は札を並べるだけなので、
+       言葉はここにしか無い。**数える段と、押して出てくる段が同じ**である */
+    ok(QR_GROUPS.map((g) => g.label).join('/') === 'まだ/言えかけ/言える',
+      '復習の数 … 文言が「まだ / 言えかけ / 言える」(単語帳と同じ数え方)',
+      QR_GROUPS.map((g) => g.label).join('/'))
+    ok(WORD_GROUPS.map((g) => g.label).join('/') === 'まだ/覚えかけ/覚えた',
+      '復習の数 … 単語帳は「まだ / 覚えかけ / 覚えた」',
+      WORD_GROUPS.map((g) => g.label).join('/'))
+    /* **単語帳の段の id は `word_reviews.status` そのもの。**
+       対応表を持たないので、ここがずれると読み込む段が変わる */
+    ok(WORD_GROUPS.map((g) => g.id).join('/') === 'unknown/learning/known',
+      '復習の数 … 単語帳の段の id は status そのもの')
+
+    /* ── その段だけを取り出す(Quick Response)──────────────── */
+    const G = [{ box: 0 }, { box: 2 }, { box: 6 }, { box: 6 }]
+    ok(qrGroupPool(G, 'done').length === 2 && qrGroupPool(G, 'yet').length === 1,
+      '段を押す … その段だけを取り出す')
+    ok(qrGroupPool(G, null).length === 4, '段を押す … 押していなければ、ぜんぶ')
+    ok(groupLead(QR_GROUPS, null).includes('押すと'),
+      '段を押す … 押していないときは、押せることを言う')
+    ok(groupLead(QR_GROUPS, 'done').includes('「言える」')
+      && groupLead(QR_GROUPS, 'done').includes('もう一度押す'),
+      '段を押す … 押しているときは、戻り方まで言う', groupLead(QR_GROUPS, 'done'))
 
     /* **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、
-       古い「今日出す / 溜まっている」のままになる */
+       札は押せないままになる(「名前が出てくるか」で見ない・CLAUDE.md) */
     const qr = readFileSync(new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     ok(/qrTally\(rows\)/.test(qr), '復習の数 … QrReview が `qrTally()` を呼んでいる')
-    ok(/wb-stat-label">まだ</.test(qr)
-      && /wb-stat-label">言えかけ</.test(qr)
-      && /wb-stat-label">言える</.test(qr),
-      '復習の数 … 文言が「まだ / 言えかけ / 言える」(単語帳と同じ数え方)')
+    ok(/<ReviewStats/.test(qr) && /qrGroupPool\(rows, group\)/.test(qr),
+      '段を押す … QrReview が押せる札を出し、その段で絞っている')
+    const wb = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    ok(/<ReviewStats/.test(wb) && /onPick=\{pickGroup\}/.test(wb),
+      '段を押す … 単語帳が押せる札を出している')
+    /* **押したら、範囲を「ぜんぶ」へ移す。** そうしないと「覚えた」語は
+       次に出る日が先なので、押した瞬間に0件になる */
+    ok(/setScope\(id \? 'all' : loadScope\('word'\)\)/.test(wb)
+      && /setScope\(id \? 'all' : loadScope\('qr'\)\)/.test(qr),
+      '段を押す … 押したら範囲を「ぜんぶ」に移す(押した瞬間に0件にしない)')
+
+    /* ── 中に入ってからも絞り込める(2026-09 利用者の指定)──────── */
+    ok(runKeyOf({ scope: 'due', size: 10, filter: { level: 'B1' } })
+       !== runKeyOf({ scope: 'due', size: 10, filter: { level: 'B2' } }),
+      '出しかた … レベルを変えたら、組み直す合図が変わる')
+    /* **何も変えていなければ、同じ合図。** ここが変わると、
+       答えるたびに組み直されて「1 / 10 語」から先へ進まなくなる */
+    const 同じ = [
+      runKeyOf({ scope: 'due', size: 10, filter: { day: null } }),
+      runKeyOf({ scope: 'due', size: 10, filter: {} }),
+    ]
+    ok(同じ[0] === 同じ[1], '出しかた … 何も変えなければ、組み直さない', 同じ[0])
+    /* **「名前が出てくるか」で見ない**(CLAUDE.md)。`compact` は説明の中にも
+       出てくるので、**使っている形**(`<ReviewScope` に続く)で見る */
+    ok(/<ReviewScope\s+compact/.test(wb) && /<ReviewScope\s+compact/.test(qr),
+      '出しかた … 復習の最中にも、同じ「出しかた」を出している')
+    ok(/runKeyOf\(\{ scope, size, filter, group \}\)/.test(wb)
+      && /runKeyOf\(\{ scope, size, filter, group \}\)/.test(qr),
+      '出しかた … 変わったかどうかを `runKeyOf()` で見張っている')
   }
 
   console.log('\n▶ 復習の範囲と個数')

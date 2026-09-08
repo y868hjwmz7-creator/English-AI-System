@@ -62,6 +62,17 @@ export default function ReviewScope({
   children = null,
   /** いま何で絞っているか(0 なら絞っていない)。札の数として出す */
   narrowed = 0,
+  /**
+   * **「出しかた」のボタンだけを出す**(2026-09 利用者の指定
+   * 「そして中に入ってからも絞り込みができるように」)。
+   *
+   * 復習に入ったあと、上の帯からも同じものを開けるようにする。
+   * **中身を書き写さない** —— 札も絞り込みも、始める前とまったく同じものが
+   * 出る。ちがうのは「◯語を出す」のボタンを出さない点だけで、
+   * あちらは**入るためのボタン**なので、もう入っている場所には要らない。
+   * 変えたその場で組み直すのは、呼ぶ側(`runKeyOf` を見張る)の役目である。
+   */
+  compact = false,
 }) {
   const today = todayKey()
   const counts = scopeCounts(rows, today)
@@ -119,6 +130,56 @@ export default function ReviewScope({
     </>
   )
 
+  /** ⚙ と、その中身。**畳んだ形でも、始める前でも、これ1つ** */
+  const 出しかた = (
+    <>
+      <button
+        type="button"
+        ref={gearRef}
+        className={`btn btn--small${open ? ' chip--on' : ''}`}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <GearIcon />
+        出しかた
+        {/* **絞っていることは、畳んでいても分かるようにする。**
+            黙って絞ると「なぜ1件しか出ないのか」が分からない
+            (さがす画面の `.finder-badge` と同じ考え方) */}
+        {narrowed > 0 && <span className="chip-count">{narrowed}</span>}
+      </button>
+      {open && (
+        <SettingsSheet
+          anchorEl={gearRef.current}
+          onClose={() => setOpen(false)}
+          title="出しかた"
+          /* 札を押すと数が変わり、箱の高さも変わる。**置き直す合図を渡す** */
+          placeKey={`${scope}/${size}/${narrowed}`}
+        >
+          {選ぶ欄}
+          {children && (
+            <>
+              <p className="rscope-head">しぼる</p>
+              {children}
+            </>
+          )}
+          {/* **畳んだ形では、ここに1行を出す。** 始める前は下に出ているが、
+              復習の最中は帯の中なので、置ける場所がここしかない */}
+          {compact && (
+            <p className="card-hint rscope-lead">
+              {scopeLead(scope, unit)}
+              {' '}
+              変えると、その場で出し直します。
+            </p>
+          )}
+        </SettingsSheet>
+      )}
+    </>
+  )
+
+  /* **復習の最中は、ボタンだけ。** 「◯語を出す」は入るためのものなので、
+     もう入っている場所には要らない(効かない操作を見せない・CLAUDE.md) */
+  if (compact) return 出しかた
+
   return (
     <div className="rscope">
       <div className="btn-row rscope-go">
@@ -137,47 +198,8 @@ export default function ReviewScope({
               ? `${pool.length} ${unit}を出す`
               : `${pool.length} ${unit}から ${take} ${unit}を出す`}
         </button>
-        {/* **選ぶものは、ここを押したときだけ出す**(2026-09 利用者の指定)。
-
-              > 選択肢が多すぎて、どちらかというと設定の吹き出しなどを
-              > 作ってそこで設定できるとよさそうです
-
-            13個の札が並んでいたので、狭い画面では**始めるボタンが
-            画面の下へ押し出されていた。** いま選んでいるものは
-            **上のボタンと下の1行がそのまま言っている**ので、
-            札そのものは畳んでよい。**同じものを2か所に出さない** */}
-        <button
-          type="button"
-          ref={gearRef}
-          className={`btn btn--small${open ? ' chip--on' : ''}`}
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <GearIcon />
-          出しかた
-          {/* **絞っていることは、畳んでいても分かるようにする。**
-              黙って絞ると「なぜ1件しか出ないのか」が分からない
-              (さがす画面の `.finder-badge` と同じ考え方) */}
-          {narrowed > 0 && <span className="chip-count">{narrowed}</span>}
-        </button>
+        {出しかた}
       </div>
-      {open && (
-        <SettingsSheet
-          anchorEl={gearRef.current}
-          onClose={() => setOpen(false)}
-          title="出しかた"
-          /* 札を押すと数が変わり、箱の高さも変わる。**置き直す合図を渡す** */
-          placeKey={`${scope}/${size}/${narrowed}`}
-        >
-          {選ぶ欄}
-          {children && (
-            <>
-              <p className="rscope-head">しぼる</p>
-              {children}
-            </>
-          )}
-        </SettingsSheet>
-      )}
 
       <p className="card-hint rscope-lead">
         {scopeLead(scope, unit)}

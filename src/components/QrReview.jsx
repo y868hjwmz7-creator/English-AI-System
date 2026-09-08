@@ -30,11 +30,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   QR_ORDERS, loadQrReviews, markQr, orderQrPairs, qrPairOf, qrReviewSupported,
 } from '../lib/qrReviews.js'
-import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
+import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import ReviewScope from './ReviewScope.jsx'
+import ReviewStats from './ReviewStats.jsx'
 import {
-  SCOPES, loadScope, loadSize, qrTally, saveScope, saveSize,
-  scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
+  QR_GROUPS, SCOPES, groupLead, loadScope, loadSize, qrGroupPool, qrTally,
+  runKeyOf, saveScope, saveSize, scopeCounts, scopePool, shouldRecord,
+  takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
@@ -63,7 +65,7 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const [rows, setRows] = useState([])
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState(null)
-  const [filter, setFilter] = useState({ day: null, material: null, field: null, topic: null })
+  const [filter, setFilter] = useState(emptyFilter)
   const [order, setOrder] = useState(loadOrder)
   /**
    * **出題範囲と、1回ぶんの個数**(2026-09 利用者の指定)。
@@ -81,6 +83,14 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
    */
   const [scope, setScope] = useState(() => loadScope('qr'))
   const [size, setSize] = useState(() => loadSize('qr'))
+  /**
+   * **いま選んでいる段**(まだ / 言えかけ / 言える)。`null` ならぜんぶ。
+   *
+   * 2026-09 利用者の指定「タッチすればそれらを復習できるように」。
+   * **覚えない** —— その場の選択なので、次に開いたときは「ぜんぶ」に戻す
+   * (覚えていると、なぜ言える文ばかり出るのか分からなくなる)。
+   */
+  const [group, setGroup] = useState(null)
   /** いま解いている一覧(**この回のぶんだけ**)。`null` なら、まだ始めていない */
   const [run, setRun] = useState(null)
   /** まだ出していない残り。「つづける」で次の区切りへ進む */
@@ -126,7 +136,13 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const today = todayKey()
   /* 絞り込みは**手元で行う**(単語帳と同じ)。`qr_items()` は 500 件まで
      返しているので、選ぶたびに Supabase へ聞き直さない。待ち時間も費用も増えない */
-  const filtered = useMemo(() => applyWordbookFilter(rows, filter), [rows, filter])
+  /* **段で絞ってから、絞り込みを当てる。** 順はどちらでも同じものが残るが、
+     **数え上げ(`tally`)は段で絞る前の `rows` から出す** ——
+     押すたびに札の数が変わっては、何を選んでいるのか分からなくなる */
+  const filtered = useMemo(
+    () => applyWordbookFilter(qrGroupPool(rows, group), filter),
+    [rows, group, filter],
+  )
   /** いま選んでいる範囲にあてはまるもの。**数え上げと同じ道を通す** */
   const shown = useMemo(() => scopePool(filtered, scope, today), [filtered, scope, today])
 
@@ -139,8 +155,20 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
    */
   const tally = useMemo(() => qrTally(rows), [rows])
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
-  const narrowed = ['day', 'material', 'field', 'topic']
-    .filter((k) => filter[k]).length
+  const narrowed = countNarrowed(filter)
+
+  /**
+   * 段を押したとき。**範囲は「ぜんぶ」に移す**(2026-09 利用者の指定)。
+   *
+   * 「言える」文は箱6なので、次に出る日が30日先である。範囲が
+   * 「今日出す」のままだと**押した瞬間に0件**になり、押せたのに
+   * 何も出ないという、いちばん分かりにくい形になる。
+   * 段を外したら、覚えている範囲へ戻す(`onlySet` と同じ作法)。
+   */
+  const pickGroup = (id) => {
+    setGroup(id)
+    setScope(id ? 'all' : loadScope('qr'))
+  }
 
   /* **選んでいた札が0件になったら、押せる札へ移す**(絞り込みを変えたとき)。
      黙って空のまま置くと、「出すものがありません」だけが残って
@@ -164,6 +192,20 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
     setAt(0)
     setDone([])
   }
+
+  /**
+   * **復習の最中に「出しかた」を変えたら、その場で組み直す**
+   * (2026-09 利用者の指定「中に入ってからも絞り込みができるように」)。
+   * 変わったかどうかは **`runKeyOf()` 1か所**(単語帳と同じもの)。
+   */
+  const runKey = runKeyOf({ scope, size, filter, group })
+  const runKeyRef = useRef(runKey)
+  useEffect(() => {
+    if (!run) { runKeyRef.current = runKey; return }
+    if (runKeyRef.current === runKey) return
+    runKeyRef.current = runKey
+    start()
+  }, [runKey, Boolean(run)])
 
   /** 次の区切りへ。**読み直さない** —— 並びと残りをそのまま持っている */
   const next = () => {
@@ -325,6 +367,24 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
             {finished ? `${run.length} / ${run.length}` : `${at + 1} / ${run.length}`}
           </span>
         )}
+        /* **中に入ってからも絞り込める**(2026-09 利用者の指定)。
+           始める前とまったく同じ「出しかた」を、帯の右端から開く。
+           **中身は書き写さない** —— `ReviewScope` の畳んだ形である */
+        topEnd={(
+          <ReviewScope
+            compact
+            rows={filtered}
+            unit="問"
+            scope={scope}
+            size={size}
+            narrowed={narrowed}
+            onScope={(id) => { setScope(id); saveScope('qr', id) }}
+            onSize={(sz) => { setSize(sz); saveSize('qr', sz) }}
+            onStart={start}
+          >
+            <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
+          </ReviewScope>
+        )}
       >
         {body}
       </FocusFrame>
@@ -378,21 +438,18 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
               箱(0〜6)は**仕組みの内側の数字なので画面に出さない**が、
               **どの段にいるか**を3つに束ねて言うことはできる。
               言葉は Quick Response の言い方にそろえる(「覚えた」ではなく
-              「言える」)—— あちらは語、こちらは文である */}
-          <div className="wb-stats">
-            <span className={`wb-stat${tally.まだ > 0 ? ' is-due' : ''}`}>
-              <strong>{tally.まだ}</strong>
-              <span className="wb-stat-label">まだ</span>
-            </span>
-            <span className="wb-stat">
-              <strong>{tally.言えかけ}</strong>
-              <span className="wb-stat-label">言えかけ</span>
-            </span>
-            <span className="wb-stat">
-              <strong>{tally.言える}</strong>
-              <span className="wb-stat-label">言える</span>
-            </span>
-          </div>
+              「言える」)—— あちらは語、こちらは文である。
+
+              **押せる**(2026-09 利用者の指定「タッチすればそれらを
+              復習できるようにしたい」)。見た目は `ReviewStats` 1つで、
+              単語帳とまったく同じもの。**書き写さない** */}
+          <ReviewStats
+            items={QR_GROUPS.map((g) => ({ ...g, n: tally[g.id] ?? 0 }))}
+            value={group}
+            onPick={pickGroup}
+            dueId="yet"
+            lead={groupLead(QR_GROUPS, group, '問')}
+          />
 
           {/* **いつのぶんを、何問ずつ、何で絞るか**(2026-09 利用者の指定)。
               単語帳とまったく同じ部品。**書き写さない。**

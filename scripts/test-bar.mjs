@@ -2494,6 +2494,16 @@ export default defineConfig({
         ボタン: document.querySelector('.rscope .btn--primary').textContent.trim(),
         説明: document.querySelector('.rscope-lead').textContent.trim(),
         横あふれ: doc.scrollWidth > doc.clientWidth,
+        /* **段の札**(2026-09 利用者の指定「タッチすればそれらを
+           復習できるようにしたい」)。**押せるかどうかは、描いてみないと
+           分からない** —— `<span>` のままでも見た目は変わらない */
+        段: [...document.querySelectorAll('.wb-stats > .wb-stat')].map((b) => ({
+          tag: b.tagName,
+          高さ: Math.round(b.getBoundingClientRect().height),
+          押せない: Boolean(b.disabled),
+          文言: (b.querySelector('.wb-stat-label')?.textContent ?? '').trim(),
+        })),
+        段の説明: (document.querySelector('.wb-stats-lead')?.textContent ?? '').trim(),
       }
     })
     let 開 = null
@@ -2517,6 +2527,10 @@ export default defineConfig({
              ぎざぎざに折り返して「素人っぽい」見た目になる(利用者の指摘) */
           欄の幅: [...pop.querySelectorAll('.wbfilter-ctl')]
             .map((e) => Math.round(e.getBoundingClientRect().width)),
+          /* **どの絞り込みが出ているか**(0048 でレベルを足した)。
+             名前で数えるので、行ごと消せば必ず赤くなる */
+          欄の名前: [...pop.querySelectorAll('.wbfilter-name')]
+            .map((e) => e.textContent.trim()),
           画面内: r.left >= -1 && r.right <= window.innerWidth + 1
             && r.top >= -1 && r.bottom <= window.innerHeight + 1,
           幅: Math.round(r.width), 高さ: Math.round(r.height),
@@ -2586,6 +2600,74 @@ export default defineConfig({
     ng('復習の範囲 … 出すものが無いのに、始められる', old.閉.ボタン)
   } else {
     ok(`復習の範囲 … 0件の札は押せない(${old.開.押せない札} 個)`)
+  }
+
+  /* ══ **段の札は、押せる**(2026-09 利用者の指定)═══════════════════
+       > 学習者の心理としては、覚えた、を押すのは少し勇気がいるものです。
+       > なので、それぞれ数を示すだけではなく、
+       > タッチすればそれらを復習できるようにしたいです。
+
+     **押せるかどうかは、描いてみないと分からない** ——
+     `<span>` に戻しても見た目は1ドットも変わらない。
+     あわせて「0件の段は押せない」も見る(効かない操作を見せない)。 */
+  {
+    const { 閉 } = await 測る(390, '', false)
+    const 押せる段 = 閉.段.filter((g) => g.tag === 'BUTTON')
+    if (閉.段.length !== 3) {
+      ng('段を押す … 札が3つ出ていない', `${閉.段.length} 個`)
+    } else if (押せる段.length !== 3) {
+      ng('段を押す … 札が `<button>` になっていない',
+        閉.段.map((g) => g.tag).join('/'))
+    } else if (Math.min(...閉.段.map((g) => g.高さ)) < 40) {
+      ng('段を押す … 押せる大きさ(40px)を割っている',
+        閉.段.map((g) => g.高さ).join('/'))
+    } else if (!閉.段の説明.includes('押すと')) {
+      ng('段を押す … 押したら何が起きるかを言っていない', 閉.段の説明)
+    } else {
+      ok(`段を押す … 3つとも押せる(${閉.段.map((g) => g.文言).join(' / ')}`
+        + `・${閉.段[0].高さ}px)`)
+    }
+
+    /* **押した印が出るか。** 色だけに頼らない印(`is-on` + `aria-pressed`)を、
+       実際に押して確かめる。ここが無いと、どれを選んだのか分からない */
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=rscope`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.wb-stats')
+    await page.click('.wb-stats > .wb-stat:last-child')
+    await page.waitForTimeout(80)
+    const 押した = await page.evaluate(() => {
+      const b = document.querySelector('.wb-stats > .wb-stat:last-child')
+      return {
+        印: b.classList.contains('is-on'),
+        よみあげ: b.getAttribute('aria-pressed'),
+        説明: (document.querySelector('.wb-stats-lead')?.textContent ?? '').trim(),
+      }
+    })
+    await page.close()
+    if (!押した.印 || 押した.よみあげ !== 'true') {
+      ng('段を押す … 押した印が出ていない',
+        `is-on ${押した.印} / aria-pressed ${押した.よみあげ}`)
+    } else if (!押した.説明.includes('もう一度押す')) {
+      ng('段を押す … 戻り方を言っていない', 押した.説明)
+    } else {
+      ok('段を押す … 押した印(色 + 枠 + aria-pressed)と、戻り方が出る')
+    }
+  }
+
+  /* ══ **レベルでも絞り込める**(0048・2026-09 利用者の指定)═══════════
+       > また、レベルの絞り込みも欲しいですね
+     **行ごと消しても、幅の検証は緑のまま**なので、名前で数える */
+  {
+    const { 開 } = await 測る(390)
+    const 名前 = (開?.欄の名前 ?? []).join('/')
+    if (!名前.includes('レベル')) {
+      ng('絞り込み … レベルの行が出ていない', 名前 || '(1つも無い)')
+    } else if (!名前.includes('日付') || !名前.includes('分野')) {
+      ng('絞り込み … もとからあった行が消えている', 名前)
+    } else {
+      ok(`絞り込み … レベルが出て、もとの行も残っている(${名前})`)
+    }
   }
 
   /* **押す前に、何が起きるかを言う。** ここが

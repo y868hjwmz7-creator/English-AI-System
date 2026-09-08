@@ -46,9 +46,10 @@ import {
   QUIZ_FORMS, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
 } from '../lib/wordQuiz.js'
 import ReviewScope from './ReviewScope.jsx'
+import ReviewStats from './ReviewStats.jsx'
 import {
-  SCOPES, loadScope, loadSize, saveScope, saveSize,
-  scopeCounts, scopePool, shouldRecord, takeCount, todayKey, isDueNow,
+  SCOPES, WORD_GROUPS, groupLead, loadScope, loadSize, runKeyOf, saveScope, saveSize,
+  scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import { clozeAt } from '../lib/clozeSentence.js'
 import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
@@ -56,7 +57,7 @@ import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
 import SpeakButton from './SpeakButton.jsx'
 import { usePracticeLog } from '../lib/practice.js'
-import WordbookFilter, { applyWordbookFilter } from './WordbookFilter.jsx'
+import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
 import { CloseIcon, FocusIcon } from './Icons.jsx'
@@ -73,10 +74,21 @@ import { lockScroll } from '../lib/scrollLock.js'
  * その日に単語帳へ入った語から出す。
  * 「知らなかった」は外した(復習と役割が重なっていた)。
  */
+/**
+ * 何を読み込むか。**id は札(`WORD_GROUPS`)の id とそろえてある。**
+ *
+ * `due` だけが既定で、まだ + 覚えかけ をまとめて読む(0027 の 'todo')。
+ * 残りの3つは**札を押したときの段**である(2026-09 利用者の指定)。
+ *
+ *   > それぞれ数を示すだけではなく、
+ *   > タッチすればそれらを復習できるようにしたいです。
+ *
+ * **どれでも復習できる。** 以前は `due` だけが出題で、
+ * 覚えかけ・覚えた は**見返すだけの一覧**だった。
+ */
 const VIEWS = [
-  // **まだ + 覚えかけ**をまとめて読む(0027 の 'todo')。
-  // 日を絞れるように、ここでは due で切らずに読み、画面の側で選ぶ
   { id: 'due', label: '復習', status: 'todo', dueOnly: false },
+  { id: 'unknown', label: 'まだ', status: 'unknown', dueOnly: false },
   { id: 'learning', label: '覚えかけ', status: 'learning', dueOnly: false },
   { id: 'known', label: '覚えた', status: 'known', dueOnly: false },
   // **「積み上がり」はここから外した**(2026-08 利用者の指定)。
@@ -257,7 +269,7 @@ export default function Wordbook({
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
   /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
      絞り込みは手元で行う。選ぶたびに聞き直さない */
-  const [filter, setFilter] = useState({ day: null, material: null, field: null, topic: null })
+  const [filter, setFilter] = useState(emptyFilter)
   const [queue, setQueue] = useState([])        // いまの10語
   const [result, setResult] = useState(null)    // 終わったときの結果
   const [counts, setCounts] = useState({ due: 0, unknown: 0, learning: 0, known: 0 })
@@ -342,7 +354,13 @@ export default function Wordbook({
   const current = (!canLearning && view === 'learning')
     ? VIEWS[0]
     : VIEWS.find((v) => v.id === view) ?? VIEWS[0]
-  const isQuiz = current.id === 'due'
+  /* **どの段でも出題する**(2026-09 利用者の指定)。
+     以前は `current.id === 'due'` で、覚えかけ・覚えた は
+     **見返すだけ**だった。押せる札にした以上、押した先で復習できないと
+     意味がない。一覧のほうは `due` 以外でこれまでどおり下に出る */
+  const isQuiz = true
+  /** いま押している段。`due`(既定)なら、押していない */
+  const group = current.id === 'due' ? null : current.id
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -410,9 +428,10 @@ export default function Wordbook({
      数え上げ(`counts.due`)は表を直に見ているので、0030 を貼る前は
      「入れたばかりの語」を数えない。**出るのに 0 と書いてあると、
      やり切ったと思ってしまう**(2026-09 実機と同じ食い違い) */
-  const dueNow = isQuiz
-    ? rows.filter((r) => isDueNow(r, todayKey())).length
-    : counts.due
+  /* **「復習(N)」は、プルダウンごと消えた**(2026-09)。
+     「今日出す」の数は、下の範囲の札(`ReviewScope`)がそのまま出している。
+     **同じ数を2か所に出さない**(CLAUDE.md)。
+     期限の判定そのもの(`isDueNow`)は `scopeCounts` の中で今も効いている */
 
   /**
    * 復習に出す10語を組む(2026-08 利用者の指定・0027)。
@@ -464,9 +483,20 @@ export default function Wordbook({
 
   /** 絞り込みを当てたあとの一覧。**範囲の数え上げも出題も、ここから** */
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
-  const narrowed = ['day', 'material', 'field', 'topic']
-    .filter((k) => filter[k]).length
+  const narrowed = countNarrowed(filter)
   const forScope = shownRows
+
+  /**
+   * 段の札を押したとき。**範囲は「ぜんぶ」に移す**(2026-09 利用者の指定)。
+   *
+   * 「覚えた」語は次に出る日が先なので、範囲が「今日出す」のままだと
+   * **押した瞬間に0件**になる。押せたのに何も出ないのは、
+   * いちばん分かりにくい形である。外したら、覚えている範囲へ戻す。
+   */
+  const pickGroup = (id) => {
+    setView(id ?? 'due')
+    setScope(id ? 'all' : loadScope('word'))
+  }
 
   /* **選んでいた札が0件になったら、押せる札へ移す。**
      黙って空のまま置くと「出すものがありません」だけが残る
@@ -504,6 +534,23 @@ export default function Wordbook({
     setStarted(true)
     setRunning(true)
   }, [filter.day, filter.material, filter.field, filter.topic, scope, size])
+
+  /**
+   * **復習の最中に「出しかた」を変えたら、その場で組み直す**
+   * (2026-09 利用者の指定「中に入ってからも絞り込みができるように」)。
+   *
+   * 変わったかどうかは **`runKeyOf()` 1か所**(`reviewScope.js`)。
+   * `setFilter` のすぐあとでは古い値しか読めないので、
+   * **値そのものを見張って、変わったら組み直す。**
+   */
+  const runKey = runKeyOf({ scope, size, filter, group })
+  const runKeyRef = useRef(runKey)
+  useEffect(() => {
+    if (!running || !started) { runKeyRef.current = runKey; return }
+    if (runKeyRef.current === runKey) return
+    runKeyRef.current = runKey
+    start()
+  }, [runKey, running, started])
 
   /* **読み直したあとは、そのまま次の回へ進む。**「つぎの ◯ 語」を押した人に、
      もう一度「始める」を押させない(押すものが2つになる) */
@@ -769,20 +816,34 @@ export default function Wordbook({
           **言葉と中身が食い違っていた。**
           いまはカードの3つのボタンと、この3枚の札が1対1で対応する。
           「今日出す」の数は、復習のタブに付く */}
-      <div className="wb-stats">
-        <span className={`wb-stat${counts.unknown > 0 ? ' is-due' : ''}`}>
-          <strong>{counts.unknown}</strong>
-          <span className="wb-stat-label">まだ</span>
-        </span>
-        <span className="wb-stat">
-          <strong>{counts.learning}</strong>
-          <span className="wb-stat-label">覚えかけ</span>
-        </span>
-        <span className="wb-stat">
-          <strong>{counts.known}</strong>
-          <span className="wb-stat-label">覚えた</span>
-        </span>
-      </div>
+      {/* **押せる**(2026-09 利用者の指定)。
+
+            > 学習者の心理としては、覚えた、を押すのは少し勇気がいるものです。
+            > なので、それぞれ数を示すだけではなく、
+            > タッチすればそれらを復習できるようにしたいです。
+
+          数だけ出して押せない札は、**そこに何があるかを見せておいて、
+          触らせない**という形になっていた。「覚えた」を押すのに勇気が
+          要るのは、押したらもう出てこないと思うからである。
+          いつでも呼び出して確かめられるなら、押すのは怖くない。
+
+          見た目は `ReviewStats` 1つで、Quick Response の復習とまったく同じ。
+          **書き写さない**(CLAUDE.md)。段の一覧は `WORD_GROUPS`
+          (`reviewScope.js`)が持っており、**id は `VIEWS` の id そのもの**
+          なので、押したら読み込む `status` がそのまま決まる。
+
+          **見るものの切り替え(プルダウン)は、この札に吸収した。**
+          あちらの「覚えかけ / 覚えた」と、この札の2つは
+          **まったく同じもの**だった(同じものを2か所に出さない)。 */}
+      <ReviewStats
+        items={WORD_GROUPS
+          .filter((g) => g.id !== 'learning' || canLearning)
+          .map((g) => ({ ...g, n: counts[g.id] ?? 0 }))}
+        value={group}
+        onPick={pickGroup}
+        dueId="unknown"
+        lead={groupLead(WORD_GROUPS, group, '語')}
+      />
 
       {/* トレーナーが見た。**人が見ていると分かることが、いちばん効く** */}
       {viewers.length > 0 && (
@@ -810,26 +871,6 @@ export default function Wordbook({
 
           **同じ行に2つ置くなら、両方ともプルダウンにする。**
           幅が中身なりに決まるので、狭い画面でも重ならない。 */}
-      <div className="wb-tabrow">
-        <label className="wb-viewpick">
-          <span className="sr-only">見るものの切り替え</span>
-          <select value={current.id} onChange={(e) => setView(e.target.value)}>
-            {VIEWS.filter((v) => v.id !== 'learning' || canLearning).map((v) => (
-              <option key={v.id} value={v.id}>
-                {/* **復習には「今日出す数」を付ける。**
-                    開く前に、やることの量が分かる */}
-                {v.id === 'due' && dueNow > 0 ? `${v.label}(${dueNow})` : v.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {/* **出題の形は、ここには置かない**(2026-09 利用者の指定)。
-              > 「おまかせ」のプルダウンを 3/10語 の右の方に配置してください。
-              > いまははるか上に、おまかせ、があるのでいちいちスクロールして
-              > 出題の仕方を変更する必要があります。
-            答えているあいだ目が行っているのは進み具合の行なので、
-            **変えたくなる場所のとなり**に置く(下の `.wb-run-head`)。 */}
-      </div>
 
       {/* **手で入れる**(2026-09 利用者の指定「単語帳に手打ちで入力できる
           機能をつけてくれ」)。教材の外で出会った語も、その場で入れられる。
@@ -965,6 +1006,22 @@ export default function Wordbook({
                   {/* **出題の形は、進み具合の右**(2026-09 利用者の指定)。
                       画面のはるか上にあったので、訊き方を変えるたびに
                       上まで送り戻す必要があった */}
+                  {/* **中に入ってからも絞り込める**(2026-09 利用者の指定)。
+                      始める前とまったく同じ「出しかた」を開く。
+                      **中身は書き写さない** —— `ReviewScope` の畳んだ形 */}
+                  <ReviewScope
+                    compact
+                    rows={forScope}
+                    unit="語"
+                    scope={scope}
+                    size={size}
+                    narrowed={narrowed}
+                    onScope={(id) => { setScope(id); saveScope('word', id) }}
+                    onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
+                    onStart={start}
+                  >
+                    <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
+                  </ReviewScope>
                   <label className="wb-formpick">
                     <span className="sr-only">出題の形</span>
                     <select value={want}
@@ -1304,11 +1361,15 @@ export default function Wordbook({
         </div>
       )}
 
-      {/* ── 見返す用の一覧 ────────────────────────────────────── */}
-      {!isQuiz && view !== 'progress' && !loading && (
+      {/* ── 見返す用の一覧 ──────────────────────────────────────
+          **既定(復習)では出さない。** 段を押したときだけ、その段の語を
+          下に並べる(「覚えた」を押して中身を眺める、という使い方)。
+          **一覧は消していない** —— 場所が変わっただけである */}
+      {group && !loading && (
         <>
           {onlyNote}
-          <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
+          {/* **絞り込みはここに置かない。** すぐ上の「出しかた」の中に
+              同じものがある(同じものを2か所に出さない・CLAUDE.md) */}
           {!rows.length && <p className="hint">まだありません。</p>}
           {rows.length > 0 && !shownRows.length && (
             <p className="hint">その絞り込みに当てはまる語はありません。</p>

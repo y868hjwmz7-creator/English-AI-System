@@ -5192,10 +5192,15 @@ button.wbfilter-ctl { text-align: left; }
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--sp-10); margin-bottom: 16px;
 }
+/* **札は押せる**(2026-09 利用者の指定「タッチすればそれらを復習できる
+   ようにしたい」)。`<button>` になったので、既定の見た目を打ち消す */
 .wb-stat {
   display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
   padding: 12px 8px; border: 1px solid var(--border); border-radius: var(--r-12);
   background: var(--surface-2);
+  font: inherit; text-align: center; cursor: pointer;
+  /* **押せる大きさを割らない**(CLAUDE.md)。中身だけで 60px ほどある */
+  min-height: 40px;
 }
 .wb-stat > strong {
   font-size: var(--fs-24); font-weight: 700; line-height: 1.1;
@@ -5205,6 +5210,18 @@ button.wbfilter-ctl { text-align: left; }
 /* **やることがある日は、そこだけ色が付く。** 0 件の日は静かなまま */
 .wb-stat.is-due { border-color: var(--accent); background: var(--accent-soft); }
 .wb-stat.is-due > strong { color: var(--accent); }
+/* **選んでいる印は、色だけに頼らない**(CLAUDE.md)。
+   うすい地色 + 同じ色の文字 + 枠線 + 太字の4つで示す */
+.wb-stat.is-on {
+  border-color: var(--accent); border-width: 2px; padding: 11px 7px;
+  background: var(--accent-soft);
+}
+.wb-stat.is-on > strong,
+.wb-stat.is-on > .wb-stat-label { color: var(--accent); font-weight: 700; }
+/* **0件の段は押せない。ただし消さない** —— 「まだ1つも無い」ことも知らせである */
+.wb-stat:disabled { cursor: default; opacity: 0.55; }
+/* 押したら何が起きるかの1行。**添え物なので、札より先に目が行かない** */
+.wb-stats-lead { margin: -8px 0 16px; }
 
 /* ── この回の進み具合 ────────────────────────────────────────
    「のこり 10 語」という小さな文字は、あってもなくても同じだった
@@ -5229,8 +5246,9 @@ button.wbfilter-ctl { text-align: left; }
 .wb-add-note { margin: 10px 0 0; }
 .wb-add-body > .field-hint { display: block; margin-top: 10px; line-height: 1.7; }
 
-.wb-tabrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
-.wb-viewpick > select,
+/* **`.wb-tabrow` / `.wb-viewpick` は消した**(2026-09)。
+   「見るものの切り替え」のプルダウンは、押せる札に吸収した。
+   `.tabpick`(ゲストのカードの切り替え)は同じ見た目のまま残る */
 .tabpick > select {
   width: auto; height: 38px; border-radius: var(--r-pill);
   font-size: var(--fs-15); font-weight: 700;
