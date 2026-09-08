@@ -187,7 +187,11 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   if (run && run.length) {
     const finished = at >= run.length
     const body = (
-      <section className="qr qr--paper">
+      /* **`qr--paper` は付けない**(2026-09 実機・利用者の指定)。
+         あれは**紙の上の色**に差し替えるもので、地が白くなった
+         この画面では要らない —— 何も足さなければアプリの配色に従い、
+         単語帳の復習とそろう(`.focus-paper` の吹き出しと同じ考え方) */
+      <section className="qr">
         {/* どこまで来たか。**終わりが見えないと続かない**(単語帳と同じ) */}
         <div className="qr-bar" aria-hidden="true">
           <span style={{ width: `${Math.round((Math.min(at, run.length) / run.length) * 100)}%` }} />
@@ -238,6 +242,12 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
     return (
       <FocusFrame
         className="qrfocus"
+        /* **紙を持たない集中モードにする**(2026-09 実機・利用者の指定)。
+             > あくまでバックグラウンドの色を白くして、
+             > 集中モードではなくしてください
+           単語帳の復習と**並ぶ画面**なので、見た目もそろえる。
+           **幅は1ドットも変えていない**(「幅は変えないでくださいよ」) */
+        plain
         learnerId={learnerId}
         page={`qrrev:${at}`}
         scrollKey={`qrrev:${at}`}

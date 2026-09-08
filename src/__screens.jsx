@@ -424,23 +424,34 @@ const TABS = (
    本物と違う入れ物で測ると**壊れていても緑になる**(実際、はじめ
    `div.app-main` に置いていたので、集中モードで枠が伸びることに
    気づけるまでに一手よけいにかかった)。 */
-const QR = (
-  <FocusFrame className="qrfocus" width="w100" page="qr" onClose={() => {}}>
-    <section className="qr qr--paper">
+const QR_PAIR = {
+  key: 'q1',
+  ja: '会議に遅れそうなときは、できるだけ早く連絡してください。',
+  en: 'If you think you are going to be late for the meeting, '
+    + 'please let us know as early as you possibly can, '
+    + 'so that we can move the agenda around and start with '
+    + 'the items that do not need you in the room.',
+  speaker: 'Mika',
+}
+
+/* 2つの Quick Response を、**それぞれ本物の置かれ方**で描く。
+
+   | どこ | `?screen=` | 形 |
+   |---|---|---|
+   | 教材の中(`QuickResponse.jsx`) | `qr` | **紙のある集中モード**(黒い地・`qr--paper`) |
+   | 復習(`QrReview.jsx`) | `qrrev` | **紙を持たない**(`plain`・明るい地) |
+
+   **片方だけ描かない。** 復習を明るくしたついでに教材の中まで明るく
+   してしまっても、`?screen=qr` しか無ければ**緑のまま**になる
+   (「出る」と「出ない」の両方を見る・CLAUDE.md)。 */
+const qrScreen = (plain) => (
+  <FocusFrame className="qrfocus" width="w100" page="qr" plain={plain} onClose={() => {}}
+              /* 「◯ / ◯」は本物と同じく上の帯に置く。
+                 **明るい帯で読める色になっているか**を、ここで測る */
+              top={<span className="focus-count">2 / 25</span>}>
+    <section className={`qr${plain ? '' : ' qr--paper'}`}>
       <div className="qr-bar" aria-hidden="true"><span style={{ width: '20%' }} /></div>
-      <QrCard
-        pair={{
-          key: 'q1',
-          ja: '会議に遅れそうなときは、できるだけ早く連絡してください。',
-          en: 'If you think you are going to be late for the meeting, '
-            + 'please let us know as early as you possibly can, '
-            + 'so that we can move the agenda around and start with '
-            + 'the items that do not need you in the room.',
-          speaker: 'Mika',
-        }}
-        no={2}
-        onAnswer={() => {}}
-      />
+      <QrCard pair={QR_PAIR} no={2} onAnswer={() => {}} />
     </section>
   </FocusFrame>
 )
@@ -475,7 +486,9 @@ createRoot(document.getElementById('root')).render(
   q.get('screen') === 'jobbar'
     ? JOBBAR
     : q.get('screen') === 'qr'
-    ? QR
+    ? qrScreen(false)
+    : q.get('screen') === 'qrrev'
+    ? qrScreen(true)
     : q.get('screen') === 'tabs'
     ? TABS
     : q.get('screen') === 'search'

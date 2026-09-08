@@ -56,6 +56,33 @@ export default function FocusFrame({
   className = '', width = 'w100', learnerId = null, page = 0,
   bodyRef = null, scrollKey = null, onClose,
   top = null, topEnd = null, bar = null, settings = null, children,
+  /**
+   * **紙を持たない集中モード**(2026-09 実機・利用者の指定)。
+   *
+   *   > あくまでバックグラウンドの色を白くして、
+   *   > 集中モードではなくしてください
+   *
+   * Quick Response の復習は、単語帳の復習と**並ぶ画面**である
+   * (どちらも左のメニューから開く、1問ずつの復習)。ところが
+   * 片方だけ**黒い地に白い紙**の集中モードになっていた。
+   *
+   * `plain` を渡すと、単語帳の集中モード(`.wbfocus`)と同じ形になる。
+   *
+   * ・地を黒くしない(`focus--sheet` を付けない)
+   * ・**上の帯も明るくする**(`focus--plain`)。地だけ白くして帯を
+   *   黒いままにすると、**そこだけ集中モードが残って見える**
+   * ・**紙(`.focus-paper`)の地・影・角丸をやめる。** ただし
+   *   **入れ物と余白は残す**(`.focus-plainbox`)——
+   *   消すと中身が 24px ずつ広がる(「幅は変えないでくださいよ」)
+   * ・**書き込む / メモを出さない**(単語帳にも無い)
+   * ・**中身が無ければ「表示」の札も出さない**(効かない操作を見せない)
+   * ・**右下の「集中モードを終える」を出さない。**
+   *   閉じるのは左上の「✕ 閉じる」1つ(単語帳とまったく同じ)
+   *
+   * **幅は1ドットも変えていない**(利用者の指定
+   * 「Quick Response の幅は変えないでくださいよ」)。
+   */
+  plain = false,
   /* 下の帯そのもの。**「入るまで詰める」を掛けたい画面だけが渡す**
      (`useFitRow`・2026-09 利用者の指定「レスポンシブに幅に収まるように」) */
   barRef = null,
@@ -66,6 +93,12 @@ export default function FocusFrame({
   const ownRef = useRef(null)
   const ref = bodyRef ?? ownRef
   const board = useFocusBoard({ learnerId, page, bodyRef: ref })
+
+  /* 「表示」に畳むものが1つも無ければ、**札そのものを出さない。**
+     `plain` では書き込む / メモを出さないので、`settings` も渡されなければ
+     中は空になる。**押しても何も起きない札を見せない**(CLAUDE.md) */
+  const tools = plain ? null : board.tools
+  const hasMore = Boolean(tools || settings)
 
   /* 送ったら、**中身の先頭へ戻す。** 前の1つを下まで読んでいると、
      次の1つが途中から始まって見える */
@@ -81,7 +114,8 @@ export default function FocusFrame({
   return createPortal(
     /* `focus--sheet` … **紙がある集中モード**の印(2026-09 利用者の指定)。
        地をいつも黒にする。単語帳の集中モードには紙が無いので付かない */
-    <div className={`focus focus--sheet${className ? ` ${className}` : ''} focus--${width}`}
+    <div className={`focus${plain ? ' focus--plain' : ' focus--sheet'}`
+           + `${className ? ` ${className}` : ''} focus--${width}`}
          role="dialog" aria-modal="true" aria-label="集中モード">
       {/* ── 上の帯。**細く1行。** ここが太ると中身が下へ押し出される ──
           **書き込みのあいだは、まるごと入れ替える**(レッスン表示と同じ作法)。
@@ -114,19 +148,24 @@ export default function FocusFrame({
                 **一度決めれば何度も要らない**ので、狭い画面では
                 「表示」に畳み、押したときだけ2段目に出す。
                 パソコンでは畳まない(CSS が決めるので、この札も出ない) */}
-            <button type="button" className="btn btn--small lesson-more"
-                    aria-expanded={openSettings} aria-controls="focus-settings"
-                    onClick={() => setOpenSettings((v) => !v)}>
-              <GearIcon /><span className="mid-text">表示</span>
-            </button>
-            <div id="focus-settings"
-                 className={`lesson-settings${openSettings ? ' is-open' : ''}`}>
-              {/* **書き込む / メモ**(2026-09 利用者の指定)。
-                  1つだけに向き合う場所なので、線を引きたくなるのも
-                  気づいたことを残したくなるのも、まさにこの最中である */}
-              {board.tools}
-              {settings}
-            </div>
+            {hasMore && (
+              <>
+                <button type="button" className="btn btn--small lesson-more"
+                        aria-expanded={openSettings} aria-controls="focus-settings"
+                        onClick={() => setOpenSettings((v) => !v)}>
+                  <GearIcon /><span className="mid-text">表示</span>
+                </button>
+                <div id="focus-settings"
+                     className={`lesson-settings${openSettings ? ' is-open' : ''}`}>
+                  {/* **書き込む / メモ**(2026-09 利用者の指定)。
+                      1つだけに向き合う場所なので、線を引きたくなるのも
+                      気づいたことを残したくなるのも、まさにこの最中である */}
+                  {/* **紙を持たない集中モードには出さない**(単語帳にも無い) */}
+                  {tools}
+                  {settings}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -138,12 +177,18 @@ export default function FocusFrame({
               「真ん中に紙があり、コンテンツは基本白ベース、
                 幅により余る左右のスペースが黒」)。
               紙があると、**どこからどこまでが読むところか**が目で分かる */}
-          <div className="focus-paper">{children}</div>
+          {/* **紙を持たないときも、入れ物は残す。**
+              紙をやめると左右の余白(24px ずつ)が消えて、
+              **中身がそのぶん広がる**(実測 390px で 342 → 366px)。
+              言われたのは地の色の話であって、幅の話ではない
+              (「Quick Response の幅は変えないでくださいよ」)。
+              `.focus-plainbox` は**余白だけ**を紙と分け合う */}
+          <div className={plain ? 'focus-plainbox' : 'focus-paper'}>{children}</div>
           {/* **板は送る箱の中に敷く。** 外に置くと、送ったときに
               線だけが取り残される(会議アプリのペンと同じ失敗) */}
-          {board.inkLayer}
+          {plain ? null : board.inkLayer}
         </div>
-        {board.notesPane}
+        {plain ? null : board.notesPane}
       </div>
 
       {/* ── すぐ元に戻る(2026-09 利用者の指定)────────────────
@@ -155,9 +200,13 @@ export default function FocusFrame({
           **帯の上に浮かせる**(`bottom: 100%`)。帯そのものに置くと
           「次 ▶」と重なるか、320px で1行に収まらなくなる。 */}
       <div className="focus-barwrap">
-        <button type="button" className="btn btn--small focus-exit" onClick={onClose}>
-          <CloseIcon />集中モードを終える
-        </button>
+        {/* **紙を持たない集中モードには出さない。** 閉じるのは
+            左上の「✕ 閉じる」1つ(単語帳とまったく同じ) */}
+        {plain ? null : (
+          <button type="button" className="btn btn--small focus-exit" onClick={onClose}>
+            <CloseIcon />集中モードを終える
+          </button>
+        )}
         {/* 下の帯。**渡されなければ出さない**(効かない場所を作らない) */}
         {bar && <div className="focus-bar" ref={barRef}>{bar}</div>}
       </div>

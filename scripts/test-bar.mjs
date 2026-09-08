@@ -2036,6 +2036,119 @@ export default defineConfig({
     }
   }
 
+  /* ══ **Quick Response の復習は、単語帳とそろえる**(2026-09 実機・利用者の指定)══
+       > 単語帳とQuick Responseとの表示を揃えてください
+       > 同じといってもQuick Response の幅は変えないでくださいよ。
+       > 狭くしないでくださいよ。あくまでバックグラウンドの色を白くして、
+       > 集中モードではなくしてください
+
+     **見るのは4つ。**
+       ①復習(`?screen=qrrev`)は**地も帯も明るい**か
+       ②**幅が1ドットも変わっていない**か(いちばん強く言われたこと)
+       ③紙・「集中モードを終える」・「表示」が消えているか
+       ④**教材の中(`?screen=qr`)は、これまでどおり黒いまま**か
+
+     ④を見ないと、**ついでに教材の中まで明るくしても緑のまま**になる
+     (「出る」と「出ない」の両方を見る・CLAUDE.md)。
+     あちらには「紙の周囲は黒」という別の指定がある。 */
+  {
+    const 測る = async (screen) => {
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.goto(`http://localhost:${PORT}/__bar.html?screen=${screen}`,
+        { waitUntil: 'networkidle' })
+      await page.waitForSelector('.qr-card')
+      return page.evaluate(() => {
+        const cs = (el) => (el ? window.getComputedStyle(el) : null)
+        const 地 = cs(document.querySelector('.focus'))
+        const 帯 = cs(document.querySelector('.focus-top'))
+        const 数 = cs(document.querySelector('.focus-count'))
+        const num = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).map(Number)
+        const 明るさ = (c) => { const [r, g, b] = num(c); return (r + g + b) / 3 }
+        const さ = (a, b) => {
+          const [x, y, z] = num(a); const [p, q, r] = num(b)
+          return Math.abs(x - p) + Math.abs(y - q) + Math.abs(z - r)
+        }
+        return {
+          地の明るさ: Math.round(明るさ(地.backgroundColor)),
+          帯の明るさ: Math.round(明るさ(帯.backgroundColor)),
+          地と帯の差: さ(地.backgroundColor, 帯.backgroundColor),
+          数の読みやすさ: 数 ? さ(数.color, 帯.backgroundColor) : -1,
+          幅: Math.round(document.querySelector('.qr').getBoundingClientRect().width),
+          紙: !!document.querySelector('.focus-paper'),
+          終える: !!document.querySelector('.focus-exit'),
+          表示: !!document.querySelector('.lesson-more'),
+        }
+      })
+    }
+    const 中 = await 測る('qr')      // 教材の中(紙のある集中モード)
+    const 復習 = await 測る('qrrev')  // 復習(紙を持たない)
+
+    /* ① 明るいか。**帯だけ黒く残ると、そこだけ集中モードが残って見える** */
+    if (復習.地の明るさ < 128 || 復習.帯の明るさ < 128) {
+      ng(`QR復習 … 地か帯がまだ暗い(地 ${復習.地の明るさ} / 帯 ${復習.帯の明るさ})`,
+        '`focus--plain` で、地も上の帯も明るくする(単語帳の復習と同じ)')
+    } else if (復習.地と帯の差 > 12) {
+      ng(`QR復習 … 帯が地と違う色になっている(差 ${復習.地と帯の差})`,
+        '単語帳の帯(`.wbfocus > .wb-run`)は、地と同じ色 + 下に線1本')
+    } else if (復習.数の読みやすさ < 60) {
+      ng(`QR復習 … 「◯ / ◯」が帯に埋もれている(差 ${復習.数の読みやすさ})`,
+        '`.focus--plain .focus-count` を明るい帯で読める色にする')
+    } else {
+      ok(`QR復習 … 地も帯も明るい(${復習.地の明るさ}・数の差 ${復習.数の読みやすさ})`)
+    }
+
+    /* ② **幅は1ドットも変えない**(利用者がいちばん強く言ったこと) */
+    if (復習.幅 !== 中.幅) {
+      ng(`QR復習 … 幅が変わった(${中.幅} → ${復習.幅}px)`,
+        '「幅は変えないでくださいよ。狭くしないでくださいよ」')
+    } else {
+      ok(`QR復習 … 幅は変わっていない(どちらも ${復習.幅}px)`)
+    }
+
+    /* ③ 紙・出るボタン・「表示」が消えているか */
+    if (復習.紙 || 復習.終える) {
+      ng(`QR復習 … 紙(${復習.紙})か「集中モードを終える」(${復習.終える})が残っている`,
+        '`plain` では、どちらも出さない(単語帳の復習と同じ)')
+    } else if (復習.表示) {
+      ng('QR復習 … 中身の無い「表示」の札が出ている',
+        '書き込む / メモも設定も無いので、押しても何も起きない')
+    } else {
+      ok('QR復習 … 紙も「終える」も「表示」も出さない')
+    }
+
+    /* ④ **教材の中は、これまでどおり黒いまま**(言われた場所だけを直す) */
+    if (中.地の明るさ > 60 || 中.帯の明るさ > 60) {
+      ng(`QR教材の中 … 明るくなってしまった(地 ${中.地の明るさ} / 帯 ${中.帯の明るさ})`,
+        '「紙の周囲は黒」は、あちらの別の指定である(言われた場所だけを直す)')
+    } else if (!中.紙 || !中.終える) {
+      ng(`QR教材の中 … 紙(${中.紙})か「集中モードを終える」(${中.終える})が消えた`)
+    } else {
+      ok(`QR教材の中 … 黒い地に白い紙のまま(地 ${中.地の明るさ})`)
+    }
+
+    /* ⑤ **画面が本当に `plain` を渡しているか**(CLAUDE.md)。
+         ここまでは検証が自分で `plain` を渡して描いているので、
+         **`QrReview.jsx` の側で外しても、①〜④は緑のまま**になる。
+         **「名前が出てくるか」で見ない** —— 説明の中にも `plain` と
+         書いてあるので、コメントを落としてから、**渡している形**で見る */
+    const rev = readFileSync(join(ROOT, 'src/components/QrReview.jsx'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const 教材の中 = readFileSync(join(ROOT, 'src/components/QuickResponse.jsx'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    if (!/\n\s*plain\s*$/m.test(rev)) {
+      ng('QR復習 … `QrReview.jsx` が `FocusFrame` に `plain` を渡していない',
+        '渡さないと、利用者の画面は黒い集中モードのままである')
+    } else if (/\n\s*plain\s*$/m.test(教材の中)) {
+      ng('QR教材の中 … `QuickResponse.jsx` にも `plain` が付いた',
+        '「紙の周囲は黒」はあちらの別の指定(言われた場所だけを直す)')
+    } else if (rev.includes('qr--paper')) {
+      ng('QR復習 … `qr--paper` が残っている',
+        '紙の上の色に差し替えるものなので、地が白いこの画面では要らない')
+    } else {
+      ok('QR復習 … 復習だけが `plain`(教材の中はこれまでどおり)')
+    }
+  }
+
   /* ── **「AI が作っています」の1行は、教材の中に出る**(2026-09 利用者の問い)──
        > 音声や教材を「AIで作成してます」という注意書きはいらないのか？
 
