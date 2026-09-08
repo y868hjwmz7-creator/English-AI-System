@@ -1305,6 +1305,8 @@ export default defineConfig({
       断り書き: document.body.innerText.includes('試作版についての断り書き'),
       接続: document.body.innerText.includes('Supabase に接続でき'),
       版: !!document.querySelector('.app-footer'),
+      // **試作版のサンプルデータに戻す道は、消えていること**
+      戻す: document.body.innerText.includes('サンプルデータに戻す'),
     }))
     if (top.箱 !== 0 || top.断り書き || top.接続) {
       ng(`画面の上 ${w}px … 読まないものが残っている`
@@ -1313,8 +1315,11 @@ export default defineConfig({
     } else if (!top.版) {
       ng(`画面の上 ${w}px … フッター(版)まで消えている`,
         'どの版を見ているかを確かめる唯一の手がかりである')
+    } else if (top.戻す) {
+      ng(`画面の上 ${w}px … 「サンプルデータに戻す」が残っている`,
+        'ゲストの画面にも出ており、しかも確認の文が嘘だった(2026-09 利用者の指摘)')
     } else {
-      ok(`画面の上 ${w}px … 断り書きも接続の知らせも出ない(版は残っている)`)
+      ok(`画面の上 ${w}px … 断り書きも接続の知らせも「戻す」も出ない(版は残っている)`)
     }
 
     /* **画面の下の行き先は、ゲストだけ**(2026-09 利用者の指定)。

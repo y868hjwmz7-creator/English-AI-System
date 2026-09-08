@@ -27,9 +27,7 @@ import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
 import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
-import { buildSeed } from './data/seed.js'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
-import { loadState, resetState, saveState } from './lib/store.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 
 export default function App() {
@@ -65,7 +63,6 @@ export default function App() {
    * 前の教材の名前を持ったままなので、**語そのもの**で渡す。
    */
   const [onlyWords, setOnlyWords] = useState(null)
-  const [state, setState] = useState(null)
   /* **「発行する画面へ」を押した合図**(2026-09 利用者の指定)。
      数を1つ増やすだけ。`TrainerMaterials` がこれを見て、
      作る画面(下書きが入った状態)を開く。
@@ -263,22 +260,25 @@ export default function App() {
     setLanded(true)
   }, [profile, isTrainer, landed])
 
-  // 起動時にデータを読み込む(なければサンプルデータを作る)
-  useEffect(() => {
-    const loaded = loadState(buildSeed())
-    setState(loaded)
-  }, [])
+  /* 試作版のサンプルデータ(`store.js` / `seed.js`)は**道具ごと消した**
+     (2026-09 実機・利用者の指摘)。
 
-  // データが変わるたびに保存する
-  useEffect(() => {
-    if (state) saveState(state)
-  }, [state])
+       > ゲストのIDとパスワードでログインすると危険そうなものがあるぞ。
+       > 1番下の、「サンプルデータに戻す」というやつです
 
-  const handleReset = () => {
-    if (!window.confirm('保存されているデータをすべて消して、サンプルデータに戻します。よろしいですか?')) return
-    const fresh = resetState(buildSeed())
-    setState(fresh)
-  }
+     **`state` は、どの画面からも読まれていなかった。** 読み込んで、
+     保存して、消すだけの入れ物が残っていただけである
+     (`learners` / `studyLogs` / `pronunciationAttempts` の3つで、
+     どれも Supabase と `word_reviews` に移ったあとのもの)。
+
+     それでも**押させてはいけなかった。** 出ていた確認の文が
+     「保存されているデータをすべて消して、サンプルデータに戻します」で、
+     **これは嘘である** —— 単語帳も宿題も Supabase にあるので消えない。
+     読んだゲストは**自分の記録が消えると思う。**
+     **古い注意書きは、消し忘れると嘘になる**(CLAUDE.md)。
+
+     **値を偽にするだけにしない。** 残すと、次に見た人が
+     「まだ使うのかもしれない」と読む(`withSkip` を消したときと同じ)。 */
 
   // 画面の一覧。**メニューも、帯に出す名前も、これ1つを見る。**
   // 2か所に書くと、並びと呼び名が必ず食い違う。
@@ -351,7 +351,7 @@ export default function App() {
     setView(ids[0])
   }, [pageIds, view])
 
-  if (!authChecked || !state) {
+  if (!authChecked) {
     return <div className="loading">読み込み中…</div>
   }
 
@@ -661,9 +661,10 @@ export default function App() {
                 <> ／ 版: <code>{import.meta.env.VITE_BUILD_STAMP}</code></>
               )}
             </p>
-            <button type="button" className="btn btn--link" onClick={handleReset}>
-              サンプルデータに戻す
-            </button>
+            {/* 「サンプルデータに戻す」は**外した**(2026-09 利用者の指摘)。
+                ゲストの画面にも出ており、しかも確認の文が嘘だった。
+                **版はここに残す** —— どの版を見ているかを確かめる
+                唯一の手がかりである */}
           </footer>
         </div>
 
