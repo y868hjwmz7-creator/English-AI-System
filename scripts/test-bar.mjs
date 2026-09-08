@@ -815,6 +815,11 @@ for (const [label, want] of Object.entries(WANT)) {
   /* **伸ばすのは「思い出す」と「日本語 → 英語」だけ**(利用者の指定)。
      4択とつづりは、下に選択肢や入力欄があるので**もともと空いていない** ——
      伸ばすと語と選択肢が数百 px 離れる。**両方向を見る** */
+  /* 4択・つづりは伸ばさないが、**出題の枠は画面の余りから決める**
+     (2026-09 実機・利用者の指定)。ここを決め打ち(9rem)に戻すと、
+     ホーム画面(ブラウザの帯が無く縦が長い)で
+     **「出会った文」が枠の中で切れ、余りはただの空白になる。**
+     `[何を, 幅, 高さ, 箱, 伸ばすか, 枠の下限]` */
   const CASES = [
     ['スマホ / 思い出す', 390, 844, 2, true],
     ['320px / 思い出す', 320, 568, 2, true],
@@ -823,10 +828,14 @@ for (const [label, want] of Object.entries(WANT)) {
     ['スマホ / 穴埋め', 390, 844, 3, true],
     ['320px / 穴埋め', 320, 568, 3, true],
     ['スマホ / 日本語 → 英語', 390, 844, 4, true],
-    ['スマホ / 4択', 390, 844, 0, false],
-    ['スマホ / つづり', 390, 844, 6, false],
+    /* **ホーム画面(PWA)**。ブラウザの帯が無いぶん縦が長い。
+       ここがいちばん空いていた(上下 176px ずつ・実測) */
+    ['スマホ / 4択 / ホーム画面 844', 390, 844, 0, false, 320],
+    /* **Chrome**(帯のぶん 110px ほど低い) */
+    ['スマホ / 4択 / Chrome 734', 390, 734, 0, false, 300],
+    ['スマホ / つづり', 390, 844, 6, false, 320],
   ]
-  for (const [what, w, h, useBox, wantTall] of CASES) {
+  for (const [what, w, h, useBox, wantTall, wantQ] of CASES) {
     box = useBox
     await page.setViewportSize({ width: w, height: h })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
@@ -861,6 +870,12 @@ for (const [label, want] of Object.entries(WANT)) {
         // **本当に穴埋めが出ているか。** 出ていなければ「思い出す」に
         // 落ちており、伸ばす印だけを見ていると**気づけない**
         穴埋め: !!box('.wordcard-cloze-en'),
+        /* 出題の枠。**「出会った文」を開いた状態**で測っているので、
+           はみ出しが残っていれば、その文が枠の中で切れている */
+        枠: box('.wordcard-q')
+          ? Math.round(box('.wordcard-q').getBoundingClientRect().height) : 0,
+        枠のはみ出し: box('.wordcard-q')
+          ? box('.wordcard-q').scrollHeight - box('.wordcard-q').clientHeight : 0,
       }
     })
     /* **高さの割合で「伸ばしていない」を見ない。** 4択は選択肢が4つ並ぶので、
@@ -878,6 +893,17 @@ for (const [label, want] of Object.entries(WANT)) {
     } else if (wantTall && m.カード < m.画面 * 0.5) {
       ng(`${what} … カードが画面の半分も使っていない(${m.カード} / ${m.画面}px)`,
         '`.wbfocus .wordcard--recall` を伸ばす指定が外れている')
+    /* **伸ばさない形でも、出題の枠は画面の余りから決める**
+       (2026-09 実機・利用者の指定)。決め打ち(9rem = 144px)に戻すと
+       ここで赤くなる。**枠の広さと、切れていないことを両方見る** ——
+       広さだけを見ると、中身がもっと長い教材で切れても気づけない */
+    } else if (wantQ && m.枠 < wantQ) {
+      ng(`${what} … 出題の枠が狭い(${m.枠} < ${wantQ}px)`,
+        '`.wbfocus .wordcard:not(--recall) > .wordcard-q` の高さが'
+        + '決め打ち(9rem)に戻っている。ホーム画面では余りがただの空白になる')
+    } else if (wantQ && m.枠のはみ出し > 0) {
+      ng(`${what} … 「出会った文」が枠の中で切れている(${m.枠のはみ出し}px)`,
+        '出題の枠が中身より低い')
     } else if (m.答えの下端 !== null && m.答えの下端 > m.画面) {
       ng(`${what} … 答えの行が画面の外に出ている(${m.答えの下端} > ${m.画面})`)
     } else if (m.本体を送るか) {
@@ -886,7 +912,8 @@ for (const [label, want] of Object.entries(WANT)) {
       ng(`${what} … 横にはみ出している`)
     } else {
       ok(`${what} … カード ${m.カード} / ${m.画面}px`
-        + `(${wantTall ? '伸ばす' : '伸ばさない'})・画面は送らない`)
+        + `(${wantTall ? '伸ばす' : '伸ばさない'})・画面は送らない`
+        + (wantQ ? `・出題の枠 ${m.枠}px で切れない` : ''))
     }
     /* **穴埋めは、目でも1枚だけ確かめる**(こちらには画面が見えないので、
        せめて絵にして残す)。答えを開いた形も撮る */
