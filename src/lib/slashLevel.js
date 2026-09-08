@@ -76,31 +76,25 @@ export function saveSearchOpen(open) {
 }
 
 /**
- * ゲストの「過去の宿題」のしぼり込みを開いているか(2026-08 利用者の指定)。
- *
- * **教材の欄(`eas.materialSearch`)とは別に覚える。**
- * 別の画面の別の欄なので、片方を閉じてもう片方まで閉じては困る。
- */
-const PAST_KEY = 'eas.pastFilter'
-export function loadPastFilterOpen() {
-  try { return localStorage.getItem(PAST_KEY) === 'open' } catch { return false }
-}
-export function savePastFilterOpen(open) {
-  try { localStorage.setItem(PAST_KEY, open ? 'open' : 'closed') } catch { /* 使えなくても困らない */ }
-}
-
-/**
- * ゲストの「宿題をさがす」を開いているか(2026-09 利用者の指定)。
+ * ゲストの「宿題をさがす・しぼる」を開いているか(2026-09 利用者の指定)。
  *
  *   > 宿題を探すも折りたたみ式にしてください
  *
- * **「宿題をしぼる」(`eas.pastFilter`)とは別に覚える。**
- * すぐ下に並ぶ別の欄なので、片方を閉じてもう片方まで閉じては困る
- * (教材の欄と分けてあるのと、まったく同じ考え方)。
+ * **教材の欄(`eas.materialSearch`)とは別に覚える。**
+ * 別の画面の別の欄なので、片方を閉じてもう片方まで閉じては困る。
  *
  * **既定は閉じている。** 開いたままだと、検索の欄と絞り込みの札で
  * 画面の半分が埋まり、**宿題が1件も見えない**(実機の写真)。
  * 何件あるかは、畳んだままでも札が言う。
+ *
+ * **控えは1つだけ**(2026-09 実機・利用者の指定)。
+ *
+ *   > 「教材をさがす」と「教材を絞る」を１つにまとめて
+ *
+ * 以前は「さがす」と「しぼる」で箱が2つあり、控えも
+ * `eas.pastSearch` / `eas.pastFilter` と2つだった。
+ * 箱を1つにしたので、**使わなくなった `eas.pastFilter` は消した**
+ * (値を偽にするだけにすると、次に見た人が「まだ使うのかもしれない」と読む)。
  */
 const PAST_SEARCH_KEY = 'eas.pastSearch'
 export function loadPastSearchOpen() {

@@ -1789,6 +1789,10 @@ export default defineConfig({
          残っている(実測して気づいた)。`checkVisibility()` で見る */
       入力が見えるか: !!(input && input.checkVisibility()),
       畳んだ丈: Math.round(box(fold).height),
+      /* **さがすとしぼるは、1つの箱**(2026-09 実機・利用者の指定)。
+         取り組みの札が、検索の欄と**同じ `<details>` の中**にいるか */
+      札の行が中にいる: !!fold.querySelector('.chiprow'),
+      畳める箱の数: document.querySelectorAll('[data-fold] details').length,
       // 教材の側 —— 畳んでいない・札を使っていない・件数はこれまでどおり
       教材は畳めない: !!plain && plain.tagName === 'SECTION',
       教材の札: !!document.querySelector('[data-plain] .searchbar-badge'),
@@ -1812,8 +1816,13 @@ export default defineConfig({
       '「宿題を探すの文字の反対側」(利用者の指定)')
   } else if (shut.はみ出し) {
     ng('宿題をさがす … 横にはみ出している')
+  } else if (!shut.札の行が中にいる || shut.畳める箱の数 !== 1) {
+    ng(`宿題をさがす … さがすとしぼるが1つになっていない`
+      + `(箱 ${shut.畳める箱の数} 個・札の行は中に ${shut.札の行が中にいる})`,
+      '「「教材をさがす」と「教材を絞る」を１つにまとめて」(利用者の指定)')
   } else {
-    ok(`宿題をさがす … 畳んで ${shut.畳んだ丈}px・札が右端に出る(${shut.札}・${shut.札の右}px)`)
+    ok(`宿題をさがす・しぼる … 畳んで ${shut.畳んだ丈}px・箱は1つ`
+      + `・札が右端に出る(${shut.札}・${shut.札の右}px)`)
   }
 
   /* **教材の画面は1ドットも変わっていない。**
@@ -1863,7 +1872,7 @@ export default defineConfig({
   /* ── 画面が本当に呼んでいるか(検証だけが緑にならないように)──── */
   const tl = readFileSync(new URL('../src/components/TrainerLearners.jsx',
     import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-  if (!/title="宿題をさがす"[\s\S]{0,400}collapsible/.test(tl)) {
+  if (!/title="宿題をさがす・しぼる"[\s\S]{0,400}collapsible/.test(tl)) {
     ng('宿題をさがす … 画面が `collapsible` を渡していない',
       '部品に足しても、渡さなければ利用者の画面は変わらない')
   } else if (!tl.includes('savePastSearchOpen(')) {
@@ -1872,8 +1881,21 @@ export default defineConfig({
   } else if (readFileSync(new URL('../src/components/TrainerMaterials.jsx',
     import.meta.url), 'utf8').includes('collapsible')) {
     ng('教材をさがす … `collapsible` を渡している', '言われた場所だけを直す')
+  /* **箱を2つに戻していないか。** `<details className="card material-search"`
+     を自分で書いていたら、それが「宿題をしぼる」の箱である */
+  } else if (/<details className="card material-search"/.test(tl)) {
+    ng('宿題をさがす … 畳める箱が2つに戻っている',
+      '「1つにまとめて」(利用者の指定)。しぼるは `SearchBar` の中身にする')
+  /* **絞り込みの行は、まとめた箱の「下」**(利用者の指定)。
+     ソースの並び順で見る —— `SearchBar` が先、`HomeworkFilter` が後 */
+  } else if (tl.indexOf('<HomeworkFilter') < tl.indexOf('<SearchBar')) {
+    ng('宿題をさがす … 絞り込みの行が箱より上にいる',
+      '「「日付・並び順」「分野: すべて」「苦手項目で絞る」をその下に」')
+  } else if (tl.includes('PastFilterOpen')) {
+    ng('宿題をさがす … 使わなくなった控え(`eas.pastFilter`)が残っている',
+      '**値を偽にするだけにしない。** 残すと次に見た人が迷う(CLAUDE.md)')
   } else {
-    ok('宿題をさがす … 画面が渡しており、教材の側は渡していない')
+    ok('宿題をさがす・しぼる … 1つの箱・絞り込みはその下・教材の側は変えていない')
   }
 
   await page.close()

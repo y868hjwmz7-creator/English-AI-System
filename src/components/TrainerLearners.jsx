@@ -18,10 +18,7 @@ import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
 import MaterialDelete from './MaterialDelete.jsx'
 import { parseMaterialTitle } from '../lib/format.js'
-import {
-  loadPastFilterOpen, savePastFilterOpen,
-  loadPastSearchOpen, savePastSearchOpen,
-} from '../lib/slashLevel.js'
+import { loadPastSearchOpen, savePastSearchOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import Wordbook from './Wordbook.jsx'
@@ -101,9 +98,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const [printHwId, setPrintHwId] = useState(null) // 紙に出している宿題の id
   const [bodies, setBodies] = useState({})         // 教材id → 読んだ中身
   const [bodyBusy, setBodyBusy] = useState(null)   // いま読んでいる教材id
-  // 絞り込みの欄を開いているか。**教材の欄とは別に覚える**(別の画面の別の欄)
-  const [pastOpen, setPastOpen] = useState(loadPastFilterOpen)
-  /* 「宿題をさがす」の開け閉め。**しぼる(`pastOpen`)とは別に覚える** */
+  /* 「宿題をさがす・しぼる」の開け閉め。**教材の欄とは別に覚える**
+     (別の画面の別の欄)。2026-09 に**さがすとしぼるを1つにまとめた**ので、
+     控えも1つになった(`eas.pastFilter` は使わなくなり、消してある)。
+     **値を偽にするだけにしない** —— 残すと、次に見た人が
+     「まだ使うのかもしれない」と読む */
   const [pastSearchOpen, setPastSearchOpen] = useState(loadPastSearchOpen)
   // 過去の宿題の絞り込み。
   // **出すのは、そのゲストの宿題に実際に含まれる弱点だけ。**
@@ -762,25 +761,35 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                       </p>
                     )}
 
-                    {/* **「宿題をさがす」を先に、「宿題をしぼる」をその下に**
-                        (2026-08 利用者の指定)。
-                          > 「宿題をしぼる」を「宿題をさがす」の下に移動させて
-                          > ください。そして、教材モードと同じように、検索バーを
-                          > 入れ、その右にプルダウンの並び替えをおいてください。
-                        帯は `SearchBar.jsx` — 教材の画面と**同じ部品**である。
+                    {/* ── **さがすとしぼるは、1つの箱にまとめる** ──────────
+                        2026-09 実機・利用者の指定。
 
-                        **畳める**(2026-09 利用者の指定)。
-                          > 宿題を探すも折りたたみ式にしてください。
-                          > そして検索バーの下の「3件」は丸などで囲って何か
-                          > 配色してください。そして位置は宿題を探すの文字の
-                          > 反対側、検索バーの右端の上に
-                        すぐ下の「宿題をしぼる」と**同じ形**にする ——
-                        並んで出るので、形が違うと2つの別物に見える。
+                          > 「教材をさがす」と「教材を絞る」を１つにまとめて、
+                          > そして「日付・並び順」「分野: すべて」
+                          > 「苦手項目で絞る」をその下においてくれ
+
+                        **畳める箱が2つ、同じ見た目で縦に並んでいた**
+                        (「宿題をさがす」と「宿題をしぼる」)。しかも
+                        そのあいだに絞り込みの行が挟まっていたので、
+                        **どちらを開けばよいのか押すまで分からない。**
+                        中身は「名前で引く」と「取り組みで絞る」で、
+                        **どちらも一覧を狭めるという1つのこと**である。
+
+                        並びは
+                          ▸ 宿題をさがす・しぼる            [3 件]
+                          [日付・並び順][分野][苦手項目]     ← その下
+
+                        帯は `SearchBar.jsx` — 教材の画面と**同じ部品**。
                         件数の札は畳んだままでも見えるので、
-                        **開かなくても何件あるかは分かる。** */}
+                        **開かなくても何件あるかは分かる。**
+
+                        **教材の画面(トレーナーの「教材」)は1ドットも
+                        変えていない。** あちらは「探す / 条件で絞り込む / 作る」の
+                        3つで、まとめてよいものが別である
+                        (言われた場所だけを直す)。 */}
                     {assignments.length > 0 && (
                       <SearchBar
-                        title="宿題をさがす"
+                        title="宿題をさがす・しぼる"
                         keyword={pastKeyword}
                         onKeyword={setPastKeyword}
                         placeholder="教材名・見出しでさがす"
@@ -788,38 +797,10 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         collapsible
                         open={pastSearchOpen}
                         onOpenChange={(v) => { setPastSearchOpen(v); savePastSearchOpen(v) }}
-                      />
-                    )}
-
-                    {/* **日付・分野・場面・苦手項目で絞る**(2026-08 利用者の指定)。
-                          > ここも日付のタブを入れ、その中に新しい順、古い順の
-                          > 機能をまとめてくれ。日付タブの右に業界、趣味、
-                          > シチュエーション、話題で絞り込む機能を、
-                          > そしてもう一つは苦手項目から絞り込む機能だ
-                        並び順は**日付の吹き出しの中**に入っている。
-                        日付にまつわる操作を1か所にまとめるため。
-                        判断は `HomeworkFilter` 1か所(単語帳と同じ考え方) */}
-                    {assignments.length > 0 && (
-                      <HomeworkFilter
-                        rows={assignments}
-                        value={pastFilter}
-                        onChange={setPastFilter}
-                        sort={pastSort}
-                        onSort={setPastSort}
-                      />
-                    )}
-
-                    {/* **たたんでおけて、開閉は覚える。** 中の札は、その人に
-                        出したものしか出ないのでそのまま残す(件数が付いていて、
-                        押す前に結果が読める) */}
-                    {assignments.length > 0 && (
-                      <details className="card material-search" open={pastOpen}
-                               onToggle={(e) => {
-                                 setPastOpen(e.currentTarget.open)
-                                 savePastFilterOpen(e.currentTarget.open)
-                               }}>
-                        <summary className="card-title material-search-sum">宿題をしぼる</summary>
-                        {/* 取り組みの状態。件数を添えると、押す前に結果が読める */}
+                      >
+                        {/* 取り組みの状態。件数を添えると、押す前に結果が読める。
+                            **その人に出したものしか出ない**ので、教材の画面の
+                            `WeaknessTagPicker`(39個ぜんぶ)には替えない */}
                         <div className="chiprow">
                           {[
                             { id: 'all', label: 'すべて', n: assignments.length },
@@ -835,11 +816,28 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                             </button>
                           ))}
                         </div>
+                      </SearchBar>
+                    )}
 
-                        {/* **苦手項目は、上の絞り込みの行へ移した**
-                            (2026-08 利用者の指定)。ここに残すと2か所になる */}
+                    {/* **日付・分野・場面・苦手項目で絞る**(2026-08 利用者の指定)。
+                          > ここも日付のタブを入れ、その中に新しい順、古い順の
+                          > 機能をまとめてくれ。日付タブの右に業界、趣味、
+                          > シチュエーション、話題で絞り込む機能を、
+                          > そしてもう一つは苦手項目から絞り込む機能だ
+                        並び順は**日付の吹き出しの中**に入っている。
+                        日付にまつわる操作を1か所にまとめるため。
+                        判断は `HomeworkFilter` 1か所(単語帳と同じ考え方)。
 
-                      </details>
+                        **置くのは、まとめた箱の下**(2026-09 利用者の指定)。
+                        以前は2つの箱に挟まれていた */}
+                    {assignments.length > 0 && (
+                      <HomeworkFilter
+                        rows={assignments}
+                        value={pastFilter}
+                        onChange={setPastFilter}
+                        sort={pastSort}
+                        onSort={setPastSort}
+                      />
                     )}
 
 

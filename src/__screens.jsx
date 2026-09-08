@@ -354,14 +354,25 @@ const SEARCH = (
   <div className="app-main" style={{ padding: 16 }}>
     <div data-fold="1">
       <SearchBar
-        title="宿題をさがす"
+        title="宿題をさがす・しぼる"
         keyword="" onKeyword={() => {}}
         placeholder="教材名・見出しでさがす"
         count={3}
         collapsible
         open={q.get('open') === '1'}
         onOpenChange={() => {}}
-      />
+      >
+        {/* **さがすとしぼるは1つの箱**(2026-09 実機・利用者の指定)。
+            取り組みの札が、検索の欄と**同じ箱の中**に入る */}
+        <div className="chiprow">
+          {[['すべて', 3], ['やった', 1], ['まだ', 2]].map(([label, n]) => (
+            <button key={label} type="button"
+                    className={`chip${label === 'すべて' ? ' chip--on' : ''}`}>
+              {label} <span className="chip-count">{n}</span>
+            </button>
+          ))}
+        </div>
+      </SearchBar>
     </div>
     <div data-plain="1">
       <SearchBar
