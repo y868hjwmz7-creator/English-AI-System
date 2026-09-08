@@ -2064,18 +2064,27 @@ export default defineConfig({
        > 狭くしないでくださいよ。あくまでバックグラウンドの色を白くして、
        > 集中モードではなくしてください
 
-     **見るのは4つ。**
+     **余白は、そのあと利用者の判断で改めた**(2026-09 実機)。
+
+       > スマホでの quick response の表示、余白が広く画面のスペースを
+       > 生かし切れていないから、比較として添付した単語帳と
+       > 上下左右共に同じ余白にしてください。PCでの表示は現状問題ありません。
+
+     **見るのは5つ。**
        ①復習(`?screen=qrrev`)は**地も帯も明るい**か
-       ②**幅が1ドットも変わっていない**か(いちばん強く言われたこと)
+       ②**スマホでは、カードが `.focus-body` の余白にぴったり合う**か
+         (単語帳の復習とまったく同じ余白。実測 390px で左右 12 / 12px)
        ③紙・「集中モードを終える」・「表示」が消えているか
        ④**教材の中(`?screen=qr`)は、これまでどおり黒いまま**か
+       ⑤**PC(1280px)の幅は1ドットも変わっていない**か
+         (「PCでの表示は現状問題ありません」)
 
-     ④を見ないと、**ついでに教材の中まで明るくしても緑のまま**になる
-     (「出る」と「出ない」の両方を見る・CLAUDE.md)。
-     あちらには「紙の周囲は黒」という別の指定がある。 */
+     ④⑤を見ないと、**ついでに教材の中まで明るくしても、
+     PC の幅まで変えても緑のまま**になる
+     (「出る」と「出ない」の両方を見る・CLAUDE.md)。 */
   {
-    const 測る = async (screen) => {
-      await page.setViewportSize({ width: 390, height: 844 })
+    const 測る = async (screen, w = 390) => {
+      await page.setViewportSize({ width: w, height: 844 })
       await page.goto(`http://localhost:${PORT}/__bar.html?screen=${screen}`,
         { waitUntil: 'networkidle' })
       await page.waitForSelector('.qr-card')
@@ -2099,11 +2108,34 @@ export default defineConfig({
           紙: !!document.querySelector('.focus-paper'),
           終える: !!document.querySelector('.focus-exit'),
           表示: !!document.querySelector('.lesson-more'),
+          /* **カードが `.focus-body` の余白にぴったり合っているか。**
+             単語帳の復習(`.wbfocus .wordcard`)はそうなっている ——
+             入れ物が余白を足していると、そのぶん内側に入る */
+          ...(() => {
+            const b = document.querySelector('.focus-body')
+            const r = document.querySelector('.qr').getBoundingClientRect()
+            const br = b.getBoundingClientRect()
+            const p = window.getComputedStyle(b)
+            const px = (v) => Math.round(parseFloat(v))
+            return {
+              余白: [px(p.paddingTop), px(p.paddingRight),
+                px(p.paddingBottom), px(p.paddingLeft)],
+              // 枠の内側から、カードまでの余り(0 なら、ぴったり合っている)
+              余り: [
+                Math.round(r.left - (br.left + px(p.paddingLeft))),
+                Math.round((br.right - px(p.paddingRight)) - r.right),
+              ],
+              上の余り: Math.round(r.top - (br.top + px(p.paddingTop))),
+            }
+          })(),
         }
       })
     }
     const 中 = await 測る('qr')      // 教材の中(紙のある集中モード)
     const 復習 = await 測る('qrrev')  // 復習(紙を持たない)
+    // PC は「現状問題ありません」なので、**変わっていないこと**を数える
+    const 中PC = await 測る('qr', 1280)
+    const 復習PC = await 測る('qrrev', 1280)
 
     /* ① 明るいか。**帯だけ黒く残ると、そこだけ集中モードが残って見える** */
     if (復習.地の明るさ < 128 || 復習.帯の明るさ < 128) {
@@ -2119,12 +2151,28 @@ export default defineConfig({
       ok(`QR復習 … 地も帯も明るい(${復習.地の明るさ}・数の差 ${復習.数の読みやすさ})`)
     }
 
-    /* ② **幅は1ドットも変えない**(利用者がいちばん強く言ったこと) */
-    if (復習.幅 !== 中.幅) {
-      ng(`QR復習 … 幅が変わった(${中.幅} → ${復習.幅}px)`,
-        '「幅は変えないでくださいよ。狭くしないでくださいよ」')
+    /* ② **スマホでは、単語帳の復習とまったく同じ余白**(2026-09 利用者の指定)。
+         入れ物(`.focus-plainbox`)が紙と同じ余白を持っていたので、
+         カードが**左右 12px ずつ内側**に入り、幅も 24px 細かった。
+         いまは `.focus-body` の余白(16 / 12)にぴったり合う */
+    const 余り = 復習.余り
+    if (余り[0] !== 0 || 余り[1] !== 0 || 復習.上の余り !== 0) {
+      ng(`QR復習 390px … 枠の余白に合っていない`
+        + `(左右の余り ${余り.join(' / ')}px・上の余り ${復習.上の余り}px)`,
+        'スマホでは `.focus-plainbox` の余白を落とし、'
+        + '単語帳の復習と同じ余白にする(利用者の指定)')
     } else {
-      ok(`QR復習 … 幅は変わっていない(どちらも ${復習.幅}px)`)
+      ok(`QR復習 390px … 単語帳と同じ余白(上下左右 ${復習.余白.join(' / ')}px`
+        + `・カード ${復習.幅}px)`)
+    }
+
+    /* ⑤ **PC は1ドットも変えていない**(「PCでの表示は現状問題ありません」)。
+         狭い画面だけを直したので、ここは教材の中とそろったままである */
+    if (復習PC.幅 !== 中PC.幅) {
+      ng(`QR復習 1280px … PC の幅が変わった(${中PC.幅} → ${復習PC.幅}px)`,
+        '直したのは狭い画面だけ(「PCでの表示は現状問題ありません」)')
+    } else {
+      ok(`QR復習 1280px … PC の幅は変わっていない(どちらも ${復習PC.幅}px)`)
     }
 
     /* ③ 紙・出るボタン・「表示」が消えているか */
@@ -2148,7 +2196,7 @@ export default defineConfig({
       ok(`QR教材の中 … 黒い地に白い紙のまま(地 ${中.地の明るさ})`)
     }
 
-    /* ⑤ **画面が本当に `plain` を渡しているか**(CLAUDE.md)。
+    /* ⑥ **画面が本当に `plain` を渡しているか**(CLAUDE.md)。
          ここまでは検証が自分で `plain` を渡して描いているので、
          **`QrReview.jsx` の側で外しても、①〜④は緑のまま**になる。
          **「名前が出てくるか」で見ない** —— 説明の中にも `plain` と
