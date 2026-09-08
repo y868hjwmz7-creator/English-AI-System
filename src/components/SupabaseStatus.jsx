@@ -1,14 +1,34 @@
 /**
- * Supabase への接続状態を表示する小さな帯。
+ * Supabase への接続がうまくいっていないときだけ出す、小さな帯。
  *
- * つなぎ込みの作業中に「どこで止まっているか」を画面で確かめるためのもの。
- * 接続が完了して実際にデータを読み書きするようになったら、この帯は外す。
+ * 【つながっているときは、何も出さない】(2026-09 実機・利用者の指定)
+ *
+ *   > 上部のsupabaseと試作版うんぬん、、をたたむ。というくだりを消せませんか
+ *
+ *   つなぎ込みの作業中は「どこで止まっているか」を確かめるために
+ *   **成功も出していた。** けれども接続はもう当たり前になっており、
+ *   毎回いちばん上に緑の箱が出るだけで、**読むものではなくなっていた。**
+ *   このファイルの最初の版にも「接続が完了したらこの帯は外す」と
+ *   書いてあり、そのときが来た。
+ *
+ * 【それでも、失敗は黙って消さない】
+ *
+ *   **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md)。
+ *   消したのは**成功のときだけ**で、届かない・表がまだ無いといった
+ *   ときは、これまでどおり出す。
+ *
+ * 【ゲストには出さない】
+ *
+ *   「Supabase に届きません」「SQL Editor で 0001 を実行してください」は
+ *   **仕組みの内側の話**で、ゲストにできることは何も無い(CLAUDE.md)。
+ *   出すのはトレーナーと管理者だけ。**既定は「見せない」**なので、
+ *   役割が分からないうちも出ない。
  */
 import { useEffect, useState } from 'react'
 import { checkConnection, supabaseProjectRef } from '../lib/supabase.js'
+import { canSeeSystemDetail } from '../lib/viewer.js'
 
 const LOOK = {
-  ok:           { cls: 'notice--ok',   title: 'Supabase に接続できています' },
   unconfigured: { cls: 'notice--info', title: 'Supabase はまだ設定されていません' },
   'no-schema':  { cls: 'notice--warn', title: 'あと一歩 — テーブルがまだありません' },
   network:      { cls: 'notice--warn', title: 'Supabase に届きませんでした' },
@@ -25,8 +45,12 @@ export default function SupabaseStatus() {
   }, [])
 
   if (!result) return null
+  // **つながっているときは何も出さない**(利用者の指定)
+  if (result.ok) return null
+  // 内側の話なので、ゲストには出さない(既定は「見せない」)
+  if (!canSeeSystemDetail()) return null
 
-  const look = LOOK[result.ok ? 'ok' : result.reason] ?? LOOK.error
+  const look = LOOK[result.reason] ?? LOOK.error
 
   return (
     <div className={`notice ${look.cls} app-notice`}>

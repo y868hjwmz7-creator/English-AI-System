@@ -12,7 +12,7 @@ import {
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
-import { NAV_PUSH_AT, loadNavOpen, loadNoticeOpen, saveNavOpen, saveNoticeOpen, useWide } from './lib/nav.js'
+import { NAV_PUSH_AT, loadNavOpen, saveNavOpen, useWide } from './lib/nav.js'
 import { setViewerRole } from './lib/viewer.js'
 /* **教材へのリンク**(`?m=…`・2026-09 利用者の指定)。
    読み方も外し方も `materialLink.js` 1か所 */
@@ -176,7 +176,10 @@ export default function App() {
        「音声がちゃんと作られているのにいまだにこの表示が消えない」 */
     setClipNote(detail ? String(detail) : null)
   }), [])
-  const [noticeOpen, setNoticeOpen] = useState(loadNoticeOpen)
+  /* 試作版の断り書きの開け閉め(`noticeOpen`)は**外した**(2026-09)。
+     断り書きそのものを消したので、覚えておくものが無い。
+     `loadNoticeOpen` / `saveNoticeOpen`(`nav.js`)は残してあるが、
+     どこからも呼んでいない —— 断り書きを戻す日には、そのまま使える */
   const toggleNav = () => setNavOpen((v) => {
     const next = !v
     if (wide) saveNavOpen(next)   // 覚えるのは PC のときだけ
@@ -599,29 +602,26 @@ export default function App() {
               どこからも読まれていなかった —— つまり**押しても何も起きない欄**が、
               開いた瞬間の画面に1つ置かれていた。 */}
 
+          {/* **つながっていないときだけ**出る(2026-09 利用者の指定)。
+              緑の「接続できています」は消した —— 接続はもう当たり前で、
+              毎回いちばん上に出るだけの、読まれない箱になっていた。
+              **失敗は黙って消さない**ので、届かないときは出る
+              (トレーナーと管理者だけ。ゲストには内側の話を見せない) */}
           <SupabaseStatus />
 
-          {/* 試作版の断り書き。**毎回ぜんぶ読ませない。**
-              どの画面にも出るので、開いたままだと本文が下へ押し下げられる。
-              一度閉じたら覚えておき、見たいときだけ開く */}
-          {noticeOpen ? (
-            <div className="notice notice--info app-notice">
-              <button type="button" className="btn btn--link app-notice-close"
-                      onClick={() => { setNoticeOpen(false); saveNoticeOpen(false) }}>
-                とじる
-              </button>
-              <strong>この試作版について:</strong> Supabase への接続はできましたが、
-              <strong>画面に出ているデータはまだこのブラウザの中のもの</strong>です
-              (サンプルデータ)。これから順に Supabase へ移していきます。
-              発音スコアは<strong>実際の音声を解析した結果ではなく、仮の数値</strong>です。
-              詳しくは <code>docs/PROJECT_SPEC.md</code> の第5章をご覧ください。
-            </div>
-          ) : (
-            <button type="button" className="btn btn--link app-notice-open"
-                    onClick={() => { setNoticeOpen(true); saveNoticeOpen(true) }}>
-              この試作版についての断り書きを読む
-            </button>
-          )}
+          {/* 試作版の断り書きは**外した**(2026-09 利用者の指定)。
+
+                > 上部のsupabaseと試作版うんぬん、、をたたむ。というくだりを
+                > 消せませんか
+
+              しかも中身が**もう本当ではなかった** ——「画面に出ている
+              データはまだこのブラウザの中のもの」と書いてあったが、
+              いまは教材も単語帳も Supabase にある。
+              **古い注意書きは、消し忘れると嘘になる**(CLAUDE.md)。
+
+              発音の断り(点数は付かない)は**消えていない** ——
+              `PronunciationPractice` の中に、その場で書いてある。
+              版(`VITE_BUILD_STAMP`)も下のフッターに残っている */}
 
           <main className="app-main">
             {view === 'materials' ? (

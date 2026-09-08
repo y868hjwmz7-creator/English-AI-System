@@ -1248,6 +1248,33 @@ export default defineConfig({
         + `・hidden が残ると押せなくなる(${s.取り残し.上端}px)`)
     }
 
+    /* **画面のいちばん上に、読まないものを置かない**(2026-09 利用者の指定)。
+
+         > 上部のsupabaseと試作版うんぬん、、をたたむ。というくだりを
+         > 消せませんか
+
+       骨組みは Supabase 未設定 かつ 役割が分からない状態なので、
+       **接続の知らせも断り書きも1つも出てはいけない**
+       (接続の知らせは「つながっていない × トレーナー」のときだけ)。
+       **版(`VITE_BUILD_STAMP`)はフッターに残す** ——
+       どの版を見ているかを確かめる唯一の手がかりである */
+    const top = await page.evaluate(() => ({
+      箱: document.querySelectorAll('.app-notice').length,
+      断り書き: document.body.innerText.includes('試作版についての断り書き'),
+      接続: document.body.innerText.includes('Supabase に接続でき'),
+      版: !!document.querySelector('.app-footer'),
+    }))
+    if (top.箱 !== 0 || top.断り書き || top.接続) {
+      ng(`画面の上 ${w}px … 読まないものが残っている`
+        + `(箱 ${top.箱} / 断り書き ${top.断り書き} / 接続 ${top.接続})`,
+        '接続の知らせは「つながっていない × トレーナー」のときだけ出す')
+    } else if (!top.版) {
+      ng(`画面の上 ${w}px … フッター(版)まで消えている`,
+        'どの版を見ているかを確かめる唯一の手がかりである')
+    } else {
+      ok(`画面の上 ${w}px … 断り書きも接続の知らせも出ない(版は残っている)`)
+    }
+
     /* **画面の下の行き先は、ゲストだけ**(2026-09 利用者の指定)。
        骨組みは Supabase 未設定なので `isLearner` は偽 ——
        ここに帯が出るなら、**誰にでも出す形**に書き換わっている。
