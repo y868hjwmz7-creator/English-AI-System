@@ -917,16 +917,19 @@ for (const [label, want] of Object.entries(WANT)) {
   } catch {
     ng('その教材の語だけ … 集中モードが開かない')
   }
+  /* **何語で組まれたかは、進み具合の点の数で数える。**
+     以前は「◯ / ◯ 語」の文字を読んでいたが、あれは 2026-09 の指定で
+     画面から消えた。**点は1問=1目盛り**なので、同じ数を指している */
   const onlyM = await page.evaluate(() => {
-    const total = document.querySelector('.wb-run-count')?.textContent ?? ''
+    const dots = document.querySelectorAll('.wb-run-bar > span').length
     const chip = document.querySelector('.wb-only-label')?.textContent ?? ''
     const back = [...document.querySelectorAll('.wb-only button')]
       .some((b) => (b.textContent ?? '').includes('ぜんぶ'))
-    return { total, chip, back }
+    return { dots, chip, back }
   })
   // 語は12語あるが、`only` で3語に絞ってある
-  if (!/\/\s*3\s*語/.test(onlyM.total)) {
-    ng(`その教材の語だけ … 3語に絞れていない(${onlyM.total.trim()})`,
+  if (onlyM.dots !== 3) {
+    ng(`その教材の語だけ … 3語に絞れていない(${onlyM.dots} 語)`,
       '読み込んだ直後に落としているか(`onlySet`)')
   } else if (!onlyM.chip.includes('この教材の語だけ') || !/3\s*語/.test(onlyM.chip)) {
     ng(`その教材の語だけ … 絞っている札が出ていない(${onlyM.chip.trim()})`,
@@ -934,7 +937,7 @@ for (const [label, want] of Object.entries(WANT)) {
   } else if (!onlyM.back) {
     ng('その教材の語だけ … 単語帳ぜんぶに戻す道が無い', '行き止まりを作らない')
   } else {
-    ok(`その教材の語だけ … ${onlyM.total.trim()}・札「${onlyM.chip.trim()}」・戻る道あり`)
+    ok(`その教材の語だけ … ${onlyM.dots} 語・札「${onlyM.chip.trim()}」・戻る道あり`)
   }
   if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}/only.png` })
 

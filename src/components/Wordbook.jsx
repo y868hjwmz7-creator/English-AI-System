@@ -927,9 +927,9 @@ export default function Wordbook({
                           onClick={() => setRunning(false)}>
                     <CloseIcon />とじる
                   </button>
-                  <span className="wb-run-count">
-                    <strong>{done + 1}</strong> / {total} 語
-                  </span>
+                  {/* **「◯ / ◯ 語」は出さない**(2026-09 利用者の指定)。
+                      どこまで来たかは、すぐ下の点(`.wb-run-bar`)が
+                      同じことを言っている。**同じことを2つ見せない** */}
                   {/* **出題の形は、進み具合の右**(2026-09 利用者の指定)。
                       画面のはるか上にあったので、訊き方を変えるたびに
                       上まで送り戻す必要があった */}

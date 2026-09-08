@@ -5151,11 +5151,8 @@ html, body { overflow-x: clip; }
 .wb-run,
 /* 結果の箱も同じ場所に置く(2026-09 利用者の指定) */
 .wordcard--result { scroll-margin-top: calc(56px + env(safe-area-inset-top) + 8px); }
-.wb-run-count { font-size: var(--fs-13); color: var(--text-secondary); }
-.wb-run-count > strong {
-  font-size: var(--fs-20); font-weight: 700; color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
+/* `.wb-run-count`(「◯ / ◯ 語」)は 2026-09 の指定で消した。
+   どこまで来たかは、下の点が同じことを言っている */
 /* 1問=1目盛り。**色だけに頼らず、いまの1つは太くしてある** */
 .wb-run-bar { display: flex; gap: var(--sp-3); }
 .wb-run-bar > span {
