@@ -1595,6 +1595,136 @@ export default defineConfig({
   await page.close()
 }
 
+/* ══════════════════════════════════════════════════════════════
+   **「宿題をさがす」は畳める。件数の札は題の反対側**(2026-09 利用者の指定)
+
+     > 宿題を探すも折りたたみ式にしてください。そして検索バーの下の「3件」は
+     > 丸などで囲って何か配色してください。そして位置は宿題を探すの文字の
+     > 反対側、検索バーの右端の上にしてください
+
+   **`SearchBar` は2か所で使っている**(ゲストの「宿題をさがす」と
+   トレーナーの「教材をさがす」)。畳めるのは前者だけなので、
+   **両方を描いて、後者が1ドットも変わっていないこと**まで数える。
+   「畳める」だけを見ると、**教材の画面まで畳んでも緑のまま**になる。
+   ══════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage()
+  await page.setViewportSize({ width: 390, height: 844 })
+
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=search`,
+    { waitUntil: 'networkidle' })
+  await page.waitForSelector('[data-fold] details')
+
+  const shut = await page.evaluate(() => {
+    const box = (el) => (el ? el.getBoundingClientRect() : null)
+    const fold = document.querySelector('[data-fold] details')
+    const sum = fold.querySelector('summary')
+    const badge = fold.querySelector('.searchbar-badge')
+    const input = fold.querySelector('.searchbar-field > input')
+    const plain = document.querySelector('[data-plain] .searchbar')
+    return {
+      畳んである: !fold.open,
+      題: sum.textContent.trim(),
+      札: badge ? badge.textContent.trim() : null,
+      札の色: badge ? window.getComputedStyle(badge).backgroundColor : null,
+      札の丸み: badge ? window.getComputedStyle(badge).borderRadius : null,
+      札の右: badge ? Math.round(box(badge).right) : null,
+      題の右: Math.round(box(sum).right),
+      /* **`offsetParent` では見分けられない。** 畳んだ `<details>` の中は
+         `content-visibility: hidden` で描かれないだけで、`offsetParent` は
+         残っている(実測して気づいた)。`checkVisibility()` で見る */
+      入力が見えるか: !!(input && input.checkVisibility()),
+      畳んだ丈: Math.round(box(fold).height),
+      // 教材の側 —— 畳んでいない・札を使っていない・件数はこれまでどおり
+      教材は畳めない: !!plain && plain.tagName === 'SECTION',
+      教材の札: !!document.querySelector('[data-plain] .searchbar-badge'),
+      教材の件数: document.querySelector('[data-plain] .searchbar-count')?.textContent.trim(),
+      はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+    }
+  })
+
+  if (!shut.畳んである) {
+    ng('宿題をさがす … 既定で開いている', '開いたままだと宿題が1件も見えない')
+  } else if (shut.入力が見えるか) {
+    ng('宿題をさがす … 畳んでいるのに検索の欄が見えている')
+  } else if (shut.札 !== '3 件') {
+    ng(`宿題をさがす … 畳んだままでは件数が見えない(${shut.札})`,
+      '何件あるかは、開かなくても分かるようにする')
+  } else if (shut.札の丸み === '0px' || /rgba?\(0, 0, 0, 0\)/.test(shut.札の色)) {
+    ng(`宿題をさがす … 札に色も丸みも無い(${shut.札の色} / ${shut.札の丸み})`,
+      '「丸などで囲って何か配色してください」(利用者の指定)')
+  } else if (Math.abs(shut.札の右 - shut.題の右) > 2) {
+    ng(`宿題をさがす … 札が右端にいない(札 ${shut.札の右} / 行 ${shut.題の右})`,
+      '「宿題を探すの文字の反対側」(利用者の指定)')
+  } else if (shut.はみ出し) {
+    ng('宿題をさがす … 横にはみ出している')
+  } else {
+    ok(`宿題をさがす … 畳んで ${shut.畳んだ丈}px・札が右端に出る(${shut.札}・${shut.札の右}px)`)
+  }
+
+  /* **教材の画面は1ドットも変わっていない。**
+     こちらは `collapsible` を渡していないので、これまでどおり
+     `section.searchbar` + 行の中の「35 件」である */
+  if (!shut.教材は畳めない) {
+    ng('教材をさがす … 畳める形になっている', '言われた場所だけを直す(共通ルール)')
+  } else if (shut.教材の札) {
+    ng('教材をさがす … 札が出ている', '同上。あちらの件数は行の中である')
+  } else if (shut.教材の件数 !== '35 件') {
+    ng(`教材をさがす … 件数が消えている(${shut.教材の件数})`)
+  } else {
+    ok('教材をさがす … これまでどおり(畳めない・札なし・行の中に 35 件)')
+  }
+
+  /* ── 開いたら、検索の欄が**札の下**に出る ──────────────────── */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=search&open=1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForSelector('[data-fold] details[open]')
+  const open = await page.evaluate(() => {
+    const fold = document.querySelector('[data-fold] details')
+    const b = fold.querySelector('.searchbar-badge').getBoundingClientRect()
+    const r = fold.querySelector('.searchbar-row').getBoundingClientRect()
+    const input = fold.querySelector('.searchbar-field > input')
+    return {
+      入力が見えるか: !!(input && input.checkVisibility()),
+      札の下: Math.round(b.bottom),
+      行の上: Math.round(r.top),
+      // **同じ数を2か所に出さない**
+      行の中の件数: !!fold.querySelector('.searchbar-count'),
+      はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+    }
+  })
+  if (!open.入力が見えるか) {
+    ng('宿題をさがす … 開いても検索の欄が出ない')
+  } else if (open.札の下 > open.行の上) {
+    ng(`宿題をさがす … 札が検索バーの上にいない(札 ${open.札の下} / 行 ${open.行の上})`,
+      '「検索バーの右端の上に」(利用者の指定)')
+  } else if (open.行の中の件数) {
+    ng('宿題をさがす … 件数が2か所に出ている', '札と行の両方に出さない')
+  } else if (open.はみ出し) {
+    ng('宿題をさがす … 開いたら横にはみ出した')
+  } else {
+    ok(`宿題をさがす … 開くと検索の欄が札の下に出る(札 ${open.札の下} → 行 ${open.行の上})`)
+  }
+
+  /* ── 画面が本当に呼んでいるか(検証だけが緑にならないように)──── */
+  const tl = readFileSync(new URL('../src/components/TrainerLearners.jsx',
+    import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  if (!/title="宿題をさがす"[\s\S]{0,400}collapsible/.test(tl)) {
+    ng('宿題をさがす … 画面が `collapsible` を渡していない',
+      '部品に足しても、渡さなければ利用者の画面は変わらない')
+  } else if (!tl.includes('savePastSearchOpen(')) {
+    ng('宿題をさがす … 開け閉めを覚えていない',
+      '一度決める設定は覚える(CLAUDE.md)')
+  } else if (readFileSync(new URL('../src/components/TrainerMaterials.jsx',
+    import.meta.url), 'utf8').includes('collapsible')) {
+    ng('教材をさがす … `collapsible` を渡している', '言われた場所だけを直す')
+  } else {
+    ok('宿題をさがす … 画面が渡しており、教材の側は渡していない')
+  }
+
+  await page.close()
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

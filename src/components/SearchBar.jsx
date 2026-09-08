@@ -42,11 +42,32 @@ export default function SearchBar({
   sortOptions = [],
   /** 一覧の件数(「30 件」)。右端に出す */
   count = null,
+  /**
+   * **畳めるようにする**(2026-09 利用者の指定)。
+   *
+   *   > 宿題を探すも折りたたみ式にしてください。
+   *   > そして検索バーの下の「3件」は丸などで囲って何か配色してください。
+   *   > そして位置は宿題を探すの文字の反対側、検索バーの右端の上に
+   *
+   * 渡さなければ**これまでと1ドットも変わらない**(教材の画面はそのまま)。
+   * 畳んだときは、見た目も開け閉めも**「宿題をしぼる」とまったく同じ**に
+   * する(`card material-search`)—— すぐ下に並ぶので、
+   * **形が違うと2つの別物に見える。**
+   */
+  collapsible = false,
+  open = false,
+  onOpenChange = null,
 }) {
-  return (
-    <section className="searchbar" aria-label={title || placeholder}>
-      {title && <h2 className="searchbar-title">{title}</h2>}
-      <div className="searchbar-row">
+  /* 件数の札。**題の反対側(右端)に置く**(利用者の指定)。
+     色は「条件で絞り込む (3)」と**同じ `finder-badge`** を使う ——
+     うすい地色 + 同じ色の文字 + 枠線(CLAUDE.md「選んでいる印」の作法)。
+     **ここで新しい配色を作らない** */
+  const badge = count != null
+    ? <span className="finder-badge searchbar-badge">{count} 件</span>
+    : null
+
+  const row = (
+    <div className="searchbar-row">
         {onKeyword && (
           <div className="searchbar-field">
             <SearchIcon className="icon searchbar-icon" />
@@ -79,8 +100,34 @@ export default function SearchBar({
             </select>
           </label>
         )}
-        {count != null && <span className="searchbar-count">{count} 件</span>}
-      </div>
+      {/* 畳めるときは、件数の札を**題の行(summary)の右端**に出すので、
+          ここには出さない。**同じ数を2か所に出さない** */}
+      {!collapsible && count != null && (
+        <span className="searchbar-count">{count} 件</span>
+      )}
+    </div>
+  )
+
+  if (collapsible) {
+    return (
+      <details
+        className="card material-search searchbar--fold"
+        open={open}
+        onToggle={(e) => onOpenChange?.(e.currentTarget.open)}
+      >
+        <summary className="card-title material-search-sum">
+          {title}
+          {badge}
+        </summary>
+        {row}
+      </details>
+    )
+  }
+
+  return (
+    <section className="searchbar" aria-label={title || placeholder}>
+      {title && <h2 className="searchbar-title">{title}</h2>}
+      {row}
     </section>
   )
 }

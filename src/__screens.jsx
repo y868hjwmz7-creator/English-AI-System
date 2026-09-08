@@ -34,6 +34,7 @@ import {
   DownloadIcon, EraserIcon, PrintIcon, RefreshIcon, ScreenIcon,
 } from './components/Icons.jsx'
 import MaterialShare from './components/MaterialShare.jsx'
+import SearchBar from './components/SearchBar.jsx'
 import { setViewerRole } from './lib/viewer.js'
 import './styles.css'
 
@@ -310,8 +311,46 @@ const TOOLS = (
   </div>
 )
 
+/* さがす帯(`?screen=search`・2026-09 利用者の指定)。
+     > 宿題を探すも折りたたみ式にしてください。そして検索バーの下の「3件」は
+     > 丸などで囲って何か配色してください。そして位置は宿題を探すの文字の
+     > 反対側、検索バーの右端の上にしてください
+
+   **同じ部品を2か所で使っている**(ゲストの「宿題をさがす」と
+   トレーナーの「教材をさがす」)。畳めるのは前者だけなので、
+   **両方を並べて描き、後者が1ドットも変わっていないこと**まで数える。
+   「畳める」だけを見ると、**教材の画面まで畳んでも緑のまま**になる。
+
+   `?open=1` … 開いた状態(検索の欄が出るか) */
+const SEARCH = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <div data-fold="1">
+      <SearchBar
+        title="宿題をさがす"
+        keyword="" onKeyword={() => {}}
+        placeholder="教材名・見出しでさがす"
+        count={3}
+        collapsible
+        open={q.get('open') === '1'}
+        onOpenChange={() => {}}
+      />
+    </div>
+    <div data-plain="1">
+      <SearchBar
+        keyword="" onKeyword={() => {}}
+        placeholder="教材名・見出しでさがす"
+        sort="new" onSort={() => {}}
+        sortOptions={[{ id: 'new', label: '新しい順' }, { id: 'old', label: '古い順' }]}
+        count={35}
+      />
+    </div>
+  </div>
+)
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'wordbook'
+  q.get('screen') === 'search'
+    ? SEARCH
+    : q.get('screen') === 'wordbook'
     ? WORDBOOK
     : q.get('screen') === 'form'
       ? FORM

@@ -1682,9 +1682,31 @@ html, body { overflow-x: clip; }
 .searchbar-sort > select { width: auto; min-width: 140px; height: 40px; border-radius: var(--r-pill); }
 .searchbar-count { margin-left: auto; color: var(--text-secondary); font-size: var(--fs-13); }
 
+/* **畳める形**(2026-09 利用者の指定・ゲストの「宿題をさがす」)。
+     > 宿題を探すも折りたたみ式にしてください。そして検索バーの下の「3件」は
+     > 丸などで囲って何か配色してください。そして位置は宿題を探すの文字の
+     > 反対側、検索バーの右端の上にしてください
+
+   骨組みは**「宿題をしぼる」とまったく同じ**(`card material-search`)。
+   すぐ下に並ぶので、**形が違うと2つの別物に見える。**
+   ここで足すのは2つだけ。
+
+   - 件数の札を**題の反対側(右端)**へ寄せる。色は `finder-badge`
+     (「条件で絞り込む (3)」)を使い回す。**新しい配色を作らない**
+   - 開いたときの検索の行は、区切り線のすぐ下から始める
+
+   **教材の画面(`TrainerMaterials`)は1ドットも変わらない** ——
+   あちらは `collapsible` を渡していないので、これまでどおり
+   `section.searchbar` のまま描かれる。 */
+.searchbar-badge { margin-left: auto; }
+.searchbar--fold > .searchbar-row { margin: 0; }
+
 @media (max-width: 640px) {
   /* 狭い画面では、入力欄が1行を使い切る */
   .searchbar-field { flex-basis: 100%; max-width: none; }
+  /* **札はここで触らない。** 上の `margin-left: auto` がそのまま効く ——
+     狭い画面でも「題の反対側」に置く、という指定だからである
+     (`.searchbar-count` は入力欄が1行を使い切るので、寄せをやめる) */
   .searchbar-count { margin-left: 0; }
 }
 

@@ -88,3 +88,26 @@ export function loadPastFilterOpen() {
 export function savePastFilterOpen(open) {
   try { localStorage.setItem(PAST_KEY, open ? 'open' : 'closed') } catch { /* 使えなくても困らない */ }
 }
+
+/**
+ * ゲストの「宿題をさがす」を開いているか(2026-09 利用者の指定)。
+ *
+ *   > 宿題を探すも折りたたみ式にしてください
+ *
+ * **「宿題をしぼる」(`eas.pastFilter`)とは別に覚える。**
+ * すぐ下に並ぶ別の欄なので、片方を閉じてもう片方まで閉じては困る
+ * (教材の欄と分けてあるのと、まったく同じ考え方)。
+ *
+ * **既定は閉じている。** 開いたままだと、検索の欄と絞り込みの札で
+ * 画面の半分が埋まり、**宿題が1件も見えない**(実機の写真)。
+ * 何件あるかは、畳んだままでも札が言う。
+ */
+const PAST_SEARCH_KEY = 'eas.pastSearch'
+export function loadPastSearchOpen() {
+  try { return localStorage.getItem(PAST_SEARCH_KEY) === 'open' } catch { return false }
+}
+export function savePastSearchOpen(open) {
+  try {
+    localStorage.setItem(PAST_SEARCH_KEY, open ? 'open' : 'closed')
+  } catch { /* 使えなくても困らない */ }
+}

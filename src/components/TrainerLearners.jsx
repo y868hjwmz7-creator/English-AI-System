@@ -18,7 +18,10 @@ import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
 import MaterialDelete from './MaterialDelete.jsx'
 import { parseMaterialTitle } from '../lib/format.js'
-import { loadPastFilterOpen, savePastFilterOpen } from '../lib/slashLevel.js'
+import {
+  loadPastFilterOpen, savePastFilterOpen,
+  loadPastSearchOpen, savePastSearchOpen,
+} from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import Wordbook from './Wordbook.jsx'
@@ -100,6 +103,8 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const [bodyBusy, setBodyBusy] = useState(null)   // いま読んでいる教材id
   // 絞り込みの欄を開いているか。**教材の欄とは別に覚える**(別の画面の別の欄)
   const [pastOpen, setPastOpen] = useState(loadPastFilterOpen)
+  /* 「宿題をさがす」の開け閉め。**しぼる(`pastOpen`)とは別に覚える** */
+  const [pastSearchOpen, setPastSearchOpen] = useState(loadPastSearchOpen)
   // 過去の宿題の絞り込み。
   // **出すのは、そのゲストの宿題に実際に含まれる弱点だけ。**
   // 39個の弱点タグを全部並べても、ほとんどが0件で選びようがない。
@@ -762,7 +767,17 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                           > 「宿題をしぼる」を「宿題をさがす」の下に移動させて
                           > ください。そして、教材モードと同じように、検索バーを
                           > 入れ、その右にプルダウンの並び替えをおいてください。
-                        帯は `SearchBar.jsx` — 教材の画面と**同じ部品**である。 */}
+                        帯は `SearchBar.jsx` — 教材の画面と**同じ部品**である。
+
+                        **畳める**(2026-09 利用者の指定)。
+                          > 宿題を探すも折りたたみ式にしてください。
+                          > そして検索バーの下の「3件」は丸などで囲って何か
+                          > 配色してください。そして位置は宿題を探すの文字の
+                          > 反対側、検索バーの右端の上に
+                        すぐ下の「宿題をしぼる」と**同じ形**にする ——
+                        並んで出るので、形が違うと2つの別物に見える。
+                        件数の札は畳んだままでも見えるので、
+                        **開かなくても何件あるかは分かる。** */}
                     {assignments.length > 0 && (
                       <SearchBar
                         title="宿題をさがす"
@@ -770,6 +785,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         onKeyword={setPastKeyword}
                         placeholder="教材名・見出しでさがす"
                         count={shown.length}
+                        collapsible
+                        open={pastSearchOpen}
+                        onOpenChange={(v) => { setPastSearchOpen(v); savePastSearchOpen(v) }}
                       />
                     )}
 
