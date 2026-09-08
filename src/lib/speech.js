@@ -368,6 +368,26 @@ const attachWordTracking = (utterance, onWord, { text, rate = 1, voiceName = '' 
 }
 
 /**
+ * **日本語の声**(2026-09・聞き流しの「英語 → 間 → 日本語」で使う)。
+ *
+ * 読み上げの窓口(`speak`)は**英語の声しか持っていない**ので、
+ * 日本語は端末の声で読むしかない。**0円である。**
+ *
+ * **無ければ `null` を返す。** 英語の声で日本語を読ませると、
+ * ローマ字読みになって意味が取れない ——
+ * そのときは**読まない**(無いものをあるように見せない・CLAUDE.md)。
+ * 画面には日本語が出ているので、行き止まりにはならない。
+ */
+export function japaneseVoice() {
+  try {
+    const all = window.speechSynthesis?.getVoices?.() ?? []
+    return all.find((v) => String(v.lang || '').toLowerCase().startsWith('ja')) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * 英文を読み上げる。
  * @param {string} text 読み上げる英文
  * @param {object} options { voice, rate }

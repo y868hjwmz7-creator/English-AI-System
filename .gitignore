@@ -24,4 +24,5 @@ npm-debug.log*
 
 # 帯の検証(`npm run test:bar`)が一時的に作るもの
 __bar.html
+__shell.html
 vite.bar.config.js

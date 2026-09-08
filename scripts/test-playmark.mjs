@@ -43,7 +43,6 @@ import {
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
 import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
-import { lastLearner, rememberLearner } from '../src/lib/lastLearner.js'
 import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import { spanForRange } from '../src/lib/wholeAudio.js'
 import { ABBREVIATIONS, splitSentences } from '../src/lib/wordTiming.js'
@@ -66,6 +65,12 @@ import {
   QR_GROUPS, WORD_GROUPS, groupLead, isDueOn, qrGroupPool, qrTally, runKeyOf,
   scopeCounts, scopeLead, scopePool, shouldRecord, takeCount,
 } from '../src/lib/reviewScope.js'
+import {
+  lastLearner, openLearner, rememberLearner, watchLearner,
+} from '../src/lib/lastLearner.js'
+import {
+  BGM_PLACES, RADIO_MODES, bgmPlaysIn, bgmVolume, nextIndex, radioSteps,
+} from '../src/lib/wordRadio.js'
 import { readFileSync } from 'node:fs'
 
 let ng = 0
@@ -2133,6 +2138,240 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     ok(!/\bsetExtra\(/.test(src),
       `${file} … 「おさらい」の特別扱い(extra)は残っていない`)
   }
+}
+
+/* ==========================================================================
+ * 聞き流しと、自作の音楽(2026-09 利用者の指定)
+ *
+ *   > また、これからは自作の音楽が流れるようにしたいです。
+ *   > それとか音楽を流しながらどんどん登録されている単語が
+ *   > 読まれるモードも欲しいですね
+ * ========================================================================== */
+{
+  console.log('\n▶ 聞き流しと音楽')
+
+  /* ── 読み方は、利用者が挙げた2つだけ ────────────────────── */
+  ok(RADIO_MODES.length === 2
+    && RADIO_MODES.map((m) => m.id).join(',') === 'en,enja',
+    '読み方 … 2つだけ(英語だけ / 英語 → 間 → 日本語)',
+    RADIO_MODES.map((m) => m.id).join(','))
+
+  /* ── その1語を、どの順で読むか ─────────────────────────── */
+  const 語 = { display: 'take on', meaning_ja: '引き受ける' }
+  const en = radioSteps(語, 'en')
+  ok(en.length === 3 && en[0].kind === 'en' && en[1].kind === 'wait' && en[2].kind === 'en',
+    '英語だけ … 英語 → 間 → 英語 の3つ(日本語は読まない)',
+    en.map((s) => s.kind).join(' '))
+  ok(!en.some((s) => s.kind === 'ja'),
+    '英語だけ … 意味は1つも読まない')
+
+  const 両方 = radioSteps(語, 'enja')
+  ok(両方.map((s) => s.kind).join(' ') === 'en wait ja',
+    '英語 → 間 → 日本語 … その順で返る',
+    両方.map((s) => s.kind).join(' '))
+  ok(両方[1].ms > 1000,
+    '英語 → 間 → 日本語 … 思い出すための間がある(1秒以上)', String(両方[1].ms))
+
+  /* **無いものをあるように見せない。** 訳が無ければ、英語だけを読む */
+  const 訳なし = radioSteps({ display: 'gist' }, 'enja')
+  ok(訳なし.length === 1 && 訳なし[0].kind === 'en',
+    '訳が無い語 … 英語だけを読む(無音の「間」を置かない)',
+    訳なし.map((s) => s.kind).join(' '))
+  /* **英語が無ければ、何も返さない。**「読んだことにして」次へ送ると、
+     無音の時間だけが延びる */
+  ok(radioSteps({ meaning_ja: '意味だけ' }, 'enja').length === 0,
+    '英語が無い語 … 何も返さない')
+  ok(radioSteps(null).length === 0, '空の行 … 何も返さない')
+
+  /* ── 最後まで行ったら、頭へ戻る ─────────────────────────── */
+  ok(nextIndex(0, 3) === 1 && nextIndex(2, 3) === 0,
+    '聞き流し … 最後まで行ったら頭から回り直す')
+  ok(nextIndex(0, 0) === 0, '聞き流し … 0語でも壊れない')
+
+  /* ── 音楽を流す場所。**切る場所を必ず用意する** ──────────── */
+  ok(BGM_PLACES[0].id === 'off' && BGM_PLACES[0].plays.length === 0,
+    '音楽 … いちばん上が「流さない」(レッスン中に切れる)')
+  ok(!bgmPlaysIn('off', 'radio') && !bgmPlaysIn('off', 'app'),
+    '音楽 … 「流さない」ならどこでも鳴らない')
+  ok(bgmPlaysIn('radio', 'radio') && !bgmPlaysIn('radio', 'review'),
+    '音楽 … 「聞き流しのときだけ」は、復習では鳴らない')
+  ok(bgmPlaysIn('always', 'app') && bgmPlaysIn('always', 'radio'),
+    '音楽 … 「ずっと」はどこでも鳴る')
+  /* **知らない id は、既定に落とす**(行き止まりを作らない) */
+  ok(bgmPlaysIn('しらない', 'radio'),
+    '音楽 … 知らない指定は、既定(聞き流しのときだけ)に落ちる')
+
+  /* ── 音の大きさ。**下げるだけで、通り道は変えない** ────────── */
+  ok(bgmVolume(true) < bgmVolume(false) && bgmVolume(false) <= 1,
+    '音楽 … 声が鳴っているあいだは小さくする(1 を超えない)',
+    `${bgmVolume(false)} → ${bgmVolume(true)}`)
+
+  /* ── 画面が、本当に呼んでいるか ────────────────────────── */
+  {
+    const 落とす = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    const wb = 落とす(readFileSync(
+      new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8'))
+    const radio = 落とす(readFileSync(
+      new URL('../src/components/WordRadio.jsx', import.meta.url), 'utf8'))
+    const bgmjs = 落とす(readFileSync(
+      new URL('../src/lib/bgm.js', import.meta.url), 'utf8'))
+    const app = 落とす(readFileSync(
+      new URL('../src/App.jsx', import.meta.url), 'utf8'))
+
+    ok(/<WordRadio/.test(wb), '聞き流し … 単語帳から入れる')
+    /* **出題とまったく同じ道で語を選ぶ**(数え方を2通り持たない) */
+    ok(/const pool = poolNow\(\)/.test(wb) && /setRadio\(pool\)/.test(wb),
+      '聞き流し … 読む語は、出題と同じ `poolNow()` から選んでいる')
+    ok(/= radioSteps\(row, mode\)/.test(radio),
+      '聞き流し … 読む順は `radioSteps()` に任せている')
+    ok(/bgmPlaysIn\(loadBgmPlace\(\), 'radio'\)/.test(radio),
+      '聞き流し … 音楽を流すかどうかを `bgmPlaysIn()` に任せている')
+    ok(/duckBgm\(true\)/.test(radio) && /duckBgm\(false\)/.test(radio),
+      '聞き流し … 声が鳴っているあいだ、曲を小さくしている')
+    /* **記録は1ミリも動かさない**(答える練習ではない) */
+    ok(!/setWordStatus|mark_word|shouldRecord/.test(radio),
+      '聞き流し … 箱も次に出す日も動かさない')
+    /* **止まる条件を持たせる**(CLAUDE.md) */
+    ok(/stopBgm\(\)/.test(radio) && /stopReading\(\)/.test(radio),
+      '聞き流し … 画面を離れたら、声も曲も止まる')
+
+    /* **音の通り道を変えない**(2026-09 にいちばん高くついた失敗) */
+    ok(!/createMediaElementSource|createGain|AudioContext/.test(bgmjs),
+      '音楽 … Web Audio を通していない(`volume` だけを動かす)')
+    ok(/new Audio\(\)/.test(bgmjs) && (bgmjs.match(/new Audio\(\)/g) ?? []).length === 1,
+      '音楽 … `<audio>` は1つだけ作る')
+
+    ok(/id: 'bgm', label: '音楽'/.test(app) && /<BgmLibrary/.test(app),
+      '音楽 … トレーナーのメニューに「音楽」がある')
+    /* **下の帯は4つのまま**(利用者が「この四つにしてください」と決めた) */
+    ok(!/TAB_IDS = \[[^\]]*'bgm'/.test(app),
+      '音楽 … 下の帯(4つ)には足していない')
+  }
+}
+
+/* ==========================================================================
+ * ゲスト名の箱(2026-09 利用者の指定)
+ *
+ *   > ゲストを一人選んでそのページの中にいるときは、
+ *   > 常に画面上部にゲスト名ボックスが固定されているようにしたいです。
+ * ========================================================================== */
+{
+  console.log('\n▶ ゲスト名の箱')
+
+  /* ── 控えは1か所。**名前も一緒に持つ**(id だけでは箱に書けない)── */
+  rememberLearner(null)
+  ok(openLearner() === null && lastLearner() === null,
+    '控え … 開いていなければ null')
+
+  let 知らせ = 0
+  const やめる = watchLearner(() => { 知らせ += 1 })
+  rememberLearner('g1', { name: 'あいり', status: 'active' })
+  ok(lastLearner() === 'g1' && openLearner()?.name === 'あいり',
+    '控え … 名前と状態も一緒に控える', JSON.stringify(openLearner()))
+  ok(知らせ === 1, '控え … 変わったら1回だけ知らせる', String(知らせ))
+
+  /* **同じ中身なら知らせない。** 描き直しが止まらなくなる
+     (`voicePool` で踏んだのと同じ落とし穴) */
+  rememberLearner('g1', { name: 'あいり', status: 'active' })
+  ok(知らせ === 1, '控え … 同じ中身では知らせない(描き直しが止まらなくなる)',
+    String(知らせ))
+
+  rememberLearner(null)
+  ok(知らせ === 2 && openLearner() === null,
+    '控え … 忘れたときも知らせる(箱を消す)')
+  /* **二度忘れても、二度は知らせない** */
+  rememberLearner(null)
+  ok(知らせ === 2, '控え … すでに空なら、もう知らせない', String(知らせ))
+  やめる()
+  rememberLearner('g2', { name: 'けんじ' })
+  ok(知らせ === 2, '控え … 見張りをやめたら、もう来ない', String(知らせ))
+  rememberLearner(null)
+
+  /* ── 画面が、本当に呼んでいるか ────────────────────────── */
+  {
+    const 落とす = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    const app = 落とす(readFileSync(
+      new URL('../src/App.jsx', import.meta.url), 'utf8'))
+    const tl = 落とす(readFileSync(
+      new URL('../src/components/TrainerLearners.jsx', import.meta.url), 'utf8'))
+    const bar = 落とす(readFileSync(
+      new URL('../src/components/LearnerBar.jsx', import.meta.url), 'utf8'))
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+
+    /* **貼り付く箱の中に入れる。** 外に置くと `top` に帯の高さを
+       書くことになり、端末の切り欠きでずれる(`.jobbar` で踏んだ穴) */
+    ok(/<div className="app-stick">[\s\S]{0,900}<LearnerBar \/>/.test(app),
+      'ゲスト名の箱 … `.app-stick` の中に入れている')
+    /* **ゲストの画面にいるときだけ。** 控えは残るが、
+       「教材」はそのゲストのページではない */
+    ok(/view === 'learners' && <LearnerBar \/>/.test(app),
+      'ゲスト名の箱 … ゲストの画面にいるときだけ出す')
+    /* **自分では貼り付かない**(`.jobbar` とまったく同じ決まり) */
+    const 箱 = /\.learnerbar\s*\{[^}]*\}/.exec(css)?.[0] ?? ''
+    ok(箱 && !/position:\s*sticky|position:\s*fixed/.test(箱),
+      'ゲスト名の箱 … 自分では貼り付かない(貼り付く役は `.app-stick` 1つ)')
+
+    ok(/rememberLearner\(openId, \{ name: l\.display_name/.test(tl),
+      'ゲスト名の箱 … 名前と状態を渡している')
+    /* **箱の「← 一覧」を押したら、こちらも閉じる。**
+       合わせないと、箱だけ消えてゲストのページが残る */
+    ok(/watchLearner\(\(who\) => \{/.test(tl) && /setOpenIdRaw\(null\)/.test(tl),
+      'ゲスト名の箱 … 箱から閉じたとき、ゲストのページも閉じる')
+    /* **同じものを2か所に出さない。** 上の「← ゲストの一覧に戻る」は移した */
+    ok(!/learner-back/.test(tl),
+      'ゲスト名の箱 … 中身の側の「← ゲストの一覧に戻る」は残っていない')
+    ok(/openId !== l\.id && \(/.test(tl),
+      'ゲスト名の箱 … 開いているあいだ、カードの側に名前を出さない')
+    /* **状態の対応表を2か所に持たない** */
+    ok(/statusLabel|statusCls/.test(bar) && /learnerStatus\.js/.test(tl),
+      'ゲスト名の箱 … 状態の対応表は `learnerStatus.js` 1か所')
+  }
+}
+
+/* ==========================================================================
+ * ゲストのページの中でも、教材をさがせる(2026-09 利用者の指定)
+ *
+ *   > 同じくゲストページ内で自分の教材を検索できるようにしたいぞ。
+ *   > 要するにトレーナーの教材の画面の表示と同じようにしてくれ
+ * ========================================================================== */
+{
+  console.log('\n▶ ゲストのページの中の、教材をさがす')
+
+  const 落とす = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const tl = 落とす(readFileSync(
+    new URL('../src/components/TrainerLearners.jsx', import.meta.url), 'utf8'))
+  const tm = 落とす(readFileSync(
+    new URL('../src/components/TrainerMaterials.jsx', import.meta.url), 'utf8'))
+
+  /* **部品は1つ。書き写さない**(単語帳で3度言われた失敗) */
+  ok(/<TrainerMaterials\s/.test(tl),
+    '教材をさがす … ゲストのページでも、同じ部品(`TrainerMaterials`)を出している')
+  ok(/<option value="library">教材をさがす<\/option>/.test(tl),
+    '教材をさがす … 切り替えに「教材をさがす」がある')
+  /* **再利用がこの仕組みの前提**なので、「作る」より先に置く */
+  ok(tl.indexOf('value="library"') < tl.indexOf('value="create"'),
+    '教材をさがす … 「この人に教材を作る」より先に置いている')
+
+  /* **ほかのゲストの名前を、1つも出さない**(仕様書 5.5) */
+  ok(/forLearner=\{\{ id: l\.id, name: l\.display_name \}\}/.test(tl),
+    '教材をさがす … 共有先はその1人に決めている')
+  ok(/\{forLearner \? \(/.test(tm),
+    '教材をさがす … ゲストを選ぶ欄そのものを出していない')
+  ok(/setPicked\(forLearner \? \[forLearner\.id\] : \[\]\)/.test(tm),
+    '教材をさがす … 相手が決まっているので、はじめから選んである')
+
+  /* **同じことをするものを2つ見せない。** 作る道はとなりのタブにある */
+  ok(/onCreate=\{\(\) => setDetailTab\('create'\)\}/.test(tl),
+    '教材をさがす … 「教材を作る」はとなりのタブへ回している')
+  /* **作りに行く道は1か所**(3つのボタンに書き写さない) */
+  ok(!/onClick=\{\(\) => setMode\('create'\)\}/.test(tm)
+    && (tm.match(/onClick=\{goCreate\}/g) ?? []).length >= 3,
+    '教材をさがす … 作りに行く道は `goCreate()` 1か所',
+    String((tm.match(/onClick=\{goCreate\}/g) ?? []).length))
+
+  /* **「配信する」と書かない**(CLAUDE.md の呼び方) */
+  ok(!/'配信する'/.test(tm) && !/>配信する</.test(tm),
+    '呼び方 … 「配信する」ではなく「共有する」と書いている')
 }
 
 console.log(ng

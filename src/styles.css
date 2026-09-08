@@ -2139,10 +2139,37 @@ html, body { overflow-x: clip; }
   color: var(--text-primary); text-decoration: none;
 }
 .learner-open .learner-name:hover { color: var(--accent); }
-/* **一人のゲストを開いているあいだは、そのゲストだけを映す**
-   (2026-08 実機・画面共有で他のゲストが見えてしまっていた)。
-   戻る道を、名前の押し直し以外にも用意しておく */
-.learner-back { align-self: flex-start; margin-bottom: -4px; }
+/* ==========================================================================
+   ゲスト名の箱(2026-09 利用者の指定)
+
+     > ゲストを一人選んでそのページの中にいるときは、
+     > 常に画面上部にゲスト名ボックスが固定されているように
+
+   **自分では貼り付かない。** 貼り付く役は `.app-stick` が持っている ——
+   ここで `top: 0` を書くと、送ったときに**上の帯と重なって ☰ が
+   押せなくなる**(`.jobbar` でまったく同じことを踏んだ)。
+   ========================================================================== */
+.learnerbar {
+  display: flex; flex-wrap: nowrap; align-items: center;
+  gap: var(--sp-8) var(--sp-10);
+  padding: 6px 12px;
+  padding-left: max(12px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+}
+/* **戻る道は、いちばん先に置く**(集中モードと同じ作法) */
+.learnerbar-back { flex: 0 0 auto; }
+/* **名前がいちばん大きい。** ここが「誰のページか」そのものである。
+   長い名前は「…」で切るが、**札は必ず残す**(`flex: 0 0 auto`) */
+.learnerbar-name {
+  flex: 1 1 auto; min-width: 0;
+  font-size: var(--fs-16); font-weight: 700; letter-spacing: 0.01em;
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.learnerbar > .badge { flex: 0 0 auto; }
+/* **紙には刷らない。** 誰のページかは、刷った教材には要らない */
+@media print { .learnerbar { display: none; } }
 .score-cell { display: flex; align-items: baseline; gap: var(--sp-6); }
 .score-label {
   color: var(--text-secondary); font-size: var(--fs-12);
@@ -5414,6 +5441,89 @@ button.wbfilter-ctl { text-align: left; }
 
 /* とじたあとの戻り道 */
 .wb-start { margin-top: 14px; }
+
+/* ==========================================================================
+   聞き流し(2026-09 利用者の指定「音楽を流しながら…単語が読まれるモード」)
+   ========================================================================== */
+
+/* **「出す」のとなりに置く。** 同じ語を、答えるか・聴くだけかの違いである */
+.wb-listen { margin-top: 10px; }
+
+/* 1語だけに向き合う。**骨組みは `FocusFrame`(`plain`)をそのまま使う** */
+.radio-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: var(--sp-16);
+  min-height: 0;
+  text-align: center;
+}
+.radio-en {
+  margin: 0;
+  font-size: var(--fs-28);
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-primary);
+  overflow-wrap: break-word;
+}
+.radio-ja {
+  margin: 0;
+  font-size: var(--fs-17);
+  color: var(--text-secondary);
+  min-height: 1.4em;   /* 訳が無い語でも、下のボタンが動かない */
+}
+/* **いま読んでいるものを、目でも分かるようにする。**
+   色だけに頼らない —— うすい地色 + 枠 + 太字(CLAUDE.md の決まり) */
+.radio-en.is-now,
+.radio-ja.is-now {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--r-8);
+  padding: 4px 12px;
+  font-weight: 700;
+}
+.radio-seen {
+  margin: 0;
+  max-width: 34em;
+  font-size: var(--fs-14);
+  color: var(--text-secondary);
+}
+.radio-tools { justify-content: center; }
+.radio-lead,
+.radio-song { margin: 0; text-align: center; }
+
+/* ==========================================================================
+   音楽(0049)
+   ========================================================================== */
+
+.bgm-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+}
+.bgm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-8);
+}
+/* **題が長くても、消すボタンを押し出さない** */
+.bgm-title { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; }
+.bgm-size {
+  flex: 0 0 auto;
+  font-size: var(--fs-12);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.bgm-row > .btn { flex: 0 0 auto; }
+
 @media (max-width: 400px) {
   .wbfocus > .wb-run { padding-left: 12px; padding-right: 12px; }
 }

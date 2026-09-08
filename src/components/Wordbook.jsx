@@ -47,6 +47,9 @@ import {
 } from '../lib/wordQuiz.js'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
+import WordRadio from './WordRadio.jsx'
+import { listTracks } from '../lib/bgm.js'
+import { loadRateId, rateOf } from '../lib/speechRate.js'
 import {
   SCOPES, WORD_GROUPS, groupLead, loadScope, loadSize, runKeyOf, saveScope, saveSize,
   scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
@@ -60,7 +63,7 @@ import { usePracticeLog } from '../lib/practice.js'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
-import { CloseIcon, FocusIcon } from './Icons.jsx'
+import { CloseIcon, FocusIcon, MusicIcon } from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 
 /**
@@ -265,6 +268,11 @@ export default function Wordbook({
    * 「集中モードを開く」という段は、いまも1つも挟んでいない。
    */
   const [running, setRunning] = useState(false)
+  /* **聞き流し**(2026-09 利用者の指定「音楽を流しながらどんどん登録されて
+     いる単語が読まれるモード」)。答える練習ではないので、
+     **記録は1ミリも動かさない**(`WordRadio` の中でも呼んでいない) */
+  const [radio, setRadio] = useState(null)      // 読む語の一覧。null なら出さない
+  const [tracks, setTracks] = useState([])      // 曲(無ければ音楽は流れない)
   const [want, setWant] = useState('auto')      // 出題の形。auto は箱に合わせる
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
   /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
@@ -524,8 +532,16 @@ export default function Wordbook({
    * 範囲で出すときは何度も回すものなので、まるごと混ぜないと
    * **毎回おなじ「まだ」の語ばかり**が出る(おさらいで踏んだのと同じ)。
    */
+  const poolNow = useCallback(
+    () => scopePool(applyWordbookFilter(rowsRef.current, filter), scope, todayKey()),
+    /* **絞り込みの欄を足したら、ここも一緒に効く。** 鍵を並べ直さない
+       (`filter.day, filter.material, …` と書いていたので、レベルを
+       足したときに**そこだけ反映されなかった**) */
+    [runKeyOf({ scope, size, filter }), scope],
+  )
+
   const start = useCallback(() => {
-    const pool = scopePool(applyWordbookFilter(rowsRef.current, filter), scope, todayKey())
+    const pool = poolNow()
     setQueue(buildSession(pool, takeCount(size, pool.length), { shuffleAll: scope !== 'due' }))
     doneRef.current = []
     setResult(null)
@@ -533,7 +549,28 @@ export default function Wordbook({
     setPickedChoice(null)
     setStarted(true)
     setRunning(true)
-  }, [filter.day, filter.material, filter.field, filter.topic, scope, size])
+  }, [poolNow, scope, size])
+
+  /**
+   * **聞き流しを始める**(2026-09 利用者の指定)。
+   *
+   *   > 音楽を流しながらどんどん登録されている単語が読まれるモード
+   *
+   * **読む語は、出題とまったく同じ道で選ぶ**(`poolNow()`)——
+   * 範囲の札も絞り込みも、そのまま効く。**数え方を2通り持たない。**
+   * ただし**語数では切らない。** 聞き流しは終わりを決めずに回すものである。
+   *
+   * 曲は**押したときに引く**(開いた瞬間ではない)。押さない人には
+   * 1回も問い合わせが飛ばない。**曲が0本でも聞き流しは始まる**
+   * (音楽が鳴らないだけ・**行き止まりを作らない**)。
+   */
+  const listen = useCallback(async () => {
+    const pool = poolNow()
+    if (!pool.length) return
+    setRadio(pool)
+    const { data } = await listTracks()
+    setTracks(data ?? [])
+  }, [poolNow])
 
   /**
    * **復習の最中に「出しかた」を変えたら、その場で組み直す**
@@ -963,6 +1000,27 @@ export default function Wordbook({
               <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
             </ReviewScope>
           )
+      )}
+
+      {/* **聞き流し**(2026-09 利用者の指定)。「出す」のとなりに置く ——
+          同じ語を、答えるか・聴くだけかの違いなので、選ぶのはここである。
+          **範囲の札と絞り込みは、そのまま効く**(`poolNow()` 1か所) */}
+      {isQuiz && !loading && !card && rows.length > 0 && (
+        <button type="button" className="btn btn--quiet wb-listen"
+                disabled={restInScope === 0}
+                onClick={listen}>
+          <MusicIcon />聞き流す({restInScope} 語)
+        </button>
+      )}
+
+      {radio && (
+        <WordRadio
+          rows={radio}
+          tracks={tracks}
+          rate={rateOf(loadRateId())}
+          learnerId={learnerId}
+          onClose={() => setRadio(null)}
+        />
       )}
 
       {/* **とじたあとの戻り道**(2026-09)。集中モードは画面ぴったりなので、

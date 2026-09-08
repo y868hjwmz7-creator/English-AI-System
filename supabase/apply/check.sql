@@ -123,4 +123,7 @@ from (
     exists (select 1 from pg_proc
             where proname = 'qr_items'
               and pg_get_function_result(oid) like '%material_level%'), 30
+  union all select '0049 自作の音楽(BGM)の置き場を作る(pending_matome.sql)',
+    exists (select 1 from information_schema.tables
+            where table_schema = 'public' and table_name = 'bgm_tracks'), 31
 ) t order by 順;

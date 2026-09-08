@@ -40,6 +40,28 @@ export function MicIcon({ className = 'icon' }) {
 }
 
 /** 停止 */
+/** 鳴らす(聞き流しの「つづける」) */
+export function PlayIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M7 5.2 15 10l-8 4.8z" fill="currentColor" />
+    </svg>
+  )
+}
+
+/** 音楽(自作の BGM・0049)。**絵文字は使わない**(端末ごとに形が違う) */
+export function MusicIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false"
+         fill="none" stroke="currentColor" strokeWidth="1.5"
+         strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7.5 14.5V4.8l7-1.4v9.4" />
+      <circle cx="5.8" cy="14.6" r="1.9" />
+      <circle cx="12.8" cy="13.1" r="1.9" />
+    </svg>
+  )
+}
+
 export function StopIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">

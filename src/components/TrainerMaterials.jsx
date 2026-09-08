@@ -56,7 +56,32 @@ import { lastClipDetail } from '../lib/audioClips.js'
 /** 絞り込みの「問数」と、作る画面の増やし方の対応。**2か所に持たない** */
 const AMOUNT_BY_SIZE = { 20: 'double', 30: 'triple' }
 
-export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }) {
+export default function TrainerMaterials({
+  me, askCreate = 0, askOpenId = null,
+  /**
+   * **ゲストのページの中で開くとき**(2026-09 利用者の指定)。
+   *
+   *   > 同じくゲストページ内で自分の教材を検索できるようにしたいぞ。
+   *   > 要するにトレーナーの教材の画面の表示と同じようにしてくれ
+   *
+   * `{ id, name }` を渡すと、
+   *
+   *   ・共有先は**その1人に決まる**(ゲストを選ぶ欄を出さない)
+   *   ・「教材を作る」は `onCreate` へ回す(下記)
+   *
+   * **ほかのゲストの名前を、1つも画面に出さない。**
+   * レッスンは画面を共有しながら行うので、選ぶ欄をそのまま出すと
+   * **担当ゲスト25人の名前が相手に見える**(仕様書 5.5・`TrainerLearners` と同じ話)。
+   */
+  forLearner = null,
+  /**
+   * 「教材を作る」を押したとき。**渡さなければ、これまでどおり
+   * この画面の中で作る。** ゲストのページには
+   * 「この人に教材を作る」がすでにあるので、そちらへ回す
+   * (**同じことをするものを2つ見せない**)。
+   */
+  onCreate = null,
+}) {
   const [mode, setMode] = useState('search')      // 'search' | 'create'
   /* **発行した直後の教材**(2026-09 利用者の指定)。
        > 教材を発行した直後、発行した教材が画面上に来るように調整して
@@ -489,7 +514,10 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
 
   const startAssign = (materialId) => {
     setAssigningId(materialId)
-    setPicked([])
+    /* **ゲストのページの中では、相手はもう決まっている。**
+       選ぶ欄を出さないので、ここで入れておく ——
+       入れないと「共有する」が押せないままになる */
+    setPicked(forLearner ? [forLearner.id] : [])
     setMessage(null)
   }
 
@@ -564,6 +592,10 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
   const active = learners.filter((l) => l.status === 'active')
   const notActive = learners.filter((l) => l.status !== 'active')
 
+  /* **作りに行く道は1か所**(`goCreate`)。3つのボタンに書き写すと、
+     ゲストのページで1つだけ古い道に残る */
+  const goCreate = () => (onCreate ? onCreate() : setMode('create'))
+
   return (
     <div className="stack">
       {lessonOf && (
@@ -594,7 +626,7 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
           <h2 className="card-title">教材をさがす</h2>
           {/* ③ 作る。**いつも見えるところに置く**(押せる場所が分かる) */}
           <button type="button" className="btn btn--small"
-                  onClick={() => setMode('create')}>
+                  onClick={goCreate}>
             <PlusIcon />教材を作る
           </button>
         </div>
@@ -812,7 +844,7 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
               ? 'この条件に合う教材はまだありません。最初の1つを作ると、次からは全トレーナーがすぐ使えます。'
               : '教材がまだありません。'}
           </p>
-          <button type="button" className="btn btn--primary" onClick={() => setMode('create')}>
+          <button type="button" className="btn btn--primary" onClick={goCreate}>
             <PlusIcon />{filterCount ? 'この条件で教材を作る' : '教材を作る'}
           </button>
         </div>
@@ -960,7 +992,9 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
                 {assigningId !== m.id && (
                   <button type="button" className="btn btn--small btn--quiet"
                           onClick={() => startAssign(m.id)}>
-                    この教材をゲストと共有する
+                    {forLearner
+                      ? `${forLearner.name} さんに共有する`
+                      : 'この教材をゲストと共有する'}
                   </button>
                 )}
                 {/* **教材をシェア**(2026-09 利用者の指定)。
@@ -1024,6 +1058,16 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
 
               {assigningId === m.id ? (
                 <div className="assign-box">
+                  {/* **ゲストのページの中では、選ぶ欄を出さない**
+                      (2026-09 利用者の指定)。相手はもう決まっているし、
+                      **ほかのゲストの名前が画面共有に映る**(仕様書 5.5)。
+                      押すのは「共有する」と「やめる」の2つだけになる */}
+                  {forLearner ? (
+                    <p className="field-label">
+                      {forLearner.name} さんの宿題にします。
+                    </p>
+                  ) : (
+                  <>
                   <p className="field-label">共有するゲストを選んでください(複数可)</p>
                   {active.length === 0 && (
                     <p className="muted">受講中のゲストがいません。</p>
@@ -1045,10 +1089,16 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
                       休会中・退会済の {notActive.length} 人とは共有できません。
                     </p>
                   )}
+                  </>
+                  )}
                   <div className="btn-row">
                     <button type="button" className="btn btn--primary"
                             onClick={doAssign} disabled={!picked.length}>
-                      {picked.length ? `${picked.length} 人と共有する` : '配信する'}
+                      {/* **「配信する」と書かない**(CLAUDE.md の呼び方)。
+                          担当ゲストにだけ届く仕組みなので「共有する」である */}
+                      {forLearner
+                        ? '共有する'
+                        : (picked.length ? `${picked.length} 人と共有する` : '共有する')}
                     </button>
                     <button type="button" className="btn" onClick={() => setAssigningId(null)}>
                       やめる
@@ -1207,7 +1257,7 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
               ? 'この中に使えるものが無ければ、いまの条件のまま作れます。'
               : 'さがしても見つからなかったときは、新しく作ります。'}
           </p>
-          <button type="button" className="btn" onClick={() => setMode('create')}>
+          <button type="button" className="btn" onClick={goCreate}>
             <PlusIcon />{filterCount ? 'この条件で教材を作る' : '教材を作る'}
           </button>
         </div>
@@ -1218,7 +1268,7 @@ export default function TrainerMaterials({ me, askCreate = 0, askOpenId = null }
           紙には出さない */}
       {floatMake && (
         <button type="button" className="btn finder-float no-print"
-                onClick={() => setMode('create')}>
+                onClick={goCreate}>
           <PlusIcon />{filterCount ? 'この条件で作る' : '教材を作る'}
         </button>
       )}

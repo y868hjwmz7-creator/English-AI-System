@@ -8,7 +8,8 @@ import SupabaseStatus from './components/SupabaseStatus.jsx'
 import AppNav, { AppTopbar } from './components/AppNav.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import {
-  BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, MicIcon, PeopleIcon, TaskIcon,
+  BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, MicIcon, MusicIcon,
+  PeopleIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
@@ -24,11 +25,13 @@ import {
   forgetPrepare, prepareAllOn, setPrepareAllOn, usePrepare,
 } from './lib/prepareJob.js'
 import JobBar from './components/JobBar.jsx'
+import LearnerBar from './components/LearnerBar.jsx'
 import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
 import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
+import BgmLibrary from './components/BgmLibrary.jsx'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 
@@ -338,6 +341,12 @@ export default function App() {
        (`eas.*`)も、取り組みの記録(`practice_days.kind`)も
        この id で残っている。**呼び名だけを変える** */
     { id: 'pronunciation', label: 'スピーチ練習', icon: MicIcon },
+    /* **音楽**(0049・2026-09 利用者の指定「自作の音楽が流れるように」)。
+       曲を入れるのも消すのも**トレーナーと管理者だけ**なので、
+       ゲストには出さない —— ゲストは**聞き流しのときに聴くだけ**である
+       (**効かない操作を見せない**)。
+       **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている */
+    (!isSupabaseConfigured || isTrainer) && { id: 'bgm', label: '音楽', icon: MusicIcon },
     // 「学習の記録」は外した(2026-08 の設計変更)。
     // **やったことは、こちらが裏で数える**(0022・`src/lib/practice.js`)。
     // ゲストに何分やったかを入力させない。入力そのものが手間で、
@@ -597,6 +606,18 @@ export default function App() {
           badge={view === 'materials' ? jobBadge : null}
         />
 
+        {/* ── ゲスト名の箱(2026-09 利用者の指定)──────────────
+              > ゲストを一人選んでそのページの中にいるときは、
+              > 常に画面上部にゲスト名ボックスが固定されているように
+
+            **ゲストの画面にいるときだけ**出す。開いたまま「教材」へ
+            移っても控えは残るが、そこは**そのゲストのページではない。**
+
+            **貼り付く役は `.app-stick` 1つ**が持っているので、
+            この中に入れておけば `top` に帯の高さを書かずに済む
+            (`.jobbar` で踏んだのと同じ落とし穴を避ける)。 */}
+        {view === 'learners' && <LearnerBar />}
+
         {/* ── 進み具合の帯 ────────────────────────────────────
             2026-09 利用者の指定。
 
@@ -720,6 +741,8 @@ export default function App() {
               <QrReview />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice />
+            ) : view === 'bgm' ? (
+              <BgmLibrary userId={profile?.id ?? null} />
             ) : (
               <AdminDashboard />
             )}

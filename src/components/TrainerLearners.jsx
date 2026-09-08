@@ -7,7 +7,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, cefrOption, scoreTestLabel } from '../data/cefr.js'
-import { lastLearner, rememberLearner } from '../lib/lastLearner.js'
+import { lastLearner, rememberLearner, watchLearner } from '../lib/lastLearner.js'
+/* **状態の対応表は `data/learnerStatus.js` 1か所。**
+   上に貼り付く箱(`LearnerBar`)でも同じ札を出す */
+import { LEARNER_STATUS, statusCls, statusLabel } from '../data/learnerStatus.js'
 import {
   addLearnerScore, createAccount, kindLabel, loadLearnerAssignments,
   eraseLearner, loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
@@ -22,6 +25,9 @@ import { loadPastSearchOpen, savePastSearchOpen } from '../lib/slashLevel.js'
 import LessonView from './LessonView.jsx'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import Wordbook from './Wordbook.jsx'
+/* **教材をさがす画面は1つ**(2026-09 利用者の指定)。
+   ゲストのページの中でも、トレーナーの「教材」とまったく同じものを出す */
+import TrainerMaterials from './TrainerMaterials.jsx'
 import QrReview from './QrReview.jsx'
 import LearnerFiles from './LearnerFiles.jsx'
 import LessonNotes from './LessonNotes.jsx'
@@ -35,11 +41,6 @@ import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
 import { printElement } from '../lib/print.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 
-const STATUS = {
-  active:   { label: '受講中', cls: 'badge--admin' },
-  paused:   { label: '休会中', cls: 'badge--warn' },
-  inactive: { label: '退会済', cls: 'badge--learner' },
-}
 
 const today = () => new Date().toISOString().slice(0, 10)
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
@@ -138,6 +139,33 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setLearners(data)
   }
   useEffect(() => { reload() }, [])
+
+  /**
+   * **ゲスト名の箱に、名前と状態を渡す**(2026-09 利用者の指定)。
+   *
+   *   > ゲストを一人選んでそのページの中にいるときは、
+   *   > 常に画面上部にゲスト名ボックスが固定されているように
+   *
+   * 箱を描くのは `App.jsx`(貼り付く役は `.app-stick` 1つが持っている)。
+   * **id だけでは箱に何も書けない**ので、名前と状態もここから渡す ——
+   * こちらはもう持っているので、**取りに行かせない。**
+   */
+  useEffect(() => {
+    if (!openId) return
+    const l = learners.find((x) => x.id === openId)
+    if (l) rememberLearner(openId, { name: l.display_name, status: l.status })
+  }, [openId, learners])
+
+  /**
+   * **箱の「← 一覧」を押したら、こちらも閉じる。**
+   *
+   * 押したのは `App.jsx` の側にある部品なので、
+   * `setOpenId(null)` は通らない。**控えを見張って合わせる** ——
+   * 合わせないと、箱だけ消えてゲストのページが開いたまま残る。
+   */
+  useEffect(() => watchLearner((who) => {
+    if (!who) setOpenIdRaw(null)
+  }), [])
 
   /* 控えていたゲストが、いまの担当から外れていることがある(退会・担当替え)。
      そのときは**黙って一覧へ戻す** —— 絞り込むと0件になり、
@@ -336,14 +364,14 @@ export default function TrainerLearners({ me, navTick = 0 }) {
 
   const changeStatus = async (learner, status) => {
     const note = window.prompt(
-      `${learner.display_name} さんを「${STATUS[status].label}」にします。理由をひとこと(任意)`,
+      `${learner.display_name} さんを「${statusLabel(status)}」にします。理由をひとこと(任意)`,
       status === 'paused' ? '月額コース休止中' : status === 'inactive' ? '退会' : '',
     )
     if (note === null) return   // 取り消し
     const { error: e } = await setLearnerStatus(learner.id, status, note)
     if (e) { setError(e); return }
     setError(null)
-    setMessage(`${learner.display_name} さんを「${STATUS[status].label}」にしました。`)
+    setMessage(`${learner.display_name} さんを「${statusLabel(status)}」にしました。`)
     reload()
   }
 
@@ -407,12 +435,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
         * 仕様書 5.5 に「他のゲストの名前は出ません」と書いてあったのは
         * 教材を作る欄の話で、**一覧の側で破れていた。**
         */}
-      {openId && (
-        <button type="button" className="btn btn--ghost btn--small learner-back"
-                onClick={() => setOpenId(null)}>
-          ← ゲストの一覧に戻る
-        </button>
-      )}
+      {/* **「← 一覧に戻る」は、上の箱へ移した**(2026-09 利用者の指定)。
+          ここに置くと**中身と一緒に送られて消える** ——
+          戻る道が画面から消えるのはいちばん困る。
+          **同じものを2か所に出さない**ので、こちらからは外してある
+          (下の「閉じる」は残る。行き止まりにはならない)。 */}
 
       {!openId && (
       <div className="card">
@@ -542,17 +569,21 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         > 何か一つ間違えるとすぐにゲスト一覧に飛んでしまい
                       閉じる道は「← ゲストの一覧に戻る」と下の「閉じる」の
                       2つ残る。**行き止まりにはならない** */}
-                  {openId === l.id ? (
-                    <span className="learner-name is-open">{l.display_name}</span>
-                  ) : (
-                    <button type="button" className="learner-name"
-                            onClick={() => openDetail(l.id)}>
-                      {l.display_name}
-                    </button>
+                  {/* **開いているあいだは、ここに名前を出さない**
+                      (2026-09 利用者の指定)。上に貼り付く箱
+                      (`LearnerBar`)がいつも出しているので、
+                      **同じものが2つ**になる。名前も札もそちらにある */}
+                  {openId !== l.id && (
+                    <>
+                      <button type="button" className="learner-name"
+                              onClick={() => openDetail(l.id)}>
+                        {l.display_name}
+                      </button>
+                      <span className={`badge ${statusCls(l.status)}`}>
+                        {statusLabel(l.status)}
+                      </span>
+                    </>
                   )}
-                  <span className={`badge ${STATUS[l.status]?.cls ?? ''}`}>
-                    {STATUS[l.status]?.label ?? l.status}
-                  </span>
                 </div>
               </div>
 
@@ -606,6 +637,18 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     <option value="homework">
                       過去の宿題{assignments.length ? `(${assignments.length})` : ''}
                     </option>
+                    {/* **ゲストのページの中でも、教材をさがせる**
+                        (2026-09 利用者の指定)。
+
+                          > 同じくゲストページ内で自分の教材を検索できる
+                          > ようにしたいぞ。要するにトレーナーの教材の
+                          > 画面の表示と同じようにしてくれ
+
+                        **部品は `TrainerMaterials` そのもの。** 書き写すと
+                        必ず片方だけ古くなる(単語帳で踏んだ失敗)。
+                        **教材ライブラリの再利用がこの仕組みの前提**なので
+                        (CLAUDE.md 冒頭)、「作る」より先に置く */}
+                    <option value="library">教材をさがす</option>
                     <option value="create">この人に教材を作る</option>
                     {/* 次に何を混ぜるかを決めるとき、その人が何につまずいたかを見たい */}
                     <option value="wordbook">単語帳</option>
@@ -982,6 +1025,19 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     ここに置いていた「◯◯さんだけに共有されます」の断り書きは
                     外した。**選べるゲストがその人1人しか出ていないので、
                     画面を見れば分かる。** 分かることを文で言わない。 */}
+                {detailTab === 'library' && (
+                  <TrainerMaterials
+                    me={me}
+                    /* **共有先はこの1人に決まる。**
+                       選ぶ欄を出すと、担当ゲスト25人の名前が
+                       画面共有に映る(仕様書 5.5) */
+                    forLearner={{ id: l.id, name: l.display_name }}
+                    /* **「教材を作る」は、となりのタブへ回す。**
+                       同じことをするものを2つ見せない */
+                    onCreate={() => setDetailTab('create')}
+                  />
+                )}
+
                 {detailTab === 'create' && (
                   <>
                     <MaterialForm
@@ -1127,11 +1183,13 @@ export default function TrainerLearners({ me, navTick = 0 }) {
 
                 <p className="field-label">在籍状態</p>
                 <div className="btn-row">
-                  {['active', 'paused', 'inactive'].map((st) => (
+                  {/* **一覧は `learnerStatus.js` 1か所。**
+                      ここに書き写すと、状態を足したときに片方だけ残る */}
+                  {Object.keys(LEARNER_STATUS).map((st) => (
                     <button key={st} type="button"
                             className={`btn btn--toggle${l.status === st ? ' is-active' : ''}`}
                             onClick={() => l.status !== st && changeStatus(l, st)}>
-                      {STATUS[st].label}
+                      {statusLabel(st)}
                     </button>
                   ))}
                 </div>

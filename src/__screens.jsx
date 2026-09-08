@@ -35,6 +35,9 @@ import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import ReviewStats from './components/ReviewStats.jsx'
+import LearnerBar from './components/LearnerBar.jsx'
+import { rememberLearner } from './lib/lastLearner.js'
+import WordRadio from './components/WordRadio.jsx'
 import WordbookFilter, { countNarrowed, emptyFilter } from './components/WordbookFilter.jsx'
 import { QR_GROUPS, groupLead, qrTally } from './lib/reviewScope.js'
 import FocusFrame from './components/FocusFrame.jsx'
@@ -52,6 +55,14 @@ import './styles.css'
 
 const q = new window.URLSearchParams(window.location.search)
 setViewerRole(q.get('role') || null)
+
+/* **ゲスト名の箱**(2026-09 利用者の指定)。開いているゲストは
+   `lastLearner.js` が控えている。**長い名前をわざと使う** ——
+   短い名前だと、名前を切る指定をやめても**同じ幅になって緑のまま**になる */
+if (q.get('who')) {
+  rememberLearner(q.get('who'),
+    { name: q.get('name') || '長谷川 あいり(テスト用の長い名前)', status: 'active' })
+}
 
 /* **Speech練習を確かめるとき**は、本文を1人の記事(`article`)にする。
    声は `?voice=us-4` のように渡す(名簿の id) */
@@ -536,6 +547,31 @@ const RSCOPE = (() => {
   )
 })()
 
+/* 聞き流し(`?screen=radio`・2026-09 利用者の指定)。
+
+     > 音楽を流しながらどんどん登録されている単語が読まれるモード
+
+   **本物の部品と本物の CSS で測る。** 1語だけに向き合う画面なので、
+   狭い端末で**送るものが出ていないか**を見るには描くしかない。
+
+   **長い語と長い訳をわざと混ぜてある** —— 短い語ばかりだと、
+   折り返しをやめても**同じ高さになって緑のまま**になる。
+   曲は渡さない(0本でも聞き流しは始まる・行き止まりを作らない)。 */
+const RADIO = (
+  <WordRadio
+    rows={[
+      {
+        word_norm: 'take on', display: 'take on',
+        meaning_ja: '引き受ける、相手にする',
+        seen_in: 'We decided to take on the project even though the deadline was tight.',
+      },
+      { word_norm: 'gist', display: 'gist', meaning_ja: '要点' },
+    ]}
+    tracks={[]}
+    onClose={() => {}}
+  />
+)
+
 /* 支度の帯(`?screen=jobbar&role=…`・2026-09 実機・利用者の指定)。
 
      > そもそもゲストには出さない(役割で判定する)
@@ -580,6 +616,10 @@ const STICKY = (
     <div className="app-body">
       <div className="app-stick">
         <AppTopbar onToggle={() => {}} open wide pageLabel="教材" />
+        {/* **ゲスト名の箱も、同じ箱の中に入れる**(2026-09 利用者の指定)。
+            帯が3つになっても ☰ が押せることを、**送ってから**測る ——
+            送る前は縦に並ぶので、重なっても緑のままになる */}
+        <LearnerBar />
         {JOBBAR}
       </div>
       <div className="app">
@@ -630,7 +670,9 @@ function RScopeDemo({ rows }) {
 }
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'sticky'
+  q.get('screen') === 'radio'
+    ? RADIO
+    : q.get('screen') === 'sticky'
     ? STICKY
     : q.get('screen') === 'rscope'
     ? RSCOPE

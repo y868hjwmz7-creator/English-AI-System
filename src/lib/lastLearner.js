@@ -31,14 +31,78 @@
  * 何にも依存しない形にしてある。**素の node で確かめられる。**
  */
 
-let openId = null
+/**
+ * ============================================================================
+ * 【ゲスト名の箱を、画面の上に貼り付ける】(2026-09 利用者の指定)
+ * ============================================================================
+ *
+ *   > また、ゲストを一人選んでそのページの中にいるときは、
+ *   > 常に画面上部にゲスト名ボックスが固定されているようにしたいです。
+ *
+ * ゲストのページは縦に長い(見出し → 切り替え → 宿題の一覧 →…)。
+ * 下へ送ると**誰のページを開いているのかが画面から消える。**
+ * レッスンは画面を共有しながら行うので、
+ * **取り違えたまま気づかない**のがいちばん怖い。
+ *
+ * 【上に貼り付く帯は、1つの箱にまとめる】(CLAUDE.md)
+ *
+ *   `.app-topbar` と `.jobbar` を別々に `top: 0` で貼り付けたら、
+ *   送ったときに**2つとも上端 0 へ来て重なり、☰ が押せなくなった。**
+ *   だから貼り付く役は **`.app-stick` 1つ**が持っている。
+ *   ゲスト名の箱も**その中に入れる** —— そうすれば
+ *   **`top` に帯の高さを書かずに済む**(端末ごとに変わる値である)。
+ *
+ *   ところが `.app-stick` を描いているのは `App.jsx` で、
+ *   開いているゲストを知っているのは `TrainerLearners.jsx` である。
+ *   **だから、ここに置いて見張らせる**(`generateJob.js` と同じ形)。
+ *
+ * 【名前も一緒に控える】
+ *   id だけでは箱に何も書けない。**取りに行かせない** ——
+ *   `TrainerLearners` はもう名前を持っているので、そのまま渡す。
+ */
 
-/** 開いているゲストを控える。`null` で忘れる */
-export function rememberLearner(id) {
-  openId = id ?? null
+let open = null   // { id, name, status } または null
+const subs = new Set()
+
+const tell = () => { for (const fn of subs) fn(open) }
+
+/**
+ * 開いているゲストを控える。`null` で忘れる。
+ *
+ * @param {string|null} id
+ * @param {{name?: string, status?: string}} [info] 箱に出すもの
+ */
+export function rememberLearner(id, info = null) {
+  if (!id) {
+    if (open === null) return
+    open = null
+    tell()
+    return
+  }
+  const next = {
+    id,
+    name: info?.name ?? (open?.id === id ? open.name : '') ?? '',
+    status: info?.status ?? (open?.id === id ? open.status : '') ?? '',
+  }
+  /* **同じ中身なら知らせない。** 描き直しが止まらなくなる */
+  if (open && open.id === next.id
+    && open.name === next.name && open.status === next.status) return
+  open = next
+  tell()
 }
 
 /** 最後に開いていたゲスト。無ければ `null` */
 export function lastLearner() {
-  return openId
+  return open?.id ?? null
+}
+
+/** 箱に出すもの(id・名前・状態)。無ければ `null` */
+export function openLearner() {
+  return open
+}
+
+/** 見張る。返ってくる関数を呼ぶと、見張りをやめる */
+export function watchLearner(fn) {
+  subs.add(fn)
+  return () => subs.delete(fn)
 }

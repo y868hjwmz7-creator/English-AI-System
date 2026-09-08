@@ -2372,9 +2372,14 @@ export default defineConfig({
 
      **送る前だけを見ない** —— そこでは縦に並ぶので、
      **壊れたままでも緑になる。** 送ったあとを必ず測る。 */
+  /* **ゲスト名の箱を入れて、帯を3つにして測る**(2026-09 利用者の指定)。
+       > ゲストを一人選んでそのページの中にいるときは、
+       > 常に画面上部にゲスト名ボックスが固定されているように
+     箱は `.app-stick` の中にいるので、**帯が3つでも ☰ は押せる**はずである。
+     ここを `?who=` 無しで測ると、箱が描かれず**素通り**する */
   for (const w of [1280, 900, 768, 390]) {
     await page.setViewportSize({ width: w, height: 800 })
-    await page.goto(`http://localhost:${PORT}/__bar.html?screen=sticky&role=trainer`,
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=sticky&role=trainer&who=g1`,
       { waitUntil: 'networkidle' })
     await page.waitForSelector('.jobbar', { timeout: 8000 })
     await page.evaluate(() => window.scrollTo(0, 600))
@@ -2390,11 +2395,36 @@ export default defineConfig({
       const hit = bur
         ? document.elementFromPoint(bur.left + bur.width / 2, bur.top + bur.height / 2)
         : null
+      const nm = document.querySelector('.learnerbar-name')
       return { 帯: box('.app-topbar'), 支度: box('.jobbar'),
+        ゲスト: box('.learnerbar'),
+        名前: nm?.textContent?.trim() ?? '',
+        // **名前は切れても、札は残す**(誰のページかが分からなくなる)
+        札: document.querySelector('.learnerbar .badge')?.textContent?.trim() ?? '',
+        戻る: Math.round(
+          document.querySelector('.learnerbar-back')?.getBoundingClientRect().width ?? 0),
+        はみ出し: (() => {
+          const b = document.querySelector('.learnerbar')
+          return b ? b.scrollWidth - b.clientWidth : 0
+        })(),
         押せる: !!(hit && hit.closest('.nav-burger')) }
     })
     if (!m.帯 || !m.支度) {
       ng(`貼り付く帯 ${w}px … 帯が描かれていない`)
+    } else if (!m.ゲスト) {
+      ng(`ゲスト名の箱 ${w}px … 出ていない`,
+        '開いているあいだ、誰のページかが画面から消える')
+    } else if (!m.名前.includes('長谷川')) {
+      ng(`ゲスト名の箱 ${w}px … 名前が出ていない`, m.名前 || '(空)')
+    } else if (m.札 !== '受講中') {
+      ng(`ゲスト名の箱 ${w}px … 状態の札が消えている`, m.札 || '(空)')
+    } else if (m.戻る < 40) {
+      ng(`ゲスト名の箱 ${w}px … 「← 一覧」が無い`, `幅 ${m.戻る}px`)
+    } else if (m.はみ出し > 0) {
+      ng(`ゲスト名の箱 ${w}px … 横にはみ出している`, `${m.はみ出し}px`)
+    } else if (m.ゲスト.top < m.帯.bottom || m.支度.top < m.ゲスト.bottom) {
+      ng(`ゲスト名の箱 ${w}px … 帯どうしが重なっている`,
+        `帯 ${m.帯.bottom} / ゲスト ${m.ゲスト.top}〜${m.ゲスト.bottom} / 支度 ${m.支度.top}`)
     } else if (!m.押せる) {
       ng(`貼り付く帯 ${w}px … 送ると ☰ が押せない`,
         '支度の帯が上の帯にかぶっている。貼り付く箱は `.app-stick` 1つにする')
@@ -2402,8 +2432,9 @@ export default defineConfig({
       ng(`貼り付く帯 ${w}px … 支度の帯が上の帯に重なっている`
         + `(帯 ${m.帯.top}〜${m.帯.bottom} / 支度 ${m.支度.top}〜${m.支度.bottom})`)
     } else {
-      ok(`貼り付く帯 ${w}px … 送っても縦に並ぶ`
-        + `(帯 ${m.帯.top}〜${m.帯.bottom} / 支度 ${m.支度.top}〜${m.支度.bottom})・☰ 押せる`)
+      ok(`貼り付く帯 ${w}px … 3つとも縦に並ぶ`
+        + `(帯 ${m.帯.top}〜${m.帯.bottom} / ゲスト ${m.ゲスト.top}〜${m.ゲスト.bottom}`
+        + ` / 支度 ${m.支度.top}〜${m.支度.bottom})・☰ 押せる`)
     }
   }
   /* **貼り付く役を、2つに持たせない。**
@@ -2739,6 +2770,77 @@ export default defineConfig({
         '上のボタンは、入力欄まで送ると画面の外にいる')
     } else {
       ok('語句を手で入れる … 「やめる」が入れるボタンのとなりにある')
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 聞き流し(2026-09 利用者の指定)
+//
+//   > 音楽を流しながらどんどん登録されている単語が読まれるモード
+//
+// **1語だけに向き合う画面なので、送るものが出ていてはいけない**
+// (集中モードと同じ考え方)。どの幅で送るようになるかは
+// **ソースを読んでも分からない。描いて測る。**
+//
+// **「出る」と「出ない」の両方を見る**(CLAUDE.md) ——
+// 語と訳が出ていることと、送るものが無いことの両方を数える。
+// ══════════════════════════════════════════════════════════════════════
+{
+  for (const [w, h] of [[390, 844], [320, 568], [1280, 900]]) {
+    const page = await browser.newPage({ viewport: { width: w, height: h } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=radio`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    const got = await page.evaluate(() => {
+      const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
+      const card = document.querySelector('.radio-card')
+      const body = document.querySelector('.focus-body')
+      const btns = [...document.querySelectorAll('.radio-tools .btn')]
+      return {
+        語: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
+        訳: document.querySelector('.radio-ja')?.textContent?.trim() ?? '',
+        読み方: [...document.querySelectorAll('.focus-top select option')]
+          .map((o) => o.textContent.trim()),
+        ボタン: btns.map((b) => ({ 文言: b.textContent.trim(), 高さ: px(b) })),
+        // **送るものが無いか。** ここが出た瞬間、この画面の意味が消える
+        たて: body ? body.scrollHeight - body.clientHeight : 0,
+        よこ: body ? body.scrollWidth - body.clientWidth : 0,
+        右: card ? Math.round(card.getBoundingClientRect().right) : 0,
+      }
+    })
+    await page.close()
+
+    if (!got.語.includes('take on')) {
+      ng(`聞き流し(${w}px) … 語が出ていない`, got.語 || '(空)')
+    } else if (!got.訳.includes('引き受ける')) {
+      ng(`聞き流し(${w}px) … 訳が出ていない`, got.訳 || '(空)')
+    } else if (got.読み方.length !== 2) {
+      ng(`聞き流し(${w}px) … 読み方が2つではない`, got.読み方.join('/'))
+    } else if (got.ボタン.length !== 2 || got.ボタン.some((b) => b.高さ < 40)) {
+      ng(`聞き流し(${w}px) … 押せる大きさ(40px)を割っている`,
+        got.ボタン.map((b) => `${b.文言}:${b.高さ}`).join(' / '))
+    } else if (got.よこ > 0 || got.右 > w) {
+      ng(`聞き流し(${w}px) … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+    } else if (got.たて > 0) {
+      ng(`聞き流し(${w}px) … 縦に送るものが出ている`,
+        `${got.たて}px —— 1語だけに向き合う画面である`)
+    } else {
+      ok(`聞き流し(${w}px) … 語も訳も出て、送るものが無い`)
+    }
+  }
+
+  /* **画面が本当に呼んでいるか。** 検証の入り口(`__screens.jsx`)だけ
+     直しても、利用者の画面からは入れない */
+  {
+    const src = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<WordRadio\b/.test(src)) {
+      ng('聞き流し … 単語帳から入れない')
+    } else if (!/onClick=\{listen\}/.test(src)) {
+      ng('聞き流し … 入口のボタンが無い')
+    } else {
+      ok('聞き流し … 単語帳の「出す」のとなりから入れる')
     }
   }
 }
