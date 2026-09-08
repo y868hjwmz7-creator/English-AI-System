@@ -68,38 +68,38 @@ export default function SearchBar({
 
   const row = (
     <div className="searchbar-row">
-        {onKeyword && (
-          <div className="searchbar-field">
-            <SearchIcon className="icon searchbar-icon" />
-            {/* **`type="search"` にしない。** 端末ごとに勝手な ✕ が付き、
-                こちらの ✕ と2つ並ぶ。消す操作は自分で持つ */}
-            <input
-              value={keyword}
-              placeholder={placeholder}
-              aria-label={placeholder || title}
-              onChange={(e) => onKeyword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); onSearch?.() }
-              }}
-            />
-            {keyword && (
-              <button type="button" className="searchbar-clear" aria-label="入力を消す"
-                      onClick={() => { onKeyword(''); onSearch?.('') }}>
-                <CloseIcon />
-              </button>
-            )}
-          </div>
-        )}
-        {onSort && sortOptions.length > 0 && (
-          <label className="searchbar-sort">
-            <span className="sr-only">並び順</span>
-            <select value={sort} onChange={(e) => onSort(e.target.value)}>
-              {sortOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </select>
-          </label>
-        )}
+      {onKeyword && (
+        <div className="searchbar-field">
+          <SearchIcon className="icon searchbar-icon" />
+          {/* **`type="search"` にしない。** 端末ごとに勝手な ✕ が付き、
+              こちらの ✕ と2つ並ぶ。消す操作は自分で持つ */}
+          <input
+            value={keyword}
+            placeholder={placeholder}
+            aria-label={placeholder || title}
+            onChange={(e) => onKeyword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); onSearch?.() }
+            }}
+          />
+          {keyword && (
+            <button type="button" className="searchbar-clear" aria-label="入力を消す"
+                    onClick={() => { onKeyword(''); onSearch?.('') }}>
+              <CloseIcon />
+            </button>
+          )}
+        </div>
+      )}
+      {onSort && sortOptions.length > 0 && (
+        <label className="searchbar-sort">
+          <span className="sr-only">並び順</span>
+          <select value={sort} onChange={(e) => onSort(e.target.value)}>
+            {sortOptions.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
       {/* 畳めるときは、件数の札を**題の行(summary)の右端**に出すので、
           ここには出さない。**同じ数を2か所に出さない** */}
       {!collapsible && count != null && (
