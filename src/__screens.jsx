@@ -30,8 +30,10 @@ import GoalBar from './components/GoalBar.jsx'
 import MaterialForm from './components/MaterialForm.jsx'
 import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
+import AppTabs from './components/AppTabs.jsx'
 import {
-  DownloadIcon, EraserIcon, PrintIcon, RefreshIcon, ScreenIcon,
+  BoltIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
+  PrintIcon, RefreshIcon, ScreenIcon, TaskIcon,
 } from './components/Icons.jsx'
 import MaterialShare from './components/MaterialShare.jsx'
 import SearchBar from './components/SearchBar.jsx'
@@ -347,8 +349,42 @@ const SEARCH = (
   </div>
 )
 
+/* 画面の下の行き先(`?screen=tabs`・2026-09 利用者の指定)。
+
+     > ゲストとしてログインするとメニューにたどり着く方法が
+     > 1番上までスクロールしてハンバーガーを押すしかないのが
+     > かなり不便かつ分かりにくいです
+
+   **ゲストの行き先そのまま4つ**を並べる(`App.jsx` の `pages` が
+   ゲストに出すものと同じ順・同じ名前)。狭い画面で1行に収まるか・
+   押せる大きさを割っていないか・名前が切れていないかは、
+   **描かせないと分からない。**
+
+   **本物の部品と本物の CSS で測る**(写した HTML では測らない)。
+   `App.jsx` が本当にこれを出しているかは、`npm run test:bar` が
+   ソースの形で別に見る —— ここだけ緑でも利用者の画面は変わらない。 */
+const TABS = (
+  <>
+    <div style={{ height: '1200px' }} />
+    <AppTabs
+      pages={[
+        { id: 'homework', label: '今週の宿題', icon: TaskIcon },
+        { id: 'wordbook', label: '単語帳', icon: CardsIcon },
+        { id: 'qr', label: 'Quick Response', icon: BoltIcon },
+        { id: 'pronunciation', label: '発音練習', icon: MicIcon },
+      ]}
+      view={q.get('view') || 'homework'}
+      onChange={(id) => {
+        document.querySelector('.app-tabs').dataset.picked = id
+      }}
+    />
+  </>
+)
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'search'
+  q.get('screen') === 'tabs'
+    ? TABS
+    : q.get('screen') === 'search'
     ? SEARCH
     : q.get('screen') === 'wordbook'
     ? WORDBOOK

@@ -6,6 +6,7 @@ import TrainerLearners from './components/TrainerLearners.jsx'
 import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import AppNav, { AppTopbar } from './components/AppNav.jsx'
+import AppTabs from './components/AppTabs.jsx'
 import {
   BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, MicIcon, PeopleIcon, TaskIcon,
 } from './components/Icons.jsx'
@@ -322,6 +323,24 @@ export default function App() {
    * **早く帰る条件より前に置く**(hook は必ず同じ順で呼ばれなければならない)。
    * 後ろに置いて、実際に画面が真っ白になった。
    */
+  /**
+   * **画面の下の帯**(2026-09 利用者の指定)。
+   *
+   *   > ゲストとしてログインするとメニューにたどり着く方法が
+   *   > 1番上までスクロールしてハンバーガーを押すしかないのが
+   *   > かなり不便かつ分かりにくいです
+   *
+   * 上の帯は貼り付いているので ☰ は送っても消えない(実測)。
+   * 直したのは**入口が1つしか無く、しかも隠れていること**のほうである。
+   *
+   * - **ゲストだけ。** トレーナーは行き先が6つあり1行に収まらないし、
+   *   幅があればメニューが柱として常に見えている
+   * - **狭い画面だけ**(768px 未満 = メニューがかぶせて開く幅)。
+   *   それ以上では柱が出ているので、**同じことをするものが2つ**になる
+   * - 出す行き先は **`pages` そのまま。** 一覧を2つ持たない
+   */
+  const showTabs = isLearner && !navPush
+
   const pageIds = pages.map((p) => p.id).join(',')
   useEffect(() => {
     const ids = pageIds ? pageIds.split(',') : []
@@ -466,7 +485,10 @@ export default function App() {
 
   return (
     <div className={`app-shell${navPush ? ' is-wide' : ' is-narrow'}`
-                    + (navOpen ? ' nav-open' : ' nav-closed')}>
+                    + (navOpen ? ' nav-open' : ' nav-closed')
+                    /* 下の帯のぶん、本文の下に余白を足すための印。
+                       足さないと、いちばん下の行が帯に隠れて読めない */
+                    + (showTabs ? ' has-tabs' : '')}>
       <AppNav
         items={navItems} value={view}
         /* **いまいる画面をもう一度押したら、その画面の先頭に戻す**
@@ -644,6 +666,23 @@ export default function App() {
             </button>
           </footer>
         </div>
+
+        {/* ── 画面の下に貼り付く行き先(ゲスト・狭い画面だけ)────────
+            2026-09 利用者の指定。**メニューの代わりではなく、近道である。**
+            ☰ はこれまでどおり上の帯にあり、配色・音などの設定は
+            そちらの中に残っている(同じものを2か所に置かない)。
+
+            **`.app` の外に置く。** 中に入れると本文と一緒に送られて
+            消えてしまう —— それでは「送っても消えない」という
+            この帯の役目そのものが無くなる(右下の操作盤と同じ考え方)。
+
+            **押したときは `setView` だけ。** 上のメニューが持っている
+            「同じ画面をもう一度押したら先頭へ戻す」(`navTick`)は
+            ここでは数えない —— あれは**ゲストの一覧に戻す**ための印で、
+            ゲストの画面には戻る先の一覧が無い */}
+        {showTabs && (
+          <AppTabs pages={pages} view={view} onChange={setView} />
+        )}
       </div>
     </div>
   )

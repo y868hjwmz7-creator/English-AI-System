@@ -1247,6 +1247,19 @@ export default defineConfig({
       ok(`☰ ${w}px … 送っても押せる(上端 ${s.素直.上端}px)`
         + `・hidden が残ると押せなくなる(${s.取り残し.上端}px)`)
     }
+
+    /* **画面の下の行き先は、ゲストだけ**(2026-09 利用者の指定)。
+       骨組みは Supabase 未設定なので `isLearner` は偽 ——
+       ここに帯が出るなら、**誰にでも出す形**に書き換わっている。
+       「出る」だけを見ると、トレーナーにも広い画面にも出すようにして
+       緑のままになる(あちらはメニューが柱として見えている) */
+    const tabs = await page.evaluate(() => document.querySelectorAll('.app-tabs').length)
+    if (tabs !== 0) {
+      ng(`下の行き先 ${w}px … ゲストでないのに出ている(${tabs} 個)`,
+        'トレーナーは行き先が6つあり、幅があればメニューが柱として見えている')
+    } else {
+      ok(`下の行き先 ${w}px … ゲストでなければ出ない`)
+    }
   }
   await page.close()
   drop2()
@@ -1720,6 +1733,123 @@ export default defineConfig({
     ng('教材をさがす … `collapsible` を渡している', '言われた場所だけを直す')
   } else {
     ok('宿題をさがす … 画面が渡しており、教材の側は渡していない')
+  }
+
+  await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════
+   **画面の下の行き先は、ゲストの狭い画面だけ**(2026-09 利用者の指定)
+
+     > ゲストとしてログインするとメニューにたどり着く方法が
+     > 1番上までスクロールしてハンバーガーを押すしかないのが
+     > かなり不便かつ分かりにくいです
+
+   **「出る」だけを見ない。** それだと**トレーナーにも広い画面にも
+   出すように書き換えて緑のまま**になる(あちらはメニューが柱として
+   見えているので、同じことをするものが2つ並ぶ)。
+   だから ①ゲストの幅で出て、押せて、名前が切れないこと
+   ②**ゲストでない骨組みには1つも出ないこと**の両方を数える。
+   ══════════════════════════════════════════════════════════════ */
+{
+  // **押して確かめる**ので、触れる画面として開く
+  const page = await browser.newPage({ hasTouch: true })
+
+  for (const w of [390, 320]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=tabs&view=wordbook`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.app-tabs')
+
+    /* **送っても消えないことが、この帯の役目そのものである。**
+       ただし「画面の中にあるか」だけでは足りない —— 貼り付きをやめても、
+       送った先ではたまたま画面の中に入る(実際にそれで**緑のまま**だった)。
+       だから**送る前と送ったあとの両方で、下端が画面の下端に重なるか**を見る。
+       貼り付いていなければ、送る前は 1200px 下にいるので必ず外れる */
+    const atBottom = async (y) => {
+      await page.evaluate((to) => window.scrollTo(0, to), y)
+      await page.waitForTimeout(150)
+      return page.evaluate(() => {
+        const r = document.querySelector('.app-tabs').getBoundingClientRect()
+        return Math.abs(r.bottom - window.innerHeight) <= 1
+      })
+    }
+    const 貼り付き = await atBottom(0) && await atBottom(800)
+
+    const m = await page.evaluate(() => {
+      const bar = document.querySelector('.app-tabs')
+      const r = bar.getBoundingClientRect()
+      const tabs = [...document.querySelectorAll('.app-tab')].map((t) => {
+        const lab = t.querySelector('.app-tab-label')
+        return {
+          名: lab.textContent,
+          高: Math.round(t.getBoundingClientRect().height),
+          切れ: lab.scrollWidth > lab.clientWidth + 1,
+        }
+      })
+      const on = document.querySelector('.app-tab.is-on')
+      const cs = on ? window.getComputedStyle(on) : null
+      return {
+        下端: Math.round(r.bottom), 窓: window.innerHeight,
+        丈: Math.round(r.height),
+        名: tabs.map((t) => t.名),
+        低い: tabs.filter((t) => t.高 < 44).map((t) => t.名),
+        切れ: tabs.filter((t) => t.切れ).map((t) => t.名),
+        印: on ? { 名: on.textContent, 地: cs.backgroundColor, 太さ: cs.fontWeight } : null,
+        はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+      }
+    })
+
+    const want = ['今週の宿題', '単語帳', 'Quick Response', '発音練習']
+    if (!貼り付き) {
+      ng(`下の行き先 ${w}px … 画面の下端に貼り付いていない(下端 ${m.下端} / 窓 ${m.窓})`,
+        '送っても消えないことが、この帯の役目である')
+    } else if (m.名.join('/') !== want.join('/')) {
+      ng(`下の行き先 ${w}px … 行き先が違う(${m.名.join(' / ')})`, `ほしいのは ${want.join(' / ')}`)
+    } else if (m.切れ.length) {
+      ng(`下の行き先 ${w}px … 名前が切れている(${m.切れ.join(' / ')})`,
+        '「Quick…」では何のボタンか分からない。切らずに2行へ折り返させる')
+    } else if (m.低い.length) {
+      ng(`下の行き先 ${w}px … 押せる大きさを割っている(${m.低い.join(' / ')})`)
+    } else if (!m.印 || /rgba?\(0, 0, 0, 0\)/.test(m.印.地) || m.印.太さ !== '700') {
+      ng(`下の行き先 ${w}px … いまいる画面の印が弱い(${JSON.stringify(m.印)})`,
+        '色だけに頼らない —— 地色・文字色・太字・上の帯の4つで示す')
+    } else if (m.はみ出し) {
+      ng(`下の行き先 ${w}px … 横にはみ出している`)
+    } else {
+      ok(`下の行き先 ${w}px … 4つとも出て切れない(帯 ${m.丈}px・印は「${m.印.名}」)`)
+    }
+  }
+
+  /* **押したら本当に効くか。** 出ているだけで動かなければ意味がない */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=tabs`,
+    { waitUntil: 'networkidle' })
+  await page.waitForSelector('.app-tabs')
+  await page.locator('.app-tab').nth(2).tap()
+  const picked = await page.evaluate(() => document.querySelector('.app-tabs').dataset.picked)
+  if (picked !== 'qr') {
+    ng(`下の行き先 … 押しても移らない(${picked ?? 'なし'} / qr)`)
+  } else {
+    ok('下の行き先 … 押すとその画面へ移る')
+  }
+
+  /* ── 画面が本当に出しているか(検証だけが緑にならないように)──── */
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  if (!/const showTabs = isLearner && !navPush/.test(app)) {
+    ng('下の行き先 … 出す条件が「ゲスト かつ 狭い画面」になっていない',
+      '広い画面ではメニューが柱として見えており、同じことをするものが2つになる')
+  } else if (!/<AppTabs[\s\S]{0,120}pages=\{pages\}/.test(app)) {
+    ng('下の行き先 … `pages` をそのまま渡していない', '行き先の一覧を2か所に持たない')
+  } else if (!app.includes("showTabs ? ' has-tabs' : ''")) {
+    ng('下の行き先 … 本文の下に余白を足す印が無い',
+      'いちばん下の行が帯に隠れて読めなくなる')
+  } else if (!readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    .includes('.app-shell.has-tabs .app { padding-bottom')) {
+    ng('下の行き先 … その余白の指定が無い')
+  } else {
+    ok('下の行き先 … `App.jsx` がゲストの狭い画面にだけ出している')
   }
 
   await page.close()

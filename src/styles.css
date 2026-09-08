@@ -372,6 +372,59 @@ body {
 }
 .app-topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-8); }
 
+/* ── 画面の下に貼り付く行き先(ゲスト・狭い画面だけ)──────────────
+   2026-09 利用者の指定。
+
+     > ゲストとしてログインするとメニューにたどり着く方法が
+     > 1番上までスクロールしてハンバーガーを押すしかないのが
+     > かなり不便かつ分かりにくいです
+
+   上の帯は貼り付いているので ☰ は送っても消えない(実測)。
+   直したのは**入口が1つしか無く、しかも隠れていること**である。
+
+   置き場所は**画面の下端。** 読み上げの操作盤(`.player-dock`)で
+   利用者が選んだのと同じ場所で、スマホでいちばん親指が届く。
+
+   **z-index は 40。** メニューをかぶせたとき(膜 50 / メニュー 60)と
+   レッスン表示(`.lesson` は 100)には**必ず隠れる** ——
+   あちらは画面ぜんぶを覆うもので、その上に行き先が浮いていてはいけない。 */
+.app-tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; align-items: stretch;
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 10%);
+}
+.app-tab {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; padding: 6px 2px;
+  /* **押せる大きさ(56px)を割らない。** 下端は指が置きにくい */
+  min-height: 56px;
+  border: none; border-top: 3px solid transparent; background: none; cursor: pointer;
+  color: var(--text-secondary); font-size: var(--fs-11);
+}
+.app-tab-icon { display: inline-flex; font-size: var(--fs-20); line-height: 1; }
+.app-tab-label {
+  /* **名前は切らない。**「Quick…」では何のボタンか分からない。
+     入らないぶんは2行に折り返させる(Quick Response の札と同じ判断) */
+  max-width: 100%; line-height: 1.15; text-align: center;
+  overflow-wrap: anywhere;
+}
+/* いまいる画面。**色だけに頼らない**(CLAUDE.md)。
+   うすい地色 + 同じ色の文字 + 太字 + 上の帯の4つで示す */
+.app-tab.is-on {
+  border-top-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent); font-weight: 700;
+}
+.app-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* 下の帯のぶん、本文の下に余白を足す。
+   **足さないと、いちばん下の行が帯に隠れて読めない** */
+.app-shell.has-tabs .app { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+
 /* 絵だけのボタン。**指で押せる大きさ(44px)を割らない** */
 .nav-icon-btn {
   flex: 0 0 auto;
