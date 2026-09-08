@@ -2360,6 +2360,80 @@ export default defineConfig({
     }
   }
 
+  /* ══ **支度の帯が、上の帯にかぶらない**(2026-09 実機・利用者の指摘)══
+       > 上部バーは消えていなかったのですが、このバックグラウンドロード中の
+       > 表示のバーがスクロールするとかぶってしまっているのが原因でした。
+
+     **どちらも `position: sticky; top: 0; z-index: 30`** だったので、
+     送ると2つとも上端 0 へ来て、あとに書いてある支度の帯が
+     上の帯をまるごと覆っていた。実測(直す前・4つの幅とも):
+     送る前 帯 0〜61 / 支度 61〜120 → 送った後 帯 0〜61・**支度 0〜59**、
+     **☰ が押せない。**
+
+     **送る前だけを見ない** —— そこでは縦に並ぶので、
+     **壊れたままでも緑になる。** 送ったあとを必ず測る。 */
+  for (const w of [1280, 900, 768, 390]) {
+    await page.setViewportSize({ width: w, height: 800 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=sticky&role=trainer`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.jobbar', { timeout: 8000 })
+    await page.evaluate(() => window.scrollTo(0, 600))
+    await page.waitForTimeout(80)
+    const m = await page.evaluate(() => {
+      const box = (s) => {
+        const el = document.querySelector(s)
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { top: Math.round(r.top), bottom: Math.round(r.bottom) }
+      }
+      const bur = document.querySelector('.nav-burger')?.getBoundingClientRect()
+      const hit = bur
+        ? document.elementFromPoint(bur.left + bur.width / 2, bur.top + bur.height / 2)
+        : null
+      return { 帯: box('.app-topbar'), 支度: box('.jobbar'),
+        押せる: !!(hit && hit.closest('.nav-burger')) }
+    })
+    if (!m.帯 || !m.支度) {
+      ng(`貼り付く帯 ${w}px … 帯が描かれていない`)
+    } else if (!m.押せる) {
+      ng(`貼り付く帯 ${w}px … 送ると ☰ が押せない`,
+        '支度の帯が上の帯にかぶっている。貼り付く箱は `.app-stick` 1つにする')
+    } else if (m.支度.top < m.帯.bottom) {
+      ng(`貼り付く帯 ${w}px … 支度の帯が上の帯に重なっている`
+        + `(帯 ${m.帯.top}〜${m.帯.bottom} / 支度 ${m.支度.top}〜${m.支度.bottom})`)
+    } else {
+      ok(`貼り付く帯 ${w}px … 送っても縦に並ぶ`
+        + `(帯 ${m.帯.top}〜${m.帯.bottom} / 支度 ${m.支度.top}〜${m.支度.bottom})・☰ 押せる`)
+    }
+  }
+  /* **貼り付く役を、2つに持たせない。**
+     `.jobbar` の側で `top: 0` を書き戻すと、また同じことが起きる */
+  {
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    const 帯 = /\.jobbar\s*\{[^}]*\}/.exec(css)?.[0] ?? ''
+    if (/position:\s*sticky/.test(帯)) {
+      ng('貼り付く帯 … `.jobbar` が自分で貼り付いている',
+        '貼り付く役は `.app-stick` 1つ。2つに持たせると上の帯と重なる')
+    } else if (!/\.app-stick\s*\{[^}]*position:\s*sticky/.test(css)) {
+      ng('貼り付く帯 … `.app-stick` が貼り付いていない')
+    } else {
+      ok('貼り付く帯 … 貼り付く役は `.app-stick` 1か所')
+    }
+  }
+  /* **画面が本当に包んでいるか。** 検証は自分で `.app-stick` を書いて
+     描くので、`App.jsx` の側で外しても描くほうは緑のままになる */
+  {
+    const src = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<div className="app-stick">[\s\S]{0,600}<AppTopbar[\s\S]{0,900}<JobBar[\s\S]{0,600}<\/div>/
+      .test(src)) {
+      ng('貼り付く帯 … `App.jsx` が帯2つを `.app-stick` で包んでいない',
+        '包まないと、送ったときに支度の帯が上の帯にかぶる')
+    } else {
+      ok('貼り付く帯 … `App.jsx` も帯2つを1つの箱で包んでいる')
+    }
+  }
+
   /* ── 画面が本当に出しているか(検証だけが緑にならないように)──── */
   const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
@@ -2406,74 +2480,106 @@ export default defineConfig({
 // `?rows=old` は今日出すものが1つも無い状態で、そこでは札が押せない。
 // ══════════════════════════════════════════════════════════════════════
 {
-  const 測る = async (w, extra = '') => {
+  const 測る = async (w, extra = '', 開く = true) => {
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=rscope${extra}`,
       { waitUntil: 'networkidle' })
     await page.waitForSelector('.rscope', { timeout: 8000 })
-    const r = await page.evaluate(() => {
-      const rows = [...document.querySelectorAll('.rscope .chiprow')]
-      const chips = [...document.querySelectorAll('.rscope-chip')]
-      const top = (el) => Math.round(el.getBoundingClientRect().top)
-      const 行数 = (row) => new Set([...row.querySelectorAll('.rscope-chip')].map(top)).size
+    /* **閉じているときの高さ**を先に測る。ここが利用者の見る形である */
+    const 閉 = await page.evaluate(() => {
       const doc = document.documentElement
       return {
         高さ: Math.round(document.querySelector('.rscope').getBoundingClientRect().height),
-        範囲の行数: 行数(rows[0]),
-        札の数: chips.length,
-        低い札: Math.min(...chips.map((c) => Math.round(c.getBoundingClientRect().height))),
-        押せない札: chips.filter((c) => c.disabled).length,
-        数を出している: [...document.querySelectorAll('.rscope .chip-count')].length,
+        外に出ている札: document.querySelectorAll('.rscope > .chiprow .rscope-chip').length,
         ボタン: document.querySelector('.rscope .btn--primary').textContent.trim(),
         説明: document.querySelector('.rscope-lead').textContent.trim(),
         横あふれ: doc.scrollWidth > doc.clientWidth,
       }
     })
+    let 開 = null
+    if (開く) {
+      await page.click('.rscope-go .btn--small')
+      await page.waitForTimeout(140)
+      開 = await page.evaluate(() => {
+        const pop = document.querySelector('.rscope-pop')
+        if (!pop) return null
+        const r = pop.getBoundingClientRect()
+        const chips = [...pop.querySelectorAll('.rscope-chip')]
+        const top = (el) => Math.round(el.getBoundingClientRect().top)
+        return {
+          札の数: chips.length,
+          低い札: Math.min(...chips.map((c) => Math.round(c.getBoundingClientRect().height))),
+          押せない札: chips.filter((c) => c.disabled).length,
+          数を出している: pop.querySelectorAll('.chip-count').length,
+          範囲の行数: new Set(
+            [...pop.querySelectorAll('.chiprow')][0]
+              .querySelectorAll('.rscope-chip')).size && new Set(
+            [...[...pop.querySelectorAll('.chiprow')][0]
+              .querySelectorAll('.rscope-chip')].map(top)).size,
+          画面内: r.left >= -1 && r.right <= window.innerWidth + 1
+            && r.top >= -1 && r.bottom <= window.innerHeight + 1,
+          幅: Math.round(r.width), 高さ: Math.round(r.height),
+        }
+      })
+    }
     await page.close()
-    return r
+    return { 閉, 開 }
   }
 
-  for (const w of [1280, 390, 375, 360, 320]) {
-    const r = await 測る(w)
-    /* **押せる大きさを割らない。** 狭い画面で詰めるときに削るのは
-       横だけである(CLAUDE.md「押せる大きさは割らない」) */
-    if (r.低い札 < 36) ng(`復習の範囲 ${w}px … 札が小さすぎる(${r.低い札}px)`)
-    else if (r.横あふれ) ng(`復習の範囲 ${w}px … 横にはみ出している`)
+  for (const w of [1280, 430, 390, 375, 360, 320]) {
+    const { 閉, 開 } = await 測る(w)
+    /* **閉じているあいだ、札は1つも外に出ていない**(利用者の指定)。
+       ここが緩むと、また13個が並んで始めるボタンが下へ押し出される */
+    if (閉.外に出ている札 > 0) {
+      ng(`復習の範囲 ${w}px … 札が吹き出しの外に出ている(${閉.外に出ている札} 個)`,
+        '選ぶものは吹き出しの中だけ。同じものを2か所に出さない')
+    } else if (閉.横あふれ) {
+      ng(`復習の範囲 ${w}px … 横にはみ出している`)
+    /* **畳んだ帯が場所を取りすぎない。** 直す前は 259〜301px あった */
+    } else if (閉.高さ > 120) {
+      ng(`復習の範囲 ${w}px … 畳んでも帯が高い(${閉.高さ}px)`,
+        '押すものは「出す」と「出しかた」の2つだけである')
+    } else if (!開) {
+      ng(`復習の範囲 ${w}px … 「出しかた」を押しても吹き出しが出ない`)
+    /* **押せる大きさを割らない**(CLAUDE.md) */
+    } else if (開.低い札 < 36) {
+      ng(`復習の範囲 ${w}px … 札が小さすぎる(${開.低い札}px)`)
     /* **数が札の中に出ているか。** ここが「直感的」の核心で、
        消すと「1週間以内に何問あるか」が分からないまま選ぶことになる */
-    else if (r.数を出している < 8) {
-      ng(`復習の範囲 ${w}px … 札に数が出ていない(${r.数を出している} 個)`,
+    } else if (開.数を出している < 8) {
+      ng(`復習の範囲 ${w}px … 札に数が出ていない(${開.数を出している} 個)`,
         '「1週間以内に23問ある」と見えて初めて、範囲を選べる')
-    } else if (r.札の数 !== 13) {
-      ng(`復習の範囲 ${w}px … 札が 13 個(範囲8 + 個数5)ではない`, `${r.札の数} 個`)
-    /* **狭い画面で場所を取りすぎない。** 8つの札が3行になると帯だけで
-       301px になり、「始める」が画面の下へ押し出される(実測) */
-    } else if (w >= 360 && r.高さ > 270) {
-      ng(`復習の範囲 ${w}px … 帯が高すぎる(${r.高さ}px・${r.範囲の行数} 行)`,
-        '狭い画面では札を詰めて2行に収める')
+    } else if (開.札の数 !== 13) {
+      ng(`復習の範囲 ${w}px … 札が 13 個(範囲8 + 個数5)ではない`, `${開.札の数} 個`)
+    /* **吹き出しが画面からはみ出さない。** はみ出すと、
+       いちばん下の札に永久に手が届かない(語の意味の吹き出しと同じ話) */
+    } else if (!開.画面内) {
+      ng(`復習の範囲 ${w}px … 吹き出しが画面からはみ出している`
+        + `(${開.幅}×${開.高さ})`)
     } else {
-      ok(`復習の範囲 ${w}px … ${r.範囲の行数} 行・${r.高さ}px`
-        + `・札 ${r.低い札}px(${r.ボタン})`)
+      ok(`復習の範囲 ${w}px … 畳んで ${閉.高さ}px(${閉.ボタン})`
+        + `・開くと ${開.幅}×${開.高さ}・札 ${開.低い札}px`)
     }
   }
 
   /* **0件の札は押せない**(効かない操作を見せない)。
      「出ない」側を見ないと、**全部押せる形に壊しても緑のまま**になる */
   const old = await 測る(390, '&rows=old')
-  if (old.押せない札 < 7) {
-    ng('復習の範囲 … 0件の札が押せてしまう', `押せない札 ${old.押せない札} 個`)
-  } else if (!old.ボタン.includes('ありません')) {
-    ng('復習の範囲 … 出すものが無いのに、始められる', old.ボタン)
+  if (!old.開 || old.開.押せない札 < 7) {
+    ng('復習の範囲 … 0件の札が押せてしまう', `押せない札 ${old.開?.押せない札} 個`)
+  } else if (!old.閉.ボタン.includes('ありません')) {
+    ng('復習の範囲 … 出すものが無いのに、始められる', old.閉.ボタン)
   } else {
-    ok(`復習の範囲 … 0件の札は押せない(${old.押せない札} 個)`)
+    ok(`復習の範囲 … 0件の札は押せない(${old.開.押せない札} 個)`)
   }
 
   /* **押す前に、何が起きるかを言う。** ここが
-     「仕組みが分かりにくい」への答えである */
-  const one = await 測る(390)
-  if (!one.説明.includes('今日出すぶんから出します')) {
-    ng('復習の範囲 … 押す前の説明が出ていない', one.説明)
-  } else ok('復習の範囲 … 押す前に、何が出るのかを1行で言う')
+     「仕組みが分かりにくい」への答えである。
+     **畳んでいても見えている**ので、吹き出しを開かずに測る */
+  const one = await 測る(390, '', false)
+  if (!one.閉.説明.includes('今日出すぶんから出します')) {
+    ng('復習の範囲 … 押す前の説明が出ていない', one.閉.説明)
+  } else ok('復習の範囲 … 畳んだままでも、何が出るのかを1行で言う')
 
   /* **画面が本当に使っているか。** 検証の入り口(`__screens.jsx`)だけ
      直しても、利用者の画面は変わらない */

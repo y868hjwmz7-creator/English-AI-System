@@ -36,6 +36,7 @@ import QrCard from './components/QrCard.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import FocusFrame from './components/FocusFrame.jsx'
 import JobBar from './components/JobBar.jsx'
+import { AppTopbar } from './components/AppNav.jsx'
 import CastChip from './components/CastChip.jsx'
 import {
   BoltIcon, BookIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
@@ -545,6 +546,33 @@ const JOBBAR = (
   />
 )
 
+/* 上の帯と支度の帯を、**本物の骨組みのまま**重ねて描く
+   (`?screen=sticky`・2026-09 実機・利用者の指摘)。
+
+     > 上部バーは消えていなかったのですが、このバックグラウンドロード中の
+     > 表示のバーがスクロールするとかぶってしまっているのが原因でした。
+
+   **どちらも `position: sticky; top: 0`** だったので、あとに置いた
+   支度の帯が上の帯を**まるごと覆っていた。** 送る前は縦に並ぶので、
+   **送ってみるまで分からない。**
+
+   だから `.app-shell` → `.app-body` → 帯2つ → 背の高い中身、という
+   **利用者の画面とまったく同じ形**で描く(ソースを読むだけでは
+   重なりは分からない・CLAUDE.md)。 */
+const STICKY = (
+  <div className="app-shell is-wide">
+    <div className="app-body">
+      <div className="app-stick">
+        <AppTopbar onToggle={() => {}} open wide pageLabel="教材" />
+        {JOBBAR}
+      </div>
+      <div className="app">
+        <p style={{ height: '2400px', margin: 0 }}>送るための高さ</p>
+      </div>
+    </div>
+  </div>
+)
+
 function RScopeDemo({ rows }) {
   const [scope, setScope] = useState('due')
   const [size, setSize] = useState(10)
@@ -557,7 +585,9 @@ function RScopeDemo({ rows }) {
 }
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'rscope'
+  q.get('screen') === 'sticky'
+    ? STICKY
+    : q.get('screen') === 'rscope'
     ? RSCOPE
     : q.get('screen') === 'jobbar'
     ? JOBBAR

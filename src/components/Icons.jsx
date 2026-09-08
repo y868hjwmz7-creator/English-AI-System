@@ -389,3 +389,4 @@ export function LinkIcon({ className = 'icon' }) {
     </svg>
   )
 }
+

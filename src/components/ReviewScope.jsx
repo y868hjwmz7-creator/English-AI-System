@@ -37,10 +37,12 @@
  *   プレインでも見分けられる。数の丸も `.chip-count` がすでにある。
  *   **ここで新しい配色を作らない。**
  */
+import { useRef, useState } from 'react'
 import {
   SCOPES, SIZES, scopeCounts, scopeLead, scopePool, sizeLabel, takeCount, todayKey, isDueNow,
 } from '../lib/reviewScope.js'
-import { FocusIcon } from './Icons.jsx'
+import Popover from './Popover.jsx'
+import { FocusIcon, GearIcon } from './Icons.jsx'
 
 /**
  * @param {Array}  rows   絞り込みを当てたあとの一覧
@@ -60,9 +62,15 @@ export default function ReviewScope({
   /* **先取りが何件あるか。** ここで「次に出す日を動かさない」ことを
      先に言っておく。黙って動かさないと、進めたつもりで進んでいない */
   const ahead = pool.filter((r) => !isDueNow(r, today)).length
+  /* **選ぶものは、吹き出しの中へ**(2026-09 実機・利用者の指定)。
+     開いているかどうかは覚えない —— 毎回選ぶものではない */
+  const [open, setOpen] = useState(false)
+  const gearRef = useRef(null)
 
-  return (
-    <div className="rscope">
+  /* 札2つぶんの中身。**吹き出しの中にだけ置く。**
+     ここを外にも書くと、同じものが2か所に出る */
+  const 選ぶ欄 = (
+    <>
       <p className="rscope-head" id="rscope-when">いつのぶん</p>
       <div className="chiprow" role="group" aria-labelledby="rscope-when">
         {SCOPES.map((s) => {
@@ -100,8 +108,12 @@ export default function ReviewScope({
           </button>
         ))}
       </div>
+    </>
+  )
 
-      <div className="btn-row">
+  return (
+    <div className="rscope">
+      <div className="btn-row rscope-go">
         <button
           type="button"
           className="btn btn--primary"
@@ -117,7 +129,38 @@ export default function ReviewScope({
               ? `${pool.length} ${unit}を出す`
               : `${pool.length} ${unit}から ${take} ${unit}を出す`}
         </button>
+        {/* **選ぶものは、ここを押したときだけ出す**(2026-09 利用者の指定)。
+
+              > 選択肢が多すぎて、どちらかというと設定の吹き出しなどを
+              > 作ってそこで設定できるとよさそうです
+
+            13個の札が並んでいたので、狭い画面では**始めるボタンが
+            画面の下へ押し出されていた。** いま選んでいるものは
+            **上のボタンと下の1行がそのまま言っている**ので、
+            札そのものは畳んでよい。**同じものを2か所に出さない** */}
+        <button
+          type="button"
+          ref={gearRef}
+          className={`btn btn--small${open ? ' chip--on' : ''}`}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <GearIcon />
+          出しかた
+        </button>
       </div>
+      {open && (
+        <Popover
+          anchorEl={gearRef.current}
+          onClose={() => setOpen(false)}
+          className="rscope-pop"
+          label="出しかたを選ぶ"
+          /* 札を押すと数が変わり、箱の高さも変わる。**置き直す合図を渡す** */
+          placeKey={`${scope}/${size}`}
+        >
+          {選ぶ欄}
+        </Popover>
+      )}
 
       <p className="card-hint rscope-lead">
         {scopeLead(scope, unit)}
