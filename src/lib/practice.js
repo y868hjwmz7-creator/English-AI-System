@@ -34,7 +34,9 @@ export const PRACTICE_KINDS = {
   six_steps: '6Steps',
   quick_response: 'Quick Response',
   wordbook: '単語帳',
-  pronunciation: '発音練習',
+  // **「発音練習」から改名**(2026-09 利用者の指定)。
+  // **鍵(`pronunciation`)は変えない** —— 0022 に記録が残っている
+  pronunciation: 'スピーチ練習',
 }
 
 /** 何秒ごとに送るか。短くすると通信が増え、長くすると閉じたときに取りこぼす */

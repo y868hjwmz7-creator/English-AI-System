@@ -36,7 +36,7 @@ import FocusFrame from './components/FocusFrame.jsx'
 import JobBar from './components/JobBar.jsx'
 import CastChip from './components/CastChip.jsx'
 import {
-  BoltIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
+  BoltIcon, BookIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
   PrintIcon, RefreshIcon, ScreenIcon, TaskIcon,
 } from './components/Icons.jsx'
 import MaterialShare from './components/MaterialShare.jsx'
@@ -392,10 +392,16 @@ const SEARCH = (
      > 1番上までスクロールしてハンバーガーを押すしかないのが
      > かなり不便かつ分かりにくいです
 
-   **ゲストの行き先そのまま4つ**を並べる(`App.jsx` の `pages` が
-   ゲストに出すものと同じ順・同じ名前)。狭い画面で1行に収まるか・
+   **行き先そのまま4つ**を並べる(`App.jsx` の `TAB_IDS` が
+   出すものと同じ順・同じ名前)。狭い画面で1行に収まるか・
    押せる大きさを割っていないか・名前が切れていないかは、
    **描かせないと分からない。**
+
+   **トレーナーにも出す**(2026-09 利用者の指定)。
+   > 教材、単語帳、Quick Response、スピーチ この四つにしてください
+   ちがうのは**先頭の1つ**だけ(今週の宿題 / 教材)なので、
+   `?role=trainer` で切り替えて**両方を測る。**
+   片方だけ測ると、もう片方で名前があふれても緑のままになる。
 
    **本物の部品と本物の CSS で測る**(写した HTML では測らない)。
    `App.jsx` が本当にこれを出しているかは、`npm run test:bar` が
@@ -405,12 +411,16 @@ const TABS = (
     <div style={{ height: '1200px' }} />
     <AppTabs
       pages={[
-        { id: 'homework', label: '今週の宿題', icon: TaskIcon },
+        q.get('role') === 'trainer'
+          ? { id: 'materials', label: '教材', icon: BookIcon }
+          : { id: 'homework', label: '今週の宿題', icon: TaskIcon },
         { id: 'wordbook', label: '単語帳', icon: CardsIcon },
         { id: 'qr', label: 'Quick Response', icon: BoltIcon },
-        { id: 'pronunciation', label: '発音練習', icon: MicIcon },
+        /* **「発音練習」から改名**(2026-09 利用者の指定)。
+           id は変えていない —— 覚えている画面も記録もこの id である */
+        { id: 'pronunciation', label: 'スピーチ練習', icon: MicIcon },
       ]}
-      view={q.get('view') || 'homework'}
+      view={q.get('view') || (q.get('role') === 'trainer' ? 'materials' : 'homework')}
       onChange={(id) => {
         document.querySelector('.app-tabs').dataset.picked = id
       }}

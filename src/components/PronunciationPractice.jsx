@@ -1,7 +1,15 @@
 /**
- * 発音練習 — 独立した機能(2026-08 利用者の指定)。
+ * スピーチ練習 — 独立した機能(2026-08 利用者の指定)。
  *
  * > 「発音練習」だけは独立した機能としてメニューに追加してください。
+ *
+ * **呼び名は 2026-09 に「スピーチ練習」へ変えた**(利用者の指定
+ * 「『発音を練習』を『スピーチ練習』にしてください」)。
+ * **id(`pronunciation`)もファイル名も変えていない** —— 覚えている画面
+ * (`eas.*`)も取り組みの記録(`practice_days.kind`)もこの id で残っており、
+ * 変えると**過去の記録が別物になる。**
+ * **教材の種類「Speech練習」(`kind = 'speech'`)とは別物である。**
+ * あちらは自分の原稿を貼って練習する教材、こちらは声に出す画面。
  *
  * 【いまは「器」だけ】(利用者の指定)
  *   採点は入れていない。いまある発音スコア(`pronunciation.js`)は
@@ -91,7 +99,7 @@ export default function PronunciationPractice() {
   return (
     <div className="stack">
       <div className="card">
-        <h2 className="card-title">発音練習</h2>
+        <h2 className="card-title">スピーチ練習</h2>
         <p className="card-hint">
           単語とフレーズを、<strong>発音記号を見ながらお手本と同じ音で</strong>言う練習です。
           <br />
