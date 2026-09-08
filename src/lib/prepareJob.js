@@ -104,6 +104,24 @@ export function cancelPrepare() {
 }
 
 /**
+ * **ログインした人が変わったので、丸ごと忘れる**(2026-09 実機・利用者の指定)。
+ *
+ * `clearPrepare()` は**走っている最中には何もしない**(終わったものを
+ * 片づけるためのもの)。ログインし直したときは、走っていようが
+ * 終わっていようが**前の人のもの**なので、どちらでも消す。
+ *
+ * **通信そのものは取り消さない**(送った1回はどのみち課金されている)。
+ * `cancelled` を立てるので、次の1本には進まない。
+ */
+export function forgetPrepare() {
+  queue.length = 0
+  if (!task) return
+  if (task.state === 'running') task = { ...task, cancelled: true }
+  task = null
+  emit()
+}
+
+/**
  * 支度を始める。
  *
  * @param {object} material 発行した教材(`sections` と `voiceIds` を持つ形)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AdminDashboard from './components/AdminDashboard.jsx'
 import LearnerHomework from './components/LearnerHomework.jsx'
 import SignIn from './components/SignIn.jsx'
@@ -19,8 +19,10 @@ import { setViewerRole } from './lib/viewer.js'
 import { materialIdFromUrl, urlWithoutMaterial } from './lib/materialLink.js'
 import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
-import { markJobSeen, useJob, watchJob } from './lib/generateJob.js'
-import { prepareAllOn, setPrepareAllOn, usePrepare } from './lib/prepareJob.js'
+import { forgetJob, markJobSeen, useJob, watchJob } from './lib/generateJob.js'
+import {
+  forgetPrepare, prepareAllOn, setPrepareAllOn, usePrepare,
+} from './lib/prepareJob.js'
 import JobBar from './components/JobBar.jsx'
 import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
@@ -227,6 +229,34 @@ export default function App() {
       setAuthChecked(true)
     })
   }, [])
+
+  /* ── **ログインした人が変わったら、前の人のものを忘れる**(2026-09 実機)
+   *
+   *     > 両方(= ゲストには出さない + ログインし直したら消す)
+   *
+   *   教材の生成も音声の支度も、状態は**書類(モジュール)に1つだけ**
+   *   置いてある。**画面を読み込み直すまで消えない**ので、トレーナーで
+   *   教材を作ったあと、そのままゲストで入り直すと
+   *   **前の人の教材の名前が帯に残っていた。**
+   *
+   *   ・**見るのは「人が変わったか」だけ。** 同じ人のまま画面を移っても
+   *     呼ばれない(そこで消したら「画面を移っても作りつづける」が壊れる)
+   *   ・**初めの1回では呼ばない。** ログインした瞬間に消すと、
+   *     読み込み直した直後に走っている仕事まで消えることになる
+   *   ・ログアウト(`null`)も「変わった」に数える ——
+   *     次に別の人が入ってくるかもしれない
+   *   ・お知らせ(`jobNote`)も一緒に消す。**帯だけ消しても、
+   *     すぐ下の「◯◯の下書きができました」が残る** */
+  const lastUser = useRef(undefined)
+  useEffect(() => {
+    const id = session?.user?.id ?? null
+    if (lastUser.current === undefined) { lastUser.current = id; return }
+    if (lastUser.current === id) return
+    lastUser.current = id
+    forgetJob()
+    forgetPrepare()
+    setJobNote(null)
+  }, [session])
 
   // ログインしている人の表示名と役割を読む
   useEffect(() => {

@@ -4450,6 +4450,58 @@ html, body { overflow-x: clip; }
   padding: 1px 10px; font-size: 1em; line-height: 1.5;
 }
 .cast-chip--inline .cast-chip-list { flex: 1 0 100%; margin-top: 4px; font-size: 1em; }
+/* ── いちばん下の行の**左端**に、小さく静かに(2026-09 実機・利用者の指定)
+     > スマホでの「読み上げの声」のタブを「教材をシェア」の右に収めるか、
+     > もっと小さくしてどこか違うところに置くなりできないですか
+
+   **問数の行には、スマホで入る幅が無かった**(実測 390px:
+   カードの中身 356px に対し、問数の3つで 328px。残り 18px)。
+   そのため札がまるごと1行を取り、**宙に浮いて見えていた。**
+
+   いちばん下の行は 390px で 170px、320px でも 100px 空いている。
+   しかも**すぐ右が「読み上げ音声を作り直す」**なので、
+   「この声は好きじゃない → 作り直す」が並ぶ。
+
+   ・`display: contents` で**その行の一員にする**(`--inline` と同じ技)。
+     囲みを1つ挟むと、開いたときに名前が右の細い柱へ押し込まれる
+   ・`margin-right: auto` で**左端へ。** 右の3つは
+     **後戻りが利かない操作**なので、あいだに割り込ませない
+   ・**押せる大きさは割るが、それでよい。** これは読むための札で、
+     押すのは「どの声か確かめたい」ときだけである(紙の上と同じ扱い) */
+.cast-chip--foot { display: contents; }
+.cast-chip--foot .cast-chip-btn {
+  margin-right: auto; align-self: center;
+  /* **余白は詰める。** 320px では、右の3つ(40 + 40 + 88 + 隙間 18)を
+     引いた残りが 100px しかない。ここが1px でも太ると
+     「教材を消す」が次の行へ落ちて、**直す前より背が高くなる** */
+  padding: 2px 6px; font-size: var(--fs-12); line-height: 1.5;
+}
+.cast-chip--foot .cast-chip-btn:not(.chip--on) {
+  border-color: transparent; background: transparent; color: var(--text-muted);
+}
+.cast-chip--foot .cast-chip-btn:not(.chip--on):hover { color: var(--text-secondary); }
+/* 名前は**次の行いっぱい**に、左そろえで出す
+   (右の3つに合わせて右寄せにすると、名前が読みにくい) */
+.cast-chip--foot .cast-chip-list {
+  flex: 1 0 100%; order: 99; margin-top: 6px; font-size: var(--fs-12);
+}
+/* ★ **とても狭い画面では、札に1行あげる**(実測して分かったこと)。
+
+   360px を割ると、下の行に使える幅は 262px しかない。
+   右の3つ(40 + 40 + 88 + 隙間 18 = 186px)を引くと**残り 76px** で、
+   「読み上げの声」の字だけで 78px あるので**どうやっても入らない。**
+
+   そのまま置くと**「教材を消す」が次の行へ押し出される** ——
+   いちばん押し間違えたくないボタンが動くので、それは避ける。
+   **札の側に1行あげて、右の3つは1行のまま**にする。
+
+   **その1行ぶん(38px)は、320px では損になる**(問数の行が
+   2行のままなので、そこでは詰められない)。それでも
+   **390px で 42px 得している**ので、全体では割に合う。
+   iPhone が 320px で来るのは「画面表示を拡大」を選んだときだけである */
+@media (max-width: 360px) {
+  .cast-chip--foot .cast-chip-btn { flex: 1 0 100%; margin-right: 0; }
+}
 /* **地色は `--btn-bg`。** グレーの囲み(`--surface-2`)の上に置くので、
    `--surface-1` のままだと**囲みより暗くなり、黒い穴のように見える**
    (2026-08「黒背景に黒ボタンは殺風景」と同じ話)。

@@ -1374,6 +1374,73 @@ export default defineConfig({
   /** 上の行(言葉つき)。**画面に見えていること**を見る */
   const TOOLS = ['印刷 / PDF', '音声ダウンロード']
 
+  /* ══ **「読み上げの声」の札は、問数の行に入らない**(2026-09 実機・利用者の指定)══
+       > スマホでの「読み上げの声」のタブを「教材をシェア」の右に収めるか、
+       > もっと小さくしてどこか違うところに置くなりできないですか
+
+     実測(390px)。カードの中身は 356px で、問数の3つが 328px を使う。
+     **残り 18px** —— 札(112px)は絶対に入らないので、**まるごと1行**を取り、
+     宙に浮いて見えていた。「教材をシェアの右」も同じ理由で入らない
+     (共有 194 + シェア 125 + 札 112 = 441 > 356)。
+
+     だから**いちばん下の行の左端**へ、小さく静かに移した。
+     ここは 390px で右の3つを引いても 66px 余る。 */
+  for (const w of [390, 320]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.cast-chip-btn')
+    const m = await page.evaluate(() => {
+      const box = (s) => document.querySelector(s)?.getBoundingClientRect() ?? null
+      const parts = box('.material-parts')
+      const chip = box('.cast-chip-btn')
+      const foot = box('.material-foot')
+      const first = document.querySelector('.material-foot .iconbtn')?.getBoundingClientRect()
+      return {
+        問数丈: Math.round(parts?.height ?? 0),
+        札幅: Math.round(chip?.width ?? 0),
+        // **問数の行の中にいないこと**(下の行へ移したので、下端より下にいる)
+        札は下: !!(parts && chip && chip.top >= parts.bottom),
+        // **左端にいること**(右の3つは後戻りが利かない操作。混ぜない)
+        札は左: !!(chip && foot && Math.round(chip.left) === Math.round(foot.left)),
+        /* **右の3つより先にいること。** 360px を割ると札は自分の行を持つので、
+           「同じ行で左」ではなく「同じ行か、その上」で見る。
+           **3つが1行に並んでいるか**は、すぐ上の「教材の操作」が数えている */
+        札は先: !!(chip && first && (chip.right <= first.left || chip.bottom <= first.top)),
+      }
+    })
+    if (m.問数丈 === 0 || m.札幅 === 0) {
+      ng(`読み上げの声 ${w}px … 札か問数の行が描かれない`)
+    } else if (!m.札は下) {
+      ng(`読み上げの声 ${w}px … まだ問数の行の中にいる`,
+        '390px では残り 18px しかなく、札が1行まるごと取ってしまう')
+    } else if (!m.札は左 || !m.札は先) {
+      ng(`読み上げの声 ${w}px … 下の行の左端にいない`,
+        '右の3つは**後戻りが利かない操作**。あいだに割り込ませない')
+    } else if (w === 390 && m.問数丈 > 30) {
+      ng(`読み上げの声 390px … 問数の行がまだ ${m.問数丈}px(2行)`,
+        '札を出したぶん折り返している。1行(22px)に収まるはず')
+    } else {
+      ok(`読み上げの声 ${w}px … 下の行の左端に小さく(札 ${m.札幅}px`
+        + `・問数の行 ${m.問数丈}px)`)
+    }
+  }
+  /* 画面が本当にそう書いているか(検証の入り口だけ直しても、
+     利用者の画面は変わらない) */
+  {
+    const src = readFileSync(
+      new URL('../src/components/TrainerMaterials.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<CastChip[^>]*cast-chip--foot/.test(src)) {
+      ng('読み上げの声 … `TrainerMaterials` が下の行に置いていない')
+    } else if (/cast-chip--inline/.test(src)) {
+      ng('読み上げの声 … 問数の行の札(`--inline`)が残っている',
+        '同じ札を2か所に出さない')
+    } else {
+      ok('読み上げの声 … `TrainerMaterials` が同じ形で書いている')
+    }
+  }
+
   for (const w of [390, 375, 360, 320]) {
     await page.setViewportSize({ width: w, height: 844 })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,

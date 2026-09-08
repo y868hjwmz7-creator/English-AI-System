@@ -34,6 +34,7 @@ import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import FocusFrame from './components/FocusFrame.jsx'
 import JobBar from './components/JobBar.jsx'
+import CastChip from './components/CastChip.jsx'
 import {
   BoltIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
   PrintIcon, RefreshIcon, ScreenIcon, TaskIcon,
@@ -272,9 +273,28 @@ const hit = () => {
   const el = document.querySelector('.card-tools')
   el.dataset.hits = String(Number(el.dataset.hits ?? 0) + 1)
 }
+/* 写真とまったく同じ中身にしてある(2026-09 実機・利用者の指摘)。
+   会話14発言 + 内容の理解5 + ディスカッション5 —— **390px では
+   問数の行が2行に折り返す**ので、札の置き場所はここでしか測れない */
+const CARD_MATERIAL = {
+  id: '11111111-2222-3333-4444-555555555555',
+  title: '2026-09-07 / 会議に出る / 業界の語',
+  voiceIds: ['us-4', 'us-1'],
+  sections: [{
+    id: 's1', exercise_type: 'dialogue',
+    items: [{ id: 'a', speaker: 'Mika' }, { id: 'b', speaker: 'Josh' }],
+  }],
+}
+
 const TOOLS = (
   <div className="app-main" style={{ padding: 16 }}>
     <section className="card">
+      {/* 問数の行。**写真と同じ中身**(390px では3つで 328px 使う) */}
+      <div className="muted material-parts">
+        <span>会話 14 発言</span>
+        <span>内容の理解 5 問</span>
+        <span>ディスカッション 5 問</span>
+      </div>
       {/* ふだん使う2つ。**言葉つき**(絵だけでは「PDF も出せる」が読めない) */}
       <div className="btn-row card-tools" data-hits="0">
         <button type="button" className="btn btn--small" onClick={hit}>
@@ -302,6 +322,9 @@ const TOOLS = (
       </div>
       {/* めったに押さない3つ。**絵のまま**(言葉にすると1行に入らない) */}
       <div className="material-foot">
+        {/* **いちばん下の行の左端に、小さく静かに**(2026-09 実機・利用者の指定)。
+            問数の行にはスマホで入る幅が無かった(実測 390px で残り 18px) */}
+        <CastChip material={CARD_MATERIAL} className="cast-chip--foot" />
         <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
                     text={busy ? '作っています… 3 / 14' : null}
                     onClick={hit} />
