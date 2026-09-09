@@ -86,6 +86,35 @@ export const weaknessTags = [
   { id: 'ellipsis',            category: 'grammar',    kind: 'weakness', label: '省略表現',        hint: '会話で落とされる語。Sounds good. / Been there.' },
   { id: 'word-order',          category: 'grammar',    kind: 'weakness', label: '語順',            hint: '疑問文・間接疑問・副詞の位置' },
 
+  // ── 文法(2026-09 に足した15件・利用者の指定)──────────────
+  //   > ついでに苦手タグの文法項目にまだないもので
+  //   > 一般的なものがあれば追加してください
+  //
+  //   **既存の16件は1文字も触っていない**(並びも動かしていない)。
+  //   足したのは、どの文法書にも見出しがあるのに**まだ無かったもの**だけ。
+  //   受動態・助動詞・動名詞のように、**中学英語で必ず出るのに
+  //   選べなかった**ものが多い(30日講座がそのまま乗る)。
+  //
+  //   **`weakness_tags`(表)にも同じ15件を足す**(0050)。
+  //   `material_tags.tag_id` は表を参照しているので、
+  //   **貼る前にこのタグで教材を発行すると、その瞬間に止まる。**
+  //   演習の種類と同じ落とし穴である(CLAUDE.md)。
+  { id: 'sentence-pattern',    category: 'grammar',    kind: 'weakness', label: '文型(SVOC)',    hint: 'S / V / O / C の並び。「誰が どうする 何を」の骨組み' },
+  { id: 'passive',             category: 'grammar',    kind: 'weakness', label: '受動態',          hint: 'be + 過去分詞。誰がしたかを言わずに済ませる形' },
+  { id: 'modal',               category: 'grammar',    kind: 'weakness', label: '助動詞',          hint: 'can / will / must / should / may。丁寧さと確信の強さが変わる' },
+  { id: 'gerund',              category: 'grammar',    kind: 'weakness', label: '動名詞',          hint: '-ing を名詞として使う形。enjoy -ing / want to do の使い分け' },
+  { id: 'relative-adverb',     category: 'grammar',    kind: 'weakness', label: '関係副詞',        hint: 'where / when / why / how。関係代名詞との違い' },
+  { id: 'pronoun',             category: 'grammar',    kind: 'weakness', label: '代名詞',          hint: 'it / they / one / this。何を指しているかが相手に伝わるか' },
+  { id: 'causative',           category: 'grammar',    kind: 'weakness', label: '使役・知覚動詞',  hint: 'make / let / have + 原形、see / hear + O + doing' },
+  { id: 'reported-speech',     category: 'grammar',    kind: 'weakness', label: '話法',            hint: '「彼はこう言った」。時制と語順の移し方' },
+  { id: 'negation',            category: 'grammar',    kind: 'weakness', label: '否定',            hint: 'not / no / never / hardly。部分否定と全体否定' },
+  { id: 'emphasis',            category: 'grammar',    kind: 'weakness', label: '強調・倒置',      hint: 'It is 〜 that、do + 原形、Never have I 〜' },
+  { id: 'adverb-form',         category: 'grammar',    kind: 'weakness', label: '形容詞と副詞',    hint: 'good / well、hard / hardly。どちらの形を使うか' },
+  { id: 'future',              category: 'grammar',    kind: 'weakness', label: '未来の言い方',    hint: 'will / be going to / 現在進行形。決まっている予定かどうか' },
+  { id: 'there-is',            category: 'grammar',    kind: 'weakness', label: 'there の文',      hint: 'There is / are。「〜がある」を主語を立てずに言う形' },
+  { id: 'imperative',          category: 'grammar',    kind: 'weakness', label: '命令文・依頼',    hint: 'Do 〜 / Please 〜 / Could you 〜。頼み方の強さ' },
+  { id: 'time-clause',         category: 'grammar',    kind: 'weakness', label: '時・条件の節',    hint: 'When / If の中では、未来のことも現在形で言う' },
+
   // ── 表現 ──────────────────────────────────
   { id: 'filler',              category: 'expression', kind: 'weakness', label: 'つなぎ言葉',      hint: 'Well, / Actually, / I mean — 間をつなぐ言い方' },
   { id: 'paraphrase',          category: 'expression', kind: 'weakness', label: '言い換え',        hint: '語が出てこないときに別の言い方で伝える' },

@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   28行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   32行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -16,8 +16,8 @@
 --     https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/
 --     ↑ のうしろに、下のファイル名をつなげると開けます。
 --
---   **0041〜0046 のどれかが「まだです」なら、まとめた1つで済みます。**
---     supabase/apply/pending_matome.sql   ← これ1つで 0041〜0046 が全部入ります
+--   **0041 から先のどれかが「まだです」なら、まとめた1つで済みます。**
+--     supabase/apply/pending_matome.sql   ← これ1つで 0041 以降が全部入ります
 --
 --   それより古いところが「まだです」のときは、こちら。
 --     0013〜0023 … supabase/apply/pending_2026-08-29.sql
@@ -126,4 +126,6 @@ from (
   union all select '0049 自作の音楽(BGM)の置き場を作る(pending_matome.sql)',
     exists (select 1 from information_schema.tables
             where table_schema = 'public' and table_name = 'bgm_tracks'), 31
+  union all select '0050 苦手タグの文法項目を15件足す(pending_matome.sql)',
+    exists (select 1 from public.weakness_tags where id = 'passive'), 32
 ) t order by 順;

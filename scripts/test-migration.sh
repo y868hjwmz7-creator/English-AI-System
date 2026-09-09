@@ -72,14 +72,18 @@ echo "  同じ名前の関数の重なり: なし"
 #   「violates check constraint」で止まった(2026-09 実機)。
 #   lint もビルドも通るので、作ってみるまで分からない。ここで見張る。
 # ---------------------------------------------------------------------------
-echo "▶ 画面の演習・教材の種類が、表の制約に全部入っているか確かめる"
+echo "▶ 画面の演習・教材の種類・弱点タグが、表に全部入っているか確かめる"
 typedef=$(su postgres -c "psql -d $DB -tAc \"
   select pg_get_constraintdef(oid) from pg_constraint
   where conname = 'material_sections_type_check';\"")
 kinddef=$(su postgres -c "psql -d $DB -tAc \"
   select pg_get_constraintdef(oid) from pg_constraint
   where conname = 'materials_kind_check';\"")
-node scripts/check-exercise-types.mjs "$typedef" "$kinddef"
+# **弱点タグは制約ではなく「表の行」である**(`material_tags.tag_id` が参照)。
+# 画面にだけ足すと、そのタグで教材を発行した瞬間に外部キー違反で止まる
+tagids=$(su postgres -c "psql -d $DB -tAc \"
+  select string_agg(id, ',') from public.weakness_tags;\"")
+node scripts/check-exercise-types.mjs "$typedef" "$kinddef" "$tagids"
 
 echo "▶ 出来たものを確認"
 su postgres -c "psql -d $DB -tAc \"

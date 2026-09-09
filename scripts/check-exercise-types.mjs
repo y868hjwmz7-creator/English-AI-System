@@ -24,6 +24,11 @@ import { EXERCISE_TYPES, DEFAULT_SECTIONS, isBlankItem, isWrongShape } from '../
 // **`src/lib/materials.js` からは読まない。** あちらは Supabase を
 // 引き連れているので、素の node では読み込めない(だから種類だけ分けてある)
 import { MATERIAL_KINDS } from '../src/data/materialKinds.js'
+/* **弱点タグは、表(`weakness_tags`)にも同じものが要る。**
+   `material_tags.tag_id` が参照しているので、画面にだけ足すと
+   **そのタグで教材を発行した瞬間に外部キー違反で止まる**(2026-09)。
+   演習の種類・教材の種類とまったく同じ落とし穴なので、同じ場所で見張る */
+import { weaknessTags } from '../src/data/weaknessTags.js'
 
 const def = process.argv[2] ?? ''
 if (!def) {
@@ -80,6 +85,39 @@ if (noPlan.length) {
   process.exit(1)
 }
 console.log(`  画面の教材の種類 ${MATERIAL_KINDS.length} 個も、すべて表の制約に入っています`)
+
+/*
+ * ============================================================================
+ * **弱点タグも、まったく同じ形で抜ける**(2026-09)。
+ *
+ *   タグは**画面(`weaknessTags.js`)と表(`weakness_tags`)の2か所**にある。
+ *   しかも `material_tags.tag_id` は表を参照している。
+ *
+ *     tag_id text not null references public.weakness_tags(id)
+ *
+ *   だから画面にだけ足すと、**そのタグで教材を発行した瞬間に
+ *   外部キー違反で止まる。** 演習の種類・教材の種類で2度踏んだ穴と
+ *   まったく同じで、`npm run lint` も `npm run build` も通る。
+ *
+ *   **足し忘れたときだけ赤くなる。** 表のほうが多いぶんには何も言わない
+ *   —— 使わなくなったタグを表から消さない(過去の教材が行方不明になる)
+ *   ので、そちらは正しい状態である。
+ * ============================================================================
+ */
+const tagList = process.argv[4] ?? ''
+if (!tagList) {
+  console.error('❌ 表 weakness_tags のタグ一覧が渡っていません')
+  process.exit(1)
+}
+const inDb = new Set(tagList.split(',').map((s) => s.trim()).filter(Boolean))
+const tagMissing = weaknessTags.map((t) => t.id).filter((id) => !inDb.has(id))
+if (tagMissing.length) {
+  console.error(`❌ 表 weakness_tags に入っていない弱点タグがあります: ${tagMissing.join(', ')}`)
+  console.error('   supabase/migrations に insert を足してください(0050 と同じ形)。')
+  console.error('   (足さないと、そのタグを付けた教材を発行した瞬間に止まります)')
+  process.exit(1)
+}
+console.log(`  画面の弱点タグ ${weaknessTags.length} 個も、すべて表に入っています`)
 
 /*
  * ============================================================================
