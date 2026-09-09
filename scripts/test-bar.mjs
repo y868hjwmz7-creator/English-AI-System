@@ -2962,6 +2962,121 @@ export default defineConfig({
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 文法解説(SVOC と修飾要素・0051・2026-09 利用者の指定)
+//
+//   > 文章ごとにSVOCと修飾要素についての解説をしてくれる、
+//   > 文法解説モードが欲しい。
+//
+// **色は5つに分けず、「骨組み(S/V/O/C)か、飾り(M)か」の2つだけ**を
+// 目で分ける(`GrammarNote.jsx` に理由を書いてある)。
+// つまり**その2つが本当に見分けられるか**が、この画面の成否である。
+// ソースを読んでも分からないので、**描いて色を測る。**
+//
+// あわせて、集中モードの紙の上にいることを確かめる ——
+// ここは**紙の島**なので、色を決め打ちすると
+// **暗い配色で黒い紙に黒い文字**になる(CLAUDE.md で何度も踏んだ穴)。
+// ══════════════════════════════════════════════════════════════════════
+{
+  for (const dark of [false, true]) {
+    for (const w of [1280, 390, 320]) {
+      const page = await browser.newPage({ viewport: { width: w, height: 844 } })
+      await page.goto(`http://localhost:${PORT}/__bar.html?screen=gnote`,
+        { waitUntil: 'networkidle' })
+      if (dark) await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+      await page.waitForTimeout(250)
+      const got = await page.evaluate(() => {
+        const cs = (el) => (el ? window.getComputedStyle(el) : null)
+        const rgb = (v) => (String(v).match(/\d+/g) ?? []).slice(0, 3).map(Number)
+        /* 見えるかどうかは、**地との差**で見る。
+           人の目のおおよその明るさ(ITU-R BT.601)で比べる */
+        const lum = (v) => { const [r, g, b] = rgb(v); return (r * 299 + g * 587 + b * 114) / 1000 }
+        const paper = document.querySelector('.focus-paper')
+        const parts = [...document.querySelectorAll('.gnote-part')]
+        const roles = parts.map((p) => {
+          const tag = p.querySelector('.gnote-r')
+          return {
+            役: tag?.textContent?.trim().slice(0, 1) ?? '',
+            骨組み: p.classList.contains('gnote-part--core'),
+            地: cs(tag).backgroundColor,
+            文字: cs(tag).color,
+            枠: cs(tag).borderTopStyle,
+          }
+        })
+        const en = document.querySelector('.gnote-en')
+        const note = document.querySelector('.gnote-note')
+        return {
+          紙: paper ? cs(paper).backgroundColor : '',
+          紙のあかるさ: paper ? lum(cs(paper).backgroundColor) : null,
+          役: roles.map((r) => ({
+            ...r,
+            地のあかるさ: lum(r.地), 文字のあかるさ: lum(r.文字),
+            透明: /rgba?\([^)]*,\s*0\)/.test(r.地),
+          })),
+          文の数: document.querySelectorAll('.gnote-item').length,
+          文型: [...document.querySelectorAll('.gnote-pat')].map((x) => x.textContent.trim()),
+          説明のあかるさ: note ? lum(cs(note).color) : null,
+          // **横にはみ出していないか。** かたまりは折り返す約束である
+          よこ: en ? en.scrollWidth - en.clientWidth : 0,
+          右: en ? Math.round(en.getBoundingClientRect().right) : 0,
+        }
+      })
+      await page.close()
+      const 名 = `文法解説(${w}px・${dark ? '暗い' : '明るい'})`
+      const 骨 = got.役.filter((r) => r.骨組み)
+      const 飾 = got.役.filter((r) => !r.骨組み)
+      const 差 = (a) => Math.abs(a.文字のあかるさ - a.地のあかるさ)
+      const 紙差 = (a) => Math.abs(a.文字のあかるさ - got.紙のあかるさ)
+
+      if (got.文の数 !== 2) {
+        ng(`${名} … 文が2つ出ていない`, String(got.文の数))
+      } else if (got.文型.length !== 2 || !got.文型[0].includes('第3文型')) {
+        ng(`${名} … 文型の眉が出ていない`, got.文型.join(' / '))
+      } else if (骨.length !== 6 || 飾.length !== 2) {
+        // 骨組み S/V/O + S/V/O = 6、飾り M + M = 2
+        ng(`${名} … 骨組みと飾りの数が合わない`, `骨 ${骨.length} / 飾 ${飾.length}`)
+      } else if (骨.some((r) => 差(r) < 40)) {
+        ng(`${名} … 骨組みの札が、地と近すぎて読めない`,
+          骨.map((r) => `${r.役}:${Math.round(差(r))}`).join(' '))
+      } else if (飾.some((r) => 紙差(r) < 40)) {
+        ng(`${名} … 飾り(M)の札が、紙と近すぎて読めない`,
+          飾.map((r) => `${r.役}:${Math.round(紙差(r))}`).join(' '))
+      } else if (!飾.every((r) => r.透明 && r.枠 === 'dashed')) {
+        /* **塗りを2つ並べない。** 飾りは枠線だけにする決まりである
+           (ここが塗りに戻ると、骨組みと飾りが見分けられなくなる) */
+        ng(`${名} … 飾り(M)が、枠線だけになっていない`,
+          飾.map((r) => `${r.地}/${r.枠}`).join(' '))
+      } else if (Math.abs(骨[0].地のあかるさ - 飾[0].地のあかるさ) < 8) {
+        ng(`${名} … 骨組みと飾りの地が、同じに見える`,
+          `${骨[0].地} / ${飾[0].地}`)
+      } else if (got.説明のあかるさ == null
+        || Math.abs(got.説明のあかるさ - got.紙のあかるさ) < 40) {
+        ng(`${名} … 日本語の説明が、紙と近すぎて読めない`,
+          `${Math.round(got.説明のあかるさ ?? -1)} / 紙 ${Math.round(got.紙のあかるさ)}`)
+      } else if (got.よこ > 0 || got.右 > w) {
+        ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+      } else {
+        ok(`${名} … 骨組みと飾りが見分けられ、はみ出しも無い`)
+      }
+    }
+  }
+
+  /* **画面が本当に呼んでいるか。** 検証の入り口(`__screens.jsx`)だけ
+     直しても、利用者の画面からは出てこない。
+     **「名前が出てくるか」で見ない** —— 説明の中にも同じ語がある */
+  {
+    const src = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<GrammarNote sentences=\{gramHere\}/.test(src)) {
+      ng('文法解説 … 集中モードから出てこない')
+    } else if (!/view === 'grammar' \?/.test(src)) {
+      ng('文法解説 … 見せ方の切り替えに入っていない')
+    } else {
+      ok('文法解説 … 集中モードの「訳を見る」の次に出てくる')
+    }
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

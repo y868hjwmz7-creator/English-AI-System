@@ -32,10 +32,11 @@ import {
   isPassageSection,
 } from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
+import { needsGrammar } from '../lib/grammarNote.js'
 import CastChip from './CastChip.jsx'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
-  NEW_MATERIAL_KINDS, addChunkJa, assignMaterial, duplicateMaterial, isDialogueKind,
+  NEW_MATERIAL_KINDS, addChunkJa, addGrammar, assignMaterial, duplicateMaterial, isDialogueKind,
   kindLabel, loadMyLearners, searchMaterials, setMaterialVoices, wordsAddedNote,
 } from '../lib/materials.js'
 import { genresFor, scenesFor } from '../data/genres.js'
@@ -327,6 +328,27 @@ export default function TrainerMaterials({
     await search()   // 控えたものを画面に反映する
   }
 
+  /** 本文があって、まだ文法解説が入っていない教材か(0051) */
+  // **判断は `grammarNote.js` の `needsGrammar()` 1か所。** 画面に持たない
+  const needsGrammarIn = (m) => (m.sections ?? [])
+    .filter((sec) => isPassageSection(sec.exercise_type))
+    .flatMap((sec) => sec.items ?? [])
+    .some(needsGrammar)
+
+  /**
+   * 文法解説を作って控える(0051)。
+   *
+   * 触るのは `material_items.grammar` の1列だけで、
+   * 本文・設問・配信には触れない。
+   * **失敗したときだけ知らせる**(押していないので、報告する相手がいない)。
+   */
+  const makeGrammar = async (m) => {
+    const { data, error: e } = await addGrammar(m)
+    if (e) { setJaDone((v) => ({ ...v, [m.id]: { ng: true, text: e } })); return }
+    if (!data.made) return
+    await search()   // 控えたものを画面に反映する
+  }
+
   /**
    * **カタマリごとの訳は、押させない。開いたら裏で作る**(2026-08 利用者の指定)。
    *
@@ -369,6 +391,30 @@ export default function TrainerMaterials({
     if (!m || !needsJa(m) || triedJa.current.has(m.id)) return
     triedJa.current.add(m.id)
     makeChunkJa(m)
+  }, [printId, lessonOf, materials])
+
+  /**
+   * **文法解説も、押させない。使うときに裏で作る**(0051)。
+   *
+   * カタマリの訳(すぐ上)とまったく同じ形にしてある。
+   * 作るときには `MaterialForm` が一緒に作っているので、ここで拾うのは
+   * **0051 より前に作った教材**だけである。
+   *
+   * 【止まる条件を持たせる】(CLAUDE.md)
+   *   1つの教材につき**この画面を開いているあいだ1回だけ。**
+   *   失敗しても繰り返さない。残高が切れているときに、開くたび呼び続けない。
+   *
+   * **カタマリの訳とは別に数える。** 片方が失敗したときに、
+   * もう片方まで二度と作られなくなっては困る。
+   */
+  const triedGrammar = useRef(new Set())
+  useEffect(() => {
+    const id = printId || lessonOf?.id
+    if (!id) return
+    const m = materials.find((x) => x.id === id) ?? (lessonOf?.id === id ? lessonOf : null)
+    if (!m || !needsGrammarIn(m) || triedGrammar.current.has(m.id)) return
+    triedGrammar.current.add(m.id)
+    makeGrammar(m)
   }, [printId, lessonOf, materials])
 
   /**

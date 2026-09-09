@@ -41,6 +41,7 @@ import WordRadio from './components/WordRadio.jsx'
 import WordbookFilter, { countNarrowed, emptyFilter } from './components/WordbookFilter.jsx'
 import { QR_GROUPS, groupLead, qrTally } from './lib/reviewScope.js'
 import FocusFrame from './components/FocusFrame.jsx'
+import GrammarNote from './components/GrammarNote.jsx'
 import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
 import CastChip from './components/CastChip.jsx'
@@ -713,8 +714,52 @@ function RScopeDemo({ rows }) {
   )
 }
 
+/* 文法解説(`?screen=gnote`・0051・2026-09 利用者の指定)。
+
+     > 文章ごとにSVOCと修飾要素についての解説をしてくれる、
+     > 文法解説モードが欲しい。
+
+   **本物の置かれ方で測る** —— 集中モードの紙(`FocusFrame` の中)である。
+   ここは**紙の島**なので、色を決め打ちすると暗い配色で読めなくなる。
+
+   **わざと長い文を混ぜてある。** 短い文だけだと、かたまりが折り返さず
+   **横にはみ出しても緑のまま**になる(「中身の長さまでまねる」)。 */
+const GNOTE_SENTENCES = [
+  {
+    en: 'The office bought a new coffee machine last week.',
+    pattern: 'SVO',
+    parts: [
+      { t: 'The office', r: 'S' }, { t: 'bought', r: 'V' },
+      { t: 'a new coffee machine', r: 'O' }, { t: 'last week.', r: 'M' },
+    ],
+    note: '「誰が どうする 何を」の第3文型です。last week は「いつ」を足す飾りで、無くても文は成り立ちます。',
+  },
+  {
+    en: 'If the supplier cannot deliver the replacement parts before the end of '
+      + 'this quarter, the operations team in Osaka will have to reschedule '
+      + 'every installation that is already booked for next month.',
+    pattern: 'SVO',
+    parts: [
+      { t: 'If the supplier cannot deliver the replacement parts before the end of this quarter,', r: 'M' },
+      { t: 'the operations team in Osaka', r: 'S' },
+      { t: 'will have to reschedule', r: 'V' },
+      { t: 'every installation that is already booked for next month.', r: 'O' },
+    ],
+    note: 'If 〜 は「どんなときか」を足す飾りです。骨組みは「大阪の運用チームが 取り付けの予定を 組み直す」だけになります。',
+  },
+]
+
+const GNOTE = (
+  <FocusFrame width="w100" page="gnote" onClose={() => {}}
+              top={<span className="focus-count">1 / 6 段落</span>}>
+    <GrammarNote sentences={GNOTE_SENTENCES} unit="段落" />
+  </FocusFrame>
+)
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'radio'
+  q.get('screen') === 'gnote'
+    ? GNOTE
+    : q.get('screen') === 'radio'
     ? RADIO
     : q.get('screen') === 'sticky'
     ? STICKY

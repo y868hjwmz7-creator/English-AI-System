@@ -39,7 +39,9 @@
 | 貼る SQL(0031 ゲストのファイルの置き場) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
 | 貼る SQL(0032 セッションの記録) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02.sql` |
 | 貼る SQL(0033 ディスカッション・0034 に含まれるので不要) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02b.sql` |
-| **★いま貼っていただくもの … 0041〜0049 を全部まとめたもの** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_matome.sql` |
+| **★いま貼っていただくもの … 0041〜0051 を全部まとめたもの** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_matome.sql` |
+| (参考)0051 文法解説(SVOC)だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-12.sql` |
+| (参考)0050 苦手タグの文法項目だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-11.sql` |
 | (参考)0047 単語 / フレーズをまとめるところだけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-10.sql` |
 | (参考)0045 想定される質問だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-09.sql` |
 | (参考)0044 教材を消すだけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-08.sql` |

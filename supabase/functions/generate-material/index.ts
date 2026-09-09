@@ -795,6 +795,258 @@ async function makeChunkJa(apiKey: string, body: Record<string, unknown>) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// 文法解説(SVOC と修飾要素・0051・`mode: 'grammar'`)
+//
+// 【何を頼むのか】(2026-09 利用者の指定)
+//   > 文章ごとにSVOCと修飾要素についての解説をしてくれる、
+//   > 文法解説モードが欲しい。
+//
+// 【どこで文を切るかは、こちらでは決めない】
+//   カタマリの訳(0021)とまったく同じ形にしてある。
+//   ここへ届くのは**切り終わった文**である。切らせると、
+//   **数が合っているかを確かめる術が無くなる。**
+//
+// 【なぜ AI に頼むのか】
+//   区切る場所は閉じた語のリストで決められるが、
+//   **一般の動詞は語のリストでは当てられない**(`run` は名詞にもなる)。
+//   だから SVOC だけは決まりでは出せない。
+// ────────────────────────────────────────────────────────────────
+
+const GRAMMAR_SYSTEM = `あなたは日本のパーソナル英語スクールのトレーナーを補助する。
+英文1つずつについて、**文の骨組み(S / V / O / C)と修飾要素(M)**を
+示し、日本語で短く解説するのが仕事である。
+
+# 守ること
+
+1. **文の数と順番を変えない。** 渡された数と同じ数だけ、同じ順で返す。
+   まとめない・分けない・入れ替えない
+2. **かたまり(parts)をつなぐと、元の英文にそのまま戻ること。**
+   語を足さない・落とさない・書き換えない・並べ替えない。
+   **記号(. ? ! , " ')も落とさず、そのかたまりに付けたまま**にする
+3. 役(r)は **S / V / O / C / M の5つだけ。** ほかの記号を使わない
+   - S … 主語(誰が・何が)
+   - V … 動詞(be動詞・助動詞・完了形・受動態は**まとめて1つの V**)
+   - O … 目的語(何を・誰に)
+   - C … 補語(主語や目的語が「何であるか」を言う)
+   - M … 修飾語。**その他はすべて M にする**
+4. **飾りは切り出して M にする。** 前置詞句・副詞・副詞節
+   (when / if / because …)・文頭の接続詞・分詞構文は M である。
+   ただし**名詞をうしろから説明する語句(関係詞節・分詞・前置詞句)は、
+   その名詞と1つのかたまりにする。** 切り離すと、S が短くなりすぎて
+   「何が主語か」が伝わらない
+5. **文型(pattern)は五文型のどれかにする。**
+   SV / SVC / SVO / SVOO / SVOC。M は文型に数えない
+6. **1文に V は必ず1つ以上。** 従属節の中の動詞は、その節ごと
+   1つの M(または S / O)にまとめる。**節の中を割らない** ——
+   中学英語の学習者に、節の中の SVOC まで見せると読めなくなる
+7. **note は日本語で、80字以内。** 次の順で書く
+   - その文型が何を言う形か(「誰が どうする 何を」など)
+   - **修飾要素が何を足しているか**(いつ / どこで / なぜ / どんな)
+   - 学習者がつまずきやすいところが1つあれば、それも
+   **文法用語を並べない。** 中学生に話すつもりで書く
+8. 命令文は、省かれている主語を**補わない**(S 無しの SV でよい)。
+   その代わり note に「You が省かれている」と書く
+
+# 例
+
+  The office bought a new coffee machine last week.
+  → pattern: SVO
+     parts: [The office = S] [bought = V] [a new coffee machine = O] [last week. = M]
+     note: 「誰が どうする 何を」の第3文型。last week は「いつ」を足す飾りで、
+           無くても文は成り立ちます。
+
+  The boy running in the park just said hello to me.
+  → pattern: SVO
+     parts: [The boy running in the park = S] [just said = V] [hello = O] [to me. = M]
+     note: 主語は「公園で走っている男の子」まで。running 以下がうしろから
+           the boy を説明しています。ここを切ると主語が分からなくなります。
+
+  If it rains tomorrow, we will cancel the tour.
+  → pattern: SVO
+     parts: [If it rains tomorrow, = M] [we = S] [will cancel = V] [the tour. = O]
+     note: If 〜 は「どんなときか」を足す飾りです。骨組みは
+           「私たちは ツアーを 中止する」。飾りの中は未来でも現在形で言います。
+
+  She looks tired.
+  → pattern: SVC
+     parts: [She = S] [looks = V] [tired. = C]
+     note: 「主語 = どんな状態か」を言う第2文型。tired は She の説明なので、
+           目的語ではなく補語です。
+
+# 出力
+
+emit_grammar という道具だけを使って返すこと。文章での説明は要らない。`
+
+/** 文法解説を受け取る道具。\`strict: true\` なので形は API が保証する */
+const grammarTool = {
+  name: 'emit_grammar',
+  description: '文ごとの SVOC と修飾要素を返す',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['parts'],
+    properties: {
+      parts: {
+        type: 'array',
+        description: '渡された本文と同じ数、同じ順',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['no', 'sentences'],
+          properties: {
+            no: { type: 'integer', description: '本文の番号(渡されたもの)' },
+            sentences: {
+              type: 'array',
+              description: '文ごとの解説。**渡された文と同じ数、同じ順**',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['en', 'pattern', 'parts', 'note'],
+                properties: {
+                  en: { type: 'string', description: '渡された英文そのまま' },
+                  pattern: {
+                    type: 'string',
+                    description: '五文型',
+                    enum: ['SV', 'SVC', 'SVO', 'SVOO', 'SVOC'],
+                  },
+                  parts: {
+                    type: 'array',
+                    description: 'つなぐと元の英文に戻ること',
+                    items: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['t', 'r'],
+                      properties: {
+                        t: { type: 'string', description: 'そのかたまりの英語' },
+                        r: { type: 'string', description: '役', enum: ['S', 'V', 'O', 'C', 'M'] },
+                      },
+                    },
+                  },
+                  note: { type: 'string', description: '日本語で80字以内' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+}
+
+/**
+ * 文法解説を作る。
+ *
+ * **数が合わないものは返さない。** ずれた解説は、無いより害が大きい
+ * (画面側の `storedGrammar()` も、つないで元の文に戻らなければ出さない)。
+ */
+async function makeGrammar(apiKey: string, body: Record<string, unknown>) {
+  const parts = (Array.isArray(body.parts) ? body.parts : [])
+    .map((raw) => {
+      const p = (raw ?? {}) as { no?: unknown; sentences?: unknown }
+      return {
+        no: Number(p.no ?? 0),
+        sentences: (Array.isArray(p.sentences) ? p.sentences : [])
+          .map((s) => String(s ?? '').trim()).filter(Boolean),
+      }
+    })
+    .filter((p) => Number.isInteger(p.no) && p.no > 0 && p.sentences.length > 0)
+    // 記事6段落・会話14発言を1回で賄える。これ以上は画面側が分けて呼ぶ
+    .slice(0, 30)
+
+  if (!parts.length) return { error: '解説を作る本文がありませんでした' }
+
+  const listing = parts
+    .map((p) => `## ${p.no}(${p.sentences.length} 文)\n`
+      + p.sentences.map((s, i) => `${i + 1}. ${s}`).join('\n'))
+    .join('\n\n')
+
+  const client = new Anthropic({ apiKey })
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 16000,
+    output_config: { effort: 'medium' },
+    system: [{ type: 'text', text: GRAMMAR_SYSTEM }],
+    tools: [grammarTool as unknown as Anthropic.Tool],
+    tool_choice: { type: 'tool', name: 'emit_grammar' },
+    messages: [{
+      role: 'user',
+      content: `# 英文\n\n${listing}\n\n`
+        + `**${parts.length} 件すべて**を返すこと。`
+        + `各件の文の数は、その件に並んだ番号の数とちょうど同じにすること。`
+        + `**parts をつなぐと、渡した英文にそのまま戻ること**`
+        + `(語も記号も落とさない)。`,
+    }],
+  })
+  const response = await stream.finalMessage()
+
+  if (response.stop_reason === 'refusal') {
+    return { error: '内容が安全上の理由で断られました。' }
+  }
+  if (response.stop_reason === 'max_tokens') {
+    return { error: '本文が長すぎて途中で切れました。段落を分けてお試しください。' }
+  }
+
+  const block = response.content.find((b) => b.type === 'tool_use')
+  if (!block || block.type !== 'tool_use') {
+    return { error: '解説の結果を読み取れませんでした。もう一度お試しください。' }
+  }
+  const result = block.input as {
+    parts?: { no?: number; sentences?: unknown[] }[]
+  }
+
+  /* **空白を落として突き合わせる。**
+     `last week .` と `last week.` のような空白の入り方の違いだけで
+     落とすと、中身は正しいのに解説が丸ごと消える。
+     並びは保たれるので、語が抜けた・増えた・入れ替わったときは
+     これでも必ず食い違う(そこは見逃さない)。 */
+  const tight = (s: string) => s.replace(/\s+/g, '')
+
+  const want = new Map(parts.map((p) => [p.no, p.sentences]))
+  const kept: { no: number; sentences: unknown[] }[] = []
+  const seen = new Set<number>()
+  for (const r of result.parts ?? []) {
+    const no = Number(r?.no ?? 0)
+    const src = want.get(no)
+    if (!src || seen.has(no)) continue
+    const got = Array.isArray(r?.sentences) ? r.sentences : []
+    // **文の数が合わないものは使わない**
+    if (got.length !== src.length) continue
+    // **1文でも、つないで元に戻らなければ、その件ごと使わない。**
+    // 虫食いの解説は、どの文に解説が付いているのか読む側に分からない
+    const okAll = got.every((raw, i) => {
+      const s = (raw ?? {}) as { en?: unknown; parts?: unknown }
+      const bits = (Array.isArray(s.parts) ? s.parts : [])
+        .map((b) => String(((b ?? {}) as { t?: unknown }).t ?? '').trim())
+        .filter(Boolean)
+      if (!bits.length) return false
+      return tight(bits.join(' ')) === tight(src[i])
+        && tight(String(s.en ?? '')) === tight(src[i])
+    })
+    if (!okAll) continue
+    seen.add(no)
+    kept.push({ no, sentences: got })
+  }
+  const skipped = parts.length - kept.length
+
+  if (!kept.length) {
+    return { error: '文と合う解説が1件も返りませんでした。もう一度お試しください。' }
+  }
+
+  return {
+    ok: true,
+    parts: kept,
+    skipped,
+    stop_reason: response.stop_reason ?? null,
+    usage: {
+      input: response.usage.input_tokens,
+      output: response.usage.output_tokens,
+      cacheRead: response.usage.cache_read_input_tokens ?? 0,
+    },
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // 書いた答えの添削(`mode: 'review_writing'`・2026-09 利用者の指定)
 // ────────────────────────────────────────────────────────────────
 
@@ -1014,7 +1266,7 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-06d'
+const FN_REV = '2026-09-09'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
@@ -1148,12 +1400,15 @@ Deno.serve(async (req) => {
     }, 403)
   }
 
-  // **頼みごとは3つある。** 教材の下書き(既定)・カタマリごとの訳(0021)・
-  // 書いた答えの添削(2026-09)。どれも教材づくりの一部なので、
+  // **頼みごとは4つある。** 教材の下書き(既定)・カタマリごとの訳(0021)・
+  // **文法解説(0051)**・書いた答えの添削。どれも教材づくりの一部なので、
   // 関数を増やさずここで分ける
   // (関数を増やすと、利用者が Supabase の画面で配置する手順が増える)。
   if (mode === 'chunk_ja') {
     return streamed(() => makeChunkJa(apiKey, body))
+  }
+  if (mode === 'grammar') {
+    return streamed(() => makeGrammar(apiKey, body))
   }
   if (mode === 'review_writing') {
     return streamed(() => reviewWriting(apiKey, body))

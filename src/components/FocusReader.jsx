@@ -79,6 +79,11 @@ import { normWord } from '../lib/vocab.js'
 import { SIX_STEPS } from '../lib/sixSteps.js'
 import { useFitRow } from '../lib/fitRow.js'
 import { maxPieces, piecesOf } from '../lib/focusChunks.js'
+import GrammarNote from './GrammarNote.jsx'
+/* 文法解説(0051)。**見せ方の回し方も、ここ1か所が持つ** */
+import {
+  VIEW_LABEL, grammarForPiece, grammarOf, hasOtherView, nextView,
+} from '../lib/grammarNote.js'
 
 /**
  * 英文から、そろえた形(`normWord`)の語を重複なく取り出す。
@@ -177,8 +182,16 @@ export default function FocusReader({
   )
   const item = items[index] ?? null
 
-  /** いま訳を出しているか。**段落を送ったら必ず英語に戻す** */
-  const [showJa, setShowJa] = useState(false)
+  /**
+   * いま何を出しているか(`en` / `ja` / `grammar`)。
+   * **段落を送ったら必ず英語に戻す。**
+   *
+   * **真偽値にしない**(2026-09)。文法解説(0051)を足して3つになったので、
+   * `showJa` のままでは「訳でも英語でもない」を表せない。
+   * 回し方は `grammarNote.js` の `nextView()` 1か所。
+   */
+  const [view, setView] = useState('en')
+  const showJa = view === 'ja'
   /** 最後の1枚(調べた語のまとめ)を出しているか */
   const [wrap, setWrap] = useState(false)
   /** いま読んでいる文の位置(もとの英文の何文字目か)。**紙と同じ色づけ** */
@@ -327,7 +340,7 @@ export default function FocusReader({
     if (player.now !== index || readingAt == null || pieces.length < 2) return
     const i = pieces.findIndex((p, k) => readingAt >= p.at
       && (k === pieces.length - 1 || readingAt < pieces[k + 1].at))
-    if (i >= 0 && i !== partNo) { setShowJa(false); setPart(i) }
+    if (i >= 0 && i !== partNo) { setView('en'); setPart(i) }
   }, [player.now, readingAt, pieces, index, partNo])
 
   /**
@@ -337,7 +350,7 @@ export default function FocusReader({
    */
   const go = (next, where = 'head') => {
     const n = Math.min(Math.max(next, 0), items.length - 1)
-    setShowJa(false)
+    setView('en')
     setWrap(false)
     // 送った時点で、控えの側に戻す(以後は「どこまで見たか」が効く)
     setFrom(null)
@@ -360,7 +373,7 @@ export default function FocusReader({
   const step = (d) => {
     const to = partNo + d
     if (to >= 0 && to < pieces.length) {
-      setShowJa(false)
+      setView('en')
       if (bodyRef.current) bodyRef.current.scrollTop = 0
       setPart(to)
       return
@@ -444,6 +457,16 @@ export default function FocusReader({
   /** 鳴っている場所が、いま出しているかけらの中にあるか */
   const inPiece = player.now === index && readingAt != null && piece
     && readingAt >= piece.at && readingAt < piece.at + piece.en.length
+
+  /* ── 見せ方(英語 / 訳 / 文法)────────────────────────────
+     **割った段落では、そのかけらのぶんの解説だけ**を出す。
+     判断はどれも `grammarNote.js` 1か所で、画面には持たせない */
+  const gramHere = grammarForPiece(
+    grammarOf(item), item.prompt_en,
+    pieces.length > 1 ? piece?.at : null, piece?.en,
+  )
+  const have = { ja: Boolean(item.prompt_ja), grammar: gramHere.length > 0 }
+  const nextV = nextView(view, have)
 
   /* **骨組みは `FocusFrame` 1つ**(`StepFocus` / Quick Response と共通)。
      中身と、上下の帯の中だけをここが渡す */
@@ -570,18 +593,23 @@ export default function FocusReader({
             <RepeatUnit value={player.repeat} unit={unit} onChange={player.setRepeat} />
           )}
 
-          {/* 訳が無い段落では出さない(効かない操作を見せない)。
-              **詰まったときは「訳」だけになる**(`is-fit2`)。
+          {/* **1つのボタンで、英語 → 訳 → 文法 → 英語 と回る**(0051)。
+              下の帯はすでに4つで埋まっており、5つめは狭い画面であふれる
+              (実測)。`RepeatUnit` とまったく同じ形にしてある。
+
+              **無いものは飛ばす**(訳の無い段落・解説の無い教材)。
+              どちらも無ければ、ボタンごと出さない —— 効かない操作を見せない。
+              **詰まったときは「訳」「文法」だけになる**(`is-fit2`)。
               名前は `aria-label` が持っている */}
-          {item.prompt_ja && (
+          {hasOtherView(have) && (
             <button type="button" className="btn btn--small btn--ghost"
-                    aria-label={showJa ? '英語に戻す' : '訳を見る'}
-                    onClick={() => setShowJa((v) => !v)}>
+                    aria-label={`${VIEW_LABEL[nextV].head}${VIEW_LABEL[nextV].tail}`}
+                    onClick={() => setView(nextV)}>
               {/* **1つの塊にする。** ボタンは `gap` を持つので、
                   ばらばらに置くと「訳 を見る」と隙間が空く(実測) */}
               <span>
-                {showJa ? '英語' : '訳'}
-                <span className="ja-word">{showJa ? 'に戻す' : 'を見る'}</span>
+                {VIEW_LABEL[nextV].head}
+                <span className="ja-word">{VIEW_LABEL[nextV].tail}</span>
               </span>
             </button>
           )}
@@ -631,7 +659,11 @@ export default function FocusReader({
           </div>
           {/* **入れ替える。並べない。**
               訳のときは語を押せない(英語がそこに無いので、引くものが無い) */}
-          {showJa ? (
+          {view === 'grammar' ? (
+            /* 文法解説(0051)。**割った段落では、そのかけらのぶんだけ**
+               (画面に無い文の解説を並べない) */
+            <GrammarNote sentences={gramHere} unit={unit} />
+          ) : showJa ? (
             <p className="focus-ja">
               {piece?.ja}
               {/* 訳を割れなかったときは、そう書く。**無いものをあるように

@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   32行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   33行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -128,4 +128,7 @@ from (
             where table_schema = 'public' and table_name = 'bgm_tracks'), 31
   union all select '0050 苦手タグの文法項目を15件足す(pending_matome.sql)',
     exists (select 1 from public.weakness_tags where id = 'passive'), 32
+  union all select '0051 本文に文法解説(SVOC)を持たせる(pending_matome.sql)',
+    exists (select 1 from information_schema.columns
+            where table_name = 'material_items' and column_name = 'grammar'), 33
 ) t order by 順;

@@ -6810,6 +6810,68 @@ button.wbfilter-ctl { text-align: left; }
 }
 .focus-ja { color: var(--text-primary); }
 
+/* ══════════════════════════════════════════════════════════════
+ * 文法解説(SVOC と修飾要素・0051)
+ *
+ *   > 文章ごとにSVOCと修飾要素についての解説をしてくれる、
+ *   > 文法解説モードが欲しい。(2026-09 利用者の指定)
+ *
+ * 【色を5つに分けない】
+ *   役の名前(S / V / O / C / M)そのものが札に出ているので、
+ *   色は念押しにしかならない(**色だけに頼らない**)。
+ *   しかも色を1つ足すと `styles.css` の**9か所**に書き足すことになり、
+ *   1か所でも抜けると暗い配色や紙の上だけで壊れる
+ *   (`npm run test:paper` が見張っている場所そのもの)。
+ *
+ *   **代わりに「骨組みか、飾りか」の2つだけを目で分ける。**
+ *   これは利用者が言った「SVOC **と修飾要素**」そのままの分け方である。
+ *   使う変数は `--accent-soft` / `--accent` / `--border` / `--text-*` だけで、
+ *   **どれも紙の島にもプレインにも、もとから入っている。**
+ * ══════════════════════════════════════════════════════════════ */
+.gnote { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--sp-16); }
+.gnote-item { display: grid; gap: var(--sp-6); }
+/* 文型は**眉**。本文より先に目が行ってはいけない */
+.gnote-pat {
+  margin: 0;
+  font-size: var(--fs-12); font-weight: 700; letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+/* かたまりは**折り返す。** 長い文でも横に送らせない */
+.gnote-en {
+  margin: 0;
+  display: flex; flex-wrap: wrap; align-items: flex-end;
+  gap: var(--sp-6) var(--sp-8);
+  font-size: var(--fs-19); line-height: 1.5;
+  overflow-wrap: break-word;
+}
+/* 1かたまり = 英語 + その下の役の札。**縦に積む** */
+.gnote-part { display: inline-grid; justify-items: center; gap: 2px; min-width: 0; }
+.gnote-t { overflow-wrap: break-word; }
+.gnote-r {
+  font-size: var(--fs-11); font-weight: 700; line-height: 1;
+  padding: 2px 6px; border-radius: var(--r-pill);
+  font-variant-numeric: tabular-nums;
+}
+/* 骨組み(S / V / O / C)…うすい地色 + 同じ色の文字(選んでいる印と同じ) */
+.gnote-part--core > .gnote-r {
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid var(--accent-line, var(--border));
+}
+/* 飾り(M)…**塗りを2つ並べない。** 細い枠線だけ */
+.gnote-part--mod > .gnote-t { color: var(--text-secondary); }
+.gnote-part--mod > .gnote-r {
+  background: transparent; color: var(--text-muted);
+  border: 1px dashed var(--border);
+}
+.gnote-note {
+  margin: 0;
+  font-size: var(--fs-14); line-height: 1.7; color: var(--text-secondary);
+}
+.gnote-empty {
+  margin: 0; font-size: var(--fs-14); line-height: 1.8;
+  color: var(--text-secondary);
+}
+
 /* 下の帯。**親指が届くのは下半分。** 端からは離して、
    iOS の「端からの戻るスワイプ」を誤爆させない */
 .focus-bar {

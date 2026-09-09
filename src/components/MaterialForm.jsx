@@ -35,7 +35,7 @@ import {
 } from '../data/speechStyles.js'
 import {
   NEW_MATERIAL_KINDS, assignMaterial, countMaterialsLike, createMaterial, estimateCost,
-  generateChunkJa, generateSection,
+  fillGrammar, generateChunkJa, generateSection,
   bodyWord, canPasteBody, generateSectionUnique, isDialogueKind, isPassageKind, isVocabKind,
   kindLabel, usesScene,
   loadRecentStories, loadUsedSentences, loadUsedSentencesLike, normEn,
@@ -656,6 +656,17 @@ export default function MaterialForm({
       }
     }
 
+    /* 文法解説(0051)。**貼った原稿でも要る** ——
+       自分で書いた原稿ほど、文が長くて骨組みが見えにくい。
+       ここで失敗しても教材は捨てない(解説が付かないだけ)。
+       あとから「セッションで使う」で裏から足せる(`needsGrammar`) */
+    if (!cancelled()) {
+      step(plan.length + 1, '文法解説')
+      const { error: gError } = await fillGrammar(made[0].items)
+      // **黙って落とさない。** 何が足りなかったのかは残しておく
+      if (gError) console.warn(`文法解説を作れませんでした: ${gError}`)
+    }
+
     return {
       made, spent,
       headline: null, headlineJa: null, teachingPoint: null,
@@ -832,6 +843,29 @@ export default function MaterialForm({
         spent.input += cj.usage?.input ?? 0
         spent.output += cj.usage?.output ?? 0
         spent.cacheRead += cj.usage?.cacheRead ?? 0
+      }
+    }
+
+    // ── 文法解説(SVOC と修飾要素・0051)──────────────────
+    // **作る時点で1回だけ作る。** 開くたびに作ると、同じ費用が
+    // ゲストの人数 × 開いた回数だけかかる(カタマリの訳と同じ)。
+    //
+    // ここで失敗しても**教材は捨てない。** 解説が付かないだけで、
+    // 本文も設問もそのまま使える。あとから裏で足せる(`needsGrammar`)。
+    if (!cancelled()) {
+      step(plan.length + 1, '文法解説')
+      const { data: gr, error: gError } = await fillGrammar(made[0]?.items ?? [])
+      if (gError) {
+        // **黙って落とさない。** 何が足りなかったのかは残しておく
+        console.warn(`文法解説を作れませんでした: ${gError}`)
+      } else {
+        if (gr?.skipped) {
+          console.warn(`文法解説が ${gr.skipped} 段落ぶん足りません`
+            + '(セッションで使うときに、裏で作り直します)')
+        }
+        spent.input += gr?.usage?.input ?? 0
+        spent.output += gr?.usage?.output ?? 0
+        spent.cacheRead += gr?.usage?.cacheRead ?? 0
       }
     }
 
@@ -1015,7 +1049,10 @@ export default function MaterialForm({
     const plan = planNow()
     const started = startJob({
       title: kindLabel(kind),
-      total: isPassageKind(kind) ? plan.length + 1 : plan.length,
+      /* 本文のときは、そのあとに**カタマリごとの訳(0021)と
+         文法解説(0051)**の2段が続く。**足したらここも足す** ——
+         足さないと、帯が 100% になったあとも動き続ける */
+      total: isPassageKind(kind) ? plan.length + 2 : plan.length,
       run: (ctl) => (isPassageKind(kind) ? generatePassage(ctl) : generateDrill(ctl)),
     })
     if (!started) {

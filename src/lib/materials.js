@@ -15,6 +15,8 @@ import {
   givesAwayAnswer, isBlankItem, isPassageSection, isWrongShape,
 } from '../data/exerciseTypes.js'
 import { chunkPlan, needsChunkJa } from './chunkJa.js'
+/* 文法解説(SVOC と修飾要素・0051)。**判断は `grammarNote.js` 1か所** */
+import { grammarPlan, needsGrammar } from './grammarNote.js'
 import { supabase } from './supabase.js'
 import { copyTitleFor } from './format.js'
 
@@ -128,7 +130,7 @@ export async function searchMaterials({
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('question_ja')}${optLast('answer_ja')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')} )
       )
     `)
     .order('created_at', { ascending: false })
@@ -261,7 +263,7 @@ export async function loadMaterial(materialId) {
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('question_ja')}${optLast('answer_ja')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')} )
       )
     `)
     .eq('id', materialId)
@@ -321,6 +323,17 @@ const cleanItems = (items) =>
           ja: chunks.ja.map((x) => String(x ?? '')),
           // 切れ目そのもの。**あとで決まりを直しても訳がずれない**(2026-08)
           ...(Array.isArray(chunks.parts) ? { parts: chunks.parts.map((x) => String(x ?? '')) } : {}),
+        }
+      }
+      /* 文法解説(0051)。**カタマリの訳とまったく同じ扱い。**
+         {en: 作ったときの段落まるごとの英文, sentences: [{en, pattern, parts, note}]}。
+         列がまだ無いと分かっているときは送らない(挿入ごと失敗するため) */
+      const grammar = it.grammar
+      if (Array.isArray(grammar?.sentences) && grammar.sentences.length
+        && !missingColumns.has('grammar')) {
+        row.grammar = {
+          en: String(grammar.en ?? '').trim(),
+          sentences: grammar.sentences,
         }
       }
       return row
@@ -662,7 +675,7 @@ export async function loadMyAssignments() {
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                            answer, answer_alt, audio_text, note, tag_id,
-                           speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('question_ja')}${optLast('answer_ja')} )
+                           speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')} )
         )
       )
     `)
@@ -940,7 +953,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-06d'
+export const NEED_GEN_REV = '2026-09-09'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -1082,6 +1095,174 @@ export async function generateChunkJa(parts) {
     skipped: rest.length,
     usage,
   })
+}
+
+// ── 文法解説(SVOC と修飾要素・0051)────────────────────────────
+
+/**
+ * 文ごとの文法解説(S / V / O / C / M)を作らせる。
+ *
+ * **どこで文を切るかは、こちらで決めて渡す**(`grammarPlan`)。
+ * 窓口がするのは役を振ることと、日本語の説明だけである。
+ * 切らせると、**数が合っているかを確かめる術が無くなる。**
+ *
+ * **窓口は増やさない。** `generate-material` に `mode` を1つ足しただけ
+ * (カタマリの訳とまったく同じ考え方)。
+ *
+ * @param {{no: number, sentences: string[]}[]} parts 切り終わった文
+ */
+export async function generateGrammar(parts) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (!parts?.length) return ng('解説を作る本文がありません')
+
+  const callOnce = async (want) => {
+    const { data, error } = await supabase.functions.invoke('generate-material', {
+      body: { mode: 'grammar', parts: want },
+    })
+    if (error) {
+      let detail = ''
+      try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+      if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+        return ng('文法解説の窓口につながりませんでした。'
+          + 'Supabase の generate-material を配置し直したか確認してください。')
+      }
+      /* **古い窓口は、この頼みごとを知らない。**
+         `mode` を知らないので、既定の道(教材の下書き)に落ちて
+         「演習の種類が正しくありません」と断られる。
+         **添削のときとまったく同じ落とし穴**で、そのまま出すと誤診させる */
+      if (/演習の種類が正しくありません/.test(detail)) {
+        return ng('文法解説の窓口が古いため、まだ使えません。'
+          + 'Supabase → Edge Functions → generate-material を置き直してください。')
+      }
+      return ng(detail || `解説を作れませんでした: ${error.message}`)
+    }
+    noteGenRev(data?.genRev)
+    if (data?.error) return ng(data.error)
+    return ok(data)
+  }
+
+  /* **足りなかった段落だけ、もう一度頼む**(カタマリの訳と同じ作法)。
+     **2回で止める。** 際限なく試すと、残高切れのときに待たされ続ける。
+     頼み直すのは足りない段落だけなので、うまくいく回の費用は変わらない。 */
+  const got = new Map()
+  const usage = { input: 0, output: 0, cacheRead: 0 }
+  let rest = parts
+  let lastError = null
+
+  for (let attempt = 0; attempt < 2 && rest.length; attempt += 1) {
+    const { data, error } = await callOnce(rest)
+    if (error) {
+      if (!got.size) return ng(error)
+      lastError = error
+      break
+    }
+    for (const p of data.parts ?? []) {
+      if (Array.isArray(p?.sentences)) got.set(Number(p.no), p.sentences)
+    }
+    usage.input += data.usage?.input ?? 0
+    usage.output += data.usage?.output ?? 0
+    usage.cacheRead += data.usage?.cacheRead ?? 0
+    rest = parts.filter((p) => !got.has(Number(p.no)))
+  }
+
+  if (!got.size) return ng(lastError || '文と合う解説が1件も返りませんでした。')
+  return ok({
+    parts: [...got].map(([no, sentences]) => ({ no, sentences })),
+    skipped: rest.length,
+    usage,
+  })
+}
+
+/**
+ * **できたばかりの項目に、その場で解説を入れる。**
+ *
+ * 教材を発行する2つの道(記事・会話 / 貼った原稿)から呼ばれる。
+ * **同じ手順を2か所に書き写さない。**
+ *
+ * ここで失敗しても**教材は捨てない。** 解説が付かないだけで、
+ * 本文も設問もそのまま使える。あとから裏で足せる(`needsGrammar`)。
+ *
+ * @param items 本文の項目(**この配列を直に書き換える**)
+ */
+export async function fillGrammar(items) {
+  const plan = grammarPlan(items ?? [])
+  if (!plan.length) return ok({ made: 0, skipped: 0, usage: null })
+
+  const { data, error } = await generateGrammar(
+    plan.map((x) => ({ no: x.no, sentences: x.sentences })),
+  )
+  if (error) return ng(error)
+
+  const byNo = new Map(plan.map((x) => [x.no, x]))
+  let made = 0
+  for (const part of data.parts ?? []) {
+    const src = byNo.get(part.no)
+    const item = items[part.no - 1]
+    if (!src || !item) continue
+    item.grammar = { en: src.en, sentences: part.sentences }
+    made += 1
+  }
+  return ok({ made, skipped: data.skipped ?? 0, usage: data.usage ?? null })
+}
+
+/**
+ * すでにある教材に、文法解説を足す(0051)。
+ *
+ * 【なぜ要るか】
+ *   解説は**教材を作るときに一緒に作る**のが基本である(費用が桁で違う)。
+ *   だが 0051 より前に作った教材には入っていない。作り直させるのは
+ *   もったいないので、あとから足せる道を1つ用意しておく。
+ *   カタマリの訳(`addChunkJa`)とまったく同じ形にしてある。
+ *
+ * 【何が起きるか】
+ *   ・本文(記事 / 会話 / 会議 / スピーチ)の段落・発言だけを対象にする
+ *   ・すでに解説が入っていて、英文も変わっていないものは**飛ばす**(課金しない)
+ *   ・`material_items.grammar` の1列だけを書き換える。**本文には触れない**
+ */
+export async function addGrammar(material) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (missingColumns.has('grammar')) {
+    // **どこで何をすればよいかまで書く**(共通ルール)
+    return ng('文法解説の置き場(0051)が、まだ Supabase にありません。'
+      + ' GitHub のリポジトリにあるファイル(supabase/apply/pending_matome.sql)を、'
+      + 'Supabase の 左メニュー「SQL Editor」で実行してから、もう一度お試しください'
+      + '(教材・宿題・ゲストの情報には触れない SQL です)。')
+  }
+
+  // 本文の項目だけを集める。設問には解説する本文が無い
+  const items = (material?.sections ?? [])
+    .filter((sec) => isPassageSection(sec.exercise_type))
+    .flatMap((sec) => sec.items ?? [])
+    .filter((it) => String(it.prompt_en ?? '').trim())
+  if (!items.length) return ng('この教材には本文(記事・会話)がありません')
+
+  // **判断は `needsGrammar()` 1か所。**(無い / 英文が変わった / 数が合わない)
+  const todo = items.filter(needsGrammar)
+  if (!todo.length) return ok({ made: 0, spent: null })
+
+  const plan = grammarPlan(todo)
+  if (!plan.length) return ng('解説できる本文がありませんでした')
+
+  const { data, error } = await generateGrammar(
+    plan.map((x) => ({ no: x.no, sentences: x.sentences })),
+  )
+  if (error) return ng(error)
+
+  const byNo = new Map(plan.map((x) => [x.no, x]))
+  let made = 0
+  for (const part of data.parts ?? []) {
+    const src = byNo.get(part.no)
+    if (!src) continue
+    const item = todo[part.no - 1]
+    if (!item?.id) continue
+    const { error: e } = await supabase
+      .from('material_items')
+      .update({ grammar: { en: src.en, sentences: part.sentences } })
+      .eq('id', item.id)
+    if (e) return fail(e, '解説を控えられませんでした')
+    made += 1
+  }
+  return ok({ made, skipped: data.skipped ?? 0, spent: data.usage ?? null })
 }
 
 // ── 書いた答えを添削する(2026-09 利用者の指定)────────────────────

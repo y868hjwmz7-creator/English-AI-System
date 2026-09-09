@@ -2530,6 +2530,181 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '今週の宿題 … 苦手項目(`material_tags`)を取ってきている')
 }
 
+
+/* ══════════════════════════════════════════════════════════════════
+   文法解説(SVOC と修飾要素・0051・2026-09 利用者の指定)
+
+     > 文章ごとにSVOCと修飾要素についての解説をしてくれる、
+     > 文法解説モードが欲しい。
+
+   **ずれた解説は、無いより悪い**(別の文の骨組みが出る)。
+   ところが間違えても `npm run lint` にも `npm run build` にも
+   引っかからず、しかも**画面には何か出る**ので気づけない。
+   だから算段を何にも依存しない形(`src/lib/grammarNote.js`)へ出して、
+   ここで数字で見張る。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const {
+    PATTERNS, ROLES, VIEWS, grammarForPiece, grammarPlan,
+    hasOtherView, needsGrammar, nextView, storedGrammar,
+  } = await import('../src/lib/grammarNote.js')
+
+  const EN = 'The office bought a new coffee machine last week. She looks tired.'
+  const good = {
+    prompt_en: EN,
+    grammar: {
+      en: EN,
+      sentences: [
+        {
+          en: 'The office bought a new coffee machine last week.',
+          pattern: 'SVO',
+          parts: [
+            { t: 'The office', r: 'S' }, { t: 'bought', r: 'V' },
+            { t: 'a new coffee machine', r: 'O' }, { t: 'last week.', r: 'M' },
+          ],
+          note: '「誰が どうする 何を」の第3文型。',
+        },
+        {
+          en: 'She looks tired.',
+          pattern: 'SVC',
+          parts: [{ t: 'She', r: 'S' }, { t: 'looks', r: 'V' }, { t: 'tired.', r: 'C' }],
+          note: '主語 = どんな状態か、を言う第2文型。',
+        },
+      ],
+    },
+  }
+
+  // ── 役と文型は、閉じたリストにしてある ──
+  ok(Object.keys(ROLES).join('') === 'SVOCM',
+    '文法解説 … 役は S / V / O / C / M の5つだけ', Object.keys(ROLES).join(''))
+  ok(Object.keys(PATTERNS).length === 5 && PATTERNS.SVOC,
+    '文法解説 … 文型は五文型そのまま')
+
+  // ── そろっていれば、そのまま返る ──
+  ok(storedGrammar(good)?.length === 2, '文法解説 … そろっていれば返る')
+  ok(!needsGrammar(good), '文法解説 … そろっていれば作り直さない')
+
+  // ── **英文が変わっていたら返さない**(あとから本文を直したとき) ──
+  ok(storedGrammar({ ...good, prompt_en: `${EN} And more.` }) === null,
+    '文法解説 … 英文が変わっていたら返さない')
+  ok(needsGrammar({ ...good, prompt_en: `${EN} And more.` }),
+    '文法解説 … 英文が変わっていたら作り直す')
+
+  // ── **つないで元の文に戻らなければ、その項目ごと返さない** ──
+  /* **動詞を落とさない。** それだと「動詞が無い」の見張り(③)にも
+     引っかかるので、この行だけを外しても赤くならない
+     (実際にそうなった)。**飾り(M)を落として、②だけを試す** */
+  const dropped = JSON.parse(JSON.stringify(good))
+  dropped.grammar.sentences[0].parts.splice(3, 1)   // `last week.` を落とす
+  ok(storedGrammar(dropped) === null,
+    '文法解説 … かたまりをつないで元の文に戻らなければ返さない')
+
+  // ── **知らない役が混じっていたら返さない** ──
+  const weird = JSON.parse(JSON.stringify(good))
+  weird.grammar.sentences[1].parts[1].r = 'X'
+  ok(storedGrammar(weird) === null, '文法解説 … 知らない役が混じっていたら返さない')
+
+  // ── **動詞が無い文は返さない**(文の解説になっていない) ──
+  const noV = JSON.parse(JSON.stringify(good))
+  noV.grammar.sentences[1].parts[1].r = 'M'
+  ok(storedGrammar(noV) === null, '文法解説 … 動詞が1つも無ければ返さない')
+
+  // ── **文が1つ足りなければ返さない**(最後の1文だけ解説が無い、を防ぐ) ──
+  const short = JSON.parse(JSON.stringify(good))
+  short.grammar.sentences.pop()
+  ok(storedGrammar(short) === null, '文法解説 … 文が足りなければ返さない')
+
+  // ── **空白の入り方の違いだけでは落とさない** ──
+  const spacey = JSON.parse(JSON.stringify(good))
+  spacey.grammar.sentences[1].parts[2].t = 'tired .'
+  ok(storedGrammar(spacey)?.length === 2,
+    '文法解説 … 空白の入り方の違いだけでは落とさない')
+
+  // ── 窓口へ渡す一覧は、こちらで文に切って渡す ──
+  const plan = grammarPlan([{ prompt_en: EN }, { prompt_en: '' }, { prompt_en: 'Go.' }])
+  ok(plan.length === 2 && plan[0].no === 1 && plan[0].sentences.length === 2,
+    '文法解説 … 本文を文に切って渡し、空の項目は番号を飛ばす',
+    JSON.stringify(plan.map((p) => [p.no, p.sentences.length])))
+
+  // ── 割った段落では、そのかけらのぶんだけ ──
+  const at = EN.indexOf('She looks')
+  const piece2 = grammarForPiece(storedGrammar(good), EN, at, EN.slice(at))
+  ok(piece2.length === 1 && piece2[0].en.startsWith('She'),
+    '文法解説 … 割った段落では、いま出しているかけらの文だけを出す',
+    JSON.stringify(piece2.map((s) => s.en)))
+  ok(grammarForPiece(storedGrammar(good), EN, null, null).length === 2,
+    '文法解説 … 割っていないときは、そのまま全部')
+
+  // ── 見せ方は1つのボタンで回る。**無いものは飛ばす** ──
+  ok(VIEWS.join(',') === 'en,ja,grammar', '文法解説 … 見せ方は 英語 → 訳 → 文法 の順')
+  ok(nextView('en', { ja: true, grammar: true }) === 'ja'
+    && nextView('ja', { ja: true, grammar: true }) === 'grammar'
+    && nextView('grammar', { ja: true, grammar: true }) === 'en',
+    '文法解説 … 3つそろっていれば、押すたびに次へ回る')
+  ok(nextView('en', { ja: false, grammar: true }) === 'grammar',
+    '文法解説 … 訳が無い段落では、訳を飛ばす')
+  ok(nextView('en', { ja: true, grammar: false }) === 'ja'
+    && nextView('ja', { ja: true, grammar: false }) === 'en',
+    '文法解説 … 解説が無い教材では、文法を飛ばす')
+  ok(!hasOtherView({}) && hasOtherView({ grammar: true }),
+    '文法解説 … どちらも無ければ、ボタンごと出さない')
+
+  // ── **画面が本当に呼んでいるか**(定義だけあって誰も呼ばなければ同じ) ──
+  const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noComment = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+  const focus = noComment(read('src/components/FocusReader.jsx'))
+  ok(/<GrammarNote\s/.test(focus), '文法解説 … 集中モードが `GrammarNote` を描いている')
+  ok(/nextView\(view, have\)/.test(focus),
+    '文法解説 … 見せ方の回し方を `nextView()` に任せている(画面で書かない)')
+  ok(/hasOtherView\(have\)/.test(focus),
+    '文法解説 … 出せるものが無ければ、ボタンごと出さない')
+  ok(!/showJa \? '英語' : '訳'/.test(focus),
+    '文法解説 … 真偽値の出し分けが残っていない')
+  ok(/= grammarForPiece\(/.test(focus),
+    '文法解説 … 割った段落では、かけらのぶんだけを渡している')
+
+  const mats = noComment(read('src/lib/materials.js'))
+  ok(/optLast\('grammar'\)/.test(mats), '文法解説 … `grammar` の列を取ってきている')
+  ok((mats.match(/optLast\('grammar'\)/g) ?? []).length === 3,
+    '文法解説 … 3か所の問い合わせすべてで取ってきている',
+    String((mats.match(/optLast\('grammar'\)/g) ?? []).length))
+  ok(/mode: 'grammar'/.test(mats), '文法解説 … 窓口に `mode: grammar` で頼んでいる')
+  ok(/row\.grammar = \{/.test(mats), '文法解説 … 発行するときに控えている')
+
+  const form = noComment(read('src/components/MaterialForm.jsx'))
+  ok(/await fillGrammar\(/.test(form),
+    '文法解説 … 教材を作るときに1回だけ作っている')
+  ok((form.match(/await fillGrammar\(/g) ?? []).length === 2,
+    '文法解説 … 記事・会話と、貼った原稿の**両方**で作っている',
+    String((form.match(/await fillGrammar\(/g) ?? []).length))
+  ok(/plan\.length \+ 2 : plan\.length/.test(form),
+    '文法解説 … 段が2つ増えたぶん、帯の総数も足してある')
+
+  const tm = noComment(read('src/components/TrainerMaterials.jsx'))
+  ok(/needsGrammarIn\(m\)/.test(tm) && /makeGrammar\(m\)/.test(tm),
+    '文法解説 … 前に作った教材は、使うときに裏で足している')
+  ok(/triedGrammar/.test(tm),
+    '文法解説 … 1つの教材につき1回だけ(止まる条件を持たせる)')
+
+  // ── 窓口 ──
+  const fn = noComment(read('supabase/functions/generate-material/index.ts'))
+  ok(/mode === 'grammar'/.test(fn), '文法解説 … 窓口が `mode: grammar` を受けている')
+  ok(/name: 'emit_grammar'/.test(fn) && /strict: true/.test(fn),
+    '文法解説 … 道具の形は `strict: true` で保証している')
+  ok(/const FN_REV = '2026-09-09'/.test(fn),
+    '文法解説 … 窓口に手を入れたので、版を1つ進めてある')
+  ok(/NEED_GEN_REV = '2026-09-09'/.test(read('src/lib/materials.js')),
+    '文法解説 … 画面が見る版も、そろえてある')
+
+  // ── 貼る SQL がそろっているか ──
+  const matome = read('supabase/apply/pending_matome.sql')
+  const check = read('supabase/apply/check.sql')
+  ok(/add column if not exists grammar/.test(matome),
+    '文法解説 … まとめた1つに 0051 が入っている')
+  ok(/column_name = 'grammar'/.test(check),
+    '文法解説 … check.sql が 0051 を見ている')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
