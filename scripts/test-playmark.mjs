@@ -2882,9 +2882,9 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   // ── ③ 画面が本当に呼んでいるか ──
   const wb = noC(read2('src/components/Wordbook.jsx'))
   ok(/<BasicWordsPick\s/.test(wb), '基礎単語 … 単語帳の画面に置いてある')
-  ok(/meaning_ja: basicJaOf\(r\.word_norm\)/.test(wb),
+  ok(/meaning_ja: r\.meaning_ja \|\| basicJaOf\(r\.word_norm\)/.test(wb),
     '基礎単語 … 控えが無いときだけ、ファイルの訳を当てる')
-  ok(/r\.meaning_ja \? r :/.test(wb),
+  ok(/if \(r\.meaning_ja && r\.pos\) return r/.test(wb),
     '基礎単語 … 控えがある語は、1文字も書き換えない')
   ok(/onPickWords=\{onPickWords\}|onPicked=\{onPickWords\}/.test(wb),
     '基礎単語 … 絞り込みは外(App)に任せる(同じ道を2つ持たない)')
@@ -2910,6 +2910,129 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '基礎単語 … まとめた1つに 0053 が入っている')
   ok(/proname = 'add_basic_words'/.test(read2('supabase/apply/check.sql')),
     '基礎単語 … check.sql が 0053 を見ている')
+
+  /* ══════════════════════════════════════════════════════════════
+     品詞で絞る(2026-09 利用者の指定)
+
+       > 全ての単語に対して効くようにして欲しいのが
+       > 品詞ごとに分ける絞り込み機能です。
+
+     **「全ての単語に対して」がこの検証のかなめである。**
+     `pos` に入っている文字は2通りある ——
+     窓口(`lookup-word`)が引いた**日本語**と、基礎単語の**短い印**。
+     片方しか見ないと、**もう片方の語が丸ごと絞れない**まま緑になる。
+
+     見るのは5つ。
+       ① そろえ方(2通りの言葉が同じまとまりへ / 知らない語は空)
+       ② **基礎単語 1,200 語が1つ残らず振り分けられるか**
+       ③ 絞り込みの鍵に入っているか(**`runKeyOf` が書き写していないか**)
+       ④ 絞り方そのもの
+       ⑤ 画面が本当に呼んでいるか
+     ══════════════════════════════════════════════════════════════ */
+  const { POS_GROUPS, posGroupOf, posLabel } = await import('../src/lib/posGroups.js')
+  const { basicPosOf } = await import('../src/lib/basicsCourse.js')
+  const {
+    FILTER_KEYS, applyWordbookFilter, posOf,
+  } = await import('../src/lib/wordbookFilter.js')
+
+  // ── ① そろえ方。**2通りの言葉が、同じまとまりへ行くか** ──
+  ok(posGroupOf('名詞') === 'noun' && posGroupOf('n') === 'noun',
+    '品詞 … 日本語(名詞)と短い印(n)が、同じまとまりになる',
+    `${posGroupOf('名詞')} / ${posGroupOf('n')}`)
+  ok(posGroupOf('他動詞') === 'verb' && posGroupOf('助動詞') === 'verb'
+    && posGroupOf('v') === 'verb',
+    '品詞 … 他動詞・助動詞も「動詞」へ寄せる(窓口は閉じた一覧ではない)')
+  ok(posGroupOf('句動詞') === 'phrase' && posGroupOf('phr') === 'phrase',
+    '品詞 … 句動詞・イディオムは「熟語・言い回し」へ')
+  ok(posGroupOf('名詞・動詞') === 'noun',
+    '品詞 … 2つ書いてあったら、最初に当たったものを採る')
+  ok(posGroupOf('  名詞。') === 'noun' && posGroupOf('Noun') === 'noun',
+    '品詞 … 前後の空白・大文字小文字・末尾の「。」は落とす')
+  ok(posGroupOf('うんこ') === '' && posGroupOf('') === '' && posGroupOf(null) === '',
+    '品詞 … 知らない言葉は空。**当てずっぽうで振り分けない**')
+  ok(!POS_GROUPS.some((g) => /その他|ほか/.test(g.label)),
+    '品詞 … 「その他」を作らない(名詞と助動詞が混ざって出る)')
+  ok(new Set(POS_GROUPS.map((g) => g.id)).size === POS_GROUPS.length
+    && POS_GROUPS.every((g) => posLabel(g.id) === g.label),
+    '品詞 … id が重なっておらず、名前は `posLabel()` から引ける')
+
+  // ── ② **基礎単語が1語残らず振り分けられるか** ──
+  {
+    const miss = BASIC_WORDS.filter((w) => !posGroupOf(basicPosOf(w.w)))
+    ok(miss.length === 0,
+      '品詞 … 基礎単語 1,200 語が、1語残らず振り分けられる',
+      miss.slice(0, 5).map((w) => `${w.w}(${w.pos})`).join(' / '))
+  }
+  ok(basicPosOf('zzzznotaword') === '' && basicPosOf(null) === '',
+    '品詞 … 知らない語には空を返す(訳とまったく同じ作法)')
+
+  // ── ③ 絞り込みの鍵。**`runKeyOf` が一覧を書き写していないか** ──
+  ok(FILTER_KEYS.includes('pos'),
+    '品詞 … 絞り込みの鍵の一覧に入っている')
+  ok(runKeyOf({ scope: 'due', size: 10, filter: { pos: 'noun' } })
+     !== runKeyOf({ scope: 'due', size: 10, filter: { pos: 'verb' } }),
+    '品詞 … 品詞を変えたら、出題を組み直す(`runKeyOf` が変わる)')
+  {
+    const rs = noC(read2('src/lib/reviewScope.js'))
+    ok(/FILTER_KEYS\.map/.test(rs) && !/f\.level \?\? ''/.test(rs),
+      '品詞 … `runKeyOf` が `FILTER_KEYS` を読む(鍵を書き写さない)')
+  }
+
+  // ── ④ 絞り方そのもの ──
+  {
+    const rows = [
+      { word_norm: 'a', pos: '名詞' },
+      { word_norm: 'b', pos: 'n' },
+      { word_norm: 'c', pos: '他動詞' },
+      { word_norm: 'd', pos: 'うんこ' },
+      { word_norm: 'e' },
+    ]
+    const nouns = applyWordbookFilter(rows, { pos: 'noun' })
+    ok(nouns.length === 2 && nouns.every((r) => 'ab'.includes(r.word_norm)),
+      '品詞 … 「名詞」で絞ると、日本語の語も短い印の語も残る',
+      nouns.map((r) => r.word_norm).join(''))
+    ok(applyWordbookFilter(rows, { pos: 'verb' }).length === 1,
+      '品詞 … 「動詞」で絞ると、他動詞の語が残る')
+    ok(applyWordbookFilter(rows, {}).length === 5,
+      '品詞 … 絞らなければ、品詞の分からない語もこれまでどおり出る')
+    ok(posOf(rows[3]) === null && posOf(rows[4]) === null,
+      '品詞 … 分からない語は `null`(選択肢にも出ない)')
+  }
+
+  // ── ⑤ 画面が本当に呼んでいるか ──
+  {
+    const wf = noC(read2('src/components/WordbookFilter.jsx'))
+    ok(/posOf\(r\)\?\.key/.test(wf) && /POS_GROUPS\.filter/.test(wf),
+      '品詞 … 絞り込みの画面が、その一覧から選択肢を作っている')
+    ok(/pos: poss\.length > 1/.test(wf),
+      '品詞 … 選べるものが1つ以下なら、行ごと出さない(効かない操作を見せない)')
+    ok(/set\(\{ pos: e\.target\.value \|\| null \}\)/.test(wf),
+      '品詞 … 選んだら、その値が絞り込みへ渡る')
+    ok(!/pos === '名詞'|pos === 'n'/.test(wf),
+      '品詞 … 画面の中で品詞を見分けない(`posGroupOf()` 1か所)')
+
+    ok(/pos: r\.pos \|\| posLabel\(posGroupOf\(basicPosOf\(r\.word_norm\)\)\)/.test(wb),
+      '品詞 … 控えが無いときだけ、基礎単語の品詞を当てる')
+    ok(/if \(r\.meaning_ja && r\.pos\) return r/.test(wb),
+      '品詞 … 控えがある語は、1文字も書き換えない')
+  }
+
+  /* ── **生の NUL を、ソースに書かない**(2026-09 にここで踏んだ)──
+     `NO_MATERIAL` と `runKeyOf` の区切りは、**1バイトの NUL をそのまま**
+     書いてあった。すると **git がそのファイルを「バイナリ」と見なし、
+     差分も grep も効かなくなる**(実際、品詞を足すあいだ
+     `WordbookFilter.jsx` の差分が1行も読めなかった)。
+     `\u0000` と書けば**値は同じまま**、ふつうの文字列として読める。 */
+  {
+    const files = [
+      'src/lib/wordbookFilter.js', 'src/lib/reviewScope.js',
+      'src/components/WordbookFilter.jsx',
+    ]
+    const bad = files.filter((f) => read2(f).includes('\u0000'))
+    ok(bad.length === 0,
+      'ソース … 生の NUL を書かない(git がバイナリと見なし、差分も grep も効かなくなる)',
+      bad.join(' / '))
+  }
 }
 
 console.log(ng

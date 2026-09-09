@@ -45,6 +45,7 @@ import { toDateKey } from './format.js'
 /* **既定の10は `SESSION_SIZE` から取る。** 単語帳がずっとその数だった。
    同じ数を2か所に書かない(`wordQuiz.js` は素の node で読める) */
 import { SESSION_SIZE } from './wordQuiz.js'
+import { FILTER_KEYS } from './wordbookFilter.js'
 
 /** 今日(端末の日付)。"2026-08-30" */
 export const todayKey = () => toDateKey(new Date())
@@ -226,10 +227,12 @@ export function shouldRecord(ok, {
  */
 export function runKeyOf({ scope = '', size = '', filter = {}, group = null } = {}) {
   const f = filter ?? {}
-  return [
-    scope, size, group ?? '',
-    f.day ?? '', f.material ?? '', f.field ?? '', f.topic ?? '', f.level ?? '',
-  ].join(' ')
+  /* **鍵は `FILTER_KEYS`(`wordbookFilter.js`)から読む**(2026-09)。
+     ここに `f.day, f.material, …` と書き写していたので、レベルを足した
+     ときに**そこだけ反映されなかった。** 品詞を足したこの回で、
+     同じ落とし穴を二度踏まないよう**一覧そのものを共有した。**
+     `emptyFilter()` も `countNarrowed()` も、同じ一覧を見ている */
+  return [scope, size, group ?? '', ...FILTER_KEYS.map((k) => f[k] ?? '')].join('\u0000')
 }
 
 /**

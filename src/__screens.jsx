@@ -557,15 +557,22 @@ const RSCOPE = (() => {
     d.setDate(d.getDate() - n)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
-  /* **絞り込みの手がかりも持たせる。** 分野・場面・教材名・レベルが
+  /* **絞り込みの手がかりも持たせる。** 分野・場面・教材名・レベル・品詞が
      2種類ずつ無いと、その行は出ない(選べるものしか出さない)。
      **教材名だけをわざと長くしてある** —— 欄の幅をそろえるのをやめても、
-     短い言葉ばかりだと**同じ幅になって緑のまま**になるためである */
+     短い言葉ばかりだと**同じ幅になって緑のまま**になるためである。
+
+     **品詞は、2通りの言葉を混ぜてある**(2026-09)。`pos` に入るのは
+     窓口が引いた**日本語**(「他動詞」)と、基礎単語の**短い印**(`n`)の
+     2通りで、片方だけで測ると `posGroupOf()` を壊しても緑のままになる。
+     しかも「他動詞」は**そのままの言葉では一覧に無い** ——
+     まとめ方(動詞へ寄せる)まで通らないと、この行は出ない */
   const FACET = [
     { material_industry: 'it', material_scene: 'daily_standup',
-      material_title: '2026-09-07 / 仕入れ先との交渉 / B1', material_level: 'B1' },
+      material_title: '2026-09-07 / 仕入れ先との交渉 / B1', material_level: 'B1',
+      pos: '他動詞' },
     { material_industry: 'med', material_scene: 'jobinterview',
-      material_title: '会議', material_level: 'A2' },
+      material_title: '会議', material_level: 'A2', pos: 'n' },
   ]
   const row = (n, dueIn) => ({
     word_norm: `w${n}`,

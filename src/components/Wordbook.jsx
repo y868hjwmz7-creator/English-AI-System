@@ -64,7 +64,8 @@ import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from 
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
 import BasicWordsPick from './BasicWordsPick.jsx'
-import { basicJaOf } from '../lib/basicsCourse.js'
+import { basicJaOf, basicPosOf } from '../lib/basicsCourse.js'
+import { posGroupOf, posLabel } from '../lib/posGroups.js'
 import { CloseIcon, FocusIcon, MusicIcon } from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 
@@ -165,7 +166,7 @@ function Detail({ wordNorm }) {
   }, [wordNorm])
   if (rows === null) return <p className="hint">読み込み中…</p>
   const senses = rows.flatMap((r) => (Array.isArray(r.senses) && r.senses.length
-    ? r.senses : [{ pos: r.pos, meaning_ja: r.meaning_ja }]))
+    ? r.senses : [{ pos: r.pos || posLabel(posGroupOf(basicPosOf(r.word_norm))), meaning_ja: r.meaning_ja }]))
   if (!senses.length) return <p className="hint">くわしい控えはまだありません。</p>
   return (
     <ul className="wordbook-detail">
@@ -434,9 +435,23 @@ export default function Wordbook({
     const filtered = onlySet
       ? (list.data ?? []).filter((r) => onlySet.has(r.word_norm))
       : (list.data ?? [])
-    const got = filtered.map((r) => (
-      r.meaning_ja ? r : { ...r, meaning_ja: basicJaOf(r.word_norm) }
-    ))
+    const got = filtered.map((r) => {
+      /* 訳も品詞も、**控えがある語は1文字も書き換えない**(0053)。
+         品詞まで当てるのは 2026-09 利用者の指定
+         「全ての単語に対して効くようにして欲しいのが、
+          品詞ごとに分ける絞り込み機能です」——
+         基礎単語には控えが無いので、当てないと **1,200 語がまるごと
+         「品詞で絞れない語」**になり、「全ての単語に効く」にならない */
+      if (r.meaning_ja && r.pos) return r
+      return {
+        ...r,
+        meaning_ja: r.meaning_ja || basicJaOf(r.word_norm),
+        /* **画面には日本語で出す。** 基礎単語の印は `n` / `v` なので、
+           そのまま入れると札に「n」と出る(語の上の小さな札・CLAUDE.md)。
+           **対応表はここに書かない** —— `posGroups.js` の名前を借りる */
+        pos: r.pos || posLabel(posGroupOf(basicPosOf(r.word_norm))),
+      }
+    })
     setRows(got)
     rowsRef.current = got
     setQueue([])

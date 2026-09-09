@@ -72,6 +72,26 @@ const BASIC_JA = new Map(BASIC_WORDS.map((w) => [w.w, w.ja]))
 export const basicJaOf = (norm) => BASIC_JA.get(String(norm ?? '')) ?? ''
 
 /**
+ * 基礎単語の品詞。**訳とまったく同じ考え方**(2026-09 利用者の指定)。
+ *
+ *   > 全ての単語に対して効くようにして欲しいのが
+ *   > 品詞ごとに分ける絞り込み機能です。
+ *
+ * 段まるごとを単語帳へ入れると、そのどれにも意味の控え
+ * (`word_glosses`)が無い。**品詞もそこに入っている**ので、
+ * そのままでは 1,200 語が丸ごと「品詞で絞れない語」になり、
+ * **「全ての単語に効く」にならない。**
+ *
+ * 短い印(`n` / `v` / `adj`)のまま返す —— そろえるのは
+ * **`posGroupOf()`(`posGroups.js`)1か所**の役目である。
+ *
+ * @param norm そろえた語(`normWord()` を通したもの)
+ * @returns 品詞の印。**知らない語は空**(当てずっぽうで返さない)
+ */
+const BASIC_POS = new Map(BASIC_WORDS.map((w) => [w.w, w.pos]))
+export const basicPosOf = (norm) => BASIC_POS.get(String(norm ?? '')) ?? ''
+
+/**
  * 30日ぶんの一覧に、**終えたかどうか**を添える。
  *
  * @param doneDays 終えた日の番号(サーバーから読んだもの)
