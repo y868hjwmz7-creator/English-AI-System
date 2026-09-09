@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   33行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   34行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -131,4 +131,7 @@ from (
   union all select '0051 本文に文法解説(SVOC)を持たせる(pending_matome.sql)',
     exists (select 1 from information_schema.columns
             where table_name = 'material_items' and column_name = 'grammar'), 33
+  union all select '0052 文法30日集中講座の進み具合(pending_matome.sql)',
+    exists (select 1 from information_schema.tables
+            where table_schema = 'public' and table_name = 'course_days'), 34
 ) t order by 順;

@@ -3077,6 +3077,88 @@ export default defineConfig({
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 文法30日集中講座 + 基礎単語(0052・2026-09 利用者の指定)
+//
+//   > pre basic と basic に基礎単語習得モードとか文法30日集中講座などが欲しい
+//
+// **30日ぶんのカードが縦に並ぶ画面**なので、狭い端末で
+// 押せる大きさを割っていないか・横にはみ出していないかは、
+// **ソースを読んでも分からない。描いて測る。**
+//
+// **「出る」と「出ない」の両方を見る**(CLAUDE.md) ——
+// 30日そろっていることと、開いたときに語と例文が出ることの両方。
+// ══════════════════════════════════════════════════════════════════════
+{
+  for (const w of [1280, 390, 320]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=course`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(250)
+    // 1日目を開く。**開かないと中身が描かれない**
+    await page.click('.course-day:first-child .course-open')
+    await page.waitForTimeout(200)
+    const got = await page.evaluate(() => {
+      const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
+      const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
+      const opens = [...document.querySelectorAll('.course-open')]
+      const body = document.querySelector('.course-body')
+      return {
+        日数: opens.length,
+        段: [...document.querySelectorAll('.course-head .chip')].map((c) => c.textContent.trim()),
+        帯: document.querySelector('.course-bar') ? 1 : 0,
+        押せる高さ: Math.min(...opens.map(px)),
+        例文: body ? body.querySelectorAll('.course-ex > li').length : 0,
+        訳: body ? [...body.querySelectorAll('.course-ja')].every((x) => x.textContent.trim()) : false,
+        語: body ? body.querySelectorAll('.course-words > li').length : 0,
+        ボタン低さ: body
+          ? Math.min(...[...body.querySelectorAll('button')].map(px))
+          : 0,
+        // **横にはみ出していないか**
+        よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        右: Math.max(0, ...opens.map(right), ...(body ? [right(body)] : [])),
+      }
+    })
+    await page.close()
+    const 名 = `30日講座(${w}px)`
+    if (got.日数 !== 30) {
+      ng(`${名} … 30日そろっていない`, String(got.日数))
+    } else if (got.段.length !== 2 || !got.段[0].includes('厳選360')) {
+      ng(`${名} … 段が2つ出ていない`, got.段.join(' / '))
+    } else if (!got.帯) {
+      ng(`${名} … 進み具合の帯が無い`)
+    } else if (got.押せる高さ < 44) {
+      ng(`${名} … 日のカードが、押せる大きさ(44px)を割っている`, String(got.押せる高さ))
+    } else if (got.例文 < 3 || !got.訳) {
+      ng(`${名} … 例文か、その訳が出ていない`, `${got.例文} 文 / 訳 ${got.訳}`)
+    } else if (got.語 !== 12) {
+      // Pre-Basic で開くので「厳選360」= 1日 12 語
+      ng(`${名} … その日の語が 12 語ではない`, String(got.語))
+    } else if (got.ボタン低さ < 34) {
+      ng(`${名} … 中のボタンが、押せる大きさ(34px)を割っている`, String(got.ボタン低さ))
+    } else if (got.よこ > 0 || got.右 > w) {
+      ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+    } else {
+      ok(`${名} … 30日そろい、語も例文も出て、はみ出しも無い`)
+    }
+  }
+
+  /* **画面が本当に呼んでいるか。** 検証の入り口(`__screens.jsx`)だけ
+     直しても、利用者の画面からは入れない。
+     **「名前が出てくるか」で見ない** —— 説明の中にも同じ語がある */
+  {
+    const src = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<BasicsCourse me=\{profile\} \/>/.test(src)) {
+      ng('30日講座 … メニューから開けない')
+    } else if (!/isTrainer\) && \{ id: 'course', label: '30日講座'/.test(src)) {
+      ng('30日講座 … ゲスト専用になっていない')
+    } else {
+      ok('30日講座 … ゲストのメニューから開ける')
+    }
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

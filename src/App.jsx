@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AdminDashboard from './components/AdminDashboard.jsx'
 import LearnerHomework from './components/LearnerHomework.jsx'
+import BasicsCourse from './components/BasicsCourse.jsx'
 import SignIn from './components/SignIn.jsx'
 import TrainerLearners from './components/TrainerLearners.jsx'
 import TrainerMaterials from './components/TrainerMaterials.jsx'
@@ -9,7 +10,7 @@ import AppNav, { AppTopbar } from './components/AppNav.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import {
   BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, MicIcon, MusicIcon,
-  PeopleIcon, TaskIcon,
+  PeopleIcon, StepsIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
@@ -325,6 +326,11 @@ export default function App() {
     // 「ゲスト」画面に出る取り組みのほうで、スクール全体の数字ではない
     (!isSupabaseConfigured || isOwner) && { id: 'admin', label: '集計', icon: ChartIcon },
     (!isSupabaseConfigured || !isTrainer) && { id: 'homework', label: '今週の宿題', icon: TaskIcon },
+    /* **文法30日集中講座 + 基礎単語**(0052・2026-09 利用者の指定)。
+       > pre basic と basic に基礎単語習得モードとか文法30日集中講座などが欲しい
+       **ゲスト専用**(利用者が選んだ)。トレーナーには出さない。
+       **下の帯(`TAB_IDS`)には足さない** —— あちらは利用者が4つと決めている */
+    (!isSupabaseConfigured || !isTrainer) && { id: 'course', label: '30日講座', icon: StepsIcon },
     // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
     // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
     { id: 'wordbook', label: '単語帳', icon: CardsIcon },
@@ -733,6 +739,8 @@ export default function App() {
                   setView('wordbook')
                 }}
               />
+            ) : view === 'course' ? (
+              <BasicsCourse me={profile} />
             ) : view === 'wordbook' ? (
               <Wordbook only={onlyWords?.words ?? null}
                         onlyLabel={onlyWords?.label ?? ''}

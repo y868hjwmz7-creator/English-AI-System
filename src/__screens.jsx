@@ -42,6 +42,7 @@ import WordbookFilter, { countNarrowed, emptyFilter } from './components/Wordboo
 import { QR_GROUPS, groupLead, qrTally } from './lib/reviewScope.js'
 import FocusFrame from './components/FocusFrame.jsx'
 import GrammarNote from './components/GrammarNote.jsx'
+import BasicsCourse from './components/BasicsCourse.jsx'
 import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
 import CastChip from './components/CastChip.jsx'
@@ -756,8 +757,20 @@ const GNOTE = (
   </FocusFrame>
 )
 
+/* 30日講座(`?screen=course`・0052・2026-09 利用者の指定)。
+
+   **本物の部品を描いて測る。** 30日ぶんのカードが並ぶ画面なので、
+   狭い端末で**押せる大きさを割っていないか**と
+   **横にはみ出していないか**は、ソースを読んでも分からない。
+
+   `me` に id を渡さないので、**サーバーは1度も呼ばない**
+   (`loadCourseDays` は `supabase` が無ければ空を返す)。 */
+const COURSE = <BasicsCourse me={{ id: null, level: 'Pre-Basic' }} />
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'gnote'
+  q.get('screen') === 'course'
+    ? COURSE
+    : q.get('screen') === 'gnote'
     ? GNOTE
     : q.get('screen') === 'radio'
     ? RADIO

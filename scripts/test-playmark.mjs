@@ -2705,6 +2705,151 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '文法解説 … check.sql が 0051 を見ている')
 }
 
+
+/* ══════════════════════════════════════════════════════════════════
+   文法30日集中講座 + 基礎単語(0052・2026-09 利用者の指定)
+
+     > pre basic と basic に基礎単語習得モードとか文法30日集中講座などが
+     > 欲しい。日本ではいわゆる中学英語と呼ばれるものだ。
+     > ただ網羅するのではなく、単語と基礎的な文法の仕組みを
+     > 楽しんで身に付けられるコースにして欲しい。
+
+   **一覧は、勝手に減らさない**(プロジェクトを超えた決まり)。
+   1,200 語 / 厳選360 / 30日は、**数えないと崩れたことに気づけない。**
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const { BASIC_WORDS } = await import('../src/data/basicWords.js')
+  const {
+    COURSE_DAYS, COURSE_LENGTH, COURSE_TIERS, dayOf, tierForLevel, tierOf,
+  } = await import('../src/data/basicsCourse.js')
+  const {
+    courseList, courseRatio, dayPairs, nextDay, wordsForDay, wordsForTier,
+  } = await import('../src/lib/basicsCourse.js')
+  const { weaknessTags } = await import('../src/data/weaknessTags.js')
+
+  // ── 数。**減らさない** ──
+  ok(BASIC_WORDS.length === 1200, '基礎単語 … 1,200 語ある', String(BASIC_WORDS.length))
+  ok(BASIC_WORDS.filter((w) => w.core).length === 360,
+    '基礎単語 … 厳選360 が 360 語ある',
+    String(BASIC_WORDS.filter((w) => w.core).length))
+  ok(COURSE_LENGTH === 30 && COURSE_DAYS.length === 30,
+    '30日講座 … 30日ある', String(COURSE_DAYS.length))
+
+  // ── **同じ語を二度入れない。** 単語帳の鍵は語そのものである ──
+  {
+    const seen = new Set()
+    const dup = []
+    for (const w of BASIC_WORDS) { if (seen.has(w.w)) dup.push(w.w); seen.add(w.w) }
+    ok(dup.length === 0, '基礎単語 … 同じ語が二度出てこない', dup.slice(0, 8).join(' '))
+  }
+  // ── `normWord` と同じそろえ方(小文字・英字だけ)──
+  ok(BASIC_WORDS.every((w) => /^[a-z'-]+$/.test(w.w)),
+    '基礎単語 … 語は小文字の英字だけ(単語帳の鍵とそろえる)',
+    BASIC_WORDS.filter((w) => !/^[a-z'-]+$/.test(w.w)).map((w) => w.w).join(' '))
+  // ── **訳が空の語を入れない**(単語帳に入れたときに意味が出ない)──
+  ok(BASIC_WORDS.every((w) => String(w.ja ?? '').trim()),
+    '基礎単語 … 訳が空の語が1つも無い')
+  // ── 日の割り当て ──
+  {
+    const byDay = {}
+    const core = {}
+    for (const w of BASIC_WORDS) {
+      byDay[w.day] = (byDay[w.day] ?? 0) + 1
+      if (w.core) core[w.day] = (core[w.day] ?? 0) + 1
+    }
+    const days = Object.keys(byDay).map(Number).sort((a, b) => a - b)
+    ok(days.length === 30 && days[0] === 1 && days[29] === 30,
+      '基礎単語 … 1〜30 日にもれなく割り当ててある')
+    ok(days.every((d) => byDay[d] === 40),
+      '基礎単語 … どの日も 40 語',
+      days.filter((d) => byDay[d] !== 40).map((d) => `${d}:${byDay[d]}`).join(' '))
+    ok(days.every((d) => core[d] === 12),
+      '基礎単語 … どの日も 厳選360 が 12 語',
+      days.filter((d) => core[d] !== 12).map((d) => `${d}:${core[d]}`).join(' '))
+  }
+
+  // ── 段は2つ。**厳選360 は 1200 の一部**(別の一覧を持たない)──
+  ok(COURSE_TIERS.length === 2 && COURSE_TIERS[0].id === 'core' && COURSE_TIERS[1].id === 'full',
+    '30日講座 … 段は「厳選360」と「中学英語1200」の2つ')
+  ok(wordsForTier('core').length === 360 && wordsForTier('full').length === 1200,
+    '30日講座 … 段ごとの語数がそろっている')
+  {
+    const full = new Set(wordsForTier('full').map((w) => w.w))
+    ok(wordsForTier('core').every((w) => full.has(w.w)),
+      '30日講座 … 厳選360 は、すべて 1200 の中にある')
+  }
+  ok(wordsForDay(1, 'core').length === 12 && wordsForDay(1, 'full').length === 40,
+    '30日講座 … 1日ぶんの語数(12 / 40)')
+  ok(wordsForDay(0).length === 0 && wordsForDay(31).length === 0,
+    '30日講座 … 範囲の外は空(当てずっぽうで返さない)')
+  ok(tierOf('しらない').id === 'core',
+    '30日講座 … 知らない段は、やさしいほうに落ちる(行き止まりを作らない)')
+
+  // ── レベルから初めの1つを選ぶ ──
+  ok(tierForLevel('Pre-Basic') === 'core' && tierForLevel('Basic') === 'full',
+    '30日講座 … レベルから初めの段を選ぶ')
+  ok(tierForLevel('B1') === 'core',
+    '30日講座 … 知らないレベルでも、必ずどちらかになる')
+
+  // ── 進み具合。**飛ばして進んでもよい** ──
+  ok(nextDay([]) === 1, '30日講座 … 何もしていなければ1日目')
+  ok(nextDay([1, 2, 4]) === 3,
+    '30日講座 … 飛ばした日があれば、そこへ戻す(「終えた数 + 1」で出さない)',
+    String(nextDay([1, 2, 4])))
+  ok(nextDay(Array.from({ length: 30 }, (_, i) => i + 1)) === null,
+    '30日講座 … すべて終えたら null')
+  ok(courseRatio([]) === 0 && Math.abs(courseRatio([1, 2, 3]) - 0.1) < 1e-9,
+    '30日講座 … 進み具合(0で割らない)')
+  ok(courseRatio([1, 99, 0]) <= 1,
+    '30日講座 … 範囲の外の日を渡しても、1を超えない')
+  ok(courseList([2]).find((d) => d.no === 2)?.done === true
+    && courseList([2]).find((d) => d.no === 1)?.done === false,
+    '30日講座 … 終えた印が付く')
+
+  // ── 中身の作法 ──
+  ok(COURSE_DAYS.every((d) => d.points?.length && d.examples?.length),
+    '30日講座 … どの日にも、仕組みの説明と例文がある')
+  ok(COURSE_DAYS.every((d) => d.examples.every((x) => x.en?.trim() && x.ja?.trim())),
+    '30日講座 … 例文には**必ず訳がある**(無いものをあるように見せない)')
+  ok(dayPairs(1).length === dayOf(1).examples.length && dayPairs(99).length === 0,
+    '30日講座 … 例文は Quick Response と同じ対の形で渡せる')
+
+  // ── **弱点タグは、画面の一覧に必ずある** ──
+  {
+    const ids = new Set(weaknessTags.map((t) => t.id))
+    const bad = [...new Set(COURSE_DAYS.flatMap((d) => d.tagIds ?? []))].filter((x) => !ids.has(x))
+    ok(bad.length === 0, '30日講座 … 使っている弱点タグが、画面の一覧に全部ある', bad.join(' '))
+  }
+
+  // ── **画面が本当に呼んでいるか**(定義だけあって誰も呼ばなければ同じ) ──
+  const read2 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/.*$/gm, '')
+  const app = noC(read2('src/App.jsx'))
+  ok(/<BasicsCourse me=\{profile\}/.test(app), '30日講座 … 画面から開ける')
+  ok(/id: 'course'/.test(app), '30日講座 … メニューに出ている')
+  ok(/isTrainer\) && \{ id: 'course'/.test(app),
+    '30日講座 … **ゲスト専用**(トレーナーには出さない)')
+  ok(!/'course'/.test(app.slice(app.indexOf('const TAB_IDS'), app.indexOf('const TAB_IDS') + 400)),
+    '30日講座 … 下の帯は4つのまま(利用者が決めている)')
+
+  const cs = noC(read2('src/components/BasicsCourse.jsx'))
+  ok(/await lookupWord\(/.test(cs) && /await setWordStatus\(/.test(cs),
+    '30日講座 … 単語帳へは `WordbookAdd` と同じ道で入れる')
+  ok(/stop\.current/.test(cs),
+    '30日講座 … まとめて入れるのを、途中でやめられる(止まる条件を持たせる)')
+  ok(/\$\{words\.length\} 語をまとめて/.test(cs),
+    '30日講座 … 押す前に何語かを出す(見えない費用は管理できない)')
+
+  // ── 貼る SQL がそろっているか ──
+  ok(/create table if not exists public\.course_days/.test(read2('supabase/apply/pending_matome.sql')),
+    '30日講座 … まとめた1つに 0052 が入っている')
+  ok(/table_name = 'course_days'/.test(read2('supabase/apply/check.sql')),
+    '30日講座 … check.sql が 0052 を見ている')
+  ok(/delete from public\.course_days where learner_id = p_learner/
+    .test(read2('supabase/migrations/0052_basics_course.sql')),
+    '30日講座 … ゲストを消すときに、講座の記録も消す(表を足したら消す側にも足す)')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')

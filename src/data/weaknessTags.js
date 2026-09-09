@@ -115,6 +115,17 @@ export const weaknessTags = [
   { id: 'imperative',          category: 'grammar',    kind: 'weakness', label: '命令文・依頼',    hint: 'Do 〜 / Please 〜 / Could you 〜。頼み方の強さ' },
   { id: 'time-clause',         category: 'grammar',    kind: 'weakness', label: '時・条件の節',    hint: 'When / If の中では、未来のことも現在形で言う' },
 
+  /* ── 中学英語の土台(0052・2026-09)──────────────────
+     文法30日集中講座を作るときに、**この4つだけ行き先が無かった。**
+     どれも「まだないもので一般的なもの」(利用者の指定)そのもので、
+     しかも**つまずく人がいちばん多いところ**である。
+     **表(`weakness_tags`)にも 0052 で足してある。** 片方だけに足すと、
+     そのタグを付けた教材を発行した瞬間に外部キー違反で止まる */
+  { id: 'be-verb',             category: 'grammar',    kind: 'weakness', label: 'be動詞',          hint: 'am / is / are / was / were。一般動詞と2つ並べない' },
+  { id: 'verb-form',           category: 'grammar',    kind: 'weakness', label: '動詞の形',        hint: '原形・-s・-ing・過去形。どれを置くかで意味が変わる' },
+  { id: 'question',            category: 'grammar',    kind: 'weakness', label: '疑問文',          hint: 'Do / Does / Did、be動詞を前へ。答え方もそろえる' },
+  { id: 'third-person',        category: 'grammar',    kind: 'weakness', label: '三人称単数の -s', hint: 'he / she / it のときだけ動詞に -s。does のうしろは原形' },
+
   // ── 表現 ──────────────────────────────────
   { id: 'filler',              category: 'expression', kind: 'weakness', label: 'つなぎ言葉',      hint: 'Well, / Actually, / I mean — 間をつなぐ言い方' },
   { id: 'paraphrase',          category: 'expression', kind: 'weakness', label: '言い換え',        hint: '語が出てこないときに別の言い方で伝える' },
