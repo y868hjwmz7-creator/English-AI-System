@@ -283,10 +283,18 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
         </p>
       )}
 
-      {[['取り組む', todo], ['やったもの', done]].map(([label, list]) => (
+      {[
+        { id: 'todo', label: '取り組む', list: todo },
+        /* **「やったもの」の見出しは出さない**(2026-09 利用者の指定)。
+           **カードの1行目が、自分で名乗っている** ——
+           日付のとなりに「やった」の札があり、カード全体も薄くしてある
+           (`.homework-card.is-done`)。見出しは同じことを二度言っていた。
+           **並びは変えていない**(取り組むものが先、やったものがあと) */
+        { id: 'done', label: null, list: done },
+      ].map(({ id, label, list }) => (
         list.length > 0 && (
-          <section key={label} className="stack">
-            <h3 className="section-title">{label}({list.length})</h3>
+          <section key={id} className="stack">
+            {label && <h3 className="section-title">{label}({list.length})</h3>}
             {list.map((a) => (
               <div key={a.id}
                    className={`card material-card homework-card${
