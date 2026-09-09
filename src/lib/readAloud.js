@@ -50,8 +50,8 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  REPEAT_UNITS, charTimesOf, indexAtTime, rangeOf, repeatSeek, seekSentence,
-  sentenceSpansOf, spanForRange,
+  REPEAT_UNITS, alignEndOf, charTimesOf, clockScaleOf, indexAtTime, rangeOf,
+  repeatSeek, scaleSpans, seekSentence, sentenceSpansOf, spanForRange,
 } from './wholeAudio.js'
 import {
   sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
@@ -655,19 +655,38 @@ export function readAloudSequence(parts, {
     if (!alive()) return true                 // 待っているあいだに止められた
     if (!got?.spans?.length || got.spans.length !== list.length) return false
 
-    const { spans } = got
+    let spans = got.spans
     /* **どこから鳴らすか。** 控えの秒は「1本の中の秒」なので、
        その項目の中に収まっているときだけ使う(今までの形で覚えた秒が
        混ざっても、変なところから鳴らさない) */
     const s = spans[first]
     const at = (fromAt > s.start && fromAt < s.end) ? fromAt : s.start
 
-    let shown = -1
+    /* ── **番号は「かけら」ではなく「段落」で知らせる**(2026-09)────
+     *
+     *   `list` は**窓口に渡せる長さに分けたかけら**の並びである
+     *   (`speakChunks`)。分けた段落があると、かけらの番号は
+     *   段落の番号より**必ず大きくなり、しかも先へ行くほど開く。**
+     *
+     *   ここは `onIndex?.(i)` に**かけらの番号をそのまま**渡していた。
+     *   発言ごとに鳴らす道(`run()`)は `part.index` を渡しているのに、
+     *   **1本の道だけが食い違っていた。** 分けた段落が2つあれば
+     *   そこから先は**2つ先の段落**が光る(しかも音は鳴るので気づけない)。
+     *
+     *   **数え方を2通り持たない。** 内側はかけらの番号のまま扱い
+     *   (`spans` も `sent` もかけらの並びである)、
+     *   **外へ知らせるときだけ段落の番号に直す。** */
+    const itemOf = (i) => list[i]?.index ?? i
+    let shownPiece = -1
+    let shownItem = -1
     const seen = (i) => {
-      if (i < 0 || i === shown) return
-      shown = i
-      nowPlaying(resumeKey, i)
-      onIndex?.(i)
+      if (i < 0 || i === shownPiece) return
+      shownPiece = i
+      const idx = itemOf(i)
+      nowPlaying(resumeKey, idx)
+      if (idx === shownItem) return
+      shownItem = idx
+      onIndex?.(idx)
     }
     seen(first)
     /* **ここで `started()` を呼ばない**(2026-09 実機・こちらの入れ違い)。
@@ -685,11 +704,25 @@ export function readAloudSequence(parts, {
 
     /* **文の区間を控える**(1文ずつの ◁▷)。通しでは**本文ぜんぶ**を
        行き来できる(段落をまたいでも構わない) */
-    const sent = sentenceSpansFor(got, list.map((p) => p.text))
+    let sent = sentenceSpansFor(got, list.map((p) => p.text))
     holdCursor(sent, null)
     /* **いま読んでいる文を光らせる**(2026-09 実機・利用者の指摘)。
        通しでは、**いま光っている段落の文だけ**を送る */
     const seenSent = { at: -1 }
+    /** 時計を突き合わせるのは、鳴り出したあとの1回だけ */
+    let clockDone = false
+    /* 文の位置も**かけらの中の何文字目**なので、段落の頭からに直して送る
+       (発言ごとに鳴らす道の `relay` とまったく同じ直し方)。
+       足さないと、分けた段落で**段落の先頭に戻って光る** */
+    const relayWhole = onWord
+      ? (w) => {
+        if (!w) { onWord(null); return }
+        const p = list[w.index]
+        onWord(p
+          ? { ...w, charIndex: (w.charIndex ?? 0) + (p.at ?? 0), index: p.index }
+          : w)
+      }
+      : null
     const played = await playClip({
       srcUrl: got.url,
       // 1本には声が2人ぶん入っている。**声ごとの速さの補正は当てない**
@@ -698,8 +731,29 @@ export function readAloudSequence(parts, {
       rate,
       startAt: at,
       onStart: started,
-      onTime: (sec) => {
+      onTime: (sec, dur) => {
         if (!alive()) return
+        /* ── **時計を音声に合わせる**(2026-09 実機・利用者の指摘)────
+         *
+         *   > 14発言の会話で大体2-3発言分くらい
+         *   > ハイライトが発言より先に進んでしまいます。
+         *
+         *   長さが分かるのは鳴り出したあとなので、**1回目のここで**
+         *   突き合わせる。そろっていれば `clockScaleOf()` が 1 を返し、
+         *   **区間は同じ配列のまま**である(1ミリ秒も動かない)。 */
+        if (!clockDone) {
+          clockDone = true
+          const k = clockScaleOf(alignEndOf(got.alignment), dur)
+          if (k !== 1) {
+            spans = scaleSpans(spans, k)
+            sent = scaleSpans(sent, k)
+            holdCursor(sent, null)
+            /* 続きから始めたときは、飛んだ先も控えの時計のままだった。
+               **鳴り出した直後の1回だけ**、合わせ直す */
+            const want = at * k
+            if (Math.abs(want - sec) > 0.15 && seekClip(want)) return
+          }
+        }
         /* ── **くり返し**(2026-09 利用者の指定)──────────────────
            > 文章単位、段落単位、全文単位、三つ選べるような。
 
@@ -709,14 +763,18 @@ export function readAloudSequence(parts, {
            そのまま数えると**一瞬だけ次の段落が光る** */
         /* **「段落」は、集中モードが出しているかけたぶんに狭める。**
            狭められないときは、これまでどおり段落まるごと */
-        const only = shown >= 0
-          ? partSpan(shown, sent.filter((s) => s.item === shown)) : null
+        const only = shownPiece >= 0
+          ? partSpan(
+            itemOf(shownPiece),
+            (sent ?? []).filter((x) => x.item === shownPiece),
+            list[shownPiece]?.at ?? 0,
+          ) : null
         const back = repeatSeek(repeatNow(), sec, {
           spans: only ?? spans, sentences: sent,
         })
         if (back !== null && seekClip(back)) return
         seen(indexAtTime(spans, sec))
-        tellSentence(sent, sec, () => shown, seenSent, onWord)
+        tellSentence(sent, sec, () => shownPiece, seenSent, relayWhole)
       },
     })
     if (!alive()) return true

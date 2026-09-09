@@ -292,6 +292,99 @@ export function charTimesOf(alignment, text) {
   return { start, end }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ * **控えた時刻の時計と、鳴らしている音声の時計を合わせる**
+ * (2026-09 実機・利用者の指摘)
+ *
+ *   > 相変わらず音声と文章ごとのハイライトが大きくズレます。
+ *   > 14発言の会話で大体2-3発言分くらいハイライトが発言より
+ *   > 先に進んでしまいます。これは恐らく感情を込めて間をとった時などに
+ *   > ハイライトが先に進むからのように見受けられます。
+ *
+ * 【まず測った。当てはめは犯人ではない】
+ *   14発言の会話を作り、①そのまま ②1か所だけ読み下し ③余分な文字
+ *   ④短縮形の展開 で `spansOf()` を通したところ、**どれも誤差 0.00 秒**
+ *   だった(数字を全部読み下したときだけ `null` を返して、これまでどおり
+ *   発言ごとの音声に落ちる)。**文字の当てはめでは、先へは進まない。**
+ *
+ * 【残るのは「時計そのもの」しかない】
+ *   ずれが**発言を追うごとに積み上がる**なら、原因は当てはめではなく
+ *   **控えた時刻の時計が、鳴っている音声より速い**ことである。
+ *   ElevenLabs の Text to Dialogue は、発言と発言のあいだに
+ *   **間(無音)を入れて1本にする。** その無音が `alignment` の秒に
+ *   入っていなければ、
+ *
+ *       控えの秒 … 話している時間だけを足したもの
+ *       音声の秒 … 話している時間 + 間
+ *
+ *   となり、**間を1つ通るたびに、ハイライトがそのぶん先に出る。**
+ *   13 の継ぎ目で 0.7 秒ずつなら **9 秒 = 2〜3発言ぶん**で、
+ *   利用者の言う数と合う。
+ *
+ * 【こちらからは、どちらが原因かを確かめられない】
+ *   この環境から ElevenLabs にも Supabase にも届かないので、
+ *   **本物の `alignment` を見ることができない。**
+ *   だから**原因を決め打ちしない直し方**にする ——
+ *   控えの終わりの秒と、**実際の音声の長さ**を突き合わせ、
+ *   食い違っていたらその比で伸ばす。
+ *
+ *   ・時計が丸ごと速い(比の違い)     → そのまま直る
+ *   ・間が抜けている(継ぎ目に溜まる) → ほぼ直る(`test:mp3` ⑩ の実測)
+ *   ・**そろっていれば、1ミリ秒も動かさない**
+ *
+ * 【安全弁を必ず付ける】(CLAUDE.md「落とす仕組みには安全弁」)
+ *   ・2% 以内なら**そろっているとみなす**(触らない)
+ *   ・大きく外れていたら、当てはめそのものが崩れている。**触らない**
+ *     (当てずっぽうで伸ばすと、合っていたものまで壊れる)
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** これ以内なら「そろっている」。1ミリ秒も動かさない */
+const CLOCK_SAME = 0.02
+/** ここを外れたら、そもそも別物である。**伸ばさない** */
+const CLOCK_MIN = 0.6
+const CLOCK_MAX = 1.8
+
+/**
+ * 控えた時刻の**終わりの秒**(最後に時刻の付いた文字が鳴り終わる秒)。
+ * 取れなければ `null`。
+ */
+export function alignEndOf(alignment) {
+  const got = partsOf(alignment)
+  if (!got) return null
+  for (let i = got.to.length - 1; i >= 0; i -= 1) {
+    const v = Number(got.to[i])
+    if (Number.isFinite(v) && v > 0) return v
+  }
+  return null
+}
+
+/**
+ * **控えの秒 → 音声の秒**に直すための倍率。
+ *
+ * @param {number} alignEnd 控えの終わりの秒(`alignEndOf`)
+ * @param {number} duration 実際の音声の長さ(`el.duration`)
+ * @returns {number} 倍率。**分からない・そろっている・外れすぎ は 1**
+ */
+export function clockScaleOf(alignEnd, duration) {
+  const a = Number(alignEnd)
+  const d = Number(duration)
+  if (!Number.isFinite(a) || !Number.isFinite(d) || a <= 0 || d <= 0) return 1
+  const r = d / a
+  if (Math.abs(r - 1) <= CLOCK_SAME) return 1
+  if (r < CLOCK_MIN || r > CLOCK_MAX) return 1
+  return r
+}
+
+/**
+ * 区間を、その倍率で伸ばす。**`item` も `charIndex` もそのまま持ち越す。**
+ * 倍率が 1 なら、**同じ配列をそのまま返す**(触らない)。
+ */
+export function scaleSpans(spans, scale) {
+  const k = Number(scale)
+  if (!Array.isArray(spans) || !Number.isFinite(k) || k === 1) return spans
+  return spans.map((s) => ({ ...s, start: s.start * k, end: s.end * k }))
+}
+
 /**
  * いま何番目を鳴らしているか(秒 → 番号)。
  *

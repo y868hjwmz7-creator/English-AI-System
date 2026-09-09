@@ -25,8 +25,8 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  charTimesOf, indexAtTime, rangeOf, repeatSeek, seekSentence, sentenceSpansOf,
-  spansOf, wholeMark,
+  alignEndOf, charTimesOf, clockScaleOf, indexAtTime, rangeOf, repeatSeek,
+  scaleSpans, seekSentence, sentenceSpansOf, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
@@ -1018,7 +1018,7 @@ function fakeMp3({
     const skip = readFileSync(new URL('../src/components/SentenceSkip.jsx', import.meta.url), 'utf8')
     const want = [
       ['区間を控える', read, /const sent = sentenceSpansFor\(got, whole\.texts\)/],
-      ['通しでも控える', read, /const sent = sentenceSpansFor\(got, list\.map/],
+      ['通しでも控える', read, /let sent = sentenceSpansFor\(got, list\.map/],
       ['止めたら捨てる', read, /stopReading\(\) \{\s+setCursor\(null\)/],
       ['動かす道がある', read, /export function skipSentence\(/],
       ['鳴らしたまま場所だけ移す', clips, /export function seekClip\(/],
@@ -1129,7 +1129,7 @@ function fakeMp3({
         ['持ちものが読み上げへ渡す', hook, /^\s+partRangeOf,$/m],
         ['読み上げが受け取る', read, /partRangeOf = null,/],
         ['狭める算段は1か所', read, /const span = spanForRange\(sents, r, base\)/],
-        ['1本のときも狭める', read, /const only = shown >= 0/],
+        ['1本のときも狭める', read, /const only = shownPiece >= 0/],
         ['発言ごとのときも狭める', read, /const only = partSpan\(part\.index, sentSecs, part\.at\)/],
         ['鳴らし直すのは、かけらの頭から', read, /replayAt = unit === 'item' \? backTo : 0/],
         ['全文は頭から回す', read, /if \(repeatNow\(\) !== 'all' \|\| !heard\) break/],
@@ -1783,6 +1783,148 @@ function fakeMp3({
     }
     if (bad === before) ok('読み替えられても、時刻を正しく当てはめる')
   }
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑩ **控えた時刻の時計を、鳴らしている音声に合わせる**(2026-09 実機)
+ *
+ *   > 14発言の会話で大体2-3発言分くらいハイライトが発言より
+ *   > 先に進んでしまいます。
+ *
+ * 【なぜ「文字の当てはめ」ではないと言えるか】
+ *   14発言の会話で、読み下し・余分な文字・短縮形の展開を通しても
+ *   `spansOf()` の誤差は 0.00 秒だった(合わないときは `null` を返して
+ *   発言ごとの音声に落ちる)。**当てはめでは、先へは進まない。**
+ *
+ * 【残るのは、時計そのもの】
+ *   Text to Dialogue は発言と発言のあいだに**間(無音)**を入れて
+ *   1本にする。その無音が控えの秒に入っていなければ、
+ *   **継ぎ目を通るたびにハイライトがそのぶん先に出て、積み上がる。**
+ *
+ *   ここでは**その形をそのまま作って**、直す前と直したあとの
+ *   「何発言ぶん先に出るか」を数える。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+
+  // ── ㋐ 道具そのもの ─────────────────────────────────────────
+  const mk = (ends) => ({
+    characters: ends.map(() => 'a'),
+    character_start_times_seconds: ends.map((e, i) => (i ? ends[i - 1] : 0)),
+    character_end_times_seconds: ends,
+  })
+  if (alignEndOf(mk([0.1, 0.2, 1.5])) !== 1.5) ng('控えの終わりの秒が取れない')
+  if (alignEndOf(null) !== null) ng('控えが無いのに秒を返している')
+
+  if (clockScaleOf(10, 10.1) !== 1) {
+    ng('**そろっているのに伸ばしている**', '2% 以内は1ミリ秒も動かさない')
+  }
+  if (clockScaleOf(41, 50) <= 1.2) ng('食い違っているのに伸ばしていない')
+  if (clockScaleOf(10, 100) !== 1) ng('外れすぎているのに伸ばしている')
+  if (clockScaleOf(0, 50) !== 1 || clockScaleOf(10, 0) !== 1) {
+    ng('長さが分からないのに伸ばしている')
+  }
+  const same = [{ start: 1, end: 2, item: 0, charIndex: 5 }]
+  if (scaleSpans(same, 1) !== same) ng('倍率 1 なのに、区間を作り直している')
+  const bigger = scaleSpans(same, 2)
+  if (bigger[0].start !== 2 || bigger[0].item !== 0 || bigger[0].charIndex !== 5) {
+    ng('伸ばしたときに `item` / `charIndex` が落ちている')
+  }
+
+  // ── ㋑ 14発言の会話で、何発言ぶん先に出るか ────────────────────
+  {
+    const TURNS = [
+      'Hey, thanks for making time today.',
+      "Of course. What's on your mind?",
+      'I wanted to walk you through the schedule.',
+      "Sure. Let's start there.",
+      "We'd begin on the twelfth.",
+      'That is tight. Can we push it a week?',
+      'We can, but it adds to the cost.',
+      "Understood. What's the total then?",
+      'Around four thousand dollars.',
+      'Right. And that covers everything?',
+      'Everything except travel.',
+      'Okay. Let me take this to my manager.',
+      "Of course. I'll send a summary.",
+      'Perfect. Thanks again for your time.',
+    ]
+    const CPS = 0.055
+    const GAP = 0.7                       // 継ぎ目の間(控えには入っていない)
+    const chars = []
+    const from = []
+    const to = []
+    let t = 0
+    const alignStart = []
+    TURNS.forEach((turn) => {
+      alignStart.push(t)
+      for (const c of turn) { chars.push(c); from.push(t); to.push(t + CPS); t += CPS }
+    })
+    const alignment = {
+      characters: chars,
+      character_start_times_seconds: from,
+      character_end_times_seconds: to,
+    }
+    const alignEnd = t
+    const duration = alignEnd + GAP * (TURNS.length - 1)
+    // 本当の(音声の中の)発言の頭
+    const trueStart = alignStart.map((a, i) => a + GAP * i)
+    const trueAt = (sec) => {
+      let n = 0
+      for (let i = trueStart.length - 1; i >= 0; i -= 1) {
+        if (sec >= trueStart[i]) { n = i; break }
+      }
+      return n
+    }
+    const spans = spansOf(alignment, TURNS)
+    if (!spans || spans.length !== TURNS.length) {
+      ng('14発言の区切りが出せない')
+    } else {
+      const worst = (sp) => {
+        let w = 0
+        for (let sec = 0; sec < duration; sec += 0.1) {
+          const d = indexAtTime(sp, sec) - trueAt(sec)
+          if (d > w) w = d
+        }
+        return w
+      }
+      const wasAhead = worst(spans)
+      const nowAhead = worst(scaleSpans(spans, clockScaleOf(alignEnd, duration)))
+      if (wasAhead < 2) {
+        ng('この作りでは、そもそも先に進んでいない', `直す前 ${wasAhead} 発言ぶん`)
+      }
+      if (nowAhead > 1) {
+        ng('時計を合わせても、まだ先に進む', `直す前 ${wasAhead} / いま ${nowAhead}`)
+      } else {
+        ok(`14発言 … 先に進む量 ${wasAhead} 発言ぶん → ${nowAhead} 発言ぶん`)
+      }
+    }
+  }
+
+  // ── ㋒ 画面が本当に呼んでいるか。**「名前が出てくるか」で見ない** ──
+  {
+    const src = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    if (!/clockScaleOf\(alignEndOf\(got\.alignment\), dur\)/.test(src)) {
+      ng('1本の道が、時計を突き合わせていない')
+    }
+    if (!/spans = scaleSpans\(spans, k\)/.test(src) || !/sent = scaleSpans\(sent, k\)/.test(src)) {
+      ng('区間を伸ばしていない(片方だけになっている)')
+    }
+    /* **番号は段落で知らせる**(かけらの番号をそのまま渡さない)。
+       分けた段落があると、かけらの番号は先へ行くほど開く */
+    if (!/const itemOf = \(i\) => list\[i\]\?\.index \?\? i/.test(src)) {
+      ng('1本の道が、かけらの番号を段落の番号に直していない')
+    }
+    if (/nowPlaying\(resumeKey, i\)\s*\n\s*onIndex\?\.\(i\)/.test(src)) {
+      ng('**かけらの番号をそのまま知らせている**', '分けた段落で必ず先に進む')
+    }
+    if (!/charIndex: \(w\.charIndex \?\? 0\) \+ \(p\.at \?\? 0\), index: p\.index/.test(src)) {
+      ng('1本の道が、文の位置を段落の頭からに直していない')
+    }
+  }
+
+  if (bad === before) ok('時計を音声に合わせ、番号は段落で知らせる')
+}
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
