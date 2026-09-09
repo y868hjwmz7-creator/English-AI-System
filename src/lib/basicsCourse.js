@@ -13,11 +13,11 @@ import { BASIC_WORDS } from '../data/basicWords.js'
 /**
  * その日・その段の語。
  *
- * **厳選360 は「1200 の一部」である。** 別の一覧を持たない ——
+ * **基本360語 は「1200 の一部」である。** 別の一覧を持たない ——
  * 2つ持つと、片方だけ直したときに食い違う。
  *
  * @param no   何日目か(1〜30)
- * @param tier 'core'(厳選360)/ 'full'(中学英語1200)
+ * @param tier 'core'(基本360語)/ 'full'(標準1200語)
  */
 export function wordsForDay(no, tier = 'core') {
   const day = Number(no)
@@ -30,6 +30,46 @@ export function wordsForDay(no, tier = 'core') {
 export const wordsForTier = (tier = 'core') => (
   tierOf(tier).id === 'core' ? BASIC_WORDS.filter((w) => w.core) : BASIC_WORDS.slice()
 )
+
+/**
+ * その段の英単語だけを並べる(0053 の `add_basic_words()` へ渡す形)。
+ * **画面で `map` を書き写さない** —— 渡す形は1か所で決める。
+ */
+export const wordListFor = (tier = 'core') => wordsForTier(tier).map((w) => w.w)
+
+/**
+ * 基礎単語の訳。**窓口(AI)を1回も呼ばない = 0円。**
+ *
+ * ============================================================================
+ * 【なぜ要るか】(2026-09 利用者の指定)
+ *
+ *   > 講座の中の単語はそれぞれ基本360語、標準1200語、として
+ *   > そもそもが独立して選べる単語帳にしてください
+ *
+ *   段まるごと(360〜1,200語)を単語帳へ入れると、**そのどれにも
+ *   意味の控え(`word_glosses`)が無い。** そのままでは単語帳に
+ *   「(意味の控えがありません)」が並び、4択も作れない
+ *   (まちがいの選択肢は意味から作るため)。
+ *
+ *   **その訳は `basicWords.js` にもう書いてある。**
+ *   控えが無いときだけ、そちらを出す ——
+ *   `review_words()`(0047)が教材の `prompt_ja` を出すのと
+ *   **まったく同じ考え方**である。
+ *
+ * 【そろえ方(`normWord`)は、ここでは掛けない】
+ *
+ *   あれは `src/lib/vocab.js` にあり、Supabase を引き連れている。
+ *   **そろえ方を4か所目に書き写さない**(SQL / 窓口 / 画面の3か所で
+ *   そろえるのに苦労した・`materialWords.js` と同じ判断)。
+ *   `basicWords.js` の `w` は**もともとそろえた形**である
+ *   (`/^[a-z'-]+$/` を `npm run test:play` が見張っている)ので、
+ *   そろえた語をそのまま鍵として引ける。
+ *
+ * @param norm そろえた語(`normWord()` を通したもの)
+ * @returns 訳。**知らない語は空**(当てずっぽうで返さない)
+ */
+const BASIC_JA = new Map(BASIC_WORDS.map((w) => [w.w, w.ja]))
+export const basicJaOf = (norm) => BASIC_JA.get(String(norm ?? '')) ?? ''
 
 /**
  * 30日ぶんの一覧に、**終えたかどうか**を添える。

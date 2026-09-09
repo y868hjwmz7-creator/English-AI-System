@@ -3123,7 +3123,7 @@ export default defineConfig({
     const 名 = `30日講座(${w}px)`
     if (got.日数 !== 30) {
       ng(`${名} … 30日そろっていない`, String(got.日数))
-    } else if (got.段.length !== 2 || !got.段[0].includes('厳選360')) {
+    } else if (got.段.length !== 2 || !got.段[0].includes('基本360語')) {
       ng(`${名} … 段が2つ出ていない`, got.段.join(' / '))
     } else if (!got.帯) {
       ng(`${名} … 進み具合の帯が無い`)
@@ -3132,7 +3132,7 @@ export default defineConfig({
     } else if (got.例文 < 3 || !got.訳) {
       ng(`${名} … 例文か、その訳が出ていない`, `${got.例文} 文 / 訳 ${got.訳}`)
     } else if (got.語 !== 12) {
-      // Pre-Basic で開くので「厳選360」= 1日 12 語
+      // Pre-Basic で開くので「基本360語」= 1日 12 語
       ng(`${名} … その日の語が 12 語ではない`, String(got.語))
     } else if (got.ボタン低さ < 34) {
       ng(`${名} … 中のボタンが、押せる大きさ(34px)を割っている`, String(got.ボタン低さ))
@@ -3155,6 +3155,88 @@ export default defineConfig({
       ng('30日講座 … ゲスト専用になっていない')
     } else {
       ok('30日講座 … ゲストのメニューから開ける')
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     基礎単語(0053・2026-09 利用者の指定)
+
+       > 講座の中の単語はそれぞれ基本360語、標準1200語、として
+       > そもそもが独立して選べる単語帳にしてください
+
+     **描かないと分からないこと**を測る ——
+     ①畳んだときに欄が1つも出ていないか(単語帳の頭が長くならない)
+     ②開くと段が2つ出て、**それぞれの語数**が読めるか
+     ③**何が起きるかが押す前に書いてあるか**(お金の話も)
+     ④押せる大きさを割っていないか ⑤横にはみ出していないか
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md) ——
+     ①だけだと欄ごと消しても緑、②だけだと出しっぱなしでも緑になる。
+     ══════════════════════════════════════════════════════════════════ */
+  for (const w of [1280, 390, 320]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=basicpick`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(250)
+    // ① 畳んでいるあいだは、中身が1つも出ていない
+    const 畳 = await page.evaluate(() => ({
+      札: document.querySelectorAll('.basicpick .chip').length,
+      入口: document.querySelector('.basicpick .wb-add-open')?.textContent.trim() ?? '',
+    }))
+    await page.click('.basicpick .wb-add-open')
+    await page.waitForTimeout(200)
+    const got = await page.evaluate(() => {
+      const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
+      const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
+      const chips = [...document.querySelectorAll('.basicpick .chip')]
+      const btn = document.querySelector('.basicpick .btn--primary')
+      return {
+        札: chips.map((c) => c.textContent.trim()),
+        札の高さ: Math.min(...chips.map(px)),
+        すすめ: document.querySelector('.basicpick-lead')?.textContent.trim() ?? '',
+        走る: btn?.textContent.trim() ?? '',
+        走る高さ: px(btn),
+        よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        右: Math.max(0, ...chips.map(right), ...(btn ? [right(btn)] : [])),
+      }
+    })
+    await page.close()
+    const 名 = `基礎単語(${w}px)`
+    if (畳.札 !== 0) {
+      ng(`${名} … 畳んでいるのに、段の札が出ている`, String(畳.札))
+    } else if (!畳.入口.includes('基本360語') || !畳.入口.includes('標準1200語')) {
+      ng(`${名} … 畳んだ入口に、2つの段の名前が出ていない`, 畳.入口)
+    } else if (got.札.length !== 2
+      || !got.札[0].includes('基本360語') || !got.札[1].includes('標準1200語')) {
+      ng(`${名} … 段が2つ出ていない`, got.札.join(' / '))
+    } else if (!got.札[0].includes('360 語') || !got.札[1].includes('1200 語')) {
+      // **語数が読めないと、どちらを選ぶか決められない**
+      ng(`${名} … 札に語数が出ていない`, got.札.join(' / '))
+    } else if (!got.すすめ.includes('お金はかかりません')
+      || !got.すすめ.includes('1つも戻りません')) {
+      ng(`${名} … 何が起きるかが、押す前に書かれていない`, got.すすめ)
+    } else if (!got.走る.includes('基本360語')) {
+      ng(`${名} … 走らせるボタンが、選んだ段の名前を言っていない`, got.走る)
+    } else if (got.札の高さ < 34 || got.走る高さ < 40) {
+      ng(`${名} … 押せる大きさを割っている`, `札 ${got.札の高さ} / ボタン ${got.走る高さ}`)
+    } else if (got.よこ > 0 || got.右 > w) {
+      ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+    } else {
+      ok(`${名} … 畳めて、開けば段も語数も出て、はみ出しも無い`)
+    }
+  }
+
+  /* **画面が本当に置いているか。** 検証の入り口(`__screens.jsx`)だけ
+     直しても、利用者の単語帳には出ない */
+  {
+    const src = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<BasicWordsPick\s/.test(src)) {
+      ng('基礎単語 … 単語帳の画面に置かれていない')
+    } else if (!/onPicked=\{onPickWords\}/.test(src)) {
+      ng('基礎単語 … 絞り込みを外(App)に渡していない')
+    } else {
+      ok('基礎単語 … 単語帳から、その段だけを練習できる')
     }
   }
 }

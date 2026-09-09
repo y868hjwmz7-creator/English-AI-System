@@ -63,6 +63,8 @@ import { usePracticeLog } from '../lib/practice.js'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
+import BasicWordsPick from './BasicWordsPick.jsx'
+import { basicJaOf } from '../lib/basicsCourse.js'
 import { CloseIcon, FocusIcon, MusicIcon } from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 
@@ -214,6 +216,24 @@ export default function Wordbook({
    * **絞っていることは必ず画面に出し、外す道もその場に置く**(行き止まりを作らない)。
    */
   only = null, onlyLabel = '', onClearOnly = null,
+  /**
+   * **何で絞っているのか**(2026-09)。既定は教材である。
+   * 基礎単語(基本360語 / 標準1200語)から絞ったときは
+   * 「この教材の語だけ」と出すと**嘘になる**ので、呼ぶ側が言葉を渡す。
+   */
+  onlyWhat = 'この教材の語',
+  /**
+   * **基礎単語の段だけを練習する**(0053・2026-09 利用者の指定)。
+   *
+   *   > 講座の中の単語はそれぞれ基本360語、標準1200語、として
+   *   > そもそもが独立して選べる単語帳にしてください
+   *
+   * 絞り込みそのものは **`App.jsx` が1つだけ持っている**(`onlyWords`)。
+   * ここで別の絞り込みを持つと、**同じことをする道が2つ**になる。
+   * だから「この語だけにしてください」と外へ知らせるだけにする
+   * (「今週の宿題」の `onPracticeWords` とまったく同じ形)。
+   */
+  onPickWords = null,
 }) {
   /* **画面は1つだけ。** 以前はトレーナー用に別の部品を持っていたが、
      2つあると必ず片方が古くなる。実際、見た目をそろえたつもりで
@@ -399,9 +419,24 @@ export default function Wordbook({
        出題(`buildSession`)も4択のまちがいも札の数え上げも、
        **下流はいっさい触らずに**その教材の語だけになる。
        画面のあちこちで `rows` を絞り直すと、必ずどこかが食い違う */
-    const got = onlySet
+    /* **意味の控えが無い基礎単語には、ファイルの訳を出す**(0053)。
+       段まるごと(360〜1,200語)を入れると、そのどれにも
+       `word_glosses` の控えが無い。そのままでは
+       「(意味の控えがありません)」が並び、**4択も作れない**
+       (まちがいの選択肢は意味から作るため)。
+
+       **窓口(AI)は1回も呼ばない = 0円。** 訳は `basicWords.js` に
+       もう書いてある。`review_words()`(0047)が教材の `prompt_ja` を
+       出すのと**まったく同じ考え方**である。
+
+       **当てるのはここ1か所。** 下流(出題・4択・一覧・聞き流し)は
+       いっさい触らない。控えがある語は**1文字も書き換えない** */
+    const filtered = onlySet
       ? (list.data ?? []).filter((r) => onlySet.has(r.word_norm))
       : (list.data ?? [])
+    const got = filtered.map((r) => (
+      r.meaning_ja ? r : { ...r, meaning_ja: basicJaOf(r.word_norm) }
+    ))
     setRows(got)
     rowsRef.current = got
     setQueue([])
@@ -465,7 +500,9 @@ export default function Wordbook({
   const onlyNote = onlySet ? (
     <p className="wb-only">
       <span className="wb-only-label">
-        この教材の語だけ
+        {/* **何で絞っているのかは、呼ぶ側が言う**(0053)。
+            基礎単語で絞ったときに「この教材の語だけ」と出すと嘘になる */}
+        {onlyWhat}だけ
         <span className="wb-only-n">{rows.length} 語</span>
       </span>
       {/* **教材の名前は、札の外に置く。** AI が付ける名前は長いことがあり、
@@ -914,6 +951,20 @@ export default function Wordbook({
           畳んであるのは、ふだん開く画面ではないため。
           入れたら数え直す(`reload`)ので、札の数もすぐ合う */}
       <WordbookAdd learnerId={learnerId} learnerName={learnerName} onAdded={reload} />
+
+      {/* **基礎単語**(0053・2026-09 利用者の指定)。
+
+            > 講座の中の単語はそれぞれ基本360語、標準1200語、として
+            > そもそもが独立して選べる単語帳にしてください
+
+          30日講座の中にしか無かった語を、**単語帳の側から**入れて
+          その段だけを練習できるようにする。手で入れる欄のとなりに置く ——
+          どちらも「単語帳に語を入れる」道で、**ふだん開く欄ではない**ので
+          畳んである。**絞り込みは `App.jsx` の1つを使う**(`onPickWords`) */}
+      {onPickWords && (
+        <BasicWordsPick learnerId={learnerId} learnerName={learnerName}
+                        onPicked={onPickWords} />
+      )}
 
       {error && <p className="notice notice--error">{error}</p>}
       {loading && <p className="hint">読み込み中…</p>}

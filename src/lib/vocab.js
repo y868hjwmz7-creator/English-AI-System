@@ -711,6 +711,61 @@ let noLearning = false
 export const learningSupported = () => !noLearning
 
 /**
+ * **0053 を貼る前の Supabase には `add_basic_words()` が無い。**
+ * 一度断られたら覚えておき、そのあとは呼びに行かない
+ * (`courseSupported()` / `learningSupported()` と同じ作法)。
+ */
+let noBasicWords = false
+
+/** 基礎単語をまとめて入れられるか。**画面がボタンを出すかどうかの判断** */
+export const basicWordsSupported = () => !noBasicWords
+
+/**
+ * 基礎単語(基本360語 / 標準1200語)を、まとめて単語帳に入れる(0053)。
+ *
+ * ============================================================================
+ * 【1語ずつ `setWordStatus()` を呼ばない】
+ *
+ *   1,200 語なら 1,200 往復になる。しかも `mark_word()` は
+ *   **答えた記録**(`vocab_days`)まで増やす —— **まだ誰も答えていない。**
+ *   だから 0053 の `add_basic_words()`(入れるだけの関数)を1回呼ぶ。
+ *   `add_material_words()`(0047)と**まったく同じ考え方**である。
+ *
+ * 【意味は引かない = 0円】
+ *
+ *   訳は `src/data/basicWords.js` に書いてあり、画面が出す
+ *   (`basicJaOf()`)。**窓口(AI)を1回も呼ばない。**
+ *
+ * 【すでに入っている語には触らない】
+ *
+ *   SQL 側が `on conflict do nothing`。**箱も、次に出す日も戻らない。**
+ *
+ * @param words     英単語の一覧(`wordListFor()` が作る)
+ * @param learnerId 誰の単語帳か(省くと自分)
+ * @returns {number} **新しく入った語数**(すでにあったぶんは数えない)
+ */
+export async function addBasicWords(words, learnerId = null) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (!noBasicWords) {
+    const { data, error } = await supabase.rpc('add_basic_words', {
+      p_words: (words ?? []).map((w) => String(w ?? '')).filter(Boolean),
+      p_learner: learnerId,
+    })
+    if (!error) return ok(Number(data ?? 0))
+    // **その関数がまだ無い**のか、本当に断られたのかを見分ける
+    if (!/add_basic_words|does not exist|schema cache/i
+      .test(`${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`)) {
+      return fail(error, '基礎単語を単語帳に入れられませんでした')
+    }
+    noBasicWords = true
+  }
+  return ng('基礎単語をまとめて入れる仕組み(0053)が、まだ Supabase にありません。'
+    + ' GitHub のリポジトリにあるファイル(supabase/apply/pending_matome.sql)を、'
+    + 'Supabase の 左メニュー「SQL Editor」で実行してください'
+    + '(教材・宿題・単語帳の中身には触れない SQL です)。')
+}
+
+/**
  * 単語帳の**一覧**に「覚えた」を出してよい、続けて思い出せた回数(0039)。
  *
  * 2026-09 利用者の指定。

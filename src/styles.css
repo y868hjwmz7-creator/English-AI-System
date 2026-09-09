@@ -5283,6 +5283,30 @@ button.wbfilter-ctl { text-align: left; }
 .wb-add-note { margin: 10px 0 0; }
 .wb-add-body > .field-hint { display: block; margin-top: 10px; line-height: 1.7; }
 
+/* ── 基礎単語(0053・2026-09 利用者の指定)────────────────────────
+     > 講座の中の単語はそれぞれ基本360語、標準1200語、として
+     > そもそもが独立して選べる単語帳にしてください
+
+   **入れ物は `.wb-add` をそのまま使う。** 手で入れる欄のとなりに並ぶ
+   同じ役目(単語帳に語を入れる)なので、**新しい配色を作らない。**
+   足すのは、段の札の下に置く2行の字づかいだけである */
+.basicpick .chiprow { margin-bottom: 10px; }
+/* **段の札は、この欄でいちばん先に押すもの**なので、指で狙える大きさにする。
+   `.rscope-chip`(復習の範囲)とまったく同じ 36px ——
+   **新しい数字を作らない** */
+.basicpick .chip { min-height: 36px; }
+.basicpick-hint, .basicpick-lead {
+  margin: 0 0 10px; font-size: var(--fs-13); line-height: 1.8;
+  color: var(--text-secondary);
+}
+/* **何が起きるかを書く行**は、本文と同じ濃さにする。
+   ここを薄いままにすると、いちばん読んでほしい1行がいちばん薄くなる */
+.basicpick-lead { color: var(--text-primary); }
+.basicpick-lead > strong { font-weight: 600; }
+/* **お金がかからないことは、はっきり見せる。** 色だけに頼らない
+   (言葉そのものが「お金はかかりません」と言っている) */
+.basicpick-free { margin-left: 4px; color: var(--ok); font-weight: 600; }
+
 /* **`.wb-tabrow` / `.wb-viewpick` は消した**(2026-09)。
    「見るものの切り替え」のプルダウンは、押せる札に吸収した。
    `.tabpick`(ゲストのカードの切り替え)は同じ見た目のまま残る */

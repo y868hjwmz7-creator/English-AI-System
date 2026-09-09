@@ -123,7 +123,7 @@ export default function BasicsCourse({ me = null }) {
   return (
     <section className="stack">
       {/* ── どちらの段か ────────────────────────────────
-          **厳選360 は 1200 の一部。** 別の一覧を持たない */}
+          **基本360語 は 1200 の一部。** 別の一覧を持たない */}
       <div className="card course-head">
         <div className="chiprow" role="group" aria-label="コースの段">
           {COURSE_TIERS.map((t) => (

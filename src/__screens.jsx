@@ -43,6 +43,7 @@ import { QR_GROUPS, groupLead, qrTally } from './lib/reviewScope.js'
 import FocusFrame from './components/FocusFrame.jsx'
 import GrammarNote from './components/GrammarNote.jsx'
 import BasicsCourse from './components/BasicsCourse.jsx'
+import BasicWordsPick from './components/BasicWordsPick.jsx'
 import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
 import CastChip from './components/CastChip.jsx'
@@ -767,8 +768,26 @@ const GNOTE = (
    (`loadCourseDays` は `supabase` が無ければ空を返す)。 */
 const COURSE = <BasicsCourse me={{ id: null, level: 'Pre-Basic' }} />
 
+/* 基礎単語(`?screen=basicpick`・0053・2026-09 利用者の指定)。
+
+     > 講座の中の単語はそれぞれ基本360語、標準1200語、として
+     > そもそもが独立して選べる単語帳にしてください
+
+   **本物の部品を描いて測る。** 押せる大きさ・はみ出し・
+   「何が起きるかを押す前に書いてあるか」は、ソースを読んでも分からない。
+
+   押しても `addBasicWords()` は Supabase が無いので何も起きない
+   (**外へは1度も出ない**)。ここで見るのは、開いたときの姿である。 */
+const BASICPICK = (
+  <section className="card">
+    <BasicWordsPick onPicked={() => {}} />
+  </section>
+)
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'course'
+  q.get('screen') === 'basicpick'
+    ? BASICPICK
+    : q.get('screen') === 'course'
     ? COURSE
     : q.get('screen') === 'gnote'
     ? GNOTE

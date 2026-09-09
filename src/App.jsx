@@ -735,7 +735,7 @@ export default function App() {
               <LearnerHomework
                 me={profile}
                 onPracticeWords={(words, label) => {
-                  setOnlyWords({ words, label })
+                  setOnlyWords({ words, label, what: 'この教材の語' })
                   setView('wordbook')
                 }}
               />
@@ -744,7 +744,15 @@ export default function App() {
             ) : view === 'wordbook' ? (
               <Wordbook only={onlyWords?.words ?? null}
                         onlyLabel={onlyWords?.label ?? ''}
-                        onClearOnly={() => setOnlyWords(null)} />
+                        onlyWhat={onlyWords?.what ?? 'この教材の語'}
+                        onClearOnly={() => setOnlyWords(null)}
+                        /* **基礎単語の段だけを練習する**(0053・2026-09)。
+                           絞り込みは**この1か所だけ**が持つ ——
+                           「今週の宿題」から来る道とまったく同じ入れ物に置く。
+                           画面ごとに別の絞り込みを持たない(CLAUDE.md) */
+                        onPickWords={(words, label) => {
+                          setOnlyWords({ words, label, what: 'この段の語' })
+                        }} />
             ) : view === 'qr' ? (
               <QrReview />
             ) : view === 'pronunciation' ? (

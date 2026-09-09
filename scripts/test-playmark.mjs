@@ -2715,7 +2715,7 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      > 楽しんで身に付けられるコースにして欲しい。
 
    **一覧は、勝手に減らさない**(プロジェクトを超えた決まり)。
-   1,200 語 / 厳選360 / 30日は、**数えないと崩れたことに気づけない。**
+   1,200 語 / 基本360語 / 30日は、**数えないと崩れたことに気づけない。**
    ══════════════════════════════════════════════════════════════════ */
 {
   const { BASIC_WORDS } = await import('../src/data/basicWords.js')
@@ -2730,7 +2730,7 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   // ── 数。**減らさない** ──
   ok(BASIC_WORDS.length === 1200, '基礎単語 … 1,200 語ある', String(BASIC_WORDS.length))
   ok(BASIC_WORDS.filter((w) => w.core).length === 360,
-    '基礎単語 … 厳選360 が 360 語ある',
+    '基礎単語 … 基本360語 が 360 語ある',
     String(BASIC_WORDS.filter((w) => w.core).length))
   ok(COURSE_LENGTH === 30 && COURSE_DAYS.length === 30,
     '30日講座 … 30日ある', String(COURSE_DAYS.length))
@@ -2764,19 +2764,19 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '基礎単語 … どの日も 40 語',
       days.filter((d) => byDay[d] !== 40).map((d) => `${d}:${byDay[d]}`).join(' '))
     ok(days.every((d) => core[d] === 12),
-      '基礎単語 … どの日も 厳選360 が 12 語',
+      '基礎単語 … どの日も 基本360語 が 12 語',
       days.filter((d) => core[d] !== 12).map((d) => `${d}:${core[d]}`).join(' '))
   }
 
-  // ── 段は2つ。**厳選360 は 1200 の一部**(別の一覧を持たない)──
+  // ── 段は2つ。**基本360語 は 1200 の一部**(別の一覧を持たない)──
   ok(COURSE_TIERS.length === 2 && COURSE_TIERS[0].id === 'core' && COURSE_TIERS[1].id === 'full',
-    '30日講座 … 段は「厳選360」と「中学英語1200」の2つ')
+    '30日講座 … 段は2つで、id は core / full のまま')
   ok(wordsForTier('core').length === 360 && wordsForTier('full').length === 1200,
     '30日講座 … 段ごとの語数がそろっている')
   {
     const full = new Set(wordsForTier('full').map((w) => w.w))
     ok(wordsForTier('core').every((w) => full.has(w.w)),
-      '30日講座 … 厳選360 は、すべて 1200 の中にある')
+      '30日講座 … 基本360語 は、すべて 1200 の中にある')
   }
   ok(wordsForDay(1, 'core').length === 12 && wordsForDay(1, 'full').length === 40,
     '30日講座 … 1日ぶんの語数(12 / 40)')
@@ -2848,6 +2848,68 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(/delete from public\.course_days where learner_id = p_learner/
     .test(read2('supabase/migrations/0052_basics_course.sql')),
     '30日講座 … ゲストを消すときに、講座の記録も消す(表を足したら消す側にも足す)')
+
+  /* ══════════════════════════════════════════════════════════════
+     基礎単語を、**それだけで選べる単語帳にする**(0053・2026-09 利用者の指定)
+
+       > そして、講座の中の単語はそれぞれ基本360語、標準1200語、として
+       > そもそもが独立して選べる単語帳にしてください
+
+     見るのは4つ。
+       ① 呼び名が「基本360語 / 標準1200語」で、**id は変えていない**
+       ② 訳をファイルから引ける(**窓口を1回も呼ばない = 0円**)
+       ③ 画面が本当に呼んでいるか(絞り込みは `App.jsx` の1つだけ)
+       ④ 貼る SQL がそろっているか
+     ══════════════════════════════════════════════════════════════ */
+  const { basicJaOf, wordListFor } = await import('../src/lib/basicsCourse.js')
+
+  // ── ① 呼び名。**id は 0052 の check と course_days に入っている** ──
+  ok(COURSE_TIERS[0].label === '基本360語' && COURSE_TIERS[1].label === '標準1200語',
+    '基礎単語 … 呼び名は「基本360語」「標準1200語」',
+    COURSE_TIERS.map((t) => t.label).join(' / '))
+  ok(COURSE_TIERS.every((t) => !/\*\*/.test(`${t.label}${t.ja}${t.hint}`)),
+    '基礎単語 … 画面にそのまま出る文字列に `**` を混ぜない')
+
+  // ── ② 訳はファイルから引く。**AI を1回も呼ばない** ──
+  ok(basicJaOf(BASIC_WORDS[0].w) === BASIC_WORDS[0].ja,
+    '基礎単語 … そろえた語から訳を引ける(0円)')
+  ok(basicJaOf('zzzznotaword') === '' && basicJaOf(null) === '',
+    '基礎単語 … 知らない語には空を返す(当てずっぽうで返さない)')
+  ok(wordListFor('core').length === 360 && wordListFor('full').length === 1200
+    && wordListFor('core').every((w) => typeof w === 'string'),
+    '基礎単語 … 窓口へ渡す形(英単語だけの一覧)を1か所で作る')
+
+  // ── ③ 画面が本当に呼んでいるか ──
+  const wb = noC(read2('src/components/Wordbook.jsx'))
+  ok(/<BasicWordsPick\s/.test(wb), '基礎単語 … 単語帳の画面に置いてある')
+  ok(/meaning_ja: basicJaOf\(r\.word_norm\)/.test(wb),
+    '基礎単語 … 控えが無いときだけ、ファイルの訳を当てる')
+  ok(/r\.meaning_ja \? r :/.test(wb),
+    '基礎単語 … 控えがある語は、1文字も書き換えない')
+  ok(/onPickWords=\{onPickWords\}|onPicked=\{onPickWords\}/.test(wb),
+    '基礎単語 … 絞り込みは外(App)に任せる(同じ道を2つ持たない)')
+
+  const bp = noC(read2('src/components/BasicWordsPick.jsx'))
+  ok(/await addBasicWords\(wordListFor\(tier\), learnerId\)/.test(bp),
+    '基礎単語 … まとめて入れるのは `addBasicWords()` 1回だけ')
+  ok(!/lookupWord/.test(bp),
+    '基礎単語 … 1,200 語ぶんの意味を引きに行かない(0円のまま)')
+  ok(/basicWordsSupported\(\)/.test(bp),
+    '基礎単語 … 0053 がまだのときは、押せなくする(効かない操作を見せない)')
+  ok(/お金はかかりません/.test(bp),
+    '基礎単語 … 何が起きるかを、押す前に書く')
+
+  ok(/onPickWords=\{\(words, label\) => \{/.test(app),
+    '基礎単語 … App が絞り込みを1つだけ持っている')
+  ok(/onlyWhat=\{onlyWords\?\.what/.test(app),
+    '基礎単語 … 何で絞っているのかを、呼ぶ側が言う(「この教材の語」と嘘をつかない)')
+
+  // ── ④ 貼る SQL ──
+  ok(/create or replace function public\.add_basic_words/
+    .test(read2('supabase/apply/pending_matome.sql')),
+    '基礎単語 … まとめた1つに 0053 が入っている')
+  ok(/proname = 'add_basic_words'/.test(read2('supabase/apply/check.sql')),
+    '基礎単語 … check.sql が 0053 を見ている')
 }
 
 console.log(ng

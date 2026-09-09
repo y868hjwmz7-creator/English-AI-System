@@ -134,4 +134,6 @@ from (
   union all select '0052 文法30日集中講座の進み具合(pending_matome.sql)',
     exists (select 1 from information_schema.tables
             where table_schema = 'public' and table_name = 'course_days'), 34
+  union all select '0053 基礎単語を、まとめて単語帳に入れる(pending_matome.sql)',
+    exists (select 1 from pg_proc where proname = 'add_basic_words'), 35
 ) t order by 順;

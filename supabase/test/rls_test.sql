@@ -719,6 +719,54 @@ select pg_temp.expect('意味の控えが無くても、教材の訳が出る(00
      '22222222-2222-2222-2222-222222222222', 'todo', 200, false)
    where word_norm = 'backlog'), '積み残し');
 
+/* ── 基礎単語を、まとめて単語帳へ入れる(0053)────────────────────
+   2026-09 利用者の指定「基本360語、標準1200語、として
+   そもそもが独立して選べる単語帳にしてください」。
+
+   **門番は `add_basic_words()` の中だけ。** 画面には持たせない。
+   `add_material_words()`(0047)とまったく同じ形なので、
+   確かめることも同じである。
+
+   ・自分の単語帳には入る(`p_learner` を省く)
+   ・担当ゲストの単語帳にも入る
+   ・**担当していないゲストには入らない**(生徒C は誰の担当でもない)
+   ・**すでに入っている語には触らない**(箱を 0 に戻さない)
+   ・**答えた記録(vocab_days)は増やさない** */
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+
+select pg_temp.expect('自分の単語帳に、基礎単語が2語入る(0053)',
+  public.add_basic_words(array['Water', 'bridge']), 2);
+select pg_temp.expect('入るのは「まだ」・箱は 0(0053)',
+  (select status || ':' || box::text from public.word_reviews
+   where learner_id = '44444444-4444-4444-4444-444444444444'
+     and word_norm = 'water'), 'unknown:0');
+-- **そろえ方は `norm_word()` に任せている。** 大文字は小文字になる
+select pg_temp.expect('大文字で渡しても、そろえた形で入る(0053)',
+  (select count(*)::int from public.word_reviews
+   where learner_id = '44444444-4444-4444-4444-444444444444'
+     and word_norm = 'Water'), 0);
+
+-- **すでに入っている語には触らない。** `shortfall` は箱が 1 に上がっている
+select pg_temp.expect('担当ゲストの単語帳にも入る(0053)',
+  public.add_basic_words(array['shortfall', 'bridge'],
+                         '22222222-2222-2222-2222-222222222222'), 1);
+select pg_temp.expect('すでにある語の箱は、そのまま(0053)',
+  (select box::int from public.word_reviews
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and word_norm = 'shortfall'), 1);
+select pg_temp.expect('答えた記録(vocab_days)は増やさない(0053)',
+  (select answered from public.vocab_days
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and done_on = current_date), 2);
+
+-- **担当していないゲストには入れられない**(ここが唯一の門番)
+select pg_temp.expect_denied('担当していないゲストには入れられない(0053)', $$
+  select public.add_basic_words(array['bridge'],
+    '33333333-3333-3333-3333-333333333333') $$);
+select pg_temp.expect('担当していないゲストには1語も入っていない(0053)',
+  (select count(*)::int from public.word_reviews
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+
 -- ── ゲストに関するファイル(0031)───────────────────────────
 --
 --   ファイルにはその人のことが書いてある。**外に漏れてはいけない。**
