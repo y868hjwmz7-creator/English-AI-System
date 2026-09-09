@@ -218,8 +218,8 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
           中に入っていた3つは、どれも**別の場所が同じことを言っていた。**
 
             ・見出し「今週の宿題」 … 上の帯が画面の名前として出している
-            ・「残り 3 件 / 全 8 件」 … すぐ下の「取り組む(3)」
-              「やったもの(5)」と、さがす帯の札(◯ 件)
+            ・「残り 3 件 / 全 8 件」 … さがす帯の札(◯ 件)と、
+              カードごとの「やった / まだ」の札
             ・読み上げの速さ … **この画面では1つも効いていなかった**
               (演習は印刷の一瞬しか描かれない)。選んだ値は
               `eas.speechRate` に残るだけで、実際に使うのは
@@ -251,8 +251,9 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
           `HomeworkFilter`)なので、**見た目も操作もそろっている。**
 
           **取り組みの札(すべて / やった / まだ)は置かない。**
-          すぐ下の「取り組む(3)」「やったもの(5)」が同じことを
-          言っている(同じものを2か所に出さない)。 */}
+          カードの1行目に「やった / まだ」の札が出ており、
+          しかも**まだのものが先に並ぶ**ので、同じことを二度言うことになる
+          (同じものを2か所に出さない)。 */}
       {assignments.length > 0 && (
         <SearchBar
           title="宿題をさがす・しぼる"
@@ -283,18 +284,23 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
         </p>
       )}
 
+      {/* **見出し(「取り組む」「やったもの」)は、1つも出さない**
+            (2026-09 利用者の指定。「やったもの」→「取り組む」の順に外した)。
+
+          **カードの1行目が、自分で名乗っている** —— 日付のとなりに
+          「やった / まだ」の札があり、やったカードは全体を薄くしてある
+          (`.homework-card.is-done`)。見出しは同じことを二度言っていた。
+          数のほうも**さがす帯の札(◯ 件)**が同じことを言っている。
+
+          **並びは変えていない**(取り組むものが先、やったものがあと)。
+          **カードそのものは消していない** —— 消すと、一度やった宿題に
+          もう一度取り組む道が無くなる(行き止まりを作らない・CLAUDE.md)。 */}
       {[
-        { id: 'todo', label: '取り組む', list: todo },
-        /* **「やったもの」の見出しは出さない**(2026-09 利用者の指定)。
-           **カードの1行目が、自分で名乗っている** ——
-           日付のとなりに「やった」の札があり、カード全体も薄くしてある
-           (`.homework-card.is-done`)。見出しは同じことを二度言っていた。
-           **並びは変えていない**(取り組むものが先、やったものがあと) */
-        { id: 'done', label: null, list: done },
-      ].map(({ id, label, list }) => (
+        { id: 'todo', list: todo },
+        { id: 'done', list: done },
+      ].map(({ id, list }) => (
         list.length > 0 && (
           <section key={id} className="stack">
-            {label && <h3 className="section-title">{label}({list.length})</h3>}
             {list.map((a) => (
               <div key={a.id}
                    className={`card material-card homework-card${
