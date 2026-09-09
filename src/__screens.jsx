@@ -637,6 +637,35 @@ const RADIO = (
   />
 )
 
+/* Quick Response の聞き流し(`?screen=qrradio`・2026-09 利用者の指定)。
+
+     > Quick Responseにも聞き流しを作ってくれ。
+     > 英語だけ・日本語→英語 この２種類だ。
+
+   **部品は単語帳とまったく同じ `WordRadio`。** 渡すのは
+   「どの画面から来たか」(`where="qr"`)だけである。
+
+   **わざと長い文を入れてある** —— 短い文ばかりだと、
+   字を落とすのをやめても**同じ高さになって緑のまま**になる
+   (`?screen=radio` に長い語と長い訳を混ぜてあるのと同じ理由)。 */
+const QRRADIO = (
+  <WordRadio
+    where="qr"
+    rows={[
+      {
+        en: 'We decided to take on the project even though the deadline was extremely tight.',
+        ja: '締め切りが非常に厳しかったにもかかわらず、私たちはその案件を引き受けることにしました。',
+      },
+      {
+        en: 'Could you walk me through the numbers one more time?',
+        ja: '数字をもう一度説明していただけますか。',
+      },
+    ]}
+    tracks={[]}
+    onClose={() => {}}
+  />
+)
+
 /* 支度の帯(`?screen=jobbar&role=…`・2026-09 実機・利用者の指定)。
 
      > そもそもゲストには出さない(役割で判定する)
@@ -811,6 +840,8 @@ createRoot(document.getElementById('root')).render(
     ? GNOTE
     : q.get('screen') === 'radio'
     ? RADIO
+    : q.get('screen') === 'qrradio'
+    ? QRRADIO
     : q.get('screen') === 'sticky'
     ? STICKY
     : q.get('screen') === 'rscope'

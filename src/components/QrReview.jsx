@@ -42,6 +42,9 @@ import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
+import WordRadio from './WordRadio.jsx'
+import { MusicIcon } from './Icons.jsx'
+import { listTracks } from '../lib/bgm.js'
 import { NO_GOAL, NO_WEEK, loadQrWeek, loadWeeklyGoal } from '../lib/goals.js'
 import { stopReading } from '../lib/readAloud.js'
 import { usePracticeLog } from '../lib/practice.js'
@@ -93,6 +96,11 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const [group, setGroup] = useState(null)
   /** いま解いている一覧(**この回のぶんだけ**)。`null` なら、まだ始めていない */
   const [run, setRun] = useState(null)
+  /* **聞き流し**(2026-09 利用者の指定「Quick Responseにも聞き流しを作ってくれ」)。
+     答える練習ではないので、**箱も次に出す日も1ミリも動かさない**
+     (単語帳とまったく同じ決まり。`WordRadio` の中でも呼んでいない) */
+  const [radio, setRadio] = useState(null)   // 読む文。null なら出さない
+  const [tracks, setTracks] = useState([])   // 曲(無ければ音楽は流れない)
   /** まだ出していない残り。「つづける」で次の区切りへ進む */
   const [pending, setPending] = useState([])
   const [at, setAt] = useState(0)
@@ -191,6 +199,28 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
     setPending(list.slice(take))
     setAt(0)
     setDone([])
+  }
+
+  /**
+   * **聞き流しを始める**(2026-09 利用者の指定)。
+   *
+   *   > Quick Responseにも聞き流しを作ってくれ。
+   *   > 英語だけ・日本語→英語 この２種類だ。
+   *
+   * **読む文は、出題とまったく同じ道で選ぶ**(`shown` → `qrPairOf` →
+   * `orderQrPairs`)—— 範囲の札も絞り込みも並べ方も、そのまま効く。
+   * **数え方を2通り持たない。** ただし**問数では切らない**
+   * (聞き流しは終わりを決めずに回すもの・単語帳と同じ)。
+   *
+   * 曲は**押したときに引く。** 押さない人には1回も問い合わせが飛ばない。
+   * **曲が0本でも聞き流しは始まる**(音楽が鳴らないだけ・行き止まりを作らない)。
+   */
+  const listen = async () => {
+    const pool = orderQrPairs(shown.map(qrPairOf), order)
+    if (!pool.length) return
+    setRadio(pool)
+    const { data } = await listTracks()
+    setTracks(data ?? [])
   }
 
   /**
@@ -480,10 +510,34 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
             </label>
           </ReviewScope>
 
+          {/* **聞き流し**(2026-09 利用者の指定)。「出す」のとなりに置く ——
+              同じ文を、答えるか・聴くだけかの違いなので、選ぶのはここである。
+              **範囲の札も絞り込みも並べ方も、そのまま効く**(`listen()` 1か所)。
+              単語帳の `wb-listen` と**まったく同じ形**にそろえる */}
+          <button type="button" className="btn btn--quiet wb-listen"
+                  disabled={shown.length === 0}
+                  onClick={listen}>
+            <MusicIcon />聞き流す({shown.length} 問)
+          </button>
+
           {shown.length === 0 && filtered.length === 0 && (
             <p className="hint">この絞り込みに当てはまる文がありません。</p>
           )}
         </>
+      )}
+
+      {/* **部品は `WordRadio` 1つ。** 単語帳とまったく同じものを使い、
+          渡すのは「どの画面から来たか」だけ(`where`)。
+          読み方の一覧も、覚える鍵も `wordRadio.js` が持っている ——
+          **書き写すと、必ず片方だけ古くなる**(CLAUDE.md) */}
+      {radio && (
+        <WordRadio
+          rows={radio}
+          where="qr"
+          tracks={tracks}
+          learnerId={learnerId}
+          onClose={() => setRadio(null)}
+        />
       )}
     </section>
   )

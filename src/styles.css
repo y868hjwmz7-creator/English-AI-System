@@ -5575,6 +5575,27 @@ button.wbfilter-ctl { text-align: left; }
 .radio-lead,
 .radio-song { margin: 0; text-align: center; }
 
+/* **文は語より長い**(Quick Response の聞き流し・2026-09 利用者の指定)。
+   28px のままだと iPhone(390px)で1文が6行になり、
+   **送るものが出てこの画面の意味が消える。** 一段落とす */
+.radio--qr .radio-en { font-size: var(--fs-19); }
+.radio--qr .radio-ja { font-size: var(--fs-15); }
+@media (max-width: 360px) { .radio--qr .radio-en { font-size: var(--fs-17); } }
+
+/* 読み方と間は、上の帯にとなりどうしで並ぶ。**入らないぶんは
+   読み方のほうが縮む** —— 間は「1.5秒」という**値**なので、
+   1文字も削らない(CLAUDE.md「数は1文字も削らない」) */
+.radio-pick { min-width: 0; }
+.radio-pick > select {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radio-pick--gap { flex: 0 0 auto; }
+.radio-pick--gap > select { padding-right: 24px; padding-left: 8px; }
+
 /* ==========================================================================
    音楽(0049)
    ========================================================================== */

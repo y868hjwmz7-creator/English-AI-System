@@ -3107,8 +3107,13 @@ export default defineConfig({
       return {
         語: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
         訳: document.querySelector('.radio-ja')?.textContent?.trim() ?? '',
-        読み方: [...document.querySelectorAll('.focus-top select option')]
-          .map((o) => o.textContent.trim()),
+        /* **読み方と間は、別々の欄である。**
+           `.focus-top select option` をまとめて数えると、
+           片方を消しても合計が合ってしまう(素通りする) */
+        読み方: [...document.querySelectorAll('.focus-top select')].slice(0, 1)
+          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
+        間: [...document.querySelectorAll('.focus-top select')].slice(1, 2)
+          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
         ボタン: btns.map((b) => ({ 文言: b.textContent.trim(), 高さ: px(b) })),
         // **送るものが無いか。** ここが出た瞬間、この画面の意味が消える
         たて: body ? body.scrollHeight - body.clientHeight : 0,
@@ -3124,6 +3129,10 @@ export default defineConfig({
       ng(`聞き流し(${w}px) … 訳が出ていない`, got.訳 || '(空)')
     } else if (got.読み方.length !== 2) {
       ng(`聞き流し(${w}px) … 読み方が2つではない`, got.読み方.join('/'))
+    } else if (got.間.length < 4 || !got.間.some((t) => /秒/.test(t))) {
+      /* **間の欄が出ているか**(2026-09 利用者の指定
+         「単語帳もだが、間の時間設定もできるようにしてくれ」) */
+      ng(`聞き流し(${w}px) … 間の長さを選べない`, got.間.join('/') || '(欄が無い)')
     } else if (got.ボタン.length !== 2 || got.ボタン.some((b) => b.高さ < 40)) {
       ng(`聞き流し(${w}px) … 押せる大きさ(40px)を割っている`,
         got.ボタン.map((b) => `${b.文言}:${b.高さ}`).join(' / '))
@@ -3133,7 +3142,56 @@ export default defineConfig({
       ng(`聞き流し(${w}px) … 縦に送るものが出ている`,
         `${got.たて}px —— 1語だけに向き合う画面である`)
     } else {
-      ok(`聞き流し(${w}px) … 語も訳も出て、送るものが無い`)
+      ok(`聞き流し(${w}px) … 語も訳も出て、間も選べて、送るものが無い`)
+    }
+  }
+
+  /* ── Quick Response の聞き流し(2026-09 利用者の指定)────────────────
+   *
+   *   > Quick Responseにも聞き流しを作ってくれ。
+   *   > 英語だけ・日本語→英語 この２種類だ。
+   *
+   *   **部品は単語帳とまったく同じ。** けれども**中身が文になる**ので、
+   *   語のときと同じ字の大きさでは狭い画面で6行になり、
+   *   **送るものが出てこの画面の意味が消える。**
+   *   どの幅で送るようになるかは**ソースを読んでも分からない。描いて測る。**
+   */
+  for (const [w, h] of [[390, 844], [320, 568], [1280, 900]]) {
+    const page = await browser.newPage({ viewport: { width: w, height: h } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    const got = await page.evaluate(() => {
+      const card = document.querySelector('.radio-card')
+      const body = document.querySelector('.focus-body')
+      return {
+        文: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
+        訳: document.querySelector('.radio-ja')?.textContent?.trim() ?? '',
+        読み方: [...document.querySelectorAll('.focus-top select')].slice(0, 1)
+          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
+        たて: body ? body.scrollHeight - body.clientHeight : 0,
+        よこ: body ? body.scrollWidth - body.clientWidth : 0,
+        右: card ? Math.round(card.getBoundingClientRect().right) : 0,
+      }
+    })
+    await page.close()
+
+    if (!got.文.includes('take on the project')) {
+      ng(`QRの聞き流し(${w}px) … 文が出ていない`, got.文 || '(空)')
+    } else if (!got.訳.includes('引き受ける')) {
+      ng(`QRの聞き流し(${w}px) … 訳が出ていない`, got.訳 || '(空)')
+    } else if (!got.読み方.some((t) => t.includes('日本語') && t.includes('英語'))) {
+      /* **単語帳の読み方(英語 → 日本語)で鳴ってはいけない。**
+         `where="qr"` を渡し忘れると、そうなる(しかも音は鳴る) */
+      ng(`QRの聞き流し(${w}px) … 「日本語 → 間 → 英語」が選べない`,
+        got.読み方.join('/'))
+    } else if (got.よこ > 0 || got.右 > w) {
+      ng(`QRの聞き流し(${w}px) … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+    } else if (got.たて > 0) {
+      ng(`QRの聞き流し(${w}px) … 縦に送るものが出ている`,
+        `${got.たて}px —— 1問だけに向き合う画面である`)
+    } else {
+      ok(`QRの聞き流し(${w}px) … 文も訳も出て、送るものが無い`)
     }
   }
 
@@ -3211,17 +3269,123 @@ export default defineConfig({
     }
   }
 
+  /* ── **端末の声の入口を差し替える。** 上の実測とまったく同じ仕掛けで、
+        「何を読んだか」と「そのとき画面に何が出ていたか」を控える ────── */
+  const 声をすりかえる = (page, 控え) => page.addInitScript((kv) => {
+    for (const [k, v] of kv) {
+      try { localStorage.setItem(k, v) } catch { /* 使えなくても困らない */ }
+    }
+    window.__log = []
+    const voices = [{ name: 'T EN', lang: 'en-US' }, { name: 'T JA', lang: 'ja-JP' }]
+    const fake = {
+      getVoices: () => voices,
+      cancel: () => {},
+      speak: (u) => {
+        window.__log.push({
+          読んだ: u.text,
+          画面: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
+        })
+        setTimeout(() => { u.onend?.() }, 120)
+      },
+      speaking: false, pending: false, paused: false,
+      addEventListener: () => {}, removeEventListener: () => {},
+    }
+    /* **代入では効かない。** 読み取り専用の getter である */
+    Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true })
+    window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t } }
+  }, 控え)
+
+  /** 日本語の字が1つも無ければ英語(文には `.` や `?` も入る) */
+  const 英語か = (t) => !/[぀-ヿ㐀-鿿、。]/.test(t)
+
+  /* ── **Quick Response は「日本語 → 英語」で鳴るか**(2026-09 利用者の指定)──
+   *
+   *   **形を読むだけでは足りない。** `where="qr"` は渡っていても、
+   *   `radioSteps` が向きを取り違えていれば**英語 → 日本語**で鳴る。
+   *   しかも**音は鳴る**ので、聴いた人にしか分からない。
+   *   だから**本当に鳴らして、読んだ順を数える。**
+   *
+   *   間はいちばん短い 0.5 秒にしてある —— 6秒で何周も回るので、
+   *   1周ぶんの偶然では緑にならない。
+   */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    await 声をすりかえる(page, [['eas.qrRadioMode', 'jaen'], ['eas.qrRadioGap', '500']])
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(6000)
+    const log = await page.evaluate(() => window.__log)
+    await page.close()
+
+    const 英 = log.filter((r) => 英語か(r.読んだ))
+    const 和 = log.filter((r) => !英語か(r.読んだ))
+    /* **英語のすぐ前は、必ずその文の日本語である。**
+       ここが逆なら「英語 → 日本語」で鳴っている */
+    const 順 = log.length >= 2 && log.every((r, i) => (i % 2 === 0 ? !英語か(r.読んだ) : 英語か(r.読んだ)))
+    const ずれ = 英.filter((r) => r.読んだ !== r.画面)
+
+    if (英.length < 2 || 和.length < 2) {
+      ng('QRの聞き流し … 読み上げが動いていない', `英 ${英.length} / 和 ${和.length}`)
+    } else if (!順) {
+      ng('QRの聞き流し … 日本語 → 英語の順で読んでいない',
+        log.slice(0, 4).map((r) => r.読んだ.slice(0, 12)).join(' → '))
+    } else if (ずれ.length > 0) {
+      ng('QRの聞き流し … 読んでいる文と画面がずれている',
+        ずれ.map((r) => `読「${r.読んだ.slice(0, 20)}」画面「${r.画面.slice(0, 20)}」`).join(' / '))
+    } else {
+      ok(`QRの聞き流し … 日本語 → 間 → 英語 の順で、画面とそろって読む(${英.length} 文)`)
+    }
+  }
+
+  /* ── **間の設定は、本当に効いているか**(2026-09 利用者の指定)──────
+   *
+   *   > 単語帳もだが、間の時間設定もできるようにしてくれ。
+   *
+   *   **欄が出ているだけでは足りない。** 選んだ値が `radioSteps()` にも
+   *   語と語のあいだにも届いていなければ、**押しても何も変わらない**
+   *   (しかも音は鳴るので、押した人には分からない)。
+   *   だから**同じ時間だけ鳴らして、読んだ回数を数える。**
+   */
+  {
+    const 数える = async (gap) => {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+      await 声をすりかえる(page, [['eas.radioMode', 'en'], ['eas.radioGap', String(gap)]])
+      await page.goto(`http://localhost:${PORT}/__bar.html?screen=radio`,
+        { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(6000)
+      const log = await page.evaluate(() => window.__log)
+      await page.close()
+      return log.length
+    }
+    const 短い = await 数える(500)
+    const 長い = await 数える(3000)
+    if (短い < 4) {
+      ng('間 … 読み上げが動いていない', `${短い} 回`)
+    } else if (短い <= 長い * 1.5) {
+      ng('間 … 長さを変えても、鳴る速さが変わっていない',
+        `0.5秒 ${短い} 回 / 3秒 ${長い} 回(6秒のあいだ)`)
+    } else {
+      ok(`間 … 選んだ長さが本当に効く(6秒で 0.5秒 ${短い} 回 / 3秒 ${長い} 回)`)
+    }
+  }
+
   /* **画面が本当に呼んでいるか。** 検証の入り口(`__screens.jsx`)だけ
      直しても、利用者の画面からは入れない */
   {
     const src = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    const qr = readFileSync(new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     if (!/<WordRadio\b/.test(src)) {
       ng('聞き流し … 単語帳から入れない')
     } else if (!/onClick=\{listen\}/.test(src)) {
       ng('聞き流し … 入口のボタンが無い')
+    } else if (!/<WordRadio\b/.test(qr) || !/onClick=\{listen\}/.test(qr)) {
+      /* **Quick Response からも入れるか。** 検証の入り口だけ直しても、
+         利用者の画面からは入れない(単語帳とまったく同じ落とし穴) */
+      ng('聞き流し … Quick Response から入れない')
     } else {
-      ok('聞き流し … 単語帳の「出す」のとなりから入れる')
+      ok('聞き流し … 単語帳と Quick Response の「出す」のとなりから入れる')
     }
   }
 }

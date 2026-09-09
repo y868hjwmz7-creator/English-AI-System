@@ -36,20 +36,38 @@ import { readAloud, stopReading } from '../lib/readAloud.js'
 import { japaneseVoice, speakOnce } from '../lib/speech.js'
 import { duckBgm, nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
 import {
-  RADIO_MODES, WORD_GAP_MS, bgmPlaysIn, loadBgmPlace, loadRadioMode,
-  nextIndex, radioLead, radioSteps, radioTextOf, saveRadioMode,
+  RADIO_GAPS, bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
+  nextIndex, radioGapsOf, radioJaOf, radioLead, radioModesFor, radioSteps,
+  radioTextOf, saveRadioGap, saveRadioMode,
 } from '../lib/wordRadio.js'
 
 export default function WordRadio({
-  /** 読む語(**絞り込みと範囲を当てたあとの一覧**) */
+  /** 読むもの(**絞り込みと範囲を当てたあとの一覧**)。語でも文でもよい */
   rows,
+  /**
+   * どの画面から来たか(`word` = 単語帳 / `qr` = Quick Response)。
+   *
+   * **読み方の一覧も、覚える鍵も、これで決まる**(`wordRadio.js` 1か所)。
+   * Quick Response は**日本語 → 英語**が既定である ——
+   * あちらは日本語を見て英語を言う練習なので、聞き流しも同じ向きにする。
+   */
+  where = 'word',
   /** 曲(`listTracks()` が返したもの)。無ければ音楽は流れない */
   tracks = [],
   rate = 1,
   learnerId = null,
   onClose,
 }) {
-  const [mode, setMode] = useState(loadRadioMode)
+  const modes = radioModesFor(where)
+  const [mode, setMode] = useState(() => loadRadioMode(where))
+  /**
+   * **間(ま)の長さ**(2026-09 利用者の指定「間の時間設定もできるように」)。
+   *
+   * 選ぶのは**「考える間」の秒数1つだけ**で、語と語のあいだも
+   * くり返しのあいだも**同じ比でそろって動く**(`radioGapsOf()` 1か所)。
+   * **片方だけ縮めると、そこだけ不自然に詰まる**(`turnGap.js` と同じ考え方)。
+   */
+  const [gap, setGap] = useState(() => loadRadioGap(where))
   const [at, setAt] = useState(0)
   const [say, setSay] = useState(null)   // いま読んでいるもの('en' / 'ja')
   const [on, setOn] = useState(true)     // 鳴らしているか
@@ -107,6 +125,10 @@ export default function WordRadio({
     const alive = () => liveRef.current === mine
 
     const wait = (ms) => new Promise((r) => { setTimeout(r, ms) })
+    /* **3つの間は、選んだ秒から一度に出す**(`radioGapsOf()` 1か所)。
+       ここで `WORD_GAP_MS` を直に使うと、間を変えても
+       **語と語のあいだだけが動かない** */
+    const gaps = radioGapsOf(gap)
 
     const run = async () => {
       while (alive()) {
@@ -114,7 +136,7 @@ export default function WordRadio({
            1周のあいだ動かさないので、読んでいる語と画面が必ず一致する */
         const i = atRef.current
         const row = list[i]
-        const steps = radioSteps(row, mode)
+        const steps = radioSteps(row, mode, gap)
         if (!steps.length) {
           /* **読むものが無い語は、待たずに次へ。**「読んだことにして」
              間だけ置くと、無音の時間が延びるだけである。
@@ -156,13 +178,13 @@ export default function WordRadio({
            (実測: 「gist」を読んでいるのに画面は「take on」)。
            先に進めておけば、語と語のあいだの 0.9 秒で必ず追いつく */
         move(nextIndex(i, list.length))
-        await wait(WORD_GAP_MS)
+        await wait(gaps.word)
         if (!alive()) return
       }
     }
     run()
     return () => { liveRef.current += 1; stopReading(); duckBgm(false) }
-  }, [on, mode, list.length, rate])
+  }, [on, mode, gap, list.length, rate])
 
   const stop = () => {
     liveRef.current += 1
@@ -173,7 +195,10 @@ export default function WordRadio({
 
   return (
     <FocusFrame
-      className="radio"
+      /* **文は語より長い。** Quick Response では英文が1行に収まらないので、
+         そこだけ字を一段落とす(`radio--qr`)—— 落とさないと
+         狭い画面で**送るものが出て、この画面の意味が消える** */
+      className={where === 'qr' ? 'radio radio--qr' : 'radio'}
       plain
       learnerId={learnerId}
       /* **語ごとに変えない。** ここを変えると、1語進むたびに
@@ -186,25 +211,46 @@ export default function WordRadio({
           {list.length ? `${at + 1} / ${list.length}` : '0'}
         </span>
       )}
+      /* **読み方と間は、となりどうしに置く。** どちらも「どう読むか」で、
+         しかも**聴きながら「もう少し長く」と思う**ものである。
+         画面のはるか上ではなく、**変えたくなる場所のとなり**に置く
+         (単語帳の「出題の形」を進み具合の行へ移したのと同じ考え方) */
       topEnd={(
-        <label className="wb-formpick">
-          <span className="sr-only">読み方</span>
-          <select value={mode}
-                  onChange={(e) => { setMode(e.target.value); saveRadioMode(e.target.value) }}>
-            {RADIO_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
-        </label>
+        <>
+          <label className="wb-formpick radio-pick">
+            <span className="sr-only">読み方</span>
+            <select value={mode}
+                    onChange={(e) => { setMode(e.target.value); saveRadioMode(e.target.value, where) }}>
+              {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </label>
+          {/* **間の長さ。** 数(秒)は1文字も削らない —— そこが読めないと、
+              何を選んでいるのか分からない(CLAUDE.md) */}
+          <label className="wb-formpick radio-pick radio-pick--gap">
+            <span className="sr-only">間の長さ</span>
+            <select value={gap}
+                    onChange={(e) => {
+                      const ms = Number(e.target.value)
+                      setGap(ms); saveRadioGap(ms, where)
+                    }}>
+              {RADIO_GAPS.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+            </select>
+          </label>
+        </>
       )}
     >
       <div className="radio-card">
         {/* **いま読んでいるものを、目でも分かるようにする。**
             聞き流しは耳だけの練習だが、ふと見たときに追えないと
             「いまどれ?」になる(色だけに頼らないので、印は枠と太字) */}
+        {/* **出す文字も `radioTextOf()` / `radioJaOf()` を通す。**
+            ここで `display || word_norm` と書き写すと、
+            **鳴らす側と画面で数え方が2通り**になる(CLAUDE.md) */}
         <p className={`radio-en${say === 'en' ? ' is-now' : ''}`} lang="en">
-          {now?.display || now?.word_norm || '—'}
+          {radioTextOf(now) || '—'}
         </p>
         <p className={`radio-ja${say === 'ja' ? ' is-now' : ''}`}>
-          {now?.meaning_ja || ''}
+          {radioJaOf(now)}
         </p>
         {now?.seen_in && <p className="radio-seen" lang="en">{now.seen_in}</p>}
 
