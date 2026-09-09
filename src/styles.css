@@ -371,13 +371,35 @@ body {
    変わるので、決め打ちにすると端末ごとにずれる(「幅の境目で決めない」と
    同じ考え方)。**2つをまとめて1つの箱で貼り付ければ、測る値が要らない。**
    支度の帯が出ていないときは、中身が上の帯1つになるだけである */
-.app-stick { position: sticky; top: 0; z-index: 30; }
+/* **影は、この箱がまとめて出す**(2026-09 実機・利用者の指定)。
+
+     > 下部のタブと同じようにボーダー部分は薄い影を入れて自然にして
+
+   **上の帯そのものには付けない。** この箱には帯が3つまで入る
+   (上の帯・ゲスト名・支度)ので、いちばん上に影を付けても
+   **すぐ下の帯に隠れて見えない。** 箱ごと落とせば、
+   **中身がいくつでも、いちばん下から本文へ落ちる。**
+   下の行き先の帯(`.app-tabs`)の `0 -6px 24px` と、向きだけが逆である */
+.app-stick {
+  position: sticky; top: 0; z-index: 30;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 10%);
+}
 .app-topbar {
   display: flex; align-items: center; gap: var(--sp-10);
   min-height: 56px; padding: 8px 12px;
   padding-top: max(8px, env(safe-area-inset-top));
   border-bottom: 1px solid var(--border);
-  background: var(--surface-0);
+  /* **白**(2026-09 利用者の指定「全てのページで共通して上部バーを白く」)。
+     下の行き先の帯(`.app-tabs`)と**同じ地色**である —— 上下の帯が
+     同じ面になり、そのあいだが本文だと目で分かる */
+  background: var(--surface-1);
+}
+/* いまいる画面の絵。**メニューと同じもの**を、名前の左に静かに置く。
+   大きさも `.app-nav-icon` にそろえる —— **数字を書き写さない** */
+.app-topbar-icon {
+  flex: 0 0 auto; display: inline-flex; align-items: center;
+  width: 20px; font-size: var(--fs-20);
+  color: var(--text-secondary);
 }
 .app-topbar-title {
   /* `<h1>` なので、**既定の余白と大きさを打ち消す**(2026-09・第4週)。
@@ -2873,7 +2895,10 @@ html, body { overflow-x: clip; }
      (`.sheet-floats`)と、まったく同じ話である */
   padding: 8px 14px 0;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-0);
+  /* **上の帯と同じ地色**(この節のいちばん上に書いてある決まり)。
+     2026-09 に上の帯を白くしたので、ここも一緒に白くする ——
+     片方だけ残すと、貼り付いた箱の中に**色の段差**が1本できる */
+  background: var(--surface-1);
 }
 /* **1行に収める。折り返させない**(`.lesson-bar-main` と同じ決まり)。
    折り返すと帯の高さが2倍になり、そのぶん中身が下へ押し出される

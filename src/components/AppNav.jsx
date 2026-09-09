@@ -151,6 +151,17 @@ export default function AppNav({
  */
 export function AppTopbar({
   onToggle, open, wide, pageLabel, badge = null, right = null,
+  /**
+   * いまいる画面の絵(2026-09 実機・利用者の指定)。
+   *
+   *   > 「教材」など、今いるページを示す項目の横に
+   *   > サイドバーと同じアイコンを置いてください
+   *
+   * **`pages` から引いたものをそのまま渡す**(`App.jsx`)。
+   * ここで id から絵を引き直すと、**メニューと帯で対応表が2つ**になり、
+   * 画面を足したときに片方だけ古くなる(呼び名を2か所に持たないのと同じ)。
+   */
+  icon: Icon = null,
 }) {
   return (
     <div className="app-topbar">
@@ -160,6 +171,12 @@ export function AppTopbar({
               aria-label={open && wide ? 'メニューをたたむ' : 'メニューを開く'}>
         <MenuIcon />
       </button>
+      {/* **絵は名前の左。** メニューの並び(絵 → 名前)とそろえる。
+          **読み上げには渡さない**(`aria-hidden`)—— すぐ右に
+          同じことを言う `<h1>` があり、二度読ませても意味がない */}
+      {Icon && (
+        <span className="app-topbar-icon" aria-hidden="true"><Icon /></span>
+      )}
       {/* **ページの見出し**(2026-09・第4週)。
           実測すると `<h1>` がどの画面にも1つも無く、**見出しの階層が
           いちばん上から欠けていた。** 読み上げソフトは見出しをたどって

@@ -456,7 +456,12 @@ export default function App() {
         badgeTitle: `${p.label} — ${job.title}${jobBadge === 'done' ? 'の下書きができました' : 'を作っています'}` }
       : p))
     : pages
-  const pageLabel = pages.find((p) => p.id === view)?.label ?? 'English AI System'
+  /* いま見ている画面。**名前も絵も、ここから引く**(2026-09 利用者の指定
+     「今いるページを示す項目の横にサイドバーと同じアイコンを」)。
+     `pages` はメニューが見ているのと同じ一覧なので、**画面を足しても
+     帯とメニューで食い違わない**(呼び名を2か所に持たない) */
+  const nowPage = pages.find((p) => p.id === view) ?? null
+  const pageLabel = nowPage?.label ?? 'English AI System'
 
 
   /* 左のメニューの下に置くもの。
@@ -607,6 +612,7 @@ export default function App() {
             スマホでメニューが隠れていても「いまどこか」が分かる */}
         <AppTopbar
           onToggle={toggleNav} open={navOpen} wide={navPush} pageLabel={pageLabel}
+          icon={nowPage?.icon ?? null}
           /* **いま見ている画面の印だけ**を出す。
              「単語帳」の横に青い丸が出ても、何の印か分からない */
           badge={view === 'materials' ? jobBadge : null}

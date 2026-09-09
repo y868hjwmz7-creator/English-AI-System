@@ -680,7 +680,7 @@ const STICKY = (
   <div className="app-shell is-wide">
     <div className="app-body">
       <div className="app-stick">
-        <AppTopbar onToggle={() => {}} open wide pageLabel="教材" />
+        <AppTopbar onToggle={() => {}} open wide pageLabel="教材" icon={BookIcon} />
         {/* **ゲスト名の箱も、同じ箱の中に入れる**(2026-09 利用者の指定)。
             帯が3つになっても ☰ が押せることを、**送ってから**測る ——
             送る前は縦に並ぶので、重なっても緑のままになる */}

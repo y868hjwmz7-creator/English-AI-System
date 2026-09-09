@@ -1209,6 +1209,84 @@ export default defineConfig({
       ok(`骨組み ${w}px … メニュー ${m.幅}px・印あり・帯に「${m.名前}」`)
     }
 
+    /* ══ 上の帯は**白く、下の帯とそろえる**(2026-09 実機・利用者の指定)══
+         > 全てのページで共通して上部バーを白くしてください。
+         > そして下部のタブと同じようにボーダー部分は薄い影を入れて
+         > 自然にしてください。そして「教材」など、今いるページを示す
+         > 項目の横にサイドバーと同じアイコンを置いてください
+
+       **色も影も、描かないと分からない**(ソースを読むだけでは、
+       変数がどの値に解決されるか分からない)。見るのは4つ。
+         ①地色が下の行き先の帯とそろっているか
+         ②影が入っているか(`.app-stick` が箱ごと落とす)
+         ③絵が出ているか
+         ④**その絵が、メニューの絵とまったく同じか**
+
+       ④がかなめである。**「絵が在るか」だけを見ると、
+       別の絵を置いても緑のまま**になる。中身(SVG)を突き合わせる。 */
+    /** いま出ているものを測る */
+    const 測る = () => page.evaluate(() => {
+      const bar = document.querySelector('.app-topbar')
+      const tabs = document.querySelector('.app-tabs')
+      const ic = bar.querySelector('.app-topbar-icon svg')
+      const navIc = document.querySelector('.app-nav-item.is-active .app-nav-icon svg')
+      return {
+        名: bar.querySelector('.app-topbar-title').textContent.trim(),
+        地: window.getComputedStyle(bar).backgroundColor,
+        下の帯: tabs ? window.getComputedStyle(tabs).backgroundColor : null,
+        影: window.getComputedStyle(document.querySelector('.app-stick')).boxShadow,
+        絵: ic ? ic.innerHTML : null,
+        メニューの絵: navIc ? navIc.innerHTML : null,
+      }
+    })
+    const look = await 測る()
+    /* **1つの画面だけでは足りない。** 開いた瞬間は必ず「教材」なので、
+       絵を1つに決め打ちしても**そこでは合ってしまう。**
+       だから**別の画面へ移って、もう一度**突き合わせる */
+    await page.evaluate(() => {
+      const burger = document.querySelector('.app-topbar .nav-burger')
+      if (!document.querySelector('.app-nav-item')?.offsetParent) burger.click()
+    })
+    await page.waitForTimeout(150)
+    const 移った = await page.evaluate(() => {
+      const x = [...document.querySelectorAll('.app-nav-item')]
+        .find((e) => e.querySelector('.app-nav-label').textContent.trim() === '単語帳')
+      if (!x) return false
+      x.click()
+      return true
+    })
+    await page.waitForTimeout(200)
+    const look2 = 移った ? await 測る() : look
+    /* **地の上(`--surface-0`)のままではないか。**
+       明るい配色では #eaecef、暗い配色では #0c0c0b である */
+    const 白い = /^rgb\(255, 255, 255\)$/.test(look.地)
+    const どこ = `上の帯 ${w}px`
+    if (!白い) {
+      ng(`${どこ} … 白くない(${look.地})`,
+        '`--surface-1`(下の行き先の帯と同じ地色)にする')
+    } else if (look.下の帯 && look.下の帯 !== look.地) {
+      ng(`${どこ} … 下の帯と地色が違う(上 ${look.地} / 下 ${look.下の帯})`)
+    } else if (!look.影 || look.影 === 'none') {
+      ng(`${どこ} … 影が入っていない`,
+        '`.app-stick` が箱ごと落とす(帯が3つまで入るので、帯そのものに'
+        + ' 付けると下の帯に隠れて見えない)')
+    } else if (!look.絵) {
+      ng(`${どこ} … いまいる画面の絵が出ていない`)
+    } else if (look.絵 !== look.メニューの絵) {
+      ng(`${どこ} … メニューと違う絵が出ている`,
+        '`pages` から引いたものをそのまま渡す(対応表を2つ持たない)')
+    } else if (!look2.絵 || look2.絵 !== look2.メニューの絵) {
+      ng(`${どこ} … 「${look2.名}」でメニューと違う絵が出ている`,
+        '画面を移っても、メニューと同じ絵でなければならない'
+        + '(1つの画面だけ見ると、絵を決め打ちしても緑になる)')
+    } else if (look2.絵 === look.絵) {
+      ng(`${どこ} … 画面を移っても絵が変わらない(${look.名} / ${look2.名})`,
+        'いまいる画面の絵を出していない')
+    } else {
+      ok(`${どこ} … 白い(${look.地})・影あり・`
+        + `「${look.名}」「${look2.名}」ともメニューと同じ絵`)
+    }
+
     /* ── ☰ は、**送ったあとも押せる**(2026-09 実機・利用者の指摘)──────
          > スクロールを始めるとサイドバーのハンバーガーが触れなくなる
 
