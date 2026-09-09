@@ -3696,6 +3696,84 @@ export default defineConfig({
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+ * 「この文の要点」は、**紙にも刷る**(2026-09 実機・利用者の指定)
+ *
+ *   > 今でも存在しているけど印刷すると「この文の要点」が消えてしまいます。
+ *   > 印刷されるようにしてください。そしてボールドと下線で強調
+ *
+ * **`no-print` が付いていた。** それを外すだけでは足りない ——
+ * 札は1つずつ `<button>` なので、`@media print` の
+ * `button:not(.etext-word) { display: none }` が**札だけを消す。**
+ * すると**見出しの「この文の要点」だけが紙に残る**、いちばん分かりにくい形になる。
+ *
+ * **ソースを読むだけでは分からない。** 2つの指定が噛み合っているかは、
+ * **印刷の見え方をそのまま描いて測る**しかない(`emulateMedia`)。
+ *
+ * **「出る」と「出ない」の両方を見る**(CLAUDE.md) ——
+ * 札が出ることと、**吹き出しが紙に出ないこと**の両方を数える。
+ * ══════════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(300)
+  /* **本物の `printElement()` と同じ印を付ける。**
+     `is-printing` / `print-target` / `print-path` の3つがそろって
+     初めて紙の指定が効く(`src/lib/print.js`) */
+  await page.evaluate(() => {
+    const sheet = document.querySelector('#lesson-sheet') ?? document.querySelector('.lesson-sheet')
+    if (!sheet) return
+    sheet.classList.add('print-target')
+    document.body.classList.add('is-printing')
+    for (let el = sheet.parentElement; el && el !== document.body; el = el.parentElement) {
+      el.classList.add('print-path')
+    }
+  })
+  await page.emulateMedia({ media: 'print' })
+  await page.waitForTimeout(200)
+
+  const got = await page.evaluate(() => {
+    const 見える = (el) => !!el && el.checkVisibility?.() !== false
+      && el.getBoundingClientRect().height > 0
+    const chips = [...document.querySelectorAll('.print-target .phrase-chip')]
+    const label = document.querySelector('.print-target .phrases-label')
+    const one = chips[0]
+    const cs = one ? window.getComputedStyle(one) : null
+    return {
+      見出し: 見える(label),
+      札の数: chips.filter(見える).length,
+      文字: one?.textContent?.trim() ?? '',
+      太さ: cs?.fontWeight ?? '',
+      下線: cs?.textDecorationLine ?? '',
+      枠: cs?.borderTopWidth ?? '',
+      色: cs?.color ?? '',
+      吹き出し: [...document.querySelectorAll('.etext-pop')].filter(見える).length,
+    }
+  })
+  await page.close()
+
+  if (!got.見出し || got.札の数 === 0) {
+    ng('紙 … 「この文の要点」が刷られていない',
+      `見出し ${got.見出し ? '有' : '無'} / 札 ${got.札の数} 個`)
+  } else if (Number(got.太さ) < 600) {
+    ng('紙 … 要点の札が太字になっていない', `font-weight ${got.太さ}`)
+  } else if (!/underline/.test(got.下線)) {
+    ng('紙 … 要点の札に下線が無い', got.下線 || '(無し)')
+  } else if (got.枠 !== '0px') {
+    /* **紙では錠剤の枠を落とす。** 残すと枠だけが目立って中身が読みにくい
+       (「囲みも帯も増やさない。字づかいだけで層を分ける」) */
+    ng('紙 … 要点の札に錠剤の枠が残っている', `border ${got.枠}`)
+  } else if (got.色 !== 'rgb(0, 0, 0)') {
+    /* **紙の灰色は、画面の値をそのまま持ってこない**(CLAUDE.md) */
+    ng('紙 … 要点の札が黒で刷られない', got.色)
+  } else if (got.吹き出し > 0) {
+    ng('紙 … 開いたままの吹き出しが刷られる', `${got.吹き出し} 個`)
+  } else {
+    ok(`紙 … 「この文の要点」が太字 + 下線で刷られる(${got.札の数} 個・${got.文字})`)
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

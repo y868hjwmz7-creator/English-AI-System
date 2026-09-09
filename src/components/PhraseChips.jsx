@@ -85,7 +85,18 @@ export default function PhraseChips({
   }
 
   return (
-    <div className="phrases no-print" ref={rootRef}>
+    /* **`no-print` を付けない**(2026-09 利用者の指定)。
+     *
+     *   > 今でも存在しているけど印刷すると「この文の要点」が消えて
+     *   > しまいます。印刷されるようにしてください。
+     *   > そしてボールドと下線で強調
+     *
+     * 紙では**太字 + 下線の語句**になる(`styles.css` の `@media print`)。
+     * 札は1つずつ `<button>` なので、**あちらで `.phrase-chip` を
+     * 消さない指定も一緒に要る** —— 片方だけだと、見出しの
+     * 「この文の要点」だけが紙に残る。
+     */
+    <div className="phrases" ref={rootRef}>
       <span className="phrases-label">この文の要点</span>
       {list.map((phrase, i) => {
         const norm = normWord(phrase.text)

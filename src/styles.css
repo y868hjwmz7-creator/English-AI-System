@@ -3125,10 +3125,46 @@ html, body { overflow-x: clip; }
      `button` をまとめて消していたので、**紙に出すと英文が丸ごと
      消えていた**(2026-08 実機「PDFを出力すると中身が白紙になります」)。
      語の箱は `display: inline` で枠も色も持たないので、
-     出したままでもふつうの文字にしか見えない。 */
+     出したままでもふつうの文字にしか見えない。
+
+     **「この文の要点」(`.phrase-chip`)も同じ**(2026-09 利用者の指定)。
+
+       > 今でも存在しているけど印刷すると「この文の要点」が消えて
+       > しまいます。印刷されるようにしてください。
+       > そしてボールドと下線で強調
+
+     あれも1つずつ `<button>` で描いてあるので、まとめて消すと
+     **札だけが紙から消えて、見出しの「この文の要点」だけが残る。**
+     ボタンの見た目は下で落とし、**太字と下線の文字**にする。 */
   .no-print, .tabbar, .app-header nav, .btn,
-  button:not(.etext-word) { display: none !important; }
+  button:not(.etext-word):not(.phrase-chip) { display: none !important; }
   .print-only { display: block; }
+
+  /* **要点の札は、紙では「太字 + 下線の語句」にする**(利用者の指定)。
+     画面の錠剤(点線の枠・うすい地色)は、紙では**枠だけが目立って
+     中身が読みにくい。** 枠と地を落として、字づかいだけで示す
+     (「囲みも帯も増やさない。字づかいだけで層を分ける」・CLAUDE.md)。
+
+     **紙の灰色は、画面の値をそのまま持ってこない**(CLAUDE.md) ——
+     家庭用のプリンタは薄い灰色を網点で刷るので、ほとんど消える。
+     見出しは `#333`、札そのものは `#000` にする。 */
+  .print-target .phrases {
+    /* 札どうしが地続きに見えないよう、下線のあいだを広く取る */
+    gap: 0 14px; margin: 4px 0 2px;
+  }
+  .print-target .phrases-label {
+    color: #333 !important; font-size: 9pt;
+  }
+  .print-target .phrase-chip {
+    padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+    background: none !important; color: #000 !important;
+    font-size: inherit; line-height: inherit;
+    font-weight: 700; text-decoration: underline;
+  }
+  /* **開いたままの吹き出しは、紙に出さない。** あれは `position: fixed` で
+     body の直下に出るので、そのままだと**どのページにも重なって刷られる**
+     ことがある。札を押した直後に印刷しても、紙は教材の控えのままにする */
+  .etext-pop { display: none !important; }
 
   /* **画面で閉じている演習も、紙には出す。**
      タブを1つも押していない状態で印刷すると、見出しだけの紙が出ていた

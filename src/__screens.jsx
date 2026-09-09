@@ -202,11 +202,20 @@ const material = asSpeech ? {
         id: 'it-1', speaker: 'Mika',
         prompt_en: 'Could you tell me where the away fans usually sit?',
         prompt_ja: 'アウェーのファンが普段どこに座るか教えてもらえますか?',
+        /* **「この文の要点」を持たせてある**(2026-09 利用者の指定
+           「印刷すると『この文の要点』が消えてしまいます」)。
+           札は1つずつ `<button>` なので、紙の指定を1つ間違えると
+           **見出しだけが残って札が消える。** 描かないと分からない */
+        phrases: [
+          { text: 'away fans', note: 'アウェー側のサポーター' },
+          { text: 'usually sit', note: 'ふだん座る' },
+        ],
       },
       {
         id: 'it-2', speaker: 'Kenji',
         prompt_en: 'They are up in the corner behind the goal.',
         prompt_ja: 'ゴール裏の角の上の方です。',
+        phrases: [{ text: 'behind the goal', note: 'ゴールの裏に' }],
       },
     ],
   }],
