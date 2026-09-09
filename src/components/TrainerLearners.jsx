@@ -5,7 +5,7 @@
  * 最新の TOEIC / VERSANT が一目で分かるようにする。
  * レベルの物差しは教材と同じ CEFR にそろえてある。
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, cefrOption, scoreTestLabel } from '../data/cefr.js'
 import { lastLearner, rememberLearner, watchLearner } from '../lib/lastLearner.js'
 /* **状態の対応表は `data/learnerStatus.js` 1か所。**
@@ -63,6 +63,20 @@ export default function TrainerLearners({ me, navTick = 0 }) {
      端末には残さない(読み込み直せば消える) */
   const [openId, setOpenIdRaw] = useState(null)
   const setOpenId = useCallback((id) => { rememberLearner(id); setOpenIdRaw(id) }, [])
+  /* **名前から探す**(2026-09 利用者の指定
+     「担当しているゲスト内に『名前から探す』を入れて下さい」)。
+     いま担当が 22 人いて、これから 25 人まで増える(CLAUDE.md 冒頭)。
+     名前で引けないと、目当ての人を見つけるのに一覧を送ることになる。
+     **覚えない** —— 探すのはその場の操作であって、設定ではない。 */
+  const [who, setWho] = useState('')
+  /* **絞るのは一覧だけ。** 開いているゲストは `openId` で引くので、
+     打ち込んだ名前に当てはまらなくても**開いたまま**である
+     (絞り込みのせいで、開いていた人が消えては困る)。 */
+  const shown = useMemo(() => {
+    const q = who.trim().toLowerCase()
+    if (!q) return learners
+    return learners.filter((l) => (l.display_name || '').toLowerCase().includes(q))
+  }, [learners, who])
   /* 記録をすべて消すとき(0041)。**名前を打ち込ませる**ので、
      どのゲストの、いま何を入力しているかまで覚える */
   const [erasing, setErasing] = useState(null)
@@ -444,9 +458,12 @@ export default function TrainerLearners({ me, navTick = 0 }) {
           **同じものを2か所に出さない**ので、こちらからは外してある
           (下の「閉じる」は残る。行き止まりにはならない)。 */}
 
+      {/* **形は「教材をさがす」とそろえる**(`card finder` + `finder-head`)。
+          題とボタンが1行、その下に名前で引く欄。**同じ見た目を
+          書き写さない**ので、欄そのものは `SearchBar` を使い回す。 */}
       {!openId && (
-      <div className="card">
-        <div className="material-head">
+      <div className="card finder">
+        <div className="finder-head">
           <h2 className="card-title">担当しているゲスト</h2>
           {!adding && (
             <button type="button" className="btn btn--primary btn--small"
@@ -460,9 +477,21 @@ export default function TrainerLearners({ me, navTick = 0 }) {
             まだ担当しているゲストがいません。ゲストのアカウントを作ると、ここに並びます。
           </p>
         ) : (
-          <p className="card-hint">
-            {learners.length} 人 / 受講中 {learners.filter((l) => l.status === 'active').length} 人
-          </p>
+          <>
+            {/* **件数(◯ 件)は渡さない。** ゲストは「人」で数える。
+                下の1行が、絞ったあとの人数まで受け持つ */}
+            <SearchBar keyword={who} onKeyword={setWho} placeholder="名前から探す" />
+            {/* **黙って絞らない**(CLAUDE.md)。当てはまる人がいないときは、
+                いないことをはっきり言う ——「まだ担当がいない」のか
+                「絞り込みで消えた」のかが分からないと、行き止まりになる */}
+            <p className="card-hint">
+              {who.trim()
+                ? (shown.length === 0
+                  ? `「${who.trim()}」に当てはまるゲストがいません。`
+                  : `該当 ${shown.length} 人 / 担当 ${learners.length} 人`)
+                : `${learners.length} 人 / 受講中 ${learners.filter((l) => l.status === 'active').length} 人`}
+            </p>
+          </>
         )}
       </div>
       )}
@@ -517,7 +546,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
       )}
 
       {/* **開いているゲストだけを描く。** 下へ送っても、次のゲストは出てこない */}
-      {(openId ? learners.filter((l) => l.id === openId) : learners).map((l) => {
+      {(openId ? learners.filter((l) => l.id === openId) : shown).map((l) => {
         const toeic = l.scores.toeic
         const versant = l.scores.versant
         return (
@@ -572,11 +601,31 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         > 何か一つ間違えるとすぐにゲスト一覧に飛んでしまい
                       閉じる道は「← ゲストの一覧に戻る」と下の「閉じる」の
                       2つ残る。**行き止まりにはならない** */}
-                  {/* **開いているあいだは、ここに名前を出さない**
-                      (2026-09 利用者の指定)。上に貼り付く箱
-                      (`LearnerBar`)がいつも出しているので、
-                      **同じものが2つ**になる。名前も札もそちらにある */}
-                  {openId !== l.id && (
+                  {/* **開いているあいだも、名前は出す**(2026-09 実機・
+                      利用者の指定。**方針の変更**)。
+
+                        > 一番上のVERSANTのスコアなどが表示されている
+                        > ボックス内の左上、元々ゲストの名前があった
+                        > ところにも名前を入れて下さい。
+                        > ぽっかり空いていてデザインが微妙です。
+
+                      一度は「上に貼り付く箱(`LearnerBar`)が出しているので
+                      同じものが2つになる」として外したが、**この箱の左上が
+                      まるごと空き、右のスコアだけが浮いて見えた。**
+                      貼り付く箱は**画面の上端**にあり、この箱は**紙面の
+                      いちばん上**なので、役目が違う ——
+                      あちらは送っても消えない道しるべ、こちらは
+                      「この数字は誰のものか」の見出しである。
+
+                      **札(受講中)は足さない。** 言われたのは名前だけで、
+                      札は貼り付く箱の右端に出ている。
+
+                      **押せなくする**(2026-09 実機)。ここは名前でいちばん
+                      大きい字なので、画面共有中に触れただけで一覧へ飛んで
+                      いた。閉じる道は「← 一覧」と下の「閉じる」の2つ残る。 */}
+                  {openId === l.id ? (
+                    <span className="learner-name is-open">{l.display_name}</span>
+                  ) : (
                     <>
                       <button type="button" className="learner-name"
                               onClick={() => openDetail(l.id)}>
