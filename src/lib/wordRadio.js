@@ -55,6 +55,16 @@ export const REPEAT_GAP_MS = 500
 export const RECALL_GAP_MS = 1400
 
 /**
+ * その行で読む英語。**「読むものがあるか」を決めるのは、ここ1か所。**
+ *
+ * 画面の側で `r.display || r.word_norm` と書き写すと、**空白だけの語**が
+ * 一覧に残る(`' '` は真だが、trim すると空になる)。すると
+ * `radioSteps()` が空を返し、**鳴らす側が待たずに次へ送り続けて画面が固まる。**
+ * **数え方を2通り持たない。**
+ */
+export const radioTextOf = (row) => String(row?.display || row?.word_norm || '').trim()
+
+/**
  * その1語を、どの順で読むか。
  *
  * `{ kind: 'en' | 'ja' | 'wait', text?, ms? }` を並べて返す。
@@ -69,7 +79,7 @@ export const RECALL_GAP_MS = 1400
  * @param {string} modeId
  */
 export function radioSteps(row, modeId = DEFAULT_RADIO_MODE) {
-  const en = String(row?.display || row?.word_norm || '').trim()
+  const en = radioTextOf(row)
   if (!en) return []
   const ja = String(row?.meaning_ja || '').trim()
   const mode = radioModeOf(modeId)

@@ -3137,6 +3137,80 @@ export default defineConfig({
     }
   }
 
+  /* ── **本当に鳴らしてみる**(2026-09 実機・利用者の指摘)────────────
+   *
+   *   > 一つの単語が4回読み上げられたり、3回だったり、2回だったり、
+   *   > 一回だったり、不規則です。そして画面に表示されている単語と
+   *   > メチャクチャにズレてしまってます
+   *
+   *   **形を読むだけでは、絶対に見つからない。** `npm run lint` も
+   *   `npm run build` も通り、**音は鳴る**ので押しても分からない。
+   *   だから**端末の声の入口を差し替えて、何を読んだかを数える。**
+   *   置き換えるのは `speechSynthesis` だけで、画面のコードは1行も触らない。
+   *
+   *   見るのは2つ。**片方だけでは足りない。**
+   *     ① 同じ語を続けて読んでいないか(`enja` は1回・`en` は2回)
+   *     ② 読んだ英語と、そのとき画面に出ている語が同じか
+   *
+   *   ①だけだと、画面が1つ先を指したままでも緑になる。
+   *   ②だけだと、同じ語を二度読んでも(画面も同じなので)緑になる。
+   */
+  for (const [mode, 続けて] of [['enja', 1], ['en', 2]]) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    await page.addInitScript((m) => {
+      try { localStorage.setItem('eas.radioMode', m) } catch { /* 使えなくても困らない */ }
+      window.__log = []
+      const voices = [{ name: 'T EN', lang: 'en-US' }, { name: 'T JA', lang: 'ja-JP' }]
+      const fake = {
+        getVoices: () => voices,
+        cancel: () => {},
+        speak: (u) => {
+          window.__log.push({
+            読んだ: u.text,
+            画面: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
+          })
+          setTimeout(() => { u.onend?.() }, 120)
+        },
+        speaking: false, pending: false, paused: false,
+        addEventListener: () => {}, removeEventListener: () => {},
+      }
+      /* **代入では効かない。** `window.speechSynthesis` は読み取り専用の
+         getter なので、`=` は黙って捨てられる(実際に一度踏んだ) */
+      Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true })
+      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t } }
+    }, mode)
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=radio`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(7000)
+    const log = await page.evaluate(() => window.__log)
+    await page.close()
+
+    const 英語 = log.filter((r) => /^[A-Za-z][A-Za-z ]*$/.test(r.読んだ))
+    // 同じ英語が何回続いたか(`en` は 2 が正しい。3以上・不揃いは事故)
+    const 連続 = []
+    for (const r of 英語) {
+      const 末 = 連続[連続.length - 1]
+      if (末 && 末.語 === r.読んだ) 末.回 += 1
+      else 連続.push({ 語: r.読んだ, 回: 1 })
+    }
+    // 最後の1組は途中で切れているので数えない
+    const 中身 = 連続.slice(0, -1)
+    const ずれ = 英語.filter((r) => r.読んだ !== r.画面)
+
+    if (英語.length < 3) {
+      ng(`聞き流し(${mode}) … 読み上げが動いていない`, `${英語.length} 回`)
+    } else if (中身.some((c) => c.回 !== 続けて)) {
+      ng(`聞き流し(${mode}) … 同じ語を ${続けて} 回ずつ読んでいない`,
+        中身.map((c) => `${c.語}×${c.回}`).join(' / '))
+    } else if (ずれ.length > 0) {
+      ng(`聞き流し(${mode}) … 読んでいる語と画面がずれている`,
+        ずれ.map((r) => `読「${r.読んだ}」画面「${r.画面}」`).join(' / '))
+    } else {
+      ok(`聞き流し(${mode}) … 1語ずつ ${続けて} 回、画面とそろって読む`
+        + `(${中身.map((c) => c.語).join(' → ')})`)
+    }
+  }
+
   /* **画面が本当に呼んでいるか。** 検証の入り口(`__screens.jsx`)だけ
      直しても、利用者の画面からは入れない */
   {

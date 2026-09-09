@@ -2228,6 +2228,39 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '聞き流し … 読む語は、出題と同じ `poolNow()` から選んでいる')
     ok(/= radioSteps\(row, mode\)/.test(radio),
       '聞き流し … 読む順は `radioSteps()` に任せている')
+
+    /* ── **いま読んでいる語は、控えが本体**(2026-09 実機・利用者の指摘)──
+     *
+     *   > 一つの単語が4回読み上げられたり、3回だったり、2回だったり…
+     *   > 画面に表示されている単語とメチャクチャにズレてしまってます
+     *
+     *   もとは `atRef.current = at` と**描くたびに写して**いた。ところが
+     *   繰り返しは `setAt()` で進めたあと、**描き直しを待たずに次の周へ入る。**
+     *   React の状態はその場では変わっていないので、**同じ語をもう一度読み**、
+     *   しかも `setAt` が2回ぶん進むので**そこから先は画面が1つ先**を指す。
+     *
+     *   だから見るのは3つ。**どれか1つでも戻ると、また同じことが起きる。**
+     */
+    ok(!/atRef\.current\s*=\s*at\b/.test(radio),
+      '聞き流し … 描くたびに控えを写していない(写すと同じ語を二度読む)')
+    ok(/const move = \(i\) => \{ atRef\.current = i; setAt\(i\) \}/.test(radio),
+      '聞き流し … 進めるのは `move()` 1か所(控えと画面を一緒に動かす)')
+    /* **変数の名前で探さない。**「更新の形」そのもので見る ——
+       はじめ `setAt\(\(i\)` と書いていたので、`setAt((i2) => …)` に
+       名前を変えただけで**素通りした**(赤チェックで気づいた) */
+    ok(!/setAt\(\s*\(\s*\w+\s*\)\s*=>/.test(radio),
+      '聞き流し … `setAt` だけで進めていない(控えと食い違う)')
+    /* **進めるのが先、間を置くのがあと。** 逆にすると、音が出た時点で
+       画面がまだ1つ前になる(実測: gist を読んでいるのに画面は take on) */
+    ok(/move\(nextIndex\(i, list\.length\)\)\s*\n\s*await wait\(WORD_GAP_MS\)/.test(radio),
+      '聞き流し … 先に進めてから、語のあいだの間を置く(画面が追いつく)')
+    /* 「読むものがあるか」の判断を書き写さない —— 空白だけの語が残ると、
+       鳴らす側が待たずに回り続けて画面ごと固まる */
+    ok(/filter\(\(r\) => radioTextOf\(r\)\)/.test(radio),
+      '聞き流し … 読む語の絞り込みは `radioTextOf()` に任せている')
+    ok(/const en = radioTextOf\(row\)/.test(
+      落とす(readFileSync(new URL('../src/lib/wordRadio.js', import.meta.url), 'utf8'))),
+    '聞き流し … `radioSteps()` も同じ `radioTextOf()` を通る')
     ok(/bgmPlaysIn\(loadBgmPlace\(\), 'radio'\)/.test(radio),
       '聞き流し … 音楽を流すかどうかを `bgmPlaysIn()` に任せている')
     ok(/duckBgm\(true\)/.test(radio) && /duckBgm\(false\)/.test(radio),

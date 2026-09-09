@@ -37,7 +37,7 @@ import { japaneseVoice, speakOnce } from '../lib/speech.js'
 import { duckBgm, nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
 import {
   RADIO_MODES, WORD_GAP_MS, bgmPlaysIn, loadBgmPlace, loadRadioMode,
-  nextIndex, radioLead, radioSteps, saveRadioMode,
+  nextIndex, radioLead, radioSteps, radioTextOf, saveRadioMode,
 } from '../lib/wordRadio.js'
 
 export default function WordRadio({
@@ -56,10 +56,29 @@ export default function WordRadio({
   const [song, setSong] = useState(null) // いま鳴っている曲の題
   /** 止めるための印。**画面を離れたら、そこで終わる**(止まる条件を持たせる) */
   const liveRef = useRef(0)
+  /**
+   * いま読んでいる語。**控えのほうが本体で、`at` はその写しである**
+   * (2026-09 実機・利用者の指摘「一つの単語が4回読み上げられたり…
+   * 画面に表示されている単語とメチャクチャにズレてしまってます」)。
+   *
+   * **もとは `atRef.current = at` と、描くたびに写していた。** ところが
+   * 読み上げの繰り返しは `setAt()` で進めたあと、**描き直しを待たずに
+   * すぐ次の周に入って `atRef.current` を読む。** React の状態は
+   * その場では変わっていないので、**同じ語をもう一度読む。**
+   * しかも `setAt` は2回ぶん進むので、**そこから先は画面が1つ先を指したまま**
+   * になる(実測: take on を3回・gist を1回、訳は次の語の画面で読まれていた)。
+   *
+   * だから**進めるのは `move()` 1か所**にし、控えと画面を必ず一緒に動かす。
+   */
   const atRef = useRef(0)
-  atRef.current = at
 
-  const list = (rows ?? []).filter((r) => (r?.display || r?.word_norm))
+  /** いま読んでいる語を移す。**控えが先、画面はその写し** */
+  const move = (i) => { atRef.current = i; setAt(i) }
+
+  /* **読むものがある語だけを並べる。** 「読むものがあるか」の判断は
+     `radioTextOf()` 1か所(`wordRadio.js`)—— ここで書き写すと、
+     空白だけの語が残って**鳴らす側が待たずに回り続ける** */
+  const list = (rows ?? []).filter((r) => radioTextOf(r))
   const now = list[at] ?? null
 
   /* **音楽は、流す場所の指定に従う**(`bgmPlaysIn` 1か所)。
@@ -91,16 +110,25 @@ export default function WordRadio({
 
     const run = async () => {
       while (alive()) {
-        const row = list[atRef.current]
+        /* **控えから読む。** ここが「いま読んでいる語」である。
+           1周のあいだ動かさないので、読んでいる語と画面が必ず一致する */
+        const i = atRef.current
+        const row = list[i]
         const steps = radioSteps(row, mode)
         if (!steps.length) {
           /* **読むものが無い語は、待たずに次へ。**「読んだことにして」
-             間だけ置くと、無音の時間が延びるだけである */
-          setAt((i) => nextIndex(i, list.length))
+             間だけ置くと、無音の時間が延びるだけである。
+             **ただし少しだけ譲る** —— 一覧ぜんぶが空だったときに、
+             画面ごと固まらないようにする(`radioTextOf` で先に落として
+             あるので、ここへ来るのは行が入れ替わった一瞬だけ) */
+          move(nextIndex(i, list.length))
+          await wait(120)
           continue
         }
         for (const st of steps) {
           if (!alive()) return
+          /* 「次へ」で移されたら、この語はもう読まない */
+          if (atRef.current !== i) break
           if (st.kind === 'wait') { setSay(null); await wait(st.ms); continue }
           setSay(st.kind)
           /* **声が鳴っているあいだは、曲を小さくする**(利用者が選んだ) */
@@ -118,10 +146,18 @@ export default function WordRadio({
         }
         if (!alive()) return
         setSay(null)
+        setSong(nowPlaying()?.title ?? null)
+        /* 「次へ」で移されていたら、**語のあいだの間は置かない。**
+           押したのに 0.9 秒だまるのは、効いていないように見える */
+        if (atRef.current !== i) continue
+        /* **進めるのが先、間を置くのがあと。**
+           React は `setAt()` をその場では描き替えないので、
+           **間よりあとに進めると、音が出た時点で画面がまだ1つ前**になる
+           (実測: 「gist」を読んでいるのに画面は「take on」)。
+           先に進めておけば、語と語のあいだの 0.9 秒で必ず追いつく */
+        move(nextIndex(i, list.length))
         await wait(WORD_GAP_MS)
         if (!alive()) return
-        setAt((i) => nextIndex(i, list.length))
-        setSong(nowPlaying()?.title ?? null)
       }
     }
     run()
@@ -176,8 +212,12 @@ export default function WordRadio({
           <button type="button" className="btn btn--primary" onClick={() => setOn((v) => !v)}>
             {on ? <><StopIcon />とめる</> : <><PlayIcon />つづける</>}
           </button>
+          {/* **「次へ」も `move()` を通す。** `setAt` だけを動かすと
+              控えと食い違い、読んでいる語と画面がずれる。
+              いま鳴っているものは**その場で止める** —— 押したのに
+              最後まで読み切ってから移るのでは、効いていないように見える */}
           <button type="button" className="btn btn--quiet"
-                  onClick={() => setAt((i) => nextIndex(i, list.length))}>
+                  onClick={() => { stopReading(); move(nextIndex(atRef.current, list.length)) }}>
             次へ
           </button>
         </div>
