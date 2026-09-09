@@ -22,7 +22,6 @@ import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
-import { SPEECH_RATES, loadRateId, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
 import { normWord, prefetchGlosses } from '../lib/vocab.js'
@@ -78,9 +77,9 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
    *   **印刷する一瞬だけ**すべての演習を描き、終わったら元に戻す。
    */
   const [printId, setPrintId] = useState(null)
-  // 読み上げの速さ。**画面に1つだけ置く。** ここで選んだものが、
-  // この画面のすべての読み上げに効く(2026-08 利用者の指定)
-  const [rateId, setRateId] = useState(loadRateId)
+  /* **読み上げの速さの欄は置かない**(2026-09 利用者の指定で箱ごと外した)。
+     この画面では演習が印刷の一瞬しか描かれないので、**1つも効いていなかった。**
+     速さは「大きく表示する」の中の帯で選ぶ(選んだ値は覚える) */
   /* ── さがす・しぼる(2026-09 利用者の指定)──────────────────────
      宿題は溜まっていく(50件まで読む)。並んでいるだけでは、
      先週の記事をもう一度やり直したくても探せない。
@@ -189,10 +188,6 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
   /* 絞り込みで1件も残らなかったのか、そもそも宿題が無いのかを分ける。
      **黙って空にしない** */
   const narrowed = assignments.length > 0 && shown.length === 0
-  /* **上の「残り N 件」は、絞り込みに引きずられない。**
-     あれは「宿題がどれだけ残っているか」で、絞り込みとは別の話である
-     (絞ったぶんの数は、さがす帯の札が出す) */
-  const restAll = assignments.filter((a) => !a.learner_done_at).length
 
   return (
     <div className="stack">
@@ -216,27 +211,28 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
       )}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
-      <div className="card">
-        <h2 className="card-title">今週の宿題</h2>
-        {assignments.length === 0 ? (
-          <p className="card-hint">
-            まだ宿題は届いていません。次のレッスンのあとに届きます。
-          </p>
-        ) : (
-          <p className="card-hint">
-            残り <strong>{restAll}</strong> 件 / 全 {assignments.length} 件
-          </p>
-        )}
-        <label className="rate-pick">
-          <span>読み上げの速さ</span>
-          <select value={rateId}
-                  onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value) }}>
-            {SPEECH_RATES.map((r) => (
-              <option key={r.id} value={r.id}>{r.label}</option>
-            ))}
-          </select>
-        </label>
-      </div>
+      {/* **「今週の宿題」の箱は置かない**(2026-09 利用者の指定)。
+            > ゲストログインしている画面のトップ、
+            > 「今週の宿題」のボックスを排除します。
+
+          中に入っていた3つは、どれも**別の場所が同じことを言っていた。**
+
+            ・見出し「今週の宿題」 … 上の帯が画面の名前として出している
+            ・「残り 3 件 / 全 8 件」 … すぐ下の「取り組む(3)」
+              「やったもの(5)」と、さがす帯の札(◯ 件)
+            ・読み上げの速さ … **この画面では1つも効いていなかった**
+              (演習は印刷の一瞬しか描かれない)。選んだ値は
+              `eas.speechRate` に残るだけで、実際に使うのは
+              「大きく表示する」の中の帯である。そちらで選べる
+
+          **届いていないときの案内だけは残す。** これを消すと、
+          宿題が1件も無いゲストの画面が**まっさら**になる
+          (行き止まりを作らない・CLAUDE.md)。 */}
+      {assignments.length === 0 && (
+        <p className="card-hint">
+          まだ宿題は届いていません。次のレッスンのあとに届きます。
+        </p>
+      )}
 
       {/* ── さがす・しぼる(2026-09 利用者の指定)──────────────────
             > ③ ゲストのページの中で、教材をさがせます(中略)
