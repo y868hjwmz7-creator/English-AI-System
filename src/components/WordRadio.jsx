@@ -4,9 +4,13 @@
  *   > それとか音楽を流しながらどんどん登録されている単語が
  *   > 読まれるモードも欲しいですね
  *
- * 読み方は利用者が選んだ2つ。
+ * **読むのは英語だけ**(2026-09 利用者の指定)。
  *
- *   > 英語だけを繰り返し、と英語→間→日本語の2モードを選べるように
+ *   > 日本語入りはいらないですね!こえの質が悪すぎます!
+ *
+ * はじめは「英語 → 間 → 日本語」も選べたが、**日本語は端末の声でしか
+ * 読めず、質を選べなかった**(詳しくは `wordRadio.js` の読み方の節)。
+ * **画面に出す訳は、これまでどおり。**
  *
  * ============================================================================
  * 【1語ずつ画面に固定する。**集中モードと同じ骨組み**】
@@ -23,7 +27,6 @@
  *   語の読み上げは**標準の段**(Google / Azure の無料枠)で、
  *   **同じ語は1回しか課金されない**(置き場所が英文の指紋で決まる)。
  *   2周目からは0円なので、何時間回しても増えない。
- *   日本語は端末の声(0円)。
  *
  * 【記録は動かさない】
  *   聞き流しは**答える練習ではない**ので、箱も次に出す日も1ミリも動かさない。
@@ -33,7 +36,6 @@ import { useEffect, useRef, useState } from 'react'
 import FocusFrame from './FocusFrame.jsx'
 import { PlayIcon, StopIcon } from './Icons.jsx'
 import { readAloud, stopReading } from '../lib/readAloud.js'
-import { japaneseVoice, speakOnce } from '../lib/speech.js'
 import { duckBgm, nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
 import {
   RADIO_GAPS, bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
@@ -48,8 +50,7 @@ export default function WordRadio({
    * どの画面から来たか(`word` = 単語帳 / `qr` = Quick Response)。
    *
    * **読み方の一覧も、覚える鍵も、これで決まる**(`wordRadio.js` 1か所)。
-   * Quick Response は**日本語 → 英語**が既定である ——
-   * あちらは日本語を見て英語を言う練習なので、聞き流しも同じ向きにする。
+   * **間の長さは場面ごとに覚える** —— 語は短く、文は長い。
    */
   where = 'word',
   /** 曲(`listTracks()` が返したもの)。無ければ音楽は流れない */
@@ -63,7 +64,7 @@ export default function WordRadio({
   /**
    * **間(ま)の長さ**(2026-09 利用者の指定「間の時間設定もできるように」)。
    *
-   * 選ぶのは**「考える間」の秒数1つだけ**で、語と語のあいだも
+   * 選ぶのは**秒数1つだけ**で、語と語のあいだも
    * くり返しのあいだも**同じ比でそろって動く**(`radioGapsOf()` 1か所)。
    * **片方だけ縮めると、そこだけ不自然に詰まる**(`turnGap.js` と同じ考え方)。
    */
@@ -155,15 +156,11 @@ export default function WordRadio({
           setSay(st.kind)
           /* **声が鳴っているあいだは、曲を小さくする**(利用者が選んだ) */
           duckBgm(true)
-          if (st.kind === 'en') {
-            await readAloud(st.text, { rate })
-          } else {
-            const ja = japaneseVoice()
-            /* **日本語の声が無ければ、読まない。** 英語の声で読ませると
-               ローマ字読みになる。画面には出ているので行き止まりにはならない */
-            if (ja) await speakOnce(st.text, { voice: ja, rate: 1 }).done
-            else await wait(700)
-          }
+          /* **読むのは英語だけ**(2026-09 利用者の指定
+             「日本語入りはいらないですね!こえの質が悪すぎます!」)。
+             日本語は**端末の声**でしか読めず、質を選べなかった。
+             詳しくは `wordRadio.js` の読み方の節 */
+          await readAloud(st.text, { rate })
           duckBgm(false)
         }
         if (!alive()) return
@@ -211,19 +208,24 @@ export default function WordRadio({
           {list.length ? `${at + 1} / ${list.length}` : '0'}
         </span>
       )}
-      /* **読み方と間は、となりどうしに置く。** どちらも「どう読むか」で、
-         しかも**聴きながら「もう少し長く」と思う**ものである。
-         画面のはるか上ではなく、**変えたくなる場所のとなり**に置く
+      /* **間は、変えたくなる場所のとなりに置く。**
+         **聴きながら「もう少し長く」と思う**ものなので、
+         画面のはるか上ではなく、ここに置く
          (単語帳の「出題の形」を進み具合の行へ移したのと同じ考え方) */
       topEnd={(
         <>
-          <label className="wb-formpick radio-pick">
-            <span className="sr-only">読み方</span>
-            <select value={mode}
-                    onChange={(e) => { setMode(e.target.value); saveRadioMode(e.target.value, where) }}>
-              {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </label>
+          {/* **読み方は、選べるものが2つ以上あるときだけ出す**
+              (**効かない操作を見せない**・CLAUDE.md)。
+              日本語の読み上げを外したので、いまは「英語だけ」1つである */}
+          {modes.length > 1 && (
+            <label className="wb-formpick radio-pick">
+              <span className="sr-only">読み方</span>
+              <select value={mode}
+                      onChange={(e) => { setMode(e.target.value); saveRadioMode(e.target.value, where) }}>
+                {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </label>
+          )}
           {/* **間の長さ。** 数(秒)は1文字も削らない —— そこが読めないと、
               何を選んでいるのか分からない(CLAUDE.md) */}
           <label className="wb-formpick radio-pick radio-pick--gap">
@@ -268,7 +270,7 @@ export default function WordRadio({
           </button>
         </div>
         <p className="card-hint radio-lead">
-          {radioLead(mode)}
+          {radioLead()}
           {' '}最後まで行ったら、頭から回り直します。
           <strong>覚えた・まだ の記録は動きません。</strong>
         </p>

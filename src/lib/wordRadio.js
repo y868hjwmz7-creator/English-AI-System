@@ -31,45 +31,61 @@
  */
 
 /**
- * 読み方。**1つの画面に出るのは、いつも2つだけ。**
+ * 読み方。**いまは「英語だけ」1つである。**
  *
- *   | id | 何をするか | どこで |
- *   |---|---|---|
- *   | `en`   | 英語を2回。日本語は出さない | 単語帳・Quick Response |
- *   | `enja` | 英語 → 間 → 日本語 | 単語帳 |
- *   | **`jaen`** | **日本語 → 間 → 英語** | **Quick Response** |
+ * ══════════════════════════════════════════════════════════════════
+ * **日本語を読み上げる道は、外した**(2026-09 実機・利用者の指定)
  *
- * `jaen` は 2026-09 利用者の指定。
+ *   > 日本語入りはいらないですね!こえの質が悪すぎます!
  *
- *   > Quick Responseにも聞き流しを作ってくれ。
- *   > 英語だけ・日本語→英語 この２種類だ。
+ * 【なぜ質が悪いのか。直しようが無かった】
+ *   英語は**こちらで作った MP3**(ElevenLabs)を鳴らしている。
+ *   ところが**窓口は英語の声しか持っていない**ので、日本語だけは
+ *   **端末の声**(`speechSynthesis`)で読ませていた。
+ *   あれは端末まかせで、
  *
- * **向きが逆なのには理由がある。** Quick Response は
- * **日本語を見て英語を言う**練習である(教材の中でも復習でも、
- * 出題は日本語のほう)。聞き流しでも同じ向きにしないと、
- * ふだんやっていることと逆の順で耳に入る。
+ *     ・iPhone は**良い声を Web Speech API に一切公開しない**
+ *       (CLAUDE.md「iOS の録音」の節。実機で premium 0 件)
+ *     ・会社PC(Windows / Chrome)の声も端末しだいで、こちらから選べない
  *
- * **場面ごとに、利用者が挙げた2つ以外を足さない**
+ *   **こちらから直せるつまみが1つも無い。** 英語と並べて鳴らすと、
+ *   質の差がそのまま耳につく。
+ *
+ * 【消した。偽にして残さない】
+ *   `enja`(英語 → 間 → 日本語)と `jaen`(日本語 → 間 → 英語)を、
+ *   読み方の一覧からも `radioSteps()` からも、鳴らす側からも外した。
+ *   **残すと、次に見た人が「まだ使うのかもしれない」と読む**
+ *   (「サンプルデータに戻す」を消したときと同じ作法)。
+ *
+ * 【画面の日本語は消していない】
+ *   カードには訳がこれまでどおり出る。**言われたのは声の話**であって、
+ *   目で読む訳ではない(**言われた場所だけを直す**)。
+ *
+ * 【戻す日が来たら】
+ *   日本語も窓口で作れるようになった日(Azure / Google の日本語の声)には、
+ *   ここに `{ id: 'enja', … }` を足し、`radioSteps()` に枝を戻す。
+ *   **端末の声には二度と戻さない** —— 質を選べないことが、消した理由である。
+ * ══════════════════════════════════════════════════════════════════
+ *
+ * **場面ごとに、利用者が挙げたもの以外を足さない**
  * (`writingTones.js` の4つと同じ決まり)。
  */
 const MODE_EN = { id: 'en', label: '英語だけ、くり返し' }
-const MODE_ENJA = { id: 'enja', label: '英語 → 間 → 日本語' }
-const MODE_JAEN = { id: 'jaen', label: '日本語 → 間 → 英語' }
 
-/** 単語帳の読み方(**1つも変えていない**) */
-export const RADIO_MODES = [MODE_EN, MODE_ENJA]
-/** Quick Response の読み方(2026-09 利用者の指定) */
-export const QR_RADIO_MODES = [MODE_EN, MODE_JAEN]
+/** 単語帳の読み方 */
+export const RADIO_MODES = [MODE_EN]
+/** Quick Response の読み方(**単語帳と同じ**。向きの違いは日本語と一緒に消えた) */
+export const QR_RADIO_MODES = [MODE_EN]
 
-export const DEFAULT_RADIO_MODE = 'enja'
+export const DEFAULT_RADIO_MODE = 'en'
 
 /**
  * 場面ごとの持ちもの。**読み方の一覧も、覚える鍵も、ここ1か所。**
  *
  * `reviewScope.js` の `loadScope('qr')` / `saveScope('qr', id)` と同じ形
- * である。**覚える鍵を場面で分ける** —— 単語帳では `enja`、
- * Quick Response では `jaen` を選ぶ人が当たり前にいる。
- * **間の長さも同じ理由で分ける**(語は短く、文は長い)。
+ * である。**覚える鍵は場面で分けたまま**にしてある ——
+ * **間の長さが場面で違う**からである(語は短く、文は長い)。
+ * 読み方が1つに戻ったいまも、この分けかたは変えない。
  */
 const WHERES = {
   word: { modes: RADIO_MODES, modeKey: 'eas.radioMode', gapKey: 'eas.radioGap' },
@@ -78,12 +94,13 @@ const WHERES = {
 
 const whereOf = (where) => WHERES[where] ?? WHERES.word
 
-/** その画面に出す読み方(2つ)。**画面の中に一覧を書き写さない** */
+/** その画面に出す読み方。**画面の中に一覧を書き写さない** */
 export const radioModesFor = (where = 'word') => whereOf(where).modes
 
 /**
  * 覚えている値を、その画面の一覧に収める。
- * **知らない id はその画面の既定(2つめ)に落とす** —— 行き止まりを作らない。
+ * **知らない id はその画面の既定(最後のもの)に落とす** —— 行き止まりを作らない。
+ * 端末に `enja` / `jaen` が残っていても、ここで `en` に落ちる。
  */
 export const radioModeOf = (id, where = 'word') => {
   const { modes } = whereOf(where)
@@ -107,7 +124,14 @@ export const radioModeOf = (id, where = 'word') => {
 export const WORD_GAP_MS = 900
 /** 英語を2回読むときの、あいだ(比の基準) */
 export const REPEAT_GAP_MS = 500
-/** 考える間。**ここが `enja` / `jaen` のかなめ**(比の基準) */
+/**
+ * **比の基準**(選んだ秒が、そのままこの値になる)。
+ *
+ * もとは「日本語を読む前の、考える間」だった。日本語の読み上げを外した
+ * いまは**どの間にも直に使われていない**が、**基準としては残す** ——
+ * 動かすと `word` と `repeat` の比が変わり、
+ * **これまでと聞こえ方が変わってしまう。**
+ */
 export const RECALL_GAP_MS = 1400
 
 /**
@@ -171,52 +195,33 @@ export const radioJaOf = (row) => String(row?.meaning_ja || row?.ja || '').trim(
 /**
  * その1つを、どの順で読むか。
  *
- * `{ kind: 'en' | 'ja' | 'wait', text?, ms? }` を並べて返す。
+ * `{ kind: 'en' | 'wait', text?, ms? }` を並べて返す。
  * **鳴らす側は、これをそのまま上から順に処理するだけ**でよい。
  *
  * **英語が無ければ、何も返さない。** 読むものが無い語を
  * 「読んだことにして」次へ送ると、無音の時間だけが延びる。
- * **日本語が無ければ、英語だけを読む**(`enja` / `jaen` を選んでいても) ——
- * 無いものをあるように見せない(CLAUDE.md)。
+ *
+ * **`ja` は返さない**(2026-09 利用者の指定・上記)。読み上げるのは
+ * 英語だけである。**画面に出す訳は、これまでどおり**(`radioJaOf`)。
  *
  * @param {object} row  単語帳の1行 / Quick Response の1問
- * @param {string} modeId `en` / `enja` / `jaen`
- * @param {number} gapMs  考える間(ミリ秒)。ほかの間は同じ比で動く
+ * @param {string} modeId いまは `en` だけ
+ * @param {number} gapMs  間(ミリ秒)。3つの間は同じ比で動く
  */
 export function radioSteps(row, modeId = DEFAULT_RADIO_MODE, gapMs = DEFAULT_RADIO_GAP) {
   const en = radioTextOf(row)
   if (!en) return []
-  const ja = radioJaOf(row)
   const gaps = radioGapsOf(gapMs)
-  if (modeId === 'en') {
-    return [
-      { kind: 'en', text: en },
-      { kind: 'wait', ms: gaps.repeat },
-      { kind: 'en', text: en },
-    ]
-  }
-  if (modeId === 'jaen') {
-    /* **日本語が無ければ、問いが立たない。** 英語だけを読む */
-    if (!ja) return [{ kind: 'en', text: en }]
-    return [
-      { kind: 'ja', text: ja },
-      { kind: 'wait', ms: gaps.recall },
-      { kind: 'en', text: en },
-    ]
-  }
-  const steps = [{ kind: 'en', text: en }]
-  if (ja) {
-    steps.push({ kind: 'wait', ms: gaps.recall })
-    steps.push({ kind: 'ja', text: ja })
-  }
-  return steps
+  return [
+    { kind: 'en', text: en },
+    { kind: 'wait', ms: gaps.repeat },
+    { kind: 'en', text: en },
+  ]
 }
 
 /** 押す前に、何が起きるかを1行で言う(`scopeLead` と同じ作法) */
-export function radioLead(modeId = DEFAULT_RADIO_MODE) {
-  if (modeId === 'en') return '英語だけを2回ずつ読みます。意味は出しません。'
-  if (modeId === 'jaen') return '日本語を読んだあと少し間をおいて、英語を読みます。'
-  return '英語を読んだあと少し間をおいて、日本語を読みます。'
+export function radioLead() {
+  return '英語だけを2回ずつ読みます。意味は画面に出ます。'
 }
 
 /**

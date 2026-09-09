@@ -39,7 +39,7 @@ import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
 import {
-  marksFromTimes, sentenceShares, sentenceTimesOf, wordSpans,
+  markIndexAt, marksFromTimes, sentenceShares, sentenceTimesOf, wordSpans,
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
 import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
@@ -1795,6 +1795,52 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(marksFromTimes(TEXT, { start: [], end: [] }).length === 0,
     '長さが合わなければ空(当てずっぽうで色を付けない)')
 
+  /* ── **間(ま)のある本物の音声で、光り出す秒がずれないか**(2026-09 実測)
+   *
+   *   > やっぱり再生中の英文のハイライトが実際の音とずれます。
+   *
+   * 上の `align()` には間が1つも無いので、**壊しても気づけない。**
+   * 文と文のあいだに 0.5 秒の間を入れた時刻を作って、
+   * 「2文目が光り出す秒」と「2文目が本当に鳴り出す秒」を突き合わせる。
+   * ── */
+  {
+    const GAP = 'Hi there. How are you?'
+    const chars = []
+    const from = []
+    const to = []
+    let t = 0
+    for (let i = 0; i < GAP.length; i += 1) {
+      const ch = GAP[i]
+      chars.push(ch)
+      if (/\s/.test(ch)) {
+        // 文の切れ目(`.` の直後の空白)にだけ、0.5 秒の間を置く
+        const pause = GAP[i - 1] === '.' ? 0.5 : 0
+        from.push(t); t += pause; to.push(t)
+        continue
+      }
+      from.push(t); t += 0.1; to.push(t)
+    }
+    const al = {
+      characters: chars,
+      character_start_times_seconds: from,
+      character_end_times_seconds: to,
+    }
+    const tm = charTimesOf(al, GAP)
+    const ms = marksFromTimes(GAP, tm)
+    const ss = sentenceTimesOf(GAP, tm)
+    const head = GAP.indexOf('How')
+    let lit = null
+    for (let x = 0; x < 6000; x += 10) {
+      const i = markIndexAt(ms, x)
+      if (i >= 0 && ms[i].at >= head) { lit = x / 1000; break }
+    }
+    ok(Math.abs(ss[1].start - 1.3) < 0.001,
+      '2文目は 1.3 秒から鳴る(`Hi there.` 0.8 秒 + 間 0.5 秒)')
+    ok(lit !== null && Math.abs(lit - ss[1].start) <= 0.011,
+      '**間があっても、2文目は鳴り出す秒に光る**'
+      + `(光る ${lit} 秒 / 鳴る ${ss[1].start} 秒)`)
+  }
+
   // ── ③ 文の区間も、本当の時刻から ────────────────────────────────
   const sents = sentenceTimesOf(TEXT, times)
   ok(sents && sents.length === 2, '2文に分かれる')
@@ -2156,25 +2202,27 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
 {
   console.log('\n▶ 聞き流しと音楽')
 
-  /* ── 読み方は、**場面ごとに**利用者が挙げた2つだけ ──────────── */
-  ok(RADIO_MODES.length === 2
-    && RADIO_MODES.map((m) => m.id).join(',') === 'en,enja',
-    '読み方(単語帳) … 2つだけ(英語だけ / 英語 → 間 → 日本語)',
+  /* ── **読むのは英語だけ**(2026-09 利用者の指定)───────────────
+   *
+   *   > 日本語入りはいらないですね!こえの質が悪すぎます!
+   *
+   * 日本語は**端末の声**でしか読めず、質を選べなかった
+   * (iPhone は良い声を Web Speech API に公開しない・CLAUDE.md)。
+   * だから `enja` / `jaen` を、一覧からも `radioSteps()` からも外した。
+   * ── */
+  ok(RADIO_MODES.length === 1 && RADIO_MODES[0].id === 'en',
+    '読み方(単語帳) … 英語だけの1つ',
     RADIO_MODES.map((m) => m.id).join(','))
-  /* **Quick Response は向きが逆**(2026-09 利用者の指定
-     「英語だけ・日本語→英語 この２種類だ」)。あちらは日本語を見て
-     英語を言う練習なので、聞き流しも同じ向きにする */
-  ok(QR_RADIO_MODES.length === 2
-    && QR_RADIO_MODES.map((m) => m.id).join(',') === 'en,jaen',
-    '読み方(Quick Response) … 2つだけ(英語だけ / 日本語 → 間 → 英語)',
+  ok(QR_RADIO_MODES.length === 1 && QR_RADIO_MODES[0].id === 'en',
+    '読み方(Quick Response) … 英語だけの1つ',
     QR_RADIO_MODES.map((m) => m.id).join(','))
   ok(radioModesFor('qr') === QR_RADIO_MODES && radioModesFor('word') === RADIO_MODES,
     '読み方 … 場面ごとの一覧を `radioModesFor()` 1か所から引く')
-  /* **知らない id は、その画面の既定に落とす**(行き止まりを作らない)。
-     単語帳で覚えた `enja` を Quick Response へ持ち込んでも、そこでは `jaen` */
-  ok(radioModeOf('enja', 'qr').id === 'jaen' && radioModeOf('jaen', 'word').id === 'enja',
-    '読み方 … 別の画面の読み方は、その画面の既定に落ちる',
-    `${radioModeOf('enja', 'qr').id} / ${radioModeOf('jaen', 'word').id}`)
+  /* **端末に残っている古い値も、行き止まりにしない** —— `enja` / `jaen` を
+     選んだまま更新した人が、読み方の分からない画面に着かないようにする */
+  ok(radioModeOf('enja', 'word').id === 'en' && radioModeOf('jaen', 'qr').id === 'en',
+    '読み方 … 端末に残っている `enja` / `jaen` は `en` に落ちる',
+    `${radioModeOf('enja', 'word').id} / ${radioModeOf('jaen', 'qr').id}`)
 
   /* ── その1語を、どの順で読むか ─────────────────────────── */
   const 語 = { display: 'take on', meaning_ja: '引き受ける' }
@@ -2182,38 +2230,29 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(en.length === 3 && en[0].kind === 'en' && en[1].kind === 'wait' && en[2].kind === 'en',
     '英語だけ … 英語 → 間 → 英語 の3つ(日本語は読まない)',
     en.map((s) => s.kind).join(' '))
-  ok(!en.some((s) => s.kind === 'ja'),
-    '英語だけ … 意味は1つも読まない')
 
-  const 両方 = radioSteps(語, 'enja')
-  ok(両方.map((s) => s.kind).join(' ') === 'en wait ja',
-    '英語 → 間 → 日本語 … その順で返る',
-    両方.map((s) => s.kind).join(' '))
-  ok(両方[1].ms > 1000,
-    '英語 → 間 → 日本語 … 思い出すための間がある(1秒以上)', String(両方[1].ms))
+  /* **どの読み方を渡しても、日本語は1つも読まない。**
+     `radioSteps` に枝を戻すと、ここが赤くなる */
+  const 訳あり = ['en', 'enja', 'jaen', 'でたらめ', undefined]
+    .flatMap((m) => radioSteps(語, m))
+    .concat(radioSteps({ en: 'Could you walk me through it?', ja: '説明してもらえますか。' }, 'jaen'))
+  ok(!訳あり.some((s) => s.kind === 'ja'),
+    '**訳があっても、日本語は1つも読まない**(端末の声には戻さない)',
+    [...new Set(訳あり.map((s) => s.kind))].join(' '))
 
-  /* **無いものをあるように見せない。** 訳が無ければ、英語だけを読む */
-  const 訳なし = radioSteps({ display: 'gist' }, 'enja')
-  ok(訳なし.length === 1 && 訳なし[0].kind === 'en',
-    '訳が無い語 … 英語だけを読む(無音の「間」を置かない)',
-    訳なし.map((s) => s.kind).join(' '))
+  /* 訳のあるなしで、読む順は変わらない(読むのは英語だけである) */
+  ok(radioSteps({ display: 'gist' }, 'en').map((s) => s.kind).join(' ') === 'en wait en',
+    '訳が無い語 … これまでどおり、英語を2回読む')
   /* **英語が無ければ、何も返さない。**「読んだことにして」次へ送ると、
      無音の時間だけが延びる */
-  ok(radioSteps({ meaning_ja: '意味だけ' }, 'enja').length === 0,
+  ok(radioSteps({ meaning_ja: '意味だけ' }, 'en').length === 0,
     '英語が無い語 … 何も返さない')
   ok(radioSteps(null).length === 0, '空の行 … 何も返さない')
 
-  /* ── Quick Response は「日本語 → 間 → 英語」(2026-09 利用者の指定)── */
+  /* **画面に出す訳は消していない**(言われたのは声の話である) */
   const 文 = { en: 'Could you walk me through the numbers?', ja: '数字を説明してもらえますか。' }
-  const 逆 = radioSteps(文, 'jaen')
-  ok(逆.map((s) => s.kind).join(' ') === 'ja wait en',
-    '日本語 → 間 → 英語 … その順で返る(Quick Response の向き)',
-    逆.map((s) => s.kind).join(' '))
-  ok(逆[0].text === 文.ja && 逆[2].text === 文.en,
-    '日本語 → 間 → 英語 … 日本語が先、英語があと')
-  /* **日本語が無ければ、問いが立たない。** 英語だけを読む */
-  ok(radioSteps({ en: 'gist' }, 'jaen').map((s) => s.kind).join(' ') === 'en',
-    '日本語が無い文 … 英語だけを読む(無音の「間」を置かない)')
+  ok(radioJaOf(文) === 文.ja && radioJaOf(語) === 語.meaning_ja,
+    '訳 … **画面に出す訳は、これまでどおり引ける**(消したのは声だけ)')
 
   /* ── **語でも文でも、同じ1か所で読む**(部品を2つ持たない)──────── */
   ok(radioTextOf({ display: 'take on' }) === 'take on'
@@ -2241,7 +2280,7 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     const 短 = radioGapsOf(500)
     const 長 = radioGapsOf(5000)
     ok(短.recall === 500 && 長.recall === 5000,
-      '間 … 選んだ秒が、そのまま「考える間」になる')
+      '間 … 選んだ秒が、そのまま比の基準になる')
     /* **比を見る。値そのものでは見ない** —— 基準を動かしても、
        この見張りはそのまま生きている。
        **ぴったり同じにはならない**(ミリ秒に丸めるため)ので、
@@ -2262,18 +2301,16 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     /* **既定はこれまでとほぼ同じ。** 何も触らなければ聞こえ方は変わらない */
     const 既定 = radioGapsOf()
     ok(Math.abs(既定.recall - 1400) <= 200 && Math.abs(既定.word - 900) <= 150,
-      '間 … 既定は、これまで(考える間 1.4秒 / 語のあいだ 0.9秒)とほぼ同じ',
+      '間 … 既定は、これまで(基準 1.4秒 / 語のあいだ 0.9秒)とほぼ同じ',
       `${既定.recall} / ${既定.word} / ${既定.repeat}`)
   }
   /* **選んだ間が、本当に読む順に効いているか。**
      `radioSteps` が `radioGapsOf` を通っていなければ、
      間を変えても何も起きない(しかも音は鳴るので気づけない) */
-  ok(radioSteps(語, 'enja', 3000)[1].ms > radioSteps(語, 'enja', 500)[1].ms,
-    '間 … 選んだ長さが「考える間」に効く')
   ok(radioSteps(語, 'en', 3000)[1].ms > radioSteps(語, 'en', 500)[1].ms,
-    '間 … くり返しのあいだにも効く')
-  ok(radioSteps(文, 'jaen', 3000)[1].ms > radioSteps(文, 'jaen', 500)[1].ms,
-    '間 … 日本語 → 英語のあいだにも効く')
+    '間 … くり返しのあいだに効く')
+  ok(radioSteps(文, 'en', 3000)[1].ms > radioSteps(文, 'en', 500)[1].ms,
+    '間 … Quick Response の文でも同じように効く')
 
   /* ── 最後まで行ったら、頭へ戻る ─────────────────────────── */
   ok(nextIndex(0, 3) === 1 && nextIndex(2, 3) === 0,
@@ -2354,21 +2391,35 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     ok(/radioTextOf\(now\)/.test(radio) && /radioJaOf\(now\)/.test(radio),
       '聞き流し … 画面に出す文字も `radioTextOf()` / `radioJaOf()` を通る')
 
+    /* ── **日本語は読まない**(2026-09 利用者の指定)────────────────
+     *
+     *   > 日本語入りはいらないですね!こえの質が悪すぎます!
+     *
+     *   一覧から外すだけでは足りない —— **鳴らす側に道が残っていると、
+     *   誰かが枝を戻した日にまた鳴る。** 端末の声を呼ぶところごと消す。
+     */
+    ok(!/japaneseVoice/.test(radio),
+      '聞き流し … **端末の声で日本語を読む道が、鳴らす側に残っていない**')
+    /* **読み方が1つしか無いなら、選ばせない**(効かない操作を見せない) */
+    ok(/modes\.length > 1 &&/.test(radio),
+      '聞き流し … 読み方は、2つ以上あるときだけ出す')
+    /* **画面の訳は消していない**(言われたのは声の話である) */
+    ok(/className=\{`radio-ja/.test(radio),
+      '聞き流し … 訳は、これまでどおり画面に出す')
+
     /* ── Quick Response の聞き流し(2026-09 利用者の指定)────────────
      *
      *   > Quick Responseにも聞き流しを作ってくれ。
-     *   > 英語だけ・日本語→英語 この２種類だ。
      *
      *   **部品は単語帳とまったく同じ `WordRadio`。** 渡すのは
      *   「どの画面から来たか」だけである。**`where="qr"` を渡し忘れると、
-     *   単語帳の読み方(英語 → 日本語)で鳴る** —— しかも音は鳴るので、
-     *   聴いた人にしか分からない。
+     *   間の長さを単語帳と分けて覚えられない**(語は短く、文は長い)。
      */
     const qr = 落とす(readFileSync(
       new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8'))
     ok(/<WordRadio/.test(qr), '聞き流し … Quick Response から入れる')
     ok(/where="qr"/.test(qr),
-      '聞き流し … Quick Response は自分の読み方(日本語 → 英語)で鳴る')
+      '聞き流し … Quick Response は自分の持ちもの(間の長さ)で鳴る')
     ok(/onClick=\{listen\}/.test(qr), '聞き流し … Quick Response に入口のボタンがある')
     /* **出題とまったく同じ道で文を選ぶ**(数え方を2通り持たない)。
        `shown` は範囲の札と絞り込みを当てたあとの一覧である */

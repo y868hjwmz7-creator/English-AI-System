@@ -66,12 +66,48 @@ export const wordSpans = (text) => {
  * **返す形は `wordMarks()` とまったく同じ**(`{at, until}` のミリ秒)。
  * だから鳴らす側は、どちらが来たのかを知らなくてよい。
  *
+ * ══════════════════════════════════════════════════════════════════
+ * **`until` は「その語が終わった秒」ではない。「次の語が始まる秒」である**
+ * (2026-09 実測。利用者の指摘「やっぱりハイライトが実際の音とずれます」)
+ *
+ * `markIndexAt()` は **`elapsedMs < until` になる最初の印**を返す。
+ * つまり `until` は「**この印が現役でいられる終わり**」であって、
+ * 「その語が鳴り終わった秒」ではない。
+ *
+ * 見積もりの `wordMarks()` は重みを足し上げるので、
+ * **ある語の `until` = 次の語の頭**になっており、はじめからこの約束を
+ * 満たしていた。**本当の時刻を使うこちらだけが、約束を破っていた。**
+ *
+ * 【何が起きていたか】
+ *   本物の音声は、文と文のあいだに 0.3〜0.8 秒の**間(ま)**がある。
+ *   ところが「その語が終わった秒」を `until` にすると、
+ *   **前の文が鳴り終わった瞬間に次の文が光る。**
+ *
+ *     …a new machine.   ← 1.72 秒で鳴り終わる
+ *     (0.55 秒の間)     ← ここで**もう2文目が光っている**
+ *     Everyone was…     ← 実際に鳴り出すのは 2.27 秒
+ *
+ *   実測で **0.55 秒early**。ハイライトが声より先に走る、まさに
+ *   利用者の言う「ずれ」である。**次の語の頭まで伸ばせば 0.01 秒**
+ *   (10ms ごとに見ているので、それ以上は詰められない)。
+ *
+ * 【伸ばすだけ。縮めない】
+ *   時刻が当てはまらなかった語は飛ばしてあるので、その手前の語は
+ *   そのぶん長く現役でいる(**前の語の色がそのまま伸びる**)。
+ *   縮めると、そこだけ色が消える。
+ *
+ * 【いちばん最後の語は、そのまま】
+ *   次が無いので伸ばしようがない。`markIndexAt()` は行き過ぎたら
+ *   最後の印を返すので、鳴り終わりまで光ったままになる。
+ * ══════════════════════════════════════════════════════════════════
+ *
  * @param {string} text その英文
  * @param {{start:number[],end:number[]}|null} times `charTimesOf()` の返り値
  * @returns {Array<{at:number,until:number}>} 当てはめられなければ空
  */
 export const marksFromTimes = (text, times) => {
   const src = String(text ?? '')
+  const from = times?.start
   const end = times?.end
   if (!Array.isArray(end) || end.length !== src.length) return []
   const out = []
@@ -88,6 +124,18 @@ export const marksFromTimes = (text, times) => {
        戻ったり飛んだりはしない。**当てずっぽうで埋めない** */
     if (!Number.isFinite(sec)) continue
     out.push({ at: w.at, until: sec * 1000 })
+  }
+  /* **次の語が始まる秒まで伸ばす**(上記)。頭の時刻が揃っていないときは
+     何もしない —— これまでどおりの動きに戻るだけである */
+  if (Array.isArray(from) && from.length === src.length) {
+    for (let i = 0; i < out.length - 1; i += 1) {
+      let head = NaN
+      for (let k = out[i + 1].at; k < src.length; k += 1) {
+        if (Number.isFinite(from[k])) { head = from[k]; break }
+      }
+      // **伸ばすだけ。縮めない**(縮めると、そこだけ色が消える)
+      if (Number.isFinite(head) && head * 1000 > out[i].until) out[i].until = head * 1000
+    }
   }
   // **半分も当てはまらないなら、当てはめ方そのものが崩れている**
   if (!out.length || out.length < words.length * 0.6) return []
