@@ -1604,6 +1604,29 @@ html, body { overflow-x: clip; }
   /* 狭い画面では、下の端に少しだけ寄せる(親指の届くところ) */
   .finder-float { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); }
 }
+/* **下の帯があるときは、そのぶん上へ逃がす**(2026-09 実機・利用者の指摘)。
+
+     > トレーナーの教材画面で、下部のタブに「教材をつくる」が
+     > 被ってしまっています。少し上に移動させて被らないように
+     > してください。タブから少しだけマージンは取ってください
+
+   `.finder-float` は `position: fixed` なので、**下の帯(`.app-tabs`)が
+   あることを知らない。** 帯も `fixed` で、しかも**あとに描かれる**ので、
+   狭い画面では「＋ 教材を作る」が帯の下にもぐる。
+
+   **`.app-shell.has-tabs` で見る。幅の境目で決めない** —— 帯が出るのは
+   「狭い画面 かつ 行き先がある」ときで、幅だけでは決まらない
+   (`showTabs = !navPush && tabs.length > 0`・`App.jsx`)。
+
+   **帯の高さは実測してある**(`?screen=tabs`)。57px(320px では 63px)+
+   端末の切り欠き。そこへ**12px の余白**を足す —— 利用者の指定
+   「タブから少しだけマージンは取ってください」である。
+   `.sheet-floats.is-above-dock` とまったく同じ考え方。 */
+.app-shell.has-tabs .finder-float { bottom: calc(69px + env(safe-area-inset-bottom)); }
+@media (max-width: 320px) {
+  /* 320px では「Quick Response」が2行になり、帯が 63px になる(実測) */
+  .app-shell.has-tabs .finder-float { bottom: calc(75px + env(safe-area-inset-bottom)); }
+}
 
 /* 無いときと、一覧のいちばん下に出す「作る」 */
 .finder-empty, .finder-more { display: flex; flex-direction: column; gap: var(--sp-10); }

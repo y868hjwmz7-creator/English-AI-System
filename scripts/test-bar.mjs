@@ -2152,6 +2152,76 @@ export default defineConfig({
     ok('下の行き先 … 押すとその画面へ移る')
   }
 
+  /* ══ 浮きボタンが、下の帯に被っていないか(2026-09 実機・利用者の指摘)══
+       > トレーナーの教材画面で、下部のタブに「教材をつくる」が
+       > 被ってしまっています。少し上に移動させて被らないように
+       > してください。タブから少しだけマージンは取ってください
+
+     `.finder-float` も `.app-tabs` もどちらも `position: fixed` で、
+     **帯のほうがあとに描かれる。** だから被っても
+     `npm run lint` にも `npm run build` にも引っかからず、
+     **狭い画面でその画面を開くまで分からない。**
+
+     **「重なっていない」だけを見ない。** それだと画面のはるか上へ
+     逃がしても緑になる(利用者が言ったのは「少しだけマージン」である)。
+     すき間が**8〜24px に収まっているか**まで見る。 */
+  for (const w of [430, 390, 375, 360, 320]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=tabs&role=trainer`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.finder-float')
+    const m = await page.evaluate(() => {
+      const t = document.querySelector('.app-tabs').getBoundingClientRect()
+      const f = document.querySelector('.finder-float').getBoundingClientRect()
+      return {
+        すき間: Math.round(t.top - f.bottom),
+        帯: Math.round(t.height),
+        画面内: f.top >= 0 && f.right <= window.innerWidth + 1,
+      }
+    })
+    const どこ = `浮きボタン ${w}px`
+    if (m.すき間 < 0) {
+      ng(`${どこ} … 下の帯に ${-m.すき間}px 被っている`,
+        '「＋ 教材を作る」が帯の下にもぐる(2026-09 実機)')
+    } else if (m.すき間 < 8 || m.すき間 > 24) {
+      ng(`${どこ} … 帯とのすき間が ${m.すき間}px`,
+        '「タブから少しだけマージン」— 8〜24px に収める')
+    } else if (!m.画面内) {
+      ng(`${どこ} … 画面からはみ出している`)
+    } else {
+      ok(`${どこ} … 帯(${m.帯}px)の ${m.すき間}px 上に出る`)
+    }
+  }
+
+  /* **広い画面まで持ち上げない。** 帯が出るのは「狭い画面 かつ 行き先が
+     ある」ときだけなので、**逃がす指定も `.app-shell.has-tabs` に絞る。**
+     素の `.finder-float` に書くと、帯の無い画面でも 69px 浮いてしまう。
+
+     **「`.has-tabs` の指定が在るか」だけを見ない** —— それだと
+     持ち上げを素の `.finder-float` へ移しても、狭い画面ぶんの指定が
+     残っているかぎり**緑のまま**になる(実際にそうなった)。
+     **素の `.finder-float` が置いている `bottom` の値**を1つずつ見て、
+     帯の高さ(57px)ぶん浮いていないことを確かめる。 */
+  {
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    /* 素の `.finder-float { … }`(`.has-tabs` の付いていないもの)*/
+    const bare = [...css.matchAll(/(^|[{},])\s*\.finder-float\s*\{([^}]*)\}/g)]
+      .map((m) => /bottom:\s*calc\(\s*(\d+)px/.exec(m[2]))
+      .filter(Boolean).map((m) => Number(m[1]))
+    const 高い = bare.filter((n) => n > 24)
+    if (!/\.app-shell\.has-tabs \.finder-float\s*\{[^}]*bottom:/.test(css)) {
+      ng('浮きボタン … 逃がす指定が `.app-shell.has-tabs` に無い',
+        '帯があるときだけ持ち上げる(幅の境目で決めない)')
+    } else if (高い.length) {
+      ng(`浮きボタン … 素の指定が ${高い.join('px / ')}px 浮いている`,
+        '帯の無い広い画面まで持ち上がる。持ち上げは `.has-tabs` の側だけに書く')
+    } else {
+      ok(`浮きボタン … 帯があるときだけ持ち上げる`
+        + `(素の指定は ${bare.join('px / ')}px のまま)`)
+    }
+  }
+
   /* ══ **Quick Response の表示は、単語帳と同じ**(2026-09 利用者の指定)══
        > quick reponse内の表示だが、単語帳と同じにしてくれ
 

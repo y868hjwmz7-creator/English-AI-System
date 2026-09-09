@@ -471,8 +471,19 @@ function HwFilterDemo() {
    `App.jsx` が本当にこれを出しているかは、`npm run test:bar` が
    ソースの形で別に見る —— ここだけ緑でも利用者の画面は変わらない。 */
 const TABS = (
-  <>
-    <div style={{ height: '1200px' }} />
+  /* **本物の骨組みで包む**(2026-09 実機)。「＋ 教材を作る」の浮きボタン
+     (`.finder-float`)を帯の上へ逃がす指定は `.app-shell.has-tabs` で
+     効かせてあるので、**包まないと測れない**(素通りする) */
+  <div className="app-shell is-narrow has-tabs">
+    <div className="app-body">
+      <div className="app">
+        <div style={{ height: '1200px' }} />
+        {/* 一覧の途中に出る「＋ 教材を作る」。**帯に被っていないか**を測る */}
+        <button type="button" className="btn btn--small finder-float">
+          ＋ 教材を作る
+        </button>
+      </div>
+    </div>
     <AppTabs
       pages={[
         q.get('role') === 'trainer'
@@ -489,7 +500,7 @@ const TABS = (
         document.querySelector('.app-tabs').dataset.picked = id
       }}
     />
-  </>
+  </div>
 )
 
 /* Quick Response の1問(`?screen=qr`・2026-09 利用者の指定)。
