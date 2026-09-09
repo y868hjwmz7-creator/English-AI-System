@@ -36,7 +36,7 @@ import SearchBar from './SearchBar.jsx'
 import HomeworkFilter from './HomeworkFilter.jsx'
 /* **絞る・引く・並べるは `homeworkFilter.js` 1か所**(ゲストの
    「今週の宿題」と分け合っている)。画面ごとに書くと必ず食い違う */
-import { narrowHomework } from '../lib/homeworkFilter.js'
+import { homeworkFilterOn, narrowHomework } from '../lib/homeworkFilter.js'
 import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
@@ -837,6 +837,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         collapsible
                         open={pastSearchOpen}
                         onOpenChange={(v) => { setPastSearchOpen(v); savePastSearchOpen(v) }}
+                        /* **黙って絞らない。** 欄は畳むと見えなくなるので、
+                           掛かっているときだけ題のとなりに印を出す(CLAUDE.md) */
+                        mark={homeworkFilterOn(pastFilter) ? 'しぼり込み中' : null}
                       >
                         {/* 取り組みの状態。件数を添えると、押す前に結果が読める。
                             **その人に出したものしか出ない**ので、教材の画面の
@@ -856,28 +859,28 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                             </button>
                           ))}
                         </div>
+
+                        {/* **日付・分野・場面・苦手項目で絞る**(2026-08 利用者の指定)。
+                              > ここも日付のタブを入れ、その中に新しい順、古い順の
+                              > 機能をまとめてくれ。日付タブの右に業界、趣味、
+                              > シチュエーション、話題で絞り込む機能を、
+                              > そしてもう一つは苦手項目から絞り込む機能だ
+                            並び順は**日付の吹き出しの中**に入っている。
+                            日付にまつわる操作を1か所にまとめるため。
+                            判断は `HomeworkFilter` 1か所(単語帳と同じ考え方)。
+
+                            **置くのは、まとめた箱の中**(2026-09 実機・利用者の指定)。
+                              > 日付や絞り込みのプルダンは
+                              > 「宿題をさがす・しぼる」の中にしまって欲しいです
+                            箱の下に並べていたので、**畳んでも欄だけが残って**いた */}
+                        <HomeworkFilter
+                          rows={assignments}
+                          value={pastFilter}
+                          onChange={setPastFilter}
+                          sort={pastSort}
+                          onSort={setPastSort}
+                        />
                       </SearchBar>
-                    )}
-
-                    {/* **日付・分野・場面・苦手項目で絞る**(2026-08 利用者の指定)。
-                          > ここも日付のタブを入れ、その中に新しい順、古い順の
-                          > 機能をまとめてくれ。日付タブの右に業界、趣味、
-                          > シチュエーション、話題で絞り込む機能を、
-                          > そしてもう一つは苦手項目から絞り込む機能だ
-                        並び順は**日付の吹き出しの中**に入っている。
-                        日付にまつわる操作を1か所にまとめるため。
-                        判断は `HomeworkFilter` 1か所(単語帳と同じ考え方)。
-
-                        **置くのは、まとめた箱の下**(2026-09 利用者の指定)。
-                        以前は2つの箱に挟まれていた */}
-                    {assignments.length > 0 && (
-                      <HomeworkFilter
-                        rows={assignments}
-                        value={pastFilter}
-                        onChange={setPastFilter}
-                        sort={pastSort}
-                        onSort={setPastSort}
-                      />
                     )}
 
 

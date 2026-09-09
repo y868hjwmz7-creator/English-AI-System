@@ -406,7 +406,8 @@ const SEARCH = (
         「今日の宿題のところにも実装してください」)。
         **取り組みの札は入らない** —— カードの1行目の
         「やった / まだ」の札が同じことを言っている。
-        絞り込みは箱の下に、トレーナーの画面とまったく同じ形で並ぶ */}
+        **絞り込みは箱の中**(2026-09 実機・利用者の指定)。
+        しぼり込み中の印も、ここで描いて確かめる */}
     <div data-hw="1">
       <SearchBar
         title="宿題をさがす・しぼる"
@@ -416,8 +417,10 @@ const SEARCH = (
         collapsible
         open={q.get('open') === '1'}
         onOpenChange={() => {}}
-      />
-      <HwFilterDemo />
+        mark="しぼり込み中"
+      >
+        <HwFilterDemo />
+      </SearchBar>
     </div>
   </div>
 )

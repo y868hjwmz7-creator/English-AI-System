@@ -2462,8 +2462,15 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      **「名前が出てくるか」で見ない。** 説明の中にも同じ語が出てくる */
   ok(/<SearchBar\s/.test(hw) && /collapsible/.test(hw),
     '今週の宿題 … 畳めるさがす帯(`SearchBar`)を出している')
-  ok(/<HomeworkFilter\s/.test(hw),
-    '今週の宿題 … 絞り込み(`HomeworkFilter`)を出している')
+  /* **箱の中に入っているか**(2026-09 実機・利用者の指定
+       > 日付や絞り込みのプルダンは
+       > 「宿題をさがす・しぼる」の中にしまって欲しいです
+     「名前が出てくるか」では、外に戻しても緑のままになる。
+     開きタグ → `HomeworkFilter` → 閉じタグ の順で書いてあるかを見る */
+  ok(/<HomeworkFilter\s/.test(hw)
+    && hw.indexOf('<HomeworkFilter') > hw.indexOf('<SearchBar')
+    && hw.indexOf('</SearchBar>') > hw.indexOf('<HomeworkFilter'),
+    '今週の宿題 … 絞り込み(`HomeworkFilter`)を、さがす箱の中に出している')
   ok(/= narrowHomework\(assignments, \{/.test(hw),
     '今週の宿題 … 絞る・引く・並べるは `narrowHomework()` に任せている')
   ok(/= narrowHomework\(assignments, \{/.test(tl),

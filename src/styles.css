@@ -1791,6 +1791,16 @@ html, body { overflow-x: clip; }
    `section.searchbar` のまま描かれる。 */
 .searchbar-badge { margin-left: auto; }
 .searchbar--fold > .searchbar-row { margin: 0; }
+/* **絞り込みの欄も、この箱の中に入る**(2026-09 実機・利用者の指定)。
+     > 日付や絞り込みのプルダンは
+     > 「宿題をさがす・しぼる」の中にしまって欲しいです
+   `.wbfilter` は `margin-top: 0` なので、そのままだと検索の行に
+   ぴったりくっつく。**この箱の中でだけ**、一段ぶんの隙間を空ける */
+.searchbar--fold > .wbfilter { margin-top: var(--sp-10); }
+/* 畳んだままでも「掛かっている」と分かる印。
+   **黙って絞らない**(CLAUDE.md)。件数の札(`margin-left: auto`)より
+   先に出るので、題のすぐとなりに並ぶ */
+.searchbar-mark { margin-left: var(--sp-8); }
 
 @media (max-width: 640px) {
   /* 狭い画面では、入力欄が1行を使い切る */

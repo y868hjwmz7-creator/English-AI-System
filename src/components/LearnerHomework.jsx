@@ -37,7 +37,7 @@ import LessonNotes from './LessonNotes.jsx'
    トレーナーの「過去の宿題」と分け合っている。**書き写さない** */
 import SearchBar from './SearchBar.jsx'
 import HomeworkFilter from './HomeworkFilter.jsx'
-import { emptyHomeworkFilter, narrowHomework } from '../lib/homeworkFilter.js'
+import { emptyHomeworkFilter, homeworkFilterOn, narrowHomework } from '../lib/homeworkFilter.js'
 import { loadHwSearchOpen, saveHwSearchOpen } from '../lib/slashLevel.js'
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('ja-JP') : '')
@@ -264,19 +264,28 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
           collapsible
           open={searchOpen}
           onOpenChange={(v) => { setSearchOpen(v); saveHwSearchOpen(v) }}
-        />
-      )}
-      {/* 日付・分野・場面・苦手項目。**並び順は日付の吹き出しの中**。
-          選択肢は**自分に届いた宿題にあるものだけ**が出るので、
-          押しても0件、ということが起きない */}
-      {assignments.length > 0 && (
-        <HomeworkFilter
-          rows={assignments}
-          value={filter}
-          onChange={setFilter}
-          sort={sort}
-          onSort={setSort}
-        />
+          /* **黙って絞らない。** 欄は畳むと見えなくなるので、
+             掛かっているときだけ題のとなりに印を出す(CLAUDE.md) */
+          mark={homeworkFilterOn(filter) ? 'しぼり込み中' : null}
+        >
+          {/* 日付・分野・場面・苦手項目。**並び順は日付の吹き出しの中**。
+              選択肢は**自分に届いた宿題にあるものだけ**が出るので、
+              押しても0件、ということが起きない。
+
+              **箱の中に入れる**(2026-09 実機・利用者の指定)。
+                > 日付や絞り込みのプルダンは
+                > 「宿題をさがす・しぼる」の中にしまって欲しいです
+              外に並べていたので、**畳んでも欄だけが残って**いた。
+              「さがす」と「しぼる」は**どちらも一覧を狭める1つのこと**
+              なので、開け閉めも1つでよい */}
+          <HomeworkFilter
+            rows={assignments}
+            value={filter}
+            onChange={setFilter}
+            sort={sort}
+            onSort={setSort}
+          />
+        </SearchBar>
       )}
       {narrowed && (
         <p className="card-hint">

@@ -1817,6 +1817,17 @@ export default defineConfig({
          取り組みの札が、検索の欄と**同じ `<details>` の中**にいるか */
       札の行が中にいる: !!fold.querySelector('.chiprow'),
       畳める箱の数: document.querySelectorAll('[data-fold] details').length,
+      /* **絞り込みの欄も、畳んだら一緒に隠れる**(2026-09 実機・利用者の指定
+           > 日付や絞り込みのプルダンは
+           > 「宿題をさがす・しぼる」の中にしまって欲しいです
+         箱の外に置いていたので、畳んでも欄だけが残っていた */
+      畳んでも絞り込みが見えるか:
+        !!document.querySelector('[data-hw] .wbfilter')?.checkVisibility(),
+      /* **黙って絞らない。** 掛かっているときは、畳んだままでも印が出る */
+      しぼり込み中の印: document
+        .querySelector('[data-hw] .searchbar-mark')?.textContent.trim() ?? null,
+      // 渡していない側(`data-fold`)には出ない。**「出る」だけを見ない**
+      印を渡していない側: !!document.querySelector('[data-fold] .searchbar-mark'),
       // 教材の側 —— 畳んでいない・札を使っていない・件数はこれまでどおり
       教材は畳めない: !!plain && plain.tagName === 'SECTION',
       教材の札: !!document.querySelector('[data-plain] .searchbar-badge'),
@@ -1844,6 +1855,15 @@ export default defineConfig({
     ng(`宿題をさがす … さがすとしぼるが1つになっていない`
       + `(箱 ${shut.畳める箱の数} 個・札の行は中に ${shut.札の行が中にいる})`,
       '「「教材をさがす」と「教材を絞る」を１つにまとめて」(利用者の指定)')
+  } else if (shut.畳んでも絞り込みが見えるか) {
+    ng('宿題をさがす … 畳んでも絞り込みの欄が残っている',
+      '「日付や絞り込みのプルダンは…中にしまって欲しい」(利用者の指定)')
+  } else if (shut.しぼり込み中の印 !== 'しぼり込み中') {
+    ng(`宿題をさがす … 畳むと絞っていることが分からない(${shut.しぼり込み中の印})`,
+      '**黙って絞らない**(CLAUDE.md)。欄を隠したぶん、印で見せる')
+  } else if (shut.印を渡していない側) {
+    ng('宿題をさがす … 渡していない側にも印が出ている',
+      '掛かっているときだけ出す(効かない印を見せない)')
   } else {
     ok(`宿題をさがす・しぼる … 畳んで ${shut.畳んだ丈}px・箱は1つ`
       + `・札が右端に出る(${shut.札}・${shut.札の右}px)`)
@@ -1894,6 +1914,13 @@ export default defineConfig({
   }
 
   /* ── 画面が本当に呼んでいるか(検証だけが緑にならないように)──── */
+  /** `<SearchBar …> … <HomeworkFilter …> … </SearchBar>` の形か */
+  const filterInsideBar = (src) => {
+    const a = src.indexOf('<SearchBar')
+    const f = src.indexOf('<HomeworkFilter')
+    const z = src.indexOf('</SearchBar>')
+    return a >= 0 && f > a && z > f
+  }
   const tl = readFileSync(new URL('../src/components/TrainerLearners.jsx',
     import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
   if (!/title="宿題をさがす・しぼる"[\s\S]{0,400}collapsible/.test(tl)) {
@@ -1910,16 +1937,23 @@ export default defineConfig({
   } else if (/<details className="card material-search"/.test(tl)) {
     ng('宿題をさがす … 畳める箱が2つに戻っている',
       '「1つにまとめて」(利用者の指定)。しぼるは `SearchBar` の中身にする')
-  /* **絞り込みの行は、まとめた箱の「下」**(利用者の指定)。
-     ソースの並び順で見る —— `SearchBar` が先、`HomeworkFilter` が後 */
-  } else if (tl.indexOf('<HomeworkFilter') < tl.indexOf('<SearchBar')) {
-    ng('宿題をさがす … 絞り込みの行が箱より上にいる',
-      '「「日付・並び順」「分野: すべて」「苦手項目で絞る」をその下に」')
+  /* **絞り込みの欄は、まとめた箱の「中」**(2026-09 実機・利用者の指定)。
+       > 日付や絞り込みのプルダンは
+       > 「宿題をさがす・しぼる」の中にしまって欲しいです
+     ソースの並び順で見る —— 開きタグ → `HomeworkFilter` → 閉じタグ。
+     **「あとに書いてあるか」だけでは足りない** ——
+     箱の下に戻しても、それは満たされてしまう */
+  } else if (!filterInsideBar(tl)) {
+    ng('宿題をさがす … 絞り込みの欄が箱の中に入っていない',
+      '`<SearchBar>` の中身として書く(利用者の指定)')
+  } else if (!/mark=\{homeworkFilterOn\(/.test(tl)) {
+    ng('宿題をさがす … 絞っている印を出していない',
+      '欄を隠したぶん、畳んだままでも分かるようにする(黙って絞らない)')
   } else if (tl.includes('PastFilterOpen')) {
     ng('宿題をさがす … 使わなくなった控え(`eas.pastFilter`)が残っている',
       '**値を偽にするだけにしない。** 残すと次に見た人が迷う(CLAUDE.md)')
   } else {
-    ok('宿題をさがす・しぼる … 1つの箱・絞り込みはその下・教材の側は変えていない')
+    ok('宿題をさがす・しぼる … 1つの箱・絞り込みはその中・教材の側は変えていない')
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -1938,7 +1972,9 @@ export default defineConfig({
   const hw = await page.evaluate(() => {
     const box = document.querySelector('[data-hw]')
     const fold = box.querySelector('details')
-    const filter = box.querySelector('.wbfilter')
+    /* **箱の中から探す。** 外に置いてあると、ここで見つからない
+       (2026-09 実機・利用者の指定で、欄ごと中へしまった) */
+    const filter = fold.querySelector('.wbfilter')
     /* **押すものそのものを測る。** `.wbfilter` は `display: block` なので、
        包んでいる `<label>` は**行の高さ(18px)しか無い** ——
        そこを測ると、押せる大きさを割っていないのに赤くなる(実測して気づいた) */
@@ -1949,8 +1985,9 @@ export default defineConfig({
       絞り込みの数: parts.length,
       いちばん低い: parts.length
         ? Math.round(Math.min(...parts.map((el) => el.getBoundingClientRect().height))) : 0,
-      絞り込みの下: filter ? Math.round(filter.getBoundingClientRect().bottom) : 0,
-      箱の下: Math.round(fold.getBoundingClientRect().bottom),
+      検索の行の下: Math.round(fold.querySelector('.searchbar-row')
+        .getBoundingClientRect().bottom),
+      絞り込みの上: filter ? Math.round(filter.getBoundingClientRect().top) : 0,
       はみ出し: filter
         ? Math.round(Math.max(...parts.map((el) => el.getBoundingClientRect().right)))
         : 0,
@@ -1961,16 +1998,16 @@ export default defineConfig({
     ng('今週の宿題 … 取り組みの札が入っている',
       'カードの1行目の「やった / まだ」と同じことを2か所に出さない')
   } else if (!hw.絞り込みがある || hw.絞り込みの数 < 3) {
-    ng(`今週の宿題 … 絞り込みの欄が出ていない(${hw.絞り込みの数} 個)`,
-      '日付・分野・場面・苦手項目で絞れるようにする')
-  } else if (hw.絞り込みの下 < hw.箱の下) {
-    ng('今週の宿題 … 絞り込みが、さがす箱より上にいる')
+    ng(`今週の宿題 … 絞り込みの欄が箱の中に出ていない(${hw.絞り込みの数} 個)`,
+      '日付・分野・場面・苦手項目で絞れるようにする(欄は箱の中)')
+  } else if (hw.絞り込みの上 < hw.検索の行の下) {
+    ng('今週の宿題 … 絞り込みが、検索の欄より上にいる')
   } else if (hw.いちばん低い < 32) {
     ng(`今週の宿題 … 絞り込みが押せる大きさを割っている(${hw.いちばん低い}px)`)
   } else if (hw.はみ出し > hw.窓) {
     ng(`今週の宿題 … 絞り込みが横にはみ出している(${hw.はみ出し} > ${hw.窓})`)
   } else {
-    ok(`今週の宿題 … さがす箱の下に絞り込み ${hw.絞り込みの数} 個`
+    ok(`今週の宿題 … さがす箱の中に絞り込み ${hw.絞り込みの数} 個`
       + `(${hw.いちばん低い}px・${hw.窓}px に収まる)`)
   }
 
@@ -1980,13 +2017,19 @@ export default defineConfig({
   if (!/title="宿題をさがす・しぼる"[\s\S]{0,400}collapsible/.test(lh)) {
     ng('今週の宿題 … 画面がさがす帯を出していない',
       '部品に足しても、渡さなければ利用者の画面は変わらない')
-  /* **「名前が出てくるか」で見ない。** `{false && (<HomeworkFilter` のように
+  /* **「名前が出てくるか」で見ない。** `{false && (<SearchBar` のように
      出さなくしても、名前は残る(実際に試して素通りした)。
      **本当に描いている形**で見る */
-  } else if (!/assignments\.length > 0 && \(\s*<HomeworkFilter/.test(lh)) {
-    ng('今週の宿題 … 絞り込みを出していない')
-  } else if (lh.indexOf('<HomeworkFilter') < lh.indexOf('<SearchBar')) {
-    ng('今週の宿題 … 絞り込みが、さがす箱より先に書いてある')
+  } else if (!/assignments\.length > 0 && \(\s*<SearchBar/.test(lh)) {
+    ng('今週の宿題 … さがす・しぼるを出していない')
+  /* **絞り込みの欄は箱の中**(2026-09 実機・利用者の指定)。
+     開きタグ → `HomeworkFilter` → 閉じタグ の順で書いてあるか */
+  } else if (!filterInsideBar(lh)) {
+    ng('今週の宿題 … 絞り込みの欄が箱の中に入っていない',
+      '`<SearchBar>` の中身として書く(利用者の指定)')
+  } else if (!/mark=\{homeworkFilterOn\(/.test(lh)) {
+    ng('今週の宿題 … 絞っている印を出していない',
+      '欄を隠したぶん、畳んだままでも分かるようにする(黙って絞らない)')
   } else if (!lh.includes('saveHwSearchOpen(')) {
     ng('今週の宿題 … 開け閉めを覚えていない', '一度決める設定は覚える(CLAUDE.md)')
   } else if (/<TrainerMaterials|VoiceRemake|MaterialDelete/.test(lh)) {

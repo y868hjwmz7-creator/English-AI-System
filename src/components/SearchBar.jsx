@@ -58,6 +58,16 @@ export default function SearchBar({
   open = false,
   onOpenChange = null,
   /**
+   * 畳んだままでも見せる短い印(「しぼり込み中」)。
+   *
+   * **絞り込みの欄を箱の中へしまった**(2026-09 利用者の指定)ので、
+   * 畳むと「分野: すべて」などの欄ごと見えなくなる。そのままだと
+   * **黙って絞っている**ことになり、「なぜ1件しか出ないのか」が
+   * 分からなくなる(CLAUDE.md)。だから**掛かっているときだけ**、
+   * 題のとなりに1つ出す。**渡さなければ何も出ない。**
+   */
+  mark = null,
+  /**
    * 帯の下に、そのまま入れるもの(2026-09 実機・利用者の指定)。
    *
    *   > 「教材をさがす」と「教材を絞る」を１つにまとめて
@@ -70,6 +80,11 @@ export default function SearchBar({
    *
    * **畳めるときだけ効く。** 教材の画面(`collapsible` を渡さない)は
    * これまでと1ドットも変わらない。
+   *
+   * **絞り込みの欄も、ここへ入れる**(2026-09 実機・利用者の指定
+   * 「日付や絞り込みのプルダンは『宿題をさがす・しぼる』の中に
+   * しまって欲しいです」)。箱の外に並べていたので、
+   * **畳んでも欄だけが残って**いた。
    */
   children = null,
 }) {
@@ -132,6 +147,9 @@ export default function SearchBar({
       >
         <summary className="card-title material-search-sum">
           {title}
+          {/* **黙って絞らない。** 欄を中へしまったので、
+              掛かっていることは畳んだままでも見えるようにする */}
+          {mark && <span className="finder-badge searchbar-mark">{mark}</span>}
           {badge}
         </summary>
         {row}
