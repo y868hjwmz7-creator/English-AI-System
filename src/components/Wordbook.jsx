@@ -33,6 +33,7 @@
  *   トレーナーが単語帳を開いた記録を、ここに出す(0019)。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Loading from './Loading.jsx'
 import SessionResult from './SessionResult.jsx'
 import CollectRows from './CollectRows.jsx'
 import GoalBar from './GoalBar.jsx'
@@ -164,7 +165,7 @@ function Detail({ wordNorm }) {
     loadGlossDetail(wordNorm).then(({ data }) => { if (alive) setRows(data ?? []) })
     return () => { alive = false }
   }, [wordNorm])
-  if (rows === null) return <p className="hint">読み込み中…</p>
+  if (rows === null) return <Loading />
   const senses = rows.flatMap((r) => (Array.isArray(r.senses) && r.senses.length
     ? r.senses : [{ pos: r.pos || posLabel(posGroupOf(basicPosOf(r.word_norm))), meaning_ja: r.meaning_ja }]))
   if (!senses.length) return <p className="hint">くわしい控えはまだありません。</p>

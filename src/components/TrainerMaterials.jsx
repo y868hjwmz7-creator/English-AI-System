@@ -8,6 +8,7 @@
  *   教材づくりに週9時間かかり、この仕組みは回らない。
  */
 import { useEffect, useRef, useState } from 'react'
+import Loading from './Loading.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import { parseMaterialTitle } from '../lib/format.js'
 import { loadSearchOpen, saveSearchOpen } from '../lib/slashLevel.js'
@@ -880,7 +881,7 @@ export default function TrainerMaterials({
       )}
 
       {loading ? (
-        <p className="muted">読み込み中…</p>
+        <Loading />
       ) : shown.length === 0 ? (
         /* **無いときは、作る道をいちばん強く出す**(2026-09 利用者の指定)。
            何も無い画面で「作る」を探させない */

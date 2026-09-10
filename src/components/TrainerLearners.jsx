@@ -6,6 +6,7 @@
  * レベルの物差しは教材と同じ CEFR にそろえてある。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Loading from './Loading.jsx'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, cefrOption, scoreTestLabel } from '../data/cefr.js'
 import { lastLearner, rememberLearner, watchLearner } from '../lib/lastLearner.js'
 /* **状態の対応表は `data/learnerStatus.js` 1か所。**
@@ -423,7 +424,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     reload()
   }
 
-  if (loading) return <p className="muted">読み込み中…</p>
+  if (loading) return <Loading />
 
   return (
     <div className="stack">

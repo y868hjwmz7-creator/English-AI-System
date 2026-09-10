@@ -44,10 +44,101 @@
     <meta name="theme-color" content="#eaecef" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0c0c0b" media="(prefers-color-scheme: dark)" />
     <title>English AI System</title>
+
+    <!--
+      **配色の印を、いちばん最初に付ける**(2026-09)。
+
+      `theme.js` が `<html>` に `data-theme` を付けるのは
+      **JavaScript が届いたあと**である。下の起動画面はそれより先に描かれるので、
+      これが無いと「明るい」を選んでいる人の端末が暗い設定のとき、
+      **一瞬だけ暗い画面が出てから明るくなる。**
+
+      鍵の名前(`english-ai-theme`)と値は `src/lib/theme.js` と同じ。
+      **どちらかを変えたら、もう片方も変える。**
+    -->
+    <script>
+      try {
+        var t = localStorage.getItem('english-ai-theme')
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.setAttribute('data-theme', t)
+        }
+      } catch (e) { /* 端末の設定で保存が禁じられていても、ここで止めない */ }
+    </script>
+
+    <!--
+      **起動画面**(2026-09 利用者の指定
+      「アプリのロード中の画面を統一してスタイリッシュに映るようにせよ」)。
+
+      実測すると、遅い回線では **6.7 秒のあいだ何も出ていなかった** ——
+      はじめの2秒は CSS すら届いていない**素の白**、そのあと4.7秒は
+      **地色だけの画面**である。「読み込み中…」は JavaScript が動き出した
+      あとの文字なので、**いちばん待つあいだには出ていない。**
+
+      だからここに置く。**この `<style>` は HTML と一緒に届く**ので、
+      画像も外部のファイルも待たずに描ける。
+
+      **`.loading` と同じ名前・同じ形にしてある**(`src/styles.css`)。
+      React が描き始めると中身が入れ替わるが、**見た目は変わらない。**
+      **片方を直したら、必ずもう片方も直す。**
+    -->
+    <style>
+      html, body { margin: 0; }
+      body {
+        background: #eaecef;
+        color: #4a4e54;
+        font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Meiryo', system-ui, sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) body { background: #0c0c0b; color: #cfcec4; }
+        :root:not([data-theme="light"]) .loading-name { color: #9a998f; }
+        :root:not([data-theme="light"]) .loading-note { color: #cfcec4; }
+        :root:not([data-theme="light"]) .loading-bar { background: #46463f; }
+        :root:not([data-theme="light"]) .loading-bar > span { background: #6aa6de; }
+      }
+      :root[data-theme="dark"] body { background: #0c0c0b; color: #cfcec4; }
+      :root[data-theme="dark"] .loading-name { color: #9a998f; }
+      :root[data-theme="dark"] .loading-note { color: #cfcec4; }
+      :root[data-theme="dark"] .loading-bar { background: #46463f; }
+      :root[data-theme="dark"] .loading-bar > span { background: #6aa6de; }
+
+      .loading {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; padding: 48px 16px; text-align: center;
+      }
+      .loading--full { min-height: 60vh; }
+      .loading-name {
+        margin: 0; font-size: 13px; font-weight: 600;
+        letter-spacing: 0.14em; color: #767b82;
+      }
+      .loading-bar {
+        width: min(220px, 60vw); height: 3px; border-radius: 999px;
+        background: #d5d9de; overflow: hidden;
+      }
+      .loading-bar > span {
+        display: block; width: 40%; height: 100%; border-radius: inherit;
+        background: #2c6094; animation: loading-slide 1.15s ease-in-out infinite;
+      }
+      @keyframes loading-slide {
+        from { transform: translateX(-100%); }
+        to   { transform: translateX(250%); }
+      }
+      .loading-note { margin: 0; font-size: 12px; color: #4a4e54; }
+      @media (prefers-reduced-motion: reduce) {
+        .loading-bar > span { animation: none; width: 100%; opacity: 0.55; }
+      }
+    </style>
   </head>
   <body>
-    <!-- ここに React のアプリが描画されます -->
-    <div id="root"></div>
+    <!-- ここに React のアプリが描画されます。
+         中の起動画面は、React が描き始めた時点で入れ替わります -->
+    <div id="root">
+      <div class="loading loading--full" role="status" aria-live="polite">
+        <p class="loading-name">English AI System</p>
+        <div class="loading-bar" aria-hidden="true"><span></span></div>
+        <p class="loading-note">読み込み中…</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

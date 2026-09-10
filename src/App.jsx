@@ -26,6 +26,7 @@ import {
   forgetPrepare, prepareAllOn, setPrepareAllOn, usePrepare,
 } from './lib/prepareJob.js'
 import JobBar from './components/JobBar.jsx'
+import Loading from './components/Loading.jsx'
 import LearnerBar from './components/LearnerBar.jsx'
 import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
@@ -262,13 +263,38 @@ export default function App() {
     setJobNote(null)
   }, [session])
 
-  // ログインしている人の表示名と役割を読む
+  /* ログインしている人の表示名と役割を読む。
+     **読み終えたかどうかも控える**(`profileRead`・下の `booting`)。
+     **中身が空でも「読み終えた」ことにする** —— プロフィールが引けない
+     ときに立てないでいると、**起動画面から二度と出られなくなる**
+     (行き止まりを作らない)。 */
+  const [profileRead, setProfileRead] = useState(false)
   useEffect(() => {
-    if (!session?.user?.id) { setProfile(null); return }
+    if (!session?.user?.id) { setProfile(null); setProfileRead(false); return }
     let alive = true
-    loadProfile(session.user.id).then((p) => { if (alive) setProfile(p) })
+    const done = (p) => { if (!alive) return; setProfile(p); setProfileRead(true) }
+    loadProfile(session.user.id).then(done, () => done(null))
     return () => { alive = false }
   }, [session])
+
+  /**
+   * **役割が分かるまでは、まだ起動の途中である**(2026-09 実機・利用者の指摘)。
+   *
+   *   > 今は田中みなみの画面が一瞬映ったりして微妙だ
+   *
+   * 下の `pages` は**役割で中身が変わる。** プロフィールを読み終えるまで
+   * `isTrainer` は偽なので、そのあいだの `pages` は**ゲストの一覧**
+   * (今週の宿題 / 30日講座 / 単語帳 …)になる。すると
+   * 「メニューに無い画面なら先頭へ移す」見張りが働いて、
+   * **トレーナーで入っても、いったんゲストの画面が出ていた。**
+   * そのあとプロフィールが届いて「教材」へ跳ぶ ——
+   * これが**一瞬だけ別の画面が映る**正体である。
+   *
+   * レッスンは**ゲストと画面を共有しながら**行うので、
+   * 見せる気のない画面が一瞬でも出るのは見た目の問題では済まない。
+   * **役割が分かるまでは、起動画面のまま待つ。**
+   */
+  const booting = isSupabaseConfigured && !!session && !profileRead
 
   /* アイコンを選ぶ欄は外した(2026-09 利用者の指定「アイコンはいらない」)。
      **入れ物(`profiles.avatar`・0029)と保存の窓口(`saveMyAvatar`)は
@@ -421,13 +447,19 @@ export default function App() {
    */
   const pageIds = pages.map((p) => p.id).join(',')
   useEffect(() => {
+    /* **役割が分かるまでは動かさない。** そのあいだの `pages` は
+       ゲストの一覧なので、ここが「教材」を追い出してしまう(上記) */
+    if (booting) return
     const ids = pageIds ? pageIds.split(',') : []
     if (!ids.length || ids.includes(view)) return
     setView(ids[0])
-  }, [pageIds, view])
+  }, [booting, pageIds, view])
 
-  if (!authChecked) {
-    return <div className="loading">読み込み中…</div>
+  /* **起動画面は1つ**(`Loading.jsx`・`index.html` と同じ形)。
+     `booting` のあいだも出す —— 役割が分かる前に中身を描くと、
+     **一瞬だけゲストの画面が映る**(上記) */
+  if (!authChecked || booting) {
+    return <Loading full />
   }
 
   // Supabase が設定されているならログインを必須にする。
@@ -733,10 +765,10 @@ export default function App() {
             {view === 'materials' ? (
               profile ? <TrainerMaterials me={profile} askCreate={askCreate}
                                           askOpenId={askOpenId} />
-                : <p className="muted">読み込み中…</p>
+                : <Loading />
             ) : view === 'learners' ? (
               profile ? <TrainerLearners me={profile} navTick={navTick} />
-                : <p className="muted">読み込み中…</p>
+                : <Loading />
             ) : view === 'homework' ? (
               <LearnerHomework
                 me={profile}

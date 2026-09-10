@@ -331,7 +331,59 @@ body {
   line-height: 1.7;
 }
 
-.loading { padding: 48px; text-align: center; color: var(--text-secondary); }
+/* ---- 読み込み中(1か所)----------------------------------------
+   **`index.html` の起動画面と、まったく同じ形にしてある**
+   (2026-09 利用者の指定「ロード中の画面を統一してスタイリッシュに」)。
+   JavaScript が届く前は向こうが、届いたあとは `Loading.jsx` が描くので、
+   **入れ替わった瞬間に画面は1ドットも動かない。**
+   **片方を直したら、必ずもう片方も直す。**
+
+   色はすべて変数から取る —— プレインを選べば帯も灰色になり、
+   暗い配色でも読める(値を直に書かない)。 */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-10);
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+/* アプリぜんぶを覆うとき(起動直後)。画面のまん中あたりに置く */
+.loading--full { min-height: 60vh; }
+.loading-name {
+  margin: 0;
+  font-size: var(--fs-13);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+.loading-bar {
+  width: min(220px, 60vw);
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--border);
+  overflow: hidden;
+}
+.loading-bar > span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: loading-slide 1.15s ease-in-out infinite;
+}
+@keyframes loading-slide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(250%); }
+}
+.loading-note { margin: 0; font-size: var(--fs-12); color: var(--text-secondary); }
+/* **滑る動きが苦手な人がいる**(どの画面にも効く決まり)。
+   止めたときも帯は残す —— 何かを待っていることは伝わってほしい */
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar > span { animation: none; width: 100%; opacity: 0.55; }
+}
 
 /* ---------------- レイアウト ----------------
    画面は「左のメニュー + 本体」の2枚である(2026-08 利用者の指定)。

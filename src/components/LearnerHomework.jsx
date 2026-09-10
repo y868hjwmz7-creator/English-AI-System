@@ -6,6 +6,7 @@
  * 提出期限やトレーナーの確認印には触れられない(列単位の権限で絞ってある)。
  */
 import { useEffect, useState } from 'react'
+import Loading from './Loading.jsx'
 import { cefrLabel } from '../data/cefr.js'
 import { exerciseType, isPassageSection, sectionLabel } from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
@@ -178,7 +179,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
     if (e) { setError(e); reload() }
   }
 
-  if (loading) return <p className="muted">読み込み中…</p>
+  if (loading) return <Loading />
 
   /* **絞る・引く・並べるは `narrowHomework()` 1か所**(トレーナーの
      画面と分け合っている)。ここで数え直すと必ず食い違う */

@@ -3241,6 +3241,83 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       'ソース … 生の NUL を書かない(git がバイナリと見なし、差分も grep も効かなくなる)',
       bad.join(' / '))
   }
+
+  /* ── **読み込み中の画面**(2026-09 利用者の指定)────────────────────
+       > アプリのロード中の画面を統一してスタイリッシュに映るようにせよ。
+       > 今は田中みなみの画面が一瞬映ったりして微妙だ
+
+     実測(1.5Mbps・390px)すると、**6.7 秒のあいだ何も出ていなかった** ——
+     はじめの2秒は CSS すら届いていない**素の白**、そのあと 4.7 秒は
+     **地色だけの画面**である。しかも役割が分かる前の `pages` は
+     **ゲストの一覧**なので、トレーナーで入っても
+     **一瞬だけゲストの画面が映って**から「教材」へ跳んでいた。
+
+     どちらも **`npm run lint` にも `npm run build` にも引っかからない。**
+     遅い回線で開いてみるまで分からないので、ここで見張る。 */
+  {
+    const html = read2('index.html')
+    const loading = read2('src/components/Loading.jsx')
+    const app = read2('src/App.jsx')
+    const theme = read2('src/lib/theme.js')
+
+    /* ① 起動画面が `index.html` に在る。**JavaScript より先に描く**もの
+          なので、React の側にいくら書いても、いちばん待つあいだは出ない */
+    ok(/<div id="root">\s*<div class="loading loading--full"/.test(html)
+      && html.includes('class="loading-name"')
+      && html.includes('class="loading-bar"')
+      && html.includes('class="loading-note"')
+      && html.includes('読み込み中…'),
+    '起動画面 … index.html の #root の中に、はじめから描いてある')
+
+    /* ② **`Loading.jsx` と同じ形。** 入れ替わった瞬間に画面が動かないよう、
+          名前も文言もそろえる。**片方だけ直すと、そこで飛ぶ** */
+    const cls = ['loading loading--full', 'loading-name', 'loading-bar', 'loading-note']
+    const inBoth = cls.every((c) => html.includes(c)
+      && loading.includes(c.replace('loading loading--full', 'loading--full')))
+    ok(inBoth && loading.includes('読み込み中…'),
+      '起動画面 … Loading.jsx と、名前も文言もそろっている')
+
+    /* ③ **配色の印を、描く前に付ける。** これが無いと「明るい」を選んで
+          いる人の端末が暗い設定のとき、**一瞬だけ暗い画面**が出る。
+          鍵の名前は `theme.js` と同じでなければ、読めない */
+    const key = /const KEY = '([^']+)'/.exec(theme)?.[1] ?? ''
+    ok(key && html.includes(`localStorage.getItem('${key}')`)
+      && html.includes("setAttribute('data-theme'"),
+    `起動画面 … 配色の印(${key})を、描く前に付ける`)
+
+    /* ④ **役割が分かるまで、中身を描かない。**
+          `pages` は役割で中身が変わるので、プロフィールを読み終える前は
+          ゲストの一覧になる。すると「メニューに無い画面なら先頭へ移す」が
+          働いて、**トレーナーにゲストの画面が一瞬映る** */
+    ok(/const booting = isSupabaseConfigured && !!session && !profileRead/.test(app),
+      '起動 … 役割が分かるまでを `booting` 1か所で決める')
+    ok(/if \(!authChecked \|\| booting\) \{/.test(app),
+      '起動 … `booting` のあいだは、中身ではなく起動画面を出す')
+    ok(/\n\s*if \(booting\) return\n\s*const ids = pageIds/.test(app),
+      '起動 … `booting` のあいだは、画面を先頭へ移さない')
+
+    /* ⑤ **引けなくても抜け出せる。** プロフィールが空で返ったときに
+          読み終えた印を立てないと、**起動画面から二度と出られない** */
+    ok(/loadProfile\(session\.user\.id\)\.then\(done, \(\) => done\(null\)\)/.test(app)
+      && /setProfile\(p\); setProfileRead\(true\)/.test(app),
+    '起動 … プロフィールが引けなくても、起動画面から抜け出せる')
+
+    /* ⑥ **画面まるごとの「読み込み中…」は、1つの部品に寄せる。**
+          実測すると、同じ文字が `.loading` / `.muted` / `.hint` の
+          **3つの見た目**で出ていた(字の大きさも色も違う) */
+    const screens = [
+      'src/App.jsx',
+      'src/components/TrainerLearners.jsx',
+      'src/components/TrainerMaterials.jsx',
+      'src/components/LearnerHomework.jsx',
+      'src/components/Wordbook.jsx',
+      'src/components/QrReview.jsx',
+    ]
+    const missing = screens.filter((f) => !/<Loading[ />]/.test(read2(f)))
+    ok(missing.length === 0,
+      '読み込み中 … 画面まるごとのときは、6つとも Loading を使う',
+      missing.join(' / '))
+  }
 }
 
 console.log(ng

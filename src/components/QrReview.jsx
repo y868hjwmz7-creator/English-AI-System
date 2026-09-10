@@ -30,6 +30,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   QR_ORDERS, loadQrReviews, markQr, orderQrPairs, qrPairOf, qrReviewSupported,
 } from '../lib/qrReviews.js'
+import Loading from './Loading.jsx'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
@@ -439,7 +440,7 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
       {busy ? (
-        <p className="muted">読み込み中…</p>
+        <Loading />
       ) : rows.length === 0 ? (
         <p className="hint">
           まだ1問も溜まっていません。教材の Quick Response で「まだ」を押すと、
