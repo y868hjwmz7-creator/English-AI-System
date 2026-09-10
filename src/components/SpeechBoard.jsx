@@ -203,7 +203,14 @@ export default function SpeechBoard({ learnerId = null, learnerName = '' }) {
   const accents = accentsWithVoices(PURPOSE)
   const voice = findVoice(open?.voice_id)
   const accent = voice?.accent ?? DEFAULT_ACCENT
-  const pool = voicesOfAccent(accent, PURPOSE)
+  /* **いま使っている声が名簿から外れていても、選択肢に残す**
+     (`retired` を付けた声など・`VoiceRemake` と同じ作法)。
+     外すと、その欄が**空白に見える** —— 声は選んであるのに、
+     何で鳴っているのか分からなくなる */
+  const pool = (() => {
+    const list = voicesOfAccent(accent, PURPOSE)
+    return (voice && !list.some((v) => v.id === voice.id)) ? [...list, voice] : list
+  })()
 
   if (!speechesSupported()) {
     return (
