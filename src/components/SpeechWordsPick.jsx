@@ -116,8 +116,12 @@ export default function SpeechWordsPick({
     onPicked?.(speechWordList(now), speechTitleOf(now), 'このスピーチの語句')
   }
 
-  /* **0054 を貼る前は、欄ごと出さない**(効かない操作を見せない) */
-  if (!speechesSupported()) return null
+  /* **0054 を貼る前は、欄ごと出さない**(効かない操作を見せない)。
+     ただし**開いている最中に断られたときは、その1行を出しきる** ——
+     いま開いている人の目の前で欄ごと消すと、押しても何も起きなかった
+     ようにしか見えない(**黙って消さない**・CLAUDE.md) */
+  const ready = speechesSupported()
+  if (!ready && !open) return null
 
   return (
     <div className="wb-add speechpick">
@@ -130,7 +134,11 @@ export default function SpeechWordsPick({
 
       {open && (
         <div className="wb-add-body">
-          {loading ? (
+          {!ready ? (
+            /* **断られた理由を、そのまま出す。**
+               「まだありません」と言うと嘘になる */
+            null
+          ) : loading ? (
             <p className="muted">読み込んでいます…</p>
           ) : !rows.length ? (
             /* **行き止まりを作らない。** どうすれば出てくるのかまで書く */
