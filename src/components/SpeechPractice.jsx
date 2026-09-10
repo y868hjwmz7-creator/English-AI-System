@@ -129,8 +129,11 @@ export default function SpeechPractice({ speech, learnerId = null }) {
                 <div className="writing-en">
                   <EnglishText text={s.en} textJa={s.ja} level="B1"
                                statuses={statuses}
-                               /* どの教材で会ったかは無い。スピーチは教材ではない */
-                               onMark={markIn(mark, null)} />
+                               /* どの教材で会ったかは無い(スピーチは教材ではない)。
+                                  **誰の記録にするかは渡す** —— トレーナーが
+                                  ゲストのページで押したら、ゲストの記録になる
+                                  (0025 の決まりそのまま) */
+                               onMark={markIn(mark, null, learnerId)} />
                 </div>
               ) : (
                 <div className="writing-ja">{s.ja || '（訳がありません）'}</div>
