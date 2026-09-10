@@ -32,7 +32,7 @@ import {
   MAX_CHARS, MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
 } from '../src/lib/speechDraft.js'
 import {
-  EXERCISE_TYPES, SCALABLE_SECTIONS, amountsFor, defaultSectionsFor,
+  EXERCISE_TYPES, SCALABLE_SECTIONS, amountsFor, answerHasAudio, defaultSectionsFor,
   exerciseLabel, isPassageSection, noteIsAnswer, sectionLabel, sectionsFor,
 } from '../src/data/exerciseTypes.js'
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
@@ -3317,6 +3317,67 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     ok(missing.length === 0,
       '読み込み中 … 画面まるごとのときは、6つとも Loading を使う',
       missing.join(' / '))
+
+    /* ── 解答の読み上げ(2026-09 利用者の指定)────────────────
+     *
+     *   > 文型トレーニングなどの解答の和訳に「listen」ボタンは不要なので
+     *   > 同じ仕様になっているところは全て削除してください
+     *
+     * 英文和訳の `answer` は**和訳そのもの(日本語)**なので、
+     * そこに Listen を出しても日本語を英語の声で読むだけになる。 */
+
+    /* ① **書き忘れを赤くする。** `fields` からも `audioFrom` からも
+          解答の言語は当てられない(英文和訳と誤り訂正が同じ形になる)ので、
+          `answerLang` を書くしかない。**足すまで赤いまま**なので、
+          演習を足す人は必ず1回、自分の目で決めることになる */
+    const noLang = EXERCISE_TYPES
+      .filter((t) => (t.fields ?? []).includes('answer'))
+      .filter((t) => t.answerLang !== 'en' && t.answerLang !== 'ja')
+      .map((t) => t.id)
+    ok(noLang.length === 0,
+      '解答の読み上げ … `answer` を持つ演習は、必ず `answerLang` を書く',
+      noLang.join(' / '))
+
+    /* ② **和訳には出さない。英語には出す。**
+          `comprehension` を落とさないこと —— あれは 0035 の
+          利用者の指定(「音も聞けるように」)そのものである */
+    ok(answerHasAudio('translate_en_ja') === false,
+      '解答の読み上げ … 英文和訳(解答は和訳)には出さない')
+    ok(['error_correction', 'fill_blank', 'translate_ja_en', 'listening', 'comprehension']
+      .every((id) => answerHasAudio(id) === true),
+    '解答の読み上げ … 解答が英語の5つには、これまでどおり出す')
+    ok(answerHasAudio(null) === false && answerHasAudio('nope') === false,
+      '解答の読み上げ … 種類が分からないうちは出さない(既定は鳴らさない)')
+
+    /* ③ **判断は1か所。** 画面ごとに書くと、置く場所の数だけ食い違う。
+          **「名前が出てくるか」で見ない** —— 説明にも import にも
+          同じ語があるので、**使っている形**で見る */
+    const answerEn = noC(read2('src/components/AnswerEn.jsx'))
+    ok(/clipVoice !== undefined && answerHasAudio\(typeId\)/.test(answerEn),
+      '解答の読み上げ … `AnswerEn` が `answerHasAudio()` に任せている')
+
+    /* ④ **3つの画面が、演習の種類を渡している。**
+          渡し忘れると既定(鳴らさない)に落ちるので、
+          **内容の理解の Listen が黙って消える** */
+    const answerScreens = [
+      'src/components/MaterialBody.jsx',
+      'src/components/LessonView.jsx',
+      'src/components/LearnerHomework.jsx',
+    ]
+    const noType = answerScreens
+      .filter((f) => !/typeId=\{sec\.exercise_type\}/.test(noC(read2(f))))
+    ok(noType.length === 0,
+      '解答の読み上げ … 3つの画面とも、演習の種類を渡している',
+      noType.join(' / '))
+
+    /* ⑤ **画面の中で種類を見分けない。**
+          `typeId === 'translate_en_ja'` と書くと、演習を足すたびに
+          3か所を直すことになる(`remakeModeOf()` と同じ考え方) */
+    const hardCoded = [...answerScreens, 'src/components/AnswerEn.jsx']
+      .filter((f) => /translate_en_ja|answerLang/.test(noC(read2(f))))
+    ok(hardCoded.length === 0,
+      '解答の読み上げ … 画面の中で演習の種類を見分けていない',
+      hardCoded.join(' / '))
   }
 }
 

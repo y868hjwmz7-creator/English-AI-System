@@ -8,6 +8,8 @@
  *
  * fields … その演習で使う欄。作成画面はこれを見て入力欄を出し分ける。
  * audioFrom … お手本音声を作る元にする欄。null なら音声を作らない。
+ * answerLang … **`answer` に入るのが英語か日本語か。**
+ *   `answer` を持つ演習は、必ずどちらかを書く(`answerHasAudio()` の項)。
  */
 /* **本文の呼び名**(記事 / 会話 / 会議 / スピーチ)。
    `sectionLabel()` で使う。**種類の一覧は持たない**(あちらが1か所) */
@@ -18,6 +20,11 @@ export const EXERCISE_TYPES = [
     id: 'translate_en_ja', label: '英文和訳',
     instruction: '次の英文を日本語に訳しなさい。',
     fields: ['prompt_en', 'answer'], audioFrom: 'prompt_en',
+    /* **`answer` に入るのは和訳(日本語)である。**
+       だから解答に読み上げを付けない(`answerHasAudio()`)。
+       2026-09 利用者の指定 —— 実機の写真では、緑の解答の枠
+       「→ 店長は新しいスタッフを幸せにします。」の下に Listen が出ていた */
+    answerLang: 'ja',
     hideAnswerFromLearner: true,
   },
   /*
@@ -41,6 +48,11 @@ export const EXERCISE_TYPES = [
     id: 'error_correction', label: '誤り訂正',
     instruction: '次の英文には誤りが1か所あります。見つけて直しなさい。',
     fields: ['prompt_en', 'answer', 'note'], audioFrom: null,
+    /* `answer` は**直した英文まるごと**なので英語である。
+       **問題文には音を付けないが、解答には付く** —— あちらは
+       誤った文しかなく手本にできないのに対し、こちらは
+       **解答を開いたあとにだけ出る**ので、答えが先に耳から入らない */
+    answerLang: 'en',
     hideAnswerFromLearner: true,
   },
   /*
@@ -51,18 +63,21 @@ export const EXERCISE_TYPES = [
     id: 'fill_blank', label: '穴埋め',
     instruction: 'カッコ内の語を使って文を完成させなさい。',
     fields: ['prompt_en', 'hint', 'answer'], audioFrom: null,
+    answerLang: 'en',
     hideAnswerFromLearner: true,
   },
   {
     id: 'translate_ja_en', label: '和文英訳',
     instruction: '次の日本語を英語にしなさい。',
     fields: ['prompt_ja', 'answer', 'answer_alt'], audioFrom: 'answer',
+    answerLang: 'en',
     hideAnswerFromLearner: true,
   },
   {
     id: 'listening', label: 'リスニング + 理解',
     instruction: '英文は見ずに聞くこと。聞いたあとの質問に答えなさい。',
     fields: ['audio_text', 'question', 'answer'], audioFrom: 'audio_text',
+    answerLang: 'en',
     hideAnswerFromLearner: true, hidePromptFromLearner: true,
   },
   // ── 本文(まとまった1本)────────────────────────────────
@@ -100,6 +115,10 @@ export const EXERCISE_TYPES = [
     // 本文を理解できていたのかどうかが確かめられなかった。
     // **0035 を貼る前に作った教材には入っていない**(訳が出ないだけ)。
     fields: ['question', 'question_ja', 'answer', 'answer_ja'], audioFrom: 'question',
+    /* **解答は英語である**(訳は `answer_ja` に別に入っている)。
+       だから読み上げが付く —— これは 0035 の利用者の指定そのもので、
+       「音も聞けるように」と言われた場所である */
+    answerLang: 'en',
     hideAnswerFromLearner: true,
   },
   /*
@@ -475,6 +494,49 @@ export const noteIsAnswer = (typeId) => {
   const fields = exerciseType(typeId)?.fields ?? []
   return fields.includes('question') && !fields.includes('answer')
 }
+
+/**
+ * **解答に読み上げ(Listen)を出すかどうか。**
+ *
+ * 2026-09 利用者の指定。
+ *
+ *   > 文型トレーニングなどの解答の和訳に「listen」ボタンは不要なので
+ *   > 同じ仕様になっているところは全て削除してください
+ *
+ * 【何が起きていたか】(実機の写真・英文和訳)
+ *
+ *     The manager makes the new staff happy.   [Listen] [解答を隠す]
+ *     → 店長は新しいスタッフを幸せにします。
+ *       [Listen]                               ← **これ**
+ *
+ *   英文和訳の `answer` は**和訳そのもの**、つまり日本語である。
+ *   そこに読み上げを出しても、**日本語を英語の声で読む**だけで、
+ *   誰の役にも立たない(効かない操作を見せない)。
+ *
+ * 【なぜ欄で見分けられないか】
+ *   `fields` からは当てられない。英文和訳(`prompt_en` + `answer`)と
+ *   誤り訂正(`prompt_en` + `answer` + `note`)は、
+ *   **どちらも英語の問題文に `answer` が続く形**なのに、
+ *   前者の解答は日本語、後者は英語である。
+ *   `audioFrom` でも当てられない —— あれは**問題文**の音の話で、
+ *   誤り訂正は `null` だが、解答(直した英文)は英語で読める。
+ *
+ *   だから**書く。** `answer` を持つ演習には `answerLang` を必ず置き、
+ *   **`npm run test:play` が「書き忘れ」を赤くする** ——
+ *   足すまで赤いままなので、演習を足す人は必ず1回、
+ *   その解答が英語か日本語かを自分の目で決めることになる
+ *   (声の名簿の `KNOWN` と同じ考え方)。
+ *
+ * 【判断はここ1か所】
+ *   解答が出る場所は3つある(教材の中身 / レッスン表示 / 今週の宿題)。
+ *   **画面の中で `typeId === 'translate_en_ja'` と書かない** ——
+ *   置く場所の数だけ食い違う(`remakeModeOf()` と同じ考え方)。
+ *   実際に使うのは `AnswerEn` の中**1か所**で、
+ *   画面は演習の種類を渡すだけである。
+ *
+ * **既定は「出さない」。** 種類が分からないうちは鳴らさない。
+ */
+export const answerHasAudio = (typeId) => exerciseType(typeId)?.answerLang === 'en'
 
 /**
  * **画面に出す演習の名前。**

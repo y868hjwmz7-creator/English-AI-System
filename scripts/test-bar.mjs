@@ -380,6 +380,64 @@ for (const [label, want] of Object.entries(WANT)) {
     if (n) ng('本文の無い教材に、右下の「集中モード」が出ている')
     else ok('文型ドリル … 右下に集中モードは出さない(読む本文が無い)')
   }
+
+  /* ⑥ **解答の読み上げ**(2026-09 利用者の指定)
+   *
+   *    > 文型トレーニングなどの解答の和訳に「listen」ボタンは不要なので
+   *    > 同じ仕様になっているところは全て削除してください
+   *
+   *    英文和訳の `answer` は**和訳(日本語)**なので、そこに Listen を
+   *    出しても日本語を英語の声で読むだけになる。
+   *
+   *    **ソースを読むだけでは足りない。** `AnswerEn` は3つの画面から
+   *    呼ばれており、**本当に消えたか**は描かないと分からない。
+   *    **出す側も一緒に数える** —— 片方だけだと、
+   *    「どこにも出さない」と書き換えても緑のままになる。 */
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await page.waitForTimeout(200)
+  {
+    /* **演習は `data-type` で選り分ける。**
+       レッスン表示は**ページを送っていない演習も描いてある**
+       (紙に教材まるごとを刷るため・`.lesson-page.is-closed`)。
+       だから `.lesson-items > li` を頭から数えると、
+       **いつも1つめの演習を見てしまう**(実測して気づいた) */
+
+    /** その演習の1問目に出ている Listen の数 */
+    const inItem = (type) => page.evaluate((t) => {
+      const li = document.querySelector(`[data-type="${t}"] .lesson-items > li`)
+      if (!li) return null
+      return [...li.querySelectorAll('button')]
+        .filter((b) => /^(Listen|Stop)/.test(b.textContent.trim())).length
+    }, type)
+    /** その演習の1問目の「解答を見る」を押す */
+    const open = async (type) => {
+      await page.evaluate((t) => {
+        document.querySelector(`[data-type="${t}"] .lesson-items > li .lesson-reveal`)?.click()
+      }, type)
+      await page.waitForTimeout(200)
+    }
+
+    // 英文和訳 … 解答を開いても、Listen は**増えない**(問題文の1つだけ)
+    const jaBefore = await inItem('translate_en_ja')
+    await open('translate_en_ja')
+    const jaAfter = await inItem('translate_en_ja')
+    if (jaBefore !== 1) ng('英文和訳 … 問題文の Listen が1つではない', `${jaBefore} 個`)
+    else if (jaAfter !== 1) {
+      ng('英文和訳 … 解答(和訳)に Listen が出ている', `開くと ${jaAfter} 個に増える`)
+    } else ok('英文和訳 … 解答を開いても Listen は増えない(和訳は鳴らさない)')
+
+    /* 誤り訂正 … **出る側も数える。** 片方だけだと、
+       「どこにも出さない」と書き換えても緑のままになる。
+       ここは問題文に音が無い(`audioFrom: null`)ので、
+       **増えた1つが解答のものだ**と確かめられる */
+    const ecBefore = await inItem('error_correction')
+    await open('error_correction')
+    const ecAfter = await inItem('error_correction')
+    if (ecBefore !== 0) ng('誤り訂正 … 誤った英文に Listen が出ている', `${ecBefore} 個`)
+    else if (ecAfter !== 1) {
+      ng('誤り訂正 … 解答(直した英文)の Listen が出ていない', `開いても ${ecAfter} 個`)
+    } else ok('誤り訂正 … 解答を開くと、直した英文の Listen が出る')
+  }
   await page.close()
 }
 

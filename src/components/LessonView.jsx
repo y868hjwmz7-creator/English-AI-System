@@ -1850,11 +1850,14 @@ export default function LessonView({
                       {/* 解答も**語に触れれば意味が出て、単語帳に入れられる。**
                           訳と読み上げも付く(2026-09 利用者の指定)。
                           **解答を開いたあとにだけ出る**ので、
-                          答えが先に耳から入ることはない */}
+                          答えが先に耳から入ることはない。
+                          **読み上げを出すかどうかは `AnswerEn` が決める**
+                          (英文和訳の解答は和訳なので出ない・`answerHasAudio()`) */}
                       <AnswerEn
                         text={it.answer} ja={it.answer_ja} level={material.level}
                         statuses={wordStatuses} onMark={markWord}
                         className="lesson-answer" jaClassName="lesson-ja"
+                        typeId={sec.exercise_type}
                         voice={voiceFor(secCast, it.speaker)}
                         clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                         tier={secTier} rate={rateOf(rateId)}

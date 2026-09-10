@@ -543,6 +543,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                       text={it.answer} ja={it.answer_ja} level={a.material?.level}
                                       statuses={wordStatuses}
                                       onMark={markIn(markWord, a.material?.id)}
+                                      typeId={sec.exercise_type}
                                       clipVoice={resolveVoices(a.material?.voiceIds)[0]}
                                       tier={voiceTierFor({
                                         exerciseType: sec.exercise_type,

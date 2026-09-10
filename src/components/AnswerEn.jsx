@@ -19,13 +19,25 @@
  * 【出す順】
  *   英語 → 訳 → Listen。**訳はボタンより上に置く。**
  *   下に置くと、狭い画面で画面の外へ押し出される(「答えはボタンの上に出す」)。
+ *
+ * 【Listen を出さない演習がある】(2026-09 利用者の指定)
+ *
+ *   > 文型トレーニングなどの解答の和訳に「listen」ボタンは不要なので
+ *   > 同じ仕様になっているところは全て削除してください
+ *
+ *   英文和訳の `answer` は**和訳そのもの(日本語)**である。
+ *   判断は `answerHasAudio()`(`exerciseTypes.js`)**1か所**で、
+ *   ここはそれに従うだけ。**画面の中で種類を見分けない。**
  */
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
+import { answerHasAudio } from '../data/exerciseTypes.js'
 
 export default function AnswerEn({
   text, ja = '', level = null,
   statuses = null, onMark = null,
+  /** 演習の種類。**渡さなければ Listen を出さない**(既定は鳴らさない) */
+  typeId = null,
   /** 読み上げに使う声。**渡さなければ Listen を出さない**(効かない操作を見せない) */
   clipVoice = undefined, tier = undefined, voice = null, rate = null,
   /** その画面の解答行の見た目(`detail-answer` / `lesson-answer` など) */
@@ -42,7 +54,7 @@ export default function AnswerEn({
         <EnglishText text={body} level={level} statuses={statuses} onMark={onMark} />
       </div>
       {String(ja ?? '').trim() && <div className={jaClassName}>{ja}</div>}
-      {clipVoice !== undefined && (
+      {clipVoice !== undefined && answerHasAudio(typeId) && (
         <div className="item-audio">
           <SpeakButton text={body} voice={voice} clipVoice={clipVoice} tier={tier}
                        {...(rate == null ? {} : { rate })} />

@@ -158,11 +158,14 @@ export default function MaterialBody({
                     )}
                     {/* 解答も**語に触れれば意味が出て、単語帳に入れられる。**
                         訳と読み上げも付く(2026-09 利用者の指定)。
-                        3か所で同じものを使う(`AnswerEn`) */}
+                        3か所で同じものを使う(`AnswerEn`)。
+                        **読み上げを出すかどうかは、あちらが決める**
+                        (英文和訳の解答は和訳なので出ない・`answerHasAudio()`) */}
                     <AnswerEn
                       text={it.answer} ja={it.answer_ja} level={m.level}
                       statuses={wordStatuses} onMark={onMarkWord}
                       className="detail-answer"
+                      typeId={sec.exercise_type}
                       clipVoice={resolveVoices(m.voiceIds)[0]}
                       tier={voiceTierFor({ exerciseType: sec.exercise_type, tags: m.tagIds })}
                     />
