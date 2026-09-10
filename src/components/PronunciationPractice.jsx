@@ -40,6 +40,7 @@ import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 import EnglishText from './EnglishText.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
+import SpeechBoard from './SpeechBoard.jsx'
 import Phonetic from './Phonetic.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
@@ -98,8 +99,22 @@ export default function PronunciationPractice() {
 
   return (
     <div className="stack">
+      {/* ── スピーチの原稿(0054・2026-09 利用者の指定)────────────
+            > ゲストアカウントのスピーチ内から受け取ったスピーチの原稿を
+            > AIにより添削し、そしてその文の音声を作成、ゲスト側で
+            > 練習できる機能です。
+
+          **3つめの名前を作らない。** 利用者が言った「スピーチ内から」は
+          この画面のことなので、**すでにあるこの画面の中**に置く
+          (CLAUDE.md「スピーチ練習」と「Speech練習」を取り違えない)。
+
+          **いちばん上に置く。** この画面のいちばんの用事はスピーチであり、
+          下の単語・フレーズは**1つも減らしていない**
+          (一度入れたものを勝手に減らさない・共通ルール) */}
+      <SpeechBoard />
+
       <div className="card">
-        <h2 className="card-title">スピーチ練習</h2>
+        <h2 className="card-title">単語とフレーズの音</h2>
         <p className="card-hint">
           単語とフレーズを、<strong>発音記号を見ながらお手本と同じ音で</strong>言う練習です。
           <br />

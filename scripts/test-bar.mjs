@@ -3896,6 +3896,117 @@ export default defineConfig({
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+ * スピーチ練習(0054・2026-09 利用者の指定)
+ *
+ *   > ゲストアカウントのスピーチ内から受け取ったスピーチの原稿をAIにより
+ *   > 添削し、そしてその文の音声を作成、ゲスト側で練習できる機能です。
+ *   > そして、単語帳にはスピーチの単語帳も作ります。
+ *
+ * **描かないと分からないこと**を測る ——
+ *   ①直した英文が1文ずつ番号つきで並ぶか(紙と同じ丸)
+ *   ②1文ずつに Listen があるか(**その文の音声**)
+ *   ③「訳を見る」で**入れ替わる**か(並べない・箱が2倍にならない)
+ *   ④押せる大きさを割っていないか ⑤横にはみ出していないか
+ *
+ * **「出る」と「出ない」の両方を見る**(CLAUDE.md) ——
+ * ③は「訳が出る」だけを見ると、**英文と並べて出しても緑**になる。
+ * だから**英文が消えていること**まで数える。
+ * ══════════════════════════════════════════════════════════════════════ */
+for (const w of [1280, 390, 320]) {
+  const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=speech`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(250)
+  const got = await page.evaluate(() => {
+    const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
+    const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
+    const rows = [...document.querySelectorAll('.speech-sentences > li')]
+    /* **押すものそのものを測る。** 語は1つずつ `<button>` で描いてあり
+       (`EnglishText`)、`Stepper` の三角は 28px でよいと決めてある。
+       `button` をぜんぶ数えると、**押せる大きさの検証にならない** */
+    const btns = [...document.querySelectorAll('.speech-practice .btn')]
+    return {
+      文: rows.length,
+      番号: rows.map((r) => r.querySelector('.num-badge')?.textContent.trim() ?? ''),
+      聴く: rows.filter((r) => /Listen|Stop/.test(r.textContent)).length,
+      英: rows.filter((r) => r.querySelector('.writing-en')).length,
+      訳: rows.filter((r) => r.querySelector('.writing-ja')).length,
+      通し: document.querySelector('.speech-bar .btn--primary')?.textContent.trim() ?? '',
+      直し: document.querySelectorAll('.writing-notes > li').length,
+      語句: document.querySelectorAll('.writing-phrases > li').length,
+      案内: document.querySelector('.speech-tolist')?.textContent.trim() ?? '',
+      小: Math.min(...btns.map(px)),
+      よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      右: Math.max(0, ...btns.map(right),
+        ...rows.map(right)),
+    }
+  })
+  // ③ 「訳を見る」で**入れ替わる**(並べない)
+  await page.click('.speech-bar .btn--ghost')
+  await page.waitForTimeout(150)
+  const 訳 = await page.evaluate(() => ({
+    英: document.querySelectorAll('.speech-sentences .writing-en').length,
+    訳: document.querySelectorAll('.speech-sentences .writing-ja').length,
+    札: document.querySelector('.speech-bar .btn--ghost')?.textContent.trim() ?? '',
+  }))
+  await page.close()
+
+  const 名 = `スピーチ(${w}px)`
+  if (got.文 !== 2) {
+    ng(`${名} … 直した英文が1文ずつ並んでいない`, String(got.文))
+  } else if (got.番号.join('/') !== '1/2') {
+    ng(`${名} … 文に番号(紙と同じ丸)が付いていない`, got.番号.join('/'))
+  } else if (got.聴く !== 2) {
+    ng(`${名} … 1文ずつの Listen が無い`, String(got.聴く))
+  } else if (!got.通し.includes('Listen (全体)')) {
+    ng(`${名} … 通しの Listen が無い`, got.通し)
+  } else if (got.英 !== 2 || got.訳 !== 0) {
+    ng(`${名} … はじめは英語だけを出す`, `英 ${got.英} / 訳 ${got.訳}`)
+  } else if (訳.訳 !== 2 || 訳.英 !== 0) {
+    // **並べない。入れ替える**(集中モードの訳と同じ決まり)
+    ng(`${名} … 訳を出したのに、英文が並んだまま`, `英 ${訳.英} / 訳 ${訳.訳}`)
+  } else if (!訳.札.includes('英語に戻す')) {
+    ng(`${名} … 戻る道が同じボタンに出ていない`, 訳.札)
+  } else if (got.直し !== 1 || got.語句 !== 2) {
+    ng(`${名} … 直したところ・覚えたい語句が出ていない`, `${got.直し} / ${got.語句}`)
+  } else if (!got.案内.includes('スピーチの語句')) {
+    // **単語帳からまとめて練習できることを、その場で言う**
+    ng(`${名} … 単語帳への行き先が書かれていない`, got.案内)
+  } else if (got.小 < 34) {
+    ng(`${名} … 押せる大きさを割っている`, `${got.小}px`)
+  } else if (got.よこ > 0 || got.右 > w) {
+    ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+  } else {
+    ok(`${名} … 1文ずつ聴けて、訳は入れ替わり、はみ出しも無い`)
+  }
+}
+
+/* **画面が本当に置いているか。** 検証の入り口(`__screens.jsx`)だけ
+   直しても、利用者の画面には出ない。
+   **「名前が出てくるか」で見ない** —— 説明にも同じ語があるので、
+   **使っている形**で見る(CLAUDE.md) */
+{
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const pron = noC(readFileSync(
+    new URL('../src/components/PronunciationPractice.jsx', import.meta.url), 'utf8'))
+  const learners = noC(readFileSync(
+    new URL('../src/components/TrainerLearners.jsx', import.meta.url), 'utf8'))
+  const wb = noC(readFileSync(
+    new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8'))
+  if (!/<SpeechBoard \/>/.test(pron)) {
+    ng('スピーチ … 「スピーチ練習」の画面に置かれていない')
+  } else if (!/<SpeechBoard learnerId=\{l\.id\} learnerName=\{l\.display_name\} \/>/.test(learners)) {
+    ng('スピーチ … ゲストのページに置かれていない(トレーナーが登録できない)')
+  } else if (!/<option value="speech">スピーチ<\/option>/.test(learners)) {
+    ng('スピーチ … ゲストのページの切り替えに出ていない')
+  } else if (!/onPicked=\{onPickWords\}/.test(wb) || !/<SpeechWordsPick\s/.test(wb)) {
+    ng('スピーチ … 単語帳に「スピーチの語句」が置かれていない')
+  } else {
+    ok('スピーチ … 3つの画面(スピーチ練習 / ゲストのページ / 単語帳)に置いてある')
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
  * 「この文の要点」は、**紙にも刷る**(2026-09 実機・利用者の指定)
  *
  *   > 今でも存在しているけど印刷すると「この文の要点」が消えてしまいます。

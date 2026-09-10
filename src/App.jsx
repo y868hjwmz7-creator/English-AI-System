@@ -856,8 +856,11 @@ export default function App() {
                            絞り込みは**この1か所だけ**が持つ ——
                            「今週の宿題」から来る道とまったく同じ入れ物に置く。
                            画面ごとに別の絞り込みを持たない(CLAUDE.md) */
-                        onPickWords={(words, label) => {
-                          setOnlyWords({ words, label, what: 'この段の語' })
+                        /* **何で絞っているのかは、呼ぶ側が言う**(CLAUDE.md)。
+                           基礎単語は「この段の語」、スピーチは
+                           「このスピーチの語句」。**入れ物は1つのまま** */
+                        onPickWords={(words, label, what = 'この段の語') => {
+                          setOnlyWords({ words, label, what })
                         }} />
             ) : view === 'qr' ? (
               <QrReview />

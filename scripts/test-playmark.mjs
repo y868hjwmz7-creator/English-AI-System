@@ -39,6 +39,12 @@ import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
 import {
+  MAX_SPEECH_CHARS, SPEECH_COST_YEN, isBlankDraft, isReviewed, sortSpeeches,
+  speechCostYen, speechParts, speechPhrases, speechTitleOf, speechWordList,
+  tooLongDraft,
+} from '../src/lib/speechPractice.js'
+import { MAX_WRITING_CHARS } from '../src/lib/writingReview.js'
+import {
   markIndexAt, marksFromTimes, sentenceShares, sentenceTimesOf, wordSpans,
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
@@ -1028,7 +1034,13 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(/添削はトレーナーが行います/.test(fn),
       '断り方が、ゲストにも意味の分かる文になっている')
     ok(/status !== 'active'/.test(fn), 'やめた人は、どの頼みごとも呼べない')
-    ok(/slice\(0, 1500\)/.test(fn), '窓口でも長さを切っている(最後の関所)')
+    /* **窓口はいちばん大きい上限を持つ**(2026-09・0054)。
+       画面の側は置く場所ごとに上限を持ち、ディスカッションの答えは
+       1,500(`MAX_WRITING_CHARS`)、スピーチの原稿は 3,000
+       (`MAX_SPEECH_CHARS`)。**小さいほうに合わせると、
+       スピーチの終わりが黙って落ちる** */
+    ok(Number(/body\.answer \?\? ''\)\.trim\(\)\.slice\(0, (\d+)\)/.exec(fn)?.[1] ?? 0) >= 1500,
+      '窓口でも長さを切っている(最後の関所)')
 
     // **版がそろっているか。** ずれると「窓口が古い」を出せない
     const fnRev = /const FN_REV = '([^']+)'/.exec(fn)?.[1]
@@ -2899,9 +2911,12 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(/mode === 'grammar'/.test(fn), '文法解説 … 窓口が `mode: grammar` を受けている')
   ok(/name: 'emit_grammar'/.test(fn) && /strict: true/.test(fn),
     '文法解説 … 道具の形は `strict: true` で保証している')
-  ok(/const FN_REV = '2026-09-09'/.test(fn),
+  /* **版は「これ以降」で見る。** そのあとも窓口に手を入れるたびに
+     進むので(0054 で `2026-09-10` にした)、等号で書くと
+     **関係のない回に赤くなる。** 見たいのは「0051 の版に達しているか」 */
+  ok((/const FN_REV = '([^']+)'/.exec(fn)?.[1] ?? '') >= '2026-09-09',
     '文法解説 … 窓口に手を入れたので、版を1つ進めてある')
-  ok(/NEED_GEN_REV = '2026-09-09'/.test(read('src/lib/materials.js')),
+  ok((/NEED_GEN_REV = '([^']+)'/.exec(read('src/lib/materials.js'))?.[1] ?? '') >= '2026-09-09',
     '文法解説 … 画面が見る版も、そろえてある')
 
   // ── 貼る SQL がそろっているか ──
@@ -3110,7 +3125,9 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(/お金はかかりません/.test(bp),
     '基礎単語 … 何が起きるかを、押す前に書く')
 
-  ok(/onPickWords=\{\(words, label\) => \{/.test(app),
+  /* **3つめ(何で絞っているか)は 0054 で足した。**
+     基礎単語は既定の「この段の語」のまま(渡さない)*/
+  ok(/onPickWords=\{\(words, label, what = 'この段の語'\) =>/.test(app),
     '基礎単語 … App が絞り込みを1つだけ持っている')
   ok(/onlyWhat=\{onlyWords\?\.what/.test(app),
     '基礎単語 … 何で絞っているのかを、呼ぶ側が言う(「この教材の語」と嘘をつかない)')
@@ -3419,6 +3436,175 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '解答の読み上げ … 画面の中で演習の種類を見分けていない',
       hardCoded.join(' / '))
   }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   スピーチ練習 — 原稿・添削・音声・単語帳(0054・2026-09 利用者の指定)
+
+     > ゲストアカウントのスピーチ内から受け取ったスピーチの原稿をAIにより
+     > 添削し、そしてその文の音声を作成、ゲスト側で練習できる機能です。
+     > トレーナー側からもゲスト毎にスピーチを登録できます。
+     > そして、単語帳にはスピーチの単語帳も作ります。
+
+   **新しい仕組みを1つも作っていない**ことを、ここで見張る ——
+   添削は `mode: 'review_writing'`、音は `useBodyAudio`、
+   語句は `lookupWord` → `setWordStatus`、絞り込みは `App.jsx` の1つ。
+   どれかが**自前のものに置き換わったら赤くする。**
+   ════════════════════════════════════════════════════════════════ */
+console.log('\nスピーチ練習(0054)')
+{
+  const read3 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC3 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/\/\/.*$/gm, '')
+
+  // ── ① 長さの上限。**窓口は、画面のいちばん大きい上限以上を受け取る** ──
+  ok(MAX_SPEECH_CHARS === 3000,
+    'スピーチ … 原稿の上限は 3,000 文字(話して4分ぶん)')
+  ok(MAX_SPEECH_CHARS > MAX_WRITING_CHARS,
+    'スピーチ … ディスカッションの答え(1,500)より長く取ってある')
+  {
+    /* **窓口が切る数が小さいと、終わりが黙って落ちる。**
+       `npm run lint` にも `npm run build` にも引っかからない */
+    const fn = read3('supabase/functions/generate-material/index.ts')
+    const cut = /body\.answer \?\? ''\)\.trim\(\)\.slice\(0, (\d+)\)/.exec(fn)
+    ok(cut && Number(cut[1]) >= MAX_SPEECH_CHARS,
+      'スピーチ … 窓口も 3,000 文字まで受け取る(切って黙らない)',
+      cut ? `窓口 ${cut[1]}` : '見つからない')
+    /* **窓口に手を入れたら `FN_REV` を必ず1つ進める**(CLAUDE.md)。
+       画面の `NEED_GEN_REV` とそろっていないと、
+       置き直したのに「古い」と言い続ける */
+    const rev = /const FN_REV = '([^']+)'/.exec(fn)
+    const need = /export const NEED_GEN_REV = '([^']+)'/
+      .exec(read3('src/lib/materials.js'))
+    ok(rev && need && rev[1] === need[1],
+      'スピーチ … 窓口の版と、画面が求める版がそろっている',
+      rev && need ? `窓口 ${rev[1]} / 画面 ${need[1]}` : '見つからない')
+  }
+  ok(tooLongDraft('a'.repeat(MAX_SPEECH_CHARS + 1))
+    && !tooLongDraft('a'.repeat(MAX_SPEECH_CHARS)),
+    'スピーチ … ちょうど上限までは通し、1文字でも超えたら断る')
+  ok(isBlankDraft('   \n ') && !isBlankDraft(' hi '),
+    'スピーチ … 空白だけの原稿は「まだ書いていない」')
+
+  // ── ② 題名。**「無題」で終わらせない** ──
+  ok(speechTitleOf({ title: '来週の乾杯' }) === '来週の乾杯',
+    'スピーチ … 題名があれば、それを出す')
+  ok(speechTitleOf({ title: '  ', draft: '\n\nGood morning, everyone.\nI want to ...' })
+    === 'Good morning, everyone.',
+    'スピーチ … 題名が空なら、原稿の1行目から作る')
+  ok(speechTitleOf({}) === '書きかけのスピーチ',
+    'スピーチ … 原稿も空なら、そう言う(一覧で選べる名前にする)')
+  ok(speechTitleOf({ draft: 'x'.repeat(80) }).length === 41,
+    'スピーチ … 長い1行目は 40 文字で切って「…」を付ける')
+
+  // ── ③ 添削が済むまで、練習の場所を出さない ──
+  //     直す前の英文を鳴らすと、**まちがった英語を手本として聞かせる**
+  const reviewed = {
+    id: 's1', voice_id: 'us-1', updated_at: '2026-09-10T00:00:00Z',
+    review: {
+      sentences: [
+        { en: 'Good morning, everyone.', ja: 'みなさん、おはようございます。' },
+        { en: '', ja: 'これは空なので出さない' },
+        { en: 'Thank you for coming.', ja: 'お越しくださりありがとうございます。' },
+      ],
+      phrases: [{ en: 'thank you for', ja: '〜をありがとう' }, { en: '', ja: 'x' }],
+      notes: [], good: 'よく書けています',
+    },
+  }
+  ok(!isReviewed({ draft: 'x' }) && !isReviewed({ review: { sentences: [] } }),
+    'スピーチ … 添削が済んでいなければ「まだ」')
+  ok(isReviewed(reviewed), 'スピーチ … 直した英文が1文でもあれば「添削ずみ」')
+
+  // ── ④ 通しの読み上げ。**1文で1つ。声は全部同じ** ──
+  {
+    const parts = speechParts(reviewed)
+    ok(parts.length === 2, 'スピーチ … 空の文は鳴らさない(2文)')
+    ok(parts.every((p) => p.clipVoice === 'us-1'),
+      'スピーチ … 1人が最後まで話しきる(声は全部同じ)')
+    ok(speechParts({}).length === 0,
+      'スピーチ … 添削が無ければ、鳴らすものも無い')
+  }
+
+  // ── ⑤ 単語帳に入れる語句。**別の一覧を作らない** ──
+  ok(speechPhrases(reviewed).length === 1
+    && speechWordList(reviewed)[0] === 'thank you for',
+    'スピーチ … 覚えたい語句は、添削の `phrases` そのまま')
+
+  // ── ⑥ 費用。**多めに見せない**(押すのをためらわせない) ──
+  ok(speechCostYen('') === 0, 'スピーチ … 空なら 0 円')
+  ok(speechCostYen('a'.repeat(10)) === 1, 'スピーチ … 短くても 1 円は出す')
+  ok(speechCostYen('a'.repeat(MAX_SPEECH_CHARS)) === SPEECH_COST_YEN,
+    'スピーチ … いちばん長くて 4 円')
+
+  // ── ⑦ 並び。**新しく直したものが上** ──
+  {
+    const list = sortSpeeches([
+      { id: 'a', updated_at: '2026-09-01T00:00:00Z', title: 'ふるい' },
+      { id: 'b', updated_at: '2026-09-09T00:00:00Z', title: 'あたらしい' },
+    ])
+    ok(list[0].id === 'b', 'スピーチ … 新しい順に並べる')
+  }
+
+  // ── ⑧ **画面が本当に呼んでいるか**(定義だけあっても何も起きない) ──
+  const board = noC3(read3('src/components/SpeechBoard.jsx'))
+  ok(/canAskReview\(\)/.test(board),
+    'スピーチ … 添削を走らせられるかは `canAskReview()` に任せている')
+  ok(!/viewerRoleOf\(\)/.test(board),
+    'スピーチ … 画面の中で役割を見分けていない(判断を2か所に置かない)')
+  ok(/await reviewWriting\(\{/.test(board),
+    'スピーチ … 添削は `mode: review_writing` の道をそのまま使う')
+  ok(/<SpeechPractice speech=\{open\} learnerId=\{learnerId\} \/>/.test(board),
+    'スピーチ … 練習の中身は `SpeechPractice`(props で受け取る形にしてある)')
+  /* **`SpeechPractice` は props で中身を受け取る。**
+     こうしておくと `npm run test:bar` が本物の部品のまま測れる ——
+     `SpeechBoard` は自分で読み込むので、Supabase の無い骨組みでは
+     **何も描かれない**(描けないものは測れない) */
+  const prac = noC3(read3('src/components/SpeechPractice.jsx'))
+  ok(/useBodyAudio\(\)/.test(prac),
+    'スピーチ … 通しの読み上げは `useBodyAudio`(紙・集中モードと同じ道具)')
+  ok(/tier=\{PREMIUM\}/.test(prac) && /tier: PREMIUM/.test(prac),
+    'スピーチ … 良い声の段で鳴らす(1文ずつも、通しも)')
+  ok(/await lookupWord\(/.test(prac) && /await setWordStatus\(/.test(prac),
+    'スピーチ … 1語ずつ単語帳へ入れる道も、`WordbookAdd` と同じ')
+  ok(!/RepeatUnit/.test(prac),
+    'スピーチ … 1文が1つの部なので、「文」と「段落」を2つ見せない')
+
+  const pron = noC3(read3('src/components/PronunciationPractice.jsx'))
+  ok(/<SpeechBoard \/>/.test(pron),
+    'スピーチ … 「スピーチ練習」の画面に出ている')
+  ok(/SPEAK_TYPES/.test(pron),
+    'スピーチ … 単語とフレーズの練習は1つも減らしていない')
+
+  const learners = noC3(read3('src/components/TrainerLearners.jsx'))
+  ok(/detailTab === 'speech'/.test(learners)
+    && /<SpeechBoard learnerId=\{l\.id\}/.test(learners),
+    'スピーチ … ゲストのページからも登録できる(利用者の指定)')
+
+  // ── ⑨ 単語帳。**絞り込みは `App.jsx` の1つ** ──
+  const wb = noC3(read3('src/components/Wordbook.jsx'))
+  ok(/<SpeechWordsPick learnerId=/.test(wb),
+    'スピーチ … 単語帳に「スピーチの語句」が出ている')
+  const pick = noC3(read3('src/components/SpeechWordsPick.jsx'))
+  ok(/onPicked\?\.\(speechWordList\(now\), speechTitleOf\(now\), 'このスピーチの語句'\)/
+    .test(pick),
+    'スピーチ … 絞り込みは呼ぶ側(`App.jsx`)に任せ、何で絞ったかも渡す')
+  ok(/await lookupWord\(/.test(pick) && /await setWordStatus\(/.test(pick),
+    'スピーチ … 単語帳へは `WordbookAdd` と同じ道(意味も1回だけ引く)')
+  ok(!/add_basic_words|rpc\(/.test(pick),
+    'スピーチ … 語句は語でも句でもあるので、`add_basic_words` は使わない')
+  const app3 = noC3(read3('src/App.jsx'))
+  ok(/onPickWords=\{\(words, label, what = 'この段の語'\) =>/.test(app3),
+    'スピーチ … 何で絞っているのかは、呼ぶ側が言う(入れ物は1つのまま)')
+
+  // ── ⑩ **貼る SQL がそろっているか** ──
+  ok(/table_name = 'speeches'/.test(read3('supabase/apply/check.sql')),
+    'スピーチ … `check.sql` に 0054 の行がある')
+  ok(/create table if not exists public\.speeches/
+    .test(read3('supabase/apply/pending_matome.sql')),
+    'スピーチ … まとめた1つに 0054 が入っている')
+  ok(/delete from public\.speeches where learner_id = p_learner/
+    .test(read3('supabase/migrations/0054_speeches.sql')),
+    'スピーチ … 表を足したら、消す側(`erase_learner`)にも足す')
 }
 
 console.log(ng

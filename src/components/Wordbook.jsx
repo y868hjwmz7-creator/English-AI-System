@@ -65,6 +65,7 @@ import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from 
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
 import BasicWordsPick from './BasicWordsPick.jsx'
+import SpeechWordsPick from './SpeechWordsPick.jsx'
 import { basicJaOf, basicPosOf } from '../lib/basicsCourse.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
 import { CloseIcon, FocusIcon, MusicIcon } from './Icons.jsx'
@@ -980,6 +981,19 @@ export default function Wordbook({
       {onPickWords && (
         <BasicWordsPick learnerId={learnerId} learnerName={learnerName}
                         onPicked={onPickWords} />
+      )}
+
+      {/* **スピーチの語句**(0054・2026-09 利用者の指定)。
+
+            > そして、単語帳にはスピーチの単語帳も作ります。
+
+          添削の結果に入っている「覚えたい語句」を、**単語帳の側から**
+          まとめて入れて練習できるようにする。**基礎単語と同じ形**にして
+          となりに並べる —— どちらも「単語帳に語を入れる」道である。
+          **絞り込みは `App.jsx` の1つを使う**(`onPickWords`) */}
+      {onPickWords && (
+        <SpeechWordsPick learnerId={learnerId} learnerName={learnerName}
+                         onPicked={onPickWords} />
       )}
 
       {error && <p className="notice notice--error">{error}</p>}

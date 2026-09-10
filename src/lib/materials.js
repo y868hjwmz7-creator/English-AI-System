@@ -953,7 +953,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-09'
+export const NEED_GEN_REV = '2026-09-10'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -965,7 +965,8 @@ export const genGatewayStale = () => genRev !== null && genRev < NEED_GEN_REV
 export const genGatewayNote = () => (genGatewayStale()
   ? '生成の窓口(generate-material)が古いため、'
     + '**会話の登場人物の性別が、読み上げの声と合わないこと**があります。'
-    + 'また、**書いた答えの添削が使えません**'
+    + 'また、**書いた答えの添削が使えません**。'
+    + '**スピーチの原稿は 1,500 文字を超えたぶんが黙って落ちます**(0054)'
     + `(いま置かれているのは ${genRev}、必要なのは ${NEED_GEN_REV} 以降)。`
     + ' Supabase → Edge Functions → generate-material を置き直してください。'
   : null)
@@ -1277,7 +1278,12 @@ export async function addGrammar(material) {
  * **調子の文言(`toneBrief`)は画面から渡す。** 言い回しを直したくなっても
  * 窓口の置き直しが要らない(`speechBrief` と同じ考え方)。
  *
- * @param opt.answer     書いた英文(**1,500 文字まで**)
+ * **スピーチの原稿にも、この同じ道を使う**(0054・2026-09 利用者の指定)。
+ * 窓口は 3,000 文字まで受け取り、**画面の側が置く場所ごとに上限を持つ**
+ * (ディスカッションの答えは `MAX_WRITING_CHARS` = 1,500、
+ * スピーチの原稿は `MAX_SPEECH_CHARS` = 3,000)。
+ *
+ * @param opt.answer     書いた英文(**窓口は 3,000 文字まで**)
  * @param opt.toneBrief  どう直すか(`toneBrief()` が組み立てる)
  * @param opt.question   設問(英語)
  * @param opt.questionJa 設問の訳

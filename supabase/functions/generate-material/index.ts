@@ -1167,9 +1167,20 @@ const writingTool = {
  * 直した英文が1つも無ければ、失敗として返す。
  */
 async function reviewWriting(apiKey: string, body: Record<string, unknown>) {
-  /* **上限は窓口でも見る。** 画面側(`MAX_WRITING_CHARS`)と同じ数。
-     ここが最後の関所なので、どこから来た文でも必ず収まる */
-  const answer = String(body.answer ?? '').trim().slice(0, 1500)
+  /* **上限は窓口でも見る。ここが最後の関所である。**
+     どこから来た文でも必ず収まるので、`max_tokens` を超えることがない。
+
+     **画面の側は、置く場所ごとにこれより短い上限を持つ**(2026-09)。
+
+     | どこ | 画面の上限 | なぜ |
+     |---|---|---|
+     | ディスカッションの答え | `MAX_WRITING_CHARS` = 1,500 | 話して 30〜60 秒ぶん |
+     | **スピーチの原稿** | `MAX_SPEECH_CHARS` = **3,000** | 話して4分ぶん(0054) |
+
+     **窓口はいちばん大きいほうを持つ。** 小さいほうに合わせると、
+     スピーチの終わりが**黙って落ちる**(利用者にも画面にも何も出ない)。
+     画面はどちらも「切らずに、断る」ので、ここまで来る文は必ず収まっている */
+  const answer = String(body.answer ?? '').trim().slice(0, 3000)
   if (!answer) return { error: '添削する英文がありませんでした' }
 
   // どう直すか(調子)。**文言は画面から渡ってくる**ので、
@@ -1266,7 +1277,7 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-09'
+const FN_REV = '2026-09-10'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {

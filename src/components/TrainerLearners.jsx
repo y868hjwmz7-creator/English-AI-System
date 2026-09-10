@@ -32,6 +32,7 @@ import TrainerMaterials from './TrainerMaterials.jsx'
 import QrReview from './QrReview.jsx'
 import LearnerFiles from './LearnerFiles.jsx'
 import LessonNotes from './LessonNotes.jsx'
+import SpeechBoard from './SpeechBoard.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import SearchBar from './SearchBar.jsx'
 import HomeworkFilter from './HomeworkFilter.jsx'
@@ -709,6 +710,12 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         押した文が溜まる。単語帳と同じで、レッスン中に
                         一緒に取り組めば、それはゲストの学習として残る */}
                     <option value="qr">Quick Response</option>
+                    {/* **スピーチ**(0054・2026-09 利用者の指定)。
+                          > トレーナー側からもゲスト毎にスピーチを
+                          > 登録できます。
+                        部品は `SpeechBoard` そのもの。**書き写さない** ——
+                        ゲストの「スピーチ練習」とまったく同じものが出る */}
+                    <option value="speech">スピーチ</option>
                     {/* 会社からもらった英文メール、テストの結果、宿題の写真。
                         ここに置けば、次のレッスンで必ず見つかる(0031) */}
                     <option value="files">ファイル</option>
@@ -1127,6 +1134,13 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     (単語帳で `LearnerWordbook` を別に持って踏んだ失敗) */}
                 {detailTab === 'qr' && (
                   <QrReview learnerId={l.id} learnerName={l.display_name} />
+                )}
+
+                {/* **スピーチの原稿と、その添削**(0054)。
+                    ゲストの「スピーチ練習」と**まったく同じ部品**である。
+                    ちがうのは `learnerId` を渡すかどうかだけ */}
+                {detailTab === 'speech' && (
+                  <SpeechBoard learnerId={l.id} learnerName={l.display_name} />
                 )}
 
                 {detailTab === 'files' && (

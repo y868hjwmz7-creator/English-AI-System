@@ -44,6 +44,7 @@ import FocusFrame from './components/FocusFrame.jsx'
 import GrammarNote from './components/GrammarNote.jsx'
 import BasicsCourse from './components/BasicsCourse.jsx'
 import BasicWordsPick from './components/BasicWordsPick.jsx'
+import SpeechPractice from './components/SpeechPractice.jsx'
 import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
 import CastChip from './components/CastChip.jsx'
@@ -840,8 +841,56 @@ const BASICPICK = (
   </section>
 )
 
+/* スピーチ練習(`?screen=speech`・0054・2026-09 利用者の指定)。
+
+     > ゲストアカウントのスピーチ内から受け取ったスピーチの原稿をAIにより
+     > 添削し、そしてその文の音声を作成、ゲスト側で練習できる機能です。
+
+   **本物の部品と本物の CSS で測る。** 1文ずつのカードが縦に並ぶので、
+   狭い端末で**押せる大きさを割っていないか**と
+   **横にはみ出していないか**は、ソースを読んでも分からない。
+
+   `SpeechBoard` ではなく `SpeechPractice` を描く ——
+   あちらは**自分で読み込む**部品なので、Supabase の無いここでは
+   **中身が1つも描かれない**(描けないものは測れない)。
+
+   **わざと長い文と長い訳を混ぜてある** —— 短い文ばかりだと、
+   折り返しをやめても**同じ高さになって緑のまま**になる
+   (`?screen=radio` に長い語を混ぜてあるのと同じ理由)。 */
+const SPEECH = (
+  <SpeechPractice
+    speech={{
+      id: 'sp1',
+      voice_id: 'us-1',
+      review: {
+        good: '話し出しの呼びかけが自然で、聞き手のほうを向いています。',
+        sentences: [
+          {
+            en: 'Good morning, everyone, and thank you very much for making time '
+              + 'in your busy schedule to be here with us today.',
+            ja: 'みなさん、おはようございます。'
+              + 'お忙しいなか、本日はお時間をいただきありがとうございます。',
+          },
+          { en: 'I want to talk about our new plan.', ja: '新しい計画についてお話しします。' },
+        ],
+        notes: [{
+          before: 'thank you for your time to be here',
+          after: 'thank you for making time to be here',
+          why: '「時間をつくる」は make time と言います。for のあとは動名詞にします。',
+        }],
+        phrases: [
+          { en: 'make time', ja: '時間をつくる' },
+          { en: 'busy schedule', ja: '立て込んだ予定' },
+        ],
+      },
+    }}
+  />
+)
+
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'basicpick'
+  q.get('screen') === 'speech'
+    ? SPEECH
+    : q.get('screen') === 'basicpick'
     ? BASICPICK
     : q.get('screen') === 'course'
     ? COURSE

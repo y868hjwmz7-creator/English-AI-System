@@ -767,6 +767,79 @@ select pg_temp.expect('担当していないゲストには1語も入ってい�
   (select count(*)::int from public.word_reviews
    where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
 
+/* ── スピーチの原稿(0054)────────────────────────────────────
+   2026-09 利用者の指定「ゲストアカウントのスピーチ内から受け取った
+   スピーチの原稿をAIにより添削し…トレーナー側からもゲスト毎に
+   スピーチを登録できます」。
+
+   **`lesson_notes`(0032)とは、書ける人が違う。**
+   あちらはトレーナーが書いてゲストに渡す記録なのでゲストは読むだけだが、
+   こちらは**ゲストが書いたものをトレーナーが直す**ものなので、
+   **両方が書ける。**
+
+   確かめること。
+     ・ゲスト本人は、自分のスピーチを置ける・書き直せる
+     ・担当トレーナーも、そのゲストのスピーチを置ける
+     ・**担当していないゲストには置けない**(生徒C は誰の担当でもない)
+     ・**他のゲストのスピーチは、あることさえ見えない**
+     ・**`created_by` は自分でなければならない**(他人の名前で置かせない) */
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+insert into public.speeches (learner_id, title, draft, created_by)
+values ('22222222-2222-2222-2222-222222222222', '来週のあいさつ',
+        'Good morning everyone.', '22222222-2222-2222-2222-222222222222');
+select pg_temp.expect('ゲスト本人は自分のスピーチを置ける(0054)',
+  (select count(*)::int from public.speeches), 1);
+
+select pg_temp.expect_denied('他人の名前では置けない(0054)', $$
+  insert into public.speeches (learner_id, draft, created_by)
+  values ('22222222-2222-2222-2222-222222222222', 'x',
+          '44444444-4444-4444-4444-444444444444') $$);
+
+update public.speeches set draft = 'Good morning, everyone.'
+ where learner_id = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('ゲスト本人は自分のスピーチを書き直せる(0054)',
+  (select draft from public.speeches
+   where learner_id = '22222222-2222-2222-2222-222222222222'),
+  'Good morning, everyone.');
+
+-- 担当トレーナー。**登録もできるし、添削の結果も書き込める**
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+insert into public.speeches (learner_id, title, draft, created_by)
+values ('22222222-2222-2222-2222-222222222222', 'トレーナーが登録した原稿',
+        'Thank you for coming.', '44444444-4444-4444-4444-444444444444');
+select pg_temp.expect('担当トレーナーもゲストのスピーチを置ける(0054)',
+  (select count(*)::int from public.speeches
+   where learner_id = '22222222-2222-2222-2222-222222222222'), 2);
+
+update public.speeches
+   set review = '{"sentences":[{"en":"Thank you for coming.","ja":"お越しくださりありがとうございます。"}]}'::jsonb
+ where title = 'トレーナーが登録した原稿';
+select pg_temp.expect('担当トレーナーは添削の結果を書き込める(0054)',
+  (select jsonb_array_length(review -> 'sentences') from public.speeches
+   where title = 'トレーナーが登録した原稿'), 1);
+
+select pg_temp.expect_denied('担当していないゲストのスピーチは置けない(0054)', $$
+  insert into public.speeches (learner_id, draft, created_by)
+  values ('33333333-3333-3333-3333-333333333333', 'x',
+          '44444444-4444-4444-4444-444444444444') $$);
+
+-- **他のゲストのスピーチは、あることさえ見えない。**
+--   レッスンは画面を共有しながら行う(仕様書 5.5)
+reset role;
+insert into public.speeches (learner_id, draft, created_by)
+values ('33333333-3333-3333-3333-333333333333', 'Secret speech.',
+        '33333333-3333-3333-3333-333333333333');
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('他のゲストのスピーチは見えない(0054)',
+  (select count(*)::int from public.speeches
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+
+-- 管理者は、どのゲストのスピーチも見える(トレーナーの権限も兼ねる)
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select pg_temp.expect('管理者はどのゲストのスピーチも見える(0054)',
+  (select count(*)::int from public.speeches), 3);
+
 -- ── ゲストに関するファイル(0031)───────────────────────────
 --
 --   ファイルにはその人のことが書いてある。**外に漏れてはいけない。**
@@ -1075,6 +1148,10 @@ select pg_temp.expect('文の日ごとの記録が消えている(0042)',
    where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
 select pg_temp.expect('週の目標が消えている(0042)',
   (select count(*)::int from public.weekly_goals
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+-- **表を足したら、消す側にも足す**(CLAUDE.md)。0054 で足した1つ
+select pg_temp.expect('スピーチが消えている(0054)',
+  (select count(*)::int from public.speeches
    where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
 select pg_temp.expect('ゲストの欄そのものが消えている',
   (select count(*)::int from public.profiles
