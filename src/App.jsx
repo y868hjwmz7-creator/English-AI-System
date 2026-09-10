@@ -8,8 +8,9 @@ import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
 import AppNav, { AppTopbar } from './components/AppNav.jsx'
 import AppTabs from './components/AppTabs.jsx'
+import AppHome, { HOME_ID } from './components/AppHome.jsx'
 import {
-  BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, MicIcon, MusicIcon,
+  BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, HomeIcon, MicIcon, MusicIcon,
   PeopleIcon, StepsIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
@@ -39,9 +40,40 @@ import { isSupabaseConfigured } from './lib/supabase.js'
 
 export default function App() {
   /**
-   * いま開いている画面。'materials' 教材 / 'learners' ゲスト / 'admin' 集計 /
-   * 'homework' 今週の宿題 / 'wordbook' 単語帳 / 'qr' Quick Response /
+   * **リンクで指された教材**(`?m=…`・2026-09 利用者の指定)。
+   *
+   *   > 「教材をシェア」ボタンをつけてトレーナー間でシェアできるように
+   *   > してください。これで教材へのリンクをシェアできるようにします。
+   *
+   * **読むのは、開いた瞬間の1回だけ。** `useState` の初期値として読み、
+   * そのあと URL からは外す(`urlWithoutMaterial`)。残しておくと、
+   * 別の教材を発行して一覧を読み直すたびに**リンクの教材へ引き戻される**
+   * (`playMark.js` の「取り出したら消す」と同じ作法)。
+   *
+   * **`view` より前に置く。** 下の初めの値がこれを見る ——
+   * リンクで来た人をホームに落とすと、渡した教材に着かない。
+   */
+  const [askOpenId] = useState(() => materialIdFromUrl(window.location.search))
+  useEffect(() => {
+    if (!askOpenId) return
+    // 印だけを外す。**`?v=` などほかの印は残す**
+    window.history.replaceState(null, '', urlWithoutMaterial(window.location))
+  }, [askOpenId])
+
+  /**
+   * いま開いている画面。`HOME_ID` ホーム / 'materials' 教材 /
+   * 'learners' ゲスト / 'admin' 集計 / 'homework' 今週の宿題 /
+   * 'wordbook' 単語帳 / 'qr' Quick Response /
    * 'pronunciation' スピーチ練習(**id は変えない**・下記)。
+   *
+   * 【**ホームから始める**】(2026-09 利用者の指定)
+   *
+   *   > ロードの後いきなり教材が映るのではなく、何か箱を並べて、
+   *   > 選択したモードに飛ぶ仕様にしたいです
+   *
+   *   **ただしリンクで来た人は別**(`?m=…`)。あれは
+   *   「この教材を見てください」と名指しで渡されたものなので、
+   *   ホームに落とすと**渡した教材に着かない。**
    *
    * 【`'learner'` から始めない】(2026-09・第3週に実測して気づいた)
    *
@@ -58,7 +90,7 @@ export default function App() {
    *   **パッドの細い柱は絵だけ**なので、印が無いと本当に分からない。
    *   下の `useEffect` が「メニューに無い画面なら、先頭へ移す」ようにしてある。
    */
-  const [view, setView] = useState('materials')
+  const [view, setView] = useState(askOpenId ? 'materials' : HOME_ID)
   /**
    * **「この教材の語だけ練習する」で渡ってきた語**(0047・2026-09)。
    *
@@ -75,23 +107,6 @@ export default function App() {
      作る画面(下書きが入った状態)を開く。
      真偽値にすると、2度目に押したときに変わらず効かない */
   const [askCreate, setAskCreate] = useState(0)
-  /**
-   * **リンクで指された教材**(`?m=…`・2026-09 利用者の指定)。
-   *
-   *   > 「教材をシェア」ボタンをつけてトレーナー間でシェアできるように
-   *   > してください。これで教材へのリンクをシェアできるようにします。
-   *
-   * **読むのは、開いた瞬間の1回だけ。** `useState` の初期値として読み、
-   * そのあと URL からは外す(`urlWithoutMaterial`)。残しておくと、
-   * 別の教材を発行して一覧を読み直すたびに**リンクの教材へ引き戻される**
-   * (`playMark.js` の「取り出したら消す」と同じ作法)。
-   */
-  const [askOpenId] = useState(() => materialIdFromUrl(window.location.search))
-  useEffect(() => {
-    if (!askOpenId) return
-    // 印だけを外す。**`?v=` などほかの印は残す**
-    window.history.replaceState(null, '', urlWithoutMaterial(window.location))
-  }, [askOpenId])
   /** どこにいても、ワンタッチで発行の画面へ */
   const goPublish = () => {
     setView('materials')
@@ -312,13 +327,21 @@ export default function App() {
     if (isLearner && ['materials', 'learners', 'admin'].includes(view)) setView('homework')
   }, [profile, isLearner, view])
 
-  // ログインした直後は、その人が最初に見たい画面を開く
+  /* ログインした直後に開く画面。
+     **ホームから始める**(2026-09 利用者の指定)。
+       > ロードの後いきなり教材が映るのではなく、何か箱を並べて、
+       > 選択したモードに飛ぶ仕様にしたいです
+
+     **リンクで来た人だけは、その教材へ**(`?m=…`)。名指しで渡された
+     ものなので、ホームに落とすと**渡した教材に着かない。**
+     ゲストに「教材」の画面は無いので、そこはホームのままにする
+     (どのみち下の見張りが追い出す)。 */
   const [landed, setLanded] = useState(false)
   useEffect(() => {
     if (!isSupabaseConfigured || !profile || landed) return
-    setView(isTrainer ? 'materials' : 'homework')
+    setView(isTrainer && askOpenId ? 'materials' : HOME_ID)
     setLanded(true)
-  }, [profile, isTrainer, landed])
+  }, [profile, isTrainer, landed, askOpenId])
 
   /* 試作版のサンプルデータ(`store.js` / `seed.js`)は**道具ごと消した**
      (2026-09 実機・利用者の指摘)。
@@ -345,40 +368,79 @@ export default function App() {
   //
   // 並びは役割の順。トレーナーには「教材 → ゲスト → 集計」が仕事の順で、
   // 「今週の宿題 / 学習の記録」は自分自身の学習の画面である。
+  //
+  // **`desc`(1行の説明)も、ここが持つ**(2026-09 利用者の指定)。
+  // ホームの箱がそれを出す。**呼び名と説明を2か所に分けない** ——
+  // 分けると、名前を変えたときに説明だけが古いまま残る。
   const pages = [
-    (!isSupabaseConfigured || isTrainer) && { id: 'materials', label: '教材', icon: BookIcon },
-    (!isSupabaseConfigured || isTrainer) && { id: 'learners', label: 'ゲスト', icon: PeopleIcon },
+    /* **ホーム**(2026-09 利用者の指定)。
+         > ロードの後いきなり教材が映るのではなく、何か箱を並べて、
+         > 選択したモードに飛ぶ仕様にしたいです
+       **いちばん上に置く。** 「メニューに無い画面なら先頭へ移す」の
+       行き先(`ids[0]`)にもなるので、どの役割でも必ず在る場所である。
+       **下の帯(`TAB_IDS`)には足さない** —— あちらは利用者が4つと
+       決めている。ホームへは ☰ から戻る(「ゲスト」「集計」と同じ扱い) */
+    { id: HOME_ID, label: 'ホーム', icon: HomeIcon },
+    (!isSupabaseConfigured || isTrainer) && {
+      id: 'materials', label: '教材', icon: BookIcon,
+      desc: 'さがす・作る・ゲストに共有する',
+    },
+    (!isSupabaseConfigured || isTrainer) && {
+      id: 'learners', label: 'ゲスト', icon: PeopleIcon,
+      desc: '担当ゲストの宿題と取り組み',
+    },
     // **集計は管理者だけ**(2026-08 の設計変更)。トレーナーが見るのは
     // 「ゲスト」画面に出る取り組みのほうで、スクール全体の数字ではない
-    (!isSupabaseConfigured || isOwner) && { id: 'admin', label: '集計', icon: ChartIcon },
-    (!isSupabaseConfigured || !isTrainer) && { id: 'homework', label: '今週の宿題', icon: TaskIcon },
+    (!isSupabaseConfigured || isOwner) && {
+      id: 'admin', label: '集計', icon: ChartIcon,
+      desc: 'スクール全体の教材とゲストの数',
+    },
+    (!isSupabaseConfigured || !isTrainer) && {
+      id: 'homework', label: '今週の宿題', icon: TaskIcon,
+      desc: 'トレーナーから届いた教材',
+    },
     /* **文法30日集中講座 + 基礎単語**(0052・2026-09 利用者の指定)。
        > pre basic と basic に基礎単語習得モードとか文法30日集中講座などが欲しい
        **ゲスト専用**(利用者が選んだ)。トレーナーには出さない。
        **下の帯(`TAB_IDS`)には足さない** —— あちらは利用者が4つと決めている */
-    (!isSupabaseConfigured || !isTrainer) && { id: 'course', label: '30日講座', icon: StepsIcon },
+    (!isSupabaseConfigured || !isTrainer) && {
+      id: 'course', label: '30日講座', icon: StepsIcon,
+      desc: '文法30日と、基礎の単語',
+    },
     // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
     // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
-    { id: 'wordbook', label: '単語帳', icon: CardsIcon },
+    {
+      id: 'wordbook', label: '単語帳', icon: CardsIcon,
+      desc: '覚えた語を、間をあけてくり返す',
+    },
     /* **Quick Response の復習**(0040・2026-09 利用者の指定)。
        教材の中で「まだ」を押した文が、**1つのアカウントに1つ**溜まる。
        単語帳のとなりに置く — あちらは**語**、こちらは**文**で、
        やることは同じ(思い出して、口から出す)である。
        トレーナーも使う(単語帳と同じ理由。トレーナーも日々英語を学んでいる) */
-    { id: 'qr', label: 'Quick Response', icon: BoltIcon },
+    {
+      id: 'qr', label: 'Quick Response', icon: BoltIcon,
+      desc: '日本語を見て、英語で言う',
+    },
     /* **発音練習だけは独立した機能にする**(2026-08 利用者の指定)。
        **名前は「スピーチ練習」**(2026-09 利用者の指定)。
        > 「発音を練習」を「スピーチ練習」にしてください
        **id(`pronunciation`)は変えない** —— 覚えている画面
        (`eas.*`)も、取り組みの記録(`practice_days.kind`)も
        この id で残っている。**呼び名だけを変える** */
-    { id: 'pronunciation', label: 'スピーチ練習', icon: MicIcon },
+    {
+      id: 'pronunciation', label: 'スピーチ練習', icon: MicIcon,
+      desc: '声に出して、話す練習をする',
+    },
     /* **音楽**(0049・2026-09 利用者の指定「自作の音楽が流れるように」)。
        曲を入れるのも消すのも**トレーナーと管理者だけ**なので、
        ゲストには出さない —— ゲストは**聞き流しのときに聴くだけ**である
        (**効かない操作を見せない**)。
        **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている */
-    (!isSupabaseConfigured || isTrainer) && { id: 'bgm', label: '音楽', icon: MusicIcon },
+    (!isSupabaseConfigured || isTrainer) && {
+      id: 'bgm', label: '音楽', icon: MusicIcon,
+      desc: '聞き流しのときに流す曲',
+    },
     // 「学習の記録」は外した(2026-08 の設計変更)。
     // **やったことは、こちらが裏で数える**(0022・`src/lib/practice.js`)。
     // ゲストに何分やったかを入力させない。入力そのものが手間で、
@@ -762,7 +824,13 @@ export default function App() {
               版(`VITE_BUILD_STAMP`)も下のフッターに残っている */}
 
           <main className="app-main">
-            {view === 'materials' ? (
+            {/* **ホーム — 行き先を箱で並べる**(2026-09 利用者の指定)。
+                並べるのは `pages` そのままなので、**画面を足せば
+                ここにも自動で並ぶ**(行き先の一覧を2つ持たない)。
+                役割で並ぶものが変わるのも、そのまま効く */}
+            {view === HOME_ID ? (
+              <AppHome pages={pages} onPick={setView} />
+            ) : view === 'materials' ? (
               profile ? <TrainerMaterials me={profile} askCreate={askCreate}
                                           askOpenId={askOpenId} />
                 : <Loading />

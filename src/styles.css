@@ -352,7 +352,11 @@ body {
 }
 /* アプリぜんぶを覆うとき(起動直後)。画面のまん中あたりに置く */
 .loading--full { min-height: 60vh; }
-.loading-name {
+/* **ホームの見出しと、字づかいを分け合う**(2026-09 利用者の指定)。
+   読み込みが終わると、この字はそこに残り、**下に箱が並ぶ** ——
+   画面が入れ替わったようには見えない。**値を書き写さない** */
+.loading-name,
+.home-eyebrow {
   margin: 0;
   font-size: var(--fs-13);
   font-weight: 600;
@@ -383,6 +387,109 @@ body {
    止めたときも帯は残す —— 何かを待っていることは伝わってほしい */
 @media (prefers-reduced-motion: reduce) {
   .loading-bar > span { animation: none; width: 100%; opacity: 0.55; }
+}
+
+/* ---- ホーム(行き先の箱)------------------------------------------
+   2026-09 利用者の指定。
+
+     > ロードの後いきなり教材が映るのではなく、何か箱を並べて、
+     > 選択したモードに飛ぶ仕様にしたいです
+
+   **起動画面の続きに見えるようにしてある。** いちばん上の
+   「English AI System」は `.loading-name` と字づかいを分け合っており
+   (上の行)、読み込みが終わるとその字はそこに残って、下に箱が並ぶ。
+
+   **色はすべて変数から取る** —— プレインを選べば箱の絵も灰色になり、
+   暗い配色でもそのまま読める(値を直に書かない)。 */
+.home { display: flex; flex-direction: column; gap: var(--sp-16); }
+.home-head { display: flex; flex-direction: column; gap: var(--sp-6); }
+/* **アプリの名前は、柱が出ていないときだけ出す。**
+   左のメニューが柱として見えている幅では、その頭にまったく同じ名前が
+   あるので、**同じものが2か所**になる(CLAUDE.md)。
+   隠れる幅では、名前がこの1行にしか無い ——
+   起動画面から続いて、そこに残っているように見える。
+
+   **幅の数字をここに書かない。** 柱が出ているかどうかは
+   `App.jsx` が `.app-shell.is-wide` / `.is-narrow` で言っているので、
+   **その判断にそのまま乗る**(境目を2か所に持たない)。 */
+.home-eyebrow { display: none; }
+.app-shell.is-narrow .home-eyebrow { display: block; }
+.home-title {
+  margin: 0;
+  font-size: var(--fs-20);
+  font-weight: 700;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+/* 広い画面では中身なりの列、狭い画面では**必ず2列**(下記)。
+   同じ行の箱は grid が背丈をそろえるので、中身の長さが違っても
+   **辺と余白がそろう**(「repeated things as one object」) */
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--sp-12);
+}
+.home-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-8);
+  min-height: 112px;
+  padding: var(--sp-16);
+  text-align: left;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-12);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+/* **カーソルでは色を変えず、輪郭を出す**(カードの開閉と同じ作法)。
+   色をもう一段足すと、明るい側と暗い側で「濃くなる / 薄くなる」が逆になる */
+.home-box:hover { border-color: var(--accent-line); box-shadow: var(--shadow-1); }
+.home-box:active { transform: translateY(1px); }
+.home-box:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* 絵は**うすい地色 + 同じ色**(「選んでいる印」と同じ組み合わせ)。
+   大きさはメニューの絵(`.app-nav-icon`)と同じ 20px にそろえる */
+.home-box-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: var(--fs-20);
+  border-radius: var(--r-8);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.home-box-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  width: 100%;
+  font-size: var(--fs-15);
+  font-weight: 600;
+}
+/* **名前は切らない。** 入らないぶんは折り返す(下の行き先の帯と同じ決まり)。
+   flex の中の文字は `min-width: 0` を置かないと縮まない */
+.home-box-label { min-width: 0; overflow-wrap: break-word; }
+.home-box-go { flex: 0 0 auto; margin-left: auto; color: var(--text-muted); }
+.home-box-desc {
+  font-size: var(--fs-12);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-wrap: break-word;
+}
+/* **滑る動きが苦手な人がいる**(どの画面にも効く決まり) */
+@media (prefers-reduced-motion: reduce) {
+  .home-box { transition: none; }
+  .home-box:active { transform: none; }
+}
+/* 狭い画面では**必ず2列。** 1列にすると、8つの行き先で画面3枚ぶんになり、
+   「並べて選ぶ」という、この画面の役目そのものが無くなる */
+@media (max-width: 560px) {
+  .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-8); }
+  .home-box { min-height: 104px; padding: var(--sp-12); }
 }
 
 /* ---------------- レイアウト ----------------

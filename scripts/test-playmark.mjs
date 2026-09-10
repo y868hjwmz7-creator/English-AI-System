@@ -3035,7 +3035,10 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   const app = noC(read2('src/App.jsx'))
   ok(/<BasicsCourse me=\{profile\}/.test(app), '30日講座 … 画面から開ける')
   ok(/id: 'course'/.test(app), '30日講座 … メニューに出ている')
-  ok(/isTrainer\) && \{ id: 'course'/.test(app),
+  /* **改行をまたげる形で見る。** `pages` の行は説明(`desc`)が付いて
+     複数行になった(2026-09・ホーム)。`&& { id:` を1行の形で探していたので、
+     **中身は1文字も変わっていないのに赤くなった** */
+  ok(/isTrainer\) && \{\s*id: 'course'/.test(app),
     '30日講座 … **ゲスト専用**(トレーナーには出さない)')
   ok(!/'course'/.test(app.slice(app.indexOf('const TAB_IDS'), app.indexOf('const TAB_IDS') + 400)),
     '30日講座 … 下の帯は4つのまま(利用者が決めている)')
@@ -3317,6 +3320,43 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     ok(missing.length === 0,
       '読み込み中 … 画面まるごとのときは、6つとも Loading を使う',
       missing.join(' / '))
+
+    /* ── ホーム(2026-09 利用者の指定)──────────────────────────
+     *
+     *   > ロードの後いきなり教材が映るのではなく、何か箱を並べて、
+     *   > 選択したモードに飛ぶ仕様にしたいです
+     *
+     * **見えるところは `npm run test:bar` が描いて数える。**
+     * こちらは**描いても分からない形**だけを見る ——
+     * id を文字列で書いていないか、下の帯に混ざっていないか、
+     * リンクの道が残っているか、行き先の一覧を2つ持っていないか。 */
+    const home = noC(read2('src/components/AppHome.jsx'))
+    const appSrc = noC(read2('src/App.jsx'))
+    ok(/export const HOME_ID = 'home'/.test(home),
+      'ホーム … id は `AppHome.jsx` 1か所が持つ')
+    /* **`App.jsx` は2か所でこの id を使う**(`pages` に足す / 箱から外す)。
+       文字列で書くと、名前を変えたときに必ず片方が残る */
+    ok(/id: HOME_ID/.test(appSrc) && /view === HOME_ID/.test(appSrc)
+      && !/'home'/.test(appSrc),
+      'ホーム … `App.jsx` は `HOME_ID` を使う(文字列で書かない)')
+    /* **箱にホームそのものを並べない**(押しても同じ場所に留まる) */
+    ok(/pages\.filter\(\(p\) => p\.id !== HOME_ID\)/.test(home),
+      'ホーム … ホームそのものは箱にしない(効かない操作を見せない)')
+    /* **行き先の一覧を2つ持たない。** 名前も絵も説明も `pages` 1か所 */
+    ok(!/id: '(materials|wordbook|qr|homework)'/.test(home),
+      'ホーム … 行き先の一覧を自分で持たない(`pages` をそのまま並べる)')
+    /* **開いた瞬間はホーム。ただしリンク(`?m=…`)で来た人はその教材へ** */
+    ok(/useState\(askOpenId \? 'materials' : HOME_ID\)/.test(appSrc),
+      'ホーム … 開いた瞬間はホーム(リンクで来た人だけ教材)')
+    ok(/setView\(isTrainer && askOpenId \? 'materials' : HOME_ID\)/.test(appSrc),
+      'ホーム … ログインした直後もホーム(リンクで来た人だけ教材)')
+    /* **下の帯は4つのまま**(利用者が「この四つに」と決めている) */
+    ok(!/HOME_ID/.test(
+      appSrc.slice(appSrc.indexOf('const TAB_IDS'), appSrc.indexOf('const TAB_IDS') + 400),
+    ), 'ホーム … 下の帯には足さない(☰ から戻る)')
+    /* **説明も `pages` が持つ。** 呼び名と説明を2か所に分けない */
+    ok((appSrc.match(/\n\s+desc: '/g) ?? []).length >= 8,
+      'ホーム … 1行の説明は `pages` が持つ(呼び名と2か所に分けない)')
 
     /* ── 解答の読み上げ(2026-09 利用者の指定)────────────────
      *

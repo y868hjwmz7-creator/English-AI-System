@@ -1267,6 +1267,97 @@ export default defineConfig({
       ok(`骨組み ${w}px … メニュー ${m.幅}px・印あり・帯に「${m.名前}」`)
     }
 
+    /* ══ ホーム — **読み込みが終わったら、まず行き先を並べる** ══════════
+         2026-09 利用者の指定。
+
+           > ロードの後いきなり教材が映るのではなく、何か箱を並べて、
+           > 選択したモードに飛ぶ仕様にしたいです
+
+       **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+       箱が並んでいることだけを見ると、
+         ・ホームそのものの箱まで並べる(押しても動かない)
+         ・押しても移らない
+         ・戻る道が無い
+       のどれに壊しても**緑のまま**になる。だから
+       ①開いた瞬間がホームか ②`pages` から1つ減った数だけ並ぶか
+       ③ホームの箱が混ざっていないか ④名前と説明が出ているか
+       ⑤押せる大きさか ⑥押すと本当に移るか ⑦**☰ から戻れるか**
+       を、まとめて見る。 */
+    const home = await page.evaluate(() => {
+      const boxes = [...document.querySelectorAll('.home-box')]
+      return {
+        名: document.querySelector('.app-topbar-title')?.textContent.trim() ?? '',
+        箱: boxes.length,
+        行き先: document.querySelectorAll('.app-nav-item').length,
+        札: boxes.map((e) => e.querySelector('.home-box-label')?.textContent.trim() ?? ''),
+        説明: boxes.filter((e) => e.querySelector('.home-box-desc')).length,
+        押せる: boxes.every((e) => e.getBoundingClientRect().height >= 44),
+        押せる形: boxes.every((e) => e.tagName === 'BUTTON'),
+        低い: Math.min(...boxes.map((e) => Math.round(e.getBoundingClientRect().height))),
+        はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+      }
+    })
+    /* 押して移る → ☰ から戻る。**片道だけ見ない**(行き止まりを作らない) */
+    const 移動 = await page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      const 題 = () => document.querySelector('.app-topbar-title')?.textContent.trim() ?? ''
+      const box = [...document.querySelectorAll('.home-box')]
+        .find((e) => e.querySelector('.home-box-label')?.textContent.trim() === '単語帳')
+      if (!box) return null
+      box.click()
+      await wait(300)
+      const 押した後 = 題()
+      // かぶせて開く幅では、まず ☰ を押す
+      if (!document.querySelector('.app-nav-item')?.offsetParent) {
+        document.querySelector('.app-topbar .nav-burger')?.click()
+        await wait(250)
+      }
+      const back = [...document.querySelectorAll('.app-nav-item')]
+        .find((e) => e.querySelector('.app-nav-label')?.textContent.trim() === 'ホーム')
+      if (!back) return { 押した後, 戻れる: false, 戻った箱: 0 }
+      back.click()
+      await wait(300)
+      return {
+        押した後,
+        戻れる: 題() === 'ホーム',
+        戻った箱: document.querySelectorAll('.home-box').length,
+      }
+    })
+    if (home.名 !== 'ホーム') {
+      ng(`ホーム ${w}px … 開いた瞬間がホームではない(${home.名 || '空'})`,
+        '`view` の初めの値は `HOME_ID`(リンク `?m=…` で来たときだけ教材)')
+    } else if (home.箱 !== home.行き先 - 1) {
+      ng(`ホーム ${w}px … 箱が ${home.箱} 個(メニューは ${home.行き先} 項目)`,
+        '`pages` をそのまま並べ、ホームそのものだけを外す')
+    } else if (home.札.includes('ホーム')) {
+      ng(`ホーム ${w}px … ホームそのものの箱が並んでいる`,
+        '押しても同じ場所に留まるだけ。**効かない操作を見せない**')
+    } else if (home.説明 !== home.箱) {
+      ng(`ホーム ${w}px … 説明の無い箱がある(${home.説明} / ${home.箱})`,
+        '`desc` は `pages` が持つ(呼び名と説明を2か所に分けない)')
+    } else if (!home.押せる形 || !home.押せる) {
+      ng(`ホーム ${w}px … 押せる形になっていない`
+        + `(button ${home.押せる形} / いちばん低い箱 ${home.低い}px)`)
+    } else if (home.はみ出し) {
+      ng(`ホーム ${w}px … 横にはみ出している`)
+    } else if (!移動) {
+      ng(`ホーム ${w}px … 「単語帳」の箱が無い`)
+    } else if (移動.押した後 !== '単語帳') {
+      ng(`ホーム ${w}px … 箱を押しても移らない(${移動.押した後 || '空'})`,
+        '「選択したモードに飛ぶ」(利用者の指定)')
+    } else if (!移動.戻れる || 移動.戻った箱 !== home.箱) {
+      ng(`ホーム ${w}px … ☰ からホームへ戻れない(箱 ${移動.戻った箱} 個)`,
+        '**行き止まりを作らない。** ホームは `pages` の先頭に入れてある')
+    } else {
+      ok(`ホーム ${w}px … 箱 ${home.箱} 個(${home.低い}px 以上)・`
+        + '押すと移る・☰ から戻れる')
+    }
+    /* **次の検証のために、開いた直後の姿へ戻す。**
+       上のやりとりで画面もメニューも動いているので、
+       ここで読み直さないと**このあとの測りが引きずられる** */
+    await page.goto(`http://localhost:${PORT2}/__shell.html`, { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+
     /* ══ 上の帯は**白く、下の帯とそろえる**(2026-09 実機・利用者の指定)══
          > 全てのページで共通して上部バーを白くしてください。
          > そして下部のタブと同じようにボーダー部分は薄い影を入れて
@@ -1298,7 +1389,7 @@ export default defineConfig({
       }
     })
     const look = await 測る()
-    /* **1つの画面だけでは足りない。** 開いた瞬間は必ず「教材」なので、
+    /* **1つの画面だけでは足りない。** 開いた瞬間は必ず「ホーム」なので、
        絵を1つに決め打ちしても**そこでは合ってしまう。**
        だから**別の画面へ移って、もう一度**突き合わせる */
     await page.evaluate(() => {
@@ -3711,7 +3802,10 @@ export default defineConfig({
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     if (!/<BasicsCourse me=\{profile\} \/>/.test(src)) {
       ng('30日講座 … メニューから開けない')
-    } else if (!/isTrainer\) && \{ id: 'course', label: '30日講座'/.test(src)) {
+    /* **改行をまたげる形で見る。** `pages` の行は説明(`desc`)が付いて
+       複数行になった(2026-09・ホーム)。1行の形で探していたので、
+       **中身は1文字も変わっていないのに赤くなった** */
+    } else if (!/isTrainer\) && \{\s*id: 'course', label: '30日講座'/.test(src)) {
       ng('30日講座 … ゲスト専用になっていない')
     } else {
       ok('30日講座 … ゲストのメニューから開ける')

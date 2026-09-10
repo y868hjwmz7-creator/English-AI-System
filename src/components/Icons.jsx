@@ -412,3 +412,38 @@ export function LinkIcon({ className = 'icon' }) {
   )
 }
 
+
+/**
+ * 家(ホーム・2026-09 利用者の指定)。
+ *
+ *   > ロードの後いきなり教材が映るのではなく、何か箱を並べて、
+ *   > 選択したモードに飛ぶ仕様にしたいです
+ *
+ * 行き先を並べる画面そのものにも、メニューの並びに入る絵が要る。
+ * **絵文字は使わない**(端末ごとに形が違う)。
+ */
+export function HomeIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false"
+         fill="none" stroke="currentColor" strokeWidth="1.5"
+         strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.2 8.6 10 3.4l6.8 5.2v7.1a1 1 0 0 1-1 1h-3.4v-4.6H7.6v4.6H4.2a1 1 0 0 1-1-1z" />
+    </svg>
+  )
+}
+
+/**
+ * 右向きの山形(ホームの箱の「行き先」の印)。
+ *
+ * **触る端末には「カーソルを載せる」が無い**(CLAUDE.md)。
+ * 箱が押せることを、押す前から見て分かるようにするための印である。
+ */
+export function ChevronIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false"
+         fill="none" stroke="currentColor" strokeWidth="1.6"
+         strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7.8 4.6 13.2 10l-5.4 5.4" />
+    </svg>
+  )
+}
