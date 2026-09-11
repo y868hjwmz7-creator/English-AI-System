@@ -494,6 +494,121 @@ export const REPEAT_UNITS = ['off', 'sentence', 'item', 'all']
  */
 const REPEAT_EPS = 0.04
 
+/* ══════════════════════════════════════════════════════════════════
+ * **折り返しは、声の端ではなく「間(ま)のまん中」に置く**
+ * (2026-09 実機・利用者の指摘)
+ *
+ *   > 文ごとの繰り返しをオンにすると繰り返す際に
+ *   > **前の文や発言の終わりの辺りから始まり**、
+ *   > 文の終わりの方で**また前の発言に戻り**繰り返されます
+ *
+ *   > 文や段落ごとの繰り返しをオンにすると
+ *   > **文や段落が終わり切る前に**また
+ *   > **前の発言や段落の最後の部分**に戻り繰り返えされます
+ *
+ * 【出どころは「窓の縁が、声の端そのもの」だったこと】
+ *   これまでは
+ *
+ *     ・戻る先   … その文の**最初の文字が鳴り出した秒**
+ *     ・折り返し … その文の**最後の文字が鳴り終わった秒**
+ *
+ *   という、**声のぎりぎりの端**を縁にしていた。しかも
+ *   いまどの文にいるかは `indexAtTime()`(始まりの秒を過ぎたか)で
+ *   数えていた。**この2つが噛み合うと、こうなる。**
+ *
+ *     ① 折り返しが**声の端ちょうど**なので、うしろの余韻を聴かずに戻る
+ *        → **「文や段落が終わり切る前に」**
+ *     ② 戻った先も**声の端ちょうど**。ところが MP3 の頭出しは
+ *        **フレームの切れ目に吸い寄せられる**(1枚 26ms)ので、
+ *        頼んだ秒より**少し手前**に着くことがある
+ *     ③ すると `indexAtTime()` は**1つ前の文**だと答える。
+ *        その文はとっくに終わっているので「終わりに来た」と読まれ、
+ *        **その場でもう一度、1つ前の文の頭へ戻す**
+ *        → **「前の文や発言の終わりの辺りから始まり、
+ *            また前の発言に戻り繰り返される」**
+ *
+ *   **たった 1/1000 秒でも手前に着けば起きる。** しかも
+ *   `npm run lint` にも `npm run build` にも引っかからず、
+ *   **音は鳴っている**ので、聴いてみるまで分からない。
+ *
+ * 【ハイライトは平気なのに、くり返しだけが壊れる理由】
+ *   ハイライトは**文のまん中あたり**で当たっていればよい
+ *   (CLAUDE.md「精度を上げるより、外れても困らない見せ方を選ぶ」)。
+ *   端で少し行き来しても、目には正しく見える。
+ *   **くり返しは、まさにその端で使う。** ずれがそのまま音になる。
+ *
+ * 【直し方 — 縁を「間(ま)のまん中」へ動かし、窓で数える】
+ *   文と文のあいだには**必ず静かなところ**がある(息継ぎ・発言の間)。
+ *   その**まん中**を縁にすれば、
+ *
+ *     ・戻る先   … 静かなところ。前の声はもう鳴り終わっている
+ *     ・折り返し … 静かなところ。その文はもう言い終わっている
+ *     ・**少し手前に着いても、窓から出ない**(③が起きない)
+ *
+ *   数えるのも `indexAtTime()` をやめ、**縁で数える**(`windowAt`)。
+ *   窓は縁どうしが継ぎ目なく並ぶので、どこにいても必ずどれか1つに入る。
+ *
+ *   間がまったく無い(端どうしがくっついている)ところでは
+ *   まん中＝端なので、**これまでと1ミリ秒も変わらない。**
+ *
+ * 【こちらでは、本物の音声で確かめられない】
+ *   この環境から ElevenLabs にも Supabase にも届かない
+ *   (`clockScaleOf` を入れたときと同じ限界。CLAUDE.md にそう書いてある)。
+ *   上の①②③は**症状にぴたりと合う説明**だが、**実測ではない。**
+ *   だから「何秒ずれているか」を当てて足し引きはしない ——
+ *   **当てずっぽうの補正は、合っている教材を壊す。**
+ *   ここでしているのは「**どちらの向きに少しずれても当たる場所へ縁を置く**」
+ *   だけである。
+ *
+ * 【いちばん最後だけは、音声の終わりまで】
+ *   控えの終わりは「最後の文字が鳴り終わった秒」なので、
+ *   **うしろの余韻のぶん短い。** 伸ばさないと、最後の文をくり返すときに
+ *   言い終わる前に戻る(発言ごとに鳴らす道では前から伸ばしてあった。
+ *   **1本の道にだけ無かった** —— ここで1か所にまとめる)。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** その区間の**手前の縁**。前の区間との間(ま)のまん中に置く */
+function backEdge(list, i) {
+  const s = Number(list[i]?.start)
+  if (!Number.isFinite(s)) return NaN
+  if (i <= 0) return s
+  const p = Number(list[i - 1]?.end)
+  return Number.isFinite(p) ? (p + s) / 2 : s
+}
+
+/** その区間の**向こうの縁**。最後だけは音声の終わりまで伸ばす */
+function frontEdge(list, i, duration = 0) {
+  const e = Number(list[i]?.end)
+  if (!Number.isFinite(e)) return NaN
+  if (i >= list.length - 1) {
+    const d = Number(duration)
+    return Number.isFinite(d) && d > e ? d : e
+  }
+  const n = Number(list[i + 1]?.start)
+  return Number.isFinite(n) ? (e + n) / 2 : e
+}
+
+/**
+ * いま、どの区間の**窓**の中にいるか。
+ *
+ * **`indexAtTime()` では数えない。** あちらは「始まりの秒を過ぎたか」で
+ * 見るので、**間(ま)のまん中へ戻した次の刻みで1つ前を指す。**
+ * すると「終わりに来た」と読まれて、**前の文へ戻り続ける。**
+ * 窓は縁どうしが継ぎ目なく並んでいるので、縁で数える。
+ */
+function windowAt(list, t) {
+  for (let i = list.length - 1; i >= 1; i -= 1) {
+    if (t >= backEdge(list, i)) return i
+  }
+  return 0
+}
+
+/** その並びの中で、いまいる窓 */
+function windowOf(list, t, duration) {
+  const i = windowAt(list, t)
+  return { start: backEdge(list, i), end: frontEdge(list, i, duration) }
+}
+
 /**
  * **くり返しの折り返し先の秒。** まだ終わりに来ていなければ `null`。
  *
@@ -502,6 +617,11 @@ const REPEAT_EPS = 0.04
  * @param {object} o
  * @param {Array} o.spans     項目(段落 / 発言)の区間
  * @param {Array} o.sentences 文の区間(`sentenceSpansOf()`)
+ * @param {number} o.duration 音声ぜんぶの長さ(秒)。**最後の区間を伸ばす**
+ * @param {{start:number,end:number}|null} o.window
+ *   集中モードが出しているかけらの区間(`spanForRange()` が縁まで込みで返す)。
+ *   **渡されたらそのまま使う** —— あれは本文の途中なので、
+ *   「最後だから音声の終わりまで」を当てはめてはいけない
  * @returns {number|null} 戻る先の秒
  *
  * 【文の区間が無いときは、段落で回す】
@@ -510,25 +630,31 @@ const REPEAT_EPS = 0.04
  *   こちらの知っているいちばん細かい単位である。
  *   **何も起きないより、近い単位で回すほうがよい**(行き止まりを作らない)。
  */
-export function repeatSeek(unit, sec, { spans = null, sentences = null } = {}) {
+export function repeatSeek(unit, sec, {
+  spans = null, sentences = null, duration = 0, window = null,
+} = {}) {
   if (!REPEAT_UNITS.includes(unit) || unit === 'off') return null
   const t = Number(sec) || 0
   const items = Array.isArray(spans) && spans.length ? spans : null
   const sents = Array.isArray(sentences) && sentences.length ? sentences : null
 
-  let span = null
+  let win = null
   if (unit === 'sentence') {
-    span = sents ? sents[indexAtTime(sents, t)] : null
-    if (!span && items) span = items[indexAtTime(items, t)]
+    if (sents) win = windowOf(sents, t, duration)
+    else if (items) win = windowOf(items, t, duration)
   } else if (unit === 'item') {
-    span = items ? items[indexAtTime(items, t)] : null
+    // 集中モードのかけらは、縁まで込みで渡されている
+    if (window) win = window
+    else if (items) win = windowOf(items, t, duration)
   } else if (unit === 'all') {
     // **全文は、いつも頭へ戻す。** 途中から鳴らし始めていても、
     // 「全文をくり返す」と言った以上は本文の頭から回る
-    if (items) span = { start: items[0].start, end: items[items.length - 1].end }
+    if (items) {
+      win = { start: Number(items[0].start), end: frontEdge(items, items.length - 1, duration) }
+    }
   }
-  if (!span || !Number.isFinite(span.start) || !Number.isFinite(span.end)) return null
-  return t >= span.end - REPEAT_EPS ? span.start : null
+  if (!win || !Number.isFinite(win.start) || !Number.isFinite(win.end)) return null
+  return t >= win.end - REPEAT_EPS ? win.start : null
 }
 
 /**
@@ -546,20 +672,38 @@ export function repeatSeek(unit, sec, { spans = null, sentences = null } = {}) {
  * かけらの端は必ず文の端と重なる(文の切れ目でしか割らない)ので、
  * 中に入る文を拾えば、そのまま区間になる。
  *
+ * **縁は `repeatSeek` と同じ考え方で取る**(2026-09 実機)。
+ * かけらの端も、前後の文との**間(ま)のまん中**に置く。
+ * そうしないと、ここだけ「前の文のしっぽから始まり、言い終わる前に戻る」
+ * が残る。**縁の決め方を2通り持たない。**
+ *
+ * **縁は、狭める前の並びから取る。** 先に絞り込んでから縁を取ると、
+ * 絞った側の端がいつも「いちばん最後」になり、
+ * **本文の途中のかけらまで音声の終わりまで伸びる。**
+ * だから絞り込みは `keep` で言い、**並びそのものは丸ごと渡す。**
+ *
  * @param {Array} sentences `{ start, end, charIndex }` の並び(秒でも割合でもよい)
  * @param {{from:number,to:number}|null} range その段落の何文字目から何文字目まで
  * @param {number} base その並びが数え始めている、段落の中の文字位置
+ * @param {object} [o]
+ * @param {number} o.duration 音声ぜんぶの長さ(秒)。**いちばん最後だけ伸びる**
+ * @param {Function|null} o.keep その段落のものだけを拾う見分け方
  * @returns {{start:number,end:number}|null} 狭められないときは `null`
  */
-export function spanForRange(sentences, range, base = 0) {
+export function spanForRange(sentences, range, base = 0, { duration = 0, keep = null } = {}) {
   if (!Array.isArray(sentences) || !sentences.length) return null
   if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null
-  const inside = sentences.filter((s) => {
+  const inside = []
+  sentences.forEach((s, i) => {
+    if (keep && !keep(s, i)) return
     const c = (s.charIndex ?? 0) + base
-    return c >= range.from && c < range.to
+    if (c >= range.from && c < range.to) inside.push(i)
   })
   if (!inside.length) return null
-  return { start: inside[0].start, end: inside[inside.length - 1].end }
+  return {
+    start: backEdge(sentences, inside[0]),
+    end: frontEdge(sentences, inside[inside.length - 1], duration),
+  }
 }
 
 /**

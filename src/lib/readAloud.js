@@ -583,6 +583,31 @@ export function readAloudSequence(parts, {
     return REPEAT_UNITS.includes(u) ? u : 'off'
   }
 
+  /* ── **戻した直後に、また戻さない**(2026-09 実機・利用者の指摘)────
+   *
+   *   MP3 の頭出しは**フレームの切れ目に吸い寄せられる**(1枚 26ms)ので、
+   *   頼んだ秒より少し手前に着くことがある。窓の縁を間(ま)のまん中に
+   *   置いたので、そのくらいでは窓から出ない —— けれども
+   *   **端末や回線しだいでは、もっと大きく外すこともある。**
+   *   そのときに何度も戻し続けると、**前の文をくり返し続ける。**
+   *
+   *   だから「戻した先のすぐそば」にいるあいだは、もう一度戻さない。
+   *   **止まる条件を持たせる**(CLAUDE.md)。 */
+  const JUST_MOVED = 0.25
+  let lastBack = -99
+  /**
+   * くり返しで戻す。**戻したら true**(呼ぶ側はそのひと刻みを何もしない)。
+   * @param {number|null} back 戻る先の秒(`repeatSeek()` の返り値)
+   * @param {number} sec いまの秒
+   */
+  const goBack = (back, sec) => {
+    if (back === null) return false
+    if (Math.abs(sec - lastBack) < JUST_MOVED) return false   // 戻した直後
+    if (!seekClip(back)) return false
+    lastBack = back
+    return true
+  }
+
   /**
    * くり返し「段落」で回す区間。**いま出しているかけたぶんに狭める。**
    *
@@ -595,13 +620,13 @@ export function readAloudSequence(parts, {
    * @param {number} idx 段落の番号
    * @param {Array} sents `{ start, end, charIndex }` の並び(秒でも割合でもよい)
    * @param {number} base その並びが数え始めている、段落の中の文字位置
+   * @param {object} o `{ duration, keep }`(`spanForRange` にそのまま渡す)
    */
-  const partSpan = (idx, sents, base = 0) => {
+  const partSpan = (idx, sents, base = 0, o = {}) => {
     if (repeatNow() !== 'item' || !partRangeOf || !sents?.length) return null
     const r = partRangeOf(idx)
     if (!r || !Number.isFinite(r.from) || !Number.isFinite(r.to)) return null
-    const span = spanForRange(sents, r, base)
-    return span ? [span] : null
+    return spanForRange(sents, r, base, o)
   }
 
   const alive = () => mine === session
@@ -763,16 +788,17 @@ export function readAloudSequence(parts, {
            そのまま数えると**一瞬だけ次の段落が光る** */
         /* **「段落」は、集中モードが出しているかけたぶんに狭める。**
            狭められないときは、これまでどおり段落まるごと */
+        /* **並びは丸ごと渡し、絞り込みは `keep` で言う。**
+           先に絞ると、そのかけらの終わりがいつも「いちばん最後」になり、
+           **本文の途中なのに音声の終わりまで回る** */
         const only = shownPiece >= 0
-          ? partSpan(
-            itemOf(shownPiece),
-            (sent ?? []).filter((x) => x.item === shownPiece),
-            list[shownPiece]?.at ?? 0,
-          ) : null
+          ? partSpan(itemOf(shownPiece), sent, list[shownPiece]?.at ?? 0, {
+            duration: dur, keep: (x) => x.item === shownPiece,
+          }) : null
         const back = repeatSeek(repeatNow(), sec, {
-          spans: only ?? spans, sentences: sent,
+          spans, sentences: sent, duration: dur, window: only,
         })
-        if (back !== null && seekClip(back)) return
+        if (goBack(back, sec)) return
         seen(indexAtTime(spans, sec))
         tellSentence(sent, sec, () => shownPiece, seenSent, relayWhole)
       },
@@ -913,20 +939,17 @@ export function readAloudSequence(parts, {
             /* **最後の文だけ、終わりを音声の終わりまで伸ばす。**
                本当の時刻は「最後の文字が鳴り終わった秒」なので、
                うしろの余韻のぶん短い。伸ばさないと、文でくり返すときに
-               **言い終わる前に戻る** */
-            if (!sentSecs) {
-              sentSecs = exact
-                ? exact.sents.map((s, n) => (n === exact.sents.length - 1
-                  ? { ...s, end: Math.max(s.end, Number(dur) || s.end) } : s))
-                : sharesToTimes(shares, dur)
-            }
+               **言い終わる前に戻る。**
+               伸ばすのは `repeatSeek` / `spanForRange` の中(`duration`)で、
+               **縁の決め方を2通り持たない** */
+            if (!sentSecs) sentSecs = exact ? exact.sents : sharesToTimes(shares, dur)
             if (!sentSecs) return
-            const only = partSpan(part.index, sentSecs, part.at)
-            backTo = only ? only[0].start : 0
+            const only = partSpan(part.index, sentSecs, part.at, { duration: dur })
+            backTo = only ? only.start : 0
             const back = repeatSeek(repeatNow(), sec, {
-              spans: only, sentences: sentSecs,
+              sentences: sentSecs, duration: dur, window: only,
             })
-            if (back !== null) seekClip(back)
+            goBack(back, sec)
           },
           startAt: startSec,
           // 鳴り始めたら、次のぶんを裏で用意しておく

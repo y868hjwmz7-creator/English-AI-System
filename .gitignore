@@ -26,3 +26,6 @@ npm-debug.log*
 __bar.html
 __shell.html
 vite.bar.config.js
+
+# `npm run test:bar` が骨組みを描くために一時的に作る(中の道が /tmp なので、残しても次は使えない)
+vite.shell.config.js
