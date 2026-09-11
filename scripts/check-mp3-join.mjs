@@ -599,7 +599,9 @@ function fakeMp3({
     )()
 
     // 窓口が**実際に呼んでいる**か。定義だけあって誰も呼ばなければ同じこと
-    if (!/const stored = provider === 'eleven' \? fadeMp3Tail\(audio\) : audio/.test(src)) {
+    /* **`madeBy`(実際に作った会社)で見る。** `provider`(頼まれた会社)の
+       ままだと、良い声に断られて標準に落ちたときに食い違う */
+    if (!/const stored = madeBy === 'eleven' \? fadeMp3Tail\(audio\) : audio/.test(src)) {
       ng('窓口が fadeMp3Tail を呼んでいない')
     } else if (!/body: stored,/.test(src)) {
       ng('なだらかにしたほうを置いていない', 'body: audio のままでは何も変わらない')
@@ -1499,10 +1501,16 @@ function fakeMp3({
   else ok('知らせを引っ込める道がある')
 
   /* **作れたら引っ込める。** 窓口が URL を返した時点で、
-     「作れませんでした」はもう本当ではない */
-  if (!/if \(body\.url\) \{ lastReason = ''; clearDetail\(\);/.test(clips)) {
+     「作れませんでした」はもう本当ではない。
+     **ただし、良い声に断られて標準の声へ落ちたときは引っ込めない**
+     (2026-09 実機)。あれは音が鳴っていても**選んだ声では鳴っていない**ので、
+     消すと「なぜ声が違うのか」を知る道がどこにも無くなる */
+  if (!/lastReason = ''[\s;]*clearDetail\(\)/.test(clips)) {
     ng('音声を作れても、知らせを引っ込めていない')
-  } else ok('窓口が音声を返したら、知らせを引っ込める')
+  } else if (!/if \(body\.fellBack && body\.detail\)/.test(clips)) {
+    ng('落ちたときにも、知らせを引っ込めている',
+      '標準の声で鳴ってはいるが、選んだ声では鳴っていない')
+  } else ok('窓口が音声を返したら引っ込める(落ちたときは残す)')
   if (!/wholeNote = null\n\s*clearDetail\(\)/.test(clips)) {
     ng('1本にまとめられても、知らせを引っ込めていない')
   } else ok('1本にまとめられたら、知らせを引っ込める')

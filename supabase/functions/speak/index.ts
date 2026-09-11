@@ -87,7 +87,7 @@ const reply = (body: unknown, status = 200) =>
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-07'
+const FN_REV = '2026-09-11'
 
 /** 置き場所(Storage のバケツ)。0016 で作る */
 const BUCKET = 'tts'
@@ -796,17 +796,129 @@ async function synthWhole(
  *   だから普段は何も出さない。この文言は、トレーナーが
  *   「なぜ iPhone で声が悪いままなのか」を調べるときのためにある。
  */
+// ── ここから tts-error ──────────────────────────────────────────────
+//    (`scripts/check-voice-cast.mjs` が**この印のあいだを取り出して**
+//     素の node で走らせる。型注釈は、あちらが知っている4つだけにすること —
+//     知らない注釈を足すと検証が赤くなるので、黙って素通りすることはない)
 const GENERIC = 'いま音声を用意できません。端末の声で読み上げます。'
+
+/**
+ * **どの Secrets を直せばよいか。その会社のものだけを言う。**
+ *
+ * 【なぜ要るのか】(2026-09 実機)
+ *
+ *   > イギリスの男性、Jofra でスピーチを作成しようとしたら、
+ *   > google の女性の音声で生成されました。
+ *
+ *   画面に出ていたのは「**ElevenLabs の鍵が正しくありません。**
+ *   …(Azure は AZURE_SPEECH_KEY と AZURE_SPEECH_REGION、
+ *   Google は GOOGLE_TTS_API_KEY)」だった。
+ *   **断ったのは ElevenLabs なのに、関係のない鍵を2つ挙げていた。**
+ *   直す場所が分からないまま、正しい鍵を貼り直すことになる。
+ */
+/**
+ * 良い声で作れなかったときに、画面へ出す1文。
+ *
+ * **それだけで意味の通る1文にする**(CLAUDE.md)。画面の側は
+ * 受け取った文をそのまま出すだけなので、ここで言い切っておかないと
+ * 「作れませんでした」のような**本当ではない文**が付く。
+ */
+const fellBackNote = (why: string) =>
+  '選んだ声(ElevenLabs)で作れなかったので、標準の声で読み上げています。'
+  + (why ? ` ${why}` : '')
+
+const SECRET_OF: Record<string, string> = {
+  Azure: 'AZURE_SPEECH_KEY と AZURE_SPEECH_REGION',
+  Google: 'GOOGLE_TTS_API_KEY',
+  ElevenLabs: 'ELEVENLABS_API_KEY',
+}
+
+/**
+ * **向こうの言い分を、そのまま持ち帰る。こちらで言い換えない。**
+ *
+ * ElevenLabs は 401 の中身に `detail.status` を入れてくる
+ * (`invalid_api_key` / `quota_exceeded` / `missing_permissions` /
+ * `detected_unusual_activity`)。**そこを捨てていた**ので、
+ * どれで断られても「鍵が正しくありません」の1文しか出なかった。
+ *
+ * **こちらには ElevenLabs へ問い合わせる手段が無い**(この環境から届かない)。
+ * だから**利用者の画面に出る1文だけが、唯一の手がかり**である。
+ */
+const theirWords = (raw: string) => {
+  const text = String(raw ?? '').trim()
+  if (!text) return ''
+  try {
+    const j = JSON.parse(text)
+    const d = j?.detail ?? j?.error ?? j
+    const status = typeof d?.status === 'string' ? d.status : ''
+    const message = typeof d?.message === 'string'
+      ? d.message
+      : (typeof d === 'string' ? d : '')
+    const joined = [status, message].filter(Boolean).join(': ')
+    if (joined) return joined.slice(0, 300)
+  } catch { /* JSON でなければ、下でそのまま載せる */ }
+  return text.slice(0, 300)
+}
 
 const humanTtsError = (who: string, status: number, raw: string) => {
   const text = String(raw ?? '')
+  const said = theirWords(text)
+  // **必ず添える。** 言い換えたこちらの1文だけでは、外したときに直せない
+  const theirs = said ? `(${who} の返事: ${said})` : ''
+  const secret = SECRET_OF[who]
+
+  /* **クレジット切れを、401 より先に見る**(2026-09 実機)。
+     すぐ下に「ElevenLabs はクレジットを使い切ると **401 / 402** で断る」と
+     自分で書いてあるのに、**401 の枝のほうが先にあった。**
+     だからクレジット切れは**一度も**この枝に来ず、
+     いつも「鍵が正しくありません」と出ていた。**順が逆だった。** */
+  if (status === 402 || /quota|credit|insufficient/i.test(text)) {
+    // **待っても直らない**ので、この画面のあいだは取りに来させない
+    return {
+      error: GENERIC,
+      detail: `${who} のクレジットを使い切りました。`
+        + 'プランを上げるか、翌月まで待ってください。'
+        + '(標準の声で読み上げる演習は、これまでどおり鳴ります)'
+        + theirs,
+      fatal: true,
+    }
+  }
+
+  /* **無料プランは、クラウドから呼ぶと止められることがある。**
+     鍵は正しいのに 401 で返るので、**貼り直しても永久に直らない。**
+     Supabase の窓口はクラウドで動くので、ここに当たりうる。
+     「鍵が正しくありません」と言うと、正しい鍵を何度も貼り直させることになる */
+  if (/unusual_activity|free tier usage disabled/i.test(text)) {
+    return {
+      error: GENERIC,
+      detail: `${who} が、無料プランからの呼び出しを止めています。`
+        + '鍵は正しくてもこうなります(この窓口は Supabase のクラウドで'
+        + '動くためです)。有料プランに上げると通ります。'
+        + theirs,
+      fatal: true,
+    }
+  }
+
+  /* **鍵はあるが、読み上げの権限が付いていない。**
+     ElevenLabs は鍵ごとに権限を選べるので、
+     Text to Speech を外したまま作ると、これになる */
+  if (/missing_permission|permission/i.test(text)) {
+    return {
+      error: GENERIC,
+      detail: `${who} の鍵に、読み上げ(Text to Speech)の権限がありません。`
+        + `${who} の画面で鍵を作り直すときに、その権限を付けてください。`
+        + theirs,
+      fatal: true,
+    }
+  }
+
   if (status === 401 || status === 403) {
     return {
       error: GENERIC,
       detail: `${who} の鍵が正しくありません。Supabase の`
         + ' Edge Functions → Secrets を確認してください'
-        + '(Azure は AZURE_SPEECH_KEY と AZURE_SPEECH_REGION、'
-        + ' Google は GOOGLE_TTS_API_KEY)。',
+        + (secret ? `(${who} は ${secret})。` : '。')
+        + theirs,
       fatal: true,
     }
   }
@@ -815,32 +927,27 @@ const humanTtsError = (who: string, status: number, raw: string) => {
       error: GENERIC,
       detail: `${who} の呼び出し上限に当たりました。`
         + '無料枠(Azure は毎月50万文字 / Google は毎月100万文字)を'
-        + '使い切っている可能性があります。使用量を確認してください。',
+        + '使い切っている可能性があります。使用量を確認してください。'
+        + theirs,
       fatal: false,
     }
   }
-  if (status === 402 || /quota|credit/i.test(text)) {
-    // ElevenLabs はクレジットを使い切ると 401 / 402 で断る。
-    // **待っても直らない**ので、この画面のあいだは取りに来させない
+  if (status >= 500) {
     return {
       error: GENERIC,
-      detail: `${who} のクレジットを使い切りました。`
-        + 'プランを上げるか、翌月まで待ってください。'
-        + '(標準の声で読み上げる演習は、これまでどおり鳴ります)',
-      fatal: true,
+      detail: `${who} 側が応答していません(${status})。` + theirs,
+      fatal: false,
     }
-  }
-  if (status >= 500) {
-    return { error: GENERIC, detail: `${who} 側が応答していません(${status})。`, fatal: false }
   }
   // 400 は**声の名前が使えない**ときにも来る。返事をそのまま載せる。
   // ここを削ると、DragonHD が使えないリージョンだったときに原因が分からない
   return {
     error: GENERIC,
-    detail: `${who} からの応答: ${status} ${text.slice(0, 300)}`,
+    detail: `${who} からの応答: ${status} ${said || text.slice(0, 300)}`,
     fatal: false,
   }
 }
+// ── ここまで tts-error ──────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -915,7 +1022,8 @@ Deno.serve(async (req) => {
         return reply({ error: GENERIC, detail: '1本にまとめる材料がそろっていません。', fatal: false }, 400)
       }
 
-      const wholeKey = Deno.env.get('ELEVENLABS_API_KEY')
+      // **ここでも前後の空白を落とす**(下の `envKey` と同じ理由)
+      const wholeKey = (Deno.env.get('ELEVENLABS_API_KEY') ?? '').trim()
       if (!wholeKey) {
         // **鍵が無いだけ。** 画面はこれまでどおり発言ごとに作る
         return reply({
@@ -1017,10 +1125,16 @@ Deno.serve(async (req) => {
     //   **判断を2か所に置かない。** 置けば必ず食い違う。
     const tier = String(body.tier ?? 'standard') === 'premium' ? 'premium' : 'standard'
 
-    const googleKey = Deno.env.get('GOOGLE_TTS_API_KEY')
-    const azureKey = Deno.env.get('AZURE_SPEECH_KEY')
-    const azureRegion = Deno.env.get('AZURE_SPEECH_REGION')
-    const elevenKey = Deno.env.get('ELEVENLABS_API_KEY')
+    /* **鍵は、前後の空白を落としてから使う**(2026-09)。
+       Secrets に貼るときに改行や空白が1つ混じるだけで、
+       **正しい鍵でも 401 で断られる。** しかも画面には
+       「鍵が正しくありません」と出るので、**何度貼り直しても直らない。**
+       こちらで落とせるものは、こちらで落とす */
+    const envKey = (name: string) => (Deno.env.get(name) ?? '').trim() || undefined
+    const googleKey = envKey('GOOGLE_TTS_API_KEY')
+    const azureKey = envKey('AZURE_SPEECH_KEY')
+    const azureRegion = envKey('AZURE_SPEECH_REGION')
+    const elevenKey = envKey('ELEVENLABS_API_KEY')
     const hasGoogle = !!googleKey
     const hasAzure = !!(azureKey && azureRegion)
 
@@ -1083,9 +1197,11 @@ Deno.serve(async (req) => {
      *   下の「すでにあるなら、作らない」で返る)。課金は増えない。
      *
      * (あとで声の id を足したときは `CLIP_REV` を進める) */
-    const madeTier = usePremium ? 'premium' : 'standard'
-    const path = `${CLIP_REV}/${madeTier}/${voiceId}/${await fingerprint(voiceId, text)}.mp3`
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${path}`
+    /* **`let` にしてある。** 良い声に断られたら、下で標準の段へ置き直す
+       (置き場所は「段 × 声のフォルダ」で決まるので、両方が変わる) */
+    let madeTier = usePremium ? 'premium' : 'standard'
+    let path = `${CLIP_REV}/${madeTier}/${voiceId}/${await fingerprint(voiceId, text)}.mp3`
+    let publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${path}`
 
     // ── 3. すでにあるなら、作らない ────────────────────────
     //
@@ -1135,24 +1251,89 @@ Deno.serve(async (req) => {
       alignment?: unknown
       madeModel?: string; madeStability?: number; modelNote?: string
     }
+    /** 実際に作った会社。**落ちると `provider` と違う** */
+    let madeBy = provider
+    /** 良い声に断られた理由。**落ちても、黙って消さない** */
+    let premiumTrouble = ''
     if (provider === 'eleven') {
       made = await synthElevenBest(
         text, elevenVoice, elevenKey!,
         elevenModel,
         elevenSettings,
       )
+      /*
+       * ── **断られたら、標準の声に落とす**(2026-09 実機)─────────
+       *
+       *   > イギリスの男性、Jofra でスピーチを作成しようとしたら、
+       *   > google の女性の音声で生成されました。
+       *
+       *   **その「Google の女性」は、こちらが作った音ではない。**
+       *   落ちる先を1つも用意していなかったので、画面は
+       *   **端末の声**まで落ちていた。利用者の会社PC に入っている
+       *   英語の声は Google の3つだけで、その既定が女性である
+       *   (CLAUDE.md「端末に何が入っているかを、当て推量で決めない」)。
+       *
+       *   標準の声(ここでは Azure の `uk-male`)なら、
+       *   **訛りも性別も、選んだとおり**になる。
+       *   **鳴らないより、標準の声で鳴るほうがよい** ——
+       *   Voice ID を入れていない声で、もともとそうしている。
+       *
+       *   【作り直し(`force`)のときは落とさない】
+       *     あれは**良い声にするために課金して押すボタン**である。
+       *     標準の声で作って「できました」と返すと、
+       *     **成功と失敗が同じ見た目で終わる**(CLAUDE.md)。
+       *
+       *   【置き場所は「標準の段 × 代役の声」】
+       *     **画面が標準の声を見に来る場所**とまったく同じにする
+       *     (`src/lib/audioClips.js` の `pathVoice`)。
+       *     良い段の場所は**空のまま**にしておく(`madeTier` の考え方)ので、
+       *     鍵を直した日に、そこで初めて良い声が作られる。
+       */
+      if (made.error && !force && standardProvider) {
+        premiumTrouble = String(
+          (made.error as { detail?: string })?.detail ?? '',
+        )
+        madeBy = standardProvider
+        madeTier = 'standard'
+        path = `${CLIP_REV}/standard/${base}/${await fingerprint(base, text)}.mp3`
+        publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${path}`
+        // **もうあるなら、作らない。** 標準の声にも無料枠と待ち時間がある
+        const already = await fetch(publicUrl, { method: 'HEAD' })
+        if (already.ok) {
+          return reply({
+            url: publicUrl,
+            cached: true,
+            tier,
+            madeTier,
+            provider: madeBy,
+            fellBack: true,
+            detail: fellBackNote(premiumTrouble),
+            ms: Date.now() - startedAt,
+          })
+        }
+        made = standardProvider === 'google'
+          ? await synthGoogle(text, GOOGLE_VOICES[base], googleKey!)
+          : await synthAzure(text, AZURE_VOICES[base], azureKey!, azureRegion!)
+      }
     } else if (provider === 'google') {
       made = await synthGoogle(text, GOOGLE_VOICES[base], googleKey!)
     } else {
       made = await synthAzure(text, AZURE_VOICES[base], azureKey!, azureRegion!)
     }
-    if (made.error) return reply(made.error, 502)
+    if (made.error) {
+      /* **落ちた先でも駄目だったときは、両方を言う。**
+         良い声の理由を落とすと、「なぜ選んだ声で鳴らないのか」が消える */
+      const e = made.error as { error?: string; detail?: string; fatal?: boolean }
+      return reply(premiumTrouble
+        ? { ...e, detail: `${premiumTrouble} さらに標準の声でも作れませんでした: ${e.detail ?? ''}` }
+        : e, 502)
+    }
     const audio = made.audio!
     if (!audio.byteLength) {
       // **中身が0件のまま「成功」を返さない。**
       return reply({
         error: GENERIC,
-        detail: `${provider} が空の音声を返しました。`
+        detail: `${madeBy} が空の音声を返しました。`
           + '英文に読める文字が無い可能性があります。',
         fatal: false,
       }, 502)
@@ -1173,7 +1354,9 @@ Deno.serve(async (req) => {
      *   標準の段(Azure / Google)は 24kHz なので `fadeMp3Tail` は
      *   どのみち何もしない。
      */
-    const stored = provider === 'eleven' ? fadeMp3Tail(audio) : audio
+    // **`madeBy` で見る。** 良い声に断られて標準に落ちたときは、
+    // 24kHz(MPEG2)なので `fadeMp3Tail` はどのみち何もしない
+    const stored = madeBy === 'eleven' ? fadeMp3Tail(audio) : audio
     // **文字ごとの時刻**(ElevenLabs のときだけ返ってくる)
     const alignment = made.alignment ?? null
 
@@ -1241,7 +1424,8 @@ Deno.serve(async (req) => {
       cached: false,
       chars: text.length,
       // どの声で作ったかを返す。**聞き比べのときに、これが手がかりになる**
-      provider,
+      // **頼まれた会社ではなく、実際に作った会社**(良い声に断られると変わる)
+      provider: madeBy,
       tier,
       // **実際に作った段。** 頼まれた段と違うことがある(上の `madeTier`)
       madeTier,
@@ -1254,13 +1438,18 @@ Deno.serve(async (req) => {
       // 良い声を頼まれたのに用意できなかったことを、係の人に伝える。
       // **どの鍵が足りないのかまで書く。** 「なぜか良い声にならない」で
       // 悩ませない(JSON の書き間違いは、これが無いと見つけられない)
-      fellBack: tier === 'premium' && !usePremium,
-      detail: tier === 'premium' && !usePremium
-        ? (elevenKey
-          ? `"${voiceId}" に ElevenLabs の Voice ID が入っていないので、`
-            + '標準の声で作りました。src/data/clipVoices.js の elevenId を'
-            + '確かめてください。'
-          : 'ELEVENLABS_API_KEY が設定されていないので、標準の声で作りました。')
+      /* **頼まれた段で作れたかどうかで見る。** 以前は「Voice ID が
+         入っていないか」だけを見ていたので、**ElevenLabs に断られて
+         落ちたことは、どこにも出てこなかった** */
+      fellBack: tier === 'premium' && madeTier !== 'premium',
+      detail: tier === 'premium' && madeTier !== 'premium'
+        ? (premiumTrouble
+          ? fellBackNote(premiumTrouble)
+          : (elevenKey
+            ? `"${voiceId}" に ElevenLabs の Voice ID が入っていないので、`
+              + '標準の声で作りました。src/data/clipVoices.js の elevenId を'
+              + '確かめてください。'
+            : 'ELEVENLABS_API_KEY が設定されていないので、標準の声で作りました。'))
         : undefined,
       ms: Date.now() - startedAt,
     })

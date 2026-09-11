@@ -1919,10 +1919,17 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '**時刻ごと受け取る。** 課金は文字数なので1円も増えない')
   ok(sp.includes(".replace(/\\.mp3$/, '.json')"),
     'MP3 と同じ道の `.json` に控える(画面と同じ規則)')
-  ok(sp.includes("FN_REV = '2026-09-07'"), '窓口の版を1つ進めてある')
+  /* **版そのものを書き写さない**(2026-09)。ここが見たいのは
+     「**時刻の控えが入った版より新しいか**」であって、いまの値ではない。
+     等号で書いていたので、**別の回で版を進めるたびにここが赤くなった。**
+     版がそろっているかは `npm run test:voice` が見ている */
+  const TIMESTAMPS_FROM = '2026-09-07'
+  const fnRev = sp.match(/^const FN_REV = '([^']+)'/m)?.[1] ?? ''
+  ok(fnRev >= TIMESTAMPS_FROM, `窓口の版が ${TIMESTAMPS_FROM} 以降である(いま ${fnRev || '読めない'})`)
 
   const ac = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
-  ok(ac.includes("NEED_FN_REV = '2026-09-07'"),
+  const needRev = ac.match(/^export const NEED_FN_REV = '([^']+)'/m)?.[1] ?? ''
+  ok(needRev >= TIMESTAMPS_FROM && needRev === fnRev,
     '画面が求める版も、そろえてある(古ければ赤く知らせる)')
   ok(ac.includes('export async function clipAlignment'),
     '控えを読む道がある')

@@ -202,7 +202,7 @@ export const lastClipDetail = () => lastDetail
  *
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  */
-export const NEED_FN_REV = '2026-09-07'
+export const NEED_FN_REV = '2026-09-11'
 
 let fnRev = null
 /** 窓口の版。まだ一度も呼んでいなければ `null` */
@@ -521,7 +521,25 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
     // それは**窓口がまだ古い**という意味である(下の `remakeClip`)
     /* **作れたら、前の知らせを引っ込める。** 一度失敗しても、
        次に作れたのなら「作れませんでした」はもう本当ではない */
-    if (body.url) { lastReason = ''; clearDetail(); return { url: body.url, cached: !!body.cached } }
+    if (body.url) {
+      /* **落ちたのなら、黙って消さない**(2026-09 実機)。
+       *
+       *   > イギリスの男性、Jofra でスピーチを作成しようとしたら、
+       *   > google の女性の音声で生成されました。
+       *
+       * 窓口が良い声に断られて標準の声に落ちたときも `url` は返る。
+       * ここで消すと**音は鳴るので、なぜ声が違うのかを知る道が
+       * どこにも無くなる。** 文は窓口が言い切っているので、そのまま出す
+       * (**起きたことは、呼んだ側がいちばんよく知っている**) */
+      if (body.fellBack && body.detail) {
+        lastReason = body.detail
+        setDetail(body.detail)
+      } else {
+        lastReason = ''
+        clearDetail()
+      }
+      return { url: body.url, cached: !!body.cached }
+    }
     if (body.fatal) stopped = true
     /* **知らせは、それだけで意味が通る1文にする**(2026-09 実機)。
        画面の側に「作れませんでした」と決め打ちしていたので、

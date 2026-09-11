@@ -778,5 +778,195 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   }
 }
 
+// ── ⑩ 良い声に断られたとき ─────────────────────────────────────────
+//
+//   【なぜ要るか】(2026-09 実機・利用者の指摘)
+//
+//     > イギリスの男性、Jofra でスピーチを作成しようとしたら、
+//     > google の女性の音声で生成されました。
+//
+//   出どころは2つあった。**どちらも「音は鳴る」ので気づけない。**
+//
+//     ① 断り方 … ElevenLabs が断ったのに、画面には
+//        「Azure は AZURE_SPEECH_KEY…、Google は GOOGLE_TTS_API_KEY」と
+//        **関係のない鍵の名前**が出ていた。しかも
+//        **クレジット切れ(401)が、いつも「鍵が正しくありません」**に
+//        化けていた(401 の枝が 402 の枝より先にあったため)
+//     ② 落ちる先 … 良い声に断られると**端末の声**まで落ちていた。
+//        利用者の会社PC の英語の声は Google の3つだけで、既定が女性である。
+//        つまり「Google の女性」は**端末の声**であって、こちらが作った音ではない
+//
+//   ①は**中身を取り出して、素の node で実際に走らせる。**
+//   文字を探すだけだと、枝の順を入れ替えても緑のままになる。
+{
+  const speak = read('supabase/functions/speak/index.ts')
+  const a = speak.indexOf('// ── ここから tts-error')
+  const b = speak.indexOf('// ── ここまで tts-error')
+  if (a < 0 || b < 0) {
+    ng('窓口(speak)に tts-error の印が無い', '印を消すと、この検証が何も見なくなる')
+  } else {
+    /* 型注釈だけを外して走らせる。**知っている4つしか外さない** ——
+       足されたものは `new Function` が落ちるので、黙って素通りしない */
+    const STRIP = [
+      ['const SECRET_OF: Record<string, string> = {', 'const SECRET_OF = {'],
+      ['const theirWords = (raw: string) =>', 'const theirWords = (raw) =>'],
+      ['const fellBackNote = (why: string) =>', 'const fellBackNote = (why) =>'],
+      ['const humanTtsError = (who: string, status: number, raw: string) => {',
+        'const humanTtsError = (who, status, raw) => {'],
+    ]
+    let block = speak.slice(a, b)
+    let stripOk = true
+    for (const [from, to] of STRIP) {
+      if (!block.includes(from)) {
+        ng(`tts-error の中の "${from.slice(0, 40)}…" が見つからない`,
+          '形を変えたら、この検証の STRIP も直すこと')
+        stripOk = false
+      } else block = block.replace(from, to)
+    }
+    if (stripOk) {
+      const { humanTtsError, fellBackNote } = new Function(
+        `${block}\nreturn { humanTtsError, fellBackNote }`,
+      )()
+
+      const quota = JSON.stringify({
+        detail: { status: 'quota_exceeded', message: 'You have 0 credits remaining.' },
+      })
+      const unusual = JSON.stringify({
+        detail: {
+          status: 'detected_unusual_activity',
+          message: 'Unusual activity detected. Free Tier usage disabled.',
+        },
+      })
+      const perm = JSON.stringify({
+        detail: { status: 'missing_permissions', message: 'The API key is missing text_to_speech.' },
+      })
+      const badKey = JSON.stringify({
+        detail: { status: 'invalid_api_key', message: 'Invalid API key.' },
+      })
+
+      // ── その会社の鍵の名前だけを言う ──────────────────────────
+      const ev = humanTtsError('ElevenLabs', 401, badKey)
+      if (!/ELEVENLABS_API_KEY/.test(ev.detail)) {
+        ng('ElevenLabs に断られたのに、ELEVENLABS_API_KEY と言っていない',
+          'どこを直せばよいのか、画面から分からない')
+      } else if (/AZURE_SPEECH_KEY|GOOGLE_TTS_API_KEY/.test(ev.detail)) {
+        ng('ElevenLabs の断りに、Azure と Google の鍵の名前が混ざっている',
+          '断ったのはその会社ではない。関係のない鍵を貼り直すことになる')
+      } else ok('ElevenLabs の断りは、ELEVENLABS_API_KEY だけを名指しする')
+
+      const az = humanTtsError('Azure', 401, 'Unauthorized')
+      if (!/AZURE_SPEECH_KEY/.test(az.detail) || /ELEVENLABS_API_KEY/.test(az.detail)) {
+        ng('Azure の断りが、その会社の鍵を名指ししていない')
+      } else ok('Azure の断りは、AZURE_SPEECH_KEY を名指しする')
+
+      // ── クレジット切れは、401 でも「鍵」と言わない ──────────────
+      const q = humanTtsError('ElevenLabs', 401, quota)
+      if (/鍵が正しくありません/.test(q.detail)) {
+        ng('クレジット切れ(401)が「鍵が正しくありません」になっている',
+          '401 の枝を 402 の枝より先に置くと、こうなる。順が逆')
+      } else if (!/クレジット/.test(q.detail)) {
+        ng('クレジット切れを、クレジットの話として言っていない')
+      } else ok('クレジット切れは、401 で来ても「クレジット」と言う')
+
+      // ── 無料プランがクラウドから止められている ─────────────────
+      const u = humanTtsError('ElevenLabs', 401, unusual)
+      if (/鍵が正しくありません/.test(u.detail) || !/無料プラン/.test(u.detail)) {
+        ng('無料プランの停止が「鍵が正しくありません」になっている',
+          '鍵は正しいので、貼り直しても永久に直らない')
+      } else if (!u.fatal) {
+        ng('無料プランの停止で、取りに行くのをやめていない')
+      } else ok('無料プランの停止は、そのことばで言う(貼り直させない)')
+
+      // ── 鍵に読み上げの権限が無い ──────────────────────────────
+      const p = humanTtsError('ElevenLabs', 401, perm)
+      if (/鍵が正しくありません/.test(p.detail) || !/権限/.test(p.detail)) {
+        ng('権限不足が「鍵が正しくありません」になっている')
+      } else ok('権限不足は、権限の話として言う')
+
+      // ── **向こうの言い分を、必ず添える** ──────────────────────
+      //   こちらには ElevenLabs へ問い合わせる手段が無い。
+      //   画面に出る1文だけが、唯一の手がかりである
+      const cases = [[401, badKey, 'invalid_api_key'], [401, quota, 'quota_exceeded'],
+        [401, unusual, 'detected_unusual_activity'], [401, perm, 'missing_permissions'],
+        [429, 'Too Many Requests', 'Too Many Requests'],
+        [500, 'boom', 'boom'], [400, 'no such voice', 'no such voice']]
+      const lost = cases.filter(([s, raw, word]) =>
+        !String(humanTtsError('ElevenLabs', s, raw).detail).includes(word))
+      if (lost.length) {
+        ng(`向こうの言い分を捨てている枝がある(${lost.length} 件)`,
+          '言い換えたこちらの1文だけでは、外したときに直せない')
+      } else ok('どの断り方でも、向こうの言い分をそのまま添えている')
+
+      // ── 落ちたことを、それだけで通じる1文で言う ───────────────
+      const note = fellBackNote('ElevenLabs のクレジットを使い切りました。')
+      if (!/標準の声/.test(note) || !/クレジット/.test(note)) {
+        ng('落ちたときの1文が、起きたことを言い切っていない',
+          '画面はこの文をそのまま出す。ここで言い切らないと誤診させる')
+      } else ok('落ちたときの1文は、それだけで意味が通る')
+    }
+  }
+
+  // ── ② 落ちる先は「標準の声」。端末の声まで落とさない ───────────
+  /* **`!force` は、すぐ下の別の見張りが受け持つ。** ここで一緒に見ると、
+     どちらを壊しても同じ1行が赤くなり、**どちらが壊れたのか分からない** */
+  if (!/if \(made\.error &&[^)]*standardProvider\) \{/.test(speak)) {
+    ng('良い声に断られたとき、標準の声に落としていない',
+      '落ちる先が無いと、画面は端末の声(会社PCでは Google の女性)まで落ちる')
+  } else if (!/path = `\$\{CLIP_REV\}\/standard\/\$\{base\}\/\$\{await fingerprint\(base, text\)\}\.mp3`/.test(speak)) {
+    ng('落ちた先の置き場所が、画面の見に来る場所と違う',
+      '`<版>/standard/<代役の声>/<指紋>` でなければ、毎回作り直して毎回課金する')
+  } else if (!/const already = await fetch\(publicUrl, \{ method: 'HEAD' \}\)[\s\S]{0,400}?fellBack: true/.test(speak)) {
+    ng('落ちた先に、もう音声があっても作り直している', '標準の声にも無料枠と待ち時間がある')
+  } else ok('良い声に断られたら、標準の声(選んだ訛りと性別)に落ちる')
+
+  // **作り直しのときは落とさない。** あれは良い声にするために課金するボタンで、
+  // 標準の声で作って「できました」と返すと、成功と失敗が同じ見た目で終わる
+  if (!/&& !force &&/.test(speak)) {
+    ng('作り直し(force)のときにも標準の声へ落ちている',
+      '課金して押したのに「できました」と出る。成功と失敗が見分けられない')
+  } else ok('作り直しのときは落とさない(断った理由をそのまま返す)')
+
+  // 実際に作った会社で見ているか(`provider` のままだと、落ちたあとに食い違う)
+  if (!/const stored = madeBy === 'eleven' \? fadeMp3Tail\(audio\) : audio/.test(speak)) {
+    ng('置く前のなだらかにする判断が、実際に作った会社を見ていない')
+  } else if (!/provider: madeBy,/.test(speak)) {
+    ng('返している会社が、実際に作った会社ではない')
+  } else ok('窓口は、実際に作った会社で判断し、それを返す')
+
+  // 頼まれた段で作れたかで `fellBack` を決めているか
+  if (!/fellBack: tier === 'premium' && madeTier !== 'premium',/.test(speak)) {
+    ng('落ちたことを `fellBack` で返していない',
+      'Voice ID の有無だけを見ていると、断られて落ちたことがどこにも出ない')
+  } else ok('頼まれた段で作れたかどうかで、落ちたことを返す')
+
+  /* ── **鍵は、前後の空白を落としてから使う** ──────────────────────
+     Secrets に貼るときに改行や空白が1つ混じるだけで、
+     **正しい鍵でも 401 になる。** しかも画面には「鍵が正しくありません」と
+     出るので、**何度貼り直しても直らない。** こちらで落とせる */
+  if (!/const envKey = \(name: string\) => \(Deno\.env\.get\(name\) \?\? ''\)\.trim\(\)/.test(speak)) {
+    ng('鍵の前後の空白を落としていない',
+      '貼るときに改行が1つ混じるだけで、正しい鍵が 401 になる')
+  } else if (/Deno\.env\.get\('(ELEVENLABS_API_KEY|AZURE_SPEECH_KEY|AZURE_SPEECH_REGION|GOOGLE_TTS_API_KEY)'\)(?!\s*\?\?)/.test(speak)) {
+    ng('空白を落とさずに読んでいる鍵が残っている')
+  } else ok('鍵は、前後の空白を落としてから使う')
+
+  // ── ③ 画面は、落ちたときに知らせを消さない ─────────────────────
+  const clips = read('src/lib/audioClips.js')
+  if (!/if \(body\.fellBack && body\.detail\) \{[\s\S]{0,200}?setDetail\(body\.detail\)/.test(clips)) {
+    ng('画面が、落ちたときの知らせを消している',
+      '音は鳴るので、なぜ声が違うのかを知る道がどこにも無くなる')
+  } else ok('画面は、落ちたときの知らせをそのまま出す')
+
+  // ── ④ 窓口を直したら、版を1つ進める ───────────────────────────
+  const fnRev = speak.match(/^const FN_REV = '([^']+)'/m)?.[1] ?? ''
+  const need = clips.match(/^export const NEED_FN_REV = '([^']+)'/m)?.[1] ?? ''
+  if (!fnRev || !need) {
+    ng('窓口の版を読めない')
+  } else if (fnRev !== need) {
+    ng(`窓口の版と、画面が要る版が違う(窓口 ${fnRev} / 画面 ${need})`,
+      '窓口に手を入れたら、両方を同じ値に進める')
+  } else ok(`窓口の版はそろっている(${fnRev})`)
+}
+
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
