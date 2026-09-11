@@ -35,7 +35,7 @@
 import { useEffect, useRef, useState } from 'react'
 import FocusFrame from './FocusFrame.jsx'
 import { PlayIcon, StopIcon } from './Icons.jsx'
-import { readAloud, stopReading } from '../lib/readAloud.js'
+import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
 import { duckBgm, nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
 import {
   RADIO_GAPS, bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
@@ -138,6 +138,19 @@ export default function WordRadio({
         const i = atRef.current
         const row = list[i]
         const steps = radioSteps(row, mode, gap)
+        /* **次の語は、いま鳴らしているあいだに用意する**
+           (2026-09 実機・利用者の指定「違う単語に移る際の間を
+           0.5 秒くらいまで縮められませんか」)。
+
+           耳に届く間は**「決めた間 + 用意の待ち」**である。語が変わると
+           MP3 と文字ごとの時刻を取りに行くが、**同じ語の2回目には
+           起きない**(もう控えにある)。だから間の値だけを縮めても、
+           「別の語のときだけ長い」は半分しか直らない。
+
+           **1つ先だけ**(`readAloudSequence` の `ahead` と同じ作法)。
+           どのみち次に鳴らすものなので、**費用は増えない**。
+           失敗しても何もしない —— 先読みのために画面を止めない */
+        prepareRead(radioTextOf(list[nextIndex(i, list.length)]))
         if (!steps.length) {
           /* **読むものが無い語は、待たずに次へ。**「読んだことにして」
              間だけ置くと、無音の時間が延びるだけである。

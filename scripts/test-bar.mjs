@@ -3592,6 +3592,76 @@ export default defineConfig({
     }
   }
 
+  /* ── **違う語へ移るときの間を、本当に測る**(2026-09 実機・利用者の指定)
+   *
+   *   > 違う単語に移る際の間を 0.5 秒くらいまで縮められませんか?
+   *   > 同じ単語の2回繰り返す際の間は今のままでOKです
+   *
+   *   **回数を数えるだけでは足りない。** 上の見張りは「長さを変えたら
+   *   鳴る速さが変わるか」しか見ないので、**語のあいだだけが 1 秒に
+   *   戻っていても緑のまま**になる(実際、そこが 965ms だったことに
+   *   何か月も気づけなかった)。だから**鳴り終わりから次の鳴り始めまで**を
+   *   1つずつ数え、**同じ語のときと、別の語のとき**で分ける。
+   *
+   *   **両方を見る。** 「別の語」だけを見ると、
+   *   利用者が「今のままでOK」と言った**同じ語のあいだまで縮めても**
+   *   緑になる。 */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('eas.radioMode', 'en')
+        /* **既定(1.5秒)で測る。** 利用者が「1秒くらいある」と言ったのは
+           この状態である(選び直していない人に、いちばん効く) */
+        localStorage.removeItem('eas.radioGap')
+      } catch { /* 使えなくても困らない */ }
+      window.__log = []
+      const voices = [{ name: 'T EN', lang: 'en-US' }]
+      const fake = {
+        getVoices: () => voices,
+        cancel: () => {},
+        speak: (u) => {
+          window.__log.push({ t: performance.now(), kind: 'start', text: u.text })
+          setTimeout(() => {
+            window.__log.push({ t: performance.now(), kind: 'end', text: u.text })
+            u.onend?.()
+          }, 300)
+        },
+        speaking: false, pending: false, paused: false,
+        addEventListener: () => {}, removeEventListener: () => {},
+      }
+      Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true })
+      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t } }
+    })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=radio`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(9000)
+    const log = await page.evaluate(() => window.__log)
+    await page.close()
+
+    const 同じ語 = []
+    const 別の語 = []
+    for (let i = 0; i + 1 < log.length; i += 1) {
+      if (log[i].kind !== 'end' || log[i + 1].kind !== 'start') continue
+      const ms = Math.round(log[i + 1].t - log[i].t)
+      ;(log[i].text === log[i + 1].text ? 同じ語 : 別の語).push(ms)
+    }
+    /* **1本目は数えない。** 立ち上がりのぶんが乗る(実測で +400ms ほど) */
+    const 平均 = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null)
+    const 別 = 平均(別の語.slice(1))
+    const 同 = 平均(同じ語)
+    if (別の語.length < 2 || 同じ語.length < 2) {
+      ng('間 … 語のあいだを測れていない', `別 ${別の語.length} / 同 ${同じ語.length}`)
+    } else if (別 > 800) {
+      ng('間 … 違う語へ移るときの間が長すぎる(0.5秒くらいにする)', `${別}ms`)
+    } else if (同 < 400) {
+      ng('間 … 同じ語を2回読むあいだまで縮んでいる(「今のままでOK」)', `${同}ms`)
+    } else {
+      ok(`間 … 違う語へ移るとき ${別}ms(前は 965ms)`
+        + ` / 同じ語の2回のあいだ ${同}ms(今のまま)`)
+    }
+  }
+
   /* **画面が本当に呼んでいるか。** 検証の入り口(`__screens.jsx`)だけ
      直しても、利用者の画面からは入れない */
   {

@@ -1744,6 +1744,30 @@ function fakeMp3({
     if (bad === before) ok('画面が、窓口へ渡す前に必ず分けている')
   }
 
+  /* ── **次に鳴らすものを、先に用意する道**(2026-09 実機・利用者の指定)
+   *
+   *   > 違う単語に移る際の間を 0.5 秒くらいまで縮められませんか?
+   *
+   *   聞き流しは**1つも先読みしていなかった**ので、語が変わるたびに
+   *   MP3 と文字ごとの時刻(`.json`)をその場で取りに行っていた。
+   *   **同じ語の2回目には起きない**(もう控えにある)ので、
+   *   「別の語のときだけ長い」という聞こえ方になっていた。
+   *
+   *   `prepareRead()` は **`readAloud()` とまったく同じ既定**で用意する。
+   *   ここが食い違うと、**用意した場所と鳴らす場所が別になり、
+   *   先読みが1ミリも効かない**(しかも音は鳴るので気づけない)。 */
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const want = [
+      ['道がある', /export function prepareRead\(text, \{/],
+      ['分け方は `readAloud()` と同じ', /const first = speakChunks\(t\)\[0\]/],
+      ['話者の決め方も同じ', /prefetchClip\(first\.text, clipVoice \?\? clipSpeakerFor\(voice\), clipTier\)/],
+    ]
+    const before = bad
+    for (const [what, re] of want) if (!re.test(read)) ng(`先読み: ${what}`)
+    if (bad === before) ok('次に鳴らすものを、鳴らすのと同じ場所で先に用意できる')
+  }
+
   /* **断られた理由を読めているか。**「non-2xx」は supabase-js の
      決まり文句であって、理由ではない(窓口は `detail` を返している) */
   {
