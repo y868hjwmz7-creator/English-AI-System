@@ -406,6 +406,39 @@ function fakeMp3({
     ng('ダウンロードが、かけらではなく段落まるごとで集めている')
   } else ok('ダウンロードは `materialClipPieces(material)` で集めている')
 
+  /* ── **鳴っているのと同じ1本を、先に探す**(2026-09 実機)─────────
+   *
+   *   > 2度通しで再生しているのにこう表示される
+   *   > 「まだ作られていない音声が 14 本あります (全 14 本)」
+   *
+   *   本文の読み上げは「1本にまとめる」に統一されているので、
+   *   通しで聴いても**発言ごとの MP3 は1本も作られない。**
+   *   ここが発言ごとにしか探していなかったので、
+   *   **何度聴いても永久に「14 本足りません」**と出ていた。
+   *
+   *   見るのは3つ ——①ダウンロードが1本のほうを先に探すか
+   *   ②その道が**窓口を呼ばない**か(呼ぶと押すたびに課金される)
+   *   ③**鍵が1か所か**(書き写すと置き場所が食い違って二重に課金される) */
+  if (!/=\s*await wholeClipUrl\(\{/.test(dl)) {
+    ng('ダウンロードが、1本にまとまった音声を探していない(何度聴いても足りないと出る)')
+  } else if (!/materialAudioClips\(material\)/.test(dl)) {
+    ng('1本を探すときの英文が、鳴らすときと違う(段落まるごとで渡すこと)')
+  } else ok('ダウンロードは、まず1本にまとまった音声を探す')
+
+  const ac = bare('../src/lib/audioClips.js')
+  const only = ac.match(/export async function wholeClipUrl\([\s\S]*?\n\}/)?.[0] ?? ''
+  if (!only) ng('`wholeClipUrl` が無い')
+  else if (/functions\.invoke/.test(only)) {
+    ng('あるかどうかを見るだけの道で、窓口を呼んでいる(押すたびに課金される)')
+  } else ok('1本を探す道は、窓口を呼ばない(1円もかからない)')
+
+  /* **定義の行を数に入れない。** `wholeKeyOf(texts, voiceIds)` で探すと
+     `function wholeKeyOf(…)` にも当たるので、**片方の呼び出しを外しても
+     2件のまま緑になる**(実際にそうなった)。**呼んでいる形で見る** */
+  if ((ac.match(/=\s*wholeKeyOf\(texts, voiceIds\)/g) ?? []).length < 2) {
+    ng('1本の鍵を書き写している(置き場所が食い違うと、二重に課金される)')
+  } else ok('1本の鍵は `wholeKeyOf()` 1か所(探す側と作る側で同じ)')
+
   /* 画面が数える本数も、同じものでなければならない ——
      違うと**「3 / 14」と出ているのに 22 本目まで進む** */
   const tm = bare('../src/components/TrainerMaterials.jsx')

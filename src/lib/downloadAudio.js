@@ -6,7 +6,14 @@
  *   > 全体の音声をひとつ。これだけでOKです。
  *   > 教材と同じビットレートのMP3でOKです。
  *
- * 【何を並べるか】
+ * 【まず、鳴っているのと同じ1本を探す】(2026-09 実機)
+ *   本文の読み上げは**「1本にまとめる」に統一されている**(CLAUDE.md)。
+ *   だから通しで聴いても、**発言ごとの MP3 は1本も作られない。**
+ *   ここが発言ごとに集めていたので、
+ *   **2度通しで聴いても「まだ作られていない音声が 14 本あります」**
+ *   としか出なかった。**つなぐ必要も無い —— すでに1本である。**
+ *
+ * 【1本にできない教材だけ、これまでどおり集めてつなぐ】
  *   **「Listen (全体)」で鳴るものと、まったく同じ。**
  *   本文(記事の段落 / 会話の発言)を、出てくる順に並べる。
  *   声の当て方も間(ま)の決め方も、鳴らすときと同じ道具を通す
@@ -31,9 +38,10 @@
  *   **素の node で確かめられる**(`npm run test:mp3`)。
  * ============================================================================
  */
-import { clipUrl } from './audioClips.js'
+import { clipUrl, wholeClipUrl } from './audioClips.js'
 import { audioFileName, joinMp3 } from './mp3Join.js'
 import { materialAudioClips, materialClipPieces } from './audioPlaylist.js'
+import { PREMIUM } from './voiceTier.js'
 
 /* 並べるところは `audioPlaylist.js` にある。
    あちらは Supabase を持たないので、**素の node で確かめられる**
@@ -53,7 +61,47 @@ export { materialAudioClips, materialClipPieces }
  * @returns {{ok: boolean, total: number, missing: number, bytes: number, error?: string}}
  */
 export async function downloadMaterialAudio(material, onProgress = null) {
-  /* **鳴らすときとまったく同じ「かけら」で集める**(2026-09 実機)。
+  /* ── ① **鳴っているのと同じ1本**が置いてあれば、それをそのまま渡す ──
+   *
+   *   > 2度通しで再生しているのにこう表示される
+   *   > 「まだ作られていない音声が 14 本あります (全 14 本)」(2026-09 実機)
+   *
+   *   **本文の読み上げは「1本にまとめる」に統一されている**(CLAUDE.md)。
+   *   通しで聴くと作られるのは**その1本だけ**で、
+   *   **発言ごとの MP3 は1本も作られない。**
+   *   ところがここは発言ごとに集めていたので、
+   *   **何度聴いても、永久に「14 本足りません」**と出ていた。
+   *
+   *   **つなぐ必要も無い。すでに1本である。**
+   *   継ぎ目も無いので、②でつないだものより音がよい。 */
+  const clips = materialAudioClips(material)
+  if (clips.length >= 2 && clips[0].tier === PREMIUM) {
+    onProgress?.({ done: 0, total: 1 })
+    /* **作らない。置いてあるものだけを見る**(1円もかからない) */
+    const url = await wholeClipUrl({
+      texts: clips.map((c) => c.text),
+      voiceIds: clips.map((c) => c.voiceId),
+    })
+    if (url) {
+      let bytes = null
+      try {
+        const res = await fetch(url)
+        if (res.ok) bytes = new Uint8Array(await res.arrayBuffer())
+      } catch { /* 届かなければ、②へ落ちる(行き止まりを作らない) */ }
+      if (bytes?.length) {
+        onProgress?.({ done: 1, total: 1 })
+        saveFile(bytes, audioFileName(material?.title))
+        return { ok: true, total: 1, missing: 0, bytes: bytes.length, whole: true }
+      }
+    }
+  }
+
+  /* ── ② 1本にできない教材は、これまでどおり集めてつなぐ ────────────
+     鍵が無い・文字数が多すぎる・名簿に無い声が混じっている…のときは、
+     読み上げも**発言ごと**に落ちている(`readAloud.js`)。
+     だからそちらの MP3 は、聴いたぶんだけ置いてある。
+
+     **鳴らすときとまったく同じ「かけら」で集める**(2026-09 実機)。
      段落まるごとの英文で探すと、貼った原稿(Speech練習)では
      その指紋の MP3 がどこにも無く、「◯本足りません」としか出なかった */
   const list = materialClipPieces(material)

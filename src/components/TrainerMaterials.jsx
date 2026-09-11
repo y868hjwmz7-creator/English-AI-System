@@ -1057,7 +1057,11 @@ export default function TrainerMaterials({
               {dlDone?.id === m.id && (
                 <p className={`notice${dlDone.ok ? ' notice--ok' : ' notice--warn'}`}>
                   {dlDone.ok
-                    ? <>音声 <strong>{dlDone.total} 本</strong>を1つにまとめました
+                    ? <>{/* **1本にまとまっている教材は、それをそのまま渡す。**
+                            「音声 1 本をまとめました」では何のことか分からない */}
+                        {dlDone.whole
+                          ? <>本文の音声(<strong>1本にまとめたもの</strong>)を渡しました</>
+                          : <>音声 <strong>{dlDone.total} 本</strong>を1つにまとめました</>}
                         ({Math.round(dlDone.bytes / 1024 / 102.4) / 10} MB)。
                         端末の「ダウンロード」に入っています。</>
                     : dlDone.missing > 0

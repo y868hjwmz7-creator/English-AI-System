@@ -751,16 +751,15 @@ async function readWholeJson(url) {
 }
 
 /**
- * 本文まるごとの音声を取りに行く。
+ * 1本にまとめるときの**鍵**。
  *
- * @param {object} o
- * @param {string[]} o.texts    段落 / 発言の英文(並び順そのまま)
- * @param {string[]} o.voiceIds その項目を読む声(名簿の id)。texts と同じ長さ
- * @param {boolean} o.force     あっても作り直す(課金される)
- * @returns {Promise<{url: string, spans: Array}|null>}
+ * **`wholeClip` と `wholeClipUrl` が、同じものを使う。**
+ * 片方に書き写すと、**置き場所が食い違って二重に課金される**
+ * (`speakChunks` を作り直しの側に通していなかったのと同じ根)。
+ *
+ * @returns {{mark, body, voices, elevenIds}|null} 1本にできないなら null(理由は `wholeNote`)
  */
-export async function wholeClip({ texts, voiceIds, force = false }) {
-  if (!canUseClips() || !supabase) return null
+function wholeKeyOf(texts, voiceIds) {
   const body = (texts ?? []).map((t) => normText(t))
   const voices = voiceIds ?? []
   if (body.length < 2 || voices.length !== body.length) {
@@ -776,8 +775,60 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     wholeNote = '名簿に無い声が混じっています(教材の声を選び直すと1本にできます)'
     return null
   }
+  return { mark: wholeMark(voices, body), body, voices, elevenIds }
+}
 
-  const mark = wholeMark(voices, body)
+/**
+ * **もう置いてある1本を探すだけ。** 窓口は呼ばないので**1円もかからない。**
+ *
+ * ── なぜ要るのか(2026-09 実機)─────────────────────────────────
+ *
+ *   > 2度通しで再生しているのにこう表示される
+ *   > 「まだ作られていない音声が 14 本あります (全 14 本)」
+ *
+ *   **本文の読み上げは「1本にまとめる」に統一されている**(CLAUDE.md)。
+ *   つまり通しで聴いても、**発言ごとの MP3 は1本も作られない。**
+ *   ところが音声のダウンロードは発言ごとに集めていたので、
+ *   **何度聴いても、永久に「14 本足りません」**と出ていた。
+ *
+ *   あちらに要るのは **MP3 の中身だけ**で、時刻(区切り)は要らない。
+ *   だから `wholeClip` とは別に、**置いてあるかどうかだけ**を見る。
+ *
+ * - **`wholeGaveUp` は見ない。** あれは「時刻が本文と合わない」でも立つが、
+ *   そのとき **MP3 そのものは置いてある。** 落とすぶんには何の支障もない
+ * - **作らない。** 無ければ `null` を返すだけ(**見えない費用は管理できない**)
+ *
+ * @returns {Promise<string|null>} 置いてあれば URL、まだなら null
+ */
+export async function wholeClipUrl({ texts, voiceIds }) {
+  if (!canUseClips() || !supabase) return null
+  const key = wholeKeyOf(texts, voiceIds)
+  if (!key) return null
+  /* **作り直したものは、控えの側に `?v=` 付きで入っている。**
+     素の URL を返すと、1年もちの古い MP3 を落とすことになる */
+  if (wholeCache.has(key.mark)) return wholeCache.get(key.mark).url ?? null
+  const mp3 = wholeUrlOf(await fingerprint('whole', key.mark), 'mp3')
+  try {
+    const res = await fetch(mp3, { method: 'HEAD' })
+    return res.ok ? mp3 : null
+  } catch { return null }
+}
+
+/**
+ * 本文まるごとの音声を取りに行く。
+ *
+ * @param {object} o
+ * @param {string[]} o.texts    段落 / 発言の英文(並び順そのまま)
+ * @param {string[]} o.voiceIds その項目を読む声(名簿の id)。texts と同じ長さ
+ * @param {boolean} o.force     あっても作り直す(課金される)
+ * @returns {Promise<{url: string, spans: Array}|null>}
+ */
+export async function wholeClip({ texts, voiceIds, force = false }) {
+  if (!canUseClips() || !supabase) return null
+  const key = wholeKeyOf(texts, voiceIds)
+  if (!key) return null
+  const { mark, body, voices, elevenIds } = key
+
   if (!force && wholeCache.has(mark)) return wholeCache.get(mark)
   if (!force && wholeGaveUp.has(mark)) return null
 
