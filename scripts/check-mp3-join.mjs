@@ -1210,6 +1210,60 @@ function fakeMp3({
         if (!ok3) ng('前へ送ったあと、その1周が回らない')
         else ok('遠くへ送られたら、歯止めは捨てる')
       }
+
+      /* ⑦ **くり返しながら、送り戻しが効くか**(2026-09 実機・9手め)──
+       *
+       *   > 繰り返しはほとんど解決されました。しかし、文送り、発言送り、
+       *   > 段落送りが効かなくなりました。リピートしながら文ごと、
+       *   > 段落ごとの、発言ごとに戻したり送ったりできることが
+       *   > 英語学習では不可欠です
+       *
+       *   7手めで「縁を越えたら手前の窓へ戻す」にした。ところが
+       *   **送りの行き先は「文の頭」＝まさに縁のすぐ後ろ**なので、
+       *   送った瞬間に「手前の窓を鳴らし終えた」と読まれて引き戻される。
+       *
+       *   **間(ま)の無い並びで測る** —— そこがいちばん危ない。 */
+      {
+        const flat5 = [
+          { start: 0, end: 1 }, { start: 1, end: 2 }, { start: 2, end: 3 },
+          { start: 3, end: 4 }, { start: 4, end: 5 },
+        ]
+        const o5 = { sentences: flat5, duration: 5.2 }
+        const skip = (delta) => {
+          const s = makeRepeatSeeker()
+          let t = 1.5
+          let done = false
+          let to = null
+          const seen = []
+          const turns = []
+          for (let n = 0; n < 900; n += 1) {
+            /* **少し鳴らしてから送る。** 押す人は、鳴っている最中に押す ——
+               いきなり送ると「ふつうに進んだのか、人が動かしたのか」を
+               見分ける手がかり(前のひと刻み)が無く、**現実と違う形**になる */
+            if (!done && t >= 1.8) {
+              to = seekSentence(flat5, t, delta)
+              if (to !== null) { t = to; done = true; seen.push(t); continue }
+            }
+            const b = s.next(repeatSeek('sentence', t, o5), t)
+            if (b !== null) { turns.push(b); t = b; seen.push(t); continue }
+            seen.push(t)
+            t += 0.01
+            if (t > 5.2) break
+          }
+          const i = seen.indexOf(to)
+          const after = seen.slice(i + 1, i + 31)
+          return { to, pulled: after.filter((x) => x < to - 0.001).length, turns: turns.length }
+        }
+        const fwd = skip(1)
+        const back = skip(-1)
+        if (fwd.pulled || back.pulled) {
+          ng('**送ったのに、引き戻されている**', `次へ ${fwd.pulled} / 前へ ${back.pulled} 刻み`)
+        } else if (fwd.turns < 2 || back.turns < 2) {
+          /* **「引き戻されない」だけを見ない。** くり返しを止めてしまっても
+             緑になる —— 利用者が要るのは「**リピートしながら**送れる」ことである */
+          ng('送ったあと、くり返しが止まっている', `次へ ${fwd.turns} / 前へ ${back.turns} 回`)
+        } else ok(`くり返しながら送り戻しできる(送ったあと ${fwd.turns} 回まわる)`)
+      }
     }
   }
 
@@ -1462,6 +1516,10 @@ function fakeMp3({
         ['来なければ時間で諦めて鳴らす', clips, /timer: window\.setTimeout\(wake, LAND_WAIT\)/],
         ['見張りは1つだけ', clips, /^function clearSeekWatch\(\)/m],
         ['止めたら見張りを外す', clips, /fadeOrigin = null\n\s+\/\/[^\n]*\n\s+clearSeekWatch\(\)/],
+        /* **人が送ったときも外す**(2026-09 実機・9手め)。
+           外さないと、`seeked` を拾った見張りが「頼んだ秒より手前だ」と
+           読んで、**送った先から引き戻す** */
+        ['人が送ったら見張りを外す', clips, /if \(!hush\) \{[\s\S]{0,400}?clearSeekWatch\(\)/],
         ['断られても、そこで終わらせない', clips, /el\.play\(\)\?\.catch\?\.\(\(\) => \{\}\)/],
         ['くり返しの戻しが黙らせる', read, /return seekClip\(to, \{ hush: true \}\)/],
         /* **ふだんの ◁▷ には渡さない。** 押した人が場所を動かす操作なので、

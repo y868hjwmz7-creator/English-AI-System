@@ -1058,6 +1058,10 @@ export function seekClip(sec, { hush = false } = {}) {
   if (!Number.isFinite(t) || t < 0) return false
   const el = element
   if (!hush) {
+    /* **人が送ったら、戻したあとの見張りは無効**(2026-09 実機・9手め)。
+       外さないと、`seeked` を拾った見張りが
+       **「頼んだ秒より手前だ」と読んで、送った先から引き戻す。** */
+    clearSeekWatch()
     try { el.currentTime = t } catch { return false }
     fadeOrigin?.(t)
     return true
