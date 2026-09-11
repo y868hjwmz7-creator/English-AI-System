@@ -3657,8 +3657,35 @@ console.log('\nスピーチ練習(0054)')
   const pron = noC3(read3('src/components/PronunciationPractice.jsx'))
   ok(/<SpeechBoard level=\{me\?\.cefr \?\? null\} \/>/.test(pron),
     'スピーチ … 「スピーチ練習」の画面に出ていて、自分のレベルを渡している')
-  ok(/SPEAK_TYPES/.test(pron),
-    'スピーチ … 単語とフレーズの練習は1つも減らしていない')
+
+  /* ── 単語とフレーズの音は、いま出していない(2026-09 利用者の指定)──────
+       > 発音の機能は一度廃止してください。
+       > いつでも戻せるように
+
+     **消していない。閉じてある。**「いつでも戻せるように」という指定なので、
+     見るのは3つ ——①既定で閉じているか ②道が残っているか
+     ③画面が判断を自分で持っていないか。
+     `LEARNER_WRITING_REVIEW`(ゲストの添削)の裏の道と同じ作法である */
+  const sndSw = noC3(read3('src/data/soundPractice.js'))
+  ok(/export const SOUND_PRACTICE_ON = false/.test(sndSw),
+    '発音の廃止 … 既定は「出さない」(戻す日はこの1行を true にするだけ)')
+  ok(/export function soundPracticeOn\s*\(/.test(sndSw),
+    '発音の廃止 … 出すかどうかの判断は `soundPracticeOn()` 1か所')
+
+  /* **道が残っているか。** 部品ごと消すと、戻したい日に画面を書き直すことに
+     なり、そのときには「なぜ廃止したのか」の経緯も失われている */
+  const snd = noC3(read3('src/components/SoundPractice.jsx'))
+  ok(/SPEAK_TYPES/.test(snd) && /className="pron-list"/.test(snd),
+    '発音の廃止 … 練習の中身は消していない(`SoundPractice.jsx` に残してある)')
+
+  /* **画面の中で `SOUND_PRACTICE_ON` と直に書かない** ——
+     置く場所の数だけ食い違う(`remakeModeOf()` と同じ考え方)。
+     **「名前が出てくるか」で見ない**(説明の中にも同じ語がある)ので、
+     コメントを落としたうえで**使っている形**で見る */
+  ok(/\{soundPracticeOn\(\) && <SoundPractice \/>\}/.test(pron),
+    '発音の廃止 … 画面は `soundPracticeOn()` に任せている')
+  ok(!/SOUND_PRACTICE_ON/.test(pron) && !/SPEAK_TYPES/.test(pron),
+    '発音の廃止 … 画面は判断も中身も自分で持っていない')
 
   const learners = noC3(read3('src/components/TrainerLearners.jsx'))
   ok(/detailTab === 'speech'/.test(learners)
