@@ -372,6 +372,29 @@ export function noteFellBack(where) {
  * **「作れませんでした」とは言わない。** 発言ごとの音声はちゃんと鳴る。
  * 言うのは**どの道で鳴っているかと、その理由**だけである。
  */
+/**
+ * **1本で鳴っているときの数字を、1度だけ出す**(2026-09 実機・12手め)。
+ *
+ *   > listen を押しても特に何も表示されず再生が始まり、
+ *   > 前と何も変わらない症状です。また、文字数も1396文字のようです。
+ *
+ * **知らせが出ない ＝ 1本で鳴っている。** そして 1,396 文字なので
+ * 長さでもない。つまり**1本の道でずれている。**
+ *
+ * ここから先は、**控えと音声が実際どれだけ食い違っているか**を
+ * 見ないと進めない。こちらから ElevenLabs にも Supabase にも届かず、
+ * **推測を重ねてはまた外す**のを4回くり返している。
+ *
+ * **これは調べるための表示である。原因が分かったら外す。**
+ */
+export function noteWholeClock({ align, dur, k, sents }) {
+  const n = (v) => (Number.isFinite(v) ? v.toFixed(2) : '—')
+  const heads = (sents ?? []).slice(0, 6).map((s) => n(s.start)).join(' / ')
+  setDetail(`[調査中] 1本で鳴っています。控え ${n(align)} 秒 / 音声 ${n(dur)} 秒`
+    + ` / 倍率 ${Number.isFinite(k) ? k.toFixed(4) : '—'}`
+    + `${heads ? ` / 文の頭 ${heads}` : ''}`)
+}
+
 export function noteWholeFallback(why) {
   /* **画面にそのまま出る文に `**` を混ぜない**(CLAUDE.md)。
      `<div>` に出るので Markdown としては読まれず、記号がそのまま見える */

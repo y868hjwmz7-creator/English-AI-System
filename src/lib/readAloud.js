@@ -42,7 +42,7 @@
  */
 import {
   DEFAULT_CLIP_VOICE, canUseClips, clipAlignment, clipDuration, clipTime,
-  lastWholeDetail, noteFellBack, noteWholeFallback,
+  lastWholeDetail, noteFellBack, noteWholeClock, noteWholeFallback,
   playClip, prefetchClip, seekClip, stopClip, wholeClip,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
@@ -845,6 +845,22 @@ export function readAloudSequence(parts, {
         if (!clockDone) {
           clockDone = true
           const k = clockScaleOf(alignEndOf(got.alignment), dur)
+          /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
+           *
+           *   > listen を押しても特に何も表示されず再生が始まり、
+           *   > 前と何も変わらない症状です。また、文字数も1396文字のようです。
+           *
+           *   **これで分かったことが2つある。** ①知らせが出ない ＝
+           *   **1本で鳴っている**(こちらの「発言ごとだろう」は外れ)
+           *   ②1,396 文字なので**長さでもない。**
+           *
+           *   つまり**1本の道でずれている。** ここから先は、
+           *   **控えと音声が実際どれだけ食い違っているか**を見ないと
+           *   進めない —— こちらから ElevenLabs にも Supabase にも届かず、
+           *   **推測を重ねてはまた外す**のを、もう4回くり返している。
+           *
+           *   **これは調べるための表示である。** 原因が分かったら外す。 */
+          noteWholeClock({ align: alignEndOf(got.alignment), dur, k, sents: sent })
           if (k !== 1) {
             spans = scaleSpans(spans, k)
             sent = scaleSpans(sent, k)
