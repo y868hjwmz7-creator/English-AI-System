@@ -84,7 +84,7 @@ import {
   applyHomeworkFilter, assignedDayOf, emptyHomeworkFilter,
   homeworkFilterOn, narrowHomework, topicOfAssignment,
 } from '../src/lib/homeworkFilter.js'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
 const ok = (cond, name, extra = '') => {
@@ -3676,6 +3676,100 @@ console.log('\nスピーチ練習(0054)')
   ok(/delete from public\.speeches where learner_id = p_learner/
     .test(read3('supabase/migrations/0054_speeches.sql')),
     'スピーチ … 表を足したら、消す側(`erase_learner`)にも足す')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑫ **準備が済んでいるかを、アプリが自分で訊く**(2026-09 実機・利用者の問い)
+ *
+ *   > ①supabase/apply/pending_matome.sql を貼る ②generate-material を置き直す。
+ *   > これをやったかどうか覚えていません。この現象がなん度も起きています。
+ *   > あなたで把握できる方法はないのですか？
+ *
+ * 【この検証が守るもの】
+ *   ・**印が古びないこと** —— 移行を足したら `NEWEST_MIGRATION` も直す
+ *     (直すまで赤いまま。`check.sql` とまったく同じ作法)
+ *   ・**版を訊く道が、ただのままであること** —— 窓口の
+ *     「読めない中身は、いちばん手前で断る」を消す・順を下げると、
+ *     **この問い合わせがそのまま課金になる**
+ *   ・**画面が本当に呼んでいること** —— 定義だけあって誰も呼ばなければ、
+ *     いままでと何も変わらない(`noteFnRev` で踏んだ落とし穴)
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const read4 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC4 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+
+  const state = read4('src/lib/setupState.js')
+
+  /* ── 印は、いちばん新しい移行とそろっているか ── */
+  const newest = readdirSync(new URL('../supabase/migrations/', import.meta.url))
+    .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+    .sort()
+    .at(-1)
+  const newestNo = newest.slice(0, 4)
+  ok(new RegExp(`NEWEST_MIGRATION = '${newestNo}'`).test(state),
+    `準備の状態 … 印がいちばん新しい移行(${newestNo})にそろっている`,
+    `いちばん新しいのは ${newest}`)
+
+  const mark = /NEWEST_MARK = \{ table: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
+  ok(mark && new RegExp(`create table if not exists public\\.${mark}\\b`)
+    .test(read4(`supabase/migrations/${newest}`)),
+    `準備の状態 … 印(${mark || '(無し)'})は、その移行が本当に作る表である`)
+  /* **まとめた1つに入っていなければ、貼っても印は現れない** */
+  ok(mark && new RegExp(`create table if not exists public\\.${mark}\\b`)
+    .test(read4('supabase/apply/pending_matome.sql')),
+    '準備の状態 … その印は、まとめた1つ(`pending_matome.sql`)にも入っている')
+
+  /* ── 表の有無だけを見る。**ほかの理由と混ぜない** ── */
+  ok(/42P01|PGRST205/.test(state) && /schema cache/.test(state),
+    '準備の状態 … 「そんな表は無い」だけを「まだです」と読む')
+  ok(/return 'unknown'/.test(state),
+    '準備の状態 … 分からないときは `unknown`(騒がない)')
+  /* **押せる URL を渡す**(`raw.` は非公開のリポジトリでは開けない) */
+  ok(/github\.com\/[^\s']+\/blob/.test(state) && !/raw\.githubusercontent/.test(state),
+    '準備の状態 … 貼るものは、押せる URL で渡している')
+  /* **画面にそのまま出る文字列に、`**` を混ぜない**(CLAUDE.md)。
+     Markdown としては読まれないので、画面にそのまま見える。
+     実際にこの回で1つ混ぜていた(描いて実測して気づいた) */
+  ok(!/\*\*/.test(noC4(state).replace(/\s\/\/.*$/gm, '')),
+    '準備の状態 … 画面に出る文に、強調の書き方が混じっていない')
+
+  /* ── ②の版は、0円で訊いている ── */
+  const mats4 = noC4(read4('src/lib/materials.js'))
+  ok(/export async function checkGenGateway\(force = false\)/.test(mats4),
+    '準備の状態 … 生成の窓口にも、版を訊きに行く道がある')
+  ok(/invoke\('generate-material', \{[\s\S]{0,300}?body: '\(版を訊くだけ/.test(mats4),
+    '準備の状態 … 読めない中身を送って、いちばん手前で断らせる(0円)')
+  ok(/Failed to send a request\|FunctionsFetchError/.test(mats4)
+    && /return\s+\/\/ 届いていない/.test(mats4),
+    '準備の状態 … 届かなかったときは「古い」と言わない')
+
+  /* **窓口の側で、この道を塞がないこと。**
+     `req.json()` の断りは Claude を1度も呼ばないいちばん手前にある。
+     消す・順を下げると、版を訊くだけの問い合わせが課金になる */
+  const fn4 = read4('supabase/functions/generate-material/index.ts')
+  const cut = fn4.indexOf("if (mode === 'chunk_ja')")
+  const head = fn4.slice(0, cut > 0 ? cut : fn4.length)
+  ok(cut > 0 && /catch \{ return reply\(\{ error: '内容を読めませんでした' \}, 400\) \}/
+    .test(head),
+    '準備の状態 … 窓口は、読めない中身を Claude より手前で断っている')
+  ok(/genRev: FN_REV/.test(fn4),
+    '準備の状態 … 窓口は、どの応答にも版を付けている')
+
+  /* ── 画面が本当に呼んでいるか ── */
+  /* **「名前が出てくるか」で見ない**(赤チェックで実際に素通りした)。
+     `// await checkGenGateway(force)` と**打ち消しても文字は残る**ので、
+     **行の頭から**見る */
+  ok(/^\s*await checkGenGateway\(force\)$/m.test(noC4(state)),
+    '準備の状態 … ②は `checkGenGateway()` に任せている(数え方を2通り持たない)')
+  const note4 = noC4(read4('src/components/SetupStatus.jsx'))
+  ok(/pendingSetup\(\)\.then\(/.test(note4) && /await pendingSetup\(true\)/.test(note4),
+    '準備の状態 … 画面が訊きに行き、済ませたあとは確かめ直せる')
+  ok(/if \(!canSeeSystemDetail\(\)\) return null/.test(note4),
+    '準備の状態 … ゲストには出さない(既定は「見せない」)')
+  ok(/if \(!done \|\| !todo\.length\) return null/.test(note4),
+    '準備の状態 … 済んでいれば1ドットも出さない')
+  ok(/<SetupStatus role=\{profile\?\.role \?\? null\} \/>/.test(noC4(read4('src/App.jsx'))),
+    '準備の状態 … `App.jsx` が本当に置いている')
 }
 
 console.log(ng

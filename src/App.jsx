@@ -6,6 +6,7 @@ import SignIn from './components/SignIn.jsx'
 import TrainerLearners from './components/TrainerLearners.jsx'
 import TrainerMaterials from './components/TrainerMaterials.jsx'
 import SupabaseStatus from './components/SupabaseStatus.jsx'
+import SetupStatus from './components/SetupStatus.jsx'
 import AppNav, { AppTopbar } from './components/AppNav.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import AppHome, { HOME_ID } from './components/AppHome.jsx'
@@ -808,6 +809,17 @@ export default function App() {
               **失敗は黙って消さない**ので、届かないときは出る
               (トレーナーと管理者だけ。ゲストには内側の話を見せない) */}
           <SupabaseStatus />
+
+          {/* **まだ済んでいない準備だけ**を出す(2026-09 実機・利用者の問い)。
+
+                > これをやったかどうか覚えていません。この現象がなん度も
+                > 起きています。あなたで把握できる方法はないのですか？
+
+              こちらからは Supabase に届かないので確かめられないが、
+              **アプリからは 0 円で確かめられる**(表の印を読むだけ・
+              窓口には読めない中身を送って断らせるだけ)。
+              **済んでいれば1ドットも出ない。** ゲストにも出さない */}
+          <SetupStatus role={profile?.role ?? null} />
 
           {/* 試作版の断り書きは**外した**(2026-09 利用者の指定)。
 

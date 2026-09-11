@@ -975,6 +975,75 @@ const noteGenRev = (rev) => {
   genRev = typeof rev === 'string' && rev ? rev : '(版なし)'
 }
 
+/**
+ * **窓口に、版だけを訊きに行く**(2026-09 実機・利用者の問い)。
+ *
+ *   > これをやったかどうか覚えていません。この現象がなん度も起きています。
+ *   > あなたで把握できる方法はないのですか？
+ *
+ * 【なぜ要るか】
+ *   版の見比べ(`noteGenRev`)は、**教材を作りに行ったときにしか
+ *   起きていなかった。** つまり「置き直したかどうか」を確かめるには、
+ *   **実際に教材を1本作ってみる**しかない —— それは**そのまま課金**である。
+ *   `speak` には `checkClipGateway()`(ただの `ping`)があるのに、
+ *   **こちらには無かった。** 同じ抜けを二度している。
+ *
+ * 【どうやって、ただで訊くか】
+ *   **窓口に `ping` を足さない。** 足せば置き直しが要るので、
+ *   「置き直したか分からない」を確かめる道が、置き直しを前提にしてしまう。
+ *
+ *   代わりに、**読めない中身をわざと送る。** 窓口は
+ *
+ *     try { body = await req.json() } catch { return reply({ … }, 400) }
+ *
+ *   で断る。ここは **Claude を1度も呼ばないいちばん手前**であり、
+ *   しかも `reply()` は**どの応答にも版を付ける**ので、
+ *   断りの中に版が入って返ってくる。**0円**である。
+ *
+ *   **いま置かれているのがどの版でも効く。** 版を付ける前のものなら
+ *   版が付いてこないので「古い」と読まれる —— それが正しい答えである。
+ *
+ * 【窓口の側で消してはいけないもの】
+ *   `req.json()` の早い断りは、**版を訊く道としても使っている。**
+ *   ここを消す・順を下げる(Claude を呼んだあとにする)と、
+ *   **この問い合わせが課金になる。** `npm run test:play` が見張っている。
+ *
+ * 【届かなかったときは、何も言わない】
+ *   窓口を置いていない・通信が切れているときは `error.context` が無い。
+ *   そこを「版なし = 古い」と読むと、**置いてすらいないものに
+ *   「置き直してください」と言う**ことになる。接続の知らせが別にあるので、
+ *   ここは黙る(**分からないうちは騒がない**)。
+ */
+let genAsked = false
+/**
+ * @param force 置き直したあとに**確かめ直す**ときだけ真
+ *   (押し直しても何も起きないのでは、行き止まりになる)
+ */
+export async function checkGenGateway(force = false) {
+  if ((genAsked && !force) || !supabase) return
+  genAsked = true
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-material', {
+      // **文字列で送ると `text/plain` でそのまま届く**(supabase-js)。
+      // JSON として読めないので、窓口はいちばん手前で断る
+      body: '(版を訊くだけ。JSON として読めない中身です)',
+    })
+    if (error && /Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      return                                  // 届いていない。**古いとは言わない**
+    }
+    const rev = data?.genRev ?? (await genErrBody(error)).genRev
+    noteGenRev(rev)
+  } catch { /* 届かなくても、教材づくりは止めない */ }
+}
+
+/** 窓口が 400 を返すと、中身は `error` の側に入る(`data` は `null`) */
+async function genErrBody(error) {
+  try {
+    const got = await error?.context?.json?.()
+    return got && typeof got === 'object' ? got : {}
+  } catch { return {} }
+}
+
 export async function generateSection({
   sectionType, count = 10, topic, topics = [], level, industry = '',
   isFirst = false, avoid = [], genre = '', scene = '', subject = '', context = '',

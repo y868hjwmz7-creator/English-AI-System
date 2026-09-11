@@ -1369,6 +1369,20 @@ input.share-url {
   padding: 0; font-size: var(--fs-12h);
 }
 
+/* まだ済んでいない準備の帯(`SetupStatus`)。
+   **閉じるボタンを置かない**ので、右の余白は要らない(`padding-right` を戻す)。
+   済ませれば消えるものを、押して消せるようにすると**忘れる道**になる */
+.setup-note { padding-right: 14px; }
+.setup-list {
+  margin: var(--sp-8) 0 0; padding-left: 1.4em;
+  display: flex; flex-direction: column; gap: var(--sp-12);
+}
+/* **字づかいだけで層を分ける**(囲みを重ねない・CLAUDE.md) */
+.setup-title { font-weight: 600; }
+.setup-why { color: var(--text-secondary); }
+.setup-how { margin-top: 2px; }
+.setup-links { display: flex; flex-wrap: wrap; gap: var(--sp-12); margin-top: 4px; }
+
 .badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: var(--r-pill); font-size: var(--fs-11); font-weight: 600; }
 .badge--warn {
   background: var(--surface-2);
