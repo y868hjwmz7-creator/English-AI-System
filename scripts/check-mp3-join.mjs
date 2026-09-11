@@ -1427,6 +1427,24 @@ function fakeMp3({
            戻さないと「鳴っているのに音が出ない」になる(音量 0 のまま) */
         ['戻したら起点も戻す', clips, /fadeOrigin\?\.\(t\)/],
         ['起点を書き換える窓口がある', clips, /fadeOrigin = moveOrigin/],
+        /* ── **戻す前に、出力そのものを止めて黙らせる**(2026-09 実機・5手め)──
+             > 一瞬なのですが前の発言や文の最後の音が入ります。
+
+           **Chromium では漏れない**(本物の `<audio>` で実測して 0 刻み)。
+           残るのは **iPhone** で、あそこは `volume` を無視するので
+           **なだらかな上げ下げも「差し替えの前に 0 にする」も効かない。**
+           `pause()` だけが、あの端末でも確実に出力を止められる */
+        ['戻す前に黙らせる道がある', clips, /export function seekClip\(sec, \{ hush = false \} = \{\}\)/],
+        ['止めるのは pause。通り道は変えない', clips, /if \(hush\) \{\n\s+try \{ el\.volume = 0 \}[\s\S]{0,120}?try \{ el\.pause\(\) \}/],
+        /* **移したあとの鳴らし直しを見る。** ただ `if (hush) wake()` を
+           探すと、**断られたときの枝**(`catch` の中)に当たって
+           **本筋を消しても緑のまま**になる(実際そうなった) */
+        ['止めたら必ず鳴らし直す', clips, /if \(hush\) wake\(\)\n\s+return true/],
+        ['断られても、そこで終わらせない', clips, /el\.play\(\)\?\.catch\?\.\(\(\) => \{\}\)/],
+        ['くり返しの戻しが黙らせる', read, /return seekClip\(to, \{ hush: true \}\)/],
+        /* **ふだんの ◁▷ には渡さない。** 押した人が場所を動かす操作なので、
+           一瞬の途切れより**すぐ鳴り出すこと**のほうが大事である */
+        ['1文ずつの送りは、止めない', read, (s) => !/seekClip\(sec, \{ hush/.test(s)],
       ]
       let bad1 = bad
       for (const [what, text, re] of want3) {

@@ -995,14 +995,62 @@ let fadeOrigin = null
  *   戻した先を新しい起点にすれば、そこから 70ms で入り直す。
  * ────────────────────────────────────────────────────────────────
  *
+ * ────────────────────────────────────────────────────────────────
+ * **戻す前に、出力そのものを止めて黙らせる**(`hush`・2026-09 実機・5手め)
+ *
+ *   > 一瞬なのですが前の発言や文の最後の音が入ります。
+ *   > 一瞬といえど違和感は非常に大きいです。
+ *
+ *   **Chromium では、この漏れは1刻みも起きない**(本物の `<audio>` で
+ *   実測。440Hz → 880Hz の音を作り、戻したあと 400ms を 5ms ごとに
+ *   解析して 0 刻み)。つまり**頭出しの外れではない。**
+ *
+ *   残るのは **iPhone** である。このファイルの各所に書いてあるとおり、
+ *   **iOS は `<audio>` の `volume` を無視する。** だから
+ *
+ *     ・`fadeGain` のなだらかな上げ下げ … **効かない**
+ *     ・差し替えの前に `volume = 0`     … **効かない**
+ *
+ *   の2つが**どちらも死んでいて、戻した瞬間の音がそのまま出る。**
+ *   「プチっ」を切り落としで消せなかったときと**まったく同じ壁**である。
+ *
+ *   **`pause()` は `volume` に頼らない。** 出力そのものが止まるので、
+ *   iPhone でも確実に黙る。止めて・移して・鳴らし直す ——
+ *   **音の通り道は1ミリも変えていない**(Web Audio を通さない)。
+ *
+ *   - **`stopClip()` は通らない。** あれは「どこまで聴いたか」を控え、
+ *     世代を進めて見張りを終わらせてしまう。ここで使うのは
+ *     `el.pause()` / `el.play()` だけである
+ *   - **`play()` が断られても、そこで終わらせない**(`catch`)。
+ *     `<audio>` は1つを使い回しており、**すでに解錠されている**ので
+ *     ふつうは通る(`stopClip` → 次を鳴らす、で毎回やっていることである)
+ *   - **ふだんの ◁▷ には渡さない。** あちらは押した人が場所を動かす操作で、
+ *     一瞬の途切れより**すぐ鳴り出すこと**のほうが大事である
+ * ────────────────────────────────────────────────────────────────
+ *
+ * @param {number} sec 移す先の秒
+ * @param {object} [o]
+ * @param {boolean} o.hush 戻す前に出力を止めて黙らせるか(くり返しの折り返し)
  * @returns {boolean} 移せたか(鳴っていなければ false)
  */
-export function seekClip(sec) {
+export function seekClip(sec, { hush = false } = {}) {
   if (!element || element.paused) return false
   const t = Number(sec)
   if (!Number.isFinite(t) || t < 0) return false
-  try { element.currentTime = t } catch { return false }
+  const el = element
+  // **鳴らし直すのは、止めたときだけ**(断られても、そこで終わらせない)
+  const wake = () => { try { el.play()?.catch?.(() => {}) } catch { /* 鳴らし直せなくても、次の折り返しで直る */ } }
+  if (hush) {
+    try { el.volume = 0 } catch { /* iOS は volume を無視する */ }
+    try { el.pause() } catch { /* 止められなくても困らない */ }
+  }
+  try { el.currentTime = t } catch {
+    if (hush) wake()
+    return false
+  }
+  // **音量は `fade()` が入れ直す。** ここで戻すと、入りのフェードを飛ばす
   fadeOrigin?.(t)
+  if (hush) wake()
   return true
 }
 

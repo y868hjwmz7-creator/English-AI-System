@@ -655,7 +655,11 @@ export function readAloudSequence(parts, {
   const goBack = (back, sec) => {
     const to = seeker.next(back, sec)
     if (to === null) return false
-    return seekClip(to)
+    /* **黙らせてから戻す**(`hush`・2026-09 実機・5手め)。
+       iPhone は `volume` を無視するので、なだらかな上げ下げも
+       「差し替えの前に 0 にする」も**どちらも効いていない。**
+       `pause()` だけが、あの端末でも確実に出力を止められる */
+    return seekClip(to, { hush: true })
   }
 
   /**
