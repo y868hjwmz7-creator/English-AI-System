@@ -42,7 +42,8 @@
  */
 import {
   DEFAULT_CLIP_VOICE, canUseClips, clipAlignment, clipDuration, clipTime,
-  noteFellBack, playClip, prefetchClip, seekClip, stopClip, wholeClip,
+  lastWholeDetail, noteFellBack, noteWholeFallback,
+  playClip, prefetchClip, seekClip, stopClip, wholeClip,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
@@ -732,7 +733,28 @@ export function readAloudSequence(parts, {
       voiceIds: list.map((p) => p.clipVoice ?? clipSpeakerFor(p.voice)),
     })
     if (!alive()) return true                 // 待っているあいだに止められた
-    if (!got?.spans?.length || got.spans.length !== list.length) return false
+    if (!got?.spans?.length || got.spans.length !== list.length) {
+      /* ── **1本にできなかった理由を、必ず言う**(2026-09 実機・11手め)──
+       *
+       *   > これではなぜ一本にならなかったのかが分からないままなので、
+       *   > また発言ごとになってしまった教材があれば同じことが起こる。
+       *   > **根本的に解決ではないですよね**
+       *
+       *   利用者の言うとおりだった。**理由は `wholeNote` に必ず入っている**
+       *   のに、**読んでいるのは支度の帯だけ**で、鳴らしたときには
+       *   誰も出していなかった。だから「なぜこの教材だけ違うのか」を、
+       *   こちらも利用者も**永久に知りようがなかった。**
+       *
+       *   **「端末の声で鳴らしています」とは言わない。** 発言ごとの音声は
+       *   ちゃんと鳴るし、端末の声にも落ちていない(2026-09 に直したところ)。
+       *   言うのは**どの道で鳴っているかと、その理由**だけである。
+       *
+       *   **トレーナーと管理者にだけ出す**(`App.jsx` が役割で決める)。
+       *   ゲストには仕組みの内側の話で、できることが何も無い。 */
+      const why = lastWholeDetail()
+      if (why) noteWholeFallback(why)
+      return false
+    }
 
     let spans = got.spans
     /* **どこから鳴らすか。** 控えの秒は「1本の中の秒」なので、

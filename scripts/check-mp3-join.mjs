@@ -2376,6 +2376,33 @@ function fakeMp3({
       /* **片方だけ合わせない。** 光る文と ◀ ▶ の飛び先が食い違う */
       ng('発言ごとの道が、◀ ▶ の飛び先を合わせていない')
     }
+    /* ── **1本にできなかった理由を、必ず言う**(2026-09 実機・11手め)──
+     *
+     *   > これではなぜ一本にならなかったのかが分からないままなので、
+     *   > また発言ごとになってしまった教材があれば同じことが起こる。
+     *   > **根本的に解決ではないですよね**
+     *
+     *   理由(`wholeNote`)は**必ず入っていた**のに、読んでいるのは
+     *   支度の帯だけで、**鳴らしたときには誰も出していなかった。**
+     *   出しさえすれば、次に同じことが起きても**その場で分かる。** */
+    if (!/const why = lastWholeDetail\(\)/.test(src) || !/noteWholeFallback\(why\)/.test(src)) {
+      ng('**1本にできなかった理由を、誰も出していない**', 'また同じことが起きても分からない')
+    }
+    {
+      const clipSrc = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+      if (!/export function noteWholeFallback/.test(clipSrc)) {
+        ng('理由を知らせる道が無い')
+      }
+      /* **「作れませんでした」とは言わない。** 発言ごとの音声はちゃんと鳴る */
+      if (/noteWholeFallback[\s\S]{0,400}?作れませんでした/.test(clipSrc)) {
+        ng('1本にできなかっただけで「作れませんでした」と言っている')
+      }
+      /* **画面にそのまま出る文に `**` を混ぜない**(CLAUDE.md) */
+      const say = clipSrc.match(/export function noteWholeFallback[\s\S]{0,500}?\n\}/)?.[0] ?? ''
+      if (/setDetail\([\s\S]*?\*\*/.test(say)) {
+        ng('画面に出る文に `**` が混ざっている', 'Markdown としては読まれない')
+      }
+    }
   }
 
   if (bad === before) ok('時計を音声に合わせ、番号は段落で知らせる')
