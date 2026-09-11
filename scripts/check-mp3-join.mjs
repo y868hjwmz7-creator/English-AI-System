@@ -1435,11 +1435,26 @@ function fakeMp3({
            **なだらかな上げ下げも「差し替えの前に 0 にする」も効かない。**
            `pause()` だけが、あの端末でも確実に出力を止められる */
         ['戻す前に黙らせる道がある', clips, /export function seekClip\(sec, \{ hush = false \} = \{\}\)/],
-        ['止めるのは pause。通り道は変えない', clips, /if \(hush\) \{\n\s+try \{ el\.volume = 0 \}[\s\S]{0,120}?try \{ el\.pause\(\) \}/],
-        /* **移したあとの鳴らし直しを見る。** ただ `if (hush) wake()` を
-           探すと、**断られたときの枝**(`catch` の中)に当たって
-           **本筋を消しても緑のまま**になる(実際そうなった) */
-        ['止めたら必ず鳴らし直す', clips, /if \(hush\) wake\(\)\n\s+return true/],
+        ['止めるのは pause。通り道は変えない', clips, /try \{ el\.volume = 0 \}[\s\S]{0,120}?try \{ el\.pause\(\) \}/],
+        /* ── **止めたまま、着いたのを見てから鳴らす**(2026-09 実機・6手め)──
+             > ダメな文については何も変わってません。
+             > 大丈夫な文があるのも事実です
+
+           **文によって分かれるのは「逃げ場」のほう**である ——
+           間の無い文では、縁＝声の頭なので**少しでも外すと前の声の中**。
+           実測(本物の `<audio>`・頭出しを 0.08 秒外す):
+
+             間 0.1 秒 … そのまま戻す **0 刻み**
+             間 0   秒 … そのまま戻す **24 刻み(120ms)** ← 症状
+             間 0   秒 … 着いたのを見る **0 刻み**      ← 直った */
+        ['着いたのを見てから鳴らす', clips, /el\.addEventListener\('seeked', landed\)/],
+        ['手前に着いたら、1回だけ直す', clips, /if \(!fixed && gap > LAND_EPS && gap < LAND_FAR\)/],
+        ['直しているあいだは、まだ鳴らさない', clips, /el\.currentTime = t \+ gap; return/],
+        /* **`seeked` が来ない端末のために、必ず時間で諦める。**
+           黙ったままがいちばん悪い(行き止まりを作らない) */
+        ['来なければ時間で諦めて鳴らす', clips, /timer: window\.setTimeout\(wake, LAND_WAIT\)/],
+        ['見張りは1つだけ', clips, /^function clearSeekWatch\(\)/m],
+        ['止めたら見張りを外す', clips, /fadeOrigin = null\n\s+\/\/[^\n]*\n\s+clearSeekWatch\(\)/],
         ['断られても、そこで終わらせない', clips, /el\.play\(\)\?\.catch\?\.\(\(\) => \{\}\)/],
         ['くり返しの戻しが黙らせる', read, /return seekClip\(to, \{ hush: true \}\)/],
         /* **ふだんの ◁▷ には渡さない。** 押した人が場所を動かす操作なので、

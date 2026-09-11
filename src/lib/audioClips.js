@@ -975,6 +975,25 @@ export function clipDuration() {
  */
 let fadeOrigin = null
 
+/** これより小さいずれは直さない(秒) */
+const LAND_EPS = 0.005
+/** これだけ離れていたら、こちらの戻しのせいではない(秒) */
+const LAND_FAR = 1
+/** `seeked` が来ない端末のために、これを過ぎたら諦めて鳴らす(ミリ秒) */
+const LAND_WAIT = 250
+
+/** 戻したあとの見張り。**1つだけ**(`{ el, on, timer }`) */
+let seekWatch = null
+
+/** 見張りを外す。**次の戻しと、止めたときに必ず呼ぶ** */
+function clearSeekWatch() {
+  if (!seekWatch) return
+  const { el, on, timer } = seekWatch
+  seekWatch = null
+  try { el.removeEventListener('seeked', on) } catch { /* 外せなくても困らない */ }
+  window.clearTimeout(timer)
+}
+
 /**
  * **鳴らしたまま、場所だけを移す**(2026-09 利用者の指定・1文ずつの ◁▷)。
  *
@@ -1038,25 +1057,76 @@ export function seekClip(sec, { hush = false } = {}) {
   const t = Number(sec)
   if (!Number.isFinite(t) || t < 0) return false
   const el = element
-  // **鳴らし直すのは、止めたときだけ**(断られても、そこで終わらせない)
-  const wake = () => { try { el.play()?.catch?.(() => {}) } catch { /* 鳴らし直せなくても、次の折り返しで直る */ } }
-  if (hush) {
-    try { el.volume = 0 } catch { /* iOS は volume を無視する */ }
-    try { el.pause() } catch { /* 止められなくても困らない */ }
+  if (!hush) {
+    try { el.currentTime = t } catch { return false }
+    fadeOrigin?.(t)
+    return true
   }
+
+  /* ── **止めたまま、着いたのを見てから鳴らす**(2026-09 実機・6手め)──
+   *
+   *   > ダメな文については何も変わってません。
+   *   > 大丈夫な文があるのも事実です
+   *
+   *   **文によって分かれる**、が決め手だった。頭出しのずれは
+   *   文によらず同じだけ起きるので、**分かれるのは「逃げ場」のほう**である。
+   *
+   *     間のある文 … 縁は声の頭のずっと手前。少し外しても**間の中**
+   *     間の無い文 … 縁＝声の頭。**少しでも外すと、前の声の中**
+   *
+   *   ElevenLabs は自然に読むので、**続けて読む文には間がほとんど無い。**
+   *   そこだけが残っていた。
+   *
+   *   **止めたままなら、直しているあいだ音は1ミリ秒も出ない。**
+   *   だから ①止める ②移す ③**着いたのを見る**(`seeked`)
+   *   ④手前に着いていたら、そのぶん先をもう一度頼む ⑤鳴らす、とする。
+   *
+   *   - **直すのは1回だけ**(際限なく飛び直すと、そこで鳴らなくなる)
+   *   - **`seeked` が来ない端末のために、必ず時間で諦める**(`LAND_WAIT`)。
+   *     **行き止まりを作らない** —— 黙ったままがいちばん悪い
+   *   - **1秒以上離れていたら、こちらの戻しのせいではない**(`LAND_FAR`)
+   *   - 見張りは**1つだけ**。次の戻しと、止めたときに必ず外す
+   * ────────────────────────────────────────────────────────────── */
+  const mine = generation
+  // **鳴らし直すのは、止めたときだけ**(断られても、そこで終わらせない)
+  const wake = () => {
+    clearSeekWatch()
+    if (mine !== generation) return
+    try { el.play()?.catch?.(() => {}) } catch { /* 鳴らし直せなくても、次の折り返しで直る */ }
+  }
+  let fixed = false
+  const landed = () => {
+    if (mine !== generation) { clearSeekWatch(); return }
+    const at = Number(el.currentTime) || 0
+    const gap = t - at                      // + なら、頼んだ秒より手前
+    if (!fixed && gap > LAND_EPS && gap < LAND_FAR) {
+      fixed = true
+      // もう一度 `seeked` が来る。**まだ鳴らさない**
+      try { el.currentTime = t + gap; return } catch { /* 直せなければ、そのまま鳴らす */ }
+    }
+    fadeOrigin?.(Number(el.currentTime) || 0)
+    wake()
+  }
+
+  clearSeekWatch()
+  try { el.volume = 0 } catch { /* iOS は volume を無視する */ }
+  try { el.pause() } catch { /* 止められなくても困らない */ }
+  seekWatch = { el, on: landed, timer: window.setTimeout(wake, LAND_WAIT) }
+  el.addEventListener('seeked', landed)
   try { el.currentTime = t } catch {
-    if (hush) wake()
+    wake()
     return false
   }
   // **音量は `fade()` が入れ直す。** ここで戻すと、入りのフェードを飛ばす
   fadeOrigin?.(t)
-  if (hush) wake()
   return true
 }
 
 export function stopClip() {
   generation += 1
   fadeOrigin = null
+  // **戻したあとの見張りを、必ず外す**(止めたのに鳴り直しては困る)
+  clearSeekWatch()
   const end = endCurrent
   endCurrent = null
   let at = 0
