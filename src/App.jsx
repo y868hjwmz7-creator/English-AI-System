@@ -37,6 +37,8 @@ import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import BgmLibrary from './components/BgmLibrary.jsx'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
+import { loadLearnerFeatures } from './lib/learnerFeatures.js'
+import { showsBasics } from './data/learnerFeatures.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 
 export default function App() {
@@ -285,11 +287,24 @@ export default function App() {
      ときに立てないでいると、**起動画面から二度と出られなくなる**
      (行き止まりを作らない)。 */
   const [profileRead, setProfileRead] = useState(false)
+  /* **この人に出すもの**(0055・2026-09 利用者の指定)。
+     プロフィールと**一緒に読む** —— 別に読むと、ゲストのメニューに
+     「30日講座」が**あとから生えてくる**ように見える。
+     `booting` が両方そろうまで待つので、そのちらつきが起きない */
+  const [features, setFeatures] = useState(null)
   useEffect(() => {
-    if (!session?.user?.id) { setProfile(null); setProfileRead(false); return }
+    if (!session?.user?.id) { setProfile(null); setFeatures(null); setProfileRead(false); return }
     let alive = true
-    const done = (p) => { if (!alive) return; setProfile(p); setProfileRead(true) }
-    loadProfile(session.user.id).then(done, () => done(null))
+    const done = (p, f) => {
+      if (!alive) return
+      setProfile(p); setFeatures(f); setProfileRead(true)
+    }
+    Promise.all([
+      loadProfile(session.user.id).catch(() => null),
+      /* **自分のぶんは id を渡さない。** RLS が自分の行だけを返す。
+         0055 を貼る前は空の集合が返る(= 既定のまま) */
+      loadLearnerFeatures().then((r) => r.data, () => null),
+    ]).then(([p, f]) => done(p, f), () => done(null, null))
     return () => { alive = false }
   }, [session])
 
@@ -320,6 +335,12 @@ export default function App() {
   const isTrainer = profile?.role === 'trainer' || profile?.role === 'owner'
   const isOwner = profile?.role === 'owner'
   const isLearner = profile?.role === 'learner'
+
+  /* **文法30日集中講座と基礎単語を、この人に出すか**(0055)。
+     判断は `showsBasics()` 1か所。**ここで `role === 'learner'` と書かない。**
+     Supabase が未設定のとき(手元で画面を確かめるとき)は、
+     ほかの画面と同じように**そのまま出す** */
+  const basicsOn = !isSupabaseConfigured || showsBasics({ role: profile?.role ?? null, features })
 
   // ゲストがトレーナー用の画面を開いていたら戻す。
   // 見えるデータはどのみち RLS が止めるが、画面としても出さない。
@@ -403,8 +424,13 @@ export default function App() {
     /* **文法30日集中講座 + 基礎単語**(0052・2026-09 利用者の指定)。
        > pre basic と basic に基礎単語習得モードとか文法30日集中講座などが欲しい
        **ゲスト専用**(利用者が選んだ)。トレーナーには出さない。
-       **下の帯(`TAB_IDS`)には足さない** —— あちらは利用者が4つと決めている */
-    (!isSupabaseConfigured || !isTrainer) && {
+       **下の帯(`TAB_IDS`)には足さない** —— あちらは利用者が4つと決めている。
+
+       **トレーナーが指定したゲストにだけ出す**(0055・2026-09 利用者の指定)。
+       > ゲストの画面から基礎英文法講座と基本単語を取り除いてください。
+       > これは、トレーナー側から指定したゲストにのみ映るようにしてください
+       判断は `basicsOn`(= `showsBasics()`)1か所。**既定は出さない** */
+    (!isSupabaseConfigured || (!isTrainer && basicsOn)) && {
       id: 'course', label: '30日講座', icon: StepsIcon,
       desc: '文法30日と、基礎の単語',
     },
@@ -873,7 +899,11 @@ export default function App() {
                            「このスピーチの語句」。**入れ物は1つのまま** */
                         onPickWords={(words, label, what = 'この段の語') => {
                           setOnlyWords({ words, label, what })
-                        }} />
+                        }}
+                        /* **基礎単語は、トレーナーが指定したゲストにだけ**
+                           (0055)。30日講座とまったく同じ判断を渡す ——
+                           **2つで1つ**なので、片方だけ出さない */
+                        showBasics={basicsOn} />
             ) : view === 'qr' ? (
               <QrReview />
             ) : view === 'pronunciation' ? (

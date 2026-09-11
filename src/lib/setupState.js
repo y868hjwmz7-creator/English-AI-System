@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0054'
+export const NEWEST_MIGRATION = '0055'
 
 /**
  * その移行が入っているかを見る印。
@@ -65,7 +65,9 @@ export const NEWEST_MIGRATION = '0054'
  * **表が在るかどうかだけ**を見るので、RLS に断られても
  * (=0件で返るだけなので)判定は狂わない。
  */
-export const NEWEST_MARK = { table: 'speeches', label: 'スピーチの原稿の置き場' }
+export const NEWEST_MARK = {
+  table: 'learner_features', label: 'ゲストごとに「出すもの」を決める置き場',
+}
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */
 const REPO = 'https://github.com/y868hjwmz7-creator/English-AI-System/blob'
@@ -87,7 +89,11 @@ const noTable = (error) => {
 export async function checkSqlApplied() {
   if (!supabase) return 'unknown'
   try {
-    const { error } = await supabase.from(NEWEST_MARK.table).select('id').limit(1)
+    /* **列の名前を書かない**(`select('*')`)。もとは `'id'` だったが、
+       `learner_features`(0055)のように **`id` を持たない表**を印に
+       選んだ瞬間、断りが「そんな列は無い」(42703)になって
+       `noTable()` をすり抜け、**入っていないのに黙る**ことになる */
+    const { error } = await supabase.from(NEWEST_MARK.table).select('*').limit(1)
     if (!error) return 'ok'
     if (noTable(error)) return 'missing'
     return 'unknown'                  // 通信の失敗など。**騒がない**
@@ -112,7 +118,7 @@ export async function pendingSetup(force = false) {
       id: 'sql',
       title: '貼る SQL が、まだ最後まで届いていません',
       why: `${NEWEST_MIGRATION} の「${NEWEST_MARK.label}」が、まだ Supabase にありません。`
-        + 'スピーチ練習など、新しく足したものが使えない状態です。',
+        + 'ゲストごとに出すものを決める欄など、新しく足したものが使えない状態です。',
       how: 'Supabase → 左メニュー SQL Editor → New query に貼り付けて、'
         /* **強調の書き方(`**`)を混ぜない。** ここは `<div>` にそのまま出る
            文字列なので、Markdown として読まれず**画面にそのまま見える**

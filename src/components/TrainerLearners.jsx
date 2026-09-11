@@ -43,6 +43,8 @@ import { PrintIcon, ScreenIcon } from './Icons.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
+import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.js'
+import { LEARNER_FEATURES } from '../data/learnerFeatures.js'
 import { printElement } from '../lib/print.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 
@@ -88,6 +90,12 @@ export default function TrainerLearners({ me, navTick = 0 }) {
      自分で下げられる目標は、目標にならない。判定は `set_weekly_goal()` の中 */
   const [goal, setGoal] = useState({ words: '', sentences: '' })
   const [goalBusy, setGoalBusy] = useState(false)
+
+  /* **この人に出すもの**(0055・2026-09 利用者の指定)。
+     > これは、トレーナー側から指定したゲストにのみ映るようにしてください
+     一覧は `src/data/learnerFeatures.js` 1か所。**ここに書き写さない** */
+  const [features, setFeatures] = useState(new Set())
+  const [featureBusy, setFeatureBusy] = useState(null)
   // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
   // 過去の宿題を最初に開く(2026-08 の要望)。
   const [detailTab, setDetailTab] = useState('homework')
@@ -300,13 +308,16 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setMessage(null)
     setForm({ testType: 'toeic', score: '', takenOn: today() })
     setGoal({ words: '', sentences: '' })
+    setFeatures(new Set())
     setDetailBusy(true)
     // `loadLearnerSummary`(study_logs の合計)は読まない。
     // **もう誰も入力しないので、いつも 0 になる**(2026-08 の設計変更)
-    const [{ data: hist }, { data: past }, { data: aim }] = await Promise.all([
+    const [{ data: hist }, { data: past }, { data: aim }, { data: feat }] = await Promise.all([
       loadScoreHistory(id), loadLearnerAssignments(id),
       /* 0042 を貼る前は 0 が返る。**欄が空になるだけで、画面は壊れない** */
       loadWeeklyGoal(id),
+      /* 0055 を貼る前は空の集合が返る。**既定(出さない)のままになる** */
+      loadLearnerFeatures(id),
     ])
     setHistory(hist ?? [])
     setAssignments(past ?? [])
@@ -314,6 +325,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
       words: aim?.wordsGoal ? String(aim.wordsGoal) : '',
       sentences: aim?.sentGoal ? String(aim.sentGoal) : '',
     })
+    setFeatures(feat ?? new Set())
     setDetailBusy(false)
   }
 
@@ -347,6 +359,33 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setMessage(w || t
       ? `${learner.display_name} さんの今週の目標を、語 ${w} / 文 ${t} にしました。`
       : `${learner.display_name} さんの週の目標を外しました。`)
+  }
+
+  /**
+   * **この人に出すものを決める**(0055・2026-09 利用者の指定)。
+   *
+   *   > これは、トレーナー側から指定したゲストにのみ映るようにしてください
+   *
+   * **門番は `set_learner_feature()` の中**(担当トレーナーと管理者だけ)。
+   * 画面に持たせない —— 2か所に置くと必ず食い違う。
+   *
+   * **黙って切り替えない。** 何が起きたのかを1行で出す
+   * (成功と失敗を、同じ見た目で終わらせない)。
+   */
+  const toggleFeature = async (learner, feat) => {
+    if (featureBusy) return
+    const next = !features.has(feat.id)
+    setFeatureBusy(feat.id)
+    const { error: e } = await setLearnerFeature(learner.id, feat.id, next)
+    setFeatureBusy(null)
+    if (e) { setError(e); return }
+    setError(null)
+    const now = new Set(features)
+    if (next) now.add(feat.id); else now.delete(feat.id)
+    setFeatures(now)
+    setMessage(next
+      ? `${learner.display_name} さんの画面に「${feat.label}」を出しました。`
+      : `${learner.display_name} さんの画面から「${feat.label}」を外しました。`)
   }
 
   const changeCefr = async (learner, cefr) => {
@@ -1247,6 +1286,34 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                   あと何問かが出ます。空にして押せば外れます。
                   日ではなく週で数えるので、1日休んでも途切れません。
                 </p>
+
+                {/* ── この人に出すもの(0055・2026-09 利用者の指定)────────
+                    > ゲストの画面から基礎英文法講座と基本単語を取り除いて
+                    > ください。これは、トレーナー側から指定したゲストにのみ
+                    > 映るようにしてください
+
+                    **既定は「出さない」。** 入れたゲストの画面にだけ出る。
+                    一覧は `src/data/learnerFeatures.js` 1か所 ——
+                    ここに書き写すと、足したときに片方だけ残る
+                    (`LEARNER_STATUS` と同じ考え方)。
+
+                    **守っているのは画面ではなく `set_learner_feature()` の中**
+                    であって、担当していないゲストには書けない。 */}
+                <p className="field-label">この人の画面に出すもの</p>
+                {LEARNER_FEATURES.map((f) => (
+                  <div key={f.id} className="feature-row">
+                    <button type="button"
+                            className={`btn btn--toggle${features.has(f.id) ? ' is-active' : ''}`}
+                            disabled={featureBusy === f.id}
+                            aria-pressed={features.has(f.id)}
+                            onClick={() => toggleFeature(l, f)}>
+                      {featureBusy === f.id
+                        ? '決めています…'
+                        : `${features.has(f.id) ? '出しています' : '出していません'} — ${f.label}`}
+                    </button>
+                    <p className="field-hint">{f.hint}</p>
+                  </div>
+                ))}
 
                 <p className="field-label">在籍状態</p>
                 <div className="btn-row">

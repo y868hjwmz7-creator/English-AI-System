@@ -64,6 +64,9 @@ import {
   MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
 } from '../src/data/materialKinds.js'
 import {
+  BASICS, LEARNER_FEATURES, featureOf, showsBasics,
+} from '../src/data/learnerFeatures.js'
+import {
   COMMON_HOBBY_SPEECH_SCENES, DIALOGUE_SCENES, SPEECH_SCENES,
   genresFor, sceneLabel, scenesFor, speechScenesFor,
 } from '../src/data/genres.js'
@@ -3054,8 +3057,10 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   /* **改行をまたげる形で見る。** `pages` の行は説明(`desc`)が付いて
      複数行になった(2026-09・ホーム)。`&& { id:` を1行の形で探していたので、
      **中身は1文字も変わっていないのに赤くなった** */
-  ok(/isTrainer\) && \{\s*id: 'course'/.test(app),
-    '30日講座 … **ゲスト専用**(トレーナーには出さない)')
+  /* **トレーナーには出さない、かつ指定したゲストにだけ出す**(0055)。
+     > これは、トレーナー側から指定したゲストにのみ映るようにしてください */
+  ok(/!isTrainer && basicsOn\)\) && \{\s*id: 'course'/.test(app),
+    '30日講座 … ゲスト専用で、しかも指定したゲストにだけ出る')
   ok(!/'course'/.test(app.slice(app.indexOf('const TAB_IDS'), app.indexOf('const TAB_IDS') + 400)),
     '30日講座 … 下の帯は4つのまま(利用者が決めている)')
 
@@ -3319,8 +3324,11 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
 
     /* ⑤ **引けなくても抜け出せる。** プロフィールが空で返ったときに
           読み終えた印を立てないと、**起動画面から二度と出られない** */
-    ok(/loadProfile\(session\.user\.id\)\.then\(done, \(\) => done\(null\)\)/.test(app)
-      && /setProfile\(p\); setProfileRead\(true\)/.test(app),
+    /* **0055 で「この人に出すもの」も一緒に読むようになった。**
+       どちらが転んでも、読み終えた印は必ず立てる */
+    ok(/loadProfile\(session\.user\.id\)\.catch\(\(\) => null\)/.test(app)
+      && /\.then\(\(\[p, f\]\) => done\(p, f\), \(\) => done\(null, null\)\)/.test(app)
+      && /setProfile\(p\); setFeatures\(f\); setProfileRead\(true\)/.test(app),
     '起動 … プロフィールが引けなくても、起動画面から抜け出せる')
 
     /* ⑥ **画面まるごとの「読み込み中…」は、1つの部品に寄せる。**
@@ -3710,7 +3718,7 @@ console.log('\nスピーチ練習(0054)')
     `準備の状態 … 印がいちばん新しい移行(${newestNo})にそろっている`,
     `いちばん新しいのは ${newest}`)
 
-  const mark = /NEWEST_MARK = \{ table: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
+  const mark = /NEWEST_MARK = \{\s*table: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
   ok(mark && new RegExp(`create table if not exists public\\.${mark}\\b`)
     .test(read4(`supabase/migrations/${newest}`)),
     `準備の状態 … 印(${mark || '(無し)'})は、その移行が本当に作る表である`)
@@ -3770,6 +3778,110 @@ console.log('\nスピーチ練習(0054)')
     '準備の状態 … 済んでいれば1ドットも出さない')
   ok(/<SetupStatus role=\{profile\?\.role \?\? null\} \/>/.test(noC4(read4('src/App.jsx'))),
     '準備の状態 … `App.jsx` が本当に置いている')
+
+  /* **印を読むときに、列の名前を書かない**(0055 で踏みかけた)。
+     `select('id')` のままだと、`id` を持たない表を印に選んだ瞬間、
+     断りが「そんな列は無い」(42703)になって `noTable()` をすり抜け、
+     **入っていないのに黙る**ことになる */
+  ok(/\.from\(NEWEST_MARK\.table\)\.select\('\*'\)/.test(noC4(state)),
+    '準備の状態 … 印は「表があるか」だけを見る(列の名前を書かない)')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ⑬ **ゲストごとに「出すもの」を決める**(0055・2026-09 利用者の指定)
+
+     > ゲストの画面から
+     > 基礎英文法講座と基本単語を取り除いてください。
+     > これは、トレーナー側から指定したゲストにのみ映るようにしてください
+
+   【この検証が守るもの】
+     ・**判断が1か所であること** —— 画面の中で `role === 'learner'` と
+       書くと、置く場所の数だけ食い違う(`remakeModeOf()` と同じ)
+     ・**既定が「出さない」であること** —— 役割が分からないうちも出さない
+     ・**2つで1つであること** —— 30日講座と基礎単語は、同じ判断で出る
+     ・**画面が本当に呼んでいること** —— 一覧だけ作って誰も見なければ、
+       いままでと何も変わらない
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const read5 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC5 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+
+  /* ── 一覧 ── */
+  ok(LEARNER_FEATURES.length >= 1
+    && LEARNER_FEATURES.every((f) => f.id && f.label && f.hint),
+    '出すもの … 一覧の1行ずつに id・呼び名・説明がある')
+  ok(new Set(LEARNER_FEATURES.map((f) => f.id)).size === LEARNER_FEATURES.length,
+    '出すもの … id が重なっていない')
+  ok(!!featureOf(BASICS) && featureOf('なにもない') === null,
+    '出すもの … 知らない id は `null`(当てずっぽうで返さない)')
+  /* **画面にそのまま出る文字列に、`**` を混ぜない**(CLAUDE.md)。
+     `<p>` に出るので Markdown としては読まれず、そのまま見える */
+  ok(!LEARNER_FEATURES.some((f) => /\*\*/.test(`${f.label}${f.hint}`)),
+    '出すもの … 画面に出る文に、強調の書き方が混ざっていない')
+
+  /* ── 判断(`showsBasics`)。**既定は「出さない」** ── */
+  const on = new Set([BASICS])
+  ok(showsBasics({ role: 'trainer', features: null }) === true
+    && showsBasics({ role: 'owner', features: null }) === true,
+    '出すもの … ゲスト以外には、これまでどおり出す')
+  ok(showsBasics({ role: 'learner', features: on }) === true,
+    '出すもの … 入れたゲストには出す')
+  ok(showsBasics({ role: 'learner', features: new Set() }) === false,
+    '出すもの … 入れていないゲストには出さない')
+  ok(showsBasics({ role: 'learner', features: null }) === false,
+    '出すもの … 読めていないゲストには出さない')
+  ok(showsBasics({ role: null, features: null }) === false
+    && showsBasics() === false,
+    '出すもの … 役割が分からないうちは出さない(既定は「出さない」)')
+
+  /* ── 画面が本当に呼んでいるか ──
+     **「名前が出てくるか」で見ない** —— 使っている形で見る */
+  const app = noC5(read5('src/App.jsx'))
+  ok(/showsBasics\(\{ role: profile\?\.role \?\? null, features \}\)/.test(app),
+    '出すもの … `App.jsx` は `showsBasics()` に任せている')
+  ok(!/role === 'learner'.*basics|basics.*role === 'learner'/i.test(app),
+    '出すもの … `App.jsx` の中で役割をベタ書きしていない')
+  ok(/!isTrainer && basicsOn\)\) && \{\s*id: 'course'/.test(app),
+    '出すもの … 30日講座は、指定したゲストにだけ出る')
+  ok(/showBasics=\{basicsOn\}/.test(app),
+    '出すもの … 基礎単語にも、まったく同じ判断を渡している(2つで1つ)')
+
+  const wb = noC5(read5('src/components/Wordbook.jsx'))
+  ok(/showBasics = true,/.test(wb),
+    '出すもの … 単語帳の既定は真(トレーナー自身の単語帳は変わらない)')
+  ok(/onPickWords && showBasics && \(/.test(wb),
+    '出すもの … 単語帳は、渡された判断を本当に見ている')
+  ok(!/showsBasics|viewerRoleOf/.test(wb),
+    '出すもの … 単語帳の中で、自分で役割を見ていない')
+
+  /* ── トレーナーが決める側 ── */
+  const tl = noC5(read5('src/components/TrainerLearners.jsx'))
+  ok(/LEARNER_FEATURES\.map\(/.test(tl),
+    '出すもの … 決める欄は一覧を回している(書き写していない)')
+  ok(/await setLearnerFeature\(learner\.id, feat\.id, next\)/.test(tl),
+    '出すもの … 決める欄は `setLearnerFeature()` を呼んでいる')
+  ok(/loadLearnerFeatures\(id\)/.test(tl),
+    '出すもの … そのゲストのぶんを読んでいる')
+
+  /* ── 判断を、Supabase 側のファイルに書き写していないか ── */
+  const lib5 = noC5(read5('src/lib/learnerFeatures.js'))
+  ok(!/export function showsBasics/.test(lib5),
+    '出すもの … 判断は `src/data/` 1か所(素の node で確かめられる形)')
+
+  /* ── 貼る SQL がそろっているか ── */
+  for (const f of ['supabase/migrations/0055_learner_features.sql',
+    'supabase/apply/pending_matome.sql']) {
+    const sql = read5(f)
+    ok(/create table if not exists public\.learner_features/.test(sql)
+      && /create policy "担当トレーナーが決める" on public\.learner_features/.test(sql)
+      && /create or replace function public\.set_learner_feature/.test(sql)
+      && /delete from public\.learner_features where learner_id = p_learner/.test(sql),
+      `出すもの … ${f.split('/').pop()} に表・RLS・窓口・消す行がそろっている`)
+  }
+  /* **名前の一覧(check)を置かない** —— 置くと、1つ足すたびに
+     SQL を貼り直してもらうことになる(`material_sections_type_check` の落とし穴) */
+  ok(!/check \(feature in/.test(read5('supabase/migrations/0055_learner_features.sql')),
+    '出すもの … `feature` に一覧(check)を置いていない(足すのに SQL が要らない)')
 }
 
 console.log(ng

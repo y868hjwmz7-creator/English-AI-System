@@ -991,6 +991,46 @@ set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.expect('ほかのゲストの目標は見えない(0042)',
   (select count(*)::int from public.weekly_goals), 0);
 
+-- ── ゲストごとに「出すもの」を決める(0055)────────────────────
+--
+--   **決められるのは担当トレーナー(と管理者)だけ。**
+--   自分で出せるなら「トレーナー側から指定する」にならない。
+--   ゲスト本人は読めるが書けない(週の目標とまったく同じ形)。
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select public.set_learner_feature('22222222-2222-2222-2222-222222222222', 'basics', true);
+select pg_temp.expect('担当トレーナーは、出すものを決められる(0055)',
+  (select count(*)::int from public.learner_features
+    where learner_id = '22222222-2222-2222-2222-222222222222'
+      and feature = 'basics' and enabled), 1);
+
+-- **何度押しても行は増えない**(上書きする)
+select public.set_learner_feature('22222222-2222-2222-2222-222222222222', 'basics', false);
+select pg_temp.expect('もう一度押すと、外れる(行は増えない)(0055)',
+  (select count(*)::int from public.learner_features
+    where learner_id = '22222222-2222-2222-2222-222222222222'
+      and feature = 'basics' and not enabled), 1);
+select public.set_learner_feature('22222222-2222-2222-2222-222222222222', 'basics', true);
+
+select pg_temp.expect_denied('担当していないゲストには決められない(0055)',
+  $$select public.set_learner_feature('33333333-3333-3333-3333-333333333333', 'basics', true)$$);
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('ゲスト本人は、自分に出ているものを読める(0055)',
+  (select count(*)::int from public.learner_features where enabled), 1);
+select pg_temp.expect_denied('ゲストは、自分で出すものを決められない(0055)',
+  $$select public.set_learner_feature('22222222-2222-2222-2222-222222222222', 'basics', true)$$);
+-- **表に直に書く道も塞がっている。** 週の目標とちがい `with check` を
+-- 置いてあるので、**0行ではなく、はっきり断られる**
+select pg_temp.expect_denied('ゲストは、表に直に入れられない(0055)',
+  $$insert into public.learner_features (learner_id, feature, enabled)
+      values ('22222222-2222-2222-2222-222222222222', 'ずるい', true)$$);
+select pg_temp.expect('ゲストが入れた行は1つも無い(0055)',
+  (select count(*)::int from public.learner_features where feature = 'ずるい'), 0);
+
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('ほかのゲストに出ているものは見えない(0055)',
+  (select count(*)::int from public.learner_features), 0);
+
 -- ── Quick Response の続けた記録(0042)──────────────────────────
 --
 --   `mark_qr()` が日ごとの記録を1つ増やす。**単語帳と同じ形**。
@@ -1097,6 +1137,11 @@ insert into public.weekly_goals (learner_id, words, sentences, set_by)
   values ('33333333-3333-3333-3333-333333333333', 50, 20,
           '55555555-5555-5555-5555-555555555555')
   on conflict do nothing;
+-- 0055 で足した1つ。**表を足したら、消す側にも足す**(CLAUDE.md)
+insert into public.learner_features (learner_id, feature, enabled, set_by)
+  values ('33333333-3333-3333-3333-333333333333', 'basics', true,
+          '55555555-5555-5555-5555-555555555555')
+  on conflict do nothing;
 insert into storage.buckets (id, name, public) values ('learner-files', 'learner-files', false)
   on conflict do nothing;
 insert into storage.objects (bucket_id, name)
@@ -1152,6 +1197,9 @@ select pg_temp.expect('週の目標が消えている(0042)',
 -- **表を足したら、消す側にも足す**(CLAUDE.md)。0054 で足した1つ
 select pg_temp.expect('スピーチが消えている(0054)',
   (select count(*)::int from public.speeches
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+select pg_temp.expect('この人に出すものが消えている(0055)',
+  (select count(*)::int from public.learner_features
    where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
 select pg_temp.expect('ゲストの欄そのものが消えている',
   (select count(*)::int from public.profiles

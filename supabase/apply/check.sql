@@ -139,4 +139,7 @@ from (
   union all select '0054 スピーチの原稿と、その添削の置き場(pending_matome.sql)',
     exists (select 1 from information_schema.tables
             where table_schema = 'public' and table_name = 'speeches'), 36
+  union all select '0055 ゲストごとに「出すもの」を決める(pending_matome.sql)',
+    exists (select 1 from information_schema.tables
+            where table_schema = 'public' and table_name = 'learner_features'), 37
 ) t order by 順;

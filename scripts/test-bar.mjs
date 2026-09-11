@@ -3805,10 +3805,12 @@ export default defineConfig({
     /* **改行をまたげる形で見る。** `pages` の行は説明(`desc`)が付いて
        複数行になった(2026-09・ホーム)。1行の形で探していたので、
        **中身は1文字も変わっていないのに赤くなった** */
-    } else if (!/isTrainer\) && \{\s*id: 'course', label: '30日講座'/.test(src)) {
-      ng('30日講座 … ゲスト専用になっていない')
+    /* **トレーナーに出さない、かつ指定したゲストにだけ出す**(0055)。
+       > これは、トレーナー側から指定したゲストにのみ映るようにしてください */
+    } else if (!/!isTrainer && basicsOn\)\) && \{\s*id: 'course', label: '30日講座'/.test(src)) {
+      ng('30日講座 … ゲスト専用 / 指定したゲストだけ、になっていない')
     } else {
-      ok('30日講座 … ゲストのメニューから開ける')
+      ok('30日講座 … 指定したゲストのメニューから開ける')
     }
   }
 
@@ -3889,8 +3891,17 @@ export default defineConfig({
       ng('基礎単語 … 単語帳の画面に置かれていない')
     } else if (!/onPicked=\{onPickWords\}/.test(src)) {
       ng('基礎単語 … 絞り込みを外(App)に渡していない')
+    /* **指定したゲストにだけ出す**(0055)。30日講座とまったく同じ判断を
+       受け取る —— **2つで1つ**なので、片方だけ出さない */
+    } else if (!/onPickWords && showBasics && \(/.test(src)) {
+      ng('基礎単語 … 指定したゲストだけ、になっていない')
+    } else if (!/showBasics=\{basicsOn\}/.test(
+      readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ''),
+    )) {
+      ng('基礎単語 … App が判断(basicsOn)を渡していない')
     } else {
-      ok('基礎単語 … 単語帳から、その段だけを練習できる')
+      ok('基礎単語 … 指定したゲストの単語帳から、その段だけを練習できる')
     }
   }
 }
