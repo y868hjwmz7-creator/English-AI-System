@@ -962,6 +962,33 @@ export function readAloudSequence(parts, {
            **窓口は呼ばない = 0円。** 無ければ上の見積もりに戻る */
         const exact = await exactTimesFor(part.text, clipVoice, clipTier)
         if (!alive()) return
+
+        /* ── **控えの時計を、その MP3 の長さに合わせる**(2026-09 実機・10手め)──
+         *
+         *   > 最近作った四つの教材で試した結果、最新の教材以外では完璧でした。
+         *   > …しかし、最新のスコットランドの音声だと変わらず同じ現象が
+         *   > 起こります
+         *
+         *   **1つだけ違う、が決め手だった。** 時計合わせ(`clockScaleOf`)は
+         *   **1本にまとめた道(`runWhole`)にしか入っていなかった。**
+         *
+         *     1本にまとめられた教材 … 合わせる → **完璧**
+         *     1本にできなかった教材 … **合わせない** → ずれたまま
+         *
+         *   1本にできないのは、鍵が無い・文字数が多すぎる・
+         *   **名簿に無い声が混じっている**・時刻が本文と合わないとき。
+         *   **声を変えると、そこで道が分かれる。**
+         *
+         *   控えの終わりは「最後の文字が鳴り終わった秒」で、
+         *   **実際の MP3 には前後の余白がある。** 合わせないと、
+         *   折り返しも戻る先も同じだけ手前になる ——
+         *   利用者の言う「速かった分だけ前の文の最後が入る」そのものである。
+         */
+        const fitSents = (d) => {
+          if (!exact) return null
+          const k = clockScaleOf(alignEndOf(exact.alignment), d)
+          return k === 1 ? exact.sents : scaleSpans(exact.sents, k)
+        }
         let sentSecs = null
         /* 「段落」でくり返すとき、**どこから鳴らし直すか**(かけらの頭)。
            鳴らし終わってしまったときの受け皿である —— 中で戻せていれば
@@ -996,7 +1023,8 @@ export function readAloudSequence(parts, {
                **言い終わる前に戻る。**
                伸ばすのは `repeatSeek` / `spanForRange` の中(`duration`)で、
                **縁の決め方を2通り持たない** */
-            if (!sentSecs) sentSecs = exact ? exact.sents : sharesToTimes(shares, dur)
+            // **合わせてから使う。** 合わせないと、折り返しも戻る先も手前になる
+            if (!sentSecs) sentSecs = fitSents(dur) ?? sharesToTimes(shares, dur)
             if (!sentSecs) return
             const only = partSpan(part.index, sentSecs, part.at, { duration: dur })
             backTo = only ? only.start : 0
@@ -1013,7 +1041,9 @@ export function readAloudSequence(parts, {
                **段落の切れ目では、前の控えをそのまま残す** ——
                鳴っていないあいだは `clipTime()` が `null` を返すので
                誤って飛ぶことはなく、◀ ▶ が一瞬押せなくなることもない */
-            if (exact) holdCursor(exact.sents, null)
+            /* **◀ ▶ の飛び先も、同じ時計で合わせる。**
+               片方だけ合わせると、**光る文と飛ぶ先が食い違う** */
+            if (exact) holdCursor(fitSents(clipDuration() ?? 0) ?? exact.sents, null)
             else holdCursor(shares, null, true)
             started()
             const ahead = list[i + 1]
