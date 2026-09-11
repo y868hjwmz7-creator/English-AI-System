@@ -25,7 +25,9 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  alignEndOf, charTimesOf, clockScaleOf, indexAtTime, rangeOf, repeatSeek,
+  SEEK_OFF,
+  alignEndOf, charTimesOf, clockScaleOf, indexAtTime, makeRepeatSeeker,
+  rangeOf, repeatSeek,
   scaleSpans, seekSentence, sentenceSpansOf, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
@@ -1025,6 +1027,106 @@ function fakeMp3({
     } else if (repeatSeek('all', 0, { spans: null }) !== null) {
       ng('区間が無いのに回そうとしている')
     } else ok('知らない単位・区間が無いときは、回さない')
+
+    /* ══════════════════════════════════════════════════════════
+     * ⑪ **戻したあと、本当にそこへ着いたかを見る**(2026-09 実機・3手め)
+     *
+     *   > 文、段落ごとの繰り返し、依然として直っていません。
+     *
+     *   `el.currentTime = t` は「そこへ行ってくれ」と頼むだけで、
+     *   **着く場所は頼んだ秒とは限らない。** 手前に着くと、
+     *   前の文のしっぽが鳴り、そこは前の窓の終わりぎわなので
+     *   **また戻される。** それが利用者の言う症状そのものである。
+     *
+     *   **鳴らして数えないと分からない**ので、ここでひと刻みずつ回す。
+     *   1周ぶん鳴らして、①前の文へ戻っていないか ②着いた先が
+     *   その文の頭になっているか、の2つを見る。
+     * ══════════════════════════════════════════════════════════ */
+    {
+      /**
+       * ひと刻み 10ms で鳴らしてみる。**頭出しは `slip` 秒だけ手前に着く**
+       * @returns {{backs:number[], heard:number[]}} 戻した先と、鳴った秒
+       */
+      const play = (slip, unit, from, steps = 900) => {
+        const seeker = makeRepeatSeeker()
+        const backs = []
+        const heard = []
+        let t = from
+        for (let n = 0; n < steps; n += 1) {
+          const to = seeker.next(repeatSeek(unit, t, o), t)
+          if (to !== null) { backs.push(to); t = Math.max(0, to - slip); continue }
+          heard.push(t)
+          t += 0.01
+          if (t > dur) break
+        }
+        return { backs, heard }
+      }
+
+      /* **どれだけ外しても、同じことが言えるか。**
+         1つの値だけで見ると、そこだけ当たる形に書き換えても緑のままになる */
+      for (const slip of [0.02, 0.05, 0.12, 0.4]) {
+        const r = play(slip, 'sentence', just(fore1))
+        // ① 前の文へ戻っていないか。**戻る先はどれも、この文の縁だけ**
+        const strayed = r.backs.filter((b) => b < back1 - 0.01)
+        /* ② 着いた先。**直したあとは、その文の頭から鳴る。**
+           `SEEK_OFF`(0.12 秒)より小さいずれは直さない ——
+           そこまで来ると耳には届かず、直すほうが飛び跳ねて聞こえる */
+        const tail = r.heard.filter((x) => x < back1 - SEEK_OFF - 0.02)
+        // ③ **ちゃんと回っているか。**「戻らない」だけを見ると、
+        //    何もしない形に書き換えても緑のままになる
+        if (strayed.length) {
+          ng(`頭出しが ${slip} 秒外れると、前の文へ戻る`, `${strayed.length} 回`)
+        } else if (tail.length) {
+          ng(`頭出しが ${slip} 秒外れると、前の文のしっぽが鳴る`, `${tail.length} 刻み`)
+        } else if (r.backs.length < 2) {
+          ng(`頭出しが ${slip} 秒外れると、回らなくなる`, `${r.backs.length} 回`)
+        } else ok(`頭出しが ${slip} 秒外れても、その文の頭から ${r.backs.length} 回くり返す`)
+      }
+
+      /* ④ **ずれが無いときは、1ミリ秒も変わらない** */
+      const clean = play(0, 'sentence', just(fore1))
+      if (clean.backs.some((b) => Math.abs(b - back1) > 1e-9)) {
+        ng('ずれが無いのに、戻る先が動いている')
+      } else ok('頭出しが外れなければ、戻る先はこれまでどおり')
+
+      /* ⑤ **短い文でも、行き止まりにならない。**
+         歯止めを「戻した先から 0.25 秒」で固定すると、
+         それより短い窓は**二度と回せなくなる** */
+      const tiny = [{ start: 0, end: 0.1 }, { start: 0.2, end: 0.3 }]
+      const s2 = makeRepeatSeeker()
+      let t2 = 0.25
+      let n2 = 0
+      for (let n = 0; n < 200; n += 1) {
+        const to = s2.next(repeatSeek('sentence', t2, { sentences: tiny, duration: 0.4 }), t2)
+        if (to !== null) { n2 += 1; t2 = to; continue }
+        t2 += 0.01
+        if (t2 > 0.4) break
+      }
+      if (n2 < 2) ng('短い文が、1度しか回らない', `${n2} 回`)
+      else ok(`0.1 秒の短い文も回る(${n2} 回)`)
+
+      /* ⑥ **遠くへ送られたら、歯止めは古い**(◀ ▶ で1文戻したとき)。
+         そのまま待たせると、その1周が黙って飛ばされる */
+      const s3 = makeRepeatSeeker()
+      if (s3.next(back1, just(fore1)) === null) {
+        ng('1回目から戻せていない')
+      } else if (s3.next(null, back1) !== null) {
+        ng('戻した直後に、また何かしている')
+      } else {
+        // 着いたので、見張りを終わらせる(ひと刻みずつ進める)
+        for (let n = 0; n < 30; n += 1) s3.next(null, back1 + n * 0.01)
+        // ◀ でずっと手前へ送られた。そこからの1周は、ふつうに回るべき
+        let ok3 = false
+        let t3 = 0
+        for (let n = 0; n < 400; n += 1) {
+          const to = s3.next(repeatSeek('sentence', t3, o), t3)
+          if (to !== null) { ok3 = true; break }
+          t3 += 0.01
+        }
+        if (!ok3) ng('前へ送ったあと、その1周が回らない')
+        else ok('遠くへ送られたら、歯止めは捨てる')
+      }
+    }
   }
 
   // 置き場所の材料。**声か英文が変われば、別の音声になる**
@@ -1220,10 +1322,13 @@ function fakeMp3({
         ['読み上げが受け取る', read, /repeatOf = null,/],
         ['1本のときは戻して回す', read, /spans, sentences: sent, duration: dur, window: only,/],
         ['戻せたら、そのひと刻みは何もしない', read, /if \(goBack\(back, sec\)\) return/],
-        /* **戻した直後に、また戻さない**(2026-09 実機)。MP3 の頭出しは
-           フレームの切れ目に吸い寄せられるので、頼んだ秒より手前に着くことが
-           ある。そこでもう一度戻すと、**前の文をくり返し続ける** */
-        ['戻した直後は、もう一度戻さない', read, /Math\.abs\(sec - lastBack\) < JUST_MOVED/],
+        /* **戻したあと、本当にそこへ着いたかを見る**(2026-09 実機・3手め)。
+           `el.currentTime = t` は頼むだけで、着く場所は頼んだ秒とは限らない。
+           手前に着くと前の文のしっぽが鳴り、そこで**また戻される。**
+           算段は `makeRepeatSeeker()` 1か所(素の node で確かめられる) */
+        ['着地の見張りを使う', read, /const seeker = makeRepeatSeeker\(\)/],
+        ['戻す先は見張りが決める', read, /const to = seeker\.next\(back, sec\)/],
+        ['画面の中で歯止めを書き直していない', read, (s) => !/JUST_MOVED|lastBack/.test(s)],
         ['発言ごとのときも回す', read, /if \(\(unit === 'sentence' \|\| unit === 'item'\) && ok\) \{/],
         /* ── **かけらを「段落」としてくり返す**(2026-09 利用者の指定)──
              > 集中モード内ではそれらを段落として扱い、繰り返し再生できる
@@ -1247,7 +1352,11 @@ function fakeMp3({
         ['起点を書き換える窓口がある', clips, /fadeOrigin = moveOrigin/],
       ]
       let bad1 = bad
-      for (const [what, text, re] of want3) if (!re.test(text)) ng(`くり返し: ${what}`)
+      for (const [what, text, re] of want3) {
+        // **「無い」ことも見る。** 古い歯止めが書き戻されたら赤くする
+        const good = typeof re === 'function' ? re(text) : re.test(text)
+        if (!good) ng(`くり返し: ${what}`)
+      }
       if (bad === bad1) ok('くり返しは、画面から音まで道が1本もつながっている')
     }
 

@@ -50,8 +50,9 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  REPEAT_UNITS, alignEndOf, charTimesOf, clockScaleOf, indexAtTime, rangeOf,
-  repeatSeek, scaleSpans, seekSentence, sentenceSpansOf, spanForRange,
+  REPEAT_UNITS, alignEndOf, charTimesOf, clockScaleOf, indexAtTime,
+  makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
+  sentenceSpansOf, spanForRange,
 } from './wholeAudio.js'
 import {
   sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
@@ -629,29 +630,32 @@ export function readAloudSequence(parts, {
     return REPEAT_UNITS.includes(u) ? u : 'off'
   }
 
-  /* ── **戻した直後に、また戻さない**(2026-09 実機・利用者の指摘)────
+  /* ── **戻した先に、本当に着いたかを見る**(2026-09 実機・3手め)────
    *
-   *   MP3 の頭出しは**フレームの切れ目に吸い寄せられる**(1枚 26ms)ので、
-   *   頼んだ秒より少し手前に着くことがある。窓の縁を間(ま)のまん中に
-   *   置いたので、そのくらいでは窓から出ない —— けれども
-   *   **端末や回線しだいでは、もっと大きく外すこともある。**
-   *   そのときに何度も戻し続けると、**前の文をくり返し続ける。**
+   *   > 文、段落ごとの繰り返し、依然として直っていません。
    *
-   *   だから「戻した先のすぐそば」にいるあいだは、もう一度戻さない。
-   *   **止まる条件を持たせる**(CLAUDE.md)。 */
-  const JUST_MOVED = 0.25
-  let lastBack = -99
+   *   `el.currentTime = t` は「そこへ行ってくれ」と頼むだけで、
+   *   **着く場所は頼んだ秒とは限らない**(MP3 の頭出し)。
+   *   手前に着くと、前の文のしっぽが鳴り、そこは前の窓の終わりぎわなので
+   *   **また戻される。** これが利用者の言う
+   *   「前の発言の終わりの辺りから始まり、終わり切る前にまた戻る」である。
+   *
+   *   歯止めは前からあったが、**「戻した先のすぐそば」という位置**で
+   *   見ていたので、**ずれがそれより大きいと素通り**していた。
+   *
+   *   算段は `makeRepeatSeeker()`(`wholeAudio.js`)1か所。
+   *   `readAloud.js` は Supabase を引き連れていて**素の node で
+   *   走らせられない**ので、**押してみなくても確かめられる**形に出してある。 */
+  const seeker = makeRepeatSeeker()
   /**
    * くり返しで戻す。**戻したら true**(呼ぶ側はそのひと刻みを何もしない)。
    * @param {number|null} back 戻る先の秒(`repeatSeek()` の返り値)
    * @param {number} sec いまの秒
    */
   const goBack = (back, sec) => {
-    if (back === null) return false
-    if (Math.abs(sec - lastBack) < JUST_MOVED) return false   // 戻した直後
-    if (!seekClip(back)) return false
-    lastBack = back
-    return true
+    const to = seeker.next(back, sec)
+    if (to === null) return false
+    return seekClip(to)
   }
 
   /**
