@@ -500,7 +500,9 @@ export default function TrainerMaterials({
   const runRemake = async (m, { voiceIds, mode, accentName }) => {
     setVoiceAsk(null)
     setVoiceDone(null)
-    setVoiceBusy({ id: m.id, done: 0, total: premiumClipsOf(m).length })
+    /* **数えるのは `remakeSizeOf()` 1か所**(1本にまとめた音声も入る)。
+       画面で数え直すと、**出した数と実際に作る数が食い違う** */
+    setVoiceBusy({ id: m.id, done: 0, total: remakeSizeOf(m).clips })
 
     /* **声を先に決めてから、音声を作る。**
        逆にすると、作った音声の置き場所と教材の声が食い違う。

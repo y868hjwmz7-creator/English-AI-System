@@ -32,8 +32,9 @@
  *   自動では作り直さない — 作り直しはそのまま ElevenLabs への課金になる
  *   (**見えない費用は管理できない**・CLAUDE.md)。
  */
-import { remakeClip } from './audioClips.js'
+import { remakeClip, wholeClip } from './audioClips.js'
 import { castClipSpeakers, voiceFor } from './voiceCast.js'
+import { materialAudioClips } from './audioPlaylist.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { speakChunks } from './speakChunks.js'
 import { PREMIUM, voiceTierFor } from './voiceTier.js'
@@ -118,7 +119,41 @@ export function remakeSizeOf(material) {
   const list = premiumClipsOf(material)
   let chars = 0
   for (const c of list) chars += c.text.length
+  const whole = wholeRemakeOf(material)
+  if (whole) {
+    // **1本ぶんも課金される**(全文をもう一度読ませるため)
+    for (const t of whole.texts) chars += t.length
+    return { clips: list.length + 1, chars }
+  }
   return { clips: list.length, chars }
+}
+
+/**
+ * **1本にまとめた音声の材料**(2026-09 実機・13手め)。作れなければ `null`。
+ *
+ *   > 同じ声で作り直しましたが何も変わりません
+ *
+ * **変わらなくて当然だった。** 作り直していたのは
+ * **発言ごとの MP3 だけ**で、**いま実際に鳴っている「1本にまとめた音声」を
+ * 一度も触っていなかった。**
+ *
+ * 本文の読み上げは「1本にまとめる」に統一されている(利用者の指定)ので、
+ * **聴いている音は、ほぼいつもこちらである。**
+ * つまり利用者は**課金だけして、音は1ミリも変わらない**状態だった。
+ *
+ * **`speakChunks` を通していなかったのと、まったく同じ根**である ——
+ * 「作り直す側が、鳴らす側と違うものを作っていた」。
+ *
+ * 材料の出し方は **`materialAudioClips()` 1か所**(鳴らすときと同じ)。
+ * **数え方を2通り持たない。**
+ *
+ * @returns {{texts: string[], voiceIds: string[]}|null}
+ */
+export function wholeRemakeOf(material) {
+  const list = materialAudioClips(material)
+  // 1本にまとめられるのは、良い段の本文が2つ以上あるときだけ
+  if (list.length < 2 || list.some((c) => c.tier !== PREMIUM)) return null
+  return { texts: list.map((c) => c.text), voiceIds: list.map((c) => c.voiceId) }
 }
 
 /**
@@ -133,14 +168,26 @@ export function remakeSizeOf(material) {
  */
 export async function remakeMaterialClips(material, onProgress = null) {
   const list = premiumClipsOf(material)
+  /* **1本にまとめた音声も作り直す**(2026-09 実機・13手め)。
+     **鳴っているのはこちらである。** 触らないでいたので、
+     利用者は課金だけして音が1ミリも変わらなかった */
+  const whole = wholeRemakeOf(material)
+  const total = list.length + (whole ? 1 : 0)
   let done = 0
   let failed = 0
-  onProgress?.({ done: 0, total: list.length })
+  onProgress?.({ done: 0, total })
   for (const { text, voiceId } of list) {
     const url = await remakeClip(text, voiceId, PREMIUM)
     if (url) done += 1
     else failed += 1
-    onProgress?.({ done: done + failed, total: list.length })
+    onProgress?.({ done: done + failed, total })
   }
-  return { done, failed, total: list.length }
+  if (whole) {
+    // **最後に回す。** ここだけ失敗しても、発言ごとの音は新しくなっている
+    const got = await wholeClip({ ...whole, force: true })
+    if (got) done += 1
+    else failed += 1
+    onProgress?.({ done: done + failed, total })
+  }
+  return { done, failed, total }
 }
