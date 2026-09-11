@@ -25,9 +25,9 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  alignEndOf, charTimesOf, clockScaleOf, indexAtTime, makeRepeatSeeker,
+  alignEndOf, charTimesOf, clockFitOf, clockScaleOf, indexAtTime, makeRepeatSeeker,
   rangeOf, repeatSeek,
-  scaleSpans, seekSentence, sentenceSpansOf, spansOf, wholeMark,
+  scaleSpans, seekSentence, sentenceSpansOf, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
@@ -2323,27 +2323,90 @@ function fakeMp3({
         return w
       }
       const wasAhead = worst(spans)
-      const nowAhead = worst(scaleSpans(spans, clockScaleOf(alignEnd, duration)))
+      const byScale = worst(scaleSpans(spans, clockScaleOf(alignEnd, duration)))
+      const fit = clockFitOf(spans, alignEnd, duration)
+      const bySeam = worst(shiftSeams(spans, fit.per))
       if (wasAhead < 2) {
         ng('この作りでは、そもそも先に進んでいない', `直す前 ${wasAhead} 発言ぶん`)
       }
-      if (nowAhead > 1) {
-        ng('時計を合わせても、まだ先に進む', `直す前 ${wasAhead} / いま ${nowAhead}`)
-      } else {
-        ok(`14発言 … 先に進む量 ${wasAhead} 発言ぶん → ${nowAhead} 発言ぶん`)
+      if (byScale > 1) {
+        ng('時計を合わせても、まだ先に進む', `直す前 ${wasAhead} / いま ${byScale}`)
       }
+      /* ── **継ぎ目に配る**(2026-09 実機・14手め)──────────────────
+       *   控えに間(ま)が入っていないのだから、余った時間は
+       *   **継ぎ目にある。** そこへ配れば、ずれは残らない。 */
+      if (fit.how !== 'seam') {
+        ng('**継ぎ目に間の無い控えなのに、継ぎ目へ配っていない**', `how=${fit.how}`)
+      }
+      if (bySeam !== 0) {
+        ng('継ぎ目に配っても、まだ先に進む', `${bySeam} 発言ぶん`)
+      } else {
+        ok(`14発言 … 先に進む量 ${wasAhead} → 比で ${byScale} → 継ぎ目で ${bySeam}`)
+      }
+      /* **発言の長さがばらばらだと、比では合わない。** そこが本題である */
+      let worstSec = 0
+      spans.forEach((s, i) => {
+        const d = Math.abs((s.start * clockScaleOf(alignEnd, duration)) - trueStart[i])
+        if (d > worstSec) worstSec = d
+      })
+      let seamSec = 0
+      shiftSeams(spans, fit.per).forEach((s, i) => {
+        const d = Math.abs(s.start - trueStart[i])
+        if (d > seamSec) seamSec = d
+      })
+      if (seamSec > 0.01) ng('継ぎ目に配っても、発言の頭がずれる', `${seamSec.toFixed(3)} 秒`)
+      else ok(`発言の頭のずれ … 比で ${worstSec.toFixed(3)} 秒 → 継ぎ目で ${seamSec.toFixed(3)} 秒`)
     }
+  }
+
+  // ── ㋑2 **控えが間を数えているときは、これまでどおり比で配る** ──────
+  {
+    /* **どちらかに決め打ちしない。** 継ぎ目に間が入っている控えでは、
+       余った時間は継ぎ目のものではない(終わりの余韻か、時計そのもの)。
+       そこへ配ると、**今まで合っていたものまで壊す。** */
+    const wide = [
+      { start: 0, end: 2 }, { start: 2.4, end: 4 }, { start: 4.5, end: 6 },
+    ]
+    const got = clockFitOf(wide, 6, 6.6)
+    if (got.how !== 'scale') ng('**間の入っている控えまで、継ぎ目に配っている**', `how=${got.how}`)
+    else ok('継ぎ目に間があれば、これまでどおり比で配る')
+    /* **そろっていれば、1ミリ秒も動かさない** */
+    if (clockFitOf(wide, 6, 6.01).how !== 'same') ng('そろっているのに配り直している')
+    /* **1人が話しきる(継ぎ目が無い)ときは、配る先が無い** */
+    if (clockFitOf([{ start: 0, end: 60 }], 60, 61.3).how !== 'scale') {
+      ng('継ぎ目が無いのに、継ぎ目に配ろうとしている')
+    }
+    /* **ずらすだけ。伸ばさない** */
+    const one = [{ start: 1, end: 2 }, { start: 2, end: 3 }]
+    const moved = shiftSeams(one, 0.5)
+    if (moved[0].start !== 1 || moved[0].end !== 2) ng('1つめの区間まで動かしている')
+    if (moved[1].start !== 2.5 || moved[1].end !== 3.5) ng('2つめの区間のずらし方が違う')
+    if ((moved[1].end - moved[1].start) !== (one[1].end - one[1].start)) {
+      ng('**継ぎ目に配るときに、話している時間まで伸ばしている**')
+    }
+    if (shiftSeams(one, 0) !== one) ng('配るものが無いのに、区間を作り直している')
+    ok('継ぎ目に配るのは、ずらすだけ(伸ばさない)')
   }
 
   // ── ㋒ 画面が本当に呼んでいるか。**「名前が出てくるか」で見ない** ──
   {
     const src = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
-    if (!/clockScaleOf\(alignEndOf\(got\.alignment\), dur\)/.test(src)) {
+    if (!/clockFitOf\(spans, alignEndOf\(got\.alignment\), dur\)/.test(src)) {
       ng('1本の道が、時計を突き合わせていない')
     }
-    if (!/spans = scaleSpans\(spans, k\)/.test(src) || !/sent = scaleSpans\(sent, k\)/.test(src)) {
+    if (!/spans = scaleSpans\(spans, fit\.k\)/.test(src)
+      || !/sent = scaleSpans\(sent, fit\.k\)/.test(src)) {
       ng('区間を伸ばしていない(片方だけになっている)')
+    }
+    /* **継ぎ目に配る道も、両方に効かせる。** 片方だけだと、
+       光る文と ◀ ▶ の飛び先が食い違う */
+    if (!/spans = shiftSeams\(spans, fit\.per\)/.test(src)
+      || !/sent = shiftSeams\(sent, fit\.per\)/.test(src)) {
+      ng('**継ぎ目に配る道が、画面につながっていない**', '片方だけになっている')
+    }
+    if (!/fitTime\(at, fit, raw\)/.test(src)) {
+      ng('続きから始めたときの飛び先を、配り方に合わせていない')
     }
     /* **番号は段落で知らせる**(かけらの番号をそのまま渡さない)。
        分けた段落があると、かけらの番号は先へ行くほど開く */

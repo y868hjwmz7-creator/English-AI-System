@@ -387,11 +387,19 @@ export function noteFellBack(where) {
  *
  * **これは調べるための表示である。原因が分かったら外す。**
  */
-export function noteWholeClock({ align, dur, k, sents }) {
+export function noteWholeClock({ align, dur, fit, sents }) {
   const n = (v) => (Number.isFinite(v) ? v.toFixed(2) : '—')
   const heads = (sents ?? []).slice(0, 6).map((s) => n(s.start)).join(' / ')
+  /* **継ぎ目の間(ま)を出す。** ここが決め手である ——
+     ほとんど 0 なら「控えが間を数えていない」、0.1 秒以上あるなら
+     「数えている」。どちらかで、余った時間の行き先が変わる */
+  const gaps = (fit?.gaps ?? []).slice(0, 6).map((g) => n(g)).join(' ')
+  const how = { same: 'そのまま', scale: '比で配る', seam: '継ぎ目に配る' }[fit?.how] ?? '—'
   setDetail(`[調査中] 1本で鳴っています。控え ${n(align)} 秒 / 音声 ${n(dur)} 秒`
-    + ` / 倍率 ${Number.isFinite(k) ? k.toFixed(4) : '—'}`
+    + ` / ${how}`
+    + (fit?.how === 'seam' ? ` ${n(fit.per)} 秒ずつ` : '')
+    + (fit?.how === 'scale' ? ` ${Number.isFinite(fit.k) ? fit.k.toFixed(4) : '—'} 倍` : '')
+    + `${gaps ? ` / 継ぎ目 ${gaps}` : ''}`
     + `${heads ? ` / 文の頭 ${heads}` : ''}`)
 }
 

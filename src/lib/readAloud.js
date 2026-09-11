@@ -51,9 +51,9 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  REPEAT_UNITS, alignEndOf, charTimesOf, clockScaleOf, indexAtTime,
-  makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
-  sentenceSpansOf, spanForRange,
+  REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime,
+  indexAtTime, makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
+  sentenceSpansOf, shiftSeams, spanForRange,
 } from './wholeAudio.js'
 import {
   sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
@@ -844,7 +844,10 @@ export function readAloudSequence(parts, {
          *   **区間は同じ配列のまま**である(1ミリ秒も動かない)。 */
         if (!clockDone) {
           clockDone = true
-          const k = clockScaleOf(alignEndOf(got.alignment), dur)
+          /* **余った時間を、どこへ配るか**(2026-09 実機・14手め)。
+             比で配ると、発言の長さがばらばらなときに数百ミリ秒ずれる。
+             継ぎ目に間(ま)が入っていない控えなら、**継ぎ目に配る** */
+          const fit = clockFitOf(spans, alignEndOf(got.alignment), dur)
           /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
            *
            *   > listen を押しても特に何も表示されず再生が始まり、
@@ -860,15 +863,23 @@ export function readAloudSequence(parts, {
            *   **推測を重ねてはまた外す**のを、もう4回くり返している。
            *
            *   **これは調べるための表示である。** 原因が分かったら外す。 */
-          noteWholeClock({ align: alignEndOf(got.alignment), dur, k, sents: sent })
-          if (k !== 1) {
-            spans = scaleSpans(spans, k)
-            sent = scaleSpans(sent, k)
+          if (fit.how !== 'same') {
+            const raw = spans
+            const want = fitTime(at, fit, raw)
+            if (fit.how === 'scale') {
+              spans = scaleSpans(spans, fit.k)
+              sent = scaleSpans(sent, fit.k)
+            } else {
+              spans = shiftSeams(spans, fit.per)
+              sent = shiftSeams(sent, fit.per)
+            }
             holdCursor(sent, null)
+            noteWholeClock({ align: alignEndOf(got.alignment), dur, fit, sents: sent })
             /* 続きから始めたときは、飛んだ先も控えの時計のままだった。
                **鳴り出した直後の1回だけ**、合わせ直す */
-            const want = at * k
             if (Math.abs(want - sec) > 0.15 && seekClip(want)) return
+          } else {
+            noteWholeClock({ align: alignEndOf(got.alignment), dur, fit, sents: sent })
           }
         }
         /* ── **くり返し**(2026-09 利用者の指定)──────────────────

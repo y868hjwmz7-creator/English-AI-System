@@ -419,6 +419,112 @@ export function scaleSpans(spans, scale) {
 }
 
 /**
+ * 継ぎ目に、これだけの間(ま)も無ければ「控えに間が入っていない」。
+ *
+ * 人が話を交代するときの無音は、どんなに詰まっていても 0.1 秒は空く。
+ * 控えがそれより短い間しか言っていないなら、**向こうが間を数えていない。**
+ */
+export const SEAM_TIGHT = 0.08
+
+/** 並びのまん中の値(外れ値に引きずられない) */
+function median(list) {
+  const a = list.filter((v) => Number.isFinite(v)).sort((x, y) => x - y)
+  if (!a.length) return null
+  const h = a.length >> 1
+  return a.length % 2 ? a[h] : (a[h - 1] + a[h]) / 2
+}
+
+/**
+ * **余った時間を、どこへ配るか**(2026-09 実機・14手め)。
+ *
+ * ── なぜ要るのか ───────────────────────────────────────────────
+ *
+ *   利用者の画面に出た数字は、こうだった。
+ *
+ *     控え 88.40 秒 / 音声 89.73 秒 / 倍率 1.0150
+ *
+ *   **倍率が 1 ではない。** つまり 8手めの「遊びを秒で見る」は届いており、
+ *   時計合わせ(`clockScaleOf`)は**効いている。**
+ *   それでも直らないのだから、残っているのは**配り方**である。
+ *
+ *   `scaleSpans` は、余った 1.33 秒を**時間に比例して**配る。
+ *   ところが Text to Dialogue の音声は、**発言ごとに作ったものを
+ *   つないだもの**で、数え落とされた時間は
+ *   **継ぎ目(発言と発言のあいだ)に溜まっている。**
+ *
+ *     発言が同じ長さなら … 時間に比例 ≒ 継ぎ目の数に比例 → **たまたま合う**
+ *     発言の長さがばらばらなら … **数百ミリ秒ずれる**
+ *
+ *   だから「長い発言のあとの文」だけが前の音を引きずる。
+ *   利用者の言う「**ダメな文と大丈夫な文がある**」と、そのまま合う。
+ *
+ * ── **推測で決めない。控えに訊く**(CLAUDE.md)───────────────────
+ *
+ *   余った時間が「継ぎ目にある」のか「**終わりの余韻**にある」のかは、
+ *   こちらからは聴けない。**けれども控えが知っている。**
+ *
+ *     継ぎ目の間(ま)が **ほとんど 0** … 向こうは間を数えていない
+ *                                      → **余りは継ぎ目にある**
+ *     継ぎ目の間が **0.1 秒以上ある**  … 向こうは間を数えている
+ *                                      → 余りは継ぎ目ではない
+ *
+ *   前者だけを新しく配り直し、後者は**これまでどおり**(比で配る)。
+ *   **効く場所を、測って決めた1つに絞る。**
+ *
+ * @param {Array<{start:number,end:number}>} spans 項目ごとの区間(控えの時計)
+ * @param {number} alignEnd 控えの終わりの秒
+ * @param {number} duration 実際の音声の長さ
+ * @returns {{how:'same'|'scale'|'seam', k:number, per:number, gaps:number[]}}
+ */
+export function clockFitOf(spans, alignEnd, duration) {
+  const k = clockScaleOf(alignEnd, duration)
+  const list = Array.isArray(spans) ? spans : []
+  const gaps = []
+  for (let i = 1; i < list.length; i += 1) {
+    const g = Number(list[i]?.start) - Number(list[i - 1]?.end)
+    if (Number.isFinite(g)) gaps.push(g)
+  }
+  if (k === 1) return { how: 'same', k: 1, per: 0, gaps }
+  const extra = Number(duration) - Number(alignEnd)
+  // 継ぎ目が無い(1人が話しきる)ときは、配る先そのものが無い
+  if (!(extra > 0) || gaps.length < 1) return { how: 'scale', k, per: 0, gaps }
+  const mid = median(gaps)
+  if (!(mid !== null && mid < SEAM_TIGHT)) return { how: 'scale', k, per: 0, gaps }
+  /* **終わりのぶんを取り分けない。** 取り分けると1つぶんだけ配りが減り、
+     こちらの言う「文の頭」が**本当より手前**になる。
+     すると戻したときに**前の文の最後が入る** —— まさに直したい症状である。
+     余らせるなら、**遅い側に外す**ほうがましである(頭が数十ミリ秒
+     欠けるだけで、`SEEK_LEAD` がそのぶんを見ている)。 */
+  return { how: 'seam', k: 1, per: extra / gaps.length, gaps }
+}
+
+/**
+ * 区間を、**継ぎ目のぶんだけうしろへずらす。**
+ *
+ * **伸ばさない。** 話している時間そのものは控えのとおりで、
+ * ずれているのは「その発言がいつ始まるか」だけである。
+ *
+ * 何番目の項目かは `item`(文の区間)、無ければ並び順(項目の区間)。
+ */
+export function shiftSeams(list, per) {
+  const p = Number(per)
+  if (!Array.isArray(list) || !Number.isFinite(p) || p <= 0) return list
+  return list.map((s, i) => {
+    const item = Number.isFinite(s.item) ? s.item : i
+    const d = item * p
+    return { ...s, start: s.start + d, end: s.end + d }
+  })
+}
+
+/** 控えの秒 → 音声の秒(続きから始めたときの飛び先を合わせ直す) */
+export function fitTime(sec, fit, spans) {
+  const t = Number(sec) || 0
+  if (!fit || fit.how === 'same') return t
+  if (fit.how === 'scale') return t * fit.k
+  return t + Math.max(0, indexAtTime(spans, t)) * fit.per
+}
+
+/**
  * いま何番目を鳴らしているか(秒 → 番号)。
  *
  * **間(ま)の上に来たら、次の項目とみなす。** 発言と発言のあいだは
