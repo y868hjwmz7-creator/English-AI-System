@@ -928,11 +928,15 @@ function fakeMp3({
     const o = { spans: itemsG, sentences: sentG, duration: dur }
     /* 間(ま)のまん中 = 折り返しの縁。**声の端ではない** */
     const mid = (a, b) => (a + b) / 2
-    /* 縁のほんの手前(10ms ごとに見ているので、ここで必ず捕まる) */
+    /* **縁を、ほんの少し越えたところ**(2026-09 実機・7手め)。
+       縁は**声の切れ目**なので、**越えたということは最後まで鳴らした**
+       ということである。手前で折り返すと、その文の最後がそのぶん切れる */
+    const past = (x) => x + 0.01
+    /* 縁のほんの手前。**ここではまだ折り返さない**(声の途中だから) */
     const just = (x) => x - 0.02
 
     // ① しない … いつまでも戻らない
-    if (repeatSeek('off', just(mid(sentG[1].end, sentG[2].start)), o) !== null) {
+    if (repeatSeek('off', past(mid(sentG[1].end, sentG[2].start)), o) !== null) {
       ng('「しない」なのに戻している')
     } else ok('「しない」では、どこまで来ても戻らない')
 
@@ -950,11 +954,16 @@ function fakeMp3({
        外れても、着くのは**間の中**である */
     const back1 = mid(sentG[0].end, sentG[1].start)
     const fore1 = mid(sentG[1].end, sentG[2].start)
-    const land1 = repeatSeek('sentence', just(fore1), o)
+    const land1 = repeatSeek('sentence', past(fore1), o)
     if (repeatSeek('sentence', sentG[1].start + 0.5, o) !== null) {
       ng('文の途中なのに戻している')
     } else if (repeatSeek('sentence', sentG[1].end, o) !== null) {
       ng('**声が切れた瞬間に戻している**(言い終わる前に折り返す)')
+    } else if (repeatSeek('sentence', just(fore1), o) !== null) {
+      /* **縁の手前では、まだ折り返さない**(2026-09 実機・7手め)。
+         ここで折り返すと、その文の最後がそのぶん切れ、
+         **戻った先で「前の文の最後」として鳴る** */
+      ng('**縁の手前で折り返している**(文の最後が切れる)')
     } else if (!(land1 > back1 + 1e-9)) {
       /* **`SEEK_LEAD` を書き写して突き合わせない。** それでは
          値を変えたときに期待値も一緒に動き、**仕組みを壊しても素通りする。**
@@ -971,8 +980,6 @@ function fakeMp3({
        すると「終わりに来た」と読まれて**前の文へ戻り続ける** */
     if (repeatSeek('sentence', land1, o) !== null) {
       ng('戻した先で、すぐまた戻している(前の文をくり返してしまう)')
-    } else if (repeatSeek('sentence', back1, o) !== null) {
-      ng('縁(間のまん中)で、すぐまた戻している')
     } else ok('戻した先では、そのまま鳴り続ける')
 
     /* **間(ま)の無い並びでは、1ミリ秒も変わらない**(2026-09 実機・4手め)。
@@ -980,13 +987,13 @@ function fakeMp3({
        声の端どうしがくっついている。そこで頭へ寄せると、
        **今度は前の文へ食い込む。** `landEdge` は縁より手前へは行かない */
     const flat = [{ start: 0, end: 1 }, { start: 1, end: 2 }, { start: 2, end: 3 }]
-    if (repeatSeek('sentence', 2.99, { sentences: flat, duration: 3 }) !== 2) {
+    if (repeatSeek('sentence', past(2), { sentences: flat, duration: 3 }) !== 1) {
       ng('間の無い並びで、戻る先が動いている(前の文へ食い込む)')
     } else ok('間の無い並びでは、これまでどおり文の頭へ戻る')
 
     // ③ 段落 … その段落の終わりまで来たら、その段落の頭へ
     const fore2 = mid(itemsG[0].end, itemsG[1].start)
-    if (repeatSeek('item', just(fore2), o) !== itemsG[0].start) {
+    if (repeatSeek('item', past(fore2), o) !== itemsG[0].start) {
       ng('段落の終わりで、その段落の頭に戻らない')
     } else if (repeatSeek('item', sentG[0].end, o) !== null) {
       ng('段落の途中(1文目の終わり)で戻している')
@@ -1044,12 +1051,12 @@ function fakeMp3({
     /* **文の区間が出せないときは、段落で回す。**
        1本にできなかった教材では文の区間が無い。
        **何も起きないより、近い単位で回すほうがよい**(行き止まりを作らない) */
-    if (repeatSeek('sentence', just(fore2), { spans: itemsG }) !== itemsG[0].start) {
+    if (repeatSeek('sentence', past(fore2), { spans: itemsG }) !== itemsG[0].start) {
       ng('文の区間が無いときに、段落で回していない')
     } else ok('文の区間が無ければ、段落で回す')
 
     // **知らない単位は「しない」に落とす**(渡し間違いで鳴り続けない)
-    if (repeatSeek('paragraph', just(fore1), o) !== null) {
+    if (repeatSeek('paragraph', past(fore1), o) !== null) {
       ng('知らない単位で回してしまう')
     } else if (repeatSeek('all', 0, { spans: null }) !== null) {
       ng('区間が無いのに回そうとしている')
@@ -1100,7 +1107,7 @@ function fakeMp3({
       /* **どれだけ外しても、同じことが言えるか。**
          1つの値だけで見ると、そこだけ当たる形に書き換えても緑のままになる */
       for (const slip of [0.02, 0.05, 0.12, 0.3]) {
-        const r = play(slip, 'sentence', just(fore1))
+        const r = play(slip, 'sentence', past(fore1))
         // ① 前の文へ戻っていないか。**戻る先はどれも、この文のものだけ**
         const strayed = r.backs.filter((b) => b < back1 - 0.01)
         /* ② **前の文の声が、1刻みも鳴らないこと**(2026-09 実機・4手め)。
@@ -1139,7 +1146,7 @@ function fakeMp3({
         const foreN = mid(sentN[1].end, sentN[2].start)
         /* 0.06 秒のずれ。**間(0.1 秒)の半分より大きく、間より小さい** ——
            まん中を頼んでいたら前の声に入り、頭ぎりぎりなら入らない */
-        const r = play(0.06, 'sentence', just(foreN), { opts: oN, end: durN })
+        const r = play(0.06, 'sentence', past(foreN), { opts: oN, end: durN })
         const bled = r.heard.filter((x) => x < sentN[0].end)
         if (bled.length) {
           ng('間の短い音声で、前の文の最後の音が鳴る', `${bled.length} 刻み`)
@@ -1152,7 +1159,7 @@ function fakeMp3({
            外したことが分かるのは着いたあとだからである。
            **まずいのは、それが続くこと。** 直さないでいると、
            前の文のしっぽを鳴らしたまま次の折り返しまで進む */
-        const r2 = play(0.1, 'sentence', just(foreN), { opts: oN, end: durN })
+        const r2 = play(0.1, 'sentence', past(foreN), { opts: oN, end: durN })
         const bled2 = r2.heard.filter((x) => x < sentN[0].end)
         const rounds = Math.max(1, r2.backs.length)
         if (bled2.length > rounds) {
@@ -1161,7 +1168,7 @@ function fakeMp3({
       }
 
       /* ④ **ずれが無いときは、1ミリ秒も変わらない** */
-      const clean = play(0, 'sentence', just(fore1))
+      const clean = play(0, 'sentence', past(fore1))
       if (clean.backs.some((b) => Math.abs(b - land1) > 1e-9)) {
         ng('ずれが無いのに、戻る先が動いている(直さなくてよいものを直している)')
       } else ok('頭出しが外れなければ、戻る先はこれまでどおり')
@@ -1185,7 +1192,7 @@ function fakeMp3({
       /* ⑥ **遠くへ送られたら、歯止めは古い**(◀ ▶ で1文戻したとき)。
          そのまま待たせると、その1周が黙って飛ばされる */
       const s3 = makeRepeatSeeker()
-      if (s3.next(land1, just(fore1)) === null) {
+      if (s3.next(land1, past(fore1)) === null) {
         ng('1回目から戻せていない')
       } else if (s3.next(null, land1) !== null) {
         ng('戻した直後に、また何かしている')
@@ -1750,7 +1757,10 @@ function fakeMp3({
   /* くり返しは**文だけ**をここで受け持つ。段落・全文は周回のほうが
      受け持つので、`repeatSeek` に文の区間だけ渡しても動いてはいけない */
   {
-    const end = secs[1].end - 0.01
+    /* **縁を越えてから折り返す**(2026-09 実機・7手め)。
+       この並びは割合の見積もりなので**間(ま)が無い** ——
+       縁＝声の切れ目で、手前で折り返すとその文の最後が切れる */
+    const end = secs[1].end + 0.01
     if (repeatSeek('sentence', end, { sentences: secs }) !== secs[1].start) {
       ng('文の終わりで、その文の頭へ戻らない')
     } else if (repeatSeek('item', end, { sentences: secs }) !== null

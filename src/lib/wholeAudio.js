@@ -489,8 +489,31 @@ export function seekSentence(spans, sec, delta, bound = null) {
 export const REPEAT_UNITS = ['off', 'sentence', 'item', 'all']
 
 /**
- * 折り返しの手前。**10ms ごとに見ている**ので、これだけあれば取りこぼさない
+ * **いちばん最後の区間だけ**、この手前で折り返す(秒)。
+ *
+ * 音声の終わりまで待つと、**`ended` に先を越されて折り返せない。**
+ * 10ms ごとに見ているので、これだけあれば取りこぼさない
  * (`audioClips.js` の `FADE_STEP`)。速さ 2.5 倍でも 25ms しか進まない。
+ *
+ * ── **途中の区間では、1ミリ秒も先取りしない**(2026-09 実機・7手め)──
+ *
+ *   > 文が終わる前に繰り返しに入り、
+ *   > **速かった分だけ**前の文の最後が入ります。不愉快です
+ *
+ *   **これを全部の区間に掛けていた。** すると
+ *
+ *     ・折り返しが 40ms 早い → **文の最後 40ms が切れる**
+ *     ・戻る先も同じだけ早い → **その 40ms が、前の文の最後として鳴る**
+ *
+ *   利用者の言う「**速かった分だけ**」が、まさにこれである。
+ *
+ *   **間(ま)のある文では起きない。** あちらの折り返しは
+ *   「間のまん中」= 声の終わりより**後ろ**なので、40ms 引いてもまだ後ろ。
+ *   **間の無い文だけが、声の途中で折り返していた** ——
+ *   「ダメな文と大丈夫な文がある」の、もう半分の答えである。
+ *
+ *   **先取りは要らない。** 10ms ごとに見ているので、
+ *   **超えた最初のひと刻みで必ず捕まる。**
  */
 const REPEAT_EPS = 0.04
 
@@ -643,14 +666,48 @@ function windowAt(list, t) {
   return 0
 }
 
-/** その並びの中で、いまいる窓。`land` は**戻すときに頼む秒** */
-function windowOf(list, t, duration) {
+/**
+ * **いま「鳴らし終えた窓」があれば、その番号。** 無ければ `-1`。
+ *
+ * ── なぜ「いまの窓の終わりに来たか」で見ないのか(2026-09 実機・7手め)──
+ *
+ *   > 文が終わる前に繰り返しに入り、
+ *   > **速かった分だけ**前の文の最後が入ります。不愉快です
+ *
+ *   窓の縁は**声の切れ目**である。そして `windowAt()` は
+ *   **縁に達した瞬間、もう次の窓を指す。** つまり
+ *
+ *     「いまの窓の終わりに来たか」で見るかぎり、
+ *     **必ず縁より手前で折り返すことになる。**
+ *
+ *   手前で折り返せば、**その文の最後がそのぶん切れ**、
+ *   戻る先も同じだけ手前になって、**前の文の最後として鳴る。**
+ *   利用者の言う「**速かった分だけ**」が、まさにこれである。
+ *
+ *   **間(ま)のある文では起きない。** あちらの縁は「間のまん中」＝
+ *   声の終わりより**後ろ**なので、少し手前でもまだ声は終わっている。
+ *   **間の無い文だけが、声の途中で折り返していた** ——
+ *   「ダメな文と大丈夫な文がある」の、もう半分の答えである。
+ *
+ * ── 直し ──────────────────────────────────────────────────────
+ *
+ *   **縁を越えてから、手前の窓へ戻す。**
+ *   越えたということは、その窓を**最後まで鳴らした**ということである。
+ *
+ *   代わりに**次の窓の頭が、ひと刻みぶん(10ms・速さ 2.5 倍でも 25ms)
+ *   鳴る。** 前の文の最後が切れるより、こちらのほうがずっとよい ——
+ *   くり返しの継ぎ目としては、むしろ自然である。
+ *
+ *   **いちばん最後の窓だけは、次の縁が無い。** あそこは音声の終わりで
+ *   見るしかなく、`ended` に先を越されるので**そこだけ先取りする。**
+ */
+function doneWindow(list, t, duration) {
   const i = windowAt(list, t)
-  return {
-    start: backEdge(list, i),
-    end: frontEdge(list, i, duration),
-    land: landEdge(list, i),
-  }
+  // ① 手前の窓の縁を、いま越えたところ = その窓を最後まで鳴らした
+  if (i > 0 && t - backEdge(list, i) <= REPEAT_EPS) return i - 1
+  // ② いちばん最後は、次の縁が無いので音声の終わりで見る
+  if (i === list.length - 1 && t >= frontEdge(list, i, duration) - REPEAT_EPS) return i
+  return -1
 }
 
 /**
@@ -682,14 +739,23 @@ export function repeatSeek(unit, sec, {
   const items = Array.isArray(spans) && spans.length ? spans : null
   const sents = Array.isArray(sentences) && sentences.length ? sentences : null
 
+  /* **並びから回すときは、「鳴らし終えた窓」を探す**(2026-09 実機・7手め)。
+     「いまの窓の終わりに来たか」で見ると、**必ず声の途中で折り返す**
+     (`doneWindow()` の節)。越えてから、手前の窓へ戻す */
+  const done = (list) => {
+    const i = doneWindow(list, t, duration)
+    return i < 0 ? null : landEdge(list, i)
+  }
+
   let win = null
   if (unit === 'sentence') {
-    if (sents) win = windowOf(sents, t, duration)
-    else if (items) win = windowOf(items, t, duration)
-  } else if (unit === 'item') {
+    const list = sents || items
+    return list ? done(list) : null
+  }
+  if (unit === 'item') {
     // 集中モードのかけらは、縁まで込みで渡されている
-    if (window) win = window
-    else if (items) win = windowOf(items, t, duration)
+    if (!window) return items ? done(items) : null
+    win = window
   } else if (unit === 'all') {
     // **全文は、いつも頭へ戻す。** 途中から鳴らし始めていても、
     // 「全文をくり返す」と言った以上は本文の頭から回る
@@ -697,6 +763,9 @@ export function repeatSeek(unit, sec, {
       win = { start: Number(items[0].start), end: frontEdge(items, items.length - 1, duration) }
     }
   }
+  /* ここへ来るのは**集中モードのかけら**と**全文**だけ。
+     どちらも「そのひとかたまりの終わり」＝音声の終わりか、かけらの端で、
+     **その先に次の窓が無い。** だから、これまでどおり少し手前で見る */
   if (!win || !Number.isFinite(win.start) || !Number.isFinite(win.end)) return null
   if (t < win.end - REPEAT_EPS) return null
   /* **頼むのは `land`(声の頭ぎりぎり)。** 縁は数えるためのものである。
