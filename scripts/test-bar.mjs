@@ -3942,13 +3942,46 @@ for (const w of [1280, 390, 320]) {
     }
   })
   // ③ 「訳を見る」で**入れ替わる**(並べない)
-  await page.click('.speech-bar .btn--ghost')
+  await page.click('.speech-swap')
   await page.waitForTimeout(150)
   const 訳 = await page.evaluate(() => ({
     英: document.querySelectorAll('.speech-sentences .writing-en').length,
     訳: document.querySelectorAll('.speech-sentences .writing-ja').length,
-    札: document.querySelector('.speech-bar .btn--ghost')?.textContent.trim() ?? '',
+    札: document.querySelector('.speech-swap')?.textContent.trim() ?? '',
   }))
+
+  /* ── **集中モード**(2026-09 利用者の指定「今のままに集中モードだけつけて」)──
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+     開く前に `.focus` があってはいけない(勝手に集中モードで始まらない)。 */
+  const 前 = await page.evaluate(() => document.querySelectorAll('.focus').length)
+  await page.click('.speech-swap')          // **英語に戻してから**開く
+  await page.click('.speech-focus-open')
+  await page.waitForTimeout(200)
+  const 集 = await page.evaluate(() => {
+    const el = document.querySelector('.focus.speechfocus')
+    const rows = [...document.querySelectorAll('.speechfocus .speech-sentences > li')]
+    return {
+      開く: !!el,
+      紙: !!document.querySelector('.speechfocus .focus-paper'),
+      文: rows.length,
+      英: rows[0]?.querySelector('.writing-en')?.textContent.trim() ?? '',
+      聴く: rows.filter((r) => /Listen|Stop/.test(r.textContent)).length,
+      数: document.querySelector('.speechfocus .focus-count')?.textContent.trim() ?? '',
+      速さ: !!document.querySelector('.speechfocus .stepper'),
+      よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }
+  })
+  /* **送れるか。** 1文ずつ出す画面なので、送れないと2文目へ行けない */
+  await page.click('.speechfocus .focus-bar > .btn:last-child')
+  await page.waitForTimeout(150)
+  const 次 = await page.evaluate(() => ({
+    数: document.querySelector('.speechfocus .focus-count')?.textContent.trim() ?? '',
+    英: document.querySelector('.speechfocus .writing-en')?.textContent.trim() ?? '',
+  }))
+  /* **戻る道。** 閉じられないと行き止まりになる */
+  await page.click('.speechfocus .focus-exit')
+  await page.waitForTimeout(150)
+  const 閉 = await page.evaluate(() => document.querySelectorAll('.focus').length)
   await page.close()
 
   const 名 = `スピーチ(${w}px)`
@@ -3976,8 +4009,27 @@ for (const w of [1280, 390, 320]) {
     ng(`${名} … 押せる大きさを割っている`, `${got.小}px`)
   } else if (got.よこ > 0 || got.右 > w) {
     ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+  } else if (前 !== 0) {
+    // **勝手に集中モードで始まらない**(押したときだけ開く)
+    ng(`${名} … 開いた瞬間から集中モードになっている`, String(前))
+  } else if (!集.開く || !集.紙) {
+    ng(`${名} … 集中モードが開かない(黒い地に白い紙)`, `${集.開く} / 紙 ${集.紙}`)
+  } else if (集.文 !== 1) {
+    // **1つずつ出す。** これが集中モードの役目そのものである
+    ng(`${名} … 集中モードで1文だけになっていない`, String(集.文))
+  } else if (集.数 !== '1 / 2 文') {
+    ng(`${名} … 集中モードに「何文めか」が出ていない`, 集.数)
+  } else if (集.聴く !== 1 || !集.速さ) {
+    ng(`${名} … 集中モードに Listen / 速さが無い`, `${集.聴く} / 速さ ${集.速さ}`)
+  } else if (集.よこ > 0) {
+    ng(`${名} … 集中モードが横にはみ出している`, `${集.よこ}px`)
+  } else if (次.数 !== '2 / 2 文' || 次.英 === 集.英) {
+    // **送ると、本当に別の文が出る**(数字だけ動いても意味がない)
+    ng(`${名} … 集中モードで次の文へ送れない`, `${次.数} / 同じ文 ${次.英 === 集.英}`)
+  } else if (閉 !== 0) {
+    ng(`${名} … 集中モードから戻れない(行き止まり)`, String(閉))
   } else {
-    ok(`${名} … 1文ずつ聴けて、訳は入れ替わり、はみ出しも無い`)
+    ok(`${名} … 1文ずつ聴けて、訳は入れ替わり、集中モードも1文ずつ`)
   }
 }
 
@@ -3993,10 +4045,12 @@ for (const w of [1280, 390, 320]) {
     new URL('../src/components/TrainerLearners.jsx', import.meta.url), 'utf8'))
   const wb = noC(readFileSync(
     new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8'))
-  if (!/<SpeechBoard \/>/.test(pron)) {
-    ng('スピーチ … 「スピーチ練習」の画面に置かれていない')
-  } else if (!/<SpeechBoard learnerId=\{l\.id\} learnerName=\{l\.display_name\} \/>/.test(learners)) {
-    ng('スピーチ … ゲストのページに置かれていない(トレーナーが登録できない)')
+  if (!/<SpeechBoard level=\{me\?\.cefr/.test(pron)) {
+    /* **レベルはゲストのものを使う**(2026-09 利用者の指定)。
+       渡さなくなると、**画面は普通に出るのに B1 で添削される**ので気づけない */
+    ng('スピーチ … 「スピーチ練習」の画面に置かれていない / レベルを渡していない')
+  } else if (!/<SpeechBoard learnerId=\{l\.id\} learnerName=\{l\.display_name\}\s+level=\{l\.cefr/.test(learners)) {
+    ng('スピーチ … ゲストのページに置かれていない / そのゲストのレベルを渡していない')
   } else if (!/<option value="speech">スピーチ<\/option>/.test(learners)) {
     ng('スピーチ … ゲストのページの切り替えに出ていない')
   } else if (!/onPicked=\{onPickWords\}/.test(wb) || !/<SpeechWordsPick\s/.test(wb)) {

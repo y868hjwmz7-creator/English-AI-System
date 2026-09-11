@@ -1139,8 +1139,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 {/* **スピーチの原稿と、その添削**(0054)。
                     ゲストの「スピーチ練習」と**まったく同じ部品**である。
                     ちがうのは `learnerId` を渡すかどうかだけ */}
+                {/* **添削も語の意味も、そのゲストのレベルで頼む**
+                    (2026-09 利用者の指定)。落とし先は `speechLevelOf()` */}
                 {detailTab === 'speech' && (
-                  <SpeechBoard learnerId={l.id} learnerName={l.display_name} />
+                  <SpeechBoard learnerId={l.id} learnerName={l.display_name}
+                               level={l.cefr ?? null} />
                 )}
 
                 {detailTab === 'files' && (

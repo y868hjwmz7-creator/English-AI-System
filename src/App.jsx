@@ -865,7 +865,7 @@ export default function App() {
             ) : view === 'qr' ? (
               <QrReview />
             ) : view === 'pronunciation' ? (
-              <PronunciationPractice />
+              <PronunciationPractice me={profile} />
             ) : view === 'bgm' ? (
               <BgmLibrary userId={profile?.id ?? null} />
             ) : (

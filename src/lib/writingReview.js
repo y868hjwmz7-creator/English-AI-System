@@ -188,14 +188,35 @@ export function seenSentenceFor(review, en) {
 export const phraseKind = (en) =>
   (String(en ?? '').trim().includes(' ') ? 'phrase' : 'word')
 
-/* ── 選んだ調子を覚える(一度決める設定は覚える・CLAUDE.md)── */
+/* ── 選んだ調子を覚える(一度決める設定は覚える・CLAUDE.md)──
+ *
+ * 【場面ごとに別に覚える】(2026-09 利用者の指定・スピーチ)
+ *
+ *   ・**ディスカッションの答え**(`WritingAnswer`)… 口に出して話す練習。
+ *     既定は「カジュアル」
+ *   ・**スピーチの原稿**(`SpeechBoard`)… 全社集会・学会・乾杯など、
+ *     たいていは**もっと改まった場**である
+ *
+ *   同じ鍵で覚えると、**片方を直すともう片方まで変わる。**
+ *   `eas.radioGap` / `eas.qrRadioGap`(聞き流しの間)を場面ごとに
+ *   分けてあるのと、まったく同じ考え方である。
+ *
+ *   **読み書きは `toneStore()` 1か所。** 鍵の名前を画面に書かない ——
+ *   書くと、鍵を直したときに片方だけ古くなる。
+ */
 
-const TONE_KEY = 'eas.writingTone'
-
-export function loadWritingTone() {
-  try { return localStorage.getItem(TONE_KEY) || DEFAULT_TONE } catch { return DEFAULT_TONE }
+const TONE_KEYS = {
+  writing: 'eas.writingTone',
+  speech: 'eas.speechTone',
 }
 
-export function saveWritingTone(id) {
-  try { localStorage.setItem(TONE_KEY, id) } catch { /* 使えなくても困らない */ }
+/** 知らない場面は、**ディスカッションの鍵に落とす**(行き止まりを作らない) */
+const toneKeyOf = (where) => TONE_KEYS[where] ?? TONE_KEYS.writing
+
+export function loadWritingTone(where = 'writing') {
+  try { return localStorage.getItem(toneKeyOf(where)) || DEFAULT_TONE } catch { return DEFAULT_TONE }
+}
+
+export function saveWritingTone(id, where = 'writing') {
+  try { localStorage.setItem(toneKeyOf(where), id) } catch { /* 使えなくても困らない */ }
 }

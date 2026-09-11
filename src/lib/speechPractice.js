@@ -35,6 +35,7 @@
  *   (`playMark.js` / `writingReview.js` と同じ考え方)。
  *   Supabase を触るものは `speeches.js` の側にある。
  */
+import { cefrIndex } from '../data/cefr.js'
 import { reviewText } from './writingReview.js'
 
 /**
@@ -96,6 +97,18 @@ export const isReviewed = (speech) =>
   Boolean((speech?.review?.sentences ?? []).some((s) => String(s?.en ?? '').trim()))
 
 /**
+ * **画面に出す文であり、音になる文でもある**(2026-09)。
+ *
+ * 英文の無い文は、練習しようがない(読み上げも、語を押すこともできない)。
+ * だから**描くのも、鳴らすのも、区間を数えるのも、この1つの並び**で行う。
+ *
+ * **数え方を2通り持たない**(CLAUDE.md)。描くときの番号と鳴らすときの
+ * 番号が1つでもずれると、**別の文が光り、別の文が鳴る。**
+ */
+export const speechLines = (speech) =>
+  (speech?.review?.sentences ?? []).filter((s) => String(s?.en ?? '').trim())
+
+/**
  * 通しの読み上げに渡す並び(`useBodyAudio` の `parts`)。
  *
  * **1文で1つ。** 添削の窓口が**はじめから文ごとに返している**ので、
@@ -105,9 +118,70 @@ export const isReviewed = (speech) =>
  * 話す人は1人しかいない(`materials.kind = 'speech'` と同じ考え方)。
  */
 export const speechParts = (speech) =>
-  (speech?.review?.sentences ?? [])
-    .map((s) => ({ text: String(s?.en ?? '').trim(), clipVoice: speech?.voice_id || null }))
-    .filter((p) => p.text)
+  speechLines(speech)
+    .map((s) => ({ text: String(s.en).trim(), clipVoice: speech?.voice_id || null }))
+
+/**
+ * **1本にまとめた音声の、どこを鳴らすか**(2026-09 利用者の指定)。
+ *
+ *   > 音声については「1本にまとめる」の仕様に統一しましょう。
+ *   > 「段落ごと」は廃止です
+ *
+ * ── なぜ要るのか ───────────────────────────────────────────────
+ *
+ * 通しの読み上げ(`useBodyAudio` → `readAloudSequence`)は、良い声の段で
+ * 2文以上あれば**もともと1本にまとめて**鳴らしている。ところが
+ * **1文ずつの Listen だけ**が、その文だけの MP3 を別に作っていた ——
+ * つまり**廃止したほうの作り**である。継ぎ目が出るうえ、
+ * 同じ英文の音声代を**二度**払うことになる。
+ *
+ * 本文の段落ごとの Listen を `wholeSliceOf()` で直したのと
+ * **まったく同じ考え方**で、その1本の中の区間を鳴らす。
+ *
+ * ── 断る条件 ───────────────────────────────────────────────────
+ *
+ * ・**2文以上ないと、1本にまとめる意味がない**(`wholeClip` も同じ条件)
+ * ・**声が決まっていなければ `null`。** 1本にするには Voice ID が要る
+ *   (`wholeClip` が名簿から引く)。ここで `null` を返せば、
+ *   呼ぶ側は**これまでどおり1文ずつ鳴らす** —— 音は必ず出る
+ *   (**行き止まりを作らない**・CLAUDE.md)
+ *
+ * @param {object} speech
+ * @param {number} index  `speechLines()` の中での番号。**描くときと同じ番号**
+ * @returns {{texts: string[], voiceIds: string[], index: number}|null}
+ */
+export function speechWholeSlice(speech, index) {
+  const list = speechLines(speech)
+  if (list.length < 2) return null
+  if (!Number.isInteger(index) || index < 0 || index >= list.length) return null
+  const voice = speech?.voice_id || null
+  if (!voice) return null
+  return {
+    texts: list.map((s) => String(s.en).trim()),
+    voiceIds: list.map(() => voice),
+    index,
+  }
+}
+
+/**
+ * **添削と、語の意味を引くときのレベル**(2026-09 利用者の指定)。
+ *
+ *   > ゲストのレベルに合わせる
+ *
+ * 以前は `'B1'` を**画面に直に書いて**いた。すると Pre-Basic の人にも
+ * C2 の人にも**同じ難しさの英語**で直してくることになり、
+ * せっかく `profiles.cefr` を持っている意味がない。
+ *
+ * **名簿(`CEFR_LEVELS`)に無い値は既定に落とす**(行き止まりを作らない)。
+ * まだレベルを判定していないゲスト(`cefr` が null)もいるので、
+ * **そのときは真ん中あたりの B1 で頼む** —— ここが唯一の既定である。
+ */
+export const SPEECH_LEVEL_FALLBACK = 'B1'
+
+export const speechLevelOf = (cefr) => {
+  const id = String(cefr ?? '').trim()
+  return cefrIndex(id) >= 0 ? id : SPEECH_LEVEL_FALLBACK
+}
 
 /** 直した英文を1本につないだもの。**`sentences` からしか作らない** */
 export const speechText = (speech) => reviewText(speech?.review)

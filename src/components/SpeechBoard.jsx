@@ -46,7 +46,7 @@ import { reviewWriting } from '../lib/materials.js'
 import { createSpeech, deleteSpeech, loadSpeeches, saveSpeech, speechesSupported } from '../lib/speeches.js'
 import {
   MAX_SPEECH_CHARS, isBlankDraft, isReviewed, sortSpeeches, speechCostYen,
-  speechTitleOf, tooLongDraft,
+  speechLevelOf, speechTitleOf, tooLongDraft,
 } from '../lib/speechPractice.js'
 import {
   canAskReview, loadWritingTone, normalizeReview, saveWritingTone, toneBrief,
@@ -60,7 +60,26 @@ const PURPOSE = 'narration'
 /** 書いてから送るまでの間合い。**「保存」を押させない**(`LessonNotes` と同じ) */
 const SAVE_AFTER_MS = 1200
 
-export default function SpeechBoard({ learnerId = null, learnerName = '' }) {
+/**
+ * **調子を覚える場面の名前**(2026-09 利用者の指定「スピーチだけ別に覚える」)。
+ *
+ * ディスカッションの答え(`WritingAnswer`)とは**別に覚える。**
+ * あちらは口に出して話す練習で既定は「カジュアル」だが、
+ * スピーチは全社集会・学会・乾杯など、たいてい**もっと改まった場**である。
+ * 同じ鍵で覚えると、**片方を直すともう片方まで変わる。**
+ *
+ * **鍵の名前はここに書かない** —— `writingReview.js` の `TONE_KEYS` が持つ。
+ */
+const TONE_WHERE = 'speech'
+
+/**
+ * @param learnerId  誰のスピーチか。渡さなければ自分のもの
+ * @param learnerName 題に出す名前(ゲストのときだけ)
+ * @param level      **そのゲストのレベル**(`profiles.cefr`・2026-09 利用者の指定)。
+ *   添削も、語の意味も、この段に合わせて頼む。
+ *   **既定の落とし先は `speechLevelOf()` 1か所**(画面で `'B1'` と書かない)
+ */
+export default function SpeechBoard({ learnerId = null, learnerName = '', level = null }) {
   const name = String(learnerName ?? '').trim()
   const honored = /(さん|様|先生)$/.test(name) ? name : `${name} さん`
   const whose = learnerId ? (name ? honored : 'このゲスト') : 'わたし'
@@ -73,7 +92,7 @@ export default function SpeechBoard({ learnerId = null, learnerName = '' }) {
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
   const [askDelete, setAskDelete] = useState(false)
-  const [tone, setTone] = useState(loadWritingTone)
+  const [tone, setTone] = useState(() => loadWritingTone(TONE_WHERE))
   const timer = useRef(null)
 
   /* **添削を走らせられるのはトレーナーと管理者だけ**(2026-09 利用者の指定)。
@@ -188,7 +207,10 @@ export default function SpeechBoard({ learnerId = null, learnerName = '' }) {
       question: 'This is a speech the learner will deliver aloud.',
       questionJa: '声に出して話すスピーチの原稿です。'
         + '聞いて分かる言い方に直してください。',
-      level: 'B1',
+      /* **ゲストのレベルに合わせる**(2026-09 利用者の指定)。
+         ベタ書きにすると、Pre-Basic の人にも C2 の人にも
+         **同じ難しさの英語**で直してくることになる */
+      level: speechLevelOf(level),
     })
     setBusy(false)
     if (e) { setError(e); return }
@@ -351,7 +373,10 @@ export default function SpeechBoard({ learnerId = null, learnerName = '' }) {
               <label className="writing-tone">
                 <span>添削の調子</span>
                 <select value={tone} disabled={busy}
-                        onChange={(e) => { setTone(e.target.value); saveWritingTone(e.target.value) }}>
+                        onChange={(e) => {
+                          setTone(e.target.value)
+                          saveWritingTone(e.target.value, TONE_WHERE)
+                        }}>
                   {WRITING_TONES.map((t) => (
                     <option key={t.id} value={t.id}>{t.label} — {t.hint}</option>
                   ))}
@@ -405,7 +430,7 @@ export default function SpeechBoard({ learnerId = null, learnerName = '' }) {
           (この部品は自分で読み込むので、Supabase の無い骨組みでは
           何も描かれない) */}
       {open && reviewed && (
-        <SpeechPractice speech={open} learnerId={learnerId} />
+        <SpeechPractice speech={open} learnerId={learnerId} level={level} />
       )}
     </div>
   )

@@ -53,7 +53,13 @@ const PRON_TAGS = new Set(weaknessTags
   .filter((t) => t.category === 'pronunciation').map((t) => t.id))
 const isPronunciationTag = (id) => PRON_TAGS.has(id)
 
-export default function PronunciationPractice() {
+/**
+ * @param me  いま開いている人のプロフィール(`App.jsx` が読んだもの)。
+ *   **レベル(`cefr`)だけを使う** —— スピーチの添削を、
+ *   その人の段に合わせて頼むため(2026-09 利用者の指定)。
+ *   渡さなければ `speechLevelOf()` が既定に落とす(行き止まりを作らない)。
+ */
+export default function PronunciationPractice({ me = null }) {
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -111,7 +117,7 @@ export default function PronunciationPractice() {
           **いちばん上に置く。** この画面のいちばんの用事はスピーチであり、
           下の単語・フレーズは**1つも減らしていない**
           (一度入れたものを勝手に減らさない・共通ルール) */}
-      <SpeechBoard />
+      <SpeechBoard level={me?.cefr ?? null} />
 
       <div className="card">
         <h2 className="card-title">単語とフレーズの音</h2>

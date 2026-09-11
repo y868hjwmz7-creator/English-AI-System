@@ -8430,6 +8430,17 @@ button.wbfilter-ctl { text-align: left; }
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-10);
 }
 .speech-line > .writing-en, .speech-line > .writing-ja { flex: 1 1 14rem; min-width: 0; }
+/* ── 集中モード(2026-09 利用者の指定「今のままに集中モードだけつけて」)──
+   **骨組みは `FocusFrame` そのまま。** ここで足すのは、1文だけを
+   ゆったり置く余白と、字の大きさだけである。
+   **色は1つも決め打ちしない** —— 紙の島(`.focus-paper`)の変数から取る
+   (`npm run test:paper` が見張っている場所そのもの)。 */
+.speechfocus .speech-sentences--focus > li {
+  padding: var(--sp-16) var(--sp-12);
+  font-size: var(--fs-17);
+}
+.speechfocus .speech-line { gap: var(--sp-12) var(--sp-14); }
+
 /* 単語帳への案内。**添え物なので、本文より先に目が行かない** */
 .speech-tolist {
   display: flex; align-items: center; gap: var(--sp-6);

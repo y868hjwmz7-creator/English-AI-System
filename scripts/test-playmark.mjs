@@ -39,8 +39,9 @@ import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
 import {
-  MAX_SPEECH_CHARS, SPEECH_COST_YEN, isBlankDraft, isReviewed, sortSpeeches,
-  speechCostYen, speechParts, speechPhrases, speechTitleOf, speechWordList,
+  MAX_SPEECH_CHARS, SPEECH_COST_YEN, SPEECH_LEVEL_FALLBACK, isBlankDraft,
+  isReviewed, sortSpeeches, speechCostYen, speechLevelOf, speechLines,
+  speechParts, speechPhrases, speechTitleOf, speechWholeSlice, speechWordList,
   tooLongDraft,
 } from '../src/lib/speechPractice.js'
 import { MAX_WRITING_CHARS } from '../src/lib/writingReview.js'
@@ -3523,7 +3524,42 @@ console.log('\nスピーチ練習(0054)')
       'スピーチ … 1人が最後まで話しきる(声は全部同じ)')
     ok(speechParts({}).length === 0,
       'スピーチ … 添削が無ければ、鳴らすものも無い')
+    /* **描く並びと、鳴らす並びは同じもの。**
+       1つでもずれると、**別の文が光り、別の文が鳴る** */
+    ok(speechLines(reviewed).length === parts.length,
+      'スピーチ … 描く文の数と、鳴らす文の数がそろっている')
   }
+
+  // ── ④' **音声は1本にまとめる**(2026-09 利用者の指定) ──
+  //     > 音声については「1本にまとめる」の仕様に統一しましょう。
+  //     1文ずつの Listen も、その1本の中の区間を鳴らす(二度課金しない)
+  {
+    const slice = speechWholeSlice(reviewed, 1)
+    ok(slice && slice.index === 1 && slice.texts.length === 2,
+      'スピーチ … 1文ずつの Listen は、1本の中の区間を指す')
+    ok(slice && slice.texts[1] === 'Thank you for coming.',
+      'スピーチ … **空の文を抜いた並び**で数える(描くときと同じ番号)',
+      slice ? slice.texts.join(' / ') : 'null')
+    ok(slice && slice.voiceIds.length === slice.texts.length
+      && slice.voiceIds.every((v) => v === 'us-1'),
+      'スピーチ … 声は人数ぶん揃えて渡す(1人が最後まで話しきる)')
+    /* **断るときは `null`。** 呼ぶ側はこれまでどおり1文ずつ鳴らすので、
+       音は必ず出る(**行き止まりを作らない**) */
+    ok(speechWholeSlice({ voice_id: 'us-1', review: { sentences: [{ en: 'Hi.' }] } }, 0) === null,
+      'スピーチ … 1文しか無ければ、1本にまとめない')
+    ok(speechWholeSlice({ ...reviewed, voice_id: null }, 0) === null,
+      'スピーチ … 声が決まっていなければ、1本にまとめない(Voice ID が要る)')
+    ok(speechWholeSlice(reviewed, 2) === null && speechWholeSlice(reviewed, -1) === null,
+      'スピーチ … 並びの外の番号では区間を作らない(別の文を鳴らさない)')
+  }
+
+  // ── ④'' **レベルはゲストのものを使う**(2026-09 利用者の指定) ──
+  ok(speechLevelOf('A2+') === 'A2+' && speechLevelOf('C1') === 'C1',
+    'スピーチ … 名簿にあるレベルは、そのまま使う')
+  ok(speechLevelOf(null) === SPEECH_LEVEL_FALLBACK
+    && speechLevelOf('') === SPEECH_LEVEL_FALLBACK
+    && speechLevelOf('X9') === SPEECH_LEVEL_FALLBACK,
+    'スピーチ … まだ判定していない / 知らない値は、既定に落とす')
 
   // ── ⑤ 単語帳に入れる語句。**別の一覧を作らない** ──
   ok(speechPhrases(reviewed).length === 1
@@ -3553,8 +3589,25 @@ console.log('\nスピーチ練習(0054)')
     'スピーチ … 画面の中で役割を見分けていない(判断を2か所に置かない)')
   ok(/await reviewWriting\(\{/.test(board),
     'スピーチ … 添削は `mode: review_writing` の道をそのまま使う')
-  ok(/<SpeechPractice speech=\{open\} learnerId=\{learnerId\} \/>/.test(board),
-    'スピーチ … 練習の中身は `SpeechPractice`(props で受け取る形にしてある)')
+  ok(/<SpeechPractice speech=\{open\} learnerId=\{learnerId\} level=\{level\} \/>/.test(board),
+    'スピーチ … 練習の中身は `SpeechPractice`(レベルもそのまま渡す)')
+  /* **レベルをベタ書きしない**(2026-09 利用者の指定)。
+     書くと Pre-Basic の人にも C2 の人にも**同じ難しさ**で直してくる */
+  ok(/level: speechLevelOf\(level\)/.test(board) && !/level: 'B1'/.test(board),
+    'スピーチ … 添削はゲストのレベルで頼む(`speechLevelOf()` 1か所)')
+  /* **調子は、スピーチだけ別に覚える**(利用者の指定)。
+     鍵の名前を画面に書かない —— `writingReview.js` の `TONE_KEYS` が持つ */
+  ok(/loadWritingTone\(TONE_WHERE\)/.test(board)
+    && /saveWritingTone\(e\.target\.value, TONE_WHERE\)/.test(board),
+    'スピーチ … 添削の調子は、ディスカッションとは別に覚える')
+  ok(!/eas\.speechTone|eas\.writingTone/.test(board),
+    'スピーチ … 覚える鍵の名前を、画面に書き写していない')
+  {
+    /* **同じ鍵で覚えると、片方を直すともう片方まで変わる** */
+    const wr = read3('src/lib/writingReview.js')
+    ok(/writing: 'eas\.writingTone'/.test(wr) && /speech: 'eas\.speechTone'/.test(wr),
+      'スピーチ … 調子の鍵は場面ごとに分けてある')
+  }
   /* **`SpeechPractice` は props で中身を受け取る。**
      こうしておくと `npm run test:bar` が本物の部品のまま測れる ——
      `SpeechBoard` は自分で読み込むので、Supabase の無い骨組みでは
@@ -3568,17 +3621,35 @@ console.log('\nスピーチ練習(0054)')
     'スピーチ … 1語ずつ単語帳へ入れる道も、`WordbookAdd` と同じ')
   ok(!/RepeatUnit/.test(prac),
     'スピーチ … 1文が1つの部なので、「文」と「段落」を2つ見せない')
+  /* **1本にまとめた音声の区間を鳴らす**(2026-09 利用者の指定)。
+     渡さなくなると**その文だけの MP3 を別に作って二度課金する**が、
+     **音は鳴る**ので押してみても気づけない */
+  ok(/whole=\{speechWholeSlice\(speech, i\)\}/.test(prac),
+    'スピーチ … 1文ずつの Listen に、1本の中の区間を渡している')
+  /* **集中モードは `FocusFrame` をそのまま使う**(骨組みを2つ持たない)。
+     **6Steps は足していない**(利用者の指定「今のままに集中モードだけつけて」) */
+  ok(/<FocusFrame/.test(prac) && /className="speechfocus"/.test(prac),
+    'スピーチ … 集中モードの骨組みは `FocusFrame` 1つ')
+  ok(!/SIX_STEPS|StepFocus/.test(prac),
+    'スピーチ … 6Steps は足していない(言われた場所だけを直す)')
+  /* **中身は書き写さない。** ふだんの一覧と同じ `lineOf()` を渡す */
+  ok(/\{lineOf\(sentences\[at\], at\)\}/.test(prac)
+    && /\{lineOf\(s, i\)\}/.test(prac),
+    'スピーチ … 集中モードの中身は、ふだんの一覧とまったく同じもの')
+  ok(/level=\{lv\}/.test(prac) && /level: lv/.test(prac) && !/level="B1"/.test(prac),
+    'スピーチ … 語の意味も、ゲストのレベルで引く')
 
   const pron = noC3(read3('src/components/PronunciationPractice.jsx'))
-  ok(/<SpeechBoard \/>/.test(pron),
-    'スピーチ … 「スピーチ練習」の画面に出ている')
+  ok(/<SpeechBoard level=\{me\?\.cefr \?\? null\} \/>/.test(pron),
+    'スピーチ … 「スピーチ練習」の画面に出ていて、自分のレベルを渡している')
   ok(/SPEAK_TYPES/.test(pron),
     'スピーチ … 単語とフレーズの練習は1つも減らしていない')
 
   const learners = noC3(read3('src/components/TrainerLearners.jsx'))
   ok(/detailTab === 'speech'/.test(learners)
-    && /<SpeechBoard learnerId=\{l\.id\}/.test(learners),
-    'スピーチ … ゲストのページからも登録できる(利用者の指定)')
+    && /<SpeechBoard learnerId=\{l\.id\}/.test(learners)
+    && /level=\{l\.cefr \?\? null\}/.test(learners),
+    'スピーチ … ゲストのページからも登録でき、そのゲストのレベルで頼む')
 
   // ── ⑨ 単語帳。**絞り込みは `App.jsx` の1つ** ──
   const wb = noC3(read3('src/components/Wordbook.jsx'))
