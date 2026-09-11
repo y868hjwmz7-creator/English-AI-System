@@ -494,6 +494,28 @@ export const REPEAT_UNITS = ['off', 'sentence', 'item', 'all']
  */
 const REPEAT_EPS = 0.04
 
+/**
+ * **戻す先は、その声の頭の「これだけ手前」まで寄せる**(2026-09 実機・4手め)。
+ *
+ *   > 一瞬なのですが前の発言や文の最後の音が入ります。
+ *   > 一瞬といえど違和感は非常に大きいです。
+ *
+ * 窓の縁(`backEdge`)は**間(ま)のまん中**にある。ところが
+ * **頭出しは手前に外れる**(フレーム1枚 26ms)ので、そこを頼むと
+ * 着地が**間のまん中より手前** ＝ **前の声の中**になる。
+ *
+ * だから**頼む先だけ、声の頭ぎりぎりまで寄せる。**
+ * 外れても、着くのは**間の中**である。
+ *
+ * **縁そのものは動かさない** —— あれは「いまどの窓にいるか」を数えるもので、
+ * 動かすと前の文へ戻り続ける(下の節)。**頼む先と、縁は別物である。**
+ *
+ * **間が `2 × SEEK_LEAD` より短ければ、まん中がそのまま採られる**
+ * (`landEdge` が縁より手前へは行かない)ので、
+ * 間の無い並び(推定で出した区間)では**1ミリ秒も変わらない。**
+ */
+export const SEEK_LEAD = 0.02
+
 /* ══════════════════════════════════════════════════════════════════
  * **折り返しは、声の端ではなく「間(ま)のまん中」に置く**
  * (2026-09 実機・利用者の指摘)
@@ -594,6 +616,19 @@ function frontEdge(list, i, duration = 0) {
 }
 
 /**
+ * その区間へ**戻すときに頼む秒。** 縁(間のまん中)より手前へは行かない。
+ *
+ * **縁は数えるため、こちらは頼むため**である。取り違えない ——
+ * 縁を動かすと「いまどの窓にいるか」がずれて、前の文へ戻り続ける。
+ */
+function landEdge(list, i) {
+  const edge = backEdge(list, i)
+  const s = Number(list[i]?.start)
+  if (!Number.isFinite(edge) || !Number.isFinite(s)) return edge
+  return Math.max(edge, s - SEEK_LEAD)
+}
+
+/**
  * いま、どの区間の**窓**の中にいるか。
  *
  * **`indexAtTime()` では数えない。** あちらは「始まりの秒を過ぎたか」で
@@ -608,10 +643,14 @@ function windowAt(list, t) {
   return 0
 }
 
-/** その並びの中で、いまいる窓 */
+/** その並びの中で、いまいる窓。`land` は**戻すときに頼む秒** */
 function windowOf(list, t, duration) {
   const i = windowAt(list, t)
-  return { start: backEdge(list, i), end: frontEdge(list, i, duration) }
+  return {
+    start: backEdge(list, i),
+    end: frontEdge(list, i, duration),
+    land: landEdge(list, i),
+  }
 }
 
 /**
@@ -659,7 +698,13 @@ export function repeatSeek(unit, sec, {
     }
   }
   if (!win || !Number.isFinite(win.start) || !Number.isFinite(win.end)) return null
-  return t >= win.end - REPEAT_EPS ? win.start : null
+  if (t < win.end - REPEAT_EPS) return null
+  /* **頼むのは `land`(声の頭ぎりぎり)。** 縁は数えるためのものである。
+     **ここで縁と比べ直さない** —— 縁より手前へ行かない守りは
+     `landEdge()` 1か所にある(**判断を2か所に置かない**)。
+     集中モードのかけらのように `land` を持たない窓だけ、縁をそのまま使う */
+  const to = Number(win.land)
+  return Number.isFinite(to) ? to : win.start
 }
 
 /**
@@ -693,7 +738,7 @@ export function repeatSeek(unit, sec, {
  * @param {object} [o]
  * @param {number} o.duration 音声ぜんぶの長さ(秒)。**いちばん最後だけ伸びる**
  * @param {Function|null} o.keep その段落のものだけを拾う見分け方
- * @returns {{start:number,end:number}|null} 狭められないときは `null`
+ * @returns {{start:number,end:number,land:number}|null} 狭められないときは `null`
  */
 export function spanForRange(sentences, range, base = 0, { duration = 0, keep = null } = {}) {
   if (!Array.isArray(sentences) || !sentences.length) return null
@@ -708,6 +753,7 @@ export function spanForRange(sentences, range, base = 0, { duration = 0, keep = 
   return {
     start: backEdge(sentences, inside[0]),
     end: frontEdge(sentences, inside[inside.length - 1], duration),
+    land: landEdge(sentences, inside[0]),
   }
 }
 
@@ -757,8 +803,20 @@ export function spanForRange(sentences, range, base = 0, { duration = 0, keep = 
 
 /** 戻した先から、これだけ先へ進むまで、もう戻さない(秒) */
 export const REPEAT_HOLD = 0.25
-/** 頼んだ秒より、これだけ手前に着いたら「外した」とみなす(秒) */
-export const SEEK_OFF = 0.12
+/**
+ * 頼んだ秒より、これだけ手前に着いたら「外した」とみなす(秒)。
+ *
+ * **2026-09 に 0.12 → 0.03 へ下げた**(実機・利用者の指摘)。
+ *
+ *   > 一瞬なのですが前の発言や文の最後の音が入ります。
+ *   > 一瞬といえど違和感は非常に大きいです。
+ *
+ * **「一瞬なら耳に届かない」は、こちらの思い込みだった。**
+ * 語尾の子音が 0.1 秒混じるだけで、はっきり分かる。
+ * フレーム1枚(26ms)ぶんの吸い寄せは `SEEK_LEAD` が吸うので、
+ * ここはそれより大きいずれだけを拾えばよい。
+ */
+export const SEEK_OFF = 0.03
 /** 外したときに直すのは、1回だけ */
 export const SEEK_TRIES = 1
 /** 着いた先を見張るひと刻みの数(`audioClips.js` は 10ms ごと) */

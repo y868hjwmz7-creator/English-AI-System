@@ -25,7 +25,6 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  SEEK_OFF,
   alignEndOf, charTimesOf, clockScaleOf, indexAtTime, makeRepeatSeeker,
   rangeOf, repeatSeek,
   scaleSpans, seekSentence, sentenceSpansOf, spansOf, wholeMark,
@@ -937,25 +936,53 @@ function fakeMp3({
       ng('「しない」なのに戻している')
     } else ok('「しない」では、どこまで来ても戻らない')
 
-    /* ② 文 … **間(ま)のまん中で**折り返し、**手前の間のまん中へ**戻す。
+    /* ② 文 … **間(ま)のまん中で**折り返し、**その声の頭ぎりぎりへ**戻す。
        声の端で折り返していたのが、2026-09 実機の
-       「前の文のしっぽから始まり、言い終わる前に戻る」の出どころだった */
+       「前の文のしっぽから始まり、言い終わる前に戻る」の出どころだった。
+
+       **頼む先と、窓の縁は別物である**(2026-09 実機・4手め)。
+       縁は「いまどの窓にいるか」を数えるためのもので、間のまん中。
+       ところがそこを頼むと、**頭出しが手前に外れたときに前の声へ入る** ——
+
+         > 一瞬なのですが前の発言や文の最後の音が入ります。
+
+       だから**頼む先だけ、声の頭ぎりぎりまで寄せる**(`SEEK_LEAD`)。
+       外れても、着くのは**間の中**である */
     const back1 = mid(sentG[0].end, sentG[1].start)
     const fore1 = mid(sentG[1].end, sentG[2].start)
+    const land1 = repeatSeek('sentence', just(fore1), o)
     if (repeatSeek('sentence', sentG[1].start + 0.5, o) !== null) {
       ng('文の途中なのに戻している')
     } else if (repeatSeek('sentence', sentG[1].end, o) !== null) {
       ng('**声が切れた瞬間に戻している**(言い終わる前に折り返す)')
-    } else if (repeatSeek('sentence', just(fore1), o) !== back1) {
-      ng('文の間(ま)のまん中で、手前の間のまん中へ戻らない')
-    } else ok('文をくり返す(間のまん中で折り返し、手前の間のまん中へ)')
+    } else if (!(land1 > back1 + 1e-9)) {
+      /* **`SEEK_LEAD` を書き写して突き合わせない。** それでは
+         値を変えたときに期待値も一緒に動き、**仕組みを壊しても素通りする。**
+         見るのは**性質**である ——「縁より後ろ」かつ「声の頭は飛ばさない」 */
+      ng('戻る先が、間(ま)のまん中のまま(頭出しが外れると前の声に入る)', `${land1}`)
+    } else if (!(land1 <= sentG[1].start)) {
+      ng('戻る先が、その文の頭を通り過ぎている', `${land1}`)
+    } else if (sentG[1].start - land1 > 0.05) {
+      ng('戻る先が、その文の頭から遠い', `${(sentG[1].start - land1).toFixed(3)} 秒手前`)
+    } else ok('文をくり返す(間のまん中で折り返し、その声の頭ぎりぎりへ)')
 
     /* **戻した次のひと刻みで、また戻してしまわないか。**
        `indexAtTime()` で数えると、間のまん中は「1つ前の文」に入る。
        すると「終わりに来た」と読まれて**前の文へ戻り続ける** */
-    if (repeatSeek('sentence', back1, o) !== null) {
+    if (repeatSeek('sentence', land1, o) !== null) {
       ng('戻した先で、すぐまた戻している(前の文をくり返してしまう)')
+    } else if (repeatSeek('sentence', back1, o) !== null) {
+      ng('縁(間のまん中)で、すぐまた戻している')
     } else ok('戻した先では、そのまま鳴り続ける')
+
+    /* **間(ま)の無い並びでは、1ミリ秒も変わらない**(2026-09 実機・4手め)。
+       1本にできなかった教材の文の区間は**割合の見積もり**で出すので、
+       声の端どうしがくっついている。そこで頭へ寄せると、
+       **今度は前の文へ食い込む。** `landEdge` は縁より手前へは行かない */
+    const flat = [{ start: 0, end: 1 }, { start: 1, end: 2 }, { start: 2, end: 3 }]
+    if (repeatSeek('sentence', 2.99, { sentences: flat, duration: 3 }) !== 2) {
+      ng('間の無い並びで、戻る先が動いている(前の文へ食い込む)')
+    } else ok('間の無い並びでは、これまでどおり文の頭へ戻る')
 
     // ③ 段落 … その段落の終わりまで来たら、その段落の頭へ
     const fore2 = mid(itemsG[0].end, itemsG[1].start)
@@ -1047,46 +1074,96 @@ function fakeMp3({
        * ひと刻み 10ms で鳴らしてみる。**頭出しは `slip` 秒だけ手前に着く**
        * @returns {{backs:number[], heard:number[]}} 戻した先と、鳴った秒
        */
-      const play = (slip, unit, from, steps = 900) => {
+      const play = (slip, unit, from, { opts = o, end = dur, steps = 900 } = {}) => {
         const seeker = makeRepeatSeeker()
         const backs = []
         const heard = []
         let t = from
         for (let n = 0; n < steps; n += 1) {
-          const to = seeker.next(repeatSeek(unit, t, o), t)
-          if (to !== null) { backs.push(to); t = Math.max(0, to - slip); continue }
+          const to = seeker.next(repeatSeek(unit, t, opts), t)
+          if (to !== null) {
+            backs.push(to)
+            t = Math.max(0, to - slip)
+            /* **着いた先も鳴っている。** 外したことが分かるのは
+               次のひと刻みなので、そこは必ず耳に届く。
+               ここを数えないと、**食い込みを見落とす** */
+            heard.push(t)
+            continue
+          }
           heard.push(t)
           t += 0.01
-          if (t > dur) break
+          if (t > end) break
         }
         return { backs, heard }
       }
 
       /* **どれだけ外しても、同じことが言えるか。**
          1つの値だけで見ると、そこだけ当たる形に書き換えても緑のままになる */
-      for (const slip of [0.02, 0.05, 0.12, 0.4]) {
+      for (const slip of [0.02, 0.05, 0.12, 0.3]) {
         const r = play(slip, 'sentence', just(fore1))
-        // ① 前の文へ戻っていないか。**戻る先はどれも、この文の縁だけ**
+        // ① 前の文へ戻っていないか。**戻る先はどれも、この文のものだけ**
         const strayed = r.backs.filter((b) => b < back1 - 0.01)
-        /* ② 着いた先。**直したあとは、その文の頭から鳴る。**
-           `SEEK_OFF`(0.12 秒)より小さいずれは直さない ——
-           そこまで来ると耳には届かず、直すほうが飛び跳ねて聞こえる */
-        const tail = r.heard.filter((x) => x < back1 - SEEK_OFF - 0.02)
+        /* ② **前の文の声が、1刻みも鳴らないこと**(2026-09 実機・4手め)。
+           ここが利用者の言葉そのものである ——
+           **「一瞬といえど違和感は非常に大きい」。**
+           `SEEK_OFF` より小さいずれを直さないのは構わないが、
+           **その残りが前の声に届いていては意味がない。**
+           だから「どれだけ手前か」ではなく、
+           **前の文の声の終わりより手前で鳴ったか**で数える */
+        const bled = r.heard.filter((x) => x < sentG[0].end)
         // ③ **ちゃんと回っているか。**「戻らない」だけを見ると、
         //    何もしない形に書き換えても緑のままになる
         if (strayed.length) {
           ng(`頭出しが ${slip} 秒外れると、前の文へ戻る`, `${strayed.length} 回`)
-        } else if (tail.length) {
-          ng(`頭出しが ${slip} 秒外れると、前の文のしっぽが鳴る`, `${tail.length} 刻み`)
+        } else if (bled.length) {
+          ng(`頭出しが ${slip} 秒外れると、前の文の最後の音が鳴る`, `${bled.length} 刻み`)
         } else if (r.backs.length < 2) {
           ng(`頭出しが ${slip} 秒外れると、回らなくなる`, `${r.backs.length} 回`)
-        } else ok(`頭出しが ${slip} 秒外れても、その文の頭から ${r.backs.length} 回くり返す`)
+        } else ok(`頭出しが ${slip} 秒外れても、前の文の音は入らず ${r.backs.length} 回くり返す`)
+      }
+
+      /* ⓐ **間(ま)が短い並びが、いちばん危ない**(2026-09 実機・4手め)。
+         上の並びは間が 0.4 秒ある。**本物の音声はもっと詰まっている** ——
+         実際、間が 0.12 秒より短いからこそ、
+
+           > 一瞬なのですが前の発言や文の最後の音が入ります。
+
+         が起きていた。縁(まん中)を頼むと、間の半分しか余裕が無い。
+         **声の頭ぎりぎりを頼めば、余裕は間ぜんぶになる** */
+      {
+        const alN = fakeAlign(groups.flat(), ' ')       // 区切りは空白1つ = 0.1 秒
+        const sentN = sentenceSpansOf(alN, groups)
+        const itemsN = spansOf(alN, groups.map((g) => g.join(' ')))
+        const durN = alN.character_end_times_seconds[alN.characters.length - 1] + 0.5
+        const oN = { spans: itemsN, sentences: sentN, duration: durN }
+        const foreN = mid(sentN[1].end, sentN[2].start)
+        /* 0.06 秒のずれ。**間(0.1 秒)の半分より大きく、間より小さい** ——
+           まん中を頼んでいたら前の声に入り、頭ぎりぎりなら入らない */
+        const r = play(0.06, 'sentence', just(foreN), { opts: oN, end: durN })
+        const bled = r.heard.filter((x) => x < sentN[0].end)
+        if (bled.length) {
+          ng('間の短い音声で、前の文の最後の音が鳴る', `${bled.length} 刻み`)
+        } else if (r.backs.length < 2) {
+          ng('間の短い音声で、回らなくなる', `${r.backs.length} 回`)
+        } else ok(`間が 0.1 秒でも、前の文の音は入らず ${r.backs.length} 回くり返す`)
+
+        /* **間より大きく外れたら、着いてから直す**(`SEEK_OFF`)。
+           そこは**どうやっても1刻み(10ms)は鳴る** ——
+           外したことが分かるのは着いたあとだからである。
+           **まずいのは、それが続くこと。** 直さないでいると、
+           前の文のしっぽを鳴らしたまま次の折り返しまで進む */
+        const r2 = play(0.1, 'sentence', just(foreN), { opts: oN, end: durN })
+        const bled2 = r2.heard.filter((x) => x < sentN[0].end)
+        const rounds = Math.max(1, r2.backs.length)
+        if (bled2.length > rounds) {
+          ng('間より大きく外れたとき、前の文のしっぽが鳴り続ける', `${bled2.length} 刻み / ${rounds} 周`)
+        } else ok(`間より大きく外れても、前の文の音は 1 周につき ${bled2.length / rounds} 刻みで止まる`)
       }
 
       /* ④ **ずれが無いときは、1ミリ秒も変わらない** */
       const clean = play(0, 'sentence', just(fore1))
-      if (clean.backs.some((b) => Math.abs(b - back1) > 1e-9)) {
-        ng('ずれが無いのに、戻る先が動いている')
+      if (clean.backs.some((b) => Math.abs(b - land1) > 1e-9)) {
+        ng('ずれが無いのに、戻る先が動いている(直さなくてよいものを直している)')
       } else ok('頭出しが外れなければ、戻る先はこれまでどおり')
 
       /* ⑤ **短い文でも、行き止まりにならない。**
@@ -1108,13 +1185,13 @@ function fakeMp3({
       /* ⑥ **遠くへ送られたら、歯止めは古い**(◀ ▶ で1文戻したとき)。
          そのまま待たせると、その1周が黙って飛ばされる */
       const s3 = makeRepeatSeeker()
-      if (s3.next(back1, just(fore1)) === null) {
+      if (s3.next(land1, just(fore1)) === null) {
         ng('1回目から戻せていない')
-      } else if (s3.next(null, back1) !== null) {
+      } else if (s3.next(null, land1) !== null) {
         ng('戻した直後に、また何かしている')
       } else {
         // 着いたので、見張りを終わらせる(ひと刻みずつ進める)
-        for (let n = 0; n < 30; n += 1) s3.next(null, back1 + n * 0.01)
+        for (let n = 0; n < 30; n += 1) s3.next(null, land1 + n * 0.01)
         // ◀ でずっと手前へ送られた。そこからの1周は、ふつうに回るべき
         let ok3 = false
         let t3 = 0
