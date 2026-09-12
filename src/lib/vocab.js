@@ -485,13 +485,32 @@ export async function loadMyWordbook({
 }
 
 /**
+ * 1回に読む語の上限。**0056 を貼るまでは、SQL 側が 200 で切る。**
+ *
+ * 2026-09 実機・利用者の問い ——
+ *   > なぜ「まだ」が1900個以上あるのに出し方で選べるのが200個なのですか？
+ *
+ * 「出しかた」の札(今日出す / 1週間 / … / ぜんぶ)は、**読み込んだ行から
+ * 数えている。** 200 で切られていたので、どの範囲を選んでも 200 と出ていた。
+ * 数だけでなく、実際に出る語も・4択のまちがいも・聞き流しも・紙も、
+ * ぜんぶ**同じ 200 語の中**で回っていた。
+ *
+ * **上限そのものは SQL(`wordbook_limit()`・0056)が持つ。**
+ * ここはそれを超えない数を頼むだけで、**数字を2か所に持たない。**
+ */
+export const WORDBOOK_LIMIT = 5000
+
+/** 0056 を貼る前の上限。**これちょうどで返ってきたら、切られている** */
+export const WORDBOOK_LIMIT_OLD = 200
+
+/**
  * 単語帳を読む。**自分のぶんも、担当ゲストのぶんも、ここ1か所を通る。**
  *
  * 誰の単語帳を読んでよいかは `review_words()`(security definer)が決める。
  * 画面ごとに書き分けると、**片方だけ古くなる**(0027 の `todo` の
  * 落とし穴を、トレーナー側だけ踏むことになる)。
  */
-async function readWordbook(learnerId, { status = 'unknown', limit = 200, dueOnly = false } = {}) {
+async function readWordbook(learnerId, { status = 'unknown', limit = WORDBOOK_LIMIT, dueOnly = false } = {}) {
   if (!supabase) return ng('Supabase が設定されていません')
   if (!learnerId) return ok([])
 

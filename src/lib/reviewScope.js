@@ -44,7 +44,9 @@
 import { toDateKey } from './format.js'
 /* **既定の10は `SESSION_SIZE` から取る。** 単語帳がずっとその数だった。
    同じ数を2か所に書かない(`wordQuiz.js` は素の node で読める) */
-import { SESSION_SIZE } from './wordQuiz.js'
+import {
+  DEFAULT_FORM, DEFAULT_ORDER, SESSION_SIZE, formOf, orderOf,
+} from './wordQuiz.js'
 import { FILTER_KEYS } from './wordbookFilter.js'
 
 /** 今日(端末の日付)。"2026-08-30" */
@@ -225,14 +227,22 @@ export function shouldRecord(ok, {
  * **単語帳と Quick Response で同じものを使う。** 鍵を書き写すと、
  * レベルを足したときに片方だけ組み直さない、という形になる。
  */
-export function runKeyOf({ scope = '', size = '', filter = {}, group = null } = {}) {
+export function runKeyOf({
+  scope = '', size = '', filter = {}, group = null,
+  /* **並べ方も鍵に入れる**(2026-09)。入れないと、「教材ごと」に変えても
+     押し直すまで並びが変わらない。**出題の形(`form`)は入れない** ——
+     あれはいま出ているカードの見せ方で、組み直すと答えかけが消える。
+     **繰り返す(`repeat`)も入れない** —— 出し切ったあとに効くものである */
+  order = '',
+} = {}) {
   const f = filter ?? {}
   /* **鍵は `FILTER_KEYS`(`wordbookFilter.js`)から読む**(2026-09)。
      ここに `f.day, f.material, …` と書き写していたので、レベルを足した
      ときに**そこだけ反映されなかった。** 品詞を足したこの回で、
      同じ落とし穴を二度踏まないよう**一覧そのものを共有した。**
      `emptyFilter()` も `countNarrowed()` も、同じ一覧を見ている */
-  return [scope, size, group ?? '', ...FILTER_KEYS.map((k) => f[k] ?? '')].join('\u0000')
+  return [scope, size, group ?? '', order ?? '', ...FILTER_KEYS.map((k) => f[k] ?? '')]
+    .join('\u0000')
 }
 
 /**
@@ -266,6 +276,60 @@ export function loadSize(where) {
 
 export function saveSize(where, size) {
   try { localStorage.setItem(KEY(where, 'size'), String(size)) } catch { /* 同上 */ }
+}
+
+/**
+ * ============================================================================
+ * 【出しかたに足した3つ】(2026-09 実機・利用者の指定)
+ *
+ *   > 出し方の中に、「ランダムで」と「教材ごと」選んだを選べるように、
+ *   > また一度に出す個数の横に「繰り返す」ボタンも作ってください
+ *
+ * あわせて**出題の形**も、上の帯からここへ移した
+ * (スマホで画面から切れていた・`wordQuiz.js` の頭に経緯がある)。
+ *
+ * **一覧はそれぞれの持ち主が持つ**(`QUIZ_FORMS` / `WORD_ORDERS` は
+ * `wordQuiz.js`)。ここは**覚えておくだけ。** 一覧を書き写すと、
+ * 形を1つ足したときに片方だけ古くなる。
+ */
+
+/** 出題の形。知らない id(消した `auto` / `spell`)は既定に落とす */
+export function loadForm(where) {
+  try { return formOf(localStorage.getItem(KEY(where, 'form'))) } catch { return DEFAULT_FORM }
+}
+
+export function saveForm(where, id) {
+  try { localStorage.setItem(KEY(where, 'form'), String(id)) } catch { /* 同上 */ }
+}
+
+/** 並べ方(ランダム / 教材ごと) */
+export function loadOrder(where) {
+  try { return orderOf(localStorage.getItem(KEY(where, 'order'))) } catch { return DEFAULT_ORDER }
+}
+
+export function saveOrder(where, id) {
+  try { localStorage.setItem(KEY(where, 'order'), String(id)) } catch { /* 同上 */ }
+}
+
+/**
+ * 繰り返すか。**既定は「しない」**(いまと1ミリも変わらない)。
+ *
+ * 入っていると、1回ぶんを出し切っても
+ * 「この範囲は終わりです。」で止まらず、もう一度その範囲を回す。
+ * 利用者は前にも同じことを言っている(2026-09)——
+ *
+ *   > 一巡しただけで「今日はもう出すものがありません」となってしまいます。
+ *   > 反復してランダムに出題するよう変更してください。
+ *
+ * **間隔の決まりは壊れない。** 先取りしたぶんは `shouldRecord()` が
+ * 記録しないので、何周しても明日の復習が空にならない。
+ */
+export function loadRepeat(where) {
+  try { return localStorage.getItem(KEY(where, 'repeat')) === 'on' } catch { return false }
+}
+
+export function saveRepeat(where, on) {
+  try { localStorage.setItem(KEY(where, 'repeat'), on ? 'on' : 'off') } catch { /* 同上 */ }
 }
 
 /**

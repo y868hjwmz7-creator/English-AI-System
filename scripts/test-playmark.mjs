@@ -20,7 +20,8 @@ import {
   finished, hasMark, nowPlaying, stopped, takeMark,
 } from '../src/lib/playMark.js'
 import {
-  QUIZ_FORMS, SESSION_SIZE, buildSession, formForBox, isSelfGraded, pickForm,
+  DEFAULT_FORM, DEFAULT_ORDER, QUIZ_FORMS, SESSION_SIZE, WORD_ORDERS,
+  buildSession, formOf, isSelfGraded, orderOf, orderWords, pickForm,
 } from '../src/lib/wordQuiz.js'
 import { clozeAt, hasCloze } from '../src/lib/clozeSentence.js'
 import { hasMaterialWords, materialWordsOf } from '../src/lib/materialWords.js'
@@ -1227,26 +1228,54 @@ console.log('\n▶ 穴埋め — 出会った文の、その語だけを伏せ�
   ok(!hasCloze({ seen_in: null, display: 'intern' }), '出会った文が無ければ作れない')
   ok(!hasCloze({ seen_in: S, display: 'quarterly' }), '文の中に無ければ作れない')
 
-  // ── 箱ごとの形。**段が飛ばないこと** ──
-  ok(formForBox(0) === 'choice' && formForBox(1) === 'choice', '箱0〜1 は4択')
-  ok(formForBox(2) === 'recall', '箱2 は思い出す')
-  ok(formForBox(3) === 'cloze', '箱3 は穴埋め')
-  ok(formForBox(4) === 'ja2en' && formForBox(5) === 'ja2en', '箱4〜5 は日本語 → 英語')
-  ok(formForBox(6) === 'spell', '箱6 はつづり')
-  ok(QUIZ_FORMS.some((f) => f.id === 'cloze'), '選べる形の一覧にも入っている')
+  /* ── 選べる形は4つ。**「おまかせ」と「つづりを書く」は外した** ──
+     (2026-09 実機・利用者の指定「実際にはおまかせではなくずっと四択なので
+     なくしましょう。そして、綴りを描くもいらないです」) */
+  ok(QUIZ_FORMS.length === 4, '選べる形は4つ')
+  ok(QUIZ_FORMS.some((f) => f.id === 'cloze'), '穴埋めは残っている')
+  ok(!QUIZ_FORMS.some((f) => f.id === 'spell'), 'つづりを書くは外した')
+  ok(!QUIZ_FORMS.some((f) => f.id === 'auto'), 'おまかせは一覧に無い')
+  ok(DEFAULT_FORM === 'choice', '既定は4択')
+  /* **端末に残った古い id を、そのまま渡さない。**
+     消した `auto` / `spell` が localStorage に残っている人がいる */
+  ok(formOf('auto') === 'choice' && formOf('spell') === 'choice',
+    '消した形は既定に落ちる')
+  ok(formOf('cloze') === 'cloze', '在る形はそのまま')
+  ok(pickForm({ box: 0, meaning_ja: '研修生' }, [], 'auto') !== 'spell',
+    'おまかせを渡しても、つづりにはならない')
 
   /* **出会った文が無い語では「思い出す」に落ちる。**
      0047 で単語帳に入れた語には、出会った文が無い */
-  ok(pickForm({ box: 3, seen_in: S, display: 'intern', meaning_ja: '研修生' }, [])
+  ok(pickForm({ seen_in: S, display: 'intern', meaning_ja: '研修生' }, [], 'cloze')
      === 'cloze', '文があれば穴埋めで出る')
-  ok(pickForm({ box: 3, seen_in: null, display: 'intern', meaning_ja: '研修生' }, [])
+  ok(pickForm({ seen_in: null, display: 'intern', meaning_ja: '研修生' }, [], 'cloze')
      === 'recall', '文が無ければ思い出すに落ちる(行き止まりを作らない)')
 
   /* **自分で答え合わせをする形。** ここが
      「カードを画面いっぱいに伸ばすか」も決めている(`wordcard--recall`) */
   ok(isSelfGraded('cloze'), '穴埋めは自分で答え合わせをする形')
-  ok(!isSelfGraded('choice') && !isSelfGraded('spell'),
-    '4択とつづりは機械が判定する(伸ばさない)')
+  ok(!isSelfGraded('choice'), '4択は機械が判定する(伸ばさない)')
+
+  /* ── 並べ方(ランダム / 教材ごと)── 2026-09 利用者の指定 */
+  ok(WORD_ORDERS.length === 2 && DEFAULT_ORDER === 'random', '並べ方は2つ。既定はランダム')
+  ok(orderOf('material') === 'material' && orderOf('zzz') === 'random',
+    '知らない並べ方は既定に落ちる')
+  const MIX = [
+    { word_norm: 'a', material_title: '2026-09-01 / 朝礼' },
+    { word_norm: 'b', material_title: '' },
+    { word_norm: 'c', material_title: '2026-09-08 / 交渉' },
+    { word_norm: 'd', material_title: '2026-09-01 / 朝礼' },
+  ]
+  const byMat = orderWords(MIX, 'material').map((r) => r.word_norm)
+  ok(byMat.length === 4, '**1語も落とさない**(並べ替えは減らす道具ではない)')
+  ok(byMat[0] === 'c', '新しい教材が先')
+  ok(byMat[1] === 'a' && byMat[2] === 'd', '同じ教材はまとまる')
+  ok(byMat[3] === 'b', '教材の無い語(手で入れた語)は、いちばん後ろ')
+  ok(orderWords(MIX, 'random').length === 4, 'ランダムでも数は変わらない')
+  /* **「教材ごと」を選んだら混ぜない。** 混ぜたら選んだ意味が無い */
+  const sess = buildSession(MIX, 4, { shuffleAll: true, order: 'material' })
+  ok(sess.map((r) => r.word_norm).join('') === 'cadb',
+    '「教材ごと」では、混ぜずにその並びで出す')
 
   // **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、何も起きない
   const wb = readFileSync(
@@ -2118,9 +2147,52 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
        出てくるので、**使っている形**(`<ReviewScope` に続く)で見る */
     ok(/<ReviewScope\s+compact/.test(wb) && /<ReviewScope\s+compact/.test(qr),
       '出しかた … 復習の最中にも、同じ「出しかた」を出している')
-    ok(/runKeyOf\(\{ scope, size, filter, group \}\)/.test(wb)
+    /* 単語帳には**並べ方**が増えた(2026-09)。Quick Response には無い */
+    ok(/runKeyOf\(\{ scope, size, filter, group, order \}\)/.test(wb)
       && /runKeyOf\(\{ scope, size, filter, group \}\)/.test(qr),
       '出しかた … 変わったかどうかを `runKeyOf()` で見張っている')
+
+    /* ── 出題の形・並べ方・繰り返す(2026-09 実機・利用者の指定)──
+       > スマホでの「おまかせ」が画面に入り切らずに切れています。
+       > …出し方の中に、「ランダムで」と「教材ごと」選んだを選べるように、
+       > また一度に出す個数の横に「繰り返す」ボタンも作ってください */
+    const rd = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    const rs = rd('src/components/ReviewScope.jsx')
+    ok(/forms && forms\.length > 0 &&/.test(rs) && /orders && orders\.length > 0 &&/.test(rs),
+      '出しかた … 渡さなければ、その行ごと出さない(効かない操作を見せない)')
+    ok(/onRepeat && \(/.test(rs), '出しかた … 繰り返すも、渡したときだけ出す')
+    /* **「一度に出す個数の横」**(利用者の指定)。同じ `chiprow` の中にいる */
+    ok(/aria-labelledby="rscope-many"[\s\S]{0,900}?rscope-repeat[\s\S]{0,200}?<\/div>/.test(rs),
+      '出しかた … 繰り返すは、何語ずつと同じ行にある')
+    /* **画面が本当に渡しているか。** 定義だけあっても何も出ない */
+    ok(/forms=\{QUIZ_FORMS\}/.test(wb) && /orders=\{WORD_ORDERS\}/.test(wb),
+      '出しかた … 単語帳が、形と並べ方を渡している')
+    ok((wb.match(/onRepeat=\{\(on\) =>/g) ?? []).length === 2,
+      '出しかた … 始める前と、復習の最中の**両方**に渡している')
+    /* **上の帯からは外した。** スマホで画面から切れていた */
+    ok(!/wb-formpick/.test(wb), '出しかた … 上の帯に出題の形を置いていない')
+    ok(!/おまかせ/.test(wb), '出しかた … 「おまかせ」という言葉を画面に出していない')
+    /* **繰り返すなら、行き止まりを作らない** */
+    ok(/: repeat[\s\S]{0,400}?もう一度この範囲を回す/.test(wb),
+      '出しかた … 繰り返すなら、出し切っても止まらない')
+    ok(/この範囲は終わりです/.test(wb),
+      '出しかた … 繰り返さないときは、これまでどおり終わりと言う')
+
+    /* ── 読める語の上限(0056)── 2026-09 実機・利用者の問い
+       > なぜ「まだ」が1900個以上あるのに出し方で選べるのが200個なのですか？ */
+    ok(/limit: WORDBOOK_LIMIT,/.test(wb),
+      '上限 … 単語帳は `WORDBOOK_LIMIT` を渡す(数字を書き写さない)')
+    const voc = rd('src/lib/vocab.js')
+    ok(/export const WORDBOOK_LIMIT = \d+/.test(voc), '上限 … 出どころは `vocab.js` 1か所')
+    ok(/limit = WORDBOOK_LIMIT,/.test(voc), '上限 … 既定にもそれを使っている')
+    ok(/wordbook_limit\(\)/.test(rd('supabase/migrations/0056_wordbook_limit.sql')),
+      '上限 … SQL 側の出どころも1か所(`wordbook_limit()`)')
+    ok(!/least\(coalesce\(p_limit, 200\), 5000\)/
+      .test(rd('supabase/migrations/0056_wordbook_limit.sql')),
+      '上限 … SQL に数字を書き写していない')
+    /* **読めていないことを、黙って隠さない** */
+    ok(/capped > 0 && \(/.test(wb), '上限 … 切られていたら、画面がそう言う')
+    ok(/WORDBOOK_LIMIT_OLD/.test(wb), '上限 … 切られたかどうかも、数字を書き写さない')
   }
 
   console.log('\n▶ 復習の範囲と個数')
@@ -3784,13 +3856,20 @@ console.log('\nスピーチ練習(0054)')
     `準備の状態 … 印がいちばん新しい移行(${newestNo})にそろっている`,
     `いちばん新しいのは ${newest}`)
 
-  const mark = /NEWEST_MARK = \{\s*table: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
-  ok(mark && new RegExp(`create table if not exists public\\.${mark}\\b`)
-    .test(read4(`supabase/migrations/${newest}`)),
-    `準備の状態 … 印(${mark || '(無し)'})は、その移行が本当に作る表である`)
+  /* **表を作らない移行もある**(0056 は関数の上限を上げるだけ)。
+     `table` なら表の有無、`rpc` なら関数の有無を印にする。
+     どちらでも「**その移行が本当に作るもの**」であることは変わらない */
+  const markT = /NEWEST_MARK = \{\s*table: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
+  const markF = /NEWEST_MARK = \{\s*rpc: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
+  const makesMark = (src) => {
+    if (markT) return new RegExp(`create table if not exists public\\.${markT}\\b`).test(src)
+    if (markF) return new RegExp(`create or replace function public\\.${markF}\\(`).test(src)
+    return false
+  }
+  ok(makesMark(read4(`supabase/migrations/${newest}`)),
+    `準備の状態 … 印(${markT || markF || '(無し)'})は、その移行が本当に作るものである`)
   /* **まとめた1つに入っていなければ、貼っても印は現れない** */
-  ok(mark && new RegExp(`create table if not exists public\\.${mark}\\b`)
-    .test(read4('supabase/apply/pending_matome.sql')),
+  ok(makesMark(read4('supabase/apply/pending_matome.sql')),
     '準備の状態 … その印は、まとめた1つ(`pending_matome.sql`)にも入っている')
 
   /* ── 表の有無だけを見る。**ほかの理由と混ぜない** ── */
@@ -3851,6 +3930,11 @@ console.log('\nスピーチ練習(0054)')
      **入っていないのに黙る**ことになる */
   ok(/\.from\(NEWEST_MARK\.table\)\.select\('\*'\)/.test(noC4(state)),
     '準備の状態 … 印は「表があるか」だけを見る(列の名前を書かない)')
+  /* **関数の印も読めること**(0056)。読めないと、貼る前でも黙ってしまう */
+  ok(/await supabase\.rpc\(NEWEST_MARK\.rpc\)/.test(noC4(state)),
+    '準備の状態 … 関数の印も見に行く')
+  ok(/PGRST202/.test(noC4(state)) && /42883/.test(noC4(state)),
+    '準備の状態 … 「そんな関数は無い」も「まだです」と読む')
 }
 
 /* ══════════════════════════════════════════════════════════════════

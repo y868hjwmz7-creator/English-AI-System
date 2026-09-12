@@ -34,6 +34,7 @@ import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
+import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
 import LearnerBar from './components/LearnerBar.jsx'
 import { rememberLearner } from './lib/lastLearner.js'
@@ -744,6 +745,11 @@ function RScopeDemo({ rows }) {
      押せるか・押した印が出るか・0件の札が押せないかを、実際に描いて測る */
   const [group, setGroup] = useState(null)
   const [filter, setFilter] = useState(emptyFilter)
+  /* **出題の形・並べ方・繰り返す**(2026-09 実機・利用者の指定)。
+     渡さなければ、その行ごと出ない —— **渡した形で測る** */
+  const [form, setForm] = useState('choice')
+  const [order, setOrder] = useState('random')
+  const [repeat, setRepeat] = useState(false)
   const tally = qrTally(rows)
   return (
     <>
@@ -758,6 +764,9 @@ function RScopeDemo({ rows }) {
       rows={rows} unit="問" scope={scope} size={size}
       narrowed={countNarrowed(filter)}
       onScope={setScope} onSize={setSize} onStart={() => {}}
+      forms={QUIZ_FORMS} form={form} onForm={setForm}
+      orders={WORD_ORDERS} order={order} onOrder={setOrder}
+      repeat={repeat} onRepeat={setRepeat}
     >
       {/* **絞り込みも「出しかた」の中**(2026-09 利用者の指定)。
           名前を左・欄を右にそろえた行が、同じ幅で並ぶかを測る。

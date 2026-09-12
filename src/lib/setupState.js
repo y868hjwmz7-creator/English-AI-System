@@ -56,17 +56,22 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0055'
+export const NEWEST_MIGRATION = '0056'
 
 /**
  * その移行が入っているかを見る印。
  *
- * 0054 は `speeches`(スピーチの原稿と、その添削の置き場)を作る。
- * **表が在るかどうかだけ**を見るので、RLS に断られても
- * (=0件で返るだけなので)判定は狂わない。
+ * **表を作らない移行もある。** 0056 は `review_words()` の上限を
+ * 上げるだけで、表も列も1つも増えない。だから印は**関数**にした ——
+ * 0056 が作る `wordbook_limit()` が在るかどうかで見る
+ * (あの関数は上限そのものの出どころでもある。**印のためだけの
+ * 関数を作っていない**)。
+ *
+ * `table` を書けば表の有無、`rpc` を書けば関数の有無を見る。
+ * **どちらか一方だけ**を書く。
  */
 export const NEWEST_MARK = {
-  table: 'learner_features', label: 'ゲストごとに「出すもの」を決める置き場',
+  rpc: 'wordbook_limit', label: '単語帳を、200 語より先まで読めるようにする',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */
@@ -78,7 +83,11 @@ export const CHECK_URL = `${REPO}/${BRANCH}/supabase/apply/check.sql`
 /** 「そんな表は無い」と言われたか。**ほかの理由と混ぜない** */
 const noTable = (error) => {
   const m = `${error?.code ?? ''} ${error?.message ?? ''}`
-  return /relation .* does not exist|42P01|PGRST205|schema cache/i.test(m)
+  /* **関数のときも同じ言い方で断られる**(0056 で印を関数にした)。
+     PostgREST は `PGRST202`、Postgres は `42883` を返す。
+     **通信の失敗と混ぜない** —— あちらは `unknown` にして騒がない */
+  return /relation .* does not exist|function .* does not exist|42P01|42883|PGRST202|PGRST205|schema cache/i
+    .test(m)
 }
 
 /**
@@ -93,7 +102,12 @@ export async function checkSqlApplied() {
        `learner_features`(0055)のように **`id` を持たない表**を印に
        選んだ瞬間、断りが「そんな列は無い」(42703)になって
        `noTable()` をすり抜け、**入っていないのに黙る**ことになる */
-    const { error } = await supabase.from(NEWEST_MARK.table).select('*').limit(1)
+    /* **関数の印**(0056)。無ければ PGRST202 で断られる。
+       **引数の要らない関数だけを印にする** —— 引数が要ると、
+       その中身しだいで断られて「まだです」と誤診する */
+    const { error } = NEWEST_MARK.rpc
+      ? await supabase.rpc(NEWEST_MARK.rpc)
+      : await supabase.from(NEWEST_MARK.table).select('*').limit(1)
     if (!error) return 'ok'
     if (noTable(error)) return 'missing'
     return 'unknown'                  // 通信の失敗など。**騒がない**

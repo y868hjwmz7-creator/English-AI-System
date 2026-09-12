@@ -40,11 +40,12 @@ import GoalBar from './GoalBar.jsx'
 import {
   KNOWN_AFTER, canMarkKnown,
   loadGlossDetail, loadMyWordbook, loadVocabWeek, loadVocabByIndustry,
+  WORDBOOK_LIMIT, WORDBOOK_LIMIT_OLD,
   loadWordbookCounts, loadWordbookViewers, learningSupported,
   noteWordbookView, normWord, setWordStatus,
 } from '../lib/vocab.js'
 import {
-  QUIZ_FORMS, buildSession, isSelfGraded, makeChoices, pickForm, spellMatches,
+  QUIZ_FORMS, WORD_ORDERS, buildSession, isSelfGraded, makeChoices, pickForm,
 } from '../lib/wordQuiz.js'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
@@ -52,7 +53,8 @@ import WordRadio from './WordRadio.jsx'
 import { listTracks } from '../lib/bgm.js'
 import { loadRateId, rateOf } from '../lib/speechRate.js'
 import {
-  SCOPES, WORD_GROUPS, groupLead, loadScope, loadSize, runKeyOf, saveScope, saveSize,
+  SCOPES, WORD_GROUPS, groupLead, loadForm, loadOrder, loadRepeat, loadScope, loadSize,
+  runKeyOf, saveForm, saveOrder, saveRepeat, saveScope, saveSize,
   scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import { clozeAt } from '../lib/clozeSentence.js'
@@ -68,7 +70,7 @@ import BasicWordsPick from './BasicWordsPick.jsx'
 import SpeechWordsPick from './SpeechWordsPick.jsx'
 import { basicJaOf, basicPosOf } from '../lib/basicsCourse.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
-import { CloseIcon, FocusIcon, MusicIcon, PrintIcon } from './Icons.jsx'
+import { CloseIcon, FocusIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
@@ -317,7 +319,14 @@ export default function Wordbook({
      中身は刷る一瞬だけ描く —— 1,200 語を常に描くと画面が重くなる
      (教材のカードの `printId` とまったく同じ作法・CLAUDE.md) */
   const [printing, setPrinting] = useState(false)
-  const [want, setWant] = useState('auto')      // 出題の形。auto は箱に合わせる
+  /* **出題の形は覚える**(2026-09)。「おまかせ」は外した ——
+     この人の単語帳はほとんどが箱0で、**ずっと4択**にしかならず、
+     名前が嘘になっていた(経緯は `wordQuiz.js` の頭) */
+  const [want, setWant] = useState(() => loadForm('word'))
+  /** 並べ方(ランダム / 教材ごと)。Quick Response にはもともとある */
+  const [order, setOrder] = useState(() => loadOrder('word'))
+  /** 出し切っても止まらないか(2026-09 利用者の指定) */
+  const [repeat, setRepeat] = useState(() => loadRepeat('word'))
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
   /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
      絞り込みは手元で行う。選ぶたびに聞き直さない */
@@ -341,7 +350,6 @@ export default function Wordbook({
      長い文が開いたままだと、答えの4択が画面の外へ出てしまう。 */
   const [seenOpen, setSeenOpen] = useState(false)
   const [deep, setDeep] = useState(false)
-  const [typed, setTyped] = useState('')        // つづりの入力
   const [judged, setJudged] = useState(null)    // 4択・つづりの判定
   /** 4択で押した選択肢。**まちがいを赤くする相手**を見分けるために持つ */
   const [pickedChoice, setPickedChoice] = useState(null)
@@ -414,12 +422,23 @@ export default function Wordbook({
   /** いま押している段。`due`(既定)なら、押していない */
   const group = current.id === 'due' ? null : current.id
 
+  /* **その段に本当は何語あるか。** 3つの札(`counts`)は表を直に数えている。
+     `due` の段は「まだ + 覚えかけ」なので、2つを足す */
+  const expected = current.id === 'due'
+    ? (counts.unknown ?? 0) + (counts.learning ?? 0)
+    : (counts[current.id] ?? 0)
+  /* **切られているか。** 0056 を貼る前はちょうど 200 で返る。
+     貼ったあとも上限はあるので、**数字を決め打ちにしない** */
+  const capped = (rows.length >= WORDBOOK_LIMIT_OLD && expected > rows.length)
+    ? expected - rows.length
+    : 0
+
   const reload = useCallback(async () => {
     setLoading(true)
     const [list, tally, wk, seen, byField, aim] = await Promise.all([
       current.status
         ? loadMyWordbook({
-          status: current.status, dueOnly: current.dueOnly, limit: 200, learnerId,
+          status: current.status, dueOnly: current.dueOnly, limit: WORDBOOK_LIMIT, learnerId,
         })
         : Promise.resolve({ data: [] }),
       loadWordbookCounts(learnerId), loadVocabWeek(learnerId),
@@ -480,7 +499,7 @@ export default function Wordbook({
     setQueue([])
     doneRef.current = []
     setResult(null)
-    setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
+    setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
     setPickedChoice(null)
     // **読み直したときだけ組み直す。** 答えたときには組み直さない
     setDeal((n) => n + 1)
@@ -626,19 +645,20 @@ export default function Wordbook({
     /* **絞り込みの欄を足したら、ここも一緒に効く。** 鍵を並べ直さない
        (`filter.day, filter.material, …` と書いていたので、レベルを
        足したときに**そこだけ反映されなかった**) */
-    [runKeyOf({ scope, size, filter }), scope],
+    [runKeyOf({ scope, size, filter, order }), scope],
   )
 
   const start = useCallback(() => {
     const pool = poolNow()
-    setQueue(buildSession(pool, takeCount(size, pool.length), { shuffleAll: scope !== 'due' }))
+    setQueue(buildSession(pool, takeCount(size, pool.length),
+      { shuffleAll: scope !== 'due', order }))
     doneRef.current = []
     setResult(null)
-    setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
+    setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
     setPickedChoice(null)
     setStarted(true)
     setRunning(true)
-  }, [poolNow, scope, size])
+  }, [poolNow, scope, size, order])
 
   /**
    * **聞き流しを始める**(2026-09 利用者の指定)。
@@ -669,7 +689,7 @@ export default function Wordbook({
    * `setFilter` のすぐあとでは古い値しか読めないので、
    * **値そのものを見張って、変わったら組み直す。**
    */
-  const runKey = runKeyOf({ scope, size, filter, group })
+  const runKey = runKeyOf({ scope, size, filter, group, order })
   const runKeyRef = useRef(runKey)
   useEffect(() => {
     if (!running || !started) { runKeyRef.current = runKey; return }
@@ -852,7 +872,7 @@ export default function Wordbook({
        (2026-09 に「覚えた」を外したので、見ていると全部 × になる) */
     doneRef.current.push({ word: row.display || row.word_norm, ok: status !== 'unknown' })
     setRows((list) => list.filter((r) => r.word_norm !== row.word_norm))
-    setShown(false); setDeep(false); setTyped(''); setJudged(null); setSeenOpen(false)
+    setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
     setPickedChoice(null)
     /* **3枚の札は、押したとおりに動かす。**
        「覚えかけ」を押したのに数が動かないと、記録されていないように見える。
@@ -971,6 +991,27 @@ export default function Wordbook({
         lead={groupLead(WORD_GROUPS, group, '語')}
       />
 
+      {/* **読めていないことを、黙って隠さない**(2026-09 実機・利用者の問い)。
+
+            > なぜ「まだ」が1900個以上あるのに出し方で選べるのが200個なのですか？
+
+          上の3つの札は**表を直に数えている**ので正しい。ところが
+          「出しかた」の札は**読み込んだ行から数えている**ので、
+          0056 を貼るまでは**どの範囲を選んでも 200** と出る。
+          数だけでなく、実際に出る語も・4択のまちがいも・聞き流しも、
+          ぜんぶ同じ 200 語の中で回っている。**そう書く。**
+
+          **0056 を貼れば、この行はひとりでに消える。** */}
+      {capped > 0 && (
+        <p className="hint wb-capped">
+          いまこの画面に読めているのは <strong>{rows.length} 語</strong>までです
+          (この段はぜんぶで {expected} 語)。
+          「出しかた」の札の数も、実際に出る語も、この {rows.length} 語から選んでいます。
+          {' '}
+          <strong>0056 の SQL</strong> を貼ると、ぜんぶ読めるようになります。
+        </p>
+      )}
+
       {/* トレーナーが見た。**人が見ていると分かることが、いちばん効く** */}
       {viewers.length > 0 && (
         <p className="wordbook-seenby">
@@ -1079,7 +1120,20 @@ export default function Wordbook({
                   つぎの {takeCount(size, restInScope)} 語
                 </button>
               )
-              : <p className="hint">この範囲は終わりです。</p>}
+              /* **「繰り返す」が入っていたら、行き止まりを作らない**
+                 (2026-09 利用者の指定)。読み直すと、答えた語も戻ってくる ——
+                 **間隔の決まりは壊れない。** 先取りしたぶんは
+                 `shouldRecord()` が記録しないので、何周しても
+                 明日の復習は空にならない。
+                 **数は書かない** —— 読み直すまで何語あるか分からない */
+              : repeat
+                ? (
+                  <button type="button" className="btn btn--primary" onClick={reload}>
+                    <RepeatIcon />
+                    もう一度この範囲を回す
+                  </button>
+                )
+                : <p className="hint">この範囲は終わりです。</p>}
           </SessionResult>
         </div>
         </div>
@@ -1110,6 +1164,17 @@ export default function Wordbook({
               narrowed={narrowed}
               onScope={(id) => { setScope(id); saveScope('word', id) }}
               onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
+              forms={QUIZ_FORMS}
+              form={want}
+              onForm={(id) => {
+                setWant(id); saveForm('word', id)
+                setShown(false); setJudged(null); setPickedChoice(null)
+              }}
+              orders={WORD_ORDERS}
+              order={order}
+              onOrder={(id) => { setOrder(id); saveOrder('word', id) }}
+              repeat={repeat}
+              onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
               onStart={start}
             >
               {/* **絞り込みも「出しかた」の中へ**(2026-09 利用者の指定)。
@@ -1206,23 +1271,25 @@ export default function Wordbook({
                     narrowed={narrowed}
                     onScope={(id) => { setScope(id); saveScope('word', id) }}
                     onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
+                    forms={QUIZ_FORMS}
+                    form={want}
+                    onForm={(id) => {
+                      setWant(id); saveForm('word', id)
+                      setShown(false); setJudged(null); setPickedChoice(null)
+                    }}
+                    orders={WORD_ORDERS}
+                    order={order}
+                    onOrder={(id) => { setOrder(id); saveOrder('word', id) }}
+                    repeat={repeat}
+                    onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
                     onStart={start}
                   >
                     <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
                   </ReviewScope>
-                  <label className="wb-formpick">
-                    <span className="sr-only">出題の形</span>
-                    <select value={want}
-                            onChange={(e) => {
-                              setWant(e.target.value)
-                              setShown(false); setJudged(null); setPickedChoice(null)
-                            }}>
-                      <option value="auto">おまかせ</option>
-                      {QUIZ_FORMS.map((f) => (
-                        <option key={f.id} value={f.id}>{f.label}</option>
-                      ))}
-                    </select>
-                  </label>
+                  {/* **出題の形は、ここから「出しかた」の中へ移した**
+                      (2026-09 実機・利用者の指摘「スマホでの『おまかせ』が
+                      画面に入り切らずに切れています」)。帯には
+                      **とじる と 出しかた の2つ**しか置かない */}
                 </div>
                 <div className="wb-run-bar" role="presentation">
                   {Array.from({ length: total }, (unused, i) => (
@@ -1312,24 +1379,10 @@ export default function Wordbook({
                   <ClozeFace sentence={card.seen_in} word={word}
                              meaning={card.meaning_ja} shown={swapped} />
                 )
-                : form === 'ja2en' || form === 'spell'
+                : form === 'ja2en'
                 ? (swapped
                   ? (
-                    /* つづりを書く形では、**合っていたかも同じ場所で返す。**
-                       ✗ と綴りを並べただけだと、**その綴りが
-                       まちがいのように読める**ので「正解は」を添える
-                       (4択と同じ作法・CLAUDE.md) */
-                    <span className={`wordcard-word wordcard-word--en${
-                      form === 'spell' && judged !== null
-                        ? (judged ? ' wordcard-judged is-ok' : ' wordcard-judged is-ng') : ''}`}>
-                      {form === 'spell' && judged !== null && (
-                        <span className="wordcard-mark" aria-hidden="true">
-                          {judged ? '✓' : '✗'}
-                        </span>
-                      )}
-                      {form === 'spell' && judged === false && (
-                        <span className="wordcard-lead">正解は</span>
-                      )}
+                    <span className="wordcard-word wordcard-word--en">
                       <span lang="en">{word}</span>
                     </span>
                   )
@@ -1389,13 +1442,13 @@ export default function Wordbook({
                     {seenOpen ? '▾ 出会った文' : '▸ 出会った文'}
                   </button>
                   {/* 答えが聞こえてしまう形では、出す前に鳴らさない */}
-                  {seenOpen && ((form !== 'ja2en' && form !== 'spell') || shown) && (
+                  {seenOpen && (form !== 'ja2en' || shown) && (
                     <SpeakButton text={card.seen_in} className="etext-listen" />
                   )}
                 </div>
                 {seenOpen && (
                   <SeenIn sentence={card.seen_in} word={word}
-                          hide={(form === 'ja2en' || form === 'spell') && !shown} />
+                          hide={form === 'ja2en' && !shown} />
                 )}
               </div>
             )}
@@ -1443,22 +1496,6 @@ export default function Wordbook({
                   </li>
                 ))}
               </ul>
-            )}
-
-            {/* ── つづりを書く ───────────────────────────────── */}
-            {form === 'spell' && (
-              <form className="wordbook-spell"
-                    onSubmit={(e) => { e.preventDefault(); judge(spellMatches(typed, word)) }}>
-                <input type="text" value={typed} lang="en" autoCapitalize="off"
-                       autoCorrect="off" spellCheck="false" placeholder="英語で書く"
-                       disabled={judged !== null}
-                       onChange={(e) => setTyped(e.target.value)} />
-                <button type="submit" className="btn btn--primary"
-                        disabled={judged !== null || !typed.trim()}>答える</button>
-                {/* **「正しくは …」は、ここに出さない**(2026-09)。
-                    答えたとたんに、上の枠が正しい綴りと入れ替わる。
-                    ここにも出すと**同じ答えが2か所**に出る */}
-              </form>
             )}
 
             {/* ── 思い出す / 日本語 → 英語 ───────────────────── */}

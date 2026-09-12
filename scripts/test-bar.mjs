@@ -873,28 +873,36 @@ for (const [label, want] of Object.entries(WANT)) {
   /* **伸ばすのは「思い出す」と「日本語 → 英語」だけ**(利用者の指定)。
      4択とつづりは、下に選択肢や入力欄があるので**もともと空いていない** ——
      伸ばすと語と選択肢が数百 px 離れる。**両方向を見る** */
-  /* 4択・つづりは伸ばさないが、**出題の枠は画面の余りから決める**
+  /* 4択は伸ばさないが、**出題の枠は画面の余りから決める**
      (2026-09 実機・利用者の指定)。ここを決め打ち(9rem)に戻すと、
      ホーム画面(ブラウザの帯が無く縦が長い)で
      **「出会った文」が枠の中で切れ、余りはただの空白になる。**
-     `[何を, 幅, 高さ, 箱, 伸ばすか, 枠の下限]` */
+
+     **形は「箱」ではなく、選んだものから決まる**(2026-09 実機・
+     利用者の指定「おまかせ…なくしましょう」)。だから端末の控えに
+     入れてから開く —— **画面が本当にそこを読んでいるか**も、
+     これで一緒に確かめられる。
+     `[何を, 幅, 高さ, 形, 伸ばすか, 枠の下限]` */
   const CASES = [
-    ['スマホ / 思い出す', 390, 844, 2, true],
-    ['320px / 思い出す', 320, 568, 2, true],
+    ['スマホ / 思い出す', 390, 844, 'recall', true],
+    ['320px / 思い出す', 320, 568, 'recall', true],
     /* **穴埋め**(0047)。出会った文をまるごと出すので、いちばん背が高い。
        ここが伸びないと、答えの2つが画面の外へ出る */
-    ['スマホ / 穴埋め', 390, 844, 3, true],
-    ['320px / 穴埋め', 320, 568, 3, true],
-    ['スマホ / 日本語 → 英語', 390, 844, 4, true],
+    ['スマホ / 穴埋め', 390, 844, 'cloze', true],
+    ['320px / 穴埋め', 320, 568, 'cloze', true],
+    ['スマホ / 日本語 → 英語', 390, 844, 'ja2en', true],
     /* **ホーム画面(PWA)**。ブラウザの帯が無いぶん縦が長い。
        ここがいちばん空いていた(上下 176px ずつ・実測) */
-    ['スマホ / 4択 / ホーム画面 844', 390, 844, 0, false, 320],
+    ['スマホ / 4択 / ホーム画面 844', 390, 844, 'choice', false, 320],
     /* **Chrome**(帯のぶん 110px ほど低い) */
-    ['スマホ / 4択 / Chrome 734', 390, 734, 0, false, 300],
-    ['スマホ / つづり', 390, 844, 6, false, 320],
+    ['スマホ / 4択 / Chrome 734', 390, 734, 'choice', false, 300],
   ]
-  for (const [what, w, h, useBox, wantTall, wantQ] of CASES) {
-    box = useBox
+  for (const [what, w, h, useForm, wantTall, wantQ] of CASES) {
+    /* 箱は据え置き(2)。**形は箱で決まらない**ので、どれでもよい */
+    box = 2
+    await page.addInitScript((f) => {
+      try { localStorage.setItem('eas.review.word.form', f) } catch { /* 使えなくても困らない */ }
+    }, useForm)
     await page.setViewportSize({ width: w, height: h })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
       { waitUntil: 'networkidle' })
@@ -943,14 +951,14 @@ for (const [label, want] of Object.entries(WANT)) {
        伸ばさなくても画面の半分ほどになる(実測 424 / 844px)。
        見るのは**印が付いている形かどうか**と、
        付いている形が**本当に画面を使い切っているか**の2つである */
-    if (useBox === 3 && !m.穴埋め) {
+    if (useForm === 'cloze' && !m.穴埋め) {
       ng(`${what} … 穴埋めになっていない`,
         '`pickForm()` が「思い出す」に落ちている(出会った文にその語が無い)')
     } else if (m.伸ばす印 !== wantTall) {
       ng(`${what} … 伸ばす印(\`wordcard--recall\`)が ${m.伸ばす印 ? '付いている' : '付いていない'}`,
         wantTall
-          ? '「思い出す」と「日本語 → 英語」には付ける'
-          : '4択とつづりには付けない(下に選択肢や入力欄がある)')
+          ? '「思い出す」「穴埋め」「日本語 → 英語」には付ける'
+          : '4択には付けない(下に選択肢がある)')
     } else if (wantTall && m.カード < m.画面 * 0.5) {
       ng(`${what} … カードが画面の半分も使っていない(${m.カード} / ${m.画面}px)`,
         '`.wbfocus .wordcard--recall` を伸ばす指定が外れている')
@@ -978,7 +986,7 @@ for (const [label, want] of Object.entries(WANT)) {
     }
     /* **穴埋めは、目でも1枚だけ確かめる**(こちらには画面が見えないので、
        せめて絵にして残す)。答えを開いた形も撮る */
-    if (process.env.SHOT && useBox === 3 && w === 390) {
+    if (process.env.SHOT && useForm === 'cloze' && w === 390) {
       await page.screenshot({ path: `${process.env.SHOT}/cloze-q.png` })
       for (const btn of await page.$$('button')) {
         if (((await btn.textContent()) ?? '').includes('英語を見る')) { await btn.click(); break }
@@ -3012,6 +3020,18 @@ export default defineConfig({
         return {
           形: document.querySelector('.sheet') ? 'シート' : '吹き出し',
           札の数: chips.length,
+          /* **消した形が残っていないか**(2026-09)。数だけ見ていると、
+             「おまかせ」を残したまま別の札を消しても緑になる */
+          札の言葉: chips.map((c) => c.textContent.trim()).join('/'),
+          見出し: [...pop.querySelectorAll('.rscope-head')]
+            .map((e) => e.textContent.trim()).join('/'),
+          /* **「繰り返す」が、個数の札と同じ行にいるか**(利用者の指定
+             「一度に出す個数の横に」)。別の行に落ちていたら赤くする */
+          繰り返すが個数と同じ行: (() => {
+            const rep = pop.querySelector('.rscope-repeat')
+            const row = pop.querySelector('[aria-labelledby="rscope-many"]')
+            return !!rep && !!row && row.contains(rep)
+          })(),
           低い札: Math.min(...chips.map((c) => Math.round(c.getBoundingClientRect().height))),
           押せない札: chips.filter((c) => c.disabled).length,
           数を出している: pop.querySelectorAll('.chip-count').length,
@@ -3063,8 +3083,24 @@ export default defineConfig({
     } else if (開.数を出している < 8) {
       ng(`復習の範囲 ${w}px … 札に数が出ていない(${開.数を出している} 個)`,
         '「1週間以内に23問ある」と見えて初めて、範囲を選べる')
-    } else if (開.札の数 !== 13) {
-      ng(`復習の範囲 ${w}px … 札が 13 個(範囲8 + 個数5)ではない`, `${開.札の数} 個`)
+    /* 範囲8 + 個数5 + 繰り返す1 + 訊き方4 + 並べ方2 = 20
+       (2026-09 実機・利用者の指定で、上の帯から3つを移した) */
+    } else if (開.札の数 !== 20) {
+      ng(`復習の範囲 ${w}px … 札が 20 個`
+        + `(範囲8 + 個数5 + 繰り返す1 + 訊き方4 + 並べ方2)ではない`, `${開.札の数} 個`)
+    /* **「おまかせ」は消した**(2026-09 実機・利用者の指定)。
+       この人の単語帳はほとんどが箱0で、**ずっと4択**にしかならず、
+       名前が嘘になっていた */
+    } else if (開.札の言葉.includes('おまかせ') || 開.札の言葉.includes('つづりを書く')) {
+      ng(`復習の範囲 ${w}px … 消したはずの形が札に残っている`, 開.札の言葉)
+    /* **見出しが無いと、どの札が何なのか分からない** */
+    } else if (!開.見出し.includes('訊き方') || !開.見出し.includes('並べ方')) {
+      ng(`復習の範囲 ${w}px … 訊き方・並べ方の見出しが出ていない`, 開.見出し)
+    /* **繰り返すは「一度に出す個数の横」**(利用者の指定)。
+       別の行に落ちていたら、言われたとおりに置けていない */
+    } else if (!開.繰り返すが個数と同じ行) {
+      ng(`復習の範囲 ${w}px … 「繰り返す」が個数と別の行にある`,
+        '利用者の指定は「一度に出す個数の横に」である')
     /* **吹き出しが画面からはみ出さない。** はみ出すと、
        いちばん下の札に永久に手が届かない(語の意味の吹き出しと同じ話) */
     } else if (!開.画面内) {
@@ -3220,8 +3256,13 @@ export default defineConfig({
     if (!/<ReviewScope\b/.test(src)) {
       ng(`復習の範囲 … ${f} が札を出していない`)
     /* **絞り込みも中へ入れているか**(2026-09 利用者の指定)。
-       外に出したままだと、設定がまた2か所に分かれる */
-    } else if (!/<ReviewScope[\s\S]{0,400}<WordbookFilter\b/.test(src)) {
+       外に出したままだと、設定がまた2か所に分かれる。
+
+       **「あとに書いてあるか」では足りない**(`SearchBar` で一度踏んだ)——
+       箱の下に戻しても、それは満たされてしまう。
+       **開きタグ → 絞り込み → 閉じタグ**の順で見る。
+       字数で見張ると、props を足したときに巻き添えで赤くなる */
+    } else if (!/<ReviewScope[\s\S]*?<WordbookFilter\b[\s\S]*?<\/ReviewScope>/.test(src)) {
       ng(`復習の範囲 … ${f} が絞り込みを「出しかた」の外に置いている`,
         '設定は1か所。押すものは「出す」と「出しかた」の2つだけにする')
     } else {

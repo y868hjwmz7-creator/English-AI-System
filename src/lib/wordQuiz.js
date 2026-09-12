@@ -10,18 +10,30 @@
  *   ただし4択は「見て分かる」(再認)であって、
  *   「口から出る」(再生)より**弱い。** 4択だけでは話せるようにならない。
  *
- *   そこで**同じ語が、覚えるにつれて勝手に難しくなる**ようにした。
- *   0015 で入れた箱(0〜6)を、**間隔だけでなく出題の形にも使う。**
+ *   そこで**同じ語が、覚えるにつれて勝手に難しくなる**ようにした
+ *   (0015 で入れた箱を、間隔だけでなく出題の形にも使う)。
  *
- *   | 箱 | 形 | 何の力がつくか |
- *   |---|---|---|
- *   | 0〜1 | 4択 | まず触れる回数を稼ぐ |
- *   | 2    | 思い出す(自己申告) | 意味を引き出す |
- *   | **3**| **穴埋め** | **文の中で使えるようにする** |
- *   | 4〜5 | 日本語 → 英語 | 話すときに出てくる |
- *   | 6    | つづりを書く | メールで書ける |
+ * ============================================================================
+ * 【「おまかせ」と「つづりを書く」は外した】(2026-09 実機・利用者の指定)
  *
- *   **表も列も増やさない。** 箱はもう入っている。
+ *   > 「おまかせ」という表示は分かりにくく、
+ *   > 実際にはおまかせではなくずっと四択なのでなくしましょう。
+ *   > そして、綴りを描くもいらないです。
+ *
+ *   **利用者の見立てのとおりだった。** おまかせは箱に合わせて形を変える
+ *   仕組みだったが、この人の単語帳は「まだ」が 1,197 語 —— つまり
+ *   **ほとんどが箱0**である。箱0は4択なので、
+ *   **何度開いてもずっと4択**にしかならない。
+ *   名前が「おまかせ」なのに中身が固定では、名前が嘘になる。
+ *
+ *   **箱に合わせて形を変える道は、いったん閉じた。**
+ *   形は**自分で選ぶ**(既定は4択)。
+ *   戻したくなったら「箱に合わせる」という名前で足し直す ——
+ *   **「おまかせ」という名前では戻さない**(何が起きるか分からない)。
+ *
+ *   つづりを書く形も**道具ごと消した**(値を偽にするだけにしない・
+ *   CLAUDE.md)。`want` は端末にしか残らないので、
+ *   消しても過去の記録は1つも壊れない。
  *
  * ============================================================================
  * 【穴埋めを足した理由】(2026-09 利用者の指定)
@@ -57,25 +69,18 @@ export const QUIZ_FORMS = [
   { id: 'recall', label: '思い出す', hint: '意味を言ってから確かめる' },
   { id: 'cloze', label: '穴埋め', hint: '文の空いたところに入る語を思い出す' },
   { id: 'ja2en', label: '日本語 → 英語', hint: '英語を言ってから確かめる' },
-  { id: 'spell', label: 'つづりを書く', hint: '打ち込んで答える' },
 ]
+
+/** 何も選んでいないときの形。**「おまかせ」は作らない**(上記) */
+export const DEFAULT_FORM = 'choice'
+
+/** 知らない id(消した `auto` / `spell` が端末に残っている)は既定に落とす */
+export const formOf = (id) => (QUIZ_FORMS.some((f) => f.id === id) ? id : DEFAULT_FORM)
 
 export const formLabel = (id) => QUIZ_FORMS.find((f) => f.id === id)?.label ?? id
 
-/** 自動でえらぶときの形。**箱が上がるほど難しくなる** */
-export function formForBox(box) {
-  const b = Number(box ?? 0)
-  if (b <= 1) return 'choice'
-  if (b <= 2) return 'recall'
-  // 箱3 は**穴埋め**(2026-09)。意味が言えるようになったら、次は文の中で使う。
-  // 出会った文が無い語では作れないので、`pickForm()` が「思い出す」に落とす
-  if (b <= 3) return 'cloze'
-  if (b <= 5) return 'ja2en'
-  return 'spell'
-}
-
 /**
- * 自分で答え合わせをする形か(4択とつづりは機械が判定する)。
+ * 自分で答え合わせをする形か(4択だけは機械が判定する)。
  *
  * **穴埋めもこちら。** 箱3 の段でつづりまで求めるのは早すぎる
  * (書けるようにするのは箱6 の役目である)。
@@ -84,6 +89,51 @@ export function formForBox(box) {
  */
 export const isSelfGraded = (form) =>
   form === 'recall' || form === 'ja2en' || form === 'cloze'
+
+/**
+ * ============================================================================
+ * 【並べ方】(2026-09 実機・利用者の指定)
+ *
+ *   > 出し方の中に、「ランダムで」と「教材ごと」選んだを選べるように
+ *
+ * Quick Response の復習には**もともとある**(「混ぜる / 教材の順」)。
+ * 単語帳だけが**いつも混ぜる**の一択だった。
+ * 「先週の記事に出てきた語だけを、その並びでさらう」ができない。
+ *
+ * **一覧はここ1か所。** 画面(`ReviewScope`)は受け取って札にするだけで、
+ * 自分では1つも持たない。
+ */
+export const WORD_ORDERS = [
+  { id: 'random', label: 'ランダム' },
+  { id: 'material', label: '教材ごと' },
+]
+
+export const DEFAULT_ORDER = 'random'
+export const orderOf = (id) => (WORD_ORDERS.some((o) => o.id === id) ? id : DEFAULT_ORDER)
+
+/**
+ * 教材ごとにまとめる。**新しい教材から。**
+ *
+ * - 教材名は `2026-09-08 / …` で始まる(`copyTitleFor`)ので、
+ *   名前の逆順がそのまま**新しい順**になる
+ * - **教材の無い語(手で入れた語・基礎単語)は、いちばん後ろ。**
+ *   落とさない —— 並べ替えは減らす道具ではない
+ * - **中の並びは変えない。** サーバーが返した順のまま
+ */
+export function orderWords(rows, order = DEFAULT_ORDER) {
+  const list = [...(rows ?? [])]
+  if (orderOf(order) !== 'material') return list
+  const groups = new Map()
+  for (const r of list) {
+    const k = String(r?.material_title ?? '').trim()
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(r)
+  }
+  const named = [...groups.entries()]
+    .filter(([k]) => k)
+    .sort((a, b) => b[0].localeCompare(a[0], 'ja'))
+  return [...named.flatMap(([, v]) => v), ...(groups.get('') ?? [])]
+}
 
 /** 混ぜる。**毎回順番を変える。** 並び順で覚えると思い出す練習にならない */
 export function shuffle(list) {
@@ -114,8 +164,13 @@ export const SESSION_SIZE = 10
  * **それぞれの中では混ぜる。** 並び順で覚えてしまわないようにするため
  * (単語帳の決まり・CLAUDE.md)。
  */
-export function buildSession(rows, size = SESSION_SIZE, { shuffleAll = false } = {}) {
+export function buildSession(
+  rows, size = SESSION_SIZE, { shuffleAll = false, order = DEFAULT_ORDER } = {},
+) {
   const list = rows ?? []
+  /* **「教材ごと」を選んだら、混ぜない。**
+     混ぜてしまうと、並べ方を選んだ意味がそもそも無い(2026-09) */
+  if (orderOf(order) === 'material') return orderWords(list, 'material').slice(0, size)
   /* **おさらいでは、まるごと混ぜる**(2026-09 利用者の指定)。
      > 反復してランダムに出題するよう変更してください
 
@@ -130,15 +185,6 @@ export function buildSession(rows, size = SESSION_SIZE, { shuffleAll = false } =
   const rest = shuffle(list.filter((r) => r.status !== 'unknown' && r.status !== 'learning'))
   return [...yet, ...half, ...rest].slice(0, size)
 }
-
-/** 答え合わせに使う形にそろえる。大文字小文字と前後の空白は見ない */
-const normAnswer = (text) => String(text ?? '')
-  .toLowerCase().replace(/\s+/g, ' ').replace(/[.,!?;:"']/g, '')
-  .trim()
-
-/** つづりの答え合わせ */
-export const spellMatches = (typed, word) => !!normAnswer(typed)
-  && normAnswer(typed) === normAnswer(word)
 
 /**
  * 4択をつくる。正解1つ + まちがい3つ。
@@ -177,10 +223,13 @@ export function makeChoices(row, pool, count = 4) {
 
 /**
  * その語をどの形で出すか決める。
- * `want` が 'auto' なら箱に合わせる。作れない形になったら思い出す形に落とす。
+ *
+ * **作れない形になったら「思い出す」に落とす**(行き止まりを作らない)。
+ * 知らない id は既定(4択)に落とす —— 端末に残った `auto` / `spell` が
+ * そのまま渡ってくることがある(2026-09 に消した形)。
  */
-export function pickForm(row, pool, want = 'auto') {
-  const form = want === 'auto' ? formForBox(row?.box) : want
+export function pickForm(row, pool, want = DEFAULT_FORM) {
+  const form = formOf(want)
   // 4択は語が足りないと作れない。**空の選択肢を出すくらいなら形を変える**
   if (form === 'choice' && !makeChoices(row, pool)) return 'recall'
   /* 穴埋めは**出会った文**が要る(0018)。手で入れた語には無いし、

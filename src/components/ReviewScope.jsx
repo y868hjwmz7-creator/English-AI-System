@@ -42,7 +42,7 @@ import {
   SCOPES, SIZES, scopeCounts, scopeLead, scopePool, sizeLabel, takeCount, todayKey, isDueNow,
 } from '../lib/reviewScope.js'
 import SettingsSheet from './SettingsSheet.jsx'
-import { FocusIcon, GearIcon } from './Icons.jsx'
+import { FocusIcon, GearIcon, RepeatIcon } from './Icons.jsx'
 
 /**
  * @param {Array}  rows   絞り込みを当てたあとの一覧
@@ -73,6 +73,22 @@ export default function ReviewScope({
    * 変えたその場で組み直すのは、呼ぶ側(`runKeyOf` を見張る)の役目である。
    */
   compact = false,
+  /**
+   * **出題の形・並べ方・繰り返す**(2026-09 実機・利用者の指定)。
+   *
+   *   > 「おまかせ」という表示は分かりにくく、実際にはおまかせではなく
+   *   > ずっと四択なのでなくしましょう。…出し方の中に、「ランダムで」と
+   *   > 「教材ごと」選んだを選べるように、また一度に出す個数の横に
+   *   > 「繰り返す」ボタンも作ってください
+   *
+   * **一覧は呼ぶ側が渡す。** ここで持つと、Quick Response と単語帳で
+   * 並ぶものが違うのに同じ一覧を見ることになる
+   * (`children`(しぼる)とまったく同じ考え方)。
+   * **渡さなければ、その行ごと出ない** —— 効かない操作を見せない。
+   */
+  forms = null, form = null, onForm = null,
+  orders = null, order = null, onOrder = null,
+  repeat = false, onRepeat = null,
 }) {
   const today = todayKey()
   const counts = scopeCounts(rows, today)
@@ -126,7 +142,61 @@ export default function ReviewScope({
             {sizeLabel(s)}
           </button>
         ))}
+        {/* **「一度に出す個数の横」**(利用者の指定)。同じ行に置く ——
+            「10 語ずつ、繰り返す」と続けて読めるのが、いちばん短い説明である */}
+        {onRepeat && (
+          <button
+            type="button"
+            aria-pressed={repeat}
+            className={`chip rscope-chip rscope-repeat${repeat ? ' chip--on' : ''}`}
+            onClick={() => onRepeat(!repeat)}
+          >
+            <RepeatIcon />
+            繰り返す
+          </button>
+        )}
       </div>
+
+      {/* **出題の形。** 上の帯から、ここへ移した(スマホで切れていた) */}
+      {forms && forms.length > 0 && (
+        <>
+          <p className="rscope-head" id="rscope-form">訊き方</p>
+          <div className="chiprow" role="group" aria-labelledby="rscope-form">
+            {forms.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                aria-pressed={f.id === form}
+                title={f.hint}
+                className={`chip rscope-chip${f.id === form ? ' chip--on' : ''}`}
+                onClick={() => onForm(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* **並べ方**(ランダム / 教材ごと) */}
+      {orders && orders.length > 0 && (
+        <>
+          <p className="rscope-head" id="rscope-order">並べ方</p>
+          <div className="chiprow" role="group" aria-labelledby="rscope-order">
+            {orders.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                aria-pressed={o.id === order}
+                className={`chip rscope-chip${o.id === order ? ' chip--on' : ''}`}
+                onClick={() => onOrder(o.id)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </>
   )
 
@@ -153,7 +223,7 @@ export default function ReviewScope({
           onClose={() => setOpen(false)}
           title="出しかた"
           /* 札を押すと数が変わり、箱の高さも変わる。**置き直す合図を渡す** */
-          placeKey={`${scope}/${size}/${narrowed}`}
+          placeKey={`${scope}/${size}/${narrowed}/${form}/${order}/${repeat}`}
         >
           {選ぶ欄}
           {children && (
@@ -203,6 +273,8 @@ export default function ReviewScope({
 
       <p className="card-hint rscope-lead">
         {scopeLead(scope, unit)}
+        {/* **繰り返すなら、そう書く。** 押す前に何が起きるかを言う */}
+        {repeat && ` 出し切っても止まらず、もう一度この範囲を回します。`}
         {ahead > 0 && (
           <>
             {' '}
