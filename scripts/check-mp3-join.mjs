@@ -982,14 +982,36 @@ function fakeMp3({
       ng('戻した先で、すぐまた戻している(前の文をくり返してしまう)')
     } else ok('戻した先では、そのまま鳴り続ける')
 
-    /* **間(ま)の無い並びでは、1ミリ秒も変わらない**(2026-09 実機・4手め)。
-       1本にできなかった教材の文の区間は**割合の見積もり**で出すので、
-       声の端どうしがくっついている。そこで頭へ寄せると、
-       **今度は前の文へ食い込む。** `landEdge` は縁より手前へは行かない */
+    /* **間(ま)が無いところでは、逃がす向きが逆になる**(2026-09 実機・15手め)。
+       頭出しは**フレーム1枚(26ms)ぶん手前に吸い寄せられる。**
+       間が無い並び(割合の見積もり・控えが間を持っていない教材)で
+       文の頭ちょうどを頼むと、**必ず前の声の中に着く。**
+       だから**1枚ぶんうしろへ逃がす** ——
+       欠けるのは、その文自身の 26ms である。
+       **いちばん最初だけは逃がさない**(前に声が無い) */
     const flat = [{ start: 0, end: 1 }, { start: 1, end: 2 }, { start: 2, end: 3 }]
-    if (repeatSeek('sentence', past(2), { sentences: flat, duration: 3 }) !== 1) {
-      ng('間の無い並びで、戻る先が動いている(前の文へ食い込む)')
-    } else ok('間の無い並びでは、これまでどおり文の頭へ戻る')
+    const flatO = { sentences: flat, duration: 3 }
+    /* **ここでも値を書き写さない。** 見るのは**性質**である ——
+       ①前の声へ食い込まない ②欠けるのは一瞬だけ ③頭は逃がさない */
+    const back2 = repeatSeek('sentence', past(2), flatO)
+    if (!(back2 > 1 + 1e-9)) {
+      ng('間の無い並びで、文の頭ちょうどを頼んでいる(前の声へ食い込む)', `${back2}`)
+    } else if (!(back2 - 1 <= 0.05)) {
+      ng('間の無い並びで、逃がしすぎている(文の頭が欠ける)', `${back2}`)
+    } else if (repeatSeek('sentence', past(1), flatO) !== 0) {
+      ng('いちばん最初の文まで逃がしている(頭が欠ける)')
+    } else ok(`間の無い並びでは、少しうしろへ逃がす(頭は逃がさない・+${((back2 - 1) * 1000).toFixed(0)}ms)`)
+
+    /* **間が足りるところは、これまでどおり手前へ寄せる。**
+       逃がすのは足りないぶんだけである(そうしないと、
+       これまで合っていた教材で**頭が欠ける**) */
+    const wide = [{ start: 0, end: 1 }, { start: 1.4, end: 2.4 }, { start: 2.8, end: 3.8 }]
+    const wideBack = repeatSeek('sentence', past(mid(2.4, 2.8)), { sentences: wide, duration: 4 })
+    if (!(wideBack < 1.4)) {
+      ng('間が足りるのに、うしろへ逃がしている(文の頭が欠ける)', `${wideBack}`)
+    } else if (!(wideBack > 1)) {
+      ng('間が足りるのに、前の声の中まで戻している', `${wideBack}`)
+    } else ok('間が足りるところは、これまでどおり手前へ寄せる')
 
     // ③ 段落 … その段落の終わりまで来たら、その段落の頭へ
     const fore2 = mid(itemsG[0].end, itemsG[1].start)
@@ -1819,8 +1841,11 @@ function fakeMp3({
        この並びは割合の見積もりなので**間(ま)が無い** ——
        縁＝声の切れ目で、手前で折り返すとその文の最後が切れる */
     const end = secs[1].end + 0.01
-    if (repeatSeek('sentence', end, { sentences: secs }) !== secs[1].start) {
-      ng('文の終わりで、その文の頭へ戻らない')
+    /* 間が無い並びなので、戻る先は**その文の頭のすぐうしろ**になる
+       (フレーム1枚ぶん逃がす・15手め)。**値は書き写さない** */
+    const backTo = repeatSeek('sentence', end, { sentences: secs })
+    if (!(backTo > secs[1].start && backTo - secs[1].start <= 0.05)) {
+      ng('文の終わりで、その文の頭へ戻らない', `${backTo}`)
     } else if (repeatSeek('item', end, { sentences: secs }) !== null
       || repeatSeek('all', end, { sentences: secs }) !== null
       || repeatSeek('off', end, { sentences: secs }) !== null) {
@@ -1864,6 +1889,21 @@ function fakeMp3({
     } else if (!/export function clipDuration\(/.test(clips)) {
       ng('いま鳴っているものの長さを訊く道が無い')
     } else ok('鳴らす側が、いまの秒と長さの両方を渡している')
+  }
+
+  /* **フレーム1枚ぶんの吸い寄せを、二度直さない**(15手め)。
+     頼む先(`landSec`)が1枚ぶんを**先に見込んである**ので、
+     着地の見張りがそれより小さいずれまで直すと**二重に先へ送り**、
+     文の頭が 50ms 欠ける。**音は鳴るので、聴くまで分からない** */
+  {
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    const line = clips.match(/^const LAND_EPS = (.+)$/m)
+    if (!line) ng('着地の見張りの「これより小さいずれは直さない」が見つからない')
+    else if (!/FRAME_SEC/.test(line[1])) {
+      ng('着地の見張りが、フレーム1枚ぶんの吸い寄せまで直している', line[1])
+    } else if (!/^import \{ FRAME_SEC[,\s]/m.test(clips)) {
+      ng('フレームの大きさを書き写している(1か所から取っていない)')
+    } else ok('フレーム1枚ぶんの吸い寄せは、着地の見張りが直さない')
   }
 }
 

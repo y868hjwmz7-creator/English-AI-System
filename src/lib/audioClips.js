@@ -59,7 +59,7 @@ import {
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
-import { charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
+import { FRAME_SEC, charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
 import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
   FADE_STEP, FADE_STOP, applyGain, fadeGain, isMeasured, measureClip,
@@ -1028,8 +1028,15 @@ export function clipDuration() {
  */
 let fadeOrigin = null
 
-/** これより小さいずれは直さない(秒) */
-const LAND_EPS = 0.005
+/**
+ * これより小さいずれは直さない(秒)。
+ *
+ * **フレーム1枚(26ms)ぶんの吸い寄せは、直さない**(2026-09 実機・15手め)。
+ * 頼む先(`landSec`)が**その1枚ぶんを先に見込んである**ので、
+ * ここで直すと**二重に先へ送る**ことになり、文の頭が 50ms 欠ける。
+ * ここが見るのは、それより大きい外れだけである。
+ */
+const LAND_EPS = FRAME_SEC
 /** これだけ離れていたら、こちらの戻しのせいではない(秒) */
 const LAND_FAR = 1
 /** `seeked` が来ない端末のために、これを過ぎたら諦めて鳴らす(ミリ秒) */
