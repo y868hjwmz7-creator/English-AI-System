@@ -27,9 +27,9 @@ import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, indexAtTime, makeRepeatSeeker,
   rangeOf, repeatSeek, REPEAT_LOOK,
-  scaleSpans, seekSentence, sentenceSpansOf, shiftItems, shiftSeams, spansOf, wholeMark,
+  scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
-import { measureSeams, seamOffsets } from '../src/lib/seamFind.js'
+import { itemOffsFrom, measureSeams, seamOffsets } from '../src/lib/seamFind.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
@@ -2795,6 +2795,142 @@ function fakeMp3({
   }
 
   if (bad === before) ok('越えるのを待たず、次の刻みで越えるなら先に戻す')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑮ **文まで測る**(2026-09 実機・19手め)
+ *
+ *   > ほぼほぼ解決しましたが、たまに次の文の頭が入ります。
+ *   > こんな感じだと運頼りな気がしますが、、
+ *
+ * 17手めが測っていたのは**発言と発言の継ぎ目だけ**である。ところが
+ * くり返しの単位が「文」のときに使う縁は**文の区間**で、
+ * `shiftItems()` は同じ発言の文に**同じずれ**しか当てない。つまり
+ * **1つの発言の中にある文と文の継ぎ目は、一度も測っていなかった。**
+ *
+ * 見るのは5つ ——
+ *   ①発言だけ測ると、**縁が声の中に落ちる**(測る値打ちがあるか)
+ *   ②文まで測ると、**どの縁も本当の静けさの中に入る**
+ *   ③`itemOffsFrom()` が、1つめの文から項目のずれを出す
+ *   ④`shiftEach()` が、1文ずつ当てる
+ *   ⑤**画面と `wholeSeams` が、本当に文を渡して当てているか**
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+
+  const ms19 = (v) => `${(v * 1000).toFixed(0)}ms`
+  /** 1発言の中に2〜3文。**記事でも会話でもふつうに起きる形** */
+  const RATE = 8000
+  const shape = [[1.0, 0.9, 1.1], [1.3, 0.8], [1.0, 1.2]]
+  const INNER = 0.30      // 文と文の間(ま)
+  const OUTER = 0.55      // 発言と発言の間(ま)
+  const LEAD = 0.12
+
+  const real = []
+  let at = LEAD
+  shape.forEach((sents, k) => {
+    sents.forEach((d, j) => {
+      real.push({ start: at, end: at + d, item: k })
+      at += d + (j < sents.length - 1 ? INNER : 0)
+    })
+    if (k < shape.length - 1) at += OUTER
+  })
+  const total = at + 0.3
+  const wave = new Float32Array(Math.round(total * RATE))
+  let seed = 999
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff - 0.5 }
+  for (const s of real) {
+    const a = Math.round(s.start * RATE)
+    const b = Math.round(s.end * RATE)
+    for (let j = a; j < b; j += 1) wave[j] = rnd() * 0.5
+  }
+
+  // 控え(alignment)は間を数えていない = 継ぎ目 0 の並び
+  const rawSent = []
+  let t0 = 0
+  real.forEach((s) => {
+    rawSent.push({ start: t0, end: t0 + (s.end - s.start), item: s.item })
+    t0 += s.end - s.start
+  })
+  const rawItem = shape.map((_, k) => {
+    const mine = rawSent.filter((s) => s.item === k)
+    return { start: mine[0].start, end: mine[mine.length - 1].end }
+  })
+
+  /** 縁(`backEdge` と同じ出し方)が、本当の静けさの中にいるか */
+  const inSilence = (list) => {
+    let ng2 = 0
+    for (let i = 1; i < list.length; i += 1) {
+      const edge = (Number(list[i - 1].end) + Number(list[i].start)) / 2
+      if (!(edge > real[i - 1].end && edge < real[i].start)) ng2 += 1
+    }
+    return ng2
+  }
+
+  // ── ① 発言だけ測ると、どうなるか(測る値打ち)
+  {
+    const got = measureSeams(wave, RATE, rawItem, total)
+    const now = got ? shiftItems(rawSent, got.offs) : rawSent
+    const out = inSilence(now)
+    if (!out) {
+      ng('発言だけ測っても縁が合ってしまう(この検証では、文を測る値打ちを示せない)')
+    } else {
+      ok(`発言だけ測ると、縁が声の中に落ちる継ぎ目が ${out}/${rawSent.length - 1} 本ある`)
+    }
+  }
+
+  // ── ② 文まで測ると、どの縁も静けさの中に入る
+  const deep = measureSeams(wave, RATE, rawSent, total)
+  if (!deep) ng('文の区間からは、継ぎ目を1つも測れていない')
+  else {
+    const fixed = shiftEach(rawSent, deep.offs)
+    const out = inSilence(fixed)
+    const worst = Math.max(...fixed.map((s, i) => Math.abs(s.start - real[i].start)))
+    if (out) ng('文まで測っても、縁が声の中に落ちている', `${out} 本`)
+    else if (worst > 0.02) ng('測った文の頭が、本当の頭とずれている', ms19(worst))
+    else ok(`文まで測れば、どの縁も静けさの中(頭のずれ 最大 ${ms19(worst)})`)
+  }
+
+  // ── ③ 項目のずれは、1つめの文から出す(もう一度測らない)
+  {
+    const offs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+    const got = itemOffsFrom(rawSent, offs, shape.length)
+    // 発言0 の1つめは文0、発言1 は文3、発言2 は文5
+    if (Math.abs(got[0] - 0.1) > 1e-9 || Math.abs(got[1] - 0.4) > 1e-9
+      || Math.abs(got[2] - 0.6) > 1e-9) {
+      ng('項目のずれを、その項目の1つめの文から出していない', got.join(' / '))
+    } else if (itemOffsFrom([{ item: 0 }], [0.5], 3).join() !== [0.5, 0.5, 0.5].join()) {
+      ng('文が1つも無い項目で、控えの時計へ戻している')
+    } else ok('項目のずれは、その項目の1つめの文から出す')
+  }
+
+  // ── ④ `shiftEach()` は1文ずつ当てる(`shiftItems()` と役目が違う)
+  {
+    const list = [{ start: 0, end: 1, item: 0 }, { start: 1, end: 2, item: 0 }]
+    const one = shiftEach(list, [0.1, 0.5])
+    const same = shiftItems(list, [0.1])
+    if (Math.abs(one[1].start - 1.5) > 1e-9) ng('`shiftEach()` が1文ずつ当たっていない')
+    else if (Math.abs(same[1].start - 1.1) > 1e-9) ng('`shiftItems()` の振る舞いが変わっている')
+    else if (shiftEach(list, [0.1]) !== list) ng('数が合わないのに当てている(ずれた対は無いより悪い)')
+    else ok('`shiftEach()` は1文ずつ、`shiftItems()` は項目ごと')
+  }
+
+  // ── ⑤ 道が1本も切れていないか(**「名前が出てくるか」で見ない**)
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    if (!/wholeSeams\(got\.url,\s*got\.spans,\s*sent\)/.test(read)) {
+      ng('画面が、文の区間を `wholeSeams()` に渡していない')
+    } else if (!/sentOffs\s*\?\s*shiftEach\(sent,\s*fit\.sentOffs\)/.test(read)) {
+      ng('文まで測れても、1文ずつ当てていない')
+    } else if (!/measureSeams\(wave,\s*buf\.sampleRate,\s*fine,/.test(clips)) {
+      ng('`wholeSeams()` が、文の区間を測っていない')
+    } else if (!/=\s*deep\s*\?\s*itemOffsFrom\(fine,/.test(clips)) {
+      ng('項目のずれを、文のずれから出していない(二度測っている)')
+    } else ok('文を渡し、文で測り、1文ずつ当てている')
+  }
+
+  if (bad === before) ok('発言の中の文と文の継ぎ目も、音から測る')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

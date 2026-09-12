@@ -53,7 +53,7 @@ import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
   REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime,
   indexAtTime, makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
-  sentenceSpansOf, shiftItems, shiftSeams, spanForRange,
+  sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spanForRange,
 } from './wholeAudio.js'
 import {
   sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
@@ -764,8 +764,22 @@ export function readAloudSequence(parts, {
      *   **測れなければ `null`** —— これまでどおり均等に配る。
      *
      *   ここで待つのは、**ほどく1〜2秒だけ**である(2度目からは
-     *   端末に覚えている)。押した人には「用意しています…」が出ている。 */
-    const seamOffs = await wholeSeams(got.url, got.spans)
+     *   端末に覚えている)。押した人には「用意しています…」が出ている。
+     *
+     *   ── **文まで測る**(2026-09 実機・19手め)────────────────
+     *
+     *   > ほぼほぼ解決しましたが、たまに次の文の頭が入ります。
+     *   > こんな感じだと運頼りな気がしますが、、
+     *
+     *   17手めが測っていたのは**発言と発言の継ぎ目だけ**だった。
+     *   **1つの発言の中にある文と文の継ぎ目は、一度も測っていない。**
+     *   だから縁が声の中に落ちることがあり、それが「たまに」である。
+     *   波はどのみち全部ほどいているので、**測る相手を細かくするだけ**
+     *   —— 費用も通信も1ミリも増えない。 */
+    /* **文の区間を控える**(1文ずつの ◁▷)。通しでは**本文ぜんぶ**を
+       行き来できる(段落をまたいでも構わない) */
+    let sent = sentenceSpansFor(got, list.map((p) => p.text))
+    const seamOffs = await wholeSeams(got.url, got.spans, sent)
     if (!alive()) return true
 
     let spans = got.spans
@@ -815,9 +829,6 @@ export function readAloudSequence(parts, {
      *
      * 合図は `playClip` の `onStart` が、**本当に鳴り始めた瞬間**に出す。 */
 
-    /* **文の区間を控える**(1文ずつの ◁▷)。通しでは**本文ぜんぶ**を
-       行き来できる(段落をまたいでも構わない) */
-    let sent = sentenceSpansFor(got, list.map((p) => p.text))
     holdCursor(sent, null)
     /* **いま読んでいる文を光らせる**(2026-09 実機・利用者の指摘)。
        通しでは、**いま光っている段落の文だけ**を送る */
@@ -862,7 +873,9 @@ export function readAloudSequence(parts, {
           /* **測れたときは、測ったほうを採る**(17手め)。
              均等に配るのは、測れなかったときの受け皿である */
           const fit = seamOffs
-            ? { how: 'measured', k: 1, per: 0, offs: seamOffs, gaps: [] }
+            ? {
+              how: 'measured', k: 1, per: 0, offs: seamOffs.offs, sentOffs: seamOffs.sentOffs, gaps: [],
+            }
             : clockFitOf(spans, alignEndOf(got.alignment), dur)
           /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
            *
@@ -884,7 +897,10 @@ export function readAloudSequence(parts, {
             const want = fitTime(at, fit, raw)
             if (fit.how === 'measured') {
               spans = shiftItems(spans, fit.offs)
-              sent = shiftItems(sent, fit.offs)
+              /* **文まで測れていたら、1文ずつ当てる**(19手め)。
+                 `shiftItems()` は同じ発言の文に同じずれしか当てないので、
+                 **発言の中の継ぎ目が控えの時計のまま**になる */
+              sent = fit.sentOffs ? shiftEach(sent, fit.sentOffs) : shiftItems(sent, fit.offs)
             } else if (fit.how === 'scale') {
               spans = scaleSpans(spans, fit.k)
               sent = scaleSpans(sent, fit.k)

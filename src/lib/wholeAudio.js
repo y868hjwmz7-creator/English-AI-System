@@ -537,6 +537,25 @@ export function shiftItems(list, offs) {
   })
 }
 
+/**
+ * 区間を、**1つずつ測ったぶんだけずらす**(2026-09 実機・19手め)。
+ *
+ * `shiftItems()` は「同じ項目の文には、同じずれ」である。だから
+ * **発言の中の文と文の継ぎ目は、控えの時計のまま**だった ——
+ * ElevenLabs が空白に何秒を割り当てたか任せで、たいてい足りない。
+ * 文そのものを測れたときは、こちらで**1文ずつ**当てる。
+ *
+ * **ずらすだけ。伸ばさない**のは `shiftItems()` と同じ。
+ */
+export function shiftEach(list, offs) {
+  if (!Array.isArray(list) || !Array.isArray(offs) || offs.length !== list.length) return list
+  return list.map((s, i) => {
+    const d = Number(offs[i])
+    if (!Number.isFinite(d) || d === 0) return s
+    return { ...s, start: s.start + d, end: s.end + d }
+  })
+}
+
 /** 控えの秒 → 音声の秒(続きから始めたときの飛び先を合わせ直す) */
 export function fitTime(sec, fit, spans) {
   if (fit?.how === 'measured') {

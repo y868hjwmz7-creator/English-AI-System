@@ -262,3 +262,35 @@ export function measureSeams(samples, rate, spans, duration = 0) {
   const got = seamOffsets(spans, runs, duration || (samples.length / rate))
   return got ? { ...got, runs: runs.length } : null
 }
+
+/**
+ * **文のずれから、項目(段落 / 発言)のずれを出す**(2026-09 実機・19手め)。
+ *
+ * 文で測ったなら、**項目のずれはその項目の1つめの文のずれ**である
+ * (項目の頭と、その1つめの文の頭は、同じ文字を指している)。
+ * **もう一度測らない** —— 2度測ると、片方だけずれたときに
+ * 色と折り返しが食い違う(**数え方を2通り持たない**)。
+ *
+ * @param {Array<{item:number}>} sents 文の区間(`item` を持つ)
+ * @param {number[]} offs 文ごとのずれ
+ * @param {number} count 項目の数
+ * @returns {number[]} 項目ごとのずれ
+ */
+export function itemOffsFrom(sents, offs, count) {
+  const n = Math.max(0, Number(count) || 0)
+  const out = new Array(n).fill(0)
+  const seen = new Array(n).fill(false)
+  const list = Array.isArray(sents) ? sents : []
+  list.forEach((s, i) => {
+    const k = Number(s?.item)
+    if (!Number.isInteger(k) || k < 0 || k >= n || seen[k]) return
+    const d = Number(offs?.[i])
+    if (!Number.isFinite(d)) return
+    seen[k] = true
+    out[k] = d
+  })
+  /* 文が1つも無い項目(英文が空)は、手前と同じずれにする。
+     0 のまま残すと、そこだけ控えの時計へ戻ってしまう */
+  for (let k = 1; k < n; k += 1) if (!seen[k]) out[k] = out[k - 1]
+  return out
+}

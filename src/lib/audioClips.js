@@ -59,7 +59,7 @@ import {
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
-import { measureSeams } from './seamFind.js'
+import { itemOffsFrom, measureSeams } from './seamFind.js'
 import { SEEK_MISS, charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
 import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
@@ -984,7 +984,8 @@ const seamCache = new Map()
 /** 測れないと分かったもの(古い端末・ほどけない MP3) */
 const seamGaveUp = new Set()
 
-const SEAM_KEY = 'eas.seams'
+/** **19手めで中身の形が変わった**(文ごとのずれも覚える)。鍵ごと分ける */
+const SEAM_KEY = 'eas.seams2'
 /** 覚えておく音声の数(古いものから落とす) */
 const SEAM_KEEP = 40
 
@@ -995,10 +996,10 @@ function readSeamStore() {
   try { return JSON.parse(localStorage.getItem(SEAM_KEY) || '{}') || {} } catch { return {} }
 }
 
-function writeSeamStore(name, offs) {
+function writeSeamStore(name, rec) {
   try {
     const all = readSeamStore()
-    all[name] = offs
+    all[name] = rec
     const keys = Object.keys(all)
     // 新しいものから残す(入れ物が膨らまないように)
     if (keys.length > SEAM_KEEP) keys.slice(0, keys.length - SEAM_KEEP).forEach((k) => { delete all[k] })
@@ -1011,23 +1012,49 @@ let seamNote = null
 export const lastSeamNote = () => seamNote
 
 /**
- * 1本にまとめた音声から、**項目ごとの本当のずれ**を測る。
+ * 1本にまとめた音声から、**本当のずれ**を測る。
+ *
+ * ── **文まで測る**(2026-09 実機・19手め)────────────────────
+ *
+ *   > ほぼほぼ解決しましたが、たまに次の文の頭が入ります。
+ *   > こんな感じだと運頼りな気がしますが、、
+ *
+ *   **利用者の言うとおりだった。** 17手めで測っていたのは
+ *   **発言と発言の継ぎ目だけ**である。ところがくり返しの単位が「文」の
+ *   ときに使う縁は**文の区間**で、`shiftItems()` は
+ *   **同じ発言の文には同じずれ**しか当てない。つまり
+ *   **1つの発言の中にある文と文の継ぎ目は、一度も測っていなかった。**
+ *   そこは ElevenLabs が空白に何秒を割り当てたか任せで、
+ *   たいてい実際の間より短い ——**縁が声の中に落ちる。**
+ *
+ *   **記事は1段落に何文も入る**ので、文の継ぎ目のほとんどがここに当たる。
+ *   会話は1発言が1〜2文なので、多くが発言の継ぎ目で測れている。
+ *   **「教材によって違う」の中身は、これである**(1本かどうかではない)。
+ *
+ *   波(`runs`)はどのみち全部ほどいている。**測る相手を細かくするだけで、
+ *   費用も通信も1ミリも増えない。**
  *
  * @param {string} url その音声の置き場所
  * @param {Array<{start:number,end:number}>} spans 控えの区間(項目ごと)
- * @returns {Promise<number[]|null>} 測れなければ `null`(これまでどおり)
+ * @param {Array<{start:number,end:number,item:number}>|null} [sents]
+ *   文の区間。渡せば**文まで測る**(渡さなければ 17手めのまま)
+ * @returns {Promise<{offs:number[], sentOffs:number[]|null}|null>}
+ *   測れなければ `null`(これまでどおり均等に配る)
  */
-export async function wholeSeams(url, spans) {
+export async function wholeSeams(url, spans, sents = null) {
   if (!url || !Array.isArray(spans) || spans.length < 2) return null
+  const fine = Array.isArray(sents) && sents.length >= 2 ? sents : null
   const name = seamNameOf(url)
   if (seamCache.has(name)) return seamCache.get(name)
   if (seamGaveUp.has(name)) return null
 
   const kept = readSeamStore()[name]
-  if (Array.isArray(kept) && kept.length === spans.length) {
-    seamCache.set(name, kept)
-    seamNote = `覚えていた継ぎ目(${kept.length} 項目)`
-    return kept
+  if (kept && Array.isArray(kept.o) && kept.o.length === spans.length
+    && kept.n === (fine?.length ?? 0)) {
+    const rec = { offs: kept.o, sentOffs: Array.isArray(kept.s) ? kept.s : null }
+    seamCache.set(name, rec)
+    seamNote = `覚えていた継ぎ目(${rec.sentOffs ? `${rec.sentOffs.length} 文` : `${kept.o.length} 項目`})`
+    return rec
   }
 
   try {
@@ -1039,19 +1066,28 @@ export async function wholeSeams(url, spans) {
     const bytes = await res.arrayBuffer()
     const off = new OAC(1, 1, 44100)
     const buf = await off.decodeAudioData(bytes)
-    const got = measureSeams(buf.getChannelData(0), buf.sampleRate, spans, buf.duration)
+    const wave = buf.getChannelData(0)
+    /* **細かいほうから測る。** 文で測れたら、項目のずれは
+       `itemOffsFrom()` が出す(**もう一度測らない**)。
+       文で測れなかったときだけ、17手めのまま項目で測る */
+    const deep = fine ? measureSeams(wave, buf.sampleRate, fine, buf.duration) : null
+    const got = deep || measureSeams(wave, buf.sampleRate, spans, buf.duration)
     if (!got) {
       seamGaveUp.add(name)
       seamNote = '継ぎ目を数え切れませんでした'
       return null
     }
-    seamCache.set(name, got.offs)
-    writeSeamStore(name, got.offs)
+    const sentOffs = deep ? deep.offs : null
+    const offs = deep ? itemOffsFrom(fine, deep.offs, spans.length) : got.offs
+    const rec = { offs, sentOffs }
+    seamCache.set(name, rec)
+    writeSeamStore(name, { o: offs, s: sentOffs, n: fine?.length ?? 0 })
     const wide = Math.max(...got.offs.map((v) => Math.abs(v)))
-    seamNote = `実測 ${got.hit}/${spans.length - 1} 本`
+    const all = (deep ? fine.length : spans.length) - 1
+    seamNote = `実測 ${got.hit}/${all} ${deep ? '文' : '本'}`
       + (got.loose ? `(あて ${got.loose})` : '')
       + ` / ずれ 最大 ${(wide * 1000).toFixed(0)}ms`
-    return got.offs
+    return rec
   } catch (e) {
     seamGaveUp.add(name)
     seamNote = `ほどけませんでした(${e?.message ?? e})`
