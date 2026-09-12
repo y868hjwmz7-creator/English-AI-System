@@ -49,6 +49,8 @@ import FocusFrame from './components/FocusFrame.jsx'
 import GrammarNote from './components/GrammarNote.jsx'
 import BasicsCourse from './components/BasicsCourse.jsx'
 import BasicWordsPick from './components/BasicWordsPick.jsx'
+import ShelfPick from './components/ShelfPick.jsx'
+import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
 import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
@@ -854,6 +856,26 @@ const BASICPICK = (
   </section>
 )
 
+/* 業種べつの単語帳(棚・`?screen=shelfpick`・0057・2026-09 利用者の指定)。
+
+     > 何冊も違う単語帳を持てるようにしてほしいんです。…
+     > 「自分の単語帳に追加する」みたいのを押したものだけ
+
+   **本物の部品を描いて測る。** 畳んだときに札が0個か・開いたら
+   35冊のプルダウンが出るか・押せる大きさ・はみ出しは、
+   ソースを読んでも分からない。
+
+   Supabase が無いので `loadShelfWords()` は空を返す ——
+   **外へは1度も出ない。** ここで見るのは、開いたときの姿である。
+
+   **わざと `shelves` をぜんぶ渡してある** —— 1冊だけにすると、
+   プルダウンが横に伸びないので**はみ出しを見逃す。** */
+const SHELFPICK = (
+  <section className="card">
+    <ShelfPick shelves={shelfList()} onPicked={() => {}} />
+  </section>
+)
+
 /* スピーチ練習(`?screen=speech`・0054・2026-09 利用者の指定)。
 
      > ゲストアカウントのスピーチ内から受け取ったスピーチの原稿をAIにより
@@ -945,6 +967,8 @@ const SPEECH = (
 createRoot(document.getElementById('root')).render(
   q.get('screen') === 'sheet'
     ? <SheetScreen />
+    : q.get('screen') === 'shelfpick'
+    ? SHELFPICK
     : q.get('screen') === 'speech'
     ? SPEECH
     : q.get('screen') === 'basicpick'

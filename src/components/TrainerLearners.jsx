@@ -45,6 +45,7 @@ import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practic
 import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
 import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.js'
 import { LEARNER_FEATURES } from '../data/learnerFeatures.js'
+import { SHELF_GROUPS, shelfFeature, shelfList } from '../data/shelves.js'
 import { printElement } from '../lib/print.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 
@@ -96,6 +97,19 @@ export default function TrainerLearners({ me, navTick = 0 }) {
      一覧は `src/data/learnerFeatures.js` 1か所。**ここに書き写さない** */
   const [features, setFeatures] = useState(new Set())
   const [featureBusy, setFeatureBusy] = useState(null)
+  /* **業種べつの単語帳(棚)のうち、この人に出しているもの**(0057)。
+     入れ物は `learner_features` と同じで、名前だけが `shelf:<id>` である。
+     **名前の作り方は `shelfFeature()` 1か所** ——
+     ここで `'shelf:' + id` と書くと、置く場所の数だけ食い違う */
+  const allShelves = useMemo(() => shelfList(), [])
+  const shelfOn = useMemo(
+    () => allShelves.filter((s) => features.has(shelfFeature(s.id))),
+    [allShelves, features],
+  )
+  const shelfOff = useMemo(
+    () => allShelves.filter((s) => !features.has(shelfFeature(s.id))),
+    [allShelves, features],
+  )
   // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
   // 過去の宿題を最初に開く(2026-08 の要望)。
   const [detailTab, setDetailTab] = useState('homework')
@@ -1314,6 +1328,66 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     <p className="field-hint">{f.hint}</p>
                   </div>
                 ))}
+
+                {/* ── この人に出す「業種べつの単語帳」(0057・利用者の指定)──
+                    > そして、ゲストにはトレーナーが指定した単語帳のみが
+                    > 追加されるのです。
+
+                    **入れ物は 0055 の `learner_features` そのまま**
+                    (名前は `shelf:<分野の id>`。作り方は `shelves.js` 1か所)。
+                    新しい表も、新しい窓口も作っていない。
+
+                    **35冊あるので、上のような札を35個並べない。**
+                    選んで足し、押して外す。 */}
+                <p className="field-label">この人に出す「業種べつの単語帳」</p>
+                {shelfOn.length > 0 ? (
+                  <div className="chiprow" role="group" aria-label="出している単語帳">
+                    {shelfOn.map((s) => (
+                      <button key={s.id} type="button" className="chip chip--on"
+                              disabled={featureBusy === shelfFeature(s.id)}
+                              onClick={() => toggleFeature(l, {
+                                id: shelfFeature(s.id), label: `業種べつの単語帳「${s.label}」`,
+                              })}>
+                        {s.label}
+                        <span className="chip-count">外す</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="field-hint">
+                    まだ1冊も出していません。この人の単語帳には、
+                    <strong>業種べつの単語帳が1冊も出ません。</strong>
+                  </p>
+                )}
+                <label className="field">
+                  <span className="visually-hidden">出す単語帳を足す</span>
+                  <select className="input" value=""
+                          onChange={(e) => {
+                            const s = shelfOff.find((x) => x.id === e.target.value)
+                            if (s) {
+                              toggleFeature(l, {
+                                id: shelfFeature(s.id), label: `業種べつの単語帳「${s.label}」`,
+                              })
+                            }
+                          }}>
+                    <option value="">単語帳を足す…</option>
+                    {SHELF_GROUPS.map((g) => {
+                      const list = shelfOff.filter((s) => s.group === g.id)
+                      if (!list.length) return null
+                      return (
+                        <optgroup key={g.id} label={g.label}>
+                          {list.map((s) => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </optgroup>
+                      )
+                    })}
+                  </select>
+                </label>
+                <p className="field-hint">
+                  出した単語帳は、この人の単語帳の中に「業種べつの単語帳」として
+                  並びます。<strong>押して追加するまで、語は1つも混ざりません。</strong>
+                </p>
 
                 <p className="field-label">在籍状態</p>
                 <div className="btn-row">

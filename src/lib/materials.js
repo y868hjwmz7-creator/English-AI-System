@@ -953,7 +953,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-10'
+export const NEED_GEN_REV = '2026-09-12'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -966,7 +966,8 @@ export const genGatewayNote = () => (genGatewayStale()
   ? '生成の窓口(generate-material)が古いため、'
     + '**会話の登場人物の性別が、読み上げの声と合わないこと**があります。'
     + 'また、**書いた答えの添削が使えません**。'
-    + '**スピーチの原稿は 1,500 文字を超えたぶんが黙って落ちます**(0054)'
+    + '**スピーチの原稿は 1,500 文字を超えたぶんが黙って落ちます**(0054)。'
+    + 'また、**業種べつの単語帳(棚)の語句が作れません**(0057)'
     + `(いま置かれているのは ${genRev}、必要なのは ${NEED_GEN_REV} 以降)。`
     + ' Supabase → Edge Functions → generate-material を置き直してください。'
   : null)
@@ -1240,6 +1241,71 @@ export async function generateGrammar(parts) {
     parts: [...got].map(([no, sentences]) => ({ no, sentences })),
     skipped: rest.length,
     usage,
+  })
+}
+
+// ── 業種べつの単語帳(棚)の語句(0057)────────────────────────────
+
+/**
+ * ある業種・ある場面で使う語句を作らせる(`mode: 'shelf_words'`)。
+ *
+ * **1回に頼むのは1つの場面ぶん。** 区切り方は `shelfJobs()`
+ * (`src/data/shelves.js`)が決めるので、**ここでは数え直さない。**
+ *
+ * **窓口は増やさない。** `generate-material` に `mode` を1つ足しただけ
+ * (カタマリの訳・文法解説とまったく同じ考え方)。
+ *
+ * **教材は1本も作らない。** 返るのは語句だけで、棚に置くのは
+ * `saveShelfWords()`(`src/lib/shelfWords.js`)である。
+ *
+ * @param {{industry: string, scene: string, sceneHint?: string,
+ *          level?: string, count?: number, have?: string[]}} job
+ */
+export async function generateShelfWords(job) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  const industry = String(job?.industry ?? '').trim()
+  const scene = String(job?.scene ?? '').trim()
+  if (!industry || !scene) return ng('業種と場面が決まっていません')
+
+  const { data, error } = await supabase.functions.invoke('generate-material', {
+    body: {
+      mode: 'shelf_words',
+      industry,
+      scene,
+      sceneHint: String(job?.sceneHint ?? ''),
+      level: String(job?.level ?? ''),
+      count: Number(job?.count ?? 12),
+      have: Array.isArray(job?.have) ? job.have : [],
+    },
+  })
+  if (error) {
+    let detail = ''
+    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
+      return ng('単語帳を作る窓口につながりませんでした。'
+        + 'Supabase の generate-material を配置し直したか確認してください。')
+    }
+    /* **古い窓口は、この頼みごとを知らない。**
+       `mode` を知らないので、既定の道(教材の下書き)に落ちて
+       「演習の種類が正しくありません」と断られる。
+       **添削・文法解説とまったく同じ落とし穴**で、
+       そのまま出すと誤診させる */
+    if (/演習の種類が正しくありません/.test(detail)) {
+      return ng('単語帳を作る窓口が古いため、まだ使えません。'
+        + 'Supabase → Edge Functions → generate-material を置き直してください。')
+    }
+    return ng(detail || `語句を作れませんでした: ${error.message}`)
+  }
+  noteGenRev(data?.genRev)
+  if (data?.error) return ng(data.error)
+  /* **中身が0件のまま「成功」を返さない**(CLAUDE.md) */
+  if (!Array.isArray(data?.words) || !data.words.length) {
+    return ng('使える語句が1件も返りませんでした。もう一度お試しください。')
+  }
+  return ok({
+    words: data.words,
+    dropped: Number(data.dropped ?? 0),
+    usage: data.usage ?? null,
   })
 }
 

@@ -12,7 +12,7 @@ import AppTabs from './components/AppTabs.jsx'
 import AppHome, { HOME_ID } from './components/AppHome.jsx'
 import {
   BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, HomeIcon, MicIcon, MusicIcon,
-  PeopleIcon, StepsIcon, TaskIcon,
+  PeopleIcon, ShelfIcon, StepsIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
@@ -36,9 +36,11 @@ import Wordbook from './components/Wordbook.jsx'
 import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import BgmLibrary from './components/BgmLibrary.jsx'
+import ShelfBuilder from './components/ShelfBuilder.jsx'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadLearnerFeatures } from './lib/learnerFeatures.js'
 import { showsBasics } from './data/learnerFeatures.js'
+import { shelfList, shelvesFor } from './data/shelves.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 
 export default function App() {
@@ -342,6 +344,14 @@ export default function App() {
      ほかの画面と同じように**そのまま出す** */
   const basicsOn = !isSupabaseConfigured || showsBasics({ role: profile?.role ?? null, features })
 
+  /* **業種べつの単語帳(棚)のうち、この人に出すもの**(0057)。
+     判断は `shelvesFor()` 1か所。**ここで `role === 'learner'` と書かない。**
+     Supabase が未設定のとき(手元で画面を確かめるとき)は、
+     ほかの画面と同じように**そのまま出す** */
+  const myShelves = isSupabaseConfigured
+    ? shelvesFor({ role: profile?.role ?? null, features })
+    : shelfList()
+
   // ゲストがトレーナー用の画面を開いていたら戻す。
   // 見えるデータはどのみち RLS が止めるが、画面としても出さない。
   useEffect(() => {
@@ -464,6 +474,16 @@ export default function App() {
        ゲストには出さない —— ゲストは**聞き流しのときに聴くだけ**である
        (**効かない操作を見せない**)。
        **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている */
+    /* **業種べつの単語帳(棚)**(0057・2026-09 利用者の指定)。
+       > 何冊も違う単語帳を持てるようにしてほしいんです。
+       作るのも育てるのも**トレーナーと管理者だけ**なので、ゲストには
+       出さない —— ゲストは単語帳の中の欄から**追加するだけ**である
+       (**効かない操作を見せない**)。
+       **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている */
+    (!isSupabaseConfigured || isTrainer) && {
+      id: 'shelves', label: '業種べつの単語帳', icon: ShelfIcon,
+      desc: '業種・趣味ごとの語句を作る',
+    },
     (!isSupabaseConfigured || isTrainer) && {
       id: 'bgm', label: '音楽', icon: MusicIcon,
       desc: '聞き流しのときに流す曲',
@@ -903,13 +923,18 @@ export default function App() {
                         /* **基礎単語は、トレーナーが指定したゲストにだけ**
                            (0055)。30日講座とまったく同じ判断を渡す ——
                            **2つで1つ**なので、片方だけ出さない */
-                        showBasics={basicsOn} />
+                        showBasics={basicsOn}
+                        /* **業種べつの単語帳も、トレーナーが指定した棚だけ**
+                           (0057)。判断は `shelvesFor()` が済ませてある */
+                        shelves={myShelves} />
             ) : view === 'qr' ? (
               <QrReview />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice me={profile} />
             ) : view === 'bgm' ? (
               <BgmLibrary userId={profile?.id ?? null} />
+            ) : view === 'shelves' ? (
+              <ShelfBuilder />
             ) : (
               <AdminDashboard />
             )}

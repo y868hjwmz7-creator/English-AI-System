@@ -51,6 +51,11 @@ import {
   markIndexAt, marksFromTimes, sentenceShares, sentenceTimesOf, wordSpans,
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
+import {
+  WORDS_PER_SCENE, isShelf, shelfFeature, shelfIdOfFeature, shelfJobs, shelfList,
+  shelfOf, shelfScenes, shelfTarget, shelvesFor, showsShelf,
+} from '../src/data/shelves.js'
+import { INDUSTRIES } from '../src/data/industries.js'
 import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
 import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import { spanForRange } from '../src/lib/wholeAudio.js'
@@ -4135,6 +4140,152 @@ console.log('\nスピーチ練習(0054)')
     '紙 … `printElement()` は `markPrint()` を通る(印の付け方は1か所)')
   ok((pr.match(/classList\.add\('print-path'\)/g) ?? []).length === 1,
     '紙 … `print-path` を付けているところは1か所だけ')
+}
+
+/* ────────────────────────────────────────────────────────────
+   業種べつの単語帳(棚・0057・2026-09 利用者の指定)
+
+     > 何冊も違う単語帳を持てるようにしてほしいんです。基本は自分の単語帳、
+     > Quick Response が表示され、他の独立した業種や趣味別の単語帳とは
+     > そもそも混ざらないようにしたいんです。
+     > …そして、ゲストにはトレーナーが指定した単語帳のみが追加されるのです。
+
+     > 単語帳は業種ごと、出し方の中に場面やシチュエーションで絞り込み
+
+   ここで見るのは**算段**である —— 棚の一覧・棚の当て方・名前の作り方・
+   出し分け・**画面が本当に呼んでいるか**・貼る SQL がそろっているか。
+   **描いて測るほうは `npm run test:bar`。** 役目が違う。
+   ──────────────────────────────────────────────────────────── */
+{
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noCS = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+
+  /* ── 棚の一覧は、`industries.js` の親そのもの ──
+     **別の一覧を作らない。** 分野を足せば棚もひとりでに1冊増える */
+  const list = shelfList()
+  const parents = INDUSTRIES.filter((i) => !i.parent)
+  ok(list.length === parents.length,
+    `棚 … 冊の数は親の分野と同じ(${list.length} 冊)`)
+  ok(list.every((s) => parents.some((p) => p.id === s.id)),
+    '棚 … 一覧を別に持っていない(親の分野そのもの)')
+  ok(list.some((s) => s.group === 'work') && list.some((s) => s.group === 'hobby'),
+    '棚 … お仕事と趣味・娯楽の両方がある')
+
+  /* ── 種類は、親の棚に落ちる ──
+     利用者の「カテゴリーがかぶるものであれば既存のものに追加」が、
+     `parentOf()` 1つでそのまま満たされる */
+  ok(shelfOf('medical') === 'med',
+    '棚 … 種類(医療・介護)は、親(医療)の棚に入る')
+  ok(shelfOf('it') === 'it', '棚 … 種類を持たない分野は、自分の棚に入る')
+  ok(shelfOf(null) === null && shelfOf('そんな分野') === null,
+    '棚 … 知らない分野は、当てずっぽうで棚に入れない')
+  ok(!isShelf('medical') && isShelf('med'),
+    '棚 … 種類そのものは棚を持たない(冊が二重にならない)')
+
+  /* ── 場面は、冊の中の絞り込み ──
+     **1,700 冊にしない**(CLAUDE.md「書けない表は作らない」) */
+  ok(shelfScenes('it').length > 0, '棚 … その棚の場面が引ける')
+  ok(shelfScenes('med').length >= shelfScenes('medical').length,
+    '棚 … 親の棚では、種類ぜんぶの場面が集まる')
+  ok(shelfScenes('そんな分野').length === 0, '棚 … 知らない棚の場面は空')
+  ok(shelfTarget('it') === shelfScenes('it').length * WORDS_PER_SCENE,
+    '棚 … 目安の語数は「場面 × 1場面の語数」')
+  const jobs = shelfJobs('it')
+  ok(jobs.length === shelfScenes('it').length
+    && jobs.every((j) => j.shelf === 'it' && j.scene && j.label
+      && j.count === WORDS_PER_SCENE),
+    '棚 … 作る仕事は、場面ごとに1つ')
+
+  /* ── ゲストへの指定の名前 ──
+     **新しい表を作らない。** 0055 の `learner_features` に
+     `shelf:<分野の id>` で入る。**名前の作り方はここ1か所** */
+  ok(shelfFeature('it') === 'shelf:it', '棚 … 名前は `shelf:<分野の id>`')
+  ok(shelfFeature('medical') === null,
+    '棚 … 棚でないものには、名前を作らない')
+  ok(shelfIdOfFeature('shelf:it') === 'it',
+    '棚 … 名前から棚を引ける')
+  ok(shelfIdOfFeature('basics') === null
+    && shelfIdOfFeature('shelf:medical') === null
+    && shelfIdOfFeature(null) === null,
+    '棚 … 別の名前・棚でないものは `null`')
+
+  /* ── 出し分け(4とおり)──
+     **既定は「出さない」**(`showsBasics()` とまったく同じ作法) */
+  ok(showsShelf({ role: 'trainer', features: null }, 'it'),
+    '棚 … トレーナーには、ぜんぶ出す')
+  ok(showsShelf({ role: 'owner', features: null }, 'it'),
+    '棚 … 管理者にも、ぜんぶ出す')
+  ok(!showsShelf({ role: 'learner', features: new Set() }, 'it'),
+    '棚 … ゲストには、入れていなければ出さない')
+  ok(showsShelf({ role: 'learner', features: new Set(['shelf:it']) }, 'it'),
+    '棚 … ゲストには、トレーナーが入れた棚だけ出す')
+  ok(!showsShelf({ role: null, features: null }, 'it'),
+    '棚 … 役割が分からないうちは出さない(既定は出さない)')
+  ok(!showsShelf({ role: 'trainer', features: null }, 'medical'),
+    '棚 … 棚でないものは、誰にも出さない')
+  ok(shelvesFor({ role: 'learner', features: new Set(['shelf:it']) }).length === 1,
+    '棚 … その人に出す棚だけを並べる(画面で `filter` を書き写さない)')
+  ok(shelvesFor({ role: 'trainer', features: null }).length === list.length,
+    '棚 … トレーナーには全冊が並ぶ')
+
+  /* ── 画面が本当に呼んでいるか ──
+     **「名前が出てくるか」で見ない**(CLAUDE.md)。
+     説明の中にも同じ言葉があるので、**使っている形**で見る */
+  const appS = noCS(readS('src/App.jsx'))
+  ok(/shelvesFor\(\{ role:/.test(appS),
+    '棚 … `App.jsx` が `shelvesFor()` で出し分けている')
+  ok(/shelves=\{myShelves\}/.test(appS),
+    '棚 … 単語帳に、その人の棚を渡している')
+  ok(!/'shelf:'\s*\+/.test(appS), '棚 … 画面で名前を組み立てていない')
+
+  const wbS = noCS(readS('src/components/Wordbook.jsx'))
+  ok(/<ShelfPick\s+shelves=\{shelves\}/.test(wbS),
+    '棚 … 単語帳が `ShelfPick` を描いている')
+
+  const pickS = noCS(readS('src/components/ShelfPick.jsx'))
+  ok(/await addShelfWords\(shelf, scenes, learnerId\)/.test(pickS),
+    '棚 … 押したら `add_shelf_words` を通る(語の一覧を渡さない)')
+  ok(/if \(!shelves\.length\) return null/.test(pickS),
+    '棚 … 出す棚が無ければ、欄ごと出さない')
+  ok(/onPicked\?\.\(/.test(pickS),
+    '棚 … 絞り込みは呼ぶ側に任せる(`App.jsx` の1つを使う)')
+
+  const trS = noCS(readS('src/components/TrainerLearners.jsx'))
+  ok(/shelfFeature\(s\.id\)/.test(trS),
+    '棚 … ゲストへの指定も `shelfFeature()` を通る')
+  ok(!/'shelf:'\s*\+/.test(trS), '棚 … トレーナーの画面でも名前を組み立てていない')
+
+  /* ── 窓口(0057 の `mode`)── */
+  const fn = readS('supabase/functions/generate-material/index.ts')
+  ok(/mode === 'shelf_words'/.test(fn),
+    '棚 … 窓口が `mode: shelf_words` を受け取っている')
+  ok(/name: 'emit_shelf_words'/.test(fn) && /strict: true/.test(fn),
+    '棚 … 形は道具(`strict: true`)が保証している')
+  const matS = noCS(readS('src/lib/materials.js'))
+  ok(/mode: 'shelf_words'/.test(matS),
+    '棚 … 画面から `mode: shelf_words` を渡している')
+  ok(/NEED_GEN_REV = '2026-09-12'/.test(matS)
+    && /const FN_REV = '2026-09-12'/.test(fn),
+    '棚 … 窓口の版が、画面と窓口でそろっている')
+
+  /* ── 貼る SQL がそろっているか ──
+     **移行を足したら3つとも直す**(CLAUDE.md) */
+  const mig = readS('supabase/migrations/0057_shelf_words.sql')
+  ok(/create table if not exists public\.shelf_words/.test(mig),
+    '棚 … 0057 が表を作る')
+  ok(!/industry\s+text\s+not null\s+check/.test(mig),
+    '棚 … `industry` に check を置いていない(分野を足すたびに貼り直さない)')
+  ok(!/create table[\s\S]*learner_shelves/.test(mig),
+    '棚 … ゲストへの指定に、新しい表を作っていない(0055 を使う)')
+  const matome = readS('supabase/apply/pending_matome.sql')
+  ok(/create table if not exists public\.shelf_words/.test(matome),
+    '棚 … まとめた1つに 0057 が入っている')
+  const check = readS('supabase/apply/check.sql')
+  ok(/shelf_words/.test(check), '棚 … `check.sql` に 0057 の行がある')
+  const setup = readS('src/lib/setupState.js')
+  ok(/NEWEST_MIGRATION = '0057'/.test(setup)
+    && /table: 'shelf_words'/.test(setup),
+    '棚 … 画面の印が 0057 を見ている')
 }
 
 console.log(ng

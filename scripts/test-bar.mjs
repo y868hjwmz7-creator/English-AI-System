@@ -4015,6 +4015,84 @@ export default defineConfig({
       ok('基礎単語 … 指定したゲストの単語帳から、その段だけを練習できる')
     }
   }
+
+  /* ══════════════════════════════════════════════════════════════════
+     業種べつの単語帳(棚・0057・2026-09 利用者の指定)
+
+       > 何冊も違う単語帳を持てるようにしてほしいんです。…
+       > 「自分の単語帳に追加する」みたいのを押したものだけ
+       > 自分の単語帳に追加されてほしいんです。
+
+     **描かないと分からないこと**を測る ——
+     ①畳んだときに欄が1つも出ていないか
+     ②開くと棚のプルダウンが出て、**35冊そろっているか**
+     ③押せる大きさを割っていないか ④横にはみ出していないか
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+     Supabase が無いので棚の中身は読めない —— **描けないものは測れない**
+     ので、ここで見るのは**開いたときの姿**だけである。
+     ══════════════════════════════════════════════════════════════════ */
+  for (const w of [1280, 390, 320]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfpick`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(250)
+    const 畳 = await page.evaluate(() => ({
+      欄: document.querySelectorAll('.shelfpick select').length,
+      入口: document.querySelector('.shelfpick .wb-add-open')?.textContent.trim() ?? '',
+    }))
+    await page.click('.shelfpick .wb-add-open')
+    await page.waitForTimeout(250)
+    const got = await page.evaluate(() => {
+      const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
+      const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
+      const sel = document.querySelector('.shelfpick select')
+      return {
+        冊: sel ? sel.querySelectorAll('optgroup option').length : 0,
+        組: sel ? [...sel.querySelectorAll('optgroup')].map((g) => g.label) : [],
+        欄の高さ: px(sel),
+        よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        右: right(sel),
+      }
+    })
+    await page.close()
+    const 名 = `棚(${w}px)`
+    if (畳.欄 !== 0) {
+      ng(`${名} … 畳んでいるのに、棚の欄が出ている`, String(畳.欄))
+    } else if (!畳.入口.includes('業種べつの単語帳')) {
+      ng(`${名} … 畳んだ入口に名前が出ていない`, 畳.入口)
+    } else if (got.冊 !== 35) {
+      // **分野を足せば棚も1冊増える。** 数が変わったら、ここも直す
+      ng(`${名} … 棚が35冊そろっていない`, String(got.冊))
+    } else if (got.組.length !== 2
+      || !got.組.includes('お仕事') || !got.組.includes('趣味・娯楽')) {
+      ng(`${名} … お仕事と趣味・娯楽に分かれていない`, got.組.join(' / '))
+    } else if (got.欄の高さ < 40) {
+      ng(`${名} … 押せる大きさを割っている`, String(got.欄の高さ))
+    } else if (got.よこ > 0 || got.右 > w) {
+      ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+    } else {
+      ok(`${名} … 畳めて、開けば35冊が2組に分かれて出る`)
+    }
+  }
+
+  /* **画面が本当に置いているか。** 検証の入り口(`__screens.jsx`)だけ
+     直しても、利用者の単語帳には出ない */
+  {
+    const src = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<ShelfPick\s/.test(src)) {
+      ng('棚 … 単語帳の画面に置かれていない')
+    } else if (!/onPicked=\{onPickWords\}/.test(src)) {
+      ng('棚 … 絞り込みを外(App)に渡していない')
+    } else if (!/shelves=\{myShelves\}/.test(app)) {
+      ng('棚 … App が、その人に出す棚を渡していない')
+    } else {
+      ok('棚 … 指定した棚だけが、その人の単語帳に並ぶ')
+    }
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════

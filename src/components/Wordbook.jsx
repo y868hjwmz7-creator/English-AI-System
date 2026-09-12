@@ -67,6 +67,7 @@ import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from 
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
 import BasicWordsPick from './BasicWordsPick.jsx'
+import ShelfPick from './ShelfPick.jsx'
 import SpeechWordsPick from './SpeechWordsPick.jsx'
 import { basicJaOf, basicPosOf } from '../lib/basicsCourse.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
@@ -256,6 +257,16 @@ export default function Wordbook({
    * と、手元で画面を確かめるときは、これまでどおり出す。
    */
   showBasics = true,
+  /**
+   * **業種べつの単語帳(棚)のうち、この人に出すもの**(0057・利用者の指定)。
+   *
+   *   > ゲストにはトレーナーが指定した単語帳のみが追加されるのです。
+   *
+   * **判断はここでしない。** `shelvesFor()`(`src/data/shelves.js`)が
+   * 決めたものを受け取るだけである(`showBasics` とまったく同じ作法)。
+   * **空なら欄ごと出ない**(効かない操作を見せない)。
+   */
+  shelves = [],
 }) {
   /* **画面は1つだけ。** 以前はトレーナー用に別の部品を持っていたが、
      2つあると必ず片方が古くなる。実際、見た目をそろえたつもりで
@@ -1060,6 +1071,21 @@ export default function Wordbook({
       {onPickWords && showBasics && (
         <BasicWordsPick learnerId={learnerId} learnerName={learnerName}
                         onPicked={onPickWords} />
+      )}
+
+      {/* **業種べつの単語帳(棚)**(0057・2026-09 利用者の指定)。
+
+            > 何冊も違う単語帳を持てるようにしてほしいんです。…
+            > 「自分の単語帳に追加する」みたいのを押したものだけ
+            > 自分の単語帳に追加されてほしいんです。
+
+          棚は**別の表**(`shelf_words`)にあり、押すまで混ざらない。
+          **基礎単語と同じ形**にしてとなりに並べる ——
+          どちらも「単語帳に語を入れる」道である。
+          **出す棚は `shelvesFor()` が決めてある**(ここで役割を見ない) */}
+      {onPickWords && (
+        <ShelfPick shelves={shelves} learnerId={learnerId}
+                   learnerName={learnerName} onPicked={onPickWords} />
       )}
 
       {/* **スピーチの語句**(0054・2026-09 利用者の指定)。

@@ -1047,6 +1047,196 @@ async function makeGrammar(apiKey: string, body: Record<string, unknown>) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// 業種べつの単語帳(棚)を作る(`mode: 'shelf_words'`・0057)
+//
+//   > 作りたい単語帳は、すべての業界、趣味について、すべての
+//   > シチュエーションと場面を想定したものを。(2026-09 利用者の指定)
+//
+// 【1回に頼むのは、1つの場面ぶんだけ】
+//   1冊まるごと(場面 12 × 12 語 = 144 語)を1回で頼むと、
+//   途中で切られる(`max_tokens`)。**場面ごとに区切れば、
+//   途中で失敗しても、そこまでの場面は残る。**
+//   区切り方は画面(`shelfJobs()`)が決める —— **こちらでは数え直さない。**
+//
+// 【出会う文を必ず付ける】
+//   `word_reviews.seen_in` に写すので、自分の単語帳に入れたあと
+//   **穴埋め**(箱3)がそのまま効く。**人は文脈ごと覚える**(0018)。
+//   だから「その語を含む文」でなければ意味がない ——
+//   含んでいない返しは、こちらで落とす。
+// ────────────────────────────────────────────────────────────────
+
+const SHELF_SYSTEM = `あなたは日本のパーソナル英語スクールのトレーナーを補助する。
+**ある業種・ある場面で、実際に口から出る語句**を選ぶのが仕事である。
+
+# 守ること
+
+1. **その場面で本当に使う語句だけ。** 辞書に載っているというだけの語、
+   教科書にしか出ない語は入れない。
+   **その場に居合わせた人が、その日に耳にする語**を選ぶ
+2. **一般的すぎる語を入れない**(go / make / people / important など)。
+   どの業種にも出る語は、この単語帳の値打ちを下げる
+3. **単語だけにしない。** その場面の**言い回し**(2〜5語のかたまり)を
+   3〜5割入れる。仕事の英語で本当に要るのは、たいてい言い回しである
+4. **実在の会社名・製品名・人名を使わない**
+5. **ja(訳)は短く。** 辞書の語釈を写さない。
+   その場面での使われ方が分かる、10〜20字の日本語にする
+6. **ex_en(例文)には、その語句を必ずそのまま含める。**
+   含まない例文は使えない(そのまま単語帳の「出会った文」になる)。
+   長さは 8〜18 語。**その場面で実際に交わされそうな1文**にする
+7. **ex_ja は ex_en の訳。** 1文で、自然な日本語にする
+8. **pos は日本語で1語**(名詞 / 動詞 / 形容詞 / 副詞 / 前置詞 / 熟語 …)
+9. **level は、その語句が出てくる段**(A1 / A2 / B1 / B2 / C1 / C2)。
+   専門語は難しく見えるが、**場面で毎日使う語なら A2 や B1 でよい**
+10. **同じ語を二度返さない。** 語形が違うだけのもの(plan / planning)も
+    どちらか1つにする`
+
+/** 棚の語を受け取る道具。\`strict: true\` なので形は API が保証する */
+const shelfTool = {
+  name: 'emit_shelf_words',
+  description: 'ある業種・ある場面で使う語句を返す',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['words'],
+    properties: {
+      words: {
+        type: 'array',
+        description: '頼まれた数だけ返す',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['en', 'ja', 'pos', 'level', 'ex_en', 'ex_ja'],
+          properties: {
+            en: { type: 'string', description: '語句(単語か、2〜5語の言い回し)' },
+            ja: { type: 'string', description: '日本語で10〜20字' },
+            pos: { type: 'string', description: '品詞。日本語で1語' },
+            level: {
+              type: 'string',
+              description: 'その語句が出てくる段',
+              enum: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+            },
+            ex_en: { type: 'string', description: 'その語句を含む1文(8〜18語)' },
+            ex_ja: { type: 'string', description: 'ex_en の訳' },
+          },
+        },
+      },
+    },
+  },
+}
+
+/**
+ * 棚の語を作る。**1つの場面ぶん。**
+ *
+ * **中身が0件のまま「成功」を返さない**(CLAUDE.md)。
+ * 落とす検査には**安全弁**を付ける —— 落としすぎて0語になるくらいなら、
+ * 形の崩れた語が混じるほうがましである(トレーナーが発行前に目を通す)。
+ */
+async function makeShelfWords(apiKey: string, body: Record<string, unknown>) {
+  const industry = String(body.industry ?? '').trim()   // 日本語の分野名
+  const scene = String(body.scene ?? '').trim()         // 日本語の場面名
+  const hint = String(body.sceneHint ?? '').trim()
+  const level = String(body.level ?? '').trim()
+  const count = Math.min(Math.max(Number(body.count ?? 12), 1), 30)
+  /* **すでに棚にある語は、もう一度作らせない。**
+     渡さないと、2回目に押したときにほとんど同じ語が返る */
+  const have = (Array.isArray(body.have) ? body.have : [])
+    .map((w) => String(w ?? '').trim()).filter(Boolean).slice(0, 400)
+
+  if (!industry || !scene) {
+    return { error: '業種と場面が要ります' }
+  }
+
+  const client = new Anthropic({ apiKey })
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 8000,
+    output_config: { effort: 'medium' },
+    system: [{ type: 'text', text: SHELF_SYSTEM }],
+    tools: [shelfTool as unknown as Anthropic.Tool],
+    tool_choice: { type: 'tool', name: 'emit_shelf_words' },
+    messages: [{
+      role: 'user',
+      content: `# 業種\n${industry}\n\n# 場面\n${scene}`
+        + (hint ? `(${hint})` : '')
+        + (level ? `\n\n# ゲストのレベルの目安\n${level}` : '')
+        + (have.length
+          ? `\n\n# すでにこの単語帳にある語(**1つも返さない**)\n${have.join(' / ')}`
+          : '')
+        + `\n\n**${count} 件**返すこと。`
+        + `単語と言い回しを混ぜ、**言い回しを3〜5割**入れること。`
+        + `**例文には、その語句をそのまま含めること。**`,
+    }],
+  })
+  const response = await stream.finalMessage()
+
+  if (response.stop_reason === 'refusal') {
+    return { error: '内容が安全上の理由で断られました。' }
+  }
+  if (response.stop_reason === 'max_tokens') {
+    return { error: '返しが長すぎて途中で切れました。件数を減らしてお試しください。' }
+  }
+
+  const block = response.content.find((b) => b.type === 'tool_use')
+  if (!block || block.type !== 'tool_use') {
+    return { error: '語句を読み取れませんでした。もう一度お試しください。' }
+  }
+  const result = block.input as {
+    words?: { en?: string; ja?: string; pos?: string; level?: string;
+              ex_en?: string; ex_ja?: string }[]
+  }
+
+  /* そろえ方は、画面・SQL・`lookup-word` と同じ規則
+     (ここで別の規則を作ると、控えを引き当てられなくなる) */
+  const norm = (s: string) => String(s ?? '')
+    .toLowerCase().replace(/[^a-z0-9'-]+/g, ' ').trim()
+    .replace(/^[\s'-]+|[\s'-]+$/g, '')
+
+  const already = new Set(have.map(norm))
+  const seen = new Set<string>()
+  const kept: Record<string, string>[] = []
+  let dropped = 0
+  for (const w of result.words ?? []) {
+    const en = String(w?.en ?? '').trim()
+    const ja = String(w?.ja ?? '').trim()
+    const ex = String(w?.ex_en ?? '').trim()
+    const key = norm(en)
+    /* **空の語は絶対に落とす。** 中身が無いものは、どうやっても使えない */
+    if (!key || !ja) { dropped += 1; continue }
+    if (seen.has(key) || already.has(key)) { dropped += 1; continue }
+    /* **例文にその語句が入っていなければ落とす。**
+       そのまま単語帳の「出会った文」になるので、入っていないと
+       穴埋め(箱3)が作れず、文脈の手がかりにもならない */
+    if (!norm(ex).includes(key)) { dropped += 1; continue }
+    seen.add(key)
+    kept.push({
+      en,
+      ja,
+      pos: String(w?.pos ?? '').trim(),
+      level: String(w?.level ?? '').trim(),
+      ex_en: ex,
+      ex_ja: String(w?.ex_ja ?? '').trim(),
+    })
+  }
+
+  if (!kept.length) {
+    return { error: '使える語句が1件も返りませんでした。もう一度お試しください。' }
+  }
+
+  return {
+    ok: true,
+    words: kept,
+    dropped,
+    stop_reason: response.stop_reason ?? null,
+    usage: {
+      input: response.usage.input_tokens,
+      output: response.usage.output_tokens,
+      cacheRead: response.usage.cache_read_input_tokens ?? 0,
+    },
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // 書いた答えの添削(`mode: 'review_writing'`・2026-09 利用者の指定)
 // ────────────────────────────────────────────────────────────────
 
@@ -1277,7 +1467,7 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-10'
+const FN_REV = '2026-09-12'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
@@ -1420,6 +1610,11 @@ Deno.serve(async (req) => {
   }
   if (mode === 'grammar') {
     return streamed(() => makeGrammar(apiKey, body))
+  }
+  /* **業種べつの単語帳(棚)**(0057)。教材は1本も作らない ——
+     語句だけを返し、置くのは画面の側である(`shelfWords.js`) */
+  if (mode === 'shelf_words') {
+    return streamed(() => makeShelfWords(apiKey, body))
   }
   if (mode === 'review_writing') {
     return streamed(() => reviewWriting(apiKey, body))

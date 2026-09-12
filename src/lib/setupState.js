@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0056'
+export const NEWEST_MIGRATION = '0057'
 
 /**
  * その移行が入っているかを見る印。
@@ -71,7 +71,7 @@ export const NEWEST_MIGRATION = '0056'
  * **どちらか一方だけ**を書く。
  */
 export const NEWEST_MARK = {
-  rpc: 'wordbook_limit', label: '単語帳を、200 語より先まで読めるようにする',
+  table: 'shelf_words', label: '業種べつの単語帳(棚)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */

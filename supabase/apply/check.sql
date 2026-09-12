@@ -146,4 +146,7 @@ from (
   -- だから関数そのものの有無で見る。画面の SetupStatus も同じ印を見ている
   union all select '0056 単語帳を、200 語より先まで読めるようにする(pending_matome.sql)',
     exists (select 1 from pg_proc where proname = 'wordbook_limit'), 38
+  union all select '0057 業種べつの単語帳(棚)(pending_matome.sql)',
+    exists (select 1 from information_schema.tables
+            where table_schema = 'public' and table_name = 'shelf_words'), 39
 ) t order by 順;

@@ -8436,3 +8436,50 @@ button.wbfilter-ctl { text-align: left; }
    **`.basicpick` とまったく同じ形。** ちがうのは、お金がかかることだけ */
 .speechpick .field { margin-bottom: 10px; }
 .speechpick-cost { margin-left: 4px; color: var(--text-primary); }
+
+/* ── 業種べつの単語帳(棚・0057)────────────────────────────
+     > 何冊も違う単語帳を持てるようにしてほしいんです。…
+     > 「自分の単語帳に追加する」みたいのを押したものだけ
+
+   **単語帳の中の欄は `.basicpick` とまったく同じ形。**
+   並べて置くものは同じ形にする ——
+   足すのは「棚を選ぶプルダウン」の余白だけである */
+.shelfpick .field { margin-bottom: 10px; }
+.shelfpick .chiprow { margin-bottom: 10px; }
+.shelfpick .chip { min-height: 36px; }
+/* **棚を選ぶ欄は、この欄でいちばん先に押すもの**なので、
+   指で狙える大きさにする(`.basicpick .chip` を 36px にしたのと同じ話)。
+   素の `select` は実測 37px で、**押せる大きさ 40px を 3px 割っていた** */
+.shelfpick select, .shelfbuild select { min-height: 40px; }
+
+/* ── 棚を作る画面(トレーナーだけ)──────────────────────
+   **1語 = 1行。** 語・訳・品詞とレベル・例文・訳を縦に積む ——
+   横に並べると、長い例文で必ずどこかがはみ出す */
+.shelfbuild .field { margin-bottom: var(--sp-10); }
+.shelfbuild-draft { margin-top: var(--sp-14); }
+.shelfbuild-list {
+  list-style: none; margin: var(--sp-8) 0 var(--sp-14); padding: 0;
+  display: flex; flex-direction: column; gap: var(--sp-8);
+}
+.shelfbuild-list > li {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--sp-10) var(--sp-12);
+  border: 1px solid var(--border); border-radius: var(--r-8);
+  background: var(--surface-2);
+  /* AI が付ける語句は長いことがある。**囲みから出さない** */
+  overflow-wrap: break-word;
+}
+/* **外したものは消さない。** 薄くして残す ——
+   消すと、何を外したのか分からなくなる */
+.shelfbuild-list > li.is-off { opacity: 0.5; }
+.shelfbuild-keep {
+  display: flex; align-items: center; gap: var(--sp-8);
+  /* チェックは指で狙える大きさにする */
+  min-height: 28px; cursor: pointer;
+}
+.shelfbuild-ja { font-size: var(--fs-13); color: var(--text-primary); }
+.shelfbuild-meta { font-size: var(--fs-12); color: var(--text-secondary); }
+.shelfbuild-ex { font-size: var(--fs-13); color: var(--text-primary); }
+.shelfbuild-exja { font-size: var(--fs-12); color: var(--text-secondary); }
+/* 「外す」は行の右端。**後戻りが利かないので、いちばん端に置く** */
+.shelfbuild-list > li > .btn { align-self: flex-end; margin-top: var(--sp-4); }

@@ -172,6 +172,31 @@ export function BookIcon({ className = 'icon' }) {
 }
 
 /**
+ * 本棚。**業種べつの単語帳(棚)**(0057)。
+ *
+ * **足す前に、同じ絵がもう無いか探した。** `BookIcon`(教材)と
+ * `CardsIcon`(単語帳)はどちらもすでに別の画面が使っており、
+ * 使い回すと上の帯とメニューで**どの画面か見分けられなくなる**
+ * (絵は `pages` から引いて上の帯にも出るため)。
+ * ほかの絵と同じ枠(20×20)・同じ線の太さ(1.5)でそろえる。
+ */
+export function ShelfIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      {/* 立てて並んだ本3冊 + 棚板1枚 */}
+      <rect x="3.5" y="4" width="3" height="10" rx="0.6"
+            fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="8" y="6" width="3" height="8" rx="0.6"
+            fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M13.2 5.2l2.8.8-2 7.7-2.8-.8z"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M2.5 16.5h15" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/**
  * カレンダー。**単語帳を「入った日」で絞る**ときに使う(2026-08 利用者の指定)。
  * ほかの絵と同じ枠(20×20)・同じ線の太さ(1.5)でそろえる。
  */
