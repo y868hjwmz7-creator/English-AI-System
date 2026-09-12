@@ -25,8 +25,8 @@
  */
 import { readFileSync } from 'node:fs'
 import {
-  alignEndOf, charTimesOf, clockFitOf, clockScaleOf, indexAtTime, makeRepeatSeeker,
-  rangeOf, repeatSeek, REPEAT_LOOK,
+  alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
+  rangeOf, repeatSeek, REPEAT_LEAD,
   scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import { itemOffsFrom, measureSeams, seamOffsets } from '../src/lib/seamFind.js'
@@ -933,8 +933,6 @@ function fakeMp3({
        縁は**声の切れ目**なので、**越えたということは最後まで鳴らした**
        ということである。手前で折り返すと、その文の最後がそのぶん切れる */
     const past = (x) => x + 0.01
-    /* 縁のほんの手前。**ここではまだ折り返さない**(声の途中だから) */
-    const just = (x) => x - 0.02
 
     // ① しない … いつまでも戻らない
     if (repeatSeek('off', past(mid(sentG[1].end, sentG[2].start)), o) !== null) {
@@ -958,13 +956,18 @@ function fakeMp3({
     const land1 = repeatSeek('sentence', past(fore1), o)
     if (repeatSeek('sentence', sentG[1].start + 0.5, o) !== null) {
       ng('文の途中なのに戻している')
-    } else if (repeatSeek('sentence', sentG[1].end, o) !== null) {
-      ng('**声が切れた瞬間に戻している**(言い終わる前に折り返す)')
-    } else if (repeatSeek('sentence', just(fore1), o) !== null) {
-      /* **縁の手前では、まだ折り返さない**(2026-09 実機・7手め)。
-         ここで折り返すと、その文の最後がそのぶん切れ、
-         **戻った先で「前の文の最後」として鳴る** */
-      ng('**縁の手前で折り返している**(文の最後が切れる)')
+    } else if (repeatSeek('sentence', sentG[1].end - 0.02, o) !== null) {
+      /* **声の終わりより手前では、まだ折り返さない**(7手め)。
+         ここで折り返すと、その文の最後がそのぶん切れる。
+         **間(ま)が足りている継ぎ目では、1ミリ秒も欠かさない** */
+      ng('**言い終わる前に折り返している**(文の最後が切れる)')
+    } else if (repeatSeek('sentence', sentG[1].end, o) === null) {
+      /* ── **声が終わったら、そこで止める**(2026-09 実機・21手め)────
+         前は**間のまん中**まで鳴らしてから止めていた。つまり
+         **わざわざ間の半分を使ってから**止めていたので、
+         決めてから黙るまでの遅れが**次の声へ直に食い込んでいた。**
+         止める場所を声の終わりへ動かすと、遅れは**間ぜんぶ**が受け止める */
+      ng('**声が終わっても止めていない**(遅れが次の声へ食い込む)')
     } else if (!(land1 > back1 + 1e-9)) {
       /* **`SEEK_LEAD` を書き写して突き合わせない。** それでは
          値を変えたときに期待値も一緒に動き、**仕組みを壊しても素通りする。**
@@ -1023,8 +1026,11 @@ function fakeMp3({
       ng('段落の終わりで、その段落の頭に戻らない')
     } else if (repeatSeek('item', sentG[0].end, o) !== null) {
       ng('段落の途中(1文目の終わり)で戻している')
-    } else if (repeatSeek('item', itemsG[0].end, o) !== null) {
-      ng('**声が切れた瞬間に戻している**(段落が言い終わる前に折り返す)')
+    } else if (repeatSeek('item', itemsG[0].end - 0.02, o) !== null) {
+      ng('**言い終わる前に折り返している**(段落の最後が切れる)')
+    } else if (repeatSeek('item', itemsG[0].end, o) === null) {
+      // 21手め … 段落でも、止めるのは**声が終わったところ**
+      ng('**声が終わっても止めていない**(遅れが次の声へ食い込む)')
     } else ok('段落をくり返す(その段落の頭へ)')
 
     /* ④ 全文 … **音声の終わりまで**来たら、本文の頭へ。
@@ -1065,9 +1071,23 @@ function fakeMp3({
       return null
     }
     const lp = loopOf(sentG[1].start + 0.1, sentG[2].start)
+    /* ── **どちらへ外れるかは、こちらで決める**(2026-09 実機・21手め)──
+     *
+     *   控えが早くずれていると、声が終わる前に折り返すことがある。
+     *   ここは前まで「**ずれのぶん待ってから**折り返す」を求めていた。
+     *   **それが、利用者が20回言い続けた「次の音が入る」の出どころ**である
+     *   —— 待ったぶんが、そのまま次の声になる。
+     *
+     *   **耳は、音の立ち上がりに鋭く、消えぎわには鈍い。**
+     *   だから外れる向きは**自分の声の終わりを欠くほう**に固定する。
+     *   欠けてよいのはずれのぶんまで(それ以上は待ちすぎ・切りすぎ)。
+     *
+     *   **戻る先が前の声に食い込まないことは、これまでどおり見る。** */
     if (!lp) ng('2文目で一度も折り返さない')
-    else if (!(lp.at > sentG[1].end + drift)) {
-      ng('ずれていると、言い終わる前に戻ってしまう', `${lp.at.toFixed(2)} 秒で折り返す`)
+    else if (!(lp.at > sentG[1].end - drift)) {
+      ng('ずれの見込みより早く戻っている(文の最後が切れすぎる)', `${lp.at.toFixed(2)} 秒`)
+    } else if (!(lp.at <= sentG[1].end + 0.02)) {
+      ng('**声が終わってからも待っている**(そのぶん次の声が鳴る)', `${lp.at.toFixed(2)} 秒`)
     } else if (!(lp.to > sentG[0].end + drift)) {
       ng('ずれていると、前の文のしっぽから始まってしまう', `${lp.to.toFixed(2)} 秒へ戻る`)
     } else if (!(lp.to < sentG[1].start + drift)) {
@@ -2736,20 +2756,38 @@ function fakeMp3({
    * @returns {{fold:number|null, head:number, tail:number}}
    *   head = 2文目の声が鳴った秒 / tail = 1文目の声が切れた秒
    */
-  const roll = (gap, phase, step) => {
+  /* ── **遅れを数える**(2026-09 実機・21手め)────────────────────
+   *
+   *   > ダメですね。次の音が入ります。(利用者・20回めの報告)
+   *
+   *   ここは「折り返しを返した**瞬間に音が止まる**」ものとして
+   *   数えていた。だから 18手め以降ずっと緑で、実機では直らなかった。
+   *
+   *   **実機では止まらない。** 決めてから本当に黙るまでに
+   *   ①そのひと刻みの残りの処理 ②`pause()` が音の側へ届くまで
+   *   ③端末へ渡してある音が鳴りきるまで、の遅れがある。
+   *   **その遅れのぶん、次の声が鳴る。**
+   *
+   *   **数えていない量は、直しようがない。** だから引数にする。 */
+  const roll = (gap, phase, step, lag = 0) => {
     const list = three(gap)
     const seeker = makeRepeatSeeker()
     let t = 0.5 + phase
     let head = 0
+    /** その区間で、2文目の声が何秒鳴ったか */
+    const heard = (a, b) => Math.max(0, Math.min(b, list[1].end) - Math.max(a, list[1].start))
     for (let n = 0; n < 500; n += 1) {
       const back = repeatSeek('sentence', t, {
         spans: list, sentences: list, duration: 4.5, prev: seeker.last(),
       })
       const to = seeker.next(back, t)
-      // 黙らせてから戻す(`hush`)ので、折り返した刻みから先は鳴らない
-      if (to !== null) return { fold: t, head, tail: Math.max(0, list[0].end - t) }
+      if (to !== null) {
+        // **決めてから黙るまでのぶんは、まだ鳴っている**
+        head += heard(t, t + lag)
+        return { fold: t, head, tail: Math.max(0, list[0].end - (t + lag)) }
+      }
       const till = t + step
-      head += Math.max(0, Math.min(till, list[1].end) - Math.max(t, list[1].start))
+      head += heard(t, till)
       t = till
       if (t > 2.5 + gap) return { fold: null, head, tail: 0 }
     }
@@ -2767,49 +2805,75 @@ function fakeMp3({
      **先取りが間の半分をはみ出したぶん**まで。値は書き写さず、
      `REPEAT_LOOK` から出す(**性質で見る**) */
   const gaps = [0, 0.005, 0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.5]
+  /* **遅れは、決め打ちにしない。** 端末も負荷も分からないので、
+     **`REPEAT_LEAD` までの遅れなら耐える**ことを確かめる ——
+     そこが、この値を置いてある理由そのものである */
   for (const step of [0.01, 0.012]) {
-    const look = Math.min(step, REPEAT_LOOK)
-    let worst = 0
-    let missed = 0
-    let over = 0
-    let cut = 0
-    for (const gap of gaps) {
-      for (let p = 0; p < 20; p += 1) {
-        const r = roll(gap, p * 0.0007, step)
-        if (r.fold === null) { missed += 1; continue }
-        worst = Math.max(worst, r.head)
-        cut = Math.max(cut, r.tail)
-        over = Math.max(over, r.tail - Math.max(0, look - gap / 2))
+    for (const lag of [0, 0.01, 0.02, 0.03, REPEAT_LEAD]) {
+      let worst = 0
+      let missed = 0
+      let over = 0
+      let cut = 0
+      for (const gap of gaps) {
+        for (let p = 0; p < 20; p += 1) {
+          const r = roll(gap, p * 0.0007, step, lag)
+          if (r.fold === null) { missed += 1; continue }
+          worst = Math.max(worst, r.head)
+          cut = Math.max(cut, r.tail)
+          /* 欠けてよいのは「もらった量 + ひと刻み」まで。
+             **値を書き写さない** —— `foldNeed()` から出す(性質で見る) */
+          const need = foldNeed(three(gap), 0, step)
+          over = Math.max(over, r.tail - (need + step))
+        }
       }
+      const at = `ひと刻み ${ms(step)} / 遅れ ${ms(lag)}`
+      if (missed) ng(`折り返しを見逃している(${at})`, `${missed} 回`)
+      else if (worst > 0) ng(`次の文の頭が鳴っている(${at})`, ms(worst))
+      else if (over > 0.002) ng(`自分の声を切りすぎている(${at})`, ms(over))
+      else ok(`次の文の頭は 0ms(${at} / 自分の終わりは ${ms(cut)} まで)`)
     }
-    if (missed) ng(`折り返しを見逃している(ひと刻み ${ms(step)})`, `${missed} 回`)
-    else if (worst > 0) ng(`次の文の頭が鳴っている(ひと刻み ${ms(step)})`, ms(worst))
-    else if (over > 0.002) ng(`自分の声を切りすぎている(ひと刻み ${ms(step)})`, ms(over))
-    else ok(`次の文の頭は 0ms(ひと刻み ${ms(step)} / 自分の終わりは ${ms(cut)} まで)`)
   }
 
-  /* ── ③ 先取りしすぎない ──────────────────────────────────────
-     **前のひと刻みが遅れていても、先取りは `REPEAT_LOOK` まで。**
-     でなければ、遅れたぶんだけ**自分の声の終わりが切れる** */
+  /* ── ② **間(ま)が足りていれば、声は1ミリ秒も欠けない** ───────────
+     止める場所を「声の終わり」にしたので、遅れは**間が受け止める。**
+     間のまん中で止めていた前の形に戻すと、ここが赤くなる */
+  {
+    let cut = 0
+    for (const gap of [0.06, 0.1, 0.2, 0.5]) {
+      for (let p = 0; p < 20; p += 1) {
+        const r = roll(gap, p * 0.0007, 0.01, 0.03)
+        if (r.fold !== null) cut = Math.max(cut, r.tail)
+      }
+    }
+    if (cut > 0.002) ng('間が足りているのに、自分の声を欠いている', ms(cut))
+    else ok('間が足りていれば、声は1ミリ秒も欠けない')
+  }
+
+  /* ── ③ 刻みが遅れても、切りすぎない ────────────────────────────
+     **もらうのは「足りないぶん + ひと刻み」まで**(21手め)。
+     刻みが 80ms 遅れても、そこで青天井に切らない */
   {
     let over = 0
     let cut = 0
     let missed = 0
+    let heard = 0
     /* **ひと周りぶん、位相をずらして試す。** 数えるところだけを
        たまたま外す位相があるので、**遅れの幅ぶん全部**を回す */
     for (const step of [0.03, 0.05, 0.08]) {
       for (const gap of [0.02, 0.03, 0.1, 0.5]) {
         for (let p = 0; p * 0.002 < step; p += 1) {
-          const r = roll(gap, p * 0.002, step)
+          const r = roll(gap, p * 0.002, step, 0.02)
           if (r.fold === null) { missed += 1; continue }
           cut = Math.max(cut, r.tail)
-          over = Math.max(over, r.tail - Math.max(0, REPEAT_LOOK - gap / 2))
+          heard = Math.max(heard, r.head)
+          over = Math.max(over, r.tail - (foldNeed(three(gap), 0, step) + step))
         }
       }
     }
     if (missed) ng('刻みが遅れると、折り返しを見逃す', `${missed} 回`)
+    else if (heard > 0) ng('刻みが遅れると、次の文の頭が鳴る', ms(heard))
     else if (over > 0.002) ng('先取りしすぎて、自分の声を切っている', ms(over))
-    else ok(`刻みが遅れても、先取りは ${ms(REPEAT_LOOK)} まで(切れるのは ${ms(cut)})`)
+    else ok(`刻みが 80ms 遅れても、次の頭は 0ms(切れるのは ${ms(cut)} まで)`)
   }
 
   /* ── ④ **前のひと刻みを渡さなければ、これまでどおり** ───────────
