@@ -388,7 +388,31 @@ export function noteFellBack(where) {
  *
  * **これは調べるための表示である。原因が分かったら外す。**
  */
-export function noteWholeClock({ align, dur, fit, sents }) {
+/**
+ * **どちらの入口で作られたか**(2026-09 実機・20手め)。
+ *
+ *   > なぜスコットランドのやつだけ違う挙動になったのかを
+ *   > きちんと解明しないと泥沼にハマっています。(利用者)
+ *
+ * 窓口(`synthWhole`)は、**声の数で入口を分けている。**
+ *
+ * | 声 | 入口 | 控えに間(ま)が入るか |
+ * |---|---|---|
+ * | 2人以上(会話・会議) | `text-to-dialogue` … 発言を**1つずつ**渡す | **入らない** |
+ * | 1人(記事・スピーチ) | `text-to-speech` … 段落を**空行でつないで1本**で渡す | **入る**(空行も文字なので) |
+ *
+ * 会話では、発言と発言のあいだの無音は**どの文字のものでもない。**
+ * だから控えの終わりが音声より短くなり、継ぎ目は 0.00 で並ぶ。
+ * 記事では、その無音が空行に割り当てられるので、そのまま合う。
+ *
+ * **「スコットランドだから」ではない。** 分かれ目は声の数である。
+ * ここを画面に出しておけば、次からは推測しなくてよい。
+ */
+const DOOR = { dialogue: '会話(発言ごとに渡す)', narration: '記事(1本の文章で渡す)' }
+
+export function noteWholeClock({
+  align, dur, fit, sents, kind = null,
+}) {
   const n = (v) => (Number.isFinite(v) ? v.toFixed(2) : '—')
   const heads = (sents ?? []).slice(0, 6).map((s) => n(s.start)).join(' / ')
   /* **継ぎ目の間(ま)を出す。** ここが決め手である ——
@@ -399,6 +423,7 @@ export function noteWholeClock({ align, dur, fit, sents }) {
     same: 'そのまま', scale: '比で配る', seam: '継ぎ目に配る', measured: '音を測って合わせる',
   }[fit?.how] ?? '—'
   setDetail(`[調査中] 1本で鳴っています。控え ${n(align)} 秒 / 音声 ${n(dur)} 秒`
+    + `${DOOR[kind] ? ` / ${DOOR[kind]}` : ''}`
     + ` / ${how}`
     + (seamNote ? `(${seamNote})` : '')
     + (fit?.how === 'seam' ? ` ${n(fit.per)} 秒ずつ` : '')
@@ -900,7 +925,13 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
       const spans = spansOf(had.alignment, body)
       /* **時刻そのものも返す。** 1文ずつの ◁▷ は、同じ時刻から
          文の区間を出す(`sentenceSpansOf`)。**二度取りに行かない** */
-      const out = spans ? { url: mp3, spans, alignment: had.alignment } : null
+      /* **どちらの入口で作られたかも返す**(2026-09 実機・20手め)。
+         `dialogue`(会話・会議)と `narration`(記事・スピーチ)では
+         **控えに間(ま)が入るかどうかが違う。**
+         窓口が `.json` に控えているので、こちらで数え直さない */
+      const out = spans
+        ? { url: mp3, spans, alignment: had.alignment, kind: had.kind ?? null }
+        : null
       if (!out) {
         /* **時刻が当てはまらない。** 区切れないものを当てずっぽうで
            区切ると、別の発言の場所を指す。1本にするのはあきらめる。
@@ -945,7 +976,12 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
     /* **作り直したときは、控えを素通りさせる。** 置き場所は同じままで、
        1年もつ指定で入っているため(`remakeClip` と同じ落とし穴) */
     const stamp = force ? `?v=${Date.now()}` : ''
-    const out = { url: `${res.url}${stamp}`, spans, alignment: made.alignment }
+    const out = {
+      url: `${res.url}${stamp}`,
+      spans,
+      alignment: made.alignment,
+      kind: made.kind ?? res.kind ?? null,
+    }
     wholeCache.set(mark, out)
     wholeGaveUp.delete(mark)
     wholeNote = null

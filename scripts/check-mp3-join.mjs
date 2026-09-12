@@ -2649,12 +2649,52 @@ function fakeMp3({
     if (!/how: 'measured'/.test(read)) ng('測れたときに、測ったほうを採っていない')
     /* **これまでどおりの道を消さない**(測れない教材がある) */
     if (!/clockFitOf\(spans,/.test(read)) ng('均等に配る受け皿が消えている(行き止まり)')
+    /* ── **そろっているものは動かさない**(20手め)──────────────
+     *
+     *   > この改善に入る前は通常だった教材まで
+     *   > 同じ挙動になり始めています。(2026-09 実機・利用者)
+     *
+     *   17手めは「測れたら必ず当てる」形だったので、
+     *   **控えと音声がそろっている教材まで動かしていた。**
+     *   14手めの「そろっていれば1ミリ秒も動かさない」を、
+     *   自分で外していたことになる。**歯止めを見張る。** */
+    if (!/seamOffs && base\.how !== 'same'/.test(read)) {
+      ng('**そろっている教材にまで、測ったずれを当てている**',
+        'clockFitOf が same のときは動かさないこと')
+    }
+    /* 継ぎ目の間(ま)は、測ったときも出す(どちらの入口かの決め手) */
+    if (!/gaps: base\.gaps/.test(read)) ng('測ったときに、継ぎ目の間を捨てている')
     /* **鳴らす音には一切かからない。** ほどくのは Offline のほうだけ */
     const fn = clips.match(/export async function wholeSeams[\s\S]*?\n\}/)?.[0] ?? ''
     if (!/OfflineAudioContext/.test(fn)) ng('`wholeSeams()` が `OfflineAudioContext` を使っていない')
     if (/createMediaElementSource|createGain/.test(fn)) ng('測るために、鳴らす音の通り道を変えている')
     if (!/cache: 'force-cache'/.test(fn)) ng('端末の控えを使っていない(もう一度落としに行く)')
     if (/functions\.invoke/.test(fn)) ng('測るために窓口を呼んでいる(課金される)')
+
+    /* ── **どちらの入口で作られたかを、画面に出す**(20手め)──────
+     *
+     *   > なぜスコットランドのやつだけ違う挙動になったのかを
+     *   > きちんと解明しないと泥沼にハマっています。(利用者)
+     *
+     *   窓口は**声の数で入口を分けている**(`synthWhole`)。
+     *   会話は発言を1つずつ渡すので**控えに間(ま)が入らず**、
+     *   記事は段落を空行でつないで渡すので**入る。**
+     *   ここが見えないかぎり、また推測することになる
+     *   (11手め「道が2つあるものは、どちらを通ったかを出す」)。 */
+    if (!/kind: had\.kind/.test(clips) || !/kind: made\.kind/.test(clips)) {
+      ng('1本の音声が、どちらの入口で作られたかを返していない')
+    }
+    if (!/kind: got\.kind/.test(read)) ng('画面が、入口を知らせに渡していない')
+    if (!/dialogue:.*会話/.test(clips) || !/narration:.*記事/.test(clips)) {
+      ng('入口の呼び名が、画面に出る形になっていない')
+    }
+    /* 窓口の分かれ目そのもの。**声の数で分かれる**(教材の種類ではない) */
+    const speak = readFileSync(
+      new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8',
+    )
+    if (!/if \(unique\.length > 1\)/.test(speak)) {
+      ng('窓口の分かれ目が「声の数」でなくなっている(説明が合わなくなる)')
+    }
   }
 
   if (bad === before) ok('継ぎ目を、音声そのものから測る')

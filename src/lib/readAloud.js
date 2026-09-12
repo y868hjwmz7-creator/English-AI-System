@@ -871,12 +871,33 @@ export function readAloudSequence(parts, {
              比で配ると、発言の長さがばらばらなときに数百ミリ秒ずれる。
              継ぎ目に間(ま)が入っていない控えなら、**継ぎ目に配る** */
           /* **測れたときは、測ったほうを採る**(17手め)。
-             均等に配るのは、測れなかったときの受け皿である */
-          const fit = seamOffs
+             均等に配るのは、測れなかったときの受け皿である。
+
+             ── **ただし、そろっているものは動かさない**(20手め)────
+             > この改善に入る前は通常だった教材まで
+             > 同じ挙動になり始めています。(2026-09 実機・利用者)
+
+             17手めは、**測れたら必ず当てる**形にしてしまった。
+             ところが控えと音声の長さが**そろっている**教材
+             (`how === 'same'`)には、配り直す時間がそもそも無い。
+             そこへ測ったずれを当てれば、**合っていたものが動く。**
+
+             14手めに自分で「そろっていれば、1ミリ秒も動かさない」と
+             書いておきながら、17手めでその歯止めを外していた。
+             **直すものが無いときは、直さない。** */
+          const base = clockFitOf(spans, alignEndOf(got.alignment), dur)
+          const fit = (seamOffs && base.how !== 'same')
             ? {
-              how: 'measured', k: 1, per: 0, offs: seamOffs.offs, sentOffs: seamOffs.sentOffs, gaps: [],
+              how: 'measured',
+              k: 1,
+              per: 0,
+              offs: seamOffs.offs,
+              sentOffs: seamOffs.sentOffs,
+              /* **継ぎ目の間(ま)は、測ったときも出す。**
+                 ここが「どちらの窓口で作られたか」の決め手である */
+              gaps: base.gaps,
             }
-            : clockFitOf(spans, alignEndOf(got.alignment), dur)
+            : base
           /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
            *
            *   > listen を押しても特に何も表示されず再生が始まり、
@@ -909,12 +930,16 @@ export function readAloudSequence(parts, {
               sent = shiftSeams(sent, fit.per)
             }
             holdCursor(sent, null)
-            noteWholeClock({ align: alignEndOf(got.alignment), dur, fit, sents: sent })
+            noteWholeClock({
+              align: alignEndOf(got.alignment), dur, fit, sents: sent, kind: got.kind,
+            })
             /* 続きから始めたときは、飛んだ先も控えの時計のままだった。
                **鳴り出した直後の1回だけ**、合わせ直す */
             if (Math.abs(want - sec) > 0.15 && seekClip(want)) return
           } else {
-            noteWholeClock({ align: alignEndOf(got.alignment), dur, fit, sents: sent })
+            noteWholeClock({
+              align: alignEndOf(got.alignment), dur, fit, sents: sent, kind: got.kind,
+            })
           }
         }
         /* ── **くり返し**(2026-09 利用者の指定)──────────────────
