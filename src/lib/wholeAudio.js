@@ -679,8 +679,48 @@ export const REPEAT_UNITS = ['off', 'sentence', 'item', 'all']
  *
  *   **先取りは要らない。** 10ms ごとに見ているので、
  *   **超えた最初のひと刻みで必ず捕まる。**
+ *
+ *   → **この2行は 18手めで取り下げた。** 下の `REPEAT_LOOK` を見ること。
+ *     刻みは飛ぶし、**超えた最初のひと刻み**では
+ *     すでに次の声が鳴っている。
  */
 const REPEAT_EPS = 0.04
+
+/**
+ * **次のひと刻みで縁を越えるなら、いま戻す**(先取り・秒)。18手め。
+ *
+ *   > 前の文の最後の音が入ることは無くなりました。
+ *   > たまに次の文の最初の音がはいります。(2026-09 実機・利用者)
+ *
+ * ── まず測った(`npm run test:mp3` ⑭)────────────────────────────
+ *
+ *   7手めは「**縁を越えてから**、手前の窓へ戻す」である。だから
+ *   **越えたことに気づくまでのひと刻みぶん、必ず鳴りすぎる。**
+ *
+ *     間(ま) 0ms  … 次の文の頭が **10〜13ms 鳴る**
+ *     間 20ms     … 速さ 2.5 倍で **15ms 鳴る**
+ *     間 50ms 以上 … 0ms(縁のうしろがまだ静かなので、鳴らない)
+ *
+ *   17手めで継ぎ目を実測するようにしたので、**間のある継ぎ目はもう
+ *   鳴らない。** 残るのは**間がほとんど無い継ぎ目だけ** ——
+ *   利用者の「**たまに**」と、そのまま合う。
+ *
+ * ── 直し:**越えるのを待たない。次の刻みで越えるなら、いま戻す** ──
+ *
+ *   前のひと刻みとの差から、**次のひと刻みの幅**を見積もる。
+ *   縁までがそれより近ければ、越える前に戻す。
+ *
+ *     間 30ms 以上 … **間の中で折り返す。**
+ *                     次の声は1ミリ秒も鳴らず、自分の声も1ミリ秒も欠けない
+ *     間 0ms       … 縁の手前で折り返すので、**自分の声の終わりが
+ *                     15ms まで欠ける。** 次の声が鳴るよりましである
+ *                     (15手め「欠けるのは、その文自身の…ほうがましである」)
+ *
+ *   **上限を置くのが、そのまま歯止めになる。** 刻みが 80ms 遅れても
+ *   先取りは 15ms までなので、**欠けるのは多くても 15ms**である
+ *   (MP3 のフレーム1枚 26ms の半分。耳には届かない)。
+ */
+export const REPEAT_LOOK = 0.015
 
 /**
  * **戻す先は、その声の頭の「これだけ手前」まで寄せる**(2026-09 実機・4手め)。
@@ -842,6 +882,20 @@ function frontEdge(list, i, duration = 0) {
 }
 
 /**
+ * その区間を**鳴らし終える秒**(18手め)。ここを越えたら、もう次の声である。
+ *
+ * ふだんは次の区間との**縁(間のまん中)**だが、控えの終わりが
+ * 実際より長いと縁が次の声より後ろに来る。**そこは次の声の頭で止める** ——
+ * 先取りが**次の声に食い込んでは、直した意味がない。**
+ */
+function foldAt(list, i) {
+  const n = Number(list[i + 1]?.start)
+  if (!Number.isFinite(n)) return NaN
+  const edge = backEdge(list, i + 1)
+  return Number.isFinite(edge) ? Math.min(edge, n) : n
+}
+
+/**
  * その区間へ**戻すときに頼む秒**(`landSec`)。
  *
  * ── 15手め:**間が無いところでは、逃がす向きが逆である** ────────
@@ -959,12 +1013,40 @@ function windowAt(list, t) {
  *
  *   **いちばん最後の窓だけは、次の縁が無い。** あそこは音声の終わりで
  *   見るしかなく、`ended` に先を越されるので**そこだけ先取りする。**
+ *
+ * ── 18手め:**越えるのを待たない**(`REPEAT_LOOK` の節)──────────
+ *
+ *   越えてから気づくかぎり、**ひと刻みぶんは必ず次の声が鳴る。**
+ *   だから ⓐ **次のひと刻みで越えるなら、いま戻す**(先取り)。
+ *   越えてしまったときの受け皿として ⓑ を残す。
+ *
+ *   **ⓑは、前のひと刻みが分かるなら「越えた瞬間」だけで見る。**
+ *   前は「縁から 40ms 以内」で見ていたので、
+ *   **刻みが 120ms 飛ぶと窓ごと跳び越して、折り返しが丸ごと消えていた**
+ *   (実測。そのときは次の文が最後まで鳴ってしまう)。
  */
-function doneWindow(list, t, duration) {
+function doneWindow(list, t, duration, prev = null) {
   const i = windowAt(list, t)
-  // ① 手前の窓の縁を、いま越えたところ = その窓を最後まで鳴らした
-  if (i > 0 && t - backEdge(list, i) <= REPEAT_EPS) return i - 1
-  // ② いちばん最後は、次の縁が無いので音声の終わりで見る
+  /* **`Number(null)` は 0 である。** そのまま渡すと「前のひと刻みは 0 秒」
+     になり、**どこにいても『いま縁を越えた』と読まれる**
+     (実際にそう書いて、検証に捕まえてもらった) */
+  const p = prev === null || prev === undefined ? NaN : Number(prev)
+  /* ひと刻みの幅。**人が送ったぶん(`JUMP` 超え)は数に入れない** */
+  const step = Number.isFinite(p) && t > p && t - p < JUMP ? t - p : 0
+  const look = Math.min(step, REPEAT_LOOK)
+
+  // ⓐ 次のひと刻みで縁を越える = この窓はもう鳴らし終える
+  if (i >= 0 && i < list.length - 1) {
+    const at = foldAt(list, i)
+    if (Number.isFinite(at) && t + look >= at) return i
+  }
+  // ⓑ 手前の窓の縁を、いま越えたところ(先取りが間に合わなかったとき)
+  if (i > 0) {
+    const edge = backEdge(list, i)
+    const crossed = Number.isFinite(p) ? p < edge : t - edge <= REPEAT_EPS
+    if (crossed) return i - 1
+  }
+  // ⓒ いちばん最後は、次の縁が無いので音声の終わりで見る
   if (i === list.length - 1 && t >= frontEdge(list, i, duration) - REPEAT_EPS) return i
   return -1
 }
@@ -982,6 +1064,11 @@ function doneWindow(list, t, duration) {
  *   集中モードが出しているかけらの区間(`spanForRange()` が縁まで込みで返す)。
  *   **渡されたらそのまま使う** —— あれは本文の途中なので、
  *   「最後だから音声の終わりまで」を当てはめてはいけない
+ * @param {number|null} o.prev **前のひと刻みの秒**(18手め)。
+ *   ひと刻みの幅を見積もって**越える前に折り返す**ために要る。
+ *   渡さなければ先取りしない(これまでどおりの動き)。
+ *   持っているのは `makeRepeatSeeker()` なので、**`seeker.last()` を渡す**
+ *   —— 数え方を2通り持たない
  * @returns {number|null} 戻る先の秒
  *
  * 【文の区間が無いときは、段落で回す】
@@ -991,7 +1078,7 @@ function doneWindow(list, t, duration) {
  *   **何も起きないより、近い単位で回すほうがよい**(行き止まりを作らない)。
  */
 export function repeatSeek(unit, sec, {
-  spans = null, sentences = null, duration = 0, window = null,
+  spans = null, sentences = null, duration = 0, window = null, prev = null,
 } = {}) {
   if (!REPEAT_UNITS.includes(unit) || unit === 'off') return null
   const t = Number(sec) || 0
@@ -1002,7 +1089,7 @@ export function repeatSeek(unit, sec, {
      「いまの窓の終わりに来たか」で見ると、**必ず声の途中で折り返す**
      (`doneWindow()` の節)。越えてから、手前の窓へ戻す */
   const done = (list) => {
-    const i = doneWindow(list, t, duration)
+    const i = doneWindow(list, t, duration, prev)
     return i < 0 ? null : landEdge(list, i)
   }
 
@@ -1170,7 +1257,10 @@ export const JUMP = 0.1
  * @param {number} o.off   「外した」とみなす手前のずれ(秒)
  * @param {number} o.tries 外したときに直す回数
  * @param {number} o.ticks 着いた先を見張るひと刻みの数
- * @returns {{next: (back: number|null, sec: number) => number|null}}
+ * @returns {{next: (back: number|null, sec: number) => number|null,
+ *            last: () => number|null}}
+ *   `last()` は**前のひと刻みの秒**(18手め)。`repeatSeek()` の `prev` に
+ *   そのまま渡す —— **前の刻みを覚えている場所を2つ持たない**
  */
 export function makeRepeatSeeker({
   hold = REPEAT_HOLD, off = SEEK_OFF, tries = SEEK_TRIES, ticks = LAND_TICKS,
@@ -1183,6 +1273,9 @@ export function makeRepeatSeeker({
   let last = null
 
   return {
+    /** 前のひと刻みの秒。**`repeatSeek()` に渡して先取りに使う**(18手め) */
+    last() { return last },
+
     next(back, sec) {
       const t = Number(sec)
       if (!Number.isFinite(t)) return null

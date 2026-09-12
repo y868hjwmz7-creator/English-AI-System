@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, indexAtTime, makeRepeatSeeker,
-  rangeOf, repeatSeek,
+  rangeOf, repeatSeek, REPEAT_LOOK,
   scaleSpans, seekSentence, sentenceSpansOf, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import { measureSeams, seamOffsets } from '../src/lib/seamFind.js'
@@ -2658,6 +2658,143 @@ function fakeMp3({
   }
 
   if (bad === before) ok('継ぎ目を、音声そのものから測る')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑭ **越えるのを待たない**(2026-09 実機・18手め)
+ *
+ *   > 前の文の最後の音が入ることは無くなりました。
+ *   > たまに次の文の最初の音がはいります。
+ *
+ *   17手めで**前の声**は消えた。残ったのは**逆向き**である。
+ *   7手めは「**縁を越えてから**戻す」ので、越えたことに気づくまでの
+ *   **ひと刻みぶん、次の声が必ず鳴る。**
+ *
+ * 【ここで測ること】
+ *   **鳴らしてみる。** ひと刻みずつ回して、
+ *   **2文目の声が何ミリ秒鳴ったか**を数える(黙らせてから戻すので、
+ *   折り返した刻みから先は鳴らない)。
+ *
+ *   **「戻った」だけを見ない。** それだと
+ *   **何もしない形に書き換えても緑**になるし、
+ *   **自分の声を切り落として黙らせる形**でも緑になる。
+ *   ①次の声が鳴らないか ②**自分の声が切れていないか**
+ *   ③**そもそも回っているか**の3つを、いつも一緒に数える。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+
+  /** 3文。まん中の継ぎ目の間(ま)だけを変える */
+  const three = (gap) => ([
+    { start: 0, end: 1, item: 0 },
+    { start: 1 + gap, end: 2 + gap, item: 1 },
+    { start: 2.3 + gap, end: 3.3 + gap, item: 2 },
+  ])
+
+  /**
+   * 1文目の途中から、ひと刻みずつ鳴らして折り返しまで回す。
+   * @returns {{fold:number|null, head:number, tail:number}}
+   *   head = 2文目の声が鳴った秒 / tail = 1文目の声が切れた秒
+   */
+  const roll = (gap, phase, step) => {
+    const list = three(gap)
+    const seeker = makeRepeatSeeker()
+    let t = 0.5 + phase
+    let head = 0
+    for (let n = 0; n < 500; n += 1) {
+      const back = repeatSeek('sentence', t, {
+        spans: list, sentences: list, duration: 4.5, prev: seeker.last(),
+      })
+      const to = seeker.next(back, t)
+      // 黙らせてから戻す(`hush`)ので、折り返した刻みから先は鳴らない
+      if (to !== null) return { fold: t, head, tail: Math.max(0, list[0].end - t) }
+      const till = t + step
+      head += Math.max(0, Math.min(till, list[1].end) - Math.max(t, list[1].start))
+      t = till
+      if (t > 2.5 + gap) return { fold: null, head, tail: 0 }
+    }
+    return { fold: null, head, tail: 0 }
+  }
+
+  const ms = (v) => `${Math.round(v * 1000)}ms`
+
+  /* ── ① **どの継ぎ目でも、次の文の頭は1ミリ秒も鳴らない** ─────────
+     間(ま)がどれだけ狭くても、**先取りが刻みの幅より広ければ**
+     縁の手前で折り返せる。**間の狭い継ぎ目こそが、この直しの相手**である
+     (17手めで、間のある継ぎ目はもう鳴らなくなっている)。
+
+     欠けてよいのは**自分の声の終わり**だけで、しかも
+     **先取りが間の半分をはみ出したぶん**まで。値は書き写さず、
+     `REPEAT_LOOK` から出す(**性質で見る**) */
+  const gaps = [0, 0.005, 0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.5]
+  for (const step of [0.01, 0.012]) {
+    const look = Math.min(step, REPEAT_LOOK)
+    let worst = 0
+    let missed = 0
+    let over = 0
+    let cut = 0
+    for (const gap of gaps) {
+      for (let p = 0; p < 20; p += 1) {
+        const r = roll(gap, p * 0.0007, step)
+        if (r.fold === null) { missed += 1; continue }
+        worst = Math.max(worst, r.head)
+        cut = Math.max(cut, r.tail)
+        over = Math.max(over, r.tail - Math.max(0, look - gap / 2))
+      }
+    }
+    if (missed) ng(`折り返しを見逃している(ひと刻み ${ms(step)})`, `${missed} 回`)
+    else if (worst > 0) ng(`次の文の頭が鳴っている(ひと刻み ${ms(step)})`, ms(worst))
+    else if (over > 0.002) ng(`自分の声を切りすぎている(ひと刻み ${ms(step)})`, ms(over))
+    else ok(`次の文の頭は 0ms(ひと刻み ${ms(step)} / 自分の終わりは ${ms(cut)} まで)`)
+  }
+
+  /* ── ③ 先取りしすぎない ──────────────────────────────────────
+     **前のひと刻みが遅れていても、先取りは `REPEAT_LOOK` まで。**
+     でなければ、遅れたぶんだけ**自分の声の終わりが切れる** */
+  {
+    let over = 0
+    let cut = 0
+    let missed = 0
+    /* **ひと周りぶん、位相をずらして試す。** 数えるところだけを
+       たまたま外す位相があるので、**遅れの幅ぶん全部**を回す */
+    for (const step of [0.03, 0.05, 0.08]) {
+      for (const gap of [0.02, 0.03, 0.1, 0.5]) {
+        for (let p = 0; p * 0.002 < step; p += 1) {
+          const r = roll(gap, p * 0.002, step)
+          if (r.fold === null) { missed += 1; continue }
+          cut = Math.max(cut, r.tail)
+          over = Math.max(over, r.tail - Math.max(0, REPEAT_LOOK - gap / 2))
+        }
+      }
+    }
+    if (missed) ng('刻みが遅れると、折り返しを見逃す', `${missed} 回`)
+    else if (over > 0.002) ng('先取りしすぎて、自分の声を切っている', ms(over))
+    else ok(`刻みが遅れても、先取りは ${ms(REPEAT_LOOK)} まで(切れるのは ${ms(cut)})`)
+  }
+
+  /* ── ④ **前のひと刻みを渡さなければ、これまでどおり** ───────────
+     渡し忘れても**音は鳴る**ので、気づけない。
+     `Number(null)` が 0 になるのを踏んだので、そこも一緒に見る */
+  {
+    const list = three(0.4)
+    const mid = (list[0].end + list[1].start) / 2
+    if (repeatSeek('sentence', list[0].start + 0.3, { sentences: list, duration: 4.5 }) !== null) {
+      ng('前のひと刻みを渡さないと、声の途中で戻している')
+    } else if (repeatSeek('sentence', mid + 0.01, { sentences: list, duration: 4.5 }) === null) {
+      ng('前のひと刻みが無いと、縁を越えても戻らない(これまでの道が切れている)')
+    } else ok('前のひと刻みを渡さなければ、これまでどおりの動き')
+  }
+
+  /* ── ⑤ 画面が本当に渡しているか ──────────────────────────────
+     **「名前が出てくるか」で見ない。** 説明にも `prev` と書いてある */
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const calls = read.match(/prev:\s*seeker\.last\(\)/g)?.length ?? 0
+    if (calls < 2) ng('画面が、前のひと刻みを渡していない', `${calls} か所(2 か所要る)`)
+    else ok('1本の道でも、発言ごとの道でも、前のひと刻みを渡している')
+  }
+
+  if (bad === before) ok('越えるのを待たず、次の刻みで越えるなら先に戻す')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
