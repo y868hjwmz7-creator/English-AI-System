@@ -1542,7 +1542,10 @@ function fakeMp3({
            **なだらかな上げ下げも「差し替えの前に 0 にする」も効かない。**
            `pause()` だけが、あの端末でも確実に出力を止められる */
         ['戻す前に黙らせる道がある', clips, /export function seekClip\(sec, \{ hush = false \} = \{\}\)/],
-        ['止めるのは pause。通り道は変えない', clips, /try \{ el\.volume = 0 \}[\s\S]{0,120}?try \{ el\.pause\(\) \}/],
+        /* **順は volume → muted → pause**(22手め で `muted` が入った)。
+           どれも `<audio>` そのものの持ちもので、**通り道は増えていない** */
+        ['止めるのは pause。通り道は変えない', clips,
+          /try \{ el\.volume = 0 \}[\s\S]*?try \{ el\.muted = true \}[\s\S]{0,80}?try \{ el\.pause\(\) \}/],
         /* ── **止めたまま、着いたのを見てから鳴らす**(2026-09 実機・6手め)──
              > ダメな文については何も変わってません。
              > 大丈夫な文があるのも事実です
@@ -2691,6 +2694,32 @@ function fakeMp3({
     if (!/cache: 'force-cache'/.test(fn)) ng('端末の控えを使っていない(もう一度落としに行く)')
     if (/functions\.invoke/.test(fn)) ng('測るために窓口を呼んでいる(課金される)')
 
+    /* ── **戻す前に、出口も閉じる**(22手め)────────────────────────
+     *
+     *   > 次の文の音がいまだに入ります。(2026-09 実機・利用者)
+     *
+     *   **iOS が無視するのは `volume` であって、`muted` ではない。**
+     *   `pause()` が音の側へ届くまでのあいだ、出口を先に閉じておく。
+     *
+     *   **戻す道が1本でも抜けると、そのあと永久に無音になる。**
+     *   だから「閉じているか」と「必ず戻すか」を**必ず一緒に**見る ——
+     *   片方だけだと、いちばん悪い壊し方が素通りする。
+     * ────────────────────────────────────────────────────────────── */
+    const seek = clips.match(/export function seekClip[\s\S]*?\n\}/)?.[0] ?? ''
+    if (!/el\.muted = true/.test(seek)) {
+      ng('**戻す前に出口を閉じていない**(iOS は volume を無視する)')
+    }
+    const clr = clips.match(/function clearSeekWatch[\s\S]*?\n\}/)?.[0] ?? ''
+    if (!/muted = false/.test(clr)) {
+      ng('**黙らせたのを戻す道が無い**(そのあと永久に無音になる)')
+    }
+    if (!/if \(element\)[\s\S]{0,120}muted = false[\s\S]{0,80}if \(!seekWatch\) return/.test(clr)) {
+      ng('黙らせを戻すのが、早く帰る条件より**あと**にある')
+    }
+    if (!/el\.muted = false\s*\n\s*el\.src = src/.test(clips)) {
+      ng('新しい音を、黙ったまま始めうる(差し替えのときに戻していない)')
+    }
+
     /* ── **どちらの入口で作られたかを、画面に出す**(20手め)──────
      *
      *   > なぜスコットランドのやつだけ違う挙動になったのかを
@@ -2839,7 +2868,11 @@ function fakeMp3({
      間のまん中で止めていた前の形に戻すと、ここが赤くなる */
   {
     let cut = 0
-    for (const gap of [0.06, 0.1, 0.2, 0.5]) {
+    /* **間の広さを書き写さない。** 「足りている」は `REPEAT_LEAD` で
+       決まるので、そこから出す(**性質で見る**)。書き写すと、
+       見込む量を上げた日に**この行だけが古くなって赤くなる** */
+    const wide = [0.02, 0.05, 0.2, 0.4].map((extra) => REPEAT_LEAD + 0.01 + extra)
+    for (const gap of wide) {
       for (let p = 0; p < 20; p += 1) {
         const r = roll(gap, p * 0.0007, 0.01, 0.03)
         if (r.fold !== null) cut = Math.max(cut, r.tail)

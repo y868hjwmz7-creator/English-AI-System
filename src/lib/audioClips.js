@@ -1225,8 +1225,19 @@ const LAND_WAIT = 250
 /** 戻したあとの見張り。**1つだけ**(`{ el, on, timer }`) */
 let seekWatch = null
 
-/** 見張りを外す。**次の戻しと、止めたときに必ず呼ぶ** */
+/**
+ * 見張りを外す。**次の戻しと、止めたときに必ず呼ぶ**
+ *
+ * **黙らせたのを、ここで必ず戻す**(`muted`・22手め)。
+ * 戻す道が1本でも抜けると、**そのあと永久に無音**になる ——
+ * このアプリでいちばん悪い壊れ方である。だから
+ * **出るところを1つに絞って**、そこで無条件に戻す。
+ * `seekWatch` が無くても戻すので、**早く帰る条件より前**に置く。
+ */
 function clearSeekWatch() {
+  if (element) {
+    try { element.muted = false } catch { /* 戻せない端末では、もともと効いていない */ }
+  }
   if (!seekWatch) return
   const { el, on, timer } = seekWatch
   seekWatch = null
@@ -1354,6 +1365,14 @@ export function seekClip(sec, { hush = false } = {}) {
 
   clearSeekWatch()
   try { el.volume = 0 } catch { /* iOS は volume を無視する */ }
+  /* **iOS が無視するのは `volume` であって、`muted` ではない**(22手め)。
+     消音の自動再生が iPhone で通るのは、`muted` が効いているからである。
+     `pause()` が音の側へ届くまでのあいだ、**出口を先に閉じておく。**
+
+     - **音の通り道は1ミリも変えていない**(Web Audio を通さない)。
+       すでにやっている `volume = 0` の、iOS でも効く版である
+     - **戻すのは `clearSeekWatch()` 1か所。** 出る道が全部そこを通る */
+  try { el.muted = true } catch { /* 黙らせられなくても、`pause()` は効く */ }
   try { el.pause() } catch { /* 止められなくても困らない */ }
   seekWatch = { el, on: landed, timer: window.setTimeout(wake, LAND_WAIT) }
   el.addEventListener('seeked', landed)
@@ -1505,6 +1524,9 @@ export async function playClip({
       // ② 差し替えのあいだは黙らせる。**段差ができても聞こえない。**
       //    本当の音量は、下の `applyGain()` が読み込みのあとに入れ直す
       el.volume = 0
+      // **新しい音は、黙ったまま始めない**(22手め)。`clearSeekWatch()` が
+      // 戻しているが、ここでも念を押す —— **行き止まりを作らない**
+      el.muted = false
       el.src = src
       el.load()
     } catch { done(false) }
