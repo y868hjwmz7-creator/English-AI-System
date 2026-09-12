@@ -43,7 +43,7 @@
 import {
   DEFAULT_CLIP_VOICE, canUseClips, clipAlignment, clipDuration, clipTime,
   lastWholeDetail, noteFellBack, noteWholeClock, noteWholeFallback,
-  playClip, prefetchClip, seekClip, stopClip, wholeClip,
+  playClip, prefetchClip, seekClip, stopClip, wholeClip, wholeSeams,
 } from './audioClips.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
@@ -53,7 +53,7 @@ import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
   REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime,
   indexAtTime, makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
-  sentenceSpansOf, shiftSeams, spanForRange,
+  sentenceSpansOf, shiftItems, shiftSeams, spanForRange,
 } from './wholeAudio.js'
 import {
   sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
@@ -756,6 +756,18 @@ export function readAloudSequence(parts, {
       return false
     }
 
+    /* ── **継ぎ目を、音声そのものから測る**(2026-09 実機・17手め)────
+     *
+     *   14手めの「継ぎ目に均等に配る」は**当て推量**である。
+     *   ElevenLabs の間は継ぎ目ごとに違うので、そのぶんずれる。
+     *   **窓口を呼ばない = 0円**で、通信も起きない(端末の控えが効く)。
+     *   **測れなければ `null`** —— これまでどおり均等に配る。
+     *
+     *   ここで待つのは、**ほどく1〜2秒だけ**である(2度目からは
+     *   端末に覚えている)。押した人には「用意しています…」が出ている。 */
+    const seamOffs = await wholeSeams(got.url, got.spans)
+    if (!alive()) return true
+
     let spans = got.spans
     /* **どこから鳴らすか。** 控えの秒は「1本の中の秒」なので、
        その項目の中に収まっているときだけ使う(今までの形で覚えた秒が
@@ -847,7 +859,11 @@ export function readAloudSequence(parts, {
           /* **余った時間を、どこへ配るか**(2026-09 実機・14手め)。
              比で配ると、発言の長さがばらばらなときに数百ミリ秒ずれる。
              継ぎ目に間(ま)が入っていない控えなら、**継ぎ目に配る** */
-          const fit = clockFitOf(spans, alignEndOf(got.alignment), dur)
+          /* **測れたときは、測ったほうを採る**(17手め)。
+             均等に配るのは、測れなかったときの受け皿である */
+          const fit = seamOffs
+            ? { how: 'measured', k: 1, per: 0, offs: seamOffs, gaps: [] }
+            : clockFitOf(spans, alignEndOf(got.alignment), dur)
           /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
            *
            *   > listen を押しても特に何も表示されず再生が始まり、
@@ -866,7 +882,10 @@ export function readAloudSequence(parts, {
           if (fit.how !== 'same') {
             const raw = spans
             const want = fitTime(at, fit, raw)
-            if (fit.how === 'scale') {
+            if (fit.how === 'measured') {
+              spans = shiftItems(spans, fit.offs)
+              sent = shiftItems(sent, fit.offs)
+            } else if (fit.how === 'scale') {
               spans = scaleSpans(spans, fit.k)
               sent = scaleSpans(sent, fit.k)
             } else {

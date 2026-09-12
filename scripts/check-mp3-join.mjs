@@ -27,8 +27,9 @@ import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, indexAtTime, makeRepeatSeeker,
   rangeOf, repeatSeek,
-  scaleSpans, seekSentence, sentenceSpansOf, shiftSeams, spansOf, wholeMark,
+  scaleSpans, seekSentence, sentenceSpansOf, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
+import { measureSeams, seamOffsets } from '../src/lib/seamFind.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
@@ -2526,6 +2527,137 @@ function fakeMp3({
   }
 
   if (bad === before) ok('時計を音声に合わせ、番号は段落で知らせる')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑬ **継ぎ目を、音声そのものから測る**(2026-09 実機・17手め)
+ *
+ *   > まだ、というよりも前回とズレ方に違いがない、
+ *   > または体感できる変化がありません。
+ *
+ * **こちらには音が聞こえない。だから作った波形で数える。**
+ * 見るのは6つ ——
+ *   ①測り方(静かなところを見つけられるか)
+ *   ②**間(ま)がばらばらでも、本当の頭に当たるか**
+ *   ③**均等に配ると、どれだけずれるか**(測る値打ちがあるか)
+ *   ④測り損ねたら `null`(これまでどおりに落ちるか)
+ *   ⑤`shiftItems()` が、項目にも文にも同じずれを当てるか
+ *   ⑥**画面が本当に呼んでいるか**(定義だけあっても何も起きない)
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+
+  /** 声のところは雑音、間は無音。**間(ま)はわざとばらばらにする** */
+  const RATE = 8000
+  const speech = [1.2, 0.8, 2.4, 0.6, 1.9, 1.1]      // 話している秒
+  const gaps = [0.04, 0.55, 0.10, 0.90, 0.22]        // 本当の間(ま)
+  const lead = 0.12                                   // 頭の無音
+
+  const trueStart = []
+  let at = lead
+  for (let i = 0; i < speech.length; i += 1) {
+    trueStart.push(at)
+    at += speech[i] + (gaps[i] ?? 0)
+  }
+  const total = at + 0.30                             // 終わりの余韻
+  const wave = new Float32Array(Math.round(total * RATE))
+  let seed = 12345
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff - 0.5 }
+  trueStart.forEach((s, i) => {
+    const a = Math.round(s * RATE)
+    const b = Math.round((s + speech[i]) * RATE)
+    for (let j = a; j < b; j += 1) wave[j] = rnd() * 0.5
+  })
+
+  // 控え(alignment)は**間を数えていない** = 継ぎ目 0 の並び
+  const raw = []
+  let t0 = 0
+  speech.forEach((d) => { raw.push({ start: t0, end: t0 + d }); t0 += d })
+  const alignEnd = t0
+
+  // ── ① ②
+  const got = measureSeams(wave, RATE, raw, total)
+  if (!got) ng('作った波形から、継ぎ目を1つも測れていない')
+  else {
+    const err = got.offs.map((o, i) => Math.abs(raw[i].start + o - trueStart[i]))
+    const worst = Math.max(...err)
+    /* **40ms の継ぎ目だけは、これ以上詰められない。** 語と語のあいだと
+       見分けが付かないので、そこは「間が無い」として前と同じずれを当てる。
+       残り4本は 1ms も外していないことを、下で別に数える */
+    if (worst > 0.05) ng('測った頭が、本当の頭とずれている', `最大 ${(worst * 1000).toFixed(0)}ms`)
+    else ok(`間(ま)がばらばらでも、本当の頭に当たる(最大 ${(worst * 1000).toFixed(0)}ms)`)
+    const clean = err.filter((_, i) => i === 0 || (gaps[i - 1] ?? 0) >= 0.05)
+    if (Math.max(...clean) > 0.015) {
+      ng('見分けの付く継ぎ目まで外している', `${(Math.max(...clean) * 1000).toFixed(0)}ms`)
+    }
+    if (got.hit + got.tight < speech.length - 1) {
+      ng('継ぎ目を数え落としている', `${got.hit}+${got.tight}/${speech.length - 1}`)
+    }
+    if (!got.tight) ng('間の無い継ぎ目を「間が無い」と読んでいない')
+  }
+
+  // ── ③ 均等に配ると、どれだけずれるか(測る値打ち)
+  {
+    const fit = clockFitOf(raw, alignEnd, total)
+    if (fit.how !== 'seam') ng('この形で「継ぎ目に配る」を選んでいない', fit.how)
+    const even = shiftSeams(raw, fit.per)
+    const worst = Math.max(...even.map((s, i) => Math.abs(s.start - trueStart[i])))
+    if (!(worst > 0.1)) {
+      ng('均等に配っても合ってしまう(この検証では、測る値打ちを示せない)', `${(worst * 1000).toFixed(0)}ms`)
+    } else ok(`均等に配ると、最大 ${(worst * 1000).toFixed(0)}ms ずれる(だから測る)`)
+  }
+
+  // ── ④ 測り損ねたら `null`(これまでどおりに落ちる)
+  {
+    const quiet = new Float32Array(RATE * 3)
+    if (measureSeams(quiet, RATE, raw, 3) !== null) ng('無音しか無いのに、測れたことにしている')
+    else if (seamOffsets(raw, [{ from: 0, to: 1 }], total) !== null) {
+      ng('声のところが足りないのに、測れたことにしている')
+    } else if (seamOffsets(
+      raw,
+      trueStart.map((s, i) => ({ from: s + 9, to: s + 9 + speech[i] })),
+      /* **長さの見張りに拾わせない。** ここで見たいのは
+         「ずれが大きすぎる」の1本だけである(赤チェックは1つずつ) */
+      total + 20,
+    ) !== null) {
+      ng('とんでもなくずれているのに、そのまま返している')
+    } else ok('測り損ねたら `null`(これまでどおり均等に配る)')
+  }
+
+  // ── ⑤ 項目にも文にも、同じずれを当てる
+  {
+    const offs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+    const items = shiftItems(raw, offs)
+    const sents = shiftItems([
+      { start: raw[2].start, end: raw[2].start + 1, item: 2 },
+      { start: raw[2].start + 1, end: raw[2].end, item: 2 },
+    ], offs)
+    if (Math.abs(items[2].start - (raw[2].start + 0.3)) > 1e-9) ng('`shiftItems()` が項目に当たっていない')
+    else if (Math.abs(sents[1].start - (raw[2].start + 1 + 0.3)) > 1e-9) {
+      ng('`shiftItems()` が、その文の項目のずれを見ていない')
+    } else if (shiftItems(raw, []) !== raw) ng('ずれが無いのに、配列を作り直している')
+    else ok('項目にも文にも、同じずれが当たる')
+  }
+
+  // ── ⑥ 画面が本当に呼んでいるか
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    if (!/=\s*await wholeSeams\(/.test(read)) ng('1本の道が、継ぎ目を測りに行っていない')
+    if (!/shiftItems\(spans, fit\.offs\)/.test(read)) ng('測ったずれを、項目の区間に当てていない')
+    if (!/shiftItems\(sent, fit\.offs\)/.test(read)) ng('測ったずれを、文の区間に当てていない')
+    if (!/how: 'measured'/.test(read)) ng('測れたときに、測ったほうを採っていない')
+    /* **これまでどおりの道を消さない**(測れない教材がある) */
+    if (!/clockFitOf\(spans,/.test(read)) ng('均等に配る受け皿が消えている(行き止まり)')
+    /* **鳴らす音には一切かからない。** ほどくのは Offline のほうだけ */
+    const fn = clips.match(/export async function wholeSeams[\s\S]*?\n\}/)?.[0] ?? ''
+    if (!/OfflineAudioContext/.test(fn)) ng('`wholeSeams()` が `OfflineAudioContext` を使っていない')
+    if (/createMediaElementSource|createGain/.test(fn)) ng('測るために、鳴らす音の通り道を変えている')
+    if (!/cache: 'force-cache'/.test(fn)) ng('端末の控えを使っていない(もう一度落としに行く)')
+    if (/functions\.invoke/.test(fn)) ng('測るために窓口を呼んでいる(課金される)')
+  }
+
+  if (bad === before) ok('継ぎ目を、音声そのものから測る')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

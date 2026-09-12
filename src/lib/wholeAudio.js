@@ -516,8 +516,34 @@ export function shiftSeams(list, per) {
   })
 }
 
+/**
+ * 区間を、**項目ごとに測ったぶんだけずらす**(2026-09 実機・17手め)。
+ *
+ * `shiftSeams()` は「どの継ぎ目も同じ間(ま)」という**当て推量**である。
+ * 実際の間は継ぎ目ごとに違うので、音声から測れたときはこちらを使う
+ * (`seamFind.js`)。**ずらすだけ。伸ばさない**のは同じ。
+ *
+ * 何番目の項目かの見方も `shiftSeams()` とそろえる ——
+ * `item`(文の区間)、無ければ並び順(項目の区間)。
+ * **数え方を2通り持たない。**
+ */
+export function shiftItems(list, offs) {
+  if (!Array.isArray(list) || !Array.isArray(offs) || !offs.length) return list
+  return list.map((s, i) => {
+    const item = Number.isFinite(s.item) ? s.item : i
+    const d = Number(offs[item])
+    if (!Number.isFinite(d) || d === 0) return s
+    return { ...s, start: s.start + d, end: s.end + d }
+  })
+}
+
 /** 控えの秒 → 音声の秒(続きから始めたときの飛び先を合わせ直す) */
 export function fitTime(sec, fit, spans) {
+  if (fit?.how === 'measured') {
+    const t0 = Number(sec) || 0
+    const i = Math.max(0, indexAtTime(spans, t0))
+    return t0 + (Number(fit.offs?.[i]) || 0)
+  }
   const t = Number(sec) || 0
   if (!fit || fit.how === 'same') return t
   if (fit.how === 'scale') return t * fit.k

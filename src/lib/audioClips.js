@@ -59,6 +59,7 @@ import {
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
+import { measureSeams } from './seamFind.js'
 import { SEEK_MISS, charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
 import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
@@ -394,9 +395,12 @@ export function noteWholeClock({ align, dur, fit, sents }) {
      ほとんど 0 なら「控えが間を数えていない」、0.1 秒以上あるなら
      「数えている」。どちらかで、余った時間の行き先が変わる */
   const gaps = (fit?.gaps ?? []).slice(0, 6).map((g) => n(g)).join(' ')
-  const how = { same: 'そのまま', scale: '比で配る', seam: '継ぎ目に配る' }[fit?.how] ?? '—'
+  const how = {
+    same: 'そのまま', scale: '比で配る', seam: '継ぎ目に配る', measured: '音を測って合わせる',
+  }[fit?.how] ?? '—'
   setDetail(`[調査中] 1本で鳴っています。控え ${n(align)} 秒 / 音声 ${n(dur)} 秒`
     + ` / ${how}`
+    + (seamNote ? `(${seamNote})` : '')
     + (fit?.how === 'seam' ? ` ${n(fit.per)} 秒ずつ` : '')
     + (fit?.how === 'scale' ? ` ${Number.isFinite(fit.k) ? fit.k.toFixed(4) : '—'} 倍` : '')
     + `${gaps ? ` / 継ぎ目 ${gaps}` : ''}`
@@ -950,6 +954,107 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
   } catch (e) {
     wholeNote = `窓口につながりません(${e?.message ?? e})`
     wholeGaveUp.add(mark)
+    return null
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * **継ぎ目を、音声そのものから測る**(2026-09 実機・17手め)
+ *
+ *   > まだ、というよりも前回とズレ方に違いがない、
+ *   > または体感できる変化がありません。
+ *
+ * 14手めは、数え落とされた時間を**継ぎ目に均等に**配っていた。
+ * けれども ElevenLabs の間は継ぎ目ごとに違うので、**継ぎ目ごとに
+ * 数十〜数百ミリ秒ずれる。** なぜ「均等では足りない」と言えるのかは
+ * `seamFind.js` の頭に、数字ごと書いてある。
+ *
+ *   - **窓口を1回も呼ばない = 0円。** MP3 は鳴らすためにどのみち
+ *     落としているので、**通信も起きない**(端末の控えが効く)
+ *   - **鳴らす音には一切かからない。** ほどくのは
+ *     `OfflineAudioContext` で、`loudness.js` の `measureClip()` と
+ *     まったく同じ立場である(音の通り道は1ミリも変えていない)
+ *   - **測れなければ `null`。** これまでどおり均等に配る
+ *   - **端末に覚える。** 90 秒をほどくのは携帯には重いので、
+ *     同じ音声を二度ほどかない
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** 測ったずれ。**この画面のあいだは、二度ほどかない** */
+const seamCache = new Map()
+/** 測れないと分かったもの(古い端末・ほどけない MP3) */
+const seamGaveUp = new Set()
+
+const SEAM_KEY = 'eas.seams'
+/** 覚えておく音声の数(古いものから落とす) */
+const SEAM_KEEP = 40
+
+/** 置き場所から、覚えるときの短い名前を作る(URL は長い) */
+const seamNameOf = (url) => String(url || '').split('/').pop()?.split('?')[0] || ''
+
+function readSeamStore() {
+  try { return JSON.parse(localStorage.getItem(SEAM_KEY) || '{}') || {} } catch { return {} }
+}
+
+function writeSeamStore(name, offs) {
+  try {
+    const all = readSeamStore()
+    all[name] = offs
+    const keys = Object.keys(all)
+    // 新しいものから残す(入れ物が膨らまないように)
+    if (keys.length > SEAM_KEEP) keys.slice(0, keys.length - SEAM_KEEP).forEach((k) => { delete all[k] })
+    localStorage.setItem(SEAM_KEY, JSON.stringify(all))
+  } catch { /* 覚えられなくても、その場では測れている */ }
+}
+
+/** 直近の測りぐあい。**`[調査中]` の行がそのまま出す** */
+let seamNote = null
+export const lastSeamNote = () => seamNote
+
+/**
+ * 1本にまとめた音声から、**項目ごとの本当のずれ**を測る。
+ *
+ * @param {string} url その音声の置き場所
+ * @param {Array<{start:number,end:number}>} spans 控えの区間(項目ごと)
+ * @returns {Promise<number[]|null>} 測れなければ `null`(これまでどおり)
+ */
+export async function wholeSeams(url, spans) {
+  if (!url || !Array.isArray(spans) || spans.length < 2) return null
+  const name = seamNameOf(url)
+  if (seamCache.has(name)) return seamCache.get(name)
+  if (seamGaveUp.has(name)) return null
+
+  const kept = readSeamStore()[name]
+  if (Array.isArray(kept) && kept.length === spans.length) {
+    seamCache.set(name, kept)
+    seamNote = `覚えていた継ぎ目(${kept.length} 項目)`
+    return kept
+  }
+
+  try {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext
+    if (!OAC) { seamGaveUp.add(name); seamNote = 'この端末ではほどけません'; return null }
+    // **端末の控えが効く。** `<audio>` が取ったばかりなので、たいてい通信は起きない
+    const res = await fetch(url, { mode: 'cors', cache: 'force-cache' })
+    if (!res.ok) { seamGaveUp.add(name); seamNote = `音声を読めません(${res.status})`; return null }
+    const bytes = await res.arrayBuffer()
+    const off = new OAC(1, 1, 44100)
+    const buf = await off.decodeAudioData(bytes)
+    const got = measureSeams(buf.getChannelData(0), buf.sampleRate, spans, buf.duration)
+    if (!got) {
+      seamGaveUp.add(name)
+      seamNote = '継ぎ目を数え切れませんでした'
+      return null
+    }
+    seamCache.set(name, got.offs)
+    writeSeamStore(name, got.offs)
+    const wide = Math.max(...got.offs.map((v) => Math.abs(v)))
+    seamNote = `実測 ${got.hit}/${spans.length - 1} 本`
+      + (got.loose ? `(あて ${got.loose})` : '')
+      + ` / ずれ 最大 ${(wide * 1000).toFixed(0)}ms`
+    return got.offs
+  } catch (e) {
+    seamGaveUp.add(name)
+    seamNote = `ほどけませんでした(${e?.message ?? e})`
     return null
   }
 }
