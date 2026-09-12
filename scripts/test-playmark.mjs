@@ -52,8 +52,8 @@ import {
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
 import {
-  WORDS_PER_SCENE, isShelf, shelfFeature, shelfIdOfFeature, shelfJobs, shelfList,
-  shelfOf, shelfScenes, shelfTarget, shelvesFor, showsShelf,
+  SCENE_COST, WORDS_PER_SCENE, isShelf, shelfFeature, shelfIdOfFeature, shelfJobs,
+  shelfList, shelfOf, shelfScenes, shelfTarget, shelfTodo, shelvesFor, showsShelf,
 } from '../src/data/shelves.js'
 import { INDUSTRIES } from '../src/data/industries.js'
 import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
@@ -4196,6 +4196,26 @@ console.log('\nスピーチ練習(0054)')
       && j.count === WORDS_PER_SCENE),
     '棚 … 作る仕事は、場面ごとに1つ')
 
+  /* ── まとめて作る ──(2026-09 利用者の問い「一回一回単語を作るのですか？」)
+     **足りない場面だけ**を、**足りないぶんだけ**作る。
+     だから何度押しても安全である */
+  const empty = shelfTodo('it')
+  ok(empty.length === shelfScenes('it').length
+    && empty.every((j) => j.count === WORDS_PER_SCENE),
+    '棚 … 空の棚では、場面ぜんぶを作る')
+  const one = shelfScenes('it')[0].id
+  const full = shelfTodo('it', { [one]: WORDS_PER_SCENE })
+  ok(full.length === empty.length - 1 && !full.some((j) => j.scene === one),
+    '棚 … すでに足りている場面は落とす(同じ語を作り直さない)')
+  const part = shelfTodo('it', new Map([[one, 5]]))
+  ok(part.find((j) => j.scene === one)?.count === WORDS_PER_SCENE - 5,
+    '棚 … 足りないぶんだけ作る(手で1語入れた場面も、埋まる)')
+  ok(part.map((j) => j.scene).join() === empty.map((j) => j.scene).join(),
+    '棚 … 順は `shelfJobs()` のまま(プルダウンと食い違わない)')
+  ok(shelfTodo('そんな棚').length === 0, '棚 … 知らない棚では、作るものが無い')
+  ok(SCENE_COST.min > 0 && SCENE_COST.max > SCENE_COST.min,
+    '棚 … 1場面の見積もりに幅がある(押す前に金額を出すため)')
+
   /* ── ゲストへの指定の名前 ──
      **新しい表を作らない。** 0055 の `learner_features` に
      `shelf:<分野の id>` で入る。**名前の作り方はここ1か所** */
@@ -4249,6 +4269,28 @@ console.log('\nスピーチ練習(0054)')
     '棚 … 出す棚が無ければ、欄ごと出さない')
   ok(/onPicked\?\.\(/.test(pickS),
     '棚 … 絞り込みは呼ぶ側に任せる(`App.jsx` の1つを使う)')
+
+  /* ── 棚を作る画面 ──
+     **一回一回押させない。** まとめて作る道と、止まる条件を見る */
+  const buildS = noCS(readS('src/components/ShelfBuilder.jsx'))
+  ok(/= useMemo\(\(\) => shelfTodo\(shelf, have\)/.test(buildS),
+    '棚 … 足りない場面は `shelfTodo()` が決める(画面で数え直さない)')
+  ok(/onClick=\{makeAll\}/.test(buildS)
+    && /const makeAll = \(\) => \{ runJobs\(todo\) \}/.test(buildS),
+    '棚 … 「ぜんぶ作る」で、足りない場面をまとめて作る')
+  ok(/onClick=\{make\}/.test(buildS)
+    && /if \(job\) runJobs\(\[job\]\)/.test(buildS),
+    '棚 … 1場面ずつ作る道も残してある(同じ `runJobs()` を通る)')
+  ok(/if \(stop\.current\) break/.test(buildS)
+    && /onClick=\{\(\) => \{ stop\.current = true \}\}/.test(buildS),
+    '棚 … 止まる条件を持たせてある(「やめる」で次の場面へ進まない)')
+  ok(/\{run\.at \+ 1\} \/ \{run\.total\} 場面/.test(buildS),
+    '棚 … あと何場面かを、走っているあいだ出す')
+  ok(/todo\.length \* SCENE_COST\.min/.test(buildS)
+    && /\{todoWords\} 語/.test(buildS),
+    '棚 … 押す前に、語数と金額を出す(見えない費用は管理できない)')
+  ok(/この単語帳に入れる/.test(buildS) && /setDraft\(groups\.map/.test(buildS),
+    '棚 … まとめて作っても、入れる前に必ず目を通す')
 
   const trS = noCS(readS('src/components/TrainerLearners.jsx'))
   ok(/shelfFeature\(s\.id\)/.test(trS),

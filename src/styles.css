@@ -8483,3 +8483,28 @@ button.wbfilter-ctl { text-align: left; }
 .shelfbuild-exja { font-size: var(--fs-12); color: var(--text-secondary); }
 /* 「外す」は行の右端。**後戻りが利かないので、いちばん端に置く** */
 .shelfbuild-list > li > .btn { align-self: flex-end; margin-top: var(--sp-4); }
+
+/* ── まとめて作る(2026-09 利用者の問い「一回一回単語を作るのですか？」)──
+   **1冊ぶんをまとめて作る道**を、いちばん上に置く。
+   1つずつ作る道はその下に残してある(**消さない**) */
+.shelfbuild-all {
+  margin: var(--sp-12) 0;
+  padding: var(--sp-12);
+  border: 1px solid var(--border); border-radius: var(--r-8);
+  background: var(--surface-2);
+}
+.shelfbuild-all > .card-hint { margin-top: 0; }
+/* 走っているあいだの1行と「やめる」。**となりに置く**(CLAUDE.md) */
+.shelfbuild-run {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-8) var(--sp-12); margin: var(--sp-10) 0;
+}
+.shelfbuild-run > p { margin: 0; }
+.shelfbuild-run > .btn-row { margin: 0; }
+/* 場面の見出し。**どの場面のものかを、必ず書く** ——
+   まとめて作ると場面をまたぐので、無いとどこへ入るのか分からない */
+.shelfbuild-group {
+  margin: var(--sp-12) 0 0;
+  font-size: var(--fs-12); font-weight: 600;
+  color: var(--text-secondary); letter-spacing: 0.02em;
+}

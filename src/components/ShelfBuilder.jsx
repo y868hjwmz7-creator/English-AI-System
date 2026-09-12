@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  SHELF_GROUPS, WORDS_PER_SCENE, shelfJobs, shelfLabel, shelfList, shelfScenes, shelfTarget,
+  SCENE_COST, SHELF_GROUPS, WORDS_PER_SCENE,
+  shelfJobs, shelfLabel, shelfList, shelfScenes, shelfTarget, shelfTodo,
 } from '../data/shelves.js'
 import { sceneLabel } from '../data/genres.js'
 import {
@@ -19,19 +20,33 @@ import { PlusIcon, ShelfIcon } from './Icons.jsx'
  *   > シチュエーションと場面を想定したものを。
  *
  *   35冊 × 平均 6.3 場面 = **約 220 の場面**がある。
- *   一度に作らず、**1つの場面ずつ**作って目を通す。
- *   悪い教材1つが1,500人に届くのと同じで、**棚もスクール全体で共有する**
- *   ので、発行前の確認を省かない(CLAUDE.md 冒頭)。
+ *
+ * 【**一回一回は押させない**】(2026-09 利用者の問い)
+ *
+ *   > 一回一回単語を作るのですか？
+ *
+ *   出したときは**場面を1つ選んで1回押す**形だったので、
+ *   そのとおり**約 220 回**押すことになっていた。
+ *   いまは **「この単語帳をぜんぶ作る」** で、
+ *   **その棚の足りない場面を、上から順に1つずつ**作る。
+ *
+ *   - **1つずつしか走らせない**(`startPrepareAll` と同じ作法)。
+ *     まとめて投げると、いくらかかったのか分からないうちに終わる
+ *   - **あと何場面かを、いつも出す。**「やめる」はそのとなりに置く
+ *   - **やめても、そこまでに作ったぶんは残る**(行き止まりを作らない)
+ *   - **場面を1つずつ作る道も、そのまま残してある**(消さない)
  *
  * 【押す前に、語数と金額を出す】
  *
  *   **見えない費用は管理できない**(CLAUDE.md)。
- *   1場面(12語)でおよそ 3〜5 円である。
+ *   1場面(12語)でおよそ $0.02〜0.05、1冊ぶんならその場面数ぶんである。
  *
  * 【入れる前に、必ず一覧で見せる】
  *
- *   作っただけでは棚に入らない。**目を通して「入れる」を押すまで**、
- *   どこにも保存されない。要らない語はその場で外せる。
+ *   **まとめて作っても、ここは変えない。** 作っただけでは棚に入らない。
+ *   目を通して「入れる」を押すまで、どこにも保存されない。
+ *   棚は**スクール全体で共有する**ので、発行前の確認を省かない
+ *   (CLAUDE.md 冒頭「悪い教材1つが1,500人に届く」)。
  *
  * 【0057 を貼る前でも壊れない】
  *
@@ -46,9 +61,18 @@ export default function ShelfBuilder() {
   const [scene, setScene] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
-  /** 作ったばかりの語(**まだ棚に入っていない**) */
+  /**
+   * 作ったばかりの語(**まだ棚に入っていない**)。
+   * `[{ scene, label, words: [{ …, keep }] }]` —— **場面ごとにまとめる。**
+   * まとめて作ると場面をまたぐので、どの語がどの場面のものかを持っておく。
+   */
   const [draft, setDraft] = useState(null)
   const [cost, setCost] = useState(0)
+  /** まとめて作っているあいだの様子(`{ at, total, label, startedAt }`) */
+  const [run, setRun] = useState(null)
+  const [secs, setSecs] = useState(0)
+  /** 「やめる」の印。**通信そのものは取り消さない**(送った1回は課金される) */
+  const stop = useRef(false)
 
   const stale = genGatewayNote()
 
@@ -58,6 +82,17 @@ export default function ShelfBuilder() {
     loadShelfCounts().then(({ data }) => { if (alive) setCounts(data) })
     return () => { alive = false }
   }, [])
+
+  /* 経過秒数。**走っているあいだだけ数える**(`useJob()` と同じ作法) */
+  const running = !!run
+  const startedAt = run?.startedAt ?? 0
+  useEffect(() => {
+    if (!running) { setSecs(0); return undefined }
+    const tick = () => setSecs(Math.max(0, Math.round((Date.now() - startedAt) / 1000)))
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [running, startedAt])
 
   const reload = async (id) => {
     const { data } = await loadShelfWords(id)
@@ -75,55 +110,127 @@ export default function ShelfBuilder() {
     return () => { alive = false }
   }, [shelf])
 
-  /** その棚の場面と、いま何語あるか */
-  const scenes = useMemo(() => {
+  /** 場面ごとに、いま何語あるか */
+  const have = useMemo(() => {
     const n = new Map()
     for (const r of rows ?? []) n.set(r.scene ?? '', (n.get(r.scene ?? '') ?? 0) + 1)
-    return shelfJobs(shelf).map((j) => ({ ...j, have: n.get(j.scene) ?? 0 }))
-  }, [rows, shelf])
+    return n
+  }, [rows])
 
-  /** 作る */
-  const make = async () => {
-    const job = scenes.find((s) => s.scene === scene)
-    if (!job) return
+  /** その棚の場面ぜんぶ(プルダウン用) */
+  const scenes = useMemo(
+    () => shelfJobs(shelf).map((j) => ({ ...j, have: have.get(j.scene) ?? 0 })),
+    [have, shelf],
+  )
+
+  /**
+   * **まだ足りない場面だけ。** 判断は `shelfTodo()` 1か所で、
+   * 画面では数え直さない(**数え方を2通り持たない**)。
+   */
+  const todo = useMemo(() => shelfTodo(shelf, have), [have, shelf])
+  const todoWords = todo.reduce((n, j) => n + j.count, 0)
+
+  /**
+   * 場面の一覧を、**上から順に1つずつ**作る。
+   *
+   * 場面が1つだけのときも、まとめて作るときも、**同じ道を通る** ——
+   * 書き分けると、片方だけ古くなる。
+   */
+  const runJobs = async (jobs) => {
+    if (!jobs.length) return
+    stop.current = false
     setBusy(true)
     setNote(null)
     setDraft(null)
-    const { data, error } = await generateShelfWords({
-      industry: shelfLabel(shelf),
-      scene: job.label,
-      sceneHint: job.hint,
-      count: job.count,
-      /* **すでにある語は、もう一度作らせない。**
-         渡さないと、2回目にほとんど同じ語が返る */
-      have: (rows ?? []).map((r) => r.word_norm),
-    })
+    setCost(0)
+    setRun({ at: 0, total: jobs.length, label: jobs[0].label, startedAt: Date.now() })
+
+    /* **すでにある語は、もう一度作らせない。** 渡さないと、
+       2回目にほとんど同じ語が返る。**まとめて作るときは、
+       この回で作った語も足していく**(場面をまたいで重ならないように) */
+    const known = new Set((rows ?? []).map((r) => r.word_norm))
+    const groups = []
+    let spent = 0
+    let failed = null
+
+    for (let i = 0; i < jobs.length; i += 1) {
+      if (stop.current) break
+      const j = jobs[i]
+      setRun((v) => (v ? { ...v, at: i, label: j.label } : v))
+      /* **1つずつしか走らせない。** まとめて投げると、
+         いくらかかったのか分からないうちに終わる */
+      const { data, error } = await generateShelfWords({
+        industry: shelfLabel(shelf),
+        scene: j.label,
+        sceneHint: j.hint,
+        count: j.count,
+        have: [...known],
+      })
+      if (error) { failed = { label: j.label, text: error }; break }
+      spent += estimateCost(data.usage)
+      const words = (data.words ?? []).map((w) => ({ ...w, keep: true }))
+      for (const w of words) known.add(String(w.en ?? '').trim().toLowerCase())
+      groups.push({ scene: j.scene, label: j.label, words })
+      setDraft(groups.map((g) => ({ ...g, words: [...g.words] })))
+      setCost(spent)
+    }
+
+    setRun(null)
     setBusy(false)
-    if (error) { setNote({ ng: true, text: error }); return }
-    setDraft(data.words.map((w) => ({ ...w, keep: true })))
-    setCost(estimateCost(data.usage))
+
+    const made = groups.reduce((n, g) => n + g.words.length, 0)
     /* **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md)。
        何ができたのかを、押した場所のすぐ下に出す */
+    if (failed) {
+      setNote({
+        ng: true,
+        text: `「${failed.label}」でつまずきました — ${failed.text}`
+          + (made ? `(ここまでの ${made} 語は下に残してあります)` : ''),
+      })
+      return
+    }
+    if (stop.current) {
+      setNote({
+        text: made
+          ? `やめました。ここまでの ${made} 語は下に残してあります。`
+          : 'やめました。',
+      })
+      return
+    }
     setNote({
-      text: `${data.words.length} 件できました`
-        + (data.dropped ? `(形の合わない ${data.dropped} 件は落としました)` : '')
-        + `。目を通して「この単語帳に入れる」を押してください。`,
+      text: `${groups.length} 場面 / ${made} 件できました。`
+        + '目を通して「この単語帳に入れる」を押してください。',
     })
   }
 
-  /** 棚に入れる */
+  /** 場面を1つだけ作る(これまでどおりの道。**消していない**) */
+  const make = () => {
+    const job = scenes.find((s) => s.scene === scene)
+    if (job) runJobs([job])
+  }
+
+  /** その棚の足りない場面を、まとめて作る */
+  const makeAll = () => { runJobs(todo) }
+
+  /** 棚に入れる。**場面をまたいでいても、1回で置く** */
   const put = async () => {
-    const keep = (draft ?? []).filter((w) => w.keep)
+    const keep = []
+    for (const g of draft ?? []) {
+      for (const w of g.words) {
+        if (!w.keep) continue
+        keep.push({
+          word: w.en, ja: w.ja, pos: w.pos, level: w.level,
+          en: w.ex_en, enJa: w.ex_ja, scene: g.scene,
+        })
+      }
+    }
     if (!keep.length) return
     setBusy(true)
-    const { data, error } = await saveShelfWords(shelf, keep.map((w) => ({
-      word: w.en, ja: w.ja, pos: w.pos, level: w.level,
-      en: w.ex_en, enJa: w.ex_ja, scene,
-    })))
+    const { data, error } = await saveShelfWords(shelf, keep)
     setBusy(false)
     if (error) { setNote({ ng: true, text: error.message ?? String(error) }); return }
     setDraft(null)
-    setNote({ text: `${data} 語を「${sceneLabel(scene)}」に入れました。` })
+    setNote({ text: `${data} 語を「${shelfLabel(shelf)}」に入れました。` })
     await reload(shelf)
     const { data: c } = await loadShelfCounts()
     setCounts(c)
@@ -136,6 +243,10 @@ export default function ShelfBuilder() {
     if (error) { setNote({ ng: true, text: error.message ?? String(error) }); return }
     await reload(shelf)
   }
+
+  const keeping = (draft ?? []).reduce(
+    (n, g) => n + g.words.filter((w) => w.keep).length, 0,
+  )
 
   return (
     <section className="card shelfbuild">
@@ -157,7 +268,8 @@ export default function ShelfBuilder() {
 
       <label className="field">
         <span className="field-label">単語帳</span>
-        <select className="input" value={shelf} onChange={(e) => setShelf(e.target.value)}>
+        <select className="input" value={shelf} disabled={busy}
+                onChange={(e) => setShelf(e.target.value)}>
           <option value="">選んでください</option>
           {SHELF_GROUPS.map((g) => (
             <optgroup key={g.id} label={g.label}>
@@ -186,10 +298,53 @@ export default function ShelfBuilder() {
 
       {shelf && rows !== null && (
         <>
-          {/* ── 場面を1つ選んで作る ────────────────────────── */}
+          {/* ── ①まとめて作る ──────────────────────────────
+              **一回一回押させない**(2026-09 利用者の問い) */}
+          {todo.length > 0 && (
+            <div className="shelfbuild-all">
+              <p className="card-hint">
+                まだ足りない場面が <strong>{todo.length} 件</strong>あります。
+                上から順に、あわせて <strong>{todoWords} 語</strong>を作ります。
+                <strong>
+                  {' '}AI を {todo.length} 回呼ぶので、およそ $
+                  {(todo.length * SCENE_COST.min).toFixed(2)}〜$
+                  {(todo.length * SCENE_COST.max).toFixed(2)} かかります。
+                </strong>
+                {' '}作っただけでは<strong>まだ入りません</strong> ——
+                目を通してから入れます。
+                作っているあいだは、この画面を開いたままにしてください。
+              </p>
+              <div className="btn-row">
+                <button type="button" className="btn btn--primary"
+                        disabled={busy || !shelfWordsSupported()} onClick={makeAll}>
+                  <PlusIcon />
+                  この単語帳をぜんぶ作る({todo.length} 場面)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── 走っているあいだ ──────────────────────────
+              **あと何場面かを出し、「やめる」をそのとなりに置く** */}
+          {run && (
+            <div className="shelfbuild-run">
+              <p className="muted">
+                {run.at + 1} / {run.total} 場面 —— 「{run.label}」を作っています…
+                {secs > 2 ? `(${secs} 秒)` : ''}
+              </p>
+              <div className="btn-row">
+                <button type="button" className="btn btn--quiet"
+                        onClick={() => { stop.current = true }}>
+                  {stop.current ? 'やめています…' : 'やめる'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── ②場面を1つだけ作る(**この道も残す**)────────── */}
           <label className="field">
-            <span className="field-label">場面</span>
-            <select className="input" value={scene}
+            <span className="field-label">場面(1つだけ作るとき)</span>
+            <select className="input" value={scene} disabled={busy}
                     onChange={(e) => { setScene(e.target.value); setDraft(null); setNote(null) }}>
               <option value="">選んでください</option>
               {scenes.map((s) => (
@@ -200,20 +355,17 @@ export default function ShelfBuilder() {
             </select>
           </label>
 
-          {scene && (
+          {scene && !run && (
             <>
               <p className="card-hint">
                 この場面の語句を <strong>{WORDS_PER_SCENE} 件</strong>作ります。
                 すでにある語は渡してあるので、同じ語は返りません。
                 <strong> AI を1回呼ぶので、およそ $0.02〜0.05 かかります。</strong>
-                作っただけでは<strong>まだ入りません</strong> ——
-                目を通してから入れます。
               </p>
               <div className="btn-row">
-                <button type="button" className="btn btn--primary"
+                <button type="button" className="btn btn--ghost"
                         disabled={busy || !shelfWordsSupported()} onClick={make}>
-                  <PlusIcon />
-                  {busy ? '作っています…' : 'この場面の語句を作る'}
+                  この場面の語句を作る
                 </button>
               </div>
             </>
@@ -231,27 +383,43 @@ export default function ShelfBuilder() {
                     円に直さない —— 為替をこちらで決め打ちしない */}
                 できた語句(この生成にかかった費用 約 ${cost.toFixed(2)})
               </p>
-              <ul className="shelfbuild-list">
-                {draft.map((w, i) => (
-                  <li key={`${w.en}:${i}`} className={w.keep ? '' : 'is-off'}>
-                    <label className="shelfbuild-keep">
-                      <input type="checkbox" checked={w.keep}
-                             onChange={() => setDraft((v) => v.map((x, j) => (
-                               j === i ? { ...x, keep: !x.keep } : x
-                             )))} />
-                      <strong>{w.en}</strong>
-                    </label>
-                    <span className="shelfbuild-ja">{w.ja}</span>
-                    <span className="shelfbuild-meta">{w.pos} / {w.level}</span>
-                    <span className="shelfbuild-ex">{w.ex_en}</span>
-                    <span className="shelfbuild-exja">{w.ex_ja}</span>
-                  </li>
-                ))}
-              </ul>
+              {draft.map((g, gi) => (
+                <div key={g.scene}>
+                  {/* **どの場面のものかを、必ず書く。** まとめて作ると
+                      場面をまたぐので、書かないとどこへ入るのか分からない */}
+                  <p className="shelfbuild-group">
+                    {g.label}({g.words.length} 件)
+                  </p>
+                  <ul className="shelfbuild-list">
+                    {g.words.map((w, i) => (
+                      <li key={`${w.en}:${i}`} className={w.keep ? '' : 'is-off'}>
+                        <label className="shelfbuild-keep">
+                          <input type="checkbox" checked={w.keep}
+                                 onChange={() => setDraft((v) => v.map((x, j) => (
+                                   j === gi
+                                     ? {
+                                       ...x,
+                                       words: x.words.map((y, k) => (
+                                         k === i ? { ...y, keep: !y.keep } : y
+                                       )),
+                                     }
+                                     : x
+                                 )))} />
+                          <strong>{w.en}</strong>
+                        </label>
+                        <span className="shelfbuild-ja">{w.ja}</span>
+                        <span className="shelfbuild-meta">{w.pos} / {w.level}</span>
+                        <span className="shelfbuild-ex">{w.ex_en}</span>
+                        <span className="shelfbuild-exja">{w.ex_ja}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
               <div className="btn-row">
                 <button type="button" className="btn btn--primary"
-                        disabled={busy || !draft.some((w) => w.keep)} onClick={put}>
-                  この単語帳に入れる({draft.filter((w) => w.keep).length} 語)
+                        disabled={busy || !keeping} onClick={put}>
+                  この単語帳に入れる({keeping} 語)
                 </button>
                 {/* **「やめる」を、走らせるボタンのとなりに置く**(CLAUDE.md) */}
                 <button type="button" className="btn btn--quiet"
