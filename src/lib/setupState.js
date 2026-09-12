@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0057'
+export const NEWEST_MIGRATION = '0058'
 
 /**
  * その移行が入っているかを見る印。
@@ -71,7 +71,7 @@ export const NEWEST_MIGRATION = '0057'
  * **どちらか一方だけ**を書く。
  */
 export const NEWEST_MARK = {
-  table: 'shelf_words', label: '業種べつの単語帳(棚)',
+  table: 'shelf_reviews', label: '業種べつの単語帳を、独立した単語帳にする',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */

@@ -67,7 +67,10 @@ import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from 
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
 import BasicWordsPick from './BasicWordsPick.jsx'
-import ShelfPick from './ShelfPick.jsx'
+import ShelfBooks from './ShelfBooks.jsx'
+import { loadShelfPick, pickedShelves, saveShelfPick } from '../data/shelves.js'
+import { loadShelfCounts } from '../lib/shelfWords.js'
+import { loadShelfProgress, loadShelfWordbook, setShelfWordStatus } from '../lib/shelfReviews.js'
 import SpeechWordsPick from './SpeechWordsPick.jsx'
 import { basicJaOf, basicPosOf } from '../lib/basicsCourse.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
@@ -413,6 +416,46 @@ export default function Wordbook({
      絞り込みを変えても選択は消さない(集めて教材にするため) */
   const [picked, setPicked] = useState([])
 
+  /**
+   * **いま開いている冊**(0058・2026-09 利用者の指定)。
+   *
+   *   > 最終的にこうやって混ぜたくないんですよ。
+   *   > これは独立した単語帳にしたいんです。
+   *
+   * `'my'`(自分の単語帳)か `'shelf'`(業種べつ)。**同時には出さない** ——
+   * 混ざらないことが、この機能の要である。
+   *
+   * **画面は1つのまま。** 行の形をそろえてあるので(`shelfReviews.js`)、
+   * 出題の形も4択も絞り込みも聞き流しも紙も、**1文字も書き分けていない。**
+   * 2つ持つと必ず片方が古くなる(単語帳で3度言われた失敗)。
+   *
+   * **既定は自分の単語帳**(利用者の言葉「基本は自分の単語帳」)。
+   */
+  const [book, setBook] = useState('my')
+  const shelfBook = book === 'shelf'
+  /** チェックを入れた分野。**覚える**(`shelves.js` が鍵を持つ) */
+  const [shelfPick, setShelfPick] = useState(() => loadShelfPick(shelves))
+  /** 棚ごとの語数(棚そのもの・誰のものでもない) */
+  const [shelfCounts, setShelfCounts] = useState({})
+  /** 棚ごとの覚え具合(その人のぶん) */
+  const [shelfProg, setShelfProg] = useState({})
+  const shelfKey = shelfPick.join(' ')
+  /** 出してよい棚。**見張りには id をつないだ文字列を渡す**(配列は毎回別物) */
+  const shelfIds = shelves.map((s) => s.id).join(' ')
+
+  /* **棚の一覧は、あとから届く**(`App.jsx` がプロフィールと一緒に読む)。
+     はじめの `useState` は空の一覧で走るので、そのままだと
+     **覚えていたチェックが黙って落ちる。**
+     届いたところで読み直し、**出せなくなった棚だけを落とす** */
+  useEffect(() => {
+    setShelfPick((v) => {
+      const base = v.length ? v : loadShelfPick(shelves)
+      const next = pickedShelves(base, shelves)
+      return next.join(' ') === v.join(' ') ? v : next
+    })
+  }, [shelfIds])
+
+
   /* **0027 を貼る前の Supabase には「覚えかけ」が無い**(2026-09 実機)。
      一度断られたら、その画面のあいだは出さない。
      **効かないボタンを出さない**(CLAUDE.md)。`noLearning` は
@@ -446,6 +489,58 @@ export default function Wordbook({
 
   const reload = useCallback(async () => {
     setLoading(true)
+
+    /* ── 業種べつの単語帳(0058)────────────────────────────────
+       **自分の単語帳とは、読む先そのものが違う。**
+       行の形はそろえてあるので(`shelfReviews.js`)、
+       ここから下の描き方は1文字も書き分けていない。
+
+       **状態で分けて読まない。** 棚は表を直に読めるので、
+       3枚の札(まだ / 覚えかけ / 覚えた)も読んだ行から数える ——
+       分けて読むと、札の数と実際に出る語が食い違う。 */
+    if (shelfBook) {
+      const [pack, tally, wk, aim, prog] = await Promise.all([
+        loadShelfWordbook({ learnerId, shelves: shelfPick }),
+        loadShelfCounts(),
+        loadVocabWeek(learnerId),
+        loadWeeklyGoal(learnerId),
+        loadShelfProgress(learnerId),
+      ])
+      setLoading(false)
+      if (tally.data) setShelfCounts(tally.data)
+      if (prog.data) setShelfProg(prog.data)
+      if (wk.data) setWeek(wk.data)
+      if (aim.data) setGoal(aim.data)
+      if (pack.error) { setError(pack.error.message ?? String(pack.error)); return }
+      setError(null)
+      const all = pack.data ?? []
+      const day = todayKey()
+      setCounts({
+        due: all.filter((r) => r.status !== 'known'
+          && String(r.due_on ?? '').slice(0, 10) <= day).length,
+        unknown: all.filter((r) => r.status === 'unknown').length,
+        learning: all.filter((r) => r.status === 'learning').length,
+        known: all.filter((r) => r.status === 'known').length,
+      })
+      /* いま見ている段だけを出す。**期限の見方は自分の単語帳と同じ** */
+      const got = all.filter((r) => {
+        if (current.id === 'due') {
+          return r.status !== 'known'
+            && (!current.dueOnly || String(r.due_on ?? '').slice(0, 10) <= day)
+        }
+        return r.status === current.id
+      })
+      setRows(got)
+      rowsRef.current = got
+      setQueue([])
+      doneRef.current = []
+      setResult(null)
+      setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
+      setPickedChoice(null)
+      setDeal((n) => n + 1)
+      return
+    }
+
     const [list, tally, wk, seen, byField, aim] = await Promise.all([
       current.status
         ? loadMyWordbook({
@@ -514,7 +609,12 @@ export default function Wordbook({
     setPickedChoice(null)
     // **読み直したときだけ組み直す。** 答えたときには組み直さない
     setDeal((n) => n + 1)
-  }, [current.status, current.dueOnly, learnerId, mine, onlySet])
+    /* **見張りに `shelfPick`(配列)そのものを入れない。**
+       親から毎回 `[...]` が来るわけではないが、`setShelfPick` のたびに
+       別の配列になる。つないだ文字列(`shelfKey`)で見る
+       (`onlyKey` とまったく同じ落とし穴) */
+  }, [current.status, current.dueOnly, current.id, learnerId, mine, onlySet,
+    shelfBook, shelfKey])
 
   useEffect(() => { reload() }, [reload])
 
@@ -870,8 +970,14 @@ export default function Wordbook({
         already: gradedRef.current.has(row.word_norm),
       })) {
         if (ok) gradedRef.current.add(row.word_norm)
-        ;({ error: e } = await setWordStatus(row.word_norm, status,
-          { kind: row.kind, learnerId }))
+        /* **書き戻す先は、開いている冊のほう**(0058)。
+           棚の語を `word_reviews` に書くと、それが「混ぜる」ことになる。
+           どの棚の語かは行が持っている(`row.shelf`)—— 同じ語が
+           2つの棚にあってもよいので、棚を画面で当て直さない */
+        ;({ error: e } = shelfBook
+          ? await setShelfWordStatus(row.shelf, row.word_norm, status, { learnerId })
+          : await setWordStatus(row.word_norm, status, { kind: row.kind, learnerId }))
+        if (e && typeof e !== 'string') e = e.message ?? String(e)
       }
     } catch (err) {
       e = String(err?.message ?? err ?? '記録できませんでした')
@@ -964,6 +1070,63 @@ export default function Wordbook({
         )}
       </div>
 
+      {/* ── どの冊を開くか(0058・2026-09 利用者の指定)──────────────
+
+            > 最終的にこうやって混ぜたくないんですよ。
+            > これは独立した単語帳にしたいんです。
+
+          **同時には出さない。** 混ざらないことが、この機能の要である。
+          出す棚が1冊も無い人には、切り替えそのものを出さない
+          (効かない操作を見せない・CLAUDE.md)。
+
+          **色だけに頼らない** —— うすい地色 + 同じ色の文字 + 太字 +
+          `aria-pressed` の4つで、いまどちらを開いているかを示す */}
+      {shelves.length > 0 && (
+        <div className="chiprow wb-books" role="group" aria-label="どの単語帳か">
+          {[
+            { id: 'my', label: '自分の単語帳' },
+            { id: 'shelf', label: '業種べつ' },
+          ].map((b) => (
+            <button key={b.id} type="button"
+                    className={`chip${book === b.id ? ' chip--on' : ''}`}
+                    aria-pressed={book === b.id}
+                    onClick={() => {
+                      if (book === b.id) return
+                      setBook(b.id)
+                      /* 冊が変わると中身が丸ごと変わる。
+                         **やりかけを持ち越さない** */
+                      setRunning(false); setStarted(false); setRadio(null)
+                      setFilter(emptyFilter)
+                      gradedRef.current = new Set()
+                    }}>
+              {b.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* **チェックを入れた分野だけを学ぶ**(0058・利用者の指定)。
+          棚は 35 冊・語は1万を超えるので、**ぜんぶを一度に開かない。**
+          語数も覚え具合も、ここが読むのではなく**渡す**
+          (`ShelfBooks` は props で受け取るだけの部品) */}
+      {shelfBook && (
+        <ShelfBooks shelves={shelves} counts={shelfCounts} progress={shelfProg}
+                    picked={shelfPick}
+                    onPicked={(ids) => {
+                      setShelfPick(ids)
+                      saveShelfPick(ids)
+                      setRunning(false); setStarted(false); setRadio(null)
+                      setFilter(emptyFilter)
+                    }} />
+      )}
+
+      {/* **1分野も選んでいないときは、そう言う**(行き止まりを作らない) */}
+      {shelfBook && !shelfPick.length && (
+        <p className="hint">
+          上の「学ぶ分野をえらぶ」で、練習したい分野にチェックを入れてください。
+        </p>
+      )}
+
       {/* 数は**3枚の札**にする。以前は1行に流していたので、
           どれが「いま何をすればよいか」なのか分からなかった。
           **「今日出す」だけを目立たせる。** そこが行動につながる数である */}
@@ -1013,7 +1176,7 @@ export default function Wordbook({
           ぜんぶ同じ 200 語の中で回っている。**そう書く。**
 
           **0056 を貼れば、この行はひとりでに消える。** */}
-      {capped > 0 && (
+      {!shelfBook && capped > 0 && (
         <p className="hint wb-capped">
           いまこの画面に読めているのは <strong>{rows.length} 語</strong>までです
           (この段はぜんぶで {expected} 語)。
@@ -1024,7 +1187,7 @@ export default function Wordbook({
       )}
 
       {/* トレーナーが見た。**人が見ていると分かることが、いちばん効く** */}
-      {viewers.length > 0 && (
+      {!shelfBook && viewers.length > 0 && (
         <p className="wordbook-seenby">
           {/* `viewed_at` は時刻まで入った値なので、**日付だけに切ってから渡す。**
               そのまま渡すと "8/NaN" になる(実際にそう出した) */}
@@ -1054,7 +1217,12 @@ export default function Wordbook({
           機能をつけてくれ」)。教材の外で出会った語も、その場で入れられる。
           畳んであるのは、ふだん開く画面ではないため。
           入れたら数え直す(`reload`)ので、札の数もすぐ合う */}
-      <WordbookAdd learnerId={learnerId} learnerName={learnerName} onAdded={reload} />
+      {/* **自分の単語帳のときだけ。** 業種べつの単語帳は
+          スクール全体で1組なので、ここから語を足す道ではない
+          (棚を育てるのは、左のメニューの「業種べつの単語帳」) */}
+      {!shelfBook && (
+        <WordbookAdd learnerId={learnerId} learnerName={learnerName} onAdded={reload} />
+      )}
 
       {/* **基礎単語**(0053・2026-09 利用者の指定)。
 
@@ -1068,25 +1236,16 @@ export default function Wordbook({
       {/* **トレーナーが指定したゲストにだけ出す**(0055・2026-09 利用者の指定)。
           判断は `showsBasics()` が済ませてあり、ここは受け取るだけである。
           **30日講座とまったく同じ判断** —— 2つで1つなので、片方だけ出さない */}
-      {onPickWords && showBasics && (
+      {!shelfBook && onPickWords && showBasics && (
         <BasicWordsPick learnerId={learnerId} learnerName={learnerName}
                         onPicked={onPickWords} />
       )}
 
-      {/* **業種べつの単語帳(棚)**(0057・2026-09 利用者の指定)。
-
-            > 何冊も違う単語帳を持てるようにしてほしいんです。…
-            > 「自分の単語帳に追加する」みたいのを押したものだけ
-            > 自分の単語帳に追加されてほしいんです。
-
-          棚は**別の表**(`shelf_words`)にあり、押すまで混ざらない。
-          **基礎単語と同じ形**にしてとなりに並べる ——
-          どちらも「単語帳に語を入れる」道である。
-          **出す棚は `shelvesFor()` が決めてある**(ここで役割を見ない) */}
-      {onPickWords && (
-        <ShelfPick shelves={shelves} learnerId={learnerId}
-                   learnerName={learnerName} onPicked={onPickWords} />
-      )}
+      {/* **業種べつの単語帳から自分の単語帳へ入れる欄は、消した**
+          (0058・2026-09 利用者の指定「最終的にこうやって混ぜたくない
+          んですよ。これは独立した単語帳にしたいんです」)。
+          いまは上の「自分の単語帳 / 業種べつ」で冊ごと切り替える —— 
+          **入れる段そのものが無くなった。** */}
 
       {/* **スピーチの語句**(0054・2026-09 利用者の指定)。
 
@@ -1096,7 +1255,7 @@ export default function Wordbook({
           まとめて入れて練習できるようにする。**基礎単語と同じ形**にして
           となりに並べる —— どちらも「単語帳に語を入れる」道である。
           **絞り込みは `App.jsx` の1つを使う**(`onPickWords`) */}
-      {onPickWords && (
+      {!shelfBook && onPickWords && (
         <SpeechWordsPick learnerId={learnerId} learnerName={learnerName}
                          onPicked={onPickWords} />
       )}
@@ -1134,7 +1293,9 @@ export default function Wordbook({
               <>
                 {/* **週の目標**(0042)。決めていなければ、行ごと出ない */}
                 <GoalBar goal={goal.wordsGoal} done={goal.wordsDone} unit="語" />
-                <CollectRows rows={fields} />
+                {/* **集める楽しみは、自分の単語帳のぶん**(0019)。
+                    業種べつの単語帳で出すと、そこには映っていない数が並ぶ */}
+                {!shelfBook && <CollectRows rows={fields} />}
               </>
             )}
           >

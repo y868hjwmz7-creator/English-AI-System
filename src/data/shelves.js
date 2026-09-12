@@ -17,8 +17,13 @@
  *   |---|---|
  *   | 分野ぜんぶ | 83 |
  *   | **親だけ** | **35**(お仕事 26 / 趣味 9) |
- *   | 場面(共通を含む) | 分野あたり平均 6.3 |
- *   | **分野 × 場面** | **約 1,700** |
+ *   | 場面(共通と、種類ぶんを含む) | **合計 883**(棚あたり平均 25.2) |
+ *   | **分野 × 場面** | **約 1,700**(種類まで数えたとき) |
+ *
+ *   **棚あたりの場面は、ばらつきが大きい**(実測)。
+ *   エネルギー 80・格闘技 69 に対し、ビジネス全般・ゲーム・ファッションは 14。
+ *   種類(`parent` を持つ行)を抱えている親ほど、`ownOf` が
+ *   その種類ぶんの場面まで集めるためである。
  *
  *   CLAUDE.md には、まさにこの数について
  *   「**場面は 1,700通りあり、手で書けない。書けない表は作らない**」と
@@ -148,7 +153,7 @@ export const shelfJobs = (id) => shelfScenes(id).map((s) => ({
  *   > 一回一回単語を作るのですか？
  *
  * 出したときは**場面を1つ選んで1回押す**形だったので、
- * 35冊 × 平均 6.3 場面 = **約 220 回**押すことになっていた。
+ * **883 回**押すことになっていた(35冊 × 平均 25.2 場面・実測)。
  * **1冊ぶんをまとめて作れる**ようにするために、
  * 「この棚で、あと何をどれだけ作ればよいか」をここが決める。
  *
@@ -236,3 +241,58 @@ export function showsShelf({ role = null, features = null } = {}, shelf = null) 
 
 /** その人に出す棚だけを並べる。**画面で `filter` を書き写さない** */
 export const shelvesFor = (who = {}) => shelfList().filter((s) => showsShelf(who, s.id))
+
+/* ==========================================================================
+ * **チェックを入れた分野だけを学ぶ**(0058・2026-09 利用者の指定)
+ *
+ *   > 最終的にこうやって混ぜたくないんですよ。これは独立した単語帳に
+ *   > したいんです。…チェックを入れた分野だけ単語が学べるようにしたいです
+ *
+ *   棚は 35 冊・語は 1万を超える(上の表)。**ぜんぶを一度に開かない。**
+ *   チェックを入れた分野の語だけを読み、その中で練習する。
+ *
+ *   - **覚える。** 毎回選び直させない(「一度選んだら覚える」)
+ *   - **出せなくなった棚は、黙って落とす**(`pickedShelves`)。
+ *     トレーナーが指定を外した棚が残っていると、
+ *     **見えていない冊の語が出題に混ざる**
+ *   - 鍵の名前は**ここ1か所。** 画面に書かない
+ * ========================================================================== */
+
+/** チェックを入れた棚を覚えておく鍵 */
+export const SHELF_PICK_KEY = 'eas.shelfPick'
+
+/**
+ * 覚えているチェックを、**いま出してよい棚だけに絞って**返す。
+ *
+ * @param saved   覚えていた id の一覧(壊れていてもよい)
+ * @param allowed いま出してよい棚(`shelvesFor()` の返り値でも、id の一覧でもよい)
+ */
+export function pickedShelves(saved, allowed = []) {
+  const okIds = new Set(
+    (allowed ?? []).map((s) => (typeof s === 'string' ? s : s?.id)).filter(Boolean),
+  )
+  const list = Array.isArray(saved) ? saved : []
+  const out = []
+  for (const id of list) {
+    const s = String(id ?? '')
+    if (okIds.has(s) && !out.includes(s)) out.push(s)
+  }
+  return out
+}
+
+/** 覚えているチェックを読む。**壊れていても落ちない** */
+export function loadShelfPick(allowed = []) {
+  try {
+    const raw = globalThis.localStorage?.getItem(SHELF_PICK_KEY)
+    return pickedShelves(raw ? JSON.parse(raw) : [], allowed)
+  } catch { return [] }
+}
+
+/** チェックを覚える */
+export function saveShelfPick(ids) {
+  try {
+    globalThis.localStorage?.setItem(
+      SHELF_PICK_KEY, JSON.stringify((ids ?? []).map(String)),
+    )
+  } catch { /* 覚えられなくても、その場では使える */ }
+}

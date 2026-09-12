@@ -49,7 +49,7 @@ import FocusFrame from './components/FocusFrame.jsx'
 import GrammarNote from './components/GrammarNote.jsx'
 import BasicsCourse from './components/BasicsCourse.jsx'
 import BasicWordsPick from './components/BasicWordsPick.jsx'
-import ShelfPick from './components/ShelfPick.jsx'
+import ShelfBooks from './components/ShelfBooks.jsx'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
 import JobBar from './components/JobBar.jsx'
@@ -872,7 +872,13 @@ const BASICPICK = (
    プルダウンが横に伸びないので**はみ出しを見逃す。** */
 const SHELFPICK = (
   <section className="card">
-    <ShelfPick shelves={shelfList()} onPicked={() => {}} />
+    {/* **語数と覚え具合は props で渡す**(0058)。
+        `ShelfBooks` は自分では何も読まない部品なので、
+        Supabase の無い骨組みでも**そのまま描ける** */}
+    <ShelfBooks shelves={shelfList()}
+                counts={Object.fromEntries(shelfList().map((s, i) => [s.id, 12 * (i % 5)]))}
+                progress={{ it: { learning: 3, known: 1 } }}
+                picked={['it']} onPicked={() => {}} />
   </section>
 )
 

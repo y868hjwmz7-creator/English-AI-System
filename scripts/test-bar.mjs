@@ -4037,42 +4037,51 @@ export default defineConfig({
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfpick`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(250)
+    /* **1分野えらんだ状態で開く**(`__screens.jsx`)ので、
+       はじめは畳んでいる。**「出る」と「出ない」の両方を見る** */
     const 畳 = await page.evaluate(() => ({
-      欄: document.querySelectorAll('.shelfpick select').length,
-      入口: document.querySelector('.shelfpick .wb-add-open')?.textContent.trim() ?? '',
+      欄: document.querySelectorAll('.shelfbook').length,
+      入口: document.querySelector('.shelfbooks .wb-add-open')?.textContent.trim() ?? '',
     }))
-    await page.click('.shelfpick .wb-add-open')
+    await page.click('.shelfbooks .wb-add-open')
     await page.waitForTimeout(250)
     const got = await page.evaluate(() => {
-      const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
-      const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
-      const sel = document.querySelector('.shelfpick select')
+      const box = [...document.querySelectorAll('.shelfbook')]
+      const px = (el) => Math.round(el.getBoundingClientRect().height)
+      const right = (el) => Math.round(el.getBoundingClientRect().right)
       return {
-        冊: sel ? sel.querySelectorAll('optgroup option').length : 0,
-        組: sel ? [...sel.querySelectorAll('optgroup')].map((g) => g.label) : [],
-        欄の高さ: px(sel),
+        冊: box.length,
+        印: box.filter((b) => b.querySelector('input[type="checkbox"]')).length,
+        組: [...document.querySelectorAll('.shelfbooks-group > .field-label')]
+          .map((p) => p.textContent.trim()),
+        入り: box.filter((b) => b.querySelector('input')?.checked).length,
+        低い: Math.min(...box.map(px)),
         よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        右: right(sel),
+        右: Math.max(...box.map(right)),
       }
     })
     await page.close()
     const 名 = `棚(${w}px)`
     if (畳.欄 !== 0) {
-      ng(`${名} … 畳んでいるのに、棚の欄が出ている`, String(畳.欄))
-    } else if (!畳.入口.includes('業種べつの単語帳')) {
+      ng(`${名} … 畳んでいるのに、分野の欄が出ている`, String(畳.欄))
+    } else if (!畳.入口.includes('学ぶ分野')) {
       ng(`${名} … 畳んだ入口に名前が出ていない`, 畳.入口)
     } else if (got.冊 !== 35) {
       // **分野を足せば棚も1冊増える。** 数が変わったら、ここも直す
       ng(`${名} … 棚が35冊そろっていない`, String(got.冊))
+    } else if (got.印 !== 35) {
+      ng(`${名} … チェックの印が無い分野がある`, String(got.印))
     } else if (got.組.length !== 2
       || !got.組.includes('お仕事') || !got.組.includes('趣味・娯楽')) {
       ng(`${名} … お仕事と趣味・娯楽に分かれていない`, got.組.join(' / '))
-    } else if (got.欄の高さ < 40) {
-      ng(`${名} … 押せる大きさを割っている`, String(got.欄の高さ))
+    } else if (got.入り !== 1) {
+      ng(`${名} … チェックが入っている分野の数が合わない`, String(got.入り))
+    } else if (got.低い < 40) {
+      ng(`${名} … 押せる大きさを割っている`, String(got.低い))
     } else if (got.よこ > 0 || got.右 > w) {
       ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
     } else {
-      ok(`${名} … 畳めて、開けば35冊が2組に分かれて出る`)
+      ok(`${名} … 畳めて、開けば35冊が2組に分かれてチェックできる`)
     }
   }
 
@@ -4083,14 +4092,16 @@ export default defineConfig({
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-    if (!/<ShelfPick\s/.test(src)) {
+    if (!/<ShelfBooks\s/.test(src)) {
       ng('棚 … 単語帳の画面に置かれていない')
-    } else if (!/onPicked=\{onPickWords\}/.test(src)) {
-      ng('棚 … 絞り込みを外(App)に渡していない')
+    } else if (!/setShelfWordStatus\(row\.shelf/.test(src)) {
+      ng('棚 … 答えを棚の側に書き戻していない(混ざる)')
+    } else if (/<ShelfPick\s|addShelfWords/.test(src)) {
+      ng('棚 … 自分の単語帳へ混ぜる道が残っている')
     } else if (!/shelves=\{myShelves\}/.test(app)) {
       ng('棚 … App が、その人に出す棚を渡していない')
     } else {
-      ok('棚 … 指定した棚だけが、その人の単語帳に並ぶ')
+      ok('棚 … 指定した棚だけが、独立した単語帳として並ぶ')
     }
   }
 }

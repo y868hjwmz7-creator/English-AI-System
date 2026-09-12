@@ -8437,20 +8437,56 @@ button.wbfilter-ctl { text-align: left; }
 .speechpick .field { margin-bottom: 10px; }
 .speechpick-cost { margin-left: 4px; color: var(--text-primary); }
 
-/* ── 業種べつの単語帳(棚・0057)────────────────────────────
-     > 何冊も違う単語帳を持てるようにしてほしいんです。…
-     > 「自分の単語帳に追加する」みたいのを押したものだけ
+/* ── 業種べつの単語帳(棚・0057 / 0058)────────────────────
+     > 最終的にこうやって混ぜたくないんですよ。
+     > これは独立した単語帳にしたいんです。
+     > …チェックを入れた分野だけ単語が学べるようにしたいです
 
-   **単語帳の中の欄は `.basicpick` とまったく同じ形。**
-   並べて置くものは同じ形にする ——
-   足すのは「棚を選ぶプルダウン」の余白だけである */
-.shelfpick .field { margin-bottom: 10px; }
-.shelfpick .chiprow { margin-bottom: 10px; }
-.shelfpick .chip { min-height: 36px; }
+   **どの冊を開くかの切り替え**(`.wb-books`)と、
+   **チェックを入れる欄**(`.shelfbooks`)の2つ。
+   0057 の「自分の単語帳に追加する」欄は、道具ごと消してある */
+.wb-books { margin: 0 0 var(--sp-10); }
+.wb-books .chip { min-height: 36px; }
+
 /* **棚を選ぶ欄は、この欄でいちばん先に押すもの**なので、
    指で狙える大きさにする(`.basicpick .chip` を 36px にしたのと同じ話)。
    素の `select` は実測 37px で、**押せる大きさ 40px を 3px 割っていた** */
-.shelfpick select, .shelfbuild select { min-height: 40px; }
+.shelfbuild select { min-height: 40px; }
+
+.shelfbooks-group { margin-top: var(--sp-10); }
+.shelfbooks-group > .field-label { margin-bottom: var(--sp-6); }
+/* **狭い画面では1列、広い画面では2列。**
+   分野の名前は短いが、覚え具合まで出ると1行が長くなる */
+.shelfbooks-list {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: var(--sp-6);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 700px) {
+  .shelfbooks-list { grid-template-columns: 1fr 1fr; }
+}
+/* **押せる大きさ(40px)を割らない。** 四角い印は小さいので、
+   行そのものを押せるようにする(`<label>` で囲む) */
+.shelfbook {
+  display: flex; align-items: center; gap: var(--sp-8);
+  min-height: 40px; padding: var(--sp-6) var(--sp-10);
+  border: 1px solid var(--border); border-radius: var(--r-8);
+  background: var(--btn-bg); cursor: pointer;
+  font-size: var(--fs-13);
+}
+/* **選んでいる印は、色だけに頼らない** ——
+   うすい地色 + 同じ色の文字 + 太字 + 四角い印の4つ */
+.shelfbook.is-on {
+  background: var(--accent-soft); border-color: var(--accent);
+  color: var(--accent); font-weight: 600;
+}
+.shelfbook > input { width: 18px; height: 18px; flex: 0 0 auto; }
+.shelfbook-name { flex: 1 1 auto; overflow-wrap: break-word; }
+.shelfbook-n, .shelfbook-done {
+  flex: 0 0 auto; font-size: var(--fs-11);
+  color: var(--text-secondary); font-variant-numeric: tabular-nums;
+}
+.shelfbook.is-on .shelfbook-n, .shelfbook.is-on .shelfbook-done { color: var(--accent); }
 
 /* ── 棚を作る画面(トレーナーだけ)──────────────────────
    **1語 = 1行。** 語・訳・品詞とレベル・例文・訳を縦に積む ——

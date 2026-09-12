@@ -152,45 +152,16 @@ export async function dropShelfWord(industry, wordNorm) {
   return ok(true)
 }
 
-/**
- * 棚の語を、自分(または担当ゲスト)の単語帳に入れる(0057)。
+/* ──────────────────────────────────────────────────────────────
+ * **`addShelfWords()` は、道具ごと消した**(0058・2026-09 利用者の指定)
  *
- * ============================================================================
- * 【語の一覧を渡さない】
+ *   > 最終的にこうやって混ぜたくないんですよ。
+ *   > これは独立した単語帳にしたいんです。
  *
- *   棚と場面だけを渡し、**どの語かは SQL が引く。**
- *   画面が一覧を作って渡すと、**見えている語と入る語が食い違う**
- *   (絞り込みを変えた直後・読み込みが遅れたとき)。
+ *   あれは棚の語を `word_reviews` に入れる —— つまり
+ *   **自分の単語帳に混ぜる**ための道だった。混ぜないと決めたので、
+ *   **値を偽にせず、関数ごと消す**(CLAUDE.md)。
+ *   SQL の `add_shelf_words()` も 0058 が落としている。
  *
- * 【1語ずつ `setWordStatus()` を呼ばない】
- *
- *   `add_basic_words()`(0053)/ `add_material_words()`(0047)と
- *   まったく同じ考え方である。あちらは**答えた記録**(`vocab_days`)まで
- *   増やす —— **まだ誰も答えていない。**
- *
- * 【すでに入っている語には触らない】
- *
- *   SQL 側が `on conflict do nothing`。**箱も、次に出す日も戻らない。**
- *   何度押しても安全である。
- *
- * @param industry  棚の id
- * @param scenes    場面の id の一覧(空なら、その棚ぜんぶ)
- * @param learnerId 誰の単語帳か(省くと自分)
- * @returns {number} **新しく入った語数**(すでにあったぶんは数えない)
- */
-export async function addShelfWords(industry, scenes = null, learnerId = null) {
-  if (!supabase) return ng(new Error('Supabase が設定されていません'))
-  if (!supported) return ng(notYet())
-  if (!industry) return ng(new Error('どの単語帳から入れるのかが決まっていません'))
-  const list = (scenes ?? []).map((s) => String(s ?? '')).filter(Boolean)
-  const { data, error } = await supabase.rpc('add_shelf_words', {
-    p_industry: industry,
-    p_scenes: list.length ? list : null,
-    p_learner: learnerId,
-  })
-  if (error) {
-    if (missing(error)) { supported = false; return ng(notYet()) }
-    return ng(error)
-  }
-  return ok(Number(data ?? 0))
-}
+ *   棚はいま、`shelfReviews.js` を通して**それだけで練習できる。**
+ * ────────────────────────────────────────────────────────────── */

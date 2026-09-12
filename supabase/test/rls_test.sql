@@ -1066,44 +1066,72 @@ select pg_temp.expect_denied('ゲストは棚に語を置けない(0057)',
   $$insert into public.shelf_words (industry, word_norm, display, meaning_ja)
       values ('it', 'ずるい', 'ずるい', 'ずるい')$$);
 
--- ③ **押すまで、自分の単語帳には1語も入らない。** ここがこの機能の要である
-select pg_temp.expect('押すまで、棚の語は単語帳に混ざらない(0057)',
+-- ③ **自分の単語帳には、1語も入らない**(0058・利用者の指定)
+--
+--     > 最終的にこうやって混ぜたくないんですよ。
+--     > これは独立した単語帳にしたいんです。
+--
+--    0057 の「自分の単語帳に追加する」(`add_shelf_words`)は、
+--    0058 が落としてある。**混ぜる道そのものが無い**
+select pg_temp.expect('混ぜる関数は残っていない(0058)',
+  (select count(*)::int from pg_proc where proname = 'add_shelf_words'), 0);
+select pg_temp.expect('棚の語は、自分の単語帳に1語も入らない(0058)',
   (select count(*)::int from public.word_reviews
     where learner_id = '22222222-2222-2222-2222-222222222222'
       and word_norm in ('rollback', 'sprint review')), 0);
 
--- ④ 押すと入る。**場面で絞れる**
-select pg_temp.expect('場面で絞って入れられる(0057)',
-  public.add_shelf_words('it', array['it_incident']), 1);
-select pg_temp.expect('選ばなかった場面の語は入っていない(0057)',
+-- ④ **棚は、それだけで練習できる。** 覚え具合は棚の側に残る
+select pg_temp.expect('棚の語に「覚えかけ」を付けられる(0058)',
+  (select box::int from public.mark_shelf_word('it', 'rollback', 'learning')), 1);
+select pg_temp.expect('覚え具合は shelf_reviews に残る(0058)',
+  (select count(*)::int from public.shelf_reviews
+    where learner_id = '22222222-2222-2222-2222-222222222222'
+      and industry = 'it' and word_norm = 'rollback'), 1);
+select pg_temp.expect('答えても、自分の単語帳には入らない(0058)',
   (select count(*)::int from public.word_reviews
     where learner_id = '22222222-2222-2222-2222-222222222222'
-      and word_norm = 'sprint review'), 0);
--- **出会う文も写る。** 写さないと、自分の単語帳で穴埋め(箱3)が作れない
-select pg_temp.expect('出会う文も一緒に写る(0057)',
-  (select seen_in from public.word_reviews
-    where learner_id = '22222222-2222-2222-2222-222222222222'
-      and word_norm = 'rollback'),
-  'We had to do a rollback of the release last night.');
+      and word_norm = 'rollback'), 0);
+-- **続けた記録は増やす。** 取り組んだのは同じ人である。
+-- **決め打ちの数で見ない** —— この人は上のほうで単語帳にも答えている
+do $$
+declare v0 int; v1 int;
+begin
+  select coalesce(answered, 0) into v0 from public.vocab_days
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and done_on = current_date;
+  perform public.mark_shelf_word('it', 'sprint review', 'learning');
+  select answered into v1 from public.vocab_days
+   where learner_id = '22222222-2222-2222-2222-222222222222'
+     and done_on = current_date;
+  if v1 is distinct from coalesce(v0, 0) + 1 then
+    raise exception '✗ 取り組んだ記録が1つ増えない(0058) … % → %', v0, v1;
+  end if;
+  raise notice '✓ 取り組んだ記録が1つ増える(0058)';
+end $$;
 
--- ⑤ **何度押しても、覚え具合は戻らない**
-reset role;
-update public.word_reviews set box = 3, status = 'learning'
-  where learner_id = '22222222-2222-2222-2222-222222222222' and word_norm = 'rollback';
-set role authenticated;
-set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
-select pg_temp.expect('もう一度押すと、残りだけが入る(0057)',
-  public.add_shelf_words('it'), 1);
-select pg_temp.expect('すでに入っている語の箱は戻らない(0057)',
-  (select box::int from public.word_reviews
-    where learner_id = '22222222-2222-2222-2222-222222222222'
-      and word_norm = 'rollback'), 3);
+-- ⑤ **間隔の決まりは、自分の単語帳とまったく同じもの**(`review_next`)
+select pg_temp.expect('もう一度押すと箱が上がる(0058)',
+  (select box::int from public.mark_shelf_word('it', 'rollback', 'learning')), 2);
+select pg_temp.expect('「まだ」を押すと箱0に戻る(0058)',
+  (select box::int from public.mark_shelf_word('it', 'rollback', 'unknown')), 0);
+-- **棚に無い語は受け取らない**(表に迷子の行を作らない)
+select pg_temp.expect_denied('棚に無い語には付けられない(0058)',
+  $$select public.mark_shelf_word('it', 'no such word here', 'learning')$$);
 
--- ⑥ **担当していないゲストの単語帳には入れられない**
+-- ⑥ **書けるのは窓口だけ。表そのものには書き込めない**
+select pg_temp.expect_denied('棚の覚え具合を、表に直に書けない(0058)',
+  $$insert into public.shelf_reviews (learner_id, industry, word_norm)
+      values ('22222222-2222-2222-2222-222222222222', 'it', 'sprint review')$$);
+-- **担当していないゲストの記録には書けない**
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
-select pg_temp.expect_denied('担当していないゲストには入れられない(0057)',
-  $$select public.add_shelf_words('it', null,
+select pg_temp.expect_denied('担当していないゲストには付けられない(0058)',
+  $$select public.mark_shelf_word('it', 'rollback', 'learning',
       '33333333-3333-3333-3333-333333333333')$$);
+-- **ほかのゲストの覚え具合は見えない**
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.expect('ほかのゲストの覚え具合は見えない(0058)',
+  (select count(*)::int from public.shelf_reviews), 0);
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
 
 -- ⑦ **ゲストへの指定に、新しい表を作っていない。**
 --    0055 の `learner_features` に `shelf:<分野の id>` の名前で入る。
@@ -1229,6 +1257,10 @@ insert into public.learner_features (learner_id, feature, enabled, set_by)
   values ('33333333-3333-3333-3333-333333333333', 'basics', true,
           '55555555-5555-5555-5555-555555555555')
   on conflict do nothing;
+-- 0058 で足した1つ。**棚そのもの(shelf_words)は消さない**(共有物)
+insert into public.shelf_reviews (learner_id, industry, word_norm, status)
+  values ('33333333-3333-3333-3333-333333333333', 'it', 'rollback', 'learning')
+  on conflict do nothing;
 insert into storage.buckets (id, name, public) values ('learner-files', 'learner-files', false)
   on conflict do nothing;
 insert into storage.objects (bucket_id, name)
@@ -1287,6 +1319,9 @@ select pg_temp.expect('スピーチが消えている(0054)',
    where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
 select pg_temp.expect('この人に出すものが消えている(0055)',
   (select count(*)::int from public.learner_features
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+select pg_temp.expect('業種べつの単語帳の覚え具合が消えている(0058)',
+  (select count(*)::int from public.shelf_reviews
    where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
 select pg_temp.expect('ゲストの欄そのものが消えている',
   (select count(*)::int from public.profiles

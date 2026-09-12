@@ -150,8 +150,10 @@ from (
     select 1 from pg_proc where proname = 'mark_word'), 37
   union all
   select '㊳ 間隔の決まりが入っている(0015)', (
-    -- 知らなかった → 箱 0・翌日。**数字ごと確かめる**
-    select prosrc like '%when 5 then 14%' from pg_proc where proname = 'mark_word'), 38
+    -- 知らなかった → 箱 0・翌日。**数字ごと確かめる**。
+    -- **0058 で `review_next()` へ切り出した**ので、どちらかに在ればよい
+    select bool_or(prosrc like '%when 5 then 14%') from pg_proc
+     where proname in ('mark_word', 'review_next')), 38
   union all
   select '㊴ 今日出すべきものだけに絞れる(0015)', (
     select count(*) = 4 from pg_proc p,

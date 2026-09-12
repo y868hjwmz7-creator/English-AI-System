@@ -52,8 +52,9 @@ import {
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
 import {
-  SCENE_COST, WORDS_PER_SCENE, isShelf, shelfFeature, shelfIdOfFeature, shelfJobs,
-  shelfList, shelfOf, shelfScenes, shelfTarget, shelfTodo, shelvesFor, showsShelf,
+  SCENE_COST, SHELF_PICK_KEY, WORDS_PER_SCENE, isShelf, pickedShelves, shelfFeature,
+  shelfIdOfFeature, shelfJobs, shelfList, shelfOf, shelfScenes, shelfTarget,
+  shelfTodo, shelvesFor, showsShelf,
 } from '../src/data/shelves.js'
 import { INDUSTRIES } from '../src/data/industries.js'
 import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
@@ -94,7 +95,7 @@ import {
   applyHomeworkFilter, assignedDayOf, emptyHomeworkFilter,
   homeworkFilterOn, narrowHomework, topicOfAssignment,
 } from '../src/lib/homeworkFilter.js'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
 const ok = (cond, name, extra = '') => {
@@ -4258,17 +4259,39 @@ console.log('\nスピーチ練習(0054)')
     '棚 … 単語帳に、その人の棚を渡している')
   ok(!/'shelf:'\s*\+/.test(appS), '棚 … 画面で名前を組み立てていない')
 
-  const wbS = noCS(readS('src/components/Wordbook.jsx'))
-  ok(/<ShelfPick\s+shelves=\{shelves\}/.test(wbS),
-    '棚 … 単語帳が `ShelfPick` を描いている')
+  /* ── **独立した単語帳**(0058・2026-09 利用者の指定)──
+       > 最終的にこうやって混ぜたくないんですよ。
+       > これは独立した単語帳にしたいんです。
 
-  const pickS = noCS(readS('src/components/ShelfPick.jsx'))
-  ok(/await addShelfWords\(shelf, scenes, learnerId\)/.test(pickS),
-    '棚 … 押したら `add_shelf_words` を通る(語の一覧を渡さない)')
+     **「出る」と「出ない」の両方を見る** ——
+     混ぜる道が残っていないことも、必ず数える */
+  const wbS = noCS(readS('src/components/Wordbook.jsx'))
+  ok(/<ShelfBooks\s+shelves=\{shelves\}/.test(wbS),
+    '棚 … 単語帳が `ShelfBooks`(チェックの欄)を描いている')
+  ok(/await setShelfWordStatus\(row\.shelf, row\.word_norm, status/.test(wbS),
+    '棚 … 答えは棚の側(`shelf_reviews`)に書き戻す')
+  ok(/loadShelfWordbook\(\{ learnerId, shelves: shelfPick \}\)/.test(wbS),
+    '棚 … チェックを入れた分野の語だけを読む')
+  ok(!/addShelfWords/.test(wbS) && !/ShelfPick from/.test(wbS),
+    '棚 … 自分の単語帳へ混ぜる道は、道具ごと消してある')
+  ok(!existsSync(new URL('../src/components/ShelfPick.jsx', import.meta.url)),
+    '棚 … `ShelfPick.jsx` はファイルごと消してある(値を偽にして残さない)')
+  ok(!/export async function addShelfWords/.test(readS('src/lib/shelfWords.js')),
+    '棚 … `addShelfWords()` も消してある')
+
+  const pickS = noCS(readS('src/components/ShelfBooks.jsx'))
   ok(/if \(!shelves\.length\) return null/.test(pickS),
     '棚 … 出す棚が無ければ、欄ごと出さない')
-  ok(/onPicked\?\.\(/.test(pickS),
-    '棚 … 絞り込みは呼ぶ側に任せる(`App.jsx` の1つを使う)')
+  ok(/type="checkbox"/.test(pickS),
+    '棚 … 分野は「チェックを入れる」形にする(利用者の言葉そのまま)')
+  ok(!/loadShelfWords|loadShelfCounts|supabase/.test(pickS),
+    '棚 … `ShelfBooks` は自分では読まない(props で受け取る部品)')
+
+  /* ── チェックの控え ── */
+  ok(pickedShelves(['it', 'nope', 'it'], list).join() === 'it',
+    '棚 … 出せない棚と重なりは落とす(見えていない冊の語を混ぜない)')
+  ok(pickedShelves(null, list).length === 0, '棚 … 壊れた控えでも落ちない')
+  ok(SHELF_PICK_KEY === 'eas.shelfPick', '棚 … 鍵の名前は `shelves.js` 1か所')
 
   /* ── 棚を作る画面 ──
      **一回一回押させない。** まとめて作る道と、止まる条件を見る */
@@ -4324,10 +4347,15 @@ console.log('\nスピーチ練習(0054)')
     '棚 … まとめた1つに 0057 が入っている')
   const check = readS('supabase/apply/check.sql')
   ok(/shelf_words/.test(check), '棚 … `check.sql` に 0057 の行がある')
+  ok(/create table if not exists public\.shelf_reviews/.test(matome),
+    '棚 … まとめた1つに 0058(独立した単語帳)が入っている')
+  ok(/drop function if exists public\.add_shelf_words/.test(matome),
+    '棚 … まとめた1つが、混ぜる関数を落としている')
+  ok(/shelf_reviews/.test(check), '棚 … `check.sql` に 0058 の行がある')
   const setup = readS('src/lib/setupState.js')
-  ok(/NEWEST_MIGRATION = '0057'/.test(setup)
-    && /table: 'shelf_words'/.test(setup),
-    '棚 … 画面の印が 0057 を見ている')
+  ok(/NEWEST_MIGRATION = '0058'/.test(setup)
+    && /table: 'shelf_reviews'/.test(setup),
+    '棚 … 画面の印が 0058 を見ている')
 }
 
 console.log(ng

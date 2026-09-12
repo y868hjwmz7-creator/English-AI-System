@@ -149,4 +149,7 @@ from (
   union all select '0057 業種べつの単語帳(棚)(pending_matome.sql)',
     exists (select 1 from information_schema.tables
             where table_schema = 'public' and table_name = 'shelf_words'), 39
+  union all select '0058 棚を独立した単語帳にする(pending_matome.sql)',
+    exists (select 1 from information_schema.tables
+            where table_schema = 'public' and table_name = 'shelf_reviews'), 40
 ) t order by 順;
