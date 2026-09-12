@@ -68,8 +68,11 @@ import BasicWordsPick from './BasicWordsPick.jsx'
 import SpeechWordsPick from './SpeechWordsPick.jsx'
 import { basicJaOf, basicPosOf } from '../lib/basicsCourse.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
-import { CloseIcon, FocusIcon, MusicIcon } from './Icons.jsx'
+import { CloseIcon, FocusIcon, MusicIcon, PrintIcon } from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
+import ReviewSheet from './ReviewSheet.jsx'
+import { usePrintSheet } from '../lib/printSheet.js'
+import { sheetNote, wordSheetPairs } from '../lib/reviewSheet.js'
 
 /**
  * 画面の切り替え(2026-08 利用者の指定・0027)。
@@ -310,6 +313,10 @@ export default function Wordbook({
      **記録は1ミリも動かさない**(`WordRadio` の中でも呼んでいない) */
   const [radio, setRadio] = useState(null)      // 読む語の一覧。null なら出さない
   const [tracks, setTracks] = useState([])      // 曲(無ければ音楽は流れない)
+  /* **紙に出しているあいだだけ真**(2026-09 利用者の指定)。
+     中身は刷る一瞬だけ描く —— 1,200 語を常に描くと画面が重くなる
+     (教材のカードの `printId` とまったく同じ作法・CLAUDE.md) */
+  const [printing, setPrinting] = useState(false)
   const [want, setWant] = useState('auto')      // 出題の形。auto は箱に合わせる
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
   /* **入った日と教材で絞る**(0024・2026-08 利用者の指定)。
@@ -561,6 +568,20 @@ export default function Wordbook({
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
   const narrowed = countNarrowed(filter)
   const forScope = shownRows
+
+  /**
+   * **紙に出す対**(2026-09 利用者の指定「単語帳…の内容を印刷する機能」)。
+   *
+   * 刷るのは**いま画面に出ている一覧そのもの**(`shownRows`)である。
+   * 段の札も絞り込みも、そのまま効く ——
+   * **数え方を2通り持たない**(CLAUDE.md)。
+   * 範囲の札(いつのぶん)は当てない。あれは**出題の話**であって、
+   * 帳面の中身ではない。
+   *
+   * 対に直すのは `wordSheetPairs()` 1か所(`reviewSheet.js`)。
+   */
+  const sheetPairs = wordSheetPairs(shownRows)
+  usePrintSheet(printing, () => setPrinting(false))
 
   /**
    * 段の札を押したとき。**範囲は「ぜんぶ」に移す**(2026-09 利用者の指定)。
@@ -1111,6 +1132,17 @@ export default function Wordbook({
         </button>
       )}
 
+      {/* **紙に出す**(2026-09 利用者の指定)。「聞き流す」のとなりに置く ——
+          どちらも**いま絞っているものに対して、そのまま行う**操作である。
+          何語ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
+      {isQuiz && !loading && !card && rows.length > 0 && (
+        <button type="button" className="btn btn--quiet wb-listen"
+                disabled={sheetPairs.length === 0 || printing}
+                onClick={() => setPrinting(true)}>
+          <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 語)`}
+        </button>
+      )}
+
       {radio && (
         <WordRadio
           rows={radio}
@@ -1604,6 +1636,25 @@ export default function Wordbook({
             この語で教材を作る
           </button>
         </div>
+      )}
+
+      {/* **中身は、紙に出す一瞬だけ描く。** 1,200 語をいつも描くと、
+          語は1つずつ描いているので画面が重くなる
+          (教材のカードの `print-holder` とまったく同じ作法)。
+          見た目は**教材の紙の Quick Response と同じ指定**に乗っている */}
+      {printing && (
+        <ReviewSheet
+          title={learnerName ? `${honor(learnerName)}の単語帳` : '単語帳'}
+          note={sheetNote({
+            count: sheetPairs.length,
+            unit: '語',
+            group: current.id === 'due' ? '' : current.label,
+            narrowed,
+            date: todayKey(),
+          })}
+          lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
+          pairs={sheetPairs}
+        />
       )}
     </section>
   )

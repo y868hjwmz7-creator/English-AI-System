@@ -44,7 +44,10 @@ import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import WordRadio from './WordRadio.jsx'
-import { MusicIcon } from './Icons.jsx'
+import { MusicIcon, PrintIcon } from './Icons.jsx'
+import ReviewSheet from './ReviewSheet.jsx'
+import { usePrintSheet } from '../lib/printSheet.js'
+import { qrSheetPairs, sheetNote } from '../lib/reviewSheet.js'
 import { listTracks } from '../lib/bgm.js'
 import { NO_GOAL, NO_WEEK, loadQrWeek, loadWeeklyGoal } from '../lib/goals.js'
 import { stopReading } from '../lib/readAloud.js'
@@ -102,6 +105,9 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
      (単語帳とまったく同じ決まり。`WordRadio` の中でも呼んでいない) */
   const [radio, setRadio] = useState(null)   // 読む文。null なら出さない
   const [tracks, setTracks] = useState([])   // 曲(無ければ音楽は流れない)
+  /* **紙に出しているあいだだけ真**(2026-09 利用者の指定)。
+     中身は刷る一瞬だけ描く(単語帳とまったく同じ作法) */
+  const [printing, setPrinting] = useState(false)
   /** まだ出していない残り。「つづける」で次の区切りへ進む */
   const [pending, setPending] = useState([])
   const [at, setAt] = useState(0)
@@ -165,6 +171,17 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const tally = useMemo(() => qrTally(rows), [rows])
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
   const narrowed = countNarrowed(filter)
+
+  /**
+   * **紙に出す対**(2026-09 利用者の指定「クイックレスポン帖の内容を印刷」)。
+   *
+   * 刷るのは**段の札と絞り込みを当てたもの**(`filtered`)である。
+   * **範囲の札(いつのぶん)は当てない** —— あれは出題の話であって、
+   * 帳面の中身ではない(単語帳とまったく同じ考え方)。
+   * 対に直すのは `qrSheetPairs()` 1か所(`reviewSheet.js`)。
+   */
+  const sheetPairs = qrSheetPairs(filtered)
+  usePrintSheet(printing, () => setPrinting(false))
 
   /**
    * 段を押したとき。**範囲は「ぜんぶ」に移す**(2026-09 利用者の指定)。
@@ -521,6 +538,14 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
             <MusicIcon />聞き流す({shown.length} 問)
           </button>
 
+          {/* **紙に出す**(2026-09 利用者の指定)。「聞き流す」のとなりに置く。
+              何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
+          <button type="button" className="btn btn--quiet wb-listen"
+                  disabled={sheetPairs.length === 0 || printing}
+                  onClick={() => setPrinting(true)}>
+            <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 問)`}
+          </button>
+
           {shown.length === 0 && filtered.length === 0 && (
             <p className="hint">この絞り込みに当てはまる文がありません。</p>
           )}
@@ -538,6 +563,25 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
           tracks={tracks}
           learnerId={learnerId}
           onClose={() => setRadio(null)}
+        />
+      )}
+
+      {/* **中身は、紙に出す一瞬だけ描く**(単語帳とまったく同じ作法)。
+          見た目は**教材の紙の Quick Response と同じ指定**に乗っている ——
+          利用者の言う「教材を印刷、PDFにした時のクイックレスポンの部分と
+          同じ仕様」そのものである */}
+      {printing && (
+        <ReviewSheet
+          title={`${who}Quick Response 帳`}
+          note={sheetNote({
+            count: sheetPairs.length,
+            unit: '問',
+            group: QR_GROUPS.find((g) => g.id === group)?.label ?? '',
+            narrowed,
+            date: today,
+          })}
+          lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
+          pairs={sheetPairs}
         />
       )}
     </section>

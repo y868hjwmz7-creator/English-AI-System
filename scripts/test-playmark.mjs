@@ -38,6 +38,7 @@ import {
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
+import { qrSheetPairs, sheetNote, wordSheetPairs } from '../src/lib/reviewSheet.js'
 import {
   MAX_SPEECH_CHARS, SPEECH_COST_YEN, SPEECH_LEVEL_FALLBACK, isBlankDraft,
   isReviewed, sortSpeeches, speechCostYen, speechLevelOf, speechLines,
@@ -3947,6 +3948,109 @@ console.log('\nスピーチ練習(0054)')
      SQL を貼り直してもらうことになる(`material_sections_type_check` の落とし穴) */
   ok(!/check \(feature in/.test(read5('supabase/migrations/0055_learner_features.sql')),
     '出すもの … `feature` に一覧(check)を置いていない(足すのに SQL が要らない)')
+}
+
+/* ────────────────────────────────────────────────────────────
+   単語帳 / Quick Response 帳を紙に出す(2026-09 利用者の指定)
+
+     > ちなみに、単語帳やクイックレスポン帖の内容を印刷する機能を
+     > 追加してください。
+     > フォーマットは、左に日本語、右に英語が来るようにしてください。
+     > 教材を印刷、PDFにした時のクイックレスポンの部分と同じ仕様です
+
+   ここで見るのは**算段**である ——
+   対の作り方・落とすもの・副題・**画面が本当に呼んでいるか**。
+   **紙の見え方(左が日本語・右が英語)は `npm run test:bar` が
+   印刷モードで描いて測る。** 役目が違うので、片方だけにしない。
+   ──────────────────────────────────────────────────────────── */
+{
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noCS = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+
+  /* ── 対に直す ── */
+  const wp = wordSheetPairs([
+    { word_norm: 'take on', display: 'take on', meaning_ja: '引き受ける' },
+    { word_norm: 'gist', display: '', meaning_ja: '要点' },
+    { word_norm: '', display: '', meaning_ja: 'これは落ちる' },
+  ])
+  ok(wp.length === 2, '紙 … 英語の無い行は落ちる')
+  ok(wp[0].ja === '引き受ける' && wp[0].en === 'take on',
+    '紙 … 左が日本語(意味)、右が英語(語)')
+  ok(wp[1].en === 'gist',
+    '紙 … `display` が空でも `word_norm` から英語を取る')
+  /* **訳が無い語は落とさない。** 控えがまだ引けていないだけである */
+  const wp2 = wordSheetPairs([{ word_norm: 'gist', display: 'gist', meaning_ja: '' }])
+  ok(wp2.length === 1 && wp2[0].ja === '' && wp2[0].en === 'gist',
+    '紙 … 訳の無い語も落とさない(黙って減らさない)')
+  ok(wordSheetPairs(null).length === 0 && wordSheetPairs(undefined).length === 0,
+    '紙 … 一覧でないものを渡しても落ちない')
+
+  const qp = qrSheetPairs([
+    { en_norm: 'we need it', en: 'We need it.', ja: 'それが要ります。' },
+    { en_norm: '', en: '', ja: '英語が無いので落ちる' },
+  ])
+  ok(qp.length === 1 && qp[0].ja === 'それが要ります。' && qp[0].en === 'We need it.',
+    '紙 … Quick Response も、左が日本語・右が英語')
+
+  /* ── 副題(何を刷ったのかが、紙だけ見て分かる)── */
+  ok(sheetNote({ count: 12, unit: '語' }) === '全 12 語',
+    '紙 … 絞っていなければ、数だけ')
+  const note = sheetNote({ count: 3, unit: '語', group: '覚えかけ', narrowed: 2, date: '2026-09-12' })
+  ok(note.includes('全 3 語') && note.includes('覚えかけ')
+    && note.includes('絞り込み 2 件') && note.includes('2026-09-12'),
+    '紙 … 絞っているときは、そう書く(黙って絞らない)')
+  ok(!sheetNote({ count: 1, unit: '問', narrowed: 0 }).includes('絞り込み'),
+    '紙 … 絞っていないのに「絞り込み」と書かない')
+
+  /* ── 出す場所の id は1か所 ── */
+  ok(/id=\{SHEET_ID\}/.test(readS('src/components/ReviewSheet.jsx')),
+    '紙 … 部品は `SHEET_ID` を使っている(id を書き写していない)')
+  ok(!/id="review-sheet"/.test(noCS(readS('src/components/Wordbook.jsx')))
+    && !/id="review-sheet"/.test(noCS(readS('src/components/QrReview.jsx'))),
+    '紙 … 画面の中に id を書き写していない')
+
+  /* ── 見た目を書き写していないか ──
+     **教材の紙とまったく同じ指定に乗る**のがこの回の肝である。
+     `.qrsheet-*` を使わずに独自の入れ物を作ると、
+     片方を直したときに、もう片方だけ古くなる */
+  const sheet = readS('src/components/ReviewSheet.jsx')
+  ok(/className="qrsheet-list"/.test(sheet)
+    && /className="qrsheet-ja"/.test(sheet)
+    && /className="qrsheet-en"/.test(sheet),
+    '紙 … 教材の紙の Quick Response と同じ指定に乗っている')
+  ok(/lang="en"/.test(sheet), '紙 … 英語の側に `lang="en"` を付けている')
+
+  /* ── 画面が本当に呼んでいるか ──
+     **「名前が出てくるか」で見ない**(CLAUDE.md)。
+     説明の中にも同じ言葉があるので、**使っている形**で見る */
+  const wbS = noCS(readS('src/components/Wordbook.jsx'))
+  ok(/=\s*wordSheetPairs\(shownRows\)/.test(wbS),
+    '紙 … 単語帳は、いま画面に出ている一覧をそのまま刷る')
+  ok(/usePrintSheet\(printing,/.test(wbS),
+    '紙 … 単語帳は、描き終わってから刷る(`usePrintSheet`)')
+  ok(/\{printing && \(\s*<ReviewSheet/.test(wbS),
+    '紙 … 単語帳は、刷る一瞬だけ中身を描く')
+  ok(/setPrinting\(true\)/.test(wbS), '紙 … 単語帳に、刷るボタンがある')
+
+  const qrS = noCS(readS('src/components/QrReview.jsx'))
+  ok(/=\s*qrSheetPairs\(filtered\)/.test(qrS),
+    '紙 … Quick Response 帳は、段と絞り込みを当てたものを刷る')
+  ok(/usePrintSheet\(printing,/.test(qrS),
+    '紙 … Quick Response 帳も、描き終わってから刷る')
+  ok(/\{printing && \(\s*<ReviewSheet/.test(qrS),
+    '紙 … Quick Response 帳も、刷る一瞬だけ中身を描く')
+  ok(/setPrinting\(true\)/.test(qrS), '紙 … Quick Response 帳に、刷るボタンがある')
+
+  /* ── 印の付け方を2通り持っていないか ──
+     `markPrint()` を切り出したのは、検証が**同じ道**を通れるようにするため。
+     `printElement()` が自分でも印を付け直していたら、そこで食い違う */
+  const pr = noCS(readS('src/lib/print.js'))
+  ok(/export function markPrint\(/.test(pr) && /export function printElement\(/.test(pr),
+    '紙 … 印を付けるところが切り出してある')
+  ok(/const undo = markPrint\(element, opts\)/.test(pr),
+    '紙 … `printElement()` は `markPrint()` を通る(印の付け方は1か所)')
+  ok((pr.match(/classList\.add\('print-path'\)/g) ?? []).length === 1,
+    '紙 … `print-path` を付けているところは1か所だけ')
 }
 
 console.log(ng

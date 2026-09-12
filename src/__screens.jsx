@@ -22,7 +22,7 @@
  *   `?role=trainer`        … トレーナーが「教材」画面から開いている
  *   `?role=learner&who=g1` … ゲスト自身が開いている
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import LessonView from './components/LessonView.jsx'
 import SessionResult from './components/SessionResult.jsx'
@@ -38,6 +38,10 @@ import ReviewStats from './components/ReviewStats.jsx'
 import LearnerBar from './components/LearnerBar.jsx'
 import { rememberLearner } from './lib/lastLearner.js'
 import WordRadio from './components/WordRadio.jsx'
+import ReviewSheet from './components/ReviewSheet.jsx'
+import { sheetNote, wordSheetPairs } from './lib/reviewSheet.js'
+import { SHEET_ID } from './lib/printSheet.js'
+import { markPrint } from './lib/print.js'
 import WordbookFilter, { countNarrowed, emptyFilter } from './components/WordbookFilter.jsx'
 import { QR_GROUPS, groupLead, qrTally } from './lib/reviewScope.js'
 import FocusFrame from './components/FocusFrame.jsx'
@@ -857,6 +861,48 @@ const BASICPICK = (
    **わざと長い文と長い訳を混ぜてある** —— 短い文ばかりだと、
    折り返しをやめても**同じ高さになって緑のまま**になる
    (`?screen=radio` に長い語を混ぜてあるのと同じ理由)。 */
+/* 単語帳 / Quick Response 帳の紙(`?screen=sheet`・2026-09 利用者の指定)。
+
+     > フォーマットは、左に日本語、右に英語が来るようにしてください。
+     > 教材を印刷、PDFにした時のクイックレスポンの部分と同じ仕様です
+
+   **描いて測るしかない。** 「左が日本語・右が英語」は CSS の格子で
+   決まっており、しかも `@media print` の中にしか無い。
+   ソースを読んでも、その指定が本当に当たっているかは分からない。
+
+   **わざと長い訳と長い英文を混ぜてある** —— 短いものばかりだと、
+   横に並べるのをやめて縦に積んでも**同じに見えて緑のまま**になる
+   (`?screen=radio` に長い語を混ぜてあるのと同じ理由)。
+   **訳の無い語も1つ入れてある**(控えがまだ引けていない語は落とさない)。 */
+const SHEET_BODY = (
+  <div className="app">
+    <ReviewSheet
+      title="Airi さんの単語帳"
+      note={sheetNote({ count: 4, unit: '語', group: '覚えかけ', narrowed: 2, date: '2026-09-12' })}
+      lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
+      pairs={wordSheetPairs([
+        { word_norm: 'take on', display: 'take on', meaning_ja: '引き受ける' },
+        {
+          word_norm: 'contingency',
+          display: 'contingency',
+          meaning_ja: '不測の事態にそなえた予備の枠。予算や日程に、あらかじめ見込んでおくもの',
+        },
+        { word_norm: 'gist', display: 'gist', meaning_ja: '' },
+        { word_norm: 'wrap up', display: 'wrap up', meaning_ja: '締めくくる' },
+      ])}
+    />
+  </div>
+)
+
+function SheetScreen() {
+  /* **印は `markPrint()` に付けてもらう**(`print.js`)。
+     紙の見え方は `@media print` の `.print-target …` にしか無いので、
+     **印が無いと1つも当たらない。** ここで自前に付けると、
+     付け方を2通り持つことになる(CLAUDE.md) */
+  useEffect(() => markPrint(document.getElementById(SHEET_ID)), [])
+  return SHEET_BODY
+}
+
 const SPEECH = (
   <SpeechPractice
     speech={{
@@ -888,7 +934,9 @@ const SPEECH = (
 )
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'speech'
+  q.get('screen') === 'sheet'
+    ? <SheetScreen />
+    : q.get('screen') === 'speech'
     ? SPEECH
     : q.get('screen') === 'basicpick'
     ? BASICPICK

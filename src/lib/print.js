@@ -32,8 +32,18 @@
  *   中身はふつうの流れのまま並ぶので、**ページの区切りは
  *   ブラウザが正しく決められる。**
  */
-export function printElement(element, { worksheet = false } = {}) {
-  if (!element) return
+/**
+ * **印を付けるところだけ**を切り出してある(2026-09)。
+ *
+ * 紙の見え方(左が日本語・右が英語 など)は `@media print` の中の
+ * `.print-target …` にしか無いので、**印が付いていないと当たらない。**
+ * `npm run test:bar` は、この関数を**そのまま呼んで**から測る ——
+ * 検証の側で印を付け直すと、**付け方を2通り持つ**ことになる(CLAUDE.md)。
+ *
+ * 戻り値は、付けた印を全部外す後始末。
+ */
+export function markPrint(element, { worksheet = false } = {}) {
+  if (!element) return () => {}
   const body = document.body
   element.classList.add('print-target')
   // 書き込む用紙(ゲスト用)は、設問のあとに記入欄を出す
@@ -49,12 +59,20 @@ export function printElement(element, { worksheet = false } = {}) {
   }
 
   let done = false
-  const cleanup = () => {
+  return () => {
     if (done) return
     done = true
     element.classList.remove('print-target', 'print-worksheet')
     for (const el of path) el.classList.remove('print-path')
     body.classList.remove('is-printing')
+  }
+}
+
+export function printElement(element, opts = {}) {
+  if (!element) return
+  const undo = markPrint(element, opts)
+  const cleanup = () => {
+    undo()
     window.removeEventListener('afterprint', cleanup)
   }
   window.addEventListener('afterprint', cleanup)

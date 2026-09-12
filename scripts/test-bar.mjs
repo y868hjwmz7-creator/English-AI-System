@@ -4219,6 +4219,91 @@ for (const w of [1280, 390, 320]) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+ * 単語帳 / Quick Response 帳の紙(2026-09 利用者の指定)
+ *
+ *   > フォーマットは、左に日本語、右に英語が来るようにしてください。
+ *   > 教材を印刷、PDFにした時のクイックレスポンの部分と同じ仕様です
+ *
+ * **ソースを読むだけでは分からない。** 「左が日本語・右が英語」は
+ * CSS の格子(`grid-template-columns: 1fr 1fr`)で決まっており、
+ * しかも **`@media print` の `.print-target …` の中にしか無い。**
+ * 印が付いていなければ1つも当たらないので、
+ * **印刷の見え方をそのまま描いて測る**しかない。
+ *
+ * 印は画面の側(`markPrint()`)が付ける ——
+ * ここで付け直すと、**付け方を2通り持つ**ことになる(CLAUDE.md)。
+ *
+ * **「出る」と「出ない」の両方を見る** ——
+ * 左右に並んでいることだけを見ると、**縦に積む形に戻しても
+ * 「日本語も英語も出ている」で緑のまま**になる。
+ * ══════════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=sheet`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(300)
+  await page.emulateMedia({ media: 'print' })
+  await page.waitForTimeout(200)
+
+  const got = await page.evaluate(() => {
+    const 見える = (el) => !!el && el.checkVisibility?.() !== false
+      && el.getBoundingClientRect().height > 0
+    const rows = [...document.querySelectorAll('.print-target ol.qrsheet-list > li')]
+    const 行 = rows.map((li) => {
+      const ja = li.querySelector('.qrsheet-ja')
+      const en = li.querySelector('.qrsheet-en')
+      const jb = ja?.getBoundingClientRect()
+      const eb = en?.getBoundingClientRect()
+      return {
+        ja: ja?.textContent?.trim() ?? '',
+        en: en?.textContent?.trim() ?? '',
+        jaX: jb ? Math.round(jb.left) : null,
+        enX: eb ? Math.round(eb.left) : null,
+        jaY: jb ? Math.round(jb.top) : null,
+        enY: eb ? Math.round(eb.top) : null,
+        番号: window.getComputedStyle(li, '::before').content,
+      }
+    })
+    const head = document.querySelector('.print-target .print-head')
+    return {
+      印: document.body.classList.contains('is-printing'),
+      行,
+      見出し: 見える(head) ? head.textContent.trim() : '',
+      はみ出し: document.documentElement.scrollWidth
+        > document.documentElement.clientWidth + 1,
+    }
+  })
+  await page.close()
+
+  const 並ぶ = got.行.filter((r) => r.jaX !== null && r.enX !== null)
+  /* 左右に並んでいる = 英語が日本語より**右**にあり、しかも**同じ行**にいる。
+     縦に積むと、英語は下(Y が違う)へ回る */
+  const 左右 = 並ぶ.filter((r) => r.enX > r.jaX && Math.abs(r.enY - r.jaY) < 8)
+  const 番号あり = got.行.filter((r) => r.番号 && r.番号 !== 'none' && r.番号 !== 'normal')
+
+  if (!got.印) {
+    ng('紙 … 印(`is-printing`)が付いていない', '`markPrint()` が呼ばれていない')
+  } else if (got.行.length !== 4) {
+    ng('紙 … 単語帳の対が刷られていない', `${got.行.length} 行`)
+  } else if (左右.length !== 4) {
+    ng('紙 … 左に日本語・右に英語で並んでいない',
+      並ぶ.map((r) => `ja ${r.jaX},${r.jaY} / en ${r.enX},${r.enY}`).join(' | '))
+  } else if (!got.行.some((r) => r.ja === '' && r.en === 'gist')) {
+    /* **訳の無い語も落とさない**(控えがまだ引けていないだけ) */
+    ng('紙 … 訳の無い語が落ちている', got.行.map((r) => r.en).join(' / '))
+  } else if (番号あり.length !== 4) {
+    ng('紙 … 通し番号が出ていない', `${番号あり.length} / 4`)
+  } else if (!got.見出し.includes('単語帳') || !got.見出し.includes('全 4 語')) {
+    ng('紙 … 何の紙かが書かれていない', got.見出し || '(無し)')
+  } else if (got.はみ出し) {
+    ng('紙 … 横にはみ出している')
+  } else {
+    const w = 並ぶ[0]
+    ok(`紙 … 左が日本語・右が英語(4 行・ja x=${w.jaX} / en x=${w.enX}・${got.見出し})`)
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
