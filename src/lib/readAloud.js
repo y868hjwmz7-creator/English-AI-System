@@ -52,8 +52,8 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  HEAD_LEAD, REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, segOffsOf,
-  indexAtTime, makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
+  REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, segOffsOf, stickyIndex,
+  makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
   foldWorst, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
 } from './wholeAudio.js'
 import {
@@ -240,8 +240,12 @@ function tellSentence(spans, sec, only, state, onWord) {
   if (!onWord || !spans) return
   let hit = -1
   for (let i = spans.length - 1; i >= 0; i -= 1) {
-    if (sec >= spans[i].start - HEAD_LEAD) { hit = i; break }
+    if (sec >= spans[i].start - 0.001) { hit = i; break }
   }
+  /* **戻る向きだけ、わずかな手前を許す**(36手め)。
+     くり返しで戻ると、頭の数十ミリ秒手前に着く —— そこで1つ前の文へ
+     落とすと、光りが**一瞬ちらつく。** 前へは何もしない */
+  if (hit >= 0) hit = stickyIndex(spans, sec, state.at < 0 ? null : state.at)
   if (hit < 0 || hit === state.at) return
   const sp = spans[hit]
   /* 通しでは、いま光っている項目のものだけを送る(別の段落を光らせない)。
@@ -1060,8 +1064,10 @@ export function readAloudSequence(parts, {
         if (goBack(back, sec)) return
         /* **戻したあとは、頭の少し手前にいる**(35手め)。
            そのまま数えると、一文目のくり返しで**1コマだけ前の段落**が
-           「いまの段落」と読まれ、画面が切り替わって戻る */
-        seen(indexAtTime(spans, sec, HEAD_LEAD))
+           「いまの段落」と読まれ、画面が切り替わって戻る。
+           **前へは効かせない**(36手め)—— 先取りすると、こんどは
+           **最後の文**で次の段落へ早く切り替わって、同じちらつきが出る */
+        seen(stickyIndex(spans, sec, shownPiece))
         tellSentence(sent, sec, () => shownPiece, seenSent, relayWhole)
       },
     })

@@ -672,9 +672,9 @@ export function fitTime(sec, fit, spans) {
  * **間(ま)の上に来たら、次の項目とみなす。** 発言と発言のあいだは
  * どちらのものでもないが、色は**これから話す人**に付いていてほしい。
  */
-export function indexAtTime(spans, sec, lead = 0) {
+export function indexAtTime(spans, sec) {
   if (!Array.isArray(spans) || !spans.length) return -1
-  const t = (Number(sec) || 0) + (Number(lead) || 0)
+  const t = Number(sec) || 0
   if (t < spans[0].start) return 0
   for (let i = spans.length - 1; i >= 0; i -= 1) {
     if (t >= spans[i].start) return i
@@ -1030,11 +1030,52 @@ export const FRAME_SEC = 0.0262
  *   **新しい数を決め打ちしない** —— どちらも、その値がある理由が
  *   別の節に書いてある(CLAUDE.md「数えられるものを決め打ちにしない」)。
  *
- *   鳴らし方は1ミリ秒も変えていない。変えたのは**読み方**だけである
- *   (ふつうに鳴っているときは、光るのが 46ms 早くなるだけ ——
- *   読む側にとって、遅れるより早いほうがよい)。
+ * ── **先へは効かせない**(2026-09 実機・36手め・こちらの入れ違い)───
+ *
+ *   > 初めの分は直りました。ちなみに、最後の文でもなりますので、
+ *   > こちらも修正お願いします(利用者)
+ *
+ *   35手めは `indexAtTime(spans, sec + lead)` と書いた。これは
+ *   「手前にいても中と読む」と同時に、**次の項目にも 46ms 早く
+ *   切り替わる**ということである。すると
+ *
+ *     **最後の文**をくり返すと、折り返す直前の1〜4コマだけ
+ *     **次の発言**に切り替わり、戻したあとにまた戻る
+ *
+ *   —— 一文目で消したのと同じちらつきを、**最後の文で作っていた。**
+ *
+ *   要るのは**戻る向きの歯止めだけ**である。前へは、これまでどおり
+ *   本当に頭へ着いてから切り替える(`stickyIndex`)。
  * ══════════════════════════════════════════════════════════════════ */
 export const HEAD_LEAD = SEEK_LEAD + FRAME_SEC
+
+/**
+ * **いま出しているものから、わずかに戻っただけなら、そのままにする。**
+ *
+ * 前へは何もしない —— **先取りすると、最後の文で同じちらつきが出る。**
+ *
+ * @param {Array<{start:number}>} spans 区間(項目でも文でもよい)
+ * @param {number} sec いまの秒
+ * @param {number|null} shown いま出している番号
+ * @param {number} [lead] これだけ手前までは「まだその中」と読む
+ * @returns {number} 出すべき番号
+ */
+export function stickyIndex(spans, sec, shown, lead = HEAD_LEAD) {
+  const i = indexAtTime(spans, sec)
+  if (i < 0 || shown === null || shown === undefined || shown < 0) return i
+  /* **いま出しているものの頭から、これだけ手前まで。**
+     大きく戻ったのは人が送ったのだから、そのまま従う
+     (◀◀ で1つ前の段落へ、など)。
+
+     **「1つだけ手前のときに限る」という歯止めは置かない**
+     —— 2つ手前で、なお 46ms 以内という並びは作れなかった
+     (発言も文も、それより短くはならない)。
+     **確かめられない歯止めを置かない**(31手めの `FLOOR_CAP` と同じ) */
+  if (i >= shown) return i
+  const head = Number(spans[shown]?.start)
+  if (!Number.isFinite(head)) return i
+  return (head - (Number(sec) || 0) <= (Number(lead) || 0)) ? shown : i
+}
 
 /**
  * **頭出しが、頼んだ秒よりどれだけ手前に着きうるか**(秒)。
