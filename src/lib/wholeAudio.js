@@ -985,6 +985,36 @@ export const REPEAT_LEAD = 0
  *
  * **これは「間があるとき」の値である。** 間が足りないところでは
  * 向きが逆になる(下の `landSec`・15手め)。
+ *
+ * ── **前の声の余韻(`TAIL_KEEP`)が残っているところへは寄せない**
+ *    (2026-09 実機・37手め)────────────────────────────────
+ *
+ *   > 文によりほんの一瞬ですが最後が切れ、
+ *   > 前の文の最後の一瞬が入ってしまいます(利用者)
+ *
+ *   **後半は、この 20ms がそのまま出どころだった。**
+ *   控えの `end` は「その文字に割り当てた終わり」であって、
+ *   **音が消えたところではない**(前半の直しがそれである)。
+ *   つまり前の声は `end` のあと最大 `TAIL_KEEP` まで鳴っている。
+ *
+ *   ElevenLabs は自然に読むので、**続けて読む文の間(ま)はとても狭い。**
+ *   そこで 20ms 手前を頼むと、**そのまま前の声の余韻の中**である。
+ *
+ *   だから**寄せてよいのは、余韻の外に残っているぶんだけ**にする。
+ *
+ *     寄せる量 = min(SEEK_LEAD, max(0, 間 − TAIL_KEEP))
+ *
+ *   - 間が `TAIL_KEEP` より狭ければ **0** ——「その文の頭ちょうど」
+ *   - 間が広ければ、これまでどおり 20ms 手前(**1ミリも変えない**)
+ *
+ *   **`TAIL_KEEP` は、折り返しと同じ1つの値である**(`foldStop`)。
+ *   あちらは「余韻を鳴らしきる」ため、こちらは「余韻を踏まない」ため。
+ *   **同じ事実の表と裏なので、数を2つ持たない。**
+ *
+ *   **0 にはしない。** そうすると `landSec()` が素通しになり、
+ *   間の広い教材で**控えより本当の頭が少し早い**ときに欠ける。
+ *   **これ以上うしろへも詰めない** —— 頼む先を頭より**うしろ**にすると、
+ *   こんどはその文の頭が欠ける(耳は立ち上がりに鋭い・21手め)。
  */
 export const SEEK_LEAD = 0.02
 
@@ -1205,6 +1235,24 @@ export function stickyIndex(spans, sec, shown, lead = HEAD_LEAD) {
  *   本当に道ごとに違うし、**次に「次の文の音が入る」に振れたときの
  *   つまみ**でもある(`REPEAT_LEAD` と2つ)。
  */
+/**
+ * **語尾の余韻のために、間からもらってよい残り**(2026-09 実機・37手め)。
+ *
+ *   > much で終わるところが mu しか入らないようなくらい(利用者)
+ *
+ * `alignment` の文字ごとの時刻は「その文字の割り当てがどこまでか」で
+ * あって、**音がいつ鳴り終わるか**ではない。だから語尾の子音の余韻は
+ * そのうしろにはみ出す。そこでぴたりと止めると「切れた」と聞こえる。
+ *
+ * **間がこれより狭ければ、1ミリ秒ももらわない**(今日と同じ動き)。
+ * これより広い間からだけ、余った分を余韻に回す ——
+ * **受け止めは、いつも `TAIL_KEEP` だけ残る。**
+ *
+ * 値は、いまの検証が模型にしている遅れ(50ms)の3倍である。
+ * **iPhone の遅れは測れていない**ので、そこを厚く取ってある。
+ */
+export const TAIL_KEEP = 0.15
+
 export const SLIP = 0.02
 
 /**
@@ -1334,19 +1382,70 @@ function frontEdge(list, i, duration = 0) {
  * 遅れを受け止めるのに `REPEAT_LEAD` 要る。まず**間(ま)から**使い、
  * 足りないぶんだけ声をもらう。**間が足りていれば 0**(1ミリ秒も欠けない)。
  */
-export function foldNeed(list, i, step = 0, slip = SLIP) {
+/**
+ * **折り返す場所** —— その窓の終わり(次の声との、まん中)。
+ *
+ * ── なぜ「その文の最後の文字が終わった秒」ではないのか(37手め)────
+ *
+ *   > 文によりほんの一瞬ですが最後が切れ…
+ *   > much で終わるところが mu しか入らないようなくらい(利用者)
+ *
+ *   `alignment` の文字ごとの時刻は、**その音がいつ鳴り終わるか**では
+ *   なく「その文字の割り当てがどこまでか」である。だから
+ *   **語尾の子音(`much` の /tʃ/)の余韻は、そのうしろにはみ出す。**
+ *   そこでぴたりと止めれば、耳には「切れた」と聞こえる。
+ *
+ *   `windowAt()` は**まん中で窓を分けている。** つまりその余韻は
+ *   もともと**この窓のもの**である。折り返す場所だけが、
+ *   1つ手前(声の終わり)に置かれていた —— **そこをそろえる。**
+ *
+ *   **次の声には決して届かない**(まん中までなので、残り半分は無音)。
+ */
+function foldStop(list, i, step = 0, slip = SLIP) {
   const e = Number(list[i]?.end)
   const n = Number(list[i + 1]?.start)
-  if (!Number.isFinite(e) || !Number.isFinite(n)) return 0
+  if (!Number.isFinite(e) || !Number.isFinite(n)) return NaN
+  if (e > n) return n
+  /* **広い間からだけ、余韻をもらう。**
+     間が `TAIL_KEEP` より狭ければ 0 —— **今日と1ミリ秒も変わらない。**
+     余っているぶんを半分ずつ分ける形も試したが、**狭い継ぎ目で
+     受け止めを削ってしまい、遅れのある端末で次の声が鳴った**(実測6件赤)。
+     `step` / `slip` はここでは使わない(受け止めは `TAIL_KEEP` が持つ) */
+  /* **窓のまん中は越えない。** `windowAt()` がまん中で窓を分けているので、
+     越えるとその窓の外に出てしまい、**折り返しそのものが起きない**
+     (実測で赤くなった)。だから残るのは
+     `max(間の半分, TAIL_KEEP)` —— **今日より狭くなることはない** */
+  const room = Math.max(0, n - e)
+  return e + Math.min(Math.max(0, room - TAIL_KEEP), room / 2)
+}export function foldNeed(list, i, step = 0, slip = SLIP) {
+  const stop = foldStop(list, i)
+  const n = Number(list[i + 1]?.start)
+  if (!Number.isFinite(stop) || !Number.isFinite(n)) return 0
   /* 受け止めるのは**3つ**である。1つでも落とすと、間がぎりぎりの継ぎ目で
      ひと刻みぶんだけ次の声が鳴る(実測で見つけた)。
        ①決めてから黙るまでの遅れ … `REPEAT_LEAD`(**端末**のもの)
        ②ひと刻み遅れて気づくぶん … `step`
        ③控えの境目そのもののずれ … `slip`(**その教材**のもの・24手め)
-     ③を定数に混ぜていたので、**ずれの無い教材まで払っていた** */
+     ③を定数に混ぜていたので、**ずれの無い教材まで払っていた**
+
+     **残りは「折り返す場所から次の声まで」**(37手め)。
+     まん中で折り返すので、間のうしろ半分がそのまま余白になる */
   const s = Number.isFinite(step) && step > 0 ? step : 0
   const p = Number.isFinite(slip) && slip > 0 ? slip : 0
-  return Math.max(0, (REPEAT_LEAD + p + s) - Math.max(0, n - e))
+  return Math.max(0, (REPEAT_LEAD + p + s) - Math.max(0, n - stop))
+}
+
+/**
+ * **実際に、声の後ろをどれだけ削るか。**
+ *
+ * まん中まで鳴らすので、`foldNeed()` がまるごと削りになるわけではない
+ * (間のうしろ半分は無音で、そこを削っても声は1ミリ秒も欠けない)。
+ */
+export function foldCut(list, i, step = 0, slip = SLIP) {
+  const e = Number(list[i]?.end)
+  const at = foldAt(list, i, step, slip)
+  if (!Number.isFinite(e) || !Number.isFinite(at)) return 0
+  return Math.max(0, e - at)
 }
 
 /**
@@ -1365,8 +1464,8 @@ export function foldWorst(list, step = 0, slip = SLIP) {
   if (!Array.isArray(list) || list.length < 2) return 0
   let worst = 0
   for (let i = 0; i < list.length - 1; i += 1) {
-    const need = foldNeed(list, i, step, slip)
-    if (need > worst) worst = need
+    const cut = foldCut(list, i, step, slip)
+    if (cut > worst) worst = cut
   }
   return worst
 }
@@ -1378,11 +1477,9 @@ export function foldWorst(list, step = 0, slip = SLIP) {
  * 止めるのは早いほどよく、戻るのは間のまん中がよい。
  */
 function foldAt(list, i, step = 0, slip = SLIP) {
-  const n = Number(list[i + 1]?.start)
-  if (!Number.isFinite(n)) return NaN
-  const e = Number(list[i]?.end)
-  if (!Number.isFinite(e) || e > n) return n
-  return e - foldNeed(list, i, step, slip)
+  const stop = foldStop(list, i)
+  if (!Number.isFinite(stop)) return NaN
+  return stop - foldNeed(list, i, step, slip)
 }
 
 /**
@@ -1460,9 +1557,15 @@ export function landSec(start, gap) {
   const s = Number(start)
   if (!Number.isFinite(s)) return NaN
   const g = Math.max(0, Number(gap) || 0)
-  /* 間があるぶんだけ手前へ寄せる。**前の声には届かない**(`s - g` で止める)。
-     手前に外れたぶんは、`seekClip()` の着地の見張りが**黙ったまま**直す */
-  return Math.max(s - Math.min(SEEK_LEAD, g), s - g)
+  /* **前の声は、控えの `end` のあと最大 `TAIL_KEEP` まで鳴っている**
+     (37手め)。だから寄せてよいのは、**その余韻の外に残っているぶんだけ**。
+
+     - 間が `TAIL_KEEP` より狭ければ 0 ——「その文の頭ちょうど」を頼む
+     - 間が広ければ、これまでどおり `SEEK_LEAD` 手前(**1ミリも変えない**)
+
+     手前に外れたぶん(フレーム1枚)は、`seekClip()` の着地の見張りが
+     **黙ったまま**直す(29手め) */
+  return s - Math.min(SEEK_LEAD, Math.max(0, g - TAIL_KEEP))
 }
 
 /**
