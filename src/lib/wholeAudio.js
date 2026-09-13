@@ -885,22 +885,35 @@ export const FRAME_SEC = 0.0262
  * **`LAND_EPS`(着地の見張り)も、ここから取る。**
  * 書き写すと、値を変えた日に片方だけが古くなる。
  *
- * ## 3枚も、**2つの別物を1つの数にしていた**(2026-09 実機・24手め)
+ * ## **ここは小さくしてはいけなかった**(2026-09 実機・25手め)
  *
- * `REPEAT_LEAD` とまったく同じ話である(あちらの節を見ること)。
- * 16手めで1枚 → 3枚に上げたのは**会話の道の境目のずれ**のためで、
- * **フレームの吸い寄せ(物の決まり)とは別物**だった。
- * ところがこの定数も**全教材にかかる。**
+ *   > 半分くらいの文が終わる前に折り返され、
+ *   > 前の文の最後の部分から始まります(利用者)
  *
- * `landSec()` が頭を欠かし始めるのは、間(ま)が
- * `SEEK_LEAD + SEEK_MISS` より狭いところである。
+ * 24手めで、`REPEAT_LEAD` と同じ理屈で1枚へ戻した。**それが誤りだった。**
+ * 間(ま)が 30ms の継ぎ目で頼む先を出すと、こうなる。
  *
- *     3枚 … 間が 99ms より狭ければ、その文の頭が欠ける
- *     1枚 … 間が 46ms より狭いときだけ
+ * | | 頼む先 | 吸い寄せられた最悪 |
+ * |---|---|---|
+ * | 3枚 | **頭 + 48.6ms**(声の中) | ちょうど前の声の終わり |
+ * | 1枚 | 頭 − 3.8ms(間の中) | ちょうど前の声の終わり |
  *
- * **だから物の決まりへ戻す。** 境目のずれは `SLIP` が別に持つ。
+ * **最悪値は同じ。ちがうのは、どちらへ倒してあるか**である。
+ * 3枚は「必ず声の中へ入る」側に倒してあり、1枚は**間の上でぎりぎり
+ * 釣り合っている** —— ほんの少しでも手前に外れれば前の声である。
+ *
+ * **折り返しと頭出しは、優先順が違う。**
+ *
+ * | | 何を失うか | 利用者の判断 |
+ * |---|---|---|
+ * | 折り返し(`REPEAT_LEAD`) | **自分の声の終わり** | 150ms で「散見される」 |
+ * | 頭出し(`SEEK_MISS`) | **前の声が入る**(倒し方を誤ると) | 「一瞬といえど違和感は非常に大きい」 |
+ *
+ * だから**同じ物差しで動かさない。**
+ * `REPEAT_LEAD` は教材ごとに絞ってよいが、**ここは絞らない**
+ * (`landSec()` は `slip` を受け取らない)。
  */
-export const SEEK_MISS = FRAME_SEC
+export const SEEK_MISS = FRAME_SEC * 3
 
 /**
  * **境目のずれ**(秒)。**その教材の控えを、どれだけ信じてよいか。**
@@ -1117,24 +1130,24 @@ function foldAt(list, i, step = 0, slip = SLIP) {
  *   **逃がす量は `SEEK_MISS` 1か所。** 15手めはフレーム1枚だったが、
  *   実機では足りなかった(16手め)。**つまみはあそこだけである。**
  *
- *   **その「足りなかったぶん」は、境目のずれだった**(24手め)。
- *   いまは `SEEK_MISS`(物の決まり)+ `slip`(その教材のもの)で、
- *   **控えが正しい教材では 1枚ぶんしか逃がさない。**
+ *   **ここは、教材ごとに絞らない**(25手め)。24手めで
+ *   `REPEAT_LEAD` と同じ理屈で絞ったところ、**前の声が入るようになった。**
+ *   折り返しが失うのは**自分の声の終わり**だが、
+ *   ここが失うのは**前の声が入るかどうか**で、**優先順が違う**
+ *   (`SEEK_MISS` の節)。だから `slip` を受け取らない。
  *
  * @param {number} start その区間の頭(控えの秒)
  * @param {number} gap 前の区間との間(ま)。負なら 0 として見る
- * @param {number} slip その教材の境目のずれ(`slipOf()`)
  * @returns {number} 頼む秒
  */
-export function landSec(start, gap, slip = SLIP) {
+export function landSec(start, gap) {
   const s = Number(start)
   if (!Number.isFinite(s)) return NaN
   const g = Math.max(0, Number(gap) || 0)
-  const miss = SEEK_MISS + (Number.isFinite(slip) && slip > 0 ? slip : 0)
   // 手前に外れても間の中に着く、いちばん手前
-  const floor = s - g + miss
+  const floor = s - g + SEEK_MISS
   // 欠けてよいのは、多くても見込んだぶんまで
-  const ceil = s + miss
+  const ceil = s + SEEK_MISS
   return Math.min(ceil, Math.max(s - SEEK_LEAD, floor))
 }
 
@@ -1144,7 +1157,7 @@ export function landSec(start, gap, slip = SLIP) {
  * **縁は数えるため、こちらは頼むため**である。取り違えない ——
  * 縁を動かすと「いまどの窓にいるか」がずれて、前の文へ戻り続ける。
  */
-function landEdge(list, i, slip = SLIP) {
+function landEdge(list, i) {
   const s = Number(list[i]?.start)
   if (!Number.isFinite(s)) return NaN
   /* **いちばん最初だけは、逃がさない。** 前に声が無いのだから、
@@ -1152,7 +1165,7 @@ function landEdge(list, i, slip = SLIP) {
      ここで逃がすと、頭から鳴らし直すたびにそのぶん欠ける */
   if (i <= 0) return s
   const p = Number(list[i - 1]?.end)
-  return landSec(s, Number.isFinite(p) ? s - p : 0, slip)
+  return landSec(s, Number.isFinite(p) ? s - p : 0)
 }
 
 /**
@@ -1283,9 +1296,11 @@ export function repeatSeek(unit, sec, {
   /* **並びから回すときは、「鳴らし終えた窓」を探す**(2026-09 実機・7手め)。
      「いまの窓の終わりに来たか」で見ると、**必ず声の途中で折り返す**
      (`doneWindow()` の節)。越えてから、手前の窓へ戻す */
+  /* **`slip` がかかるのは折り返しの側だけ。** 戻る先(`landEdge`)には
+     かけない —— あちらは「前の声が入るかどうか」で、優先順が違う(25手め) */
   const done = (list) => {
     const i = doneWindow(list, t, duration, prev, slip)
-    return i < 0 ? null : landEdge(list, i, slip)
+    return i < 0 ? null : landEdge(list, i)
   }
 
   let win = null
@@ -1348,12 +1363,9 @@ export function repeatSeek(unit, sec, {
  * @param {object} [o]
  * @param {number} o.duration 音声ぜんぶの長さ(秒)。**いちばん最後だけ伸びる**
  * @param {Function|null} o.keep その段落のものだけを拾う見分け方
- * @param {number} o.slip その教材の境目のずれ(`slipOf()`)
  * @returns {{start:number,end:number,land:number}|null} 狭められないときは `null`
  */
-export function spanForRange(sentences, range, base = 0, {
-  duration = 0, keep = null, slip = SLIP,
-} = {}) {
+export function spanForRange(sentences, range, base = 0, { duration = 0, keep = null } = {}) {
   if (!Array.isArray(sentences) || !sentences.length) return null
   if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null
   const inside = []
@@ -1366,7 +1378,7 @@ export function spanForRange(sentences, range, base = 0, {
   return {
     start: backEdge(sentences, inside[0]),
     end: frontEdge(sentences, inside[inside.length - 1], duration),
-    land: landEdge(sentences, inside[0], slip),
+    land: landEdge(sentences, inside[0]),
   }
 }
 

@@ -26,10 +26,10 @@
 import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
-  humanSeek, rangeOf, repeatSeek, REPEAT_LEAD, SLIP, slipOf,
+  humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_MISS, SLIP, slipOf,
   scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
-import { itemOffsFrom, measureSeams, seamOffsets } from '../src/lib/seamFind.js'
+import { itemOffsFrom, measureSeams, MIN_SILENCE, seamOffsets } from '../src/lib/seamFind.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
@@ -1529,7 +1529,7 @@ function fakeMp3({
         ['読み上げが受け取る', read, /partRangeOf = null,/],
         ['狭める算段は1か所', read, /return spanForRange\(sents, r, base, o\)/],
         ['1本のときも狭める', read, /const only = shownPiece >= 0/],
-        ['発言ごとのときも狭める', read, /const only = partSpan\(part\.index, sentSecs, part\.at, \{ duration: dur, slip \}\)/],
+        ['発言ごとのときも狭める', read, /const only = partSpan\(part\.index, sentSecs, part\.at, \{ duration: dur \}\)/],
         ['鳴らし直すのは、かけらの頭から', read, /replayAt = unit === 'item' \? backTo : 0/],
         ['全文は頭から回す', read, /if \(repeatNow\(\) !== 'all' \|\| !heard\) break/],
         /* **戻したら、なだらかな上げ下げの起点も戻す。**
@@ -1902,7 +1902,7 @@ function fakeMp3({
       ['押された瞬間に秒へ直す', /sharesToTimes\(cursor\.spans, clipDuration\(\)\)/],
       /* 段落ごとの MP3 でも、文でくり返す。**`spans` は集中モードが
          かけらに狭めるためのもの**で、渡さなければ `null`(段落で回る) */
-      ['文のくり返しを、周回の中でも見る', /sentences: sentSecs, duration: dur, window: only,/],
+      ['文のくり返しを、周回の中でも見る', /sentences: sentSecs,\s*\n\s*duration: dur,\s*\n\s*window: only,/],
     ]
     const before = bad
     for (const [what, re] of want) if (!re.test(read)) ng(`文の単位: ${what}`)
@@ -1948,11 +1948,12 @@ function fakeMp3({
     if (!body) ng('`landSec()` が見つからない')
     else if (/FRAME_SEC/.test(body[0])) {
       ng('逃がす量に、フレームの長さを直に使っている(つまみが2つある)')
-    } else if (!/SEEK_MISS/.test(body[0])) {
-      ng('逃がす量を `SEEK_MISS` から取っていない')
-    } else if ((body[0].match(/\bmiss\b/g) || []).length < 3) {
+    } else if ((body[0].match(/SEEK_MISS/g) || []).length < 2) {
       ng('逃がす量を、手前と向こうの両方で見込んでいない')
-    } else ok('逃がす量は `SEEK_MISS` + `slip` 1か所(手前も向こうも同じ量)')
+    } else if (/slip/.test(body[0])) {
+      /* **頭出しは、教材ごとに絞らない**(25手め)。折り返しと優先順が違う */
+      ng('頭出しにまで `slip` を掛けている(前の声が入る)')
+    } else ok('逃がす量は `SEEK_MISS` 1か所(手前も向こうも同じ量・教材で絞らない)')
   }
 }
 
@@ -3393,6 +3394,42 @@ function fakeMp3({
     }
   }
 
+  /* ── ④' **頭出しは、必ず「声の中」へ倒す**(2026-09 実機・25手め)──
+
+       > 半分くらいの文が終わる前に折り返され、
+       > 前の文の最後の部分から始まります(利用者)
+
+     24手めで `SEEK_MISS` を1枚へ絞ったときの症状である。
+     **最悪値は絞る前と同じ**(どちらも「ちょうど前の声の終わり」)。
+     ちがうのは**どちらへ倒してあるか**で、絞ると
+     **間の上でぎりぎり釣り合う** —— 少しでも手前に外れれば前の声である。
+
+     **`MIN_SILENCE` から出す。** あれは「これより狭い無音は、
+     語と語のあいだと見分けが付かない」という境目なので、
+     **そこまで詰まった継ぎ目には、着地できる静けさが無い。**
+     値を書き写さない */
+  {
+    const bad2 = []
+    for (let g = 0; g <= MIN_SILENCE + 1e-9; g += 0.005) {
+      const to = landSec(1, g)
+      // ①声の中へ倒してあるか(間が狭いところでは、頭より後ろ)
+      if (to < 1 - 1e-9) bad2.push(`間 ${ms(g)} で 頭より ${ms(1 - to)} 手前`)
+    }
+    let deep = 0
+    let early = 0
+    for (let g = 0; g <= 0.5; g += 0.005) {
+      const to = landSec(1, g)
+      // ②吸い寄せられても、前の声には届かない
+      if (to - SEEK_MISS < 1 - g - 1e-9) early = Math.max(early, (1 - g) - (to - SEEK_MISS))
+      // ③欠かしてよいのは、見込んだぶんまで
+      deep = Math.max(deep, to - 1)
+    }
+    if (bad2.length) ng('頭出しが、間の上で釣り合っている(前の声が入る)', bad2[0])
+    else if (early > 1e-9) ng('吸い寄せられると、前の声に届く', ms(early))
+    else if (deep > SEEK_MISS + 1e-9) ng('その文の頭を、見込んだぶんより深く欠いている', ms(deep))
+    else ok(`頭出しは、詰まった継ぎ目(${ms(MIN_SILENCE)} まで)では必ず声の中へ倒す`)
+  }
+
   /* ── ⑤ 既定は「信じない」 ─────────────────────────────────────
      取り違えたときの害が桁で違う(声の終わりが欠ける / 次の文が鳴る) */
   {
@@ -3419,13 +3456,15 @@ function fakeMp3({
     if (!/prev: seeker\.last\(\),\s*\n\s*slip: slipOf\(sure\),/.test(read)) {
       miss.push('1本の道の、くり返しに渡していない')
     }
-    if (!/keep: \(x\) => x\.item === shownPiece, slip: slipOf\(sure\)/.test(read)) {
-      miss.push('1本の道の、集中モードのかけらに渡していない')
+    /* **頭出しには掛けない**(25手め)。掛けると前の声が入る ——
+       折り返し(自分の声の終わりを削る)とは優先順が違う */
+    for (const [name, why] of [['landSec', '頭出し'], ['landEdge', '戻す先'], ['spanForRange', 'かけらの戻す先']]) {
+      const fn = w.match(new RegExp(`export function ${name}\\([\\s\\S]*?\\n\\}`))
+      if (fn && /slip/.test(fn[0])) miss.push(`${why}(\`${name}\`)にまで \`slip\` が掛かっている`)
     }
     // 発言ごとの道 … 本当の時刻から出たときだけ信じる
     if (!/sentSure = !!sentSecs/.test(read)) miss.push('発言ごとの道が、見積もりかどうかを見ていない')
-    if (!/const slip = slipOf\(sentSure\)/.test(read)) miss.push('発言ごとの道が `slip` を出していない')
-    if (!/prev: seeker\.last\(\), slip,/.test(read)) {
+    if (!/prev: seeker\.last\(\),\s*\n\s*slip: slipOf\(sentSure\),/.test(read)) {
       miss.push('発言ごとの道の、くり返しに渡していない')
     }
     // 見込む側 … 渡されたものを本当に使っているか

@@ -987,7 +987,7 @@ export function readAloudSequence(parts, {
            **本文の途中なのに音声の終わりまで回る** */
         const only = shownPiece >= 0
           ? partSpan(itemOf(shownPiece), sent, list[shownPiece]?.at ?? 0, {
-            duration: dur, keep: (x) => x.item === shownPiece, slip: slipOf(sure),
+            duration: dur, keep: (x) => x.item === shownPiece,
           }) : null
         /* **前のひと刻みを渡す**(18手め)。ひと刻みの幅が分かるので、
            縁を**越える前に**折り返せる。渡さないと、越えたことに
@@ -1183,11 +1183,14 @@ export function readAloudSequence(parts, {
               if (!sentSecs) sentSecs = sharesToTimes(shares, dur)
             }
             if (!sentSecs) return
-            const slip = slipOf(sentSure)
-            const only = partSpan(part.index, sentSecs, part.at, { duration: dur, slip })
+            const only = partSpan(part.index, sentSecs, part.at, { duration: dur })
             backTo = only ? only.start : 0
             const back = repeatSeek(repeatNow(), sec, {
-              sentences: sentSecs, duration: dur, window: only, prev: seeker.last(), slip,
+              sentences: sentSecs,
+              duration: dur,
+              window: only,
+              prev: seeker.last(),
+              slip: slipOf(sentSure),
             })
             goBack(back, sec)
           },
