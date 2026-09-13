@@ -59,7 +59,9 @@ import {
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
-import { itemOffsFrom, lastSeamFail, measureSeams } from './seamFind.js'
+import {
+  TRY_RATIOS, itemOffsFrom, lastSeamFail, measureSeams,
+} from './seamFind.js'
 import { charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
 import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
@@ -1191,6 +1193,9 @@ export async function wholeSeams(url, spans, sents = null) {
     const all = (deep ? fine.length : spans.length) - 1
     seamNote = `実測 ${got.hit}/${all} ${deep ? '文' : '本'}`
       + (got.loose ? `(あて ${got.loose})` : '')
+      /* **梯子を降りたときだけ言う**(31手め)。1本目で測れたのなら
+         これまでとまったく同じなので、行を長くしない */
+      + (got.q > TRY_RATIOS[0] ? ` / しきい ${Math.round(got.q * 100)}%` : '')
       + ` / ずれ 最大 ${(wide * 1000).toFixed(0)}ms`
     return rec
   } catch (e) {

@@ -30,7 +30,8 @@ import {
   scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
-  TRY_RATIOS, itemOffsFrom, lastSeamFail, measureSeams, seamOffsets,
+  ABS_FLOOR, QUIET_RATIO, TRY_RATIOS, frameRms, itemOffsFrom, lastSeamFail,
+  measureSeams, quietLevel, seamOffsets, speechRuns,
 } from '../src/lib/seamFind.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
@@ -2688,16 +2689,42 @@ function fakeMp3({
     } else ok('測り損ねたら、その理由と「声のかたまり いくつ」まで残す')
   }
 
-  /* ── ④'' **しきい値のせいかどうかが、その1行で分かる**────────────
+  /* ── ④'' **雑音が乗っていても、継ぎ目を測れる**(2026-09・31手め)──
    *
    *   声に「さーっ」が乗っていると、いちばん静かなところでも
-   *   ピークの 3%(`QUIET_RATIO`)を割らない。すると**音声ぜんぶが
-   *   1本の run** になり、`seamOffsets()` は「どの継ぎ目にも間が無い」で
-   *   落ちる。**そのとき 10% なら分かれることを、その場で数える。**
+   *   ピークの 3%(`QUIET_RATIO`)を割らない。**直す前は、そこで
+   *   音声ぜんぶが1本の run** になり、`seamOffsets()` は
+   *   「どの継ぎ目にも間が無い」で落ちていた。
+   *   利用者の `[調査中]` が「継ぎ目を数え切れませんでした」だった、
+   *   その形そのものである。
    *
-   *   ここが「出どころはしきい値か、そもそも間が無いのか」の分かれ目で、
-   *   **利用者の報告1つで決まる**ようにするための1行である。 */
+   *   **「測れる」だけを見ない。** 見るのは3つ ——
+   *     ⓐ きれいな音声では、境目が**1ミリも変わっていない**か
+   *        (いままで測れていた教材を壊していないか)
+   *     ⓑ **直す前のやり方(ピークからだけ)では、本当に1本になる**か
+   *        (この検証が、直しの値打ちを示せているか)
+   *     ⓒ そのうえで、**いまは測れる**か
+   *
+   *   ⓐが無いと「全部のしきい値を上げる」形に書き換えても緑になり、
+   *   ⓑが無いと「そもそも雑音を乗せられていない」ことに気づけない。 */
   {
+    /* ⓐ 底が 0 に近ければ、境目はピーク × `QUIET_RATIO` そのもの */
+    const clean = new Float32Array(Math.round(total * RATE))
+    trueStart.forEach((s, i) => {
+      const a = Math.round(s * RATE)
+      const b = Math.round((s + speech[i]) * RATE)
+      for (let j = a; j < b; j += 1) clean[j] = Math.sin(j * 0.31) * 0.5
+    })
+    const cleanRms = frameRms(clean, RATE)
+    let peak = 0
+    for (let j = 0; j < cleanRms.length; j += 1) if (cleanRms[j] > peak) peak = cleanRms[j]
+    const was = Math.max(peak * QUIET_RATIO, ABS_FLOOR)
+    const now = quietLevel(cleanRms)
+    if (Math.abs(now - was) > 1e-9) {
+      ng('きれいな音声で、境目が変わってしまった(いままで測れていたものが壊れる)',
+        `${was.toFixed(6)} → ${now.toFixed(6)}`)
+    } else ok('きれいな音声では、境目はこれまでと同じ(1ミリも変わらない)')
+
     // 雑音の底を上げた波(声 0.5・底 0.05 = ピークの 10%)
     const floor = new Float32Array(Math.round(total * RATE))
     let s2 = 999
@@ -2708,17 +2735,72 @@ function fakeMp3({
       const b = Math.round((s + speech[i]) * RATE)
       for (let j = a; j < b; j += 1) floor[j] = r2() * 0.5
     })
-    measureSeams(floor, RATE, raw, total)
-    const f = lastSeamFail()
-    if (!f) ng('雑音の底を上げても測れてしまう(この検証では、しきい値を示せない)')
-    else {
-      const at3 = f.runs
-      const at10 = f.tries?.find((t) => t.q === 0.1)?.n ?? 0
-      if (at3 !== 1) ng('雑音の底を上げても1つにならない(この検証が成り立っていない)', `${at3} つ`)
-      else if (!(at10 > at3)) {
-        ng('しきい値を上げても分かれない = 出どころを見分けられない', `10% で ${at10} つ`)
-      } else ok(`しきい値のせいだと分かる(3% で ${at3} つ / 10% で ${at10} つ)`)
+    /* **頭には、まったくの無音がある。** MP3 をほどくと、
+       いちばん前に符号化のぶんの空白が付いてくる。
+       底を「いちばん小さいコマ」で見ると、**そこを底と読んで 0 になり、
+       雑音を1つも見ていないのと同じ**になる。だから下から10%で見る */
+    for (let j = 0; j < Math.round(0.03 * RATE); j += 1) floor[j] = 0
+
+    /* ⓑ **直す前のやり方**(ピークからだけ)を、その場で作って確かめる。
+          **値を書き写さない** —— `QUIET_RATIO` から出す */
+    const noisyRms = frameRms(floor, RATE)
+    let np = 0
+    for (let j = 0; j < noisyRms.length; j += 1) if (noisyRms[j] > np) np = noisyRms[j]
+    const oldRuns = speechRuns(noisyRms, undefined, {
+      level: Math.max(np * QUIET_RATIO, ABS_FLOOR),
+    }).length
+    if (oldRuns !== 1) {
+      ng('雑音の底を上げても、直す前のやり方で分かれてしまう(直しの値打ちを示せない)',
+        `${oldRuns} つ`)
+    } else ok('直す前のやり方では、音声ぜんぶが1つのかたまりになる(だから測れなかった)')
+
+    /* ⓒ いまは測れる。**取れる本数は、きれいな音声と同じ**
+          (数を書き写さない —— 間が 50ms を割る継ぎ目は、
+           きれいに録れていても「間が無い」と数えるのが正しい) */
+    const clear = measureSeams(wave, RATE, raw, total)
+    const got = measureSeams(floor, RATE, raw, total)
+    if (!got) {
+      ng('雑音が乗っていると、いまも測れない', lastSeamFail()?.why ?? '')
+    } else if (got.hit !== clear.hit || got.tight !== clear.tight) {
+      ng('雑音が乗ると、きれいなときと取れ方が変わる',
+        `実測 ${got.hit}+${got.tight} / きれいなとき ${clear.hit}+${clear.tight}`)
+    } else if (got.loose) {
+      ng('雑音が乗ると、当てで拾っている', `あて ${got.loose}`)
+    } else if (got.q !== TRY_RATIOS[0]) {
+      /* **梯子に頼らせない。** 底を見ていれば1本目で測れるはずである
+         (降りるほど、発言の途中で切れる見込みが増える)。
+         ここが無いと、底を見るのをやめても梯子が拾って緑になる */
+      ng('底を見ずに、しきい値を上げて拾っている', `しきい ${Math.round(got.q * 100)}%`)
+    } else {
+      ok(`雑音が乗っていても、きれいなときと同じだけ測れる`
+        + `(${got.hit}/${raw.length - 1} 本 / しきい ${Math.round(got.q * 100)}%)`)
     }
+  }
+
+  /* ── ④''' **測れるまで、しきい値を降りる**(2026-09・31手め)────────
+   *
+   *   梯子(`TRY_RATIOS`)の1本目は `QUIET_RATIO` そのものである。
+   *   **いままで測れていた教材は、そこで測れて終わる** ——
+   *   降りるのは、測れなかったときだけ。
+   *
+   *   **「1本目が `QUIET_RATIO`」を、ここで留める。** 入れ替えると
+   *   いままで測れていた教材の継ぎ目が黙って動く(しかも音は鳴る)。 */
+  {
+    if (!Array.isArray(TRY_RATIOS) || TRY_RATIOS.length < 2) {
+      ng('しきい値の梯子が1段しかない(降りる先が無い)')
+    } else if (TRY_RATIOS[0] !== QUIET_RATIO) {
+      ng('梯子の1本目が `QUIET_RATIO` ではない(いままで測れていた教材が動く)',
+        `${TRY_RATIOS[0]}`)
+    } else if (TRY_RATIOS.some((q, i) => i > 0 && !(q > TRY_RATIOS[i - 1]))) {
+      ng('梯子が上がっていない(順に降りる意味が無い)', TRY_RATIOS.join(' → '))
+    } else ok(`測れるまで、しきい値を降りる(${TRY_RATIOS.map((q) => `${Math.round(q * 100)}%`).join(' → ')})`)
+
+    /* **1本目で測れたのなら、そこで止まる**(降り切っていないか) */
+    const got = measureSeams(wave, RATE, raw, total)
+    if (!got) ng('きれいな音声なのに測れない')
+    else if (got.q !== TRY_RATIOS[0]) {
+      ng('きれいな音声なのに、梯子を降りている', `しきい ${got.q}`)
+    } else ok('きれいな音声は、1本目のしきい値で測れる(降りない)')
   }
 
   // ── ⑤ 項目にも文にも、同じずれを当てる

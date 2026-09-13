@@ -80,16 +80,30 @@ export const MAX_OFF = 3
 export const MIN_HIT = 0.7
 
 /**
- * 測り損ねたときに、**別のしきい値なら何本に分かれるか**も数えてみる
- * (2026-09・30手め)。`rms` はもう出してあるので、**費用は増えない。**
+ * **静けさの底を、下から何%のところで見るか**(31手め)。
  *
- * ここが決め手になる —— `QUIET_RATIO`(3%)で1本にしか分かれず、
- * 10% なら分かれるなら、**出どころはしきい値**である
- * (声に「さーっ」が乗っていると、いちばん静かなところでも
- *  ピークの 3% を割らない)。逆にどのしきい値でも1本なら、
- * **そもそも間が無い**ということになる。
+ * 平均でも中央値でもなく**下から10%**にするのは、
+ * 音声のほとんどが声で埋まっていても、いちばん静かな1割は
+ * 「さーっ」だけが残っているところだからである。
  */
-export const TRY_RATIOS = [0.01, 0.1]
+export const FLOOR_PCT = 0.1
+
+/**
+ * **試すしきい値**(2026-09・30手め → 31手め で**梯子**にした)。
+ *
+ * 30手めは「別のしきい値なら何本に分かれるか」を**数えるだけ**だった。
+ * ところが `[調査中]` を待つあいだ、利用者は何も変わらない画面を
+ * 使い続けることになる。**数えられるなら、その場で試せばよい。**
+ *
+ * `measureSeams()` が上から順に試し、**最初に測れたもの**を採る。
+ * `rms` はもう出してあるので、**通信も費用も1ミリも増えない**
+ * (窓口を1回も呼ばない = 0円)。
+ *
+ * **いちばん上は `QUIET_RATIO` そのもの**なので、
+ * **いままで測れていた教材は、1本目でそのまま測れる**
+ * (2本目以降に降りるのは、いままで**測れていなかった**ものだけ)。
+ */
+export const TRY_RATIOS = [QUIET_RATIO, 0.08, 0.16]
 
 /**
  * **直近の測り損ねの理由**(2026-09・30手め)。
@@ -141,14 +155,51 @@ export function frameRms(samples, rate, hop = HOP_SEC) {
 }
 
 /**
- * 「静か」の境目。**いちばん大きいところから決める。**
+ * **静けさの底**(2026-09・31手め)。下から `FLOOR_PCT` のところ。
+ *
+ * 雑音の乗った音声では、**いちばん静かなところでも 0 ではない。**
+ * その高さを知らずにピークからだけ境目を決めると、
+ * **音声ぜんぶが1つのかたまり**になり、継ぎ目が1本も見つからない。
+ *
+ * @param {Float32Array|number[]} rms
+ * @returns {number} 底(0 以上)
+ */
+export function noiseFloor(rms) {
+  const n = rms?.length | 0
+  if (!n) return 0
+  const a = Float64Array.from(rms)
+  a.sort()
+  const floor = a[Math.min(n - 1, Math.floor(n * FLOOR_PCT))]
+  return Number.isFinite(floor) && floor > 0 ? floor : 0
+}
+
+/**
+ * 「静か」の境目。**底とピークのあいだで決める。**
  *
  * 決め打ちの値にすると、小さく録れた声で本文まるごとが静かになる。
+ *
+ * ## **底が 0 に近ければ、いままでとまったく同じ値である**(31手め)
+ *
+ *     底 ≒ 0 のとき … 0 + (ピーク − 0) × ratio = ピーク × ratio
+ *
+ * つまり**きれいに録れた音声では、この直しは1ミリも効かない**
+ * (いままで測れていたものが、これで壊れることはない)。
+ * 効くのは**雑音が乗っていて、底が持ち上がっている**ときだけである。
+ *
+ * @param {Float32Array|number[]} rms
+ * @param {number} [ratio] 底からピークまでの、どれだけ上を境目にするか
  */
-export function quietLevel(rms) {
+export function quietLevel(rms, ratio = QUIET_RATIO) {
   let peak = 0
   for (let i = 0; i < rms.length; i += 1) if (rms[i] > peak) peak = rms[i]
-  return Math.max(peak * QUIET_RATIO, ABS_FLOOR)
+  const q = Number.isFinite(ratio) ? ratio : QUIET_RATIO
+  /* **底を頭打ちにしない。** ほとんど間の無い音声では、底が
+     ふつうの声の高さまで来ることがある。すると境目も上がって
+     細かく刻まれるが、**短い音は `MIN_SPEECH` が落とす**ので
+     run が足りなくなり、**これまでどおり `null` に落ちる**だけである
+     (行き止まりを作らない)。**確かめられない歯止めを置かない** */
+  const floor = noiseFloor(rms)
+  return Math.max(floor + (peak - floor) * q, ABS_FLOOR)
 }
 
 /**
@@ -297,7 +348,25 @@ export function seamOffsets(spans, runs, duration = 0) {
 /**
  * 波から、そのまま項目ごとのずれを出す(上の3つをつないだだけ)。
  *
- * @returns {{offs:number[], hit:number, loose:number, runs:number}|null}
+ * ## **1つのしきい値で決めない。測れるまで降りる**(31手め)
+ *
+ * 30手めは「別のしきい値なら何本に分かれるか」を**数えるだけ**にして、
+ * 利用者の報告を待つことにした。**それが誤りだった** ——
+ * 30回めの直しで「なにひとつ変わっていない」と言わせている。
+ * **数えられるなら、その場で試せばよい。**
+ *
+ *   - **1本目は `QUIET_RATIO` そのもの。** いままで測れていた教材は、
+ *     そこで測れて終わる(**1ミリ秒も変わらない**)
+ *   - 降りるのは**測れなかったときだけ。** `rms` はもう出してあるので、
+ *     **通信も費用も増えない**(窓口を1回も呼ばない = 0円)
+ *   - 全部だめなら、これまでどおり `null` —— 均等に配るへ落ちる
+ *     (**行き止まりを作らない**)
+ *
+ * 高いしきい値で**発言の途中まで切れてしまっても害は無い。**
+ * `seamOffsets()` は「前の声が終わったあと、最初に鳴り出すところ」しか
+ * 採らないので、途中で増えた run は**手前にいるぶん、必ず読み飛ばされる。**
+ *
+ * @returns {{offs:number[], hit:number, loose:number, runs:number, q:number}|null}
  */
 export function measureSeams(samples, rate, spans, duration = 0) {
   const rms = frameRms(samples, rate)
@@ -305,19 +374,19 @@ export function measureSeams(samples, rate, spans, duration = 0) {
     failWhy = { why: '波をほどけない', runs: 0 }
     return null
   }
-  const runs = speechRuns(rms)
-  const got = seamOffsets(spans, runs, duration || (samples.length / rate))
-  if (got) return { ...got, runs: runs.length }
-  /* **しきい値のせいかどうかを、その場で数えておく**(30手め)。
-     `rms` はもう出してあるので、**費用も通信も1ミリも増えない。**
-     `[調査中]` の行に出れば、次の報告1つで出どころが決まる */
-  if (failWhy) {
-    let peak = 0
-    for (let i = 0; i < rms.length; i += 1) if (rms[i] > peak) peak = rms[i]
-    failWhy.tries = TRY_RATIOS.map((q) => ({
-      q, n: speechRuns(rms, HOP_SEC, { level: Math.max(peak * q, ABS_FLOOR) }).length,
-    }))
+  const len = duration || (samples.length / rate)
+  const tries = []
+  let first = null
+  for (const q of TRY_RATIOS) {
+    const runs = speechRuns(rms, HOP_SEC, { level: quietLevel(rms, q) })
+    tries.push({ q, n: runs.length })
+    const got = seamOffsets(spans, runs, len)
+    if (got) return { ...got, runs: runs.length, q }
+    if (!first) first = failWhy
   }
+  /* **どの段でも測れなかった。** 何を試して何本に分かれたかを残す ——
+     これが `[調査中]` の行に出るので、次の報告1つで出どころが決まる */
+  if (failWhy) failWhy.tries = tries
   return null
 }
 
