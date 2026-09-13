@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
-  rangeOf, repeatSeek, REPEAT_LEAD,
+  humanSeek, rangeOf, repeatSeek, REPEAT_LEAD,
   scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import { itemOffsFrom, measureSeams, seamOffsets } from '../src/lib/seamFind.js'
@@ -1511,7 +1511,9 @@ function fakeMp3({
            手前に着くと前の文のしっぽが鳴り、そこで**また戻される。**
            算段は `makeRepeatSeeker()` 1か所(素の node で確かめられる) */
         ['着地の見張りを使う', read, /const seeker = makeRepeatSeeker\(\)/],
-        ['戻す先は見張りが決める', read, /const to = seeker\.next\(back, sec\)/],
+        /* **本当の時刻も渡す**(23手め)。渡さないと「刻みが遅れただけ」を
+           「人が送った」と読み違え、**次の文が丸ごと鳴る** */
+        ['戻す先は見張りが決める', read, /const to = seeker\.next\(back, sec, nowMs\(\)\)/],
         ['画面の中で歯止めを書き直していない', read, (s) => !/JUST_MOVED|lastBack/.test(s)],
         ['発言ごとのときも回す', read, /if \(\(unit === 'sentence' \|\| unit === 'item'\) && ok\) \{/],
         /* ── **かけらを「段落」としてくり返す**(2026-09 利用者の指定)──
@@ -3068,6 +3070,150 @@ function fakeMp3({
   }
 
   if (bad === before) ok('発言の中の文と文の継ぎ目も、音から測る')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑯ **刻みが遅れただけを、人の送りと取り違えない**(2026-09 実機・23手め)
+ *
+ *   > 今日こそは文ごとのリピートを直してください。
+ *
+ * 【22回とも外していた理由 —— 模型が、刻みを一定にしていた】
+ *   ⑭ は**ひと刻みをいつも同じ幅**で回している。ところが実機では
+ *   `setInterval(tick, 10)` のあいだに React の描き直しや MP3 の
+ *   読み込みが挟まり、**ひと刻みが 100ms を超えることがある。**
+ *
+ *   そのとき音は止まらない(端末の側で鳴っている)ので、
+ *   `currentTime` はきっちり進む。すると
+ *   **`makeRepeatSeeker()` がそれを「人が送った」と読み**、
+ *   そこから `REPEAT_HOLD`(250ms)のあいだ折り返しをまるごと止める。
+ *   その 250ms で縁を通り過ぎるので、**次の文が丸ごと鳴る。**
+ *
+ *   直す前の実測(間 100ms・ひと刻み 10ms・途中で1回だけ止める):
+ *   **90ms 止まると 0ms、110ms 止まると 1000ms(まる1文)。**
+ *
+ * 【ここで測ること】
+ *   **刻みの幅を、途中で1回だけ変えて回す。** ⑭ には無い量である。
+ *   ①刻みが遅れても、次の文が鳴らないか
+ *   ②**人が送ったときは、これまでどおり歯止めが立つか**
+ *   ③**時計を渡さなければ、これまでどおりか**
+ *
+ *   **①だけを見ない。** 歯止めをまるごと外しても①は緑になるが、
+ *   それでは 9手め(文送り・段落送りが引き戻される)に戻る。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+  const ms = (v) => `${Math.round(v * 1000)}ms`
+
+  /** 3文。まん中の継ぎ目の間(ま)だけを変える */
+  const three = (gap) => ([
+    { start: 0, end: 1, item: 0 },
+    { start: 1 + gap, end: 2 + gap, item: 1 },
+    { start: 2.3 + gap, end: 3.3 + gap, item: 2 },
+  ])
+
+  /**
+   * 1文目の途中から回す。**途中で1回だけ、ひと刻みが `stall` 秒になる。**
+   * 音は鳴り続けているので、**本当の時間も同じだけ進む**(`clock`)。
+   */
+  const roll = (gap, { step = 0.01, stall = 0, at = 0.9, clock = true } = {}) => {
+    const list = three(gap)
+    const seeker = makeRepeatSeeker()
+    let t = 0.5
+    let wall = 1000
+    let head = 0
+    /** 止まっているあいだに鳴ったぶん。**こちらからは手が出せない** */
+    let blind = 0
+    let stalled = false
+    const heard = (a, b) => Math.max(0, Math.min(b, list[1].end) - Math.max(a, list[1].start))
+    for (let n = 0; n < 4000; n += 1) {
+      const back = repeatSeek('sentence', t, {
+        spans: list, sentences: list, duration: 4.5, prev: seeker.last(),
+      })
+      if (seeker.next(back, t, clock ? wall : null) !== null) return { fold: t, head, blind }
+      let s = step
+      if (stall && !stalled && t >= at) { s = stall; stalled = true; blind += heard(t, t + s) }
+      head += heard(t, t + s)
+      t += s
+      wall += s * 1000
+      if (t > 3 + gap) return { fold: null, head, blind }
+    }
+    return { fold: null, head, blind }
+  }
+
+  /* ── ① **ひと刻みが遅れても、次の文は鳴らない** ─────────────────
+     **`JUMP` をまたぐ幅を必ず入れる。** ⑭ はいちばん広くて 80ms で、
+     **またぐところを一度も通っていなかった** —— そこが穴だった。
+
+     長く止まったぶんは**もう鳴ってしまっている**(主体は端末の側)ので、
+     こちらで消せるものではない。だから
+     **「止まったぶんより増えていないか」**で見る(性質で見る) */
+  {
+    let worst = 0
+    let missed = 0
+    let where = ''
+    for (const gap of [0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3]) {
+      for (const stall of [0.11, 0.12, 0.15, 0.2]) {
+        for (let p = 0; p < 12; p += 1) {
+          const r = roll(gap, { stall, at: 0.85 + p * 0.01 })
+          if (r.fold === null) { missed += 1; continue }
+          /* **止まっているあいだに鳴ったぶんは、どうやっても止められない。**
+             主体は端末の側で、こちらは呼ばれてすらいない。
+             **それを超えて鳴っていたら、折り返しを取りこぼしている** */
+          if (r.head - r.blind > worst) {
+            worst = r.head - r.blind
+            where = `間 ${ms(gap)} / ${ms(stall)} 止まる`
+          }
+        }
+      }
+    }
+    if (missed) ng('刻みが遅れると、折り返しを見逃す', `${missed} 回`)
+    else if (worst > 0.002) ng('刻みの遅れを、人の送りと取り違えている', `${where} → ${ms(worst)}`)
+    else ok('ひと刻みが `JUMP` をまたいで遅れても、次の文は鳴らない')
+  }
+
+  /* ── ② **人が送ったときは、これまでどおり歯止めが立つ**(9手め)──
+     `humanSeek()` に直に訊く。**ここで算数をやり直すと、
+     仕組みを壊しても素通りする**(「無ければ素通り」する検証を書かない) */
+  {
+    const cases = [
+      // [いまの秒, 前の秒, いまの時刻, 前の時刻, 人か, 何のとき]
+      [1.5, 0.5, 1010, 1000, true, '「次の文へ」を押した(時計は 10ms)'],
+      [0.5, 1.5, 1010, 1000, true, '「前の文へ」を押した(うしろへ飛ぶ)'],
+      [1.2, 0.9, 1300, 1000, false, '刻みが 300ms 遅れた(音は鳴っている)'],
+      [0.62, 0.5, 1120, 1000, false, '刻みが 120ms 遅れた'],
+      [0.51, 0.5, 1010, 1000, false, 'ふつうのひと刻み'],
+      [1.5, 0.5, null, null, true, '時計を渡さなければ、これまでどおり'],
+    ]
+    let ngAt = ''
+    for (const [t, last, now, then, want, what] of cases) {
+      if (humanSeek(t, last, now, then) !== want) { ngAt = what; break }
+    }
+    if (ngAt) ng('人が送ったのかどうかを、見分けられていない', ngAt)
+    else ok('人の送りと、刻みの遅れを見分けている(うしろ向きはいつでも人)')
+  }
+
+  /* ── ③ **時計を渡さなければ、これまでどおり** ───────────────────
+     呼ぶ側が知らないときに、勝手な見分けをしない */
+  {
+    const r = roll(0.1, { stall: 0.15, clock: false })
+    if (r.head < 0.5) ng('時計を渡していないのに、振る舞いが変わっている', ms(r.head))
+    else ok('時計を渡さなければ、これまでどおり(`JUMP` だけで見る)')
+  }
+
+  /* ── ④ **画面が、本当に時計を渡しているか** ─────────────────────
+     渡し忘れても**音は鳴る**ので、押しても気づけない。
+     **「名前が出てくるか」で見ない** —— 説明の中にも `nowMs` と書いてある */
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const code = read.replace(/\/\*[\s\S]*?\*\//g, '')
+    if (!/seeker\.next\(back,\s*sec,\s*nowMs\(\)\)/.test(code)) {
+      ng('画面が、いまの本当の時刻を渡していない(刻みの遅れを見分けられない)')
+    } else if (!/performance/.test(code)) {
+      ng('`Date.now()` だけを見ている(端末の時計が動くと狂う)')
+    } else ok('画面が、本当の時刻を渡している')
+  }
+
+  if (bad === before) ok('刻みが遅れただけを、人の送りと取り違えない')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

@@ -649,12 +649,25 @@ export function readAloudSequence(parts, {
    *   走らせられない**ので、**押してみなくても確かめられる**形に出してある。 */
   const seeker = makeRepeatSeeker()
   /**
+   * **いまの本当の時刻**(ミリ秒)。`performance.now()` は
+   * 端末の時計が動いても狂わない(`Date.now()` は狂う)。
+   */
+  const nowMs = () => {
+    const p = globalThis.performance
+    return typeof p?.now === 'function' ? p.now() : Date.now()
+  }
+  /**
    * くり返しで戻す。**戻したら true**(呼ぶ側はそのひと刻みを何もしない)。
+   *
+   * **本当の時刻も渡す**(23手め)。渡さないと
+   * 「刻みが遅れただけ」を「人が送った」と読み違えて、
+   * **次の文が丸ごと鳴る**(`humanSeek()` の節)。
+   *
    * @param {number|null} back 戻る先の秒(`repeatSeek()` の返り値)
    * @param {number} sec いまの秒
    */
   const goBack = (back, sec) => {
-    const to = seeker.next(back, sec)
+    const to = seeker.next(back, sec, nowMs())
     if (to === null) return false
     /* **黙らせてから戻す**(`hush`・2026-09 実機・5手め)。
        iPhone は `volume` を無視するので、なだらかな上げ下げも
