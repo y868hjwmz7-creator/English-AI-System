@@ -26,10 +26,9 @@
 import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
-  foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SLIP, slipOf,
+  foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_LEAD, SLIP, slipOf,
   scaleSpans, seekSentence, segOffsOf, FRAME_SEC, HEAD_LEAD, SEG_HEAD,
-  sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, stickyIndex, TAIL_KEEP,
-  wholeMark,
+  sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, stickyIndex, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   ABS_FLOOR, MAX_OFF, QUIET_RATIO, TRY_RATIOS, frameRms, itemOffsFrom, lastSeamFail,
@@ -959,16 +958,6 @@ function fakeMp3({
     const back1 = mid(sentG[0].end, sentG[1].start)
     const fore1 = mid(sentG[1].end, sentG[2].start)
     const land1 = repeatSeek('sentence', past(fore1), o)
-    /* **いちばん早く折り返す秒**(37手め)。声の終わりから窓の縁まで
-       1ms ずつ見て、最初に折り返すところを探す。
-       **値を書き写さず、性質で見る** —— ①声の終わりより後ろ
-       ②次の声まで `TAIL_KEEP`(間がそれより狭ければ、その間)を残す */
-    let first1 = null
-    for (let t = sentG[1].end; t <= fore1 + 1e-9; t += 0.001) {
-      if (repeatSeek('sentence', t, o) !== null) { first1 = t; break }
-    }
-    const room1 = sentG[2].start - sentG[1].end
-    const keep1 = Math.min(room1, TAIL_KEEP)
     if (repeatSeek('sentence', sentG[1].start + 0.5, o) !== null) {
       ng('文の途中なのに戻している')
     } else if (repeatSeek('sentence', sentG[1].end - 0.02, o) !== null) {
@@ -976,21 +965,13 @@ function fakeMp3({
          ここで折り返すと、その文の最後がそのぶん切れる。
          **間(ま)が足りている継ぎ目では、1ミリ秒も欠かさない** */
       ng('**言い終わる前に折り返している**(文の最後が切れる)')
-    } else if (first1 === null) {
-      ng('窓の縁まで来ても、一度も折り返さない')
-    } else if (!(sentG[2].start - first1 >= keep1 - 1e-9)) {
-      /* **受け止めは必ず残す**(21手めの心配は生きている) */
-      ng('**受け止めを残さずに鳴らし続けている**(遅れが次の声へ食い込む)',
-        `残り ${((sentG[2].start - first1) * 1000).toFixed(0)}ms`)
-    } else if (repeatSeek('sentence', sentG[1].end, o) !== null) {
-      /* ── **語尾の余韻まで鳴らす**(2026-09 実機・37手め)────────
-         21手めは「声が終わったら、そこで止める」にした。ところが
-         `alignment` の時刻は**音が鳴り終わる秒ではない**ので、
-         そこで止めると語尾の子音が切れる(利用者「much が mu」)。
-         **間が `TAIL_KEEP` より広いときだけ**、余りを余韻に回す */
-      ng('**声の終わりちょうどで折り返している**(語尾の余韻が切れる)')
-    } else if (land1 === null) {
-      ng('窓の縁を越えても折り返さない')
+    } else if (repeatSeek('sentence', sentG[1].end, o) === null) {
+      /* ── **声が終わったら、そこで止める**(2026-09 実機・21手め)────
+         前は**間のまん中**まで鳴らしてから止めていた。つまり
+         **わざわざ間の半分を使ってから**止めていたので、
+         決めてから黙るまでの遅れが**次の声へ直に食い込んでいた。**
+         止める場所を声の終わりへ動かすと、遅れは**間ぜんぶ**が受け止める */
+      ng('**声が終わっても止めていない**(遅れが次の声へ食い込む)')
     } else if (!(land1 > back1 + 1e-9)) {
       /* **`SEEK_LEAD` を書き写して突き合わせない。** それでは
          値を変えたときに期待値も一緒に動き、**仕組みを壊しても素通りする。**
@@ -1000,8 +981,7 @@ function fakeMp3({
       ng('戻る先が、その文の頭を通り過ぎている', `${land1}`)
     } else if (sentG[1].start - land1 > 0.05) {
       ng('戻る先が、その文の頭から遠い', `${(sentG[1].start - land1).toFixed(3)} 秒手前`)
-    } else ok(`文をくり返す(余韻を ${((first1 - sentG[1].end) * 1000).toFixed(0)}ms 足し、`
-      + `受け止め ${((sentG[2].start - first1) * 1000).toFixed(0)}ms を残す)`)
+    } else ok('文をくり返す(間のまん中で折り返し、その声の頭ぎりぎりへ)')
 
     /* **戻した次のひと刻みで、また戻してしまわないか。**
        `indexAtTime()` で数えると、間のまん中は「1つ前の文」に入る。
@@ -1053,11 +1033,9 @@ function fakeMp3({
       ng('段落の途中(1文目の終わり)で戻している')
     } else if (repeatSeek('item', itemsG[0].end - 0.02, o) !== null) {
       ng('**言い終わる前に折り返している**(段落の最後が切れる)')
-    } else if (repeatSeek('item', itemsG[0].end, o) !== null) {
-      // 37手め … 段落でも、語尾の余韻まで鳴らす
-      ng('**声の終わりちょうどで折り返している**(語尾の余韻が切れる)')
-    } else if (repeatSeek('item', past(mid(itemsG[0].end, itemsG[1].start)), o) === null) {
-      ng('窓の縁を越えても折り返さない')
+    } else if (repeatSeek('item', itemsG[0].end, o) === null) {
+      // 21手め … 段落でも、止めるのは**声が終わったところ**
+      ng('**声が終わっても止めていない**(遅れが次の声へ食い込む)')
     } else ok('段落をくり返す(その段落の頭へ)')
 
     /* ④ 全文 … **音声の終わりまで**来たら、本文の頭へ。
@@ -1113,14 +1091,8 @@ function fakeMp3({
     if (!lp) ng('2文目で一度も折り返さない')
     else if (!(lp.at > sentG[1].end - drift)) {
       ng('ずれの見込みより早く戻っている(文の最後が切れすぎる)', `${lp.at.toFixed(2)} 秒`)
-    } else if (!(sentG[2].start - lp.at
-      >= Math.min(sentG[2].start - sentG[1].end, TAIL_KEEP) - 0.011)) {
-      /* **37手め** —— 語尾の余韻ぶんは待ってよくなった。
-         それでも**受け止め(`TAIL_KEEP`、間がそれより狭ければその間)は
-         必ず残す。** 21手めの心配は、ここで生きている
-         (ひと刻み 0.01 秒ぶんは、探し方の粗さとして見込む) */
-      ng('**受け止めを残さずに待っている**(そのぶん次の声が鳴る)',
-        `残り ${((sentG[2].start - lp.at) * 1000).toFixed(0)}ms`)
+    } else if (!(lp.at <= sentG[1].end + 0.02)) {
+      ng('**声が終わってからも待っている**(そのぶん次の声が鳴る)', `${lp.at.toFixed(2)} 秒`)
     } else if (!(lp.to > sentG[0].end + drift)) {
       ng('ずれていると、前の文のしっぽから始まってしまう', `${lp.to.toFixed(2)} 秒へ戻る`)
     } else if (!(lp.to < sentG[1].start + drift)) {
@@ -3653,17 +3625,11 @@ function fakeMp3({
       const to = landSec(1, g)
       // ①その文の頭を、1ミリ秒も欠かさない
       deep = Math.max(deep, to - 1)
-      /* ②**前の声の余韻へは、決して届かない**(37手め)。
-         控えの `end` は「その文字に割り当てた終わり」であって、
-         音が消えたところではない —— 前の声は `TAIL_KEEP` まで鳴っている。
-         **間がそれより狭ければ、寄せる余地は 1ミリ秒も無い** */
-      early = Math.max(early, Math.min(1, (1 - g) + TAIL_KEEP) - to)
+      // ②前の声には、決して届かない
+      early = Math.max(early, (1 - g) - to)
+      // ③間があるぶんは手前へ寄せる(吸い寄せられても間の中に着く)
+      if (g >= SEEK_LEAD) near = Math.max(near, Math.abs(to - (1 - SEEK_LEAD)))
     }
-    /* ③**「寄せない」だけを見ない。** 余韻の外に間が残っているところでは、
-       ちゃんと手前へ寄せる —— そうでないと `landSec()` が素通しになり、
-       控えより本当の頭が少し早い教材で、その文の頭が欠ける。
-       **`SEEK_LEAD` を書き写さない**(値を変えた日に期待値も動く) */
-    if (!(landSec(1, TAIL_KEEP + 0.2) < 1)) near = 1
     /* ④**直すのは、黙ったまま。** `muted` にしてから移し、
        着いた先を見てからでないと鳴らさない —— この順が崩れると、
        手前に着いたぶんがそのまま前の声として出る */
@@ -3680,8 +3646,8 @@ function fakeMp3({
       .map((k) => body.indexOf(k))
     const eps = ac.match(/const LAND_EPS = ([\d.]+)/)
     if (deep > 1e-9) bad2.push(`その文の頭を ${ms(deep)} 欠いている`)
-    if (early > 1e-9) bad2.push(`前の声の余韻へ ${ms(early)} 届いている`)
-    if (near > 1e-9) bad2.push('間が余韻より広いのに、手前へ寄せていない')
+    if (early > 1e-9) bad2.push(`前の声へ ${ms(early)} 届いている`)
+    if (near > 1e-9) bad2.push(`間があるのに手前へ寄せていない(${ms(near)} ずれ)`)
     if (order.some((i) => i < 0) || order.some((v, i) => i && v < order[i - 1])) {
       bad2.push('黙らせてから移す順が崩れている')
     }
