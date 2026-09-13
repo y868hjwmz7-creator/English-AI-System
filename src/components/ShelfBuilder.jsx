@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   JOB_COST, SHELF_GROUPS, WORDS_PER_JOB,
-  shelfLabel, shelfList, shelfSceneNames, shelfTarget, shelfTodo,
+  levelTally, shelfLabel, shelfList, shelfSceneNames, shelfTarget, shelfTodo,
 } from '../data/shelves.js'
 import { sceneLabel } from '../data/genres.js'
 import {
@@ -379,6 +379,17 @@ export default function ShelfBuilder() {
               <p className="field-label">
                 いま入っている語({rows.length} 語)
               </p>
+              {/* **段の散らばりを、その場で見せる**(2026-09 利用者の指定
+                  「レベルは絞り込みで指定できればOK」)。
+                  絞り込みでレベルを選べるのは散らばりがあるときだけで、
+                  ぜんぶ同じ段になっても**ゲストの画面には何も出ない。**
+                  350 回まわす前に、ここで気づけるようにしておく */}
+              {levelTally(rows).length > 0 && (
+                <p className="hint shelfbuild-levels">
+                  段ごとの語数 …{' '}
+                  {levelTally(rows).map((l) => `${l.id} ${l.count}`).join(' / ')}
+                </p>
+              )}
               <ul className="shelfbuild-list">
                 {rows.map((r) => (
                   <li key={r.word_norm}>

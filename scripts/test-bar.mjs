@@ -3050,6 +3050,13 @@ export default defineConfig({
           品詞の選択肢: [...pop.querySelectorAll('.wbfilter-row')]
             .filter((r) => r.querySelector('.wbfilter-name')?.textContent.trim() === '品詞')
             .flatMap((r) => [...r.querySelectorAll('option')].map((o) => o.textContent.trim())),
+          /* **レベルの選択肢**(2026-09 利用者の指定「カッコでGSEスコアも
+             添えて」)。行が出ているだけでは足りない —— 名前が
+             `cefrLabel`(「B1(中級)」)に戻っても行は出るので、
+             **何と書いてあるか**まで読む */
+          レベルの選択肢: [...pop.querySelectorAll('.wbfilter-row')]
+            .filter((r) => r.querySelector('.wbfilter-name')?.textContent.trim() === 'レベル')
+            .flatMap((r) => [...r.querySelectorAll('option')].map((o) => o.textContent.trim())),
           画面内: r.left >= -1 && r.right <= window.innerWidth + 1
             && r.top >= -1 && r.bottom <= window.innerHeight + 1,
           幅: Math.round(r.width), 高さ: Math.round(r.height),
@@ -3202,6 +3209,19 @@ export default defineConfig({
       ng('絞り込み … もとからあった行が消えている', 名前)
     } else {
       ok(`絞り込み … レベルが出て、もとの行も残っている(${名前})`)
+    }
+    /* **カッコで GSE を添える**(2026-09 利用者の指定)。
+       選ぶときは VERSANT のスコアと突き合わせたいので数字が要る
+       (`cefr.js`「選ぶときと、見るときでは要る情報が違う」)。
+       **「すべて」以外の全部**に付いているかを読む */
+    const 選択肢 = (開?.レベルの選択肢 ?? []).filter((t) => t && t !== 'すべて')
+    const GSE無し = 選択肢.filter((t) => !/\(GSE /.test(t))
+    if (!選択肢.length) {
+      ng('絞り込み … レベルの選択肢が1つも無い')
+    } else if (GSE無し.length) {
+      ng('絞り込み … レベルの選択肢に GSE が添っていない', GSE無し.join(' / '))
+    } else {
+      ok(`絞り込み … レベルの選択肢に GSE が添う(${選択肢.join(' / ')})`)
     }
   }
 

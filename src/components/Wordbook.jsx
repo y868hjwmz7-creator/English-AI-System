@@ -439,7 +439,7 @@ export default function Wordbook({
   const [shelfCounts, setShelfCounts] = useState({})
   /** 棚ごとの覚え具合(その人のぶん) */
   const [shelfProg, setShelfProg] = useState({})
-  const shelfKey = shelfPick.join(' ')
+  const shelfKey = shelfPick.join('\u0000')
   /** 出してよい棚。**見張りには id をつないだ文字列を渡す**(配列は毎回別物) */
   const shelfIds = shelves.map((s) => s.id).join(' ')
 

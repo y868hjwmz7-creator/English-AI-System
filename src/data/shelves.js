@@ -81,6 +81,7 @@
 
 import { INDUSTRIES, industriesIn, industryLabel, parentOf } from './industries.js'
 import { scenesFor } from './genres.js'
+import { cefrIndex } from './cefr.js'
 
 /** 棚の組。**`INDUSTRY_GROUPS` と同じもの**(名前を2か所に持たない) */
 export const SHELF_GROUPS = [
@@ -324,4 +325,34 @@ export function saveShelfPick(ids) {
       SHELF_PICK_KEY, JSON.stringify((ids ?? []).map(String)),
     )
   } catch { /* 覚えられなくても、その場では使える */ }
+}
+
+/**
+ * **段ごとの語数**(2026-09 利用者の指定「レベルは絞り込みで指定できればOK」)。
+ *
+ * 絞り込みでレベルを選べるのは、**その冊に段の散らばりがあるとき**だけ
+ * である(`WordbookFilter` は、選べるものが1つ以下の欄を出さない)。
+ * ところが 200 語がぜんぶ B1 になっても、**画面には何も出ない** ——
+ * 押しても段の欄が現れないだけで、なぜなのか分からない。
+ *
+ * だから**作っている場所に、そのまま数を出す。** 350 回まわす前に、
+ * 1冊目の 20 語で偏りに気づける(**見えない費用は管理できない**)。
+ *
+ * **並びはやさしい順**(`cefrIndex`)。知らない段はいちばん後ろへ回す ——
+ * 当てずっぽうで真ん中に混ぜない。
+ *
+ * @param rows `{ level }` を持つ行の一覧(棚の語でも、下書きでもよい)
+ * @returns `[{ id, count }]`
+ */
+export function levelTally(rows) {
+  const n = new Map()
+  for (const r of rows ?? []) {
+    const id = String(r?.level ?? '').trim()
+    if (!id) continue
+    n.set(id, (n.get(id) ?? 0) + 1)
+  }
+  const rank = (id) => { const i = cefrIndex(id); return i < 0 ? 999 : i }
+  return [...n.entries()]
+    .map(([id, count]) => ({ id, count }))
+    .sort((a, b) => rank(a.id) - rank(b.id))
 }

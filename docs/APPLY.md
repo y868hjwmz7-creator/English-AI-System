@@ -81,7 +81,7 @@
 | 貼る SQL⑥(0039 一覧の「覚えた」・⑤のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03e.sql` |
 | 貼る SQL⑦(0040 Quick Response の復習・⑥のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-04.sql` |
 | 状態を見るだけの SQL | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
-| **★いま置き直していただくもの … 教材を作る関数**(業種べつの単語帳を、場面べつではなく1冊 200 語で作れるようにしました) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
+| **★いま置き直していただくもの … 教材を作る関数**(業種べつの単語帳を、場面べつではなく1冊 200 語で作れるようにしました。あわせて、語の段を Basic 〜 Proficiency の8つにして散らすようにしました) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
 | **★いま置き直していただくもの … 読み上げ音声の関数**(良い声で作れないときに、端末の声ではなく標準の声で鳴らします。断られた理由も、そのまま画面に出します) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |
 | 語の意味を引く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/lookup-word/index.ts` |
 | 似た英文を弾く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/check-similar/index.ts` |

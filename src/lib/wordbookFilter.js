@@ -23,7 +23,7 @@
 import { toDateKey } from './format.js'
 import { industryLabel } from '../data/industries.js'
 import { genreLabel, sceneLabel } from '../data/genres.js'
-import { cefrLabel } from '../data/cefr.js'
+import { cefrOption } from '../data/cefr.js'
 import { posGroupOf, posLabel } from './posGroups.js'
 
 /**
@@ -76,9 +76,23 @@ export const fieldOf = (row) => (row?.material_industry
  *
  * **0048 を貼るまでは空**なので、そのときは行ごと出ない
  * (`material_industry` を足したときとまったく同じ作法)。
+ *
+ * 【名前は `cefrOption()`。`cefrLabel()` ではない】(2026-09 利用者の指定)
+ *
+ *   > カッコでGSEスコアも添えて
+ *
+ *   `cefr.js` にはもともと**「選ぶときと、見るときでは要る情報が違う」**と
+ *   書いてある —— 選ぶときは VERSANT のスコアと突き合わせたいので
+ *   数字が要り、見るときは「中級」のような言葉のほうが早い。
+ *   ここは**プルダウンの選択肢**なので、数字のほうである。
+ *
+ *       A1 (GSE 22-25)      ← いま
+ *       A1(入門)           ← 前(`cefrLabel`)
+ *
+ *   **札や見出しは `cefrLabel()` のまま。** 変えたのはこの1か所だけである。
  */
 export const levelOf = (row) => (row?.material_level
-  ? { key: row.material_level, label: cefrLabel(row.material_level) }
+  ? { key: row.material_level, label: cefrOption(row.material_level) }
   : null)
 
 /**

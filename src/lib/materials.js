@@ -953,7 +953,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-13'
+export const NEED_GEN_REV = '2026-09-13b'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -1276,7 +1276,10 @@ export async function generateShelfWords(job) {
       industry,
       scenes: (Array.isArray(job?.scenes) ? job.scenes : [])
         .map((s) => String(s ?? '').trim()).filter(Boolean),
-      level: String(job?.level ?? ''),
+      /* **レベルは渡さない**(2026-09 利用者の指定「レベルは絞り込みで
+         指定できればOK」)。1つの段を頼むと 20 語がそこに寄り、
+         **絞り込みで選べるだけの散らばりが出ない。**
+         窓口の側も受け取る欄ごと消してある */
       count: Number(job?.count ?? 20),
       have: Array.isArray(job?.have) ? job.have : [],
     },

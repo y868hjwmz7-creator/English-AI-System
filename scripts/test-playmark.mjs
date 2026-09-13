@@ -53,10 +53,11 @@ import {
 import { charTimesOf } from '../src/lib/wholeAudio.js'
 import {
   JOB_COST, SCENE_HINT_MAX, SHELF_PICK_KEY, WORDS_PER_BOOK, WORDS_PER_JOB,
-  isShelf, pickedShelves, shelfFeature,
+  isShelf, levelTally, pickedShelves, shelfFeature,
   shelfIdOfFeature, shelfList, shelfOf, shelfSceneNames, shelfScenes, shelfTarget,
   shelfTodo, shelvesFor, showsShelf,
 } from '../src/data/shelves.js'
+import { CEFR_LEVELS, SHELF_LEVELS, cefrOption } from '../src/data/cefr.js'
 import { INDUSTRIES } from '../src/data/industries.js'
 import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
 import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
@@ -3379,6 +3380,9 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     const files = [
       'src/lib/wordbookFilter.js', 'src/lib/reviewScope.js',
       'src/components/WordbookFilter.jsx',
+      /* **2026-09 にもう一度踏んだ。** 棚の鍵(`shelfPick.join`)を
+         生の NUL で書いてしまい、`Wordbook.jsx` の差分が読めなくなった */
+      'src/components/Wordbook.jsx',
     ]
     const bad = files.filter((f) => read2(f).includes('\u0000'))
     ok(bad.length === 0,
@@ -4350,9 +4354,57 @@ console.log('\nスピーチ練習(0054)')
   /* **古い窓口の断りを、そのまま出さない**(誤診させない・CLAUDE.md) */
   ok(/業種と場面が要ります/.test(matS),
     '棚 … 古い窓口の断りを「窓口が古い」と読み替える')
-  ok(/NEED_GEN_REV = '2026-09-13'/.test(matS)
-    && /const FN_REV = '2026-09-13'/.test(fn),
+  ok(/NEED_GEN_REV = '2026-09-13b'/.test(matS)
+    && /const FN_REV = '2026-09-13b'/.test(fn),
     '棚 … 窓口の版が、画面と窓口でそろっている')
+
+  /* ── **レベル**(2026-09 利用者の指定)──────────────────────
+       > ３５冊にした単語帳、それぞれレベルを指定して学べるようにしたい。
+       > Basic / A1 / A2 / B1 / B2 / C1 / C2 / Proficiency
+       > カッコでGSEスコアも添えて / レベルは絞り込みで指定できればOK  */
+  ok(SHELF_LEVELS.join(' ')
+     === 'Basic A1 A2 B1 B2 C1 C2 Proficiency',
+    '棚 … 段は利用者が挙げた8つ、やさしい順',
+    SHELF_LEVELS.join(' '))
+  /* **別の表を作らない。** 8つはどれも `CEFR_LEVELS` の id なので、
+     名前も GSE も `cefrOption()` がそのまま出せる */
+  {
+    const lost = SHELF_LEVELS.filter(
+      (id) => !CEFR_LEVELS.some((l) => l.id === id && l.gse))
+    ok(lost.length === 0,
+      '棚 … 段はどれも `CEFR_LEVELS` にあり、GSE を持っている', lost.join(' / '))
+    const noGse = SHELF_LEVELS.filter((id) => !/\(GSE /.test(cefrOption(id)))
+    ok(noGse.length === 0,
+      '棚 … 選択肢には GSE が添う(例 ' + cefrOption('A1') + ')', noGse.join(' / '))
+  }
+  /* **窓口にも同じ8つがある**(窓口からは `src/` を読めない)。
+     **足すまで赤いまま**なので、必ず1回は自分の目で数えることになる */
+  {
+    const m = fn.match(/enum: \[([^\]]*)\],\n\s*\},\n\s*ex_en/)
+    const got = m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : []
+    ok(got.join(' ') === SHELF_LEVELS.join(' '),
+      '棚 … 窓口の段の一覧が、画面と1つも食い違っていない', got.join(' '))
+  }
+  /* **1つの段を指定しない。** 20 語がそこに寄り、散らす指示と打ち消し合う */
+  ok(!/ゲストのレベルの目安/.test(noCS(fn)) && !/level: String\(job\?\.level/.test(matS),
+    '棚 … レベルは渡さない(絞り込みで選ぶものになった)')
+  ok(/散らす/.test(fn),
+    '棚 … 窓口に「段を散らす」を書いてある')
+  /* **段の散らばりを、作る場所で見せる。** 偏っても
+     ゲストの画面には何も出ない(選べるものが1つの欄は出ない) */
+  ok(levelTally([{ level: 'B1' }, { level: 'A2' }, { level: 'B1' }, {}])
+       .map((l) => `${l.id}${l.count}`).join(' ') === 'A21 B12',
+    '棚 … 段ごとの語数は、やさしい順に数える')
+  ok(levelTally([{ level: 'ZZ' }, { level: 'B1' }])[1]?.id === 'ZZ',
+    '棚 … 知らない段は、いちばん後ろへ回す(真ん中に混ぜない)')
+  ok(/levelTally\(rows\)/.test(buildS),
+    '棚 … 作る画面が、段ごとの語数を出している')
+  /* **絞り込みの名前は `cefrOption`。** `cefrLabel` だと GSE が付かない */
+  {
+    const wf = noCS(readS('src/lib/wordbookFilter.js'))
+    ok(/label: cefrOption\(row\.material_level\)/.test(wf),
+      '棚 … レベルの選択肢に GSE を添える(`cefrOption`)')
+  }
 
   /* ── 貼る SQL がそろっているか ──
      **移行を足したら3つとも直す**(CLAUDE.md) */

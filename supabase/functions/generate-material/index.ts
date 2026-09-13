@@ -1092,9 +1092,16 @@ const SHELF_SYSTEM = `あなたは日本のパーソナル英語スクールの�
    長さは 8〜18 語。**その業種で実際に交わされそうな1文**にする
 8. **ex_ja は ex_en の訳。** 1文で、自然な日本語にする
 9. **pos は日本語で1語**(名詞 / 動詞 / 形容詞 / 副詞 / 前置詞 / 熟語 …)
-10. **level は、その語句が出てくる段**(A1 / A2 / B1 / B2 / C1 / C2)。
-    専門語は難しく見えるが、**毎日使う語なら A2 や B1 でよい**
-11. **同じ語を二度返さない。** 語形が違うだけのもの(plan / planning)も
+10. **level は、その語句が出てくる段**
+    (Basic / A1 / A2 / B1 / B2 / C1 / C2 / Proficiency)。
+    専門語は難しく見えるが、**毎日使う語なら A2 や B1 でよい**。
+    Basic は中学1年でも読める1語(GSE 16-21)、
+    Proficiency は母語話者でも改まった場でしか使わない語(GSE 90)。
+    **この2つは、当てはまるときだけ。無理に入れない**
+11. **段を偏らせない。** 20 語が同じ段になると、
+    レベルで絞ったときに使いものにならない。
+    **やさしい段から難しい段まで散らす**
+12. **同じ語を二度返さない。** 語形が違うだけのもの(plan / planning)も
     どちらか1つにする`
 
 /** 棚の語を受け取る道具。\`strict: true\` なので形は API が保証する */
@@ -1118,10 +1125,13 @@ const shelfTool = {
             en: { type: 'string', description: '語句(単語か、2〜5語の言い回し)' },
             ja: { type: 'string', description: '日本語で10〜20字' },
             pos: { type: 'string', description: '品詞。日本語で1語' },
+            /* **画面(`SHELF_LEVELS`・`src/data/cefr.js`)と同じ8つ。**
+               窓口からは `src/` を読めないので、ここにも並べるしかない。
+               **足したら両方に足す**(`npm run test:play` が突き合わせる) */
             level: {
               type: 'string',
               description: 'その語句が出てくる段',
-              enum: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+              enum: ['Basic', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'Proficiency'],
             },
             ex_en: { type: 'string', description: 'その語句を含む1文(8〜18語)' },
             ex_ja: { type: 'string', description: 'ex_en の訳' },
@@ -1145,7 +1155,11 @@ async function makeShelfWords(apiKey: string, body: Record<string, unknown>) {
      渡らなくても作れる —— そのぶん語が会議まわりに寄りやすくなるだけ */
   const scenes = (Array.isArray(body.scenes) ? body.scenes : [])
     .map((s) => String(s ?? '').trim()).filter(Boolean).slice(0, 40)
-  const level = String(body.level ?? '').trim()
+  /* **「ゲストのレベルの目安」は受け取らない**(2026-09 利用者の指定)。
+     棚はスクール全体で1組で、**レベルは絞り込みで選ぶ**ものになった。
+     1つの段を指定すると 20 語がそこに寄り、**散らす指示と打ち消し合う。**
+     欄ごと消してある —— 値を偽にして残すと、
+     次に見た人が「まだ使うのかもしれない」と読む */
   const count = Math.min(Math.max(Number(body.count ?? 20), 1), 30)
   /* **すでに棚にある語は、もう一度作らせない。**
      渡さないと、2回目に押したときにほとんど同じ語が返る */
@@ -1171,12 +1185,12 @@ async function makeShelfWords(apiKey: string, body: Record<string, unknown>) {
           ? `\n\n# この業種でよくある場面(**ここから広く散らして選ぶ**)\n`
             + scenes.join(' / ')
           : '')
-        + (level ? `\n\n# ゲストのレベルの目安\n${level}` : '')
         + (have.length
           ? `\n\n# すでにこの単語帳にある語(**1つも返さない**)\n${have.join(' / ')}`
           : '')
         + `\n\n**${count} 件**返すこと。`
         + `単語と言い回しを混ぜ、**言い回しを3〜5割**入れること。`
+        + `**段(level)は、やさしいものから難しいものまで散らすこと。**`
         + `**例文には、その語句をそのまま含めること。**`,
     }],
   })
@@ -1479,7 +1493,7 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-13'
+const FN_REV = '2026-09-13b'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
