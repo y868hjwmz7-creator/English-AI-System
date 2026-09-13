@@ -52,7 +52,7 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, segOffsOf,
+  HEAD_LEAD, REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, segOffsOf,
   indexAtTime, makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
   foldWorst, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
 } from './wholeAudio.js'
@@ -240,7 +240,7 @@ function tellSentence(spans, sec, only, state, onWord) {
   if (!onWord || !spans) return
   let hit = -1
   for (let i = spans.length - 1; i >= 0; i -= 1) {
-    if (sec >= spans[i].start - 0.001) { hit = i; break }
+    if (sec >= spans[i].start - HEAD_LEAD) { hit = i; break }
   }
   if (hit < 0 || hit === state.at) return
   const sp = spans[hit]
@@ -1058,7 +1058,10 @@ export function readAloudSequence(parts, {
           slip: slipOf(sure),
         })
         if (goBack(back, sec)) return
-        seen(indexAtTime(spans, sec))
+        /* **戻したあとは、頭の少し手前にいる**(35手め)。
+           そのまま数えると、一文目のくり返しで**1コマだけ前の段落**が
+           「いまの段落」と読まれ、画面が切り替わって戻る */
+        seen(indexAtTime(spans, sec, HEAD_LEAD))
         tellSentence(sent, sec, () => shownPiece, seenSent, relayWhole)
       },
     })

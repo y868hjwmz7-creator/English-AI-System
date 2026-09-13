@@ -27,8 +27,8 @@ import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
   foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_LEAD, SLIP, slipOf,
-  scaleSpans, seekSentence, segOffsOf, SEG_HEAD, sentenceSpansOf, shiftEach, shiftItems,
-  shiftSeams, spansOf, wholeMark,
+  scaleSpans, seekSentence, segOffsOf, FRAME_SEC, HEAD_LEAD, SEG_HEAD,
+  sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   ABS_FLOOR, MAX_OFF, QUIET_RATIO, TRY_RATIOS, frameRms, itemOffsFrom, lastSeamFail,
@@ -3959,6 +3959,81 @@ function fakeMp3({
   }
 
   if (bad === before) ok('ずれの上限は、その音声の数字から出している')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑳ **一文目をくり返すと、画面が一瞬切り替わる**(2026-09 実機・35手め)
+ *
+ *   > 発言や段落の一文目をリピートする際に、リピートするたびに
+ *   > 画面が一瞬切り替わるような挙動をします(利用者)
+ *
+ *   戻す先は**わざと頭の `SEEK_LEAD` 手前**である(前の声に食い込ませない
+ *   ため)。しかも頭出しはフレームの切れ目に吸い寄せられる。
+ *   **一文目では、その数十ミリ秒が前の発言の側**なので、
+ *   1コマだけ前の発言が「いまの発言」と読まれる。
+ *
+ *   **「戻る」だけを見ない。** 先へ行きすぎていないかも一緒に数える ——
+ *   `HEAD_LEAD` を大きくすれば「戻らない」は簡単に満たせてしまう。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+  /* 3発言。まん中の発言は2文。継ぎ目は 0.30 秒 */
+  const items = [
+    { start: 0, end: 4 }, { start: 4.3, end: 9.3 }, { start: 9.6, end: 13.6 },
+  ]
+  const sents = [
+    { start: 0, end: 4, item: 0 },
+    { start: 4.3, end: 6.5, item: 1 },     // ← 一文目
+    { start: 6.6, end: 9.3, item: 1 },
+    { start: 9.6, end: 13.6, item: 2 },
+  ]
+  const gapBefore = items[1].start - items[0].end        // 0.30
+  const ask = landSec(sents[1].start, gapBefore)         // 戻す先(頭の手前)
+  /* 頭出しはフレームの切れ目に吸い寄せられる。**いちばん手前に着いた形** */
+  const landed = ask - FRAME_SEC
+
+  // ⓐ 直す前は、本当に前の発言に見えていたか(直しの値打ち)
+  if (indexAtTime(items, landed) !== 0) {
+    ng('仮の並びが甘い。直す前でも前の発言に見えない')
+  } else ok(`戻す先は頭の ${((items[1].start - landed) * 1000).toFixed(0)}ms 手前(だから前の発言に見えていた)`)
+
+  // ⓑ 直したあとは、その発言のままか
+  if (indexAtTime(items, landed, HEAD_LEAD) !== 1) {
+    ng('戻したあとも、前の発言と読まれている')
+  } else ok('一文目に戻しても、いまの発言のまま(画面が切り替わらない)')
+
+  /* ⓒ **先へ行きすぎていないか。**
+     **`HEAD_LEAD` から試験点を作らない** —— 値を大きくすると期待値も
+     一緒に動き、**先取りを2秒にしても緑のまま**になる(実際にそうなった)。
+     見るのは**性質**である ——「前の声が鳴り終わった時点で、
+     まだ次の発言に切り替わっていないこと」。 */
+  if (indexAtTime(items, items[1].end, HEAD_LEAD) !== 1) {
+    ng('前の声が終わった時点で、もう次の発言に切り替わっている',
+      `先取り ${(HEAD_LEAD * 1000).toFixed(0)}ms / 継ぎ目 ${((items[2].start - items[1].end) * 1000).toFixed(0)}ms`)
+  } else if (indexAtTime(items, items[2].start, HEAD_LEAD) !== 2) {
+    ng('次の発言に入っても、切り替わらない')
+  } else ok(`先取り ${(HEAD_LEAD * 1000).toFixed(0)}ms は、継ぎ目より短い(先へ行きすぎない)`)
+
+  // ⓓ **渡さなければ、これまでどおり**(ほかの呼ぶ側を1ミリも変えない)
+  if (indexAtTime(items, landed) !== 0) ng('既定が変わっている')
+  else ok('先取りを渡さなければ、これまでどおり')
+
+  // ⓔ 画面が本当に使っているか
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const w = readFileSync(new URL('../src/lib/wholeAudio.js', import.meta.url), 'utf8')
+    const miss = []
+    if (!/seen\(indexAtTime\(spans, sec, HEAD_LEAD\)\)/.test(read)) miss.push('段落の番号に渡していない')
+    if (!/sec >= spans\[i\]\.start - HEAD_LEAD/.test(read)) miss.push('文の光らせ方に渡していない')
+    /* **新しい数を決め打ちしない。** どちらも理由が別の節に書いてある */
+    if (!/export const HEAD_LEAD = SEEK_LEAD \+ FRAME_SEC/.test(w)) {
+      miss.push('先取りの量を、戻す先の作り方から出していない')
+    }
+    if (miss.length) ng('先取りが、画面まで届いていない', miss.join(' / '))
+    else ok('段落の番号と、文の光らせ方の両方に届いている')
+  }
+
+  if (bad === before) ok('一文目のくり返しで、画面は切り替わらない')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
