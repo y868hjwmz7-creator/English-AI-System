@@ -788,8 +788,43 @@ const REPEAT_EPS = 0.04
  * 「`pause()` を呼んでから本当に黙るまで」を読む手段がない
  * (`currentTime` は止めた位置で凍るだけである)。
  * だから**測るのではなく、耐える量を決める。**
+ *
+ * ## 0.12 は、**2つの別物を1つの数にしていた**(2026-09 実機・24手め)
+ *
+ *   > 先日はスコットランドの音声だけがおかしく、それを直そうとしたら
+ *   > 他の教材のリピートまでおかしくなりました。つまり、理由は分からないが、
+ *   > スコットランドの音声の教材だけが何かしらの不備があり、
+ *   > それに合わせすぎで汎用性がなくなってしまった可能性があります
+ *
+ * **利用者の見立てが、そのまま当たっていた。** ここが吸っていたのは
+ * **別々の2つ**である。
+ *
+ * | 何を吸うか | 何のものか | 大きさ |
+ * |---|---|---|
+ * | **遅れ**(決めてから黙るまで) | **端末**のもの。教材によらない | **0.05**(21手めで実測) |
+ * | **境目のずれ**(控えが言う秒と、本当に声が終わる秒の差) | **その教材**のもの | 会話の道 ≈ `SLIP` / **記事は 0** |
+ *
+ * 22手めで 0.05 → 0.12 に上げたのは**後者のため**だった。ところが
+ * この定数は**全教材にかかる。** つまり
+ * **控えが正しい教材まで、直すものが無いのに払っていた。**
+ *
+ * **実測(控えが正しい教材で、いま何ミリ秒を捨てていたか)。**
+ *
+ * | 間(ま) | 自分の声の終わり |
+ * |---|---|
+ * | 0ms | **130ms 欠ける** |
+ * | 50ms | 80ms 欠ける |
+ * | 100ms | 30ms 欠ける |
+ * | 130ms 以上 | 0 |
+ *
+ * **利用者は「150ms でもまだ散見される」「200ms は発言の最後が消えて
+ * ダメ」と言っている。** その帯に、直す必要のない教材まで入れていた。
+ *
+ * **だから 0.05 に戻す。** 境目のずれは `SLIP` が別に持ち、
+ * **信じられない教材にだけ足す**(`slipOf()`)。
+ * **上げ下げで帳尻を合わせるのをやめ、出どころで分ける。**
  */
-export const REPEAT_LEAD = 0.12
+export const REPEAT_LEAD = 0.05
 
 /**
  * **戻す先は、その声の頭の「これだけ手前」まで寄せる**(2026-09 実機・4手め)。
@@ -849,8 +884,61 @@ export const FRAME_SEC = 0.0262
  *
  * **`LAND_EPS`(着地の見張り)も、ここから取る。**
  * 書き写すと、値を変えた日に片方だけが古くなる。
+ *
+ * ## 3枚も、**2つの別物を1つの数にしていた**(2026-09 実機・24手め)
+ *
+ * `REPEAT_LEAD` とまったく同じ話である(あちらの節を見ること)。
+ * 16手めで1枚 → 3枚に上げたのは**会話の道の境目のずれ**のためで、
+ * **フレームの吸い寄せ(物の決まり)とは別物**だった。
+ * ところがこの定数も**全教材にかかる。**
+ *
+ * `landSec()` が頭を欠かし始めるのは、間(ま)が
+ * `SEEK_LEAD + SEEK_MISS` より狭いところである。
+ *
+ *     3枚 … 間が 99ms より狭ければ、その文の頭が欠ける
+ *     1枚 … 間が 46ms より狭いときだけ
+ *
+ * **だから物の決まりへ戻す。** 境目のずれは `SLIP` が別に持つ。
  */
-export const SEEK_MISS = FRAME_SEC * 3
+export const SEEK_MISS = FRAME_SEC
+
+/**
+ * **境目のずれ**(秒)。**その教材の控えを、どれだけ信じてよいか。**
+ *
+ * 控えが「ここで声が終わる」と言う秒と、**本当に終わる秒**の食い違いである。
+ * `REPEAT_LEAD`(遅れ)や `SEEK_MISS`(吸い寄せ)と違い、
+ * **端末のものでも物の決まりでもなく、その教材のもの**である。
+ *
+ * | どんな教材か | ずれ |
+ * |---|---|
+ * | 記事・スピーチ(1人が話しきる) | **0**。控えは空白まで数えている |
+ * | 会話・会議(発言ごとに作ってつなぐ) | **あり**。継ぎ目の無音が控えに入っていない |
+ *
+ * この分かれ目は **`clockFitOf()` の `how` がすでに答えている**
+ * (20手めで、どちらの窓口で作られたかまで突き止めてある)。
+ * ところが**折り返しの側からは、一度も見ていなかった。**
+ *
+ * **値は、これまでの2つから逆算したもの。** 22手めが `REPEAT_LEAD` を
+ * 0.05 → 0.12 に上げたぶん(0.07)が、そのまま境目のずれの見込みである。
+ * だから**信じられない教材の折り返しは、24手めの前と1ミリ秒も変わらない。**
+ */
+export const SLIP = 0.07
+
+/**
+ * **その教材のずれ。** 控えを信じてよければ 0、そうでなければ `SLIP`。
+ *
+ * **既定は「信じない」。** 取り違えたときの害が、桁で違うからである。
+ *
+ *   信じてよい教材を「信じない」と読む … 声の終わりが少し欠ける
+ *   信じられない教材を「信じる」と読む … **次の文の音が入る**
+ *
+ * 利用者が「一瞬といえど違和感は非常に大きい」と言ったのは**後者**である。
+ *
+ * @param {boolean} sure 控えの秒をそのまま信じてよいか
+ */
+export function slipOf(sure) {
+  return sure === true ? 0 : SLIP
+}
 
 /* ══════════════════════════════════════════════════════════════════
  * **折り返しは、声の端ではなく「間(ま)のまん中」に置く**
@@ -963,16 +1051,19 @@ function frontEdge(list, i, duration = 0) {
  * 遅れを受け止めるのに `REPEAT_LEAD` 要る。まず**間(ま)から**使い、
  * 足りないぶんだけ声をもらう。**間が足りていれば 0**(1ミリ秒も欠けない)。
  */
-export function foldNeed(list, i, step = 0) {
+export function foldNeed(list, i, step = 0, slip = SLIP) {
   const e = Number(list[i]?.end)
   const n = Number(list[i + 1]?.start)
   if (!Number.isFinite(e) || !Number.isFinite(n)) return 0
-  /* 受け止めるのは**2つ**である。片方だけだと、間がぎりぎりの継ぎ目で
+  /* 受け止めるのは**3つ**である。1つでも落とすと、間がぎりぎりの継ぎ目で
      ひと刻みぶんだけ次の声が鳴る(実測で見つけた)。
-       ①決めてから黙るまでの遅れ … `REPEAT_LEAD`
-       ②ひと刻み遅れて気づくぶん … `step` */
+       ①決めてから黙るまでの遅れ … `REPEAT_LEAD`(**端末**のもの)
+       ②ひと刻み遅れて気づくぶん … `step`
+       ③控えの境目そのもののずれ … `slip`(**その教材**のもの・24手め)
+     ③を定数に混ぜていたので、**ずれの無い教材まで払っていた** */
   const s = Number.isFinite(step) && step > 0 ? step : 0
-  return Math.max(0, (REPEAT_LEAD + s) - Math.max(0, n - e))
+  const p = Number.isFinite(slip) && slip > 0 ? slip : 0
+  return Math.max(0, (REPEAT_LEAD + p + s) - Math.max(0, n - e))
 }
 
 /**
@@ -981,12 +1072,12 @@ export function foldNeed(list, i, step = 0) {
  * **戻る先(`backEdge` = 間のまん中)とは別物である。**
  * 止めるのは早いほどよく、戻るのは間のまん中がよい。
  */
-function foldAt(list, i, step = 0) {
+function foldAt(list, i, step = 0, slip = SLIP) {
   const n = Number(list[i + 1]?.start)
   if (!Number.isFinite(n)) return NaN
   const e = Number(list[i]?.end)
   if (!Number.isFinite(e) || e > n) return n
-  return e - foldNeed(list, i, step)
+  return e - foldNeed(list, i, step, slip)
 }
 
 /**
@@ -1026,18 +1117,24 @@ function foldAt(list, i, step = 0) {
  *   **逃がす量は `SEEK_MISS` 1か所。** 15手めはフレーム1枚だったが、
  *   実機では足りなかった(16手め)。**つまみはあそこだけである。**
  *
+ *   **その「足りなかったぶん」は、境目のずれだった**(24手め)。
+ *   いまは `SEEK_MISS`(物の決まり)+ `slip`(その教材のもの)で、
+ *   **控えが正しい教材では 1枚ぶんしか逃がさない。**
+ *
  * @param {number} start その区間の頭(控えの秒)
  * @param {number} gap 前の区間との間(ま)。負なら 0 として見る
+ * @param {number} slip その教材の境目のずれ(`slipOf()`)
  * @returns {number} 頼む秒
  */
-export function landSec(start, gap) {
+export function landSec(start, gap, slip = SLIP) {
   const s = Number(start)
   if (!Number.isFinite(s)) return NaN
   const g = Math.max(0, Number(gap) || 0)
+  const miss = SEEK_MISS + (Number.isFinite(slip) && slip > 0 ? slip : 0)
   // 手前に外れても間の中に着く、いちばん手前
-  const floor = s - g + SEEK_MISS
+  const floor = s - g + miss
   // 欠けてよいのは、多くても見込んだぶんまで
-  const ceil = s + SEEK_MISS
+  const ceil = s + miss
   return Math.min(ceil, Math.max(s - SEEK_LEAD, floor))
 }
 
@@ -1047,7 +1144,7 @@ export function landSec(start, gap) {
  * **縁は数えるため、こちらは頼むため**である。取り違えない ——
  * 縁を動かすと「いまどの窓にいるか」がずれて、前の文へ戻り続ける。
  */
-function landEdge(list, i) {
+function landEdge(list, i, slip = SLIP) {
   const s = Number(list[i]?.start)
   if (!Number.isFinite(s)) return NaN
   /* **いちばん最初だけは、逃がさない。** 前に声が無いのだから、
@@ -1055,7 +1152,7 @@ function landEdge(list, i) {
      ここで逃がすと、頭から鳴らし直すたびにそのぶん欠ける */
   if (i <= 0) return s
   const p = Number(list[i - 1]?.end)
-  return landSec(s, Number.isFinite(p) ? s - p : 0)
+  return landSec(s, Number.isFinite(p) ? s - p : 0, slip)
 }
 
 /**
@@ -1119,7 +1216,7 @@ function windowAt(list, t) {
  *   **刻みが 120ms 飛ぶと窓ごと跳び越して、折り返しが丸ごと消えていた**
  *   (実測。そのときは次の文が最後まで鳴ってしまう)。
  */
-function doneWindow(list, t, duration, prev = null) {
+function doneWindow(list, t, duration, prev = null, slip = SLIP) {
   const i = windowAt(list, t)
   /* **`Number(null)` は 0 である。** そのまま渡すと「前のひと刻みは 0 秒」
      になり、**どこにいても『いま縁を越えた』と読まれる**
@@ -1130,12 +1227,12 @@ function doneWindow(list, t, duration, prev = null) {
 
   // ⓐ 次のひと刻みで止める場所に届く = この窓はもう鳴らし終える
   if (i >= 0 && i < list.length - 1) {
-    const at = foldAt(list, i, step)
+    const at = foldAt(list, i, step, slip)
     /* **先取りは「もらった量」まで**(21手め)。間が足りているところでは
        `foldNeed()` が 0 を返すので**1ミリ秒も先取りしない** ——
        止める場所そのものが声の終わりなので、遅れは間が受け止める。
        間の狭いところでだけ、もらったぶんを先取りする */
-    const look = Math.min(step, foldNeed(list, i, step))
+    const look = Math.min(step, foldNeed(list, i, step, slip))
     if (Number.isFinite(at) && t + look >= at) return i
   }
   // ⓑ 手前の窓の縁を、いま越えたところ(先取りが間に合わなかったとき)
@@ -1176,7 +1273,7 @@ function doneWindow(list, t, duration, prev = null) {
  *   **何も起きないより、近い単位で回すほうがよい**(行き止まりを作らない)。
  */
 export function repeatSeek(unit, sec, {
-  spans = null, sentences = null, duration = 0, window = null, prev = null,
+  spans = null, sentences = null, duration = 0, window = null, prev = null, slip = SLIP,
 } = {}) {
   if (!REPEAT_UNITS.includes(unit) || unit === 'off') return null
   const t = Number(sec) || 0
@@ -1187,8 +1284,8 @@ export function repeatSeek(unit, sec, {
      「いまの窓の終わりに来たか」で見ると、**必ず声の途中で折り返す**
      (`doneWindow()` の節)。越えてから、手前の窓へ戻す */
   const done = (list) => {
-    const i = doneWindow(list, t, duration, prev)
-    return i < 0 ? null : landEdge(list, i)
+    const i = doneWindow(list, t, duration, prev, slip)
+    return i < 0 ? null : landEdge(list, i, slip)
   }
 
   let win = null
@@ -1251,9 +1348,12 @@ export function repeatSeek(unit, sec, {
  * @param {object} [o]
  * @param {number} o.duration 音声ぜんぶの長さ(秒)。**いちばん最後だけ伸びる**
  * @param {Function|null} o.keep その段落のものだけを拾う見分け方
+ * @param {number} o.slip その教材の境目のずれ(`slipOf()`)
  * @returns {{start:number,end:number,land:number}|null} 狭められないときは `null`
  */
-export function spanForRange(sentences, range, base = 0, { duration = 0, keep = null } = {}) {
+export function spanForRange(sentences, range, base = 0, {
+  duration = 0, keep = null, slip = SLIP,
+} = {}) {
   if (!Array.isArray(sentences) || !sentences.length) return null
   if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null
   const inside = []
@@ -1266,7 +1366,7 @@ export function spanForRange(sentences, range, base = 0, { duration = 0, keep = 
   return {
     start: backEdge(sentences, inside[0]),
     end: frontEdge(sentences, inside[inside.length - 1], duration),
-    land: landEdge(sentences, inside[0]),
+    land: landEdge(sentences, inside[0], slip),
   }
 }
 

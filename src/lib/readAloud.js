@@ -53,7 +53,7 @@ import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
   REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime,
   indexAtTime, makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
-  sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spanForRange,
+  sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
 } from './wholeAudio.js'
 import {
   sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
@@ -848,6 +848,19 @@ export function readAloudSequence(parts, {
     const seenSent = { at: -1 }
     /** 時計を突き合わせるのは、鳴り出したあとの1回だけ */
     let clockDone = false
+    /**
+     * **この教材の控えを、そのまま信じてよいか**(24手め)。
+     *
+     * `clockFitOf()` の `how === 'same'` ＝ 控えと音声の長さがそろっている
+     * ＝ **1人が話しきる道**(`text-to-speech`)で作られた音声である。
+     * あの道は段落のあいだの空白まで文字として数えるので、
+     * **継ぎ目の秒がそのまま本当の秒**になる(20手め)。
+     *
+     * **既定は「信じない」。** 時計を突き合わせる前の1刻みぶんと、
+     * 控えそのものが無いときは、これまでどおりの見込みで守る
+     * (取り違えたときの害は `slipOf()` の節)。
+     */
+    let sure = false
     /* 文の位置も**かけらの中の何文字目**なので、段落の頭からに直して送る
        (発言ごとに鳴らす道の `relay` とまったく同じ直し方)。
        足さないと、分けた段落で**段落の先頭に戻って光る** */
@@ -911,6 +924,11 @@ export function readAloudSequence(parts, {
               gaps: base.gaps,
             }
             : base
+          /* **控えを信じてよいのは、そろっている教材だけ**(24手め)。
+             `measured` は音から測って当てたものだが、測り方そのものにも
+             刻み(`HOP_SEC`)ぶんの粗さがある。**分かっていないことを
+             分かったように書かない** —— ここでは信じない側に置く */
+          sure = fit.how === 'same'
           /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
            *
            *   > listen を押しても特に何も表示されず再生が始まり、
@@ -969,13 +987,17 @@ export function readAloudSequence(parts, {
            **本文の途中なのに音声の終わりまで回る** */
         const only = shownPiece >= 0
           ? partSpan(itemOf(shownPiece), sent, list[shownPiece]?.at ?? 0, {
-            duration: dur, keep: (x) => x.item === shownPiece,
+            duration: dur, keep: (x) => x.item === shownPiece, slip: slipOf(sure),
           }) : null
         /* **前のひと刻みを渡す**(18手め)。ひと刻みの幅が分かるので、
            縁を**越える前に**折り返せる。渡さないと、越えたことに
            気づくまでのぶん**次の文の頭が鳴る**(実測 10〜15ms) */
+        /* **見込む量は、この教材の控えをどれだけ信じてよいかで決める**
+           (24手め)。定数に混ぜていたので、**ずれの無い教材まで
+           声の終わりを 130ms 捨てていた** */
         const back = repeatSeek(repeatNow(), sec, {
           spans, sentences: sent, duration: dur, window: only, prev: seeker.last(),
+          slip: slipOf(sure),
         })
         if (goBack(back, sec)) return
         seen(indexAtTime(spans, sec))
@@ -1115,6 +1137,8 @@ export function readAloudSequence(parts, {
           return k === 1 ? exact.sents : scaleSpans(exact.sents, k)
         }
         let sentSecs = null
+        /** その区間が**本当の時刻**から出たものか(見積もりなら偽・24手め) */
+        let sentSure = false
         /* 「段落」でくり返すとき、**どこから鳴らし直すか**(かけらの頭)。
            鳴らし終わってしまったときの受け皿である —— 中で戻せていれば
            ここまで来ない */
@@ -1149,12 +1173,21 @@ export function readAloudSequence(parts, {
                伸ばすのは `repeatSeek` / `spanForRange` の中(`duration`)で、
                **縁の決め方を2通り持たない** */
             // **合わせてから使う。** 合わせないと、折り返しも戻る先も手前になる
-            if (!sentSecs) sentSecs = fitSents(dur) ?? sharesToTimes(shares, dur)
+            /* **控えを信じてよいのは、本当の時刻があるときだけ**(24手め)。
+               `fitSents()` は `.json` に控えた文字ごとの時刻から出すので
+               そのまま信じてよい。`sharesToTimes()` は**語の重みからの
+               見積もり**なので、これまでどおりの見込みで守る */
+            if (!sentSecs) {
+              sentSecs = fitSents(dur)
+              sentSure = !!sentSecs
+              if (!sentSecs) sentSecs = sharesToTimes(shares, dur)
+            }
             if (!sentSecs) return
-            const only = partSpan(part.index, sentSecs, part.at, { duration: dur })
+            const slip = slipOf(sentSure)
+            const only = partSpan(part.index, sentSecs, part.at, { duration: dur, slip })
             backTo = only ? only.start : 0
             const back = repeatSeek(repeatNow(), sec, {
-              sentences: sentSecs, duration: dur, window: only, prev: seeker.last(),
+              sentences: sentSecs, duration: dur, window: only, prev: seeker.last(), slip,
             })
             goBack(back, sec)
           },

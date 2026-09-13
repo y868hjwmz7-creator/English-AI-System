@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
-  humanSeek, rangeOf, repeatSeek, REPEAT_LEAD,
+  humanSeek, rangeOf, repeatSeek, REPEAT_LEAD, SLIP, slipOf,
   scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import { itemOffsFrom, measureSeams, seamOffsets } from '../src/lib/seamFind.js'
@@ -1529,7 +1529,7 @@ function fakeMp3({
         ['読み上げが受け取る', read, /partRangeOf = null,/],
         ['狭める算段は1か所', read, /return spanForRange\(sents, r, base, o\)/],
         ['1本のときも狭める', read, /const only = shownPiece >= 0/],
-        ['発言ごとのときも狭める', read, /const only = partSpan\(part\.index, sentSecs, part\.at, \{ duration: dur \}\)/],
+        ['発言ごとのときも狭める', read, /const only = partSpan\(part\.index, sentSecs, part\.at, \{ duration: dur, slip \}\)/],
         ['鳴らし直すのは、かけらの頭から', read, /replayAt = unit === 'item' \? backTo : 0/],
         ['全文は頭から回す', read, /if \(repeatNow\(\) !== 'all' \|\| !heard\) break/],
         /* **戻したら、なだらかな上げ下げの起点も戻す。**
@@ -1937,16 +1937,22 @@ function fakeMp3({
 
   /* **つまみは1つだけ**(16手め)。逃がす量は `SEEK_MISS` から取る ——
      `landSec` が `FRAME_SEC` を直に使っていると、
-     **上げたつもりで上がっていない**(しかも音は鳴る) */
+     **上げたつもりで上がっていない**(しかも音は鳴る)。
+
+     24手めで、そこへ**その教材のずれ**(`slip`)が足された。
+     手前(`floor`)と向こう(`ceil`)が**同じ量**を見込んでいないと、
+     信じてよい教材で頭が余分に欠ける(しかも音は鳴る) */
   {
     const w = readFileSync(new URL('../src/lib/wholeAudio.js', import.meta.url), 'utf8')
     const body = w.match(/export function landSec\([^)]*\) \{[\s\S]*?\n\}/)
     if (!body) ng('`landSec()` が見つからない')
     else if (/FRAME_SEC/.test(body[0])) {
       ng('逃がす量に、フレームの長さを直に使っている(つまみが2つある)')
-    } else if ((body[0].match(/SEEK_MISS/g) || []).length < 2) {
+    } else if (!/SEEK_MISS/.test(body[0])) {
+      ng('逃がす量を `SEEK_MISS` から取っていない')
+    } else if ((body[0].match(/\bmiss\b/g) || []).length < 3) {
       ng('逃がす量を、手前と向こうの両方で見込んでいない')
-    } else ok('逃がす量は `SEEK_MISS` 1か所(つまみは1つだけ)')
+    } else ok('逃がす量は `SEEK_MISS` + `slip` 1か所(手前も向こうも同じ量)')
   }
 }
 
@@ -2515,7 +2521,10 @@ function fakeMp3({
     if (!/clockScaleOf\(alignEndOf\(exact\.alignment\), d\)/.test(src)) {
       ng('**発言ごとの道が、時計を突き合わせていない**', '1本にできない教材だけずれる')
     }
-    if (!/sentSecs = fitSents\(dur\) \?\? sharesToTimes\(shares, dur\)/.test(src)) {
+    /* **合わせた区間を先に使い、無ければ見積もりへ落ちる**(24手めで
+       落ちたかどうかを `sentSure` に控えるようにしたので、形が変わった) */
+    if (!/sentSecs = fitSents\(dur\)/.test(src)
+      || !/sentSecs = sharesToTimes\(shares, dur\)/.test(src)) {
       ng('発言ごとの道が、合わせた区間でくり返していない')
     }
     if (!/holdCursor\(fitSents\(clipDuration\(\) \?\? 0\) \?\? exact\.sents, null\)/.test(src)) {
@@ -2870,10 +2879,13 @@ function fakeMp3({
      間のまん中で止めていた前の形に戻すと、ここが赤くなる */
   {
     let cut = 0
-    /* **間の広さを書き写さない。** 「足りている」は `REPEAT_LEAD` で
-       決まるので、そこから出す(**性質で見る**)。書き写すと、
-       見込む量を上げた日に**この行だけが古くなって赤くなる** */
-    const wide = [0.02, 0.05, 0.2, 0.4].map((extra) => REPEAT_LEAD + 0.01 + extra)
+    /* **間の広さを書き写さない。** 「足りている」は
+       `REPEAT_LEAD`(遅れ)+ `slip`(その教材のずれ・24手め)で決まるので、
+       そこから出す(**性質で見る**)。書き写すと、
+       見込む量を上げた日に**この行だけが古くなって赤くなる**。
+       `roll()` は `slip` を渡していないので、**信じられない教材**の側である */
+    const budget = REPEAT_LEAD + slipOf(false)
+    const wide = [0.02, 0.05, 0.2, 0.4].map((extra) => budget + 0.01 + extra)
     for (const gap of wide) {
       for (let p = 0; p < 20; p += 1) {
         const r = roll(gap, p * 0.0007, 0.01, 0.03)
@@ -3214,6 +3226,218 @@ function fakeMp3({
   }
 
   if (bad === before) ok('刻みが遅れただけを、人の送りと取り違えない')
+}
+
+/**
+ * ============================================================================
+ * ⑰ **見込む量は、その教材の控えをどれだけ信じてよいかで決める**
+ *    (2026-09 実機・利用者の指摘・24手め)
+ *
+ *   > 先日はスコットランドの音声だけがおかしく、それを直そうとしたら
+ *   > 他の教材のリピートまでおかしくなりました。つまり、理由は分からないが、
+ *   > スコットランドの音声の教材だけが何かしらの不備があり、
+ *   > それに合わせすぎで汎用性がなくなってしまった可能性があります
+ *
+ * 【出どころ】
+ *   `REPEAT_LEAD` は**別々の2つ**を1つの数にしていた。
+ *
+ *     ①遅れ(決めてから黙るまで) … **端末**のもの。教材によらない
+ *     ②境目のずれ               … **その教材**のもの。記事は 0
+ *
+ *   22手めで ②のために 0.05 → 0.12 へ上げた。ところがこの定数は
+ *   **全教材にかかる。** だから控えが正しい教材まで、
+ *   **直すものが無いのに自分の声の終わりを 130ms 捨てていた。**
+ *   利用者は「150ms でもまだ散見される」「200ms はダメ」と言っている。
+ *
+ * 【ここで測ること】
+ *   ①信じてよい教材のほうが、**必ず削る量が少ない**
+ *   ②信じてよい教材では、間が足りていれば**1ミリ秒も欠けない**
+ *   ③**それでも次の文は鳴らない**(守りを削っただけでは意味がない)
+ *   ④**信じられない教材は、24手めの前と1ミリ秒も変わらない**
+ *   ⑤既定は「信じない」
+ *   ⑥**画面が本当に渡しているか**
+ *
+ *   **①②だけを見ない。** 見込む量をまるごと 0 にしても①②は緑になる。
+ *   **③を、いつも一緒に数える。**
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+  console.log('\n▶ 見込む量は、その教材のずれから決める')
+
+  const STEP = 0.01
+  /** 3文。まん中の継ぎ目の間(ま)だけを変える */
+  const three = (gap) => ([
+    { start: 0, end: 1, item: 0 },
+    { start: 1 + gap, end: 2 + gap, item: 1 },
+    { start: 2.3 + gap, end: 3.3 + gap, item: 2 },
+  ])
+
+  /**
+   * 1文目の途中から、ひと刻みずつ鳴らして折り返しまで回す。
+   * @returns {{fold:number|null, head:number, tail:number}}
+   *   head = 2文目の声が鳴った秒 / tail = 1文目の声が切れた秒
+   */
+  const roll = (gap, slip, phase = 0, lag = 0) => {
+    const list = three(gap)
+    const seeker = makeRepeatSeeker()
+    let t = 0.5 + phase
+    let head = 0
+    const heard = (a, b) => Math.max(0, Math.min(b, list[1].end) - Math.max(a, list[1].start))
+    for (let n = 0; n < 500; n += 1) {
+      const back = repeatSeek('sentence', t, {
+        spans: list, sentences: list, duration: 4.5, prev: seeker.last(), slip,
+      })
+      if (seeker.next(back, t) !== null) {
+        head += heard(t, t + lag)
+        return { fold: t, head, tail: Math.max(0, list[0].end - (t + lag)) }
+      }
+      head += heard(t, t + STEP)
+      t += STEP
+      if (t > 2.5 + gap) return { fold: null, head, tail: 0 }
+    }
+    return { fold: null, head, tail: 0 }
+  }
+
+  const worst = (gap, slip, lag = 0) => {
+    let tail = 0
+    let head = 0
+    let folded = false
+    for (let p = 0; p < 20; p += 1) {
+      const r = roll(gap, slip, p * 0.0007, lag)
+      if (r.fold === null) continue
+      folded = true
+      tail = Math.max(tail, r.tail)
+      head = Math.max(head, r.head)
+    }
+    return { tail, head, folded }
+  }
+
+  const ms = (v) => `${Math.round(v * 1000)}ms`
+  const SURE = slipOf(true)
+  const LOOSE = slipOf(false)
+
+  /* ── ① 信じてよい教材のほうが、必ず削る量が少ない ─────────────── */
+  {
+    let same = 0
+    let worse = 0
+    let gain = 0
+    for (const gap of [0, 0.01, 0.03, 0.05, 0.08, 0.1, 0.12]) {
+      const a = worst(gap, SURE)
+      const b = worst(gap, LOOSE)
+      if (!a.folded || !b.folded) { worse = 1; break }
+      if (a.tail > b.tail + 1e-9) worse = Math.max(worse, a.tail - b.tail)
+      if (Math.abs(a.tail - b.tail) < 1e-9) same += 1
+      gain = Math.max(gain, b.tail - a.tail)
+    }
+    if (worse) ng('信じてよい教材のほうが、よけいに削っている', ms(worse))
+    else if (same > 3) ng('信じてよい教材でも、削る量が変わっていない')
+    else ok(`信じてよい教材は、削る量が少ない(いちばん狭い継ぎ目で ${ms(gain)} 得)`)
+  }
+
+  /* ── ② 間が足りていれば、信じてよい教材は1ミリ秒も欠けない ─────
+     **書き写さない。**「足りている」は `REPEAT_LEAD`(遅れ)だけで
+     決まる ―― 信じてよい教材には、境目のずれが無いからである */
+  {
+    let cut = 0
+    let leak = 0
+    const wide = [0.001, 0.02, 0.1, 0.3].map((extra) => REPEAT_LEAD + STEP + extra)
+    for (const gap of wide) {
+      const r = worst(gap, SURE, 0.03)
+      cut = Math.max(cut, r.tail)
+      leak = Math.max(leak, r.head)
+    }
+    if (cut > 0.002) ng('間が足りているのに、信じてよい教材の声を欠いている', ms(cut))
+    else if (leak > 0.002) ng('間が足りているのに、次の文が鳴っている', ms(leak))
+    else ok('信じてよい教材は、間が足りていれば1ミリ秒も欠けない')
+  }
+
+  /* ── ③ **それでも、次の文は鳴らない**(いちばん大事) ────────────
+     ①②だけだと、見込む量を 0 にしても緑になる */
+  {
+    let leak = 0
+    let none = 0
+    for (const gap of [0, 0.01, 0.02, 0.05, 0.1, 0.2]) {
+      for (const lag of [0, 0.01, 0.03, 0.05]) {
+        const r = worst(gap, SURE, lag)
+        if (!r.folded) none += 1
+        leak = Math.max(leak, r.head)
+      }
+    }
+    if (none) ng('信じてよい教材で、そもそも折り返していない', `${none} 通り`)
+    else if (leak > 0.002) ng('信じてよい教材で、次の文が鳴っている', ms(leak))
+    else ok('信じてよい教材でも、次の文は1ミリ秒も鳴らない(遅れ 50ms まで)')
+  }
+
+  /* ── ④ 信じられない教材は、24手めの前と1ミリ秒も変わらない ──────
+     **値を1つだけ書き写してある。** 「会話の教材は1ミリ秒も
+     変わらない」という約束そのものなので、どちらかを動かした日に
+     **必ずここで手が止まる**(声の名簿の `KNOWN` と同じ考え方) */
+  {
+    const WAS = 0.12
+    if (Math.abs((REPEAT_LEAD + LOOSE) - WAS) > 1e-9) {
+      ng('信じられない教材の見込みが、24手めの前と変わっている',
+        `${ms(REPEAT_LEAD + LOOSE)}(前は ${ms(WAS)})`)
+    } else {
+      /* 間がぎりぎり足りないところで、本当に前と同じだけ削るか。
+         **ひと刻みの幅は見込む**(先取りはその刻みの中で起きるので、
+         削る量は `want` から `want + ひと刻み` のあいだに散る) */
+      const g = WAS + STEP - 0.03
+      const r = worst(g, LOOSE)
+      const want = (WAS + STEP) - g
+      const wide = worst(WAS + STEP + 0.05, LOOSE)
+      if (!r.folded || r.tail < want - 0.003 || r.tail > want + STEP + 0.003) {
+        ng('信じられない教材の削る量が、前と違う', `${ms(r.tail)} / ${ms(want)}`)
+      } else if (wide.tail > 0.002) {
+        ng('信じられない教材で、間が足りているのに削っている', ms(wide.tail))
+      } else ok('信じられない教材(会話)は、24手めの前と1ミリ秒も変わらない')
+    }
+  }
+
+  /* ── ⑤ 既定は「信じない」 ─────────────────────────────────────
+     取り違えたときの害が桁で違う(声の終わりが欠ける / 次の文が鳴る) */
+  {
+    const loose = [undefined, null, false, 0, 1, 'same', 'true', {}]
+    const wrong = loose.filter((v) => slipOf(v) !== SLIP)
+    if (wrong.length) ng('既定が「信じる」に倒れている', `${wrong.length} 通り`)
+    else if (slipOf(true) !== 0) ng('信じてよいときに、見込みが残っている')
+    else ok('既定は「信じない」(本当のときだけ 0)')
+  }
+
+  /* ── ⑥ 画面が、本当に渡しているか ─────────────────────────────
+     **渡していなくても音は鳴る。** 定義だけあって誰も呼ばなければ、
+     いまと同じことになる(`noteFnRev` で踏んだ落とし穴) */
+  {
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const w = readFileSync(new URL('../src/lib/wholeAudio.js', import.meta.url), 'utf8')
+    /* **「名前が出てくるか」で見ない。** `slip: slipOf(sure)` は2か所に
+       あるので、そのまま探すと**片方を消しても緑のまま**になる
+       (実際に赤チェックで踏んだ)。**渡している形を1つずつ**見る */
+    const miss = []
+    // 1本の道 … 控えと音声がそろっているときだけ信じる
+    if (!/sure = fit\.how === 'same'/.test(read)) miss.push('1本の道が `how` を見ていない')
+    if (!/prev: seeker\.last\(\),\s*\n\s*slip: slipOf\(sure\),/.test(read)) {
+      miss.push('1本の道の、くり返しに渡していない')
+    }
+    if (!/keep: \(x\) => x\.item === shownPiece, slip: slipOf\(sure\)/.test(read)) {
+      miss.push('1本の道の、集中モードのかけらに渡していない')
+    }
+    // 発言ごとの道 … 本当の時刻から出たときだけ信じる
+    if (!/sentSure = !!sentSecs/.test(read)) miss.push('発言ごとの道が、見積もりかどうかを見ていない')
+    if (!/const slip = slipOf\(sentSure\)/.test(read)) miss.push('発言ごとの道が `slip` を出していない')
+    if (!/prev: seeker\.last\(\), slip,/.test(read)) {
+      miss.push('発言ごとの道の、くり返しに渡していない')
+    }
+    // 見込む側 … 渡されたものを本当に使っているか
+    const fold = w.match(/export function foldNeed\([^)]*\) \{[\s\S]*?\n\}/)
+    if (!fold || !/\bp\b/.test(fold[0]) || !/slip/.test(fold[0])) {
+      miss.push('`foldNeed()` が `slip` を見ていない')
+    }
+    if (miss.length) ng('見込む量が、画面から届いていない', miss.join(' / '))
+    else ok('画面が、その教材のずれを渡している(1本の道・発言ごとの道)')
+  }
+
+  if (bad === before) ok('見込む量は、その教材のずれから決めている')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
