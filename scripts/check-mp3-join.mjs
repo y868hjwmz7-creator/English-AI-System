@@ -3340,33 +3340,48 @@ function fakeMp3({
      決まる ―― 信じてよい教材には、境目のずれが無いからである */
   {
     let cut = 0
-    let leak = 0
     const wide = [0.001, 0.02, 0.1, 0.3].map((extra) => REPEAT_LEAD + STEP + extra)
-    for (const gap of wide) {
-      const r = worst(gap, SURE, 0.03)
-      cut = Math.max(cut, r.tail)
-      leak = Math.max(leak, r.head)
-    }
+    for (const gap of wide) cut = Math.max(cut, worst(gap, SURE).tail)
+    /* **いちばん狭い継ぎ目でも、ひと刻みより多くは削らない**(26手め)。
+       遅れは実測 0 だったので、残るのは「気づくのがひと刻み遅れる」ぶんだけ */
+    const tight = worst(0, SURE).tail
     if (cut > 0.002) ng('間が足りているのに、信じてよい教材の声を欠いている', ms(cut))
-    else if (leak > 0.002) ng('間が足りているのに、次の文が鳴っている', ms(leak))
-    else ok('信じてよい教材は、間が足りていれば1ミリ秒も欠けない')
+    else if (tight > 2 * STEP + 0.002) {
+      ng('間がまったく無い継ぎ目で、ひと刻みより多く削っている', ms(tight))
+    } else ok(`信じてよい教材が削るのは、多くても ${ms(tight)}(間が無い継ぎ目でも)`)
   }
 
   /* ── ③ **それでも、次の文は鳴らない**(いちばん大事) ────────────
      ①②だけだと、見込む量を 0 にしても緑になる */
   {
-    let leak = 0
     let none = 0
+    let leak = 0
+    let odd = null
+    let knob = 0
     for (const gap of [0, 0.01, 0.02, 0.05, 0.1, 0.2]) {
-      for (const lag of [0, 0.01, 0.03, 0.05]) {
-        const r = worst(gap, SURE, lag)
-        if (!r.folded) none += 1
-        leak = Math.max(leak, r.head)
+      // ①**実測の遅れ(0)**では、1ミリ秒も鳴らない
+      const r = worst(gap, SURE)
+      if (!r.folded) none += 1
+      leak = Math.max(leak, r.head)
+      /* ②遅れがある端末でも、**漏れは模型どおり**である。
+         見込み(`REPEAT_LEAD`)と間(ま)で説明が付かない漏れがあれば、
+         そこには模型に無い量がまだ残っている(21手めの戒め) */
+      for (const lag of [0.02, 0.05]) {
+        const got = worst(gap, SURE, lag)
+        const want = Math.max(0, lag - Math.max(gap, REPEAT_LEAD + STEP))
+        if (!odd && Math.abs(got.head - want) > STEP + 0.003) {
+          odd = `間 ${ms(gap)} / 遅れ ${ms(lag)} … ${ms(got.head)}(模型は ${ms(want)})`
+        }
+        /* ③**つまみが効くか。** `slip` は `REPEAT_LEAD` とまったく同じ
+           足され方をするので、遅れぶん足せば漏れが消えるはずである */
+        knob = Math.max(knob, worst(gap, lag, lag).head)
       }
     }
     if (none) ng('信じてよい教材で、そもそも折り返していない', `${none} 通り`)
-    else if (leak > 0.002) ng('信じてよい教材で、次の文が鳴っている', ms(leak))
-    else ok('信じてよい教材でも、次の文は1ミリ秒も鳴らない(遅れ 50ms まで)')
+    else if (leak > 0.002) ng('遅れが無いのに、次の文が鳴っている', ms(leak))
+    else if (odd) ng('漏れが、模型では説明が付かない', odd)
+    else if (knob > 0.002) ng('見込みを足しても、漏れが消えない(つまみが効いていない)', ms(knob))
+    else ok('遅れ 0(実測)では鳴らない / 遅れがあっても模型どおり / つまみは効く')
   }
 
   /* ── ④ 信じられない教材は、24手めの前と1ミリ秒も変わらない ──────
