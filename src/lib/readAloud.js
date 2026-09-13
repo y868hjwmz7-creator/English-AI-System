@@ -45,6 +45,7 @@ import {
   lastWholeDetail, noteFellBack, noteWholeClock, noteWholeFallback,
   playClip, prefetchClip, seekClip, stopClip, wholeClip, wholeSeams,
 } from './audioClips.js'
+import { FADE_STEP } from './loudness.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
 import { speedPadMs, turnGapMs } from './turnGap.js'
@@ -53,7 +54,7 @@ import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
   REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime,
   indexAtTime, makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
-  sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
+  foldWorst, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
 } from './wholeAudio.js'
 import {
   sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
@@ -924,11 +925,24 @@ export function readAloudSequence(parts, {
               gaps: base.gaps,
             }
             : base
-          /* **控えを信じてよいのは、そろっている教材だけ**(24手め)。
-             `measured` は音から測って当てたものだが、測り方そのものにも
-             刻み(`HOP_SEC`)ぶんの粗さがある。**分かっていないことを
-             分かったように書かない** —— ここでは信じない側に置く */
-          sure = fit.how === 'same'
+          /* **控えを信じてよいのは、そろっている教材と、測って当てた教材**
+             (27手め)。
+
+             > 1ミリも変わっていません(2026-09 実機・利用者)
+
+             24手めで `measured` を「信じない側」に置いたのが誤りだった。
+             **会話の教材はここに来る。** だから 24・25・26手めの直しは
+             **1ミリ秒も届いておらず、間 0ms で 130ms 削り続けていた** ——
+             しかも会話は `Right.` `Sure.` のような**短い発言が多い。**
+
+             **測って当てた境目は、信じてよい境目である。**
+             `seamOffsets()` は波の中の**本当に鳴り出すところ**へ合わせて
+             いるので、`start` は実測そのもの。`end` もそこへ控えの長さを
+             足したもので、**間(ま)の広さが本物になる**(17・19手め)。
+             **それが測る目的そのものだった。**
+
+             信じないのは `scale` / `seam`(**測れず、均等に配った**)だけ */
+          sure = fit.how === 'same' || fit.how === 'measured'
           /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
            *
            *   > listen を押しても特に何も表示されず再生が始まり、
@@ -962,14 +976,24 @@ export function readAloudSequence(parts, {
             }
             holdCursor(sent, null)
             noteWholeClock({
-              align: alignEndOf(got.alignment), dur, fit, sents: sent, kind: got.kind,
+              align: alignEndOf(got.alignment),
+              dur,
+              fit,
+              sents: sent,
+              kind: got.kind,
+              cut: foldWorst(sent, FADE_STEP / 1000, slipOf(sure)),
             })
             /* 続きから始めたときは、飛んだ先も控えの時計のままだった。
                **鳴り出した直後の1回だけ**、合わせ直す */
             if (Math.abs(want - sec) > 0.15 && seekClip(want)) return
           } else {
             noteWholeClock({
-              align: alignEndOf(got.alignment), dur, fit, sents: sent, kind: got.kind,
+              align: alignEndOf(got.alignment),
+              dur,
+              fit,
+              sents: sent,
+              kind: got.kind,
+              cut: foldWorst(sent, FADE_STEP / 1000, slipOf(sure)),
             })
           }
         }

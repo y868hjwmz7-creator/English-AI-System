@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
-  humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_MISS, SLIP, slipOf,
+  foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_MISS, SLIP, slipOf,
   scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import { itemOffsFrom, measureSeams, MIN_SILENCE, seamOffsets } from '../src/lib/seamFind.js'
@@ -3445,6 +3445,30 @@ function fakeMp3({
     else ok(`頭出しは、詰まった継ぎ目(${ms(MIN_SILENCE)} まで)では必ず声の中へ倒す`)
   }
 
+  /* ── ④'' **測って当てた教材は、信じてよい側にいる**(27手め)────
+       会話の教材はここに来る。24手めで「信じない側」に置いたせいで、
+       3回ぶんの直しが**1ミリ秒も届いていなかった** */
+  {
+    /* **いちばん削る継ぎ目を、わざと最初にしない**(27手め)。
+       最初だけを見る形に書き換えても緑になってしまう(赤チェックで踏んだ) */
+    const seam = [
+      { start: 0, end: 0.6 }, { start: 0.9, end: 1.5 }, { start: 1.5, end: 2.1 },
+    ]
+    const wide = [
+      { start: 0, end: 0.6 }, { start: 0.75, end: 1.35 }, { start: 1.5, end: 2.1 },
+    ]
+    const tight = foldWorst(seam, STEP, SURE)
+    const loose = foldWorst(seam, STEP, LOOSE)
+    const roomy = foldWorst(wide, STEP, SURE)
+    if (!(tight <= 2 * STEP + 0.002)) {
+      ng('測って当てた教材でも、間が無い継ぎ目で削りすぎている', ms(tight))
+    } else if (!(loose > tight + 0.05)) {
+      ng('測れなかった教材と、区別が付いていない', `${ms(loose)} / ${ms(tight)}`)
+    } else if (roomy > 0.002) {
+      ng('間が足りているのに削っている', ms(roomy))
+    } else ok(`測って当てた教材が削るのは、多くても ${ms(tight)}(測れなければ ${ms(loose)})`)
+  }
+
   /* ── ⑤ 既定は「信じない」 ─────────────────────────────────────
      取り違えたときの害が桁で違う(声の終わりが欠ける / 次の文が鳴る) */
   {
@@ -3467,7 +3491,17 @@ function fakeMp3({
        (実際に赤チェックで踏んだ)。**渡している形を1つずつ**見る */
     const miss = []
     // 1本の道 … 控えと音声がそろっているときだけ信じる
-    if (!/sure = fit\.how === 'same'/.test(read)) miss.push('1本の道が `how` を見ていない')
+    /* **前方一致で見ない**(27手め)。`=== 'same'` だけを探すと、
+       `|| how === 'measured'` を外しても緑のままになる ——
+       そこを外したせいで、会話の教材に3回ぶん届いていなかった */
+    if (!/sure = fit\.how === 'same' \|\| fit\.how === 'measured'/.test(read)) {
+      miss.push('測って当てた教材を、信じていない(会話の教材に届かない)')
+    }
+    /* **削る量を画面に出す。** 出ていないと、次も「届いたか」を
+       利用者に推測させることになる(`[調査中]` の行) */
+    if ((read.match(/cut: foldWorst\(sent, FADE_STEP \/ 1000, slipOf\(sure\)\)/g) || []).length < 2) {
+      miss.push('削る量を `[調査中]` に出していない')
+    }
     if (!/prev: seeker\.last\(\),\s*\n\s*slip: slipOf\(sure\),/.test(read)) {
       miss.push('1本の道の、くり返しに渡していない')
     }

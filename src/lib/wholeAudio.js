@@ -1129,6 +1129,28 @@ export function foldNeed(list, i, step = 0, slip = SLIP) {
 }
 
 /**
+ * **その並びで、いちばん多く削る量**(秒・27手め)。
+ *
+ *   > 1ミリも変わっていません(2026-09 実機・利用者)
+ *
+ * **「何も変わらない」は、届いていないという意味である**(CLAUDE.md)。
+ * ところが**どれだけ削っているかは、画面のどこにも出ていなかった。**
+ * だから直すたびに、届いたのかどうかを利用者に推測させていた。
+ *
+ * **`[調査中]` の行に出す。** 次の報告で、届いたかが一目で分かる。
+ * **原因が分かったら、その行ごと外す。**
+ */
+export function foldWorst(list, step = 0, slip = SLIP) {
+  if (!Array.isArray(list) || list.length < 2) return 0
+  let worst = 0
+  for (let i = 0; i < list.length - 1; i += 1) {
+    const need = foldNeed(list, i, step, slip)
+    if (need > worst) worst = need
+  }
+  return worst
+}
+
+/**
  * **止める場所。** 声が終わったところ(足りなければ、その少し手前)。
  *
  * **戻る先(`backEdge` = 間のまん中)とは別物である。**

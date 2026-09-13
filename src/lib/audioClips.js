@@ -410,8 +410,16 @@ export function noteFellBack(where) {
  */
 const DOOR = { dialogue: '会話(発言ごとに渡す)', narration: '記事(1本の文章で渡す)' }
 
+/**
+ * @param {object} o
+ * @param {number} [o.cut] **いま、声の後ろを何秒まで削る見込みか**(27手め)。
+ *   > 1ミリも変わっていません(2026-09 実機・利用者)
+ *
+ *   直すたびに「届いたのかどうか」を利用者に推測させていた。
+ *   **数字を1つ出せば、次の報告で一目で分かる。**
+ */
 export function noteWholeClock({
-  align, dur, fit, sents, kind = null,
+  align, dur, fit, sents, kind = null, cut = null,
 }) {
   const n = (v) => (Number.isFinite(v) ? v.toFixed(2) : '—')
   const heads = (sents ?? []).slice(0, 6).map((s) => n(s.start)).join(' / ')
@@ -429,6 +437,7 @@ export function noteWholeClock({
     + (fit?.how === 'seam' ? ` ${n(fit.per)} 秒ずつ` : '')
     + (fit?.how === 'scale' ? ` ${Number.isFinite(fit.k) ? fit.k.toFixed(4) : '—'} 倍` : '')
     + `${gaps ? ` / 継ぎ目 ${gaps}` : ''}`
+    + `${Number.isFinite(cut) ? ` / 声の後ろを削る 最大 ${Math.round(cut * 1000)}ms` : ''}`
     + `${heads ? ` / 文の頭 ${heads}` : ''}`)
 }
 
