@@ -205,7 +205,7 @@ export const lastClipDetail = () => lastDetail
  *
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  */
-export const NEED_FN_REV = '2026-09-11'
+export const NEED_FN_REV = '2026-09-13'
 
 let fnRev = null
 /** 窓口の版。まだ一度も呼んでいなければ `null` */
@@ -430,7 +430,13 @@ export function noteWholeClock({
      「数えている」。どちらかで、余った時間の行き先が変わる */
   const gaps = (fit?.gaps ?? []).slice(0, 6).map((g) => n(g)).join(' ')
   const how = {
-    same: 'そのまま', scale: '比で配る', seam: '継ぎ目に配る', measured: '音を測って合わせる',
+    same: 'そのまま',
+    scale: '比で配る',
+    seam: '継ぎ目に配る',
+    measured: '音を測って合わせる',
+    /* **向こうが返した区切り**(32手め)。ここが出ていれば、
+       当て推量は1つも通っていない */
+    segments: '発言の区切り(向こうが返した)',
   }[fit?.how] ?? '—'
   setDetail(`[調査中] 1本で鳴っています。控え ${n(align)} 秒 / 音声 ${n(dur)} 秒`
     + `${DOOR[kind] ? ` / ${DOOR[kind]}` : ''}`
@@ -963,8 +969,16 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
          `dialogue`(会話・会議)と `narration`(記事・スピーチ)では
          **控えに間(ま)が入るかどうかが違う。**
          窓口が `.json` に控えているので、こちらで数え直さない */
+      /* **発言ごとの区切りも返す**(32手め)。あれば、継ぎ目を
+         波形から測る必要そのものが無くなる(`segOffsOf`) */
       const out = spans
-        ? { url: mp3, spans, alignment: had.alignment, kind: had.kind ?? null }
+        ? {
+          url: mp3,
+          spans,
+          alignment: had.alignment,
+          kind: had.kind ?? null,
+          segments: had.segments ?? null,
+        }
         : null
       if (!out) {
         /* **時刻が当てはまらない。** 区切れないものを当てずっぽうで
@@ -1015,6 +1029,7 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
       spans,
       alignment: made.alignment,
       kind: made.kind ?? res.kind ?? null,
+      segments: made.segments ?? null,
     }
     wholeCache.set(mark, out)
     wholeGaveUp.delete(mark)

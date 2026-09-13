@@ -424,6 +424,103 @@ export function scaleSpans(spans, scale) {
  * 人が話を交代するときの無音は、どんなに詰まっていても 0.1 秒は空く。
  * 控えがそれより短い間しか言っていないなら、**向こうが間を数えていない。**
  */
+/* ══════════════════════════════════════════════════════════════════
+ * **発言の区切りは、向こうが返している**(2026-09・32手め)
+ *
+ *   > 真剣に調査しすでに成功している方法をまず探ってください。
+ *   > この手の機能は世の中に溢れています(利用者)
+ *
+ * ── 世の中のやり方 ─────────────────────────────────────────────
+ *
+ *   読み上げに合わせて字を光らせる仕組み(読み上げ絵本・カラオケ・
+ *   語学アプリ)は、どれも**同じ形**をしている。
+ *
+ *     ①音声を作った仕組みから、**区切りの時刻をそのまま受け取る**
+ *     ②その時刻を SRT / VTT のような「キュー」として持つ
+ *     ③鳴らすときは `currentTime` をキューの頭へ動かし、
+ *      終わりを過ぎたら戻す
+ *
+ *   **どこも、波形から沈黙を探して時刻を当て直してはいない。**
+ *   受け取った時刻が正解だからである。
+ *
+ * ── こちらが31回やっていたこと ───────────────────────────────
+ *
+ *   ElevenLabs の会話の窓口(Text to Dialogue)は、
+ *   **`voice_segments` に発言ごとの本当の開始・終了秒**を返す。
+ *   ところが窓口は `alignment`(文字ごと)だけを控えていた。
+ *
+ *   **`alignment` には、発言と発言のあいだの無音が入っていない**
+ *   —— あの無音は、どの文字のものでもないからである。だから
+ *
+ *     控え 74.00 秒 / 音声 76.93 秒 / 継ぎ目 0.00 0.00 0.00 …
+ *
+ *   となる(利用者の画面に出た数字そのもの)。記事(1人が話しきる道)が
+ *   ずっと正常だったのは、**段落の切れ目に渡した空行が文字として
+ *   数えられる**からで、20手めの分かれ目の話とも噛み合う。
+ *
+ *   14手めは足りない時間を継ぎ目に**均等に**配り、17・19・31手めは
+ *   **波形から測ろう**とした。どれも**正解を捨てたうえでの当て推量**
+ *   だった。
+ *
+ * ── だから、そのまま使う ───────────────────────────────────────
+ *
+ *   `offs[i] = 向こうが言う発言の頭 − 控えが言う発言の頭`
+ *
+ *   これを控えの区間に足すだけで、**発言の頭は実測と1ミリ秒も違わない。**
+ *   発言の**中**の文と文は、もともと控えの時計で正しい(そこには
+ *   無音が挟まれていない)ので、同じずれを当てれば全部そろう。
+ *
+ *   **波をほどく必要も、しきい値も、均等配りも要らなくなる。**
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** 1つめの発言のずれの上限。ここが大きいなら、対が食い違っている */
+export const SEG_HEAD = 0.5
+/** うしろへ戻る向きの、許す揺らぎ(無音は増える一方のはずである) */
+export const SEG_BACK = 0.05
+
+/**
+ * **`voice_segments` から、項目ごとのずれを出す。**
+ *
+ * @param {Array} segments 窓口が控えた `voice_segments` そのもの
+ * @param {Array<{start:number,end:number}>} spans `spansOf()` の返り値
+ * @returns {number[]|null} 項目ごとに足す秒。**合わなければ `null`**
+ *
+ * 【合わなければ、何も返さない】
+ *   当てずっぽうでずらすと、**別の発言の場所を指す。**
+ *   ずれた対は、無いより悪い(`spansOf` と同じ考え方)。
+ *   返さなければ、これまでどおりの受け皿に落ちるだけである。
+ */
+export function segOffsOf(segments, spans) {
+  const segs = Array.isArray(segments) ? segments : null
+  const list = Array.isArray(spans) ? spans : null
+  if (!segs || !list || !list.length || segs.length !== list.length) return null
+
+  /* **並び順で当てない。** 向こうは `dialogue_input_index` で
+     「渡した何番目の入力か」を言っている。無いときだけ並び順に落とす */
+  const by = new Array(list.length).fill(null)
+  segs.forEach((s, i) => {
+    const at = Number.isFinite(Number(s?.dialogue_input_index))
+      ? Number(s.dialogue_input_index) : i
+    if (at >= 0 && at < by.length && !by[at]) by[at] = s
+  })
+  if (by.some((s) => !s)) return null
+
+  const offs = []
+  for (let i = 0; i < list.length; i += 1) {
+    const real = Number(by[i].start_time_seconds)
+    const said = Number(list[i]?.start)
+    if (!Number.isFinite(real) || !Number.isFinite(said)) return null
+    offs.push(real - said)
+  }
+  // ①1つめは、どちらの時計でも頭のはずである
+  if (Math.abs(offs[0]) > SEG_HEAD) return null
+  // ②無音は増える一方。**減る向きに大きく動くなら、対が食い違っている**
+  for (let i = 1; i < offs.length; i += 1) {
+    if (offs[i] < offs[i - 1] - SEG_BACK) return null
+  }
+  return offs
+}
+
 export const SEAM_TIGHT = 0.08
 
 /** 並びのまん中の値(外れ値に引きずられない) */

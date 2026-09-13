@@ -87,7 +87,7 @@ const reply = (body: unknown, status = 200) =>
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-11'
+const FN_REV = '2026-09-13'
 
 /** 置き場所(Storage のバケツ)。0016 で作る */
 const BUCKET = 'tts'
@@ -704,7 +704,26 @@ async function synthElevenTimed(
   const bin = atob(b64)
   const audio = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i += 1) audio[i] = bin.charCodeAt(i)
-  return { audio, alignment: json.alignment ?? null }
+  return {
+    audio,
+    alignment: json.alignment ?? null,
+    /* **発言ごとの、本当の開始・終了秒**(2026-09・32手め)。
+     *
+     * Text to Dialogue は `voice_segments` を返す。
+     *   voice_id / start_time_seconds / end_time_seconds /
+     *   character_start_index / character_end_index / dialogue_input_index
+     *
+     * **`alignment` には、発言と発言のあいだの無音が入っていない**
+     * (どの文字のものでもないため)。だから控えの終わりは音声より短く、
+     * 継ぎ目は 0.00 で並ぶ —— 利用者の画面に出た
+     * 「控え 74.00 秒 / 音声 76.93 秒 / 継ぎ目 0.00」がそれである。
+     *
+     * **こちらはそれを捨てていた。** 31回、波形から沈黙を探して
+     * 継ぎ目を当て直そうとしていたが、**向こうが正解を返している。**
+     * 読ませる文字数は1文字も変わらないので、**課金は1円も増えない。**
+     */
+    segments: json.voice_segments ?? null,
+  }
 }
 
 /**
@@ -1091,7 +1110,13 @@ Deno.serve(async (req) => {
           'x-upsert': 'true',
         },
         body: JSON.stringify({
-          rev: FN_REV, kind: made.kind, texts, alignment: made.alignment ?? null,
+          rev: FN_REV,
+          kind: made.kind,
+          texts,
+          alignment: made.alignment ?? null,
+          /* **発言ごとの区切りも、そのまま控える**(32手め)。
+             区切りの計算は画面側(`src/lib/wholeAudio.js`)が行う */
+          segments: made.segments ?? null,
         }),
       })
 

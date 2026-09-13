@@ -52,7 +52,7 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime,
+  REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, segOffsOf,
   indexAtTime, makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
   foldWorst, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
 } from './wholeAudio.js'
@@ -370,8 +370,16 @@ export async function readAloud(text, {
   if (whole && clipTier === PREMIUM && whole.texts?.length >= 2) {
     const got = await wholeClip({ texts: whole.texts, voiceIds: whole.voiceIds })
     if (mine !== session) return              // 待っているあいだに止められた
-    const span = got?.spans?.length === whole.texts.length
-      ? rangeOf(got.spans, whole.index) : null
+    /* **ここにも同じずれがある**(32手め)。1本の中の「その項目だけ」を
+       鳴らす道で、控えの秒をそのまま使っていた。会話では発言と発言の
+       あいだの無音が控えに入っていないので、**先へ行くほど手前を鳴らす。**
+       **道が2つあるものは、両方を数える**(27手めの戒め) */
+    const segShift = segOffsOf(got?.segments, got?.spans)
+    /* **控えそのものを書き換えない。** `wholeClip` は同じものを
+       覚えて返すので、書き換えると押すたびに二重・三重にずれる */
+    const wSpans = segShift ? shiftItems(got.spans, segShift) : got?.spans
+    const span = wSpans?.length === whole.texts.length
+      ? rangeOf(wSpans, whole.index) : null
     if (span) {
       /* 控えの秒は「1本の中の秒」なので、**その区間に収まっているときだけ**
          使う(発言ごとに作っていた頃の秒が残っていても、変な場所から
@@ -380,7 +388,9 @@ export async function readAloud(text, {
         ? from.at : span.start
       /* **文の区間を控える**(1文ずつの ◁▷)。段落ごとに押したときは、
          **その段落の中だけ**で動かす(押した段落から出ていかない) */
-      const sent = sentenceSpansFor(got, whole.texts)
+      const raw = sentenceSpansFor(got, whole.texts)
+      // 文の区間も、同じだけずらす(`item` を見るので1つの道具で足りる)
+      const sent = (raw && segShift) ? shiftItems(raw, segShift) : raw
       holdCursor(sent, span)
       /* **いま読んでいる文を光らせる**(2026-09 実機・利用者の指摘)。
          この項目の文だけを送る(ほかの段落を光らせない) */
@@ -793,7 +803,16 @@ export function readAloudSequence(parts, {
     /* **文の区間を控える**(1文ずつの ◁▷)。通しでは**本文ぜんぶ**を
        行き来できる(段落をまたいでも構わない) */
     let sent = sentenceSpansFor(got, list.map((p) => p.text))
-    const seamOffs = await wholeSeams(got.url, got.spans, sent)
+    /* ── **向こうが返した区切りがあれば、それが正解**(32手め)────────
+     *
+     *   > 真剣に調査しすでに成功している方法をまず探ってください。
+     *
+     *   Text to Dialogue は `voice_segments` に**発言ごとの本当の秒**を
+     *   返している。31回、こちらはそれを捨てて波形から測ろうとしていた。
+     *   **あるときは、波をほどきに行く必要そのものが無い**
+     *   (ほどく1〜2秒も、しきい値の当て推量も要らなくなる)。 */
+    const segOffs = segOffsOf(got.segments, got.spans)
+    const seamOffs = segOffs ? null : await wholeSeams(got.url, got.spans, sent)
     if (!alive()) return true
 
     let spans = got.spans
@@ -913,7 +932,14 @@ export function readAloudSequence(parts, {
              書いておきながら、17手めでその歯止めを外していた。
              **直すものが無いときは、直さない。** */
           const base = clockFitOf(spans, alignEndOf(got.alignment), dur)
-          const fit = (seamOffs && base.how !== 'same')
+          const fit = (segOffs && base.how !== 'same')
+            /* **向こうが返した区切り**(32手め)。当て推量が1つも入らない。
+               `how === 'same'`(そろっている)なら配る時間が無いので、
+               20手めの歯止め(直すものが無いときは直さない)は残す */
+            ? {
+              how: 'segments', k: 1, per: 0, offs: segOffs, sentOffs: null, gaps: base.gaps,
+            }
+            : (seamOffs && base.how !== 'same')
             ? {
               how: 'measured',
               k: 1,
@@ -942,7 +968,9 @@ export function readAloudSequence(parts, {
              **それが測る目的そのものだった。**
 
              信じないのは `scale` / `seam`(**測れず、均等に配った**)だけ */
-          sure = fit.how === 'same' || fit.how === 'measured'
+          /* `segments` は**向こうが返した実測そのもの**なので、
+             `same` / `measured` と同じく信じてよい(32手め) */
+          sure = fit.how === 'same' || fit.how === 'measured' || fit.how === 'segments'
           /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
            *
            *   > listen を押しても特に何も表示されず再生が始まり、
@@ -961,7 +989,7 @@ export function readAloudSequence(parts, {
           if (fit.how !== 'same') {
             const raw = spans
             const want = fitTime(at, fit, raw)
-            if (fit.how === 'measured') {
+            if (fit.how === 'measured' || fit.how === 'segments') {
               spans = shiftItems(spans, fit.offs)
               /* **文まで測れていたら、1文ずつ当てる**(19手め)。
                  `shiftItems()` は同じ発言の文に同じずれしか当てないので、

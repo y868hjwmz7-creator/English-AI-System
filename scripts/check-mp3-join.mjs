@@ -27,7 +27,8 @@ import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
   foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_LEAD, SLIP, slipOf,
-  scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
+  scaleSpans, seekSentence, segOffsOf, SEG_HEAD, sentenceSpansOf, shiftEach, shiftItems,
+  shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   ABS_FLOOR, QUIET_RATIO, TRY_RATIOS, frameRms, itemOffsFrom, lastSeamFail,
@@ -1359,7 +1360,9 @@ function fakeMp3({
         play, /const items = audioItemsOf\(body\.items, body\.exercise_type\)/],
       ['読む欄は audioFrom 1か所が決める', play, /exerciseType\(typeId\)\?\.audioFrom/],
       ['読み上げが区間を受け取る', read, /whole = null,/],
-      ['読み上げが区間を鳴らす', read, /rangeOf\(got\.spans, whole\.index\)/],
+      /* **区切りを当てたほうの区間で鳴らす**(32手め)。控えの秒のままだと、
+         会話では先へ行くほど手前を鳴らす */
+      ['読み上げが区間を鳴らす', read, /rangeOf\(wSpans, whole\.index\)/],
       ['終わりで止める', read, /stopAt: span\.end/],
       ['ボタンが素通しで渡す', btn, /onStart: heard, whole,/],
     ]
@@ -1411,7 +1414,9 @@ function fakeMp3({
     const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
     const skip = readFileSync(new URL('../src/components/SentenceSkip.jsx', import.meta.url), 'utf8')
     const want = [
-      ['区間を控える', read, /const sent = sentenceSpansFor\(got, whole\.texts\)/],
+      ['区間を控える', read, /const raw = sentenceSpansFor\(got, whole\.texts\)/],
+      // 文の区間にも、同じずれを当てる(32手め)
+      ['文にも区切りを当てる', read, /const sent = \(raw && segShift\) \? shiftItems\(raw, segShift\) : raw/],
       ['通しでも控える', read, /let sent = sentenceSpansFor\(got, list\.map/],
       ['止めたら捨てる', read, /stopReading\(\) \{\s+setCursor\(null\)/],
       ['動かす道がある', read, /export function skipSentence\(/],
@@ -2822,7 +2827,11 @@ function fakeMp3({
   {
     const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
     const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
-    if (!/=\s*await wholeSeams\(/.test(read)) ng('1本の道が、継ぎ目を測りに行っていない')
+    /* **向こうが返した区切りが無いときだけ、測りに行く**(32手め)。
+       あるときにほどくのは、1〜2秒の無駄でしかない */
+    if (!/=\s*segOffs \? null : await wholeSeams\(/.test(read)) {
+      ng('1本の道が、継ぎ目を測りに行っていない')
+    }
     /* **理由を、画面まで届ける**(30手め)。数えるだけで出さなければ、
        28手めで `noteSentClock()` を誰も呼んでいなかったのと同じである。
        **「名前が出てくるか」で見ない** —— 説明にも同じ語が出てくるので、
@@ -3730,6 +3739,134 @@ function fakeMp3({
   }
 
   if (bad === before) ok('見込む量は、その教材のずれから決めている')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑱ **発言の区切りは、向こうが返している**(2026-09・32手め)
+ *
+ *   > 真剣に調査しすでに成功している方法をまず探ってください。
+ *
+ *   読み上げに字を合わせる仕組みは、世の中では**音声を作った側が返す
+ *   時刻をそのまま使う。** 波形から沈黙を探して当て直したりしない。
+ *   ElevenLabs の会話の窓口は `voice_segments` に発言ごとの本当の秒を
+ *   返しており、**こちらはそれを捨てていた。**
+ *
+ *   見るのは4つ。**「使う」だけを見ない** ——
+ *   合わない控えまで信じる形に書き換えても緑になる。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+  /* 控えの時計(間が入っていない)と、本当の時計(間が入っている)。
+     発言の長さをわざとばらばらにしてある —— 均等配りが外すのは、
+     まさにこの形である(14手め) */
+  const said = [
+    { start: 0, end: 3 }, { start: 3, end: 9 }, { start: 9, end: 10.5 },
+    { start: 10.5, end: 14.5 }, { start: 14.5, end: 16 },
+  ]
+  const gaps = [0, 0.31, 0.09, 0.62, 0.18]      // その発言の前に入る無音(積む)
+  let run = 0
+  const segs = said.map((s, i) => {
+    run += gaps[i]
+    return {
+      voice_id: `v${i % 2}`,
+      dialogue_input_index: i,
+      start_time_seconds: s.start + run,
+      end_time_seconds: s.end + run,
+    }
+  })
+
+  // ⓐ そのまま使えば、発言の頭は1ミリ秒も違わない
+  const offs = segOffsOf(segs, said)
+  if (!offs) {
+    ng('向こうが返した区切りを使えていない')
+  } else {
+    const got = shiftItems(said, offs)
+    let worst = 0
+    got.forEach((s, i) => {
+      worst = Math.max(worst, Math.abs(s.start - segs[i].start_time_seconds))
+    })
+    if (worst > 1e-9) ng('発言の頭が、向こうの言う秒と合わない', `ずれ ${worst}`)
+    else ok(`向こうが返した区切りで、発言の頭のずれは 0ms(${said.length} 発言)`)
+
+    /* **均等配りが、どれだけ外すか**も一緒に数える。
+       これが無いと、直しの値打ちを検証が示せていない(31手めの戒め) */
+    const per = run / (said.length - 1)
+    let flat = 0
+    said.forEach((s, i) => {
+      flat = Math.max(flat, Math.abs((s.start + i * per) - segs[i].start_time_seconds))
+    })
+    if (!(flat > 0.1)) ng('均等配りでも合ってしまう。仮の並びが甘い', `${(flat * 1000).toFixed(0)}ms`)
+    else ok(`同じ並びを均等に配ると、最大 ${(flat * 1000).toFixed(0)}ms 外す(14手めの受け皿)`)
+  }
+
+  // ⓑ **並び順で当てない。** 向こうが順を入れ替えて返しても合う
+  const shuffled = [segs[2], segs[0], segs[4], segs[1], segs[3]]
+  const byIdx = segOffsOf(shuffled, said)
+  if (!byIdx || byIdx.some((v, i) => Math.abs(v - offs[i]) > 1e-9)) {
+    ng('`dialogue_input_index` を見ずに、並び順で当てている')
+  } else ok('並びが入れ替わっていても、入力の番号で当てる')
+
+  // ⓒ **合わなければ、何も返さない**(ずれた対は、無いより悪い)
+  const shortSaid = said.slice(0, 4)
+  const head = segs.map((s, i) => (i ? s : { ...s, start_time_seconds: SEG_HEAD + 1 }))
+  const back = segs.map((s, i) => (i === 3 ? { ...s, start_time_seconds: 1 } : s))
+  const cases = [
+    ['数が合わない', segOffsOf(segs, shortSaid)],
+    ['1つめが頭から大きく離れている', segOffsOf(head, said)],
+    ['無音が減る向きに飛んでいる', segOffsOf(back, said)],
+    ['そもそも無い', segOffsOf(null, said)],
+    ['番号が抜けている', segOffsOf(segs.slice(0, 4).concat([{ ...segs[4], dialogue_input_index: 0 }]), said)],
+  ]
+  const through = cases.filter(([, v]) => v !== null).map(([why]) => why)
+  if (through.length) ng('合わない控えまで信じている', through.join(' / '))
+  else ok('合わない控えは、1つも通さない(5とおり)')
+
+  // ⓓ **道が1本も切れていないか**(窓口 → `.json` → 画面 → 鳴らす側)
+  {
+    const miss = []
+    const fn = readFileSync(new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8')
+    if (!/segments: json\.voice_segments \?\? null/.test(fn)) miss.push('窓口が受け取っていない')
+    if (!/segments: made\.segments \?\? null/.test(fn)) miss.push('窓口が `.json` に控えていない')
+
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    if (!/segments: had\.segments \?\? null/.test(clips)) miss.push('置いてある音声から読んでいない')
+    if (!/segments: made\.segments \?\? null/.test(clips)) miss.push('作った音声から読んでいない')
+    if (!/segments: '発言の区切り/.test(clips)) miss.push('`[調査中]` に出していない')
+
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    /* **「名前が出てくるか」で見ない。** 説明の中にも同じ語がある */
+    if (!/const segOffs = segOffsOf\(got\.segments, got\.spans\)/.test(read)) {
+      miss.push('通しの道が呼んでいない')
+    }
+    if (!/const segShift = segOffsOf\(got\?\.segments, got\?\.spans\)/.test(read)) {
+      // **道が2つあるものは、両方を数える**(27手めの戒め)
+      miss.push('段落ごとの道が呼んでいない')
+    }
+    if (!/const fit = \(segOffs && base\.how !== 'same'\)/.test(read)) {
+      miss.push('向こうの区切りを、いちばん先に採っていない')
+    }
+    if (!/const seamOffs = segOffs \? null : await wholeSeams\(/.test(read)) {
+      miss.push('区切りがあるのに、波をほどきに行っている')
+    }
+    if (!/fit\.how === 'measured' \|\| fit\.how === 'segments'/.test(read)) {
+      miss.push('区切りを、ずらす側に渡していない')
+    }
+    if (!/sure = fit\.how === 'same' \|\| fit\.how === 'measured' \|\| fit\.how === 'segments'/.test(read)) {
+      miss.push('向こうの区切りを、信じる側に入れていない')
+    }
+    /* **控えそのものを書き換えない。** 書き換えると、押すたびに二重にずれる */
+    if (/got\.spans = shiftItems\(/.test(read)) miss.push('覚えている控えを書き換えている')
+
+    // 版がそろっているか(置き直さないと、控えに区切りが入らない)
+    const need = clips.match(/NEED_FN_REV = '([^']+)'/)?.[1]
+    const have = fn.match(/FN_REV = '([^']+)'/)?.[1]
+    if (!need || !have || need !== have) miss.push(`版が食い違っている(窓口 ${have} / 画面 ${need})`)
+
+    if (miss.length) ng('向こうの区切りが、鳴らす側まで届いていない', miss.join(' / '))
+    else ok('窓口 → 控え → 画面 → 鳴らす側まで、道が1本も切れていない')
+  }
+
+  if (bad === before) ok('発言の区切りは、向こうが返したものをそのまま使っている')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
