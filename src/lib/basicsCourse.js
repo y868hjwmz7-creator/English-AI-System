@@ -9,6 +9,7 @@
  */
 import { COURSE_DAYS, COURSE_LENGTH, dayOf, tierOf } from '../data/basicsCourse.js'
 import { BASIC_WORDS } from '../data/basicWords.js'
+import { posGroupOf, posLabel } from './posGroups.js'
 
 /**
  * その日・その段の語。
@@ -144,3 +145,84 @@ export function dayLine(no, tier = 'core') {
  */
 export const dayPairs = (no) => (dayOf(no)?.examples ?? [])
   .map((x, i) => ({ key: `d${no}-${i}`, en: x.en, ja: x.ja }))
+
+/**
+ * その段の語を、**単語帳の行**(`review_words()` が返す形)にそろえる。
+ *
+ * ============================================================================
+ * 【なぜ要るか】(2026-09 利用者の指定)
+ *
+ *   > 基礎単語360/1200も業種別の横に置いてください。
+ *
+ *   基礎単語は**3冊目の単語帳**になった(「自分の単語帳 / 業種べつ /
+ *   基礎単語」)。**行の形をそろえておけば、`Wordbook.jsx` は
+ *   どの冊でも1文字も書き分けずに描ける** —— 出題の形も4択も
+ *   絞り込みも聞き流しも紙も、そのまま効く
+ *   (`shelfReviews.js` の `joinRow()` とまったく同じ考え方)。
+ *
+ * 【覚え具合は、自分の単語帳に残す】
+ *
+ *   ここが**業種べつとの唯一の違い**である。棚は
+ *   「混ぜたくない」という指定だったので `shelf_reviews`(0058)に
+ *   分けたが、基礎単語は 0053 で**逆の指定**を受けている。
+ *
+ *     > 講座から単語帳に登録を押せば、
+ *     > 単語帳の中の自分の普段の単語に追加される感じで
+ *
+ *   だから読む先も書く先も `word_reviews` のままで、
+ *   **新しい表も RPC も1つも作っていない**(SQL は1行も要らない)。
+ *
+ * 【まだ答えていない語には、行が無い】
+ *
+ *   `word_reviews` に行ができるのは**答えたとき**である。
+ *   だから左(段の語)から突き合わせて、行の無い語は
+ *   「まだ・箱0・今日出す」として組み立てる ——
+ *   **「まず入れる」を押さなくても、そのまま練習できる。**
+ *
+ * 【0円である】
+ *
+ *   訳も品詞も `basicWords.js` に書いてある。**窓口(AI)を1回も呼ばない。**
+ *   1,200 語を `lookupWord` で引くと 120 円ほどかかる。
+ *
+ * @param tier  'core'(基本360語)/ 'full'(標準1200語)
+ * @param seen  その人の `word_reviews`(`word_norm` を持つ行の一覧)
+ * @param today きょうの日付。**呼ぶ側が渡す**(素の node で確かめるため)
+ */
+export function basicRows(tier = 'core', seen = [], { today = '' } = {}) {
+  const map = new Map(
+    (seen ?? []).map((r) => [String(r?.word_norm ?? ''), r]).filter(([k]) => k),
+  )
+  return wordsForTier(tier).map((w) => {
+    const s = map.get(w.w) ?? null
+    return {
+      word_norm: w.w,
+      display: w.w,
+      /* `basicWords.js` の `w` は**空白を含まない**(`test:play` が
+         見張っている)ので、どれも語である(言い回しは入らない) */
+      kind: 'word',
+      /* **画面には日本語で出す。** 印は `n` / `v` なので、そのまま入れると
+         語の上の小さな札に「n」と出る。**対応表はここに書かない** */
+      pos: posLabel(posGroupOf(w.pos)),
+      meaning_ja: w.ja,
+      /* **出会った文は持たない。** 基礎単語は語だけの一覧なので、
+         穴埋め(箱3)は `pickForm()` が「思い出す」に落とす
+         (**行き止まりを作らない**) */
+      seen_in: null,
+      seen_in_ja: null,
+      status: s?.status ?? 'unknown',
+      box: s?.box ?? 0,
+      /* **まだ答えていない語は「今日出す」。** 待たせる理由がない */
+      due_on: s?.due_on ?? today,
+      updated_at: s?.updated_at ?? null,
+      added_at: s?.added_at ?? null,
+      material_id: null,
+      material_title: null,
+      material_industry: null,
+      material_kind: null,
+      material_genre: null,
+      material_scene: null,
+      material_level: null,
+      learn_streak: s?.learn_streak ?? 0,
+    }
+  })
+}

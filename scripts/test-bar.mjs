@@ -3951,14 +3951,19 @@ export default defineConfig({
        > 講座の中の単語はそれぞれ基本360語、標準1200語、として
        > そもそもが独立して選べる単語帳にしてください
 
+     **2026-09 に役目が1つになった**(利用者の指定「基礎単語360/1200も
+     業種別の横に置いてください」)。段の札は**冊の側**(`.wb-tiers`)へ
+     移り、ここは**「自分の単語帳にも入れる」だけ**になった
+     (0053 の `add_basic_words()` は道具ごと残してある)。
+
      **描かないと分からないこと**を測る ——
-     ①畳んだときに欄が1つも出ていないか(単語帳の頭が長くならない)
-     ②開くと段が2つ出て、**それぞれの語数**が読めるか
+     ①畳んだときに中身が1つも出ていないか(単語帳の頭が長くならない)
+     ②**段の札がここに残っていないか**(同じものを2か所に見せない)
      ③**何が起きるかが押す前に書いてあるか**(お金の話も)
      ④押せる大きさを割っていないか ⑤横にはみ出していないか
 
      **「出る」と「出ない」の両方を見る**(CLAUDE.md) ——
-     ①だけだと欄ごと消しても緑、②だけだと出しっぱなしでも緑になる。
+     ①だけだと欄ごと消しても緑、③だけだと出しっぱなしでも緑になる。
      ══════════════════════════════════════════════════════════════════ */
   for (const w of [1280, 390, 320]) {
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
@@ -3967,7 +3972,7 @@ export default defineConfig({
     await page.waitForTimeout(250)
     // ① 畳んでいるあいだは、中身が1つも出ていない
     const 畳 = await page.evaluate(() => ({
-      札: document.querySelectorAll('.basicpick .chip').length,
+      中身: document.querySelectorAll('.basicpick .wb-add-body').length,
       入口: document.querySelector('.basicpick .wb-add-open')?.textContent.trim() ?? '',
     }))
     await page.click('.basicpick .wb-add-open')
@@ -3975,41 +3980,39 @@ export default defineConfig({
     const got = await page.evaluate(() => {
       const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
       const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
-      const chips = [...document.querySelectorAll('.basicpick .chip')]
       const btn = document.querySelector('.basicpick .btn--primary')
       return {
-        札: chips.map((c) => c.textContent.trim()),
-        札の高さ: Math.min(...chips.map(px)),
+        // **段の札は、ここには無い**(冊の `.wb-tiers` が持っている)
+        札: document.querySelectorAll('.basicpick .chip').length,
         すすめ: document.querySelector('.basicpick-lead')?.textContent.trim() ?? '',
         走る: btn?.textContent.trim() ?? '',
         走る高さ: px(btn),
         よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        右: Math.max(0, ...chips.map(right), ...(btn ? [right(btn)] : [])),
+        右: Math.max(0, ...(btn ? [right(btn)] : [])),
       }
     })
     await page.close()
     const 名 = `基礎単語(${w}px)`
-    if (畳.札 !== 0) {
-      ng(`${名} … 畳んでいるのに、段の札が出ている`, String(畳.札))
-    } else if (!畳.入口.includes('基本360語') || !畳.入口.includes('標準1200語')) {
-      ng(`${名} … 畳んだ入口に、2つの段の名前が出ていない`, 畳.入口)
-    } else if (got.札.length !== 2
-      || !got.札[0].includes('基本360語') || !got.札[1].includes('標準1200語')) {
-      ng(`${名} … 段が2つ出ていない`, got.札.join(' / '))
-    } else if (!got.札[0].includes('360 語') || !got.札[1].includes('1200 語')) {
-      // **語数が読めないと、どちらを選ぶか決められない**
-      ng(`${名} … 札に語数が出ていない`, got.札.join(' / '))
+    if (畳.中身 !== 0) {
+      ng(`${名} … 畳んでいるのに、中身が出ている`, String(畳.中身))
+    } else if (!畳.入口.includes('入れる')) {
+      ng(`${名} … 畳んだ入口が、何をする欄なのか言っていない`, 畳.入口)
+    } else if (got.札 !== 0) {
+      // **段は冊の側にある。** 2か所に置くと食い違う
+      ng(`${名} … 段の札が、この欄に残っている`, String(got.札))
     } else if (!got.すすめ.includes('お金はかかりません')
       || !got.すすめ.includes('1つも戻りません')) {
       ng(`${名} … 何が起きるかが、押す前に書かれていない`, got.すすめ)
-    } else if (!got.走る.includes('基本360語')) {
-      ng(`${名} … 走らせるボタンが、選んだ段の名前を言っていない`, got.走る)
-    } else if (got.札の高さ < 34 || got.走る高さ < 40) {
-      ng(`${名} … 押せる大きさを割っている`, `札 ${got.札の高さ} / ボタン ${got.走る高さ}`)
+    } else if (!got.すすめ.includes('基本360語')) {
+      ng(`${名} … 受け取った段の名前を言っていない`, got.すすめ)
+    } else if (!got.走る.includes('入れる')) {
+      ng(`${名} … 走らせるボタンが、何をするか言っていない`, got.走る)
+    } else if (got.走る高さ < 40) {
+      ng(`${名} … 押せる大きさを割っている`, `ボタン ${got.走る高さ}`)
     } else if (got.よこ > 0 || got.右 > w) {
       ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
     } else {
-      ok(`${名} … 畳めて、開けば段も語数も出て、はみ出しも無い`)
+      ok(`${名} … 畳めて、開けば何が起きるかも出て、はみ出しも無い`)
     }
   }
 
@@ -4020,11 +4023,15 @@ export default defineConfig({
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     if (!/<BasicWordsPick\s/.test(src)) {
       ng('基礎単語 … 単語帳の画面に置かれていない')
-    } else if (!/onPicked=\{onPickWords\}/.test(src)) {
-      ng('基礎単語 … 絞り込みを外(App)に渡していない')
+    } else if (!/\{basicBook && \(\s*<BasicWordsPick/.test(src)) {
+      ng('基礎単語 … 「自分の単語帳にも入れる」が、この冊の中に置かれていない')
+    } else if (!/<BasicWordsPick tier=\{tier\}/.test(src)) {
+      ng('基礎単語 … 段を渡していない(欄の中でもう一度選ばせない)')
     /* **指定したゲストにだけ出す**(0055)。30日講座とまったく同じ判断を
-       受け取る —— **2つで1つ**なので、片方だけ出さない */
-    } else if (!/onPickWords && showBasics && \(/.test(src)) {
+       受け取る —— **2つで1つ**なので、片方だけ出さない。
+       2026-09 に、見る場所が「畳んだ欄を出すか」から
+       「冊を並べるか」へ移った(判断の渡り方は1文字も変わっていない) */
+    } else if (!/showBasics \? \[\{ id: 'basic', label: '基礎単語' \}\] : \[\]/.test(src)) {
       ng('基礎単語 … 指定したゲストだけ、になっていない')
     } else if (!/showBasics=\{basicsOn\}/.test(
       readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
@@ -4140,7 +4147,17 @@ export default defineConfig({
        押せば35冊が並ぶ
      ②**既定は自分の単語帳**で、そのあいだ棚の欄は1つも出ていない
        (**混ざらないことが、この機能の要である**)
-     ③棚を渡していない画面(`?screen=wordbook`)には、切り替えごと出ない
+     ③棚も基礎単語も渡していない画面(`?screen=wordbook`)には、
+       切り替えごと出ない
+
+   **基礎単語(3冊目)も、この行で測る**(2026-09 利用者の指定)。
+
+     > 基礎単語360/1200も業種別の横に置いてください。
+
+   「横」が指しているのはこの `.wb-books` の行である。だから
+   **札が3つ並んでいるか**と、押したときに**段の切り替え
+   (`.wb-tiers`)が出て、語がそのまま並ぶか**まで数える ——
+   0053 では「まず入れる」を押すまで1語も出なかった。
      ══════════════════════════════════════════════════════════════════ */
   for (const w of [1280, 390]) {
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
@@ -4157,7 +4174,7 @@ export default defineConfig({
     }))
 
     let 開 = { 冊: 0, 低い: 0, よこ: 0 }
-    if (初.札.length === 2) {
+    if (初.札.length === 3) {
       for (const b of await page.$$('.wb-books .chip')) {
         if (((await b.textContent()) ?? '').includes('業種べつ')) { await b.click(); break }
       }
@@ -4182,8 +4199,51 @@ export default defineConfig({
     const 戻 = await page.evaluate(() => document.querySelectorAll('.shelfbooks').length)
     await page.close()
 
+    /* ── 3冊目(基礎単語)。**押したら、そのまま語が並ぶか** ──────
+       段は2つ(基本360語 / 標準1200語)。**段を切り替えたら、
+       語の数もその段のものになる** —— そこまで数えないと、
+       札だけ出して中身が変わらない形に書き換えても緑のままになる */
+    let 基 = { 段: [], 語: 0, 語2: 0, 低い: 0, よこ: 0, 棚: 1 }
+    if (初.札.length === 3) {
+      const page2 = await browser.newPage({ viewport: { width: w, height: 900 } })
+      await page2.goto(`http://localhost:${PORT}/__bar.html?screen=mybook`,
+        { waitUntil: 'networkidle' })
+      await page2.waitForTimeout(300)
+      for (const b of await page2.$$('.wb-books .chip')) {
+        if (((await b.textContent()) ?? '').includes('基礎単語')) { await b.click(); break }
+      }
+      await page2.waitForTimeout(400)
+      基 = await page2.evaluate(() => {
+        const tab = [...document.querySelectorAll('.wb-tiers .chip')]
+        return {
+          段: tab.map((b) => b.textContent.replace(/\s+/g, ' ').trim()),
+          /* **語の数は3枚の札から数える**(まだ / 覚えかけ / 覚えた)。
+             一覧(`.wordbook-row`)は段を押したときだけ出るので、
+             既定の画面では0になる —— **見えているもので数える** */
+          語: [...document.querySelectorAll('.wb-stat strong')]
+            .reduce((a, b) => a + Number(b.textContent || 0), 0),
+          語2: 0,
+          低い: tab.length
+            ? Math.min(...tab.map((b) => Math.round(b.getBoundingClientRect().height))) : 0,
+          よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          // **棚の欄は出ていない**(混ざらない)
+          棚: document.querySelectorAll('.shelfbooks').length,
+        }
+      })
+      // 段を「標準1200語」へ。**語の数がその段のものになるか**
+      for (const b of await page2.$$('.wb-tiers .chip')) {
+        if (((await b.textContent()) ?? '').includes('1200')) { await b.click(); break }
+      }
+      await page2.waitForTimeout(500)
+      基.語2 = await page2.evaluate(
+        () => [...document.querySelectorAll('.wb-stat strong')]
+          .reduce((a, b) => a + Number(b.textContent || 0), 0),
+      )
+      await page2.close()
+    }
+
     const 名 = `トレーナーの単語帳(${w}px)`
-    if (初.札.join(' / ') !== '自分の単語帳 / 業種べつ') {
+    if (初.札.join(' / ') !== '自分の単語帳 / 業種べつ / 基礎単語') {
       ng(`${名} … 冊の切り替えが出ていない`, 初.札.join(' / ') || '(無し)')
     } else if (初.押.join('') !== '自分の単語帳') {
       ng(`${名} … 既定が自分の単語帳になっていない`, 初.押.join(' / ') || '(無し)')
@@ -4198,14 +4258,31 @@ export default defineConfig({
       ng(`${名} … 横にはみ出している`, `${開.よこ}px`)
     } else if (戻 !== 0) {
       ng(`${名} … 自分の単語帳に戻しても、棚の欄が残っている`)
+    } else if (基.段.length !== 2) {
+      ng(`${名} … 基礎単語の段(基本360語 / 標準1200語)が出ていない`,
+        基.段.join(' / ') || '(無し)')
+    } else if (!基.段[0].includes('360') || !基.段[1].includes('1200')) {
+      ng(`${名} … 段に語数が出ていない`, 基.段.join(' / '))
+    } else if (基.棚 !== 0) {
+      ng(`${名} … 基礎単語なのに、棚の欄が出ている(混ざって見える)`)
+    } else if (基.語 < 300) {
+      // **「まず入れる」を押さなくても、そのまま並ぶ**(2026-09 の指定)
+      ng(`${名} … 基礎単語の語が並んでいない`, `${基.語} 語`)
+    } else if (基.語2 <= 基.語) {
+      ng(`${名} … 段を変えても語が入れ替わっていない`, `${基.語} → ${基.語2}`)
+    } else if (基.低い < 36) {
+      ng(`${名} … 段の札が押せる大きさを割っている`, String(基.低い))
+    } else if (基.よこ > 0) {
+      ng(`${名} … 基礎単語で横にはみ出している`, `${基.よこ}px`)
     } else {
-      ok(`${名} … 35冊を、独立した単語帳として自由に開ける`)
+      ok(`${名} … 35冊と基礎単語を、独立した単語帳として自由に開ける`)
     }
   }
 
   /* **棚を渡していない画面には、切り替えごと出さない**
      (効かない操作を見せない)。ゲストの単語帳をトレーナーが開いたときは、
-     そのゲストに指定された棚だけが渡る —— **1冊も無ければ、ここは空** */
+     そのゲストに指定された棚だけが渡る —— **1冊も無ければ、ここは空。**
+     基礎単語も 0055 で外されていれば同じで、**冊が1つなら行ごと出ない** */
   {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,

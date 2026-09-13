@@ -1175,9 +1175,16 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     「おまかせ」も出題もこちらに無いままだった。
                     **同じ部品に、誰の単語帳かを渡すだけにする。**
                     こうすれば、片方だけ古くなることが起こりえない */}
+                {/* **基礎単語の冊は、ここには出さない**(2026-09)。
+                    利用者が言ったのは**ゲスト自身の単語帳**の話で
+                    (「基礎単語360/1200も業種別の横に置いてください」)、
+                    この画面には冊の切り替えがもともと1つも無い。
+                    **言われた場所だけを直す** —— 出したくなったら、
+                    ここを `showsBasics({ role: 'learner', features })` に
+                    変えるだけである(`features` はこの画面が持っている) */}
                 {detailTab === 'wordbook' && (
                   <Wordbook
-                    learnerId={l.id} learnerName={l.display_name}
+                    learnerId={l.id} learnerName={l.display_name} showBasics={false}
                     onMakeMaterial={(words) => { setMustUse(words); setDetailTab('create') }}
                   />
                 )}

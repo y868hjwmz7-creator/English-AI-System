@@ -3237,11 +3237,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '基礎単語 … 控えが無いときだけ、ファイルの訳を当てる')
   ok(/if \(r\.meaning_ja && r\.pos\) return r/.test(wb),
     '基礎単語 … 控えがある語は、1文字も書き換えない')
-  ok(/onPickWords=\{onPickWords\}|onPicked=\{onPickWords\}/.test(wb),
+  /* **絞り込みは `App.jsx` の1つだけ。** 基礎単語は 2026-09 に冊そのものへ
+     移したので、いまここを使うのはスピーチの語句である */
+  ok(/onPicked=\{onPickWords\}/.test(wb),
     '基礎単語 … 絞り込みは外(App)に任せる(同じ道を2つ持たない)')
 
   const bp = noC(read2('src/components/BasicWordsPick.jsx'))
-  ok(/await addBasicWords\(wordListFor\(tier\), learnerId\)/.test(bp),
+  ok(/await addBasicWords\(wordListFor\(info\.id\), learnerId\)/.test(bp),
     '基礎単語 … まとめて入れるのは `addBasicWords()` 1回だけ')
   ok(!/lookupWord/.test(bp),
     '基礎単語 … 1,200 語ぶんの意味を引きに行かない(0円のまま)')
@@ -3263,6 +3265,108 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '基礎単語 … まとめた1つに 0053 が入っている')
   ok(/proname = 'add_basic_words'/.test(read2('supabase/apply/check.sql')),
     '基礎単語 … check.sql が 0053 を見ている')
+
+  /* ══════════════════════════════════════════════════════════════
+     基礎単語を、**3冊目の単語帳にする**(2026-09 利用者の指定)
+
+       > 基礎単語360/1200も業種別の横に置いてください。
+
+     「横」が指しているのは**冊の切り替えの行**である
+     (「自分の単語帳 / 業種べつ」)。0053 では下の畳んだ欄で
+     「入れてから、その段だけに絞る」だったので、
+     **入れるまで1語も練習できなかった。**
+
+     見るのは3つ。
+       ① 行の形が `review_words()` とそろっているか(画面が書き分けずに済む)
+       ② 覚え具合は**自分の単語帳**に残る(棚とは逆・0053 の指定)
+       ③ 画面が本当に呼んでいるか
+     ══════════════════════════════════════════════════════════════ */
+  {
+    const { basicRows } = await import('../src/lib/basicsCourse.js')
+    const { BASIC_TIER_KEY, loadBasicTier, saveBasicTier } =
+      await import('../src/data/basicsCourse.js')
+
+    // ── ① 数と形 ──
+    const core = basicRows('core', [], { today: '2026-09-13' })
+    const full = basicRows('full', [], { today: '2026-09-13' })
+    ok(core.length === 360 && full.length === 1200,
+      '基礎単語の冊 … 段ごとに 360 / 1,200 語そろう',
+      `${core.length} / ${full.length}`)
+
+    /* **`review_words()` が返す形にそろえる。** そろっていないと、
+       出題・4択・絞り込み・聞き流し・紙のどこかで黙って抜ける */
+    const WANT = ['word_norm', 'display', 'kind', 'pos', 'meaning_ja',
+      'seen_in', 'seen_in_ja', 'status', 'box', 'due_on', 'updated_at',
+      'added_at', 'material_id', 'material_title', 'material_industry',
+      'material_kind', 'material_genre', 'material_scene', 'material_level',
+      'learn_streak']
+    const miss = WANT.filter((k) => !(k in core[0]))
+    ok(miss.length === 0,
+      '基礎単語の冊 … 行の形が `review_words()` とそろっている', miss.join(' '))
+
+    /* **まだ答えていない語は「まだ・箱0・今日出す」。**
+       待たせる理由がない —— ここが「入れなくても練習できる」の中身である */
+    ok(core[0].status === 'unknown' && core[0].box === 0
+      && core[0].due_on === '2026-09-13',
+      '基礎単語の冊 … 答えていない語は、そのまま今日出す')
+    ok(core.every((r) => r.meaning_ja),
+      '基礎単語の冊 … 訳が空の語が1つも無い(0円のまま4択が作れる)')
+    /* **画面には日本語で出す。** 印は `n` / `v` なので、
+       そのままだと語の上の小さな札に「n」と出る */
+    ok(core.every((r) => !/^[a-z]+$/.test(r.pos)),
+      '基礎単語の冊 … 品詞は日本語にしてから渡す',
+      core.find((r) => /^[a-z]+$/.test(r.pos))?.pos ?? '')
+    /* **出会った文は持たない。** 穴埋め(箱3)は `pickForm()` が
+       「思い出す」に落とす(行き止まりを作らない) */
+    ok(core.every((r) => r.seen_in === null),
+      '基礎単語の冊 … 出会った文は持たない(穴埋めは思い出すに落ちる)')
+
+    // ── 覚え具合を突き合わせる ──
+    const seen = basicRows('core', [{
+      word_norm: core[0].word_norm, status: 'learning', box: 3,
+      due_on: '2026-10-01', learn_streak: 7, added_at: '2026-09-01',
+    }], { today: '2026-09-13' })
+    ok(seen[0].status === 'learning' && seen[0].box === 3
+      && seen[0].due_on === '2026-10-01' && seen[0].learn_streak === 7,
+      '基礎単語の冊 … 答えた語は、その覚え具合をそのまま持つ')
+    ok(seen[1].status === 'unknown',
+      '基礎単語の冊 … 答えていない語は、突き合わせても「まだ」のまま')
+
+    // ── 段は覚える。**知らない値はやさしい段に落とす** ──
+    ok(BASIC_TIER_KEY === 'eas.basicTier' && typeof saveBasicTier === 'function',
+      '基礎単語の冊 … 段を覚える鍵は1か所(画面に書かない)')
+    ok(loadBasicTier() === 'core',
+      '基礎単語の冊 … 覚えていなければ、やさしい段から始める')
+
+    // ── ② 覚え具合は自分の単語帳。**棚とは逆**(0053 の指定) ──
+    const br = noC(read2('src/lib/basicReviews.js'))
+    ok(/from\('word_reviews'\)/.test(br),
+      '基礎単語の冊 … 覚え具合は自分の単語帳(`word_reviews`)から読む')
+    ok(!/review_words/.test(br),
+      '基礎単語の冊 … `review_words()` を通さない(上限で切られて後ろが「まだ」になる)')
+    ok(!/lookupWord/.test(br),
+      '基礎単語の冊 … 意味を引きに行かない(0円のまま)')
+
+    // ── ③ 画面が本当に呼んでいるか ──
+    ok(/const basicBook = book === 'basic'/.test(wb),
+      '基礎単語の冊 … 3冊目として持っている')
+    ok(/\.\.\.\(showBasics \? \[\{ id: 'basic', label: '基礎単語' \}\] : \[\]\)/.test(wb),
+      '基礎単語の冊 … 冊の一覧は1か所。0055 で外された人には並べない')
+    ok(/: loadBasicWordbook\(\{ learnerId, tier \}\)/.test(wb),
+      '基礎単語の冊 … 画面が本当に読みに行っている')
+    ok(/className="chiprow wb-tiers"/.test(wb),
+      '基礎単語の冊 … 段の切り替え(基本360語 / 標準1200語)を出す')
+    ok(/\{basicBook && \(\s*<BasicWordsPick/.test(wb),
+      '基礎単語の冊 … 「自分の単語帳にも入れる」は、この冊の中に置く')
+    /* **書き戻す先は自分の単語帳のまま。** 棚だけが `shelf_reviews` へ行く */
+    ok(/\? await setShelfWordStatus\(row\.shelf/.test(wb)
+      && /: await setWordStatus\(row\.word_norm/.test(wb),
+      '基礎単語の冊 … 答えは自分の単語帳へ書き戻す(棚だけが別)')
+    /* **「棚ではない」で書かない。** 書くと、冊を足すたびに
+       置いた場所の数だけ食い違う */
+    ok(!/\{!shelfBook &&/.test(wb),
+      '基礎単語の冊 … 自分の単語帳だけの欄は `myBook` で出し分ける')
+  }
 
   /* ══════════════════════════════════════════════════════════════
      品詞で絞る(2026-09 利用者の指定)
@@ -4014,7 +4118,11 @@ console.log('\nスピーチ練習(0054)')
   const wb = noC5(read5('src/components/Wordbook.jsx'))
   ok(/showBasics = true,/.test(wb),
     '出すもの … 単語帳の既定は真(トレーナー自身の単語帳は変わらない)')
-  ok(/onPickWords && showBasics && \(/.test(wb),
+  /* **2026-09 に、基礎単語は3冊目の単語帳になった**(利用者の指定
+     「基礎単語360/1200も業種別の横に置いてください」)。
+     判断の渡り方は1文字も変わっていない —— 見る場所が
+     「畳んだ欄を出すか」から「冊を並べるか」へ移っただけである */
+  ok(/showBasics \? \[\{ id: 'basic', label: '基礎単語' \}\] : \[\]/.test(wb),
     '出すもの … 単語帳は、渡された判断を本当に見ている')
   ok(!/showsBasics|viewerRoleOf/.test(wb),
     '出すもの … 単語帳の中で、自分で役割を見ていない')

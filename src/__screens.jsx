@@ -282,7 +282,10 @@ const FORM = (
 const only = (q.get('only') || '').split(',').map((w) => w.trim()).filter(Boolean)
 const WORDBOOK = (
   <div className="app-main">
-    <Wordbook learnerId="g1" learnerName="Airi"
+    {/* **棚も基礎単語も渡さない。** これが「出ない」側である ——
+        0055 で基礎単語を外されたゲストの単語帳がこの形になる
+        (冊が1つしか無いので、切り替えごと出ない) */}
+    <Wordbook learnerId="g1" learnerName="Airi" showBasics={false}
               only={only.length ? only : null}
               onlyLabel={only.length ? '業界の語' : ''}
               onClearOnly={only.length ? () => {} : null} />
@@ -299,8 +302,12 @@ const WORDBOOK = (
    (**判断は画面に持たせない**ので、渡すものは同じ形になる)。
 
    上の `?screen=wordbook` は**ゲストの単語帳を開いたとき**で、
-   棚を渡していない。**「出る」と「出ない」の両方を見る**ために、
-   2つとも残してある。 */
+   棚も基礎単語も渡していない。**「出る」と「出ない」の両方を見る**ために、
+   2つとも残してある。
+
+   **基礎単語(3冊目)もここで測る**(2026-09 利用者の指定
+   「基礎単語360/1200も業種別の横に置いてください」)。
+   `showBasics` の既定は真なので、渡さなくても出る。 */
 const MYBOOK = (
   <div className="app-main">
     <Wordbook shelves={shelfList()} />
@@ -867,10 +874,15 @@ const COURSE = <BasicsCourse me={{ id: null, level: 'Pre-Basic' }} />
    「何が起きるかを押す前に書いてあるか」は、ソースを読んでも分からない。
 
    押しても `addBasicWords()` は Supabase が無いので何も起きない
-   (**外へは1度も出ない**)。ここで見るのは、開いたときの姿である。 */
+   (**外へは1度も出ない**)。ここで見るのは、開いたときの姿である。
+
+   **2026-09 に役目が1つになった**(利用者の指定「基礎単語360/1200も
+   業種別の横に置いてください」)。段の札は冊の側(`.wb-tiers`)へ移り、
+   ここは**「自分の単語帳にも入れる」だけ**になった —— だから
+   段は外から受け取る。 */
 const BASICPICK = (
   <section className="card">
-    <BasicWordsPick onPicked={() => {}} />
+    <BasicWordsPick tier="core" />
   </section>
 )
 

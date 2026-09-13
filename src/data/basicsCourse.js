@@ -628,6 +628,34 @@ export const COURSE_TIERS = [
 /** 知らない id は、いちばんやさしい段に落とす(**行き止まりを作らない**) */
 export const tierOf = (id) => COURSE_TIERS.find((t) => t.id === id) ?? COURSE_TIERS[0]
 
+/* ==========================================================================
+ * どちらの段を開いていたか(2026-09 利用者の指定)
+ *
+ *   > 基礎単語360/1200も業種別の横に置いてください。
+ *
+ * 基礎単語は**3冊目の単語帳**になった。だから「どちらの段か」は、
+ * 業種べつの「チェックを入れた分野」(`SHELF_PICK_KEY`)とまったく
+ * 同じ扱いにする —— **覚える。毎回選び直させない。**
+ *
+ * **鍵の名前はここ1か所。** 画面に書かない
+ * (`SHELF_PICK_KEY` / `TONE_KEYS` と同じ作法)。
+ * ========================================================================== */
+
+/** どちらの段を開いていたかを覚えておく鍵 */
+export const BASIC_TIER_KEY = 'eas.basicTier'
+
+/** 覚えている段を読む。**知らない値・壊れていても落ちない**(`tierOf` が受ける) */
+export function loadBasicTier() {
+  try { return tierOf(globalThis.localStorage?.getItem(BASIC_TIER_KEY)).id }
+  catch { return COURSE_TIERS[0].id }
+}
+
+/** 段を覚える。**知らない値は書かない**(`tierOf` を必ず通す) */
+export function saveBasicTier(id) {
+  try { globalThis.localStorage?.setItem(BASIC_TIER_KEY, tierOf(id).id) }
+  catch { /* 覚えられなくても、その場では使える */ }
+}
+
 /**
  * そのレベルに合う段。**決めつけず、初めの1つを選んでおくだけ。**
  * ゲストは画面でいつでも切り替えられる。

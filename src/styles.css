@@ -5551,12 +5551,11 @@ button.wbfilter-ctl { text-align: left; }
    **入れ物は `.wb-add` をそのまま使う。** 手で入れる欄のとなりに並ぶ
    同じ役目(単語帳に語を入れる)なので、**新しい配色を作らない。**
    足すのは、段の札の下に置く2行の字づかいだけである */
-.basicpick .chiprow { margin-bottom: 10px; }
-/* **段の札は、この欄でいちばん先に押すもの**なので、指で狙える大きさにする。
-   `.rscope-chip`(復習の範囲)とまったく同じ 36px ——
-   **新しい数字を作らない** */
-.basicpick .chip { min-height: 36px; }
-.basicpick-hint, .basicpick-lead {
+/* **段の札は、ここから `.wb-tiers`(冊の中の段の切り替え)へ移した**
+   (2026-09 利用者の指定「基礎単語360/1200も業種別の横に置いてください」)。
+   **使わなくなった指定は残さない** —— 残すと、次に見た人が
+   どちらが生きているのか分からなくなる */
+.basicpick-lead {
   margin: 0 0 10px; font-size: var(--fs-13); line-height: 1.8;
   color: var(--text-secondary);
 }
@@ -8445,11 +8444,16 @@ button.wbfilter-ctl { text-align: left; }
    **どの冊を開くかの切り替え**(`.wb-books`)と、
    **チェックを入れる欄**(`.shelfbooks`)の2つ。
    0057 の「自分の単語帳に追加する」欄は、道具ごと消してある */
-.wb-books { margin: 0 0 var(--sp-10); }
-.wb-books .chip { min-height: 36px; }
+/* **基礎単語の段(基本360語 / 標準1200語)も、まったく同じ形にする**
+   (2026-09 利用者の指定「基礎単語360/1200も業種別の横に置いてください」)。
+   冊の切り替えのすぐ下に出る同じ役目の行なので、**値を書き写さない** */
+.wb-books,
+.wb-tiers { margin: 0 0 var(--sp-10); }
+.wb-books .chip,
+.wb-tiers .chip { min-height: 36px; }
 
 /* **棚を選ぶ欄は、この欄でいちばん先に押すもの**なので、
-   指で狙える大きさにする(`.basicpick .chip` を 36px にしたのと同じ話)。
+   指で狙える大きさにする(`.wb-tiers .chip` を 36px にしたのと同じ話)。
    素の `select` は実測 37px で、**押せる大きさ 40px を 3px 割っていた** */
 .shelfbuild select { min-height: 40px; }
 
