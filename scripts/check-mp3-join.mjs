@@ -31,8 +31,8 @@ import {
   shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
-  ABS_FLOOR, QUIET_RATIO, TRY_RATIOS, frameRms, itemOffsFrom, lastSeamFail,
-  measureSeams, quietLevel, seamOffsets, speechRuns,
+  ABS_FLOOR, MAX_OFF, QUIET_RATIO, TRY_RATIOS, frameRms, itemOffsFrom, lastSeamFail,
+  measureSeams, offCapOf, quietLevel, seamOffsets, speechRuns,
 } from '../src/lib/seamFind.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
@@ -2662,7 +2662,13 @@ function fakeMp3({
       ng('声のところが足りないのに、測れたことにしている')
     } else if (seamOffsets(
       raw,
-      trueStart.map((s, i) => ({ from: s + 9, to: s + 9 + speech[i] })),
+      /* **上限より大きくずらす**(33手め)。上限は決め打ちではなく
+         **数え落とした時間から出す**ようになったので、検証も
+         その値から作る —— **数を書き写さない** */
+      trueStart.map((s, i) => {
+        const d = offCapOf(raw, total + 20) + 5
+        return { from: s + d, to: s + d + speech[i] }
+      }),
       /* **長さの見張りに拾わせない。** ここで見たいのは
          「ずれが大きすぎる」の1本だけである(赤チェックは1つずつ) */
       total + 20,
@@ -3867,6 +3873,92 @@ function fakeMp3({
   }
 
   if (bad === before) ok('発言の区切りは、向こうが返したものをそのまま使っている')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ⑲ **ずれの上限を、決め打ちにしない**(2026-09 実機・33手め)
+ *
+ *   > 声を作り直しました。…その上でリピートをしましたが、
+ *   > 一切何も変わっていません(利用者)
+ *
+ *   画面に出ていた理由は **「ずれが大きすぎる(3.06 秒 / 上限 3 秒)」。**
+ *   **測れていたのに、こちらの上限が捨てていた。**
+ *   その教材は 控え 75.20 秒 / 音声 79.73 秒 で、
+ *   **数え落としそのものが 4.53 秒**ある。3 秒では通りようがない。
+ *
+ *   **「通る」だけを見ない。** 決め打ちのままなら**本当に捨てられる**
+ *   ことも一緒に数える —— でないと、直しの値打ちを検証が示せていない。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+  const RATE = 8000
+  // 14発言。**長さをわざとばらばらに**(均等配りが外すのは、この形である)
+  const lens = [0.59, 6.4, 1.42, 4.29, 2.26, 9.1, 3.4, 7.8, 5.2, 11.4, 4.6, 8.3, 6.1, 4.33]
+  const gaps = [0.62, 0.18, 0.55, 0.21, 0.44, 0.13, 0.51, 0.29, 0.38, 0.24, 0.47, 0.19, 0.32]
+  const total = lens.reduce((a, b) => a + b, 0)
+  const dur = total + gaps.reduce((a, b) => a + b, 0)
+
+  let t = 0
+  const spans = lens.map((L) => { const s = { start: t, end: t + L }; t += L; return s })
+
+  /* 波を作る。**「さーっ」も乗せる** —— 利用者の音声にはずっと入っている */
+  const buf = new Float32Array(Math.round(dur * RATE))
+  for (let j = 0; j < buf.length; j += 1) buf[j] = Math.sin(j * 7.3) * 0.03
+  let at = 0
+  const want = []
+  lens.forEach((L, i) => {
+    want.push(at - spans[i].start)
+    const from = Math.round(at * RATE)
+    const to = Math.round((at + L) * RATE)
+    for (let j = from; j < to; j += 1) {
+      buf[j] = Math.sin(j / 6) * 0.5 * (0.6 + 0.4 * Math.sin(j / 900)) + Math.sin(j * 7.3) * 0.03
+    }
+    at += L + (gaps[i] ?? 0)
+  })
+
+  // ⓐ 上限は、数え落としから出す
+  const cap = offCapOf(spans, dur)
+  if (!(cap > dur - total) || !(cap < (dur - total) + 2)) {
+    ng('上限が、数え落とした時間から出ていない', `${cap.toFixed(2)} 秒 / 数え落とし ${(dur - total).toFixed(2)} 秒`)
+  } else if (offCapOf(spans, 0) !== MAX_OFF || offCapOf(spans, total) !== MAX_OFF) {
+    ng('長さが分からないときに、いちばん下へ落ちていない')
+  } else ok(`ずれの上限は、その音声から出す(${MAX_OFF} 秒 → ${cap.toFixed(2)} 秒)`)
+
+  // ⓑ **決め打ちのままなら、本当に捨てられる**(直しの値打ち)
+  const got = measureSeams(buf, RATE, spans, dur)
+  if (!got) {
+    ng('数え落としの大きい音声を、いまも測れていない', JSON.stringify(lastSeamFail()))
+  } else {
+    const over = got.offs.filter((o) => Math.abs(o) > MAX_OFF).length
+    if (!over) ng('仮の並びが甘い。決め打ちの上限でも通ってしまう')
+    else ok(`決め打ち ${MAX_OFF} 秒なら、${over} 本が捨てられていた(利用者の 3.06 秒)`)
+
+    // ⓒ 測ったずれが、本当のずれと合っているか
+    const worst = Math.max(...got.offs.map((o, i) => Math.abs(o - want[i])))
+    const per = (dur - total) / (lens.length - 1)
+    const flat = Math.max(...want.map((w, i) => Math.abs(i * per - w)))
+    if (!(worst < flat)) ng('測っても、均等配りより良くなっていない', `${(worst * 1000).toFixed(0)}ms / ${(flat * 1000).toFixed(0)}ms`)
+    else ok(`測ると ${(worst * 1000).toFixed(0)}ms(均等に配ると ${(flat * 1000).toFixed(0)}ms 外す)`)
+  }
+
+  // ⓓ 区切りが無いとき、**どちらの意味か**を画面が言う
+  {
+    const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
+    const miss = []
+    if (!/rev: had\.rev \?\? null/.test(clips)) miss.push('控えの版を読んでいない')
+    if (!/segText\(seg, NEED_FN_REV\)/.test(clips)) miss.push('`[調査中]` に出していない')
+    if (!/なのに返っていない/.test(clips) || !/置き直しが要る/.test(clips)) {
+      miss.push('2つの意味を言い分けていない')
+    }
+    if ((read.match(/seg: \{ has: !!segOffs, rev: got\.rev \}/g) || []).length < 2) {
+      miss.push('画面が渡していない(2か所)')
+    }
+    if (miss.length) ng('区切りが無い理由を、切り分けられない', miss.join(' / '))
+    else ok('区切りが無いときは、窓口が古いのか返っていないのかを言う')
+  }
+
+  if (bad === before) ok('ずれの上限は、その音声の数字から出している')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

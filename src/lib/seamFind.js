@@ -73,8 +73,41 @@ export const SEAM_TOL = 0.08
 /** 継ぎ目の間が、これより広いことはない */
 export const MAX_GAP = 2.5
 
-/** ずれがこれを超えたら、測り損ねている */
+/** ずれの上限の、いちばん下(短い音声のため) */
 export const MAX_OFF = 3
+
+/** 数え落とされた時間に、これだけ足したところを上限にする */
+export const OFF_PAD = 1
+
+/**
+ * **ずれの上限は、その音声の数字から出す**(2026-09 実機・33手め)。
+ *
+ *   > 声を作り直しました。…その上でリピートをしましたが、
+ *   > 一切何も変わっていません(利用者)
+ *
+ * 画面に出ていた理由は、これだった。
+ *
+ *     ずれが大きすぎる(3.06 秒 / 上限 3 秒)
+ *
+ * **測れていたのに、こちらの上限が捨てていた。**
+ * その教材は 控え 75.20 秒 / 音声 79.73 秒 ——
+ * **数え落とされた時間そのものが 4.53 秒**あるので、
+ * ずれが 3 秒を超えるのは**当たり前**である。
+ * `MAX_OFF = 3` という決め打ちは、はじめから成り立っていなかった。
+ *
+ * **ずれは、数え落とされた時間より大きくはなりえない。**
+ * だからそこに少しだけ余白を足したところを上限にする ——
+ * **数えられるものを、決め打ちにしない**(CLAUDE.md)。
+ *
+ * @param {Array<{start:number,end:number}>} spans 控えの区間
+ * @param {number} duration 実際の音声の長さ
+ */
+export function offCapOf(spans, duration) {
+  const d = Number(duration)
+  const last = Number(spans?.[spans.length - 1]?.end)
+  if (!Number.isFinite(d) || !Number.isFinite(last) || !(d > last)) return MAX_OFF
+  return Math.max(MAX_OFF, (d - last) + OFF_PAD)
+}
 
 /** これだけの割合が素直に当たらなければ、測れたことにしない */
 export const MIN_HIT = 0.7
@@ -323,10 +356,13 @@ export function seamOffsets(spans, runs, duration = 0) {
   if (hit + tight < Math.ceil((spans.length - 1) * MIN_HIT)) {
     return no(`当てが多い(素直に当たったのは ${hit + tight}/${spans.length - 1} 本)`)
   }
+  /* **上限は、その音声の数字から出す**(33手め)。決め打ちの 3 秒では、
+     数え落としが 4.53 秒あった教材で**必ず捨てていた** */
+  const cap = offCapOf(spans, duration)
   for (let k = 0; k < offs.length; k += 1) {
     if (!Number.isFinite(offs[k])) return no('ずれが数にならない')
-    if (Math.abs(offs[k]) > MAX_OFF) {
-      return no(`ずれが大きすぎる(${offs[k].toFixed(2)} 秒 / 上限 ${MAX_OFF} 秒)`)
+    if (Math.abs(offs[k]) > cap) {
+      return no(`ずれが大きすぎる(${offs[k].toFixed(2)} 秒 / 上限 ${cap.toFixed(2)} 秒)`)
     }
   }
   for (let k = 1; k < spans.length; k += 1) {

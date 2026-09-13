@@ -1010,6 +1010,9 @@ export function readAloudSequence(parts, {
               sents: sent,
               kind: got.kind,
               cut: foldWorst(sent, FADE_STEP / 1000, slipOf(sure)),
+              /* **区切りが届いているか**も出す(33手め)。無いときは、
+                 窓口が古いのか返っていないのかまで言い切る */
+              seg: { has: !!segOffs, rev: got.rev },
             })
             /* 続きから始めたときは、飛んだ先も控えの時計のままだった。
                **鳴り出した直後の1回だけ**、合わせ直す */
@@ -1022,6 +1025,9 @@ export function readAloudSequence(parts, {
               sents: sent,
               kind: got.kind,
               cut: foldWorst(sent, FADE_STEP / 1000, slipOf(sure)),
+              /* **区切りが届いているか**も出す(33手め)。無いときは、
+                 窓口が古いのか返っていないのかまで言い切る */
+              seg: { has: !!segOffs, rev: got.rev },
             })
           }
         }

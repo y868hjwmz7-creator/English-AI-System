@@ -420,8 +420,24 @@ const DOOR = { dialogue: '会話(発言ごとに渡す)', narration: '記事(1�
  *   直すたびに「届いたのかどうか」を利用者に推測させていた。
  *   **数字を1つ出せば、次の報告で一目で分かる。**
  */
+/**
+ * **区切りが無いのは、どちらの意味か**(33手め)。
+ *
+ * 控えは自分を作った窓口の版(`rev`)を持っている。だから
+ * 「置き直していない」のか「置き直したのに返っていない」のかを、
+ * **推測せずに**言い切れる。**分かれ道は、画面に出してから直す**
+ * (第5.159.11節の戒め)。
+ */
+function segText(seg, need) {
+  if (!seg) return ''
+  if (seg.has) return ''                    // 使えているので、何も言わない
+  const rev = seg.rev || '版が付いていない'
+  return ` / 区切り 無し(窓口 ${rev}${
+    seg.rev && seg.rev >= need ? ' なのに返っていない' : ' … 置き直しが要る'})`
+}
+
 export function noteWholeClock({
-  align, dur, fit, sents, kind = null, cut = null,
+  align, dur, fit, sents, kind = null, cut = null, seg = null,
 }) {
   const n = (v) => (Number.isFinite(v) ? v.toFixed(2) : '—')
   const heads = (sents ?? []).slice(0, 6).map((s) => n(s.start)).join(' / ')
@@ -440,6 +456,7 @@ export function noteWholeClock({
   }[fit?.how] ?? '—'
   setDetail(`[調査中] 1本で鳴っています。控え ${n(align)} 秒 / 音声 ${n(dur)} 秒`
     + `${DOOR[kind] ? ` / ${DOOR[kind]}` : ''}`
+    + segText(seg, NEED_FN_REV)
     + ` / ${how}`
     + (seamNote ? `(${seamNote})` : '')
     + (fit?.how === 'seam' ? ` ${n(fit.per)} 秒ずつ` : '')
@@ -978,6 +995,10 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
           alignment: had.alignment,
           kind: had.kind ?? null,
           segments: had.segments ?? null,
+          /* **その控えを作った窓口の版**(33手め)。区切りが無いときに
+             「窓口が古い」のか「窓口は新しいのに返っていない」のかを、
+             画面で切り分けるために要る(推測させない) */
+          rev: had.rev ?? null,
         }
         : null
       if (!out) {
@@ -1030,6 +1051,7 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
       alignment: made.alignment,
       kind: made.kind ?? res.kind ?? null,
       segments: made.segments ?? null,
+      rev: made.rev ?? null,
     }
     wholeCache.set(mark, out)
     wholeGaveUp.delete(mark)
