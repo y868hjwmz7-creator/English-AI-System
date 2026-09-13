@@ -653,57 +653,6 @@ export function shiftEach(list, offs) {
   })
 }
 
-/**
- * **測った縁を、文の区間に当てる**(2026-09 実機・38手め)。
- *
- *   > much で終わるところが mu しか入らない
- *   > こういう挙動になる文が全てではないので、
- *   > ここに全体を合わせるとまたメチャクチャになる(利用者)
- *
- * ずれる量は**語尾の音の種類**で変わるので、一律の数は足せない
- * (37手めで足して取り下げた)。**継ぎ目ごとに測って、その継ぎ目にだけ当てる。**
- *
- * ## **今日より早くならないことを、形で保証する**
- *
- * `seamEdges()` が `max(控えの値, 測った値)` を返すので、
- * ここで当てても**区間が今日より狭くなることは起こりえない。**
- * 測れなかった継ぎ目は `null` なので、**1ミリ秒も変わらない。**
- *
- * **`shiftEach()` とは別物である。** あちらは「ずらす」(長さは変えない)、
- * こちらは「**伸ばす**」(始まりと終わりを、音の在るところまで広げる)。
- *
- * @param {Array<{start:number,end:number}>} list 文の区間
- * @param {{tail:Array<number|null>, head:Array<number|null>}|null} edges
- * @returns {Array} 当てた区間(当てるものが無ければ、そのまま返す)
- */
-export function applyEdges(list, edges) {
-  if (!Array.isArray(list) || !edges) return list
-  const { tail, head } = edges
-  if (!Array.isArray(tail) || !Array.isArray(head)) return list
-  if (tail.length !== list.length || head.length !== list.length) return list
-  /* **歯止めはここ1か所。** 測る側(`seamEdges()`)は測った値をそのまま返す */
-  const out = list.map((s, i) => {
-    const s0 = Number(s.start)
-    const e0 = Number(s.end)
-    if (!Number.isFinite(s0) || !Number.isFinite(e0)) return s
-    const h = Number(head[i])
-    const t = Number(tail[i])
-    /* **どちらも `max`。** 測れていない側(`null`)は今日のまま */
-    const start = Number.isFinite(h) ? Math.max(s0, h) : s0
-    const end = Number.isFinite(t) ? Math.max(e0, t) : e0
-    if (start === s0 && end === e0) return s
-    return { ...s, start, end: Math.max(end, start) }
-  })
-  /* **頭を追い越さない。** 追い越すと区間が逆さになり、`windowAt()` の
-     縁が並ばなくなる。**縮めても今日より狭くはならない** ——
-     頭は今日より早くならないので、`min` の相手は必ず今日の `end` 以上 */
-  return out.map((s, i) => {
-    const next = out[i + 1]
-    if (!next || !(s.end > next.start)) return s
-    return { ...s, end: Math.max(Number(list[i].end), next.start) }
-  })
-}
-
 /** 控えの秒 → 音声の秒(続きから始めたときの飛び先を合わせ直す) */
 export function fitTime(sec, fit, spans) {
   if (fit?.how === 'measured') {

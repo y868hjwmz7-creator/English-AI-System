@@ -26,14 +26,13 @@
 import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
-  applyEdges, foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_LEAD, SLIP,
-  slipOf,
+  foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_LEAD, SLIP, slipOf,
   scaleSpans, seekSentence, segOffsOf, FRAME_SEC, HEAD_LEAD, SEG_HEAD,
   sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, stickyIndex, wholeMark,
 } from '../src/lib/wholeAudio.js'
 import {
   ABS_FLOOR, MAX_OFF, QUIET_RATIO, TRY_RATIOS, frameRms, itemOffsFrom, lastSeamFail,
-  measureEdges, measureSeams, offCapOf, quietLevel, seamEdges, seamOffsets, speechRuns,
+  measureSeams, offCapOf, quietLevel, seamOffsets, speechRuns,
 } from '../src/lib/seamFind.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
@@ -4049,112 +4048,6 @@ function fakeMp3({
   }
 
   if (bad === before) ok('一文目のくり返しで、画面は切り替わらない')
-}
-
-/* ══════════════════════════════════════════════════════════════════
- * ㉑ **控えの `end` は、音が消えたところではない**(2026-09 実機・38手め)
- *
- *   > much で終わるところが mu しか入らない
- *   > ⓶なのですが、こういう挙動になる文が全てではないので、
- *   > ここに全体を合わせるとまたメチャクチャになる(利用者)
- *
- *   **一律の数は足せない**(37手めで足して取り下げた)。
- *   ずれる量は語尾の音の種類で変わるので、**継ぎ目ごとに測る。**
- *
- *   見るのは4つ。**「伸びた」だけを見ない。**
- *     ①測れた継ぎ目では、控えより先まで伸びるか
- *     ②**測れなかった継ぎ目は、1ミリ秒も変わらないか**
- *     ③**どの継ぎ目も、今日より狭くならないか**(`max` の保証)
- *     ④画面が本当に呼んでいるか(定義だけでは何も起きない)
- * ══════════════════════════════════════════════════════════════════ */
-{
-  const before = bad
-  const HOP = 0.01
-  const RATE = 8000
-
-  /* **波を作る。** 2文めの語尾だけ、控えの `end` より 90ms 長く鳴らす
-     (`much` の /tʃ/ のつもり)。3文めの語尾は控えぴったり */
-  const sents = [
-    { start: 0.00, end: 1.00, item: 0 },
-    { start: 1.20, end: 2.20, item: 0 },   // ← 実際は 2.29 まで鳴っている(much)
-    { start: 2.50, end: 3.50, item: 0 },   // ← 控えのとおり(動かしてはいけない)
-    { start: 3.80, end: 4.80, item: 0 },   // ← 実際はどちらの端も控えより手前
-    { start: 5.00, end: 6.00, item: 0 },
-  ]
-  /* 実際に音が在るところ(秒)。**2文めは後ろへはみ出し、4文めは手前で終わる。**
-     **両方を混ぜる** —— はみ出す側だけだと、`max` の下限を外しても緑になる */
-  const real = [
-    [0.00, 1.05], [1.20, 2.29], [2.50, 3.50], [3.70, 4.65], [5.00, 6.00],
-  ]
-  const wave = new Float32Array(Math.round(6.2 * RATE))
-  real.forEach(([a, b]) => {
-    for (let i = Math.round(a * RATE); i < Math.round(b * RATE); i += 1) {
-      wave[i] = Math.sin((i / RATE) * 2 * Math.PI * 220) * 0.5
-    }
-  })
-
-  const got = measureEdges(wave, RATE, sents)
-  if (!got) ng('縁を測れない', 'measureEdges が null を返した')
-  else {
-    const fixed = applyEdges(sents, got)
-
-    // ① 2文めは、控えの end より先まで伸びているか
-    const grew = fixed[1].end - sents[1].end
-    if (grew < 0.05) ng('語尾まで伸びていない', `2文めの伸び ${(grew * 1000).toFixed(0)}ms`)
-    else ok(`測れた継ぎ目では、語尾まで伸びる(2文め +${(grew * 1000).toFixed(0)}ms)`)
-
-    // ② 控えのとおりに鳴り終わっている文は、動かさない(誤差 1コマぶんまで)
-    const still = Math.abs(fixed[2].end - sents[2].end)
-    if (still > HOP * 1.5) ng('動かしてはいけない文まで動かした', `3文め ${(still * 1000).toFixed(0)}ms`)
-    else ok('控えどおりに終わっている文は、ほとんど動かさない')
-
-    /* ③ **どの継ぎ目も、今日より狭くならない。** ここが直しの安全そのもの。
-       値を書き写さず、`applyEdges()` の前後を突き合わせる */
-    const shrunk = fixed.filter((f, i) => f.end < sents[i].end - 1e-9
-      || f.start < sents[i].start - 1e-9)
-    if (shrunk.length) ng('今日より狭くなった区間がある', `${shrunk.length} 文`)
-    else ok('どの文も、今日より狭くならない(max で下限にしてある)')
-  }
-
-  /* ② 測れなかったとき ——**1ミリ秒も変わらない** */
-  const same = applyEdges(sents, null)
-  if (same !== sents) ng('測れなくても作り直している', '同じ並びを返していない')
-  else ok('測れなかったら、今日の区間をそのまま使う')
-
-  /* 地続きの継ぎ目(静けさが無い)は、測らない —— 延ばす余地が無い */
-  const tight = seamEdges(
-    [{ start: 0, end: 1 }, { start: 1, end: 2 }],
-    [{ from: 0, to: 2 }],
-  )
-  if (tight) ng('地続きの継ぎ目まで測っている', '静けさが無いのに縁を返した')
-  else ok('地続きの継ぎ目は測らない(延ばす余地が無い)')
-
-  /* 遠い静けさは結ばない(`EDGE_CAP`)。**値は書き写さず、性質で見る** */
-  const far = seamEdges(
-    [{ start: 0, end: 1 }, { start: 5, end: 6 }],
-    [{ from: 0, to: 1.02 }, { from: 2.0, to: 2.5 }, { from: 5, to: 6 }],
-  )
-  if (far && Number.isFinite(far.tail[0]) && far.tail[0] > 2) {
-    ng('遠い静けさに結んでいる', `tail ${far.tail[0]}`)
-  } else ok('控えの継ぎ目から遠い静けさには結ばない')
-
-  /* ④ **画面が本当に呼んでいるか。** 定義だけでは何も起きない */
-  {
-    const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
-    const miss = []
-    if (!/await wholeEdges\(got\.url, shiftItems\(sent, segOffs\)\)/.test(read)) {
-      miss.push('時計を合わせたあとの並びで測っていない')
-    }
-    /* **「名前が出てくるか」で見ない。** `if (false)` と打ち消しても
-       名前は残る(実際に赤チェックで素通りした)。**条件ごと**見る */
-    if (!/if \(fit\.how === 'segments'\) sent = applyEdges\(sent, edges\)/.test(read)) {
-      miss.push('文の区間に当てていない')
-    }
-    if (miss.length) ng('測った縁が、画面まで届いていない', miss.join(' / '))
-    else ok('画面が、時計を合わせたあとの並びで測って、当てている')
-  }
-
-  if (bad === before) ok('控えの end を過ぎても、語尾は鳴りきる')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

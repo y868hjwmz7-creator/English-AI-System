@@ -60,7 +60,7 @@ import {
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
 import {
-  TRY_RATIOS, itemOffsFrom, lastSeamFail, measureEdges, measureSeams,
+  TRY_RATIOS, itemOffsFrom, lastSeamFail, measureSeams,
 } from './seamFind.js'
 import { charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
 import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
@@ -469,9 +469,6 @@ export function noteWholeClock({
     + (fit?.how === 'seam' ? ` ${n(fit.per)} 秒ずつ` : '')
     + (fit?.how === 'scale' ? ` ${Number.isFinite(fit.k) ? fit.k.toFixed(4) : '—'} 倍` : '')
     + `${gaps ? ` / 継ぎ目 ${gaps}` : ''}`
-    /* **縁まで伸ばせたか**(38手め)。出ていなければ届いていない ——
-       次の報告1つで、直しが効いているかどうかが決まる */
-    + `${edgeNote ? ` / ${edgeNote}` : ''}`
     + `${Number.isFinite(cut) ? ` / 声の後ろを削る 最大 ${Math.round(cut * 1000)}ms` : ''}`
     + `${heads ? ` / 文の頭 ${heads}` : ''}`)
 }
@@ -1248,98 +1245,6 @@ export async function wholeSeams(url, spans, sents = null) {
   } catch (e) {
     seamNote = `ほどけませんでした(${e?.message ?? e})`
     seamGaveUp.set(name, seamNote)
-    return null
-  }
-}
-
-/* ── **文の継ぎ目の、本当の縁を測る**(2026-09 実機・38手め)─────────
- *
- *   > much で終わるところが mu しか入らない
- *
- * `voice_segments`(32手め)が返すのは**発言の区切り**である。
- * **発言の中の文と文**は、これまでどおり `alignment` の文字の時刻から
- * 出しており、そこは「文字に割り当てた区間」であって
- * **音が鳴り終わったところではない。**
- *
- * `wholeSeams()` とは**役目が違う。**
- *
- * | | 何を返すか | いつ使うか |
- * |---|---|---|
- * | `wholeSeams()` | 継ぎ目の**ずれ**(時計合わせ) | 区切りが**返っていない**とき |
- * | `wholeEdges()` | 継ぎ目の**縁**(音の在るところ) | 区切りが**返っている**とき |
- *
- * **窓口を1回も呼ばない = 0円。** MP3 は鳴らすためにどのみち落としている。
- * ほどくのは1つの音声につき1回だけで、そのあとは端末に覚える。
- */
-const edgeCache = new Map()
-const edgeGaveUp = new Set()
-/** **中身の形が変わったら鍵を変える**(古い控えを読むと縁が食い違う) */
-const EDGE_KEY = 'eas.edges1'
-const EDGE_KEEP = 40
-
-function readEdgeStore() {
-  try { return JSON.parse(localStorage.getItem(EDGE_KEY) || '{}') || {} } catch { return {} }
-}
-
-function writeEdgeStore(name, rec) {
-  try {
-    const all = readEdgeStore()
-    all[name] = rec
-    const keys = Object.keys(all)
-    if (keys.length > EDGE_KEEP) keys.slice(0, keys.length - EDGE_KEEP).forEach((k) => { delete all[k] })
-    localStorage.setItem(EDGE_KEY, JSON.stringify(all))
-  } catch { /* 覚えられなくても、その場では測れている */ }
-}
-
-/** 直近の縁の測りぐあい。**`[調査中]` の行がそのまま出す** */
-let edgeNote = null
-export const lastEdgeNote = () => edgeNote
-
-/**
- * @param {string} url その音声の置き場所
- * @param {Array<{start:number,end:number}>} sents **時計を合わせたあとの**文の区間
- * @returns {Promise<{tail:Array<number|null>, head:Array<number|null>}|null>}
- *   測れなければ `null`(**今日と1ミリ秒も変わらない**)
- */
-export async function wholeEdges(url, sents) {
-  edgeNote = null
-  if (!url || !Array.isArray(sents) || sents.length < 2) return null
-  const name = seamNameOf(url)
-  if (edgeCache.has(name)) {
-    const rec = edgeCache.get(name)
-    edgeNote = rec ? `覚えていた縁(${rec.hit}/${sents.length - 1} 文)` : null
-    return rec
-  }
-  if (edgeGaveUp.has(name)) return null
-
-  const kept = readEdgeStore()[name]
-  if (kept && Array.isArray(kept.t) && kept.t.length === sents.length) {
-    const rec = { tail: kept.t, head: kept.h, hit: kept.n }
-    edgeCache.set(name, rec)
-    edgeNote = `覚えていた縁(${kept.n}/${sents.length - 1} 文)`
-    return rec
-  }
-
-  try {
-    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext
-    if (!OAC) { edgeGaveUp.add(name); return null }
-    // **端末の控えが効く。** `<audio>` が取ったばかりなので、たいてい通信は起きない
-    const res = await fetch(url, { mode: 'cors', cache: 'force-cache' })
-    if (!res.ok) { edgeGaveUp.add(name); return null }
-    const bytes = await res.arrayBuffer()
-    const off = new OAC(1, 1, 44100)
-    const buf = await off.decodeAudioData(bytes)
-    const got = measureEdges(buf.getChannelData(0), buf.sampleRate, sents)
-    if (!got) { edgeGaveUp.add(name); edgeNote = '縁は測れません'; return null }
-    const rec = { tail: got.tail, head: got.head, hit: got.hit }
-    edgeCache.set(name, rec)
-    writeEdgeStore(name, { t: got.tail, h: got.head, n: got.hit })
-    edgeNote = `縁 ${got.hit}/${sents.length - 1} 文`
-      + (got.q > TRY_RATIOS[0] ? ` / しきい ${Math.round(got.q * 100)}%` : '')
-    return rec
-  } catch (e) {
-    edgeGaveUp.add(name)
-    edgeNote = `縁をほどけません(${e?.message ?? e})`
     return null
   }
 }

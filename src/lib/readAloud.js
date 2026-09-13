@@ -43,7 +43,7 @@
 import {
   DEFAULT_CLIP_VOICE, canUseClips, clipAlignment, clipDuration, clipTime,
   lastWholeDetail, noteFellBack, noteSentClock, noteWholeClock, noteWholeFallback,
-  playClip, prefetchClip, seekClip, stopClip, wholeClip, wholeEdges, wholeSeams,
+  playClip, prefetchClip, seekClip, stopClip, wholeClip, wholeSeams,
 } from './audioClips.js'
 import { FADE_STEP } from './loudness.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
@@ -52,8 +52,7 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  REPEAT_UNITS, alignEndOf, applyEdges, charTimesOf, clockFitOf, clockScaleOf, fitTime, segOffsOf,
-  stickyIndex,
+  REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, segOffsOf, stickyIndex,
   makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
   foldWorst, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
 } from './wholeAudio.js'
@@ -818,21 +817,6 @@ export function readAloudSequence(parts, {
      *   (ほどく1〜2秒も、しきい値の当て推量も要らなくなる)。 */
     const segOffs = segOffsOf(got.segments, got.spans)
     const seamOffs = segOffs ? null : await wholeSeams(got.url, got.spans, sent)
-    /* ── **発言の中の文と文は、まだ控えの時計のまま**(38手め)────────
-     *
-     *   > much で終わるところが mu しか入らない
-     *
-     *   `voice_segments` が返すのは**発言の区切り**である。発言の中の
-     *   文の縁は `alignment` の文字の時刻のままで、そこは
-     *   **音が鳴り終わったところではない。** 語尾が破裂音・摩擦音の文
-     *   だけがはっきり切れるので、**文によって出たり出なかったりする。**
-     *
-     *   **測るのは、時計を合わせたあとの並びに対して**である
-     *   (縁は音声の中の絶対の秒なので、ずらす前に測ると継ぎ目がずれる)。
-     *   だから `segOffs` を先に当ててから渡す。 */
-    const edges = segOffs
-      ? await wholeEdges(got.url, shiftItems(sent, segOffs))
-      : null
     if (!alive()) return true
 
     let spans = got.spans
@@ -1015,10 +999,6 @@ export function readAloudSequence(parts, {
                  `shiftItems()` は同じ発言の文に同じずれしか当てないので、
                  **発言の中の継ぎ目が控えの時計のまま**になる */
               sent = fit.sentOffs ? shiftEach(sent, fit.sentOffs) : shiftItems(sent, fit.offs)
-              /* **測った縁まで伸ばす**(38手め)。`max` で今日の値を
-                 下限にしてあるので、**いまより早く切れることは起こりえない。**
-                 測れなかった継ぎ目は、1ミリ秒も変わらない */
-              if (fit.how === 'segments') sent = applyEdges(sent, edges)
             } else if (fit.how === 'scale') {
               spans = scaleSpans(spans, fit.k)
               sent = scaleSpans(sent, fit.k)
