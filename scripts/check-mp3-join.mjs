@@ -26,10 +26,10 @@
 import { readFileSync } from 'node:fs'
 import {
   alignEndOf, charTimesOf, clockFitOf, clockScaleOf, foldNeed, indexAtTime, makeRepeatSeeker,
-  foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_MISS, SLIP, slipOf,
+  foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_LEAD, SLIP, slipOf,
   scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
-import { itemOffsFrom, measureSeams, MIN_SILENCE, seamOffsets } from '../src/lib/seamFind.js'
+import { itemOffsFrom, measureSeams, seamOffsets } from '../src/lib/seamFind.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
@@ -1000,14 +1000,15 @@ function fakeMp3({
        ①前の声へ食い込まない ②欠けるのは**ひと呼吸より短い**
        ③頭は逃がさない。**`SEEK_MISS` を書き写すと、値を変えた日に
        期待値も一緒に動き、仕組みを壊しても素通りする** */
+    /* **29手めで、逃がすのをやめた。** `seekClip(hush)` が**黙らせたまま**
+       着いた先を見て直すので、あらかじめ倒す必要が無い ——
+       いまは**その文の頭ちょうど**を頼み、頭を1ミリ秒も欠かさない */
     const back2 = repeatSeek('sentence', past(2), flatO)
-    if (!(back2 > 1 + 1e-9)) {
-      ng('間の無い並びで、文の頭ちょうどを頼んでいる(前の声へ食い込む)', `${back2}`)
-    } else if (!(back2 - 1 <= 0.15)) {
-      ng('間の無い並びで、逃がしすぎている(文の頭が欠ける)', `${back2}`)
+    if (Math.abs(back2 - 1) > 1e-9) {
+      ng('間の無い並びで、その文の頭ちょうどを頼んでいない', `${back2}`)
     } else if (repeatSeek('sentence', past(1), flatO) !== 0) {
-      ng('いちばん最初の文まで逃がしている(頭が欠ける)')
-    } else ok(`間の無い並びでは、少しうしろへ逃がす(頭は逃がさない・+${((back2 - 1) * 1000).toFixed(0)}ms)`)
+      ng('いちばん最初の文が、頭から始まらない')
+    } else ok('間の無い並びでは、その文の頭ちょうどを頼む(頭を欠かさない)')
 
     /* **間が足りるところは、これまでどおり手前へ寄せる。**
        逃がすのは足りないぶんだけである(そうしないと、
@@ -1870,10 +1871,10 @@ function fakeMp3({
        この並びは割合の見積もりなので**間(ま)が無い** ——
        縁＝声の切れ目で、手前で折り返すとその文の最後が切れる */
     const end = secs[1].end + 0.01
-    /* 間が無い並びなので、戻る先は**その文の頭のすぐうしろ**になる
-       (見込んだぶん逃がす・15手め / 16手め)。**値は書き写さない** */
+    /* 間が無い並びなので、戻る先は**その文の頭ちょうど**である
+       (29手めで、あらかじめ逃がすのをやめた)。**値は書き写さない** */
     const backTo = repeatSeek('sentence', end, { sentences: secs })
-    if (!(backTo > secs[1].start && backTo - secs[1].start <= 0.15)) {
+    if (Math.abs(backTo - secs[1].start) > 1e-9) {
       ng('文の終わりで、その文の頭へ戻らない', `${backTo}`)
     } else if (repeatSeek('item', end, { sentences: secs }) !== null
       || repeatSeek('all', end, { sentences: secs }) !== null
@@ -1921,18 +1922,20 @@ function fakeMp3({
   }
 
   /* **見込んだぶんの外れを、二度直さない**(15手め / 16手め)。
-     頼む先(`landSec`)が `SEEK_MISS` を**先に見込んである**ので、
-     着地の見張りがそれより小さいずれまで直すと**二重に先へ送り**、
-     文の頭がそのぶん余計に欠ける。**音は鳴るので、聴くまで分からない** */
+     **29手めで、意味が逆になった。** 頼む先はもう倒していないので、
+     見張りは**細かいずれまで直してよい** —— 直しているあいだは
+     `muted` で黙っているので、手前に着いても音は出ない。
+     **粗いままだと、その文の頭が欠けたまま鳴り出す** */
   {
     const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
     const line = clips.match(/^const LAND_EPS = (.+)$/m)
+    const val = line ? Number(line[1]) : NaN
     if (!line) ng('着地の見張りの「これより小さいずれは直さない」が見つからない')
-    else if (!/SEEK_MISS/.test(line[1])) {
-      ng('着地の見張りが、見込んだぶんの外れまで直している', line[1])
-    } else if (!/^import \{ SEEK_MISS[,\s]/m.test(clips)) {
-      ng('見込む量を書き写している(1か所から取っていない)')
-    } else ok('見込んだぶんの外れは、着地の見張りが直さない')
+    else if (!Number.isFinite(val)) {
+      ng('着地の見張りが、ほかの見込みに括り付けられている', line[1])
+    } else if (val > 0.02) {
+      ng('着地の見張りが粗すぎる(頭が欠けたまま鳴り出す)', line[1])
+    } else ok(`着地の見張りは ${Math.round(val * 1000)}ms より大きいずれを直す(黙ったまま)`)
   }
 
   /* **つまみは1つだけ**(16手め)。逃がす量は `SEEK_MISS` から取る ——
@@ -1945,15 +1948,16 @@ function fakeMp3({
   {
     const w = readFileSync(new URL('../src/lib/wholeAudio.js', import.meta.url), 'utf8')
     const body = w.match(/export function landSec\([^)]*\) \{[\s\S]*?\n\}/)
+    /* **29手めで、逃がす仕組みごと消した。** あらかじめ倒す代わりに、
+       `seekClip()` の着地の見張りが**黙ったまま**直す ——
+       **同じ役目のものを2つ持たない。** 書き戻したら赤くする */
     if (!body) ng('`landSec()` が見つからない')
-    else if (/FRAME_SEC/.test(body[0])) {
-      ng('逃がす量に、フレームの長さを直に使っている(つまみが2つある)')
-    } else if ((body[0].match(/SEEK_MISS/g) || []).length < 2) {
-      ng('逃がす量を、手前と向こうの両方で見込んでいない')
+    else if (/SEEK_MISS|FRAME_SEC/.test(body[0])) {
+      ng('頭出しで、また逃がしている(着地の見張りと二重になる)')
     } else if (/slip/.test(body[0])) {
       /* **頭出しは、教材ごとに絞らない**(25手め)。折り返しと優先順が違う */
       ng('頭出しにまで `slip` を掛けている(前の声が入る)')
-    } else ok('逃がす量は `SEEK_MISS` 1か所(手前も向こうも同じ量・教材で絞らない)')
+    } else ok('頭出しは逃がさない(手前に外れたぶんは、着地の見張りが直す)')
   }
 }
 
@@ -3329,7 +3333,6 @@ function fakeMp3({
 
   /* ── ① 信じてよい教材のほうが、必ず削る量が少ない ─────────────── */
   {
-    let same = 0
     let worse = 0
     let gain = 0
     for (const gap of [0, 0.01, 0.03, 0.05, 0.08, 0.1, 0.12]) {
@@ -3337,7 +3340,6 @@ function fakeMp3({
       const b = worst(gap, LOOSE)
       if (!a.folded || !b.folded) { worse = 1; break }
       if (a.tail > b.tail + 1e-9) worse = Math.max(worse, a.tail - b.tail)
-      if (Math.abs(a.tail - b.tail) < 1e-9) same += 1
       gain = Math.max(gain, b.tail - a.tail)
     }
     if (worse) ng('信じてよい教材のほうが、よけいに削っている', ms(worse))
@@ -3433,40 +3435,57 @@ function fakeMp3({
     } else ok(`どの道でも、声の後ろを削るのは ${ms(worstCut)} まで(上限 ${ms(CEILING)})`)
   }
 
-  /* ── ④' **頭出しは、必ず「声の中」へ倒す**(2026-09 実機・25手め)──
+  /* ── ④' **頭出しは、その文の頭を1ミリ秒も欠かさない**(29手め)──
 
-       > 半分くらいの文が終わる前に折り返され、
-       > 前の文の最後の部分から始まります(利用者)
+       > まだ、ズレまくってます(利用者)
 
-     24手めで `SEEK_MISS` を1枚へ絞ったときの症状である。
-     **最悪値は絞る前と同じ**(どちらも「ちょうど前の声の終わり」)。
-     ちがうのは**どちらへ倒してあるか**で、絞ると
-     **間の上でぎりぎり釣り合う** —— 少しでも手前に外れれば前の声である。
+     25手めまでは**あらかじめ 78.6ms 声の中へ倒して**いた。
+     ところが `seekClip(hush)` は**黙らせたまま**着いた先を見て直す
+     (6手め)ので、**あらかじめ倒す必要がそもそも無い。**
+     しかも `LAND_EPS` がその見込みと同じ値に括り付けてあったため、
+     **見張りは一度も働いておらず、頭の欠けだけが残っていた。**
 
-     **`MIN_SILENCE` から出す。** あれは「これより狭い無音は、
-     語と語のあいだと見分けが付かない」という境目なので、
-     **そこまで詰まった継ぎ目には、着地できる静けさが無い。**
-     値を書き写さない */
+     いまの約束は3つ。**どれか1つでも崩れたら赤くする** */
   {
     const bad2 = []
-    for (let g = 0; g <= MIN_SILENCE + 1e-9; g += 0.005) {
-      const to = landSec(1, g)
-      // ①声の中へ倒してあるか(間が狭いところでは、頭より後ろ)
-      if (to < 1 - 1e-9) bad2.push(`間 ${ms(g)} で 頭より ${ms(1 - to)} 手前`)
-    }
     let deep = 0
     let early = 0
+    let near = 0
     for (let g = 0; g <= 0.5; g += 0.005) {
       const to = landSec(1, g)
-      // ②吸い寄せられても、前の声には届かない
-      if (to - SEEK_MISS < 1 - g - 1e-9) early = Math.max(early, (1 - g) - (to - SEEK_MISS))
-      // ③欠かしてよいのは、見込んだぶんまで
+      // ①その文の頭を、1ミリ秒も欠かさない
       deep = Math.max(deep, to - 1)
+      // ②前の声には、決して届かない
+      early = Math.max(early, (1 - g) - to)
+      // ③間があるぶんは手前へ寄せる(吸い寄せられても間の中に着く)
+      if (g >= SEEK_LEAD) near = Math.max(near, Math.abs(to - (1 - SEEK_LEAD)))
     }
-    if (bad2.length) ng('頭出しが、間の上で釣り合っている(前の声が入る)', bad2[0])
-    else if (early > 1e-9) ng('吸い寄せられると、前の声に届く', ms(early))
-    else if (deep > SEEK_MISS + 1e-9) ng('その文の頭を、見込んだぶんより深く欠いている', ms(deep))
-    else ok(`頭出しは、詰まった継ぎ目(${ms(MIN_SILENCE)} まで)では必ず声の中へ倒す`)
+    /* ④**直すのは、黙ったまま。** `muted` にしてから移し、
+       着いた先を見てからでないと鳴らさない —— この順が崩れると、
+       手前に着いたぶんがそのまま前の声として出る */
+    const ac = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    /* **`hush` の段だけを見る。** `el.currentTime = t` は
+       「押した人が送る」側にもあるので、丸ごと探すとそちらを拾う */
+    const whole = ac.match(/export function seekClip[\s\S]*?\n\}/)?.[0] ?? ''
+    const body = whole.slice(Math.max(0, whole.indexOf('const mine = generation')))
+    /* **最後の頭出しだけを見る。** `el.currentTime = t + gap`(着いたのを
+       見て直すほう)は `landed()` の中にあり、**黙らせるより前**に書いてある。
+       `'el.currentTime = t'` で探すとそちらに当たるので、
+       **`}` まで含めた形**で、最後の1回だけを拾う */
+    const order = ['el.muted = true', 'el.pause()', 'addEventListener(\'seeked\'', 'el.currentTime = t }']
+      .map((k) => body.indexOf(k))
+    const eps = ac.match(/const LAND_EPS = ([\d.]+)/)
+    if (deep > 1e-9) bad2.push(`その文の頭を ${ms(deep)} 欠いている`)
+    if (early > 1e-9) bad2.push(`前の声へ ${ms(early)} 届いている`)
+    if (near > 1e-9) bad2.push(`間があるのに手前へ寄せていない(${ms(near)} ずれ)`)
+    if (order.some((i) => i < 0) || order.some((v, i) => i && v < order[i - 1])) {
+      bad2.push('黙らせてから移す順が崩れている')
+    }
+    if (!eps || Number(eps[1]) > 0.02) {
+      bad2.push(`着地の見張りが粗すぎる(${eps ? eps[1] : '見つからない'})`)
+    }
+    if (bad2.length) ng('頭出しの約束が崩れている', bad2.join(' / '))
+    else ok('頭出しは、頭を欠かさず・前の声にも届かない(直すのは黙ったまま)')
   }
 
   /* ── ④'' **測って当てた教材は、信じてよい側にいる**(27手め)────

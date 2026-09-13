@@ -60,7 +60,7 @@ import {
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
 import { itemOffsFrom, measureSeams } from './seamFind.js'
-import { SEEK_MISS, charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
+import { charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
 import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
   FADE_STEP, FADE_STOP, applyGain, fadeGain, isMeasured, measureClip,
@@ -1245,10 +1245,18 @@ let fadeOrigin = null
  * ここで直すと**二重に先へ送る**ことになり、文の頭がそのぶん余計に欠ける。
  * ここが見るのは、それより大きい外れだけである。
  *
- * **`SEEK_MISS` から取る。書き写さない** —— 見込む量を変えた日に、
- * 片方だけが古くなる。
  */
-const LAND_EPS = SEEK_MISS
+/**
+ * **着いた先が、頼んだ秒よりこれだけ手前なら直す**(秒・29手め)。
+ *
+ * もとは `SEEK_MISS`(78.6ms)と**同じ値に括り付けて**あった。ところが
+ * `landSec()` があらかじめ 78.6ms 倒していたので、**その先へは行かない** ——
+ * **この見張りは一度も働いていなかった。** 残ったのは頭の欠けだけである。
+ *
+ * **直しているあいだ、音は1ミリ秒も出ない**(`muted` にして止めてある)。
+ * だから**小さく取ってよい。** フレーム1枚の吸い寄せも、ここで直す。
+ */
+const LAND_EPS = 0.008
 /** これだけ離れていたら、こちらの戻しのせいではない(秒) */
 const LAND_FAR = 1
 /** `seeked` が来ない端末のために、これを過ぎたら諦めて鳴らす(ミリ秒) */
