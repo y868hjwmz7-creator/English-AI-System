@@ -80,6 +80,36 @@ export const MAX_OFF = 3
 export const MIN_HIT = 0.7
 
 /**
+ * 測り損ねたときに、**別のしきい値なら何本に分かれるか**も数えてみる
+ * (2026-09・30手め)。`rms` はもう出してあるので、**費用は増えない。**
+ *
+ * ここが決め手になる —— `QUIET_RATIO`(3%)で1本にしか分かれず、
+ * 10% なら分かれるなら、**出どころはしきい値**である
+ * (声に「さーっ」が乗っていると、いちばん静かなところでも
+ *  ピークの 3% を割らない)。逆にどのしきい値でも1本なら、
+ * **そもそも間が無い**ということになる。
+ */
+export const TRY_RATIOS = [0.01, 0.1]
+
+/**
+ * **直近の測り損ねの理由**(2026-09・30手め)。
+ *
+ * 17手めは `null` を返すだけで、`[調査中]` の行には
+ * 「継ぎ目を数え切れませんでした」としか出していなかった。
+ * **なぜ数え切れなかったのかは、どこにも出ていない。**
+ * 11手め(「道が2つあるものは、どちらを通ったかを見えるようにしてから
+ * 直す」)と、まったく同じ抜けを1段下でやっていた。
+ *
+ * **書くだけ。読む側の判断には一切使わない**ので、
+ * `loudness.js` で踏んだ「モジュールに残って2つめ以降が素通りする」
+ * 落とし穴には当たらない(呼ぶたびに必ず上書きする)。
+ *
+ * @returns {{why:string, runs:number, tries?:Array<{q:number,n:number}>}|null}
+ */
+let failWhy = null
+export const lastSeamFail = () => failWhy
+
+/**
  * 10ms ごとの大きさ(RMS)を出す。
  *
  * **耳の重み付け(K特性)は掛けない。** あれは「どれくらい大きく
@@ -188,8 +218,14 @@ export function speechRuns(rms, hop = HOP_SEC, {
  *   測れなければ `null`
  */
 export function seamOffsets(spans, runs, duration = 0) {
-  if (!Array.isArray(spans) || spans.length < 2) return null
-  if (!Array.isArray(runs) || !runs.length) return null
+  /* **なぜ測れなかったのかを、必ず残す**(30手め)。
+     呼ぶたびに上書きするので、前の呼び出しの理由が混ざることはない */
+  const no = (why) => {
+    failWhy = { why, runs: Array.isArray(runs) ? runs.length : 0 }
+    return null
+  }
+  if (!Array.isArray(spans) || spans.length < 2) return no('区間が2つに満たない')
+  if (!Array.isArray(runs) || !runs.length) return no('声のところが1つも無い')
 
   const offs = new Array(spans.length).fill(0)
   // 頭の無音ぶん(いちばん最初の声が鳴り出すところに合わせる)
@@ -224,29 +260,37 @@ export function seamOffsets(spans, runs, duration = 0) {
       pick = best
       if (pick) loose += 1
     }
-    if (!pick) return null
-    if (pick.from - prevEnd > MAX_GAP) return null
+    if (!pick) return no(`声のところが足りない(${k}/${spans.length - 1} 本目で尽きた)`)
+    if (pick.from - prevEnd > MAX_GAP) {
+      return no(`間が広すぎる(${(pick.from - prevEnd).toFixed(2)} 秒)`)
+    }
     offs[k] = pick.from - Number(spans[k].start)
     last = pick.from
   }
 
   // ── 測り損ねを、そのまま使わない ──────────────────────────────
-  if (hit + tight < Math.ceil((spans.length - 1) * MIN_HIT)) return null
+  if (hit + tight < Math.ceil((spans.length - 1) * MIN_HIT)) {
+    return no(`当てが多い(素直に当たったのは ${hit + tight}/${spans.length - 1} 本)`)
+  }
   for (let k = 0; k < offs.length; k += 1) {
-    if (!Number.isFinite(offs[k]) || Math.abs(offs[k]) > MAX_OFF) return null
+    if (!Number.isFinite(offs[k])) return no('ずれが数にならない')
+    if (Math.abs(offs[k]) > MAX_OFF) {
+      return no(`ずれが大きすぎる(${offs[k].toFixed(2)} 秒 / 上限 ${MAX_OFF} 秒)`)
+    }
   }
   for (let k = 1; k < spans.length; k += 1) {
     const a = Number(spans[k - 1].start) + offs[k - 1]
     const b = Number(spans[k].start) + offs[k]
-    if (!(b > a)) return null
+    if (!(b > a)) return no(`順が逆になった(${k} 本目)`)
   }
   // 間が無いだけの継ぎ目は「測れた」に数えるが、全部そうなら測れていない
-  if (!hit) return null
+  if (!hit) return no(`どの継ぎ目にも間が無い(${tight} 本とも詰まっている)`)
   const d = Number(duration) || 0
   if (d > 0) {
     const tail = Number(spans[spans.length - 1].end) + offs[offs.length - 1]
-    if (tail > d + 0.5) return null
+    if (tail > d + 0.5) return no(`終わりが音声より先(${(tail - d).toFixed(2)} 秒)`)
   }
+  failWhy = null
   return { offs, hit, tight, loose }
 }
 
@@ -257,10 +301,24 @@ export function seamOffsets(spans, runs, duration = 0) {
  */
 export function measureSeams(samples, rate, spans, duration = 0) {
   const rms = frameRms(samples, rate)
-  if (!rms.length) return null
+  if (!rms.length) {
+    failWhy = { why: '波をほどけない', runs: 0 }
+    return null
+  }
   const runs = speechRuns(rms)
   const got = seamOffsets(spans, runs, duration || (samples.length / rate))
-  return got ? { ...got, runs: runs.length } : null
+  if (got) return { ...got, runs: runs.length }
+  /* **しきい値のせいかどうかを、その場で数えておく**(30手め)。
+     `rms` はもう出してあるので、**費用も通信も1ミリも増えない。**
+     `[調査中]` の行に出れば、次の報告1つで出どころが決まる */
+  if (failWhy) {
+    let peak = 0
+    for (let i = 0; i < rms.length; i += 1) if (rms[i] > peak) peak = rms[i]
+    failWhy.tries = TRY_RATIOS.map((q) => ({
+      q, n: speechRuns(rms, HOP_SEC, { level: Math.max(peak * q, ABS_FLOOR) }).length,
+    }))
+  }
+  return null
 }
 
 /**

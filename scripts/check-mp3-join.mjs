@@ -29,7 +29,9 @@ import {
   foldWorst, humanSeek, landSec, rangeOf, repeatSeek, REPEAT_LEAD, SEEK_LEAD, SLIP, slipOf,
   scaleSpans, seekSentence, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, spansOf, wholeMark,
 } from '../src/lib/wholeAudio.js'
-import { itemOffsFrom, measureSeams, seamOffsets } from '../src/lib/seamFind.js'
+import {
+  TRY_RATIOS, itemOffsFrom, lastSeamFail, measureSeams, seamOffsets,
+} from '../src/lib/seamFind.js'
 import {
   audioFileName, countFrames, dropId3v1, firstFrame, joinMp3,
   silenceFor, skipId3, vbrTagFrame, vbrTagOf,
@@ -2663,6 +2665,62 @@ function fakeMp3({
     } else ok('測り損ねたら `null`(これまでどおり均等に配る)')
   }
 
+  /* ── ④' **なぜ測れなかったのかを、必ず言う**(2026-09・30手め)────
+   *
+   *   17手めは `null` を返すだけで、`[調査中]` の行には
+   *   「継ぎ目を数え切れませんでした」としか出していなかった。
+   *   **こちらも利用者も、次にどこを直せばよいか決められない。**
+   *
+   *   **理由は「出す」だけでは足りない。** 出す仕組みを足したら、
+   *   その場で見張りも足す(28手めで踏んだのと同じ落とし穴)。 */
+  {
+    const quiet = new Float32Array(RATE * 3)
+    measureSeams(quiet, RATE, raw, 3)
+    const f1 = lastSeamFail()
+    if (!f1?.why) ng('測り損ねたのに、理由を残していない')
+    else if (!Number.isFinite(f1.runs)) ng('理由に「声のかたまり いくつ」が入っていない')
+    else if ((f1.tries ?? []).length !== TRY_RATIOS.length) {
+      ng('別のしきい値で何本に分かれるかを数えていない', `${(f1.tries ?? []).length} 件`)
+    } else if (measureSeams(wave, RATE, raw, total) && lastSeamFail() !== null) {
+      /* **測れたら、理由は消す。** 残すと、次の教材の `[調査中]` に
+         前の理由がそのまま出る(`loudness.js` で踏んだのと同じ根) */
+      ng('測れたのに、前の理由が残っている')
+    } else ok('測り損ねたら、その理由と「声のかたまり いくつ」まで残す')
+  }
+
+  /* ── ④'' **しきい値のせいかどうかが、その1行で分かる**────────────
+   *
+   *   声に「さーっ」が乗っていると、いちばん静かなところでも
+   *   ピークの 3%(`QUIET_RATIO`)を割らない。すると**音声ぜんぶが
+   *   1本の run** になり、`seamOffsets()` は「どの継ぎ目にも間が無い」で
+   *   落ちる。**そのとき 10% なら分かれることを、その場で数える。**
+   *
+   *   ここが「出どころはしきい値か、そもそも間が無いのか」の分かれ目で、
+   *   **利用者の報告1つで決まる**ようにするための1行である。 */
+  {
+    // 雑音の底を上げた波(声 0.5・底 0.05 = ピークの 10%)
+    const floor = new Float32Array(Math.round(total * RATE))
+    let s2 = 999
+    const r2 = () => { s2 = (s2 * 1103515245 + 12345) & 0x7fffffff; return s2 / 0x7fffffff - 0.5 }
+    for (let j = 0; j < floor.length; j += 1) floor[j] = r2() * 0.05
+    trueStart.forEach((s, i) => {
+      const a = Math.round(s * RATE)
+      const b = Math.round((s + speech[i]) * RATE)
+      for (let j = a; j < b; j += 1) floor[j] = r2() * 0.5
+    })
+    measureSeams(floor, RATE, raw, total)
+    const f = lastSeamFail()
+    if (!f) ng('雑音の底を上げても測れてしまう(この検証では、しきい値を示せない)')
+    else {
+      const at3 = f.runs
+      const at10 = f.tries?.find((t) => t.q === 0.1)?.n ?? 0
+      if (at3 !== 1) ng('雑音の底を上げても1つにならない(この検証が成り立っていない)', `${at3} つ`)
+      else if (!(at10 > at3)) {
+        ng('しきい値を上げても分かれない = 出どころを見分けられない', `10% で ${at10} つ`)
+      } else ok(`しきい値のせいだと分かる(3% で ${at3} つ / 10% で ${at10} つ)`)
+    }
+  }
+
   // ── ⑤ 項目にも文にも、同じずれを当てる
   {
     const offs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
@@ -2683,6 +2741,21 @@ function fakeMp3({
     const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
     const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
     if (!/=\s*await wholeSeams\(/.test(read)) ng('1本の道が、継ぎ目を測りに行っていない')
+    /* **理由を、画面まで届ける**(30手め)。数えるだけで出さなければ、
+       28手めで `noteSentClock()` を誰も呼んでいなかったのと同じである。
+       **「名前が出てくるか」で見ない** —— 説明にも同じ語が出てくるので、
+       `seamFailText(lastSeamFail())` という**使っている形**で見る */
+    if (!/seamFailText\(lastSeamFail\(\)\)/.test(clips)) {
+      ng('測り損ねの理由を、`[調査中]` の行に出していない')
+    }
+    if (!/const fineWhy = fine && !deep \? lastSeamFail\(\) : null/.test(clips)) {
+      ng('文の側の理由を控えていない(発言の側で上書きされる)')
+    }
+    /* **2度目に開いたときも、その教材の理由を出す。**
+       `Set` のままだと、前の教材の理由が残ったままになる */
+    if (!/seamGaveUp\.get\(name\)/.test(clips)) {
+      ng('2度目は理由を出し直していない(前の教材の理由が残る)')
+    }
     if (!/shiftItems\(spans, fit\.offs\)/.test(read)) ng('測ったずれを、項目の区間に当てていない')
     if (!/shiftItems\(sent, fit\.offs\)/.test(read)) ng('測ったずれを、文の区間に当てていない')
     if (!/how: 'measured'/.test(read)) ng('測れたときに、測ったほうを採っていない')

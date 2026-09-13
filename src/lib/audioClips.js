@@ -59,7 +59,7 @@ import {
 } from '../data/clipVoices.js'
 import { isSupabaseConfigured, supabase, supabaseUrl } from './supabase.js'
 import { PREMIUM, STANDARD } from './voiceTier.js'
-import { itemOffsFrom, measureSeams } from './seamFind.js'
+import { itemOffsFrom, lastSeamFail, measureSeams } from './seamFind.js'
 import { charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
 import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
@@ -1049,8 +1049,14 @@ export async function wholeClip({ texts, voiceIds, force = false }) {
 
 /** 測ったずれ。**この画面のあいだは、二度ほどかない** */
 const seamCache = new Map()
-/** 測れないと分かったもの(古い端末・ほどけない MP3) */
-const seamGaveUp = new Set()
+/**
+ * 測れないと分かったもの(古い端末・ほどけない MP3)。
+ *
+ * **理由ごと覚える**(30手め)。`Set` だったころは、2度目に開いたときに
+ * ここで早く帰るだけで `seamNote` を書き換えず、**前の教材の理由が
+ * そのまま `[調査中]` の行に残っていた。**
+ */
+const seamGaveUp = new Map()
 
 /** **19手めで中身の形が変わった**(文ごとのずれも覚える)。鍵ごと分ける */
 const SEAM_KEY = 'eas.seams2'
@@ -1078,6 +1084,30 @@ function writeSeamStore(name, rec) {
 /** 直近の測りぐあい。**`[調査中]` の行がそのまま出す** */
 let seamNote = null
 export const lastSeamNote = () => seamNote
+
+/**
+ * **測り損ねの理由を、そのまま読める1行にする**(2026-09・30手め)。
+ *
+ * 17手めは「継ぎ目を数え切れませんでした」としか出していなかったので、
+ * **なぜ数え切れなかったのかを、こちらも利用者も知りようがなかった。**
+ * 11手め(「道が2つあるものは、どちらを通ったかを見えるようにしてから
+ * 直す」)を、1段下でそのまま破っていた。
+ *
+ * `しきい` の並びが決め手である —— 3%(`QUIET_RATIO`)で1本なのに
+ * 10% なら分かれるなら、**出どころはしきい値**(声に乗った「さーっ」)。
+ * どのしきい値でも1本なら、**そもそも間が無い。**
+ */
+function seamFailText(f, withTries = true) {
+  if (!f) return '理由が分かりません'
+  /* **しきい値の並びは1度だけ。** 文の側と発言の側は**同じ波**を測って
+     いるので、両方に付けると同じ数字が2度出て、1行が読めなくなる */
+  /* **「本」と書かない。** この行では「本」は継ぎ目の数
+     (`実測 12/13 本`)に使っている。声のかたまりは「つ」で数える */
+  const tries = withTries
+    ? (f.tries ?? []).map((t) => `${Math.round(t.q * 100)}% ${t.n}つ`).join('・')
+    : ''
+  return `${f.why} / 声のかたまり ${f.runs} つ${tries ? ` / しきい ${tries}` : ''}`
+}
 
 /**
  * 1本にまとめた音声から、**本当のずれ**を測る。
@@ -1114,7 +1144,8 @@ export async function wholeSeams(url, spans, sents = null) {
   const fine = Array.isArray(sents) && sents.length >= 2 ? sents : null
   const name = seamNameOf(url)
   if (seamCache.has(name)) return seamCache.get(name)
-  if (seamGaveUp.has(name)) return null
+  /* **理由も出し直す。** 出さずに帰ると、前の教材の理由が残る(30手め) */
+  if (seamGaveUp.has(name)) { seamNote = seamGaveUp.get(name); return null }
 
   const kept = readSeamStore()[name]
   if (kept && Array.isArray(kept.o) && kept.o.length === spans.length
@@ -1126,11 +1157,12 @@ export async function wholeSeams(url, spans, sents = null) {
   }
 
   try {
+    const give = (note) => { seamNote = note; seamGaveUp.set(name, note); return null }
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext
-    if (!OAC) { seamGaveUp.add(name); seamNote = 'この端末ではほどけません'; return null }
+    if (!OAC) return give('この端末ではほどけません')
     // **端末の控えが効く。** `<audio>` が取ったばかりなので、たいてい通信は起きない
     const res = await fetch(url, { mode: 'cors', cache: 'force-cache' })
-    if (!res.ok) { seamGaveUp.add(name); seamNote = `音声を読めません(${res.status})`; return null }
+    if (!res.ok) return give(`音声を読めません(${res.status})`)
     const bytes = await res.arrayBuffer()
     const off = new OAC(1, 1, 44100)
     const buf = await off.decodeAudioData(bytes)
@@ -1139,11 +1171,16 @@ export async function wholeSeams(url, spans, sents = null) {
        `itemOffsFrom()` が出す(**もう一度測らない**)。
        文で測れなかったときだけ、17手めのまま項目で測る */
     const deep = fine ? measureSeams(wave, buf.sampleRate, fine, buf.duration) : null
+    /* **文の側の理由は、その場で控える。** 次の `measureSeams()` が
+       上書きしてしまうので、あとから読むと発言の側の理由しか残らない */
+    const fineWhy = fine && !deep ? lastSeamFail() : null
     const got = deep || measureSeams(wave, buf.sampleRate, spans, buf.duration)
     if (!got) {
-      seamGaveUp.add(name)
-      seamNote = '継ぎ目を数え切れませんでした'
-      return null
+      /* **なぜ数え切れないのかまで言う**(30手め)。
+         「数え切れませんでした」だけでは、次に何を直せばよいか決まらない */
+      return give('継ぎ目を数え切れません'
+        + `(${fineWhy ? `文: ${seamFailText(fineWhy, false)} / 発言: ` : ''}`
+        + `${seamFailText(lastSeamFail())})`)
     }
     const sentOffs = deep ? deep.offs : null
     const offs = deep ? itemOffsFrom(fine, deep.offs, spans.length) : got.offs
@@ -1157,8 +1194,8 @@ export async function wholeSeams(url, spans, sents = null) {
       + ` / ずれ 最大 ${(wide * 1000).toFixed(0)}ms`
     return rec
   } catch (e) {
-    seamGaveUp.add(name)
     seamNote = `ほどけませんでした(${e?.message ?? e})`
+    seamGaveUp.set(name, seamNote)
     return null
   }
 }
