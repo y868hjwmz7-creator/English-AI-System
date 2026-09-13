@@ -1146,6 +1146,37 @@ select pg_temp.expect_denied('ゲストは、自分に棚を出せない(0057)',
   $$select public.set_learner_feature('22222222-2222-2222-2222-222222222222',
       'shelf:med', true)$$);
 
+-- ⑧ **トレーナー自身も、棚を自由に学べる**(2026-09 利用者の指定)
+--
+--     > これらの単語帳はトレーナーアカウントでは独立した単語帳として
+--     > 自由に学習できるようにして下さい。
+--
+--    ゲストは「トレーナーが指定した棚だけ」だが、**トレーナーは指定なしで
+--    35冊ぜんぶ**を開ける(判断は画面側の `showsShelf()`)。
+--    ここで確かめるのは、**その先で記録が残るか**である ——
+--    `mark_shelf_word()` の門番は「自分か、担当ゲストか」なので、
+--    **自分のぶんは誰でも書ける。** ここが締まりすぎると、
+--    トレーナーは開けても**答えを1つも残せない。**
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select pg_temp.expect('トレーナーも棚の語に「覚えかけ」を付けられる(0058)',
+  (select box::int from public.mark_shelf_word('it', 'sprint review', 'learning')), 1);
+select pg_temp.expect('トレーナーの覚え具合は、自分の行として残る(0058)',
+  (select count(*)::int from public.shelf_reviews
+    where learner_id = '44444444-4444-4444-4444-444444444444'
+      and industry = 'it' and word_norm = 'sprint review'), 1);
+-- **自分の単語帳には1語も入らない。** 混ざらないことが、この機能の要である
+select pg_temp.expect('トレーナーが棚で答えても、自分の単語帳には入らない(0058)',
+  (select count(*)::int from public.word_reviews
+    where learner_id = '44444444-4444-4444-4444-444444444444'
+      and word_norm = 'sprint review'), 0);
+-- **自分の記録は読める**(0058 の select は `learner_id = auth.uid()` を許す)
+select pg_temp.expect('トレーナーは自分の棚の記録を読める(0058)',
+  (select count(*)::int from public.shelf_reviews
+    where learner_id = '44444444-4444-4444-4444-444444444444'), 1);
+-- **間隔の決まりは、ゲストとまったく同じもの**(`review_next`)
+select pg_temp.expect('トレーナーでも、もう一度押すと箱が上がる(0058)',
+  (select box::int from public.mark_shelf_word('it', 'sprint review', 'learning')), 2);
+
 -- ── Quick Response の続けた記録(0042)──────────────────────────
 --
 --   `mark_qr()` が日ごとの記録を1つ増やす。**単語帳と同じ形**。

@@ -289,6 +289,24 @@ const WORDBOOK = (
   </div>
 )
 
+/* **トレーナー自身の単語帳**(`?screen=mybook`・2026-09 利用者の指定)。
+
+     > これらの単語帳はトレーナーアカウントでは独立した単語帳として
+     > 自由に学習できるようにして下さい。
+
+   `learnerId` を渡さない = 自分の単語帳である。棚は `shelvesFor()` が
+   トレーナーには**35冊ぜんぶ**を返すので、ここでも `shelfList()` を渡す
+   (**判断は画面に持たせない**ので、渡すものは同じ形になる)。
+
+   上の `?screen=wordbook` は**ゲストの単語帳を開いたとき**で、
+   棚を渡していない。**「出る」と「出ない」の両方を見る**ために、
+   2つとも残してある。 */
+const MYBOOK = (
+  <div className="app-main">
+    <Wordbook shelves={shelfList()} />
+  </div>
+)
+
 /* 教材のカードの操作(`?screen=tools`・2026-09 利用者の指定)。
 
    > 「音声を作り直す」「学習の記録を消す」を教材を消すの左側に並べて、
@@ -1001,6 +1019,8 @@ createRoot(document.getElementById('root')).render(
     ? TABS
     : q.get('screen') === 'search'
     ? SEARCH
+    : q.get('screen') === 'mybook'
+    ? MYBOOK
     : q.get('screen') === 'wordbook'
     ? WORDBOOK
     : q.get('screen') === 'form'

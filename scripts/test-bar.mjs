@@ -4124,6 +4124,98 @@ export default defineConfig({
       ok('棚 … 指定した棚だけが、独立した単語帳として並ぶ')
     }
   }
+
+  /* ══════════════════════════════════════════════════════════════════
+     **トレーナー自身の単語帳から、棚を自由に学べるか**(2026-09 利用者の指定)
+
+       > これらの単語帳はトレーナーアカウントでは独立した単語帳として
+       > 自由に学習できるようにして下さい。
+
+     判断は `showsShelf()` 1か所で、**ゲスト以外にはぜんぶ出す**。
+     ところが「出す」と決めてあっても、**画面に切り替えが無ければ
+     たどり着けない。** ここは**描いて数える。**
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+     ①トレーナー自身の単語帳(`?screen=mybook`)には切り替えが出て、
+       押せば35冊が並ぶ
+     ②**既定は自分の単語帳**で、そのあいだ棚の欄は1つも出ていない
+       (**混ざらないことが、この機能の要である**)
+     ③棚を渡していない画面(`?screen=wordbook`)には、切り替えごと出ない
+     ══════════════════════════════════════════════════════════════════ */
+  for (const w of [1280, 390]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=mybook`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+
+    const 初 = await page.evaluate(() => ({
+      札: [...document.querySelectorAll('.wb-books .chip')].map((b) => b.textContent.trim()),
+      押: [...document.querySelectorAll('.wb-books .chip')]
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => b.textContent.trim()),
+      棚: document.querySelectorAll('.shelfbooks').length,
+    }))
+
+    let 開 = { 冊: 0, 低い: 0, よこ: 0 }
+    if (初.札.length === 2) {
+      for (const b of await page.$$('.wb-books .chip')) {
+        if (((await b.textContent()) ?? '').includes('業種べつ')) { await b.click(); break }
+      }
+      await page.waitForTimeout(300)
+      const open = await page.$('.shelfbooks .wb-add-open[aria-expanded="false"]')
+      if (open) { await open.click(); await page.waitForTimeout(250) }
+      開 = await page.evaluate(() => {
+        const box = [...document.querySelectorAll('.shelfbook')]
+        return {
+          冊: box.length,
+          低い: box.length
+            ? Math.min(...box.map((b) => Math.round(b.getBoundingClientRect().height))) : 0,
+          よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        }
+      })
+      // **戻せるか。** 戻したら棚の欄は消える(混ざらない)
+      for (const b of await page.$$('.wb-books .chip')) {
+        if (((await b.textContent()) ?? '').includes('自分の単語帳')) { await b.click(); break }
+      }
+      await page.waitForTimeout(250)
+    }
+    const 戻 = await page.evaluate(() => document.querySelectorAll('.shelfbooks').length)
+    await page.close()
+
+    const 名 = `トレーナーの単語帳(${w}px)`
+    if (初.札.join(' / ') !== '自分の単語帳 / 業種べつ') {
+      ng(`${名} … 冊の切り替えが出ていない`, 初.札.join(' / ') || '(無し)')
+    } else if (初.押.join('') !== '自分の単語帳') {
+      ng(`${名} … 既定が自分の単語帳になっていない`, 初.押.join(' / ') || '(無し)')
+    } else if (初.棚 !== 0) {
+      ng(`${名} … 自分の単語帳なのに、棚の欄が出ている(混ざって見える)`)
+    } else if (開.冊 !== 35) {
+      // **分野を足せば棚も1冊増える。** 数が変わったら、ここも直す
+      ng(`${名} … 35冊そろっていない`, String(開.冊))
+    } else if (開.低い < 40) {
+      ng(`${名} … 押せる大きさを割っている`, String(開.低い))
+    } else if (開.よこ > 0) {
+      ng(`${名} … 横にはみ出している`, `${開.よこ}px`)
+    } else if (戻 !== 0) {
+      ng(`${名} … 自分の単語帳に戻しても、棚の欄が残っている`)
+    } else {
+      ok(`${名} … 35冊を、独立した単語帳として自由に開ける`)
+    }
+  }
+
+  /* **棚を渡していない画面には、切り替えごと出さない**
+     (効かない操作を見せない)。ゲストの単語帳をトレーナーが開いたときは、
+     そのゲストに指定された棚だけが渡る —— **1冊も無ければ、ここは空** */
+  {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    const n = await page.evaluate(() => document.querySelectorAll('.wb-books').length)
+    await page.close()
+    if (n !== 0) ng('棚 … 出す棚が1冊も無いのに、冊の切り替えが出ている', String(n))
+    else ok('棚 … 出す棚が無い単語帳には、切り替えを出さない')
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════

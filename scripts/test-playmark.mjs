@@ -3377,13 +3377,17 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      `WordbookFilter.jsx` の差分が1行も読めなかった)。
      `\u0000` と書けば**値は同じまま**、ふつうの文字列として読める。 */
   {
-    const files = [
-      'src/lib/wordbookFilter.js', 'src/lib/reviewScope.js',
-      'src/components/WordbookFilter.jsx',
-      /* **2026-09 にもう一度踏んだ。** 棚の鍵(`shelfPick.join`)を
-         生の NUL で書いてしまい、`Wordbook.jsx` の差分が読めなくなった */
-      'src/components/Wordbook.jsx',
-    ]
+    /* **一覧を手で持たない**(2026-09・三度目に踏んで改めた)。
+       はじめは4つのファイル名を並べていたが、**並べたところしか見ない**。
+       実際 `shelfReviews.js` に同じものを書いたときは**素通りした。**
+       `src/` をまるごと歩けば、**書き足さなくても検証が付いてくる**
+       (`seed_rows.sql` に一覧を書かず、制約から読み取るのと同じ考え方)。 */
+    const walk = (dir) => readdirSync(new URL(`../${dir}/`, import.meta.url),
+      { withFileTypes: true })
+      .flatMap((e) => (e.isDirectory()
+        ? walk(`${dir}/${e.name}`)
+        : (/\.(js|jsx|ts|tsx|css|html)$/.test(e.name) ? [`${dir}/${e.name}`] : [])))
+    const files = walk('src')
     const bad = files.filter((f) => read2(f).includes('\u0000'))
     ok(bad.length === 0,
       'ソース … 生の NUL を書かない(git がバイナリと見なし、差分も grep も効かなくなる)',
@@ -4259,6 +4263,21 @@ console.log('\nスピーチ練習(0054)')
     '棚 … その人に出す棚だけを並べる(画面で `filter` を書き写さない)')
   ok(shelvesFor({ role: 'trainer', features: null }).length === list.length,
     '棚 … トレーナーには全冊が並ぶ')
+  /* **トレーナーには、指定が要らない**(2026-09 利用者の指定)。
+
+       > これらの単語帳はトレーナーアカウントでは独立した単語帳として
+       > 自由に学習できるようにして下さい。
+
+     上の2行は `features: null`(まだ読めていない)で見ているので、
+     **「読めていないから素通りしているだけ」でも緑になる。**
+     1つも入っていない `Set` を渡して、**指定そのものを見ていない**ことを
+     確かめる —— ゲストはここで0冊になる(すぐ下)。 */
+  ok(shelvesFor({ role: 'trainer', features: new Set() }).length === list.length,
+    '棚 … トレーナーは、1冊も指定されていなくても全冊を開ける')
+  ok(shelvesFor({ role: 'owner', features: new Set() }).length === list.length,
+    '棚 … 管理者も、指定なしで全冊を開ける')
+  ok(shelvesFor({ role: 'learner', features: new Set() }).length === 0,
+    '棚 … ゲストは、指定が無ければ0冊(トレーナーと同じにしない)')
 
   /* ── 画面が本当に呼んでいるか ──
      **「名前が出てくるか」で見ない**(CLAUDE.md)。
