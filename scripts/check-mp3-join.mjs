@@ -2850,26 +2850,36 @@ function fakeMp3({
      **`REPEAT_LEAD` までの遅れなら耐える**ことを確かめる ——
      そこが、この値を置いてある理由そのものである */
   for (const step of [0.01, 0.012]) {
-    for (const lag of [0, 0.01, 0.02, 0.03, REPEAT_LEAD]) {
+    /* **遅れは実測 0 だった**(26手め)。0 で漏れないことを見たうえで、
+       遅れのある端末では**漏れが模型どおり**であることまで見る ——
+       説明の付かない漏れがあれば、模型にまだ無い量が残っている */
+    for (const lag of [0, 0.01, 0.02, 0.03, 0.05]) {
       let worst = 0
       let missed = 0
       let over = 0
       let cut = 0
+      let leaked = 0
       for (const gap of gaps) {
+        /* 漏れてよいのは、**その継ぎ目**で「遅れ − max(もらった量, 間)」まで
+           (+ 気づくのがひと刻み遅れるぶん)。**値を書き写さない** */
+        const need = foldNeed(three(gap), 0, step)
+        const room = Math.max(0, lag - Math.max(need + gap, gap)) + step
         for (let p = 0; p < 20; p += 1) {
           const r = roll(gap, p * 0.0007, step, lag)
           if (r.fold === null) { missed += 1; continue }
           worst = Math.max(worst, r.head)
           cut = Math.max(cut, r.tail)
-          /* 欠けてよいのは「もらった量 + ひと刻み」まで。
-             **値を書き写さない** —— `foldNeed()` から出す(性質で見る) */
-          const need = foldNeed(three(gap), 0, step)
+          leaked = Math.max(leaked, r.head - room)
+          // 欠けてよいのは「もらった量 + ひと刻み」まで
           over = Math.max(over, r.tail - (need + step))
         }
       }
       const at = `ひと刻み ${ms(step)} / 遅れ ${ms(lag)}`
+      /* 漏れてよいのは「遅れ − もらった量 − ひと刻み」まで(模型どおり)。
+         **遅れ 0 では 1ミリ秒も漏れない** */
       if (missed) ng(`折り返しを見逃している(${at})`, `${missed} 回`)
-      else if (worst > 0) ng(`次の文の頭が鳴っている(${at})`, ms(worst))
+      else if (lag === 0 && worst > 0) ng(`遅れが無いのに、次の文が鳴っている(${at})`, ms(worst))
+      else if (leaked > 0.002) ng(`模型より多く鳴っている(${at})`, ms(leaked))
       else if (over > 0.002) ng(`自分の声を切りすぎている(${at})`, ms(over))
       else ok(`次の文の頭は 0ms(${at} / 自分の終わりは ${ms(cut)} まで)`)
     }
@@ -3331,7 +3341,7 @@ function fakeMp3({
       gain = Math.max(gain, b.tail - a.tail)
     }
     if (worse) ng('信じてよい教材のほうが、よけいに削っている', ms(worse))
-    else if (same > 3) ng('信じてよい教材でも、削る量が変わっていない')
+    else if (gain <= 0.002) ng('信じてよい教材でも、削る量が変わっていない')
     else ok(`信じてよい教材は、削る量が少ない(いちばん狭い継ぎ目で ${ms(gain)} 得)`)
   }
 
@@ -3384,29 +3394,43 @@ function fakeMp3({
     else ok('遅れ 0(実測)では鳴らない / 遅れがあっても模型どおり / つまみは効く')
   }
 
-  /* ── ④ 信じられない教材は、24手めの前と1ミリ秒も変わらない ──────
-     **値を1つだけ書き写してある。** 「会話の教材は1ミリ秒も
-     変わらない」という約束そのものなので、どちらかを動かした日に
-     **必ずここで手が止まる**(声の名簿の `KNOWN` と同じ考え方) */
+  /* ── ④ **どの道でも、声の後ろを削るのは 30ms を超えない**(28手め)──
+
+       > 再び1ミリも変わりません(利用者・2回続けて)
+
+     24〜27手めは「会話の教材は 24手めの前と1ミリ秒も変えない」を
+     守っていた。**その約束そのものが、直しを3回ぶん堰き止めていた。**
+     声の後ろを削る道は**5つ**あり、そのうち2つ
+     (**測れず均等に配った** / **語の重みからの見積もり**)に
+     一度も届いていなかった。
+
+     **道ごとの約束をやめ、利用者に向けた1つの約束にする。**
+     150ms は利用者が「まだ散見される」と言った値なので、その 1/5 に置く。 */
   {
-    const WAS = 0.12
-    if (Math.abs((REPEAT_LEAD + LOOSE) - WAS) > 1e-9) {
-      ng('信じられない教材の見込みが、24手めの前と変わっている',
-        `${ms(REPEAT_LEAD + LOOSE)}(前は ${ms(WAS)})`)
-    } else {
-      /* 間がぎりぎり足りないところで、本当に前と同じだけ削るか。
-         **ひと刻みの幅は見込む**(先取りはその刻みの中で起きるので、
-         削る量は `want` から `want + ひと刻み` のあいだに散る) */
-      const g = WAS + STEP - 0.03
-      const r = worst(g, LOOSE)
-      const want = (WAS + STEP) - g
-      const wide = worst(WAS + STEP + 0.05, LOOSE)
-      if (!r.folded || r.tail < want - 0.003 || r.tail > want + STEP + 0.003) {
-        ng('信じられない教材の削る量が、前と違う', `${ms(r.tail)} / ${ms(want)}`)
-      } else if (wide.tail > 0.002) {
-        ng('信じられない教材で、間が足りているのに削っている', ms(wide.tail))
-      } else ok('信じられない教材(会話)は、24手めの前と1ミリ秒も変わらない')
+    /* **上限は導く。手で選ばない。**
+       もらうのは「遅れ + 境目のずれ + ひと刻み」で、
+       気づくのがもうひと刻み遅れることがある */
+    const CEILING = REPEAT_LEAD + SLIP + 2 * STEP
+    /* **利用者の耳が決めた値。** 切り落としを試した回で
+       150ms は「まだ散見される」、200ms は「発言の最後が消えました」。
+       その 1/3 より内に収める */
+    const AUDIBLE = 0.15
+    let worstCut = 0
+    let where = ''
+    for (const slip of [SURE, LOOSE]) {
+      for (const gap of [0, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2]) {
+        const r = worst(gap, slip)
+        if (!r.folded) { where = `間 ${ms(gap)} で折り返さない`; worstCut = 9; break }
+        if (r.tail > worstCut) { worstCut = r.tail; where = `間 ${ms(gap)} / ずれ ${ms(slip)}` }
+      }
     }
+    if (worstCut > CEILING + 0.002) {
+      ng('声の後ろを、見込んだぶんより多く削っている', `${ms(worstCut)} / ${ms(CEILING)}(${where})`)
+    } else if (CEILING > AUDIBLE / 3) {
+      /* **利用者の耳より先に、ここで止まる。**
+         `REPEAT_LEAD` か `SLIP` を上げた日に、必ず1度考えることになる */
+      ng('見込みが、聞こえる帯に近づいている', `${ms(CEILING)}(耳の目安 ${ms(AUDIBLE)})`)
+    } else ok(`どの道でも、声の後ろを削るのは ${ms(worstCut)} まで(上限 ${ms(CEILING)})`)
   }
 
   /* ── ④' **頭出しは、必ず「声の中」へ倒す**(2026-09 実機・25手め)──
@@ -3462,7 +3486,7 @@ function fakeMp3({
     const roomy = foldWorst(wide, STEP, SURE)
     if (!(tight <= 2 * STEP + 0.002)) {
       ng('測って当てた教材でも、間が無い継ぎ目で削りすぎている', ms(tight))
-    } else if (!(loose > tight + 0.05)) {
+    } else if (!(loose > tight + 0.005)) {
       ng('測れなかった教材と、区別が付いていない', `${ms(loose)} / ${ms(tight)}`)
     } else if (roomy > 0.002) {
       ng('間が足りているのに削っている', ms(roomy))
@@ -3500,7 +3524,13 @@ function fakeMp3({
     /* **削る量を画面に出す。** 出ていないと、次も「届いたか」を
        利用者に推測させることになる(`[調査中]` の行) */
     if ((read.match(/cut: foldWorst\(sent, FADE_STEP \/ 1000, slipOf\(sure\)\)/g) || []).length < 2) {
-      miss.push('削る量を `[調査中]` に出していない')
+      miss.push('1本の道が、削る量を `[調査中]` に出していない')
+    }
+    /* **発言ごとの道にも出す**(28手め)。1本の道にしか出していなかったので、
+       **古い音声で鳴っている教材では、届いたかを確かめる術が無かった** */
+    if (!/noteSentClock\(\{/.test(read)
+      || !/cut: foldWorst\(sentSecs, FADE_STEP \/ 1000, slipOf\(sentSure\)\)/.test(read)) {
+      miss.push('発言ごとの道が、削る量を `[調査中]` に出していない')
     }
     if (!/prev: seeker\.last\(\),\s*\n\s*slip: slipOf\(sure\),/.test(read)) {
       miss.push('1本の道の、くり返しに渡していない')

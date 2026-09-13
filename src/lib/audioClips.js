@@ -441,11 +441,34 @@ export function noteWholeClock({
     + `${heads ? ` / 文の頭 ${heads}` : ''}`)
 }
 
+/** 1本にできなかった理由の控え。**`noteSentClock()` が言い添える** */
+let fellWhy = null
+
 export function noteWholeFallback(why) {
+  fellWhy = why
   /* **画面にそのまま出る文に `**` を混ぜない**(CLAUDE.md)。
      `<div>` に出るので Markdown としては読まれず、記号がそのまま見える */
   setDetail(`この教材は発言ごとの音声で鳴っています(${why})。`
     + '声を選び直して「読み上げ音声を作り直す」と、1本にまとめられることがあります。')
+}
+
+/**
+ * **発言ごとに鳴っている道の `[調査中]`**(2026-09 実機・28手め)。
+ *
+ *   > 再び1ミリも変わりません(利用者・2回続けて)
+ *
+ * 数字を出していたのは**1本の道だけ**だった。だから
+ * **発言ごとに鳴っている教材では、届いたかどうかを確かめる術が無かった。**
+ * **道が2つあるものは、いまどちらを通ったかを見えるようにしてから直す**
+ * (11手めの戒め)を、こちらで破っていた。
+ *
+ * @param {boolean} sure 区間が**本当の時刻**から出たものか(見積もりなら偽)
+ * @param {number} cut いま、声の後ろを何秒まで削る見込みか
+ */
+export function noteSentClock({ sure, cut }) {
+  setDetail(`${fellWhy ? `この教材は発言ごとの音声で鳴っています(${fellWhy})。` : ''}`
+    + `[調査中] 区間は ${sure ? '本当の時刻' : '語の重みからの見積もり'}`
+    + `${Number.isFinite(cut) ? ` / 声の後ろを削る 最大 ${Math.round(cut * 1000)}ms` : ''}`)
 }
 
 const setDetail = (d) => {

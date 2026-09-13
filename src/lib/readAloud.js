@@ -42,7 +42,7 @@
  */
 import {
   DEFAULT_CLIP_VOICE, canUseClips, clipAlignment, clipDuration, clipTime,
-  lastWholeDetail, noteFellBack, noteWholeClock, noteWholeFallback,
+  lastWholeDetail, noteFellBack, noteSentClock, noteWholeClock, noteWholeFallback,
   playClip, prefetchClip, seekClip, stopClip, wholeClip, wholeSeams,
 } from './audioClips.js'
 import { FADE_STEP } from './loudness.js'
@@ -1205,6 +1205,15 @@ export function readAloudSequence(parts, {
               sentSecs = fitSents(dur)
               sentSure = !!sentSecs
               if (!sentSecs) sentSecs = sharesToTimes(shares, dur)
+              /* **この道の数字も画面に出す**(28手め)。1本の道にしか
+                 出していなかったので、**発言ごとに鳴っている教材では
+                 届いたかどうかを確かめる術が無かった** */
+              if (sentSecs) {
+                noteSentClock({
+                  sure: sentSure,
+                  cut: foldWorst(sentSecs, FADE_STEP / 1000, slipOf(sentSure)),
+                })
+              }
             }
             if (!sentSecs) return
             const only = partSpan(part.index, sentSecs, part.at, { duration: dur })
