@@ -1301,10 +1301,20 @@ export function slipOf(sure) {
  *   **1本の道にだけ無かった** —— ここで1か所にまとめる)。
  * ══════════════════════════════════════════════════════════════════ */
 
-/** その区間の**手前の縁**。前の区間との間(ま)のまん中に置く */
+/**
+ * その区間の**手前の縁**。前の区間との間(ま)のまん中に置く。
+ *
+ * **ただし発言(段落)の中は別である**(39手め)。そこは無音ではなく、
+ * 控えが「空白」に割り当てた時間 ＝ **前の文の語尾の余韻**なので、
+ * まん中に縁を置くと**余韻の途中で窓が変わる。** 縁は**次の文の頭**。
+ *
+ * **`foldAt()` / `landEdge()` と、必ずそろえる。** 3つのどれかだけを
+ * 動かすと「終わりに来た」と読まれて**前の文へ戻り続ける**(3手め)。
+ */
 function backEdge(list, i) {
   const s = Number(list[i]?.start)
   if (!Number.isFinite(s)) return NaN
+  if (insideItem(list, i - 1)) return s
   const p = Number(list[i - 1]?.end)
   return Number.isFinite(p) ? (p + s) / 2 : s
 }
@@ -1334,8 +1344,12 @@ function frontEdge(list, i, duration = 0) {
  * 遅れを受け止めるのに `REPEAT_LEAD` 要る。まず**間(ま)から**使い、
  * 足りないぶんだけ声をもらう。**間が足りていれば 0**(1ミリ秒も欠けない)。
  */
-export function foldNeed(list, i, step = 0, slip = SLIP) {
-  const e = Number(list[i]?.end)
+export function foldNeed(list, i, step = 0, slip = SLIP, stop = null) {
+  /* **`Number(null)` は 0 である。** そのまま `Number.isFinite()` に
+     渡すと真になり、**止める場所が 0 秒**として数えられる
+     (`doneWindow()` の `prev` で二度踏んだのと、まったく同じ穴) */
+  const e = stop === null || stop === undefined
+    ? Number(list[i]?.end) : Number(stop)
   const n = Number(list[i + 1]?.start)
   if (!Number.isFinite(e) || !Number.isFinite(n)) return 0
   /* 受け止めるのは**3つ**である。1つでも落とすと、間がぎりぎりの継ぎ目で
@@ -1365,8 +1379,13 @@ export function foldWorst(list, step = 0, slip = SLIP) {
   if (!Array.isArray(list) || list.length < 2) return 0
   let worst = 0
   for (let i = 0; i < list.length - 1; i += 1) {
-    const need = foldNeed(list, i, step, slip)
-    if (need > worst) worst = need
+    /* **控えの `end` からどれだけ削るか**を数える(39手め)。
+       発言の中では `end` を過ぎてから折り返すので、そこは 0 になる ——
+       `foldNeed()` をそのまま数えると、**削っていないのに削ったと出る** */
+    const e = Number(list[i]?.end)
+    const at = foldAt(list, i, step, slip)
+    const cut = Number.isFinite(e) && Number.isFinite(at) ? Math.max(0, e - at) : 0
+    if (cut > worst) worst = cut
   }
   return worst
 }
@@ -1377,12 +1396,60 @@ export function foldWorst(list, step = 0, slip = SLIP) {
  * **戻る先(`backEdge` = 間のまん中)とは別物である。**
  * 止めるのは早いほどよく、戻るのは間のまん中がよい。
  */
+/**
+ * **その継ぎ目は、発言(段落)の中か**(2026-09 実機・39手め)。
+ *
+ * ここが今回の要である。
+ *
+ * | 継ぎ目 | `end` と次の `start` のあいだにあるもの |
+ * |---|---|
+ * | 発言と発言(`item` が変わる) | **本当の無音**(`voice_segments` が返した実測) |
+ * | **発言の中の文と文**(`item` が同じ) | **控えが「空白」に割り当てた時間** |
+ *
+ * 後者は無音ではない。**語尾の子音の開放が、そこで鳴っている。**
+ * `much` の /tʃ/ も `stopped` の /t/ も、控えが「最後の文字」と言う
+ * ところでは終わっていない。
+ *
+ * **`item` を持たない並び(発言そのもの)では、必ず偽を返す** ——
+ * だから発言の側は1ミリ秒も変わらない。
+ */
+function insideItem(list, i) {
+  const a = list?.[i]?.item
+  const b = list?.[i + 1]?.item
+  return Number.isFinite(a) && Number.isFinite(b) && a === b
+}
+
+/**
+ * **どこで折り返すか。**
+ *
+ * ── 39手め:**空白の時間は、前の文のものである** ────────────────
+ *
+ *   > なーにひとつ変わってません。…あなたのしていることは
+ *   > どの文章にも影響を与えていません。そもそもそこが問題なのでは?
+ *
+ *   利用者の言うとおりだった。**37・38手めが効かなかったのは、
+ *   どちらも「間(ま)がある継ぎ目」にしか手を入れていなかったから**である。
+ *   ところが発言の中の文と文には、**間そのものが無い**(控えの上では
+ *   数十ミリ秒しかない)。だから 37手めの `max(0, 間 − 0.15)` は 0、
+ *   38手めの「静けさを測る」も**静けさが見つからない。**
+ *   **どちらも、この教材のどの文にも届いていなかった。**
+ *
+ *   いま止めているのは `end`(最後の文字の終わり)である。
+ *   **その先の空白の時間まで鳴らせば、語尾は鳴りきる。**
+ *   これは一律の数ではない ——**継ぎ目ごとに、控えが持っている値**である
+ *   (語尾が破裂音の文ほど、そこに長く割り当てられている)。
+ *
+ *   **発言と発言の継ぎ目は1ミリ秒も変えない。** あちらの `end` は
+ *   `voice_segments` の実測そのもので、そのあとは本当の無音である。
+ */
 function foldAt(list, i, step = 0, slip = SLIP) {
   const n = Number(list[i + 1]?.start)
   if (!Number.isFinite(n)) return NaN
   const e = Number(list[i]?.end)
   if (!Number.isFinite(e) || e > n) return n
-  return e - foldNeed(list, i, step, slip)
+  /* **発言の中では、次の文の頭まで鳴らしきる。** そこから先は次の文である */
+  const stop = insideItem(list, i) ? n : e
+  return stop - foldNeed(list, i, step, slip, stop)
 }
 
 /**
@@ -1478,6 +1545,12 @@ function landEdge(list, i) {
      手前に外れても入ってくるものが無い(頭の無音である)。
      ここで逃がすと、頭から鳴らし直すたびにそのぶん欠ける */
   if (i <= 0) return s
+  /* **発言の中では、頭の手前は無音ではない**(39手め)。そこは控えが
+     「空白」に割り当てた時間で、**前の文の語尾がまだ鳴っている。**
+     手前へ逃がすと、まさに利用者の言う
+     「前の文の最後の一瞬が入ってしまいます」になる。**逃がさない。**
+     発言と発言の継ぎ目は本当の無音なので、これまでどおり逃がす */
+  if (insideItem(list, i - 1)) return s
   const p = Number(list[i - 1]?.end)
   return landSec(s, Number.isFinite(p) ? s - p : 0)
 }
@@ -1565,7 +1638,11 @@ function doneWindow(list, t, duration, prev = null, slip = SLIP) {
   // ⓑ 手前の窓の縁を、いま越えたところ(先取りが間に合わなかったとき)
   if (i > 0) {
     const edge = backEdge(list, i)
-    const crossed = Number.isFinite(p) ? p < edge : t - edge <= REPEAT_EPS
+    /* **縁ちょうどは「越えた」ではない**(39手め)。発言の中では
+       戻る先が縁そのもの(次の文の頭)になったので、`>=` のままだと
+       **戻した次のひと刻みで、また戻す。**
+       前のひと刻みが分かっているときは、これまでどおり素直に見る */
+    const crossed = Number.isFinite(p) ? p < edge : (t > edge && t - edge <= REPEAT_EPS)
     if (crossed) return i - 1
   }
   // ⓒ いちばん最後は、次の縁が無いので音声の終わりで見る
