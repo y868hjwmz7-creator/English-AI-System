@@ -953,7 +953,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-12'
+export const NEED_GEN_REV = '2026-09-13'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -1247,10 +1247,14 @@ export async function generateGrammar(parts) {
 // ── 業種べつの単語帳(棚)の語句(0057)────────────────────────────
 
 /**
- * ある業種・ある場面で使う語句を作らせる(`mode: 'shelf_words'`)。
+ * ある業種で使う語句を作らせる(`mode: 'shelf_words'`)。
  *
- * **1回に頼むのは1つの場面ぶん。** 区切り方は `shelfJobs()`
+ * **1回に頼むのは 20 語ぶん。** 区切り方は `shelfTodo()`
  * (`src/data/shelves.js`)が決めるので、**ここでは数え直さない。**
+ *
+ * **場面べつはやめた**(2026-09 利用者の指定「場面別はやめましょう」)。
+ * 場面は `scenes` として**まとめて渡すだけ** —— 区切りではなく、
+ * 200 語がどれも「会議」まわりに寄らないための手がかりである。
  *
  * **窓口は増やさない。** `generate-material` に `mode` を1つ足しただけ
  * (カタマリの訳・文法解説とまったく同じ考え方)。
@@ -1258,23 +1262,22 @@ export async function generateGrammar(parts) {
  * **教材は1本も作らない。** 返るのは語句だけで、棚に置くのは
  * `saveShelfWords()`(`src/lib/shelfWords.js`)である。
  *
- * @param {{industry: string, scene: string, sceneHint?: string,
+ * @param {{industry: string, scenes?: string[],
  *          level?: string, count?: number, have?: string[]}} job
  */
 export async function generateShelfWords(job) {
   if (!supabase) return ng('Supabase が設定されていません')
   const industry = String(job?.industry ?? '').trim()
-  const scene = String(job?.scene ?? '').trim()
-  if (!industry || !scene) return ng('業種と場面が決まっていません')
+  if (!industry) return ng('業種が決まっていません')
 
   const { data, error } = await supabase.functions.invoke('generate-material', {
     body: {
       mode: 'shelf_words',
       industry,
-      scene,
-      sceneHint: String(job?.sceneHint ?? ''),
+      scenes: (Array.isArray(job?.scenes) ? job.scenes : [])
+        .map((s) => String(s ?? '').trim()).filter(Boolean),
       level: String(job?.level ?? ''),
-      count: Number(job?.count ?? 12),
+      count: Number(job?.count ?? 20),
       have: Array.isArray(job?.have) ? job.have : [],
     },
   })
@@ -1290,7 +1293,10 @@ export async function generateShelfWords(job) {
        「演習の種類が正しくありません」と断られる。
        **添削・文法解説とまったく同じ落とし穴**で、
        そのまま出すと誤診させる */
-    if (/演習の種類が正しくありません/.test(detail)) {
+    /* **古い窓口は「場面」を欲しがる**(場面べつをやめる前のもの)。
+       こちらはもう送らないので「業種と場面が要ります」と断られる ——
+       **そのまま出すと、業種を選び直させることになる** */
+    if (/演習の種類が正しくありません|業種と場面が要ります/.test(detail)) {
       return ng('単語帳を作る窓口が古いため、まだ使えません。'
         + 'Supabase → Edge Functions → generate-material を置き直してください。')
     }

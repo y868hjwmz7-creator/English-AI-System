@@ -1052,11 +1052,16 @@ async function makeGrammar(apiKey: string, body: Record<string, unknown>) {
 //   > 作りたい単語帳は、すべての業界、趣味について、すべての
 //   > シチュエーションと場面を想定したものを。(2026-09 利用者の指定)
 //
-// 【1回に頼むのは、1つの場面ぶんだけ】
-//   1冊まるごと(場面 12 × 12 語 = 144 語)を1回で頼むと、
-//   途中で切られる(`max_tokens`)。**場面ごとに区切れば、
-//   途中で失敗しても、そこまでの場面は残る。**
-//   区切り方は画面(`shelfJobs()`)が決める —— **こちらでは数え直さない。**
+// 【場面べつは、やめた】(2026-09 利用者の指定)
+//   > 場面別はやめましょう。細かすぎる。35冊、これだけにしましょう。
+//
+//   場面を1つずつ渡していたが、883 通りあって細かすぎた。
+//   いまは **1冊 200 語を、20 語ずつ 10 回**に割って作る。
+//   区切り方は画面(`shelfTodo()`)が決める —— **こちらでは数え直さない。**
+//
+//   場面は `scenes`(名前の一覧)として**まとめて渡す。**
+//   **区切りではなく、偏らせないための手がかり**である ——
+//   渡さないと、200 語がどれも「会議」まわりに寄る。
 //
 // 【出会う文を必ず付ける】
 //   `word_reviews.seen_in` に写すので、自分の単語帳に入れたあと
@@ -1066,34 +1071,36 @@ async function makeGrammar(apiKey: string, body: Record<string, unknown>) {
 // ────────────────────────────────────────────────────────────────
 
 const SHELF_SYSTEM = `あなたは日本のパーソナル英語スクールのトレーナーを補助する。
-**ある業種・ある場面で、実際に口から出る語句**を選ぶのが仕事である。
+**ある業種で、実際に口から出る語句**を選ぶのが仕事である。
 
 # 守ること
 
-1. **その場面で本当に使う語句だけ。** 辞書に載っているというだけの語、
+1. **その業種で本当に使う語句だけ。** 辞書に載っているというだけの語、
    教科書にしか出ない語は入れない。
    **その場に居合わせた人が、その日に耳にする語**を選ぶ
 2. **一般的すぎる語を入れない**(go / make / people / important など)。
    どの業種にも出る語は、この単語帳の値打ちを下げる
-3. **単語だけにしない。** その場面の**言い回し**(2〜5語のかたまり)を
+3. **単語だけにしない。** その業種の**言い回し**(2〜5語のかたまり)を
    3〜5割入れる。仕事の英語で本当に要るのは、たいてい言い回しである
-4. **実在の会社名・製品名・人名を使わない**
-5. **ja(訳)は短く。** 辞書の語釈を写さない。
-   その場面での使われ方が分かる、10〜20字の日本語にする
-6. **ex_en(例文)には、その語句を必ずそのまま含める。**
+4. **場面を偏らせない。** 渡された場面の一覧から**広く散らして**選ぶ。
+   会議まわりの語ばかりにしない
+5. **実在の会社名・製品名・人名を使わない**
+6. **ja(訳)は短く。** 辞書の語釈を写さない。
+   その業種での使われ方が分かる、10〜20字の日本語にする
+7. **ex_en(例文)には、その語句を必ずそのまま含める。**
    含まない例文は使えない(そのまま単語帳の「出会った文」になる)。
-   長さは 8〜18 語。**その場面で実際に交わされそうな1文**にする
-7. **ex_ja は ex_en の訳。** 1文で、自然な日本語にする
-8. **pos は日本語で1語**(名詞 / 動詞 / 形容詞 / 副詞 / 前置詞 / 熟語 …)
-9. **level は、その語句が出てくる段**(A1 / A2 / B1 / B2 / C1 / C2)。
-   専門語は難しく見えるが、**場面で毎日使う語なら A2 や B1 でよい**
-10. **同じ語を二度返さない。** 語形が違うだけのもの(plan / planning)も
+   長さは 8〜18 語。**その業種で実際に交わされそうな1文**にする
+8. **ex_ja は ex_en の訳。** 1文で、自然な日本語にする
+9. **pos は日本語で1語**(名詞 / 動詞 / 形容詞 / 副詞 / 前置詞 / 熟語 …)
+10. **level は、その語句が出てくる段**(A1 / A2 / B1 / B2 / C1 / C2)。
+    専門語は難しく見えるが、**毎日使う語なら A2 や B1 でよい**
+11. **同じ語を二度返さない。** 語形が違うだけのもの(plan / planning)も
     どちらか1つにする`
 
 /** 棚の語を受け取る道具。\`strict: true\` なので形は API が保証する */
 const shelfTool = {
   name: 'emit_shelf_words',
-  description: 'ある業種・ある場面で使う語句を返す',
+  description: 'ある業種で使う語句を返す',
   strict: true,
   input_schema: {
     type: 'object',
@@ -1126,7 +1133,7 @@ const shelfTool = {
 }
 
 /**
- * 棚の語を作る。**1つの場面ぶん。**
+ * 棚の語を作る。**20 語ぶん。**
  *
  * **中身が0件のまま「成功」を返さない**(CLAUDE.md)。
  * 落とす検査には**安全弁**を付ける —— 落としすぎて0語になるくらいなら、
@@ -1134,17 +1141,19 @@ const shelfTool = {
  */
 async function makeShelfWords(apiKey: string, body: Record<string, unknown>) {
   const industry = String(body.industry ?? '').trim()   // 日本語の分野名
-  const scene = String(body.scene ?? '').trim()         // 日本語の場面名
-  const hint = String(body.sceneHint ?? '').trim()
+  /* **場面は「手がかり」であって、区切りではない**(2026-09 利用者の指定)。
+     渡らなくても作れる —— そのぶん語が会議まわりに寄りやすくなるだけ */
+  const scenes = (Array.isArray(body.scenes) ? body.scenes : [])
+    .map((s) => String(s ?? '').trim()).filter(Boolean).slice(0, 40)
   const level = String(body.level ?? '').trim()
-  const count = Math.min(Math.max(Number(body.count ?? 12), 1), 30)
+  const count = Math.min(Math.max(Number(body.count ?? 20), 1), 30)
   /* **すでに棚にある語は、もう一度作らせない。**
      渡さないと、2回目に押したときにほとんど同じ語が返る */
   const have = (Array.isArray(body.have) ? body.have : [])
     .map((w) => String(w ?? '').trim()).filter(Boolean).slice(0, 400)
 
-  if (!industry || !scene) {
-    return { error: '業種と場面が要ります' }
+  if (!industry) {
+    return { error: '業種が要ります' }
   }
 
   const client = new Anthropic({ apiKey })
@@ -1157,8 +1166,11 @@ async function makeShelfWords(apiKey: string, body: Record<string, unknown>) {
     tool_choice: { type: 'tool', name: 'emit_shelf_words' },
     messages: [{
       role: 'user',
-      content: `# 業種\n${industry}\n\n# 場面\n${scene}`
-        + (hint ? `(${hint})` : '')
+      content: `# 業種\n${industry}`
+        + (scenes.length
+          ? `\n\n# この業種でよくある場面(**ここから広く散らして選ぶ**)\n`
+            + scenes.join(' / ')
+          : '')
         + (level ? `\n\n# ゲストのレベルの目安\n${level}` : '')
         + (have.length
           ? `\n\n# すでにこの単語帳にある語(**1つも返さない**)\n${have.join(' / ')}`
@@ -1467,7 +1479,7 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-12'
+const FN_REV = '2026-09-13'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {

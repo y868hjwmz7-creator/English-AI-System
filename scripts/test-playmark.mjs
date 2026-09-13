@@ -52,8 +52,9 @@ import {
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
 import {
-  SCENE_COST, SHELF_PICK_KEY, WORDS_PER_SCENE, isShelf, pickedShelves, shelfFeature,
-  shelfIdOfFeature, shelfJobs, shelfList, shelfOf, shelfScenes, shelfTarget,
+  JOB_COST, SCENE_HINT_MAX, SHELF_PICK_KEY, WORDS_PER_BOOK, WORDS_PER_JOB,
+  isShelf, pickedShelves, shelfFeature,
+  shelfIdOfFeature, shelfList, shelfOf, shelfSceneNames, shelfScenes, shelfTarget,
   shelfTodo, shelvesFor, showsShelf,
 } from '../src/data/shelves.js'
 import { INDUSTRIES } from '../src/data/industries.js'
@@ -4183,39 +4184,45 @@ console.log('\nスピーチ練習(0054)')
   ok(!isShelf('medical') && isShelf('med'),
     '棚 … 種類そのものは棚を持たない(冊が二重にならない)')
 
-  /* ── 場面は、冊の中の絞り込み ──
-     **1,700 冊にしない**(CLAUDE.md「書けない表は作らない」) */
+  /* ── 場面べつは、やめた ──(2026-09 利用者の指定)
+       > 場面別はやめましょう。細かすぎる。35冊、これだけにしましょう。
+
+     場面は**窓口へ渡す手がかり**として残る。**区切りではない** */
   ok(shelfScenes('it').length > 0, '棚 … その棚の場面が引ける')
   ok(shelfScenes('med').length >= shelfScenes('medical').length,
     '棚 … 親の棚では、種類ぜんぶの場面が集まる')
   ok(shelfScenes('そんな分野').length === 0, '棚 … 知らない棚の場面は空')
-  ok(shelfTarget('it') === shelfScenes('it').length * WORDS_PER_SCENE,
-    '棚 … 目安の語数は「場面 × 1場面の語数」')
-  const jobs = shelfJobs('it')
-  ok(jobs.length === shelfScenes('it').length
-    && jobs.every((j) => j.shelf === 'it' && j.scene && j.label
-      && j.count === WORDS_PER_SCENE),
-    '棚 … 作る仕事は、場面ごとに1つ')
+  const hints = shelfSceneNames('energy')
+  ok(hints.length > 0 && hints.length <= SCENE_HINT_MAX
+    && hints.every((s) => typeof s === 'string' && s),
+    '棚 … 窓口へ渡す場面は、名前だけ・上限つき')
 
-  /* ── まとめて作る ──(2026-09 利用者の問い「一回一回単語を作るのですか？」)
-     **足りない場面だけ**を、**足りないぶんだけ**作る。
+  /* **どの冊も同じ語数。** 場面の数で変えない ——
+     変えると、エネルギー 960 語・ゲーム 168 語のように桁が違うものができる */
+  ok(shelfTarget() === WORDS_PER_BOOK, '棚 … 1冊の語数は、どの冊も同じ')
+  ok(shelfScenes('energy').length !== shelfScenes('gaming').length,
+    '棚 … 場面の数は、冊によってまるで違う(だから語数の根拠にしない)')
+
+  /* ── まとめて作る ──
+     **足りないぶんだけ**を、**20 語ずつ**に割る。
      だから何度押しても安全である */
   const empty = shelfTodo('it')
-  ok(empty.length === shelfScenes('it').length
-    && empty.every((j) => j.count === WORDS_PER_SCENE),
-    '棚 … 空の棚では、場面ぜんぶを作る')
-  const one = shelfScenes('it')[0].id
-  const full = shelfTodo('it', { [one]: WORDS_PER_SCENE })
-  ok(full.length === empty.length - 1 && !full.some((j) => j.scene === one),
-    '棚 … すでに足りている場面は落とす(同じ語を作り直さない)')
-  const part = shelfTodo('it', new Map([[one, 5]]))
-  ok(part.find((j) => j.scene === one)?.count === WORDS_PER_SCENE - 5,
-    '棚 … 足りないぶんだけ作る(手で1語入れた場面も、埋まる)')
-  ok(part.map((j) => j.scene).join() === empty.map((j) => j.scene).join(),
-    '棚 … 順は `shelfJobs()` のまま(プルダウンと食い違わない)')
+  ok(empty.length === Math.ceil(WORDS_PER_BOOK / WORDS_PER_JOB)
+    && empty.reduce((n, j) => n + j.count, 0) === WORDS_PER_BOOK
+    && empty.every((j) => j.shelf === 'it' && j.count <= WORDS_PER_JOB),
+    '棚 … 空の棚では、1冊ぶんを 20 語ずつに割る')
+  ok(empty[0].from === 1 && empty[0].to === WORDS_PER_JOB
+    && empty[empty.length - 1].to === WORDS_PER_BOOK,
+    '棚 … 何語目から何語目までかを持つ(帯に出す)')
+  ok(shelfTodo('it', WORDS_PER_BOOK).length === 0,
+    '棚 … そろっていれば、作るものが無い(同じ語を作り直さない)')
+  const part = shelfTodo('it', WORDS_PER_BOOK - 5)
+  ok(part.length === 1 && part[0].count === 5 && part[0].from === WORDS_PER_BOOK - 4,
+    '棚 … 足りないぶんだけ作る(超えて作らない)')
+  ok(shelfTodo('it', 999).length === 0, '棚 … 多すぎても、マイナスにならない')
   ok(shelfTodo('そんな棚').length === 0, '棚 … 知らない棚では、作るものが無い')
-  ok(SCENE_COST.min > 0 && SCENE_COST.max > SCENE_COST.min,
-    '棚 … 1場面の見積もりに幅がある(押す前に金額を出すため)')
+  ok(JOB_COST.min > 0 && JOB_COST.max > JOB_COST.min,
+    '棚 … 1回の見積もりに幅がある(押す前に金額を出すため)')
 
   /* ── ゲストへの指定の名前 ──
      **新しい表を作らない。** 0055 の `learner_features` に
@@ -4294,26 +4301,32 @@ console.log('\nスピーチ練習(0054)')
   ok(SHELF_PICK_KEY === 'eas.shelfPick', '棚 … 鍵の名前は `shelves.js` 1か所')
 
   /* ── 棚を作る画面 ──
-     **一回一回押させない。** まとめて作る道と、止まる条件を見る */
+     **場面べつをやめた。** 1冊ぶんをまとめて作る道と、止まる条件を見る */
   const buildS = noCS(readS('src/components/ShelfBuilder.jsx'))
   ok(/= useMemo\(\(\) => shelfTodo\(shelf, have\)/.test(buildS),
-    '棚 … 足りない場面は `shelfTodo()` が決める(画面で数え直さない)')
+    '棚 … 足りないぶんは `shelfTodo()` が決める(画面で数え直さない)')
   ok(/onClick=\{makeAll\}/.test(buildS)
     && /const makeAll = \(\) => \{ runJobs\(todo\) \}/.test(buildS),
-    '棚 … 「ぜんぶ作る」で、足りない場面をまとめて作る')
-  ok(/onClick=\{make\}/.test(buildS)
-    && /if \(job\) runJobs\(\[job\]\)/.test(buildS),
-    '棚 … 1場面ずつ作る道も残してある(同じ `runJobs()` を通る)')
+    '棚 … 「ぜんぶ作る」で、1冊ぶんをまとめて作る')
+  ok(/onClick=\{makeOne\}/.test(buildS)
+    && /const makeOne = \(\) => \{ runJobs\(todo\.slice\(0, 1\)\) \}/.test(buildS),
+    '棚 … まず1回ぶんだけ見る道も残してある(同じ `runJobs()` を通る)')
+  ok(!/場面\(1つだけ作るとき\)/.test(buildS) && !/setScene\(/.test(buildS),
+    '棚 … 場面のプルダウンは、道具ごと消してある(場面べつはやめた)')
   ok(/if \(stop\.current\) break/.test(buildS)
     && /onClick=\{\(\) => \{ stop\.current = true \}\}/.test(buildS),
-    '棚 … 止まる条件を持たせてある(「やめる」で次の場面へ進まない)')
-  ok(/\{run\.at \+ 1\} \/ \{run\.total\} 場面/.test(buildS),
-    '棚 … あと何場面かを、走っているあいだ出す')
-  ok(/todo\.length \* SCENE_COST\.min/.test(buildS)
+    '棚 … 止まる条件を持たせてある(「やめる」で次の回へ進まない)')
+  ok(/\{run\.at \+ 1\} \/ \{run\.total\} 回/.test(buildS)
+    && /\{run\.from\}〜\{run\.to\} 語目/.test(buildS),
+    '棚 … あと何回か・何語目かを、走っているあいだ出す')
+  ok(/todo\.length \* JOB_COST\.min/.test(buildS)
     && /\{todoWords\} 語/.test(buildS),
     '棚 … 押す前に、語数と金額を出す(見えない費用は管理できない)')
-  ok(/この単語帳に入れる/.test(buildS) && /setDraft\(groups\.map/.test(buildS),
+  ok(/この単語帳に入れる/.test(buildS) && /setDraft\(\[\.\.\.made\]\)/.test(buildS),
     '棚 … まとめて作っても、入れる前に必ず目を通す')
+  ok(/scenes = shelfSceneNames\(shelf\)/.test(buildS)
+    && /\n\s+scenes,\n/.test(buildS),
+    '棚 … 場面は、偏らせないための手がかりとしてまとめて渡す')
 
   const trS = noCS(readS('src/components/TrainerLearners.jsx'))
   ok(/shelfFeature\(s\.id\)/.test(trS),
@@ -4326,11 +4339,19 @@ console.log('\nスピーチ練習(0054)')
     '棚 … 窓口が `mode: shelf_words` を受け取っている')
   ok(/name: 'emit_shelf_words'/.test(fn) && /strict: true/.test(fn),
     '棚 … 形は道具(`strict: true`)が保証している')
+  /* **場面べつはやめた。** 窓口は場面が無くても作れる ——
+     残っていると、いまの画面からは1回も呼べなくなる */
+  ok(/const scenes = \(Array\.isArray\(body\.scenes\)/.test(fn)
+    && !/if \(!industry \|\| !scene\)/.test(fn),
+    '棚 … 窓口は場面を要求しない(手がかりとしてまとめて受け取る)')
   const matS = noCS(readS('src/lib/materials.js'))
   ok(/mode: 'shelf_words'/.test(matS),
     '棚 … 画面から `mode: shelf_words` を渡している')
-  ok(/NEED_GEN_REV = '2026-09-12'/.test(matS)
-    && /const FN_REV = '2026-09-12'/.test(fn),
+  /* **古い窓口の断りを、そのまま出さない**(誤診させない・CLAUDE.md) */
+  ok(/業種と場面が要ります/.test(matS),
+    '棚 … 古い窓口の断りを「窓口が古い」と読み替える')
+  ok(/NEED_GEN_REV = '2026-09-13'/.test(matS)
+    && /const FN_REV = '2026-09-13'/.test(fn),
     '棚 … 窓口の版が、画面と窓口でそろっている')
 
   /* ── 貼る SQL がそろっているか ──
