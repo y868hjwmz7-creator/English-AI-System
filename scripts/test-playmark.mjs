@@ -4597,8 +4597,28 @@ console.log('\nスピーチ練習(0054)')
     '単語帳を出す … 0055 を貼る前は、そう言う')
   /* **ゲストのページからの道も、消していない**(2つとも要る) */
   const tl = noCS(readS('src/components/TrainerLearners.jsx'))
-  ok(/shelfFeature\(s\.id\)/.test(tl),
+  /* **押せる形で数える。** `shelfFeature(s.id)` だけだと、
+     一覧を作る `useMemo` にも当たって**欄を消しても緑**になる */
+  ok(/toggleFeature\(l, \{\s*id: shelfFeature\(s\.id\)/.test(tl),
     '単語帳を出す … ゲストのページからの道も残っている')
+  /* **置き場所は「単語帳」のタブ**(2026-09 利用者の指定)。
+
+       > ゲストへの単語帳のアサインは、レベルとスコアからではなく、
+       > ゲストの単語帳からできるようにしてください。
+
+     **「ファイルの中に在るか」では足りない** —— それだと
+     「レベルとスコア」へ戻しても緑のままになる。
+     **タブとタブのあいだ**にいることまで見る */
+  {
+    const wb = tl.indexOf("detailTab === 'wordbook'")
+    const qr = tl.indexOf("detailTab === 'qr'")
+    const rec = tl.indexOf("detailTab === 'record'")
+    const at = tl.indexOf('この人に出す「業種べつの単語帳」')
+    ok(wb > 0 && qr > wb && at > wb && at < qr,
+      '単語帳を出す … 出す欄が「単語帳」のタブの中にある')
+    ok(rec > 0 && !(at > rec),
+      '単語帳を出す … 「レベルとスコア」には戻していない')
+  }
 
   /* ── ② 教材の音声を、ゲストの画面からも落とせる ── */
   const hw = noCS(readS('src/components/LearnerHomework.jsx'))
