@@ -4687,17 +4687,67 @@ for (const W of [1280, 794, 453, 390, 320]) {
     }
   })
 
-  /* ③ 文を畳んだぶん、形で言う(1冊も選んでいなければ青) */
+  /* ③ 文を畳んだぶん、形で言う(1冊も選んでいなければ青)。
+
+       **「青い」だけを見ない**(2026-09 実機)。
+
+         > 業種別単語帳のボタンが真っ青です
+
+       `.wb-add-open { color: var(--accent) }` が `.btn--primary` より
+       **あとに書いてあって重さが同じ**だったので、青い地に青い文字になり、
+       **絵ごと消えてただの青い板**になっていた。ところがこの検証は
+       **`className` に `btn--primary` が入っているか**しか見ていないので、
+       **ずっと緑のまま**だった ——「名前が出てくるか」で見ない、の色の版。
+
+       だから**描いて、地との差を測る。** 明るい側と暗い側の両方
+       (CLAUDE.md「確認は明るい・暗いの両方で行う」)。 */
   await page.evaluate(() => { try { localStorage.removeItem('eas.tips') } catch { /* 同上 */ } })
   const 青 = {}
   for (const [key, q] of [['無し', '&picked=none'], ['有り', '']]) {
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfpick${q}`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(200)
-    青[key] = await page.evaluate(() =>
-      document.querySelector('.shelfbooks .wb-add-open')?.className ?? '')
+    for (const 配色 of ['light', 'dark']) {
+      await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), 配色)
+      await page.waitForTimeout(80)
+      const m = await page.evaluate(() => {
+        const el = document.querySelector('.shelfbooks .wb-add-open')
+        if (!el) return null
+        const 明 = (c) => {
+          const [r, g, b] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+            .map((v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4 })
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
+        /* **地は、自分から上へたどって最初の不透明なもの。**
+           枠線だけのボタンは自分の地を持たないことがある */
+        const 地の色 = () => {
+          for (let n = el; n; n = n.parentElement) {
+            const c = window.getComputedStyle(n).backgroundColor
+            if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) return c
+          }
+          return 'rgb(255, 255, 255)'
+        }
+        const 字 = window.getComputedStyle(el).color
+        const 地 = 地の色()
+        const x = 明(字); const y = 明(地)
+        return {
+          cls: el.className,
+          字,
+          地,
+          差: Math.round(((Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)) * 10) / 10,
+        }
+      })
+      青[`${key}:${配色}`] = m
+    }
+    await page.evaluate(() => document.documentElement.removeAttribute('data-theme'))
+    青[key] = 青[`${key}:light`]?.cls ?? ''
   }
   await page.close()
+
+  /** **字が読めない**(地との差が小さすぎる)ものを探す */
+  const 読めない = Object.entries(青)
+    .filter(([k, v]) => k.includes(':') && v && v.差 < 3)
+    .map(([k, v]) => `${k} 差 ${v.差}(字 ${v.字} / 地 ${v.地})`)
 
   if (既定.印 !== null) {
     ng('説明の文 … 既定なのに `data-tips` が付いている', String(既定.印))
@@ -4715,9 +4765,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ng('説明の文 … 1冊も選んでいないのに、えらぶボタンが青くない', 青.無し)
   } else if (!/btn--ghost/.test(青.有り) || /btn--primary/.test(青.有り)) {
     ng('説明の文 … 選んだあとも、えらぶボタンが青いまま', 青.有り)
+  } else if (読めない.length) {
+    ng('説明の文 … えらぶボタンの字が、地に沈んで読めない',
+      `${読めない.join(' / ')}。青い地に青い字を当てていないか`)
   } else {
-    ok(`説明の文 ${W}px … 既定は 0 / ${既定.在る} 個・オンで ${オン.見える} 個・` +
-      '1冊も無いあいだはえらぶボタンが青い')
+    ok(`説明の文 ${W}px … 既定は 0 / ${既定.在る} 個・オンで ${オン.見える} 個・`
+      + `1冊も無いあいだはえらぶボタンが青く、字も読める`
+      + `(明 ${青['無し:light']?.差} / 暗 ${青['無し:dark']?.差})`)
   }
 }
 

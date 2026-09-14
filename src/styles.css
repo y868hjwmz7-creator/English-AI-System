@@ -5569,7 +5569,19 @@ button.wbfilter-ctl { text-align: left; }
    **ふだん開く場所ではない**ので、畳んで1行のボタンにしておく。
    開いたときだけ、うすい面の上に欄が並ぶ */
 .wb-add { margin: 12px 0 4px; }
-.wb-add-open { color: var(--accent); }
+/* **青の塗りつぶしのときは、この色を当てない**(2026-09 実機)。
+
+     > 業種別単語帳のボタンが真っ青です
+
+   ここは `.btn--primary`(`color: var(--on-accent)`)より**あとに
+   書いてある**うえ、**重さが同じ**(0,1,0)なので、こちらが勝つ。
+   すると**青い地に青い文字**になり、絵(`currentColor`)ごと消えて
+   **ただの青い板**になっていた。
+
+   `:not(.btn--primary)` は、札の地色で同じことをしたときの
+   **`:not(.chip--on)` とまったく同じ考え方**である
+   (CLAUDE.md「`:not()` を付け忘れると、開いている印を打ち消す」)。 */
+.wb-add-open:not(.btn--primary) { color: var(--accent); }
 .wb-add-body {
   margin-top: 10px; padding: 14px 16px;
   border: 1px solid var(--border); border-radius: var(--radius);
