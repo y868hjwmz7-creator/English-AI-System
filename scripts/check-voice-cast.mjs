@@ -35,6 +35,7 @@ import {
   voicesOfAccent,
 } from '../src/data/clipVoices.js'
 import { SPEAK_MAX, speakChunks } from '../src/lib/speakChunks.js'
+import { orderVoicesByNames } from '../src/lib/voiceOrder.js'
 
 let bad = 0
 const ok = (s) => console.log(`✓ ${s}`)
@@ -91,11 +92,25 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   if (/pickVoices\(/.test(form) && !/useMemo\(/.test(form)) {
     ng('声をその場で選び直している', 'おまかせは毎回混ざるので、1回だけ決める')
   }
-  if (/voiceIds:\s*cast\b/.test(form)) ok('保存する声は、決めた1つ(cast)を使っている')
-  else {
-    ng('保存する声が、決めた1つ(cast)ではない',
-      '作るときに伝えた性別と、保存する声がずれる')
-  }
+  /* **保存する声は `cast` から1回だけ作り、支度にも同じものを渡す。**
+     `cast` そのものではなく、出来上がった名前に合わせて並べ替えた
+     `voiceIds` を保存する(⑨)。ただし**顔ぶれは `cast` のまま**なので、
+     「作るときに伝えた性別と、保存する声がずれない」という
+     この検証の役目は変わっていない。
+     見るのは「1回だけ作って、2か所へ同じものを渡しているか」である */
+  const once = /const voiceIds = orderedCast\(\)/.test(form)
+  const saved = /\n\s*voiceIds,\n/.test(form)
+  const prepared = /voiceIds,\s*tags:/.test(form)
+  if (/voiceIds:\s*cast\b/.test(form)) {
+    ng('保存する声を、並べ替える前のまま渡している',
+      '出来上がった名前に合わせた voiceIds を渡すこと(⑨)')
+  } else if (!once) {
+    ng('保存する声を、1回だけ決めていない',
+      '作るときと支度で別々に作ると、食い違う')
+  } else if (!saved || !prepared) {
+    ng('作るときと支度で、同じ声を渡していない',
+      `保存 ${saved} / 支度 ${prepared}`)
+  } else ok('保存する声は、1回だけ決めて、支度にも同じものを渡している')
   // **見張りに `voicePool` を入れない**(描き直すたびに別の配列になる)
   const memo = form.match(/const cast = useMemo\([\s\S]*?\}, \[([^\]]*)\]\)/)
   if (!memo) ng('`cast` が useMemo で決まっていない')
@@ -1008,6 +1023,69 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     ng(`窓口の版と、画面が要る版が違う(窓口 ${fnRev} / 画面 ${need})`,
       '窓口に手を入れたら、両方を同じ値に進める')
   } else ok(`窓口の版はそろっている(${fnRev})`)
+}
+
+/* ── ⑨ 出来上がった名前に、声の並びを合わせる ──────────────────────
+ *
+ *   2026-09 利用者の指摘
+ *     > 会話や会議で男の役に女性の声、女性の役に男の声が
+ *     > アサインされることがほとんどです。
+ *
+ *   窓口へ性別は渡していたが、**そのあと一度も確かめていなかった。**
+ *   ①窓口を置き直していない ②AI がその1行を守らなかった、のどちらでも
+ *   黙ってずれる。**しかも音は鳴るので、聴くまで分からない。**
+ *
+ *   **「直る」だけを見ない。** それだけだと、名前が読めないときにまで
+ *   勝手に入れ替える形へ書き換えても緑になる。
+ *   ①直るか ②顔ぶれが1人も変わっていないか ③合っているものを動かさないか
+ *   ④読めないときは何もしないか ⑤画面が本当に呼んでいるか、を一緒に見る。 */
+{
+  const us = voicesOfAccent('us')
+  const male = us.find((v) => v.gender === 'male')
+  const female = us.find((v) => v.gender === 'female')
+  const gOf = (id) => findVoice(id)?.gender
+  const ids = [male.id, female.id]
+  // 「1人目は男性」と頼んだのに、AI が女性の名前から始めてしまった会話
+  const flipped = ['Mika (Agent)', 'Kenji (Manager)', 'Mika (Agent)']
+
+  // ① 入れ替わるか
+  const fixed = orderVoicesByNames(ids, flipped, gOf)
+  const cast = castClipSpeakers(flipped, fixed)
+  if (gOf(cast.get('mika (agent)')) !== 'female' || gOf(cast.get('kenji (manager)')) !== 'male') {
+    ng('名前と声の性別がそろっていない',
+      `mika → ${gOf(cast.get('mika (agent)'))} / kenji → ${gOf(cast.get('kenji (manager)'))}`)
+  } else ok('名前がずれていたら、声の並びを入れ替える')
+
+  // ② **顔ぶれは1人も変えない**(指名した声が無視されない)
+  if ([...fixed].sort().join() !== [...ids].sort().join()) {
+    ng('声の顔ぶれが変わっている', `${ids} → ${fixed}`)
+  } else ok('入れ替えても、選んだ声は1人も変わらない')
+
+  // ③ 合っているものは、1ミリも動かさない
+  const same = ['Kenji (Manager)', 'Mika (Agent)']
+  if (orderVoicesByNames(ids, same, gOf) !== ids) {
+    ng('合っているのに並びを動かしている', '元の配列そのものを返すこと')
+  } else ok('名前と声が合っていれば、何もしない')
+
+  // ④ **名前から読めないときは、何もしない**(あやふやなことを言わない)
+  const unknown = ['Speaker A (x)', 'Speaker B (y)']
+  if (orderVoicesByNames(ids, unknown, gOf) !== ids) {
+    ng('名前を読めないのに並びを変えている')
+  } else ok('名前から性別を読めないときは、何もしない')
+
+  // 1人だけ読めるときも動かさない(根拠が足りない)
+  if (orderVoicesByNames(ids, ['Mika (Agent)', 'Speaker B (y)'], gOf) !== ids) {
+    ng('1人しか読めないのに並びを変えている')
+  } else ok('読める名前が1人だけなら、動かさない')
+
+  // ⑤ **画面が本当に呼んでいるか。** 定義だけあっても何も起きない
+  const form3 = read('src/components/MaterialForm.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+  // **呼んでいる形で見る。** 取り込みの行(`import { … }`)には丸括弧が無い
+  if (!/orderVoicesByNames\(\s*\n?\s*cast/.test(form3)) {
+    ng('画面が、並びを合わせていない', '発行するときに1回だけ通すこと')
+  } else if (/voiceIds:\s*cast\b/.test(form3)) {
+    ng('保存する声が、並べ替える前のままになっている')
+  } else ok('画面は、発行するときに声の並びを合わせている')
 }
 
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

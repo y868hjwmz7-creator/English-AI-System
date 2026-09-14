@@ -55,6 +55,11 @@ import {
   CLIP_ACCENTS, DEFAULT_ACCENT, MIN_MEETING_SPEAKERS, findVoice, pickVoices,
   speakerCountsFor, voiceCountFor, voicePurposeFor, voicesOfAccent,
 } from '../data/clipVoices.js'
+/* **出来上がった名前に、声の並びを合わせる**(2026-09 利用者の指摘
+     「男の役に女性の声、女性の役に男の声がアサインされることがほとんど」)。
+   窓口へ性別を渡してはいたが、**そのあと一度も確かめていなかった。**
+   算段は `voiceOrder.js` 1か所(素の node で確かめられる形にしてある) */
+import { orderVoicesByNames } from '../lib/voiceOrder.js'
 import { collectReviewWords, normWord } from '../lib/vocab.js'
 import { startPrepare } from '../lib/prepareJob.js'
 
@@ -1152,11 +1157,36 @@ export default function MaterialForm({
     return watchJob(sync)
   }, [])
 
+  /**
+   * 保存する声の並び。**出来上がった名前に合わせて入れ替える。**
+   *
+   * 窓口へ「1人目は男性、2人目は女性」と渡してはいるが、
+   * ①窓口を置き直していない ②AI がその1行を守らなかった、のどちらでも
+   * **黙ってずれる**(しかも音は鳴るので、聴くまで分からない)。
+   * **頼むだけにせず、出来上がりを見て直す**(CLAUDE.md)。
+   *
+   * **声は1人も入れ替えない。並び順だけを変える**ので、
+   * トレーナーが指名した声は必ず全員そのまま使われる。
+   * 名前から性別が読めないときは、何もしない。
+   */
+  const orderedCast = () => (
+    isDialogueKind(kind)
+      ? orderVoicesByNames(
+        cast,
+        (sections.find((sec) => isPassageSection(sec.exercise_type))?.items ?? [])
+          .map((it) => it.speaker),
+        (id) => findVoice(id)?.gender,
+      )
+      : cast
+  )
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (busy) return
     setBusy(true)
     setError(null)
+    // **1回だけ決めて、作るときも支度のときも同じものを使う**
+    const voiceIds = orderedCast()
     // 教材名は空でよい。日付・弱点・レベルから組み立てる。
     // 必須にすると、AI に作らせるだけの人にも入力を強いることになる。
     const { data, error: message } = await createMaterial({
@@ -1171,8 +1201,9 @@ export default function MaterialForm({
       angle: usedAngle || angle, gist,
       // **おまかせは、ここで1回だけ決めて保存する。**
       // 開くたびに選び直すと、同じ教材なのに毎回ちがう声になり、
-      // そのたびに音声を作り直す(= 課金される)
-      voiceIds: cast,
+      // そのたびに音声を作り直す(= 課金される)。
+      // **並びは出来上がった名前に合わせてある**(`orderedCast`)
+      voiceIds,
       topic: subject,
     })
     if (message) { setBusy(false); setError(message); return }
@@ -1213,7 +1244,7 @@ export default function MaterialForm({
      *   **待たない。** 支度は裏で走り、画面はすぐ次へ進む
      *   (`prepareJob.js` がモジュールに1つだけ持つので、画面が消えても続く)。 */
     startPrepare(
-      { id: data.id, sections, voiceIds: cast, tags: tagIds },
+      { id: data.id, sections, voiceIds, tags: tagIds },
       { title: title.trim() || autoTitle(), level },
     )
 
