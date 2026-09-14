@@ -354,7 +354,12 @@ const CARD_MATERIAL = {
 const TOOLS = (
   <div className="app-main" style={{ padding: 16 }}>
     <section className="card">
-      {/* 問数の行。**写真と同じ中身**(390px では3つで 328px 使う) */}
+      {/* 問数の行。**写真と同じ中身**(390px では3つで 328px 使う)。
+
+          **ここには `tip` を付けない。** 本物の画面では畳んであるが、
+          この行は「読み上げの声」の札が**その下にいるか**を測るための
+          物差しである。畳むと高さが 0 になり、
+          **測れないものは測れない**(検証が「描かれない」で赤くなる) */}
       <div className="muted material-parts">
         <span>会話 14 発言</span>
         <span>内容の理解 5 問</span>

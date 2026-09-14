@@ -4763,8 +4763,16 @@ console.log('\nスピーチ練習(0054)')
     '説明の文 … 先取りの断りは、畳まない行に分けてある')
   ok(/className="tip hint wb-capped"/.test(wb),
     '説明の文 … 「いまこの画面に読めているのは…」を畳んである')
-  ok(/className="tip muted material-parts"/.test(noCS(readS('src/components/TrainerMaterials.jsx'))),
-    '説明の文 … 教材のカードの「何が何問」を畳んである')
+  /* 「何が何問」の行は**2つの画面にある**(教材のカード / 過去の宿題)。
+     2026-09 利用者の指定「揃えてください」。**片方だけ畳むと、
+     同じものが画面によって出たり出なかったりする** */
+  for (const [名, 道] of [
+    ['教材のカード', 'src/components/TrainerMaterials.jsx'],
+    ['過去の宿題', 'src/components/TrainerLearners.jsx'],
+  ]) {
+    ok(/className="tip muted material-parts"/.test(noCS(readS(道))),
+      `説明の文 … ${名}の「何が何問」を畳んである`)
+  }
 }
 
 console.log(ng
