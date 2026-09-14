@@ -3440,10 +3440,25 @@ html, body { overflow-x: clip; }
      ただし紙で読める濃さは保つ */
   .print-target .qrsheet-ja { font-size: 10.5pt; }
   .print-target .qrsheet-en { font-size: 11pt; color: #222 !important; }
-  /* 狭い紙(縦の A4 でも長い文がある)では、上下に積む */
-  @media (max-width: 120mm) {
-    .print-target ol.qrsheet-list > li { grid-template-columns: 1fr; }
-  }
+  /* **狭くても畳まない**(2026-09 実機・利用者の指定)
+       > 単語帳を印刷した際に、現状は上に日本語、下に英語、という
+       > デザインになるのですが、これを、左に日本語、右に英語、という風に
+       > 印刷したときに学習しやすいように変えてください。
+       > これはどの単語帳でも同じです。
+
+     ここには **`@media (max-width: 120mm)` で1列に畳む指定**があった。
+     「狭い紙では長い文が入らないだろう」という**こちらの思いつき**で、
+     一度も確かめていなかった。実測すると **453px(= 120mm)以下で
+     きっかり上下に積む**(460px は左右のまま)。利用者が見ていたのは
+     これである。**畳む必要そのものが無かった** ——
+     日本語も英語もどこでも折り返せるので、細くなるだけで読める。
+
+     **「どの単語帳でも同じ」は、この1か所が守る。** 単語帳・
+     Quick Response 帳・教材の紙のいちばん後ろのページは、
+     どれもこの `.qrsheet-list` に乗っている(**書き写さない**)。
+
+     `npm run test:bar` は**狭い幅でも測る** —— 1280px だけを見ていたので、
+     この不具合を何日も素通りさせた(「無ければ素通りする検証を書かない」)。 */
   /* ただし通しの練習(6Steps / Quick Response)は紙に出さない。
      あれは**画面でやること**で、中身は上のページがすべて持っている */
   body.is-printing .lesson-sheet > .passage,
@@ -8496,6 +8511,16 @@ button.wbfilter-ctl { text-align: left; }
    **1語 = 1行。** 語・訳・品詞とレベル・例文・訳を縦に積む ——
    横に並べると、長い例文で必ずどこかがはみ出す */
 .shelfbuild .field { margin-bottom: var(--sp-10); }
+/* この単語帳を出すゲスト(2026-09 利用者の指定)。
+   **新しい配色を作らない** —— 札は `.chip` / `.chip--on` がすでに持っている。
+   ここは「作る話」と「誰に出すかの話」を線1本で分けるだけ */
+.shelfbuild-who {
+  margin: var(--sp-12) 0;
+  padding-top: var(--sp-12);
+  border-top: 1px solid var(--border);
+}
+.shelfbuild-who .field-label { margin-top: 0; }
+.shelfbuild-who .field-hint { margin: var(--sp-6) 0 0; }
 .shelfbuild-draft { margin-top: var(--sp-14); }
 .shelfbuild-list {
   list-style: none; margin: var(--sp-8) 0 var(--sp-14); padding: 0;

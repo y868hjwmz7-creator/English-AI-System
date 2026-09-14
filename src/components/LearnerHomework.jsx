@@ -22,7 +22,13 @@ import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materia
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
-import { PrintIcon, ScreenIcon } from './Icons.jsx'
+import { DownloadIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
+/* **音声のダウンロード**(2026-09 利用者の指定「各ゲストのアカウント内でも
+   教材の音声がダウンロードできるようにしてください」)。
+   段取りも文言も、トレーナーの「教材」とまったく同じものを使う ——
+   **書き写さない**(CLAUDE.md) */
+import { useAudioDownload } from '../lib/useAudioDownload.js'
+import AudioDownloadNote from './AudioDownloadNote.jsx'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
 import { normWord, prefetchGlosses } from '../lib/vocab.js'
@@ -78,6 +84,13 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
    *   **印刷する一瞬だけ**すべての演習を描き、終わったら元に戻す。
    */
   const [printId, setPrintId] = useState(null)
+  /* **音声のダウンロード**(2026-09 利用者の指定)。
+     持ちものはトレーナーの「教材」と同じ `useAudioDownload()` 1か所。
+     **すでにある MP3 を集めるだけ**なので、ゲストが押しても
+     窓口(`speak`)は1回も呼ばれない = **0円** */
+  const {
+    busy: dlBusy, done: dlDone, pieces: dlPieces, label: dlLabel, start: dlStart,
+  } = useAudioDownload()
   /* **読み上げの速さの欄は置かない**(2026-09 利用者の指定で箱ごと外した)。
      この画面では演習が印刷の一瞬しか描かれないので、**1つも効いていなかった。**
      速さは「大きく表示する」の中の帯で選ぶ(選んだ値は覚える) */
@@ -427,10 +440,29 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                               onClick={() => { setPrintId(a.id); recordWorked(a) }}>
                         <PrintIcon />印刷 / PDFで保存(問題のみ)
                       </button>
+                      {/* **音声を1本にまとめて落とす**(2026-09 利用者の指定)。
+                            > 各ゲストのアカウント内でも教材の音声が
+                            > ダウンロードできるようにしてください。
+
+                          本文がある教材だけに出す(**効かない操作を見せない**)。
+                          **すでにある MP3 を集めてつなぐだけ**なので、
+                          窓口は1回も呼ばれず、**課金されない** */}
+                      {dlPieces(a.material) > 0 && (
+                        <button type="button" className="btn btn--small"
+                                disabled={!!dlBusy} onClick={() => dlStart(a.material)}>
+                          {/* **進み具合は、必ず数で出す**(CLAUDE.md) */}
+                          <DownloadIcon />{dlLabel(a.material)}
+                        </button>
+                      )}
                       <button type="button" className="btn btn--small btn--primary"
                               onClick={() => { setLessonOf(a.material); recordWorked(a) }}>
                         <ScreenIcon />大きく表示する
                       </button>
+                    </div>
+                    {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
+                        文言は `AudioDownloadNote` 1か所 */}
+                    <div className="no-print">
+                      <AudioDownloadNote done={dlDone} materialId={a.material?.id} />
                     </div>
                     {/* **「ここに注意」は出さない**(2026-09 利用者の指定)。
                         > 赤で囲った部分は必要ないです。

@@ -52,7 +52,8 @@ import { premiumClipsOf, remakeMaterialClips, remakeSizeOf } from '../lib/remake
 import VoiceRemake from './VoiceRemake.jsx'
 /* **音声を1本にまとめて渡す**(2026-09 利用者の指定)。
    すでにある MP3 を集めてつなぐだけで、窓口は呼ばない(課金しない) */
-import { downloadMaterialAudio, materialClipPieces } from '../lib/downloadAudio.js'
+import { useAudioDownload } from '../lib/useAudioDownload.js'
+import AudioDownloadNote from './AudioDownloadNote.jsx'
 import { lastClipDetail } from '../lib/audioClips.js'
 
 /** 絞り込みの「問数」と、作る画面の増やし方の対応。**2か所に持たない** */
@@ -141,9 +142,12 @@ export default function TrainerMaterials({
   const [voiceBusy, setVoiceBusy] = useState(null)   // {id, done, total}
   const [voiceDone, setVoiceDone] = useState(null)   // {id, done, failed, total}
   /* **音声のダウンロード**(2026-09 利用者の指定)。
-     {id, done, total} と、終わったときの知らせ */
-  const [dlBusy, setDlBusy] = useState(null)
-  const [dlDone, setDlDone] = useState(null)
+     **ゲストの「今週の宿題」にも置いた**ので、持ちものは
+     `useAudioDownload()` 1か所にしてある(**書き写さない**)。
+     見た目も押したときの動きも、1ドットも変えていない */
+  const {
+    busy: dlBusy, done: dlDone, pieces: dlPieces, label: dlLabel, start: dlStart,
+  } = useAudioDownload()
   // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
   // (2026-08 利用者の指定)。担当ゲストの記録には触れない
   const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
@@ -536,30 +540,10 @@ export default function TrainerMaterials({
     await search()
   }
 
-  /**
-   * その教材の音声を、**1本の MP3 にまとめて渡す**(2026-09 利用者の指定)。
-   *
-   *   > 各教材の音声をダウンロード出来るようにしてください。
-   *   > 全体の音声をひとつ。
-   *
-   * **すでにある MP3 を集めてつなぐだけ。** 窓口(`speak`)は呼ばないので
-   * **1円もかからない。** まだ作られていない英文があったら、その場では
-   * こしらえず、**何本足りないかを伝える**(見えない費用は管理できない)。
-   */
-  const downloadAudio = async (m) => {
-    setDlDone(null)
-    setDlBusy({ id: m.id, done: 0, total: materialClipPieces(m).length })
-    let r
-    try {
-      r = await downloadMaterialAudio(m, ({ done, total }) => {
-        setDlBusy({ id: m.id, done, total })
-      })
-    } catch (e) {
-      r = { ok: false, total: 0, missing: 0, error: String(e?.message ?? e) }
-    }
-    setDlBusy(null)
-    setDlDone({ id: m.id, ...r })
-  }
+  /* 音声のダウンロードの段取りは `useAudioDownload()`(上)が持つ。
+     **すでにある MP3 を集めてつなぐだけ。** 窓口(`speak`)は呼ばないので
+     **1円もかからない。** 足りないときは、その場ではこしらえず
+     **何本足りないかを伝える**(見えない費用は管理できない)。 */
 
   const startAssign = (materialId) => {
     setAssigningId(materialId)
@@ -1022,15 +1006,12 @@ export default function TrainerMaterials({
 
                     **本文がある教材だけ**に出す(効かない操作を見せない)。
                     すでにある MP3 を集めてつなぐだけなので、**課金されない** */}
-                {materialClipPieces(m).length > 0 && (
+                {dlPieces(m) > 0 && (
                   <button type="button" className="btn btn--small"
-                          disabled={!!dlBusy} onClick={() => downloadAudio(m)}>
-                    <DownloadIcon />
+                          disabled={!!dlBusy} onClick={() => dlStart(m)}>
                     {/* **進み具合は、必ず数で出す**(CLAUDE.md)。
                         14 本を集めるあいだ、名前のままでは止まって見える */}
-                    {dlBusy?.id === m.id
-                      ? `集めています… ${dlBusy.done} / ${dlBusy.total}`
-                      : '音声ダウンロード'}
+                    <DownloadIcon />{dlLabel(m)}
                   </button>
                 )}
               </div>
@@ -1056,26 +1037,7 @@ export default function TrainerMaterials({
               </div>
               {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
                   **足りないときは、どうすればよいかまで書く** */}
-              {dlDone?.id === m.id && (
-                <p className={`notice${dlDone.ok ? ' notice--ok' : ' notice--warn'}`}>
-                  {dlDone.ok
-                    ? <>{/* **1本にまとまっている教材は、それをそのまま渡す。**
-                            「音声 1 本をまとめました」では何のことか分からない */}
-                        {dlDone.whole
-                          ? <>本文の音声(<strong>1本にまとめたもの</strong>)を渡しました</>
-                          : <>音声 <strong>{dlDone.total} 本</strong>を1つにまとめました</>}
-                        ({Math.round(dlDone.bytes / 1024 / 102.4) / 10} MB)。
-                        端末の「ダウンロード」に入っています。</>
-                    : dlDone.missing > 0
-                      ? <>まだ作られていない音声が <strong>{dlDone.missing} 本</strong>あります
-                          (全 {dlDone.total} 本)。
-                          <br />
-                          先に「セッションで使う(大きく表示)」で
-                          <strong>Listen (全体)</strong> を通して聴くか、
-                          「読み上げ音声を作り直す」で作ってから、もう一度押してください。</>
-                      : <>音声をまとめられませんでした。{dlDone.error}</>}
-                </p>
-              )}
+              <AudioDownloadNote done={dlDone} materialId={m.id} trainer />
               {jaDone[m.id]?.ng && <p className="notice notice--warn">{jaDone[m.id].text}</p>}
 
               {/* **中身は、紙に出す一瞬だけ描く。**

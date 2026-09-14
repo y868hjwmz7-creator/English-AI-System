@@ -4558,6 +4558,79 @@ console.log('\nスピーチ練習(0054)')
     '棚 … 画面の印が 0058 を見ている')
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+ * 単語帳をゲストに出す道(①)と、音声のダウンロード(②)
+ *
+ *   > ①業種別の単語帳を指定したゲストに、トレーナーアカウントの
+ *   > 業種別単語帳から、もしくはトレーナーアカウント内のゲストのページから
+ *   > アサインする方法を実装してください。
+ *   > ②各ゲストのアカウント内でも教材の音声がダウンロードできるように
+ *   > してください。(2026-09 利用者の指定)
+ *
+ * どちらも**すでにある道に乗せただけ**なので、危ないのは
+ * 「**画面が本当に呼んでいるか**」と「**文言が1か所か**」である。
+ * 定義だけあって誰も呼ばなければ、画面は普通に出るので気づけない。
+ * ══════════════════════════════════════════════════════════════════════ */
+{
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noCS = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+
+  /* ── ① 業種べつの単語帳を、その画面からゲストに出す ── */
+  const build = noCS(readS('src/components/ShelfBuilder.jsx'))
+  const feats = noCS(readS('src/lib/learnerFeatures.js'))
+
+  ok(/loadFeatureLearners\(shelfFeature\(shelf\)\)/.test(build),
+    '単語帳を出す … 作る画面が、いま誰に出しているかを引いている')
+  ok(/await setLearnerFeature\(learner\.id, feat, next\)/.test(build),
+    '単語帳を出す … 作る画面が、出す / 出さないを決められる')
+  /* **名前を組み立てない。** `'shelf:' + id` と書くと、
+     `shelfFeature()` を直した日にここだけ古くなる */
+  ok(!/['"`]shelf:/.test(build),
+    '単語帳を出す … 名前を画面で組み立てていない(`shelfFeature()` 1か所)')
+  /* **担当かどうかの判定を、画面にも引く側にも書かない** ——
+     誰のぶんが返るかは RLS(0055)が決める */
+  ok(/\.eq\('feature', feature\)/.test(feats)
+    && !/learner_admins/.test(feats),
+    '単語帳を出す … 引くのは `feature` だけ(担当の判定は RLS に任せる)')
+  /* **0055 を貼る前は、押せないことを言う**(黙って効かないようにしない) */
+  ok(/learnerFeaturesSupported\(\)/.test(build),
+    '単語帳を出す … 0055 を貼る前は、そう言う')
+  /* **ゲストのページからの道も、消していない**(2つとも要る) */
+  const tl = noCS(readS('src/components/TrainerLearners.jsx'))
+  ok(/shelfFeature\(s\.id\)/.test(tl),
+    '単語帳を出す … ゲストのページからの道も残っている')
+
+  /* ── ② 教材の音声を、ゲストの画面からも落とせる ── */
+  const hw = noCS(readS('src/components/LearnerHomework.jsx'))
+  const tm = noCS(readS('src/components/TrainerMaterials.jsx'))
+
+  for (const [name, src] of [['今週の宿題', hw], ['教材', tm]]) {
+    ok(/=\s*useAudioDownload\(\)/.test(src),
+      `音声を落とす … ${name}が \`useAudioDownload()\` を使っている`)
+    ok(/<AudioDownloadNote\s/.test(src),
+      `音声を落とす … ${name}が知らせを \`AudioDownloadNote\` に任せている`)
+    /* **文言を書き写さない。** 片方だけ古くなる */
+    ok(!/1つにまとめました/.test(src),
+      `音声を落とす … ${name}が知らせの文を自分で持っていない`)
+    /* **本文がある教材だけに出す**(効かない操作を見せない) */
+    ok(/dlPieces\((m|a\.material)\) > 0/.test(src),
+      `音声を落とす … ${name}が、本文のある教材にだけ出している`)
+  }
+  /* **窓口を呼ばない = 0円。** ゲストが押しても課金されない */
+  const dl = noCS(readS('src/lib/useAudioDownload.js'))
+  ok(!/askForClip|speak/.test(dl),
+    '音声を落とす … 集めるだけで、窓口を呼んでいない(0円)')
+  /* **足りないときの逃げ道は、画面によって違う** ——
+     「読み上げ音声を作り直す」はトレーナーの画面にしかない */
+  const note = noCS(readS('src/components/AudioDownloadNote.jsx'))
+  ok(/trainer/.test(note) && /読み上げ音声を作り直す/.test(note),
+    '音声を落とす … 足りないときの逃げ道を、画面ごとに書き分けている')
+  ok(/<AudioDownloadNote done=\{dlDone\} materialId=\{m\.id\} trainer \/>/.test(tm),
+    '音声を落とす … トレーナーの画面だけが、作り直しの逃げ道を出す')
+  ok(!/trainer/.test(hw.match(/<AudioDownloadNote[^/]*\/>/)?.[0] ?? ''),
+    '音声を落とす … ゲストには、そこに無いボタンを案内しない')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')

@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   JOB_COST, SHELF_GROUPS, WORDS_PER_JOB,
-  levelTally, shelfLabel, shelfList, shelfSceneNames, shelfTarget, shelfTodo,
+  levelTally, shelfFeature, shelfLabel, shelfList, shelfSceneNames,
+  shelfTarget, shelfTodo,
 } from '../data/shelves.js'
 import { sceneLabel } from '../data/genres.js'
 import {
   dropShelfWord, loadShelfCounts, loadShelfWords, saveShelfWords, shelfWordsSupported,
 } from '../lib/shelfWords.js'
-import { estimateCost, genGatewayNote, generateShelfWords } from '../lib/materials.js'
+import { estimateCost, genGatewayNote, generateShelfWords, loadMyLearners } from '../lib/materials.js'
+import {
+  learnerFeaturesSupported, loadFeatureLearners, setLearnerFeature,
+} from '../lib/learnerFeatures.js'
 import { PlusIcon, ShelfIcon } from './Icons.jsx'
 
 /**
@@ -73,6 +77,26 @@ export default function ShelfBuilder() {
   const [secs, setSecs] = useState(0)
   /** 「やめる」の印。**通信そのものは取り消さない**(送った1回は課金される) */
   const stop = useRef(false)
+  /* ── この単語帳を出すゲスト(2026-09 利用者の指定)──────────────────
+     > 業種別の単語帳を指定したゲストに、トレーナーアカウントの
+     > 業種別単語帳から…アサインする方法を実装してください。
+
+     **ゲストのページからの道は 0057 からある**
+     (ゲスト → その人を開く → レベルとスコア)。足りなかったのは
+     **こちら側** —— 単語帳を作り終えたその場で、誰に出すかを決められない。
+
+     **入れ物も窓口も1つも増やしていない。** 0055 の `learner_features` に、
+     `shelf:<分野の id>` という名前で入る(作り方は `shelfFeature()` 1か所)。
+     **門番は `set_learner_feature()` の中**で、画面には持たせない。 */
+  const [learners, setLearners] = useState(null)   // null = まだ読んでいない
+  const [onFor, setOnFor] = useState(null)         // その単語帳を出しているゲスト
+  const [pickBusy, setPickBusy] = useState(null)   // いま決めているゲストの id
+  /* **知らせは、作る話の `note` と分けて持つ。**
+     `note` が出るのは画面のずっと下(できたものの手前)なので、
+     ここで使うと**押した場所から遠い**(CLAUDE.md
+     「失敗の知らせは、その操作をした場所に出す」)。
+     しかも、作っている最中の知らせを上書きしてしまう */
+  const [pickNote, setPickNote] = useState(null)
 
   const stale = genGatewayNote()
 
@@ -108,6 +132,51 @@ export default function ShelfBuilder() {
     loadShelfWords(shelf).then(({ data }) => { if (alive) setRows(data ?? []) })
     return () => { alive = false }
   }, [shelf])
+
+  /* 担当しているゲスト。**一度だけ読む**(単語帳を替えても変わらない) */
+  useEffect(() => {
+    let alive = true
+    loadMyLearners().then(({ data }) => { if (alive) setLearners(data ?? []) })
+    return () => { alive = false }
+  }, [])
+
+  /* その単語帳を出しているゲスト。**単語帳を替えたら読み直す** */
+  useEffect(() => {
+    let alive = true
+    // **前の単語帳の知らせを残さない**(別の1冊の話に見える)
+    setPickNote(null)
+    if (!shelf) { setOnFor(null); return () => { alive = false } }
+    setOnFor(null)
+    loadFeatureLearners(shelfFeature(shelf))
+      .then(({ data }) => { if (alive) setOnFor(data ?? new Set()) })
+    return () => { alive = false }
+  }, [shelf])
+
+  /**
+   * その人に出す / 出さないを切り替える。
+   *
+   * **門番は `set_learner_feature()` の中**(0055)。
+   * 担当していないゲストには、そもそも書けない。
+   */
+  const toggleFor = async (learner) => {
+    const feat = shelfFeature(shelf)
+    if (!feat || !onFor) return
+    const next = !onFor.has(learner.id)
+    setPickBusy(learner.id)
+    setPickNote(null)
+    const { error } = await setLearnerFeature(learner.id, feat, next)
+    setPickBusy(null)
+    if (error) { setPickNote({ ng: true, text: error.message ?? String(error) }); return }
+    const copy = new Set(onFor)
+    if (next) copy.add(learner.id)
+    else copy.delete(learner.id)
+    setOnFor(copy)
+    /* **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md) */
+    setPickNote({
+      text: `${learner.display_name} さんに「${shelfLabel(shelf)}」を`
+        + `${next ? '出しました' : '出さないようにしました'}。`,
+    })
+  }
 
   /** いま何語あるか。**場面ごとには数えない**(場面べつはやめた) */
   const have = rows?.length ?? 0
@@ -275,6 +344,77 @@ export default function ShelfBuilder() {
           この単語帳は <strong>{shelfTarget()} 語</strong>で1冊です
           (どの単語帳も同じ)。1回に {WORDS_PER_JOB} 語ずつ作ります。
         </p>
+      )}
+
+      {/* ── この単語帳を出すゲスト(2026-09 利用者の指定)──────────────
+            > 業種別の単語帳を指定したゲストに、トレーナーアカウントの
+            > 業種別単語帳から…アサインする方法を実装してください。
+
+          **ゲストは、出された単語帳しか開けない**(0057)。
+          作り終えたその場で決められないと、**ゲストのページを25人ぶん
+          開いて回る**ことになる。
+
+          **札は「出している人」だけを色で示さない** ——
+          うすい地色 + 同じ色の文字 + 枠線 + 太字(`chip--on`)に加えて、
+          押すと何が起きるかを**言葉**で添える(出す / 外す)。 */}
+      {shelf && (
+        <div className="shelfbuild-who">
+          <p className="field-label">この単語帳を出すゲスト</p>
+          {!learnerFeaturesSupported() ? (
+            <p className="notice notice--warn">
+              ゲストごとに出すものを決める仕組み(0055)が、まだ Supabase に
+              ありません。GitHub のリポジトリにあるファイル
+              (supabase/apply/pending_matome.sql)を、
+              Supabase の 左メニュー「SQL Editor」で実行してください。
+            </p>
+          ) : (
+            <>
+              {/* **空の単語帳を出しても、ゲストの画面には何も出ない。**
+                  黙って出させない(行き止まりを作らない) */}
+              {rows !== null && have === 0 && (
+                <p className="field-hint">
+                  この単語帳は<strong>まだ 0 語</strong>です。
+                  いま出しても、ゲストの画面には語が1つも出ません。
+                </p>
+              )}
+              {learners === null || onFor === null
+                ? <p className="muted">開いています…</p>
+                : learners.length === 0
+                  ? <p className="field-hint">担当しているゲストがいません。</p>
+                  : (
+                    <div className="chiprow" role="group" aria-label="この単語帳を出すゲスト">
+                      {learners.map((p) => {
+                        const on = onFor.has(p.id)
+                        return (
+                          <button key={p.id} type="button"
+                                  className={`chip${on ? ' chip--on' : ''}`}
+                                  disabled={pickBusy === p.id}
+                                  aria-pressed={on}
+                                  onClick={() => toggleFor(p)}>
+                            {p.display_name}
+                            <span className="chip-count">
+                              {pickBusy === p.id ? '…' : (on ? '外す' : '出す')}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+              {/* **押した場所のすぐ下に出す**(CLAUDE.md) */}
+              {pickNote && (
+                <p className={pickNote.ng ? 'notice notice--warn' : 'muted'}>
+                  {pickNote.text}
+                </p>
+              )}
+              <p className="field-hint">
+                ここで出した人の単語帳に、「業種べつ」としてこの1冊が並びます。
+                <strong>その人の語句とは混ざりません。</strong>
+                {/* **同じことができる場所を、黙って隠さない** */}
+                {' '}同じことは「ゲスト → その人を開く → レベルとスコア」でもできます。
+              </p>
+            </>
+          )}
+        </div>
       )}
 
       {shelf && rows === null && <p className="muted">開いています…</p>}

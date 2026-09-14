@@ -56,6 +56,38 @@ export async function loadLearnerFeatures(learnerId = null) {
 }
 
 /**
+ * **その1つを出しているゲスト**を引く(2026-09 利用者の指定)。
+ *
+ *   > 業種別の単語帳を指定したゲストに、トレーナーアカウントの
+ *   > 業種別単語帳から…アサインする方法を実装してください。
+ *
+ * ゲストのページからは1人ずつ決められるが(`loadLearnerFeatures`)、
+ * **単語帳の側から見るときは「この1冊を、誰に出しているか」**が要る。
+ *
+ * **絞るのは `feature` だけ。** 誰のぶんが返るかは **RLS が決める**
+ * (0055「自分と担当トレーナーが見る」)ので、
+ * **画面にもここにも、担当かどうかの判定を書かない**
+ * —— 判定を2か所に置くと、必ず食い違う(CLAUDE.md)。
+ *
+ * @returns `Set`(出しているゲストの id だけ)
+ */
+export async function loadFeatureLearners(feature) {
+  if (!supabase || !supported || !feature) return ok(new Set())
+  const { data, error } = await supabase
+    .from('learner_features')
+    .select('learner_id, enabled')
+    .eq('feature', feature)
+  if (error) {
+    if (missing(error)) supported = false
+    // **騒がない。** 読めなければ既定(誰にも出していない)である
+    return ok(new Set())
+  }
+  const on = new Set()
+  for (const r of data ?? []) if (r?.enabled) on.add(r.learner_id)
+  return ok(on)
+}
+
+/**
  * 出す / 出さないを決める(担当トレーナーと管理者だけ)。
  *
  * **門番は `set_learner_feature()` の中**(0055)。画面に持たせない。

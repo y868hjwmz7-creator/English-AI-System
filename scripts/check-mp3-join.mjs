@@ -446,13 +446,27 @@ function fakeMp3({
   } else ok('1本の鍵は `wholeKeyOf()` 1か所(探す側と作る側で同じ)')
 
   /* 画面が数える本数も、同じものでなければならない ——
-     違うと**「3 / 14」と出ているのに 22 本目まで進む** */
-  const tm = bare('../src/components/TrainerMaterials.jsx')
-  if (/materialAudioClips\(m\)/.test(tm)) {
-    ng('画面が、段落まるごとの本数を出している(進み具合が実際と食い違う)')
-  } else if ((tm.match(/materialClipPieces\(m\)\.length/g) ?? []).length < 2) {
-    ng('画面が `materialClipPieces` で数えていない')
-  } else ok('画面も、同じかけらの数で出している(ボタンの出し分けと進み具合)')
+     違うと**「3 / 14」と出ているのに 22 本目まで進む**
+
+     **数えるのは `useAudioDownload()` 1か所**(2026-09)。
+     ゲストの「今週の宿題」にも置いたので、
+     **画面ごとに数えると必ず食い違う**(CLAUDE.md)。 */
+  const hook = bare('../src/lib/useAudioDownload.js')
+  if (/materialAudioClips\(/.test(hook)) {
+    ng('段落まるごとの本数を出している(進み具合が実際と食い違う)')
+  } else if (!/materialClipPieces\(m\)\.length/.test(hook)) {
+    ng('`materialClipPieces` で数えていない')
+  } else if (!/total: pieces\(m\)/.test(hook)) {
+    /* **ボタンの出し分けと進み具合を、別々に数えない** */
+    ng('進み具合の本数を、別に数え直している')
+  } else ok('本数は `useAudioDownload()` 1か所(ボタンの出し分けと進み具合)')
+  /* **画面の側では数え直さない**(2つの画面で必ず食い違う) */
+  for (const f of ['TrainerMaterials', 'LearnerHomework']) {
+    const src = bare(`../src/components/${f}.jsx`)
+    if (/materialClipPieces\(|materialAudioClips\(/.test(src)) {
+      ng(`${f} が、自分で本数を数え直している`)
+    } else ok(`${f} は、本数を数え直していない`)
+  }
 }
 
 /* ── 通しで鳴らすものは、演習ごとに違う欄から取る(2026-09 利用者の指定)──
