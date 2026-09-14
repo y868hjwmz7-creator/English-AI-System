@@ -1175,7 +1175,7 @@ export default function Wordbook({
               </button>
             ))}
           </div>
-          <p className="hint">{tierOf(tier).hint}</p>
+          <p className="tip hint">{tierOf(tier).hint}</p>
         </>
       )}
 
@@ -1194,9 +1194,14 @@ export default function Wordbook({
                     }} />
       )}
 
-      {/* **1分野も選んでいないときは、そう言う**(行き止まりを作らない) */}
+      {/* **1分野も選んでいないときは、そう言う**(行き止まりを作らない)。
+
+          **ただし、既定では畳んである**(`tip`・2026-09 利用者の指定)。
+          利用者が**この1行を名指しで**挙げたためである。
+          代わりに、上の「学ぶ分野をえらぶ」が**1冊も選んでいないあいだ
+          青くなる**(`ShelfBooks`)。**文を消したぶん、形で言う。** */}
       {shelfBook && !shelfPick.length && (
-        <p className="hint">
+        <p className="tip hint">
           上の「学ぶ分野をえらぶ」で、練習したい分野にチェックを入れてください。
         </p>
       )}

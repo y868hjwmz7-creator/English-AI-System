@@ -16,6 +16,7 @@ import {
 } from './components/Icons.jsx'
 import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
 import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
+import { TIPS, applyTips, loadTips } from './lib/tips.js'
 import { NAV_PUSH_AT, loadNavOpen, saveNavOpen, useWide } from './lib/nav.js'
 import { setViewerRole } from './lib/viewer.js'
 /* **教材へのリンク**(`?m=…`・2026-09 利用者の指定)。
@@ -129,6 +130,9 @@ export default function App() {
   // **早く帰る条件より前に置く**(hook は必ず同じ順で呼ばれなければならない)
   const [navTick, setNavTick] = useState(0)
   const [palette, setPalette] = useState(loadPalette)
+  /* 説明の文を出すかどうか。**既定は「出さない」**(2026-09 利用者の指定・
+     `src/lib/tips.js`)。消してはいないので、ここを「出す」にすれば戻る */
+  const [tips, setTips] = useState(loadTips)
   /* 押したときの音。**覚える**(`src/lib/sfx.js`)。
      切れるようにしてあるのは、レッスン中に邪魔なことがあるため */
   const [sound, setSound] = useState(soundOn)
@@ -217,6 +221,7 @@ export default function App() {
 
   useEffect(() => { applyTheme(theme) }, [theme])
   useEffect(() => { applyPalette(palette) }, [palette])
+  useEffect(() => { applyTips(tips) }, [tips])
   // 仕組みの内側の事情(鍵・残高)を出してよい相手かどうかの判断に使う。
   // **ゲストには内側の話を見せない**(2026-08 利用者の指定)
   useEffect(() => { setViewerRole(profile?.role ?? null) }, [profile])
@@ -630,6 +635,27 @@ export default function App() {
             <button key={x.id} type="button" title={x.hint}
                     className={`theme-btn${palette === x.id ? ' is-active' : ''}`}
                     onClick={() => setPalette(x.id)}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* **説明の文を出すか**(2026-09 利用者の指定)。
+
+            > 全てのデザインから言葉による説明を省いてください。
+            > 目指すのは説明がない、直感的なUIです。
+
+          既定は「出さない」。**消してはいない**ので、ここで戻せる。
+          畳むかどうかの決まりは `src/lib/tips.js` と styles.css の
+          1行だけで、画面の側は `tip` の印を付けてあるだけである。 */}
+      <div className="nav-setting">
+        <span className="nav-setting-label">説明の文</span>
+        <div className="theme-switch" role="group" aria-label="説明の文">
+          {TIPS.map((x) => (
+            <button key={x.id} type="button" title={x.hint}
+                    className={`theme-btn${tips === x.id ? ' is-active' : ''}`}
+                    onClick={() => setTips(x.id)}>
               {x.label}
             </button>
           ))}

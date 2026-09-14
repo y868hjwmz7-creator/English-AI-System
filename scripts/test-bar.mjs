@@ -4635,6 +4635,92 @@ for (const W of [1280, 794, 453, 390, 320]) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   説明の文は、既定では出さない(2026-09 利用者の指定)
+
+     > 全てのデザインから言葉による説明を省いてください。
+     > 目指すのは説明がない、直感的なUIです。
+     > tool tipモードをオンにすればカーソルを当てた時に
+     > ポップアップするくらいの扱いでOKです。
+
+   **「出ない」だけを見ない。** それだと、**畳む決まりを
+   「いつでも消す」に書き換えても緑のまま**になり、
+   戻す道が死んでいることに気づけない。
+   ①既定で1つも見えないか ②オンにすると本当に出るか
+   ③**文を畳んだぶん、形で言えているか**(えらぶボタンが青い)を
+   いつも一緒に数える。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const W = 390
+  const page = await browser.newPage({ viewport: { width: W, height: 900 } })
+
+  /* ① 既定(出さない) */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfpick`,
+    { waitUntil: 'networkidle' })
+  await page.evaluate(() => { try { localStorage.removeItem('eas.tips') } catch { /* 端末が断ることがある */ } })
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.waitForTimeout(200)
+  await page.click('.shelfbooks .wb-add-open')
+  await page.waitForTimeout(200)
+  const 既定 = await page.evaluate(() => {
+    const all = [...document.querySelectorAll('.tip')]
+    return {
+      印: document.documentElement.getAttribute('data-tips'),
+      在る: all.length,
+      見える: all.filter((el) => el.checkVisibility()).length,
+    }
+  })
+
+  /* ② オンにすると出る */
+  await page.evaluate(() => { try { localStorage.setItem('eas.tips', 'on') } catch { /* 同上 */ } })
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.waitForTimeout(200)
+  await page.click('.shelfbooks .wb-add-open')
+  await page.waitForTimeout(200)
+  const オン = await page.evaluate(() => {
+    const all = [...document.querySelectorAll('.tip')]
+    const み = all.filter((el) => el.checkVisibility())
+    return {
+      印: document.documentElement.getAttribute('data-tips'),
+      見える: み.length,
+      文: (み[0]?.textContent ?? '').replace(/\s+/g, '').slice(0, 20),
+    }
+  })
+
+  /* ③ 文を畳んだぶん、形で言う(1冊も選んでいなければ青) */
+  await page.evaluate(() => { try { localStorage.removeItem('eas.tips') } catch { /* 同上 */ } })
+  const 青 = {}
+  for (const [key, q] of [['無し', '&picked=none'], ['有り', '']]) {
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfpick${q}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(200)
+    青[key] = await page.evaluate(() =>
+      document.querySelector('.shelfbooks .wb-add-open')?.className ?? '')
+  }
+  await page.close()
+
+  if (既定.印 !== null) {
+    ng('説明の文 … 既定なのに `data-tips` が付いている', String(既定.印))
+  } else if (既定.在る === 0) {
+    ng('説明の文 … 畳むはずの説明が、そもそも1つも無い')
+  } else if (既定.見える !== 0) {
+    ng('説明の文 … 既定で説明が見えている', `${既定.見える} / ${既定.在る} 個`)
+  } else if (オン.印 !== 'on') {
+    ng('説明の文 … オンにしても印が付かない', String(オン.印))
+  } else if (オン.見える === 0) {
+    ng('説明の文 … オンにしても出てこない(戻す道が死んでいる)')
+  } else if (!オン.文.includes('チェックを入れた分野')) {
+    ng('説明の文 … オンで出たのが、その欄の説明ではない', オン.文)
+  } else if (!/btn--primary/.test(青.無し) || /btn--ghost/.test(青.無し)) {
+    ng('説明の文 … 1冊も選んでいないのに、えらぶボタンが青くない', 青.無し)
+  } else if (!/btn--ghost/.test(青.有り) || /btn--primary/.test(青.有り)) {
+    ng('説明の文 … 選んだあとも、えらぶボタンが青いまま', 青.有り)
+  } else {
+    ok(`説明の文 ${W}px … 既定は 0 / ${既定.在る} 個・オンで ${オン.見える} 個・` +
+      '1冊も無いあいだはえらぶボタンが青い')
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

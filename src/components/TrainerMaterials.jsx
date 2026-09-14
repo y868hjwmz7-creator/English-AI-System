@@ -743,7 +743,7 @@ export default function TrainerMaterials({
           <label className="field">
             <span>
               1つの演習の問数
-              <span className="field-hint">記事・会話の段落数は数えません</span>
+              <span className="tip field-hint">記事・会話の段落数は数えません</span>
             </span>
             <select value={size} onChange={(e) => setSize(e.target.value)}>
               <option value="">すべて</option>
@@ -1267,7 +1267,7 @@ export default function TrainerMaterials({
           新しく作るのは2番目の動線なので、見た目は強くしない */}
       {!loading && shown.length > 0 && (
         <div className="card finder-more" ref={moreRef}>
-          <p className="card-hint">
+          <p className="tip card-hint">
             {filterCount
               ? 'この中に使えるものが無ければ、いまの条件のまま作れます。'
               : 'さがしても見つからなかったときは、新しく作ります。'}

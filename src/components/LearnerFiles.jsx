@@ -159,7 +159,7 @@ export default function LearnerFiles({ learnerId, learnerName = '' }) {
 
       {/* **誰に見えるのかを、はっきり書く。** SQL で守っていることは
           利用者には見えない。不安なままでは置いてもらえない */}
-      <p className="field-hint lfiles-who">
+      <p className="tip field-hint lfiles-who">
         ここに置いたものが見えるのは、<strong>{who}と、いま担当している
         トレーナー</strong>だけです。ほかのゲストからは、あることさえ見えません。
       </p>
@@ -171,7 +171,7 @@ export default function LearnerFiles({ learnerId, learnerName = '' }) {
             ふだんのボタンと同じ見た目の札から開く */}
         <p className="field-label" id="lfiles-pick-label">
           置くファイル
-          <span className="field-hint">
+          <span className="tip field-hint">
             PDF・写真・文書・音声。1つ {prettySize(MAX_FILE_BYTES)} まで
           </span>
         </p>
@@ -190,7 +190,7 @@ export default function LearnerFiles({ learnerId, learnerName = '' }) {
         <label className="field">
           <span>
             メモ
-            <span className="field-hint">任意。何のファイルかを一言で</span>
+            <span className="tip field-hint">任意。何のファイルかを一言で</span>
           </span>
           <input type="text" value={memo} placeholder="8月のTOEICの結果"
                  onChange={(e) => setMemo(e.target.value)} />

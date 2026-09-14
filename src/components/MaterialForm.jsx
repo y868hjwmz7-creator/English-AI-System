@@ -1342,7 +1342,7 @@ export default function MaterialForm({
         <label className="field">
           <span>
             {industryLabel(topIndustry)}の種類
-            <span className="field-hint">場面と話題が、その種類のものに変わります</span>
+            <span className="tip field-hint">場面と話題が、その種類のものに変わります</span>
           </span>
           <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
             {industryKinds.map((k) => (
@@ -1356,7 +1356,7 @@ export default function MaterialForm({
         <label className="field">
           <span>
             話題
-            <span className="field-hint">業界・趣味と組み合わせて、何の記事にするかが決まります</span>
+            <span className="tip field-hint">業界・趣味と組み合わせて、何の記事にするかが決まります</span>
           </span>
           <select value={genre} onChange={(e) => setGenre(e.target.value)}>
             {genreList.map((g) => (
@@ -1374,7 +1374,7 @@ export default function MaterialForm({
         <label className="field">
           <span>
             シチュエーション
-            <span className="field-hint">
+            <span className="tip field-hint">
               場面によって丁寧さと言い回しが変わります。同じ話題でも別の教材になります
             </span>
           </span>
@@ -1400,7 +1400,7 @@ export default function MaterialForm({
         <label className="field">
           <span>
             話の切り口
-            <span className="field-hint">
+            <span className="tip field-hint">
               同じ場面でも、切り口が違えば別の話になります。
               おまかせなら、まだ使っていない切り口から選びます
             </span>
@@ -1441,7 +1441,7 @@ export default function MaterialForm({
           <label className="field">
             <span>
               自分の原稿(英語)
-              <span className="field-hint">
+              <span className="tip field-hint">
                 貼れば、そのまま本文になります。空行で段落が分かれます
               </span>
             </span>
@@ -1479,7 +1479,7 @@ export default function MaterialForm({
             <label className="field">
               <span>
                 話し方の型(任意)
-                <span className="field-hint">
+                <span className="tip field-hint">
                   上の場面に合うものだけが出ます。有名なスピーチの原稿は
                   使えませんが、話し方はまねられます
                 </span>
@@ -1505,7 +1505,7 @@ export default function MaterialForm({
             <label className="field">
               <span>
                 話す中身(任意)
-                <span className="field-hint">
+                <span className="tip field-hint">
                   空のままなら、業界と場面に合う中身を AI が決めます
                 </span>
               </span>
@@ -1525,7 +1525,7 @@ export default function MaterialForm({
             <fieldset className="field">
               <legend>
                 話し手(任意)
-                <span className="field-hint">
+                <span className="tip field-hint">
                   入れたぶんだけ、その人が話す原稿になります。空でも作れます
                 </span>
               </legend>
@@ -1698,7 +1698,7 @@ export default function MaterialForm({
 
       <div className="generate-box">
         <h3 className="card-title">AI に下書きを作らせる</h3>
-        <p className="card-hint">
+        <p className="tip card-hint">
           {/* 記事・会話では弱点タグは任意。ここで「1つ選んでから」と書くと
               すぐ下の「任意です」と食い違い、どちらが本当か分からなくなる */}
           {isPassageKind(kind)
@@ -1706,7 +1706,7 @@ export default function MaterialForm({
             : <>上の<strong>弱点タグを1つ</strong>選んでから押してください。 レベルと業界も自動で反映されます。</>}
           {kind === 'pattern' && ' 文型ドリルは 4演習 × 10問 = 40問 作ります。'}
         </p>
-        <p className="card-hint">
+        <p className="tip card-hint">
           {isPassageKind(kind)
             ? '弱点タグは任意です。選ぶと、その表現が本文の中に自然に何度も出るように作ります。'
               + '選ばなくても読み物としては成立します。'
@@ -1726,7 +1726,7 @@ export default function MaterialForm({
           </p>
         )}
         {isPassageKind(kind) && (
-          <p className="card-hint">
+          <p className="tip card-hint">
             {/* **貼った原稿があれば、そう言う。** 「作ります」と出ていると、
                 書き直されるのではないかと思わせる */}
             {scriptParts.length ? (
@@ -1819,7 +1819,7 @@ export default function MaterialForm({
               })}
           </div>
         )}
-        <p className="field-hint">
+        <p className="tip field-hint">
           チェックを外した演習は作りません。
           {isPassageKind(kind)
             ? `${bodyWord(kind)}の本文は必ず入ります。`
@@ -1943,7 +1943,7 @@ export default function MaterialForm({
         </div>
 
         {!isPassageKind(kind) && (
-          <p className="card-hint">
+          <p className="tip card-hint">
             同じ英文は二度出しません。生成するたびにデータベースと照合し、
             すでに出した文が混じっていれば取り除いて<strong>その分を作り直します。</strong>
             意味が近すぎる文も弾きます。
@@ -1979,7 +1979,7 @@ export default function MaterialForm({
           </button>
         )}
         {generating && (
-          <p className="field-hint">
+          <p className="tip field-hint">
             1〜3分かかります。
             <strong>ほかの画面へ移っても、作りつづけます。</strong>
             できあがったら音とお知らせでお伝えします。
@@ -2059,7 +2059,7 @@ export default function MaterialForm({
           </div>
         )}
 
-        <p className="field-hint">
+        <p className="tip field-hint">
           作ったあと、<strong>必ず目を通して直してください。</strong>
           共有した教材は他のトレーナーのゲストにも届きます。
         </p>
@@ -2216,7 +2216,7 @@ export default function MaterialForm({
           {showDetails ? '▾ 詳しく設定する(任意)を閉じる' : '▸ 詳しく設定する(任意)'}
         </button>
         {!showDetails && (
-          <p className="field-hint">
+          <p className="tip field-hint">
             教材名・取り組み方・指導ポイント
             {isPassageKind(kind) && (kind === 'speech' ? '・見出し' : '・話題・見出し')}
             。ふだんは触らなくて構いません(自動で入ります)。
@@ -2228,7 +2228,7 @@ export default function MaterialForm({
             <label className="field">
               <span>
                 教材名
-                <span className="field-hint">空のままなら、日付と弱点から自動で付きます</span>
+                <span className="tip field-hint">空のままなら、日付と弱点から自動で付きます</span>
               </span>
               <input value={title} onChange={(e) => setTitle(e.target.value)}
                      placeholder="作ると自動で入ります" />
@@ -2241,7 +2241,7 @@ export default function MaterialForm({
                 <label className="field">
                   <span>
                     話題(任意)
-                    <span className="field-hint">
+                    <span className="tip field-hint">
                       空のままなら、業界とジャンルに合う話題を AI が決めます
                     </span>
                   </span>
@@ -2258,7 +2258,7 @@ export default function MaterialForm({
               <label className="field">
                 <span>
                   見出し
-                  <span className="field-hint">作ると自動で入ります。直しても構いません</span>
+                  <span className="tip field-hint">作ると自動で入ります。直しても構いません</span>
                 </span>
                 <input type="text" value={headline} lang="en"
                        onChange={(e) => setHeadline(e.target.value)}
@@ -2275,7 +2275,7 @@ export default function MaterialForm({
             <label className="field">
               <span>
                 指導ポイント
-                <span className="field-hint">
+                <span className="tip field-hint">
                   この文法全体の勘所。作ると自動で入ります
                 </span>
               </span>
@@ -2301,7 +2301,7 @@ export default function MaterialForm({
             自分だけ
           </button>
         </div>
-        <p className="field-hint">
+        <p className="tip field-hint">
           共有すると他のトレーナーも使えます。50人で共有すれば、必要な教材が7週でそろいます。
         </p>
       </fieldset>

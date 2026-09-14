@@ -66,7 +66,18 @@ export default function ShelfBooks({
 
   return (
     <div className="wb-add shelfbooks">
-      <button type="button" className="btn btn--ghost btn--small wb-add-open"
+      {/* **1冊も選んでいないときは、青くする**(2026-09 利用者の指定)。
+
+            > 全てのデザインから言葉による説明を省いてください。
+            > 目指すのは説明がない、直感的なUIです。
+
+          下に「上の『学ぶ分野をえらぶ』で…」と1行書いてあったが、
+          **その文はもう畳んである**(`tip`)。文を消したぶん、
+          **次に押すものが目で分かる形**にしておく ——
+          押すところが1つしか無いのだから、そこが青ければ迷わない
+          (**行き止まりを作らない**・CLAUDE.md)。 */}
+      <button type="button"
+              className={`btn btn--small wb-add-open${picked.length ? ' btn--ghost' : ' btn--primary'}`}
               aria-expanded={open}
               onClick={() => setOpen((v) => !v)}>
         <BookIcon />
@@ -77,7 +88,7 @@ export default function ShelfBooks({
 
       {open && (
         <div className="wb-add-body">
-          <p className="basicpick-lead">
+          <p className="tip basicpick-lead">
             チェックを入れた分野の語だけを練習します。
             <strong>自分の単語帳とは混ざりません。</strong>
             覚え具合は、この単語帳の側に残ります。

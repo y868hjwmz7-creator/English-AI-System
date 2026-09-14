@@ -104,7 +104,7 @@ export default function BgmLibrary({ userId = null }) {
                 onChange={(e) => { setPlace(e.target.value); saveBgmPlace(e.target.value) }}>
           {BGM_PLACES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
-        <span className="field-hint">
+        <span className="tip field-hint">
           {bgmPlaceOf(place).id === 'off'
             ? '曲は流れません。'
             : '声が鳴っているあいだは、曲を自動で小さくします。'}

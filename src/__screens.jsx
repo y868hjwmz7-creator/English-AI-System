@@ -24,6 +24,7 @@
  */
 import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { applyTips, loadTips } from './lib/tips.js'
 import LessonView from './components/LessonView.jsx'
 import SessionResult from './components/SessionResult.jsx'
 import CollectRows from './components/CollectRows.jsx'
@@ -908,7 +909,8 @@ const SHELFPICK = (
     <ShelfBooks shelves={shelfList()}
                 counts={Object.fromEntries(shelfList().map((s, i) => [s.id, 12 * (i % 5)]))}
                 progress={{ it: { learning: 3, known: 1 } }}
-                picked={['it']} onPicked={() => {}} />
+                picked={q.get('picked') === 'none' ? [] : ['it']}
+                onPicked={() => {}} />
   </section>
 )
 
@@ -999,6 +1001,11 @@ const SPEECH = (
     }}
   />
 )
+
+/* **説明の文を出すかどうかも、本物と同じ道を通す**(2026-09)。
+   `App.jsx` がやっていることをここでもやらないと、
+   `data-tips` が付かず、**既定で畳んであることを測れない。** */
+applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
   q.get('screen') === 'sheet'

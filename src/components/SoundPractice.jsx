@@ -100,7 +100,7 @@ export default function SoundPractice() {
     <>
       <div className="card">
         <h2 className="card-title">単語とフレーズの音</h2>
-        <p className="card-hint">
+        <p className="tip card-hint">
           単語とフレーズを、<strong>発音記号を見ながらお手本と同じ音で</strong>言う練習です。
           <br />
           お手本は速さを落として聴けます。語に触れると意味も出ます。

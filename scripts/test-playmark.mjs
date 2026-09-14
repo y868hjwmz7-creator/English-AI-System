@@ -4651,6 +4651,101 @@ console.log('\nスピーチ練習(0054)')
     '音声を落とす … ゲストには、そこに無いボタンを案内しない')
 }
 
+/* ─────────────────────────────────────────────────────────────
+   説明の文を、既定では出さない(2026-09 利用者の指定)
+
+     > 全てのデザインから言葉による説明を省いてください。
+     > 目指すのは説明がない、直感的なUIです。
+     > ここでは「上の「学ぶ分野をえらぶ」で、練習したい分野にチェックを
+     > 入れてください。」などです。
+
+   **消したのではない。畳んである。**「いつでも戻せるように」と
+   同じ作法なので、見るのは3つ ——
+   ①既定で閉じているか ②道が残っているか
+   ③**画面が判断を自分で持っていないか。**
+
+   あわせて、**残すと決めたもの**に印が付いていないことも数える。
+   どれもこのリポジトリに先に書いてある決まりである(費用・取り消せない・
+   0件の知らせ・黙って消さない・教材の中身)。
+   **「畳んだか」だけを見ると、知らせまで畳んでも緑のまま**になる。
+   ───────────────────────────────────────────────────────────── */
+{
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noCS = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const tips = noCS(readS('src/lib/tips.js'))
+
+  /* ① 既定は「出さない」 */
+  ok(/return 'off'/.test(tips) && /:\s*'off'/.test(tips),
+    '説明の文 … 読めないときも、既定は「出さない」')
+  ok(/TIPS\s*=\s*\[[\s\S]*id:\s*'off'[\s\S]*id:\s*'on'[\s\S]*\]/.test(tips),
+    '説明の文 … 出す / 出さないの2つだけ')
+
+  /* ② 道が残っている(消して作り直さない) */
+  ok(/data-tips/.test(tips) && /export function applyTips/.test(tips),
+    '説明の文 … 戻す道(`data-tips`)が残っている')
+
+  /* ③ 判断は1か所。**画面の中で `data-tips` と書かない** */
+  {
+    const wrote = []
+    for (const f of readdirSync('src/components')) {
+      if (!f.endsWith('.jsx')) continue
+      if (/data-tips|loadTips|applyTips/.test(noCS(readS(`src/components/${f}`)))) wrote.push(f)
+    }
+    ok(wrote.length === 0,
+      `説明の文 … 画面が判断を自分で持っていない${wrote.length ? `(${wrote.join(' / ')})` : ''}`)
+  }
+  const app = noCS(readS('src/App.jsx'))
+  ok(/=\s*useState\(loadTips\)/.test(app) && /applyTips\(tips\)/.test(app),
+    '説明の文 … App.jsx が本当に呼んでいる')
+  ok(/nav-setting-label">説明の文/.test(app),
+    '説明の文 … 左のメニューの下から切り替えられる')
+
+  /* 畳む決まりは styles.css の1行だけ。**部品ごとに書いて回らない** */
+  const css = readS('src/styles.css')
+  const hide = css.match(/^:root:not\(\[data-tips="on"\]\) \.tip \{[^}]*\}/m)
+  ok(!!hide && /display:\s*none\s*!important/.test(hide[0]),
+    '説明の文 … 畳む決まりは styles.css の1行だけ(必ず勝つ)')
+  ok((css.match(/\.tip[\s,{]/g) || []).length <= 2,
+    '説明の文 … `.tip` に、部品ごとの上書きを増やしていない')
+
+  /* ④ **残すと決めたものに、印を付けていない。**
+        画面の該当行を名指しで数える(文言そのもので探す) */
+  const keep = [
+    ['MaterialForm.jsx', '出力 {done.spent.output', '費用'],
+    ['ShelfBuilder.jsx', 'AI を {todo.length} 回呼ぶので', '費用'],
+    ['MaterialDelete.jsx', '{deleteWarning(shared)}', '取り消せない操作'],
+    ['TrainerLearners.jsx', '取り消せません。', '取り消せない操作'],
+    ['TrainerMaterials.jsx', 'この端末に残っている、この教材の', '取り消せない操作'],
+    ['LearnerHomework.jsx', 'まだ宿題は届いていません', '0件の知らせ'],
+    ['LearnerHomework.jsx', 'この条件に当てはまる宿題はありません', '絞り込みの知らせ'],
+    ['WritingAnswer.jsx', 'そのままトレーナーに届きます', '黙って消さない'],
+    ['SpeechBoard.jsx', '書いた原稿はトレーナーに届いています', '黙って消さない'],
+    ['MaterialBody.jsx', '{sec.instruction}', '教材の中身'],
+    ['MaterialBody.jsx', '{it.note}', '教材の中身'],
+    ['WordRadio.jsx', '覚えた・まだ の記録は動きません', '黙って動かさない'],
+  ]
+  for (const [f, text, why] of keep) {
+    const src = readS(`src/components/${f}`)
+    const at = src.indexOf(text)
+    if (at < 0) { ok(false, `説明の文 … ${f} に「${text}」が見当たらない`); continue }
+    /* その行(または直前の開きタグ)に `tip` が付いていないこと */
+    const head = src.slice(Math.max(0, src.lastIndexOf('<', at)), at + text.length)
+    ok(!/className="[^"]*\btip\b/.test(head),
+      `説明の文 … ${why}は畳まない(${f})`)
+  }
+
+  /* ⑤ 利用者が名指ししたものは、本当に畳んである */
+  const wb = readS('src/components/Wordbook.jsx')
+  ok(/className="tip hint">\s*\n\s*上の「学ぶ分野をえらぶ」/.test(wb),
+    '説明の文 … 「上の『学ぶ分野をえらぶ』で…」を畳んである')
+  /* **文を畳んだぶん、形で言う**(行き止まりを作らない) */
+  const sb = noCS(readS('src/components/ShelfBooks.jsx'))
+  ok(/picked\.length \? ' btn--ghost' : ' btn--primary'/.test(sb),
+    '説明の文 … 1冊も選んでいないあいだ、えらぶボタンが青い')
+  ok(/className="tip basicpick-lead"/.test(sb),
+    '説明の文 … 棚のえらび方の説明も畳んである')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')

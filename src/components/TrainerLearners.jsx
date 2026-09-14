@@ -569,7 +569,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
           <label className="field">
             <span>
               ログインID
-              <span className="field-hint">半角の英数字と . _ - だけ。3文字以上</span>
+              <span className="tip field-hint">半角の英数字と . _ - だけ。3文字以上</span>
             </span>
             <input value={newGuest.loginId} required
                    placeholder="例: tanaka01" autoComplete="off"
@@ -852,7 +852,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                             : reminding === l.id ? '送っています…' : 'リマインドする'}
                         </button>
                       )}
-                      <p className="field-hint">
+                      <p className="tip field-hint">
                         アプリで取り組んだぶんを、こちらで数えています。
                         ゲストが入力したものではありません。
                       </p>
@@ -1346,7 +1346,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     記録する
                   </button>
                 </div>
-                <p className="field-hint">
+                <p className="tip field-hint">
                   TOEIC は 10〜990、VERSANT は 20〜80。範囲の外は登録できません。
                 </p>
 
@@ -1392,7 +1392,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     {goalBusy ? '決めています…' : '決める'}
                   </button>
                 </div>
-                <p className="field-hint">
+                <p className="tip field-hint">
                   1週間に答える数です。ゲストの単語帳と Quick Response に、
                   あと何問かが出ます。空にして押せば外れます。
                   日ではなく週で数えるので、1日休んでも途切れません。

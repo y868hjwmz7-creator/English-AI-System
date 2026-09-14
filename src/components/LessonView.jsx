@@ -1586,7 +1586,7 @@ export default function LessonView({
                 {notePeople?.length === 0 && (
                   <p className="card-hint">担当しているゲストがいません。</p>
                 )}
-                <p className="card-hint">
+                <p className="tip card-hint">
                   記録はゲストごと・日付ごとに1枚残ります。
                   ゲストのページから教材を開いたときは、ここは出ません。
                 </p>

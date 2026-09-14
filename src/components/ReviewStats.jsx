@@ -68,7 +68,7 @@ export default function ReviewStats({
           )
         })}
       </div>
-      {lead && <p className="card-hint wb-stats-lead">{lead}</p>}
+      {lead && <p className="tip card-hint wb-stats-lead">{lead}</p>}
     </>
   )
 }

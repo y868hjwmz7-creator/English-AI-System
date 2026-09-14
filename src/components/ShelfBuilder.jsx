@@ -302,7 +302,7 @@ export default function ShelfBuilder() {
   return (
     <section className="card shelfbuild">
       <h2 className="card-title"><ShelfIcon /> 業種べつの単語帳</h2>
-      <p className="card-hint">
+      <p className="tip card-hint">
         業種・趣味ごとに1冊ずつあります(全 {shelves.length} 冊)。
         ここで作った語句は<strong>ゲストの単語帳には混ざりません</strong> ——
         独立した単語帳として、そのまま練習できます(0058)。

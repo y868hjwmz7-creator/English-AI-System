@@ -249,7 +249,7 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
     <div className="stack speechboard">
       <div className="card">
         <h3 className="card-title">{whose}のスピーチ</h3>
-        <p className="card-hint">
+        <p className="tip card-hint">
           スピーチの原稿を書いて出すと、<strong>トレーナーが添削</strong>します。
           直った英文は<strong>1文ずつ音で聴けて</strong>、そのまま練習できます。
           {/* **黙って消さない。** ゲストにも、どこへ行くのかを言う */}
@@ -297,7 +297,7 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
           <label className="field">
             <span>
               題名
-              <span className="field-hint">空でもよい(原稿の1行目から作ります)</span>
+              <span className="tip field-hint">空でもよい(原稿の1行目から作ります)</span>
             </span>
             <input type="text" value={open.title ?? ''} disabled={busy}
                    placeholder="来週の全社集会であいさつ"

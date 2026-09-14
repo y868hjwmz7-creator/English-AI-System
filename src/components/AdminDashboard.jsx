@@ -158,7 +158,7 @@ export default function AdminDashboard() {
       {/* ── 教材の種類ごと ───────────────────────────────────── */}
       <section className="card">
         <h2 className="card-title">教材の種類ごと</h2>
-        <p className="card-hint">
+        <p className="tip card-hint">
           <strong>作った数と配った数は別物です。</strong>
           再利用が効いていれば、共有した回数は教材の数よりずっと多くなります。
         </p>
@@ -205,7 +205,7 @@ export default function AdminDashboard() {
       {/* ── 内容(弱点)ごと ─────────────────────────────────── */}
       <section className="card">
         <h2 className="card-title">弱点ごと(教材の中身)</h2>
-        <p className="card-hint">
+        <p className="tip card-hint">
           レッスンで弱点を指摘しても、<strong>その弱点の教材が無ければ宿題が出せません。</strong>
           まず「0 本」の行を埋めていくのが早道です。
         </p>
@@ -266,7 +266,7 @@ export default function AdminDashboard() {
       {/* ── レベルごと ───────────────────────────────────────── */}
       <section className="card">
         <h2 className="card-title">レベルごと(教材とゲストの数)</h2>
-        <p className="card-hint">
+        <p className="tip card-hint">
           <strong>ゲストがいるのに教材が無いレベル</strong>が、次に作るべきところです。
         </p>
 
@@ -309,7 +309,7 @@ export default function AdminDashboard() {
       {/* ── アプリでの取り組み(0022 が裏で数えたもの)──────────── */}
       <section className="card">
         <h2 className="card-title">アプリでの取り組み</h2>
-        <p className="card-hint">
+        <p className="tip card-hint">
           ゲストは何も入力していません。<strong>開いていた時間をこちらで数えています</strong>
           (裏に回した端末の時間は数えません)。
         </p>

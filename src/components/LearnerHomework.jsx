@@ -619,7 +619,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
       {learnerId && (
         <details className="card notes-card">
           <summary className="card-title">セッションの記録</summary>
-          <p className="card-hint">
+          <p className="tip card-hint">
             レッスンで担当トレーナーが書いた記録です。日付ごとに残ります。
           </p>
           <LessonNotes learnerId={learnerId} />
