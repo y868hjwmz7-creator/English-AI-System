@@ -4721,6 +4721,57 @@ for (const W of [1280, 794, 453, 390, 320]) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   畳んだのは説明の側だけ(2026-09 利用者の指定「こういうの、いらないです」)
+
+   「今日出すぶんから出します。」と**先取りの断り**は、
+   **同じ1つの段落にいた。** だから畳むには**行を分ける**しかない。
+
+   **「消えたか」だけを見ない。** 段落ごと畳んでも、それは緑になる ——
+   そのとき**先取りの断りまで一緒に消えている**(黙って動かさない・CLAUDE.md)。
+   ①説明が消えるか ②**断りは残るか**を、いつも一緒に数える。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const W = 390
+  const page = await browser.newPage({ viewport: { width: W, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=rscope`,
+    { waitUntil: 'networkidle' })
+  await page.evaluate(() => { try { localStorage.removeItem('eas.tips') } catch { /* 端末が断ることがある */ } })
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.waitForSelector('.rscope', { timeout: 8000 })
+
+  /* **範囲を「ぜんぶ」へ広げる。** 既定の「今日出す」では
+     先取りが 0 件で、**断りの行がそもそも描かれない**
+     (それでは、畳んだかどうかを測ったことにならない) */
+  await page.click('.rscope-go .btn--small')
+  await page.waitForTimeout(200)
+  await page.evaluate(() => {
+    const 札 = [...document.querySelectorAll('.rscope-chip')]
+      .find((b) => b.textContent.trim().startsWith('ぜんぶ'))
+    札?.click()
+  })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(200)
+
+  const 見え = await page.evaluate(() => {
+    const 文 = (el) => (el.textContent ?? '').replace(/\s+/g, '')
+    const 行 = [...document.querySelectorAll('.rscope-lead')]
+    return {
+      説明: 行.filter((el) => 文(el).includes('から出します') && el.checkVisibility()).length,
+      断り: 行.filter((el) => 文(el).includes('次に出る日は動きません') && el.checkVisibility()).length,
+    }
+  })
+  await page.close()
+
+  if (見え.説明 !== 0) {
+    ng('説明の文 … 「今日出すぶんから出します。」が既定で見えている', String(見え.説明))
+  } else if (見え.断り !== 1) {
+    ng('説明の文 … 先取りの断りまで畳んでしまっている(黙って動かさない)', String(見え.断り))
+  } else {
+    ok(`説明の文 ${W}px … 復習は、説明だけ畳んで**先取りの断りは残る**`)
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

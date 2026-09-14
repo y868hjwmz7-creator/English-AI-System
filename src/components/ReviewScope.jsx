@@ -235,7 +235,7 @@ export default function ReviewScope({
           {/* **畳んだ形では、ここに1行を出す。** 始める前は下に出ているが、
               復習の最中は帯の中なので、置ける場所がここしかない */}
           {compact && (
-            <p className="card-hint rscope-lead">
+            <p className="tip card-hint rscope-lead">
               {scopeLead(scope, unit)}
               {' '}
               変えると、その場で出し直します。
@@ -271,19 +271,27 @@ export default function ReviewScope({
         {出しかた}
       </div>
 
-      <p className="card-hint rscope-lead">
+      {/* **説明の側だけを畳む**(2026-09 利用者の指定「こういうの、いらないです」)。
+
+            「今日出すぶんから出します。」は、**すぐ上のボタンが同じことを
+            言っている** ——「1000 語から 10 語を出す」と札の「今日出す」で、
+            どこから何語出るかは読み取れる。 */}
+      <p className="tip card-hint rscope-lead">
         {scopeLead(scope, unit)}
         {/* **繰り返すなら、そう書く。** 押す前に何が起きるかを言う */}
         {repeat && ` 出し切っても止まらず、もう一度この範囲を回します。`}
-        {ahead > 0 && (
-          <>
-            {' '}
-            このうち <strong>{ahead} {unit}</strong>は先取りなので、
-            正解しても<strong>次に出る日は動きません</strong>
-            (同じ範囲を何度も回して先へ飛ぶと、明日の復習が空になるためです)。
-          </>
-        )}
       </p>
+
+      {/* **先取りの断りは畳まない。** あれは説明ではなく
+          **「押しても記録が動かない」という知らせ**である(黙って動かさない・
+          CLAUDE.md)。だから同じ段落に混ぜず、行を分けてある */}
+      {ahead > 0 && (
+        <p className="card-hint rscope-lead">
+          このうち <strong>{ahead} {unit}</strong>は先取りなので、
+          正解しても<strong>次に出る日は動きません</strong>
+          (同じ範囲を何度も回して先へ飛ぶと、明日の復習が空になるためです)。
+        </p>
+      )}
     </div>
   )
 }

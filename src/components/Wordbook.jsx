@@ -1255,8 +1255,14 @@ export default function Wordbook({
           ぜんぶ同じ 200 語の中で回っている。**そう書く。**
 
           **0056 を貼れば、この行はひとりでに消える。** */}
+      {/* **これも畳んである**(2026-09 利用者の指定「こういうの、いらないです」)。
+
+            **黙って隠したことにはならない。** 貼っていない移行があることは
+            `SetupStatus` が**画面のいちばん上で、貼るファイル名まで**言っている
+            (`NEWEST_MIGRATION`)。しかもあちらはトレーナーと管理者にだけ出る。
+            ここはその**同じことを、単語帳の言葉で言い直していた**だけである。 */}
       {myBook && capped > 0 && (
-        <p className="hint wb-capped">
+        <p className="tip hint wb-capped">
           いまこの画面に読めているのは <strong>{rows.length} 語</strong>までです
           (この段はぜんぶで {expected} 語)。
           「出しかた」の札の数も、実際に出る語も、この {rows.length} 語から選んでいます。

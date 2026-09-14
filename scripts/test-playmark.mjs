@@ -4744,6 +4744,27 @@ console.log('\nスピーチ練習(0054)')
     '説明の文 … 1冊も選んでいないあいだ、えらぶボタンが青い')
   ok(/className="tip basicpick-lead"/.test(sb),
     '説明の文 … 棚のえらび方の説明も畳んである')
+
+  /* ⑥ 2026-09「こういうの、いらないです」で名指しされた3つ。
+        **どれも消していない。畳んであるだけ**である */
+  const rs = noCS(readS('src/components/ReviewScope.jsx'))
+  /* 「今日出すぶんから出します。」は**2か所**にある(始める前 / 復習の最中)。
+     **片方だけ畳むと、もう片方に出たまま残る** */
+  ok((rs.match(/className="tip card-hint rscope-lead"/g) ?? []).length === 2,
+    '説明の文 … 「今日出すぶんから出します。」を2か所とも畳んである')
+  /* **先取りの断りは、説明ではなく知らせ**である(黙って動かさない)。
+     畳んだ文と**同じ段落にいた**ので、行を分けてある。
+
+     **上の `keep` の表では捕まらない。** あちらは「その行の手前の
+     開きタグに `tip` が付いていないか」を見るが、段落へ戻すと
+     手前に来るのが `<>` なので、**混ぜ直しても緑のまま**になる
+     (実際に赤チェックで素通りした)。だから**自分の `<p>` にいるか**で見る */
+  ok(/\{ahead > 0 && \(\s*\n\s*<p className="card-hint rscope-lead">/.test(rs),
+    '説明の文 … 先取りの断りは、畳まない行に分けてある')
+  ok(/className="tip hint wb-capped"/.test(wb),
+    '説明の文 … 「いまこの画面に読めているのは…」を畳んである')
+  ok(/className="tip muted material-parts"/.test(noCS(readS('src/components/TrainerMaterials.jsx'))),
+    '説明の文 … 教材のカードの「何が何問」を畳んである')
 }
 
 console.log(ng
