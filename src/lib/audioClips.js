@@ -756,6 +756,54 @@ export async function clipUrl(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDAR
  *   古い教材で、段落を送るたびに 404 を出し続けない。
  * ══════════════════════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════════════════════
+ * **時刻表(`.json`)だけは、端末の控えを素通りする**(2026-09 実機)
+ *
+ *   > 版も同じ数字が表示されるのに挙動だけが改善していない状態が
+ *   > 維持されます。ここから直接 URL を踏むと改善されています
+ *
+ * 【まず測った。同じ教材を、2つの入れ物で鳴らして数字を並べた】
+ *
+ *   | | Chrome | 控えの空な入れ物 |
+ *   |---|---|---|
+ *   | 音声 | 45.87 秒 | 45.87 秒(**同じ**) |
+ *   | **控え** | **44.32 秒** | **45.84 秒** |
+ *   | 3つめの文の頭 | **3.48** | **4.03** |
+ *
+ *   `控え` は `.json` の中身そのものから出している。**同じファイルなら
+ *   同じ数字になる。** 44.32 と 45.84 は**別のファイル**である。
+ *
+ * 【なぜ古いものが残るのか】
+ *   窓口は `.mp3` にも `.json` にも
+ *   `Cache-Control: public, max-age=31536000, immutable` を付けている。
+ *   **1年のあいだ、問い合わせすらするな**という意味なので、
+ *   あとから同じ場所へ上書きしても、**すでに控えを持っている端末は
+ *   取りに行かない。** `remadeMark()` の `?v=` は
+ *   **「作り直す」を押したブラウザにしか無い**ので、別のブラウザには届かない。
+ *
+ * 【MP3 ではなく `.json` が残るのは、なぜか】
+ *   **大きいものから捨てられる。** 数 MB の MP3 は端末に追い出されて
+ *   取り直されるのに、**数 KB の `.json` は居座る。**
+ *   だから「新しい音 + 古い時刻表」という、いちばん分かりにくい形になる。
+ *
+ * 【直し方 —— 時刻表だけ、必ず問い合わせる】
+ *   `cache: 'no-cache'` は「控えがあっても、必ず向こうへ確かめる」。
+ *   変わっていなければ **304 が返るだけで、中身は流れない。**
+ *
+ *   ・**MP3 は1年もちのまま。** 費用も通信も増えない
+ *   ・**窓口の置き直しも SQL も要らない**(画面だけの直し)
+ *   ・取りに行くのは**1つの教材につき、その画面で1回だけ**
+ *     (`timesCache` / `wholeCache` が控える)
+ *
+ * 【残っている穴(直していない)】
+ *   **音声そのものは、これで新しくならない。**「読み上げ音声を作り直す」を
+ *   押したブラウザだけが `?v=` で新しい音になり、別のブラウザには
+ *   古い音が残りうる。**そこは別の話**なので、言われたときに直す。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** @type {RequestInit} 時刻表を取りに行くときだけ付ける */
+const FRESH_JSON = { cache: 'no-cache' }
+
 /** 読んだ時刻(と、無かったという答え)。この画面のあいだだけ */
 const timesCache = new Map()
 
@@ -784,7 +832,7 @@ export async function clipAlignment(text, voiceId = DEFAULT_CLIP_VOICE, tier = S
   const url = mark ? `${base}?v=${mark}` : base
   let out = null
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, FRESH_JSON)
     if (res.ok) {
       const got = await res.json()
       /* **同じ英文のものか、必ず確かめる。** 置き場所は英文の指紋で
@@ -890,7 +938,7 @@ const wholeUrlOf = (hash, ext) =>
 /** 控えた時刻(JSON)を読む。**無ければ null**(まだ作られていない) */
 async function readWholeJson(url) {
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, FRESH_JSON)
     if (!res.ok) return null
     return await res.json()
   } catch { return null }
@@ -1106,6 +1154,29 @@ const seamGaveUp = new Map()
 
 /** **19手めで中身の形が変わった**(文ごとのずれも覚える)。鍵ごと分ける */
 const SEAM_KEY = 'eas.seams2'
+
+/**
+ * **測り方の版**(2026-09 実機)。控えは、これが同じときだけ読む。
+ *
+ * 【なぜ要るのか】
+ *   19手めで「中身の**形**が変わったから鍵を分ける」と決めたのに、
+ *   **計算のしかたが変わったとき**には何もしていなかった。だから
+ *
+ *     37・38・39手めが書き込んだ数字が、
+ *     **コードを取り下げても端末に残り続ける。**
+ *
+ *   実際、利用者の Chrome には `覚えていた継ぎ目(24 文)` が残っていて、
+ *   **同じ版なのに、控えの空な入れ物とは別の場所で文が切れていた。**
+ *   こちらの直しが「1ミリも変わらない」ように見える出どころの1つである。
+ *
+ * 【決まり】
+ *   **`seamFind.js` の測り方や `itemOffsFrom()` を変えたら、1つ進める。**
+ *   進めれば、古い数字は読まれずに測り直される(**費用は1円もかからない** ——
+ *   波形をほどくだけで、窓口は1回も呼ばない)。
+ *   **鍵そのものは分けない** —— 分けると古いほうが端末に残り続ける。
+ */
+const SEAM_REV = 2
+
 /** 覚えておく音声の数(古いものから落とす) */
 const SEAM_KEEP = 40
 
@@ -1194,7 +1265,9 @@ export async function wholeSeams(url, spans, sents = null) {
   if (seamGaveUp.has(name)) { seamNote = seamGaveUp.get(name); return null }
 
   const kept = readSeamStore()[name]
-  if (kept && Array.isArray(kept.o) && kept.o.length === spans.length
+  /* **測り方の版が違う控えは読まない**(2026-09 実機)。
+     読むと、**取り下げたはずの版が書いた数字**がそのまま効き続ける */
+  if (kept && kept.v === SEAM_REV && Array.isArray(kept.o) && kept.o.length === spans.length
     && kept.n === (fine?.length ?? 0)) {
     const rec = { offs: kept.o, sentOffs: Array.isArray(kept.s) ? kept.s : null }
     seamCache.set(name, rec)
@@ -1232,7 +1305,7 @@ export async function wholeSeams(url, spans, sents = null) {
     const offs = deep ? itemOffsFrom(fine, deep.offs, spans.length) : got.offs
     const rec = { offs, sentOffs }
     seamCache.set(name, rec)
-    writeSeamStore(name, { o: offs, s: sentOffs, n: fine?.length ?? 0 })
+    writeSeamStore(name, { v: SEAM_REV, o: offs, s: sentOffs, n: fine?.length ?? 0 })
     const wide = Math.max(...got.offs.map((v) => Math.abs(v)))
     const all = (deep ? fine.length : spans.length) - 1
     seamNote = `実測 ${got.hit}/${all} ${deep ? '文' : '本'}`

@@ -363,7 +363,7 @@ function fakeMp3({
   const one = materialClipPieces(art([{ prompt_en: longText }]))
   const want = speakChunks(longText).map((p) => p.text.trim()).filter(Boolean)
   if (one.length < 2) ng('長い段落を分けていない', `${one.length} 本`)
-  else if (one.map((c) => c.text).join(' ') !== want.join(' ')) {
+  else if (one.map((c) => c.text).join('\u0000') !== want.join('\u0000')) {
     ng('鳴らすときと違う英文で集めている(`speakChunks` を通っていない)')
   } else ok(`長い段落は、鳴らすときと同じ ${one.length} 本のかけらで集める`)
 
@@ -4048,6 +4048,73 @@ function fakeMp3({
   }
 
   if (bad === before) ok('一文目のくり返しで、画面は切り替わらない')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ㉑ **古い控えを読まない**(2026-09 実機・利用者の指摘)
+ *
+ *   > 版も同じ数字が表示されるのに挙動だけが改善していない状態が
+ *   > 維持されます。ここから直接 URL を踏むと改善されています
+ *
+ *   同じ教材を2つの入れ物で鳴らして数字を並べたら、**控えの長さ**が
+ *   44.32 秒 と 45.84 秒 —— **別のファイルを読んでいた。**
+ *   時刻表(`.json`)は端末に1年ぶん居座り、継ぎ目の控えは
+ *   **取り下げた版が書いた数字**をそのまま持ち続けていた。
+ *
+ *   **どちらも「音は鳴る」ので、押してみても気づけない。**
+ *   だから、書いてある形で見張る。
+ *
+ *   見るのは5つ。**「素通りさせる」だけを見ない。**
+ *     ①時刻表を取りに行く2か所とも、控えを素通りしているか
+ *     ②**MP3 は素通りさせていないか**(1年もちのまま = 費用も通信も増えない)
+ *     ③継ぎ目の控えに、測り方の版を**書いているか**
+ *     ④その版を、**読むときにも見ているか**
+ *     ⑤版を書き写していないか(`SEAM_REV` 1か所から取る)
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const before = bad
+  const raw = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+  /* **コメントを落としてから見る。** この節の説明にも同じ名前が
+     書いてあるので、そのまま探すと**使うのをやめても緑のまま**になる
+     (「名前が出てくるか」で見ない・CLAUDE.md) */
+  const src = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  const count = (re) => (src.match(re) ?? []).length
+
+  // ① 時刻表を取りに行く2か所とも、控えを素通りする
+  const fresh = count(/await fetch\([^)]*,\s*FRESH_JSON\)/g)
+  if (!/const FRESH_JSON = \{ cache: 'no-cache' \}/.test(src)) {
+    ng('時刻表の取り方が、控えを素通りしていない', "FRESH_JSON = { cache: 'no-cache' }")
+  } else if (fresh !== 2) {
+    ng('時刻表を取りに行くところが、2か所とも素通りしていない', `${fresh} か所`)
+  } else ok('時刻表(.json)は、2か所とも端末の控えを素通りして取りに行く')
+
+  /* ② **MP3 は素通りさせない。**「出る」と「出ない」の両方を見る ——
+     ここまで素通りさせると、1年もちの利点(費用と通信)が消える */
+  const noCache = count(/'no-cache'/g)
+  if (noCache !== 1) ng('音声そのものまで控えを素通りさせている', `'no-cache' が ${noCache} か所`)
+  else if (!/cache: 'force-cache'/.test(src)) ng('波形を測るときに、端末の控えを使っていない')
+  else ok('音声(MP3)は1年もちのまま(費用も通信も増えない)')
+
+  // ③④ 継ぎ目の控えに、測り方の版を書き、読むときにも見る
+  if (!/writeSeamStore\(name, \{ v: SEAM_REV,/.test(src)) {
+    ng('継ぎ目の控えに、測り方の版を書いていない')
+  } else if (!/kept\.v === SEAM_REV/.test(src)) {
+    ng('版を書いているのに、読むときに見ていない',
+      '取り下げた版が書いた数字が、そのまま効き続ける')
+  } else ok('継ぎ目の控えは、測り方の版が同じときだけ読む')
+
+  /* ⑤ **版を書き写さない。** 数字で直に書くと、片方だけ古くなる */
+  const revs = count(/SEAM_REV/g)
+  if (!/const SEAM_REV = \d+/.test(src)) ng('測り方の版が、1か所に無い')
+  else if (revs !== 3) ng('測り方の版を書き写している', `SEAM_REV が ${revs} か所`)
+  else ok('測り方の版は1か所(定義 + 書く + 読む)')
+
+  /* 鍵そのものは分けない。**分けると、古いほうが端末に残り続ける** */
+  if (!/const SEAM_KEY = 'eas\.seams2'/.test(src)) {
+    ng('継ぎ目の控えの鍵を分けている', '分けると、古いほうが端末に残り続ける')
+  } else ok('鍵は `eas.seams2` のまま(読まなくなるだけで、居座らせない)')
+
+  if (bad === before) ok('古い控え(時刻表・継ぎ目)を読まない')
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
