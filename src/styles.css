@@ -1229,9 +1229,20 @@ audio { width: 100%; margin-top: 4px; }
    **「右」にならない。** ここは折り返さず、入りきらないときは
    ボタンのほうを縮める(`.btn--small` の `flex-shrink: 0` を戻す)。
    縮んでも文言は削らない — 何のボタンか分からなくなる。 */
-.card-tools { gap: var(--sp-6); margin-bottom: 0; }
+/* **下の余白を、こちらで消さない**(2026-09 実機・利用者の指摘)。
+
+     > 大きく表示のボタンとその上の3つのボタンが隙間がなく接触しています。
+
+   もとは `margin-bottom: 0` にして、**次が `.btn-row` のときだけ**
+   `+ .btn-row` で 8px を戻していた。ところが下に来るものが
+   **素の `<button>`**(「セッションで使う」)に変わった日から、
+   隣り合わせの指定がどこにも当たらず、**隙間が 0 になった。**
+
+   **「次に何が来るか」で余白を決めない**(CLAUDE.md)。
+   `.btn-row` の `margin: 12px 0` をそのまま残せば、
+   **下に何が来ても 12px 空く**(`.btn-row` どうしなら重なって 12px)。 */
+.card-tools { gap: var(--sp-6); }
 .card-tools > .btn { flex: 0 1 auto; min-width: 0; }
-.card-tools + .btn-row { margin-top: 8px; }
 /* **開いた箱は、行の外へ落とす**(2026-09 実機で撮って気づいた)。
 
    「共有」を1つにまとめた日、`.share-box` が**ボタンと同じ行の一員**に
@@ -5402,7 +5413,18 @@ html, body { overflow-x: clip; }
    名前を左の柱にそろえ、**選ぶ欄はぜんぶ同じ幅**にする。
    こうすると日付も「1行のうちの1つ」に収まるので、
    **アイコンの置き場所という問題そのものが消える。** */
-.wbfilter { display: block; margin-top: 0; }
+/* **行と行を、余白ではなく `gap` で離す**(2026-09 実機・利用者の指摘)。
+   `display: block` のままだと、行そのものには余白が無いので
+   **プルダウンどうしが接する**(実測 390px で 0px)。
+   `gap` なら、行をいくつ足しても離れる ——
+   **「次に何が来るか」で余白を決めない**(CLAUDE.md) */
+/* **`align-items` を戻す。** 上の `.wbfilter` が `center` を置いており、
+   縦積みにすると**行が中身なりの幅に縮んで、左端がぎざぎざになる**
+   (実測 86 / 93 / 142 / 82 / 149 / 218px)。**欄はぜんぶ同じ幅**が決まり */
+.wbfilter {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: var(--sp-6); margin-top: 0;
+}
 .wbfilter-row {
   display: flex; align-items: center; gap: var(--sp-10);
   min-height: 40px;

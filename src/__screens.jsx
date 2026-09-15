@@ -424,11 +424,13 @@ function ToolsScreen() {
             )}
           />
         </div>
-        <div className="btn-row">
-          <button type="button" className="btn btn--primary">
-            <ScreenIcon />セッションで使う(大きく表示)
-          </button>
-        </div>
+        {/* **本物と同じく、素の `<button>` にする**(2026-09 実機)。
+            ここを `.btn-row` で包んでいたせいで、**骨組みだけ 8px 空き**
+            (`.card-tools + .btn-row`)、本物の 0px を素通りさせていた。
+            **骨組みが本物と食い違うと、検証は何も守らない** */}
+        <button type="button" className="btn btn--primary">
+          <ScreenIcon />セッションで使う(大きく表示)
+        </button>
         {/* めったに押さない3つ。**絵のまま**(言葉にすると1行に入らない) */}
         <div className="material-foot">
           {/* **いちばん下の行の左端に、小さく静かに**(2026-09 実機・利用者の指定)。

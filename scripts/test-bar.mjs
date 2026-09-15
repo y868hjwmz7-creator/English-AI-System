@@ -4975,6 +4975,165 @@ for (const W of [1280, 794, 453, 390, 320]) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   **別々の物を、すき間ゼロでくっつけない**(2026-09 実機・利用者の指定)
+
+     > 大きく表示のボタンとその上の3つのボタンが隙間がなく接触しています。
+     > ダサいのですぐ直してください。他にもこういう場所がありました。
+     > 全て探して直してください。プロはこんなデザインは作りません。
+     > これはこれからどんなアプリを作る時も共通のルールにしてください
+
+   実際に起きていたこと。`.card-tools` は
+   **`margin-bottom: 0` + 「次が `.btn-row` のときだけ 8px 戻す」**
+   という書き方だった。ところが下に来るものが
+   **素の `<button>`**(「セッションで使う」)に変わった日から、
+   その指定がどこにも当たらず、**隙間が 0 になった。**
+
+   【この検証がいちばん大事にしていること】
+
+   ・**DOM の兄弟では測らない。** `.card-tools` のような行は
+     枠も地色も持たない**透明な入れ物**なので、兄弟どうしで測ると
+     **素通りする**(実際、最初に書いた測り方はこれで捕まえられなかった)。
+     **描かれている物(いちばん内側)だけ**を拾って、縦に並べ直す
+   ・**浮いているものは数えない**(`fixed` / `sticky` / `absolute`)。
+     あちらは流れの中にいない ——ただ上に重なっているだけである
+   ・**わざと接しているものは、名指しで外す**(`TOUCH_OK`)。
+     一覧の行(`li + li`)のように、**線を接して1つに見せる**作りは
+     正しい。**外したものは、必ずここに理由を書く**
+
+   【なぜ測るのか。ソースを読むだけでは絶対に分からない】
+   隙間は「上の余白」「下の余白」「`gap`」「隣り合わせの指定」の
+   **掛け合わせ**で決まる。1つのファイルを読んでも答えは出ない。 */
+{
+  /** わざと接している(接することに意味がある)もの */
+  const TOUCH_OK = [
+    // 一覧の行。**線を接して1つの表に見せる**(`li + li { border-top }`)
+    ['li', 'li'],
+    // 下から出るシートの「つまみ」。飾りであって、別の物ではない
+    ['sheet-grip', 'sheet-head'],
+  ]
+  /** 画面の中の、描かれている物どうしの接触を拾う */
+  const FIND = (okPairs) => {
+    const rgb = (s) => {
+      const m = /rgba?\(([^)]+)\)/.exec(s || '')
+      if (!m) return null
+      const p = m[1].split(',').map((x) => parseFloat(x))
+      return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }
+    }
+    const same = (a, b) => (!a && !b)
+      || (a && b && a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a)
+    /** 「別々の物」に見えるか(押せるもの / 枠がある / 地色が親と違う) */
+    const isObject = (el) => {
+      if (['BUTTON', 'SELECT', 'INPUT', 'TEXTAREA'].includes(el.tagName)) return true
+      const cs = window.getComputedStyle(el)
+      const bw = ['Top', 'Right', 'Bottom', 'Left']
+        .map((s) => parseFloat(cs[`border${s}Width`]) || 0)
+      if (bw.some((w) => w > 0)) return true
+      const me = rgb(cs.backgroundColor)
+      if (me && me.a > 0.02) {
+        const pa = el.parentElement
+          ? rgb(window.getComputedStyle(el.parentElement).backgroundColor) : null
+        if (!same(me, pa)) return true
+      }
+      return false
+    }
+    const name = (el) => {
+      const c = (el.className || '').toString().trim().split(/\s+/).filter(Boolean)
+      return el.tagName.toLowerCase() + (c.length ? `.${c.slice(0, 3).join('.')}` : '')
+    }
+    const tags = (el) => [el.tagName.toLowerCase(),
+      ...(el.className || '').toString().trim().split(/\s+/).filter(Boolean)]
+    const painted = []
+    for (const el of document.querySelectorAll('*')) {
+      if (!isObject(el)) continue
+      const r = el.getBoundingClientRect()
+      if (r.width < 2 || r.height < 2) continue
+      const cs = window.getComputedStyle(el)
+      if (cs.visibility === 'hidden' || cs.display === 'none') continue
+      let floating = false
+      for (let n = el; n && n !== document.body; n = n.parentElement) {
+        const p = window.getComputedStyle(n).position
+        if (p === 'fixed' || p === 'sticky' || p === 'absolute') { floating = true; break }
+      }
+      if (floating) continue
+      painted.push({ el, r })
+    }
+    // **いちばん内側だけ残す。** 中にも物があるなら、外側は「囲み」である
+    const inner = painted.filter((p) => !painted.some((q) => q !== p && p.el.contains(q.el)))
+    inner.sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left)
+    const out = []
+    for (let i = 0; i < inner.length; i += 1) {
+      for (let j = i + 1; j < inner.length; j += 1) {
+        const a = inner[i]; const b = inner[j]
+        if (b.r.top < a.r.bottom - 0.5) continue        // 横に並んでいる
+        const gap = b.r.top - a.r.bottom
+        if (gap >= 4) break                             // これより下は離れている
+        if (Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left) < 4) continue
+        const ta = tags(a.el); const tb = tags(b.el)
+        if (okPairs.some(([x, y]) => ta.includes(x) && tb.includes(y))) continue
+        out.push({ gap: Math.round(gap * 10) / 10, a: name(a.el), b: name(b.el) })
+      }
+    }
+    return out
+  }
+
+  /* 見る画面。**押すものが縦に積まれるところ**を中心に並べる。
+     **画面を足したら、ここにも足す** —— 足すまで見張られない */
+  const SCREENS = [
+    ['tools', ''], ['form', ''], ['search', ''], ['qr', ''], ['qrrev', ''],
+    ['rscope', ''], ['wordbook', ''], ['mybook', ''], ['result', ''],
+    ['radio', ''], ['qrradio', ''], ['course', ''], ['basicpick', ''],
+    ['shelfpick', ''], ['speech', ''], ['gnote', ''], ['tabs', ''],
+    ['', 'role=trainer&who=g1'],
+  ]
+  const 見つかった = []
+  for (const [s, extra] of SCREENS) {
+    for (const w of [390, 1280]) {
+      const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+      page.setDefaultTimeout(8000)
+      page.setDefaultNavigationTimeout(8000)
+      await page.route('**/rest/v1/**', (r) => r.fulfill({
+        status: 200, contentType: 'application/json', body: '[]',
+      }))
+      await page.route('**/auth/v1/**', (r) => r.fulfill({
+        status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
+      }))
+      const q = s ? `?screen=${s}${extra ? `&${extra}` : ''}` : `?${extra}`
+      try {
+        await page.goto(`http://localhost:${PORT}/__bar.html${q}`,
+          { waitUntil: 'domcontentloaded' })
+        await page.waitForTimeout(600)
+        let hits = await page.evaluate(FIND, TOUCH_OK)
+        /* **畳んであるものを開いてから、もう一度測る。**
+           開いた箱(共有・絞り込み)は、閉じているあいだ測れない */
+        await page.evaluate(() => {
+          for (const d of document.querySelectorAll('details')) d.open = true
+          for (const b of document.querySelectorAll('button')) {
+            if (/共有|出しかた|分野をえらぶ/.test((b.textContent || '').trim())) b.click()
+          }
+        })
+        await page.waitForTimeout(400)
+        hits = hits.concat(await page.evaluate(FIND, TOUCH_OK))
+        for (const h of hits) {
+          見つかった.push(`${s || 'レッスン表示'}@${w}px  ${h.gap}px  ${h.a} ↕ ${h.b}`)
+        }
+      } catch (e) {
+        ng(`すき間 … ${s || 'レッスン表示'}@${w}px を描けなかった`,
+          e.message.split('\n')[0])
+      }
+      await page.close()
+    }
+  }
+  /** 同じ組は1回だけ言う(同じ指定が何画面にも出るため) */
+  const 一覧 = [...new Set(見つかった)]
+  if (一覧.length) {
+    ng(`すき間 … 別々の物が ${一覧.length} 組、すき間ゼロで接している`,
+      一覧.slice(0, 12).join('\n    '))
+  } else {
+    ok(`すき間 … ${SCREENS.length} 画面 × 2幅で、接している組は無い`)
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
