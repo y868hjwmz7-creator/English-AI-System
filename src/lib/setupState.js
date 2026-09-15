@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0060'
+export const NEWEST_MIGRATION = '0061'
 
 /**
  * その移行が入っているかを見る印。
@@ -88,8 +88,8 @@ export const NEWEST_MIGRATION = '0060'
  */
 export const NEWEST_MARK = {
   table: 'weakness_tags',
-  row: { column: 'id', value: 'inanimate-subject' },
-  label: '苦手タグの「無生物主語」と「名詞構文」',
+  row: { column: 'id', value: 'polite-phrasing' },
+  label: '苦手タグの「丁寧な言い回し」',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */

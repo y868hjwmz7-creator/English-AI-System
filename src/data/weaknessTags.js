@@ -152,6 +152,10 @@ export const weaknessTags = [
   { id: 'phrasal-verb',        category: 'expression', kind: 'weakness', label: '句動詞',          hint: 'put off / come up with / look into など' },
   { id: 'idiom',               category: 'expression', kind: 'weakness', label: 'イディオム',      hint: '直訳できない慣用表現' },
   { id: 'collocation',         category: 'expression', kind: 'weakness', label: 'コロケーション',  hint: '語の相性。make a decision(× do a decision)' },
+  // **丁寧さの段**(2026-09 利用者の指定・0061)。`fixed-phrase` とは軸が違う ——
+  // あちらは「定型を知っているか」、こちらは「その場に合う丁寧さで言えるか」。
+  // 巻末のレクチャー ③「やわらげる・提案する」が、そのままこの型である
+  { id: 'polite-phrasing',     category: 'expression', kind: 'weakness', label: '丁寧な言い回し', hint: 'ビジネスの丁寧さ。I was wondering if you could 〜 / Do you mind 〜ing? / Could you possibly 〜?' },
 
   // ── 単語(2026-08 に足した見出し)──────────────
   //   語そのものの問題。表現(言い回し)とは別に数える。

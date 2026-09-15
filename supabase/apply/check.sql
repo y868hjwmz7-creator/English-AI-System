@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   42行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   43行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -161,4 +161,7 @@ from (
   -- 表の有無で見ると**入っていないのに「もう入っています」と出る**
   union all select '0060 苦手タグに「無生物主語」「名詞構文」(pending_matome.sql)',
     exists (select 1 from public.weakness_tags where id = 'inanimate-subject'), 42
+  -- 0060 と同じく**表も列も増えない**ので、**その行が在るか**で見る
+  union all select '0061 苦手タグに「丁寧な言い回し」(pending_matome.sql)',
+    exists (select 1 from public.weakness_tags where id = 'polite-phrasing'), 43
 ) t order by 順;
