@@ -8548,40 +8548,25 @@ button.wbfilter-ctl { text-align: left; }
    素の `select` は実測 37px で、**押せる大きさ 40px を 3px 割っていた** */
 .shelfbuild select { min-height: 40px; }
 
-.shelfbooks-group { margin-top: var(--sp-10); }
-.shelfbooks-group > .field-label { margin-bottom: var(--sp-6); }
-/* **狭い画面では1列、広い画面では2列。**
-   分野の名前は短いが、覚え具合まで出ると1行が長くなる */
-.shelfbooks-list {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; gap: var(--sp-6);
-  grid-template-columns: 1fr;
-}
-@media (min-width: 700px) {
-  .shelfbooks-list { grid-template-columns: 1fr 1fr; }
-}
-/* **押せる大きさ(40px)を割らない。** 四角い印は小さいので、
-   行そのものを押せるようにする(`<label>` で囲む) */
-.shelfbook {
-  display: flex; align-items: center; gap: var(--sp-8);
-  min-height: 40px; padding: var(--sp-6) var(--sp-10);
-  border: 1px solid var(--border); border-radius: var(--r-8);
-  background: var(--btn-bg); cursor: pointer;
-  font-size: var(--fs-13);
-}
-/* **選んでいる印は、色だけに頼らない** ——
-   うすい地色 + 同じ色の文字 + 太字 + 四角い印の4つ */
-.shelfbook.is-on {
-  background: var(--accent-soft); border-color: var(--accent);
-  color: var(--accent); font-weight: 600;
-}
-.shelfbook > input { width: 18px; height: 18px; flex: 0 0 auto; }
-.shelfbook-name { flex: 1 1 auto; overflow-wrap: break-word; }
-.shelfbook-n, .shelfbook-done {
-  flex: 0 0 auto; font-size: var(--fs-11);
-  color: var(--text-secondary); font-variant-numeric: tabular-nums;
-}
-.shelfbook.is-on .shelfbook-n, .shelfbook.is-on .shelfbook-done { color: var(--accent); }
+/* **開く1冊は、プルダウンで選ぶ**(2026-09 利用者の指定)。
+
+     > こんなに沢山のチェックリストは必要ありません。アサインされた
+     > 業種のものだけがプルダウンで表示されれば十分です。
+     > ここはアサインするための場所ではないので。
+
+   0058 は四角い印を 35 個並べていた(`.shelfbook*`)。実機で見ると
+   画面が一覧で埋まり、しかも**ゲストに業種を割り当てる欄のように
+   見えた。** 欄ごと**道具ごと消してある**(値を偽にして残さない)。
+
+   **名前と欄は横に並べる**(`.field--inline`)。上下に積むと、
+   ただでさえ縦に長い単語帳がもう1行伸びる。
+   並べ方そのものは `.field--inline` が持っている —— **書き写さない。**
+
+   ここで足すのは、**欄が残りいっぱいを取ること**と
+   **押せる大きさ(40px)を割らないこと**の2つだけ
+   (素の `select` は実測 37px。`.shelfbuild select` と同じ話)。 */
+.shelfbooks-pick > .field-label { margin: 0; }
+.shelfbooks-pick > select { flex: 1 1 auto; min-width: 0; min-height: 40px; }
 
 /* ── 棚を作る画面(トレーナーだけ)──────────────────────
    **1語 = 1行。** 語・訳・品詞とレベル・例文・訳を縦に積む ——

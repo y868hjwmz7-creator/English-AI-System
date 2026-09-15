@@ -1,144 +1,102 @@
-import { useMemo, useState } from 'react'
 import { SHELF_GROUPS } from '../data/shelves.js'
-import { BookIcon } from './Icons.jsx'
 
 /**
- * **チェックを入れた分野だけを学ぶ**(0058・2026-09 利用者の指定)。
- *
- *   > 最終的にこうやって混ぜたくないんですよ。これは独立した単語帳に
- *   > したいんです。…チェックを入れた分野だけ単語が学べるようにしたいです
+ * **どの業種の単語帳を開くかを、プルダウンで選ぶ**(2026-09 利用者の指定)。
  *
  * ============================================================================
- * 【「追加する」ボタンは消えた】
+ *   > 自分の単語帳で業種別を選んだ際に、こんなに沢山のチェックリストは
+ *   > 必要ありません。アサインされた業種のものだけがプルダウンで
+ *   > 表示されれば十分です。ここはアサインするための場所ではないので。
+ *   > これはゲストの単語帳も同じ仕様にしてください。
+ *   > 単語帳については全て同じ仕様で
  *
- *   0057 の `ShelfPick` は、棚の語を**自分の単語帳へ入れる**欄だった。
- *   入れた瞬間に教材の語と混ざるので、**混ぜる道ごと消した**
- *   (`ShelfPick.jsx` はファイルごと消してある・CLAUDE.md
- *   「値を偽にせず、道具ごと消す」)。
+ * 【もとは 35 冊のチェックだった。経緯ごと残す】
  *
- *   いまここは**どの冊を開くかを選ぶだけ**である。
- *   選んだ棚の語は、そのまま下の復習に出る ——
- *   覚え具合は `shelf_reviews`(0058)に、**棚の側として**残る。
+ *   0058 では「**チェックを入れた分野**だけ単語が学べるように」という
+ *   利用者の言葉をそのまま形にし、四角い印を 35 個並べていた。
+ *   ところが実機で見ると、**お仕事 26 + 趣味 9 の一覧が画面を埋め**、
+ *   しかも**ゲストに業種を割り当てる欄のように見えた。**
  *
- * 【札ではなく、チェックにした】
+ *   割り当てるのは別の場所である(ゲスト → その人 → 単語帳)。
+ *   ここは**開く1冊を選ぶだけ**なので、プルダウン1つで足りる。
  *
- *   利用者の言葉が「**チェックを入れた分野**」である。
- *   しかも棚は 35 冊あり、**いくつも選ぶ**もの
- *   (札の「押している / 押していない」より、四角い印のほうが
- *   「複数えらべる」と分かる)。
+ * 【1冊ずつ開く】
+ *
+ *   プルダウンは1つしか選べない。**それでよい** ——
+ *   0057 の指定そのものが「**何冊も違う単語帳を持てる**ようにしてほしい」で、
+ *   本は1冊ずつ開くものである。混ぜないことがこの機能の要でもある。
+ *
+ * 【並ぶのは「その人に出してよい棚」だけ】
+ *
+ *   判断はここでしない。**`shelvesFor()`(`src/data/shelves.js`)1か所**が
+ *   済ませてある —— ゲストはトレーナーが指定した冊だけ、
+ *   トレーナーは 35 冊ぜんぶ(2026-09 利用者の指定
+ *   「トレーナーアカウントでは独立した単語帳として自由に学習できるように」)。
  *
  * 【自分では何も読まない】
  *
- *   語数も覚え具合も**呼ぶ側から受け取る**(`SpeechPractice` /
- *   `QrCard` と同じ「props で受け取る部品」)。
- *   自分で読みに行くと、**骨組み(Supabase 無し)では何も描かれず、
- *   描けないものは測れない。**
+ *   語数は**呼ぶ側から受け取る**(`SpeechPractice` / `QrCard` と同じ
+ *   「props で受け取る部品」)。自分で読みに行くと、
+ *   **骨組み(Supabase 無し)では何も描かれず、描けないものは測れない。**
+ *
+ * 【覚え具合は、ここには出さない】
+ *
+ *   すぐ下の3枚の札(まだ / 覚えかけ / 覚えた)が、
+ *   **いま開いている冊のぶんを出している。同じものを2か所に出さない。**
+ * ============================================================================
  */
 export default function ShelfBooks({
   /** 出してよい棚(`shelvesFor()` が決めたもの) */
   shelves = [],
   /** 棚ごとの語数 `{ [id]: n }`(`loadShelfCounts()`) */
   counts = {},
-  /** 棚ごとの覚え具合 `{ [id]: { learning, known } }`(`loadShelfProgress()`) */
-  progress = {},
-  /** チェックが入っている棚の id */
+  /** 開いている棚の id。**1冊だけ**(配列なのは、読む側と形をそろえるため) */
   picked = [],
   onPicked = null,
 }) {
-  /* **選んでいなければ開いておく。** 1冊も選んでいない状態で畳むと、
-     下に何も出ないまま「どうすればよいか」が画面から消える */
-  const [open, setOpen] = useState(picked.length === 0)
-
-  const total = useMemo(
-    () => picked.reduce((n, id) => n + (counts[id] ?? 0), 0),
-    [picked, counts],
-  )
-
-  const toggle = (id) => {
-    const next = picked.includes(id)
-      ? picked.filter((x) => x !== id)
-      : [...picked, id]
-    onPicked?.(next)
-  }
-
   /** **出す棚が1冊も無ければ、欄ごと出さない**(効かない操作を見せない) */
   if (!shelves.length) return null
 
+  /* **知らない id が残っていても、空に落ちる。**
+     `<select>` に無い値を渡すと、ブラウザは勝手に先頭を選ぶ ——
+     画面と中身が食い違うので、こちらで空へそろえる */
+  const now = shelves.some((s) => s.id === picked[0]) ? picked[0] : ''
+
   return (
     <div className="wb-add shelfbooks">
-      {/* **1冊も選んでいないときは、青くする**(2026-09 利用者の指定)。
-
-            > 全てのデザインから言葉による説明を省いてください。
-            > 目指すのは説明がない、直感的なUIです。
-
-          下に「上の『学ぶ分野をえらぶ』で…」と1行書いてあったが、
-          **その文はもう畳んである**(`tip`)。文を消したぶん、
-          **次に押すものが目で分かる形**にしておく ——
-          押すところが1つしか無いのだから、そこが青ければ迷わない
-          (**行き止まりを作らない**・CLAUDE.md)。 */}
-      <button type="button"
-              className={`btn btn--small wb-add-open${picked.length ? ' btn--ghost' : ' btn--primary'}`}
-              aria-expanded={open}
-              onClick={() => setOpen((v) => !v)}>
-        <BookIcon />
-        {picked.length
-          ? `学ぶ分野(${picked.length} 分野 / ${total} 語)`
-          : `学ぶ分野をえらぶ(${shelves.length} 分野)`}
-      </button>
-
-      {open && (
-        <div className="wb-add-body">
-          <p className="tip basicpick-lead">
-            チェックを入れた分野の語だけを練習します。
-            <strong>自分の単語帳とは混ざりません。</strong>
-            覚え具合は、この単語帳の側に残ります。
-          </p>
-
+      {/* **名前と欄を横に並べる決まりは、もう在る**(`.field--inline`)。
+          ここで書き写さない —— 写すと、あちらを直したときに古くなる */}
+      <label className="field field--inline shelfbooks-pick">
+        <span className="field-label">学ぶ分野</span>
+        <select className="input" value={now}
+                onChange={(e) => onPicked?.(e.target.value ? [e.target.value] : [])}>
+          {/* **1冊も開いていない状態を、選べるようにしておく。**
+              閉じる道が無いと、一度開いたら戻せない(行き止まりを作らない) */}
+          <option value="">分野をえらぶ({shelves.length} 分野)</option>
           {SHELF_GROUPS.map((g) => {
             const list = shelves.filter((s) => s.group === g.id)
+            /* **その組の棚が1つも無ければ、見出しごと出さない。**
+               ゲストにはお仕事しか出ていないことがある */
             if (!list.length) return null
             return (
-              <div key={g.id} className="shelfbooks-group">
-                <p className="field-label">{g.label}</p>
-                <ul className="shelfbooks-list">
-                  {list.map((s) => {
-                    const n = counts[s.id] ?? 0
-                    const p = progress[s.id] ?? null
-                    return (
-                      <li key={s.id}>
-                        <label className={`shelfbook${picked.includes(s.id) ? ' is-on' : ''}`}>
-                          <input type="checkbox"
-                                 checked={picked.includes(s.id)}
-                                 onChange={() => toggle(s.id)} />
-                          <span className="shelfbook-name">{s.label}</span>
-                          {/* **まだ空の棚も出す。** 隠すと「なぜ出ないのか」が
-                              分からない。トレーナーが作るまで 0 語である */}
-                          <span className="shelfbook-n">{n} 語</span>
-                          {p && (p.learning > 0 || p.known > 0) && (
-                            <span className="shelfbook-done">
-                              覚えかけ {p.learning} / 覚えた {p.known}
-                            </span>
-                          )}
-                        </label>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
+              <optgroup key={g.id} label={g.label}>
+                {list.map((s) => (
+                  /* **まだ空の棚も出す。** 隠すと「なぜ出ないのか」が
+                     分からない。トレーナーが作るまで 0 語である */
+                  <option key={s.id} value={s.id}>
+                    {s.label}({counts[s.id] ?? 0} 語)
+                  </option>
+                ))}
+              </optgroup>
             )
           })}
-
-          {/* **外す道を、その場に置く**(1つずつ外して回らせない) */}
-          {picked.length > 0 && (
-            <div className="btn-row">
-              <button type="button" className="btn btn--ghost btn--small"
-                      onClick={() => onPicked?.([])}>
-                チェックをぜんぶ外す
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        </select>
+      </label>
+      <p className="tip basicpick-lead">
+        えらんだ分野の語だけを練習します。
+        <strong>自分の単語帳とは混ざりません。</strong>
+        覚え具合は、この単語帳の側に残ります。
+      </p>
     </div>
   )
 }

@@ -4446,10 +4446,22 @@ console.log('\nスピーチ練習(0054)')
   const pickS = noCS(readS('src/components/ShelfBooks.jsx'))
   ok(/if \(!shelves\.length\) return null/.test(pickS),
     '棚 … 出す棚が無ければ、欄ごと出さない')
-  ok(/type="checkbox"/.test(pickS),
-    '棚 … 分野は「チェックを入れる」形にする(利用者の言葉そのまま)')
+  /* **2026-09 にチェックの一覧からプルダウンへ改めた**(利用者の指定)。
+       > こんなに沢山のチェックリストは必要ありません。アサインされた
+       > 業種のものだけがプルダウンで表示されれば十分です。
+     **「プルダウンか」だけを見ない** —— チェックが残っていないことも数える */
+  ok(/<select /.test(pickS) && /<optgroup /.test(pickS),
+    '棚 … 分野はプルダウンで選ぶ(お仕事 / 趣味に分ける)')
+  ok(!/type="checkbox"/.test(pickS),
+    '棚 … 35個のチェックは、道具ごと消してある(値を偽にして残さない)')
+  ok(/<option value="">/.test(pickS),
+    '棚 … 「分野をえらぶ」に戻せる(**行き止まりを作らない**)')
   ok(!/loadShelfWords|loadShelfCounts|supabase/.test(pickS),
     '棚 … `ShelfBooks` は自分では読まない(props で受け取る部品)')
+  /* **1冊だけの人には、開いてある**(選択肢が1つのプルダウンを
+     選ばせるのは、押す回数が1つ増えるだけ)。判断は `Wordbook` の1か所 */
+  ok(/if \(!next\.length && shelves\.length === 1\) next = \[shelves\[0\]\.id\]/.test(wbS),
+    '棚 … 出せる冊が1つしかなければ、それを開く')
 
   /* ── チェックの控え ── */
   ok(pickedShelves(['it', 'nope', 'it'], list).join() === 'it',
@@ -4762,12 +4774,15 @@ console.log('\nスピーチ練習(0054)')
 
   /* ⑤ 利用者が名指ししたものは、本当に畳んである */
   const wb = readS('src/components/Wordbook.jsx')
-  ok(/className="tip hint">\s*\n\s*上の「学ぶ分野をえらぶ」/.test(wb),
-    '説明の文 … 「上の『学ぶ分野をえらぶ』で…」を畳んである')
+  ok(/className="tip hint">\s*\n\s*上の「学ぶ分野」/.test(wb),
+    '説明の文 … 「上の『学ぶ分野』で…」を畳んである')
   /* **文を畳んだぶん、形で言う**(行き止まりを作らない) */
   const sb = noCS(readS('src/components/ShelfBooks.jsx'))
-  ok(/picked\.length \? ' btn--ghost' : ' btn--primary'/.test(sb),
-    '説明の文 … 1冊も選んでいないあいだ、えらぶボタンが青い')
+  /* **青いボタンは、もう無い**(2026-09 にプルダウンへ改めた)。
+     形で言う役目は**プルダウンそのもの**が引き継いでいる ——
+     押すところが1つしか無く、選んでいなければ「分野をえらぶ」と出る */
+  ok(/<option value="">分野をえらぶ/.test(sb),
+    '説明の文 … 1冊も選んでいなければ、欄が「分野をえらぶ」と言う')
   ok(/className="tip basicpick-lead"/.test(sb),
     '説明の文 … 棚のえらび方の説明も畳んである')
 

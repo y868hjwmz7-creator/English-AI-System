@@ -937,23 +937,22 @@ const BASICPICK = (
      > 何冊も違う単語帳を持てるようにしてほしいんです。…
      > 「自分の単語帳に追加する」みたいのを押したものだけ
 
-   **本物の部品を描いて測る。** 畳んだときに札が0個か・開いたら
-   35冊のプルダウンが出るか・押せる大きさ・はみ出しは、
+   **本物の部品を描いて測る。** 選択肢が 35 冊そろっているか・
+   お仕事と趣味に分かれているか・押せる大きさ・はみ出しは、
    ソースを読んでも分からない。
 
    Supabase が無いので `loadShelfWords()` は空を返す ——
-   **外へは1度も出ない。** ここで見るのは、開いたときの姿である。
+   **外へは1度も出ない。**
 
    **わざと `shelves` をぜんぶ渡してある** —— 1冊だけにすると、
    プルダウンが横に伸びないので**はみ出しを見逃す。** */
 const SHELFPICK = (
   <section className="card">
-    {/* **語数と覚え具合は props で渡す**(0058)。
+    {/* **語数は props で渡す**(0058)。
         `ShelfBooks` は自分では何も読まない部品なので、
         Supabase の無い骨組みでも**そのまま描ける** */}
     <ShelfBooks shelves={shelfList()}
                 counts={Object.fromEntries(shelfList().map((s, i) => [s.id, 12 * (i % 5)]))}
-                progress={{ it: { learning: 3, known: 1 } }}
                 picked={q.get('picked') === 'none' ? [] : ['it']}
                 onPicked={() => {}} />
   </section>

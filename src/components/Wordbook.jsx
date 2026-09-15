@@ -70,7 +70,7 @@ import BasicWordsPick from './BasicWordsPick.jsx'
 import ShelfBooks from './ShelfBooks.jsx'
 import { loadShelfPick, pickedShelves, saveShelfPick } from '../data/shelves.js'
 import { loadShelfCounts } from '../lib/shelfWords.js'
-import { loadShelfProgress, loadShelfWordbook, setShelfWordStatus } from '../lib/shelfReviews.js'
+import { loadShelfWordbook, setShelfWordStatus } from '../lib/shelfReviews.js'
 import SpeechWordsPick from './SpeechWordsPick.jsx'
 import { basicJaOf, basicPosOf, wordsForTier } from '../lib/basicsCourse.js'
 import { COURSE_TIERS, loadBasicTier, saveBasicTier, tierOf } from '../data/basicsCourse.js'
@@ -470,8 +470,6 @@ export default function Wordbook({
   const [shelfPick, setShelfPick] = useState(() => loadShelfPick(shelves))
   /** 棚ごとの語数(棚そのもの・誰のものでもない) */
   const [shelfCounts, setShelfCounts] = useState({})
-  /** 棚ごとの覚え具合(その人のぶん) */
-  const [shelfProg, setShelfProg] = useState({})
   const shelfKey = shelfPick.join('\u0000')
   /** 出してよい棚。**見張りには id をつないだ文字列を渡す**(配列は毎回別物) */
   const shelfIds = shelves.map((s) => s.id).join(' ')
@@ -483,7 +481,13 @@ export default function Wordbook({
   useEffect(() => {
     setShelfPick((v) => {
       const base = v.length ? v : loadShelfPick(shelves)
-      const next = pickedShelves(base, shelves)
+      let next = pickedShelves(base, shelves)
+      /* **出せる冊が1つしかなければ、それを開く**(2026-09)。
+         ゲストには、たいていトレーナーが1冊だけ指定する。
+         選択肢が1つしか無いプルダウンを選ばせるのは、
+         **押す回数が1つ増えるだけ**である(行き止まりを作らない)。
+         **覚えはしない** —— 指定が増えた日には、そちらが勝つ */
+      if (!next.length && shelves.length === 1) next = [shelves[0].id]
       return next.join(' ') === v.join(' ') ? v : next
     })
   }, [shelfIds])
@@ -536,20 +540,23 @@ export default function Wordbook({
        上限で切るので、1,200 語ある基礎単語では**段の後ろが丸ごと
        「まだ」に見える。** */
     if (shelfBook || basicBook) {
-      const [pack, tally, wk, aim, prog] = await Promise.all([
+      const [pack, tally, wk, aim] = await Promise.all([
         shelfBook
           ? loadShelfWordbook({ learnerId, shelves: shelfPick })
           : loadBasicWordbook({ learnerId, tier }),
-        /* 棚の語数と覚え具合は、**チェックの欄に出すためだけ**のもの。
-           基礎単語には棚が無いので読みに行かない(問い合わせを増やさない) */
+        /* 棚の語数は、**プルダウンの選択肢に出すためだけ**のもの。
+           基礎単語には棚が無いので読みに行かない(問い合わせを増やさない)。
+
+           **覚え具合はもう読まない**(2026-09 利用者の指定でプルダウンに
+           したとき、棚ごとの覚え具合を出す場所が無くなった)。
+           いま開いている冊のぶんは、**すぐ下の3枚の札**が出している ——
+           **同じものを2か所に出さない。** */
         shelfBook ? loadShelfCounts() : Promise.resolve({ data: null }),
         loadVocabWeek(learnerId),
         loadWeeklyGoal(learnerId),
-        shelfBook ? loadShelfProgress(learnerId) : Promise.resolve({ data: null }),
       ])
       setLoading(false)
       if (tally.data) setShelfCounts(tally.data)
-      if (prog.data) setShelfProg(prog.data)
       if (wk.data) setWeek(wk.data)
       if (aim.data) setGoal(aim.data)
       if (pack.error) { setError(pack.error.message ?? String(pack.error)); return }
@@ -1179,12 +1186,16 @@ export default function Wordbook({
         </>
       )}
 
-      {/* **チェックを入れた分野だけを学ぶ**(0058・利用者の指定)。
+      {/* **開く1冊を、プルダウンで選ぶ**(2026-09 利用者の指定)。
+            > こんなに沢山のチェックリストは必要ありません。アサインされた
+            > 業種のものだけがプルダウンで表示されれば十分です。
+            > ここはアサインするための場所ではないので。
+
           棚は 35 冊・語は1万を超えるので、**ぜんぶを一度に開かない。**
-          語数も覚え具合も、ここが読むのではなく**渡す**
+          語数は、ここが読むのではなく**渡す**
           (`ShelfBooks` は props で受け取るだけの部品) */}
       {shelfBook && (
-        <ShelfBooks shelves={shelves} counts={shelfCounts} progress={shelfProg}
+        <ShelfBooks shelves={shelves} counts={shelfCounts}
                     picked={shelfPick}
                     onPicked={(ids) => {
                       setShelfPick(ids)
@@ -1198,11 +1209,12 @@ export default function Wordbook({
 
           **ただし、既定では畳んである**(`tip`・2026-09 利用者の指定)。
           利用者が**この1行を名指しで**挙げたためである。
-          代わりに、上の「学ぶ分野をえらぶ」が**1冊も選んでいないあいだ
-          青くなる**(`ShelfBooks`)。**文を消したぶん、形で言う。** */}
+          文を消したぶんは**形で言う** —— すぐ上のプルダウンが
+          「分野をえらぶ」と出ており、**押すところはそこ1つ**しかない。
+          (1冊しか出せない人には、`Wordbook` がそれを開いてある) */}
       {shelfBook && !shelfPick.length && (
         <p className="tip hint">
-          上の「学ぶ分野をえらぶ」で、練習したい分野にチェックを入れてください。
+          上の「学ぶ分野」で、練習したい分野をえらんでください。
         </p>
       )}
 

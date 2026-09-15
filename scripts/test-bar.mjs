@@ -4197,65 +4197,68 @@ export default defineConfig({
        > 「自分の単語帳に追加する」みたいのを押したものだけ
        > 自分の単語帳に追加されてほしいんです。
 
-     **描かないと分からないこと**を測る ——
-     ①畳んだときに欄が1つも出ていないか
-     ②開くと棚のプルダウンが出て、**35冊そろっているか**
-     ③押せる大きさを割っていないか ④横にはみ出していないか
+     **2026-09 に、チェックの一覧をプルダウンへ改めた**(利用者の指定)。
 
-     **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
-     Supabase が無いので棚の中身は読めない —— **描けないものは測れない**
-     ので、ここで見るのは**開いたときの姿**だけである。
+       > こんなに沢山のチェックリストは必要ありません。アサインされた
+       > 業種のものだけがプルダウンで表示されれば十分です。
+       > ここはアサインするための場所ではないので。
+
+     **描かないと分からないこと**を測る ——
+     ①**35冊が選択肢にそろっているか**(+「分野をえらぶ」)
+     ②お仕事と趣味・娯楽に分かれているか
+     ③いま開いている冊が選ばれているか
+     ④押せる大きさ(40px)を割っていないか ⑤横にはみ出していないか
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+     **前のチェックの一覧(`.shelfbook`)が残っていないか**も数える。
      ══════════════════════════════════════════════════════════════════ */
   for (const w of [1280, 390, 320]) {
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfpick`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(250)
-    /* **1分野えらんだ状態で開く**(`__screens.jsx`)ので、
-       はじめは畳んでいる。**「出る」と「出ない」の両方を見る** */
-    const 畳 = await page.evaluate(() => ({
-      欄: document.querySelectorAll('.shelfbook').length,
-      入口: document.querySelector('.shelfbooks .wb-add-open')?.textContent.trim() ?? '',
-    }))
-    await page.click('.shelfbooks .wb-add-open')
-    await page.waitForTimeout(250)
     const got = await page.evaluate(() => {
-      const box = [...document.querySelectorAll('.shelfbook')]
-      const px = (el) => Math.round(el.getBoundingClientRect().height)
-      const right = (el) => Math.round(el.getBoundingClientRect().right)
+      const sel = document.querySelector('.shelfbooks select')
+      if (!sel) return null
+      const r = sel.getBoundingClientRect()
       return {
-        冊: box.length,
-        印: box.filter((b) => b.querySelector('input[type="checkbox"]')).length,
-        組: [...document.querySelectorAll('.shelfbooks-group > .field-label')]
-          .map((p) => p.textContent.trim()),
-        入り: box.filter((b) => b.querySelector('input')?.checked).length,
-        低い: Math.min(...box.map(px)),
+        冊: sel.querySelectorAll('optgroup option').length,
+        空: (sel.querySelector('option[value=""]')?.textContent ?? '').trim(),
+        組: [...sel.querySelectorAll('optgroup')].map((g) => g.label),
+        いま: sel.value,
+        名: (sel.selectedOptions[0]?.textContent ?? '').trim(),
+        高さ: Math.round(r.height),
+        右: Math.round(r.right),
+        // **前のチェックの一覧が残っていないか**(道具ごと消してある)
+        古い: document.querySelectorAll('.shelfbook, .shelfbooks-list').length,
         よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        右: Math.max(...box.map(right)),
       }
     })
     await page.close()
     const 名 = `棚(${w}px)`
-    if (畳.欄 !== 0) {
-      ng(`${名} … 畳んでいるのに、分野の欄が出ている`, String(畳.欄))
-    } else if (!畳.入口.includes('学ぶ分野')) {
-      ng(`${名} … 畳んだ入口に名前が出ていない`, 畳.入口)
+    if (!got) {
+      ng(`${名} … プルダウンが描かれない`)
+    } else if (got.古い !== 0) {
+      ng(`${名} … チェックの一覧が残っている`,
+        '2026-09 にプルダウンへ改めた。**値を偽にせず、道具ごと消す**')
     } else if (got.冊 !== 35) {
       // **分野を足せば棚も1冊増える。** 数が変わったら、ここも直す
       ng(`${名} … 棚が35冊そろっていない`, String(got.冊))
-    } else if (got.印 !== 35) {
-      ng(`${名} … チェックの印が無い分野がある`, String(got.印))
+    } else if (!got.空.includes('分野をえらぶ')) {
+      ng(`${名} … 「分野をえらぶ」が無い`,
+        '一度開いたら戻せなくなる(**行き止まりを作らない**)')
     } else if (got.組.length !== 2
       || !got.組.includes('お仕事') || !got.組.includes('趣味・娯楽')) {
       ng(`${名} … お仕事と趣味・娯楽に分かれていない`, got.組.join(' / '))
-    } else if (got.入り !== 1) {
-      ng(`${名} … チェックが入っている分野の数が合わない`, String(got.入り))
-    } else if (got.低い < 40) {
-      ng(`${名} … 押せる大きさを割っている`, String(got.低い))
+    } else if (got.いま !== 'it' || !got.名.includes('語')) {
+      ng(`${名} … いま開いている冊が選ばれていない(${got.いま} / ${got.名})`,
+        '選択肢には語数も出す(0 語なら、まだ空の棚だと分かる)')
+    } else if (got.高さ < 40) {
+      ng(`${名} … 押せる大きさを割っている`, String(got.高さ))
     } else if (got.よこ > 0 || got.右 > w) {
       ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
     } else {
-      ok(`${名} … 畳めて、開けば35冊が2組に分かれてチェックできる`)
+      ok(`${名} … 35冊が2組に分かれたプルダウン1つ(${got.高さ}px)`)
     }
   }
 
@@ -4326,14 +4329,14 @@ export default defineConfig({
         if (((await b.textContent()) ?? '').includes('業種べつ')) { await b.click(); break }
       }
       await page.waitForTimeout(300)
-      const open = await page.$('.shelfbooks .wb-add-open[aria-expanded="false"]')
-      if (open) { await open.click(); await page.waitForTimeout(250) }
+      /* **プルダウンで数える**(2026-09 にチェックの一覧から改めた)。
+         トレーナーには 35 冊ぜんぶが並ぶ —— これは利用者の指定である
+         (「トレーナーアカウントでは…自由に学習できるようにして下さい」) */
       開 = await page.evaluate(() => {
-        const box = [...document.querySelectorAll('.shelfbook')]
+        const sel = document.querySelector('.shelfbooks select')
         return {
-          冊: box.length,
-          低い: box.length
-            ? Math.min(...box.map((b) => Math.round(b.getBoundingClientRect().height))) : 0,
+          冊: sel ? sel.querySelectorAll('optgroup option').length : 0,
+          低い: sel ? Math.round(sel.getBoundingClientRect().height) : 0,
           よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         }
       })
@@ -4794,7 +4797,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
    「いつでも消す」に書き換えても緑のまま**になり、
    戻す道が死んでいることに気づけない。
    ①既定で1つも見えないか ②オンにすると本当に出るか
-   ③**文を畳んだぶん、形で言えているか**(えらぶボタンが青い)を
+   ③**文を畳んだぶん、形で言えているか**(えらぶ欄が読めるか)を
    いつも一緒に数える。
    ══════════════════════════════════════════════════════════════════ */
 {
@@ -4806,8 +4809,6 @@ for (const W of [1280, 794, 453, 390, 320]) {
     { waitUntil: 'networkidle' })
   await page.evaluate(() => { try { localStorage.removeItem('eas.tips') } catch { /* 端末が断ることがある */ } })
   await page.reload({ waitUntil: 'networkidle' })
-  await page.waitForTimeout(200)
-  await page.click('.shelfbooks .wb-add-open')
   await page.waitForTimeout(200)
   const 既定 = await page.evaluate(() => {
     const all = [...document.querySelectorAll('.tip')]
@@ -4822,8 +4823,6 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await page.evaluate(() => { try { localStorage.setItem('eas.tips', 'on') } catch { /* 同上 */ } })
   await page.reload({ waitUntil: 'networkidle' })
   await page.waitForTimeout(200)
-  await page.click('.shelfbooks .wb-add-open')
-  await page.waitForTimeout(200)
   const オン = await page.evaluate(() => {
     const all = [...document.querySelectorAll('.tip')]
     const み = all.filter((el) => el.checkVisibility())
@@ -4834,19 +4833,23 @@ for (const W of [1280, 794, 453, 390, 320]) {
     }
   })
 
-  /* ③ 文を畳んだぶん、形で言う(1冊も選んでいなければ青)。
+  /* ③ 文を畳んだぶん、形で言う —— **えらぶ欄が読めるか。**
 
-       **「青い」だけを見ない**(2026-09 実機)。
+       **「そこに在るか」だけを見ない**(2026-09 実機)。
 
          > 業種別単語帳のボタンが真っ青です
 
-       `.wb-add-open { color: var(--accent) }` が `.btn--primary` より
-       **あとに書いてあって重さが同じ**だったので、青い地に青い文字になり、
-       **絵ごと消えてただの青い板**になっていた。ところがこの検証は
-       **`className` に `btn--primary` が入っているか**しか見ていないので、
-       **ずっと緑のまま**だった ——「名前が出てくるか」で見ない、の色の版。
+       あのときは `.wb-add-open { color: var(--accent) }` が
+       `.btn--primary` より**あとに書いてあって重さが同じ**だったので、
+       青い地に青い文字になり、**絵ごと消えてただの青い板**になっていた。
+       ところが検証は **`className` に `btn--primary` が入っているか**しか
+       見ていなかったので、**ずっと緑のまま**だった ——
+       「名前が出てくるか」で見ない、の色の版である。
 
-       だから**描いて、地との差を測る。** 明るい側と暗い側の両方
+       **青いボタンそのものは、もう無い**(2026-09 にプルダウンへ改めた)。
+       **測り方だけを引き継ぐ** —— いま押すところは
+       `.shelfbooks select` 1つなので、**その字が地に沈んでいないか**を
+       明るい側と暗い側の両方で測る
        (CLAUDE.md「確認は明るい・暗いの両方で行う」)。 */
   await page.evaluate(() => { try { localStorage.removeItem('eas.tips') } catch { /* 同上 */ } })
   const 青 = {}
@@ -4858,7 +4861,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
       await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), 配色)
       await page.waitForTimeout(80)
       const m = await page.evaluate(() => {
-        const el = document.querySelector('.shelfbooks .wb-add-open')
+        const el = document.querySelector('.shelfbooks select')
         if (!el) return null
         const 明 = (c) => {
           const [r, g, b] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
@@ -4906,18 +4909,14 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ng('説明の文 … オンにしても印が付かない', String(オン.印))
   } else if (オン.見える === 0) {
     ng('説明の文 … オンにしても出てこない(戻す道が死んでいる)')
-  } else if (!オン.文.includes('チェックを入れた分野')) {
+  } else if (!オン.文.includes('えらんだ分野')) {
     ng('説明の文 … オンで出たのが、その欄の説明ではない', オン.文)
-  } else if (!/btn--primary/.test(青.無し) || /btn--ghost/.test(青.無し)) {
-    ng('説明の文 … 1冊も選んでいないのに、えらぶボタンが青くない', 青.無し)
-  } else if (!/btn--ghost/.test(青.有り) || /btn--primary/.test(青.有り)) {
-    ng('説明の文 … 選んだあとも、えらぶボタンが青いまま', 青.有り)
   } else if (読めない.length) {
-    ng('説明の文 … えらぶボタンの字が、地に沈んで読めない',
-      `${読めない.join(' / ')}。青い地に青い字を当てていないか`)
+    ng('説明の文 … えらぶ欄の字が、地に沈んで読めない',
+      `${読めない.join(' / ')}。地と同じ色を当てていないか`)
   } else {
     ok(`説明の文 ${W}px … 既定は 0 / ${既定.在る} 個・オンで ${オン.見える} 個・`
-      + `1冊も無いあいだはえらぶボタンが青く、字も読める`
+      + `えらぶ欄の字が読める`
       + `(明 ${青['無し:light']?.差} / 暗 ${青['無し:dark']?.差})`)
   }
 }
