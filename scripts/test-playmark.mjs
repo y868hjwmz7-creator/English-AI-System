@@ -4379,46 +4379,58 @@ console.log('\nスピーチ練習(0054)')
     && shelfIdOfFeature(null) === null,
     '棚 … 別の名前・棚でないものは `null`')
 
-  /* ── 出し分け(4とおり)──
-     **既定は「出さない」**(`showsBasics()` とまったく同じ作法) */
-  ok(showsShelf({ role: 'trainer', features: null }, 'it'),
-    '棚 … トレーナーには、ぜんぶ出す')
-  ok(showsShelf({ role: 'owner', features: null }, 'it'),
-    '棚 … 管理者にも、ぜんぶ出す')
+  /* ── 出し分け ── **誰でも「出された冊だけ」**(0059・方針の変更)
+
+       > その代わり、業種別単語帳のページではトレーナーは
+       > 自分自身にアサイン出来るように改良してください。
+
+     もとは「**ゲスト以外にはぜんぶ出す**」だった。利用者が改めたので、
+     **役割を見ないこと**そのものを数える —— さもないと、
+     どこかに `role === 'learner'` を書き戻しても緑のままになる。 */
+  ok(!showsShelf({ role: 'trainer', features: new Set() }, 'it'),
+    '棚 … トレーナーにも、出していなければ出さない(0059・方針の変更)')
+  ok(!showsShelf({ role: 'owner', features: new Set() }, 'it'),
+    '棚 … 管理者にも、出していなければ出さない')
+  ok(showsShelf({ role: 'trainer', features: new Set(['shelf:it']) }, 'it'),
+    '棚 … トレーナーは、自分に出した冊が開ける')
   ok(!showsShelf({ role: 'learner', features: new Set() }, 'it'),
     '棚 … ゲストには、入れていなければ出さない')
   ok(showsShelf({ role: 'learner', features: new Set(['shelf:it']) }, 'it'),
     '棚 … ゲストには、トレーナーが入れた棚だけ出す')
+  /* **役割で分かれていないこと**を、同じ `features` で突き合わせる。
+     どちらかだけを見ると、片側に書き戻しても気づけない */
+  ok(showsShelf({ role: 'trainer', features: new Set(['shelf:it']) }, 'it')
+    === showsShelf({ role: 'learner', features: new Set(['shelf:it']) }, 'it')
+    && showsShelf({ role: 'trainer', features: new Set() }, 'it')
+    === showsShelf({ role: 'learner', features: new Set() }, 'it'),
+    '棚 … 役割では分けない(出すかどうかは `learner_features` だけが決める)')
   ok(!showsShelf({ role: null, features: null }, 'it'),
-    '棚 … 役割が分からないうちは出さない(既定は出さない)')
-  ok(!showsShelf({ role: 'trainer', features: null }, 'medical'),
+    '棚 … 読めていないうちは出さない(既定は出さない)')
+  ok(!showsShelf({ features: new Set(['shelf:medical']) }, 'medical'),
     '棚 … 棚でないものは、誰にも出さない')
-  ok(shelvesFor({ role: 'learner', features: new Set(['shelf:it']) }).length === 1,
+  ok(shelvesFor({ features: new Set(['shelf:it']) }).length === 1,
     '棚 … その人に出す棚だけを並べる(画面で `filter` を書き写さない)')
-  ok(shelvesFor({ role: 'trainer', features: null }).length === list.length,
-    '棚 … トレーナーには全冊が並ぶ')
-  /* **トレーナーには、指定が要らない**(2026-09 利用者の指定)。
-
-       > これらの単語帳はトレーナーアカウントでは独立した単語帳として
-       > 自由に学習できるようにして下さい。
-
-     上の2行は `features: null`(まだ読めていない)で見ているので、
-     **「読めていないから素通りしているだけ」でも緑になる。**
-     1つも入っていない `Set` を渡して、**指定そのものを見ていない**ことを
-     確かめる —— ゲストはここで0冊になる(すぐ下)。 */
-  ok(shelvesFor({ role: 'trainer', features: new Set() }).length === list.length,
-    '棚 … トレーナーは、1冊も指定されていなくても全冊を開ける')
-  ok(shelvesFor({ role: 'owner', features: new Set() }).length === list.length,
-    '棚 … 管理者も、指定なしで全冊を開ける')
+  ok(shelvesFor({ role: 'trainer', features: new Set() }).length === 0,
+    '棚 … トレーナーも、1冊も出していなければ0冊')
+  ok(shelvesFor({ role: 'owner', features: new Set() }).length === 0,
+    '棚 … 管理者も同じ(指定なしで全冊にしない)')
   ok(shelvesFor({ role: 'learner', features: new Set() }).length === 0,
-    '棚 … ゲストは、指定が無ければ0冊(トレーナーと同じにしない)')
+    '棚 … ゲストは、指定が無ければ0冊')
+  ok(list.length > 0
+    && shelvesFor({ features: new Set(list.map((s) => `shelf:${s.id}`)) }).length
+      === list.length,
+    '棚 … ぜんぶ出せば、ぜんぶ並ぶ(絞りすぎていない)')
 
   /* ── 画面が本当に呼んでいるか ──
      **「名前が出てくるか」で見ない**(CLAUDE.md)。
      説明の中にも同じ言葉があるので、**使っている形**で見る */
   const appS = noCS(readS('src/App.jsx'))
-  ok(/shelvesFor\(\{ role:/.test(appS),
+  ok(/shelvesFor\(\{ features \}\)/.test(appS),
     '棚 … `App.jsx` が `shelvesFor()` で出し分けている')
+  /* **役割を渡し戻していないか。** 渡すと、判断そのものは1か所のままでも
+     「トレーナーだけ別」を書き足す下地に戻る */
+  ok(!/shelvesFor\(\{\s*role:/.test(appS),
+    '棚 … `App.jsx` は `shelvesFor()` に役割を渡していない(0059)')
   ok(/shelves=\{myShelves\}/.test(appS),
     '棚 … 単語帳に、その人の棚を渡している')
   ok(!/'shelf:'\s*\+/.test(appS), '棚 … 画面で名前を組み立てていない')
@@ -4590,10 +4602,12 @@ console.log('\nスピーチ練習(0054)')
   ok(/drop function if exists public\.add_shelf_words/.test(matome),
     '棚 … まとめた1つが、混ぜる関数を落としている')
   ok(/shelf_reviews/.test(check), '棚 … `check.sql` に 0058 の行がある')
-  const setup = readS('src/lib/setupState.js')
-  ok(/NEWEST_MIGRATION = '0058'/.test(setup)
-    && /table: 'shelf_reviews'/.test(setup),
-    '棚 … 画面の印が 0058 を見ている')
+  /* **「画面の印が 0058 を見ている」は、ここに書かない。**
+     移行を1つ足すたびに**この行だけが古くなる**(実際、0059 で赤くなった)。
+     印がいちばん新しい移行にそろっているかは、
+     **`supabase/migrations/` を読む ⑫ が数えている** ——
+     あちらは番号を書き写していないので、足しても古びない。
+     **同じことを2か所で数えない**(CLAUDE.md) */
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -4619,8 +4633,54 @@ console.log('\nスピーチ練習(0054)')
 
   ok(/loadFeatureLearners\(shelfFeature\(shelf\)\)/.test(build),
     '単語帳を出す … 作る画面が、いま誰に出しているかを引いている')
-  ok(/await setLearnerFeature\(learner\.id, feat, next\)/.test(build),
+  ok(/await setLearnerFeature\(who\.id, feat, next/.test(build),
     '単語帳を出す … 作る画面が、出す / 出さないを決められる')
+
+  /* ── **自分自身にも出せる**(0059・2026-09 利用者の指定)──
+
+       > その代わり、業種別単語帳のページではトレーナーは
+       > 自分自身にアサイン出来るように改良してください。
+
+     **「自分が並ぶか」だけを見ない** —— 並べただけで
+     ①窓口に自分と伝えていない ②出したあと読み直させていない
+     のどれでも、**画面は普通に出るので気づけない。** */
+  ok(/\{ id: me\.id, display_name: '自分', self: true \}/.test(build),
+    '自分に出す … 出す相手の先頭に自分が並ぶ(`loadMyLearners()` に自分は入らない)')
+  ok(/setLearnerFeature\(who\.id, feat, next, \{ self: !!who\.self \}\)/.test(build),
+    '自分に出す … 自分のぶんだと窓口に伝える(断り方を読み替えるため)')
+  ok(/if \(who\.self\) onSelfChange\?\.\(\)/.test(build),
+    '自分に出す … 出したら、その場で読み直させる(次に開くまで増えない、を防ぐ)')
+  /* **`App.jsx` が渡しているか。** 受け取る側だけでは何も起きない */
+  const app59 = noCS(readS('src/App.jsx'))
+  ok(/<ShelfBuilder me=\{profile\} onSelfChange=\{reloadFeatures\} \/>/.test(app59),
+    '自分に出す … `App.jsx` が自分と読み直しを渡している')
+  ok(/loadLearnerFeatures\(\)\.then\(\(r\) => setFeatures\(r\.data\)/.test(app59),
+    '自分に出す … 読み直すと `features` が入れ替わる')
+  /* **0059 より前の断りを、そのまま出さない**(CLAUDE.md
+     「そのまま出すと誤診させる」)。自分の担当かどうかを疑わせない */
+  ok(/このゲストの担当ではありません/.test(feats)
+    && /0059/.test(feats),
+    '自分に出す … 窓口が古いときは「0059 がまだ」と読み替える')
+  /* **貼る SQL がそろっているか。** 移行だけ書いてまとめた1つに足し忘れると、
+     利用者が貼っても入らない(CLAUDE.md・いちばん悪い壊れ方) */
+  {
+    const mig = readS('supabase/migrations/0059_self_features.sql')
+    const matome = readS('supabase/apply/pending_matome.sql')
+    const check = readS('supabase/apply/check.sql')
+    /* **RPC と RLS の両方**を数える。**二重に塞ぐ**のが 0055 からの作法で、
+       片方だけ見ていると**もう片方を落としても緑のまま**になる
+       (実際に赤チェックで素通りした) */
+    ok(/create or replace function public\.can_set_own_features/.test(mig),
+      '自分に出す … 0059 が `can_set_own_features()` を作る')
+    ok(/p_learner = auth\.uid\(\) and public\.can_set_own_features\(\)/.test(mig),
+      '自分に出す … 決める窓口(RPC)の門番に「自分のぶん」がある')
+    ok(/learner_id = auth\.uid\(\) and public\.can_set_own_features\(\)/.test(mig),
+      '自分に出す … 書き換えのポリシー(RLS)にも、同じ1つがある')
+    ok(/create or replace function public\.can_set_own_features/.test(matome),
+      '自分に出す … まとめた1つ(pending_matome.sql)にも 0059 が入っている')
+    ok(/can_set_own_features/.test(check),
+      '自分に出す … 利用者が見る check.sql にも 0059 の行がある')
+  }
   /* **名前を組み立てない。** `'shelf:' + id` と書くと、
      `shelfFeature()` を直した日にここだけ古くなる */
   ok(!/['"`]shelf:/.test(build),

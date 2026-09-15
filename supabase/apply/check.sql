@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   34行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   41行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -152,4 +152,8 @@ from (
   union all select '0058 棚を独立した単語帳にする(pending_matome.sql)',
     exists (select 1 from information_schema.tables
             where table_schema = 'public' and table_name = 'shelf_reviews'), 40
+  -- **表も列も増えない移行**(門番に「自分のぶん」を足すだけ)。
+  -- だから関数そのものの有無で見る。画面の SetupStatus も同じ印を見ている
+  union all select '0059 トレーナーが自分にも単語帳を出せる(pending_matome.sql)',
+    exists (select 1 from pg_proc where proname = 'can_set_own_features'), 41
 ) t order by 順;

@@ -57,8 +57,31 @@ import { PlusIcon, ShelfIcon } from './Icons.jsx'
  *
  *   一度断られたら `shelfWordsSupported()` が偽になり、
  *   **そのあとは呼びに行かない。**
+ *
+ * ============================================================================
+ * 【**自分自身にも出せる**】(0059・2026-09 利用者の指定)
+ *
+ *   > その代わり、業種別単語帳のページではトレーナーは
+ *   > 自分自身にアサイン出来るように改良してください。
+ *
+ *   「その代わり」は、**トレーナーの単語帳も指定された冊だけに絞る**ことへの
+ *   引き換えである(`showsShelf()`)。絞るなら、**自分で自分に出せる**道が
+ *   要る —— さもないと、トレーナーの単語帳から「業種べつ」が丸ごと消える
+ *   (**行き止まりを作らない**)。
+ *
+ *   - **道具を1つも増やしていない。** 出す先も `learner_features`、
+ *     窓口も `set_learner_feature()`、名前も `shelfFeature()` のままである。
+ *     広げたのは**門番1か所**だけ(0059)
+ *   - **`me` を受け取るのは、`loadMyLearners()` に自分が入らない**ため。
+ *     あれは「担当しているゲスト」の一覧である
+ *   - **出したら知らせる**(`onSelfChange`)。`App.jsx` が持っている
+ *     `features` は1回読んだきりなので、読み直さないと
+ *     **自分の単語帳に冊が増えるのが「次に開いたとき」**になる
+ *
+ * @param me           ログインしている自分(`profiles` の行)
+ * @param onSelfChange 自分に出すものが変わったときに呼ぶ
  */
-export default function ShelfBuilder() {
+export default function ShelfBuilder({ me = null, onSelfChange = null }) {
   const shelves = useMemo(() => shelfList(), [])
   const [shelf, setShelf] = useState('')
   const [counts, setCounts] = useState(null)     // null = 数えられなかった
@@ -154,28 +177,59 @@ export default function ShelfBuilder() {
   }, [shelf])
 
   /**
+   * **出す相手。いちばん前が自分**(0059・2026-09 利用者の指定)。
+   *
+   * `loadMyLearners()` は**担当しているゲスト**しか返さないので、
+   * 自分はここで足す。**先頭に置く** —— この画面はトレーナーが
+   * 単語帳を作る場所なので、作ったその足で自分に出せるのが素直である。
+   *
+   * **`self` の印を持たせる。** 断り方も知らせの文も、自分のときだけ
+   * 言い方が変わる(`setLearnerFeature` の `{ self }`)。
+   * 画面のあちこちで `p.id === me?.id` と書き写さない。
+   */
+  const people = useMemo(() => {
+    const list = learners === null ? null : [...learners]
+    if (!list) return null
+    /* **名前が空でも「自分」と出す。** 誰のことか分からない札を出さない */
+    return me?.id
+      ? [{ id: me.id, display_name: '自分', self: true }, ...list]
+      : list
+  }, [learners, me])
+
+  /**
    * その人に出す / 出さないを切り替える。
    *
-   * **門番は `set_learner_feature()` の中**(0055)。
+   * **門番は `set_learner_feature()` の中**(0055 / 0059)。
    * 担当していないゲストには、そもそも書けない。
    */
-  const toggleFor = async (learner) => {
+  const toggleFor = async (who) => {
     const feat = shelfFeature(shelf)
     if (!feat || !onFor) return
-    const next = !onFor.has(learner.id)
-    setPickBusy(learner.id)
+    const next = !onFor.has(who.id)
+    setPickBusy(who.id)
     setPickNote(null)
-    const { error } = await setLearnerFeature(learner.id, feat, next)
+    const { error } = await setLearnerFeature(who.id, feat, next, { self: !!who.self })
     setPickBusy(null)
     if (error) { setPickNote({ ng: true, text: error.message ?? String(error) }); return }
     const copy = new Set(onFor)
-    if (next) copy.add(learner.id)
-    else copy.delete(learner.id)
+    if (next) copy.add(who.id)
+    else copy.delete(who.id)
     setOnFor(copy)
-    /* **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md) */
+    /* **自分に出したら、その場で読み直させる。** `App.jsx` の `features` は
+       プロフィールと一緒に1回読んだきりなので、知らせないと
+       **自分の単語帳に冊が増えるのが「次に開いたとき」**になる */
+    if (who.self) onSelfChange?.()
+    /* **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md)。
+       **自分のときは行き先まで書く** —— 「出した」だけでは、
+       どこを開けば練習できるのか分からない */
     setPickNote({
-      text: `${learner.display_name} さんに「${shelfLabel(shelf)}」を`
-        + `${next ? '出しました' : '出さないようにしました'}。`,
+      text: who.self
+        ? (next
+          ? `自分の単語帳に「${shelfLabel(shelf)}」を出しました。`
+            + '単語帳 →「業種べつ」から開けます。'
+          : `自分の単語帳から「${shelfLabel(shelf)}」を外しました。`)
+        : `${who.display_name} さんに「${shelfLabel(shelf)}」を`
+          + `${next ? '出しました' : '出さないようにしました'}。`,
     })
   }
 
@@ -360,7 +414,8 @@ export default function ShelfBuilder() {
           押すと何が起きるかを**言葉**で添える(出す / 外す)。 */}
       {shelf && (
         <div className="shelfbuild-who">
-          <p className="field-label">この単語帳を出すゲスト</p>
+          {/* **「ゲスト」と書かない**(0059)。いちばん前に自分が並ぶ */}
+          <p className="field-label">この単語帳を出す人</p>
           {!learnerFeaturesSupported() ? (
             <p className="notice notice--warn">
               ゲストごとに出すものを決める仕組み(0055)が、まだ Supabase に
@@ -378,13 +433,13 @@ export default function ShelfBuilder() {
                   いま出しても、ゲストの画面には語が1つも出ません。
                 </p>
               )}
-              {learners === null || onFor === null
+              {people === null || onFor === null
                 ? <p className="muted">開いています…</p>
-                : learners.length === 0
+                : people.length === 0
                   ? <p className="field-hint">担当しているゲストがいません。</p>
                   : (
-                    <div className="chiprow" role="group" aria-label="この単語帳を出すゲスト">
-                      {learners.map((p) => {
+                    <div className="chiprow" role="group" aria-label="この単語帳を出す人">
+                      {people.map((p) => {
                         const on = onFor.has(p.id)
                         return (
                           <button key={p.id} type="button"
@@ -401,6 +456,13 @@ export default function ShelfBuilder() {
                       })}
                     </div>
                   )}
+              {/* **担当しているゲストがいないことも、必ず言う**(0059)。
+                  自分が並ぶと `people.length` は 0 にならないので、
+                  上の枝だけでは**黙って隠れる** */}
+              {people !== null && learners !== null
+                && people.length > 0 && learners.length === 0 && (
+                <p className="field-hint">担当しているゲストは、まだいません。</p>
+              )}
               {/* **押した場所のすぐ下に出す**(CLAUDE.md) */}
               {pickNote && (
                 <p className={pickNote.ng ? 'notice notice--warn' : 'muted'}>
@@ -410,8 +472,12 @@ export default function ShelfBuilder() {
               <p className="field-hint">
                 ここで出した人の単語帳に、「業種べつ」としてこの1冊が並びます。
                 <strong>その人の語句とは混ざりません。</strong>
+                {/* **自分に出す道は、ここにしかない**(0059)。
+                    ゲストのページには自分が並ばないので、黙っていると
+                    「トレーナーは業種べつを使えない」と読まれる */}
+                {' '}<strong>自分の単語帳に出せるのも、ここだけです。</strong>
                 {/* **同じことができる場所を、黙って隠さない** */}
-                {' '}同じことは「ゲスト → その人を開く → 単語帳」でもできます。
+                {' '}ゲストに出すのは「ゲスト → その人を開く → 単語帳」でもできます。
               </p>
             </>
           )}

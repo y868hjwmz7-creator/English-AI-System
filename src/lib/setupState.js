@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0058'
+export const NEWEST_MIGRATION = '0059'
 
 /**
  * その移行が入っているかを見る印。
@@ -67,11 +67,17 @@ export const NEWEST_MIGRATION = '0058'
  * (あの関数は上限そのものの出どころでもある。**印のためだけの
  * 関数を作っていない**)。
  *
+ * 0059 も同じで、**門番に「自分のぶん」を1つ足すだけ**である。
+ * その足した半分そのものが `can_set_own_features()`(引数を取らない・
+ * **読むだけ**)なので、印としてそのまま呼べる ——
+ * **書く関数を印にしない。** 訊いただけで何かが書き換わる。
+ *
  * `table` を書けば表の有無、`rpc` を書けば関数の有無を見る。
  * **どちらか一方だけ**を書く。
  */
 export const NEWEST_MARK = {
-  table: 'shelf_reviews', label: '業種べつの単語帳を、独立した単語帳にする',
+  rpc: 'can_set_own_features',
+  label: 'トレーナーが、自分自身にも単語帳を出せるようにする',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */
@@ -132,7 +138,7 @@ export async function pendingSetup(force = false) {
       id: 'sql',
       title: '貼る SQL が、まだ最後まで届いていません',
       why: `${NEWEST_MIGRATION} の「${NEWEST_MARK.label}」が、まだ Supabase にありません。`
-        + 'ゲストごとに出すものを決める欄など、新しく足したものが使えない状態です。',
+        + '業種べつの単語帳を自分に出す欄など、新しく足したものが使えない状態です。',
       how: 'Supabase → 左メニュー SQL Editor → New query に貼り付けて、'
         /* **強調の書き方(`**`)を混ぜない。** ここは `<div>` にそのまま出る
            文字列なので、Markdown として読まれず**画面にそのまま見える**

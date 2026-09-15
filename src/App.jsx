@@ -315,6 +315,16 @@ export default function App() {
     return () => { alive = false }
   }, [session])
 
+  /* **自分に出したものが変わったら、その場で読み直す**(0059)。
+     トレーナーは「業種べつの単語帳」の画面から**自分自身に**棚を出せる
+     (2026-09 利用者の指定)。ところが `features` はプロフィールと一緒に
+     1回読んだきりなので、**読み直さないと単語帳の冊が増えない** ——
+     利用者からは「出したのに出てこない」にしか見えない。
+     **見張り(`useEffect`)には渡さない。** 押したときにだけ呼ぶ */
+  const reloadFeatures = () => {
+    loadLearnerFeatures().then((r) => setFeatures(r.data), () => {})
+  }
+
   /**
    * **役割が分かるまでは、まだ起動の途中である**(2026-09 実機・利用者の指摘)。
    *
@@ -350,12 +360,12 @@ export default function App() {
   const basicsOn = !isSupabaseConfigured || showsBasics({ role: profile?.role ?? null, features })
 
   /* **業種べつの単語帳(棚)のうち、この人に出すもの**(0057)。
-     判断は `shelvesFor()` 1か所。**ここで `role === 'learner'` と書かない。**
+     判断は `shelvesFor()` 1か所。**ここで役割を見ない** ——
+     2026-09 の指定で**トレーナーも「出された冊だけ」**になったので、
+     渡すのは `features` だけである(出す道は 0059。自分で自分に出す)。
      Supabase が未設定のとき(手元で画面を確かめるとき)は、
      ほかの画面と同じように**そのまま出す** */
-  const myShelves = isSupabaseConfigured
-    ? shelvesFor({ role: profile?.role ?? null, features })
-    : shelfList()
+  const myShelves = isSupabaseConfigured ? shelvesFor({ features }) : shelfList()
 
   // ゲストがトレーナー用の画面を開いていたら戻す。
   // 見えるデータはどのみち RLS が止めるが、画面としても出さない。
@@ -960,7 +970,12 @@ export default function App() {
             ) : view === 'bgm' ? (
               <BgmLibrary userId={profile?.id ?? null} />
             ) : view === 'shelves' ? (
-              <ShelfBuilder />
+              /* **自分自身にも出せる**(0059・2026-09 利用者の指定)。
+                 `me` を渡すのは、`loadMyLearners()` に**自分は入らない**
+                 ためである(あれは担当ゲストの一覧)。
+                 出したら `features` を読み直す —— さもないと、
+                 自分の単語帳に冊が増えるのが**次に開くまで**になる */
+              <ShelfBuilder me={profile} onSelfChange={reloadFeatures} />
             ) : (
               <AdminDashboard />
             )}

@@ -4330,8 +4330,11 @@ export default defineConfig({
       }
       await page.waitForTimeout(300)
       /* **プルダウンで数える**(2026-09 にチェックの一覧から改めた)。
-         トレーナーには 35 冊ぜんぶが並ぶ —— これは利用者の指定である
-         (「トレーナーアカウントでは…自由に学習できるようにして下さい」) */
+         ここで 35 冊そろうのは、**骨組みが `shelfList()` を直に渡している**
+         ためである(`__screens.jsx`)—— 実際の画面では
+         `shelvesFor()` が「出された冊だけ」に絞る(0059)。
+         **測っているのは「渡した冊が1冊残らず並ぶか」**であって、
+         誰に何冊出すかではない(そちらは `npm run test:play`) */
       開 = await page.evaluate(() => {
         const sel = document.querySelector('.shelfbooks select')
         return {
@@ -4425,7 +4428,7 @@ export default defineConfig({
     } else if (基.よこ > 0) {
       ng(`${名} … 基礎単語で横にはみ出している`, `${基.よこ}px`)
     } else {
-      ok(`${名} … 35冊と基礎単語を、独立した単語帳として自由に開ける`)
+      ok(`${名} … 渡した 35 冊と基礎単語が、独立した単語帳として1冊残らず開ける`)
     }
   }
 

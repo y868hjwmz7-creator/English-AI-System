@@ -87,12 +87,18 @@ export async function loadFeatureLearners(feature) {
   return ok(on)
 }
 
+/** 0059 より前の窓口が、自分のぶんを断ったときの言い方 */
+const NOT_MINE = /このゲストの担当ではありません/
+
 /**
  * 出す / 出さないを決める(担当トレーナーと管理者だけ)。
  *
  * **門番は `set_learner_feature()` の中**(0055)。画面に持たせない。
+ *
+ * @param self 自分自身のぶんか(0059)。**断り方を読み替えるためだけに使う**
+ *             —— 通す / 通さないを決めるのは、あくまで SQL の側である
  */
-export async function setLearnerFeature(learnerId, feature, on) {
+export async function setLearnerFeature(learnerId, feature, on, { self = false } = {}) {
   if (!supabase) return ng(new Error('Supabase が設定されていません'))
   if (!learnerId) return ng(new Error('ゲストが決まっていません'))
   if (!feature) return ng(new Error('出すものが決まっていません'))
@@ -106,6 +112,18 @@ export async function setLearnerFeature(learnerId, feature, on) {
       supported = false
       return ng(new Error(
         'ゲストごとに出すものを決める仕組み(0055)が、まだ入っていません。'
+        + 'Supabase の SQL Editor に supabase/apply/pending_matome.sql を貼ってください。',
+      ))
+    }
+    /* **窓口が古いことを、そのまま出さない**(CLAUDE.md
+       「そのまま出すと誤診させる」・`reviewWriting()` と同じ作法)。
+       0059 より前の `set_learner_feature()` は自分のぶんを知らないので、
+       **「このゲストの担当ではありません」**と断る。ところが相手は自分で、
+       自分の担当かどうかを疑わせても直しようがない ——
+       貼る SQL が届いていないことのほうを言う */
+    if (self && NOT_MINE.test(`${error?.message ?? ''}`)) {
+      return ng(new Error(
+        '自分自身に単語帳を出す仕組み(0059)が、まだ入っていません。'
         + 'Supabase の SQL Editor に supabase/apply/pending_matome.sql を貼ってください。',
       ))
     }

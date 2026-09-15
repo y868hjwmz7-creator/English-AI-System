@@ -1146,13 +1146,66 @@ select pg_temp.expect_denied('ゲストは、自分に棚を出せない(0057)',
   $$select public.set_learner_feature('22222222-2222-2222-2222-222222222222',
       'shelf:med', true)$$);
 
--- ⑧ **トレーナー自身も、棚を自由に学べる**(2026-09 利用者の指定)
+-- ⑦' **トレーナーは、自分自身にも出せる**(0059・2026-09 利用者の指定)
 --
---     > これらの単語帳はトレーナーアカウントでは独立した単語帳として
---     > 自由に学習できるようにして下さい。
+--     > その代わり、業種別単語帳のページではトレーナーは
+--     > 自分自身にアサイン出来るように改良してください。
 --
---    ゲストは「トレーナーが指定した棚だけ」だが、**トレーナーは指定なしで
---    35冊ぜんぶ**を開ける(判断は画面側の `showsShelf()`)。
+--    「その代わり」は、**トレーナーの単語帳も指定された冊だけに絞る**ことへの
+--    引き換えである。絞るなら、自分で自分に出せる道が要る
+--    (**行き止まりを作らない**)。
+--
+--    **ゲストの決まりは1文字も緩んでいない** —— 足したのは
+--    `is_trainer()` のときだけ通る道で、そのことはすぐ上の
+--    「ゲストは、自分に棚を出せない」がそのまま見張っている。
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select public.set_learner_feature('44444444-4444-4444-4444-444444444444', 'shelf:med', true);
+select pg_temp.expect('トレーナーは、自分自身に棚を出せる(0059)',
+  (select count(*)::int from public.learner_features
+    where learner_id = '44444444-4444-4444-4444-444444444444'
+      and feature = 'shelf:med' and enabled), 1);
+-- **外すのも自分でできる**(出せるだけだと、行き止まりになる)
+select public.set_learner_feature('44444444-4444-4444-4444-444444444444', 'shelf:med', false);
+select pg_temp.expect('トレーナーは、自分から外すこともできる(0059)',
+  (select count(*)::int from public.learner_features
+    where learner_id = '44444444-4444-4444-4444-444444444444'
+      and feature = 'shelf:med' and enabled), 0);
+select public.set_learner_feature('44444444-4444-4444-4444-444444444444', 'shelf:med', true);
+select pg_temp.expect('自分に出したものは、自分で読める(0059)',
+  (select count(*)::int from public.learner_features
+    where learner_id = '44444444-4444-4444-4444-444444444444' and enabled), 1);
+-- **RPC と RLS は、同じことを言っていなければならない**(0055 からの作法)。
+-- 窓口(`set_learner_feature`)は `security definer` なので RLS を通らない ——
+-- つまり**ポリシーの側だけを落としても、上の3行は緑のまま**である。
+-- だから**表に直に書いて**、ポリシーも同じ1つを持っていることを確かめる。
+-- **`enabled` は偽**にしておく(上の数え上げを動かさないため)
+insert into public.learner_features (learner_id, feature, enabled)
+  values ('44444444-4444-4444-4444-444444444444', 'shelf:fin', false);
+select pg_temp.expect('書き換えのポリシーも、自分のぶんを通す(0059)',
+  (select count(*)::int from public.learner_features
+    where learner_id = '44444444-4444-4444-4444-444444444444'
+      and feature = 'shelf:fin'), 1);
+-- **ほかの人のぶんは、これまでどおり塞がっている** ——
+-- 広げたのは `can_set_own_features()` を通る道だけで、
+-- **担当していない人のぶんは、RLS が `with check` で断る**
+select pg_temp.expect_denied('トレーナーでも、担当していない人のぶんは表に直に入れられない(0059)',
+  $$insert into public.learner_features (learner_id, feature, enabled)
+      values ('33333333-3333-3333-3333-333333333333', 'ずるい', true)$$);
+-- **ゲストには、この道も開いていない**(`can_set_own_features()` が偽)
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select pg_temp.expect('ゲストは、自分のぶんでも決められない(0059)',
+  (select public.can_set_own_features())::int, 0);
+select pg_temp.expect_denied('ゲストは、自分の行を表に直に入れられない(0059)',
+  $$insert into public.learner_features (learner_id, feature, enabled)
+      values ('22222222-2222-2222-2222-222222222222', 'shelf:med', true)$$);
+select pg_temp.expect('トレーナーが自分に出したものは、ゲストには見えない(0059)',
+  (select count(*)::int from public.learner_features
+    where learner_id = '44444444-4444-4444-4444-444444444444'), 0);
+
+-- ⑧ **トレーナー自身も、棚を学べる**(2026-09 利用者の指定)
+--
+--    ゲストもトレーナーも「**出された冊だけ**」で、
+--    トレーナーは⑦' のとおり**自分で自分に出す**(0059)。
 --    ここで確かめるのは、**その先で記録が残るか**である ——
 --    `mark_shelf_word()` の門番は「自分か、担当ゲストか」なので、
 --    **自分のぶんは誰でも書ける。** ここが締まりすぎると、
