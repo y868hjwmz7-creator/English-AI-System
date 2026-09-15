@@ -4869,6 +4869,11 @@ for (const w of [1280, 390, 320]) {
    **「A4 と書いてあるか」だけを見ない** —— それだと、余白を
    30mm に広げても緑のままになる。**中身が用紙幅を使い切っているか**まで
    描いて測る(`.print-target` が縮んでいれば、そのぶん余白が増える)。
+
+   **赤チェックは、`@media print` に指定を足す形でやらない。**
+   `body.is-printing .print-target { max-width: none !important }` が
+   必ず勝つので、**壊れていないのに壊したつもり**になる(実際に踏んだ)。
+   壊すなら**その打ち消しそのもの**を `560px` などにする。
    ══════════════════════════════════════════════════════════════════════ */
 {
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
@@ -4908,7 +4913,7 @@ for (const w of [1280, 390, 320]) {
       const got = await page.evaluate(() => {
         const t = document.querySelector('.print-target')
         if (!t) return null
-        const cs = getComputedStyle(t)
+        const cs = window.getComputedStyle(t)
         const 行 = [...t.querySelectorAll('li, p')]
           .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0)
         return {
