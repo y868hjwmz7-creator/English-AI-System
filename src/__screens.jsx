@@ -645,7 +645,11 @@ const qrScreen = (plain) => (
               top={<span className="focus-count">2 / 25</span>}>
     <section className={`qr${plain ? '' : ' qr--paper'}`}>
       <div className="qr-bar" aria-hidden="true"><span style={{ width: '20%' }} /></div>
-      <QrCard pair={QR_PAIR} no={2} onAnswer={() => {}} />
+      {/* **本物と1文字も違えない**(CLAUDE.md)。
+          型の札を出すのは**復習(`plain`)のときだけ** —— 教材の中の
+          Quick Response(紙・集中モード)には `showFrame` を渡していない。
+          骨組みだけが本物と食い違うと、検証は何も守らない */}
+      <QrCard pair={QR_PAIR} no={2} onAnswer={() => {}} showFrame={plain} />
     </section>
   </FocusFrame>
 )

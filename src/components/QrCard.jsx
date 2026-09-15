@@ -37,6 +37,7 @@ import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
 import { stopReading } from '../lib/readAloud.js'
+import { frameFormOf } from '../lib/frameMatch.js'
 
 export default function QrCard({
   pair, no, level = null, clipVoice = null, tier = 'premium',
@@ -46,6 +47,20 @@ export default function QrCard({
   yetLabel = 'まだ', okLabel = '言えた',
   /** 答えの右に足すもの(復習の「もう出さない」など)。無ければ出さない */
   extra = null,
+  /**
+   * **英文の「型」を、答えの下に出すか**(2026-09 利用者の指定)。
+   *
+   *   > 型の見分け、使い分けは必ず実現したいトレーニングです
+   *
+   * 「見分け」は、**言ったあとに答え合わせをするその場**で効く ——
+   * 自分で言ってから英語を開いたとき、そこに型の名前があれば、
+   * 「いまのは `S allows 人 to do` だったのか」と結びつく。
+   *
+   * **既定は出さない。呼ぶ側が決める**(`showCol` / `showNf` と同じ作法)。
+   * 紙に刷るときや集中モードにまで勝手に出すと、
+   * **言われていない場所が変わる**(CLAUDE.md)。
+   */
+  showFrame = false,
 }) {
   const [shown, setShown] = useState(false)
   /** 答えの音をくり返すか。**覚えない**(次に開いたときは1回に戻す) */
@@ -70,6 +85,10 @@ export default function QrCard({
     const body = bodyRef.current
     if (body) body.scrollTop = 0
   }, [shown, key])
+
+  /* **型が言い当てられなかった文には、何も出さない**(`frameMatch.js`)。
+     当てずっぽうで型を付けると、練習そのものが嘘になる */
+  const frame = showFrame ? frameFormOf(pair?.en) : null
 
   if (!pair) return null
 
@@ -117,6 +136,12 @@ export default function QrCard({
               <EnglishText text={pair.en} textJa={pair.ja} level={level}
                            statuses={wordStatuses} onMark={onMarkWord} />
             </div>
+            {/* **型**(2026-09 利用者の指定)。巻末の一覧・PDF と同じ名前で出す
+                ので、そのまま引きに行ける。**色だけに頼らない** ——
+                うすい地色 + 同じ色の文字 + 枠線 + 太字(CLAUDE.md) */}
+            {frame && (
+              <p className="qr-frame"><span className="qr-frame-name">型</span>{frame}</p>
+            )}
           </div>
         )}
       </div>

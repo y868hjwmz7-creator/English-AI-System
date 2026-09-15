@@ -25,6 +25,7 @@ import { industryLabel } from '../data/industries.js'
 import { genreLabel, sceneLabel } from '../data/genres.js'
 import { cefrOption } from '../data/cefr.js'
 import { posGroupOf, posLabel } from './posGroups.js'
+import { FRAME_INDEX, frameFormOf } from './frameMatch.js'
 
 /**
  * 絞り込みの鍵。**一覧はここ1か所。**
@@ -32,7 +33,7 @@ import { posGroupOf, posLabel } from './posGroups.js'
  * 「いくつ絞っているか」も「ぜんぶ外す」も「組み直すか」も、
  * すべてここから作る。**書き写さない。**
  */
-export const FILTER_KEYS = ['day', 'material', 'field', 'topic', 'level', 'pos']
+export const FILTER_KEYS = ['day', 'material', 'field', 'topic', 'level', 'pos', 'frame']
 
 /** いくつ絞っているか。**畳んでいても分かるように**札の数として出す */
 export const countNarrowed = (filter) => FILTER_KEYS
@@ -114,17 +115,43 @@ export const posOf = (row) => {
 }
 
 /**
+ * その行の英文の「型」(2026-09 利用者の指定)。
+ *
+ *   > 型の見分け、使い分けは必ず実現したいトレーニングです
+ *
+ * 【見るのは、その行が持っている英文】
+ *   Quick Response の問は `en`、単語帳の語は**出会った文** `seen_in` である。
+ *   **どちらか在るほうを見る** —— 画面ごとに書き分けない。
+ *
+ * 【**当てられなければ `null`**】
+ *   `matchFrame()` は、言い当てられない文には型を付けない
+ *   (`frameMatch.js`「取り違えるくらいなら、見落とすほう」)。
+ *   そのぶんは選択肢に出ないだけで、絞らなければこれまでどおり出る ——
+ *   **品詞(`posOf`)とまったく同じ作法**である。
+ *
+ * 【見出しは、型の節の名前】
+ *   `<optgroup>` で ①無生物主語 / ②主語の席 / ③それ以外 に分かれる。
+ *   **対応表をここに書き写さない** —— `FRAME_INDEX` が
+ *   `sentenceFrames.js` から作っている。
+ */
+export const frameOf = (row) => {
+  const form = frameFormOf(row?.en || row?.seen_in || '')
+  const found = form ? FRAME_INDEX.get(form) : null
+  return found ? { key: found.form, label: found.form, group: `${found.sectionNo} ${found.groupLabel}` } : null
+}
+
+/**
  * 絞り込みを当てる。**判断はここ1か所。** 画面ごとに書くとずれる。
  *
  * @param {Array} rows 一覧ぜんぶ
- * @param {{day, material, field, topic, level, pos}} filter
+ * @param {{day, material, field, topic, level, pos, frame}} filter
  */
 export function applyWordbookFilter(rows, filter) {
   const {
     day = null, material = null, field = null,
-    topic = null, level = null, pos = null,
+    topic = null, level = null, pos = null, frame = null,
   } = filter ?? {}
-  if (!day && !material && !field && !topic && !level && !pos) return rows
+  if (!day && !material && !field && !topic && !level && !pos && !frame) return rows
   return (rows ?? []).filter((r) => {
     if (day && addedDayOf(r) !== day) return false
     if (material) {
@@ -135,6 +162,7 @@ export function applyWordbookFilter(rows, filter) {
     if (topic && topicOf(r)?.key !== topic) return false
     if (level && levelOf(r)?.key !== level) return false
     if (pos && posOf(r)?.key !== pos) return false
+    if (frame && frameOf(r)?.key !== frame) return false
     return true
   })
 }

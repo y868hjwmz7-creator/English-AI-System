@@ -30,7 +30,7 @@
 import { splitEnSentences } from './sentencePair.js'
 
 /** 前置詞。**この語の前で切る。** 区切りの最後がこれになってはいけない */
-const PREPOSITIONS = new Set([
+export const PREPOSITIONS = new Set([
   'about', 'above', 'across', 'after', 'against', 'along', 'among', 'around',
   'as', 'at', 'before', 'behind', 'below', 'beneath', 'beside', 'besides',
   'between', 'beyond', 'by', 'despite', 'down', 'during', 'except', 'for',
@@ -89,7 +89,7 @@ const MODALS = new Set([
 ])
 
 /** 冠詞・限定詞。**この語のあとで切らない。** 名詞と離れる */
-const DETERMINERS = new Set([
+export const DETERMINERS = new Set([
   'a', 'an', 'the', 'this', 'that', 'these', 'those', 'my', 'your', 'his',
   'her', 'its', 'our', 'their', 'some', 'any', 'no', 'every', 'each', 'both',
 ])
@@ -308,7 +308,7 @@ function insideSplitPhrasal(words, i) {
  *
  * 冠詞も前置詞も付かないので、これまでの決まりでは1つも拾えていない。
  */
-const TAIL_ADVERBS = new Set([
+export const TAIL_ADVERBS = new Set([
   'today', 'tonight', 'tomorrow', 'yesterday', 'tomorrow.', 'now',
   'backstage', 'onstage', 'offstage', 'overseas', 'abroad',
   'upstairs', 'downstairs', 'outside', 'inside', 'nearby',
@@ -390,7 +390,7 @@ const LY_ADJECTIVES = new Set([
 ])
 
 /** `-ly` で終わらない、よく出る副詞。ここも切れ目にしておく */
-const PLAIN_ADVERBS = new Set([
+export const PLAIN_ADVERBS = new Set([
   'almost', 'always', 'never', 'often', 'sometimes', 'still', 'already',
   'soon', 'again', 'instead', 'together', 'however', 'therefore',
   'meanwhile', 'nevertheless', 'moreover', 'furthermore', 'otherwise',
@@ -414,7 +414,7 @@ const isAdverb = (w) => PLAIN_ADVERBS.has(w)
  * `her` `his` は**冠詞にもなる**(`of her regular customers`)ので入れない。
  * `one` も `about one / of …` と切れたほうが自然なので入れない。
  */
-const OBJECT_PRONOUNS = new Set([
+export const OBJECT_PRONOUNS = new Set([
   'this', 'that', 'these', 'those', 'it', 'them', 'him', 'us', 'me', 'you',
 ])
 
@@ -451,7 +451,7 @@ const takesGerund = (w) => {
 }
 
 /** 主語になる代名詞。**ここから新しいまとまりが始まることが多い** */
-const SUBJECT_PRONOUNS = new Set(['i', 'you', 'he', 'she', 'it', 'we', 'they'])
+export const SUBJECT_PRONOUNS = new Set(['i', 'you', 'he', 'she', 'it', 'we', 'they'])
 
 /**
  * **形容詞**(2026-08 利用者の指定で足した)。
@@ -522,7 +522,7 @@ const ADJECTIVES = new Set([
  * 単なる過去形と同じ形のものも入っているが、`isParticiple` を使う側で
  * 「冠詞や形容詞のうしろ」に限っているので、`He lost / the game` は咎めない。
  */
-const IRREGULAR_PARTICIPLES = new Set([
+export const IRREGULAR_PARTICIPLES = new Set([
   'broken', 'written', 'given', 'taken', 'spoken', 'chosen', 'driven',
   'frozen', 'hidden', 'known', 'shown', 'thrown', 'worn', 'torn', 'born',
   'lost', 'made', 'built', 'sent', 'kept', 'held', 'told', 'sold', 'felt',
@@ -551,7 +551,7 @@ const DEGREE_WORDS = new Set([
 ])
 
 /** 形容詞かどうか。`safer` `safest` は `safe` に戻して見る */
-const isAdjective = (w) => {
+export const isAdjective = (w) => {
   if (ADJECTIVES.has(w)) return true
   for (const t of [w.replace(/er$/, ''), w.replace(/est$/, ''),
     w.replace(/er$/, 'e'), w.replace(/est$/, 'e'),
@@ -562,7 +562,7 @@ const isAdjective = (w) => {
 }
 
 /** `-ing` / `-ed` の分詞。名詞の前に付けば形容詞のはたらきをする */
-const isParticiple = (w) => /^[a-z]{4,}(ing|ed)$/.test(w) || IRREGULAR_PARTICIPLES.has(w)
+export const isParticiple = (w) => /^[a-z]{4,}(ing|ed)$/.test(w) || IRREGULAR_PARTICIPLES.has(w)
 
 /* **よく出る動詞の一覧(`COMMON_VERBS`)と `verbBase()` は消した**(2026-09)。
 
@@ -578,7 +578,7 @@ const isParticiple = (w) => /^[a-z]{4,}(ing|ed)$/.test(w) || IRREGULAR_PARTICIPL
    そこが動詞と目的語の切れ目である。**一覧は要らなくなった。** */
 
 /** 数をあらわす語。**名詞のはじまり**として数える */
-const NUMBER_WORDS = new Set([
+export const NUMBER_WORDS = new Set([
   'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
   'ten', 'twenty', 'thirty', 'fifty', 'hundred', 'thousand', 'million',
   'billion', 'several', 'many', 'much', 'few', 'more', 'most', 'other',
@@ -595,7 +595,7 @@ const NUMBER_WORDS = new Set([
  * `Before you buy / anything fancy,` と切れるようにするために足した。
  * 冠詞も数も付かないので、これまでの `startsNoun` では拾えなかった。
  */
-const INDEFINITE_PRONOUNS = new Set([
+export const INDEFINITE_PRONOUNS = new Set([
   'anything', 'something', 'everything', 'nothing',
   'anyone', 'someone', 'everyone', 'no-one',
   'anybody', 'somebody', 'everybody', 'nobody',
@@ -605,7 +605,7 @@ const INDEFINITE_PRONOUNS = new Set([
  * **`-ing` で終わるが、分詞ではない語。**
  * 形だけでは分詞と区別が付かないので、よく出るものを並べてある。
  */
-const NOT_PARTICIPLES = new Set([
+export const NOT_PARTICIPLES = new Set([
   'morning', 'evening', 'during', 'spring', 'string', 'thing', 'king',
   'ring', 'ceiling', 'building', 'meaning', 'feeling', 'training',
 ])

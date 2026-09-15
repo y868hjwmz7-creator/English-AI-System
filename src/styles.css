@@ -6661,6 +6661,25 @@ button.wbfilter-ctl { text-align: left; }
   padding: 10px 12px; border-left: none; border-radius: var(--r-8);
   background: var(--qa-answer, var(--surface-2));
 }
+/* 答えと、その下の「型」。**別々の物なので `gap` で離す**(CLAUDE.md
+   「別々の物を、すき間ゼロでくっつけない」)。子に `margin` を付けて回らない。
+   **`align-items` は既定(stretch)のまま** —— `center` を入れると
+   英文の行が中身なりの幅に縮んで、左端がぎざぎざになる */
+.qr-answer { display: flex; flex-direction: column; gap: var(--sp-8); }
+/* 英文の「型」(2026-09 利用者の指定「型の見分け、使い分け」)。
+   **色だけに頼らない** —— うすい地色・同じ色の文字・枠線・太字 */
+.qr-frame {
+  margin: 0; align-self: center; max-width: 100%;
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  padding: 3px 12px; border-radius: 999px;
+  border: 1px solid var(--accent-line); background: var(--accent-bg);
+  color: var(--accent); font-size: var(--fs-12); font-weight: 700;
+  line-height: 1.5; text-align: center;
+}
+.qr-frame-name {
+  font-size: var(--fs-11); font-weight: 700; opacity: .75;
+}
+
 /* 何問目か + 話す人。**丸の番号は集中モード・紙と同じもの**
    (2026-09 利用者の指定「クイックレスポンスの文章にも番号を。おしゃれにね」)。
    上の「2 / 25」は**どこまで来たか**の目安で、役目が違う */

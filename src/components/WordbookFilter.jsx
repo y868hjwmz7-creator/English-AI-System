@@ -35,12 +35,13 @@ import { CalendarIcon, CloseIcon } from './Icons.jsx'
    数え漏らした)。**呼ぶ側は1行も変わっていない。** */
 export {
   FILTER_KEYS, countNarrowed, emptyFilter, addedDayOf,
-  topicOf, fieldOf, levelOf, posOf, applyWordbookFilter,
+  topicOf, fieldOf, levelOf, posOf, frameOf, applyWordbookFilter,
 } from '../lib/wordbookFilter.js'
 import {
   NO_MATERIAL, addedDayOf, countNarrowed,
-  emptyFilter, fieldOf, levelOf, posOf, topicOf,
+  emptyFilter, fieldOf, frameOf, levelOf, posOf, topicOf,
 } from '../lib/wordbookFilter.js'
+import { FRAME_FORMS } from '../lib/frameMatch.js'
 
 /**
  * 絞り込みの行。**コンパクトに、押せるものだけ**(2026-08 利用者の指定)。
@@ -86,7 +87,7 @@ export default function WordbookFilter({
   const list = rows ?? []
   const {
     day = null, material = null, field = null,
-    topic = null, level = null, pos = null,
+    topic = null, level = null, pos = null, frame = null,
   } = value ?? {}
 
   // **0024 を貼る前は、日で絞れない。** その欄だけ出さない
@@ -117,6 +118,24 @@ export default function WordbookFilter({
   const posSet = new Set(list.map((r) => posOf(r)?.key).filter(Boolean))
   const poss = POS_GROUPS.filter((g) => posSet.has(g.id))
 
+  /* **英文の「型」**(2026-09 利用者の指定「型の見分け、使い分けは
+     必ず実現したいトレーニングです」)。
+
+     **並べ替えない。** `sentenceFrames.js` に並んでいる順のまま出す
+     (①無生物主語 → ②主語の席 → ③それ以外。巻末の一覧・PDF と同じ順)。
+     五十音順にすると、資料と見比べられなくなる。
+
+     **型を言い当てられなかった文は、選択肢に出ない** ——
+     `frameOf()` が `null` を返すだけで、条件は1つも足していない
+     (品詞とまったく同じ) */
+  const frameFound = new Map()
+  for (const r of list) {
+    const f = frameOf(r)
+    if (f && !frameFound.has(f.key)) frameFound.set(f.key, f)
+  }
+  const frames = FRAME_FORMS.map((f) => frameFound.get(f)).filter(Boolean)
+  const frameGroups = [...new Set(frames.map((f) => f.group))]
+
   // **選べるものが何も無ければ、行ごと出さない**
   const show = {
     day: days.length > 0,
@@ -128,6 +147,10 @@ export default function WordbookFilter({
     /* **Quick Response の復習には出ない。** あちらは「文」が溜まるので
        `pos` を1つも持たない —— 条件を1つも足さずに、ひとりでにそうなる */
     pos: poss.length > 1,
+    /* **型が1つしか見つからなければ、絞る意味がない。**
+       Native Flow のような短い言い回しばかりの冊では、
+       そもそもこの欄が出ない —— 効かない操作を見せない(CLAUDE.md) */
+    frame: frames.length > 1,
   }
   if (!Object.values(show).some(Boolean)) return null
 
@@ -200,6 +223,31 @@ export default function WordbookFilter({
                   onChange={(e) => set({ pos: e.target.value || null })}>
             <option value="">すべて</option>
             {poss.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+          </select>
+        </label>
+      )}
+
+      {/* **英文の型**(2026-09 利用者の指定)。
+
+            > 型の見分け、使い分けは必ず実現したいトレーニングです
+
+          「無生物主語の文だけをさらう」「`When it comes to` の型だけ」が
+          できる。**見分けは `frameMatch.js` 1か所**で、AI は呼ばない
+          (1文ごとに課金になるため)。
+          **言い当てられなかった文には型を付けない** ——
+          当てずっぽうで付けると、練習そのものが嘘になる */}
+      {show.frame && (
+        <label className="wbfilter-row">
+          <span className="wbfilter-name">型</span>
+          <select className="wbfilter-ctl" value={frame ?? ''}
+                  onChange={(e) => set({ frame: e.target.value || null })}>
+            <option value="">すべて</option>
+            {frameGroups.map((g) => (
+              <optgroup key={g} label={g}>
+                {frames.filter((f) => f.group === g)
+                  .map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+              </optgroup>
+            ))}
           </select>
         </label>
       )}
