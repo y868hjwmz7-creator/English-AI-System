@@ -3860,12 +3860,18 @@ export default defineConfig({
     const 同 = 平均(同じ語)
     if (別の語.length < 2 || 同じ語.length < 2) {
       ng('間 … 語のあいだを測れていない', `別 ${別の語.length} / 同 ${同じ語.length}`)
-    } else if (別 > 800) {
-      ng('間 … 違う語へ移るときの間が長すぎる(0.5秒くらいにする)', `${別}ms`)
+    } else if (別 > 420) {
+      /* **2026-09 にもう一段詰めた**(利用者の指定「違う単語同士の間を
+         もっと詰めれませんか？もっとサクサク読み上げてほしいです」)。
+         965 → 536 → **268ms**。しきい値も一緒に下げる ——
+         下げないと、**戻しても緑のまま**になる */
+      ng('間 … 違う語へ移るときの間が長すぎる(もっとサクサク)', `${別}ms`)
     } else if (同 < 400) {
+      /* **同じ語の2回のあいだは、一度も動かしていない**
+         (「今のままでOKです」)。**ついでに縮めない** */
       ng('間 … 同じ語を2回読むあいだまで縮んでいる(「今のままでOK」)', `${同}ms`)
     } else {
-      ok(`間 … 違う語へ移るとき ${別}ms(前は 965ms)`
+      ok(`間 … 違う語へ移るとき ${別}ms(965 → 536 → いま)`
         + ` / 同じ語の2回のあいだ ${同}ms(今のまま)`)
     }
   }
@@ -5097,17 +5103,58 @@ for (const W of [1280, 794, 453, 390, 320]) {
 
    【なぜ測るのか。ソースを読むだけでは絶対に分からない】
    隙間は「上の余白」「下の余白」「`gap`」「隣り合わせの指定」の
-   **掛け合わせ**で決まる。1つのファイルを読んでも答えは出ない。 */
+   **掛け合わせ**で決まる。1つのファイルを読んでも答えは出ない。
+
+   ══════════════════════════════════════════════════════════════
+   **縦だけ測っていた。横に並ぶ組は一度も見ていなかった**
+   (2026-09 実機・利用者の指摘)
+
+     > 「聞き流す」と「印刷・PDF」ボタンの間に隙間がありません。
+     > これは PC での表示ですが、**すべてのデバイスでこれが起こらないように
+     > 徹底してください。**
+
+   もとの測り方は、はじめの1行が
+
+       if (b.r.top < a.r.bottom - 0.5) continue        // 横に並んでいる
+
+   で、**横に並ぶ組をまるごと読み飛ばしていた。** だから
+   `.wb-listen` が2つ横に並んで接していても、**ずっと緑だった。**
+
+   「徹底する」とは、**測るものを増やすこと**である。
+   いまは**縦と横の両方**を測る。横は「同じ行にいて、あいだが 0」。 */
 {
-  /** わざと接している(接することに意味がある)もの */
+  /** わざと接している(接することに意味がある)もの —— **縦に並ぶ組** */
   const TOUCH_OK = [
     // 一覧の行。**線を接して1つの表に見せる**(`li + li { border-top }`)
     ['li', 'li'],
     // 下から出るシートの「つまみ」。飾りであって、別の物ではない
     ['sheet-grip', 'sheet-head'],
   ]
-  /** 画面の中の、描かれている物どうしの接触を拾う */
-  const FIND = (okPairs) => {
+  /**
+   * わざと接している **横に並ぶ組。**
+   *
+   * **1つの部品に見せるために、わざと継ぎ目を無くしてあるもの**だけを
+   * 名指しで外す。**「並んでいるから」では外さない** ——
+   * それをやると、この見張りは何も守らなくなる。
+   */
+  const TOUCH_OK_X = [
+    /* 錠剤(`◀ Listen ▶`)。**枠と地は錠剤が持ち、中のボタンは持たない** ——
+       離すと「またボタンが3つ」に見える(CLAUDE.md に書いてある決まり) */
+    ['listenpill', 'listenpill'],
+    ['listenpill-mid', 'listenpill'],
+    ['listenpill', 'listenpill-mid'],
+    /* 段を送る欄(`◀ 標準 ▶`)。**いまの値の左右に三角**という
+       1つの部品である(`Stepper.jsx`) */
+    ['stepper', 'stepper'],
+    /* 選んでいる1つを示す帯(配色・色づかい・説明の文・音)。
+       **継ぎ目を無くして1本の帯に見せる**作りである */
+    ['theme-btn', 'theme-btn'],
+    ['seg-btn', 'seg-btn'],
+    // 一覧の行。縦と同じ理由(横に並ぶ表もある)
+    ['li', 'li'],
+  ]
+  /** 画面の中の、描かれている物どうしの接触を拾う(縦と横の両方) */
+  const FIND = ([okPairs, okPairsX]) => {
     const rgb = (s) => {
       const m = /rgba?\(([^)]+)\)/.exec(s || '')
       if (!m) return null
@@ -5154,8 +5201,14 @@ for (const W of [1280, 794, 453, 390, 320]) {
     }
     // **いちばん内側だけ残す。** 中にも物があるなら、外側は「囲み」である
     const inner = painted.filter((p) => !painted.some((q) => q !== p && p.el.contains(q.el)))
-    inner.sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left)
     const out = []
+    const 許す = (list, a, b) => {
+      const ta = tags(a.el); const tb = tags(b.el)
+      return list.some(([x, y]) => ta.includes(x) && tb.includes(y))
+    }
+
+    /* ── 縦に並ぶ組 ────────────────────────────────────────── */
+    inner.sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left)
     for (let i = 0; i < inner.length; i += 1) {
       for (let j = i + 1; j < inner.length; j += 1) {
         const a = inner[i]; const b = inner[j]
@@ -5163,9 +5216,28 @@ for (const W of [1280, 794, 453, 390, 320]) {
         const gap = b.r.top - a.r.bottom
         if (gap >= 4) break                             // これより下は離れている
         if (Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left) < 4) continue
-        const ta = tags(a.el); const tb = tags(b.el)
-        if (okPairs.some(([x, y]) => ta.includes(x) && tb.includes(y))) continue
-        out.push({ gap: Math.round(gap * 10) / 10, a: name(a.el), b: name(b.el) })
+        if (許す(okPairs, a, b)) continue
+        out.push({ dir: '縦', gap: Math.round(gap * 10) / 10, a: name(a.el), b: name(b.el) })
+      }
+    }
+
+    /* ── 横に並ぶ組(2026-09 実機。**ここを一度も見ていなかった**)──
+       「同じ行にいて(縦に 4px 以上かぶっていて)、あいだが 4px 未満」。
+       **左から順に並べ替えてから見る** —— そうすれば、
+       あいだが開いた時点でそれより右は見なくてよい */
+    const 左順 = [...inner].sort((a, b) => a.r.left - b.r.left || a.r.top - b.r.top)
+    for (let i = 0; i < 左順.length; i += 1) {
+      for (let j = i + 1; j < 左順.length; j += 1) {
+        const a = 左順[i]; const b = 左順[j]
+        const gap = b.r.left - a.r.right
+        if (gap >= 4) break                             // これより右は離れている
+        /* **重なっているものは数えない。** 別々に置いた物ではなく、
+           上に載せた飾りのことが多い(端まで来ると -1px ほどずれる) */
+        if (gap < -1.5) continue
+        // 同じ行にいるか(縦のかぶり)
+        if (Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top) < 4) continue
+        if (許す(okPairsX, a, b)) continue
+        out.push({ dir: '横', gap: Math.round(gap * 10) / 10, a: name(a.el), b: name(b.el) })
       }
     }
     return out
@@ -5187,9 +5259,36 @@ for (const W of [1280, 794, 453, 390, 320]) {
       const page = await browser.newPage({ viewport: { width: w, height: 900 } })
       page.setDefaultTimeout(8000)
       page.setDefaultNavigationTimeout(8000)
-      await page.route('**/rest/v1/**', (r) => r.fulfill({
-        status: 200, contentType: 'application/json', body: '[]',
-      }))
+      /* **描けないものは測れない**(CLAUDE.md)。
+         `[]` を返していたので、単語帳も Quick Response 帳も
+         **`rows.length > 0` の中身がまるごと描かれず**、
+         「聞き流す」「印刷 / PDF」はここに一度も出ていなかった
+         (2026-09 実機。**だから接していても緑だった**)。
+         **窓口の応答を差し替えて、実際に描かせてから測る** */
+      await page.route('**/rest/v1/**', (r) => {
+        const u = r.request().url()
+        let body = []
+        if (u.includes('review_words')) {
+          body = ['budget', 'forecast', 'margin'].map((w, i) => ({
+            word_norm: w, display: w, kind: 'word', pos: '名詞',
+            status: 'unknown', box: 0, learn_streak: 0,
+            due_on: '2020-01-01', added_at: '2026-09-01',
+            meaning_ja: `意味${i}`, seen_in: '', seen_in_ja: '',
+            material_id: null, material_title: null, industry: 'it', topic: null,
+          }))
+        }
+        if (u.includes('qr_items')) {
+          body = ['We need the budget.', 'I will send it.'].map((en, i) => ({
+            en_norm: en.toLowerCase(), en, ja: `訳${i}`,
+            box: 0, due_on: '2020-01-01', added_at: '2026-09-01',
+            material_id: null, material_title: null, industry: 'it',
+            scene: null, level: 'b1',
+          }))
+        }
+        return r.fulfill({
+          status: 200, contentType: 'application/json', body: JSON.stringify(body),
+        })
+      })
       await page.route('**/auth/v1/**', (r) => r.fulfill({
         status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
       }))
@@ -5198,7 +5297,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
         await page.goto(`http://localhost:${PORT}/__bar.html${q}`,
           { waitUntil: 'domcontentloaded' })
         await page.waitForTimeout(600)
-        let hits = await page.evaluate(FIND, TOUCH_OK)
+        let hits = await page.evaluate(FIND, [TOUCH_OK, TOUCH_OK_X])
         /* **畳んであるものを開いてから、もう一度測る。**
            開いた箱(共有・絞り込み)は、閉じているあいだ測れない */
         await page.evaluate(() => {
@@ -5208,9 +5307,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
           }
         })
         await page.waitForTimeout(400)
-        hits = hits.concat(await page.evaluate(FIND, TOUCH_OK))
+        hits = hits.concat(await page.evaluate(FIND, [TOUCH_OK, TOUCH_OK_X]))
         for (const h of hits) {
-          見つかった.push(`${s || 'レッスン表示'}@${w}px  ${h.gap}px  ${h.a} ↕ ${h.b}`)
+          見つかった.push(`${s || 'レッスン表示'}@${w}px  ${h.dir} ${h.gap}px  ${h.a} / ${h.b}`)
         }
       } catch (e) {
         ng(`すき間 … ${s || 'レッスン表示'}@${w}px を描けなかった`,
@@ -5225,7 +5324,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ng(`すき間 … 別々の物が ${一覧.length} 組、すき間ゼロで接している`,
       一覧.slice(0, 12).join('\n    '))
   } else {
-    ok(`すき間 … ${SCREENS.length} 画面 × 2幅で、接している組は無い`)
+    ok(`すき間 … ${SCREENS.length} 画面 × 2幅、縦と横の両方で、接している組は無い`)
   }
 }
 

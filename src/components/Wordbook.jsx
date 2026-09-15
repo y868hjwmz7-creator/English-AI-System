@@ -469,7 +469,11 @@ export default function Wordbook({
   /** チェックを入れた分野。**覚える**(`shelves.js` が鍵を持つ) */
   const [shelfPick, setShelfPick] = useState(() => loadShelfPick(shelves))
   /** 棚ごとの語数(棚そのもの・誰のものでもない) */
-  const [shelfCounts, setShelfCounts] = useState({})
+  /* 棚ごとの語数。**`loadShelfCounts()` が返すのは `Map`**、
+     読めていなければ `null`(**`{}` にしない** —— 空のオブジェクトだと
+     「数えたら 0 語だった」と見分けが付かず、
+     **数えられなかったときに 0 と嘘をつく**ことになる) */
+  const [shelfCounts, setShelfCounts] = useState(null)
   const shelfKey = shelfPick.join('\u0000')
   /** 出してよい棚。**見張りには id をつないだ文字列を渡す**(配列は毎回別物) */
   const shelfIds = shelves.map((s) => s.id).join(' ')
@@ -1469,26 +1473,29 @@ export default function Wordbook({
           )
       )}
 
-      {/* **聞き流し**(2026-09 利用者の指定)。「出す」のとなりに置く ——
-          同じ語を、答えるか・聴くだけかの違いなので、選ぶのはここである。
-          **範囲の札と絞り込みは、そのまま効く**(`poolNow()` 1か所) */}
-      {isQuiz && !loading && !card && rows.length > 0 && (
-        <button type="button" className="btn btn--quiet wb-listen"
-                disabled={restInScope === 0}
-                onClick={listen}>
-          <MusicIcon />聞き流す({restInScope} 語)
-        </button>
-      )}
+      {/* **聞き流し**と**紙に出す**(2026-09 利用者の指定)。
+          「出す」のとなりに置く —— 同じ語を、答えるか・聴くだけか・
+          紙にするかの違いなので、選ぶのはここである。
+          **範囲の札と絞り込みは、そのまま効く**(`poolNow()` 1か所)。
 
-      {/* **紙に出す**(2026-09 利用者の指定)。「聞き流す」のとなりに置く ——
-          どちらも**いま絞っているものに対して、そのまま行う**操作である。
-          何語ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
+          **1つの行にまとめ、`gap` で離す**(2026-09 実機・利用者の指摘
+          「聞き流すと印刷・PDF ボタンの間に隙間がありません」)。
+          別々に置くと、横に並んだときに**離すものが何も無い** ——
+          `.claude/rules/common.md`「別々の物を、すき間ゼロでくっつけない」 */}
       {isQuiz && !loading && !card && rows.length > 0 && (
-        <button type="button" className="btn btn--quiet wb-listen"
-                disabled={sheetPairs.length === 0 || printing}
-                onClick={() => setPrinting(true)}>
-          <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 語)`}
-        </button>
+        <div className="wb-tools">
+          <button type="button" className="btn btn--quiet wb-listen"
+                  disabled={restInScope === 0}
+                  onClick={listen}>
+            <MusicIcon />聞き流す({restInScope} 語)
+          </button>
+          {/* 何語ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
+          <button type="button" className="btn btn--quiet wb-listen"
+                  disabled={sheetPairs.length === 0 || printing}
+                  onClick={() => setPrinting(true)}>
+            <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 語)`}
+          </button>
+        </div>
       )}
 
       {radio && (

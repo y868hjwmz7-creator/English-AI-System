@@ -1,4 +1,4 @@
-import { SHELF_GROUPS } from '../data/shelves.js'
+import { SHELF_GROUPS, shelfCountOf } from '../data/shelves.js'
 
 /**
  * **どの業種の単語帳を開くかを、プルダウンで選ぶ**(2026-09 利用者の指定)。
@@ -49,8 +49,15 @@ import { SHELF_GROUPS } from '../data/shelves.js'
 export default function ShelfBooks({
   /** 出してよい棚(`shelvesFor()` が決めたもの) */
   shelves = [],
-  /** 棚ごとの語数 `{ [id]: n }`(`loadShelfCounts()`) */
-  counts = {},
+  /**
+   * 棚ごとの語数(`loadShelfCounts()` が返す **`Map`**)。
+   * **`null` なら数えられなかった** —— そのときは語数を出さない。
+   *
+   * **`counts[s.id]` と書かない。** あれは Map では必ず `undefined` に
+   * なり、**35 冊ぜんぶが「0 語」**になる(2026-09 実機)。
+   * 形を知らなくてよいように、**`shelfCountOf()` 1か所**を通す。
+   */
+  counts = null,
   /** 開いている棚の id。**1冊だけ**(配列なのは、読む側と形をそろえるため) */
   picked = [],
   onPicked = null,
@@ -81,13 +88,20 @@ export default function ShelfBooks({
             if (!list.length) return null
             return (
               <optgroup key={g.id} label={g.label}>
-                {list.map((s) => (
+                {list.map((s) => {
                   /* **まだ空の棚も出す。** 隠すと「なぜ出ないのか」が
-                     分からない。トレーナーが作るまで 0 語である */
-                  <option key={s.id} value={s.id}>
-                    {s.label}({counts[s.id] ?? 0} 語)
-                  </option>
-                ))}
+                     分からない。トレーナーが作るまで 0 語である。
+
+                     **ただし「数えられなかった」を 0 と書かない**
+                     (`shelfCountOf()` は `null` を返す)。
+                     0 と出すと「まだ1語もありません」という嘘になる */
+                  const n = shelfCountOf(counts, s.id)
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {s.label}{n === null ? '' : `(${n} 語)`}
+                    </option>
+                  )
+                })}
               </optgroup>
             )
           })}

@@ -528,23 +528,25 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
             </label>
           </ReviewScope>
 
-          {/* **聞き流し**(2026-09 利用者の指定)。「出す」のとなりに置く ——
-              同じ文を、答えるか・聴くだけかの違いなので、選ぶのはここである。
+          {/* **聞き流し**と**紙に出す**(2026-09 利用者の指定)。
+              「出す」のとなりに置く —— 同じ文を、答えるか・聴くだけか・
+              紙にするかの違いなので、選ぶのはここである。
               **範囲の札も絞り込みも並べ方も、そのまま効く**(`listen()` 1か所)。
-              単語帳の `wb-listen` と**まったく同じ形**にそろえる */}
-          <button type="button" className="btn btn--quiet wb-listen"
-                  disabled={shown.length === 0}
-                  onClick={listen}>
-            <MusicIcon />聞き流す({shown.length} 問)
-          </button>
-
-          {/* **紙に出す**(2026-09 利用者の指定)。「聞き流す」のとなりに置く。
-              何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
-          <button type="button" className="btn btn--quiet wb-listen"
-                  disabled={sheetPairs.length === 0 || printing}
-                  onClick={() => setPrinting(true)}>
-            <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 問)`}
-          </button>
+              単語帳の `wb-tools` と**まったく同じ形**にそろえる ——
+              **1つの行にまとめ、`gap` で離す**(2026-09 実機・利用者の指摘) */}
+          <div className="wb-tools">
+            <button type="button" className="btn btn--quiet wb-listen"
+                    disabled={shown.length === 0}
+                    onClick={listen}>
+              <MusicIcon />聞き流す({shown.length} 問)
+            </button>
+            {/* 何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
+            <button type="button" className="btn btn--quiet wb-listen"
+                    disabled={sheetPairs.length === 0 || printing}
+                    onClick={() => setPrinting(true)}>
+              <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 問)`}
+            </button>
+          </div>
 
           {shown.length === 0 && filtered.length === 0 && (
             <p className="hint">この絞り込みに当てはまる文がありません。</p>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   JOB_COST, SHELF_GROUPS, WORDS_PER_JOB,
-  levelTally, shelfFeature, shelfLabel, shelfList, shelfSceneNames,
+  levelTally, shelfCountOf, shelfFeature, shelfLabel, shelfList, shelfSceneNames,
   shelfTarget, shelfTodo,
 } from '../data/shelves.js'
 import { sceneLabel } from '../data/genres.js'
@@ -382,8 +382,11 @@ export default function ShelfBuilder({ me = null, onSelfChange = null }) {
                 <option key={s.id} value={s.id}>
                   {s.label}
                   {/* **数えられなかったら出さない。** 0 と取り違えると
-                      「まだ1語もありません」という嘘になる */}
-                  {counts ? `(${counts.get(s.id) ?? 0} 語)` : ''}
+                      「まだ1語もありません」という嘘になる。
+                      **数え方は `shelfCountOf()` 1か所**(`ShelfBooks` と
+                      同じもの)—— 2か所に持つと、片方が Map を
+                      オブジェクトで読んで**黙って 0 になる**(2026-09 実機) */}
+                  {(() => { const n = shelfCountOf(counts, s.id); return n === null ? '' : `(${n} 語)` })()}
                 </option>
               ))}
             </optgroup>

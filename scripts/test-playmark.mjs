@@ -54,7 +54,7 @@ import { charTimesOf } from '../src/lib/wholeAudio.js'
 import {
   JOB_COST, SCENE_HINT_MAX, SHELF_PICK_KEY, WORDS_PER_BOOK, WORDS_PER_JOB,
   isShelf, levelTally, pickedShelves, shelfFeature,
-  shelfIdOfFeature, shelfList, shelfOf, shelfSceneNames, shelfScenes, shelfTarget,
+  shelfCountOf, shelfIdOfFeature, shelfList, shelfOf, shelfSceneNames, shelfScenes, shelfTarget,
   shelfTodo, shelvesFor, showsShelf,
 } from '../src/data/shelves.js'
 import { CEFR_LEVELS, SHELF_LEVELS, cefrOption } from '../src/data/cefr.js'
@@ -2433,20 +2433,33 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       && radioGapsOf(0).recall === DEFAULT_RADIO_GAP
       && radioGapsOf(999999).recall === DEFAULT_RADIO_GAP,
     '間 … 知らない値・範囲の外は既定に落ちる')
-    /* ── **違う語へ移るときの間は、0.5秒くらい**(2026-09 実機・利用者の指定)
+    /* ── **違う語へ移るときの間は、もっと短く**(2026-09 実機・利用者の指定)
      *
+     *   1回目:
      *   > 違う単語に移る際の間を 0.5 秒くらいまで縮められませんか?
      *   > 同じ単語の2回繰り返す際の間は今のままでOKです
      *
-     *   実測では既定で **965ms(≒1秒)** あった。
+     *   2回目(**もう一段**):
+     *   > 違う単語同士の間をもっと詰めれませんか？
+     *   > もっとサクサク読み上げてほしいです。
+     *
+     *   実測は **965ms → 536ms → 268ms**。
      *   **動かしてよいのは「語と語」だけ** —— 「くり返し」は
-     *   「今のままでOK」と言われているので、537ms のまま。 */
+     *   「今のままでOK」と言われたきり取り消されていないので、537ms のまま。
+     *
+     *   **しきい値も一緒に下げる。** 下げないと、
+     *   500 に戻しても緑のままになる(「無ければ素通り」する検証を書かない)。 */
     const 既定 = radioGapsOf()
     ok(Math.abs(既定.recall - 1400) <= 200,
       '間 … 基準は、これまで(1.4秒)とほぼ同じ', `${既定.recall}ms`)
-    ok(既定.word >= 400 && 既定.word <= 700,
-      '間 … 既定で、違う語へ移るときの間が 0.5 秒くらい',
-      `${既定.word}ms(前は 965ms)`)
+    ok(既定.word >= 180 && 既定.word <= 330,
+      '間 … 既定で、違う語へ移るときの間がサクサク',
+      `${既定.word}ms(965 → 536 → いま)`)
+    /* **「語と語」だけが縮んだか。** くり返しまで一緒に縮めていないこと
+       (そちらは「今のままでOK」)を、比そのもので見る */
+    ok(既定.word < 既定.repeat,
+      '間 … 縮めたのは「語と語」だけ(くり返しは触っていない)',
+      `語と語 ${既定.word}ms / くり返し ${既定.repeat}ms`)
     /* **「今のまま」を見張る。** ここを動かすと、利用者が
        「OK」と言った長さが黙って変わる */
     ok(Math.abs(既定.repeat - 537) <= 30,
@@ -4590,6 +4603,98 @@ console.log('\nスピーチ練習(0054)')
     '棚 … 「分野をえらぶ」に戻せる(**行き止まりを作らない**)')
   ok(!/loadShelfWords|loadShelfCounts|supabase/.test(pickS),
     '棚 … `ShelfBooks` は自分では読まない(props で受け取る部品)')
+
+  /* ══════════════════════════════════════════════════════════
+     **棚の語数を、`counts[id]` と書かない**(2026-09 実機)
+
+       > なぜ０語になっているのですか？
+
+     `loadShelfCounts()` が返すのは **`Map`** なのに、`ShelfBooks` が
+     `counts[s.id]` と**オブジェクトのつもりで**読んでいた。
+     Map をそう読むと**必ず `undefined`** で、`?? 0` に落ちて
+     **35 冊ぜんぶが「0 語」**になる。
+     CLAUDE.md の「`wordStatuses` は Map である」と**まったく同じ穴**。
+
+     **「気をつける」では二度目を防げない。** 読む側が形を知らなくて
+     よいように、`shelfCountOf()` 1か所を通す ── そのうえで
+     **オブジェクトの読み方が戻っていないか**を、ここで数える */
+  ok(shelfCountOf(new Map([['it', 7]]), 'it') === 7,
+    '棚 … `Map` で数えられる')
+  ok(shelfCountOf({ it: 7 }, 'it') === 7,
+    '棚 … 素のオブジェクトでも数えられる(読む側は形を知らなくてよい)')
+  ok(shelfCountOf(new Map([['it', 7]]), 'biz') === 0,
+    '棚 … 数えた結果その棚が無ければ 0 語')
+  ok(shelfCountOf(null, 'it') === null && shelfCountOf(undefined, 'it') === null,
+    '棚 … **数えられなかったら `null`**(0 と取り違えて嘘をつかない)')
+  ok(/shelfCountOf\(counts, s\.id\)/.test(pickS),
+    '棚 … `ShelfBooks` は `shelfCountOf()` を通す')
+  ok(!/counts\[/.test(pickS),
+    '棚 … `counts[...]`(オブジェクトの読み方)が残っていない')
+  ok(/shelfCountOf\(counts, s\.id\)/.test(noCS(readS('src/components/ShelfBuilder.jsx'))),
+    '棚 … 棚を作る画面も、同じ `shelfCountOf()` を通す(数え方を2通り持たない)')
+  ok(/n === null \? '' :/.test(pickS),
+    '棚 … 数えていないときは、語数そのものを出さない')
+
+  /* ══════════════════════════════════════════════════════════
+     **「聞き流す」と「印刷 / PDF」を、すき間ゼロでくっつけない**
+     (2026-09 実機・利用者の指摘)
+
+       > 「聞き流す」と「印刷・PDF」ボタンの間に隙間がありません。
+       > これは PC での表示ですが、すべてのデバイスでこれが
+       > 起こらないように徹底してください。
+
+     **描いて測るのは `npm run test:bar`**(横に並ぶ組も見るようにした)。
+     ところが**あちらが測れるのは単語帳だけ** —— `?screen=qrrev` は
+     `QrCard` 1枚しか描かないので、**Quick Response 側は
+     描いて測れない。** だから**書いてある形**で見る。
+
+     **`margin` で離さない。`gap` で離す**(`.claude/rules/common.md`)——
+     余白は縦にしか効かないので、横に並べると 0px になる。 */
+  for (const [f, s] of [
+    ['Wordbook.jsx', noCS(readS('src/components/Wordbook.jsx'))],
+    ['QrReview.jsx', noCS(readS('src/components/QrReview.jsx'))],
+  ]) {
+    const 行 = /<div className="wb-tools">([\s\S]*?)<\/div>/.exec(s)?.[1] ?? ''
+    ok((行.match(/wb-listen/g) ?? []).length === 2,
+      `すき間 … ${f} は「聞き流す」と「印刷 / PDF」を1つの行にまとめている`)
+  }
+  {
+    /* **コメントを落としてから読む。** 落とさないと、すぐ上の説明に書いた
+       「もとは `.wb-listen { margin-top: 10px }` だった」に当たって
+       **直してあるのに赤くなる**(実際にそうなった) */
+    const css = noCS(readS('src/styles.css'))
+    ok(/\.wb-tools \{[^}]*gap:/.test(css),
+      'すき間 … `.wb-tools` は `gap` で離す(`margin` は横に効かない)')
+    /* **値そのものを読む。** `(?!0)` のような書き方は `[^}]*` が
+       後戻りして**いつでも当たる** —— 実際、いちど素通りした */
+    const 余白 = /margin-top:\s*([^;]+)/
+      .exec(/\.wb-listen \{([^}]*)\}/.exec(css)?.[1] ?? '')?.[1]?.trim()
+    ok(!余白 || /^0(px)?$/.test(余白),
+      'すき間 … `.wb-listen` は自分で余白を持たない(離すのは親の役目)',
+      余白 ?? '(持っていない)')
+  }
+  /* **骨組みが本物と食い違うと、検証は何も守らない**(CLAUDE.md)。
+     ここが `Object.fromEntries(...)` だったので、画面が Map を
+     オブジェクトで読んでいても**骨組みでは正しく数が出ていた** */
+  ok(/counts=\{new Map\(/.test(noCS(readS('src/__screens.jsx'))),
+    '棚 … 骨組みも本物と同じ `Map` を渡す')
+  /* **数える側も、1回の問い合わせで数え切らない。**
+     PostgREST は1回に返す行数に上限を持つ(既定 1,000)。
+     35 冊 × 200 語 = 7,000 行なので、`.range()` を付けずに読むと
+     **後ろの棚がまるごと 0 語**になる ——
+     利用者が見たのと**同じ見え方をする、別の原因**である */
+  {
+    const sw = noCS(readS('src/lib/shelfWords.js'))
+    const 数える = /export async function loadShelfCounts\(\)[\s\S]*?\n\}/.exec(sw)?.[0] ?? ''
+    ok(/\.range\(/.test(数える),
+      '棚 … 語数は、終わりまで読む(1回の上限で切られない)')
+    ok(/\.order\(/.test(数える),
+      '棚 … 並び順を決めて読む(ページのあいだで抜け・重なりを作らない)')
+  }
+  /* 「数えていない」と「数えたら 0 だった」を、入れ物で見分ける */
+  ok(/useState\(null\)\s*$/m.test(wbS.split('shelfCounts')[1]?.slice(0, 40) ?? '')
+    || /const \[shelfCounts, setShelfCounts\] = useState\(null\)/.test(wbS),
+    '棚 … 単語帳の控えの初めの値は `null`(`{}` にしない)')
   /* **1冊だけの人には、開いてある**(選択肢が1つのプルダウンを
      選ばせるのは、押す回数が1つ増えるだけ)。判断は `Wordbook` の1か所 */
   ok(/if \(!next\.length && shelves\.length === 1\) next = \[shelves\[0\]\.id\]/.test(wbS),

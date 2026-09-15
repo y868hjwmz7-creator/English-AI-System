@@ -955,9 +955,15 @@ const SHELFPICK = (
   <section className="card">
     {/* **語数は props で渡す**(0058)。
         `ShelfBooks` は自分では何も読まない部品なので、
-        Supabase の無い骨組みでも**そのまま描ける** */}
+        Supabase の無い骨組みでも**そのまま描ける**。
+
+        **`Map` で渡す。本物と1文字も違えない**(2026-09 実機)——
+        ここを `Object.fromEntries(...)` にしていたので、
+        画面が `counts[s.id]`(オブジェクトの読み方)のままでも
+        **骨組みでは正しく数が出て、検証が何も守っていなかった。**
+        利用者の画面では **35 冊ぜんぶが「0 語」**だった */}
     <ShelfBooks shelves={shelfList()}
-                counts={Object.fromEntries(shelfList().map((s, i) => [s.id, 12 * (i % 5)]))}
+                counts={new Map(shelfList().map((s, i) => [s.id, 12 * (i % 5)]))}
                 picked={q.get('picked') === 'none' ? [] : ['it']}
                 onPicked={() => {}} />
   </section>

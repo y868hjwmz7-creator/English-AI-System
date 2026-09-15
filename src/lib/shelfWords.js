@@ -75,13 +75,42 @@ export async function loadShelfWords(industry) {
  */
 export async function loadShelfCounts() {
   if (!supabase || !supported) return ok(null)
-  const { data, error } = await supabase.from('shelf_words').select('industry')
-  if (error) {
-    if (missing(error)) { supported = false; return ok(null) }
-    return ok(null)                     // **騒がない。** 数が出ないだけ
-  }
+  /* ══════════════════════════════════════════════════════════════
+     **終わりまで読む。1回の問い合わせで数え切らない**(2026-09)
+
+     この関数は**棚ぜんぶの行**を数える。35 冊 × 200 語 = **7,000 行**で、
+     PostgREST(Supabase)は**1回に返す行数に上限を持っている**
+     (既定は 1,000 行)。`.range()` を付けずに読むと、そこで切られて
+     **後ろの棚がまるごと「0 語」**になる —— 利用者が見た
+     「ビジネス全般(0 語)」と、**同じ見え方をする別の原因**である。
+
+     **上限がいくつでも正しい形にする。** 「返ってきた行が1ページぶんに
+     満たなくなるまで読む」なら、上限を知らなくてよい
+     (上限が 7,000 なら1回で終わる。**増える問い合わせは0回**)。
+
+     **並び順を必ず決める。** 決めないと、ページのあいだで
+     同じ行が二度来たり、抜けたりする(鍵は 分野 × そろえた語)。
+     ══════════════════════════════════════════════════════════════ */
+  const PAGE = 1000
+  const MAX_PAGES = 30                  // **際限なく読まない**(3万行で止める)
   const n = new Map()
-  for (const r of data ?? []) n.set(r.industry, (n.get(r.industry) ?? 0) + 1)
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const from = page * PAGE
+    const { data, error } = await supabase.from('shelf_words')
+      .select('industry')
+      .order('industry').order('word_norm')
+      .range(from, from + PAGE - 1)
+    if (error) {
+      if (missing(error)) { supported = false; return ok(null) }
+      /* **騒がない。** 数が出ないだけ ——
+         ただし1ページでも読めていれば、そこまでを返す
+         (**0 と書くよりはまし**。1行も読めていなければ `null`) */
+      return ok(n.size ? n : null)
+    }
+    const rows = data ?? []
+    for (const r of rows) n.set(r.industry, (n.get(r.industry) ?? 0) + 1)
+    if (rows.length < PAGE) break       // ここで終わり(ふつうは1回目で抜ける)
+  }
   return ok(n)
 }
 
