@@ -5005,17 +5005,17 @@ for (const W of [1280, 794, 453, 390, 320]) {
 
   if (!got.印) {
     ng(`紙 ${W}px … 印(\`is-printing\`)が付いていない`, '`markPrint()` が呼ばれていない')
-  } else if (got.行.length !== 4) {
+  } else if (got.行.length !== 5) {
     ng(`紙 ${W}px … 単語帳の対が刷られていない`, `${got.行.length} 行`)
-  } else if (左右.length !== 4) {
+  } else if (左右.length !== 5) {
     ng(`紙 ${W}px … 左に日本語・右に英語で並んでいない`,
       並ぶ.map((r) => `ja ${r.jaX},${r.jaY} / en ${r.enX},${r.enY}`).join(' | '))
   } else if (!got.行.some((r) => r.ja === '' && r.en === 'gist')) {
     /* **訳の無い語も落とさない**(控えがまだ引けていないだけ) */
     ng(`紙 ${W}px … 訳の無い語が落ちている`, got.行.map((r) => r.en).join(' / '))
-  } else if (番号あり.length !== 4) {
-    ng(`紙 ${W}px … 通し番号が出ていない`, `${番号あり.length} / 4`)
-  } else if (!got.見出し.includes('単語帳') || !got.見出し.includes('全 4 語')) {
+  } else if (番号あり.length !== 5) {
+    ng(`紙 ${W}px … 通し番号が出ていない`, `${番号あり.length} / 5`)
+  } else if (!got.見出し.includes('単語帳') || !got.見出し.includes('全 5 語')) {
     ng(`紙 ${W}px … 何の紙かが書かれていない`, got.見出し || '(無し)')
   } else if (!got.見出し.includes('ビジネス全般')) {
     /* **どの冊を刷ったのかを、題に書く**(2026-09 実機・利用者の指定)。
@@ -5027,12 +5027,12 @@ for (const W of [1280, 794, 453, 390, 320]) {
        ここが欠けると**10 枚刷ったうちの9枚**が名無しになる */
     ng(`紙 ${W}px … どのページの下にも出す題(--sheet-name)が置かれていない`,
       got.下の題 || '(無し)')
-  } else if (札あり.length !== 3) {
+  } else if (札あり.length !== 4) {
     /* **品詞とレベル**(2026-09 実機・利用者の指定「また、品詞とレベルも。」)。
-       骨組みは**わざと3語にだけ**付けてある —— 4つとも付けて数えると、
+       骨組みは**わざと1語だけ**空けてある(`gist`)—— 5つとも付けて数えると、
        **無い語にも空の札を出す形に書き換えても緑のまま**になる */
     ng(`紙 ${W}px … 品詞とレベルの札が出ていない`,
-      `${札あり.length} / 3(${got.行.map((r) => r.札 || '-').join(' | ')})`)
+      `${札あり.length} / 4(${got.行.map((r) => r.札 || '-').join(' | ')})`)
   } else if (空札.length) {
     ng(`紙 ${W}px … 品詞もレベルも無い語に、空の札を出している`,
       空札.map((r) => r.en).join(' / '))
@@ -5051,9 +5051,154 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ng(`紙 ${W}px … 横にはみ出している`)
   } else {
     const w = 並ぶ[0]
-    ok(`紙 ${W}px … 左が日本語・右が英語(4 行・ja x=${w.jaX} / en x=${w.enX})`
+    ok(`紙 ${W}px … 左が日本語・右が英語(5 行・ja x=${w.jaX} / en x=${w.enX})`
       + ` / 題「${got.見出し.split('全 ')[0].trim()}」`
       + ` / 札 ${札あり.map((r) => r.札).join('・')}`)
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   単語帳の紙 — **品詞ごとの小見出し / 例文 / 巻末のレクチャー**
+   (2026-09 利用者の指定)
+
+     > 単語帳のPDF化の際に、品詞ごとに並び替えて、小見出しをつけて
+     > 表示されるようにしてほしい。また、例文をつける、つけないも
+     > 選べるようにしたい。そして、単語帳の巻末とか間、どこでもよいけど、
+     > このレクチャーを入れてただの単語帳ではなく、
+     > 使いこなすことをイメージできる単語帳にしたい。
+
+   **描いて測るしかない。** 小見出しも例文の行も巻末の紙も、
+   見え方は `@media print` の中にしかない。しかも
+   **通し番号を振り直していないか**は、CSS の計算結果を読むしかない
+   (`::before` の中身は DOM に無い)。
+
+   **「出る」と「出ない」の両方を見る** —— 例文は `?ex=off`、
+   レクチャーは `?frames=off` でも測る。
+   出るほうだけを見ると、**いつでも出す形に書き換えても緑のまま**になる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const 測る = async (q2) => {
+    const page = await browser.newPage({ viewport: { width: 794, height: 1000 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=sheet${q2}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    await page.emulateMedia({ media: 'print' })
+    await page.waitForTimeout(200)
+    const got = await page.evaluate(() => {
+      const 箱 = document.querySelector('.print-target .qrsheet-groups')
+      const 例 = [...document.querySelectorAll('.print-target .qrsheet-ex')]
+      const frames = document.querySelector('.print-target .frames-sheet')
+      const 型 = [...document.querySelectorAll('.print-target ul.frames-list > li')]
+      const 型1 = 型[0]
+      const f = 型1?.querySelector('.frames-form')?.getBoundingClientRect()
+      const e = 型1?.querySelector('.frames-ex')?.getBoundingClientRect()
+      return {
+        小見出し: [...document.querySelectorAll(
+          '.print-target .qrsheet-groups .qrsheet-title')].map((t) => t.textContent.trim()),
+        /* **番号を振り直していないか。** 包みで1度だけ数え始め、
+           中の `<ol>` は打ち消す —— ここが崩れると、節ごとに 1 へ戻る */
+        包みの数え始め: 箱 ? window.getComputedStyle(箱).counterReset : '(包みが無い)',
+        中の数え直し: [...document.querySelectorAll(
+          '.print-target .qrsheet-groups ol.qrsheet-list')]
+          .map((o) => window.getComputedStyle(o).counterReset),
+        例文の数: 例.length,
+        /* **1本目だけを見ない。** 品詞ごとに並べ替えるので、
+           1本目がどの語のものかは並びで変わる ——
+           骨組みは**訳のある例文と、無い例文を1本ずつ**持たせてある */
+        例文: 例.map((e) => {
+          const li = e.closest('li')
+          const w = li?.querySelector('.qrsheet-word')
+          return {
+            幅: Math.round(e.getBoundingClientRect().width),
+            行の幅: Math.round(li.getBoundingClientRect().width),
+            下か: e.getBoundingClientRect().top
+              > (w?.getBoundingClientRect().bottom ?? 0) - 1,
+            訳: !!e.querySelector('.qrsheet-exja'),
+          }
+        }),
+        レクチャー: !!frames,
+        型の数: 型.length,
+        型の並び: f && e ? { 型X: Math.round(f.left), 例X: Math.round(e.left),
+          同じ行: Math.abs(f.top - e.top) < 8 } : null,
+        /* 巻末は**新しい紙から**(語の一覧の続きに見せない) */
+        改ページ: frames ? window.getComputedStyle(frames).breakBefore : '',
+        はみ出し: document.documentElement.scrollWidth
+          > document.documentElement.clientWidth + 1,
+      }
+    })
+    await page.close()
+    return got
+  }
+
+  const 既定 = await 測る('')
+  const 例文なし = await 測る('&ex=off')
+  const 型なし = await 測る('&frames=off')
+
+  const 欲しい小見出し = ['名詞', '動詞', '熟語・言い回し', '品詞の記録なし']
+  const 見出しが合う = 欲しい小見出し.every((w, i) => 既定.小見出し[i]?.startsWith(w))
+
+  if (既定.小見出し.length !== 4 || !見出しが合う) {
+    /* **品詞ごとに分かれ、絞り込みと同じ並びで出ているか。**
+       骨組みは**わざと4つの品詞**を混ぜてある —— 1つだけだと、
+       **分けるのをやめても小見出しが1つ出て緑のまま**になる */
+    ng('紙 … 品詞ごとの小見出しが出ていない',
+      既定.小見出し.join(' / ') || '(1つも無い)')
+  } else if (!/qr/.test(既定.包みの数え始め)) {
+    ng('紙 … 通し番号を、包みで数え始めていない', 既定.包みの数え始め)
+  } else if (既定.中の数え直し.some((c) => /qr/.test(c))) {
+    /* **ここが崩れると、節ごとに番号が 1 へ戻る。**
+       `::before` の中身は DOM に無いので、**計算結果で見るしかない** */
+    ng('紙 … 節ごとに番号を振り直している(通し番号にならない)',
+      既定.中の数え直し.join(' / '))
+  } else if (既定.例文の数 !== 2) {
+    /* 骨組みは**わざと2語にだけ**出会った文を付けてある ——
+       5つとも付けると、**無い語にも空の行を出す形に書き換えても
+       緑のまま**になる */
+    ng('紙 … 例文が出ていない', `${既定.例文の数} / 2`)
+  } else if (!既定.例文.every((e) => e.下か)) {
+    ng('紙 … 例文が、語の下の行に置かれていない')
+  } else if (!既定.例文.every((e) => e.幅 > e.行の幅 * 0.8)) {
+    /* **両方の列にまたがる。** 片方の列に押し込むと、
+       語の訳と例文の訳が同じ列で混ざって読めなくなる */
+    ng('紙 … 例文が両方の列にまたがっていない',
+      既定.例文.map((e) => `${e.幅}/${e.行の幅}`).join(' | '))
+  } else if (既定.例文.filter((e) => e.訳).length !== 1) {
+    /* **訳の無い例文に、空の行を作らない。**
+       骨組みは**訳のある例文1本・無い例文1本**にしてある ——
+       2本とも訳を持たせると、**空の訳を出す形に書き換えても緑のまま**になる */
+    ng('紙 … 例文の訳の出し方が意図どおりでない',
+      `訳あり ${既定.例文.filter((e) => e.訳).length} / 2 本中 1 本`)
+  } else if (例文なし.例文の数 !== 0) {
+    /* **「つけない」を選んだら、本当に消えるか。**
+       ここを見ないと、**いつでも出す形に書き換えても緑のまま**になる */
+    ng('紙 … 「例文をつけない」を選んでも、例文が残っている',
+      `${例文なし.例文の数} 行`)
+  } else if (例文なし.小見出し.length !== 4) {
+    /* 例文をやめても、**品詞の小見出しは残る**(別の話である) */
+    ng('紙 … 例文をやめると、小見出しまで消える', 例文なし.小見出し.join(' / '))
+  } else if (!既定.レクチャー) {
+    ng('紙 … 巻末の「英文の型」のレクチャーが出ていない')
+  } else if (既定.型の数 < 60) {
+    /* **型を減らさない。** `sentenceFrames.js` の 66 型がそのまま並ぶ */
+    ng('紙 … 巻末のレクチャーの型が足りない', `${既定.型の数} 型`)
+  } else if (!既定.型の並び?.同じ行 || !(既定.型の並び.例X > 既定.型の並び.型X)) {
+    /* **型が左、例文が右。** 語の一覧と同じ向きにそろえる */
+    ng('紙 … 巻末のレクチャーが「左が型・右が例文」で並んでいない',
+      JSON.stringify(既定.型の並び))
+  } else if (既定.改ページ !== 'page') {
+    /* **新しい紙から始める。** 語の一覧の余りに続けると、
+       最後の品詞の続きのように見える */
+    ng('紙 … 巻末のレクチャーが、新しい紙から始まっていない', 既定.改ページ)
+  } else if (型なし.レクチャー) {
+    ng('紙 … レクチャーを出さない指定が効いていない')
+  } else if (型なし.小見出し.length !== 4) {
+    ng('紙 … レクチャーをやめると、語の一覧まで消える')
+  } else if (既定.はみ出し) {
+    ng('紙 … 横にはみ出している')
+  } else {
+    ok(`紙 … 品詞ごとの小見出し ${既定.小見出し.join('・')}`
+      + ` / 通し番号は振り直さない / 例文 ${既定.例文の数} 行(訳つき 1・off で 0)`
+      + ` / 巻末のレクチャー ${既定.型の数} 型`)
   }
 }
 

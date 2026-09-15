@@ -80,7 +80,11 @@ import { CloseIcon, FocusIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.
 import { lockScroll } from '../lib/scrollLock.js'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
-import { sheetNote, sheetTitle, wordSheetPairs } from '../lib/reviewSheet.js'
+import {
+  loadSheetExample, loadSheetFrames, saveSheetExample, saveSheetFrames,
+  sheetNote, sheetTitle, wordSheetPairs, wordSheetSections,
+} from '../lib/reviewSheet.js'
+import { frameCount } from '../data/sentenceFrames.js'
 
 /**
  * 画面の切り替え(2026-08 利用者の指定・0027)。
@@ -335,6 +339,12 @@ export default function Wordbook({
      中身は刷る一瞬だけ描く —— 1,200 語を常に描くと画面が重くなる
      (教材のカードの `printId` とまったく同じ作法・CLAUDE.md) */
   const [printing, setPrinting] = useState(false)
+  /* 紙に例文を載せるか(2026-09 利用者の指定「例文をつける、つけないも選べる」)。
+     **覚える。** 鍵の名前は `reviewSheet.js` が持つ(画面に書かない) */
+  const [sheetEx, setSheetEx] = useState(loadSheetExample)
+  /* 巻末の「英文の型」のレクチャーをつけるか。**既定はつける**(利用者の指定)。
+     型は 66 あり**5ページほど増える**ので、断る道も残す */
+  const [sheetFrames, setSheetFrames] = useState(loadSheetFrames)
   /* **出題の形は覚える**(2026-09)。「おまかせ」は外した ——
      この人の単語帳はほとんどが箱0で、**ずっと4択**にしかならず、
      名前が嘘になっていた(経緯は `wordQuiz.js` の頭) */
@@ -765,7 +775,14 @@ export default function Wordbook({
    *
    * 対に直すのは `wordSheetPairs()` 1か所(`reviewSheet.js`)。
    */
-  const sheetPairs = wordSheetPairs(shownRows)
+  const sheetPairs = wordSheetPairs(shownRows, { example: sheetEx })
+  /* **品詞ごとに分けて、小見出しを付ける**(2026-09 利用者の指定)。
+     分けるのは `wordSheetSections()` 1か所 —— ここで `pos === '名詞'` と
+     書くと、**基礎単語(`n` / `v`)で必ず抜ける** */
+  const sheetSections = wordSheetSections(sheetPairs)
+  /* 例文の載る語の数。**押す前に出す** —— 例文の有無で紙の枚数が変わるので、
+     「つけたのに1語も載らない」を黙って起こさない */
+  const sheetExCount = sheetPairs.filter((p) => p.ex).length
   usePrintSheet(printing, () => setPrinting(false))
 
   /**
@@ -1495,6 +1512,30 @@ export default function Wordbook({
                   onClick={() => setPrinting(true)}>
             <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 語)`}
           </button>
+          {/* **例文をつける / つけない**(2026-09 利用者の指定)。
+              例文は**出会った文**なので、**新しくは作らない = 0円**。
+              **何語に載るのかを、押す前に出す** —— 手で入れた語や
+              基礎単語には出会った文が無いので、0 語のことがある
+              (**効かない操作を、効くように見せない**) */}
+          <label className="wb-sheetex">
+            <input type="checkbox" checked={sheetEx}
+                   onChange={(e) => {
+                     setSheetEx(e.target.checked)
+                     saveSheetExample(e.target.checked)
+                   }} />
+            例文をつける({sheetExCount} 語)
+          </label>
+          {/* **巻末に「英文の型」のレクチャーを入れる**(2026-09 利用者の指定)。
+              **何型ぶん増えるのかを、押す前に出す** —— 数は
+              `frameCount()` から取る(画面で数え直さない) */}
+          <label className="wb-sheetex">
+            <input type="checkbox" checked={sheetFrames}
+                   onChange={(e) => {
+                     setSheetFrames(e.target.checked)
+                     saveSheetFrames(e.target.checked)
+                   }} />
+            巻末に型のレクチャー({frameCount()} 型)
+          </label>
         </div>
       )}
 
@@ -1988,7 +2029,10 @@ export default function Wordbook({
             date: todayKey(),
           })}
           lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
-          pairs={sheetPairs}
+          sections={sheetSections}
+          /* **巻末に「英文の型」のレクチャーを入れる**(2026-09 利用者の指定)。
+             ただの単語帳ではなく、**覚えた語を文にするところまで**見える紙にする */
+          frames={sheetFrames}
         />
       )}
     </section>

@@ -47,7 +47,7 @@ import WordRadio from './WordRadio.jsx'
 import { MusicIcon, PrintIcon } from './Icons.jsx'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
-import { qrSheetPairs, sheetNote } from '../lib/reviewSheet.js'
+import { qrSheetPairs, sheetNote, wordSheetSections } from '../lib/reviewSheet.js'
 import { listTracks } from '../lib/bgm.js'
 import { NO_GOAL, NO_WEEK, loadQrWeek, loadWeeklyGoal } from '../lib/goals.js'
 import { stopReading } from '../lib/readAloud.js'
@@ -583,7 +583,11 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
             date: today,
           })}
           lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
-          pairs={sheetPairs}
+          /* **品詞では分けない**(`byPos: false`)。ここに並ぶのは**文**で、
+             文に品詞は無い。小見出しの無い節を1つ渡すので、
+             **紙は1ドットも変わらない**(小見出しはそのときだけ出る)。
+             **巻末のレクチャーも出さない** —— 言われたのは単語帳である */
+          sections={wordSheetSections(sheetPairs, { byPos: false })}
         />
       )}
     </section>

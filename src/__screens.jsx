@@ -41,7 +41,7 @@ import LearnerBar from './components/LearnerBar.jsx'
 import { rememberLearner } from './lib/lastLearner.js'
 import WordRadio from './components/WordRadio.jsx'
 import ReviewSheet from './components/ReviewSheet.jsx'
-import { sheetNote, sheetTitle, wordSheetPairs } from './lib/reviewSheet.js'
+import { sheetNote, sheetTitle, wordSheetPairs, wordSheetSections } from './lib/reviewSheet.js'
 import { SHEET_ID } from './lib/printSheet.js'
 import { markPrint } from './lib/print.js'
 import WordbookFilter, { countNarrowed, emptyFilter } from './components/WordbookFilter.jsx'
@@ -1045,32 +1045,49 @@ const SHELFPICK = (
    緑のまま**になる。題も **`sheetTitle()` を通す** ——
    ここで「Airi さんの単語帳 — ビジネス全般」と直に書くと、
    組み立てを壊しても骨組みだけが正しく描かれてしまう。 */
-const SHEET_BODY = (
+const SHEET_ROWS = [
+  {
+    word_norm: 'take on',
+    display: 'take on',
+    meaning_ja: '引き受ける',
+    pos: '熟語',
+    material_level: 'B1',
+    // 例文(出会った文)。**訳つき**のものと、訳の無いものを混ぜてある
+    seen_in: 'She agreed to take on the project after the meeting.',
+    seen_in_ja: '彼女は会議のあと、その案件を引き受けることに同意した。',
+  },
+  {
+    word_norm: 'contingency',
+    display: 'contingency',
+    meaning_ja: '不測の事態にそなえた予備の枠。予算や日程に、あらかじめ見込んでおくもの',
+    pos: '名詞',
+    material_level: 'B2',
+    seen_in: 'We kept a contingency in the budget.',
+  },
+  // **品詞もレベルも例文も無い語。** 空の札・空の行を並べないことを、ここで測る
+  { word_norm: 'gist', display: 'gist', meaning_ja: '' },
+  // 品詞だけある語(レベルは分からない)。**同じ品詞が2語**あると、
+  // 小見出しの下に2行まとまることまで測れる
+  { word_norm: 'wrap up', display: 'wrap up', meaning_ja: '締めくくる', pos: '熟語' },
+  /* **品詞の違う語を混ぜてある。** 1つの品詞しか無いと、
+     **分けるのをやめても小見出しが1つ出て緑のまま**になる。
+     `pos` は**日本語**で持つ —— 本物の `Wordbook` は、読み込みの
+     1か所で基礎単語の短い印(`v`)を `posLabel()` で日本語にそろえてから
+     渡す(**骨組みは本物と1文字も違えない**・CLAUDE.md) */
+  { word_norm: 'postpone', display: 'postpone', meaning_ja: '延期する', pos: '動詞' },
+]
+
+/* **例文の有無は、本物と同じ道で切り替える**(`?ex=off`)。
+   骨組みだけ別の組み立てにすると、**本物を壊しても緑のまま**になる
+   (CLAUDE.md「骨組みは、本物と1文字も違えない」) */
+const SheetBody = ({ example = true, frames = true }) => (
   <div className="app">
     <ReviewSheet
       title={sheetTitle({ owner: 'Airi さん', book: 'shelf', shelves: ['business'] })}
-      note={sheetNote({ count: 4, unit: '語', group: '覚えかけ', narrowed: 2, date: '2026-09-12' })}
+      note={sheetNote({ count: 5, unit: '語', group: '覚えかけ', narrowed: 2, date: '2026-09-12' })}
       lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
-      pairs={wordSheetPairs([
-        {
-          word_norm: 'take on',
-          display: 'take on',
-          meaning_ja: '引き受ける',
-          pos: '熟語',
-          material_level: 'B1',
-        },
-        {
-          word_norm: 'contingency',
-          display: 'contingency',
-          meaning_ja: '不測の事態にそなえた予備の枠。予算や日程に、あらかじめ見込んでおくもの',
-          pos: '名詞',
-          material_level: 'B2',
-        },
-        // **品詞もレベルも無い語。** 空の札を並べないことを、ここで測る
-        { word_norm: 'gist', display: 'gist', meaning_ja: '' },
-        // 品詞だけある語(レベルは分からない)
-        { word_norm: 'wrap up', display: 'wrap up', meaning_ja: '締めくくる', pos: '熟語' },
-      ])}
+      sections={wordSheetSections(wordSheetPairs(SHEET_ROWS, { example }))}
+      frames={frames}
     />
   </div>
 )
@@ -1081,7 +1098,7 @@ function SheetScreen() {
      **印が無いと1つも当たらない。** ここで自前に付けると、
      付け方を2通り持つことになる(CLAUDE.md) */
   useEffect(() => markPrint(document.getElementById(SHEET_ID)), [])
-  return SHEET_BODY
+  return <SheetBody example={q.get('ex') !== 'off'} frames={q.get('frames') !== 'off'} />
 }
 
 const SPEECH = (

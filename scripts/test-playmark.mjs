@@ -4566,7 +4566,9 @@ console.log('\nスピーチ練習(0054)')
      **「名前が出てくるか」で見ない**(CLAUDE.md)。
      説明の中にも同じ言葉があるので、**使っている形**で見る */
   const wbS = noCS(readS('src/components/Wordbook.jsx'))
-  ok(/=\s*wordSheetPairs\(shownRows\)/.test(wbS),
+  /* **`shownRows` であることだけを見る**(例文をつけるかは別の話・
+     2026-09 に足した第2引数まで書き写すと、そこを直すたびにここが赤くなる) */
+  ok(/=\s*wordSheetPairs\(shownRows[,)]/.test(wbS),
     '紙 … 単語帳は、いま画面に出ている一覧をそのまま刷る')
   ok(/usePrintSheet\(printing,/.test(wbS),
     '紙 … 単語帳は、描き終わってから刷る(`usePrintSheet`)')
@@ -5471,6 +5473,176 @@ console.log('\nスピーチ練習(0054)')
   const lib = readD('src/lib/drillWords.js')
   ok(!/from '\.\/supabase\.js'|import\.meta\.env/.test(lib),
     '文型ドリルの語 … 算段に Supabase を持ち込まない(素の node で確かめられる)')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+ * 単語帳の紙 — **品詞ごとの小見出し・例文の有無・巻末のレクチャー**
+ *
+ * 2026-09 利用者の指定。
+ *
+ *   > 単語帳のPDF化の際に、品詞ごとに並び替えて、小見出しをつけて
+ *   > 表示されるようにしてほしい。また、例文をつける、つけないも
+ *   > 選べるようにしたい。そして、単語帳の巻末とか間、どこでもよいけど、
+ *   > このレクチャーを入れてただの単語帳ではなく、
+ *   > 使いこなすことをイメージできる単語帳にしたい。
+ *
+ * **ここでは算段だけを見る。** 見た目(左が日本語・右が英語か、
+ * 小見出しが本当に出ているか)は `npm run test:bar` が**描いて測る** ——
+ * 役目が違うので、両方要る。
+ * ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 単語帳の紙 — 品詞ごとの小見出し / 例文 / 巻末のレクチャー')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  /* **「名前が出てくるか」で見ない**(CLAUDE.md)。この節のコメントには
+     `qrsheet-list` も `pos === '名詞'` もそのまま書いてあるので、
+     **落としてから**使っている形で数える */
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+  const sheet = await import('../src/lib/reviewSheet.js')
+  const frames = await import('../src/data/sentenceFrames.js')
+
+  const ROWS = [
+    { word_norm: 'plan', display: 'plan', meaning_ja: '計画', pos: '名詞',
+      seen_in: 'We changed the plan.', seen_in_ja: '計画を変えました。' },
+    // **基礎単語の短い印。** 日本語1語と混ぜてある ——
+    // `posGroupOf()` を通していないと、この語だけ落ちる
+    { word_norm: 'postpone', display: 'postpone', meaning_ja: '延期する', pos: 'v' },
+    { word_norm: 'take on', display: 'take on', meaning_ja: '引き受ける', pos: '熟語' },
+    // **品詞の分からない語。** 落とさず、いちばん後ろへ
+    { word_norm: 'gist', display: 'gist', meaning_ja: '要点' },
+    // **窓口が返す知らない言葉。** 当てずっぽうで名詞に入れない
+    // (`句動詞` は `posGroups.js` の一覧にあるので、ここでは使わない ——
+    //  一覧に在る言葉で試すと、**振り分けを壊しても緑のまま**になる)
+    { word_norm: 'ASAP', display: 'ASAP', meaning_ja: 'できるだけ早く', pos: '略語' },
+  ]
+
+  /* ── ① 品詞ごとに分ける ──────────────────────────── */
+  const secs = sheet.wordSheetSections(sheet.wordSheetPairs(ROWS))
+  ok(secs.length === 4, '紙の節 … 品詞ごとに分かれる',
+    secs.map((x) => `${x.label}(${x.pairs.length})`).join(' / '))
+  ok(secs[0].label === '名詞' && secs[1].label === '動詞',
+    '紙の節 … 並びは絞り込みと同じ(名詞 → 動詞 …)')
+  /* **短い印(`v`)も動詞へ。** `pos === '動詞'` と書いていたら、ここで落ちる */
+  ok(secs[1].pairs.some((x) => x.en === 'postpone'),
+    '紙の節 … 基礎単語の短い印(v)も、動詞にまとまる')
+  /* **分からないものは、いちばん後ろの節へ。落とさない** */
+  const last = secs[secs.length - 1]
+  ok(last.id === 'none' && last.pairs.length === 2,
+    '紙の節 … 品詞の分からない語は、落とさずいちばん後ろへ',
+    `${last.label}(${last.pairs.length})`)
+  ok(!secs.some((x) => x.label === 'その他'),
+    '紙の節 … 当てずっぽうの「その他」を作らない')
+  /* **1語も落ちていない** */
+  ok(secs.reduce((n, x) => n + x.pairs.length, 0) === ROWS.length,
+    '紙の節 … 1語も落ちていない')
+  /* **0語の節は出さない**(空の小見出しを刷らない) */
+  ok(!secs.some((x) => x.pairs.length === 0), '紙の節 … 0語の節は出さない')
+
+  /* ── ② Quick Response 帳は分けない ─────────────────── */
+  const flat = sheet.wordSheetSections(sheet.wordSheetPairs(ROWS), { byPos: false })
+  ok(flat.length === 1 && flat[0].label === '' && flat[0].pairs.length === ROWS.length,
+    '紙の節 … byPos を偽にすると、小見出しの無い1つの節になる')
+  ok(sheet.wordSheetSections([], { byPos: false }).length === 0,
+    '紙の節 … 1つも無ければ、節も作らない')
+
+  /* ── ③ 例文をつける / つけない ────────────────────── */
+  const noEx = sheet.wordSheetPairs(ROWS)
+  ok(!('ex' in noEx[0]), '紙の例文 … つけないときは、欄ごと持たせない')
+  const withEx = sheet.wordSheetPairs(ROWS, { example: true })
+  ok(withEx[0].ex === 'We changed the plan.' && withEx[0].exJa === '計画を変えました。',
+    '紙の例文 … 出会った文(seen_in)と、その訳をそのまま使う')
+  ok(!('ex' in withEx[1]),
+    '紙の例文 … 出会った文の無い語には、空の行を作らない')
+  /* **新しく作らない = 0円。** 窓口を1回も呼ばない */
+  ok(!/lookupWord|generateSection|supabase|import\.meta\.env/.test(readD('src/lib/reviewSheet.js')),
+    '紙の例文 … 例文を新しく作らない(窓口を1回も呼ばない・0円)')
+  /* **既定は「つける」。** この指定の眼目である */
+  ok(sheet.loadSheetExample() === true, '紙の例文 … 既定は「つける」')
+  /* **鍵の名前は1か所。** 画面に書かない */
+  ok(!/eas\.sheetExample/.test(readD('src/components/Wordbook.jsx')),
+    '紙の例文 … 覚える鍵の名前を、画面に書かない')
+
+  /* ── ④ 巻末のレクチャー ───────────────────────────── */
+  ok(frames.FRAME_SECTIONS.length === 3 && frames.frameCount() >= 60,
+    '巻末のレクチャー … ①②③の3節で、型が 60 以上ある',
+    `${frames.frameCount()} 型`)
+  /* **実在の人物・会社の名前を入れない**(`speechStyles.js` と同じ決まり) */
+  const names = /Elon|Musk|Jobs|Apple|Google|Microsoft|Amazon|Tesla/
+  ok(!frames.FRAME_SECTIONS.some((x) => x.groups.some((g) =>
+    g.rows.some((r) => names.test(r.ex) || names.test(r.form)))),
+  '巻末のレクチャー … 例文に実在の人物・企業の名前を入れない')
+  /* **型が重なっていない**(同じ型を2度刷らない) */
+  {
+    const all = frames.FRAME_SECTIONS.flatMap((x) => x.groups.flatMap((g) => g.rows.map((r) => r.form)))
+    ok(new Set(all).size === all.length, '巻末のレクチャー … 同じ型が2度出てこない')
+  }
+  /* **資料と食い違わない。**
+     `docs/sentence-frames.html` はトレーナーに渡す詳しいほうで、
+     こちらはゲストが引く一覧である。**役目は違うが、型が違ってはいけない** ——
+     片方に足して、もう片方に足し忘れると**言っていることが2つ**になる */
+  {
+    const html = readD('docs/sentence-frames.html')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+    const miss = []
+    for (const sec of frames.FRAME_SECTIONS) {
+      for (const g of sec.groups) {
+        for (const r of g.rows) {
+          if (!html.includes(r.form.replace(/\s+/g, ' '))) miss.push(`型 ${r.form}`)
+          if (!html.includes(r.ex.replace(/\s+/g, ' '))) miss.push(`例 ${r.ex}`)
+        }
+      }
+    }
+    ok(miss.length === 0,
+      '巻末のレクチャー … 型と例文が、docs/sentence-frames.html と食い違わない',
+      miss.slice(0, 3).join(' / '))
+  }
+  /* **型を画面に書き写さない**(資料を直したときに、紙だけ古くなる) */
+  {
+    const fs2 = noNote(readD('src/components/FramesSheet.jsx'))
+    ok(/from '\.\.\/data\/sentenceFrames\.js'/.test(fs2),
+      '巻末のレクチャー … 型は sentenceFrames.js から読む(書き写さない)')
+    ok(!/S allows|keeps 人 from/.test(fs2),
+      '巻末のレクチャー … 画面の中に型を書かない')
+  }
+  /* **語の番号と見分けが付かなくなるので、型には番号を振らない** */
+  ok(!/qrsheet-list/.test(noNote(readD('src/components/FramesSheet.jsx'))),
+    '巻末のレクチャー … 語の一覧(通し番号つき)の指定に乗せない')
+
+  /* ── ⑤ 画面が本当に呼んでいるか ───────────────────── */
+  {
+    const wb = readD('src/components/Wordbook.jsx')
+    ok(/= wordSheetSections\(sheetPairs\)/.test(wb),
+      '単語帳の紙 … 画面が wordSheetSections() を通している')
+    ok(/wordSheetPairs\(shownRows, \{ example: sheetEx \}\)/.test(wb),
+      '単語帳の紙 … 例文をつけるかを、対の作り方へ渡している')
+    ok(/sections=\{sheetSections\}/.test(wb) && /frames=\{sheetFrames\}/.test(wb),
+      '単語帳の紙 … 節と、巻末のレクチャーを渡している')
+    /* **既定は「つける」**(利用者の指定は「入れて」である)。
+       ただし 66 型は5ページほどになるので、**断る道も残す** */
+    ok(sheet.loadSheetFrames() === true, '巻末のレクチャー … 既定は「つける」')
+    ok(!/eas\.sheetFrames/.test(wb),
+      '巻末のレクチャー … 覚える鍵の名前を、画面に書かない')
+    /* **何型ぶん増えるのかを、押す前に出す**(画面で数え直さない) */
+    ok(/\{frameCount\(\)\} 型/.test(wb),
+      '巻末のレクチャー … 押す前に、型の数を出す')
+    /* **画面で品詞を書き分けない**(基礎単語の `v` で必ず抜ける) */
+    ok(!/pos === '名詞'|pos === '動詞'/.test(noNote(wb)),
+      '単語帳の紙 … 画面の中で品詞を名指ししない')
+    const qr = readD('src/components/QrReview.jsx')
+    ok(/wordSheetSections\(sheetPairs, \{ byPos: false \}\)/.test(qr),
+      'Quick Response 帳 … 品詞では分けない(文に品詞は無い)')
+    ok(!/frames/.test(qr),
+      'Quick Response 帳 … 巻末のレクチャーは出さない(言われた場所だけを直す)')
+    /* **骨組みは本物と1文字も違えない**(CLAUDE.md)。
+       ここが食い違うと、`npm run test:bar` は何も守らない */
+    const sc = readD('src/__screens.jsx')
+    ok(/sections=\{wordSheetSections\(wordSheetPairs\(SHEET_ROWS, \{ example \}\)\)\}/.test(sc),
+      '骨組み … 本物と同じ道で節を作っている')
+  }
 }
 
 console.log(ng
