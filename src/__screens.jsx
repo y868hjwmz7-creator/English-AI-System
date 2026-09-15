@@ -41,7 +41,7 @@ import LearnerBar from './components/LearnerBar.jsx'
 import { rememberLearner } from './lib/lastLearner.js'
 import WordRadio from './components/WordRadio.jsx'
 import ReviewSheet from './components/ReviewSheet.jsx'
-import { sheetNote, wordSheetPairs } from './lib/reviewSheet.js'
+import { sheetNote, sheetTitle, wordSheetPairs } from './lib/reviewSheet.js'
 import { SHEET_ID } from './lib/printSheet.js'
 import { markPrint } from './lib/print.js'
 import WordbookFilter, { countNarrowed, emptyFilter } from './components/WordbookFilter.jsx'
@@ -997,22 +997,38 @@ const SHELFPICK = (
    **わざと長い訳と長い英文を混ぜてある** —— 短いものばかりだと、
    横に並べるのをやめて縦に積んでも**同じに見えて緑のまま**になる
    (`?screen=radio` に長い語を混ぜてあるのと同じ理由)。
-   **訳の無い語も1つ入れてある**(控えがまだ引けていない語は落とさない)。 */
+   **訳の無い語も1つ入れてある**(控えがまだ引けていない語は落とさない)。
+
+   **品詞とレベルは、あえて欠けたものを混ぜてある**(2026-09)——
+   ぜんぶに付いていると、**無い語にも空の札を出す形に書き換えても
+   緑のまま**になる。題も **`sheetTitle()` を通す** ——
+   ここで「Airi さんの単語帳 — ビジネス全般」と直に書くと、
+   組み立てを壊しても骨組みだけが正しく描かれてしまう。 */
 const SHEET_BODY = (
   <div className="app">
     <ReviewSheet
-      title="Airi さんの単語帳"
+      title={sheetTitle({ owner: 'Airi さん', book: 'shelf', shelves: ['business'] })}
       note={sheetNote({ count: 4, unit: '語', group: '覚えかけ', narrowed: 2, date: '2026-09-12' })}
       lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
       pairs={wordSheetPairs([
-        { word_norm: 'take on', display: 'take on', meaning_ja: '引き受ける' },
+        {
+          word_norm: 'take on',
+          display: 'take on',
+          meaning_ja: '引き受ける',
+          pos: '熟語',
+          material_level: 'B1',
+        },
         {
           word_norm: 'contingency',
           display: 'contingency',
           meaning_ja: '不測の事態にそなえた予備の枠。予算や日程に、あらかじめ見込んでおくもの',
+          pos: '名詞',
+          material_level: 'B2',
         },
+        // **品詞もレベルも無い語。** 空の札を並べないことを、ここで測る
         { word_norm: 'gist', display: 'gist', meaning_ja: '' },
-        { word_norm: 'wrap up', display: 'wrap up', meaning_ja: '締めくくる' },
+        // 品詞だけある語(レベルは分からない)
+        { word_norm: 'wrap up', display: 'wrap up', meaning_ja: '締めくくる', pos: '熟語' },
       ])}
     />
   </div>

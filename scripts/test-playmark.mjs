@@ -39,7 +39,9 @@ import {
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
-import { qrSheetPairs, sheetNote, wordSheetPairs } from '../src/lib/reviewSheet.js'
+import {
+  bookLabel, cssString, qrSheetPairs, sheetNote, sheetTitle, wordSheetPairs,
+} from '../src/lib/reviewSheet.js'
 import {
   MAX_SPEECH_CHARS, SPEECH_COST_YEN, SPEECH_LEVEL_FALLBACK, isBlankDraft,
   isReviewed, sortSpeeches, speechCostYen, speechLevelOf, speechLines,
@@ -4351,6 +4353,58 @@ console.log('\nスピーチ練習(0054)')
   ok(wordSheetPairs(null).length === 0 && wordSheetPairs(undefined).length === 0,
     '紙 … 一覧でないものを渡しても落ちない')
 
+  /* ── 品詞とレベル(2026-09 実機・利用者の指定「また、品詞とレベルも。」)──
+     **新しい入れ物を作っていない。** 行がもともと持っている
+     `pos` と `material_level` を、そのまま持たせるだけである */
+  const wp3 = wordSheetPairs([
+    {
+      word_norm: 'take on', display: 'take on', meaning_ja: '引き受ける',
+      pos: '熟語', material_level: 'B1',
+    },
+    { word_norm: 'gist', display: 'gist', meaning_ja: '要点' },
+  ])
+  ok(wp3[0].pos === '熟語' && wp3[0].level === 'B1',
+    '紙 … 品詞とレベルを持つ(`pos` / `material_level` から)')
+  ok(wp3[1].pos === '' && wp3[1].level === '',
+    '紙 … 分からない語は空のまま(当てずっぽうで埋めない)')
+
+  /* ── どの単語帳を刷ったのかを、題に書く ──
+       > タイトルの部分を「単語」だけでなく「ビジネス一般」と… */
+  ok(sheetTitle({}) === '単語帳', '紙 … 自分の単語帳は「単語帳」だけ')
+  ok(sheetTitle({ owner: 'Airi さん' }) === 'Airi さんの単語帳',
+    '紙 … 誰の単語帳かを題に書く')
+  ok(sheetTitle({ book: 'shelf', shelves: ['business'] }) === '単語帳 — ビジネス全般',
+    '紙 … 業種べつは、棚の名前を題に書く')
+  ok(sheetTitle({ owner: 'Airi さん', book: 'shelf', shelves: ['business'] })
+    === 'Airi さんの単語帳 — ビジネス全般',
+    '紙 … 誰の・どの冊かを、両方とも題に書く')
+  ok(sheetTitle({ book: 'basic', tier: 'full' }) === '単語帳 — 標準1200語',
+    '紙 … 基礎単語は、段の名前を題に書く')
+  ok(bookLabel({ book: 'shelf', shelves: ['business', 'it'] }) === 'ビジネス全般 / IT・技術',
+    '紙 … 棚を2冊開いていれば、2つとも書く')
+  ok(bookLabel({ book: 'shelf', shelves: [] }) === ''
+    && bookLabel({ book: 'shelf', shelves: ['', null] }) === '',
+    '紙 … 棚を1冊も開いていなければ、題に足さない')
+  /* **知らない id は、そのまま出す**(`shelfLabel()` の決まりに従う)。
+     題から**黙って落とさない** —— 分野を組み替えたあとでも、
+     何を刷ったのかが紙に残る(**黙って減らさない**・CLAUDE.md)。
+     **ここで名前の引き方を書き換えない**(一覧は `shelves.js` 1か所) */
+  ok(bookLabel({ book: 'shelf', shelves: ['zzz'] }) === 'zzz',
+    '紙 … 名前の引けない棚も、題から黙って落とさない')
+  ok(bookLabel({}) === '' && bookLabel() === '',
+    '紙 … 冊の名前は、渡さなくても落ちない')
+
+  /* ── ページの下へ渡す題(`@page` の余白の箱)──
+     **引用符と `\` を逃がす。** 逃がさないと、題に `"` が1つ入った
+     だけで宣言ごと壊れ、**どのページにも何も出なくなる** */
+  ok(cssString('単語帳 — ビジネス全般') === '"単語帳 — ビジネス全般"',
+    '紙 … 題を CSS の文字列に直す')
+  ok(cssString('a "b" c') === '"a \\"b\\" c"', '紙 … 引用符を逃がす')
+  ok(cssString('a \\ b') === '"a \\\\ b"', '紙 … `\\` を逃がす')
+  ok(cssString('a\nb  c') === '"a b c"', '紙 … 改行と連なる空白は1つに直す')
+  ok(cssString(null) === '""' && cssString(undefined) === '""',
+    '紙 … 題が無くても落ちない')
+
   const qp = qrSheetPairs([
     { en_norm: 'we need it', en: 'We need it.', ja: 'それが要ります。' },
     { en_norm: '', en: '', ja: '英語が無いので落ちる' },
@@ -4384,7 +4438,28 @@ console.log('\nスピーチ練習(0054)')
     && /className="qrsheet-ja"/.test(sheet)
     && /className="qrsheet-en"/.test(sheet),
     '紙 … 教材の紙の Quick Response と同じ指定に乗っている')
-  ok(/lang="en"/.test(sheet), '紙 … 英語の側に `lang="en"` を付けている')
+  /* **`lang="en"` は語そのものに付ける。** 囲みに付けると、
+     すぐ隣の品詞(日本語)まで英語の字づかい(12.5pt)で刷られる */
+  ok(/className="qrsheet-word" lang="en"/.test(sheet),
+    '紙 … 英語そのものに `lang="en"` を付けている')
+  ok(!/className="qrsheet-en" lang="en"/.test(sheet),
+    '紙 … 囲みには `lang="en"` を付けない(品詞まで英語の字になる)')
+  /* **無い札は出さない。** 空の札を並べると、紙に意味のない点が増える */
+  ok(/\(p\.pos \|\| p\.level\) && \(/.test(noCS(sheet)),
+    '紙 … 品詞もレベルも無い語には、札そのものを出さない')
+
+  /* ── どのページの下にも題を出す(`--sheet-name`)──
+     ページの下の文字は `@page` の余白の箱が描くので **DOM に無い。**
+     渡す道はカスタムプロパティしかない。
+     **紙をやめたら必ず外す** —— 外さないと、そのあと教材を刷ったときに
+     単語帳の題が下に出たままになる */
+  const sheetC = noCS(sheet)
+  ok(/setProperty\('--sheet-name', cssString\(title\)\)/.test(sheetC),
+    '紙 … 題を `<html>` に置く(どのページの下にも出すため)')
+  ok(/removeProperty\('--sheet-name'\)/.test(sheetC),
+    '紙 … 紙をやめたら、題を外す(教材の紙に残さない)')
+  ok(/useLayoutEffect\(/.test(sheetC),
+    '紙 … 描き終わる前に置く(`window.print()` に間に合わせる)')
 
   /* ── 画面が本当に呼んでいるか ──
      **「名前が出てくるか」で見ない**(CLAUDE.md)。
@@ -4397,6 +4472,24 @@ console.log('\nスピーチ練習(0054)')
   ok(/\{printing && \(\s*<ReviewSheet/.test(wbS),
     '紙 … 単語帳は、刷る一瞬だけ中身を描く')
   ok(/setPrinting\(true\)/.test(wbS), '紙 … 単語帳に、刷るボタンがある')
+  /* **題の組み立ては1か所。** 画面の中で `book === 'shelf'` と書くと、
+     冊を足すたびに食い違う(`remakeModeOf()` と同じ考え方) */
+  ok(/title=\{sheetTitle\(\{/.test(wbS),
+    '紙 … 単語帳は、題を `sheetTitle()` に組ませる')
+  ok(!/title=\{learnerName \?/.test(wbS),
+    '紙 … 画面の中で題を組み立てていない')
+
+  /* ── ページ数(`@page` の余白の箱)──
+     **`@page` を分けて書く。** `size` / `margin` と同じ規則に混ぜると、
+     余白の箱を読めないブラウザで**用紙の大きさごと落ちる**恐れがある。
+     実測(Chromium・A4・200 行): `1 / 6` 〜 `6 / 6` が右下に出た */
+  const css = noCS(readS('src/styles.css'))
+  ok(/@bottom-right\s*\{[^}]*counter\(page\)[^}]*counter\(pages\)/.test(css),
+    '紙 … ページ数を余白の箱に出す(`counter(page) / counter(pages)`)')
+  ok(/@bottom-left\s*\{[^}]*var\(--sheet-name, ""\)/.test(css),
+    '紙 … どのページの下にも題を出す(控えは空の文字列)')
+  ok(/@page \{ size: A4;[^}]*\}/.test(css),
+    '紙 … 用紙の大きさは、余白の箱とは別の `@page` に書く')
 
   const qrS = noCS(readS('src/components/QrReview.jsx'))
   ok(/=\s*qrSheetPairs\(filtered\)/.test(qrS),

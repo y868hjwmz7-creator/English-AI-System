@@ -4742,12 +4742,23 @@ for (const W of [1280, 794, 453, 390, 320]) {
     const rows = [...document.querySelectorAll('.print-target ol.qrsheet-list > li')]
     const 行 = rows.map((li) => {
       const ja = li.querySelector('.qrsheet-ja')
-      const en = li.querySelector('.qrsheet-en')
+      /* **英語そのものを測る。** `.qrsheet-en` は囲みになっていて、
+         中に品詞とレベルの札も入る(2026-09) */
+      const en = li.querySelector('.qrsheet-word')
+      const tag = li.querySelector('.qrsheet-tags')
       const jb = ja?.getBoundingClientRect()
       const eb = en?.getBoundingClientRect()
+      const tb = tag?.getBoundingClientRect()
       return {
         ja: ja?.textContent?.trim() ?? '',
         en: en?.textContent?.trim() ?? '',
+        札: tag ? tag.textContent.trim() : '',
+        /* **箱そのものが在るか**も見る。中身が空の札を出しても
+           高さが 0 になるので、見えるかどうかでは見分けられない */
+        札の箱: !!tag,
+        札X: tb ? Math.round(tb.left) : null,
+        札大きさ: tag ? parseFloat(window.getComputedStyle(tag).fontSize) : null,
+        語大きさ: en ? parseFloat(window.getComputedStyle(en).fontSize) : null,
         jaX: jb ? Math.round(jb.left) : null,
         enX: eb ? Math.round(eb.left) : null,
         jaY: jb ? Math.round(jb.top) : null,
@@ -4760,6 +4771,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
       印: document.body.classList.contains('is-printing'),
       行,
       見出し: 見える(head) ? head.textContent.trim() : '',
+      /* ページの下に出す題は **DOM に無い**(`@page` の余白の箱)。
+         `<html>` に置いたカスタムプロパティを、そのまま読む */
+      下の題: document.documentElement.style.getPropertyValue('--sheet-name').trim(),
       はみ出し: document.documentElement.scrollWidth
         > document.documentElement.clientWidth + 1,
     }
@@ -4771,6 +4785,12 @@ for (const W of [1280, 794, 453, 390, 320]) {
      縦に積むと、英語は下(Y が違う)へ回る */
   const 左右 = 並ぶ.filter((r) => r.enX > r.jaX && Math.abs(r.enY - r.jaY) < 8)
   const 番号あり = got.行.filter((r) => r.番号 && r.番号 !== 'none' && r.番号 !== 'normal')
+  const 札あり = got.行.filter((r) => r.札)
+  /* **品詞もレベルも無い語に、空の札を出していないか。**
+     骨組みの `gist` がそれにあたる(控えがまだ引けていない語)。
+     **箱の有無で見る** —— 中身が空の札は高さ 0 になるので、
+     見えるかどうかでは「出していない」と見分けが付かない */
+  const 空札 = got.行.filter((r) => r.札の箱 && !r.札)
 
   if (!got.印) {
     ng(`紙 ${W}px … 印(\`is-printing\`)が付いていない`, '`markPrint()` が呼ばれていない')
@@ -4786,11 +4806,43 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ng(`紙 ${W}px … 通し番号が出ていない`, `${番号あり.length} / 4`)
   } else if (!got.見出し.includes('単語帳') || !got.見出し.includes('全 4 語')) {
     ng(`紙 ${W}px … 何の紙かが書かれていない`, got.見出し || '(無し)')
+  } else if (!got.見出し.includes('ビジネス全般')) {
+    /* **どの冊を刷ったのかを、題に書く**(2026-09 実機・利用者の指定)。
+         > タイトルの部分を「単語」だけでなく「ビジネス一般」と
+       単語帳は3冊あるので、「単語帳」だけでは刷った紙から分からない */
+    ng(`紙 ${W}px … 題に、どの単語帳かが書かれていない`, got.見出し)
+  } else if (!got.下の題.includes('ビジネス全般')) {
+    /* ページの下の題(`@page` の余白の箱)。**2枚目から先で効く**ので、
+       ここが欠けると**10 枚刷ったうちの9枚**が名無しになる */
+    ng(`紙 ${W}px … どのページの下にも出す題(--sheet-name)が置かれていない`,
+      got.下の題 || '(無し)')
+  } else if (札あり.length !== 3) {
+    /* **品詞とレベル**(2026-09 実機・利用者の指定「また、品詞とレベルも。」)。
+       骨組みは**わざと3語にだけ**付けてある —— 4つとも付けて数えると、
+       **無い語にも空の札を出す形に書き換えても緑のまま**になる */
+    ng(`紙 ${W}px … 品詞とレベルの札が出ていない`,
+      `${札あり.length} / 3(${got.行.map((r) => r.札 || '-').join(' | ')})`)
+  } else if (空札.length) {
+    ng(`紙 ${W}px … 品詞もレベルも無い語に、空の札を出している`,
+      空札.map((r) => r.en).join(' / '))
+  } else if (!got.行.some((r) => r.札 === '熟語 · B1')) {
+    ng(`紙 ${W}px … 品詞とレベルが両方そろっていない`,
+      got.行.map((r) => r.札 || '-').join(' | '))
+  } else if (札あり.some((r) => !(r.札大きさ < r.語大きさ))) {
+    /* **添え物なので、語より先に目が行ってはいけない**(CLAUDE.md)。
+       **値を書き写さない** —— 語の大きさと比べる */
+    ng(`紙 ${W}px … 札が語より小さくない`,
+      札あり.map((r) => `${r.札大きさ} / ${r.語大きさ}`).join(' | '))
+  } else if (札あり.some((r) => r.札X <= r.enX)) {
+    ng(`紙 ${W}px … 札が英語のうしろに置かれていない`,
+      札あり.map((r) => `札 ${r.札X} / 英 ${r.enX}`).join(' | '))
   } else if (got.はみ出し) {
     ng(`紙 ${W}px … 横にはみ出している`)
   } else {
     const w = 並ぶ[0]
-    ok(`紙 ${W}px … 左が日本語・右が英語(4 行・ja x=${w.jaX} / en x=${w.enX})`)
+    ok(`紙 ${W}px … 左が日本語・右が英語(4 行・ja x=${w.jaX} / en x=${w.enX})`
+      + ` / 題「${got.見出し.split('全 ')[0].trim()}」`
+      + ` / 札 ${札あり.map((r) => r.札).join('・')}`)
   }
 }
 

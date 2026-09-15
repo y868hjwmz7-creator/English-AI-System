@@ -80,7 +80,7 @@ import { CloseIcon, FocusIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.
 import { lockScroll } from '../lib/scrollLock.js'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
-import { sheetNote, wordSheetPairs } from '../lib/reviewSheet.js'
+import { sheetNote, sheetTitle, wordSheetPairs } from '../lib/reviewSheet.js'
 
 /**
  * 画面の切り替え(2026-08 利用者の指定・0027)。
@@ -1971,7 +1971,15 @@ export default function Wordbook({
           見た目は**教材の紙の Quick Response と同じ指定**に乗っている */}
       {printing && (
         <ReviewSheet
-          title={learnerName ? `${honor(learnerName)}の単語帳` : '単語帳'}
+          /* **どの冊を刷ったのかを、題に書く**(2026-09 実機・利用者の指定)。
+             組み立てるのは `sheetTitle()` 1か所 —— ここで
+             `book === 'shelf'` と書くと、冊を足すたびに食い違う */
+          title={sheetTitle({
+            owner: learnerName ? honor(learnerName) : '',
+            book,
+            shelves: shelfPick,
+            tier,
+          })}
           note={sheetNote({
             count: sheetPairs.length,
             unit: '語',
