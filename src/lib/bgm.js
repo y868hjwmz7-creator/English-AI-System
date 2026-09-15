@@ -19,15 +19,20 @@
  *   (分けると、トレーナーが1人ずつ入れて回ることになる)。
  *   **判定は 0049 の RLS。画面に持たせない。**
  *
- * 【算段は `wordRadio.js`】
- *   「どこで流すか」「音の大きさ」はあちらが持っている
- *   (**素の node で確かめられる**形にしてある)。
+ * 【算段は別のところ】
+ *   「どこで流すか」は `wordRadio.js`、**「音の大きさ」は `mixVolume.js`**
+ *   が持っている(どちらも**素の node で確かめられる**形にしてある)。
  *   ここは Supabase と `<audio>` を触るところだけである。
+ *
+ * 【自動で小さくする仕組みは、もう無い】
+ *   2026-09 利用者の指定「英語音声が再生される時に自動で音楽の音量を
+ *   下げる機能は必要ありません」。`duckBgm()` は**道具ごと消してある。**
+ *   大きさは聴く人が決める(左のメニューの下)。
  *
  * **例外を外に出さない。** 呼んだ側の `await` がそこで止まる。
  */
 import { supabase, withTimeout } from './supabase.js'
-import { BGM_VOLUME, bgmVolume } from './wordRadio.js'
+import { bgmLevel, setBgmLevel } from './mixVolume.js'
 
 const BUCKET = 'bgm'
 const TABLE = 'bgm_tracks'
@@ -182,7 +187,6 @@ export async function trackUrl(row) {
 let el = null
 let list = []
 let at = 0
-let ducked = false
 let ramp = null
 
 function audio() {
@@ -190,7 +194,7 @@ function audio() {
   if (typeof Audio === 'undefined') return null
   el = new Audio()
   el.preload = 'auto'
-  el.volume = BGM_VOLUME
+  el.volume = bgmLevel()
   /* **次の曲へ。** 1曲で終わると、聞き流しの途中で静かになる */
   el.addEventListener('ended', () => { next() })
   /* **鳴らせない曲は飛ばす。** 止まると、そこで音楽が終わってしまう
@@ -227,7 +231,7 @@ async function play(i) {
   a.volume = 0
   a.src = url
   try { await a.play() } catch { return }
-  to(bgmVolume(ducked), 700)
+  to(bgmLevel(), 700)
 }
 
 function next() { if (list.length) play(at + 1) }
@@ -252,19 +256,27 @@ export function stopBgm() {
   try { el.pause(); el.removeAttribute('src'); el.load() } catch { /* 何もしない */ }
   list = []
   at = 0
-  ducked = false
 }
 
 export const bgmPlaying = () => Boolean(el && !el.paused && list.length)
 
 /**
- * **声が鳴っているあいだは、曲を小さくする**(利用者が選んだ)。
- * 大きさそのものは `wordRadio.js` の `bgmVolume()` が決める。
+ * **曲の大きさを決める**(2026-09 利用者の指定)。
+ *
+ *   > 英語の音声と音楽を独立してそれぞれ音量を調整出来るようにしたいです。
+ *
+ * 覚えるのは `mixVolume.js`、**鳴っている曲に当てるのはここ**である
+ * (`<audio>` を持っているのはこのファイルだけ)。
+ * **画面はこれだけを呼ぶ** —— 覚えるのと当てるのを2回に分けると、
+ * 片方を呼び忘れたときに「動かしたのに音が変わらない」になる。
+ *
+ * **鳴っている最中でも、その場で追う**(押し直させない)。
+ * 跳ぶと「プチッ」と鳴るので、ここでもなだらかに動かす。
  */
-export function duckBgm(on) {
-  if (ducked === on) return
-  ducked = on
-  if (el && !el.paused) to(bgmVolume(on), on ? 250 : 600)
+export function setBgmVolume(v) {
+  const got = setBgmLevel(v)
+  if (el && !el.paused) to(got, 150)
+  return got
 }
 
 /** いま鳴っている曲(画面に題を出すため)。無ければ `null` */

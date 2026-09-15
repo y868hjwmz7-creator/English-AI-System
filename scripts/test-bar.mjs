@@ -4976,6 +4976,100 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   **英語の音声と音楽の音量は、メニューの下で別々に決める**
+   (2026-09 利用者の指定)
+
+     > アプリに好きな音楽を追加し、英語の音声と音楽を独立してそれぞれ
+     > 音量を調整出来るようにしたいです。
+     > 英語音声が再生される時に自動で音楽の音量を下げる機能は必要ありません
+
+   **算段は `npm run test:play` が見る。ここは描いて測る。**
+   ①2本そろっているか ②いまの大きさが数で出ているか
+   ③動かすと本当に値が変わるか ④**片方を動かして、もう片方が動かないか**
+   ⑤指で掴める高さか ⑥横にはみ出していないか。
+
+   **「2本ある」だけを見ない** —— 同じつまみを2つ並べただけでも
+   それは満たされる。**独立していること**が、この指定そのものである。
+   ══════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{}',
+  }))
+  /* **本物のメニューは、ここには描けない**(ログインした `App` の中にある)。
+     骨組みは `?screen=volume` で、**`App.jsx` とまったく同じ形**の
+     つまみ2本を置いてある。**画面が本当に呼んでいるか**は
+     `npm run test:play` が見張っている(役目が違う) */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=volume`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(700)
+
+  const 見る = () => page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.app-nav-foot .nav-setting')]
+      .filter((r) => r.querySelector('.nav-vol'))
+    const nav = document.querySelector('.app-nav-foot')
+    return {
+      本数: rows.length,
+      名: rows.map((r) => r.querySelector('.nav-setting-label')?.firstChild?.textContent?.trim()),
+      数: rows.map((r) => r.querySelector('.nav-vol-pct')?.textContent ?? ''),
+      値: rows.map((r) => Number(r.querySelector('.nav-vol').value)),
+      高: rows.map((r) => Math.round(r.querySelector('.nav-vol').getBoundingClientRect().height)),
+      はみ出し: nav ? Math.max(0, nav.scrollWidth - nav.clientWidth) : 0,
+    }
+  })
+
+  const before = await 見る()
+  if (before.本数 !== 2) {
+    ng(`音量 … メニューの下のつまみが ${before.本数} 本`,
+      '「英語の音声」と「音楽」の2本を、それぞれ別に決められること')
+  } else if (before.名[0] !== '英語の音声' || before.名[1] !== '音楽') {
+    ng(`音量 … 名前が「${before.名.join(' / ')}」`, '何のつまみか読み取れない')
+  } else if (!/^\d+%$/.test(before.数[0]) || !/^\d+%$/.test(before.数[1])) {
+    ng(`音量 … いまの大きさが数で出ていない(${before.数.join(' / ')})`,
+      'つまみの位置だけでは、もう一方と同じ大きさか読み取れない')
+  } else if (Math.min(...before.高) < 24) {
+    ng(`音量 … つまみが細すぎて狙えない(${before.高.join(' / ')}px)`)
+  } else if (before.はみ出し > 0) {
+    ng(`音量 … メニューの下が ${before.はみ出し}px 横にはみ出している`)
+  } else {
+    ok(`音量 1280px … 「英語の音声 ${before.数[0]}」「音楽 ${before.数[1]}」`
+      + `(高さ ${before.高.join(' / ')}px・はみ出し無し)`)
+  }
+
+  if (before.本数 === 2) {
+    /* **独立しているか。** 英語の音声だけを動かして、音楽が動かないこと */
+    await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.nav-vol')][0]
+      const set = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value').set
+      set.call(el, '0.3')
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await page.waitForTimeout(250)
+    const after = await 見る()
+    if (after.値[0] !== 0.3) {
+      ng(`音量 … 動かしても値が変わらない(${before.値[0]} → ${after.値[0]})`,
+        '画面が `setVoiceLevel()` を呼んでいない')
+    } else if (after.数[0] !== '30%') {
+      ng(`音量 … 動かしても数が追わない(${after.数[0]})`)
+    } else if (after.値[1] !== before.値[1]) {
+      ng(`音量 … 英語の音声を動かしたら、音楽まで動いた`
+        + `(${before.値[1]} → ${after.値[1]})`,
+      '**独立してそれぞれ**調整できること(利用者の指定)')
+    } else {
+      ok(`音量 1280px … 英語の音声だけが 30% になり、音楽は ${after.数[1]} のまま`)
+    }
+  }
+  await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════
    **別々の物を、すき間ゼロでくっつけない**(2026-09 実機・利用者の指定)
 
      > 大きく表示のボタンとその上の3つのボタンが隙間がなく接触しています。
@@ -5084,6 +5178,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ['rscope', ''], ['wordbook', ''], ['mybook', ''], ['result', ''],
     ['radio', ''], ['qrradio', ''], ['course', ''], ['basicpick', ''],
     ['shelfpick', ''], ['speech', ''], ['gnote', ''], ['tabs', ''],
+    ['volume', ''],
     ['', 'role=trainer&who=g1'],
   ]
   const 見つかった = []

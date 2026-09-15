@@ -67,6 +67,7 @@ import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
   FADE_STEP, FADE_STOP, applyGain, fadeGain, isMeasured, measureClip,
 } from './loudness.js'
+import { voiceLevel } from './mixVolume.js'
 
 /** 0016 で作るバケツ。窓口(supabase/functions/speak)と同じ名前にすること */
 const BUCKET = 'tts'
@@ -1762,7 +1763,7 @@ export async function playClip({
   /* **この声の音量。** すぐには入れず、下の `tick` が**なだらかに上げる。**
      いきなり 0 から本来の音量へ跳ぶと、そこに段差ができて「プチッ」と鳴る
      (2026-09 利用者の指摘。下の `FADE_IN` / `FADE_OUT`) */
-  const gain = applyGain(el, tier, pathName)
+  const base = applyGain(el, tier, pathName)
   el.volume = 0
 
   /* **止めた場所から鳴らす**(2026-09 利用者の指定)。
@@ -1825,8 +1826,19 @@ export async function playClip({
          **下げ始める前に切れて「プチッ」と鳴る** */
       const until = stopAt > 0 ? stopAt : len
       const outMs = until ? ((until - now) / r) * 1000 : Infinity
-      // **決め方は `loudness.js` 1か所**(手元で確かめられる形にしてある)
-      const v = fadeGain(gain, inMs, outMs)
+      /* **決め方は `loudness.js` 1か所**(手元で確かめられる形にしてある)。
+         そこへ**聴く人が選んだ大きさ**(`voiceLevel()`)を掛ける
+         (2026-09 利用者の指定「英語の音声と音楽を独立してそれぞれ
+         音量を調整出来るように」)。
+
+         **`gainFor()` の側では掛けない。** あちらは「声どうしをそろえる」
+         ためのもので、`npm run test:audio` が
+         「倍率がすべて 1 以下か」を見張っている。役目を混ぜない。
+
+         **毎回読んでよい** —— `voiceLevel()` は覚えた値を返すだけなので、
+         10ms ごとに呼んでも安い。おかげで**鳴っている最中につまみを
+         動かしても、その場で追う**(押し直させない)。 */
+      const v = fadeGain(base * voiceLevel(), inMs, outMs)
       // 0.005 より細かい差は耳に届かない。入れ直す回数を減らす
       if (Math.abs(v - shown) >= 0.005 || (v === 0 && shown !== 0)) {
         shown = v

@@ -15,6 +15,7 @@
  *   このファイルの `speak()` は、MP3 がまだ無いときの受け皿である。
  */
 import { markIndexAt, totalWeight, weighWords, wordMarks } from './wordTiming.js'
+import { voiceLevel } from './mixVolume.js'
 
 /** ブラウザが読み上げ機能に対応しているか */
 export function isSpeechSupported() {
@@ -407,7 +408,10 @@ export function speak(text, { voice, rate = 0.9, onWord } = {}) {
   }
   utterance.rate = rate
   utterance.pitch = 1
-  utterance.volume = 1
+  /* **選んだ大きさは、端末の声にも効かせる**(2026-09 利用者の指定)。
+     ここは MP3 を作れなかったときの受け皿なので、ここだけ
+     いつも最大だと「つまみを下げたのに、その1本だけ大きい」になる */
+  utterance.volume = voiceLevel()
   window.speechSynthesis.speak(utterance)
   return true
 }
@@ -449,7 +453,10 @@ export function speakOnce(text, { voice, rate = 0.9, onWord } = {}) {
   }
   utterance.rate = rate
   utterance.pitch = 1
-  utterance.volume = 1
+  /* **選んだ大きさは、端末の声にも効かせる**(2026-09 利用者の指定)。
+     ここは MP3 を作れなかったときの受け皿なので、ここだけ
+     いつも最大だと「つまみを下げたのに、その1本だけ大きい」になる */
+  utterance.volume = voiceLevel()
 
   let finished = false
   let timer = null

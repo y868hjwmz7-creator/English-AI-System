@@ -53,6 +53,9 @@ import BasicWordsPick from './components/BasicWordsPick.jsx'
 import ShelfBooks from './components/ShelfBooks.jsx'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
+import VolumeRow from './components/VolumeRow.jsx'
+import { bgmLevel, setVoiceLevel, voiceLevel } from './lib/mixVolume.js'
+import { setBgmVolume } from './lib/bgm.js'
 import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
 import CastChip from './components/CastChip.jsx'
@@ -1048,13 +1051,43 @@ const SPEECH = (
   />
 )
 
+/* 英語の音声と音楽の音量(`?screen=volume`・2026-09 利用者の指定)。
+
+     > アプリに好きな音楽を追加し、英語の音声と音楽を独立してそれぞれ
+     > 音量を調整出来るようにしたいです。
+
+   **本物(`App.jsx` の `navFooter`)と1文字も違えない。**
+   包み(`.app-nav-foot`)も、名前も、押したときに呼ぶものも同じにする ——
+   骨組みが本物と食い違うと、**検証は何も守らない**
+   (「セッションで使う」を `.btn-row` で包んでいて、CSS のバグを
+   何日も素通りさせた・CLAUDE.md)。
+
+   **本物のメニューは、ここには描けない。** あちらはログインした
+   `App` の中にあり、この骨組みは Supabase 未設定で描いている。
+   だから**つまみだけ**を、同じ形で置く(`QrCard` / `WordRadio` と同じ作法)。
+   **画面が本当に呼んでいるか**は `npm run test:play` が見張る。 */
+function VolumeScreen() {
+  const [voiceVol, setVoiceVol] = useState(voiceLevel)
+  const [bgmVol, setBgmVol] = useState(bgmLevel)
+  return (
+    <div className="app-nav-foot" style={{ width: '248px' }}>
+      <VolumeRow label="英語の音声" value={voiceVol}
+                 onChange={(v) => setVoiceVol(setVoiceLevel(v))} />
+      <VolumeRow label="音楽" value={bgmVol}
+                 onChange={(v) => setBgmVol(setBgmVolume(v))} />
+    </div>
+  )
+}
+
 /* **説明の文を出すかどうかも、本物と同じ道を通す**(2026-09)。
    `App.jsx` がやっていることをここでもやらないと、
    `data-tips` が付かず、**既定で畳んであることを測れない。** */
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'sheet'
+  q.get('screen') === 'volume'
+    ? <VolumeScreen />
+    : q.get('screen') === 'sheet'
     ? <SheetScreen />
     : q.get('screen') === 'shelfpick'
     ? SHELFPICK

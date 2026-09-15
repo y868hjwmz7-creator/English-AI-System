@@ -338,12 +338,13 @@ export function saveRadioGap(ms, where = 'word') {
   try { localStorage.setItem(whereOf(where).gapKey, String(ms)) } catch { /* 同上 */ }
 }
 
-/**
- * 音楽の大きさ。**声が鳴っているあいだは下げる**(利用者の指定
- * 「声が聞こえるよう、曲は自動で小さくします」)。
+/* **音の大きさは、ここには無い**(2026-09 利用者の指定)。
  *
- * **算段だけをここに置く。** 実際に `<audio>` を動かすのは `bgm.js`。
- */
-export const BGM_VOLUME = 0.42
-export const BGM_DUCKED = 0.12
-export const bgmVolume = (ducked) => (ducked ? BGM_DUCKED : BGM_VOLUME)
+ *   > 英語の音声と音楽を独立してそれぞれ音量を調整出来るようにしたいです。
+ *   > 英語音声が再生される時に自動で音楽の音量を下げる機能は必要ありません
+ *
+ * 大きさは**聴く人が決める**ものになったので、英語の音声のぶんと並べて
+ * `src/lib/mixVolume.js` 1か所に置いてある。
+ * 自動で下げる仕組み(`BGM_DUCKED` / `bgmVolume()` / `duckBgm()`)は
+ * **道具ごと消した** —— 値を偽にして残すと、次に見た人が
+ * 「まだ使うのかもしれない」と読む。 */

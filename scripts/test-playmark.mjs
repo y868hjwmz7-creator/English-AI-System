@@ -90,9 +90,14 @@ import {
 } from '../src/lib/lastLearner.js'
 import {
   BGM_PLACES, DEFAULT_RADIO_GAP, QR_RADIO_MODES, RADIO_GAPS, RADIO_MODES,
-  bgmPlaysIn, bgmVolume, nextIndex, radioGapsOf, radioJaOf, radioModeOf,
+  bgmPlaysIn, nextIndex, radioGapsOf, radioJaOf, radioModeOf,
   radioModesFor, radioSteps, radioTextOf,
 } from '../src/lib/wordRadio.js'
+import {
+  DEFAULT_BGM, DEFAULT_VOICE, VOL_STEP,
+  bgmLevel, clampLevel, pctLabel, setBgmLevel, setVoiceLevel, voiceLevel,
+  volumeWorks,
+} from '../src/lib/mixVolume.js'
 import {
   applyHomeworkFilter, assignedDayOf, emptyHomeworkFilter,
   homeworkFilterOn, narrowHomework, topicOfAssignment,
@@ -2474,10 +2479,49 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(bgmPlaysIn('しらない', 'radio'),
     '音楽 … 知らない指定は、既定(聞き流しのときだけ)に落ちる')
 
-  /* ── 音の大きさ。**下げるだけで、通り道は変えない** ────────── */
-  ok(bgmVolume(true) < bgmVolume(false) && bgmVolume(false) <= 1,
-    '音楽 … 声が鳴っているあいだは小さくする(1 を超えない)',
-    `${bgmVolume(false)} → ${bgmVolume(true)}`)
+  /* ── 英語の音声と音楽の大きさ(2026-09 利用者の指定)───────────
+
+       > アプリに好きな音楽を追加し、英語の音声と音楽を独立してそれぞれ
+       > 音量を調整出来るようにしたいです。
+       > 英語音声が再生される時に自動で音楽の音量を下げる機能は必要ありません
+
+     **何も触らなければ、いままでと同じ音量で鳴る**こと(既定)。
+     **範囲の外・知らない値は既定に落とす**こと(行き止まりを作らない)。 */
+  /* **既定は、つまみの刻みの上に置く。** 0.42 のままだと、画面に「40%」と
+     出ているのに中身は 42% という食い違いが残る(0049 との差は耳で分からない) */
+  ok(DEFAULT_BGM === 0.4 && clampLevel(DEFAULT_BGM, 0) === DEFAULT_BGM,
+    '音量 … 音楽の既定は、これまで(0049 の 0.42)とほぼ同じ 0.4(刻みの上)')
+  ok(clampLevel(DEFAULT_VOICE, 0) === DEFAULT_VOICE,
+    '音量 … 英語の音声の既定も、刻みの上にある')
+  ok(DEFAULT_VOICE === 1,
+    '音量 … 英語の音声の既定は 1(触らなければ、いままでと 1 ミリも変わらない)')
+  ok(clampLevel(2, 0.5) === 1 && clampLevel(-1, 0.5) === 0,
+    '音量 … 範囲の外は 0〜1 に収める')
+  ok(clampLevel('あ', 0.42) === 0.42 && clampLevel(undefined, 1) === 1,
+    '音量 … 知らない値は既定に落とす(行き止まりを作らない)')
+  ok(clampLevel(0.37, 1) === 0.35 && clampLevel(0.33, 1) === 0.35,
+    `音量 … ${VOL_STEP * 100}% 刻みにそろえる`,
+    `0.37 → ${clampLevel(0.37, 1)}`)
+  /* **小数の誤差をそのまま画面に出さない**(0.35000000000000003) */
+  ok(String(clampLevel(0.35, 1)) === '0.35' && pctLabel(0.35) === '35%',
+    '音量 … 画面に出す言い方は 1 か所(小数の誤差が出ない)')
+  /* **それぞれ別に覚える**(片方を動かして、もう片方が動かないこと) */
+  {
+    const v0 = voiceLevel()
+    const b0 = bgmLevel()
+    setVoiceLevel(0.3)
+    ok(voiceLevel() === 0.3 && bgmLevel() === b0,
+      '音量 … 英語の音声を動かしても、音楽は動かない')
+    setBgmLevel(0.8)
+    ok(bgmLevel() === 0.8 && voiceLevel() === 0.3,
+      '音量 … 音楽を動かしても、英語の音声は動かない')
+    setVoiceLevel(v0)
+    setBgmLevel(b0)
+  }
+  /* **端末が受け付けるかは、名前(UA)では決めない。** 素の node には
+     `Audio` が無いので、ここでは「分からなければ効く」に落ちる */
+  ok(volumeWorks() === true,
+    '音量 … 分からない端末では、つまみを出す(行き止まりを作らない)')
 
   /* ── 画面が、本当に呼んでいるか ────────────────────────── */
   {
@@ -2599,8 +2643,20 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '聞き流し … `radioSteps()` も同じ `radioTextOf()` を通る')
     ok(/bgmPlaysIn\(loadBgmPlace\(\), 'radio'\)/.test(radio),
       '聞き流し … 音楽を流すかどうかを `bgmPlaysIn()` に任せている')
-    ok(/duckBgm\(true\)/.test(radio) && /duckBgm\(false\)/.test(radio),
-      '聞き流し … 声が鳴っているあいだ、曲を小さくしている')
+    /* **自動で下げる仕組みは、道具ごと消した**(2026-09 利用者の指定
+       「英語音声が再生される時に自動で音楽の音量を下げる機能は
+       必要ありません」)。値を偽にして残すと、次に見た人が
+       「まだ使うのかもしれない」と読む */
+    {
+      const 消えた = [
+        'src/lib/bgm.js', 'src/lib/wordRadio.js', 'src/lib/mixVolume.js',
+        'src/components/WordRadio.jsx', 'src/components/BgmLibrary.jsx', 'src/App.jsx',
+      ].filter((f) => /duckBgm|BGM_DUCKED|bgmVolume\(/.test(
+        落とす(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'))))
+      ok(消えた.length === 0,
+        '音楽 … 自動で小さくする仕組みは、道具ごと消えている',
+        消えた.join(' / '))
+    }
     /* **記録は1ミリも動かさない**(答える練習ではない) */
     ok(!/setWordStatus|mark_word|shouldRecord/.test(radio),
       '聞き流し … 箱も次に出す日も動かさない')
@@ -2613,6 +2669,70 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '音楽 … Web Audio を通していない(`volume` だけを動かす)')
     ok(/new Audio\(\)/.test(bgmjs) && (bgmjs.match(/new Audio\(\)/g) ?? []).length === 1,
       '音楽 … `<audio>` は1つだけ作る')
+
+    /* ── 選んだ大きさが、本当に効いているか(2026-09 利用者の指定)──────
+
+         **道は3つある。1つでも切れていると、そこだけ効かない。**
+         しかも**音は鳴る**ので、聴いた人にしか分からない
+         (`elevenSettings` が届いていなかったのと、まったく同じ形の穴)。 */
+    {
+      const mix = 落とす(readFileSync(
+        new URL('../src/lib/mixVolume.js', import.meta.url), 'utf8'))
+      const clips = 落とす(readFileSync(
+        new URL('../src/lib/audioClips.js', import.meta.url), 'utf8'))
+      const sp = 落とす(readFileSync(
+        new URL('../src/lib/speech.js', import.meta.url), 'utf8'))
+      const row = 落とす(readFileSync(
+        new URL('../src/components/VolumeRow.jsx', import.meta.url), 'utf8'))
+
+      /* **算段は素の node で走らせられる形にしてある**
+         (`playMark.js` と同じ考え方)。ここが Supabase を持つと、
+         上の丸めの検証そのものが書けなくなる */
+      ok(!/supabase|import\.meta\.env/.test(mix),
+        '音量 … 算段は Supabase を持たない(素の node で確かめられる)')
+      /* **通り道は変えない。** `GainNode` に通せば iPhone でも効くが、
+         2026-09 にそれをやって全部の声で雑音が乗った */
+      ok(!/createMediaElementSource|createGain|GainNode/.test(mix),
+        '音量 … Web Audio を通していない(`volume` だけを動かす)')
+
+      /* ① 英語の音声(1本にまとめた音声も、発言ごとの MP3 も、ここを通る) */
+      ok(/fadeGain\(base \* voiceLevel\(\)/.test(clips),
+        '音量 … 英語の音声に、選んだ大きさが掛かっている')
+      /* **`gainFor()` の側では掛けない。** あちらは声どうしをそろえる
+         ためのもので、`npm run test:audio` が「1 以下か」を見張っている */
+      ok(!/voiceLevel/.test(落とす(readFileSync(
+        new URL('../src/lib/loudness.js', import.meta.url), 'utf8'))),
+      '音量 … 声どうしをそろえる倍率(`gainFor`)には混ぜていない')
+      /* ② 端末の声(MP3 を作れなかったときの受け皿)。
+         ここだけいつも最大だと、その1本だけ大きくなる */
+      ok((sp.match(/utterance\.volume = voiceLevel\(\)/g) ?? []).length === 2
+        && !/utterance\.volume = 1\b/.test(sp),
+      '音量 … 端末の声にも、選んだ大きさが効く(2か所とも)')
+      /* ③ 音楽。**覚えるのと当てるのを、画面に2回呼ばせない** */
+      ok(/el\.volume = bgmLevel\(\)/.test(bgmjs) && /to\(bgmLevel\(\), 700\)/.test(bgmjs),
+        '音量 … 音楽は、選んだ大きさで鳴り始める')
+      ok(/export function setBgmVolume/.test(bgmjs)
+        && /if \(el && !el\.paused\) to\(got, 150\)/.test(bgmjs),
+      '音量 … 鳴っている最中につまみを動かしても、その場で追う')
+
+      /* ── 画面が、本当に呼んでいるか ──────────────────────
+         **定義だけあって誰も呼ばなければ、何も起きない**
+         (`noteFnRev` を定義だけして呼んでいなかったのと同じ落とし穴)。 */
+      ok(/onChange=\{\(v\) => setVoiceVol\(setVoiceLevel\(v\)\)\}/.test(app),
+        '音量 … 画面が、英語の音声の大きさを本当に覚えさせている')
+      ok(/onChange=\{\(v\) => setBgmVol\(setBgmVolume\(v\)\)\}/.test(app),
+        '音量 … 画面が、音楽の大きさを本当に効かせている')
+      /* **効かない端末では、つまみを出さずに理由を言う**
+         (「効かない操作を見せない」+「黙って消さない」)。
+         **端末の名前では決めない** —— `volumeWorks()` が実際に試す */
+      ok(/volumeWorks\(\) \? \(/.test(app) && /nav-vol-no/.test(app),
+        '音量 … 受け付けない端末では、つまみを出さずに理由を1行で言う')
+      ok(!/iPhone|iPad|userAgent/.test(mix),
+        '音量 … 端末の名前(UA)では決めない')
+      /* **部品は自分で覚えない**(`test:bar` がそのまま描いて測れる) */
+      ok(!/localStorage|setVoiceLevel|setBgmVolume/.test(row),
+        '音量 … つまみの部品は、受け取って描くだけ(自分では覚えない)')
+    }
 
     ok(/id: 'bgm', label: '音楽'/.test(app) && /<BgmLibrary/.test(app),
       '音楽 … トレーナーのメニューに「音楽」がある')

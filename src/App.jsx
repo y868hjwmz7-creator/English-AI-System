@@ -24,6 +24,11 @@ import { setViewerRole } from './lib/viewer.js'
 import { materialIdFromUrl, urlWithoutMaterial } from './lib/materialLink.js'
 import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
+/* 英語の音声と音楽の大きさ(2026-09 利用者の指定)。
+   **覚えるのは `mixVolume.js`、曲に当てるのは `bgm.js` 1か所** */
+import { bgmLevel, setVoiceLevel, voiceLevel, volumeWorks } from './lib/mixVolume.js'
+import { setBgmVolume } from './lib/bgm.js'
+import VolumeRow from './components/VolumeRow.jsx'
 import { forgetJob, markJobSeen, useJob, watchJob } from './lib/generateJob.js'
 import {
   forgetPrepare, prepareAllOn, setPrepareAllOn, usePrepare,
@@ -136,6 +141,10 @@ export default function App() {
   /* 押したときの音。**覚える**(`src/lib/sfx.js`)。
      切れるようにしてあるのは、レッスン中に邪魔なことがあるため */
   const [sound, setSound] = useState(soundOn)
+  /* 英語の音声と音楽の大きさ。**それぞれ別に覚える**(2026-09 利用者の指定)。
+     自動で下げる仕組み(`duckBgm`)は道具ごと消してある */
+  const [voiceVol, setVoiceVol] = useState(voiceLevel)
+  const [bgmVol, setBgmVol] = useState(bgmLevel)
   /* 本文の読み上げを1本にまとめるか。**戻せる道を残す**(利用者の指定) */
   /**
    * 裏で作っている教材のお知らせ(2026-09 利用者の指定)。
@@ -687,6 +696,40 @@ export default function App() {
           ))}
         </div>
       </div>
+
+      {/* **英語の音声と音楽の大きさ**(2026-09 利用者の指定)。
+
+            > アプリに好きな音楽を追加し、英語の音声と音楽を独立して
+            > それぞれ音量を調整出来るようにしたいです。
+            > 英語音声が再生される時に自動で音楽の音量を下げる機能は
+            > 必要ありません
+
+          **置くのはここ1か所。** 端末ごとに覚える「一度決める設定」で、
+          しかも**聴く人が決める**ものなので、音楽の画面(トレーナーだけ)には
+          置かない —— ゲストも英語の音声を聴くし、曲も耳に入る。
+          **同じ設定を2か所に置かない**(CLAUDE.md)。
+
+          **効かない端末では、つまみを出さずに理由を言う。**
+          iOS は `<audio>` の `volume` を無視するので、iPhone / iPad では
+          どちらのつまみも動かない。**端末の名前では決めない** ——
+          `volumeWorks()` が実際に入れて読み返すので、
+          いつか受け付けるようになった日には**ひとりでに出る。** */}
+      {volumeWorks() ? (
+        <>
+          <VolumeRow label="英語の音声" value={voiceVol}
+                     onChange={(v) => setVoiceVol(setVoiceLevel(v))} />
+          <VolumeRow label="音楽" value={bgmVol}
+                     onChange={(v) => setBgmVol(setBgmVolume(v))} />
+        </>
+      ) : (
+        <div className="nav-setting">
+          <span className="nav-setting-label">音量</span>
+          <p className="nav-vol-no">
+            この端末は、アプリからの音量指定を受け付けません
+            (iPhone・iPad)。端末の音量ボタンで調整してください。
+          </p>
+        </div>
+      )}
 
       {/* **過去の教材も、裏で順に支度するか**(2026-09 利用者の指定)。
 

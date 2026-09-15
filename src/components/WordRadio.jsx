@@ -36,7 +36,7 @@ import { useEffect, useRef, useState } from 'react'
 import FocusFrame from './FocusFrame.jsx'
 import { PlayIcon, StopIcon } from './Icons.jsx'
 import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
-import { duckBgm, nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
+import { nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
 import {
   RADIO_GAPS, bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
   nextIndex, radioGapsOf, radioJaOf, radioLead, radioModesFor, radioSteps,
@@ -167,14 +167,14 @@ export default function WordRadio({
           if (atRef.current !== i) break
           if (st.kind === 'wait') { setSay(null); await wait(st.ms); continue }
           setSay(st.kind)
-          /* **声が鳴っているあいだは、曲を小さくする**(利用者が選んだ) */
-          duckBgm(true)
+          /* **曲は、鳴っているあいだも小さくしない**(2026-09 利用者の指定
+             「英語音声が再生される時に自動で音楽の音量を下げる機能は
+             必要ありません」)。大きさは聴く人が左のメニューの下で決める */
           /* **読むのは英語だけ**(2026-09 利用者の指定
              「日本語入りはいらないですね!こえの質が悪すぎます!」)。
              日本語は**端末の声**でしか読めず、質を選べなかった。
              詳しくは `wordRadio.js` の読み方の節 */
           await readAloud(st.text, { rate })
-          duckBgm(false)
         }
         if (!alive()) return
         setSay(null)
@@ -193,7 +193,7 @@ export default function WordRadio({
       }
     }
     run()
-    return () => { liveRef.current += 1; stopReading(); duckBgm(false) }
+    return () => { liveRef.current += 1; stopReading() }
   }, [on, mode, gap, list.length, rate])
 
   const stop = () => {

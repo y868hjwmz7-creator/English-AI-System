@@ -104,10 +104,14 @@ export default function BgmLibrary({ userId = null }) {
                 onChange={(e) => { setPlace(e.target.value); saveBgmPlace(e.target.value) }}>
           {BGM_PLACES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
+        {/* **古い説明は、消し忘れると嘘になる**(CLAUDE.md)。
+            0049 のときは「声が鳴っているあいだは自動で小さくします」と
+            書いていたが、**利用者がその仕組みを要らないと決めた**
+            (2026-09)。大きさは聴く人が左のメニューの下で決める */}
         <span className="tip field-hint">
           {bgmPlaceOf(place).id === 'off'
             ? '曲は流れません。'
-            : '声が鳴っているあいだは、曲を自動で小さくします。'}
+            : '曲と英語の音声の大きさは、左のメニューのいちばん下で決められます。'}
         </span>
       </label>
 

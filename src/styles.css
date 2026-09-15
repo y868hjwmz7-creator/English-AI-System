@@ -747,6 +747,26 @@ body {
 .nav-setting-label { color: var(--text-muted); font-size: var(--fs-11h); }
 .nav-setting .theme-switch { margin-left: 0; align-self: flex-start; }
 .nav-setting .theme-btn { padding: 6px 12px; }
+
+/* 英語の音声と音楽の大きさ(2026-09 利用者の指定)。
+   **見出しの行の右端に、いまの大きさを数で出す** —— つまみの位置だけでは、
+   もう一方と同じ大きさなのかどうかが読み取れない。
+   数字は `tabular-nums` にして、動かすたびに幅が変わらないようにする */
+.nav-vol-head { display: flex; align-items: baseline; gap: var(--sp-6); }
+.nav-vol-pct {
+  margin-left: auto; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+/* **指で掴める高さを残す。** つまみは押すものではなく動かすものなので
+   `.btn` の 40px までは要らないが、細すぎると狙えない */
+.nav-vol {
+  width: 100%; min-height: 28px; margin: 0;
+  accent-color: var(--accent); cursor: pointer;
+}
+/* 受け付けない端末に出す1行。**黙って消さない**(CLAUDE.md) */
+.nav-vol-no {
+  margin: 0; color: var(--text-muted); font-size: var(--fs-11h); line-height: 1.5;
+}
 /* **自分のアイコンは、自分の名前の隣**(0029・2026-09)。
    置き場所を1か所にしておく。画面ごとに置くと、どこで変えたのかが
    分からなくなるし、必ずどれかが古くなる */
