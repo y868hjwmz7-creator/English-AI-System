@@ -126,6 +126,25 @@ export const weaknessTags = [
   { id: 'question',            category: 'grammar',    kind: 'weakness', label: '疑問文',          hint: 'Do / Does / Did、be動詞を前へ。答え方もそろえる' },
   { id: 'third-person',        category: 'grammar',    kind: 'weakness', label: '三人称単数の -s', hint: 'he / she / it のときだけ動詞に -s。does のうしろは原形' },
 
+  /* ── 文を組み立てる「型」(0060・2026-09 利用者の指定)────────
+     > 「無生物主語」と「名詞構文」のタグをつけ足してください。
+
+     **この2つは、日本語から訳しても絶対に出てこない。**
+     だからこそ指摘する値打ちがあるのに、貼る先のタグが無かった。
+
+     `sentence-pattern`(文型 SVOC)は**並びの決まり**、
+     `gerund`(動名詞)は**-ing を名詞にする形**そのもので、
+     どちらも「人以外を主語に立てる」「文を名詞のかたまりにする」という
+     **組み立ての型**は指せない。**似たタグを2つ作らない**ので、
+     重ならないところだけを足してある。
+
+     **表(`weakness_tags`)にも同じ2件を足す**(0060)。
+     `material_tags.tag_id` は表を参照しているので、
+     **貼る前にこのタグで教材を発行すると、その瞬間に止まる**
+     (0050・0052 とまったく同じ落とし穴)。 */
+  { id: 'inanimate-subject',   category: 'grammar',    kind: 'weakness', label: '無生物主語',      hint: '人以外を主語に立てる。Cutting corners costs more / This tool allows you to 〜' },
+  { id: 'nominalization',      category: 'grammar',    kind: 'weakness', label: '名詞構文',        hint: '動詞や文を名詞のかたまりにする。We decided → our decision to 〜' },
+
   // ── 表現 ──────────────────────────────────
   { id: 'filler',              category: 'expression', kind: 'weakness', label: 'つなぎ言葉',      hint: 'Well, / Actually, / I mean — 間をつなぐ言い方' },
   { id: 'paraphrase',          category: 'expression', kind: 'weakness', label: '言い換え',        hint: '語が出てこないときに別の言い方で伝える' },

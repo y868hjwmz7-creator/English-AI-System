@@ -37,6 +37,7 @@ import {
   NEW_MATERIAL_KINDS, assignMaterial, countMaterialsLike, createMaterial, estimateCost,
   fillGrammar, generateChunkJa, generateSection,
   bodyWord, canPasteBody, generateSectionUnique, isDialogueKind, isPassageKind, isVocabKind,
+  isDrillKind,
   kindLabel, usesScene,
   loadRecentStories, loadUsedSentences, loadUsedSentencesLike, normEn,
   genGatewayNote,
@@ -60,7 +61,20 @@ import {
    窓口へ性別を渡してはいたが、**そのあと一度も確かめていなかった。**
    算段は `voiceOrder.js` 1か所(素の node で確かめられる形にしてある) */
 import { orderVoicesByNames } from '../lib/voiceOrder.js'
-import { collectReviewWords, normWord } from '../lib/vocab.js'
+import { collectReviewWords, loadMyWordbook, normWord } from '../lib/vocab.js'
+/* **文型ドリルで使う語を、単語帳から絞って指定する**(2026-09 利用者の指定)。
+     > 文型トレーニングに、どの単語帳からどのレベルのどの品詞を使用するか、
+     > を指定できるようにしたい。
+   算段は `drillWords.js` 1か所(**素の node で確かめられる形**にしてある)。
+   渡し先は**すでにある `mustUse`** なので、
+   **SQL も、窓口の置き直しも要らない。** AI も1回も呼ばない(0円) */
+import {
+  BASIC_TIERS, DRILL_COUNTS, booksFor, narrowRows, optionsOf, pickWords, spreadWords,
+} from '../lib/drillWords.js'
+import { levelOf, posOf } from '../lib/wordbookFilter.js'
+import { loadShelfWordbook } from '../lib/shelfReviews.js'
+import { basicRows } from '../lib/basicsCourse.js'
+import { shelfLabel, shelfList, shelfOf } from '../data/shelves.js'
 import { startPrepare } from '../lib/prepareJob.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
@@ -252,6 +266,25 @@ export default function MaterialForm({
   // 何が足りないのか分からなくなる(この失敗を何度もした)
   const [reviewError, setReviewError] = useState(null)
 
+  /* ── 文型ドリルで使う語を、単語帳から絞って選ぶ(2026-09 利用者の指定)──
+       > 文型トレーニングに、どの単語帳からどのレベルのどの品詞を使用するか、
+       > を指定できるようにしたい。
+
+     **入れ物も窓口も1つも増えていない。** 選んだ語は、そのまま
+     **すでにある `mustUse`** に足される(窓口へは `reviewWords` として
+     渡り、「それぞれ1回以上、問題文の中で使うこと」と伝わる)。
+     だから **SQL も、窓口の置き直しも要らない。AI も1回も呼ばない。** */
+  const [wordBook, setWordBook] = useState('basic')   // どの単語帳から
+  const [wordShelf, setWordShelf] = useState('')      // 業種べつのとき、どの棚
+  const [wordTier, setWordTier] = useState('core')    // 基礎単語のとき、どの段
+  const [wordLevel, setWordLevel] = useState('')      // レベル(空=すべて)
+  const [wordPos, setWordPos] = useState('')          // 品詞(空=すべて)
+  const [wordCount, setWordCount] = useState(10)      // 何語足すか
+  const [wordRows, setWordRows] = useState([])        // 引けた語
+  const [wordBusy, setWordBusy] = useState(false)
+  const [wordError, setWordError] = useState(null)
+  const [wordNote, setWordNote] = useState('')        // 押した結果(その場に出す)
+
   /* **分野を変えたら、場面もその分野のものに入れ替える**(2026-08 利用者の指定)。
      入れ替えないと、外科医の教材に「打ち合わせ前の雑談」が残る。
      いまの場面がその分野にもあれば、そのままにする */
@@ -360,6 +393,90 @@ export default function MaterialForm({
     })
     return () => { alive = false }
   }, [reviewLearner])
+
+  /* ── 文型ドリルで使う語を引く(2026-09 利用者の指定)────────────
+
+     **問い合わせは、冊を選んだときだけ。** 基礎単語はファイルなので
+     **問い合わせ0回・0円**である。棚とゲストの単語帳は読むだけで、
+     **窓口(AI・ElevenLabs)は1回も呼ばない。**
+
+     **出せる冊だけを出す**(`booksFor`)。ゲストの単語帳は
+     「**誰の**単語帳か」が決まらないと引けないので、
+     ゲストを1人だけ選んでいるときにしか出さない
+     (「これまでの宿題から復習する」とまったく同じ決まり)。 */
+  const drillOn = isDrillKind(kind)
+  const wordLearner = shareWith.length === 1 ? shareWith[0] : null
+  const wordBooks = booksFor({ hasLearner: !!wordLearner })
+  /** 選べなくなった冊は、黙って基礎単語へ落とす(**行き止まりを作らない**) */
+  const book = wordBooks.some((b) => b.id === wordBook) ? wordBook : 'basic'
+  /* **棚の既定は、この教材の業界。** トレーナーはもう業界を選んでいるので、
+     そのぶんの語が出るのがいちばん素直である(選び直すこともできる) */
+  const shelfId = wordShelf || shelfOf(industry) || shelfList()[0]?.id || ''
+
+  useEffect(() => {
+    if (!drillOn) { setWordRows([]); return undefined }
+    let alive = true
+    setWordBusy(true); setWordError(null)
+    const read = () => {
+      if (book === 'basic') {
+        /* **ファイルから。問い合わせ0回。** 覚え具合は要らない ——
+           ここで欲しいのは「どんな語があるか」だけである */
+        return Promise.resolve({ data: basicRows(wordTier, [], {}), error: null })
+      }
+      if (book === 'shelf') {
+        return loadShelfWordbook({ learnerId: null, shelves: shelfId ? [shelfId] : [] })
+      }
+      /* **`status` を渡さない**(`null` = ぜんぶ)。「まだ」だけに絞ると、
+         その人がもう覚えた語で文型を練習できなくなる */
+      return loadMyWordbook({ status: null, learnerId: wordLearner })
+    }
+    Promise.resolve(read()).then(({ data, error: e }) => {
+      if (!alive) return
+      setWordBusy(false)
+      setWordError(e ?? null)
+      setWordRows(data ?? [])
+    }, () => {
+      if (!alive) return
+      setWordBusy(false); setWordError('単語帳を読めませんでした'); setWordRows([])
+    })
+    return () => { alive = false }
+  }, [drillOn, book, shelfId, wordTier, wordLearner])
+
+  /* **選択肢は、引けた語から作る**(`optionsOf`)。固定の一覧を持たない ——
+     基礎単語はレベルを持たないので、レベルの欄がそもそも出ない */
+  const wordLevels = useMemo(() => optionsOf(wordRows, levelOf), [wordRows])
+  const wordPoss = useMemo(() => optionsOf(wordRows, posOf), [wordRows])
+  /** **選べなくなった値は、黙って「すべて」に落とす**(行き止まりを作らない) */
+  const lv = wordLevels.some((o) => o.key === wordLevel) ? wordLevel : ''
+  const ps = wordPoss.some((o) => o.key === wordPos) ? wordPos : ''
+  /** その条件に当てはまる語の数。**押す前に出す** */
+  const wordHit = useMemo(
+    () => narrowRows(wordRows, { level: lv || null, pos: ps || null }).length,
+    [wordRows, lv, ps],
+  )
+
+  /**
+   * 選んだ語を、上の一覧(`mustUse`)に**足す**。
+   *
+   * **入れ替えない。** 単語帳の画面から名指しで渡された語が先に入って
+   * いることがあるので、消してしまうとトレーナーの選択が消える。
+   * 重なった語は落とすので、**何度押しても安全**である。
+   */
+  const addDrillWords = () => {
+    const picked = pickWords(wordRows, {
+      level: lv || null, pos: ps || null, count: wordCount,
+    })
+    const have = new Set(mustUse.map(normWord))
+    const add = picked.filter((w) => !have.has(normWord(w)))
+    if (!add.length) {
+      setWordNote(picked.length
+        ? '選んだ語は、すべてもう上の一覧に入っています。'
+        : 'この条件に当てはまる語がありません。')
+      return
+    }
+    setMustUse([...mustUse, ...add])
+    setWordNote(`${add.length} 語を上の一覧に足しました。`)
+  }
 
   /* **同じ組み合わせの教材が、もう何本あるか**(0046・2026-09 利用者の指定)。
 
@@ -903,6 +1020,19 @@ export default function MaterialForm({
     const usedSet = new Set((used ?? []).map(normEn))
 
     const plan = planNow()
+    /* **語は、演習ごとに配る**(2026-09 利用者の指定)。
+
+       これまで復習の語は**最初の演習にだけ**渡していた。
+       単語・フレーズは1演習しかないのでそれでよかったが、
+       **文型ドリルは4演習ある。** 20 語を選んでも10問ぶんの1演習に
+       押し込まれ、窓口の「不自然に詰め込まない。入りきらなければ
+       全部使わなくてよい」でほとんどが落ちていた。
+       **配れば、40問ぜんぶに行き渡る。**
+
+       **効くのは文型ドリルだけ。** 単語・フレーズは
+       「先頭から順にこの語で作り」なので、これまでどおり最初の演習へ
+       まとめて渡す(**言われた場所だけを直す**)。 */
+    const share = isDrillKind(kind) ? spreadWords(mergedReview(), plan.length) : null
     const made = []
     const notes = []
     // 指導ポイントは最初の演習で1本だけ受け取る。演習ごとに集めていた
@@ -932,10 +1062,10 @@ export default function MaterialForm({
           topic: topicOf(tagIds[0]),
           topics: tagIds.length > 1 ? tagIds.map(topicOf) : [],
           level, industry: industryText, isFirst: i === 0,
-          // 復習の語は最初の演習にだけ渡す。単語・フレーズは1演習しかない。
           // **単語帳から渡された語(mustUse)が先。** トレーナーが名指しで
-          // 選んだものなので、自動で拾った語より優先する
-          reviewWords: i === 0 ? mergedReview() : [],
+          // 選んだものなので、自動で拾った語より優先する。
+          // 文型ドリルは**4演習に配る**、単語・フレーズは最初の演習だけ
+          reviewWords: share ? (share[i] ?? []) : (i === 0 ? mergedReview() : []),
         },
         { usedSet, learnerIds: shareWith, tagIds },
       )
@@ -1704,7 +1834,7 @@ export default function MaterialForm({
           {isPassageKind(kind)
             ? '種類・場面・レベル・業界は、上で選んだものがそのまま反映されます。'
             : <>上の<strong>弱点タグを1つ</strong>選んでから押してください。 レベルと業界も自動で反映されます。</>}
-          {kind === 'pattern' && ' 文型ドリルは 4演習 × 10問 = 40問 作ります。'}
+          {isDrillKind(kind) && ' 文型ドリルは 4演習 × 10問 = 40問 作ります。'}
         </p>
         <p className="tip card-hint">
           {isPassageKind(kind)
@@ -1825,6 +1955,127 @@ export default function MaterialForm({
             ? `${bodyWord(kind)}の本文は必ず入ります。`
             : '最後の1つは外せません(作るものが無くなるため)。'}
         </p>
+
+        {/* ── 文型ドリルで使う語を、単語帳から絞って選ぶ ──────────
+            2026-09 利用者の指定:
+              > 文型トレーニングに、どの単語帳からどのレベルのどの品詞を
+              > 使用するか、を指定できるようにしたい。
+
+            **新しい仕組みを1つも作っていない。** 選んだ語は、すぐ下の
+            「必ず入れます」の一覧(`mustUse`)に足されるだけである。
+            **文型ドリルにだけ出す**(言われた場所だけを直す)。 */}
+        {drillOn && (
+          <div className="review-box">
+            <p className="field-hint">
+              <strong>単語帳から、使う語を選ぶ。</strong>
+              レベルと品詞で絞って、その中から選んだ語を下の一覧に足します。
+              <br />
+              選んだ語は、4つの演習に分けて渡します。
+              <strong>AI は1回も呼びません(0円)。</strong>
+            </p>
+
+            <div className="wbfilter">
+              <label className="wbfilter-row">
+                <span className="wbfilter-name">単語帳</span>
+                <select className="wbfilter-ctl" value={book}
+                        onChange={(e) => { setWordBook(e.target.value); setWordNote('') }}>
+                  {wordBooks.map((b) => (
+                    <option key={b.id} value={b.id} title={b.hint}>{b.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              {/* **業種べつは、この教材の業界から始める。** 選び直せる */}
+              {book === 'shelf' && (
+                <label className="wbfilter-row">
+                  <span className="wbfilter-name">業種</span>
+                  <select className="wbfilter-ctl" value={shelfId}
+                          onChange={(e) => { setWordShelf(e.target.value); setWordNote('') }}>
+                    {shelfList().map((sh) => (
+                      <option key={sh.id} value={sh.id}>{shelfLabel(sh.id)}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {book === 'basic' && (
+                <label className="wbfilter-row">
+                  <span className="wbfilter-name">段</span>
+                  <select className="wbfilter-ctl" value={wordTier}
+                          onChange={(e) => { setWordTier(e.target.value); setWordNote('') }}>
+                    {BASIC_TIERS.map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {/* **選べるものが1つ以下の欄は出さない**(`optionsOf`)。
+                  基礎単語はレベルを持たないので、ここは出ない */}
+              {wordLevels.length > 0 && (
+                <label className="wbfilter-row">
+                  <span className="wbfilter-name">レベル</span>
+                  <select className="wbfilter-ctl" value={lv}
+                          onChange={(e) => { setWordLevel(e.target.value); setWordNote('') }}>
+                    <option value="">すべて</option>
+                    {wordLevels.map((o) => (
+                      <option key={o.key} value={o.key}>{o.label}({o.count} 語)</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {wordPoss.length > 0 && (
+                <label className="wbfilter-row">
+                  <span className="wbfilter-name">品詞</span>
+                  <select className="wbfilter-ctl" value={ps}
+                          onChange={(e) => { setWordPos(e.target.value); setWordNote('') }}>
+                    <option value="">すべて</option>
+                    {wordPoss.map((o) => (
+                      <option key={o.key} value={o.key}>{o.label}({o.count} 語)</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <label className="wbfilter-row">
+                <span className="wbfilter-name">何語使うか</span>
+                <select className="wbfilter-ctl" value={wordCount}
+                        onChange={(e) => setWordCount(Number(e.target.value))}>
+                  {DRILL_COUNTS.map((n) => (
+                    <option key={n} value={n}>{n} 語</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {/* **押す前に、何語あるかを出す。** 0 なら押せない
+                (効かない操作を見せない)。読めなかったことを
+                「0語」と同じ見た目にしない */}
+            {wordBusy ? (
+              <p className="field-hint">単語帳を読んでいます…</p>
+            ) : wordError ? (
+              <p className="notice notice--warn">
+                単語帳を読めませんでした。{String(wordError)}
+              </p>
+            ) : (
+              <>
+                <p className="field-hint">
+                  この条件に当てはまる語は <strong>{wordHit} 語</strong>あります。
+                  {wordHit > 0 && ` この中から ${Math.min(wordCount, wordHit)} 語を選びます。`}
+                </p>
+                <div className="btn-row">
+                  <button type="button" className="btn btn--small"
+                          disabled={wordHit === 0}
+                          onClick={addDrillWords}>
+                    この条件から語を足す
+                  </button>
+                </div>
+                {wordNote && <p className="field-hint"><strong>{wordNote}</strong></p>}
+              </>
+            )}
+          </div>
+        )}
 
         {/* ── 単語帳から名指しで渡された語 ──────────────────────
             ゲストの単語帳で選んで「この語で教材を作る」を押すと、ここに並ぶ。

@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   41行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   42行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -156,4 +156,9 @@ from (
   -- だから関数そのものの有無で見る。画面の SetupStatus も同じ印を見ている
   union all select '0059 トレーナーが自分にも単語帳を出せる(pending_matome.sql)',
     exists (select 1 from pg_proc where proname = 'can_set_own_features'), 41
+  -- **表も列も増えない移行**(弱点タグを2つ足すだけ)。
+  -- だから**その行が在るか**で見る。表そのものは 0001 からあるので、
+  -- 表の有無で見ると**入っていないのに「もう入っています」と出る**
+  union all select '0060 苦手タグに「無生物主語」「名詞構文」(pending_matome.sql)',
+    exists (select 1 from public.weakness_tags where id = 'inanimate-subject'), 42
 ) t order by 順;

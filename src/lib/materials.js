@@ -41,6 +41,7 @@ const fail = (e, fallback) => ng(e?.message ? `${fallback}: ${e.message}` : fall
  */
 export {
   MATERIAL_KINDS, NEW_MATERIAL_KINDS, isPassageKind, isDialogueKind, isVocabKind,
+  isDrillKind,
   bodyWord, usesScene, canPasteBody, kindLabel,
 } from '../data/materialKinds.js'
 // このファイルの中でも使うので、出し直すだけでなく取り込む

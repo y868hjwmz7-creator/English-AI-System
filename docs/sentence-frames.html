@@ -1,0 +1,529 @@
+<!doctype html>
+<meta charset="utf-8">
+<!--
+  英文の「型」— トレーナー向けレクチャー資料(2026-09 利用者の指定)
+
+  【PDF の作り方】
+    node scripts/make-frames-pdf.mjs
+    → docs/sentence-frames.pdf ができます。
+
+  中身は「無生物主語」から始まる5つの節で、
+  そのうち2つ(無生物主語 / 名詞構文)は弱点タグにもなっています(0060)。
+-->
+<title>英文の「型」— 文を組み立てる骨組み</title>
+<style>
+  @page {
+    size: A4;
+    margin: 16mm 14mm 18mm;
+  }
+
+  :root {
+    --ink:        #1b1b1f;
+    --ink-soft:   #44464d;
+    --ink-faint:  #6b6e76;
+    --accent:     #1d4e8f;
+    --accent-bg:  #eef3fa;
+    --accent-line:#c7d8ee;
+    --warm:       #8a5a1c;
+    --warm-bg:    #fbf4e8;
+    --rule:       #d8dae0;
+    --gothic: 'IPAPGothic', 'IPAGothic', sans-serif;
+    --mincho: 'IPAPMincho', 'IPAMincho', serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--mincho);
+    font-size: 10.2pt;
+    line-height: 1.85;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── 表紙の帯 ───────────────────────────────────── */
+  .cover {
+    border-top: 3px solid var(--accent);
+    border-bottom: 1px solid var(--rule);
+    padding: 14px 0 16px;
+    margin-bottom: 22px;
+  }
+  .cover .eyebrow {
+    font-family: var(--gothic);
+    font-size: 8.4pt;
+    letter-spacing: .18em;
+    color: var(--accent);
+    margin: 0 0 6px;
+  }
+  .cover h1 {
+    font-family: var(--gothic);
+    font-size: 19pt;
+    line-height: 1.35;
+    margin: 0 0 6px;
+    letter-spacing: .01em;
+  }
+  .cover .sub {
+    font-family: var(--gothic);
+    font-size: 10pt;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+  .cover .meta {
+    font-family: var(--gothic);
+    font-size: 8.2pt;
+    color: var(--ink-faint);
+    margin: 10px 0 0;
+  }
+
+  /* ── 見出し ─────────────────────────────────────── */
+  h2 {
+    font-family: var(--gothic);
+    font-size: 13pt;
+    margin: 26px 0 10px;
+    padding: 5px 0 5px 11px;
+    border-left: 4px solid var(--accent);
+    line-height: 1.45;
+    break-after: avoid;
+  }
+  h2 .no {
+    color: var(--accent);
+    margin-right: .35em;
+  }
+  h3 {
+    font-family: var(--gothic);
+    font-size: 10.8pt;
+    margin: 18px 0 7px;
+    color: var(--accent);
+    break-after: avoid;
+  }
+  h4 {
+    font-family: var(--gothic);
+    font-size: 9.8pt;
+    margin: 14px 0 5px;
+    color: var(--ink-soft);
+    break-after: avoid;
+  }
+
+  p { margin: 0 0 9px; }
+  strong { font-weight: 700; }
+
+  .lead {
+    font-family: var(--gothic);
+    font-size: 10pt;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+
+  /* ── 英文 ───────────────────────────────────────── */
+  .en, table .en, code {
+    font-family: 'DejaVu Serif', Georgia, serif;
+    font-size: 9.6pt;
+  }
+  .en b, .pat b { font-weight: 700; }
+
+  /* ── 表 ─────────────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 14px;
+    font-size: 9.4pt;
+    break-inside: auto;
+  }
+  th {
+    font-family: var(--gothic);
+    font-size: 8.8pt;
+    text-align: left;
+    color: var(--accent);
+    background: var(--accent-bg);
+    border-bottom: 1.2px solid var(--accent-line);
+    padding: 5px 8px;
+    white-space: nowrap;
+  }
+  td {
+    padding: 5px 8px;
+    border-bottom: .8px solid var(--rule);
+    vertical-align: top;
+    line-height: 1.7;
+  }
+  tr { break-inside: avoid; }
+  td.pat {
+    font-family: 'DejaVu Serif', Georgia, serif;
+    font-size: 9.3pt;
+    white-space: nowrap;
+    width: 34%;
+  }
+  td.ja { font-size: 9.2pt; }
+
+  /* ── 囲み ───────────────────────────────────────── */
+  .note {
+    border: 1px solid var(--accent-line);
+    background: var(--accent-bg);
+    border-radius: 3px;
+    padding: 9px 12px;
+    margin: 12px 0 14px;
+    font-size: 9.4pt;
+    line-height: 1.75;
+    break-inside: avoid;
+  }
+  .note .t {
+    display: block;
+    font-family: var(--gothic);
+    font-size: 8.8pt;
+    color: var(--accent);
+    letter-spacing: .08em;
+    margin-bottom: 3px;
+  }
+  .warn {
+    border: 1px solid #e3d0ae;
+    background: var(--warm-bg);
+  }
+  .warn .t { color: var(--warm); }
+  .note p:last-child { margin-bottom: 0; }
+
+  /* 抜き書き(利用者の言葉) */
+  blockquote {
+    margin: 10px 0 12px;
+    padding: 2px 0 2px 12px;
+    border-left: 3px solid var(--rule);
+    color: var(--ink-soft);
+    font-size: 9.4pt;
+  }
+
+  ul { margin: 0 0 10px; padding-left: 1.25em; }
+  li { margin-bottom: 4px; }
+
+  .page-break { break-before: page; }
+
+  .end {
+    margin-top: 26px;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--gothic);
+    font-size: 8.4pt;
+    color: var(--ink-faint);
+  }
+</style>
+
+<div class="cover">
+  <p class="eyebrow">TRAINER HANDOUT</p>
+  <h1>英文の「型」— 文を組み立てる骨組み</h1>
+  <p class="sub">無生物主語から始める、5つの節</p>
+  <p class="meta">English AI System ／ トレーナー向け資料 ／ 2026-09</p>
+</div>
+
+<p class="lead">
+  この資料は、<strong>日本語から訳しても出てこない英文の組み立て方</strong>を、
+  レッスンでそのまま使える形にまとめたものです。
+  ①が中心で、②〜⑤はその周りを固めます。
+  <strong>順番に読む必要はありません。</strong>
+  必要な表だけをその場で開いてください。
+</p>
+
+<!-- ══════════════════════════════════════════════════ -->
+<h2><span class="no">①</span>無生物主語 —「主語」ではなく「動詞」を覚える</h2>
+
+<h3>まず、何を覚えるのか</h3>
+
+<p>
+  <span class="en">cut corners</span>(手を抜く)を
+  <span class="en">cutting corners</span> にして主語に立てる。
+  これはたしかに<strong>無生物主語</strong>です。
+  ただし教えるときは、ひとこと言い添えると効きが変わります。
+</p>
+
+<div class="note">
+  <span class="t">ここがかなめ</span>
+  <p>
+    <strong>覚えるべきは「主語」ではなく「動詞」です。</strong>
+    「無生物主語」は<em>結果</em>の呼び名で、文を成り立たせているのは
+    <strong>うしろに人を目的語として取れる動詞</strong>のほうです。
+    <span class="en">inspire</span> ／ <span class="en">keep</span> ／
+    <span class="en">require</span> は、どれもうしろに人が来るので
+    <strong>主語の席が空きます。</strong>
+    そこへ <span class="en">cutting corners</span> を入れる、という順番です。
+  </p>
+</div>
+
+<p>
+  だから一覧にするなら「主語になれるもの」ではなく、
+  <strong>動詞を、うしろに続く形とセットで</strong>並べるのが実用的です
+  ——<span class="en">keep 人 <b>from</b> ~ing</span> の
+  <span class="en">from</span> と <span class="en">~ing</span> まで含めて、
+  <strong>ひとかたまりで1つの型</strong>です。
+</p>
+
+<h3>1. させる(背中を押す)</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat">S <b>allows</b> 人 <b>to</b> do</td><td class="en">This tool <b>allows</b> you <b>to</b> share files instantly.</td></tr>
+  <tr><td class="pat">S <b>enables</b> 人 <b>to</b> do</td><td class="en">The update <b>enabled</b> us <b>to</b> cut the cost in half.</td></tr>
+  <tr><td class="pat">S <b>helps</b> 人 (<b>to</b>) do</td><td class="en">The training <b>helped</b> the team <b>work</b> faster.</td></tr>
+  <tr><td class="pat">S <b>encourages</b> 人 <b>to</b> do</td><td class="en">The results <b>encouraged</b> us <b>to</b> expand.</td></tr>
+  <tr><td class="pat">S <b>inspires</b> 人 <b>to</b> do</td><td class="en">Working overseas <b>inspired</b> her <b>to</b> learn Spanish.</td></tr>
+  <tr><td class="pat">S <b>leads</b> 人 <b>to</b> do</td><td class="en">The delay <b>led</b> us <b>to</b> rethink the schedule.</td></tr>
+  <tr><td class="pat">S <b>prompts</b> 人 <b>to</b> do</td><td class="en">The complaint <b>prompted</b> us <b>to</b> review the process.</td></tr>
+  <tr><td class="pat">S <b>forces</b> 人 <b>to</b> do</td><td class="en">Rising costs <b>forced</b> them <b>to</b> raise prices.</td></tr>
+  <tr><td class="pat">S <b>makes</b> 人 do(原形)</td><td class="en">The music <b>made</b> everyone <b>relax</b>.</td></tr>
+</table>
+
+<h3>2. させない(妨げる)</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat">S <b>keeps</b> 人 <b>from</b> ~ing</td><td class="en">Fear of mistakes <b>keeps</b> many people <b>from speaking</b> up.</td></tr>
+  <tr><td class="pat">S <b>prevents</b> 人 <b>from</b> ~ing</td><td class="en">The rain <b>prevented</b> us <b>from starting</b> on time.</td></tr>
+  <tr><td class="pat">S <b>stops</b> 人 <b>from</b> ~ing</td><td class="en">Nothing <b>is stopping</b> you <b>from asking</b>.</td></tr>
+  <tr><td class="pat">S <b>discourages</b> 人 <b>from</b> ~ing</td><td class="en">The long form <b>discourages</b> people <b>from applying</b>.</td></tr>
+</table>
+
+<div class="note">
+  <span class="t">まとめて教えると速い</span>
+  <p>
+    <strong>この4つは全部 <span class="en">from + ~ing</span> です。</strong>
+    ばらばらに覚えると、本番で <span class="en">to</span> と
+    <span class="en">from</span> を取り違えます。
+    <strong>1つの型として一度に</strong>渡してください。
+  </p>
+</div>
+
+<h3>3. 要る・かかる</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat">S <b>requires</b> 名詞</td><td class="en">Learning a language <b>requires</b> patience.</td></tr>
+  <tr><td class="pat">S <b>requires</b> 人 <b>to</b> do</td><td class="en">This project <b>requires</b> everyone <b>to</b> report weekly.</td></tr>
+  <tr><td class="pat">S <b>takes</b> (人) 時間 <b>to</b> do</td><td class="en">It <b>took</b> us three days <b>to</b> fix the bug.</td></tr>
+  <tr><td class="pat">S <b>involves</b> ~ing</td><td class="en">The role <b>involves traveling</b> twice a month.</td></tr>
+  <tr><td class="pat">S <b>calls for</b> 名詞</td><td class="en">The situation <b>calls for</b> a quick decision.</td></tr>
+</table>
+
+<h3>4. もたらす(結果)</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat">S <b>causes</b> 名詞</td><td class="en">The update <b>caused</b> several errors.</td></tr>
+  <tr><td class="pat">S <b>leads to</b> 名詞</td><td class="en">Poor planning <b>leads to</b> delays.</td></tr>
+  <tr><td class="pat">S <b>results in</b> 名詞</td><td class="en">The change <b>resulted in</b> a 10% drop.</td></tr>
+  <tr><td class="pat">S <b>brings</b> 人 名詞</td><td class="en">The new line <b>brought</b> us 200 new customers.</td></tr>
+</table>
+
+<h3>5. 人を、ある状態にする</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat">S <b>makes</b> 人 形容詞</td><td class="en">The news <b>made</b> everyone <b>nervous</b>.</td></tr>
+  <tr><td class="pat">S <b>leaves</b> 人 形容詞</td><td class="en">The delay <b>left</b> us <b>short</b> on time.</td></tr>
+  <tr><td class="pat">S <b>keeps</b> 人/物 形容詞</td><td class="en">Regular practice <b>keeps</b> your English <b>sharp</b>.</td></tr>
+</table>
+
+<h3>6. 示す・説明する(会議で頻出)</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat">S <b>shows / suggests (that)</b> ~</td><td class="en">The data <b>shows that</b> demand is rising.</td></tr>
+  <tr><td class="pat">S <b>explains why</b> ~</td><td class="en">That <b>explains why</b> he was late.</td></tr>
+  <tr><td class="pat">S <b>is why</b> ~</td><td class="en">This <b>is why</b> we changed suppliers.</td></tr>
+  <tr><td class="pat">S <b>reminds</b> 人 <b>that</b> ~</td><td class="en">The chart <b>reminds us that</b> growth has slowed.</td></tr>
+</table>
+
+<h3>7. <span class="en">it</span> を立てる形(無生物主語の親戚)</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat">S <b>makes it possible to</b> do</td><td class="en">Remote tools <b>make it possible to</b> hire anywhere.</td></tr>
+  <tr><td class="pat">S <b>makes it hard for</b> 人 <b>to</b> do</td><td class="en">The noise <b>made it hard for</b> me <b>to</b> focus.</td></tr>
+  <tr><td class="pat"><b>It takes</b> 時間 <b>to</b> do</td><td class="en"><b>It takes</b> three months <b>to</b> see results.</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════ -->
+<h2 class="page-break"><span class="no">②</span>主語の席に、何を入れるか</h2>
+
+<p>
+  <span class="en">cut corners</span> →
+  <span class="en">cutting corners</span> の<strong>動名詞化</strong>は、
+  そのうちの1つです。ほかに5つあります。
+</p>
+
+<table>
+  <tr><th>手立て</th><th>例</th></tr>
+  <tr><td class="pat">動名詞</td><td class="en"><b>Cutting corners</b> saves time now but costs more later.</td></tr>
+  <tr><td class="pat">名詞化(動詞→名詞)</td><td class="en"><b>Her decision to leave</b> surprised everyone.</td></tr>
+  <tr><td class="pat">what 節</td><td class="en"><b>What matters</b> is consistency.</td></tr>
+  <tr><td class="pat">the fact that</td><td class="en"><b>The fact that no one asked</b> worries me.</td></tr>
+  <tr><td class="pat">the way / the reason</td><td class="en"><b>The way he explained it</b> made sense.</td></tr>
+  <tr><td class="pat">形式主語 it</td><td class="en"><b>It</b> is important <b>to check twice</b>.</td></tr>
+</table>
+
+<div class="note">
+  <span class="t">名詞構文は、無生物主語と裏表</span>
+  <p>
+    <span class="en">We decided to postpone</span> →
+    <span class="en"><b>Our decision to postpone</b></span> にすると、
+    そのまま主語の席に入ります。
+    <strong>動詞を名詞のかたまりに変えること</strong>が、
+    そのまま<strong>主語を作る手立て</strong>になっているわけです。
+    ここを通すと、1文がぐっと引き締まります。
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<h2><span class="no">③</span>無生物主語以外の「型」</h2>
+
+<p class="lead">
+  ここからは<strong>文全体の骨</strong>の話です。役目ごとに分けます。
+</p>
+
+<h3>焦点を当てる(どこを際立たせるか)</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat"><b>It is</b> X <b>that / who</b> ~</td><td class="en"><b>It's</b> the price <b>that</b> worries me.</td></tr>
+  <tr><td class="pat"><b>What</b> ~ <b>is</b> …</td><td class="en"><b>What</b> we need <b>is</b> more time.</td></tr>
+  <tr><td class="pat"><b>All</b> 人 <b>have to do is</b> do</td><td class="en"><b>All you have to do is</b> send the file.</td></tr>
+  <tr><td class="pat"><b>The reason</b> ~ <b>is that</b> …</td><td class="en"><b>The reason</b> we changed <b>is that</b> the old one broke.</td></tr>
+  <tr><td class="pat"><b>There is / are</b> ~</td><td class="en"><b>There's</b> a problem with the schedule.</td></tr>
+</table>
+
+<h3>話題を先に置く(前置き)</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat"><b>When it comes to</b> ~</td><td class="en"><b>When it comes to</b> pricing, we're flexible.</td></tr>
+  <tr><td class="pat"><b>As for</b> ~</td><td class="en"><b>As for</b> the schedule, nothing has changed.</td></tr>
+  <tr><td class="pat"><b>In terms of</b> ~</td><td class="en"><b>In terms of</b> cost, this is the best option.</td></tr>
+  <tr><td class="pat"><b>Given (that)</b> ~</td><td class="en"><b>Given</b> the budget, we should wait.</td></tr>
+  <tr><td class="pat"><b>Based on</b> ~</td><td class="en"><b>Based on</b> the data, demand is growing.</td></tr>
+</table>
+<p>
+  <span class="en">When it comes to</span> と <span class="en">Given</span> は、
+  仕事の英語でとくに回数が多い型です。
+</p>
+
+<h3>文と文をつなぐ</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat"><b>That's why</b> ~</td><td class="en"><b>That's why</b> we moved the meeting.</td></tr>
+  <tr><td class="pat"><b>Which means</b> ~</td><td class="en">We're short-staffed, <b>which means</b> we need to start earlier.</td></tr>
+  <tr><td class="pat"><b>That said,</b> ~</td><td class="en">It's expensive. <b>That said,</b> it's still worth trying.</td></tr>
+  <tr><td class="pat"><b>Not only</b> ~ <b>but also</b> …</td><td class="en"><b>Not only</b> did it save time, <b>but</b> it <b>also</b> cut costs.</td></tr>
+</table>
+<p>
+  <span class="en">Which means</span> は<strong>会話でとても多いのに、
+  教材では出にくい</strong>型です。意識して入れる値打ちがあります。
+</p>
+
+<h3>1文を後ろへ伸ばす</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat">関係詞</td><td class="en">the report <b>that we sent yesterday</b></td></tr>
+  <tr><td class="pat">現在分詞</td><td class="en">the team <b>working on it</b></td></tr>
+  <tr><td class="pat">過去分詞</td><td class="en">the report <b>sent yesterday</b></td></tr>
+  <tr><td class="pat">同格</td><td class="en">our goal, <b>a 20% increase</b></td></tr>
+  <tr><td class="pat">分詞構文</td><td class="en"><b>Having reviewed the data,</b> we decided to wait.</td></tr>
+</table>
+
+<h3>やわらげる・提案する(仕事で効く)</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat"><b>It might be worth</b> ~ing</td><td class="en"><b>It might be worth</b> checking again.</td></tr>
+  <tr><td class="pat"><b>I was wondering if</b> you could ~</td><td class="en"><b>I was wondering if</b> you could send it today.</td></tr>
+  <tr><td class="pat"><b>Would it be possible to</b> ~</td><td class="en"><b>Would it be possible to</b> move the meeting?</td></tr>
+  <tr><td class="pat"><b>We may want to</b> ~</td><td class="en"><b>We may want to</b> wait a week.</td></tr>
+  <tr><td class="pat"><b>What if we</b> ~</td><td class="en"><b>What if we</b> split it into two phases?</td></tr>
+</table>
+
+<h3>比べる</h3>
+<table>
+  <tr><th>型</th><th>例</th></tr>
+  <tr><td class="pat"><b>less about</b> A <b>than</b> B</td><td class="en">It's <b>less about</b> cost <b>than</b> timing.</td></tr>
+  <tr><td class="pat"><b>The</b> 比較級, <b>the</b> 比較級</td><td class="en"><b>The more</b> we practice, <b>the faster</b> we improve.</td></tr>
+  <tr><td class="pat"><b>not</b> A <b>but</b> B</td><td class="en">It's <b>not</b> a delay <b>but</b> a change of plan.</td></tr>
+  <tr><td class="pat">A <b>rather than</b> B</td><td class="en">We'd start in May <b>rather than</b> April.</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════ -->
+<h2 class="page-break"><span class="no">④</span>型は、3つの層に分かれる</h2>
+
+<p>
+  ①〜③をまとめると、こうなります。
+  <strong>ここが、レッスンの組み立てにいちばん効きます。</strong>
+</p>
+
+<table>
+  <tr><th>層</th><th>何をする型か</th><th>例</th></tr>
+  <tr>
+    <td class="pat">骨</td>
+    <td class="ja">文そのものの形を決める</td>
+    <td class="en">無生物主語 ／ It is ~ that ／ There is</td>
+  </tr>
+  <tr>
+    <td class="pat">伸ばす</td>
+    <td class="ja">骨は変えず、部品を長くする</td>
+    <td class="en">関係詞 ／ 分詞 ／ 同格</td>
+  </tr>
+  <tr>
+    <td class="pat">つなぐ</td>
+    <td class="ja">文と文のあいだ</td>
+    <td class="en">That's why ／ Which means ／ That said</td>
+  </tr>
+</table>
+
+<div class="note">
+  <span class="t">つまずきの切り分けに使う</span>
+  <p>
+    <strong>層が違うと、つまずき方も違います。</strong>
+  </p>
+  <ul>
+    <li><strong>骨が無い</strong> → そもそも文が作れない。言いよどんで止まる</li>
+    <li><strong>伸ばせない</strong> → 短い文しか言えない。情報が足せない</li>
+    <li><strong>つなげない</strong> → 単文が並ぶだけ。話がぶつ切りに聞こえる</li>
+  </ul>
+  <p>
+    ゲストがどこで止まっているかは、<strong>この3つで切り分けられます。</strong>
+    「文法が弱い」とひとまとめにせず、どの層かを見てください。
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════ -->
+<h2><span class="no">⑤</span>教えるときに効いたこと</h2>
+
+<h3>1. 動詞を、うしろの形まで一組で覚える</h3>
+<p>
+  <span class="en">prevent</span> だけでは使えません。
+  <span class="en">prevent 人 from ~ing</span> で<strong>ひとかたまり</strong>です。
+  ここを切って覚えると、本番で <span class="en">to</span> と
+  <span class="en">from</span> を取り違えます。
+  <strong>型の本体は、動詞そのものではなく「動詞 + 前置詞 + 続く形」にあります。</strong>
+</p>
+
+<h3>2. 日本語から訳して出てこないものだけを、型として明示する</h3>
+<p>
+  無生物主語がいちばん値打ちがあるのは、まさに
+  <strong>直訳では一生出てこない</strong>からです。
+  逆に <span class="en">if ~</span> のように日本語と順番が同じものは、
+  <strong>型として教えなくても出てきます。</strong>
+  限られたレッスン時間は、前者に使ってください。
+</p>
+
+<div class="note warn">
+  <span class="t">練習のしかた</span>
+  <p>
+    型は<strong>暗記ではなく、入れ替えで身に付きます。</strong>
+    1つの型に対して、<strong>主語だけを変えた文を5〜10本</strong>作らせてください。
+  </p>
+  <p class="en" style="margin-top:6px">
+    The delay <b>kept us from finishing</b> on time.<br>
+    The budget <b>kept us from hiring</b> anyone.<br>
+    His schedule <b>kept him from joining</b> the call.
+  </p>
+  <p style="margin-top:6px">
+    <strong>同じ型で主語と目的語だけを動かす</strong> —— これが、
+    文型ドリルがしていることそのものです。
+  </p>
+</div>
+
+<div class="end">
+  <p style="margin:0 0 4px">
+    <strong>このアプリでの置き場所</strong> ——
+    「無生物主語」と「名詞構文」は、<strong>弱点タグ</strong>として選べます
+    (文法の見出しの中)。レッスンで指摘したら、その弱点のまま
+    文型ドリルを作れます。
+  </p>
+  <p style="margin:0">
+    English AI System ／ トレーナー向け資料 ／ 2026-09
+  </p>
+</div>

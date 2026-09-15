@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0059'
+export const NEWEST_MIGRATION = '0060'
 
 /**
  * その移行が入っているかを見る印。
@@ -75,9 +75,21 @@ export const NEWEST_MIGRATION = '0059'
  * `table` を書けば表の有無、`rpc` を書けば関数の有無を見る。
  * **どちらか一方だけ**を書く。
  */
+/*
+ * 0060 は**表も列も関数も1つも増えない**(弱点タグを2行足すだけ)。
+ * だから `table: 'weakness_tags'` では見られない ——
+ * **あの表は 0001 からある**ので、貼る前でも「もう入っています」と出る。
+ * **いちばん悪い壊れ方**である(CLAUDE.md「本当は足りないのに全部 ✅」)。
+ *
+ * そこで **`row`(その行が在るか)** を足した。
+ * `weakness_tags` は 0001 で「タグは全員が読める」(`using (true)`)なので、
+ * **0件は「まだです」を正しく意味する** —— RLS に断られて 0 件になる表を、
+ * この印に選んではいけない。
+ */
 export const NEWEST_MARK = {
-  rpc: 'can_set_own_features',
-  label: 'トレーナーが、自分自身にも単語帳を出せるようにする',
+  table: 'weakness_tags',
+  row: { column: 'id', value: 'inanimate-subject' },
+  label: '苦手タグの「無生物主語」と「名詞構文」',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */
@@ -111,6 +123,15 @@ export async function checkSqlApplied() {
     /* **関数の印**(0056)。無ければ PGRST202 で断られる。
        **引数の要らない関数だけを印にする** —— 引数が要ると、
        その中身しだいで断られて「まだです」と誤診する */
+    /* **行の印**(0060)。表そのものは前からあるので、
+       **その行が在るか**を見る。読めるのに 0 件なら「まだです」である */
+    if (NEWEST_MARK.row) {
+      const { column, value } = NEWEST_MARK.row
+      const { data, error: rowError } = await supabase
+        .from(NEWEST_MARK.table).select(column).eq(column, value).limit(1)
+      if (rowError) return noTable(rowError) ? 'missing' : 'unknown'
+      return (data?.length ?? 0) > 0 ? 'ok' : 'missing'
+    }
     const { error } = NEWEST_MARK.rpc
       ? await supabase.rpc(NEWEST_MARK.rpc)
       : await supabase.from(NEWEST_MARK.table).select('*').limit(1)
@@ -138,7 +159,7 @@ export async function pendingSetup(force = false) {
       id: 'sql',
       title: '貼る SQL が、まだ最後まで届いていません',
       why: `${NEWEST_MIGRATION} の「${NEWEST_MARK.label}」が、まだ Supabase にありません。`
-        + '業種べつの単語帳を自分に出す欄など、新しく足したものが使えない状態です。',
+        + 'レッスンでその弱点を指摘しても、教材を作れない状態です。',
       how: 'Supabase → 左メニュー SQL Editor → New query に貼り付けて、'
         /* **強調の書き方(`**`)を混ぜない。** ここは `<div>` にそのまま出る
            文字列なので、Markdown として読まれず**画面にそのまま見える**

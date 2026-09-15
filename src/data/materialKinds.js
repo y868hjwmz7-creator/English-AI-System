@@ -115,6 +115,18 @@ export const isDialogueKind = (kind) => kind === 'dialogue' || kind === 'meeting
 export const isVocabKind = (kind) =>
   kind === 'vocab' || kind === 'word' || kind === 'phrase'
 
+/**
+ * **文型ドリル**かどうか(2026-09)。
+ *
+ * ここだけ「使う語を、単語帳から絞って指定する」欄が出る
+ * (利用者の指定「文型トレーニングに、どの単語帳からどのレベルの
+ * どの品詞を使用するか、を指定できるようにしたい」)。
+ *
+ * **画面の中で `kind === 'pattern'` と書かない。**
+ * 置く場所の数だけ食い違う(`isDialogueKind` と同じ考え方)。
+ */
+export const isDrillKind = (kind) => kind === 'pattern'
+
 /** 画面に出す短い呼び名(「記事」「会話」「会議」「スピーチ」)。文の中で使う */
 export const bodyWord = (kind) => (
   kind === 'reading' ? '記事'

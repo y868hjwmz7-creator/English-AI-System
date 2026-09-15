@@ -4224,7 +4224,18 @@ console.log('\nスピーチ練習(0054)')
      どちらでも「**その移行が本当に作るもの**」であることは変わらない */
   const markT = /NEWEST_MARK = \{\s*table: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
   const markF = /NEWEST_MARK = \{\s*rpc: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
+  /* **行そのものを印にすることもある**(0060 は弱点タグを2行足すだけで、
+     表も列も関数も1つも増えない)。`weakness_tags` は 0001 からあるので、
+     表の有無で見ると**貼る前でも「もう入っています」と出る** ——
+     CLAUDE.md が「いちばん悪い壊れ方」と呼んでいるものである */
+  const markR = /row: \{ column: '[a-z_]+', value: '([a-z-]+)' \}/
+    .exec(noC4(state))?.[1] ?? ''
   const makesMark = (src) => {
+    /* **行の印を先に見る。** `table` も一緒に書いてあるので、
+       順を逆にすると「表を作っているか」で見てしまい、必ず落ちる */
+    if (markR && markT) {
+      return new RegExp(`insert into public\\.${markT}\\b[\\s\\S]*'${markR}'`).test(src)
+    }
     if (markT) return new RegExp(`create table if not exists public\\.${markT}\\b`).test(src)
     if (markF) return new RegExp(`create or replace function public\\.${markF}\\(`).test(src)
     return false
@@ -4296,6 +4307,13 @@ console.log('\nスピーチ練習(0054)')
   /* **関数の印も読めること**(0056)。読めないと、貼る前でも黙ってしまう */
   ok(/await supabase\.rpc\(NEWEST_MARK\.rpc\)/.test(noC4(state)),
     '準備の状態 … 関数の印も見に行く')
+  /* **行の印も読めること**(0060)。**0件を「まだです」と読む**のがかなめで、
+     ここが `if (!error) return 'ok'` のままだと、
+     **表さえあれば「もう入っています」**になって印の意味が消える */
+  ok(/NEWEST_MARK\.row/.test(noC4(state))
+    && /\.eq\(column, value\)\.limit\(1\)/.test(noC4(state))
+    && /return \(data\?\.length \?\? 0\) > 0 \? 'ok' : 'missing'/.test(noC4(state)),
+  '準備の状態 … 行の印も見に行き、0件は「まだです」と読む')
   ok(/PGRST202/.test(noC4(state)) && /42883/.test(noC4(state)),
     '準備の状態 … 「そんな関数は無い」も「まだです」と読む')
 }
@@ -5295,6 +5313,164 @@ console.log('\nスピーチ練習(0054)')
     ok(/className="tip muted material-parts"/.test(noCS(readS(道))),
       `説明の文 … ${名}の「何が何問」を畳んである`)
   }
+}
+
+/*
+ * ============================================================================
+ * ▶ 文型ドリルで使う語を「単語帳 × レベル × 品詞」で指定する(2026-09)
+ *
+ *   > 文型トレーニングに、どの単語帳からどのレベルのどの品詞を使用するか、
+ *   > を指定できるようにしたい。(利用者の指定)
+ *
+ *   **新しい仕組みを1つも作っていない。** 選んだ語はすでにある `mustUse`
+ *   へ足され、窓口には `reviewWords` として渡る。だから
+ *   **SQL も、窓口の置き直しも要らない。AI も1回も呼ばない(0円)。**
+ *
+ *   ここで見るのは**算段**と、**画面が本当に呼んでいるか**の2つ。
+ *   見た目は測れない —— `MaterialForm` は Supabase を引き連れており、
+ *   `npm run test:bar` の骨組みでは1ドットも描かれない
+ *   (**描けないものは測れない**・CLAUDE.md)。
+ * ============================================================================
+ */
+{
+  console.log('\n▶ 文型ドリルで使う語を、単語帳から絞って選ぶ')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noD = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
+  const dw = await import('../src/lib/drillWords.js')
+  const { levelOf, posOf } = await import('../src/lib/wordbookFilter.js')
+  const { isDrillKind } = await import('../src/data/materialKinds.js')
+
+  /* ── ① 種類の見分け ─────────────────────────────────── */
+  ok(isDrillKind('pattern') && !isDrillKind('reading') && !isDrillKind('vocab')
+    && !isDrillKind('dialogue'),
+  '文型ドリルの語 … 文型ドリルだけを見分ける(`isDrillKind`)')
+
+  /* ── ② 出せる冊だけを出す ───────────────────────────── */
+  const noOne = dw.booksFor({ hasLearner: false }).map((b) => b.id)
+  const withOne = dw.booksFor({ hasLearner: true }).map((b) => b.id)
+  ok(!noOne.includes('learner') && withOne.includes('learner')
+    && noOne.includes('shelf') && noOne.includes('basic'),
+  '文型ドリルの語 … ゲストを1人選んでいないと「ゲストの単語帳」を出さない')
+
+  /* ── ③ 選択肢は、引けた語から作る ───────────────────── */
+  const rows = [
+    { word_norm: 'reduce', display: 'reduce', pos: '動詞', material_level: 'B1' },
+    { word_norm: 'delay',  display: 'delay',  pos: '名詞', material_level: 'A2' },
+    { word_norm: 'ensure', display: 'ensure', pos: '動詞', material_level: 'B2' },
+    { word_norm: 'prompt', display: 'prompt', pos: '動詞', material_level: 'A2' },
+    /* **品詞が分からない語**。当てずっぽうで「その他」に入れない */
+    { word_norm: 'hmm',    display: 'hmm',    pos: '',     material_level: 'A2' },
+  ]
+  const lv = dw.optionsOf(rows, levelOf)
+  ok(lv.map((o) => o.key).join(',') === 'A2,B1,B2',
+    '文型ドリルの語 … レベルは、やさしい順にそろえる')
+  ok(lv.find((o) => o.key === 'A2')?.count === 3,
+    '文型ドリルの語 … 選択肢に、その語数を出す')
+  const ps = dw.optionsOf(rows, posOf)
+  ok(ps.map((o) => o.key).sort().join(',') === 'noun,verb',
+    '文型ドリルの語 … 品詞が分からない語は、選択肢に混ぜない')
+
+  /* **選べるものが1つ以下なら、欄そのものを出さない**
+     (効かない操作を見せない)。基礎単語はレベルを持たないので、ここに落ちる */
+  const flat = rows.map((r) => ({ ...r, material_level: null }))
+  ok(dw.optionsOf(flat, levelOf).length === 0,
+    '文型ドリルの語 … レベルが1つも無ければ、欄を出さない')
+  ok(dw.optionsOf([{ pos: '動詞' }, { pos: '動詞' }], posOf).length === 0,
+    '文型ドリルの語 … 選べるものが1つしかなければ、欄を出さない')
+
+  /* ── ④ 絞って、取り出す ─────────────────────────────── */
+  ok(dw.narrowRows(rows, { pos: 'verb' }).length === 3
+    && dw.narrowRows(rows, { level: 'A2', pos: 'verb' }).length === 1,
+  '文型ドリルの語 … レベルと品詞で絞る(`applyWordbookFilter` を通す)')
+
+  const got = dw.pickWords(rows, { pos: 'verb', count: 10, seed: 1 })
+  ok(got.length === 3 && got.every((w) => ['reduce', 'ensure', 'prompt'].includes(w)),
+    '文型ドリルの語 … 足りなければ、あるだけ返す')
+  ok(dw.pickWords(rows, { pos: 'verb', count: 2, seed: 1 }).length === 2,
+    '文型ドリルの語 … 頼んだ数で切る')
+  ok(dw.pickWords(rows, { count: 999, seed: 1 }).length
+    === Math.min(rows.length, dw.MAX_DRILL_WORDS),
+  '文型ドリルの語 … 上限(20 語)を超えない')
+  ok(dw.pickWords([{ display: 'a' }, { display: 'a' }, { display: '' }], { count: 5, seed: 1 })
+    .join(',') === 'a',
+  '文型ドリルの語 … 同じ語を2回入れない。空の行は落とす')
+
+  /* **混ぜてから取る。** 先頭から取ると、基礎単語では
+     いつも1日目の語(i / you / am)しか出てこない */
+  const many = Array.from({ length: 40 }, (_, i) => ({ display: `w${i}`, pos: '動詞' }))
+  const a1 = dw.pickWords(many, { count: 10, seed: 1 }).join(',')
+  const a2 = dw.pickWords(many, { count: 10, seed: 9 }).join(',')
+  ok(a1 !== a2 && a1 !== many.slice(0, 10).map((x) => x.display).join(','),
+    '文型ドリルの語 … 先頭から取らない(混ぜてから選ぶ)')
+
+  /* ── ⑤ 演習ごとに配る ───────────────────────────────── */
+  const four = (n) => dw.spreadWords(Array.from({ length: n }, (_, i) => `w${i}`), 4)
+  ok(four(20).map((x) => x.length).join(',') === '5,5,5,5',
+    '文型ドリルの語 … 20 語は、4演習へ 5 語ずつ配る')
+  ok(four(10).map((x) => x.length).join(',') === '3,3,2,2',
+    '文型ドリルの語 … 余りは前の演習へ')
+  ok(four(2).map((x) => x.length).join(',') === '1,1,0,0',
+    '文型ドリルの語 … 足りなければ、空の演習があってよい')
+  /* **並びを崩さない。** `mustUse` はトレーナーが名指しで選んだ語が先に来る */
+  ok(four(8).flat().join(',') === Array.from({ length: 8 }, (_, i) => `w${i}`).join(','),
+    '文型ドリルの語 … 配っても、語の順は崩さない')
+  ok(dw.spreadWords([], 4).length === 4 && dw.spreadWords(['a'], 0).length === 0,
+    '文型ドリルの語 … 語が無くても・演習が無くても転ばない')
+
+  /* ── ⑥ 画面が本当に呼んでいるか ─────────────────────── */
+  const mf = noD(readD('src/components/MaterialForm.jsx'))
+  ok(/const drillOn = isDrillKind\(kind\)/.test(mf),
+    '文型ドリルの語 … 画面は `isDrillKind()` に任せる(種類をベタ書きしない)')
+  ok(!/kind === 'pattern'/.test(mf),
+    "文型ドリルの語 … 画面の中で `kind === 'pattern'` と書かない")
+  ok(/\{drillOn && \(/.test(mf),
+    '文型ドリルの語 … 欄は、文型ドリルのときだけ出す')
+  ok(/= booksFor\(\{ hasLearner: !!wordLearner \}\)/.test(mf),
+    '文型ドリルの語 … 冊の一覧は `booksFor()` から引く')
+  ok(/= useMemo\(\(\) => optionsOf\(wordRows, levelOf\)/.test(mf)
+    && /= useMemo\(\(\) => optionsOf\(wordRows, posOf\)/.test(mf),
+  '文型ドリルの語 … レベルと品詞の選択肢は `optionsOf()` から作る')
+  ok(/= pickWords\(wordRows, \{/.test(mf),
+    '文型ドリルの語 … 語は `pickWords()` で選ぶ')
+  ok(/wordLevels\.length > 0 && \(/.test(mf) && /wordPoss\.length > 0 && \(/.test(mf),
+    '文型ドリルの語 … 選べるものが無い欄は、画面にも出さない')
+  ok(/disabled=\{wordHit === 0\}/.test(mf),
+    '文型ドリルの語 … 0 語のときは押せない(効かない操作を見せない)')
+  ok(/この条件に当てはまる語は <strong>\{wordHit\} 語<\/strong>/.test(mf),
+    '文型ドリルの語 … 押す前に、当てはまる語の数を出す')
+
+  /* **足す。入れ替えない。** 単語帳の画面から渡された語が消えては困る */
+  ok(/setMustUse\(\[\.\.\.mustUse, \.\.\.add\]\)/.test(mf),
+    '文型ドリルの語 … 選んだ語は、いまの一覧に足す(入れ替えない)')
+  ok(/const have = new Set\(mustUse\.map\(normWord\)\)/.test(mf),
+    '文型ドリルの語 … 同じ語を二重に足さない(何度押しても安全)')
+
+  /* **配っているか。** 文型ドリルだけで、ほかは今までどおり */
+  ok(/const share = isDrillKind\(kind\) \? spreadWords\(mergedReview\(\), plan\.length\) : null/
+    .test(mf),
+  '文型ドリルの語 … 文型ドリルのときだけ、語を演習ごとに配る')
+  ok(/reviewWords: share \? \(share\[i\] \?\? \[\]\) : \(i === 0 \? mergedReview\(\) : \[\]\)/
+    .test(mf),
+  '文型ドリルの語 … 単語・フレーズは、これまでどおり最初の演習へ渡す')
+
+  /* **0円であること。** 語を選ぶのに窓口(AI)を1回も呼ばない */
+  const pick = /const addDrillWords = \(\) => \{[\s\S]*?\n  \}/.exec(mf)?.[0] ?? ''
+  ok(pick && !/generateSection|lookupWord|askForClip|supabase/.test(pick),
+    '文型ドリルの語 … 語を選ぶのに、窓口を1回も呼ばない(0円)')
+
+  /* **`status` を渡さない**(`null` = ぜんぶ)。「まだ」だけに絞ると、
+     その人がもう覚えた語で文型を練習できなくなる */
+  ok(/loadMyWordbook\(\{ status: null, learnerId: wordLearner \}\)/.test(mf),
+    '文型ドリルの語 … ゲストの単語帳は、覚えた語も含めて引く')
+  /* **基礎単語はファイルから。** 問い合わせ0回・0円 */
+  ok(/basicRows\(wordTier, \[\], \{\}\)/.test(mf),
+    '文型ドリルの語 … 基礎単語はファイルから読む(問い合わせ0回)')
+
+  /* ── ⑦ 算段は、素の node で走る形にしてある ─────────── */
+  const lib = readD('src/lib/drillWords.js')
+  ok(!/from '\.\/supabase\.js'|import\.meta\.env/.test(lib),
+    '文型ドリルの語 … 算段に Supabase を持ち込まない(素の node で確かめられる)')
 }
 
 console.log(ng
