@@ -51,6 +51,7 @@ import GrammarNote from './components/GrammarNote.jsx'
 import BasicsCourse from './components/BasicsCourse.jsx'
 import BasicWordsPick from './components/BasicWordsPick.jsx'
 import ShelfBooks from './components/ShelfBooks.jsx'
+import ShelfAssign from './components/ShelfAssign.jsx'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
 import VolumeRow from './components/VolumeRow.jsx'
@@ -937,6 +938,42 @@ const BASICPICK = (
   </section>
 )
 
+/* **この人に出す「業種べつの単語帳」**(`?screen=shelfassign`・2026-09 実機)。
+
+     > ゲストの単語帳（トレーナーアカウント）で、業界別の単語帳を
+     > アサインできません。アサインしたい単語帳を選んだ後にできることが
+     > なにもありませんし、アサインされる様子もありません。
+
+   もとは `TrainerLearners.jsx` の中に直に書いてあった。あの画面は
+   **Supabase を引き連れている**ので、骨組みでは**1ドットも描けなかった** ——
+   **描けないものは測れない**(`SpeechBoard` → `SpeechPractice` と同じ話)。
+   だから部品に切り出してある。
+
+   **「欄がある」だけを見ない。** 選んでも何も起きない形に戻しても
+   緑のままになる。**押したら本当に札が増えるか・結果がこの場に出るか**
+   まで数える。 */
+function ShelfAssignScreen() {
+  const all = shelfList()
+  /* **はじめから1冊出してある** —— 実機の写真がその形だった
+     (「ビジネス全般 外す」の札が1つ) */
+  const [on, setOn] = useState(['business'])
+  const [note, setNote] = useState(null)
+  return (
+    <ShelfAssign
+      shelfOn={all.filter((s) => on.includes(s.id))}
+      shelfOff={all.filter((s) => !on.includes(s.id))}
+      busy={false} note={note}
+      onPick={(sh) => {
+        const had = on.includes(sh.id)
+        setOn(had ? on.filter((x) => x !== sh.id) : [...on, sh.id])
+        setNote({ kind: 'ok', text: had
+          ? `元 さんの画面から「業種べつの単語帳「${sh.label}」」を外しました。`
+          : `元 さんの画面に「業種べつの単語帳「${sh.label}」」を出しました。` })
+      }}
+    />
+  )
+}
+
 /* 業種べつの単語帳(棚・`?screen=shelfpick`・0057・2026-09 利用者の指定)。
 
      > 何冊も違う単語帳を持てるようにしてほしいんです。…
@@ -1107,7 +1144,9 @@ function VolumeScreen() {
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'volume'
+  q.get('screen') === 'shelfassign'
+    ? <ShelfAssignScreen />
+    : q.get('screen') === 'volume'
     ? <VolumeScreen />
     : q.get('screen') === 'sheet'
     ? <SheetScreen />

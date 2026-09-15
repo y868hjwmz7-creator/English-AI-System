@@ -5014,9 +5014,24 @@ console.log('\nスピーチ練習(0054)')
   /* **ゲストのページからの道も、消していない**(2つとも要る) */
   const tl = noCS(readS('src/components/TrainerLearners.jsx'))
   /* **押せる形で数える。** `shelfFeature(s.id)` だけだと、
-     一覧を作る `useMemo` にも当たって**欄を消しても緑**になる */
-  ok(/toggleFeature\(l, \{\s*id: shelfFeature\(s\.id\)/.test(tl),
+     一覧を作る `useMemo` にも当たって**欄を消しても緑**になる。
+
+     **2026-09 に `ShelfAssign` へ切り出した** —— あの欄は
+     `TrainerLearners.jsx` の中にあり、この画面は Supabase を
+     引き連れているので**骨組みでは1ドットも描けなかった**
+     (**描けないものは測れない**)。そのあいだに
+     「押した結果がどこにも出ない」形が入り込んだ(実機で指摘された)。 */
+  ok(/<ShelfAssign\s/.test(tl),
     '単語帳を出す … ゲストのページからの道も残っている')
+  ok(/onPick=\{\(sh\) => pickShelf\(l, sh\)\}/.test(tl),
+    '単語帳を出す … えらんだ棚が、ちゃんと渡っている')
+  /* **押した結果は、押した場所に出す**(CLAUDE.md)。
+     画面のいちばん上(`message` / `error`)に出していたので、
+     単語帳のタブまで送った人には**1文字も見えなかった** */
+  ok(/note=\{shelfNote\}/.test(tl),
+    '単語帳を出す … 結果を、その欄に出している')
+  ok(/\{ quiet: true \}/.test(tl),
+    '単語帳を出す … 上の帯には同じ知らせを出していない')
   /* **置き場所は「単語帳」のタブ**(2026-09 利用者の指定)。
 
        > ゲストへの単語帳のアサインは、レベルとスコアからではなく、
@@ -5029,7 +5044,8 @@ console.log('\nスピーチ練習(0054)')
     const wb = tl.indexOf("detailTab === 'wordbook'")
     const qr = tl.indexOf("detailTab === 'qr'")
     const rec = tl.indexOf("detailTab === 'record'")
-    const at = tl.indexOf('この人に出す「業種べつの単語帳」')
+    /* **目印は `<ShelfAssign`。** 題そのものは部品の中へ移った */
+    const at = tl.indexOf('<ShelfAssign')
     ok(wb > 0 && qr > wb && at > wb && at < qr,
       '単語帳を出す … 出す欄が「単語帳」のタブの中にある')
     ok(rec > 0 && !(at > rec),

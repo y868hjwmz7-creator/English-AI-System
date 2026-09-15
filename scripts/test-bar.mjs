@@ -4169,6 +4169,134 @@ export default defineConfig({
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+     **この人に出す「業種べつの単語帳」**(0057・2026-09 実機)
+
+       > ゲストの単語帳（トレーナーアカウント）で、業界別の単語帳を
+       > アサインできません。アサインしたい単語帳を選んだ後にできることが
+       > なにもありませんし、アサインされる様子もありません。
+
+     出どころは**知らせの置き場所**だった。成功も失敗も画面のいちばん上
+     (`message` / `error`)に出していたので、**単語帳のタブまで送った人には
+     1文字も見えなかった**(CLAUDE.md「失敗の知らせは、その操作をした
+     場所に出す」)。しかもこの欄は `TrainerLearners.jsx` の中にあり、
+     あの画面は Supabase を引き連れているので**骨組みでは描けなかった** ——
+     **描けないものは測れない。**
+
+     **「欄がある」だけを見ない。** 選んでも何も起きない形に戻しても
+     緑のままになる。**押して、札が増えるか・結果がこの場に出るか**まで数える。
+     ══════════════════════════════════════════════════════════════════ */
+  for (const w of [1280, 390, 320]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfassign`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(250)
+
+    const 前 = await page.evaluate(() => {
+      const sel = document.querySelector('.card select')
+      const card = document.querySelector('.card')
+      if (!sel || !card) return null
+      const r = sel.getBoundingClientRect()
+      return {
+        冊: sel.querySelectorAll('optgroup option').length,
+        空: (sel.querySelector('option[value=""]')?.textContent ?? '').trim(),
+        組: [...sel.querySelectorAll('optgroup')].map((g) => g.label),
+        札: card.querySelectorAll('.chip--on').length,
+        /* **札も押すもの。** 36px を割らない(CLAUDE.md) */
+        札高: Math.round(Math.min(...[...card.querySelectorAll('.chip--on')]
+          .map((c) => c.getBoundingClientRect().height), 999)),
+        見出し: [...card.querySelectorAll('.field-label')]
+          .some((el) => (el.textContent ?? '').includes('いま出している')),
+        知らせ: card.querySelectorAll('.notice').length,
+        高さ: Math.round(r.height),
+        右: Math.round(r.right),
+        よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }
+    })
+
+    /* **選んでみる。** ここがこの見張りの本体である */
+    let 後 = null
+    if (前) {
+      const v = await page.evaluate(() => {
+        const sel = document.querySelector('.card select')
+        return sel?.querySelector('optgroup option')?.value ?? ''
+      })
+      await page.selectOption('.card select', v)
+      await page.waitForTimeout(200)
+      後 = await page.evaluate(() => {
+        const card = document.querySelector('.card')
+        const n = card.querySelector('.notice')
+        return {
+          札: card.querySelectorAll('.chip--on').length,
+          知らせ: (n?.textContent ?? '').trim(),
+          /* **知らせは、この欄の中にいるか。**
+             画面のいちばん上へ戻すと、ここが 0 になる */
+          中: card.querySelectorAll('.notice').length,
+          よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        }
+      })
+    }
+    await page.close()
+
+    const 名 = `棚を出す(${w}px)`
+    if (!前) {
+      ng(`${名} … 欄が描かれない`)
+    } else if (前.冊 !== 34) {
+      /* 35冊 − すでに出している1冊。**分野を足したら、ここも直す** */
+      ng(`${名} … 足せる棚が34冊そろっていない`, String(前.冊))
+    } else if (前.組.length !== 2
+      || !前.組.includes('お仕事') || !前.組.includes('趣味・娯楽')) {
+      ng(`${名} … お仕事と趣味・娯楽に分かれていない`, 前.組.join(' / '))
+    } else if (!前.空.includes('すぐ出します')) {
+      ng(`${名} … 「えらぶと、すぐ出します」が無い`,
+        '**選んだ瞬間に出す。** 言わないと「選んだあと、できることがない」と読める')
+    } else if (!前.見出し) {
+      ng(`${名} … 「いま出している単語帳」の見出しが無い`,
+        '札だけだと「外す」の字が先に目に入り、**出ている印**だと読めない')
+    } else if (前.知らせ !== 0) {
+      ng(`${名} … 押す前から知らせが出ている`, String(前.知らせ))
+    } else if (前.高さ < 40) {
+      ng(`${名} … プルダウンが押せる大きさを割っている`, String(前.高さ))
+    } else if (前.札高 < 36) {
+      ng(`${名} … 札が押せる大きさを割っている`, String(前.札高))
+    } else if (前.よこ > 0 || 前.右 > w) {
+      ng(`${名} … 横にはみ出している`, `${前.よこ}px / 右 ${前.右}`)
+    } else if (後.札 !== 前.札 + 1) {
+      ng(`${名} … えらんでも札が増えない(${前.札} → ${後.札})`,
+        '**選んだ瞬間に出す。** ここが増えないと「アサインされる様子がない」')
+    } else if (後.中 === 0 || !後.知らせ.includes('出しました')) {
+      ng(`${名} … 押した結果が、この欄に出ない`,
+        `${後.中} 件 / 「${後.知らせ}」 —— 画面のいちばん上に出すと、`
+        + '単語帳のタブまで送った人には見えない')
+    } else if (後.よこ > 0) {
+      ng(`${名} … えらんだあと横にはみ出す`, `${後.よこ}px`)
+    } else {
+      ok(`${名} … 34冊から1つえらぶと札が ${前.札} → ${後.札}、`
+        + `結果もその場に出る(${前.高さ}px)`)
+    }
+  }
+
+  /* **画面が本当に置いているか。** 検証の入り口(`__screens.jsx`)だけ
+     直しても、利用者の画面には出ない */
+  {
+    const tl = readFileSync(new URL('../src/components/TrainerLearners.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<ShelfAssign\s/.test(tl)) {
+      ng('棚を出す … ゲストのページに置かれていない')
+    } else if (!/onPick=\{\(sh\) => pickShelf\(l, sh\)\}/.test(tl)) {
+      ng('棚を出す … 押しても何も起きない形になっている',
+        '`onPick` を渡さないと、えらんでも1冊も出ない')
+    } else if (!/note=\{shelfNote\}/.test(tl)) {
+      ng('棚を出す … 知らせを渡していない',
+        '**その操作をした場所に出す** —— 渡さないと、また画面の上にしか出ない')
+    } else if (!/\{ quiet: true \}/.test(tl)) {
+      ng('棚を出す … 上の帯にも同じ知らせを出している',
+        '**同じものを2か所に出さない**(CLAUDE.md)')
+    } else {
+      ok('棚を出す … ゲストのページが `ShelfAssign` に任せている')
+    }
+  }
+
   /* **画面が本当に置いているか。** 検証の入り口(`__screens.jsx`)だけ
      直しても、利用者の単語帳には出ない */
   {

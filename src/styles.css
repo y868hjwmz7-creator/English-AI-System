@@ -8686,7 +8686,13 @@ button.wbfilter-ctl { text-align: left; }
    **押せる大きさ(40px)を割らないこと**の2つだけ
    (素の `select` は実測 37px。`.shelfbuild select` と同じ話)。 */
 .shelfbooks-pick > .field-label { margin: 0; }
-.shelfbooks-pick > select { flex: 1 1 auto; min-width: 0; min-height: 40px; }
+/* **押せる大きさ(40px)を割らない**(CLAUDE.md)。
+   素の `<select>` は padding と字の高さで **35px ほどしかない。**
+   ゲストのページの「単語帳を足す」(`.shelfassign`)と
+   **同じ行で分け合う** —— 値を書き写すと、片方だけ古くなる */
+.shelfbooks-pick > select,
+.shelfassign select { min-height: 40px; }
+.shelfbooks-pick > select { flex: 1 1 auto; min-width: 0; }
 
 /* ── 棚を作る画面(トレーナーだけ)──────────────────────
    **1語 = 1行。** 語・訳・品詞とレベル・例文・訳を縦に積む ——

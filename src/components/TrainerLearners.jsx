@@ -45,7 +45,8 @@ import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practic
 import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
 import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.js'
 import { LEARNER_FEATURES } from '../data/learnerFeatures.js'
-import { SHELF_GROUPS, shelfFeature, shelfList } from '../data/shelves.js'
+import { shelfFeature, shelfList } from '../data/shelves.js'
+import ShelfAssign from './ShelfAssign.jsx'
 import { printElement } from '../lib/print.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 
@@ -97,6 +98,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
      一覧は `src/data/learnerFeatures.js` 1か所。**ここに書き写さない** */
   const [features, setFeatures] = useState(new Set())
   const [featureBusy, setFeatureBusy] = useState(null)
+  /* **業種べつの単語帳を出したときの知らせ**(2026-09 実機)。
+     画面のいちばん上ではなく、**押した欄のすぐ下**に出す */
+  const [shelfNote, setShelfNote] = useState(null)
   /* **業種べつの単語帳(棚)のうち、この人に出しているもの**(0057)。
      入れ物は `learner_features` と同じで、名前だけが `shelf:<id>` である。
      **名前の作り方は `shelfFeature()` 1か所** ——
@@ -323,6 +327,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setForm({ testType: 'toeic', score: '', takenOn: today() })
     setGoal({ words: '', sentences: '' })
     setFeatures(new Set())
+    setShelfNote(null)
     setDetailBusy(true)
     // `loadLearnerSummary`(study_logs の合計)は読まない。
     // **もう誰も入力しないので、いつも 0 になる**(2026-08 の設計変更)
@@ -386,20 +391,49 @@ export default function TrainerLearners({ me, navTick = 0 }) {
    * **黙って切り替えない。** 何が起きたのかを1行で出す
    * (成功と失敗を、同じ見た目で終わらせない)。
    */
-  const toggleFeature = async (learner, feat) => {
-    if (featureBusy) return
+  const toggleFeature = async (learner, feat, { quiet = false } = {}) => {
+    if (featureBusy) return null
     const next = !features.has(feat.id)
     setFeatureBusy(feat.id)
     const { error: e } = await setLearnerFeature(learner.id, feat.id, next)
     setFeatureBusy(null)
-    if (e) { setError(e); return }
-    setError(null)
+    if (e) {
+      if (!quiet) setError(e)
+      /* **理由をそのまま返す。** 呼ぶ側が、押した場所に出す */
+      return { ok: false, text: `${e?.message ?? e}` }
+    }
+    if (!quiet) setError(null)
     const now = new Set(features)
     if (next) now.add(feat.id); else now.delete(feat.id)
     setFeatures(now)
-    setMessage(next
+    const text = next
       ? `${learner.display_name} さんの画面に「${feat.label}」を出しました。`
-      : `${learner.display_name} さんの画面から「${feat.label}」を外しました。`)
+      : `${learner.display_name} さんの画面から「${feat.label}」を外しました。`
+    if (!quiet) setMessage(text)
+    return { ok: true, text }
+  }
+
+  /**
+   * **業種べつの単語帳を、この人に出す / 外す**(0057)。
+   *
+   * `toggleFeature` をそのまま呼ぶだけだが、**知らせはこの欄に出す**
+   * (`quiet`)。画面のいちばん上(`message` / `error`)に出していたので、
+   * **単語帳のタブまで送った人には、成功も失敗も1文字も見えなかった**
+   * (2026-09 実機「アサインされる様子もありません」)。
+   * CLAUDE.md「**失敗の知らせは、その操作をした場所に出す**」。
+   *
+   * **同じものを2か所に出さない**ので、上の帯には出さない。
+   */
+  const pickShelf = async (learner, shelf) => {
+    if (featureBusy) return
+    const id = shelfFeature(shelf.id)
+    const on = !features.has(id)
+    setShelfNote({ kind: 'busy', text: on
+      ? `「${shelf.label}」を出しています…`
+      : `「${shelf.label}」を外しています…` })
+    const r = await toggleFeature(learner,
+      { id, label: `業種べつの単語帳「${shelf.label}」` }, { quiet: true })
+    setShelfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
   }
 
   const changeCefr = async (learner, cefr) => {
@@ -1216,69 +1250,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         `<section className="card">` を持っているので、
                         地の上に直に置くと**そこだけ浮いて見える**
                         (CLAUDE.md「外側まで数える」) */}
-                    <section className="card">
-                      <h3 className="card-title">この人に出す「業種べつの単語帳」</h3>
-                      {shelfOn.length > 0 ? (
-                        <div className="chiprow" role="group" aria-label="出している単語帳">
-                          {shelfOn.map((s) => (
-                            <button key={s.id} type="button" className="chip chip--on"
-                                    disabled={featureBusy === shelfFeature(s.id)}
-                                    onClick={() => toggleFeature(l, {
-                                      id: shelfFeature(s.id),
-                                      label: `業種べつの単語帳「${s.label}」`,
-                                    })}>
-                              {s.label}
-                              <span className="chip-count">外す</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="field-hint">
-                          まだ1冊も出していません。この人の単語帳には、
-                          <strong>業種べつの単語帳が1冊も出ません。</strong>
-                        </p>
-                      )}
-                      <label className="field">
-                        <span className="visually-hidden">出す単語帳を足す</span>
-                        <select className="input" value=""
-                                onChange={(e) => {
-                                  const s = shelfOff.find((x) => x.id === e.target.value)
-                                  if (s) {
-                                    toggleFeature(l, {
-                                      id: shelfFeature(s.id),
-                                      label: `業種べつの単語帳「${s.label}」`,
-                                    })
-                                  }
-                                }}>
-                          <option value="">単語帳を足す…</option>
-                          {SHELF_GROUPS.map((g) => {
-                            const list = shelfOff.filter((s) => s.group === g.id)
-                            if (!list.length) return null
-                            return (
-                              <optgroup key={g.id} label={g.label}>
-                                {list.map((s) => (
-                                  <option key={s.id} value={s.id}>{s.label}</option>
-                                ))}
-                              </optgroup>
-                            )
-                          })}
-                        </select>
-                      </label>
-                      {/* **「押して追加するまで混ざりません」とは、もう書かない**
-                          (0058)。入れる段そのものを消したので、
-                          棚の語は**独立した1冊**として並び、覚え具合も
-                          `shelf_reviews` に残る。**古い注意書きは、
-                          消し忘れると嘘になる**(CLAUDE.md) */}
-                      <p className="field-hint">
-                        出した単語帳は、この人の画面の単語帳に
-                        「業種べつ」として並びます。
-                        <strong>その人の語句とは混ざりません。</strong>
-                        {/* **下に出ているのは「自分の単語帳」だけ。**
-                            黙って隠さず、そう書く */}
-                        下に出しているのはこの人の「自分の単語帳」なので、
-                        ここで出した1冊は下には並びません。
-                      </p>
-                    </section>
+                    <ShelfAssign
+                      shelfOn={shelfOn} shelfOff={shelfOff}
+                      busy={!!featureBusy} note={shelfNote}
+                      onPick={(sh) => pickShelf(l, sh)}
+                    />
 
                     <Wordbook
                       learnerId={l.id} learnerName={l.display_name} showBasics={false}
