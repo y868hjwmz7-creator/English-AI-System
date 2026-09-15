@@ -4856,6 +4856,84 @@ for (const w of [1280, 390, 320]) {
  *   「無ければ素通りする検証を書かない」の、幅の版である。
  *   **狭い紙(スマホから刷ったとき)まで測る。**
  * ══════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════
+   **紙は A4。中身は用紙幅を使い切る**(2026-09 実機・利用者の指定)
+
+     > 紙のサイズはデフォルトで何になっていますか？A4にしてください。
+     > プレビューだとちょうどよい余白に見えるのに、
+     > 実際に印刷すると余白がすごく大きいです。
+
+   **サイズはもとから A4 だった。** 広かったのは `@page` の余白のほうで、
+   16/14/18mm は**紙の 13.3% を捨てて**いた(いまは 12/10/14mm = 9.5%)。
+
+   **「A4 と書いてあるか」だけを見ない** —— それだと、余白を
+   30mm に広げても緑のままになる。**中身が用紙幅を使い切っているか**まで
+   描いて測る(`.print-target` が縮んでいれば、そのぶん余白が増える)。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+  const m = css.match(/@page\s*\{\s*size:\s*([A-Za-z0-9]+);\s*margin:\s*([^;}]+)[;}]/)
+  const MM = 96 / 25.4
+  if (!m) {
+    ng('紙 … `@page { size: … ; margin: … }` が見つからない')
+  } else if (m[1] !== 'A4') {
+    ng('紙 … A4 になっていない', m[1])
+  } else {
+    /* 「12mm 10mm 14mm」→ 上 / 左右 / 下 */
+    const mm = m[2].trim().split(/\s+/).map((v) => parseFloat(v))
+    const [上, 左右, 下] = [mm[0], mm[1], mm[2] ?? mm[0]]
+    const 幅 = 210 - 左右 * 2
+    const 割合 = 幅 / 210 * 100
+    if (!(左右 >= 10)) {
+      /* **プリンタは端 5〜6.4mm を刷れない。** 割ると端が切れる */
+      ng('紙 … 左右の余白が 10mm を割っている(端が切れる)', `${左右}mm`)
+    } else if (!(下 >= 12)) {
+      /* 下には**ページ番号と紙の名前**(9pt)が入る */
+      ng('紙 … 下の余白が足りない(ページ番号が入らない)', `${下}mm`)
+    } else if (割合 < 88) {
+      ng('紙 … 中身に使える幅が狭すぎる', `${幅}mm(${割合.toFixed(1)}%)`)
+    } else {
+      ok(`紙 … A4 / 余白 上${上} 左右${左右} 下${下}mm`
+        + ` → 中身 ${幅}mm(${割合.toFixed(1)}%)`)
+
+      /* **描いて測る。** 中身が本当にその幅を使い切っているか ——
+         `max-width` や `padding` が残っていると、紙の上でそのぶん余る */
+      const W = Math.round(幅 * MM)
+      const page = await browser.newPage({ viewport: { width: W, height: 1000 } })
+      await page.goto(`http://localhost:${PORT}/__bar.html?screen=sheet`,
+        { waitUntil: 'networkidle' })
+      await page.waitForTimeout(300)
+      await page.emulateMedia({ media: 'print' })
+      await page.waitForTimeout(200)
+      const got = await page.evaluate(() => {
+        const t = document.querySelector('.print-target')
+        if (!t) return null
+        const cs = getComputedStyle(t)
+        const 行 = [...t.querySelectorAll('li, p')]
+          .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0)
+        return {
+          幅: Math.round(t.getBoundingClientRect().width),
+          maxW: cs.maxWidth, padL: cs.paddingLeft, padR: cs.paddingRight,
+          右端: 行.length ? Math.round(Math.max(...行.map((r) => r.right))) : 0,
+          窓: document.documentElement.clientWidth,
+        }
+      })
+      await page.close()
+      if (!got) {
+        ng('紙 … 印刷の中身(`.print-target`)が描かれない')
+      } else if (got.幅 < got.窓) {
+        ng('紙 … 中身が用紙幅を使い切っていない',
+          `${got.幅}px / 紙 ${got.窓}px(max-width ${got.maxW} padding ${got.padL}/${got.padR})`)
+      } else if (got.右端 < got.窓 - 24) {
+        /* 24px(約 6mm)まではふつうの行末。それ以上余るなら、何かが縮めている */
+        ng('紙 … 本文が右まで届いていない', `右端 ${got.右端}px / 紙 ${got.窓}px`)
+      } else {
+        ok(`紙 … 中身が用紙幅を使い切っている(${got.幅}px = ${幅}mm・余り 0)`)
+      }
+    }
+  }
+}
+
 for (const W of [1280, 794, 453, 390, 320]) {
   const page = await browser.newPage({ viewport: { width: W, height: 900 } })
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=sheet`,
