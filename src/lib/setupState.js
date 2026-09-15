@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0061'
+export const NEWEST_MIGRATION = '0062'
 
 /**
  * その移行が入っているかを見る印。
@@ -86,10 +86,15 @@ export const NEWEST_MIGRATION = '0061'
  * **0件は「まだです」を正しく意味する** —— RLS に断られて 0 件になる表を、
  * この印に選んではいけない。
  */
+/*
+ * 0062 も**表も列も1つも増えない**(`qr_items()` の上限を上げるだけ)。
+ * 0056 とまったく同じで、その移行が作る **`qr_limit()`** を印にする ——
+ * あれは上限そのものの出どころでもあるので、
+ * **印のためだけの関数ではない。**
+ */
 export const NEWEST_MARK = {
-  table: 'weakness_tags',
-  row: { column: 'id', value: 'polite-phrasing' },
-  label: '苦手タグの「丁寧な言い回し」',
+  rpc: 'qr_limit',
+  label: 'Quick Response の上限(qr_limit)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */

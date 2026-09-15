@@ -39,6 +39,7 @@ import {
   runKeyOf, saveScope, saveSize, scopeCounts, scopePool, shouldRecord,
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
+import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
 import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
@@ -68,7 +69,42 @@ const saveOrder = (id) => {
   try { localStorage.setItem(ORDER_KEY, id) } catch { /* 使えなくても困らない */ }
 }
 
-export default function QrReview({ learnerId = null, learnerName = '' }) {
+export default function QrReview({
+  learnerId = null, learnerName = '',
+  /**
+   * **Native Flow の冊を出すか**(2026-09 利用者の指定)。
+   * **既定は「出さない」** —— 単語帳の `showCol` とまったく同じ作法で、
+   * トレーナーがゲストのページから開く画面を1ドットも変えないためである。
+   */
+  showNf = false,
+}) {
+  /**
+   * **いま開いている Quick Response 帳**(2026-09 利用者の指定)。
+   *
+   *   > これらを教材として独立させて登録せよ。
+   *   > Native flow は Quick Response 教材、コロケーション基本動詞は単語帳だ。
+   *
+   * `'my'`(自分の Quick Response 帳)/ `'nf'`(Native Flow Vol.1)。
+   * **単語帳の冊(`Wordbook.jsx` の `books`)とまったく同じ形**である。
+   *
+   * **同時には出さない** —— 混ざらないことが、この機能の要である。
+   * 行の形をそろえてあるので(`nativeFlowRows()`)、出題も絞り込みも
+   * 聞き流しも紙も、**1文字も書き分けていない。**
+   *
+   * **Unit の切り替えを作らない。** `material_title` に Unit が入っているので、
+   * 「出しかた」の中の**教材の名前で絞る**がそのまま効く。
+   */
+  const books = [
+    { id: 'my', label: '自分の Quick Response 帳' },
+    /* **出す場所は呼ぶ側が決める**(`showNf`)。**既定は「出さない」** ——
+       トレーナーがゲストのページから開く Quick Response 帳には、
+       冊の切り替えをもともと出していない(単語帳とまったく同じ判断) */
+    ...(showNf ? [{ id: 'nf', label: 'Native Flow' }] : []),
+  ]
+  const [bookWanted, setBookWanted] = useState('my')
+  const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
+  const nfBook = book === 'nf'
+
   const [rows, setRows] = useState([])
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState(null)
@@ -131,7 +167,13 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
   const reload = async () => {
     setBusy(true)
     const [list, wk, aim] = await Promise.all([
-      loadQrReviews(learnerId, { status: 'todo', limit: 500 }),
+      /* **Native Flow は、ファイル × 覚え具合。** 行の形はそろえてあるので
+         (`nativeFlowRows()`)、ここから下は1文字も書き分けていない。
+         **状態で絞らない** —— 3枚の札(まだ / 言えかけ / 言える)も
+         読んだ行から数えるので、分けて読むと札と中身が食い違う */
+      nfBook
+        ? loadNativeFlowQr({ learnerId })
+        : loadQrReviews(learnerId, { status: 'todo', limit: 500 }),
       /* 0042 を貼る前は 0 が返る。**数が出ないだけで、復習はできる** */
       loadQrWeek(learnerId),
       loadWeeklyGoal(learnerId),
@@ -143,7 +185,7 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
     setBusy(false)
   }
 
-  useEffect(() => { reload() }, [learnerId])
+  useEffect(() => { reload() }, [learnerId, book])
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
@@ -491,6 +533,33 @@ export default function QrReview({ learnerId = null, learnerName = '' }) {
               **押せる**(2026-09 利用者の指定「タッチすればそれらを
               復習できるようにしたい」)。見た目は `ReviewStats` 1つで、
               単語帳とまったく同じもの。**書き写さない** */}
+          {/* **どの Quick Response 帳か**(2026-09 利用者の指定)。
+              見た目も置き場所も**単語帳の冊とまったく同じ**(`wb-books`)——
+              並べて置くものは、同じ形にする。
+              **色だけに頼らない** —— うすい地色 + 同じ色の文字 + 太字 +
+              `aria-pressed` の4つで、いまどちらを開いているかを示す */}
+          {books.length > 1 && (
+            <div className="chiprow wb-books" role="group"
+                 aria-label="どの Quick Response 帳か">
+              {books.map((b) => (
+                <button key={b.id} type="button"
+                        className={`chip${book === b.id ? ' chip--on' : ''}`}
+                        aria-pressed={book === b.id}
+                        onClick={() => {
+                          if (book === b.id) return
+                          setBookWanted(b.id)
+                          /* 冊が変わると中身が丸ごと変わる。
+                             **やりかけを持ち越さない** */
+                          setRun(null); setPending([]); setAt(0); setDone([])
+                          setRadio(null); setGroup(null); setFilter(emptyFilter)
+                          gradedRef.current = new Set()
+                        }}>
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <ReviewStats
             items={QR_GROUPS.map((g) => ({ ...g, n: tally[g.id] ?? 0 }))}
             value={group}

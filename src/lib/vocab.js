@@ -17,24 +17,16 @@
  */
 import { supabase } from './supabase.js'
 import { canSeeSystemDetail } from './viewer.js'
+import { normWord } from './textNorm.js'
 
 const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
 const fail = (e, fallback) => ng(e?.message ? `${fallback}: ${e.message}` : fallback)
 
-/**
- * 語のそろえ方。
- *
- * **データベースの `public.norm_word()` と、Edge Function の `normWord()` と、
- * ここの3か所で同じ規則にする。** ずれると控えを引き当てられず、
- * 同じ語を何度も AI に尋ねることになる(費用が増える)。
- */
-export const normWord = (text) =>
-  String(text ?? '')
-    .toLowerCase()
-    .replace(/[^a-z0-9'-]+/g, ' ')
-    .trim()
-    .replace(/^[\s'-]+|[\s'-]+$/g, '')
+/* 語のそろえ方は **`textNorm.js` 1か所**(2026-09)。
+   あちらは Supabase を引き連れていないので、**素の node で確かめられる。**
+   ここは読み直して出し直すだけ —— **呼ぶ側は1行も変わっていない** */
+export { normWord }
 
 /**
  * 英文を「語」と「語でないもの」に分ける。区切りもそのまま残す。

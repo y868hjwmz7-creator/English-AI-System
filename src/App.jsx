@@ -890,7 +890,12 @@ export default function App() {
             ) : view === 'course' ? (
               <BasicsCourse me={profile} />
             ) : view === 'wordbook' ? (
-              <Wordbook only={onlyWords?.words ?? null}
+              <Wordbook /* **コロケーション基本動詞の冊**(2026-09 利用者の指定)。
+                            出すのは**自分の単語帳**だけ —— トレーナーが
+                            ゲストの単語帳を開く画面には、冊の切り替えを
+                            もともと出していない */
+                        showCol
+                        only={onlyWords?.words ?? null}
                         onlyLabel={onlyWords?.label ?? ''}
                         onlyWhat={onlyWords?.what ?? 'この教材の語'}
                         onClearOnly={() => setOnlyWords(null)}
@@ -912,7 +917,9 @@ export default function App() {
                            (0057)。判断は `shelvesFor()` が済ませてある */
                         shelves={myShelves} />
             ) : view === 'qr' ? (
-              <QrReview />
+              /* **Native Flow の冊**(2026-09 利用者の指定)。
+                 単語帳の `showCol` とまったく同じ作法である */
+              <QrReview showNf />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice me={profile} />
             ) : view === 'bgm' ? (

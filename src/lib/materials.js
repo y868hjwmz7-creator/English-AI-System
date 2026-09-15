@@ -10,6 +10,7 @@
  * error は日本語の文字列(そのまま画面に出せる)。
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+import { normEn } from './textNorm.js'
 import { kindsOf } from '../data/industries.js'
 import {
   givesAwayAnswer, isBlankItem, isPassageSection, isWrongShape,
@@ -1582,15 +1583,10 @@ export async function createAccount({ loginId, password, displayName, role = 'le
 //   ②だけでも重複は防げるが、落としてばかりでは問数が足りなくなる。
 //   ①で当たりを減らし、②で取りこぼしを止める。
 
-/**
- * 英文を突き合わせ用の形にそろえる。
- *
- * データベースの public.norm_en() と**同じ規則**にしてある
- * (0008_sentence_ledger.sql)。片方だけ変えると、手元の判定と
- * データベースの判定がずれて、片方を素通りする。
- */
-export const normEn = (text) =>
-  String(text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+/* 英文のそろえ方は **`textNorm.js` 1か所**(2026-09)。
+   あちらは Supabase を引き連れていないので、**素の node で確かめられる。**
+   ここは読み直して出し直すだけ —— **呼ぶ側は1行も変わっていない** */
+export { normEn }
 
 /**
  * 1つの設問に含まれる英文をすべて取り出す(そろえた形で)。

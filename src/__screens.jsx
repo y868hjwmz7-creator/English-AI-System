@@ -319,7 +319,7 @@ const WORDBOOK = (
    `showBasics` の既定は真なので、渡さなくても出る。 */
 const MYBOOK = (
   <div className="app-main">
-    <Wordbook shelves={shelfList()} />
+    <Wordbook shelves={shelfList()} showCol />
   </div>
 )
 

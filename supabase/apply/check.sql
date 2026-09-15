@@ -164,4 +164,8 @@ from (
   -- 0060 と同じく**表も列も増えない**ので、**その行が在るか**で見る
   union all select '0061 苦手タグに「丁寧な言い回し」(pending_matome.sql)',
     exists (select 1 from public.weakness_tags where id = 'polite-phrasing'), 43
+  -- **表も列も増えない移行**(qr_items() の上限を上げるだけ)。
+  -- だから関数そのものの有無で見る。画面の SetupStatus も同じ印を見ている
+  union all select '0062 Quick Response を 500 問より先まで読めるようにする(pending_matome.sql)',
+    exists (select 1 from pg_proc where proname = 'qr_limit'), 44
 ) t order by 順;

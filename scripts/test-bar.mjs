@@ -4458,7 +4458,7 @@ export default defineConfig({
     }))
 
     let 開 = { 冊: 0, 低い: 0, よこ: 0 }
-    if (初.札.length === 3) {
+    if (初.札.length === 4) {
       for (const b of await page.$$('.wb-books .chip')) {
         if (((await b.textContent()) ?? '').includes('業種べつ')) { await b.click(); break }
       }
@@ -4491,7 +4491,7 @@ export default defineConfig({
        語の数もその段のものになる** —— そこまで数えないと、
        札だけ出して中身が変わらない形に書き換えても緑のままになる */
     let 基 = { 段: [], 語: 0, 語2: 0, 低い: 0, よこ: 0, 棚: 1 }
-    if (初.札.length === 3) {
+    if (初.札.length === 4) {
       const page2 = await browser.newPage({ viewport: { width: w, height: 900 } })
       await page2.goto(`http://localhost:${PORT}/__bar.html?screen=mybook`,
         { waitUntil: 'networkidle' })
@@ -4530,7 +4530,7 @@ export default defineConfig({
     }
 
     const 名 = `トレーナーの単語帳(${w}px)`
-    if (初.札.join(' / ') !== '自分の単語帳 / 業種べつ / 基礎単語') {
+    if (初.札.join(' / ') !== '自分の単語帳 / 業種べつ / 基礎単語 / コロケーション') {
       ng(`${名} … 冊の切り替えが出ていない`, 初.札.join(' / ') || '(無し)')
     } else if (初.押.join('') !== '自分の単語帳') {
       ng(`${名} … 既定が自分の単語帳になっていない`, 初.押.join(' / ') || '(無し)')

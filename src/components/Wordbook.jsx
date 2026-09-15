@@ -74,6 +74,7 @@ import { loadShelfWordbook, setShelfWordStatus } from '../lib/shelfReviews.js'
 import SpeechWordsPick from './SpeechWordsPick.jsx'
 import { basicJaOf, basicPosOf, wordsForTier } from '../lib/basicsCourse.js'
 import { COURSE_TIERS, loadBasicTier, saveBasicTier, tierOf } from '../data/basicsCourse.js'
+import { loadCollocationWordbook } from '../lib/collocationWords.js'
 import { loadBasicWordbook } from '../lib/basicReviews.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
 import { CloseIcon, FocusIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
@@ -266,6 +267,19 @@ export default function Wordbook({
    * と、手元で画面を確かめるときは、これまでどおり出す。
    */
   showBasics = true,
+  /**
+   * **コロケーション基本動詞の冊を出すか**(2026-09 利用者の指定)。
+   *
+   *   > Native flow は Quick Response 教材、コロケーション基本動詞は単語帳だ。
+   *
+   * **既定は「出さない」。** トレーナーがゲストの単語帳を開く画面には
+   * **冊の切り替えがもともと1つも無い**(棚も基礎単語も渡していない)ので、
+   * そこを1ドットも変えないためである —— 0053 で基礎単語を3冊目にしたときの
+   * 判断とまったく同じ(**言われた場所だけを直す**)。
+   *
+   * 出すのは**ゲスト自身の単語帳**(`App.jsx`)だけ。
+   */
+  showCol = false,
   /**
    * **業種べつの単語帳(棚)のうち、この人に出すもの**(0057・利用者の指定)。
    *
@@ -462,6 +476,15 @@ export default function Wordbook({
     { id: 'my', label: '自分の単語帳' },
     ...(shelves.length ? [{ id: 'shelf', label: '業種べつ' }] : []),
     ...(showBasics ? [{ id: 'basic', label: '基礎単語' }] : []),
+    /* **コロケーション基本動詞**(2026-09 利用者の指定)。
+         > これらを教材として独立させて登録せよ。
+         > Native flow は Quick Response 教材、コロケーション基本動詞は単語帳だ。
+       50 件が `collocations.js` に書いてあるので、**誰にでも出せる** ——
+       棚のように「出された冊だけ」に絞る理由が、いまは無い
+       (絞りたくなったら `learnerFeatures.js` に1つ足すだけである)。
+       **ただし出す場所は呼ぶ側が決める**(`showCol`)—— トレーナーが
+       ゲストの単語帳を開く画面には、冊の切り替えをもともと出していない */
+    ...(showCol ? [{ id: 'col', label: 'コロケーション' }] : []),
   ]
   const [bookWanted, setBookWanted] = useState('my')
   /* **出せなくなった冊は、黙って自分の単語帳へ落とす**(行き止まりを作らない)。
@@ -471,6 +494,7 @@ export default function Wordbook({
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
   const shelfBook = book === 'shelf'
   const basicBook = book === 'basic'
+  const colBook = book === 'col'
   /** 自分の単語帳を開いているか。**「棚ではない」で書かない** ——
       書くと、冊を足すたびに置いた場所の数だけ食い違う */
   const myBook = book === 'my'
@@ -553,11 +577,13 @@ export default function Wordbook({
        **`review_words()` を通さない**のも同じ理由である。あちらは
        上限で切るので、1,200 語ある基礎単語では**段の後ろが丸ごと
        「まだ」に見える。** */
-    if (shelfBook || basicBook) {
+    if (shelfBook || basicBook || colBook) {
       const [pack, tally, wk, aim] = await Promise.all([
-        shelfBook
-          ? loadShelfWordbook({ learnerId, shelves: shelfPick })
-          : loadBasicWordbook({ learnerId, tier }),
+        /* **コロケーションも同じ道。** 行の形はそろえてあるので
+           (`collocationRows()`)、ここから下は1文字も書き分けていない */
+        shelfBook ? loadShelfWordbook({ learnerId, shelves: shelfPick })
+          : colBook ? loadCollocationWordbook({ learnerId })
+            : loadBasicWordbook({ learnerId, tier }),
         /* 棚の語数は、**プルダウンの選択肢に出すためだけ**のもの。
            基礎単語には棚が無いので読みに行かない(問い合わせを増やさない)。
 
@@ -676,7 +702,7 @@ export default function Wordbook({
        別の配列になる。つないだ文字列(`shelfKey`)で見る
        (`onlyKey` とまったく同じ落とし穴) */
   }, [current.status, current.dueOnly, current.id, learnerId, mine, onlySet,
-    shelfBook, shelfKey, basicBook, tier])
+    shelfBook, shelfKey, basicBook, tier, colBook])
 
   useEffect(() => { reload() }, [reload])
 

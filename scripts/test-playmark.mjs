@@ -5645,6 +5645,206 @@ console.log('\nスピーチ練習(0054)')
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+ * Native Flow Vol.1(Quick Response 教材)と
+ * コロケーション基本動詞(単語帳)   2026-09 利用者の指定
+ *
+ *   > これらを教材として独立させて登録せよ。
+ *   > Native flow は Quick Response 教材、コロケーション基本動詞は単語帳だ。
+ *
+ * **どちらもファイルに書いてある = AI を1回も呼ばない = 0円。**
+ * 見るのは6つ ——①数が減っていないか ②原本のとおりか
+ * ③行の形が `qr_items()` / `review_words()` と同じか
+ * ④絞り込みが効く形になっているか ⑤答えが漏れていないか
+ * ⑥**画面が本当に呼んでいるか。**
+ * ══════════════════════════════════════════════════════════════════════ */
+console.log('\n▶ Native Flow と コロケーション(ファイルに持った教材)')
+{
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  /* **「名前が出てくるか」で見ない**(CLAUDE.md)。この節にも
+     `loadNativeFlowQr` などがコメントで出てくるので、落としてから数える */
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+
+  const nf = await import('../src/data/nativeFlow.js')
+  const col = await import('../src/data/collocations.js')
+  const { normEn, normWord } = await import('../src/lib/textNorm.js')
+
+  /* ── ① 一覧を勝手に減らさない ───────────────────────── */
+  ok(nf.NATIVE_FLOW.length === 690,
+    'Native Flow … 690 問ある', `いま ${nf.NATIVE_FLOW.length}`)
+  ok(nf.NATIVE_FLOW_UNITS.length === 6,
+    'Native Flow … Unit は 6 つ', `いま ${nf.NATIVE_FLOW_UNITS.length}`)
+  ok(nf.NATIVE_FLOW_UNITS.every((u) => u.n === nf.NATIVE_FLOW.filter((x) => x.u === u.id).length),
+    'Native Flow … Unit ごとの数が、一覧と中身で合っている')
+  ok(col.COLLOCATIONS.length === 50,
+    'コロケーション … 50 件ある', `いま ${col.COLLOCATIONS.length}`)
+  ok(col.COLLOCATION_VERBS.length === 5
+     && col.COLLOCATION_VERBS.every((v) => col.COLLOCATIONS.filter((x) => x.v === v.id).length === 10),
+    'コロケーション … 5動詞 × 10 件')
+
+  /* ── ② 原本のとおりに持つ ───────────────────────────── */
+  /* **合字は直す。** PDF の組版で1文字になっているので、
+     そのままだと `normEn` でも読み上げでも別の語になる */
+  const LIG = /[ﬀ-ﬆ]/
+  ok(!nf.NATIVE_FLOW.some((x) => LIG.test(x.en) || LIG.test(x.ja)),
+    'Native Flow … 合字(fi / fl)が1つも残っていない')
+  ok(!col.COLLOCATIONS.some((x) => LIG.test(x.en) || LIG.test(x.p)),
+    'コロケーション … 合字が1つも残っていない')
+  ok(nf.NATIVE_FLOW.every((x) => x.en.trim() && x.ja.trim()),
+    'Native Flow … 英文も訳も、空の問が1つも無い')
+  ok(col.COLLOCATIONS.every((x) => x.p.trim() && x.n.trim() && x.en.trim() && x.ja.trim()),
+    'コロケーション … 空の欄が1つも無い')
+  /* **句である**(`make a decision`)。1語だと `kind: 'phrase'` が嘘になる */
+  ok(col.COLLOCATIONS.every((x) => x.p.includes(' ')),
+    'コロケーション … どれも2語以上(句として単語帳に入る)')
+  /* **例文の中に、その語句が出てくるか。** 出てこないと
+     「出会った文」が手がかりにならず、穴埋め(箱3)も作れない。
+
+     **動詞では当てられない** —— `make a decision` の例文は `made`、
+     `do damage` の例文は `did` である(活用は語のリストでは追えない)。
+     **当てられることだけを見る**(CLAUDE.md)ので、**名詞のほう**を見る。
+     あちらは活用しないので、50 件とも当たる */
+  const inSentence = col.COLLOCATIONS.filter(
+    (x) => normEn(x.en).split(' ').includes(normEn(x.p.split(' ').pop())))
+  ok(inSentence.length === col.COLLOCATIONS.length,
+    'コロケーション … 例文の中に、その語句の名詞が出てくる',
+    `${inSentence.length} / ${col.COLLOCATIONS.length}`)
+
+  /* ── ③ 行の形が、表から来る行と1つ残らず同じか ──────────── */
+  const QR_FIELDS = ['en_norm', 'en', 'ja', 'speaker', 'status', 'box', 'learn_streak',
+    'due_on', 'added_at', 'updated_at', 'material_id', 'material_title',
+    'material_industry', 'material_kind', 'material_genre', 'material_scene', 'material_level']
+  const nfRows = nf.nativeFlowRows([], { today: '2026-09-15' })
+  ok(nfRows.length === 690, 'Native Flow … 行も 690 出る')
+  ok(QR_FIELDS.every((k) => k in nfRows[0]) && Object.keys(nfRows[0]).length === QR_FIELDS.length,
+    'Native Flow … qr_items() と同じ欄がそろっている',
+    QR_FIELDS.filter((k) => !(k in nfRows[0])).join(' ') || 'ぴったり')
+
+  const WORD_FIELDS = ['word_norm', 'display', 'kind', 'pos', 'meaning_ja', 'seen_in',
+    'seen_in_ja', 'status', 'box', 'due_on', 'updated_at', 'added_at', 'material_id',
+    'material_title', 'material_industry', 'material_kind', 'material_genre',
+    'material_scene', 'material_level', 'learn_streak']
+  const colRows = col.collocationRows([], { today: '2026-09-15' })
+  ok(colRows.length === 50, 'コロケーション … 行も 50 出る')
+  ok(WORD_FIELDS.every((k) => k in colRows[0]) && Object.keys(colRows[0]).length === WORD_FIELDS.length,
+    'コロケーション … review_words() と同じ欄がそろっている',
+    WORD_FIELDS.filter((k) => !(k in colRows[0])).join(' ') || 'ぴったり')
+
+  /* **行の無い問は「まだ・箱0・今日出す」**(待たせる理由がない) */
+  ok(nfRows.every((r) => r.status === 'unknown' && r.box === 0 && r.due_on === '2026-09-15'),
+    'Native Flow … まだ答えていない問は「まだ・箱0・今日出す」')
+  ok(colRows.every((r) => r.status === 'unknown' && r.box === 0 && r.due_on === '2026-09-15'),
+    'コロケーション … まだ答えていない語句は「まだ・箱0・今日出す」')
+
+  /* **覚え具合は、そろえた形で突き合わせる**(鍵は英文 / 語句そのもの) */
+  const seenNf = [{ en_norm: normEn(nf.NATIVE_FLOW[3].en), status: 'learning', box: 2,
+    due_on: '2026-12-01', learn_streak: 4 }]
+  const hit = nf.nativeFlowRows(seenNf, { today: '2026-09-15' })[3]
+  ok(hit.status === 'learning' && hit.box === 2 && hit.due_on === '2026-12-01'
+     && hit.learn_streak === 4,
+    'Native Flow … 覚え具合が、そろえた英文で当たる')
+  const seenCol = [{ word_norm: normWord(col.COLLOCATIONS[7].p), status: 'known', box: 6,
+    due_on: '2026-12-31', learn_streak: 30 }]
+  const hitC = col.collocationRows(seenCol, { today: '2026-09-15' })[7]
+  ok(hitC.status === 'known' && hitC.box === 6 && hitC.learn_streak === 30,
+    'コロケーション … 覚え具合が、そろえた語句で当たる')
+
+  /* ── ④ 絞り込みが効く形か(**新しい欄を作らない**)─────────── */
+  /* Unit は `material_title` に入れてある。だから Quick Response の
+     「教材の名前で絞る」がそのまま効く(棚が `material_industry` を
+     使い回したのと同じ話)。**ここが空だと、Unit で絞れなくなる** */
+  ok([...new Set(nfRows.map((r) => r.material_title))].length === 6,
+    'Native Flow … material_title に Unit が入っている(6種)')
+  ok(nfRows.every((r) => /^Native Flow Unit \d /.test(r.material_title)),
+    'Native Flow … どの Unit だか、名前を見れば分かる')
+  ok([...new Set(colRows.map((r) => r.material_title))].length === 5,
+    'コロケーション … material_title に動詞の組が入っている(5種)')
+  /* **知らない id は null**(当てずっぽうで返さない) */
+  ok(nf.unitOf(99) === null && col.collocationVerbOf('zzz') === null,
+    '知らない id … null を返す(当てずっぽうで返さない)')
+  ok(nf.unitTitle(99) === 'Native Flow' && col.collocationTitle('zzz') === 'コロケーション',
+    '知らない id … 名前は行き止まりにしない')
+
+  /* ── ⑤ 答えが漏れていないか ─────────────────────────── */
+  /* `base`(1語で言うと decide)を意味に混ぜると、
+     **4択の選択肢に英語が出て、答えが見えてしまう**(CLAUDE.md) */
+  ok(colRows.every((r) => !/[A-Za-z]{3,}/.test(r.meaning_ja)),
+    'コロケーション … 意味の欄に英語を混ぜない(4択で答えが見える)')
+  ok(col.COLLOCATIONS.every((x, i) => colRows[i].meaning_ja === x.n),
+    'コロケーション … 意味はニュアンスそのもの')
+  /* **出会った文は、原本の例文そのもの**(人は文脈ごと覚える・0018) */
+  ok(col.COLLOCATIONS.every((x, i) => colRows[i].seen_in === x.en && colRows[i].seen_in_ja === x.ja),
+    'コロケーション … 出会った文は、原本の例文そのもの')
+
+  /* ── ⑥ 画面が本当に呼んでいるか ─────────────────────── */
+  const wb = noNote(readD('src/components/Wordbook.jsx'))
+  ok(/loadCollocationWordbook\(\{ learnerId \}\)/.test(wb),
+    '単語帳 … 画面が loadCollocationWordbook() を呼んでいる')
+  ok(/showCol \? \[\{ id: 'col', label: 'コロケーション' \}\] : \[\]/.test(wb),
+    '単語帳 … 冊の一覧に「コロケーション」が在る(出すかは呼ぶ側が決める)')
+  /* **トレーナーがゲストの単語帳を開く画面を、1ドットも変えていない。**
+     既定は「出さない」で、`App.jsx`(自分の単語帳)だけが渡す */
+  ok(/showCol = false/.test(wb), '単語帳 … コロケーションの既定は「出さない」')
+  const app = noNote(readD('src/App.jsx'))
+  ok(/<Wordbook\s+showCol/.test(app), '単語帳 … 自分の単語帳にだけ出している')
+  ok(!/showCol/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
+    '単語帳 … ゲストの単語帳を開く画面には渡していない')
+  ok(/colBook = book === 'col'/.test(wb) && /shelfBook \|\| basicBook \|\| colBook/.test(wb),
+    '単語帳 … 表を直に読む冊として扱っている')
+  ok(/tier, colBook\]\)/.test(wb),
+    '単語帳 … 冊が変わったら読み直す(見張りに入っている)')
+
+  const qr = noNote(readD('src/components/QrReview.jsx'))
+  ok(/loadNativeFlowQr\(\{ learnerId \}\)/.test(qr),
+    'Quick Response 帳 … 画面が loadNativeFlowQr() を呼んでいる')
+  ok(/showNf \? \[\{ id: 'nf', label: 'Native Flow' \}\] : \[\]/.test(qr),
+    'Quick Response 帳 … 冊の一覧に「Native Flow」が在る(出すかは呼ぶ側が決める)')
+  ok(/showNf = false/.test(qr), 'Quick Response 帳 … Native Flow の既定は「出さない」')
+  ok(/<QrReview showNf \/>/.test(app),
+    'Quick Response 帳 … 自分の帳にだけ出している')
+  ok(!/showNf/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
+    'Quick Response 帳 … ゲストのページから開く画面には渡していない')
+  ok(/\[learnerId, book\]/.test(qr),
+    'Quick Response 帳 … 冊が変わったら読み直す')
+  /* **Unit の切り替えを作らない**(`material_title` の絞り込みが効く) */
+  ok(!/NATIVE_FLOW_UNITS/.test(qr),
+    'Quick Response 帳 … Unit の切り替えを別に作っていない')
+
+  /* **そろえ方を書き写さない**(`textNorm.js` 1か所) */
+  const nfSrc = noNote(readD('src/data/nativeFlow.js'))
+  const colSrc = noNote(readD('src/data/collocations.js'))
+  ok(/from '\.\.\/lib\/textNorm\.js'/.test(nfSrc) && /from '\.\.\/lib\/textNorm\.js'/.test(colSrc),
+    'そろえ方は textNorm.js 1か所(書き写さない)')
+  ok(!/toLowerCase\(\)\s*\.replace/.test(nfSrc + colSrc),
+    'そろえ方を、データの側に書き写していない')
+
+  /* ── ⑦ 貼る SQL がそろっているか(0062)──────────────── */
+  /* **`setupState.js` は import できない** —— Supabase を引き連れており、
+     素の node では `import.meta.env` が無くて落ちる。**ソースで見る** */
+  const setup = noNote(readD('src/lib/setupState.js'))
+  ok(/NEWEST_MIGRATION = '0062'/.test(setup),
+    '0062 … いちばん新しい移行として登録してある')
+  ok(/rpc: 'qr_limit'/.test(setup),
+    '0062 … 印は qr_limit()(表も列も増えない移行だから)')
+  ok(!/row: \{ column/.test(setup),
+    '0062 … 前の印(行を見る形)が残っていない')
+  const matome = readD('supabase/apply/pending_matome.sql')
+  ok(/create or replace function public\.qr_limit\(\)/.test(matome),
+    '0062 … まとめた1つ(pending_matome.sql)に入っている')
+  ok(/least\(coalesce\(p_limit, 200\), public\.qr_limit\(\)\)/.test(matome),
+    '0062 … qr_items() の上限が qr_limit() から読まれている')
+  /* **500 の決め打ちは残っていてよい** —— まとめた1つは 0041 以降を
+     **順に並べたもの**なので、0048 の段も入っている。
+     見るのは「**そのあとに 0062 が来て、上書きされるか**」である */
+  ok(matome.lastIndexOf('public.qr_limit()')
+     > matome.lastIndexOf('least(coalesce(p_limit, 200), 500)'),
+    '0062 … 上限の差し替えが、0048 の 500 より後に来ている(貼れば上書きされる)')
+  ok(/proname = 'qr_limit'/.test(readD('supabase/apply/check.sql')),
+    '0062 … check.sql にも行が足してある')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
