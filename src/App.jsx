@@ -14,9 +14,9 @@ import {
   BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, HomeIcon, MicIcon, MusicIcon,
   PeopleIcon, ShelfIcon, StepsIcon, TaskIcon,
 } from './components/Icons.jsx'
-import { THEMES, applyTheme, loadTheme } from './lib/theme.js'
-import { PALETTES, applyPalette, loadPalette } from './lib/palette.js'
-import { TIPS, applyTips, loadTips } from './lib/tips.js'
+import { applyTheme, loadTheme } from './lib/theme.js'
+import { applyPalette, loadPalette } from './lib/palette.js'
+import { applyTips, loadTips } from './lib/tips.js'
 import { NAV_PUSH_AT, loadNavOpen, saveNavOpen, useWide } from './lib/nav.js'
 import { setViewerRole } from './lib/viewer.js'
 /* **教材へのリンク**(`?m=…`・2026-09 利用者の指定)。
@@ -26,9 +26,10 @@ import { installTapFeedback } from './lib/haptics.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 /* 英語の音声と音楽の大きさ(2026-09 利用者の指定)。
    **覚えるのは `mixVolume.js`、曲に当てるのは `bgm.js` 1か所** */
-import { bgmLevel, setVoiceLevel, voiceLevel, volumeWorks } from './lib/mixVolume.js'
+import { bgmLevel, setVoiceLevel, voiceLevel } from './lib/mixVolume.js'
 import { setBgmVolume } from './lib/bgm.js'
-import VolumeRow from './components/VolumeRow.jsx'
+/* 左のメニューの下の「設定」。**7つとも中に入っている**(2026-09 利用者の指定) */
+import NavSettings from './components/NavSettings.jsx'
 import { forgetJob, markJobSeen, useJob, watchJob } from './lib/generateJob.js'
 import {
   forgetPrepare, prepareAllOn, setPrepareAllOn, usePrepare,
@@ -629,135 +630,23 @@ export default function App() {
   const pageLabel = nowPage?.label ?? 'English AI System'
 
 
-  /* 左のメニューの下に置くもの。
-     **配色も色づかいも、一度決めたら何度も触るものではない。**
-     上に出しっぱなしにすると、スマホでは題名と同じ幅を食う
-     (レッスン表示の操作欄で一度学んだこと・第5.25節)。 */
+  /* 左のメニューの下に置くもの。**自分の欄 → 設定**の順に並べる。
+
+     2026-09 利用者の指定。
+
+       > サイドバーの「配色」から「教材の支度」までの項目をすべてまとめて
+       > 「設定」としてサイドバーの一番下に配置してください。
+
+     設定が**7つ縦に並んで**いた(配色 / 色づかい / 説明の文 /
+     押したときの音 / 英語の音声 / 音楽 / 教材の支度)。どれも
+     **一度決めたら何度も触らないもの**なのに、メニューを開くたびに
+     行き先(画面の一覧)と同じだけの高さを占めていた。
+
+     **7つとも1つも減らしていない**(「一度入れたものを勝手に減らさない」・
+     共通ルール)。畳んで「設定」1つにまとめ、**いちばん下**へ置いた。
+     中身と作法は `NavSettings.jsx`。 */
   const navFooter = (
     <>
-      <div className="nav-setting">
-        <span className="nav-setting-label">配色</span>
-        <div className="theme-switch" role="group" aria-label="配色">
-          {THEMES.map((t) => (
-            <button key={t.id} type="button" title={t.hint}
-                    className={`theme-btn${theme === t.id ? ' is-active' : ''}`}
-                    onClick={() => setTheme(t.id)}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="nav-setting">
-        <span className="nav-setting-label">色づかい</span>
-        <div className="theme-switch" role="group" aria-label="色づかい">
-          {PALETTES.map((x) => (
-            <button key={x.id} type="button" title={x.hint}
-                    className={`theme-btn${palette === x.id ? ' is-active' : ''}`}
-                    onClick={() => setPalette(x.id)}>
-              {x.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* **説明の文を出すか**(2026-09 利用者の指定)。
-
-            > 全てのデザインから言葉による説明を省いてください。
-            > 目指すのは説明がない、直感的なUIです。
-
-          既定は「出さない」。**消してはいない**ので、ここで戻せる。
-          畳むかどうかの決まりは `src/lib/tips.js` と styles.css の
-          1行だけで、画面の側は `tip` の印を付けてあるだけである。 */}
-      <div className="nav-setting">
-        <span className="nav-setting-label">説明の文</span>
-        <div className="theme-switch" role="group" aria-label="説明の文">
-          {TIPS.map((x) => (
-            <button key={x.id} type="button" title={x.hint}
-                    className={`theme-btn${tips === x.id ? ' is-active' : ''}`}
-                    onClick={() => setTips(x.id)}>
-              {x.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 押した手応え(音とふるえ)。**一度決める設定なので、ここに置く。**
-          レッスン中に鳴ると邪魔なことがあるので、切れるようにしてある
-          (2026-09 に「鳴らさない」から改めた・利用者の指定) */}
-      <div className="nav-setting">
-        <span className="nav-setting-label">押したときの音</span>
-        <div className="theme-switch" role="group" aria-label="押したときの音">
-          {[{ id: true, label: '鳴らす' }, { id: false, label: '鳴らさない' }].map((x) => (
-            <button key={String(x.id)} type="button"
-                    className={`theme-btn${sound === x.id ? ' is-active' : ''}`}
-                    onClick={() => { setSound(x.id); setSoundOn(x.id) }}>
-              {x.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* **英語の音声と音楽の大きさ**(2026-09 利用者の指定)。
-
-            > アプリに好きな音楽を追加し、英語の音声と音楽を独立して
-            > それぞれ音量を調整出来るようにしたいです。
-            > 英語音声が再生される時に自動で音楽の音量を下げる機能は
-            > 必要ありません
-
-          **置くのはここ1か所。** 端末ごとに覚える「一度決める設定」で、
-          しかも**聴く人が決める**ものなので、音楽の画面(トレーナーだけ)には
-          置かない —— ゲストも英語の音声を聴くし、曲も耳に入る。
-          **同じ設定を2か所に置かない**(CLAUDE.md)。
-
-          **効かない端末では、つまみを出さずに理由を言う。**
-          iOS は `<audio>` の `volume` を無視するので、iPhone / iPad では
-          どちらのつまみも動かない。**端末の名前では決めない** ——
-          `volumeWorks()` が実際に入れて読み返すので、
-          いつか受け付けるようになった日には**ひとりでに出る。** */}
-      {volumeWorks() ? (
-        <>
-          <VolumeRow label="英語の音声" value={voiceVol}
-                     onChange={(v) => setVoiceVol(setVoiceLevel(v))} />
-          <VolumeRow label="音楽" value={bgmVol}
-                     onChange={(v) => setBgmVol(setBgmVolume(v))} />
-        </>
-      ) : (
-        <div className="nav-setting">
-          <span className="nav-setting-label">音量</span>
-          <p className="nav-vol-no">
-            この端末は、アプリからの音量指定を受け付けません
-            (iPhone・iPad)。端末の音量ボタンで調整してください。
-          </p>
-        </div>
-      )}
-
-      {/* **過去の教材も、裏で順に支度するか**(2026-09 利用者の指定)。
-
-            > 過去に作成したものも常にバックグラウンドで再生準備を
-            > 進められないでしょうか？
-
-          教材の画面を開いているあいだ、まだ音声の無い教材を1本ずつ
-          用意していく。**費用が出ていく**ので、切れるようにしてある
-          (「見えない費用は管理できない」・CLAUDE.md)。
-          いま何本待っているかは、上の帯がいつも出している。 */}
-      {(profile?.role === 'trainer' || profile?.role === 'owner') && (
-        <div className="nav-setting">
-          <span className="nav-setting-label">教材の支度</span>
-          <div className="theme-switch" role="group" aria-label="教材の支度">
-            {[
-              { id: true, label: '自動', hint: '過去の教材も、裏で順に用意しておく' },
-              { id: false, label: '使うときだけ', hint: '発行と「セッションで使う」のときだけ' },
-            ].map((x) => (
-              <button key={String(x.id)} type="button" title={x.hint}
-                      className={`theme-btn${prepAll === x.id ? ' is-active' : ''}`}
-                      onClick={() => { setPrepAll(x.id); setPrepareAllOn(x.id) }}>
-                {x.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {session && (
         <div className="nav-account">
           {/* **アイコンは出さない**(2026-09 利用者の指定)。
@@ -783,6 +672,22 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* **いちばん下は「設定」。** 7つとも中に入っている。
+          ふだんは閉じているので、メニューは行き先だけになる。
+          **値と書き込みは、ここが持つ** —— `NavSettings` は
+          受け取って描くだけなので、`npm run test:bar` が
+          Supabase 無しでそのまま描いて測れる */}
+      <NavSettings
+        theme={theme} onTheme={setTheme}
+        palette={palette} onPalette={setPalette}
+        tips={tips} onTips={setTips}
+        sound={sound} onSound={(v) => { setSound(v); setSoundOn(v) }}
+        voiceVol={voiceVol} onVoiceVol={(v) => setVoiceVol(setVoiceLevel(v))}
+        bgmVol={bgmVol} onBgmVol={(v) => setBgmVol(setBgmVolume(v))}
+        showPrepare={profile?.role === 'trainer' || profile?.role === 'owner'}
+        prepare={prepAll} onPrepare={(v) => { setPrepAll(v); setPrepareAllOn(v) }}
+      />
     </>
   )
 

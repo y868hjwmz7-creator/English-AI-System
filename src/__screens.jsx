@@ -54,9 +54,13 @@ import ShelfBooks from './components/ShelfBooks.jsx'
 import ShelfAssign from './components/ShelfAssign.jsx'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
-import VolumeRow from './components/VolumeRow.jsx'
+import NavSettings from './components/NavSettings.jsx'
 import { bgmLevel, setVoiceLevel, voiceLevel } from './lib/mixVolume.js'
 import { setBgmVolume } from './lib/bgm.js'
+import { loadTheme } from './lib/theme.js'
+import { loadPalette } from './lib/palette.js'
+import { soundOn } from './lib/sfx.js'
+import { prepareAllOn } from './lib/prepareJob.js'
 import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
 import CastChip from './components/CastChip.jsx'
@@ -1110,30 +1114,50 @@ const SPEECH = (
   />
 )
 
-/* 英語の音声と音楽の音量(`?screen=volume`・2026-09 利用者の指定)。
+/* 左のメニューのいちばん下(`?screen=navfoot`・2026-09 利用者の指定)。
 
-     > アプリに好きな音楽を追加し、英語の音声と音楽を独立してそれぞれ
-     > 音量を調整出来るようにしたいです。
+     > サイドバーの「配色」から「教材の支度」までの項目をすべてまとめて
+     > 「設定」としてサイドバーの一番下に配置してください。
 
    **本物(`App.jsx` の `navFooter`)と1文字も違えない。**
-   包み(`.app-nav-foot`)も、名前も、押したときに呼ぶものも同じにする ——
-   骨組みが本物と食い違うと、**検証は何も守らない**
-   (「セッションで使う」を `.btn-row` で包んでいて、CSS のバグを
-   何日も素通りさせた・CLAUDE.md)。
+   包み(`.app-nav-foot`)も、並び(自分の欄 → 設定)も、
+   押したときに呼ぶものも同じにする —— 骨組みが本物と食い違うと、
+   **検証は何も守らない**(「セッションで使う」を `.btn-row` で包んでいて、
+   CSS のバグを何日も素通りさせた・CLAUDE.md)。
 
-   **本物のメニューは、ここには描けない。** あちらはログインした
-   `App` の中にあり、この骨組みは Supabase 未設定で描いている。
-   だから**つまみだけ**を、同じ形で置く(`QrCard` / `WordRadio` と同じ作法)。
+   **本物のメニュー(行き先の一覧)は、ここには描けない。** あちらは
+   ログインした `App` の中にあり、この骨組みは Supabase 未設定で描いている。
+   だから**下の部分だけ**を、同じ形で置く(`QrCard` / `WordRadio` と同じ作法)。
    **画面が本当に呼んでいるか**は `npm run test:play` が見張る。 */
-function VolumeScreen() {
+function NavFootScreen() {
+  const [theme, setTheme] = useState(loadTheme)
+  const [palette, setPalette] = useState(loadPalette)
+  const [tips, setTips] = useState(loadTips)
+  const [sound, setSound] = useState(soundOn)
+  const [prepAll, setPrepAll] = useState(prepareAllOn)
   const [voiceVol, setVoiceVol] = useState(voiceLevel)
   const [bgmVol, setBgmVol] = useState(bgmLevel)
   return (
     <div className="app-nav-foot" style={{ width: '248px' }}>
-      <VolumeRow label="英語の音声" value={voiceVol}
-                 onChange={(v) => setVoiceVol(setVoiceLevel(v))} />
-      <VolumeRow label="音楽" value={bgmVol}
-                 onChange={(v) => setBgmVol(setBgmVolume(v))} />
+      <div className="nav-account">
+        <div className="nav-account-text">
+          <span className="nav-account-name">Hisato Nakjaima</span>
+          <div className="nav-account-row">
+            <span className="badge badge--admin">トレーナー</span>
+            <button type="button" className="btn btn--link">ログアウト</button>
+          </div>
+        </div>
+      </div>
+      <NavSettings
+        theme={theme} onTheme={setTheme}
+        palette={palette} onPalette={setPalette}
+        tips={tips} onTips={setTips}
+        sound={sound} onSound={setSound}
+        voiceVol={voiceVol} onVoiceVol={(v) => setVoiceVol(setVoiceLevel(v))}
+        bgmVol={bgmVol} onBgmVol={(v) => setBgmVol(setBgmVolume(v))}
+        showPrepare
+        prepare={prepAll} onPrepare={setPrepAll}
+      />
     </div>
   )
 }
@@ -1146,8 +1170,8 @@ applyTips(loadTips())
 createRoot(document.getElementById('root')).render(
   q.get('screen') === 'shelfassign'
     ? <ShelfAssignScreen />
-    : q.get('screen') === 'volume'
-    ? <VolumeScreen />
+    : q.get('screen') === 'navfoot'
+    ? <NavFootScreen />
     : q.get('screen') === 'sheet'
     ? <SheetScreen />
     : q.get('screen') === 'shelfpick'

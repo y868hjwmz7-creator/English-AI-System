@@ -5271,12 +5271,18 @@ for (const W of [1280, 794, 453, 390, 320]) {
     status: 200, contentType: 'application/json', body: '{}',
   }))
   /* **本物のメニューは、ここには描けない**(ログインした `App` の中にある)。
-     骨組みは `?screen=volume` で、**`App.jsx` とまったく同じ形**の
-     つまみ2本を置いてある。**画面が本当に呼んでいるか**は
-     `npm run test:play` が見張っている(役目が違う) */
-  await page.goto(`http://localhost:${PORT}/__bar.html?screen=volume`,
+     骨組みは `?screen=navfoot` で、**`App.jsx` とまったく同じ形**の
+     自分の欄と「設定」を置いてある。**画面が本当に呼んでいるか**は
+     `npm run test:play` が見張っている(役目が違う)。
+
+     **つまみは「設定」の中にある**(2026-09 利用者の指定でまとめた)ので、
+     **利用者と同じように開いてから測る。** 骨組みの側を開きっぱなしに
+     すると、**本物と食い違って何も守らなくなる** */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=navfoot`,
     { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(700)
+  await page.click('.nav-settings-sum')
+  await page.waitForTimeout(250)
 
   const 見る = () => page.evaluate(() => {
     const rows = [...document.querySelectorAll('.app-nav-foot .nav-setting')]
@@ -5336,6 +5342,111 @@ for (const W of [1280, 794, 453, 390, 320]) {
     }
   }
   await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════
+   **設定は「設定」1つにまとめ、メニューのいちばん下に置く**
+   (2026-09 利用者の指定)
+
+     > サイドバーの「配色」から「教材の支度」までの項目をすべてまとめて
+     > 「設定」としてサイドバーの一番下に配置してください。
+
+   設定が**7つ縦に並んで**いた(配色 / 色づかい / 説明の文 /
+   押したときの音 / 英語の音声 / 音楽 / 教材の支度)。どれも
+   **一度決めたら何度も触らないもの**なのに、メニューを開くたびに
+   行き先(画面の一覧)と同じだけの高さを占めていた。
+
+   【「出る」と「出ない」の両方を見る】
+   **「畳めている」だけを見ると、7つのうち何本か落としても緑のまま**に
+   なる —— 一度入れたものを勝手に減らさない(共通ルール)。だから
+   **開いて7つとも数える。** 逆に**開いたときだけを見ると、
+   畳むのをやめても緑**になるので、閉じているときも一緒に数える。
+
+   ①畳んだら、設定の行が1つも見えないか
+   ②押すものは「設定」1つか ③**自分の欄より下(いちばん下)にいるか**
+   ④押せる大きさ(40px)か ⑤開くと**7つとも**出るか ⑥はみ出さないか
+   ══════════════════════════════════════════════════════════════ */
+{
+  const WANT_SET = ['配色', '色づかい', '説明の文', '押したときの音',
+    '英語の音声', '音楽', '教材の支度']
+  for (const W of [1280, 390]) {
+    const page = await browser.newPage({ viewport: { width: W, height: 900 } })
+    page.setDefaultTimeout(8000)
+    page.setDefaultNavigationTimeout(8000)
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    await page.route('**/auth/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '{}',
+    }))
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=navfoot`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(600)
+
+    /* **畳んだ `<details>` の中は `offsetParent` では見分けられない**
+       (CLAUDE.md)。`checkVisibility()` で見る */
+    const 見る = () => page.evaluate(() => {
+      const foot = document.querySelector('.app-nav-foot')
+      const sums = [...document.querySelectorAll('.nav-settings-sum')]
+      const rows = [...document.querySelectorAll('.app-nav-foot .nav-setting')]
+      const 名 = (r) => r.querySelector('.nav-setting-label')
+        ?.firstChild?.textContent?.trim() ?? ''
+      const acc = document.querySelector('.nav-account')
+      const det = document.querySelector('.nav-settings')
+      return {
+        押すもの: sums.length,
+        題: sums[0]?.innerText?.trim() ?? '',
+        高: sums[0] ? Math.round(sums[0].getBoundingClientRect().height) : 0,
+        在る: rows.length,
+        見える: rows.filter((r) => r.checkVisibility?.() ?? true).map(名),
+        /* **自分の欄より下にいるか。** ソースの並びではなく、描いた位置で見る */
+        下か: !!(acc && det
+          && det.getBoundingClientRect().top >= acc.getBoundingClientRect().bottom - 1),
+        はみ出し: foot ? Math.max(0, foot.scrollWidth - foot.clientWidth) : 0,
+      }
+    })
+
+    const 閉 = await 見る()
+    if (閉.押すもの !== 1) {
+      ng(`設定 ${W}px … メニューの下の「設定」が ${閉.押すもの} つ`,
+        '**すべてまとめて「設定」として**(利用者の指定)')
+    } else if (閉.題 !== '設定') {
+      ng(`設定 ${W}px … 題が「${閉.題}」`, '「設定」と書いてあること')
+    } else if (閉.見える.length !== 0) {
+      ng(`設定 ${W}px … 畳んだのに ${閉.見える.length} 行が出たまま`,
+        `見えている: ${閉.見える.join(' / ')}`)
+    } else if (!閉.下か) {
+      ng(`設定 ${W}px … 「設定」が自分の欄より上にいる`,
+        '**サイドバーの一番下に**(利用者の指定)')
+    } else if (閉.高 < 40) {
+      ng(`設定 ${W}px … 「設定」が ${閉.高}px しかなく、指で狙えない`)
+    } else if (閉.はみ出し > 0) {
+      ng(`設定 ${W}px … メニューの下が ${閉.はみ出し}px 横にはみ出している`)
+    } else {
+      ok(`設定 ${W}px … 畳んで「設定」1つ(${閉.高}px)・`
+        + `自分の欄より下・中の ${閉.在る} 行は見えていない`)
+    }
+
+    if (閉.押すもの === 1) {
+      await page.click('.nav-settings-sum')
+      await page.waitForTimeout(250)
+      const 開 = await 見る()
+      const 足りない = WANT_SET.filter((n) => !開.見える.includes(n))
+      if (足りない.length) {
+        ng(`設定 ${W}px … 開いても ${足りない.join(' / ')} が出てこない`,
+          '**一度入れたものを勝手に減らさない**(共通ルール)。'
+          + `いま出ているのは ${開.見える.join(' / ')}`)
+      } else if (開.見える.length !== WANT_SET.length) {
+        ng(`設定 ${W}px … 開くと ${開.見える.length} 行`,
+          `${WANT_SET.length} 行のはず(${開.見える.join(' / ')})`)
+      } else if (開.はみ出し > 0) {
+        ng(`設定 ${W}px … 開くと ${開.はみ出し}px 横にはみ出す`)
+      } else {
+        ok(`設定 ${W}px … 開くと ${開.見える.join(' / ')} の ${開.見える.length} 行`)
+      }
+    }
+    await page.close()
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════

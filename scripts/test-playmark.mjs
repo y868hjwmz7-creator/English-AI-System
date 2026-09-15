@@ -2733,14 +2733,17 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       /* ── 画面が、本当に呼んでいるか ──────────────────────
          **定義だけあって誰も呼ばなければ、何も起きない**
          (`noteFnRev` を定義だけして呼んでいなかったのと同じ落とし穴)。 */
-      ok(/onChange=\{\(v\) => setVoiceVol\(setVoiceLevel\(v\)\)\}/.test(app),
+      ok(/onVoiceVol=\{\(v\) => setVoiceVol\(setVoiceLevel\(v\)\)\}/.test(app),
         '音量 … 画面が、英語の音声の大きさを本当に覚えさせている')
-      ok(/onChange=\{\(v\) => setBgmVol\(setBgmVolume\(v\)\)\}/.test(app),
+      ok(/onBgmVol=\{\(v\) => setBgmVol\(setBgmVolume\(v\)\)\}/.test(app),
         '音量 … 画面が、音楽の大きさを本当に効かせている')
       /* **効かない端末では、つまみを出さずに理由を言う**
          (「効かない操作を見せない」+「黙って消さない」)。
-         **端末の名前では決めない** —— `volumeWorks()` が実際に試す */
-      ok(/volumeWorks\(\) \? \(/.test(app) && /nav-vol-no/.test(app),
+         **端末の名前では決めない** —— `volumeWorks()` が実際に試す。
+         2026-09 に「設定」へまとめたので、置き場所は `NavSettings.jsx` */
+      const navset = 落とす(readFileSync(
+        new URL('../src/components/NavSettings.jsx', import.meta.url), 'utf8'))
+      ok(/volumeWorks\(\) \? \(/.test(navset) && /nav-vol-no/.test(navset),
         '音量 … 受け付けない端末では、つまみを出さずに理由を1行で言う')
       ok(!/iPhone|iPad|userAgent/.test(mix),
         '音量 … 端末の名前(UA)では決めない')
@@ -2755,6 +2758,86 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     ok(!/TAB_IDS = \[[^\]]*'bgm'/.test(app),
       '音楽 … 下の帯(4つ)には足していない')
   }
+}
+
+/* ==========================================================================
+ * 設定は「設定」1つにまとめ、メニューのいちばん下に置く
+ * (2026-09 利用者の指定)
+ *
+ *   > サイドバーの「配色」から「教材の支度」までの項目をすべてまとめて
+ *   > 「設定」としてサイドバーの一番下に配置してください。
+ *
+ * 設定が**7つ縦に並んで**いた。どれも**一度決めたら何度も触らないもの**
+ * なのに、メニューを開くたびに行き先(画面の一覧)と同じだけの高さを
+ * 占めていた。**畳んで1つにまとめ、いちばん下へ置いた。**
+ *
+ * 【ここは算段。描いて測るのは `npm run test:bar`】
+ *   ①7つとも入っているか ②既定で閉じているか ③いちばん下にいるか
+ *   ④画面が本当に呼んでいるか ⑤部品が自分で覚えていないか
+ * ========================================================================== */
+{
+  console.log('\n▶ 設定')
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noCS = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const app = noCS(readS('src/App.jsx'))
+  const set = noCS(readS('src/components/NavSettings.jsx'))
+
+  /* ① **7つとも入っている。一度入れたものを勝手に減らさない**(共通ルール) */
+  {
+    const WANT = ['配色', '色づかい', '説明の文', '押したときの音',
+      '英語の音声', '音楽', '教材の支度']
+    const 無い = WANT.filter((n) => !set.includes(n))
+    ok(無い.length === 0,
+      `設定 … 7つとも入っている${無い.length ? `(足りない: ${無い.join(' / ')})` : ''}`)
+  }
+
+  /* ② **既定は閉じている。** `open` を書くと、まとめた意味が無くなる。
+     **開け閉めも覚えない** —— 毎回触るものではないので、覚えていると
+     次にメニューを開いたときに行き先より先に設定が目に入る */
+  ok(/<details className="nav-settings">/.test(set),
+    '設定 … 既定で畳んである(`open` を書いていない)')
+  ok(!/localStorage|loadTheme|loadPalette|loadTips|soundOn|prepareAllOn/.test(set),
+    '設定 … 部品は受け取って描くだけ(自分では覚えない)')
+  /* **絵文字を使わない**(端末ごとに形も大きさも違う) */
+  ok(/GearIcon/.test(set) && !/⚙/.test(set),
+    '設定 … 歯車は `GearIcon`(絵文字を使わない)')
+
+  /* ③ **いちばん下。** 自分の欄(名前・役割・ログアウト)より下にいること。
+     **ソースの並びで見る** —— 描いた位置は `npm run test:bar` が測る */
+  {
+    const foot = app.slice(app.indexOf('const navFooter = ('),
+      app.indexOf('<AppNav'))
+    const acc = foot.indexOf('className="nav-account"')
+    const set2 = foot.indexOf('<NavSettings')
+    ok(acc >= 0 && set2 > acc,
+      '設定 … 自分の欄より下(メニューのいちばん下)にいる')
+  }
+
+  /* ④ **画面が本当に呼んでいるか。**
+     定義だけあって誰も呼ばなければ、何も起きない
+     (`noteFnRev` を定義だけして呼んでいなかったのと同じ落とし穴)。
+     **「名前が出てくるか」で見ない** —— 渡している形で数える */
+  {
+    const WANT = [
+      /theme=\{theme\} onTheme=\{setTheme\}/,
+      /palette=\{palette\} onPalette=\{setPalette\}/,
+      /tips=\{tips\} onTips=\{setTips\}/,
+      /sound=\{sound\} onSound=/,
+      /voiceVol=\{voiceVol\} onVoiceVol=/,
+      /bgmVol=\{bgmVol\} onBgmVol=/,
+      /prepare=\{prepAll\} onPrepare=/,
+    ]
+    const 抜け = WANT.filter((re) => !re.test(app)).length
+    ok(抜け === 0, `設定 … 画面が7つとも渡している${抜け ? `(${抜け} 件が抜けている)` : ''}`)
+  }
+  /* **「教材の支度」はトレーナーと管理者だけ**(費用が出ていく) */
+  ok(/showPrepare=\{profile\?\.role === 'trainer' \|\| profile\?\.role === 'owner'\}/.test(app),
+    '設定 … 「教材の支度」はトレーナーと管理者だけに出す')
+
+  /* ⑤ **まとめた証拠。** App.jsx に設定の欄が残っていないこと ——
+     残っていると、**同じ設定が2か所**に出る(CLAUDE.md) */
+  ok(!/nav-setting-label">(配色|色づかい|説明の文|押したときの音|教材の支度)/.test(app),
+    '設定 … 同じ設定を2か所に出していない')
 }
 
 /* ==========================================================================
@@ -5129,8 +5212,12 @@ console.log('\nスピーチ練習(0054)')
   const app = noCS(readS('src/App.jsx'))
   ok(/=\s*useState\(loadTips\)/.test(app) && /applyTips\(tips\)/.test(app),
     '説明の文 … App.jsx が本当に呼んでいる')
-  ok(/nav-setting-label">説明の文/.test(app),
-    '説明の文 … 左のメニューの下から切り替えられる')
+  /* 2026-09 に「設定」へまとめたので、置き場所は `NavSettings.jsx`。
+     **App.jsx が値を渡していること**も一緒に見る ——
+     片方だけでは、渡さないまま欄だけ出す形に書き換えても緑になる */
+  ok(/<Pick label="説明の文" options=\{TIPS\}/.test(noCS(readS('src/components/NavSettings.jsx')))
+    && /tips=\{tips\} onTips=\{setTips\}/.test(app),
+  '説明の文 … 左のメニューの下から切り替えられる')
 
   /* 畳む決まりは styles.css の1行だけ。**部品ごとに書いて回らない** */
   const css = readS('src/styles.css')

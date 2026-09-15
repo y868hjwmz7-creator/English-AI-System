@@ -790,6 +790,40 @@ body {
 }
 .nav-account .btn--link { margin-left: auto; }
 
+/* ── 設定 ────────────────────────────────────────────────────
+   2026-09 利用者の指定。
+
+     > サイドバーの「配色」から「教材の支度」までの項目をすべてまとめて
+     > 「設定」としてサイドバーの一番下に配置してください。
+
+   **7つとも消していない。畳んであるだけ**である(`NavSettings.jsx`)。
+   見せ方は「条件で絞り込む」(`.finder-sum`)と同じ作法 ——
+   ▸ / ▾ は `::after` で描き、**端末ごとに形の違う既定の三角は消す。**
+
+   **押せる大きさ(40px)を割らない。** ここはメニューの下で唯一の
+   押すものになったので、`.app-nav-item`(44px)と並べても狙える高さにする。 */
+.nav-settings { padding-top: 12px; border-top: 1px solid var(--border); }
+.nav-settings-sum {
+  display: flex; align-items: center; gap: var(--sp-8);
+  min-height: 40px; cursor: pointer; list-style: none;
+  color: var(--text-secondary); font-size: var(--fs-12h); font-weight: 600;
+}
+.nav-settings-sum::-webkit-details-marker { display: none; }
+.nav-settings-sum::after {
+  content: '\25B8'; margin-left: auto; color: var(--text-muted); font-size: .9em;
+}
+.nav-settings[open] > .nav-settings-sum::after { content: '\25BE'; }
+.nav-settings[open] > .nav-settings-sum { color: var(--text-primary); }
+.nav-settings-icon { flex: 0 0 auto; width: 18px; height: 18px; }
+.nav-settings-body {
+  display: flex; flex-direction: column; gap: var(--sp-10); padding-top: 10px;
+}
+/* **いちばん上に来たものは、線を引かない。**
+   `.app-nav-foot` がもう1本引いているので、そのままだと2本並ぶ。
+   自分の欄が無いとき(ログイン前)は「設定」が先頭に来るので、
+   **どちらが先頭でも効く形**にしてある */
+.app-nav-foot > :first-child { padding-top: 0; border-top: 0; }
+
 /* ---------------- タブ ----------------
    スマホでは折り返さず、横に流す。折り返すと「教」「材」のように
    縦に割れて読めなくなる(実機で確認、2026-08)。 */
