@@ -419,12 +419,15 @@ export function RefreshIcon({ className = 'icon' }) {
 }
 
 /**
- * リンク(教材をシェア)。
+ * リンク(鎖の輪が2つ —— 「場所そのものを渡す」)。
  *
  * **`ScreenIcon`(セッションで使う)や `UploadIcon` と取り違えない。**
- * 鎖の輪が2つ —— 「場所そのものを渡す」という意味である。
- * 同じカードの中に「この教材をゲストと共有する」が並ぶので、
- * **絵で見分けられるようにしておく。**
+ *
+ * **いまはどの画面も使っていない。** 「教材をシェア」と
+ * 「この教材をゲストと共有する」を1つのボタンにまとめた日(2026-09)に、
+ * そちらは `ShareIcon`(渡す)へ移った —— 鎖では
+ * **ゲストに宿題として出す道**を言えないためである。
+ * **絵そのものは消していない**(リンクを渡す場面はまた出てくる)。
  */
 export function LinkIcon({ className = 'icon' }) {
   return (
@@ -433,6 +436,35 @@ export function LinkIcon({ className = 'icon' }) {
             fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       <path d="M11.6 8.4a3 3 0 0 0-4.3 0l-2.6 2.6a3 3 0 0 0 4.3 4.3l1-1"
             fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+
+/**
+ * 渡す(共有・2026-09 利用者の指定)。
+ *
+ *   > 「教材をシェア」と「教材をゲストと共有」はボタンをひとつにして
+ *   > その中でゲストと共有なのか普通の共有なのかを選べるようにしてください
+ *
+ * **`LinkIcon`(鎖)では足りない。** あれは「リンクを渡す」しか言えないが、
+ * このボタンは**ゲストに宿題として出す**道も持っている。
+ * 点と点をつなぐ形なら、「この教材を、あちらへ渡す」とだけ言える。
+ *
+ * **絵文字は使わない**(端末ごとに形が違う)。
+ * **足す前に、同じ絵がもう無いかを探してある** —— 鎖(`LinkIcon`)は
+ * 意味が狭く、`UploadIcon`(上矢印)は「取り込む」に読める。
+ */
+export function ShareIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false"
+         fill="none" stroke="currentColor" strokeWidth="1.5"
+         strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="15" cy="4.6" r="2.3" />
+      <circle cx="5" cy="10" r="2.3" />
+      <circle cx="15" cy="15.4" r="2.3" />
+      <path d="M7.1 8.9 12.9 5.7" />
+      <path d="M7.1 11.1 12.9 14.3" />
     </svg>
   )
 }

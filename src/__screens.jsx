@@ -351,63 +351,103 @@ const CARD_MATERIAL = {
   }],
 }
 
-const TOOLS = (
-  <div className="app-main" style={{ padding: 16 }}>
-    <section className="card">
-      {/* 問数の行。**写真と同じ中身**(390px では3つで 328px 使う)。
+/** 仮の担当ゲスト。**「ゲストと共有」の中身を描くのに要る** */
+const CARD_LEARNERS = [
+  { id: 'g1', display_name: 'Airi' },
+  { id: 'g2', display_name: 'テスト太郎' },
+  { id: 'g3', display_name: '佐藤ひかる' },
+]
 
-          **ここには `tip` を付けない。** 本物の画面では畳んであるが、
-          この行は「読み上げの声」の札が**その下にいるか**を測るための
-          物差しである。畳むと高さが 0 になり、
-          **測れないものは測れない**(検証が「描かれない」で赤くなる) */}
-      <div className="muted material-parts">
-        <span>会話 14 発言</span>
-        <span>内容の理解 5 問</span>
-        <span>ディスカッション 5 問</span>
-      </div>
-      {/* ふだん使う2つ。**言葉つき**(絵だけでは「PDF も出せる」が読めない) */}
-      <div className="btn-row card-tools" data-hits="0">
-        <button type="button" className="btn btn--small" onClick={hit}>
-          <PrintIcon />印刷 / PDF
-        </button>
-        <button type="button" className="btn btn--small" onClick={hit}>
-          <DownloadIcon />
-          {busy ? '集めています… 3 / 14' : '音声ダウンロード'}
-        </button>
-      </div>
-      {/* 人に渡す2つ */}
-      <div className="btn-row">
-        <button type="button" className="btn btn--small btn--quiet">
-          この教材をゲストと共有する
-        </button>
-        {/* **本物の部品で測る。**「メールで送る」「リンクをコピー」の
-            2つが並んで出るか、狭い画面ではみ出さないかを見る */}
-        <MaterialShare material={{ id: '11111111-2222-3333-4444-555555555555',
-                                   title: '2026-09-07 / 会議に出る / 業界の語' }} />
-      </div>
-      <div className="btn-row">
-        <button type="button" className="btn btn--primary">
-          <ScreenIcon />セッションで使う(大きく表示)
-        </button>
-      </div>
-      {/* めったに押さない3つ。**絵のまま**(言葉にすると1行に入らない) */}
-      <div className="material-foot">
-        {/* **いちばん下の行の左端に、小さく静かに**(2026-09 実機・利用者の指定)。
-            問数の行にはスマホで入る幅が無かった(実測 390px で残り 18px) */}
-        <CastChip material={CARD_MATERIAL} className="cast-chip--foot" />
-        <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
-                    text={busy ? '作っています… 3 / 14' : null}
-                    onClick={hit} />
-        <IconButton icon={<EraserIcon />} label="練習の記録を消す"
-                    text={busy ? '本当に消す' : null} pressed={busy}
-                    onClick={hit} />
-        <div className="btn-row material-danger">
-          <button type="button" className="btn btn--small btn--ghost">教材を消す</button>
+/* **部品にしてある。** 「共有」の開け閉めは呼ぶ側が持つ形にしたので
+   (`open` / `onOpen` / `onClose`)、ここでも本物と同じように持つ。
+   **本物の部品・本物の CSS で測る**(写した HTML では測らない) */
+function ToolsScreen() {
+  const [shareOpen, setShareOpen] = useState(false)
+  const [picked, setPicked] = useState([])
+  return (
+    <div className="app-main" style={{ padding: 16 }}>
+      <section className="card">
+        {/* 問数の行。**写真と同じ中身**(390px では3つで 328px 使う)。
+
+            **ここには `tip` を付けない。** 本物の画面では畳んであるが、
+            この行は「読み上げの声」の札が**その下にいるか**を測るための
+            物差しである。畳むと高さが 0 になり、
+            **測れないものは測れない**(検証が「描かれない」で赤くなる) */}
+        <div className="muted material-parts">
+          <span>会話 14 発言</span>
+          <span>内容の理解 5 問</span>
+          <span>ディスカッション 5 問</span>
         </div>
-      </div>
-    </section>
-  </div>
-)
+        {/* ふだん使う**3つ**(2026-09 利用者の指定)。
+            > 「印刷/PDF」「音声ダウンロード」「教材をシェア」を適宜言葉を
+            > 減らしてアイコンを活かすことで３つ並ぶようにしてください
+
+            **絵だけには戻さない。** 何のボタンかを言う語は1つずつ残す */}
+        <div className="btn-row card-tools" data-hits="0">
+          <button type="button" className="btn btn--small" onClick={hit}>
+            <PrintIcon />PDF
+          </button>
+          <button type="button" className="btn btn--small" onClick={hit}>
+            <DownloadIcon />
+            {/* **集めているあいだも、数は1文字も削らない**(CLAUDE.md) */}
+            {busy ? '3 / 14' : '音声'}
+          </button>
+          {/* **本物の部品で測る。** 中で「ゲストと共有」「リンクを渡す」の
+              2つから選べるか、狭い画面ではみ出さないかを見る */}
+          <MaterialShare
+            material={{ id: '11111111-2222-3333-4444-555555555555',
+                        title: '2026-09-07 / 会議に出る / 業界の語' }}
+            open={shareOpen}
+            onOpen={() => { setShareOpen(true); setPicked([]) }}
+            onClose={() => setShareOpen(false)}
+            guest={(
+              <>
+                <p className="field-label">共有するゲストを選んでください(複数可)</p>
+                <div className="assign-list">
+                  {CARD_LEARNERS.map((l) => (
+                    <label key={l.id} className="toggle">
+                      <input type="checkbox" checked={picked.includes(l.id)}
+                             onChange={() => setPicked(picked.includes(l.id)
+                               ? picked.filter((x) => x !== l.id)
+                               : [...picked, l.id])} />
+                      <span>{l.display_name}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="btn-row">
+                  <button type="button" className="btn btn--primary"
+                          disabled={!picked.length}>
+                    {picked.length ? `${picked.length} 人と共有する` : '共有する'}
+                  </button>
+                </div>
+              </>
+            )}
+          />
+        </div>
+        <div className="btn-row">
+          <button type="button" className="btn btn--primary">
+            <ScreenIcon />セッションで使う(大きく表示)
+          </button>
+        </div>
+        {/* めったに押さない3つ。**絵のまま**(言葉にすると1行に入らない) */}
+        <div className="material-foot">
+          {/* **いちばん下の行の左端に、小さく静かに**(2026-09 実機・利用者の指定)。
+              問数の行にはスマホで入る幅が無かった(実測 390px で残り 18px) */}
+          <CastChip material={CARD_MATERIAL} className="cast-chip--foot" />
+          <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
+                      text={busy ? '作っています… 3 / 14' : null}
+                      onClick={hit} />
+          <IconButton icon={<EraserIcon />} label="練習の記録を消す"
+                      text={busy ? '本当に消す' : null} pressed={busy}
+                      onClick={hit} />
+          <div className="btn-row material-danger">
+            <button type="button" className="btn btn--small btn--ghost">教材を消す</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
 
 /* さがす帯(`?screen=search`・2026-09 利用者の指定)。
      > 宿題を探すも折りたたみ式にしてください。そして検索バーの下の「3件」は
@@ -1052,6 +1092,6 @@ createRoot(document.getElementById('root')).render(
       : q.get('screen') === 'result'
         ? RESULT
         : q.get('screen') === 'tools'
-          ? TOOLS
+          ? <ToolsScreen />
           : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
 )

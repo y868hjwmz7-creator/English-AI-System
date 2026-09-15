@@ -146,7 +146,7 @@ export default function TrainerMaterials({
      `useAudioDownload()` 1か所にしてある(**書き写さない**)。
      見た目も押したときの動きも、1ドットも変えていない */
   const {
-    busy: dlBusy, done: dlDone, pieces: dlPieces, label: dlLabel, start: dlStart,
+    busy: dlBusy, done: dlDone, pieces: dlPieces, short: dlShort, start: dlStart,
   } = useAudioDownload()
   // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
   // (2026-08 利用者の指定)。担当ゲストの記録には触れない
@@ -989,23 +989,34 @@ export default function TrainerMaterials({
                 ))}
               </div>
 
-              {/* ── ふだん使う2つ(2026-09 利用者の指定)────────────────
-                    > 「音声を作り直す」「学習の記録を消す」を教材を消すの
-                    > 左側に並べて、「印刷 / PDF」と「音声ダウンロード」
-                    > アイコンを今の位置に並べてください
+              {/* ── ふだん使う3つ(2026-09 利用者の指定)────────────────
+                    > 「教材をシェア」と「教材をゲストと共有」はボタンを
+                    > ひとつにしてその中でゲストと共有なのか普通の共有なのかを
+                    > 選べるようにしてください。省スペースです。
+                    > そして、スマホの表示で、「印刷/PDF」「音声ダウンロード」
+                    > 「教材をシェア」を適宜言葉を減らしてアイコンを活かすことで
+                    > ３つ並ぶようにしてください。直感でわかれば良いのです。
+
+                  **これは方針の変更である。経緯ごと残す。**
+                  ひとつ前の回は、同じ行について逆のことを言われていた ——
+
                     > 「🖨️」だけでは PDF が出せることがわからないので、
                     > 「印刷 / PDF」として、音声ダウンロードもそのまま
                     > 「音声ダウンロード」としましょう。
-                    > もともとスペースの問題だったのでこれで解決です。
 
-                  **絵だけに戻さない。** 印刷の絵からは「PDF でも出せる」が
-                  読み取れず、下向きの矢印からは「何を落とすのか」が
-                  分からない。**2つに減ったので、言葉が入る。**
-                  (めったに押さない2つは、下の「教材を消す」の行へ移した) */}
+                  あのときは**2つ**だったので言葉が入った。共有をここへ入れて
+                  **3つ**になったので、入る幅が変わった。
+                  **絵だけには戻していない** —— 削ったのは
+                  「**印刷**」「音声**ダウンロード**」「**教材を**シェア」の
+                  添えの部分だけで、**何のボタンかを言う語は1つも消していない。**
+
+                    🖨 PDF      … 絵が「印刷」、字が「PDF も出せる」
+                    ⬇ 音声      … 絵が「落とす」、字が「何を」
+                    ⤳ 共有      … 絵が「渡す」、字が「何をするか」 */}
               <div className="btn-row card-tools">
                 <button type="button" className="btn btn--small"
                         onClick={() => setPrintId(m.id)}>
-                  <PrintIcon />印刷 / PDF
+                  <PrintIcon />PDF
                 </button>
                 {/* **音声を1本にまとめて落とす**(2026-09 利用者の指定)。
                     > 各教材の音声をダウンロード出来るようにしてください。
@@ -1017,31 +1028,78 @@ export default function TrainerMaterials({
                   <button type="button" className="btn btn--small"
                           disabled={!!dlBusy} onClick={() => dlStart(m)}>
                     {/* **進み具合は、必ず数で出す**(CLAUDE.md)。
-                        14 本を集めるあいだ、名前のままでは止まって見える */}
-                    <DownloadIcon />{dlLabel(m)}
+                        14 本を集めるあいだ、名前のままでは止まって見える。
+                        **3つ並ぶ行なので、数だけにする**(`dlShort`)——
+                        消したのは「集めています…」の側で、数は1文字も削らない */}
+                    <DownloadIcon />{dlShort(m)}
                   </button>
                 )}
+                {/* **渡す道は、ボタン1つ**(2026-09 利用者の指定)。
+                    ゲストへ宿題として配るのも、トレーナーへリンクを渡すのも
+                    「この教材を誰かへ渡す」1つのことで、**違うのは相手だけ**。
+                    どちらにするかは、開いた箱の中の札で選ぶ。
+
+                    **開け閉めはこちらが持つ**(`assigningId`)——
+                    共有し終わったら、その場で閉じたいため */}
+                <MaterialShare
+                  material={m}
+                  open={assigningId === m.id}
+                  onOpen={() => startAssign(m.id)}
+                  onClose={() => setAssigningId(null)}
+                  guest={(
+                    <>
+                      {/* **ゲストのページの中では、選ぶ欄を出さない**
+                          (2026-09 利用者の指定)。相手はもう決まっているし、
+                          **ほかのゲストの名前が画面共有に映る**(仕様書 5.5)。
+                          押すのは「共有する」だけになる */}
+                      {forLearner ? (
+                        <p className="field-label">
+                          {forLearner.name} さんの宿題にします。
+                        </p>
+                      ) : (
+                        <>
+                          <p className="field-label">
+                            共有するゲストを選んでください(複数可)
+                          </p>
+                          {active.length === 0 && (
+                            <p className="muted">受講中のゲストがいません。</p>
+                          )}
+                          <div className="assign-list">
+                            {active.map((l) => (
+                              <label key={l.id} className="toggle">
+                                <input type="checkbox" checked={picked.includes(l.id)}
+                                       onChange={() => setPicked(
+                                         picked.includes(l.id)
+                                           ? picked.filter((x) => x !== l.id)
+                                           : [...picked, l.id])} />
+                                <span>{l.display_name}</span>
+                              </label>
+                            ))}
+                          </div>
+                          {notActive.length > 0 && (
+                            <p className="field-hint">
+                              休会中・退会済の {notActive.length} 人とは共有できません。
+                            </p>
+                          )}
+                        </>
+                      )}
+                      <div className="btn-row">
+                        <button type="button" className="btn btn--primary"
+                                onClick={doAssign} disabled={!picked.length}>
+                          {/* **「配信する」と書かない**(CLAUDE.md の呼び方)。
+                              担当ゲストにだけ届く仕組みなので「共有する」である */}
+                          {forLearner
+                            ? '共有する'
+                            : (picked.length ? `${picked.length} 人と共有する` : '共有する')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                />
               </div>
-              {/* **人に渡す操作は、その下に1行**(2026-09)。
-                  ゲストへ配るのと、トレーナーへリンクを渡すのは
-                  **渡す相手が違うだけ**なので、同じ行に並べる */}
-              <div className="btn-row">
-                {assigningId !== m.id && (
-                  <button type="button" className="btn btn--small btn--quiet"
-                          onClick={() => startAssign(m.id)}>
-                    {forLearner
-                      ? `${forLearner.name} さんに共有する`
-                      : 'この教材をゲストと共有する'}
-                  </button>
-                )}
-                {/* **教材をシェア**(2026-09 利用者の指定)。
-                    こちらは**トレーナー間**。教材は既定で全トレーナーの
-                    共有物なので、リンクを開けばその教材がそのまま出る。
-                    **ゲストに配るのとは別物**なので、絵で見分けられるようにする。
-                    渡し方(メール / リンクをコピー)は `MaterialShare` が持つ */}
-                <MaterialShare material={m} />
-                {makingJa === m.id && <span className="muted">区切りの訳を作っています…</span>}
-              </div>
+              {makingJa === m.id && (
+                <p className="muted">区切りの訳を作っています…</p>
+              )}
               {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
                   **足りないときは、どうすればよいかまで書く** */}
               <AudioDownloadNote done={dlDone} materialId={m.id} trainer />
@@ -1077,57 +1135,6 @@ export default function TrainerMaterials({
                       onClick={() => setLessonOf(m)}>
                 <ScreenIcon />セッションで使う(大きく表示)
               </button>
-
-              {assigningId === m.id ? (
-                <div className="assign-box">
-                  {/* **ゲストのページの中では、選ぶ欄を出さない**
-                      (2026-09 利用者の指定)。相手はもう決まっているし、
-                      **ほかのゲストの名前が画面共有に映る**(仕様書 5.5)。
-                      押すのは「共有する」と「やめる」の2つだけになる */}
-                  {forLearner ? (
-                    <p className="field-label">
-                      {forLearner.name} さんの宿題にします。
-                    </p>
-                  ) : (
-                  <>
-                  <p className="field-label">共有するゲストを選んでください(複数可)</p>
-                  {active.length === 0 && (
-                    <p className="muted">受講中のゲストがいません。</p>
-                  )}
-                  <div className="assign-list">
-                    {active.map((l) => (
-                      <label key={l.id} className="toggle">
-                        <input type="checkbox" checked={picked.includes(l.id)}
-                               onChange={() => setPicked(
-                                 picked.includes(l.id)
-                                   ? picked.filter((x) => x !== l.id)
-                                   : [...picked, l.id])} />
-                        <span>{l.display_name}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {notActive.length > 0 && (
-                    <p className="field-hint">
-                      休会中・退会済の {notActive.length} 人とは共有できません。
-                    </p>
-                  )}
-                  </>
-                  )}
-                  <div className="btn-row">
-                    <button type="button" className="btn btn--primary"
-                            onClick={doAssign} disabled={!picked.length}>
-                      {/* **「配信する」と書かない**(CLAUDE.md の呼び方)。
-                          担当ゲストにだけ届く仕組みなので「共有する」である */}
-                      {forLearner
-                        ? '共有する'
-                        : (picked.length ? `${picked.length} 人と共有する` : '共有する')}
-                    </button>
-                    <button type="button" className="btn" onClick={() => setAssigningId(null)}>
-                      やめる
-                    </button>
-                  </div>
-                </div>
-              ) : null}
 
               {/* ── めったに押さない3つ(2026-09 利用者の指定)──────────
                     > 「音声を作り直す」「学習の記録を消す」を

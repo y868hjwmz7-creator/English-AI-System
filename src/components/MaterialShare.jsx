@@ -1,20 +1,37 @@
 /**
- * **教材へのリンクを渡す。渡し方は2つ**(2026-09 利用者の指定)。
+ * **教材を渡す道は、ボタン1つにまとめる**(2026-09 利用者の指定)。
  *
  * ════════════════════════════════════════════════════════════════
- *   > シェアする際はメールアドレスを入れる、またはリンクを生成して
- *   > 好きなところに貼り付けれるように、2つから選べると良いですね
+ *   > 「教材をシェア」と「教材をゲストと共有」はボタンをひとつにして
+ *   > その中でゲストと共有なのか普通の共有なのかを選べるように
+ *   > してください。省スペースです。
  *
- * はじめは押した瞬間に端末の共有シートを開いていたが、
- * **何が起きるのか押す前に分からなかった。** いまは欄を開いて、
- * **2つを並べて見せる。**
+ * 【もとは2つのボタンだった。経緯ごと残す】
  *
- *   ① メールで送る … 宛先を書いて、**利用者自身のメールソフト**を開く
- *   ② リンクをコピー … リンクをそのまま出す。好きなところに貼れる
+ *   | | ボタン | 開くもの |
+ *   |---|---|---|
+ *   | 前 | この教材をゲストと共有する | `.assign-box`(ゲストを選ぶ) |
+ *   | 前 | 教材をシェア | `.share-box`(メール / リンク) |
+ *   | **いま** | **共有** | **`.share-box` 1つ。中で2つから選ぶ** |
  *
- * 【選ぶ手間を、もう1回増やさない】
- *   「どちらにしますか」を先に訊いてから欄を出すと、押す回数が1つ増える。
- *   **2つとも出しておけば、選ぶことがそのまま操作になる。**
+ *   どちらも**「この教材を、誰かへ渡す」**という1つのことで、
+ *   **違うのは渡す相手だけ**である(ゲスト / トレーナー)。
+ *   ボタンを2つ並べると、そのぶん**場所を取り**、しかも
+ *   狭い画面では「印刷 / PDF」「音声」と1行に並べられない。
+ *
+ * 【ここでは「どちらにしますか」を先に訊く】
+ *   この部品には**逆の決まりが書いてあった** ——
+ *   「2つとも出しておけば、選ぶことがそのまま操作になる」。
+ *   あれは**メール / リンクという小さな2つ**の話で、いまも守っている
+ *   (`way === 'link'` の中は、2つとも並べてある)。
+ *
+ *   **ゲストを選ぶ欄は大きい**(担当25人ぶんのチェックが並ぶ)ので、
+ *   両方を開くと箱が画面2枚ぶんになる。利用者が挙げた目的は
+ *   **省スペース**であり、言葉も「**選べるように**」である。
+ *
+ * 【既定は「ゲストと共有」】
+ *   このアプリの中心は「弱点から教材を作り、**指定したゲストに配る**」
+ *   循環である(CLAUDE.md 冒頭)。リンクを渡すのは、そのあとの話。
  *
  * 【こちらからメールは送らない】
  *   送るには外の送信サービスとその鍵が要る。**鍵は扱わない**という
@@ -29,20 +46,23 @@
  *   **欄そのものに出して手でも選べるようにする。**
  *   行き止まりを作らない(CLAUDE.md)。
  *
- * 【「ゲストと共有する」とは別物】
- *   あちらは宿題として配る(`assignments`)。こちらは**リンクを渡すだけ**で、
- *   何も配らない。取り違えると事故になるので、欄の頭に1行書く。
+ * 【開け閉めは、呼ぶ側が持つ】
+ *   ゲストと共有する道は `assigningId` / `picked` を使う。
+ *   **共有し終わったらその場で閉じたい**ので、開いているかどうかを
+ *   ここに閉じ込めると、閉じる合図をもう1本渡すことになる。
+ *   `open` / `onOpen` / `onClose` で**外から決める。**
  * ════════════════════════════════════════════════════════════════
  */
 import { useRef, useState } from 'react'
-import { LinkIcon } from './Icons.jsx'
+import { ShareIcon } from './Icons.jsx'
 /* **宛先の形を、画面で見分けない。** `mailtoFor()` が形の違う宛先には
    `null` を返すので、それをそのまま「押せない」の合図に使う
    (判断を2か所に置かない・`remakeModeOf()` と同じ考え方) */
 import { mailtoFor, materialLinkFor } from '../lib/materialLink.js'
 
-export default function MaterialShare({ material }) {
-  const [open, setOpen] = useState(false)
+export default function MaterialShare({ material, guest = null, open, onOpen, onClose }) {
+  /** どちらの道か。**ゲストを渡されていなければ、リンクしかない** */
+  const [way, setWay] = useState(guest ? 'guest' : 'link')
   const [to, setTo] = useState('')
   /** コピーの結果。**成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md) */
   const [copied, setCopied] = useState(null)   // 'ok' | 'ng' | null
@@ -63,30 +83,68 @@ export default function MaterialShare({ material }) {
     }
   }
 
+  const shut = () => { setCopied(null); onClose?.() }
+  const toggle = () => {
+    if (open) { shut(); return }
+    /* **開くたびに、既定から始める。** 前に「リンクを渡す」を見ていた人が、
+       次の教材でもそこから始まると、ゲストに配る道が隠れて見える */
+    setWay(guest ? 'guest' : 'link')
+    setCopied(null)
+    onOpen?.()
+  }
+
+  /* **ゲストを渡されていなければ、その道は無い**(効かない操作を見せない)。
+     `way` が取り残されても、ここで必ずリンクに落ちる */
+  const now = guest ? way : 'link'
+
   return (
     <>
+      {/* **言葉は「共有」1語。** 絵(点と点をつなぐ)が「渡す」を言うので、
+          残すのは「誰に」ではなく「何をするか」だけでよい。
+          長い名前だと、狭い画面で「印刷 / PDF」「音声」と3つ並ばない */}
       <button type="button"
-              className={`btn btn--small btn--quiet${open ? ' is-on' : ''}`}
-              onClick={() => { setOpen(!open); setCopied(null) }}>
-        <LinkIcon />教材をシェア
+              className={`btn btn--small share-open${open ? ' is-on' : ''}`}
+              aria-expanded={open}
+              onClick={toggle}>
+        <ShareIcon />共有
       </button>
 
       {open && (
         <div className="share-box">
-          {/* **何が起きるのかを、先に1行で書く。**
-              すぐ左に「ゲストと共有する」があるので、取り違えを防ぐ */}
-          <p className="field-hint">
-            この教材の<strong>リンクを渡します</strong>。
-            教材そのものは配られません(ゲストへ配るのは、
-            左の「この教材をゲストと共有する」です)。
-          </p>
+          {/* ── 渡す相手を選ぶ ─────────────────────────────────
+              **色だけに頼らない**(うすい地色 + 同じ色の文字 + 枠線 + 太字)。
+              札の見た目は `.chip` を使い回す —— ここで新しい配色を作らない */}
+          {guest && (
+            <div className="chiprow share-pick" role="group"
+                 aria-label="共有のしかた">
+              {[['guest', 'ゲストと共有'], ['link', 'リンクを渡す']].map(([id, name]) => (
+                <button key={id} type="button"
+                        className={`chip${now === id ? ' chip--on' : ''}`}
+                        aria-pressed={now === id}
+                        onClick={() => { setWay(id); setCopied(null) }}>
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {url === null ? (
+          {now === 'guest' ? (
+            /* **中身は呼ぶ側が持つ。** 誰が担当ゲストかも、何人選んだかも、
+               共有したときに何語が単語帳へ入るかも、あちらが知っている */
+            guest
+          ) : url === null ? (
             /* **当てずっぽうの URL を出さない。**
                作れないときは、そう言う(黙って空欄を出さない) */
             <p className="notice notice--warn">リンクを作れませんでした。</p>
           ) : (
             <>
+              {/* **何が起きるのかを、先に1行で書く。**
+                  同じ箱の中に「ゲストと共有」があるので、取り違えを防ぐ */}
+              <p className="field-hint">
+                この教材の<strong>リンクを渡します</strong>(トレーナー間)。
+                教材そのものは配られません。
+              </p>
+
               {/* ── ① メールで送る ───────────────────────────── */}
               <p className="field-label">① メールで送る</p>
               <div className="share-row">
@@ -137,10 +195,11 @@ export default function MaterialShare({ material }) {
 
           {/* **「やめる」を、走らせるボタンのとなりに置く**(CLAUDE.md)。
               上のボタンをもう一度押しても閉じるが、
-              画面を送るとそこは見えなくなる */}
+              画面を送るとそこは見えなくなる。
+              **どちらの道でも同じ場所**にある(箱が持つ) */}
           <div className="btn-row">
             <button type="button" className="btn btn--small btn--ghost"
-                    onClick={() => { setOpen(false); setCopied(null) }}>
+                    onClick={shut}>
               やめる
             </button>
           </div>

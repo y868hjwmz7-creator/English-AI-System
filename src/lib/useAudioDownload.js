@@ -33,6 +33,7 @@ import { downloadMaterialAudio, materialClipPieces } from './downloadAudio.js'
  *   done: (object|null),
  *   pieces: (m: object) => number,
  *   label: (m: object) => string,
+ *   short: (m: object) => string,
  *   start: (m: object) => Promise<void>,
  * }}
  */
@@ -51,6 +52,28 @@ export function useAudioDownload() {
     ? `集めています… ${busy.done} / ${busy.total}`
     : '音声ダウンロード')
 
+  /**
+   * **3つ並ぶ行のための、短い言い方**(2026-09 利用者の指定)。
+   *
+   *   > 適宜言葉を減らしてアイコンを活かすことで３つ並ぶように
+   *   > してください。直感でわかれば良いのです。
+   *
+   * トレーナーの「教材」のカードは、いま
+   * **PDF / 音声 / 共有**の3つを1行に並べている。そこへ
+   * `label()` の「集めています… 3 / 14」を出すと、狭い画面ではみ出す。
+   *
+   * **削るのは動詞だけ。数は1文字も削らない**(CLAUDE.md
+   * 「進み具合は、必ず数で出す」)—— 動いていることは、
+   * 数が増えることと、押せなくなることが言う。
+   *
+   * **`label()` は残す。** ゲストの「今週の宿題」は
+   * ボタンが少なく、あちらは言葉のまま入る
+   * (**言われた場所だけを直す** —— 押す場所ごとに要る幅が違う)。
+   */
+  const short = (m) => (busy?.id === m?.id
+    ? `${busy.done} / ${busy.total}`
+    : '音声')
+
   const start = async (m) => {
     if (!m?.id) return
     setDone(null)
@@ -67,5 +90,5 @@ export function useAudioDownload() {
     setDone({ id: m.id, ...r })
   }
 
-  return { busy, done, pieces, label, start }
+  return { busy, done, pieces, label, short, start }
 }

@@ -1229,9 +1229,33 @@ audio { width: 100%; margin-top: 4px; }
    **「右」にならない。** ここは折り返さず、入りきらないときは
    ボタンのほうを縮める(`.btn--small` の `flex-shrink: 0` を戻す)。
    縮んでも文言は削らない — 何のボタンか分からなくなる。 */
-.card-tools { flex-wrap: nowrap; gap: var(--sp-6); margin-bottom: 0; }
+.card-tools { gap: var(--sp-6); margin-bottom: 0; }
 .card-tools > .btn { flex: 0 1 auto; min-width: 0; }
 .card-tools + .btn-row { margin-top: 8px; }
+/* **開いた箱は、行の外へ落とす**(2026-09 実機で撮って気づいた)。
+
+   「共有」を1つにまとめた日、`.share-box` が**ボタンと同じ行の一員**に
+   なっていた。行は `nowrap` だったので、箱がそこへ割り込み、
+   **PDF / 音声 / 共有が縦棒3本に潰れた。**
+   高さも「はみ出し」も正常のままなので、**測っても気づけなかった** ——
+   **撮って初めて分かった。**
+
+   `flex-basis: 100%` は、**折り返す行でしか効かない。** だから
+   `nowrap` をやめた。3つは実測で 320px でも 221〜253px に収まるので
+   折り返さないが、**もし入らなくなったら縦に積まれる** ——
+   そこは `npm run test:bar` が「3つが1行か」で赤くする
+   (潰れて気づけないより、**赤くなるほうがよい**)。 */
+.card-tools > .share-box { flex: 1 0 100%; }
+/* **いちばん狭い端末では、余白だけを詰める**(2026-09 実機で測って足した)。
+   3つになったので、**320px の端末で「表示を大きく」にしていて、しかも
+   音声を集めている最中**だけ 3px 足りず、ボタンの中の字が2行に折り返して
+   いた(実測 高さ 34 → 55px)。
+   **削るのは余白だけ。** 言葉も、集めた本数も1文字も削らない
+   (`.btn--small` は 34px を保つので、押せる大きさは変わらない) */
+@media (max-width: 360px) {
+  .card-tools { gap: var(--sp-4); }
+  .card-tools > .btn { padding-left: 8px; padding-right: 8px; }
+}
 
 /* ── 絵だけのボタン(`IconButton.jsx`)────────────────────────────
    2026-09 実機・利用者の指定。
@@ -1320,16 +1344,30 @@ audio { width: 100%; margin-top: 4px; }
 .material-foot > .card-hint,
 .material-foot > .notice { flex: 1 0 100%; margin: 8px 0 0; text-align: right; }
 
-/* ── 教材をシェア(2026-09 利用者の指定)──────────────────────────
-     > シェアする際はメールアドレスを入れる、またはリンクを生成して
-     > 好きなところに貼り付けれるように、2つから選べると良いですね
+/* ── 共有(2026-09 利用者の指定)────────────────────────────────
+     > 「教材をシェア」と「教材をゲストと共有」はボタンをひとつにして
+     > その中でゲストと共有なのか普通の共有なのかを選べるように
+     > してください。省スペースです。
 
-   **2つとも出しておく。**「どちらにしますか」を先に訊くと、
-   押す回数が1つ増えるだけである。囲みは `.assign-box` と同じ作法。 */
+   囲みは `.assign-box` と同じ作法。中は**札で2つに分かれる** ——
+   ゲストを選ぶ欄は担当25人ぶん並ぶので、両方を開くと箱が画面2枚になる。
+
+   **メール / リンクの2つは、これまでどおり並べて出す**
+   (「どちらにしますか」を先に訊くと、押す回数が1つ増えるだけ)。 */
 .share-box {
   margin-top: 12px; padding: 12px;
   border: 1px solid var(--accent); border-radius: var(--radius);
 }
+/* 渡す相手を選ぶ札。**`.chiprow` / `.chip` を使い回す** ——
+   ここで新しい配色を作らない。下に線を1本引いて、選ぶ行と中身を分ける */
+.share-pick {
+  margin: 0 0 10px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+/* **押せる大きさを割らない。** 札の既定(5px 12px)は指には小さい */
+.share-pick .chip { min-height: 36px; }
+/* 箱の中の1つめの説明は、札のすぐ下に付ける */
+.share-box > .field-hint:first-of-type { margin-top: 0; }
 .share-box .field-label { margin: 12px 0 4px; }
 .share-box .field-label:first-of-type { margin-top: 4px; }
 .share-box .field-hint { margin: 4px 0 0; }
@@ -1349,8 +1387,14 @@ input.share-url {
 }
 /* 押せないボタン(宛先の形が違ううち)。**選ばせてから断らない** */
 .btn.is-off { opacity: 0.5; pointer-events: none; }
-/* 開いている印。**べた塗りにしない**(選んでいる印と同じ作法) */
-.btn--quiet.is-on {
+/* 「共有」を開いている印。**べた塗りにしない**(選んでいる印と同じ作法)。
+
+   **`.btn.is-on` と広げない。** `is-on` は読み上げの操作盤(`player-play`)
+   など**あちこちで別の意味に使っている**ので、広げるとそこまで青くなる
+   (**寄せたついでに直さない**・共通ルール)。
+   このボタンだけの札(`share-open`)に付ける。
+   重さは (0,2,0) なので、`.btn--small`(0,1,0)には負けない */
+.btn.share-open.is-on {
   background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
 }
 

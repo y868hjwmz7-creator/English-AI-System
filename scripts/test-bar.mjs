@@ -1603,26 +1603,35 @@ export default defineConfig({
 
      > 「音声を作り直す」「学習の記録を消す」を教材を消すの左側に並べて、
      > 「印刷 / PDF」と「音声ダウンロード」アイコンを今の位置に並べて
-     > ください。…「🖨️」だけでは PDF が出せることがわからないので、
-     > 「印刷 / PDF」として、音声ダウンロードもそのまま「音声ダウンロード」
-     > としましょう。もともとスペースの問題だったのでこれで解決です。
+     > ください。…もともとスペースの問題だったのでこれで解決です。
 
    4つを1行に詰めていたので、iPhone(390px)で文字が1字ずつ縦に割れ、
-   **4本の棒**になっていた。**絵にして詰める**のが前の直しだったが、
-   それでは印刷の絵から「PDF でも出せる」が読み取れない。
-   いまは**役目で2つの行に分ける。**
+   **4本の棒**になっていた。いまは**役目で2つの行に分ける。**
 
-     `.card-tools`     ふだん使う2つ。**言葉つき**
+     `.card-tools`     ふだん使う**3つ**。**言葉つき**
      `.material-foot`  めったに押さない3つ。**絵のまま**(11文字は入らない)
+
+   **上の行は 2026-09 に3つへ増えた**(利用者の指定・方針の変更)。
+
+     > 「教材をシェア」と「教材をゲストと共有」はボタンをひとつにして
+     > その中でゲストと共有なのか普通の共有なのかを選べるように
+     > してください。省スペースです。そして、スマホの表示で、
+     > 「印刷/PDF」「音声ダウンロード」「教材をシェア」を適宜言葉を減らして
+     > アイコンを活かすことで３つ並ぶようにしてください。
+     > 直感でわかれば良いのです。
+
+   **絵だけには戻していない。** 削ったのは添えの部分だけで、
+   **何のボタンかを言う語は1つずつ残っている**(PDF / 音声 / 共有)。
 
    **両側を見る。**
      ①上の行に**言葉が出ているか**(絵だけに戻すと、この指定が消える)
-     ②下の行の3つが**同じ1行に並んでいるか**(「教材を消すの左側」)
-     ③**押せる大きさ(40px)を割っていないか**
-     ④**読み上げ機に名前が渡っているか**(絵だけのボタンの決まり)
-     ⑤**長押しで名前が出るか**(触る端末にはカーソルが無い)
-     ⑥**言葉が要る状態では、言葉が出るか**(進み具合・2段めの確認)
-     ⑦**「教材をシェア」があるか**(トレーナー間でリンクを渡す)
+     ②上の3つが**同じ1行に並んでいるか**(利用者の指定そのもの)
+     ③下の行の3つが**同じ1行に並んでいるか**(「教材を消すの左側」)
+     ④**押せる大きさ(40px)を割っていないか**
+     ⑤**読み上げ機に名前が渡っているか**(絵だけのボタンの決まり)
+     ⑥**長押しで名前が出るか**(触る端末にはカーソルが無い)
+     ⑦**言葉が要る状態では、言葉が出るか**(進み具合・2段めの確認)
+     ⑧**「共有」の中で2つから選べるか**(ゲストと共有 / リンクを渡す)
    ①だけを見ると、**下の行を消しても緑のまま**になる。
    ══════════════════════════════════════════════════════════════ */
 {
@@ -1630,8 +1639,9 @@ export default defineConfig({
   const page = await browser.newPage({ hasTouch: true })
   /** 下の行(絵のまま)。**名前が渡っていること**を見る */
   const FOOT = ['読み上げ音声を作り直す', '練習の記録を消す']
-  /** 上の行(言葉つき)。**画面に見えていること**を見る */
-  const TOOLS = ['印刷 / PDF', '音声ダウンロード']
+  /** 上の行(言葉つき)。**画面に見えていること**を見る。
+      **3つとも語を1つずつ持っている** —— 絵だけにはしない */
+  const TOOLS = ['PDF', '音声', '共有']
 
   /* ══ **「読み上げの声」の札は、問数の行に入らない**(2026-09 実機・利用者の指定)══
        > スマホでの「読み上げの声」のタブを「教材をシェア」の右に収めるか、
@@ -1714,10 +1724,17 @@ export default defineConfig({
       const icons = [...foot.querySelectorAll('.iconbtn')]
       const del = foot.querySelector('.material-danger .btn')
       const line = [...icons, del].filter(Boolean)
+      const tools = [...row.querySelectorAll('.btn')]
       return {
-        上の文字: [...row.querySelectorAll('.btn')].map((b) => (b.textContent ?? '').trim()),
+        上の文字: tools.map((b) => (b.textContent ?? '').trim()),
         上の高さ: Math.round(row.getBoundingClientRect().height),
         上のあふれ: row.scrollWidth > row.clientWidth + 1,
+        /* **3つが同じ1行に並んでいるか**(2026-09 利用者の指定)。
+           `.card-tools` は `nowrap` なので折り返しでは割れないが、
+           **ボタンの中の字が2行に折り返す**ことはある(実測 34 → 55px)。
+           だから高さでも見る(すぐ下の `上の高さ`) */
+        上の段: [...new Set(tools.map((b) => Math.round(b.getBoundingClientRect().top)))].length,
+        上の数: tools.length,
         はみ出し: document.documentElement.scrollWidth > window.innerWidth,
         名前: icons.map((b) => b.getAttribute('aria-label') ?? ''),
         /* **同じ1行に並んでいるか。**
@@ -1746,13 +1763,19 @@ export default defineConfig({
     const missing = FOOT.filter((t) => !m.名前.includes(t))
     if (noWord.length) {
       ng(`教材の操作 ${w}px … 上の行に言葉が無い(${noWord.join(' / ')})`,
-        '絵だけでは「PDF も出せる」「何を落とすのか」が読めない(利用者の指定)')
+        '絵だけでは「PDF も出せる」「何を落とすのか」「何をするのか」が'
+        + '読めない(利用者の指定)')
+    } else if (m.上の数 !== 3) {
+      ng(`教材の操作 ${w}px … 上の行が ${m.上の数} つ(3つのはず)`,
+        '「印刷/PDF」「音声」「共有」を3つ並べる(2026-09 利用者の指定)')
     } else if (missing.length) {
       ng(`教材の操作 ${w}px … 下の行に名前が渡っていない(${missing.join(' / ')})`,
         '絵だけのボタンには `aria-label` を必ず添える(CLAUDE.md)')
-    } else if (m.上の高さ > 48) {
-      ng(`教材の操作 ${w}px … 上の行が ${m.上の高さ}px(1行なら 34〜40px)`,
-        '2つに減らしたのだから、言葉つきでも1行に収まるはず')
+    } else if (m.上の段 !== 1 || m.上の高さ > 48) {
+      ng(`教材の操作 ${w}px … 上の3つが1行に収まっていない`
+        + `(${m.上の段} 段 / ${m.上の高さ}px)`,
+        '言葉を減らして3つ並べる(利用者の指定)。'
+        + '`nowrap` なので、割れるとしたらボタンの中の字が折り返したとき')
     } else if (m.上のあふれ || m.はみ出し) {
       ng(`教材の操作 ${w}px … はみ出している`,
         '`.card-tools` は `nowrap`。入らないぶんは外へ出て切れる')
@@ -1766,8 +1789,49 @@ export default defineConfig({
       ng(`教材の操作 ${w}px … 40px を割っている(${m.小さい.join(' / ')})`,
         '押せる大きさ(40px)は割らない(CLAUDE.md)')
     } else {
-      ok(`教材の操作 ${w}px … 上は言葉つき2つ(${m.上の高さ}px)・`
+      ok(`教材の操作 ${w}px … 上は言葉つき3つが1行(${m.上の高さ}px)・`
         + '下は絵2つ + 教材を消すの1行')
+    }
+  }
+
+  /* **端末の「表示を大きく」でも、3つが1行のままか**(2026-09 実機で測って足した)。
+     幅だけでは決まらない —— 実際、320px + 1.25 倍 + 音声を集めている最中で、
+     **3px 足りずにボタンの中の字が2行**になっていた(34 → 55px)。
+     **いちばん狭い端末では余白だけを詰めてある**(言葉も本数も削らない) */
+  for (const [w, state] of [[390, ''], [375, ''], [360, ''], [320, ''],
+    [390, '&state=busy'], [360, '&state=busy'], [320, '&state=busy']]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools${state}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.card-tools .btn')
+    await page.evaluate(() => {
+      const st = document.createElement('style')
+      st.textContent = '.card-tools .btn { font-size: 16px !important }'
+      document.head.appendChild(st)
+    })
+    await page.waitForTimeout(150)
+    const big = await page.evaluate(() => {
+      const row = document.querySelector('.card-tools')
+      const bs = [...row.querySelectorAll('.btn')]
+      return {
+        高さ: Math.round(row.getBoundingClientRect().height),
+        段: [...new Set(bs.map((b) => Math.round(b.getBoundingClientRect().top)))].length,
+        あふれ: row.scrollWidth > row.clientWidth + 1,
+        はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+        文字: bs.map((b) => (b.textContent ?? '').trim()),
+      }
+    })
+    const 印 = `${w}px(文字 1.25 倍${state ? '・集めている最中' : ''})`
+    if (big.段 !== 1 || big.高さ > 48) {
+      ng(`教材の操作 ${印} … 3つが1行に収まらない(${big.段} 段 / ${big.高さ}px)`,
+        '狭い端末では余白を詰める。**言葉も、集めた本数も削らない**')
+    } else if (big.あふれ || big.はみ出し) {
+      ng(`教材の操作 ${印} … はみ出している`)
+    } else if (state && !big.文字.some((t) => t.includes('3 / 14'))) {
+      ng(`教材の操作 ${印} … 集めた本数が消えている(${big.文字.join(' / ')})`,
+        '**進み具合は必ず数で出す**(CLAUDE.md)。削ってよいのは動詞だけ')
+    } else {
+      ok(`教材の操作 ${印} … 3つが1行(${big.高さ}px)`)
     }
   }
 
@@ -1783,7 +1847,18 @@ export default defineConfig({
     await page.locator('.card').screenshot({ path: `${process.env.SHOT}/tools-busy.png` })
   }
 
-  /* ── ⑦ **教材をシェア**(トレーナー間でリンクを渡す)─────────── */
+  /* ── ⑧ **共有はボタン1つ。中で2つから選ぶ**(2026-09 利用者の指定)────
+
+       > 「教材をシェア」と「教材をゲストと共有」はボタンをひとつにして
+       > その中でゲストと共有なのか普通の共有なのかを選べるように
+       > してください。省スペースです。
+
+     **「1つになったか」だけを見ない。** それだと、**片方の道を消しても
+     緑のまま**になる —— まさにこの回にやりかけたことである。
+     ①ボタンが1つか ②開くと**2つとも選べるか**
+     ③**既定はゲストと共有か**(このアプリの中心はそちら)
+     ④切り替えると**中身が本当に入れ替わるか**
+     ⑤**狭い画面ではみ出さないか** */
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
     { waitUntil: 'networkidle' })
@@ -1791,39 +1866,95 @@ export default defineConfig({
   const share = await page.evaluate(() => {
     const all = [...document.querySelectorAll('.btn')].map((b) => (b.textContent ?? '').trim())
     return {
-      シェア: all.some((t) => t.includes('教材をシェア')),
-      ゲスト: all.some((t) => t.includes('この教材をゲストと共有する')),
+      共有: all.filter((t) => t === '共有').length,
+      // **もとの2つが残っていないか**(1つにまとめた、が守れているか)
+      古い: all.filter((t) => t.includes('教材をシェア')
+        || t.includes('この教材をゲストと共有する')).length,
       はみ出し: document.documentElement.scrollWidth > window.innerWidth,
     }
   })
-  if (!share.シェア) {
-    ng('教材の操作 … 「教材をシェア」が無い',
-      'トレーナー間でリンクを渡す道(2026-09 利用者の指定)')
-  } else if (!share.ゲスト) {
-    ng('教材の操作 … 「この教材をゲストと共有する」が消えている',
-      '**渡す相手が違う2つ**。片方を足したついでに、もう片方を消さない')
+  if (share.共有 !== 1) {
+    ng(`教材の操作 … 「共有」のボタンが ${share.共有} つ(1つのはず)`,
+      'ゲストと共有・リンクを渡すを、**ボタン1つ**にまとめる(利用者の指定)')
+  } else if (share.古い > 0) {
+    ng('教材の操作 … 前の2つのボタンが残っている',
+      '「教材をシェア」「この教材をゲストと共有する」は、1つにまとめた')
   } else if (share.はみ出し) {
-    ng('教材の操作 … シェアを足したらはみ出した')
+    ng('教材の操作 … 共有を足したらはみ出した')
   } else {
-    ok('教材の操作 … 「教材をシェア」と「ゲストと共有する」が両方ある')
+    ok('教材の操作 … 「共有」はボタン1つ(前の2つは残っていない)')
   }
 
-  /* **渡し方は2つ。並べて出す**(2026-09 利用者の指定)
-
-       > シェアする際はメールアドレスを入れる、またはリンクを生成して
-       > 好きなところに貼り付けれるように、2つから選べると良いですね
-
-     **狭い画面でも確かめる。** 欄が2つ増えるので、
+  /* **狭い画面でも確かめる。** 中にゲストの一覧と2つの欄が入るので、
      iPhone(390px)ではみ出さないかは**描いてみないと分からない** */
   for (const w of [390, 320]) {
     await page.setViewportSize({ width: w, height: 900 })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=tools`,
       { waitUntil: 'networkidle' })
-    await page.getByRole('button', { name: '教材をシェア' }).click()
+    await page.getByRole('button', { name: '共有', exact: true }).click()
     try {
       await page.waitForSelector('.share-box', { timeout: 4000 })
-    } catch { ng(`教材をシェア ${w}px … 押しても欄が開かない`); continue }
+    } catch { ng(`共有 ${w}px … 押しても欄が開かない`); continue }
 
+    /* ── ②③ 開いたら、2つとも選べる。**既定はゲストと共有** ── */
+    const pick = await page.evaluate(() => {
+      const box = document.querySelector('.share-box')
+      const chips = [...box.querySelectorAll('.share-pick .chip')]
+      const row = document.querySelector('.card-tools')
+      const btns = [...row.querySelectorAll(':scope > .btn')]
+      const bb = box.getBoundingClientRect()
+      return {
+        札: chips.map((c) => (c.textContent ?? '').trim()),
+        選: chips.filter((c) => c.classList.contains('chip--on'))
+          .map((c) => (c.textContent ?? '').trim()),
+        小さい: chips.filter((c) => Math.round(c.getBoundingClientRect().height) < 36).length,
+        ゲストの欄: !!box.querySelector('.assign-list input[type="checkbox"]'),
+        リンクの欄: !!box.querySelector('input.share-url'),
+        やめる: !!([...box.querySelectorAll('button')]
+          .find((b) => b.textContent.trim() === 'やめる')),
+        はみ出し: document.documentElement.scrollWidth > window.innerWidth,
+        あふれ: box.scrollWidth > box.clientWidth + 1,
+        /* **開いたら、箱は3つの「下」に来る**(2026-09 実機で撮って気づいた)。
+           箱が行の一員のままだと、**ボタンが縦棒に潰れる。**
+           高さもはみ出しも正常のままなので、**ここを測らないと気づけない** */
+        箱は下: btns.length > 0
+          && Math.round(bb.top) >= Math.round(Math.max(...btns.map((b) => b.getBoundingClientRect().bottom))),
+        ボタンの段: [...new Set(btns.map((b) => Math.round(b.getBoundingClientRect().top)))].length,
+        ボタンの幅: Math.min(...btns.map((b) => Math.round(b.getBoundingClientRect().width))),
+      }
+    })
+    if (!pick.箱は下 || pick.ボタンの段 !== 1 || pick.ボタンの幅 < 50) {
+      ng(`共有 ${w}px … 開いたら3つの行が崩れた`
+        + `(箱は下 ${pick.箱は下} / ${pick.ボタンの段} 段 / 細いもの ${pick.ボタンの幅}px)`,
+        '**箱は行の外へ落とす。** 行の一員のままだと、ボタンが縦棒に潰れる')
+    } else if (pick.札.join('/') !== 'ゲストと共有/リンクを渡す') {
+      ng(`共有 ${w}px … 2つから選べない(${pick.札.join(' / ') || '札が無い'})`,
+        '「その中でゲストと共有なのか普通の共有なのかを選べるように」(利用者の指定)')
+    } else if (pick.選.join('') !== 'ゲストと共有') {
+      ng(`共有 ${w}px … 既定が「ゲストと共有」ではない(${pick.選.join(' / ') || '無し'})`,
+        'このアプリの中心は「弱点から作って、指定したゲストに配る」循環である')
+    } else if (!pick.ゲストの欄 || pick.リンクの欄) {
+      ng(`共有 ${w}px … 開いた中身が「ゲストと共有」になっていない`,
+        `ゲストの欄 ${pick.ゲストの欄} / リンクの欄 ${pick.リンクの欄}`)
+    } else if (pick.小さい > 0) {
+      ng(`共有 ${w}px … 札が 36px を割っている`, '押せる大きさを割らない(CLAUDE.md)')
+    } else if (!pick.やめる) {
+      ng(`共有 ${w}px … 「やめる」が無い`,
+        '走らせるボタンのとなりに置く(CLAUDE.md)')
+    } else if (pick.はみ出し || pick.あふれ) {
+      ng(`共有 ${w}px … はみ出している`)
+    } else {
+      ok(`共有 ${w}px … 2つから選べる・既定はゲストと共有・`
+        + `箱は3つの下(ボタン ${pick.ボタンの幅}px)`)
+    }
+
+    if (process.env.SHOT) {
+      await page.locator('.card').screenshot({ path: `${process.env.SHOT}/share-guest-${w}.png` })
+    }
+
+    /* ── ④ 切り替えると、中身が**入れ替わる** ── */
+    await page.getByRole('button', { name: 'リンクを渡す' }).click()
+    await page.waitForTimeout(80)
     const sh = await page.evaluate(() => {
       const box = document.querySelector('.share-box')
       const link = box.querySelector('input.share-url')
@@ -1833,30 +1964,30 @@ export default defineConfig({
         文: (box.textContent ?? ''),
         リンク: link ? link.value : '',
         宛先の欄: !!box.querySelector('input[type="email"]'),
+        // **入れ替わっているか**(並べると箱が画面2枚ぶんになる)
+        ゲストの欄: !!box.querySelector('.assign-list input[type="checkbox"]'),
         // **形が違ううちは押せない**(選ばせてから断らない)
         押せる: mailBtn ? !mailBtn.classList.contains('is-off') : null,
         はみ出し: document.documentElement.scrollWidth > window.innerWidth,
         あふれ: box.scrollWidth > box.clientWidth + 1,
-        やめる: !!([...box.querySelectorAll('button')]
-          .find((b) => b.textContent.trim() === 'やめる')),
       }
     })
 
     if (!sh.宛先の欄 || !sh.文.includes('① メールで送る')) {
-      ng(`教材をシェア ${w}px … ①メールで送るが無い`)
+      ng(`共有 ${w}px … ①メールで送るが無い`)
     } else if (!sh.リンク.includes('?m=') || !sh.文.includes('② リンクをコピー')) {
-      ng(`教材をシェア ${w}px … ②リンクが出ていない(${sh.リンク})`,
+      ng(`共有 ${w}px … ②リンクが出ていない(${sh.リンク})`,
         'コピーを断る端末でも手で選べるよう、いつも見えるところに出す')
+    } else if (sh.ゲストの欄) {
+      ng(`共有 ${w}px … リンクに切り替えてもゲストの欄が残っている`,
+        '**並べない。入れ替える** —— 並べると箱が画面2枚ぶんになる')
     } else if (sh.押せる !== false) {
-      ng(`教材をシェア ${w}px … 宛先が空でも「メールを開く」が押せる`,
+      ng(`共有 ${w}px … 宛先が空でも「メールを開く」が押せる`,
         '**選ばせてから断らない**(CLAUDE.md)')
-    } else if (!sh.やめる) {
-      ng(`教材をシェア ${w}px … 「やめる」が無い`,
-        '走らせるボタンのとなりに置く(CLAUDE.md)')
     } else if (sh.はみ出し || sh.あふれ) {
-      ng(`教材をシェア ${w}px … はみ出している`)
+      ng(`共有 ${w}px … リンク側ではみ出している`)
     } else {
-      ok(`教材をシェア ${w}px … 2つとも出る・宛先が空なら押せない・やめるがある`)
+      ok(`共有 ${w}px … リンクへ切り替わる(2つとも出る・宛先が空なら押せない)`)
     }
 
     if (process.env.SHOT) {
@@ -1871,11 +2002,11 @@ export default defineConfig({
       return { 押せる: !a.classList.contains('is-off'), 行き先: a.getAttribute('href') ?? '' }
     })
     if (!on.押せる) {
-      ng(`教材をシェア ${w}px … 宛先を書いても押せないまま`)
+      ng(`共有 ${w}px … 宛先を書いても押せないまま`)
     } else if (!on.行き先.startsWith('mailto:a@b.com?')) {
-      ng(`教材をシェア ${w}px … 行き先が mailto ではない(${on.行き先.slice(0, 40)})`)
+      ng(`共有 ${w}px … 行き先が mailto ではない(${on.行き先.slice(0, 40)})`)
     } else {
-      ok(`教材をシェア ${w}px … 宛先を書くと mailto: が入る`)
+      ok(`共有 ${w}px … 宛先を書くと mailto: が入る`)
     }
   }
   await page.setViewportSize({ width: 390, height: 844 })
@@ -1966,9 +2097,10 @@ export default defineConfig({
       .map((s) => s.textContent.trim()),
     はみ出し: document.documentElement.scrollWidth > window.innerWidth,
   }))
-  if (!busyM.上.some((t) => t.includes('集めています… 3 / 14'))) {
+  if (!busyM.上.some((t) => t.includes('3 / 14'))) {
     ng(`教材の操作 … 集めているあいだ、進み具合が出ない(${busyM.上.join(' / ')})`,
-      '進み具合は必ず数で出す(CLAUDE.md)')
+      '進み具合は必ず数で出す(CLAUDE.md)。'
+      + '3つ並ぶ行なので動詞は落としてあるが、**数は1文字も削らない**')
   } else if (!busyM.下.some((t) => t.includes('作っています… 3 / 14'))) {
     ng(`教材の操作 … 作っているあいだ、進み具合が出ない(${busyM.下.join(' / ')})`,
       '作り直しは課金が走っている。絵だけでは止まって見える')
@@ -1985,18 +2117,33 @@ export default defineConfig({
   const src = readFileSync(new URL('../src/components/TrainerMaterials.jsx',
     import.meta.url), 'utf8')
   const want = [
-    ['印刷 / PDF', '上の行は言葉つき(絵だけでは PDF が読めない)'],
-    ['音声ダウンロード', '同上'],
-    ['<MaterialShare material={m} />',
-      'トレーナー間でリンクを渡す(2026-09 利用者の指定)。渡し方は `MaterialShare` が持つ'],
+    ['<PrintIcon />PDF', '上の行は言葉つき(絵だけでは PDF が出せることが読めない)'],
+    ['<DownloadIcon />{dlShort(m)}',
+      '**短い言い方**(2026-09 利用者の指定)。動詞は落とすが、数は削らない'],
+    ['<MaterialShare', '渡す道はボタン1つ(2026-09 利用者の指定)'],
+    ['guest={(', '**ゲストと共有の中身は、こちらが渡す**(担当ゲストを知っている)'],
     ['material-foot', 'めったに押さない3つは、教材を消すと同じ行'],
     ['読み上げ音声を作り直す', '下の行(絵のまま)'],
     ['練習の記録を消す', '同上'],
   ]
   const gone = want.filter(([t]) => !src.includes(t))
+  /* **`.card-tools` の中に3つとも入っているか。**
+     「あるか」だけを見ると、**共有だけ別の行へ戻しても緑のまま**になる */
+  const row = src.match(/className="btn-row card-tools"[\s\S]*?\n {14}<\/div>/)?.[0] ?? ''
+  /* **コメントを落としてから探す**(CLAUDE.md「名前が出てくるか」で見ない)。
+     この画面は**利用者の言葉をそのまま引いてある**ので、
+     「教材をシェア」も「教材をゲストと共有」も注釈の中に出てくる */
+  const noC = src.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
   if (gone.length) {
     ng(`教材の操作 … 画面に無い(${gone.map(([t]) => t).join(' / ')})`,
       gone[0][1])
+  } else if (!/<PrintIcon/.test(row) || !/dlShort\(m\)/.test(row)
+    || !/<MaterialShare/.test(row)) {
+    ng('教材の操作 … 3つが同じ `.card-tools` の中にいない',
+      '「３つ並ぶようにしてください」(2026-09 利用者の指定)')
+  } else if (noC.includes('この教材をゲストと共有する') || noC.includes('教材をシェア')) {
+    ng('教材の操作 … 前の2つのボタンが残っている',
+      '1つにまとめた(**同じことをするものを2つ見せない**)')
   } else if ((src.match(/<IconButton/g) ?? []).length < 2) {
     ng('教材の操作 … 下の行の `IconButton` が2つ揃っていない')
   } else if (!src.includes('<MaterialDelete')) {

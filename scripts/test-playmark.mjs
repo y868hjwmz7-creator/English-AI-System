@@ -1714,8 +1714,12 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     'App が、`TrainerMaterials` へ渡している')
   const tm = readFileSync(new URL('../src/components/TrainerMaterials.jsx',
     import.meta.url), 'utf8')
-  ok(tm.includes('<MaterialShare material={m} />'),
-    '画面が `MaterialShare` を置いている')
+  /* **開け閉めは呼ぶ側が持つ**(2026-09 に「共有」をボタン1つへまとめた)。
+     `material={m}` だけを探すと、**ゲストと共有の道を落としても緑**になる */
+  ok(/<MaterialShare\s+material=\{m\}/.test(tm)
+    && tm.includes('open={assigningId === m.id}')
+    && tm.includes('guest={('),
+    '画面が `MaterialShare` を置き、ゲストと共有の中身を渡している')
   ok(tm.includes('setLinkMiss(true)'),
     '見つからなければ、**黙らない**')
   // **リンクの作り方は `MaterialShare` に預けた。**
@@ -1784,6 +1788,28 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(ms.includes('やめる'), '**やめるを、走らせるボタンのとなりに置く**')
   ok(!ms.includes('navigator.share'),
     '**2つから選ぶ。** 共有シートを3つめとして足さない(利用者の指定)')
+
+  /* ── 渡す道は、ボタン1つ(2026-09 利用者の指定)──────────────────
+
+       > 「教材をシェア」と「教材をゲストと共有」はボタンをひとつにして
+       > その中でゲストと共有なのか普通の共有なのかを選べるように
+
+     **「札があるか」だけを見ない。** それだと、**ゲスト側を出さない形**に
+     書き換えても緑になる。**どちらが既定か**と、
+     **渡されていなければリンクに落ちるか**まで見る。 */
+  ok(ms.includes("['guest', 'ゲストと共有'], ['link', 'リンクを渡す']"),
+    '**2つから選べる**(ゲストと共有 / リンクを渡す)')
+  ok(ms.includes("useState(guest ? 'guest' : 'link')")
+    && ms.includes("setWay(guest ? 'guest' : 'link')"),
+    '**既定はゲストと共有。** 開くたびにそこから始める')
+  ok(ms.includes("const now = guest ? way : 'link'"),
+    '**ゲストを渡されていなければ、その道は無い**(効かない操作を見せない)')
+  ok(ms.includes("now === 'guest' ? (") && ms.includes('guest\n'),
+    '**並べない。入れ替える** —— 並べると箱が画面2枚ぶんになる')
+  /* **開け閉めは呼ぶ側が持つ。** 中に閉じ込めると、共有し終わったときに
+     閉じる合図をもう1本渡すことになる */
+  ok(ms.includes('onOpen') && ms.includes('onClose') && !ms.includes('useState(false)'),
+    '**開け閉めは外から決める**(`open` / `onOpen` / `onClose`)')
 }
 
 /* ══════════════════════════════════════════════════════════════════
