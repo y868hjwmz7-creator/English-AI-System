@@ -18,6 +18,7 @@
 import { supabase } from './supabase.js'
 import { canSeeSystemDetail } from './viewer.js'
 import { normWord } from './textNorm.js'
+import { KNOWN_AFTER } from './qrPromote.js'
 
 const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
@@ -794,8 +795,20 @@ export async function addBasicWords(words, learnerId = null) {
  *
  * **25回で自動的に卒業する**(0038)ので、ここはその手前の目安である。
  * 早くしたい・遅くしたいときは**この1行**を変える。
+ *
+ * 【数そのものは `qrPromote.js` が持っている】(2026-09)
+ *
+ *   同じ数が、**もう1つの問いにも答えている** ——
+ *   「その語の出会った文を、Quick Response 帳へ送ってよいか」。
+ *   **判断が同じ**(この語はもう身に付いたと言ってよいか)なので、
+ *   **数を2か所に書かない。**
+ *
+ *   あちらへ出したのは、**素の node で走らせられるから**である
+ *   (ここは Supabase を引き連れており、`npm run test:play` から読めない)。
+ *   `textNorm.js` へ `normWord` を出したときとまったく同じ作法で、
+ *   **読む側は1行も変わっていない。**
  */
-export const KNOWN_AFTER = 10
+export { KNOWN_AFTER } from './qrPromote.js'
 
 /**
  * その行に、一覧の「覚えた」を出してよいか。

@@ -58,6 +58,7 @@ import {
   scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import { clozeAt } from '../lib/clozeSentence.js'
+import { promoteGrownWords } from '../lib/qrReviews.js'
 import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
 import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
@@ -317,6 +318,11 @@ export default function Wordbook({
   // レッスン中に一緒に取り組んだぶんは**ゲストの記録**にする(0025)
   usePracticeLog('wordbook', true, learnerId)
 
+  /* **育った語の例文を Quick Response 帳へ送った知らせ**(2026-09 利用者の指定)。
+     **黙って足さない**(CLAUDE.md)。送ったことも、何が起きたのかも、
+     その場に1行で出す */
+  const [promoted, setPromoted] = useState(null)
+
   const [view, setView] = useState('due')
   /**
    * **復習を、集中モードと同じ形で出しているか**(2026-09 利用者の指定
@@ -562,8 +568,30 @@ export default function Wordbook({
     ? expected - rows.length
     : 0
 
+  /**
+   * **十分に育った語の「出会った文」を、Quick Response 帳へ送る**
+   * (2026-09 利用者の指定「自動でOK」)。
+   *
+   * 語を覚えても、その語を使った**文をまるごと言う**練習には回らなかった。
+   * 単語帳の行は出会った文とその訳をもう持っているので、
+   * **AI は1回も呼ばない = 0円。表も列も SQL も増えない。**
+   *
+   * **誰を送るかの判断は `qrPromote.js` 1か所。** ここは呼ぶだけである。
+   *
+   * **ゲスト本人の単語帳のときだけ送る。** トレーナーが開いたときに
+   * 送ると、**見ただけでゲストの復習が増える。**
+   * 既定は「しない」側(CLAUDE.md)。
+   */
+  const sendGrown = useCallback(async (list) => {
+    if (learnerId) return
+    const { data } = await promoteGrownWords(list)
+    if (data?.sent) setPromoted(data)
+  }, [learnerId])
+
   const reload = useCallback(async () => {
     setLoading(true)
+    /* **前の知らせを持ち越さない。** 読み直すたびに数え直す */
+    setPromoted(null)
 
     /* ── 表を直に読む冊(業種べつ 0058 / 基礎単語)────────────────
        **自分の単語帳とは、読む先そのものが違う。**
@@ -620,6 +648,7 @@ export default function Wordbook({
       })
       setRows(got)
       rowsRef.current = got
+      sendGrown(got)
       setQueue([])
       doneRef.current = []
       setResult(null)
@@ -690,6 +719,7 @@ export default function Wordbook({
     })
     setRows(got)
     rowsRef.current = got
+    sendGrown(got)
     setQueue([])
     doneRef.current = []
     setResult(null)
@@ -702,7 +732,7 @@ export default function Wordbook({
        別の配列になる。つないだ文字列(`shelfKey`)で見る
        (`onlyKey` とまったく同じ落とし穴) */
   }, [current.status, current.dueOnly, current.id, learnerId, mine, onlySet,
-    shelfBook, shelfKey, basicBook, tier, colBook])
+    shelfBook, shelfKey, basicBook, tier, colBook, sendGrown])
 
   useEffect(() => { reload() }, [reload])
 
@@ -1302,6 +1332,24 @@ export default function Wordbook({
         dueId="unknown"
         lead={groupLead(WORD_GROUPS, group, '語')}
       />
+
+      {/* **育った語の例文を、Quick Response 帳へ送った**
+          (2026-09 利用者の指定「自動でOK」)。
+
+          **黙って足さない**(CLAUDE.md)。何がどこへ増えたのかを、
+          その場で1行で言う —— 言わないと、Quick Response 帳を開いた
+          ゲストが「覚えのない文が増えている」と思う。
+
+          **色だけに頼らない**(うすい地色 + 同じ色の文字 + 枠線 + 太字)。
+          送る文が無い日は、この行ごと出ない(効かない知らせを出さない) */}
+      {promoted?.sent > 0 && (
+        <p className="wb-promoted">
+          <strong>{promoted.sent} 文</strong>を Quick Response の復習に足しました。
+          <strong>{KNOWN_AFTER} 回</strong>つづけて思い出せた語
+          {promoted.words?.length > 0 && `(${promoted.words.slice(0, 3).join('・')}${promoted.words.length > 3 ? ' ほか' : ''})`}
+          の、<strong>出会った文</strong>です。語で言えたら、次は文でまるごと言う練習です。
+        </p>
+      )}
 
       {/* **読めていないことを、黙って隠さない**(2026-09 実機・利用者の問い)。
 

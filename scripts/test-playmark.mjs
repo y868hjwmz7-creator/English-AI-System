@@ -104,6 +104,10 @@ import {
   applyHomeworkFilter, assignedDayOf, emptyHomeworkFilter,
   homeworkFilterOn, narrowHomework, topicOfAssignment,
 } from '../src/lib/homeworkFilter.js'
+import {
+  KNOWN_AFTER as PROMOTE_KNOWN_AFTER, PROMOTE_MAX,
+  pickPromotions, promotableOf,
+} from '../src/lib/qrPromote.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -5793,7 +5797,11 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
     '単語帳 … ゲストの単語帳を開く画面には渡していない')
   ok(/colBook = book === 'col'/.test(wb) && /shelfBook \|\| basicBook \|\| colBook/.test(wb),
     '単語帳 … 表を直に読む冊として扱っている')
-  ok(/tier, colBook\]\)/.test(wb),
+  /* **並びで見ない。入っているかで見る**(2026-09)。
+     もとは `tier, colBook])` と**末尾の並びそのもの**を探していたので、
+     見張りに1つ足しただけで赤くなった。**壊れていないものが赤くなると、
+     本当に壊れているものを見落とす**(CLAUDE.md) */
+  ok(/\}, \[[^\]]*\bcolBook\b[^\]]*\]\)/.test(wb),
     '単語帳 … 冊が変わったら読み直す(見張りに入っている)')
 
   const qr = noNote(readD('src/components/QrReview.jsx'))
@@ -5843,6 +5851,118 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
     '0062 … 上限の差し替えが、0048 の 500 より後に来ている(貼れば上書きされる)')
   ok(/proname = 'qr_limit'/.test(readD('supabase/apply/check.sql')),
     '0062 … check.sql にも行が足してある')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   育った語の例文を、Quick Response 帳へ送る(2026-09 利用者の指定「自動でOK」)
+
+   **いちばん危ないのは「送りすぎ」ではなく「送り直し」である。**
+   `mark_qr` は「まだ」で入れ直すと**箱も回数も 0 に戻す**ので、
+   すでに溜まっている文をもう一度送ると、
+   **ゲストが積み上げた進み具合を、こちらが崩す。**
+   だからそこを名指しで見る。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 育った語の例文を Quick Response 帳へ送る')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+
+  /** 育った語1行ぶん。**値を書き写さず、性質で作る** */
+  const row = (o = {}) => ({
+    word_norm: 'decision',
+    learn_streak: PROMOTE_KNOWN_AFTER,
+    seen_in: 'I need to make a decision soon.',
+    seen_in_ja: 'すぐに決断しないといけない',
+    ...o,
+  })
+
+  // ── 送る(出る)
+  ok(!!promotableOf(row()), '十分に育った語は、出会った文を送る')
+  ok(promotableOf(row()).en === row().seen_in, '送るのは、出会った文そのもの(作り直さない)')
+  ok(promotableOf(row()).ja === row().seen_in_ja, '訳も、出会ったときのものを送る')
+
+  // ── 送らない(出ない)。**両方を見ないと、何も守らない**
+  ok(promotableOf(row({ learn_streak: PROMOTE_KNOWN_AFTER - 1 })) === null,
+    'あと1回足りない語は、送らない')
+  ok(promotableOf(row({ learn_streak: 0 })) === null, '入ったばかりの語は、送らない')
+  ok(promotableOf(row({ seen_in: null })) === null,
+    '出会った文が無ければ送らない(**AI に作らせない = 0円**)')
+  ok(promotableOf(row({ seen_in_ja: '' })) === null, '訳が無ければ送らない')
+  ok(promotableOf(row({ seen_in: 'Decision.' })) === null,
+    '出会った文が語そのものなら送らない(伏せる場所が無い)')
+  ok(promotableOf(row({ seen_in: 'No way.' })) === null, '3語に満たない文は送らない')
+
+  // ── **送り直さない**(ここがいちばん危ない)
+  const one = promotableOf(row())
+  ok(pickPromotions([row()], { already: [one.norm] }).length === 0,
+    '前に送った文は、もう一度送らない(「もう出さない」を掘り返さない)')
+  ok(pickPromotions([row()], {}).length === 1, '前に送っていなければ、ちゃんと送る')
+
+  // ── 同じ文が2語ぶん来ても、1つにまとめる
+  ok(pickPromotions([row(), row({ word_norm: 'soon' })], {}).length === 1,
+    '同じ文が2語ぶん来ても、送るのは1つ')
+
+  // ── **止まる条件を持たせる**(CLAUDE.md)
+  const many = Array.from({ length: PROMOTE_MAX + 5 },
+    (unused, i) => row({ word_norm: `w${i}`, seen_in: `This is sentence number ${i} here.` }))
+  ok(pickPromotions(many, {}).length === PROMOTE_MAX,
+    `1回に送るのは ${PROMOTE_MAX} 文まで(棚を入れ直した日に溢れない)`)
+
+  // ── **ふだんは通信が1回も増えない**
+  ok(pickPromotions([row({ learn_streak: 0 })], {}).length === 0,
+    '送る文が無い日は、1件も選ばない(窓口を呼ぶ前に終わる)')
+
+  // ── 実データ(コロケーションの 50 件)で確かめる
+  const colRaw = (await import('../src/lib/../data/collocations.js'))
+    .collocationRows([], { today: '2026-09-15' })
+  const colGrown = colRaw.map((r) => ({ ...r, learn_streak: PROMOTE_KNOWN_AFTER }))
+  const colPick = pickPromotions(colGrown, { max: colGrown.length })
+  ok(colPick.length > 20, `コロケーションの例文も送れる(${colPick.length} / ${colGrown.length})`)
+  ok(colPick.every((p) => p.norm.split(' ').length >= 3), '送るのは、どれも3語以上の文')
+  ok(pickPromotions(colRaw, { max: colRaw.length }).length === 0,
+    '育っていないうちは、1文も送らない(**開いた瞬間に流し込まない**)')
+
+  // ── 数を2か所に書かない
+  const voc = noNote(readD('src/lib/vocab.js'))
+  ok(/export \{ KNOWN_AFTER \} from '\.\/qrPromote\.js'/.test(voc),
+    '`KNOWN_AFTER` の出どころは `qrPromote.js` 1か所')
+  ok(!/KNOWN_AFTER = \d/.test(voc), '`vocab.js` が数そのものを持っていない')
+
+  // ── 表への入れ方。**ここに、いちばん危ないものが2つある**
+  const qrSrc = readD('src/lib/qrReviews.js')
+  const qr = noNote(qrSrc)
+  ok(/export async function promoteGrownWords/.test(qr), '送る窓口が在る')
+  ok(/pickPromotions\(/.test(qr), '誰を送るかは `qrPromote.js` に任せている')
+  const body = qr.slice(qr.indexOf('export async function promoteGrownWords'))
+  /* ① **`mark_qr()` を通さない。** あれは「まだ」で呼ぶと
+     `qr_days.answered` を1つ増やすので、ゲストが1問も答えていないのに
+     **その日の取り組みの数が水増しされる**(記録を黙って汚す) */
+  ok(!/markQr\(/.test(body),
+    '**`mark_qr()` を通していない**(通すと、答えていない数が記録に足される)')
+  /* ② **すでに在る行に触らない。** 触ると箱も回数も 0 に戻る */
+  ok(/ignoreDuplicates: true/.test(body),
+    '**すでに溜まっている文には1文字も触らない**(触ると進み具合が 0 に戻る)')
+  ok(/onConflict: 'learner_id,en_norm'/.test(body),
+    '重なりの見分けは、表の一意の決まりと同じ鍵で見ている')
+  /* **既定値に任せる。** 書き写すと 0040 を変えた日に片方だけ古くなる */
+  ok(!/\bbox:|\blearn_streak:|\bdue_on:|\bstatus:/.test(body),
+    '箱・回数・出す日・状態を書き写していない(0040 の既定値に任せる)')
+  ok(/\.select\('en_norm'\)/.test(body),
+    '**実際に入ったぶんだけ**数えている(数え方を2通り持たない)')
+
+  // ── 画面が呼んでいるか
+  const wb = noNote(readD('src/components/Wordbook.jsx'))
+  ok(/promoteGrownWords\(/.test(wb), '単語帳が、その窓口を呼んでいる')
+  ok(/if \(learnerId\) return/.test(wb),
+    '**ゲスト本人の単語帳のときだけ送る**(トレーナーが見ただけで増やさない)')
+  ok(/promoted\?\.sent > 0/.test(wb), '送ったときだけ、画面に1行出す(黙って足さない)')
+  ok(/setPromoted\(null\)/.test(wb), '読み直すたびに数え直す(前の知らせを持ち越さない)')
+  const css = readD('src/styles.css')
+  const pro = css.match(/\.wb-promoted \{[^}]*\}/)?.[0] ?? ''
+  ok(/border:/.test(pro) && /background:/.test(pro),
+    '知らせが色だけに頼っていない(枠線 + 地色)')
 }
 
 console.log(ng

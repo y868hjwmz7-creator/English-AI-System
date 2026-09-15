@@ -6510,6 +6510,18 @@ button.wbfilter-ctl { text-align: left; }
 .wordbook-industry > li > span:first-child { flex: 1; }
 
 /* トレーナーが見た。**人が見ていると分かることが、いちばん効く** */
+/* **育った語の例文を Quick Response へ送った知らせ**(2026-09 利用者の指定)。
+   すぐ上の `ReviewStats` から離す。**となりの `.wordbook-seenby` と同じ
+   離し方にそろえてある**(この親は `gap` ではなく余白で組んである。
+   寄せたついでに親を組み直さない・CLAUDE.md)。
+   **色だけに頼らない** —— うすい地色・同じ色の文字・枠線・太字 */
+.wb-promoted {
+  margin: 8px 0 0; padding: 8px 12px; border-radius: var(--r-8);
+  border: 1px solid var(--accent-line); background: var(--accent-bg);
+  color: var(--accent); font-size: var(--fs-13); line-height: 1.6;
+}
+.wb-promoted strong { font-weight: 700; }
+
 .wordbook-seenby {
   margin: 8px 0 0; padding: 7px 10px; border-radius: var(--r-8);
   background: var(--surface-2); color: var(--text-secondary); font-size: var(--fs-12h);

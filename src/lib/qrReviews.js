@@ -35,6 +35,7 @@
  */
 import { supabase } from './supabase.js'
 import { normEn } from './materials.js'
+import { PROMOTE_KEY, pickPromotions } from './qrPromote.js'
 
 const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
@@ -223,4 +224,119 @@ export function orderQrPairs(list, order) {
     ;[rows[i], rows[j]] = [rows[j], rows[i]]
   }
   return rows
+}
+
+/* ────────────────────────────────────────────────────────────────
+   育った語の例文を、Quick Response 帳へ送る(2026-09 利用者の指定)
+   ──────────────────────────────────────────────────────────────── */
+
+/**
+ * 前に送った文(端末ごとに覚えておく)。
+ *
+ * **これが要るのは1つの理由からである。** ゲストが「もう出さない」で
+ * 退けた文は `qr_reviews` から**消える**(`dropQr`)。溜まっている文を
+ * 見るだけだと、次に単語帳を開いたときに**同じ文をこちらが掘り返す。**
+ *
+ * 端末をまたがないので、**別の端末では一度だけ掘り返ることがある。**
+ * そのときは「もう出さない」をもう一度押せば済む。
+ * ここを表に持つと列が増えるので、いまはそこまでしない。
+ */
+const readPromoted = () => {
+  try {
+    const raw = window.localStorage.getItem(PROMOTE_KEY)
+    const list = raw ? JSON.parse(raw) : []
+    return Array.isArray(list) ? list : []
+  } catch { return [] }
+}
+
+const writePromoted = (list) => {
+  try {
+    // **際限なく溜めない。** 新しいほうから 2,000 件だけ残す
+    window.localStorage.setItem(PROMOTE_KEY, JSON.stringify(list.slice(-2000)))
+  } catch { /* 端末が断ることがある。送ったこと自体は表に残っている */ }
+}
+
+/**
+ * 単語帳の行のうち、**十分に育ったもの**の「出会った文」を
+ * Quick Response 帳へ送る。
+ *
+ * **判断は `qrPromote.js` 1か所**(誰を送るか・いくつまで)。
+ * ここがするのは、表へ入れることと、送った控えを残すことだけである。
+ *
+ * ============================================================================
+ * 【`mark_qr()` を通さない。**表へ直に入れる**】(2026-09)
+ *
+ *   はじめ `markQr()` を呼んでいた。**2つ、まずいことが起きる。**
+ *
+ *   ① **その日の取り組みの数が水増しされる。**
+ *      `mark_qr()` は「まだ」で呼ぶと `qr_days.answered` を1つ増やす
+ *      (0042)。ゲストは1問も答えていないのに、
+ *      **こちらが送ったぶんだけ「答えた」ことになる。**
+ *      正答率は下がり、続けた記録は膨らむ。**記録を黙って汚す。**
+ *
+ *   ② **すでに溜まっている文の進み具合が 0 に戻る。**
+ *      `mark_qr('unknown')` は箱も回数も 0 にする。
+ *      ゲストが積み上げたものを、こちらが崩す。
+ *
+ *   どちらも**新しく入れるときには要らない処理**である。
+ *   `qr_reviews` は `(learner_id, en_norm)` が一意で、
+ *   `status` / `box` / `learn_streak` / `due_on` の既定値が
+ *   **ちょうど「まだ・箱0・今日出す」**(0040)なので、
+ *   **入れるだけで、`mark_qr` と同じ形の行になる。**
+ *
+ *   `ignoreDuplicates` を付ければ、**すでに在る行には1文字も触らない。**
+ *   しかも `.select()` が**実際に入ったぶんだけ**返すので、
+ *   「何文足したか」を数え直さずに済む(**数え方を2通り持たない**)。
+ *
+ *   表へ直に書けるのは、**自分の行だからである**
+ *   (`qr_reviews_own_write` / 0040)。RLS は1行も緩めていない。
+ *
+ * 【ほとんどの読み込みでは、通信が1回も増えない】
+ *   送る文が1つも無ければ、`pickPromotions()` が空を返してそこで終わる。
+ *   `KNOWN_AFTER` に届く語は1日に数語なので、ふだんはここで打ち切る。
+ * ============================================================================
+ *
+ * @param {Array} rows 単語帳の行(読み込んだままのもの)
+ * @returns {{data:{sent:number, words:string[]}}} 送った数
+ */
+export async function promoteGrownWords(rows, { learnerId = null } = {}) {
+  const none = { sent: 0, words: [] }
+  if (!supabase || notReady) return ok(none)
+  const already = readPromoted()
+  const list = pickPromotions(rows, { already })
+  if (!list.length) return ok(none)
+
+  let who = learnerId
+  if (!who) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return ok(none)
+    who = user.id
+  }
+
+  /* **既定値に任せる**(`status` / `box` / `learn_streak` / `due_on`)。
+     ここに書き写すと、0040 の決まりを変えた日に片方だけ古くなる */
+  const { data, error } = await supabase
+    .from('qr_reviews')
+    .upsert(list.map((p) => ({
+      learner_id: who,
+      en_norm: p.norm,
+      en: p.en,
+      ja: p.ja,
+      material_id: p.materialId,
+    })), { onConflict: 'learner_id,en_norm', ignoreDuplicates: true })
+    .select('en_norm')
+
+  if (error) {
+    // **0040 を貼る前は、静かに何もしない**(単語帳の練習は止めない)
+    if (missing(error)) { notReady = true; return ok(none) }
+    return ok(none)
+  }
+
+  /* **入らなかったぶんも控えておく。** すでに在る文なので、
+     次に開いたときにもう一度うかがう必要がない */
+  writePromoted([...already, ...list.map((p) => p.norm)])
+
+  const put = new Set((data ?? []).map((r) => r.en_norm))
+  const done = list.filter((p) => put.has(p.norm))
+  return ok({ sent: done.length, words: done.map((p) => p.word) })
 }
