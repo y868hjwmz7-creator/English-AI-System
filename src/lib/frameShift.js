@@ -59,6 +59,8 @@
  * ============================================================================
  */
 import { FRAME_SHIFTS, SHIFT_SCENES } from '../data/frameShift.js'
+import { FRAME_SECTIONS } from '../data/sentenceFrames.js'
+import { moveOfGroup } from '../data/frameTraining.js'
 import { FRAME_INDEX, SAME_SHAPE, frameFormOf } from './frameMatch.js'
 
 /** 判定の4つ。**文字列を画面に書き写さない**(`===` で比べるのはここだけ) */
@@ -135,7 +137,11 @@ export function shiftQuestions({ scene = null, group = null } = {}) {
   for (const t of FRAME_SHIFTS) {
     if (scene && t.scene !== scene) continue
     for (const s of t.shifts) {
-      const found = FRAME_INDEX.get(shiftTargetOf(s.form)) ?? null
+      /* **組は、書いたほうの型から引く。** 読み替え先(`shiftTargetOf`)から
+         引くと、`what 節`(②)の問が `What ~ is …`(③)の組に入ってしまう ——
+         実際そうなっており、② が 5 問・③焦点が 6 問になっていた(2026-09)。
+         **読み替えは採点のためだけのもの**で、どのカテゴリーの練習かとは別である */
+      const found = FRAME_INDEX.get(s.form) ?? null
       if (group && found?.groupId !== group) continue
       out.push({
         qid: `${t.id}:${s.form}`,
@@ -156,14 +162,46 @@ export function shiftQuestions({ scene = null, group = null } = {}) {
   return out
 }
 
-/** 組の札(絞り込みに出す)。**出てくる順のまま。並べ替えない** */
-export function shiftGroups() {
-  const seen = new Map()
-  for (const q of shiftQuestions()) {
-    if (!q.groupId || seen.has(q.groupId)) continue
-    seen.set(q.groupId, { id: q.groupId, label: `${q.sectionNo} ${q.groupLabel}` })
+/**
+ * **カテゴリーごとのトレーニングの一覧**(2026-09 利用者の指定
+ * 「これら 66 の型をカテゴリー別に分け、それぞれを活用するための
+ * トレーニングを作りたい」)。
+ *
+ * **並びは `sentenceFrames.js` のまま。** 問から数え上げると、
+ * お題を書いた順に並んでしまう —— 型の一覧は
+ * **一覧を勝手に並べ替えない**(`.claude/rules/common.md`)。
+ *
+ * **問が1問も無い組は出さない。** 出すと、開いた先が空になる
+ * (**行き止まりを作らない**)。いまは 14 組すべてに問がある。
+ *
+ * @param done 言えた問の id(`Set`)。渡さなければ 0 として数える
+ */
+export function shiftTrainings(done = null) {
+  const has = done instanceof Set ? done : new Set()
+  const qs = shiftQuestions()
+  const out = []
+  for (const sec of FRAME_SECTIONS) {
+    for (const g of sec.groups) {
+      const mine = qs.filter((q) => q.groupId === g.id)
+      if (!mine.length) continue
+      out.push({
+        id: g.id,
+        no: sec.no,
+        sectionLabel: sec.label,
+        label: g.label,
+        /* **やることは `frameTraining.js` 1か所。** 画面で書き分けない */
+        move: moveOfGroup(g.id),
+        /* **その組に入っている型の名前。** 一覧のカードに出す ——
+           ①の7組は「やること」が同じなので、**名前だけが手がかり**になる
+           (同じ一言を7回くり返さない・**同じことをするものを2つ見せない**)。
+           **並びは `sentenceFrames.js` のまま**(問を書いた順ではない) */
+        forms: g.rows.map((r) => r.form).filter((f) => mine.some((q) => q.form === f)),
+        total: mine.length,
+        done: mine.filter((q) => has.has(q.qid)).length,
+      })
+    }
   }
-  return [...seen.values()]
+  return out
 }
 
 /* ------------------------------------------------------------------ *

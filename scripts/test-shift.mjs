@@ -36,9 +36,10 @@ import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 import { SAME_SHAPE, frameFormOf } from '../src/lib/frameMatch.js'
 import {
   SHIFT_EMPTY, SHIFT_OK, SHIFT_OTHER, SHIFT_UNSURE,
-  judgeShift, shiftGroups, shiftQuestions, shiftSay, shiftSceneOf, shiftMap,
-  shiftTargetOf,
+  judgeShift, shiftQuestions, shiftSay, shiftSceneOf, shiftMap,
+  shiftTargetOf, shiftTrainings,
 } from '../src/lib/frameShift.js'
+import { MOVE_OF_GROUP, SHIFT_MOVES, moveOfGroup } from '../src/data/frameTraining.js'
 
 const ROOT = new URL('..', import.meta.url).pathname
 /** **コメントを落としてから数える。** 説明文にも同じ語が出てくる(CLAUDE.md) */
@@ -215,21 +216,68 @@ head('見せる言葉')
    ⑧ 絞り込みと数え上げ
       **0問になる絞り込みを、検証の中に必ず置く**(CLAUDE.md)
    ──────────────────────────────────────────────────────────── */
-head('絞り込みと数え上げ')
+head('カテゴリーごとのトレーニング')
 {
   const all = shiftQuestions()
   ok(all.length === shiftCount(), '問の数が、お題の数え上げと合う')
 
-  const groups = shiftGroups()
-  ok(groups.length > 1, `型の組が ${groups.length} 出る`)
+  /* **組は `sentenceFrames.js` が持っている。** ここで別の分け方を作らない */
+  const groups = []
+  for (const sec of FRAME_SECTIONS) for (const g of sec.groups) groups.push(g)
+
+  const ts = shiftTrainings()
+  ok(ts.length === groups.length,
+    `トレーニングが ${ts.length} 本(組の数と同じ)`, `組は ${groups.length}`)
+
+  /* **並びを変えていないか。** 問を書いた順に並べると、型の一覧と食い違う */
+  ok(ts.map((t) => t.id).join(',') === groups.map((g) => g.id).join(','),
+    '並びが sentenceFrames.js のまま(並べ替えていない)')
+
+  /* **いちばん効いた見張り。** 組ごとの問の数が、その組の型の数と合うか。
+     `what 節`(②)の問が、読み替え先の `What ~ is …`(③)の組へ
+     入り込んでいたのを、これで見つけた(2026-09) */
+  const wrong = ts
+    .filter((t) => t.total !== groups.find((g) => g.id === t.id).rows.length)
+    .map((t) => `${t.label} 問${t.total} / 型${groups.find((g) => g.id === t.id).rows.length}`)
+  ok(wrong.length === 0, '組ごとの問の数が、その組の型の数と合う',
+    `\n    ${wrong.join('\n    ')}`)
+
+  /* **組を足したら「やること」も足す。** 足すまで赤い
+     (`check.sql` と移行の関係とまったく同じ作法) */
+  const noMove = groups.filter((g) => !moveOfGroup(g.id)).map((g) => g.id)
+  ok(noMove.length === 0, '14 の組すべてに「やること」がある', `\n    ${noMove.join(' / ')}`)
+  const strayMove = [...MOVE_OF_GROUP.keys()].filter((g) => !groups.some((x) => x.id === g))
+  ok(strayMove.length === 0, '知らない組を勝手に増やしていない', `\n    ${strayMove.join(' / ')}`)
+  /* **使われていない「やること」を置き去りにしない**(逆も見る) */
+  const usedMoves = new Set(groups.map((g) => moveOfGroup(g.id)?.id))
+  const idle = SHIFT_MOVES.filter((m) => !usedMoves.has(m.id)).map((m) => m.id)
+  ok(idle.length === 0, 'どの「やること」も、いずれかの組で使われている',
+    `\n    ${idle.join(' / ')}`)
+
+  /* **指示と理由が、どれも空でない。** 空だと画面に何も出ない */
+  const thin = SHIFT_MOVES.filter((m) => !m.label?.trim() || !m.ask?.trim() || !m.why?.trim())
+  ok(thin.length === 0, 'やることの名前・指示・理由が、どれも空でない',
+    `\n    ${thin.map((m) => m.id).join(' / ')}`)
+  /* 画面にそのまま出る文字列に ** を混ぜない(CLAUDE.md) */
+  ok(!SHIFT_MOVES.some((m) => `${m.label}${m.ask}${m.why}`.includes('**')),
+    'やることの文に ** を混ぜていない')
+
+  /* **カードに出す型の名前が、その組のものだけか** */
+  const badForms = ts.filter((t) => {
+    const mine = new Set(groups.find((g) => g.id === t.id).rows.map((r) => r.form))
+    return t.forms.some((f) => !mine.has(f)) || t.forms.length !== t.total
+  }).map((t) => t.label)
+  ok(badForms.length === 0, 'カードの型の名前が、その組のものと過不足なく合う',
+    `\n    ${badForms.join(' / ')}`)
+
   /* **足して全部になるか。** どこかの組に入っていない問があれば合わない */
-  const byGroup = groups.reduce((n, g) => n + shiftQuestions({ group: g.id }).length, 0)
+  const byGroup = ts.reduce((n, t) => n + shiftQuestions({ group: t.id }).length, 0)
   ok(byGroup === all.length, '組ごとに数えて足すと、全部になる', `${byGroup} / ${all.length}`)
 
-  const byScene = SHIFT_SCENES.reduce((n, s) => n + shiftQuestions({ scene: s.id }).length, 0)
+  const byScene = SHIFT_SCENES.reduce((n, x) => n + shiftQuestions({ scene: x.id }).length, 0)
   ok(byScene === all.length, '場面ごとに数えて足すと、全部になる', `${byScene} / ${all.length}`)
 
-  /* **いちばん危ない形。** 知らない場面を渡すと 0 問になる ——
+  /* **いちばん危ない形。** 知らない組・場面を渡すと 0 問になる ——
      0 のときに「ぜんぶ返す」形になっていたら、ここで赤くなる */
   ok(shiftQuestions({ scene: 'そんな場面は無い' }).length === 0,
     '知らない場面で絞ると 0 問になる(黙ってぜんぶ返さない)')
@@ -241,6 +289,14 @@ head('絞り込みと数え上げ')
 
   ok(shiftSceneOf('そんな場面は無い') === null, '知らない場面は null(当てずっぽうで返さない)')
   ok(shiftSceneOf(SHIFT_SCENES[0].id)?.label === SHIFT_SCENES[0].label, '知っている場面は引ける')
+  ok(moveOfGroup('そんな組は無い') === null, '知らない組のやることは null')
+
+  /* **言えた数が、渡した控えのとおりに数えられるか**(0 と null を取り違えない) */
+  const one = all[0]
+  const withOne = shiftTrainings(new Set([one.qid]))
+  ok(withOne.reduce((n, t) => n + t.done, 0) === 1, '言えた問が 1 と数えられる')
+  ok(shiftTrainings().every((t) => t.done === 0), '控えを渡さなければ 0 のまま')
+  ok(shiftTrainings(null).every((t) => t.done === 0), 'null を渡しても落ちない')
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -276,6 +332,16 @@ head('画面が、判定を書き写していないか')
   ok(/judgeShift\(/.test(view), '画面が judgeShift() を呼んでいる')
   ok(/shiftSay\(/.test(view), '画面が shiftSay() を呼んでいる')
   ok(/shiftQuestions\(/.test(view), '画面が shiftQuestions() を呼んでいる')
+  ok(/shiftTrainings\(/.test(view), '画面が shiftTrainings() を呼んでいる')
+
+  /* **カテゴリーの名前も、やることも、画面で書き写さない** */
+  ok(!/モノ・ことを主語にして/.test(view), '「やること」の文を画面に書き写していない')
+  ok(/move\?\.ask/.test(view), '「やること」は frameTraining.js から引いている')
+
+  /* **一覧から入る形になっているか。** 66 問を1本の列にすると、
+     何の練習をしているのかが最後まで出てこない(2026-09 に一度そうした) */
+  ok(/fshift-card/.test(view), 'トレーニングの一覧(カード)がある')
+  ok(/トレーニングの一覧へ/.test(view), 'ドリルから一覧へ戻れる(行き止まりを作らない)')
 
   /* **判定の文字列を書き写していない。** `'ok'` と直に書くと、
      あちらを変えた日に画面だけ古くなる */
@@ -295,9 +361,11 @@ head('画面が、判定を書き写していないか')
   /* **絞り込みは畳んである**(390px で問が画面の外へ押し出されるため)。
      ただし **黙って絞らない** —— 掛かっている条件は畳んだままでも見せる */
   ok(/<details className="card fshift-filter">/.test(view), '絞り込みは畳んである')
-  ok(/pickedLabel/.test(view), '掛かっている絞り込みを、畳んだままでも見せる')
-  /* **「出る」と「出ない」の両方。** 何も絞っていなければ札は出さない */
-  ok(/\{pickedLabel &&/.test(view), '絞っていないときは、札を出さない')
+  /* **掛かっている絞り込みを、畳んだままでも見せる**(黙って絞らない)。
+     **「出る」と「出ない」の両方を見る** —— 絞っていなければ札は出さない */
+  ok(/<summary className="fshift-sum">[\s\S]*?finder-badge[\s\S]*?<\/summary>/.test(view),
+    '畳んだ見出しの中に、掛かっている絞り込みの札がある')
+  ok(/\{scene && \(/.test(view), '絞っていないときは、札を出さない')
 }
 
 /* ────────────────────────────────────────────────────────────
