@@ -9146,3 +9146,33 @@ button.wbfilter-ctl { text-align: left; }
 /* 型は合っているが名詞句が入っていない。**✕ にしない** —— 骨は言えている */
 .fshift-verdict--nophrase { border-color: var(--warn); background: var(--warn-bg); }
 .fshift-verdict--nophrase > .fshift-vhead { color: var(--warn); }
+
+/* ── 型シフト:見分ける(4択)─────────────────────────────────
+   1問3秒で押せることが要点。**選択肢は縦に大きく並べる**(親指で押す) */
+.fquiz { display: grid; gap: var(--sp-14); }
+.fquiz-en {
+  margin: 0; padding: var(--sp-14);
+  border: 1px solid var(--border); border-radius: var(--r-8);
+  background: var(--surface-2);
+  font-size: var(--fs-17); line-height: 1.6;
+}
+.fquiz-choices { display: grid; gap: var(--sp-10); }
+/* **押せるものどうしを、すき間ゼロでくっつけない**(`gap` で離す) */
+.fquiz-btn {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: var(--sp-8);
+  width: 100%; text-align: left;
+  padding: var(--sp-14); font-size: var(--fs-15);
+}
+.fquiz-form { font-weight: 700; }
+/* **色だけに頼らない。** 枠線 + 地色 + 文字の3つで示す */
+.fquiz-mark {
+  padding: 2px var(--sp-8); border-radius: var(--r-pill);
+  border: 1px solid currentColor; font-size: var(--fs-12); font-weight: 700;
+}
+.fquiz-btn--right:disabled {
+  border-color: var(--ok); background: var(--ok-bg); color: var(--ok); opacity: 1;
+}
+.fquiz-btn--wrong:disabled {
+  border-color: var(--danger); background: var(--ng-bg); color: var(--ng); opacity: 1;
+}

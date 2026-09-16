@@ -58,6 +58,8 @@ import {
   swapFrames, swapQuestions,
 } from '../lib/frameShift.js'
 import { SHIFT_SCENES } from '../data/frameShift.js'
+import { QUIZ_GROUP, quizGroups, quizQuestions, quizTraining } from '../lib/frameQuiz.js'
+import FrameQuiz from './FrameQuiz.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { ChevronIcon, MicIcon, RepeatIcon, StopIcon } from './Icons.jsx'
 import { answerFeedback } from '../lib/haptics.js'
@@ -79,16 +81,25 @@ export default function FrameShift() {
   const [done, setDone] = useState(loadShiftDone)
   const sessionRef = useRef(null)
 
-  const trainings = useMemo(() => shiftTrainings(done), [done])
+  /* **⑤ 見分けるは、いちばん後ろに足す**(前へ割り込ませない)。
+     `shiftTrainings()` の中では作らない —— あちらからここを読むと
+     読み込みが輪になる(`frameQuiz` → `frameShift` → `frameQuiz`) */
+  const trainings = useMemo(
+    () => [...shiftTrainings(done), quizTraining(done)], [done],
+  )
   const here = trainings.find((t) => t.id === pick) ?? null
   /** 名詞句を入れ替える練習かどうか。**画面の中で id を比べるのはここだけ** */
   const swapping = pick === SWAP_GROUP
+  /** 見分ける練習かどうか。**画面の中で id を比べるのはここだけ** */
+  const quizzing = pick === QUIZ_GROUP
   const frames = useMemo(() => swapFrames(), [])
+  const qGroups = useMemo(() => quizGroups(), [])
   const qs = useMemo(
     () => (!pick ? []
-      : swapping ? swapQuestions({ frame })
-        : shiftQuestions({ group: pick, scene })),
-    [pick, scene, frame, swapping],
+      : quizzing ? quizQuestions({ group: scene })
+        : swapping ? swapQuestions({ frame })
+          : shiftQuestions({ group: pick, scene })),
+    [pick, scene, frame, swapping, quizzing],
   )
   /* **範囲の外に出さない。** 絞り込みを変えると数が変わる
      (やりかけの控えと同じ注意・CLAUDE.md) */
@@ -239,7 +250,7 @@ export default function FrameShift() {
           ——「黙って絞らない」(CLAUDE.md) */}
       <details className="card fshift-filter">
         <summary className="fshift-sum">
-          {swapping ? '骨をえらぶ' : '場面でしぼる'}
+          {swapping ? '骨をえらぶ' : quizzing ? '型の組でしぼる' : '場面でしぼる'}
           {swapping ? (
             <span className="finder-badge fshift-mark">
               {frames.find((x) => x.id === frame)?.label ?? frames[0].label}
@@ -264,6 +275,19 @@ export default function FrameShift() {
                         className={`btn btn--small ${(frame ?? frames[0].id) === f.id ? '' : 'btn--ghost'}`}
                         onClick={() => setFrame(f.id)}>{f.label}</button>
               ))
+            ) : quizzing ? (
+              /* **見分けるは、型の組でしぼる。** 入れ物は `scene` を使い回す ——
+                 **絞り込みを2つ持たない**(CLAUDE.md「数え方を2通り持たない」) */
+              <>
+                <button type="button"
+                        className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
+                        onClick={() => setScene(null)}>ぜんぶ</button>
+                {qGroups.map((g) => (
+                  <button key={g.id} type="button"
+                          className={`btn btn--small ${scene === g.id ? '' : 'btn--ghost'}`}
+                          onClick={() => setScene(g.id)}>{g.label}</button>
+                ))}
+              </>
             ) : (
               <>
                 <button type="button"
@@ -280,7 +304,10 @@ export default function FrameShift() {
         </div>
       </details>
 
-      {!q ? (
+      {quizzing ? (
+        /* **本物の部品をそのまま描く。** 問と控えは、ここが渡す */
+        <FrameQuiz questions={qs} done={done} onRight={markDone} />
+      ) : !q ? (
         /* **行き止まりを作らない。** 0問になったら、戻る道を出す */
         <div className="card fshift-none">
           <p>この絞り込みでは、問がありません。</p>
