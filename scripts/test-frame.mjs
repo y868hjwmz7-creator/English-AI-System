@@ -37,6 +37,7 @@ import {
 import {
   FILTER_KEYS, applyWordbookFilter, countNarrowed, emptyFilter, frameOf,
 } from '../src/lib/wordbookFilter.js'
+import { GROUP, LEAD } from '../src/data/frameSlides.js'
 import { runKeyOf } from '../src/lib/reviewScope.js'
 import { NATIVE_FLOW } from '../src/data/nativeFlow.js'
 import { COLLOCATIONS } from '../src/data/collocations.js'
@@ -271,6 +272,38 @@ ok(!/margin-top/.test(css.match(/\.qr-frame \{[^}]*\}/)?.[0] ?? ''),
 const frameCss = css.match(/\.qr-frame \{[^}]*\}/)?.[0] ?? ''
 ok(/border:/.test(frameCss) && /font-weight: *[67]00/.test(frameCss),
   '色だけに頼っていない(枠線 + 太字)')
+
+/* ────────────────────────────────────────────────────────────
+   プレゼン資料(2026-09 利用者の指定「素人でもわかりやすい資料に」)
+   ──────────────────────────────────────────────────────────── */
+head('プレゼン資料(npm run slides)')
+
+/* **66 型は書き写していない。** 資料は `sentenceFrames.js` から組む。
+   ここで見るのは「**手で書いた説明**が、節と組の数だけ在るか」である
+   —— 節や組を足したのに説明を足し忘れたら、そこだけ空で刷られる */
+ok(FRAME_SECTIONS.every((s) => LEAD[s.id]),
+  'どの節にも、扉の説明がある',
+  FRAME_SECTIONS.filter((s) => !LEAD[s.id]).map((s) => s.id).join(' '))
+ok(FRAME_SECTIONS.every((s) => s.groups.every((g) => GROUP[g.id])),
+  'どの組にも、ひとことの説明がある',
+  FRAME_SECTIONS.flatMap((s) => s.groups).filter((g) => !GROUP[g.id]).map((g) => g.id).join(' '))
+ok(Object.keys(LEAD).every((k) => FRAME_SECTIONS.some((s) => s.id === k)),
+  '要らなくなった節の説明が残っていない')
+ok(Object.keys(GROUP).every((k) => FRAME_SECTIONS.some((s) => s.groups.some((g) => g.id === k))),
+  '要らなくなった組の説明が残っていない')
+
+/* **訳は 66 本そろっている。** 資料にも、これからの練習にも要る */
+const noJa = FRAME_SECTIONS.flatMap((s) => s.groups.flatMap((g) => g.rows))
+  .filter((r) => !String(r.ja ?? '').trim())
+ok(noJa.length === 0, '66 の例文が、ぜんぶ訳を持っている',
+  noJa.map((r) => r.ex).join(' / '))
+
+/* **フォントの指定**(2026-09 利用者の指定「事態はメイリオで、英語は Arial」)。
+   `Arial` を先に書くと、英字は Arial・日本語は(Arial に無いので)メイリオへ落ちる */
+const slides = readD('scripts/make-frames-slides.mjs')
+ok(/font-family: Arial, Meiryo/.test(slides),
+  '英語は Arial、日本語はメイリオ(この順に書く)')
+ok(/書き写さない/.test(slides), '66 型を書き写していないことが、書いてある')
 
 /* ────────────────────────────────────────────────────────────
    おしまい

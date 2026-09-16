@@ -47,7 +47,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **声と役の性別の検証** | `npm run test:voice` |
 | **英文の「型」の見分けの検証** | `npm run test:frame` |
 | お手本音声の生成(Azure の鍵が必要) | `npm run audio` |
-| **英文の「型」の資料を PDF にする** | `node scripts/make-frames-pdf.mjs` |
+| **英文の「型」の資料を PDF にする**(トレーナー向け) | `node scripts/make-frames-pdf.mjs` |
+| **英文の「型」のプレゼン資料を作る**(素人向け) | `npm run slides` |
 
 自動テストは `npm run test:db` / `test:chunk` / `test:audio` / `test:mp3` /
 `test:gap` / `test:play` / `test:paper` / `test:bar` / `test:voice` /
@@ -225,6 +226,19 @@ UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
 
 `docs/sentence-frames.html`(英文の「型」)。**PDF はそこから作る**
 (`node scripts/make-frames-pdf.mjs` → `docs/sentence-frames.pdf`)。
+
+**資料は2つある。役目が違うので、2つとも要る**(2026-09 利用者の指定
+「66 の型を素人の人でもわかりやすく説明したプレゼン資料に」)。
+
+| | 誰に | 何を | 作り方 |
+|---|---|---|---|
+| `sentence-frames` | **トレーナー** | なぜその型が要るか・教える順番まで | 手書きの HTML |
+| `frames-slides` | **素人・ゲスト・初めての人** | **1枚1つ**。横向き21枚 | **`npm run slides`(データから組む)** |
+
+**プレゼンのほうは、66 型を書き写していない** —— `sentenceFrames.js` から
+組み立てる。手で書いてあるのは**素人向けの言い換え**だけで、
+それは `src/data/frameSlides.js` に置く(道具に置くと、
+**読み込むだけで PDF が刷られて検証が汚れる**・実際にそうなった)。
 
 - **PDF だけを渡して終わりにしない。** それだと直せる人がいなくなる。
   **元は HTML で置き、作り方をコマンドにしておく**

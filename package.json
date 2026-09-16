@@ -21,7 +21,8 @@
     "test:paper": "node scripts/check-paper-vars.mjs",
     "test:bar": "node scripts/test-bar.mjs",
     "test:voice": "node scripts/check-voice-cast.mjs",
-    "test:frame": "node scripts/test-frame.mjs"
+    "test:frame": "node scripts/test-frame.mjs",
+    "slides": "node scripts/make-frames-slides.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

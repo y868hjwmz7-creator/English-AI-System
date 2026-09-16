@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>英文の「型」66 — 文が組み立てられるようになる</title>
+<style>
+  /* **英語は Arial、日本語はメイリオ**(2026-09 利用者の指定)。
+     Arial を先に書くと、英字は Arial・日本語は(Arial に無いので)
+     メイリオへ落ちる。**1つの指定で2つを分けられる** */
+  :root {
+    --ink: #1c2430; --sub: #5b6573; --line: #d6dce4;
+    --accent: #2c6094; --accent-bg: #edf4f7; --accent-line: #b9cde3;
+    --font: Arial, Meiryo, "メイリオ", "Hiragino Kaku Gothic ProN", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); color: var(--ink); background: #eef1f5; }
+  /* **1枚 = 横向き16:9。** 紙でもそのまま1ページになる */
+  .slide {
+    width: 297mm; height: 167mm; padding: 14mm 16mm 10mm;
+    background: #fff; margin: 0 auto 6mm; position: relative;
+    display: flex; flex-direction: column; gap: 4mm;
+    break-after: page; page-break-after: always; overflow: hidden;
+  }
+  .slide:last-child { break-after: auto; page-break-after: auto; }
+  h1 { margin: 0; font-size: 30pt; line-height: 1.25; letter-spacing: .01em; }
+  h2 { margin: 0; font-size: 21pt; line-height: 1.3; display: flex;
+       align-items: baseline; gap: 4mm; flex-wrap: wrap; }
+  .count { font-size: 11pt; color: var(--accent); background: var(--accent-bg);
+           border: 1px solid var(--accent-line); border-radius: 999px; padding: 1mm 3mm; }
+  .eyebrow { margin: 0; font-size: 11pt; color: var(--sub); letter-spacing: .08em; }
+  .eyebrow.big { font-size: 40pt; color: var(--accent); line-height: 1; margin-bottom: 2mm; }
+  .say { margin: 0; font-size: 13pt; line-height: 1.7; color: var(--ink); }
+  .say.big { font-size: 16pt; }
+  .note { margin: 0; font-size: 11pt; line-height: 1.7; color: var(--sub);
+          background: var(--accent-bg); border: 1px solid var(--accent-line);
+          border-radius: 3mm; padding: 3mm 4mm; }
+  .note.wide { font-size: 12pt; color: var(--ink); }
+  .en { font-family: Arial, sans-serif; }
+  table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+  th { text-align: left; font-size: 9.5pt; color: var(--sub); font-weight: 700;
+       border-bottom: 2px solid var(--line); padding: 2mm 2mm; }
+  td { border-bottom: 1px solid var(--line); padding: 2.2mm 2mm; vertical-align: top;
+       line-height: 1.5; }
+  td.form { width: 27%; font-weight: 700; color: var(--accent); }
+  td.ex { width: 40%; }
+  td.ja { width: 33%; color: var(--sub); }
+  /* **行が多い組は、字を詰める**(①1「させる」は 9 型ある)。
+     枚ごとに手で直すと、型を足した日にどれかがはみ出す */
+  table.dense { font-size: 9.5pt; }
+  table.dense td { padding: 1.5mm 2mm; line-height: 1.45; }
+  .foot { position: absolute; right: 16mm; bottom: 6mm; margin: 0;
+          font-size: 9pt; color: var(--sub); }
+  .divider { justify-content: center; }
+  .swap { display: flex; flex-direction: column; gap: 2mm; align-items: flex-start;
+          margin-top: 2mm; }
+  .swap-ja, .swap-en { font-size: 15pt; line-height: 1.5; padding: 3mm 4mm;
+          border-radius: 3mm; width: 100%; }
+  .swap-ja { background: #f2f4f7; border: 1px solid var(--line); }
+  .swap-en { background: var(--accent-bg); border: 1px solid var(--accent-line);
+             color: var(--accent); font-weight: 700; }
+  .tag { display: inline-block; font-size: 9pt; font-weight: 700; color: var(--sub);
+         background: #fff; border: 1px solid var(--line); border-radius: 999px;
+         padding: .5mm 2.5mm; margin-right: 3mm; vertical-align: middle;
+         font-family: var(--font); }
+  .arrow { font-size: 14pt; color: var(--sub); align-self: center; }
+  .cover { justify-content: center; align-items: flex-start; }
+  .cover h1 { font-size: 38pt; }
+  .cover .say { font-size: 15pt; }
+  .map { display: flex; gap: 5mm; margin-top: 2mm; }
+  .map-col { flex: 1; border: 1px solid var(--line); border-radius: 3mm; padding: 4mm; }
+  .map-col h3 { margin: 0 0 2mm; font-size: 13pt; color: var(--accent); }
+  .map-col p { margin: 0 0 2mm; font-size: 10.5pt; color: var(--sub); line-height: 1.6; }
+  .map-col ul { margin: 0; padding-left: 5mm; font-size: 10pt; line-height: 1.8; }
+  .big-num { font-size: 22pt; font-weight: 700; color: var(--accent); }
+  ol.how { margin: 0; padding-left: 7mm; font-size: 13pt; line-height: 2.1; }
+  ol.how b { color: var(--accent); }
+  @page { size: A4 landscape; margin: 0; }
+  @media print { body { background: #fff; } .slide { margin: 0; box-shadow: none; } }
+</style>
+</head>
+<body>
+
+<section class="slide cover">
+  <p class="eyebrow">英語が「出てこない」を、仕組みで解く</p>
+  <h1>英文の「型」66<br>— 語を知っていても、文にならない理由</h1>
+  <p class="say">単語は覚えた。文法も習った。<br>
+    それでも口から出てこないのは、<b>組み立て方の引き出しが無い</b>からです。</p>
+  <p class="note wide">この資料は、仕事で使う英文を組み立てる<b>66 の型</b>を、
+    1枚に1つずつ並べたものです。順番に読む必要はありません。</p></section>
+
+<section class="slide ">
+  <h1>型とは、文の「骨」です</h1>
+  <p class="say">語は<b>肉</b>。骨が無いと、肉だけがバラバラに散らばります。</p>
+  <div class="swap">
+    <div class="swap-ja"><span class="tag">語だけ</span>tool / share / files / instantly</div>
+    <div class="arrow">↓ 骨に載せる</div>
+    <div class="swap-en en"><span class="tag">型に入れる</span>This tool <u>allows you to</u> share files instantly.</div>
+  </div>
+  <p class="note wide">同じ骨に、別の肉を入れれば別の文になります。<br>
+    <span class="en">The new contract <u>allows us to</u> start in April.</span><br>
+    <b>骨を 66 本持てば、言えることが一気に増えます。</b></p></section>
+
+<section class="slide ">
+  <h1>66 の型は、3つに分かれます</h1>
+  <div class="map">
+    <div class="map-col">
+        <h3>① 「モノ」を主語にする</h3>
+        <p><span class="big-num">32</span> 型</p>
+        <p>日本語は「人」から話し始めます。英語は「モノ・こと」から話し始められます。</p>
+        <ul><li>1. させる(背中を押す)</li><li>2. させない(妨げる)</li><li>3. 要る・かかる</li><li>4. もたらす(結果)</li><li>5. 人を、ある状態にする</li><li>6. 示す・説明する(会議で頻出)</li><li>7. it を立てる形(無生物主語の親戚)</li></ul>
+      </div><div class="map-col">
+        <h3>② 主語の席に、何を置くか</h3>
+        <p><span class="big-num">6</span> 型</p>
+        <p>主語は「人」でなくてかまいません。動作も、事実も、理由も主語になります。</p>
+        <ul><li>6つの手立て</li></ul>
+      </div><div class="map-col">
+        <h3>③ 文の組み立て方、そのもの</h3>
+        <p><span class="big-num">28</span> 型</p>
+        <p>ここからは、言いたいことの「置き方」です。前置き・つなぎ・やわらげ方。</p>
+        <ul><li>焦点を当てる(どこを際立たせるか)</li><li>話題を先に置く(前置き)</li><li>文と文をつなぐ</li><li>1文を後ろへ伸ばす</li><li>やわらげる・提案する(仕事で効く)</li><li>比べる</li></ul>
+      </div>
+  </div>
+  <p class="note wide">いちばん効くのは <b>①</b> です。日本語から訳しても、まず出てこない形だからです。</p></section>
+
+<section class="slide divider">
+    <p class="eyebrow big">①</p>
+    <h1 class="cover-h">「モノ」を主語にする</h1>
+    <p class="say big">日本語は「人」から話し始めます。英語は「モノ・こと」から話し始められます。</p>
+    <div class="swap">
+      <div class="swap-ja"><span class="tag">言いたいこと</span>この道具を使えば、ファイルをすぐ共有できます</div>
+      <div class="arrow">↓</div>
+      <div class="swap-en en"><span class="tag">英語では</span>This tool allows you to share files instantly.</div>
+    </div>
+    <p class="note wide">覚えるのは主語ではなく、<b>動詞とうしろの形</b>です。「allows 人 to do」でひとかたまり。ここを覚えると、主語の席が空きます。</p>
+    <p class="foot">この節に 32 型</p></section>
+<section class="slide ">
+    <p class="eyebrow">① 「モノ」を主語にする</p>
+    <h2>1. させる(背中を押す)<span class="count">9 型</span></h2>
+    <p class="say">相手に「させる」。モノが主語になって、人を動かします。</p>
+    
+    <table class="dense">
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">S allows 人 to do</td>
+        <td class="ex en">This tool allows you to share files instantly.</td>
+        <td class="ja">この道具を使えば、ファイルをすぐに共有できます。</td>
+      </tr>
+      <tr>
+        <td class="form">S enables 人 to do</td>
+        <td class="ex en">The update enabled us to cut the cost in half.</td>
+        <td class="ja">更新のおかげで、費用を半分にできました。</td>
+      </tr>
+      <tr>
+        <td class="form">S helps 人 (to) do</td>
+        <td class="ex en">The training helped the team work faster.</td>
+        <td class="ja">その研修で、チームの仕事が速くなりました。</td>
+      </tr>
+      <tr>
+        <td class="form">S encourages 人 to do</td>
+        <td class="ex en">The results encouraged us to expand.</td>
+        <td class="ja">結果が良かったので、私たちは拡大に踏み切りました。</td>
+      </tr>
+      <tr>
+        <td class="form">S inspires 人 to do</td>
+        <td class="ex en">Working overseas inspired her to learn Spanish.</td>
+        <td class="ja">海外勤務がきっかけで、彼女はスペイン語を学び始めました。</td>
+      </tr>
+      <tr>
+        <td class="form">S leads 人 to do</td>
+        <td class="ex en">The delay led us to rethink the schedule.</td>
+        <td class="ja">遅れたことで、私たちは予定を考え直しました。</td>
+      </tr>
+      <tr>
+        <td class="form">S prompts 人 to do</td>
+        <td class="ex en">The complaint prompted us to review the process.</td>
+        <td class="ja">その苦情をきっかけに、私たちは手順を見直しました。</td>
+      </tr>
+      <tr>
+        <td class="form">S forces 人 to do</td>
+        <td class="ex en">Rising costs forced them to raise prices.</td>
+        <td class="ja">費用が上がり、彼らは値上げせざるを得ませんでした。</td>
+      </tr>
+      <tr>
+        <td class="form">S makes 人 do(原形)</td>
+        <td class="ex en">The music made everyone relax.</td>
+        <td class="ja">その音楽で、みんながくつろぎました。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">① 1. させる(背中を押す)</p></section>
+<section class="slide ">
+    <p class="eyebrow">① 「モノ」を主語にする</p>
+    <h2>2. させない(妨げる)<span class="count">4 型</span></h2>
+    <p class="say">させない・妨げる。<b>4つとも from + ~ing</b>。ここだけ形が同じです。</p>
+    <p class="note">4つとも from + ~ing です。ばらばらに覚えると to と取り違えます。</p>
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">S keeps 人 from ~ing</td>
+        <td class="ex en">Fear of mistakes keeps many people from speaking up.</td>
+        <td class="ja">間違いを恐れて、多くの人が発言できずにいます。</td>
+      </tr>
+      <tr>
+        <td class="form">S prevents 人 from ~ing</td>
+        <td class="ex en">The rain prevented us from starting on time.</td>
+        <td class="ja">雨のせいで、時間どおりに始められませんでした。</td>
+      </tr>
+      <tr>
+        <td class="form">S stops 人 from ~ing</td>
+        <td class="ex en">Nothing is stopping you from asking.</td>
+        <td class="ja">聞いてはいけない理由は、何もありません。</td>
+      </tr>
+      <tr>
+        <td class="form">S discourages 人 from ~ing</td>
+        <td class="ex en">The long form discourages people from applying.</td>
+        <td class="ja">用紙が長いので、応募をためらわせています。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">① 2. させない(妨げる)</p></section>
+<section class="slide ">
+    <p class="eyebrow">① 「モノ」を主語にする</p>
+    <h2>3. 要る・かかる<span class="count">5 型</span></h2>
+    <p class="say">要る・かかる。必要なもの、かかる時間を言います。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">S requires 名詞</td>
+        <td class="ex en">Learning a language requires patience.</td>
+        <td class="ja">言語を学ぶには、忍耐が要ります。</td>
+      </tr>
+      <tr>
+        <td class="form">S requires 人 to do</td>
+        <td class="ex en">This project requires everyone to report weekly.</td>
+        <td class="ja">この案件では、全員が毎週報告する必要があります。</td>
+      </tr>
+      <tr>
+        <td class="form">S takes (人) 時間 to do</td>
+        <td class="ex en">It took us three days to fix the bug.</td>
+        <td class="ja">その不具合を直すのに、3日かかりました。</td>
+      </tr>
+      <tr>
+        <td class="form">S involves ~ing</td>
+        <td class="ex en">The role involves traveling twice a month.</td>
+        <td class="ja">この職務には、月2回の出張が含まれます。</td>
+      </tr>
+      <tr>
+        <td class="form">S calls for 名詞</td>
+        <td class="ex en">The situation calls for a quick decision.</td>
+        <td class="ja">この状況では、早い決断が必要です。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">① 3. 要る・かかる</p></section>
+<section class="slide ">
+    <p class="eyebrow">① 「モノ」を主語にする</p>
+    <h2>4. もたらす(結果)<span class="count">4 型</span></h2>
+    <p class="say">もたらす。原因から結果へ、まっすぐつなぎます。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">S causes 名詞</td>
+        <td class="ex en">The update caused several errors.</td>
+        <td class="ja">その更新が、いくつかの不具合を引き起こしました。</td>
+      </tr>
+      <tr>
+        <td class="form">S leads to 名詞</td>
+        <td class="ex en">Poor planning leads to delays.</td>
+        <td class="ja">計画が甘いと、遅れにつながります。</td>
+      </tr>
+      <tr>
+        <td class="form">S results in 名詞</td>
+        <td class="ex en">The change resulted in a 10% drop.</td>
+        <td class="ja">その変更の結果、10%下がりました。</td>
+      </tr>
+      <tr>
+        <td class="form">S brings 人 名詞</td>
+        <td class="ex en">The new line brought us 200 new customers.</td>
+        <td class="ja">新商品によって、新規のお客様が200人増えました。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">① 4. もたらす(結果)</p></section>
+<section class="slide ">
+    <p class="eyebrow">① 「モノ」を主語にする</p>
+    <h2>5. 人を、ある状態にする<span class="count">3 型</span></h2>
+    <p class="say">人を、ある状態にする。「〜させた」の中身が形容詞です。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">S makes 人 形容詞</td>
+        <td class="ex en">The news made everyone nervous.</td>
+        <td class="ja">その知らせで、みんな不安になりました。</td>
+      </tr>
+      <tr>
+        <td class="form">S leaves 人 形容詞</td>
+        <td class="ex en">The delay left us short on time.</td>
+        <td class="ja">遅れのせいで、時間が足りなくなりました。</td>
+      </tr>
+      <tr>
+        <td class="form">S keeps 人/物 形容詞</td>
+        <td class="ex en">Regular practice keeps your English sharp.</td>
+        <td class="ja">練習を続けていれば、英語は鈍りません。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">① 5. 人を、ある状態にする</p></section>
+<section class="slide ">
+    <p class="eyebrow">① 「モノ」を主語にする</p>
+    <h2>6. 示す・説明する(会議で頻出)<span class="count">4 型</span></h2>
+    <p class="say">示す・説明する。会議でいちばん出てくる型です。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">S shows / suggests (that) ~</td>
+        <td class="ex en">The data shows that demand is rising.</td>
+        <td class="ja">このデータは、需要が伸びていることを示しています。</td>
+      </tr>
+      <tr>
+        <td class="form">S explains why ~</td>
+        <td class="ex en">That explains why he was late.</td>
+        <td class="ja">それで、彼が遅れた理由が分かりました。</td>
+      </tr>
+      <tr>
+        <td class="form">S is why ~</td>
+        <td class="ex en">This is why we changed suppliers.</td>
+        <td class="ja">こういう事情で、取引先を変えました。</td>
+      </tr>
+      <tr>
+        <td class="form">S reminds 人 that ~</td>
+        <td class="ex en">The chart reminds us that growth has slowed.</td>
+        <td class="ja">この図を見ると、成長が鈍ったことが分かります。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">① 6. 示す・説明する(会議で頻出)</p></section>
+<section class="slide ">
+    <p class="eyebrow">① 「モノ」を主語にする</p>
+    <h2>7. it を立てる形(無生物主語の親戚)<span class="count">3 型</span></h2>
+    <p class="say">いったん <span class="en">it</span> を置いて、中身をうしろに回します。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">S makes it possible to do</td>
+        <td class="ex en">Remote tools make it possible to hire anywhere.</td>
+        <td class="ja">遠隔の道具のおかげで、どこでも採用できます。</td>
+      </tr>
+      <tr>
+        <td class="form">S makes it hard for 人 to do</td>
+        <td class="ex en">The noise made it hard for me to focus.</td>
+        <td class="ja">騒音のせいで、集中しづらかったです。</td>
+      </tr>
+      <tr>
+        <td class="form">It takes 時間 to do</td>
+        <td class="ex en">It takes three months to see results.</td>
+        <td class="ja">成果が出るまでに、3か月かかります。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">① 7. it を立てる形(無生物主語の親戚)</p></section>
+<section class="slide divider">
+    <p class="eyebrow big">②</p>
+    <h1 class="cover-h">主語の席に、何を置くか</h1>
+    <p class="say big">主語は「人」でなくてかまいません。動作も、事実も、理由も主語になります。</p>
+    <div class="swap">
+      <div class="swap-ja"><span class="tag">言いたいこと</span>手を抜くと、あとで高くつきます</div>
+      <div class="arrow">↓</div>
+      <div class="swap-en en"><span class="tag">英語では</span>Cutting corners saves time now but costs more later.</div>
+    </div>
+    <p class="note wide">「手を抜く」を <b>Cutting corners</b> というカタマリに変えて、主語の席に置きました。</p>
+    <p class="foot">この節に 6 型</p></section>
+<section class="slide ">
+    <p class="eyebrow">② 主語の席に、何を置くか</p>
+    <h2>6つの手立て<span class="count">6 型</span></h2>
+    <p class="say">主語の席に置けるもの、6つ。動作・名詞・節・事実・やり方・仮の主語。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">動名詞</td>
+        <td class="ex en">Cutting corners saves time now but costs more later.</td>
+        <td class="ja">手を抜けば今は速いですが、あとで高くつきます。</td>
+      </tr>
+      <tr>
+        <td class="form">名詞化(動詞→名詞)</td>
+        <td class="ex en">Her decision to leave surprised everyone.</td>
+        <td class="ja">彼女が辞めると決めたことに、みんな驚きました。</td>
+      </tr>
+      <tr>
+        <td class="form">what 節</td>
+        <td class="ex en">What matters is consistency.</td>
+        <td class="ja">大事なのは、続けることです。</td>
+      </tr>
+      <tr>
+        <td class="form">the fact that</td>
+        <td class="ex en">The fact that no one asked worries me.</td>
+        <td class="ja">誰も質問しなかったことが、気になります。</td>
+      </tr>
+      <tr>
+        <td class="form">the way / the reason</td>
+        <td class="ex en">The way he explained it made sense.</td>
+        <td class="ja">彼の説明のしかたは、筋が通っていました。</td>
+      </tr>
+      <tr>
+        <td class="form">形式主語 it</td>
+        <td class="ex en">It is important to check twice.</td>
+        <td class="ja">二度確かめることが大切です。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">② 6つの手立て</p></section>
+<section class="slide divider">
+    <p class="eyebrow big">③</p>
+    <h1 class="cover-h">文の組み立て方、そのもの</h1>
+    <p class="say big">ここからは、言いたいことの「置き方」です。前置き・つなぎ・やわらげ方。</p>
+    <div class="swap">
+      <div class="swap-ja"><span class="tag">言いたいこと</span>価格については、柔軟に対応します</div>
+      <div class="arrow">↓</div>
+      <div class="swap-en en"><span class="tag">英語では</span>When it comes to pricing, we're flexible.</div>
+    </div>
+    <p class="note wide"><b>丸ごと覚える型</b>です。中身を入れ替えるのではなく、口に馴染ませます。</p>
+    <p class="foot">この節に 28 型</p></section>
+<section class="slide ">
+    <p class="eyebrow">③ 文の組み立て方、そのもの</p>
+    <h2>焦点を当てる(どこを際立たせるか)<span class="count">5 型</span></h2>
+    <p class="say">どこを際立たせるか。言いたい一点を、文の前に押し出します。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">It is X that / who ~</td>
+        <td class="ex en">It's the price that worries me.</td>
+        <td class="ja">気がかりなのは、値段のほうです。</td>
+      </tr>
+      <tr>
+        <td class="form">What ~ is …</td>
+        <td class="ex en">What we need is more time.</td>
+        <td class="ja">必要なのは、もっと時間です。</td>
+      </tr>
+      <tr>
+        <td class="form">All 人 have to do is do</td>
+        <td class="ex en">All you have to do is send the file.</td>
+        <td class="ja">ファイルを送っていただくだけで結構です。</td>
+      </tr>
+      <tr>
+        <td class="form">The reason ~ is that …</td>
+        <td class="ex en">The reason we changed is that the old one broke.</td>
+        <td class="ja">変えた理由は、前のものが壊れたからです。</td>
+      </tr>
+      <tr>
+        <td class="form">There is / are ~</td>
+        <td class="ex en">There's a problem with the schedule.</td>
+        <td class="ja">予定に問題があります。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">③ 焦点を当てる(どこを際立たせるか)</p></section>
+<section class="slide ">
+    <p class="eyebrow">③ 文の組み立て方、そのもの</p>
+    <h2>話題を先に置く(前置き)<span class="count">5 型</span></h2>
+    <p class="say">話題を先に置く。「〜については」と枠をつくってから話します。</p>
+    <p class="note">When it comes to と Given は、仕事の英語でとくに回数が多い型です。</p>
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">When it comes to ~</td>
+        <td class="ex en">When it comes to pricing, we're flexible.</td>
+        <td class="ja">価格については、柔軟に対応します。</td>
+      </tr>
+      <tr>
+        <td class="form">As for ~</td>
+        <td class="ex en">As for the schedule, nothing has changed.</td>
+        <td class="ja">予定については、変更はありません。</td>
+      </tr>
+      <tr>
+        <td class="form">In terms of ~</td>
+        <td class="ex en">In terms of cost, this is the best option.</td>
+        <td class="ja">費用の面では、これがいちばん良い案です。</td>
+      </tr>
+      <tr>
+        <td class="form">Given (that) ~</td>
+        <td class="ex en">Given the budget, we should wait.</td>
+        <td class="ja">予算を考えると、待つべきです。</td>
+      </tr>
+      <tr>
+        <td class="form">Based on ~</td>
+        <td class="ex en">Based on the data, demand is growing.</td>
+        <td class="ja">データから見て、需要は伸びています。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">③ 話題を先に置く(前置き)</p></section>
+<section class="slide ">
+    <p class="eyebrow">③ 文の組み立て方、そのもの</p>
+    <h2>文と文をつなぐ<span class="count">4 型</span></h2>
+    <p class="say">文と文をつなぐ。話の向きを変えるときの合図です。</p>
+    <p class="note">Which means は会話でとても多いのに、教材では出にくい型です。</p>
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">That's why ~</td>
+        <td class="ex en">That's why we moved the meeting.</td>
+        <td class="ja">だから、会議をずらしました。</td>
+      </tr>
+      <tr>
+        <td class="form">Which means ~</td>
+        <td class="ex en">We're short-staffed, which means we need to start earlier.</td>
+        <td class="ja">人手が足りません。つまり、早めに始める必要があります。</td>
+      </tr>
+      <tr>
+        <td class="form">That said, ~</td>
+        <td class="ex en">It's expensive. That said, it's still worth trying.</td>
+        <td class="ja">高いです。とはいえ、試す価値はあります。</td>
+      </tr>
+      <tr>
+        <td class="form">Not only ~ but also …</td>
+        <td class="ex en">Not only did it save time, but it also cut costs.</td>
+        <td class="ja">時間が短くなっただけでなく、費用も下がりました。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">③ 文と文をつなぐ</p></section>
+<section class="slide ">
+    <p class="eyebrow">③ 文の組み立て方、そのもの</p>
+    <h2>1文を後ろへ伸ばす<span class="count">5 型</span></h2>
+    <p class="say">1文を後ろへ伸ばす。名詞にあとから説明をくっつけます。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">関係詞</td>
+        <td class="ex en">the report that we sent yesterday</td>
+        <td class="ja">昨日こちらから送った報告書</td>
+      </tr>
+      <tr>
+        <td class="form">現在分詞</td>
+        <td class="ex en">the team working on it</td>
+        <td class="ja">それに取り組んでいるチーム</td>
+      </tr>
+      <tr>
+        <td class="form">過去分詞</td>
+        <td class="ex en">the report sent yesterday</td>
+        <td class="ja">昨日送られた報告書</td>
+      </tr>
+      <tr>
+        <td class="form">同格</td>
+        <td class="ex en">our goal, a 20% increase</td>
+        <td class="ja">私たちの目標、つまり20%の増加</td>
+      </tr>
+      <tr>
+        <td class="form">分詞構文</td>
+        <td class="ex en">Having reviewed the data, we decided to wait.</td>
+        <td class="ja">データを確認したうえで、待つことにしました。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">③ 1文を後ろへ伸ばす</p></section>
+<section class="slide ">
+    <p class="eyebrow">③ 文の組み立て方、そのもの</p>
+    <h2>やわらげる・提案する(仕事で効く)<span class="count">5 型</span></h2>
+    <p class="say">やわらげる・提案する。仕事の英語で、いちばん効きます。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">It might be worth ~ing</td>
+        <td class="ex en">It might be worth checking again.</td>
+        <td class="ja">もう一度確かめてみる価値があるかもしれません。</td>
+      </tr>
+      <tr>
+        <td class="form">I was wondering if you could ~</td>
+        <td class="ex en">I was wondering if you could send it today.</td>
+        <td class="ja">本日中にお送りいただけないでしょうか。</td>
+      </tr>
+      <tr>
+        <td class="form">Would it be possible to ~</td>
+        <td class="ex en">Would it be possible to move the meeting?</td>
+        <td class="ja">会議をずらすことはできますでしょうか。</td>
+      </tr>
+      <tr>
+        <td class="form">We may want to ~</td>
+        <td class="ex en">We may want to wait a week.</td>
+        <td class="ja">1週間待ったほうが、よいかもしれません。</td>
+      </tr>
+      <tr>
+        <td class="form">What if we ~</td>
+        <td class="ex en">What if we split it into two phases?</td>
+        <td class="ja">2段階に分けるのは、どうでしょう。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">③ やわらげる・提案する(仕事で効く)</p></section>
+<section class="slide ">
+    <p class="eyebrow">③ 文の組み立て方、そのもの</p>
+    <h2>比べる<span class="count">4 型</span></h2>
+    <p class="say">比べる。2つを並べて、どちらかを選ばせます。</p>
+    
+    <table>
+      <thead><tr><th>型</th><th>例文</th><th>意味</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="form">less about A than B</td>
+        <td class="ex en">It's less about cost than timing.</td>
+        <td class="ja">問題は、費用よりも時期のほうです。</td>
+      </tr>
+      <tr>
+        <td class="form">The 比較級, the 比較級</td>
+        <td class="ex en">The more we practice, the faster we improve.</td>
+        <td class="ja">練習すればするほど、上達が速くなります。</td>
+      </tr>
+      <tr>
+        <td class="form">not A but B</td>
+        <td class="ex en">It's not a delay but a change of plan.</td>
+        <td class="ja">遅れではなく、計画の変更です。</td>
+      </tr>
+      <tr>
+        <td class="form">A rather than B</td>
+        <td class="ex en">We'd start in May rather than April.</td>
+        <td class="ja">4月ではなく、5月に始めたいと思います。</td>
+      </tr></tbody>
+    </table>
+    <p class="foot">③ 比べる</p></section>
+
+<section class="slide ">
+  <h1>どう練習するか</h1>
+  <ol class="how">
+    <li><b>読む</b> … この資料で、型を眺める(いま、ここ)</li>
+    <li><b>見分ける</b> … 英文を見て「これは何の型か」を言えるようにする</li>
+    <li><b>使い分ける</b> … 言いたいことに、どの型を使うかを選べるようにする</li>
+    <li><b>作る</b> … 型は固定したまま、<b>中身だけ入れ替えて</b>何度も口に出す</li>
+  </ol>
+  <p class="note wide">4 がいちばん大事です。<b>同じ骨に違う肉を入れる</b>練習を繰り返すと、
+    考えなくても骨が出てくるようになります。</p></section>
+
+</body>
+</html>
