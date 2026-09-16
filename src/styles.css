@@ -9176,3 +9176,29 @@ button.wbfilter-ctl { text-align: left; }
 .fquiz-btn--wrong:disabled {
   border-color: var(--danger); background: var(--ng-bg); color: var(--ng); opacity: 1;
 }
+
+/* ── 型シフト:3つの段 ───────────────────────────────────────
+   **やさしい順に、左から。** 組を開けばいつもこの3つがこの順で並ぶ。
+   **すき間は `gap` で作る**(押せるものどうしを接しさせない) */
+.fshift-stages { display: flex; flex-wrap: wrap; gap: var(--sp-10); }
+.fshift-stage {
+  flex: 1 1 8em; display: flex; align-items: center; justify-content: center;
+  gap: var(--sp-6); padding: var(--sp-12) var(--sp-10);
+}
+/* 段の番号。**数字も出す** —— 色だけに頼らない */
+.fshift-stageno {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5em; height: 1.5em; border-radius: var(--r-pill);
+  border: 1px solid currentColor; font-size: var(--fs-12); font-weight: 700;
+}
+.fshift-stagename { font-weight: 700; }
+.fshift-stagen { font-size: var(--fs-12); opacity: 0.8; }
+/* いま開いている段。**枠線 + 地色 + 太字**(色だけに頼らない) */
+.fshift-stage--on {
+  border-color: var(--accent); background: var(--accent-soft); color: var(--accent);
+}
+/* 一覧のカードに出す段ごとの数 */
+.fshift-cardstage {
+  padding: 2px var(--sp-8); border-radius: var(--r-pill);
+  border: 1px solid var(--border); background: var(--surface-2);
+}

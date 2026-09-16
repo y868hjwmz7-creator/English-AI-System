@@ -197,8 +197,8 @@ export function quizTraining(done = null) {
   return {
     id: QUIZ_GROUP,
     no: '⑤',
-    sectionLabel: '見分ける(1問3秒・いちばん速い)',
-    label: '見分ける',
+    sectionLabel: 'ぜんぶの型をまぜて(1問3秒)',
+    label: 'まぜて見分ける',
     move: moveOfGroup(QUIZ_GROUP),
     /* **札に出すのは型の名前ではなく、覆っている数。**
        65 型ぶんあるので、名前を並べても読めない */

@@ -1,63 +1,47 @@
 /**
- * **型シフト** — 66 の型を、カテゴリーごとのトレーニングにする(2026-09 利用者の指定)。
+ * **型シフト** —— 66 の型を、組ごとに「3段の道」で鍛える(2026-09 利用者の指定)。
  *
  *   > 画期的なトレーニングを作りたいです
- *   > これら 66 の型をカテゴリー別に分け、
- *   > それぞれを活用するためのトレーニングを作りたい
+ *   > これら 66 の型をカテゴリー別に分け、それぞれを活用するための…
+ *   > どうするのが学習者が一番使いやすく、仕組みを理解しやすいでしょうか
  *
  * ============================================================================
- * 【画面は2つ】
+ * 【画面は2つ。中は3段】
  *
- *   ① トレーニングの一覧 …… 14 のカテゴリー。何をする練習かと、進み具合
- *   ② その1つのドリル   …… もとの言い方 → 指定の型で言い直す
+ *   ① トレーニングの一覧 …… 14 の組 +「まぜて見分ける」
+ *   ② 組を1つ開いた画面 …… **段1 見分ける → 段2 入れ替える → 段3 言い直す**
  *
- *   **一覧から入る形にした。** 66 問を1本の列にして「型の組」で絞る形だと、
- *   **何の練習をしているのかが最後まで出てこない**(2026-09 に一度そうした)。
- *   カテゴリーごとに頭の使い方が違うので、**入口で分ける。**
- *
- * 【ふつうの英語アプリと、どこが違うのか】
- *
- *   パタプラ・スピフルは「**語**を入れ替える」。瞬間英作文は「和文 → 英文」の
- *   1対1。ここでやるのは「**型**を入れ替える」——
- *   同じ内容を、`It is X that ~` でも `What ~ is …` でも言えるようにする。
- *
- *   そして**言い直した文が本当にその型かを、機械が採点する**
- *   (`src/lib/frameMatch.js`・66 型を決まりで見分ける)。**AI を呼ばない = 0円。**
+ *   もとは「言い直す」「入れ替える」「見分ける」が**バラバラの入口**だった。
+ *   「させる」を鍛えたい人は**3か所を回る**ことになり(①1組で9問・
+ *   ④で86問・⑤で27問)、**その3つが同じ型の練習だとは画面のどこにも
+ *   書いていなかった。** いまは組を1つ押せば、いつも同じ順で3段が並ぶ ——
+ *   **1つの組でやれば、残り13組も全部同じだと分かる。**
  *
  * 【判断を、この画面に持ち込まない】
  *
- *   呼ぶのは `judgeShift()` / `shiftSay()` / `shiftTrainings()` だけ。
+ *   段の一覧と順は `frameTraining.js`、問は `frameShift.js` / `frameQuiz.js`、
+ *   採点は `judgeShift()` / `judgeQuiz()`。
  *   **`frameMatch` を直に触らない**(`npm run test:shift` が見張る)。
- *   「何をする練習か」も `frameTraining.js` が持っており、ここでは書き分けない。
  *
- * 【✕を付けない】
+ * 【書き込む欄は置かない】(2026-09 利用者の指定・**共通仕様**)
  *
- *   見分けられなかったときに「間違い」と出さない。
- *   `frameMatch` は**迷ったら黙る**ので、「見分けられない」は
- *   「間違っている」ではないからである。**正しく言えた人に嘘をつかない。**
+ *   > 書き込む欄はいらないですね。基本的にタイプするのは面倒なので
+ *   これは**話す練習**である。打たせると、打つ速さの練習になってしまう。
  *
  * 【隙間は `gap` で作る】
  *
- *   縦に並ぶ別々の物のあいだには、必ず目に見える隙間を置く
- *   (`.claude/rules/common.md`)。子に `margin-bottom` を付けて回らない。
- *   **`<details>` そのものに `display` を書かない** ——
+ *   `<details>` そのものに `display` を書かない ——
  *   書くと畳んでいても中身が場所を取る(2026-09 実測)。
- *
- * 【この段では音を鳴らさない】
- *
- *   お手本の読み上げは `speak` の窓口を呼ぶので**課金される。**
- *   **見えない費用は管理できない**(CLAUDE.md)ので、
- *   足すかどうかは利用者に確かめてからにする。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   SHIFT_EMPTY, SHIFT_OK,
-  SWAP_GROUP,
   judgeShift, loadShiftDone, saveShiftDone,
   shiftQuestions, shiftSay, shiftSceneOf, shiftTrainings,
   swapFrames, swapQuestions,
 } from '../lib/frameShift.js'
 import { SHIFT_SCENES } from '../data/frameShift.js'
+import { FIRST_STAGE, SHIFT_STAGES } from '../data/frameTraining.js'
 import { QUIZ_GROUP, quizGroups, quizQuestions, quizTraining } from '../lib/frameQuiz.js'
 import FrameQuiz from './FrameQuiz.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
@@ -65,11 +49,13 @@ import { ChevronIcon, MicIcon, RepeatIcon, StopIcon } from './Icons.jsx'
 import { answerFeedback } from '../lib/haptics.js'
 
 export default function FrameShift() {
-  /** いま開いているトレーニング(組の id)。**`null` なら一覧** */
+  /** いま開いている組(`QUIZ_GROUP` なら「まぜて見分ける」)。**`null` なら一覧** */
   const [pick, setPick] = useState(null)
-  /** 場面での絞り込み。**`null` はぜんぶ**(黙って絞らない) */
+  /** いまの段。**開いたらいちばんやさしい段から** */
+  const [stage, setStage] = useState(FIRST_STAGE)
+  /** 場面(段3)/ 型の組(まぜて見分ける)。**`null` はぜんぶ**(黙って絞らない) */
   const [scene, setScene] = useState(null)
-  /** 名詞句を入れ替える練習で、いま使っている骨。**`null` なら先頭** */
+  /** 骨(段2)。**`null` なら、出ている中の先頭** */
   const [frame, setFrame] = useState(null)
   const [at, setAt] = useState(0)
   const [said, setSaid] = useState('')
@@ -81,53 +67,56 @@ export default function FrameShift() {
   const [done, setDone] = useState(loadShiftDone)
   const sessionRef = useRef(null)
 
-  /* **⑤ 見分けるは、いちばん後ろに足す**(前へ割り込ませない)。
-     `shiftTrainings()` の中では作らない —— あちらからここを読むと
-     読み込みが輪になる(`frameQuiz` → `frameShift` → `frameQuiz`) */
-  const trainings = useMemo(
-    () => [...shiftTrainings(done), quizTraining(done)], [done],
-  )
+  /* **数えるのは1回だけ。** 組ごとに呼び直すと、同じ数え上げを 14 回やることになる */
+  const allQuiz = useMemo(() => quizQuestions(), [])
+  const allBones = useMemo(() => swapFrames(), [])
+  const countBy = (list, key, get) => {
+    const m = new Map()
+    for (const x of list) m.set(x[key], (m.get(x[key]) ?? 0) + get(x))
+    return m
+  }
+  const quizBy = useMemo(() => countBy(allQuiz, 'groupId', () => 1), [allQuiz])
+  const swapBy = useMemo(() => countBy(allBones, 'groupId', (f) => f.count), [allBones])
+
+  /** 一覧に出す 14 組 +「まぜて見分ける」。**段ごとの数も添える** */
+  const trainings = useMemo(() => [
+    ...shiftTrainings(done).map((t) => ({
+      ...t,
+      counts: { quiz: quizBy.get(t.id) ?? 0, swap: swapBy.get(t.id) ?? 0, say: t.total },
+    })),
+    /* **まぜて見分けるは、いちばん後ろ**(前へ割り込ませない)。
+       `shiftTrainings()` の中では作らない —— 読み込みが輪になる */
+    { ...quizTraining(done), counts: null },
+  ], [done, quizBy, swapBy])
+
   const here = trainings.find((t) => t.id === pick) ?? null
-  /** 名詞句を入れ替える練習かどうか。**画面の中で id を比べるのはここだけ** */
-  const swapping = pick === SWAP_GROUP
-  /** 見分ける練習かどうか。**画面の中で id を比べるのはここだけ** */
-  const quizzing = pick === QUIZ_GROUP
-  const frames = useMemo(() => swapFrames(), [])
-  /* **骨は 66 本ある。** そのまま並べると札の壁になるので、
-     **まず組をえらび、その中の骨をえらぶ**(2段)。
-     組の入れ物は `scene` を使い回す ——**絞り込みを2つ持たない** */
-  const swapGroups = useMemo(
-    () => [...new Map(frames.map((f) => [f.groupId, { id: f.groupId, label: f.groupLabel }])).values()],
-    [frames],
+  const mixing = pick === QUIZ_GROUP
+  /** この組の骨(段2)。**組の外の骨は出さない** */
+  const myBones = useMemo(
+    () => allBones.filter((f) => f.groupId === pick), [allBones, pick],
   )
-  const shownFrames = useMemo(
-    () => (scene ? frames.filter((f) => f.groupId === scene) : frames),
-    [frames, scene],
-  )
-  /** いま使っている骨。**選んでいなければ、出ている中の先頭** */
-  const activeFrame = shownFrames.some((f) => f.id === frame)
-    ? frame : (shownFrames[0]?.id ?? null)
-  const qGroups = useMemo(() => quizGroups(), [])
-  const qs = useMemo(
-    () => (!pick ? []
-      : quizzing ? quizQuestions({ group: scene })
-        : swapping ? swapQuestions({ frame: activeFrame })
-          : shiftQuestions({ group: pick, scene })),
-    [pick, scene, activeFrame, swapping, quizzing],
-  )
-  /* **範囲の外に出さない。** 絞り込みを変えると数が変わる
-     (やりかけの控えと同じ注意・CLAUDE.md) */
+  const activeFrame = myBones.some((f) => f.id === frame)
+    ? frame : (myBones[0]?.id ?? null)
+
+  /** いま出す問。**段で分かれるのはここ1か所** */
+  const qs = useMemo(() => {
+    if (!here) return []
+    if (mixing) return quizQuestions({ group: scene })
+    if (stage === 'quiz') return allQuiz.filter((q) => q.groupId === pick)
+    if (stage === 'swap') return swapQuestions({ frame: activeFrame })
+    return shiftQuestions({ group: pick, scene })
+  }, [here, mixing, stage, pick, scene, activeFrame, allQuiz])
+
+  /* **範囲の外に出さない。** 段や絞り込みを変えると数が変わる */
   const nth = Math.min(Math.max(0, at), Math.max(0, qs.length - 1))
   const q = qs[nth] ?? null
 
-  /* 問が変われば、言ったことも判定もお手本も消す。
-     **前の問の判定を、次の問に残さない** */
+  /* 問が変われば、言ったことも判定もお手本も消す */
   useEffect(() => {
     setSaid(''); setResult(null); setOpenEx(false); setMicNote('')
   }, [q?.qid])
-
-  /* トレーニングや絞り込みを変えたら先頭へ。**途中の番号のまま残さない** */
-  useEffect(() => { setAt(0) }, [pick, scene, frame])
+  /* 組・段・絞り込みを変えたら先頭へ。**途中の番号のまま残さない** */
+  useEffect(() => { setAt(0) }, [pick, stage, scene, activeFrame])
 
   /** 言えた問を控える。**数え方を2通り持たない**ので、足すのはここだけ */
   const markDone = (qid) => {
@@ -140,13 +129,10 @@ export default function FrameShift() {
 
   /** 言い直した文を見る。**判定はここ1か所からしか呼ばない** */
   const check = (text) => {
-    /* **入れるはずの名詞句も、判定に渡す。**
-       入れ替えの練習だけが `phrase` を持つ(ふだんの型シフトは `null`) */
     const j = judgeShift(text, q?.form ?? '', { phrase: q?.phrase ?? null })
     setResult(j)
     if (j.verdict === SHIFT_EMPTY) return
     answerFeedback(j.verdict === SHIFT_OK)
-    /* **言えた問だけ控える。** 型ごとの到達度は `shiftMap()` が数える */
     if (j.verdict === SHIFT_OK && q) markDone(q.qid)
   }
 
@@ -172,25 +158,24 @@ export default function FrameShift() {
   /* 画面を離れるときに、マイクを掴んだままにしない(iOS で必ず効いてくる) */
   useEffect(() => () => { sessionRef.current?.stop() }, [])
 
+  const open = (id) => { setPick(id); setStage(FIRST_STAGE); setScene(null); setFrame(null) }
+  const close = () => { setPick(null); setStage(FIRST_STAGE); setScene(null); setFrame(null) }
+
   /* ── ① トレーニングの一覧 ───────────────────────────── */
   if (!here) {
-    /** 節の見出しは、**変わったときだけ**出す(同じ見出しを何度も書かない) */
     let lastNo = null
-    /** **同じ「やること」を続けて出さない。** ①の7組は同じ指示である */
     let lastAsk = null
-    const total = trainings.reduce((n, t) => n + t.total, 0)
-    const got = trainings.reduce((n, t) => n + t.done, 0)
     return (
       <section className="stack fshift">
         <header className="card fshift-head">
           <h2 className="fshift-title"><RepeatIcon /> 型シフト</h2>
           <p className="fshift-lead">
-            もとの言い方を、指定された型で言い直します。
-            言い直した文が、その型になっているかを機械が見ます。
+            鍛えたい型の組をえらぶと、
+            <strong>見分ける → 入れ替える → 言い直す</strong> の3段が出ます。
+            どの組でも、いつも同じ3段です。
           </p>
           <p className="muted fshift-note">
-            カテゴリーごとに、やることが違います。
-            やりたいものを選んでください。言えた問: {got} / {total}
+            答えるのはマイクです。打ち込む欄はありません。
           </p>
         </header>
 
@@ -203,27 +188,26 @@ export default function FrameShift() {
             lastAsk = ask
             return (
               <div key={t.id} className="fshift-menuitem">
-                {head && (
-                  <h3 className="fshift-secline">{t.no} {t.sectionLabel}</h3>
-                )}
-                <button type="button" className="card fshift-card"
-                        onClick={() => { setPick(t.id); setScene(null); setFrame(null) }}>
+                {head && <h3 className="fshift-secline">{t.no} {t.sectionLabel}</h3>}
+                <button type="button" className="card fshift-card" onClick={() => open(t.id)}>
                   <span className="fshift-cardtop">
                     <span className="fshift-cardname">{t.label}</span>
                     <ChevronIcon />
                   </span>
-                  {/* **何をする練習かを、開く前に言う。**
-                      ただし同じ指示が続くときは、はじめの1枚にだけ出す */}
                   {showAsk && <span className="fshift-cardmove">{ask}</span>}
-                  {/* **この組に入っている型の名前。** 組ごとに必ず違う ——
-                      「やること」だけだと①の7枚が見分けられない */}
                   <span className="fshift-cardforms">
                     {t.forms.slice(0, 3).join(' / ')}
                     {t.forms.length > 3 && ` ほか ${t.forms.length - 3}`}
                   </span>
+                  {/* **段ごとの数を、開く前に見せる。** どれだけこなせるかが分かる */}
                   <span className="fshift-cardcount">
-                    {t.total} 問
-                    {/* **0 と null を取り違えない。** 0 のときも数で出す */}
+                    {t.counts
+                      ? SHIFT_STAGES.map((s) => (
+                        <span key={s.id} className="fshift-cardstage">
+                          {s.label} {t.counts[s.id]}
+                        </span>
+                      ))
+                      : <span className="fshift-cardstage">{t.total} 問</span>}
                     <span className="fshift-carddone">言えた {t.done}</span>
                   </span>
                 </button>
@@ -235,109 +219,87 @@ export default function FrameShift() {
     )
   }
 
-  /* ── ② そのトレーニングのドリル ─────────────────────── */
+  /* ── ② 組を1つ開いた画面(3段) ───────────────────── */
   const say = result ? shiftSay(result) : null
-  const doneHere = qs.filter((x) => done.has(x.qid)).length
+  const nowStage = mixing ? null : SHIFT_STAGES.find((s) => s.id === stage)
 
   return (
     <section className="stack fshift">
       <header className="card fshift-head">
         <div className="fshift-back">
-          <button type="button" className="btn btn--small btn--ghost"
-                  onClick={() => { setPick(null); setScene(null); setFrame(null) }}>
+          <button type="button" className="btn btn--small btn--ghost" onClick={close}>
             トレーニングの一覧へ
           </button>
         </div>
-        <h2 className="fshift-title">
-          <RepeatIcon /> {here.label}
-        </h2>
-        <p className="fshift-lead">
-          <strong>やること:</strong> {here.move?.ask ?? ''}
-        </p>
-        {/* **なぜ効くかは畳まない。** 理由が無いと続かない */}
+        <h2 className="fshift-title"><RepeatIcon /> {here.label}</h2>
+        <p className="fshift-lead"><strong>やること:</strong> {here.move?.ask ?? ''}</p>
         {here.move?.why && <p className="muted fshift-note">{here.move.why}</p>}
+
+        {!mixing && (
+          /* **段はいつも3つ、いつもこの順。** 左がやさしい */
+          <div className="fshift-stages">
+            {SHIFT_STAGES.map((s) => (
+              <button key={s.id} type="button"
+                      className={`btn fshift-stage${stage === s.id ? ' fshift-stage--on' : ' btn--ghost'}`}
+                      aria-pressed={stage === s.id}
+                      onClick={() => { setStage(s.id); setScene(null); setFrame(null) }}>
+                <span className="fshift-stageno">{s.no}</span>
+                <span className="fshift-stagename">{s.label}</span>
+                <span className="fshift-stagen">{here.counts?.[s.id] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {nowStage && <p className="muted fshift-note">{nowStage.hint}</p>}
       </header>
 
-      {/* **絞り込みは畳んでおく**(2026-09・390px で実測)。
-          開いたままだと問が画面の外まで押し出される。
-          **掛かっている絞り込みは、畳んだままでも見える**ようにする
-          ——「黙って絞らない」(CLAUDE.md) */}
-      <details className="card fshift-filter">
-        <summary className="fshift-sum">
-          {swapping ? '骨をえらぶ' : quizzing ? '型の組でしぼる' : '場面でしぼる'}
-          {swapping ? (
-            <span className="finder-badge fshift-mark">
-              {frames.find((x) => x.id === activeFrame)?.label ?? ''}
-            </span>
-          ) : scene && (
-            <span className="finder-badge fshift-mark">
-              {shiftSceneOf(scene)?.label ?? ''}
-            </span>
-          )}
-          <span className="muted fshift-sumcount">{qs.length} 問</span>
-        </summary>
-        {/* **`<details>` そのものに `display` を書かない。**
-            書くと、畳んでいても中身が場所を取り続ける(2026-09 実測・
-            見えないまま下の問と重なる)。**並べるのは、この入れ物の役目** */}
-        <div className="fshift-filterbody">
-          <div className="chiprow">
-            {swapping ? (
-              /* **骨は「ぜんぶ」を出さない。** 1つに固定するのがこの練習である
-                 —— 混ぜると「肉だけに気を使う」ができなくなる。
-                 **2段でえらぶ**(組 → その中の骨)。66 本を1列に並べると壁になる */
-              <>
-                <button type="button"
-                        className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
-                        onClick={() => { setScene(null); setFrame(null) }}>組ぜんぶ</button>
-                {swapGroups.map((g) => (
-                  <button key={g.id} type="button"
-                          className={`btn btn--small ${scene === g.id ? '' : 'btn--ghost'}`}
-                          onClick={() => { setScene(g.id); setFrame(null) }}>{g.label}</button>
-                ))}
-              </>
-            ) : quizzing ? (
-              /* **見分けるは、型の組でしぼる。** 入れ物は `scene` を使い回す ——
-                 **絞り込みを2つ持たない**(CLAUDE.md「数え方を2通り持たない」) */
-              <>
-                <button type="button"
-                        className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
-                        onClick={() => setScene(null)}>ぜんぶ</button>
-                {qGroups.map((g) => (
-                  <button key={g.id} type="button"
-                          className={`btn btn--small ${scene === g.id ? '' : 'btn--ghost'}`}
-                          onClick={() => setScene(g.id)}>{g.label}</button>
-                ))}
-              </>
-            ) : (
-              <>
-                <button type="button"
-                        className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
-                        onClick={() => setScene(null)}>ぜんぶ</button>
-                {SHIFT_SCENES.map((s) => (
-                  <button key={s.id} type="button"
-                          className={`btn btn--small ${scene === s.id ? '' : 'btn--ghost'}`}
-                          onClick={() => setScene(s.id)}>{s.label}</button>
-                ))}
-              </>
+      {/* 段ごとの絞り込み。**段1(組の中)には絞るものが無いので出さない** */}
+      {(mixing || stage !== 'quiz') && (
+        <details className="card fshift-filter">
+          <summary className="fshift-sum">
+            {mixing ? '型の組でしぼる' : stage === 'swap' ? '骨をえらぶ' : '場面でしぼる'}
+            {stage === 'swap' && !mixing ? (
+              <span className="finder-badge fshift-mark">
+                {myBones.find((x) => x.id === activeFrame)?.label ?? ''}
+              </span>
+            ) : scene && (
+              <span className="finder-badge fshift-mark">
+                {(mixing ? quizGroups() : SHIFT_SCENES).find((x) => x.id === scene)?.label ?? ''}
+              </span>
             )}
-          </div>
-          {swapping && (
-            /* **2段目 —— えらんだ組の中の骨。** 何問あるかも添える
-               (**黙って絞らない**。どれを押すと何問になるかが見える) */
+            <span className="muted fshift-sumcount">{qs.length} 問</span>
+          </summary>
+          {/* **`<details>` そのものに `display` を書かない。**
+              書くと、畳んでいても中身が場所を取り続ける(2026-09 実測) */}
+          <div className="fshift-filterbody">
             <div className="chiprow">
-              {shownFrames.map((f) => (
-                <button key={f.id} type="button"
-                        className={`btn btn--small ${activeFrame === f.id ? '' : 'btn--ghost'}`}
-                        onClick={() => setFrame(f.id)}>
-                  {f.label} <span className="muted">{f.count}</span>
-                </button>
-              ))}
+              {stage === 'swap' && !mixing ? (
+                /* **骨は「ぜんぶ」を出さない。** 1つに固定するのがこの段である */
+                myBones.map((f) => (
+                  <button key={f.id} type="button"
+                          className={`btn btn--small ${activeFrame === f.id ? '' : 'btn--ghost'}`}
+                          onClick={() => setFrame(f.id)}>
+                    {f.label} <span className="muted">{f.count}</span>
+                  </button>
+                ))
+              ) : (
+                <>
+                  <button type="button"
+                          className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
+                          onClick={() => setScene(null)}>ぜんぶ</button>
+                  {(mixing ? quizGroups() : SHIFT_SCENES).map((x) => (
+                    <button key={x.id} type="button"
+                            className={`btn btn--small ${scene === x.id ? '' : 'btn--ghost'}`}
+                            onClick={() => setScene(x.id)}>{x.label}</button>
+                  ))}
+                </>
+              )}
             </div>
-          )}
-        </div>
-      </details>
+          </div>
+        </details>
+      )}
 
-      {quizzing ? (
+      {(mixing || stage === 'quiz') ? (
         /* **本物の部品をそのまま描く。** 問と控えは、ここが渡す */
         <FrameQuiz questions={qs} done={done} onRight={markDone} />
       ) : !q ? (
@@ -363,16 +325,12 @@ export default function FrameShift() {
             <p className="fshift-ja">{q.ja}</p>
 
             <div className="fshift-base">
-              {/* **渡しているものが違えば、札も違う。**
-                  ふだんは「もとの言い方」、入れ替えの練習では「骨」 */}
+              {/* **渡しているものが違えば、札も違う** */}
               <span className="field-label">{q.give ?? 'もとの言い方'}</span>
               <p className="fshift-baseen">{q.base}</p>
             </div>
 
-            {/* **入れるものの英語は見せない。**
-                見せると写すだけになる —— 意味はお題の日本語に出ている。
-                **何を入れるかは `q.give`(骨の札)が言っている**ので、
-                ここで席の種類ごとに書き分けない(CLAUDE.md) */}
+            {/* **入れるものの英語は見せない。** 見せると写すだけになる */}
             {q.phrase && (
               <p className="muted fshift-hint">
                 入れるものは、お題の日本語に出ています。
@@ -380,8 +338,7 @@ export default function FrameShift() {
               </p>
             )}
 
-            {/* **入れ替えの練習では出さない。** 骨にその型がそのまま
-                書いてあるので、**同じことを2つ見せる**ことになる(CLAUDE.md) */}
+            {/* **入れ替えの段では出さない。** 骨にその型がそのまま書いてある */}
             {!q.phrase && (
               <div className="fshift-target">
                 <span className="field-label">この型で言い直す</span>
@@ -389,21 +346,9 @@ export default function FrameShift() {
               </div>
             )}
 
-            {/* **書き込む欄は置かない**(2026-09 実機・利用者の指定)。
-
-                  > 書き込む欄はいらないですね。基本的にタイプするのは面倒なので
-                  > 型シフトトレーニングについては書き込みはなしを共通仕様にしてください
-
-                これは**話す練習**である。打たせると、打つ速さの練習になってしまう。
-                この画面には `input` も `textarea` も1つも置かない ——
-                `npm run test:shift` が機械で見張っている。 */}
+            {/* **書き込む欄は置かない**(2026-09 利用者の指定・共通仕様)。
+                これは話す練習である。打たせると、打つ速さの練習になる */}
             <div className="fshift-answer">
-              {/* **聞き取った文は、必ず見せる。**
-                  何と聞こえたか分からないと、判定に納得できない。
-
-                  **マイクが使えない端末では、箱ごと出さない** ——
-                  出しても一生うまらないし、「マイクを押して」という
-                  **効かない案内**になる(CLAUDE.md) */}
               {isRecognitionSupported() && (
                 <>
                   <span className="field-label">言い直した文</span>
@@ -420,13 +365,9 @@ export default function FrameShift() {
                     {listening ? <><StopIcon /> 止める</> : <><MicIcon /> 話す</>}
                   </button>
                 ) : (
-                  /* **行き止まりを作らない**(CLAUDE.md)。
-                     音声認識に対応していない端末でも、お手本を見て声に出し、
-                     自分で「言えた」を押せる。**打たせない**のは同じである */
+                  /* **行き止まりを作らない。** 打たせないのは同じ */
                   <button type="button" className="btn"
-                          onClick={() => q && markDone(q.qid)}>
-                    言えた
-                  </button>
+                          onClick={() => markDone(q.qid)}>言えた</button>
                 )}
                 <button type="button" className="btn btn--ghost"
                         onClick={() => setOpenEx((v) => !v)}>
@@ -439,13 +380,11 @@ export default function FrameShift() {
                   機械で確かめられません。お手本を見て、声に出して確かめてください。
                 </p>
               )}
-              {/* **失敗の知らせは、その操作をした場所に出す** */}
               {micNote && <p className="fshift-mic" role="alert">{micNote}</p>}
             </div>
 
             {say && say.head && (
-              /* **成功と失敗を、同じ見た目で終わらせない。**
-                 色だけに頼らず、地色 + 枠線 + 太字の見出しで分ける */
+              /* **成功と失敗を、同じ見た目で終わらせない** */
               <div className={`fshift-verdict fshift-verdict--${say.tone}`} role="status">
                 <p className="fshift-vhead">{say.head}</p>
                 {say.body && <p className="fshift-vbody">{say.body}</p>}
@@ -468,7 +407,7 @@ export default function FrameShift() {
                       disabled={nth >= qs.length - 1} onClick={() => setAt(nth + 1)}>次へ</button>
             </div>
             <p className="muted fshift-count">
-              言えた問: {doneHere} / {qs.length}
+              言えた問: {qs.filter((x) => done.has(x.qid)).length} / {qs.length}
             </p>
           </div>
         </>

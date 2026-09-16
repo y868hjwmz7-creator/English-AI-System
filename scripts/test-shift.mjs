@@ -41,6 +41,7 @@ import {
 } from '../src/lib/frameShift.js'
 import { SWAP_BLANK, SWAP_FRAMES, SWAP_SLOTS, swapFrameOf } from '../src/data/phraseSwap.js'
 import { SUBJ_KINDS } from '../src/data/swapParts.js'
+import { FIRST_STAGE, SHIFT_STAGES, stageOf } from '../src/data/frameTraining.js'
 import { NOUN_PHRASES } from '../src/data/nounPhrases.js'
 import {
   QUIZ_CHOICES, QUIZ_GROUP, QUIZ_MAX_PER_FORM,
@@ -232,13 +233,14 @@ head('カテゴリーごとのトレーニング')
   const groups = []
   for (const sec of FRAME_SECTIONS) for (const g of sec.groups) groups.push(g)
 
-  const all2 = shiftTrainings()
-  /* **④ 名詞句を入れ替えるは、組ではない。** いちばん後ろに1枚だけ足してある */
-  const ts = all2.filter((t) => t.id !== SWAP_GROUP)
+  const ts = shiftTrainings()
   ok(ts.length === groups.length,
-    `型の組のトレーニングが ${ts.length} 本(組の数と同じ)`, `組は ${groups.length}`)
-  ok(all2[all2.length - 1].id === SWAP_GROUP,
-    '名詞句を入れ替えるは、いちばん後ろ(前へ割り込ませない)')
+    `トレーニングが ${ts.length} 本(組の数と同じ)`, `組は ${groups.length}`)
+  /* **入れ替えは、別の入口として出さない**(2026-09 利用者の指定
+     「どうするのが学習者が一番使いやすく…」)。
+     組の中の**段2**になったので、一覧には出てこない */
+  ok(!ts.some((t) => t.id === SWAP_GROUP),
+    '入れ替えは、一覧の1枚として出していない(組の中の段2にした)')
 
   /* **並びを変えていないか。** 問を書いた順に並べると、型の一覧と食い違う */
   ok(ts.map((t) => t.id).join(',') === groups.map((g) => g.id).join(','),
@@ -450,16 +452,62 @@ head('入れ替えて数をこなす練習')
   const view = code('src/components/FrameShift.jsx')
   ok(/swapQuestions\(/.test(view), '画面が swapQuestions() を呼んでいる')
   ok(/swapFrames\(/.test(view), '画面が骨の札を出している')
-  /* **66 本を1列に並べない。** 組をえらんでから骨をえらぶ(2段) */
-  ok(/swapGroups/.test(view), '骨を、まず組でまとめて出している')
-  ok(/shownFrames/.test(view), 'えらんだ組の中の骨だけを出している')
+  /* **66 本を1列に並べない。** その組の骨だけを出す */
+  ok(/myBones/.test(view), 'その組の骨だけを出している')
   ok(/activeFrame/.test(view), 'えらんでいなければ、出ている中の先頭を使う')
   ok(/phrase: q\?\.phrase/.test(view), '画面が、入れる名詞句を判定に渡している')
   /* **英語を見せない。** 見せると写すだけになる */
   ok(!/\{q\.phrase\}/.test(view), '入れる名詞句の英語を、画面に出していない')
   /* **同じことを2つ見せない。** 骨に型がそのまま書いてある */
   ok(/\{!q\.phrase && \(/.test(view), '入れ替えの練習では、型の名前を重ねて出さない')
-  ok(/pick === SWAP_GROUP/.test(view), '画面の中で id を直に書き比べていない(1か所)')
+  /* **入れ替えは、組の中の「段2」である**(別の入口ではない) */
+  ok(/stage === 'swap'/.test(view), '入れ替えを、段2として出している')
+  /* **段の一覧と順は `frameTraining.js` から引く。** 画面に書き写さない ——
+     書き写すと、順を変えた日に片方だけ古くなる */
+  ok(/SHIFT_STAGES\.map/.test(view), '段の札を SHIFT_STAGES から組み立てている')
+  ok(!/'見分ける'|'入れ替える'|'言い直す'/.test(view), '段の名前を画面に書き写していない')
+}
+
+head('3つの段(一本の道)')
+{
+  /* **やさしい順に3つ。** 組を開けばいつもこの順で並ぶ(2026-09 利用者の指定
+     「どうするのが学習者が一番使いやすく、仕組みを理解しやすいでしょうか」) */
+  ok(SHIFT_STAGES.length === 3, `段が ${SHIFT_STAGES.length} つある`)
+  ok(SHIFT_STAGES.map((x) => x.id).join(',') === 'quiz,swap,say',
+    '段の順が「見分ける → 入れ替える → 言い直す」(やさしい順)',
+    SHIFT_STAGES.map((x) => x.id).join(','))
+  ok(SHIFT_STAGES.every((x, i) => x.no === i + 1), '段に 1・2・3 の番号が振ってある')
+  ok(SHIFT_STAGES.every((x) => x.label?.trim() && x.hint?.trim()),
+    'どの段にも、名前と一言がある')
+  ok(new Set(SHIFT_STAGES.map((x) => x.label)).size === 3, '段の名前が、3つとも別')
+  ok(FIRST_STAGE === SHIFT_STAGES[0].id, '開いたときは、いちばんやさしい段から')
+  ok(stageOf('そんな段は無い') === null, '知らない段は null(当てずっぽうで返さない)')
+
+  /* **どの組でも、3段とも問がある。** 1つでも 0 なら、その組は道が切れている */
+  const thinStage = []
+  for (const t of shiftTrainings()) {
+    const n1 = quizQuestions({ group: t.id }).length
+    const n2 = swapFrames().filter((f) => f.groupId === t.id)
+      .reduce((n, f) => n + f.count, 0)
+    const n3 = t.total
+    if (!n1 || !n2 || !n3) thinStage.push(`${t.label} ${n1}/${n2}/${n3}`)
+  }
+  ok(thinStage.length === 0, '14 の組すべてで、3段とも問がある',
+    `\n    ${thinStage.join('\n    ')}`)
+
+  /* **画面が、段で出し分けているか** */
+  const sv = code('src/components/FrameShift.jsx')
+  /* **`open` の中を名指しで見る。** ただ `setStage(FIRST_STAGE)` を探すと、
+     `close` にも同じ行があるので**外しても緑のまま**になる
+     ——「赤チェックで赤くならないのは、壊し方が違うという知らせ」(CLAUDE.md) */
+  ok(/const open = \(id\) => \{ setPick\(id\); setStage\(FIRST_STAGE\)/.test(sv),
+    '組を開いたら、いちばんやさしい段から始まる')
+  ok(/fshift-stage--on/.test(sv), 'いま開いている段が、見て分かる')
+  ok(/aria-pressed=\{stage === s\.id\}/.test(sv), '段の札が、押した状態を伝える')
+  /* **段1(組の中)には絞るものが無いので、絞り込みを出さない**
+     —— 効かない操作を見せない(CLAUDE.md) */
+  ok(/\(mixing \|\| stage !== 'quiz'\) && \(/.test(sv),
+    '段1では、絞り込みの箱を出さない(効かない操作を見せない)')
 }
 
 head('見分ける練習(4択)')
@@ -571,11 +619,10 @@ head('見分ける練習(4択)')
   ok(/quizTraining\(/.test(view), '一覧に、見分けるの1枚を足している')
   ok(/pick === QUIZ_GROUP/.test(view), '画面の中で id を直に書き比べていない(1か所)')
   /* **後ろへ足す。並べ替えない** */
-  const list = shiftTrainings()
-  ok(view.indexOf('shiftTrainings(done), quizTraining(done)') > 0,
-    '見分けるは、いちばん後ろに足している')
-  ok(list.every((t) => t.id !== QUIZ_GROUP),
-    '見分けるを shiftTrainings() の中で作っていない(読み込みが輪にならない)')
+  ok(view.indexOf('quizTraining(done)') > view.indexOf('shiftTrainings(done)'),
+    'まぜて見分けるは、いちばん後ろに足している')
+  ok(shiftTrainings().every((t) => t.id !== QUIZ_GROUP),
+    'まぜて見分けるを shiftTrainings() の中で作っていない(読み込みが輪にならない)')
 }
 
 /* ────────────────────────────────────────────────────────────
