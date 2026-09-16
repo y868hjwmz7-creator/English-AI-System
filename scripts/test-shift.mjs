@@ -614,10 +614,28 @@ head('画面が、判定を書き写していないか')
    ──────────────────────────────────────────────────────────── */
 head('画面が、アプリに組み込まれているか')
 {
+  /* **サイドバーからは外した**(2026-09 利用者の指定
+     「型シフトはサイドバーからなくして、quick response 内に
+     『66の型のQR』として…追加します」)。
+     **メニューの行き先は増やさない** —— 冊の札で切り替える */
   const app = code('src/App.jsx')
-  ok(/<FrameShift\s*\/>/.test(app), 'App.jsx が FrameShift を描いている')
-  ok(/id:\s*'shift'/.test(app), 'メニューに行き先がある')
-  ok(/view === 'shift'/.test(app), '行き先から画面へつながっている')
+  ok(!/id:\s*'shift'/.test(app), 'メニューに行き先を残していない')
+  ok(!/FrameShift/.test(app), 'App.jsx から型シフトの名残が消えている')
+
+  /* **Quick Response の中の冊になっている** */
+  const qr = code('src/components/QrReview.jsx')
+  ok(/<FrameShift\s*\/>/.test(qr), 'Quick Response が FrameShift を描いている')
+  ok(/\{ id: 'frame', label: '66 の型' \}/.test(qr), '冊の一覧に「66 の型」が在る')
+  ok(/frameBook = book === 'frame'/.test(qr), '画面の中で id を直に書き比べていない(1か所)')
+  /* **冊は後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
+  ok(qr.indexOf("id: 'nf'") < qr.indexOf("id: 'frame'"),
+    '新しい冊を後ろへ足している(並べ替えていない)')
+  /* **溜まった問が0でも開ける。** 札も中身も、空の判定より前に置く ——
+     うしろだと、溜まっていない人は札そのものが見えず、開く道が無くなる */
+  ok(qr.indexOf('books.length > 1') < qr.indexOf('rows.length === 0'),
+    '冊の札が、「まだ1問も溜まっていません」より前にある(行き止まりを作らない)')
+  ok(qr.indexOf('frameBook ? (') < qr.indexOf('rows.length === 0'),
+    '66 の型の中身も、空の判定より前にある')
 
   /* **骨組み(`__screens.jsx`)にも在る** —— すき間の見張りが通る */
   const sc = code('src/__screens.jsx')

@@ -33,6 +33,7 @@ import {
 import Loading from './Loading.jsx'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import ReviewScope from './ReviewScope.jsx'
+import FrameShift from './FrameShift.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import {
   QR_GROUPS, SCOPES, groupLead, loadScope, loadSize, qrGroupPool, qrTally,
@@ -117,10 +118,22 @@ export default function QrReview({
        済ませてあり、ここでは数を見るだけである。
        **既定は空**なので、渡さない画面はこれまでどおり何も出ない */
     ...(nfUnits.length ? [{ id: 'nf', label: 'Native Flow' }] : []),
+    /* **66 の型**(2026-09 利用者の指定
+       「型シフトはサイドバーからなくして、quick response 内に
+       『66の型のQR』としてその中に『日本語→英語』と『言い換え』を
+       コンテンツとして追加します」)。
+
+       **誰にでも出す** —— 66 型はファイル(`sentenceFrames.js` /
+       `phraseSwap.js`)に書いてあり、ゲストごとに出し分ける理由がいまは無い
+       (絞りたくなったら `learnerFeatures.js` に1つ足すだけである)。
+       **後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
+    { id: 'frame', label: '66 の型' },
   ]
   const [bookWanted, setBookWanted] = useState('my')
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
   const nfBook = book === 'nf'
+  /** 66 の型を開いているか。**画面の中で id を比べるのはここだけ** */
+  const frameBook = book === 'frame'
 
   /**
    * **いま開いている Unit**(`null` ならぜんぶ)。
@@ -392,13 +405,46 @@ export default function QrReview({
 
   const who = learnerName ? `${learnerName} さんの` : ''
 
+  /** 冊の札。**Supabase の有無で2か所から描くので、ここ1つに持つ**
+      (**呼び名を2か所に書かない**・CLAUDE.md) */
+  const bookChips = books.length > 1 && (
+    <div className="chiprow wb-books" role="group" aria-label="どの Quick Response 帳か">
+      {books.map((b) => (
+        <button key={b.id} type="button"
+                className={`chip${book === b.id ? ' chip--on' : ''}`}
+                aria-pressed={book === b.id}
+                onClick={() => {
+                  if (book === b.id) return
+                  setBookWanted(b.id)
+                  /* 冊が変わると中身が丸ごと変わる。**やりかけを持ち越さない** */
+                  setRun(null); setPending([]); setAt(0); setDone([])
+                  setRadio(null); setGroup(null); setFilter(emptyFilter)
+                  gradedRef.current = new Set()
+                }}>
+          {b.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  /* **Supabase が無くても、66 の型は開ける**(2026-09)。
+     あちらはファイル(`sentenceFrames.js` / `phraseSwap.js`)に書いてあり、
+     サーバーを1回も呼ばない。ここで丸ごと打ち切ると、
+     会社のネットワークが塞がった日に**開く道が無くなる**
+     (**行き止まりを作らない**・CLAUDE.md) */
   if (!isSupabaseConfigured) {
     return (
       <section className="card">
         <h2 className="card-title">Quick Response(復習)</h2>
-        <p className="hint">
-          Supabase が設定されていないため、復習は溜まりません。
-        </p>
+        {bookChips}
+        {frameBook ? (
+          <FrameShift />
+        ) : (
+          <p className="hint">
+            Supabase が設定されていないため、復習は溜まりません。
+            「66 の型」は、設定が無くてもそのまま使えます。
+          </p>
+        )}
       </section>
     )
   }
@@ -549,7 +595,19 @@ export default function QrReview({
       )}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
-      {busy ? (
+      {/* **どの Quick Response 帳か**(2026-09 利用者の指定)。
+          見た目も置き場所も**単語帳の冊とまったく同じ**(`wb-books`)。
+          **色だけに頼らない** —— うすい地色 + 同じ色の文字 + 太字 +
+          `aria-pressed` の4つで、いまどれを開いているかを示す */}
+      {bookChips}
+
+      {/* **66 の型は、溜まった問に関係なく開ける。**
+          だから冊の札も中身も、読み込みや「まだ1問も溜まっていません」より
+          **前**に置く —— うしろに置くと、溜まっていない人は
+          札そのものが見えず、**開く道が無くなる**(行き止まり) */}
+      {frameBook ? (
+        <FrameShift />
+      ) : busy ? (
         <Loading />
       ) : rows.length === 0 ? (
         <p className="hint">
@@ -584,33 +642,6 @@ export default function QrReview({
               **押せる**(2026-09 利用者の指定「タッチすればそれらを
               復習できるようにしたい」)。見た目は `ReviewStats` 1つで、
               単語帳とまったく同じもの。**書き写さない** */}
-          {/* **どの Quick Response 帳か**(2026-09 利用者の指定)。
-              見た目も置き場所も**単語帳の冊とまったく同じ**(`wb-books`)——
-              並べて置くものは、同じ形にする。
-              **色だけに頼らない** —— うすい地色 + 同じ色の文字 + 太字 +
-              `aria-pressed` の4つで、いまどちらを開いているかを示す */}
-          {books.length > 1 && (
-            <div className="chiprow wb-books" role="group"
-                 aria-label="どの Quick Response 帳か">
-              {books.map((b) => (
-                <button key={b.id} type="button"
-                        className={`chip${book === b.id ? ' chip--on' : ''}`}
-                        aria-pressed={book === b.id}
-                        onClick={() => {
-                          if (book === b.id) return
-                          setBookWanted(b.id)
-                          /* 冊が変わると中身が丸ごと変わる。
-                             **やりかけを持ち越さない** */
-                          setRun(null); setPending([]); setAt(0); setDone([])
-                          setRadio(null); setGroup(null); setFilter(emptyFilter)
-                          gradedRef.current = new Set()
-                        }}>
-                  {b.label}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* **どの Unit を練習するか**(2026-09 利用者の指定「UNIT毎に分けて」)。
               **Native Flow を開いているときだけ**出す ——
               自分の Quick Response 帳には Unit という区切りが無い

@@ -96,7 +96,7 @@ export const SHIFT_MOVES = [
        **シンプルにした** —— 出すのは**日本語のお題と型の名前だけ**である。
        (「見分ける」は廃止・同じ日の指定) */
     id: 'swap',
-    label: 'Quick Response',
+    label: '日本語 → 英語',
     ask: '日本語を見て、その型で英語を言う',
     why: '読んで分かることと、口から出てくることは別物である。'
       + '型を1つに決めてあるので、言い方に迷わない。66 型すべてに問がある。',
@@ -163,8 +163,8 @@ export function moveOfGroup(groupId) {
  * **並べ替えない。** 段の順は難しさの順であり、画面の都合ではない。
  */
 export const SHIFT_STAGES = [
-  { id: 'swap', no: 1, label: 'Quick Response', hint: '日本語を見て、その型で英語を言う' },
-  { id: 'say', no: 2, label: '言い直す', hint: 'もとの英文を、指定の型で言い直す' },
+  { id: 'swap', no: 1, label: '日本語 → 英語', hint: '日本語を見て、その型で英語を言う' },
+  { id: 'say', no: 2, label: '言い換え', hint: 'もとの英文を、指定の型で言い換える' },
 ]
 
 /** 段の id から1行を引く。知らない id は `null`(**当てずっぽうで返さない**) */

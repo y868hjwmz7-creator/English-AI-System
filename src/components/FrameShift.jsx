@@ -155,11 +155,12 @@ export default function FrameShift() {
     return (
       <section className="stack fshift">
         <header className="card fshift-head">
-          <h2 className="fshift-title"><RepeatIcon /> 型シフト</h2>
+          {/* **冊の札が「66 の型」と言っているので、見出しで繰り返さない**
+              (**同じことをするものを2つ見せない**・CLAUDE.md) */}
           <p className="fshift-lead">
             鍛えたい型の組をえらぶと、
-            <strong>Quick Response → 言い直す</strong> の2段が出ます。
-            どの組でも、いつも同じ2段です。
+            <strong>日本語 → 英語</strong> と <strong>言い換え</strong> の
+            2つが出ます。どの組でも、いつも同じ2つです。
           </p>
           <p className="muted fshift-note">
             答えるのはマイクです。打ち込む欄はありません。
@@ -333,7 +334,9 @@ export default function FrameShift() {
             <div className="fshift-answer">
               {isRecognitionSupported() && (
                 <>
-                  <span className="field-label">言い直した文</span>
+                  {/* **「言い直した文」と書かない。** 日本語 → 英語の段では
+                      言い直していない —— **どちらの段でも真になる言い方**にする */}
+                  <span className="field-label">言った文</span>
                   <p className={`fshift-heard${said ? '' : ' fshift-heard--none'}`}>
                     {said || 'マイクを押して、声に出して言ってください'}
                   </p>
