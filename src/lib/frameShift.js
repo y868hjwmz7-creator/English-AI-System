@@ -59,6 +59,8 @@
  * ============================================================================
  */
 import { FRAME_SHIFTS, SHIFT_SCENES } from '../data/frameShift.js'
+import { NOUN_PHRASES } from '../data/nounPhrases.js'
+import { SWAP_FRAMES, swapFrameOf, swapJa, swapSentence } from '../data/phraseSwap.js'
 import { FRAME_SECTIONS } from '../data/sentenceFrames.js'
 import { moveOfGroup } from '../data/frameTraining.js'
 import { FRAME_INDEX, SAME_SHAPE, frameFormOf } from './frameMatch.js'
@@ -68,6 +70,8 @@ export const SHIFT_OK = 'ok'
 export const SHIFT_OTHER = 'other'
 export const SHIFT_UNSURE = 'unsure'
 export const SHIFT_EMPTY = 'empty'
+/** 型は合っているが、入れるはずの名詞句が入っていない(入れ替えの練習だけ) */
+export const SHIFT_NOPHRASE = 'nophrase'
 
 /**
  * 狙った型を、`frameMatch` が返しうる形に読み替える。
@@ -82,14 +86,21 @@ export const shiftTargetOf = (form) => SAME_SHAPE.get(form)?.as ?? form
  * @param form 狙った型(`sentenceFrames.js` の `form`)
  * @returns `{ verdict, got, want }` —— `got` は見分けた型(無ければ null)
  */
-export function judgeShift(said, form) {
+export function judgeShift(said, form, { phrase = null } = {}) {
   const text = String(said ?? '').trim()
   const want = shiftTargetOf(form)
-  if (!text) return { verdict: SHIFT_EMPTY, got: null, want }
+  if (!text) return { verdict: SHIFT_EMPTY, got: null, want, phrase }
   const got = frameFormOf(text)
-  if (!got) return { verdict: SHIFT_UNSURE, got: null, want }
-  if (got === want) return { verdict: SHIFT_OK, got, want }
-  return { verdict: SHIFT_OTHER, got, want }
+  if (!got) return { verdict: SHIFT_UNSURE, got: null, want, phrase }
+  if (got !== want) return { verdict: SHIFT_OTHER, got, want, phrase }
+  /* **名詞句を入れ替える練習だけ、もう1つ見る。**
+     骨が合っていても、入れるはずの名詞句が入っていなければ
+     その練習をしたことにならない。**大文字小文字は見ない**
+     (文頭に来ると `A lack of …` になる) */
+  if (phrase && !text.toLowerCase().includes(String(phrase).toLowerCase())) {
+    return { verdict: SHIFT_NOPHRASE, got, want, phrase }
+  }
+  return { verdict: SHIFT_OK, got, want, phrase }
 }
 
 /**
@@ -97,7 +108,7 @@ export function judgeShift(said, form) {
  * **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md)ので、
  * `tone` を添える(画面が色と枠を決める手がかり)。
  */
-export function shiftSay({ verdict, got, want }) {
+export function shiftSay({ verdict, got, want, phrase = null }) {
   if (verdict === SHIFT_OK) return { tone: 'ok', head: 'その型で言えています', body: `「${want}」` }
   if (verdict === SHIFT_OTHER) {
     return {
@@ -105,6 +116,15 @@ export function shiftSay({ verdict, got, want }) {
       head: 'ちがう型になっています',
       /* **「間違い」と書かない。** 英語として正しいことは多い */
       body: `いま言えているのは「${got}」です。狙いは「${want}」です。`,
+    }
+  }
+  if (verdict === SHIFT_NOPHRASE) {
+    return {
+      tone: 'nophrase',
+      head: '型は合っています。名詞句が入っていません',
+      /* **✕ にしない。** 骨は言えているのだから、あと1つである */
+      body: `この練習で入れるのは「${phrase}」です。`
+        + 'もう一度、そこを入れて言ってみてください。',
     }
   }
   if (verdict === SHIFT_UNSURE) {
@@ -201,8 +221,70 @@ export function shiftTrainings(done = null) {
       })
     }
   }
+  /* **④ 名詞句を入れ替える**(2026-09 利用者の指定)。
+     `sentenceFrames.js` の組ではないので、**いちばん後ろに足す** ——
+     冊と同じで、**前へ割り込ませない**(docs/notes/22 の決まり)。
+     数は骨ごとに変わるので、**先頭の骨で数えず、ぜんぶ足す** */
+  const swapAll = SWAP_FRAMES.flatMap((f) => swapQuestions({ frame: f.id }))
+  out.push({
+    id: SWAP_GROUP,
+    no: '④',
+    sectionLabel: '名詞句を入れ替える(骨は固定、肉だけ変える)',
+    label: '名詞句を入れ替える',
+    move: moveOfGroup(SWAP_GROUP),
+    forms: SWAP_FRAMES.map((f) => f.form),
+    total: swapAll.length,
+    done: swapAll.filter((q) => has.has(q.qid)).length,
+  })
   return out
 }
+
+/** 名詞句を入れ替える練習の、id の頭。**2か所に書かない** */
+export const SWAP_GROUP = 'swap'
+
+/**
+ * **名詞句を入れ替える練習の問**(2026-09 利用者の指定
+ * 「5文だけでなく、そこを言い換える練習ができるようにしたい」)。
+ *
+ * 骨(`SWAP_FRAMES`)1つに、名詞句 80 件を順に入れる。
+ *
+ * **機械で確かめてから出す。** 入れてみて狙いの型に見えない組み合わせは
+ * **はじめから出さない** —— 出して「ちがう型です」と言ったら、
+ * 正しく言えた人に嘘をつくことになる(この道具の根っこの決まり)。
+ * 一覧を手で書いていないので、**名詞句を足したときも自動で付いてくる。**
+ *
+ * @param frame 骨の id(`null` なら先頭の骨)
+ */
+export function swapQuestions({ frame = null } = {}) {
+  const f = swapFrameOf(frame) ?? SWAP_FRAMES[0]
+  const want = shiftTargetOf(f.form)
+  const out = []
+  for (const x of NOUN_PHRASES) {
+    const en = swapSentence(f, x.p)
+    /* **確かめてから出す。** ここが、この練習の安全弁である */
+    if (frameFormOf(en) !== want) continue
+    out.push({
+      qid: `${SWAP_GROUP}:${f.id}:${x.p}`,
+      id: f.id,
+      scene: null,
+      ja: swapJa(f, x.n),
+      /* **渡すのは骨。** 「もとの言い方」ではないので、呼ぶ側が札を変える */
+      base: f.en,
+      give: '骨(ここに名詞句を入れる)',
+      form: f.form,
+      /* **入れるはずの名詞句。** 判定がもう1つ見る */
+      phrase: x.p,
+      ex: en,
+      groupId: SWAP_GROUP,
+      groupLabel: '名詞句を入れ替える',
+      sectionNo: '④',
+    })
+  }
+  return out
+}
+
+/** 骨の札(入れ替えの練習で出す)。**出てくる順のまま。並べ替えない** */
+export const swapFrames = () => SWAP_FRAMES.map((f) => ({ id: f.id, label: f.form }))
 
 /* ------------------------------------------------------------------ *
  * 言えた型の控え(端末に持つ)

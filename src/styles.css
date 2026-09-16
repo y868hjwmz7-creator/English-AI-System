@@ -9139,3 +9139,8 @@ button.wbfilter-ctl { text-align: left; }
   font-size: var(--fs-13); line-height: 1.6;
   color: var(--text-primary); font-weight: 600;
 }
+/* 入れ替えの練習の一言。**英語は見せない**(見せると写すだけになる) */
+.fshift-hint { margin: 0; font-size: var(--fs-13); line-height: 1.6; }
+/* 型は合っているが名詞句が入っていない。**✕ にしない** —— 骨は言えている */
+.fshift-verdict--nophrase { border-color: var(--warn); background: var(--warn-bg); }
+.fshift-verdict--nophrase > .fshift-vhead { color: var(--warn); }

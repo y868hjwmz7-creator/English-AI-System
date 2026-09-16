@@ -5679,7 +5679,7 @@ console.log('\nスピーチ練習(0054)')
  * ④絞り込みが効く形になっているか ⑤答えが漏れていないか
  * ⑥**画面が本当に呼んでいるか。**
  * ══════════════════════════════════════════════════════════════════════ */
-console.log('\n▶ Native Flow と コロケーション(ファイルに持った教材)')
+console.log('\n▶ Native Flow と コロケーションと名詞句(ファイルに持った教材)')
 {
   const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
   /* **「名前が出てくるか」で見ない**(CLAUDE.md)。この節にも
@@ -5690,6 +5690,7 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
 
   const nf = await import('../src/data/nativeFlow.js')
   const col = await import('../src/data/collocations.js')
+  const np = await import('../src/data/nounPhrases.js')
   const { normEn, normWord } = await import('../src/lib/textNorm.js')
 
   /* ── ① 一覧を勝手に減らさない ───────────────────────── */
@@ -5820,6 +5821,81 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
      本当に壊れているものを見落とす**(CLAUDE.md) */
   ok(/\}, \[[^\]]*\bcolBook\b[^\]]*\]\)/.test(wb),
     '単語帳 … 冊が変わったら読み直す(見張りに入っている)')
+
+  /* ── ⑦ 名詞句(単語帳の5冊目)─────────────────────────
+     2026-09 利用者の指定
+       > どのビジネスでも使える「名詞句」を厳選し、
+       > 単語帳に一つのコンテンツとして置き……
+
+     **コロケーションと1文字も違わない形にしてある**ので、
+     見る中身も同じにそろえる(読み方を2通り持たない)。 */
+  ok(np.NOUN_PHRASES.length === 80,
+    '名詞句 … 80 件ある', `いま ${np.NOUN_PHRASES.length}`)
+  ok(np.NOUN_PHRASE_GROUPS.length === 6
+     && np.NOUN_PHRASE_GROUPS.every((g) => np.NOUN_PHRASES.some((x) => x.g === g.id)),
+    '名詞句 … 6つの組があり、どれにも中身がある')
+  /* **知らない組を勝手に増やしていないか**(逆も見る) */
+  ok(np.NOUN_PHRASES.every((x) => np.nounPhraseGroupOf(x.g)),
+    '名詞句 … 一覧に無い組を使っていない')
+  ok(np.NOUN_PHRASES.every((x) => x.p.trim() && x.n.trim() && x.en.trim() && x.ja.trim()),
+    '名詞句 … 空の欄が1つも無い')
+  ok(np.NOUN_PHRASES.every((x) => x.p.includes(' ')),
+    '名詞句 … どれも2語以上(句として単語帳に入る)')
+  ok(!np.NOUN_PHRASES.some((x) => LIG.test(x.en) || LIG.test(x.p)),
+    '名詞句 … 合字が1つも残っていない')
+  /* **鍵が重なっていないか。** 重なると、片方の覚え具合がもう片方に付く */
+  const npKeys = np.NOUN_PHRASES.map((x) => normWord(x.p))
+  ok(new Set(npKeys).size === npKeys.length, '名詞句 … そろえた語句が重なっていない')
+  /* **例文の中に、その語句がそのまま出てくるか。**
+     ここがいちばん効く —— 出てこない例文だと、
+     **文脈ごと覚える**という単語帳の前提がくずれる(0018)。
+     大文字小文字は見ない(文頭に来ると `A lack of …` になる) */
+  const npIn = np.NOUN_PHRASES.filter((x) => x.en.toLowerCase().includes(x.p.toLowerCase()))
+  ok(npIn.length === np.NOUN_PHRASES.length, '名詞句 … 例文の中に、その語句がそのまま出てくる',
+    `${npIn.length} / ${np.NOUN_PHRASES.length}`)
+  /* **芯の名詞は、語句の中に入っているか**(`head` の書き間違い) */
+  ok(np.NOUN_PHRASES.every((x) => x.p.toLowerCase().includes(x.head.toLowerCase())),
+    '名詞句 … 芯の名詞が、語句の中にある')
+
+  const npRows = np.nounPhraseRows([], { today: '2026-09-15' })
+  ok(npRows.length === 80, '名詞句 … 行も 80 出る')
+  ok(WORD_FIELDS.every((k) => k in npRows[0]) && Object.keys(npRows[0]).length === WORD_FIELDS.length,
+    '名詞句 … review_words() と同じ欄がそろっている',
+    WORD_FIELDS.filter((k) => !(k in npRows[0])).join(' ') || 'ぴったり')
+  ok(npRows.every((r) => r.status === 'unknown' && r.box === 0 && r.due_on === '2026-09-15'),
+    '名詞句 … まだ答えていない語句は「まだ・箱0・今日出す」')
+  const seenNp = [{ word_norm: normWord(np.NOUN_PHRASES[9].p), status: 'known', box: 5,
+    due_on: '2026-12-31', learn_streak: 12 }]
+  const hitN = np.nounPhraseRows(seenNp, { today: '2026-09-15' })[9]
+  ok(hitN.status === 'known' && hitN.box === 5 && hitN.learn_streak === 12,
+    '名詞句 … 覚え具合が、そろえた語句で当たる')
+  /* **答えが漏れていないか。** 芯の名詞を意味に混ぜると 4択に英語が出る */
+  ok(npRows.every((r) => !/[A-Za-z]{3,}/.test(r.meaning_ja)),
+    '名詞句 … 意味の欄に英語を混ぜない(4択で答えが見える)')
+  ok([...new Set(npRows.map((r) => r.material_title))].length === 6,
+    '名詞句 … material_title に組が入っている(6種)')
+  ok(np.nounPhraseGroupOf('zzz') === null && np.nounPhraseTitle('zzz') === '名詞句',
+    '名詞句 … 知らない id は null。名前は行き止まりにしない')
+
+  /* **画面が本当に呼んでいるか。** 算段だけ直っていても、
+     画面が呼んでいなければ何も変わらない */
+  ok(/loadNounPhraseWordbook\(\{ learnerId \}\)/.test(wb),
+    '単語帳 … 画面が loadNounPhraseWordbook() を呼んでいる')
+  ok(/showNp \? \[\{ id: 'np', label: '名詞句' \}\] : \[\]/.test(wb),
+    '単語帳 … 冊の一覧に「名詞句」が在る(出すかは呼ぶ側が決める)')
+  ok(/showNp = false/.test(wb), '単語帳 … 名詞句の既定は「出さない」')
+  ok(/showNp/.test(app), '単語帳 … 自分の単語帳にだけ出している')
+  ok(!/showNp/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
+    '単語帳 … ゲストの単語帳を開く画面には渡していない')
+  ok(/npBook = book === 'np'/.test(wb) && /colBook \|\| npBook/.test(wb),
+    '単語帳 … 表を直に読む冊として扱っている')
+  /* **並びで見ない。入っているかで見る**(2026-09 の教訓) */
+  ok(/\}, \[[^\]]*\bnpBook\b[^\]]*\]\)/.test(wb),
+    '単語帳 … 冊が変わったら読み直す(見張りに入っている)')
+  /* **冊は後ろへ足す。並べ替えない**(docs/notes/22 の決まり) ——
+     前へ割り込ませると、ゲストが覚えた置き場所が全部ずれる */
+  ok(wb.indexOf("id: 'col'") < wb.indexOf("id: 'np'"),
+    '単語帳 … 新しい冊を後ろへ足している(並べ替えていない)')
 
   const qr = noNote(readD('src/components/QrReview.jsx'))
   ok(/loadNativeFlowQr\(\{ learnerId, units:/.test(qr),

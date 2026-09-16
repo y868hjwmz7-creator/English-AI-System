@@ -923,6 +923,11 @@ export default function App() {
                             ゲストの単語帳を開く画面には、冊の切り替えを
                             もともと出していない */
                         showCol
+                        /* **名詞句の冊**(2026-09 利用者の指定)。
+                           `showCol` とまったく同じ扱い —— 出すのは
+                           自分の単語帳だけで、トレーナーがゲストの
+                           単語帳を開く画面には冊の切り替えを出していない */
+                        showNp
                         only={onlyWords?.words ?? null}
                         onlyLabel={onlyWords?.label ?? ''}
                         onlyWhat={onlyWords?.what ?? 'この教材の語'}

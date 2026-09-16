@@ -52,8 +52,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   SHIFT_EMPTY, SHIFT_OK,
+  SWAP_GROUP,
   judgeShift, loadShiftDone, saveShiftDone,
   shiftQuestions, shiftSay, shiftSceneOf, shiftTrainings,
+  swapFrames, swapQuestions,
 } from '../lib/frameShift.js'
 import { SHIFT_SCENES } from '../data/frameShift.js'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
@@ -65,6 +67,8 @@ export default function FrameShift() {
   const [pick, setPick] = useState(null)
   /** 場面での絞り込み。**`null` はぜんぶ**(黙って絞らない) */
   const [scene, setScene] = useState(null)
+  /** 名詞句を入れ替える練習で、いま使っている骨。**`null` なら先頭** */
+  const [frame, setFrame] = useState(null)
   const [at, setAt] = useState(0)
   const [said, setSaid] = useState('')
   const [result, setResult] = useState(null)
@@ -77,9 +81,14 @@ export default function FrameShift() {
 
   const trainings = useMemo(() => shiftTrainings(done), [done])
   const here = trainings.find((t) => t.id === pick) ?? null
+  /** 名詞句を入れ替える練習かどうか。**画面の中で id を比べるのはここだけ** */
+  const swapping = pick === SWAP_GROUP
+  const frames = useMemo(() => swapFrames(), [])
   const qs = useMemo(
-    () => (pick ? shiftQuestions({ group: pick, scene }) : []),
-    [pick, scene],
+    () => (!pick ? []
+      : swapping ? swapQuestions({ frame })
+        : shiftQuestions({ group: pick, scene })),
+    [pick, scene, frame, swapping],
   )
   /* **範囲の外に出さない。** 絞り込みを変えると数が変わる
      (やりかけの控えと同じ注意・CLAUDE.md) */
@@ -93,11 +102,13 @@ export default function FrameShift() {
   }, [q?.qid])
 
   /* トレーニングや絞り込みを変えたら先頭へ。**途中の番号のまま残さない** */
-  useEffect(() => { setAt(0) }, [pick, scene])
+  useEffect(() => { setAt(0) }, [pick, scene, frame])
 
   /** 言い直した文を見る。**判定はここ1か所からしか呼ばない** */
   const check = (text) => {
-    const j = judgeShift(text, q?.form ?? '')
+    /* **入れるはずの名詞句も、判定に渡す。**
+       入れ替えの練習だけが `phrase` を持つ(ふだんの型シフトは `null`) */
+    const j = judgeShift(text, q?.form ?? '', { phrase: q?.phrase ?? null })
     setResult(j)
     if (j.verdict === SHIFT_EMPTY) return
     answerFeedback(j.verdict === SHIFT_OK)
@@ -168,7 +179,7 @@ export default function FrameShift() {
                   <h3 className="fshift-secline">{t.no} {t.sectionLabel}</h3>
                 )}
                 <button type="button" className="card fshift-card"
-                        onClick={() => { setPick(t.id); setScene(null) }}>
+                        onClick={() => { setPick(t.id); setScene(null); setFrame(null) }}>
                   <span className="fshift-cardtop">
                     <span className="fshift-cardname">{t.label}</span>
                     <ChevronIcon />
@@ -205,7 +216,7 @@ export default function FrameShift() {
       <header className="card fshift-head">
         <div className="fshift-back">
           <button type="button" className="btn btn--small btn--ghost"
-                  onClick={() => { setPick(null); setScene(null) }}>
+                  onClick={() => { setPick(null); setScene(null); setFrame(null) }}>
             トレーニングの一覧へ
           </button>
         </div>
@@ -225,8 +236,12 @@ export default function FrameShift() {
           ——「黙って絞らない」(CLAUDE.md) */}
       <details className="card fshift-filter">
         <summary className="fshift-sum">
-          場面でしぼる
-          {scene && (
+          {swapping ? '骨をえらぶ' : '場面でしぼる'}
+          {swapping ? (
+            <span className="finder-badge fshift-mark">
+              {frames.find((x) => x.id === frame)?.label ?? frames[0].label}
+            </span>
+          ) : scene && (
             <span className="finder-badge fshift-mark">
               {shiftSceneOf(scene)?.label ?? ''}
             </span>
@@ -238,14 +253,26 @@ export default function FrameShift() {
             見えないまま下の問と重なる)。**並べるのは、この入れ物の役目** */}
         <div className="fshift-filterbody">
           <div className="chiprow">
-            <button type="button"
-                    className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
-                    onClick={() => setScene(null)}>ぜんぶ</button>
-            {SHIFT_SCENES.map((s) => (
-              <button key={s.id} type="button"
-                      className={`btn btn--small ${scene === s.id ? '' : 'btn--ghost'}`}
-                      onClick={() => setScene(s.id)}>{s.label}</button>
-            ))}
+            {swapping ? (
+              /* **骨は「ぜんぶ」を出さない。** 1つに固定するのがこの練習である
+                 —— 混ぜると「肉だけに気を使う」ができなくなる */
+              frames.map((f) => (
+                <button key={f.id} type="button"
+                        className={`btn btn--small ${(frame ?? frames[0].id) === f.id ? '' : 'btn--ghost'}`}
+                        onClick={() => setFrame(f.id)}>{f.label}</button>
+              ))
+            ) : (
+              <>
+                <button type="button"
+                        className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
+                        onClick={() => setScene(null)}>ぜんぶ</button>
+                {SHIFT_SCENES.map((s) => (
+                  <button key={s.id} type="button"
+                          className={`btn btn--small ${scene === s.id ? '' : 'btn--ghost'}`}
+                          onClick={() => setScene(s.id)}>{s.label}</button>
+                ))}
+              </>
+            )}
           </div>
         </div>
       </details>
@@ -253,10 +280,10 @@ export default function FrameShift() {
       {!q ? (
         /* **行き止まりを作らない。** 0問になったら、戻る道を出す */
         <div className="card fshift-none">
-          <p>この場面では、問がありません。</p>
+          <p>この絞り込みでは、問がありません。</p>
           <button type="button" className="btn btn--small"
-                  onClick={() => setScene(null)}>
-            場面のしぼり込みを外す
+                  onClick={() => { setScene(null); setFrame(null) }}>
+            しぼり込みを外す
           </button>
         </div>
       ) : (
@@ -264,21 +291,38 @@ export default function FrameShift() {
           <div className="card fshift-q">
             <div className="fshift-qhead">
               <span className="chip-count">{nth + 1} / {qs.length}</span>
-              <span className="fshift-scene">{shiftSceneOf(q.scene)?.label ?? ''}</span>
+              {q.scene && (
+                <span className="fshift-scene">{shiftSceneOf(q.scene)?.label ?? ''}</span>
+              )}
               {done.has(q.qid) && <span className="fshift-doneflag">言えた</span>}
             </div>
 
             <p className="fshift-ja">{q.ja}</p>
 
             <div className="fshift-base">
-              <span className="field-label">もとの言い方</span>
+              {/* **渡しているものが違えば、札も違う。**
+                  ふだんは「もとの言い方」、入れ替えの練習では「骨」 */}
+              <span className="field-label">{q.give ?? 'もとの言い方'}</span>
               <p className="fshift-baseen">{q.base}</p>
             </div>
 
-            <div className="fshift-target">
-              <span className="field-label">この型で言い直す</span>
-              <p className="fshift-form">{q.form}</p>
-            </div>
+            {/* **入れる名詞句は、英語を見せない。**
+                見せると写すだけになる —— 意味はお題の中に出ている */}
+            {q.phrase && (
+              <p className="muted fshift-hint">
+                入れる名詞句は、単語帳の「名詞句」にあります。
+                思い出せなければ、お手本を見てください。
+              </p>
+            )}
+
+            {/* **入れ替えの練習では出さない。** 骨にその型がそのまま
+                書いてあるので、**同じことを2つ見せる**ことになる(CLAUDE.md) */}
+            {!q.phrase && (
+              <div className="fshift-target">
+                <span className="field-label">この型で言い直す</span>
+                <p className="fshift-form">{q.form}</p>
+              </div>
+            )}
 
             <div className="fshift-answer">
               <label className="field-label" htmlFor="fshift-said">言い直した文</label>

@@ -35,10 +35,12 @@ import { FRAME_SHIFTS, SHIFT_SCENES, shiftCount } from '../src/data/frameShift.j
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 import { SAME_SHAPE, frameFormOf } from '../src/lib/frameMatch.js'
 import {
-  SHIFT_EMPTY, SHIFT_OK, SHIFT_OTHER, SHIFT_UNSURE,
+  SHIFT_EMPTY, SHIFT_NOPHRASE, SHIFT_OK, SHIFT_OTHER, SHIFT_UNSURE, SWAP_GROUP,
   judgeShift, shiftQuestions, shiftSay, shiftSceneOf, shiftMap,
-  shiftTargetOf, shiftTrainings,
+  shiftTargetOf, shiftTrainings, swapQuestions,
 } from '../src/lib/frameShift.js'
+import { SWAP_BLANK, SWAP_FRAMES, swapFrameOf } from '../src/data/phraseSwap.js'
+import { NOUN_PHRASES } from '../src/data/nounPhrases.js'
 import { MOVE_OF_GROUP, SHIFT_MOVES, moveOfGroup } from '../src/data/frameTraining.js'
 
 const ROOT = new URL('..', import.meta.url).pathname
@@ -225,9 +227,13 @@ head('カテゴリーごとのトレーニング')
   const groups = []
   for (const sec of FRAME_SECTIONS) for (const g of sec.groups) groups.push(g)
 
-  const ts = shiftTrainings()
+  const all2 = shiftTrainings()
+  /* **④ 名詞句を入れ替えるは、組ではない。** いちばん後ろに1枚だけ足してある */
+  const ts = all2.filter((t) => t.id !== SWAP_GROUP)
   ok(ts.length === groups.length,
-    `トレーニングが ${ts.length} 本(組の数と同じ)`, `組は ${groups.length}`)
+    `型の組のトレーニングが ${ts.length} 本(組の数と同じ)`, `組は ${groups.length}`)
+  ok(all2[all2.length - 1].id === SWAP_GROUP,
+    '名詞句を入れ替えるは、いちばん後ろ(前へ割り込ませない)')
 
   /* **並びを変えていないか。** 問を書いた順に並べると、型の一覧と食い違う */
   ok(ts.map((t) => t.id).join(',') === groups.map((g) => g.id).join(','),
@@ -246,10 +252,15 @@ head('カテゴリーごとのトレーニング')
      (`check.sql` と移行の関係とまったく同じ作法) */
   const noMove = groups.filter((g) => !moveOfGroup(g.id)).map((g) => g.id)
   ok(noMove.length === 0, '14 の組すべてに「やること」がある', `\n    ${noMove.join(' / ')}`)
-  const strayMove = [...MOVE_OF_GROUP.keys()].filter((g) => !groups.some((x) => x.id === g))
+  /* **④ 名詞句を入れ替えるだけは、`sentenceFrames.js` の組ではない。**
+     組は 14 のままで、練習だけが1つ多い(**名指しで外す**) */
+  const strayMove = [...MOVE_OF_GROUP.keys()]
+    .filter((g) => g !== SWAP_GROUP && !groups.some((x) => x.id === g))
   ok(strayMove.length === 0, '知らない組を勝手に増やしていない', `\n    ${strayMove.join(' / ')}`)
+  ok(MOVE_OF_GROUP.has(SWAP_GROUP), '名詞句を入れ替えるにも「やること」がある')
   /* **使われていない「やること」を置き去りにしない**(逆も見る) */
-  const usedMoves = new Set(groups.map((g) => moveOfGroup(g.id)?.id))
+  const usedMoves = new Set([...groups.map((g) => moveOfGroup(g.id)?.id),
+    moveOfGroup(SWAP_GROUP)?.id])
   const idle = SHIFT_MOVES.filter((m) => !usedMoves.has(m.id)).map((m) => m.id)
   ok(idle.length === 0, 'どの「やること」も、いずれかの組で使われている',
     `\n    ${idle.join(' / ')}`)
@@ -297,6 +308,87 @@ head('カテゴリーごとのトレーニング')
   ok(withOne.reduce((n, t) => n + t.done, 0) === 1, '言えた問が 1 と数えられる')
   ok(shiftTrainings().every((t) => t.done === 0), '控えを渡さなければ 0 のまま')
   ok(shiftTrainings(null).every((t) => t.done === 0), 'null を渡しても落ちない')
+}
+
+head('名詞句を入れ替える練習')
+{
+  ok(SWAP_FRAMES.length >= 5, `骨が ${SWAP_FRAMES.length} 本ある`)
+  /* **骨の型は、66 型の一覧にあるか。** 無ければ「型が2つある」ことになる */
+  const strayForm = SWAP_FRAMES.filter((f) => !FORMS.includes(f.form)).map((f) => f.form)
+  ok(strayForm.length === 0, '骨の型が、66 型の一覧にある', `\n    ${strayForm.join(' / ')}`)
+  /* **入れる場所が、骨にも お題にも1つずつあるか** */
+  const noBlank = SWAP_FRAMES.filter(
+    (f) => !f.en.includes(SWAP_BLANK) || !f.ja.includes(SWAP_BLANK),
+  ).map((f) => f.id)
+  ok(noBlank.length === 0, '骨にも お題にも、名詞句を入れる場所がある',
+    `\n    ${noBlank.join(' / ')}`)
+  ok(new Set(SWAP_FRAMES.map((f) => f.id)).size === SWAP_FRAMES.length, '骨の id が重なっていない')
+  ok(swapFrameOf('そんな骨は無い') === null, '知らない骨は null(当てずっぽうで返さない)')
+
+  /* **出した問は、どれも機械で確かめられるか。**
+     ここが、この練習の安全弁である —— 確かめられないものを出して
+     「ちがう型です」と言ったら、正しく言えた人に嘘をつくことになる */
+  let bad = 0
+  let made = 0
+  for (const f of SWAP_FRAMES) {
+    const qs = swapQuestions({ frame: f.id })
+    made += qs.length
+    for (const q of qs) {
+      if (judgeShift(q.ex, q.form, { phrase: q.phrase }).verdict !== SHIFT_OK) bad += 1
+    }
+  }
+  ok(bad === 0, `出した ${made} 問が、どれも機械で ○ になる`, `だめだったもの ${bad}`)
+
+  /* **落とした組み合わせが多すぎないか。** 決まりを1つ変えて
+     大半が落ちても、上の見張りは緑のままである(**0問でも緑**)。
+     **いちばん危ない形を、検証の中に必ず置く**(CLAUDE.md) */
+  const full = SWAP_FRAMES.length * NOUN_PHRASES.length
+  ok(made > full * 0.95, `落とした組み合わせは ${full - made} 通りだけ(全 ${full})`)
+
+  /* **骨をえらばなければ、先頭の骨**(行き止まりを作らない) */
+  ok(swapQuestions().length === swapQuestions({ frame: SWAP_FRAMES[0].id }).length,
+    '骨をえらばなければ、先頭の骨で出る')
+  ok(swapQuestions({ frame: 'そんな骨は無い' }).length === swapQuestions().length,
+    '知らない骨を渡しても落ちず、先頭の骨で出る')
+
+  /* **問の形。** お題に英語が出ていたら、写すだけの練習になる */
+  const q0 = swapQuestions({ frame: 'about' })[0]
+  ok(!/[A-Za-z]{3,}/.test(q0.ja), 'お題に英語が出ていない(写すだけにならない)')
+  ok(q0.base.includes(SWAP_BLANK), '渡す骨に、入れる場所が残っている')
+  ok(q0.give && q0.give !== 'もとの言い方', '渡しているものの札が、ふだんと違う')
+  ok(q0.phrase && q0.ex.toLowerCase().includes(q0.phrase.toLowerCase()),
+    'お手本に、入れるはずの名詞句が入っている')
+  ok(new Set(swapQuestions({ frame: 'about' }).map((x) => x.qid)).size
+     === swapQuestions({ frame: 'about' }).length, '問の id が重なっていない')
+
+  /* **型は合っているが、名詞句が入っていない**という道が出るか。
+     **これが出ないと、骨さえ言えれば ○ になってしまう** */
+  const noPhrase = judgeShift('When it comes to money, we need to be careful.',
+    q0.form, { phrase: q0.phrase })
+  ok(noPhrase.verdict === SHIFT_NOPHRASE, '名詞句が入っていなければ ○ にしない',
+    noPhrase.verdict)
+  /* **ふだんの型シフトは、この道を通らない**(逆も見る) */
+  ok(judgeShift('When it comes to money, we need to be careful.', q0.form).verdict === SHIFT_OK,
+    '名詞句を渡さなければ、これまでどおり ○ になる')
+  /* **5つの判定が、それぞれ別のもの** */
+  ok(new Set([SHIFT_OK, SHIFT_OTHER, SHIFT_UNSURE, SHIFT_EMPTY, SHIFT_NOPHRASE]).size === 5,
+    '5つの判定が、それぞれ別のもの')
+  const sayNo = shiftSay(noPhrase)
+  ok(sayNo.tone === 'nophrase' && sayNo.head && sayNo.body.includes(q0.phrase),
+    '入れるはずの名詞句を、知らせの中に出す', `${sayNo.head} / ${sayNo.body}`)
+  ok(!/間違|誤り|✕|×/.test(sayNo.head + sayNo.body),
+    '「名詞句が入っていない」を、間違い扱いしていない')
+
+  /* **画面が、この練習を出しているか** */
+  const view = code('src/components/FrameShift.jsx')
+  ok(/swapQuestions\(/.test(view), '画面が swapQuestions() を呼んでいる')
+  ok(/swapFrames\(/.test(view), '画面が骨の札を出している')
+  ok(/phrase: q\?\.phrase/.test(view), '画面が、入れる名詞句を判定に渡している')
+  /* **英語を見せない。** 見せると写すだけになる */
+  ok(!/\{q\.phrase\}/.test(view), '入れる名詞句の英語を、画面に出していない')
+  /* **同じことを2つ見せない。** 骨に型がそのまま書いてある */
+  ok(/\{!q\.phrase && \(/.test(view), '入れ替えの練習では、型の名前を重ねて出さない')
+  ok(/pick === SWAP_GROUP/.test(view), '画面の中で id を直に書き比べていない(1か所)')
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -365,7 +457,7 @@ head('画面が、判定を書き写していないか')
      **「出る」と「出ない」の両方を見る** —— 絞っていなければ札は出さない */
   ok(/<summary className="fshift-sum">[\s\S]*?finder-badge[\s\S]*?<\/summary>/.test(view),
     '畳んだ見出しの中に、掛かっている絞り込みの札がある')
-  ok(/\{scene && \(/.test(view), '絞っていないときは、札を出さない')
+  ok(/: scene && \(/.test(view), '絞っていないときは、札を出さない')
 }
 
 /* ────────────────────────────────────────────────────────────
