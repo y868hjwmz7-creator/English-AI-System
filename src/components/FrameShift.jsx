@@ -42,8 +42,6 @@ import {
 } from '../lib/frameShift.js'
 import { SHIFT_SCENES } from '../data/frameShift.js'
 import { FIRST_STAGE, SHIFT_STAGES } from '../data/frameTraining.js'
-import { QUIZ_GROUP, quizGroups, quizQuestions, quizTraining } from '../lib/frameQuiz.js'
-import FrameQuiz from './FrameQuiz.jsx'
 import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { ChevronIcon, MicIcon, RepeatIcon, StopIcon } from './Icons.jsx'
 import { answerFeedback } from '../lib/haptics.js'
@@ -68,29 +66,20 @@ export default function FrameShift() {
   const sessionRef = useRef(null)
 
   /* **数えるのは1回だけ。** 組ごとに呼び直すと、同じ数え上げを 14 回やることになる */
-  const allQuiz = useMemo(() => quizQuestions(), [])
   const allBones = useMemo(() => swapFrames(), [])
-  const countBy = (list, key, get) => {
+  const swapBy = useMemo(() => {
     const m = new Map()
-    for (const x of list) m.set(x[key], (m.get(x[key]) ?? 0) + get(x))
+    for (const f of allBones) m.set(f.groupId, (m.get(f.groupId) ?? 0) + f.count)
     return m
-  }
-  const quizBy = useMemo(() => countBy(allQuiz, 'groupId', () => 1), [allQuiz])
-  const swapBy = useMemo(() => countBy(allBones, 'groupId', (f) => f.count), [allBones])
+  }, [allBones])
 
-  /** 一覧に出す 14 組 +「まぜて見分ける」。**段ごとの数も添える** */
-  const trainings = useMemo(() => [
-    ...shiftTrainings(done).map((t) => ({
-      ...t,
-      counts: { quiz: quizBy.get(t.id) ?? 0, swap: swapBy.get(t.id) ?? 0, say: t.total },
-    })),
-    /* **まぜて見分けるは、いちばん後ろ**(前へ割り込ませない)。
-       `shiftTrainings()` の中では作らない —— 読み込みが輪になる */
-    { ...quizTraining(done), counts: null },
-  ], [done, quizBy, swapBy])
+  /** 一覧に出す 14 組。**段ごとの数も添える** */
+  const trainings = useMemo(() => shiftTrainings(done).map((t) => ({
+    ...t,
+    counts: { swap: swapBy.get(t.id) ?? 0, say: t.total },
+  })), [done, swapBy])
 
   const here = trainings.find((t) => t.id === pick) ?? null
-  const mixing = pick === QUIZ_GROUP
   /** この組の骨(段2)。**組の外の骨は出さない** */
   const myBones = useMemo(
     () => allBones.filter((f) => f.groupId === pick), [allBones, pick],
@@ -101,11 +90,9 @@ export default function FrameShift() {
   /** いま出す問。**段で分かれるのはここ1か所** */
   const qs = useMemo(() => {
     if (!here) return []
-    if (mixing) return quizQuestions({ group: scene })
-    if (stage === 'quiz') return allQuiz.filter((q) => q.groupId === pick)
     if (stage === 'swap') return swapQuestions({ frame: activeFrame })
     return shiftQuestions({ group: pick, scene })
-  }, [here, mixing, stage, pick, scene, activeFrame, allQuiz])
+  }, [here, stage, pick, scene, activeFrame])
 
   /* **範囲の外に出さない。** 段や絞り込みを変えると数が変わる */
   const nth = Math.min(Math.max(0, at), Math.max(0, qs.length - 1))
@@ -171,8 +158,8 @@ export default function FrameShift() {
           <h2 className="fshift-title"><RepeatIcon /> 型シフト</h2>
           <p className="fshift-lead">
             鍛えたい型の組をえらぶと、
-            <strong>見分ける → 入れ替える → 言い直す</strong> の3段が出ます。
-            どの組でも、いつも同じ3段です。
+            <strong>Quick Response → 言い直す</strong> の2段が出ます。
+            どの組でも、いつも同じ2段です。
           </p>
           <p className="muted fshift-note">
             答えるのはマイクです。打ち込む欄はありません。
@@ -201,13 +188,11 @@ export default function FrameShift() {
                   </span>
                   {/* **段ごとの数を、開く前に見せる。** どれだけこなせるかが分かる */}
                   <span className="fshift-cardcount">
-                    {t.counts
-                      ? SHIFT_STAGES.map((s) => (
-                        <span key={s.id} className="fshift-cardstage">
-                          {s.label} {t.counts[s.id]}
-                        </span>
-                      ))
-                      : <span className="fshift-cardstage">{t.total} 問</span>}
+                    {SHIFT_STAGES.map((s) => (
+                      <span key={s.id} className="fshift-cardstage">
+                        {s.label} {t.counts[s.id]}
+                      </span>
+                    ))}
                     <span className="fshift-carddone">言えた {t.done}</span>
                   </span>
                 </button>
@@ -221,7 +206,7 @@ export default function FrameShift() {
 
   /* ── ② 組を1つ開いた画面(3段) ───────────────────── */
   const say = result ? shiftSay(result) : null
-  const nowStage = mixing ? null : SHIFT_STAGES.find((s) => s.id === stage)
+  const nowStage = SHIFT_STAGES.find((s) => s.id === stage)
 
   return (
     <section className="stack fshift">
@@ -235,8 +220,8 @@ export default function FrameShift() {
         <p className="fshift-lead"><strong>やること:</strong> {here.move?.ask ?? ''}</p>
         {here.move?.why && <p className="muted fshift-note">{here.move.why}</p>}
 
-        {!mixing && (
-          /* **段はいつも3つ、いつもこの順。** 左がやさしい */
+        {(
+          /* **段はいつも2つ、いつもこの順。** 左がやさしい */
           <div className="fshift-stages">
             {SHIFT_STAGES.map((s) => (
               <button key={s.id} type="button"
@@ -253,18 +238,18 @@ export default function FrameShift() {
         {nowStage && <p className="muted fshift-note">{nowStage.hint}</p>}
       </header>
 
-      {/* 段ごとの絞り込み。**段1(組の中)には絞るものが無いので出さない** */}
-      {(mixing || stage !== 'quiz') && (
+      {/* 段ごとの絞り込み */}
+      {(
         <details className="card fshift-filter">
           <summary className="fshift-sum">
-            {mixing ? '型の組でしぼる' : stage === 'swap' ? '骨をえらぶ' : '場面でしぼる'}
-            {stage === 'swap' && !mixing ? (
+            {stage === 'swap' ? '型をえらぶ' : '場面でしぼる'}
+            {stage === 'swap' ? (
               <span className="finder-badge fshift-mark">
                 {myBones.find((x) => x.id === activeFrame)?.label ?? ''}
               </span>
             ) : scene && (
               <span className="finder-badge fshift-mark">
-                {(mixing ? quizGroups() : SHIFT_SCENES).find((x) => x.id === scene)?.label ?? ''}
+                {SHIFT_SCENES.find((x) => x.id === scene)?.label ?? ''}
               </span>
             )}
             <span className="muted fshift-sumcount">{qs.length} 問</span>
@@ -273,8 +258,9 @@ export default function FrameShift() {
               書くと、畳んでいても中身が場所を取り続ける(2026-09 実測) */}
           <div className="fshift-filterbody">
             <div className="chiprow">
-              {stage === 'swap' && !mixing ? (
-                /* **骨は「ぜんぶ」を出さない。** 1つに固定するのがこの段である */
+              {stage === 'swap' ? (
+                /* **型は「ぜんぶ」を出さない。** 1つに固定するのがこの段である ——
+                   混ぜると「言い方に迷わない」が成り立たなくなる */
                 myBones.map((f) => (
                   <button key={f.id} type="button"
                           className={`btn btn--small ${activeFrame === f.id ? '' : 'btn--ghost'}`}
@@ -287,7 +273,7 @@ export default function FrameShift() {
                   <button type="button"
                           className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
                           onClick={() => setScene(null)}>ぜんぶ</button>
-                  {(mixing ? quizGroups() : SHIFT_SCENES).map((x) => (
+                  {SHIFT_SCENES.map((x) => (
                     <button key={x.id} type="button"
                             className={`btn btn--small ${scene === x.id ? '' : 'btn--ghost'}`}
                             onClick={() => setScene(x.id)}>{x.label}</button>
@@ -299,10 +285,7 @@ export default function FrameShift() {
         </details>
       )}
 
-      {(mixing || stage === 'quiz') ? (
-        /* **本物の部品をそのまま描く。** 問と控えは、ここが渡す */
-        <FrameQuiz questions={qs} done={done} onRight={markDone} />
-      ) : !q ? (
+      {!q ? (
         /* **行き止まりを作らない。** 0問になったら、戻る道を出す */
         <div className="card fshift-none">
           <p>この絞り込みでは、問がありません。</p>
@@ -324,27 +307,26 @@ export default function FrameShift() {
 
             <p className="fshift-ja">{q.ja}</p>
 
-            <div className="fshift-base">
-              {/* **渡しているものが違えば、札も違う** */}
-              <span className="field-label">{q.give ?? 'もとの言い方'}</span>
-              <p className="fshift-baseen">{q.base}</p>
-            </div>
-
-            {/* **入れるものの英語は見せない。** 見せると写すだけになる */}
-            {q.phrase && (
-              <p className="muted fshift-hint">
-                入れるものは、お題の日本語に出ています。
-                思い出せなければ、お手本を見てください。
-              </p>
-            )}
-
-            {/* **入れ替えの段では出さない。** 骨にその型がそのまま書いてある */}
+            {/* **Quick Response では、もとの英文(骨)を出さない**(2026-09
+                利用者の指定「シンプルな quick response に。日本語→英語です」)。
+                出すのは**日本語のお題と型の名前だけ** ——
+                英文を見せると、写すだけの練習になる */}
             {!q.phrase && (
-              <div className="fshift-target">
-                <span className="field-label">この型で言い直す</span>
-                <p className="fshift-form">{q.form}</p>
+              <div className="fshift-base">
+                <span className="field-label">もとの言い方</span>
+                <p className="fshift-baseen">{q.base}</p>
               </div>
             )}
+
+            {/* **型は、どちらの段でも出す。**
+                出さないと `This tool lets you …` のような別の言い方でも
+                正しくなってしまい、「ちがう型です」が理不尽になる */}
+            <div className="fshift-target">
+              <span className="field-label">
+                {q.phrase ? 'この型で英語を言う' : 'この型で言い直す'}
+              </span>
+              <p className="fshift-form">{q.form}</p>
+            </div>
 
             {/* **書き込む欄は置かない**(2026-09 利用者の指定・共通仕様)。
                 これは話す練習である。打たせると、打つ速さの練習になる */}

@@ -43,10 +43,6 @@ import { SWAP_BLANK, SWAP_FRAMES, SWAP_SLOTS, swapFrameOf } from '../src/data/ph
 import { SUBJ_KINDS } from '../src/data/swapParts.js'
 import { FIRST_STAGE, SHIFT_STAGES, stageOf } from '../src/data/frameTraining.js'
 import { NOUN_PHRASES } from '../src/data/nounPhrases.js'
-import {
-  QUIZ_CHOICES, QUIZ_GROUP, QUIZ_MAX_PER_FORM,
-  judgeQuiz, quizGroups, quizQuestions, quizTraining,
-} from '../src/lib/frameQuiz.js'
 import { MOVE_OF_GROUP, SHIFT_MOVES, moveOfGroup } from '../src/data/frameTraining.js'
 
 const ROOT = new URL('..', import.meta.url).pathname
@@ -261,9 +257,9 @@ head('カテゴリーごとのトレーニング')
   ok(noMove.length === 0, '14 の組すべてに「やること」がある', `\n    ${noMove.join(' / ')}`)
   /* **④ 名詞句を入れ替えるだけは、`sentenceFrames.js` の組ではない。**
      組は 14 のままで、練習だけが1つ多い(**名指しで外す**) */
-  /* **④ 名詞句を入れ替える と ⑤ 見分ける だけは、`sentenceFrames.js` の
-     組ではない。** 組は 14 のままで、練習だけが2つ多い(**名指しで外す**) */
-  const NOT_GROUP = [SWAP_GROUP, QUIZ_GROUP]
+  /* **Quick Response だけは、`sentenceFrames.js` の組ではない。**
+     組は 14 のままで、やることが1つ多い(**名指しで外す**) */
+  const NOT_GROUP = [SWAP_GROUP]
   const strayMove = [...MOVE_OF_GROUP.keys()]
     .filter((g) => !NOT_GROUP.includes(g) && !groups.some((x) => x.id === g))
   ok(strayMove.length === 0, '知らない組を勝手に増やしていない', `\n    ${strayMove.join(' / ')}`)
@@ -472,27 +468,29 @@ head('3つの段(一本の道)')
 {
   /* **やさしい順に3つ。** 組を開けばいつもこの順で並ぶ(2026-09 利用者の指定
      「どうするのが学習者が一番使いやすく、仕組みを理解しやすいでしょうか」) */
-  ok(SHIFT_STAGES.length === 3, `段が ${SHIFT_STAGES.length} つある`)
-  ok(SHIFT_STAGES.map((x) => x.id).join(',') === 'quiz,swap,say',
-    '段の順が「見分ける → 入れ替える → 言い直す」(やさしい順)',
+  /* **2026-09、利用者が実際に使って「見分ける」を廃止した。**
+     残るのは Quick Response(日本語 → 英語)→ 言い直す の2段 */
+  ok(SHIFT_STAGES.length === 2, `段が ${SHIFT_STAGES.length} つある`)
+  ok(SHIFT_STAGES.map((x) => x.id).join(',') === 'swap,say',
+    '段の順が「Quick Response → 言い直す」(やさしい順)',
     SHIFT_STAGES.map((x) => x.id).join(','))
   ok(SHIFT_STAGES.every((x, i) => x.no === i + 1), '段に 1・2・3 の番号が振ってある')
   ok(SHIFT_STAGES.every((x) => x.label?.trim() && x.hint?.trim()),
     'どの段にも、名前と一言がある')
-  ok(new Set(SHIFT_STAGES.map((x) => x.label)).size === 3, '段の名前が、3つとも別')
+  ok(new Set(SHIFT_STAGES.map((x) => x.label)).size === SHIFT_STAGES.length,
+    '段の名前が、どれも別')
   ok(FIRST_STAGE === SHIFT_STAGES[0].id, '開いたときは、いちばんやさしい段から')
   ok(stageOf('そんな段は無い') === null, '知らない段は null(当てずっぽうで返さない)')
 
-  /* **どの組でも、3段とも問がある。** 1つでも 0 なら、その組は道が切れている */
+  /* **どの組でも、2段とも問がある。** 片方でも 0 なら、その組は道が切れている */
   const thinStage = []
   for (const t of shiftTrainings()) {
-    const n1 = quizQuestions({ group: t.id }).length
-    const n2 = swapFrames().filter((f) => f.groupId === t.id)
+    const n1 = swapFrames().filter((f) => f.groupId === t.id)
       .reduce((n, f) => n + f.count, 0)
-    const n3 = t.total
-    if (!n1 || !n2 || !n3) thinStage.push(`${t.label} ${n1}/${n2}/${n3}`)
+    const n2 = t.total
+    if (!n1 || !n2) thinStage.push(`${t.label} ${n1}/${n2}`)
   }
-  ok(thinStage.length === 0, '14 の組すべてで、3段とも問がある',
+  ok(thinStage.length === 0, '14 の組すべてで、2段とも問がある',
     `\n    ${thinStage.join('\n    ')}`)
 
   /* **画面が、段で出し分けているか** */
@@ -504,125 +502,10 @@ head('3つの段(一本の道)')
     '組を開いたら、いちばんやさしい段から始まる')
   ok(/fshift-stage--on/.test(sv), 'いま開いている段が、見て分かる')
   ok(/aria-pressed=\{stage === s\.id\}/.test(sv), '段の札が、押した状態を伝える')
-  /* **段1(組の中)には絞るものが無いので、絞り込みを出さない**
-     —— 効かない操作を見せない(CLAUDE.md) */
-  ok(/\(mixing \|\| stage !== 'quiz'\) && \(/.test(sv),
-    '段1では、絞り込みの箱を出さない(効かない操作を見せない)')
-}
-
-head('見分ける練習(4択)')
-{
-  const qs = quizQuestions()
-  ok(qs.length > 100, `問が ${qs.length} ある(素材を1文も書いていない)`)
-
-  /* **見分けられないと宣言してある型は、答えにも選択肢にも出さない。**
-     `what 節` と `What ~ is …` は同じ形なので、どちらも正しい問になる */
-  const hidden = [...SAME_SHAPE.keys()]
-  ok(!qs.some((q) => hidden.includes(q.form)), '見分けられない型は、答えにしない')
-  ok(!qs.some((q) => q.choices.some((c) => hidden.includes(c))),
-    '見分けられない型は、選択肢にも出さない')
-  const forms = new Set(qs.map((q) => q.form))
-  ok(forms.size === FORMS.length - hidden.length,
-    `${forms.size} 型を覆っている(66 − ${hidden.length})`)
-
-  /* **選択肢の形。** 正解が入っていない・重なっている問があれば赤 */
-  const badChoice = qs.filter((q) => q.choices.length !== QUIZ_CHOICES
-    || new Set(q.choices).size !== QUIZ_CHOICES
-    || !q.choices.includes(q.form))
-  ok(badChoice.length === 0, `どの問も選択肢が ${QUIZ_CHOICES} つで、正解を含む`,
-    `\n    ${badChoice.slice(0, 3).map((q) => q.qid).join(' / ')}`)
-
-  /* **まぎらわしい選択肢を出す。** でたらめだと、組さえ分かれば当たる。
-     同じ組に3つ以上ある型では、はずれも同じ組から出ているか */
-  const sameGroup = qs.filter((q) => {
-    const g = FRAME_SECTIONS.flatMap((x) => x.groups).find((x) => x.id === q.groupId)
-    if (!g || g.rows.length < QUIZ_CHOICES) return true
-    return q.choices.every((c) => g.rows.some((r) => r.form === c))
-  })
-  ok(sameGroup.length === qs.length, 'まぎらわしい選択肢(同じ組)から出している',
-    `${sameGroup.length} / ${qs.length}`)
-
-  /* **出す文は、機械で確かめてある。**
-     確かめられない文を出して「ちがいます」と言ったら、
-     正しく選んだ人に嘘をつくことになる */
-  const unsure = qs.filter((q) => frameFormOf(q.en) !== shiftTargetOf(q.form))
-  ok(unsure.length === 0, '出す文は、どれも機械でその型に当たる',
-    `\n    ${unsure.slice(0, 3).map((q) => q.en).join('\n    ')}`)
-
-  /* **2つの見張りが、互いを吸っていた**(2026-09)。
-     「確かめてから入れる」と「見分けられない型を外す」は、
-     **どちらか片方を外しても、もう片方が拾ってしまう。**
-     いまの素材はどれも型に当たるので、上の数え上げも 0 のまま緑である
-     ——「赤チェックで赤くならないのは、壊し方が違うという知らせ」(CLAUDE.md)。
-     **だから、書いてある形そのものを数える。** 片方を消したら赤くなる */
-  const qlib = code('src/lib/frameQuiz.js')
-  ok(/if \(frameFormOf\(text\) !== form\) return/.test(qlib),
-    '素材を入れる前に、機械で確かめている(その1行が在る)')
-  ok(/HIDDEN\.has\(form\)/.test(qlib),
-    '見分けられない型を、素材の段で外している(その1行が在る)')
-  ok(/const HIDDEN = new Set\(SAME_SHAPE\.keys\(\)\)/.test(qlib),
-    '外す型の一覧を、SAME_SHAPE から引いている(書き写していない)')
-
-  /* **いちばん効いた見張り。** 生の文は7つの型に 80 ずつ偏っているので、
-     上限を外すと**同じ型ばかり出る。** どの型も上限以下か */
-  const tally = new Map()
-  for (const q of qs) tally.set(q.form, (tally.get(q.form) ?? 0) + 1)
-  const over = [...tally].filter(([, n]) => n > QUIZ_MAX_PER_FORM)
-  ok(over.length === 0, `どの型も ${QUIZ_MAX_PER_FORM} 問まで(偏らせない)`,
-    `\n    ${over.slice(0, 3).map(([f, n]) => `${f} が ${n} 問`).join(' / ')}`)
-
-  /* **並びが動かないか。** 描き直すたびに選択肢が動くと、押す先が変わる */
-  const again = quizQuestions()
-  ok(again[0].choices.join() === qs[0].choices.join()
-     && again[40].choices.join() === qs[40].choices.join(),
-    '描き直しても、選択肢の並びが動かない')
-  /* **全部が同じ並びではない**(逆も見る。混ぜていなければ、これが赤くなる) */
-  ok(qs.some((q) => q.choices[0] !== q.form), '正解がいつも先頭、にはなっていない')
-
-  /* **絞り込み。** 知らない組は0問、絞らなければぜんぶ */
-  ok(quizGroups().length > 1, `型の組が ${quizGroups().length} 出る`)
-  ok(quizQuestions({ group: 'そんな組は無い' }).length === 0, '知らない組で絞ると 0 問')
-  ok(quizQuestions({ group: null }).length === qs.length, '絞らなければ、ぜんぶ返る')
-  const byG = quizGroups().reduce((n, g) => n + quizQuestions({ group: g.id }).length, 0)
-  ok(byG === qs.length, '組ごとに数えて足すと、全部になる', `${byG} / ${qs.length}`)
-
-  /* **判定。** 押していないときを「正解」にしない */
-  ok(judgeQuiz(qs[0].form, qs[0]).right === true, '正しい型を選べば当たり')
-  const other = qs[0].choices.find((c) => c !== qs[0].form)
-  ok(judgeQuiz(other, qs[0]).right === false, 'ちがう型を選べば、はずれ')
-  ok(judgeQuiz(null, qs[0]).answered === false, 'まだ押していないときは、答えていない扱い')
-  ok(judgeQuiz(null, qs[0]).right === false, 'まだ押していないときを、当たりにしない')
-  ok(judgeQuiz('なにか', null).answered === false, '問が無くても落ちない')
-
-  /* **一覧の1枚** */
-  const card = quizTraining(new Set([qs[0].qid]))
-  ok(card.id === QUIZ_GROUP && card.total === qs.length, '一覧の1枚が、問の数と合う')
-  ok(card.done === 1, '当てた問が 1 と数えられる')
-  ok(quizTraining().done === 0 && quizTraining(null).done === 0,
-    '控えを渡さなくても落ちない')
-  ok(card.move?.ask, '見分けるにも「やること」がある')
-
-  /* **画面が本当に呼んでいるか** */
-  const qv = code('src/components/FrameQuiz.jsx')
-  ok(/judgeQuiz\(/.test(qv), '画面が judgeQuiz() を呼んでいる')
-  ok(!/picked === q\.form|q\.form === picked/.test(qv),
-    '画面の中で、合っているかを書き比べていない')
-  /* **書き込む欄は置かない**(型シフトの共通仕様) */
-  ok(!/<textarea|<input/.test(qv), '見分ける練習にも、書き込む欄が無い')
-  /* **二度押しで答えが変わらない** */
-  ok(/disabled=\{!!picked\}/.test(qv), '一度押したら、選び直せない')
-  /* **色だけに頼らない**(CLAUDE.md)。印の文字も出す */
-  ok(/正しい型/.test(qv) && /選んだもの/.test(qv), '色だけでなく、文字でも示している')
-
-  const view = code('src/components/FrameShift.jsx')
-  ok(/<FrameQuiz\s/.test(view), '一覧から、見分ける練習へつながっている')
-  ok(/quizTraining\(/.test(view), '一覧に、見分けるの1枚を足している')
-  ok(/pick === QUIZ_GROUP/.test(view), '画面の中で id を直に書き比べていない(1か所)')
-  /* **後ろへ足す。並べ替えない** */
-  ok(view.indexOf('quizTraining(done)') > view.indexOf('shiftTrainings(done)'),
-    'まぜて見分けるは、いちばん後ろに足している')
-  ok(shiftTrainings().every((t) => t.id !== QUIZ_GROUP),
-    'まぜて見分けるを shiftTrainings() の中で作っていない(読み込みが輪にならない)')
+  /* **見分ける(4択)は廃止した**(2026-09 利用者の指定)。
+     道具も画面も残っていないことを、機械で確かめる ——
+     **消したつもりで残っている**のがいちばん分かりにくい */
+  ok(!/FrameQuiz|frameQuiz|quizQuestions/.test(sv), '画面に、見分けるの名残が無い')
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -665,7 +548,11 @@ head('画面が、判定を書き写していないか')
   /* **席の種類ごとに、画面で書き分けない。** 何を入れるかは骨の札が言う */
   ok(!/主語を入れる|動詞のかたまりを入れる/.test(view),
     '入れるものの名前を、画面に書き写していない')
-  ok(/q\.give/.test(view), '渡しているものの札は、出題の側が決めている')
+  /* **Quick Response では、もとの英文を出さない**(2026-09 利用者の指定)。
+     出すのは日本語のお題と型の名前だけ ——
+     英文を見せると、写すだけの練習になる */
+  ok(/\{!q\.phrase && \(/.test(view), 'Quick Response では、もとの英文を出さない')
+  ok(/q\.phrase \? 'この型で英語を言う'/.test(view), '型は、どちらの段でも出す')
   ok(/move\?\.ask/.test(view), '「やること」は frameTraining.js から引いている')
 
   /* **一覧から入る形になっているか。** 66 問を1本の列にすると、
@@ -737,8 +624,8 @@ head('画面が、アプリに組み込まれているか')
   ok(/<FrameShift\s*\/>/.test(sc), '骨組みが、本物の部品をそのまま描いている')
   const bar = code('scripts/test-bar.mjs')
   ok(/\['shift', ''\]/.test(bar), 'すき間の見張りに shift が入っている')
-  ok(/\['quiz', ''\]/.test(bar), 'すき間の見張りに quiz が入っている')
-  ok(/<FrameQuiz\s/.test(sc), '骨組みが、見分けるの部品もそのまま描いている')
+  ok(!/FrameQuiz|frameQuiz/.test(sc), '骨組みにも、見分けるの名残が無い')
+  ok(!/\['quiz',/.test(bar), 'すき間の見張りからも、見分けるを外している')
 }
 
 console.log(ng === 0 ? '\n✅ 型シフトは、すべて意図どおりです' : `\n❌ ${ng} 件`)

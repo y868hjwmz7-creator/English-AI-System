@@ -5777,7 +5777,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ['rscope', ''], ['wordbook', ''], ['mybook', ''], ['result', ''],
     ['radio', ''], ['qrradio', ''], ['course', ''], ['basicpick', ''],
     ['shelfpick', ''], ['speech', ''], ['gnote', ''], ['tabs', ''],
-    ['volume', ''], ['shift', ''], ['quiz', ''], ['quiz', 'done=yes'],
+    ['volume', ''], ['shift', ''],
     ['', 'role=trainer&who=g1'],
   ]
   const 見つかった = []

@@ -35,8 +35,6 @@ import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import FrameShift from './components/FrameShift.jsx'
-import FrameQuiz from './components/FrameQuiz.jsx'
-import { quizQuestions } from './lib/frameQuiz.js'
 import ReviewScope from './components/ReviewScope.jsx'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
@@ -1042,18 +1040,6 @@ const NFUNITS = (
    お題はファイル(`src/data/frameShift.js`)に持っているからである。
    だから**骨組みと本物が食い違いようがない**(CLAUDE.md
    「骨組みは、本物と1文字も違えない」で何度も転んだところ) */
-/* **見分ける(4択)**(2026-09)。**本物の部品を、そのまま描く。**
-   `FrameQuiz` は props だけで描けるので、骨組みと本物が食い違いようがない。
-   `?picked=yes` で「押したあと」も描ける —— **押す前しか測れないと、
-   当たり / はずれの印が接していても分からない** */
-const QUIZ = (
-  <div className="app-main" style={{ padding: 16 }}>
-    <FrameQuiz questions={quizQuestions().slice(0, 5)}
-               done={q.get('done') === 'yes' ? new Set([quizQuestions()[0].qid]) : new Set()}
-               onRight={() => {}} />
-  </div>
-)
-
 const SHIFT = (
   <div className="app-main" style={{ padding: 16 }}>
     <FrameShift />
@@ -1249,9 +1235,7 @@ function NavFootScreen() {
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'quiz'
-    ? QUIZ
-    : q.get('screen') === 'shift'
+  q.get('screen') === 'shift'
     ? SHIFT
     : q.get('screen') === 'shelfassign'
     ? <ShelfAssignScreen />
