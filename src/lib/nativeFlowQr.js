@@ -64,8 +64,12 @@ export const NATIVE_FLOW_SEEN_LIMIT = 5000
  * (**行き止まりを作らない**)。
  *
  * @param learnerId 誰の覚え具合か(省くと自分)
+ * @param units     出す Unit の番号(2026-09 利用者の指定「UNIT毎に分けて」)。
+ *                  **`null` ならぜんぶ。** 絞るのは `nativeFlowRows()` 1か所で、
+ *                  **読む側(覚え具合)は絞らない** —— あちらは英文で引くので、
+ *                  Unit を切り替えるたびに読み直す理由がない
  */
-export async function loadNativeFlowQr({ learnerId = null } = {}) {
+export async function loadNativeFlowQr({ learnerId = null, units = null } = {}) {
   const day = todayKey()
   /* **状態で絞らない。** 冊ぜんぶを出して、3枚の札(まだ / 言えかけ /
      言える)も読んだ行から数える —— 分けて読むと、札の数と
@@ -74,6 +78,6 @@ export async function loadNativeFlowQr({ learnerId = null } = {}) {
     status: null, limit: NATIVE_FLOW_SEEN_LIMIT,
   })
   /* **読めなくても、問は返す。** 0040 を貼る前もここに来る */
-  if (error) return ok(nativeFlowRows([], { today: day }))
-  return ok(nativeFlowRows(data ?? [], { today: day }))
+  if (error) return ok(nativeFlowRows([], { today: day, units }))
+  return ok(nativeFlowRows(data ?? [], { today: day, units }))
 }

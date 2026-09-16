@@ -40,6 +40,8 @@ import {
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
+import { NF_UNIT_KEY } from '../data/nativeFlow.js'
+import NativeFlowUnits from './NativeFlowUnits.jsx'
 import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
@@ -72,11 +74,23 @@ const saveOrder = (id) => {
 export default function QrReview({
   learnerId = null, learnerName = '',
   /**
-   * **Native Flow の冊を出すか**(2026-09 利用者の指定)。
-   * **既定は「出さない」** —— 単語帳の `showCol` とまったく同じ作法で、
-   * トレーナーがゲストのページから開く画面を1ドットも変えないためである。
+   * **この人に出す Native Flow の Unit**(2026-09 利用者の指定)。
+   *
+   *   > UNIT毎に分けて quick response が出来るようにしてください。
+   *   > そして、これも指定したゲストだけに届くように、
+   *   > トレーナーにはデフォルトで表示されるように
+   *
+   * **判断はここでしない。** `nfUnitsFor()`(`src/data/nativeFlow.js`)が
+   * 済ませたものを受け取るだけである(単語帳の `shelves` とまったく同じ作法)。
+   *
+   * **既定は空 = 冊ごと出さない。** トレーナーがゲストのページから開く
+   * Quick Response 帳を1ドットも変えないため、渡さない場所では
+   * これまでどおり何も出ない。
+   *
+   * **`showNf` はこれに置き換えた** —— 「出すか」と「どれを出すか」を
+   * 2つ持つと、片方だけ古くなる(**同じことをするものを2つ持たない**)。
    */
-  showNf = false,
+  nfUnits = [],
 }) {
   /**
    * **いま開いている Quick Response 帳**(2026-09 利用者の指定)。
@@ -91,19 +105,40 @@ export default function QrReview({
    * 行の形をそろえてあるので(`nativeFlowRows()`)、出題も絞り込みも
    * 聞き流しも紙も、**1文字も書き分けていない。**
    *
-   * **Unit の切り替えを作らない。** `material_title` に Unit が入っているので、
-   * 「出しかた」の中の**教材の名前で絞る**がそのまま効く。
+   * **Unit の切り替えは、冊の中に置く**(2026-09 利用者の指定
+   * 「UNIT毎に分けて」)。冊を6つに割ると、札の行が
+   * 「自分の帳 + 6」になって何を選ぶ場所なのか分からなくなる。
+   * 冊は2つのまま、**中で Unit を選ぶ**(棚とまったく同じ形)。
    */
   const books = [
     { id: 'my', label: '自分の Quick Response 帳' },
-    /* **出す場所は呼ぶ側が決める**(`showNf`)。**既定は「出さない」** ——
-       トレーナーがゲストのページから開く Quick Response 帳には、
-       冊の切り替えをもともと出していない(単語帳とまったく同じ判断) */
-    ...(showNf ? [{ id: 'nf', label: 'Native Flow' }] : []),
+    /* **出す Unit が1つも無ければ、冊ごと出さない**(2026-09 利用者の指定
+       「指定したゲストだけに届くように」)。判断は `nfUnitsFor()` 1か所で
+       済ませてあり、ここでは数を見るだけである。
+       **既定は空**なので、渡さない画面はこれまでどおり何も出ない */
+    ...(nfUnits.length ? [{ id: 'nf', label: 'Native Flow' }] : []),
   ]
   const [bookWanted, setBookWanted] = useState('my')
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
   const nfBook = book === 'nf'
+
+  /**
+   * **いま開いている Unit**(`null` ならぜんぶ)。
+   *
+   * **覚える** —— 毎回選び直させない(棚の `SHELF_PICK_KEY` と同じ作法)。
+   * **鍵の名前は `nativeFlow.js` 1か所。** ここに書き写さない。
+   */
+  const [unitWanted, setUnitWanted] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(NF_UNIT_KEY))
+      return Number.isInteger(saved) && saved > 0 ? saved : null
+    } catch { return null }
+  })
+  /* **出せなくなった Unit は、黙って落ちる。** トレーナーが指定を外した
+     Unit が残っていると、**見えていないはずの問が出題に混ざる**
+     (棚の `pickedShelves` とまったく同じ落とし穴) */
+  const unit = nfUnits.some((u) => u.id === unitWanted) ? unitWanted : null
+  const nfUnitIds = nfUnits.map((u) => u.id)
 
   const [rows, setRows] = useState([])
   const [busy, setBusy] = useState(true)
@@ -171,8 +206,13 @@ export default function QrReview({
          (`nativeFlowRows()`)、ここから下は1文字も書き分けていない。
          **状態で絞らない** —— 3枚の札(まだ / 言えかけ / 言える)も
          読んだ行から数えるので、分けて読むと札と中身が食い違う */
+      /* **Unit で絞るのは `nativeFlowRows()` 1か所。**
+         覚え具合の側は絞らない —— あちらは英文で引くので、
+         Unit を切り替えるたびに読み直す理由がない。
+         **出してよい Unit の外は、そもそも渡さない**(`nfUnitIds`)——
+         「ぜんぶ」を選んでいても、指定されていない Unit は出ない */
       nfBook
-        ? loadNativeFlowQr({ learnerId })
+        ? loadNativeFlowQr({ learnerId, units: unit ? [unit] : nfUnitIds })
         : loadQrReviews(learnerId, { status: 'todo', limit: 500 }),
       /* 0042 を貼る前は 0 が返る。**数が出ないだけで、復習はできる** */
       loadQrWeek(learnerId),
@@ -185,7 +225,12 @@ export default function QrReview({
     setBusy(false)
   }
 
-  useEffect(() => { reload() }, [learnerId, book])
+  /* **Unit を変えたら読み直す。** 出す問が丸ごと変わるためである。
+     見張りには**数えられる形**(つないだ文字列)を入れる ——
+     `nfUnits`(配列)そのものを入れると、描き直すたびに別のものになり、
+     読み直しが止まらない(`onlyKey` / `shelfKey` と同じ落とし穴) */
+  const nfKey = nfUnitIds.join(',')
+  useEffect(() => { reload() }, [learnerId, book, unit, nfKey])
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
@@ -564,6 +609,30 @@ export default function QrReview({
                 </button>
               ))}
             </div>
+          )}
+
+          {/* **どの Unit を練習するか**(2026-09 利用者の指定「UNIT毎に分けて」)。
+              **Native Flow を開いているときだけ**出す ——
+              自分の Quick Response 帳には Unit という区切りが無い
+              (効かない操作を見せない・CLAUDE.md)。
+              並ぶのは**その人に出してよい Unit だけ**で、判断は
+              `nfUnitsFor()` が済ませてある */}
+          {nfBook && (
+            <NativeFlowUnits
+              units={nfUnits}
+              picked={unit}
+              onPick={(id) => {
+                setUnitWanted(id)
+                try {
+                  if (id) localStorage.setItem(NF_UNIT_KEY, String(id))
+                  else localStorage.removeItem(NF_UNIT_KEY)
+                } catch { /* 使えなくても困らない */ }
+                /* Unit が変わると出す問が丸ごと変わる。**やりかけを持ち越さない** */
+                setRun(null); setPending([]); setAt(0); setDone([])
+                setRadio(null); setGroup(null); setFilter(emptyFilter)
+                gradedRef.current = new Set()
+              }}
+            />
           )}
 
           <ReviewStats

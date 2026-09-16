@@ -8855,7 +8855,10 @@ button.wbfilter-ctl { text-align: left; }
    **同じ行で値を分け合う** —— 書き写すと、片方だけ古くなる */
 .wb-books .chip,
 .wb-tiers .chip,
-.shelfassign .chip { min-height: 36px; }
+.shelfassign .chip,
+/* Native Flow の Unit も**同じ行で値を分け合う**(2026-09)。
+   別に書くと、36px を変えた日に片方だけ古くなる */
+.nfassign .chip { min-height: 36px; }
 
 /* **棚を選ぶ欄は、この欄でいちばん先に押すもの**なので、
    指で狙える大きさにする(`.wb-tiers .chip` を 36px にしたのと同じ話)。
@@ -8879,14 +8882,21 @@ button.wbfilter-ctl { text-align: left; }
    ここで足すのは、**欄が残りいっぱいを取ること**と
    **押せる大きさ(40px)を割らないこと**の2つだけ
    (素の `select` は実測 37px。`.shelfbuild select` と同じ話)。 */
-.shelfbooks-pick > .field-label { margin: 0; }
+.shelfbooks-pick > .field-label,
+/* Native Flow の Unit を選ぶ欄も、**まったく同じ形**である
+   (2026-09 利用者の指定「UNIT毎に分けて」)。
+   **新しい決まりを作らない。この行に足す** */
+.nfunits-pick > .field-label { margin: 0; }
 /* **押せる大きさ(40px)を割らない**(CLAUDE.md)。
    素の `<select>` は padding と字の高さで **35px ほどしかない。**
    ゲストのページの「単語帳を足す」(`.shelfassign`)と
    **同じ行で分け合う** —— 値を書き写すと、片方だけ古くなる */
 .shelfbooks-pick > select,
-.shelfassign select { min-height: 40px; }
-.shelfbooks-pick > select { flex: 1 1 auto; min-width: 0; }
+.shelfassign select,
+.nfunits-pick > select,
+.nfassign select { min-height: 40px; }
+.shelfbooks-pick > select,
+.nfunits-pick > select { flex: 1 1 auto; min-width: 0; }
 
 /* ── 棚を作る画面(トレーナーだけ)──────────────────────
    **1語 = 1行。** 語・訳・品詞とレベル・例文・訳を縦に積む ——

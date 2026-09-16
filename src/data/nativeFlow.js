@@ -786,11 +786,16 @@ export const unitTitle = (id) => {
  * @param seen    `qr_items()` が返した行(`en_norm` で引く)
  * @param today   きょうの日付。`due_on` の既定になる
  */
-export function nativeFlowRows(seen = [], { today = '' } = {}) {
+export function nativeFlowRows(seen = [], { today = '', units = null } = {}) {
   const map = new Map(
     (seen ?? []).map((r) => [String(r?.en_norm ?? ''), r]).filter(([k]) => k),
   )
-  return NATIVE_FLOW.map((x) => {
+  /* **どの Unit を出すか**(2026-09 利用者の指定「UNIT毎に分けて」)。
+     **`null` ならぜんぶ** —— 渡さない呼び方をこれまでどおりにしておく。
+     数そのものは減らない(`NATIVE_FLOW` は 690 件のまま)。
+     出す範囲が変わるだけである(**一覧を勝手に減らさない**) */
+  const only = Array.isArray(units) ? new Set(units.map(Number)) : null
+  return NATIVE_FLOW.filter((x) => !only || only.has(Number(x.u))).map((x) => {
     const key = normEn(x.en)
     const s = map.get(key) ?? null
     return {
@@ -816,3 +821,80 @@ export function nativeFlowRows(seen = [], { today = '' } = {}) {
     }
   })
 }
+
+/* ==========================================================================
+ * **Unit ごとに、指定したゲストにだけ届ける**(2026-09 利用者の指定)
+ *
+ *   > UNIT毎に分けて quick response が出来るようにしてください。
+ *   > そして、これも指定したゲストだけに届くように、
+ *   > トレーナーにはデフォルトで表示されるように
+ *
+ *   「これも」は**業種べつの単語帳(棚)と同じに**という意味である。
+ *   あちらは 0055 の `learner_features`(ゲスト × 名前で1行)へ
+ *   `shelf:<分野の id>` という名前で入れている。
+ *   **まったく同じ入れ物に、`nf:<Unit の番号>` で入れる。**
+ *
+ *   - 新しい表も、新しい RPC も、新しい RLS も、**貼る SQL も要らない**
+ *     (`learner_features.feature` に check が無いのは、そのためである)
+ *   - `set_learner_feature()` の門番(`teaches()` / `is_owner()`)がそのまま効く
+ *   - `erase_learner()` が**すでに消している**
+ *
+ *   **名前の作り方は、ここ1か所。** 画面で `'nf:' + id` と書かない ——
+ *   置く場所の数だけ食い違う(`shelfFeature()` と同じ考え方)。
+ * ========================================================================== */
+
+/** `learner_features.feature` に入れる名前の頭 */
+export const NF_PREFIX = 'nf:'
+
+/** Unit → 名前。**知らない Unit には名前を作らない** */
+export const nfFeature = (id) => {
+  const u = unitOf(id)
+  return u ? `${NF_PREFIX}${u.id}` : null
+}
+
+/** 名前 → Unit の番号。Unit でないもの(`basics` / `shelf:…`)は `null` */
+export const nfUnitOfFeature = (name) => {
+  const s = String(name ?? '')
+  if (!s.startsWith(NF_PREFIX)) return null
+  const u = unitOf(s.slice(NF_PREFIX.length))
+  return u ? u.id : null
+}
+
+/**
+ * **この人に、その Unit を出すか。**
+ *
+ * 判断はここ1か所。画面の中で `role === 'learner'` と書かない ——
+ * 置く場所の数だけ食い違う(`showsBasics()` / `remakeModeOf()` と同じ)。
+ *
+ * 【棚(`showsShelf`)とは、わざと違う】
+ *
+ *   棚は 2026-09 の指定で**トレーナーも「出された冊だけ」**になった。
+ *   ここは**そうしない** —— 利用者の指定がはっきり分かれている。
+ *
+ *     > 指定したゲストだけに届くように、
+ *     > **トレーナーにはデフォルトで表示される**ように
+ *
+ *   だから形は `showsBasics()` のほう(ゲストだけ絞る)に合わせる。
+ *   **似ているからと、あちらに寄せない**(CLAUDE.md「寄せたついでに直さない」)。
+ *
+ * - **ゲスト以外(トレーナー・管理者)には、ぜんぶ出す**
+ * - **ゲストには、トレーナーが出した Unit だけ**
+ * - **役割が分からないうちは出さない**(既定は「出さない」側)
+ *
+ * @param role     `profiles.role`(分からなければ null)
+ * @param features 開いているものの集合(`Set`)。読めていなければ null
+ * @param unit     Unit の番号
+ */
+export function showsNfUnit({ role = null, features = null } = {}, unit = null) {
+  const u = unitOf(unit)
+  if (!u) return false
+  if (role && role !== 'learner') return true
+  return !!features && features.has(nfFeature(u.id))
+}
+
+/** その人に出す Unit だけを並べる。**画面で `filter` を書き写さない** */
+export const nfUnitsFor = (who = {}) =>
+  NATIVE_FLOW_UNITS.filter((u) => showsNfUnit(who, u.id))
+
+/** 覚えておく鍵(どの Unit を開いていたか)。**画面に書かない** */
+export const NF_UNIT_KEY = 'eas.nfUnit'

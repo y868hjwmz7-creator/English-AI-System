@@ -48,6 +48,7 @@ import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadLearnerFeatures } from './lib/learnerFeatures.js'
 import { showsBasics } from './data/learnerFeatures.js'
 import { shelfList, shelvesFor } from './data/shelves.js'
+import { NATIVE_FLOW_UNITS, nfUnitsFor } from './data/nativeFlow.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 
 export default function App() {
@@ -376,6 +377,21 @@ export default function App() {
      Supabase が未設定のとき(手元で画面を確かめるとき)は、
      ほかの画面と同じように**そのまま出す** */
   const myShelves = isSupabaseConfigured ? shelvesFor({ features }) : shelfList()
+
+  /* **Native Flow(Quick Response)のうち、この人に出す Unit**
+     (2026-09 利用者の指定)。
+
+       > これも指定したゲストだけに届くように、
+       > トレーナーにはデフォルトで表示されるように
+
+     判断は `nfUnitsFor()` 1か所。**ここで `role === 'learner'` と書かない。**
+     **棚(`shelvesFor`)とはわざと違う** —— あちらは役割を見ないが、
+     こちらは利用者の指定で**トレーナーには既定でぜんぶ出す**
+     (`showsBasics()` と同じ形)。似ているからとそろえない。
+     Supabase が未設定のとき(手元で画面を確かめるとき)は、そのまま出す */
+  const myNfUnits = isSupabaseConfigured
+    ? nfUnitsFor({ role: profile?.role ?? null, features })
+    : NATIVE_FLOW_UNITS
 
   // ゲストがトレーナー用の画面を開いていたら戻す。
   // 見えるデータはどのみち RLS が止めるが、画面としても出さない。
@@ -919,7 +935,11 @@ export default function App() {
             ) : view === 'qr' ? (
               /* **Native Flow の冊**(2026-09 利用者の指定)。
                  単語帳の `showCol` とまったく同じ作法である */
-              <QrReview showNf />
+              /* **出す Unit は `nfUnitsFor()` が決めてある**(2026-09)。
+                 渡すのは**自分の Quick Response 帳**だけ —— トレーナーが
+                 ゲストのページから開く画面には、冊の切り替えを
+                 もともと出していない(単語帳とまったく同じ判断) */
+              <QrReview nfUnits={myNfUnits} />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice me={profile} />
             ) : view === 'bgm' ? (

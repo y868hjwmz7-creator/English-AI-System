@@ -108,6 +108,10 @@ import {
   KNOWN_AFTER as PROMOTE_KNOWN_AFTER, PROMOTE_MAX,
   pickPromotions, promotableOf,
 } from '../src/lib/qrPromote.js'
+import {
+  NATIVE_FLOW_UNITS, nativeFlowRows, nfFeature, nfUnitOfFeature,
+  nfUnitsFor, showsNfUnit,
+} from '../src/data/nativeFlow.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -5805,20 +5809,18 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
     '単語帳 … 冊が変わったら読み直す(見張りに入っている)')
 
   const qr = noNote(readD('src/components/QrReview.jsx'))
-  ok(/loadNativeFlowQr\(\{ learnerId \}\)/.test(qr),
-    'Quick Response 帳 … 画面が loadNativeFlowQr() を呼んでいる')
-  ok(/showNf \? \[\{ id: 'nf', label: 'Native Flow' \}\] : \[\]/.test(qr),
-    'Quick Response 帳 … 冊の一覧に「Native Flow」が在る(出すかは呼ぶ側が決める)')
-  ok(/showNf = false/.test(qr), 'Quick Response 帳 … Native Flow の既定は「出さない」')
-  ok(/<QrReview showNf \/>/.test(app),
+  ok(/loadNativeFlowQr\(\{ learnerId, units:/.test(qr),
+    'Quick Response 帳 … 画面が loadNativeFlowQr() を Unit つきで呼んでいる')
+  ok(/nfUnits\.length \? \[\{ id: 'nf', label: 'Native Flow' \}\] : \[\]/.test(qr),
+    'Quick Response 帳 … 出す Unit が1つも無ければ、冊ごと出さない')
+  ok(/nfUnits = \[\]/.test(qr), 'Quick Response 帳 … 既定は空(渡さない画面では出ない)')
+  ok(!/showNf/.test(qr), 'Quick Response 帳 … 「出すか」と「どれを出すか」を2つ持っていない')
+  ok(/<QrReview nfUnits=\{myNfUnits\} \/>/.test(app),
     'Quick Response 帳 … 自分の帳にだけ出している')
-  ok(!/showNf/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
+  ok(!/nfUnits/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
     'Quick Response 帳 … ゲストのページから開く画面には渡していない')
-  ok(/\[learnerId, book\]/.test(qr),
+  ok(/\}, \[[^\]]*\blearnerId\b[^\]]*\bbook\b[^\]]*\]\)/.test(qr),
     'Quick Response 帳 … 冊が変わったら読み直す')
-  /* **Unit の切り替えを作らない**(`material_title` の絞り込みが効く) */
-  ok(!/NATIVE_FLOW_UNITS/.test(qr),
-    'Quick Response 帳 … Unit の切り替えを別に作っていない')
 
   /* **そろえ方を書き写さない**(`textNorm.js` 1か所) */
   const nfSrc = noNote(readD('src/data/nativeFlow.js'))
@@ -5963,6 +5965,124 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
   const pro = css.match(/\.wb-promoted \{[^}]*\}/)?.[0] ?? ''
   ok(/border:/.test(pro) && /background:/.test(pro),
     '知らせが色だけに頼っていない(枠線 + 地色)')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Native Flow を Unit ごとに / 指定したゲストにだけ(2026-09 利用者の指定)
+
+     > UNIT毎に分けて quick response が出来るようにしてください。
+     > そして、これも指定したゲストだけに届くように、
+     > トレーナーにはデフォルトで表示されるように
+
+   **いちばん危ないのは「出しすぎ」である。**
+   指定していない Unit がゲストに出てしまうと、
+   **こちらが決めた配布の約束を、こちらで破る。**
+   だから「出る」と「出ない」の両方を、役割ごとに見る。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ Native Flow の Unit と、その配布')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+
+  // ── Unit ごとに分ける
+  const all = nativeFlowRows()
+  ok(all.length === 690, `Unit を渡さなければ、これまでどおり 690 問(${all.length})`)
+  /* **数を書き写さない。** 原本が持っている数(`u.n`)と突き合わせる */
+  let sum = 0
+  for (const u of NATIVE_FLOW_UNITS) {
+    const rows = nativeFlowRows([], { units: [u.id] })
+    sum += rows.length
+    ok(rows.length === u.n,
+      `Unit ${u.id} … 原本の数だけ出る(${rows.length} / ${u.n})`)
+    ok(rows.every((r) => r.material_title.includes(`Unit ${u.id}`)),
+      `Unit ${u.id} … ほかの Unit の問が混ざっていない`)
+  }
+  ok(sum === all.length, `Unit を足すと、ぜんぶと同じ数になる(${sum} / ${all.length})`)
+  ok(nativeFlowRows([], { units: [2, 5] }).length
+     === NATIVE_FLOW_UNITS.filter((u) => [2, 5].includes(u.id)).reduce((n, u) => n + u.n, 0),
+    '2つえらべば、その2つぶんだけ出る')
+  ok(nativeFlowRows([], { units: [] }).length === 0, '1つも選ばなければ、0 問(黙って全部出さない)')
+  ok(nativeFlowRows([], { units: [99] }).length === 0, '知らない Unit を渡しても、何も出ない')
+
+  // ── 名前の作り方(`learner_features` に入れる名前)
+  ok(nfFeature(3) === 'nf:3', '名前は `nf:<Unit の番号>`(棚の `shelf:` と同じ入れ物)')
+  ok(nfUnitOfFeature(nfFeature(3)) === 3, '名前から Unit に戻せる')
+  ok(nfFeature(0) === null && nfFeature(99) === null,
+    '知らない Unit には名前を作らない(当てずっぽうで返さない)')
+  ok(nfUnitOfFeature('shelf:it') === null && nfUnitOfFeature('basics') === null,
+    'ほかの名前(棚・講座)を Unit と取り違えない')
+
+  // ── **誰に出るか。** 出る側と出ない側の両方を見る
+  const T = { role: 'trainer' }
+  const O = { role: 'owner' }
+  const G = (list) => ({ role: 'learner', features: new Set(list.map(nfFeature)) })
+  ok(nfUnitsFor(T).length === NATIVE_FLOW_UNITS.length,
+    '**トレーナーには、指定がなくてもぜんぶ出る**(利用者の指定)')
+  ok(nfUnitsFor(O).length === NATIVE_FLOW_UNITS.length, '管理者にもぜんぶ出る')
+  ok(nfUnitsFor(G([])).length === 0,
+    '**ゲストには、出していなければ1つも出ない**(指定したゲストだけに届く)')
+  ok(nfUnitsFor(G([2, 5])).map((u) => u.id).join(',') === '2,5',
+    'ゲストには、出した Unit だけが出る')
+  ok(showsNfUnit(G([2, 5]), 2) === true && showsNfUnit(G([2, 5]), 3) === false,
+    '出した Unit は出て、出していない Unit は出ない')
+  ok(nfUnitsFor({}).length === 0,
+    '**役割が分からないうちは出さない**(読み込みの途中・引けなかったとき)')
+  ok(nfUnitsFor({ role: 'learner' }).length === 0, '控えが読めていないゲストにも出さない')
+  /* **棚とはわざと違う。** あちらは役割を見ない(2026-09 の方針転換)。
+     ここで寄せると、利用者の指定「トレーナーにはデフォルトで表示される」を破る */
+  const shSrc = noNote(readD('src/data/shelves.js'))
+  ok(/export function showsShelf/.test(shSrc) && !/role !== 'learner'/.test(shSrc),
+    '棚は役割を見ないまま(寄せたついでに直していない)')
+
+  // ── 並びを勝手に変えない
+  ok(NATIVE_FLOW_UNITS.map((u) => u.id).join(',') === '1,2,3,4,5,6',
+    'Unit の並びは原本のまま(並べ替えは減らすに当たる)')
+
+  // ── 画面が呼んでいるか
+  const qrSrc = noNote(readD('src/components/QrReview.jsx'))
+  ok(/NativeFlowUnits/.test(qrSrc), 'Quick Response 帳が Unit の切り替えを出している')
+  ok(/nfBook && \(/.test(qrSrc),
+    '**Native Flow を開いているときだけ**出す(効かない操作を見せない)')
+  ok(/NF_UNIT_KEY/.test(qrSrc) && !/eas\.nfUnit/.test(qrSrc),
+    '覚えておく鍵の名前を、画面に書き写していない')
+  ok(/nfUnits\.some\(\(u\) => u\.id === unitWanted\)/.test(qrSrc),
+    '**出せなくなった Unit は黙って落ちる**(見えない問が出題に混ざらない)')
+
+  const appSrc = noNote(readD('src/App.jsx'))
+  ok(/nfUnitsFor\(\{ role: profile\?\.role \?\? null, features \}\)/.test(appSrc),
+    '誰に出すかの判断は `nfUnitsFor()` 1か所(画面で役割を見ない)')
+
+  const tlSrc = noNote(readD('src/components/TrainerLearners.jsx'))
+  ok(/NativeFlowAssign/.test(tlSrc), 'ゲストのページに、Unit を出す欄が在る')
+  ok(/nfFeature\(u\.id\)/.test(tlSrc),
+    "名前の作り方は `nfFeature()` 1か所(`'nf:' + id` と書いていない)")
+  ok(!/'nf:'/.test(tlSrc + qrSrc + appSrc), 'どの画面も名前を組み立てていない')
+  /* **読み込みの行ではなく、置いてある場所**で見る。
+     `indexOf('NativeFlowAssign')` だと、いちばん上の `import` に当たって
+     必ず手前になる(**測り方が違うと、壊れていなくても赤くなる**) */
+  ok(/detailTab === 'qr'/.test(tlSrc) && tlSrc.indexOf('<NativeFlowAssign')
+     > tlSrc.indexOf("detailTab === 'qr'"),
+    '置き場所は Quick Response のタブ(出した結果がすぐ下にある)')
+  ok(/set_learner_feature|toggleFeature/.test(tlSrc),
+    '窓口は 0055 の `set_learner_feature()` のまま(新しい窓口を作っていない)')
+
+  // ── **部品は props だけで描ける**(描けないものは測れない)
+  const unitsJsx = noNote(readD('src/components/NativeFlowUnits.jsx'))
+  const assignJsx = noNote(readD('src/components/NativeFlowAssign.jsx'))
+  ok(!/supabase|useState|useEffect|load[A-Z]/.test(unitsJsx + assignJsx),
+    '2つとも、自分では何も読み込まない(骨組みでそのまま描ける)')
+  ok(/if \(!units\.length\) return null/.test(unitsJsx),
+    '出す Unit が無ければ、欄ごと出さない')
+  const screens = noNote(readD('src/__screens.jsx'))
+  ok(/NativeFlowUnits/.test(screens) && /NativeFlowAssign/.test(screens),
+    '骨組みが2つとも描いている(`?screen=nfunits` / `?screen=nfassign`)')
+
+  // ── **貼る SQL は1つも増えていない**(入れ物は 0055 のまま)
+  const check = readD('supabase/apply/check.sql')
+  ok(!/nf_units|native_flow/i.test(check),
+    '新しい表も関数も作っていない(check.sql に足すものが無い)')
 }
 
 console.log(ng

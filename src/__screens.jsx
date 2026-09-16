@@ -52,6 +52,9 @@ import BasicsCourse from './components/BasicsCourse.jsx'
 import BasicWordsPick from './components/BasicWordsPick.jsx'
 import ShelfBooks from './components/ShelfBooks.jsx'
 import ShelfAssign from './components/ShelfAssign.jsx'
+import NativeFlowUnits from './components/NativeFlowUnits.jsx'
+import NativeFlowAssign from './components/NativeFlowAssign.jsx'
+import { NATIVE_FLOW_UNITS } from './data/nativeFlow.js'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
 import NavSettings from './components/NavSettings.jsx'
@@ -1014,6 +1017,32 @@ const SHELFPICK = (
   </section>
 )
 
+/* Native Flow の Unit(`?screen=nfunits` / `?screen=nfassign`・
+   2026-09 利用者の指定「UNIT毎に分けて」「指定したゲストだけに届くように」)。
+
+   **本物の部品を描いて測る。** 6つの札が1行に収まるか・
+   長い Unit 名でプルダウンがはみ出さないか・押せる大きさは、
+   ソースを読んでも分からない(`ShelfBooks` / `ShelfAssign` と同じ話)。
+
+   **わざと Unit をぜんぶ渡してある** —— 1つだけにすると、
+   札の行が折り返さないので**はみ出しを見逃す。** */
+const NFUNITS = (
+  <section className="card">
+    <NativeFlowUnits units={NATIVE_FLOW_UNITS}
+                     picked={q.get('picked') === 'none' ? null : 4}
+                     onPick={() => {}} />
+  </section>
+)
+
+const NFASSIGN = (
+  <NativeFlowAssign units={NATIVE_FLOW_UNITS}
+                    on={q.get('on') === 'none' ? [] : [2, 5]}
+                    busy={false}
+                    note={q.get('on') === 'none' ? null
+                      : { kind: 'ok', text: '元 さんの画面に「Native Flow「Unit 2 3〜4単語の表現」」を出しました。' }}
+                    onPick={() => {}} />
+)
+
 /* スピーチ練習(`?screen=speech`・0054・2026-09 利用者の指定)。
 
      > ゲストアカウントのスピーチ内から受け取ったスピーチの原稿をAIにより
@@ -1197,6 +1226,10 @@ createRoot(document.getElementById('root')).render(
     ? <SheetScreen />
     : q.get('screen') === 'shelfpick'
     ? SHELFPICK
+    : q.get('screen') === 'nfunits'
+    ? NFUNITS
+    : q.get('screen') === 'nfassign'
+    ? NFASSIGN
     : q.get('screen') === 'speech'
     ? SPEECH
     : q.get('screen') === 'basicpick'

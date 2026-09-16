@@ -47,6 +47,8 @@ import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.j
 import { LEARNER_FEATURES } from '../data/learnerFeatures.js'
 import { shelfFeature, shelfList } from '../data/shelves.js'
 import ShelfAssign from './ShelfAssign.jsx'
+import { NATIVE_FLOW_UNITS, nfFeature } from '../data/nativeFlow.js'
+import NativeFlowAssign from './NativeFlowAssign.jsx'
 import { printElement } from '../lib/print.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 
@@ -114,6 +116,17 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     () => allShelves.filter((s) => !features.has(shelfFeature(s.id))),
     [allShelves, features],
   )
+  /* **Native Flow の Unit のうち、この人に出しているもの**(2026-09 利用者の指定)。
+     入れ物は棚とまったく同じ `learner_features` で、名前だけが `nf:<番号>` である。
+     **名前の作り方は `nfFeature()` 1か所** ——
+     ここで `'nf:' + id` と書くと、置く場所の数だけ食い違う */
+  const nfOn = useMemo(
+    () => NATIVE_FLOW_UNITS.filter((u) => features.has(nfFeature(u.id))).map((u) => u.id),
+    [features],
+  )
+  /* **押した結果の知らせ。** 棚とは別に持つ —— 別のタブに出す札なので、
+     同じ入れ物にすると**片方の知らせが、もう片方の画面に出る** */
+  const [nfNote, setNfNote] = useState(null)
   // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
   // 過去の宿題を最初に開く(2026-08 の要望)。
   const [detailTab, setDetailTab] = useState('homework')
@@ -434,6 +447,24 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     const r = await toggleFeature(learner,
       { id, label: `業種べつの単語帳「${shelf.label}」` }, { quiet: true })
     setShelfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
+  }
+
+  /**
+   * **Native Flow の Unit を、この人に出す / 外す**(2026-09 利用者の指定)。
+   *
+   * `pickShelf()` とまったく同じ形である —— 窓口も入れ物も同じで、
+   * ちがうのは**名前の作り方**(`nfFeature`)と、知らせの置き場所だけ。
+   */
+  const pickNfUnit = async (learner, u) => {
+    if (featureBusy) return
+    const id = nfFeature(u.id)
+    const on = !features.has(id)
+    setNfNote({ kind: 'busy', text: on
+      ? `「Unit ${u.id} ${u.label}」を出しています…`
+      : `「Unit ${u.id} ${u.label}」を外しています…` })
+    const r = await toggleFeature(learner,
+      { id, label: `Native Flow「Unit ${u.id} ${u.label}」` }, { quiet: true })
+    setNfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
   }
 
   const changeCefr = async (learner, cefr) => {
@@ -1267,7 +1298,32 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     「誰の復習か」を渡すだけにする。**似たものを2つ持たない**
                     (単語帳で `LearnerWordbook` を別に持って踏んだ失敗) */}
                 {detailTab === 'qr' && (
-                  <QrReview learnerId={l.id} learnerName={l.display_name} />
+                  <>
+                    {/* ── この人に出す「Native Flow」の Unit(2026-09 利用者の指定)──
+
+                        > これも指定したゲストだけに届くように、
+                        > トレーナーにはデフォルトで表示されるように
+
+                        **置き場所は、この Quick Response のタブ。**
+                        Native Flow は Quick Response の教材なので、
+                        出した結果(この人の帳)がすぐ下にある
+                        —— 業種べつの単語帳を単語帳のタブに置いたのと同じ判断。
+
+                        **入れ物は 0055 の `learner_features` そのまま**
+                        (名前は `nf:<Unit の番号>`。作り方は `nativeFlow.js` 1か所)。
+                        **新しい表も窓口も、貼る SQL も1つも増えていない。**
+
+                        **囲みに入れる。** すぐ下の `QrReview` は自分で
+                        `<section className="card">` を持っているので、
+                        地の上に直に置くとそこだけ浮いて見える */}
+                    <NativeFlowAssign
+                      units={NATIVE_FLOW_UNITS} on={nfOn}
+                      busy={!!featureBusy} note={nfNote}
+                      onPick={(u) => pickNfUnit(l, u)}
+                    />
+
+                    <QrReview learnerId={l.id} learnerName={l.display_name} />
+                  </>
                 )}
 
                 {/* **スピーチの原稿と、その添削**(0054)。
