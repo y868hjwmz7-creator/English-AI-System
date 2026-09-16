@@ -12,7 +12,7 @@ import AppTabs from './components/AppTabs.jsx'
 import AppHome, { HOME_ID } from './components/AppHome.jsx'
 import {
   BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, HomeIcon, MicIcon, MusicIcon,
-  PeopleIcon, ShelfIcon, StepsIcon, TaskIcon,
+  PeopleIcon, RepeatIcon, ShelfIcon, StepsIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { applyTheme, loadTheme } from './lib/theme.js'
 import { applyPalette, loadPalette } from './lib/palette.js'
@@ -41,6 +41,7 @@ import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
 import QrReview from './components/QrReview.jsx'
+import FrameShift from './components/FrameShift.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import BgmLibrary from './components/BgmLibrary.jsx'
 import ShelfBuilder from './components/ShelfBuilder.jsx'
@@ -500,6 +501,17 @@ export default function App() {
       id: 'qr', label: 'Quick Response', icon: BoltIcon,
       desc: '日本語を見て、英語で言う',
     },
+    /* **型シフト**(2026-09 利用者の指定「画期的なトレーニングを作りたいです」)。
+       同じ内容を、指定された型で言い直す。**言い直した文がその型かを
+       機械が見る**(`frameMatch.js`・AI を呼ばないので 0円)。
+       Quick Response のとなりに置く —— あちらは「思い出して言う」、
+       こちらは「言えるものを、別の型に移す」で、**次の段**にあたる。
+       トレーナーも使う(単語帳・Quick Response と同じ理由)。
+       **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている */
+    {
+      id: 'shift', label: '型シフト', icon: RepeatIcon,
+      desc: '同じ内容を、別の型で言い直す',
+    },
     /* **発音練習だけは独立した機能にする**(2026-08 利用者の指定)。
        **名前は「スピーチ練習」**(2026-09 利用者の指定)。
        > 「発音を練習」を「スピーチ練習」にしてください
@@ -940,6 +952,10 @@ export default function App() {
                  ゲストのページから開く画面には、冊の切り替えを
                  もともと出していない(単語帳とまったく同じ判断) */
               <QrReview nfUnits={myNfUnits} />
+            ) : view === 'shift' ? (
+              /* **お題はファイルに持っている**(`src/data/frameShift.js`)。
+                 表も列も RPC も増やしていない —— Native Flow と同じ作法 */
+              <FrameShift />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice me={profile} />
             ) : view === 'bgm' ? (

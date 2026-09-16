@@ -34,6 +34,7 @@ import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
+import FrameShift from './components/FrameShift.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
@@ -1034,6 +1035,17 @@ const NFUNITS = (
   </section>
 )
 
+/* **型シフト**(2026-09)。**本物の部品を、そのまま描く。**
+   `FrameShift` は props も Supabase も要らない ——
+   お題はファイル(`src/data/frameShift.js`)に持っているからである。
+   だから**骨組みと本物が食い違いようがない**(CLAUDE.md
+   「骨組みは、本物と1文字も違えない」で何度も転んだところ) */
+const SHIFT = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <FrameShift />
+  </div>
+)
+
 const NFASSIGN = (
   <NativeFlowAssign units={NATIVE_FLOW_UNITS}
                     on={q.get('on') === 'none' ? [] : [2, 5]}
@@ -1223,7 +1235,9 @@ function NavFootScreen() {
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'shelfassign'
+  q.get('screen') === 'shift'
+    ? SHIFT
+    : q.get('screen') === 'shelfassign'
     ? <ShelfAssignScreen />
     : q.get('screen') === 'navfoot'
     ? <NavFootScreen />
