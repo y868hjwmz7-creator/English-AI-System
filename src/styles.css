@@ -6123,6 +6123,20 @@ button.wbfilter-ctl { text-align: left; }
   padding: 4px 12px;
   font-weight: 700;
 }
+/* **言う練習で、答えを隠しているあいだの1行**(2026-09 利用者の指定
+   「パタプラのようにしたい」)。
+
+   **英文と同じ場所・同じ高さ**に置く —— 別の場所に出すと、
+   答えが鳴った瞬間に行が入れ替わって**画面が跳ねる。**
+   字を一段落とすのは、これが**答えではない**からである。
+   **色だけに頼らない**(うすい地色 + 枠線 + その文字そのもの) */
+.radio-en--you {
+  font-size: var(--fs-19); font-weight: 600; line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--surface-2); border: 1px dashed var(--border);
+  border-radius: var(--r-8); padding: 8px 14px;
+}
+
 .radio-seen {
   margin: 0;
   max-width: 34em;

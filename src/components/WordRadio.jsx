@@ -39,6 +39,7 @@ import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
 import { nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
 import {
   RADIO_GAPS, bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
+  hidesAnswer,
   nextIndex, radioGapsOf, radioJaOf, radioLead, radioModesFor, radioSteps,
   radioTextOf, saveRadioGap, saveRadioMode,
 } from '../lib/wordRadio.js'
@@ -70,6 +71,25 @@ export default function WordRadio({
    */
   const [gap, setGap] = useState(() => loadRadioGap(where))
   const [at, setAt] = useState(0)
+  /**
+   * **いま鳴っている文字**(かたまりのときは、そのかたまり)。
+   * `null` なら、まだ何も鳴っていない。
+   *
+   * **画面で文を切り直さない** —— 何を鳴らすかは `radioSteps()` が
+   * 決めてあるので、その `text` をそのまま出す(**数え方を2通り持たない**)。
+   */
+  const [line, setLine] = useState(null)
+  /**
+   * **答えを開いたか。**
+   *
+   * 言う練習(2026-09 利用者の指定「パタプラのようにしたい」)では、
+   * **英文が先に出ていたら、ただ読み上げているだけ**になる。
+   * 1つめの音が鳴った瞬間に開き、次の問へ移ったら閉じる。
+   *
+   * **開くかどうかを決めるのは `hidesAnswer()` 1か所**(`wordRadio.js`)。
+   * ここで `mode === 'say'` と書かない。
+   */
+  const [open, setOpen] = useState(false)
   const [say, setSay] = useState(null)   // いま読んでいるもの('en' / 'ja')
   const [on, setOn] = useState(true)     // 鳴らしているか
   const [song, setSong] = useState(null) // いま鳴っている曲の題
@@ -138,6 +158,9 @@ export default function WordRadio({
         const i = atRef.current
         const row = list[i]
         const steps = radioSteps(row, mode, gap)
+        /* **問が変わったら、答えは閉じる。** 前の問の英文が残っていると、
+           次の問の「言う番」に**前の答えが出たまま**になる */
+        setLine(null); setOpen(false)
         /* **次の語は、いま鳴らしているあいだに用意する**
            (2026-09 実機・利用者の指定「違う単語に移る際の間を
            0.5 秒くらいまで縮められませんか」)。
@@ -165,8 +188,28 @@ export default function WordRadio({
           if (!alive()) return
           /* 「次へ」で移されたら、この語はもう読まない */
           if (atRef.current !== i) break
-          if (st.kind === 'wait') { setSay(null); await wait(st.ms); continue }
+          /* **「言う番」は、ただの間ではない。** 画面にそう出す ——
+             黙って止まっていると、待たされているのか壊れたのか分からない */
+          if (st.kind === 'wait') {
+            setSay(st.you ? 'you' : null)
+            await wait(st.ms)
+            continue
+          }
           setSay(st.kind)
+          /* **鳴らすものを、そのまま画面に出す。** かたまりのときは
+             かたまりが出る。ここで開く(答えは、鳴ってから見せる) */
+          setLine(st.text); setOpen(true)
+          /* **描き替えを1手待ってから鳴らす**(2026-09)。
+             React は `setLine()` をその場では描き替えないので、
+             すぐ鳴らすと**音が先、文字があと**になる ——
+             実測で「`Could you walk me through…` を読んでいるのに、
+             画面は1つ前のかたまり」だった(`npm run test:bar`)。
+             `setAt()` で踏んだのとまったく同じ落とし穴である。
+
+             **`requestAnimationFrame` は使わない** ——
+             別のタブへ移ると止まるので、そこで練習ごと固まる */
+          await wait(0)
+          if (!alive() || atRef.current !== i) return
           /* **曲は、鳴っているあいだも小さくしない**(2026-09 利用者の指定
              「英語音声が再生される時に自動で音楽の音量を下げる機能は
              必要ありません」)。大きさは聴く人が左のメニューの下で決める */
@@ -202,6 +245,9 @@ export default function WordRadio({
     stopBgm()
     onClose?.()
   }
+
+  /* **答えを隠す読み方か。** 判断は `hidesAnswer()` 1か所(`wordRadio.js`) */
+  const hidden = hidesAnswer(mode)
 
   return (
     <FocusFrame
@@ -261,9 +307,23 @@ export default function WordRadio({
         {/* **出す文字も `radioTextOf()` / `radioJaOf()` を通す。**
             ここで `display || word_norm` と書き写すと、
             **鳴らす側と画面で数え方が2通り**になる(CLAUDE.md) */}
-        <p className={`radio-en${say === 'en' ? ' is-now' : ''}`} lang="en">
-          {radioTextOf(now) || '—'}
-        </p>
+        {/* **言う練習では、答えを先に見せない**(2026-09 利用者の指定
+            「パタプラのようにしたい」)。英文が出ていたら、
+            **間の中で「言う」のではなく「読む」**ことになる。
+
+            出すのは**鳴っているそのもの**(かたまりのときは、かたまり)。
+            **色だけに頼らない** —— 枠と太字と、この文字そのもので示す */}
+        {hidden && !open ? (
+          <p className="radio-en radio-en--you" lang="ja">
+            {say === 'you' ? '声に出して言ってください' : 'つぎの英語を思い出してください'}
+          </p>
+        ) : (
+          <p className={`radio-en${say === 'en' || say === 'chunk' ? ' is-now' : ''}`} lang="en">
+            {(hidden ? line : null) || radioTextOf(now) || '—'}
+          </p>
+        )}
+        {/* **日本語は、いつも出ている。** これが出題そのものである
+            (読み上げるのは英語だけ —— 2026-09 利用者の指定) */}
         <p className={`radio-ja${say === 'ja' ? ' is-now' : ''}`}>
           {radioJaOf(now)}
         </p>
@@ -283,7 +343,7 @@ export default function WordRadio({
           </button>
         </div>
         <p className="card-hint radio-lead">
-          {radioLead()}
+          {radioLead(mode)}
           {' '}最後まで行ったら、頭から回り直します。
           <strong>覚えた・まだ の記録は動きません。</strong>
         </p>

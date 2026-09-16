@@ -92,7 +92,8 @@ import {
 } from '../src/lib/lastLearner.js'
 import {
   BGM_PLACES, DEFAULT_RADIO_GAP, QR_RADIO_MODES, RADIO_GAPS, RADIO_MODES,
-  bgmPlaysIn, nextIndex, radioGapsOf, radioJaOf, radioModeOf,
+  bgmPlaysIn, drillChunks, hidesAnswer,
+  nextIndex, radioGapsOf, radioJaOf, radioLead, radioModeOf,
   radioModesFor, radioSteps, radioTextOf,
 } from '../src/lib/wordRadio.js'
 import {
@@ -112,6 +113,10 @@ import {
   NATIVE_FLOW_UNITS, nativeFlowRows, nfFeature, nfUnitOfFeature,
   nfUnitsFor, showsNfUnit,
 } from '../src/data/nativeFlow.js'
+import { QR_ORDERS, orderQrPairs } from '../src/lib/qrOrder.js'
+import { frameFormOf } from '../src/lib/frameMatch.js'
+import { NATIVE_FLOW } from '../src/data/nativeFlow.js'
+import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -2358,8 +2363,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(RADIO_MODES.length === 1 && RADIO_MODES[0].id === 'en',
     '読み方(単語帳) … 英語だけの1つ',
     RADIO_MODES.map((m) => m.id).join(','))
-  ok(QR_RADIO_MODES.length === 1 && QR_RADIO_MODES[0].id === 'en',
-    '読み方(Quick Response) … 英語だけの1つ',
+  /* **ここは、利用者の指定で開いた**(2026-09「パタプラのようにしたい」)。
+     Quick Response には「言う練習」「チャンクで積む」「慣れるまで…」が
+     足してある(下の「パタプラ風の『言う練習』」の節が中身を見る)。
+     **見るのは「いちばん上が、これまでの『英語だけ』のままか」** ——
+     既定が動くと、毎日使っている人の耳が黙って変わる */
+  ok(QR_RADIO_MODES[0].id === 'en',
+    '読み方(Quick Response) … いちばん上は、これまでの「英語だけ」',
     QR_RADIO_MODES.map((m) => m.id).join(','))
   ok(radioModesFor('qr') === QR_RADIO_MODES && radioModesFor('word') === RADIO_MODES,
     '読み方 … 場面ごとの一覧を `radioModesFor()` 1か所から引く')
@@ -6104,6 +6114,168 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
   const check = readD('supabase/apply/check.sql')
   ok(!/nf_units|native_flow/i.test(check),
     '新しい表も関数も作っていない(check.sql に足すものが無い)')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   パタプラ風の「言う練習」(2026-09 利用者の指定)
+
+     > quick response を、特に「パタプラのようにしたいです。」
+
+   **いちばん危ないのは「いままでの聞き流しが変わってしまう」ことである。**
+   読み方を足しただけのつもりが、既定(英語だけ)の並びまで動いていたら、
+   **毎日使っている人の耳が、黙って変わる。**
+   だから「足したもの」と同じだけ「変えていないもの」を見る。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ パタプラ風の「言う練習」')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+
+  const LONG = 'If you think you are going to be late for the meeting, '
+    + 'please let us know as early as you can.'
+  const SHORT = 'Absolutely.'
+  const row = (o = {}) => ({ en: LONG, ja: '…', box: 0, ...o })
+  const GAP = 2000
+  const g = radioGapsOf(GAP)
+
+  // ── 読み方の一覧
+  ok(QR_RADIO_MODES.length === 4,
+    `Quick Response の読み方が4つある(${QR_RADIO_MODES.map((m) => m.id).join('/')})`)
+  ok(QR_RADIO_MODES[0].id === 'en', '**いちばん上はこれまでの「英語だけ」**(既定を変えていない)')
+  /* **単語帳は1ドットも変えていない。** 言われたのは Quick Response である */
+  ok(RADIO_MODES.length === 1 && RADIO_MODES[0].id === 'en',
+    '単語帳の読み方は「英語だけ」のまま(言われた場所だけを直す)')
+  ok(new Set(QR_RADIO_MODES.map((m) => m.id)).size === QR_RADIO_MODES.length,
+    '同じ id の読み方が2つ無い')
+
+  // ── **これまでの聞き流しが、1ミリも変わっていない**
+  const before = radioSteps(row(), 'en', GAP)
+  ok(before.length === 3 && before[0].kind === 'en' && before[1].kind === 'wait'
+    && before[2].kind === 'en' && before[1].ms === g.repeat,
+    '**「英語だけ」の並びは、これまでと1つも違わない**(英語 → くり返しの間 → 英語)')
+  ok(!before.some((st) => st.you), '「英語だけ」には「言う番」が無い(聞くだけの練習のまま)')
+  ok(radioSteps(row(), 'しらない読み方', GAP).length === before.length,
+    '知らない読み方は、既定に落ちる(行き止まりを作らない)')
+
+  // ── ① 言う練習(間 → 答え)
+  const say = radioSteps(row(), 'say', GAP)
+  ok(say[0].kind === 'wait' && say[0].you === true,
+    '**言う練習は「言う番」から始まる**(答えを先に鳴らすと、ただのリピートになる)')
+  ok(say.filter((st) => st.kind === 'en').length === 2, '答えは2回鳴る')
+  ok(say[0].ms === g.recall, '「言う番」の長さは、ゲストが選んだ「考える間」')
+
+  // ── ② チャンクで積む
+  const ch = radioSteps(row(), 'chunk', GAP)
+  const chunks = ch.filter((st) => st.kind === 'chunk')
+  ok(chunks.length >= 3, `かたまりに割れている(${chunks.length} かたまり)`)
+  /* **約束できることだけを見る**(CLAUDE.md「当てられることだけを見る」)。
+     パタプラのかたまりは 2〜8語だが、**上は約束できない** ——
+     区切りはスラッシュリーディングが決めており、長い節は長いままである。
+     **下は約束できる**(1語のかたまりは、となりへ寄せてある) */
+  ok(chunks.every((st) => st.text.split(' ').length >= 2),
+    '**1語だけのかたまりを作らない**(1語では言い直す単位にならない)',
+    chunks.map((st) => st.text.split(' ').length).join(','))
+  ok(ch[ch.length - 1].kind === 'en' && ch[ch.length - 3].kind === 'en',
+    '**最後は1文まるごと**(積み上げて終わる)')
+  ok(chunks.map((st) => st.text).join(' ') === LONG,
+    'かたまりを足すと、もとの文に戻る(**1語も落としていない**)')
+  /* **「言う番」は、どれも同じ長さ。** 4〜8語のかたまりを
+     「語と語のあいだ」(既定 268ms)で言い直させていた、を直した回 */
+  ok(ch.filter((st) => st.you).every((st) => st.ms === g.recall),
+    '**かたまりのあとの「言う番」も「考える間」**(短い間では言い直せない)')
+  /* **割れない文は、1文まるごとに落ちる**(同じ音が3回続かない) */
+  ok(radioSteps(row({ en: SHORT }), 'chunk', GAP)
+    .every((st) => st.kind !== 'chunk'),
+  '割れない短い文は、かたまりにしない')
+
+  /* **実データで数える。** 1文だけ見ても「たまたま合っていた」が分からない */
+  {
+    const ens = [...NATIVE_FLOW.map((x) => x.en),
+      ...FRAME_SECTIONS.flatMap((sec) => sec.groups.flatMap((gr) => gr.rows.map((r) => r.ex)))]
+    const sizes = []
+    let broken = 0
+    let split = 0
+    for (const en of ens) {
+      const cs = drillChunks(en)
+      if (!cs.length) continue
+      split += 1
+      if (cs.join(' ') !== en.trim().replace(/\s+/g, ' ')) broken += 1
+      for (const c of cs) sizes.push(c.split(' ').length)
+    }
+    ok(split > 100, `実データで、かたまりに割れる文がある(${split} 文 / ${ens.length} 文)`)
+    ok(broken === 0, '**どの文も、かたまりを足せばもとに戻る**(1語も落としていない)')
+    ok(Math.min(...sizes) >= 2, `1語のかたまりが1つも無い(いちばん短くて ${Math.min(...sizes)} 語)`)
+    /* **ほとんどが 8語以下**(パタプラの粒度)。**割合で見る** ——
+       ぴったりの数を書き写すと、文を足した日に期待値も一緒に動く */
+    ok(sizes.filter((n) => n <= 8).length > sizes.length * 0.9,
+      `かたまりのほとんどが8語以下(${(sizes.filter((n) => n <= 8).length / sizes.length * 100).toFixed(1)}%)`)
+  }
+
+  // ── ③ Type A → Type B(箱で切り替える)
+  ok(radioSteps(row({ box: 0 }), 'step', GAP).some((st) => st.kind === 'chunk'),
+    '**まだ言えていない文(箱0)は、かたまりから**(Type A)')
+  ok(!radioSteps(row({ box: 1 }), 'step', GAP).some((st) => st.kind === 'chunk'),
+    '**一度言えた文(箱1以上)は、1文まるごと**(Type B)')
+  ok(!radioSteps(row({ box: 6 }), 'step', GAP).some((st) => st.kind === 'chunk'),
+    '進んだ文も1文まるごと')
+
+  // ── 答えを隠すか。**「出る」と「出ない」の両方**
+  ok(hidesAnswer('say') && hidesAnswer('chunk') && hidesAnswer('step'),
+    '言う練習では、答えを先に見せない')
+  ok(!hidesAnswer('en'), '**聞き流し(英語だけ)では、これまでどおり見せる**')
+
+  // ── 押す前に、何が起きるかを言う
+  const leads = ['en', 'say', 'chunk', 'step'].map((m) => radioLead(m))
+  ok(new Set(leads).size === leads.length, '読み方ごとに、違う説明が出る')
+  ok(leads.every((t) => t.length > 10), 'どの読み方にも説明がある(黙って始めない)')
+
+  // ── かたまりの割り方は `chunker.js` 1か所
+  ok(drillChunks(SHORT).length === 0, '割れない文は、かたまりを返さない')
+  ok(drillChunks('').length === 0, '空の文でも落ちない')
+  const wr = noNote(readD('src/lib/wordRadio.js'))
+  ok(/slashesFor\(en, 'middle'\)/.test(wr),
+    'かたまりはスラッシュリーディングの「中級」から作る(割り方を2つ持たない)')
+  ok(!/\bsplit\(\/\[,\.\]/.test(wr), '自前で文を切り直していない')
+
+  // ── 型でまとめる(パターンプラクティスの芯)
+  ok(QR_ORDERS.some((o) => o.id === 'frame'), '並べ方に「型でまとめる」が在る')
+  const mixed = [
+    { en: 'Poor planning leads to delays.', added_at: '1' },
+    { en: 'Sure.', added_at: '2' },
+    { en: 'This tool allows you to share files instantly.', added_at: '3' },
+    { en: 'The new system allows staff to book rooms online.', added_at: '4' },
+    { en: 'Totally.', added_at: '5' },
+  ]
+  const byFrame = orderQrPairs(mixed, 'frame')
+  ok(byFrame.length === mixed.length, '並べ替えても、1つも落ちない(黙って消さない)')
+  const forms = byFrame.map((r) => frameFormOf(r.en))
+  const allowAt = forms.map((f, i) => (f === 'S allows 人 to do' ? i : -1)).filter((i) => i >= 0)
+  ok(allowAt.length === 2 && allowAt[1] - allowAt[0] === 1,
+    '**同じ型は、となりどうしに並ぶ**(型を固定して、中身だけ入れ替える)')
+  ok(forms[forms.length - 1] === null && forms[forms.length - 2] === null,
+    '型を言い当てられなかった文は、**後ろにまとめる**(落とさない)')
+  ok(orderQrPairs(mixed, 'material').length === mixed.length,
+    'ほかの並べ方は、これまでどおり')
+
+  // ── 画面が呼んでいるか
+  const rj = noNote(readD('src/components/WordRadio.jsx'))
+  ok(/hidesAnswer\(mode\)/.test(rj), '画面が `hidesAnswer()` を呼んでいる(判断を書き写さない)')
+  ok(/radioLead\(mode\)/.test(rj), '説明も読み方から出している')
+  ok(/setLine\(st\.text\)/.test(rj),
+    '**鳴っているものを、そのまま画面に出す**(かたまりのときはかたまり)')
+  ok(/setLine\(null\); setOpen\(false\)/.test(rj),
+    '問が変わったら答えを閉じる(前の答えが残らない)')
+  ok(/st\.you \? 'you' : null/.test(rj),
+    '「言う番」を画面に出している(黙って止まらない)')
+  const qv = noNote(readD('src/components/QrReview.jsx'))
+  ok(/言う練習・聞き流し/.test(qv),
+    '入口の名前が中身と合っている(聞き流しだけの場所ではなくなった)')
+  const css = readD('src/styles.css')
+  const you = css.match(/\.radio-en--you \{[^}]*\}/)?.[0] ?? ''
+  ok(/border:/.test(you) && /background:/.test(you),
+    '「言う番」の1行が色だけに頼っていない(枠線 + 地色)')
 }
 
 console.log(ng

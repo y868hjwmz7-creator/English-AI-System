@@ -682,7 +682,13 @@ export default function QrReview({
             <button type="button" className="btn btn--quiet wb-listen"
                     disabled={shown.length === 0}
                     onClick={listen}>
-              <MusicIcon />聞き流す({shown.length} 問)
+              {/* **言葉と中身を食い違わせない**(2026-09)。
+                  ここは**聞き流しだけの場所ではなくなった** ——
+                  パタプラの「言う練習」「チャンクで積む」も、この中にある。
+                  「聞き流す」とだけ書いておくと、**探している人が
+                  一生たどり着かない**(「覚えかけ」と書いて中身が
+                  「まだ」だったのと、同じ間違い) */}
+              <MusicIcon />言う練習・聞き流し({shown.length} 問)
             </button>
             {/* 何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
             <button type="button" className="btn btn--quiet wb-listen"

@@ -203,28 +203,9 @@ export const qrPairOf = (row) => ({
  * 復習は教材をまたいで溜まるので、**どちらが良いかは人による。**
  * だから選べるようにする。
  */
-export const QR_ORDERS = [
-  { id: 'shuffle', label: '混ぜる' },
-  { id: 'material', label: '教材の順' },
-]
-
-/** 並べ替える。`shuffle` は呼ぶたびに違う並びになる */
-export function orderQrPairs(list, order) {
-  const rows = [...(list ?? [])]
-  if (order === 'material') {
-    // 教材ごとにまとめ、その中は溜まった順。**話の流れが戻る**
-    return rows.sort((a, b) => {
-      const t = String(a.material_title ?? '').localeCompare(String(b.material_title ?? ''), 'ja')
-      if (t !== 0) return t
-      return String(a.added_at ?? '').localeCompare(String(b.added_at ?? ''))
-    })
-  }
-  for (let i = rows.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[rows[i], rows[j]] = [rows[j], rows[i]]
-  }
-  return rows
-}
+/* **並べ方は `qrOrder.js` 1か所**(2026-09)。あちらは何にも依存しない形なので、
+   `npm run test:play` が素の node で確かめられる。**呼ぶ側は1行も変わらない** */
+export { QR_ORDERS, orderQrPairs } from './qrOrder.js'
 
 /* ────────────────────────────────────────────────────────────────
    育った語の例文を、Quick Response 帳へ送る(2026-09 利用者の指定)

@@ -30,8 +30,10 @@
  *   **日本語は端末の声で読む**(窓口は英語の声しか持っていない)。0円である。
  */
 
+import { chunksOf, slashesFor } from './chunker.js'
+
 /**
- * 読み方。**いまは「英語だけ」1つである。**
+ * 読み方。**もとは「英語だけ」1つだった。**
  *
  * ══════════════════════════════════════════════════════════════════
  * **日本語を読み上げる道は、外した**(2026-09 実機・利用者の指定)
@@ -72,10 +74,44 @@
  */
 const MODE_EN = { id: 'en', label: '英語だけ、くり返し' }
 
-/** 単語帳の読み方 */
+/* ══════════════════════════════════════════════════════════════════
+   **言う練習**(2026-09 利用者の指定「パタプラのようにしたい」)
+
+   調べたところ、パタプラ(パタプライングリッシュ)の芯は4つだった。
+
+     ・**テキストを見ない。** 耳で聞いて、**間(ポーズ)の中で声に出す**
+     ・**チャンク**(2〜8語の意味のかたまり)単位で口に出す
+     ・**型を固定して、中身だけ入れ替える**
+     ・**Type A(かたまりのリピート)→ Type B(文のリピート)**の段
+
+   **新しい画面を作らない。** 聞き流し(`WordRadio`)は
+   「音声が自動で進み、間を選べて、やめるまで回りつづける」——
+   **必要なものが、もうぜんぶ在る。** 足りないのは
+   **どの順で鳴らすか**だけなので、ここ(`radioSteps`)に足す。
+
+   **3つめを足さない**という上の決まりは、
+   **利用者がここを名指しで変えたので、そのぶんだけ解けている。**
+   思いつきで足したものは、いまも1つも無い。
+   ══════════════════════════════════════════════════════════════════ */
+
+/** ①日本語を見て、間の中で言い、そのあと答えが鳴る(パタプラの芯) */
+const MODE_SAY = { id: 'say', label: '言う練習(間 → 答え)' }
+/** ②チャンクを積み上げて、最後に1文まるごと */
+const MODE_CHUNK = { id: 'chunk', label: 'チャンクで積む' }
+/** ③覚え具合で①と②を切り替える(Type A → Type B) */
+const MODE_STEP = { id: 'step', label: '慣れるまでチャンク、慣れたら1文' }
+
+/**
+ * 単語帳の読み方。**変えていない。**
+ *
+ * 言われたのは **Quick Response** である(「quick response を、特に
+ * パタプラのようにしたいです」)。語は文ではないので**チャンクに割れず**、
+ * 「言う練習」も語の意味を見て言うだけで、いまの形とほとんど変わらない。
+ * **言われた場所だけを直す**(CLAUDE.md)。
+ */
 export const RADIO_MODES = [MODE_EN]
-/** Quick Response の読み方(**単語帳と同じ**。向きの違いは日本語と一緒に消えた) */
-export const QR_RADIO_MODES = [MODE_EN]
+/** Quick Response の読み方。**文なので、パタプラの4つが効く** */
+export const QR_RADIO_MODES = [MODE_EN, MODE_SAY, MODE_CHUNK, MODE_STEP]
 
 export const DEFAULT_RADIO_MODE = 'en'
 
@@ -104,7 +140,16 @@ export const radioModesFor = (where = 'word') => whereOf(where).modes
  */
 export const radioModeOf = (id, where = 'word') => {
   const { modes } = whereOf(where)
-  return modes.find((m) => m.id === id) ?? modes[modes.length - 1]
+  /* **知らない読み方は、既定に落とす**(端末に残った `enja` / `jaen` など)。
+     **`modes[modes.length - 1]`(いちばん最後)ではない** ——
+     読み方が1つしか無かったころは先頭と末尾が同じだったので、
+     どちらで書いても同じだった。読み方を4つに増やした日に、
+     **古い値が「慣れるまでチャンク」に落ちる**ようになっていた
+     (`npm run test:play` が見つけた・2026-09)。
+     落とし先は `DEFAULT_RADIO_MODE` 1か所である */
+  return modes.find((m) => m.id === id)
+    ?? modes.find((m) => m.id === DEFAULT_RADIO_MODE)
+    ?? modes[0]
 }
 
 /* --------------------------------------------------------------------------
@@ -274,10 +319,121 @@ export const radioJaOf = (row) => String(row?.meaning_ja || row?.ja || '').trim(
  * @param {string} modeId いまは `en` だけ
  * @param {number} gapMs  間(ミリ秒)。3つの間は同じ比で動く
  */
+/**
+ * **意味のかたまりに割る**(2026-09 利用者の指定「チャンクで積む」)。
+ *
+ * **割り方を新しく作らない。** スラッシュリーディングの
+ * `slashesFor()`(`chunker.js`)が、この仕組みの中で唯一の割り方である。
+ * ここで別の割り方を書くと、**同じ文が画面とここで違う場所で切れる。**
+ *
+ * 【なぜ「中級」か】
+ *
+ *   パタプラのチャンクは **2〜8語**である。実際に測ると、
+ *
+ *     初級 … `you` `please let` `us know`   … 1〜2語。**細かすぎる**
+ *     中級 … 8 / 3 / 4 / 5 語                … **ちょうど合う**
+ *     上級 … 11 / 9 語                       … **長すぎる**
+ *
+ *   **値を書き写していない** —— `chunker.js` の段をそのまま名指ししている。
+ *
+ * 【短い文は、割らない】
+ *
+ *   Native Flow の多くは 1〜8語で、割ると1つにしかならない。
+ *   そのときは**かたまりを返さない** —— 呼ぶ側が
+ *   「1文まるごと」に落とす(**行き止まりを作らない**)。
+ */
+export function drillChunks(sentence) {
+  const en = String(sentence ?? '').trim()
+  if (!en) return []
+  const marks = slashesFor(en, 'middle').map((m) => (typeof m === 'number' ? m : m?.at))
+  const out = merged(chunksOf(en, marks.filter((n) => Number.isInteger(n))))
+  return out.length > 1 ? out : []
+}
+
+/** かたまりとして短すぎる語数。**これ未満は、となりへ寄せる** */
+const MIN_CHUNK_WORDS = 2
+
+/**
+ * **1語だけのかたまりを、となりへ寄せる**(2026-09 実測)。
+ *
+ * スラッシュリーディングの区切りをそのまま使うと、
+ * **400 かたまりのうち 52(13%)が1語**だった(`you` `can.` など)。
+ * 1語では**言い直す単位にならない** —— パタプラのかたまりは 2〜8語である。
+ *
+ * **区切り方そのものは触らない。** あちらは読むための区切りで、
+ * ここは言うための単位である。**寄せるのはここだけ**にしておけば、
+ * 画面のスラッシュは1本も動かない(**言われた場所だけを直す**)。
+ *
+ * 前がいなければ**うしろへ**寄せる(先頭の1語を落とさない)。
+ */
+function merged(list) {
+  const out = []
+  for (const c of list ?? []) {
+    const short = c.split(' ').length < MIN_CHUNK_WORDS
+    if (short && out.length) out[out.length - 1] += ` ${c}`
+    else out.push(c)
+  }
+  /* **先頭がまだ短いときは、うしろと1つにする。**
+     `out[0]` に寄せる相手がいなかった場合である */
+  if (out.length > 1 && out[0].split(' ').length < MIN_CHUNK_WORDS) {
+    out[1] = `${out[0]} ${out[1]}`
+    out.shift()
+  }
+  return out
+}
+
+/**
+ * 箱(覚え具合)。**0 は「まだ一度も言えていない / 間違えた直後」**である。
+ *
+ * 単語帳の行と Quick Response の行で、同じ名前の欄に入っている
+ * (`radioTextOf` と同じで、**数え方を2通り持たない**)。
+ */
+const boxOf = (row) => Number(row?.box ?? 0)
+
+/** ①日本語を見て、間の中で言う → 答えが鳴る → もう一度 */
+const saySteps = (en, gaps) => [
+  /* **先に間を置く。** ここが「自分が言う番」である ——
+     答えを鳴らしてから間を置くと、**ただのリピートになる** */
+  { kind: 'wait', ms: gaps.recall, you: true },
+  { kind: 'en', text: en },
+  { kind: 'wait', ms: gaps.repeat },
+  { kind: 'en', text: en },
+]
+
+/** ②かたまりごとにまねて言い、最後に1文まるごと */
+const chunkSteps = (en, gaps) => {
+  const cs = drillChunks(en)
+  /* **割れない文は、1文まるごとに落とす。** 「かたまりが1つ」を
+     わざわざかたまりとして鳴らすと、同じ音が3回続く */
+  if (!cs.length) return saySteps(en, gaps)
+  const out = []
+  for (const c of cs) {
+    out.push({ kind: 'chunk', text: c })
+    /* **「言う番」は、どれも「考える間」にそろえる。**
+       はじめ「語と語のあいだ」(選んだ秒 × 250/1400 = 既定 268ms)を
+       使っていたが、**4〜8語のかたまりを言い直すには短すぎた。**
+       間は1つしか選ばせていないので、**言う番はその1つ**である
+       —— 3つとも選ばせない、という上の決まりと同じ考え方 */
+    out.push({ kind: 'wait', ms: gaps.recall, you: true })
+  }
+  /* 積み終えたら、**まとめて1文。** ここがこの読み方の山である */
+  out.push({ kind: 'en', text: en })
+  out.push({ kind: 'wait', ms: gaps.recall, you: true })
+  out.push({ kind: 'en', text: en })
+  return out
+}
+
 export function radioSteps(row, modeId = DEFAULT_RADIO_MODE, gapMs = DEFAULT_RADIO_GAP) {
   const en = radioTextOf(row)
   if (!en) return []
   const gaps = radioGapsOf(gapMs)
+  const id = String(modeId ?? '')
+  if (id === MODE_SAY.id) return saySteps(en, gaps)
+  if (id === MODE_CHUNK.id) return chunkSteps(en, gaps)
+  /* **Type A → Type B。** 箱が 0(まだ一度も言えていない / 間違えた直後)なら
+     かたまりから積み、1つでも上がっていれば文まるごとで言う。
+     **新しい数を決めていない** —— 箱そのものが、その判断を持っている */
+  if (id === MODE_STEP.id) return (boxOf(row) === 0 ? chunkSteps : saySteps)(en, gaps)
   return [
     { kind: 'en', text: en },
     { kind: 'wait', ms: gaps.repeat },
@@ -285,8 +441,26 @@ export function radioSteps(row, modeId = DEFAULT_RADIO_MODE, gapMs = DEFAULT_RAD
   ]
 }
 
+/**
+ * **その読み方は、答えを先に見せないか。**
+ *
+ * 言う練習では、英文が画面に出ていたら**読み上げているだけ**になる。
+ * 判断はここ1か所。画面で `mode === 'say'` と書かない。
+ */
+export const hidesAnswer = (modeId) => modeId === MODE_SAY.id
+  || modeId === MODE_CHUNK.id || modeId === MODE_STEP.id
+
 /** 押す前に、何が起きるかを1行で言う(`scopeLead` と同じ作法) */
-export function radioLead() {
+export function radioLead(modeId = DEFAULT_RADIO_MODE) {
+  if (modeId === MODE_SAY.id) {
+    return '日本語だけを出します。間のあいだに声に出して言い、そのあと答えが鳴ります。'
+  }
+  if (modeId === MODE_CHUNK.id) {
+    return '意味のかたまりごとに読みます。1つずつまねて言い、最後に1文まるごと言います。'
+  }
+  if (modeId === MODE_STEP.id) {
+    return 'まだ言えていない文はかたまりから、一度言えた文は1文まるごとで練習します。'
+  }
   return '英語だけを2回ずつ読みます。意味は画面に出ます。'
 }
 
@@ -342,11 +516,17 @@ export function saveBgmPlace(id) {
  * `loadScope('qr')` と同じ形で、**呼ぶ側は場面の名前だけを渡す。**
  */
 export function loadRadioMode(where = 'word') {
-  const { modes, modeKey } = whereOf(where)
+  const { modeKey } = whereOf(where)
+  /* **落とし方を2通り持たない**(2026-09)。ここにも
+     `modes[modes.length - 1]`(いちばん最後)と書いてあった ——
+     読み方が1つのころは先頭と末尾が同じなので、どちらでも同じだった。
+     4つに増やした日、**端末に残った `jaen` が「慣れるまでチャンク」に
+     落ちて、聞き流しのつもりが言う練習になった**
+     (`npm run test:bar` が「読んでいる文と画面がずれている」で見つけた)。
+     **落とし先は `radioModeOf()` 1か所**である */
   try {
-    const saved = localStorage.getItem(modeKey)
-    return modes.some((m) => m.id === saved) ? saved : modes[modes.length - 1].id
-  } catch { return modes[modes.length - 1].id }
+    return radioModeOf(localStorage.getItem(modeKey), where).id
+  } catch { return DEFAULT_RADIO_MODE }
 }
 
 export function saveRadioMode(id, where = 'word') {
