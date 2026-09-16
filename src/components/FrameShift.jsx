@@ -93,13 +93,27 @@ export default function FrameShift() {
   /** 見分ける練習かどうか。**画面の中で id を比べるのはここだけ** */
   const quizzing = pick === QUIZ_GROUP
   const frames = useMemo(() => swapFrames(), [])
+  /* **骨は 66 本ある。** そのまま並べると札の壁になるので、
+     **まず組をえらび、その中の骨をえらぶ**(2段)。
+     組の入れ物は `scene` を使い回す ——**絞り込みを2つ持たない** */
+  const swapGroups = useMemo(
+    () => [...new Map(frames.map((f) => [f.groupId, { id: f.groupId, label: f.groupLabel }])).values()],
+    [frames],
+  )
+  const shownFrames = useMemo(
+    () => (scene ? frames.filter((f) => f.groupId === scene) : frames),
+    [frames, scene],
+  )
+  /** いま使っている骨。**選んでいなければ、出ている中の先頭** */
+  const activeFrame = shownFrames.some((f) => f.id === frame)
+    ? frame : (shownFrames[0]?.id ?? null)
   const qGroups = useMemo(() => quizGroups(), [])
   const qs = useMemo(
     () => (!pick ? []
       : quizzing ? quizQuestions({ group: scene })
-        : swapping ? swapQuestions({ frame })
+        : swapping ? swapQuestions({ frame: activeFrame })
           : shiftQuestions({ group: pick, scene })),
-    [pick, scene, frame, swapping, quizzing],
+    [pick, scene, activeFrame, swapping, quizzing],
   )
   /* **範囲の外に出さない。** 絞り込みを変えると数が変わる
      (やりかけの控えと同じ注意・CLAUDE.md) */
@@ -253,7 +267,7 @@ export default function FrameShift() {
           {swapping ? '骨をえらぶ' : quizzing ? '型の組でしぼる' : '場面でしぼる'}
           {swapping ? (
             <span className="finder-badge fshift-mark">
-              {frames.find((x) => x.id === frame)?.label ?? frames[0].label}
+              {frames.find((x) => x.id === activeFrame)?.label ?? ''}
             </span>
           ) : scene && (
             <span className="finder-badge fshift-mark">
@@ -269,12 +283,18 @@ export default function FrameShift() {
           <div className="chiprow">
             {swapping ? (
               /* **骨は「ぜんぶ」を出さない。** 1つに固定するのがこの練習である
-                 —— 混ぜると「肉だけに気を使う」ができなくなる */
-              frames.map((f) => (
-                <button key={f.id} type="button"
-                        className={`btn btn--small ${(frame ?? frames[0].id) === f.id ? '' : 'btn--ghost'}`}
-                        onClick={() => setFrame(f.id)}>{f.label}</button>
-              ))
+                 —— 混ぜると「肉だけに気を使う」ができなくなる。
+                 **2段でえらぶ**(組 → その中の骨)。66 本を1列に並べると壁になる */
+              <>
+                <button type="button"
+                        className={`btn btn--small ${scene ? 'btn--ghost' : ''}`}
+                        onClick={() => { setScene(null); setFrame(null) }}>組ぜんぶ</button>
+                {swapGroups.map((g) => (
+                  <button key={g.id} type="button"
+                          className={`btn btn--small ${scene === g.id ? '' : 'btn--ghost'}`}
+                          onClick={() => { setScene(g.id); setFrame(null) }}>{g.label}</button>
+                ))}
+              </>
             ) : quizzing ? (
               /* **見分けるは、型の組でしぼる。** 入れ物は `scene` を使い回す ——
                  **絞り込みを2つ持たない**(CLAUDE.md「数え方を2通り持たない」) */
@@ -301,6 +321,19 @@ export default function FrameShift() {
               </>
             )}
           </div>
+          {swapping && (
+            /* **2段目 —— えらんだ組の中の骨。** 何問あるかも添える
+               (**黙って絞らない**。どれを押すと何問になるかが見える) */
+            <div className="chiprow">
+              {shownFrames.map((f) => (
+                <button key={f.id} type="button"
+                        className={`btn btn--small ${activeFrame === f.id ? '' : 'btn--ghost'}`}
+                        onClick={() => setFrame(f.id)}>
+                  {f.label} <span className="muted">{f.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </details>
 
@@ -336,11 +369,13 @@ export default function FrameShift() {
               <p className="fshift-baseen">{q.base}</p>
             </div>
 
-            {/* **入れる名詞句は、英語を見せない。**
-                見せると写すだけになる —— 意味はお題の中に出ている */}
+            {/* **入れるものの英語は見せない。**
+                見せると写すだけになる —— 意味はお題の日本語に出ている。
+                **何を入れるかは `q.give`(骨の札)が言っている**ので、
+                ここで席の種類ごとに書き分けない(CLAUDE.md) */}
             {q.phrase && (
               <p className="muted fshift-hint">
-                入れる名詞句は、単語帳の「名詞句」にあります。
+                入れるものは、お題の日本語に出ています。
                 思い出せなければ、お手本を見てください。
               </p>
             )}

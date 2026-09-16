@@ -37,9 +37,10 @@ import { SAME_SHAPE, frameFormOf } from '../src/lib/frameMatch.js'
 import {
   SHIFT_EMPTY, SHIFT_NOPHRASE, SHIFT_OK, SHIFT_OTHER, SHIFT_UNSURE, SWAP_GROUP,
   judgeShift, shiftQuestions, shiftSay, shiftSceneOf, shiftMap,
-  shiftTargetOf, shiftTrainings, swapQuestions,
+  shiftTargetOf, shiftTrainings, swapFillers, swapFrames, swapQuestions,
 } from '../src/lib/frameShift.js'
-import { SWAP_BLANK, SWAP_FRAMES, swapFrameOf } from '../src/data/phraseSwap.js'
+import { SWAP_BLANK, SWAP_FRAMES, SWAP_SLOTS, swapFrameOf } from '../src/data/phraseSwap.js'
+import { SUBJ_KINDS } from '../src/data/swapParts.js'
 import { NOUN_PHRASES } from '../src/data/nounPhrases.js'
 import {
   QUIZ_CHOICES, QUIZ_GROUP, QUIZ_MAX_PER_FORM,
@@ -318,8 +319,57 @@ head('カテゴリーごとのトレーニング')
   ok(shiftTrainings(null).every((t) => t.done === 0), 'null を渡しても落ちない')
 }
 
-head('名詞句を入れ替える練習')
+head('入れ替えて数をこなす練習')
 {
+  /* **66 型ぜんぶに骨がある**(2026-09 利用者の指定
+     「和らげと名詞句以外にも沢山型があったはずです……全てを網羅してください」)。
+     型を足して骨を足し忘れたら赤くなる */
+  const noFrame = FORMS.filter((f) => !SWAP_FRAMES.some((x) => x.form === f))
+  ok(noFrame.length === 0, `66 型すべてに骨がある(${SWAP_FRAMES.length} 本)`,
+    `\n    骨の無い型: ${noFrame.join(' / ')}`)
+  const strayFrame = SWAP_FRAMES.filter((f) => !FORMS.includes(f.form)).map((f) => f.form)
+  ok(strayFrame.length === 0, '一覧に無い型の骨を作っていない', `\n    ${strayFrame.join(' / ')}`)
+
+  /* **席の種類が正しいか。** `own` なら自前の肉を持っているか */
+  const badSlot = SWAP_FRAMES.filter(
+    (f) => !SWAP_SLOTS.includes(f.slot) || (f.slot === 'own' && !(f.own ?? []).length),
+  ).map((f) => f.id)
+  ok(badSlot.length === 0, 'どの骨も、席の種類がはっきりしている', `\n    ${badSlot.join(' / ')}`)
+  /* **主語の席は、呼ぶ主語の性格を言う。**
+     言わずに総当たりにすると `The price helps us …` が出る(2026-09 実測) */
+  const noPick = SWAP_FRAMES.filter((f) => f.slot === 'subj' && !SUBJ_KINDS.has(f.pick))
+    .map((f) => f.id)
+  ok(noPick.length === 0, '主語の骨は、どの性格の主語を呼ぶかを言っている',
+    `\n    ${noPick.join(' / ')}`)
+  const uselessPick = SWAP_FRAMES.filter((f) => f.slot !== 'subj' && f.pick).map((f) => f.id)
+  ok(uselessPick.length === 0, '主語の席でない骨に、要らない指定を持たせていない',
+    `\n    ${uselessPick.join(' / ')}`)
+  /* **性格で絞っているか、書いてある形そのものを見る。**
+     総当たりに戻しても、型だけ見る見張りは緑のままである ——
+     `Poor planning helps us meet the deadline.` は型としては正しい
+     (2026-09 実測)。**機械は意味のおかしさを捕まえない** */
+  const flib = code('src/lib/frameShift.js')
+  ok(/SUBJ_KINDS\.get\(f\.pick\)/.test(flib),
+    '主語は、骨が呼んだ性格だけから出している(その1行が在る)')
+  /* **性格ごとの数がそろっているか。** 1つの性格に偏ると、
+     その性格を呼ぶ骨だけ問が多くなる */
+  const kinds = [...SUBJ_KINDS.values()]
+  ok(kinds.every((k) => k.length >= 8), 'どの性格の主語も 8 つ以上ある',
+    kinds.map((k) => k.length).join(' / '))
+  /* **どの主語も単数。** 現在形の骨に複数を入れると
+     `Rising costs requires …` になる */
+  const plural = kinds.flat().filter((x) => /s$/.test(x.en) && !/ss$/.test(x.en))
+  ok(plural.length === 0, '主語がどれも単数(現在形の骨と合う)',
+    plural.map((x) => x.en).join(' / '))
+
+  /* **どの骨にも肉が回っているか。** 1問も出ない骨があれば行き止まり */
+  const empty = SWAP_FRAMES.filter((f) => swapQuestions({ frame: f.id }).length === 0)
+  ok(empty.length === 0, '1問も出ない骨が無い', `\n    ${empty.map((f) => f.id).join(' / ')}`)
+  /* **薄すぎる骨が無いか。** 数が出ないと「量をこなす」にならない */
+  const thin = SWAP_FRAMES.filter((f) => swapQuestions({ frame: f.id }).length < 8)
+  ok(thin.length === 0, 'どの骨も 8 問以上ある',
+    `\n    ${thin.map((f) => `${f.id} ${swapQuestions({ frame: f.id }).length}問`).join(' / ')}`)
+
   ok(SWAP_FRAMES.length >= 5, `骨が ${SWAP_FRAMES.length} 本ある`)
   /* **骨の型は、66 型の一覧にあるか。** 無ければ「型が2つある」ことになる */
   const strayForm = SWAP_FRAMES.filter((f) => !FORMS.includes(f.form)).map((f) => f.form)
@@ -349,9 +399,18 @@ head('名詞句を入れ替える練習')
 
   /* **落とした組み合わせが多すぎないか。** 決まりを1つ変えて
      大半が落ちても、上の見張りは緑のままである(**0問でも緑**)。
-     **いちばん危ない形を、検証の中に必ず置く**(CLAUDE.md) */
-  const full = SWAP_FRAMES.length * NOUN_PHRASES.length
-  ok(made > full * 0.95, `落とした組み合わせは ${full - made} 通りだけ(全 ${full})`)
+     **いちばん危ない形を、検証の中に必ず置く**(CLAUDE.md)。
+     **席ごとに肉が違う**ので、骨ごとに数えて足す */
+  const full = SWAP_FRAMES.reduce((n, f) => n + swapFillers(f).length, 0)
+  ok(made > full * 0.9, `落とした組み合わせは ${full - made} 通りだけ(全 ${full})`)
+  ok(NOUN_PHRASES.length > 0, '名詞句の部品表が空でない')
+
+  /* **札。** 問が出ない骨は札にも出さない(行き止まりを作らない) */
+  const tags = swapFrames()
+  ok(tags.length === SWAP_FRAMES.length, `骨の札が ${tags.length} 枚(問の出る骨ぶん)`)
+  ok(tags.every((t) => t.count > 0 && t.groupId && t.groupLabel),
+    'どの札も、問の数と型の組を持っている')
+  ok(tags.reduce((n, t) => n + t.count, 0) === made, '札の数を足すと、問の数と合う')
 
   /* **骨をえらばなければ、先頭の骨**(行き止まりを作らない) */
   ok(swapQuestions().length === swapQuestions({ frame: SWAP_FRAMES[0].id }).length,
@@ -391,6 +450,10 @@ head('名詞句を入れ替える練習')
   const view = code('src/components/FrameShift.jsx')
   ok(/swapQuestions\(/.test(view), '画面が swapQuestions() を呼んでいる')
   ok(/swapFrames\(/.test(view), '画面が骨の札を出している')
+  /* **66 本を1列に並べない。** 組をえらんでから骨をえらぶ(2段) */
+  ok(/swapGroups/.test(view), '骨を、まず組でまとめて出している')
+  ok(/shownFrames/.test(view), 'えらんだ組の中の骨だけを出している')
+  ok(/activeFrame/.test(view), 'えらんでいなければ、出ている中の先頭を使う')
   ok(/phrase: q\?\.phrase/.test(view), '画面が、入れる名詞句を判定に渡している')
   /* **英語を見せない。** 見せると写すだけになる */
   ok(!/\{q\.phrase\}/.test(view), '入れる名詞句の英語を、画面に出していない')
@@ -552,6 +615,10 @@ head('画面が、判定を書き写していないか')
 
   /* **カテゴリーの名前も、やることも、画面で書き写さない** */
   ok(!/モノ・ことを主語にして/.test(view), '「やること」の文を画面に書き写していない')
+  /* **席の種類ごとに、画面で書き分けない。** 何を入れるかは骨の札が言う */
+  ok(!/主語を入れる|動詞のかたまりを入れる/.test(view),
+    '入れるものの名前を、画面に書き写していない')
+  ok(/q\.give/.test(view), '渡しているものの札は、出題の側が決めている')
   ok(/move\?\.ask/.test(view), '「やること」は frameTraining.js から引いている')
 
   /* **一覧から入る形になっているか。** 66 問を1本の列にすると、

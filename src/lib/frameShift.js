@@ -61,6 +61,7 @@
 import { FRAME_SHIFTS, SHIFT_SCENES } from '../data/frameShift.js'
 import { NOUN_PHRASES } from '../data/nounPhrases.js'
 import { SWAP_FRAMES, swapFrameOf, swapJa, swapSentence } from '../data/phraseSwap.js'
+import { SUBJ_KINDS, SWAP_CLAUSES, SWAP_VERBS } from '../data/swapParts.js'
 import { FRAME_SECTIONS } from '../data/sentenceFrames.js'
 import { moveOfGroup } from '../data/frameTraining.js'
 import { FRAME_INDEX, SAME_SHAPE, frameFormOf } from './frameMatch.js'
@@ -229,10 +230,11 @@ export function shiftTrainings(done = null) {
   out.push({
     id: SWAP_GROUP,
     no: '④',
-    sectionLabel: '名詞句を入れ替える(骨は固定、肉だけ変える)',
-    label: '名詞句を入れ替える',
+    sectionLabel: '入れ替えて数をこなす(骨は固定、肉だけ変える)',
+    label: '入れ替えて数をこなす',
     move: moveOfGroup(SWAP_GROUP),
-    forms: SWAP_FRAMES.map((f) => f.form),
+    /* **66 本ぶんの名前は並べても読めない。** 覆っている数を出す */
+    forms: [`66 型ぜんぶに骨があります`],
     total: swapAll.length,
     done: swapAll.filter((q) => has.has(q.qid)).length,
   })
@@ -255,36 +257,81 @@ export const SWAP_GROUP = 'swap'
  *
  * @param frame 骨の id(`null` なら先頭の骨)
  */
+/**
+ * **骨に入れる肉**を、席の種類(`slot`)から引く。
+ *
+ * **席の種類ごとに部品表が1つ。** 骨ごとに書き分けない ——
+ * 書き分けると、部品を足したときに**足した先だけが増える。**
+ */
+export function swapFillers(f) {
+  if (!f) return []
+  if (f.slot === 'own') return (f.own ?? []).map((x) => ({ en: x.en, ja: x.ja }))
+  if (f.slot === 'subj') {
+    /* **性格の合う主語だけ**(`The price helps us …` を出さないため) */
+    return (SUBJ_KINDS.get(f.pick) ?? []).map((x) => ({ en: x.en, ja: x.ja }))
+  }
+  if (f.slot === 'vp') return SWAP_VERBS.map((x) => ({ en: x.bare, ja: x.ja }))
+  if (f.slot === 'ving') return SWAP_VERBS.map((x) => ({ en: x.ing, ja: x.ja }))
+  if (f.slot === 'clause') return SWAP_CLAUSES.map((x) => ({ en: x.en, ja: x.ja }))
+  return NOUN_PHRASES.map((x) => ({ en: x.p, ja: x.n }))
+}
+
+/** 席の種類ごとに、渡すものの札を変える。**文言はここ1か所** */
+const GIVE = {
+  subj: '骨(ここに主語を入れる)',
+  vp: '骨(ここに動詞のかたまりを入れる)',
+  ving: '骨(ここに動詞の ~ing を入れる)',
+  np: '骨(ここに名詞句を入れる)',
+  clause: '骨(ここに短い文を入れる)',
+  own: '骨(ここに言葉を入れる)',
+}
+
 export function swapQuestions({ frame = null } = {}) {
   const f = swapFrameOf(frame) ?? SWAP_FRAMES[0]
   const want = shiftTargetOf(f.form)
   const out = []
-  for (const x of NOUN_PHRASES) {
-    const en = swapSentence(f, x.p)
+  for (const x of swapFillers(f)) {
+    const en = swapSentence(f, x.en)
     /* **確かめてから出す。** ここが、この練習の安全弁である */
     if (frameFormOf(en) !== want) continue
     out.push({
-      qid: `${SWAP_GROUP}:${f.id}:${x.p}`,
+      qid: `${SWAP_GROUP}:${f.id}:${x.en}`,
       id: f.id,
       scene: null,
-      ja: swapJa(f, x.n),
+      ja: swapJa(f, x.ja),
       /* **渡すのは骨。** 「もとの言い方」ではないので、呼ぶ側が札を変える */
       base: f.en,
-      give: '骨(ここに名詞句を入れる)',
+      give: GIVE[f.slot] ?? GIVE.own,
       form: f.form,
-      /* **入れるはずの名詞句。** 判定がもう1つ見る */
-      phrase: x.p,
+      /* **入れるはずの言葉。** 判定がもう1つ見る */
+      phrase: x.en,
       ex: en,
       groupId: SWAP_GROUP,
-      groupLabel: '名詞句を入れ替える',
+      groupLabel: '入れ替えて数をこなす',
       sectionNo: '④',
     })
   }
   return out
 }
 
-/** 骨の札(入れ替えの練習で出す)。**出てくる順のまま。並べ替えない** */
-export const swapFrames = () => SWAP_FRAMES.map((f) => ({ id: f.id, label: f.form }))
+/**
+ * 骨の札(入れ替えの練習で出す)。**出てくる順のまま。並べ替えない。**
+ *
+ * **問が1つも出ない骨は出さない**(行き止まりを作らない)。
+ * 組も添えるので、画面は 66 本を組ごとにまとめて出せる。
+ */
+export const swapFrames = () => SWAP_FRAMES
+  .map((f) => {
+    const found = FRAME_INDEX.get(shiftTargetOf(f.form)) ?? FRAME_INDEX.get(f.form) ?? null
+    return {
+      id: f.id,
+      label: f.form,
+      groupId: found?.groupId ?? null,
+      groupLabel: found ? `${found.sectionNo} ${found.groupLabel}` : '',
+      count: swapQuestions({ frame: f.id }).length,
+    }
+  })
+  .filter((f) => f.count > 0)
 
 /* ------------------------------------------------------------------ *
  * 言えた型の控え(端末に持つ)
