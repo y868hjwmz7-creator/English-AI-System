@@ -6056,6 +6056,27 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
 
   const tlSrc = noNote(readD('src/components/TrainerLearners.jsx'))
   ok(/NativeFlowAssign/.test(tlSrc), 'ゲストのページに、Unit を出す欄が在る')
+  /* **ユニット毎にも、丸ごとにも**(2026-09 利用者の指定)。
+     1つずつ押すと6回かかるので、「ぜんぶ渡す」を1回で済ませる */
+  ok(/onAll=\{\(on\) => setNfAll\(l, on\)\}/.test(tlSrc),
+    'ゲストのページから、丸ごと出す / 外すができる')
+  ok(/const setNfAll = async/.test(tlSrc), '丸ごとの窓口が在る')
+  const bulk = tlSrc.slice(tlSrc.indexOf('const setNfAll = async'))
+    .slice(0, tlSrc.slice(tlSrc.indexOf('const setNfAll = async')).indexOf('const changeCefr'))
+  /* **`toggleFeature()` を6回呼ばない。** あれは押すたびに `features` を
+     見て向きを決めるので、続けて呼ぶと2回目以降が逆向きに倒れる */
+  ok(!/toggleFeature\(/.test(bulk),
+    '丸ごとは `toggleFeature()` を繰り返し呼んでいない(向きが逆に倒れる)')
+  ok(/features\.has\(id\) !== on/.test(bulk),
+    'すでにその向きの Unit には、窓口を呼ばない(変えていないものを書き直さない)')
+  ok(/done \+= 1/.test(bulk),
+    'どこまで通ったかを数えている(途中で断られても黙って落ちない)')
+  const nfaJsx = noNote(readD('src/components/NativeFlowAssign.jsx'))
+  ok(/units\.reduce\(/.test(nfaJsx),
+    '「ぜんぶ」の問数は数えて出す(Vol.2 で増えても、ひとりでに合う)')
+  ok(/n > 0 && \(/.test(nfaJsx),
+    '「ぜんぶ外す」は、出しているときだけ出す(効かない操作を見せない)')
+  ok(/onAll = null/.test(nfaJsx), '丸ごとの行も、渡されなければ出ない')
   ok(/nfFeature\(u\.id\)/.test(tlSrc),
     "名前の作り方は `nfFeature()` 1か所(`'nf:' + id` と書いていない)")
   ok(!/'nf:'/.test(tlSrc + qrSrc + appSrc), 'どの画面も名前を組み立てていない')

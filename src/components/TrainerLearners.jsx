@@ -467,6 +467,62 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setNfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
   }
 
+  /**
+   * **Native Flow を丸ごと出す / 外す**(2026-09 利用者の指定
+   * 「ユニット毎、または丸ごとアサイン出来るようにしてください」)。
+   *
+   * 【`toggleFeature()` を6回呼ばない】
+   *
+   *   あれは**押すたびに `features` を見て向きを決める**うえ、
+   *   `featureBusy` が立っているあいだは何もしない。
+   *   続けて6回呼ぶと、**2回目以降は素通りするか、古い `features` を見て
+   *   逆向きに倒す。** ここは「どちらにそろえるか」が先に決まっているので、
+   *   **向きを渡して、まとめて1回だけ書き戻す。**
+   *
+   * 【すでにその向きのものは、窓口を呼ばない】
+   *   6つとも呼ぶと、**変えていない Unit まで書き直す**ことになる。
+   *
+   * 【途中で断られても、黙って落ちない】
+   *   そこまでに通ったぶんを `features` に残し、断りの文をその場に出す
+   *   —— 画面と中身が食い違ったままにしない(CLAUDE.md)。
+   */
+  const setNfAll = async (learner, on) => {
+    if (featureBusy) return
+    const todo = NATIVE_FLOW_UNITS
+      .map((u) => nfFeature(u.id))
+      .filter((id) => features.has(id) !== on)
+    if (!todo.length) {
+      setNfNote({ kind: 'ok', text: on
+        ? `${learner.display_name} さんには、すでに ${NATIVE_FLOW_UNITS.length} つとも出しています。`
+        : `${learner.display_name} さんには、もともと1つも出していません。` })
+      return
+    }
+    setFeatureBusy('nf:all')
+    setNfNote({ kind: 'busy', text: on
+      ? `Unit を ${todo.length} つ出しています…`
+      : `Unit を ${todo.length} つ外しています…` })
+    const next = new Set(features)
+    let bad = null
+    /* **数えながら進む。** あとから引き算で出そうとすると、
+       読んでも正しさが確かめられない式になる(実際そう書いて、直した) */
+    let done = 0
+    for (const id of todo) {
+      const { error: e } = await setLearnerFeature(learner.id, id, on)
+      if (e) { bad = e; break }
+      if (on) next.add(id); else next.delete(id)
+      done += 1
+    }
+    setFeatures(next)
+    setFeatureBusy(null)
+    /* **どこまで通ったかを、そのまま言う。** 「失敗しました」だけだと、
+       いくつ出たのかが分からない(`eraseNow` と同じ作法) */
+    setNfNote(bad
+      ? { kind: 'ng', text: `${done} つまで済みましたが、そこで止まりました: ${bad?.message ?? bad}` }
+      : { kind: 'ok', text: on
+        ? `${learner.display_name} さんの画面に Native Flow を ${NATIVE_FLOW_UNITS.length} つとも出しました。`
+        : `${learner.display_name} さんの画面から Native Flow を外しました。` })
+  }
+
   const changeCefr = async (learner, cefr) => {
     const { error: e } = await setLearnerCefr(learner.id, cefr)
     if (e) { setError(e); return }
@@ -1316,10 +1372,14 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         **囲みに入れる。** すぐ下の `QrReview` は自分で
                         `<section className="card">` を持っているので、
                         地の上に直に置くとそこだけ浮いて見える */}
+                    {/* **ユニット毎にも、丸ごとにも出せる**(2026-09 利用者の指定)。
+                        1つずつ押すと6回かかるので、
+                        「この人には Native Flow をぜんぶ渡す」を1回で済ませる */}
                     <NativeFlowAssign
                       units={NATIVE_FLOW_UNITS} on={nfOn}
                       busy={!!featureBusy} note={nfNote}
                       onPick={(u) => pickNfUnit(l, u)}
+                      onAll={(on) => setNfAll(l, on)}
                     />
 
                     <QrReview learnerId={l.id} learnerName={l.display_name} />

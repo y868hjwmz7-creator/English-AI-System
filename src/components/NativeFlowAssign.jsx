@@ -33,12 +33,18 @@
  * @param busy    いま切り替えている最中か
  * @param note    押した結果 `{ kind: 'busy'|'ok'|'ng', text }`
  * @param onPick  押された Unit を受け取る(出す / 外すの判断は呼ぶ側)
+ * @param onAll   **丸ごと**出す / 外す(2026-09 利用者の指定
+ *                「ユニット毎、または丸ごとアサイン出来るように」)。
+ *                `true` なら出す・`false` なら外す。渡さなければ、その行は出ない
  */
 export default function NativeFlowAssign({
-  units = [], on = [], busy = false, note = null, onPick = null,
+  units = [], on = [], busy = false, note = null, onPick = null, onAll = null,
 }) {
   const shown = new Set([...on].map(Number))
-  const n = units.filter((u) => shown.has(u.id)).length
+  const mine = units.filter((u) => shown.has(u.id))
+  const n = mine.length
+  /* **数は数える。書き写さない**(Vol.2 で Unit が増えても、ひとりでに合う) */
+  const allQ = units.reduce((t, u) => t + u.n, 0)
 
   return (
     <section className="card nfassign">
@@ -71,6 +77,32 @@ export default function NativeFlowAssign({
           )
         })}
       </div>
+
+      {/* **丸ごと**(2026-09 利用者の指定「ユニット毎、または丸ごと」)。
+
+          1つずつ押すと**6回**かかる。ふだんは「この人には Native Flow を
+          ぜんぶ渡す」で足りるので、そこを1回で済ませる。
+
+          **数は数えて出す**(`units` から)。Vol.2 で Unit が増えても
+          ひとりでに合う —— **書き写すと、増やした日に嘘になる。**
+
+          **「ぜんぶ外す」は、出しているときだけ出す**
+          (効かない操作を見せない・CLAUDE.md)。
+          **すき間は `.btn-row` の `gap`** で付く —— 子に余白を付けて回らない */}
+      {onAll && (
+        <div className="btn-row">
+          <button type="button" className="btn btn--small" disabled={busy || n === units.length}
+                  onClick={() => onAll(true)}>
+            ぜんぶ出す({units.length} Unit・{allQ} 問)
+          </button>
+          {n > 0 && (
+            <button type="button" className="btn btn--ghost btn--small" disabled={busy}
+                    onClick={() => onAll(false)}>
+              ぜんぶ外す
+            </button>
+          )}
+        </div>
+      )}
 
       {/* **押した結果は、必ずこの場に出す**(画面のいちばん上に出さない) */}
       {note && (
