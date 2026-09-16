@@ -115,6 +115,9 @@ import {
 } from '../src/data/nativeFlow.js'
 import { QR_ORDERS, orderQrPairs } from '../src/lib/qrOrder.js'
 import { frameFormOf } from '../src/lib/frameMatch.js'
+import {
+  CLIP_ACCENTS, JA_VOICE, accentsWithVoices, elevenIdOf, voicesOfAccent,
+} from '../src/data/clipVoices.js'
 import { NATIVE_FLOW } from '../src/data/nativeFlow.js'
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -6136,7 +6139,8 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
   const LONG = 'If you think you are going to be late for the meeting, '
     + 'please let us know as early as you can.'
   const SHORT = 'Absolutely.'
-  const row = (o = {}) => ({ en: LONG, ja: '…', box: 0, ...o })
+  const JA = '締め切りが厳しくても、できるだけ早く知らせてください。'
+  const row = (o = {}) => ({ en: LONG, ja: JA, box: 0, ...o })
   const GAP = 2000
   const g = radioGapsOf(GAP)
 
@@ -6159,15 +6163,25 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
   ok(radioSteps(row(), 'しらない読み方', GAP).length === before.length,
     '知らない読み方は、既定に落ちる(行き止まりを作らない)')
 
-  // ── ① 言う練習(間 → 答え)
+  // ── ① 言う練習(訳 → 言う番 → 答え)
   const say = radioSteps(row(), 'say', GAP)
-  ok(say[0].kind === 'wait' && say[0].you === true,
-    '**言う練習は「言う番」から始まる**(答えを先に鳴らすと、ただのリピートになる)')
+  ok(say[0].kind === 'ja' && say[0].text === JA,
+    '**訳から始まる**(2026-09 利用者の指定・パタプラは音声完結)')
+  ok(say[1].kind === 'wait' && say[1].you === true,
+    '**訳のつぎは「言う番」**(答えを先に鳴らすと、ただのリピートになる)')
   ok(say.filter((st) => st.kind === 'en').length === 2, '答えは2回鳴る')
-  ok(say[0].ms === g.recall, '「言う番」の長さは、ゲストが選んだ「考える間」')
+  ok(say[1].ms === g.recall, '「言う番」の長さは、ゲストが選んだ「考える間」')
+  ok(say.filter((st) => st.kind === 'ja').length === 1, '訳は1回だけ鳴る')
+  /* **訳が無い問でも落ちない。** 空を鳴らそうとすると、窓口が断って
+     端末の声へ落ちる道に入る(そこが、外したはずのものである) */
+  const noJa = radioSteps({ en: 'Sure.', box: 1 }, 'say', GAP)
+  ok(!noJa.some((st) => st.kind === 'ja'), '訳が無ければ、訳は鳴らさない')
+  ok(noJa[0].kind === 'wait' && noJa[0].you === true, '訳が無ければ、言う番から始まる')
 
   // ── ② チャンクで積む
   const ch = radioSteps(row(), 'chunk', GAP)
+  ok(ch[0].kind === 'ja',
+    '**かたまりで積むときも、訳から**(何を言うのか分からないままでは音真似になる)')
   const chunks = ch.filter((st) => st.kind === 'chunk')
   ok(chunks.length >= 3, `かたまりに割れている(${chunks.length} かたまり)`)
   /* **約束できることだけを見る**(CLAUDE.md「当てられることだけを見る」)。
@@ -6220,6 +6234,33 @@ console.log('\n▶ Native Flow と コロケーション(ファイルに持っ�
     '**一度言えた文(箱1以上)は、1文まるごと**(Type B)')
   ok(!radioSteps(row({ box: 6 }), 'step', GAP).some((st) => st.kind === 'chunk'),
     '進んだ文も1文まるごと')
+
+  /* ── **訳を読むのは、窓口の声だけ。端末の声には二度と戻さない** ──
+     2026-09 に外したのは端末の声のほうで、そこは戻していない */
+  ok(!radioSteps(row(), 'en', GAP).some((st) => st.kind === 'ja'),
+    '**聞き流し(英語だけ)には、訳の段が1つも無い**(1ミリも変えていない)')
+  ok(['enja', 'jaen', 'でたらめ', undefined]
+    .flatMap((m) => radioSteps(row(), m, GAP))
+    .every((st) => st.kind !== 'ja'),
+  '端末に残った古い値(`enja` / `jaen`)でも、訳は鳴らない')
+  ok(JA_VOICE === 'ja-1' && elevenIdOf(JA_VOICE).length > 10,
+    `訳を読む声に Voice ID が入っている(${elevenIdOf(JA_VOICE).slice(0, 6)}…)`)
+  /* **英語の声を選ぶ画面には、1つも出てはいけない** ——
+     出ると、日本語の声が英文を読む教材が作れてしまう */
+  ok(!CLIP_ACCENTS.some((a) => a.id === 'ja'), '訛りの一覧に `ja` を足していない')
+  ok(!accentsWithVoices().flatMap((a) => voicesOfAccent(a.id)).some((v) => v.id === JA_VOICE),
+    '**訳の声は、どの訛りの選択肢にも出ない**(英文を読ませない)')
+  ok(!accentsWithVoices('narration').flatMap((a) => voicesOfAccent(a.id, 'narration'))
+    .some((v) => v.id === JA_VOICE), 'ナレーションの選択肢にも出ない')
+  const ra = noNote(readD('src/lib/readAloud.js'))
+  ok(/clipOnly = false/.test(ra), '**端末の声に落とさない**道は、渡されたときだけ効く(既定は落とす)')
+  ok(/if \(clipOnly\) \{/.test(ra), '落とさないと言われたら、鳴らさずに終える')
+  const rj0 = noNote(readD('src/components/WordRadio.jsx'))
+  ok(/clipOnly: true/.test(rj0) && /clipVoice: JA_VOICE/.test(rj0),
+    '訳は `JA_VOICE` で読み、端末の声には落とさない')
+  ok(!/'ja-1'/.test(rj0), "画面に声の id を書き写していない(`'ja-1'` と書かない)")
+  ok(/clipTier: PREMIUM/.test(rj0),
+    '訳は良い段で頼む(標準の段に落とすと、代役の英語の声になる)')
 
   // ── 答えを隠すか。**「出る」と「出ない」の両方**
   ok(hidesAnswer('say') && hidesAnswer('chunk') && hidesAnswer('step'),

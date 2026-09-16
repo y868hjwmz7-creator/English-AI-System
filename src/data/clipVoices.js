@@ -364,6 +364,26 @@ export const CLIP_VOICES = [
        選んだのに1本にできない — **選ばせてから断らない**(CLAUDE.md)。 */
   { id: 'sc-10', accent: 'sc', gender: 'female', use: 'narration',
     label: 'Sophie', elevenId: 'iePvrB4HtMcAormXZou7', model: V2 },
+  /* ── 日本語 ──────────────────────────────────────────────
+     **訳を読むためだけの声**(2026-09 利用者の指定)。
+
+       > 日本語の声のIDです Shohei (male) ID IVNAqtksLGNGcgvh8Jez
+
+     【なぜ `CLIP_ACCENTS` に `ja` を足さないのか】
+
+       **足すと、教材の声を選ぶ画面に日本語の声が並ぶ。**
+       選べば、**日本語の声が英文を読む。**
+       声の選択肢は `accentsWithVoices()` が `CLIP_ACCENTS` から作るので、
+       **一覧に無い訛りの声は、どの画面にも出ない。**
+       それでいて `findVoice('ja-1')` は引けるので、
+       `readAloud(訳, { clipVoice: JA_VOICE })` はちゃんと鳴る。
+
+       `npm run test:play` が「どの訛りの選択肢にも出ない」を見張っている
+       —— あとで誰かが `ja` を `CLIP_ACCENTS` に足したら、そこで赤くなる。
+
+     【`gender` は男性】利用者が選んだ声である(Shohei / male)。 */
+  { id: 'ja-1', accent: 'ja', gender: 'male', use: 'both',
+    label: 'Shohei', elevenId: 'IVNAqtksLGNGcgvh8Jez' },
 ]
 
 /**
@@ -485,6 +505,19 @@ export const DEFAULT_BASE = 'us-female'
 /** 訛りと性別から、標準の段での代役を決める */
 export const baseOf = (accent, gender) =>
   `${['us', 'ca'].includes(accent) ? 'us' : 'uk'}-${gender === 'male' ? 'male' : 'female'}`
+
+/**
+ * **訳を読む声**(2026-09 利用者の指定)。
+ *
+ * 2026-09 に日本語の読み上げを外したのは、**端末の声**だったからである
+ * (「こえの質が悪すぎます!」)。あのとき
+ * 「**日本語も窓口で作れるようになった日には戻す。
+ * 端末の声には二度と戻さない**」と書き残してあった。**その日である。**
+ *
+ * **どの声で訳を読むかは、ここ1か所。** 画面で `'ja-1'` と書かない
+ * —— 声を入れ替える日に、置く場所の数だけ直すことになる。
+ */
+export const JA_VOICE = 'ja-1'
 
 export const findVoice = (id) => CLIP_VOICES.find((v) => v.id === id) ?? null
 

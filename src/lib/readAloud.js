@@ -333,6 +333,22 @@ export const canReadAloud = () => isSpeechSupported() || canUseClips()
 export async function readAloud(text, {
   voice = null, clipVoice = null, clipTier = STANDARD, rate = 0.9,
   onWord = null, onStart = null,
+  /**
+   * **端末の声には落とさない**(2026-09 利用者の指定・日本語の読み上げ)。
+   *
+   * 2026-09 に日本語を外したのは、**端末の声しか無かったから**である。
+   *
+   *   > 日本語入りはいらないですね!こえの質が悪すぎます!
+   *
+   * 窓口の声(`JA_VOICE`)で作れなかったときに端末の声へ落ちると、
+   * **あのとき外したものが、そのまま戻ってくる。**
+   * そういう場面では**鳴らさない**ほうがよい ——
+   * 黙るのは一瞬だが、悪い声は毎回耳に残る。
+   *
+   * **英語には渡さない**(既定は `false`)。あちらは端末の声でも
+   * 読めるほうがよい(オフラインでも Listen が動く)。
+   */
+  clipOnly = false,
   /** 止めた場所から鳴らすための目印。**渡さなければ、いつも頭から** */
   resumeKey = null,
   /**
@@ -457,6 +473,14 @@ export async function readAloud(text, {
     if (!played) break                 // 1つでも鳴らせなければ、端末の声へ
   }
   if (played) { if (mine === session) finished(); return }
+
+  /* **落としてよいと言われていなければ、鳴らさずに終える**(2026-09)。
+     **黙って落ちない** —— 落ちたことは、これまでどおり控える */
+  if (clipOnly) {
+    noteFellBack('')
+    if (mine === session) { finished(); onWord?.(null) }
+    return
+  }
 
   // MP3 を使えなかった。端末の声に落ちる。**黙って落ちない**
   noteFellBack('')

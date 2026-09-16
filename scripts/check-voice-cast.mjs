@@ -197,6 +197,12 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     'au-9', 'au-10', 'au-11', 'au-12',
     'sc-1', 'sc-2', 'sc-3', 'sc-4', 'sc-5',
     'sc-6', 'sc-7', 'sc-8', 'sc-9', 'sc-10',
+    /* **訳を読むためだけの声**(2026-09 利用者の指定
+       「日本語の声のIDです Shohei (male) ID …」)。
+       **英語の声ではない** —— `CLIP_ACCENTS` に `ja` を足していないので、
+       教材の声を選ぶ画面にはどこにも出ない(`npm run test:play` が見張る)。
+       ここに足すのは「名簿から勝手に消えていないか」を数えるためである */
+    'ja-1',
   ]
   const gone = KNOWN.filter((id) => !findVoice(id))
   if (gone.length) {

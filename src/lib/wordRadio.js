@@ -390,9 +390,29 @@ function merged(list) {
  */
 const boxOf = (row) => Number(row?.box ?? 0)
 
-/** ①日本語を見て、間の中で言う → 答えが鳴る → もう一度 */
-const saySteps = (en, gaps) => [
-  /* **先に間を置く。** ここが「自分が言う番」である ——
+/**
+ * **訳を読むか**(2026-09 利用者の指定「日本語の声のIDです」)。
+ *
+ * パタプラは**音声完結**で、訳も音声の中に入る。
+ * だから**言う練習では訳を読む** —— 画面を見ずに練習できるのが芯である。
+ *
+ * **聞き流し(英語だけ)では読まない。** あちらは 2026-09 の指定で
+ * 英語だけにしたもので、**そこは1ミリも変えていない。**
+ *
+ * 読む声は `JA_VOICE`(`clipVoices.js`)1か所。
+ * **端末の声には二度と落とさない**(`clipOnly`・`readAloud.js`)。
+ */
+const jaStep = (ja) => {
+  const t = String(ja ?? '').trim()
+  /* **訳が無ければ、読まない。** 空を鳴らそうとすると、
+     窓口が断って端末の声へ落ちる道に入る */
+  return t ? [{ kind: 'ja', text: t }] : []
+}
+
+/** ①訳が鳴る → 間の中で言う → 答えが鳴る → もう一度 */
+const saySteps = (en, gaps, ja) => [
+  ...jaStep(ja),
+  /* **訳のあとに間を置く。** ここが「自分が言う番」である ——
      答えを鳴らしてから間を置くと、**ただのリピートになる** */
   { kind: 'wait', ms: gaps.recall, you: true },
   { kind: 'en', text: en },
@@ -401,12 +421,14 @@ const saySteps = (en, gaps) => [
 ]
 
 /** ②かたまりごとにまねて言い、最後に1文まるごと */
-const chunkSteps = (en, gaps) => {
+const chunkSteps = (en, gaps, ja) => {
   const cs = drillChunks(en)
   /* **割れない文は、1文まるごとに落とす。** 「かたまりが1つ」を
      わざわざかたまりとして鳴らすと、同じ音が3回続く */
-  if (!cs.length) return saySteps(en, gaps)
-  const out = []
+  if (!cs.length) return saySteps(en, gaps, ja)
+  /* **はじめに訳を鳴らす。** 何を言うのかが分からないまま
+     かたまりを追いかけても、ただの音真似になる */
+  const out = [...jaStep(ja)]
   for (const c of cs) {
     out.push({ kind: 'chunk', text: c })
     /* **「言う番」は、どれも「考える間」にそろえる。**
@@ -427,13 +449,14 @@ export function radioSteps(row, modeId = DEFAULT_RADIO_MODE, gapMs = DEFAULT_RAD
   const en = radioTextOf(row)
   if (!en) return []
   const gaps = radioGapsOf(gapMs)
+  const ja = radioJaOf(row)
   const id = String(modeId ?? '')
-  if (id === MODE_SAY.id) return saySteps(en, gaps)
-  if (id === MODE_CHUNK.id) return chunkSteps(en, gaps)
+  if (id === MODE_SAY.id) return saySteps(en, gaps, ja)
+  if (id === MODE_CHUNK.id) return chunkSteps(en, gaps, ja)
   /* **Type A → Type B。** 箱が 0(まだ一度も言えていない / 間違えた直後)なら
      かたまりから積み、1つでも上がっていれば文まるごとで言う。
      **新しい数を決めていない** —— 箱そのものが、その判断を持っている */
-  if (id === MODE_STEP.id) return (boxOf(row) === 0 ? chunkSteps : saySteps)(en, gaps)
+  if (id === MODE_STEP.id) return (boxOf(row) === 0 ? chunkSteps : saySteps)(en, gaps, ja)
   return [
     { kind: 'en', text: en },
     { kind: 'wait', ms: gaps.repeat },
@@ -453,10 +476,10 @@ export const hidesAnswer = (modeId) => modeId === MODE_SAY.id
 /** 押す前に、何が起きるかを1行で言う(`scopeLead` と同じ作法) */
 export function radioLead(modeId = DEFAULT_RADIO_MODE) {
   if (modeId === MODE_SAY.id) {
-    return '日本語だけを出します。間のあいだに声に出して言い、そのあと答えが鳴ります。'
+    return '訳が読まれます。間のあいだに声に出して言い、そのあと答えが鳴ります。'
   }
   if (modeId === MODE_CHUNK.id) {
-    return '意味のかたまりごとに読みます。1つずつまねて言い、最後に1文まるごと言います。'
+    return '訳のあと、意味のかたまりごとに読みます。1つずつまねて言い、最後に1文まるごと言います。'
   }
   if (modeId === MODE_STEP.id) {
     return 'まだ言えていない文はかたまりから、一度言えた文は1文まるごとで練習します。'

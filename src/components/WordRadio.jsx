@@ -36,6 +36,8 @@ import { useEffect, useRef, useState } from 'react'
 import FocusFrame from './FocusFrame.jsx'
 import { PlayIcon, StopIcon } from './Icons.jsx'
 import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
+import { JA_VOICE } from '../data/clipVoices.js'
+import { PREMIUM } from '../lib/voiceTier.js'
 import { nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
 import {
   RADIO_GAPS, bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
@@ -213,11 +215,34 @@ export default function WordRadio({
           /* **曲は、鳴っているあいだも小さくしない**(2026-09 利用者の指定
              「英語音声が再生される時に自動で音楽の音量を下げる機能は
              必要ありません」)。大きさは聴く人が左のメニューの下で決める */
-          /* **読むのは英語だけ**(2026-09 利用者の指定
-             「日本語入りはいらないですね!こえの質が悪すぎます!」)。
-             日本語は**端末の声**でしか読めず、質を選べなかった。
-             詳しくは `wordRadio.js` の読み方の節 */
-          await readAloud(st.text, { rate })
+          /* ══════════════════════════════════════════════════════
+             **訳は、窓口の声でだけ読む**(2026-09 利用者の指定)。
+
+               > 日本語の声のIDです Shohei (male) ID IVNAqtksLGNGcgvh8Jez
+
+             2026-09 に日本語を外したのは「こえの質が悪すぎます!」
+             だったが、**あれは端末の声**である。あのとき
+             「窓口で作れるようになった日には戻す。
+             **端末の声には二度と戻さない**」と書き残してあった。
+
+             だから `clipOnly` を渡す —— 窓口で作れなかったときは
+             **鳴らさずに次へ**。落ちた先で悪い声が鳴るくらいなら、
+             一瞬だまるほうがよい。
+
+             **聞き流し(英語だけ)は1ミリも変えていない** ——
+             あちらに `ja` の段は1つも出ない(`radioSteps`)。
+             どの声で読むかは `JA_VOICE` 1か所である
+             ══════════════════════════════════════════════════════ */
+          await (st.kind === 'ja'
+            ? readAloud(st.text, {
+              rate,
+              clipVoice: JA_VOICE,
+              /* **良い段で頼む。** `JA_VOICE` は ElevenLabs にしかいないので、
+                 標準の段(Google / Azure)に落とすと**代役の英語の声**になる */
+              clipTier: PREMIUM,
+              clipOnly: true,
+            })
+            : readAloud(st.text, { rate }))
         }
         if (!alive()) return
         setSay(null)
