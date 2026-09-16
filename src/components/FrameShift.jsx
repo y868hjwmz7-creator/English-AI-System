@@ -104,6 +104,15 @@ export default function FrameShift() {
   /* トレーニングや絞り込みを変えたら先頭へ。**途中の番号のまま残さない** */
   useEffect(() => { setAt(0) }, [pick, scene, frame])
 
+  /** 言えた問を控える。**数え方を2通り持たない**ので、足すのはここだけ */
+  const markDone = (qid) => {
+    setDone((prev) => {
+      if (prev.has(qid)) return prev
+      const next = new Set(prev); next.add(qid)
+      return saveShiftDone(next)
+    })
+  }
+
   /** 言い直した文を見る。**判定はここ1か所からしか呼ばない** */
   const check = (text) => {
     /* **入れるはずの名詞句も、判定に渡す。**
@@ -112,14 +121,8 @@ export default function FrameShift() {
     setResult(j)
     if (j.verdict === SHIFT_EMPTY) return
     answerFeedback(j.verdict === SHIFT_OK)
-    if (j.verdict === SHIFT_OK && q) {
-      /* **言えた問だけ控える。** 型ごとの到達度は `shiftMap()` が数える */
-      setDone((prev) => {
-        if (prev.has(q.qid)) return prev
-        const next = new Set(prev); next.add(q.qid)
-        return saveShiftDone(next)
-      })
-    }
+    /* **言えた問だけ控える。** 型ごとの到達度は `shiftMap()` が数える */
+    if (j.verdict === SHIFT_OK && q) markDone(q.qid)
   }
 
   /** 話して答える。もう一度押すと止めて、結果を見る */
@@ -324,20 +327,43 @@ export default function FrameShift() {
               </div>
             )}
 
+            {/* **書き込む欄は置かない**(2026-09 実機・利用者の指定)。
+
+                  > 書き込む欄はいらないですね。基本的にタイプするのは面倒なので
+                  > 型シフトトレーニングについては書き込みはなしを共通仕様にしてください
+
+                これは**話す練習**である。打たせると、打つ速さの練習になってしまう。
+                この画面には `input` も `textarea` も1つも置かない ——
+                `npm run test:shift` が機械で見張っている。 */}
             <div className="fshift-answer">
-              <label className="field-label" htmlFor="fshift-said">言い直した文</label>
-              <textarea id="fshift-said" className="fshift-input" rows={2}
-                        value={said} onChange={(e) => setSaid(e.target.value)}
-                        placeholder="ここに打つか、下のマイクで話します" />
+              {/* **聞き取った文は、必ず見せる。**
+                  何と聞こえたか分からないと、判定に納得できない。
+
+                  **マイクが使えない端末では、箱ごと出さない** ——
+                  出しても一生うまらないし、「マイクを押して」という
+                  **効かない案内**になる(CLAUDE.md) */}
+              {isRecognitionSupported() && (
+                <>
+                  <span className="field-label">言い直した文</span>
+                  <p className={`fshift-heard${said ? '' : ' fshift-heard--none'}`}>
+                    {said || 'マイクを押して、声に出して言ってください'}
+                  </p>
+                </>
+              )}
               <div className="btn-row fshift-acts">
-                <button type="button" className="btn" onClick={() => check(said)}>
-                  見てもらう
-                </button>
-                {isRecognitionSupported() && (
+                {isRecognitionSupported() ? (
                   <button type="button"
                           className={`btn ${listening ? 'btn--ghost' : ''}`}
                           onClick={talk}>
                     {listening ? <><StopIcon /> 止める</> : <><MicIcon /> 話す</>}
+                  </button>
+                ) : (
+                  /* **行き止まりを作らない**(CLAUDE.md)。
+                     音声認識に対応していない端末でも、お手本を見て声に出し、
+                     自分で「言えた」を押せる。**打たせない**のは同じである */
+                  <button type="button" className="btn"
+                          onClick={() => q && markDone(q.qid)}>
+                    言えた
                   </button>
                 )}
                 <button type="button" className="btn btn--ghost"
@@ -345,6 +371,12 @@ export default function FrameShift() {
                   {openEx ? 'お手本を隠す' : 'お手本を見る'}
                 </button>
               </div>
+              {!isRecognitionSupported() && (
+                <p className="muted fshift-hint">
+                  この端末のブラウザは音声認識に対応していないため、
+                  機械で確かめられません。お手本を見て、声に出して確かめてください。
+                </p>
+              )}
               {/* **失敗の知らせは、その操作をした場所に出す** */}
               {micNote && <p className="fshift-mic" role="alert">{micNote}</p>}
             </div>

@@ -9028,14 +9028,16 @@ button.wbfilter-ctl { text-align: left; }
 }
 .fshift-group { margin: 0; font-size: var(--fs-12); }
 
-.fshift-input {
-  width: 100%; box-sizing: border-box;
+/* 聞き取った文。**打つ欄ではない**(2026-09 利用者の指定)。
+   枠だけ残して、何と聞こえたかを必ず見せる */
+.fshift-heard {
+  margin: 0; min-height: 3.2em; box-sizing: border-box;
   padding: var(--sp-12);
   border: 1px solid var(--border); border-radius: var(--r-8);
-  background: var(--surface); color: var(--text-primary);
-  font-size: var(--fs-17); line-height: 1.6; font-family: inherit;
-  resize: vertical;
+  background: var(--surface);
+  font-size: var(--fs-17); line-height: 1.6;
 }
+.fshift-heard--none { color: var(--text-muted); }
 .fshift-acts { margin: 0; display: flex; flex-wrap: wrap; gap: var(--sp-10); }
 /* マイクの失敗。**その操作をした場所に出す**(画面のいちばん下に出さない) */
 .fshift-mic {
