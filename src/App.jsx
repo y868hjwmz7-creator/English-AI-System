@@ -928,6 +928,9 @@ export default function App() {
                            自分の単語帳だけで、トレーナーがゲストの
                            単語帳を開く画面には冊の切り替えを出していない */
                         showNp
+                        /* **副詞句の冊**(2026-09 利用者の指定)。
+                           `showNp` とまったく同じ扱い */
+                        showAdv
                         only={onlyWords?.words ?? null}
                         onlyLabel={onlyWords?.label ?? ''}
                         onlyWhat={onlyWords?.what ?? 'この教材の語'}

@@ -55,7 +55,7 @@
  *
  * 【一覧を勝手に減らさない】
  *
- *   `npm run test:play` が **80 件**と、組ごとの中身を数えている
+ *   `npm run test:play` が **100 件**と、組ごとの中身を数えている
  *   (コロケーションと同じ場所で見る。**見る場所を増やさない**)。
  *
  * @property g    うしろに続く形の組(`of` / `todo` / `prep` / `that` / `adj` / `nn`)
@@ -78,7 +78,8 @@ export const NOUN_PHRASE_GROUPS = [
   { id: 'nn', label: 'N + N', name: '名詞 + 名詞', point: '2語で1つの言葉になっているもの' },
 ]
 
-/** 厳選 80 件。**並べ替えない。減らさない** */
+/** 厳選 100 件(2026-09 利用者の指定「ビジネスで使用する名詞句100」)。
+    **並べ替えない。減らさない。後ろへ足す** */
 export const NOUN_PHRASES = [
   // -- OF ... A の B
   { g: 'of', head: 'cost', p: 'the cost of delay', n: '遅れにかかる費用', en: 'We underestimated the cost of delay.', ja: '遅れにかかる費用を、低く見積もっていた' },
@@ -96,6 +97,10 @@ export const NOUN_PHRASES = [
   { g: 'of', head: 'amount', p: 'the amount of work', n: '仕事の量', en: 'The amount of work surprised us.', ja: '仕事の量に驚いた' },
   { g: 'of', head: 'series', p: 'a series of problems', n: '続けて起きた問題', en: 'A series of problems delayed the launch.', ja: '問題が続いて、発売が遅れた' },
 
+  { g: 'of', head: 'pace', p: 'the pace of change', n: '変化の速さ', en: 'The pace of change surprised the team.', ja: '変化の速さに、チームは驚いた' },
+  { g: 'of', head: 'level', p: 'the level of detail', n: '細かさの度合い', en: 'The level of detail was too high.', ja: '細かさの度合いが、行きすぎていた' },
+  { g: 'of', head: 'piece', p: 'a piece of feedback', n: '意見のひとつ', en: 'She gave us a piece of feedback.', ja: '彼女から、意見をひとつもらった' },
+
   // -- TO DO ... 〜するための / 〜するという
   { g: 'todo', head: 'ability', p: 'the ability to adapt', n: '合わせて変わる力', en: 'The ability to adapt matters more than experience.', ja: '合わせて変わる力は、経験より大事だ' },
   { g: 'todo', head: 'decision', p: 'the decision to postpone', n: '延期するという判断', en: 'The decision to postpone came too late.', ja: '延期するという判断が、遅すぎた' },
@@ -110,6 +115,10 @@ export const NOUN_PHRASES = [
   { g: 'todo', head: 'permission', p: 'permission to share', n: '共有してよいという許可', en: 'We need permission to share the file.', ja: 'ファイルを共有してよいという許可が要る' },
   { g: 'todo', head: 'reason', p: 'a reason to wait', n: '待つ理由', en: 'I do not see a reason to wait.', ja: '待つ理由が見当たらない' },
   { g: 'todo', head: 'willingness', p: 'the willingness to change', n: '変わろうという姿勢', en: 'The willingness to change is the hard part.', ja: '変わろうという姿勢が、いちばん難しい' },
+
+  { g: 'todo', head: 'decision', p: 'the decision to invest', n: '投資するという判断', en: 'The decision to invest came from the board.', ja: '投資するという判断は、役員会から出た' },
+  { g: 'todo', head: 'freedom', p: 'the freedom to choose', n: '選べる自由', en: 'Members have the freedom to choose.', ja: 'メンバーには、選べる自由がある' },
+  { g: 'todo', head: 'duty', p: 'the duty to report', n: '報告する義務', en: 'We have the duty to report any delay.', ja: '遅れは報告する義務がある' },
 
   // -- PREP ... 前置詞が決まっている
   { g: 'prep', head: 'solution', p: 'a solution to the problem', n: '問題の解決策', en: 'We found a solution to the problem.', ja: '問題の解決策が見つかった' },
@@ -130,6 +139,11 @@ export const NOUN_PHRASES = [
   { g: 'prep', head: 'delay', p: 'a delay in the approval', n: '承認の遅れ', en: 'A delay in the approval stopped the work.', ja: '承認の遅れで、仕事が止まった' },
   { g: 'prep', head: 'difference', p: 'the difference between the two', n: '2つの違い', en: 'Explain the difference between the two.', ja: '2つの違いを説明してください' },
 
+  { g: 'prep', head: 'reason', p: 'the reason behind the change', n: '変更の裏にある理由', en: 'Let me explain the reason behind the change.', ja: '変更の裏にある理由を説明します' },
+  { g: 'prep', head: 'alternative', p: 'an alternative to this plan', n: 'この案に代わるもの', en: 'We need an alternative to this plan.', ja: 'この案に代わるものが要る' },
+  { g: 'prep', head: 'response', p: 'the response to our offer', n: 'こちらの提案への返事', en: 'The response to our offer was positive.', ja: 'こちらの提案への返事は、前向きだった' },
+  { g: 'prep', head: 'confidence', p: 'confidence in the team', n: 'チームへの信頼', en: 'The client has confidence in the team.', ja: '取引先は、チームを信頼している' },
+
   // -- THAT ... 〜という(中身が文)
   { g: 'that', head: 'fact', p: 'the fact that we are behind', n: '遅れているという事実', en: 'The fact that we are behind worries the client.', ja: '遅れているという事実が、取引先を心配させている' },
   { g: 'that', head: 'idea', p: 'the idea that price decides everything', n: '値段で全部決まるという考え', en: 'The idea that price decides everything is wrong.', ja: '値段で全部決まるという考えは間違いだ' },
@@ -139,6 +153,10 @@ export const NOUN_PHRASES = [
   { g: 'that', head: 'assumption', p: 'the assumption that nothing changes', n: '何も変わらないという前提', en: 'The assumption that nothing changes is risky.', ja: '何も変わらないという前提は、危うい' },
   { g: 'that', head: 'concern', p: 'the concern that costs will rise', n: '費用が上がるという心配', en: 'The concern that costs will rise is fair.', ja: '費用が上がるという心配は、もっともだ' },
   { g: 'that', head: 'agreement', p: 'the agreement that we split the cost', n: '費用を折半するという取り決め', en: 'The agreement that we split the cost is in writing.', ja: '費用を折半するという取り決めは、文書にしてある' },
+
+  { g: 'that', head: 'possibility', p: 'the possibility that it fails', n: 'うまくいかない見込み', en: 'We cannot ignore the possibility that it fails.', ja: 'うまくいかない見込みを、無視はできない' },
+  { g: 'that', head: 'impression', p: 'the impression that we are slow', n: '遅いという印象', en: 'The impression that we are slow is spreading.', ja: '遅いという印象が広がっている' },
+  { g: 'that', head: 'understanding', p: 'the understanding that we share the cost', n: '費用を分け合うという了解', en: 'We started with the understanding that we share the cost.', ja: '費用を分け合うという了解のもとで始めた' },
 
   // -- ADJ + N ... 形容詞 + 名詞(2語で1つ)
   { g: 'adj', head: 'deadline', p: 'a tight deadline', n: 'きつい締め切り', en: 'We are working to a tight deadline.', ja: 'きつい締め切りで動いている' },
@@ -160,6 +178,11 @@ export const NOUN_PHRASES = [
   { g: 'adj', head: 'cost', p: 'the overall cost', n: '全体の費用', en: 'The overall cost went down.', ja: '全体の費用が下がった' },
   { g: 'adj', head: 'win', p: 'a quick win', n: 'すぐ出せる成果', en: 'Let us start with a quick win.', ja: 'すぐ出せる成果から始めましょう' },
 
+  { g: 'adj', head: 'mistake', p: 'a common mistake', n: 'よくある間違い', en: 'That is a common mistake.', ja: 'それは、よくある間違いです' },
+  { g: 'adj', head: 'price', p: 'a reasonable price', n: '妥当な値段', en: 'They offered a reasonable price.', ja: '妥当な値段を出してきた' },
+  { g: 'adj', head: 'point', p: 'the main point', n: '要点', en: 'Let me get to the main point.', ja: '要点に入ります' },
+  { g: 'adj', head: 'choice', p: 'a safe choice', n: '無難な選び方', en: 'Waiting is a safe choice.', ja: '待つのは、無難な選び方だ' },
+
   // -- N + N ... 名詞 + 名詞(2語で1つの言葉)
   { g: 'nn', head: 'breakdown', p: 'a cost breakdown', n: '費用の内訳', en: 'Please attach a cost breakdown.', ja: '費用の内訳を付けてください' },
   { g: 'nn', head: 'report', p: 'a progress report', n: '進み具合の報告', en: 'I sent a progress report on Friday.', ja: '金曜に、進み具合の報告を送った' },
@@ -171,6 +194,9 @@ export const NOUN_PHRASES = [
   { g: 'nn', head: 'meeting', p: 'a team meeting', n: 'チームの打ち合わせ', en: 'We have a team meeting every Monday.', ja: '毎週月曜に、チームの打ち合わせがある' },
   { g: 'nn', head: 'assessment', p: 'a risk assessment', n: '危なさの見立て', en: 'They asked for a risk assessment.', ja: '危なさの見立てを出すよう言われた' },
   { g: 'nn', head: 'extension', p: 'a deadline extension', n: '締め切りの延ばし', en: 'We asked for a deadline extension.', ja: '締め切りを延ばしてほしいと頼んだ' },
+  { g: 'nn', head: 'estimate', p: 'a cost estimate', n: '費用の見積もり', en: 'Please send a cost estimate by Friday.', ja: '金曜までに、費用の見積もりを送ってください' },
+  { g: 'nn', head: 'meeting', p: 'a client meeting', n: '取引先との会合', en: 'I have a client meeting this afternoon.', ja: '午後に、取引先との会合がある' },
+  { g: 'nn', head: 'schedule', p: 'a work schedule', n: '作業の日程', en: 'We agreed on a work schedule.', ja: '作業の日程が決まった' },
 ]
 
 /** id から組を引く。知らない id は `null`(**当てずっぽうで返さない**) */

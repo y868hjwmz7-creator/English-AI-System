@@ -5679,7 +5679,7 @@ console.log('\nスピーチ練習(0054)')
  * ④絞り込みが効く形になっているか ⑤答えが漏れていないか
  * ⑥**画面が本当に呼んでいるか。**
  * ══════════════════════════════════════════════════════════════════════ */
-console.log('\n▶ Native Flow と コロケーションと名詞句(ファイルに持った教材)')
+console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句(ファイルに持った教材)')
 {
   const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
   /* **「名前が出てくるか」で見ない**(CLAUDE.md)。この節にも
@@ -5691,6 +5691,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句(ファイ�
   const nf = await import('../src/data/nativeFlow.js')
   const col = await import('../src/data/collocations.js')
   const np = await import('../src/data/nounPhrases.js')
+  const adv = await import('../src/data/adverbPhrases.js')
   const { normEn, normWord } = await import('../src/lib/textNorm.js')
 
   /* ── ① 一覧を勝手に減らさない ───────────────────────── */
@@ -5700,11 +5701,18 @@ console.log('\n▶ Native Flow と コロケーションと名詞句(ファイ�
     'Native Flow … Unit は 6 つ', `いま ${nf.NATIVE_FLOW_UNITS.length}`)
   ok(nf.NATIVE_FLOW_UNITS.every((u) => u.n === nf.NATIVE_FLOW.filter((x) => x.u === u.id).length),
     'Native Flow … Unit ごとの数が、一覧と中身で合っている')
-  ok(col.COLLOCATIONS.length === 50,
-    'コロケーション … 50 件ある', `いま ${col.COLLOCATIONS.length}`)
-  ok(col.COLLOCATION_VERBS.length === 5
-     && col.COLLOCATION_VERBS.every((v) => col.COLLOCATIONS.filter((x) => x.v === v.id).length === 10),
-    'コロケーション … 5動詞 × 10 件')
+  /* **基本動詞 50 + ビジネス 50 = 100**(2026-09 利用者の指定
+     「ビジネスで使用するコロケーション50」「同じ冊に足して 100 件に」)。
+     **数を書き写さず、組の数 × 10 という関係で見る** ——
+     組を足したときに、期待値も一緒に動く */
+  ok(col.COLLOCATIONS.length === col.COLLOCATION_VERBS.length * 10,
+    `コロケーション … ${col.COLLOCATION_VERBS.length} 動詞 × 10 = ${col.COLLOCATIONS.length} 件`,
+    `いま ${col.COLLOCATIONS.length}`)
+  ok(col.COLLOCATION_VERBS.every((v) => col.COLLOCATIONS.filter((x) => x.v === v.id).length === 10),
+    'コロケーション … どの動詞の組も 10 件ちょうど')
+  /* **組を勝手に増やしていないか**(逆も見る) */
+  ok(col.COLLOCATIONS.every((x) => col.collocationVerbOf(x.v)),
+    'コロケーション … 一覧に無い動詞の組を使っていない')
 
   /* ── ② 原本のとおりに持つ ───────────────────────────── */
   /* **合字は直す。** PDF の組版で1文字になっているので、
@@ -5749,7 +5757,8 @@ console.log('\n▶ Native Flow と コロケーションと名詞句(ファイ�
     'material_title', 'material_industry', 'material_kind', 'material_genre',
     'material_scene', 'material_level', 'learn_streak']
   const colRows = col.collocationRows([], { today: '2026-09-15' })
-  ok(colRows.length === 50, 'コロケーション … 行も 50 出る')
+  ok(colRows.length === col.COLLOCATIONS.length,
+    `コロケーション … 行も ${colRows.length} 出る`)
   ok(WORD_FIELDS.every((k) => k in colRows[0]) && Object.keys(colRows[0]).length === WORD_FIELDS.length,
     'コロケーション … review_words() と同じ欄がそろっている',
     WORD_FIELDS.filter((k) => !(k in colRows[0])).join(' ') || 'ぴったり')
@@ -5781,8 +5790,8 @@ console.log('\n▶ Native Flow と コロケーションと名詞句(ファイ�
     'Native Flow … material_title に Unit が入っている(6種)')
   ok(nfRows.every((r) => /^Native Flow Unit \d /.test(r.material_title)),
     'Native Flow … どの Unit だか、名前を見れば分かる')
-  ok([...new Set(colRows.map((r) => r.material_title))].length === 5,
-    'コロケーション … material_title に動詞の組が入っている(5種)')
+  ok([...new Set(colRows.map((r) => r.material_title))].length === col.COLLOCATION_VERBS.length,
+    `コロケーション … material_title に動詞の組が入っている(${col.COLLOCATION_VERBS.length}種)`)
   /* **知らない id は null**(当てずっぽうで返さない) */
   ok(nf.unitOf(99) === null && col.collocationVerbOf('zzz') === null,
     '知らない id … null を返す(当てずっぽうで返さない)')
@@ -5829,8 +5838,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句(ファイ�
 
      **コロケーションと1文字も違わない形にしてある**ので、
      見る中身も同じにそろえる(読み方を2通り持たない)。 */
-  ok(np.NOUN_PHRASES.length === 80,
-    '名詞句 … 80 件ある', `いま ${np.NOUN_PHRASES.length}`)
+  /* **100 件**(2026-09 利用者の指定「ビジネスで使用する名詞句100」) */
+  ok(np.NOUN_PHRASES.length === 100,
+    '名詞句 … 100 件ある', `いま ${np.NOUN_PHRASES.length}`)
   ok(np.NOUN_PHRASE_GROUPS.length === 6
      && np.NOUN_PHRASE_GROUPS.every((g) => np.NOUN_PHRASES.some((x) => x.g === g.id)),
     '名詞句 … 6つの組があり、どれにも中身がある')
@@ -5858,7 +5868,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句(ファイ�
     '名詞句 … 芯の名詞が、語句の中にある')
 
   const npRows = np.nounPhraseRows([], { today: '2026-09-15' })
-  ok(npRows.length === 80, '名詞句 … 行も 80 出る')
+  ok(npRows.length === np.NOUN_PHRASES.length, `名詞句 … 行も ${npRows.length} 出る`)
   ok(WORD_FIELDS.every((k) => k in npRows[0]) && Object.keys(npRows[0]).length === WORD_FIELDS.length,
     '名詞句 … review_words() と同じ欄がそろっている',
     WORD_FIELDS.filter((k) => !(k in npRows[0])).join(' ') || 'ぴったり')
@@ -5895,6 +5905,68 @@ console.log('\n▶ Native Flow と コロケーションと名詞句(ファイ�
   /* **冊は後ろへ足す。並べ替えない**(docs/notes/22 の決まり) ——
      前へ割り込ませると、ゲストが覚えた置き場所が全部ずれる */
   ok(wb.indexOf("id: 'col'") < wb.indexOf("id: 'np'"),
+    '単語帳 … 新しい冊を後ろへ足している(並べ替えていない)')
+
+  /* ── ⑧ 副詞句(単語帳の6冊目)─────────────────────────
+     2026-09 利用者の指定「ビジネスで使用する副詞句50」。
+     **名詞句と1文字も違わない形**にしてあるので、見る中身も同じにそろえる */
+  ok(adv.ADVERB_PHRASES.length === 50,
+    '副詞句 … 50 件ある', `いま ${adv.ADVERB_PHRASES.length}`)
+  ok(adv.ADVERB_PHRASE_GROUPS.length > 1
+     && adv.ADVERB_PHRASE_GROUPS.every((g) => adv.ADVERB_PHRASES.some((x) => x.g === g.id)),
+    `副詞句 … ${adv.ADVERB_PHRASE_GROUPS.length} つの組があり、どれにも中身がある`)
+  ok(adv.ADVERB_PHRASES.every((x) => adv.adverbPhraseGroupOf(x.g)),
+    '副詞句 … 一覧に無い組を使っていない')
+  ok(adv.ADVERB_PHRASES.every((x) => x.p.trim() && x.n.trim() && x.en.trim() && x.ja.trim()),
+    '副詞句 … 空の欄が1つも無い')
+  ok(adv.ADVERB_PHRASES.every((x) => x.p.includes(' ')),
+    '副詞句 … どれも2語以上(句として単語帳に入る)')
+  ok(!adv.ADVERB_PHRASES.some((x) => LIG.test(x.en) || LIG.test(x.p)),
+    '副詞句 … 合字が1つも残っていない')
+  const advKeys = adv.ADVERB_PHRASES.map((x) => normWord(x.p))
+  ok(new Set(advKeys).size === advKeys.length, '副詞句 … そろえた語句が重なっていない')
+  /* **例文の中に、その語句がそのまま出てくるか。** ここがいちばん効く */
+  const advIn = adv.ADVERB_PHRASES.filter(
+    (x) => x.en.toLowerCase().includes(x.p.toLowerCase()))
+  ok(advIn.length === adv.ADVERB_PHRASES.length,
+    '副詞句 … 例文の中に、その語句がそのまま出てくる',
+    `${advIn.length} / ${adv.ADVERB_PHRASES.length}`)
+
+  const advRows = adv.adverbPhraseRows([], { today: '2026-09-15' })
+  ok(advRows.length === adv.ADVERB_PHRASES.length, `副詞句 … 行も ${advRows.length} 出る`)
+  ok(WORD_FIELDS.every((k) => k in advRows[0])
+     && Object.keys(advRows[0]).length === WORD_FIELDS.length,
+    '副詞句 … review_words() と同じ欄がそろっている',
+    WORD_FIELDS.filter((k) => !(k in advRows[0])).join(' ') || 'ぴったり')
+  ok(advRows.every((r) => r.status === 'unknown' && r.box === 0 && r.due_on === '2026-09-15'),
+    '副詞句 … まだ答えていない語句は「まだ・箱0・今日出す」')
+  const seenAdv = [{ word_norm: normWord(adv.ADVERB_PHRASES[5].p), status: 'known', box: 4,
+    due_on: '2026-12-31', learn_streak: 9 }]
+  const hitA = adv.adverbPhraseRows(seenAdv, { today: '2026-09-15' })[5]
+  ok(hitA.status === 'known' && hitA.box === 4 && hitA.learn_streak === 9,
+    '副詞句 … 覚え具合が、そろえた語句で当たる')
+  ok(advRows.every((r) => !/[A-Za-z]{3,}/.test(r.meaning_ja)),
+    '副詞句 … 意味の欄に英語を混ぜない(4択で答えが見える)')
+  ok([...new Set(advRows.map((r) => r.material_title))].length
+     === adv.ADVERB_PHRASE_GROUPS.length,
+    '副詞句 … material_title に組が入っている')
+  ok(adv.adverbPhraseGroupOf('zzz') === null && adv.adverbPhraseTitle('zzz') === '副詞句',
+    '副詞句 … 知らない id は null。名前は行き止まりにしない')
+
+  ok(/loadAdverbPhraseWordbook\(\{ learnerId \}\)/.test(wb),
+    '単語帳 … 画面が loadAdverbPhraseWordbook() を呼んでいる')
+  ok(/showAdv \? \[\{ id: 'adv', label: '副詞句' \}\] : \[\]/.test(wb),
+    '単語帳 … 冊の一覧に「副詞句」が在る(出すかは呼ぶ側が決める)')
+  ok(/showAdv = false/.test(wb), '単語帳 … 副詞句の既定は「出さない」')
+  ok(/showAdv/.test(app), '単語帳 … 自分の単語帳にだけ出している')
+  ok(!/showAdv/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
+    '単語帳 … ゲストの単語帳を開く画面には渡していない')
+  ok(/advBook = book === 'adv'/.test(wb) && /npBook \|\| advBook/.test(wb),
+    '単語帳 … 表を直に読む冊として扱っている')
+  ok(/\}, \[[^\]]*\badvBook\b[^\]]*\]\)/.test(wb),
+    '単語帳 … 冊が変わったら読み直す(見張りに入っている)')
+  /* **冊は後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
+  ok(wb.indexOf("id: 'np'") < wb.indexOf("id: 'adv'"),
     '単語帳 … 新しい冊を後ろへ足している(並べ替えていない)')
 
   const qr = noNote(readD('src/components/QrReview.jsx'))

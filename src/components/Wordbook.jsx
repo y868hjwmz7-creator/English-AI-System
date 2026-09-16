@@ -77,6 +77,7 @@ import { basicJaOf, basicPosOf, wordsForTier } from '../lib/basicsCourse.js'
 import { COURSE_TIERS, loadBasicTier, saveBasicTier, tierOf } from '../data/basicsCourse.js'
 import { loadCollocationWordbook } from '../lib/collocationWords.js'
 import { loadNounPhraseWordbook } from '../lib/nounPhraseWords.js'
+import { loadAdverbPhraseWordbook } from '../lib/adverbPhraseWords.js'
 import { loadBasicWordbook } from '../lib/basicReviews.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
 import { CloseIcon, FocusIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
@@ -286,6 +287,9 @@ export default function Wordbook({
      厳選し、単語帳に一つのコンテンツとして置き」)。
      `showCol` とまったく同じ扱い —— 出す場所は呼ぶ側が決める */
   showNp = false,
+  /* **副詞句の冊**(2026-09 利用者の指定「ビジネスで使用する副詞句50」)。
+     `showNp` とまったく同じ扱い —— 出す場所は呼ぶ側が決める */
+  showAdv = false,
   /**
    * **業種べつの単語帳(棚)のうち、この人に出すもの**(0057・利用者の指定)。
    *
@@ -501,6 +505,10 @@ export default function Wordbook({
        **後ろへ足す。並べ替えない** —— 冊が増えたときに前へ割り込ませると、
        ゲストが覚えた置き場所が全部ずれる(docs/notes/22 の決まり) */
     ...(showNp ? [{ id: 'np', label: '名詞句' }] : []),
+    /* **副詞句**(2026-09 利用者の指定)。名詞句とまったく同じ扱い。
+       **後ろへ足す。並べ替えない** —— 前へ割り込ませると、ゲストが
+       覚えた置き場所が全部ずれる(docs/notes/22 の決まり) */
+    ...(showAdv ? [{ id: 'adv', label: '副詞句' }] : []),
   ]
   const [bookWanted, setBookWanted] = useState('my')
   /* **出せなくなった冊は、黙って自分の単語帳へ落とす**(行き止まりを作らない)。
@@ -512,6 +520,7 @@ export default function Wordbook({
   const basicBook = book === 'basic'
   const colBook = book === 'col'
   const npBook = book === 'np'
+  const advBook = book === 'adv'
   /** 自分の単語帳を開いているか。**「棚ではない」で書かない** ——
       書くと、冊を足すたびに置いた場所の数だけ食い違う */
   const myBook = book === 'my'
@@ -616,15 +625,16 @@ export default function Wordbook({
        **`review_words()` を通さない**のも同じ理由である。あちらは
        上限で切るので、1,200 語ある基礎単語では**段の後ろが丸ごと
        「まだ」に見える。** */
-    if (shelfBook || basicBook || colBook || npBook) {
+    if (shelfBook || basicBook || colBook || npBook || advBook) {
       const [pack, tally, wk, aim] = await Promise.all([
         /* **コロケーションも同じ道。** 行の形はそろえてあるので
            (`collocationRows()`)、ここから下は1文字も書き分けていない */
         shelfBook ? loadShelfWordbook({ learnerId, shelves: shelfPick })
           : colBook ? loadCollocationWordbook({ learnerId })
-            /* **名詞句も同じ道。** 行の形はそろえてある(`nounPhraseRows()`) */
+            /* **名詞句も副詞句も同じ道。** 行の形はそろえてある */
             : npBook ? loadNounPhraseWordbook({ learnerId })
-              : loadBasicWordbook({ learnerId, tier }),
+              : advBook ? loadAdverbPhraseWordbook({ learnerId })
+                : loadBasicWordbook({ learnerId, tier }),
         /* 棚の語数は、**プルダウンの選択肢に出すためだけ**のもの。
            基礎単語には棚が無いので読みに行かない(問い合わせを増やさない)。
 
@@ -745,7 +755,7 @@ export default function Wordbook({
        別の配列になる。つないだ文字列(`shelfKey`)で見る
        (`onlyKey` とまったく同じ落とし穴) */
   }, [current.status, current.dueOnly, current.id, learnerId, mine, onlySet,
-    shelfBook, shelfKey, basicBook, tier, colBook, npBook, sendGrown])
+    shelfBook, shelfKey, basicBook, tier, colBook, npBook, advBook, sendGrown])
 
   useEffect(() => { reload() }, [reload])
 
