@@ -29,8 +29,14 @@ export const FRAME_QR_SEEN_LIMIT = 5000
  *
  * @param learnerId 誰の覚え具合か(省くと自分)
  * @param part      どの中身か(`'swap'` / `'say'`)
+ * @param form      その型だけ出す(`null` ならぜんぶ)。**絞るのは
+ *                  `frameQrRows()` 1か所**で、覚え具合の側は絞らない ——
+ *                  あちらは英文で引くので、型を変えるたびに読み直す理由がない
+ *                  (Native Flow の Unit とまったく同じ作法)
  */
-export async function loadFrameQr({ learnerId = null, part = FIRST_FRAME_PART } = {}) {
+export async function loadFrameQr({
+  learnerId = null, part = FIRST_FRAME_PART, form = null,
+} = {}) {
   const day = todayKey()
   /* **状態で絞らない。** 中身ぜんぶを出して、3枚の札(まだ / 練習中 / できた)も
      読んだ行から数える —— 分けて読むと、札の数と実際に出る問が食い違う */
@@ -38,6 +44,6 @@ export async function loadFrameQr({ learnerId = null, part = FIRST_FRAME_PART } 
     status: null, limit: FRAME_QR_SEEN_LIMIT,
   })
   /* **読めなくても、問は返す。** 0040 を貼る前もここに来る */
-  if (error) return ok(frameQrRows([], { today: day, part }))
-  return ok(frameQrRows(data ?? [], { today: day, part }))
+  if (error) return ok(frameQrRows([], { today: day, part, form }))
+  return ok(frameQrRows(data ?? [], { today: day, part, form }))
 }

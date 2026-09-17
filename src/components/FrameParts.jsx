@@ -25,13 +25,29 @@
  *   骨組み(Supabase 無し)でもそのまま描ける(**描けないものは測れない**)。
  * ============================================================================
  *
+ * 【型で絞る欄も、ここに置く】(2026-09 利用者の指定)
+ *
+ *   > quick response 内で型のトレーニングをする際に、絞り込めるようにして欲しい。
+ *
+ *   **「出しかた」の中には入れない。** あちらは読み込んだ問の中から選ぶ
+ *   絞り込みで、こちらは**出す問そのものが変わる**(Unit とまったく同じ)。
+ *   同じ場所に並べると、押したときに起きることが2通りになる。
+ *
+ *   **66 本を書き写さない。** 一覧も並びも組の名前も
+ *   `frameQrForms()`(`sentenceFrames.js` の並び)が持つ。
+ *   `<optgroup>` は、その組の名前をそのまま見出しにするだけである。
+ *
  * @param parts  中身の一覧(`FRAME_PARTS`)
  * @param counts 中身ごとの問数(`frameQrCounts()`)
  * @param picked いま開いている中身の id
  * @param onPick 選ばれた中身の id
+ * @param forms  絞れる型の一覧(`frameQrForms()`)
+ * @param form   いま絞っている型。`null` なら「ぜんぶ」
+ * @param onForm 選ばれた型(「ぜんぶ」は `null`)
  */
 export default function FrameParts({
   parts = [], counts = {}, picked = null, onPick = null,
+  forms = [], form = null, onForm = null,
 }) {
   /** **中身が1つも無ければ、欄ごと出さない**(効かない操作を見せない) */
   if (!parts.length) return null
@@ -41,6 +57,17 @@ export default function FrameParts({
      画面と中身が食い違う(`ShelfBooks` で踏んだ落とし穴) */
   const now = parts.some((p) => p.id === picked) ? picked : parts[0].id
   const lead = parts.find((p) => p.id === now)?.lead ?? ''
+  /* **知らない型が残っていても、「ぜんぶ」に落ちる**(`ShelfBooks` と同じ) */
+  const nowForm = forms.some((f) => f.form === form) ? form : ''
+  const all = forms.reduce((n, f) => n + f.n, 0)
+  /* **組ごとにまとめる。** 66 本を1列に並べると、どこに何があるか分からない。
+     **並びは `frameQrForms()` のまま** —— ここで並べ替えない */
+  const groups = []
+  for (const f of forms) {
+    const last = groups[groups.length - 1]
+    if (last && last.label === f.group) last.rows.push(f)
+    else groups.push({ label: f.group, rows: [f] })
+  }
 
   return (
     <div className="wb-add nfunits">
@@ -57,6 +84,26 @@ export default function FrameParts({
           ))}
         </select>
       </label>
+      {/* **型で絞る**(2026-09 利用者の指定)。中身の欄のすぐ下に置く ——
+          どちらも「出す問そのものが変わる」ものなので、同じ場所にまとめる。
+          **1つも型が無ければ、欄ごと出さない**(効かない操作を見せない) */}
+      {forms.length > 0 && (
+        <label className="field field--inline nfunits-pick">
+          <span className="field-label">型</span>
+          <select className="input" value={nowForm}
+                  onChange={(e) => onForm?.(e.target.value || null)}>
+            {/* **「ぜんぶ」を先に置く。** これまでの通し練習を残す道である */}
+            <option value="">ぜんぶ({all} 問)</option>
+            {groups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.rows.map((f) => (
+                  <option key={f.form} value={f.form}>{f.form}({f.n} 問)</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+      )}
       {/* **何をする練習かを、その場で1行。** 選ぶたびに入れ替わる ——
           説明を1つにまとめると、**選んでいないほうの説明も読まされる** */}
       <p className="tip basicpick-lead">

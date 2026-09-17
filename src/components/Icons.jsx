@@ -337,6 +337,22 @@ export function UploadIcon({ className = 'icon' }) {
  * くり返し(ディクテーション・2026-09 利用者の指定)。
  * **輪になった矢印。** 「同じところを回る」が形で分かる
  */
+/**
+ * **ヒント**(2026-09 利用者の指定)。電球。
+ * ほかの絵と同じ 20×20・線だけ・`aria-hidden`(文字のほうが名前を言う)。
+ */
+export function HintIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false"
+         fill="none" stroke="currentColor" strokeWidth="1.5"
+         strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 2.6a4.7 4.7 0 0 0-2.8 8.5c.5.4.8 1 .8 1.6v.3h4v-.3c0-.6.3-1.2.8-1.6A4.7 4.7 0 0 0 10 2.6Z" />
+      <path d="M8.3 15.6h3.4" />
+      <path d="M8.9 17.6h2.2" />
+    </svg>
+  )
+}
+
 export function RepeatIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">

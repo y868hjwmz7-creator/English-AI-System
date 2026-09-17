@@ -6705,6 +6705,23 @@ button.wbfilter-ctl { text-align: left; }
 .qr-frame-name {
   font-size: var(--fs-11); font-weight: 700; opacity: .75;
 }
+/* ヒント(2026-09 利用者の指定「ヒントは『-の形』」)。**問の下に置く** ——
+   答えではないので、答えの囲み(.answer-box)には入れない。
+   型の札(.qr-frame)と同じ丸い形にそろえるが、**地色を変えて別物と分かるように**
+   する(色だけに頼らない ── うすい地色 + 枠線 + 太字 + 「ヒント」の文字)。
+   すき間は親(.qr-body)の gap が作る ── margin で回らない
+   (.claude/rules/common.md「別々の物を、すき間ゼロでくっつけない」) */
+.qr-hint {
+  margin: 0; align-self: center; max-width: 100%;
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  padding: 3px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-secondary); font-size: var(--fs-13); font-weight: 700;
+  line-height: 1.5; text-align: center;
+}
+.qr-hint-name {
+  font-size: var(--fs-11); font-weight: 700; opacity: .75;
+}
 
 /* 何問目か + 話す人。**丸の番号は集中モード・紙と同じもの**
    (2026-09 利用者の指定「クイックレスポンスの文章にも番号を。おしゃれにね」)。
@@ -8900,6 +8917,13 @@ button.wbfilter-ctl { text-align: left; }
 /* Native Flow の Unit を選ぶ欄も、**まったく同じ形**である
    (2026-09 利用者の指定「UNIT毎に分けて」)。
    **新しい決まりを作らない。この行に足す** */
+/* **すき間は `gap` で作る。余白で作らない**(`.claude/rules/common.md`)。
+   66 の型では欄が2つ(中身 / 型)に増えたので、子の `margin` に頼ると
+   **下に何が来るかで隙間が変わる** —— 実際それで 0 になった例がある。
+   `<details>` と違い、ここは入れ物そのものが並べる役なので `grid` でよい */
+.nfunits { display: grid; gap: var(--sp-10); }
+.nfunits > .field { margin: 0; }
+.nfunits > .basicpick-lead { margin: 0; }
 .nfunits-pick > .field-label { margin: 0; }
 /* **押せる大きさ(40px)を割らない**(CLAUDE.md)。
    素の `<select>` は padding と字の高さで **35px ほどしかない。**

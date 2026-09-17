@@ -179,6 +179,10 @@ export const qrPairOf = (row) => ({
   en: row?.en ?? '',
   ja: row?.ja ?? '',
   speaker: row?.speaker ?? '',
+  /* **ヒント**(2026-09 利用者の指定)。66 の型の行だけが持っている。
+     持っていない行(自分の帳・Native Flow)は `null` なので、
+     **あちらにはヒントのボタンが出ない**(効かない操作を見せない・CLAUDE.md) */
+  hint: row?.hint ?? null,
   from: row?.material_title ?? '',
   group: 'sentence',
   key: row?.en_norm ?? row?.en ?? '',

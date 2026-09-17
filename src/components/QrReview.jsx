@@ -42,7 +42,8 @@ import {
 } from '../lib/reviewScope.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
 import {
-  FIRST_FRAME_PART, FRAME_PARTS, FRAME_PART_KEY, frameQrCounts,
+  FIRST_FRAME_PART, FRAME_FORM_KEY, FRAME_PARTS, FRAME_PART_KEY, QR_HINT_KEY,
+  frameQrCounts, frameQrForms,
 } from '../lib/frameQr.js'
 import { loadFrameQr } from '../lib/frameQrLoad.js'
 import { NF_UNIT_KEY } from '../data/nativeFlow.js'
@@ -177,6 +178,41 @@ export default function QrReview({
   /** 中身ごとの問数。**画面で数え直さない**(`frameQr.js` 1か所) */
   const partCounts = useMemo(() => frameQrCounts(), [])
 
+  /**
+   * **どの型だけを練習するか**(2026-09 利用者の指定
+   * 「quick response 内で型のトレーニングをする際に、絞り込めるようにして欲しい」)。
+   *
+   * `null` ならぜんぶ。**Native Flow の Unit とまったく同じ作法**である ——
+   * 覚える・出せない型は黙って落とす・変えたら読み直す。
+   * 一覧も並びも `frameQrForms()`(`sentenceFrames.js` の並び)が持つ。
+   */
+  const [formWanted, setFormWanted] = useState(() => {
+    try { return localStorage.getItem(FRAME_FORM_KEY) || null } catch { return null }
+  })
+  const partForms = useMemo(() => frameQrForms(part), [part])
+  /* **出せない型が残っていても、「ぜんぶ」に落ちる。**
+     中身を切り替えたときに、向こうに無い型が残っていると0問になる */
+  const form = partForms.some((f) => f.form === formWanted) ? formWanted : null
+
+  /**
+   * **ヒントを出しているか**(2026-09 利用者の指定)。
+   *
+   *   > 一度ボタンを押したら問題を跨いでも、
+   *   > もう一度ヒントボタンを押すまでヒントが出続けるようにして欲しい。
+   *
+   * **カードではなく、ここに持つ。** `QrCard` は問ごとに描き直されるので、
+   * あちらに持つと1問で消える(「問題を跨いでも」が成り立たない)。
+   * **覚える** —— 押したままにしたいものなので、開き直しても消さない。
+   */
+  const [hintOn, setHintOn] = useState(() => {
+    try { return localStorage.getItem(QR_HINT_KEY) === 'on' } catch { return false }
+  })
+  const pickHint = (on) => {
+    setHintOn(on)
+    try { localStorage.setItem(QR_HINT_KEY, on ? 'on' : 'off') }
+    catch { /* 使えなくても困らない */ }
+  }
+
   const [rows, setRows] = useState([])
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState(null)
@@ -251,7 +287,7 @@ export default function QrReview({
       /* **66 の型も、行の形をそろえてある**(`frameQrRows()`)。
          だからここから下は、Native Flow と1文字も書き分けていない */
       frameBook
-        ? loadFrameQr({ learnerId, part })
+        ? loadFrameQr({ learnerId, part, form })
         : nfBook
         ? loadNativeFlowQr({ learnerId, units: unit ? [unit] : nfUnitIds })
         : loadQrReviews(learnerId, { status: 'todo', limit: 500 }),
@@ -271,7 +307,7 @@ export default function QrReview({
      `nfUnits`(配列)そのものを入れると、描き直すたびに別のものになり、
      読み直しが止まらない(`onlyKey` / `shelfKey` と同じ落とし穴) */
   const nfKey = nfUnitIds.join(',')
-  useEffect(() => { reload() }, [learnerId, book, unit, nfKey, part])
+  useEffect(() => { reload() }, [learnerId, book, unit, nfKey, part, form])
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
@@ -431,6 +467,18 @@ export default function QrReview({
     setAt((i) => i + 1)
   }
 
+  /**
+   * **やりかけを捨てる。** 冊・Unit・中身・型のどれを変えても、
+   * 出す問が丸ごと変わるので持ち越せない。
+   * **4か所に書き写さない**(CLAUDE.md)—— 1つ足し忘れると、
+   * **前の冊の問が次の冊で出続ける**。
+   */
+  const dropRun = () => {
+    setRun(null); setPending([]); setAt(0); setDone([])
+    setRadio(null); setGroup(null); setFilter(emptyFilter)
+    gradedRef.current = new Set()
+  }
+
   const who = learnerName ? `${learnerName} さんの` : ''
 
   /** 冊の札。**Supabase の有無で2か所から描くので、ここ1つに持つ**
@@ -445,9 +493,7 @@ export default function QrReview({
                   if (book === b.id) return
                   setBookWanted(b.id)
                   /* 冊が変わると中身が丸ごと変わる。**やりかけを持ち越さない** */
-                  setRun(null); setPending([]); setAt(0); setDone([])
-                  setRadio(null); setGroup(null); setFilter(emptyFilter)
-                  gradedRef.current = new Set()
+                  dropRun()
                 }}>
           {b.label}
         </button>
@@ -543,6 +589,10 @@ export default function QrReview({
             pair={run[at]} no={at + 1}
             onAnswer={answer}
             yetLabel="まだ" okLabel="言える"
+            /* **ヒント**(2026-09 利用者の指定)。押した状態は**ここが持つ** ——
+               カードは問ごとに描き直されるので、あちらに持つと1問で消える。
+               **ヒントを持たない行にはボタンが出ない**(`QrCard` が見ている) */
+            hintOn={hintOn} onHint={pickHint}
             /* **型を出すのは、この復習の画面だけ**(2026-09 利用者の指定
                「型の見分け、使い分けは必ず実現したいトレーニングです」)。
                教材の中の Quick Response には**渡していない** ——
@@ -687,9 +737,7 @@ export default function QrReview({
                   else localStorage.removeItem(NF_UNIT_KEY)
                 } catch { /* 使えなくても困らない */ }
                 /* Unit が変わると出す問が丸ごと変わる。**やりかけを持ち越さない** */
-                setRun(null); setPending([]); setAt(0); setDone([])
-                setRadio(null); setGroup(null); setFilter(emptyFilter)
-                gradedRef.current = new Set()
+                dropRun()
               }}
             />
           )}
@@ -708,9 +756,19 @@ export default function QrReview({
                 try { localStorage.setItem(FRAME_PART_KEY, id) }
                 catch { /* 使えなくても困らない */ }
                 /* 中身が変わると出す問が丸ごと変わる。**やりかけを持ち越さない** */
-                setRun(null); setPending([]); setAt(0); setDone([])
-                setRadio(null); setGroup(null); setFilter(emptyFilter)
-                gradedRef.current = new Set()
+                dropRun()
+              }}
+              /* **型で絞る**(2026-09 利用者の指定)。一覧も並びも
+                 `frameQrForms()` が持つ —— 画面で 66 本を書き写さない */
+              forms={partForms}
+              form={form}
+              onForm={(f) => {
+                setFormWanted(f)
+                try {
+                  if (f) localStorage.setItem(FRAME_FORM_KEY, f)
+                  else localStorage.removeItem(FRAME_FORM_KEY)
+                } catch { /* 使えなくても困らない */ }
+                dropRun()
               }}
             />
           )}

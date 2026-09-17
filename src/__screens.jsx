@@ -56,7 +56,9 @@ import ShelfAssign from './components/ShelfAssign.jsx'
 import NativeFlowUnits from './components/NativeFlowUnits.jsx'
 import NativeFlowAssign from './components/NativeFlowAssign.jsx'
 import { NATIVE_FLOW_UNITS } from './data/nativeFlow.js'
-import { FIRST_FRAME_PART, FRAME_PARTS, frameQrCounts } from './lib/frameQr.js'
+import {
+  FIRST_FRAME_PART, FRAME_PARTS, frameQrCounts, frameQrForms,
+} from './lib/frameQr.js'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
 import NavSettings from './components/NavSettings.jsx'
@@ -1052,7 +1054,12 @@ const SHIFT = (
       <h2 className="card-title">Quick Response(復習)</h2>
       <FrameParts parts={FRAME_PARTS} counts={frameQrCounts()}
                   picked={q.get('picked') === 'say' ? 'say' : FIRST_FRAME_PART}
-                  onPick={() => {}} />
+                  onPick={() => {}}
+                  /* **わざと 66 本ぜんぶ渡す** —— 1つだけにすると、
+                     長い型の名前でプルダウンがはみ出すのを見逃す */
+                  forms={frameQrForms(q.get('picked') === 'say' ? 'say' : FIRST_FRAME_PART)}
+                  form={q.get('form') === 'none' ? null : 'S allows 人 to do'}
+                  onForm={() => {}} />
     </section>
   </div>
 )

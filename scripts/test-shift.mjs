@@ -53,8 +53,9 @@ import { SUBJ_KINDS } from '../src/data/swapParts.js'
 import { NOUN_PHRASES } from '../src/data/nounPhrases.js'
 import { nativeFlowRows } from '../src/data/nativeFlow.js'
 import {
-  FIRST_FRAME_PART, FRAME_PARTS, FRAME_PART_KEY,
-  framePartOf, framePartTitle, frameQrCounts, frameQrRows, frameQuestions,
+  FIRST_FRAME_PART, FRAME_FORM_KEY, FRAME_PARTS, FRAME_PART_KEY, QR_HINT_KEY,
+  frameHintOf, framePartOf, framePartTitle, frameQrCounts, frameQrForms,
+  frameQrRows, frameQuestions,
 } from '../src/lib/frameQr.js'
 
 const ROOT = new URL('..', import.meta.url).pathname
@@ -285,26 +286,34 @@ head('Quick Response の行にしているか')
   ok(frameQuestions('そんな中身は無い').length === 0, '知らない中身では、1問も出さない')
   ok(frameQuestions('swap').length === counts.swap, '日本語 → 英語の数が、数え上げと合う')
 
-  /* **言い換えは、型を問に書く。** 書かないと同じ日本語が二度出て、
-     どちらの答えか分からない。**「出る」と「出ない」の両方を見る** */
+  /* **型は、問の文に混ぜない**(2026-09 利用者の指定でヒントに移した)。
+     混ぜると**聞き流しが読み上げ**(`radioJaOf()` は `ja` を読む)、
+     **紙にもそのまま刷られる**(`qrSheetPairs()` も `ja` を使う)。
+     **「出る」と「出ない」の両方を見る** */
   const sayQ = frameQuestions('say')
-  ok(sayQ.every((q) => /の型で/.test(q.ja)), '言い換えの問には、どの型で言うかが書いてある')
-  ok(new Set(sayQ.map((q) => q.ja)).size === sayQ.length,
-    '言い換えの問は、同じ日本語が二度出ない',
-    `${new Set(sayQ.map((q) => q.ja)).size} / ${sayQ.length}`)
-  /* **型を書かなければ、本当に重なるのか。** 重ならないなら、
-     この見張りは何も守っていない(**赤チェックの代わり**) */
-  ok(new Set(shiftQuestions().map((q) => q.ja)).size < sayQ.length,
-    '型を書かなければ、日本語は重なる(だから書いている)')
   const swapQ = frameQuestions('swap')
-  ok(!swapQ.some((q) => /の型で/.test(q.ja)),
-    '日本語 → 英語のほうには、型を書き足していない(型は1つに決まっている)')
+  ok(![...sayQ, ...swapQ].some((q) => /の型で|の形/.test(q.ja)),
+    '問の日本語に、型を混ぜていない(聞き流しも紙も読むところ)')
+  ok([...sayQ, ...swapQ].every((q) => FORMS.includes(q.form)),
+    'どの問も、型を持っている(66 型の一覧にあるもの)')
+  /* **型を出さなければ、本当に見分けられないのか。** 見分けられるなら、
+     ヒントも絞り込みも要らないことになる(**赤チェックの代わり**) */
+  ok(new Set(sayQ.map((q) => q.ja)).size < sayQ.length,
+    '言い換えは、同じ日本語が2度以上出る(だからヒントと絞り込みが要る)',
+    `別の日本語 ${new Set(sayQ.map((q) => q.ja)).size} / 問 ${sayQ.length}`)
+  ok(new Set(shiftQuestions().map((q) => q.ja)).size
+     === new Set(sayQ.map((q) => q.ja)).size, 'お題の日本語を、書き換えていない')
 
-  /* **行の形が `nativeFlowRows()` と1文字も違わない。**
-     ずれると `QrReview.jsx` が書き分けを持つ(数え方が2通りになる) */
-  const nf = Object.keys(nativeFlowRows([], { today: '2026-01-01' })[0]).sort().join(',')
-  const fr = Object.keys(frameQrRows([], { today: '2026-01-01' })[0]).sort().join(',')
-  ok(nf === fr, '行の欄が、Native Flow と1文字も違わない', `\n    NF: ${nf}\n    型: ${fr}`)
+  /* **行の形。** `nativeFlowRows()` の欄を**1つも欠かさない** ——
+     欠けると `QrReview.jsx` が書き分けを持つ(数え方が2通りになる)。
+     **足したものは名指しで書く** —— 黙って増やすと、
+     「同じ形」と言いながら中身が離れていく */
+  const nfKeys = Object.keys(nativeFlowRows([], { today: '2026-01-01' })[0])
+  const frKeys = Object.keys(frameQrRows([], { today: '2026-01-01' })[0])
+  const lack = nfKeys.filter((k) => !frKeys.includes(k))
+  ok(lack.length === 0, 'Native Flow の欄を、1つも欠かしていない', `\n    足りない: ${lack.join(' / ')}`)
+  const extra = frKeys.filter((k) => !nfKeys.includes(k))
+  ok(extra.join(',') === 'hint', '足したのは `hint` だけ', extra.join(',') || '(無し)')
 
   const rows = frameQrRows([], { today: '2026-01-01', part: 'say' })
   ok(rows.length === counts.say, '言い換えの行の数が、問の数と合う')
@@ -333,6 +342,114 @@ head('Quick Response の行にしているか')
   ok(frameQrRows([], { part: 'そんな中身は無い' }).length === 0, '知らない中身では、行も0')
 
   ok(FRAME_PART_KEY.startsWith('eas.'), '覚えておく鍵の名前が、ほかとそろっている')
+  ok(new Set([FRAME_PART_KEY, FRAME_FORM_KEY, QR_HINT_KEY]).size === 3,
+    '覚えておく鍵が、3つとも別のもの')
+}
+
+/* ────────────────────────────────────────────────────────────
+   ⑧ ヒント(2026-09 利用者の指定「ヒントは『-の形』」)
+   ──────────────────────────────────────────────────────────── */
+head('ヒント')
+{
+  /* **文言はここ1か所。** 画面に書き写さない */
+  ok(frameHintOf('S allows 人 to do') === '「S allows 人 to do」の形',
+    'ヒントの文は「◯◯」の形', frameHintOf('S allows 人 to do'))
+  /* **型が分からなければ、当てずっぽうで出さない。**
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md) */
+  ok(frameHintOf(null) === null && frameHintOf('') === null,
+    '型が分からない行には、ヒントを作らない')
+
+  for (const part of FRAME_PARTS.map((p) => p.id)) {
+    const rows = frameQrRows([], { today: '', part })
+    ok(rows.every((r) => r.hint && r.hint.endsWith('の形')),
+      `${part} … どの行にもヒントがある`)
+    /* **型の名前が、そのままヒントに入っているか。**
+       見分け直さず、問が持っている型をそのまま渡している */
+    ok(rows.every((r) => FORMS.some((f) => r.hint === frameHintOf(f))),
+      `${part} … ヒントの型が、66 型の一覧にある`)
+  }
+  /* **逆も見る。** ふだんの Quick Response と Native Flow は
+     ヒントを持たない —— だからあちらにボタンが出ない */
+  ok(nativeFlowRows([], { today: '' }).every((r) => r.hint === undefined),
+    'Native Flow の行は、ヒントを持たない(ボタンごと出ない)')
+
+  const qr = code('src/components/QrReview.jsx')
+  const card = code('src/components/QrCard.jsx')
+  /* **押した状態は、呼ぶ側が持つ**(2026-09 利用者の指定
+     「一度ボタンを押したら問題を跨いでも、もう一度押すまで出続ける」)。
+     カードは問ごとに描き直されるので、**あちらに持つと1問で消える** */
+  ok(!/useState\([\s\S]{0,20}hintOn/.test(card), 'カードは、押した状態を自分で持たない')
+  ok(/hintOn/.test(card) && /onHint/.test(card), 'カードは、押した状態を受け取って描くだけ')
+  ok(/hintOn=\{hintOn\}/.test(qr) && /onHint=\{pickHint\}/.test(qr),
+    '画面が、押した状態を持ってカードへ渡している')
+  ok(new RegExp(`localStorage\\.setItem\\(QR_HINT_KEY`).test(qr),
+    '押したままにできる(端末に覚える)')
+  /* **ヒントの文言を、画面に書き写していない** */
+  ok(!/の形/.test(qr) && !/の形/.test(card), 'ヒントの文言を、画面に書き写していない')
+  /* **ヒントを持たない問には、ボタンを出さない**(効かない操作を見せない) */
+  ok(/onHint && pair\.hint/.test(card), 'ヒントを持たない問には、ボタンを出さない')
+  /* **答えの下の型とは、別のもの。** 片方だけ消しても分かるように名前を分ける */
+  ok(/qr-hint/.test(card) && /qr-frame/.test(card), 'ヒントと、答えの下の型は別の場所')
+  ok(/\.qr-hint\b/.test(raw('src/styles.css')), 'ヒントの見た目の指定がある')
+}
+
+/* ────────────────────────────────────────────────────────────
+   ⑨ 型で絞る(2026-09 利用者の指定「絞り込めるようにして欲しい」)
+   ──────────────────────────────────────────────────────────── */
+head('型で絞る')
+{
+  for (const part of FRAME_PARTS.map((p) => p.id)) {
+    const forms = frameQrForms(part)
+    /* **並びは `sentenceFrames.js` のまま。** 問を数えた順に並べると、
+       書いた順になる(**一覧を勝手に並べ替えない**) */
+    const order = forms.map((f) => FORMS.indexOf(f.form))
+    ok(order.every((n, i) => i === 0 || n > order[i - 1]),
+      `${part} … 型の並びが、66 型の一覧のまま`)
+    /* **1問も無い型は出さない**(開いた先が空になる・行き止まり) */
+    ok(forms.every((f) => f.n > 0), `${part} … 1問も無い型は出さない`)
+    /* **数を足すと、問の数と合う**(黙って落としていない) */
+    ok(forms.reduce((n, f) => n + f.n, 0) === frameQuestions(part).length,
+      `${part} … 型ごとの数を足すと、問の数と合う`)
+    /* **組の名前も書き写していない**(`sentenceFrames.js` から引く) */
+    ok(forms.every((f) => f.group), `${part} … どの型にも、組の名前が付いている`)
+    /* **絞ると、その型だけになる** */
+    const one = forms[0]
+    const rows = frameQrRows([], { today: '', part, form: one.form })
+    ok(rows.length === one.n, `${part} … 絞ると、その型の数だけ出る`,
+      `${rows.length} / ${one.n}`)
+    ok(rows.every((r) => r.hint === frameHintOf(one.form)),
+      `${part} … 絞ったあと、どの行もその型`)
+    /* **絞らなければ、ぜんぶ**(逆も見る) */
+    ok(frameQrRows([], { today: '', part, form: null }).length > rows.length,
+      `${part} … 絞らなければ、ぜんぶ出る`)
+    /* **知らない型では0問。** 黙って「ぜんぶ」に落とさない ——
+       落とすと、選んでいないものが出る(いちばん分かりにくい) */
+    ok(frameQrRows([], { today: '', part, form: 'そんな型は無い' }).length === 0,
+      `${part} … 知らない型では、1問も出さない`)
+  }
+  /* **66 型ぜんぶが絞れる**(一覧を勝手に減らさない) */
+  ok(frameQrForms('swap').length === FORMS.length,
+    `日本語 → 英語は、66 型すべてで絞れる(${frameQrForms('swap').length})`)
+
+  const qr = code('src/components/QrReview.jsx')
+  const parts = code('src/components/FrameParts.jsx')
+  ok(/frameQrForms\(/.test(qr), '画面が、絞れる型の一覧を引いている')
+  ok(/loadFrameQr\(\{ learnerId, part, form \}\)/.test(qr),
+    '型を渡して読み込んでいる(絞ったぶんだけ読む)')
+  ok(/nfKey, part, form\]/.test(qr), '型を変えたら読み直す(前の型の問が残らない)')
+  ok(/optgroup/.test(parts), '66 本を組ごとにまとめて出している')
+  /* **66 本を画面に書き写していない** */
+  ok(!/S allows 人 to do/.test(parts) && !/S allows 人 to do/.test(qr),
+    '型の名前を、画面に書き写していない')
+  /* **やりかけを持ち越さない。** 冊・Unit・中身・型の4つとも。
+     **数を書き写さず、性質で見る** —— 出す問が変わる操作は4つあり、
+     そのどれもが `dropRun()` を通る */
+  const drops = (qr.match(/dropRun\(\)/g) ?? []).length
+  ok(drops === 4, '冊・Unit・中身・型の4つとも、やりかけを捨てる', String(drops))
+  /* **中身を書き写していない。** 1つ足し忘れると、
+     **前の冊の問が次の冊で出続ける**(いちばん分かりにくい壊れ方) */
+  ok((qr.match(/setRun\(null\); setPending/g) ?? []).length === 1,
+    'やりかけの捨て方は1か所だけ(4か所に書き写していない)')
 }
 
 /* ────────────────────────────────────────────────────────────

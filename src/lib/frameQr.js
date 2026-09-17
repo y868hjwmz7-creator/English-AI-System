@@ -33,14 +33,28 @@
  *   「ぜんぶ」は置かない。**もともと2つは別の練習**であり、
  *   通しで回せていたものを取り上げるわけではない。
  *
- * 【言い換えは、型を問のほうに書く】
+ * 【型は、問の文に混ぜない。**ヒントと絞り込みで出す**】(2026-09 利用者の指定)
  *
- *   お題1つに型が2つ以上あるので(37 お題 → 66 問)、
- *   **型を出さないと、同じ日本語が2度出て、どちらの答えか分からない。**
- *   もとの画面が「この型で言い直す」と出していたものを、そのまま問に入れる。
+ *   > quick response 内で型のトレーニングをする際に、絞り込めるようにして欲しい。
+ *   > また、ヒントボタンをつけて、一度ボタンを押したら問題を跨いでも、
+ *   > もう一度ヒントボタンを押すまでヒントが出続けるようにして欲しい。
+ *   > ヒントは、「-の形」というのがヒントにしてください。
  *
- *   日本語 → 英語のほうは**型が1つに決まっている**ので、足さない
- *   (`QrCard` が答えの下に型を出す・`showFrame`)。
+ *   **前の形を直している。** 言い換えの問は
+ *   `…と伝える(「S makes 人 do(原形)」の型で)` と**日本語の中に**
+ *   型を書いていた。**あれを外した** —— 理由は2つある。
+ *
+ *   - **聞き流しが、その括弧を読み上げる**(`radioJaOf()` は `ja` を読む)。
+ *     日本語の声が `S makes 人 do` を読むので、雑音にしかならない
+ *   - **紙にもそのまま刷られる**(`qrSheetPairs()` も `ja` を使う)
+ *
+ *   型は `hint`(**「◯◯」の形**)として別に持ち、画面が出す。
+ *   **同じ値を2か所に書かない**(CLAUDE.md)—— 問が持っている型を
+ *   そのまま渡すだけで、英文から見分け直さない(**もらえる正解を捨てない**)。
+ *
+ *   言い換えは**お題1つに型が2つ以上ある**(37 お題 → 66 問)ので、
+ *   ヒントを出さないと同じ日本語が2度出る。**型で絞れば1つに決まる**し、
+ *   ヒントを出しておけば見分けられる。どちらも利用者の指定で足したものである。
  *
  * 【Supabase を引き連れない】
  *
@@ -53,6 +67,7 @@
  */
 import { SWAP_FRAMES } from '../data/phraseSwap.js'
 import { shiftQuestions, swapQuestions } from './frameShift.js'
+import { FRAME_FORMS, FRAME_INDEX } from './frameMatch.js'
 import { normEn } from './textNorm.js'
 
 /**
@@ -87,18 +102,55 @@ export const framePartTitle = (id) => {
  * @param part `'swap'` / `'say'`。知らない id は**空**(当てずっぽうで出さない)
  */
 export function frameQuestions(part = FIRST_FRAME_PART) {
+  /* **型は、問が持っているものをそのまま渡す。**
+     英文から見分け直さない(**もらえる正解を捨てない**・CLAUDE.md)*/
   if (part === 'say') {
-    /* **型を問に書く。** お題1つに型が2つ以上あるので、
-       書かないと同じ日本語が2度出て、どちらの答えか分からない */
-    return shiftQuestions().map((q) => ({ ja: `${q.ja}(「${q.form}」の型で)`, en: q.ex }))
+    return shiftQuestions().map((q) => ({ ja: q.ja, en: q.ex, form: q.form }))
   }
   if (part !== 'swap') return []
   const out = []
   /* **骨の並びは `phraseSwap.js` のまま。** ここで並べ替えない */
   for (const f of SWAP_FRAMES) {
-    for (const q of swapQuestions({ frame: f.id })) out.push({ ja: q.ja, en: q.ex })
+    for (const q of swapQuestions({ frame: f.id })) {
+      out.push({ ja: q.ja, en: q.ex, form: q.form })
+    }
   }
   return out
+}
+
+/**
+ * **ヒントの文**(2026-09 利用者の指定「ヒントは、『-の形』というのがヒント」)。
+ *
+ * 文言はここ1か所。**画面に書き写さない。**
+ * 型が分からない行(ふだんの Quick Response・Native Flow)は `null` ——
+ * **当てずっぽうで出さない**ので、あちらにヒントのボタンは出ない。
+ */
+export const frameHintOf = (form) => (form ? `「${form}」の形` : null)
+
+/**
+ * **型で絞るための一覧**(2026-09 利用者の指定「絞り込めるようにして欲しい」)。
+ *
+ * **並びは `sentenceFrames.js` のまま**(`FRAME_FORMS`)。問を数え上げた順に
+ * 並べると、書いた順になってしまう —— **一覧を勝手に並べ替えない**
+ * (`.claude/rules/common.md`)。
+ *
+ * **1問も無い型は出さない**(開いた先が空になる・行き止まりを作らない)。
+ * 組も添えるので、画面は `<optgroup>` でまとめて出せる。
+ */
+export function frameQrForms(part = FIRST_FRAME_PART) {
+  const n = new Map()
+  for (const q of frameQuestions(part)) n.set(q.form, (n.get(q.form) ?? 0) + 1)
+  return FRAME_FORMS
+    .filter((f) => n.get(f) > 0)
+    .map((f) => {
+      const found = FRAME_INDEX.get(f)
+      return {
+        form: f,
+        /* **組の名前も書き写さない。** `sentenceFrames.js` から引く */
+        group: found ? `${found.sectionNo} ${found.groupLabel}` : '',
+        n: n.get(f),
+      }
+    })
 }
 
 /**
@@ -110,7 +162,9 @@ export function frameQuestions(part = FIRST_FRAME_PART) {
  * **同じ英文は二度出さない。** いまは1つも重なっていないが、
  * 部品を足した日に重なりうる —— 重なると**同じ札が2枚出て、数も二重**になる。
  */
-export function frameQrRows(seen = [], { today = '', part = FIRST_FRAME_PART } = {}) {
+export function frameQrRows(
+  seen = [], { today = '', part = FIRST_FRAME_PART, form = null } = {},
+) {
   const map = new Map(
     (seen ?? []).map((r) => [String(r?.en_norm ?? ''), r]).filter(([k]) => k),
   )
@@ -118,6 +172,10 @@ export function frameQrRows(seen = [], { today = '', part = FIRST_FRAME_PART } =
   const out = []
   const used = new Set()
   for (const q of frameQuestions(part)) {
+    /* **型で絞る**(`null` ならぜんぶ)。知らない型を渡せば0問になる ——
+       **黙って「ぜんぶ」に落とさない**(選んでいないものが出るほうが怖い)。
+       画面の側が、出せる型かどうかを先に見ている */
+    if (form && q.form !== form) continue
     const key = normEn(q.en)
     if (!key || used.has(key)) continue
     used.add(key)
@@ -126,6 +184,8 @@ export function frameQrRows(seen = [], { today = '', part = FIRST_FRAME_PART } =
       en_norm: key,
       en: q.en,
       ja: q.ja,
+      /** **ヒント。** 文言は `frameHintOf()` 1か所(画面に書き写さない) */
+      hint: frameHintOf(q.form),
       /* **話す人はいない。** 会話から溜めた問と違い、ここは1問ずつの表現である */
       speaker: null,
       status: s?.status ?? 'unknown',
@@ -151,6 +211,12 @@ export function frameQrRows(seen = [], { today = '', part = FIRST_FRAME_PART } =
 export const frameQrCounts = () => Object.fromEntries(
   FRAME_PARTS.map((p) => [p.id, frameQuestions(p.id).length]),
 )
+
+/** どの型で絞っていたかを覚える鍵。**2か所に書かない**(CLAUDE.md) */
+export const FRAME_FORM_KEY = 'eas.frameQr.form'
+
+/** ヒントを出しているかを覚える鍵。**同上** */
+export const QR_HINT_KEY = 'eas.qrHint'
 
 /** どの中身を開いていたかを覚える鍵。**2か所に書かない**(CLAUDE.md) */
 export const FRAME_PART_KEY = 'eas.frameQr.part'

@@ -38,6 +38,7 @@ import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
 import { stopReading } from '../lib/readAloud.js'
 import { frameFormOf } from '../lib/frameMatch.js'
+import { HintIcon } from './Icons.jsx'
 
 export default function QrCard({
   pair, no, level = null, clipVoice = null, tier = 'premium',
@@ -61,6 +62,17 @@ export default function QrCard({
    * **言われていない場所が変わる**(CLAUDE.md)。
    */
   showFrame = false,
+  /**
+   * **ヒントを出しているか**(2026-09 利用者の指定)。
+   *
+   *   > ヒントボタンをつけて、一度ボタンを押したら問題を跨いでも、
+   *   > もう一度ヒントボタンを押すまでヒントが出続けるようにして欲しい。
+   *
+   * **この部品は覚えない。** 押した状態は**呼ぶ側が持つ** ——
+   * カードは問ごとに描き直されるので、ここに持つと1問で消える
+   * (「問題を跨いでも」が成り立たない)。`RepeatToggle` と同じ作法。
+   */
+  hintOn = false, onHint = null,
 }) {
   const [shown, setShown] = useState(false)
   /** 答えの音をくり返すか。**覚えない**(次に開いたときは1回に戻す) */
@@ -124,7 +136,20 @@ export default function QrCard({
             入れ替えなら箱の高さが変わらないので、
             **押す場所も、目を向ける場所も動かない。**
             測って出し分ける必要もなくなった(`is-tight` ごと消した)。 */}
-        {!shown && <p className="qr-ja">{pair.ja}</p>}
+        {!shown && (
+          <>
+            <p className="qr-ja">{pair.ja}</p>
+            {/* **ヒントは、問の下に置く**(2026-09 利用者の指定)。
+                答えではないので、答えの囲み(`.answer-box`)には入れない。
+                **色だけに頼らない** —— うすい地色 + 枠線 + 太字(CLAUDE.md)。
+                文言(「◯◯」の形)は `frameQr.js` が作る。**書き写さない** */}
+            {hintOn && pair.hint && (
+              <p className="qr-hint">
+                <span className="qr-hint-name">ヒント</span>{pair.hint}
+              </p>
+            )}
+          </>
+        )}
         {shown && (
           /* **答えはうすい色の囲みに入れる**(2026-08 の指定)。
              ほかのトレーニングの解答(`.answer-box`)と同じ形にそろえる */
@@ -164,6 +189,19 @@ export default function QrCard({
           {/* **くり返し**(2026-09 利用者の指定「オートリピートのボタン」)。
               口が追いつくまで、同じ英文を何度も聴く練習である */}
           <RepeatToggle on={loop} onChange={setLoop} className="btn--ghost" />
+          {/* **ヒント**(2026-09 利用者の指定)。
+              **ヒントを持たない問には出さない** —— ふだんの Quick Response と
+              Native Flow の行は `hint` が `null` なので、ボタンごと出ない
+              (効かない操作を見せない・CLAUDE.md)。
+              **押している状態は、色だけに頼らない**(`aria-pressed` + 地色) */}
+          {onHint && pair.hint && (
+            <button type="button"
+                    className={`btn btn--small btn--ghost${hintOn ? ' chip--on' : ''}`}
+                    aria-pressed={hintOn}
+                    onClick={() => onHint(!hintOn)}>
+              <HintIcon />{hintOn ? 'ヒントを消す' : 'ヒント'}
+            </button>
+          )}
           {extra}
         </div>
         <div className="qr-answers">
