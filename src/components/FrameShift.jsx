@@ -105,7 +105,7 @@ export default function FrameShift() {
   /* 組・段・絞り込みを変えたら先頭へ。**途中の番号のまま残さない** */
   useEffect(() => { setAt(0) }, [pick, stage, scene, activeFrame])
 
-  /** 言えた問を控える。**数え方を2通り持たない**ので、足すのはここだけ */
+  /** できた問を控える。**数え方を2通り持たない**ので、足すのはここだけ */
   const markDone = (qid) => {
     setDone((prev) => {
       if (prev.has(qid)) return prev
@@ -194,7 +194,9 @@ export default function FrameShift() {
                         {s.label} {t.counts[s.id]}
                       </span>
                     ))}
-                    <span className="fshift-carddone">言えた {t.done}</span>
+                    {/* **段の名前と同じ言葉**(2026-09 利用者の指定)。
+                        単語帳・Quick Response・66 の型で「できた」にそろえる */}
+                    <span className="fshift-carddone">できた {t.done}</span>
                   </span>
                 </button>
               </div>
@@ -303,7 +305,7 @@ export default function FrameShift() {
               {q.scene && (
                 <span className="fshift-scene">{shiftSceneOf(q.scene)?.label ?? ''}</span>
               )}
-              {done.has(q.qid) && <span className="fshift-doneflag">言えた</span>}
+              {done.has(q.qid) && <span className="fshift-doneflag">できた</span>}
             </div>
 
             <p className="fshift-ja">{q.ja}</p>
@@ -352,7 +354,7 @@ export default function FrameShift() {
                 ) : (
                   /* **行き止まりを作らない。** 打たせないのは同じ */
                   <button type="button" className="btn"
-                          onClick={() => markDone(q.qid)}>言えた</button>
+                          onClick={() => markDone(q.qid)}>できた</button>
                 )}
                 <button type="button" className="btn btn--ghost"
                         onClick={() => setOpenEx((v) => !v)}>
@@ -392,7 +394,7 @@ export default function FrameShift() {
                       disabled={nth >= qs.length - 1} onClick={() => setAt(nth + 1)}>次へ</button>
             </div>
             <p className="muted fshift-count">
-              言えた問: {qs.filter((x) => done.has(x.qid)).length} / {qs.length}
+              できた: {qs.filter((x) => done.has(x.qid)).length} / {qs.length}
             </p>
           </div>
         </>

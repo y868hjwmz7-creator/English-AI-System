@@ -113,11 +113,20 @@ import { frameCount } from '../data/sentenceFrames.js'
  * **どれでも復習できる。** 以前は `due` だけが出題で、
  * 覚えかけ・覚えた は**見返すだけの一覧**だった。
  */
+/* **段の名前は、ここに書かない**(2026-09 利用者の指定「統一感が欲しいのです」)。
+
+   もとはここに `label: '覚えかけ'` / `label: '覚えた'` と書いてあり、
+   **紙の1行(`sheetNote` の「どの段か」)だけが、そちらを読んでいた。**
+   画面の札は `WORD_GROUPS` から出ているので、名前を変えたとき
+   **画面は「できた」、紙は「覚えた」**という食い違いが起きる。
+
+   **呼び名を2か所に書かない。必ず片方だけ古くなる**(CLAUDE.md)。
+   このファイルが持つのは **id と、何を読み込むか**だけにした。 */
 const VIEWS = [
-  { id: 'due', label: '復習', status: 'todo', dueOnly: false },
-  { id: 'unknown', label: 'まだ', status: 'unknown', dueOnly: false },
-  { id: 'learning', label: '覚えかけ', status: 'learning', dueOnly: false },
-  { id: 'known', label: '覚えた', status: 'known', dueOnly: false },
+  { id: 'due', status: 'todo', dueOnly: false },
+  { id: 'unknown', status: 'unknown', dueOnly: false },
+  { id: 'learning', status: 'learning', dueOnly: false },
+  { id: 'known', status: 'known', dueOnly: false },
   // **「積み上がり」はここから外した**(2026-08 利用者の指定)。
   //   > 積み上がりは一旦そこからは削除です。
 ]
@@ -2121,7 +2130,11 @@ export default function Wordbook({
           note={sheetNote({
             count: sheetPairs.length,
             unit: '語',
-            group: current.id === 'due' ? '' : current.label,
+            /* **段の名前は `WORD_GROUPS` から引く**(2026-09)。
+               ここに書き写すと、画面と紙で別の言葉になる */
+            group: current.id === 'due'
+              ? ''
+              : (WORD_GROUPS.find((g) => g.id === current.id)?.label ?? ''),
             narrowed,
             date: todayKey(),
           })}

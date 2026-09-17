@@ -2150,12 +2150,47 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
 
     /* **文言は `QR_GROUPS` 1か所**(2026-09)。画面は札を並べるだけなので、
        言葉はここにしか無い。**数える段と、押して出てくる段が同じ**である */
-    ok(QR_GROUPS.map((g) => g.label).join('/') === 'まだ/言えかけ/言える',
-      '復習の数 … 文言が「まだ / 言えかけ / 言える」(単語帳と同じ数え方)',
-      QR_GROUPS.map((g) => g.label).join('/'))
-    ok(WORD_GROUPS.map((g) => g.label).join('/') === 'まだ/覚えかけ/覚えた',
-      '復習の数 … 単語帳は「まだ / 覚えかけ / 覚えた」',
+    /* **段の名前は、単語帳も Quick Response も同じ**(2026-09 利用者の指定
+       「統一感が欲しいのです」「使い方や数の概念がよく分からないようです」)。
+
+       **前の決定を上書きしている** —— もとは「単語帳は語、Quick Response は
+       文だから言葉を分ける」として「覚えた」/「言える」にしていた。
+       **ゲストには伝わっていなかった。**
+
+       **値を書き写さず、2つがそろっているかを見る。**
+       片方だけ書き換えても赤くなる —— そこが、この見張りの仕事である */
+    ok(QR_GROUPS.map((g) => g.label).join('/')
+       === WORD_GROUPS.map((g) => g.label).join('/'),
+      '復習の数 … 段の名前が、単語帳と Quick Response で同じ',
+      `${WORD_GROUPS.map((g) => g.label).join('/')} / ${QR_GROUPS.map((g) => g.label).join('/')}`)
+    ok(WORD_GROUPS.map((g) => g.label).join('/') === 'まだ/練習中/できた',
+      '復習の数 … 段の名前は「まだ / 練習中 / できた」',
       WORD_GROUPS.map((g) => g.label).join('/'))
+    /* **「できた」は語でも文でも型でも真になる。**
+       66 の型の画面も、同じ言葉を使っている */
+    {
+      /* **この節には `readD` が無い**(下のほうの節だけが持っていた)。
+         借りずに、その場で読む —— **無い名前を呼ぶと、そこで落ちて
+         残りの検証がまるごと走らなくなる**(実際にそうなった) */
+      const fshift = readFileSync(new URL('../src/components/FrameShift.jsx',
+        import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      ok(/できた/.test(fshift) && !/言えた/.test(fshift),
+        '復習の数 … 66 の型の画面も、同じ言葉を使っている(「言えた」は残っていない)')
+
+      /* **紙にも、同じ言葉が出るか**(2026-09)。
+         `Wordbook.jsx` の `VIEWS` が段の名前を**書き写していた**ので、
+         **画面は「できた」・紙は「覚えた」**になっていた。
+         **呼び名を2か所に書かない**(CLAUDE.md)。
+
+         **「無い」と「有る」の両方を見る** —— 書き写しが消えただけでは、
+         紙にどこからも名前が出ない形に落ちても緑になる */
+      const wbSrc = readFileSync(new URL('../src/components/Wordbook.jsx',
+        import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      ok(!/label: '覚え/.test(wbSrc),
+        '復習の数 … 段の名前を `VIEWS` に書き写していない(紙だけ古くならない)')
+      ok(/WORD_GROUPS\.find\(\(g\) => g\.id === current\.id\)/.test(wbSrc),
+        '復習の数 … 紙の「どの段か」も `WORD_GROUPS` から引く')
+    }
     /* **単語帳の段の id は `word_reviews.status` そのもの。**
        対応表を持たないので、ここがずれると読み込む段が変わる */
     ok(WORD_GROUPS.map((g) => g.id).join('/') === 'unknown/learning/known',
@@ -2168,7 +2203,7 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     ok(qrGroupPool(G, null).length === 4, '段を押す … 押していなければ、ぜんぶ')
     ok(groupLead(QR_GROUPS, null).includes('押すと'),
       '段を押す … 押していないときは、押せることを言う')
-    ok(groupLead(QR_GROUPS, 'done').includes('「言える」')
+    ok(groupLead(QR_GROUPS, 'done').includes('「できた」')
       && groupLead(QR_GROUPS, 'done').includes('もう一度押す'),
       '段を押す … 押しているときは、戻り方まで言う', groupLead(QR_GROUPS, 'done'))
 

@@ -362,11 +362,31 @@ export function saveRepeat(where, on) {
  *   なぜそうなったのか分からない。
  */
 
-/** 単語帳の段。**id は `word_reviews.status` そのもの**(対応表を持たない) */
+/**
+ * 単語帳の段。**id は `word_reviews.status` そのもの**(対応表を持たない)。
+ *
+ * **段の名前は、単語帳も Quick Response も 66 の型も同じ言葉**
+ * (2026-09 利用者の指定)。
+ *
+ *   > 統一感が欲しいのです。
+ *   > 実際にゲストは今の仕様で試用してくださっていますが、
+ *   > 使い方や数の概念がよく分からないようです。
+ *
+ * **これは前の決定を上書きしている。** もとは「単語帳は語、
+ * Quick Response は文だから言葉を分ける」として
+ * 「覚えた」/「言える」にしていた。**ゲストには伝わっていなかった** ——
+ * 同じ3枚の札が、画面を移ると別の言葉になる。
+ *
+ * 利用者が選んだのは **まだ / 練習中 / できた**。
+ * 「できた」は語でも文でも型でも真になる。
+ *
+ * **id は変えない。** `word_reviews.status` の値であり、
+ * 覚え具合そのものだからである(呼び名だけを変える・CLAUDE.md)。
+ */
 export const WORD_GROUPS = [
   { id: 'unknown', label: 'まだ' },
-  { id: 'learning', label: '覚えかけ' },
-  { id: 'known', label: '覚えた' },
+  { id: 'learning', label: '練習中' },
+  { id: 'known', label: 'できた' },
 ]
 
 /**
@@ -376,9 +396,11 @@ export const WORD_GROUPS = [
  * のままなので(0038 と同じ考え方)、**箱でしか段を見分けられない。**
  */
 export const QR_GROUPS = [
+  /* **単語帳と同じ言葉**(2026-09 利用者の指定・`WORD_GROUPS` の頭に理由)。
+     **id は変えない** —— 箱の番号で分けている仕組みは1つも変えていない */
   { id: 'yet', label: 'まだ', has: (box) => box < 1 },
-  { id: 'mid', label: '言えかけ', has: (box) => box >= 1 && box < 6 },
-  { id: 'done', label: '言える', has: (box) => box >= 6 },
+  { id: 'mid', label: '練習中', has: (box) => box >= 1 && box < 6 },
+  { id: 'done', label: 'できた', has: (box) => box >= 6 },
 ]
 
 /** その行がどの段か(Quick Response) */
