@@ -64,6 +64,8 @@ const code = (p) => readFileSync(ROOT + p, 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
 const raw = (p) => readFileSync(ROOT + p, 'utf8')
+/** CSS も**コメントを落としてから**数える。説明文に同じ名前が出てくる(CLAUDE.md) */
+const css = (p) => raw(p).replace(/\/\*[\s\S]*?\*\//g, ' ')
 
 let ng = 0
 const ok = (cond, label, extra = '') => {
@@ -351,9 +353,11 @@ head('Quick Response の行にしているか')
    ──────────────────────────────────────────────────────────── */
 head('ヒント')
 {
-  /* **文言はここ1か所。** 画面に書き写さない */
-  ok(frameHintOf('S allows 人 to do') === '「S allows 人 to do」の形',
-    'ヒントの文は「◯◯」の形', frameHintOf('S allows 人 to do'))
+  /* **ヒントに出すのは、型の名前そのもの**(2026-09 利用者の指定
+     「青で囲まれた『〜の型』をヒントに」)。文言も見た目も `QrCard` が持ち、
+     **答えを開いたあとに出る札とまったく同じもの**である */
+  ok(frameHintOf('S allows 人 to do') === 'S allows 人 to do',
+    'ヒントに出すのは、型の名前そのもの', frameHintOf('S allows 人 to do'))
   /* **型が分からなければ、当てずっぽうで出さない。**
      **「出る」と「出ない」の両方を見る**(CLAUDE.md) */
   ok(frameHintOf(null) === null && frameHintOf('') === null,
@@ -361,12 +365,11 @@ head('ヒント')
 
   for (const part of FRAME_PARTS.map((p) => p.id)) {
     const rows = frameQrRows([], { today: '', part })
-    ok(rows.every((r) => r.hint && r.hint.endsWith('の形')),
-      `${part} … どの行にもヒントがある`)
+    ok(rows.every((r) => r.hint), `${part} … どの行にもヒントがある`)
     /* **型の名前が、そのままヒントに入っているか。**
        見分け直さず、問が持っている型をそのまま渡している */
-    ok(rows.every((r) => FORMS.some((f) => r.hint === frameHintOf(f))),
-      `${part} … ヒントの型が、66 型の一覧にある`)
+    ok(rows.every((r) => FORMS.includes(r.hint)),
+      `${part} … ヒントが、66 型の一覧にある名前そのもの`)
   }
   /* **逆も見る。** ふだんの Quick Response と Native Flow は
      ヒントを持たない —— だからあちらにボタンが出ない */
@@ -384,13 +387,25 @@ head('ヒント')
     '画面が、押した状態を持ってカードへ渡している')
   ok(new RegExp(`localStorage\\.setItem\\(QR_HINT_KEY`).test(qr),
     '押したままにできる(端末に覚える)')
-  /* **ヒントの文言を、画面に書き写していない** */
-  ok(!/の形/.test(qr) && !/の形/.test(card), 'ヒントの文言を、画面に書き写していない')
+  /* **型の名前を、画面に書き写していない** */
+  ok(!/S allows 人 to do/.test(qr) && !/S allows 人 to do/.test(card),
+    '型の名前を、画面に書き写していない')
   /* **ヒントを持たない問には、ボタンを出さない**(効かない操作を見せない) */
   ok(/onHint && pair\.hint/.test(card), 'ヒントを持たない問には、ボタンを出さない')
-  /* **答えの下の型とは、別のもの。** 片方だけ消しても分かるように名前を分ける */
-  ok(/qr-hint/.test(card) && /qr-frame/.test(card), 'ヒントと、答えの下の型は別の場所')
-  ok(/\.qr-hint\b/.test(raw('src/styles.css')), 'ヒントの見た目の指定がある')
+
+  /* **ヒントと、答えの下の型は、同じ札**(2026-09 利用者の指定
+     「青で囲まれた『〜の型』をヒントに」)。
+     **同じことを2つの見た目で見せない**(CLAUDE.md)ので、
+     部品も見た目の指定も1つにまとめてある。
+     **「有る」と「無い」の両方を見る** —— 別の見た目を作り直したら赤くなる */
+  ok(/function FrameTag/.test(card), '型の札は、部品1つにまとめてある')
+  ok((card.match(/<FrameTag/g) ?? []).length === 2,
+    'その札を、ヒントと答えの下の2か所で使っている',
+    String((card.match(/<FrameTag/g) ?? []).length))
+  ok(!/qr-hint/.test(card) && !/\.qr-hint\b/.test(css('src/styles.css')),
+    'ヒント専用の見た目を、別に持っていない')
+  ok((card.match(/qr-frame"/g) ?? []).length === 1,
+    '札の見た目の指定も、1か所だけ')
 }
 
 /* ────────────────────────────────────────────────────────────

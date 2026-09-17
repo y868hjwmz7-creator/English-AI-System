@@ -40,6 +40,20 @@ import { stopReading } from '../lib/readAloud.js'
 import { frameFormOf } from '../lib/frameMatch.js'
 import { HintIcon } from './Icons.jsx'
 
+/**
+ * **型の札**(2026-09 利用者の指定「青で囲まれた『〜の型』をヒントに」)。
+ *
+ * **ヒントと、答えを開いたあとに出るものは、同じ札**である ——
+ * 同じことを2つの見た目で見せない(CLAUDE.md)。
+ * だから**ここ1つにまとめてある。** 巻末の一覧・PDF と同じ名前で出すので、
+ * そのまま引きに行ける。**色だけに頼らない** ——
+ * うすい地色 + 同じ色の文字 + 枠線 + 太字 + 「型」の文字。
+ */
+function FrameTag({ form }) {
+  if (!form) return null
+  return <p className="qr-frame"><span className="qr-frame-name">型</span>{form}</p>
+}
+
 export default function QrCard({
   pair, no, level = null, clipVoice = null, tier = 'premium',
   wordStatuses = null, onMarkWord = null,
@@ -141,13 +155,10 @@ export default function QrCard({
             <p className="qr-ja">{pair.ja}</p>
             {/* **ヒントは、問の下に置く**(2026-09 利用者の指定)。
                 答えではないので、答えの囲み(`.answer-box`)には入れない。
-                **色だけに頼らない** —— うすい地色 + 枠線 + 太字(CLAUDE.md)。
-                文言(「◯◯」の形)は `frameQr.js` が作る。**書き写さない** */}
-            {hintOn && pair.hint && (
-              <p className="qr-hint">
-                <span className="qr-hint-name">ヒント</span>{pair.hint}
-              </p>
-            )}
+                **出すのは、答えの下に出るのとまったく同じ札**である
+                (利用者の指定「青で囲まれた『〜の型』をヒントに」)。
+                型の名前は `frameQr.js` が持つ。**書き写さない** */}
+            {hintOn && <FrameTag form={pair.hint} />}
           </>
         )}
         {shown && (
@@ -161,12 +172,9 @@ export default function QrCard({
               <EnglishText text={pair.en} textJa={pair.ja} level={level}
                            statuses={wordStatuses} onMark={onMarkWord} />
             </div>
-            {/* **型**(2026-09 利用者の指定)。巻末の一覧・PDF と同じ名前で出す
-                ので、そのまま引きに行ける。**色だけに頼らない** ——
-                うすい地色 + 同じ色の文字 + 枠線 + 太字(CLAUDE.md) */}
-            {frame && (
-              <p className="qr-frame"><span className="qr-frame-name">型</span>{frame}</p>
-            )}
+            {/* **型**(2026-09 利用者の指定)。**ヒントと同じ札**
+                (`FrameTag`)—— 書き写すと、片方だけ古くなる */}
+            <FrameTag form={frame} />
           </div>
         )}
       </div>
