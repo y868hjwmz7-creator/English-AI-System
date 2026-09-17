@@ -34,7 +34,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import FocusFrame from './FocusFrame.jsx'
-import { PlayIcon, StopIcon } from './Icons.jsx'
+import { CloseIcon, PlayIcon, StopIcon } from './Icons.jsx'
 import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
 import { JA_VOICE } from '../data/clipVoices.js'
 import { PREMIUM } from '../lib/voiceTier.js'
@@ -61,6 +61,16 @@ export default function WordRadio({
   rate = 1,
   learnerId = null,
   onClose,
+  /**
+   * **左上の ☰**(第5.172節・2026-09 利用者の指定)。
+   *
+   *   > 聞き流しの時も左上にはバーガーです。
+   *
+   * **渡しても、やめる道は消さない**(下の「聞き流しをやめる」)——
+   * ☰ だけにすると、**練習へ戻るのにメニューを1周する**ことになる
+   * (**行き止まりを作らない**・CLAUDE.md)。
+   */
+  onMenu = null,
 }) {
   const modes = radioModesFor(where)
   const [mode, setMode] = useState(() => loadRadioMode(where))
@@ -287,6 +297,8 @@ export default function WordRadio({
          そのぶんが丸ごと無駄になる) */
       page="radio"
       onClose={stop}
+      /* **左上は ☰**(第5.172節)。渡されなければ ✕ 閉じるのまま */
+      onMenu={onMenu}
       top={(
         <span className="focus-count">
           {list.length ? `${at + 1} / ${list.length}` : '0'}
@@ -366,6 +378,16 @@ export default function WordRadio({
                   onClick={() => { stopReading(); move(nextIndex(atRef.current, list.length)) }}>
             次へ
           </button>
+          {/* **やめる道は、ここに残す**(第5.172節)。
+              左上が ☰ になったので、**押さないと練習へ戻れなくなる。**
+              ☰ から戻ることもできるが、それはメニューを1周する道である
+              (**行き止まりを作らない**・CLAUDE.md)。
+              ✕ のままの画面では、左上と2つになってしまうので出さない */}
+          {onMenu && (
+            <button type="button" className="btn btn--ghost" onClick={stop}>
+              <CloseIcon />聞き流しをやめる
+            </button>
+          )}
         </div>
         <p className="card-hint radio-lead">
           {radioLead(mode)}

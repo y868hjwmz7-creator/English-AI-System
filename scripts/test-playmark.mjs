@@ -6549,14 +6549,18 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const scope = noNote(readD('src/components/ReviewScope.jsx'))
 
   // ── ① 開いた瞬間に1問目 ────────────────────────────────
-  ok(/if \(!isQuiz \|\| loading \|\| started\) return/.test(wb),
-    '単語帳が、始めていなければ自分で始める(設定の画面を通らない)')
-  ok(/if \(busy \|\| started\) return/.test(qr),
-    'Quick Response が、始めていなければ自分で始める')
+  /* **印の名前は `opened` に変わった**(第5.172節)。
+     「始めたか」だと、**1問も無くて始められなかったとき**に立たず、
+     開くときの帯(`Loading`)が永遠に出たままになる。
+     **決まりは1つも変えていない** —— 一度だけ走り、とじた人を押し戻さない */
+  ok(/if \(!isQuiz \|\| loading \|\| opened\) return/.test(wb),
+    '単語帳が、開いていなければ自分で始める(設定の画面を通らない)')
+  ok(/if \(busy \|\| opened\) return/.test(qr),
+    'Quick Response が、開いていなければ自分で始める')
   /* **一度しか走らない**。これが無いと、「とじる」で一覧へ戻った人を
      そのまま押し戻す(**行き止まりの反対で、出口が無くなる**) */
-  ok(/const \[started, setStarted\] = useState\(false\)/.test(qr),
-    'Quick Response が「一度でも始めたか」を持っている(とじた人を押し戻さない)')
+  ok(/const \[opened, setOpened\] = useState\(false\)/.test(qr),
+    'Quick Response が「開くときの判断が済んだか」を持っている(押し戻さない)')
   ok(/if \(!rowsRef\.current\.length\) return/.test(wb)
     && /if \(poolNow\(\)\.length === 0\) return/.test(wb),
     '1語も無ければ入らない(空の画面をそのまま使う)')
@@ -6600,7 +6604,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   // ── ④ やりかけを持ち越さない ────────────────────────────
   ok(/const dropRun = \(\) => \{/.test(wb) && /setStarted\(false\)/.test(wb),
     '単語帳が、冊を変えたらやりかけを捨てて、新しい冊の1問目を出す')
-  ok(/const dropRun = \(\) => \{[\s\S]*?setStarted\(false\)[\s\S]*?\}/.test(qr),
+  ok(/const dropRun = \(\) => \{[\s\S]*?setOpened\(false\)[\s\S]*?\}/.test(qr),
     'Quick Response も同じ(4か所に書き写さない)')
 
   // ── ⑤ とじたときの行き先 ────────────────────────────────
@@ -6636,6 +6640,110 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      既定で畳まれていた */
   ok(/\{weekLine\(week\) && </.test(prog) && !/"tip[^"]*">\{weekLine/.test(prog),
     '続けた記録を畳まない。1日も記録が無ければ、行ごと出ない')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   **左上は ☰。開くときは帯1本**(第5.172節・2026-09 利用者の指定)
+
+     > quick response も単語帳も左上は閉じる「❌」ボタンではなく、
+     > 他のところと同じくハンバーガーをおいてサイドバーが出せるように
+     > してください。それから、単語帳と quick response を開く際に、
+     > 変な画面切り替えが出ないよう、ローディングバーでスタイリッシュに
+     > してください。聞き流しの時も左上にはバーガーです。
+
+   ここで見るのは、**黙って壊れやすいもの**である。
+
+   ①「渡されたときだけ ☰」になっているか(**両方を見る**)
+   ② 教材の中の集中モードは**✕ のまま**か(あちらの ✕ には行き先がある)
+   ③ 聞き流しに**やめる道が残っているか**(☰ だけにすると戻れない)
+   ④ 判断が済むまで**帯1本**か。**1問も無い帳面で止まらないか**
+   ⑤ メニューが**集中している画面の上に出る**か(z-index)
+   ⑥ PC の柱を**たたんでしまわない**か
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 左上は ☰。開くときは帯1本(5.172)')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const css = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const frame = noNote(readD('src/components/FocusFrame.jsx'))
+  const wb = noNote(readD('src/components/Wordbook.jsx'))
+  const qr = noNote(readD('src/components/QrReview.jsx'))
+  const radio = noNote(readD('src/components/WordRadio.jsx'))
+  const app = noNote(readD('src/App.jsx'))
+  const nav = noNote(readD('src/components/AppNav.jsx'))
+  const sheetSrc = noNote(readD('src/components/ReviewScope.jsx'))
+  const st = css(readD('src/styles.css'))
+
+  // ── ① 渡されたときだけ ☰(「出る」と「出ない」の両方) ──────
+  ok(/onMenu = null,/.test(frame)
+    && /onMenu \? \([\s\S]{0,200}?focus-burger/.test(frame),
+    '集中モードの左上は、☰ を渡されたときだけ ☰ になる')
+  ok(/<CloseIcon \/><span className="wide-text">閉じる<\/span>/.test(frame),
+    '渡されなければ、これまでどおり ✕ 閉じる(行き先のある画面は変えない)')
+  /* **3か所とも数える。** 1つでもあるかで見ると、
+     **どれか1つに付け忘れても緑のまま**になる */
+  ok(/onMenu = null,/.test(wb) && (wb.match(/focus-burger/g) ?? []).length === 2,
+    '単語帳の2つの帯(復習と、終わりの1枚)が、どちらも ☰ になる')
+  ok(/onMenu = null,/.test(qr) && /onMenu=\{onMenu\}/.test(qr),
+    'Quick Response も ☰ を受け取って、集中モードへ渡している')
+  ok(/onMenu = null,/.test(radio) && /onMenu=\{onMenu\}/.test(radio),
+    '聞き流しも ☰ を受け取っている(利用者の指定)')
+  /* **聞き流しには、単語帳と Quick Response の両方から入る。**
+     片方だけ渡すと、そちらからは ☰ が出ない */
+  ok((wb.match(/onMenu=\{onMenu\}/g) ?? []).length >= 1
+    && (qr.match(/onMenu=\{onMenu\}/g) ?? []).length >= 2,
+    '聞き流しへ、単語帳からも Quick Response からも ☰ が渡る')
+
+  // ── ② 教材の中の集中モードは ✕ のまま ────────────────────
+  for (const f of ['FocusReader', 'StepFocus', 'QuickResponse', 'SpeechPractice']) {
+    ok(!/onMenu/.test(noNote(readD(`src/components/${f}.jsx`))),
+      `${f} は ✕ のまま(閉じたら読んでいた教材に戻る)`)
+  }
+
+  // ── ③ 聞き流しの、やめる道 ──────────────────────────────
+  ok(/onMenu && \([\s\S]{0,200}?聞き流しをやめる/.test(radio),
+    '☰ にした聞き流しには、やめる道を残す(行き止まりを作らない)')
+
+  // ── ④ 開くときは帯1本 ───────────────────────────────────
+  ok(/if \(!running && \(loading \|\| !opened\)\) return <Loading \/>/.test(wb),
+    '単語帳は、判断が済むまで帯1本(0 / 0 / 0 の札をちらつかせない)')
+  ok(/if \(busy \|\| !opened\) return <Loading \/>/.test(qr),
+    'Quick Response も同じ')
+  /* **出題中に通してはいけない。** 通すと、答えたあとの読み直しのたびに
+     出題が消えて帯になる */
+  ok(/!running &&/.test(wb), '出題しているあいだは、帯に戻らない')
+  /* **「始めたか」では見張らない。** 1問も無い帳面で立たないので、
+     **永遠に読み込み中**になる */
+  ok(/setOpened\(true\)[\s\S]{0,200}?if \(!rowsRef\.current\.length\) return/.test(wb),
+    '単語帳は、先に「判断が済んだ」を立てる(1語も無い帳面で止まらない)')
+  ok(/setOpened\(true\)[\s\S]{0,120}?if \(shown\.length === 0\) return/.test(qr),
+    'Quick Response も同じ')
+  ok(/setOpened\(false\)/.test(wb) && /setOpened\(false\)/.test(qr),
+    '冊を変えたら、判断からやり直す(新しい冊の1問目が出る)')
+
+  // ── ⑤ メニューは、集中している画面の上に出す ──────────────
+  ok(/overFocus = false,/.test(nav) && /nav-scrim--over/.test(nav) && /' is-over'/.test(nav),
+    'メニューは1つのまま。かぶさる高さだけを変えられる')
+  ok(/\.nav-scrim--over \{[^}]*z-index: 125/.test(st)
+    && /\.app-nav\.is-drawer\.is-over \{[^}]*z-index: 130/.test(st),
+    'かぶせて開いたときだけ、集中モード(120)より上に出る')
+  ok(/\.nav-scrim \{[^}]*z-index: 50/.test(st) && /\.app-nav\.is-drawer \{[^}]*z-index: 60/.test(st),
+    'いつものメニューの高さ(50 / 60)は動かしていない')
+  ok(/open=\{navOpen \|\| focusMenu\} wide=\{navPush && !focusMenu\}/.test(app),
+    '集中モードから開くときは、柱ではなく引き出しにする')
+
+  // ── ⑥ PC の柱をたたまない ───────────────────────────────
+  ok(/focusMenu \? setFocusMenu\(false\) : setNavOpen\(false\)/.test(app),
+    'かぶせたメニューを閉じても、PC の柱はたたまない(覚えた設定を壊さない)')
+  ok((app.match(/onMenu=\{openFocusMenu\}/g) ?? []).length === 2,
+    '単語帳と Quick Response の両方に ☰ を渡している')
+
+  // ── 設定の箱が、聞き流しの上に居座らない ──────────────────
+  /* `.sheet-back` は 200、集中モードは 120。**閉じないと上に残る** */
+  ok(/if \(e\.target\.closest\('button'\)\) setOpen\(false\)/.test(sheetSrc),
+    '「出しかた」の道具を押したら、その箱は閉じる(聞き流しの上に残らない)')
 }
 
 console.log(ng

@@ -32,7 +32,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CloseIcon, GearIcon } from './Icons.jsx'
+import { CloseIcon, GearIcon, MenuIcon } from './Icons.jsx'
 import { useFocusBoard } from './FocusBoard.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 
@@ -86,6 +86,23 @@ export default function FocusFrame({
   /* 下の帯そのもの。**「入るまで詰める」を掛けたい画面だけが渡す**
      (`useFitRow`・2026-09 利用者の指定「レスポンシブに幅に収まるように」) */
   barRef = null,
+  /**
+   * **左上を ✕ ではなく ☰ にする**(第5.172節・2026-09 利用者の指定)。
+   *
+   *   > 左上は閉じる「❌」ボタンではなく、他のところと同じく
+   *   > ハンバーガーをおいてサイドバーが出せるようにしてください。
+   *   > 「閉じる」で戻るメリットは一つもないと思いますので
+   *
+   * **単語帳と Quick Response は、メニューから開いたらすぐ始まる**形に
+   * なった(第5.167節)。その画面の ✕ は**どこへも連れて行かない** ——
+   * 押すと、さっき通り過ぎたはずの画面が出るだけである。
+   * ここが**そのページそのもの**なら、左上にあるべきは ☰ である。
+   *
+   * **渡さなければ、これまでどおり ✕ 閉じる。** 教材の中から開く
+   * 集中モード(読む・6Steps・教材の Quick Response)は、
+   * 閉じたら**読んでいた教材に戻る** —— あちらの ✕ には行き先がある。
+   */
+  onMenu = null,
 }) {
   /* 狭い画面で「表示」を開いているか。**覚えない** —
      一度決める設定なので、開くたびに畳んだところから始めてよい */
@@ -130,12 +147,22 @@ export default function FocusFrame({
                 なっていた(実測 95px)。囲みにまとめれば、入らないぶんは
                 プルダウンのほうが縮む(「…」で切れる) */}
             <div className="focus-top-main">
-              {/* **狭い画面では絵だけになる**(`.wide-text`)ので、
-                  読み上げのための名前を必ず添える */}
-              <button type="button" className="btn btn--small btn--ghost"
-                      aria-label="閉じる" onClick={onClose}>
-                <CloseIcon /><span className="wide-text">閉じる</span>
-              </button>
+              {/* **左上は ☰。渡されたときだけ**(第5.172節)。
+                  上の帯(`AppTopbar`)の ☰ とまったく同じ見た目・同じ場所に
+                  置く —— **どこにいても同じところに同じものがある** */}
+              {onMenu ? (
+                <button type="button" className="nav-icon-btn focus-burger"
+                        aria-label="メニューを開く" onClick={onMenu}>
+                  <MenuIcon />
+                </button>
+              ) : (
+                /* **狭い画面では絵だけになる**(`.wide-text`)ので、
+                   読み上げのための名前を必ず添える */
+                <button type="button" className="btn btn--small btn--ghost"
+                        aria-label="閉じる" onClick={onClose}>
+                  <CloseIcon /><span className="wide-text">閉じる</span>
+                </button>
+              )}
               {top}
               {topEnd}
             </div>

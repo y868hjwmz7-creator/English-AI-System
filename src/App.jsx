@@ -226,6 +226,24 @@ export default function App() {
     return next
   })
 
+  /**
+   * **集中している画面(単語帳・Quick Response・聞き流し)の ☰**
+   * (第5.172節・2026-09 利用者の指定)。
+   *
+   *   > 左上は閉じる「❌」ボタンではなく、他のところと同じく
+   *   > ハンバーガーをおいてサイドバーが出せるようにしてください。
+   *
+   * あちらは**画面ぜんぶを覆う**ので、いつもの柱では見えない。
+   * **かぶせる形で、その上に開く。**
+   *
+   * **`navOpen` は触らない。** PC の柱は「開いたままにしておく」という
+   * 覚えた設定なので(`saveNavOpen`)、ここで閉じると
+   * **練習から戻ったときに柱がたたまれている。**
+   * だから別の印(`focusMenu`)を持ち、閉じるときはそれだけを倒す。
+   */
+  const [focusMenu, setFocusMenu] = useState(false)
+  const openFocusMenu = () => setFocusMenu(true)
+
   // 選んだ配色を画面に反映する。最初の1回も含めてここで行う
   // 触る端末で、押したときに短い手応えを返す(2026-08 の要望)。
   // **アプリで1か所だけ。** 画面ごとに書くと、新しいボタンで必ず抜ける
@@ -754,8 +772,11 @@ export default function App() {
            上の指定は「**その画面にいるときに**もう一度押したら」なので、
            ここを狭めても指定は1文字も崩れない */
         onChange={(id) => { if (id === view) setNavTick((n) => n + 1); setView(id) }}
-        open={navOpen} wide={navPush} compact={!wide}
-        onClose={() => setNavOpen(false)}
+        /* **かぶせて開いているあいだは、柱ではなく引き出しにする**
+           (第5.172節)。`wide` を偽にすると `AppNav` が引き出しになる */
+        open={navOpen || focusMenu} wide={navPush && !focusMenu} compact={!wide}
+        overFocus={focusMenu}
+        onClose={() => (focusMenu ? setFocusMenu(false) : setNavOpen(false))}
         title="English AI System"
         footer={navFooter}
       />
@@ -964,9 +985,12 @@ export default function App() {
                         /* **業種べつの単語帳も、トレーナーが指定した棚だけ**
                            (0057)。判断は `shelvesFor()` が済ませてある */
                         shelves={myShelves}
-                        /* **とじたら達成具合へ**(第5.167節)。
+                        /* **終わったら達成具合へ**(第5.167節)。
                            トップ画面が無くなったので、戻り先をそこにする */
-                        onClose={() => setView('progress')} />
+                        onClose={() => setView('progress')}
+                        /* **左上は ☰**(第5.172節)。ここはメニューから
+                           開いたページそのものなので、✕ には行き先が無い */
+                        onMenu={openFocusMenu} />
             ) : view === 'qr' ? (
               /* **Native Flow の冊**(2026-09 利用者の指定)。
                  単語帳の `showCol` とまったく同じ作法である */
@@ -975,8 +999,10 @@ export default function App() {
                  ゲストのページから開く画面には、冊の切り替えを
                  もともと出していない(単語帳とまったく同じ判断) */
               <QrReview nfUnits={myNfUnits}
-                        /* **とじたら達成具合へ**(第5.167節) */
-                        onClose={() => setView('progress')} />
+                        /* **終わったら達成具合へ**(第5.167節) */
+                        onClose={() => setView('progress')}
+                        /* **左上は ☰**(第5.172節。単語帳とまったく同じ) */
+                        onMenu={openFocusMenu} />
             ) : view === 'progress' ? (
               /* **達成具合**(第5.167節)。単語帳と Quick Response の
                  `×` と「おわる」の行き先でもあるので、

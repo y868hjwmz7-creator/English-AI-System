@@ -108,6 +108,16 @@ export default function QrReview({
    * **渡さなければ、これまでどおり一覧へ戻る。**
    */
   onClose = null,
+  /**
+   * **左上の ☰**(第5.172節・2026-09 利用者の指定)。
+   *
+   *   > quick response も単語帳も左上は閉じる「❌」ボタンではなく、
+   *   > 他のところと同じくハンバーガーをおいてサイドバーが出せるように
+   *
+   * **渡さなければ、これまでどおり ✕ 閉じる**(トレーナーがゲストの
+   * ページから開く画面には、かぶせるサイドバーそのものが無い)。
+   */
+  onMenu = null,
 }) {
   /**
    * **いま開いている Quick Response 帳**(2026-09 利用者の指定)。
@@ -263,7 +273,23 @@ export default function QrReview({
    * 冊・Unit・中身・型を変えたときは `dropRun()` が戻すので、
    * **新しい冊の1問目がそのまま出る。**
    */
-  const [started, setStarted] = useState(false)
+  /**
+   * **1問目を出すかどうかの判断が済んだか**(第5.172節)。
+   *
+   *   > 単語帳と quick response を開く際に、変な画面切り替えが出ないよう、
+   *   > ローディングバーでスタイリッシュにしてください
+   *
+   * 押した直後は、まだ何問あるか分からない。そのあいだ一覧の画面を
+   * 描いてしまうと、**空の札がちらりと出てから出題に入れ替わる。**
+   * 判断が済むまでは**帯1本(`Loading`)だけ**を出す。
+   *
+   * **「始めたか」と分けない**(2026-09・第5.172節)。
+   * 以前は `started`(始めたか)で見張っていたが、それだと
+   * **1問も無くて始められなかったとき**に立たず、
+   * 空の帳面が**永遠に読み込み中**に見える。
+   * 立てるのは「判断が済んだ」ときで、始めたかどうかではない。
+   */
+  const [opened, setOpened] = useState(false)
   /* **聞き流し**(2026-09 利用者の指定「Quick Responseにも聞き流しを作ってくれ」)。
      答える練習ではないので、**箱も次に出す日も1ミリも動かさない**
      (単語帳とまったく同じ決まり。`WordRadio` の中でも呼んでいない) */
@@ -409,15 +435,17 @@ export default function QrReview({
    *   > サイドバーや下のタブからクリックしたらすぐに実際のトレーニングの
    *   > 画面に飛び、その画面にメニューを足す。
    *
-   * **一度しか走らない**(`started`)。「とじる」で一覧へ戻った人を
+   * **一度しか走らない**(`opened`)。「とじる」で一覧へ戻った人を
    * 押し戻さない。**1問も無ければ入らない** —— 空の画面をそのまま使う。
    */
   useEffect(() => {
-    if (busy || started) return
+    if (busy || opened) return
+    /* **判断が済んだことを、必ず先に立てる。** ここを「始めたときだけ」に
+       すると、1問も無い帳面で**帯1本のまま止まる** */
+    setOpened(true)
     if (shown.length === 0) return
-    setStarted(true)
     start()
-  }, [busy, started, shown.length])
+  }, [busy, opened, shown.length])
 
   /**
    * **聞き流しを始める**(2026-09 利用者の指定)。
@@ -516,8 +544,9 @@ export default function QrReview({
     setRun(null); setPending([]); setAt(0); setDone([])
     setRadio(null); setGroup(null); setFilter(emptyFilter)
     /* **「開いた瞬間に1問目」をもう一度走らせる**(第5.167節)。
-       冊を変えた人は、その冊の1問目をやりに来ている */
-    setStarted(false)
+       冊を変えた人は、その冊の1問目をやりに来ている。
+       冊が変われば問も変わるので、**判断からやり直す**(帯1本に戻る) */
+    setOpened(false)
     gradedRef.current = new Set()
   }
 
@@ -738,6 +767,8 @@ export default function QrReview({
         page={`qrrev:${at}`}
         scrollKey={`qrrev:${at}`}
         onClose={stop}
+        /* **左上は ☰**(第5.172節)。渡されなければ ✕ 閉じるのまま */
+        onMenu={onMenu}
         top={(
           <>
             {/* **冊名は、常に見えているところに置く**(第5.167節)。
@@ -777,6 +808,15 @@ export default function QrReview({
     )
   }
 
+  /**
+   * **開くときに、変な画面の入れ替わりを出さない**(第5.172節)。
+   *
+   * 判断が済むまでは**帯1本だけ**を出す。カードの題も札も描かない ——
+   * 描いてしまうと、**一瞬だけ出て、すぐ出題に入れ替わる。**
+   * 出題に入っているあいだ(`run`)は、ここまで来ない。
+   */
+  if (busy || !opened) return <Loading />
+
   // ── 始める前 ───────────────────────────────────────────────
   return (
     <section className="card">
@@ -806,9 +846,9 @@ export default function QrReview({
           **「まだ1問も溜まっていません」は自分の帳だけに出る** ——
           Native Flow と 66 の型はファイルに問を持っているので、
           `rows` が空になることがない(この道には入らない) */}
-      {busy ? (
-        <Loading />
-      ) : rows.length === 0 ? (
+      {/* **`busy` の枝は上で返している**(第5.172節)。ここへ来るのは
+          「読み終わって、出す問が無かった」ときだけである */}
+      {rows.length === 0 ? (
         <p className="hint">
           まだ1問も溜まっていません。教材の Quick Response で「まだ」を押すと、
           その文がここに入ります。
@@ -901,6 +941,8 @@ export default function QrReview({
           where="qr"
           tracks={tracks}
           learnerId={learnerId}
+          /* **聞き流しの左上も ☰**(第5.172節・利用者の指定) */
+          onMenu={onMenu}
           onClose={() => setRadio(null)}
         />
       )}

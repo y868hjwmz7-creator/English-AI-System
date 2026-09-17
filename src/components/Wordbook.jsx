@@ -81,7 +81,7 @@ import { loadNounPhraseWordbook } from '../lib/nounPhraseWords.js'
 import { loadAdverbPhraseWordbook } from '../lib/adverbPhraseWords.js'
 import { loadBasicWordbook } from '../lib/basicReviews.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
-import { CloseIcon, FocusIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
+import { CloseIcon, FocusIcon, MenuIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
@@ -323,6 +323,16 @@ export default function Wordbook({
    * **行き止まりは、どちらでも作らない。**
    */
   onClose = null,
+  /**
+   * **左上の ☰**(第5.172節・2026-09 利用者の指定)。
+   *
+   *   > quick response も単語帳も左上は閉じる「❌」ボタンではなく、
+   *   > 他のところと同じくハンバーガーをおいてサイドバーが出せるように
+   *
+   * **渡さなければ、これまでどおり ✕ とじる**(トレーナーがゲストの
+   * ページから開く画面には、かぶせるサイドバーそのものが無い)。
+   */
+  onMenu = null,
 }) {
   /* **画面は1つだけ。** 以前はトレーナー用に別の部品を持っていたが、
      2つあると必ず片方が古くなる。実際、見た目をそろえたつもりで
@@ -467,6 +477,21 @@ export default function Wordbook({
   const [size, setSize] = useState(() => loadSize('word'))
   /** 始めたか。**札を選んでから始める**ので、開いた瞬間には出さない */
   const [started, setStarted] = useState(false)
+  /**
+   * **1問目を出すかどうかの判断が済んだか**(第5.172節)。
+   *
+   *   > 単語帳と quick response を開く際に、変な画面切り替えが出ないよう、
+   *   > ローディングバーでスタイリッシュにしてください
+   *
+   * 押した直後は、まだ何語あるか分からない。そのあいだ一覧の画面を
+   * 描いてしまうと、**空の札(0 / 0 / 0)がちらりと出てから
+   * 出題に入れ替わる。** 判断が済むまでは**帯1本(`Loading`)だけ**を出す。
+   *
+   * **「始めたか」(`started`)では見張れない。** あちらは
+   * **1語も無くて始められなかったとき**に立たないので、
+   * 空の帳面が**永遠に読み込み中**に見える。
+   */
+  const [opened, setOpened] = useState(false)
   /**
    * **この回で「覚えかけ」を記録した語。**
    *
@@ -1009,11 +1034,14 @@ export default function Wordbook({
    * 空の画面(いまの一覧)をそのまま使う —— 行き止まりを作らない。
    */
   useEffect(() => {
-    if (!isQuiz || loading || started) return
+    if (!isQuiz || loading || opened) return
+    /* **判断が済んだことを、必ず先に立てる。** ここを「始めたときだけ」に
+       すると、1語も無い帳面で**帯1本のまま止まる**(第5.172節) */
+    setOpened(true)
     if (!rowsRef.current.length) return
     if (poolNow().length === 0) return
     start()
-  }, [isQuiz, loading, started, rows.length, poolNow])
+  }, [isQuiz, loading, opened, rows.length, poolNow])
   const card = isQuiz ? queue[0] : null
 
   /**
@@ -1262,6 +1290,8 @@ export default function Wordbook({
    */
   const dropRun = () => {
     setRunning(false); setStarted(false); setRadio(null)
+    /* 冊が変われば語も変わる。**判断からやり直す**(帯1本に戻る・第5.172節) */
+    setOpened(false)
     setFilter(emptyFilter)
     gradedRef.current = new Set()
   }
@@ -1375,6 +1405,18 @@ export default function Wordbook({
       </label>
     </div>
   )
+
+  /**
+   * **開くときに、変な画面の入れ替わりを出さない**(第5.172節・利用者の指定)。
+   *
+   * 判断が済むまでは**帯1本だけ**を出す。題も札も描かない ——
+   * 描いてしまうと、**0 / 0 / 0 の札が一瞬だけ出て、すぐ出題に入れ替わる。**
+   *
+   * **出題に入っているあいだ(`running`)は、ここを通らない。**
+   * 通してしまうと、答えたあとの読み直し(`reload()`)のたびに
+   * **出題が消えて帯になる。**
+   */
+  if (!running && (loading || !opened)) return <Loading />
 
   return (
     <section className="card">
@@ -1580,12 +1622,19 @@ export default function Wordbook({
       {isQuiz && !loading && result && running && (
       <div className="focus wbfocus" role="dialog" aria-modal="true" aria-label="今日の復習">
         <div className="focus-top">
-          {/* **とじたら達成具合へ**(第5.167節)。トップ画面が無くなったので、
-              戻り先をそこにする。**渡されなければ一覧へ戻る** */}
-          <button type="button" className="btn btn--small btn--ghost"
-                  onClick={() => (onClose ? onClose() : setRunning(false))}>
-            <CloseIcon />{onClose ? 'おわる' : 'とじる'}
-          </button>
+          {/* **左上は ☰**(第5.172節)。上の帯とまったく同じ場所・同じ見た目。
+              **渡されなければ、これまでどおり閉じるボタン** */}
+          {onMenu ? (
+            <button type="button" className="nav-icon-btn focus-burger"
+                    aria-label="メニューを開く" onClick={onMenu}>
+              <MenuIcon />
+            </button>
+          ) : (
+            <button type="button" className="btn btn--small btn--ghost"
+                    onClick={() => (onClose ? onClose() : setRunning(false))}>
+              <CloseIcon />{onClose ? 'おわる' : 'とじる'}
+            </button>
+          )}
           <span className="focus-count">おつかれさまでした</span>
         </div>
         <div className="focus-body">
@@ -1700,6 +1749,8 @@ export default function Wordbook({
           tracks={tracks}
           rate={rateOf(loadRateId())}
           learnerId={learnerId}
+          /* **聞き流しの左上も ☰**(第5.172節・利用者の指定) */
+          onMenu={onMenu}
           onClose={() => setRadio(null)}
         />
       )}
@@ -1735,10 +1786,21 @@ export default function Wordbook({
                 <div className="wb-run-head">
                   {/* **戻る道は、いちばん先に置く**(集中モードと同じ作法)。
                       画面ぴったりなので、無いと閉じ方を探すことになる */}
-                  <button type="button" className="btn btn--small btn--ghost"
-                          onClick={() => (onClose ? onClose() : setRunning(false))}>
-                    <CloseIcon />とじる
-                  </button>
+                  {/* **左上は ☰**(第5.172節・2026-09 利用者の指定)。
+                      ここは**メニューから開いたページそのもの**なので、
+                      ✕ には行き先が無い ——「戻るメリットが一つもない」。
+                      **渡されなければ、これまでどおり「とじる」** */}
+                  {onMenu ? (
+                    <button type="button" className="nav-icon-btn focus-burger"
+                            aria-label="メニューを開く" onClick={onMenu}>
+                      <MenuIcon />
+                    </button>
+                  ) : (
+                    <button type="button" className="btn btn--small btn--ghost"
+                            onClick={() => (onClose ? onClose() : setRunning(false))}>
+                      <CloseIcon />とじる
+                    </button>
+                  )}
                   {/* **冊名は、常に見えているところに置く**(第5.167節)。
                       トップ画面が無くなったので、いちばん怖いのは
                       **冊を間違えたまま進むこと**である。

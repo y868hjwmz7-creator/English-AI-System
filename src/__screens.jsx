@@ -653,6 +653,11 @@ const QR_PAIR = {
    (「出る」と「出ない」の両方を見る・CLAUDE.md)。 */
 const qrScreen = (plain) => (
   <FocusFrame className="qrfocus" width="w100" page="qr" plain={plain} onClose={() => {}}
+              /* **左上が ☰ になるのは、復習(`plain`)だけ**(第5.172節)。
+                 教材の中の Quick Response は、閉じたら**読んでいた教材に戻る**
+                 ので ✕ のままである。**本物と1文字も違えない**(CLAUDE.md)——
+                 片方だけ描くと、間違えて両方 ☰ にしても緑のままになる */
+              onMenu={plain ? () => {} : null}
               /* 「◯ / ◯」は本物と同じく上の帯に置く。
                  **明るい帯で読める色になっているか**を、ここで測る */
               top={<span className="focus-count">2 / 25</span>}>

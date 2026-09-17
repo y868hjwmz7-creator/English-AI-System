@@ -53,6 +53,18 @@ function NavDot({ kind, onIcon = false }) {
 
 export default function AppNav({
   items, value, onChange, open, onClose, wide, compact = false, title, footer,
+  /**
+   * **集中している画面の上に、かぶせて開いているか**(第5.172節)。
+   *
+   * 単語帳・Quick Response・聞き流しは**画面ぜんぶを覆う**
+   * (`.focus` は `z-index: 120`)。そこの ☰ から開くので、
+   * **メニューはその上に出さないと見えない。**
+   *
+   * 見た目も中身も**このメニュー1つのまま**である ——
+   * 変えるのは「かぶさる高さ」だけ。2つ目のメニューを作らない
+   * (**同じことをするものを2つ持たない**・CLAUDE.md)。
+   */
+  overFocus = false,
 }) {
   const panelRef = useRef(null)
   const list = (items ?? []).filter(Boolean)
@@ -91,12 +103,16 @@ export default function AppNav({
   return (
     <>
       {/* かぶせているときの、うしろの膜。押すと閉じる */}
-      {drawer && <div className="nav-scrim" onClick={onClose} aria-hidden="true" />}
+      {drawer && (
+        <div className={`nav-scrim${overFocus ? ' nav-scrim--over' : ''}`}
+             onClick={onClose} aria-hidden="true" />
+      )}
 
       <nav
         ref={panelRef}
         id="app-nav"
-        className={`app-nav${open ? ' is-open' : ' is-closed'}${wide ? ' is-wide' : ' is-drawer'}`}
+        className={`app-nav${open ? ' is-open' : ' is-closed'}${wide ? ' is-wide' : ' is-drawer'}`
+          + (overFocus ? ' is-over' : '')}
         aria-label="画面の切り替え"
         aria-hidden={!wide && !open ? 'true' : undefined}
       >
