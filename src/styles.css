@@ -8870,18 +8870,19 @@ button.wbfilter-ctl { text-align: left; }
      > これは独立した単語帳にしたいんです。
      > …チェックを入れた分野だけ単語が学べるようにしたいです
 
-   **どの冊を開くかの切り替え**(`.wb-books`)と、
-   **チェックを入れる欄**(`.shelfbooks`)の2つ。
-   0057 の「自分の単語帳に追加する」欄は、道具ごと消してある */
-/* **基礎単語の段(基本360語 / 標準1200語)も、まったく同じ形にする**
-   (2026-09 利用者の指定「基礎単語360/1200も業種別の横に置いてください」)。
-   冊の切り替えのすぐ下に出る同じ役目の行なので、**値を書き写さない** */
-.wb-books,
+   **チェックを入れる欄**(`.shelfbooks`)と、
+   **基礎単語の段**(`.wb-tiers`)の2つ。
+   0057 の「自分の単語帳に追加する」欄は、道具ごと消してある。
+
+   **`.wb-books`(冊を横に並べる札)は消した**(第5.167節)——
+   冊は**縦1列の本棚**(`.shelf`)になり、この指定はどこにも当たらなくなった。
+   **効かない指定を残さない**(CLAUDE.md)。戻すときは git から取り出す */
+/* **基礎単語の段(基本360語 / 標準1200語)。**
+   本棚の「基礎単語」の行の中に出る(第5.167節) */
 .wb-tiers { margin: 0 0 var(--sp-10); }
 /* **札も押すもの。** 36px を割らない(CLAUDE.md)。
    ゲストのページの「いま出している単語帳」(`.shelfassign`)とも
    **同じ行で値を分け合う** —— 書き写すと、片方だけ古くなる */
-.wb-books .chip,
 .wb-tiers .chip,
 .shelfassign .chip,
 /* Native Flow の Unit も**同じ行で値を分け合う**(2026-09)。
@@ -8998,4 +8999,84 @@ button.wbfilter-ctl { text-align: left; }
   margin: var(--sp-12) 0 0;
   font-size: var(--fs-12); font-weight: 600;
   color: var(--text-secondary); letter-spacing: 0.02em;
+}
+
+/* ── 冊をえらぶ「本棚」(BookShelf・2026-09 利用者の問い)──────────────
+   > これからもっと増えていくのに、何列にも重ねるわけにはいかないですよね
+
+   **横に並べるのをやめた。** 札の行は冊 6 つで既に2行になっており(390px 実測)、
+   しかも「3つ + 3つ」のギザギザで左端がそろわなかった。
+   **1冊1行**なら、冊が 6 でも 20 でも見た目が変わらない。
+
+   すき間は `gap` で作る。子の margin で回らない
+   (.claude/rules/common.md「別々の物を、すき間ゼロでくっつけない」) */
+.shelf { display: grid; gap: var(--sp-8); }
+.shelf-row { display: grid; gap: var(--sp-8); }
+/* 1冊ぶんの行。**押す面積を大きく取る** ── 札は 34px だったが、行なら
+   44px を割らない(CLAUDE.md「押せる大きさ(40px)を割らない」) */
+.shelf-pick {
+  display: flex; align-items: center; gap: var(--sp-10);
+  width: 100%; min-height: 48px; padding: var(--sp-10) var(--sp-12);
+  border: 1px solid var(--border); border-radius: var(--r-10);
+  background: var(--surface); color: var(--text);
+  font-size: var(--fs-15); text-align: left; cursor: pointer;
+}
+.shelf-pick:hover { background: var(--surface-2); }
+/* **いま開いている冊。色だけに頼らない** ── 印 + 太字 + 枠 + 地色 */
+.shelf-row--on > .shelf-pick {
+  border-color: var(--accent); background: var(--accent-bg);
+  color: var(--accent); font-weight: 700;
+}
+.shelf-mark { flex: 0 0 auto; font-size: var(--fs-12); }
+/* **名前は折り返してよい。** 「自分の Quick Response 帳」のような長い名前を
+   切らない ── 切ると、どの帳面か分からなくなる */
+.shelf-name { flex: 1 1 auto; min-width: 0; line-height: 1.5; }
+/* 件数。**右端にそろえる** ── 冊が増えても数の位置が動かない */
+.shelf-n {
+  flex: 0 0 auto; font-size: var(--fs-13); font-weight: 600;
+  color: var(--text-secondary); font-variant-numeric: tabular-nums;
+}
+.shelf-row--on > .shelf-pick > .shelf-n { color: var(--accent); }
+/* 冊の中の区切り(棚・段・Unit・中身・型)。**その冊の行の中に置く** */
+.shelf-sub { display: grid; gap: var(--sp-8); padding-left: var(--sp-12); }
+.shelf-sub > .wb-add { margin: 0; }
+
+/* ── 帯の「冊名 ▾」(BookPick・第5.167節)────────────────────────────
+   トップ画面を無くしたので、**いまどの帳面をやっているか**が
+   常に見えていないと、冊を間違えたまま進んでしまう。
+
+   **名前は切るが、消さない。** 狭い画面では入るところまでで「…」になる
+   —— 絵だけにはしない(CLAUDE.md「絵だけに戻さない」) */
+.bookpick { min-width: 0; max-width: 46vw; }
+/* **帯の中では、離すのは帯の役目**(`.focus-top-main` / `.wb-run-head` の
+   `gap`)。**紙の上に直に置いたときだけ**、下と離す ——
+   `npm run test:bar` が、ここが 0px で「まだ / 練習中 / できた」の札に
+   接しているのを見つけた(`.claude/rules/common.md`
+   「別々の物を、すき間ゼロでくっつけない」)。
+
+   **「次に何が来るか」で決めない**(`.a + .b` は、下に来るものが
+   変わった日にどこにも当たらなくなる)。自分の下側にいつも持たせる。
+   `.wb-tiers` が同じ形で、**値をそこと分け合っている** */
+.card > .bookpick { margin-bottom: var(--sp-10); }
+.bookpick-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── 達成具合のページ(Progress・2026-09 利用者の指定)────────────────
+   > 達成具合を確認するには別の専用ページに飛んで出来るようにすれば良いので
+
+   すき間は親の `gap` で作る(.claude/rules/common.md) */
+.prog-head {
+  display: flex; align-items: center; gap: var(--sp-8);
+  margin: var(--sp-16) 0 var(--sp-8);
+  font-size: var(--fs-15); font-weight: 700;
+}
+/* 続けた記録(◯週つづけて / 今週 ◯ 日)。**畳まない** ——
+   `tip` は説明を畳む印であって、数に付けるものではない(第5.166節) */
+.prog-week { margin: 0 0 var(--sp-8); }
+/* **練習へ戻る道。** ここは × と「おわる」の行き先でもあるので、
+   いちばん下でも見つかるように、上に線を引いて区切る */
+.prog-go {
+  margin-top: var(--sp-16); padding-top: var(--sp-12);
+  border-top: 1px solid var(--border);
 }

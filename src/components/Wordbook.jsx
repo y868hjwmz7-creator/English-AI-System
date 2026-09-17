@@ -47,6 +47,7 @@ import {
 import {
   QUIZ_FORMS, WORD_ORDERS, buildSession, isSelfGraded, makeChoices, pickForm,
 } from '../lib/wordQuiz.js'
+import BookPick from './BookPick.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import WordRadio from './WordRadio.jsx'
@@ -309,6 +310,19 @@ export default function Wordbook({
    * **空なら欄ごと出ない**(効かない操作を見せない)。
    */
   shelves = [],
+  /**
+   * **とじたときの行き先**(第5.167節・2026-09 利用者の指定)。
+   *
+   *   > 達成具合を確認するには別の専用ページに飛んで出来るようにすれば良いので
+   *
+   * トップ画面が無くなったので、**閉じたときの戻り先が無い。**
+   * 呼ぶ側が「達成具合」のページを渡す。
+   *
+   * **渡さなければ、これまでどおり一覧へ戻る**(トレーナーがゲストの
+   * 単語帳を開く画面には、まだ達成具合のページが無い)。
+   * **行き止まりは、どちらでも作らない。**
+   */
+  onClose = null,
 }) {
   /* **画面は1つだけ。** 以前はトレーナー用に別の部品を持っていたが、
      2つあると必ず片方が古くなる。実際、見た目をそろえたつもりで
@@ -976,6 +990,30 @@ export default function Wordbook({
     if (queue.length || result) return
     start()
   }, [isQuiz, loading, started, deal])
+
+  /**
+   * **開いた瞬間に1問目**(第5.167節・2026-09 利用者の提案)。
+   *
+   *   > サイドバーや下のタブからクリックしたらすぐに実際のトレーニングの
+   *   > 画面に飛び、その画面にメニューを足す。
+   *
+   * これまでは**設定の画面**が先に出て、もう1回押してやっと始まっていた。
+   * 設定に用があるのは最初の1回で、毎日見るものではない。
+   *
+   * **一度しか走らない。** `start()` が `started` を立てるので、
+   * 「とじる」で一覧へ戻った人を**押し戻さない**(`running` だけが偽になる)。
+   * 冊・段・分野を変えたときは `dropRun()` が `started` を戻すので、
+   * **新しい冊の1問目がそのまま出る。**
+   *
+   * **1語も無ければ入らない**(第5.167節の例外)。
+   * 空の画面(いまの一覧)をそのまま使う —— 行き止まりを作らない。
+   */
+  useEffect(() => {
+    if (!isQuiz || loading || started) return
+    if (!rowsRef.current.length) return
+    if (poolNow().length === 0) return
+    start()
+  }, [isQuiz, loading, started, rows.length, poolNow])
   const card = isQuiz ? queue[0] : null
 
   /**
@@ -1214,6 +1252,130 @@ export default function Wordbook({
     )
   }
 
+  /**
+   * **やりかけを捨てる。** 冊・段・分野のどれを変えても、
+   * 出す語が丸ごと変わるので持ち越せない。
+   * **3か所に書き写さない**(CLAUDE.md)—— 1つ足し忘れると、
+   * **前の冊の語が次の冊で出続ける**。
+   *
+   * `started` を戻すので、**新しい冊の1問目がそのまま出る**(第5.167節)。
+   */
+  const dropRun = () => {
+    setRunning(false); setStarted(false); setRadio(null)
+    setFilter(emptyFilter)
+    gradedRef.current = new Set()
+  }
+
+  /**
+   * **冊の中の区切り**(段・分野)。**その冊の行の中**に出す(第5.167節)。
+   * 「どの帳面の、どこ」が**1か所で決まる。**
+   */
+  const bookSub = basicBook ? (
+    <>
+      {/* **どちらの段か**(基本360語 / 標準1200語)。
+          **基本360語 は 標準1200語 の一部。** 別の一覧を持たない */}
+      <div className="chiprow wb-tiers" role="group" aria-label="基礎単語の段">
+        {COURSE_TIERS.map((t) => (
+          <button key={t.id} type="button"
+                  className={`chip${t.id === tier ? ' chip--on' : ''}`}
+                  aria-pressed={t.id === tier}
+                  onClick={() => {
+                    if (t.id === tier) return
+                    setTier(t.id)
+                    saveBasicTier(t.id)
+                    dropRun()
+                  }}>
+            {t.label}
+            <span className="chip-count">{wordsForTier(t.id).length} 語</span>
+          </button>
+        ))}
+      </div>
+      <p className="tip hint">{tierOf(tier).hint}</p>
+    </>
+  ) : shelfBook ? (
+    /* **開く1冊を、プルダウンで選ぶ**(2026-09 利用者の指定)。
+       棚は 35 冊・語は1万を超えるので、**ぜんぶを一度に開かない。**
+       語数は、ここが読むのではなく**渡す**
+       (`ShelfBooks` は props で受け取るだけの部品) */
+    <ShelfBooks shelves={shelves} counts={shelfCounts}
+                picked={shelfPick}
+                onPicked={(ids) => {
+                  setShelfPick(ids)
+                  saveShelfPick(ids)
+                  dropRun()
+                }} />
+  ) : null
+
+  /**
+   * **どの冊を開くか**(0058 → 第5.167節で帯へ移した)。
+   *
+   *   > 最終的にこうやって混ぜたくないんですよ。
+   *   > これは独立した単語帳にしたいんです。
+   *
+   * **同時には出さない。** 混ざらないことが、この機能の要である。
+   * 札を横に並べる形は、冊6つで**すでに2行に折り返していた**(390px で実測)。
+   * **縦1列の本棚**にすれば、冊が増えても見た目が変わらない。
+   *
+   * **件数は渡さない。** 冊によって数の出どころが違い
+   * (自分の単語帳 / 棚 / 基礎単語 / ファイルの冊)、全部を数えるには
+   * **読み込みを冊の数だけ増やす**ことになる。
+   * **`0 語` と嘘をつかない** —— `BookShelf` は数が無ければ出さない。
+   *
+   * **1つの `bookPick` を、始める前と復習の最中の両方で使う。**
+   * 書き写すと、必ず片方だけ古くなる(CLAUDE.md)。
+   */
+  const bookPick = (
+    <BookPick books={books} book={book} unit="語" sub={bookSub}
+              title="どの単語帳をやりますか"
+              onPick={(id) => { setBookWanted(id); dropRun() }} />
+  )
+
+  /**
+   * **ほかの道具**(聞き流す・紙に出す)。
+   *
+   * トップ画面が無くなったので(第5.167節)、復習の最中に開ける
+   * 「出しかた」の中へ入れる。**浮くものを2つにしない。**
+   * **中身は書き写さない** —— 始める前の `.wb-tools` とまったく同じものを、
+   * ここ1か所から渡す。
+   *
+   * **範囲の札と絞り込みは、そのまま効く**(`poolNow()` 1か所)。
+   */
+  const toolsBox = (
+    <div className="wb-tools">
+      <button type="button" className="btn btn--quiet wb-listen"
+              disabled={restInScope === 0}
+              onClick={listen}>
+        <MusicIcon />聞き流す({restInScope} 語)
+      </button>
+      {/* 何語ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
+      <button type="button" className="btn btn--quiet wb-listen"
+              disabled={sheetPairs.length === 0 || printing}
+              onClick={() => setPrinting(true)}>
+        <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 語)`}
+      </button>
+      {/* **例文をつける / つけない**。例文は**出会った文**なので、
+          **新しくは作らない = 0円**。何語に載るのかを、押す前に出す */}
+      <label className="wb-sheetex">
+        <input type="checkbox" checked={sheetEx}
+               onChange={(e) => {
+                 setSheetEx(e.target.checked)
+                 saveSheetExample(e.target.checked)
+               }} />
+        例文をつける({sheetExCount} 語)
+      </label>
+      {/* **巻末に「英文の型」のレクチャーを入れる**。何型ぶん増えるのかを
+          `frameCount()` から取る(画面で数え直さない) */}
+      <label className="wb-sheetex">
+        <input type="checkbox" checked={sheetFrames}
+               onChange={(e) => {
+                 setSheetFrames(e.target.checked)
+                 saveSheetFrames(e.target.checked)
+               }} />
+        巻末に型のレクチャー({frameCount()} 型)
+      </label>
+    </div>
+  )
+
   return (
     <section className="card">
       {/* **題と、続いている記録は同じ行**(2026-08 利用者の指定)。
@@ -1230,89 +1392,12 @@ export default function Wordbook({
         )}
       </div>
 
-      {/* ── どの冊を開くか(0058・2026-09 利用者の指定)──────────────
+      {/* ── どの冊を開くか(0058 → 第5.167節で帯へ移した)─────────────
 
-            > 最終的にこうやって混ぜたくないんですよ。
-            > これは独立した単語帳にしたいんです。
-
-          **同時には出さない。** 混ざらないことが、この機能の要である。
-          出す棚が1冊も無い人には、切り替えそのものを出さない
-          (効かない操作を見せない・CLAUDE.md)。
-
-          **色だけに頼らない** —— うすい地色 + 同じ色の文字 + 太字 +
-          `aria-pressed` の4つで、いまどちらを開いているかを示す */}
-      {/* **基礎単語も、この行に置く**(2026-09 利用者の指定)。
-            > 基礎単語360/1200も業種別の横に置いてください。
-          一覧は `books` 1か所。**ここで並べ直さない** */}
-      {books.length > 1 && (
-        <div className="chiprow wb-books" role="group" aria-label="どの単語帳か">
-          {books.map((b) => (
-            <button key={b.id} type="button"
-                    className={`chip${book === b.id ? ' chip--on' : ''}`}
-                    aria-pressed={book === b.id}
-                    onClick={() => {
-                      if (book === b.id) return
-                      setBookWanted(b.id)
-                      /* 冊が変わると中身が丸ごと変わる。
-                         **やりかけを持ち越さない** */
-                      setRunning(false); setStarted(false); setRadio(null)
-                      setFilter(emptyFilter)
-                      gradedRef.current = new Set()
-                    }}>
-              {b.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* **どちらの段か**(基本360語 / 標準1200語)。
-          **基本360語 は 標準1200語 の一部。** 別の一覧を持たない。
-          棚の「学ぶ分野をえらぶ」とまったく同じ役目なので、
-          同じ場所(冊の切り替えのすぐ下)に、同じ形で置く */}
-      {basicBook && (
-        <>
-          <div className="chiprow wb-tiers" role="group" aria-label="基礎単語の段">
-            {COURSE_TIERS.map((t) => (
-              <button key={t.id} type="button"
-                      className={`chip${t.id === tier ? ' chip--on' : ''}`}
-                      aria-pressed={t.id === tier}
-                      onClick={() => {
-                        if (t.id === tier) return
-                        setTier(t.id)
-                        saveBasicTier(t.id)
-                        /* 段が変わると語がまるごと入れ替わる。
-                           **やりかけを持ち越さない**(冊のときと同じ) */
-                        setRunning(false); setStarted(false); setRadio(null)
-                        setFilter(emptyFilter)
-                        gradedRef.current = new Set()
-                      }}>
-                {t.label}
-                <span className="chip-count">{wordsForTier(t.id).length} 語</span>
-              </button>
-            ))}
-          </div>
-          <p className="tip hint">{tierOf(tier).hint}</p>
-        </>
-      )}
-
-      {/* **開く1冊を、プルダウンで選ぶ**(2026-09 利用者の指定)。
-            > こんなに沢山のチェックリストは必要ありません。アサインされた
-            > 業種のものだけがプルダウンで表示されれば十分です。
-            > ここはアサインするための場所ではないので。
-
-          棚は 35 冊・語は1万を超えるので、**ぜんぶを一度に開かない。**
-          語数は、ここが読むのではなく**渡す**
-          (`ShelfBooks` は props で受け取るだけの部品) */}
-      {shelfBook && (
-        <ShelfBooks shelves={shelves} counts={shelfCounts}
-                    picked={shelfPick}
-                    onPicked={(ids) => {
-                      setShelfPick(ids)
-                      saveShelfPick(ids)
-                      setRunning(false); setStarted(false); setRadio(null)
-                      setFilter(emptyFilter)
-                    }} />
-      )}
+          札を横に並べる形は、冊6つで**すでに2行に折り返していた。**
+          いまは**縦1列の本棚**を、`冊名 ▾` から開く。
+          中身は `bookPick` 1か所 —— **復習の帯と同じものを出す** */}
+      {bookPick}
 
       {/* **1分野も選んでいないときは、そう言う**(行き止まりを作らない)。
 
@@ -1495,9 +1580,11 @@ export default function Wordbook({
       {isQuiz && !loading && result && running && (
       <div className="focus wbfocus" role="dialog" aria-modal="true" aria-label="今日の復習">
         <div className="focus-top">
+          {/* **とじたら達成具合へ**(第5.167節)。トップ画面が無くなったので、
+              戻り先をそこにする。**渡されなければ一覧へ戻る** */}
           <button type="button" className="btn btn--small btn--ghost"
-                  onClick={() => setRunning(false)}>
-            <CloseIcon />とじる
+                  onClick={() => (onClose ? onClose() : setRunning(false))}>
+            <CloseIcon />{onClose ? 'おわる' : 'とじる'}
           </button>
           <span className="focus-count">おつかれさまでした</span>
         </div>
@@ -1605,45 +1692,7 @@ export default function Wordbook({
           「聞き流すと印刷・PDF ボタンの間に隙間がありません」)。
           別々に置くと、横に並んだときに**離すものが何も無い** ——
           `.claude/rules/common.md`「別々の物を、すき間ゼロでくっつけない」 */}
-      {isQuiz && !loading && !card && rows.length > 0 && (
-        <div className="wb-tools">
-          <button type="button" className="btn btn--quiet wb-listen"
-                  disabled={restInScope === 0}
-                  onClick={listen}>
-            <MusicIcon />聞き流す({restInScope} 語)
-          </button>
-          {/* 何語ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
-          <button type="button" className="btn btn--quiet wb-listen"
-                  disabled={sheetPairs.length === 0 || printing}
-                  onClick={() => setPrinting(true)}>
-            <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 語)`}
-          </button>
-          {/* **例文をつける / つけない**(2026-09 利用者の指定)。
-              例文は**出会った文**なので、**新しくは作らない = 0円**。
-              **何語に載るのかを、押す前に出す** —— 手で入れた語や
-              基礎単語には出会った文が無いので、0 語のことがある
-              (**効かない操作を、効くように見せない**) */}
-          <label className="wb-sheetex">
-            <input type="checkbox" checked={sheetEx}
-                   onChange={(e) => {
-                     setSheetEx(e.target.checked)
-                     saveSheetExample(e.target.checked)
-                   }} />
-            例文をつける({sheetExCount} 語)
-          </label>
-          {/* **巻末に「英文の型」のレクチャーを入れる**(2026-09 利用者の指定)。
-              **何型ぶん増えるのかを、押す前に出す** —— 数は
-              `frameCount()` から取る(画面で数え直さない) */}
-          <label className="wb-sheetex">
-            <input type="checkbox" checked={sheetFrames}
-                   onChange={(e) => {
-                     setSheetFrames(e.target.checked)
-                     saveSheetFrames(e.target.checked)
-                   }} />
-            巻末に型のレクチャー({frameCount()} 型)
-          </label>
-        </div>
-      )}
+      {isQuiz && !loading && !card && rows.length > 0 && toolsBox}
 
       {radio && (
         <WordRadio
@@ -1687,9 +1736,14 @@ export default function Wordbook({
                   {/* **戻る道は、いちばん先に置く**(集中モードと同じ作法)。
                       画面ぴったりなので、無いと閉じ方を探すことになる */}
                   <button type="button" className="btn btn--small btn--ghost"
-                          onClick={() => setRunning(false)}>
+                          onClick={() => (onClose ? onClose() : setRunning(false))}>
                     <CloseIcon />とじる
                   </button>
+                  {/* **冊名は、常に見えているところに置く**(第5.167節)。
+                      トップ画面が無くなったので、いちばん怖いのは
+                      **冊を間違えたまま進むこと**である。
+                      **中身は `bookPick` 1か所**(書き写さない) */}
+                  {bookPick}
                   {/* **「◯ / ◯ 語」は出さない**(2026-09 利用者の指定)。
                       どこまで来たかは、すぐ下の点(`.wb-run-bar`)が
                       同じことを言っている。**同じことを2つ見せない** */}
@@ -1720,6 +1774,9 @@ export default function Wordbook({
                     repeat={repeat}
                     onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
                     onStart={start}
+                    /* **聞き流す・紙に出すも、この中**(第5.167節)。
+                       トップ画面が無くなったので、置き場所がここだけになった */
+                    tools={toolsBox}
                   >
                     <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
                   </ReviewScope>

@@ -906,15 +906,17 @@ for (const [label, want] of Object.entries(WANT)) {
     await page.setViewportSize({ width: w, height: h })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
       { waitUntil: 'networkidle' })
-    /* **範囲と個数を選んでから始める形になった**(2026-09 利用者の指定)。
-       「集中モードを開く」という段は**いまも1つも挟んでいない** ——
-       押すのは「◯語を出す」で、そのまま集中モードに入る */
+    /* **開いた瞬間に1問目**(第5.167節・2026-09 利用者の指定)。
+         > サイドバーや下のタブからクリックしたらすぐに実際の
+         > トレーニングの画面に飛び、その画面にメニューを足す。
+       「◯語を出す」を押す段は**無くなった。**
+       **だから、押さずに待つ** —— この待ちそのものが
+       「開いたらすぐ始まる」の見張りになる */
     try {
-      await page.waitForSelector('.rscope .btn--primary:not([disabled])', { timeout: 8000 })
-      await page.click('.rscope .btn--primary')
       await page.waitForSelector('.wbfocus .wordcard', { timeout: 8000 })
     } catch {
-      ng(`${what} … 集中モードが開かない`, '語を読めていないか、開く道が変わった')
+      ng(`${what} … 開いても1問目が出ない`,
+        '語を読めていないか、自分で始める道(`started`)が変わった')
       continue
     }
     // 「出会った文」を開いた状態で測る(いちばん背が高くなる形)
@@ -1008,12 +1010,8 @@ for (const [label, want] of Object.entries(WANT)) {
     `http://localhost:${PORT}/__bar.html?screen=wordbook&only=answer,engineer,quiet`,
     { waitUntil: 'networkidle' },
   )
-  /* 範囲と個数を選んでから始める(上と同じ)。**絞ったときは「ぜんぶ」**に
+  /* **開いた瞬間に1問目**(第5.167節・上と同じ)。**絞ったときは「ぜんぶ」**に
      なるので、期限で切られず3語とも出る(0047 の決まり) */
-  try {
-    await page.waitForSelector('.rscope .btn--primary:not([disabled])', { timeout: 8000 })
-    await page.click('.rscope .btn--primary')
-  } catch { /* 下の待ちで赤くなる */ }
   try {
     await page.waitForSelector('.wbfocus .wordcard', { timeout: 8000 })
   } catch {
@@ -4446,39 +4444,59 @@ export default defineConfig({
 
      > 基礎単語360/1200も業種別の横に置いてください。
 
-   「横」が指しているのはこの `.wb-books` の行である。だから
-   **札が3つ並んでいるか**と、押したときに**段の切り替え
-   (`.wb-tiers`)が出て、語がそのまま並ぶか**まで数える ——
-   0053 では「まず入れる」を押すまで1語も出なかった。
+   **置き場所は帯の `冊名 ▾` へ移った**(第5.167節)。だから
+   **押して本棚を開いてから**数える —— 札が4つ並んでいるか、
+   押したときに**段の切り替え(`.wb-tiers`)がその行の中に出て**、
+   語がそのまま並ぶかまで見る。0053 では「まず入れる」を押すまで
+   1語も出なかった。
      ══════════════════════════════════════════════════════════════════ */
+  /** 帯の `冊名 ▾` を押して、本棚を開く。
+      **いちばん後ろの1つを押す** —— 復習に入っていると
+      (第5.167節「開いた瞬間に1問目」)、帯の側があとに描かれる */
+  const 本棚を開く = async (pg) => {
+    await pg.locator('.bookpick').last().click()
+    await pg.waitForTimeout(350)
+  }
+  /** 本棚から1冊えらぶ(えらぶと、本棚は閉じる) */
+  const 冊をえらぶ = async (pg, 名) => {
+    await 本棚を開く(pg)
+    await pg.locator('.shelf-pick', { hasText: 名 }).first().click()
+    await pg.waitForTimeout(450)
+  }
   for (const w of [1280, 390]) {
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=mybook`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(300)
 
+    /* **帯に冊名が出ているか。** トップ画面が無くなったので、
+       ここが消えると**いまどの帳面をやっているか分からなくなる** */
+    const 帯 = (await page.locator('.bookpick').last().textContent() ?? '').trim()
+    await 本棚を開く(page)
     const 初 = await page.evaluate(() => ({
-      札: [...document.querySelectorAll('.wb-books .chip')].map((b) => b.textContent.trim()),
-      押: [...document.querySelectorAll('.wb-books .chip')]
-        .filter((b) => b.getAttribute('aria-pressed') === 'true')
-        .map((b) => b.textContent.trim()),
+      札: [...document.querySelectorAll('.shelf-pick')]
+        .map((b) => (b.querySelector('.shelf-name')?.textContent ?? '').trim()),
+      押: [...document.querySelectorAll('.shelf-pick')]
+        .filter((b) => b.getAttribute('aria-current') === 'true')
+        .map((b) => (b.querySelector('.shelf-name')?.textContent ?? '').trim()),
       棚: document.querySelectorAll('.shelfbooks').length,
     }))
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(250)
 
     let 開 = { 冊: 0, 低い: 0, よこ: 0 }
     if (初.札.length === 4) {
-      for (const b of await page.$$('.wb-books .chip')) {
-        if (((await b.textContent()) ?? '').includes('業種べつ')) { await b.click(); break }
-      }
-      await page.waitForTimeout(300)
+      await 冊をえらぶ(page, '業種べつ')
       /* **プルダウンで数える**(2026-09 にチェックの一覧から改めた)。
          ここで 35 冊そろうのは、**骨組みが `shelfList()` を直に渡している**
          ためである(`__screens.jsx`)—— 実際の画面では
          `shelvesFor()` が「出された冊だけ」に絞る(0059)。
          **測っているのは「渡した冊が1冊残らず並ぶか」**であって、
-         誰に何冊出すかではない(そちらは `npm run test:play`) */
+         誰に何冊出すかではない(そちらは `npm run test:play`)。
+         **棚の欄は、本棚の「業種べつ」の行の中**にある(第5.167節) */
+      await 本棚を開く(page)
       開 = await page.evaluate(() => {
-        const sel = document.querySelector('.shelfbooks select')
+        const sel = document.querySelector('.shelf-sub .shelfbooks select')
         return {
           冊: sel ? sel.querySelectorAll('optgroup option').length : 0,
           低い: sel ? Math.round(sel.getBoundingClientRect().height) : 0,
@@ -4486,10 +4504,9 @@ export default defineConfig({
         }
       })
       // **戻せるか。** 戻したら棚の欄は消える(混ざらない)
-      for (const b of await page.$$('.wb-books .chip')) {
-        if (((await b.textContent()) ?? '').includes('自分の単語帳')) { await b.click(); break }
-      }
-      await page.waitForTimeout(250)
+      await page.locator('.shelf-pick', { hasText: '自分の単語帳' }).first().click()
+      await page.waitForTimeout(350)
+      await 本棚を開く(page)
     }
     const 戻 = await page.evaluate(() => document.querySelectorAll('.shelfbooks').length)
     await page.close()
@@ -4504,15 +4521,15 @@ export default defineConfig({
       await page2.goto(`http://localhost:${PORT}/__bar.html?screen=mybook`,
         { waitUntil: 'networkidle' })
       await page2.waitForTimeout(300)
-      for (const b of await page2.$$('.wb-books .chip')) {
-        if (((await b.textContent()) ?? '').includes('基礎単語')) { await b.click(); break }
-      }
-      await page2.waitForTimeout(400)
+      await 冊をえらぶ(page2, '基礎単語')
+      await 本棚を開く(page2)
       基 = await page2.evaluate(() => {
-        const tab = [...document.querySelectorAll('.wb-tiers .chip')]
+        /* **段は、本棚の「基礎単語」の行の中**(第5.167節)。
+           `.shelf-sub` の中を見ることで、**その冊の行に入っているか**まで数える */
+        const tab = [...document.querySelectorAll('.shelf-sub .wb-tiers .chip')]
         return {
           段: tab.map((b) => b.textContent.replace(/\s+/g, ' ').trim()),
-          /* **語の数は3枚の札から数える**(まだ / 覚えかけ / 覚えた)。
+          /* **語の数は3枚の札から数える**(まだ / 練習中 / できた)。
              一覧(`.wordbook-row`)は段を押したときだけ出るので、
              既定の画面では0になる —— **見えているもので数える** */
           語: [...document.querySelectorAll('.wb-stat strong')]
@@ -4526,10 +4543,10 @@ export default defineConfig({
         }
       })
       // 段を「標準1200語」へ。**語の数がその段のものになるか**
-      for (const b of await page2.$$('.wb-tiers .chip')) {
+      for (const b of await page2.$$('.shelf-sub .wb-tiers .chip')) {
         if (((await b.textContent()) ?? '').includes('1200')) { await b.click(); break }
       }
-      await page2.waitForTimeout(500)
+      await page2.waitForTimeout(700)
       基.語2 = await page2.evaluate(
         () => [...document.querySelectorAll('.wb-stat strong')]
           .reduce((a, b) => a + Number(b.textContent || 0), 0),
@@ -4538,8 +4555,11 @@ export default defineConfig({
     }
 
     const 名 = `トレーナーの単語帳(${w}px)`
-    if (初.札.join(' / ') !== '自分の単語帳 / 業種べつ / 基礎単語 / コロケーション') {
-      ng(`${名} … 冊の切り替えが出ていない`, 初.札.join(' / ') || '(無し)')
+    if (!帯.includes('自分の単語帳')) {
+      // **帯に冊名が出ていないと、冊を間違えたまま進む**(第5.167節)
+      ng(`${名} … 帯に冊名が出ていない`, 帯 || '(無し)')
+    } else if (初.札.join(' / ') !== '自分の単語帳 / 業種べつ / 基礎単語 / コロケーション') {
+      ng(`${名} … 本棚に冊が並んでいない`, 初.札.join(' / ') || '(無し)')
     } else if (初.押.join('') !== '自分の単語帳') {
       ng(`${名} … 既定が自分の単語帳になっていない`, 初.押.join(' / ') || '(無し)')
     } else if (初.棚 !== 0) {
@@ -4554,7 +4574,7 @@ export default defineConfig({
     } else if (戻 !== 0) {
       ng(`${名} … 自分の単語帳に戻しても、棚の欄が残っている`)
     } else if (基.段.length !== 2) {
-      ng(`${名} … 基礎単語の段(基本360語 / 標準1200語)が出ていない`,
+      ng(`${名} … 基礎単語の段(基本360語 / 標準1200語)が、その冊の行の中に出ていない`,
         基.段.join(' / ') || '(無し)')
     } else if (!基.段[0].includes('360') || !基.段[1].includes('1200')) {
       ng(`${名} … 段に語数が出ていない`, 基.段.join(' / '))
@@ -4570,23 +4590,23 @@ export default defineConfig({
     } else if (基.よこ > 0) {
       ng(`${名} … 基礎単語で横にはみ出している`, `${基.よこ}px`)
     } else {
-      ok(`${名} … 渡した 35 冊と基礎単語が、独立した単語帳として1冊残らず開ける`)
+      ok(`${名} … 帯の「${帯}」から、渡した 35 冊と基礎単語が1冊残らず開ける`)
     }
   }
 
-  /* **棚を渡していない画面には、切り替えごと出さない**
+  /* **冊が1つしか無い画面には、えらぶ場所ごと出さない**
      (効かない操作を見せない)。ゲストの単語帳をトレーナーが開いたときは、
      そのゲストに指定された棚だけが渡る —— **1冊も無ければ、ここは空。**
-     基礎単語も 0055 で外されていれば同じで、**冊が1つなら行ごと出ない** */
+     基礎単語も 0055 で外されていれば同じである */
   {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(300)
-    const n = await page.evaluate(() => document.querySelectorAll('.wb-books').length)
+    const n = await page.evaluate(() => document.querySelectorAll('.bookpick').length)
     await page.close()
-    if (n !== 0) ng('棚 … 出す棚が1冊も無いのに、冊の切り替えが出ている', String(n))
-    else ok('棚 … 出す棚が無い単語帳には、切り替えを出さない')
+    if (n !== 0) ng('棚 … 出す棚が1冊も無いのに、冊をえらぶ場所が出ている', String(n))
+    else ok('棚 … 出す棚が無い単語帳には、えらぶ場所を出さない')
   }
 }
 
@@ -5778,6 +5798,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ['radio', ''], ['qrradio', ''], ['course', ''], ['basicpick', ''],
     ['shelfpick', ''], ['speech', ''], ['gnote', ''], ['tabs', ''],
     ['volume', ''], ['shift', ''],
+    /* **冊をえらぶ本棚**(第5.167節)。トップ画面を無くしたので、
+       冊をえらぶ場所は**この1枚だけ**になった。
+       `books=one` は**冊が1つのとき**(えらぶ場所そのものが出ない) */
+    ['shelf', ''], ['shelf', 'books=one'],
+    /* **達成具合**(第5.167節)。`×` と「おわる」の行き先なので、
+       ここが行き止まりだと練習へ戻れなくなる */
+    ['progress', ''],
     ['', 'role=trainer&who=g1'],
   ]
   const 見つかった = []

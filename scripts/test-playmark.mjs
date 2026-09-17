@@ -6017,7 +6017,10 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     'Quick Response 帳 … 出す Unit が1つも無ければ、冊ごと出さない')
   ok(/nfUnits = \[\]/.test(qr), 'Quick Response 帳 … 既定は空(渡さない画面では出ない)')
   ok(!/showNf/.test(qr), 'Quick Response 帳 … 「出すか」と「どれを出すか」を2つ持っていない')
-  ok(/<QrReview nfUnits=\{myNfUnits\} \/>/.test(app),
+  /* **`/>` まで数えない**(第5.167節で `onClose` が付き、複数行になった)。
+     見たいのは「自分の帳にだけ `nfUnits` を渡している」ことである */
+  ok(/<QrReview nfUnits=\{myNfUnits\}/.test(app)
+    && (app.match(/<QrReview /g) ?? []).length === 1,
     'Quick Response 帳 … 自分の帳にだけ出している')
   ok(!/nfUnits/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
     'Quick Response 帳 … ゲストのページから開く画面には渡していない')
@@ -6245,7 +6248,10 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   // ── 画面が呼んでいるか
   const qrSrc = noNote(readD('src/components/QrReview.jsx'))
   ok(/NativeFlowUnits/.test(qrSrc), 'Quick Response 帳が Unit の切り替えを出している')
-  ok(/nfBook && \(/.test(qrSrc),
+  /* 第5.167節で**本棚の行の中**へ移した(`bookSub`)。
+     条件は `nfBook && (` から `nfBook ? (` に変わったが、
+     **「その冊を開いているときだけ」という決まりは1つも変えていない** */
+  ok(/const bookSub = nfBook \? \(/.test(qrSrc),
     '**Native Flow を開いているときだけ**出す(効かない操作を見せない)')
   ok(/NF_UNIT_KEY/.test(qrSrc) && !/eas\.nfUnit/.test(qrSrc),
     '覚えておく鍵の名前を、画面に書き写していない')
@@ -6506,6 +6512,130 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const you = css.match(/\.radio-en--you \{[^}]*\}/)?.[0] ?? ''
   ok(/border:/.test(you) && /background:/.test(you),
     '「言う番」の1行が色だけに頼っていない(枠線 + 地色)')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   **開いたらすぐ始まる**(第5.167節・2026-09 利用者の提案)
+
+     > quick response と単語帳は、トップ画面をなくしませんか?
+     > サイドバーや下のタブからクリックしたらすぐに実際のトレーニングの
+     > 画面に飛び、その画面にメニューを足す。
+
+   ここで見るのは、**黙って落ちやすいもの**である。
+
+   ①「開いた瞬間に1問目」が**本当に自動で走るか**
+   ② 帯に**冊名が出ているか**(冊を間違えたまま進むのがいちばん怖い)
+   ③ 移した道具(聞き流す・紙に出す)が**設定の中に残っているか**
+   ④ **やりかけを持ち越さない**(冊を変えたら捨てる)
+   ⑤ とじたときの**行き先があるか**(行き止まりを作らない)
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   一度しか走らない印(`started`)が無ければ、とじた人を押し戻してしまう。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 単語帳と Quick Response は、開いたらすぐ始まる(5.167)')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  /* **コメントを落としてから、使っている形で数える**(CLAUDE.md)——
+     説明にも同じ語が出るので、名前が出てくるかでは見ない */
+  const wb = noNote(readD('src/components/Wordbook.jsx'))
+  const qr = noNote(readD('src/components/QrReview.jsx'))
+  const app = noNote(readD('src/App.jsx'))
+  const pick = noNote(readD('src/components/BookPick.jsx'))
+  const shelf = noNote(readD('src/components/BookShelf.jsx'))
+  const prog = noNote(readD('src/components/Progress.jsx'))
+  const scope = noNote(readD('src/components/ReviewScope.jsx'))
+
+  // ── ① 開いた瞬間に1問目 ────────────────────────────────
+  ok(/if \(!isQuiz \|\| loading \|\| started\) return/.test(wb),
+    '単語帳が、始めていなければ自分で始める(設定の画面を通らない)')
+  ok(/if \(busy \|\| started\) return/.test(qr),
+    'Quick Response が、始めていなければ自分で始める')
+  /* **一度しか走らない**。これが無いと、「とじる」で一覧へ戻った人を
+     そのまま押し戻す(**行き止まりの反対で、出口が無くなる**) */
+  ok(/const \[started, setStarted\] = useState\(false\)/.test(qr),
+    'Quick Response が「一度でも始めたか」を持っている(とじた人を押し戻さない)')
+  ok(/if \(!rowsRef\.current\.length\) return/.test(wb)
+    && /if \(poolNow\(\)\.length === 0\) return/.test(wb),
+    '1語も無ければ入らない(空の画面をそのまま使う)')
+  ok(/if \(shown\.length === 0\) return/.test(qr),
+    '1問も無ければ入らない(同上)')
+
+  // ── ② 帯に冊名 ──────────────────────────────────────────
+  /* **「出る」と「出ない」の両方**。`bookPick` が1か所で作られ、
+     **始める前と帯の2か所で使われている**ことを数える ——
+     数えないと、どちらか片方だけに出す形に書き換えても緑のままになる */
+  ok((wb.match(/\{bookPick\}/g) ?? []).length >= 2,
+    '単語帳の冊名が、始める前と復習の帯の両方に出る(書き写さず1つを使い回す)')
+  ok((qr.match(/\{bookPick\}/g) ?? []).length >= 3,
+    'Quick Response の冊名が、3つの画面すべてに出る(Supabase 未設定の画面も)')
+  ok(/const bookPick = \(\s*<BookPick/.test(wb) && /const bookPick = \(\s*<BookPick/.test(qr),
+    '冊をえらぶ部品は1つ(`BookPick`)—— 呼び名を2か所に書かない')
+  ok(!/chiprow wb-books/.test(wb) && !/chiprow wb-books/.test(qr),
+    '横に並べる古い札は残っていない(同じことをするものを2つ見せない)')
+
+  // ── 本棚そのもの ────────────────────────────────────────
+  ok(/if \(books\.length < 2\) return null/.test(shelf)
+    && /if \(books\.length < 2\) return null/.test(pick),
+    '冊が1つなら、えらぶ場所を出さない(効かない操作を見せない)')
+  ok(/aria-current=\{on \? 'true' : undefined\}/.test(shelf)
+    && /\{on \? '●' : '○'\}/.test(shelf),
+    'いま開いている冊を、色だけに頼らずに示す(印 + `aria-current`)')
+  ok(/Number\.isFinite\(n\)/.test(shelf),
+    '数えられなかった冊に `0 語` と書かない(0 と null を取り違えない)')
+
+  // ── ③ 移した道具 ────────────────────────────────────────
+  ok(/tools = null,/.test(scope) && /<p className="rscope-head">ほかの道具<\/p>/.test(scope),
+    '「出しかた」が、ほかの道具を預かれる(渡さなければ段ごと出ない)')
+  /* **作る形(`const toolsBox =`)は数えない。使う形だけを数える** ——
+     数え方が1つだと、置き場所を1つ減らしても緑のままになる */
+  const uses = (src) => (src.match(/toolsBox/g) ?? []).length - 1
+  ok(/const toolsBox = \(/.test(wb) && uses(wb) >= 2,
+    '単語帳の聞き流す・紙に出すが、始める前と設定の中の両方にある(1か所から描く)')
+  ok(/const toolsBox = \(/.test(qr) && uses(qr) >= 2,
+    'Quick Response も同じ(黙って落とさない)')
+
+  // ── ④ やりかけを持ち越さない ────────────────────────────
+  ok(/const dropRun = \(\) => \{/.test(wb) && /setStarted\(false\)/.test(wb),
+    '単語帳が、冊を変えたらやりかけを捨てて、新しい冊の1問目を出す')
+  ok(/const dropRun = \(\) => \{[\s\S]*?setStarted\(false\)[\s\S]*?\}/.test(qr),
+    'Quick Response も同じ(4か所に書き写さない)')
+
+  // ── ⑤ とじたときの行き先 ────────────────────────────────
+  ok(/onClose = null,/.test(wb) && /onClose = null,/.test(qr),
+    '2つとも、とじたときの行き先を受け取れる(渡さなければ一覧へ戻る)')
+  /* **数える。**「1つでもあるか」で見ると、**片方を消しても緑のまま**に
+     なる —— 単語帳のとじる口は**2つ**ある(復習の帯と、終わりの1枚) */
+  ok((wb.match(/onClose \? onClose\(\) : setRunning\(false\)/g) ?? []).length === 2,
+    '単語帳の2つのとじる口が、どちらも渡された行き先へ行く')
+  ok(/onClose\?\.\(\)/.test(qr),
+    'Quick Response の「おわる」も同じ')
+  ok((app.match(/onClose=\{\(\) => setView\('progress'\)\}/g) ?? []).length === 2,
+    '自分の単語帳と Quick Response の行き先が、どちらも達成具合')
+  ok(/id: 'progress', label: '達成具合'/.test(app),
+    '左メニューに「達成具合」が1行ある')
+  ok(!/'progress'/.test(app.match(/const TAB_IDS = [\s\S]*?\n\n/)?.[0] ?? ''),
+    '下の帯は4つのまま(利用者が決めている)')
+  /* **ここも数える。** 達成具合の画面は2つある(Supabase が設定されている
+     ときと、されていないとき)。**どちらにも戻る道を置く** */
+  ok(/function Practice\(\{ onGo \}\)/.test(prog)
+    && (prog.match(/<Practice onGo=\{onGo\} \/>/g) ?? []).length === 2,
+    '達成具合の2つの画面の、どちらからも練習へ戻れる(行き止まりを作らない)')
+  ok(/status: null, limit: 1000/.test(prog),
+    '達成具合は段ごと読む(`todo` だけだと「できた」がいつでも 0 になる)')
+  /* **もう1つの「0 と null を取り違えない」。** 0040 を貼っていない
+     Supabase では `loadQrReviews()` が**黙って空の一覧を返す**ので、
+     そのまま数えると「まだ 0 / 練習中 0 / できた 0」と出て、
+     **やり切ったように見える** */
+  ok((prog.match(/qrReviewSupported\(\)/g) ?? []).length >= 2,
+    '入れ物(0040)が無いときは、数えずにそう言う(0 と嘘をつかない)')
+  /* `tip` は**説明を畳む印**(第5.166節)であって、数に付けるものではない。
+     じっくり見るためのページなのに、いちばん見たい「◯週つづけて」が
+     既定で畳まれていた */
+  ok(/\{weekLine\(week\) && </.test(prog) && !/"tip[^"]*">\{weekLine/.test(prog),
+    '続けた記録を畳まない。1日も記録が無ければ、行ごと出ない')
 }
 
 console.log(ng

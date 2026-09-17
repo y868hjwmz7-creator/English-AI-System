@@ -32,6 +32,7 @@ import {
 } from '../lib/qrReviews.js'
 import Loading from './Loading.jsx'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
+import BookPick from './BookPick.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import FrameParts from './FrameParts.jsx'
 import ReviewStats from './ReviewStats.jsx'
@@ -97,6 +98,16 @@ export default function QrReview({
    * 2つ持つと、片方だけ古くなる(**同じことをするものを2つ持たない**)。
    */
   nfUnits = [],
+  /**
+   * **とじたときの行き先**(第5.167節・2026-09 利用者の指定)。
+   *
+   *   > 達成具合を確認するには別の専用ページに飛んで出来るようにすれば良いので
+   *
+   * トップ画面が無くなったので、**閉じたときの戻り先が無い。**
+   * 呼ぶ側が「達成具合」のページを渡す。**単語帳とまったく同じ形。**
+   * **渡さなければ、これまでどおり一覧へ戻る。**
+   */
+  onClose = null,
 }) {
   /**
    * **いま開いている Quick Response 帳**(2026-09 利用者の指定)。
@@ -244,6 +255,15 @@ export default function QrReview({
   const [group, setGroup] = useState(null)
   /** いま解いている一覧(**この回のぶんだけ**)。`null` なら、まだ始めていない */
   const [run, setRun] = useState(null)
+  /**
+   * **一度でも始めたか**(第5.167節)。
+   *
+   * 「開いた瞬間に1問目」を**一度しか走らせない**ための印である。
+   * これが無いと、「とじる」で一覧へ戻った人をそのまま押し戻してしまう。
+   * 冊・Unit・中身・型を変えたときは `dropRun()` が戻すので、
+   * **新しい冊の1問目がそのまま出る。**
+   */
+  const [started, setStarted] = useState(false)
   /* **聞き流し**(2026-09 利用者の指定「Quick Responseにも聞き流しを作ってくれ」)。
      答える練習ではないので、**箱も次に出す日も1ミリも動かさない**
      (単語帳とまったく同じ決まり。`WordRadio` の中でも呼んでいない) */
@@ -384,6 +404,22 @@ export default function QrReview({
   }
 
   /**
+   * **開いた瞬間に1問目**(第5.167節・2026-09 利用者の提案)。
+   *
+   *   > サイドバーや下のタブからクリックしたらすぐに実際のトレーニングの
+   *   > 画面に飛び、その画面にメニューを足す。
+   *
+   * **一度しか走らない**(`started`)。「とじる」で一覧へ戻った人を
+   * 押し戻さない。**1問も無ければ入らない** —— 空の画面をそのまま使う。
+   */
+  useEffect(() => {
+    if (busy || started) return
+    if (shown.length === 0) return
+    setStarted(true)
+    start()
+  }, [busy, started, shown.length])
+
+  /**
    * **聞き流しを始める**(2026-09 利用者の指定)。
    *
    *   > Quick Responseにも聞き流しを作ってくれ。
@@ -435,6 +471,9 @@ export default function QrReview({
     gradedRef.current = new Set()
     // **答えた結果を映し直す。** 箱が動いているので、残り数が変わる
     reload()
+    /* **とじたら達成具合へ**(第5.167節)。トップ画面が無くなったので、
+       戻り先をそこにする。**渡されなければ一覧へ戻る** */
+    onClose?.()
   }
 
   const answer = async (ok) => {
@@ -476,28 +515,101 @@ export default function QrReview({
   const dropRun = () => {
     setRun(null); setPending([]); setAt(0); setDone([])
     setRadio(null); setGroup(null); setFilter(emptyFilter)
+    /* **「開いた瞬間に1問目」をもう一度走らせる**(第5.167節)。
+       冊を変えた人は、その冊の1問目をやりに来ている */
+    setStarted(false)
     gradedRef.current = new Set()
   }
 
   const who = learnerName ? `${learnerName} さんの` : ''
 
-  /** 冊の札。**Supabase の有無で2か所から描くので、ここ1つに持つ**
-      (**呼び名を2か所に書かない**・CLAUDE.md) */
-  const bookChips = books.length > 1 && (
-    <div className="chiprow wb-books" role="group" aria-label="どの Quick Response 帳か">
-      {books.map((b) => (
-        <button key={b.id} type="button"
-                className={`chip${book === b.id ? ' chip--on' : ''}`}
-                aria-pressed={book === b.id}
-                onClick={() => {
-                  if (book === b.id) return
-                  setBookWanted(b.id)
-                  /* 冊が変わると中身が丸ごと変わる。**やりかけを持ち越さない** */
-                  dropRun()
-                }}>
-          {b.label}
-        </button>
-      ))}
+  /**
+   * **冊の中の区切り**(Unit・中身・型)。**その冊の行の中**に出す(第5.167節)。
+   * 「どの帳面の、どこ」が**1か所で決まる。**
+   */
+  const bookSub = nfBook ? (
+    /* **どの Unit を練習するか**(2026-09 利用者の指定「UNIT毎に分けて」)。
+       並ぶのは**その人に出してよい Unit だけ**で、判断は
+       `nfUnitsFor()` が済ませてある */
+    <NativeFlowUnits
+      units={nfUnits}
+      picked={unit}
+      onPick={(id) => {
+        setUnitWanted(id)
+        try {
+          if (id) localStorage.setItem(NF_UNIT_KEY, String(id))
+          else localStorage.removeItem(NF_UNIT_KEY)
+        } catch { /* 使えなくても困らない */ }
+        dropRun()
+      }}
+    />
+  ) : frameBook ? (
+    /* **66 の型の、どの中身を練習するか**(2026-09 利用者の指定)。
+       見た目も置き場所も、**Unit の欄とまったく同じ**(`FrameParts`) */
+    <FrameParts
+      parts={FRAME_PARTS}
+      counts={partCounts}
+      picked={part}
+      onPick={(id) => {
+        setPartWanted(id)
+        try { localStorage.setItem(FRAME_PART_KEY, id) }
+        catch { /* 使えなくても困らない */ }
+        dropRun()
+      }}
+      /* **型で絞る**(2026-09 利用者の指定)。一覧も並びも
+         `frameQrForms()` が持つ —— 画面で 66 本を書き写さない */
+      forms={partForms}
+      form={form}
+      onForm={(f) => {
+        setFormWanted(f)
+        try {
+          if (f) localStorage.setItem(FRAME_FORM_KEY, f)
+          else localStorage.removeItem(FRAME_FORM_KEY)
+        } catch { /* 使えなくても困らない */ }
+        dropRun()
+      }}
+    />
+  ) : null
+
+  /**
+   * **どの Quick Response 帳か**(第5.167節で帯へ移した)。
+   *
+   * 札を横に並べる形は、冊3つでも**2行に折り返していた**
+   * (「自分の Quick Response 帳」が長い・390px で実測)。
+   * **縦1列の本棚**にすれば、冊が増えても見た目が変わらない。
+   *
+   * **1つの `bookPick` を、始める前と復習の帯の両方で使う。**
+   * 書き写すと、必ず片方だけ古くなる(CLAUDE.md)。
+   */
+  const bookPick = (
+    <BookPick books={books} book={book} unit="問" sub={bookSub}
+              title="どの Quick Response 帳をやりますか"
+              onPick={(id) => { setBookWanted(id); dropRun() }} />
+  )
+
+  /**
+   * **ほかの道具**(言う練習・聞き流し・紙に出す)。
+   *
+   * トップ画面が無くなったので(第5.167節)、復習の最中に開ける
+   * 「出しかた」の中へ入れる。**中身は書き写さない** ——
+   * 始める前の `.wb-tools` とまったく同じものを、ここ1か所から渡す。
+   */
+  const toolsBox = (
+    <div className="wb-tools">
+      <button type="button" className="btn btn--quiet wb-listen"
+              disabled={shown.length === 0}
+              onClick={listen}>
+        {/* **言葉と中身を食い違わせない**(2026-09)。
+            ここは**聞き流しだけの場所ではない** —— パタプラの
+            「言う練習」「チャンクで積む」も、この中にある */}
+        <MusicIcon />言う練習・聞き流し({shown.length} 問)
+      </button>
+      {/* 何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
+      <button type="button" className="btn btn--quiet wb-listen"
+              disabled={sheetPairs.length === 0 || printing}
+              onClick={() => setPrinting(true)}>
+        <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 問)`}
+      </button>
     </div>
   )
 
@@ -513,7 +625,7 @@ export default function QrReview({
     return (
       <section className="card">
         <h2 className="card-title">Quick Response(復習)</h2>
-        {bookChips}
+        {bookPick}
         <p className="hint">
           Supabase が設定されていないため、復習は溜まりません。
           「66 の型」は、設定が無くてもそのまま使えます。
@@ -627,9 +739,16 @@ export default function QrReview({
         scrollKey={`qrrev:${at}`}
         onClose={stop}
         top={(
-          <span className="focus-count">
-            {finished ? `${run.length} / ${run.length}` : `${at + 1} / ${run.length}`}
-          </span>
+          <>
+            {/* **冊名は、常に見えているところに置く**(第5.167節)。
+                トップ画面が無くなったので、いちばん怖いのは
+                **冊を間違えたまま進むこと**である。
+                **中身は `bookPick` 1か所**(書き写さない) */}
+            {bookPick}
+            <span className="focus-count">
+              {finished ? `${run.length} / ${run.length}` : `${at + 1} / ${run.length}`}
+            </span>
+          </>
         )}
         /* **中に入ってからも絞り込める**(2026-09 利用者の指定)。
            始める前とまったく同じ「出しかた」を、帯の右端から開く。
@@ -645,6 +764,9 @@ export default function QrReview({
             onScope={(id) => { setScope(id); saveScope('qr', id) }}
             onSize={(sz) => { setSize(sz); saveSize('qr', sz) }}
             onStart={start}
+            /* **言う練習・聞き流し・紙に出すも、この中**(第5.167節)。
+               トップ画面が無くなったので、置き場所がここだけになった */
+            tools={toolsBox}
           >
             <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
           </ReviewScope>
@@ -672,11 +794,10 @@ export default function QrReview({
       )}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
-      {/* **どの Quick Response 帳か**(2026-09 利用者の指定)。
-          見た目も置き場所も**単語帳の冊とまったく同じ**(`wb-books`)。
-          **色だけに頼らない** —— うすい地色 + 同じ色の文字 + 太字 +
-          `aria-pressed` の4つで、いまどれを開いているかを示す */}
-      {bookChips}
+      {/* **どの Quick Response 帳か**(第5.167節で帯へ移した)。
+          いまは**縦1列の本棚**を、`冊名 ▾` から開く。
+          中身は `bookPick` 1か所 —— **復習の帯と同じものを出す** */}
+      {bookPick}
 
       {/* **冊の札は、読み込みや「まだ1問も溜まっていません」より前**に置く。
           うしろに置くと、まだ溜まっていない人は札そのものが見えず、
@@ -720,58 +841,8 @@ export default function QrReview({
               **押せる**(2026-09 利用者の指定「タッチすればそれらを
               復習できるようにしたい」)。見た目は `ReviewStats` 1つで、
               単語帳とまったく同じもの。**書き写さない** */}
-          {/* **どの Unit を練習するか**(2026-09 利用者の指定「UNIT毎に分けて」)。
-              **Native Flow を開いているときだけ**出す ——
-              自分の Quick Response 帳には Unit という区切りが無い
-              (効かない操作を見せない・CLAUDE.md)。
-              並ぶのは**その人に出してよい Unit だけ**で、判断は
-              `nfUnitsFor()` が済ませてある */}
-          {nfBook && (
-            <NativeFlowUnits
-              units={nfUnits}
-              picked={unit}
-              onPick={(id) => {
-                setUnitWanted(id)
-                try {
-                  if (id) localStorage.setItem(NF_UNIT_KEY, String(id))
-                  else localStorage.removeItem(NF_UNIT_KEY)
-                } catch { /* 使えなくても困らない */ }
-                /* Unit が変わると出す問が丸ごと変わる。**やりかけを持ち越さない** */
-                dropRun()
-              }}
-            />
-          )}
-
-          {/* **66 の型の、どの中身を練習するか**(2026-09 利用者の指定)。
-              **66 の型を開いているときだけ**出す —— ほかの冊に中身の区切りは
-              無い(効かない操作を見せない・CLAUDE.md)。
-              見た目も置き場所も、**Unit の欄とまったく同じ**(`FrameParts`) */}
-          {frameBook && (
-            <FrameParts
-              parts={FRAME_PARTS}
-              counts={partCounts}
-              picked={part}
-              onPick={(id) => {
-                setPartWanted(id)
-                try { localStorage.setItem(FRAME_PART_KEY, id) }
-                catch { /* 使えなくても困らない */ }
-                /* 中身が変わると出す問が丸ごと変わる。**やりかけを持ち越さない** */
-                dropRun()
-              }}
-              /* **型で絞る**(2026-09 利用者の指定)。一覧も並びも
-                 `frameQrForms()` が持つ —— 画面で 66 本を書き写さない */
-              forms={partForms}
-              form={form}
-              onForm={(f) => {
-                setFormWanted(f)
-                try {
-                  if (f) localStorage.setItem(FRAME_FORM_KEY, f)
-                  else localStorage.removeItem(FRAME_FORM_KEY)
-                } catch { /* 使えなくても困らない */ }
-                dropRun()
-              }}
-            />
-          )}
+          {/* **Unit と、66 の型の中身・型は、本棚の行の中へ移した**
+              (第5.167節)。「どの帳面の、どこ」が**1か所で決まる** */}
 
           <ReviewStats
             items={QR_GROUPS.map((g) => ({ ...g, n: tally[g.id] ?? 0 }))}
@@ -810,31 +881,9 @@ export default function QrReview({
             </label>
           </ReviewScope>
 
-          {/* **聞き流し**と**紙に出す**(2026-09 利用者の指定)。
-              「出す」のとなりに置く —— 同じ文を、答えるか・聴くだけか・
-              紙にするかの違いなので、選ぶのはここである。
-              **範囲の札も絞り込みも並べ方も、そのまま効く**(`listen()` 1か所)。
-              単語帳の `wb-tools` と**まったく同じ形**にそろえる ——
-              **1つの行にまとめ、`gap` で離す**(2026-09 実機・利用者の指摘) */}
-          <div className="wb-tools">
-            <button type="button" className="btn btn--quiet wb-listen"
-                    disabled={shown.length === 0}
-                    onClick={listen}>
-              {/* **言葉と中身を食い違わせない**(2026-09)。
-                  ここは**聞き流しだけの場所ではなくなった** ——
-                  パタプラの「言う練習」「チャンクで積む」も、この中にある。
-                  「聞き流す」とだけ書いておくと、**探している人が
-                  一生たどり着かない**(「覚えかけ」と書いて中身が
-                  「まだ」だったのと、同じ間違い) */}
-              <MusicIcon />言う練習・聞き流し({shown.length} 問)
-            </button>
-            {/* 何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
-            <button type="button" className="btn btn--quiet wb-listen"
-                    disabled={sheetPairs.length === 0 || printing}
-                    onClick={() => setPrinting(true)}>
-              <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 問)`}
-            </button>
-          </div>
+          {/* **聞き流し**と**紙に出す**。中身は `toolsBox` 1か所 ——
+              復習の「出しかた」にも、同じものが出る(書き写さない) */}
+          {toolsBox}
 
           {shown.length === 0 && filtered.length === 0 && (
             <p className="hint">この絞り込みに当てはまる文がありません。</p>

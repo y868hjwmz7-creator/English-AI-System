@@ -12,7 +12,7 @@ import AppTabs from './components/AppTabs.jsx'
 import AppHome, { HOME_ID } from './components/AppHome.jsx'
 import {
   BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, HomeIcon, MicIcon, MusicIcon,
-  PeopleIcon, ShelfIcon, StepsIcon, TaskIcon,
+  PeopleIcon, ShelfIcon, StepsIcon, TaskIcon, TrendIcon,
 } from './components/Icons.jsx'
 import { applyTheme, loadTheme } from './lib/theme.js'
 import { applyPalette, loadPalette } from './lib/palette.js'
@@ -40,6 +40,7 @@ import LearnerBar from './components/LearnerBar.jsx'
 import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
+import Progress from './components/Progress.jsx'
 import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import BgmLibrary from './components/BgmLibrary.jsx'
@@ -505,6 +506,24 @@ export default function App() {
       id: 'qr', label: 'Quick Response', icon: BoltIcon,
       desc: '日本語を見て、英語で言う',
     },
+    /**
+     * **達成具合**(第5.167節・2026-09 利用者の指定)。
+     *
+     *   > 達成具合を確認するには別の専用ページに飛んで出来るようにすれば良いので
+     *
+     * 単語帳と Quick Response が**開いた瞬間に始まる**形になり、
+     * 進み具合の札を出していたトップ画面が無くなった。
+     * **ゲストには、いま自分の積み上がりを見る場所が1つも無い**(調べた)。
+     *
+     * **誰にでも出す** —— 単語帳と Quick Response はトレーナーも使う。
+     * **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている
+     */
+    {
+      /* **絵は「集計」と分ける**(ChartIcon はあちらが使っている)。
+         同じ絵を2つの行き先に付けると、どちらがどちらか分からない */
+      id: 'progress', label: '達成具合', icon: TrendIcon,
+      desc: 'どこまで進んだかを、じっくり見る',
+    },
     /* **発音練習だけは独立した機能にする**(2026-08 利用者の指定)。
        **名前は「スピーチ練習」**(2026-09 利用者の指定)。
        > 「発音を練習」を「スピーチ練習」にしてください
@@ -944,7 +963,10 @@ export default function App() {
                         showBasics={basicsOn}
                         /* **業種べつの単語帳も、トレーナーが指定した棚だけ**
                            (0057)。判断は `shelvesFor()` が済ませてある */
-                        shelves={myShelves} />
+                        shelves={myShelves}
+                        /* **とじたら達成具合へ**(第5.167節)。
+                           トップ画面が無くなったので、戻り先をそこにする */
+                        onClose={() => setView('progress')} />
             ) : view === 'qr' ? (
               /* **Native Flow の冊**(2026-09 利用者の指定)。
                  単語帳の `showCol` とまったく同じ作法である */
@@ -952,7 +974,14 @@ export default function App() {
                  渡すのは**自分の Quick Response 帳**だけ —— トレーナーが
                  ゲストのページから開く画面には、冊の切り替えを
                  もともと出していない(単語帳とまったく同じ判断) */
-              <QrReview nfUnits={myNfUnits} />
+              <QrReview nfUnits={myNfUnits}
+                        /* **とじたら達成具合へ**(第5.167節) */
+                        onClose={() => setView('progress')} />
+            ) : view === 'progress' ? (
+              /* **達成具合**(第5.167節)。単語帳と Quick Response の
+                 `×` と「おわる」の行き先でもあるので、
+                 **必ず練習へ戻る道を置く**(行き止まりを作らない) */
+              <Progress onGo={setView} />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice me={profile} />
             ) : view === 'bgm' ? (

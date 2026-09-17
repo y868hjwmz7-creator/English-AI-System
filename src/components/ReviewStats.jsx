@@ -34,8 +34,16 @@ export default function ReviewStats({
   items,
   /** いま選んでいる段の id。`null` なら選んでいない(ぜんぶ) */
   value = null,
-  /** 押されたとき。もう一度押したときは `null` が来る */
-  onPick,
+  /**
+   * 押されたとき。もう一度押したときは `null` が来る。
+   *
+   * **渡さなければ、押せる形で描かない**(2026-09)。
+   * 達成具合のページは**眺める場所**で、その段だけを復習するのは
+   * 練習の画面の仕事である。`onClick` の中身が空のボタンを置くと
+   * **押しても何も起きないもの**を見せることになる
+   * (**効かない操作を見せない**・CLAUDE.md)。
+   */
+  onPick = null,
   /**
    * 「いま手を付けるところ」の id。その札だけ、数があるときに目立たせる
    * (もとの `counts.unknown > 0` の `is-due` をそのまま引き継いでいる)。
@@ -51,19 +59,27 @@ export default function ReviewStats({
         {list.map((it) => {
           const on = it.id === value
           const n = Number(it.n ?? 0)
+          const cls = `wb-stat${n > 0 && it.id === dueId ? ' is-due' : ''}${on ? ' is-on' : ''}`
+          const body = (
+            <>
+              <strong>{n}</strong>
+              <span className="wb-stat-label">{it.label}</span>
+            </>
+          )
+          /* **押せないときは、押せる形にしない**(上記) */
+          if (!onPick) return <div key={it.id} className={cls}>{body}</div>
           return (
             <button
               key={it.id}
               type="button"
-              className={`wb-stat${n > 0 && it.id === dueId ? ' is-due' : ''}${on ? ' is-on' : ''}`}
+              className={cls}
               aria-pressed={on}
               /* **中身が無い段は押せない。** 押しても出すものが無い
                  (効かない操作を見せない・CLAUDE.md) */
               disabled={n === 0}
               onClick={() => onPick(on ? null : it.id)}
             >
-              <strong>{n}</strong>
-              <span className="wb-stat-label">{it.label}</span>
+              {body}
             </button>
           )
         })}

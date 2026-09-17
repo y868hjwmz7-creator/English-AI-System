@@ -89,6 +89,15 @@ export default function ReviewScope({
   forms = null, form = null, onForm = null,
   orders = null, order = null, onOrder = null,
   repeat = false, onRepeat = null,
+  /**
+   * **ほかの道具**(聞き流す・紙に出す・手で入れる)。
+   *
+   * トップ画面を無くしたので(第5.167節)、**置き場所がここしか無い。**
+   * 「出しかた」と同じ吹き出しに入れる —— 浮くものを2つにしない。
+   *
+   * **渡さなければ、この段ごと出ない**(効かない場所を作らない)。
+   */
+  tools = null,
 }) {
   const today = todayKey()
   const counts = scopeCounts(rows, today)
@@ -230,6 +239,14 @@ export default function ReviewScope({
             <>
               <p className="rscope-head">しぼる</p>
               {children}
+            </>
+          )}
+          {/* **ほかの道具も、この中**(第5.167節)。トップ画面が無くなり、
+              聞き流す・紙に出す・手で入れるの置き場所がここだけになった */}
+          {tools && (
+            <>
+              <p className="rscope-head">ほかの道具</p>
+              {tools}
             </>
           )}
           {/* **畳んだ形では、ここに1行を出す。** 始める前は下に出ているが、

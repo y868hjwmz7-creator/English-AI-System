@@ -35,6 +35,8 @@ import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import FrameParts from './components/FrameParts.jsx'
+import BookShelf from './components/BookShelf.jsx'
+import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
@@ -1072,6 +1074,64 @@ const SHIFT = (
   </div>
 )
 
+/* **冊をえらぶ「本棚」**(`?screen=shelf`・第5.167節)。
+
+   トップ画面を無くしたので、冊をえらぶのは**この1枚だけ**になった。
+   ここが崩れると、**どの帳面をやるかを決める場所が無くなる。**
+
+   **本物の部品を、そのまま描く**(`BookShelf` + `FrameParts`)。
+   どちらも props で受け取るだけなので Supabase が要らない ——
+   **骨組みと本物が食い違いようがない**(CLAUDE.md
+   「骨組みは、本物と1文字も違えない」で何度も転んだところ)。
+
+   **いちばん危ない形を、必ず1つ置く**(CLAUDE.md)。
+   ・冊は**長い名前**(「自分の Quick Response 帳」)を含める
+   ・件数のある冊と**無い冊**を混ぜる(`0 語` と嘘をつかないほう)
+   ・**いま開いている冊の行の中**に、中の区切り(`sub`)を入れる ——
+     ここが本体と 0px で接していないかを測る
+   ・`?books=one` で**冊が1つだけ**(えらぶ場所そのものが出ない)  */
+const SHELF = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <section className="card">
+      <h2 className="card-title">どの帳面をやりますか</h2>
+      <BookShelf
+        books={q.get('books') === 'one'
+          ? [{ id: 'my', label: '自分の Quick Response 帳' }]
+          : [
+            { id: 'my', label: '自分の Quick Response 帳' },
+            { id: 'nf', label: 'Native Flow' },
+            { id: 'frame', label: '66 の型' },
+          ]}
+        book="frame"
+        unit="問"
+        /* **数の無い冊を混ぜる。** 全部に数があると、
+           「数えられなかったら出さない」を壊しても緑のままになる */
+        counts={{ my: 128, frame: 2872 }}
+        sub={(
+          <FrameParts parts={FRAME_PARTS} counts={frameQrCounts()}
+                      picked={FIRST_FRAME_PART} onPick={() => {}}
+                      forms={frameQrForms(FIRST_FRAME_PART)}
+                      form={null} onForm={() => {}} />
+        )}
+        onPick={() => {}} />
+    </section>
+  </div>
+)
+
+/* **達成具合**(`?screen=progress`・第5.167節)。
+
+   単語帳と Quick Response の `×` と「おわる」の行き先である。
+   **ここが行き止まりになると、練習へ戻る道が無くなる。**
+
+   本物の `Progress` をそのまま描く。Supabase が無い環境では
+   「溜まりません」の側が出るが、**練習へ戻るボタンはどちらにも出る** ——
+   測りたいのはそこ(行き止まりを作らない・すき間ゼロにしない)である。 */
+const PROGRESS = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <Progress onGo={() => {}} />
+  </div>
+)
+
 const NFASSIGN = (
   <NativeFlowAssign units={NATIVE_FLOW_UNITS}
                     on={q.get('on') === 'none' ? [] : [2, 5]}
@@ -1261,7 +1321,11 @@ function NavFootScreen() {
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'shift'
+  q.get('screen') === 'progress'
+    ? PROGRESS
+    : q.get('screen') === 'shelf'
+    ? SHELF
+    : q.get('screen') === 'shift'
     ? SHIFT
     : q.get('screen') === 'shelfassign'
     ? <ShelfAssignScreen />
