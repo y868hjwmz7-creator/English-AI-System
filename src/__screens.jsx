@@ -633,6 +633,10 @@ const QR_PAIR = {
     + 'so that we can move the agenda around and start with '
     + 'the items that do not need you in the room.',
   speaker: 'Mika',
+  /* **ヒント**(2026-09)。**いちばん長い実物の型の名前**(30 字)を入れる ——
+     短い名前だと、狭い画面ですき間が詰まっても緑のままになる
+     (**いちばん危ない形を、検証の中に必ず置く**・CLAUDE.md) */
+  hint: 'I was wondering if you could ~',
 }
 
 /* 2つの Quick Response を、**それぞれ本物の置かれ方**で描く。
@@ -656,7 +660,11 @@ const qrScreen = (plain) => (
           型の札を出すのは**復習(`plain`)のときだけ** —— 教材の中の
           Quick Response(紙・集中モード)には `showFrame` を渡していない。
           骨組みだけが本物と食い違うと、検証は何も守らない */}
-      <QrCard pair={QR_PAIR} no={2} onAnswer={() => {}} showFrame={plain} />
+      {/* **ヒントも、本物と同じ渡し方で**(2026-09 実機・利用者の指摘
+          「ヒント内の『ヒント』の表示が崩れている」)。
+          押した状態は本物でも呼ぶ側が持つので、ここでも props で渡す */}
+      <QrCard pair={QR_PAIR} no={2} onAnswer={() => {}} showFrame={plain}
+              hintOn={plain} onHint={() => {}} />
     </section>
   </FocusFrame>
 )

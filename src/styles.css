@@ -6703,6 +6703,14 @@ button.wbfilter-ctl { text-align: left; }
   line-height: 1.5; text-align: center;
 }
 .qr-frame-name {
+  /* **この字を縮ませない。** flex の子は既定で縮む(`flex-shrink: 1`)。
+
+     **これは用心であって、直した跡ではない。** 2026-09 に利用者から
+     「ヒント内の『ヒント』の表示が崩れている」と言われたが、
+     **こちらでは再現できなかった**(320〜390px で測って、
+     箱も中身も1行のまま)。原因が分かっていないものを
+     「直した」と書かない(CLAUDE.md)。 */
+  flex: 0 0 auto;
   font-size: var(--fs-11); font-weight: 700; opacity: .75;
 }
 /* **ヒントも、この札を使う**(2026-09 利用者の指定
