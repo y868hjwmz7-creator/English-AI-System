@@ -46,10 +46,11 @@ import { FRAME_SHIFTS, SHIFT_SCENES, shiftCount } from '../src/data/frameShift.j
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 import { SAME_SHAPE, frameFormOf } from '../src/lib/frameMatch.js'
 import {
-  SWAP_GROUP, shiftQuestions, shiftTargetOf, swapFillers, swapQuestions,
+  SWAP_GROUP, sayQuestions, shiftQuestions, shiftTargetOf, swapFillers, swapQuestions,
 } from '../src/lib/frameShift.js'
+import { SAY_BLANK, SAY_BUNDLES, SAY_LISTS } from '../src/data/frameSay.js'
 import { SWAP_BLANK, SWAP_FRAMES, SWAP_SLOTS, swapFrameOf } from '../src/data/phraseSwap.js'
-import { SUBJ_KINDS } from '../src/data/swapParts.js'
+import { SUBJ_KINDS, SWAP_CLAUSES, SWAP_VERBS } from '../src/data/swapParts.js'
 import { NOUN_PHRASES } from '../src/data/nounPhrases.js'
 import { nativeFlowRows } from '../src/data/nativeFlow.js'
 import {
@@ -201,9 +202,15 @@ head('日本語 → 英語の問(骨と肉)')
   const flib = code('src/lib/frameShift.js')
   ok(/SUBJ_KINDS\.get\(f\.pick\)/.test(flib),
     '主語は、骨が呼んだ性格だけから出している(その1行が在る)')
+  /* **肉の数が、そのまま問の数になる**(2026-09 利用者の指定
+     「型毎の問題数を大幅に増やしてください」)。
+     部品を減らすと**その席を持つ骨すべてが痩せる**ので、ここで下限を持つ。
+     **床は、いまの数より下に置く** —— 1つ足すたびに赤くなっては困る */
   const kinds = [...SUBJ_KINDS.values()]
-  ok(kinds.every((k) => k.length >= 8), 'どの性格の主語も 8 つ以上ある',
+  ok(kinds.every((k) => k.length >= 20), 'どの性格の主語も 20 以上ある',
     kinds.map((k) => k.length).join(' / '))
+  ok(SWAP_VERBS.length >= 40, `動詞が 40 以上ある(${SWAP_VERBS.length})`)
+  ok(SWAP_CLAUSES.length >= 30, `短い文が 30 以上ある(${SWAP_CLAUSES.length})`)
   /* **どの主語も単数。** 現在形の骨に複数を入れると
      `Rising costs requires …` になる */
   const plural = kinds.flat().filter((x) => /s$/.test(x.en) && !/ss$/.test(x.en))
@@ -303,8 +310,14 @@ head('Quick Response の行にしているか')
   ok(new Set(sayQ.map((q) => q.ja)).size < sayQ.length,
     '言い換えは、同じ日本語が2度以上出る(だからヒントと絞り込みが要る)',
     `別の日本語 ${new Set(sayQ.map((q) => q.ja)).size} / 問 ${sayQ.length}`)
-  ok(new Set(shiftQuestions().map((q) => q.ja)).size
-     === new Set(sayQ.map((q) => q.ja)).size, 'お題の日本語を、書き換えていない')
+  /* **手で書いた 37 のお題を、1つも落としていない**(2026-09)。
+     束(`frameSay.js`)で数を増やしたときに、**あちらを消して
+     置き換えていないか**を見る —— 場面のある本物の言い回しは、
+     機械で組んだ文では代われない(**勝手に消さない**・CLAUDE.md) */
+  const sayJa = new Set(sayQ.map((q) => q.ja))
+  const lostJa = shiftQuestions().filter((q) => !sayJa.has(q.ja)).map((q) => q.qid)
+  ok(lostJa.length === 0, '手で書いたお題の日本語が、1つも落ちていない',
+    `\n    ${lostJa.slice(0, 5).join(' / ')}`)
 
   /* **行の形。** `nativeFlowRows()` の欄を**1つも欠かさない** ——
      欠けると `QrReview.jsx` が書き分けを持つ(数え方が2通りになる)。
@@ -346,6 +359,96 @@ head('Quick Response の行にしているか')
   ok(FRAME_PART_KEY.startsWith('eas.'), '覚えておく鍵の名前が、ほかとそろっている')
   ok(new Set([FRAME_PART_KEY, FRAME_FORM_KEY, QR_HINT_KEY]).size === 3,
     '覚えておく鍵が、3つとも別のもの')
+}
+
+/* ────────────────────────────────────────────────────────────
+   ⑦-2 言い換えの束(2026-09 利用者の指定「型毎の問題数を大幅に増やして」)
+   ──────────────────────────────────────────────────────────── */
+head('言い換えの束')
+{
+  /* **束の型は、66 型の一覧にあるか。** 無ければ「型が2つある」ことになる */
+  const forms = SAY_BUNDLES.flatMap((b) => (b.says ?? []).map((x) => x.form))
+  const stray = [...new Set(forms)].filter((f) => !FORMS.includes(f))
+  ok(stray.length === 0, '束の型が、66 型の一覧にある', `\n    ${stray.join(' / ')}`)
+  ok(SAY_BUNDLES.every((b) => b.id && b.ja && (b.says ?? []).length),
+    'どの束にも、id と日本語と型がある')
+  ok(new Set(SAY_BUNDLES.map((b) => b.id)).size === SAY_BUNDLES.length,
+    '束の id が重なっていない')
+  ok(SAY_BUNDLES.every((b) => SAY_LISTS.includes(b.list)),
+    '肉の出どころが、一覧にあるものだけ')
+  ok(SAY_BUNDLES.filter((b) => b.list === 'own').every((b) => (b.own ?? []).length),
+    '自前の肉を使う束は、肉を持っている')
+  /* **日本語にも英文にも、入れる場所が1つずつあるか** */
+  const noBlank = SAY_BUNDLES.filter(
+    (b) => !b.ja.includes(SAY_BLANK) || (b.says ?? []).some((x) => !x.en.includes(SAY_BLANK)),
+  ).map((b) => b.id)
+  ok(noBlank.length === 0, 'どの束にも、肉を入れる場所がある', `\n    ${noBlank.join(' / ')}`)
+
+  const qs = sayQuestions()
+  ok(qs.length > 0, `束から ${qs.length} 問できている`)
+  /* **出した問は、どれも狙った型に当たるか。** ここが安全弁である */
+  const bad = qs.filter((q) => frameFormOf(q.ex) !== shiftTargetOf(q.form))
+  ok(bad.length === 0, '束から出した問が、どれも狙った型に当たる',
+    `\n    ${bad.slice(0, 4).map((q) => q.form + ' | ' + q.ex).join('\n    ')}`)
+  /* **落とした組み合わせが多すぎないか。** 決まりを1つ変えて大半が落ちても、
+     上の見張りは緑のままである(**0問でも緑**・CLAUDE.md) */
+  const plan = SAY_BUNDLES.reduce((n, b) => {
+    const meat = b.list === 'own' ? (b.own ?? []).length
+      : b.list === 'clause' ? SWAP_CLAUSES.length
+      : b.list === 'noun' ? NOUN_PHRASES.length : SWAP_VERBS.length
+    return n + meat * (b.says ?? []).length
+  }, 0)
+  ok(qs.length > plan * 0.7, `落とした組み合わせは ${plan - qs.length} 通り(全 ${plan})`)
+
+  /* **文は大文字で始まる。** `___ is important.` のように肉が頭に来る骨が
+     あるので、そのままだと `working from home is important.` になる。
+     **名詞のかたまりの型(関係詞・同格など)は小文字で正しい** ——
+     だから「文の形のものだけ」を見る */
+  const lower = qs.filter((q) => /[.?]$/.test(q.ex) && /^[a-z]/.test(q.ex))
+  ok(lower.length === 0, '文の形の問は、大文字で始まる',
+    `\n    ${lower.slice(0, 4).map((q) => q.ex).join('\n    ')}`)
+  /* **日本語に英語を混ぜない**(写すだけの練習になる) */
+  const enJa = qs.filter((q) => /[A-Za-z]{3,}/.test(q.ja)).map((q) => q.qid)
+  ok(enJa.length === 0, 'お題に英語が出ていない', `\n    ${enJa.slice(0, 3).join(' / ')}`)
+  ok(new Set(qs.map((q) => q.qid)).size === qs.length, '問の id が重なっていない')
+
+  /* **同じ内容を、別の型で。** それが言い換えである ——
+     型が1つしかない束ばかりなら、それは「日本語 → 英語」と同じものになる。
+     **「有る」と「無い」の両方を見る**(1つだけの束も、わざと置いてある) */
+  const many = SAY_BUNDLES.filter((b) => (b.says ?? []).length >= 2)
+  ok(many.length > SAY_BUNDLES.length / 2,
+    `型が2つ以上ある束が ${many.length} / ${SAY_BUNDLES.length}`)
+}
+
+/* ────────────────────────────────────────────────────────────
+   ⑦-3 型ごとの問数(2026-09 利用者の指定「大幅に増やしてください」)
+   ──────────────────────────────────────────────────────────── */
+head('型ごとの問数')
+{
+  /**
+   * どの型にも、これだけは要る。**下回ったら赤くする。**
+   *
+   * **床は中身ごとに違う。** 日本語 → 英語は骨1本に肉を掛けるので厚く、
+   * 言い換えは**相方の無い型**(`名詞化` など)が薄い ——
+   * そこへ同じ床を当てると、**厚いほうの痩せを見逃す。**
+   */
+  const FLOOR = { swap: 16, say: 8 }
+  for (const part of FRAME_PARTS.map((p) => p.id)) {
+    const forms = frameQrForms(part)
+    const thin = forms.filter((f) => f.n < FLOOR[part])
+    ok(thin.length === 0, `${part} … どの型にも ${FLOOR[part]} 問以上ある`,
+      `\n    ${thin.map((f) => `${f.form} ${f.n}問`).join(' / ')}`)
+    /* **数え上げと、実際に出る行が合うか。**
+       別々に数えると、**札には 52 問と出て 51 問しか出てこない**
+       (2026-09 に踏んだ)。**数え方を2通り持たない**(CLAUDE.md) */
+    const rows = frameQrRows([], { today: '', part })
+    ok(forms.reduce((n, f) => n + f.n, 0) === rows.length,
+      `${part} … 札の数を足すと、出てくる行の数と合う`,
+      `${forms.reduce((n, f) => n + f.n, 0)} / ${rows.length}`)
+    const one = forms[0]
+    ok(frameQrRows([], { today: '', part, form: one.form }).length === one.n,
+      `${part} … 1つの型で絞っても、札の数と合う`)
+  }
 }
 
 /* ────────────────────────────────────────────────────────────

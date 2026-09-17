@@ -66,7 +66,7 @@
  * ============================================================================
  */
 import { SWAP_FRAMES } from '../data/phraseSwap.js'
-import { shiftQuestions, swapQuestions } from './frameShift.js'
+import { sayQuestions, shiftQuestions, swapQuestions } from './frameShift.js'
 import { FRAME_FORMS, FRAME_INDEX } from './frameMatch.js'
 import { normEn } from './textNorm.js'
 
@@ -101,11 +101,47 @@ export const framePartTitle = (id) => {
  *
  * @param part `'swap'` / `'say'`。知らない id は**空**(当てずっぽうで出さない)
  */
+/**
+ * 組み立てた問の控え。**同じものを何度も組み立てない。**
+ *
+ * 5,400 問を `frameFormOf()` に通すので、1回あたり 80ms ほどかかる。
+ * 画面は数え上げ・型の一覧・行の3か所から呼ぶので、**控えが無いと
+ * 開くたびに 3 回走る**(CLAUDE.md「CPU 2秒」の考え方)。
+ * 中身はファイルから作るだけで**いつ呼んでも同じ**なので、控えて安全である。
+ */
+const PLANNED = new Map()
+
 export function frameQuestions(part = FIRST_FRAME_PART) {
+  const kept = PLANNED.get(part)
+  if (kept) return kept
+  /* **同じ英文は、ここで1つに落とす。**
+     数え上げ(`frameQrCounts` / `frameQrForms`)も行(`frameQrRows`)も
+     **この1つの道を通る** —— 別々に数えると、
+     **札には 52 問と出て、出てくるのは 51 問**になる(2026-09 に踏んだ)。
+     **数え方を2通り持たない**(CLAUDE.md)。
+     **先に書いてあるほうを残す**(手で書いたお題 → 束の順) */
+  const out = []
+  const used = new Set()
+  for (const q of framePlan(part)) {
+    const key = normEn(q.en)
+    if (!key || used.has(key)) continue
+    used.add(key)
+    out.push({ ...q, key })
+  }
+  PLANNED.set(part, out)
+  return out
+}
+
+/** 重なりを落とす前の問。**`frameQuestions()` だけが呼ぶ** */
+function framePlan(part) {
   /* **型は、問が持っているものをそのまま渡す。**
      英文から見分け直さない(**もらえる正解を捨てない**・CLAUDE.md)*/
   if (part === 'say') {
-    return shiftQuestions().map((q) => ({ ja: q.ja, en: q.ex, form: q.form }))
+    /* **手で書いた 37 のお題が先。** あちらは場面のある本物の言い回しで、
+       束(`frameSay.js`)は数である。**順を入れ替えない** ——
+       並べ方を「教材の順」にした人は、良いほうから始まる */
+    return [...shiftQuestions(), ...sayQuestions()]
+      .map((q) => ({ ja: q.ja, en: q.ex, form: q.form }))
   }
   if (part !== 'swap') return []
   const out = []
@@ -167,8 +203,8 @@ export function frameQrForms(part = FIRST_FRAME_PART) {
  * **`nativeFlowRows()` と同じ形を返す。** ここがずれると、
  * `QrReview.jsx` が書き分けを持つことになる(**数え方を2通り持たない**)。
  *
- * **同じ英文は二度出さない。** いまは1つも重なっていないが、
- * 部品を足した日に重なりうる —— 重なると**同じ札が2枚出て、数も二重**になる。
+ * **同じ英文は二度出さない**(落とすのは `frameQuestions()` 1か所)。
+ * 重なると**同じ札が2枚出て、数も二重**になる。
  */
 export function frameQrRows(
   seen = [], { today = '', part = FIRST_FRAME_PART, form = null } = {},
@@ -178,18 +214,14 @@ export function frameQrRows(
   )
   const title = framePartTitle(part)
   const out = []
-  const used = new Set()
   for (const q of frameQuestions(part)) {
     /* **型で絞る**(`null` ならぜんぶ)。知らない型を渡せば0問になる ——
        **黙って「ぜんぶ」に落とさない**(選んでいないものが出るほうが怖い)。
        画面の側が、出せる型かどうかを先に見ている */
     if (form && q.form !== form) continue
-    const key = normEn(q.en)
-    if (!key || used.has(key)) continue
-    used.add(key)
-    const s = map.get(key) ?? null
+    const s = map.get(q.key) ?? null
     out.push({
-      en_norm: key,
+      en_norm: q.key,
       en: q.en,
       ja: q.ja,
       /** **ヒント。** 文言は `frameHintOf()` 1か所(画面に書き写さない) */

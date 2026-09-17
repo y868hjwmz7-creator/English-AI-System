@@ -43,8 +43,11 @@
  * ============================================================================
  */
 import { FRAME_SHIFTS } from '../data/frameShift.js'
+import { SAY_BUNDLES } from '../data/frameSay.js'
 import { NOUN_PHRASES } from '../data/nounPhrases.js'
-import { SWAP_FRAMES, swapFrameOf, swapJa, swapSentence } from '../data/phraseSwap.js'
+import {
+  SWAP_BLANK, SWAP_FRAMES, swapFrameOf, swapJa, swapSentence,
+} from '../data/phraseSwap.js'
 import { SUBJ_KINDS, SWAP_CLAUSES, SWAP_VERBS } from '../data/swapParts.js'
 import { FRAME_INDEX, SAME_SHAPE, frameFormOf } from './frameMatch.js'
 
@@ -95,6 +98,63 @@ export function shiftQuestions({ scene = null, group = null } = {}) {
 
 /** 名詞句を入れ替える練習の、id の頭。**2か所に書かない** */
 export const SWAP_GROUP = 'swap'
+
+/** 束から作った言い換えの、id の頭。**2か所に書かない** */
+export const SAY_GROUP = 'say'
+
+/**
+ * **言い換えの束 → 1問ずつ**(2026-09 利用者の指定
+ * 「日本語→英語 / 言い換え ともに型毎の問題数を大幅に増やしてください」)。
+ *
+ * 内容を1つ書けば、そこに乗る**型の数 × 肉の数**だけ問ができる
+ * (`swapQuestions()` とまったく同じ掛け算)。
+ *
+ * **機械で確かめてから出す。** 組み立てた英文が狙いの型に見えないものは
+ * **はじめから出さない** —— ここがこの練習の安全弁である。
+ *
+ * **日本語は型をまたいで同じ。** それが「言い換え」だからである
+ * (どの型で言うかは、ヒントと型の絞り込みが伝える)。
+ */
+export function sayQuestions() {
+  const out = []
+  for (const b of SAY_BUNDLES) {
+    /* **肉は `swapParts.js` から借りる。** 束だけの肉は `own` に書いてある */
+    const meat = b.list === 'own' ? (b.own ?? [])
+      : b.list === 'clause' ? SWAP_CLAUSES
+      : b.list === 'noun' ? NOUN_PHRASES.map((x) => ({ en: x.p, ja: x.n }))
+      : SWAP_VERBS
+    for (const say of b.says ?? []) {
+      const want = shiftTargetOf(say.form)
+      for (const x of meat) {
+        /* **原形か ~ing か。** 同じ動詞の別の形を、束の側が選ぶ ——
+           `S involves ~ing` と `S requires 人 to do` は**同じ内容**だが、
+           入る形が違う(**~ing を機械で作らない**・`swapParts.js`) */
+        const filler = b.list === 'verb' ? (say.ing ? x.ing : x.bare) : x.en
+        if (!filler) continue
+        /* **文の頭に来た肉は、大文字にする。**
+           `動名詞` の骨は `___ is important.` なので、
+           そのままだと `working from home is important.` と小文字で始まる。
+           **見分けはできてしまうので、検証では捕まらない** —— 実物を読んで
+           初めて分かる類の崩れである(まず測る・CLAUDE.md) */
+        const head = String(say.en).startsWith(SWAP_BLANK)
+        const put = head ? filler.charAt(0).toUpperCase() + filler.slice(1) : filler
+        const en = String(say.en).replace(SWAP_BLANK, put)
+        /* **確かめてから出す。** ここが、この練習の安全弁である */
+        if (frameFormOf(en) !== want) continue
+        out.push({
+          qid: `${SAY_GROUP}:${b.id}:${say.form}:${filler}`,
+          id: b.id,
+          scene: null,
+          ja: String(b.ja).replace(SWAP_BLANK, x.ja),
+          form: say.form,
+          ex: en,
+          groupId: SAY_GROUP,
+        })
+      }
+    }
+  }
+  return out
+}
 
 /**
  * **骨に入れる肉**を、席の種類(`slot`)から引く。
