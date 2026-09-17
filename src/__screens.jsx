@@ -34,7 +34,7 @@ import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
-import FrameShift from './components/FrameShift.jsx'
+import FrameParts from './components/FrameParts.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
@@ -56,6 +56,7 @@ import ShelfAssign from './components/ShelfAssign.jsx'
 import NativeFlowUnits from './components/NativeFlowUnits.jsx'
 import NativeFlowAssign from './components/NativeFlowAssign.jsx'
 import { NATIVE_FLOW_UNITS } from './data/nativeFlow.js'
+import { FIRST_FRAME_PART, FRAME_PARTS, frameQrCounts } from './lib/frameQr.js'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
 import NavSettings from './components/NavSettings.jsx'
@@ -1035,14 +1036,24 @@ const NFUNITS = (
   </section>
 )
 
-/* **型シフト**(2026-09)。**本物の部品を、そのまま描く。**
-   `FrameShift` は props も Supabase も要らない ——
-   お題はファイル(`src/data/frameShift.js`)に持っているからである。
-   だから**骨組みと本物が食い違いようがない**(CLAUDE.md
-   「骨組みは、本物と1文字も違えない」で何度も転んだところ) */
+/* **66 の型の、中身をえらぶ欄**(2026-09)。**本物の部品を、そのまま描く。**
+
+   型シフトの画面は廃止した(利用者の指定「型のトレーニングの UI は廃止して、
+   quick response の UI にそのままコンテンツを移してください」)。
+   残ったのはこの欄だけで、`FrameParts` は props で受け取るだけなので
+   Supabase が要らない ——**骨組みと本物が食い違いようがない**(CLAUDE.md
+   「骨組みは、本物と1文字も違えない」で何度も転んだところ)。
+
+   **問数も本物から数える**(`frameQrCounts()`)—— 書き写すと、
+   部品を足した日にここだけ古くなる */
 const SHIFT = (
   <div className="app-main" style={{ padding: 16 }}>
-    <FrameShift />
+    <section className="card">
+      <h2 className="card-title">Quick Response(復習)</h2>
+      <FrameParts parts={FRAME_PARTS} counts={frameQrCounts()}
+                  picked={q.get('picked') === 'say' ? 'say' : FIRST_FRAME_PART}
+                  onPick={() => {}} />
+    </section>
   </div>
 )
 

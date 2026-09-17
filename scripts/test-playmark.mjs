@@ -2172,10 +2172,16 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       /* **この節には `readD` が無い**(下のほうの節だけが持っていた)。
          借りずに、その場で読む —— **無い名前を呼ぶと、そこで落ちて
          残りの検証がまるごと走らなくなる**(実際にそうなった) */
-      const fshift = readFileSync(new URL('../src/components/FrameShift.jsx',
+      /* **66 の型は、Quick Response の冊になった**(2026-09 利用者の指定
+         「型のトレーニングの UI は廃止して、quick response の UI に
+         そのままコンテンツを移してください」)。
+         専用の画面が無くなったので、段の札も答えのボタンも
+         **ふだんの Quick Response とまったく同じもの**である。
+         残った欄(`FrameParts`)の言葉だけを、ここで見る */
+      const fparts = readFileSync(new URL('../src/components/FrameParts.jsx',
         import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-      ok(/できた/.test(fshift) && !/言えた/.test(fshift),
-        '復習の数 … 66 の型の画面も、同じ言葉を使っている(「言えた」は残っていない)')
+      ok(/できた/.test(fparts) && !/言えた/.test(fparts),
+        '復習の数 … 66 の型の欄も、同じ言葉を使っている(「言えた」は残っていない)')
 
       /* **紙にも、同じ言葉が出るか**(2026-09)。
          `Wordbook.jsx` の `VIEWS` が段の名前を**書き写していた**ので、

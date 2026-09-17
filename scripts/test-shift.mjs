@@ -1,27 +1,38 @@
 /**
- * **型シフトの検証**(2026-09 利用者の指定「画期的なトレーニングを作りたいです」)。
+ * **66 の型(Quick Response の冊)の検証**。
  *
  * ============================================================================
+ * 【2026-09 に、専用の画面をやめた】(利用者の指定)
+ *
+ *   > マイクで「話す」の機能は入りません。削除です。全ての型で削除してください。
+ *   > そして、型のトレーニングの UI は廃止して、
+ *   > quick response の UI にそのままコンテンツを移してください
+ *
+ *   だから、この検証も**採点(`judgeShift`)を見るのをやめた** ——
+ *   採点はマイクのためだけに在り、まとめて消したからである。
+ *   代わりに見るのは「**問が Quick Response の行になっているか**」である。
+ *
  * 【この検証が守るもの】
  *
  *   ① お題の答えが、**狙った型に当たる**こと。
- *      1つでも当たらなければ、ゲストは正しく言えても ○ をもらえない
+ *      1つでも当たらなければ、お手本のほうが間違っていることになる
  *   ② **素の文が、どの型にも当たらない**こと。
- *      素の文がすでにその型なら、「言い直す」練習が成り立たない
+ *      素の文がすでにその型なら、「言い換え」の練習が成り立たない
  *   ③ 66 型を**1つも落としていない**こと
  *      (**一覧を勝手に減らさない**・`.claude/rules/common.md`)
  *   ④ 型の名前が `sentenceFrames.js` と**1文字も違わない**こと。
  *      違うと「型が2つある」ことになり、どちらが本物か分からなくなる
- *   ⑤ 判定の**4つの道が全部出る**こと。
- *      `ok` しか出ない形・`unsure` しか出ない形に書き換えても、
- *      片方しか見ていなければ緑のままになる(CLAUDE.md)
- *   ⑥ **画面が判定を書き写していない**こと。
- *      `frameMatch` を直に触っていたら、置く場所の数だけ食い違う
+ *   ⑤ 出す問が、**機械で確かめてある**こと(`swapQuestions()` の安全弁)。
+ *      確かめずに出して「ちがう型です」と言ったら、
+ *      正しく言えた人に嘘をつくことになる
+ *   ⑥ 行の形が **`nativeFlowRows()` と1文字も違わない**こと。
+ *      ずれると `QrReview.jsx` が書き分けを持つ(数え方が2通りになる)
+ *   ⑦ **マイクも打ち込む欄も、どこにも無い**こと
  *
  * 【いちばん危ない形を、検証の中に必ず置く】(CLAUDE.md)
  *
- *   空の文字列・知らない型・`SAME_SHAPE` の組・素の文そのもの・
- *   **0問になる絞り込み**。
+ *   空の文字列・知らない型・知らない中身の id・`SAME_SHAPE` の組・
+ *   **同じ英文が二度**・**同じ日本語が二度**。
  *   「無ければ素通り」する形だけを並べると、壊しても緑のままになる。
  *
  * 【値を書き写さない。性質で見る】(CLAUDE.md)
@@ -30,26 +41,28 @@
  *   見るのは「型の数と、覆った型の数が同じか」という**関係**のほう。
  * ============================================================================
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { FRAME_SHIFTS, SHIFT_SCENES, shiftCount } from '../src/data/frameShift.js'
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 import { SAME_SHAPE, frameFormOf } from '../src/lib/frameMatch.js'
 import {
-  SHIFT_EMPTY, SHIFT_NOPHRASE, SHIFT_OK, SHIFT_OTHER, SHIFT_UNSURE, SWAP_GROUP,
-  judgeShift, shiftQuestions, shiftSay, shiftSceneOf, shiftMap,
-  shiftTargetOf, shiftTrainings, swapFillers, swapFrames, swapQuestions,
+  SWAP_GROUP, shiftQuestions, shiftTargetOf, swapFillers, swapQuestions,
 } from '../src/lib/frameShift.js'
 import { SWAP_BLANK, SWAP_FRAMES, SWAP_SLOTS, swapFrameOf } from '../src/data/phraseSwap.js'
 import { SUBJ_KINDS } from '../src/data/swapParts.js'
-import { FIRST_STAGE, SHIFT_STAGES, stageOf } from '../src/data/frameTraining.js'
 import { NOUN_PHRASES } from '../src/data/nounPhrases.js'
-import { MOVE_OF_GROUP, SHIFT_MOVES, moveOfGroup } from '../src/data/frameTraining.js'
+import { nativeFlowRows } from '../src/data/nativeFlow.js'
+import {
+  FIRST_FRAME_PART, FRAME_PARTS, FRAME_PART_KEY,
+  framePartOf, framePartTitle, frameQrCounts, frameQrRows, frameQuestions,
+} from '../src/lib/frameQr.js'
 
 const ROOT = new URL('..', import.meta.url).pathname
 /** **コメントを落としてから数える。** 説明文にも同じ語が出てくる(CLAUDE.md) */
 const code = (p) => readFileSync(ROOT + p, 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+const raw = (p) => readFileSync(ROOT + p, 'utf8')
 
 let ng = 0
 const ok = (cond, label, extra = '') => {
@@ -126,49 +139,15 @@ head('お題そのものの形')
   ok(badScene.length === 0, '場面の id が、札の一覧にある', `\n    ${badScene.join(' / ')}`)
 
   const empty = FRAME_SHIFTS.filter((t) => !t.ja?.trim() || !t.base?.trim() || !t.shifts?.length)
-  ok(empty.length === 0, 'お題・素の文・言い直す先が、どれも空でない',
+  ok(empty.length === 0, 'お題・素の文・言い換える先が、どれも空でない',
     `\n    ${empty.map((t) => t.id).join(' / ')}`)
 
-  /* **実在の名前を入れない**(`speechStyles.js` / `sentenceFrames.js` と同じ決まり)。
-     ここでは「よく使われる会社名らしきもの」を機械で当てられないので、
-     **数えられることだけ**を見る —— 英文が英字で書かれているか */
   const notEn = shiftQuestions().filter((q) => !/[A-Za-z]/.test(q.ex)).map((q) => q.qid)
   ok(notEn.length === 0, 'お手本が英語で書かれている', `\n    ${notEn.join(' / ')}`)
 }
 
 /* ────────────────────────────────────────────────────────────
-   ⑤ 判定の4つの道が、全部出るか
-      **片方だけ見ると、どこにも ○ を出さない形にしても緑になる**(CLAUDE.md)
-   ──────────────────────────────────────────────────────────── */
-head('判定の4つの道が、全部出るか')
-{
-  const target = 'It is X that / who ~'
-  const cases = [
-    [SHIFT_OK, 'It is the price that worries me.'],
-    [SHIFT_OTHER, 'What worries me is the price.'],
-    /* **いちばん危ない形。** 素の文は正しい英語だが、型ではない ——
-       ここで ✕ を出したら、正しく言えた人に嘘をつくことになる */
-    [SHIFT_UNSURE, 'The price worries me.'],
-    [SHIFT_EMPTY, ''],
-    [SHIFT_EMPTY, '   '],
-  ]
-  for (const [want, said] of cases) {
-    const got = judgeShift(said, target).verdict
-    ok(got === want, `「${said || '(空)'}」 → ${want}`, `いま ${got}`)
-  }
-  /* **4つが全部ちがう文字列であること。** 同じにすると、上の5件は
-     全部通るのに、画面では何も区別できなくなる */
-  ok(new Set([SHIFT_OK, SHIFT_OTHER, SHIFT_UNSURE, SHIFT_EMPTY]).size === 4,
-    '4つの判定が、それぞれ別のもの')
-
-  /* **知らない型を渡しても落ちない**(既定は「できない」側) */
-  ok(judgeShift('It is the price that worries me.', 'そんな型は無い').verdict === SHIFT_OTHER,
-    '知らない型を渡しても落ちず、○ にもしない')
-  ok(judgeShift(null, null).verdict === SHIFT_EMPTY, 'null を渡しても落ちない')
-}
-
-/* ────────────────────────────────────────────────────────────
-   ⑥ `SAME_SHAPE`(見分けられないと宣言してある組)を吸収しているか
+   ⑤ `SAME_SHAPE`(見分けられないと宣言してある組)を吸収しているか
       **画面にこの事情を持ち込まない**
    ──────────────────────────────────────────────────────────── */
 head('SAME_SHAPE を吸収しているか')
@@ -176,148 +155,18 @@ head('SAME_SHAPE を吸収しているか')
   ok(SAME_SHAPE.size > 0, '見分けられない組が、宣言されている')
   for (const [from, to] of SAME_SHAPE) {
     ok(shiftTargetOf(from) === to.as, `「${from}」は「${to.as}」として見る`)
-    /* **その型を狙ったお題が、ちゃんと ○ になるか。**
+    /* **その型を狙ったお題のお手本が、読み替え先に当たるか。**
        読み替えを外すと、ここだけが赤くなる */
     const q = shiftQuestions().find((x) => x.form === from)
-    if (q) ok(judgeShift(q.ex, from).verdict === SHIFT_OK, `「${from}」のお題が ○ になる`)
+    if (q) ok(frameFormOf(q.ex) === to.as, `「${from}」のお手本が「${to.as}」に当たる`)
   }
+  ok(shiftTargetOf('そんな型は無い') === 'そんな型は無い', '知らない型は、そのまま返す')
 }
 
 /* ────────────────────────────────────────────────────────────
-   ⑦ 見せる言葉(`shiftSay`)
-      **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md)
+   ⑥ 日本語 → 英語の問(骨に肉を入れて、数をこなす)
    ──────────────────────────────────────────────────────────── */
-head('見せる言葉')
-{
-  const t = 'It is X that / who ~'
-  const sOk = shiftSay(judgeShift('It is the price that worries me.', t))
-  const sOther = shiftSay(judgeShift('What worries me is the price.', t))
-  const sUnsure = shiftSay(judgeShift('The price worries me.', t))
-  const sEmpty = shiftSay(judgeShift('', t))
-
-  const tones = [sOk.tone, sOther.tone, sUnsure.tone, sEmpty.tone]
-  ok(new Set(tones).size === 4, '4つの見せ方が、それぞれ別のもの', tones.join(' / '))
-  ok(new Set([sOk.head, sOther.head, sUnsure.head]).size === 3,
-    '見出しが、3つとも別の文')
-  ok(!sEmpty.head, '何も言っていないときは、何も出さない')
-
-  /* **✕ と書かない。**「間違い」と言い切らない —— `frameMatch` は迷ったら黙る */
-  ok(!/間違|誤り|✕|×/.test(sUnsure.head + sUnsure.body),
-    '「たしかめられない」を、間違い扱いしていない',
-    `${sUnsure.head} / ${sUnsure.body}`)
-  ok(!/間違|誤り|✕|×/.test(sOther.head + sOther.body),
-    '「ちがう型」を、間違い扱いしていない',
-    `${sOther.head} / ${sOther.body}`)
-  /* **ちがう型のときは、いま何になっているかを言う**(黙って落とさない) */
-  ok(sOther.body.includes('What ~ is …'), 'ちがう型のとき、いまの型の名前を出す', sOther.body)
-
-  /* 画面にそのまま出る文字列に `**` を混ぜない(CLAUDE.md) */
-  const texts = [sOk, sOther, sUnsure].flatMap((x) => [x.head, x.body])
-  ok(!texts.some((x) => x.includes('**')), '画面に出る文に ** を混ぜていない')
-}
-
-/* ────────────────────────────────────────────────────────────
-   ⑧ 絞り込みと数え上げ
-      **0問になる絞り込みを、検証の中に必ず置く**(CLAUDE.md)
-   ──────────────────────────────────────────────────────────── */
-head('カテゴリーごとのトレーニング')
-{
-  const all = shiftQuestions()
-  ok(all.length === shiftCount(), '問の数が、お題の数え上げと合う')
-
-  /* **組は `sentenceFrames.js` が持っている。** ここで別の分け方を作らない */
-  const groups = []
-  for (const sec of FRAME_SECTIONS) for (const g of sec.groups) groups.push(g)
-
-  const ts = shiftTrainings()
-  ok(ts.length === groups.length,
-    `トレーニングが ${ts.length} 本(組の数と同じ)`, `組は ${groups.length}`)
-  /* **入れ替えは、別の入口として出さない**(2026-09 利用者の指定
-     「どうするのが学習者が一番使いやすく…」)。
-     組の中の**段2**になったので、一覧には出てこない */
-  ok(!ts.some((t) => t.id === SWAP_GROUP),
-    '入れ替えは、一覧の1枚として出していない(組の中の段2にした)')
-
-  /* **並びを変えていないか。** 問を書いた順に並べると、型の一覧と食い違う */
-  ok(ts.map((t) => t.id).join(',') === groups.map((g) => g.id).join(','),
-    '並びが sentenceFrames.js のまま(並べ替えていない)')
-
-  /* **いちばん効いた見張り。** 組ごとの問の数が、その組の型の数と合うか。
-     `what 節`(②)の問が、読み替え先の `What ~ is …`(③)の組へ
-     入り込んでいたのを、これで見つけた(2026-09) */
-  const wrong = ts
-    .filter((t) => t.total !== groups.find((g) => g.id === t.id).rows.length)
-    .map((t) => `${t.label} 問${t.total} / 型${groups.find((g) => g.id === t.id).rows.length}`)
-  ok(wrong.length === 0, '組ごとの問の数が、その組の型の数と合う',
-    `\n    ${wrong.join('\n    ')}`)
-
-  /* **組を足したら「やること」も足す。** 足すまで赤い
-     (`check.sql` と移行の関係とまったく同じ作法) */
-  const noMove = groups.filter((g) => !moveOfGroup(g.id)).map((g) => g.id)
-  ok(noMove.length === 0, '14 の組すべてに「やること」がある', `\n    ${noMove.join(' / ')}`)
-  /* **④ 名詞句を入れ替えるだけは、`sentenceFrames.js` の組ではない。**
-     組は 14 のままで、練習だけが1つ多い(**名指しで外す**) */
-  /* **Quick Response だけは、`sentenceFrames.js` の組ではない。**
-     組は 14 のままで、やることが1つ多い(**名指しで外す**) */
-  const NOT_GROUP = [SWAP_GROUP]
-  const strayMove = [...MOVE_OF_GROUP.keys()]
-    .filter((g) => !NOT_GROUP.includes(g) && !groups.some((x) => x.id === g))
-  ok(strayMove.length === 0, '知らない組を勝手に増やしていない', `\n    ${strayMove.join(' / ')}`)
-  ok(NOT_GROUP.every((g) => MOVE_OF_GROUP.has(g)),
-    '組ではない練習にも「やること」がある')
-  /* **使われていない「やること」を置き去りにしない**(逆も見る) */
-  const usedMoves = new Set([...groups.map((g) => moveOfGroup(g.id)?.id),
-    ...NOT_GROUP.map((g) => moveOfGroup(g)?.id)])
-  const idle = SHIFT_MOVES.filter((m) => !usedMoves.has(m.id)).map((m) => m.id)
-  ok(idle.length === 0, 'どの「やること」も、いずれかの組で使われている',
-    `\n    ${idle.join(' / ')}`)
-
-  /* **指示と理由が、どれも空でない。** 空だと画面に何も出ない */
-  const thin = SHIFT_MOVES.filter((m) => !m.label?.trim() || !m.ask?.trim() || !m.why?.trim())
-  ok(thin.length === 0, 'やることの名前・指示・理由が、どれも空でない',
-    `\n    ${thin.map((m) => m.id).join(' / ')}`)
-  /* 画面にそのまま出る文字列に ** を混ぜない(CLAUDE.md) */
-  ok(!SHIFT_MOVES.some((m) => `${m.label}${m.ask}${m.why}`.includes('**')),
-    'やることの文に ** を混ぜていない')
-
-  /* **カードに出す型の名前が、その組のものだけか** */
-  const badForms = ts.filter((t) => {
-    const mine = new Set(groups.find((g) => g.id === t.id).rows.map((r) => r.form))
-    return t.forms.some((f) => !mine.has(f)) || t.forms.length !== t.total
-  }).map((t) => t.label)
-  ok(badForms.length === 0, 'カードの型の名前が、その組のものと過不足なく合う',
-    `\n    ${badForms.join(' / ')}`)
-
-  /* **足して全部になるか。** どこかの組に入っていない問があれば合わない */
-  const byGroup = ts.reduce((n, t) => n + shiftQuestions({ group: t.id }).length, 0)
-  ok(byGroup === all.length, '組ごとに数えて足すと、全部になる', `${byGroup} / ${all.length}`)
-
-  const byScene = SHIFT_SCENES.reduce((n, x) => n + shiftQuestions({ scene: x.id }).length, 0)
-  ok(byScene === all.length, '場面ごとに数えて足すと、全部になる', `${byScene} / ${all.length}`)
-
-  /* **いちばん危ない形。** 知らない組・場面を渡すと 0 問になる ——
-     0 のときに「ぜんぶ返す」形になっていたら、ここで赤くなる */
-  ok(shiftQuestions({ scene: 'そんな場面は無い' }).length === 0,
-    '知らない場面で絞ると 0 問になる(黙ってぜんぶ返さない)')
-  ok(shiftQuestions({ group: 'そんな組は無い' }).length === 0,
-    '知らない組で絞ると 0 問になる')
-  /* **絞らないときは、ぜんぶ返す**(逆も見る) */
-  ok(shiftQuestions({ scene: null, group: null }).length === all.length,
-    '絞らなければ、ぜんぶ返る')
-
-  ok(shiftSceneOf('そんな場面は無い') === null, '知らない場面は null(当てずっぽうで返さない)')
-  ok(shiftSceneOf(SHIFT_SCENES[0].id)?.label === SHIFT_SCENES[0].label, '知っている場面は引ける')
-  ok(moveOfGroup('そんな組は無い') === null, '知らない組のやることは null')
-
-  /* **言えた数が、渡した控えのとおりに数えられるか**(0 と null を取り違えない) */
-  const one = all[0]
-  const withOne = shiftTrainings(new Set([one.qid]))
-  ok(withOne.reduce((n, t) => n + t.done, 0) === 1, '言えた問が 1 と数えられる')
-  ok(shiftTrainings().every((t) => t.done === 0), '控えを渡さなければ 0 のまま')
-  ok(shiftTrainings(null).every((t) => t.done === 0), 'null を渡しても落ちない')
-}
-
-head('入れ替えて数をこなす練習')
+head('日本語 → 英語の問(骨と肉)')
 {
   /* **66 型ぜんぶに骨がある**(2026-09 利用者の指定
      「和らげと名詞句以外にも沢山型があったはずです……全てを網羅してください」)。
@@ -349,8 +198,6 @@ head('入れ替えて数をこなす練習')
   const flib = code('src/lib/frameShift.js')
   ok(/SUBJ_KINDS\.get\(f\.pick\)/.test(flib),
     '主語は、骨が呼んだ性格だけから出している(その1行が在る)')
-  /* **性格ごとの数がそろっているか。** 1つの性格に偏ると、
-     その性格を呼ぶ骨だけ問が多くなる */
   const kinds = [...SUBJ_KINDS.values()]
   ok(kinds.every((k) => k.length >= 8), 'どの性格の主語も 8 つ以上ある',
     kinds.map((k) => k.length).join(' / '))
@@ -368,32 +215,32 @@ head('入れ替えて数をこなす練習')
   ok(thin.length === 0, 'どの骨も 8 問以上ある',
     `\n    ${thin.map((f) => `${f.id} ${swapQuestions({ frame: f.id }).length}問`).join(' / ')}`)
 
-  ok(SWAP_FRAMES.length >= 5, `骨が ${SWAP_FRAMES.length} 本ある`)
-  /* **骨の型は、66 型の一覧にあるか。** 無ければ「型が2つある」ことになる */
-  const strayForm = SWAP_FRAMES.filter((f) => !FORMS.includes(f.form)).map((f) => f.form)
-  ok(strayForm.length === 0, '骨の型が、66 型の一覧にある', `\n    ${strayForm.join(' / ')}`)
   /* **入れる場所が、骨にも お題にも1つずつあるか** */
   const noBlank = SWAP_FRAMES.filter(
     (f) => !f.en.includes(SWAP_BLANK) || !f.ja.includes(SWAP_BLANK),
   ).map((f) => f.id)
-  ok(noBlank.length === 0, '骨にも お題にも、名詞句を入れる場所がある',
-    `\n    ${noBlank.join(' / ')}`)
+  ok(noBlank.length === 0, '骨にも お題にも、入れる場所がある', `\n    ${noBlank.join(' / ')}`)
   ok(new Set(SWAP_FRAMES.map((f) => f.id)).size === SWAP_FRAMES.length, '骨の id が重なっていない')
   ok(swapFrameOf('そんな骨は無い') === null, '知らない骨は null(当てずっぽうで返さない)')
 
-  /* **出した問は、どれも機械で確かめられるか。**
+  /* **出した問は、どれも機械で確かめてあるか。**
      ここが、この練習の安全弁である —— 確かめられないものを出して
-     「ちがう型です」と言ったら、正しく言えた人に嘘をつくことになる */
+     「ちがう型です」と言ったら、正しく言えた人に嘘をつくことになる。
+     **採点は消したが、出す前の確認は残っている** */
   let bad = 0
   let made = 0
   for (const f of SWAP_FRAMES) {
     const qs = swapQuestions({ frame: f.id })
     made += qs.length
     for (const q of qs) {
-      if (judgeShift(q.ex, q.form, { phrase: q.phrase }).verdict !== SHIFT_OK) bad += 1
+      if (frameFormOf(q.ex) !== shiftTargetOf(q.form)) bad += 1
+      if (!q.ex.toLowerCase().includes(String(q.phrase).toLowerCase())) bad += 1
     }
   }
-  ok(bad === 0, `出した ${made} 問が、どれも機械で ○ になる`, `だめだったもの ${bad}`)
+  ok(bad === 0, `出した ${made} 問が、どれも狙った型に当たり、入れた言葉も入っている`,
+    `だめだったもの ${bad}`)
+  ok(/frameFormOf\(en\) !== want/.test(flib),
+    '確かめてから出している(安全弁の1行が在る)')
 
   /* **落とした組み合わせが多すぎないか。** 決まりを1つ変えて
      大半が落ちても、上の見張りは緑のままである(**0問でも緑**)。
@@ -402,13 +249,6 @@ head('入れ替えて数をこなす練習')
   const full = SWAP_FRAMES.reduce((n, f) => n + swapFillers(f).length, 0)
   ok(made > full * 0.9, `落とした組み合わせは ${full - made} 通りだけ(全 ${full})`)
   ok(NOUN_PHRASES.length > 0, '名詞句の部品表が空でない')
-
-  /* **札。** 問が出ない骨は札にも出さない(行き止まりを作らない) */
-  const tags = swapFrames()
-  ok(tags.length === SWAP_FRAMES.length, `骨の札が ${tags.length} 枚(問の出る骨ぶん)`)
-  ok(tags.every((t) => t.count > 0 && t.groupId && t.groupLabel),
-    'どの札も、問の数と型の組を持っている')
-  ok(tags.reduce((n, t) => n + t.count, 0) === made, '札の数を足すと、問の数と合う')
 
   /* **骨をえらばなければ、先頭の骨**(行き止まりを作らない) */
   ok(swapQuestions().length === swapQuestions({ frame: SWAP_FRAMES[0].id }).length,
@@ -419,232 +259,140 @@ head('入れ替えて数をこなす練習')
   /* **問の形。** お題に英語が出ていたら、写すだけの練習になる */
   const q0 = swapQuestions({ frame: 'about' })[0]
   ok(!/[A-Za-z]{3,}/.test(q0.ja), 'お題に英語が出ていない(写すだけにならない)')
-  ok(q0.base.includes(SWAP_BLANK), '渡す骨に、入れる場所が残っている')
-  ok(q0.give && q0.give !== 'もとの言い方', '渡しているものの札が、ふだんと違う')
-  ok(q0.phrase && q0.ex.toLowerCase().includes(q0.phrase.toLowerCase()),
-    'お手本に、入れるはずの名詞句が入っている')
+  ok(q0.base.includes(SWAP_BLANK), '骨に、入れる場所が残っている')
+  ok(q0.qid.startsWith(`${SWAP_GROUP}:`), '問の id の頭が、書き写さずに付いている')
   ok(new Set(swapQuestions({ frame: 'about' }).map((x) => x.qid)).size
      === swapQuestions({ frame: 'about' }).length, '問の id が重なっていない')
-
-  /* **型は合っているが、名詞句が入っていない**という道が出るか。
-     **これが出ないと、骨さえ言えれば ○ になってしまう** */
-  const noPhrase = judgeShift('When it comes to money, we need to be careful.',
-    q0.form, { phrase: q0.phrase })
-  ok(noPhrase.verdict === SHIFT_NOPHRASE, '名詞句が入っていなければ ○ にしない',
-    noPhrase.verdict)
-  /* **ふだんの型シフトは、この道を通らない**(逆も見る) */
-  ok(judgeShift('When it comes to money, we need to be careful.', q0.form).verdict === SHIFT_OK,
-    '名詞句を渡さなければ、これまでどおり ○ になる')
-  /* **5つの判定が、それぞれ別のもの** */
-  ok(new Set([SHIFT_OK, SHIFT_OTHER, SHIFT_UNSURE, SHIFT_EMPTY, SHIFT_NOPHRASE]).size === 5,
-    '5つの判定が、それぞれ別のもの')
-  const sayNo = shiftSay(noPhrase)
-  ok(sayNo.tone === 'nophrase' && sayNo.head && sayNo.body.includes(q0.phrase),
-    '入れるはずの名詞句を、知らせの中に出す', `${sayNo.head} / ${sayNo.body}`)
-  ok(!/間違|誤り|✕|×/.test(sayNo.head + sayNo.body),
-    '「名詞句が入っていない」を、間違い扱いしていない')
-
-  /* **画面が、この練習を出しているか** */
-  const view = code('src/components/FrameShift.jsx')
-  ok(/swapQuestions\(/.test(view), '画面が swapQuestions() を呼んでいる')
-  ok(/swapFrames\(/.test(view), '画面が骨の札を出している')
-  /* **66 本を1列に並べない。** その組の骨だけを出す */
-  ok(/myBones/.test(view), 'その組の骨だけを出している')
-  ok(/activeFrame/.test(view), 'えらんでいなければ、出ている中の先頭を使う')
-  ok(/phrase: q\?\.phrase/.test(view), '画面が、入れる名詞句を判定に渡している')
-  /* **英語を見せない。** 見せると写すだけになる */
-  ok(!/\{q\.phrase\}/.test(view), '入れる名詞句の英語を、画面に出していない')
-  /* **同じことを2つ見せない。** 骨に型がそのまま書いてある */
-  ok(/\{!q\.phrase && \(/.test(view), '入れ替えの練習では、型の名前を重ねて出さない')
-  /* **入れ替えは、組の中の「段2」である**(別の入口ではない) */
-  ok(/stage === 'swap'/.test(view), '入れ替えを、段2として出している')
-  /* **段の一覧と順は `frameTraining.js` から引く。** 画面に書き写さない ——
-     書き写すと、順を変えた日に片方だけ古くなる */
-  ok(/SHIFT_STAGES\.map/.test(view), '段の札を SHIFT_STAGES から組み立てている')
-  ok(!/'見分ける'|'入れ替える'|'言い直す'/.test(view), '段の名前を画面に書き写していない')
-}
-
-head('3つの段(一本の道)')
-{
-  /* **やさしい順に3つ。** 組を開けばいつもこの順で並ぶ(2026-09 利用者の指定
-     「どうするのが学習者が一番使いやすく、仕組みを理解しやすいでしょうか」) */
-  /* **2026-09、利用者が実際に使って「見分ける」を廃止した。**
-     残るのは Quick Response(日本語 → 英語)→ 言い直す の2段 */
-  ok(SHIFT_STAGES.length === 2, `段が ${SHIFT_STAGES.length} つある`)
-  ok(SHIFT_STAGES.map((x) => x.id).join(',') === 'swap,say',
-    '段の順が「Quick Response → 言い直す」(やさしい順)',
-    SHIFT_STAGES.map((x) => x.id).join(','))
-  ok(SHIFT_STAGES.every((x, i) => x.no === i + 1), '段に 1・2・3 の番号が振ってある')
-  ok(SHIFT_STAGES.every((x) => x.label?.trim() && x.hint?.trim()),
-    'どの段にも、名前と一言がある')
-  ok(new Set(SHIFT_STAGES.map((x) => x.label)).size === SHIFT_STAGES.length,
-    '段の名前が、どれも別')
-  ok(FIRST_STAGE === SHIFT_STAGES[0].id, '開いたときは、いちばんやさしい段から')
-  ok(stageOf('そんな段は無い') === null, '知らない段は null(当てずっぽうで返さない)')
-
-  /* **どの組でも、2段とも問がある。** 片方でも 0 なら、その組は道が切れている */
-  const thinStage = []
-  for (const t of shiftTrainings()) {
-    const n1 = swapFrames().filter((f) => f.groupId === t.id)
-      .reduce((n, f) => n + f.count, 0)
-    const n2 = t.total
-    if (!n1 || !n2) thinStage.push(`${t.label} ${n1}/${n2}`)
-  }
-  ok(thinStage.length === 0, '14 の組すべてで、2段とも問がある',
-    `\n    ${thinStage.join('\n    ')}`)
-
-  /* **画面が、段で出し分けているか** */
-  const sv = code('src/components/FrameShift.jsx')
-  /* **`open` の中を名指しで見る。** ただ `setStage(FIRST_STAGE)` を探すと、
-     `close` にも同じ行があるので**外しても緑のまま**になる
-     ——「赤チェックで赤くならないのは、壊し方が違うという知らせ」(CLAUDE.md) */
-  ok(/const open = \(id\) => \{ setPick\(id\); setStage\(FIRST_STAGE\)/.test(sv),
-    '組を開いたら、いちばんやさしい段から始まる')
-  ok(/fshift-stage--on/.test(sv), 'いま開いている段が、見て分かる')
-  ok(/aria-pressed=\{stage === s\.id\}/.test(sv), '段の札が、押した状態を伝える')
-  /* **見分ける(4択)は廃止した**(2026-09 利用者の指定)。
-     道具も画面も残っていないことを、機械で確かめる ——
-     **消したつもりで残っている**のがいちばん分かりにくい */
-  ok(!/FrameQuiz|frameQuiz|quizQuestions/.test(sv), '画面に、見分けるの名残が無い')
 }
 
 /* ────────────────────────────────────────────────────────────
-   ⑨ 型ごとの到達度(次の段「型の地図」の土台)
+   ⑦ Quick Response の行にしているか(`frameQr.js`)
    ──────────────────────────────────────────────────────────── */
-head('型ごとの到達度')
+head('Quick Response の行にしているか')
 {
-  const none = shiftMap(new Set())
-  ok(none.length === FORMS.length, `型の数だけ行が出る(${none.length})`)
-  ok(none.every((m) => m.done === 0), '何も言えていなければ、0 のまま')
+  /* **中身は2つ。並べ替えない**(利用者の指定「『日本語→英語』と『言い換え』を
+     コンテンツとして追加します」)。**id も名前も、ここでしか持たない** */
+  ok(FRAME_PARTS.map((p) => p.id).join('/') === 'swap/say',
+    '中身は2つ(日本語 → 英語 → 言い換え の順)', FRAME_PARTS.map((p) => p.id).join('/'))
+  ok(FIRST_FRAME_PART === FRAME_PARTS[0].id, 'いちばんやさしい中身は、先頭から引いている')
+  ok(FRAME_PARTS.every((p) => p.label && p.lead), 'どの中身にも、名前と1行の説明がある')
+  ok(framePartOf('そんな中身は無い') === null, '知らない中身は null(当てずっぽうで返さない)')
 
-  const one = shiftQuestions()[0]
-  const some = shiftMap(new Set([one.qid]))
-  ok(some.find((m) => m.form === one.form).done === 1, '言えた問が 1 と数えられる')
-  ok(some.filter((m) => m.done > 0).length === 1, '言えていない型まで数えていない')
-  /* **Set 以外を渡しても落ちない**(読めなかったときに来る) */
-  ok(shiftMap(null).every((m) => m.done === 0), 'null を渡しても落ちない')
+  const counts = frameQrCounts()
+  ok(counts.swap > 0 && counts.say > 0, `どちらの中身にも問がある(${counts.swap} / ${counts.say})`)
+  /* **知らない id では、1問も出さない。**「無ければ素通り」を作らない ——
+     ここを「先頭に落とす」にすると、選んでいないものが黙って出る */
+  ok(frameQuestions('そんな中身は無い').length === 0, '知らない中身では、1問も出さない')
+  ok(frameQuestions('swap').length === counts.swap, '日本語 → 英語の数が、数え上げと合う')
+
+  /* **言い換えは、型を問に書く。** 書かないと同じ日本語が二度出て、
+     どちらの答えか分からない。**「出る」と「出ない」の両方を見る** */
+  const sayQ = frameQuestions('say')
+  ok(sayQ.every((q) => /の型で/.test(q.ja)), '言い換えの問には、どの型で言うかが書いてある')
+  ok(new Set(sayQ.map((q) => q.ja)).size === sayQ.length,
+    '言い換えの問は、同じ日本語が二度出ない',
+    `${new Set(sayQ.map((q) => q.ja)).size} / ${sayQ.length}`)
+  /* **型を書かなければ、本当に重なるのか。** 重ならないなら、
+     この見張りは何も守っていない(**赤チェックの代わり**) */
+  ok(new Set(shiftQuestions().map((q) => q.ja)).size < sayQ.length,
+    '型を書かなければ、日本語は重なる(だから書いている)')
+  const swapQ = frameQuestions('swap')
+  ok(!swapQ.some((q) => /の型で/.test(q.ja)),
+    '日本語 → 英語のほうには、型を書き足していない(型は1つに決まっている)')
+
+  /* **行の形が `nativeFlowRows()` と1文字も違わない。**
+     ずれると `QrReview.jsx` が書き分けを持つ(数え方が2通りになる) */
+  const nf = Object.keys(nativeFlowRows([], { today: '2026-01-01' })[0]).sort().join(',')
+  const fr = Object.keys(frameQrRows([], { today: '2026-01-01' })[0]).sort().join(',')
+  ok(nf === fr, '行の欄が、Native Flow と1文字も違わない', `\n    NF: ${nf}\n    型: ${fr}`)
+
+  const rows = frameQrRows([], { today: '2026-01-01', part: 'say' })
+  ok(rows.length === counts.say, '言い換えの行の数が、問の数と合う')
+  ok(rows.every((r) => r.en_norm && r.en && r.ja), 'どの行にも、鍵と英文と日本語がある')
+  ok(rows.every((r) => r.status === 'unknown' && r.box === 0),
+    '覚え具合が無ければ「まだ」から始まる')
+  ok(rows.every((r) => r.due_on === '2026-01-01'), '覚え具合が無ければ、今日から出る')
+  ok(rows.every((r) => r.material_title === framePartTitle('say')),
+    '紙と絞り込みに出す名前が、中身ごとに付いている', rows[0]?.material_title)
+  ok(framePartTitle('swap') !== framePartTitle('say'), '中身ごとに、別の名前になる')
+  /* **同じ英文が二度出ない**(CLAUDE.md・`dedup_test.sql` と同じ考え方) */
+  const allRows = [...frameQrRows([], { today: '', part: 'swap' }), ...rows]
+  const dup = allRows.length - new Set(allRows.map((r) => r.en_norm)).size
+  ok(new Set(rows.map((r) => r.en_norm)).size === rows.length, '同じ英文が二度出ない')
+  ok(/used\.has\(key\)/.test(code('src/lib/frameQr.js')),
+    '重なりを落とす1行が在る(部品を足した日に効く)', `いまの重なり ${dup}`)
+
+  /* **覚え具合が付くか。** 付かなければ、3枚の札がいつも「まだ」になる */
+  const seen = [{ en_norm: rows[0].en_norm, status: 'known', box: 6, due_on: '2026-12-31' }]
+  const withSeen = frameQrRows(seen, { today: '2026-01-01', part: 'say' })
+  ok(withSeen[0].status === 'known' && withSeen[0].box === 6,
+    '覚え具合があれば、そのまま乗る', `${withSeen[0].status} / ${withSeen[0].box}`)
+  ok(withSeen.slice(1).every((r) => r.status === 'unknown'), 'ほかの行は動かない')
+  /* **空・null でも落ちない** */
+  ok(frameQrRows(null, {}).length > 0, '覚え具合が null でも、問は返る')
+  ok(frameQrRows([], { part: 'そんな中身は無い' }).length === 0, '知らない中身では、行も0')
+
+  ok(FRAME_PART_KEY.startsWith('eas.'), '覚えておく鍵の名前が、ほかとそろっている')
 }
 
 /* ────────────────────────────────────────────────────────────
-   ⑩ 画面が、判定を書き写していないか
-      **算段だけ直っていても、画面が呼んでいなければ何も変わらない**
+   ⑧ 画面 —— 冊として通っているか。マイクが消えているか
    ──────────────────────────────────────────────────────────── */
-head('画面が、判定を書き写していないか')
+head('Quick Response の冊として通っているか')
 {
-  const view = code('src/components/FrameShift.jsx')
+  ok(!existsSync(ROOT + 'src/components/FrameShift.jsx'),
+    '型シフトの画面そのものが無い(廃止した)')
+  ok(!existsSync(ROOT + 'src/data/frameTraining.js'),
+    '型シフトの段・やることの一覧も無い(あの画面の持ちもの)')
+  ok(!/fshift/.test(raw('src/styles.css')), '型シフトの見た目の指定も残っていない')
 
-  /* **`frameMatch` を直に触らない。** 触ると、判定が2か所になる */
-  ok(!/frameMatch|frameFormOf|FRAME_INDEX/.test(view),
-    '画面が frameMatch を直に触っていない')
-
-  /* **使っている形で数える。** 名前が出てくるだけでは足りない(CLAUDE.md) */
-  ok(/judgeShift\(/.test(view), '画面が judgeShift() を呼んでいる')
-  ok(/shiftSay\(/.test(view), '画面が shiftSay() を呼んでいる')
-  ok(/shiftQuestions\(/.test(view), '画面が shiftQuestions() を呼んでいる')
-  ok(/shiftTrainings\(/.test(view), '画面が shiftTrainings() を呼んでいる')
-
-  /* **カテゴリーの名前も、やることも、画面で書き写さない** */
-  ok(!/モノ・ことを主語にして/.test(view), '「やること」の文を画面に書き写していない')
-  /* **席の種類ごとに、画面で書き分けない。** 何を入れるかは骨の札が言う */
-  ok(!/主語を入れる|動詞のかたまりを入れる/.test(view),
-    '入れるものの名前を、画面に書き写していない')
-  /* **Quick Response では、もとの英文を出さない**(2026-09 利用者の指定)。
-     出すのは日本語のお題と型の名前だけ ——
-     英文を見せると、写すだけの練習になる */
-  ok(/\{!q\.phrase && \(/.test(view), 'Quick Response では、もとの英文を出さない')
-  ok(/q\.phrase \? 'この型で英語を言う'/.test(view), '型は、どちらの段でも出す')
-  ok(/move\?\.ask/.test(view), '「やること」は frameTraining.js から引いている')
-
-  /* **一覧から入る形になっているか。** 66 問を1本の列にすると、
-     何の練習をしているのかが最後まで出てこない(2026-09 に一度そうした) */
-  ok(/fshift-card/.test(view), 'トレーニングの一覧(カード)がある')
-  ok(/トレーニングの一覧へ/.test(view), 'ドリルから一覧へ戻れる(行き止まりを作らない)')
-
-  /* **判定の文字列を書き写していない。** `'ok'` と直に書くと、
-     あちらを変えた日に画面だけ古くなる */
-  ok(!/['"]unsure['"]|['"]other['"]/.test(view),
-    '画面が判定の文字列を書き写していない')
-
-  /* **お手本を、はじめから出していない。** 出ていたら練習にならない */
-  ok(/openEx/.test(view), 'お手本は、押したときだけ出す')
-
-  /* **マイクの知らせを、その場に出す**(画面のいちばん下に出さない) */
-  ok(/micNote/.test(view), 'マイクの失敗を、その操作をした場所に出す')
-
-  /* ── **書き込む欄を置かない**(2026-09 実機・利用者の指定)──────
-
-       > 書き込む欄はいらないですね。基本的にタイプするのは面倒なので
-       > 型シフトトレーニングについては書き込みはなしを共通仕様にしてください
-
-     これは**話す練習**である。打たせると、打つ速さの練習になってしまう。
-     **共通仕様**なので、14 のカテゴリーでも名詞句の入れ替えでも同じ ——
-     この画面に `input` / `textarea` が1つでもあれば赤くする。 */
-  ok(!/<textarea/.test(view), '型シフトに、書き込む欄(textarea)を置いていない')
-  ok(!/<input/.test(view), '型シフトに、書き込む欄(input)を置いていない')
-  ok(!/onChange=/.test(view), '打った文字を受け取っていない')
-  /* **聞き取った文は、必ず見せる。**
-     何と聞こえたか分からないと、判定に納得できない */
-  ok(/fshift-heard/.test(view), '聞き取った文を、画面に出している')
-
-  /* **対応していない端末を、行き止まりにしない**(CLAUDE.md)。
-     マイクが無い端末では「言えた」を自分で押せる。**打たせないのは同じ** */
-  ok(/isRecognitionSupported\(\) \? \(/.test(view),
-    'マイクが使えるかで、出すものを変えている')
-  ok(/markDone\(q\.qid\)/.test(view),
-    'マイクが使えない端末でも、言えたを控えられる(行き止まりを作らない)')
-  ok(/!isRecognitionSupported\(\) && \(/.test(view),
-    'マイクが使えないときは、その理由を画面に出す')
-  /* **控えに足すのは1か所だけ。** 2か所あると数え方が食い違う */
-  ok((view.match(/saveShiftDone\(/g) || []).length === 1,
-    '言えた問を控えるのは、1か所だけ')
-
-  /* **絞り込みは畳んである**(390px で問が画面の外へ押し出されるため)。
-     ただし **黙って絞らない** —— 掛かっている条件は畳んだままでも見せる */
-  ok(/<details className="card fshift-filter">/.test(view), '絞り込みは畳んである')
-  /* **掛かっている絞り込みを、畳んだままでも見せる**(黙って絞らない)。
-     **「出る」と「出ない」の両方を見る** —— 絞っていなければ札は出さない */
-  ok(/<summary className="fshift-sum">[\s\S]*?finder-badge[\s\S]*?<\/summary>/.test(view),
-    '畳んだ見出しの中に、掛かっている絞り込みの札がある')
-  ok(/: scene && \(/.test(view), '絞っていないときは、札を出さない')
-}
-
-/* ────────────────────────────────────────────────────────────
-   ⑪ 画面が、アプリに組み込まれているか
-      **作っただけで、どこからも開けない**を防ぐ
-   ──────────────────────────────────────────────────────────── */
-head('画面が、アプリに組み込まれているか')
-{
-  /* **サイドバーからは外した**(2026-09 利用者の指定
-     「型シフトはサイドバーからなくして、quick response 内に
-     『66の型のQR』として…追加します」)。
-     **メニューの行き先は増やさない** —— 冊の札で切り替える */
-  const app = code('src/App.jsx')
-  ok(!/id:\s*'shift'/.test(app), 'メニューに行き先を残していない')
-  ok(!/FrameShift/.test(app), 'App.jsx から型シフトの名残が消えている')
-
-  /* **Quick Response の中の冊になっている** */
   const qr = code('src/components/QrReview.jsx')
-  ok(/<FrameShift\s*\/>/.test(qr), 'Quick Response が FrameShift を描いている')
-  ok(/\{ id: 'frame', label: '66 の型' \}/.test(qr), '冊の一覧に「66 の型」が在る')
-  ok(/frameBook = book === 'frame'/.test(qr), '画面の中で id を直に書き比べていない(1か所)')
-  /* **冊は後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
-  ok(qr.indexOf("id: 'nf'") < qr.indexOf("id: 'frame'"),
-    '新しい冊を後ろへ足している(並べ替えていない)')
-  /* **溜まった問が0でも開ける。** 札も中身も、空の判定より前に置く ——
-     うしろだと、溜まっていない人は札そのものが見えず、開く道が無くなる */
-  ok(qr.indexOf('books.length > 1') < qr.indexOf('rows.length === 0'),
-    '冊の札が、「まだ1問も溜まっていません」より前にある(行き止まりを作らない)')
-  ok(qr.indexOf('frameBook ? (') < qr.indexOf('rows.length === 0'),
-    '66 の型の中身も、空の判定より前にある')
+  ok(!/FrameShift/.test(qr), 'Quick Response が、専用の画面を描いていない')
+  ok(/loadFrameQr\(/.test(qr), 'Quick Response が、66 の型を冊として読んでいる')
+  ok(/<QrCard/.test(qr), '1問ぶんは、ふだんの Quick Response と同じ部品')
+  /* **書き分けを持たない。** 読むところ以外で `frameBook` を見ていたら、
+     66 の型だけ別の道を通っていることになる */
+  const frameIfs = (qr.match(/frameBook/g) ?? []).length
+  ok(frameIfs <= 5, `画面が 66 の型を見分けている箇所が ${frameIfs} 個だけ`, String(frameIfs))
+  ok(/<FrameParts/.test(qr), '中身(日本語 → 英語 / 言い換え)をえらぶ欄がある')
+  /* **名前を画面に書き写さない。** 書き写すと、中身を足した日に片方だけ古くなる */
+  ok(!/'日本語 → 英語'|'言い換え'/.test(qr), '中身の名前を、画面に書き写していない')
+  ok(/FRAME_PARTS/.test(qr), '中身の一覧は frameQr.js から引いている')
 
-  /* **骨組み(`__screens.jsx`)にも在る** —— すき間の見張りが通る */
+  /* **マイクも打ち込む欄も無い**(2026-09 利用者の指定
+     「マイクで『話す』の機能は入りません。削除です。全ての型で削除してください」)。
+     **「出る」と「出ない」の両方を見る** —— `QrCard` は
+     そもそも一度も持っていないので、持っていないことを名指しで見る */
+  const card = code('src/components/QrCard.jsx')
+  for (const [name, src] of [['Quick Response の画面', qr], ['1問ぶんの部品', card]]) {
+    ok(!/recognition|SpeechRecognition|MicIcon|話す/.test(src), `${name}にマイクが無い`)
+    ok(!/<textarea|type="text"/.test(src), `${name}に打ち込む欄が無い`)
+  }
+  /* **逆も見る。** 教材の中の練習のマイクまで消していないか
+     (**言われた場所だけを直す**・CLAUDE.md)。
+     消えたのは 66 の型のマイクだけで、**書き取り・音読・文ごとの練習は
+     これまでどおり**である */
+  ok(existsSync(ROOT + 'src/lib/recognition.js'), 'マイクの作法そのものは残っている')
+  const stillMic = ['StepDictation', 'StepSentence', 'PassagePractice']
+    .filter((n) => /lib\/recognition/.test(code(`src/components/${n}.jsx`)))
+  ok(stillMic.length === 3, '教材の中の練習のマイクは、これまでどおり在る',
+    stillMic.join(' / '))
+
+  const app = code('src/App.jsx')
+  ok(!/FrameShift/.test(app), 'App.jsx から型シフトの名残が消えている')
+  ok(!/id: 'shift'/.test(app), 'メニューに行き先を残していない')
+
+  /* **骨組み(`__screens.jsx`)は、本物と1文字も違えない**(CLAUDE.md)。
+     すき間の見張り(`npm run test:bar`)がここを描く */
   const sc = code('src/__screens.jsx')
-  ok(/<FrameShift\s*\/>/.test(sc), '骨組みが、本物の部品をそのまま描いている')
+  ok(!/FrameShift/.test(sc), '骨組みからも、廃止した画面が消えている')
+  ok(/<FrameParts/.test(sc), '骨組みが、本物の部品をそのまま描いている')
+  ok(/frameQrCounts\(\)/.test(sc), '骨組みも、問数を本物から数えている(書き写さない)')
   const bar = code('scripts/test-bar.mjs')
   ok(/\['shift', ''\]/.test(bar), 'すき間の見張りに shift が入っている')
-  ok(!/FrameQuiz|frameQuiz/.test(sc), '骨組みにも、見分けるの名残が無い')
-  ok(!/\['quiz',/.test(bar), 'すき間の見張りからも、見分けるを外している')
 }
 
-console.log(ng === 0 ? '\n✅ 型シフトは、すべて意図どおりです' : `\n❌ ${ng} 件`)
+console.log(ng === 0
+  ? '\n✅ 66 の型(Quick Response の冊)は、すべて意図どおりです'
+  : `\n❌ ${ng} 件`)
 process.exit(ng === 0 ? 0 : 1)

@@ -46,7 +46,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **帯の持ちものの検証** | `npm run test:bar` |
 | **声と役の性別の検証** | `npm run test:voice` |
 | **英文の「型」の見分けの検証** | `npm run test:frame` |
-| **型シフト(言い直しの練習)の検証** | `npm run test:shift` |
+| **66 の型の Quick Response の検証** | `npm run test:shift` |
 | お手本音声の生成(Azure の鍵が必要) | `npm run audio` |
 | **英文の「型」の資料を PDF にする**(トレーナー向け) | `node scripts/make-frames-pdf.mjs` |
 | **英文の「型」のプレゼン資料を作る**(素人向け) | `npm run slides` |
@@ -390,7 +390,7 @@ CLAUDE.md が 1.08MB になり、**毎ターン読み込まれて「prompt is to
 | [`19-記録と集計.md`](docs/notes/19-記録と集計.md) | 取り組みを裏で数える(0022)・集計(0023)・スピーチ練習・データの置き場 |
 | [`20-ファイルに持った教材.md`](docs/notes/20-ファイルに持った教材.md) | Native Flow(Quick Response の冊)・コロケーション基本動詞(単語帳の4冊目)・0062・textNorm.js |
 | [`21-英文の型の見分け.md`](docs/notes/21-英文の型の見分け.md) | 66 型を決まりで見分ける・当てられなければ黙る・目的語の切れ目・名詞のかたまり・型で絞る・test:frame |
-| [`23-型シフト.md`](docs/notes/23-型シフト.md) | 同じ内容を別の型で言い直す・機械で採点する・✕を付けない・66 型を落とさない・カテゴリー別の14トレーニング・書き込む欄を置かない・**2段に減らした**(Quick Response → 言い直す)・test:shift |
+| [`23-型シフト.md`](docs/notes/23-型シフト.md) | 66 型の Quick Response(日本語 → 英語 1,879 / 言い換え 66)・**専用の画面もマイクも採点も廃止**して Quick Response の冊にした・66 型を落とさない・確かめてから出す・test:shift |
 | [`22-パタプラ風の言う練習.md`](docs/notes/22-パタプラ風の言う練習.md) | 言う番から始める・答えを隠す・チャンクで積む・Type A → B・型でまとめる・qrOrder.js |
 | [`24-名詞句.md`](docs/notes/24-名詞句.md) | 名詞句100・副詞句50・コロケーション100(単語帳の冊)・目的語もセット・骨を固定して肉だけ変える・66 型ぜんぶに骨・席の種類・主語の性格・確かめてから出す・nophrase |
 

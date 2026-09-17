@@ -33,7 +33,7 @@ import {
 import Loading from './Loading.jsx'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import ReviewScope from './ReviewScope.jsx'
-import FrameShift from './FrameShift.jsx'
+import FrameParts from './FrameParts.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import {
   QR_GROUPS, SCOPES, groupLead, loadScope, loadSize, qrGroupPool, qrTally,
@@ -41,6 +41,10 @@ import {
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
+import {
+  FIRST_FRAME_PART, FRAME_PARTS, FRAME_PART_KEY, frameQrCounts,
+} from '../lib/frameQr.js'
+import { loadFrameQr } from '../lib/frameQrLoad.js'
 import { NF_UNIT_KEY } from '../data/nativeFlow.js'
 import NativeFlowUnits from './NativeFlowUnits.jsx'
 import QrCard from './QrCard.jsx'
@@ -153,6 +157,26 @@ export default function QrReview({
   const unit = nfUnits.some((u) => u.id === unitWanted) ? unitWanted : null
   const nfUnitIds = nfUnits.map((u) => u.id)
 
+  /**
+   * **66 の型の、どの中身を開いているか**(2026-09 利用者の指定
+   * 「型のトレーニングの UI は廃止して、quick response の UI に
+   * そのままコンテンツを移してください」)。
+   *
+   * `'swap'`(日本語 → 英語)/ `'say'`(言い換え)。
+   * **Native Flow の Unit とまったく同じ作法**である ——
+   * 覚える・知らない id は落とす・変えたら読み直す。
+   * **鍵の名前は `frameQr.js` 1か所。** ここに書き写さない。
+   */
+  const [partWanted, setPartWanted] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FRAME_PART_KEY)
+      return FRAME_PARTS.some((x) => x.id === saved) ? saved : FIRST_FRAME_PART
+    } catch { return FIRST_FRAME_PART }
+  })
+  const part = FRAME_PARTS.some((x) => x.id === partWanted) ? partWanted : FIRST_FRAME_PART
+  /** 中身ごとの問数。**画面で数え直さない**(`frameQr.js` 1か所) */
+  const partCounts = useMemo(() => frameQrCounts(), [])
+
   const [rows, setRows] = useState([])
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState(null)
@@ -224,7 +248,11 @@ export default function QrReview({
          Unit を切り替えるたびに読み直す理由がない。
          **出してよい Unit の外は、そもそも渡さない**(`nfUnitIds`)——
          「ぜんぶ」を選んでいても、指定されていない Unit は出ない */
-      nfBook
+      /* **66 の型も、行の形をそろえてある**(`frameQrRows()`)。
+         だからここから下は、Native Flow と1文字も書き分けていない */
+      frameBook
+        ? loadFrameQr({ learnerId, part })
+        : nfBook
         ? loadNativeFlowQr({ learnerId, units: unit ? [unit] : nfUnitIds })
         : loadQrReviews(learnerId, { status: 'todo', limit: 500 }),
       /* 0042 を貼る前は 0 が返る。**数が出ないだけで、復習はできる** */
@@ -243,7 +271,7 @@ export default function QrReview({
      `nfUnits`(配列)そのものを入れると、描き直すたびに別のものになり、
      読み直しが止まらない(`onlyKey` / `shelfKey` と同じ落とし穴) */
   const nfKey = nfUnitIds.join(',')
-  useEffect(() => { reload() }, [learnerId, book, unit, nfKey])
+  useEffect(() => { reload() }, [learnerId, book, unit, nfKey, part])
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
@@ -428,23 +456,22 @@ export default function QrReview({
   )
 
   /* **Supabase が無くても、66 の型は開ける**(2026-09)。
-     あちらはファイル(`sentenceFrames.js` / `phraseSwap.js`)に書いてあり、
-     サーバーを1回も呼ばない。ここで丸ごと打ち切ると、
-     会社のネットワークが塞がった日に**開く道が無くなる**
-     (**行き止まりを作らない**・CLAUDE.md) */
-  if (!isSupabaseConfigured) {
+     あちらはファイル(`phraseSwap.js` / `frameShift.js`)に書いてあり、
+     **問を出すのにサーバーを1回も呼ばない**(覚え具合が付かないだけ)。
+     ここで丸ごと打ち切ると、会社のネットワークが塞がった日に
+     **開く道が無くなる**(**行き止まりを作らない**・CLAUDE.md)。
+
+     **打ち切らずに、そのまま下の本体へ通す** —— 別の見た目を用意すると、
+     **設定のある人と無い人で画面が2つ**になり、片方だけ古くなる */
+  if (!isSupabaseConfigured && !frameBook) {
     return (
       <section className="card">
         <h2 className="card-title">Quick Response(復習)</h2>
         {bookChips}
-        {frameBook ? (
-          <FrameShift />
-        ) : (
-          <p className="hint">
-            Supabase が設定されていないため、復習は溜まりません。
-            「66 の型」は、設定が無くてもそのまま使えます。
-          </p>
-        )}
+        <p className="hint">
+          Supabase が設定されていないため、復習は溜まりません。
+          「66 の型」は、設定が無くてもそのまま使えます。
+        </p>
       </section>
     )
   }
@@ -601,13 +628,14 @@ export default function QrReview({
           `aria-pressed` の4つで、いまどれを開いているかを示す */}
       {bookChips}
 
-      {/* **66 の型は、溜まった問に関係なく開ける。**
-          だから冊の札も中身も、読み込みや「まだ1問も溜まっていません」より
-          **前**に置く —— うしろに置くと、溜まっていない人は
-          札そのものが見えず、**開く道が無くなる**(行き止まり) */}
-      {frameBook ? (
-        <FrameShift />
-      ) : busy ? (
+      {/* **冊の札は、読み込みや「まだ1問も溜まっていません」より前**に置く。
+          うしろに置くと、まだ溜まっていない人は札そのものが見えず、
+          **ほかの冊を開く道が無くなる**(行き止まり)。
+
+          **「まだ1問も溜まっていません」は自分の帳だけに出る** ——
+          Native Flow と 66 の型はファイルに問を持っているので、
+          `rows` が空になることがない(この道には入らない) */}
+      {busy ? (
         <Loading />
       ) : rows.length === 0 ? (
         <p className="hint">
@@ -659,6 +687,27 @@ export default function QrReview({
                   else localStorage.removeItem(NF_UNIT_KEY)
                 } catch { /* 使えなくても困らない */ }
                 /* Unit が変わると出す問が丸ごと変わる。**やりかけを持ち越さない** */
+                setRun(null); setPending([]); setAt(0); setDone([])
+                setRadio(null); setGroup(null); setFilter(emptyFilter)
+                gradedRef.current = new Set()
+              }}
+            />
+          )}
+
+          {/* **66 の型の、どの中身を練習するか**(2026-09 利用者の指定)。
+              **66 の型を開いているときだけ**出す —— ほかの冊に中身の区切りは
+              無い(効かない操作を見せない・CLAUDE.md)。
+              見た目も置き場所も、**Unit の欄とまったく同じ**(`FrameParts`) */}
+          {frameBook && (
+            <FrameParts
+              parts={FRAME_PARTS}
+              counts={partCounts}
+              picked={part}
+              onPick={(id) => {
+                setPartWanted(id)
+                try { localStorage.setItem(FRAME_PART_KEY, id) }
+                catch { /* 使えなくても困らない */ }
+                /* 中身が変わると出す問が丸ごと変わる。**やりかけを持ち越さない** */
                 setRun(null); setPending([]); setAt(0); setDone([])
                 setRadio(null); setGroup(null); setFilter(emptyFilter)
                 gradedRef.current = new Set()
