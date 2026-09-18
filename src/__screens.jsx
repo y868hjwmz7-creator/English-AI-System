@@ -407,14 +407,16 @@ function BookAssignScreen() {
     <div className="app-main" style={{ padding: 16 }}>
       <section className="card">
         <BookAssign
-          label="14 の型"
+          /* **冊の名前は書き写さない**(第5.177節)。骨組みだけ古い名前に
+             なると、**骨組みでは緑・本物では別の名前**になる */
+          label={FRAME_BOOK_LABEL}
           lead="このゲストの Quick Response の本棚に出ます。トレーナーには、指定にかかわらず出ます。"
           rows={rows}
           busy={q.get('busy') === 'on' ? 'g1' : null}
           note={q.get('note') === 'ng'
             ? { ng: true, text: '1 つまで済みましたが、そこで止まりました: 権限がありません' }
             : q.get('note') === 'ok'
-              ? { text: '山田はなこ さんに「14 の型」を出しました。' }
+              ? { text: `山田はなこ さんに「${FRAME_BOOK_LABEL}」を出しました。` }
               : null}
           onPick={() => {}} />
       </section>

@@ -1023,7 +1023,7 @@ for (const [label, want] of Object.entries(WANT)) {
      以前は「◯ / ◯ 語」の文字を読んでいたが、あれは 2026-09 の指定で
      画面から消えた。**点は1問=1目盛り**なので、同じ数を指している */
   const onlyM = await page.evaluate(() => {
-    const dots = document.querySelectorAll('.wb-run-bar > span').length
+    const dots = document.querySelectorAll('.drill-bar > span').length
     const chip = document.querySelector('.wb-only-label')?.textContent ?? ''
     const back = [...document.querySelectorAll('.wb-only button')]
       .some((b) => (b.textContent ?? '').includes('ぜんぶ'))
@@ -1040,6 +1040,38 @@ for (const [label, want] of Object.entries(WANT)) {
     ng('その教材の語だけ … 単語帳ぜんぶに戻す道が無い', '行き止まりを作らない')
   } else {
     ok(`その教材の語だけ … ${onlyM.dots} 語・札「${onlyM.chip.trim()}」・戻る道あり`)
+  }
+  /* **名前と進み具合は、カードの中の上**(第5.180節・2026-09 実機・
+     利用者の指定「quick response のようにコンテンツの上部にタイトルを、
+     そして単語帳 のように個数のバーを。それで統一してください」)。
+
+     **カードの外に置いていたのが、そろっていなかった理由**である。
+     ソースを読んでも「中か外か」は分からない —— **描いて測る。** */
+  const 頭 = await page.evaluate(() => {
+    const card = document.querySelector('.wordcard')
+    const head = document.querySelector('.drill-head')
+    const title = document.querySelector('.drill-title')
+    const bar = document.querySelector('.drill-bar')
+    if (!card || !head) return null
+    return {
+      中: card.contains(head),
+      題: (title?.textContent ?? '').trim(),
+      /** **題がバーより上にいるか**(並びも見る) */
+      順: !!(title && bar
+        && title.getBoundingClientRect().bottom <= bar.getBoundingClientRect().top + 0.5),
+      区切り: bar ? bar.children.length : 0,
+    }
+  })
+  if (!頭) ng('単語帳の頭 … 名前と進み具合が描かれていない')
+  else {
+    if (頭.中) ok('単語帳の頭 … 名前と進み具合は、カードの中にある')
+    else ng('単語帳の頭 … カードの外に出ている(Quick Response とそろわない)')
+    if (頭.題) ok(`単語帳の頭 … 名前が出ている(${頭.題})`)
+    else ng('単語帳の頭 … 名前が出ていない')
+    if (頭.順) ok('単語帳の頭 … 名前が先、進み具合があと')
+    else ng('単語帳の頭 … 名前と進み具合の順が逆')
+    if (頭.区切り === 3) ok(`単語帳の頭 … 1問 = 1つの区切り(${頭.区切り})`)
+    else ng('単語帳の頭 … 区切りの数が問の数と合わない', String(頭.区切り))
   }
   if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}/only.png` })
 

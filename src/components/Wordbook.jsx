@@ -48,7 +48,7 @@ import {
   QUIZ_FORMS, WORD_ORDERS, buildSession, isSelfGraded, makeChoices, pickForm,
 } from '../lib/wordQuiz.js'
 import BookPick from './BookPick.jsx'
-import DrillTitle from './DrillTitle.jsx'
+import DrillHead from './DrillHead.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import WordRadio from './WordRadio.jsx'
@@ -1069,6 +1069,15 @@ export default function Wordbook({
     start()
   }, [isQuiz, loading, opened, rows.length, poolNow])
   const card = isQuiz ? queue[0] : null
+  /**
+   * **いくつ終えて、ぜんぶでいくつか**(第5.180節でカードの中へ移した)。
+   *
+   * もとは進み具合の行の中で数えていたが、**名前とバーはカードの中**に
+   * 移ったので、ここで1回だけ数えて両方へ渡す ——
+   * **数え方を2通り持たない**(CLAUDE.md)。
+   */
+  const runDone = doneRef.current.length
+  const runTotal = runDone + queue.length
 
   /**
    * **カードを画面のまん中に置く**(2026-09 利用者の指定)。
@@ -1398,7 +1407,23 @@ export default function Wordbook({
    * **Quick Response とまったく同じ部品**(`DrillTitle`)—— 書き写さない。
    * 名前は `books` 1か所から引く。
    */
-  const drillTitle = <DrillTitle label={books.find((b) => b.id === book)?.label ?? ''} />
+  /** いま開いている帳面の名前(全文)。**`books` 1か所から引く** */
+  const bookLabel = books.find((b) => b.id === book)?.label ?? ''
+  /**
+   * **帳面の名前と、進み具合**(第5.180節・2026-09 実機・利用者の指定)。
+   *
+   *   > quick response のようにコンテンツの上部にタイトルを、
+   *   > そして単語帳 のように個数のバーを。それで統一してください。
+   *
+   * **カードの中の上**に置く(もとはカードの外・地の上にあった)。
+   * 部品は `DrillHead` 1つで、Quick Response と分け合う。
+   *
+   * **1つ作って、2か所に置く。** 冊を替えている最中(`Loading`)にも
+   * 同じものを出す —— **画面のどこも動かない**(第5.173節)。
+   */
+  const drillHead = (
+    <DrillHead label={bookLabel} total={runTotal} done={runDone} />
+  )
 
   const bookPick = (
     <BookPick books={books} book={book} unit="語" sub={bookSub}
@@ -1836,10 +1861,7 @@ export default function Wordbook({
               出題の形は**プルダウン1つ**にした。札を5つ並べていたので、
               いちばん押す「答える」ボタンより目立っていた。
               既定の「おまかせ」は、覚えの深さ(箱)から自動で決まる */}
-          {(() => {
-            const done = doneRef.current.length
-            const total = done + queue.length
-            return (
+          {(
               <div className="wb-run" ref={runRef}>
                 {/* 出題の形は**タブの右**へ移した(2026-08 利用者の指定)。
                     ここに残すと、同じものが2か所に出る */}
@@ -1907,19 +1929,19 @@ export default function Wordbook({
                       画面に入り切らずに切れています」)。帯には
                       **とじる と 出しかた の2つ**しか置かない */}
                 </div>
-                {/* **帳面の名前は、進み具合のすぐ上**(第5.176節)。
-                    Quick Response とまったく同じ場所・同じ部品である */}
-                {drillTitle}
-                <div className="wb-run-bar" role="presentation">
-                  {Array.from({ length: total }, (unused, i) => (
-                    <span key={i} className={i < done ? 'is-done' : i === done ? 'is-now' : ''} />
-                  ))}
-                </div>
+                {/* **名前と進み具合は、カードの中の上へ移した**
+                    (第5.180節・2026-09 実機・利用者の指定)。
+
+                      > quick response のようにコンテンツの上部にタイトルを、
+                      > そして単語帳 のように個数のバーを。それで統一して
+
+                    ここ(カードの外・地の上)に置いていたので、
+                    Quick Response と**置き場所が違っていた。**
+                    いまは `DrillHead` 1つを、2つの画面が分け合う */}
                 {/* **絞っていることを、絞った画面に出す**(0047) */}
                 {onlyNote}
               </div>
-            )
-          })()}
+          )}
 
           {/* **出題は、画面の残りいっぱいの中でまん中に置く**
               (集中モードと同じ `.focus-body`)。
@@ -1928,8 +1950,14 @@ export default function Wordbook({
           {!card ? (
             /* **冊を替えている最中は、ここだけが帯になる**(第5.173節)。
                帯(☰ / 冊名 ▾ / 出しかた)はそのまま残るので、
-               **画面のどこも動かない。** 本棚のシートも開いたままである */
-            <Loading />
+               **画面のどこも動かない。** 本棚のシートも開いたままである。
+
+               **名前と進み具合も残す**(第5.180節)。カードの中へ移したので、
+               ここに置かないと**替えているあいだだけ題が消える** */
+            <div className="wordcard">
+              {drillHead}
+              <Loading />
+            </div>
           ) : (<>
           {/* **「思い出す」と「日本語 → 英語」だけ、カードで画面を使い切る**
               (2026-09 利用者の指定)。この2つは答えが**2つのボタンだけ**
@@ -1939,6 +1967,12 @@ export default function Wordbook({
               **判断は `isSelfGraded()` 1か所**(形の一覧を2か所に持たない) */}
           <div className={`wordcard${isSelfGraded(form) ? ' wordcard--recall' : ''}`}
                ref={cardRef}>
+
+            {/* **帳面の名前と進み具合は、いちばん上**(第5.180節・
+                2026-09 実機・利用者の指定「quick response のように
+                コンテンツの上部にタイトルを」)。
+                Quick Response と**同じ部品・同じ置き場所**である */}
+            {drillHead}
 
             {/* **出題は、高さの決まった枠に入れる**(2026-09 利用者の指定)。
                   > 単語や解答の長さに関わらず、しっかり中央に居座るように

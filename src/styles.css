@@ -6221,12 +6221,29 @@ button.wbfilter-ctl { text-align: left; }
 /* `.wb-run-count`(「◯ / ◯ 語」)は 2026-09 の指定で消した。
    どこまで来たかは、下の点が同じことを言っている */
 /* 1問=1目盛り。**色だけに頼らず、いまの1つは太くしてある** */
-.wb-run-bar { display: flex; gap: var(--sp-3); }
-.wb-run-bar > span {
+/* **帳面の名前と、進み具合**(`DrillHead`・第5.180節)。
+
+   2026-09 実機・利用者の指定。
+
+     > quick response のようにコンテンツの上部にタイトルを、
+     > そして単語帳 のように個数のバーを。それで統一してください。
+
+   **名前とバーは、並びで1つ。** 単語帳と Quick Response が
+   **同じ入れ物**を使う —— 別々に置いたから形が割れた。
+
+   すき間は親の `gap` で作る(`.claude/rules/common.md`)——
+   下に何が来ても、いくつ増えても離れる */
+.drill-head {
+  display: flex; flex-direction: column; gap: var(--sp-8);
+}
+/* **1問 = 1つの区切り。** ひと続きの帯は「だいたい半分」までしか
+   言えないが、区切りなら**残り何問かが目で数えられる** */
+.drill-bar { display: flex; gap: var(--sp-3); }
+.drill-bar > span {
   flex: 1 1 0; height: 5px; border-radius: var(--r-pill); background: var(--border);
 }
-.wb-run-bar > span.is-done { background: var(--accent); }
-.wb-run-bar > span.is-now { background: var(--accent); height: 8px; margin-top: -1.5px; }
+.drill-bar > span.is-done { background: var(--accent); }
+.drill-bar > span.is-now { background: var(--accent); height: 8px; margin-top: -1.5px; }
 
 /* 終わったときの点数。**やり切ったことが分かるように大きく** */
 .wb-score {

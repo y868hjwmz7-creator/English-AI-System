@@ -33,7 +33,7 @@ import {
 import Loading from './Loading.jsx'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import BookPick from './BookPick.jsx'
-import DrillTitle from './DrillTitle.jsx'
+import DrillHead from './DrillHead.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import FrameParts from './FrameParts.jsx'
 import ReviewStats from './ReviewStats.jsx'
@@ -811,13 +811,6 @@ export default function QrReview({
    * **1つの `bookPick` を、始める前と復習の帯の両方で使う。**
    * 書き写すと、必ず片方だけ古くなる(CLAUDE.md)。
    */
-  /**
-   * **いま開いている帳面の名前(全文)**(第5.176節)。
-   * 帯の札は「…」で切れるので、**切れない名前をここが受け止める。**
-   * 名前は `books` 1か所から引く —— 画面で書き写さない
-   * (**引くのも1回だけ**。`bookLabel` を出す相手の欄と分け合う)。
-   */
-  const drillTitle = <DrillTitle label={bookLabel} />
 
   const bookPick = (
     <BookPick books={books} book={book} unit="問" sub={bookSub}
@@ -908,20 +901,22 @@ export default function QrReview({
           *
           * 帯の `冊名 ▾` は**押すもの**なので、幅に収まるところで
           * 「…」に切れる。**切れた名前を、ここが受け止める。**
-          * 単語帳とまったく同じ場所・同じ形である(`drillTitle` 1か所)。
+          * 単語帳とまったく同じ場所・同じ形である(`DrillHead` 1つ)。
+          *
+          * **進み具合と並びで1つ**にした(第5.180節・2026-09 利用者の指定)。
+          * 名前だけを部品にして、バーを画面ごとに書いていたので、
+          * **単語帳と形が割れた** —— 並びで1つなら、入れ物ごと1つにする。
           */}
-        {drillTitle}
         {/**
-          * **「1 / 30」はやめて、進み具合の帯にした**(第5.176節)。
+          * **「1 / 30」はやめて、進み具合のバーにした**(第5.176節)。
           *
           *   > 1/30などは進捗バーにしましょう
           *
-          * 帯はもともとここに在る。**数を消しただけ**で、
-          * 単語帳(点が並ぶ)とも「数字を出さない」で そろう。
+          * **1問 = 1つの区切り**に変えた(第5.180節・利用者の指定
+          * 「単語帳のように個数のバーを」)。ひと続きの帯は
+          * 「だいたい半分」までしか言えず、**残り何問かが数えられない。**
           */}
-        <div className="qr-bar" aria-hidden="true">
-          <span style={{ width: `${n ? Math.round((Math.min(at, n) / n) * 100) : 0}%` }} />
-        </div>
+        <DrillHead label={bookLabel} total={n} done={at} />
         {n === 0 ? (
           /* **冊を替えている最中は、ここだけが帯になる**(第5.173節)。
              上の冊名も進み具合も残るので、**画面のどこも動かない** */

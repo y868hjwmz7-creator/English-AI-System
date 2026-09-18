@@ -6956,8 +6956,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '帯にも紙にも「1 / 30」は無い(進み具合の帯が言う)')
   ok(!/focus-top-right/.test(qr) && !/\.focus-top-right \{/.test(st),
     '右端へ寄せる指定は消してある(効かない指定を残さない)')
-  ok(/<div className="qr-bar" aria-hidden="true">/.test(qr),
-    '進み具合は帯で出す(数字を出さない)')
+  /* **進み具合は、1問=1つの区切りで出す**(第5.180節で帯から変えた)。
+     数字は出さない —— 目で数えられるものを、もう一度言わない */
+  ok(/<DrillHead label=\{bookLabel\} total=\{n\} done=\{at\} \/>/.test(qr),
+    '進み具合は個数のバーで出す(数字を出さない)')
+  ok(!/qr-bar/.test(qr), 'ひと続きの帯は、この画面から消してある')
 
   // ── (2) 長い冊名は、札で切れる ──────────────────────────
   /* **`.btn--small` が `flex-shrink: 0` を持っている。**
@@ -6984,12 +6987,16 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
        (出す相手の欄と名前を分け合う)。**書き方を1つに縛ると、
        寄せた日に赤くなる** —— 見たいのは
        「`books` から引いている・二度引いていない」のほうである */
-    ok(/const drillTitle = <DrillTitle label=\{/.test(src),
-      `${name} … 名前は同じ部品(DrillTitle)に渡す`)
+    ok(/<DrillHead label=\{/.test(src),
+      `${name} … 名前と進み具合を、同じ部品(DrillHead)に渡す`)
     const 引く = (src.match(/books\.find\(\(b\) => b\.id === book\)\?\.label/g) ?? []).length
     ok(引く === 1,
       `${name} … 名前は books 1か所から引く(書き写していない)`, String(引く))
-    ok(/\{drillTitle\}/.test(src), `${name} … 進み具合のすぐ上に出している`)
+    /* **カードの中の上**に置く(第5.180節・利用者の指定
+       「quick response のようにコンテンツの上部にタイトルを」)。
+       単語帳はカードの外に置いていたので、置き場所が割れていた */
+    ok(/(<section className="qr">|<div className="wordcard)/.test(src),
+      `${name} … コンテンツの入れ物がある`)
   }
   ok(/\.drill-title \{[^}]*margin: 0/.test(st),
     'タイトルは余白を持たない(すき間は親の gap で作る)')
@@ -7249,6 +7256,67 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/'none'/.test(sc), '骨組み … 担当がいないときも描いている')
   const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
   ok(/\['bookassign', ''\]/.test(bar), 'すき間の見張りに bookassign が入っている')
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.180節 名前と進み具合を、2つの画面でそろえる
+
+     > quick response のようにコンテンツの上部にタイトルを、
+     > そして単語帳 のように個数のバーを。それで統一してください。
+
+   **並びで1つなのだから、入れ物ごと1つにする。** 名前だけを部品にして
+   バーを画面ごとに書いていたから、置き場所も形も割れた。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const css = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const head = noNote(read('components/DrillHead.jsx'))
+  const qr = noNote(read('components/QrReview.jsx'))
+  const wb = noNote(read('components/Wordbook.jsx'))
+  const st = css(read('styles.css'))
+
+  /* **自分では何も読まない部品**(骨組みでもそのまま描ける) */
+  ok(!/supabase|useEffect|useState/i.test(head),
+    '名前と進み具合の部品は、props で受け取るだけ')
+  /* **名前の部品を、二重に持たない** */
+  ok(/<DrillTitle label=\{label\} \/>/.test(head),
+    '名前は、これまでの部品(DrillTitle)をそのまま使う')
+  /* **空の帯を出さない・空の行で場所を取らない**(黙って出さない) */
+  ok(/if \(!String\(label \?\? ''\)\.trim\(\) && n === 0\) return null/.test(head),
+    '名前も数も無ければ、入れ物ごと出さない')
+  ok(/\{n > 0 && \(/.test(head), '数が 0 ならバーを出さない')
+  /* **数えられない値を 0 として描かない**(「1問しかない」と読めてしまう) */
+  ok(/Number\.isFinite\(Number\(total\)\)/.test(head),
+    '数えられない値は、区切りを作らない')
+
+  /* **2つの画面が、同じ部品を同じ順で使う** */
+  for (const [src, name] of [[qr, 'Quick Response'], [wb, '単語帳']]) {
+    ok(/<DrillHead label=\{/.test(src), `${name} … 同じ部品を使っている`)
+    ok(!/wb-run-bar|qr-bar/.test(src), `${name} … 前のバーは残っていない`)
+  }
+  /* **単語帳は、替えている最中にも出す**(画面のどこも動かない・第5.173節)。
+     **数えて見る** —— 1か所だけだと、替えているあいだ題が消える */
+  const 置いた = (wb.match(/\{drillHead\}/g) ?? []).length
+  ok(置いた === 2, `単語帳 … カードと、替えている最中の両方に置く(${置いた})`,
+    String(置いた))
+  /* **数え方を2通り持たない** */
+  const 数える = (wb.match(/doneRef\.current\.length/g) ?? []).length
+  ok(数える === 1, `単語帳 … 進み具合を数えるのは1か所(${数える})`, String(数える))
+
+  /* **CSS も1つ。** 古い名前を残さない(片方だけ直す事故のもと) */
+  ok(/\.drill-bar \{/.test(st) && /\.drill-head \{/.test(st),
+    '見た目の指定も、1つの名前にまとめてある')
+  ok(!/\.wb-run-bar/.test(st), '古い名前(.wb-run-bar)は残っていない')
+  /* **`.qr-bar` は残す** —— 教材の中の Quick Response が使っている。
+     **言われた場所だけを直す**(CLAUDE.md) */
+  ok(/\.qr-bar \{/.test(st) && /qr-bar/.test(noNote(read('components/QuickResponse.jsx'))),
+    '教材の中の Quick Response は、これまでどおり(言われた場所だけ直す)')
+  /* **すき間は親の gap で作る**(`.claude/rules/common.md`) */
+  ok(/\.drill-head \{[^}]*gap: var\(--sp-8\)/.test(st),
+    '名前とバーのすき間は、親の gap で作る')
 }
 
 console.log(ng
