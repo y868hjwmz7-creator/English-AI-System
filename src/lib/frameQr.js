@@ -66,6 +66,7 @@
  * ============================================================================
  */
 import { SWAP_FRAMES } from '../data/phraseSwap.js'
+import { FRAME_GROUPS, frameGroupCount } from '../data/sentenceFrames.js'
 import { sayQuestions, shiftQuestions, swapQuestions } from './frameShift.js'
 import { FRAME_FORMS, FRAME_INDEX } from './frameMatch.js'
 import { normEn } from './textNorm.js'
@@ -77,7 +78,7 @@ import { normEn } from './textNorm.js'
  * 画面はこの一覧を並べるだけで、名前を書き写さない。
  */
 export const FRAME_PARTS = [
-  { id: 'swap', label: '日本語 → 英語', lead: '日本語を見て、その型で英語を言います。66 型ぜんぶに問があります。' },
+  { id: 'swap', label: '日本語 → 英語', lead: `日本語を見て、その型で英語を言います。${frameGroupCount()} の型ぜんぶに問があります。` },
   { id: 'say', label: '言い換え', lead: '伝えたいことを、指定の型で言います。型は問に書いてあります。' },
 ]
 
@@ -87,10 +88,21 @@ export const FIRST_FRAME_PART = FRAME_PARTS[0].id
 /** id から1行を引く。知らない id は `null`(**当てずっぽうで返さない**) */
 export const framePartOf = (id) => FRAME_PARTS.find((p) => p.id === id) ?? null
 
+/**
+ * **この冊の名前**(2026-09 利用者の指定)。
+ *
+ *   > 66の型ですが、実際はもっと少ないはずです。
+ *   > 写真のように「させる系」で一つと数えた時の数に変えてください。
+ *
+ * **数は `frameGroupCount()` 1か所から来る**(14)。画面にも骨組みにも
+ * 書き写さない —— 型を足した日に、片方だけ古くなる(CLAUDE.md)。
+ */
+export const FRAME_BOOK_LABEL = `${frameGroupCount()} の型`
+
 /** 紙と絞り込みに出す名前。**`material_title` に入る。ここ1か所で作る** */
 export const framePartTitle = (id) => {
   const p = framePartOf(id)
-  return p ? `66 の型(${p.label})` : '66 の型'
+  return p ? `${FRAME_BOOK_LABEL}(${p.label})` : FRAME_BOOK_LABEL
 }
 
 /**
@@ -192,9 +204,90 @@ export function frameQrForms(part = FIRST_FRAME_PART) {
         form: f,
         /* **組の名前も書き写さない。** `sentenceFrames.js` から引く */
         group: found ? `${found.sectionNo} ${found.groupLabel}` : '',
+        /** どの系の中か。**`frameQrGroups()` が束ねるのに使う** */
+        groupKey: found ? `${found.sectionId}.${found.groupId}` : '',
         n: n.get(f),
       }
     })
+}
+
+/**
+ * **「〜系ぜんぶ」を指す値**(2026-09 利用者の指定
+ * 「選択肢に『〜系全て』を追加してください」)。
+ *
+ * 型の名前と**同じ欄**に入れるので、取り違えないよう印を先頭に付ける。
+ * 型の名前は `S allows 人 to do` の形で、この印では始まらない。
+ * **印の文字はここ1か所**(画面にも検証にも書き写さない)。
+ */
+const GROUP_MARK = '系:'
+
+/** 系の鍵 → 欄に入れる値。**組み立ても1か所** */
+export const frameGroupValue = (key) => `${GROUP_MARK}${key}`
+
+/**
+ * **絞り込みの値 → 出す型の一覧。判断はここ1か所**(CLAUDE.md)。
+ *
+ * - 空(`null` / `''`)… `null` を返す = **ぜんぶ出す**
+ * - 型の名前 … その1本
+ * - `系:◯◯` … その系に入る型ぜんぶ
+ * - **知らない系 … 空**(0問)。**黙って「ぜんぶ」に落とさない** ——
+ *   選んでいないものが出るほうが分かりにくい(型ひとつのときと同じ作法)
+ */
+export function frameFormFilter(value) {
+  const v = String(value ?? '')
+  if (!v) return null
+  if (!v.startsWith(GROUP_MARK)) return [v]
+  const g = FRAME_GROUPS.find((x) => x.key === v.slice(GROUP_MARK.length))
+  return g ? g.forms : []
+}
+
+/**
+ * **系ごとに束ねた、絞り込みの一覧**(2026-09 利用者の指定)。
+ *
+ * 画面は、これをそのまま `<optgroup>` に並べるだけである ——
+ * **束ね方も、系ごとの問数も、画面で数え直さない**
+ * (別々に数えると「札には 52 問、出てくるのは 51 問」になる)。
+ *
+ * **並びは `frameQrForms()` のまま** = `sentenceFrames.js` のまま。
+ * **1問も無い型は入らない**ので、系まるごと消えることもある。
+ */
+export function frameQrGroups(part = FIRST_FRAME_PART) {
+  const out = []
+  for (const f of frameQrForms(part)) {
+    const last = out[out.length - 1]
+    if (last && last.key === f.groupKey) {
+      last.rows.push(f)
+      last.n += f.n
+      continue
+    }
+    const g = FRAME_GROUPS.find((x) => x.key === f.groupKey)
+    out.push({
+      key: f.groupKey,
+      /** 欄に入れる値。**画面で組み立てない** */
+      value: frameGroupValue(f.groupKey),
+      /** 見出し(`① 1. させる(背中を押す)`) */
+      label: f.group,
+      /** 短い呼び名。画面が `${kei}系ぜんぶ` を作る */
+      kei: g?.kei ?? '',
+      n: f.n,
+      rows: [f],
+    })
+  }
+  return out
+}
+
+/**
+ * その中身で、**いま選べる絞り方か**。
+ *
+ * 画面が覚えている値(`FRAME_FORM_KEY`)は、中身を切り替えると
+ * 向こうに無いことがある。**「ぜんぶ」に落とす判断はここ1か所**で、
+ * 画面は答えを受け取るだけである(型ひとつでも、系ぜんぶでも同じ道)。
+ */
+export function frameFormOk(part = FIRST_FRAME_PART, value = null) {
+  const only = frameFormFilter(value)
+  if (!only || !only.length) return false
+  const have = new Set(frameQuestions(part).map((q) => q.form))
+  return only.some((f) => have.has(f))
 }
 
 /**
@@ -213,12 +306,15 @@ export function frameQrRows(
     (seen ?? []).map((r) => [String(r?.en_norm ?? ''), r]).filter(([k]) => k),
   )
   const title = framePartTitle(part)
+  /* **型で絞る**(`null` ならぜんぶ)。**型ひとつでも、系ぜんぶでも同じ道**
+     (`frameFormFilter()` が一覧に直す)。知らない型・知らない系を渡せば
+     0問になる —— **黙って「ぜんぶ」に落とさない**
+     (選んでいないものが出るほうが怖い)。
+     画面の側が、出せる絞り方かどうかを先に見ている(`frameFormOk()`) */
+  const only = form ? new Set(frameFormFilter(form) ?? []) : null
   const out = []
   for (const q of frameQuestions(part)) {
-    /* **型で絞る**(`null` ならぜんぶ)。知らない型を渡せば0問になる ——
-       **黙って「ぜんぶ」に落とさない**(選んでいないものが出るほうが怖い)。
-       画面の側が、出せる型かどうかを先に見ている */
-    if (form && q.form !== form) continue
+    if (only && !only.has(q.form)) continue
     const s = map.get(q.key) ?? null
     out.push({
       en_norm: q.key,

@@ -43,7 +43,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { FRAME_SHIFTS, SHIFT_SCENES, shiftCount } from '../src/data/frameShift.js'
-import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
+import { FRAME_GROUPS, FRAME_SECTIONS, frameGroupCount } from '../src/data/sentenceFrames.js'
 import { SAME_SHAPE, frameFormOf } from '../src/lib/frameMatch.js'
 import {
   SWAP_GROUP, sayQuestions, shiftQuestions, shiftTargetOf, swapFillers, swapQuestions,
@@ -54,9 +54,10 @@ import { SUBJ_KINDS, SWAP_CLAUSES, SWAP_VERBS } from '../src/data/swapParts.js'
 import { NOUN_PHRASES } from '../src/data/nounPhrases.js'
 import { nativeFlowRows } from '../src/data/nativeFlow.js'
 import {
-  FIRST_FRAME_PART, FRAME_FORM_KEY, FRAME_PARTS, FRAME_PART_KEY, QR_HINT_KEY,
+  FIRST_FRAME_PART, FRAME_BOOK_LABEL, FRAME_FORM_KEY, FRAME_PARTS,
+  FRAME_PART_KEY, QR_HINT_KEY, frameFormFilter, frameFormOk, frameGroupValue,
   frameHintOf, framePartOf, framePartTitle, frameQrCounts, frameQrForms,
-  frameQrRows, frameQuestions,
+  frameQrGroups, frameQrRows, frameQuestions,
 } from '../src/lib/frameQr.js'
 
 const ROOT = new URL('..', import.meta.url).pathname
@@ -551,7 +552,7 @@ head('型で絞る')
 
   const qr = code('src/components/QrReview.jsx')
   const parts = code('src/components/FrameParts.jsx')
-  ok(/frameQrForms\(/.test(qr), '画面が、絞れる型の一覧を引いている')
+  ok(/frameQrGroups\(/.test(qr), '画面が、絞れる型の一覧を引いている')
   ok(/loadFrameQr\(\{ learnerId, part, form \}\)/.test(qr),
     '型を渡して読み込んでいる(絞ったぶんだけ読む)')
   ok(/nfKey, part, form\]/.test(qr), '型を変えたら読み直す(前の型の問が残らない)')
@@ -568,6 +569,128 @@ head('型で絞る')
      **前の冊の問が次の冊で出続ける**(いちばん分かりにくい壊れ方) */
   ok((qr.match(/setRun\(null\); setPending/g) ?? []).length === 1,
     'やりかけの捨て方は1か所だけ(4か所に書き写していない)')
+}
+
+/* ────────────────────────────────────────────────────────────
+   ⑩ 系(「〜系ぜんぶ」・第5.177節)
+   ──────────────────────────────────────────────────────────── */
+head('系(〜系ぜんぶ)')
+{
+  /* **人に見せる数は、系の数**(2026-09 利用者の指定
+     「66の型ですが、実際はもっと少ないはずです。写真のように『させる系』で
+     一つと数えた時の数に変えてください」)。
+
+     **数を書き写さない**(CLAUDE.md「値を書き写さない。性質で見る」)——
+     見るのは「系のほうが少ない」という**関係**である */
+  ok(frameGroupCount() === FRAME_GROUPS.length, '系の数は、系の一覧から数えている')
+  ok(frameGroupCount() < FORMS.length,
+    `系のほうが、型より少ない(${frameGroupCount()} / ${FORMS.length})`)
+
+  /* **1つも落としていない・並べ替えてもいない**(`.claude/rules/common.md`)。
+     系に束ねるときに1本でも落ちると、**その型は永久に出てこない** */
+  const flat = FRAME_GROUPS.flatMap((g) => g.forms)
+  ok(flat.length === FORMS.length && flat.every((f, i) => f === FORMS[i]),
+    '系をつなぐと、型の一覧とぴったり同じ(落とさない・並べ替えない)',
+    `${flat.length} / ${FORMS.length}`)
+  ok(new Set(FRAME_GROUPS.map((g) => g.key)).size === FRAME_GROUPS.length,
+    '系の鍵が、1つも重なっていない')
+
+  /* **短い呼び名(`kei`)は、組ごとに1つだけ。**
+     無いと「系ぜんぶ」という名無しの選択肢になり、
+     重なると**どちらを選んだのか分からなくなる** */
+  const noKei = FRAME_GROUPS.filter((g) => !g.kei)
+  ok(noKei.length === 0, 'どの系にも、短い呼び名がある',
+    noKei.map((g) => g.key).join(' / '))
+  ok(new Set(FRAME_GROUPS.map((g) => g.kei)).size === FRAME_GROUPS.length,
+    '短い呼び名が、1つも重なっていない')
+
+  /* **「〜系ぜんぶ」の値と、型の名前が重ならない。**
+     同じ欄に入れるので、重なると**別のものが出る**(いちばん怖い壊れ方) */
+  ok(FRAME_GROUPS.every((g) => !FORMS.includes(frameGroupValue(g.key))),
+    '「〜系ぜんぶ」の値は、どの型の名前とも重ならない')
+  ok(FORMS.every((f) => {
+    const only = frameFormFilter(f)
+    return only.length === 1 && only[0] === f
+  }), '型ひとつの値は、そのまま1本に直る')
+  ok(frameFormFilter(null) === null && frameFormFilter('') === null,
+    '空なら「ぜんぶ」(絞らない)')
+
+  for (const part of FRAME_PARTS.map((p) => p.id)) {
+    const groups = frameQrGroups(part)
+    ok(groups.length === frameGroupCount(),
+      `${part} … 欄に出る系の数が、系の数と同じ`,
+      `${groups.length} / ${frameGroupCount()}`)
+    /* **並びは `sentenceFrames.js` のまま**(一覧を勝手に並べ替えない) */
+    const order = groups.map((g) => FRAME_GROUPS.findIndex((x) => x.key === g.key))
+    ok(order.every((n, i) => i === 0 || n > order[i - 1]),
+      `${part} … 系の並びが、一覧のまま`)
+    /* **数え方を2通り持たない。** 系の数は、中の型を足したものと合う */
+    ok(groups.every((g) => g.n === g.rows.reduce((n, f) => n + f.n, 0)),
+      `${part} … 系の問数が、中の型を足した数と合う`)
+    ok(groups.reduce((n, g) => n + g.n, 0) === frameQuestions(part).length,
+      `${part} … 系の数を足すと、問の数と合う`)
+    ok(groups.every((g) => g.kei && g.label && g.value),
+      `${part} … どの系にも、呼び名と見出しと値がそろっている`)
+
+    /* **絞ると、その系だけが出る。「出る」と「出ない」の両方を見る**
+       (CLAUDE.md)—— 片方だけだと、
+       **どこにも出さない形・ぜんぶ出す形**に書き換えても緑のまま */
+    const g0 = groups[0]
+    const rows = frameQrRows([], { today: '', part, form: g0.value })
+    ok(rows.length === g0.n, `${part} … ${g0.kei}系ぜんぶで絞ると、その数だけ出る`,
+      `${rows.length} / ${g0.n}`)
+    const hints = new Set(rows.map((r) => r.hint))
+    ok(hints.size === g0.rows.length,
+      `${part} … その系の型が、ぜんぶ混ざって出る(1本に絞られていない)`,
+      `${hints.size} / ${g0.rows.length}`)
+    const inGroup = new Set(g0.rows.map((f) => f.form))
+    ok(rows.every((r) => inGroup.has(r.hint)),
+      `${part} … よその系の型は、1問も混ざらない`)
+    ok(rows.length < frameQrRows([], { today: '', part }).length,
+      `${part} … 系で絞ると、絞らないときより少ない`)
+    ok(frameQrRows([], { today: '', part, form: g0.rows[0].form }).length < rows.length,
+      `${part} … 型ひとつのほうが、系ぜんぶより少ない`)
+    /* **知らない系では0問。** 黙って「ぜんぶ」に落とさない
+       —— 選んでいないものが出るほうが分かりにくい(型ひとつと同じ作法) */
+    ok(frameQrRows([], { today: '', part, form: frameGroupValue('そんな系は無い') }).length === 0,
+      `${part} … 知らない系では、1問も出さない`)
+
+    /* **「ぜんぶ」に落とす判断は1か所**(`frameFormOk()`)。
+       ここも「答える」と「答えない」の両方を見る */
+    ok(frameFormOk(part, g0.value) && frameFormOk(part, g0.rows[0].form),
+      `${part} … 系も型も、選べると答える`)
+    ok(!frameFormOk(part, frameGroupValue('そんな系は無い'))
+      && !frameFormOk(part, 'そんな型は無い')
+      && !frameFormOk(part, null) && !frameFormOk(part, ''),
+      `${part} … 知らないもの・空には、選べないと答える`)
+  }
+
+  /* **冊の名前に出るのは、系の数**(第5.177節)。
+     **数を書き写さず、どちらの数が入っているかで見る** */
+  ok(FRAME_BOOK_LABEL.includes(String(frameGroupCount())),
+    `冊の名前に、系の数が入っている(${FRAME_BOOK_LABEL})`)
+  ok(!FRAME_BOOK_LABEL.includes(String(FORMS.length)),
+    '冊の名前に、型の数は出てこない')
+  ok(framePartTitle('swap').startsWith(FRAME_BOOK_LABEL),
+    '紙と絞り込みに出る名前も、同じ冊の名前から作る')
+  ok(FRAME_PARTS.every((p) => !/\d+ 型/.test(p.lead)),
+    '中身の説明にも、型の数を書き写していない')
+
+  const qr = code('src/components/QrReview.jsx')
+  const sc = code('src/__screens.jsx')
+  const parts = code('src/components/FrameParts.jsx')
+  ok(/FRAME_BOOK_LABEL/.test(qr) && /FRAME_BOOK_LABEL/.test(sc),
+    '画面も骨組みも、冊の名前を frameQr.js から引いている')
+  /* **書き写していない。** 骨組みだけ古い名前になると、
+     **骨組みでは緑・本物では別の名前**になる(CLAUDE.md で何度も転んだ形) */
+  ok(!/\d+ の型/.test(qr) && !/\d+ の型/.test(sc),
+    '冊の名前を、画面にも骨組みにも書き写していない')
+  /* **「〜系ぜんぶ」を、画面が出している** */
+  ok(/\{g\.kei\}系ぜんぶ/.test(parts), '欄に「〜系ぜんぶ」が出る')
+  ok(/value=\{g\.value\}/.test(parts),
+    '「〜系ぜんぶ」の値は、frameQrGroups() が作ったものをそのまま使う')
+  ok(!/g\.rows\.reduce/.test(parts), '系ごとの問数を、画面で数え直していない')
+  ok(/frameQrGroups\(/.test(sc), '骨組みも、系ごとの一覧を本物から引いている')
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -628,6 +751,6 @@ head('Quick Response の冊として通っているか')
 }
 
 console.log(ng === 0
-  ? '\n✅ 66 の型(Quick Response の冊)は、すべて意図どおりです'
+  ? '\n✅ 型の冊(Quick Response)は、すべて意図どおりです'
   : `\n❌ ${ng} 件`)
 process.exit(ng === 0 ? 0 : 1)

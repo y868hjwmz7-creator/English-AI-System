@@ -28,6 +28,12 @@
  *   一度入れた型は、指示がないかぎり消さない・並べ替えない
  *   (業種・趣味・声の名簿と同じ・`.claude/rules/common.md`)。
  *
+ * 【組(系)が持つもの】
+ *   `id` / `label`(見出し)/ **`kei`(短い呼び名)** / `rows`。
+ *   `kei` は「させる」「つなぐ」のような**短い呼び名**で、画面が
+ *   「させる系ぜんぶ」を作るのに使う(第5.177節)。**組の名前から機械では
+ *   削り出せない**ので、1つだけ持たせてある。
+ *
  * @property form 型。**日本語の「人」「名詞」を混ぜたまま**にする ——
  *                `S allows 人 to do` のほうが、英語だけで書くより速く読める
  * @property ex   例文。**実在の人物や会社の名前を入れない**(`speechStyles.js` と同じ決まり)
@@ -46,6 +52,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'push',
         label: '1. させる(背中を押す)',
+        kei: 'させる',
         rows: [
           { form: 'S allows 人 to do', ex: 'This tool allows you to share files instantly.', ja: 'この道具を使えば、ファイルをすぐに共有できます。' },
           { form: 'S enables 人 to do', ex: 'The update enabled us to cut the cost in half.', ja: '更新のおかげで、費用を半分にできました。' },
@@ -61,6 +68,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'block',
         label: '2. させない(妨げる)',
+        kei: 'させない',
         // **4つとも `from + ~ing`。** ばらばらに覚えると、本番で
         // `to` と取り違える。1つの型として一度に渡す(資料の指摘そのまま)
         note: '4つとも from + ~ing です。ばらばらに覚えると to と取り違えます。',
@@ -74,6 +82,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'need',
         label: '3. 要る・かかる',
+        kei: '要る・かかる',
         rows: [
           { form: 'S requires 名詞', ex: 'Learning a language requires patience.', ja: '言語を学ぶには、忍耐が要ります。' },
           { form: 'S requires 人 to do', ex: 'This project requires everyone to report weekly.', ja: 'この案件では、全員が毎週報告する必要があります。' },
@@ -85,6 +94,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'result',
         label: '4. もたらす(結果)',
+        kei: 'もたらす',
         rows: [
           { form: 'S causes 名詞', ex: 'The update caused several errors.', ja: 'その更新が、いくつかの不具合を引き起こしました。' },
           { form: 'S leads to 名詞', ex: 'Poor planning leads to delays.', ja: '計画が甘いと、遅れにつながります。' },
@@ -95,6 +105,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'state',
         label: '5. 人を、ある状態にする',
+        kei: '状態にする',
         rows: [
           { form: 'S makes 人 形容詞', ex: 'The news made everyone nervous.', ja: 'その知らせで、みんな不安になりました。' },
           { form: 'S leaves 人 形容詞', ex: 'The delay left us short on time.', ja: '遅れのせいで、時間が足りなくなりました。' },
@@ -104,6 +115,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'show',
         label: '6. 示す・説明する(会議で頻出)',
+        kei: '示す・説明する',
         rows: [
           { form: 'S shows / suggests (that) ~', ex: 'The data shows that demand is rising.', ja: 'このデータは、需要が伸びていることを示しています。' },
           { form: 'S explains why ~', ex: 'That explains why he was late.', ja: 'それで、彼が遅れた理由が分かりました。' },
@@ -114,6 +126,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'it',
         label: '7. it を立てる形(無生物主語の親戚)',
+        kei: 'it を立てる',
         rows: [
           { form: 'S makes it possible to do', ex: 'Remote tools make it possible to hire anywhere.', ja: '遠隔の道具のおかげで、どこでも採用できます。' },
           { form: 'S makes it hard for 人 to do', ex: 'The noise made it hard for me to focus.', ja: '騒音のせいで、集中しづらかったです。' },
@@ -133,6 +146,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'ways',
         label: '6つの手立て',
+        kei: '主語の席',
         rows: [
           { form: '動名詞', ex: 'Cutting corners saves time now but costs more later.', ja: '手を抜けば今は速いですが、あとで高くつきます。' },
           { form: '名詞化(動詞→名詞)', ex: 'Her decision to leave surprised everyone.', ja: '彼女が辞めると決めたことに、みんな驚きました。' },
@@ -153,6 +167,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'focus',
         label: '焦点を当てる(どこを際立たせるか)',
+        kei: '焦点',
         rows: [
           { form: 'It is X that / who ~', ex: "It's the price that worries me.", ja: '気がかりなのは、値段のほうです。' },
           { form: 'What ~ is …', ex: 'What we need is more time.', ja: '必要なのは、もっと時間です。' },
@@ -164,6 +179,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'topic',
         label: '話題を先に置く(前置き)',
+        kei: '話題を先に置く',
         note: 'When it comes to と Given は、仕事の英語でとくに回数が多い型です。',
         rows: [
           { form: 'When it comes to ~', ex: "When it comes to pricing, we're flexible.", ja: '価格については、柔軟に対応します。' },
@@ -176,6 +192,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'connect',
         label: '文と文をつなぐ',
+        kei: 'つなぐ',
         note: 'Which means は会話でとても多いのに、教材では出にくい型です。',
         rows: [
           { form: "That's why ~", ex: "That's why we moved the meeting.", ja: 'だから、会議をずらしました。' },
@@ -187,6 +204,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'extend',
         label: '1文を後ろへ伸ばす',
+        kei: '後ろへ伸ばす',
         rows: [
           { form: '関係詞', ex: 'the report that we sent yesterday', ja: '昨日こちらから送った報告書' },
           { form: '現在分詞', ex: 'the team working on it', ja: 'それに取り組んでいるチーム' },
@@ -198,6 +216,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'soften',
         label: 'やわらげる・提案する(仕事で効く)',
+        kei: 'やわらげる',
         rows: [
           { form: 'It might be worth ~ing', ex: 'It might be worth checking again.', ja: 'もう一度確かめてみる価値があるかもしれません。' },
           { form: 'I was wondering if you could ~', ex: 'I was wondering if you could send it today.', ja: '本日中にお送りいただけないでしょうか。' },
@@ -209,6 +228,7 @@ export const FRAME_SECTIONS = [
       {
         id: 'compare',
         label: '比べる',
+        kei: '比べる',
         rows: [
           { form: 'less about A than B', ex: "It's less about cost than timing.", ja: '問題は、費用よりも時期のほうです。' },
           { form: 'The 比較級, the 比較級', ex: 'The more we practice, the faster we improve.', ja: '練習すればするほど、上達が速くなります。' },
@@ -233,3 +253,47 @@ export const frameCount = () =>
     (n, s) => n + s.groups.reduce((m, g) => m + g.rows.length, 0),
     0,
   )
+
+/**
+ * **型の「系」** —— 組を1つと数えたもの(2026-09 利用者の指定)。
+ *
+ *   > 66の型ですが、実際はもっと少ないはずです。
+ *   > 写真のように「させる系」で一つと数えた時の数に変えてください。
+ *
+ * 【なぜ2つの数え方が要るのか】
+ *
+ *   `frameCount()` は **66** —— 巻末に刷る行の数である(何ページ増えるかを言う)。
+ *   `frameGroupCount()` は **14** —— **人に見せる数**である。
+ *   `S allows 人 to do` と `S enables 人 to do` は、
+ *   覚える側から見れば**同じ「させる」の言い方違い**であって、
+ *   別々の型として数えると「66 も覚えるのか」と身構えさせてしまう。
+ *
+ *   **数え方を2通り持たない**(CLAUDE.md)に見えるが、そうではない ——
+ *   **数えているものが違う**(刷る行 / 系)。どちらも `FRAME_SECTIONS`
+ *   1つから数えているので、型を足せば両方が同時に動く。
+ *
+ * 【`kei`(系の名前)を、組に1つ持たせた理由】
+ *
+ *   組の名前(`label`)は `1. させる(背中を押す)` のように
+ *   **番号と補足が付いた見出し**である。ここから機械で
+ *   「させる」だけを削り出すことはできない(`6つの手立て` → `6つの手立て系`)。
+ *   だから**短い呼び名を、組に1つだけ**置く。
+ *   `npm run test:shift` が「どの組にも `kei` がある・重なっていない」を見張る。
+ */
+export const FRAME_GROUPS = FRAME_SECTIONS.flatMap((sec) => sec.groups.map((g) => ({
+  /** 組を指す鍵。**節をまたいで重ならないよう、節の id から作る** */
+  key: `${sec.id}.${g.id}`,
+  sectionId: sec.id,
+  sectionNo: sec.no,
+  /** 見出し(`① 1. させる(背中を押す)` の後ろ半分) */
+  label: g.label,
+  /** 短い呼び名。**画面が `◯◯系ぜんぶ` を作るのに使う** */
+  kei: g.kei,
+  /** この組に入る型の名前。**並びは `FRAME_SECTIONS` のまま** */
+  forms: g.rows.map((r) => r.form),
+})))
+
+/**
+ * 系の数(= 人に見せる型の数)。**画面で数え直さない。**
+ */
+export const frameGroupCount = () => FRAME_GROUPS.length

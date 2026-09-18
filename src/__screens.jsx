@@ -61,7 +61,7 @@ import NativeFlowUnits from './components/NativeFlowUnits.jsx'
 import NativeFlowAssign from './components/NativeFlowAssign.jsx'
 import { NATIVE_FLOW_UNITS } from './data/nativeFlow.js'
 import {
-  FIRST_FRAME_PART, FRAME_PARTS, frameQrCounts, frameQrForms,
+  FIRST_FRAME_PART, FRAME_BOOK_LABEL, FRAME_PARTS, frameQrCounts, frameQrGroups,
 } from './lib/frameQr.js'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
@@ -668,7 +668,7 @@ const qrScreen = (plain) => (
                 <BookPick books={[
                   { id: 'my', label: '自分の Quick Response 帳' },
                   { id: 'nf', label: 'Native Flow', hasSub: true },
-                  { id: 'frame', label: '66 の型', hasSub: true },
+                  { id: 'frame', label: FRAME_BOOK_LABEL, hasSub: true },
                 ]} book="my" unit="問" onPick={() => {}} />
               ) : null}
               /* **「出しかた」も本物と同じく帯に置く**(第5.176節)。
@@ -1084,7 +1084,7 @@ const NFUNITS = (
   </section>
 )
 
-/* **66 の型の、中身をえらぶ欄**(2026-09)。**本物の部品を、そのまま描く。**
+/* **型の冊の、中身をえらぶ欄**(2026-09)。**本物の部品を、そのまま描く。**
 
    型シフトの画面は廃止した(利用者の指定「型のトレーニングの UI は廃止して、
    quick response の UI にそのままコンテンツを移してください」)。
@@ -1101,9 +1101,9 @@ const SHIFT = (
       <FrameParts parts={FRAME_PARTS} counts={frameQrCounts()}
                   picked={q.get('picked') === 'say' ? 'say' : FIRST_FRAME_PART}
                   onPick={() => {}}
-                  /* **わざと 66 本ぜんぶ渡す** —— 1つだけにすると、
+                  /* **わざと型をぜんぶ渡す** —— 1つだけにすると、
                      長い型の名前でプルダウンがはみ出すのを見逃す */
-                  forms={frameQrForms(q.get('picked') === 'say' ? 'say' : FIRST_FRAME_PART)}
+                  groups={frameQrGroups(q.get('picked') === 'say' ? 'say' : FIRST_FRAME_PART)}
                   form={q.get('form') === 'none' ? null : 'S allows 人 to do'}
                   onForm={() => {}} />
     </section>
@@ -1136,7 +1136,7 @@ const SHELF = (
           : [
             { id: 'my', label: '自分の Quick Response 帳' },
             { id: 'nf', label: 'Native Flow' },
-            { id: 'frame', label: '66 の型' },
+            { id: 'frame', label: FRAME_BOOK_LABEL },
           ]}
         book="frame"
         unit="問"
@@ -1146,7 +1146,7 @@ const SHELF = (
         sub={(
           <FrameParts parts={FRAME_PARTS} counts={frameQrCounts()}
                       picked={FIRST_FRAME_PART} onPick={() => {}}
-                      forms={frameQrForms(FIRST_FRAME_PART)}
+                      groups={frameQrGroups(FIRST_FRAME_PART)}
                       form={null} onForm={() => {}} />
         )}
         onPick={() => {}} />

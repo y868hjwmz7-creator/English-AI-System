@@ -44,8 +44,8 @@ import {
 } from '../lib/reviewScope.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
 import {
-  FIRST_FRAME_PART, FRAME_FORM_KEY, FRAME_PARTS, FRAME_PART_KEY, QR_HINT_KEY,
-  frameQrCounts, frameQrForms,
+  FIRST_FRAME_PART, FRAME_BOOK_LABEL, FRAME_FORM_KEY, FRAME_PARTS,
+  FRAME_PART_KEY, QR_HINT_KEY, frameFormOk, frameQrCounts, frameQrGroups,
 } from '../lib/frameQr.js'
 import { loadFrameQr } from '../lib/frameQrLoad.js'
 import { NF_UNIT_KEY } from '../data/nativeFlow.js'
@@ -156,8 +156,10 @@ export default function QrReview({
        `phraseSwap.js`)に書いてあり、ゲストごとに出し分ける理由がいまは無い
        (絞りたくなったら `learnerFeatures.js` に1つ足すだけである)。
        **後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
-    /* 中身(日本語 → 英語 / 言い換え)と型を、行の中で選ぶ */
-    { id: 'frame', label: '66 の型', hasSub: true },
+    /* 中身(日本語 → 英語 / 言い換え)と型を、行の中で選ぶ。
+       **名前は `frameQr.js` 1か所**(`FRAME_BOOK_LABEL`)。
+       型を足した日に、ここだけ古い数が残らないようにする(第5.177節) */
+    { id: 'frame', label: FRAME_BOOK_LABEL, hasSub: true },
   ]
   const [bookWanted, setBookWanted] = useState('my')
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
@@ -209,15 +211,19 @@ export default function QrReview({
    *
    * `null` ならぜんぶ。**Native Flow の Unit とまったく同じ作法**である ——
    * 覚える・出せない型は黙って落とす・変えたら読み直す。
-   * 一覧も並びも `frameQrForms()`(`sentenceFrames.js` の並び)が持つ。
+   * 一覧も並びも `frameQrGroups()`(`sentenceFrames.js` の並び)が持つ。
+   *
+   * **型ひとつでも、系ぜんぶ(`系:◯◯`)でも、同じ1つの値**である
+   * (第5.177節)。画面は中身を見ない —— 出せるかどうかも
+   * `frameFormOk()` に聞く(**判断を2か所に持たない**)。
    */
   const [formWanted, setFormWanted] = useState(() => {
     try { return localStorage.getItem(FRAME_FORM_KEY) || null } catch { return null }
   })
-  const partForms = useMemo(() => frameQrForms(part), [part])
-  /* **出せない型が残っていても、「ぜんぶ」に落ちる。**
+  const partGroups = useMemo(() => frameQrGroups(part), [part])
+  /* **出せない絞り方が残っていても、「ぜんぶ」に落ちる。**
      中身を切り替えたときに、向こうに無い型が残っていると0問になる */
-  const form = partForms.some((f) => f.form === formWanted) ? formWanted : null
+  const form = frameFormOk(part, formWanted) ? formWanted : null
 
   /**
    * **ヒントを出しているか**(2026-09 利用者の指定)。
@@ -617,9 +623,9 @@ export default function QrReview({
         catch { /* 使えなくても困らない */ }
         dropRun()
       }}
-      /* **型で絞る**(2026-09 利用者の指定)。一覧も並びも
-         `frameQrForms()` が持つ —— 画面で 66 本を書き写さない */
-      forms={partForms}
+      /* **型で絞る**(2026-09 利用者の指定)。一覧も並びも系ごとの数も
+         `frameQrGroups()` が持つ —— 画面で型を書き写さない */
+      groups={partGroups}
       form={form}
       onForm={(f) => {
         setFormWanted(f)
@@ -696,7 +702,7 @@ export default function QrReview({
         {bookPick}
         <p className="hint">
           Supabase が設定されていないため、復習は溜まりません。
-          「66 の型」は、設定が無くてもそのまま使えます。
+          「{FRAME_BOOK_LABEL}」は、設定が無くてもそのまま使えます。
         </p>
       </section>
     )

@@ -32,6 +32,8 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs'
+/** 系の数(= 人に見せる型の数)。**書き写さない**(第5.177節) */
+import { frameGroupCount } from '../src/data/sentenceFrames.js'
 
 const PORT = 5198
 const ROOT = new URL('..', import.meta.url).pathname
@@ -5238,6 +5240,63 @@ for (const W of [1280, 794, 453, 390, 320]) {
       + ` / 通し番号は振り直さない / 例文 ${既定.例文の数} 行(訳つき 1・off で 0)`
       + ` / 巻末のレクチャー ${既定.型の数} 型`)
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   「〜系ぜんぶ」が、本当に欄に出ているか(第5.177節・2026-09 利用者の指定)
+
+     > 66の型ですが、実際はもっと少ないはずです。
+     > 写真のように「させる系」で一つと数えた時の数に変えてください。
+     > そして、選択肢に「〜系全て」を追加してください。
+
+   **`npm run test:shift` は「書いてあるか」までしか見られない。**
+   `<optgroup>` の中に `<option>` を1つ足す話なので、
+   **描いてみないと、本当に選べるかは分からない**(CLAUDE.md
+   「描けないものは測れない」)。
+
+   **「出る」と「出ない」の両方を数える** —— 系ぜんぶだけになっても、
+   型ひとつだけになっても赤くなるようにする。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=shift`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(200)
+  const 欄 = await page.evaluate(() => {
+    /* **型の欄は、2つめの `<select>`**(1つめは「中身」)。
+       名前で探さない —— 名前は画面の言葉で、変わりうる */
+    const sel = [...document.querySelectorAll('.nfunits select')][1]
+    if (!sel) return null
+    const opts = [...sel.querySelectorAll('option')]
+    return {
+      組: sel.querySelectorAll('optgroup').length,
+      ぜんぶ: opts.length,
+      系: opts.filter((o) => /系ぜんぶ/.test(o.textContent)).length,
+      /* **その系の見出しの中に入っているか**(よそに紛れていない) */
+      組の中: [...sel.querySelectorAll('optgroup')]
+        .filter((g) => /系ぜんぶ/.test(g.querySelector('option')?.textContent ?? '')).length,
+      値: new Set(opts.map((o) => o.value)).size,
+      見える: sel.checkVisibility(),
+    }
+  })
+  if (!欄) ng('型の欄そのものが描かれていない')
+  else {
+    if (欄.系 === frameGroupCount()) ok(`「〜系ぜんぶ」が系の数だけ出ている(${欄.系})`)
+    else ng('「〜系ぜんぶ」の数が、系の数と合わない', `${欄.系} / ${frameGroupCount()}`)
+    if (欄.組 === frameGroupCount()) ok(`組の見出しも系の数だけある(${欄.組})`)
+    else ng('組の見出しの数が、系の数と合わない', `${欄.組} / ${frameGroupCount()}`)
+    if (欄.組の中 === frameGroupCount()) ok('「〜系ぜんぶ」は、どれもその系の先頭にある')
+    else ng('「〜系ぜんぶ」が、その系の先頭に無い組がある', String(欄.組の中))
+    /* **型ひとつも、これまでどおり選べる**(系ぜんぶに置き換わっていない) */
+    if (欄.ぜんぶ > 欄.系 + 1) ok(`型ひとつの選択肢も残っている(${欄.ぜんぶ} 個)`)
+    else ng('型ひとつが選べなくなっている', `${欄.ぜんぶ} / ${欄.系}`)
+    /* **値が1つも重なっていない** —— 重なると、別のものが出る */
+    if (欄.値 === 欄.ぜんぶ) ok('選択肢の値が、1つも重なっていない')
+    else ng('選択肢の値が重なっている', `${欄.値} / ${欄.ぜんぶ}`)
+    if (欄.見える) ok('型の欄が見えている')
+    else ng('型の欄が見えていない')
+  }
+  await page.close()
 }
 
 /* ══════════════════════════════════════════════════════════════════

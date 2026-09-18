@@ -6819,9 +6819,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/id: 'shelf', label: '業種べつ', hasSub: true/.test(wb)
     && /id: 'basic', label: '基礎単語', hasSub: true/.test(wb),
     '単語帳の「業種べつ」と「基礎単語」に、中身がある印が付いている')
+  /* **型の冊の名前は書き写さない**(第5.177節)。
+     `FRAME_BOOK_LABEL` 1か所から引いているので、ここでも名前では数えない */
   ok(/id: 'nf', label: 'Native Flow', hasSub: true/.test(qr)
-    && /id: 'frame', label: '66 の型', hasSub: true/.test(qr),
-    'Quick Response の「Native Flow」と「66 の型」も同じ')
+    && /id: 'frame', label: FRAME_BOOK_LABEL, hasSub: true/.test(qr),
+    'Quick Response の「Native Flow」と型の冊も同じ')
   /* **「出る」と「出ない」の両方**。中身の無い冊にまで付けると、
      選んだのに閉じない(押すところを探すことになる) */
   ok(!/label: '自分の単語帳', hasSub/.test(wb) && !/label: 'コロケーション', hasSub/.test(wb),

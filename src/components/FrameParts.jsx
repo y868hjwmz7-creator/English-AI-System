@@ -1,5 +1,5 @@
 /**
- * **66 の型の、どの中身を練習するか**(2026-09 利用者の指定)。
+ * **型の冊の、どの中身を練習するか**(2026-09 利用者の指定)。
  *
  * ============================================================================
  *   > 型のトレーニングの UI は廃止して、
@@ -33,21 +33,33 @@
  *   絞り込みで、こちらは**出す問そのものが変わる**(Unit とまったく同じ)。
  *   同じ場所に並べると、押したときに起きることが2通りになる。
  *
- *   **66 本を書き写さない。** 一覧も並びも組の名前も
- *   `frameQrForms()`(`sentenceFrames.js` の並び)が持つ。
+ *   **型を書き写さない。** 一覧も並びも組の名前も系ごとの問数も
+ *   `frameQrGroups()`(`sentenceFrames.js` の並び)が持つ。
  *   `<optgroup>` は、その組の名前をそのまま見出しにするだけである。
+ *
+ * 【「〜系ぜんぶ」を、組の見出しの下に1つ置く】(2026-09 利用者の指定)
+ *
+ *   > 選択肢に「〜系全て」を追加してください。
+ *
+ *   `S allows 人 to do` と `S enables 人 to do` は、
+ *   覚える側から見れば**同じ「させる」の言い方違い**である。
+ *   1本ずつしか選べないと、**系をまとめて練習する道が無い。**
+ *
+ *   **数も名前も、こちらで作らない** —— `frameQrGroups()` が
+ *   `kei`(短い呼び名)と `n`(系ぜんぶの問数)を持って来る。
+ *   ここで足し算すると、**札の数と出てくる問がずれる**(CLAUDE.md)。
  *
  * @param parts  中身の一覧(`FRAME_PARTS`)
  * @param counts 中身ごとの問数(`frameQrCounts()`)
  * @param picked いま開いている中身の id
  * @param onPick 選ばれた中身の id
- * @param forms  絞れる型の一覧(`frameQrForms()`)
- * @param form   いま絞っている型。`null` なら「ぜんぶ」
- * @param onForm 選ばれた型(「ぜんぶ」は `null`)
+ * @param groups 絞れる型の一覧を、系ごとに束ねたもの(`frameQrGroups()`)
+ * @param form   いま絞っているもの。`null` なら「ぜんぶ」
+ * @param onForm 選ばれた絞り方(「ぜんぶ」は `null`)
  */
 export default function FrameParts({
   parts = [], counts = {}, picked = null, onPick = null,
-  forms = [], form = null, onForm = null,
+  groups = [], form = null, onForm = null,
 }) {
   /** **中身が1つも無ければ、欄ごと出さない**(効かない操作を見せない) */
   if (!parts.length) return null
@@ -57,17 +69,14 @@ export default function FrameParts({
      画面と中身が食い違う(`ShelfBooks` で踏んだ落とし穴) */
   const now = parts.some((p) => p.id === picked) ? picked : parts[0].id
   const lead = parts.find((p) => p.id === now)?.lead ?? ''
-  /* **知らない型が残っていても、「ぜんぶ」に落ちる**(`ShelfBooks` と同じ) */
-  const nowForm = forms.some((f) => f.form === form) ? form : ''
-  const all = forms.reduce((n, f) => n + f.n, 0)
-  /* **組ごとにまとめる。** 66 本を1列に並べると、どこに何があるか分からない。
-     **並びは `frameQrForms()` のまま** —— ここで並べ替えない */
-  const groups = []
-  for (const f of forms) {
-    const last = groups[groups.length - 1]
-    if (last && last.label === f.group) last.rows.push(f)
-    else groups.push({ label: f.group, rows: [f] })
-  }
+  /* **知らない絞り方が残っていても、「ぜんぶ」に落ちる**(`ShelfBooks` と同じ)。
+     **この欄に出しているものと突き合わせる** —— 型ひとつでも系ぜんぶでも同じ */
+  const pick = new Set(
+    groups.flatMap((g) => [g.value, ...g.rows.map((f) => f.form)]),
+  )
+  const nowForm = pick.has(form) ? form : ''
+  /* **全体の問数も足し算しない。** 系ごとの数を足すだけである */
+  const all = groups.reduce((n, g) => n + g.n, 0)
 
   return (
     <div className="wb-add nfunits">
@@ -87,7 +96,7 @@ export default function FrameParts({
       {/* **型で絞る**(2026-09 利用者の指定)。中身の欄のすぐ下に置く ——
           どちらも「出す問そのものが変わる」ものなので、同じ場所にまとめる。
           **1つも型が無ければ、欄ごと出さない**(効かない操作を見せない) */}
-      {forms.length > 0 && (
+      {groups.length > 0 && (
         <label className="field field--inline nfunits-pick">
           <span className="field-label">型</span>
           <select className="input" value={nowForm}
@@ -95,7 +104,12 @@ export default function FrameParts({
             {/* **「ぜんぶ」を先に置く。** これまでの通し練習を残す道である */}
             <option value="">ぜんぶ({all} 問)</option>
             {groups.map((g) => (
-              <optgroup key={g.label} label={g.label}>
+              <optgroup key={g.key} label={g.label}>
+                {/* **「〜系ぜんぶ」を、その系のいちばん上に**(2026-09 利用者の指定)。
+                    **呼び名が無い系には出さない**(「系ぜんぶ」になってしまう) */}
+                {g.kei && (
+                  <option value={g.value}>{g.kei}系ぜんぶ({g.n} 問)</option>
+                )}
                 {g.rows.map((f) => (
                   <option key={f.form} value={f.form}>{f.form}({f.n} 問)</option>
                 ))}
