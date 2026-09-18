@@ -549,6 +549,40 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     if (tuned.length) ok(`このうち値を変えてあるのは … ${tuned.join(' / ')}`)
   }
 
+  /* **v3 が受け取る `stability` は、とびとびの3つだけ**(0 / 0.5 / 1)。
+     第5.192節・2026-09 実機・利用者の指摘。
+
+       > スコットランドの訛りで教材を作ったのに、全然訛りがなくなっている。
+
+     3つのどれでもない値(前は 0.35 だった)を送ると、窓口は先回りして
+     丸めないので、**断られない限り低いほう(Creative)として扱われる** ——
+     あれは**元の録音から離れる側**で、訛りはそこで薄くなる。
+
+     **一覧は窓口(`snapStability`)と分け合えない**(あちらは Deno の
+     関数の中にある)ので、**同じ3つを書いてあるかどうか**を見る。
+     窓口の側を変えたら、ここも赤くなって気づける */
+  {
+    const V3_OK = [0, 0.5, 1]
+    const fn = readFileSync(
+      new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8')
+    const m = fn.match(/const V3_STABILITY = \[([^\]]*)\]/)
+    const 窓口 = m ? m[1].split(',').map((x) => Number(x.trim())) : []
+    if (String(窓口) !== String(V3_OK)) {
+      ng('窓口が受け取る stability の3つが、見張りと食い違っている',
+        `窓口 ${窓口} / ここ ${V3_OK}`)
+    } else if (!V3_OK.includes(Number(ACCENT_KEEP.stability))) {
+      ng('stability が、v3 の受け取る3つのどれでもない',
+        `${ACCENT_KEEP.stability}。0(感情)/ 0.5(元の録音に近い)/ 1(揃う)`)
+    } else if (Number(ACCENT_KEEP.stability) !== 0.5) {
+      /* **「3つのどれか」だけでは足りない。** 0 に戻しても緑になる ——
+         あれは訛りが薄くなる側である(利用者の指定は「最大限生かす」) */
+      ng('訛りを最大限に活かす値(0.5・Natural)になっていない',
+        `いま ${ACCENT_KEEP.stability}。0 は感情が出るが、元の録音から離れる`)
+    } else {
+      ok('stability は 0.5(Natural)—— v3 で元の録音にいちばん近い読み方')
+    }
+  }
+
   /* **範囲の外を送ると窓口が 422 で断られる。** 数の欄は 0〜1 に収める */
   const outOfRange = CLIP_VOICES.filter((v) => {
     const st = voiceSettingsOf(v.id)
