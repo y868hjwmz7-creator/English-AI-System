@@ -6059,6 +6059,184 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   読み方 —— 訛りと感情を、都度えらぶ(第5.196節・2026-09 利用者の指定)
+
+     > 発音について、訛りと感情どちらを重視するか都度指定させてください。
+
+   **描いて数える。** ソースに `READ_STYLES.map(` が1つあるだけでは、
+   ①本当に画面に出ているのか ②畳んだ中に隠れていないか
+   ③良い声がいない訛りで消えるか(効かない操作を見せない)
+   ④作り直しの欄で、**いまの読み方が入っているか**
+   —— どれも分からない。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)。片方だけだと、
+   **どこにも出さない形・どの訛りでも出す形**に書き換えても緑になる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const { READ_STYLES, voicesOfAccent, CLIP_ACCENTS } =
+    await import('../src/data/clipVoices.js')
+  /** その画面の読み方の欄を返す。**開いたままにして、選び直せるようにする** */
+  const 開く = async (url) => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    page.setDefaultTimeout(8000)
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(500)
+    return page
+  }
+
+  /** 読み方の欄を、**描かれているとおりに**拾う */
+  const 測る = async (page) => {
+    const got = await page.evaluate(() => {
+      const 欄 = [...document.querySelectorAll('label.field')]
+        .filter((l) => (l.querySelector('span')?.firstChild?.textContent ?? '')
+          .trim() === '声の出し方')
+      const sel = 欄[0]?.querySelector('select')
+      /* **代償の1行は、`tip` ではない。** 説明の文を消している人にも
+         出ていなければならないので、**見えているかどうかまで見る** */
+      const hint = 欄[0]?.querySelector('.field-hint')
+      return {
+        数: 欄.length,
+        /* **畳んだ中にいないか。** `checkVisibility()` で見る */
+        見える: 欄.filter((l) => l.checkVisibility?.() ?? true).length,
+        文: sel ? [...sel.options].map((o) => o.textContent.trim()) : [],
+        いま: sel ? sel.value : null,
+        代償: (hint?.checkVisibility?.() ?? !!hint) ? (hint?.textContent ?? '').trim() : '',
+        /* **選択肢が、閉じたまま読み切れるか。**
+           `<select>` は `scrollWidth` が伸びない —— **あれでは測れない**
+           (実際に長い名前に差し替えても緑のままだった)。
+           **同じ字で描いた幅**と、中身の入る幅(内側の幅 − 余白 − 三角)を
+           突き合わせる。選択肢を長くしたら赤くなる */
+        切れ: (() => {
+          if (!sel) return false
+          const cs = window.getComputedStyle(sel)
+          const ruler = document.createElement('span')
+          ruler.style.cssText = 'position:absolute;visibility:hidden;white-space:pre'
+          ruler.style.font = cs.font
+          ruler.style.letterSpacing = cs.letterSpacing
+          document.body.appendChild(ruler)
+          const 入る = sel.clientWidth
+            - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 26
+          let 出た = false
+          for (const o of sel.options) {
+            ruler.textContent = o.textContent
+            if (ruler.offsetWidth > 入る) 出た = true
+          }
+          ruler.remove()
+          return 出た
+        })(),
+      }
+    })
+    return got
+  }
+  /** 開いて、測って、閉じる(1回きりのとき) */
+  const 読む = async (url) => {
+    const page = await 開く(url)
+    const got = await 測る(page)
+    await page.close()
+    return got
+  }
+
+  const 作る = await 読む(`http://localhost:${PORT}/__bar.html?screen=form&kind=reading`)
+  if (作る.数 === 0) {
+    ng('声の出し方 … 教材を作る画面に出ていない', '訛りと感情をえらぶ欄が要る')
+  } else if (作る.見える === 0) {
+    ng('声の出し方 … 畳んだ中に隠れている', '声をえらぶ流れの中に、そのまま出す')
+  } else if (作る.数 > 1) {
+    ng('声の出し方 … 同じ欄が2つ並んでいる', `${作る.数} 個`)
+  } else ok(`声の出し方 … 教材を作る画面に、畳まずに出る(いま「${作る.いま}」)`)
+
+  /* **選択肢は2つとも、名簿のとおりか。** 画面で書き直すと、
+     名簿を直しても画面が古いままになる(呼び名を2か所に書かない) */
+  const 名簿の文 = READ_STYLES.map((st) => st.label)
+  if (String(作る.文) !== String(名簿の文)) {
+    ng('声の出し方 … 選択肢が名簿(READ_STYLES)のとおりでない',
+      `画面 ${作る.文.join(' / ')}\n    名簿 ${名簿の文.join(' / ')}`)
+  } else if (作る.切れ) {
+    ng('声の出し方 … 選択肢が 390px で切れている', `${作る.文.join(' / ')}`)
+  } else ok(`声の出し方 … 選択肢は名簿のとおりで、390px でも切れない(${作る.文.join(' / ')})`)
+
+  /* **失うほうが、画面に出ているか**(第5.192節で踏んだところ)。
+     **2つとも選び直して、実際に描かれた1行を読む** ——
+     片方だけだと、**いつも同じ1行を出す形**に書き換えても緑になる。
+     `tip` を付けていないので、説明の文を消していても出ていなければならない */
+  {
+    const page = await 開く(`http://localhost:${PORT}/__bar.html?screen=form&kind=reading`)
+    const 見た = []
+    for (const st of READ_STYLES) {
+      await page.selectOption('label.voice-style select', st.id)
+      await page.waitForTimeout(150)
+      見た.push({ id: st.id, ...(await 測る(page)) })
+    }
+    await page.close()
+    const 無 = 見た.filter((x) => !x.代償.includes('訛り'))
+    const 同 = new Set(見た.map((x) => x.代償)).size < READ_STYLES.length
+    if (無.length) {
+      ng('声の出し方 … 「訛り」がどうなるかが、画面に出ていない',
+        無.map((x) => `${x.id}「${x.代償}」`).join(' / '))
+    } else if (同) {
+      ng('声の出し方 … どちらを選んでも、同じ1行しか出ない',
+        見た.map((x) => x.代償).join(' / '))
+    } else {
+      ok(`声の出し方 … 選ぶたびに、失うほうが出る(${見た.map((x) => `${x.id}: ${x.代償}`).join(' / ')})`)
+    }
+  }
+
+  /* ③ **良い声が1人もいない訛りでは、出ない。**
+     標準の段(Google / Azure)に `stability` は無く、どちらを選んでも
+     同じ音が鳴る —— **効かない操作を見せない**(CLAUDE.md)。
+     **一覧から拾う**(どの訛りに声がいないかを書き写さない) */
+  const 声なし = CLIP_ACCENTS.find((a) => voicesOfAccent(a.id, 'narration').length === 0)
+  if (!声なし) {
+    ok('声の出し方 … 声のいない訛りが1つも無いので、消える側は測れない')
+  } else {
+    const 消える = await 読む(
+      `http://localhost:${PORT}/__bar.html?screen=form&kind=reading&accent=${声なし.id}`)
+    if (消える.数 > 0) {
+      ng(`声の出し方 … 良い声のいない訛り(${声なし.label})でも出ている`,
+        '標準の段に stability は無く、えらんでも何も変わらない')
+    } else ok(`声の出し方 … 良い声のいない訛り(${声なし.label})では出ない`)
+  }
+
+  /* ④ **作り直しの欄。** ここが無いと、作ったあとで読み方だけを
+     変える道がどこにも無い。**いまの読み方が入っているか**も見る
+     ——既定に戻っていると、押しただけで読み方が変わり、課金される */
+  const 直す = await 読む(`http://localhost:${PORT}/__bar.html?screen=remake`)
+  const 直す感情 = await 読む(
+    `http://localhost:${PORT}/__bar.html?screen=remake&style=emotion`)
+  if (直す.数 === 0 || 直す.見える === 0) {
+    ng('声の出し方 … 音声を作り直す欄に出ていない', '作ったあとで変える道が無くなる')
+  } else if (直す.いま === 直す感情.いま) {
+    /* **両方見る。** 片方だけだと、**いつも同じ値を出す形**に
+       書き換えても緑のままになる */
+    ng('声の出し方 … 作り直しの欄が、いまの読み方を読んでいない',
+      `訛りの教材も感情の教材も「${直す.いま}」で開く`)
+  } else if (直す.いま !== 'accent' || 直す感情.いま !== 'emotion') {
+    ng('声の出し方 … 作り直しの欄が、教材と違う読み方で開く',
+      `訛りの教材 → ${直す.いま} / 感情の教材 → ${直す感情.いま}`)
+  } else ok('声の出し方 … 作り直しの欄は、その教材の読み方で開く(訛り / 感情)')
+
+  /* **押す前に、何で作るのかが読めるか。** 声の名前だけだと、
+     いま訛りと感情のどちらで作ろうとしているのかが分からない */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    page.setDefaultTimeout(8000)
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=remake&style=emotion`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(400)
+    const 札 = await page.evaluate(() => (
+      document.querySelector('.voice-remake-cast')?.textContent ?? ''))
+    await page.close()
+    const 名 = READ_STYLES.find((st) => st.id === 'emotion').label
+    if (!札.includes(名)) {
+      ng('声の出し方 … 作り直しの札に、読み方が出ていない', `いま「${札.trim()}」`)
+    } else ok(`声の出し方 … 作り直しの札に読み方が出る(${札.trim()})`)
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    アサインする(第5.181節 / 第5.186節・2026-09 利用者の指定)
 
      > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、
@@ -6759,6 +6937,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
      **画面を足したら、ここにも足す** —— 足すまで見張られない */
   const SCREENS = [
     ['tools', ''], ['form', ''], ['search', ''], ['qr', ''], ['qrrev', ''],
+    /* **音声を作り直す欄**(第5.196節)。訛り・話す人・読み方が
+       横に並ぶので、**横のすき間**がいちばん出やすい */
+    ['remake', ''],
     ['rscope', ''], ['wordbook', ''], ['mybook', ''], ['result', ''],
     ['radio', ''], ['qrradio', ''], ['course', ''], ['basicpick', ''],
     ['shelfpick', ''], ['speech', ''], ['gnote', ''], ['tabs', ''],

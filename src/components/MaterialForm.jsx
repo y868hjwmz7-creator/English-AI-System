@@ -54,8 +54,9 @@ import {
   speechScenesFor,
 } from '../data/genres.js'
 import {
-  CLIP_ACCENTS, DEFAULT_ACCENT, MIN_MEETING_SPEAKERS, findVoice, pickVoices,
-  speakerCountsFor, voiceCountFor, voicePurposeFor, voicesOfAccent,
+  CLIP_ACCENTS, DEFAULT_ACCENT, DEFAULT_READ_STYLE, MIN_MEETING_SPEAKERS,
+  READ_STYLES, findVoice, pickVoices, readStyleHint, speakerCountsFor, styledVoiceId,
+  voiceCountFor, voicePurposeFor, voicesOfAccent,
 } from '../data/clipVoices.js'
 /* **出来上がった名前に、声の並びを合わせる**(2026-09 利用者の指摘
      「男の役に女性の声、女性の役に男の声がアサインされることがほとんど」)。
@@ -227,6 +228,10 @@ export default function MaterialForm({
   const [speakers, setSpeakers] = useState(initial.speakers ?? 2)
   // 指名した声。空文字のところは「おまかせ」
   const [picked, setPicked] = useState([])
+  /* **読み方**(第5.196節・2026-09 利用者の指定「訛りと感情どちらを重視するか
+     都度指定させてください」)。既定はこれまでどおり「訛りを活かす」。
+     選んだ側は、保存する声の id の後ろに付いて回る(`styledVoiceId`) */
+  const [readStyle, setReadStyle] = useState(initial.readStyle || DEFAULT_READ_STYLE)
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
   /* **話の切り口**(0046・2026-09 利用者の指定)。
      空なら「おまかせ」=**まだ使っていない切り口から1枚引く。**
@@ -1321,13 +1326,23 @@ export default function MaterialForm({
       : cast
   )
 
+  /**
+   * 保存する声の並びに、**読み方を付ける**(第5.196節)。
+   *
+   * **並べ替えが終わってから付ける。** 先に付けると、性別を引く
+   * `findVoice()` に読み方付きの id が渡ることになる(引けはするが、
+   * **並べ替えの中で1つでも素の id に戻されたら、その声だけ読み方が抜ける**)。
+   * **付けるのは、いちばん最後の1回だけ**にしておく。
+   */
+  const styledCast = () => orderedCast().map((id) => styledVoiceId(id, readStyle))
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (busy) return
     setBusy(true)
     setError(null)
     // **1回だけ決めて、作るときも支度のときも同じものを使う**
-    const voiceIds = orderedCast()
+    const voiceIds = styledCast()
     // 教材名は空でよい。日付・弱点・レベルから組み立てる。
     // 必須にすると、AI に作らせるだけの人にも入力を強いることになる。
     const { data, error: message } = await createMaterial({
@@ -1806,6 +1821,45 @@ export default function MaterialForm({
               </select>
             </label>
           ))}
+
+          {/* **読み方 —— 訛りを活かすか、感情を出すか**(第5.196節・
+              2026-09 利用者の指定「発音について、訛りと感情どちらを重視するか
+              都度指定させてください」)。
+
+              **両方は選べない。** v3 の `stability` はとびとびの3つで、
+              **訛りは「元の録音の特徴」そのもの**である。感情を前に出すほど
+              元の録音から離れ、訛りは薄れる(第5.192節)。
+              だから**選択肢の文に、失うほうも必ず書く** ——
+              片方だけ書くと、もう片方は「黙って変えた」ことになる。
+
+              **良い声が1人もいない訛りでは出さない**(効かない操作を
+              見せない)。標準の段(Google / Azure)に `stability` は無く、
+              どちらを選んでも同じ音が鳴る。
+
+              **選んだ側は、保存する声の id の後ろに付いて回る**
+              (`styledVoiceId`)。置き場所も指紋も別になるので、
+              **同じ英文を2つの読み方で持てるし、混ざらない。**
+              既定(訛りを活かす)は素の id のままなので、
+              **すでに作った音声は1本も無駄にならない。** */}
+          {voicePool.length > 0 && (
+            <label className="field voice-style">
+              <span>
+                声の出し方
+                {/* **いま選んでいる読み方が、何を諦めるのか。**
+                    `tip` を付けない —— 説明の文を消している人にも必ず出す。
+                    ここは飾りではなく、**片方を選べばもう片方を失う**という、
+                    この欄そのものの意味である(第5.192節で黙って変えた) */}
+                <span className="field-hint">{readStyleHint(readStyle)}</span>
+              </span>
+              {/* **選択肢は名前だけ。** ひとことまで入れると、
+                  狭い画面で「訛りを活かす —」で切れて読めなくなる(実測) */}
+              <select value={readStyle} onChange={(e) => setReadStyle(e.target.value)}>
+                {READ_STYLES.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         {/* **声が1人も登録されていないときの断り書きは出さない**

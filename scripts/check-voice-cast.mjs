@@ -31,9 +31,12 @@ import {
   castClipSpeakers, castLine, castList, remakeModeOf, sameVoices,
 } from '../src/lib/voiceCast.js'
 import {
-  ACCENT_KEEP, CLIP_VOICES, V2, V3, findVoice, voiceModelOf, voiceSettingsOf,
-  voicesOfAccent,
+  ACCENT_KEEP, CLIP_VOICES, DEFAULT_READ_STYLE, READ_STYLES, V2, V3,
+  baseVoiceOf, elevenIdOf, findVoice, plainVoiceId, readStyleLabel, readStyleOf,
+  resolveVoices, styledVoiceId, voiceLabel, voiceModelOf, voiceRateOf,
+  voiceSettingsOf, voicesOfAccent,
 } from '../src/data/clipVoices.js'
+import { wholeMark } from '../src/lib/wholeAudio.js'
 import { SPEAK_MAX, speakChunks } from '../src/lib/speakChunks.js'
 import { orderVoicesByNames } from '../src/lib/voiceOrder.js'
 
@@ -97,8 +100,15 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
      `voiceIds` を保存する(⑨)。ただし**顔ぶれは `cast` のまま**なので、
      「作るときに伝えた性別と、保存する声がずれない」という
      この検証の役目は変わっていない。
-     見るのは「1回だけ作って、2か所へ同じものを渡しているか」である */
-  const once = /const voiceIds = orderedCast\(\)/.test(form)
+     見るのは「1回だけ作って、2か所へ同じものを渡しているか」である。
+
+     **第5.196節で1段はさまった。** 並べ替えた `orderedCast()` に
+     読み方(訛り / 感情)を付けたものが `styledCast()` で、
+     保存するのはそちら。**顔ぶれも並びも変わらない**ので、
+     この検証の役目は変わらない —— 見る名前だけを付け替える。
+     **2段とも見る**(片方だけだと、途中で読み方が落ちても緑になる) */
+  const once = /const voiceIds = styledCast\(\)/.test(form)
+    && /const styledCast = \(\) => orderedCast\(\)/.test(form)
   const saved = /\n\s*voiceIds,\n/.test(form)
   const prepared = /voiceIds,\s*tags:/.test(form)
   if (/voiceIds:\s*cast\b/.test(form)) {
@@ -580,6 +590,161 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
         `いま ${ACCENT_KEEP.stability}。0 は感情が出るが、元の録音から離れる`)
     } else {
       ok('stability は 0.5(Natural)—— v3 で元の録音にいちばん近い読み方')
+    }
+  }
+
+  /* ── **読み方(訛り / 感情)を、都度えらべる**(第5.196節)────────
+   *
+   *   > 発音について、訛りと感情どちらを重視するか都度指定させてください。
+   *
+   * 読み方は、**声の id の後ろに `-emo` を付けて持ち回る。**
+   * だから見るのは次の4つで、**どれか1つでも欠けると黙って壊れる。**
+   *
+   *   ① 名簿の id が、その印とぶつかっていないか
+   *   ② 付ける / 外すが、往復して元に戻るか。**既定の側は素のまま**か
+   *   ③ 名簿を引く仕組みが、読み方を素通りするか
+   *      (ここが抜けると、その声の**名前も Voice ID も引けなくなる**)
+   *   ④ 置き場所が**本当に別になる**か
+   *      (ここが抜けると、2つの読み方が**同じファイルを取り合う**)
+   */
+  {
+    const TAIL = '-emo'
+    const clash = CLIP_VOICES.filter((v) => v.id.endsWith(TAIL))
+    if (clash.length) {
+      ng(`名簿の id が「${TAIL}」で終わっている`,
+        `${clash.map((v) => v.id).join(' / ')}\n    読み方の印とぶつかる。id を変える`)
+    } else ok(`名簿の ${CLIP_VOICES.length} 人とも、id が読み方の印とぶつかっていない`)
+
+    /* **一覧を勝手に減らさない。** 片方しか無ければ「都度えらぶ」が成り立たない */
+    const styleIds = READ_STYLES.map((st) => st.id)
+    if (!styleIds.includes('accent') || !styleIds.includes('emotion')) {
+      ng('読み方が2つそろっていない', `いま ${styleIds.join(' / ')}`)
+    } else if (!READ_STYLES.every((st) => st.label && st.hint)) {
+      ng('読み方に、画面に出す名前かひとことが無い')
+    } else if (DEFAULT_READ_STYLE !== 'accent') {
+      /* **既定は「訛りを活かす」。** ここが感情の側に倒れると、
+         何も指定していない古い教材まで読み方が変わったことになる */
+      ng('既定の読み方が「訛りを活かす」ではない', `いま ${DEFAULT_READ_STYLE}`)
+    } else ok(`読み方は ${READ_STYLES.map((st) => st.label).join(' / ')} の2つ`)
+
+    /* **選択肢の文に、失うほうも書いてあるか**(第5.192節で踏んだところ)。
+       「感情が豊かになる」しか言わないと、**訛りが薄れることを黙って
+       変えた**ことになる。**つまみが2つの意味を持つなら、両方を言う** */
+    const noLoss = READ_STYLES.filter((st) => !st.hint.includes('訛り'))
+    if (noLoss.length) {
+      ng('読み方のひとことに「訛り」がどうなるかが書いていない',
+        `${noLoss.map((st) => `${st.label}「${st.hint}」`).join(' / ')}`)
+    } else ok('読み方のひとことは、どちらも「訛り」がどうなるかを書いている')
+
+    const probe = CLIP_VOICES.find((v) => v.elevenId) ?? CLIP_VOICES[0]
+    const emo = styledVoiceId(probe.id, 'emotion')
+    const plain = styledVoiceId(probe.id, 'accent')
+
+    /* ② 往復。**既定の側は素の id のまま**でなければならない ——
+       ここが変わると、**すでに作ってある音声が全部作り直しになる**(課金) */
+    if (plain !== probe.id) {
+      ng('既定の読み方で、声の id が変わってしまう',
+        `${probe.id} → ${plain}。すでに作った音声が全部作り直しになる`)
+    } else if (emo === probe.id) {
+      ng('感情の側でも、声の id が変わらない', '置き場所が分かれず、同じ音が返る')
+    } else if (plainVoiceId(emo) !== probe.id) {
+      ng('読み方を外すと、元の id に戻らない', `${emo} → ${plainVoiceId(emo)}`)
+    } else if (readStyleOf(emo) !== 'emotion' || readStyleOf(plain) !== 'accent') {
+      ng('id から読み方を読み取れない',
+        `${emo} → ${readStyleOf(emo)} / ${plain} → ${readStyleOf(plain)}`)
+    } else ok(`読み方は id で持ち回る … ${plain} / ${emo}(往復して戻る)`)
+
+    /* **両方見る。** 片方だけだと、**どちらでも同じ値を返す形**に
+       書き換えても緑のままになる(CLAUDE.md「出ると出ないの両方を見る」) */
+    const stEmo = Number(voiceSettingsOf(emo).stability)
+    const stPlain = Number(voiceSettingsOf(plain).stability)
+    if (stEmo === stPlain) {
+      ng('読み方を変えても stability が動かない', `どちらも ${stEmo}`)
+    } else if (stPlain !== Number(ACCENT_KEEP.stability)) {
+      ng('訛りの側が、既定(ACCENT_KEEP)と違う値になっている',
+        `${stPlain} / 既定 ${ACCENT_KEEP.stability}`)
+    } else if (stEmo !== 0) {
+      ng('感情の側が Creative(0)になっていない', `いま ${stEmo}`)
+    } else ok(`読み方で stability が変わる … 訛り ${stPlain} / 感情 ${stEmo}`)
+
+    /* ③ 名簿を引く仕組みが、読み方を素通りするか。
+       **1つでも抜けると、その声だけ名前が出ない・Voice ID が引けない
+       (= 1本にまとめられない)・速さの補正が効かない**、と別々に壊れる */
+    const through = [
+      ['名簿の行', findVoice(emo)?.id, findVoice(probe.id)?.id],
+      ['Voice ID', elevenIdOf(emo), elevenIdOf(probe.id)],
+      ['モデル', voiceModelOf(emo), voiceModelOf(probe.id)],
+      ['速さ', voiceRateOf(emo), voiceRateOf(probe.id)],
+      ['画面に出す名前', voiceLabel(emo), voiceLabel(probe.id)],
+      ['標準の段の代役', baseVoiceOf(emo), baseVoiceOf(probe.id)],
+    ].filter(([, a, b]) => a !== b)
+    if (through.length) {
+      ng('読み方を付けると、名簿から引けなくなるものがある',
+        through.map(([k, a, b]) => `${k}: ${a} ≠ ${b}`).join(' / '))
+    } else ok('読み方を付けても、名前・Voice ID・モデル・速さ・代役は同じ')
+
+    /* ④ 置き場所。**良い段では分かれ、標準の段では分かれない。**
+       ・分かれないと、2つの読み方が同じファイルを取り合う
+       ・標準の段(Google / Azure)に stability は無いので、
+         そちらまで分けると**同じ音を二度作って二度課金される** */
+    if (baseVoiceOf(emo) !== baseVoiceOf(probe.id)) {
+      ng('標準の段の置き場所まで分かれている', '同じ音を二度作って二度課金される')
+    } else ok('標準の段では分かれない(同じ音なので、作り直さない)')
+
+    /* **教材に保存した id が、そのまま鳴らす側へ届くか。**
+       画面はどこも `resolveVoices(m.voiceIds)[0]` で取り出している。
+       ここで落とされたり素の id に戻されたりすると、
+       **保存はできているのに、鳴る音だけが既定に戻る**(いちばん気づけない) */
+    const kept = resolveVoices([emo])
+    if (kept[0] !== emo) {
+      ng('教材に保存した読み方が、鳴らす側へ届かない', `${emo} → ${kept[0]}`)
+    } else ok('教材に保存した読み方は、そのまま鳴らす側へ届く')
+
+    const seat = castClipSpeakers(['Mika', 'Ken'], [emo, styledVoiceId(
+      CLIP_VOICES.find((v) => v.id !== probe.id)?.id, 'emotion')])
+    if ([...seat.values()].some((id) => readStyleOf(id) !== 'emotion')) {
+      ng('会話の役に配ると、読み方が落ちる', [...seat.values()].join(' / '))
+    } else ok('会話の役に配っても、読み方は落ちない')
+
+    /* **1本にまとめた音声も分かれるか。** あちらは別の鍵(`wholeMark`)を
+       持っているので、**ここを見ないと片方だけ取り違えたまま気づけない** */
+    const w1 = wholeMark([emo, emo], ['Hello.', 'Bye.'])
+    const w2 = wholeMark([probe.id, probe.id], ['Hello.', 'Bye.'])
+    if (w1 === w2) {
+      ng('1本にまとめた音声が、読み方で分かれない', '同じファイルを取り合う')
+    } else ok('1本にまとめた音声も、読み方で分かれる')
+
+    /* 画面に出す名前。**知らない id でも黙って落ちない** */
+    if (readStyleLabel('emotion') === readStyleLabel('accent')) {
+      ng('読み方の名前が、2つとも同じになっている')
+    } else if (readStyleLabel('') !== readStyleLabel(DEFAULT_READ_STYLE)) {
+      ng('知らない読み方に、名前が付かない')
+    } else ok(`読み方の名前が出る … ${readStyleLabel('accent')} / ${readStyleLabel('emotion')}`)
+
+    /* **えらんだものが、保存する id に本当に付いているか。**
+       画面の側で付け忘れると、**選べるのに何も変わらない**
+       (CLAUDE.md「何も変わらないは、届いていないという意味である」) */
+    for (const [file, why] of [
+      ['src/components/MaterialForm.jsx', '教材を作るとき'],
+      ['src/components/VoiceRemake.jsx', '音声を作り直すとき'],
+    ]) {
+      const src = read(file).replace(/\/\*[\s\S]*?\*\//g, '')
+      if (!/styledVoiceId\(/.test(src)) {
+        ng(`${why}、えらんだ読み方を声の id に付けていない`, file)
+      } else if (!/READ_STYLES\.map\(/.test(src)) {
+        ng(`${why}、読み方をえらぶ欄が出ていない`, file)
+      } else ok(`${why}、読み方をえらべて、保存する id に付く`)
+    }
+
+    /* **作り直しの欄は、指名を素の id で持つ。**
+       `sc-2-emo` のまま入れると選択肢のどれにも当たらず、
+       **「おまかせ」に見えて、押しただけで別の声に変わる** */
+    {
+      const src = read('src/components/VoiceRemake.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+      if (!/useState\(now\.map\(plainVoiceId\)\)/.test(src)) {
+        ng('作り直しの欄が、指名を素の id で持っていない',
+          'now をそのまま入れると、選択肢に当たらず「おまかせ」に見える')
+      } else ok('作り直しの欄は、指名を素の id で持っている')
     }
   }
 

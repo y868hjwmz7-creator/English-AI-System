@@ -30,6 +30,8 @@ import SessionResult from './components/SessionResult.jsx'
 import CollectRows from './components/CollectRows.jsx'
 import GoalBar from './components/GoalBar.jsx'
 import MaterialForm from './components/MaterialForm.jsx'
+import VoiceRemake from './components/VoiceRemake.jsx'
+import { styledVoiceId } from './data/clipVoices.js'
 import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
@@ -293,8 +295,41 @@ const RESULT = (
    **利用者の画面には出ない**(`index.html` はこのファイルを読み込まない) */
 const FORM = (
   <div className="app-main" style={{ padding: 16 }}>
-    <MaterialForm createdBy="t1" initial={{ kind: q.get('kind') || 'speech' }}
+    {/* `?accent=` … **良い声が1人もいない訛り**を測るために渡す
+        (第5.196節。読み方の欄は、そこでは出ない) */}
+    <MaterialForm createdBy="t1"
+                  initial={{ kind: q.get('kind') || 'speech',
+                    ...(q.get('accent') ? { accent: q.get('accent') } : {}) }}
                   onCreated={() => {}} onCancel={() => {}} />
+  </div>
+)
+
+/* **読み上げ音声を作り直す欄**(`?screen=remake`・第5.196節)。
+
+   ここでも読み方(訛り / 感情)をえらべる。**描かないと測れない** ——
+   `VoiceRemake` は props で受け取るだけなので Supabase が要らない。
+
+   `?style=emotion` … **いまの教材が「感情を出す」で作られている**形。
+   開いたときに**その読み方が入っているか**を見る
+   (既定に戻っていると、押しただけで読み方が変わり、課金される)。 */
+const REMAKE = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <VoiceRemake
+      material={{
+        id: 'm1',
+        kind: 'dialogue',
+        /* **本物と同じ形**(`castList` が話す人の数を数える) */
+        sections: [{ exercise_type: 'dialogue', items: [
+          { speaker: 'Mika', en: 'Could you send the file?' },
+          { speaker: 'Ken', en: 'Sure, right away.' },
+        ] }],
+        /* **読み方付きの id を書き写さない**(CLAUDE.md「値を書き写さない」)。
+           印を変えた日に、この骨組みだけが黙って「訛り」側に戻る */
+        voiceIds: ['us-1', 'us-2'].map(
+          (id) => styledVoiceId(id, q.get('style') === 'emotion' ? 'emotion' : 'accent')),
+      }}
+      clipCount={14} clipChars={1820} mine busy={false}
+      onRun={() => {}} onCancel={() => {}} />
   </div>
 )
 
@@ -1523,6 +1558,8 @@ createRoot(document.getElementById('root')).render(
     ? MYBOOK
     : q.get('screen') === 'wordbook'
     ? WORDBOOK
+    : q.get('screen') === 'remake'
+    ? REMAKE
     : q.get('screen') === 'form'
       ? FORM
       : q.get('screen') === 'result'

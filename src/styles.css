@@ -1063,6 +1063,11 @@ input, select, textarea {
 .voice-row > .field { flex: 1 1 150px; min-width: 0; }
 .voice-row > .field:first-child { flex: 2 1 280px; }
 .voice-pick { max-width: none; }
+/* **読み方(訛り / 感情)は、行を1つ使う**(第5.196節)。
+   この欄だけは、名前のとなりに**何を諦めるのかの1行**を連れている。
+   ほかの欄と同じ幅(390px で 165px)にすると**そこが折り返しだらけになる。**
+   `flex-basis: 100%` にするだけでよい —— 隙間は親の `gap` が持つ */
+.voice-row > .voice-style { flex: 1 1 100%; }
 .voice-pick > legend { margin-bottom: 6px; }
 
 /* ── 読み上げ音声を作り直すときの欄(2026-09 利用者の指定)──────────

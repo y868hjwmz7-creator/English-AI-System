@@ -521,7 +521,113 @@ export const ACCENT_KEEP = {
  *
  * 名簿にその行の `settings` があれば、**書いてある欄だけ**を差し替える。
  */
-export const voiceSettingsOf = (id) => ({ ...ACCENT_KEEP, ...(findVoice(id)?.settings ?? {}) })
+/**
+ * ============================================================================
+ * **読み方 —— 訛りを活かすか、感情を出すか**(第5.196節・2026-09 利用者の指定)
+ *
+ *   > 発音について、訛りと感情どちらを重視するか都度指定させてください。
+ *
+ * 【なぜ「どちらか」なのか】
+ *   v3 の `stability` は**とびとびの3つ**(0 / 0.5 / 1)で、
+ *   **訛りは「元の録音の特徴」そのもの**である。だから
+ *   **「感情を豊かに」と「訛りを残す」は、同じつまみの両端**で、
+ *   片方を選べば、もう片方は諦めることになる(第5.192節)。
+ *   **両立させる値は無い。** だから「都度えらぶ」形にした。
+ *
+ * | id | 画面に出す名前 | stability | どうなるか |
+ * |---|---|---|---|
+ * | `accent`(既定) | 訛りを活かす | **0.5** Natural | 元の録音にいちばん近い |
+ * | `emotion` | 感情を出す | **0** Creative | 抑揚が大きい。**訛りは薄れる** |
+ *
+ * **1 (Robust) は出さない。** 揃うだけで、訛りも感情もどちらも
+ * 前に出ない —— **えらぶ意味のある両端だけを見せる。**
+ *
+ * 【画面に出す名前は「声の出し方」】
+ *   中の名前は「読み方」(`READ_STYLES`)だが、**画面では使わない。**
+ *   聞き流しの「読み方」(英語だけ / くり返し言う練習 / チャンクで積む・
+ *   `wordRadio.js`)が**先にその名前を使っている。**
+ *   **違うものに同じ名前を付けない**(`.claude/rules/common.md`)ので、
+ *   こちらは**「声の出し方」**と呼ぶ。
+ */
+export const READ_STYLES = [
+  { id: 'accent', label: '訛りを活かす',
+    hint: '元の録音に近い。訛りが残る',
+    /* 既定なので上書きしない。`ACCENT_KEEP` がそのまま効く */
+    settings: {} },
+  { id: 'emotion', label: '感情を出す',
+    hint: '抑揚が出る。訛りは薄れる',
+    settings: { stability: 0 } },
+]
+
+/** 何も指定していない教材は、これまでどおり「訛りを活かす」 */
+export const DEFAULT_READ_STYLE = 'accent'
+
+/**
+ * **読み方は、声の id の後ろに付けて持ち回る**(第5.196節)。
+ *
+ * 【なぜ列を増やさないのか】
+ *   読み方が変われば**別の音声**である。置き場所は
+ *   `<版>/<段>/<声の id>/<英文の指紋>.mp3` で、**声の id が道に入っている。**
+ *   id の後ろに付ければ、**道も指紋も自動的に別になる** ——
+ *   混ざりようがないし、**すでに作った音声は1本も無駄にならない**
+ *   (既定の「訛りを活かす」は、これまでどおり素の id のままである)。
+ *
+ *   別の列に持つと、**道に入らない。** すると同じ英文・同じ声の
+ *   2つの読み方が**同じファイルを取り合い、先に作ったほうが両方に返る。**
+ *   `voice_ids`(0017)は `text[]` なので、**貼る SQL は1つも要らない。**
+ *
+ * 【`-emo` にした理由】
+ *   窓口(`supabase/functions/speak`)は受け取った声の名前から
+ *   **`[a-z0-9-]` 以外を落とす。** `_` も `@` も `.` も消えるので、
+ *   **使えるのは英数字とハイフンだけ**である。
+ *   名簿の id がこれで終わっていないことは `npm run test:voice` が見張る。
+ */
+const EMO_TAIL = '-emo'
+
+/** 声の id から読み方を読み取る。**判断はここ1か所** */
+export const readStyleOf = (voiceId) =>
+  (String(voiceId ?? '').endsWith(EMO_TAIL) ? 'emotion' : DEFAULT_READ_STYLE)
+
+/** 読み方を外した、名簿そのままの id */
+export const plainVoiceId = (voiceId) => {
+  const id = String(voiceId ?? '')
+  return id.endsWith(EMO_TAIL) ? id.slice(0, -EMO_TAIL.length) : id
+}
+
+/** 名簿の id に読み方を付ける。**既定の側は何も付けない**(素の id のまま) */
+export const styledVoiceId = (voiceId, style) =>
+  (style === 'emotion' ? `${plainVoiceId(voiceId)}${EMO_TAIL}` : plainVoiceId(voiceId))
+
+/** 読み方の id から、その読み方の1行。知らない id は既定のものを返す */
+const readStyleRow = (style) => READ_STYLES.find((s) => s.id === style) ?? READ_STYLES[0]
+
+/** 画面に出す名前(「訛りを活かす」) */
+export const readStyleLabel = (style) => readStyleRow(style).label
+
+/**
+ * **その読み方が、何を諦めるのか**(「抑揚が出る。訛りは薄れる」)。
+ *
+ * **名前と別に持つ。** 選択肢には名前だけを出し、これは欄のとなりに出す ——
+ * 1つにまとめると、**狭い画面で途中で切れて、失うほうだけが消える。**
+ */
+export const readStyleHint = (style) => readStyleRow(style).hint
+
+/**
+ * その声に添える ElevenLabs の指定。**どの声にも必ず添える。**
+ * **判断はここ1か所。** 画面ごとに書くと必ず食い違う。
+ *
+ * 重ねる順は、**弱いほうから**。
+ *   ① `ACCENT_KEEP`(全員に効く既定)
+ *   ② 読み方(`-emo` が付いていれば `stability` を 0 にする)
+ *   ③ 名簿にその行の `settings` があれば、**書いてある欄だけ**を差し替える
+ *
+ * ③がいちばん強いのは変えていない —— **1人だけ直す道**を塞がないため。
+ */
+export const voiceSettingsOf = (id) => ({
+  ...ACCENT_KEEP,
+  ...(READ_STYLES.find((s) => s.id === readStyleOf(id))?.settings ?? {}),
+  ...(findVoice(id)?.settings ?? {}),
+})
 
 // ── ここから下は仕組み。触らなくてよい ──────────────────────────
 
@@ -547,14 +653,20 @@ export const baseOf = (accent, gender) =>
  */
 export const JA_VOICE = 'ja-1'
 
-export const findVoice = (id) => CLIP_VOICES.find((v) => v.id === id) ?? null
+/**
+ * 名簿から1行引く。**読み方(`-emo`)は外してから引く**(第5.196節)。
+ * ここで外しておけば、名前・性別・Voice ID・モデル・速さを引く仕組みが
+ * **どれも書き換えずに済む**(判断は1か所)。
+ */
+export const findVoice = (id) => CLIP_VOICES.find((v) => v.id === plainVoiceId(id)) ?? null
 
 /** 名簿に無い id でも落とさない。代役だけは必ず決まる */
 export const baseVoiceOf = (id) => {
   const v = findVoice(id)
   if (v) return baseOf(v.accent, v.gender)
   // 名簿に無いものは、id そのものが代役の名前かもしれない(`us-female` など)
-  return BASE_VOICES.includes(id) ? id : DEFAULT_BASE
+  const plain = plainVoiceId(id)
+  return BASE_VOICES.includes(plain) ? plain : DEFAULT_BASE
 }
 
 /** その声で ElevenLabs を使えるか(Voice ID が入っているか) */
@@ -591,7 +703,7 @@ export const voiceLabel = (id) => {
      id をそのまま出すと**何のことか分からない**ので、
      「標準の声」であることと、訛り・性別を日本語で言う。
      `baseOf()` の作りに合わせて `<訛り>-<性別>` を読み解く */
-  const m = /^([a-z]{2})-(male|female)$/.exec(String(id ?? ''))
+  const m = /^([a-z]{2})-(male|female)$/.exec(plainVoiceId(id))
   if (m) return `標準の声(${accentLabel(m[1])}・${m[2] === 'male' ? '男性' : '女性'})`
   return id
 }

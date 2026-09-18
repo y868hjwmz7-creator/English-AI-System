@@ -29,7 +29,9 @@
  */
 import { useMemo, useState } from 'react'
 import {
-  CLIP_ACCENTS, accentLabel, findVoice, pickVoices, voicePurposeFor, voicesOfAccent,
+  CLIP_ACCENTS, READ_STYLES, accentLabel, findVoice, pickVoices, plainVoiceId,
+  readStyleHint, readStyleLabel, readStyleOf, styledVoiceId, voicePurposeFor,
+  voicesOfAccent,
 } from '../data/clipVoices.js'
 import { castList, remakeModeOf, sameVoices } from '../lib/voiceCast.js'
 
@@ -51,7 +53,14 @@ export default function VoiceRemake({
      もともとこのボタンは「良い声にならない英文を作り直す」ためのもので、
      声を変えるつもりが無いことのほうが多い。
      **国と話す人を変えるのは、選び直したときだけ** */
-  const [picked, setPicked] = useState(now)
+  /* **指名の欄は、読み方を外した id で持つ。** 選択肢の `value` は
+     名簿そのままの id なので、`sc-2-emo` のまま入れると
+     **どれにも当たらず「おまかせ」に見える**(= 開いて押しただけで
+     別の声に変わる)。付け直すのは `voiceIds` の最後の1回だけ */
+  const [picked, setPicked] = useState(now.map(plainVoiceId))
+  /* **読み方**(第5.196節)。**いまの読み方から始める** ——
+     ここが既定に戻っていると、押しただけで読み方まで変わり、課金される */
+  const [readStyle, setReadStyle] = useState(readStyleOf(now[0]))
   const [mode, setMode] = useState('copy')   // 'copy' | 'replace'
 
   /* 選べる声。**いま使っている声が名簿から外れていても、選択肢に残す**
@@ -73,8 +82,10 @@ export default function VoiceRemake({
     for (let i = 0; i < n; i += 1) {
       out.push(picked[i] || auto[i] || auto[0])
     }
-    return out.filter(Boolean)
-  }, [accent, n, purpose, picked])
+    /* **読み方は、いちばん最後に1回だけ付ける**(第5.196節)。
+       おまかせで引いてきた id にも同じように付く */
+    return out.filter(Boolean).map((id) => styledVoiceId(id, readStyle))
+  }, [accent, n, purpose, picked, readStyle])
 
   const accents = CLIP_ACCENTS.filter((a) => voicesOfAccent(a.id, purpose).length > 0)
   /* **いまと同じ声のままか。** 同じなら、していることは
@@ -117,6 +128,31 @@ export default function VoiceRemake({
             </select>
           </label>
         ))}
+
+        {/* **読み方**(第5.196節・2026-09 利用者の指定
+            「訛りと感情どちらを重視するか都度指定させてください」)。
+
+            作り直しの場でも選べないと、**作ったあとで読み方だけを
+            変える道がどこにも無い。** 開いたときは**いまの読み方**が
+            入っている(押しただけで変わらない)。
+
+            **良い声が1人もいなければ出さない** ——
+            標準の段(Google / Azure)に `stability` は無く、
+            どちらを選んでも同じ音が鳴る(効かない操作を見せない)。 */}
+        {pool.length > 0 && (
+          <label className="field voice-style">
+            <span>
+              声の出し方
+              <span className="field-hint">{readStyleHint(readStyle)}</span>
+            </span>
+            <select value={readStyle} disabled={busy}
+                    onChange={(e) => setReadStyle(e.target.value)}>
+              {READ_STYLES.map((st) => (
+                <option key={st.id} value={st.id}>{st.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       {/* **声を変えていないなら、道は1つしかない。**
@@ -168,6 +204,9 @@ export default function VoiceRemake({
         <br />
         <span className="voice-remake-cast">
           {accentLabel(accent)} … {voiceIds.map((id) => findVoice(id)?.label ?? id).join(' / ')}
+          {/* **読み方も並べて出す**(第5.196節)。声の名前だけだと、
+              いま訛りと感情のどちらで作ろうとしているのかが読めない */}
+          {' / '}{readStyleLabel(readStyle)}
         </span>
       </p>
 
