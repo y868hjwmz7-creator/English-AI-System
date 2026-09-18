@@ -42,7 +42,7 @@ import {
   SCOPES, SIZES, scopeCounts, scopeLead, scopePool, sizeLabel, takeCount, todayKey, isDueNow,
 } from '../lib/reviewScope.js'
 import SettingsSheet from './SettingsSheet.jsx'
-import { FocusIcon, GearIcon, RepeatIcon } from './Icons.jsx'
+import { FocusIcon, RepeatIcon, SortIcon } from './Icons.jsx'
 
 /**
  * @param {Array}  rows   絞り込みを当てたあとの一覧
@@ -209,18 +209,26 @@ export default function ReviewScope({
     </>
   )
 
-  /** ⚙ と、その中身。**畳んだ形でも、始める前でも、これ1つ** */
+  /** この欄の呼び名。**絵だけにしたので、言葉はここ1か所が持つ** */
+  const 出しかたと呼ぶ = '出しかた'
+
+  /** 絵と、その中身。**畳んだ形でも、始める前でも、これ1つ** */
   const 出しかた = (
     <>
       <button
         type="button"
         ref={gearRef}
-        className={`btn btn--small${open ? ' chip--on' : ''}`}
+        className={`btn btn--small rscope-sort${open ? ' chip--on' : ''}`}
         aria-expanded={open}
+        /* **文字を消したので、名前は `aria-label` が持つ**(第5.184節・
+           2026-09 利用者の指定「文字をなくしてください」)。
+           読み上げにも、押したときの吹き出しの題にも、同じ言葉を使う ——
+           **呼び名を2か所に書かない**(CLAUDE.md) */
+        aria-label={出しかたと呼ぶ}
+        title={出しかたと呼ぶ}
         onClick={() => setOpen((v) => !v)}
       >
-        <GearIcon />
-        出しかた
+        <SortIcon />
         {/* **絞っていることは、畳んでいても分かるようにする。**
             黙って絞ると「なぜ1件しか出ないのか」が分からない
             (さがす画面の `.finder-badge` と同じ考え方) */}
@@ -230,7 +238,7 @@ export default function ReviewScope({
         <SettingsSheet
           anchorEl={gearRef.current}
           onClose={() => setOpen(false)}
-          title="出しかた"
+          title={出しかたと呼ぶ}
           /* 札を押すと数が変わり、箱の高さも変わる。**置き直す合図を渡す** */
           placeKey={`${scope}/${size}/${narrowed}/${form}/${order}/${repeat}`}
         >

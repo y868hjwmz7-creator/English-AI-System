@@ -3191,6 +3191,39 @@ export default defineConfig({
           文言: (b.querySelector('.wb-stat-label')?.textContent ?? '').trim(),
         })),
         段の説明: (document.querySelector('.wb-stats-lead')?.textContent ?? '').trim(),
+        /* **「出しかた」は絵だけ**(第5.184節・2026-09 利用者の指定
+           「添付した『ソートアイコン』にして、文字をなくしてください」)。
+
+           **「絵が出ているか」だけを見ない** —— 文字を残したまま絵を
+           足しても緑になる。**文字が無いこと・名前が残っていること・
+           押せる大きさ・絵が真ん中にいること**の4つを持ち帰る。
+
+           名前は消していない(`aria-label`)。**黙って消さない**
+           ——読み上げでは「ボタン」としか読まれなくなる。 */
+        出しかた: (() => {
+          const b = document.querySelector('.rscope-sort')
+          if (!b) return null
+          const r = b.getBoundingClientRect()
+          const sv = b.querySelector('svg')
+          const sr = sv?.getBoundingClientRect()
+          return {
+            /* **数の丸(`.chip-count`)は数えない** —— あれは絞り込みの
+               件数で、消す約束をしたのは**ボタンの文字**である */
+            文字: [...b.childNodes]
+              .filter((n) => !n.classList?.contains('chip-count'))
+              .map((n) => n.textContent || '').join('').replace(/\s/g, ''),
+            名: b.getAttribute('aria-label') || '',
+            題: b.getAttribute('title') || '',
+            絵: !!sv,
+            幅: Math.round(r.width), 高さ: Math.round(r.height),
+            /* **絵が真ん中にいるか。** `.icon` は「絵のうしろに文字が続く」
+               前提で `margin-right: .38em` を持っているので、
+               **戻し忘れると右にだけ余白が残って左に寄る**(実測で踏んだ) */
+            絵のずれ: sr
+              ? Math.round(Math.abs((sr.left + sr.right) / 2 - (r.left + r.right) / 2) * 10) / 10
+              : null,
+          }
+        })(),
       }
     })
     let 開 = null
@@ -3267,6 +3300,26 @@ export default defineConfig({
     } else if (閉.高さ > 120) {
       ng(`復習の範囲 ${w}px … 畳んでも帯が高い(${閉.高さ}px)`,
         '押すものは「出す」と「出しかた」の2つだけである')
+    /* ── 「出しかた」は絵だけ(第5.184節)──────────────────── */
+    } else if (!閉.出しかた) {
+      ng(`復習の範囲 ${w}px … 「出しかた」のボタンが無い`, '`.rscope-sort`')
+    } else if (閉.出しかた.文字 !== '') {
+      ng(`復習の範囲 ${w}px … 「出しかた」に文字が残っている`,
+        `「${閉.出しかた.文字}」。利用者の指定は「文字をなくしてください」である`)
+    } else if (!閉.出しかた.絵) {
+      ng(`復習の範囲 ${w}px … 「出しかた」に絵が無い`,
+        '文字も絵も無いと、何のボタンか分からない')
+    } else if (閉.出しかた.名 !== '出しかた' || 閉.出しかた.題 !== '出しかた') {
+      ng(`復習の範囲 ${w}px … 「出しかた」の名前が消えている`,
+        `aria-label「${閉.出しかた.名}」/ title「${閉.出しかた.題}」。`
+        + '文字を消しても、読み上げと吹き出しには名前が要る')
+    } else if (閉.出しかた.幅 < 40 || 閉.出しかた.高さ < 34) {
+      ng(`復習の範囲 ${w}px … 「出しかた」が小さすぎる`,
+        `${閉.出しかた.幅}×${閉.出しかた.高さ}px。文字を消しても押す場所は小さくしない`)
+    } else if (閉.出しかた.絵のずれ > 0.6) {
+      ng(`復習の範囲 ${w}px … 「出しかた」の絵が真ん中にいない`,
+        `${閉.出しかた.絵のずれ}px ずれている。`
+        + '`.icon` の `margin-right` を 0 に戻し忘れていないか')
     } else if (!開) {
       ng(`復習の範囲 ${w}px … 「出しかた」を押しても吹き出しが出ない`)
     /* **押せる大きさを割らない**(CLAUDE.md) */
@@ -3316,6 +3369,7 @@ export default defineConfig({
         `${開.欄の幅.join(' / ')}px`)
     } else {
       ok(`復習の範囲 ${w}px … 畳んで ${閉.高さ}px(${閉.ボタン})`
+        + `・出しかたは絵だけ ${閉.出しかた.幅}×${閉.出しかた.高さ}px`
         + `・${開.形} ${開.幅}×${開.高さ}・欄 ${開.欄の幅[0]}px でそろう`)
     }
   }
@@ -6262,7 +6316,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
         await page.evaluate(() => {
           for (const d of document.querySelectorAll('details')) d.open = true
           for (const b of document.querySelectorAll('button')) {
-            if (/共有|出しかた|分野をえらぶ/.test((b.textContent || '').trim())) b.click()
+            /* **文字だけで探さない**(第5.184節)。「出しかた」は**絵だけ**に
+               なったので `textContent` は空である —— 名前は `aria-label` が
+               持っている。ここを直さないと、**黙って見張りが減る**
+               (畳んだ箱の中のすき間を、誰も測らなくなる) */
+            const 名 = `${(b.textContent || '').trim()} `
+              + `${b.getAttribute('aria-label') || ''}`
+            if (/共有|出しかた|分野をえらぶ/.test(名)) b.click()
           }
         })
         await page.waitForTimeout(400)

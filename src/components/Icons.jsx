@@ -159,6 +159,26 @@ export function SearchIcon({ className = 'icon' }) {
   )
 }
 
+/**
+ * **出しかた**(第5.184節・2026-09 実機・利用者の指定)。
+ *
+ *   > 単語帳とクイックレスポンスの右上の「出し方」を添付した
+ *   > 「ソートアイコン」にして、文字をなくしてください
+ *
+ * **長さの違う3本の横線。** 添付の絵と同じ形である。
+ * **歯車(`GearIcon`)とは役目が違う** —— あちらは「設定」、
+ * こちらは「並べ方・絞り方」を指す。
+ * **同じ絵を2つの行き先に付けない**(CLAUDE.md)。
+ */
+export function SortIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M4 6h12M4 10h8M4 14h4" fill="none" stroke="currentColor"
+            strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** 本。教材 */
 export function BookIcon({ className = 'icon' }) {
   return (
