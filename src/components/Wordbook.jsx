@@ -493,6 +493,23 @@ export default function Wordbook({
    */
   const [opened, setOpened] = useState(false)
   /**
+   * **冊(段・分野)を替えている最中か**(第5.173節・2026-09 利用者の指摘)。
+   *
+   *   > どの冊をやるのかを切り替える際に画面がチラつくのと、
+   *   > 冊の中にさらに選択肢があるはずなのに選択肢が出ずに切り替わり、
+   *   > もう一度選択肢を出すとやっと更なる選択肢が表示されるという
+   *   > 二度手間になってしまっています。
+   *
+   * **原因は1つ。** 替えた瞬間に画面ぜんぶを描き直していたので、
+   * **本棚のシートごと消えていた**(あれは `BookPick` の中にある)。
+   * だから中の選択肢(棚・段)が出ず、開き直す手間になっていた。
+   *
+   * この印が立っているあいだは、**帯も本棚も残したまま、中身だけ**を
+   * 入れ替える。**はじめて開いたときとは分ける** ——
+   * あちらは帯1本だけを出す(第5.172節)。
+   */
+  const [switching, setSwitching] = useState(false)
+  /**
    * **この回で「覚えかけ」を記録した語。**
    *
    * 同じ範囲を続けて回したときに、同じ語を二度進めないための控え
@@ -537,8 +554,11 @@ export default function Wordbook({
    */
   const books = [
     { id: 'my', label: '自分の単語帳' },
-    ...(shelves.length ? [{ id: 'shelf', label: '業種べつ' }] : []),
-    ...(showBasics ? [{ id: 'basic', label: '基礎単語' }] : []),
+    /* **`hasSub`** … 中にまだ選ぶものがある(第5.173節)。
+       選んでも本棚を閉じない —— 閉じると、分野を選ぶのに開き直しになる */
+    ...(shelves.length ? [{ id: 'shelf', label: '業種べつ', hasSub: true }] : []),
+    /* 段(基本360語 / 標準1200語)を、行の中で選ぶ */
+    ...(showBasics ? [{ id: 'basic', label: '基礎単語', hasSub: true }] : []),
     /* **コロケーション基本動詞**(2026-09 利用者の指定)。
          > これらを教材として独立させて登録せよ。
          > Native flow は Quick Response 教材、コロケーション基本動詞は単語帳だ。
@@ -1038,8 +1058,13 @@ export default function Wordbook({
     /* **判断が済んだことを、必ず先に立てる。** ここを「始めたときだけ」に
        すると、1語も無い帳面で**帯1本のまま止まる**(第5.172節) */
     setOpened(true)
-    if (!rowsRef.current.length) return
-    if (poolNow().length === 0) return
+    setSwitching(false)
+    if (!rowsRef.current.length || poolNow().length === 0) {
+      /* **出すものが無い冊に替えたときは、一覧の画面へ戻す**(第5.173節)。
+         帯のまま止めると、読み込み中に見えて終わらない */
+      setRunning(false)
+      return
+    }
     start()
   }, [isQuiz, loading, opened, rows.length, poolNow])
   const card = isQuiz ? queue[0] : null
@@ -1289,9 +1314,16 @@ export default function Wordbook({
    * `started` を戻すので、**新しい冊の1問目がそのまま出る**(第5.167節)。
    */
   const dropRun = () => {
-    setRunning(false); setStarted(false); setRadio(null)
-    /* 冊が変われば語も変わる。**判断からやり直す**(帯1本に戻る・第5.172節) */
+    setStarted(false); setRadio(null)
+    /* 冊が変われば語も変わる。**判断からやり直す** */
     setOpened(false)
+    /* **`running` は倒さない**(第5.173節)。倒すと出題の箱ごと消えて、
+       **その中にある本棚のシートまで一緒に消える。**
+       中身(`queue` / `result`)だけを空にすれば、
+       箱はそのままで**帯の下だけが帯1本に入れ替わる** */
+    setSwitching(true)
+    setQueue([]); setResult(null)
+    doneRef.current = []
     setFilter(emptyFilter)
     gradedRef.current = new Set()
   }
@@ -1416,7 +1448,7 @@ export default function Wordbook({
    * 通してしまうと、答えたあとの読み直し(`reload()`)のたびに
    * **出題が消えて帯になる。**
    */
-  if (!running && (loading || !opened)) return <Loading />
+  if (!running && !switching && (loading || !opened)) return <Loading />
 
   return (
     <section className="card">
@@ -1441,6 +1473,11 @@ export default function Wordbook({
           中身は `bookPick` 1か所 —— **復習の帯と同じものを出す** */}
       {bookPick}
 
+      {/* **冊を替えている最中は、ここから下だけが帯になる**(第5.173節)。
+          題も `冊名 ▾` も残るので、**画面のどこも動かない** ——
+          本棚のシートは `BookPick` が持っているので、開いたままである */}
+      {loading || !opened ? <Loading /> : (
+        <>
       {/* **1分野も選んでいないときは、そう言う**(行き止まりを作らない)。
 
           **ただし、既定では畳んである**(`tip`・2026-09 利用者の指定)。
@@ -1611,7 +1648,10 @@ export default function Wordbook({
       )}
 
       {error && <p className="notice notice--error">{error}</p>}
-      {loading && <p className="hint">読み込み中…</p>}
+        </>
+      )}
+      {/* **「読み込み中…」の1行は外した**(第5.173節)。
+          待っているあいだは `Loading`(帯)が出る —— 同じことを2つ見せない */}
 
       {/* 「積み上がり」は、いったんタブから外した(2026-08 利用者の指定)。
              > 積み上がりは一旦そこからは削除です。
@@ -1619,7 +1659,9 @@ export default function Wordbook({
           **効かない画面のコードを残さない。** 戻すときは git から取り出す */}
 
       {/* ── 今日の復習(10語ずつ)────────────────────────────── */}
-      {isQuiz && !loading && result && running && (
+      {/* **`!loading` を外した**(第5.173節)。読み直しのあいだだけ
+          結果の箱が消えて、**画面がちらついていた** */}
+      {isQuiz && result && running && (
       <div className="focus wbfocus" role="dialog" aria-modal="true" aria-label="今日の復習">
         <div className="focus-top">
           {/* **左上は ☰**(第5.172節)。上の帯とまったく同じ場所・同じ見た目。
@@ -1764,7 +1806,11 @@ export default function Wordbook({
         </button>
       )}
 
-      {card && running && (
+      {/* **中身が無くても、箱は残す**(第5.173節)。
+          冊を替えたときにここを畳むと、**帯も本棚も一緒に消える** ——
+          本棚のシートは `BookPick`(この中)が持っているので、
+          消えたぶんだけ「もう一度開く」手間になっていた */}
+      {running && !result && (
         <div className="focus wbfocus" role="dialog" aria-modal="true" aria-label="今日の復習">
           {/* **この回の進み具合**(2026-08 利用者の指定)。
                 > あと10語みたいなのも、入れるのであればしっかりメリハリを
@@ -1862,6 +1908,12 @@ export default function Wordbook({
               (集中モードと同じ `.focus-body`)。
               上に積まれた札や絞り込みは、この裏に隠れている */}
           <div className="focus-body">
+          {!card ? (
+            /* **冊を替えている最中は、ここだけが帯になる**(第5.173節)。
+               帯(☰ / 冊名 ▾ / 出しかた)はそのまま残るので、
+               **画面のどこも動かない。** 本棚のシートも開いたままである */
+            <Loading />
+          ) : (<>
           {/* **「思い出す」と「日本語 → 英語」だけ、カードで画面を使い切る**
               (2026-09 利用者の指定)。この2つは答えが**2つのボタンだけ**
               なので、下がまるごと空いていた。4択とつづりは、下に
@@ -2138,6 +2190,7 @@ export default function Wordbook({
                 箱と次に出す日は、**この仕組みが内側で使う数字**である。
                 ゲストにできることは何も無く、覚える助けにもならない。 */}
           </div>
+          </>)}
           </div>
         </div>
       )}

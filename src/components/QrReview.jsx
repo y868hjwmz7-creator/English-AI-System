@@ -143,7 +143,9 @@ export default function QrReview({
        「指定したゲストだけに届くように」)。判断は `nfUnitsFor()` 1か所で
        済ませてあり、ここでは数を見るだけである。
        **既定は空**なので、渡さない画面はこれまでどおり何も出ない */
-    ...(nfUnits.length ? [{ id: 'nf', label: 'Native Flow' }] : []),
+    /* **`hasSub`** … Unit を行の中で選ぶ(第5.173節)。
+       選んでも本棚を閉じない —— 閉じると、開き直さないと Unit を選べない */
+    ...(nfUnits.length ? [{ id: 'nf', label: 'Native Flow', hasSub: true }] : []),
     /* **66 の型**(2026-09 利用者の指定
        「型シフトはサイドバーからなくして、quick response 内に
        『66の型のQR』としてその中に『日本語→英語』と『言い換え』を
@@ -153,7 +155,8 @@ export default function QrReview({
        `phraseSwap.js`)に書いてあり、ゲストごとに出し分ける理由がいまは無い
        (絞りたくなったら `learnerFeatures.js` に1つ足すだけである)。
        **後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
-    { id: 'frame', label: '66 の型' },
+    /* 中身(日本語 → 英語 / 言い換え)と型を、行の中で選ぶ */
+    { id: 'frame', label: '66 の型', hasSub: true },
   ]
   const [bookWanted, setBookWanted] = useState('my')
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
@@ -290,6 +293,23 @@ export default function QrReview({
    * 立てるのは「判断が済んだ」ときで、始めたかどうかではない。
    */
   const [opened, setOpened] = useState(false)
+  /**
+   * **出題の箱(集中モード)が画面に出ているか**(第5.173節)。
+   *
+   *   > どの冊をやるのかを切り替える際に画面がチラつくのと、
+   *   > 冊の中にさらに選択肢があるはずなのに選択肢が出ずに切り替わり…
+   *
+   * 以前は「問が入っているか」(`run`)で箱を出していた。だから冊を
+   * 替えた瞬間に**箱ごと消え、その中にある本棚のシートまで一緒に消えて**
+   * いた。中の選択肢(Unit・型)が出ないのも、開き直す手間になるのも、
+   * **根は1つ**である。
+   *
+   * 箱を出すかどうかと、中に何を描くかを**分ける。**
+   * 替えている最中は、**帯はそのまま・中身だけが帯1本**になる。
+   */
+  const [live, setLive] = useState(false)
+  /** 冊(Unit・中身・型)を替えている最中か。**帯を残すための印** */
+  const [switching, setSwitching] = useState(false)
   /* **聞き流し**(2026-09 利用者の指定「Quick Responseにも聞き流しを作ってくれ」)。
      答える練習ではないので、**箱も次に出す日も1ミリも動かさない**
      (単語帳とまったく同じ決まり。`WordRadio` の中でも呼んでいない) */
@@ -418,6 +438,7 @@ export default function QrReview({
   }, [busy, filtered.length, counts[scope], scope])
 
   const start = () => {
+    setLive(true)
     const list = orderQrPairs(shown.map(qrPairOf), order)
     const take = takeCount(size, list.length)
     setRun(list.slice(0, take))
@@ -443,7 +464,13 @@ export default function QrReview({
     /* **判断が済んだことを、必ず先に立てる。** ここを「始めたときだけ」に
        すると、1問も無い帳面で**帯1本のまま止まる** */
     setOpened(true)
-    if (shown.length === 0) return
+    setSwitching(false)
+    if (shown.length === 0) {
+      /* **出す問が無い冊に替えたときは、一覧の画面へ戻す**(第5.173節)。
+         帯のまま止めると、読み込み中に見えて終わらない */
+      setLive(false)
+      return
+    }
     start()
   }, [busy, opened, shown.length])
 
@@ -494,6 +521,7 @@ export default function QrReview({
 
   const stop = () => {
     stopReading()
+    setLive(false)
     setRun(null)
     setPending([])
     gradedRef.current = new Set()
@@ -545,8 +573,11 @@ export default function QrReview({
     setRadio(null); setGroup(null); setFilter(emptyFilter)
     /* **「開いた瞬間に1問目」をもう一度走らせる**(第5.167節)。
        冊を変えた人は、その冊の1問目をやりに来ている。
-       冊が変われば問も変わるので、**判断からやり直す**(帯1本に戻る) */
+       冊が変われば問も変わるので、**判断からやり直す** */
     setOpened(false)
+    /* **`live` は倒さない**(第5.173節)。倒すと箱ごと消えて、
+       **その中にある本棚のシートまで一緒に消える** */
+    setSwitching(true)
     gradedRef.current = new Set()
   }
 
@@ -677,9 +708,18 @@ export default function QrReview({
   // 骨組みは `FocusFrame` 1つ(`FocusReader` / `StepFocus` /
   // 教材の中の Quick Response と同じもの)。**書き写さない。**
   // portal で body の直下に出るので、**まわりのものは自動的に消える。**
-  if (run && run.length) {
-    const finished = at >= run.length
-    const body = (
+  /* **中身が無くても、箱は残す**(第5.173節)。冊を替えたときにここを
+     畳むと、帯も本棚も一緒に消える —— 本棚のシートは `BookPick`
+     (この中)が持っているので、消えたぶんだけ開き直す手間になる */
+  if (live) {
+    const n = run?.length ?? 0
+    const finished = n > 0 && at >= n
+    const body = n === 0 ? (
+      /* **冊を替えている最中は、ここだけが帯になる**(第5.173節)。
+         帯(☰ / 冊名 ▾ / 出しかた)はそのまま残るので、
+         **画面のどこも動かない。** 本棚のシートも開いたままである */
+      <Loading />
+    ) : (
       /* **`qr--paper` は付けない**(2026-09 実機・利用者の指定)。
          あれは**紙の上の色**に差し替えるもので、地が白くなった
          この画面では要らない —— 何も足さなければアプリの配色に従い、
@@ -687,7 +727,7 @@ export default function QrReview({
       <section className="qr">
         {/* どこまで来たか。**終わりが見えないと続かない**(単語帳と同じ) */}
         <div className="qr-bar" aria-hidden="true">
-          <span style={{ width: `${Math.round((Math.min(at, run.length) / run.length) * 100)}%` }} />
+          <span style={{ width: `${Math.round((Math.min(at, n) / n) * 100)}%` }} />
         </div>
 
         {finished ? (
@@ -776,9 +816,13 @@ export default function QrReview({
                 **冊を間違えたまま進むこと**である。
                 **中身は `bookPick` 1か所**(書き写さない) */}
             {bookPick}
-            <span className="focus-count">
-              {finished ? `${run.length} / ${run.length}` : `${at + 1} / ${run.length}`}
-            </span>
+            {/* **冊を替えている最中は、数を出さない**(第5.173節)。
+                前の冊の数が一瞬だけ残ると、そこがちらついて見える */}
+            {n > 0 && (
+              <span className="focus-count">
+                {finished ? `${n} / ${n}` : `${at + 1} / ${n}`}
+              </span>
+            )}
           </>
         )}
         /* **中に入ってからも絞り込める**(2026-09 利用者の指定)。
@@ -815,7 +859,10 @@ export default function QrReview({
    * 描いてしまうと、**一瞬だけ出て、すぐ出題に入れ替わる。**
    * 出題に入っているあいだ(`run`)は、ここまで来ない。
    */
-  if (busy || !opened) return <Loading />
+  /* **はじめて開いたときだけ、帯1本だけを出す**(第5.172節)。
+     冊を替えたときは題も `冊名 ▾` も残す(第5.173節)—— 消すと、
+     **本棚のシートまで一緒に消えて**、開き直す手間になる */
+  if ((busy || !opened) && !switching) return <Loading />
 
   // ── 始める前 ───────────────────────────────────────────────
   return (
@@ -846,9 +893,9 @@ export default function QrReview({
           **「まだ1問も溜まっていません」は自分の帳だけに出る** ——
           Native Flow と 66 の型はファイルに問を持っているので、
           `rows` が空になることがない(この道には入らない) */}
-      {/* **`busy` の枝は上で返している**(第5.172節)。ここへ来るのは
-          「読み終わって、出す問が無かった」ときだけである */}
-      {rows.length === 0 ? (
+      {/* **冊を替えている最中は、ここから下だけが帯になる**(第5.173節)。
+          題も `冊名 ▾` も残るので、**画面のどこも動かない** */}
+      {busy || !opened ? <Loading /> : rows.length === 0 ? (
         <p className="hint">
           まだ1問も溜まっていません。教材の Quick Response で「まだ」を押すと、
           その文がここに入ります。

@@ -23,7 +23,9 @@
  *   トレーナーがゲストの単語帳を開く画面には、冊の切り替えがもともと無い。
  *   押しても1つしか出ない札を置かない(**効かない操作を見せない**)。
  *
- * @param books  冊の一覧(`[{ id, label }]`)
+ * @param books  冊の一覧(`[{ id, label, hasSub }]`)。
+ *               `hasSub` … **中にまだ選ぶものがある**(分野・段・Unit・型)。
+ *               その冊を選んだときは、**シートを閉じない**(第5.173節)
  * @param book   いま開いている冊の id
  * @param counts 冊ごとの件数(`{ [id]: 数 }`)。無ければ数を出さない
  * @param unit   件数の単位(`'語'` / `'問'`)
@@ -72,7 +74,26 @@ export default function BookPick({
         >
           <BookShelf books={books} book={book} counts={counts} unit={unit}
                      sub={sub}
-                     onPick={(id) => { onPick?.(id); setOpen(false) }} />
+                     /**
+                      * **中にまだ選ぶものがある冊は、閉じない**
+                      * (第5.173節・2026-09 利用者の指摘)。
+                      *
+                      *   > 冊の中にさらに選択肢があるはずなのに選択肢が出ずに
+                      *   > 切り替わり、もう一度選択肢を出すとやっと更なる
+                      *   > 選択肢が表示されるという二度手間
+                      *
+                      * 業種べつ(分野)・基礎単語(段)・Native Flow(Unit)・
+                      * 66 の型(中身と型)は、**選んだ行の中に次の欄が出る。**
+                      * そこで閉じてしまうと、**開き直さないと選べない。**
+                      *
+                      * **どの冊に中身があるかは、呼ぶ側が知っている**
+                      * (`books` の `hasSub`)。ここで id を並べると、
+                      * 冊を足すたびに食い違う(CLAUDE.md)。
+                      */
+                     onPick={(id) => {
+                       onPick?.(id)
+                       if (!books.find((b) => b.id === id)?.hasSub) setOpen(false)
+                     }} />
         </SettingsSheet>
       )}
     </>

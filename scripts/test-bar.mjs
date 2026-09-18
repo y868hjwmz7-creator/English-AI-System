@@ -4318,7 +4318,9 @@ export default defineConfig({
        受け取る —— **2つで1つ**なので、片方だけ出さない。
        2026-09 に、見る場所が「畳んだ欄を出すか」から
        「冊を並べるか」へ移った(判断の渡り方は1文字も変わっていない) */
-    } else if (!/showBasics \? \[\{ id: 'basic', label: '基礎単語' \}\] : \[\]/.test(src)) {
+    /* **`hasSub` が付いた**(第5.173節)。見ているのは
+       「`showBasics` のときだけ並べるか」で、そこは1文字も変わっていない */
+    } else if (!/showBasics \? \[\{ id: 'basic', label: '基礎単語'/.test(src)) {
       ng('基礎単語 … 指定したゲストだけ、になっていない')
     } else if (!/showBasics=\{basicsOn\}/.test(
       readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')

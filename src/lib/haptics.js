@@ -5,9 +5,11 @@
  * > 何でも良いのですが、ボタンを押したという感覚を得られる仕組みが
  * > 欲しいです。単語の長押しの際も。
  *
- * 【触る端末だけ】
- *   マウスには要らない。カーソルが動き、`:hover` も `:active` もあるので、
- *   押したことは目で分かる。**指は画面を隠すので、そこが分からない。**
+ * 【ふるえは触る端末だけ。**音はいつも**】(第5.173節で改めた)
+ *   ふるえはマウスに返しようがない。**音は、指でもマウスでも要る** ——
+ *   利用者の指定「普段から押した音が出るようにしてください」。
+ *   以前は音まで触る端末に限っていたので、**パソコンでは1回も
+ *   鳴っていなかった。**
  *
  * 【端末によってできることが違う。当て推量しない】
  *
@@ -96,7 +98,18 @@ function iosTap() {
  * @param {'tap'|'hold'} kind tap … ふつうに押した / hold … 長押しが効いた
  */
 export function tapFeedback(kind = 'tap') {
-  buzz(kind)
+  /* **ふるえは、触る端末だけ。** マウスには返すものが無い
+     (カーソルも `:active` も見えている) */
+  if (lastTouch) buzz(kind)
+  /**
+   * **音は、いつも鳴らす**(第5.173節・2026-09 利用者の指定)。
+   *
+   *   > 普段から押した音が出るようにしてください
+   *
+   * **以前は触る端末だけだった。** パソコンで使っている利用者には
+   * **1回も鳴っていなかった** —— 押した合図が欲しいのは、
+   * 指でもマウスでも同じである。
+   */
   playSfx('tap')
 }
 
@@ -124,8 +137,10 @@ export function buzz(kind = 'tap') {
  * @param {boolean} ok
  */
 export function answerFeedback(ok) {
-  if (!lastTouch) return
-  buzz(ok ? 'hold' : 'tap')
+  /* **ふるえは、触る端末だけ**(上と同じ) */
+  if (lastTouch) buzz(ok ? 'hold' : 'tap')
+  /* **音は、いつも鳴らす**(第5.173節)。押した音と同じ決まりにする ——
+     片方だけ触る端末に限ると、**パソコンでは正解の音だけが無い** */
   playSfx(ok ? 'correct' : 'miss')
 }
 
@@ -166,7 +181,9 @@ export function installTapFeedback() {
     // iOS は、触っていないところで始めた音を鳴らさない(`sfx.js`)
     unlockSfx()
     lastTouch = isTouch(e)
-    if (!isTouch(e)) return
+    /* **マウスでも見張る**(第5.173節・利用者の指定「普段から押した音が」)。
+       以前はここで帰っていたので、パソコンでは1回も鳴らなかった。
+       ふるえるかどうかは `tapFeedback` が `lastTouch` で決める */
     const el = e.target?.closest?.('button, [role="button"], summary, label.chip')
     if (!el || el.disabled) return
     if (el.closest('.etext-word')) return   // 語は意味が開いたときだけ

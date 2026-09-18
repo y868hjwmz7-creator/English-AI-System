@@ -3656,7 +3656,9 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     // ── ③ 画面が本当に呼んでいるか ──
     ok(/const basicBook = book === 'basic'/.test(wb),
       '基礎単語の冊 … 3冊目として持っている')
-    ok(/\.\.\.\(showBasics \? \[\{ id: 'basic', label: '基礎単語' \}\] : \[\]\)/.test(wb),
+    /* **`hasSub` が付いた**(第5.173節)。見ているのは
+       「`showBasics` のときだけ並べるか」で、そこは1文字も変わっていない */
+    ok(/\.\.\.\(showBasics \? \[\{ id: 'basic', label: '基礎単語'/.test(wb),
       '基礎単語の冊 … 冊の一覧は1か所。0055 で外された人には並べない')
     ok(/: loadBasicWordbook\(\{ learnerId, tier \}\)/.test(wb),
       '基礎単語の冊 … 画面が本当に読みに行っている')
@@ -4446,7 +4448,7 @@ console.log('\nスピーチ練習(0054)')
      「基礎単語360/1200も業種別の横に置いてください」)。
      判断の渡り方は1文字も変わっていない —— 見る場所が
      「畳んだ欄を出すか」から「冊を並べるか」へ移っただけである */
-  ok(/showBasics \? \[\{ id: 'basic', label: '基礎単語' \}\] : \[\]/.test(wb),
+  ok(/showBasics \? \[\{ id: 'basic', label: '基礎単語'/.test(wb),
     '出すもの … 単語帳は、渡された判断を本当に見ている')
   ok(!/showsBasics|viewerRoleOf/.test(wb),
     '出すもの … 単語帳の中で、自分で役割を見ていない')
@@ -6013,7 +6015,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const qr = noNote(readD('src/components/QrReview.jsx'))
   ok(/loadNativeFlowQr\(\{ learnerId, units:/.test(qr),
     'Quick Response 帳 … 画面が loadNativeFlowQr() を Unit つきで呼んでいる')
-  ok(/nfUnits\.length \? \[\{ id: 'nf', label: 'Native Flow' \}\] : \[\]/.test(qr),
+  ok(/nfUnits\.length \? \[\{ id: 'nf', label: 'Native Flow'/.test(qr),
     'Quick Response 帳 … 出す Unit が1つも無ければ、冊ごと出さない')
   ok(/nfUnits = \[\]/.test(qr), 'Quick Response 帳 … 既定は空(渡さない画面では出ない)')
   ok(!/showNf/.test(qr), 'Quick Response 帳 … 「出すか」と「どれを出すか」を2つ持っていない')
@@ -6561,10 +6563,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      そのまま押し戻す(**行き止まりの反対で、出口が無くなる**) */
   ok(/const \[opened, setOpened\] = useState\(false\)/.test(qr),
     'Quick Response が「開くときの判断が済んだか」を持っている(押し戻さない)')
-  ok(/if \(!rowsRef\.current\.length\) return/.test(wb)
-    && /if \(poolNow\(\)\.length === 0\) return/.test(wb),
+  /* **2つの `if` を1つにまとめた**(第5.173節)。出すものが無いときは
+     一覧へ戻すので、同じ枝になった —— 決まりは1つも変えていない */
+  ok(/if \(!rowsRef\.current\.length \|\| poolNow\(\)\.length === 0\)/.test(wb),
     '1語も無ければ入らない(空の画面をそのまま使う)')
-  ok(/if \(shown\.length === 0\) return/.test(qr),
+  ok(/if \(shown\.length === 0\) \{/.test(qr),
     '1問も無ければ入らない(同上)')
 
   // ── ② 帯に冊名 ──────────────────────────────────────────
@@ -6707,18 +6710,20 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '☰ にした聞き流しには、やめる道を残す(行き止まりを作らない)')
 
   // ── ④ 開くときは帯1本 ───────────────────────────────────
-  ok(/if \(!running && \(loading \|\| !opened\)\) return <Loading \/>/.test(wb),
+  /* **冊を替えているあいだは通さない**(第5.173節)。あちらは
+     帯も本棚も残したまま、下だけを入れ替える */
+  ok(/if \(!running && !switching && \(loading \|\| !opened\)\) return <Loading \/>/.test(wb),
     '単語帳は、判断が済むまで帯1本(0 / 0 / 0 の札をちらつかせない)')
-  ok(/if \(busy \|\| !opened\) return <Loading \/>/.test(qr),
+  ok(/if \(\(busy \|\| !opened\) && !switching\) return <Loading \/>/.test(qr),
     'Quick Response も同じ')
   /* **出題中に通してはいけない。** 通すと、答えたあとの読み直しのたびに
      出題が消えて帯になる */
   ok(/!running &&/.test(wb), '出題しているあいだは、帯に戻らない')
   /* **「始めたか」では見張らない。** 1問も無い帳面で立たないので、
      **永遠に読み込み中**になる */
-  ok(/setOpened\(true\)[\s\S]{0,200}?if \(!rowsRef\.current\.length\) return/.test(wb),
+  ok(/setOpened\(true\)[\s\S]{0,240}?if \(!rowsRef\.current\.length/.test(wb),
     '単語帳は、先に「判断が済んだ」を立てる(1語も無い帳面で止まらない)')
-  ok(/setOpened\(true\)[\s\S]{0,120}?if \(shown\.length === 0\) return/.test(qr),
+  ok(/setOpened\(true\)[\s\S]{0,160}?if \(shown\.length === 0\)/.test(qr),
     'Quick Response も同じ')
   ok(/setOpened\(false\)/.test(wb) && /setOpened\(false\)/.test(qr),
     '冊を変えたら、判断からやり直す(新しい冊の1問目が出る)')
@@ -6744,6 +6749,164 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* `.sheet-back` は 200、集中モードは 120。**閉じないと上に残る** */
   ok(/if \(e\.target\.closest\('button'\)\) setOpen\(false\)/.test(sheetSrc),
     '「出しかた」の道具を押したら、その箱は閉じる(聞き流しの上に残らない)')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   **切り替えでちらつかせない。音は洒落たものに**
+   (第5.173節・2026-09 利用者の指摘)
+
+     > どの冊をやるのかを切り替える際に画面がチラつくのと、冊の中にさらに
+     > 選択肢があるはずなのに選択肢が出ずに切り替わり、もう一度選択肢を
+     > 出すとやっと更なる選択肢が表示されるという二度手間に…
+     > また、正解時の音ももっと洒落たものにしてください。
+     > 普段から押した音が出るようにしてください
+
+   **ちらつきと二度手間は、根が1つ**である ——
+   替えた瞬間に画面ぜんぶを描き直していたので、
+   **本棚のシートごと消えていた**(あれは出題の箱の中にある)。
+
+   音は**鳴らして数える**(`test:audio` と同じ考え方・こちらには
+   音が聞こえない)。**「ピンポン」と書いてあるか**では見ない。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 切り替えでちらつかせない。音は洒落たものに(5.173)')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const wb = noNote(readD('src/components/Wordbook.jsx'))
+  const qr = noNote(readD('src/components/QrReview.jsx'))
+  const pick = noNote(readD('src/components/BookPick.jsx'))
+  const hap = noNote(readD('src/lib/haptics.js'))
+
+  // ── ① 冊を替えても、箱を畳まない ────────────────────────
+  /* **`dropRun()` が箱を倒していないこと**を数える。倒すと、
+     その中にある本棚のシートまで一緒に消えて、開き直す手間になる */
+  const wbDrop = wb.match(/const dropRun = \(\) => \{[\s\S]*?\n  \}/)?.[0] ?? ''
+  const qrDrop = qr.match(/const dropRun = \(\) => \{[\s\S]*?\n  \}/)?.[0] ?? ''
+  ok(wbDrop && !/setRunning\(false\)/.test(wbDrop),
+    '単語帳は、冊を替えても出題の箱を畳まない(本棚が消えない)')
+  ok(qrDrop && !/setLive\(false\)/.test(qrDrop),
+    'Quick Response も同じ')
+  ok(/setSwitching\(true\)/.test(wbDrop) && /setSwitching\(true\)/.test(qrDrop),
+    '替えている最中だと分かるようにしている(はじめて開いたときとは分ける)')
+  ok(/\{running && !result && \(/.test(wb),
+    '単語帳の箱は、中身が空でも出したまま(帯が残る)')
+  ok(/if \(live\) \{/.test(qr) && /const \[live, setLive\] = useState\(false\)/.test(qr),
+    'Quick Response も「箱を出すか」と「中に何を描くか」を分けている')
+  /* **中身が無いあいだは、そこだけが帯になる。** 帯(冊名 ▾)は動かない */
+  ok(/\{!card \? \([\s\S]{0,400}?<Loading \/>/.test(wb),
+    '単語帳は、替えている最中も帯の下だけが読み込みの帯になる')
+  ok(/const body = n === 0 \? \([\s\S]{0,400}?<Loading \/>/.test(qr),
+    'Quick Response も同じ')
+  /* **出すものが無い冊に替えたら、一覧へ戻す**(帯のまま止めない) */
+  ok(/setRunning\(false\)\s*\n\s*return/.test(wb) && /setLive\(false\)\s*\n\s*return/.test(qr),
+    '出すものが無い冊に替えたら、一覧の画面へ戻す(読み込み中のまま止めない)')
+  /* **読み直しのあいだ、結果の箱を消さない** */
+  ok(/\{isQuiz && result && running && \(/.test(wb),
+    '読み直しのあいだも、終わりの1枚は消えない')
+
+  // ── ② 中に選択肢がある冊は、本棚を閉じない ────────────────
+  ok(/if \(!books\.find\(\(b\) => b\.id === id\)\?\.hasSub\) setOpen\(false\)/.test(pick),
+    '中にまだ選ぶものがある冊は、本棚を閉じない(二度手間にしない)')
+  /* **どの冊に中身があるかは、呼ぶ側が持つ。** ここで id を並べない */
+  ok(!/'shelf'|'basic'|'nf'|'frame'/.test(pick),
+    '本棚は、冊の id を1つも知らない(冊を足しても食い違わない)')
+  ok(/id: 'shelf', label: '業種べつ', hasSub: true/.test(wb)
+    && /id: 'basic', label: '基礎単語', hasSub: true/.test(wb),
+    '単語帳の「業種べつ」と「基礎単語」に、中身がある印が付いている')
+  ok(/id: 'nf', label: 'Native Flow', hasSub: true/.test(qr)
+    && /id: 'frame', label: '66 の型', hasSub: true/.test(qr),
+    'Quick Response の「Native Flow」と「66 の型」も同じ')
+  /* **「出る」と「出ない」の両方**。中身の無い冊にまで付けると、
+     選んだのに閉じない(押すところを探すことになる) */
+  ok(!/label: '自分の単語帳', hasSub/.test(wb) && !/label: 'コロケーション', hasSub/.test(wb),
+    '中に選ぶものが無い冊には付けない(選んだら閉じる)')
+
+  // ── ③ 押した音は、いつも鳴らす ───────────────────────────
+  ok(/if \(lastTouch\) buzz\(kind\)/.test(hap) && /\n  playSfx\('tap'\)/.test(hap),
+    '押した音はいつも鳴り、ふるえは触る端末だけ')
+  ok(/if \(lastTouch\) buzz\(ok \? 'hold' : 'tap'\)/.test(hap)
+    && !/if \(!lastTouch\) return/.test(hap),
+    '正解・まだの音も、マウスで押した人に鳴る')
+  /* **見張りそのものを、マウスで止めない。** ここで帰っていたので、
+     パソコンでは1回も鳴っていなかった */
+  ok(!/lastTouch = isTouch\(e\)\s*\n\s*if \(!isTouch\(e\)\) return/.test(hap),
+    '見張りがマウスの操作で打ち切られていない')
+
+  // ── ④ 音そのものを鳴らして数える(**耳の代わり**)──────────
+  {
+    /* **書いてある言葉では見ない。** 実際に組み立てた波を数える */
+    const sched = []
+    class Osc {
+      constructor() {
+        this.type = 'sine'
+        this.frequency = { setValueAtTime: (v) => { this.f = v } }
+      }
+      connect(n) { this.g = n; return n }
+      start(t) { this.t0 = t }
+      stop(t) { sched.push({ type: this.type, f: this.f, t0: this.t0, t1: t, peak: this.g?.peak }) }
+    }
+    class Gain {
+      constructor() {
+        this.gain = {
+          setValueAtTime: () => {},
+          exponentialRampToValueAtTime: (v) => {
+            if (v < 1 && v > (this.peak ?? 0)) this.peak = v
+          },
+        }
+      }
+      connect() { return {} }
+    }
+    globalThis.window = {
+      AudioContext: class {
+        constructor() { this.state = 'running'; this.currentTime = 0; this.destination = {} }
+        createOscillator() { return new Osc() }
+        createGain() { return new Gain() }
+        resume() { return Promise.resolve() }
+      },
+      localStorage: { getItem: () => null, setItem: () => {} },
+    }
+    const { playSfx } = await import('../src/lib/sfx.js')
+    const take = (kind) => { sched.length = 0; playSfx(kind); return sched.map((x) => ({ ...x })) }
+
+    const tap = take('tap')
+    ok(tap.length >= 2 && tap.every((x) => x.type === 'sine'),
+      '押した音は、正弦を重ねている(小さくしても芯が残る)')
+    ok(Math.max(...tap.map((x) => x.t1)) <= 0.09,
+      '押した音は 0.09 秒より短い(たくさん鳴るので、耳に残らない)')
+
+    const cor = take('correct')
+    ok(cor.length >= 3, '正解の音は3つ以上(ピンポンの2つから増えた)')
+    ok(cor.every((x) => x.type === 'sine'),
+      '正解の音は正弦(三角のまま重ねると、倍音がぶつかって濁る)')
+    /* **重なっていることが、和音に聞こえる理由である。**
+       前は 0.10 秒ずらしで、ほとんど重なっていなかった */
+    let over = 0
+    for (let i = 0; i < cor.length; i++) {
+      for (let j = i + 1; j < cor.length; j++) {
+        if (cor[i].t0 < cor[j].t1 && cor[j].t0 < cor[i].t1) over += 1
+      }
+    }
+    ok(over >= 3, `正解の音は重なって鳴る(${over} 組)—— だから和音になる`)
+    /* **ハ長調の分散和音。** 値は書き写さず、**比**で見る
+       (定数を書き写すと、変えた日に期待値も一緒に動く・CLAUDE.md) */
+    const base = Math.min(...cor.map((x) => x.f))
+    const ratio = [...new Set(cor.map((x) => Math.round((x.f / base) * 100) / 100))].sort((a, b) => a - b)
+    ok(ratio.length >= 3
+      && Math.abs(ratio[1] - 1.26) < 0.03      // 長三度
+      && Math.abs(ratio[2] - 1.5) < 0.03,      // 完全五度
+      `上がっていく和音になっている(${ratio.join(' : ')})`)
+    ok(Math.max(...cor.map((x) => x.t1)) <= 0.6,
+      '正解の音は 0.6 秒より短い(答えて 0.9 秒で次へ進むので、切れない)')
+
+    /* **変えていないものは、変わっていない**(言われた場所だけを直す) */
+    const miss = take('miss')
+    ok(miss.length === 1 && miss[0].type === 'triangle' && Math.round(miss[0].f) === 392,
+      '「まだ」の音は1文字も変えていない(責めない・低く1つだけ)')
+    ok(take('done').every((x) => x.type === 'triangle'),
+      '裏の仕事が終わった音も、変えていない')
+  }
 }
 
 console.log(ng
