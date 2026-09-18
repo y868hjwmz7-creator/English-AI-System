@@ -39,6 +39,7 @@ import {
   bodyWord, canPasteBody, generateSectionUnique, isDialogueKind, isPassageKind, isVocabKind,
   isDrillKind,
   kindLabel, usesScene,
+  subjectLabel, subjectHint, subjectExample,
   loadRecentStories, loadUsedSentences, loadUsedSentencesLike, normEn,
   genGatewayNote,
 } from '../lib/materials.js'
@@ -1062,6 +1063,16 @@ export default function MaterialForm({
           topic: topicOf(tagIds[0]),
           topics: tagIds.length > 1 ? tagIds.map(topicOf) : [],
           level, industry: industryText, isFirst: i === 0,
+          /* **書いた中身を、ドリルにも渡す**(第5.190節・2026-09 利用者の指定
+             「ほかのトレーニングにもその項目を追加してください」)。
+
+             渡していなかったので、文型ドリルと単語 / フレーズでは
+             **欄に書いても1文字も効かなかった。**
+             **効かない欄を見せない**(CLAUDE.md)——
+             欄を出すなら、届くところまで通す。
+             窓口は `subject` を受け取ると「# 話題(指定あり)」として
+             指示に入れる。**窓口も `FN_REV` も触っていない** */
+          subject,
           // **単語帳から渡された語(mustUse)が先。** トレーナーが名指しで
           // 選んだものなので、自動で拾った語より優先する。
           // 文型ドリルは**4演習に配る**、単語・フレーズは最初の演習だけ
@@ -1643,27 +1654,6 @@ export default function MaterialForm({
             </label>
           )}
 
-          {/* **話す中身は、話し方の型のすぐ下**(2026-09 利用者の指定
-              「自由テキスト入力欄は、話の型の下に置いてください」)。
-
-              ほかの種類では「詳しく設定する(任意)」の中にあるが、
-              スピーチでは**場面 → 型 → 中身**が1つの流れなので、
-              畳んだ中に隠すと最後の一手が見えない。
-              **同じ入れ物(`subject`)を使う。欄は増やさない** */}
-          {!scriptParts.length && (
-            <label className="field">
-              <span>
-                話す中身(任意)
-                <span className="tip field-hint">
-                  空のままなら、業界と場面に合う中身を AI が決めます
-                </span>
-              </span>
-              <input type="text" value={subject}
-                     onChange={(e) => setSubject(e.target.value)}
-                     placeholder="例: 新しい勤怠システムを来月から使ってもらう話" />
-            </label>
-          )}
-
           {/* 話し手(任意)。
                 > その際に「会社名」「自分の名前」「役職」「部署名」なども
                 > 任意で指定すればそれに沿って Speech を作成してくれる機能です
@@ -1690,6 +1680,47 @@ export default function MaterialForm({
             </fieldset>
           )}
         </>
+      )}
+
+      {/* ── 自由に書く「中身」(第5.190節・2026-09 利用者の指定)────────
+
+            > それとも、スピーチの場合は「話す内容(任意)」に追加すると
+            > よいでしょうか? もしそうであれば、記事や会話、ほかの
+            > トレーニングにもその項目を追加してください。
+
+          **どの種類でも、同じ場所に、同じ1つ。**
+
+          直す前はこうだった ——
+          スピーチだけ**話し方の型のすぐ下**にあり、記事・会話・会議は
+          **「詳しく設定する(任意)」の中**に畳まれていて、
+          文型ドリルと単語 / フレーズには**そもそも無かった。**
+          **同じことをするものが、3通りの出方をしていた**(CLAUDE.md)。
+
+          いまは**選ぶ欄の最後**に、1つだけ置く ——
+          「選び終わったら、最後にひとこと足す」という流れになる。
+
+          **スピーチでは、話し方の型より下に出る**(2026-09 利用者の指定
+          「自由テキスト入力欄は、話の型の下に置いてください」)。
+          この場所はスピーチの塊(原稿・型・話し手)の**すぐ後ろ**なので、
+          ほかの種類では切り口のすぐ下に、スピーチでは型の下に出る ——
+          **どちらも「選び終わった最後」である。欄は1つのまま。** 
+
+          **入れ物は `subject` 1つ**(欄は増やしていない)。
+          **呼び名は `materialKinds.js` 1か所**から引く ——
+          画面で `kind === 'speech' ? … : …` と書き分けない。
+
+          **原稿を貼ったときは出さない**(貼ったものがすべてである・
+          効かない欄を見せない)。 */}
+      {!scriptParts.length && (
+        <label className="field">
+          <span>
+            {subjectLabel(kind)}
+            <span className="tip field-hint">{subjectHint(kind)}</span>
+          </span>
+          <input type="text" value={subject}
+                 onChange={(e) => setSubject(e.target.value)}
+                 placeholder={subjectExample(kind)} />
+        </label>
       )}
 
       {/* 読み上げの声(0017)。
@@ -2488,7 +2519,8 @@ export default function MaterialForm({
         {!showDetails && (
           <p className="tip field-hint">
             教材名・取り組み方・指導ポイント
-            {isPassageKind(kind) && (kind === 'speech' ? '・見出し' : '・話題・見出し')}
+            {/* **「話題」は、もうこの中に無い**(第5.190節で上へ出した) */}
+            {isPassageKind(kind) && '・見出し'}
             。ふだんは触らなくて構いません(自動で入ります)。
           </p>
         )}
@@ -2503,25 +2535,6 @@ export default function MaterialForm({
               <input value={title} onChange={(e) => setTitle(e.target.value)}
                      placeholder="作ると自動で入ります" />
             </label>
-
-            {/* **スピーチでは、話題は上(話し方の型の下)に出してある。**
-                ここにも出すと、同じ欄が2か所に並ぶ */}
-            {isPassageKind(kind) && kind !== 'speech' && (
-              <>
-                <label className="field">
-                  <span>
-                    話題(任意)
-                    <span className="tip field-hint">
-                      空のままなら、業界とジャンルに合う話題を AI が決めます
-                    </span>
-                  </span>
-                  <input type="text" value={subject}
-                         onChange={(e) => setSubject(e.target.value)}
-                         placeholder="例: 生成AIを社内で使うときのルール作り" />
-                </label>
-
-              </>
-            )}
 
             {/* **見出しは、スピーチでも要る**(教材の顔になる) */}
             {isPassageKind(kind) && (

@@ -5571,6 +5571,85 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   自由に書く「中身」の欄(第5.190節・2026-09 利用者の指定)
+
+     > それとも、スピーチの場合は「話す内容(任意)」に追加すると
+     > よいでしょうか? もしそうであれば、記事や会話、ほかの
+     > トレーニングにもその項目を追加してください。
+
+   直す前はこうだった ——
+   スピーチだけ**上に出ていて**、記事・会話・会議は
+   **「詳しく設定する(任意)」の中に畳まれ**、文型ドリルと
+   単語 / フレーズには**そもそも無かった。**
+
+   **描いて数える。** 「ソースに1つある」だけでは、
+   **畳んだ中に入っているのか、外に出ているのか**が分からない。
+
+   ①どの種類でも出るか ②畳まずに見えているか ③1つだけか
+   ④呼び名が種類ごとに変わるか ⑤畳んだ箱の中に残っていないか
+   ══════════════════════════════════════════════════════════════════ */
+{
+  /** 新しく作れる種類。**書き写さない** —— 一覧から拾う */
+  const { NEW_MATERIAL_KINDS, subjectLabel } =
+    await import('../src/data/materialKinds.js')
+
+  const 見た = []
+  for (const k of NEW_MATERIAL_KINDS) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    page.setDefaultTimeout(8000)
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=form&kind=${k.id}`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(500)
+    const got = await page.evaluate((want) => {
+      /** その名前の欄を、**描かれている位置ごと**拾う */
+      const 欄 = [...document.querySelectorAll('label.field')]
+        .filter((l) => (l.querySelector('span')?.firstChild?.textContent ?? '')
+          .trim() === want)
+      /* **畳んだ箱(詳しく設定する)の中にいないか。**
+         `checkVisibility()` で見る —— 畳んだ中は `offsetParent` では
+         見分けられない(CLAUDE.md) */
+      return {
+        数: 欄.length,
+        見える: 欄.filter((l) => l.checkVisibility?.() ?? true).length,
+        /* **`subject` の入れ物は、画面ぜんぶで1つだけ。**
+           2つあると、どちらに書いたかで結果が変わる */
+        入れ物: document.querySelectorAll('label.field input[type="text"]').length,
+      }
+    }, subjectLabel(k.id))
+    await page.close()
+    見た.push({ id: k.id, 名: subjectLabel(k.id), ...got })
+  }
+
+  const 無い = 見た.filter((x) => x.数 === 0)
+  if (無い.length) {
+    ng(`書く欄 … ${無い.length} つの種類に出ていない`,
+      無い.map((x) => `${x.id}(${x.名})`).join(' / '))
+  } else ok(`書く欄 … ${見た.length} つの種類ぜんぶに出る`)
+
+  const 二重 = 見た.filter((x) => x.数 > 1)
+  if (二重.length) {
+    ng('書く欄 … 同じ欄が2つ並んでいる',
+      二重.map((x) => `${x.id}: ${x.数} 個`).join(' / '))
+  } else ok('書く欄 … どの種類でも1つだけ(2か所に出ていない)')
+
+  const 隠れ = 見た.filter((x) => x.見える === 0)
+  if (隠れ.length) {
+    ng('書く欄 … 畳んだ中に隠れている',
+      隠れ.map((x) => x.id).join(' / ') + '。**選ぶ欄の続きに、そのまま出す**')
+  } else ok('書く欄 … どの種類でも、畳まずに見えている')
+
+  /* **呼び名が種類で変わる。** ぜんぶ同じ名前にしたら赤くする ——
+     「話す中身」と「出す語の中身」は、別のものである */
+  const 名 = new Set(見た.map((x) => x.名))
+  if (名.size < 3) {
+    ng('書く欄 … 呼び名が種類ごとに変わっていない', [...名].join(' / '))
+  } else ok(`書く欄 … 呼び名は種類ごと(${[...名].join(' / ')})`)
+}
+
+/* ══════════════════════════════════════════════════════════════════
    アサインする(第5.181節 / 第5.186節・2026-09 利用者の指定)
 
      > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、

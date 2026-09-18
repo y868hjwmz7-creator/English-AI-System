@@ -44,6 +44,9 @@ export {
   MATERIAL_KINDS, NEW_MATERIAL_KINDS, isPassageKind, isDialogueKind, isVocabKind,
   isDrillKind,
   bodyWord, usesScene, canPasteBody, kindLabel,
+  /* 自由に書く「中身」の欄の呼び名(第5.190節)。
+     **種類で言い方が変わるので、画面で書き分けない** */
+  subjectLabel, subjectHint, subjectExample,
 } from '../data/materialKinds.js'
 // このファイルの中でも使うので、出し直すだけでなく取り込む
 import { isPassageKind } from '../data/materialKinds.js'

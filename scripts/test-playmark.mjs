@@ -881,15 +881,16 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
       '作る画面が、型で場面を絞っている')
     ok(/pickScene/.test(form) && /pickStyle/.test(form),
       '噛み合わなくなった選択を、その場で入れ替えている')
-    // **話す中身は、話し方の型の下**(利用者の指定)
+    /* **話す中身は、話し方の型の下**(2026-09 利用者の指定)。
+       第5.190節で**どの種類でも同じ1つの欄**にしたので、
+       呼び名そのものではなく **`subjectLabel(kind)` を描いている場所**で見る */
     const iStyle = form.indexOf('話し方の型(任意)')
-    const iSubj = form.indexOf('話す中身(任意)')
-    const iWho = form.indexOf('話し手(任意)\n')
+    const iSubj = form.indexOf('{subjectLabel(kind)}')
     ok(iStyle > 0 && iSubj > iStyle, '話す中身の欄は、話し方の型の下にある')
-    ok(iWho < 0 || iSubj < form.lastIndexOf('話し手(任意)'),
-      '話し手より前にある(場面 → 型 → 中身 の流れ)')
-    ok(/isPassageKind\(kind\) && kind !== 'speech'/.test(form),
-      'スピーチでは、話題の欄を2か所に出さない')
+    /* **欄は画面ぜんぶで1つだけ。** 2か所に出すと、
+       どちらに書いたかで結果が変わる(第5.190節) */
+    ok((form.match(/\{subjectLabel\(kind\)\}/g) ?? []).length === 1,
+      '書く欄は、画面ぜんぶで1つだけ')
   }
   ok(speechStyleOf('') === null && speechStyleOf('nope') === null,
     '知らない id では null を返す(落ちない)')
@@ -7867,6 +7868,81 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     for (const id of ene) seen.set(id, (seen.get(id) ?? 0) + 1)
     ok(g.scenesFor('energy').length === new Set(g.scenesFor('energy').map((x) => x.id)).size,
       '「全般」の場面に、同じ id が2つ出ない')
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.190節 自由に書く「中身」の欄を、どの種類にも出す
+
+     > それとも、スピーチの場合は「話す内容(任意)」に追加すると
+     > よいでしょうか? もしそうであれば、記事や会話、ほかの
+     > トレーニングにもその項目を追加してください。
+
+   **見た目(どこに出るか・1つか)は `npm run test:bar` が描いて測る。**
+   こちらで見るのは、素の node で読めること —— つまり
+   **呼び名が1か所にあるか**と、**書いたものが窓口まで届くか**である。
+
+   **いちばん危ないのは「効かない欄」**(CLAUDE.md)。欄だけ出して
+   窓口に渡していないと、**書いても1文字も効かない。**
+   直す前の文型ドリルと単語 / フレーズが、まさにそうだった。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const mk = await import('../src/data/materialKinds.js')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const mf = noNote(readFileSync(new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8'))
+
+  /* ① **どの種類にも呼び名がある**(知らない種類でも落ちない) */
+  {
+    const 無い = mk.MATERIAL_KINDS.filter((k) => !mk.subjectLabel(k.id)
+      || !mk.subjectHint(k.id) || !mk.subjectExample(k.id)).map((k) => k.id)
+    ok(無い.length === 0, '書く欄 … どの種類にも、呼び名と説明と例がある', 無い.join(', '))
+    ok(mk.subjectLabel('そんな種類は無い').length > 0,
+      '書く欄 … 知らない種類でも、名前は返す(行き止まりを作らない)')
+    /* **旧い種類も、いまの言い方にそろえる**(`kind === 'word'` と書かない) */
+    ok(mk.subjectLabel('word') === mk.subjectLabel('vocab')
+      && mk.subjectLabel('passage') === mk.subjectLabel('reading'),
+      '書く欄 … 旧い種類も、いまの種類と同じ言い方になる')
+  }
+
+  /* ② **「(任意)」を書き写していない。** どの呼び名にも同じ形で付く */
+  {
+    const 付いていない = mk.MATERIAL_KINDS
+      .filter((k) => !mk.subjectLabel(k.id).endsWith('(任意)')).map((k) => k.id)
+    ok(付いていない.length === 0, '書く欄 … どの呼び名にも「(任意)」が付く',
+      付いていない.join(', '))
+  }
+
+  /* ③ **画面は呼び名を書き写していない**(1か所から引く) */
+  ok(/subjectLabel\(kind\)/.test(mf) && /subjectHint\(kind\)/.test(mf)
+    && /subjectExample\(kind\)/.test(mf),
+    '書く欄 … 画面は呼び名を1か所から引いている')
+  /* **`kind === 'speech' ?` で言い分けていない**(判断は1か所) */
+  ok(!/話す中身/.test(mf) && !/'話題\(任意\)'/.test(mf),
+    '書く欄 … 画面の中に呼び名を書き写していない')
+
+  /* ④ **効かない欄になっていないか。**
+     本文を作る道(`generatePassage`)と、ドリルの道(`generateDrill`)の
+     **両方**で窓口に渡しているか。**片方だけだと、種類によって効かない** */
+  {
+    const 本文 = /subject: kind === 'speech' \? speechSubject\(\) : subject,/.test(mf)
+    /* ドリルの道は `generateSectionUnique` に渡す */
+    const ドリル = /topics: tagIds\.length > 1[\s\S]{0,600}?\n\s*subject,/.test(mf)
+    ok(本文, '書く欄 … 記事・会話・スピーチでは、窓口まで届いている')
+    ok(ドリル, '書く欄 … 文型ドリル・単語 / フレーズでも、窓口まで届いている')
+  }
+
+  /* ⑤ **窓口が、受け取った中身を指示に入れているか。**
+     ここが抜けていると、渡していても効かない(**届いているかを確かめる**) */
+  {
+    const fn = readFileSync(
+      new URL('../supabase/functions/generate-material/index.ts', import.meta.url), 'utf8')
+    ok(/# 話題\(指定あり\)/.test(fn), '窓口 … 書いた中身を「話題(指定あり)」として指示に入れる')
+    /* **本文のときだけ、にしていない。** `isPassage` で囲うと、
+       ドリルでは渡しても捨てられる */
+    ok(/subject\s*\n?\s*\? `\\n# 話題\(指定あり\)/.test(fn),
+      '窓口 … 種類で分けずに、中身があれば必ず入れる')
   }
 }
 

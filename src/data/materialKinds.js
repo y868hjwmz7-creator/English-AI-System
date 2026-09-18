@@ -84,6 +84,89 @@ export const MATERIAL_KINDS = [
   { id: 'passage',  label: '長文(旧)', hint: '作り直す前の形。新しくは作れない', legacy: true },
 ]
 
+/**
+ * **自由に書く「中身」の欄の呼び名**(第5.190節・2026-09 利用者の指定)。
+ *
+ * ============================================================================
+ *   > それとも、スピーチの場合は「話す内容(任意)」に追加するとよいでしょうか?
+ *   > もしそうであれば、記事や会話、ほかのトレーニングにもその項目を
+ *   > 追加してください。
+ *
+ * 【選ぶ欄と、書く欄は、役目が違う】
+ *
+ *   | | 何ができるか |
+ *   |---|---|
+ *   | **選ぶ**(場面・話題・型) | **残る。** 一度足せば、全トレーナーが押すだけで使える |
+ *   | **書く**(この欄) | **その1本かぎり。** 毎回打ち直す。そのぶん、何でも書ける |
+ *
+ *   だから**どちらも要る。** 毎回使うもの(土木の場面など)は選ぶ欄へ、
+ *   その回だけの細かい注文はこの欄へ。
+ *
+ * 【欄は1つ。呼び名だけが種類で変わる】
+ *
+ *   入れ物は `subject` 1つである(**同じことをするものを2つ持たない**)。
+ *   けれども「話す中身」と呼ぶか「話題」と呼ぶかは、種類で変わる。
+ *   **画面で `kind === 'speech' ? … : …` と書き分けない**
+ *   —— 置く場所の数だけ食い違う(CLAUDE.md「判断は1か所に持つ」)。
+ *
+ * 【Supabase を引き連れない】
+ *
+ *   ここは何にも依存しないので、`npm run test:play` が素の node で
+ *   呼んで確かめられる(この表と同じ考え方)。
+ * ============================================================================
+ */
+const SUBJECT_WORDS = {
+  speech:   { label: '話す中身',
+    hint: '空のままなら、業界と場面に合う中身を AI が決めます',
+    example: '例: 新しい勤怠システムを来月から使ってもらう話' },
+  reading:  { label: '話題',
+    hint: '空のままなら、業界とジャンルに合う話題を AI が決めます',
+    example: '例: 生成AIを社内で使うときのルール作り' },
+  dialogue: { label: '話す中身',
+    hint: '空のままなら、業界と場面に合う中身を AI が決めます',
+    example: '例: 着工前に、進入路の使い方を近隣へ説明する' },
+  meeting:  { label: '話す中身',
+    hint: '空のままなら、業界と場面に合う中身を AI が決めます',
+    example: '例: 基礎工事の遅れをどう取り戻すかを決める' },
+  pattern:  { label: '文の中身',
+    hint: '空のままなら、業界と弱点に合う文を AI が決めます',
+    example: '例: 造成工事の進み具合を報告する場面の文にする' },
+  vocab:    { label: '出す語の中身',
+    hint: '空のままなら、業界とレベルに合う語を AI が決めます',
+    example: '例: 地盤調査と基礎工事で使う語にする' },
+}
+
+/** どの種類でも同じ言い方をするところ。**「(任意)」を書き写さない** */
+const SUBJECT_TAIL = '(任意)'
+
+/**
+ * その種類での、書く欄の呼び名。
+ *
+ * **知らない種類でも、名前は返す**(行き止まりを作らない)。
+ * 旧い種類(`word` / `phrase` / `passage`)は、いまの `vocab` / `reading` と
+ * 同じ言い方にそろえてある。
+ */
+export const subjectLabel = (kind) => `${(SUBJECT_WORDS[subjectKey(kind)]
+  ?? SUBJECT_WORDS.reading).label}${SUBJECT_TAIL}`
+
+/** その種類での、欄の下に出す1行 */
+export const subjectHint = (kind) => (SUBJECT_WORDS[subjectKey(kind)]
+  ?? SUBJECT_WORDS.reading).hint
+
+/** その種類での、書く前に薄く出しておく例 */
+export const subjectExample = (kind) => (SUBJECT_WORDS[subjectKey(kind)]
+  ?? SUBJECT_WORDS.reading).example
+
+/**
+ * 旧い種類を、いまの種類に読み替える。
+ * **`isVocabKind()` と同じ考え方** —— `kind === 'word'` と書かない。
+ */
+function subjectKey(kind) {
+  if (kind === 'word' || kind === 'phrase') return 'vocab'
+  if (kind === 'passage') return 'reading'
+  return kind
+}
+
 /** 新しく作れる種類(旧いものを除く) */
 export const NEW_MATERIAL_KINDS = MATERIAL_KINDS.filter((k) => !k.legacy)
 
