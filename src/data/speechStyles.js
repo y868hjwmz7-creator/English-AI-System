@@ -136,6 +136,18 @@ export const SCENE_STYLES = {
   sp_result:     ['st_numbers', 'st_plain', 'st_keynote'],
   sp_webinar:    ['st_plain', 'st_coach', 'st_talkshow'],
   sp_handover:   ['st_coach', 'st_plain'],
+  /* **あいさつの場面**(2026-09 利用者の指定)。
+     あいさつに「創業者のように」「ロッカールームで」は出さない ——
+     **選ぶものにより最適な選択肢だけが残る**(利用者の指定・第5.?節) */
+  sp_greet:      ['st_plain', 'st_onepoint', 'st_talkshow'],
+  sp_client1st:  ['st_plain', 'st_story', 'st_onepoint'],
+  sp_visit:      ['st_plain', 'st_onepoint'],
+  sp_welcome:    ['st_plain', 'st_talkshow', 'st_onepoint'],
+  sp_online:     ['st_plain', 'st_onepoint', 'st_coach'],
+  sp_newyear:    ['st_vision', 'st_plain', 'st_story'],
+  sp_social:     ['st_talkshow', 'st_award', 'st_story'],
+  sp_thanks:     ['st_award', 'st_plain', 'st_story'],
+  sp_closing:    ['st_plain', 'st_onepoint', 'st_award'],
 
   /* ── 趣味(COMMON_HOBBY_SPEECH_SCENES)── */
   sph_intro:   ['st_talkshow', 'st_story', 'st_onepoint'],

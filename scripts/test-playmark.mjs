@@ -757,6 +757,11 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
       'sp_interview', 'sp_talk',
       // ここから 2026-09 に足したプレゼンまわり
       'sp_deck', 'sp_demo', 'sp_kickoff', 'sp_result', 'sp_webinar', 'sp_handover',
+      /* ここから 2026-09 に足したあいさつまわり(第5.182節・利用者の指定
+         「挨拶、クライアントとのプロジェクトの初めての挨拶、など
+         考えられる場面を作り出してください」) */
+      'sp_greet', 'sp_client1st', 'sp_visit', 'sp_welcome', 'sp_online',
+      'sp_newyear', 'sp_social', 'sp_thanks', 'sp_closing',
     ]
     const ids = SPEECH_SCENES.map((s) => s.id)
     const gone = KNOWN.filter((id) => !ids.includes(id))
