@@ -5737,6 +5737,71 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   どの曲を流すか(第5.194節・2026-09 利用者の指定)
+
+     > また、複数登録した曲から選べるようにしてください。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+   曲が1つしかないときは**欄そのものを出さない**
+   (「ぜんぶ」とその1曲は同じもの・効かない操作を見せない)。
+   ここを見ないと、**いつも出す形に戻しても緑のまま**になる。
+
+   **帯からはみ出さないことも測る。** 曲の題は長い(`?screen=qrradio` に
+   長い題を1つ混ぜてある)ので、読み方・間と並べると押し出される。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const 見る = async (w, q = '') => {
+    const page = await browser.newPage({ viewport: { width: w, height: 800 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio${q}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    const r = await page.evaluate(() => {
+      const sel = document.querySelector('.radio-pick--song select')
+      const bar = document.querySelector('.focus-top')
+      return {
+        ある: !!sel,
+        選択肢: sel ? [...sel.options].map((o) => o.textContent.trim()) : [],
+        いま: sel ? sel.value : null,
+        /* **帯からはみ出さないか。** 題が長いと押し出される */
+        はみ出し: bar ? Math.max(0, Math.round(bar.scrollWidth - bar.clientWidth)) : 0,
+        よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }
+    })
+    await page.close()
+    return r
+  }
+
+  for (const w of [390, 320, 1280]) {
+    const a2 = await 見る(w)
+    const 名 = `曲をえらぶ(${w}px)`
+    if (!a2.ある) {
+      ng(`${名} … 曲をえらぶ欄が出ない`, '2曲以上あるときは選べること')
+    } else if (a2.選択肢.length !== 4) {
+      /* ぜんぶ + 3曲。**曲を足したら、ここも直す** */
+      ng(`${名} … 選択肢が「ぜんぶ + 3曲」になっていない`, a2.選択肢.join(' / '))
+    } else if (a2.選択肢[0] !== 'ぜんぶ(順不同)') {
+      ng(`${名} … 先頭が「ぜんぶ」ではない`, a2.選択肢[0])
+    } else if (a2.いま !== '') {
+      ng(`${名} … 既定が「ぜんぶ」ではない`, `いま「${a2.いま}」`)
+    } else if (a2.選択肢.some((x) => !x)) {
+      /* **名前の無い曲にも、何か出す**(空の行を出さない) */
+      ng(`${名} … 名前の無い曲が、空の行になっている`, a2.選択肢.join(' / '))
+    } else if (a2.はみ出し > 0 || a2.よこ > 0) {
+      ng(`${名} … 帯からはみ出している`, `帯 ${a2.はみ出し}px / 画面 ${a2.よこ}px`)
+    } else {
+      ok(`${名} … ぜんぶ + 3曲からえらべる(既定はぜんぶ・はみ出しなし)`)
+    }
+  }
+
+  /* **1曲しかないときは、欄ごと出さない**(「出ない」側) */
+  const one = await 見る(390, '&songs=one')
+  if (one.ある) {
+    ng('曲をえらぶ … 1曲しかないのに、えらぶ欄が出ている',
+      '「ぜんぶ」とその1曲は同じもの(効かない操作を見せない)')
+  } else ok('曲をえらぶ … 1曲しかないときは、欄ごと出さない')
+}
+
+/* ══════════════════════════════════════════════════════════════════
    やり終えたあとの1枚(第5.193節・2026-09 実機・利用者の指摘)
 
      > 終わった後のリストの背景の色が途中から切り替わっています。

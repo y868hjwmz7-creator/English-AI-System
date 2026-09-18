@@ -39,6 +39,10 @@ import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
 import { JA_VOICE } from '../data/clipVoices.js'
 import { PREMIUM } from '../lib/voiceTier.js'
 import { nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
+/* **どの曲を流すか**(第5.194節)。選び方も文言も、あちら1か所が持つ */
+import {
+  bgmChoices, bgmPickOf, bgmPlan, loadBgmPick, saveBgmPick,
+} from '../lib/bgmPick.js'
 import {
   RADIO_GAPS, bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
   hidesAnswer,
@@ -132,18 +136,34 @@ export default function WordRadio({
   const list = (rows ?? []).filter((r) => radioTextOf(r))
   const now = list[at] ?? null
 
+  /**
+   * **どの曲を流すか**(第5.194節・2026-09 利用者の指定
+   * 「複数登録した曲から選べるようにしてください」)。
+   *
+   * 既定は「ぜんぶ(順不同)」—— **これまでと1ミリも変わらない。**
+   * **消えた曲を握ったままにしない**(`bgmPickOf` が落とす)。
+   */
+  const [pick, setPick] = useState(loadBgmPick)
+  const song選び = bgmChoices(tracks)
+  const 選んでいる = bgmPickOf(tracks, pick)
+
   /* **音楽は、流す場所の指定に従う**(`bgmPlaysIn` 1か所)。
      切ってあれば1曲も鳴らさない —— レッスン中に画面を共有するので、
-     **切る場所を必ず用意する**(CLAUDE.md) */
+     **切る場所を必ず用意する**(CLAUDE.md)。
+
+     **どれを流すかは `bgmPlan()` 1か所**(第5.194節)。
+     混ぜるかどうかも、あちらが決める —— 1曲だけのときに順を混ぜても
+     意味がないので、**画面で書き分けない** */
   useEffect(() => {
     let alive = true
     if (bgmPlaysIn(loadBgmPlace(), 'radio')) {
-      startBgm(tracks).then((started) => {
+      const 計画 = bgmPlan(tracks, 選んでいる)
+      startBgm(計画.tracks, { shuffle: 計画.shuffle }).then((started) => {
         if (alive && started) setSong(nowPlaying()?.title ?? null)
       })
     }
     return () => { alive = false; stopBgm() }
-  }, [tracks])
+  }, [tracks, 選んでいる])
 
   /**
    * 上から順に読む。**1語ぶんの並びは `radioSteps()` が決める。**
@@ -319,6 +339,28 @@ export default function WordRadio({
               <select value={mode}
                       onChange={(e) => { setMode(e.target.value); saveRadioMode(e.target.value, where) }}>
                 {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </label>
+          )}
+          {/* **どの曲を流すか**(第5.194節・2026-09 利用者の指定)。
+
+              > 複数登録した曲から選べるようにしてください。
+
+              **2曲以上あるときだけ出す**(`bgmChoices` が決める)——
+              1曲しか無ければ「ぜんぶ」とその1曲は同じもので、
+              **押しても何も変わらない**(効かない操作を見せない・CLAUDE.md)。
+
+              **置き場所は、間の長さのとなり。** 聴きながら
+              「この曲じゃないな」と思うものなので、画面のはるか上ではなく
+              ここに置く(読み方・間とまったく同じ考え方) */}
+          {song選び.length > 0 && (
+            <label className="wb-formpick radio-pick radio-pick--song">
+              <span className="sr-only">曲</span>
+              <select value={選んでいる}
+                      onChange={(e) => { setPick(e.target.value); saveBgmPick(e.target.value) }}>
+                {song選び.map((x) => (
+                  <option key={x.id || 'all'} value={x.id}>{x.label}</option>
+                ))}
               </select>
             </label>
           )}

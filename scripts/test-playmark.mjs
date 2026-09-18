@@ -8017,6 +8017,77 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '出た問は、型の札と英文で見る(題で見ない)')
 }
 
+/* ────────────────────────────────────────────────────────────────
+   第5.194節 どの曲を流すか
+
+     > また、複数登録した曲から選べるようにしてください。
+
+   **選び方は素の node で呼んで確かめる**(`bgmPick.js` は
+   Supabase を引き連れていない)。見た目は `npm run test:bar` が測る。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const b = await import('../src/lib/bgmPick.js')
+  const 曲 = [
+    { id: 't1', title: '朝の光', path: 'a.mp3' },
+    { id: 't2', title: '', path: 'b.mp3' },
+    { id: 't3', title: '夜', path: null },
+  ]
+
+  /* ① **先頭はいつも「ぜんぶ」。既定もこれ** —— いまの音を変えない */
+  const 選 = b.bgmChoices(曲)
+  ok(選[0]?.id === b.BGM_ALL && 選[0]?.label === b.BGM_ALL_LABEL,
+    '曲 … 先頭は「ぜんぶ(順不同)」')
+  ok(b.loadBgmPick() === b.BGM_ALL, '曲 … 覚えていなければ「ぜんぶ」')
+
+  /* ② **流せない曲(置き場所が無い)は並べない**(効かない操作を見せない) */
+  ok(選.length === 3 && !選.some((x) => x.id === 't3'),
+    '曲 … 置き場所の無い曲は並べない', 選.map((x) => x.label).join(' / '))
+  /* ③ **名前が無くても、空の行にしない** */
+  ok(選.every((x) => x.label.trim().length > 0), '曲 … 名前の無い曲にも、何か出す')
+
+  /* ④ **1曲しかなければ、えらぶ場所そのものが要らない** */
+  ok(b.bgmChoices([曲[0]]).length === 0, '曲 … 1曲しかないときは、えらぶ場所を出さない')
+  ok(b.bgmChoices([]).length === 0, '曲 … 1曲も無いときも出さない')
+
+  /* ⑤ **1曲を選んだら、その曲だけ。混ぜない** */
+  {
+    const p1 = b.bgmPlan(曲, 't2')
+    ok(p1.tracks.length === 1 && p1.tracks[0].id === 't2',
+      '曲 … 1曲を選んだら、その曲だけを流す')
+    ok(p1.shuffle === false, '曲 … 1曲のときは、順を混ぜない')
+  }
+  /* ⑥ **「ぜんぶ」は、流せる曲ぜんぶを混ぜる**(これまでどおり) */
+  {
+    const p2 = b.bgmPlan(曲, b.BGM_ALL)
+    ok(p2.tracks.length === 2 && p2.shuffle === true,
+      '曲 … 「ぜんぶ」は流せる曲を混ぜて流す', `${p2.tracks.length} 曲`)
+  }
+  /* ⑦ **消えた曲を握ったままにしない**(行き止まりを作らない)。
+     ここが無いと、消した曲を選んだままの人は**1曲も鳴らなくなる** */
+  {
+    const p3 = b.bgmPlan(曲, 'もう無い曲')
+    ok(p3.tracks.length === 2 && p3.shuffle === true,
+      '曲 … 消えた曲を選んでいたら、黙って「ぜんぶ」に落ちる')
+    ok(b.bgmPickOf(曲, 'もう無い曲') === b.BGM_ALL,
+      '曲 … 欄の側も「ぜんぶ」に戻る(消えた id を選んだままにしない)')
+    ok(b.bgmPickOf(曲, 't2') === 't2', '曲 … 在る曲は、そのまま選ばれている')
+  }
+
+  /* ⑧ **画面が、その決まりを通しているか。**
+     `startBgm(tracks)` のままだと、選んでも全部流れる */
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const wr = noNote(readFileSync(new URL('../src/components/WordRadio.jsx', import.meta.url), 'utf8'))
+  ok(/bgmPlan\(tracks, /.test(wr), '聞き流し … どれを流すかは `bgmPlan()` に聞いている')
+  ok(/startBgm\([^,]+\.tracks, \{ shuffle: /.test(wr),
+    '聞き流し … 混ぜるかどうかも、あちらが決めたものを渡している')
+  ok(/bgmChoices\(tracks\)/.test(wr), '聞き流し … 並べるものも1か所から引いている')
+  ok(!/'ぜんぶ\(順不同\)'/.test(wr), '聞き流し … 呼び名を画面に書き写していない')
+  /* **選んだら覚える**(毎回えらび直させない) */
+  ok(/saveBgmPick\(/.test(wr), '聞き流し … えらんだ曲を覚える')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
