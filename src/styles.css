@@ -6599,6 +6599,38 @@ button.wbfilter-ctl { text-align: left; }
 .qr-head .nav-icon-btn { width: 36px; height: 36px; margin-right: -6px; }
 
 /* どこまで来たか。**終わりが見えないと続かない** */
+/* ── 冊名と「いくつ目か」(第5.174節・2026-09 実機・利用者の指摘)──────
+     > 上部バーから内容がはみ出してしまってます。はみ出さないように変え、
+     > 1／30の表示や、タイトルは別の場所に移してください。
+     > 例えば…画面内の上の方に小さめ、またはデザイン的に映える感じの場所に
+
+   **進み具合の帯のすぐ上**に置く。単語帳の `.wb-run`(冊名と点が並ぶ
+   ところ)と**同じ場所・同じ並び**で、2つの復習がそろう。
+
+   すき間は親の `gap` で作る(`.claude/rules/common.md`)。
+   **数は右端に固定**(`tabular-nums`)—— 1 → 10 で桁が増えても動かない */
+/* **`.qr-head` という名前は、もう使われていた**(2026-09 に気づいた)。
+   あちらは**教材の中の Quick Response**(`QuickResponse.jsx`)の見出しで、
+   折り返しの決まりも数の置き方も違う。そのまま名乗ると、
+   **言われていない画面の見た目まで変わる**(CLAUDE.md
+   「呼び名を2か所に書かない」の、裏返しの失敗)。**別の名前にする** */
+.qrrev-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-10); margin-bottom: var(--sp-6);
+}
+/* **帯の中ではなくなったので、幅の上限を外す。**
+   代わりに `min-width: 0` で縮めて、入らないぶんは「…」で切る
+   (`.bookpick-name` が受け持つ)—— **名前は切るが、消さない** */
+.qrrev-head > .bookpick {
+  max-width: none; flex: 0 1 auto; min-width: 0;
+  font-size: var(--fs-13);
+}
+.qrrev-at {
+  flex: 0 0 auto;
+  font-size: var(--fs-13); font-weight: 700; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .qr-bar {
   height: 6px; margin: 8px 0 2px; border-radius: var(--r-pill);
   background: var(--surface-2); overflow: hidden;
@@ -7392,6 +7424,15 @@ button.wbfilter-ctl { text-align: left; }
   flex: 1 1 0; min-width: 0;
   display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-10);
 }
+/* **帯の右端へ寄せるもの**(第5.174節・2026-09 実機・利用者の指摘)。
+   Quick Response の帯は ☰ と「出しかた」の2つだけになった。
+   並べたままだと左半分に寄って落ち着かないので、
+   **上の帯(`.app-topbar`)と同じ「左に ☰、右に操作」**にそろえる */
+.focus-top-right {
+  margin-left: auto; flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--sp-10);
+}
+
 /* 6Steps のプルダウン。**縮むのはここ**(ほかは縮めようがない)。
    広い画面で伸びすぎないよう、上限も置く */
 .focus-top .stepfocus-pick { flex: 0 1 auto; min-width: 0; max-width: 15em; }

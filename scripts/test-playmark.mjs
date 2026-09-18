@@ -6797,7 +6797,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **中身が無いあいだは、そこだけが帯になる。** 帯(冊名 ▾)は動かない */
   ok(/\{!card \? \([\s\S]{0,400}?<Loading \/>/.test(wb),
     '単語帳は、替えている最中も帯の下だけが読み込みの帯になる')
-  ok(/const body = n === 0 \? \([\s\S]{0,400}?<Loading \/>/.test(qr),
+  /* **置き場所が下がった**(第5.174節)。冊名と進み具合の帯は
+     そのまま残り、**その下だけ**が読み込みの帯になる */
+  ok(/\{n === 0 \? \([\s\S]{0,400}?<Loading \/>/.test(qr),
     'Quick Response も同じ')
   /* **出すものが無い冊に替えたら、一覧へ戻す**(帯のまま止めない) */
   ok(/setRunning\(false\)\s*\n\s*return/.test(wb) && /setLive\(false\)\s*\n\s*return/.test(qr),
@@ -6907,6 +6909,78 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     ok(take('done').every((x) => x.type === 'triangle'),
       '裏の仕事が終わった音も、変えていない')
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   **帯からはみ出さない。冊名と数は紙の上へ**
+   (第5.174節・2026-09 実機・利用者の指摘)
+
+     > quick response 帳にて、上部バーから内容がはみ出してしまってます。
+     > はみ出さないように変え、1／30の表示や、タイトルは別の場所に
+     > 移してください。例えば…画面内の上の方に小さめ、
+     > またはデザイン的に映える感じの場所に
+
+   帯に4つ(☰ / 冊名 ▾ / 1 / 30 / 出しかた)並べていた。冊名が長いと
+   **390px を 41px 超えて、「出しかた」が切れていた。**
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 帯からはみ出さない。冊名と数は紙の上へ(5.174)')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const css = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const qr = noNote(readD('src/components/QrReview.jsx'))
+  const sk = noNote(readD('src/__screens.jsx'))
+  const st = css(readD('src/styles.css'))
+
+  // ── ① 帯に置くのは2つだけ ───────────────────────────────
+  ok(!/top=\{/.test(qr),
+    'Quick Response の帯に、冊名も数も渡していない(☰ と「出しかた」の2つだけ)')
+  ok(!/focus-count/.test(qr),
+    '帯の中の数(`focus-count`)は、もう使っていない')
+  ok(/<div className="focus-top-right">/.test(qr)
+    && /\.focus-top-right \{[^}]*margin-left: auto/.test(st),
+    '「出しかた」は帯の右端へ寄る(上の帯と同じ「左に ☰、右に操作」)')
+
+  // ── ② 冊名と数は、進み具合の帯のすぐ上 ────────────────────
+  ok(/<div className="qrrev-head">[\s\S]{0,200}?\{bookPick\}/.test(qr),
+    '冊名は、進み具合の帯のすぐ上にある')
+  ok(/<span className="qrrev-at">/.test(qr),
+    '「いくつ目か」も同じ行にある')
+  /* **`qr-head` は、替えている最中も残す**(第5.173節)。
+     `n === 0` の枝の中に入れると、**本棚のシートまで一緒に消える** */
+  const head = qr.indexOf('className="qrrev-head"')
+  const swap = qr.indexOf('{n === 0 ? (')
+  ok(head > 0 && swap > 0 && head < swap,
+    '冊名は、冊を替えている最中も消えない(本棚のシートが開いたまま)')
+
+  // ── ③ 名前は切るが、消さない ────────────────────────────
+  ok(/\.qrrev-head > \.bookpick \{[^}]*max-width: none/.test(st)
+    && /\.qrrev-head > \.bookpick \{[^}]*min-width: 0/.test(st),
+    '紙の上では幅の上限を外し、入らないぶんは「…」で切る')
+  ok(/\.bookpick-name \{[^}]*text-overflow: ellipsis/.test(st),
+    '切るのは名前の側(押すところは残る)')
+  ok(/\.qrrev-at \{[^}]*tabular-nums/.test(st),
+    '数は桁が増えても動かない(1 → 10 で右端がずれない)')
+  ok(/\.qrrev-head \{[^}]*gap:/.test(st),
+    'すき間は親の `gap` で作っている(子の余白で回らない)')
+  /* **名前をぶつけない**(2026-09 に一度ぶつけた)。`.qr-head` は
+     **教材の中の Quick Response**(`QuickResponse.jsx`)のもので、
+     そのまま名乗ると**言われていない画面の見た目まで変わる** */
+  ok(!/qr-head/.test(qr) && /\.qr-head \{[^}]*flex-wrap: wrap/.test(st),
+    '復習の行は、教材の中の見出し(`.qr-head`)と名前がぶつかっていない')
+
+  // ── ④ 骨組みは、本物と1文字も違えない ─────────────────────
+  ok(/\{plain && \(\s*<div className="qrrev-head">/.test(sk),
+    '骨組みも、復習のときだけ冊名の行を出す(教材の中には出さない)')
+  /* **その行の中で数える**(2026-09 の赤チェックで気づいた)。
+     同じ冊名は**本棚の骨組み(`?screen=shelf`)にも書いてある**ので、
+     ただ探すだけだと**あちらに当たって緑のまま**になる
+     (CLAUDE.md「赤くならないのは、壊し方が違うという知らせ」) */
+  ok(/<div className="qrrev-head">[\s\S]{0,400}?label: '自分の Quick Response 帳'/.test(sk),
+    '骨組みには、いちばん長い冊名を入れてある(短いと、はみ出しを見逃す)')
 }
 
 console.log(ng

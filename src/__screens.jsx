@@ -36,6 +36,7 @@ import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import FrameParts from './components/FrameParts.jsx'
 import BookShelf from './components/BookShelf.jsx'
+import BookPick from './components/BookPick.jsx'
 import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
@@ -662,6 +663,21 @@ const qrScreen = (plain) => (
                  **明るい帯で読める色になっているか**を、ここで測る */
               top={<span className="focus-count">2 / 25</span>}>
     <section className={`qr${plain ? '' : ' qr--paper'}`}>
+      {/* **冊名と「いくつ目か」は、帯から下ろした**(第5.174節)。
+          **復習(`plain`)にだけ出す** —— 教材の中の Quick Response には
+          冊という区切りが無い。**本物と1文字も違えない**(CLAUDE.md)。
+          **いちばん長い冊名を入れてある** —— 短い名前だと、
+          幅の上限を戻しても「はみ出さない」まま緑になる */}
+      {plain && (
+        <div className="qrrev-head">
+          <BookPick books={[
+            { id: 'my', label: '自分の Quick Response 帳' },
+            { id: 'nf', label: 'Native Flow', hasSub: true },
+            { id: 'frame', label: '66 の型', hasSub: true },
+          ]} book="my" unit="問" onPick={() => {}} />
+          <span className="qrrev-at">2 / 25</span>
+        </div>
+      )}
       <div className="qr-bar" aria-hidden="true"><span style={{ width: '20%' }} /></div>
       {/* **本物と1文字も違えない**(CLAUDE.md)。
           型の札を出すのは**復習(`plain`)のときだけ** —— 教材の中の
