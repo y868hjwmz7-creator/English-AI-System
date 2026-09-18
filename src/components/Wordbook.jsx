@@ -77,6 +77,7 @@ import { loadShelfWordbook, setShelfWordStatus } from '../lib/shelfReviews.js'
 import SpeechWordsPick from './SpeechWordsPick.jsx'
 import { basicJaOf, basicPosOf, wordsForTier } from '../lib/basicsCourse.js'
 import { COURSE_TIERS, loadBasicTier, saveBasicTier, tierOf } from '../data/basicsCourse.js'
+import { nowName } from '../lib/bookNow.js'
 import { loadCollocationWordbook } from '../lib/collocationWords.js'
 import { loadNounPhraseWordbook } from '../lib/nounPhraseWords.js'
 import { loadAdverbPhraseWordbook } from '../lib/adverbPhraseWords.js'
@@ -1410,6 +1411,25 @@ export default function Wordbook({
   /** いま開いている帳面の名前(全文)。**`books` 1か所から引く** */
   const bookLabel = books.find((b) => b.id === book)?.label ?? ''
   /**
+   * **いま出しているものの名前**(第5.187節・2026-09 実機・利用者の指定)。
+   *
+   *   > 選んだ後に選んだものがどこかに明確に表示されてほしいと思います。
+   *
+   * Quick Response とまったく同じ形(`nowName()` 1か所)。
+   * 段(基本360語 / 標準1200語)と分野(業種べつ)を、冊の名前に続ける。
+   * **呼び名は `tierOf()` と `shelves` から引く** —— ここで書き写さない。
+   *
+   * **分野は何冊でも選べる**ので、ぜんぶ並べる ——
+   * 「3 冊」と丸めると、**どの3冊なのかが分からない**
+   * (**黙って丸めない**・CLAUDE.md)。
+   */
+  const drillLabel = nowName(basicBook
+    ? [bookLabel, tierOf(tier)?.label ?? '']
+    : shelfBook
+    ? [bookLabel, ...shelfPick
+      .map((id) => shelves.find((x) => x.id === id)?.label ?? '')]
+    : [bookLabel])
+  /**
    * **帳面の名前と、進み具合**(第5.180節・2026-09 実機・利用者の指定)。
    *
    *   > quick response のようにコンテンツの上部にタイトルを、
@@ -1422,7 +1442,7 @@ export default function Wordbook({
    * 同じものを出す —— **画面のどこも動かない**(第5.173節)。
    */
   const drillHead = (
-    <DrillHead label={bookLabel} total={runTotal} done={runDone} />
+    <DrillHead label={drillLabel} total={runTotal} done={runDone} />
   )
 
   const bookPick = (

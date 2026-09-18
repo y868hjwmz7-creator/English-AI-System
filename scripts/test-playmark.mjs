@@ -6991,7 +6991,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '右端へ寄せる指定は消してある(効かない指定を残さない)')
   /* **進み具合は、1問=1つの区切りで出す**(第5.180節で帯から変えた)。
      数字は出さない —— 目で数えられるものを、もう一度言わない */
-  ok(/<DrillHead label=\{bookLabel\} total=\{n\} done=\{at\} \/>/.test(qr),
+  /* **題は `drillLabel`**(第5.187節)—— 冊の名前だけでなく、
+     Unit・中身・型まで出す。`bookLabel` に戻したら赤くなる */
+  ok(/<DrillHead label=\{drillLabel\} total=\{n\} done=\{at\} \/>/.test(qr),
     '進み具合は個数のバーで出す(数字を出さない)')
   ok(!/qr-bar/.test(qr), 'ひと続きの帯は、この画面から消してある')
 
@@ -7039,8 +7041,12 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '骨組みも、復習のときだけ冊名 ▾ を帯に置く')
   ok(/topEnd=\{plain \? \(\s*<ReviewScope/.test(sk),
     '骨組みの帯にも「出しかた」がある(3つそろえないと、はみ出しを測れない)')
-  ok(/\{plain && <DrillTitle label="自分の Quick Response 帳" \/>\}/.test(sk),
-    '骨組みのタイトルは、いちばん長い冊名(短いと切れ方を測れない)')
+  /* **いちばん長い形**(第5.187節)。冊 / 中身 / 型 の3つがつながった
+     名前を入れておかないと、**折り返しも切れ方も測れない。**
+     つなぐのは本物と同じ `nowName()` —— 書き写すと片方だけ古くなる */
+  ok(/\{plain && <DrillTitle label=\{nowName\(\[/.test(sk)
+    && /FRAME_BOOK_LABEL, '日本語 → 英語', '① 1\. させる/.test(sk),
+    '骨組みのタイトルは、いちばん長い形(冊 / 中身 / 型)')
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -7628,6 +7634,100 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      絵文字を貼れという意味ではない */
   const ic = noNote(readFileSync(new URL('../src/components/Icons.jsx', import.meta.url), 'utf8'))
   ok(!/⚙/.test(ic) && !/⚙/.test(app), '歯車は絵で描いている(絵文字を貼っていない)')
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.187節 選んだものと、出るものが合っているか
+
+     > Quick responseや単語帳の冊選びから、範囲を絞り込んだ後に出題される
+     > 内容が選んだものと一致していない気がします。特にNATIVE FLOWと14の型です。
+     > 選んだ後に選んだものがどこかに明確に表示されてほしいと思います。
+
+   **まず数える。** 絞り込みそのものが合っているかを、
+   Unit 6つ・14 系・型ひとつのぜんぶで**呼んで数える。**
+   合っているなら、足りないのは**選んだものが見えないこと**のほうである。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const nf = await import('../src/data/nativeFlow.js')
+  const fq = await import('../src/lib/frameQr.js')
+  const bn = await import('../src/lib/bookNow.js')
+  const day = '2026-09-18'
+
+  /* ① **Unit で絞ると、その Unit だけが出る。**
+     一覧の数(`u.n`)と、出た数がぴったり合うか ——
+     **値を書き写さず、一覧と突き合わせる**(CLAUDE.md) */
+  {
+    const ずれ = nf.NATIVE_FLOW_UNITS
+      .map((u) => ({ u, n: nf.nativeFlowRows([], { today: day, units: [u.id] }).length }))
+      .filter((x) => x.n !== x.u.n)
+    ok(ずれ.length === 0, 'Native Flow … Unit で絞ると、その Unit の数だけ出る',
+      ずれ.map((x) => `Unit ${x.u.id}: ${x.n} ≠ ${x.u.n}`).join(' / '))
+    /* **「絞れる」だけを見ない。** ぜんぶのときに本当にぜんぶ出るかも見る
+       —— いつも1つの Unit しか返さない形に壊しても、①だけなら緑になる */
+    const 全 = nf.nativeFlowRows([], {
+      today: day, units: nf.NATIVE_FLOW_UNITS.map((u) => u.id),
+    }).length
+    const 合計 = nf.NATIVE_FLOW_UNITS.reduce((t, u) => t + u.n, 0)
+    ok(全 === 合計, 'Native Flow … ぜんぶを選ぶと、6つぶんが出る', `${全} / ${合計}`)
+    /* **別々の Unit が混ざらない。** 2つ選んだら、2つぶんちょうど */
+    const ふたつ = nf.nativeFlowRows([], { today: day, units: [1, 4] }).length
+    const 期待 = nf.NATIVE_FLOW_UNITS
+      .filter((u) => [1, 4].includes(u.id)).reduce((t, u) => t + u.n, 0)
+    ok(ふたつ === 期待, 'Native Flow … 2つ選ぶと、2つぶんちょうど出る', `${ふたつ} / ${期待}`)
+  }
+
+  /* ② **型で絞ると、その型だけが出る。**
+     系(14 通り)も、型ひとつも、一覧が持っている数と突き合わせる */
+  for (const part of fq.FRAME_PARTS.map((p) => p.id)) {
+    const gs = fq.frameQrGroups(part)
+    const 系ずれ = gs
+      .map((g) => ({ g, n: fq.frameQrRows([], { today: day, part, form: g.value }).length }))
+      .filter((x) => x.n !== x.g.n)
+    ok(系ずれ.length === 0, `14 の型(${part}) … 系で絞ると、その系の数だけ出る`,
+      系ずれ.map((x) => `${x.g.label}: ${x.n} ≠ ${x.g.n}`).join(' / '))
+    const 型ずれ = gs.flatMap((g) => g.rows)
+      .map((f) => ({ f, n: fq.frameQrRows([], { today: day, part, form: f.form }).length }))
+      .filter((x) => x.n !== x.f.n)
+    ok(型ずれ.length === 0, `14 の型(${part}) … 型ひとつで絞ると、その型の数だけ出る`,
+      型ずれ.slice(0, 3).map((x) => `${x.f.form}: ${x.n} ≠ ${x.f.n}`).join(' / '))
+    /* **ぜんぶのときは、系の合計とちょうど同じ** */
+    const 全 = fq.frameQrRows([], { today: day, part, form: null }).length
+    const 合計 = gs.reduce((t, g) => t + g.n, 0)
+    ok(全 === 合計, `14 の型(${part}) … ぜんぶを選ぶと、系の合計とちょうど同じ`,
+      `${全} / ${合計}`)
+  }
+
+  /* ③ **選んだものの名前**。つなぎ方は `nowName()` 1か所 */
+  ok(bn.nowName(['Native Flow', '【Unit 4】4〜6単語の表現'])
+    === 'Native Flow / 【Unit 4】4〜6単語の表現', '名前は「冊 / 中で選んだもの」でつなぐ')
+  /* **選んでいないものは並ばない** —— 「ぜんぶ」のときに
+     「/ ぜんぶ」と足すと、選んだときと見た目が変わらなくなる */
+  ok(bn.nowName(['Native Flow', '', null, undefined]) === 'Native Flow',
+    '選んでいないものは並ばない(空も `null` も落とす)')
+  ok(bn.nowName([]) === '' && bn.nowName() === '', '何も無ければ、空(名前の行ごと出ない)')
+  /* **型の名前は、系でも型ひとつでも同じ関数から**(画面で書き分けない) */
+  {
+    const gs = fq.frameQrGroups(fq.FIRST_FRAME_PART)
+    ok(fq.frameFormLabel(fq.FIRST_FRAME_PART, gs[0].value) === gs[0].label,
+      '型の名前 … 系を選んだら、系の名前が出る')
+    ok(fq.frameFormLabel(fq.FIRST_FRAME_PART, gs[0].rows[0].form) === gs[0].rows[0].form,
+      '型の名前 … 型ひとつを選んだら、その型が出る')
+    ok(fq.frameFormLabel(fq.FIRST_FRAME_PART, null) === ''
+      && fq.frameFormLabel(fq.FIRST_FRAME_PART, 'そんな型は無い') === '',
+      '型の名前 … ぜんぶ・知らない値のときは、何も出さない')
+  }
+
+  /* ④ **画面が、その名前を使っているか。**
+     `bookLabel` のままだと、冊の名前しか出ない(直す前の形) */
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  for (const f of ['QrReview', 'Wordbook']) {
+    const src = noNote(readFileSync(new URL(`../src/components/${f}.jsx`, import.meta.url), 'utf8'))
+    ok(/<DrillHead label=\{drillLabel\}/.test(src),
+      `${f} … いま出しているものの名前を、頭に出している`)
+    ok(/nowName\(/.test(src), `${f} … つなぎ方は nowName() 1か所から`)
+  }
 }
 
 console.log(ng

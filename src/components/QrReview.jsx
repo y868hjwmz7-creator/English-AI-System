@@ -43,12 +43,14 @@ import {
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
+import { nowName } from '../lib/bookNow.js'
 import {
   FIRST_FRAME_PART, FRAME_BOOK_LABEL, FRAME_FORM_KEY, FRAME_PARTS,
-  FRAME_PART_KEY, QR_HINT_KEY, frameFormOk, frameQrCounts, frameQrGroups,
+  FRAME_PART_KEY, QR_HINT_KEY, frameFormLabel, frameFormOk, framePartOf,
+  frameQrCounts, frameQrGroups,
 } from '../lib/frameQr.js'
 import { loadFrameQr } from '../lib/frameQrLoad.js'
-import { NF_BOOK_LABEL, NF_UNIT_KEY } from '../data/nativeFlow.js'
+import { NF_BOOK_LABEL, NF_UNIT_KEY, unitName, unitOf } from '../data/nativeFlow.js'
 import NativeFlowUnits from './NativeFlowUnits.jsx'
 import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
@@ -619,6 +621,23 @@ export default function QrReview({
 
   /** いま開いている冊の名前。**`books` 1か所から引く**(書き写さない) */
   const bookLabel = books.find((b) => b.id === book)?.label ?? ''
+  /**
+   * **いま出しているものの名前**(第5.187節・2026-09 実機・利用者の指定)。
+   *
+   *   > 選んだ後に選んだものがどこかに明確に表示されてほしいと思います。
+   *
+   * 冊の名前だけだと、**Unit も中身も型も、吹き出しを開き直さないと
+   * 分からない。** つなぐ決まりは `nowName()` 1か所で、
+   * **呼び名もそれぞれ1か所から引く**(`unitName()` / `framePartOf()` /
+   * `frameFormLabel()`)—— ここで書き写さない。
+   *
+   * **選んでいないものは並ばない**(「ぜんぶ」のときは冊の名前だけ)。
+   */
+  const drillLabel = nowName(nfBook
+    ? [bookLabel, unit ? unitName(unitOf(unit)) : '']
+    : frameBook
+    ? [bookLabel, framePartOf(part)?.label ?? '', frameFormLabel(part, form)]
+    : [bookLabel])
 
   /**
    * **冊の中の区切り**(Unit・中身・型)。**その冊の行の中**に出す(第5.167節)。
@@ -787,7 +806,7 @@ export default function QrReview({
           * 「単語帳のように個数のバーを」)。ひと続きの帯は
           * 「だいたい半分」までしか言えず、**残り何問かが数えられない。**
           */}
-        <DrillHead label={bookLabel} total={n} done={at} />
+        <DrillHead label={drillLabel} total={n} done={at} />
         {n === 0 ? (
           /* **冊を替えている最中は、ここだけが帯になる**(第5.173節)。
              上の冊名も進み具合も残るので、**画面のどこも動かない** */

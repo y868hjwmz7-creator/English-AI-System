@@ -291,6 +291,26 @@ export function frameFormOk(part = FIRST_FRAME_PART, value = null) {
 }
 
 /**
+ * **いま絞っている型の、画面に出す名前**(第5.187節)。
+ *
+ *   > 選んだ後に選んだものがどこかに明確に表示されてほしいと思います。
+ *
+ * 系(`系:◯◯`)なら系の名前、型ひとつならその型そのもの。
+ * **画面で `value.startsWith('系:')` と書き分けない**
+ * (**判断は1か所**・CLAUDE.md)。
+ *
+ * @returns 「ぜんぶ」や知らない値のときは **空**(`nowName()` が落とす)
+ */
+export function frameFormLabel(part = FIRST_FRAME_PART, value = null) {
+  if (!value) return ''
+  const groups = frameQrGroups(part)
+  const g = groups.find((x) => x.value === value)
+  if (g) return g.label
+  const one = groups.flatMap((x) => x.rows).find((f) => f.form === value)
+  return one ? one.form : ''
+}
+
+/**
  * 問 × 覚え具合 → `qr_items()` とそろえた行。
  *
  * **`nativeFlowRows()` と同じ形を返す。** ここがずれると、

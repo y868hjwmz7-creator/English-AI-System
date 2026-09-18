@@ -38,6 +38,7 @@ import FrameParts from './components/FrameParts.jsx'
 import BookShelf from './components/BookShelf.jsx'
 import BookPick from './components/BookPick.jsx'
 import DrillTitle from './components/DrillTitle.jsx'
+import { nowName } from './lib/bookNow.js'
 import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import SessionOwner from './components/SessionOwner.jsx'
@@ -814,12 +815,18 @@ const qrScreen = (plain) => (
                 />
               ) : null}>
     <section className={`qr${plain ? '' : ' qr--paper'}`}>
-      {/* **帳面の名前を、全文で出す**(第5.176節)。
+      {/* **いま出しているものの名前を、全文で出す**(第5.176節 / 第5.187節)。
           **復習(`plain`)にだけ出す** —— 教材の中の Quick Response には
           冊という区切りが無い。**本物と1文字も違えない**(CLAUDE.md)。
-          **いちばん長い冊名を入れてある** —— 短い名前だと、
-          折り返しも切れ方も測れない */}
-      {plain && <DrillTitle label="自分の Quick Response 帳" />}
+
+          **いちばん長い形を入れてある**(第5.187節・利用者の指定
+          「選んだ後に選んだものがどこかに明確に表示されてほしい」)。
+          冊 / 中身 / 型 の3つがつながると、ここまで長くなる ——
+          短い名前だと、**折り返しも切れ方も測れない。**
+          つなぐのは本物と同じ `nowName()` で、**書き写さない** */}
+      {plain && <DrillTitle label={nowName([
+        FRAME_BOOK_LABEL, '日本語 → 英語', '① 1. させる(背中を押す)',
+      ])} />}
       <div className="qr-bar" aria-hidden="true"><span style={{ width: '20%' }} /></div>
       {/* **本物と1文字も違えない**(CLAUDE.md)。
           型の札を出すのは**復習(`plain`)のときだけ** —— 教材の中の
