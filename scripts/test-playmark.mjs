@@ -7233,42 +7233,34 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/<QrReview nfUnits=\{myNfUnits\} frameOn=\{myFrameQr\}/.test(app),
     '自分の Quick Response 帳に渡している')
 
-  /* **出す相手の欄**(`BookAssign`)。**自分では何も読み込まない部品** */
-  const ba = noNote(read('components/BookAssign.jsx'))
-  ok(!/supabase|loadMyLearners|setLearnerFeature/i.test(ba),
-    '出す相手の欄は、自分では何も読み込まない(骨組みでも描ける)')
-  ok(/rows === null/.test(ba) && /rows\.length === 0/.test(ba),
-    '読み込み中と、担当がいないときを書き分けている(0 と null を取り違えない)')
-  ok(/aria-pressed/.test(ba), '出しているかどうかを、読み上げにも伝えている')
+  /* **出す相手の欄は、もう帳面には無い**(第5.185節・2026-09 利用者の指定)。
 
-  /* **冊ごとの出し方は、表1つ。** 画面のあちこちで書き分けない */
-  ok(/const ASSIGN_BOOKS = \{/.test(qr), '冊ごとの出し方が、1つの表にある')
-  ok(/ASSIGN_BOOKS\[book\]/.test(qr), 'その表から引いている')
-  const 表 = (qr.match(/ASSIGN_BOOKS/g) ?? []).length
-  ok(表 === 2, `出し方の表を見ているのは2か所だけ(${表})`, String(表))
-  /* **7回の往復を1回にまとめてある**(`loadFeatureMap`) */
-  ok(/loadFeatureMap\(\[FRAME_QR, \.\.\.nfFeats\]\)/.test(qr),
-    '出している相手は、1回で引いている')
-  ok(!/loadFeatureLearners/.test(qr), '冊の数だけ往復していない')
-  /* **トレーナー自身の帳のときだけ**(ゲストのページの帳は1ドットも変えない) */
-  ok(/const canAssign = !learnerId/.test(qr),
-    'ゲストのページから開いた帳には、出す相手の欄を出さない')
-  ok(/viewerRoleOf\(\) === 'trainer'/.test(qr), 'ゲストには出さない')
-  /* **2つの冊のどちらでも出る。** 片方に書き忘れると、
-     Native Flow だけ本棚からアサインできない、という半端な形になる。
-     **数えて見る** —— `<BookAssign` が在るかだけでは、
-     どちらの冊の行に置いたのか分からない */
-  const 置いた = (qr.match(/\{assignBox\}/g) ?? []).length
-  ok(置いた === 2, `出す相手の欄は、2つの冊のどちらにも置いてある(${置いた})`,
-    String(置いた))
+       > Quick response のアサイン機能と単語帳のアサイン機能を、
+       > トレーナーの単語帳と quick response 帳から消してください
 
-  /* **骨組みが、本物の部品をそのまま描いている**(CLAUDE.md) */
+     **「出ない」側を見る**(CLAUDE.md)。消したつもりで戻しても、
+     ここが無ければ**緑のまま**になる。 */
+  ok(!/BookAssign|ASSIGN_BOOKS|assignBox/.test(qr),
+    '自分の Quick Response 帳に、出す相手の欄は無い(第5.185節)')
+  ok(!/loadMyLearners|setLearnerFeature|loadFeatureMap|viewerRoleOf/.test(qr),
+    '配るための読み書きも、もう持っていない(0円で済むものは0円で)')
+  /* **消したのは置き場所だけ。配る道は2つ残っている** ——
+     ゲストのページと「アサインする」。**黙って機能ごと消さない** */
+  const tl = noNote(read('components/TrainerLearners.jsx'))
+  const asg2 = noNote(read('components/AssignBooks.jsx'))
+  /* **`<FeatureToggle` だけで探さない。** `<FeatureToggleX` に
+     書き換えても当たってしまう(**赤チェックで踏んだ**・CLAUDE.md
+     「置き換える前に `grep -n` で数える」の裏返し) */
+  ok(/<FeatureToggle[\s/>]/.test(tl), '配る道① ゲストのページは残っている')
+  ok(/<FeatureToggle[\s/>]/.test(asg2), '配る道② 「アサインする」も残っている')
+  /* **部品ごと消した。** 使っていない部品を置いておくと、
+     次に触る人が「まだ在る」と思って呼び戻す */
+  const ある = existsSync(new URL('../src/components/BookAssign.jsx', import.meta.url))
+  ok(!ある, '使わなくなった `BookAssign.jsx` は、部品ごと消してある')
   const sc = noNote(read('__screens.jsx'))
-  ok(/<BookAssign/.test(sc), '骨組み … 本物の「出す相手」を描いている')
-  ok(/rows=loading|'loading'/.test(sc), '骨組み … 読み込み中も描いている')
-  ok(/'none'/.test(sc), '骨組み … 担当がいないときも描いている')
+  ok(!/BookAssign|bookassign/.test(sc), '骨組みからも消してある(描けない画面を残さない)')
   const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
-  ok(/\['bookassign', ''\]/.test(bar), 'すき間の見張りに bookassign が入っている')
+  ok(!/bookassign/.test(bar), 'すき間の見張りからも消してある')
 }
 
 /* ────────────────────────────────────────────────────────────────

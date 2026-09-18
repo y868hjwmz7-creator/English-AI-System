@@ -48,13 +48,8 @@ import {
   FRAME_PART_KEY, QR_HINT_KEY, frameFormOk, frameQrCounts, frameQrGroups,
 } from '../lib/frameQr.js'
 import { loadFrameQr } from '../lib/frameQrLoad.js'
-import { NATIVE_FLOW_UNITS, NF_UNIT_KEY, nfFeature } from '../data/nativeFlow.js'
+import { NF_UNIT_KEY } from '../data/nativeFlow.js'
 import NativeFlowUnits from './NativeFlowUnits.jsx'
-import BookAssign from './BookAssign.jsx'
-import { FRAME_QR } from '../data/learnerFeatures.js'
-import { loadFeatureMap, setLearnerFeature } from '../lib/learnerFeatures.js'
-import { loadMyLearners } from '../lib/materials.js'
-import { viewerRoleOf } from '../lib/viewer.js'
 import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
@@ -82,28 +77,6 @@ const loadOrder = () => {
 }
 const saveOrder = (id) => {
   try { localStorage.setItem(ORDER_KEY, id) } catch { /* 使えなくても困らない */ }
-}
-
-/**
- * **冊ごとの「出し方」。ここ1つだけ。**
- *
- * 画面のあちこちで `book === 'frame'` と書き分けると、
- * **置く場所の数だけ食い違う**(CLAUDE.md「判断は1か所に持つ」)。
- * 冊を足すときも、ここに1行足すだけでよい。
- *
- * `feats` が `null` の冊は **Native Flow の Unit ぜんぶ**(6つまとめて)。
- */
-const ASSIGN_BOOKS = {
-  frame: {
-    feats: [FRAME_QR],
-    lead: 'このゲストの Quick Response の本棚に出ます。'
-      + 'トレーナーには、指定にかかわらず出ます。',
-  },
-  nf: {
-    feats: null,
-    lead: '押すと、Unit を6つまとめて出します / 外します。'
-      + 'Unit ごとに決めるときは、ゲストのページから。',
-  },
 }
 
 export default function QrReview({
@@ -633,119 +606,19 @@ export default function QrReview({
 
   const who = learnerName ? `${learnerName} さんの` : ''
 
-  /* ──────────────────────────────────────────────────────────────
-     **この冊を、誰に出すか**(第5.179節・2026-09 利用者の指定)
+  /* **この冊を誰に出すかは、ここでは決めない**(第5.185節・
+     2026-09 利用者の指定「トレーナーの単語帳と quick response 帳から
+     消してください」)。
 
-       > Native Flow や 14 の型は指定したゲストにだけ出るようにしたいです。
-       > トレーナーの単語帳 / Quick Response…からアサインできるように
+     決める場所は**2つだけ**にした ——
+     ①ゲストのページ(単語帳のタブ / Quick Response のタブ)
+     ②左メニューの「アサインする」
 
-     **本棚の、その冊の行の中に置く。** 冊のことを決める場所は
-     もうそこにあり(Unit・中身・型)、**同じことを別の画面に持たない。**
-
-     **トレーナー自身の帳のときだけ。** ゲストのページから開く
-     Quick Response 帳には**冊の切り替えをもともと出していない**ので、
-     あちらには何も増えない(`App.jsx` の `nfUnits` と同じ判断)。
-     ────────────────────────────────────────────────────────────── */
-  const canAssign = !learnerId
-    && (viewerRoleOf() === 'trainer' || viewerRoleOf() === 'owner')
-  /** 担当しているゲスト。`null` は**まだ読んでいない**(いない、ではない) */
-  const [people, setPeople] = useState(null)
-  /** ゲスト → 出している名前。**7回の往復を1回にまとめてある**(`loadFeatureMap`) */
-  const [featMap, setFeatMap] = useState(null)
-  const [assignRead, setAssignRead] = useState(false)
-  const [assignBusy, setAssignBusy] = useState(null)
-  const [assignNote, setAssignNote] = useState(null)
-  /** Native Flow の名前ぜんぶ。**`nfFeature()` が作る**(ここで組み立てない) */
-  const nfFeats = useMemo(() => NATIVE_FLOW_UNITS.map((u) => nfFeature(u.id)), [])
-  /** いま開いている冊の出し方(出せない画面・出せない冊では `null`) */
-  const assignOf = useMemo(() => {
-    if (!canAssign) return null
-    const a = ASSIGN_BOOKS[book]
-    return a ? { ...a, feats: a.feats ?? nfFeats } : null
-  }, [canAssign, book, nfFeats])
-  useEffect(() => {
-    /* **開いてもいない冊のために読みに行かない**(0円で済むものは0円で) */
-    if (!assignOf || assignRead) return undefined
-    setAssignRead(true)
-    let alive = true
-    loadMyLearners().then(({ data }) => { if (alive) setPeople(data ?? []) })
-    loadFeatureMap([FRAME_QR, ...nfFeats])
-      .then(({ data }) => { if (alive) setFeatMap(data ?? new Map()) })
-    return () => { alive = false }
-  }, [assignOf, assignRead, nfFeats])
+     **同じことをするものを3つ持たない**(CLAUDE.md)。
+     ここは「自分が練習する画面」であって、配る画面ではない。 */
 
   /** いま開いている冊の名前。**`books` 1か所から引く**(書き写さない) */
   const bookLabel = books.find((b) => b.id === book)?.label ?? ''
-
-  /**
-   * 出せる相手の行。**画面で数え直さない。**
-   *
-   * Native Flow は Unit が6つあるので、**いくつ出しているか**を札に出す ——
-   * 「出している / いない」だけだと、**3つだけ出している人**が
-   * 全部出している人と同じ見た目になる(**黙って丸めない**)。
-   */
-  const assignRows = useMemo(() => {
-    if (!people || !assignOf) return null
-    const { feats } = assignOf
-    return people.map((p) => {
-      const has = featMap?.get(p.id) ?? new Set()
-      const n = feats.filter((f) => has.has(f)).length
-      return {
-        id: p.id,
-        name: p.display_name,
-        on: n > 0,
-        extra: n === 0 ? '出す'
-          : (feats.length === 1 ? '外す' : `${n} / ${feats.length}`),
-      }
-    })
-  }, [people, featMap, assignOf])
-
-  /**
-   * その人に出す / 出さないを切り替える。
-   *
-   * **門番は `set_learner_feature()` の中**(0055 / 0059)。
-   * 担当していないゲストには、そもそも書けない —— 画面に判定を持たせない。
-   *
-   * Native Flow は**6つまとめて**である(Unit ごとはゲストのページから)。
-   * **どこまで通ったかを、そのまま言う**(`setNfAll` と同じ作法)。
-   */
-  const pickAssign = async (row) => {
-    if (!assignOf) return
-    const { feats } = assignOf
-    const has = featMap?.get(row.id) ?? new Set()
-    const next = !row.on
-    setAssignBusy(row.id)
-    setAssignNote(null)
-    const now = new Set(has)
-    let done = 0
-    let bad = null
-    for (const f of feats) {
-      if (next === now.has(f)) continue        // もうそうなっている
-      const { error: e } = await setLearnerFeature(row.id, f, next)
-      if (e) { bad = e; break }
-      if (next) now.add(f); else now.delete(f)
-      done += 1
-    }
-    const copy = new Map(featMap ?? [])
-    copy.set(row.id, now)
-    setFeatMap(copy)
-    setAssignBusy(null)
-    /* **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md) */
-    setAssignNote(bad
-      ? { ng: true, text: `${done} つまで済みましたが、そこで止まりました: ${bad?.message ?? bad}` }
-      : {
-        text: `${row.name} さんに「${bookLabel}」を`
-          + `${next ? '出しました' : '出さないようにしました'}。`,
-      })
-  }
-
-  /** 出す相手の欄。**冊の行の中に置く**(トレーナー自身の帳のときだけ) */
-  const assignBox = assignOf ? (
-    <BookAssign
-      label={bookLabel} lead={assignOf.lead}
-      rows={assignRows} busy={assignBusy} note={assignNote}
-      onPick={pickAssign} />
-  ) : null
 
   /**
    * **冊の中の区切り**(Unit・中身・型)。**その冊の行の中**に出す(第5.167節)。
@@ -768,7 +641,6 @@ export default function QrReview({
         dropRun()
       }}
     />
-    {assignBox}
     </>
   ) : frameBook ? (
     <>
@@ -797,7 +669,6 @@ export default function QrReview({
         dropRun()
       }}
     />
-    {assignBox}
     </>
   ) : null
 
