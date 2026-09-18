@@ -63,6 +63,7 @@ import BasicWordsPick from './components/BasicWordsPick.jsx'
 import ShelfBooks from './components/ShelfBooks.jsx'
 import NativeFlowUnits from './components/NativeFlowUnits.jsx'
 import { NATIVE_FLOW_UNITS } from './data/nativeFlow.js'
+import QrReview from './components/QrReview.jsx'
 import {
   FIRST_FRAME_PART, FRAME_BOOK_LABEL, FRAME_PARTS, frameQrCounts, frameQrGroups,
 } from './lib/frameQr.js'
@@ -781,6 +782,26 @@ const QR_PAIR = {
    **片方だけ描かない。** 復習を明るくしたついでに教材の中まで明るく
    してしまっても、`?screen=qr` しか無ければ**緑のまま**になる
    (「出る」と「出ない」の両方を見る・CLAUDE.md)。 */
+/* **本物の Quick Response を、そのまま描く**(`?screen=qrreal`・第5.191節)。
+
+     > quick responseの冊の絞り込みが全く機能していません。
+     > また、聞き流しも機能していません。
+
+   上の `?screen=qr` / `?screen=qrrev` は**写した骨組み**なので、
+   **本物の持ちもの(いつ組み直すか・どこに描くか)を1つも測れない。**
+   実際、この2つの不具合はどちらも**持ちものの側**にあった ——
+   ①絞っても、新しい中身が届く前に古い問で組んでいた
+   ②聞き流しを描く場所が「始める前」の枝にしか無かった
+
+   **だから本物を置く。** `frameOn` の冊(66 の型)は
+   **ファイルに書いてあり、Supabase を1回も呼ばない**ので、
+   骨組み(接続なし)でもそのまま動く。 */
+const QRREAL = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <QrReview nfUnits={NATIVE_FLOW_UNITS} frameOn onClose={() => {}} onMenu={() => {}} />
+  </div>
+)
+
 const qrScreen = (plain) => (
   <FocusFrame className="qrfocus" width="w100" page="qr" plain={plain} onClose={() => {}}
               /* **左上が ☰ になるのは、復習(`plain`)だけ**(第5.172節)。
@@ -1480,6 +1501,8 @@ createRoot(document.getElementById('root')).render(
     ? qrScreen(false)
     : q.get('screen') === 'qrrev'
     ? qrScreen(true)
+    : q.get('screen') === 'qrreal'
+    ? QRREAL
     : q.get('screen') === 'tabs'
     ? TABS
     : q.get('screen') === 'search'

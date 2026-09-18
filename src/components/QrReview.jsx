@@ -298,8 +298,11 @@ export default function QrReview({
    *
    * 「開いた瞬間に1問目」を**一度しか走らせない**ための印である。
    * これが無いと、「とじる」で一覧へ戻った人をそのまま押し戻してしまう。
-   * 冊・Unit・中身・型を変えたときは `dropRun()` が戻すので、
-   * **新しい冊の1問目がそのまま出る。**
+   * **冊を変えたときだけ** `dropRun()` が戻すので、新しい冊の1問目が
+   * そのまま出る。**冊の中で絞っただけのとき(Unit・中身・型)は戻さない**
+   * (第5.191節)—— 戻すと絞るたびに練習が始まり直し、
+   * **本棚のシートごと畳まれて、2つめを選べない。**
+   * そちらは `runKey` が**その場で組み直す。**
    */
   /**
    * **1問目を出すかどうかの判断が済んだか**(第5.172節)。
@@ -363,7 +366,47 @@ export default function QrReview({
   // 取り組みを**裏で数える**(0022)。ゲストのぶんだけ数える
   usePracticeLog('quick_response', Boolean(run), learnerId)
 
+  /**
+   * **いま読んである中身が、どの選び方のものか**(第5.191節・2026-09 実機)。
+   *
+   * ============================================================================
+   *   > quick responseの冊の絞り込みが全く機能していません。
+   *
+   * 【何が起きていたか】
+   *
+   *   型(や Unit・中身)を選ぶと、こうなっていた。
+   *
+   *     1. `dropRun()` が `opened` を false に戻す
+   *     2. **同じ描き直しの中で**「開いた瞬間に1問目」が走る
+   *     3. そのとき `rows` は**まだ前の冊のまま**(読み直しは非同期)
+   *     4. → **古い中身から10問を組んで、すぐ始まってしまう**
+   *     5. 新しい中身が届いても `opened` はもう true なので、
+   *        **組み直されない**
+   *
+   *   画面には「14 の型 / 日本語 → 英語 / S enables 人 to do」と出るのに、
+   *   出てくる問は**絞る前のまま。** 描いて、選んで、出た問を読んで確かめた。
+   *
+   * 【直し方 —— 届いてから組む】
+   *
+   *   **「いま読んである中身の鍵」を持つ。** 選び方から作る鍵と
+   *   突き合わせて、**合っているときだけ**組む。
+   *   `busy` を見るだけでは足りない —— あれは**次の描き直しまで
+   *   立たない**ので、その1回をすり抜ける。
+   *
+   * **`nfKey` と同じ理由で、文字列にする**(配列のままだと、
+   * 描き直すたびに別のものになって止まらない)。
+   * ============================================================================
+   */
+  const poolKey = [learnerId ?? '', book, unit ?? '', nfUnitIds.join(','),
+    part, form ?? ''].join('|')
+  /** 読み終わった中身の鍵。**まだ1度も読んでいなければ空** */
+  const [loaded, setLoaded] = useState('')
+  /** **あとから始めた読み込みが勝つ**(順番が入れ替わっても食い違わない) */
+  const poolRef = useRef('')
+
   const reload = async () => {
+    const key = poolKey
+    poolRef.current = key
     setBusy(true)
     const [list, wk, aim] = await Promise.all([
       /* **Native Flow は、ファイル × 覚え具合。** 行の形はそろえてあるので
@@ -386,10 +429,14 @@ export default function QrReview({
       loadQrWeek(learnerId),
       loadWeeklyGoal(learnerId),
     ])
+    /* **追い越された読み込みは、捨てる。**
+       速く終わったほうの中身で上書きすると、選んだものと食い違う */
+    if (poolRef.current !== key) return
     if (list.error) setError(list.error); else setError(null)
     setRows(list.data ?? [])
     if (wk.data) setWeek(wk.data)
     if (aim.data) setGoal(aim.data)
+    setLoaded(key)
     setBusy(false)
   }
 
@@ -486,6 +533,11 @@ export default function QrReview({
    */
   useEffect(() => {
     if (busy || opened) return
+    /* **新しい中身が届くまで待つ**(第5.191節・実機で見つけた)。
+       `busy` は**次の描き直しまで立たない**ので、冊や型を替えた直後の
+       1回をすり抜け、**前の冊の問で始まってしまう。**
+       鍵が合っているかどうかで見る */
+    if (loaded !== poolKey) return
     /* **判断が済んだことを、必ず先に立てる。** ここを「始めたときだけ」に
        すると、1問も無い帳面で**帯1本のまま止まる** */
     setOpened(true)
@@ -497,7 +549,7 @@ export default function QrReview({
       return
     }
     start()
-  }, [busy, opened, shown.length])
+  }, [busy, opened, shown.length, loaded, poolKey])
 
   /**
    * **聞き流しを始める**(2026-09 利用者の指定)。
@@ -526,14 +578,20 @@ export default function QrReview({
    * (2026-09 利用者の指定「中に入ってからも絞り込みができるように」)。
    * 変わったかどうかは **`runKeyOf()` 1か所**(単語帳と同じもの)。
    */
-  const runKey = runKeyOf({ scope, size, filter, group })
+  /* **冊の中の区切り(Unit・中身・型)も、ここに入れる**(第5.191節)。
+     入れていなかったので、練習の最中に型を選んでも組み直されなかった ——
+     **絞ったのに、出る問が前のまま**だった */
+  const runKey = `${runKeyOf({ scope, size, filter, group })}|${poolKey}`
   const runKeyRef = useRef(runKey)
   useEffect(() => {
     if (!run) { runKeyRef.current = runKey; return }
     if (runKeyRef.current === runKey) return
+    /* **届いてから組む。** 鍵だけ先に合わせると、
+       古い中身で組んだものを「組み直した」ことにしてしまう */
+    if (loaded !== poolKey) return
     runKeyRef.current = runKey
     start()
-  }, [runKey, Boolean(run)])
+  }, [runKey, Boolean(run), loaded, poolKey])
 
   /** 次の区切りへ。**読み直さない** —— 並びと残りをそのまま持っている */
   const next = () => {
@@ -606,6 +664,28 @@ export default function QrReview({
     gradedRef.current = new Set()
   }
 
+  /**
+   * **冊の中で絞った**(Unit・中身・型)(第5.191節・2026-09 実機)。
+   *
+   *   > quick responseの冊の絞り込みが全く機能していません。
+   *
+   * **いまの回はやめない。** もとは `dropRun()` を呼んでいたが、あれは
+   * 「開いた瞬間に1問目」をもう一度走らせるので、**選んだ瞬間に練習が
+   * 始まり直し、本棚のシートごと畳まれた** —— つまり
+   * **中身と型の2つを続けて選べなかった。**
+   *
+   * いまは持ちものを変えるだけ。新しい中身が届いたら
+   * `runKey`(`poolKey` を含む)が**その場で組み直す。**
+   * 冊そのものを替えたときだけ `dropRun()` で始めからやり直す ——
+   * **冊が変われば、やりに来たものが変わる**からである(第5.173節)。
+   *
+   * 聞き流しは止める(前の冊の文を読み続けない)。
+   */
+  const afterNarrow = () => {
+    setRadio(null)
+    gradedRef.current = new Set()
+  }
+
   const who = learnerName ? `${learnerName} さんの` : ''
 
   /* **この冊を誰に出すかは、ここでは決めない**(第5.185節・
@@ -657,7 +737,7 @@ export default function QrReview({
           if (id) localStorage.setItem(NF_UNIT_KEY, String(id))
           else localStorage.removeItem(NF_UNIT_KEY)
         } catch { /* 使えなくても困らない */ }
-        dropRun()
+        afterNarrow()
       }}
     />
     </>
@@ -673,7 +753,7 @@ export default function QrReview({
         setPartWanted(id)
         try { localStorage.setItem(FRAME_PART_KEY, id) }
         catch { /* 使えなくても困らない */ }
-        dropRun()
+        afterNarrow()
       }}
       /* **型で絞る**(2026-09 利用者の指定)。一覧も並びも系ごとの数も
          `frameQrGroups()` が持つ —— 画面で型を書き写さない */
@@ -685,7 +765,7 @@ export default function QrReview({
           if (f) localStorage.setItem(FRAME_FORM_KEY, f)
           else localStorage.removeItem(FRAME_FORM_KEY)
         } catch { /* 使えなくても困らない */ }
-        dropRun()
+        afterNarrow()
       }}
     />
     </>
@@ -772,6 +852,72 @@ export default function QrReview({
   /* **中身が無くても、箱は残す**(第5.173節)。冊を替えたときにここを
      畳むと、帯も本棚も一緒に消える —— 本棚のシートは `BookPick`
      (この中)が持っているので、消えたぶんだけ開き直す手間になる */
+  /**
+   * **画面ぜんぶを覆うもの**(聞き流し・紙に出す)。
+   *
+   * ============================================================================
+   *   > また、聞き流しも機能していません。(2026-09 実機・利用者の指摘)
+   *
+   * **押すボタンは2か所にあるのに、描く側は1か所にしか無かった。**
+   * 「言う練習・聞き流し」と「印刷 / PDFで保存」は `toolsBox` 1つで、
+   * **始める前のカード**にも、**練習の最中の「出しかた」**にも出る。
+   * ところが受け取る側(`WordRadio` / `ReviewSheet`)は、
+   * **`live` で早く返る手前**、つまり「始める前」の枝にしか描いていなかった。
+   *
+   * 第5.167節でトップ画面を無くしてから、利用者はほぼ**ずっと `live`** に
+   * いる。だから**押しても何も起きない**——「聞き流しが機能しない」の正体。
+   *
+   * **`FocusFrame` は portal で body の直下に出る**ので、
+   * どちらの枝に置いても見え方は同じである。だから**1つ作って、
+   * 両方の枝に置く**(書き写さない)。
+   *
+   * **押す場所と、受け取る場所は、同じ数だけ要る**(CLAUDE.md
+   * 「効かない操作を見せない」)。
+   * ============================================================================
+   */
+  const overlays = (
+    <>
+      {/* **部品は `WordRadio` 1つ。** 単語帳とまったく同じものを使い、
+          渡すのは「どの画面から来たか」だけ(`where`)。
+          読み方の一覧も、覚える鍵も `wordRadio.js` が持っている ——
+          **書き写すと、必ず片方だけ古くなる**(CLAUDE.md) */}
+      {radio && (
+        <WordRadio
+          rows={radio}
+          where="qr"
+          tracks={tracks}
+          learnerId={learnerId}
+          /* **聞き流しの左上も ☰**(第5.172節・利用者の指定) */
+          onMenu={onMenu}
+          onClose={() => setRadio(null)}
+        />
+      )}
+
+      {/* **中身は、紙に出す一瞬だけ描く**(単語帳とまったく同じ作法)。
+          見た目は**教材の紙の Quick Response と同じ指定**に乗っている ——
+          利用者の言う「教材を印刷、PDFにした時のクイックレスポンの部分と
+          同じ仕様」そのものである */}
+      {printing && (
+        <ReviewSheet
+          title={`${who}Quick Response 帳`}
+          note={sheetNote({
+            count: sheetPairs.length,
+            unit: '問',
+            group: QR_GROUPS.find((g) => g.id === group)?.label ?? '',
+            narrowed,
+            date: today,
+          })}
+          lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
+          /* **品詞では分けない**(`byPos: false`)。ここに並ぶのは**文**で、
+             文に品詞は無い。小見出しの無い節を1つ渡すので、
+             **紙は1ドットも変わらない**(小見出しはそのときだけ出る)。
+             **巻末のレクチャーも出さない** —— 言われたのは単語帳である */
+          sections={wordSheetSections(sheetPairs, { byPos: false })}
+        />
+      )}
+    </>
+  )
+
   if (live) {
     const n = run?.length ?? 0
     const finished = n > 0 && at >= n
@@ -933,6 +1079,10 @@ export default function QrReview({
         )}
       >
         {body}
+        {/* **聞き流しと紙は、ここからも開ける**(第5.191節)。
+            「出しかた」の中に同じボタンがあるのに、描く側が
+            「始める前」の枝にしか無く、**押しても何も起きなかった** */}
+        {overlays}
       </FocusFrame>
     )
   }
@@ -1063,44 +1213,8 @@ export default function QrReview({
         </>
       )}
 
-      {/* **部品は `WordRadio` 1つ。** 単語帳とまったく同じものを使い、
-          渡すのは「どの画面から来たか」だけ(`where`)。
-          読み方の一覧も、覚える鍵も `wordRadio.js` が持っている ——
-          **書き写すと、必ず片方だけ古くなる**(CLAUDE.md) */}
-      {radio && (
-        <WordRadio
-          rows={radio}
-          where="qr"
-          tracks={tracks}
-          learnerId={learnerId}
-          /* **聞き流しの左上も ☰**(第5.172節・利用者の指定) */
-          onMenu={onMenu}
-          onClose={() => setRadio(null)}
-        />
-      )}
+      {overlays}
 
-      {/* **中身は、紙に出す一瞬だけ描く**(単語帳とまったく同じ作法)。
-          見た目は**教材の紙の Quick Response と同じ指定**に乗っている ——
-          利用者の言う「教材を印刷、PDFにした時のクイックレスポンの部分と
-          同じ仕様」そのものである */}
-      {printing && (
-        <ReviewSheet
-          title={`${who}Quick Response 帳`}
-          note={sheetNote({
-            count: sheetPairs.length,
-            unit: '問',
-            group: QR_GROUPS.find((g) => g.id === group)?.label ?? '',
-            narrowed,
-            date: today,
-          })}
-          lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
-          /* **品詞では分けない**(`byPos: false`)。ここに並ぶのは**文**で、
-             文に品詞は無い。小見出しの無い節を1つ渡すので、
-             **紙は1ドットも変わらない**(小見出しはそのときだけ出る)。
-             **巻末のレクチャーも出さない** —— 言われたのは単語帳である */
-          sections={wordSheetSections(sheetPairs, { byPos: false })}
-        />
-      )}
     </section>
   )
 }

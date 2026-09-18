@@ -5571,6 +5571,172 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   冊の中の絞り込みと、聞き流し(第5.191節・2026-09 実機・利用者の指摘)
+
+     > quick responseの冊の絞り込みが全く機能していません。
+     > また、聞き流しも機能していません。
+
+   **どちらも「持ちものの側」の壊れ方**で、ソースを読んでも分からなかった。
+
+   ①絞ると `dropRun()` が「開いた瞬間に1問目」をもう一度走らせ、
+    **新しい中身が届く前に、古い問で組んで**始まってしまう。
+    しかも組み直しの鍵(`runKey`)に冊の中の区切りが入っていないので、
+    **届いても組み直されない。** 画面の題は新しい型を出しているのに、
+    出てくる問は絞る前のまま —— だから「全く機能していない」に見える
+   ②聞き流しを**押すボタンは2か所**にあるのに、**描く側は1か所**
+    (「始める前」の枝)にしかなかった。第5.167節でトップ画面を無くして
+    からは、利用者はほぼずっと練習の画面にいるので、**押しても何も起きない**
+
+   **本物の `QrReview` を描いて、押して、出てきた問を読む**
+   (`?screen=qrreal`)。写した骨組みでは、どちらも1ミリも測れない。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 420, height: 900 } })
+  page.setDefaultTimeout(9000)
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(1500)
+
+  /** 66 の型の冊へ移る。**名前は `FRAME_BOOK_LABEL` 1か所**(書き写さない) */
+  const 冊へ = async () => {
+    await page.click('.bookpick')
+    await page.waitForTimeout(300)
+    await page.evaluate(() => {
+      for (const x of document.querySelectorAll('.shelf-pick')) {
+        if ((x.textContent || '').includes('の型')) { x.click(); return }
+      }
+    })
+    await page.waitForTimeout(1400)
+  }
+  await 冊へ()
+  /* **接続の無い骨組みでは、冊を替えた瞬間に描き分けが変わる**
+     (「Supabase が設定されていません」の枝 → 本体)。
+     そのぶんシートが畳まれるので、ここだけ開き直す */
+  await page.click('.bookpick')
+  await page.waitForTimeout(500)
+
+  const 型を = async (n) => page.evaluate((i) => {
+    const s2 = [...document.querySelectorAll('select')].find((x) => x.options.length > 50)
+    if (!s2) return null
+    const v = s2.options[i].value
+    s2.value = v
+    s2.dispatchEvent(new Event('change', { bubbles: true }))
+    return v
+  }, n)
+
+  const 見る = () => page.evaluate(() => ({
+    シート: !!document.querySelector('.sheet, .setpop'),
+    題: (document.querySelector('.drill-title')?.textContent ?? '').trim(),
+    型: (() => {
+      const s2 = [...document.querySelectorAll('select')].find((x) => x.options.length > 50)
+      return s2 ? s2.options[s2.selectedIndex].textContent.trim() : ''
+    })(),
+    /* **出ている問の英文だけ**を読む(`英語を見る` を押してから)。
+       **`.qr` を丸ごと読まない** —— あそこには題(「14 の型 / 言い換え /
+       S enables 人 to do」)も入っているので、**型の名前が必ず当たってしまう**
+       (赤チェックで踏んだ・CLAUDE.md「名前が出てくるかで見ない」) */
+    英文: (document.querySelector('.qr-en')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    /* **その問に付いている型の札。** 選んだ型と突き合わせる ——
+       ここが本丸である(題だけ新しくして中身が前のままなら、食い違う) */
+    札: (document.querySelector('.qr-frame')?.textContent ?? '')
+      .replace(/^型/, '').replace(/\s+/g, ' ').trim(),
+  }))
+
+  const 前 = await 見る()
+  const 型 = await 型を(3)
+  await page.waitForTimeout(1500)
+  const 後 = await 見る()
+
+  if (!型) {
+    ng('冊の絞り込み … 型をえらぶ欄が出ない')
+  } else if (!後.シート) {
+    /* **絞るたびに畳まれると、2つめを選べない**(第5.191節) */
+    ng('冊の絞り込み … 型をえらんだら、本棚のシートが閉じてしまう',
+      '**絞っただけで練習を始め直さない** —— 中身と型を続けて選べなくなる')
+  } else if (後.型 === 前.型) {
+    ng('冊の絞り込み … えらんでも、欄が変わらない', `${前.型} → ${後.型}`)
+  } else if (!後.題.includes(型)) {
+    /* **題は、いま出しているものの名前**(第5.187節) */
+    ng('冊の絞り込み … 題が、えらんだ型になっていない', `「${後.題}」/ ${型}`)
+  } else {
+    ok(`冊の絞り込み … 型をえらんでもシートは開いたまま(${後.型})`)
+  }
+
+  /* **中身(日本語 → 英語 / 言い換え)も、続けて選べるか。**
+     ここが本丸である —— 1つ選ぶたびに始まり直すと、2つめに手が届かない */
+  const 中身 = await page.evaluate(() => {
+    const s2 = [...document.querySelectorAll('select')].find((x) => x.options.length === 2)
+    if (!s2) return null
+    s2.value = s2.options[1].value
+    s2.dispatchEvent(new Event('change', { bubbles: true }))
+    return s2.options[1].textContent.trim()
+  })
+  await page.waitForTimeout(1500)
+  const 二つめ = await 見る()
+  if (!中身) ng('冊の絞り込み … 中身をえらぶ欄が出ない')
+  else if (!二つめ.題.includes(型)) {
+    ng('冊の絞り込み … 2つめを選ぶと、1つめの絞り込みが消える', 二つめ.題)
+  } else ok(`冊の絞り込み … 型のあとに中身も続けて選べる(${二つめ.題})`)
+
+  /* **出てくる問が、えらんだ型のものか。**
+     ここを見ないと、**題だけ新しくして中身は前のまま**でも緑になる ——
+     実機で起きていたのは、まさにそれである */
+  await page.evaluate(() => { document.querySelector('.sheet-back')?.click() })
+  await page.waitForTimeout(400)
+  await page.evaluate(() => {
+    const b2 = [...document.querySelectorAll('button')]
+      .find((x) => (x.textContent || '').includes('英語を見る'))
+    if (b2) b2.click()
+  })
+  await page.waitForTimeout(700)
+  const 出た = await 見る()
+  /* 型の名前は `S enables 人 to do` のような形。**動詞だけを取り出して**
+     英文に入っているかを見る(**値を書き写さない**・CLAUDE.md) */
+  const 動詞 = (型.match(/^S\s+(\w+)/) ?? [])[1] ?? ''
+  if (!動詞) {
+    ng('冊の絞り込み … 型の名前から動詞が読めない', 型)
+  } else if (出た.札 && 出た.札 !== 型) {
+    /* **札が、選んだ型と違う。** ここが「絞り込みが全く機能していない」の正体 */
+    ng('冊の絞り込み … 出ている問の型が、えらんだ型と違う',
+      `${型} を選んだのに、札は「${出た.札}」(${出た.英文.slice(0, 80)})`)
+  } else if (!出た.英文) {
+    ng('冊の絞り込み … 英文が読めない(`英語を見る` が効いていない)')
+  } else if (!new RegExp(動詞, 'i').test(出た.英文)) {
+    ng('冊の絞り込み … 出ている英文が、えらんだ型のものではない',
+      `${型} を選んだのに「${出た.英文.slice(0, 120)}」`)
+  } else {
+    ok(`冊の絞り込み … 出てくる問も、えらんだ型のものになる`
+      + `(札「${出た.札}」・${出た.英文.slice(0, 40)})`)
+  }
+
+  /* ── 聞き流し。**練習の画面から押して、本当に出るか** ───────────── */
+  await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+  await page.waitForTimeout(500)
+  const 道具 = await page.evaluate(() =>
+    [...document.querySelectorAll('.sheet .wb-listen, .setpop .wb-listen')]
+      .map((x) => x.textContent.trim()))
+  await page.evaluate(() => {
+    const b2 = [...document.querySelectorAll('button')]
+      .find((x) => (x.textContent || '').includes('聞き流し'))
+    if (b2) b2.click()
+  })
+  await page.waitForTimeout(1500)
+  const 流 = await page.evaluate(() => ({
+    ある: !!document.querySelector('.radio'),
+    文: (document.querySelector('.radio')?.textContent ?? '').replace(/\s+/g, ' ').slice(0, 120),
+  }))
+  if (道具.length !== 2) {
+    ng('聞き流し … 練習の「出しかた」に道具が2つ出ていない', 道具.join(' / '))
+  } else if (!流.ある) {
+    ng('聞き流し … 練習の画面から押しても、何も出ない',
+      '**押す場所と、受け取る場所は同じ数だけ要る**(第5.191節)')
+  } else {
+    ok(`聞き流し … 練習の画面からも開ける(${流.文.slice(0, 40)}…)`)
+  }
+  await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════════
    自由に書く「中身」の欄(第5.190節・2026-09 利用者の指定)
 
      > それとも、スピーチの場合は「話す内容(任意)」に追加すると

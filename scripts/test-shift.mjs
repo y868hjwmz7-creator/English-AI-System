@@ -561,10 +561,26 @@ head('型で絞る')
   ok(!/S allows 人 to do/.test(parts) && !/S allows 人 to do/.test(qr),
     '型の名前を、画面に書き写していない')
   /* **やりかけを持ち越さない。** 冊・Unit・中身・型の4つとも。
-     **数を書き写さず、性質で見る** —— 出す問が変わる操作は4つあり、
-     そのどれもが `dropRun()` を通る */
+     出す問が変わる操作は4つある。**ただし、捨て方は2通りである**
+     (第5.191節・2026-09 実機で直した)。
+
+       | 何を変えた | どうする |
+       |---|---|
+       | **冊**(自分の帳 / Native Flow / 型) | `dropRun()` —— 始めからやり直す |
+       | **Unit・中身・型**(冊の中で絞った) | `afterNarrow()` —— 組み直すだけ |
+
+     **絞るたびに `dropRun()` を呼ぶと、そのたびに練習が始まり直し、
+     本棚のシートごと畳まれて、2つめを選べなかった。**
+     しかも `dropRun()` は絞り込み(`filter` / `group`)も消すので、
+     **いま絞ったものが、その場で消えていた。**
+
+     **数を書き写さず、4つそろっていることで見る。** */
   const drops = (qr.match(/dropRun\(\)/g) ?? []).length
-  ok(drops === 4, '冊・Unit・中身・型の4つとも、やりかけを捨てる', String(drops))
+  const narrows = (qr.match(/^\s+afterNarrow\(\)$/gm) ?? []).length
+  ok(drops === 1, '冊を替えたら、始めからやり直す', `dropRun ${drops} か所`)
+  ok(narrows === 3, '冊の中で絞ったら、組み直す(始め直さない)', `afterNarrow ${narrows} か所`)
+  ok(drops + narrows === 4,
+    '冊・Unit・中身・型の4つとも、やりかけを捨てる', String(drops + narrows))
   /* **中身を書き写していない。** 1つ足し忘れると、
      **前の冊の問が次の冊で出続ける**(いちばん分かりにくい壊れ方) */
   ok((qr.match(/setRun\(null\); setPending/g) ?? []).length === 1,

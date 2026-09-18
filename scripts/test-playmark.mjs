@@ -7946,6 +7946,75 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   }
 }
 
+/* ────────────────────────────────────────────────────────────────
+   第5.191節 絞り込みと聞き流しが効かなかった
+
+     > quick responseの冊の絞り込みが全く機能していません。
+     > また、聞き流しも機能していません。
+
+   **見た目と動きは `npm run test:bar` が描いて、押して、出た問を読む。**
+   こちらで見るのは、素の node で読める**持ちものの形**である。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const qr = noNote(readFileSync(new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8'))
+
+  /* ① **押す場所と、受け取る場所は同じ数だけ要る。**
+     聞き流しと紙は `overlays` 1つにまとめ、
+     **練習の枝と、始める前の枝の両方**に置く */
+  ok(/const overlays = \(/.test(qr), '聞き流しと紙は、1つにまとめてある(`overlays`)')
+  ok((qr.match(/\{overlays\}/g) ?? []).length === 2,
+    '聞き流しと紙は、練習の枝と始める前の枝の両方に置いてある',
+    `${(qr.match(/\{overlays\}/g) ?? []).length} か所`)
+  /* **`{radio &&` が `overlays` の外に無い**(2か所に描くと片方が古くなる) */
+  ok((qr.match(/\{radio && \(/g) ?? []).length === 1,
+    '聞き流しを描いているのは1か所だけ')
+
+  /* ② **届いてから組む。** `busy` だけでは、替えた直後の1回をすり抜ける */
+  ok(/const poolKey = \[/.test(qr), 'いま読んである中身の鍵を持っている(`poolKey`)')
+  ok(/if \(loaded !== poolKey\) return/.test(qr),
+    '新しい中身が届くまで、1問目を組まない')
+  /* **鍵は、絞り込みに関わるものを全部含む** —— どれか1つでも抜けると、
+     そこを変えたときだけ古い問が出る(**いちばん見つけにくい壊れ方**) */
+  {
+    const m = qr.match(/const poolKey = \[([\s\S]*?)\]\.join/)
+    const 中 = m ? m[1] : ''
+    const 要る = ['learnerId', 'book', 'unit', 'nfUnitIds', 'part', 'form']
+    const 抜け = 要る.filter((k) => !中.includes(k))
+    ok(抜け.length === 0, '鍵に、冊・Unit・中身・型がぜんぶ入っている', 抜け.join(', '))
+  }
+
+  /* ③ **組み直しの鍵にも、冊の中の区切りを入れる。**
+     入れないと、練習の最中に型を選んでも組み直されない */
+  ok(/const runKey = `\$\{runKeyOf\([^)]*\)\}\|\$\{poolKey\}`/.test(qr),
+    '組み直しの鍵に、冊の中の区切りが入っている')
+
+  /* ④ **絞っただけでは、練習を始め直さない。**
+     `dropRun()` は絞り込み(`filter` / `group`)も消すので、
+     絞るたびに呼ぶと**いま絞ったものが、その場で消える** */
+  ok(/const afterNarrow = \(\) => \{/.test(qr),
+    '冊の中で絞ったときは、軽いほうを呼ぶ(`afterNarrow`)')
+  ok((qr.match(/^\s+afterNarrow\(\)$/gm) ?? []).length === 3,
+    '絞る場所は3つ(Unit・中身・型)とも、そちらを呼んでいる',
+    `${(qr.match(/^\s+afterNarrow\(\)$/gm) ?? []).length} か所`)
+  ok(/setFilter\(emptyFilter\)/.test(qr) && !/afterNarrow = \(\) => \{[\s\S]{0,200}setFilter/.test(qr),
+    '絞ったときに、いまの絞り込みを消していない')
+
+  /* ⑤ **骨組みに、本物の画面がある。**
+     写した骨組みでは、この2つはどちらも1ミリも測れなかった */
+  const sc = noNote(readFileSync(new URL('../src/__screens.jsx', import.meta.url), 'utf8'))
+  ok(/<QrReview nfUnits=\{NATIVE_FLOW_UNITS\} frameOn/.test(sc),
+    '骨組みが、本物の Quick Response を描いている(`?screen=qrreal`)')
+  const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
+  ok(/screen=qrreal/.test(bar), 'その画面を、描いて測っている')
+  /* **題ではなく、問そのものを読む**(赤チェックで踏んだ)。
+     `.qr` を丸ごと読むと、題に型の名前が入っていて必ず当たる */
+  ok(/\.qr-frame/.test(bar) && /\.qr-en/.test(bar),
+    '出た問は、型の札と英文で見る(題で見ない)')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
