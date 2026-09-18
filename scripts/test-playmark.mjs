@@ -111,7 +111,7 @@ import {
 } from '../src/lib/qrPromote.js'
 import {
   NATIVE_FLOW_UNITS, nativeFlowRows, nfFeature, nfUnitOfFeature,
-  nfUnitsFor, showsNfUnit,
+  nfUnitsFor, showsNfUnit, unitName, unitTitle,
 } from '../src/data/nativeFlow.js'
 import { QR_ORDERS, orderQrPairs } from '../src/lib/qrOrder.js'
 import { frameFormOf } from '../src/lib/frameMatch.js'
@@ -5831,8 +5831,10 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      使い回したのと同じ話)。**ここが空だと、Unit で絞れなくなる** */
   ok([...new Set(nfRows.map((r) => r.material_title))].length === 6,
     'Native Flow … material_title に Unit が入っている(6種)')
-  ok(nfRows.every((r) => /^Native Flow Unit \d /.test(r.material_title)),
-    'Native Flow … どの Unit だか、名前を見れば分かる')
+  /* **呼び名は `unitName()` 1か所**(第5.175節)。番号と中身のあいだが
+     スペース1つだと、`Unit 5 7単語以上` で**どこまでが番号か読めない** */
+  ok(nfRows.every((r) => /^Native Flow【Unit \d+】./.test(r.material_title)),
+    'Native Flow … どの Unit だか、名前を見れば分かる(【 】で囲ってある)')
   ok([...new Set(colRows.map((r) => r.material_title))].length === col.COLLOCATION_VERBS.length,
     `コロケーション … material_title に動詞の組が入っている(${col.COLLOCATION_VERBS.length}種)`)
   /* **知らない id は null**(当てずっぽうで返さない) */
@@ -6981,6 +6983,60 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      (CLAUDE.md「赤くならないのは、壊し方が違うという知らせ」) */
   ok(/<div className="qrrev-head">[\s\S]{0,400}?label: '自分の Quick Response 帳'/.test(sk),
     '骨組みには、いちばん長い冊名を入れてある(短いと、はみ出しを見逃す)')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   **Unit の呼び名は【 】で囲み、1か所で作る**
+   (第5.175節・2026-09 実機・利用者の指定)
+
+     > UNIT5 と次の数字の間にスペースしかなく、見づらいです。
+     > 【UNIT5】という風にしてください。これも全ての場所で同じルールです
+
+   前は `Unit 5 7単語以上の長い表現` で、**番号と中身のあいだが
+   スペース1つ**だった。数字のとなりに数字が来ると、
+   **どこまでが番号か読み取れない。**
+
+   しかも同じ形を**4か所がそれぞれ書いていた** ——
+   絞り込みの名前・Unit をえらぶ欄・トレーナーが出す欄・出した知らせ。
+   **直すのに画面を回ることになる**(CLAUDE.md「呼び名を2か所に書かない」)。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ Unit の呼び名は【 】で囲み、1か所で作る(5.175)')
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+
+  /* **鳴らして数える**のと同じで、**呼んで読む** ——
+     書いてある文字ではなく、出てきた名前そのものを見る */
+  ok(NATIVE_FLOW_UNITS.every((u) => unitName(u) === `【Unit ${u.id}】${u.label}`),
+    '呼び名は【Unit ◯】+ 中身(番号と中身がくっつかない)')
+  ok(NATIVE_FLOW_UNITS.every((u) => !/【Unit \d+】\s/.test(unitName(u))),
+    '【 】のうしろに、よけいなスペースを入れていない')
+  /* **知らない番号に、名前を作らない**(当てずっぽうで返さない) */
+  ok(unitName(null) === '' && unitName(undefined) === '',
+    '知らない Unit には名前を作らない')
+  ok(NATIVE_FLOW_UNITS.every((u) => unitTitle(u.id) === `Native Flow${unitName(u)}`),
+    '絞り込みの名前も、同じ呼び名から作っている')
+
+  /* ── **4か所とも、1か所から呼んでいるか** ────────────────
+     **「出る」と「出ない」の両方を見る** ——
+     組み立てている形(`Unit {u.id}`)が1つも残っていないことも数える */
+  for (const f of [
+    'src/components/NativeFlowUnits.jsx',
+    'src/components/NativeFlowAssign.jsx',
+    'src/components/TrainerLearners.jsx',
+  ]) {
+    const src = noNote(readD(f))
+    const name = f.split('/').pop()
+    ok(/unitName\(/.test(src), `${name} … 呼び名を unitName() から取っている`)
+    ok(!/Unit \$\{u\.id\}|Unit \{u\.id\}/.test(src),
+      `${name} … 自分では組み立てていない(直すのに回らなくていい)`)
+  }
+  const nf = noNote(readD('src/data/nativeFlow.js'))
+  ok((nf.match(/【Unit \$\{u\.id\}】/g) ?? []).length === 1,
+    '呼び名を作っているのは、ファイルの中でも1か所だけ')
 }
 
 console.log(ng

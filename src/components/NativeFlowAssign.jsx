@@ -37,6 +37,8 @@
  *                「ユニット毎、または丸ごとアサイン出来るように」)。
  *                `true` なら出す・`false` なら外す。渡さなければ、その行は出ない
  */
+import { unitName } from '../data/nativeFlow.js'
+
 export default function NativeFlowAssign({
   units = [], on = [], busy = false, note = null, onPick = null, onAll = null,
 }) {
@@ -69,7 +71,8 @@ export default function NativeFlowAssign({
                     className={`chip${isOn ? ' chip--on' : ''}`}
                     aria-pressed={isOn}
                     disabled={busy} onClick={() => onPick?.(u)}>
-              Unit {u.id} {u.label}
+              {/* **呼び名は `unitName()` 1か所**(第5.175節) */}
+              {unitName(u)}
               {/* **出している印は、文字でも言う。**
                   外すのか足すのか、押す前に分かるようにする */}
               <span className="chip-count">{isOn ? '外す' : `${u.n} 問`}</span>

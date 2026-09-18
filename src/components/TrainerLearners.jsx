@@ -47,7 +47,7 @@ import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.j
 import { LEARNER_FEATURES } from '../data/learnerFeatures.js'
 import { shelfFeature, shelfList } from '../data/shelves.js'
 import ShelfAssign from './ShelfAssign.jsx'
-import { NATIVE_FLOW_UNITS, nfFeature } from '../data/nativeFlow.js'
+import { NATIVE_FLOW_UNITS, nfFeature, unitName } from '../data/nativeFlow.js'
 import NativeFlowAssign from './NativeFlowAssign.jsx'
 import { printElement } from '../lib/print.js'
 import { viewerRoleOf } from '../lib/viewer.js'
@@ -460,10 +460,12 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     const id = nfFeature(u.id)
     const on = !features.has(id)
     setNfNote({ kind: 'busy', text: on
-      ? `「Unit ${u.id} ${u.label}」を出しています…`
-      : `「Unit ${u.id} ${u.label}」を外しています…` })
+      /* **呼び名は `unitName()` 1か所**(第5.175節)。
+         知らせと画面で書き方が違うと、同じ Unit に見えない */
+      ? `「${unitName(u)}」を出しています…`
+      : `「${unitName(u)}」を外しています…` })
     const r = await toggleFeature(learner,
-      { id, label: `Native Flow「Unit ${u.id} ${u.label}」` }, { quiet: true })
+      { id, label: `Native Flow「${unitName(u)}」` }, { quiet: true })
     setNfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
   }
 

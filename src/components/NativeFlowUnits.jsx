@@ -35,6 +35,8 @@
  * @param picked いま開いている Unit の番号。`null` なら「ぜんぶ」
  * @param onPick 選ばれた Unit の番号(「ぜんぶ」は `null`)
  */
+import { unitName } from '../data/nativeFlow.js'
+
 export default function NativeFlowUnits({ units = [], picked = null, onPick = null }) {
   /** **出す Unit が1つも無ければ、欄ごと出さない**(効かない操作を見せない) */
   if (!units.length) return null
@@ -59,7 +61,9 @@ export default function NativeFlowUnits({ units = [], picked = null, onPick = nu
           <option value="">ぜんぶ({all} 問)</option>
           {units.map((u) => (
             <option key={u.id} value={u.id}>
-              Unit {u.id} {u.label}({u.n} 問)
+              {/* **呼び名は `unitName()` 1か所**(第5.175節)。
+                  ここで組み立てると、直すのに画面を回ることになる */}
+              {unitName(u)}({u.n} 問)
             </option>
           ))}
         </select>

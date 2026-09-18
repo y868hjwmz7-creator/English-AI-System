@@ -767,6 +767,25 @@ export const unitOf = (id) =>
   NATIVE_FLOW_UNITS.find((u) => u.id === Number(id)) ?? null
 
 /**
+ * **Unit の呼び名**(第5.175節・2026-09 実機・利用者の指定)。
+ *
+ *   > UNIT5 と次の数字の間にスペースしかなく、見づらいです。
+ *   > 【UNIT5】という風にしてください。これも全ての場所で同じルールです
+ *
+ * 前は `Unit 5 7単語以上の長い表現` で、**番号と中身のあいだが
+ * スペース1つ**だった。数字のとなりに数字が来ると
+ * (`Unit 5 7単語以上`)、**どこまでが番号か読み取れない。**
+ *
+ * **呼び名は、ここ1か所で作る**(CLAUDE.md「呼び名を2か所に書かない」)。
+ * 前は4か所(この下・Unit をえらぶ欄・トレーナーが出す欄・出した知らせ)
+ * が**それぞれ同じ形を書いていた** —— だから直すのに4か所を回ることになる。
+ *
+ * @param u `NATIVE_FLOW_UNITS` の1つ。**番号だけを渡さない**
+ *          (知らない番号に名前を作らないため)
+ */
+export const unitName = (u) => (u ? `【Unit ${u.id}】${u.label}` : '')
+
+/**
  * 絞り込みに出す名前。**`material_title` に入れる。**
  *
  * 「Native Flow」を頭に付けてあるので、自分の Quick Response 帳の
@@ -774,7 +793,7 @@ export const unitOf = (id) =>
  */
 export const unitTitle = (id) => {
   const u = unitOf(id)
-  return u ? `Native Flow Unit ${u.id} ${u.label}` : 'Native Flow'
+  return u ? `Native Flow${unitName(u)}` : 'Native Flow'
 }
 
 /**
