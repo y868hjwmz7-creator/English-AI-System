@@ -1387,7 +1387,7 @@ const SPEECH = (
      > 「設定」としてサイドバーの一番下に配置してください。
 
    **本物(`App.jsx` の `navFooter`)と1文字も違えない。**
-   包み(`.app-nav-foot`)も、並び(自分の欄 → 設定)も、
+   包み(`.app-nav-foot`)も、並び(**設定 → 自分の欄**・第5.189節)も、
    押したときに呼ぶものも同じにする —— 骨組みが本物と食い違うと、
    **検証は何も守らない**(「セッションで使う」を `.btn-row` で包んでいて、
    CSS のバグを何日も素通りさせた・CLAUDE.md)。
@@ -1406,15 +1406,6 @@ function NavFootScreen() {
   const [bgmVol, setBgmVol] = useState(bgmLevel)
   return (
     <div className="app-nav-foot" style={{ width: '248px' }}>
-      <div className="nav-account">
-        <div className="nav-account-text">
-          <span className="nav-account-name">Hisato Nakjaima</span>
-          <div className="nav-account-row">
-            <span className="badge badge--admin">トレーナー</span>
-            <button type="button" className="btn btn--link">ログアウト</button>
-          </div>
-        </div>
-      </div>
       <NavSettings
         theme={theme} onTheme={setTheme}
         palette={palette} onPalette={setPalette}
@@ -1425,6 +1416,17 @@ function NavFootScreen() {
         showPrepare
         prepare={prepAll} onPrepare={setPrepAll}
       />
+      {/* **いちばん下は自分の欄**(第5.189節・利用者の指定
+          「位置を Hisato Nakajima の要素の上にしてください」) */}
+      <div className="nav-account">
+        <div className="nav-account-text">
+          <span className="nav-account-name">Hisato Nakjaima</span>
+          <div className="nav-account-row">
+            <span className="badge badge--admin">トレーナー</span>
+            <button type="button" className="btn btn--link">ログアウト</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

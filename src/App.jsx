@@ -729,10 +729,39 @@ export default function App() {
      行き先(画面の一覧)と同じだけの高さを占めていた。
 
      **7つとも1つも減らしていない**(「一度入れたものを勝手に減らさない」・
-     共通ルール)。畳んで「設定」1つにまとめ、**いちばん下**へ置いた。
+     共通ルール)。畳んで「設定」1つにまとめてある。
+     **置き場所は、自分の名前の上**(第5.189節でそこへ動かした)。
      中身と作法は `NavSettings.jsx`。 */
   const navFooter = (
     <>
+      {/* **「設定」は、自分の名前の上**(第5.189節・2026-09 実機・利用者の指定)。
+
+            > 位置を Hisato Nakajima の要素の上にしてください
+
+          もとは**いちばん下**に置いていた(第5.163節・利用者の指定
+          「サイドバーの一番下に配置してください」)。自分の名前と
+          ログアウトの行が、そのあとに足されて下に付いたので、
+          **「設定」が真ん中に挟まって**いた。
+
+          **いちばん下は、自分の欄。** 名前・役割・ログアウトは
+          「いま誰で入っているか」であって、行き先でも設定でもない。
+
+          7つとも中に入っている。ふだんは閉じているので、
+          メニューは行き先だけになる。
+          **値と書き込みは、ここが持つ** —— `NavSettings` は
+          受け取って描くだけなので、`npm run test:bar` が
+          Supabase 無しでそのまま描いて測れる */}
+      <NavSettings
+        theme={theme} onTheme={setTheme}
+        palette={palette} onPalette={setPalette}
+        tips={tips} onTips={setTips}
+        sound={sound} onSound={(v) => { setSound(v); setSoundOn(v) }}
+        voiceVol={voiceVol} onVoiceVol={(v) => setVoiceVol(setVoiceLevel(v))}
+        bgmVol={bgmVol} onBgmVol={(v) => setBgmVol(setBgmVolume(v))}
+        showPrepare={profile?.role === 'trainer' || profile?.role === 'owner'}
+        prepare={prepAll} onPrepare={(v) => { setPrepAll(v); setPrepareAllOn(v) }}
+      />
+
       {session && (
         <div className="nav-account">
           {/* **アイコンは出さない**(2026-09 利用者の指定)。
@@ -759,21 +788,6 @@ export default function App() {
         </div>
       )}
 
-      {/* **いちばん下は「設定」。** 7つとも中に入っている。
-          ふだんは閉じているので、メニューは行き先だけになる。
-          **値と書き込みは、ここが持つ** —— `NavSettings` は
-          受け取って描くだけなので、`npm run test:bar` が
-          Supabase 無しでそのまま描いて測れる */}
-      <NavSettings
-        theme={theme} onTheme={setTheme}
-        palette={palette} onPalette={setPalette}
-        tips={tips} onTips={setTips}
-        sound={sound} onSound={(v) => { setSound(v); setSoundOn(v) }}
-        voiceVol={voiceVol} onVoiceVol={(v) => setVoiceVol(setVoiceLevel(v))}
-        bgmVol={bgmVol} onBgmVol={(v) => setBgmVol(setBgmVolume(v))}
-        showPrepare={profile?.role === 'trainer' || profile?.role === 'owner'}
-        prepare={prepAll} onPrepare={(v) => { setPrepAll(v); setPrepareAllOn(v) }}
-      />
     </>
   )
 

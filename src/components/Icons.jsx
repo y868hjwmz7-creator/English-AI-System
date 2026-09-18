@@ -97,17 +97,33 @@ export function PrintIcon({ className = 'icon' }) {
 }
 
 /**
- * 表示の設定(歯車)。
+ * 表示の設定(**歯車**)。
  * 狭い画面で、めったに触らない設定をしまっておく札に使う。
  * 大きさは `1em`。**px で固定しない**(レッスン表示は文字を3段階に変える)。
+ *
+ * ## 光の設定に見えていた(第5.189節・2026-09 実機・利用者の指定)
+ *
+ *   > 今はライトの設定のように見える「設定」のアイコンを、
+ *   > ⚙のアイコンに変更してください。
+ *
+ * もとは**丸 + まわりに8本の線**だった。歯車のつもりだったが、
+ * **18px では線が離れていて、太陽(☀)にしか見えない。**
+ * 描いて並べて確かめた —— 18 / 24 / 40 / 64px のどれでも太陽だった。
+ *
+ * いまは**歯が本体と地続きの、本物の歯車の形**にしてある。
+ * 歯は**6つ**。8つにすると 18px で歯の谷が潰れて、また丸に戻る
+ * (4つの大きさで描いて選んだ)。
+ *
+ * **絵文字(⚙)は使わない。** 端末ごとに形も大きさも違う
+ * (CLAUDE.md)。同じ枠(20×20)・同じ線の太さ(1.5)のまま、
+ * **形だけ**を描き直してある。
  */
 export function GearIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <circle cx="10" cy="10" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10 2.4v2.1M10 15.5v2.1M17.6 10h-2.1M4.5 10H2.4
-               M15.4 4.6l-1.5 1.5M6.1 13.9l-1.5 1.5M15.4 15.4l-1.5-1.5M6.1 6.1L4.6 4.6"
-            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M15.90 8.08 L18.22 8.25 L18.22 11.75 L15.90 11.92 L14.61 14.15 L15.62 16.24 L12.60 17.99 L11.29 16.06 L8.71 16.06 L7.40 17.99 L4.38 16.24 L5.39 14.15 L4.10 11.92 L1.78 11.75 L1.78 8.25 L4.10 8.08 L5.39 5.85 L4.38 3.76 L7.40 2.01 L8.71 3.94 L11.29 3.94 L12.60 2.01 L15.62 3.76 L14.61 5.85 Z"
+            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx="10" cy="10" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   )
 }

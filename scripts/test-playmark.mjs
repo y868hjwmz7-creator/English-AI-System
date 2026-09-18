@@ -2878,8 +2878,15 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       app.indexOf('<AppNav'))
     const acc = foot.indexOf('className="nav-account"')
     const set2 = foot.indexOf('<NavSettings')
-    ok(acc >= 0 && set2 > acc,
-      '設定 … 自分の欄より下(メニューのいちばん下)にいる')
+    /* **2026-09 に利用者の指定で入れ替えた**(第5.189節)。
+       もとは「サイドバーの一番下に」だったが、そのあと自分の欄
+       (名前・役割・ログアウト)が下に足され、**設定が真ん中に挟まって**いた。
+
+         > 位置を Hisato Nakajima の要素の上にしてください
+
+       **いちばん下は自分の欄。** あれは行き先でも設定でもない */
+    ok(acc >= 0 && set2 >= 0 && set2 < acc,
+      '設定 … 自分の欄(名前・ログアウト)より上にいる')
   }
 
   /* ④ **画面が本当に呼んでいるか。**
@@ -7592,6 +7599,35 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
   ok(/\.assignshelf \.shelf-pick[\s\S]{0,200}aria-expanded[\s\S]{0,80}click\(\)/.test(bar),
     'すき間の見張りが、畳んだ冊の行も開いてから測る')
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.189節 「設定」は歯車の形で、自分の名前の上
+
+     > 今はライトの設定のように見える「設定」のアイコンを、
+     > ⚙のアイコンに変更してください。
+     > そして、位置をHisato Nakajima の要素の上にしてください
+
+   **形と置き場所は `npm run test:bar` が描いて測る**(18px で太陽に
+   見えていたので、描かないと分からない)。こちらで見るのは、
+   **本物の画面(`App.jsx`)がそう並べているか**である ——
+   骨組みだけ直しても、利用者の画面は変わらない。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const app = noNote(readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+  const set = app.indexOf('<NavSettings')
+  const acc = app.indexOf('className="nav-account"')
+  ok(set > 0 && acc > 0 && set < acc,
+    '本物の画面も「設定」を自分の欄より先に置いている',
+    `設定 ${set} / 自分の欄 ${acc}`)
+  /* **絵文字(⚙)は使わない**(端末ごとに形も大きさも違う・CLAUDE.md)。
+     利用者の言う「⚙のアイコン」は**歯車の形**という意味であって、
+     絵文字を貼れという意味ではない */
+  const ic = noNote(readFileSync(new URL('../src/components/Icons.jsx', import.meta.url), 'utf8'))
+  ok(!/⚙/.test(ic) && !/⚙/.test(app), '歯車は絵で描いている(絵文字を貼っていない)')
 }
 
 console.log(ng
