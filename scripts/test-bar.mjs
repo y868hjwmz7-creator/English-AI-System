@@ -5423,6 +5423,107 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   この冊を出す相手(第5.179節・2026-09 利用者の指定)
+
+     > Native Flow や 14 の型は指定したゲストにだけ出るようにしたいです。
+     > トレーナーの単語帳 / Quick Response、または、トレーナーアカウント内の
+     > ゲストの単語帳 / Quick Response帳からアサインできるようにしたいです。
+
+   **押しても何も起きない**が、実機で指摘されるまで残ったことがある
+   (2026-09「アサインしたい単語帳を選んだ後にできることがなにもありません」)。
+   だから**描いて数える。**
+
+   ・**色だけに頼らない** —— 印(●/○)と「出す / 外す」の文字の両方
+   ・**黙って丸めない** —— Native Flow の「6つのうち3つ」がそう出るか
+   ・**黙って空にしない** —— 読み込み中と、担当がいないときを書き分ける
+   ・**成功と失敗を、同じ見た目で終わらせない**
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const 見る = async (q, w = 390) => {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=bookassign${q}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(200)
+    const r = await page.evaluate(() => {
+      const box = document.querySelector('.bookassign')
+      if (!box) return null
+      const chips = [...box.querySelectorAll('.chip')]
+      return {
+        文: box.textContent.replace(/\s+/g, ' '),
+        はみ出し: Math.round(box.scrollWidth - box.clientWidth),
+        札: chips.map((c) => ({
+          文: c.textContent.replace(/\s+/g, ''),
+          on: c.className.includes('chip--on'),
+          押した: c.getAttribute('aria-pressed'),
+          止めて: c.disabled,
+        })),
+        warn: !!box.querySelector('.notice--warn'),
+      }
+    })
+    await page.close()
+    return r
+  }
+
+  /* ① 出している人・出していない人・途中の人が、見分けられるか */
+  for (const w of [390, 1280]) {
+    const r = await 見る('', w)
+    if (!r) { ng(`出す相手 … ${w}px で描かれていない`); continue }
+    if (r.はみ出し === 0) ok(`出す相手 … ${w}px ではみ出さない`)
+    else ng(`出す相手 … ${w}px ではみ出す`, `${r.はみ出し}px`)
+    if (r.札.length === 3) ok(`出す相手 … ${w}px で3人ぶんの札が出る`)
+    else ng(`出す相手 … ${w}px で札の数が合わない`, String(r.札.length))
+    /* **印と文字の両方**で示す(色だけに頼らない)。
+       出している人には ●、出していない人には ○ */
+    const 印 = r.札.every((c) => (c.on ? c.文.startsWith('●') : c.文.startsWith('○')))
+    if (印) ok(`出す相手 … ${w}px で、出している人に印(●)が付く`)
+    else ng(`出す相手 … ${w}px で印が合わない`, r.札.map((c) => c.文).join(' / '))
+    /* **読み上げにも同じことを伝える** */
+    const aria = r.札.every((c) => c.押した === (c.on ? 'true' : 'false'))
+    if (aria) ok(`出す相手 … ${w}px で aria-pressed も合っている`)
+    else ng(`出す相手 … ${w}px で aria-pressed が合わない`)
+    /* **黙って丸めない** —— 6つのうち3つの人は、そう出る */
+    if (r.札.some((c) => /3\/6/.test(c.文))) ok(`出す相手 … ${w}px で「6つのうち3つ」が分かる`)
+    else ng(`出す相手 … ${w}px で、いくつ出しているか分からない`,
+      r.札.map((c) => c.文).join(' / '))
+    /* **これから出す人には「出す」、出している人には「外す」** */
+    if (r.札.some((c) => /出す$/.test(c.文)) && r.札.some((c) => /外す$/.test(c.文))) {
+      ok(`出す相手 … ${w}px で「出す」と「外す」が両方ある`)
+    } else ng(`出す相手 … ${w}px で「出す / 外す」が足りない`)
+  }
+
+  /* ② **黙って空にしない。** 読み込み中と、担当がいないときを書き分ける */
+  {
+    const 読み = await 見る('&rows=loading')
+    if (読み && /読んでいます/.test(読み.文) && 読み.札.length === 0) {
+      ok('出す相手 … 読み込み中は、そう書く')
+    } else ng('出す相手 … 読み込み中に、何も言っていない', 読み?.文?.slice(0, 40))
+    const 無し = await 見る('&rows=none')
+    if (無し && /担当しているゲストが、まだいません/.test(無し.文) && 無し.札.length === 0) {
+      ok('出す相手 … 担当がいないときは、そう書く')
+    } else ng('出す相手 … 担当がいないのに、黙って空になる', 無し?.文?.slice(0, 40))
+  }
+
+  /* ③ **成功と失敗を、同じ見た目で終わらせない** */
+  {
+    const 悪 = await 見る('&note=ng')
+    if (悪?.warn && /止まりました/.test(悪.文)) ok('出す相手 … 断られたら、その場に赤く出る')
+    else ng('出す相手 … 断られたのに、目立たない')
+    const 良 = await 見る('&note=ok')
+    if (良 && !良.warn && /出しました/.test(良.文)) ok('出す相手 … うまくいったら、その場に出る')
+    else ng('出す相手 … うまくいったことが出ない')
+  }
+
+  /* ④ **押している最中は、二度押させない**(同じ人に二重に走らせない) */
+  {
+    const 中 = await 見る('&busy=on')
+    if (中 && 中.札.every((c) => c.止めて)) ok('出す相手 … 切り替えている最中は押せない')
+    else ng('出す相手 … 切り替えている最中も押せてしまう')
+    if (中 && 中.札.some((c) => /…$/.test(c.文))) ok('出す相手 … いま切り替えている人が分かる')
+    else ng('出す相手 … どの人を切り替えているのか分からない')
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    説明の文は、既定では出さない(2026-09 利用者の指定)
 
      > 全てのデザインから言葉による説明を省いてください。
@@ -5997,6 +6098,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
     /* **誰の記録として残るか**(第5.178節)。押せる形と、押せない名札と、
        担当がいないときの3つとも測る */
     ['owner', ''], ['owner', 'owner=fixed'], ['owner', 'owner=empty'],
+    /* **この冊を出す相手**(第5.179節)。札が並ぶ形と、
+       担当がいないときの2つとも測る */
+    ['bookassign', ''], ['bookassign', 'rows=none'],
     /* **達成具合**(第5.167節)。`×` と「おわる」の行き先なので、
        ここが行き止まりだと練習へ戻れなくなる */
     ['progress', ''],

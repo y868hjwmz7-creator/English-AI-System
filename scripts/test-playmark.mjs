@@ -6979,8 +6979,16 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **2つの画面が、同じ部品を使う**(利用者の指定「単語帳と同じ仕様に」)。
      書き写すと、必ず片方だけ古くなる */
   for (const [src, name] of [[qr, 'Quick Response'], [wb, '単語帳']]) {
-    ok(/const drillTitle = <DrillTitle label=\{books\.find/.test(src),
-      `${name} … 名前は books 1か所から引いて、同じ部品に渡す`)
+    /* **「どう書いてあるか」ではなく「書き写していないか」で見る。**
+       第5.179節で Quick Response は `bookLabel` を挟む形になった
+       (出す相手の欄と名前を分け合う)。**書き方を1つに縛ると、
+       寄せた日に赤くなる** —— 見たいのは
+       「`books` から引いている・二度引いていない」のほうである */
+    ok(/const drillTitle = <DrillTitle label=\{/.test(src),
+      `${name} … 名前は同じ部品(DrillTitle)に渡す`)
+    const 引く = (src.match(/books\.find\(\(b\) => b\.id === book\)\?\.label/g) ?? []).length
+    ok(引く === 1,
+      `${name} … 名前は books 1か所から引く(書き写していない)`, String(引く))
     ok(/\{drillTitle\}/.test(src), `${name} … 進み具合のすぐ上に出している`)
   }
   ok(/\.drill-title \{[^}]*margin: 0/.test(st),
@@ -7148,6 +7156,99 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **すき間の見張りにも入っている**(足すまで見張られない) */
   const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
   ok(/\['owner', ''\]/.test(bar), 'すき間の見張りに owner が入っている')
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.179節 Native Flow と型の冊を、指定したゲストにだけ出す
+
+     > Native Flow や 14 の型は指定したゲストにだけ出るようにしたいです。
+     > トレーナーの単語帳 / Quick Response、または、トレーナーアカウント内の
+     > ゲストの単語帳 / Quick Response帳からアサインできるようにしたいです。
+
+   **呼んで確かめる。** 「書いてあるか」だけだと、
+   判断を逆にしても(`role === 'learner'` を落としても)緑のままになる。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const feat = await import('../src/data/learnerFeatures.js')
+
+  /* **名前は1か所**(`FRAME_QR`)。画面にも `frameQr.js` にも書き写さない */
+  ok(typeof feat.FRAME_QR === 'string' && feat.FRAME_QR.length > 0,
+    '型の冊の名前が、1か所にある', feat.FRAME_QR)
+  ok(feat.LEARNER_FEATURES.some((f) => f.id === feat.FRAME_QR),
+    'ゲストのページの「出すもの」にも並ぶ(トレーナーの2つ目の入り口)')
+  /* **どの行にも、どこに出るのかまで書いてある**(「出しました」で終わらせない) */
+  ok(feat.LEARNER_FEATURES.every((f) => f.label && f.hint),
+    'どの「出すもの」にも、名前と説明がある')
+  ok(new Set(feat.LEARNER_FEATURES.map((f) => f.id)).size === feat.LEARNER_FEATURES.length,
+    '「出すもの」の名前が、1つも重なっていない')
+
+  /* **呼んで確かめる。** 4通りとも見る —— **出る / 出ない の両方** */
+  const 型 = feat.showsFrameQr
+  ok(型({ role: 'trainer', features: null }) === true,
+    'トレーナーには、指定にかかわらず出る')
+  ok(型({ role: 'owner', features: null }) === true, '管理者にも出る')
+  ok(型({ role: 'learner', features: new Set() }) === false,
+    'ゲストには、出していなければ出ない')
+  ok(型({ role: 'learner', features: new Set([feat.FRAME_QR]) }) === true,
+    'ゲストにも、出していれば出る')
+  ok(型({}) === false, '役割が分からないうちは出さない(既定は「出さない」側)')
+  /* **Native Flow と同じ形。** 似ているからと棚(トレーナーも絞る)に寄せない */
+  const nf = await import('../src/data/nativeFlow.js')
+  ok(nf.showsNfUnit({ role: 'trainer', features: null }, 1) === 型({ role: 'trainer', features: null }),
+    'Native Flow と、トレーナーの扱いがそろっている')
+
+  /* **画面は判断しない。** 受け取るだけ(`nfUnits` とまったく同じ作法) */
+  const qr = noNote(read('components/QrReview.jsx'))
+  ok(/frameOn = false/.test(qr), 'Quick Response は、出すかどうかを受け取るだけ')
+  ok(/\.\.\.\(frameOn \? \[\{ id: 'frame'/.test(qr),
+    '出すときだけ、型の冊を本棚に並べる')
+  ok(!/showsFrameQr/.test(qr), '画面の中で判断していない')
+  const app = noNote(read('App.jsx'))
+  ok(/showsFrameQr\(\{ role: profile\?\.role \?\? null, features \}\)/.test(app),
+    'App が判断して渡している')
+  ok(/<QrReview nfUnits=\{myNfUnits\} frameOn=\{myFrameQr\}/.test(app),
+    '自分の Quick Response 帳に渡している')
+
+  /* **出す相手の欄**(`BookAssign`)。**自分では何も読み込まない部品** */
+  const ba = noNote(read('components/BookAssign.jsx'))
+  ok(!/supabase|loadMyLearners|setLearnerFeature/i.test(ba),
+    '出す相手の欄は、自分では何も読み込まない(骨組みでも描ける)')
+  ok(/rows === null/.test(ba) && /rows\.length === 0/.test(ba),
+    '読み込み中と、担当がいないときを書き分けている(0 と null を取り違えない)')
+  ok(/aria-pressed/.test(ba), '出しているかどうかを、読み上げにも伝えている')
+
+  /* **冊ごとの出し方は、表1つ。** 画面のあちこちで書き分けない */
+  ok(/const ASSIGN_BOOKS = \{/.test(qr), '冊ごとの出し方が、1つの表にある')
+  ok(/ASSIGN_BOOKS\[book\]/.test(qr), 'その表から引いている')
+  const 表 = (qr.match(/ASSIGN_BOOKS/g) ?? []).length
+  ok(表 === 2, `出し方の表を見ているのは2か所だけ(${表})`, String(表))
+  /* **7回の往復を1回にまとめてある**(`loadFeatureMap`) */
+  ok(/loadFeatureMap\(\[FRAME_QR, \.\.\.nfFeats\]\)/.test(qr),
+    '出している相手は、1回で引いている')
+  ok(!/loadFeatureLearners/.test(qr), '冊の数だけ往復していない')
+  /* **トレーナー自身の帳のときだけ**(ゲストのページの帳は1ドットも変えない) */
+  ok(/const canAssign = !learnerId/.test(qr),
+    'ゲストのページから開いた帳には、出す相手の欄を出さない')
+  ok(/viewerRoleOf\(\) === 'trainer'/.test(qr), 'ゲストには出さない')
+  /* **2つの冊のどちらでも出る。** 片方に書き忘れると、
+     Native Flow だけ本棚からアサインできない、という半端な形になる。
+     **数えて見る** —— `<BookAssign` が在るかだけでは、
+     どちらの冊の行に置いたのか分からない */
+  const 置いた = (qr.match(/\{assignBox\}/g) ?? []).length
+  ok(置いた === 2, `出す相手の欄は、2つの冊のどちらにも置いてある(${置いた})`,
+    String(置いた))
+
+  /* **骨組みが、本物の部品をそのまま描いている**(CLAUDE.md) */
+  const sc = noNote(read('__screens.jsx'))
+  ok(/<BookAssign/.test(sc), '骨組み … 本物の「出す相手」を描いている')
+  ok(/rows=loading|'loading'/.test(sc), '骨組み … 読み込み中も描いている')
+  ok(/'none'/.test(sc), '骨組み … 担当がいないときも描いている')
+  const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
+  ok(/\['bookassign', ''\]/.test(bar), 'すき間の見張りに bookassign が入っている')
 }
 
 console.log(ng

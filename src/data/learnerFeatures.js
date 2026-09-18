@@ -29,12 +29,31 @@
 export const BASICS = 'basics'
 
 /**
+ * **型の Quick Response 帳**(第5.179節・2026-09 利用者の指定)。
+ *
+ *   > Native Flow や 14 の型は指定したゲストにだけ出るようにしたいです。
+ *
+ * Native Flow は Unit ごとに `nf:<番号>` で出し分けている(0055)。
+ * こちらは**冊まるごと1つ**なので、名前も1つでよい。
+ * **名前はここ1か所**(画面にも `frameQr.js` にも書き写さない)。
+ */
+export const FRAME_QR = 'frame'
+
+/**
  * トレーナーが、ゲストごとに出す / 出さないを決められるもの。
  *
  * **足したら、ここに1行足すだけでよい**(SQL は要らない)。
  * `npm run test:play` が、id の重なりと文言を見張る。
  */
 export const LEARNER_FEATURES = [
+  {
+    id: FRAME_QR,
+    label: '14 の型(Quick Response)',
+    /* **どこに出るのかまで書く。** 「出しました」だけでは、
+       ゲストがどこを開けば練習できるのか分からない(`ShelfBuilder` と同じ) */
+    hint: '日本語 → 英語(2,872 問)と、言い換え(2,585 問)です。'
+      + 'このゲストの Quick Response の本棚に「14 の型」が出ます。',
+  },
   {
     id: BASICS,
     label: '文法30日集中講座と基礎単語',
@@ -68,4 +87,26 @@ export function featureOf(id) {
 export function showsBasics({ role = null, features = null } = {}) {
   if (role && role !== 'learner') return true
   return !!features && features.has(BASICS)
+}
+
+/**
+ * **型の Quick Response 帳を、この人に出すか**(第5.179節)。
+ *
+ *   > Native Flow や 14 の型は指定したゲストにだけ出るようにしたいです。
+ *
+ * **形は `showsNfUnit()` とまったく同じ**にしてある ——
+ * あちらと同じ「Quick Response の冊」であり、利用者の指定も同じ
+ * (指定したゲストにだけ / **トレーナーには既定で出す**)。
+ *
+ * **棚(`showsShelf`)には寄せない。** あちらは 2026-09 の指定で
+ * トレーナーも「出された冊だけ」になった —— 指定がはっきり分かれている
+ * (CLAUDE.md「似ているからと、あちらに寄せない」)。
+ *
+ * - **ゲスト以外(トレーナー・管理者)には出す**
+ * - **ゲストには、トレーナーが出したときだけ**
+ * - **役割が分からないうちは出さない**(既定は「出さない」側)
+ */
+export function showsFrameQr({ role = null, features = null } = {}) {
+  if (role && role !== 'learner') return true
+  return !!features && features.has(FRAME_QR)
 }

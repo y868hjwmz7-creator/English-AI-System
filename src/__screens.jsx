@@ -41,6 +41,7 @@ import DrillTitle from './components/DrillTitle.jsx'
 import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import SessionOwner from './components/SessionOwner.jsx'
+import BookAssign from './components/BookAssign.jsx'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
 import LearnerBar from './components/LearnerBar.jsx'
@@ -377,6 +378,49 @@ const CARD_LEARNERS = [
   { id: 'g2', display_name: 'テスト太郎' },
   { id: 'g3', display_name: '佐藤ひかる' },
 ]
+
+/* **この冊を出す相手**(`?screen=bookassign`・第5.179節)。
+
+   2026-09 利用者の指定。
+
+     > Native Flow や 14 の型は指定したゲストにだけ出るようにしたいです。
+     > トレーナーの…Quick Response からアサインできるようにしたいです。
+
+   **本物の部品を、そのまま描く**(`BookAssign`)。props で受け取るだけ
+   なので Supabase が要らない —— 本物は本棚のシートの中に出るので、
+   **骨組みからそこへは届かない**(**描けないものは測れない**・CLAUDE.md)。
+
+   **いちばん危ない形を、必ず1つ置く。**
+   ・名前は**長いもの**を混ぜる(札が折り返しても崩れないか)
+   ・**出している人と、出していない人**を混ぜる(印が読み取れるか)
+   ・Native Flow のように「**6つのうち3つ**」も混ぜる(黙って丸めない)
+   ・`?rows=loading` で**読み込み中**・`?rows=none` で**担当がいない**
+   ・`?note=ng` で**断られたとき**(成功と同じ見た目で終わらせない) */
+function BookAssignScreen() {
+  const kind = q.get('rows') || ''
+  const rows = kind === 'loading' ? null : kind === 'none' ? [] : [
+    { id: 'g1', name: '山田はなこ', on: true, extra: '外す' },
+    { id: 'g2', name: '西大路おさむ(製造・品質保証)', on: true, extra: '3 / 6' },
+    { id: 'g3', name: '佐藤', on: false, extra: '出す' },
+  ]
+  return (
+    <div className="app-main" style={{ padding: 16 }}>
+      <section className="card">
+        <BookAssign
+          label="14 の型"
+          lead="このゲストの Quick Response の本棚に出ます。トレーナーには、指定にかかわらず出ます。"
+          rows={rows}
+          busy={q.get('busy') === 'on' ? 'g1' : null}
+          note={q.get('note') === 'ng'
+            ? { ng: true, text: '1 つまで済みましたが、そこで止まりました: 権限がありません' }
+            : q.get('note') === 'ok'
+              ? { text: '山田はなこ さんに「14 の型」を出しました。' }
+              : null}
+          onPick={() => {}} />
+      </section>
+    </div>
+  )
+}
 
 /* **いま誰の記録として残るか**(`?screen=owner`・第5.178節)。
 
@@ -1441,7 +1485,9 @@ createRoot(document.getElementById('root')).render(
       ? FORM
       : q.get('screen') === 'result'
         ? RESULT
-        : q.get('screen') === 'owner'
+        : q.get('screen') === 'bookassign'
+      ? <BookAssignScreen />
+    : q.get('screen') === 'owner'
       ? (
         <OwnerScreen
           fixed={q.get('owner') === 'fixed'}

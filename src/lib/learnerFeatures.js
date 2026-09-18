@@ -87,6 +87,44 @@ export async function loadFeatureLearners(feature) {
   return ok(on)
 }
 
+/**
+ * **いくつかの「出すもの」を、1回で引く**(第5.179節)。
+ *
+ *   > Native Flow や 14 の型は指定したゲストにだけ出るようにしたいです。
+ *   > トレーナーの…Quick Response からアサインできるようにしたいです。
+ *
+ * Quick Response の本棚では、**冊が2つ以上**(Native Flow の Unit 6つ +
+ * 型の冊)の「誰に出しているか」を同時に出す。
+ * `loadFeatureLearners()` を冊の数だけ呼ぶと**7回の往復**になるので、
+ * ここで **`in` で1回**にまとめる(CLAUDE.md「CPU 2秒」の考え方)。
+ *
+ * **絞るのは `feature` だけ。** 誰のぶんが返るかは **RLS が決める**
+ * —— 画面にもここにも、担当かどうかの判定を書かない。
+ *
+ * @param features 引きたい名前の一覧
+ * @returns `Map`(ゲストの id → 出している名前の `Set`)
+ */
+export async function loadFeatureMap(features = []) {
+  const want = [...new Set((features ?? []).filter(Boolean))]
+  if (!supabase || !supported || !want.length) return ok(new Map())
+  const { data, error } = await supabase
+    .from('learner_features')
+    .select('learner_id, feature, enabled')
+    .in('feature', want)
+  if (error) {
+    if (missing(error)) supported = false
+    // **騒がない。** 読めなければ既定(誰にも出していない)である
+    return ok(new Map())
+  }
+  const map = new Map()
+  for (const r of data ?? []) {
+    if (!r?.enabled || !r?.learner_id) continue
+    if (!map.has(r.learner_id)) map.set(r.learner_id, new Set())
+    map.get(r.learner_id).add(r.feature)
+  }
+  return ok(map)
+}
+
 /** 0059 より前の窓口が、自分のぶんを断ったときの言い方 */
 const NOT_MINE = /このゲストの担当ではありません/
 
