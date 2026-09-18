@@ -1508,11 +1508,30 @@ export default function MaterialForm({
               場面によって丁寧さと言い回しが変わります。同じ話題でも別の教材になります
             </span>
           </span>
-          <select value={scene} onChange={(e) => pickScene(e.target.value)}>
-            {sceneList.map((x) => (
-              <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
-            ))}
-          </select>
+          {/* **空の欄を出さない**(第5.183節・2026-09 利用者の指摘
+              「以前ならスピーチの詳細を選べたのに、今は選べなくなっています」)。
+
+              こちらでは再現しなかったが、**中身が0件のときに
+              「押せるのに何も入っていない欄」が出る**形になっていた。
+              それは**行き止まり**である(CLAUDE.md「黙って落とさない・
+              黙って絞らない」)。
+
+              **何が起きているかと、どうすればよいかを、その場に書く。**
+              一覧そのものはファイルにあるので、ここが0になるのは
+              **古い版が端末に残っている**ときである */}
+          {sceneList.length === 0 ? (
+            <p className="notice notice--warn" role="alert">
+              場面の一覧が読めませんでした。
+              画面を再読み込みしてください(古い版が残っている可能性があります)。
+              直らないときは、画面のいちばん下にある版の番号をお知らせください。
+            </p>
+          ) : (
+            <select value={scene} onChange={(e) => pickScene(e.target.value)}>
+              {sceneList.map((x) => (
+                <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
+              ))}
+            </select>
+          )}
         </label>
       )}
 

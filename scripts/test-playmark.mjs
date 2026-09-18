@@ -7429,6 +7429,46 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/\['assign', ''\]/.test(bar), 'すき間の見張りに assign が入っている')
 }
 
+/* ────────────────────────────────────────────────────────────────
+   第5.183節 場面の欄が、空になって行き止まりにならないこと
+
+     > 教材→Speech練習→業界→エネルギーの種類まで選択し、以前ならスピーチの
+     > 詳細を選べたのに、今は選べなくなっています。
+
+   こちらでは再現しなかった(描いて数えて 23 個あった)。それでも
+   **「押せるのに何も入っていない欄」が出る形**にはなっていたので、
+   ①どの業界でも場面が必ず1つ以上あること
+   ②万一0件でも、黙って空の欄を出さないこと
+   の2つを見張る。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const g = await import('../src/data/genres.js')
+  const ind = await import('../src/data/industries.js')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+
+  /* **どの業界・趣味でも、場面が空にならない。**
+     ここが空になると、画面には**何も選べない欄**が出る */
+  const 空スピーチ = ind.INDUSTRIES.filter((x) => g.speechScenesFor(x.id).length === 0)
+  ok(空スピーチ.length === 0, 'どの業界でも、スピーチの場面が1つ以上ある',
+    空スピーチ.map((x) => x.id).join(', '))
+  const 空会話 = ind.INDUSTRIES.filter((x) => g.scenesFor(x.id).length === 0)
+  ok(空会話.length === 0, 'どの業界でも、会話の場面が1つ以上ある',
+    空会話.map((x) => x.id).join(', '))
+  /* **登録の無い業界でも落ちない**(当てずっぽうの id を渡してみる) */
+  ok(g.speechScenesFor('そんな業界は無い').length > 0
+    && g.scenesFor('そんな業界は無い').length > 0,
+    '知らない業界でも、共通の場面に落ちる(行き止まりにならない)')
+
+  /* **万一0件でも、空の欄を出さない**(黙って行き止まりにしない) */
+  const mf = noNote(readFileSync(new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8'))
+  ok(/sceneList\.length === 0 \?/.test(mf),
+    '場面が0件のときは、選ぶ欄のかわりに断りを出す')
+  ok(/notice notice--warn/.test(mf) && /再読み込み/.test(mf),
+    'その断りに、どうすればよいかまで書いてある')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
