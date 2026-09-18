@@ -5737,6 +5737,111 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   やり終えたあとの1枚(第5.193節・2026-09 実機・利用者の指摘)
+
+     > 終わった後のリストの背景の色が途中から切り替わっています。
+     > これが、背景が黒の時は時の色と重なって読めなくなります。
+     > 下まで白くなるように改善してください。
+     > また、下までスクロールしないと「続ける」ボタンがクリックできません。
+
+   **どちらも「描いてみないと分からない」形**である。
+   ①白い箱は `flex: 1 1 auto; min-height: 0` で画面ぶんの高さで止まり、
+    はみ出した一覧は**地の色の上**に乗っていた(暗い配色では読めない)
+   ②ボタンは一覧のいちばん下にあり、**20 問ぶん送らないと届かなかった**
+
+   **本物を描いて、最後まで答えて、測る**(`?screen=qrreal`)。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  for (const w of [390, 1280]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 760 } })
+    page.setDefaultTimeout(9000)
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(1500)
+    /* 66 の型の冊へ。**いちばん長い一覧になるように、ぜんぶ「まだ」で答える** */
+    await page.click('.bookpick')
+    await page.waitForTimeout(300)
+    await page.evaluate(() => {
+      for (const x of document.querySelectorAll('.shelf-pick')) {
+        if ((x.textContent || '').includes('の型')) { x.click(); return }
+      }
+    })
+    await page.waitForTimeout(1500)
+    /* **「まだ」を押し切る。** 20 回まで(1回ぶんは 10 問なので足りる) */
+    for (let i = 0; i < 20; i += 1) {
+      const 押せた = await page.evaluate(() => {
+        const b2 = [...document.querySelectorAll('.qr-answers button')]
+          .find((x) => (x.textContent || '').trim() === 'まだ')
+        if (!b2) return false
+        b2.click()
+        return true
+      })
+      if (!押せた) break
+      await page.waitForTimeout(120)
+    }
+    await page.waitForTimeout(500)
+
+    const 見た = await page.evaluate(() => {
+      const box = document.querySelector('.qr')
+      const res = document.querySelector('.qr-result')
+      const row = document.querySelector('.qr-result .btn-row')
+      if (!box || !res) return null
+      const br = box.getBoundingClientRect()
+      const rr = res.getBoundingClientRect()
+      const wr = row?.getBoundingClientRect() ?? null
+      /* **いちばん下の1行が、白い箱の中にいるか。**
+         はみ出していると、そこだけ地の色の上に乗る */
+      const 行 = [...document.querySelectorAll('.sresult-miss > li')]
+      const 最後 = 行.length ? 行[行.length - 1].getBoundingClientRect() : null
+      return {
+        行数: 行.length,
+        箱の下: Math.round(br.bottom),
+        中身の下: Math.round(rr.bottom),
+        はみ出し: Math.round(rr.bottom - br.bottom),
+        最後の行がはみ出し: 最後 ? Math.round(最後.bottom - br.bottom) : null,
+        /* **ボタンが、送らずに押せるか。** 画面の中にいるか見る */
+        ボタン: wr ? {
+          文: (row.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 20),
+          画面内: wr.top >= 0 && wr.bottom <= window.innerHeight + 1,
+          貼り付き: window.getComputedStyle(row).position === 'sticky',
+          /* **地の色が敷いてあるか。** 透けると下の文字が重なる */
+          地: window.getComputedStyle(row).backgroundColor,
+        } : null,
+        /* いちばん下まで送らずに、その場で押せるか(実際に押してみる) */
+        送った: window.scrollY,
+      }
+    })
+
+    const 名 = `終わりの1枚(${w}px)`
+    if (!見た) {
+      ng(`${名} … 終わりの画面まで行けなかった`)
+    } else if (見た.行数 < 5) {
+      ng(`${名} … 一覧が短すぎて、はみ出しを測れない`, `${見た.行数} 行`)
+    } else if (見た.はみ出し > 1) {
+      ng(`${名} … 白い箱から中身がはみ出している`,
+        `${見た.はみ出し}px。暗い配色では、そこだけ同じ色の字になって読めない`)
+    } else if (見た.最後の行がはみ出し > 1) {
+      ng(`${名} … いちばん下の行が、白い箱の外にいる`,
+        `${見た.最後の行がはみ出し}px`)
+    } else if (!見た.ボタン) {
+      ng(`${名} … つぎへ進むボタンが無い`)
+    } else if (!見た.ボタン.貼り付き) {
+      ng(`${名} … ボタンが画面に貼り付いていない`,
+        '**下まで送らないと押せない** —— 終わったあとに、いちばんしたいことである')
+    } else if (!見た.ボタン.画面内) {
+      ng(`${名} … ボタンが画面の外にいる`, '送らずに押せること')
+    } else if (/rgba\(0, 0, 0, 0\)|transparent/.test(見た.ボタン.地)) {
+      ng(`${名} … ボタンの地の色が透けている`,
+        '下を流れている文字が、ボタンに重なって読めなくなる')
+    } else {
+      ok(`${名} … ${見た.行数} 行でも下まで地が続き、`
+        + `ボタンは送らずに押せる(${見た.ボタン.文})`)
+    }
+    await page.close()
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    自由に書く「中身」の欄(第5.190節・2026-09 利用者の指定)
 
      > それとも、スピーチの場合は「話す内容(任意)」に追加すると

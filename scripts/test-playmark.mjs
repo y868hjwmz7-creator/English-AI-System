@@ -7044,7 +7044,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     /* **カードの中の上**に置く(第5.180節・利用者の指定
        「quick response のようにコンテンツの上部にタイトルを」)。
        単語帳はカードの外に置いていたので、置き場所が割れていた */
-    ok(/(<section className="qr">|<div className="wordcard)/.test(src),
+    /* **入れ物の名前は `qr` で始まる。** 第5.193節で、終わりの1枚だけ
+       印(`qr--done`)を足したので、**そのまま一致では見ない** */
+    ok(/(<section className=\{?`?"?qr|<div className="wordcard)/.test(src),
       `${name} … コンテンツの入れ物がある`)
   }
   ok(/\.drill-title \{[^}]*margin: 0/.test(st),
