@@ -5737,6 +5737,79 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   どの画面も、開いた瞬間に落ちない(第5.195節・2026-09 利用者の指定)
+
+     > 現状で壊れていて機能していないことが他にないか、
+     > 一度徹底してチェックしてください。
+
+   **`npm run build` が通っても安心してはいけない**(CLAUDE.md)——
+   import を書き忘れてもビルドは成功し、**開いた瞬間に落ちる。**
+   実際に `App.jsx` で `TrainerMaterials` の import が抜けたまま
+   ビルドが通り、画面を開くまで分からない状態になった(2026-08)。
+
+   **骨組みで描ける画面を、1つも漏らさず開く。**
+   一覧は `__screens.jsx` から読み取る —— **書き写さない。**
+   画面を足した日に、ここが**ひとりでに増える。**
+
+   見るのは3つ。
+   ①落ちない(`pageerror` が1つも出ない)
+   ②空っぽでない(描かれている)
+   ③横にはみ出さない
+   ══════════════════════════════════════════════════════════════════ */
+{
+  /** 骨組みが知っている画面。**一覧は向こうが持つ** */
+  const 画面 = [...new Set([...readFileSync(
+    new URL('../src/__screens.jsx', import.meta.url), 'utf8')
+    .matchAll(/q\.get\('screen'\) === '([a-z]+)'/g)].map((m) => m[1]))]
+
+  /* **わざと空になる画面**は、名指しで外す。
+     `jobbar` は役割を渡さないと何も出さない(**それが正しい**)、
+     `sticky` は貼り付く帯そのものを測るための1行だけの画面である。
+     **「並んでいるから」では外さない**(CLAUDE.md) */
+  const 空でよい = new Set(['jobbar', 'sticky'])
+
+  const 落ちた = []
+  const 空 = []
+  const はみ出た = []
+  for (const s of 画面) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 800 } })
+    page.setDefaultTimeout(9000)
+    const err = []
+    page.on('pageerror', (e) => err.push(String(e).split('\n')[0].slice(0, 120)))
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    await page.route('**/auth/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '{}',
+    }))
+    try {
+      await page.goto(`http://localhost:${PORT}/__bar.html?screen=${s}`,
+        { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(1200)
+    } catch (e) { err.push(String(e).split('\n')[0].slice(0, 120)) }
+    const m = await page.evaluate(() => ({
+      文字: (document.body.textContent ?? '').replace(/\s+/g, ' ').trim().length,
+      よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    })).catch(() => ({ 文字: 0, よこ: 0 }))
+    if (err.length) 落ちた.push(`${s}: ${err[0]}`)
+    else if (m.文字 < 10 && !空でよい.has(s)) 空.push(s)
+    else if (m.よこ > 0) はみ出た.push(`${s}(${m.よこ}px)`)
+    await page.close()
+  }
+
+  if (落ちた.length) {
+    ng(`どの画面も落ちない … ${落ちた.length} 画面で落ちた`, 落ちた.slice(0, 4).join('\n    '))
+  } else if (空.length) {
+    ng(`どの画面も落ちない … ${空.length} 画面が空っぽ`,
+      `${空.join(' / ')}。わざと空なら、名指しで外す(「並んでいるから」では外さない)`)
+  } else if (はみ出た.length) {
+    ng(`どの画面も落ちない … ${はみ出た.length} 画面が横にはみ出す`, はみ出た.join(' / '))
+  } else {
+    ok(`どの画面も落ちない … ${画面.length} 画面ぜんぶ、開いて描かれて、はみ出さない`)
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    どの曲を流すか(第5.194節・2026-09 利用者の指定)
 
      > また、複数登録した曲から選べるようにしてください。
