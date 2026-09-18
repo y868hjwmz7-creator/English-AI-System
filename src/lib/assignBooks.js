@@ -27,8 +27,8 @@
  *   **ここで `'shelf:' + id` と書かない** —— 置く場所の数だけ食い違う。
  * ============================================================================
  */
-import { shelfFeature, shelfList } from '../data/shelves.js'
-import { NATIVE_FLOW_UNITS, nfFeature, unitName } from '../data/nativeFlow.js'
+import { SHELF_BOOK_LABEL, shelfFeature, shelfList } from '../data/shelves.js'
+import { NATIVE_FLOW_UNITS, NF_BOOK_LABEL, nfFeature, unitName } from '../data/nativeFlow.js'
 
 /** 出している業種べつの単語帳。**並びは `shelfList()` のまま** */
 export const shelvesOn = (features = null) => shelfList()
@@ -56,10 +56,10 @@ export const nfAllTodo = (features = null, on = true) => NATIVE_FLOW_UNITS
 /* ── 知らせの文。**画面に書き写さない** ─────────────────────── */
 
 /** 冊の呼び名(業種べつ)。**知らせと画面で言い方を変えない** */
-export const shelfTitle = (shelf) => `業種べつの単語帳「${shelf?.label ?? ''}」`
+export const shelfTitle = (shelf) => `${SHELF_BOOK_LABEL}「${shelf?.label ?? ''}」`
 
 /** 冊の呼び名(Native Flow の Unit)。**呼び名は `unitName()` 1か所** */
-export const nfUnitTitle = (u) => `Native Flow「${unitName(u)}」`
+export const nfUnitTitle = (u) => `${NF_BOOK_LABEL}「${unitName(u)}」`
 
 /** 押した直後の1行(まだ通っていない) */
 export const busyText = (title, on) => (on

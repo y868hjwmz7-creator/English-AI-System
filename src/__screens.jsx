@@ -41,8 +41,9 @@ import DrillTitle from './components/DrillTitle.jsx'
 import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import SessionOwner from './components/SessionOwner.jsx'
-import FeatureToggle from './components/FeatureToggle.jsx'
-import { featuresIn } from './data/learnerFeatures.js'
+import AssignShelf from './components/AssignShelf.jsx'
+import { BASICS, FRAME_QR } from './data/learnerFeatures.js'
+import { nfUnitTitle, shelfTitle } from './lib/assignBooks.js'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
 import LearnerBar from './components/LearnerBar.jsx'
@@ -59,9 +60,7 @@ import GrammarNote from './components/GrammarNote.jsx'
 import BasicsCourse from './components/BasicsCourse.jsx'
 import BasicWordsPick from './components/BasicWordsPick.jsx'
 import ShelfBooks from './components/ShelfBooks.jsx'
-import ShelfAssign from './components/ShelfAssign.jsx'
 import NativeFlowUnits from './components/NativeFlowUnits.jsx'
-import NativeFlowAssign from './components/NativeFlowAssign.jsx'
 import { NATIVE_FLOW_UNITS } from './data/nativeFlow.js'
 import {
   FIRST_FRAME_PART, FRAME_BOOK_LABEL, FRAME_PARTS, frameQrCounts, frameQrGroups,
@@ -387,31 +386,87 @@ const CARD_LEARNERS = [
      > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、
      > もしくは「アサインする」の機能を作り…
 
-   **本物の部品を、そのまま描く**(`FeatureToggle`)。
+   **本物の部品を、そのまま描く**(`AssignShelf`)。
    `AssignBooks` そのものは Supabase を引き連れているので、
    **骨組みからは1ドットも描けない**(**描けないものは測れない**)。
-   だから**中に並ぶ札**を、ここで測れるようにしてある。
+   だから**中に並ぶ行**を、ここで測れるようにしてある。
+
+   **「欄がある」だけを見ない**(第5.186節)。選んでも何も起きない形に
+   戻しても緑のままになるので、**押したら本当に印が変わるか・札が増えるか・
+   結果がこの場に出るか**まで数えられるよう、**持ちものを持たせてある。**
 
    **いちばん危ない形を、必ず1つ置く。**
-   ・**出している人と、出していない人**を混ぜる(印が読み取れるか)
+   ・**出している冊と、出していない冊**を混ぜる(印が読み取れるか)
    ・`?busy=on` で**決めている最中**(二度押しさせない)
+   ・`?assign=none` で**1つも出していないとき**(○ だけになる)
    ・単語帳の冊と Quick Response の冊を**2つとも**出す
-     (片方だけ描くと、振り分け(`featuresIn`)を壊しても緑になる) */
+     (片方だけ描くと、振り分け(`featuresIn`)を壊しても緑になる)
+   ・**中に区切りがある冊(業種べつ・Native Flow)も、そのまま描く** ——
+     畳んであるので、測る側が開く */
 function AssignScreen() {
-  const busy = q.get('busy') === 'on'
+  const busy = q.get('busy') === 'on' ? BASICS : null
+  const empty = q.get('assign') === 'none'
+  const all = shelfList()
+  /** **出している冊**。押すと本当に変わる —— 印だけ描いても意味がない */
+  const [features, setFeatures] = useState(new Set(empty ? [] : [FRAME_QR]))
+  /* **はじめから1冊出してある** —— 実機の写真がその形だった
+     (「ビジネス全般 外す」の札が1つ) */
+  const [on, setOn] = useState(empty ? [] : ['business'])
+  const [units, setUnits] = useState(empty ? [] : [1, 4])
+  const [wordNote, setWordNote] = useState(null)
+  const [qrNote, setQrNote] = useState(null)
+
+  /** 出す / 外すを、本物と同じように折り返す */
+  const flip = (set, id) => {
+    const next = new Set(set)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  }
+  const say = (setNote, name, added) => setNote({
+    kind: 'ok',
+    text: added ? `元 さんの画面に「${name}」を出しました。`
+      : `元 さんの画面から「${name}」を外しました。`,
+  })
+
   return (
     <div className="app-main" style={{ padding: 16 }}>
       <section className="card">
         <h3 className="card-title">単語帳の冊</h3>
-        {featuresIn('word').map((f) => (
-          <FeatureToggle key={f.id} feature={f} on busy={busy} onPick={() => {}} />
-        ))}
+        <AssignShelf
+          group="word" features={features} busy={busy} note={wordNote}
+          onFeature={(f) => {
+            setFeatures(flip(features, f.id))
+            say(setWordNote, f.label, !features.has(f.id))
+          }}
+          /* **出している棚と、出していない棚の両方**(片方だけだと、
+             「外す」の札も、足すプルダウンも、どちらかが測れない) */
+          shelfOn={all.filter((x) => on.includes(x.id))}
+          shelfOff={all.filter((x) => !on.includes(x.id))}
+          onShelf={(sh) => {
+            const had = on.includes(sh.id)
+            setOn(had ? on.filter((x) => x !== sh.id) : [...on, sh.id])
+            say(setWordNote, shelfTitle(sh), !had)
+          }} />
       </section>
       <section className="card">
         <h3 className="card-title">Quick Response の冊</h3>
-        {featuresIn('qr').map((f) => (
-          <FeatureToggle key={f.id} feature={f} on={false} busy={busy} onPick={() => {}} />
-        ))}
+        <AssignShelf
+          group="qr" features={features} busy={busy} note={qrNote}
+          onFeature={(f) => {
+            setFeatures(flip(features, f.id))
+            say(setQrNote, f.label, !features.has(f.id))
+          }}
+          units={NATIVE_FLOW_UNITS} unitsOn={units}
+          onUnit={(u) => {
+            const had = units.includes(u.id)
+            setUnits(had ? units.filter((x) => x !== u.id) : [...units, u.id])
+            say(setQrNote, nfUnitTitle(u), !had)
+          }}
+          /* **丸ごとの行も描く**(2026-09 利用者の指定
+             「ユニット毎、または丸ごとアサイン出来るように」)。
+             **本物と1文字も違えない** —— 渡さないと、
+             骨組みにだけ無い行ができて、検証が何も守らない */
+          onAll={(v) => setUnits(v ? NATIVE_FLOW_UNITS.map((u) => u.id) : [])} />
       </section>
     </div>
   )
@@ -1071,42 +1126,6 @@ const BASICPICK = (
   </section>
 )
 
-/* **この人に出す「業種べつの単語帳」**(`?screen=shelfassign`・2026-09 実機)。
-
-     > ゲストの単語帳（トレーナーアカウント）で、業界別の単語帳を
-     > アサインできません。アサインしたい単語帳を選んだ後にできることが
-     > なにもありませんし、アサインされる様子もありません。
-
-   もとは `TrainerLearners.jsx` の中に直に書いてあった。あの画面は
-   **Supabase を引き連れている**ので、骨組みでは**1ドットも描けなかった** ——
-   **描けないものは測れない**(`SpeechBoard` → `SpeechPractice` と同じ話)。
-   だから部品に切り出してある。
-
-   **「欄がある」だけを見ない。** 選んでも何も起きない形に戻しても
-   緑のままになる。**押したら本当に札が増えるか・結果がこの場に出るか**
-   まで数える。 */
-function ShelfAssignScreen() {
-  const all = shelfList()
-  /* **はじめから1冊出してある** —— 実機の写真がその形だった
-     (「ビジネス全般 外す」の札が1つ) */
-  const [on, setOn] = useState(['business'])
-  const [note, setNote] = useState(null)
-  return (
-    <ShelfAssign
-      shelfOn={all.filter((s) => on.includes(s.id))}
-      shelfOff={all.filter((s) => !on.includes(s.id))}
-      busy={false} note={note}
-      onPick={(sh) => {
-        const had = on.includes(sh.id)
-        setOn(had ? on.filter((x) => x !== sh.id) : [...on, sh.id])
-        setNote({ kind: 'ok', text: had
-          ? `元 さんの画面から「業種べつの単語帳「${sh.label}」」を外しました。`
-          : `元 さんの画面に「業種べつの単語帳「${sh.label}」」を出しました。` })
-      }}
-    />
-  )
-}
-
 /* 業種べつの単語帳(棚・`?screen=shelfpick`・0057・2026-09 利用者の指定)。
 
      > 何冊も違う単語帳を持てるようにしてほしいんです。…
@@ -1139,12 +1158,12 @@ const SHELFPICK = (
   </section>
 )
 
-/* Native Flow の Unit(`?screen=nfunits` / `?screen=nfassign`・
+/* Native Flow の Unit(`?screen=nfunits`・
    2026-09 利用者の指定「UNIT毎に分けて」「指定したゲストだけに届くように」)。
 
    **本物の部品を描いて測る。** 6つの札が1行に収まるか・
    長い Unit 名でプルダウンがはみ出さないか・押せる大きさは、
-   ソースを読んでも分からない(`ShelfBooks` / `ShelfAssign` と同じ話)。
+   ソースを読んでも分からない(`ShelfBooks` と同じ話)。
 
    **わざと Unit をぜんぶ渡してある** —— 1つだけにすると、
    札の行が折り返さないので**はみ出しを見逃す。** */
@@ -1240,19 +1259,6 @@ const PROGRESS = (
   </div>
 )
 
-const NFASSIGN = (
-  <NativeFlowAssign units={NATIVE_FLOW_UNITS}
-                    on={q.get('on') === 'none' ? [] : [2, 5]}
-                    busy={false}
-                    note={q.get('on') === 'none' ? null
-                      : { kind: 'ok', text: '元 さんの画面に「Native Flow「Unit 2 3〜4単語の表現」」を出しました。' }}
-                    onPick={() => {}}
-                    /* **丸ごとの行も描く**(2026-09 利用者の指定
-                       「ユニット毎、または丸ごとアサイン出来るように」)。
-                       **本物と1文字も違えない** —— 渡さないと、
-                       骨組みにだけ無い行ができて、検証が何も守らない */
-                    onAll={() => {}} />
-)
 
 /* スピーチ練習(`?screen=speech`・0054・2026-09 利用者の指定)。
 
@@ -1435,8 +1441,6 @@ createRoot(document.getElementById('root')).render(
     ? SHELF
     : q.get('screen') === 'shift'
     ? SHIFT
-    : q.get('screen') === 'shelfassign'
-    ? <ShelfAssignScreen />
     : q.get('screen') === 'navfoot'
     ? <NavFootScreen />
     : q.get('screen') === 'sheet'
@@ -1445,8 +1449,6 @@ createRoot(document.getElementById('root')).render(
     ? SHELFPICK
     : q.get('screen') === 'nfunits'
     ? NFUNITS
-    : q.get('screen') === 'nfassign'
-    ? NFASSIGN
     : q.get('screen') === 'speech'
     ? SPEECH
     : q.get('screen') === 'basicpick'

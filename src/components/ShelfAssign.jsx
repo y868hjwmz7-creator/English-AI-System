@@ -1,9 +1,22 @@
 import { SHELF_GROUPS } from '../data/shelves.js'
 
 /**
- * **この人に出す「業種べつの単語帳」**(0057)。
+ * **業種べつの単語帳を、この人に出す / 外す**(0057)。
  *
  *   > そして、ゲストにはトレーナーが指定した単語帳のみが追加されるのです。
+ *
+ * ## 「冊の行の中」に入る中身である(第5.186節)
+ *
+ *   > 教材のアサイン内に説明は一才必要ありません。消してください。
+ *   > シンプルに単語帳とquick responseの冊を選ぶ方法と同じ仕様にしてください。
+ *
+ * もとは自分で `<section className="card">` と見出しと**説明3段落**を
+ * 持っていた。いまは `AssignShelf` の「業種べつの単語帳」の行を開いたときに、
+ * **その行の中**に出る中身だけになっている
+ * (`BookShelf` の `sub` とまったく同じ位置)。
+ *
+ * **囲みも見出しも知らせも、持たない。** 外側は `AssignShelf` の役目である
+ * —— **置く場所の数だけ食い違う**(CLAUDE.md)。
  *
  * ## なぜ部品に切り出してあるか
  *
@@ -24,49 +37,35 @@ import { SHELF_GROUPS } from '../data/shelves.js'
  * ## 決まりごと
  *
  * - **選んだ瞬間に出す。**「出す」ボタンは置かない
- *   —— 押すものが2つになるだけで、決めることは1つしかない。
- *   代わりに**そう書く**(「えらぶと、すぐ出します…」)。
- *   黙っていると「選んだあと、できることがない」と読める
- * - **押した結果は、必ずこの場に出す**(`note`)。
- *   画面のいちばん上に出すと、**単語帳のタブまで送った人には見えない**
- *   (CLAUDE.md「失敗の知らせは、その操作をした場所に出す」)
+ *   —— 押すものが2つになるだけで、決めることは1つしかない
  * - **35冊あるので、札を35個並べない。** 選んで足し、押して外す
  *
  * @param shelfOn  いま出している棚(`{ id, label, group }`)
  * @param shelfOff まだ出していない棚
  * @param busy     いま切り替えている最中か
- * @param note     押した結果 `{ kind: 'busy'|'ok'|'ng', text }`
  * @param onPick   押された棚を受け取る(出す / 外すの判断は呼ぶ側)
  */
-export default function ShelfAssign({ shelfOn, shelfOff, busy, note, onPick }) {
+export default function ShelfAssign({ shelfOn, shelfOff, busy, onPick }) {
   return (
-    <section className="card shelfassign">
-      <h3 className="card-title">この人に出す「業種べつの単語帳」</h3>
-
-      {/* **いま出している冊。** 見出しを出す ——
-          札だけだと「外す」の文字が先に目に入り、
-          これが**出ている印**だと読み取れない */}
-      {shelfOn.length > 0 ? (
-        <>
-          <p className="field-label">いま出している単語帳</p>
-          <div className="chiprow" role="group" aria-label="出している単語帳">
-            {shelfOn.map((s) => (
-              <button key={s.id} type="button" className="chip chip--on"
-                      disabled={busy} onClick={() => onPick(s)}>
-                {s.label}
-                <span className="chip-count">外す</span>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <p className="field-hint">
-          まだ1冊も出していません。この人の単語帳には、
-          <strong>業種べつの単語帳が1冊も出ません。</strong>
-        </p>
+    <div className="shelfassign">
+      {/* **いま出している冊は、押すと外せる。**
+          1冊も出していないときは、この行ごと出さない
+          —— **空の入れ物で場所を取らない**(`DrillHead` と同じ作法) */}
+      {shelfOn.length > 0 && (
+        <div className="chiprow" role="group" aria-label="出している単語帳">
+          {shelfOn.map((s) => (
+            <button key={s.id} type="button" className="chip chip--on"
+                    disabled={busy} onClick={() => onPick(s)}>
+              {s.label}
+              <span className="chip-count">外す</span>
+            </button>
+          ))}
+        </div>
       )}
 
       <label className="field">
+        {/* **この1行だけは残す。** 説明ではなく、**プルダウンの名前**である
+            —— 無いと、何を選ぶ欄なのか分からない */}
         <span className="field-label">単語帳を足す</span>
         <select className="input" value="" disabled={busy}
                 onChange={(e) => {
@@ -87,28 +86,6 @@ export default function ShelfAssign({ shelfOn, shelfOff, busy, note, onPick }) {
           })}
         </select>
       </label>
-
-      {/* **押した結果は、必ずこの場に出す**(2026-09 実機)。
-          成功と失敗を、同じ見た目で終わらせない */}
-      {note && (
-        <p className={note.kind === 'busy' ? 'field-hint'
-          : `notice notice--${note.kind === 'ok' ? 'ok' : 'warn'}`}
-           role="status">
-          {note.text}
-        </p>
-      )}
-
-      {/* **「押して追加するまで混ざりません」とは、もう書かない**(0058)。
-          入れる段そのものを消したので、棚の語は**独立した1冊**として並び、
-          覚え具合も `shelf_reviews` に残る。
-          **古い注意書きは、消し忘れると嘘になる**(CLAUDE.md) */}
-      <p className="field-hint">
-        出した単語帳は、この人の画面の単語帳に「業種べつ」として並びます。
-        <strong>その人の語句とは混ざりません。</strong>
-        {/* **下に出ているのは「自分の単語帳」だけ。** 黙って隠さず、そう書く */}
-        下に出しているのはこの人の「自分の単語帳」なので、
-        ここで出した1冊は下には並びません。
-      </p>
-    </section>
+    </div>
   )
 }

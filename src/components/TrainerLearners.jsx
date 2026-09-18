@@ -44,16 +44,13 @@ import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
 import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.js'
-import { featuresIn } from '../data/learnerFeatures.js'
-import FeatureToggle from './FeatureToggle.jsx'
+import AssignShelf from './AssignShelf.jsx'
 import { shelfFeature } from '../data/shelves.js'
 import {
   busyText, doneText, nfAllBusyText, nfAllDoneText, nfAllNoneText, nfAllTodo,
   nfUnitTitle, nfUnitsOn, shelfTitle, shelvesOff, shelvesOn, stoppedText,
 } from '../lib/assignBooks.js'
-import ShelfAssign from './ShelfAssign.jsx'
 import { NATIVE_FLOW_UNITS, nfFeature, unitName } from '../data/nativeFlow.js'
-import NativeFlowAssign from './NativeFlowAssign.jsx'
 import { printElement } from '../lib/print.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 
@@ -107,7 +104,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const [featureBusy, setFeatureBusy] = useState(null)
   /* **業種べつの単語帳を出したときの知らせ**(2026-09 実機)。
      画面のいちばん上ではなく、**押した欄のすぐ下**に出す */
-  const [shelfNote, setShelfNote] = useState(null)
+  const [wordNote, setWordNote] = useState(null)
   /* **業種べつの単語帳(棚)のうち、この人に出しているもの**(0057)。
      入れ物は `learner_features` と同じで、名前だけが `shelf:<id>` である。
      **名前の作り方は `shelfFeature()` 1か所** ——
@@ -123,7 +120,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const nfOn = useMemo(() => nfUnitsOn(features), [features])
   /* **押した結果の知らせ。** 棚とは別に持つ —— 別のタブに出す札なので、
      同じ入れ物にすると**片方の知らせが、もう片方の画面に出る** */
-  const [nfNote, setNfNote] = useState(null)
+  const [qrNote, setQrNote] = useState(null)
   // ゲストを開いたときの中身。レッスン前に見るのは「先週何を出したか」なので、
   // 過去の宿題を最初に開く(2026-08 の要望)。
   const [detailTab, setDetailTab] = useState('homework')
@@ -337,7 +334,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setForm({ testType: 'toeic', score: '', takenOn: today() })
     setGoal({ words: '', sentences: '' })
     setFeatures(new Set())
-    setShelfNote(null)
+    setWordNote(null)
     setDetailBusy(true)
     // `loadLearnerSummary`(study_logs の合計)は読まない。
     // **もう誰も入力しないので、いつも 0 になる**(2026-08 の設計変更)
@@ -424,6 +421,22 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   }
 
   /**
+   * **素の冊(30日講座と基礎単語 / 14 の型)を出す / 外す**(第5.186節)。
+   *
+   * `pickShelf()` とまったく同じ形にしてある —— **知らせは、押した欄の
+   * すぐ下に出す**(`quiet`)。もとは画面のいちばん上(`message`)に出して
+   * いたので、**単語帳のタブまで送った人には1文字も見えなかった。**
+   * CLAUDE.md「**失敗の知らせは、その操作をした場所に出す**」。
+   */
+  const pickFeature = async (learner, feat, setNote) => {
+    if (featureBusy) return
+    const on = !features.has(feat.id)
+    setNote({ kind: 'busy', text: busyText(feat.label, on) })
+    const r = await toggleFeature(learner, feat, { quiet: true })
+    setNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
+  }
+
+  /**
    * **業種べつの単語帳を、この人に出す / 外す**(0057)。
    *
    * `toggleFeature` をそのまま呼ぶだけだが、**知らせはこの欄に出す**
@@ -438,10 +451,10 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     if (featureBusy) return
     const id = shelfFeature(shelf.id)
     const on = !features.has(id)
-    setShelfNote({ kind: 'busy', text: busyText(shelf.label, on) })
+    setWordNote({ kind: 'busy', text: busyText(shelf.label, on) })
     const r = await toggleFeature(learner,
       { id, label: shelfTitle(shelf) }, { quiet: true })
-    setShelfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
+    setWordNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
   }
 
   /**
@@ -456,10 +469,10 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     const on = !features.has(id)
     /* **呼び名は `unitName()` 1か所**(第5.175節)。
        知らせと画面で書き方が違うと、同じ Unit に見えない */
-    setNfNote({ kind: 'busy', text: busyText(unitName(u), on) })
+    setQrNote({ kind: 'busy', text: busyText(unitName(u), on) })
     const r = await toggleFeature(learner,
       { id, label: nfUnitTitle(u) }, { quiet: true })
-    setNfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
+    setQrNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
   }
 
   /**
@@ -485,11 +498,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     if (featureBusy) return
     const todo = nfAllTodo(features, on)
     if (!todo.length) {
-      setNfNote({ kind: 'ok', text: nfAllNoneText(learner.display_name, on) })
+      setQrNote({ kind: 'ok', text: nfAllNoneText(learner.display_name, on) })
       return
     }
     setFeatureBusy('nf:all')
-    setNfNote({ kind: 'busy', text: nfAllBusyText(todo.length, on) })
+    setQrNote({ kind: 'busy', text: nfAllBusyText(todo.length, on) })
     const next = new Set(features)
     let bad = null
     /* **数えながら進む。** あとから引き算で出そうとすると、
@@ -505,7 +518,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setFeatureBusy(null)
     /* **どこまで通ったかを、そのまま言う。** 「失敗しました」だけだと、
        いくつ出たのかが分からない(`eraseNow` と同じ作法) */
-    setNfNote(bad
+    setQrNote(bad
       ? { kind: 'ng', text: stoppedText(done, bad) }
       : { kind: 'ok', text: nfAllDoneText(learner.display_name, on) })
   }
@@ -1327,21 +1340,20 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         `<section className="card">` を持っているので、
                         地の上に直に置くと**そこだけ浮いて見える**
                         (CLAUDE.md「外側まで数える」) */}
-                    {/* **単語帳の冊は、単語帳のタブで決める**(第5.181節)。
-                        一覧は `learnerFeatures.js` が持ち、
-                        **どちらの帳面の冊かも、あちらが知っている**
-                        (`featuresIn('word')`)—— 画面で振り分けない */}
-                    {featuresIn('word').map((f) => (
-                      <FeatureToggle key={f.id} feature={f}
-                                     on={features.has(f.id)}
-                                     busy={featureBusy === f.id}
-                                     onPick={() => toggleFeature(l, f)} />
-                    ))}
-                    <ShelfAssign
+                    {/* **1行1冊。説明は出さない**(第5.186節・利用者の指定)。
+
+                          > 教材のアサイン内に説明は一才必要ありません。消してください。
+                          > シンプルに単語帳とquick responseの冊を選ぶ方法と
+                          > 同じ仕様にしてください。
+
+                        見た目も中身も `AssignShelf` 1か所が持っている ——
+                        「アサインする」の画面とまったく同じものである
+                        (**同じことをするものを、2つの見た目で見せない**) */}
+                    <AssignShelf
+                      group="word" features={features} busy={featureBusy} note={wordNote}
+                      onFeature={(f) => pickFeature(l, f, setWordNote)}
                       shelfOn={shelfOn} shelfOff={shelfOff}
-                      busy={!!featureBusy} note={shelfNote}
-                      onPick={(sh) => pickShelf(l, sh)}
-                    />
+                      onShelf={(sh) => pickShelf(l, sh)} />
 
                     <Wordbook
                       learnerId={l.id} learnerName={l.display_name} showBasics={false}
@@ -1355,40 +1367,15 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     (単語帳で `LearnerWordbook` を別に持って踏んだ失敗) */}
                 {detailTab === 'qr' && (
                   <>
-                    {/* ── この人に出す「Native Flow」の Unit(2026-09 利用者の指定)──
-
-                        > これも指定したゲストだけに届くように、
-                        > トレーナーにはデフォルトで表示されるように
-
-                        **置き場所は、この Quick Response のタブ。**
-                        Native Flow は Quick Response の教材なので、
-                        出した結果(この人の帳)がすぐ下にある
-                        —— 業種べつの単語帳を単語帳のタブに置いたのと同じ判断。
-
-                        **入れ物は 0055 の `learner_features` そのまま**
-                        (名前は `nf:<Unit の番号>`。作り方は `nativeFlow.js` 1か所)。
-                        **新しい表も窓口も、貼る SQL も1つも増えていない。**
-
-                        **囲みに入れる。** すぐ下の `QrReview` は自分で
-                        `<section className="card">` を持っているので、
-                        地の上に直に置くとそこだけ浮いて見える */}
-                    {/* **ユニット毎にも、丸ごとにも出せる**(2026-09 利用者の指定)。
-                        1つずつ押すと6回かかるので、
-                        「この人には Native Flow をぜんぶ渡す」を1回で済ませる */}
-                    {/* **Quick Response の冊も、その帳面のタブで決める**
-                        (第5.181節)。振り分けは `featuresIn('qr')` 1か所 */}
-                    {featuresIn('qr').map((f) => (
-                      <FeatureToggle key={f.id} feature={f}
-                                     on={features.has(f.id)}
-                                     busy={featureBusy === f.id}
-                                     onPick={() => toggleFeature(l, f)} />
-                    ))}
-                    <NativeFlowAssign
-                      units={NATIVE_FLOW_UNITS} on={nfOn}
-                      busy={!!featureBusy} note={nfNote}
-                      onPick={(u) => pickNfUnit(l, u)}
-                      onAll={(on) => setNfAll(l, on)}
-                    />
+                    {/* **1行1冊。単語帳のタブとまったく同じ部品**(第5.186節)。
+                        置き場所は Quick Response のタブ —— 出した結果
+                        (この人の帳)がすぐ下にある */}
+                    <AssignShelf
+                      group="qr" features={features} busy={featureBusy} note={qrNote}
+                      onFeature={(f) => pickFeature(l, f, setQrNote)}
+                      units={NATIVE_FLOW_UNITS} unitsOn={nfOn}
+                      onUnit={(u) => pickNfUnit(l, u)}
+                      onAll={(on) => setNfAll(l, on)} />
 
                     <QrReview learnerId={l.id} learnerName={l.display_name} />
                   </>

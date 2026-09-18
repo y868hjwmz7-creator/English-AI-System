@@ -48,7 +48,7 @@ import {
   FRAME_PART_KEY, QR_HINT_KEY, frameFormOk, frameQrCounts, frameQrGroups,
 } from '../lib/frameQr.js'
 import { loadFrameQr } from '../lib/frameQrLoad.js'
-import { NF_UNIT_KEY } from '../data/nativeFlow.js'
+import { NF_BOOK_LABEL, NF_UNIT_KEY } from '../data/nativeFlow.js'
 import NativeFlowUnits from './NativeFlowUnits.jsx'
 import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
@@ -158,7 +158,7 @@ export default function QrReview({
        **既定は空**なので、渡さない画面はこれまでどおり何も出ない */
     /* **`hasSub`** … Unit を行の中で選ぶ(第5.173節)。
        選んでも本棚を閉じない —— 閉じると、開き直さないと Unit を選べない */
-    ...(nfUnits.length ? [{ id: 'nf', label: 'Native Flow', hasSub: true }] : []),
+    ...(nfUnits.length ? [{ id: 'nf', label: NF_BOOK_LABEL, hasSub: true }] : []),
     /* **66 の型**(2026-09 利用者の指定
        「型シフトはサイドバーからなくして、quick response 内に
        『66の型のQR』としてその中に『日本語→英語』と『言い換え』を

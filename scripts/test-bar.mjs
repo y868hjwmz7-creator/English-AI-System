@@ -4272,7 +4272,7 @@ export default defineConfig({
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     **この人に出す「業種べつの単語帳」**(0057・2026-09 実機)
+     **この人に出す冊**(0057 / 第5.186節・2026-09 実機)
 
        > ゲストの単語帳（トレーナーアカウント）で、業界別の単語帳を
        > アサインできません。アサインしたい単語帳を選んだ後にできることが
@@ -4281,34 +4281,64 @@ export default defineConfig({
      出どころは**知らせの置き場所**だった。成功も失敗も画面のいちばん上
      (`message` / `error`)に出していたので、**単語帳のタブまで送った人には
      1文字も見えなかった**(CLAUDE.md「失敗の知らせは、その操作をした
-     場所に出す」)。しかもこの欄は `TrainerLearners.jsx` の中にあり、
-     あの画面は Supabase を引き連れているので**骨組みでは描けなかった** ——
-     **描けないものは測れない。**
+     場所に出す」)。
+
+     **いまは「冊をえらぶ」と同じ 1行1冊**(第5.186節・利用者の指定
+     「説明は一才必要ありません」「単語帳とquick responseの冊を選ぶ方法と
+     同じ仕様に」)。業種べつの 35 冊は、**その行を開いた中**にある。
 
      **「欄がある」だけを見ない。** 選んでも何も起きない形に戻しても
-     緑のままになる。**押して、札が増えるか・結果がこの場に出るか**まで数える。
+     緑のままになる。**開いて、押して、札が増えるか・結果がこの場に出るか**
+     まで数える。
      ══════════════════════════════════════════════════════════════════ */
   for (const w of [1280, 390, 320]) {
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
-    await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfassign`,
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=assign`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(250)
 
-    const 前 = await page.evaluate(() => {
-      const sel = document.querySelector('.card select')
+    /* **畳んだままの形**を先に測る。ここが利用者の見る形である */
+    const 畳 = await page.evaluate(() => {
       const card = document.querySelector('.card')
-      if (!sel || !card) return null
+      const rows = [...card.querySelectorAll('.shelf-row')]
+      return {
+        行: rows.length,
+        文言: rows.map((r) => (r.querySelector('.shelf-name')?.textContent ?? '').trim()),
+        印: rows.map((r) => (r.querySelector('.shelf-mark')?.textContent ?? '').trim()),
+        /* **押せる大きさを割らない**(CLAUDE.md) */
+        低い行: Math.round(Math.min(...rows
+          .map((r) => r.querySelector('.shelf-pick').getBoundingClientRect().height), 999)),
+        /* **説明は1つも出していない**(利用者の指定)。
+           `.field-hint` も `.tip` も、畳んだ形には1つも無い */
+        説明: card.querySelectorAll('.field-hint, .tip').length,
+        /* **中身は、開くまで出さない** */
+        中身: card.querySelectorAll('.shelf-sub').length,
+        知らせ: card.querySelectorAll('.notice').length,
+        よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }
+    })
+
+    /* **開いてみる。** 35 冊はこの中にある */
+    await page.evaluate(() => {
+      for (const b of document.querySelectorAll('.card .shelf-pick')) {
+        if (b.getAttribute('aria-expanded') === 'false') b.click()
+      }
+    })
+    await page.waitForTimeout(200)
+
+    const 前 = await page.evaluate(() => {
+      const card = document.querySelector('.card')
+      const sel = card.querySelector('.shelf-sub select')
+      if (!sel) return null
       const r = sel.getBoundingClientRect()
       return {
         冊: sel.querySelectorAll('optgroup option').length,
         空: (sel.querySelector('option[value=""]')?.textContent ?? '').trim(),
         組: [...sel.querySelectorAll('optgroup')].map((g) => g.label),
-        札: card.querySelectorAll('.chip--on').length,
+        札: card.querySelectorAll('.shelf-sub .chip--on').length,
         /* **札も押すもの。** 36px を割らない(CLAUDE.md) */
-        札高: Math.round(Math.min(...[...card.querySelectorAll('.chip--on')]
+        札高: Math.round(Math.min(...[...card.querySelectorAll('.shelf-sub .chip--on')]
           .map((c) => c.getBoundingClientRect().height), 999)),
-        見出し: [...card.querySelectorAll('.field-label')]
-          .some((el) => (el.textContent ?? '').includes('いま出している')),
         知らせ: card.querySelectorAll('.notice').length,
         高さ: Math.round(r.height),
         右: Math.round(r.right),
@@ -4320,29 +4350,53 @@ export default defineConfig({
     let 後 = null
     if (前) {
       const v = await page.evaluate(() => {
-        const sel = document.querySelector('.card select')
+        const sel = document.querySelector('.card .shelf-sub select')
         return sel?.querySelector('optgroup option')?.value ?? ''
       })
-      await page.selectOption('.card select', v)
+      await page.selectOption('.card .shelf-sub select', v)
       await page.waitForTimeout(200)
       後 = await page.evaluate(() => {
         const card = document.querySelector('.card')
         const n = card.querySelector('.notice')
         return {
-          札: card.querySelectorAll('.chip--on').length,
+          札: card.querySelectorAll('.shelf-sub .chip--on').length,
           知らせ: (n?.textContent ?? '').trim(),
           /* **知らせは、この欄の中にいるか。**
              画面のいちばん上へ戻すと、ここが 0 になる */
           中: card.querySelectorAll('.notice').length,
+          /* **数も、印も、出した数に付いてくる**(説明のかわりに数が言う) */
+          数: (card.querySelector('.shelf-row--on .shelf-n')?.textContent ?? '').trim(),
           よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         }
       })
     }
     await page.close()
 
-    const 名 = `棚を出す(${w}px)`
-    if (!前) {
-      ng(`${名} … 欄が描かれない`)
+    const 名 = `冊を出す(${w}px)`
+    if (畳.行 !== 2) {
+      /* 文法30日集中講座と基礎単語 + 業種べつの単語帳。
+         **冊を足したら、ここも直す** */
+      ng(`${名} … 単語帳の冊が2行そろっていない`, `${畳.行} 行 / ${畳.文言.join(' / ')}`)
+    } else if (!畳.文言.some((t) => t.includes('業種べつ'))) {
+      ng(`${名} … 「業種べつの単語帳」の行が無い`, 畳.文言.join(' / '))
+    } else if (!畳.印.includes('●') || !畳.印.includes('○')) {
+      /* **出している冊と、出していない冊の両方**が印で読み取れるか。
+         **色だけに頼らない**(CLAUDE.md)。片方だけだと、
+         **全部 ● にする形・全部 ○ にする形**に壊しても緑になる */
+      ng(`${名} … 出している / いないの印が読み取れない`, 畳.印.join(' / '))
+    } else if (畳.説明 !== 0) {
+      ng(`${名} … 畳んだ形に説明が出ている(${畳.説明} 個)`,
+        '利用者の指定は「説明は一才必要ありません」である')
+    } else if (畳.中身 !== 0) {
+      ng(`${名} … 畳んでいるのに、冊の中身が出ている`, String(畳.中身))
+    } else if (畳.知らせ !== 0) {
+      ng(`${名} … 押す前から知らせが出ている`, String(畳.知らせ))
+    } else if (畳.低い行 < 44) {
+      ng(`${名} … 行が押せる大きさを割っている`, String(畳.低い行))
+    } else if (畳.よこ > 0) {
+      ng(`${名} … 畳んだ形で横にはみ出している`, `${畳.よこ}px`)
+    } else if (!前) {
+      ng(`${名} … 行を開いても、棚をえらぶ欄が出ない`)
     } else if (前.冊 !== 34) {
       /* 35冊 − すでに出している1冊。**分野を足したら、ここも直す** */
       ng(`${名} … 足せる棚が34冊そろっていない`, String(前.冊))
@@ -4352,11 +4406,6 @@ export default defineConfig({
     } else if (!前.空.includes('すぐ出します')) {
       ng(`${名} … 「えらぶと、すぐ出します」が無い`,
         '**選んだ瞬間に出す。** 言わないと「選んだあと、できることがない」と読める')
-    } else if (!前.見出し) {
-      ng(`${名} … 「いま出している単語帳」の見出しが無い`,
-        '札だけだと「外す」の字が先に目に入り、**出ている印**だと読めない')
-    } else if (前.知らせ !== 0) {
-      ng(`${名} … 押す前から知らせが出ている`, String(前.知らせ))
     } else if (前.高さ < 40) {
       ng(`${名} … プルダウンが押せる大きさを割っている`, String(前.高さ))
     } else if (前.札高 < 36) {
@@ -4370,32 +4419,45 @@ export default defineConfig({
       ng(`${名} … 押した結果が、この欄に出ない`,
         `${後.中} 件 / 「${後.知らせ}」 —— 画面のいちばん上に出すと、`
         + '単語帳のタブまで送った人には見えない')
+    } else if (後.数 !== `${後.札} 冊`) {
+      /* **説明のかわりに、数が言う**(第5.186節)。
+         「いま何冊出しているか」が行に出ていないと、
+         **開くまで分からない**(消した説明が、本当に要らなかったと言えない) */
+      ng(`${名} … 行に出している冊数が出ていない`, `「${後.数}」/ 札 ${後.札}`)
     } else if (後.よこ > 0) {
       ng(`${名} … えらんだあと横にはみ出す`, `${後.よこ}px`)
     } else {
-      ok(`${名} … 34冊から1つえらぶと札が ${前.札} → ${後.札}、`
-        + `結果もその場に出る(${前.高さ}px)`)
+      ok(`${名} … 畳んで2行(${畳.印.join('')}・説明0)、`
+        + `開くと34冊から1つえらべて札が ${前.札} → ${後.札}、`
+        + `行に「${後.数}」、結果もその場に出る`)
     }
   }
+
 
   /* **画面が本当に置いているか。** 検証の入り口(`__screens.jsx`)だけ
      直しても、利用者の画面には出ない */
   {
     const tl = readFileSync(new URL('../src/components/TrainerLearners.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-    if (!/<ShelfAssign\s/.test(tl)) {
-      ng('棚を出す … ゲストのページに置かれていない')
-    } else if (!/onPick=\{\(sh\) => pickShelf\(l, sh\)\}/.test(tl)) {
-      ng('棚を出す … 押しても何も起きない形になっている',
-        '`onPick` を渡さないと、えらんでも1冊も出ない')
-    } else if (!/note=\{shelfNote\}/.test(tl)) {
-      ng('棚を出す … 知らせを渡していない',
+    if (!/<AssignShelf\s/.test(tl)) {
+      ng('冊を出す … ゲストのページに置かれていない',
+        '**「アサインする」の画面とまったく同じ部品**(第5.186節)')
+    } else if ((tl.match(/<AssignShelf\s/g) ?? []).length !== 2) {
+      /* **単語帳のタブと Quick Response のタブ、2つとも。**
+         片方だけだと、振り分け(`group`)を壊しても気づけない */
+      ng('冊を出す … ゲストのページの2つのタブに置かれていない',
+        `${(tl.match(/<AssignShelf\s/g) ?? []).length} 個`)
+    } else if (!/onShelf=\{\(sh\) => pickShelf\(l, sh\)\}/.test(tl)) {
+      ng('冊を出す … 押しても何も起きない形になっている',
+        '`onShelf` を渡さないと、えらんでも1冊も出ない')
+    } else if (!/note=\{wordNote\}/.test(tl) || !/note=\{qrNote\}/.test(tl)) {
+      ng('冊を出す … 知らせを渡していない',
         '**その操作をした場所に出す** —— 渡さないと、また画面の上にしか出ない')
     } else if (!/\{ quiet: true \}/.test(tl)) {
-      ng('棚を出す … 上の帯にも同じ知らせを出している',
+      ng('冊を出す … 上の帯にも同じ知らせを出している',
         '**同じものを2か所に出さない**(CLAUDE.md)')
     } else {
-      ok('棚を出す … ゲストのページが `ShelfAssign` に任せている')
+      ok('冊を出す … ゲストのページも、同じ `AssignShelf` に任せている')
     }
   }
 
@@ -5509,18 +5571,20 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   アサインする(第5.181節・2026-09 利用者の指定)
+   アサインする(第5.181節 / 第5.186節・2026-09 利用者の指定)
 
      > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、
-     > もしくは「アサインする」の機能を作り、その中から教材、単語帳の冊、
-     > quick responseの冊を選べるようにしたいです。
+     > もしくは「アサインする」の機能を作り…
+
+     > 教材のアサイン内に説明は一才必要ありません。消してください。
+     > シンプルに単語帳とquick responseの冊を選ぶ方法と同じ仕様に…
 
    **どちらの帳面の冊かを、画面で振り分けない**(`featuresIn()`)。
    片方だけ描いていると、振り分けを壊しても気づけないので、
    **単語帳の冊と Quick Response の冊を、2つとも数える。**
 
-   **色だけに頼らない** —— 「出しています / 出していません」の文字と
-   `aria-pressed` の両方を見る。
+   **色だけに頼らない**(CLAUDE.md)—— 印(●/○)と `aria-pressed` の
+   両方を見る。文字は消したので、**ここが最後の砦**である。
    ══════════════════════════════════════════════════════════════════ */
 {
   const 見る = async (q = '') => {
@@ -5530,18 +5594,30 @@ for (const W of [1280, 794, 453, 390, 320]) {
     await page.waitForTimeout(200)
     const r = await page.evaluate(() => {
       const cards = [...document.querySelectorAll('.card')]
-      const rows = [...document.querySelectorAll('.feature-row')]
+      /* **素の冊だけ**(中に区切りがある冊は `aria-expanded` を持つ)。
+         **役目が違うものを、同じ数え方でまとめない** */
+      const rows = [...document.querySelectorAll('.assignshelf .shelf-row')]
+        .filter((x) => x.querySelector('.shelf-pick[aria-pressed]'))
       return {
         見出し: cards.map((c) => c.querySelector('.card-title')?.textContent ?? ''),
         札: rows.map((x) => {
           const b = x.querySelector('button')
           return {
-            文: (b?.textContent ?? '').replace(/\s+/g, ''),
+            名: (x.querySelector('.shelf-name')?.textContent ?? '').trim(),
+            印: (x.querySelector('.shelf-mark')?.textContent ?? '').trim(),
             押した: b?.getAttribute('aria-pressed'),
             止めて: !!b?.disabled,
-            説明: (x.querySelector('.field-hint')?.textContent ?? '').trim(),
+            /* **説明は1つも無い**(利用者の指定)。
+               行の中に `.field-hint` が残っていたら赤くする */
+            説明: x.querySelectorAll('.field-hint, .tip').length,
           }
         }),
+        /* **開く冊は、開く合図を持つ**(押すと何が起きるか) */
+        開く: [...document.querySelectorAll('.assignshelf .shelf-pick[aria-expanded]')]
+          .map((b) => (b.querySelector('.shelf-name')?.textContent ?? '').trim()),
+        /* **冊のえらび方と、同じ見た目か。** `.shelf` を着ていなければ
+           別の見た目になっている(「同じ仕様に」が守れていない) */
+        同じ形: document.querySelectorAll('.assignshelf.shelf').length,
         はみ出し: Math.round(document.body.scrollWidth - document.body.clientWidth),
       }
     })
@@ -5556,28 +5632,42 @@ for (const W of [1280, 794, 453, 390, 320]) {
   } else ng('アサイン … 帳面ごとに分かれていない', a.見出し.join(' / '))
   if (a.札.length >= 2) ok(`アサイン … 出せる冊が ${a.札.length} 並ぶ`)
   else ng('アサイン … 冊が並んでいない', String(a.札.length))
-  /* **色だけに頼らない。** 文字と `aria-pressed` の両方が、同じことを言う */
-  const そろう = a.札.every((x) => (x.押した === 'true'
-    ? /^出しています/.test(x.文) : /^出していません/.test(x.文)))
-  if (そろう) ok('アサイン … 「出しています / 出していません」と aria-pressed が合う')
-  else ng('アサイン … 文字と読み上げが食い違う', a.札.map((x) => `${x.文}[${x.押した}]`).join(' / '))
+  /* **冊をえらぶのと、同じ見た目**(第5.186節・利用者の指定)。
+     `.shelf` を外して別の見た目に戻したら赤くなる */
+  if (a.同じ形 === 2) ok('アサイン … 単語帳の冊をえらぶのと、同じ見た目(`.shelf`)')
+  else ng('アサイン … 冊のえらび方と見た目が違う', `${a.同じ形} / 2`)
+  /* **色だけに頼らない。** 印と `aria-pressed` の両方が、同じことを言う */
+  const そろう = a.札.every((x) => (x.押した === 'true' ? x.印 === '●' : x.印 === '○'))
+  if (そろう) ok('アサイン … 印(●/○)と aria-pressed が合う')
+  else ng('アサイン … 印と読み上げが食い違う', a.札.map((x) => `${x.名}${x.印}[${x.押した}]`).join(' / '))
   /* **出ている冊と、出ていない冊の両方**を描いている
      (片方だけだと、いつも「出している」に書き換えても緑のまま) */
   const 両方 = a.札.some((x) => x.押した === 'true') && a.札.some((x) => x.押した === 'false')
   if (両方) ok('アサイン … 出している冊と、出していない冊の両方がある')
   else ng('アサイン … 片方しか描いていない(見張りが効かない)')
-  /* **どこに出るのかまで書いてある**(「出しました」で終わらせない) */
-  if (a.札.every((x) => x.説明.length > 0)) ok('アサイン … どの冊にも説明がある')
-  else ng('アサイン … 説明の無い冊がある')
+  /* **説明は1つも無い**(2026-09 利用者の指定「説明は一才必要ありません」) */
+  if (a.札.every((x) => x.説明 === 0)) ok('アサイン … どの冊にも説明が付いていない')
+  else ng('アサイン … 説明が残っている冊がある',
+    a.札.filter((x) => x.説明 > 0).map((x) => x.名).join(' / '))
+  /* **中に区切りがある冊は、開く合図を持つ**(押すと何が起きるか)。
+     業種べつ(単語帳)と Native Flow(Quick Response)の2つ */
+  if (a.開く.length === 2) ok(`アサイン … 中に区切りがある冊は開ける(${a.開く.join(' / ')})`)
+  else ng('アサイン … 開ける冊が2つではない', a.開く.join(' / '))
   if (a.はみ出し === 0) ok('アサイン … 390px で横にはみ出さない')
   else ng('アサイン … 横にはみ出す', `${a.はみ出し}px`)
+
+  /* **1つも出していない形も見る**(「出ない」側)。
+     **全部 ● にする形に壊しても緑のまま**にならないようにする */
+  const c = await 見る('&assign=none')
+  if (c.札.every((x) => x.印 === '○' && x.押した === 'false')) {
+    ok('アサイン … 1つも出していないときは、ぜんぶ ○ になる')
+  } else ng('アサイン … 出していないのに ● が付いている',
+    c.札.map((x) => `${x.名}${x.印}`).join(' / '))
 
   /* **決めている最中は、二度押させない** */
   const b = await 見る('&busy=on')
   if (b.札.every((x) => x.止めて)) ok('アサイン … 決めている最中は押せない')
   else ng('アサイン … 決めている最中も押せてしまう')
-  if (b.札.every((x) => /決めています…/.test(x.文))) ok('アサイン … 決めている最中だと分かる')
-  else ng('アサイン … 何をしているのか分からない', b.札.map((x) => x.文).join(' / '))
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -6155,10 +6245,10 @@ for (const W of [1280, 794, 453, 390, 320]) {
     /* **誰の記録として残るか**(第5.178節)。押せる形と、押せない名札と、
        担当がいないときの3つとも測る */
     ['owner', ''], ['owner', 'owner=fixed'], ['owner', 'owner=empty'],
-    /* **この冊を出す相手**(第5.179節)。札が並ぶ形と、
-       担当がいないときの2つとも測る */
-    /* **アサインする**(第5.181節)。冊の札が縦に並ぶ */
-    ['assign', ''],
+    /* **アサインする**(第5.181節 / 第5.186節)。1行1冊で縦に並ぶ。
+       **1つも出していない形も測る** —— 印が全部 ○ になり、
+       数も出ないので、**行の高さが変わる** */
+    ['assign', ''], ['assign', 'assign=none'],
     /* **達成具合**(第5.167節)。`×` と「おわる」の行き先なので、
        ここが行き止まりだと練習へ戻れなくなる */
     ['progress', ''],
@@ -6213,6 +6303,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
            開いた箱(共有・絞り込み)は、閉じているあいだ測れない */
         await page.evaluate(() => {
           for (const d of document.querySelectorAll('details')) d.open = true
+          /* **畳んだ冊の行も開く**(第5.186節)。
+             ここを足さないと、業種べつ 35 冊のプルダウンも
+             Native Flow の札6つも、**誰も測らなくなる**
+             ——「出しかた」で踏んだのと、まったく同じ形である */
+          for (const b of document.querySelectorAll('.assignshelf .shelf-pick')) {
+            if (b.getAttribute('aria-expanded') === 'false') b.click()
+          }
           for (const b of document.querySelectorAll('button')) {
             /* **文字だけで探さない**(第5.184節)。「出しかた」は**絵だけ**に
                なったので `textContent` は空である —— 名前は `aria-label` が

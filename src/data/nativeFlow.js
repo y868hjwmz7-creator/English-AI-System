@@ -786,6 +786,14 @@ export const unitOf = (id) =>
 export const unitName = (u) => (u ? `【Unit ${u.id}】${u.label}` : '')
 
 /**
+ * **冊としての呼び名**(第5.186節)。
+ *
+ * 「この人に出す冊」の一覧にも、Quick Response の本棚にも、この名前で並ぶ。
+ * **呼び名を2か所に書かない**(CLAUDE.md)。
+ */
+export const NF_BOOK_LABEL = 'Native Flow'
+
+/**
  * 絞り込みに出す名前。**`material_title` に入れる。**
  *
  * 「Native Flow」を頭に付けてあるので、自分の Quick Response 帳の
@@ -793,7 +801,7 @@ export const unitName = (u) => (u ? `【Unit ${u.id}】${u.label}` : '')
  */
 export const unitTitle = (id) => {
   const u = unitOf(id)
-  return u ? `Native Flow${unitName(u)}` : 'Native Flow'
+  return u ? `${NF_BOOK_LABEL}${unitName(u)}` : NF_BOOK_LABEL
 }
 
 /**

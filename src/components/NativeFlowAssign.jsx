@@ -1,9 +1,18 @@
 /**
- * **この人に出す Native Flow の Unit**(2026-09 利用者の指定)。
+ * **Native Flow の Unit を、この人に出す / 外す**(2026-09 利用者の指定)。
  *
  * ============================================================================
  *   > これも指定したゲストだけに届くように、
  *   > トレーナーにはデフォルトで表示されるように
+ *
+ * 【「冊の行の中」に入る中身である】(第5.186節)
+ *
+ *   > 教材のアサイン内に説明は一才必要ありません。消してください。
+ *   > シンプルに単語帳とquick responseの冊を選ぶ方法と同じ仕様にしてください。
+ *
+ *   もとは自分で `<section className="card">` と見出しと**説明2段落**を
+ *   持っていた。いまは `AssignShelf` の「Native Flow」の行を開いたときに、
+ *   **その行の中**に出る中身だけである(`ShelfAssign` とまったく同じ位置)。
  *
  * 【入れ物は、棚(業種べつの単語帳)とまったく同じ】
  *
@@ -31,7 +40,6 @@
  * @param units   Unit ぜんぶ(`NATIVE_FLOW_UNITS`)。**呼ぶ側が渡す**
  * @param on      いま出している Unit の番号(`Set` でも配列でもよい)
  * @param busy    いま切り替えている最中か
- * @param note    押した結果 `{ kind: 'busy'|'ok'|'ng', text }`
  * @param onPick  押された Unit を受け取る(出す / 外すの判断は呼ぶ側)
  * @param onAll   **丸ごと**出す / 外す(2026-09 利用者の指定
  *                「ユニット毎、または丸ごとアサイン出来るように」)。
@@ -40,29 +48,15 @@
 import { unitName } from '../data/nativeFlow.js'
 
 export default function NativeFlowAssign({
-  units = [], on = [], busy = false, note = null, onPick = null, onAll = null,
+  units = [], on = [], busy = false, onPick = null, onAll = null,
 }) {
   const shown = new Set([...on].map(Number))
-  const mine = units.filter((u) => shown.has(u.id))
-  const n = mine.length
+  const n = units.filter((u) => shown.has(u.id)).length
   /* **数は数える。書き写さない**(Vol.2 で Unit が増えても、ひとりでに合う) */
   const allQ = units.reduce((t, u) => t + u.n, 0)
 
   return (
-    <section className="card nfassign">
-      <h3 className="card-title">この人に出す「Native Flow」の Unit</h3>
-
-      {/* **いま出している数を、先に言う。**
-          札の色だけで数えさせない(**色だけに頼らない**・CLAUDE.md) */}
-      {n > 0 ? (
-        <p className="field-label">いま {n} つの Unit を出しています(押すと外します)</p>
-      ) : (
-        <p className="field-hint">
-          まだ1つも出していません。この人の Quick Response 帳には、
-          <strong>Native Flow が出ません。</strong>
-        </p>
-      )}
-
+    <div className="nfassign">
       <div className="chiprow" role="group" aria-label="出している Unit">
         {units.map((u) => {
           const isOn = shown.has(u.id)
@@ -106,22 +100,6 @@ export default function NativeFlowAssign({
           )}
         </div>
       )}
-
-      {/* **押した結果は、必ずこの場に出す**(画面のいちばん上に出さない) */}
-      {note && (
-        <p className={note.kind === 'busy' ? 'field-hint'
-          : `notice notice--${note.kind === 'ok' ? 'ok' : 'warn'}`}
-           role="status">
-          {note.text}
-        </p>
-      )}
-
-      <p className="field-hint">
-        出した Unit は、この人の Quick Response 帳に「Native Flow」として並びます。
-        <strong>その人が溜めた文とは混ざりません。</strong>
-        {/* **黙って隠さない。** トレーナー自身の画面との違いを、その場で言う */}
-        トレーナー自身の Quick Response 帳には、指定がなくても 6 つとも出ます。
-      </p>
-    </section>
+    </div>
   )
 }

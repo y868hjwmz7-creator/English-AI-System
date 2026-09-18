@@ -43,16 +43,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { loadMyLearners } from '../lib/materials.js'
 import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.js'
-import { featuresIn } from '../data/learnerFeatures.js'
 import { shelfFeature } from '../data/shelves.js'
 import { NATIVE_FLOW_UNITS, nfFeature } from '../data/nativeFlow.js'
 import {
   busyText, doneText, nfAllBusyText, nfAllDoneText, nfAllNoneText, nfAllTodo,
   nfUnitTitle, nfUnitsOn, shelfTitle, shelvesOff, shelvesOn, stoppedText,
 } from '../lib/assignBooks.js'
-import FeatureToggle from './FeatureToggle.jsx'
-import ShelfAssign from './ShelfAssign.jsx'
-import NativeFlowAssign from './NativeFlowAssign.jsx'
+import AssignShelf from './AssignShelf.jsx'
 import Loading from './Loading.jsx'
 
 export default function AssignBooks({ learnerId = null, learnerName = '' }) {
@@ -180,10 +177,6 @@ export default function AssignBooks({ learnerId = null, learnerName = '' }) {
           {people?.length === 0 && (
             <p className="card-hint">担当しているゲストが、まだいません。</p>
           )}
-          <p className="tip card-hint">
-            ここで出せるのは<strong>単語帳の冊と Quick Response の冊</strong>です。
-            教材(宿題)は、これまでどおり「教材」の画面から出します。
-          </p>
         </section>
       )}
 
@@ -199,32 +192,23 @@ export default function AssignBooks({ learnerId = null, learnerName = '' }) {
         <>
           <section className="card">
             <h3 className="card-title">単語帳の冊</h3>
-            {featuresIn('word').map((f) => (
-              <FeatureToggle key={f.id} feature={f}
-                             on={features.has(f.id)}
-                             busy={busy === f.id}
-                             onPick={() => toggle(f.id, f.label, setWordNote)} />
-            ))}
-            {/* **35冊あるので、札を35個並べない**(`ShelfAssign` の決まり) */}
-            <ShelfAssign
+            {/* **1行1冊。説明は出さない**(第5.186節・利用者の指定)。
+                見た目も中身も `AssignShelf` 1か所が持っている ——
+                ゲストのページ(単語帳のタブ)とまったく同じものである */}
+            <AssignShelf
+              group="word" features={features} busy={busy} note={wordNote}
+              onFeature={(f) => toggle(f.id, f.label, setWordNote)}
               shelfOn={shelfOn} shelfOff={shelfOff}
-              busy={!!busy} note={wordNote}
-              onPick={(sh) => toggle(shelfFeature(sh.id), shelfTitle(sh), setWordNote)} />
+              onShelf={(sh) => toggle(shelfFeature(sh.id), shelfTitle(sh), setWordNote)} />
           </section>
 
           <section className="card">
             <h3 className="card-title">Quick Response の冊</h3>
-            {featuresIn('qr').map((f) => (
-              <FeatureToggle key={f.id} feature={f}
-                             on={features.has(f.id)}
-                             busy={busy === f.id}
-                             onPick={() => toggle(f.id, f.label, setQrNote)} />
-            ))}
-            {/* **Unit ごとにも、丸ごとにも**(2026-09 利用者の指定) */}
-            <NativeFlowAssign
-              units={NATIVE_FLOW_UNITS} on={nfOn}
-              busy={!!busy} note={qrNote}
-              onPick={(u) => toggle(nfFeature(u.id), nfUnitTitle(u), setQrNote)}
+            <AssignShelf
+              group="qr" features={features} busy={busy} note={qrNote}
+              onFeature={(f) => toggle(f.id, f.label, setQrNote)}
+              units={NATIVE_FLOW_UNITS} unitsOn={nfOn}
+              onUnit={(u) => toggle(nfFeature(u.id), nfUnitTitle(u), setQrNote)}
               onAll={pickNfAll} />
           </section>
         </>

@@ -83,6 +83,15 @@ import { INDUSTRIES, industriesIn, industryLabel, parentOf } from './industries.
 import { scenesFor } from './genres.js'
 import { cefrIndex } from './cefr.js'
 
+/**
+ * **冊としての呼び名**(第5.186節)。
+ *
+ * 「この人に出す冊」の一覧に、**1行1冊**で並ぶときの名前である。
+ * 画面にも知らせの文にも、ここから配る ——
+ * **呼び名を2か所に書かない**(CLAUDE.md)。
+ */
+export const SHELF_BOOK_LABEL = '業種べつの単語帳'
+
 /** 棚の組。**`INDUSTRY_GROUPS` と同じもの**(名前を2か所に持たない) */
 export const SHELF_GROUPS = [
   { id: 'work', label: 'お仕事' },

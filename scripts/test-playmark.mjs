@@ -4464,8 +4464,15 @@ console.log('\nスピーチ練習(0054)')
   const tl = noC5(read5('src/components/TrainerLearners.jsx'))
   /* **第5.181節で、帳面ごとに分けて出すようにした**(`featuresIn()`)。
      見たいのは「一覧を回している(書き写していない)」ことのほうである */
-  ok(/featuresIn\('word'\)\.map\(/.test(tl) && /featuresIn\('qr'\)\.map\(/.test(tl),
-    '出すもの … 決める欄は一覧を回している(書き写していない)')
+  /* **第5.186節で `AssignShelf` に寄せた。** 一覧を回すのはあちらで、
+     画面が渡すのは**どちらの帳面か**(`group`)だけである */
+  ok(/group="word"/.test(tl) && /group="qr"/.test(tl),
+    '出すもの … 帳面を名指しで渡している(画面で振り分けていない)')
+  {
+    const as = noC5(read5('src/components/AssignShelf.jsx'))
+    ok(/featuresIn\(group\)\.map\(/.test(as),
+      '出すもの … 冊の一覧は回している(書き写していない)')
+  }
   ok(/await setLearnerFeature\(learner\.id, feat\.id, next\)/.test(tl),
     '出すもの … 決める欄は `setLearnerFeature()` を呼んでいる')
   ok(/loadLearnerFeatures\(id\)/.test(tl),
@@ -5199,14 +5206,14 @@ console.log('\nスピーチ練習(0054)')
      引き連れているので**骨組みでは1ドットも描けなかった**
      (**描けないものは測れない**)。そのあいだに
      「押した結果がどこにも出ない」形が入り込んだ(実機で指摘された)。 */
-  ok(/<ShelfAssign\s/.test(tl),
+  ok(/<AssignShelf\s/.test(tl),
     '単語帳を出す … ゲストのページからの道も残っている')
-  ok(/onPick=\{\(sh\) => pickShelf\(l, sh\)\}/.test(tl),
+  ok(/onShelf=\{\(sh\) => pickShelf\(l, sh\)\}/.test(tl),
     '単語帳を出す … えらんだ棚が、ちゃんと渡っている')
   /* **押した結果は、押した場所に出す**(CLAUDE.md)。
      画面のいちばん上(`message` / `error`)に出していたので、
      単語帳のタブまで送った人には**1文字も見えなかった** */
-  ok(/note=\{shelfNote\}/.test(tl),
+  ok(/note=\{wordNote\}/.test(tl),
     '単語帳を出す … 結果を、その欄に出している')
   ok(/\{ quiet: true \}/.test(tl),
     '単語帳を出す … 上の帯には同じ知らせを出していない')
@@ -5222,8 +5229,8 @@ console.log('\nスピーチ練習(0054)')
     const wb = tl.indexOf("detailTab === 'wordbook'")
     const qr = tl.indexOf("detailTab === 'qr'")
     const rec = tl.indexOf("detailTab === 'record'")
-    /* **目印は `<ShelfAssign`。** 題そのものは部品の中へ移った */
-    const at = tl.indexOf('<ShelfAssign')
+    /* **目印は `<AssignShelf`。** 題そのものは部品の中へ移った */
+    const at = tl.indexOf('<AssignShelf')
     ok(wb > 0 && qr > wb && at > wb && at < qr,
       '単語帳を出す … 出す欄が「単語帳」のタブの中にある')
     ok(rec > 0 && !(at > rec),
@@ -6028,7 +6035,8 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const qr = noNote(readD('src/components/QrReview.jsx'))
   ok(/loadNativeFlowQr\(\{ learnerId, units:/.test(qr),
     'Quick Response 帳 … 画面が loadNativeFlowQr() を Unit つきで呼んでいる')
-  ok(/nfUnits\.length \? \[\{ id: 'nf', label: 'Native Flow'/.test(qr),
+  /* **呼び名は `NF_BOOK_LABEL` 1か所**(第5.186節)。名前で数えない */
+  ok(/nfUnits\.length \? \[\{ id: 'nf', label: NF_BOOK_LABEL/.test(qr),
     'Quick Response 帳 … 出す Unit が1つも無ければ、冊ごと出さない')
   ok(/nfUnits = \[\]/.test(qr), 'Quick Response 帳 … 既定は空(渡さない画面では出ない)')
   ok(!/showNf/.test(qr), 'Quick Response 帳 … 「出すか」と「どれを出すか」を2つ持っていない')
@@ -6280,7 +6288,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '誰に出すかの判断は `nfUnitsFor()` 1か所(画面で役割を見ない)')
 
   const tlSrc = noNote(readD('src/components/TrainerLearners.jsx'))
-  ok(/NativeFlowAssign/.test(tlSrc), 'ゲストのページに、Unit を出す欄が在る')
+  /* **第5.186節で `AssignShelf` に寄せた。** Unit の札はその中にある */
+  ok(/<AssignShelf[\s/>]/.test(tlSrc) && /units=\{NATIVE_FLOW_UNITS\}/.test(tlSrc),
+    'ゲストのページに、Unit を出す欄が在る')
   /* **ユニット毎にも、丸ごとにも**(2026-09 利用者の指定)。
      1つずつ押すと6回かかるので、「ぜんぶ渡す」を1回で済ませる */
   ok(/onAll=\{\(on\) => setNfAll\(l, on\)\}/.test(tlSrc),
@@ -6310,7 +6320,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **読み込みの行ではなく、置いてある場所**で見る。
      `indexOf('NativeFlowAssign')` だと、いちばん上の `import` に当たって
      必ず手前になる(**測り方が違うと、壊れていなくても赤くなる**) */
-  ok(/detailTab === 'qr'/.test(tlSrc) && tlSrc.indexOf('<NativeFlowAssign')
+  ok(/detailTab === 'qr'/.test(tlSrc) && tlSrc.indexOf('group="qr"')
      > tlSrc.indexOf("detailTab === 'qr'"),
     '置き場所は Quick Response のタブ(出した結果がすぐ下にある)')
   ok(/set_learner_feature|toggleFeature/.test(tlSrc),
@@ -6324,8 +6334,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/if \(!units\.length\) return null/.test(unitsJsx),
     '出す Unit が無ければ、欄ごと出さない')
   const screens = noNote(readD('src/__screens.jsx'))
-  ok(/NativeFlowUnits/.test(screens) && /NativeFlowAssign/.test(screens),
-    '骨組みが2つとも描いている(`?screen=nfunits` / `?screen=nfassign`)')
+  /* **練習で選ぶ Unit(`NativeFlowUnits`)と、出す Unit(`AssignShelf`)は
+     別のものである。** 骨組みは2つとも描く —— 片方だけだと、
+     どちらかを壊しても緑のままになる */
+  ok(/NativeFlowUnits/.test(screens) && /<AssignShelf[\s/>]/.test(screens),
+    '骨組みが2つとも描いている(`?screen=nfunits` / `?screen=assign`)')
 
   // ── **貼る SQL は1つも増えていない**(入れ物は 0055 のまま)
   const check = readD('supabase/apply/check.sql')
@@ -6836,7 +6849,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '単語帳の「業種べつ」と「基礎単語」に、中身がある印が付いている')
   /* **型の冊の名前は書き写さない**(第5.177節)。
      `FRAME_BOOK_LABEL` 1か所から引いているので、ここでも名前では数えない */
-  ok(/id: 'nf', label: 'Native Flow', hasSub: true/.test(qr)
+  ok(/id: 'nf', label: NF_BOOK_LABEL, hasSub: true/.test(qr)
     && /id: 'frame', label: FRAME_BOOK_LABEL, hasSub: true/.test(qr),
     'Quick Response の「Native Flow」と型の冊も同じ')
   /* **「出る」と「出ない」の両方**。中身の無い冊にまで付けると、
@@ -7248,11 +7261,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      ゲストのページと「アサインする」。**黙って機能ごと消さない** */
   const tl = noNote(read('components/TrainerLearners.jsx'))
   const asg2 = noNote(read('components/AssignBooks.jsx'))
-  /* **`<FeatureToggle` だけで探さない。** `<FeatureToggleX` に
+  /* **`<AssignShelf` だけで探さない。** `<AssignShelfX` に
      書き換えても当たってしまう(**赤チェックで踏んだ**・CLAUDE.md
      「置き換える前に `grep -n` で数える」の裏返し) */
-  ok(/<FeatureToggle[\s/>]/.test(tl), '配る道① ゲストのページは残っている')
-  ok(/<FeatureToggle[\s/>]/.test(asg2), '配る道② 「アサインする」も残っている')
+  ok(/<AssignShelf[\s/>]/.test(tl), '配る道① ゲストのページは残っている')
+  ok(/<AssignShelf[\s/>]/.test(asg2), '配る道② 「アサインする」も残っている')
   /* **部品ごと消した。** 使っていない部品を置いておくと、
      次に触る人が「まだ在る」と思って呼び戻す */
   const ある = existsSync(new URL('../src/components/BookAssign.jsx', import.meta.url))
@@ -7394,12 +7407,12 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   for (const [src, name] of [[tl, 'ゲストのページ'], [asg, 'アサインする']]) {
     ok(/from '\.\.\/lib\/assignBooks\.js'/.test(src), `${name} … 判断と文言を1か所から引いている`)
     ok(!/さんの画面に「/.test(src), `${name} … 知らせの文を書き写していない`)
-    ok(/<FeatureToggle/.test(src), `${name} … 冊の札は同じ部品`)
+    ok(/<AssignShelf[\s/>]/.test(src), `${name} … 冊の行は同じ部品`)
   }
   /* **「レベルとスコア」からは移した**(決める場所と、出る場所をそろえる) */
   ok(!/LEARNER_FEATURES\.map/.test(tl),
     'ゲストのページ … 冊の札を、レベルとスコアの中に置いていない')
-  ok(/featuresIn\('word'\)/.test(tl) && /featuresIn\('qr'\)/.test(tl),
+  ok(/group="word"/.test(tl) && /group="qr"/.test(tl),
     'ゲストのページ … 単語帳のタブと Quick Response のタブに分けて出す')
 
   /* **メニューに足した。ゲストは追い出す**(効かない画面を見せない) */
@@ -7414,8 +7427,8 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
 
   /* **骨組みが、本物の札を描いている** */
   const sc = noNote(read('__screens.jsx'))
-  ok(/<FeatureToggle/.test(sc), '骨組み … 本物の札を描いている')
-  ok(/featuresIn\('word'\)/.test(sc) && /featuresIn\('qr'\)/.test(sc),
+  ok(/<AssignShelf[\s/>]/.test(sc), '骨組み … 本物の行を描いている')
+  ok(/group="word"/.test(sc) && /group="qr"/.test(sc),
     '骨組み … 2つの帳面とも描いている(振り分けを壊したら赤くなる)')
   const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
   ok(/\['assign', ''\]/.test(bar), 'すき間の見張りに assign が入っている')
@@ -7515,6 +7528,70 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
   ok(/getAttribute\('aria-label'\)[\s\S]{0,120}出しかた|出しかた[\s\S]{0,200}getAttribute\('aria-label'\)/.test(bar),
     'すき間の見張りが、絵だけのボタンも `aria-label` で押せる')
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.186節 アサインの欄を、冊をえらぶのと同じ 1行1冊にする
+
+     > 教材のアサイン内に説明は一才必要ありません。消してください。
+     > シンプルに単語帳とquick responseの冊を選ぶ方法と同じ仕様にしてください。
+
+   **見た目(1行1冊・印・数・畳んだ形)は `npm run test:bar` が描いて測る。**
+   こちらで見るのは、素の node で読めること —— つまり
+   **説明を持っていないか**と、**呼び名を2か所に書いていないか**である。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const read = (f) => noNote(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'))
+
+  /* **説明を持っていない**(利用者の指定「一才必要ありません」)。
+     コメントを落としてから、**使っている形**で数える(CLAUDE.md)——
+     説明の文にも `field-hint` という語は出てくる */
+  for (const f of ['AssignShelf', 'ShelfAssign', 'NativeFlowAssign', 'AssignBooks']) {
+    const src = read(`components/${f}.jsx`)
+    ok(!/className="tip|className={`tip/.test(src), `${f} … 説明の囲み(tip)を持っていない`)
+  }
+  /* **`field-hint` は1つも無い。** `ShelfAssign` の「単語帳を足す」は
+     `field-label`(欄の名前)であって、説明ではない */
+  for (const f of ['AssignShelf', 'ShelfAssign', 'NativeFlowAssign']) {
+    ok(!/field-hint/.test(read(`components/${f}.jsx`).replace(/note\.kind === 'busy'\s*\n?\s*\? 'field-hint'/g, ' ')),
+      `${f} … 説明の1行(field-hint)を持っていない`)
+  }
+
+  /* **中身の部品は、囲みも見出しも持たない**(外側は `AssignShelf` の役目)。
+     持つと、開いた行の中に**カードが入れ子**になって見た目が割れる */
+  for (const f of ['ShelfAssign', 'NativeFlowAssign']) {
+    const src = read(`components/${f}.jsx`)
+    ok(!/className="card|card-title/.test(src), `${f} … 囲みと見出しを持っていない`)
+  }
+
+  /* **見た目は、冊をえらぶのと同じものを着る**(`.shelf`)。
+     別の名前を作ると、そこから2つの見た目に分かれていく */
+  const as = read('components/AssignShelf.jsx')
+  ok(/className="shelf assignshelf"/.test(as), '冊の行は `.shelf` を着ている(`BookShelf` と同じ)')
+  /* **呼び名は、データの側が持つ**(書き写さない) */
+  ok(/SHELF_BOOK_LABEL/.test(as) && !/'業種べつの単語帳'/.test(as),
+    '「業種べつの単語帳」は `SHELF_BOOK_LABEL` から引いている')
+  ok(/NF_BOOK_LABEL/.test(as) && !/'Native Flow'/.test(as),
+    '「Native Flow」は `NF_BOOK_LABEL` から引いている')
+  /* **その呼び名を、知らせの文も使っている**(画面と知らせで言い方を変えない) */
+  const ab = read('lib/assignBooks.js')
+  ok(/SHELF_BOOK_LABEL/.test(ab) && /NF_BOOK_LABEL/.test(ab),
+    '知らせの文も、同じ呼び名から作っている')
+
+  /* **使わなくなった部品は、部品ごと消してある**(`FeatureToggle`) */
+  ok(!existsSync(new URL('../src/components/FeatureToggle.jsx', import.meta.url)),
+    '使わなくなった `FeatureToggle.jsx` は消してある')
+
+  /* **すき間の見張りが、畳んだ冊の行を開いているか。**
+     ここを足し忘れると、35 冊のプルダウンも Unit の札も
+     **誰も測らなくなる**(「出しかた」の文字を消したときと同じ形)。
+     **見張りの見張り**である */
+  const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
+  ok(/\.assignshelf \.shelf-pick[\s\S]{0,200}aria-expanded[\s\S]{0,80}click\(\)/.test(bar),
+    'すき間の見張りが、畳んだ冊の行も開いてから測る')
 }
 
 console.log(ng

@@ -9108,6 +9108,25 @@ button.wbfilter-ctl { text-align: left; }
 .shelf-sub { display: grid; gap: var(--sp-8); padding-left: var(--sp-12); }
 .shelf-sub > .wb-add { margin: 0; }
 
+/* ── この人に出す冊(第5.186節・2026-09 実機・利用者の指定)───────────
+   > 教材のアサイン内に説明は一才必要ありません。消してください。
+   > シンプルに単語帳とquick responseの冊を選ぶ方法と同じ仕様にしてください。
+
+   **新しい見た目を作っていない。** 上の `.shelf` をそのまま着せている ——
+   「冊をえらぶ」と「冊を出す」で形が違うと、**同じ冊のことだと分からない。**
+   ここが持つのは、**開く印(▸ / ▾)の置き場所**だけである。
+
+   中身(`.shelfassign` / `.nfassign`)は、開いた行の `.shelf-sub` に入る。
+   **すき間は親の `gap`** で付く —— 子に余白を付けて回らない(CLAUDE.md) */
+.assignshelf .shelf-open {
+  flex: 0 0 auto; font-size: var(--fs-12); color: var(--text-secondary);
+}
+.shelf-row--on > .shelf-pick > .shelf-open { color: var(--accent); }
+/* 開いた中身も、行と同じだけ離す */
+.shelf-sub > .shelfassign,
+.shelf-sub > .nfassign { display: grid; gap: var(--sp-8); }
+.shelf-sub > .shelfassign > .field { margin: 0; }
+
 /* ── 集中している画面の左上の ☰(第5.172節・2026-09 利用者の指定)──────
    > 左上は閉じる「❌」ボタンではなく、他のところと同じく
    > ハンバーガーをおいてサイドバーが出せるようにしてください。
