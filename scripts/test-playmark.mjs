@@ -527,9 +527,22 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
   ok(new Set(ids).size === ids.length, '場面の id が重なっていない')
   ok(!ids.includes('negotiation') && !ids.includes('trouble'),
     '会話の場面(交渉・トラブル対応)は混ざっていない')
-  ok(speechScenesFor('golf') === COMMON_HOBBY_SPEECH_SCENES,
-    '趣味では、趣味のスピーチの場面が出る')
-  ok(speechScenesFor('it') === SPEECH_SCENES, '仕事では、仕事のスピーチの場面が出る')
+  /* **中身で見る**(第5.188節で、業界に特化した場面も並ぶようにした)。
+     同じ配列かどうかで見ていたので、特化を足したとたんに赤くなった ——
+     **見たいのは「共通の一覧が、丸ごと出ているか」**である */
+  {
+    const 同じ = (got, want) => want.every((x) => got.some((y) => y.id === x.id))
+    ok(同じ(speechScenesFor('golf'), COMMON_HOBBY_SPEECH_SCENES)
+      && !speechScenesFor('golf').some((x) => SPEECH_SCENES.some((y) => y.id === x.id)),
+      '趣味では、趣味のスピーチの場面が出る(仕事のものは混ざらない)')
+    ok(同じ(speechScenesFor('it'), SPEECH_SCENES)
+      && !speechScenesFor('it').some((x) => COMMON_HOBBY_SPEECH_SCENES.some((y) => y.id === x.id)),
+      '仕事では、仕事のスピーチの場面が出る(趣味のものは混ざらない)')
+    /* **特化の登録が無い業界は、1つも増えない**(「出ない」側) */
+    ok(speechScenesFor('it').length === SPEECH_SCENES.length,
+      '登録の無い業界では、これまでどおり共通の一覧だけ',
+      `${speechScenesFor('it').length} / ${SPEECH_SCENES.length}`)
+  }
   // **名前を引けること。** 引けないと、教材の名前に id がそのまま出る
   ok(sceneLabel('sp_toast') === '乾杯のあいさつ', '場面の名前を引ける',
     sceneLabel('sp_toast'))
@@ -7727,6 +7740,133 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     ok(/<DrillHead label=\{drillLabel\}/.test(src),
       `${f} … いま出しているものの名前を、頭に出している`)
     ok(/nowName\(/.test(src), `${f} … つなぎ方は nowName() 1か所から`)
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.188節 エネルギー関連ぜんぶに、土木の要素を足す
+
+     > また、「業界」内のエネルギー関連すべてに「土木」の要素を
+     > うまく追加してください。スピーチに対しても同様です。
+
+   **「足した」だけを見ない。** 1つの種類にだけ足しても緑になる。
+   **エネルギーの 12(親 + 11 種)ぜんぶ**を回して、
+   ①会話の場面 ②話題 ③スピーチの場面 ④業界の説明 の4か所に
+   土木の語が入っているかを数える。
+
+   **「減らしていない」も一緒に見る**(CLAUDE.md「出る」と「出ない」)——
+   足すついでに元のものを落としても、①〜④だけなら緑のままである。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const g = await import('../src/data/genres.js')
+  const ind = await import('../src/data/industries.js')
+
+  /** エネルギーの親と種類。**書き写さない** —— 一覧から拾う */
+  const ENE = ind.INDUSTRIES
+    .filter((x) => x.id === 'energy' || x.parent === 'energy')
+    .map((x) => x.id)
+  ok(ENE.length >= 12, 'エネルギーは親 + 種類で 12 以上ある', `${ENE.length} 件`)
+
+  /** 土木の語。**1つでも当たれば土木の話** */
+  const 土木 = /用地|造成|基礎|進入路|法面|擁壁|堤体|トンネル|護岸|桟橋|防潮|洞道|埋設|地盤|耐震|浚渫|防油|工事|配管|道路/
+
+  /* ① 会話の場面。**種類ぜんぶに、2つ以上あるか。**
+
+     **「1つでもあれば緑」にしない。** 風力の「洋上の工事」のように、
+     **もとから土木の語を含む場面**がいくつかある。1つで足りることにすると、
+     **足したものを丸ごと消しても緑のまま**になる(実際、赤チェックで
+     そうなった)。**説明ではなく名前で数える** —— 説明に紛れ込んだ
+     1語で数が増えないようにする */
+  {
+    const 数 = (id) => g.scenesFor(id).filter((x) => 土木.test(x.label)).length
+    const 足りない = ENE.filter((id) => id !== 'energy' && 数(id) < 2)
+    ok(足りない.length === 0, 'エネルギーのどの種類にも、土木の会話の場面が2つ以上ある',
+      足りない.map((id) => `${id}: ${数(id)}`).join(', '))
+    /* **「全般」を選んだら、種類ぜんぶのものが並ぶ**(`ownOf`)。
+       ここが種類1つぶんしか無ければ、集める仕組みが壊れている */
+    ok(数('energy') >= ENE.length - 1,
+      '「全般」には、種類ぜんぶの土木の場面が集まる', `${数('energy')} 件`)
+  }
+  /* ② 話題 */
+  {
+    const 無い = ENE.filter((id) => !g.genresFor(id)
+      .some((x) => 土木.test(x.label) || 土木.test(x.hint)))
+    ok(無い.length === 0, 'エネルギーのどの種類でも、土木の話題がある', 無い.join(', '))
+  }
+  /* ③ スピーチの場面(**利用者の指定「スピーチに対しても同様です」**) */
+  {
+    const 無い = ENE.filter((id) => !g.speechScenesFor(id)
+      .some((x) => 土木.test(x.label) || 土木.test(x.hint)))
+    ok(無い.length === 0, 'エネルギーのどの種類でも、土木のスピーチの場面がある',
+      無い.join(', '))
+  }
+  /* ④ 業界の説明(`hint`)。**画面にも出るし、AI にもそのまま渡る** */
+  {
+    const 無い = ENE.filter((id) => !土木
+      .test(ind.INDUSTRIES.find((x) => x.id === id)?.hint ?? ''))
+    ok(無い.length === 0, 'エネルギーのどの種類でも、説明に土木の語がある', 無い.join(', '))
+  }
+
+  /* ⑤ **足したついでに減らしていないか。**
+     もとからあった語が、どの種類にも残っているか */
+  {
+    const もと = {
+      ene_solar: /パネル/, ene_wind: /ブレード|風況/, ene_hydro: /ダム|水利権/,
+      ene_therm: /ボイラー|タービン/, ene_nuke: /規制|定期検査/, ene_geo: /蒸気|温泉/,
+      ene_grid: /連系|変電所/, ene_batt: /充放電/, ene_h2: /混焼/, ene_oil: /LNG|備蓄/,
+    }
+    const 消えた = Object.entries(もと)
+      .filter(([id, re]) => !re.test(ind.INDUSTRIES.find((x) => x.id === id)?.hint ?? ''))
+      .map(([id]) => id)
+    ok(消えた.length === 0, '足したついでに、もとの語を消していない', 消えた.join(', '))
+  }
+
+  /* ⑥ **ほかの業界には1つも足していない**(言われた場所だけを直す・CLAUDE.md)。
+     エネルギー以外でスピーチの場面が増えていたら赤くする */
+  {
+    const よそ = ind.INDUSTRIES
+      .filter((x) => x.id !== 'energy' && x.parent !== 'energy')
+      .filter((x) => g.speechScenesFor(x.id).some((s2) => s2.id.startsWith('spc_')))
+      .map((x) => x.id)
+    ok(よそ.length === 0, 'エネルギー以外の業界には、土木の場面を足していない',
+      よそ.join(', '))
+  }
+
+  /* ⑦ **名前を引ける。** 引けないと、教材の名前に `spc_safety` と id が出る */
+  {
+    const ない = Object.values(g.SPEECH_BY_INDUSTRY).flat()
+      .filter((x) => g.sceneLabel(x.id) === x.id)
+      .map((x) => x.id)
+    ok(ない.length === 0, '足した場面の名前が引ける(id がそのまま出ない)',
+      [...new Set(ない)].join(', '))
+  }
+
+  /* ⑧ **画面にそのまま出る文字列に、強調の書き方(**)を混ぜない** */
+  {
+    const 悪 = [
+      ...Object.values(g.SPEECH_BY_INDUSTRY).flat(),
+      ...ENE.flatMap((id) => [...g.scenesFor(id), ...g.genresFor(id)]),
+    ].filter((x) => /\*\*/.test(x.label) || /\*\*/.test(x.hint))
+    ok(悪.length === 0, '足した名前と説明に、強調の記号が混ざっていない',
+      悪.map((x) => x.id).join(', '))
+  }
+
+  /* ⑨ **id が重なっていない。** 重なると `ownOf` が片方を落とし、
+     「全般」で選んだときに1つ消える */
+  {
+    /* **11 の種類が同じ一覧を分け合っている**ので、`flat()` すると
+       同じものが 11 回出てくる。見たいのは**別の一覧どうしで重なっていないか**
+       なので、先に種類をまとめる */
+    const 特化 = [...new Set(Object.values(g.SPEECH_BY_INDUSTRY).flat().map((x) => x.id))]
+    const all = [...g.SPEECH_SCENES.map((x) => x.id),
+      ...g.COMMON_HOBBY_SPEECH_SCENES.map((x) => x.id), ...特化]
+    ok(new Set(all).size === all.length, 'スピーチの場面の id が重なっていない',
+      `${all.length} 件 → ${new Set(all).size} 種`)
+    const ene = ENE.flatMap((id) => g.scenesFor(id)).map((x) => x.id)
+    const seen = new Map()
+    for (const id of ene) seen.set(id, (seen.get(id) ?? 0) + 1)
+    ok(g.scenesFor('energy').length === new Set(g.scenesFor('energy').map((x) => x.id)).size,
+      '「全般」の場面に、同じ id が2つ出ない')
   }
 }
 

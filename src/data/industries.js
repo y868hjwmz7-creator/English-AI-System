@@ -139,6 +139,14 @@ export const INDUSTRIES = [
      まとめると、1つめの欄からあの分野が消えたように見える
      (「一度入れた業種を勝手に減らさない」・CLAUDE.md)。 */
   { id: 'hotel',         label: 'ホテル経営',   hint: '出店、稼働率と料金、運営の委託、現地スタッフ、海外への展開' },
+  /* ── エネルギーの説明に、土木を混ぜてある(第5.188節・2026-09 利用者の指定)
+       > 「業界」内のエネルギー関連すべてに「土木」の要素をうまく追加してください。
+
+     `hint` は**画面の `<option>` に出て、そのまま AI にも渡る**ので、
+     ここに土木の語を混ぜると、**教材の中身そのものが変わる。**
+     場面(`SCENES_BY_INDUSTRY`)・話題(`GENRES_BY_INDUSTRY`)・
+     スピーチ(`SPEECH_BY_INDUSTRY`)の3つにも、同じ節で足してある。
+     **後ろへ足すだけ。もとの語は1つも消していない**(CLAUDE.md) */
   /* ── エネルギー(2026-09 利用者の指定)──────────────────────────
      > 業界に「エネルギー」を追加してください。そしてエネルギーの中に、
      > 「再生可能エネルギー」や、「風力発電」、「水力発電」、「火力発電」
@@ -157,18 +165,18 @@ export const INDUSTRIES = [
      発電以外も入れてある。**電気は作るだけでは届かない** —
      送電・蓄電池・水素、そして燃料そのもの(石油・天然ガス)まで含めて、
      この業界で英語を使う場面になる。 */
-  { id: 'energy',    label: 'エネルギー', kinds: true, hint: '発電、送電、燃料、脱炭素' },
-  { id: 'ene_re',    parent: 'energy', short: '再生可能エネルギー', label: 'エネルギー(再生可能)', hint: '制度と買取、投資、脱炭素の目標、証書' },
-  { id: 'ene_solar', parent: 'energy', short: '太陽光発電', label: '太陽光発電', hint: 'パネル、日射、設置場所、出力の落ち、保守' },
-  { id: 'ene_wind',  parent: 'energy', short: '風力発電', label: '風力発電', hint: 'ブレード、洋上、風況、据付、点検' },
-  { id: 'ene_hydro', parent: 'energy', short: '水力発電', label: '水力発電', hint: 'ダム、放流、水利権、揚水、取水' },
-  { id: 'ene_therm', parent: 'energy', short: '火力発電', label: '火力発電', hint: 'ボイラー、タービン、燃料、起動停止、排出' },
-  { id: 'ene_nuke',  parent: 'energy', short: '原子力発電', label: '原子力発電', hint: '規制、定期検査、安全、廃棄物、地元への説明' },
-  { id: 'ene_geo',   parent: 'energy', short: '地熱発電', label: '地熱発電', hint: '掘削、蒸気、温泉との調整、立地' },
-  { id: 'ene_grid',  parent: 'energy', short: '送電・系統', label: '送電・系統', hint: '連系、需給の調整、停電、変電所' },
-  { id: 'ene_batt',  parent: 'energy', short: '蓄電池', label: '蓄電池', hint: '容量、充放電、寿命、設置、市場での取引' },
-  { id: 'ene_h2',    parent: 'energy', short: '水素・アンモニア', label: '水素・アンモニア', hint: '製造、輸送、混焼、コスト、実証' },
-  { id: 'ene_oil',   parent: 'energy', short: '石油・天然ガス', label: '石油・天然ガス', hint: '調達、LNG、価格、契約、備蓄' },
+  { id: 'energy',    label: 'エネルギー', kinds: true, hint: '発電、送電、燃料、脱炭素、用地と造成、基礎' },
+  { id: 'ene_re',    parent: 'energy', short: '再生可能エネルギー', label: 'エネルギー(再生可能)', hint: '制度と買取、投資、脱炭素の目標、証書、用地と造成' },
+  { id: 'ene_solar', parent: 'energy', short: '太陽光発電', label: '太陽光発電', hint: 'パネル、日射、設置場所、出力の落ち、保守、造成、基礎' },
+  { id: 'ene_wind',  parent: 'energy', short: '風力発電', label: '風力発電', hint: 'ブレード、洋上、風況、据付、点検、基礎、進入路' },
+  { id: 'ene_hydro', parent: 'energy', short: '水力発電', label: '水力発電', hint: 'ダム、放流、水利権、揚水、取水、堤体、トンネル' },
+  { id: 'ene_therm', parent: 'energy', short: '火力発電', label: '火力発電', hint: 'ボイラー、タービン、燃料、起動停止、排出、桟橋、基礎' },
+  { id: 'ene_nuke',  parent: 'energy', short: '原子力発電', label: '原子力発電', hint: '規制、定期検査、安全、廃棄物、地元への説明、地盤、耐震' },
+  { id: 'ene_geo',   parent: 'energy', short: '地熱発電', label: '地熱発電', hint: '掘削、蒸気、温泉との調整、立地、道路、法面' },
+  { id: 'ene_grid',  parent: 'energy', short: '送電・系統', label: '送電・系統', hint: '連系、需給の調整、停電、変電所、鉄塔基礎、洞道' },
+  { id: 'ene_batt',  parent: 'energy', short: '蓄電池', label: '蓄電池', hint: '容量、充放電、寿命、設置、市場での取引、基礎、地盤改良' },
+  { id: 'ene_h2',    parent: 'energy', short: '水素・アンモニア', label: '水素・アンモニア', hint: '製造、輸送、混焼、コスト、実証、タンク基礎、埋設配管' },
+  { id: 'ene_oil',   parent: 'energy', short: '石油・天然ガス', label: '石油・天然ガス', hint: '調達、LNG、価格、契約、備蓄、桟橋、タンク基礎' },
 
   /* ── 趣味・娯楽(2026-08 利用者の指定)──────────────────────────
      **選んだのはこの9つ。** 仕事で英語を使わない人にも学ぶ理由があり、
