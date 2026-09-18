@@ -9141,3 +9141,50 @@ button.wbfilter-ctl { text-align: left; }
   margin-top: var(--sp-16); padding-top: var(--sp-12);
   border-top: 1px solid var(--border);
 }
+
+/* ── いま誰の記録として残るか(SessionOwner・第5.178節)────────────────
+
+   2026-09 利用者の指摘。
+
+     > ゲストページ内の…教材内で単語やフレーズを単語帳に登録しているはずなのに、
+     > 明らかに他のゲストが登録した単語などが入っていることがあります。
+
+   **見えない持ち主は管理できない。** 帯に必ず名札を出す。
+
+   **縮むのは、この札だけ**(`.bookpick` とまったく同じ話・第5.176節)。
+   `.btn--small` が `flex-shrink: 0` を持っているので、
+   打ち消さないと**となりのボタンが画面の外へ押し出される。**
+   `.btn--small` そのものは1文字も変えない(ほかの札に響く)。 */
+/* **帯のすぐ下の1行。** 帯の中には入らなかった(320px で 26px まで
+   潰れて読めない・実測)。ここなら**どの幅でも潰れない。**
+
+   すき間は親の `gap` で作る(`.claude/rules/common.md`)——
+   下に何が来ても・いくつ増えても離れる */
+.lesson-ownerrow {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-12);
+  font-size: var(--fs-13);
+  /* **紙の外(`.lesson` の #3a3a38)の上に乗る。**
+     `--text-secondary` は明るい地色のための色で、ここでは
+     **暗い地に暗い字**になって読めなかった(実機で描いて分かった)。
+     帯と同じ明るい字にそろえる —— **色の名前を2か所に書かない**のは
+     変数のときの話で、ここは帯と地続きの見た目である */
+  color: #dad7cd;
+}
+.lesson-ownerrow-lead { white-space: nowrap; }
+.lesson-owner {
+  flex: 0 1 auto; min-width: 0; max-width: 60vw;
+}
+/* 押せない名札(相手が決まっているとき)。**ボタンに見せない** ——
+   押しても何も起きない行き止まりを作らない(CLAUDE.md)。
+   **色だけに頼らない** —— うすい地色 + 枠線 + 太字の3つで示す */
+.lesson-owner--fixed {
+  display: inline-flex; align-items: center;
+  padding: var(--sp-4) var(--sp-8);
+  border: 1px solid #55554e; border-radius: var(--r-8);
+  background: #33332d; color: #f2f2ee;
+  font-size: var(--fs-13); font-weight: 700;
+}
+.lesson-owner-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

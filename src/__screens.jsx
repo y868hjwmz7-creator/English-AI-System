@@ -40,6 +40,7 @@ import BookPick from './components/BookPick.jsx'
 import DrillTitle from './components/DrillTitle.jsx'
 import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
+import SessionOwner from './components/SessionOwner.jsx'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
 import LearnerBar from './components/LearnerBar.jsx'
@@ -376,6 +377,37 @@ const CARD_LEARNERS = [
   { id: 'g2', display_name: 'テスト太郎' },
   { id: 'g3', display_name: '佐藤ひかる' },
 ]
+
+/* **いま誰の記録として残るか**(`?screen=owner`・第5.178節)。
+
+   2026-09 利用者の指摘。
+
+     > 明らかに他のゲストが登録した単語などが入っていることがあります。
+     > しっかり分けて管理する体制にしてください。
+
+   **本物の部品を、そのまま描く**(`SessionOwner`)。props で受け取るだけ
+   なので Supabase が要らない —— レッスン表示の中では担当ゲストを
+   **窓口から読む**ので、骨組みからは一覧を入れられない
+   (**描けないものは測れない**・CLAUDE.md)。
+
+   **いちばん危ない形を、必ず1つ置く。**
+   ・名前は**長いもの**を混ぜる(帯からはみ出すのを見逃さない)
+   ・`?owner=fixed` で**押せない名札**(ゲストのページから開いたとき)
+   ・`?owner=empty` で**担当ゲストがいない**(黙って空にしない) */
+function OwnerScreen({ fixed = false, people = null }) {
+  const [who, setWho] = useState(null)
+  return (
+    <div className="lesson" style={{ position: 'static' }}>
+      <SessionOwner
+        learnerId={who}
+        name={(people ?? []).find((p) => p.id === who)?.display_name ?? ''}
+        people={people}
+        /* **受け止める親がいるときだけ押せる**(本物と同じ判断) */
+        onPick={fixed ? null : setWho}
+        onOpen={() => {}} />
+    </div>
+  )
+}
 
 /* **部品にしてある。** 「共有」の開け閉めは呼ぶ側が持つ形にしたので
    (`open` / `onOpen` / `onClose`)、ここでも本物と同じように持つ。
@@ -1409,7 +1441,29 @@ createRoot(document.getElementById('root')).render(
       ? FORM
       : q.get('screen') === 'result'
         ? RESULT
-        : q.get('screen') === 'tools'
+        : q.get('screen') === 'owner'
+      ? (
+        <OwnerScreen
+          fixed={q.get('owner') === 'fixed'}
+          people={q.get('owner') === 'empty' ? [] : [
+            { id: 'g1', display_name: '山田はなこ' },
+            /* **長い名前を1つ混ぜる**(第5.176節で踏んだところ) */
+            { id: 'g2', display_name: '西大路おさむ(製造・品質保証)' },
+            { id: 'g3', display_name: '佐藤' },
+          ]} />
+      )
+    : q.get('screen') === 'tools'
           ? <ToolsScreen />
-          : <LessonView material={material} learnerId={q.get('who') || null} onClose={() => {}} />,
+          : (
+            <LessonView
+              material={material} learnerId={q.get('who') || null}
+              /* **いま誰の記録として残るか**(第5.178節)。
+                 **いちばん長い名前を入れてある** —— 短い名前だと、
+                 帯からはみ出すのを見逃す(第5.176節で踏んだところ) */
+              learnerName={q.get('who') ? '山田はなこ' : ''}
+              /* **教材の画面から開いたときだけ切り替えられる。**
+                 ゲストのページから開いたときは名札だけ(本物と同じ) */
+              onLearnerChange={q.get('who') ? null : () => {}}
+              onClose={() => {}} />
+          ),
 )

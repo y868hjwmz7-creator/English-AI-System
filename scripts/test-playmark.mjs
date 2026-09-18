@@ -1012,8 +1012,10 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(/<WritingAnswer/.test(view), 'レッスン表示が、書く欄を出している')
     ok(/secNoteIsAnswer && \(\s*<WritingAnswer/.test(view),
       'ディスカッションと想定される質問だけに出している(noteIsAnswer)')
-    ok(/learnerId=\{learnerId\}/.test(view),
-      '誰の記録になるかを渡している(0025)')
+    /* **第5.178節で `owner` 1つに寄せた。** 生の `learnerId` を配ると、
+       帯の名札で切り替えても、ここだけ前の相手のままになる */
+    ok(/learnerId=\{owner\}/.test(view),
+      '誰の記録になるかを渡している(0025 / 第5.178節)')
   }
 
   // ── 走らせられるのは、トレーナーと管理者だけ ──
@@ -7045,6 +7047,107 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const nf = noNote(readD('src/data/nativeFlow.js'))
   ok((nf.match(/【Unit \$\{u\.id\}】/g) ?? []).length === 1,
     '呼び名を作っているのは、ファイルの中でも1か所だけ')
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.178節 いま誰の記録として残るか(2026-09 利用者の指摘)
+
+     > ゲストページ内のそのゲストの宿題になっている教材内で単語やフレーズを
+     > 単語帳に登録しているはずなのに、明らかに他のゲストが登録した単語などが
+     > 入っていることがあります。しっかり分けて管理する体制にしてください。
+
+   **渡し忘れが、そのまま「自分」になる**のがいちばん怖い。
+   `setWordStatus()` は `learnerId` を渡さなければ黙って `auth.uid()` に
+   書くので、**props を1つ書き忘れただけで、別の人の単語帳に入る。**
+   だから「書いてあるか」を機械で数える。
+   ──────────────────────────────────────────────────────────────── */
+{
+  const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+
+  /* **レッスン表示を描いている場所は、ぜんぶ誰の記録かを渡す。**
+     `<LessonView` から最初の `/>` までを1つとして数える ——
+     属性は何行にもまたがる(`[^>]*` では `=>` に当たって切れる) */
+  const tags = (src) => {
+    const out = []
+    for (const m of src.matchAll(/<LessonView\b/g)) {
+      const end = src.indexOf('/>', m.index)
+      if (end > 0) out.push(src.slice(m.index, end))
+    }
+    return out
+  }
+  const 画面 = ['App.jsx', '__screens.jsx',
+    'components/TrainerLearners.jsx', 'components/TrainerMaterials.jsx',
+    'components/LearnerHomework.jsx']
+  let 数 = 0
+  for (const f of 画面) {
+    for (const tag of tags(noNote(read(f)))) {
+      数 += 1
+      ok(/learnerId=/.test(tag),
+        `${f} … レッスン表示に「誰の記録か」を渡している`,
+        tag.replace(/\s+/g, ' ').slice(0, 60))
+    }
+  }
+  /* **数そのものも見る。** 0個なら、上の見張りは1本も回らない */
+  ok(数 >= 3, `レッスン表示を描いている場所が ${数} か所ある`, String(数))
+
+  /* **見る側と書く側が、同じ1つを使う**(第5.178節)。
+     ここが別々だと、色は自分・記録はゲスト、という食い違いになる */
+  const tm = noNote(read('components/TrainerMaterials.jsx'))
+  ok(/useWordStatuses\(sessionFor\)/.test(tm),
+    '教材の画面 … 映す記録も、選んだ相手のもの')
+  ok(/onLearnerChange=\{setSessionFor\}/.test(tm),
+    '教材の画面 … 帯の名札で切り替えられる(受け止める親がいる)')
+  ok(/markIn\(markWord, m\.id, sessionFor\)/.test(tm),
+    '教材の画面 … 紙に出すときも、選んだ相手の記録になる')
+
+  /* **ゲストのページからは切り替えさせない**(画面共有中の取り違えを防ぐ)。
+     「渡している」と「渡していない」の両方を数える —— 片方だけだと、
+     **どこでも切り替えられる形**に書き換えても緑のままになる */
+  const tl = noNote(read('components/TrainerLearners.jsx'))
+  ok(/learnerId=\{openId\}/.test(tl), 'ゲストのページ … 相手はそのゲストで決まっている')
+  ok(!/onLearnerChange/.test(tl), 'ゲストのページ … 切り替えは渡していない(名札だけ)')
+
+  /* **レッスン表示の中では、1つの `owner` だけを配る。**
+     生の `learnerId` を子に配ると、切り替えても片方だけ古いままになる */
+  const lv = noNote(read('components/LessonView.jsx'))
+  ok(/const owner = learnerId \?\? null/.test(lv),
+    'レッスン表示 … 誰の記録かを1つに持っている')
+  ok(/markIn\(onMarkWord, material\?\.id, owner\)/.test(lv),
+    'レッスン表示 … 語も、その1つの相手に入る')
+  ok(!/learnerId=\{learnerId\}/.test(lv),
+    'レッスン表示 … 子には生の learnerId を配っていない')
+  const 子 = (lv.match(/learnerId=\{owner\}/g) ?? []).length
+  ok(子 >= 4, `レッスン表示 … 子もぜんぶ同じ相手を見ている(${子} か所)`, String(子))
+  /* **「出す」の条件ごと数える。** `<SessionOwner` が書いてあるかだけ見ると、
+     **`{false && …}` に書き換えても緑のまま**になる(赤チェックで踏んだ)。
+     ゲストには出さない判断(`canNote`)も、ここで一緒に見る */
+  ok(/\{canNote && \(\s*<SessionOwner/.test(lv),
+    'レッスン表示 … 誰の記録かを、トレーナーにだけ出している')
+  /* **メモの中に、相手を選ぶ欄を残していない**(同じことを2つ見せない) */
+  ok(!/誰のセッションの記録ですか/.test(lv),
+    'レッスン表示 … 相手を選ぶ欄は、名札の1か所だけ')
+
+  /* **文言は1か所**(`ownerLabel`)。画面に書き写すと、必ず片方だけ古くなる */
+  const so = noNote(read('components/SessionOwner.jsx'))
+  ok(/export const ownerLabel/.test(so), '名札 … 文言を1か所で作っている')
+  ok(!/さんの記録/.test(lv), 'レッスン表示 … 文言を書き写していない')
+  /* **押せるのは、受け止める親がいるときだけ**(行き止まりを作らない) */
+  ok(/if \(!onPick\)/.test(so), '名札 … 受け止める親がいなければ、押せない名札')
+  /* **並べるのは `BookShelf`。** 印・太字・枠の作法を書き写さない */
+  ok(/<BookShelf/.test(so), '名札 … 並べ方は BookShelf に任せている')
+  ok(!/shelf-mark/.test(so), '名札 … 並べ方を書き写していない')
+
+  /* **骨組みが、本物の部品をそのまま描いている**(CLAUDE.md) */
+  const sc = noNote(read('__screens.jsx'))
+  ok(/<SessionOwner/.test(sc), '骨組み … 本物の名札を描いている')
+  ok(/q\.get\('owner'\) === 'fixed'/.test(sc), '骨組み … 押せない名札も描いている')
+  ok(/q\.get\('owner'\) === 'empty'/.test(sc), '骨組み … 担当がいないときも描いている')
+  /* **すき間の見張りにも入っている**(足すまで見張られない) */
+  const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
+  ok(/\['owner', ''\]/.test(bar), 'すき間の見張りに owner が入っている')
 }
 
 console.log(ng

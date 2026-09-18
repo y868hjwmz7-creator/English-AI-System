@@ -5300,6 +5300,129 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   いま誰の記録として残るか(第5.178節・2026-09 利用者の指摘)
+
+     > ゲストページ内のそのゲストの宿題になっている教材内で単語やフレーズを
+     > 単語帳に登録しているはずなのに、明らかに他のゲストが登録した単語などが
+     > 入っていることがあります。しっかり分けて管理する体制にしてください。
+
+   **読めない名札は、無いのと同じである。** はじめ帯の中に置いたところ、
+   320px で **26px まで潰れて**「…」しか見えなかった(実測)。
+   だから帯のすぐ下の1行に移した。**そこが潰れないことを、描いて数える。**
+
+   **「出る」と「出ない」の両方を見る** —— ゲストには出さない
+   (相手が自分しかいないので、効かない操作になる)。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  /* ① 名札が読める幅で出ているか。**いちばん狭い画面で見る** */
+  for (const w of [320, 390, 1280]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=owner`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(200)
+    const r = await page.evaluate(() => {
+      const row = document.querySelector('.lesson-ownerrow')
+      const own = document.querySelector('.lesson-owner')
+      if (!row || !own) return null
+      const name = own.querySelector('.lesson-owner-name')
+      return {
+        はみ出し: Math.round(row.scrollWidth - row.clientWidth),
+        /* **切れていないか。** 中身の幅より狭ければ「…」になっている */
+        切れ: Math.round(name.scrollWidth - name.clientWidth),
+        文: row.textContent.replace(/\s+/g, ''),
+        見える: own.checkVisibility(),
+      }
+    })
+    if (!r) { ng(`誰の記録か … ${w}px で行が描かれていない`); continue }
+    if (r.はみ出し === 0) ok(`誰の記録か … ${w}px で行がはみ出さない`)
+    else ng(`誰の記録か … ${w}px で行がはみ出す`, `${r.はみ出し}px`)
+    /* **名前が「…」で切れていない。** 帯の中に置いていたときは、
+       ここが 320px で切れていた(それが移した理由である) */
+    if (r.切れ <= 0) ok(`誰の記録か … ${w}px で名前が切れない`)
+    else ng(`誰の記録か … ${w}px で名前が「…」に切れている`, `${r.切れ}px`)
+    /* **何の記録かまで言えているか**(名前だけでは、何が入るのか分からない) */
+    if (/この教材で拾った語は/.test(r.文) && /に入ります/.test(r.文)) {
+      ok(`誰の記録か … ${w}px で「何が・誰に」入るか書いてある`)
+    } else ng(`誰の記録か … ${w}px で文が足りない`, r.文.slice(0, 40))
+    if (r.見える) ok(`誰の記録か … ${w}px で見えている`)
+    else ng(`誰の記録か … ${w}px で見えていない`)
+    await page.close()
+  }
+
+  /* ② 押すと相手を選べて、**選んだ相手が名札に出る** */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=owner`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(200)
+    const 前 = await page.evaluate(() => document.querySelector('.lesson-owner-name').textContent.trim())
+    await page.click('.lesson-owner')
+    await page.waitForTimeout(300)
+    const 行 = await page.evaluate(() => [...document.querySelectorAll('.shelf-pick')]
+      .map((el) => el.textContent.replace(/\s+/g, '')))
+    /* **「自分」と担当ゲストが並ぶ。** 自分が消えると、これまでの道が無くなる */
+    if (行.length >= 2 && /自分の記録/.test(行[0])) {
+      ok(`誰の記録か … 「自分」と担当ゲストが並ぶ(${行.length} 行)`)
+    } else ng('誰の記録か … 選ぶ一覧が出ない', 行.join(' / '))
+    await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.shelf-pick')]
+      rows[rows.length - 1].click()
+    })
+    await page.waitForTimeout(300)
+    const 後 = await page.evaluate(() => document.querySelector('.lesson-owner-name').textContent.trim())
+    /* **選んだら、名札がその人に変わる。**
+       変わらなければ、どこに入るのか分からないまま書き込むことになる */
+    if (後 !== 前 && /さんの記録/.test(後)) ok(`誰の記録か … 選ぶと名札が変わる(${前} → ${後})`)
+    else ng('誰の記録か … 選んでも名札が変わらない', `${前} → ${後}`)
+    /* **選んだら閉じる**(もう一度押さないと教材に戻れない、をなくす) */
+    const 開いたまま = await page.evaluate(() => !!document.querySelector('.shelf-pick'))
+    if (!開いたまま) ok('誰の記録か … 選ぶと閉じる')
+    else ng('誰の記録か … 選んでも閉じない')
+    await page.close()
+  }
+
+  /* ③ 相手が決まっているときは、**押せない名札**(取り違えを起こさない) */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=owner&owner=fixed`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(200)
+    const t = await page.evaluate(() => document.querySelector('.lesson-owner')?.tagName ?? '(無し)')
+    if (t === 'SPAN') ok('誰の記録か … 相手が決まっていれば、押せない名札')
+    else ng('誰の記録か … 相手が決まっているのに押せてしまう', t)
+    await page.close()
+  }
+
+  /* ④ 担当ゲストがいなければ、**黙って空にしない** */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=owner&owner=empty`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(200)
+    await page.click('.lesson-owner')
+    await page.waitForTimeout(300)
+    const 文 = await page.evaluate(() => [...document.querySelectorAll('.card-hint')]
+      .map((e) => e.textContent.trim()).join(' / '))
+    if (/担当しているゲストがいません/.test(文)) ok('誰の記録か … 担当がいないときは、そう書く')
+    else ng('誰の記録か … 担当がいないのに、黙って空になる', 文.slice(0, 60))
+    await page.close()
+  }
+
+  /* ⑤ **ゲストには出さない。**「出る」と「出ない」の両方を見る ——
+       片方だけだと、誰にも出さない形に書き換えても緑のままになる */
+  for (const [role, 出る] of [['trainer', true], ['learner', false]]) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=${role}&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    const 在る = await page.evaluate(() => !!document.querySelector('.lesson-ownerrow'))
+    if (在る === 出る) ok(`誰の記録か … ${role} には${出る ? '出る' : '出ない'}`)
+    else ng(`誰の記録か … ${role} に${出る ? '出ていない' : '出てしまう'}`)
+    await page.close()
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    説明の文は、既定では出さない(2026-09 利用者の指定)
 
      > 全てのデザインから言葉による説明を省いてください。
@@ -5871,6 +5994,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
        冊をえらぶ場所は**この1枚だけ**になった。
        `books=one` は**冊が1つのとき**(えらぶ場所そのものが出ない) */
     ['shelf', ''], ['shelf', 'books=one'],
+    /* **誰の記録として残るか**(第5.178節)。押せる形と、押せない名札と、
+       担当がいないときの3つとも測る */
+    ['owner', ''], ['owner', 'owner=fixed'], ['owner', 'owner=empty'],
     /* **達成具合**(第5.167節)。`×` と「おわる」の行き先なので、
        ここが行き止まりだと練習へ戻れなくなる */
     ['progress', ''],

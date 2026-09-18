@@ -45,6 +45,7 @@ import { NAV_PUSH_AT, useWide } from '../lib/nav.js'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
+import SessionOwner from './SessionOwner.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import CastChip from './CastChip.jsx'
 import QuickResponse from './QuickResponse.jsx'
@@ -200,10 +201,30 @@ export default function LessonView({
   wordStatuses = null, onMarkWord = null,
   /** 誰の学習として残すか(0025)。レッスン中のゲスト / 自分 */
   learnerId = null,
+  /** 相手の名前。**帯の名札に出すだけ**(引きに行かせない) */
+  learnerName = '',
+  /**
+   * **相手を切り替えたときの知らせ**(第5.178節)。
+   *
+   * **これが渡されているときだけ、帯の名札が押せる。**
+   * 受け止める親がいなければ切り替えても表示(色)がついてこないので、
+   * **判断はこの1つ**にしてある(`learnerId` の有無では決めない)。
+   */
+  onLearnerChange = null,
 }) {
+  /**
+   * **いま、誰の記録として残るか**(第5.178節・2026-09 利用者の指摘)。
+   *
+   *   > 明らかに他のゲストが登録した単語などが入っていることがあります。
+   *   > しっかり分けて管理する体制にしてください。
+   *
+   * 語も Quick Response もセッションの記録も、**この1つで決まる。**
+   * 3つ別々に持つと、**片方だけ別の人のものになる**(CLAUDE.md)。
+   */
+  const owner = learnerId ?? null
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る。
      語に触れる場所は多いので、**教材が分かるここで1回だけかぶせる** */
-  const markWord = markIn(onMarkWord, material?.id, learnerId)
+  const markWord = markIn(onMarkWord, material?.id, owner)
   const sections = material?.sections ?? []
   const [page, setPage] = useState(0)
   // 解答の出し方は2通り。**両方要る。**
@@ -291,20 +312,26 @@ export default function LessonView({
    * 利用者はふだん「教材」の画面から開くので、そこにメモが無いと
    * **一度も出てこない。** 3度言わせてしまった。
    *
-   * いまは**ボタンは必ず出し、相手が決まっていなければ中で選ばせる。**
-   * 選ぶ相手は「自分の担当ゲスト」だけである(RLS がそれ以外を断る)。 */
+   * いまは**ボタンは必ず出す。** 相手は、紙のすぐ上の名札
+   * (`SessionOwner`・第5.178節)で選ぶ —— **同じことをするものを
+   * 2つ見せない**(CLAUDE.md)。あの名札は語と Quick Response の
+   * 行き先でもあるので、**3つが同じ人のものになる。**
+   * 選べる相手は「自分の担当ゲスト」だけである(RLS がそれ以外を断る)。 */
   const canNote = viewerRoleOf() === 'trainer' || viewerRoleOf() === 'owner'
-  /** メモを書く相手。**渡されていれば、それが答え**(選ばせない) */
-  const [notesFor, setNotesFor] = useState(learnerId ?? null)
-  /** 選ぶための担当ゲスト。**開いたときに1回だけ読む**(要らなければ読まない) */
-  const [notePeople, setNotePeople] = useState(null)
-  useEffect(() => { setNotesFor(learnerId ?? null) }, [learnerId])
+  /**
+   * 選ぶための担当ゲスト。**帯の名札を押したときに1回だけ読む。**
+   *
+   * `null` は「まだ読んでいない」で、`[]` は「担当がいない」である ——
+   * **0 と `null` を取り違えない**(CLAUDE.md)。名札の側が書き分ける。
+   */
+  const [people, setPeople] = useState(null)
+  const [wantPeople, setWantPeople] = useState(false)
   useEffect(() => {
-    if (!notes || learnerId || notePeople) return undefined
+    if (!wantPeople || people) return undefined
     let alive = true
-    loadMyLearners().then(({ data }) => { if (alive) setNotePeople(data ?? []) })
+    loadMyLearners().then(({ data }) => { if (alive) setPeople(data ?? []) })
     return () => { alive = false }
-  }, [notes, learnerId, notePeople])
+  }, [wantPeople, people])
   openSettingsRef.current = openSettings
   // 通しの練習を出しているか。
   // null / 'qr'(Quick Response)/ 'six'(6Steps)/ 'focus'(集中モード)。
@@ -1153,6 +1180,30 @@ export default function LessonView({
         )}
       </div>
 
+      {/* **いま誰の記録として残るか**(第5.178節・2026-09 利用者の指摘)。
+
+              > 明らかに他のゲストが登録した単語などが入っていることがあります。
+              > しっかり分けて管理する体制にしてください。
+
+          **帯の中には置けなかった。** 320px の帯は
+          「閉じる31 + ページ送り103 + 3つの絵38×3 + すき間50 = 324px」で
+          すでに満杯で、札を入れると **26px まで潰れて読めない**(実測)。
+          読めない名札は、無いのと同じである。
+
+          **だから帯のすぐ下に、1行まるごと使って出す** ——
+          押すところ(切り替え)と読むところ(名前)を分けた第5.176節と
+          同じ考え方で、こちらは**どの幅でも潰れない。**
+
+          ゲストには出さない —— 相手は自分しかいないので、
+          **効かない操作になる**(CLAUDE.md)。
+          押せるのは、受け止める親がいるとき(教材の画面)だけである */}
+      {canNote && (
+        <SessionOwner
+          learnerId={owner} name={learnerName} people={people}
+          onPick={onLearnerChange}
+          onOpen={() => setWantPeople(true)} />
+      )}
+
       {/* 紙と、その横のメモ。**入れ物を1つはさむ**(0032)。
           メモを紙の上に重ねると、教材を見ながら書けない。
           横に並べるには、帯とは別の「行」が要る
@@ -1408,7 +1459,7 @@ export default function LessonView({
                同じ教材を、同じ幅で読み続けられるようにする */
             width={width}
             wordStatuses={wordStatuses} onMarkWord={onMarkWord}
-            materialId={material.id} learnerId={learnerId}
+            materialId={material.id} learnerId={owner}
             /* **6Steps へは、上の帯から移れる**(2026-09 利用者の指定) */
             onGoStep={passageSection ? goStep : null}
             /* 速さ・文字・幅・印刷。**3つの集中モードで同じもの** */
@@ -1443,11 +1494,11 @@ export default function LessonView({
             /* 途中経過を教材ごとにまとめて消せるようにするため、
                教材の id も渡す(`src/lib/progress.js`) */
             materialId={material.id}
-            learnerId={learnerId}
+            learnerId={owner}
             tags={allTags} voiceIds={material.voiceIds} level={material.level}
           />
         ) : qr ? (
-          <QuickResponse material={material} paper learnerId={learnerId}
+          <QuickResponse material={material} paper learnerId={owner}
                          /* **集中モードは、この画面のボタンが持つ**
                             (中にも同じボタンを置くと2つ並ぶ) */
                          focus={qrFocus} onFocusClose={() => setQrFocus(false)}
@@ -1566,29 +1617,19 @@ export default function LessonView({
               <button type="button" className="btn btn--small"
                       onClick={() => setNotes(false)}>閉じる</button>
             </div>
-            {notesFor ? (
-              <LessonNotes learnerId={notesFor} bare />
+            {owner ? (
+              <LessonNotes learnerId={owner} bare />
             ) : (
-              /* **相手が決まっていない。** 教材の画面から開いたときは、
-                 誰のセッションの記録かをここで選ぶ。
-                 **選ばせてから断らない** —— 出るのは担当ゲストだけである */
+              /* **相手を選ぶ欄は、ここには置かない**(第5.178節)。
+                 帯の名札が「誰の記録になるか」を持っており、
+                 **同じことをするものを2つ見せない**(CLAUDE.md)。
+                 語も Quick Response も記録も、あの1つで決まる */
               <div className="lesson-notes-pick">
-                <label className="field">
-                  <span>誰のセッションの記録ですか</span>
-                  <select value="" onChange={(e) => setNotesFor(e.target.value || null)}>
-                    <option value="">選んでください</option>
-                    {(notePeople ?? []).map((p) => (
-                      <option key={p.id} value={p.id}>{p.display_name}</option>
-                    ))}
-                  </select>
-                </label>
-                {notePeople === null && <p className="card-hint">読んでいます…</p>}
-                {notePeople?.length === 0 && (
-                  <p className="card-hint">担当しているゲストがいません。</p>
-                )}
                 <p className="tip card-hint">
-                  記録はゲストごと・日付ごとに1枚残ります。
-                  ゲストのページから教材を開いたときは、ここは出ません。
+                  いまは<strong>自分の記録</strong>になっています。
+                  上の帯の「自分の記録 ▾」でゲストを選ぶと、
+                  その人のセッションの記録になります
+                  (単語帳と Quick Response も同じ人のものになります)。
                 </p>
               </div>
             )}
@@ -1878,7 +1919,7 @@ export default function LessonView({
                       itemKey={it.id ?? i}
                       question={it.question} questionJa={it.question_ja}
                       context={bodyText} level={material.level}
-                      learnerId={learnerId}
+                      learnerId={owner}
                       statuses={wordStatuses} onMark={markWord}
                       clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                       tier={secTier} rate={rateOf(rateId)}

@@ -148,9 +148,28 @@ export default function TrainerMaterials({
   const {
     busy: dlBusy, done: dlDone, pieces: dlPieces, short: dlShort, start: dlStart,
   } = useAudioDownload()
-  // **トレーナー自身の語の記録。** トレーナーも日々英語を学んでいる
-  // (2026-08 利用者の指定)。担当ゲストの記録には触れない
-  const { statuses: wordStatuses, mark: markWord } = useWordStatuses()
+  /**
+   * **この画面から開いたセッションは、誰の記録になるか**(第5.178節)。
+   *
+   * 2026-08 は「トレーナー自身の記録でよいですか → はい」で決めたが、
+   * **利用者はふだんこの画面からセッションを開いている。**
+   * そのため**トレーナー自身の単語帳に、どのゲストとのセッションで拾った語も
+   * まとめて溜まっていた**(2026-09 利用者の指摘)。
+   *
+   * **既定は、これまでどおり自分。**(`null`)
+   * レッスン表示の帯の名札で切り替えると、ここが変わる ——
+   * **見る側(`useWordStatuses`)と書く側(`LessonView`)が、
+   * 同じ1つを使う。** 2つに分けると、色は自分・記録はゲスト、という
+   * 食い違いが起きる(CLAUDE.md「数え方を2通り持たない」)。
+   *
+   * **端末には覚えさせない。** 読み込み直せば自分に戻る
+   * (`lastLearner.js` と同じ考え方 —— 翌日ひらいた瞬間に
+   * 前の日のゲストの記録になっていては、画面共有の事故になる)。
+   */
+  const [sessionFor, setSessionFor] = useState(null)
+  // **語の記録。** 既定はトレーナー自身(2026-08 利用者の指定)。
+  // 帯でゲストを選んだあいだは、そのゲストのものを映す(第5.178節)
+  const { statuses: wordStatuses, mark: markWord } = useWordStatuses(sessionFor)
   const [lessonOf, setLessonOf] = useState(null)      // レッスン表示で開いている教材
 
   const [materials, setMaterials] = useState([])
@@ -636,6 +655,12 @@ export default function TrainerMaterials({
            > トレーナーが「教材」画面で自分のために触った語は、
            > これまでどおりトレーナー自身の記録でよいですか → はい */
         <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
+                    /* **帯の名札で切り替えられる**(第5.178節)。
+                       `onLearnerChange` を渡した画面だけが切り替えられる ——
+                       受け止められない画面で押せると、色と記録が食い違う */
+                    learnerId={sessionFor}
+                    learnerName={learners.find((l) => l.id === sessionFor)?.display_name ?? ''}
+                    onLearnerChange={setSessionFor}
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
       {/* ── 教材をさがす箱(2026-09 利用者の指定)──────────────────
@@ -1115,7 +1140,7 @@ export default function TrainerMaterials({
                     material={m}
                     wordStatuses={wordStatuses}
                     /* どの教材で会ったかを添える(0024) */
-                    onMarkWord={markIn(markWord, m.id)}
+                    onMarkWord={markIn(markWord, m.id, sessionFor)}
                   />
                 </div>
               )}

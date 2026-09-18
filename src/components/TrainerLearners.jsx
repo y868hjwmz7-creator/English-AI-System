@@ -610,6 +610,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
            > セッションで一緒に取り組んでいるので学習時間に入ります */
         <LessonView material={lessonOf} onClose={() => setLessonOf(null)}
                     learnerId={openId}
+                    /* **帯に名札を出すため**(第5.178節)。ここは相手が
+                       決まっているので、切り替えは渡さない(名札だけ) */
+                    learnerName={learners.find((l) => l.id === openId)?.display_name ?? ''}
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
       {message && <div className="notice notice--ok">{message}</div>}
