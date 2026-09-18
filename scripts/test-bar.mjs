@@ -5556,6 +5556,78 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   アサインする(第5.181節・2026-09 利用者の指定)
+
+     > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、
+     > もしくは「アサインする」の機能を作り、その中から教材、単語帳の冊、
+     > quick responseの冊を選べるようにしたいです。
+
+   **どちらの帳面の冊かを、画面で振り分けない**(`featuresIn()`)。
+   片方だけ描いていると、振り分けを壊しても気づけないので、
+   **単語帳の冊と Quick Response の冊を、2つとも数える。**
+
+   **色だけに頼らない** —— 「出しています / 出していません」の文字と
+   `aria-pressed` の両方を見る。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const 見る = async (q = '') => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=assign${q}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(200)
+    const r = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('.card')]
+      const rows = [...document.querySelectorAll('.feature-row')]
+      return {
+        見出し: cards.map((c) => c.querySelector('.card-title')?.textContent ?? ''),
+        札: rows.map((x) => {
+          const b = x.querySelector('button')
+          return {
+            文: (b?.textContent ?? '').replace(/\s+/g, ''),
+            押した: b?.getAttribute('aria-pressed'),
+            止めて: !!b?.disabled,
+            説明: (x.querySelector('.field-hint')?.textContent ?? '').trim(),
+          }
+        }),
+        はみ出し: Math.round(document.body.scrollWidth - document.body.clientWidth),
+      }
+    })
+    await page.close()
+    return r
+  }
+
+  const a = await 見る()
+  /* **2つの帳面が、別の見出しで並ぶ**(振り分けが効いている) */
+  if (a.見出し.some((t) => /単語帳の冊/.test(t)) && a.見出し.some((t) => /Quick Response の冊/.test(t))) {
+    ok('アサイン … 単語帳の冊と Quick Response の冊が、別々に並ぶ')
+  } else ng('アサイン … 帳面ごとに分かれていない', a.見出し.join(' / '))
+  if (a.札.length >= 2) ok(`アサイン … 出せる冊が ${a.札.length} 並ぶ`)
+  else ng('アサイン … 冊が並んでいない', String(a.札.length))
+  /* **色だけに頼らない。** 文字と `aria-pressed` の両方が、同じことを言う */
+  const そろう = a.札.every((x) => (x.押した === 'true'
+    ? /^出しています/.test(x.文) : /^出していません/.test(x.文)))
+  if (そろう) ok('アサイン … 「出しています / 出していません」と aria-pressed が合う')
+  else ng('アサイン … 文字と読み上げが食い違う', a.札.map((x) => `${x.文}[${x.押した}]`).join(' / '))
+  /* **出ている冊と、出ていない冊の両方**を描いている
+     (片方だけだと、いつも「出している」に書き換えても緑のまま) */
+  const 両方 = a.札.some((x) => x.押した === 'true') && a.札.some((x) => x.押した === 'false')
+  if (両方) ok('アサイン … 出している冊と、出していない冊の両方がある')
+  else ng('アサイン … 片方しか描いていない(見張りが効かない)')
+  /* **どこに出るのかまで書いてある**(「出しました」で終わらせない) */
+  if (a.札.every((x) => x.説明.length > 0)) ok('アサイン … どの冊にも説明がある')
+  else ng('アサイン … 説明の無い冊がある')
+  if (a.はみ出し === 0) ok('アサイン … 390px で横にはみ出さない')
+  else ng('アサイン … 横にはみ出す', `${a.はみ出し}px`)
+
+  /* **決めている最中は、二度押させない** */
+  const b = await 見る('&busy=on')
+  if (b.札.every((x) => x.止めて)) ok('アサイン … 決めている最中は押せない')
+  else ng('アサイン … 決めている最中も押せてしまう')
+  if (b.札.every((x) => /決めています…/.test(x.文))) ok('アサイン … 決めている最中だと分かる')
+  else ng('アサイン … 何をしているのか分からない', b.札.map((x) => x.文).join(' / '))
+}
+
+/* ══════════════════════════════════════════════════════════════════
    説明の文は、既定では出さない(2026-09 利用者の指定)
 
      > 全てのデザインから言葉による説明を省いてください。
@@ -6133,6 +6205,8 @@ for (const W of [1280, 794, 453, 390, 320]) {
     /* **この冊を出す相手**(第5.179節)。札が並ぶ形と、
        担当がいないときの2つとも測る */
     ['bookassign', ''], ['bookassign', 'rows=none'],
+    /* **アサインする**(第5.181節)。冊の札が縦に並ぶ */
+    ['assign', ''],
     /* **達成具合**(第5.167節)。`×` と「おわる」の行き先なので、
        ここが行き止まりだと練習へ戻れなくなる */
     ['progress', ''],

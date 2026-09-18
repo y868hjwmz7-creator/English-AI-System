@@ -4457,7 +4457,9 @@ console.log('\nスピーチ練習(0054)')
 
   /* ── トレーナーが決める側 ── */
   const tl = noC5(read5('src/components/TrainerLearners.jsx'))
-  ok(/LEARNER_FEATURES\.map\(/.test(tl),
+  /* **第5.181節で、帳面ごとに分けて出すようにした**(`featuresIn()`)。
+     見たいのは「一覧を回している(書き写していない)」ことのほうである */
+  ok(/featuresIn\('word'\)\.map\(/.test(tl) && /featuresIn\('qr'\)\.map\(/.test(tl),
     '出すもの … 決める欄は一覧を回している(書き写していない)')
   ok(/await setLearnerFeature\(learner\.id, feat\.id, next\)/.test(tl),
     '出すもの … 決める欄は `setLearnerFeature()` を呼んでいる')
@@ -4997,7 +4999,9 @@ console.log('\nスピーチ練習(0054)')
     '棚 … 場面は、偏らせないための手がかりとしてまとめて渡す')
 
   const trS = noCS(readS('src/components/TrainerLearners.jsx'))
-  ok(/shelfFeature\(s\.id\)/.test(trS),
+  /* **第5.181節で、どれが出ているかの判断は `assignBooks.js` へ移した。**
+     名前を作るところ(`shelfFeature`)は、どちらにしても通る */
+  ok(/shelfFeature\(shelf\.id\)/.test(trS),
     '棚 … ゲストへの指定も `shelfFeature()` を通る')
   ok(!/'shelf:'\s*\+/.test(trS), '棚 … トレーナーの画面でも名前を組み立てていない')
 
@@ -6028,7 +6032,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/<QrReview nfUnits=\{myNfUnits\}/.test(app)
     && (app.match(/<QrReview /g) ?? []).length === 1,
     'Quick Response 帳 … 自分の帳にだけ出している')
-  ok(!/nfUnits/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
+  /* **渡していないこと**を見る。第5.181節で `nfUnitsOn()`(どれが
+     出ているかの判断)を読むようになったので、**名前が出るだけでは赤にしない** */
+  ok(!/nfUnits=/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
     'Quick Response 帳 … ゲストのページから開く画面には渡していない')
   ok(/\}, \[[^\]]*\blearnerId\b[^\]]*\bbook\b[^\]]*\]\)/.test(qr),
     'Quick Response 帳 … 冊が変わったら読み直す')
@@ -6281,7 +6287,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      見て向きを決めるので、続けて呼ぶと2回目以降が逆向きに倒れる */
   ok(!/toggleFeature\(/.test(bulk),
     '丸ごとは `toggleFeature()` を繰り返し呼んでいない(向きが逆に倒れる)')
-  ok(/features\.has\(id\) !== on/.test(bulk),
+  /* **第5.181節で `nfAllTodo()` へ移した**(配る場所が2つになったため)。
+     中身そのものは `npm run test:play` の第5.181節の節が呼んで確かめている */
+  ok(/nfAllTodo\(features, on\)/.test(bulk),
     'すでにその向きの Unit には、窓口を呼ばない(変えていないものを書き直さない)')
   ok(/done \+= 1/.test(bulk),
     'どこまで通ったかを数えている(途中で断られても黙って落ちない)')
@@ -7317,6 +7325,103 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **すき間は親の gap で作る**(`.claude/rules/common.md`) */
   ok(/\.drill-head \{[^}]*gap: var\(--sp-8\)/.test(st),
     '名前とバーのすき間は、親の gap で作る')
+}
+
+/* ────────────────────────────────────────────────────────────────
+   第5.181節 アサインする(冊を、この人に出す)
+
+     > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、
+     > もしくは「アサインする」の機能を作り、その中から教材、単語帳の冊、
+     > quick responseの冊を選べるようにしたいです。
+
+   配る場所が**2つ**になった(ゲストのページ / 「アサインする」の画面)。
+   **判断と文言を書き写すと、必ず片方だけ古くなる。**
+   ──────────────────────────────────────────────────────────────── */
+{
+  const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const feat = await import('../src/data/learnerFeatures.js')
+  const ab = await import('../src/lib/assignBooks.js')
+  const nf = await import('../src/data/nativeFlow.js')
+  const sh = await import('../src/data/shelves.js')
+
+  /* **どちらの帳面の冊かは、一覧が知っている**(画面で振り分けない) */
+  ok(feat.LEARNER_FEATURES.every((f) => f.group === 'word' || f.group === 'qr'),
+    'どの冊にも、どちらの帳面かが書いてある')
+  ok(feat.featuresIn('word').length > 0 && feat.featuresIn('qr').length > 0,
+    '単語帳の冊と Quick Response の冊が、両方ある')
+  /* **足すと両方に出る**(合わせると一覧そのものになる) */
+  ok(feat.featuresIn('word').length + feat.featuresIn('qr').length
+    === feat.LEARNER_FEATURES.length, '振り分けで、1つも落ちていない')
+  /* **知らない組は空。** 当てずっぽうで全部返さない(既定は「出さない」側) */
+  ok(feat.featuresIn('そんな帳面は無い').length === 0, '知らない帳面には、1冊も出さない')
+
+  /* **判断は呼んで確かめる。** 書いてあるかだけだと、逆にしても緑のまま */
+  const 空 = new Set()
+  const 全部 = new Set([
+    ...sh.shelfList().map((s) => sh.shelfFeature(s.id)),
+    ...nf.NATIVE_FLOW_UNITS.map((u) => nf.nfFeature(u.id)),
+  ])
+  ok(ab.shelvesOn(空).length === 0 && ab.shelvesOff(空).length === sh.shelfList().length,
+    '1冊も出していなければ、出している側は空・出していない側はぜんぶ')
+  ok(ab.shelvesOn(全部).length === sh.shelfList().length && ab.shelvesOff(全部).length === 0,
+    'ぜんぶ出していれば、逆になる')
+  ok(ab.shelvesOn(null).length === 0, '読めていないときは、出していない扱い(既定は出さない側)')
+  ok(ab.nfUnitsOn(全部).length === nf.NATIVE_FLOW_UNITS.length
+    && ab.nfUnitsOn(空).length === 0, 'Native Flow も、出ている / 出ていないが逆になる')
+  /* **すでにその向きのものは、窓口を呼ばない**(変えていない冊まで書き直さない) */
+  ok(ab.nfAllTodo(全部, true).length === 0 && ab.nfAllTodo(空, true).length === nf.NATIVE_FLOW_UNITS.length,
+    '丸ごと出すとき、すでに出している Unit は書き直さない')
+  ok(ab.nfAllTodo(全部, false).length === nf.NATIVE_FLOW_UNITS.length && ab.nfAllTodo(空, false).length === 0,
+    '丸ごと外すときも、同じ')
+  /* **文言は、誰に・何を・どうしたかを言う** */
+  ok(/山田/.test(ab.doneText('山田', 'X', true)) && /出しました/.test(ab.doneText('山田', 'X', true))
+    && /外しました/.test(ab.doneText('山田', 'X', false)),
+    '知らせは、誰に・何を・どうしたかを言う')
+  ok(ab.doneText('山田', 'X', true) !== ab.doneText('山田', 'X', false),
+    '出したときと外したときで、言い方が変わる')
+  ok(/3/.test(ab.stoppedText(3, new Error('だめ'))) && /だめ/.test(ab.stoppedText(3, new Error('だめ'))),
+    '途中で断られたら、どこまで通ったかと理由を言う')
+
+  /* **Supabase を引き連れない**(素の node で走らせられる) */
+  const abSrc = noNote(readFileSync(new URL('../src/lib/assignBooks.js', import.meta.url), 'utf8'))
+  ok(!/supabase|import\.meta\.env/i.test(abSrc), '判断と文言は、素の node で走らせられる')
+  /* **名前の作り方は、ここでも書かない** */
+  ok(!/'shelf:'|'nf:'/.test(abSrc), "名前('shelf:…' / 'nf:…')を組み立てていない")
+
+  /* **2つの画面が、同じところから引いている** */
+  const tl = noNote(read('components/TrainerLearners.jsx'))
+  const asg = noNote(read('components/AssignBooks.jsx'))
+  for (const [src, name] of [[tl, 'ゲストのページ'], [asg, 'アサインする']]) {
+    ok(/from '\.\.\/lib\/assignBooks\.js'/.test(src), `${name} … 判断と文言を1か所から引いている`)
+    ok(!/さんの画面に「/.test(src), `${name} … 知らせの文を書き写していない`)
+    ok(/<FeatureToggle/.test(src), `${name} … 冊の札は同じ部品`)
+  }
+  /* **「レベルとスコア」からは移した**(決める場所と、出る場所をそろえる) */
+  ok(!/LEARNER_FEATURES\.map/.test(tl),
+    'ゲストのページ … 冊の札を、レベルとスコアの中に置いていない')
+  ok(/featuresIn\('word'\)/.test(tl) && /featuresIn\('qr'\)/.test(tl),
+    'ゲストのページ … 単語帳のタブと Quick Response のタブに分けて出す')
+
+  /* **メニューに足した。ゲストは追い出す**(効かない画面を見せない) */
+  const app = noNote(read('App.jsx'))
+  ok(/id: 'assign', label: 'アサインする'/.test(app), 'メニューに「アサインする」がある')
+  ok(/'materials', 'learners', 'admin', 'assign'/.test(app),
+    'ゲストが開いたら、宿題の画面へ戻す')
+  ok(/<AssignBooks \/>/.test(app), '行き先が描かれている')
+
+  /* **教材は、ここには出さない**(利用者の指定で冊だけ) */
+  ok(!/loadMaterials|assignMaterial/.test(asg), 'アサインする … 教材は出していない(冊だけ)')
+
+  /* **骨組みが、本物の札を描いている** */
+  const sc = noNote(read('__screens.jsx'))
+  ok(/<FeatureToggle/.test(sc), '骨組み … 本物の札を描いている')
+  ok(/featuresIn\('word'\)/.test(sc) && /featuresIn\('qr'\)/.test(sc),
+    '骨組み … 2つの帳面とも描いている(振り分けを壊したら赤くなる)')
+  const bar = noNote(readFileSync(new URL('../scripts/test-bar.mjs', import.meta.url), 'utf8'))
+  ok(/\['assign', ''\]/.test(bar), 'すき間の見張りに assign が入っている')
 }
 
 console.log(ng

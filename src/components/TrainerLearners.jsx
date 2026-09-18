@@ -44,8 +44,13 @@ import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
 import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.js'
-import { LEARNER_FEATURES } from '../data/learnerFeatures.js'
-import { shelfFeature, shelfList } from '../data/shelves.js'
+import { featuresIn } from '../data/learnerFeatures.js'
+import FeatureToggle from './FeatureToggle.jsx'
+import { shelfFeature } from '../data/shelves.js'
+import {
+  busyText, doneText, nfAllBusyText, nfAllDoneText, nfAllNoneText, nfAllTodo,
+  nfUnitTitle, nfUnitsOn, shelfTitle, shelvesOff, shelvesOn, stoppedText,
+} from '../lib/assignBooks.js'
 import ShelfAssign from './ShelfAssign.jsx'
 import { NATIVE_FLOW_UNITS, nfFeature, unitName } from '../data/nativeFlow.js'
 import NativeFlowAssign from './NativeFlowAssign.jsx'
@@ -107,23 +112,15 @@ export default function TrainerLearners({ me, navTick = 0 }) {
      入れ物は `learner_features` と同じで、名前だけが `shelf:<id>` である。
      **名前の作り方は `shelfFeature()` 1か所** ——
      ここで `'shelf:' + id` と書くと、置く場所の数だけ食い違う */
-  const allShelves = useMemo(() => shelfList(), [])
-  const shelfOn = useMemo(
-    () => allShelves.filter((s) => features.has(shelfFeature(s.id))),
-    [allShelves, features],
-  )
-  const shelfOff = useMemo(
-    () => allShelves.filter((s) => !features.has(shelfFeature(s.id))),
-    [allShelves, features],
-  )
+  /* **どれが出ているかの判断は `assignBooks.js` 1か所**(第5.181節)。
+     配る場所が2つになったので、ここに書くと必ず食い違う */
+  const shelfOn = useMemo(() => shelvesOn(features), [features])
+  const shelfOff = useMemo(() => shelvesOff(features), [features])
   /* **Native Flow の Unit のうち、この人に出しているもの**(2026-09 利用者の指定)。
      入れ物は棚とまったく同じ `learner_features` で、名前だけが `nf:<番号>` である。
      **名前の作り方は `nfFeature()` 1か所** ——
      ここで `'nf:' + id` と書くと、置く場所の数だけ食い違う */
-  const nfOn = useMemo(
-    () => NATIVE_FLOW_UNITS.filter((u) => features.has(nfFeature(u.id))).map((u) => u.id),
-    [features],
-  )
+  const nfOn = useMemo(() => nfUnitsOn(features), [features])
   /* **押した結果の知らせ。** 棚とは別に持つ —— 別のタブに出す札なので、
      同じ入れ物にすると**片方の知らせが、もう片方の画面に出る** */
   const [nfNote, setNfNote] = useState(null)
@@ -419,9 +416,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     const now = new Set(features)
     if (next) now.add(feat.id); else now.delete(feat.id)
     setFeatures(now)
-    const text = next
-      ? `${learner.display_name} さんの画面に「${feat.label}」を出しました。`
-      : `${learner.display_name} さんの画面から「${feat.label}」を外しました。`
+    /* **文言は `assignBooks.js` 1か所**(第5.181節)。
+       「アサインする」の画面と、言い方を揃える */
+    const text = doneText(learner.display_name, feat.label, next)
     if (!quiet) setMessage(text)
     return { ok: true, text }
   }
@@ -441,11 +438,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     if (featureBusy) return
     const id = shelfFeature(shelf.id)
     const on = !features.has(id)
-    setShelfNote({ kind: 'busy', text: on
-      ? `「${shelf.label}」を出しています…`
-      : `「${shelf.label}」を外しています…` })
+    setShelfNote({ kind: 'busy', text: busyText(shelf.label, on) })
     const r = await toggleFeature(learner,
-      { id, label: `業種べつの単語帳「${shelf.label}」` }, { quiet: true })
+      { id, label: shelfTitle(shelf) }, { quiet: true })
     setShelfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
   }
 
@@ -459,13 +454,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     if (featureBusy) return
     const id = nfFeature(u.id)
     const on = !features.has(id)
-    setNfNote({ kind: 'busy', text: on
-      /* **呼び名は `unitName()` 1か所**(第5.175節)。
-         知らせと画面で書き方が違うと、同じ Unit に見えない */
-      ? `「${unitName(u)}」を出しています…`
-      : `「${unitName(u)}」を外しています…` })
+    /* **呼び名は `unitName()` 1か所**(第5.175節)。
+       知らせと画面で書き方が違うと、同じ Unit に見えない */
+    setNfNote({ kind: 'busy', text: busyText(unitName(u), on) })
     const r = await toggleFeature(learner,
-      { id, label: `Native Flow「${unitName(u)}」` }, { quiet: true })
+      { id, label: nfUnitTitle(u) }, { quiet: true })
     setNfNote(r ? { kind: r.ok ? 'ok' : 'ng', text: r.text } : null)
   }
 
@@ -490,19 +483,13 @@ export default function TrainerLearners({ me, navTick = 0 }) {
    */
   const setNfAll = async (learner, on) => {
     if (featureBusy) return
-    const todo = NATIVE_FLOW_UNITS
-      .map((u) => nfFeature(u.id))
-      .filter((id) => features.has(id) !== on)
+    const todo = nfAllTodo(features, on)
     if (!todo.length) {
-      setNfNote({ kind: 'ok', text: on
-        ? `${learner.display_name} さんには、すでに ${NATIVE_FLOW_UNITS.length} つとも出しています。`
-        : `${learner.display_name} さんには、もともと1つも出していません。` })
+      setNfNote({ kind: 'ok', text: nfAllNoneText(learner.display_name, on) })
       return
     }
     setFeatureBusy('nf:all')
-    setNfNote({ kind: 'busy', text: on
-      ? `Unit を ${todo.length} つ出しています…`
-      : `Unit を ${todo.length} つ外しています…` })
+    setNfNote({ kind: 'busy', text: nfAllBusyText(todo.length, on) })
     const next = new Set(features)
     let bad = null
     /* **数えながら進む。** あとから引き算で出そうとすると、
@@ -519,10 +506,8 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     /* **どこまで通ったかを、そのまま言う。** 「失敗しました」だけだと、
        いくつ出たのかが分からない(`eraseNow` と同じ作法) */
     setNfNote(bad
-      ? { kind: 'ng', text: `${done} つまで済みましたが、そこで止まりました: ${bad?.message ?? bad}` }
-      : { kind: 'ok', text: on
-        ? `${learner.display_name} さんの画面に Native Flow を ${NATIVE_FLOW_UNITS.length} つとも出しました。`
-        : `${learner.display_name} さんの画面から Native Flow を外しました。` })
+      ? { kind: 'ng', text: stoppedText(done, bad) }
+      : { kind: 'ok', text: nfAllDoneText(learner.display_name, on) })
   }
 
   const changeCefr = async (learner, cefr) => {
@@ -1342,6 +1327,16 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         `<section className="card">` を持っているので、
                         地の上に直に置くと**そこだけ浮いて見える**
                         (CLAUDE.md「外側まで数える」) */}
+                    {/* **単語帳の冊は、単語帳のタブで決める**(第5.181節)。
+                        一覧は `learnerFeatures.js` が持ち、
+                        **どちらの帳面の冊かも、あちらが知っている**
+                        (`featuresIn('word')`)—— 画面で振り分けない */}
+                    {featuresIn('word').map((f) => (
+                      <FeatureToggle key={f.id} feature={f}
+                                     on={features.has(f.id)}
+                                     busy={featureBusy === f.id}
+                                     onPick={() => toggleFeature(l, f)} />
+                    ))}
                     <ShelfAssign
                       shelfOn={shelfOn} shelfOff={shelfOff}
                       busy={!!featureBusy} note={shelfNote}
@@ -1380,6 +1375,14 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                     {/* **ユニット毎にも、丸ごとにも出せる**(2026-09 利用者の指定)。
                         1つずつ押すと6回かかるので、
                         「この人には Native Flow をぜんぶ渡す」を1回で済ませる */}
+                    {/* **Quick Response の冊も、その帳面のタブで決める**
+                        (第5.181節)。振り分けは `featuresIn('qr')` 1か所 */}
+                    {featuresIn('qr').map((f) => (
+                      <FeatureToggle key={f.id} feature={f}
+                                     on={features.has(f.id)}
+                                     busy={featureBusy === f.id}
+                                     onPick={() => toggleFeature(l, f)} />
+                    ))}
                     <NativeFlowAssign
                       units={NATIVE_FLOW_UNITS} on={nfOn}
                       busy={!!featureBusy} note={nfNote}
@@ -1515,21 +1518,17 @@ export default function TrainerLearners({ me, navTick = 0 }) {
 
                     **守っているのは画面ではなく `set_learner_feature()` の中**
                     であって、担当していないゲストには書けない。 */}
-                <p className="field-label">この人の画面に出すもの</p>
-                {LEARNER_FEATURES.map((f) => (
-                  <div key={f.id} className="feature-row">
-                    <button type="button"
-                            className={`btn btn--toggle${features.has(f.id) ? ' is-active' : ''}`}
-                            disabled={featureBusy === f.id}
-                            aria-pressed={features.has(f.id)}
-                            onClick={() => toggleFeature(l, f)}>
-                      {featureBusy === f.id
-                        ? '決めています…'
-                        : `${features.has(f.id) ? '出しています' : '出していません'} — ${f.label}`}
-                    </button>
-                    <p className="field-hint">{f.hint}</p>
-                  </div>
-                ))}
+                {/* **「この人の画面に出すもの」は、ここには無い**(第5.181節・
+                    2026-09 利用者の指定)。
+
+                    > 新しい冊をアサインするのは各ゲストの単語帳も
+                    > quick response帳、もしくは「アサインする」の機能を作り…
+
+                    **決める場所を、出る場所のとなりへ移した。**
+                    基礎単語は**単語帳のタブ**、型の冊は
+                    **Quick Response のタブ**である。業種べつの単語帳を
+                    ここから移したとき(2026-09)と、まったく同じ話である ——
+                    **2か所には置かない。** */}
 
                 {/* **「業種べつの単語帳」を出す欄は、ここには無い**(2026-09 利用者の指定)。
 

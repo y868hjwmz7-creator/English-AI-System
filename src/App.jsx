@@ -12,7 +12,7 @@ import AppTabs from './components/AppTabs.jsx'
 import AppHome, { HOME_ID } from './components/AppHome.jsx'
 import {
   BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, HomeIcon, MicIcon, MusicIcon,
-  PeopleIcon, ShelfIcon, StepsIcon, TaskIcon, TrendIcon,
+  PeopleIcon, ShareIcon, ShelfIcon, StepsIcon, TaskIcon, TrendIcon,
 } from './components/Icons.jsx'
 import { applyTheme, loadTheme } from './lib/theme.js'
 import { applyPalette, loadPalette } from './lib/palette.js'
@@ -45,6 +45,7 @@ import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import BgmLibrary from './components/BgmLibrary.jsx'
 import ShelfBuilder from './components/ShelfBuilder.jsx'
+import AssignBooks from './components/AssignBooks.jsx'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadLearnerFeatures } from './lib/learnerFeatures.js'
 import { showsBasics, showsFrameQr } from './data/learnerFeatures.js'
@@ -425,7 +426,10 @@ export default function App() {
   // 見えるデータはどのみち RLS が止めるが、画面としても出さない。
   useEffect(() => {
     if (!isSupabaseConfigured || !profile) return
-    if (isLearner && ['materials', 'learners', 'admin'].includes(view)) setView('homework')
+    /* **足したら、ここにも足す**(第5.181節で 'assign' を足した)。
+       足さないと、ゲストが開けてしまう —— 見えるデータは RLS が止めるが、
+       **効かない画面を見せない**(CLAUDE.md) */
+    if (isLearner && ['materials', 'learners', 'admin', 'assign'].includes(view)) setView('homework')
   }, [profile, isLearner, view])
 
   /* ログインした直後に開く画面。
@@ -489,6 +493,21 @@ export default function App() {
     (!isSupabaseConfigured || isTrainer) && {
       id: 'learners', label: 'ゲスト', icon: PeopleIcon,
       desc: '担当ゲストの宿題と取り組み',
+    },
+    /* **アサインする**(第5.181節・2026-09 利用者の指定)。
+
+         > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、
+         > もしくは「アサインする」の機能を作り…
+
+       **ゲストのページにも同じ欄がある**(単語帳のタブ・Quick Response の
+       タブ)。こちらは**1人ぶんをまとめて見渡せる**場所である ——
+       中身は同じ部品なので、どちらから開いても同じことができる。
+
+       **絵は `ShareIcon`(渡す)。** ほかの行き先とぶつからない ——
+       同じ絵を2つに付けると、どちらがどちらか分からない */
+    (!isSupabaseConfigured || isTrainer) && {
+      id: 'assign', label: 'アサインする', icon: ShareIcon,
+      desc: '単語帳と Quick Response の冊を、ゲストに出す',
     },
     // **集計は管理者だけ**(2026-08 の設計変更)。トレーナーが見るのは
     // 「ゲスト」画面に出る取り組みのほうで、スクール全体の数字ではない
@@ -949,6 +968,10 @@ export default function App() {
             ) : view === 'learners' ? (
               profile ? <TrainerLearners me={profile} navTick={navTick} />
                 : <Loading />
+            ) : view === 'assign' ? (
+              /* **アサインする**(第5.181節)。**ゲストを先に選ぶ** ——
+                 1人ぶんの「いま何が出ているか」が、1画面で見渡せる */
+              <AssignBooks />
             ) : view === 'homework' ? (
               <LearnerHomework
                 me={profile}

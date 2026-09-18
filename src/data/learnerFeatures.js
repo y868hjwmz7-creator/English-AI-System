@@ -48,6 +48,8 @@ export const FRAME_QR = 'frame'
 export const LEARNER_FEATURES = [
   {
     id: FRAME_QR,
+    /** **どちらの帳面の冊か**(第5.181節)。画面で振り分けない */
+    group: 'qr',
     label: '14 の型(Quick Response)',
     /* **どこに出るのかまで書く。** 「出しました」だけでは、
        ゲストがどこを開けば練習できるのか分からない(`ShelfBuilder` と同じ) */
@@ -56,6 +58,7 @@ export const LEARNER_FEATURES = [
   },
   {
     id: BASICS,
+    group: 'word',
     label: '文法30日集中講座と基礎単語',
     /* **2つを別々に出さない。** 利用者は「単語と基礎的な文法の仕組みを」と
        言っており、別々に置くと片方だけやって終わる(0052 の決まり) */
@@ -68,6 +71,21 @@ export const LEARNER_FEATURES = [
 export function featureOf(id) {
   return LEARNER_FEATURES.find((f) => f.id === id) ?? null
 }
+
+/**
+ * **その帳面の冊だけを並べる**(第5.181節・2026-09 利用者の指定)。
+ *
+ *   > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、
+ *   > もしくは「アサインする」の機能を作り…
+ *
+ * 決める場所と、出る場所をそろえる —— 基礎単語は**単語帳のタブ**、
+ * 型の冊は **Quick Response のタブ**に出す。
+ * **画面の中で `id === 'basics'` と書き分けない**(置く場所の数だけ食い違う)。
+ *
+ * **知らない組を渡したら空。** 当てずっぽうで全部返さない
+ * (既定は「出さない」側・CLAUDE.md)。
+ */
+export const featuresIn = (group) => LEARNER_FEATURES.filter((f) => f.group === group)
 
 /**
  * **文法30日集中講座と基礎単語を、この人に出すか。**

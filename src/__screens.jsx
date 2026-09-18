@@ -42,6 +42,8 @@ import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import SessionOwner from './components/SessionOwner.jsx'
 import BookAssign from './components/BookAssign.jsx'
+import FeatureToggle from './components/FeatureToggle.jsx'
+import { featuresIn } from './data/learnerFeatures.js'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
 import ReviewStats from './components/ReviewStats.jsx'
 import LearnerBar from './components/LearnerBar.jsx'
@@ -378,6 +380,43 @@ const CARD_LEARNERS = [
   { id: 'g2', display_name: 'テスト太郎' },
   { id: 'g3', display_name: '佐藤ひかる' },
 ]
+
+/* **アサインする**(`?screen=assign`・第5.181節)。
+
+   2026-09 利用者の指定。
+
+     > 新しい冊をアサインするのは各ゲストの単語帳もquick response帳、
+     > もしくは「アサインする」の機能を作り…
+
+   **本物の部品を、そのまま描く**(`FeatureToggle`)。
+   `AssignBooks` そのものは Supabase を引き連れているので、
+   **骨組みからは1ドットも描けない**(**描けないものは測れない**)。
+   だから**中に並ぶ札**を、ここで測れるようにしてある。
+
+   **いちばん危ない形を、必ず1つ置く。**
+   ・**出している人と、出していない人**を混ぜる(印が読み取れるか)
+   ・`?busy=on` で**決めている最中**(二度押しさせない)
+   ・単語帳の冊と Quick Response の冊を**2つとも**出す
+     (片方だけ描くと、振り分け(`featuresIn`)を壊しても緑になる) */
+function AssignScreen() {
+  const busy = q.get('busy') === 'on'
+  return (
+    <div className="app-main" style={{ padding: 16 }}>
+      <section className="card">
+        <h3 className="card-title">単語帳の冊</h3>
+        {featuresIn('word').map((f) => (
+          <FeatureToggle key={f.id} feature={f} on busy={busy} onPick={() => {}} />
+        ))}
+      </section>
+      <section className="card">
+        <h3 className="card-title">Quick Response の冊</h3>
+        {featuresIn('qr').map((f) => (
+          <FeatureToggle key={f.id} feature={f} on={false} busy={busy} onPick={() => {}} />
+        ))}
+      </section>
+    </div>
+  )
+}
 
 /* **この冊を出す相手**(`?screen=bookassign`・第5.179節)。
 
@@ -1487,7 +1526,9 @@ createRoot(document.getElementById('root')).render(
       ? FORM
       : q.get('screen') === 'result'
         ? RESULT
-        : q.get('screen') === 'bookassign'
+        : q.get('screen') === 'assign'
+      ? <AssignScreen />
+    : q.get('screen') === 'bookassign'
       ? <BookAssignScreen />
     : q.get('screen') === 'owner'
       ? (
