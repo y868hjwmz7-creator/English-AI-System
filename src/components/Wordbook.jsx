@@ -48,6 +48,7 @@ import {
   QUIZ_FORMS, WORD_ORDERS, buildSession, isSelfGraded, makeChoices, pickForm,
 } from '../lib/wordQuiz.js'
 import BookPick from './BookPick.jsx'
+import DrillTitle from './DrillTitle.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import WordRadio from './WordRadio.jsx'
@@ -1386,6 +1387,19 @@ export default function Wordbook({
    * **1つの `bookPick` を、始める前と復習の最中の両方で使う。**
    * 書き写すと、必ず片方だけ古くなる(CLAUDE.md)。
    */
+  /**
+   * **いま開いている帳面の名前(全文)**(第5.176節・2026-09 利用者の指定)。
+   *
+   *   > タブが画面幅に収まるようにすると、冊のタイトルが長いものは、
+   *   > 省略されて表示されることになる。
+   *   > その分コンテンツの方にタイトルとして全文をきちんと表示する。
+   *
+   * 帯の札は「…」で切れるので、**切れない名前をここが受け止める。**
+   * **Quick Response とまったく同じ部品**(`DrillTitle`)—— 書き写さない。
+   * 名前は `books` 1か所から引く。
+   */
+  const drillTitle = <DrillTitle label={books.find((b) => b.id === book)?.label ?? ''} />
+
   const bookPick = (
     <BookPick books={books} book={book} unit="語" sub={bookSub}
               title="どの単語帳をやりますか"
@@ -1893,6 +1907,9 @@ export default function Wordbook({
                       画面に入り切らずに切れています」)。帯には
                       **とじる と 出しかた の2つ**しか置かない */}
                 </div>
+                {/* **帳面の名前は、進み具合のすぐ上**(第5.176節)。
+                    Quick Response とまったく同じ場所・同じ部品である */}
+                {drillTitle}
                 <div className="wb-run-bar" role="presentation">
                   {Array.from({ length: total }, (unused, i) => (
                     <span key={i} className={i < done ? 'is-done' : i === done ? 'is-now' : ''} />

@@ -2744,7 +2744,10 @@ export default defineConfig({
         const cs = (el) => (el ? window.getComputedStyle(el) : null)
         const 地 = cs(document.querySelector('.focus'))
         const 帯 = cs(document.querySelector('.focus-top'))
-        const 数 = cs(document.querySelector('.focus-count'))
+        /* **「◯ / ◯」は帯から消えた**(第5.176節)。進み具合の帯が言う。
+           **読めるかを測る相手を、いま在るものに移す** ——
+           帳面の名前(`DrillTitle`)である。教材の中には無いので `null` */
+        const 数 = cs(document.querySelector('.drill-title'))
         const num = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).map(Number)
         const 明るさ = (c) => { const [r, g, b] = num(c); return (r + g + b) / 3 }
         const さ = (a, b) => {
@@ -2755,7 +2758,9 @@ export default defineConfig({
           地の明るさ: Math.round(明るさ(地.backgroundColor)),
           帯の明るさ: Math.round(明るさ(帯.backgroundColor)),
           地と帯の差: さ(地.backgroundColor, 帯.backgroundColor),
-          数の読みやすさ: 数 ? さ(数.color, 帯.backgroundColor) : -1,
+          /* **背は帯ではなく紙**(タイトルは帯の下に出るため) */
+          名前の読みやすさ: 数 ? さ(数.color, 地.backgroundColor) : -1,
+          名前がある: Boolean(数),
           幅: Math.round(document.querySelector('.qr').getBoundingClientRect().width),
           紙: !!document.querySelector('.focus-paper'),
           終える: !!document.querySelector('.focus-exit'),
@@ -2796,11 +2801,14 @@ export default defineConfig({
     } else if (復習.地と帯の差 > 12) {
       ng(`QR復習 … 帯が地と違う色になっている(差 ${復習.地と帯の差})`,
         '単語帳の帯(`.wbfocus > .wb-run`)は、地と同じ色 + 下に線1本')
-    } else if (復習.数の読みやすさ < 60) {
-      ng(`QR復習 … 「◯ / ◯」が帯に埋もれている(差 ${復習.数の読みやすさ})`,
-        '`.focus--plain .focus-count` を明るい帯で読める色にする')
+    } else if (!復習.名前がある) {
+      ng('QR復習 … 帳面の名前(タイトル)が出ていない',
+        '帯の札は「…」で切れるので、**全文はここが受け止める**(第5.176節)')
+    } else if (復習.名前の読みやすさ < 60) {
+      ng(`QR復習 … 帳面の名前が地に埋もれている(差 ${復習.名前の読みやすさ})`,
+        '`.drill-title` を、明るい地で読める色にする')
     } else {
-      ok(`QR復習 … 地も帯も明るい(${復習.地の明るさ}・数の差 ${復習.数の読みやすさ})`)
+      ok(`QR復習 … 地も帯も明るい(${復習.地の明るさ}・名前の差 ${復習.名前の読みやすさ})`)
     }
 
     /* ② **スマホでは、単語帳の復習とまったく同じ余白**(2026-09 利用者の指定)。

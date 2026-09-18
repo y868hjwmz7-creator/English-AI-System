@@ -33,6 +33,7 @@ import {
 import Loading from './Loading.jsx'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
 import BookPick from './BookPick.jsx'
+import DrillTitle from './DrillTitle.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import FrameParts from './FrameParts.jsx'
 import ReviewStats from './ReviewStats.jsx'
@@ -641,6 +642,13 @@ export default function QrReview({
    * **1つの `bookPick` を、始める前と復習の帯の両方で使う。**
    * 書き写すと、必ず片方だけ古くなる(CLAUDE.md)。
    */
+  /**
+   * **いま開いている帳面の名前(全文)**(第5.176節)。
+   * 帯の札は「…」で切れるので、**切れない名前をここが受け止める。**
+   * 名前は `books` 1か所から引く —— 画面で書き写さない。
+   */
+  const drillTitle = <DrillTitle label={books.find((b) => b.id === book)?.label ?? ''} />
+
   const bookPick = (
     <BookPick books={books} book={book} unit="問" sub={bookSub}
               title="どの Quick Response 帳をやりますか"
@@ -721,33 +729,26 @@ export default function QrReview({
          単語帳の復習とそろう(`.focus-paper` の吹き出しと同じ考え方) */
       <section className="qr">
         {/**
-          * **冊名と「いくつ目か」は、帯から下ろした**
-          * (第5.174節・2026-09 実機・利用者の指摘)。
+          * **いま開いている帳面の名前を、全文で出す**
+          * (第5.176節・2026-09 実機・利用者の指定)。
           *
-          *   > 上部バーから内容がはみ出してしまってます。はみ出さないように変え、
-          *   > 1／30の表示や、タイトルは別の場所に移してください。
-          *   > 例えば…画面内の上の方に小さめ、またはデザイン的に映える感じの場所に
+          *   > タブが画面幅に収まるようにすると、冊のタイトルが長いものは、
+          *   > 省略されて表示されることになる。
+          *   > その分コンテンツの方にタイトルとして全文をきちんと表示する。
           *
-          * 帯は **☰ と「出しかた」の2つだけ**になった。
-          * 冊名が長いと(「自分の Quick Response 帳」)、
-          * **☰ + 冊名 + 1 / 30 + 出しかた で 390px を 41px 超えていた。**
-          *
-          * ここは**進み具合の帯のすぐ上**で、単語帳の `.wb-run`
-          * (冊名と点が並ぶところ)と**同じ場所**である。
+          * 帯の `冊名 ▾` は**押すもの**なので、幅に収まるところで
+          * 「…」に切れる。**切れた名前を、ここが受け止める。**
+          * 単語帳とまったく同じ場所・同じ形である(`drillTitle` 1か所)。
           */}
-        <div className="qrrev-head">
-          {/* **冊を替えている最中も、ここは消さない**(第5.173節)。
-              本棚のシートは `BookPick`(この中)が持っている */}
-          {bookPick}
-          {/* **替えている最中は、数を出さない。**
-              前の冊の数が一瞬だけ残ると、そこがちらついて見える */}
-          {n > 0 && (
-            <span className="qrrev-at">
-              {finished ? `${n} / ${n}` : `${at + 1} / ${n}`}
-            </span>
-          )}
-        </div>
-        {/* どこまで来たか。**終わりが見えないと続かない**(単語帳と同じ) */}
+        {drillTitle}
+        {/**
+          * **「1 / 30」はやめて、進み具合の帯にした**(第5.176節)。
+          *
+          *   > 1/30などは進捗バーにしましょう
+          *
+          * 帯はもともとここに在る。**数を消しただけ**で、
+          * 単語帳(点が並ぶ)とも「数字を出さない」で そろう。
+          */}
         <div className="qr-bar" aria-hidden="true">
           <span style={{ width: `${n ? Math.round((Math.min(at, n) / n) * 100) : 0}%` }} />
         </div>
@@ -837,18 +838,27 @@ export default function QrReview({
         onClose={stop}
         /* **左上は ☰**(第5.172節)。渡されなければ ✕ 閉じるのまま */
         onMenu={onMenu}
-        /* **帯に置くのは ☰ と「出しかた」の2つだけ**(第5.174節)。
-           冊名と「いくつ目か」は、**進み具合の帯のすぐ上**へ下ろした ——
-           4つ並べると、冊名が長いときに **390px を 41px 超えていた。**
-           `top` を渡さないので、`FocusFrame` は何も足さない */
+        /**
+         * **冊名 ▾ は帯に置く。単語帳とまったく同じ並び**
+         * (第5.176節・2026-09 実機・利用者の指定)。
+         *
+         *   > quick response 帳、ダサくなったので、単語帳と同じ仕様に
+         *   > 戻してください。…選択肢のタブをそのまま下に移すのは
+         *   > ダサいと思います。つまり、タブが画面幅に収まるようにすると、
+         *   > 冊のタイトルが長いものは、省略されて表示されることになる。
+         *   > その分コンテンツの方にタイトルとして全文をきちんと表示する。
+         *
+         * **はみ出していた本当の中身は「1 / 30」だった。**
+         * あれを進み具合の帯にすれば、帯は ☰ / 冊名 ▾ / 出しかた の3つ ——
+         * **単語帳とまったく同じ**になり、収まる。
+         * 長い冊名は**帯の中で「…」に切れてよい** ——
+         * **全文は、すぐ下にタイトルとして出す。**
+         */
+        top={bookPick}
         /* **中に入ってからも絞り込める**(2026-09 利用者の指定)。
            始める前とまったく同じ「出しかた」を、帯の右端から開く。
            **中身は書き写さない** —— `ReviewScope` の畳んだ形である */
         topEnd={(
-          /* **右端へ寄せる**(第5.174節)。☰ のとなりに並べると、
-             広い帯の左半分に2つだけ寄って落ち着かない。
-             上の帯(`AppTopbar`)と同じ「左に ☰、右に操作」にそろえる */
-          <div className="focus-top-right">
           <ReviewScope
             compact
             rows={filtered}
@@ -865,7 +875,6 @@ export default function QrReview({
           >
             <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
           </ReviewScope>
-          </div>
         )}
       >
         {body}
