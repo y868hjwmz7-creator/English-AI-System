@@ -34,6 +34,8 @@ import { join } from 'node:path'
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs'
 /** 系の数(= 人に見せる型の数)。**書き写さない**(第5.177節) */
 import { frameGroupCount } from '../src/data/sentenceFrames.js'
+/* **冊の数を書き写さない**(冊を足した日に、ここだけ古い数が残る) */
+import { RIZAP_BOOKS } from '../src/data/rizapBooks.js'
 
 const PORT = 5198
 const ROOT = new URL('..', import.meta.url).pathname
@@ -6724,12 +6726,35 @@ for (const W of [1280, 794, 453, 390, 320]) {
     await page.waitForTimeout(200)
     const r = await page.evaluate(() => {
       const cards = [...document.querySelectorAll('.card')]
+      const 見出しの = (c) => (c.querySelector('.card-title')?.textContent ?? '').trim()
+      /* ── **役目が違う束を、同じ数え方でまとめない**(第5.202節・2026-09)
+       *
+       *   RIZAP ENGLISH の教材が、**同じ `.shelf` の見た目を借りて**
+       *   3つめの束として並んだ。ところがここは画面ぜんぶを数えていたので、
+       *   **「2つ」と決め打った行が2本とも赤くなった。**
+       *   数を増やして黙らせると、**振り分けを壊しても緑**になる。
+       *   だから**束ごとに分けて、それぞれを数える。**
+       *
+       *   ・冊(単語帳 / Quick Response)… `aria-pressed` で出す / 外す
+       *   ・教材(RIZAP)… 出したら戻せないので、**印は持たない** */
+      const 教材カード = cards.find((c) => /RIZAP/.test(見出しの(c))) ?? null
+      const 冊カード = cards.filter((c) => c !== 教材カード)
+      const 中の = (root, sel) => (root ? [...root.querySelectorAll(sel)] : [])
+      const 名の = (b) => (b.querySelector('.shelf-name')?.textContent ?? '').trim()
       /* **素の冊だけ**(中に区切りがある冊は `aria-expanded` を持つ)。
          **役目が違うものを、同じ数え方でまとめない** */
-      const rows = [...document.querySelectorAll('.assignshelf .shelf-row')]
+      const rows = 冊カード.flatMap((c) => 中の(c, '.assignshelf .shelf-row'))
         .filter((x) => x.querySelector('.shelf-pick[aria-pressed]'))
       return {
         見出し: cards.map((c) => c.querySelector('.card-title')?.textContent ?? ''),
+        /* **教材の束も、冊と同じ見た目を借りているか**(第5.186節・第5.202節)。
+           同じページに3つ並ぶので、1つだけ作りが違うと考えさせる */
+        教材の形: 教材カード && 教材カード.querySelector('.assignshelf.shelf') ? 1 : 0,
+        /* **教材はどれも開ける**(UNIT をえらぶプルダウンが中にある) */
+        教材の開く: 中の(教材カード, '.shelf-pick[aria-expanded]').map(名の),
+        /* **教材の行は、出す / 外すの印を持たない**(戻す操作がここに無い)。
+           同じ印を、違う意味で使わない */
+        教材の印: 中の(教材カード, '.shelf-pick[aria-pressed], .shelf-mark').length,
         札: rows.map((x) => {
           const b = x.querySelector('button')
           return {
@@ -6743,11 +6768,11 @@ for (const W of [1280, 794, 453, 390, 320]) {
           }
         }),
         /* **開く冊は、開く合図を持つ**(押すと何が起きるか) */
-        開く: [...document.querySelectorAll('.assignshelf .shelf-pick[aria-expanded]')]
-          .map((b) => (b.querySelector('.shelf-name')?.textContent ?? '').trim()),
+        開く: 冊カード.flatMap((c) => 中の(c, '.assignshelf .shelf-pick[aria-expanded]'))
+          .map(名の),
         /* **冊のえらび方と、同じ見た目か。** `.shelf` を着ていなければ
            別の見た目になっている(「同じ仕様に」が守れていない) */
-        同じ形: document.querySelectorAll('.assignshelf.shelf').length,
+        同じ形: 冊カード.filter((c) => c.querySelector('.assignshelf.shelf')).length,
         はみ出し: Math.round(document.body.scrollWidth - document.body.clientWidth),
       }
     })
@@ -6783,6 +6808,24 @@ for (const W of [1280, 794, 453, 390, 320]) {
      業種べつ(単語帳)と Native Flow(Quick Response)の2つ */
   if (a.開く.length === 2) ok(`アサイン … 中に区切りがある冊は開ける(${a.開く.join(' / ')})`)
   else ng('アサイン … 開ける冊が2つではない', a.開く.join(' / '))
+
+  /* ── **RIZAP ENGLISH の教材**(第5.202節・利用者の指定)─────────
+   *
+   *   > 教材のアサインのページから Conversation1、2、3、
+   *   > Business Conversation 1、2 をアサインできるようにしてください。
+   *
+   *   **冊と同じ見た目を借りる**が、**役目は違う**(出したら戻せない)。
+   *   だから「同じ見た目か」と「印を持たないか」を、**両方**見る ——
+   *   片方だけだと、冊のほうへ寄せすぎても・離しすぎても緑のままになる。 */
+  if (a.教材の形 === 1) ok('アサイン … RIZAP の教材も、冊と同じ見た目(`.shelf`)')
+  else ng('アサイン … RIZAP の教材だけ、見た目が違う', `${a.教材の形} / 1`)
+  if (a.教材の開く.length === RIZAP_BOOKS.length) {
+    ok(`アサイン … RIZAP の冊は ${a.教材の開く.length} 冊とも開ける(${a.教材の開く[0]} …)`)
+  } else ng('アサイン … RIZAP の冊の数が合わない',
+    `${a.教材の開く.length} / ${RIZAP_BOOKS.length}(${a.教材の開く.join(' / ')})`)
+  /* **出す / 外すの印を、違う意味で使わない**(一度出したら戻す操作が無い) */
+  if (a.教材の印 === 0) ok('アサイン … RIZAP の教材には、出す / 外すの印を付けない')
+  else ng('アサイン … RIZAP の教材に、冊と同じ印が付いている', String(a.教材の印))
   if (a.はみ出し === 0) ok('アサイン … 390px で横にはみ出さない')
   else ng('アサイン … 横にはみ出す', `${a.はみ出し}px`)
 

@@ -63,6 +63,7 @@ import {
   TRY_RATIOS, itemOffsFrom, lastSeamFail, measureSeams,
 } from './seamFind.js'
 import { charTimesOf, spansOf, wholeMark } from './wholeAudio.js'
+import { spokenForm } from './speakText.js'
 import { markIndexAt, marksFromTimes, wordMarks } from './wordTiming.js'
 import {
   FADE_STEP, FADE_STOP, applyGain, fadeGain, isMeasured, measureClip,
@@ -556,6 +557,29 @@ export const canUseClips = () =>
  */
 const normText = (text) => String(text ?? '').replace(/\s+/g, ' ').trim()
 
+/**
+ * ============================================================================
+ * **窓口へ渡す英文**(第5.205節・2026-09 利用者の指定)。
+ *
+ *     DISPLAY TEXT  →  ttsBody()  →  SPOKEN TEXT  →  TTS  →  AUDIO
+ *
+ * 画面に出ている英文と、**声にするときの英文は別である**
+ * (`10 a.m.` → `ten A M` / `$25` → `twenty-five dollars`)。
+ * **画面の文字列は1文字も変えない** —— ここが返すのは別の文字列である。
+ *
+ * ── **鍵も、これで取る** ────────────────────────────────
+ *
+ *   置き場所は `指紋(声 | 英文)` で決まる。ここで**画面の英文のまま**
+ *   指紋を取ると、**読み方の決まりを直しても古い音が鳴り続ける**
+ *   (鍵が、音を決めているものを覆っていない状態・CLAUDE.md)。
+ *
+ *   **数字も略語も無い文は、書き換えが起きないので指紋も同じ = 0円。**
+ *   作り直しになるのは、**いま読み方が間違っている文だけ**である
+ *   (2026-09 利用者の判断「作り直す」)。
+ * ============================================================================
+ */
+const ttsBody = (text) => spokenForm(normText(text))
+
 async function fingerprint(voiceId, text) {
   const bytes = new TextEncoder().encode(`${voiceId}|${text}`)
   const hash = await window.crypto.subtle.digest('SHA-256', bytes)
@@ -715,7 +739,7 @@ async function askForClip(text, pathName, tier, rosterId, force = false) {
  */
 export async function clipUrl(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return null
-  const body = normText(text)
+  const body = ttsBody(text)
   if (!body) return null
   const voice = pathVoice(voiceId, tier)
   const key = `${tier}|${voice}|${body}`
@@ -818,7 +842,7 @@ const timesCache = new Map()
  */
 export async function clipAlignment(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return null
-  const body = normText(text)
+  const body = ttsBody(text)
   if (!body) return null
   const voice = pathVoice(voiceId, tier)
   const key = `${tier}|${voice}|${body}`
@@ -849,7 +873,7 @@ export async function clipAlignment(text, voiceId = DEFAULT_CLIP_VOICE, tier = S
 /** 「その場所には無かった」と分かったときに呼ぶ。窓口に作らせて場所を返す */
 export async function makeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return null
-  const body = normText(text)
+  const body = ttsBody(text)
   const voice = pathVoice(voiceId, tier)
   const key = `${tier}|${voice}|${body}`
   if (gaveUp.has(key)) return null
@@ -877,7 +901,7 @@ export async function makeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDA
  */
 export async function remakeClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
   if (!canUseClips()) return null
-  const body = normText(text)
+  const body = ttsBody(text)
   if (!body) return null
   const voice = pathVoice(voiceId, tier)
   const key = `${tier}|${voice}|${body}`
@@ -955,7 +979,7 @@ async function readWholeJson(url) {
  * @returns {{mark, body, voices, elevenIds}|null} 1本にできないなら null(理由は `wholeNote`)
  */
 function wholeKeyOf(texts, voiceIds) {
-  const body = (texts ?? []).map((t) => normText(t))
+  const body = (texts ?? []).map((t) => ttsBody(t))
   const voices = voiceIds ?? []
   if (body.length < 2 || voices.length !== body.length) {
     wholeNote = '本文が2つ以上ありません'
@@ -1725,10 +1749,22 @@ export async function playClip({
   alignment = null,
 } = {}) {
   if (!canUseClips()) return false
-  const body = normText(text)
-  if (!body && !srcUrl) return false
+  /* ── **2つの英文を、取り違えない**(第5.205節)────────────────
+   *
+   *   `spoken` … 窓口へ渡す・置き場所を決める(`ten A M`)
+   *   `onScreen` … **画面に出ている文字**。語の色は、こちらの位置で動かす
+   *
+   *   **`shown` という名前は使わない。** この関数の中では
+   *   すでに「いま入れてある音量」である(CLAUDE.md
+   *   「違うものに、同じ名前を付けない」)
+   *
+   *   ここを1つにすると、**光る場所が画面とずれる** ——
+   *   `$25` は画面で3文字、声では 19 文字だからである。 */
+  const spoken = ttsBody(text)
+  const onScreen = normText(text)
+  if (!spoken && !srcUrl) return false
 
-  let url = srcUrl || await clipUrl(body, voiceId, tier)
+  let url = srcUrl || await clipUrl(text, voiceId, tier)
   if (!url) return false
 
   const mine = (generation += 1)
@@ -1796,7 +1832,7 @@ export async function playClip({
     // **渡された音声が鳴らせないなら、そこで諦める**(作り直させない)
     if (srcUrl) return false
     // その場所には無かった。窓口に作らせる
-    url = await makeClip(body, voiceId, tier)
+    url = await makeClip(text, voiceId, tier)
     if (!url) return false
     if (mine !== generation) return true
     ok = await tryPlay(url)
@@ -1840,8 +1876,12 @@ export async function playClip({
        **合っているのは合計だけ**である。窓口が控えた文字ごとの時刻
        (`clipAlignment`)を渡してもらえたら、そちらをそのまま使う。
        当てはめられなければ空が返るので、**そのときは見積もりに戻る** */
-    const exact = alignment ? marksFromTimes(body, charTimesOf(alignment, body)) : []
-    const marks = exact.length ? exact : wordMarks(body, (el.duration || 0) * 1000)
+    /* **語の色は、画面の英文の位置で動かす**(`onScreen`)。
+       `alignment` は**声にした文字**の時刻表なので、
+       `charTimesOf()` が画面の英文へ当てはめ直す(第5.204節) */
+    const exact = alignment
+      ? marksFromTimes(onScreen, charTimesOf(alignment, onScreen)) : []
+    const marks = exact.length ? exact : wordMarks(onScreen, (el.duration || 0) * 1000)
     /* 鳴らし始めた場所(続きから鳴らすとき)。
        **戻したときは書き換える** — `seekClip()` を参照 */
     let from = Number(el.currentTime) || 0

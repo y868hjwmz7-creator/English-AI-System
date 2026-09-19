@@ -23,6 +23,7 @@
     "test:voice": "node scripts/check-voice-cast.mjs",
     "test:frame": "node scripts/test-frame.mjs",
     "test:shift": "node scripts/test-shift.mjs",
+    "test:speak": "node scripts/test-speak.mjs",
     "slides": "node scripts/make-frames-slides.mjs"
   },
   "dependencies": {

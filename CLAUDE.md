@@ -47,13 +47,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **声と役の性別の検証** | `npm run test:voice` |
 | **英文の「型」の見分けの検証** | `npm run test:frame` |
 | **66 の型の Quick Response の検証** | `npm run test:shift` |
+| **読み上げ用の英文への書き換えの検証** | `npm run test:speak` |
 | お手本音声の生成(Azure の鍵が必要) | `npm run audio` |
 | **英文の「型」の資料を PDF にする**(トレーナー向け) | `node scripts/make-frames-pdf.mjs` |
 | **英文の「型」のプレゼン資料を作る**(素人向け) | `npm run slides` |
 
 自動テストは `npm run test:db` / `test:chunk` / `test:audio` / `test:mp3` /
 `test:gap` / `test:play` / `test:paper` / `test:bar` / `test:voice` /
-`test:frame` / `test:shift` の11個。
+`test:frame` / `test:shift` / `test:speak` の12個。
 ユニットテストの枠組みは無く、どれも素の node / psql で走る。
 **`test:audio` は耳の代わりである**(こちらには音が聞こえない)。
 UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
@@ -396,6 +397,7 @@ CLAUDE.md が 1.08MB になり、**毎ターン読み込まれて「prompt is to
 | [`21-英文の型の見分け.md`](docs/notes/21-英文の型の見分け.md) | 66 型を決まりで見分ける・当てられなければ黙る・目的語の切れ目・名詞のかたまり・型で絞る・test:frame |
 | [`23-型シフト.md`](docs/notes/23-型シフト.md) | 66 型の Quick Response(日本語 → 英語 2,872 / 言い換え 2,585)・専用の画面もマイクも採点も廃止・**束で掛け算して型ごとの数を増やす**・型で絞る・ヒント・確かめてから出す・test:shift |
 | [`22-パタプラ風の言う練習.md`](docs/notes/22-パタプラ風の言う練習.md) | 言う番から始める・答えを隠す・チャンクで積む・Type A → B・型でまとめる・qrOrder.js |
+| [`25-読み上げ用の英文.md`](docs/notes/25-読み上げ用の英文.md) | 画面の英文と声にする英文を分ける・当てはめる順・分からないものは変えない・語の色はどちらの位置で数えるか・ここで転んだ6つ |
 | [`24-名詞句.md`](docs/notes/24-名詞句.md) | 名詞句100・副詞句50・コロケーション100(単語帳の冊)・目的語もセット・骨を固定して肉だけ変える・66 型ぜんぶに骨・席の種類・主語の性格・確かめてから出す・nophrase |
 
 ## 利用者に作業を頼むときは `docs/APPLY.md` をそのまま使う

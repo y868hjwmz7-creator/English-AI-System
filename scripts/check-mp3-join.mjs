@@ -2231,8 +2231,11 @@ function fakeMp3({
     if (!/timesCache\.delete\(key\)/.test(clips)) {
       ng('作り直したのに、古い時刻を覚えたまま')
     }
-    // ④ `playClip` が、あれば見積もらない
-    if (!/const exact = alignment \? marksFromTimes\(body, charTimesOf\(alignment, body\)\) : \[\]/
+    /* ④ `playClip` が、あれば見積もらない。
+       **数えるのは `onScreen`(画面の英文)である**(第5.205節)——
+       窓口へ渡す英文は読み替えてあるので、そちらで数えると
+       **光る場所が画面とずれる** */
+    if (!/const exact = alignment\s*\?\s*marksFromTimes\(onScreen, charTimesOf\(alignment, onScreen\)\)/
       .test(clips)) {
       ng('時刻があっても、色は見積もりのまま')
     }

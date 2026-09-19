@@ -2055,7 +2055,9 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '**先読みは `ensureClip` を通る**(2か所に書き写さない)')
   ok(/export function ensureClip[\s\S]{0,900}clipAlignment\(/.test(ac),
     '**次の段落の控えも温めておく**(段落の切れ目で待たせない)')
-  ok(ac.includes('marksFromTimes(body, charTimesOf(alignment, body))'),
+  /* **画面の英文(`onScreen`)で数える**(第5.205節)。
+     窓口へ渡す英文は読み替えてあるので、そちらでは数えない */
+  ok(ac.includes('marksFromTimes(onScreen, charTimesOf(alignment, onScreen))'),
     '`playClip` が、控えがあれば見積もらない')
 }
 

@@ -16,6 +16,7 @@
  */
 import { markIndexAt, totalWeight, weighWords, wordMarks } from './wordTiming.js'
 import { voiceLevel } from './mixVolume.js'
+import { displayAtOf, speakText } from './speakText.js'
 
 /** ブラウザが読み上げ機能に対応しているか */
 export function isSpeechSupported() {
@@ -310,9 +311,16 @@ const saveCps = (voiceName, cps) => {
  *   時間で声ごとの速さを覚える**(`saveCps`)。2回目からはその実測値で動く。
  *   合図が1回でも来たら、見積もりは即座にやめて合図に従う。
  */
-const attachWordTracking = (utterance, onWord, { text, rate = 1, voiceName = '' } = {}) => {
+const attachWordTracking = (utterance, onWord, {
+  text, rate = 1, voiceName = '', spoken = null,
+} = {}) => {
   if (!onWord) return () => {}
 
+  /* **語の色は、画面の英文の位置で動かす**(`text`)。
+     端末へ渡した英文(`spoken`)とは**長さが違う** ——
+     `$25` は画面で3文字、声では 19 文字である。
+     だから合図(`boundary`)が返す位置は、いったん画面の位置へ戻す
+     (第5.205節・`displayAtOf`)。**戻さないと、光る場所がずれていく** */
   const words = weighWords(text ?? utterance.text ?? '')
   let gotBoundary = false
   let timer = null
@@ -329,7 +337,8 @@ const attachWordTracking = (utterance, onWord, { text, rate = 1, voiceName = '' 
     // **合図が来た端末では、見積もりを使わない**
     gotBoundary = true
     stopTimer()
-    onWord({ charIndex: e.charIndex, charLength: e.charLength ?? 0 })
+    const at = spoken ? displayAtOf(spoken, e.charIndex) : e.charIndex
+    onWord({ charIndex: at, charLength: spoken ? 0 : (e.charLength ?? 0) })
   }
 
   const startEstimate = () => {
@@ -396,8 +405,12 @@ export function japaneseVoice() {
 export function speak(text, { voice, rate = 0.9, onWord } = {}) {
   if (!isSpeechSupported()) return false
   window.speechSynthesis.cancel() // 前の読み上げが残っていたら止める
-  const utterance = new SpeechSynthesisUtterance(text)
-  attachWordTracking(utterance, onWord, { text, rate, voiceName: voice?.name })
+  /* **端末の声にも、同じ書き換えを通す**(第5.205節)。
+     ここは MP3 を作れなかったときの受け皿だが、
+     **読み方の決まりを2つ持たない**(CLAUDE.md「判断は1か所に持つ」) */
+  const spoken = speakText(text)
+  const utterance = new SpeechSynthesisUtterance(spoken.text)
+  attachWordTracking(utterance, onWord, { text, rate, voiceName: voice?.name, spoken })
   utterance.lang = voice?.lang || 'en-US'
   // 声の指定が拒否される場合がある。失敗しても読み上げ自体は続けたいので、
   // ここで握りつぶして端末の既定の声に任せる。
@@ -440,9 +453,11 @@ export function speakOnce(text, { voice, rate = 0.9, onWord } = {}) {
   let settle = () => {}
   const done = new Promise((resolve) => { settle = resolve })
 
-  const utterance = new SpeechSynthesisUtterance(text)
+  /* **端末の声にも、同じ書き換えを通す**(第5.205節) */
+  const spoken = speakText(text)
+  const utterance = new SpeechSynthesisUtterance(spoken.text)
   const stopWords = attachWordTracking(utterance, onWord, {
-    text, rate, voiceName: voice?.name,
+    text, rate, voiceName: voice?.name, spoken,
   })
   utterance.lang = voice?.lang || 'en-US'
   // 声の指定が拒否される場合がある。失敗しても読み上げ自体は続けたい
