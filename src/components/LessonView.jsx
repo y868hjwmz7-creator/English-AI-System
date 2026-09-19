@@ -2023,11 +2023,18 @@ export default function LessonView({
                     </button>
                   )}
 
-                  {/* ── **文法**(0051・第5.209節)。**解答とは別のボタン**───
-                      答えを見ずに、文の組み立てだけ確かめたいことがある。
-                      **解説が無い問には出さない**(効かない操作を見せない) ——
-                      いまは本文(記事・会話)にだけ作られている */}
-                  {(grammarOf(it) ?? []).length > 0 && (
+                  {/* ── **文法**(0051・第5.209節・第5.210節)。
+                      **解答とは別のボタン** —— 答えを見ずに、
+                      文の組み立てだけ確かめたいことがある。
+
+                      **どの欄の英文を解説するかは、演習ごとに違う**
+                      (`exerciseTypes.js` の `grammarFrom` 1か所)。
+                      誤り訂正なら `answer`(直した英文)、和文英訳も
+                      `answer`、リスニングは `audio_text` である。
+                      **ここで `sec.exercise_type === '…'` と書かない。**
+
+                      **解説が無い問には出さない**(効かない操作を見せない) */}
+                  {(grammarOf(it, sec.exercise_type) ?? []).length > 0 && (
                     <button type="button" className="btn btn--small lesson-reveal"
                             aria-expanded={gramOpen(k(it, i))}
                             onClick={() => toggleGram(k(it, i))}>
@@ -2038,7 +2045,7 @@ export default function LessonView({
                   </div>
 
                   {gramOpen(k(it, i)) && (
-                    <GrammarNote sentences={grammarOf(it)} unit="文" />
+                    <GrammarNote sentences={grammarOf(it, sec.exercise_type)} unit="文" />
                   )}
 
                   {isOpen(k(it, i)) && (

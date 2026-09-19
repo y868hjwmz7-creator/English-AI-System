@@ -462,7 +462,10 @@ export default function FocusReader({
      **割った段落では、そのかけらのぶんの解説だけ**を出す。
      判断はどれも `grammarNote.js` 1か所で、画面には持たせない */
   const gramHere = grammarForPiece(
-    grammarOf(item), item.prompt_en,
+    /* **演習の種類も渡す。** どの欄を解説しているかは
+       `exerciseTypes.js` の `grammarFrom` が決める(本文なら `prompt_en`)。
+       渡し忘れると `null` が返り、文法が黙って消える */
+    grammarOf(item, section?.exercise_type), item.prompt_en,
     pieces.length > 1 ? piece?.at : null, piece?.en,
   )
   const have = { ja: Boolean(item.prompt_ja), grammar: gramHere.length > 0 }

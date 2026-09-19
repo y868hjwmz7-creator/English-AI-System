@@ -7827,6 +7827,97 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await page2.close()
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   **文法を、集中モードでない場所でも見る**(第5.209節・第5.210節)
+
+     > 文法を見るのはそもそも集中モードでない場所で見れませんか？
+     > もし変更を加えるなら全ての場所で同じようにしてください。
+
+   **源の見張り(`npm run test:play`)だけでは足りない。** あちらは
+   「`grammarOf(it, sec.exercise_type)` と書いてあるか」を見ているだけで、
+   **本当に画面に札が出るか**は分からない。
+
+   ここでいちばん見たいのは**誤り訂正**である。解説は `answer`
+   (直した英文)に付いているので、`prompt_en`(誤った文)のほうを
+   見に行くと控えと食い違い、**解説がまるごと消える。**
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 1100, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1&kind=drill`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(700)
+
+  /** その問(`data-key` ではなく英文で探す)の行と、文法のボタン */
+  const 問 = (en) => page.locator('.lesson-items > li')
+    .filter({ hasText: en }).first()
+
+  // ── **出る側①** 英文和訳。解説は `prompt_en` に付いている ──
+  const 和訳 = 問('She has just finished her report.')
+  const 和訳ボタン = 和訳.locator('button', { hasText: '文法を見る' })
+  if (await 和訳ボタン.count()) {
+    ok('文法 … 英文和訳の問に「文法を見る」が出ている')
+    await 和訳ボタン.first().click()
+    await page.waitForTimeout(300)
+    const 札 = await 和訳.locator('.gnote-part .gnote-r').allInnerTexts()
+    const 役 = 札.map((t) => t.trim().charAt(0)).join('')
+    if (役 === 'SVO') ok(`文法 … 押すと S / V / O の札が出る(${役})`)
+    else ng('文法 … 札が出ない、または役が違う', 役 || '(0個)')
+    const 眉 = (await 和訳.locator('.gnote-pat').innerText().catch(() => '')).trim()
+    if (/第3文型/.test(眉)) ok(`文法 … 文型も出ている(${眉})`)
+    else ng('文法 … 文型が出ていない', 眉 || '(無し)')
+  } else ng('文法 … 英文和訳の問に「文法を見る」が出ない')
+
+  /* ── **出ない側。** 控えの無い問にはボタンを出さない
+        (効かない操作を見せない)。**これが無いと、
+        「どの問にも出す」形に壊しても緑のまま**になる。
+        同じ1ページめにある問で見る ── */
+  const 無し = 問('They have known each other for ten years.')
+  if (await 無し.locator('button', { hasText: '文法' }).count() === 0) {
+    ok('文法 … 解説の無い問には、ボタンごと出さない')
+  } else ng('文法 … 解説が無いのに「文法を見る」が出ている')
+
+  /* ── **出る側②(ここが要)** 誤り訂正。
+        画面に出るのは**直した英文**であって、誤った文ではない。
+
+        **ページを送ってから見る。** レッスン表示はいま開いている
+        1ページだけを見せる作りで、ほかのページは `is-closed` で
+        隠れている(描いてはあるので `count()` は 1 を返す ——
+        **在るかどうかだけで見ると、押せないものを押しに行く**) ── */
+  const 送り = page.locator('.lesson-pages button[aria-label="次のページ"]')
+  await 送り.click()
+  await page.waitForTimeout(300)
+  await 送り.click()          // 1ページめ(和訳)→ 2(英訳)→ 3(誤り訂正)
+  await page.waitForTimeout(400)
+  const 誤り = 問('I have went to the office already.')
+  const 誤りボタン = 誤り.locator('button', { hasText: '文法を見る' })
+  if (await 誤りボタン.count()) {
+    ok('文法 … 誤り訂正の問にも「文法を見る」が出ている')
+    await 誤りボタン.first().click()
+    await page.waitForTimeout(300)
+    const 文 = (await 誤り.locator('.gnote-en').innerText().catch(() => ''))
+      .replace(/\s+/g, ' ').trim()
+    // 札(S / V / M)が字のあいだに混ざるので、語の有無で見る
+    if (/gone/.test(文) && !/went/.test(文)) {
+      ok('文法 … 誤り訂正は、直した英文のほうを解説している')
+    } else {
+      ng('文法 … 誤り訂正の解説が、誤った文のほうを向いている', 文 || '(空)')
+    }
+  } else ng('文法 … 誤り訂正の問に「文法を見る」が出ない')
+
+  /* ── 隠せること(**行き止まりを作らない**)。
+        **開いたそのページで見る** —— 誤り訂正のページに居るので、
+        戻らずにここで押す ── */
+  const 隠す = 誤り.locator('button', { hasText: '文法を隠す' })
+  if (await 隠す.count()) {
+    await 隠す.first().click()
+    await page.waitForTimeout(250)
+    if (await 誤り.locator('.gnote').count() === 0) ok('文法 … もう一度押すと閉じる')
+    else ng('文法 … 押しても閉じない')
+  } else ng('文法 … 開いたあとのボタンが「文法を隠す」になっていない')
+
+  await page.close()
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

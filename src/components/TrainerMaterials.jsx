@@ -33,7 +33,7 @@ import {
   isPassageSection,
 } from '../data/exerciseTypes.js'
 import { needsChunkJa } from '../lib/chunkJa.js'
-import { needsGrammar } from '../lib/grammarNote.js'
+import { grammarCost, grammarTodo } from '../lib/grammarNote.js'
 import CastChip from './CastChip.jsx'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
@@ -219,6 +219,10 @@ export default function TrainerMaterials({
   // さがす欄を開いているか。**一度決める設定は覚える**(2026-08 利用者の指定)
   const [searchOpen, setSearchOpen] = useState(loadSearchOpen)
   const [jaDone, setJaDone] = useState({})
+  /** いま文法解説を作っている教材と、その見積もり(回数・語数・金額) */
+  const [makingGram, setMakingGram] = useState(null)
+  /** 作り終えた数。**成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md) */
+  const [gramDone, setGramDone] = useState({})
 
   const [assigningId, setAssigningId] = useState(null)   // 配信先を選んでいる教材
   const [picked, setPicked] = useState([])
@@ -352,24 +356,39 @@ export default function TrainerMaterials({
     await search()   // 控えたものを画面に反映する
   }
 
-  /** 本文があって、まだ文法解説が入っていない教材か(0051) */
-  // **判断は `grammarNote.js` の `needsGrammar()` 1か所。** 画面に持たない
-  const needsGrammarIn = (m) => (m.sections ?? [])
-    .filter((sec) => isPassageSection(sec.exercise_type))
-    .flatMap((sec) => sec.items ?? [])
-    .some(needsGrammar)
+  /**
+   * まだ文法解説が入っていない教材か(0051・第5.210節)。
+   *
+   * **判断は `grammarNote.js` の `grammarTodo()` 1か所。** 画面に持たない。
+   * 以前はここで `isPassageSection` に絞っていたので、
+   * **文型ドリルには解説がどこにも作られなかった**(2026-09 利用者の指摘)。
+   * どの欄を解説するかは `exerciseTypes.js` の `grammarFrom` が決める。
+   */
+  const needsGrammarIn = (m) => grammarTodo(m.sections).length > 0
 
   /**
    * 文法解説を作って控える(0051)。
    *
    * 触るのは `material_items.grammar` の1列だけで、
    * 本文・設問・配信には触れない。
-   * **失敗したときだけ知らせる**(押していないので、報告する相手がいない)。
+   *
+   * 【**呼ぶ前に、回数と語数と金額を画面に出す**】(CLAUDE.md・第5.210節)
+   *   2026-09 利用者の指定は「作る(**裏で・金額を出して**)」である。
+   *   押していないぶん、**いくらかかったのかが見えなくなりやすい。**
+   *   だから窓口を呼ぶ前に数字を出し、終わったら**作れた数**を出す。
+   *   見積もりも `grammarTodo()` から数える —— **作る側と数える側で
+   *   同じものを見る**(数え方を2通り持たない)。
+   *
+   * 失敗したときも、その教材のところに出す(画面のいちばん下に出さない)。
    */
   const makeGrammar = async (m) => {
+    // **呼ぶ前に**画面へ出す。await の前に置くこと
+    setMakingGram({ id: m.id, ...grammarCost(grammarTodo(m.sections)) })
     const { data, error: e } = await addGrammar(m)
+    setMakingGram(null)
     if (e) { setJaDone((v) => ({ ...v, [m.id]: { ng: true, text: e } })); return }
     if (!data.made) return
+    setGramDone((v) => ({ ...v, [m.id]: data.made }))
     await search()   // 控えたものを画面に反映する
   }
 
@@ -1124,6 +1143,17 @@ export default function TrainerMaterials({
               </div>
               {makingJa === m.id && (
                 <p className="muted">区切りの訳を作っています…</p>
+              )}
+              {/* **見えない費用は管理できない**(CLAUDE.md)。
+                  裏で作るからこそ、回数と語数と金額をその場に出す */}
+              {makingGram?.id === m.id && (
+                <p className="muted">
+                  {`文法解説を作っています… ${makingGram.items} 件 / `}
+                  {`${makingGram.words} 語 / およそ ${makingGram.yen} 円`}
+                </p>
+              )}
+              {gramDone[m.id] != null && makingGram?.id !== m.id && (
+                <p className="muted">{`文法解説を ${gramDone[m.id]} 件ぶん作りました。`}</p>
               )}
               {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
                   **足りないときは、どうすればよいかまで書く** */}

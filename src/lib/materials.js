@@ -17,7 +17,7 @@ import {
 } from '../data/exerciseTypes.js'
 import { chunkPlan, needsChunkJa } from './chunkJa.js'
 /* 文法解説(SVOC と修飾要素・0051)。**判断は `grammarNote.js` 1か所** */
-import { grammarPlan, needsGrammar } from './grammarNote.js'
+import { grammarItems, grammarPlan, grammarTodo } from './grammarNote.js'
 import { supabase } from './supabase.js'
 import { askWithRetry, genCutNote, isGenCut } from './genRetry.js'
 import { copyTitleFor } from './format.js'
@@ -1326,7 +1326,7 @@ export async function generateShelfWords(job) {
 }
 
 /**
- * **できたばかりの項目に、その場で解説を入れる。**
+ * **できたばかりの教材に、その場で解説を入れる。**
  *
  * 教材を発行する2つの道(記事・会話 / 貼った原稿)から呼ばれる。
  * **同じ手順を2か所に書き写さない。**
@@ -1334,10 +1334,19 @@ export async function generateShelfWords(job) {
  * ここで失敗しても**教材は捨てない。** 解説が付かないだけで、
  * 本文も設問もそのまま使える。あとから裏で足せる(`needsGrammar`)。
  *
- * @param items 本文の項目(**この配列を直に書き換える**)
+ * 【本文だけでなく、設問にも作る】(2026-09 利用者の指定)
+ *
+ *   > 文法を見るのはそもそも集中モードでない場所で見れませんか？
+ *   > もし変更を加えるなら全ての場所で同じようにしてください。
+ *
+ *   以前ここは**本文の項目だけ**を受け取っていたので、文型ドリルには
+ *   解説がどこにも無かった。**どの欄の英文を解説するかは
+ *   `grammarItems()` 1か所**が演習ごとに決める。
+ *
+ * @param sections 教材の演習ぜんぶ(**中の項目を直に書き換える**)
  */
-export async function fillGrammar(items) {
-  const plan = grammarPlan(items ?? [])
+export async function fillGrammar(sections) {
+  const plan = grammarPlan(grammarTodo(sections))
   if (!plan.length) return ok({ made: 0, skipped: 0, usage: null })
 
   const { data, error } = await generateGrammar(
@@ -1348,10 +1357,11 @@ export async function fillGrammar(items) {
   const byNo = new Map(plan.map((x) => [x.no, x]))
   let made = 0
   for (const part of data.parts ?? []) {
+    /* **番号ではなく、控えた項目そのものに書き戻す。**
+       番号で引き直すと、解説できない項目を外したぶんだけずれる */
     const src = byNo.get(part.no)
-    const item = items[part.no - 1]
-    if (!src || !item) continue
-    item.grammar = { en: src.en, sentences: part.sentences }
+    if (!src?.item) continue
+    src.item.grammar = { en: src.en, sentences: part.sentences }
     made += 1
   }
   return ok({ made, skipped: data.skipped ?? 0, usage: data.usage ?? null })
@@ -1367,7 +1377,8 @@ export async function fillGrammar(items) {
  *   カタマリの訳(`addChunkJa`)とまったく同じ形にしてある。
  *
  * 【何が起きるか】
- *   ・本文(記事 / 会話 / 会議 / スピーチ)の段落・発言だけを対象にする
+ *   ・**解説できる英文を持つ演習すべて**を対象にする(`grammarItems()`)。
+ *     本文の段落・発言だけでなく、文型ドリルの設問も入る
  *   ・すでに解説が入っていて、英文も変わっていないものは**飛ばす**(課金しない)
  *   ・`material_items.grammar` の1列だけを書き換える。**本文には触れない**
  */
@@ -1381,19 +1392,20 @@ export async function addGrammar(material) {
       + '(教材・宿題・ゲストの情報には触れない SQL です)。')
   }
 
-  // 本文の項目だけを集める。設問には解説する本文が無い
-  const items = (material?.sections ?? [])
-    .filter((sec) => isPassageSection(sec.exercise_type))
-    .flatMap((sec) => sec.items ?? [])
-    .filter((it) => String(it.prompt_en ?? '').trim())
-  if (!items.length) return ng('この教材には本文(記事・会話)がありません')
+  /* **どの欄の英文を解説するかは `grammarItems()` 1か所。**
+     演習によって、それは `prompt_en` だったり `answer` だったり
+     `audio_text` だったりする(`exerciseTypes.js` の `grammarFrom`)。
+     **ここで `sec.exercise_type === '…'` と書かない** */
+  if (!grammarItems(material?.sections).length) {
+    return ng('この教材には、解説できる英文がありません')
+  }
 
   // **判断は `needsGrammar()` 1か所。**(無い / 英文が変わった / 数が合わない)
-  const todo = items.filter(needsGrammar)
+  const todo = grammarTodo(material?.sections)
   if (!todo.length) return ok({ made: 0, spent: null })
 
   const plan = grammarPlan(todo)
-  if (!plan.length) return ng('解説できる本文がありませんでした')
+  if (!plan.length) return ng('解説できる英文がありませんでした')
 
   const { data, error } = await generateGrammar(
     plan.map((x) => ({ no: x.no, sentences: x.sentences })),
@@ -1403,14 +1415,13 @@ export async function addGrammar(material) {
   const byNo = new Map(plan.map((x) => [x.no, x]))
   let made = 0
   for (const part of data.parts ?? []) {
+    /* **番号ではなく、控えた項目そのものへ書き戻す**(`fillGrammar` と同じ) */
     const src = byNo.get(part.no)
-    if (!src) continue
-    const item = todo[part.no - 1]
-    if (!item?.id) continue
+    if (!src?.item?.id) continue
     const { error: e } = await supabase
       .from('material_items')
       .update({ grammar: { en: src.en, sentences: part.sentences } })
-      .eq('id', item.id)
+      .eq('id', src.item.id)
     if (e) return fail(e, '解説を控えられませんでした')
     made += 1
   }

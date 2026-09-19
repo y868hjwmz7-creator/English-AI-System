@@ -209,7 +209,25 @@ const material = asSpeech ? {
   sections: [{
     id: 'sec-1', exercise_type: 'translate_en_ja', title: '英文和訳',
     items: [
-      { id: 'd-1', prompt_en: 'She has just finished her report.', answer: '彼女はちょうど報告書を書き終えた。' },
+      {
+        id: 'd-1', prompt_en: 'She has just finished her report.',
+        answer: '彼女はちょうど報告書を書き終えた。',
+        /* **英文和訳の解説は、問題文(`prompt_en`)に付く**(第5.210節)。
+           `d-2` にはわざと付けていない —— 解説が無い問に
+           「文法を見る」が出ていないことも見るためである */
+        grammar: {
+          en: 'She has just finished her report.',
+          sentences: [{
+            en: 'She has just finished her report.',
+            pattern: 'SVO',
+            parts: [
+              { t: 'She', r: 'S' }, { t: 'has just finished', r: 'V' },
+              { t: 'her report.', r: 'O' },
+            ],
+            note: '「誰が どうする 何を」の第3文型です。',
+          }],
+        },
+      },
       { id: 'd-2', prompt_en: 'They have known each other for ten years.', answer: '二人は10年来の知り合いだ。' },
       { id: 'd-3', prompt_en: 'I have never been to Osaka.', answer: '大阪へ行ったことがない。' },
     ],
@@ -226,6 +244,22 @@ const material = asSpeech ? {
         id: 'd-6', prompt_en: 'I have went to the office already.',
         answer: 'I have gone to the office already.',
         note: 'have のうしろは過去分詞。went は過去形である',
+        /* **誤り訂正の解説は、直した英文(`answer`)に付く**(第5.210節)。
+           控えの `en` も `answer` と同じ文である。
+           `prompt_en`(誤った文)のほうを見に行くと、ここが
+           食い違って**解説がまるごと消える** —— それが見張りになる */
+        grammar: {
+          en: 'I have gone to the office already.',
+          sentences: [{
+            en: 'I have gone to the office already.',
+            pattern: 'SV',
+            parts: [
+              { t: 'I', r: 'S' }, { t: 'have gone', r: 'V' },
+              { t: 'to the office', r: 'M' }, { t: 'already.', r: 'M' },
+            ],
+            note: 'have のうしろは過去分詞です。',
+          }],
+        },
       },
     ],
   }],

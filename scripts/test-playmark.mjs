@@ -3234,7 +3234,7 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
    ══════════════════════════════════════════════════════════════════ */
 {
   const {
-    PATTERNS, ROLES, VIEWS, grammarForPiece, grammarPlan,
+    PATTERNS, ROLES, VIEWS, grammarForPiece, grammarItems, grammarPlan,
     hasOtherView, needsGrammar, nextView, storedGrammar,
   } = await import('../src/lib/grammarNote.js')
 
@@ -3270,13 +3270,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '文法解説 … 文型は五文型そのまま')
 
   // ── そろっていれば、そのまま返る ──
-  ok(storedGrammar(good)?.length === 2, '文法解説 … そろっていれば返る')
-  ok(!needsGrammar(good), '文法解説 … そろっていれば作り直さない')
+  ok(storedGrammar(good, 'article')?.length === 2, '文法解説 … そろっていれば返る')
+  ok(!needsGrammar(good, 'article'), '文法解説 … そろっていれば作り直さない')
 
   // ── **英文が変わっていたら返さない**(あとから本文を直したとき) ──
-  ok(storedGrammar({ ...good, prompt_en: `${EN} And more.` }) === null,
+  ok(storedGrammar({ ...good, prompt_en: `${EN} And more.` }, 'article') === null,
     '文法解説 … 英文が変わっていたら返さない')
-  ok(needsGrammar({ ...good, prompt_en: `${EN} And more.` }),
+  ok(needsGrammar({ ...good, prompt_en: `${EN} And more.` }, 'article'),
     '文法解説 … 英文が変わっていたら作り直す')
 
   // ── **つないで元の文に戻らなければ、その項目ごと返さない** ──
@@ -3285,43 +3285,46 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      (実際にそうなった)。**飾り(M)を落として、②だけを試す** */
   const dropped = JSON.parse(JSON.stringify(good))
   dropped.grammar.sentences[0].parts.splice(3, 1)   // `last week.` を落とす
-  ok(storedGrammar(dropped) === null,
+  ok(storedGrammar(dropped, 'article') === null,
     '文法解説 … かたまりをつないで元の文に戻らなければ返さない')
 
   // ── **知らない役が混じっていたら返さない** ──
   const weird = JSON.parse(JSON.stringify(good))
   weird.grammar.sentences[1].parts[1].r = 'X'
-  ok(storedGrammar(weird) === null, '文法解説 … 知らない役が混じっていたら返さない')
+  ok(storedGrammar(weird, 'article') === null, '文法解説 … 知らない役が混じっていたら返さない')
 
   // ── **動詞が無い文は返さない**(文の解説になっていない) ──
   const noV = JSON.parse(JSON.stringify(good))
   noV.grammar.sentences[1].parts[1].r = 'M'
-  ok(storedGrammar(noV) === null, '文法解説 … 動詞が1つも無ければ返さない')
+  ok(storedGrammar(noV, 'article') === null, '文法解説 … 動詞が1つも無ければ返さない')
 
   // ── **文が1つ足りなければ返さない**(最後の1文だけ解説が無い、を防ぐ) ──
   const short = JSON.parse(JSON.stringify(good))
   short.grammar.sentences.pop()
-  ok(storedGrammar(short) === null, '文法解説 … 文が足りなければ返さない')
+  ok(storedGrammar(short, 'article') === null, '文法解説 … 文が足りなければ返さない')
 
   // ── **空白の入り方の違いだけでは落とさない** ──
   const spacey = JSON.parse(JSON.stringify(good))
   spacey.grammar.sentences[1].parts[2].t = 'tired .'
-  ok(storedGrammar(spacey)?.length === 2,
+  ok(storedGrammar(spacey, 'article')?.length === 2,
     '文法解説 … 空白の入り方の違いだけでは落とさない')
 
   // ── 窓口へ渡す一覧は、こちらで文に切って渡す ──
-  const plan = grammarPlan([{ prompt_en: EN }, { prompt_en: '' }, { prompt_en: 'Go.' }])
+  const plan = grammarPlan(grammarItems([{
+    exercise_type: 'article',
+    items: [{ prompt_en: EN }, { prompt_en: '' }, { prompt_en: 'Go.' }],
+  }]))
   ok(plan.length === 2 && plan[0].no === 1 && plan[0].sentences.length === 2,
     '文法解説 … 本文を文に切って渡し、空の項目は番号を飛ばす',
     JSON.stringify(plan.map((p) => [p.no, p.sentences.length])))
 
   // ── 割った段落では、そのかけらのぶんだけ ──
   const at = EN.indexOf('She looks')
-  const piece2 = grammarForPiece(storedGrammar(good), EN, at, EN.slice(at))
+  const piece2 = grammarForPiece(storedGrammar(good, 'article'), EN, at, EN.slice(at))
   ok(piece2.length === 1 && piece2[0].en.startsWith('She'),
     '文法解説 … 割った段落では、いま出しているかけらの文だけを出す',
     JSON.stringify(piece2.map((s) => s.en)))
-  ok(grammarForPiece(storedGrammar(good), EN, null, null).length === 2,
+  ok(grammarForPiece(storedGrammar(good, 'article'), EN, null, null).length === 2,
     '文法解説 … 割っていないときは、そのまま全部')
 
   // ── 見せ方は1つのボタンで回る。**無いものは飛ばす** ──
@@ -3363,15 +3366,23 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   const form = noComment(read('src/components/MaterialForm.jsx'))
   ok(/await fillGrammar\(/.test(form),
     '文法解説 … 教材を作るときに1回だけ作っている')
-  ok((form.match(/await fillGrammar\(/g) ?? []).length === 2,
-    '文法解説 … 記事・会話と、貼った原稿の**両方**で作っている',
+  ok((form.match(/await fillGrammar\(/g) ?? []).length === 3,
+    '文法解説 … 記事・会話と、貼った原稿と、**文型ドリル**で作っている',
     String((form.match(/await fillGrammar\(/g) ?? []).length))
-  ok(/plan\.length \+ 2 : plan\.length/.test(form),
-    '文法解説 … 段が2つ増えたぶん、帯の総数も足してある')
+  ok(/plan\.length \+ 2 : plan\.length \+ 1/.test(form),
+    '文法解説 … 段が増えたぶん、帯の総数も足してある(本文 +2 / ドリル +1)')
+  /* **本文だけに絞って渡していないこと。** `made[0].items` に戻すと、
+     文型ドリルには解説がどこにも作られない(2026-09 に踏んだ) */
+  ok(!/fillGrammar\(made\[0\]/.test(form),
+    '文法解説 … 最初の演習だけでなく、演習ぜんぶを渡している')
 
   const tm = noComment(read('src/components/TrainerMaterials.jsx'))
   ok(/needsGrammarIn\(m\)/.test(tm) && /makeGrammar\(m\)/.test(tm),
     '文法解説 … 前に作った教材は、使うときに裏で足している')
+  /* **本文に絞り直していないこと。** ここに `isPassageSection` が戻ると、
+     文型ドリルには裏からも解説が足されなくなる(2026-09 に踏んだ) */
+  ok(/const needsGrammarIn = \(m\) => grammarTodo\(m\.sections\)/.test(tm),
+    '文法解説 … 裏で足す相手も `grammarTodo()` 1か所から数えている')
   ok(/triedGrammar/.test(tm),
     '文法解説 … 1つの教材につき1回だけ(止まる条件を持たせる)')
 
@@ -3395,6 +3406,159 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '文法解説 … まとめた1つに 0051 が入っている')
   ok(/column_name = 'grammar'/.test(check),
     '文法解説 … check.sql が 0051 を見ている')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **どの欄の英文を解説するか**(第5.210節・2026-09 利用者の指摘)
+
+     > そして、文法も調べられません。…… 文法を見るのはそもそも
+     > 集中モードでない場所で見れませんか？ もし変更を加えるなら
+     > 全ての場所で同じようにしてください。
+
+   解説は**本文の `prompt_en` だけ**に作っていたので、文型ドリルを
+   開いても文法がどこにも出てこなかった。設問の英文がどの欄に入るかは
+   **演習ごとに違う**ので、`exerciseTypes.js` の `grammarFrom` に書く。
+
+   **ここで見るのは3つ。**
+     ① 書き忘れを赤くする(`answerLang` とまったく同じ形)
+     ② **出る**演習と**出ない**演習の両方を見る
+        (片方だけだと、**全部 null** にしても **全部 prompt_en** にしても緑)
+     ③ 作る側と数える側が、同じものを見ている(金額がずれない)
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n── 文法解説を作る欄(第5.210節)──')
+{
+  const {
+    grammarCost, grammarItems, grammarTextOf, grammarTodo, needsGrammar,
+  } = await import('../src/lib/grammarNote.js')
+  const { EXERCISE_TYPES, grammarSource } = await import('../src/data/exerciseTypes.js')
+
+  /* ① **書き忘れを赤くする。** `grammarFrom` を書いていない演習があれば、
+        そこは黙って解説が作られない。**足すまで赤いまま**にしておく */
+  const noFrom = EXERCISE_TYPES.filter((t) => !('grammarFrom' in t)).map((t) => t.id)
+  ok(noFrom.length === 0,
+    '解説する欄 … どの演習にも `grammarFrom` を書いてある', noFrom.join(' / '))
+
+  /* **書いた欄が、その演習の `fields` にあること。**
+     `answer` を持たない演習に `grammarFrom: 'answer'` と書いても、
+     画面には何も出ないまま**誰も気づけない** */
+  const badFrom = EXERCISE_TYPES
+    .filter((t) => t.grammarFrom && !(t.fields ?? []).includes(t.grammarFrom))
+    .map((t) => `${t.id}=${t.grammarFrom}`)
+  ok(badFrom.length === 0,
+    '解説する欄 … 書いた欄が、その演習の `fields` に実在する', badFrom.join(' / '))
+
+  /* ② **出る側。** 文型ドリルの4演習が、それぞれ正しい欄を指していること */
+  ok(grammarSource('translate_en_ja') === 'prompt_en',
+    '解説する欄 … 英文和訳は問題文(完全な英文)')
+  ok(grammarSource('translate_ja_en') === 'answer',
+    '解説する欄 … 和文英訳は解答例(問題文は日本語)')
+  ok(grammarSource('listening') === 'audio_text',
+    '解説する欄 … リスニングは聞く英文')
+  /* **誤り訂正だけは、ここを取り違えると害が大きい。**
+     `prompt_en` は**誤った文**なので、札を付けると間違った形を教える */
+  ok(grammarSource('error_correction') === 'answer',
+    '解説する欄 … 誤り訂正は、直した英文のほう(誤った文を解説しない)')
+  ok(grammarSource('article') === 'prompt_en' && grammarSource('dialogue') === 'prompt_en',
+    '解説する欄 … 本文はこれまでどおり(すでに作った解説を落とさない)')
+
+  /* ② **出ない側。** 文が無いところに作ると、**0円では済まない** */
+  ok(grammarSource('vocabulary') === null,
+    '解説する欄 … 単語は1語なので作らない')
+  ok(grammarSource('vocab_note') === null && grammarSource('culture_note') === null,
+    '解説する欄 … 語句と背景も作らない')
+  ok(grammarSource('fill_blank') === null,
+    '解説する欄 … 穴埋めは（　　）が開いたままなので作らない')
+  ok(grammarSource(null) === null && grammarSource('nope') === null,
+    '解説する欄 … 種類が分からないうちは作らない(既定は作らない)')
+
+  /* **全部 null でも、全部 prompt_en でも緑にならないこと。**
+     どちらかに倒しても通る見張りは、何も守らない */
+  const froms = EXERCISE_TYPES.map((t) => t.grammarFrom)
+  ok(froms.some((f) => f) && froms.some((f) => !f),
+    '解説する欄 … 作る演習と、作らない演習の両方がある')
+  ok(new Set(froms.filter(Boolean)).size >= 3,
+    '解説する欄 … 指している欄が2つ以上ある(全部 prompt_en ではない)',
+    [...new Set(froms.filter(Boolean))].join(' / '))
+
+  // ── 項目から英文を取り出す ──
+  const bad = { prompt_en: 'He go to school.', answer: 'He goes to school.' }
+  ok(grammarTextOf(bad, 'error_correction') === 'He goes to school.',
+    '解説する欄 … 誤り訂正の項目からは、直した英文が出る')
+  ok(grammarTextOf(bad, 'vocabulary') === '',
+    '解説する欄 … 作らない演習からは、何も出ない')
+
+  /* ③ **作る側と数える側が、同じものを見ている。**
+        別々に数えると、画面に出した金額と実際の課金が食い違う */
+  const SEC = [
+    { exercise_type: 'translate_en_ja', items: [{ prompt_en: 'She looks tired.' }] },
+    { exercise_type: 'error_correction', items: [bad] },
+    // **作らない演習も混ぜておく。** 混ぜないと「全部数える」形でも緑になる
+    { exercise_type: 'vocabulary', items: [{ prompt_en: 'negotiate' }] },
+    { exercise_type: 'vocab_note', items: [{ prompt_en: 'a packed floor' }] },
+  ]
+  ok(grammarItems(SEC).length === 2,
+    '解説する欄 … 教材ぜんぶから、解説できる項目だけを集める',
+    String(grammarItems(SEC).length))
+  ok(grammarItems(SEC).every((x) => needsGrammar(x.item, x.type))
+    && grammarTodo(SEC).length === 2,
+  '解説する欄 … まだ解説の無いものが、そのまま作る相手になる')
+
+  /* **控えが入っているものは、二度作らない**(二度課金しない) */
+  const doneSec = JSON.parse(JSON.stringify(SEC))
+  doneSec[0].items[0].grammar = {
+    en: 'She looks tired.',
+    sentences: [{
+      en: 'She looks tired.',
+      pattern: 'SVC',
+      parts: [{ t: 'She', r: 'S' }, { t: 'looks', r: 'V' }, { t: 'tired.', r: 'C' }],
+      note: '',
+    }],
+  }
+  ok(grammarTodo(doneSec).length === 1,
+    '解説する欄 … すでに控えがあるものは作り直さない(課金しない)',
+    String(grammarTodo(doneSec).length))
+
+  // ── 金額 ──
+  const cost = grammarCost(grammarTodo(SEC))
+  ok(cost.items === 2 && cost.sentences === 2,
+    '費用 … 何件・何文を作るのかを数えている', JSON.stringify(cost))
+  ok(cost.words === 3 + 4,
+    '費用 … 語数も数えている(解説する側の英文で数える)', String(cost.words))
+  /* **値を書き写さない。性質で見る**(CLAUDE.md)。
+     文が増えれば必ず増え、0件なら必ず 0円である */
+  ok(cost.yen > 0, '費用 … 作るものがあれば、0円にならない', String(cost.yen))
+  ok(grammarCost([]).yen === 0 && grammarCost([]).items === 0,
+    '費用 … 作るものが無ければ 0円(呼ばないので土台もかからない)')
+  ok(grammarCost(grammarTodo([...SEC, ...SEC])).yen > cost.yen,
+    '費用 … 文が増えれば、金額も増える')
+
+  /* **画面が本当に出しているか。** 裏で作るからこそ、
+     出していなければ**誰にも見えない**(CLAUDE.md「見えない費用」) */
+  const read2 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+  const tm2 = noC(read2('src/components/TrainerMaterials.jsx'))
+  ok(/grammarCost\(grammarTodo\(m\.sections\)\)/.test(tm2),
+    '費用 … 見積もりも `grammarTodo()` から数えている(数え方を2通り持たない)')
+  ok(/およそ \$\{makingGram\.yen\} 円/.test(tm2) && /\$\{makingGram\.words\} 語/.test(tm2),
+    '費用 … 回数と語数と金額を、画面に出している')
+  /* **呼ぶ前に出していること。** `await` のあとに置くと、
+     終わってから一瞬だけ出て消える */
+  const before = tm2.indexOf('setMakingGram({ id: m.id')
+  const call = tm2.indexOf('await addGrammar(m)')
+  ok(before > 0 && call > before,
+    '費用 … 窓口を呼ぶ**前に**画面へ出している')
+  ok(/setGramDone/.test(tm2),
+    '費用 … 作り終えた数も出す(成功と失敗を同じ見た目で終わらせない)')
+
+  /* 出す側 —— レッスン表示も演習の種類を渡していること。
+     渡し忘れると `null` が返り、**文法が黙って消える**(2026-09) */
+  const lv = noC(read2('src/components/LessonView.jsx'))
+  ok((lv.match(/grammarOf\(it, sec\.exercise_type\)/g) ?? []).length === 2,
+    '解説する欄 … レッスン表示が、演習の種類も渡している',
+    String((lv.match(/grammarOf\(it, sec\.exercise_type\)/g) ?? []).length))
+  const fr = noC(read2('src/components/FocusReader.jsx'))
+  ok(/grammarOf\(item, section\?\.exercise_type\)/.test(fr),
+    '解説する欄 … 集中モードも、演習の種類を渡している')
 }
 
 

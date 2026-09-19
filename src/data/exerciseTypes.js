@@ -10,6 +10,9 @@
  * audioFrom … お手本音声を作る元にする欄。null なら音声を作らない。
  * answerLang … **`answer` に入るのが英語か日本語か。**
  *   `answer` を持つ演習は、必ずどちらかを書く(`answerHasAudio()` の項)。
+ * grammarFrom … **文法解説(SVOC)を作る元にする欄。** null なら作らない。
+ *   **どの演習にも必ず書く**(`grammarSource()` の項)。書き忘れると
+ *   `npm run test:play` が赤くなる —— `answerLang` とまったく同じ形である。
  */
 /* **本文の呼び名**(記事 / 会話 / 会議 / スピーチ)。
    `sectionLabel()` で使う。**種類の一覧は持たない**(あちらが1か所) */
@@ -20,6 +23,8 @@ export const EXERCISE_TYPES = [
     id: 'translate_en_ja', label: '英文和訳',
     instruction: '次の英文を日本語に訳しなさい。',
     fields: ['prompt_en', 'answer'], audioFrom: 'prompt_en',
+    /* 問題文が**完全な英文**である。骨組みを見せるのにいちばん向く */
+    grammarFrom: 'prompt_en',
     /* **`answer` に入るのは和訳(日本語)である。**
        だから解答に読み上げを付けない(`answerHasAudio()`)。
        2026-09 利用者の指定 —— 実機の写真では、緑の解答の枠
@@ -48,6 +53,11 @@ export const EXERCISE_TYPES = [
     id: 'error_correction', label: '誤り訂正',
     instruction: '次の英文には誤りが1か所あります。見つけて直しなさい。',
     fields: ['prompt_en', 'answer', 'note'], audioFrom: null,
+    /* **誤った文を解説しない。** `prompt_en` は誤りを含む文なので、
+       そこに「これが S で、これが V で」と札を付けると、
+       **間違った形を覚えさせる。** 解説するのは `answer`(直した英文)である。
+       音声を `answer` にだけ付けてあるのと、まったく同じ理由である */
+    grammarFrom: 'answer',
     /* `answer` は**直した英文まるごと**なので英語である。
        **問題文には音を付けないが、解答には付く** —— あちらは
        誤った文しかなく手本にできないのに対し、こちらは
@@ -63,6 +73,11 @@ export const EXERCISE_TYPES = [
     id: 'fill_blank', label: '穴埋め',
     instruction: 'カッコ内の語を使って文を完成させなさい。',
     fields: ['prompt_en', 'hint', 'answer'], audioFrom: null,
+    /* **解説できる英文が、どこにも無い。**
+       `prompt_en` は（　　　）が開いたままで文になっておらず、
+       `answer` は空欄に入る語1つである。**当てずっぽうで埋めない**
+       (埋めた文を作ると、解説と画面の英文が食い違う) */
+    grammarFrom: null,
     answerLang: 'en',
     hideAnswerFromLearner: true,
   },
@@ -70,6 +85,8 @@ export const EXERCISE_TYPES = [
     id: 'translate_ja_en', label: '和文英訳',
     instruction: '次の日本語を英語にしなさい。',
     fields: ['prompt_ja', 'answer', 'answer_alt'], audioFrom: 'answer',
+    /* 英語は解答例の側にしかない。**音声と同じ欄**である */
+    grammarFrom: 'answer',
     answerLang: 'en',
     hideAnswerFromLearner: true,
   },
@@ -77,6 +94,8 @@ export const EXERCISE_TYPES = [
     id: 'listening', label: 'リスニング + 理解',
     instruction: '英文は見ずに聞くこと。聞いたあとの質問に答えなさい。',
     fields: ['audio_text', 'question', 'answer'], audioFrom: 'audio_text',
+    /* **聞く英文そのもの**を解説する。設問や解答より、こちらが本体である */
+    grammarFrom: 'audio_text',
     answerLang: 'en',
     hideAnswerFromLearner: true, hidePromptFromLearner: true,
   },
@@ -92,12 +111,14 @@ export const EXERCISE_TYPES = [
     id: 'article', label: '記事',
     instruction: '記事を読んでください。声に出す練習は、下のボタンで切り替えられます。',
     fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
+    grammarFrom: 'prompt_en',
     isPassage: true,
   },
   {
     id: 'dialogue', label: '会話',
     instruction: '会話を読んでください。役を決めて声に出すと効果が上がります。',
     fields: ['speaker', 'prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
+    grammarFrom: 'prompt_en',
     isPassage: true,
   },
   {
@@ -115,6 +136,11 @@ export const EXERCISE_TYPES = [
     // 本文を理解できていたのかどうかが確かめられなかった。
     // **0035 を貼る前に作った教材には入っていない**(訳が出ないだけ)。
     fields: ['question', 'question_ja', 'answer', 'answer_ja'], audioFrom: 'question',
+    /* **解答の側を解説する。** 設問は疑問文で語順が入れ替わっており、
+       五文型の骨組みがいちばん見えにくい形である。
+       解答は本文の内容をそのまま言い直した平叙文なので、
+       「誰が どうする 何を」がそのまま出る */
+    grammarFrom: 'answer',
     /* **解答は英語である**(訳は `answer_ja` に別に入っている)。
        だから読み上げが付く —— これは 0035 の利用者の指定そのもので、
        「音も聞けるように」と言われた場所である */
@@ -138,6 +164,8 @@ export const EXERCISE_TYPES = [
     id: 'discussion', label: 'ディスカッション',
     instruction: '本文をきっかけに、自分の考えを英語で話してみてください。正解はありません。',
     fields: ['question', 'note'], audioFrom: 'question',
+    /* 英語は設問にしかない(`note` は日本語の手がかり) */
+    grammarFrom: 'question',
   },
   /*
    * **想定される質問**(2026-09 利用者の指定)。
@@ -168,11 +196,16 @@ export const EXERCISE_TYPES = [
     id: 'audience_qa', label: '想定される質問',
     instruction: 'スピーチのあと、聴衆から来そうな質問です。声に出して答えてみてください。',
     fields: ['question', 'question_ja', 'note'], audioFrom: 'question',
+    /* ディスカッションと同じ。英語は設問にしかない */
+    grammarFrom: 'question',
   },
   {
     id: 'vocab_note', label: '本文に出た語句',
     instruction: '本文に出てきた語句です。意味と使い方を確かめてください。',
     fields: ['prompt_en', 'prompt_ja', 'note'], audioFrom: 'prompt_en',
+    /* **語句であって、文ではない。** `departure` や `book a seat` に
+       S も V も O も無い。意味は語を触れば出る(0円・控えから読む) */
+    grammarFrom: null,
   },
   /**
    * **文化の背景**(0063・2026-09 利用者の指定)。
@@ -203,6 +236,8 @@ export const EXERCISE_TYPES = [
     id: 'culture_note', label: '文化の背景',
     instruction: 'なぜそう言うのか、日本と何が違うのかです。読んでおいてください。',
     fields: ['prompt_en', 'prompt_ja', 'note'], audioFrom: null,
+    /* 中身は日本語である(`prompt_en` は見出しの語句だけ) */
+    grammarFrom: null,
   },
 
   // ── 旧「長文」で使っていたもの ────────────────────────────
@@ -211,28 +246,42 @@ export const EXERCISE_TYPES = [
     id: 'read_aloud', label: '音読',
     instruction: 'お手本を聞いてから音読してください。',
     fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
+    grammarFrom: 'prompt_en',
   },
   {
     id: 'overlapping', label: 'オーバーラッピング',
     instruction: 'お手本に重ねて読んでください。',
     fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
+    grammarFrom: 'prompt_en',
   },
   {
     id: 'shadowing', label: 'シャドーイング',
     instruction: 'お手本を追いかけて声に出してください。',
     fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
+    grammarFrom: 'prompt_en',
   },
   {
     id: 'repeating', label: 'リピーティング',
     instruction: 'お手本を聞いてから、1文ずつ繰り返してください。',
     fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
+    grammarFrom: 'prompt_en',
   },
   // 単語・フレーズには**発音記号を入れる**(0020、2026-08 利用者の指定)。
   // 発音の練習に使う教材なのに、どう読むのかが書いていなかった
+  /* **単語に SVOC は無い。** 窓口の指示が「prompt_en は1語」と決めており、
+     辞書の見出し語(原形・単数)だけが入る。文ではないので解説を作らない。
+     語の意味は触れば出る(`word_glosses` の控えを読むだけ・0円) */
   { id: 'vocabulary', label: '単語', instruction: '意味を覚えてください。',
-    fields: ['prompt_en', 'phonetic', 'prompt_ja'], audioFrom: 'prompt_en' },
+    fields: ['prompt_en', 'phonetic', 'prompt_ja'], audioFrom: 'prompt_en',
+    grammarFrom: null },
+  /* **フレーズには骨組みがある。** 窓口の指示が形を3つに絞っており
+     (動詞から始まるかたまり / 名詞のかたまり / 決まり文句)、
+     どれも「どこまでが1つのかたまりか」を札で見せられる。
+     `read the room` が [read = V] [the room = O] と出ると、
+     単語の寄せ集めではないことがそのまま分かる */
   { id: 'phrase', label: 'フレーズ', instruction: '場面ごと覚えてください。',
-    fields: ['prompt_en', 'phonetic', 'prompt_ja'], audioFrom: 'prompt_en' },
+    fields: ['prompt_en', 'phonetic', 'prompt_ja'], audioFrom: 'prompt_en',
+    grammarFrom: 'prompt_en' },
 ]
 
 export const exerciseType = (id) => EXERCISE_TYPES.find((t) => t.id === id)
@@ -567,6 +616,47 @@ export const noteIsAnswer = (typeId) => {
  * **既定は「出さない」。** 種類が分からないうちは鳴らさない。
  */
 export const answerHasAudio = (typeId) => exerciseType(typeId)?.answerLang === 'en'
+
+/**
+ * **文法解説(SVOC)を作る元にする欄。** 無ければ `null`。
+ *
+ * 【なぜ欄で見分けられないか】(2026-09 利用者の指摘)
+ *
+ *   > そして、文法も調べられません。…… 文法を見るのはそもそも
+ *   > 集中モードでない場所で見れませんか？
+ *
+ *   解説は**本文(記事・会話)の `prompt_en` だけ**に作っていた。
+ *   だから文型ドリルを開いても、どこにも文法が出てこなかった。
+ *
+ *   **では設問の英文はどこにあるか** —— これが演習ごとに違う。
+ *
+ *   | 演習 | 解説する英文 | なぜ |
+ *   |---|---|---|
+ *   | 英文和訳 | `prompt_en` | 問題文が完全な英文 |
+ *   | 誤り訂正 | `answer` | **誤った文を解説しない** |
+ *   | 和文英訳 | `answer` | 問題文は日本語 |
+ *   | リスニング | `audio_text` | 聞く英文が本体 |
+ *   | 内容の理解 | `answer` | 設問は疑問文で骨組みが見えにくい |
+ *
+ *   `fields` からは当てられない(英文和訳と誤り訂正は**どちらも
+ *   `prompt_en` + `answer`** なのに、解説する側が逆である)。
+ *   `audioFrom` でも当てられない —— 誤り訂正は `null` だが、
+ *   直した英文は解説できる。**だから書く。**
+ *
+ * 【書き忘れを赤くする】
+ *   `answerLang` とまったく同じ形にしてある。**足すまで赤いまま**なので、
+ *   演習を足す人は必ず1回、その演習に解説できる英文があるかを
+ *   自分の目で決めることになる(`npm run test:play`)。
+ *
+ * 【判断はここ1か所】
+ *   解説を作る側(`fillGrammar` / `addGrammar`)と、出す側
+ *   (`LessonView` / `FocusReader`)と、数える側(費用の見積もり)で
+ *   **同じものを見る。** 書き写すと、作った先と読む先が食い違って
+ *   **作ったのに出ない**(= 二度課金される)。
+ *
+ * **既定は `null`。** 種類が分からないうちは作らない(課金しない)。
+ */
+export const grammarSource = (typeId) => exerciseType(typeId)?.grammarFrom ?? null
 
 /**
  * **画面に出す演習の名前。**

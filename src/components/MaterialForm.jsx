@@ -790,7 +790,10 @@ export default function MaterialForm({
        あとから「セッションで使う」で裏から足せる(`needsGrammar`) */
     if (!cancelled()) {
       step(plan.length + 1, '文法解説')
-      const { error: gError } = await fillGrammar(made[0].items)
+      /* **演習ぜんぶを渡す**(2026-09 利用者の指定)。
+         以前は `made[0].items`(本文だけ)だった。
+         どの欄を解説するかは `grammarItems()` が演習ごとに決める */
+      const { error: gError } = await fillGrammar(made)
       // **黙って落とさない。** 何が足りなかったのかは残しておく
       if (gError) console.warn(`文法解説を作れませんでした: ${gError}`)
     }
@@ -982,13 +985,14 @@ export default function MaterialForm({
     // 本文も設問もそのまま使える。あとから裏で足せる(`needsGrammar`)。
     if (!cancelled()) {
       step(plan.length + 1, '文法解説')
-      const { data: gr, error: gError } = await fillGrammar(made[0]?.items ?? [])
+      // **演習ぜんぶを渡す**(すぐ上の道と同じ。本文だけに絞らない)
+      const { data: gr, error: gError } = await fillGrammar(made)
       if (gError) {
         // **黙って落とさない。** 何が足りなかったのかは残しておく
         console.warn(`文法解説を作れませんでした: ${gError}`)
       } else {
         if (gr?.skipped) {
-          console.warn(`文法解説が ${gr.skipped} 段落ぶん足りません`
+          console.warn(`文法解説が ${gr.skipped} 件ぶん足りません`
             + '(セッションで使うときに、裏で作り直します)')
         }
         spent.input += gr?.usage?.input ?? 0
@@ -1119,6 +1123,42 @@ export default function MaterialForm({
       })
     }
 
+    /* ── 文法解説(SVOC と修飾要素・0051)──────────────────
+     *
+     * **文型ドリルにも作る**(2026-09 利用者の指定)。
+     *
+     *   > そして、文法も調べられません。…… 文法を見るのはそもそも
+     *   > 集中モードでない場所で見れませんか？
+     *
+     * ここに1行も無かったので、**文型ドリルには解説がどこにも無かった。**
+     * 本文を作る2つの道(`generatePassage` / `generateFromScript`)には
+     * 入っていたのに、ドリルの道だけ抜けていた。
+     *
+     * **作る時点で1回だけ作る。** 開くたびに作ると、同じ費用が
+     * ゲストの人数 × 開いた回数だけかかる(本文のときと同じ)。
+     * ここで失敗しても**教材は捨てない。** 解説が付かないだけで、
+     * 設問はそのまま使える。あとから裏で足せる(`needsGrammar`)。
+     *
+     * **単語(`vocabulary`)には作らない** —— `grammarFrom` が `null` で、
+     * `fillGrammar()` が窓口を1回も呼ばずに戻る(**0円**)。
+     */
+    if (!cancelled()) {
+      step(plan.length, '文法解説')
+      const { data: gr, error: gError } = await fillGrammar(made)
+      if (gError) {
+        // **黙って落とさない。** 何が足りなかったのかは残しておく
+        console.warn(`文法解説を作れませんでした: ${gError}`)
+      } else {
+        if (gr?.skipped) {
+          console.warn(`文法解説が ${gr.skipped} 件ぶん足りません`
+            + '(セッションで使うときに、裏で作り直します)')
+        }
+        spent.input += gr?.usage?.input ?? 0
+        spent.output += gr?.usage?.output ?? 0
+        spent.cacheRead += gr?.usage?.cacheRead ?? 0
+      }
+    }
+
     return {
       made, spent, headline: null, headlineJa: null, teachingPoint: point,
       dropped: droppedCount, short: shortCount, notes, warn,
@@ -1202,8 +1242,10 @@ export default function MaterialForm({
       title: kindLabel(kind),
       /* 本文のときは、そのあとに**カタマリごとの訳(0021)と
          文法解説(0051)**の2段が続く。**足したらここも足す** ——
-         足さないと、帯が 100% になったあとも動き続ける */
-      total: isPassageKind(kind) ? plan.length + 2 : plan.length,
+         足さないと、帯が 100% になったあとも動き続ける。
+         **ドリルにも文法解説の1段が付いた**(2026-09)。
+         カタマリごとの訳は本文にしか無いので、こちらは +1 である */
+      total: isPassageKind(kind) ? plan.length + 2 : plan.length + 1,
       run: (ctl) => (isPassageKind(kind) ? generatePassage(ctl) : generateDrill(ctl)),
     })
     if (!started) {

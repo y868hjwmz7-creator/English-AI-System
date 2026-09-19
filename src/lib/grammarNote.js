@@ -33,6 +33,7 @@
  *   **素の node で一度も走らせられない**(`playMark.js` と同じ考え方)。
  *   算段だけをここに置けば `npm run test:play` で数字を見られる。
  */
+import { grammarSource } from '../data/exerciseTypes.js'
 import { splitEnSentences } from './sentencePair.js'
 
 /**
@@ -83,22 +84,121 @@ const norm = (text) => String(text ?? '').replace(/\s+/g, ' ').trim()
 const tight = (text) => String(text ?? '').replace(/\s+/g, '')
 
 /**
+ * **その項目の、解説する英文。** 無ければ空文字。
+ *
+ * 【なぜ項目だけでは決まらないか】(2026-09 利用者の指摘)
+ *
+ *   > そして、文法も調べられません。
+ *
+ *   以前ここは `item.prompt_en` を直に見ていた。だから解説は
+ *   **本文(記事・会話)にしか付かず**、文型ドリルを開いても
+ *   文法はどこにも出てこなかった。
+ *
+ *   ところが**設問の英文がどの欄に入るかは、演習ごとに違う。**
+ *   誤り訂正の `prompt_en` は**誤った文**なので、そこを解説すると
+ *   間違った形を教えることになる。和文英訳の `prompt_en` は無く、
+ *   英語は `answer` にしかない。
+ *
+ *   **その対応は `exerciseTypes.js` の `grammarFrom` 1か所に書いてある。**
+ *   ここでも画面でも `type === '…'` と書かない。
+ *
+ * @param item 教材の項目
+ * @param typeId 演習の種類(`sec.exercise_type`)
+ */
+export const grammarTextOf = (item, typeId) => {
+  const from = grammarSource(typeId)
+  return from ? String(item?.[from] ?? '').trim() : ''
+}
+
+/**
+ * 教材ぜんぶから、解説できる項目を集める。
+ *
+ * **作る側と数える側で、同じものを見る**(CLAUDE.md
+ * 「数え方を2通り持たない」)。金額の見積もりもここから数える。
+ *
+ * @param sections `material.sections`
+ * @returns {{item: object, type: string}[]}
+ */
+export const grammarItems = (sections) => (sections ?? [])
+  .flatMap((sec) => (sec?.items ?? [])
+    .map((it) => ({ item: it, type: sec?.exercise_type })))
+  .filter((x) => grammarTextOf(x.item, x.type))
+
+/**
+ * **これから作る相手だけ。**(まだ無い / 英文が変わった / 数が合わない)
+ *
+ * `addGrammar()` が呼ぶものと、画面が金額を見積もるものを
+ * **同じ関数**にしてある。別々に数えると、出した金額と
+ * 実際に呼ぶ回数が食い違う。
+ */
+export const grammarTodo = (sections) =>
+  grammarItems(sections).filter((x) => needsGrammar(x.item, x.type))
+
+/**
  * 教材の項目から、解説を作らせる一覧を組み立てる。
  *
- * **1項目(段落 / 発言)= 1件。** 文はこちらで切って渡す。
+ * **1項目(段落 / 発言 / 1問)= 1件。** 文はこちらで切って渡す。
  * 窓口に切らせると、**数が合っているかを確かめる術が無くなる。**
  *
- * @param {{prompt_en?: string}[]} items 本文の項目
- * @returns {{no: number, en: string, sentences: string[]}[]}
+ * @param list `grammarItems()` / `grammarTodo()` が返す組
+ * @returns {{no: number, item: object, en: string, sentences: string[]}[]}
  */
-export function grammarPlan(items) {
-  return (items ?? [])
-    .map((it, n) => ({
-      no: n + 1,
-      en: norm(it?.prompt_en),
-      sentences: splitEnSentences(it?.prompt_en),
-    }))
+export function grammarPlan(list) {
+  return (list ?? [])
+    .map((x, n) => {
+      const en = grammarTextOf(x?.item, x?.type)
+      return { no: n + 1, item: x?.item, en: norm(en), sentences: splitEnSentences(en) }
+    })
     .filter((p) => p.sentences.length > 0)
+}
+
+/* ── **AI を呼ぶ前に、回数と語数と金額を画面に出す**(CLAUDE.md)────
+ *
+ * 解説は**裏で作る**(2026-09 利用者の指定「作る(裏で・金額を出して)」)。
+ * 押していないぶん、**いくらかかったのかが見えなくなりやすい。**
+ * だから始めた時点で数字を出す。
+ *
+ * 【どう見積もっているか】
+ *   Claude Sonnet 5(入力 $2 / 出力 $10・100万トークン)、1ドル 150 円。
+ *   ・1回ごとの土台(指示文 約1,400トークン)…… およそ 0.4 円
+ *   ・1文ごと(入力 約30 + 出力 約120トークン)… およそ 0.2 円
+ *   40 問の文型ドリルなら、1文ずつとして **およそ 8 円**である。
+ *
+ * **値を書き写さない。** 画面は `grammarCost()` が返したものを出すだけで、
+ * 掛け算を持たない。
+ * ── */
+
+/** 窓口を1回呼ぶたびの土台(指示文)ぶん(円) */
+export const GRAMMAR_CALL_YEN = 0.4
+/** 1文あたり(円) */
+export const GRAMMAR_SENTENCE_YEN = 0.2
+
+/**
+ * これだけ作ると、いくらかかるか。
+ *
+ * **0 件のときは 0 円を返す**(呼ばないので、土台もかからない)。
+ * 数えられなかったのではなく、本当に 0 である
+ * (CLAUDE.md「0 と `null` を取り違えない」)。
+ *
+ * @param list `grammarTodo()` が返す組
+ * @returns {{items: number, sentences: number, words: number, yen: number}}
+ */
+export function grammarCost(list) {
+  const plan = grammarPlan(list)
+  const sentences = plan.reduce((n, p) => n + p.sentences.length, 0)
+  const words = plan.reduce(
+    (n, p) => n + p.en.split(/\s+/).filter(Boolean).length, 0,
+  )
+  const raw = plan.length
+    ? GRAMMAR_CALL_YEN + GRAMMAR_SENTENCE_YEN * sentences
+    : 0
+  return {
+    items: plan.length,
+    sentences,
+    words,
+    // 小数1桁まで。**切り上げない** —— 実際より高く見せても嘘になる
+    yen: Math.round(raw * 10) / 10,
+  }
 }
 
 /**
@@ -145,10 +245,12 @@ function cleanSentence(raw) {
  *
  * @returns {{en: string, pattern: string, parts: {t: string, r: string}[], note: string}[]|null}
  */
-export function storedGrammar(item) {
+export function storedGrammar(item, typeId) {
+  const en = grammarTextOf(item, typeId)
+  if (!en) return null
   const g = item?.grammar
   if (!g || typeof g !== 'object') return null
-  if (norm(g.en) !== norm(item?.prompt_en)) return null
+  if (norm(g.en) !== norm(en)) return null
   const raw = Array.isArray(g.sentences) ? g.sentences : null
   if (!raw?.length) return null
 
@@ -166,7 +268,7 @@ export function storedGrammar(item) {
      (`ABBREVIATIONS`)を直すと文の数が変わるので、数え直すと
      **すでに作った解説が丸ごと出なくなる**(カタマリの訳で
      一度踏んだ穴。だから `chunks.parts` を控えている)。 */
-  if (tight(out.map((s) => s.en).join(' ')) !== tight(item?.prompt_en)) return null
+  if (tight(out.map((s) => s.en).join(' ')) !== tight(en)) return null
   return out
 }
 
@@ -181,13 +283,19 @@ export function storedGrammar(item) {
  * 文の切り方はこちらの決まりだが、控えた文そのものを持っているので、
  * 決まりを変えてもずれない。**数え直さないから、作り直しも要らない。**
  */
-export function needsGrammar(item) {
-  if (!String(item?.prompt_en ?? '').trim()) return false
-  return !storedGrammar(item)
+export function needsGrammar(item, typeId) {
+  if (!grammarTextOf(item, typeId)) return false
+  return !storedGrammar(item, typeId)
 }
 
-/** 画面から呼ぶ入口。項目を渡すと、解説か null が返る */
-export const grammarOf = (item) => storedGrammar(item)
+/**
+ * 画面から呼ぶ入口。項目と演習の種類を渡すと、解説か null が返る。
+ *
+ * **種類を渡し忘れると `null` が返る**(`grammarSource()` の既定が
+ * `null` のため)。黙って `prompt_en` を見に行かせない —— 渡し忘れに
+ * 気づかないまま、**誤り訂正の誤った文に札が付く**ほうが害が大きい。
+ */
+export const grammarOf = (item, typeId) => storedGrammar(item, typeId)
 
 /* ══════════════════════════════════════════════════════════════
  * 集中モードの「見せ方」— 英語 / 訳 / 文法
@@ -284,7 +392,10 @@ export function grammarForPiece(sentences, fullText, at, pieceText) {
  * 呼ぶ側が「まだ 0 件」と「本文が無い」を見分けられるよう、
  * 分母も一緒に返す。
  */
-export function grammarTally(items) {
-  const list = (items ?? []).filter((it) => String(it?.prompt_en ?? '').trim())
-  return { total: list.length, done: list.filter((it) => storedGrammar(it)).length }
+export function grammarTally(sections) {
+  const list = grammarItems(sections)
+  return {
+    total: list.length,
+    done: list.filter((x) => storedGrammar(x.item, x.type)).length,
+  }
 }
