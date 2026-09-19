@@ -6172,9 +6172,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
       return {
         数: 欄.length,
         見える: 欄.filter((l) => l.checkVisibility?.() ?? true).length,
-        /* **`subject` の入れ物は、画面ぜんぶで1つだけ。**
-           2つあると、どちらに書いたかで結果が変わる */
-        入れ物: document.querySelectorAll('label.field input[type="text"]').length,
+        /* **1行ではなく、書ける箱であること**(第5.213節)。
+           1行だと、注文を2つ3つ書いた先から左へ流れて消える */
+        箱: 欄.filter((l) => l.querySelector('textarea')).length,
       }
     }, subjectLabel(k.id))
     await page.close()
@@ -6199,12 +6199,104 @@ for (const W of [1280, 794, 453, 390, 320]) {
       隠れ.map((x) => x.id).join(' / ') + '。**選ぶ欄の続きに、そのまま出す**')
   } else ok('書く欄 … どの種類でも、畳まずに見えている')
 
-  /* **呼び名が種類で変わる。** ぜんぶ同じ名前にしたら赤くする ——
-     「話す中身」と「出す語の中身」は、別のものである */
+  /* **呼び名は、どの種類でも同じ**(第5.213節・2026-09 利用者の指定)。
+
+       > 記事や会話、会議も含めた全ての教材を作成する際に、
+       > 細かい指定を書き込める欄を作ってください。
+       > 現状は文型トレーニングやスピーチ練習にはすでにあります。
+
+     欄は第5.190節で全種類に出ていた。**呼び分けていたせいで、
+     同じ物が4つの別物に見えていた。** ここは 2026-09 に
+     「種類ごとに変わること」から**逆向きに**書き換えた見張りである。 */
   const 名 = new Set(見た.map((x) => x.名))
-  if (名.size < 3) {
-    ng('書く欄 … 呼び名が種類ごとに変わっていない', [...名].join(' / '))
-  } else ok(`書く欄 … 呼び名は種類ごと(${[...名].join(' / ')})`)
+  if (名.size !== 1) {
+    ng('書く欄 … 呼び名が種類ごとに違う', [...名].join(' / '))
+  } else ok(`書く欄 … 呼び名はどの種類でも同じ(${[...名].join('')})`)
+
+  const 一行 = 見た.filter((x) => x.箱 === 0)
+  if (一行.length) {
+    ng('書く欄 … 1行の入力のままになっている',
+      一行.map((x) => x.id).join(' / ') + '。**複数行の箱にする**')
+  } else ok('書く欄 … どの種類でも、複数行の箱になっている')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   文法解説を作るかどうか(第5.213節・2026-09 利用者の指定)
+
+     > 文法解説をつけるかつけないかを教材を作る時に指定できると最高です
+
+   **既定は「作る」。** いままで必ず作っていたので、既定で外すと
+   黙って機能が減る。**押す前に件数と金額を出す**(見えない費用は
+   管理できない)。**解説が1つも付かない構成では、出さない。**
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  page.setDefaultTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  /** 文法解説のチェックと、その下の1行 */
+  const 見る = () => page.evaluate(() => {
+    const l = [...document.querySelectorAll('label.amount-label')]
+      .find((x) => /文法解説も作る/.test(x.textContent))
+    if (!l) return { ある: false }
+    const box = l.querySelector('input[type="checkbox"]')
+    return {
+      ある: true,
+      入っている: !!box?.checked,
+      /* **すぐ隣の1行を読む。** 親から探すと、1つ上の
+         「チェックを外した演習は作りません」を拾ってしまう
+         (`<>…</>` は DOM を作らないので、兄弟として並んでいる) */
+      文: (l.nextElementSibling?.matches?.('p.field-hint')
+        ? l.nextElementSibling.textContent : '').replace(/\s+/g, ' ').trim(),
+    }
+  })
+
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=form&kind=reading`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(600)
+  const 初め = await 見る()
+  if (!初め.ある) ng('文法解説の指定 … 記事の作成画面に出ていない')
+  else if (!初め.入っている) {
+    ng('文法解説の指定 … 既定で外れている', 'いままで必ず作っていた。既定を下げない')
+  } else if (!/\d+ 件/.test(初め.文) || !/およそ [\d.]+ 円/.test(初め.文)) {
+    ng('文法解説の指定 … 件数か金額が出ていない', `「${初め.文}」`)
+  } else ok(`文法解説の指定 … 記事で出て、既定は「作る」(${初め.文.slice(0, 28)}…)`)
+
+  // **外したら、そう書く**(成功と失敗を同じ見た目で終わらせない)
+  if (初め.ある) {
+    await page.locator('label.amount-label', { hasText: '文法解説も作る' })
+      .locator('input[type="checkbox"]').click()
+    await page.waitForTimeout(300)
+    const 外し = await 見る()
+    if (外し.入っている) ng('文法解説の指定 … 押しても外れない')
+    else if (!/課金されません/.test(外し.文)) {
+      ng('文法解説の指定 … 外したときに、課金されないことを言っていない', `「${外し.文}」`)
+    } else ok('文法解説の指定 … 外すと「そのぶん課金されません」と出る')
+  }
+
+  /* **出ない側。** 解説の付く演習を1つも作らない構成では、
+     チェックごと出さない(効かない操作を見せない)。
+     単語 / フレーズで**フレーズを外す**と、残るのは単語だけになり、
+     単語には解説が付かない(1語に S も V も無い・第5.210節) */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=form&kind=vocab`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(600)
+  const 前 = await 見る()
+  const フレーズ = page.locator('label.amount-label', { hasText: 'フレーズ' })
+    .locator('input[type="checkbox"]')
+  if (!前.ある) ng('文法解説の指定 … 単語 / フレーズで出ていない(フレーズには付く)')
+  else if (!await フレーズ.count()) ng('文法解説の指定 … フレーズのチェックが見つからない')
+  else {
+    await フレーズ.first().click()
+    await page.waitForTimeout(300)
+    const 後 = await 見る()
+    if (後.ある) {
+      ng('文法解説の指定 … 単語だけにしても、チェックが残っている',
+        '1語に S も V も無い。効かない操作を見せない')
+    } else ok('文法解説の指定 … 解説の付く演習が無くなると、チェックごと消える')
+  }
+  await page.close()
 }
 
 /* ══════════════════════════════════════════════════════════════════

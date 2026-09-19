@@ -18,9 +18,11 @@ import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrOption } from '../data/cefr.js'
 import {
   EXERCISE_TYPES, FIELD_LABELS, MAX_ITEMS, SCALABLE_SECTIONS, amountsFor,
-  defaultSectionsFor, exerciseLabel, exerciseType, isIncluded, isPassageSection,
-  sectionLabel, sectionsFor,
+  defaultSectionsFor, exerciseLabel, exerciseType, grammarSource, isIncluded,
+  isPassageSection, sectionLabel, sectionsFor,
 } from '../data/exerciseTypes.js'
+/* 文法解説を作るか(第5.213節)。**金額の見積もりも `grammarNote.js` 1か所** */
+import { grammarGuessYen } from '../lib/grammarNote.js'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   cancelJob, clearJob, currentJob, startJob, takeJobResult, watchJob,
@@ -233,6 +235,16 @@ export default function MaterialForm({
      選んだ側は、保存する声の id の後ろに付いて回る(`styledVoiceId`) */
   const [readStyle, setReadStyle] = useState(initial.readStyle || DEFAULT_READ_STYLE)
   const [subject, setSubject] = useState('')           // 話題の指定(任意)
+  /**
+   * **文法解説も一緒に作るか**(第5.213節・2026-09 利用者の指定)。
+   *
+   *   > 文法解説をつけるかつけないかを教材を作る時に指定できると最高です
+   *
+   * **既定は「作る」。** いままで必ず作っていたので、
+   * ここを既定で外すと**黙って機能が減る**(CLAUDE.md「既定を下げない」)。
+   * 要らないときだけ外す。外せば**そのぶん課金されない。**
+   */
+  const [withGrammar, setWithGrammar] = useState(true)
   /* **話の切り口**(0046・2026-09 利用者の指定)。
      空なら「おまかせ」=**まだ使っていない切り口から1枚引く。**
      同じ場面でも、切り口が違えばまったく別の話になる */
@@ -693,6 +705,20 @@ export default function MaterialForm({
   const planNow = () => sectionsFor(kind, amounts, include)
 
   /**
+   * **文法解説を作る問は、いくつあるか**(第5.213節)。
+   *
+   * **どの演習に解説が付くかは `grammarSource()` 1か所**が決める
+   * (`exerciseTypes.js` の `grammarFrom`)。ここで種類を見ない ——
+   * 単語には付かず、フレーズには付く、といった違いはあちらが持っている。
+   *
+   * **1問を1文として数える。** 長い段落は数文に切れるので、
+   * 実際はこれより増えることがある。だから画面には「およそ」と書く。
+   */
+  const grammarCount = () => planNow()
+    .filter((p2) => grammarSource(p2.exercise_type))
+    .reduce((n, p2) => n + p2.count, 0)
+
+  /**
    * 作るものの並びを、そのまま文にする(「記事6 + 内容の理解5 + …」)。
    *
    * **本文の名前は、種類に合わせる。** 演習の名前は `article` なので
@@ -788,7 +814,8 @@ export default function MaterialForm({
        自分で書いた原稿ほど、文が長くて骨組みが見えにくい。
        ここで失敗しても教材は捨てない(解説が付かないだけ)。
        あとから「セッションで使う」で裏から足せる(`needsGrammar`) */
-    if (!cancelled()) {
+    // **外してあれば、窓口を1回も呼ばない**(第5.213節・そのぶん 0円)
+    if (!cancelled() && withGrammar) {
       step(plan.length + 1, '文法解説')
       /* **演習ぜんぶを渡す**(2026-09 利用者の指定)。
          以前は `made[0].items`(本文だけ)だった。
@@ -983,7 +1010,8 @@ export default function MaterialForm({
     //
     // ここで失敗しても**教材は捨てない。** 解説が付かないだけで、
     // 本文も設問もそのまま使える。あとから裏で足せる(`needsGrammar`)。
-    if (!cancelled()) {
+    // **外してあれば、窓口を1回も呼ばない**(第5.213節・そのぶん 0円)
+    if (!cancelled() && withGrammar) {
       step(plan.length + 1, '文法解説')
       // **演習ぜんぶを渡す**(すぐ上の道と同じ。本文だけに絞らない)
       const { data: gr, error: gError } = await fillGrammar(made)
@@ -1142,7 +1170,8 @@ export default function MaterialForm({
      * **単語(`vocabulary`)には作らない** —— `grammarFrom` が `null` で、
      * `fillGrammar()` が窓口を1回も呼ばずに戻る(**0円**)。
      */
-    if (!cancelled()) {
+    // **外してあれば、窓口を1回も呼ばない**(第5.213節・そのぶん 0円)
+    if (!cancelled() && withGrammar) {
       step(plan.length, '文法解説')
       const { data: gr, error: gError } = await fillGrammar(made)
       if (gError) {
@@ -1244,8 +1273,11 @@ export default function MaterialForm({
          文法解説(0051)**の2段が続く。**足したらここも足す** ——
          足さないと、帯が 100% になったあとも動き続ける。
          **ドリルにも文法解説の1段が付いた**(2026-09)。
-         カタマリごとの訳は本文にしか無いので、こちらは +1 である */
-      total: isPassageKind(kind) ? plan.length + 2 : plan.length + 1,
+         カタマリごとの訳は本文にしか無いので、こちらは +1 である。
+         **文法解説を外したら、その1段も引く**(第5.213節)——
+         引かないと、作り終えても帯が最後まで行かない */
+      total: (isPassageKind(kind) ? plan.length + 1 : plan.length)
+        + (withGrammar && grammarCount() > 0 ? 1 : 0),
       run: (ctl) => (isPassageKind(kind) ? generatePassage(ctl) : generateDrill(ctl)),
     })
     if (!started) {
@@ -1261,6 +1293,10 @@ export default function MaterialForm({
     // 実際に引いた切り口を入れると、戻ったときにおまかせが効かなくなる
     angle,
     visibility, instruction, mustUse,
+    /* **文法解説を作るかどうかも控える**(第5.213節)。
+       控えないと、別の画面から戻ったときに「作る」へ戻っており、
+       **外したはずの解説が作られて課金される** */
+    withGrammar,
     // 会話に出す人数(2026-09)。戻ってきたときに2人へ戻っていると、
     // 会議として作ったはずの教材が1対1の会話として保存される
     speakers,
@@ -1294,6 +1330,7 @@ export default function MaterialForm({
     if (f.speakers != null) setSpeakers(f.speakers)
     if (f.visibility) setVisibility(f.visibility)
     if (f.instruction != null) setInstruction(f.instruction)
+    if (f.withGrammar != null) setWithGrammar(f.withGrammar)
     if (f.mustUse) setMustUse(f.mustUse)
     // **どの演習をいくつ作ったのか**も戻す。ここが初期値のままだと、
     // 外した演習が「作った」ことになり、保存の数と食い違う
@@ -1774,9 +1811,20 @@ export default function MaterialForm({
             {subjectLabel(kind)}
             <span className="tip field-hint">{subjectHint(kind)}</span>
           </span>
-          <input type="text" value={subject}
-                 onChange={(e) => setSubject(e.target.value)}
-                 placeholder={subjectExample(kind)} />
+          {/* **1行ではなく、書ける箱にする**(第5.213節・2026-09 利用者の指定)。
+
+                > 記事や会話、会議も含めた全ての教材を作成する際に、
+                > 細かい指定を書き込める欄を作ってください
+
+              欄そのものは第5.190節で全種類に出ていた。出ていなかったのでは
+              なく、**1行の入力だったので「ひとこと書く欄」に見えていた。**
+              注文を2つ3つ書こうとすると、**書いた先から左へ流れて消える。**
+              呼び名も種類ごとに違っていたので(話題 / 話す中身 / 文の中身)、
+              **同じ欄だと分からなかった** —— そちらは
+              `materialKinds.js` 1か所でそろえた。 */}
+          <textarea rows={3} value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder={subjectExample(kind)} />
         </label>
       )}
 
@@ -2101,6 +2149,39 @@ export default function MaterialForm({
             ? `${bodyWord(kind)}の本文は必ず入ります。`
             : '最後の1つは外せません(作るものが無くなるため)。'}
         </p>
+
+        {/* ── **文法解説を作るかどうか**(第5.213節・2026-09 利用者の指定)──
+
+              > 文法解説をつけるかつけないかを教材を作る時に指定できると最高です
+
+            **既定は「作る」。** いままで必ず作っていたので、既定で外すと
+            **黙って機能が減る**(CLAUDE.md「既定を下げない」)。
+
+            **解説が1つも付かない構成では出さない**(効かない操作を見せない)。
+            単語だけの教材がそれで —— 1語に S も V も無いためである
+            (`grammarFrom` が `null`・第5.210節)。
+
+            **押す前に、件数と金額を出す**(CLAUDE.md「見えない費用は
+            管理できない」)。ここは作る前なので**1問1文として**の見積もりで、
+            長い段落は数文に切れる。だから「およそ」と書く。 */}
+        {grammarCount() > 0 && (
+          <>
+            <label className="amount-label">
+              <input type="checkbox" checked={withGrammar}
+                     onChange={() => setWithGrammar((v) => !v)} />
+              <span>文法解説も作る(SVOC と修飾要素)</span>
+            </label>
+            <p className="tip field-hint">
+              {withGrammar
+                ? `${grammarCount()} 件ぶん、およそ ${grammarGuessYen(grammarCount())} 円`
+                  + 'かかります(1問1文として見積もっています)。'
+                  + '文ごとに S / V / O / C と修飾要素の札が付き、'
+                  + 'レッスン表示の「文法を見る」から開けます'
+                : '作りません。そのぶん課金されません。'
+                  + 'あとから「セッションで使う」を開いたときに、裏で作られます'}
+            </p>
+          </>
+        )}
 
         {/* ── 文型ドリルで使う語を、単語帳から絞って選ぶ ──────────
             2026-09 利用者の指定:

@@ -3474,8 +3474,22 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok((form.match(/await fillGrammar\(/g) ?? []).length === 3,
     '文法解説 … 記事・会話と、貼った原稿と、**文型ドリル**で作っている',
     String((form.match(/await fillGrammar\(/g) ?? []).length))
-  ok(/plan\.length \+ 2 : plan\.length \+ 1/.test(form),
-    '文法解説 … 段が増えたぶん、帯の総数も足してある(本文 +2 / ドリル +1)')
+  /* 帯の総数は、**作る段の数と同じでなければならない。**
+     足りないと 100% のあとも動き続け、多いと最後まで行かない。
+     **文法解説を外したら、その1段も引く**(第5.213節) */
+  ok(/plan\.length \+ 1 : plan\.length\)/.test(form),
+    '文法解説 … カタマリごとの訳のぶん、本文だけ1段多い')
+  ok(/\+ \(withGrammar && grammarCount\(\) > 0 \? 1 : 0\)/.test(form),
+    '文法解説 … 外したときは、帯の総数からもその1段を引いている')
+  /* **外したら、窓口を1回も呼ばない**(そのぶん 0円)。
+     3つの道(記事・会話 / 貼った原稿 / 文型ドリル)すべてで見る */
+  ok((form.match(/if \(!cancelled\(\) && withGrammar\) \{/g) ?? []).length === 3,
+    '文法解説 … 外したら、3つの道すべてで窓口を呼ばない',
+    String((form.match(/if \(!cancelled\(\) && withGrammar\) \{/g) ?? []).length))
+  /* **控える。** 別の画面から戻ったときに「作る」へ戻っていると、
+     外したはずの解説が作られて課金される */
+  ok(/\n {4}withGrammar,\n/.test(form) && /f\.withGrammar != null/.test(form),
+    '文法解説 … 作るかどうかを控えて、戻ってきたときに戻す')
   /* **本文だけに絞って渡していないこと。** `made[0].items` に戻すと、
      文型ドリルには解説がどこにも作られない(2026-09 に踏んだ) */
   ok(!/fillGrammar\(made\[0\]/.test(form),
@@ -8275,6 +8289,49 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
       .filter((k) => !mk.subjectLabel(k.id).endsWith('(任意)')).map((k) => k.id)
     ok(付いていない.length === 0, '書く欄 … どの呼び名にも「(任意)」が付く',
       付いていない.join(', '))
+  }
+
+  /* ②-2 **呼び名は、どの種類でも同じ**(第5.213節・2026-09 利用者の指定)
+
+       > 記事や会話、会議も含めた全ての教材を作成する際に、
+       > 細かい指定を書き込める欄を作ってください。
+       > 現状は文型トレーニングやスピーチ練習にはすでにあります。
+
+     欄は第5.190節で全種類に出ていた。**呼び分けていたせいで、
+     同じ物が4つの別物に見えていた**(話題 / 話す中身 / 文の中身 /
+     出す語の中身)。だから呼び名も1つにそろえた。 */
+  {
+    const 名 = new Set(mk.MATERIAL_KINDS.map((k) => mk.subjectLabel(k.id)))
+    ok(名.size === 1, '書く欄 … 呼び名は、どの種類でも同じ1つ', [...名].join(' / '))
+    /* **例は種類ごとに違う。** 何を書けばよいかは種類で変わる ——
+       ここまで1つにすると、**どの種類でも同じ例**になってしまう */
+    const 例 = new Set(mk.NEW_MATERIAL_KINDS.map((k) => mk.subjectExample(k.id)))
+    ok(例.size === mk.NEW_MATERIAL_KINDS.length,
+      '書く欄 … 例は種類ごとに違う(そこまで1つにしない)',
+      `${例.size} / ${mk.NEW_MATERIAL_KINDS.length}`)
+  }
+
+  /* ②-3 **1行ではなく、書ける箱である**(第5.213節)。
+     1行の入力だと、注文を2つ3つ書いた先から左へ流れて消える */
+  {
+    const i = mf.indexOf('{subjectLabel(kind)}')
+    const 後ろ = mf.slice(i, i + 600)
+    ok(/<textarea/.test(後ろ) && !/<input type="text" value=\{subject\}/.test(mf),
+      '書く欄 … 1行の入力ではなく、複数行の箱になっている')
+  }
+
+  /* ②-4 **モノローグ**(第5.213節・2026-09 利用者の指定)。
+     **`id` は `speech` のまま** —— あれは `materials.kind` の値で、
+     変えると過去の教材が開けなくなる(画面の言葉と、データベースの値を
+     混同しない・CLAUDE.md) */
+  {
+    const sp = mk.MATERIAL_KINDS.find((k) => k.id === 'speech')
+    ok(sp?.label === 'モノローグ', '種類の名前 … Speech練習 → モノローグ', sp?.label)
+    ok(mk.MATERIAL_KINDS.every((k) => !/Speech練習/.test(k.label)),
+      '種類の名前 … 古い呼び名がどこにも残っていない')
+    /* **ダイアローグと並ぶ言い方**にしてある(1人 / 2人以上) */
+    ok(/ダイアローグ/.test(mk.MATERIAL_KINDS.find((k) => k.id === 'dialogue')?.label ?? ''),
+      '種類の名前 … 会話は「ダイアローグ」のまま(並びを崩していない)')
   }
 
   /* ③ **画面は呼び名を書き写していない**(1か所から引く) */

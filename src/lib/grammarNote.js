@@ -253,6 +253,20 @@ export const GRAMMAR_CALL_YEN = 0.4
 export const GRAMMAR_SENTENCE_YEN = 0.2
 
 /**
+ * **作る前の見積もり**(第5.213節)。まだ英文が無いので、
+ * **1問を1文として**数える。
+ *
+ * **これは見積もりであって、実額ではない。** 長い段落は数文に切れるので
+ * 上ぶれする。画面では「およそ」と添えること
+ * (**分かっていないことを、分かったように書かない**・CLAUDE.md)。
+ *
+ * @param items 解説を作る問(段落・発言)の数
+ */
+export const grammarGuessYen = (items) => (items > 0
+  ? Math.round((GRAMMAR_CALL_YEN + GRAMMAR_SENTENCE_YEN * items) * 10) / 10
+  : 0)
+
+/**
  * これだけ作ると、いくらかかるか。
  *
  * **0 件のときは 0 円を返す**(呼ばないので、土台もかからない)。
