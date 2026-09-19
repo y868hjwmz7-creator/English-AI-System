@@ -985,7 +985,12 @@ export default function App() {
             ) : view === 'assign' ? (
               /* **アサインする**(第5.181節)。**ゲストを先に選ぶ** ——
                  1人ぶんの「いま何が出ているか」が、1画面で見渡せる */
-              <AssignBooks />
+              /* **出した人(トレーナー)が要る**(第5.202節)。
+                 RIZAP ENGLISH の教材は宿題として届けるので、
+                 `assignments.assigned_by` に入れる人が要る ——
+                 単語帳・Quick Response の冊(`learner_features`)には
+                 要らなかったので、渡していなかった */
+              <AssignBooks me={profile} />
             ) : view === 'homework' ? (
               <LearnerHomework
                 me={profile}

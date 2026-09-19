@@ -47,12 +47,16 @@ import { shelfFeature } from '../data/shelves.js'
 import { NATIVE_FLOW_UNITS, nfFeature } from '../data/nativeFlow.js'
 import {
   busyText, doneText, nfAllBusyText, nfAllDoneText, nfAllNoneText, nfAllTodo,
-  nfUnitTitle, nfUnitsOn, shelfTitle, shelvesOff, shelvesOn, stoppedText,
+  nfUnitTitle, nfUnitsOn, rizapBusyText, rizapDoneText,
+  shelfTitle, shelvesOff, shelvesOn, stoppedText,
 } from '../lib/assignBooks.js'
 import AssignShelf from './AssignShelf.jsx'
+import AssignRizap from './AssignRizap.jsx'
+import { RIZAP_BOOKS, RIZAP_LABEL, rizapPickLabel } from '../data/rizapBooks.js'
+import { assignRizap, loadRizapUnits } from '../lib/rizapAssign.js'
 import Loading from './Loading.jsx'
 
-export default function AssignBooks({ learnerId = null, learnerName = '' }) {
+export default function AssignBooks({ me = null, learnerId = null, learnerName = '' }) {
   /** 担当しているゲスト。**`null` は読み込み中**(いない、ではない) */
   const [people, setPeople] = useState(null)
   /** いま選んでいるゲスト。渡されていれば、それが答え(選ばせない) */
@@ -65,6 +69,14 @@ export default function AssignBooks({ learnerId = null, learnerName = '' }) {
      **片方の知らせが、もう片方の欄に出る** */
   const [wordNote, setWordNote] = useState(null)
   const [qrNote, setQrNote] = useState(null)
+  /* **RIZAP ENGLISH の教材**(第5.202節)。知らせは3つめとして別に持つ ——
+     同じ入れ物にすると、**別の欄の知らせがここに出る** */
+  const [rizapNote, setRizapNote] = useState(null)
+  /** 冊ごとの UNIT。**読めていない冊は `undefined` のまま**(0 と区別する) */
+  const [rizapUnits, setRizapUnits] = useState({})
+  /** 冊ごとに、いま選んでいる UNIT(空は丸ごと) */
+  const [rizapPick, setRizapPick] = useState({})
+  const [rizapBusy, setRizapBusy] = useState(null)
 
   /* ゲストの一覧。**渡されているときは読みに行かない**(0円で済むものは0円で) */
   useEffect(() => {
@@ -76,6 +88,23 @@ export default function AssignBooks({ learnerId = null, learnerName = '' }) {
 
   /* 渡されたゲストが変わったら、そちらに合わせる */
   useEffect(() => { if (learnerId) setPicked(learnerId) }, [learnerId])
+
+  /* **冊の中身は、相手によらない。**だからゲストを選び直しても読み直さない
+     (0円で済むものは0円で)。**1冊ずつ入れていく** ——
+     まとめて `setState` すると、**全部そろうまで1冊も出ない** */
+  useEffect(() => {
+    let alive = true
+    for (const b of RIZAP_BOOKS) {
+      loadRizapUnits(b.id).then(({ data }) => {
+        if (!alive) return
+        /* **読めなかった(`null`)ときは、入れない。**
+           入れると「0 UNIT」と見えて、**読めなかったことが消える** */
+        if (!data) return
+        setRizapUnits((now) => ({ ...now, [b.id]: data }))
+      })
+    }
+    return () => { alive = false }
+  }, [])
 
   /** いま決めている相手。**名前も一緒に持つ**(知らせの文に要る) */
   const who = useMemo(() => {
@@ -92,6 +121,7 @@ export default function AssignBooks({ learnerId = null, learnerName = '' }) {
     /* **前の人の知らせを残さない**(別の人の話に見える) */
     setWordNote(null)
     setQrNote(null)
+    setRizapNote(null)
     loadLearnerFeatures(who.id).then(({ data }) => {
       if (!alive) return
       setFeatures(data ?? new Set())
@@ -99,6 +129,43 @@ export default function AssignBooks({ learnerId = null, learnerName = '' }) {
     })
     return () => { alive = false }
   }, [who?.id])
+
+  /**
+   * **RIZAP ENGLISH の教材を出す**(第5.202節)。
+   *
+   * 丸ごとでも1 UNIT でも、**通る道は同じ**(`assignRizap`)——
+   * 違うのは「どの id を渡すか」だけである。
+   * **画面で2通りに書き分けない**(置く場所の数だけ食い違う)。
+   */
+  const sendRizap = async (bookId) => {
+    if (rizapBusy || !who) return
+    const list = rizapUnits[bookId] ?? []
+    const want = String(rizapPick[bookId] ?? '')
+    const rows = want ? list.filter((u) => String(u.unit_no) === want) : list
+    const title = rizapPickLabel(bookId, want, list.length)
+    if (!rows.length) {
+      setRizapNote({ kind: 'ng', text: `${title} … 出せる UNIT がありません。` })
+      return
+    }
+    setRizapBusy(bookId)
+    setRizapNote({ kind: 'busy', text: rizapBusyText(title) })
+    const { data, error } = await assignRizap({
+      learnerId: who.id,
+      assignedBy: me?.id ?? null,
+      materialIds: rows.map((u) => u.id),
+    })
+    setRizapBusy(null)
+    if (error) {
+      setRizapNote({ kind: 'ng', text: `${error?.message ?? error}` })
+      return
+    }
+    /* **0 と、出した数を取り違えない。**「出しました」とだけ言うと、
+       もう出してあった人には**何も変わっていないのに成功に見える** */
+    setRizapNote({
+      kind: 'ok',
+      text: rizapDoneText(who.display_name, title, data.sent, data.already),
+    })
+  }
 
   const shelfOn = useMemo(() => shelvesOn(features), [features])
   const shelfOff = useMemo(() => shelvesOff(features), [features])
@@ -200,6 +267,18 @@ export default function AssignBooks({ learnerId = null, learnerName = '' }) {
               onFeature={(f) => toggle(f.id, f.label, setWordNote)}
               shelfOn={shelfOn} shelfOff={shelfOff}
               onShelf={(sh) => toggle(shelfFeature(sh.id), shelfTitle(sh), setWordNote)} />
+          </section>
+
+          {/* **RIZAP ENGLISH の教材**(第5.202節・利用者の指定)。
+              3つめの束として、単語帳・Quick Response の下に置く ——
+              **並べ替えない**(上の2つは前からある) */}
+          <section className="card">
+            <h3 className="card-title">{RIZAP_LABEL}</h3>
+            <AssignRizap
+              books={RIZAP_BOOKS} units={rizapUnits} picked={rizapPick}
+              busy={rizapBusy} note={rizapNote}
+              onPick={(id, unit) => setRizapPick((now) => ({ ...now, [id]: unit }))}
+              onSend={sendRizap} />
           </section>
 
           <section className="card">

@@ -45,6 +45,9 @@ import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import SessionOwner from './components/SessionOwner.jsx'
 import AssignShelf from './components/AssignShelf.jsx'
+import AssignRizap from './components/AssignRizap.jsx'
+import { RIZAP_BOOKS, RIZAP_LABEL, rizapPickLabel } from './data/rizapBooks.js'
+import { rizapDoneText } from './lib/assignBooks.js'
 import { BASICS, FRAME_QR } from './data/learnerFeatures.js'
 import { nfUnitTitle, shelfTitle } from './lib/assignBooks.js'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
@@ -461,6 +464,19 @@ function AssignScreen() {
   const [units, setUnits] = useState(empty ? [] : [1, 4])
   const [wordNote, setWordNote] = useState(null)
   const [qrNote, setQrNote] = useState(null)
+  /* **RIZAP ENGLISH の教材**(第5.202節)。3つの形を1画面に置く ——
+     UNIT が在る / 0 UNIT / **まだ読めていない**(`undefined`) */
+  const [rzPick, setRzPick] = useState({})
+  const [rzNote, setRzNote] = useState(null)
+  const rzUnits = empty ? {} : {
+    [RIZAP_BOOKS[0].id]: [
+      { id: 'u1', unit_no: 1, headline: 'Booking a Bus' },
+      { id: 'u2', unit_no: 2, headline: 'At the Hotel' },
+      { id: 'u3', unit_no: 3, headline: 'Ordering Lunch' },
+    ],
+    [RIZAP_BOOKS[1].id]: [],          // **0 UNIT**(押せる操作を出さない)
+    // RIZAP_BOOKS[2] 以降は入れない = **まだ読めていない**
+  }
 
   /** 出す / 外すを、本物と同じように折り返す */
   const flip = (set, id) => {
@@ -513,6 +529,28 @@ function AssignScreen() {
              **本物と1文字も違えない** —— 渡さないと、
              骨組みにだけ無い行ができて、検証が何も守らない */
           onAll={(v) => setUnits(v ? NATIVE_FLOW_UNITS.map((u) => u.id) : [])} />
+      </section>
+      {/* **RIZAP ENGLISH の教材**(第5.202節・利用者の指定)。
+
+          **いちばん危ない形を、必ず1つ置く**(CLAUDE.md)——
+          ・UNIT が入っている冊(プルダウンと「出す」が出る)
+          ・**UNIT が0の冊**(押せる操作を出さない)
+          ・**まだ読めていない冊**(`undefined`)——
+            0 と取り違えると「まだ入っていません」と嘘をつく。
+            **3つとも描かないと、その書き分けを壊しても緑のまま**になる */}
+      <section className="card">
+        <h3 className="card-title">{RIZAP_LABEL}</h3>
+        <AssignRizap
+          books={RIZAP_BOOKS} units={rzUnits} picked={rzPick}
+          busy={q.get('busy') === 'on' ? RIZAP_BOOKS[0].id : null}
+          note={rzNote}
+          onPick={(id, unit) => setRzPick({ ...rzPick, [id]: unit })}
+          onSend={(id) => setRzNote({
+            kind: 'ok',
+            text: rizapDoneText('元',
+              rizapPickLabel(id, rzPick[id] ?? '', (rzUnits[id] ?? []).length),
+              rzPick[id] ? 1 : (rzUnits[id] ?? []).length),
+          })} />
       </section>
     </div>
   )

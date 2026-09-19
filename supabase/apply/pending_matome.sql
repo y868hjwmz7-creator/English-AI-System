@@ -4392,3 +4392,39 @@ comment on function public.section_types() is
   'アプリの「準備の状態」が、知っている一覧との食い違いを出すのに使う。';
 
 grant execute on function public.section_types() to authenticated;
+
+
+-- ══════════════════════════════════════════════════════════════════════
+-- 0064 … 教材に「どの冊の、第何 UNIT か」を控える
+--
+--   RIZAP ENGLISH の教材(5冊 × 各 18 UNIT ほど)を、アサインの画面で
+--   「この冊の UNIT 3 だけ」「この冊を丸ごと」と選べるようにするため。
+--
+--   **`materials` に2列増えます**(`series` / `unit_no`)。
+--   既存の教材はどちらも空のままで、これまでどおり動きます。
+--   何度貼っても同じ結果になります。
+-- ══════════════════════════════════════════════════════════════════════
+
+alter table public.materials
+  add column if not exists series  text,
+  add column if not exists unit_no integer;
+
+comment on column public.materials.series is
+  'まとまった冊の id(0064)。RIZAP ENGLISH なら rizap-c1 など。'
+  '**画面に出す名前は src/data/rizapBooks.js 1か所**が持つ(ここには書かない)';
+comment on column public.materials.unit_no is
+  'その冊の中の UNIT 番号(0064)。1 から始まる。冊に属さない教材は空';
+
+-- **同じ冊の中で、UNIT 番号が重ならないようにする。**
+-- 重なると、アサインのプルダウンに同じ番号が2つ並び、
+-- **どちらを出したのか分からなくなる**(行き止まり)。
+-- 冊に属さない教材(どちらも空)は、この決まりの外に置く
+drop index if exists materials_series_unit_idx;
+create unique index if not exists materials_series_unit_idx
+  on public.materials (series, unit_no)
+  where series is not null and unit_no is not null;
+
+-- 冊ごとに UNIT 順で読むための並び
+create index if not exists materials_series_idx
+  on public.materials (series, unit_no)
+  where series is not null;

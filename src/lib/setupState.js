@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0063'
+export const NEWEST_MIGRATION = '0064'
 
 /**
  * その移行が入っているかを見る印。
@@ -107,10 +107,20 @@ export const NEWEST_MIGRATION = '0063'
  * 制約のほうを貼り忘れる形もありうる —— だから
  * **返ってきた一覧に `culture_note` が入っているか**まで見る。
  */
+/*
+ * 0064(教材の冊と UNIT 番号)は **`materials` に列を2つ増やす**ので、
+ * **表そのもの**ではなく**列**で見たいところだが、印は
+ * 表 / 関数 / 行の3つしか見られない(下の `checkSqlApplied`)。
+ *
+ * **列を増やす移行は、読んでみれば分かる** —— 無い列を `select` すると
+ * PostgREST が断る(42703)。だから `column` を足した。
+ * **在るかどうかだけを見る** —— 0063 のような中身の確かめは要らない
+ * (列は在るか無いかしかない)。
+ */
 export const NEWEST_MARK = {
-  rpc: 'section_types',
-  has: 'culture_note',
-  label: '演習の種類の一覧(section_types)',
+  table: 'materials',
+  column: 'series',
+  label: '教材の冊と UNIT 番号(materials.series)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */
@@ -127,6 +137,23 @@ const noTable = (error) => {
      **通信の失敗と混ぜない** —— あちらは `unknown` にして騒がない */
   return /relation .* does not exist|function .* does not exist|42P01|42883|PGRST202|PGRST205|schema cache/i
     .test(m)
+}
+
+/**
+ * **「そんな列は無い」と言われたか**(0064)。
+ *
+ * **`noTable()` と混ぜない。** あちらは表・関数の話で、
+ * わざと `select('*')` にして 42703 をすり抜けさせている ——
+ * `id` を持たない表を印に選んだときに**入っていないのに黙る**のを
+ * 避けるためである(すぐ上の説明)。
+ *
+ * こちらは**列そのものを名指しで読む**ので、42703 は
+ * 「その移行がまだ」という意味にしかならない。
+ * PostgREST は `PGRST204`、Postgres は `42703` を返す。
+ */
+const noColumn = (error) => {
+  const m = `${error?.code ?? ''} ${error?.message ?? ''}`
+  return /column .* does not exist|42703|PGRST204/i.test(m) || noTable(error)
 }
 
 /**
@@ -152,6 +179,16 @@ export async function checkSqlApplied() {
         .from(NEWEST_MARK.table).select(column).eq(column, value).limit(1)
       if (rowError) return noTable(rowError) ? 'missing' : 'unknown'
       return (data?.length ?? 0) > 0 ? 'ok' : 'missing'
+    }
+    /* **列の印**(0064)。**その列を名指しで読む** ——
+       `select('*')` では、列が無くても素通りして「もう入っています」に
+       なってしまう(**いちばん悪い壊れ方**・CLAUDE.md)。
+       **0 件は「まだ」ではない** —— 教材が1つも無いだけである */
+    if (NEWEST_MARK.column) {
+      const { error: colError } = await supabase
+        .from(NEWEST_MARK.table).select(NEWEST_MARK.column).limit(1)
+      if (colError) return noColumn(colError) ? 'missing' : 'unknown'
+      return 'ok'
     }
     const { data, error } = NEWEST_MARK.rpc
       ? await supabase.rpc(NEWEST_MARK.rpc)

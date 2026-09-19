@@ -9169,6 +9169,35 @@ button.wbfilter-ctl { text-align: left; }
 .shelf-sub { display: grid; gap: var(--sp-8); padding-left: var(--sp-12); }
 .shelf-sub > .wb-add { margin: 0; }
 
+/* ── RIZAP ENGLISH の教材を出す行(第5.202節)──────────────────
+   > UNIT ごと、丸ごと、それぞれお願いします。UNIT 毎の場合はプルダウンで
+
+   **新しい見た目を作っていない。** 上の `.shelf-sub` の中に、
+   プルダウン(`.field--inline`)と「出す」を並べるだけである。
+
+   **すき間は親の `gap` で付ける**(共通ルール)。子に `margin` を
+   付けて回ると、下に来るものが変わった日にすき間が 0 になる。
+   **横に並ぶ組も離す** —— `margin` は横に効かない(共通ルール・2度目の指摘)。
+   狭い画面では縦に積む。そのとき `align-items` を `center` のままに
+   すると、**行が中身なりの幅に縮んで左端がぎざぎざになる**(共通ルール) */
+.rizap-send-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-10);
+}
+.rizap-send-row > .rizap-unit { margin: 0; flex: 1 1 14rem; min-width: 0; }
+.rizap-unit > .field-label { margin: 0; }
+/* **押せる大きさ(40px)を割らない**(CLAUDE.md)。
+   素の `<select>` は padding と字の高さで 35px ほどしかない */
+.rizap-unit > select { min-height: 40px; flex: 1 1 auto; min-width: 0; }
+.rizap-send { min-height: 40px; white-space: nowrap; }
+
+@media (max-width: 27rem) {
+  /* 狭い画面では縦に積む。**左端をそろえる**(中身なりに縮ませない) */
+  .rizap-send-row { align-items: stretch; }
+}
+
 /* ── この人に出す冊(第5.186節・2026-09 実機・利用者の指定)───────────
    > 教材のアサイン内に説明は一才必要ありません。消してください。
    > シンプルに単語帳とquick responseの冊を選ぶ方法と同じ仕様にしてください。

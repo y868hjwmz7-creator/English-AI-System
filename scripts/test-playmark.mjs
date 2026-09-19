@@ -4316,6 +4316,11 @@ console.log('\nスピーチ練習(0054)')
      `table` なら表の有無、`rpc` なら関数の有無を印にする。
      どちらでも「**その移行が本当に作るもの**」であることは変わらない */
   const markT = /NEWEST_MARK = \{\s*table: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
+  /* **列を増やすだけの移行もある**(0064)。表はもう在るので、
+     「表を作っているか」で見ると**貼る前でも「もう入っています」**になる ——
+     CLAUDE.md が「いちばん悪い壊れ方」と呼んでいるものである。
+     だから**その列を足しているか**で見る */
+  const markC = /NEWEST_MARK = \{[\s\S]{0,80}?column: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
   const markF = /NEWEST_MARK = \{\s*rpc: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
   /* **行そのものを印にすることもある**(0060 は弱点タグを2行足すだけで、
      表も列も関数も1つも増えない)。`weakness_tags` は 0001 からあるので、
@@ -4329,12 +4334,27 @@ console.log('\nスピーチ練習(0054)')
     if (markR && markT) {
       return new RegExp(`insert into public\\.${markT}\\b[\\s\\S]*'${markR}'`).test(src)
     }
+    /* **列の印も、表より先に見る**(同じ理由・0064) */
+    if (markC && markT) {
+      return new RegExp(
+        `alter table public\\.${markT}[\\s\\S]{0,400}add column if not exists ${markC}\\b`,
+      ).test(src)
+    }
     if (markT) return new RegExp(`create table if not exists public\\.${markT}\\b`).test(src)
     if (markF) return new RegExp(`create or replace function public\\.${markF}\\(`).test(src)
     return false
   }
   ok(makesMark(read4(`supabase/migrations/${newest}`)),
-    `準備の状態 … 印(${markT || markF || '(無し)'})は、その移行が本当に作るものである`)
+    `準備の状態 … 印(${markC || markT || markF || '(無し)'})は、その移行が本当に作るものである`)
+  /* **列の印は、その列を名指しで読んでいるか**(0064)。
+     `select('*')` のままだと、**列が無くても素通り**して
+     「もう入っています」になる(いちばん悪い壊れ方) */
+  if (markC) {
+    ok(/select\(NEWEST_MARK\.column\)/.test(state),
+      '準備の状態 … 列の印は、その列を名指しで読んでいる')
+    ok(/42703|PGRST204/.test(state),
+      '準備の状態 … 「そんな列は無い」を「まだです」と読む')
+  }
   /* **まとめた1つに入っていなければ、貼っても印は現れない** */
   ok(makesMark(read4('supabase/apply/pending_matome.sql')),
     '準備の状態 … その印は、まとめた1つ(`pending_matome.sql`)にも入っている')
@@ -6108,22 +6128,18 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **`setupState.js` は import できない** —— Supabase を引き連れており、
      素の node では `import.meta.env` が無くて落ちる。**ソースで見る** */
   const setup = noNote(readD('src/lib/setupState.js'))
-  /* **いちばん新しい移行は 0063 になった**(文化の背景)。
-     0062 の印(`qr_limit`)は、まとめた1つと `check.sql` の側で
-     そのまま見張り続ける(下の3本)—— **消していない** */
-  ok(/NEWEST_MIGRATION = '0063'/.test(setup),
-    '0063 … いちばん新しい移行として登録してある')
-  /* **0063 は表も列も行も増やさない**(許す値が1つ増えるだけ)。
-     だから画面から見えるように `section_types()` を作ってある。
-     **在るかどうかだけでは足りない** —— 関数は在るのに制約を
-     貼り忘れる形がありうるので、**中身に `culture_note` が
-     入っているか**まで見る(`has`) */
-  ok(/rpc: 'section_types'/.test(setup),
-    '0063 … 印は section_types()(表も列も増えない移行だから)')
-  ok(/has: 'culture_note'/.test(setup),
-    '0063 … 印は、返ってきた一覧の中身まで見る(在るかどうかだけにしない)')
+  /* **いちばん新しい移行は 0064 になった**(教材の冊と UNIT 番号)。
+     0062・0063 のぶんは、まとめた1つと `check.sql` の側で
+     そのまま見張り続ける(下)—— **消していない** */
+  ok(/NEWEST_MIGRATION = '0064'/.test(setup),
+    '0064 … いちばん新しい移行として登録してある')
+  /* **0064 は `materials` に列を2つ増やす。** 表はもう在るので、
+     **表の有無で見ると貼る前でも「もう入っています」**になる。
+     だから**列**を印にする */
+  ok(/table: 'materials'/.test(setup) && /column: 'series'/.test(setup),
+    '0064 … 印は materials.series(列が増える移行だから)')
   ok(!/row: \{ column/.test(setup),
-    '0063 … 前の印(行を見る形)が残っていない')
+    '0064 … 前の印(行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')
   ok(/create or replace function public\.qr_limit\(\)/.test(matome),
     '0062 … まとめた1つ(pending_matome.sql)に入っている')
@@ -7510,7 +7526,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/id: 'assign', label: 'アサインする'/.test(app), 'メニューに「アサインする」がある')
   ok(/'materials', 'learners', 'admin', 'assign'/.test(app),
     'ゲストが開いたら、宿題の画面へ戻す')
-  ok(/<AssignBooks \/>/.test(app), '行き先が描かれている')
+  /* **出した人(トレーナー)を渡す**(第5.202節)。RIZAP ENGLISH の教材は
+     宿題として届けるので、`assignments.assigned_by` に入れる人が要る。
+     **渡し忘れると、出せたように見えて断られる** */
+  ok(/<AssignBooks me=\{profile\} \/>/.test(app),
+    '行き先が描かれていて、出した人(トレーナー)も渡している')
 
   /* **教材は、ここには出さない**(利用者の指定で冊だけ) */
   ok(!/loadMaterials|assignMaterial/.test(asg), 'アサインする … 教材は出していない(冊だけ)')
@@ -8466,6 +8486,95 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     '単語帳 … 移れなければ、これまでどおり一覧の画面に残す')
   ok(/tried\.add\(next\)[\s\S]{0,200}setLive\(false\)/.test(qr),
     'Quick Response … 移れなければ、これまでどおり一覧の画面に残す')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   **RIZAP ENGLISH の教材を、アサインの画面から出す**(第5.202節)
+
+     > 教材のアサインのページから Conversation1、2、3、
+     > Business Conversation 1、2 をアサインできるようにしてください。
+     > UNIT ごと、丸ごと、それぞれお願いします。UNIT 毎の場合はプルダウンで
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  const srcOf = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/.*$/gm, '')
+  const books = srcOf('data/rizapBooks.js')
+  const lib = srcOf('lib/rizapAssign.js')
+  const row = srcOf('components/AssignRizap.jsx')
+  const page = srcOf('components/AssignBooks.jsx')
+  const skel = srcOf('__screens.jsx')
+
+  /* ── 冊は5つ。利用者が名指しした5冊である ── */
+  ok((books.match(/\{ id: 'rizap-/g) ?? []).length === 5,
+    'RIZAP … 冊が5つ登録してある',
+    String((books.match(/\{ id: 'rizap-/g) ?? []).length))
+  for (const name of ['Conversation 1', 'Conversation 2', 'Conversation 3',
+    'Business Conversation 1', 'Business Conversation 2']) {
+    ok(books.includes(`'${name}'`), `RIZAP … 「${name}」が在る`)
+  }
+
+  /* ── **UNIT の数を書き写していない** ──
+     書くと、UNIT を入れた日にここだけ古い数が残る */
+  ok(!/units:\s*\d/.test(books),
+    'RIZAP … UNIT の数を、冊の一覧に書き写していない(Supabase から数える)')
+  ok(/\.eq\('series', series\)/.test(lib) && /order\('unit_no'/.test(lib),
+    'RIZAP … UNIT は冊ごとに、番号の順で読む')
+
+  /* ── **0 と「読めなかった」を取り違えない** ── */
+  ok(/if \(error\) return \{ data: null, error \}/.test(lib),
+    'RIZAP … 読めなかったら null を返す(0 UNIT と言わない)')
+  ok(/list === null \|\| list === undefined/.test(row),
+    'RIZAP … 読めていない冊と、0 UNIT の冊を書き分けている')
+  ok(/まだ UNIT が入っていません/.test(row) && /読んでいます/.test(row),
+    'RIZAP … その2つを、別の言葉で出す')
+
+  /* ── **丸ごとと、1 UNIT は同じ道を通る** ──
+     2通りに書き分けると、置いた場所の数だけ食い違う */
+  ok(/const rows = want \? list\.filter/.test(page),
+    'RIZAP … 丸ごとと1 UNIT を、同じ道で出す(id の選び方だけが違う)')
+  ok(/assignRizap\(\{/.test(page), 'RIZAP … 出す窓口は1つ(assignRizap)')
+  /* **新しい配り方を作っていない。** 教材を配るのは `assignMaterial` 1か所 */
+  ok(/assignMaterial\(\{/.test(lib) && !/from\('assignments'\)\s*\n?\s*\.insert/.test(lib),
+    'RIZAP … 教材を配る道を、新しく作っていない(assignMaterial を使う)')
+
+  /* ── **二度出さない** ──
+     「丸ごと」を2回押したら宿題が2倍になる。押した人には分からない */
+  ok(/already\.has\(id\)/.test(lib),
+    'RIZAP … もう出してある UNIT は、二度出さない')
+  ok(/sent: 0/.test(lib), 'RIZAP … 1つも出さなかったことを、そのまま返す')
+  /* **0 を「出しました」と言わない**(成功と失敗を同じ見た目で終わらせない) */
+  const msg = srcOf('lib/assignBooks.js')
+  ok(/rizapDoneText = \(name, title, sent/.test(msg)
+     && /sent === 0/.test(msg) && /もう出してあります/.test(msg),
+    'RIZAP … 何も増えなかったときは、そう言う')
+
+  /* ── **「丸ごと」はプルダウンの先頭。値は空文字** ── */
+  ok(/<option value="">/.test(row), 'RIZAP … 丸ごとが、プルダウンの先頭に在る')
+  ok(/rizapAllLabel\(b\.id\)/.test(row),
+    'RIZAP … 丸ごとの名前を、冊の名前から作る(書き写さない)')
+
+  /* ── **出した人(トレーナー)が渡っているか** ──
+     渡し忘れると、出せたように見えて断られる */
+  ok(/assignedBy: me\?\.id/.test(page), 'RIZAP … 出した人を渡している')
+
+  /* ── **3つめの束として、上の2つの下に置く。並べ替えない** ── */
+  ok(page.indexOf('単語帳の冊') < page.indexOf('{RIZAP_LABEL}'),
+    'RIZAP … 単語帳の冊より下に置いてある')
+  ok(page.indexOf('{RIZAP_LABEL}') < page.indexOf('Quick Response の冊'),
+    'RIZAP … 束の並びを変えていない')
+  /* **束の名前を、画面に書き写していない** */
+  ok(!/RIZAP ENGLISH の教材/.test(page),
+    'RIZAP … 束の名前を、画面に書き写していない(rizapBooks.js 1か所)')
+
+  /* ── **骨組みは、本物と1文字も違えない**(CLAUDE.md)──
+     いちばん危ない形(UNIT 在り / 0 UNIT / まだ読めていない)を
+     3つとも置いていないと、その書き分けを壊しても緑のままになる */
+  ok(/<AssignRizap/.test(skel), '骨組み … RIZAP の行を、本物の部品で描いている')
+  ok(/\[RIZAP_BOOKS\[1\]\.id\]: \[\]/.test(skel),
+    '骨組み … 0 UNIT の冊を置いてある(押せる操作を出さない側)')
+  ok(/unit_no: 1/.test(skel) && /unit_no: 3/.test(skel),
+    '骨組み … UNIT の入っている冊も置いてある')
 }
 
 console.log(ng

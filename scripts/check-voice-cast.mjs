@@ -1293,5 +1293,92 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   } else ok('画面は、発行するときに声の並びを合わせている')
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   **RIZAP ENGLISH の教材の、固定の配役**(第5.202節)
+
+     > Elevenlabsの声で固定で作ってください。
+     > Mary = Jessica / Noah = David Esposito / Hannah = Sky / Sam = Henry
+     > Conversation1、2、３、Business Conversation 1、２は共通して
+     > この設定でお願いします。**絶対に変えないで。**
+
+   **推測ではなく、名指しである。** `voiceOrder.js` の並べ替えは
+   名前から性別を読むだけなので、「Mary が Jessica である」ことは
+   決まらない。ここは、その指名が**いまも守られているか**を見る。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  const { RIZAP_CAST, rizapVoiceOf, rizapVoiceIds, rizapNameKey } =
+    await import('../src/data/rizapCast.js')
+
+  /* ── ① 指名どおりの声か。**id と名前が食い違っていないか** ──
+     `clipVoices.js` の並びが変わった日に、黙って別人になるのを止める */
+  const wrong = RIZAP_CAST.filter((c) => {
+    const v = CLIP_VOICES.find((x) => x.id === c.voice)
+    return !v || v.label !== c.want
+  })
+  if (wrong.length) {
+    ng('RIZAP の配役 … 指名した声と、名簿の名前が食い違っている',
+      wrong.map((c) => `${c.name} → ${c.voice} は ${
+        CLIP_VOICES.find((x) => x.id === c.voice)?.label ?? '(名簿に無い)'
+      }。指定は ${c.want}`).join('\n    '))
+  } else {
+    ok(`RIZAP の配役 … ${RIZAP_CAST.length}人とも指名どおり(${
+      RIZAP_CAST.map((c) => `${c.name}=${c.want}`).join(' / ')})`)
+  }
+
+  /* ── ② 男女が入れ替わっていないか(実機で起きたことそのもの)── */
+  const sexes = RIZAP_CAST.map((c) => CLIP_VOICES.find((x) => x.id === c.voice)?.gender)
+  if (sexes.some((g) => g !== 'male' && g !== 'female')) {
+    ng('RIZAP の配役 … 性別の分からない声が混じっている', sexes.join(' / '))
+  } else if (new Set(sexes).size < 2) {
+    ng('RIZAP の配役 … 全員が同じ性別になっている(実機で起きた形)',
+      sexes.join(' / '))
+  } else {
+    ok(`RIZAP の配役 … 男女が混ざっている(${sexes.join(' / ')})`)
+  }
+
+  /* ── ③ 使っていない声・退いた声を当てていないか ── */
+  const dead = RIZAP_CAST.filter((c) => CLIP_VOICES.find((x) => x.id === c.voice)?.retired)
+  if (dead.length) {
+    ng('RIZAP の配役 … もう使わない声を当てている',
+      dead.map((c) => `${c.name} → ${c.voice}`).join(' / '))
+  } else ok('RIZAP の配役 … もう使わない声は当てていない')
+
+  /* ── ④ **知らない人物には、声を当てない** ──
+     利用者の指定「登場人物が追加になった際は、私に…尋ねてください」。
+     当てずっぽうで埋めると、また黙って別の声になる */
+  if (rizapVoiceOf('Kelly') !== null) {
+    ng('RIZAP の配役 … 知らない人物に、勝手に声を当てている',
+      '`null` を返して、利用者に訊くこと')
+  } else ok('RIZAP の配役 … 知らない人物には声を当てない(null を返す)')
+  const mixed = rizapVoiceIds(['Mary (Ticket center clerk)', 'Kelly', 'Noah'])
+  if (!mixed.unknown.includes('kelly')) {
+    ng('RIZAP の配役 … 声の決まっていない人物を、知らせていない',
+      JSON.stringify(mixed))
+  } else ok('RIZAP の配役 … 声の決まっていない人物を名指しで返す(訊く相手が分かる)')
+
+  /* ── ⑤ **出てくる順**。重複しない。`voiceOrder.js` と同じ数え方 ──
+     ずれると、声を当てた人と読み上げる人が別人になる */
+  const order = rizapVoiceIds(['Mary (Ticket center clerk)', 'Noah', 'Mary (Ticket center clerk)'])
+  if (order.ids.join(',') !== 'us-1,us-2') {
+    ng('RIZAP の配役 … 出てくる順の並びになっていない', order.ids.join(','))
+  } else ok('RIZAP の配役 … 出てくる順に、重複なく並ぶ(us-1, us-2)')
+  /* **肩書きを落とす切り方が、`voiceCast.js` とそろっているか。**
+     あちらは `speakerKey` → `(` の前 → 空白で切った最初の語 */
+  if (rizapNameKey('Mary (Ticket center clerk)') !== 'mary') {
+    ng('RIZAP の配役 … 肩書きの落とし方が、voiceCast.js とそろっていない',
+      rizapNameKey('Mary (Ticket center clerk)'))
+  } else ok('RIZAP の配役 … 肩書きの落とし方が、voiceCast.js とそろっている')
+
+  /* ── ⑥ **声の名前を、画面用に書き写していない** ──
+     `want` は「そのつもりで選んだ」という記録で、画面には使わない。
+     画面に出す名前は `voiceLabel()` が `clipVoices.js` から引く */
+  const src = readFileSync(new URL('../src/data/rizapCast.js', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+  if (/label:/.test(src)) {
+    ng('RIZAP の配役 … 画面に出す名前を、こちらに書き写している',
+      '名前は clipVoices.js 1か所(voiceLabel)から引くこと')
+  } else ok('RIZAP の配役 … 画面に出す名前を書き写していない')
+}
+
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

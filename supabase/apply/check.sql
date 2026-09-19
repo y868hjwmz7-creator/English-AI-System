@@ -177,4 +177,8 @@ from (
             where conname = 'material_sections_type_check'
               and pg_get_constraintdef(oid) like '%culture_note%')
     and exists (select 1 from pg_proc where proname = 'section_types'), 45
+  -- **列が増える移行**なので、列の有無で見る(0046 と同じ作法)
+  union all select '0064 教材に「どの冊の、第何 UNIT か」を控える(pending_matome.sql)',
+    exists (select 1 from information_schema.columns
+            where table_name = 'materials' and column_name = 'series'), 46
 ) t order by 順;

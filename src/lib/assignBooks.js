@@ -94,3 +94,29 @@ export const nfAllDoneText = (name, on) => (on
  */
 export const stoppedText = (done, err) => `${done} つまで済みましたが、`
   + `そこで止まりました: ${err?.message ?? err}`
+
+/* ── RIZAP ENGLISH の教材(第5.202節)──────────────────────────
+   **宿題として届く**ので、単語帳の冊のような「出す / 外す」ではない。
+   だから文も分けてある —— **同じ言い回しを、違う意味で使わない。**
+   ここに置くのは、`AssignBooks` が Supabase を引き連れていて
+   **素の node で一度も走らせられない**ためである(CLAUDE.md)。 */
+
+/** いま送っているときの1行 */
+export const rizapBusyText = (title) => `「${title}」を出しています…`
+
+/**
+ * **出したあとの1行。**
+ *
+ * **0 と、出した数を取り違えない。**「出しました」とだけ言うと、
+ * もう出してあった人には**何も変わっていないのに成功に見える**
+ * (CLAUDE.md「成功と失敗を、同じ見た目で終わらせない」)。
+ *
+ * @param name    相手の名前
+ * @param title   何を(`rizapPickLabel()` が作る)
+ * @param sent    いま出した UNIT の数
+ * @param already もう出してあった UNIT の数
+ */
+export const rizapDoneText = (name, title, sent, already = 0) => (sent === 0
+  ? `${name} さんには、「${title}」はもう出してあります。`
+  : `${name} さんに「${title}」を出しました(${sent} UNIT)。`
+    + (already ? `${already} UNIT は、もう出してありました。` : ''))
