@@ -55,6 +55,7 @@ import {
   QUARTERS, SUPERSCRIPTS, SYMBOL_WORDS, TIMEZONES, UNICODE_FRACTIONS, UNITS,
   WEEKDAY_ABBR, WORD_ACRONYMS,
 } from '../data/speakDict.js'
+import { splitSentences } from './wordTiming.js'
 
 /** 使える locale。**減らさない** */
 export const LOCALES = ['en-US', 'en-GB', 'en-AU', 'en-CA', 'en-NZ', 'en-IE']
@@ -131,7 +132,17 @@ const unitWord = (u, n) => (Number(n) === 1 ? u.one : u.many)
  * **英語の語と同じ字の単位。** 証拠がなければ単位として読まない。
  * `in`(インチ / 前置詞)がいちばん危ない。
  */
-const RISKY_UNITS = new Set(['in', 'A', 'B', 'K', 'T', 'N', 'J', 'W', 'V', 'l', 'a'])
+const RISKY_UNITS = new Set(['in', 'l', 'a', 'h', 't'])
+
+/**
+ * **大文字1文字の単位**(A=アンペア・V=ボルト…)。
+ *
+ * ふつうの英語では、数のうしろの大文字1文字は**席や部屋の記号**である
+ * (`seats 12 A, B, and C`)。**`twelve amperes` と読んでしまった**
+ * (2026-09 実機)。だから `domain` が理科・医療・IT のときだけ単位にする。
+ */
+const CAP_UNITS = new Set(['A', 'B', 'K', 'T', 'N', 'J', 'W', 'V', 'L', 'C', 'F', 'G', 'M'])
+const SCIENCE_DOMAINS = new Set(['SCIENCE', 'MEDICAL', 'IT', 'ACADEMIC'])
 
 /** `m²` `cm³` を言葉にする */
 function unitOf(sym, n) {
@@ -608,6 +619,8 @@ function mMeasure(c) {
    *   だから `in` は、**うしろが句読点か、長さを言う語のときだけ**
    *   単位として読む(`6 in.` / `6 in tall`)。
    *   **迷ったら単位にしない**(CLAUDE.md「既定は『できない』側」)。 */
+  /* **大文字1文字は、理科の話のときだけ単位**(`seats 12 A` は席の記号) */
+  if (CAP_UNITS.has(m[3]) && !SCIENCE_DOMAINS.has(c.domain)) return null
   if (RISKY_UNITS.has(m[3])) {
     const after = c.src.slice(c.i + m[0].length)
     if (!/^\s*$|^\s*[.,;:)!?]|^\s+(tall|long|wide|deep|thick|high|away|each|apart)\b/.test(after)) {
@@ -1016,6 +1029,13 @@ export function speakText(display, {
   const src = String(display ?? '')
   if (!src) return { text: '', changed: false, parts: [] }
   const c = { src, i: 0, locale, domain, dict }
+  /** **文を終わらせている `.` の位置。** 開いた語に、戻すために要る */
+  const sentenceDots = new Set()
+  for (const m of splitSentences(src)) {
+    let e = m.end - 1
+    while (e > m.start && /\s/.test(src[e])) e -= 1
+    if (src[e] === '.') sentenceDots.add(e)
+  }
   const parts = []
   let i = 0
   while (i < src.length) {
@@ -1050,10 +1070,18 @@ export function speakText(display, {
     /* **うしろが字や数字なら、当てはめない。**
        `5 kilometers` の `5 k` を拾って `ilometers` を残さない */
     if (hit && isWordCh(src[i + hit.len])) hit = null
-    /* **文の終わりの点を、落とさない**(`… on Mon.` / `… at 3 p.m.`)。
-       略語の点は、文の終わりの点を**兼ねている。**
-       開いた語に点を戻さないと、そこで文が切れなくなる */
-    if (hit && src[i + hit.len - 1] === '.' && !src.slice(i + hit.len).trim()) {
+    /* ── **文の終わりの点を、落とさない**(2026-09 実機)──────────
+     *
+     *   `… the arrival time is 4:50 P.M. For the 10:20 departure …`
+     *   の `P.M.` を開くと、**文の終わりの点まで食べてしまう。**
+     *   すると向こうは**息継ぎ無しで次の文へ続けて読む** ——
+     *   そこで文が切れなくなる。
+     *
+     *   **「その点は文を終わらせているか」は、すでに1か所が知っている**
+     *   (`wordTiming.js` の `splitSentences`)。ここで判じ直さない
+     *   (CLAUDE.md「判断は1か所に持つ」)。`Mr. Smith` の点は
+     *   文を終わらせていないので、戻さない。 */
+    if (hit && src[i + hit.len - 1] === '.' && sentenceDots.has(i + hit.len - 1)) {
       hit = { ...hit, say: `${hit.say}.` }
     }
     if (hit && hit.say != null) { parts.push({ at: i, ...hit }); i += hit.len; continue }

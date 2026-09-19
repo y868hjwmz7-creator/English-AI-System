@@ -383,6 +383,18 @@ export function spansOf(alignment, texts) {
   const walk = walker(got.chars)
   const raw = []
   for (const text of list) {
+    /* ── **字も数字も無い「文」を、断る理由にしない**(2026-09 実機)──
+     *
+     *   `Let's see . . . there's a 7:15 departure` を文に切ると、
+     *   **`.` だけの「文」**ができる(`splitSentences`)。
+     *   語で当てるようにした日から、そこは当たる語が0本なので
+     *   割合が 0 になり、**本文まるごと当てはめを断っていた。**
+     *   利用者の「**ハイライトが消えました**」は、これである。
+     *
+     *   **当てはめようがないものは、断る理由にならない。**
+     *   幅0の区間を置いて、あとで**次の文の頭**に合わせる ——
+     *   そこに置けば、次の文がすぐ勝つので**ちらつかない。** */
+    if (!wordsOf(text).length) { raw.push(null); continue }
     const { list: marks, rate } = walk(text)
     if (!marks.length || rate < MIN_HIT) return null
     /* **その項目で、最初に当てはまった文字と最後に当てはまった文字。**
@@ -410,21 +422,25 @@ export function spansOf(alignment, texts) {
     })
   }
 
+  /* **1つも当てはめられなければ、そこで断る**(全部が句読点だけ) */
+  if (raw.every((r) => !r)) return null
+
   /** 音声の、いちばん最初といちばん最後 */
   const headSec = Number(got.from[0])
   const tailSec = Number(got.to[got.to.length - 1])
 
-  const starts = raw.map((r) => Number(got.from[r.first.k]))
-  const ends = raw.map((r) => Number(got.to[r.last.k]))
+  const starts = raw.map((r) => (r ? Number(got.from[r.first.k]) : NaN))
+  const ends = raw.map((r) => (r ? Number(got.to[r.last.k]) : NaN))
 
   /* **いちばん最初の項目が、当てはまらない文字で始まっているとき。**
      その前には何も無いので、音声の頭まで戻す */
-  if (raw[0].head > 0 && Number.isFinite(headSec) && headSec < starts[0]) {
+  if (raw[0] && raw[0].head > 0 && Number.isFinite(headSec) && headSec < starts[0]) {
     starts[0] = headSec
   }
 
   /* **あいだの音の切れ目を、空白のかたまりで見つける**(上の注記) */
   for (let i = 0; i < raw.length - 1; i += 1) {
+    if (!raw[i] || !raw[i + 1]) continue          // 語の無い「文」は、下で置く
     /* **どちらに読み下しがあるかで決める。**
        どちらにも無ければ、残った文字(句読点)の数で決める ——
        そうすると、**文字1つずつで当てていた頃と同じ答え**になる */
@@ -471,8 +487,20 @@ export function spansOf(alignment, texts) {
   /* **いちばん最後の項目が、当てはまらない文字で終わっているとき。**
      そのあとには何も無いので、音声の終わりまで伸ばす */
   const lastOne = raw.length - 1
-  if (raw[lastOne].tail > 0 && Number.isFinite(tailSec) && tailSec > ends[lastOne]) {
+  if (raw[lastOne] && raw[lastOne].tail > 0
+    && Number.isFinite(tailSec) && tailSec > ends[lastOne]) {
     ends[lastOne] = tailSec
+  }
+
+  /* **語の無い「文」を、次の文の頭に置く**(幅0)。
+     次が無ければ、音声の終わりに置く。**前に置かない** ——
+     前に置くと、そこで一瞬だけ `.` が光ってしまう */
+  for (let i = raw.length - 1; i >= 0; i -= 1) {
+    if (raw[i]) continue
+    const next = i + 1 < raw.length ? starts[i + 1] : tailSec
+    const put = Number.isFinite(next) ? next : tailSec
+    starts[i] = put
+    ends[i] = put
   }
 
   const out = []

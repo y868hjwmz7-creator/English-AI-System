@@ -2480,6 +2480,38 @@ function fakeMp3({
       } else ok('③ 数字が無ければ、区切りは1ミリ秒も動かない')
     }
 
+    /* ── ④ **字も数字も無い「文」が、本文まるごとを断らせない** ────
+     *
+     *   > **ハイライトが消えました**(2026-09 実機・利用者)
+     *
+     *   `Let's see . . . there's a 7:15 departure` を文に切ると、
+     *   **`.` だけの「文」**ができる(`splitSentences` の実際の出力)。
+     *   語で当てるようにした日から、そこは当たる語が0本なので
+     *   割合が 0 になり、**本文まるごと見積もりに落ちていた。**
+     *
+     *   **いちばん危ない形を、検証の中に必ず置く**(CLAUDE.md)。 */
+    {
+      const shown = ['Let me see .', '.', '. there is one at noon.', 'That works.']
+      const read = 'Let me see . . . there is one at noon. That works.'
+      const sp = spansOf(align(read), shown)
+      if (!sp || sp.length !== shown.length) {
+        ng('**句読点だけの「文」で、本文まるごと断っている**',
+          `${sp ? sp.length : 'null'} / ${shown.length}`)
+      } else if (!(sp[1].start === sp[1].end)) {
+        ng('語の無い「文」に、幅のある区間を当てている', `${sp[1].start}〜${sp[1].end}`)
+      } else if (!(sp[1].start === sp[2].start)) {
+        /* **次の文の頭に置く。** 前に置くと、そこで一瞬 `.` が光る */
+        ng('語の無い「文」を、次の文の頭に置いていない', `${sp[1].start} ≠ ${sp[2].start}`)
+      } else if (!(sp[2].start > sp[0].end && sp[3].start > sp[2].end)) {
+        ng('語の無い「文」のせいで、前後の区間が壊れている')
+      } else ok('④ 句読点だけの「文」があっても、本文まるごとは断らない')
+
+      /* **「出ない」側も見る。** 全部が句読点だけなら、当てはめようがない */
+      if (spansOf(align('. . .'), ['.', '.', '.'])) {
+        ng('当てはめようが無いのに、区間を返している')
+      } else ok('④ ぜんぶ句読点だけなら、区間は返さない')
+    }
+
     /* ── ③ の歯止め **区切りの空白が広くても、そこは「間」のまま** ──
      *
      *   本物の会話は発言と発言のあいだに間(無音)がある。
