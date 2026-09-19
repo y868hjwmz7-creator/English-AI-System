@@ -4220,5 +4220,140 @@ function fakeMp3({
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   **支度で、本文のほかの読み上げも全部作る**(第5.203節)
+
+     > そもそもが教材を作りながら音の処理を裏で同時に終わらせられないの
+     > ですか？ 文系トレーニングでさえどの listen を押しても数秒待たされ、
+     > 記事やダイアローグだと1分近く待たされます。
+
+   数えたら、支度は**ほんの一部**しか作っていなかった ——
+   文型ドリル 30 本・単語 / フレーズ 20 本は**丸ごと素通り**で、
+   記事や会話も「1本にまとめた本文」だけだった。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  const { materialAudioClips, materialRestClips } =
+    await import('../src/lib/audioPlaylist.js')
+  const { EXERCISE_TYPES, defaultSectionsFor } =
+    await import('../src/data/exerciseTypes.js')
+  const { MATERIAL_KINDS } = await import('../src/data/materialKinds.js')
+
+  const mkMat = (kind) => ({
+    voiceIds: ['us-1', 'us-2'], tags: [],
+    sections: (defaultSectionsFor(kind) ?? []).map((sec) => ({
+      exercise_type: sec.exercise_type,
+      items: Array.from({ length: sec.count }, (_, i) => ({
+        prompt_en: `Sentence ${i} for ${sec.exercise_type}.`,
+        answer: `Answer ${i} for ${sec.exercise_type}.`,
+        question: `Question ${i} for ${sec.exercise_type}?`,
+        audio_text: `Audio ${i} for ${sec.exercise_type}.`,
+        speaker: i % 2 ? 'Noah' : 'Mary',
+      })),
+    })),
+  })
+
+  /* ── ① **読み上げのある問を、1本も取りこぼさない** ──
+     `audioFrom` を持つ演習の問は、本文を除いてぜんぶ出てこなければならない */
+  const audioOf = (id) => EXERCISE_TYPES.find((t) => t.id === id)?.audioFrom ?? null
+  const BODY = new Set(['article', 'dialogue'])
+  let miss = []
+  for (const k of MATERIAL_KINDS.filter((x) => !x.legacy)) {
+    const m = mkMat(k.id)
+    const want = (defaultSectionsFor(k.id) ?? [])
+      .filter((sec) => audioOf(sec.exercise_type) && !BODY.has(sec.exercise_type))
+      .reduce((n, sec) => n + sec.count, 0)
+    const got = materialRestClips(m).length
+    if (got !== want) miss.push(`${k.label} … ${got} 本 / ほしいのは ${want} 本`)
+  }
+  if (miss.length) {
+    ng('支度 … 本文のほかの読み上げを取りこぼしている', miss.join('\n    '))
+  } else {
+    ok('支度 … どの種類でも、本文のほかの読み上げを1本も取りこぼさない')
+  }
+
+  /* ── ② **文型ドリルと単語 / フレーズが、0 本のままでない** ──
+     ここが「どの listen を押しても数秒待つ」の正体だった。
+     **数で言う** —— 「増えた」ではなく「30 本」 */
+  const drill = materialRestClips(mkMat('pattern')).length
+  if (drill < 30) {
+    ng('支度 … 文型ドリルの読み上げが足りない', `${drill} 本`)
+  } else ok(`支度 … 文型ドリルの ${drill} 本も用意する(前は 0 本だった)`)
+  const vocab = materialRestClips(mkMat('vocab')).length
+  if (vocab < 20) {
+    ng('支度 … 単語 / フレーズの読み上げが足りない', `${vocab} 本`)
+  } else ok(`支度 … 単語 / フレーズの ${vocab} 本も用意する(前は 0 本だった)`)
+
+  /* ── ③ **本文は入れない**(入れると本文の音声代が倍になる)──
+     「出る」と「出ない」の両方を見る。入れない側を見ないと、
+     **何でも入れる形**に書き換えても緑のままになる */
+  const dlg = mkMat('dialogue')
+  const bodyTexts = new Set(materialAudioClips(dlg).map((c) => c.text))
+  const overlap = materialRestClips(dlg).filter((c) => bodyTexts.has(c.text))
+  if (overlap.length) {
+    ng('支度 … 本文まで入れている(本文の音声代が倍になる)',
+      `${overlap.length} 本`)
+  } else ok('支度 … 本文は入れない(1本にまとめたものが受け持つ)')
+
+  /* ── ④ **同じ英文を二度数えない** ──
+     置き場所は(段・声・英文の指紋)なので、同じ3つなら同じ1本である */
+  const dup = {
+    voiceIds: ['us-1'], tags: [],
+    sections: [{
+      exercise_type: 'comprehension',
+      items: [{ question: 'Same question?' }, { question: 'Same question?' }],
+    }],
+  }
+  const n = materialRestClips(dup).length
+  if (n !== 1) ng('支度 … 同じ英文を二度数えている', `${n} 本`)
+  else ok('支度 … 同じ英文は1本として数える')
+
+  /* ── ⑤ **声と段は、鳴らすときと同じ決め方** ──
+     ずれると、支度した MP3 と押したときに探す MP3 の置き場所が
+     食い違い、**1本も当たらない**(`materialClipPieces` と同じ根) */
+  const one = materialRestClips(mkMat('reading'))[0]
+  if (one?.voiceId !== 'us-1') {
+    ng('支度 … 本文のほかの読み上げが、いちばん最初の声で読まれていない',
+      String(one?.voiceId))
+  } else ok('支度 … 本文のほかは、いちばん最初の声で読む(画面と同じ)')
+
+  /* ── ⑥ **支度が、本当にそれを呼んでいるか** ──
+     **「名前が出てくるか」で見ない**(CLAUDE.md)。使っている形で数える */
+  const prep = readFileSync(new URL('../src/lib/prepareJob.js', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  if (!/const rest = materialRestClips\(material\)/.test(prep)) {
+    ng('支度 … 本文のほかの読み上げを数えていない')
+  } else ok('支度 … 本文のほかの読み上げを数えている')
+  if (!/await ensureClip\(c\.text, c\.voiceId, c\.tier\)/.test(prep)) {
+    ng('支度 … 1本ずつ待って用意していない',
+      '待たないと、何本できたのか数えられない')
+  } else ok('支度 … 1本ずつ待って用意する(数えられる)')
+  /* **課金は、新しく作ったぶんだけ数える。**
+     もう置いてあった1本を足すと、払っていない額が出る */
+  if (!/got === 'made' \? c\.text\.length : 0/.test(prep)) {
+    ng('支度 … 文字数を、作った本だけで数えていない',
+      'もう置いてあったぶんは 0円である')
+  } else ok('支度 … 文字数は、新しく作った本だけで数える(0円のぶんを足さない)')
+  /* **止まる条件**(CLAUDE.md)。やめたら、そこで止まる */
+  if (!/for \(const c of rest\) \{[\s\S]{0,120}if \(!alive\(\)\) return/.test(prep)) {
+    ng('支度 … 途中でやめられない(30 本ぶん回り続ける)')
+  } else ok('支度 … 途中でやめたら、そこで止まる')
+
+  /* ── ⑦ **置いてあるものは作り直さない = 0円** ── */
+  const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  if (!/addEventListener\('loadedmetadata', \(\) => stop\('had'\)\)/.test(clips)) {
+    ng('支度 … 置いてあるかを見ずに作っている(二度課金する)')
+  } else ok('支度 … 置いてあれば作り直さない(0円)')
+  /* **時間切れでも作りに行かない。** 行くと二度目の課金になる */
+  if (!/setTimeout\(\(\) => end\('unknown'\), WARM_WAIT\)/.test(clips)) {
+    ng('支度 … 待ちっぱなしになる道がある(止まる条件が無い)')
+  } else ok('支度 … 12 秒で切り上げる。時間切れでは作りに行かない')
+  /* **先読みと支度で、2つ書かない**(数え方を2通り持たない) */
+  if (!/ensureClip\(text, voiceId, tier\)\.catch/.test(clips)) {
+    ng('先読みと支度が、別々に書かれている',
+      '片方だけ別の場所を探すようになる')
+  } else ok('先読みも支度も、同じ ensureClip を通る')
+}
+
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

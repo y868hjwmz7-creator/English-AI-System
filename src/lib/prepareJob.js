@@ -32,8 +32,8 @@
  * ============================================================================
  */
 import { useEffect, useState } from 'react'
-import { lastWholeDetail, wholeClip } from './audioClips.js'
-import { materialAudioClips } from './audioPlaylist.js'
+import { ensureClip, lastWholeDetail, wholeClip } from './audioClips.js'
+import { materialAudioClips, materialRestClips } from './audioPlaylist.js'
 import { prefetchGlosses } from './vocab.js'
 import { PREMIUM } from './voiceTier.js'
 
@@ -143,20 +143,31 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
   }
 
   const clips = materialAudioClips(material)
-  // 本文の無い教材(ドリル・単語・フレーズ)には、支度することが無い
+  /* **本文のほかの読み上げも、ぜんぶ支度する**(第5.203節・利用者の指定)。
+     文型ドリル 30 本・単語 / フレーズ 20 本は、これまで**1本も**
+     作っていなかった(本文の演習が無いので丸ごと素通りしていた)。
+     だから「どの Listen を押しても数秒待つ」になっていた */
+  const rest = materialRestClips(material)
+  // 語の意味だけの教材(読み上げも本文も無い)には、支度することが無い
   const words = clips.length ? clips : bodyTextsOf(material)
-  if (!words.length) return false
+  if (!words.length && !rest.length) return false
 
   done.add(id)
   const mine = `${Date.now()}`
   task = {
     id: mine, materialId: id, title, state: 'running',
-    step: 0, total: 2, label: '読み上げ音声', startedAt: Date.now(),
+    /* 段は3つになった … ①1本にまとめた本文 ②本文のほかの読み上げ ③語の意味 */
+    step: 0, total: 3, label: '読み上げ音声', startedAt: Date.now(),
     cancelled: false, error: null,
     /* **何ができたのかを残す。** 「支度ができました」だけでは、
        **本当に用意できたのか、素通りしたのかが分からない**
        (成功と失敗を、同じ見た目で終わらせない・CLAUDE.md) */
     audio: null, words: 0, note: null,
+    /* **見えない費用は管理できない**(CLAUDE.md・利用者の指定)。
+       何本のうち何本すんだか、そのうち**何本を新しく作ったか**(=課金)、
+       その文字数(ElevenLabs はここで数える)を、そのまま出す。
+       `had` は**もう置いてあった**ぶんで、**0円**である */
+    clips: { done: 0, total: rest.length, made: 0, had: 0, chars: 0 },
   }
   emit()
 
@@ -185,12 +196,47 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
       }
       if (!alive()) return
 
-      // ② 語の意味。**開いてから引くと、レッスン中に待つことになる**
-      step(1, '語の意味')
+      /* ② **本文のほかの読み上げを、ぜんぶ用意する**(第5.203節)。
+
+         **1本ずつ順に。** まとめて投げると、いくらかかったのか
+         分からないうちに終わる(`startPrepareAll` と同じ作法)。
+         **やり直さない** —— 作れなかった1本は、押したときに作られる。
+
+         **置いてあるものは作り直さない = 0円。** `ensureClip()` が
+         見に行って、無いときだけ窓口を呼ぶ */
+      if (rest.length) {
+        step(1, '本文のほかの読み上げ')
+        for (const c of rest) {
+          if (!alive()) return
+          let got = 'ng'
+          try {
+            got = await ensureClip(c.text, c.voiceId, c.tier)
+          } catch { got = 'ng' }
+          if (!alive()) return
+          const now = task.clips
+          task = {
+            ...task,
+            clips: {
+              ...now,
+              done: now.done + 1,
+              made: now.made + (got === 'made' ? 1 : 0),
+              had: now.had + (got === 'had' ? 1 : 0),
+              /* **課金は、新しく作ったぶんだけ数える。**
+                 もう置いてあった1本を足すと、**払っていない額**が出る */
+              chars: now.chars + (got === 'made' ? c.text.length : 0),
+            },
+          }
+          emit()
+        }
+      }
+      if (!alive()) return
+
+      // ③ 語の意味。**開いてから引くと、レッスン中に待つことになる**
+      step(2, '語の意味')
       const list = (clips.length ? clips : words).map((c) => ({ text: c.text }))
       await prefetchGlosses(list, { level })
       if (!alive()) return
-      task = { ...task, state: 'done', step: 2, label: '', audio, words: list.length, note }
+      task = { ...task, state: 'done', step: 3, label: '', audio, words: list.length, note }
       emit()
     } catch (e) {
       if (!alive()) return
@@ -259,13 +305,33 @@ function bodyTextsOf(material) {
   return out
 }
 
+/**
+ * **いま作った音声の数と、その文字数**(第5.203節・利用者の指定)。
+ *
+ * **もう置いてあったぶんは、金額に数えない**(0円である)。
+ * ElevenLabs は**文字で数える**ので、文字数がそのまま「いくらか」に当たる。
+ * **1文字いくらは、こちらでは確かめていない** —— 契約の単価を
+ * いただければ、ここに円で出せる(**推測で数字を書かない**)。
+ */
+export const prepareCost = (t) => {
+  const c = t?.clips
+  if (!c || !c.made) return ''
+  return `新しく作った ${c.made} 本・${c.chars.toLocaleString()} 文字`
+}
+
 /** 画面に出す1行。**帯の文言は1か所で決める**(2か所に書き分けない) */
 export function prepareLabel(t, secs = 0) {
   if (!t) return ''
   if (t.state === 'running') {
     const what = t.label || '読み上げ音声'
     const left = queue.length ? `　ほかにあと ${queue.length} 本` : ''
-    return `${t.title ? `${t.title} の` : ''}${what}を用意しています…`
+    /* **残り本数を出す**(利用者の指定)。「用意しています…」だけでは、
+       あと3秒なのか3分なのかが分からない。
+       **`total` が 0 のときは出さない** —— 「0 / 0 本」は意味が無い */
+    const c = t.clips
+    const count = c?.total ? `(${c.done} / ${c.total} 本` +
+      (c.made ? `・新しく ${c.made} 本` : '') + ')' : ''
+    return `${t.title ? `${t.title} の` : ''}${what}を用意しています…${count}`
       + (secs > 2 ? `(${secs} 秒)` : '') + left
   }
   /* **何ができたのかを、数で出す。**「できました」だけでは、
@@ -276,18 +342,36 @@ export function prepareLabel(t, secs = 0) {
     return `${head}読み上げ音声を用意できませんでした`
       + `(初めて押したときに作られます)${t.note ? ` — ${t.note}` : ''}`
   }
+  const c = t.clips
   const made = [
-    t.audio === 'ok' ? '読み上げ音声 1本' : null,
+    t.audio === 'ok' ? '1本にまとめた本文' : null,
+    /* **すんだ本数と、そのうち新しく作った本数を分けて出す。**
+       「30 本用意しました」だけだと、**いくら払ったのか分からない**
+       (もう置いてあったぶんは 0円である・CLAUDE.md「見えない費用」) */
+    c?.total ? `読み上げ ${c.done} 本${c.made ? `(うち新しく ${c.made} 本・${
+      c.chars.toLocaleString()} 文字)` : '(すべて作り置き・0円)'}` : null,
     t.words ? `語の意味 ${t.words} か所ぶん` : null,
   ].filter(Boolean).join(' / ')
-  return `${head}支度ができました${made ? `(${made})` : ''}`
+  /* **作れなかった本があれば、そう言う**(黙って成功にしない)。
+     どのみち押したときに作られるので、止めはしない */
+  const left = c?.total ? c.total - c.done - 0 : 0
+  const miss = c?.total ? c.total - c.had - c.made : 0
+  const note = miss > 0 && left <= 0
+    ? `　${miss} 本は用意できませんでした(初めて押したときに作られます)` : ''
+  return `${head}支度ができました${made ? `(${made})` : ''}${note}`
 }
 
 /** 進み具合(0〜1)。**終わった段 + 0.5** で出す(動いて見えるように) */
 export function prepareRatio(t) {
   if (!t) return 0
   if (t.state !== 'running') return 1
-  return Math.min(1, (t.step + 0.5) / Math.max(1, t.total))
+  /* **本数が分かっている段は、本数で動かす**(第5.203節)。
+     30 本作るあいだ棒が止まって見えると、**止まっているのか
+     進んでいるのかが分からない**(行き止まりに見える) */
+  const c = t.clips
+  const inStep = (c?.total && t.label === '本文のほかの読み上げ')
+    ? c.done / c.total : 0.5
+  return Math.min(1, (t.step + inStep) / Math.max(1, t.total))
 }
 
 /**

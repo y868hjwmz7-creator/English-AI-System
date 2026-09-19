@@ -191,6 +191,79 @@ export const PIECE_GAP_MS = 90
  *
  * @returns {Array<{text, voiceId, tier, gapMs}>} `gapMs` は**そのあとの間**
  */
+/**
+ * ============================================================================
+ * **本文のほかに、読み上げが付く英文をぜんぶ並べる**(第5.203節)
+ *
+ * 2026-09 実機・利用者の指摘。
+ *
+ *   > そもそもが教材を作りながら音の処理を裏で同時に終わらせられないの
+ *   > ですか？ 文系トレーニングでさえどの listen を押しても数秒待たされ、
+ *   > 記事やダイアローグだと1分近く待たされます。
+ *
+ * ── 数えたら、支度は**ほんの一部**しか作っていなかった ──────────
+ *
+ *   | 教材の種類 | 読み上げのある問 | いま支度が作るもの |
+ *   |---|---|---|
+ *   | 文型ドリル | **30 本** | **0 本**(本文の演習が無いので、丸ごと素通り) |
+ *   | 記事 | 24 本 | 1本にまとめた本文だけ |
+ *   | 会話 | 30 本 | 同上 |
+ *   | 単語 / フレーズ | **20 本** | **0 本** |
+ *
+ *   **押したときに作るしかないので、毎回待たされていた。**
+ *
+ * ── 本文はここに入れない ────────────────────────────────────
+ *
+ *   本文(記事・会話)は `materialAudioClips()` が受け持ち、支度では
+ *   **1本にまとめて**作る(`wholeClip`)。ここで発言ごとにも作ると、
+ *   **本文の音声代が倍になる**(CLAUDE.md「2つの形を置いている」)。
+ *   利用者の指定は **A(本文以外を全部)** なので、本文は外す。
+ *
+ * ── 声と段は、鳴らすときとまったく同じ決め方 ────────────────
+ *
+ *   画面(`MaterialBody`)は本文以外の英文を
+ *   **`resolveVoices(voiceIds)[0]`(いちばん最初の声)**で読み、
+ *   段は `voiceTierFor({exerciseType, tags})` で決める。
+ *   **ここで別の決め方をすると、支度した MP3 と、押したときに探す
+ *   MP3 の置き場所が食い違い、1本も当たらない**(`materialClipPieces`
+ *   の説明にある落とし穴と、まったく同じ根)。
+ *
+ * ── どの欄を読むかも、書き写さない ──────────────────────────
+ *
+ *   `exerciseTypes.js` の `audioFrom` 1か所から引く。
+ *   種類を足した日に、ここだけ古いままにならない。
+ * ============================================================================
+ *
+ * @returns {Array<{text, voiceId, tier}>} 鳴る順
+ */
+export function materialRestClips(material) {
+  const body = bodySectionOf(material)
+  const voiceIds = material?.voiceIds ?? material?.voice_ids ?? null
+  const solo = resolveVoices(voiceIds)[0]
+  const tags = material?.tags ?? material?.tagIds ?? []
+  const out = []
+  const seen = new Set()
+  for (const sec of material?.sections ?? []) {
+    /* **本文は入れない**(1本にまとめたものが受け持つ) */
+    if (body && sec === body) continue
+    const from = exerciseType(sec?.exercise_type)?.audioFrom
+    if (!from) continue
+    const tier = voiceTierFor({ exerciseType: sec.exercise_type, tags })
+    for (const it of sec.items ?? []) {
+      const text = String(it?.[from] ?? '').trim()
+      if (!text) continue
+      /* **同じ英文を二度作らない。** 置き場所は(段・声・英文の指紋)なので、
+         同じ3つなら**同じ1本**である —— 二度数えると、
+         画面に出す本数だけが水増しになる(数え方を2通り持たない) */
+      const key = `${tier}|${solo}|${text}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ text, voiceId: solo, tier })
+    }
+  }
+  return out
+}
+
 export function materialClipPieces(material) {
   const out = []
   for (const clip of materialAudioClips(material)) {

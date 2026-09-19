@@ -2047,7 +2047,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '控えを読む道がある')
   ok(!/clipAlignment[\s\S]{0,600}askForClip/.test(ac),
     '**控えを読むだけ。窓口は呼ばない**(0円)')
-  ok(/prefetchClip[\s\S]{0,400}clipAlignment\(/.test(ac),
+  /* **温める中身は `ensureClip()` 1か所に寄せた**(第5.203節)。
+     先読みも支度も「置いてあれば温めるだけ、無ければ作る」で同じなので、
+     2つ書かない。だから**その道を通っているか**まで見る ——
+     `prefetchClip` が直に書かなくなっただけで、温めは消えていない */
+  ok(/prefetchClip[\s\S]{0,400}ensureClip\(/.test(ac),
+    '**先読みは `ensureClip` を通る**(2か所に書き写さない)')
+  ok(/export function ensureClip[\s\S]{0,900}clipAlignment\(/.test(ac),
     '**次の段落の控えも温めておく**(段落の切れ目で待たせない)')
   ok(ac.includes('marksFromTimes(body, charTimesOf(alignment, body))'),
     '`playClip` が、控えがあれば見積もらない')

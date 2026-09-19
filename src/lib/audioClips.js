@@ -1329,23 +1329,79 @@ export async function wholeSeams(url, spans, sents = null) {
  * **失敗しても何もしない。** 先読みのために画面を止めない。
  */
 export function prefetchClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
-  if (!canUseClips()) return
-  /* **文字ごとの時刻も、ここで温めておく**(2026-09)。
-     控えに入っていれば、次の段落は**待たずに**正確な色で鳴らせる。
-     `.json` は数十 KB で、しかも同じ CDN から来る。
-     読めなくても困らない —— これまでどおり見積もりに戻るだけである */
-  clipAlignment(text, voiceId, tier).catch(() => {})
-  clipUrl(text, voiceId, tier).then((url) => {
-    if (!url) return
-    // **`fetch` では取りに行かない。** 別のドメインなので CORS の許しが要る。
-    // `<audio>` の先読みなら要らず、しかも端末の控えにそのまま入る。
-    // ここで作った札は鳴らさない。控えを温めるためだけのもの
-    const warm = new Audio()
-    warm.preload = 'auto'
-    warm.addEventListener('error', () => { makeClip(text, voiceId, tier) })
-    warm.src = url
-    warm.load()
-  }).catch(() => {})
+  /* **中身は `ensureClip()` 1か所**(第5.203節)。支度も先読みも
+     「置いてあれば温めるだけ、無ければ作る」でまったく同じなので、
+     **2つ書かない** —— 書き写すと、片方だけ別の場所を探すようになる
+     (`materialClipPieces` の説明にある落とし穴と同じ根)。
+     ここは**待たない**。結果も見ない */
+  ensureClip(text, voiceId, tier).catch(() => {})
+}
+
+/** 置いてあるかを見に行くのを、これ以上待たない(ミリ秒) */
+const WARM_WAIT = 12000
+
+/**
+ * ============================================================================
+ * **その英文の MP3 を、確かに1本用意する**(第5.203節)
+ *
+ * 2026-09 実機・利用者の指摘「どの listen を押しても数秒待たされる」。
+ *
+ * ── `prefetchClip()` との違いは「待てるか」だけ ────────────────
+ *
+ *   支度(`prepareJob.js`)は**何本できたかを数えて画面に出す**ので、
+ *   1本ずつ終わりを待てなければならない。`prefetchClip()` は投げっぱなし
+ *   だったので、**何本用意できたのか誰にも分からなかった。**
+ *
+ * ── 置いてあるものは、作り直さない(= 0円)────────────────────
+ *
+ *   `<audio>` に読ませてみて、**読めたら置いてある。**
+ *   **`fetch` では見に行かない** —— 別のドメインなので CORS の許しが要る
+ *   (`prefetchClip` が 2026-09 にそう決めた理由そのもの)。
+ *   `<audio>` の先読みなら許しが要らず、しかも**端末の控えに入る**ので、
+ *   そのあと押したときは通信すら起きない。
+ *
+ * ── 待ちっぱなしにしない ────────────────────────────────────
+ *
+ *   通信が詰まると `<audio>` はどちらの合図も出さないことがある。
+ *   **止まる条件を持たせる**(CLAUDE.md)—— 12 秒で切り上げ、
+ *   「分からなかった」を返す。**作りには行かない**(二重課金しない)。
+ *
+ * @returns {Promise<'had'|'made'|'ng'|'skip'|'unknown'>}
+ *   `had` … もう置いてあった(**0円**)/ `made` … 作った(課金)
+ *   `ng` … 作れなかった / `skip` … 作る仕組みが無い / `unknown` … 時間切れ
+ * ============================================================================
+ */
+export function ensureClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) {
+  return new Promise((done) => {
+    if (!canUseClips()) { done('skip'); return }
+    /* **文字ごとの時刻も、ここで温めておく**(2026-09)。
+       控えに入っていれば、次の段落は**待たずに**正確な色で鳴らせる。
+       `.json` は数十 KB で、しかも同じ CDN から来る。
+       読めなくても困らない —— これまでどおり見積もりに戻るだけである */
+    clipAlignment(text, voiceId, tier).catch(() => {})
+    clipUrl(text, voiceId, tier).then((url) => {
+      if (!url) { done('skip'); return }
+      let settled = false
+      const end = (v) => { if (!settled) { settled = true; done(v) } }
+      /* **時間切れでも、作りには行かない。** 置いてあるのに合図が
+         来なかっただけかもしれず、作れば**二度目の課金**になる */
+      const timer = setTimeout(() => end('unknown'), WARM_WAIT)
+      const stop = (v) => { clearTimeout(timer); end(v) }
+      // **`<audio>` の先読み。** ここで作った札は鳴らさない
+      const warm = new Audio()
+      warm.preload = 'auto'
+      /* **長さが読めた = 置いてある。** `canplay` を待たない ——
+         あれは中身を落とし終わるまで来ないことがある */
+      warm.addEventListener('loadedmetadata', () => stop('had'))
+      warm.addEventListener('error', () => {
+        makeClip(text, voiceId, tier)
+          .then((made) => stop(made ? 'made' : 'ng'))
+          .catch(() => stop('ng'))
+      })
+      warm.src = url
+      warm.load()
+    }).catch(() => done('ng'))
+  })
 }
 
 /**
