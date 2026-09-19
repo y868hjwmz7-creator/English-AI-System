@@ -135,47 +135,208 @@ const solidCount = (s) => {
  *   そのときは**これまでどおり見積もりに戻す。**
  * ══════════════════════════════════════════════════════════════════ */
 
-/** 追いかける範囲(向こうの文字を、これだけ先まで見て探す) */
-const LOOKAHEAD = 60
 
 /** 当てはまったと認める最低の割合。これを下回ったら使わない */
 const MIN_HIT = 0.6
 
 /**
+ * ============================================================================
+ * **項目と項目のあいだに鳴っている音を、どこで切るか**(第5.204節・2026-09 実機)
+ *
+ *   > 10 A.M. とか $25 とか、March 8 or 9、など、
+ *   > **数字が出てくるとズレます。**2単語分くらいのズレでも
+ *   > すごくストレスがあるので、ここは詰めてしっかり修正したいです(利用者)
+ *
+ * 向こうは数字を**読み下して声にする**(`$25` →「twenty-five dollars」)。
+ * だから `$` `2` `5` は `alignment` のどの文字にも当たらない。
+ *
+ * もとは**最後に当てはまった文字で、その項目を終わり**にしていた。
+ * すると `It will be an additional $20.` は
+ * **「additional」を言い終わった瞬間に終わる** ——
+ * 次の文は「twenty dollars」を言っている最中に光り始める。
+ * 利用者の言う「2単語分くらい先に進む」は、これである。
+ *
+ * ── **切れ目は、空白で見つける** ──────────────────────────
+ *
+ *   **空白は「間(ま)」である** —— そこでは声が出ていない。
+ *   項目と項目をつなぐとき、こちらは必ず空白(や改行)ではさむ。
+ *   だから**向こうが読んだ文字の並びの中にある空白のかたまり**が、
+ *   そのまま切れ目である。秒を当てずっぽうで足し引きしない。
+ *
+ *       … additional[ ]twenty[ ]dollars.[ ]It will …
+ *                                        ↑ここが切れ目
+ *
+ *   ・**前の項目に読み下しがある**(`$20.`)… **いちばん後ろ**のかたまり。
+ *     そこまでは、前の項目が言っている
+ *   ・**うしろの項目に読み下しがある**(`$25 is …`)… **いちばん前**の
+ *     かたまり。そこから先は、うしろの項目が言っている
+ *   ・**両方にある** … どちらの空白か決められないので、**字の数で分ける**
+ *     (`SEP` のぶんだけは、どちらのものでもない「間」として残す)
+ *   ・**どちらにも無い** … 残っているのは句読点だけである。
+ *     **その数で、同じように決める** ——
+ *     `Hello there.` なら「いちばん後ろの空白まで」= ピリオドの終わりまで。
+ *     **文字1つずつで当てていた頃と、1ミリ秒も変わらない**
+ *
+ * ── **数字が無くても、同じ決まりが通る** ────────────────────
+ *
+ *   `Hello there.` の `.` も「当てはまらなかった文字」である
+ *   (語で当てるので、句読点は当たらない)。いちばん後ろの空白まで、
+ *   つまり**ピリオドの終わりまで**が前の文 ——
+ *   **文字1つずつで当てていた頃と、同じ答えになる。**
+ *   **決まりを2つ持たない**(CLAUDE.md「判断は1か所に持つ」)。
+ * ============================================================================
+ */
+
+/** 字の数で分けるとき、どちらのものでもない「間」のぶん */
+const SEP = 1
+
+/**
+ * 向こうの `a` 文字目と `b` 文字目のあいだにある、**空白のかたまり**。
+ *
+ * @returns {Array<[number, number]>} `[はじめ, おわり]` の並び(どちらも含む)
+ */
+function spaceRuns(chars, a, b) {
+  const runs = []
+  for (let i = a + 1; i < b; i += 1) {
+    if (!isSpace(chars[i])) continue
+    const last = runs[runs.length - 1]
+    if (last && last[1] === i - 1) last[1] = i
+    else runs.push([i, i])
+  }
+  return runs
+}
+
+/** 語のかたまりを作る文字(字と数字。語の中のアポストロフィも入れる) */
+const isWordChar = (c) => /[\p{L}\p{N}]/u.test(c)
+const isInWord = (c) => isWordChar(c) || c === "'" || c === '’'
+
+/**
+ * 文字の並びを、**語のかたまり**に分ける。
+ *
+ * @returns {Array<{word:string, at:number[]}>}
+ *   `at` は、その語を作っている文字の位置(**画面の英文の何文字目か**)
+ */
+function wordsOf(chars) {
+  const out = []
+  let now = null
+  for (let i = 0; i < chars.length; i += 1) {
+    const c = String(chars[i] ?? '')
+    if (isInWord(c)) {
+      /* **語の頭がアポストロフィなら、語ではない**(引用符のことが多い) */
+      if (!now && !isWordChar(c)) continue
+      if (!now) { now = { word: '', at: [] }; out.push(now) }
+      now.word += c.toLowerCase()
+      now.at.push(i)
+    } else {
+      /* **語の終わりのアポストロフィは落とす**(`dogs'` の `'`) */
+      now = null
+    }
+  }
+  /* **後ろのアポストロフィを、語から外す**(`don't` の `t` は残す) */
+  for (const w of out) {
+    while (w.word.length > 1 && !isWordChar(w.word[w.word.length - 1])) {
+      w.word = w.word.slice(0, -1)
+      w.at.pop()
+    }
+  }
+  return out.filter((w) => w.word)
+}
+
+/** 語をどれだけ先まで探すか。**近くだけを見る**(遠くへ飛ばない) */
+const WORD_LOOKAHEAD = 12
+
+/**
+ * ============================================================================
  * 向こうの読んだ文字の上を、順に歩く道具を作る。
  *
  * **1つの道具を使い回す**(項目をまたいでも位置を持ち越す)。
  * 作り直すと、2つめの項目が先頭から探し直して**前へ戻る。**
+ *
+ * ── **語のかたまりで当てる**(第5.204節・2026-09 実機)──────────
+ *
+ *   > 10 A.M. とか $25 とか、March 8 or 9、など、
+ *   > **数字が出てくるとズレます**(利用者)
+ *
+ *   もとは**文字を1つずつ**、先へ 60 文字ぶん探していた。
+ *   向こうは数字を声にするとき読み下す(`$25` →「twenty-five dollars」)
+ *   ので、`$` `2` `5` はどこにも当たらない。そこまでは織り込み済みだった。
+ *
+ *   **本当に効いていたのは、そのあとである。**
+ *
+ *       画面 `There's a 10 A.M. departure each day.`
+ *       音   `There's a ten A M departure each day.`
+ *
+ *   `A` は当たる。ところが次の **`.` が、文末のピリオドに当たった** ——
+ *   同じ文字が先に在れば、いくら離れていても飛びつくからである。
+ *   位置が文末まで飛んだので、**そこから先の `M` も `departure` も
+ *   `each day` も、ぜんぶ外れた。** 当たったのは 31 文字中 10 文字
+ *   (0.32)で、**下限 0.6 を割って当てはめごと断られ**、
+ *   文まるごとが見積もりに落ちていた。見積もりは数字を
+ *   「2文字ぶん」としか数えないので、**そこから先が全部先に進む。**
+ *
+ * ── だから、**語で当てる** ──────────────────────────────
+ *
+ *   ・`.` `,` `'` のような**1文字では当てない。** 遠くへ飛ぶ元凶である
+ *   ・語は**まるごと一致したときだけ**当てる(`departure` = `departure`)。
+ *     一致すれば**長さも同じ**なので、中の文字は1対1で並ぶ
+ *   ・数字や読み下された語は当たらない。**そこは空のまま返す** ——
+ *     埋めるのは呼ぶ側(`charTimesOf` が、当たった語と語のあいだの
+ *     音をそこへ配る)。**ここで当てずっぽうをしない**
+ *   ・探すのは**近くの語だけ**(`WORD_LOOKAHEAD`)。遠くは見ない
+ *
+ * ── どれだけ当たったかは、**字と数字だけ**で数える ────────────
+ *
+ *   句読点はもう当てないので、それを分母に入れると**句読点の多い文**が
+ *   不当に低く出て、また断られる。**数えるのは字と数字だけ。**
+ * ============================================================================
  */
 function walker(chars) {
-  let k = 0
+  const src = wordsOf(chars)
+  /** いま、向こうの何語目まで来たか */
+  let w = 0
+
   /**
    * @param {string} text 当てはめたい英文
-   * @returns {{list:Array<{at:number,k:number}>, hit:number}}
-   *   `at` は英文の何文字目か、`k` は向こうの何文字目か(-1 = 当たらず)
+   * @returns {{list:Array<{at:number,k:number}>, hit:number, rate:number}}
+   *   `at` は英文の何文字目か、`k` は向こうの何文字目か(-1 = 当たらず)。
+   *   `rate` は**字と数字のうち、当たった割合**
    */
   return (text) => {
-    const src = String(text ?? '')
-    const list = []
-    let hit = 0
-    for (let i = 0; i < src.length; i += 1) {
-      const c = src[i]
-      if (isSpace(c)) continue
-      const want = c.toLowerCase()
-      let j = k
-      let hops = 0
+    const body = String(text ?? '')
+    /* **文字列のまま渡す。** ここで出る `at` は**画面の英文の何文字目か**で、
+       呼ぶ側(`charTimesOf` の `start[]`・`sentenceTimesOf` の `charIndex`)も
+       同じ数え方をしている。`[...body]` にすると数え方が2通りになる */
+    const mine = wordsOf(body)
+    /** 英文の何文字目 → 向こうの何文字目 */
+    const hitAt = new Map()
+
+    for (const one of mine) {
+      /* **近くの語だけを見る。** 見つからなければ、その語は当てない */
       let found = -1
-      while (j < chars.length && hops <= LOOKAHEAD) {
-        const d = chars[j]
-        if (isSpace(d)) { j += 1; continue }
-        if (String(d).toLowerCase() === want) { found = j; break }
-        j += 1
-        hops += 1
+      for (let j = w; j < src.length && j < w + WORD_LOOKAHEAD; j += 1) {
+        if (src[j].word === one.word) { found = j; break }
       }
-      if (found >= 0) { list.push({ at: i, k: found }); k = found + 1; hit += 1 }
-      else list.push({ at: i, k: -1 })
+      if (found < 0) continue
+      const got = src[found]
+      /* **まるごと一致しているので、長さも同じ。**
+         そうでなければ当てない(1対1に並ばない) */
+      if (got.at.length !== one.at.length) { w = found + 1; continue }
+      one.at.forEach((at, i) => hitAt.set(at, got.at[i]))
+      w = found + 1
     }
-    return { list, hit }
+
+    const list = []
+    let solid = 0
+    let hit = 0
+    for (let i = 0; i < body.length; i += 1) {
+      const c = body[i]
+      if (isSpace(c)) continue
+      if (isWordChar(c)) solid += 1
+      const k = hitAt.has(i) ? hitAt.get(i) : -1
+      if (k >= 0 && isWordChar(c)) hit += 1
+      list.push({ at: i, k })
+    }
+    return { list, hit, rate: solid ? hit / solid : 0 }
   }
 }
 
@@ -220,20 +381,104 @@ export function spansOf(alignment, texts) {
   if (list.some((t) => solidCount(t) === 0)) return null
 
   const walk = walker(got.chars)
-  const out = []
+  const raw = []
   for (const text of list) {
-    const { list: marks, hit } = walk(text)
-    if (!marks.length || hit / marks.length < MIN_HIT) return null
+    const { list: marks, rate } = walk(text)
+    if (!marks.length || rate < MIN_HIT) return null
     /* **その項目で、最初に当てはまった文字と最後に当てはまった文字。**
        書き換えられた場所(数字・記号)は当たらないので飛ばす */
     const first = marks.find((m) => m.k >= 0)
     let last = null
+    let lastAt = -1
     for (let i = marks.length - 1; i >= 0; i -= 1) {
-      if (marks[i].k >= 0) { last = marks[i]; break }
+      if (marks[i].k >= 0) { last = marks[i]; lastAt = i; break }
     }
     if (!first || !last) return null
-    const start = Number(got.from[first.k])
-    const end = Number(got.to[last.k])
+    /** 声になる文字か(字と数字)。**句読点は、声にならない** */
+    const say = (m) => isWordChar(text[m.at])
+    const headMarks = marks.slice(0, marks.indexOf(first))
+    const tailMarks = marks.slice(lastAt + 1)
+    raw.push({
+      first,
+      last,
+      /** 頭・終わりに、当てはまらなかった文字が**何字**あるか(空白は数えない) */
+      head: headMarks.length,
+      tail: tailMarks.length,
+      /** そのうち、**声になる**のは何字か(読み下された数字は、ここに入る) */
+      headSay: headMarks.filter(say).length,
+      tailSay: tailMarks.filter(say).length,
+    })
+  }
+
+  /** 音声の、いちばん最初といちばん最後 */
+  const headSec = Number(got.from[0])
+  const tailSec = Number(got.to[got.to.length - 1])
+
+  const starts = raw.map((r) => Number(got.from[r.first.k]))
+  const ends = raw.map((r) => Number(got.to[r.last.k]))
+
+  /* **いちばん最初の項目が、当てはまらない文字で始まっているとき。**
+     その前には何も無いので、音声の頭まで戻す */
+  if (raw[0].head > 0 && Number.isFinite(headSec) && headSec < starts[0]) {
+    starts[0] = headSec
+  }
+
+  /* **あいだの音の切れ目を、空白のかたまりで見つける**(上の注記) */
+  for (let i = 0; i < raw.length - 1; i += 1) {
+    /* **どちらに読み下しがあるかで決める。**
+       どちらにも無ければ、残った文字(句読点)の数で決める ——
+       そうすると、**文字1つずつで当てていた頃と同じ答え**になる */
+    let mine = raw[i].tailSay
+    let yours = raw[i + 1].headSay
+    if (!mine && !yours) { mine = raw[i].tail; yours = raw[i + 1].head }
+    if (!mine && !yours) continue          // **どちらにも余りが無い。動かさない**
+
+    const from = ends[i]
+    const to = starts[i + 1]
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) continue
+
+    if (mine && yours) {
+      /* **どの空白が切れ目か決められない。** 字の数で分け、
+         `SEP` のぶんだけは、どちらのものでもない「間」として残す */
+      const all = raw[i].tail + raw[i + 1].head + SEP
+      const w = to - from
+      ends[i] = from + (w * raw[i].tail) / all
+      starts[i + 1] = to - (w * raw[i + 1].head) / all
+      continue
+    }
+
+    /* **切れ目の空白を1つ選ぶ。** その前は前の項目、その先はうしろの項目 ——
+       **どちらも同じ1つの空白で切る**(切れ目を2つ持たない) */
+    const runs = spaceRuns(got.chars, raw[i].last.k, raw[i + 1].first.k)
+    if (!runs.length) {
+      /* 空白が1つも無い(詰めてつないだ)。**字の数で分ける** */
+      const w = to - from
+      ends[i] = from + (w * mine) / (mine + yours)
+      starts[i + 1] = ends[i]
+      continue
+    }
+    /* 読み下しが**前の項目**にあるなら、いちばん**後ろ**の空白。
+       **うしろの項目**にあるなら、いちばん**前**の空白 */
+    const [p, q] = mine ? runs[runs.length - 1] : runs[0]
+    const cutEnd = Number(got.to[p - 1])
+    const cutStart = Number(got.from[q + 1])
+    if (Number.isFinite(cutEnd) && cutEnd > from && cutEnd <= to) ends[i] = cutEnd
+    if (Number.isFinite(cutStart) && cutStart < to && cutStart >= ends[i]) {
+      starts[i + 1] = cutStart
+    }
+  }
+
+  /* **いちばん最後の項目が、当てはまらない文字で終わっているとき。**
+     そのあとには何も無いので、音声の終わりまで伸ばす */
+  const lastOne = raw.length - 1
+  if (raw[lastOne].tail > 0 && Number.isFinite(tailSec) && tailSec > ends[lastOne]) {
+    ends[lastOne] = tailSec
+  }
+
+  const out = []
+  for (let i = 0; i < raw.length; i += 1) {
+    const start = starts[i]
+    const end = ends[i]
     if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null
     out.push({ start, end })
   }
@@ -276,18 +521,65 @@ export function charTimesOf(alignment, text) {
   const src = String(text ?? '')
   if (!got || !src) return null
 
-  const { list: marks, hit } = walker(got.chars)(src)
-  if (!marks.length || hit / marks.length < MIN_HIT) return null
+  const { list: marks, rate } = walker(got.chars)(src)
+  if (!marks.length || rate < MIN_HIT) return null
 
   const start = new Array(src.length).fill(NaN)
   const end = new Array(src.length).fill(NaN)
   for (const m of marks) {
-    if (m.k < 0) continue                 // 書き換えられた文字。**埋めない**
+    if (m.k < 0) continue                 // 書き換えられた文字。下でまとめて埋める
     const a = Number(got.from[m.k])
     const b = Number(got.to[m.k])
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue
     start[m.at] = a
     end[m.at] = b
+  }
+
+  /* ── **読み下された数字にも、時刻を入れる**(第5.204節・2026-09 実機)
+   *
+   *   > 10 A.M. とか $25 とか、March 8 or 9、など、
+   *   > 数字が出てくるとズレます(利用者)
+   *
+   *   `$25` は「twenty-five dollars」と声になるので、`$` `2` `5` は
+   *   どの文字にも当たらない。**そこを空のままにしていた**ので、
+   *   語ごとに光らせる側は**その語を飛ばして次へ進む。**
+   *   利用者の言う「2単語分くらい先に進む」は、これである。
+   *
+   *   **当てずっぽうで埋めるのとは違う。** 当てはまった文字と文字の
+   *   あいだの音は、**そのあいだの文字が鳴っている時間そのもの**である
+   *   (ほかの何かが鳴っているわけがない)。だから
+   *   **その区間を、あいだの文字の数で分ける。**
+   *
+   *   **両端が当てはまっているところだけ埋める。**
+   *   ・前が無い(文の頭が数字)… 音声の頭から、次に当たった文字まで
+   *   ・後ろが無い(文の終わりが数字)… ここでは埋めない ——
+   *     その文が音声のどこで終わるかは、この関数には分からない
+   *     (`spansOf` が項目の終わりとして受け持つ)。
+   *     **分からないものを、分かったように埋めない**(CLAUDE.md) */
+  const solid = marks.filter((m) => m.k >= 0)
+  if (solid.length) {
+    const fill = (from, to, gap) => {
+      /* 幅が無ければ、そこに全部を置く(**時刻を逆に進めない**) */
+      const span = to - from
+      const step = gap.length > 0 ? span / gap.length : 0
+      gap.forEach((at, i) => {
+        start[at] = from + step * i
+        end[at] = from + step * (i + 1)
+      })
+    }
+    let gap = []
+    let prevEnd = Number(got.from[0])
+    for (const m of marks) {
+      if (m.k < 0) { gap.push(m.at); continue }
+      const a = Number(start[m.at])
+      if (gap.length && Number.isFinite(prevEnd) && Number.isFinite(a) && a > prevEnd) {
+        fill(prevEnd, a, gap)
+      }
+      gap = []
+      if (Number.isFinite(end[m.at])) prevEnd = end[m.at]
+    }
+    /* **終わりに残った当てはまらない文字は、埋めない。**
+       そこから先が何秒まで続くのかは、この関数には分からない */
   }
   return { start, end }
 }

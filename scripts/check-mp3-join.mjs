@@ -2328,6 +2328,176 @@ function fakeMp3({
     if (bad === before) ok('読み替えられても、時刻を正しく当てはめる')
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+   * ⑫ **数字が出てくるとズレる**(第5.204節・2026-09 実機)
+   *
+   *   > 未だにハイライトが先に進みます。**10 A.M. とか $25 とか、
+   *   > March 8 or 9、など、数字が出てくるとズレます。**
+   *   > 2単語分くらいのズレでもすごくストレスがあるので、
+   *   > ここは詰めてしっかり修正したいです(利用者)
+   *
+   *   すぐ上の⑪で「読み替えられても当てはめる」までは出来ていた。
+   *   **残っていた穴は3つ**あり、どれも**数字のときだけ**顔を出す。
+   *   ①句読点が遠くへ飛ぶ ②読み下した数字に時刻が入らない
+   *   ③文の終わりが数字だと、言い終わる前にその文が終わる。
+   *
+   *   **1文字 0.06 秒の時計で、秒を全部数えて突き合わせる。**
+   *   期待値は**どれも読んだ音から数えて出す**(書き写さない・CLAUDE.md)。
+   * ══════════════════════════════════════════════════════════════════ */
+  {
+    const SEC = 0.06
+    /** 読んだ音から時刻を作る(空白も1文字ぶん進む) */
+    const align = (read) => {
+      const chars = [...read]
+      return {
+        characters: chars,
+        character_start_times_seconds: chars.map((_, i) => Number((i * SEC).toFixed(6))),
+        character_end_times_seconds: chars.map((_, i) => Number(((i + 1) * SEC).toFixed(6))),
+      }
+    }
+    /** 読んだ音の中で、その言葉が**始まる / 終わる**秒(数えて出す) */
+    const secOf = (read, w) => Number((read.indexOf(w) * SEC).toFixed(6))
+    const endOf = (read, w) => Number(((read.indexOf(w) + w.length) * SEC).toFixed(6))
+    const near = (a, b) => Number.isFinite(a) && Math.abs(a - b) < 1e-6
+
+    /* ── ① **句読点で、遠くへ飛ばない** ────────────────────────
+     *
+     *   もとは**文字を1つずつ**、先へ 60 文字ぶん探していた。
+     *   `A.M.` の `.` が**文末のピリオド**に当たって位置が飛び、
+     *   **そこから先が全滅**する。31 文字中 10 文字しか当たらず、
+     *   **下限を割って文まるごと見積もりに落ちていた。** */
+    {
+      const shown = 'There’s a 10 A.M. departure each day.'
+      const read = 'There’s a ten A M departure each day.'
+      const t = charTimesOf(align(read), shown)
+      if (!t) {
+        ng('数字の入った文で、当てはめを断っている', '文まるごと見積もりに落ちる')
+      } else {
+        const off = []
+        for (const w of ['departure', 'each', 'day']) {
+          const got = t.start[shown.indexOf(w)]
+          if (!near(got, secOf(read, w))) off.push(`${w} ${got} ≠ ${secOf(read, w)}`)
+        }
+        if (off.length) ng('数字のうしろの語が、本当の秒とずれている', off.join(' / '))
+        else ok('① 数字があっても、うしろの語は本当の秒で光る(点で遠くへ飛ばない)')
+      }
+    }
+
+    /* ── ① の裏 **句読点を分母に入れない** ──────────────────────
+     *
+     *   語で当てると、句読点はもう当たらない。それを分母に入れると
+     *   **句読点の多い文が不当に低く出て、また断られる。**
+     *   数えるのは**字と数字だけ**である。 */
+    {
+      const shown = '"Yes!!!" --- "No!!!" --- "Maybe!!!"'
+      const t = charTimesOf(align(shown), shown)   // 読んだ音は、そのまま
+      const solid = [...shown].filter((c) => !/\s/.test(c)).length
+      const words = [...shown].filter((c) => /[\p{L}\p{N}]/u.test(c)).length
+      if (words / solid >= 0.6) {
+        ng('この検証が効いていない', `句読点を数えても ${(words / solid).toFixed(2)} で通る`)
+      } else if (!t) {
+        ng('句読点の多い文で、当てはめを断っている', '語はぜんぶ当たっているのに')
+      } else ok('① 当てはまった割合は、字と数字だけで数える(句読点を分母に入れない)')
+    }
+
+    /* ── ② **読み下された数字にも、時刻が入る** ──────────────────
+     *
+     *   `$63` は「sixty-three dollars」と声になるので、どの文字にも
+     *   当たらない。**そこを空のままにしていた**ので、語ごとに光らせる側は
+     *   **その語を飛ばして次へ進む。** 当てはまった文字と文字のあいだの音は
+     *   **そのあいだの文字が鳴っている音そのもの**なので、そこへ配る。 */
+    {
+      const shown = 'It’s $63 for the morning departure.'
+      const read = 'It’s sixty-three dollars for the morning departure.'
+      const t = charTimesOf(align(read), shown)
+      const at = shown.indexOf('$63')
+      if (!t) {
+        ng('$63 の入った文で、当てはめを断っている')
+      } else if (![0, 1, 2].every((i) => Number.isFinite(t.start[at + i]))) {
+        ng('**読み下された数字に、時刻が入っていない**', '語ごとの印が、そこを飛ばす')
+      } else if (!(t.start[at] >= endOf(read, 'It’s') - 1e-6)) {
+        ng('数字の時刻が、前の語に食い込んでいる', `${t.start[at]}`)
+      } else if (!(t.start[at + 2] <= secOf(read, 'for') + 1e-6)) {
+        ng('数字の時刻が、次の語をはみ出している', `${t.start[at + 2]}`)
+      } else if (!(t.start[at + 2] > t.start[at])) {
+        ng('数字の中で、時刻が進んでいない', '3文字ぜんぶが同じ秒')
+      } else ok('② 読み下された数字にも、前後の語のあいだの秒が入る')
+    }
+
+    /* ── ③ **文の終わりが数字なら、言い終わるまでがその文** ────────
+     *
+     *   もとは**最後に当てはまった文字**で文を終わらせていたので、
+     *   `… an additional $20.` は**「additional」の終わりで文が終わる。**
+     *   次の文が「twenty dollars」の最中に光り始める ——
+     *   利用者の言う「2単語分くらい先に進む」は、これである。 */
+    {
+      const shown = ['It will be an additional $20.', 'I see. How much are the tickets?']
+      const read = 'It will be an additional twenty dollars. I see. How much are the tickets?'
+      const sp = spansOf(align(read), shown)
+      if (!sp || sp.length !== 2) {
+        ng('数字で終わる文が、区切れない')
+      } else if (!(sp[0].end >= endOf(read, 'dollars') - 1e-6)) {
+        ng('**数字を言い終わる前に、次の文へ移っている**',
+          `${sp[0].end.toFixed(2)} 秒 < ${endOf(read, 'dollars').toFixed(2)} 秒`)
+      } else if (!(sp[0].end <= secOf(read, 'I see.') + 1e-6)) {
+        ng('前の文が、次の文の声にまで食い込んでいる', `${sp[0].end.toFixed(2)} 秒`)
+      } else ok('③ 文の終わりが数字でも、言い終わるまでがその文')
+    }
+
+    /* ── ③ の裏 **文の頭が数字なら、言い始めたところから** ──────── */
+    {
+      const shown = ['I see.', '$20 is the fee.']
+      const read = 'I see. Twenty dollars is the fee.'
+      const sp = spansOf(align(read), shown)
+      if (!sp || sp.length !== 2) {
+        ng('数字で始まる文が、区切れない')
+      } else if (!(sp[1].start <= secOf(read, 'Twenty') + 1e-6)) {
+        ng('**数字を言い始めたのに、まだ前の文が光っている**',
+          `${sp[1].start.toFixed(2)} 秒 > ${secOf(read, 'Twenty').toFixed(2)} 秒`)
+      } else if (!(sp[1].start >= endOf(read, 'I see.') - 1e-6)) {
+        ng('うしろの文が、前の文の声にまで食い込んでいる', `${sp[1].start.toFixed(2)} 秒`)
+      } else ok('③ 文の頭が数字でも、言い始めたところから光る')
+    }
+
+    /* ── ③ の歯止め **数字が無ければ、1ミリ秒も動かさない** ────────
+     *
+     *   伸ばす側だけを見ていると、**どの文も次の文の頭まで伸ばす**形に
+     *   書き換えても緑のままになる。**「出る」と「出ない」の両方を見る。** */
+    {
+      const shown = ['Hello there.', 'How are you?']
+      const read = shown.join(' ')
+      const sp = spansOf(align(read), shown)
+      if (!sp || sp.length !== 2) {
+        ng('ふつうの文が、区切れない')
+      } else if (!near(sp[0].end, endOf(read, 'Hello there.'))) {
+        ng('数字が無いのに、文の終わりが動いている',
+          `${sp[0].end} ≠ ${endOf(read, 'Hello there.')}`)
+      } else if (!near(sp[1].start, secOf(read, 'How'))) {
+        ng('数字が無いのに、文の頭が動いている', `${sp[1].start} ≠ ${secOf(read, 'How')}`)
+      } else ok('③ 数字が無ければ、区切りは1ミリ秒も動かない')
+    }
+
+    /* ── ③ の歯止め **区切りの空白が広くても、そこは「間」のまま** ──
+     *
+     *   本物の会話は発言と発言のあいだに間(無音)がある。
+     *   そこまで前の文のものにしてしまうと、**間のあいだ中ずっと
+     *   前の文が光ったまま**になる。切れ目は**空白のかたまりの手前**である。 */
+    {
+      const shown = ['Hello there.', 'How are you?']
+      const read = shown.join('    ')                 // 空白4つ = 0.24 秒の間
+      const sp = spansOf(align(read), shown)
+      const ma = secOf(read, 'How') - endOf(read, 'Hello there.')
+      if (!sp || sp.length !== 2) {
+        ng('間の広い並びが、区切れない')
+      } else if (!(ma > 0.2)) {
+        ng('この検証が効いていない', `間が ${ma.toFixed(2)} 秒しかない`)
+      } else if (!near(sp[0].end, endOf(read, 'Hello there.'))) {
+        ng('**間(ま)まで、前の文のものにしている**',
+          `${sp[0].end.toFixed(2)} ≠ ${endOf(read, 'Hello there.').toFixed(2)}`)
+      } else ok('③ 区切りの空白は、どちらのものでもない(間のまま残る)')
+    }
+  }
+
 /* ══════════════════════════════════════════════════════════════════
  * ⑩ **控えた時刻の時計を、鳴らしている音声に合わせる**(2026-09 実機)
  *
