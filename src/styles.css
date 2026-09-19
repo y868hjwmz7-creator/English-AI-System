@@ -4024,6 +4024,13 @@ html, body { overflow-x: clip; }
 .lesson-settings {
   display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center; margin-left: auto;
 }
+/* **集中モードで見ている版**(2026-09 実機・利用者の指定)。
+   **既定は出さない。** 狭い画面で「表示」を開いたときだけ出す
+   (帯を2行にしない)。パソコンは集中モードを閉じればフッターに出ている */
+.focus-ver {
+  display: none;
+  font-size: var(--fs-12); color: #b8b8b0; white-space: nowrap;
+}
 
 /* ── 帯は、入るまで詰める(`useFitRow`)──────────────────────────
    2026-09 実機・利用者の指摘「またずれました。直して下さい」。
@@ -5408,6 +5415,9 @@ html, body { overflow-x: clip; }
      「あふれている」と読まれ、意味のない詰めが入る(`fitRow.js`)。
      狭い画面で1行に収めるのは、いつも見える `.lesson-bar-main` だけである */
   .is-measuring-row .lesson-settings { display: none !important; }
+  /* **版は、開いたときだけ**(上の JSX の注記)。
+     いつも出すと帯が2行になり、利用者の指定を破る */
+  .lesson-settings.is-open .focus-ver { display: inline; }
 }
 
 /* いちばん狭い端末(iPhone SE = 320px)では、「表示」を**絵だけ**にする。

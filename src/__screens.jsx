@@ -1232,6 +1232,29 @@ const GNOTE_SENTENCES = [
   },
 ]
 
+/* **集中モードの帯に、いま見ている版が出るか**(`?screen=focusver`・第5.207節)。
+
+   2026-09 実機・利用者の指定。集中モードは画面をまるごと覆うので、
+   **フッターの版が見えない。**「直したはずのものが直っていない」の多くは
+   端末に残った古い内容なので、**閉じずに確かめられる**ようにした。
+
+   **ここで測るのは `FocusFrame` そのもの**である ——
+   版は `settings` と同じかたまり(「表示」)の中に入るので、
+   **`settings` を渡した形**にしないと、その道を一度も通れない
+   (`FocusReader` は渡す。`QrReview` は渡さない)。
+   中身は本物と同じ `.btn btn--small` の並びにしてある。 */
+const FOCUSVER = (
+  <FocusFrame width="w100" page="ver" onClose={() => {}}
+              settings={(
+                <>
+                  <button type="button" className="btn btn--small">速さ</button>
+                  <button type="button" className="btn btn--small">文字</button>
+                </>
+              )}>
+    <p>集中モードの中身。</p>
+  </FocusFrame>
+)
+
 const GNOTE = (
   <FocusFrame width="w100" page="gnote" onClose={() => {}}
               top={<span className="focus-count">1 / 6 段落</span>}>
@@ -1617,6 +1640,8 @@ createRoot(document.getElementById('root')).render(
     ? qrScreen(false)
     : q.get('screen') === 'qrrev'
     ? qrScreen(true)
+    : q.get('screen') === 'focusver'
+    ? FOCUSVER
     : q.get('screen') === 'qrreal'
     ? QRREAL
     : q.get('screen') === 'tabs'

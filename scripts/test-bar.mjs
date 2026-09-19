@@ -194,7 +194,13 @@ writeFileSync(join(ROOT, '__bar.html'), `<!doctype html>
 <script type="module" src="/src/__screens.jsx"></script></body></html>
 `)
 
-const vite = spawn('npx', ['vite', '--config', CFG], { cwd: ROOT, stdio: 'ignore' })
+/** **版の札を、検証でも出せるようにする**(第5.207節)。
+    本物は GitHub Actions が入れる(`VITE_BUILD_STAMP`)。
+    ここで入れないと、**札そのものが描かれず、見張りが素通りする** */
+const STAMP = '2026-09-19 00:00 UTC / testtest'
+const vite = spawn('npx', ['vite', '--config', CFG], {
+  cwd: ROOT, stdio: 'ignore', env: { ...process.env, VITE_BUILD_STAMP: STAMP },
+})
 
 const cleanup = () => {
   try { vite.kill('SIGTERM') } catch { /* もう止まっている */ }
@@ -7666,6 +7672,159 @@ for (const W of [1280, 794, 453, 390, 320]) {
       '1語も無いところから問を作っている(行き止まり)')
   }
   await page.close()
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   **集中モードで、いま見ている版が分かる**(第5.207節・2026-09 実機)
+
+     > 集中モードの歯車の中に、版を1行出しましょうか → はい(利用者)
+
+   集中モードは画面をまるごと覆うので、フッターの版が見えない。
+   「直したはずのものが直っていない」の多くは**端末に残った古い内容**
+   なので、**閉じずに確かめられる**ようにする。
+
+   **帯を2行にしてまでは出さない**(利用者の指定)。だから
+   **狭い画面で「表示」を開いたときだけ**出す。
+   **「出る」と「出ない」の両方を見る** —— 片方だけだと、
+   いつも出す形にも・どこにも出さない形にも書き換えられる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const 見る = async (w) => {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=focusver`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(250)
+    /* **見えているか**は Playwright に訊く。`offsetParent` は
+       **先祖が `position: fixed` だと null になる**ので、
+       集中モードのように浮いている画面では当てにならない */
+    const 見える = async (sel) => {
+      const el = page.locator(sel)
+      return (await el.count()) ? el.first().isVisible() : false
+    }
+    const 閉じたまま = await 見える('.focus-ver')
+    /* 「表示」を開く(狭い画面にしかない) */
+    const gear = page.locator('.lesson-more')
+    const 歯車 = await 見える('.lesson-more')
+    if (歯車) { await gear.first().click(); await page.waitForTimeout(250) }
+    const 開いたあと = await 見える('.focus-ver')
+      ? (await page.locator('.focus-ver').first().textContent()).trim() : ''
+    /* **どこまで来たかを、必ず持ち帰る**(CLAUDE.md「道が2つあるものは、
+       いまどちらを通ったかを見えるようにしてから直す」)。
+       これが無いと、赤くなったときに**画面が描けていないのか・
+       札が出ていないのか**が分からない */
+    const 様子 = await page.evaluate(() => ({
+      枠: !!document.querySelector('.focus'),
+      歯車の数: document.querySelectorAll('.lesson-more').length,
+      欄: document.querySelector('.lesson-settings')?.className ?? '(無し)',
+      札: document.querySelector('.focus-ver')?.textContent ?? '(無し)',
+    }))
+    await page.close()
+    return { 閉じたまま, 開いたあと, 歯車, 様子 }
+  }
+
+  const あと = (r) => `枠 ${r.様子.枠} / 歯車 ${r.様子.歯車の数}(見える ${r.歯車})`
+    + ` / 欄「${r.様子.欄}」/ 札「${r.様子.札}」`
+  const 狭 = await 見る(390)
+  /* **まず、画面が描けているか。** ここが偽なら、下の2本は
+     「出ない」ではなく「そもそも見ていない」である */
+  if (狭.様子.枠 && 狭.様子.歯車の数 === 1) {
+    ok('版 … 骨組みの集中モードが描けている(歯車あり)')
+  } else ng('版 … 骨組みの集中モードが描けていない', あと(狭))
+  if (!狭.閉じたまま) {
+    ok('版 … 畳んでいるあいだは出さない(帯を太らせない)')
+  } else ng('版 … 畳んでいるのに、版が出ている', あと(狭))
+  if (狭.開いたあと.includes(STAMP)) {
+    ok(`版 … 「表示」を開くと出る(${狭.開いたあと})`)
+  } else ng('版 … 「表示」を開いても、版が出ない', あと(狭))
+
+  const 広 = await 見る(1280)
+  if (!広.閉じたまま) ok('版 … パソコンの帯には出さない(閉じればフッターに出ている)')
+  else ng('版 … パソコンの帯にも出てしまう', あと(広))
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **本文が無い教材の集中モード**(第5.208節・2026-09 実機)
+
+     > いつの間にか文系トレーニングから集中モードが消えています
+
+   文型ドリルには読む本文が無いので、本文を読む集中モード
+   (`FocusReader`)には入れない。そこでボタンごと消してしまい、
+   **行き止まり**になっていた。いまは**そのページの設問を1問ずつ**出す。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   本文のある教材で、これまでどおり**本文を読む**集中モードに
+   入ることまで見ないと、そちらを壊しても緑のままになる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill`, { waitUntil: 'networkidle' })
+  await page.waitForTimeout(600)
+
+  /** 紙のほう(押す前)。**`only` を足したせいで全問が消えていないか** */
+  const 紙の問 = await page.evaluate(
+    () => document.querySelectorAll('.lesson-page:not(.is-closed) .lesson-items > li').length,
+  )
+  if (紙の問 >= 3) ok(`ドリル … 紙には設問がぜんぶ出る(${紙の問} 問)`)
+  else ng('ドリル … 紙から設問が消えている', String(紙の問))
+
+  const 集中 = page.locator('.practice-row .btn', { hasText: '集中モード' })
+  if (await 集中.count()) ok('ドリル … 集中モードのボタンが出る(行き止まりにしない)')
+  else {
+    ng('ドリル … 集中モードのボタンが無い',
+      (await page.locator('.practice-row .btn').allTextContents()).join(' / '))
+  }
+  if (await 集中.count()) {
+    await 集中.first().click()
+    await page.waitForTimeout(500)
+    const 中 = await page.evaluate(() => ({
+      枠: !!document.querySelector('.focus'),
+      問: document.querySelectorAll('.focus .lesson-items > li').length,
+      札: (document.querySelector('.focus-count')?.textContent ?? '').trim(),
+      前が押せるか: !document.querySelector('.focus-move')?.disabled,
+      本文の画面か: !!document.querySelector('.focus .etext-sent'),
+    }))
+    if (中.枠 && 中.問 === 1) ok(`ドリル … 集中モードは1問だけ(${中.札})`)
+    else ng('ドリル … 1問だけになっていない', `枠 ${中.枠} / 問 ${中.問}`)
+    /* **何問めかを必ず出す**(数が無いと、どこまで来たか分からない) */
+    if (/^1 \/ \d+ 問$/.test(中.札)) ok('ドリル … 何問めかが札に出る')
+    else ng('ドリル … 何問めかが出ていない', 中.札 || '(空)')
+    /* **先頭で「前」は押せない**(効かない操作を見せない) */
+    if (!中.前が押せるか) ok('ドリル … 1問めでは「前」を押せない')
+    else ng('ドリル … 1問めなのに「前」が押せる')
+
+    await page.locator('.focus-move', { hasText: '次' }).first().click()
+    await page.waitForTimeout(400)
+    const 次 = await page.evaluate(() => ({
+      札: (document.querySelector('.focus-count')?.textContent ?? '').trim(),
+      前が押せるか: !document.querySelector('.focus-move')?.disabled,
+    }))
+    if (/^2 \/ /.test(次.札) && 次.前が押せるか) ok(`ドリル … 送ると次の問へ(${次.札})`)
+    else ng('ドリル … 送っても次の問へ行かない', `${次.札} / 前 ${次.前が押せるか}`)
+  }
+  await page.close()
+
+  /* ── **「出ない」側。** 本文のある教材は、これまでどおり本文を読む ───── */
+  const page2 = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  await page2.goto(`http://localhost:${PORT}/__bar.html`, { waitUntil: 'networkidle' })
+  await page2.waitForTimeout(600)
+  const 集中2 = page2.locator('.practice-row .btn', { hasText: '集中モード' })
+  if (await 集中2.count()) {
+    await 集中2.first().click()
+    await page2.waitForTimeout(600)
+    const 本文 = await page2.evaluate(() => ({
+      枠: !!document.querySelector('.focus'),
+      本文の画面か: !!document.querySelector('.focus .etext'),
+      設問の紙か: !!document.querySelector('.focus .lesson-items'),
+    }))
+    if (本文.枠 && 本文.本文の画面か && !本文.設問の紙か) {
+      ok('本文のある教材 … これまでどおり、本文を読む集中モードに入る')
+    } else {
+      ng('本文のある教材 … 集中モードの中身が変わっている',
+        `本文 ${本文.本文の画面か} / 設問 ${本文.設問の紙か}`)
+    }
+  } else ng('本文のある教材 … 集中モードのボタンが消えた')
+  await page2.close()
 }
 
 await browser.close()

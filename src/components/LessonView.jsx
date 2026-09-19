@@ -33,6 +33,7 @@ import {
   BoltIcon, FocusIcon, GearIcon, NoteIcon, PenIcon, PrintIcon,
   SpeakerIcon, StepsIcon, StopIcon,
 } from './Icons.jsx'
+import FocusFrame from './FocusFrame.jsx'
 import FocusReader from './FocusReader.jsx'
 import InkLayer from './InkLayer.jsx'
 import LessonNotes from './LessonNotes.jsx'
@@ -338,6 +339,16 @@ export default function LessonView({
   // **教材1本 / 本文1本を通しでやる**ので、出しているあいだは
   // ページ送りと解答のボタンを出さない(効かないため)
   const [run, setRun] = useState(null)
+  /**
+   * **文型ドリルの集中モードで、いま何問めか**(第5.208節・2026-09 利用者の指定)。
+   *
+   *   > いつの間にか文系トレーニングから集中モードが消えています
+   *
+   * **覚えない。** 開くたびに1問めから始める ——
+   * ドリルは頭から順に解くもので、途中から始める人はいない
+   * (本文の集中モードが `focusAt` を覚えているのとは、役目が違う)。
+   */
+  const [drillAt, setDrillAt] = useState(0)
   const runRef = useRef(null)
   runRef.current = run
   const qr = run === 'qr'
@@ -703,6 +714,25 @@ export default function LessonView({
   // 6Steps は本文(記事・会話)に対する練習である。**本文のページを探して渡す。**
   // いま開いているページが語句や設問でも、6Steps は本文に対して行う
   const passageSection = sections.find((x) => isPassageSection(x.exercise_type)) ?? null
+  /**
+   * **1問ずつ出せるページか**(第5.208節・2026-09 利用者の指定)。
+   *
+   *   > いつの間にか文系トレーニングから集中モードが消えています
+   *
+   * 文型ドリル・単語・フレーズには**読む本文が無い**ので、
+   * 本文を読む集中モード(`FocusReader`)には入れない。
+   * 消したままにすると**行き止まり**なので、代わりに
+   * **そのページの設問を1問ずつ**出す。
+   *
+   * **本文のページは、ここに入れない** —— あちらは `passageSection` が
+   * 受け持つ(**判断を2か所に置かない**・CLAUDE.md)。
+   */
+  const drillable = !!section && !isPassageSection(section.exercise_type)
+    && (section.items?.length ?? 0) > 0
+  /* **ページの外へは出さない。** ページが変わっても、番号はそのページの中に収める
+     (**黙って落ちない**・CLAUDE.md) */
+  const drillNow = drillable
+    ? Math.min(Math.max(0, drillAt), section.items.length - 1) : 0
   /* 添削のときに窓口へ渡す本文(**参考**)。何について書いているのかが
      分からないと、話の中身に合った直し方ができない */
   const bodyText = (passageSection?.items ?? [])
@@ -1322,13 +1352,13 @@ export default function LessonView({
                 そのときは**いまの取り組み方**の集中モード
                 (1文ずつ / 1発言ずつ)に入る。中に同じボタンを置かないので、
                 **同じことをするボタンは、どの画面でも1つだけ**である */}
-            {(passageSection || qr) && (
+            {(passageSection || qr || drillable) && (
               <button type="button"
                       className={`btn btn--small${
-                        run === 'focus' || (run === 'six' && sixFocus)
+                        run === 'focus' || run === 'drill' || (run === 'six' && sixFocus)
                         || (qr && qrFocus) ? ' btn--primary' : ''}`}
-                      aria-pressed={run === 'focus' || (run === 'six' && sixFocus)
-                        || (qr && qrFocus)}
+                      aria-pressed={run === 'focus' || run === 'drill'
+                        || (run === 'six' && sixFocus) || (qr && qrFocus)}
                       onClick={() => {
                         // 6Steps の最中は、**その取り組み方**を1つずつ出す
                         if (run === 'six') { setSixFocus((v) => !v); return }
@@ -1337,8 +1367,18 @@ export default function LessonView({
                            ここで `openFocus()` を呼ぶと、本文を読んで語を調べる
                            画面へ飛ばされる — それが報告された不具合である */
                         if (qr) { setQrFocus((v) => !v); return }
-                        if (run === 'focus') { stopAll(); setRun(null); return }
-                        openFocus()
+                        if (run === 'focus' || run === 'drill') {
+                          stopAll(); setRun(null); return
+                        }
+                        /* **本文がある教材は、これまでどおり本文を読む集中モード。**
+                           内容理解のページを開いていても、本文へ入る
+                           (2026-09 利用者の指定「KENJI が画面の中心に来ている時は
+                           ②KENJI の集中モードに入り…」)。**ここは変えない** */
+                        if (passageSection) { openFocus(); return }
+                        /* **本文が無い教材**(文型ドリル・単語・フレーズ)は、
+                           **いま開いているページの設問**を1問ずつ出す(第5.208節) */
+                        setDrillAt(0)
+                        setRun('drill')
                       }}>
                 <FocusIcon />集中モード
               </button>
@@ -1497,6 +1537,51 @@ export default function LessonView({
             learnerId={owner}
             tags={allTags} voiceIds={material.voiceIds} level={material.level}
           />
+        ) : run === 'drill' && drillable ? (
+          /* ── **本文が無い教材の集中モード**(第5.208節・2026-09 利用者の指定)──
+           *
+           *   > いつの間にか文系トレーニングから集中モードが消えています
+           *
+           *   文型ドリル・単語・フレーズには読む本文が無いので、
+           *   **いま開いているページの設問を1問ずつ**出す。
+           *
+           *   **設問の描き方は作り直さない。** 紙と同じ `renderSection()` に
+           *   「その1問だけ」を頼む —— 書き写すと、**片方だけ古くなる**
+           *   (CLAUDE.md「同じものを2つ作らない」)。
+           *   だから Listen も、解答も、語をタップして意味を見るのも、
+           *   **紙とまったく同じもの**が出る。 */
+          <FocusFrame
+            width={width} learnerId={owner}
+            /* **送るたびに変える。** 書き込みの線を、問ごとに分けるため */
+            page={`drill-${page}-${drillNow}`}
+            scrollKey={`${page}-${drillNow}`}
+            /* 速さ・文字・幅・印刷。**3つの集中モードで同じもの** */
+            settings={focusSettings}
+            onClose={() => setRun(null)}
+            top={(
+              <span className="focus-count">
+                {drillNow + 1} / {section.items.length} 問
+              </span>
+            )}
+            /* **送りは下の帯に。** `StepFocus` と同じ形にそろえる
+               (同じことをするものを、別の見た目で出さない) */
+            bar={(
+              <>
+                <button type="button" className="btn focus-move"
+                        onClick={() => setDrillAt(Math.max(0, drillNow - 1))}
+                        disabled={drillNow === 0}>
+                  ◀ 前
+                </button>
+                <div className="focus-mid" />
+                <button type="button" className="btn focus-move"
+                        onClick={() => setDrillAt(Math.min(section.items.length - 1, drillNow + 1))}
+                        disabled={drillNow >= section.items.length - 1}>
+                  次 ▶
+                </button>
+              </>
+            )}>
+            {renderSection(section, page, drillNow)}
+          </FocusFrame>
         ) : qr ? (
           <QuickResponse material={material} paper learnerId={owner}
                          /* **集中モードは、この画面のボタンが持つ**
@@ -1644,7 +1729,15 @@ export default function LessonView({
    * 演習1つぶん。**どのページも同じ描き方**にするため、関数にしてある。
    * 声・種類は演習ごとに違うので、ここで求め直す。
    */
-  function renderSection(sec, si) {
+  /**
+   * 1ページぶんを描く。
+   *
+   * @param only **その1問だけを描く**(第5.208節・文型ドリルの集中モード)。
+   *   `null` なら、これまでどおり全部。**番号(`i`)はずらさない** ——
+   *   `key()` も `data-key` も番号から作っているので、
+   *   詰めると**鳴っている問と印が食い違う**
+   */
+  function renderSection(sec, si, only = null) {
     if (!sec) return null
     const secType = exerciseType(sec.exercise_type)
     const secIsPassage = isPassageSection(sec.exercise_type)
@@ -1678,8 +1771,9 @@ export default function LessonView({
         fi += 1
       })
     }
-    // 練習中(6Steps / Quick Response)は、どのページも画面には出さない
-    const open = si === page && !run
+    // 練習中(6Steps / Quick Response)は、どのページも画面には出さない。
+    // **1問だけのとき**(集中モード)は、その紙そのものを出す
+    const open = only != null || (si === page && !run)
     return (
           /* `data-type` は**紙用の目印**(2026-09 利用者の指定)。
              記事・会話の紙は「本文(訳なし)→ 内容理解 → ディスカッション →
@@ -1741,7 +1835,7 @@ export default function LessonView({
             )}
 
             <ol className="lesson-items">
-              {sec.items.map((it, i) => (
+              {sec.items.map((it, i) => (only != null && i !== only ? null : (
                 <li key={k(it, i)} data-key={k(it, i)}
                     data-focus={focusNo.has(i) ? String(focusNo.get(i)) : undefined}
                     className={speakingKey === k(it, i) ? 'is-speaking' : undefined}>
@@ -1926,7 +2020,7 @@ export default function LessonView({
                     />
                   )}
                 </li>
-              ))}
+              )))}
             </ol>
           </section>
     )
