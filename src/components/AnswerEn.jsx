@@ -50,6 +50,11 @@ export default function AnswerEn({
    * **ここで判じ直さない。** 判断は `EnglishText` 1か所である
    */
   tappable = 'auto',
+  /**
+   * **語を押せないときの行き先**(`EnglishText` にそのまま渡す)。
+   * **ここで判じ直さない。** 誰が行き先を決めるかは呼ぶ側の話である
+   */
+  onNeedFocus = null,
 }) {
   const body = String(text ?? '').trim()
   if (!body) return null
@@ -58,7 +63,7 @@ export default function AnswerEn({
       <div className={className}>
         <span aria-hidden="true">→ </span>
         <EnglishText text={body} level={level} statuses={statuses} onMark={onMark}
-                     tappable={tappable} />
+                     tappable={tappable} onNeedFocus={onNeedFocus} />
       </div>
       {String(ja ?? '').trim() && <div className={jaClassName}>{ja}</div>}
       {clipVoice !== undefined && answerHasAudio(typeId) && (

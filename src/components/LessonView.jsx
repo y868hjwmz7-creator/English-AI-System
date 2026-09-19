@@ -869,6 +869,46 @@ export default function LessonView({
   }
 
   /**
+   * **その英文の語を調べる行き先**(第5.212節・2026-09 実機の指摘)。
+   *
+   *   > 文系トレーニングで単語を調べようとしても
+   *   > 集中モードへの誘導が表示されません
+   *
+   * 【なぜ出なかったか】
+   *   狭い画面では、語を押せなくしてある —— 語のタップと画面送りが、
+   *   同じ指の動きから始まるためである。代わりに**長押しすると
+   *   「集中モードで調べられます」の案内**を出す。
+   *
+   *   ところがその案内は `onNeedFocus` があるときにしか出さず、
+   *   こちらは**本文のときだけ**渡していた。
+   *   第5.208節で**ドリルにも集中モードができた**のに、
+   *   こちらを合わせていなかったので、
+   *   文型ドリルでは**長押ししても何も出ず**、
+   *   iPhone の「コピー / Google で検索」だけが出ていた。
+   *
+   * 【判断はここ1か所】
+   *   英文が出る場所は、このカードだけで3つある
+   *   (本文 / 設問 / 解答)。**画面のあちこちで
+   *   `isPassageSection(...) ? … : …` と書かない** ——
+   *   置く場所の数だけ食い違う(CLAUDE.md)。
+   *
+   *   **右下の「集中モード」ボタンと、まったく同じ行き先**にしてある。
+   *   ボタンで入るところと、案内で入るところが違っては困る。
+   *
+   * @param sec その演習
+   * @param i   その問が、演習の何番めか(**その問から開く**)
+   * @returns 行き先。無ければ `null`(**行き先が無いのに誘わない**)
+   */
+  const focusFor = (sec, i) => {
+    if (!sec) return null
+    // 本文(記事・会話)は、これまでどおり本文を読む集中モードへ
+    if (isPassageSection(sec.exercise_type)) return openFocus
+    // 本文が無い教材は、**その問**を1問ずつ出す(第5.208節)
+    if (!(sec.items?.length > 0)) return null
+    return () => { stopAll(); setDrillAt(i); setRun('drill') }
+  }
+
+  /**
    * 集中モードから 6Steps へ移る(`FocusReader` のプルダウン)。
    * **紙に戻る場所は控えたまま**にしておく — 6Steps を閉じれば、
    * 入る前と同じところへ戻れる。
@@ -1897,7 +1937,9 @@ export default function LessonView({
                                       なので、ドリルや単語では行き先が無い
                                       (右下の「集中モード」を出す条件と同じ) */
                                    tappable={tap}
-                                   onNeedFocus={secIsPassage ? openFocus : null}
+                                   /* **行き先は `focusFor()` 1か所が決める**
+                                      (第5.212節)。ここで種類を見ない */
+                                   onNeedFocus={focusFor(sec, i)}
                                    readingAt={speakingKey === k(it, i) ? readingAt : null} />
                     </div>
                   )}
@@ -1917,7 +1959,13 @@ export default function LessonView({
                     <div className="lesson-en">
                       <EnglishText text={it.question} level={material.level}
                                    statuses={wordStatuses} onMark={markWord}
-                                   tappable={tap} />
+                                   tappable={tap}
+                                   /* **設問にも誘導を出す**(第5.212節)。
+                                      ここには1つも渡していなかったので、
+                                      内容の理解・ディスカッション・
+                                      リスニングの設問では、狭い画面から
+                                      語を調べる道が**どこにも無かった** */
+                                   onNeedFocus={focusFor(sec, i)} />
                     </div>
                   )}
                   {/* 設問の訳(0035)。**伏せない。**
@@ -2075,6 +2123,9 @@ export default function LessonView({
                         clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                         tier={secTier} rate={rateOf(rateId)}
                         tappable={tap}
+                        /* 解答の語も、同じ行き先で調べられるようにする
+                           (第5.212節)。開いてある解答だけに出る */
+                        onNeedFocus={focusFor(sec, i)}
                       />
                       {it.answer_alt && <div className="lesson-note">別解: {it.answer_alt}</div>}
                       {it.note && <div className="lesson-note">{it.note}</div>}

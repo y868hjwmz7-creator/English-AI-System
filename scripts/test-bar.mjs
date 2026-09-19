@@ -1250,6 +1250,85 @@ for (const [label, want] of Object.entries(WANT)) {
     ok('長押しの案内 … 1440px では出ない')
   }
 
+  /* ── ④⑤ **文型ドリルでも出る**(第5.212節・2026-09 実機の指摘)──
+
+       > 文系トレーニングで単語を調べようとしても
+       > 集中モードへの誘導が表示されません
+
+     案内は `onNeedFocus` があるときだけ出る。そこを**本文のときだけ**
+     渡していたので、文型ドリルでは長押ししても何も出ず、
+     iPhone の「コピー / Google で検索」だけが出ていた。
+
+     **「出る」だけを見ない。** どの問から開いたかまで見る ——
+     いつも1問めから開く形に壊しても、出るだけなら緑になる。 */
+  await page.setViewportSize({ width: 390, height: 780 })
+  /** 文型ドリルの n 問めに、指を置いて待つ */
+  const holdDrill = async (nth) => {
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1&kind=drill`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.lesson-items .etext-sent', { timeout: 15000 })
+    const el = page.locator('.lesson-page:not(.is-closed) .lesson-items > li')
+      .nth(nth).locator('.etext-sent').first()
+    const b = await el.boundingBox()
+    await el.dispatchEvent('pointerdown',
+      { pointerType: 'touch', clientX: b.x + 3, clientY: b.y + 3 })
+    await page.waitForTimeout(700)
+    return page.$('.etext-hint')
+  }
+
+  if (!await holdDrill(0)) {
+    ng('長押しの案内 … 文型ドリルで出ない',
+      '本文が無い教材にも集中モードはある(第5.208節)。行き先はある')
+  } else {
+    await page.click('.etext-hint .btn')
+    await page.waitForTimeout(400)
+    const 札 = (await page.locator('.focus-count').innerText().catch(() => '')).trim()
+    if (!await page.$('.focus')) ng('長押しの案内 … 文型ドリルで、押しても集中モードに入らない')
+    else if (!/^1 \//.test(札)) ng('長押しの案内 … 1問めから開いていない', `「${札}」`)
+    else ok(`長押しの案内 … 文型ドリルでも出て、その問の集中モードへ入る(${札})`)
+  }
+
+  // ⑤ **長押しした問から開く**(いつも1問めではない)
+  if (!await holdDrill(2)) {
+    ng('長押しの案内 … 文型ドリルの3問めで出ない')
+  } else {
+    await page.click('.etext-hint .btn')
+    await page.waitForTimeout(400)
+    const 札 = (await page.locator('.focus-count').innerText().catch(() => '')).trim()
+    if (/^3 \//.test(札)) ok(`長押しの案内 … 長押しした問から開く(${札})`)
+    else ng('長押しの案内 … 長押しした問から開いていない', `「${札}」(3問めを長押しした)`)
+  }
+
+  /* ── ⑥ **設問にも出る**(第5.212節)。
+        `it.question` には `onNeedFocus` を**1つも渡していなかった**ので、
+        内容の理解・ディスカッション・想定される質問・リスニングでは、
+        狭い画面から語を調べる道がどこにも無かった ── */
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1&kind=speech`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(600)
+  const 送り2 = page.locator('.lesson-pages button[aria-label="次のページ"]')
+  if (!await 送り2.count()) {
+    ng('長押しの案内 … 設問のページへ送れない(390px)')
+  } else {
+    await 送り2.click()
+    await page.waitForTimeout(400)
+    const q = page.locator('.lesson-page:not(.is-closed) .lesson-items > li')
+      .first().locator('.etext-sent').first()
+    const b2 = await q.boundingBox()
+    await q.dispatchEvent('pointerdown',
+      { pointerType: 'touch', clientX: b2.x + 3, clientY: b2.y + 3 })
+    await page.waitForTimeout(700)
+    if (!await page.$('.etext-hint')) {
+      ng('長押しの案内 … 設問(想定される質問)で出ない',
+        '設問にも `onNeedFocus` を渡すこと')
+    } else {
+      await page.click('.etext-hint .btn')
+      await page.waitForTimeout(400)
+      if (await page.$('.focus')) ok('長押しの案内 … 設問でも出て、集中モードへ入る')
+      else ng('長押しの案内 … 設問から集中モードに入れない')
+    }
+  }
+
   await page.close()
 }
 
