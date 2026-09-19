@@ -183,6 +183,10 @@ export const qrPairOf = (row) => ({
      持っていない行(自分の帳・Native Flow)は `null` なので、
      **あちらにはヒントのボタンが出ない**(効かない操作を見せない・CLAUDE.md) */
   hint: row?.hint ?? null,
+  /* **出題に出す英文**(第5.198節)。**言い換えの行だけが持つ。**
+     持っていない行は `null` なので、これまでどおり日本語が問になる
+     —— 書き分けは `QrCard` が1か所でする */
+  askEn: row?.askEn ?? null,
   from: row?.material_title ?? '',
   group: 'sentence',
   key: row?.en_norm ?? row?.en ?? '',

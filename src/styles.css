@@ -6777,6 +6777,20 @@ button.wbfilter-ctl { text-align: left; }
   margin: 0 auto; max-width: 34em;
   font-size: var(--fs-19); font-weight: 600; line-height: 1.7;
 }
+/* **言い換えの出題(素の英文)**(第5.198節)。
+   日本語の問と**同じ場所・同じ大きさ**にする —— 中身が英語か日本語かで
+   目を向ける先が動かないようにする(`qr-en` と同じ考え方)。 */
+.qr-ask {
+  margin: 0 auto; max-width: 34em;
+  font-size: var(--fs-19); font-weight: 600; line-height: 1.7;
+}
+/* その訳。**出題より小さく、うすく** —— 主役は英文のほうである。
+   隙間は親(`.qr-body`)の `gap` が持つ(余白で作らない・共通ルール) */
+.qr-ask-ja {
+  margin: 0 auto; max-width: 34em;
+  font-size: var(--fs-15); font-weight: 400; line-height: 1.7;
+  color: var(--text-muted);
+}
 /* 単語帳と同じ並べ方。**答えの2つはとなりどうし**(2026-08 利用者の指定) */
 .qr-actions {
   flex: 0 0 auto;

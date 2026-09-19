@@ -226,19 +226,24 @@ const WAYS = [
 ]
 
 /** 名詞にしたもの(`名詞化` の中身) */
+/* **`plain` は動詞で言ったときの形**(第5.198節)。
+   名詞化の練習は「**動詞で言ったものを、名詞にして主語に据える**」ので、
+   素の文は動詞の側でなければ練習にならない ——
+   名詞のまま出すと、**もう名詞化されている文**を見せることになる
+   (実際に `frameMatch` が「名詞化」と言い当てた)。 */
 const NOMINALS = [
-  { en: 'Her decision to leave', ja: '彼女が辞めるという判断' },
-  { en: 'The introduction of the new rule', ja: '新しい決まりの導入' },
-  { en: 'The cancellation of the order', ja: '注文の取り消し' },
-  { en: 'His explanation of the delay', ja: '彼の遅れの説明' },
-  { en: 'The completion of the audit', ja: '監査の完了' },
-  { en: 'The reduction of the budget', ja: '予算の削減' },
-  { en: 'The announcement of the merger', ja: '合併の発表' },
-  { en: 'The improvement in quality', ja: '品質の向上' },
-  { en: 'The delay of the launch', ja: '開始の遅れ' },
-  { en: 'The refusal of the offer', ja: '申し出の断り' },
-  { en: 'The approval of the budget', ja: '予算の承認' },
-  { en: 'The discovery of the error', ja: '誤りの発見' },
+  { en: 'Her decision to leave', plain: 'she decided to leave', ja: '彼女が辞めるという判断' },
+  { en: 'The introduction of the new rule', plain: 'they introduced the new rule', ja: '新しい決まりの導入' },
+  { en: 'The cancellation of the order', plain: 'they cancelled the order', ja: '注文の取り消し' },
+  { en: 'His explanation of the delay', plain: 'he explained the delay', ja: '彼の遅れの説明' },
+  { en: 'The completion of the audit', plain: 'they completed the audit', ja: '監査の完了' },
+  { en: 'The reduction of the budget', plain: 'they reduced the budget', ja: '予算の削減' },
+  { en: 'The announcement of the merger', plain: 'they announced the merger', ja: '合併の発表' },
+  { en: 'The improvement in quality', plain: 'quality improved', ja: '品質の向上' },
+  { en: 'The delay of the launch', plain: 'the launch was late', ja: '開始の遅れ' },
+  { en: 'The refusal of the offer', plain: 'they refused the offer', ja: '申し出の断り' },
+  { en: 'The approval of the budget', plain: 'they approved the budget', ja: '予算の承認' },
+  { en: 'The discovery of the error', plain: 'they found the error', ja: '誤りの発見' },
 ]
 
 /** 目標の中身(`同格` の後ろ) */
@@ -258,19 +263,24 @@ const TARGETS = [
 ]
 
 /** 「〜すればするほど」の後ろ */
+/* **`plain` は、素の言い方**(第5.198節)。`the 比較級` の肉は
+   それ自体が型の一部なので、**素の文には入らない**
+   (`If we go faster, the faster we improve.` は英語にならない)。
+   **肉の側に素の形を持たせる** —— 型に寄せた言い方を、こちらで
+   機械的にほどくことはできない(**分かっていないことを、分かったように書かない**)。 */
 const MORES = [
-  { en: 'the faster we improve', ja: '速く伸びる' },
-  { en: 'the fewer mistakes we make', ja: 'まちがいが減る' },
-  { en: 'the easier it gets', ja: '楽になる' },
-  { en: 'the better we get', ja: '上手くなる' },
-  { en: 'the more confident we feel', ja: '自信がつく' },
-  { en: 'the less we worry', ja: '心配しなくなる' },
-  { en: 'the smoother it runs', ja: 'なめらかに進む' },
-  { en: 'the quicker we finish', ja: '早く終わる' },
-  { en: 'the more natural it sounds', ja: '自然に聞こえる' },
-  { en: 'the clearer our answers become', ja: '答えがはっきりする' },
-  { en: 'the calmer we stay', ja: '落ち着いていられる' },
-  { en: 'the fewer questions we get', ja: '質問が減る' },
+  { en: 'the faster we improve', plain: 'we improve faster', ja: '速く伸びる' },
+  { en: 'the fewer mistakes we make', plain: 'our mistakes go down', ja: 'まちがいが減る' },
+  { en: 'the easier it gets', plain: 'it gets easier', ja: '楽になる' },
+  { en: 'the better we get', plain: 'we get better', ja: '上手くなる' },
+  { en: 'the more confident we feel', plain: 'we feel more confident', ja: '自信がつく' },
+  { en: 'the less we worry', plain: 'we worry less', ja: '心配しなくなる' },
+  { en: 'the smoother it runs', plain: 'it runs more smoothly', ja: 'なめらかに進む' },
+  { en: 'the quicker we finish', plain: 'we finish more quickly', ja: '早く終わる' },
+  { en: 'the more natural it sounds', plain: 'it sounds more natural', ja: '自然に聞こえる' },
+  { en: 'the clearer our answers become', plain: 'our answers become clearer', ja: '答えがはっきりする' },
+  { en: 'the calmer we stay', plain: 'we stay calmer', ja: '落ち着いていられる' },
+  { en: 'the fewer questions we get', plain: 'we get fewer questions', ja: '質問が減る' },
 ]
 
 /**
@@ -283,6 +293,7 @@ export const SAY_BUNDLES = [
   {
     id: 'enable', list: 'verb',
     ja: 'この道具のおかげで、___ことができる',
+    base: 'With this tool, you can ___.',
     says: [
       { form: 'S allows 人 to do', en: 'This tool allows you to ___.' },
       { form: 'S enables 人 to do', en: 'This tool enables you to ___.' },
@@ -293,6 +304,7 @@ export const SAY_BUNDLES = [
   {
     id: 'block', list: 'verb',
     ja: 'その遅れのせいで、___ことができない',
+    base: 'Because of the delay, we cannot ___.',
     says: [
       { form: 'S keeps 人 from ~ing', en: 'The delay keeps us from ___.', ing: true },
       { form: 'S prevents 人 from ~ing', en: 'The delay prevents us from ___.', ing: true },
@@ -303,6 +315,7 @@ export const SAY_BUNDLES = [
   {
     id: 'push', list: 'verb',
     ja: 'その結果を見て、私たちは___ことになった',
+    base: 'We saw the result, so we decided to ___.',
     says: [
       { form: 'S encourages 人 to do', en: 'The result encourages us to ___.' },
       { form: 'S inspires 人 to do', en: 'The result inspires us to ___.' },
@@ -315,6 +328,7 @@ export const SAY_BUNDLES = [
   {
     id: 'rule', list: 'verb',
     ja: '新しい決まりで、私たちは___ことになる',
+    base: 'Under the new rule, we have to ___.',
     says: [
       { form: 'S requires 人 to do', en: 'The new rule requires us to ___.' },
       { form: 'S forces 人 to do', en: 'The new rule forces us to ___.' },
@@ -324,6 +338,7 @@ export const SAY_BUNDLES = [
   {
     id: 'hard', list: 'verb',
     ja: 'その騒音のせいで、___のが難しい',
+    base: 'The noise is loud, so we can hardly ___.',
     says: [
       { form: 'S makes it hard for 人 to do', en: 'The noise makes it hard for us to ___.' },
       { form: 'S keeps 人 from ~ing', en: 'The noise keeps us from ___.', ing: true },
@@ -332,6 +347,7 @@ export const SAY_BUNDLES = [
   {
     id: 'involve', list: 'verb',
     ja: 'この仕事には、___ことが含まれる',
+    base: 'In this job, we have to ___.',
     says: [
       { form: 'S involves ~ing', en: 'This job involves ___.', ing: true },
       { form: 'S requires 人 to do', en: 'This job requires you to ___.' },
@@ -340,6 +356,7 @@ export const SAY_BUNDLES = [
   {
     id: 'time', list: 'verb',
     ja: '___のに3週間かかる',
+    base: 'We need three weeks to ___.',
     says: [
       { form: 'S takes (人) 時間 to do', en: 'It takes us three weeks to ___.' },
       { form: 'It takes 時間 to do', en: 'It takes three weeks to ___.' },
@@ -348,6 +365,7 @@ export const SAY_BUNDLES = [
   {
     id: 'soften', list: 'verb',
     ja: '___のは、どうでしょう',
+    base: "Let's ___.",
     says: [
       { form: 'It might be worth ~ing', en: 'It might be worth ___.', ing: true },
       { form: 'We may want to ~', en: 'We may want to ___.' },
@@ -359,6 +377,7 @@ export const SAY_BUNDLES = [
   {
     id: 'gerund', list: 'verb',
     ja: '___のは大事だ',
+    base: 'We should always ___.',
     says: [
       { form: '動名詞', en: '___ is important.', ing: true },
       { form: '形式主語 it', en: 'It is important to ___.' },
@@ -367,6 +386,7 @@ export const SAY_BUNDLES = [
   {
     id: 'connect', list: 'verb',
     ja: '人手が足りない。だから___',
+    base: 'We are short-staffed, so we ___.',
     says: [
       { form: "That's why ~", en: "That's why we ___." },
       { form: 'Which means ~', en: 'We are short-staffed, which means we ___.' },
@@ -375,6 +395,7 @@ export const SAY_BUNDLES = [
   {
     id: 'why', list: 'verb',
     ja: 'そういうわけで、私たちは___',
+    base: 'For that reason, we ___.',
     says: [
       { form: 'S is why ~', en: 'This is why we ___.' },
       { form: 'S explains why ~', en: 'That explains why we ___.' },
@@ -383,6 +404,7 @@ export const SAY_BUNDLES = [
   {
     id: 'onlydo', list: 'verb',
     ja: '___だけで大丈夫です',
+    base: 'You only need to ___.',
     says: [
       { form: 'All 人 have to do is do', en: 'All you have to do is ___.' },
     ],
@@ -390,6 +412,7 @@ export const SAY_BUNDLES = [
   {
     id: 'thatsaid', list: 'verb',
     ja: 'とはいえ、___べきだ',
+    base: 'However, we should ___.',
     says: [
       { form: 'That said, ~', en: 'That said, we should ___.' },
     ],
@@ -397,6 +420,8 @@ export const SAY_BUNDLES = [
   {
     id: 'notonly', list: 'verb',
     ja: '時間が浮いただけでなく、___のにも役立った',
+    base: 'It saved time, and it was useful for ___.',
+    baseIng: true,
     says: [
       { form: 'Not only ~ but also …', en: 'Not only did it save time, but it also helped us ___.' },
     ],
@@ -404,6 +429,7 @@ export const SAY_BUNDLES = [
   {
     id: 'fact', list: 'clause',
     ja: '___ということが、気がかりだ',
+    base: 'I am worried because ___.',
     says: [
       { form: 'the fact that', en: 'The fact that ___ worries me.' },
       { form: 'what 節', en: 'What worries me is that ___.' },
@@ -412,6 +438,7 @@ export const SAY_BUNDLES = [
   {
     id: 'tell', list: 'clause',
     ja: 'そのデータは、___ことを示している',
+    base: 'In the data, we can see that ___.',
     says: [
       { form: 'S shows / suggests (that) ~', en: 'The data shows that ___.' },
       { form: 'S reminds 人 that ~', en: 'The data reminds us that ___.' },
@@ -420,6 +447,7 @@ export const SAY_BUNDLES = [
   {
     id: 'reason', list: 'clause',
     ja: '___ので、方針を変えた',
+    base: 'We changed the plan because ___.',
     says: [
       { form: 'The reason ~ is that …', en: 'The reason we changed the plan is that ___.' },
       { form: 'Which means ~', en: '___, which means we changed the plan.' },
@@ -428,6 +456,7 @@ export const SAY_BUNDLES = [
   {
     id: 'topic', list: 'own', own: TOPICS,
     ja: '___については、もう少し待つべきだ',
+    base: 'We should wait a little longer on ___.',
     says: [
       { form: 'When it comes to ~', en: 'When it comes to ___, we should wait.' },
       { form: 'As for ~', en: 'As for ___, we should wait.' },
@@ -437,6 +466,7 @@ export const SAY_BUNDLES = [
   {
     id: 'given', list: 'own', own: SOURCES,
     ja: '___を見たうえで、待つことにした',
+    base: 'We looked at ___ and decided to wait.',
     says: [
       { form: 'Given (that) ~', en: 'Given ___, we decided to wait.' },
       { form: 'Based on ~', en: 'Based on ___, we decided to wait.' },
@@ -446,6 +476,7 @@ export const SAY_BUNDLES = [
   {
     id: 'focus', list: 'own', own: CONCERNS,
     ja: '私が気にしているのは、___だ',
+    base: 'I am concerned about ___.',
     says: [
       { form: 'It is X that / who ~', en: 'It is ___ that worries me.' },
       { form: 'What ~ is …', en: 'What worries me is ___.' },
@@ -454,6 +485,7 @@ export const SAY_BUNDLES = [
   {
     id: 'thereis', list: 'own', own: CONCERNS,
     ja: '___に問題がある',
+    base: 'We have a problem with ___.',
     says: [
       { form: 'There is / are ~', en: 'There is a problem with ___.' },
     ],
@@ -461,6 +493,7 @@ export const SAY_BUNDLES = [
   {
     id: 'compare', list: 'own', own: COMPARE,
     ja: '費用というより、___の問題だ',
+    base: 'The real issue is ___, not cost.',
     says: [
       { form: 'less about A than B', en: 'It is less about cost than ___.' },
       { form: 'A rather than B', en: 'It is ___ rather than cost.' },
@@ -474,6 +507,7 @@ export const SAY_BUNDLES = [
   {
     id: 'result', list: 'own', own: RESULTS,
     ja: '準備不足は、___につながる',
+    base: 'If we plan poorly, we end up with ___.',
     says: [
       { form: 'S causes 名詞', en: 'Poor planning causes ___.' },
       { form: 'S leads to 名詞', en: 'Poor planning leads to ___.' },
@@ -483,6 +517,7 @@ export const SAY_BUNDLES = [
   {
     id: 'bring', list: 'own', own: RESULTS,
     ja: '新しい仕組みは、私たちに___をもたらす',
+    base: 'With the new system, we get ___.',
     says: [
       { form: 'S brings 人 名詞', en: 'The new system brings us ___.' },
       { form: 'S results in 名詞', en: 'The new system results in ___.' },
@@ -491,6 +526,7 @@ export const SAY_BUNDLES = [
   {
     id: 'state', list: 'own', own: ADJ,
     ja: 'その知らせで、みんな___',
+    base: 'After the news, everyone feels ___.',
     says: [
       { form: 'S makes 人 形容詞', en: 'The news makes everyone ___.' },
       { form: 'S leaves 人 形容詞', en: 'The news leaves everyone ___.' },
@@ -500,6 +536,7 @@ export const SAY_BUNDLES = [
   {
     id: 'need', list: 'own', own: NEEDS,
     ja: 'この案件には、___が要る',
+    base: 'For this project, we need ___.',
     says: [
       { form: 'S requires 名詞', en: 'This project requires ___.' },
       { form: 'S calls for 名詞', en: 'This project calls for ___.' },
@@ -508,6 +545,7 @@ export const SAY_BUNDLES = [
   {
     id: 'thing', list: 'own', own: THINGS,
     ja: '昨日送った___',
+    base: 'We sent the ___ yesterday.',
     says: [
       { form: '関係詞', en: 'the ___ that we sent yesterday' },
       { form: '過去分詞', en: 'the ___ sent yesterday' },
@@ -516,6 +554,7 @@ export const SAY_BUNDLES = [
   {
     id: 'people', list: 'own', own: PEOPLE,
     ja: 'それに取り組んでいる___',
+    base: 'We have a ___ working on it.',
     says: [
       { form: '関係詞', en: 'the ___ that is working on it' },
       { form: '現在分詞', en: 'the ___ working on it' },
@@ -524,6 +563,7 @@ export const SAY_BUNDLES = [
   {
     id: 'way', list: 'own', own: WAYS,
     ja: '___やり方は、うまくいっている',
+    base: '___, and it works well.',
     says: [
       { form: 'the way / the reason', en: 'The way ___ works well.' },
     ],
@@ -531,6 +571,8 @@ export const SAY_BUNDLES = [
   {
     id: 'nominal', list: 'own', own: NOMINALS,
     ja: '___に、取引先は驚いた',
+    base: 'The client was surprised when ___.',
+    baseUse: 'plain',
     says: [
       { form: '名詞化(動詞→名詞)', en: '___ surprised the client.' },
     ],
@@ -538,6 +580,7 @@ export const SAY_BUNDLES = [
   {
     id: 'target', list: 'own', own: TARGETS,
     ja: '私たちの狙い、つまり___',
+    base: 'Our target is ___.',
     says: [
       { form: '同格', en: 'our target, ___' },
     ],
@@ -545,6 +588,8 @@ export const SAY_BUNDLES = [
   {
     id: 'more', list: 'own', own: MORES,
     ja: '急げば急ぐほど、___',
+    base: 'If we go faster, ___.',
+    baseUse: 'plain',
     says: [
       { form: 'The 比較級, the 比較級', en: 'The faster we go, ___.' },
     ],

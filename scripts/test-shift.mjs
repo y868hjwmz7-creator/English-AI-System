@@ -329,7 +329,13 @@ head('Quick Response の行にしているか')
   const lack = nfKeys.filter((k) => !frKeys.includes(k))
   ok(lack.length === 0, 'Native Flow の欄を、1つも欠かしていない', `\n    足りない: ${lack.join(' / ')}`)
   const extra = frKeys.filter((k) => !nfKeys.includes(k))
-  ok(extra.join(',') === 'hint', '足したのは `hint` だけ', extra.join(',') || '(無し)')
+  /* **足したものは、2つとも名指しで書く**(黙って増やさない)。
+     `hint` … ヒントに出す型
+     `askEn` … 言い換えの出題に出す素の英文(第5.198節)。
+     **並びも決め打ちにしない** —— 欄の書き順を変えただけで
+     赤くなるのは、この見張りの役目ではない */
+  ok([...extra].sort().join(',') === 'askEn,hint',
+    '足したのは `hint` と `askEn` の2つだけ', extra.join(',') || '(無し)')
 
   const rows = frameQrRows([], { today: '2026-01-01', part: 'say' })
   ok(rows.length === counts.say, '言い換えの行の数が、問の数と合う')
@@ -764,6 +770,115 @@ head('Quick Response の冊として通っているか')
   ok(/frameQrCounts\(\)/.test(sc), '骨組みも、問数を本物から数えている(書き写さない)')
   const bar = code('scripts/test-bar.mjs')
   ok(/\['shift', ''\]/.test(bar), 'すき間の見張りに shift が入っている')
+}
+
+head('言い換えは、英文を英文に言い換える(第5.198節)')
+{
+  /* 2026-09 実機・利用者の指摘。
+
+       > 14の型の「言い換え」トレーニングが機能していません。
+       > 日本語→英語と同じになってしまっています。「言い換え」は英語が
+       > 書いてあり、それを型に則って別の形の英語で言い換えるトレーニングです。
+
+     **そのとおりだった。** 束から作った問は日本語と答えしか持たず、
+     画面は日本語を出すしかなかった —— つまり**和文英訳**である。
+
+     見るのは4つ。**どれか1つでも欠けると、また和文英訳に戻る。**
+       ①言い換えの問は、**ぜんぶ**素の英文を持つ
+       ②素の英文は **66 型のどれでもない**(素の文である)
+       ③素の英文と答えは**別の文**である
+       ④**日本語 → 英語には、素の英文が無い**(あちらは訳す練習のまま) */
+  const say = frameQuestions('say')
+  const swap = frameQuestions('swap')
+
+  const 無 = say.filter((q) => !q.askEn)
+  ok(say.length > 0 && 無.length === 0,
+    `言い換え ${say.length} 問ぜんぶに、素の英文がある`, `無いもの ${無.length} 問`)
+
+  /* **これが、この練習の安全弁である。** 素の文がもう型になっていたら、
+     「別の型で言い直す」お題として成り立たない
+     (実際、名詞化の素の文が**もう名詞化されていた**) */
+  const 型 = say.filter((q) => q.askEn && frameFormOf(q.askEn))
+  ok(型.length === 0, '素の英文は、66 型のどれでもない(素の言い方である)',
+    型.slice(0, 2).map((q) => `${frameFormOf(q.askEn)} | ${q.askEn}`).join(' / '))
+
+  const 同 = say.filter((q) => q.askEn && normEnLocal(q.askEn) === normEnLocal(q.en))
+  ok(同.length === 0, '素の英文と答えは、別の文である', `${同.length} 問`)
+
+  /* **「無い」側も見る。** 片方だけだと、**どの問にも英文を付ける形**に
+     書き換えても緑のままになる(CLAUDE.md) */
+  const 余 = swap.filter((q) => q.askEn)
+  ok(swap.length > 0 && 余.length === 0,
+    '日本語 → 英語には、素の英文が無い(あちらは訳す練習のまま)', `${余.length} 問`)
+
+  /* 束の側。**32 の束ぜんぶに素の文の骨がある**(1つ抜けるとその束だけ
+     和文英訳に戻り、**画面を開くまで分からない**) */
+  const 骨無 = SAY_BUNDLES.filter((b) => !b.base)
+  ok(骨無.length === 0, `束 ${SAY_BUNDLES.length} 個ぜんぶに、素の文の骨がある`,
+    骨無.map((b) => b.id).join(' / '))
+  const 穴 = SAY_BUNDLES.filter((b) => !String(b.base ?? '').includes(SAY_BLANK))
+  ok(穴.length === 0, '素の文の骨には、肉を入れる場所がある',
+    穴.map((b) => b.id).join(' / '))
+
+  /* 組み上がった文の形。**肉が入っていること・頭が大文字であること** */
+  /* **`null` で落ちない形で書く**(CLAUDE.md「0 と `null` を取り違えない」)。
+     素の英文が欠けた問が1つでもあると、ここで例外になって
+     **この先の見張りが1本も走らなくなる** —— 赤チェックで実際に踏んだ。
+     **落ちる見張りは、見張っていないのと同じ**である */
+  const 残 = say.filter((q) => String(q.askEn ?? '').includes(SAY_BLANK))
+  ok(残.length === 0, '素の英文に、入れ忘れた場所が残っていない', `${残.length} 問`)
+  const 小 = say.filter((q) => /^[a-z]/.test(String(q.askEn ?? '')))
+  ok(小.length === 0, '素の英文は、大文字で始まる',
+    小.slice(0, 2).map((q) => q.askEn).join(' / '))
+
+  /* **`plain`(素の言い方)を使う束**。`the 比較級` と名詞化は、
+     肉そのものが型の一部なので、素の文には別の形が要る。
+     **その道が切れていないか**を、実際に組んで確かめる */
+  const 素の言い方 = SAY_BUNDLES.filter((x) => x.baseUse === 'plain')
+  ok(素の言い方.length > 0, '肉そのものが型の一部になる束がある(the 比較級 / 名詞化)')
+  for (const b of 素の言い方) {
+    const 欠 = (b.own ?? []).filter((x) => !x.plain)
+    ok((b.own ?? []).length > 0 && 欠.length === 0,
+      `束「${b.id}」の肉には、素の言い方(plain)がそろっている`, `${欠.length} 個`)
+  }
+
+  /* **行まで届いているか。** ここで落ちると、
+     数は合っているのに**画面だけが日本語のまま**になる */
+  const rows = frameQrRows([], { part: 'say' })
+  ok(rows.length > 0 && rows.every((r) => r.askEn),
+    '溜める行(frameQrRows)まで、素の英文が届く')
+  ok(frameQrRows([], { part: 'swap' }).every((r) => !r.askEn),
+    '日本語 → 英語の行には、素の英文が付かない')
+
+  /* **1問の形(`qrPairOf`)は、素の node で呼べない**
+     —— `qrReviews.js` が Supabase を引き連れている。
+     ここは書いてあるかだけを見て、**本当に届くかは
+     `npm run test:bar` が本物の画面で確かめる**(第5.198節) */
+  const pairSrc = readFileSync(
+    new URL('../src/lib/qrReviews.js', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+  ok(/askEn: row\?\.askEn/.test(pairSrc), '1問の形(qrPairOf)が、素の英文を写している')
+
+  /* **画面が、素の英文を出す道を持っているか。**
+     持っていなければ、データだけ増やして**何も変わらない**
+     (CLAUDE.md「何も変わらないは、届いていないという意味である」) */
+  const card = readFileSync(
+    new URL('../src/components/QrCard.jsx', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  ok(/pair\.askEn/.test(card), '画面が、素の英文を見ている')
+  /* **`qr-ask` で探さない。** `qr-ask-ja`(訳)にも同じ字が入っているので、
+     出題の場所を消しても当たってしまう(**赤チェックで踏んだ**・CLAUDE.md
+     「素の文字列を置き換えるときは、先に数える」)。**閉じ引用符まで見る** */
+  ok(/className="qr-ask"/.test(card), '素の英文を出す場所がある(`.qr-ask`)')
+  ok(/className="qr-ask-ja"/.test(card), '訳を出す場所がある(`.qr-ask-ja`)')
+  ok(/訳を見る/.test(card) && /訳を隠す/.test(card), '訳を出す道がある')
+  ok(/答えを見る/.test(card) && /英語を見る/.test(card),
+    '言い換えでは「答えを見る」、日本語 → 英語では「英語を見る」と書く')
+}
+
+/** 空白のならしだけ。**`textNorm.js` を引き連れない**(素の node で走らせる) */
+function normEnLocal(t) {
+  return String(t ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
 console.log(ng === 0

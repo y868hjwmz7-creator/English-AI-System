@@ -5683,9 +5683,12 @@ for (const W of [1280, 794, 453, 390, 320]) {
      実機で起きていたのは、まさにそれである */
   await page.evaluate(() => { document.querySelector('.sheet-back')?.click() })
   await page.waitForTimeout(400)
+  /* **押すボタンの名前は、中身で変わる**(第5.198節)。
+     言い換えは出題そのものが英語なので「答えを見る」と書いてある ——
+     **文字を決め打ちにすると、ここで見張りが黙る** */
   await page.evaluate(() => {
     const b2 = [...document.querySelectorAll('button')]
-      .find((x) => (x.textContent || '').includes('英語を見る'))
+      .find((x) => /英語を見る|答えを見る/.test(x.textContent || ''))
     if (b2) b2.click()
   })
   await page.waitForTimeout(700)
@@ -6056,6 +6059,167 @@ for (const W of [1280, 794, 453, 390, 320]) {
   if (名.size < 3) {
     ng('書く欄 … 呼び名が種類ごとに変わっていない', [...名].join(' / '))
   } else ok(`書く欄 … 呼び名は種類ごと(${[...名].join(' / ')})`)
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   言い換えは、英文を英文に言い換える(第5.198節・2026-09 実機・利用者の指摘)
+
+     > 14の型の「言い換え」トレーニングが機能していません。
+     > 日本語→英語と同じになってしまっています。「言い換え」は英語が
+     > 書いてあり、それを型に則って別の形の英語で言い換えるトレーニングです。
+     > ヒントを押せば使う型が表示され、訳を見るを押せば日本語訳も見れる
+
+   **本物の `QrReview` を描いて、中身を切り替えて、出ているものを読む。**
+   写した骨組みでは、**問がどちらの文になるか**を1ミリも測れない ——
+   壊れていたのは `frameQr.js` が素の英文を落としていたところで、
+   そこは行の形を見ないと分からない。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+   日本語 → 英語のほうまで英文になってしまっては、直したことにならない。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 420, height: 900 } })
+  page.setDefaultTimeout(9000)
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(1500)
+
+  /** 66 の型の冊へ移る。**名前は書き写さない**(「の型」で拾う) */
+  await page.click('.bookpick')
+  await page.waitForTimeout(300)
+  await page.evaluate(() => {
+    for (const x of document.querySelectorAll('.shelf-pick')) {
+      if ((x.textContent || '').includes('の型')) { x.click(); return }
+    }
+  })
+  await page.waitForTimeout(1400)
+
+  /** 中身(日本語 → 英語 / 言い換え)を、何番目かで選ぶ */
+  const 中身を = async (i) => {
+    await page.evaluate(() => { document.querySelector('.bookpick')?.click() })
+    await page.waitForTimeout(400)
+    const 名 = await page.evaluate((n) => {
+      const s2 = [...document.querySelectorAll('select')].find((x) => x.options.length === 2)
+      if (!s2) return null
+      s2.value = s2.options[n].value
+      s2.dispatchEvent(new Event('change', { bubbles: true }))
+      return s2.options[n].textContent.trim()
+    }, i)
+    await page.waitForTimeout(1500)
+    await page.evaluate(() => { document.querySelector('.sheet-back')?.click() })
+    await page.waitForTimeout(500)
+    return 名
+  }
+
+  const 見る = () => page.evaluate(() => ({
+    /* **出題の英文と、日本語の問は、別の場所である。**
+       どちらが描かれているかで、どちらの練習かが決まる */
+    出題英: (document.querySelector('.qr-ask')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    出題和: (document.querySelector('.qr-ja')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    訳: (document.querySelector('.qr-ask-ja')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    札: (document.querySelector('.qr-frame')?.textContent ?? '')
+      .replace(/^型/, '').replace(/\s+/g, ' ').trim(),
+    ボタン: [...document.querySelectorAll('.qr-peek button')]
+      .map((x) => (x.textContent || '').trim()).filter(Boolean),
+  }))
+  const 押す = async (名) => page.evaluate((t) => {
+    const b2 = [...document.querySelectorAll('.qr-peek button')]
+      .find((x) => (x.textContent || '').trim() === t)
+    if (b2) b2.click()
+    return !!b2
+  }, 名)
+
+  /* ── ① 日本語 → 英語(冊に入った時点の既定)────────────────────
+     **こちらを先に見る。** 答えを開いたあとに戻そうとすると、
+     シートの開き直しに引っかかって**測れていないのに緑**になりかねない。
+     **「出ない」側を、いちばん確かな場所で見ておく** */
+  await page.evaluate(() => { document.querySelector('.sheet-back')?.click() })
+  await page.waitForTimeout(500)
+  const 和 = await 見る()
+  if (和.出題英) {
+    ng('日本語 → 英語 … こちらまで英文が問になっている', 和.出題英.slice(0, 40))
+  } else if (!和.出題和) {
+    ng('日本語 → 英語 … 日本語の問が出ていない', JSON.stringify(和).slice(0, 120))
+  } else if (和.ボタン.includes('訳を見る')) {
+    ng('日本語 → 英語 … 効かない「訳を見る」が出ている', 和.ボタン.join(' / '))
+  } else if (!和.ボタン.includes('英語を見る')) {
+    ng('日本語 → 英語 … 「英語を見る」が無い', 和.ボタン.join(' / '))
+  } else {
+    ok(`日本語 → 英語 … これまでどおり日本語が問(${和.出題和.slice(0, 30)})`)
+  }
+
+  // ── ② 言い換え(2番目の中身)────────────────────────────────
+  const 言い換え名 = await 中身を(1)
+  const 言 = await 見る()
+  if (!言い換え名) {
+    ng('言い換え … 中身をえらぶ欄が出ない')
+  } else if (!言.出題英) {
+    ng(`言い換え … 出題が英文になっていない(${言い換え名})`,
+      `いま出ているのは「${言.出題和.slice(0, 40)}」—— これでは和文英訳のままである`)
+  } else if (言.出題和) {
+    ng('言い換え … 英文と日本語が、両方とも問として出ている', 言.出題和.slice(0, 40))
+  } else if (!/[A-Za-z]/.test(言.出題英)) {
+    ng('言い換え … 出題が英語でない', 言.出題英.slice(0, 40))
+  } else {
+    ok(`言い換え … 出題が英文になっている(${言.出題英.slice(0, 44)})`)
+  }
+
+  /* **押す前に、訳は出ていない。** 既定で出していたら、
+     読む前に答えが見えてしまう(「訳を見る」の意味が無い)。
+     **`ok(条件, …)` と書かない** —— この検証の `ok()` は文字を出すだけで、
+     条件を渡すと `✓ true` と出て**失敗しようがない**(CLAUDE.md) */
+  if (言.訳) ng('言い換え … 押していないのに、訳が出ている', 言.訳.slice(0, 40))
+  else ok('言い換え … 訳は、押すまで出ない')
+
+  /* **ボタンの名前。** 出題が英語なのに「英語を見る」とは書けない */
+  const 名前 = 言.ボタン.join(' / ')
+  if (言.ボタン.includes('英語を見る')) {
+    ng('言い換え … 出題が英語なのに「英語を見る」と書いてある', 名前)
+  } else if (!言.ボタン.includes('答えを見る')) {
+    ng('言い換え … 答えを開くボタンが無い', 名前)
+  } else if (!言.ボタン.includes('訳を見る')) {
+    ng('言い換え … 「訳を見る」が無い(日本語にたどり着けない)', 名前)
+  } else ok(`言い換え … ボタンは「答えを見る」と「訳を見る」(${名前})`)
+
+  // ── ③ 訳を押したら、日本語が出るか ───────────────────────────
+  const 押せた = await 押す('訳を見る')
+  await page.waitForTimeout(400)
+  const 訳後 = await 見る()
+  if (!押せた) {
+    ng('言い換え … 「訳を見る」を押せない')
+  } else if (!訳後.訳) {
+    ng('言い換え … 「訳を見る」を押しても、訳が出ない')
+  } else if (!/[ぁ-んァ-ヶ一-龠]/.test(訳後.訳)) {
+    ng('言い換え … 出たものが日本語でない', 訳後.訳.slice(0, 40))
+  } else if (訳後.出題英 !== 言.出題英) {
+    /* **訳を出しても、出題は消えない。** 消えると見比べられない */
+    ng('言い換え … 訳を出すと、出題の英文が消える')
+  } else ok(`言い換え … 「訳を見る」で日本語が出る(${訳後.訳.slice(0, 30)})`)
+  /* **もう一度押したら引っ込む。** 行き止まりを作らない */
+  await 押す('訳を隠す')
+  await page.waitForTimeout(300)
+  const 隠した = await 見る()
+  if (隠した.訳) ng('言い換え … 「訳を隠す」を押しても隠れない', 隠した.訳.slice(0, 40))
+  else ok('言い換え … 「訳を隠す」で、また隠れる')
+
+  // ── ④ 答えは、別の英文か ─────────────────────────────────
+  await 押す('答えを見る')
+  await page.waitForTimeout(500)
+  const 答 = await page.evaluate(() => ({
+    英文: (document.querySelector('.qr-en')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    ボタン: [...document.querySelectorAll('.qr-peek button')]
+      .map((x) => (x.textContent || '').trim()).filter(Boolean),
+  }))
+  const そろえる = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  if (!答.英文) {
+    ng('言い換え … 「答えを見る」を押しても、答えが出ない')
+  } else if (そろえる(答.英文) === そろえる(言.出題英)) {
+    ng('言い換え … 答えが、出題とまったく同じ文である', 答.英文.slice(0, 60))
+  } else if (!答.ボタン.includes('答えを隠す')) {
+    ng('言い換え … 開いたあと、閉じるボタンの名前が変わっていない', 答.ボタン.join(' / '))
+  } else ok(`言い換え … 答えは別の英文になる(${答.英文.slice(0, 44)})`)
+
+  await page.close()
 }
 
 /* ══════════════════════════════════════════════════════════════════

@@ -79,7 +79,7 @@ import { normEn } from './textNorm.js'
  */
 export const FRAME_PARTS = [
   { id: 'swap', label: '日本語 → 英語', lead: `日本語を見て、その型で英語を言います。${frameGroupCount()} の型ぜんぶに問があります。` },
-  { id: 'say', label: '言い換え', lead: '伝えたいことを、指定の型で言います。型は問に書いてあります。' },
+  { id: 'say', label: '言い換え', lead: '英文を読んで、同じ内容を指定の型で言い換えます。型はヒント、訳は「訳を見る」で出ます。' },
 ]
 
 /** いちばんやさしい中身。**「先頭」と書かない** —— 並びを変えたら意味が変わる */
@@ -152,8 +152,13 @@ function framePlan(part) {
     /* **手で書いた 37 のお題が先。** あちらは場面のある本物の言い回しで、
        束(`frameSay.js`)は数である。**順を入れ替えない** ——
        並べ方を「教材の順」にした人は、良いほうから始まる */
+    /* **素の文(`base`)を落とさない**(第5.198節)。
+       ここで捨てていたので、画面は日本語を出すしかなく、
+       **言い換えが和文英訳になっていた**(利用者の指摘)。
+       `swap` には渡さない —— あちらの `base` は `___` の入った骨であり、
+       **出題に出すものではない**(同じ名前の、別のもの) */
     return [...shiftQuestions(), ...sayQuestions()]
-      .map((q) => ({ ja: q.ja, en: q.ex, form: q.form }))
+      .map((q) => ({ ja: q.ja, en: q.ex, form: q.form, askEn: q.base || null }))
   }
   if (part !== 'swap') return []
   const out = []
@@ -340,6 +345,9 @@ export function frameQrRows(
       en_norm: q.key,
       en: q.en,
       ja: q.ja,
+      /** **出題に出す英文**(言い換えだけが持つ)。無い行は `null` ——
+          そちらは日本語から言う練習のまま(第5.198節) */
+      askEn: q.askEn ?? null,
       /** **ヒント。** 文言は `frameHintOf()` 1か所(画面に書き写さない) */
       hint: frameHintOf(q.form),
       /* **話す人はいない。** 会話から溜めた問と違い、ここは1問ずつの表現である */

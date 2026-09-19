@@ -89,6 +89,16 @@ export default function QrCard({
   hintOn = false, onHint = null,
 }) {
   const [shown, setShown] = useState(false)
+  /**
+   * **訳を出しているか**(第5.198節・2026-09 利用者の指定)。
+   *
+   *   > ヒントを押せば使う型が表示され、訳を見るを押せば日本語訳も見れる
+   *
+   * **この問だけ。次の問では閉じる**(ヒントとは違う)。ヒントは
+   * 「どの型で言うか」という**お題の一部**なので問をまたいで残すが、
+   * 訳は**読めなかったときの助け**なので、既定は出さない側にしておく。
+   */
+  const [jaOn, setJaOn] = useState(false)
   /** 答えの音をくり返すか。**覚えない**(次に開いたときは1回に戻す) */
   const [loop, setLoop] = useState(false)
   const bodyRef = useRef(null)        // 出題の枠。**動かすのはここだけ**
@@ -96,8 +106,8 @@ export default function QrCard({
 
   const key = pair?.key ?? pair?.en ?? ''
 
-  // 出題が変わったら、答えは閉じた状態から
-  useEffect(() => { setShown(false); stopReading() }, [key])
+  // 出題が変わったら、答えも訳も閉じた状態から
+  useEffect(() => { setShown(false); setJaOn(false); stopReading() }, [key])
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
@@ -152,7 +162,24 @@ export default function QrCard({
             測って出し分ける必要もなくなった(`is-tight` ごと消した)。 */}
         {!shown && (
           <>
-            <p className="qr-ja">{pair.ja}</p>
+            {/* **言い換えは、英文が問である**(第5.198節・利用者の指摘
+                「言い換えは英語が書いてあり、それを型に則って別の形の
+                英語で言い換えるトレーニングです」)。
+
+                それまでは日本語しか持っていなかったので、
+                **日本語 → 英語とまったく同じ画面**になっていた。
+                素の英文(`askEn`)を持つ問だけ、そちらを出す。
+                **持たない問はこれまでどおり日本語**(書き分けはここ1か所)。
+
+                **語をタップできる形(`EnglishText`)にはしない。**
+                あれは意味を引きに行く道で、**出題を読むだけで課金が動く。**
+                答えの側は残してあるので、意味はそこで引ける */}
+            {pair.askEn
+              ? <p className="qr-ask">{pair.askEn}</p>
+              : <p className="qr-ja">{pair.ja}</p>}
+            {/* **訳**(第5.198節)。英文が問のときだけ出せる ——
+                日本語が問のときは、押しても同じものが2つ並ぶだけである */}
+            {pair.askEn && jaOn && <p className="qr-ask-ja">{pair.ja}</p>}
             {/* **ヒントは、問の下に置く**(2026-09 利用者の指定)。
                 答えではないので、答えの囲み(`.answer-box`)には入れない。
                 **出すのは、答えの下に出るのとまったく同じ札**である
@@ -187,7 +214,11 @@ export default function QrCard({
           <button type="button" className="btn btn--ghost btn--small"
                   aria-expanded={shown}
                   onClick={() => setShown((v) => !v)}>
-            {shown ? '英語を隠す' : '英語を見る'}
+            {/* **言い換えでは「英語を見る」と書けない** ——
+                問がすでに英語だからである(第5.198節) */}
+            {pair.askEn
+              ? (shown ? '答えを隠す' : '答えを見る')
+              : (shown ? '英語を隠す' : '英語を見る')}
           </button>
           {/* **英語を出さなくても、答えの音は聞ける**(2026-09 利用者の指定)。
               Quick Response は**口に出して言う**練習なので、自分で言ってから
@@ -208,6 +239,18 @@ export default function QrCard({
                     aria-pressed={hintOn}
                     onClick={() => onHint(!hintOn)}>
               <HintIcon />{hintOn ? 'ヒントを消す' : 'ヒント'}
+            </button>
+          )}
+          {/* **訳を見る**(第5.198節・利用者の指定)。
+              **英文が問のときだけ出す** —— 日本語が問のときに押しても
+              同じものが2つ並ぶだけである(効かない操作を見せない)。
+              **押している状態は、色だけに頼らない**(`aria-pressed` + 地色) */}
+          {pair.askEn && (
+            <button type="button"
+                    className={`btn btn--small btn--ghost${jaOn ? ' chip--on' : ''}`}
+                    aria-pressed={jaOn}
+                    onClick={() => setJaOn((v) => !v)}>
+              {jaOn ? '訳を隠す' : '訳を見る'}
             </button>
           )}
           {extra}

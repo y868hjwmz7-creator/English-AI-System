@@ -807,6 +807,26 @@ const QR_PAIR = {
   hint: 'I was wondering if you could ~',
 }
 
+/* **言い換えの1問**(`?say=1`・第5.198節・利用者の指摘)。
+
+     > 「言い換え」は英語が書いてあり、それを型に則って
+     > 別の形の英語で言い換えるトレーニングです
+
+   **同じ問の、英文が出題になった形**である。`askEn` を持つ行だけが
+   こうなるので、**持つ形と持たない形の両方を描く** ——
+   片方だけだと、**どの問でも英文を出す形**に書き換えても緑のままになる
+   (「出る」と「出ない」の両方を見る・CLAUDE.md)。
+
+   **素の英文も、実物どおり長いものを入れる** —— 短い文では、
+   枠からあふれるのも、訳を開いてボタンが押し出されるのも測れない。 */
+const QR_SAY_PAIR = {
+  ...QR_PAIR,
+  key: 'q1-say',
+  askEn: 'If you cannot make it to the meeting on time, '
+    + 'tell us as soon as you can, so that we can change the order '
+    + 'of the agenda and start with the parts that do not need you.',
+}
+
 /* 2つの Quick Response を、**それぞれ本物の置かれ方**で描く。
 
    | どこ | `?screen=` | 形 |
@@ -891,7 +911,9 @@ const qrScreen = (plain) => (
       {/* **ヒントも、本物と同じ渡し方で**(2026-09 実機・利用者の指摘
           「ヒント内の『ヒント』の表示が崩れている」)。
           押した状態は本物でも呼ぶ側が持つので、ここでも props で渡す */}
-      <QrCard pair={QR_PAIR} no={2} onAnswer={() => {}} showFrame={plain}
+      {/* `?say=1` … **言い換え**(英文が出題・第5.198節) */}
+      <QrCard pair={q.get('say') === '1' ? QR_SAY_PAIR : QR_PAIR}
+              no={2} onAnswer={() => {}} showFrame={plain}
               hintOn={plain} onHint={() => {}} />
     </section>
   </FocusFrame>

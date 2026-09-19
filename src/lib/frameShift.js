@@ -114,7 +114,37 @@ export const SAY_GROUP = 'say'
  *
  * **日本語は型をまたいで同じ。** それが「言い換え」だからである
  * (どの型で言うかは、ヒントと型の絞り込みが伝える)。
+ *
+ * ── **素の文も一緒に作る**(第5.198節・2026-09 利用者の指摘)────────
+ *
+ *   > 14の型の「言い換え」トレーニングが機能していません。
+ *   > 日本語→英語と同じになってしまっています。「言い換え」は英語が
+ *   > 書いてあり、それを型に則って別の形の英語で言い換えるトレーニングです。
+ *
+ *   **そのとおりだった。** 束から作った問は `ja` と答えしか持っておらず、
+ *   画面は日本語を出すしかなかった —— つまり**和文英訳**になっていた。
+ *   手で書いた 37 のお題(`FRAME_SHIFTS`)には `base`(素の文)が
+ *   はじめからあるのに、**束の側に無かった。**
+ *
+ *   束に `base` を足し、**答えとまったく同じ肉**を入れて組み立てる。
+ *   同じ肉だから、**素の文と答えが必ず同じ内容**になる。
  */
+/**
+ * 骨(`___` 入り)に肉を入れる。**文の頭に来た肉は、大文字にする。**
+ *
+ * `動名詞` の骨は `___ is important.` なので、そのままだと
+ * `working from home is important.` と小文字で始まる。
+ * **見分けはできてしまうので、検証では捕まらない** —— 実物を読んで
+ * 初めて分かる類の崩れである(まず測る・CLAUDE.md)。
+ *
+ * **答えにも素の文にも、同じ決まりを使う**(2か所に書かない)。
+ */
+const fillBlank = (skeleton, filler) => {
+  const head = String(skeleton).startsWith(SWAP_BLANK)
+  const put = head ? filler.charAt(0).toUpperCase() + filler.slice(1) : filler
+  return String(skeleton).replace(SWAP_BLANK, put)
+}
+
 export function sayQuestions() {
   const out = []
   for (const b of SAY_BUNDLES) {
@@ -136,16 +166,23 @@ export function sayQuestions() {
            そのままだと `working from home is important.` と小文字で始まる。
            **見分けはできてしまうので、検証では捕まらない** —— 実物を読んで
            初めて分かる類の崩れである(まず測る・CLAUDE.md) */
-        const head = String(say.en).startsWith(SWAP_BLANK)
-        const put = head ? filler.charAt(0).toUpperCase() + filler.slice(1) : filler
-        const en = String(say.en).replace(SWAP_BLANK, put)
+        const en = fillBlank(say.en, filler)
         /* **確かめてから出す。** ここが、この練習の安全弁である */
         if (frameFormOf(en) !== want) continue
+        /* **素の文に入れる肉は、束が決める**(第5.198節)。
+           `the 比較級` だけは肉そのものが型の一部なので `plain` を使う。
+           ~ing / 原形も、答えとは別に束が選ぶ —— 素の文の骨は1つしかない */
+        const bare = b.baseUse === 'plain' ? x.plain
+          : b.list === 'verb' ? (b.baseIng ? x.ing : x.bare)
+          : x.en
+        const base = b.base && bare ? fillBlank(b.base, bare) : ''
         out.push({
           qid: `${SAY_GROUP}:${b.id}:${say.form}:${filler}`,
           id: b.id,
           scene: null,
           ja: String(b.ja).replace(SWAP_BLANK, x.ja),
+          /** **素の文。** これを見て、`form` の型で言い換える */
+          base,
           form: say.form,
           ex: en,
           groupId: SAY_GROUP,
