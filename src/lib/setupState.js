@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0062'
+export const NEWEST_MIGRATION = '0063'
 
 /**
  * その移行が入っているかを見る印。
@@ -92,9 +92,25 @@ export const NEWEST_MIGRATION = '0062'
  * あれは上限そのものの出どころでもあるので、
  * **印のためだけの関数ではない。**
  */
+/*
+ * 0063(文化の背景)は、**許す値を1つ増やすだけ**である。
+ * 表も列も関数も行も増えないので、**このままでは画面から見えない** ——
+ * 見えないまま ✅ になるのが、CLAUDE.md の言う
+ * 「**本当は足りないのに全部 ✅**」(いちばん悪い壊れ方)である。
+ *
+ * だから 0063 は `section_types()` も作る。あれが答えるのは
+ * 「**このデータベースは、どの演習の種類を受け付けるか**」で、
+ * アプリの一覧と食い違うと**教材を作った最後の最後で insert が落ちる。**
+ * `qr_limit()` とまったく同じ立て付けで、**印のためだけの関数ではない。**
+ *
+ * **在るかどうかだけでは足りない**(`has`)。関数は 0063 が作るが、
+ * 制約のほうを貼り忘れる形もありうる —— だから
+ * **返ってきた一覧に `culture_note` が入っているか**まで見る。
+ */
 export const NEWEST_MARK = {
-  rpc: 'qr_limit',
-  label: 'Quick Response の上限(qr_limit)',
+  rpc: 'section_types',
+  has: 'culture_note',
+  label: '演習の種類の一覧(section_types)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */
@@ -137,12 +153,17 @@ export async function checkSqlApplied() {
       if (rowError) return noTable(rowError) ? 'missing' : 'unknown'
       return (data?.length ?? 0) > 0 ? 'ok' : 'missing'
     }
-    const { error } = NEWEST_MARK.rpc
+    const { data, error } = NEWEST_MARK.rpc
       ? await supabase.rpc(NEWEST_MARK.rpc)
       : await supabase.from(NEWEST_MARK.table).select('*').limit(1)
-    if (!error) return 'ok'
-    if (noTable(error)) return 'missing'
-    return 'unknown'                  // 通信の失敗など。**騒がない**
+    if (error) return noTable(error) ? 'missing' : 'unknown'
+    /* **中身まで見る印**(0063)。関数は在るのに、制約のほうを
+       貼り忘れている形がありうる。**在るかどうかだけでは足りない** */
+    if (NEWEST_MARK.has) {
+      const list = Array.isArray(data) ? data : []
+      return list.includes(NEWEST_MARK.has) ? 'ok' : 'missing'
+    }
+    return 'ok'
   } catch { return 'unknown' }
 }
 

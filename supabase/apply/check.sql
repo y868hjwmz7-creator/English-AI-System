@@ -168,4 +168,13 @@ from (
   -- だから関数そのものの有無で見る。画面の SetupStatus も同じ印を見ている
   union all select '0062 Quick Response を 500 問より先まで読めるようにする(pending_matome.sql)',
     exists (select 1 from pg_proc where proname = 'qr_limit'), 44
+  -- **表も列も増えない移行**(許す値を1つ増やすだけ)。
+  -- だから**制約そのものの中身**を見る(0045 とまったく同じ見方)
+  union all select '0063 演習の種類に「文化の背景」を足す(pending_matome.sql)',
+    -- **2つとも見る。** 制約だけ貼って関数を貼り忘れると、
+    -- 画面の「準備の状態」が 0063 を見つけられなくなる
+    exists (select 1 from pg_constraint
+            where conname = 'material_sections_type_check'
+              and pg_get_constraintdef(oid) like '%culture_note%')
+    and exists (select 1 from pg_proc where proname = 'section_types'), 45
 ) t order by 順;

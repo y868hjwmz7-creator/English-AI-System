@@ -6108,12 +6108,22 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **`setupState.js` は import できない** —— Supabase を引き連れており、
      素の node では `import.meta.env` が無くて落ちる。**ソースで見る** */
   const setup = noNote(readD('src/lib/setupState.js'))
-  ok(/NEWEST_MIGRATION = '0062'/.test(setup),
-    '0062 … いちばん新しい移行として登録してある')
-  ok(/rpc: 'qr_limit'/.test(setup),
-    '0062 … 印は qr_limit()(表も列も増えない移行だから)')
+  /* **いちばん新しい移行は 0063 になった**(文化の背景)。
+     0062 の印(`qr_limit`)は、まとめた1つと `check.sql` の側で
+     そのまま見張り続ける(下の3本)—— **消していない** */
+  ok(/NEWEST_MIGRATION = '0063'/.test(setup),
+    '0063 … いちばん新しい移行として登録してある')
+  /* **0063 は表も列も行も増やさない**(許す値が1つ増えるだけ)。
+     だから画面から見えるように `section_types()` を作ってある。
+     **在るかどうかだけでは足りない** —— 関数は在るのに制約を
+     貼り忘れる形がありうるので、**中身に `culture_note` が
+     入っているか**まで見る(`has`) */
+  ok(/rpc: 'section_types'/.test(setup),
+    '0063 … 印は section_types()(表も列も増えない移行だから)')
+  ok(/has: 'culture_note'/.test(setup),
+    '0063 … 印は、返ってきた一覧の中身まで見る(在るかどうかだけにしない)')
   ok(!/row: \{ column/.test(setup),
-    '0062 … 前の印(行を見る形)が残っていない')
+    '0063 … 前の印(行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')
   ok(/create or replace function public\.qr_limit\(\)/.test(matome),
     '0062 … まとめた1つ(pending_matome.sql)に入っている')
@@ -6127,6 +6137,34 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '0062 … 上限の差し替えが、0048 の 500 より後に来ている(貼れば上書きされる)')
   ok(/proname = 'qr_limit'/.test(readD('supabase/apply/check.sql')),
     '0062 … check.sql にも行が足してある')
+
+  /* ── ⑧ 貼る SQL がそろっているか(0063 文化の背景)──────────── */
+  const check63 = readD('supabase/apply/check.sql')
+  ok(/create or replace function public\.section_types\(\)/.test(matome),
+    '0063 … まとめた1つ(pending_matome.sql)に section_types() が入っている')
+  /* **drop を先に置く**(CLAUDE.md)。置かないと、あとで誰かが
+     返す列を変えた日に、このファイルを貼り直せなくなる */
+  /* **「無ければ素通り」を書かない**(CLAUDE.md)。
+     `lastIndexOf` は見つからないと -1 を返すので、
+     「drop < create」だけだと**drop を丸ごと消しても緑**になる
+     (赤チェックで実際に素通りした)。**在ることを先に見る** */
+  const drop63 = matome.lastIndexOf('drop function if exists public.section_types();')
+  const make63 = matome.lastIndexOf('create or replace function public.section_types()')
+  ok(drop63 >= 0 && make63 >= 0 && drop63 < make63,
+    '0063 … 作り直す前に drop を置いている', `drop ${drop63} / create ${make63}`)
+  /* **一覧を書き写していない。** 制約そのものから読む ——
+     種類を足した日に、関数の中だけ古い一覧が残らない */
+  ok(/pg_get_constraintdef\(oid\)[\s\S]{0,200}material_sections_type_check/.test(matome),
+    '0063 … 演習の種類を書き写さず、制約そのものから読んでいる')
+  ok(/proname = 'section_types'/.test(check63) && /culture_note/.test(check63),
+    '0063 … check.sql が、関数と制約の両方を見ている')
+  /* **画面に出る名前は `exerciseTypes.js` 1か所。** 書き写さない */
+  const ex = noNote(readD('src/data/exerciseTypes.js'))
+  ok(/id: 'culture_note'/.test(ex), '0063 … 演習の種類に登録してある')
+  /* **読み上げを付けない。** 中身は日本語で、付けると見出しの英語だけが
+     読み上げられて**語句のほうと二重に課金される** */
+  ok(/id: 'culture_note'[\s\S]{0,200}audioFrom: null/.test(ex),
+    '0063 … 文化の背景に読み上げを付けていない(二重に課金しない)')
 }
 
 /* ══════════════════════════════════════════════════════════════════════

@@ -53,7 +53,7 @@ alter table public.material_sections
     -- 本文に対する設問と語句
     --   discussion  … 本文をきっかけに自分の考えを話す。**正解が無い**(0033)
     --   audience_qa … 話し終えたあと、聴衆から投げられる質問。**正解が無い**(0045)
-    'comprehension', 'discussion', 'audience_qa', 'vocab_note',
+    'comprehension', 'discussion', 'audience_qa', 'vocab_note', 'culture_note',
     -- 旧「長文」で使っていたもの。既存の行のために残す
     'read_aloud', 'overlapping', 'shadowing', 'repeating',
     -- 穴埋め。**新規では使わない**(0034 で誤り訂正へ差し替えた)。
