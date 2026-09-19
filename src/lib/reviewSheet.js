@@ -24,6 +24,7 @@
  *   1つずつ機械的に確かめられる。
  */
 import { shelfLabel } from '../data/shelves.js'
+import { chunkTitle } from './chunkBook.js'
 import { POS_GROUPS, posGroupOf } from './posGroups.js'
 import { tierOf } from '../data/basicsCourse.js'
 
@@ -124,7 +125,17 @@ export function sheetNote({ count, unit, group = '', narrowed = 0, date = '' }) 
  *
  * 棚は**1冊ずつ開く**のがふつうだが(プルダウン)、複数でも並べて出す。
  */
-export function bookLabel({ book = 'my', shelves = [], tier = '' } = {}) {
+export function bookLabel({
+  book = 'my', shelves = [], tier = '', part = '', group = '',
+} = {}) {
+  /* **ビジネス必須チャンク集**(第5.199節・2026-09 利用者の指定
+     「絞り込んだ上での印刷、PDF出力ともにちゃんと出来るように」)。
+
+     ここが空を返していたので、**どの段のどの組を刷ったのかが
+     紙に1文字も残らなかった。** 名前は `chunkTitle()` が作る ——
+     画面の題(`drillLabel`)とまったく同じものである
+     (**同じ名前を2か所で組み立てない**・CLAUDE.md) */
+  if (book === 'chunk') return chunkTitle(part, group)
   if (book === 'shelf') {
     /* **空の id を引かない。** `shelfLabel('')` は「汎用」を返すので、
        そのまま通すと**選んでいない棚の名前が題に出る** ——
@@ -146,9 +157,11 @@ export function bookLabel({ book = 'my', shelves = [], tier = '' } = {}) {
  *
  * @param owner 敬称まで付けた名前(トレーナーが開いているとき)。無ければ空
  */
-export function sheetTitle({ owner = '', book = 'my', shelves = [], tier = '' } = {}) {
+export function sheetTitle({
+  owner = '', book = 'my', shelves = [], tier = '', part = '', group = '',
+} = {}) {
   const head = owner ? `${owner}の単語帳` : '単語帳'
-  const what = bookLabel({ book, shelves, tier })
+  const what = bookLabel({ book, shelves, tier, part, group })
   return what ? `${head} — ${what}` : head
 }
 

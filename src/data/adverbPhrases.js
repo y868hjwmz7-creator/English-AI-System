@@ -50,9 +50,23 @@ export const ADVERB_PHRASE_GROUPS = [
   { id: 'connect', label: 'つなぐ', name: '前の文とつなぐ', point: 'その結果・一方で' },
   { id: 'manner', label: 'やり方', name: 'やり方をそえる', point: '直接会って・文書で' },
   { id: 'cond', label: '条件', name: '条件・立場をそえる', point: '必要なら・いずれにせよ' },
+  /* **前置詞句**(2026-09 利用者の指定・第5.199節)。
+
+       > 前置詞句は厳密には副詞句の一種ですが分けることで分かりやすくしたいです。
+
+     **ほかの7つは「はたらき」で分けてある**(いつ・どのくらい…)が、
+     これだけは**形**で分けてある。軸が違うので、ふつうなら混ぜない ——
+     **利用者が「分けたほうが分かりやすい」と決めたので、そのとおりにする。**
+
+     **いまある 50 件は動かさない。** `by the end of the day` も
+     `in the meantime` も前置詞句だが、**はたらきの組に入っている**ものは
+     そのままにする —— 動かすと、ゲストが覚えた置き場所がずれる
+     (docs/notes/22 の決まり)。ここに入るのは**新しく足したぶん**である。
+     **後ろへ足す。並べ替えない** */
+  { id: 'prep', label: '前置詞句', name: '前置詞 + 名詞', point: '厳密には副詞句の一種。かたまりで覚えると速い' },
 ]
 
-/** 厳選 50 件。**並べ替えない。減らさない。後ろへ足す** */
+/** **並べ替えない。減らさない。後ろへ足す**(数は `npm run test:play` が見る) */
 export const ADVERB_PHRASES = [
   // -- いつ
   { g: 'time', p: 'as soon as possible', n: 'できるだけ早く', en: 'Please send it as soon as possible.', ja: 'できるだけ早く送ってください' },
@@ -117,6 +131,23 @@ export const ADVERB_PHRASES = [
   { g: 'cond', p: 'in any case', n: 'いずれにせよ', en: 'In any case, we should tell the client.', ja: 'いずれにせよ、取引先には伝えるべきだ' },
   { g: 'cond', p: 'at your convenience', n: 'ご都合のよいときに', en: 'Please reply at your convenience.', ja: 'ご都合のよいときに、お返事ください' },
   { g: 'cond', p: 'without fail', n: '必ず', en: 'Send the report on Friday without fail.', ja: '金曜に、必ず報告書を送ってください' },
+  // -- 前置詞句(第5.199節)。**前置詞 + 名詞で、ひとかたまり**
+  { g: 'prep', p: 'in charge of the project', n: '案件を担当して', en: 'She is in charge of the project.', ja: '彼女が案件を担当しています' },
+  { g: 'prep', p: 'on behalf of the team', n: 'チームを代表して', en: 'I am writing on behalf of the team.', ja: 'チームを代表してご連絡します' },
+  { g: 'prep', p: 'in line with the plan', n: '計画に沿って', en: 'The work is in line with the plan.', ja: '作業は計画に沿って進んでいます' },
+  { g: 'prep', p: 'in response to your request', n: 'ご依頼を受けて', en: 'In response to your request, we revised the quote.', ja: 'ご依頼を受けて、見積もりを直しました' },
+  { g: 'prep', p: 'due to the delay', n: '遅れのせいで', en: 'Due to the delay, we moved the meeting.', ja: '遅れのせいで、会議を動かしました' },
+  { g: 'prep', p: 'apart from the cost', n: '費用は別として', en: 'Apart from the cost, the plan looks good.', ja: '費用は別として、計画は良さそうです' },
+  { g: 'prep', p: 'in addition to the report', n: '報告書に加えて', en: 'In addition to the report, we sent the raw data.', ja: '報告書に加えて、元のデータも送りました' },
+  { g: 'prep', p: 'regardless of the result', n: '結果に関わらず', en: 'We will continue regardless of the result.', ja: '結果に関わらず、続けます' },
+  { g: 'prep', p: 'with regard to the contract', n: '契約について', en: 'I have one question with regard to the contract.', ja: '契約について、1つ質問があります' },
+  { g: 'prep', p: 'prior to the meeting', n: '会議より前に', en: 'Please read it prior to the meeting.', ja: '会議より前に読んでおいてください' },
+  { g: 'prep', p: 'on top of the workload', n: '仕事の量に加えて', en: 'On top of the workload, we lost a member.', ja: '仕事の量に加えて、人が1人減りました' },
+  { g: 'prep', p: 'at the expense of quality', n: '品質を犠牲にして', en: 'We will not go faster at the expense of quality.', ja: '品質を犠牲にして急ぐことはしません' },
+  { g: 'prep', p: 'in accordance with the rules', n: '決まりにしたがって', en: 'We handled it in accordance with the rules.', ja: '決まりにしたがって処理しました' },
+  { g: 'prep', p: 'in favor of the new plan', n: '新しい案に賛成で', en: 'Most of the team is in favor of the new plan.', ja: 'チームの大半は、新しい案に賛成です' },
+  { g: 'prep', p: 'in the event of a delay', n: '遅れが出た場合には', en: 'In the event of a delay, please tell us at once.', ja: '遅れが出た場合には、すぐにお知らせください' },
+  { g: 'prep', p: 'by means of a short survey', n: '短い調査によって', en: 'We gathered it by means of a short survey.', ja: '短い調査によって集めました' },
 ]
 
 /** id から組を引く。知らない id は `null`(**当てずっぽうで返さない**) */

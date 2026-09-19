@@ -899,7 +899,18 @@ export default function QrReview({
           同じ仕様」そのものである */}
       {printing && (
         <ReviewSheet
-          title={`${who}Quick Response 帳`}
+          /* **いま絞っているものを、紙の題にも出す**(第5.199節・
+             2026-09 利用者の指定「絞り込んだ上での印刷、PDF出力ともに
+             ちゃんと出来るようにしてください」)。
+
+             **行はもともと絞れていた** —— 足りなかったのは題のほうで、
+             「14 の型 / 言い換え / S enables 人 to do」で刷っても
+             紙には「Quick Response 帳」としか出ず、
+             **何を絞って刷ったのかが残らなかった。**
+
+             名前は `drillLabel` —— **画面の題とまったく同じもの**である
+             (同じ名前を2か所で組み立てない・CLAUDE.md) */
+          title={`${who}Quick Response 帳${drillLabel ? ` — ${drillLabel}` : ''}`}
           note={sheetNote({
             count: sheetPairs.length,
             unit: '問',

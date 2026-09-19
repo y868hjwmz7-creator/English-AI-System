@@ -76,6 +76,15 @@ export const NOUN_PHRASE_GROUPS = [
   { id: 'that', label: 'THAT', name: '〜という(中身が文)', point: '名詞のうしろに文がまるごと続く' },
   { id: 'adj', label: 'ADJ + N', name: '形容詞 + 名詞', point: '2語で1つ。仕事でそのまま出てくる' },
   { id: 'nn', label: 'N + N', name: '名詞 + 名詞', point: '2語で1つの言葉になっているもの' },
+  /* **動詞から作る名詞句**(2026-09 利用者の指定・第5.199節)。
+
+       > その中の-ing、5WH +SV、などなど
+
+     上の6つは**名詞が芯**だが、この2つは**動詞や文が芯**である。
+     どちらも「文の席に入るひとかたまり」なので、名詞句として同じ棚に置く。
+     **後ろへ足す。並べ替えない** */
+  { id: 'ing', label: '-ING', name: '〜すること(動名詞句)', point: '動詞を名詞にして、主語や目的語にする' },
+  { id: 'wh', label: '5WH + SV', name: '〜かということ(疑問詞 + 文)', point: 'what / why / how のうしろに文が続いて、まとまりで名詞になる' },
 ]
 
 /** 厳選 100 件(2026-09 利用者の指定「ビジネスで使用する名詞句100」)。
@@ -197,6 +206,29 @@ export const NOUN_PHRASES = [
   { g: 'nn', head: 'estimate', p: 'a cost estimate', n: '費用の見積もり', en: 'Please send a cost estimate by Friday.', ja: '金曜までに、費用の見積もりを送ってください' },
   { g: 'nn', head: 'meeting', p: 'a client meeting', n: '取引先との会合', en: 'I have a client meeting this afternoon.', ja: '午後に、取引先との会合がある' },
   { g: 'nn', head: 'schedule', p: 'a work schedule', n: '作業の日程', en: 'We agreed on a work schedule.', ja: '作業の日程が決まった' },
+  // -- -ING ... 〜すること(動名詞句)
+  { g: 'ing', head: 'improving', p: 'improving the process', n: '進め方を良くすること', en: 'Improving the process is our first job.', ja: '進め方を良くすることが、まず取りかかる仕事です' },
+  { g: 'ing', head: 'reducing', p: 'reducing the cost', n: '費用を下げること', en: 'Reducing the cost will take time.', ja: '費用を下げるのには、時間がかかります' },
+  { g: 'ing', head: 'meeting', p: 'meeting the deadline', n: '締め切りに間に合わせること', en: 'Meeting the deadline matters more than anything else.', ja: '締め切りに間に合わせることが、何よりも大事です' },
+  { g: 'ing', head: 'sharing', p: 'sharing the information', n: '情報を分け合うこと', en: 'Sharing the information early saves time.', ja: '早めに情報を分け合うと、時間の節約になります' },
+  { g: 'ing', head: 'getting', p: 'getting approval', n: '承認を取ること', en: 'Getting approval takes about a week.', ja: '承認を取るのに、1週間ほどかかります' },
+  { g: 'ing', head: 'keeping', p: 'keeping the quality', n: '品質を保つこと', en: 'Keeping the quality is harder than raising it.', ja: '品質を保つほうが、上げるより難しいです' },
+  { g: 'ing', head: 'training', p: 'training new staff', n: '新しい人を育てること', en: 'Training new staff is part of the plan.', ja: '新しい人を育てることも、計画に入っています' },
+  { g: 'ing', head: 'changing', p: 'changing the schedule', n: '予定を変えること', en: 'Changing the schedule now would cost us.', ja: 'いま予定を変えると、損が出ます' },
+  { g: 'ing', head: 'checking', p: 'checking the numbers', n: '数字を確かめること', en: 'Checking the numbers twice is worth the effort.', ja: '数字を二度確かめる手間は、かける値打ちがあります' },
+  { g: 'ing', head: 'working', p: 'working with the vendor', n: '取引先と組むこと', en: 'Working with the vendor went better than expected.', ja: '取引先と組んだのは、思ったよりうまくいきました' },
+
+  // -- 5WH + SV ... 疑問詞 + 文で、ひとかたまりの名詞になる
+  { g: 'wh', head: 'what', p: 'what we need', n: '必要なもの', en: 'Let us list what we need first.', ja: 'まず、必要なものを挙げましょう' },
+  { g: 'wh', head: 'what', p: 'what the client wants', n: '取引先が望んでいること', en: 'We should ask what the client wants.', ja: '取引先が望んでいることを、訊くべきです' },
+  { g: 'wh', head: 'why', p: 'why the cost went up', n: '費用が上がった理由', en: 'Please explain why the cost went up.', ja: '費用が上がった理由を、説明してください' },
+  { g: 'wh', head: 'how', p: 'how we handle complaints', n: '苦情への対応のしかた', en: 'I will write down how we handle complaints.', ja: '苦情への対応のしかたを、書き出します' },
+  { g: 'wh', head: 'when', p: 'when the work starts', n: '作業が始まる時期', en: 'Nobody knows when the work starts.', ja: '作業が始まる時期は、誰も知りません' },
+  { g: 'wh', head: 'where', p: 'where the problem is', n: '問題のありか', en: 'The data shows where the problem is.', ja: 'データが、問題のありかを示しています' },
+  { g: 'wh', head: 'who', p: 'who is in charge', n: '担当が誰か', en: 'Please tell me who is in charge.', ja: '担当が誰かを、教えてください' },
+  { g: 'wh', head: 'what', p: 'what went wrong', n: '何がまずかったか', en: 'Let us look at what went wrong.', ja: '何がまずかったかを、見てみましょう' },
+  { g: 'wh', head: 'how', p: 'how long it takes', n: 'どれくらいかかるか', en: 'I need to know how long it takes.', ja: 'どれくらいかかるかを、知っておきたいです' },
+  { g: 'wh', head: 'which', p: 'which option is better', n: 'どちらの案が良いか', en: 'We have not decided which option is better.', ja: 'どちらの案が良いかは、まだ決めていません' },
 ]
 
 /** id から組を引く。知らない id は `null`(**当てずっぽうで返さない**) */

@@ -344,7 +344,16 @@ const WORDBOOK = (
     {/* **棚も基礎単語も渡さない。** これが「出ない」側である ——
         0055 で基礎単語を外されたゲストの単語帳がこの形になる
         (冊が1つしか無いので、切り替えごと出ない) */}
+    {/* **ビジネス必須チャンク集は `?chunk=1` のときだけ**(第5.199節)。
+
+        既定で出すと、**「冊が1つしか無い画面には、えらぶ場所ごと出さない」**
+        を見ている検証が、永久に赤くなる —— あの決まりはいまも生きている。
+        3つとも同じ値で渡す(冊に出す決まりは `showCol || showNp || showAdv`)。
+        **本物と1文字も違えない**(骨組みが食い違うと、検証は何も守らない) */}
     <Wordbook learnerId="g1" learnerName="Airi" showBasics={false}
+              showCol={q.get('chunk') === '1'}
+              showNp={q.get('chunk') === '1'}
+              showAdv={q.get('chunk') === '1'}
               only={only.length ? only : null}
               onlyLabel={only.length ? '業界の語' : ''}
               onClearOnly={only.length ? () => {} : null} />

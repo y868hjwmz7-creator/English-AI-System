@@ -4718,7 +4718,11 @@ export default defineConfig({
     if (!帯.includes('自分の単語帳')) {
       // **帯に冊名が出ていないと、冊を間違えたまま進む**(第5.167節)
       ng(`${名} … 帯に冊名が出ていない`, 帯 || '(無し)')
-    } else if (初.札.join(' / ') !== '自分の単語帳 / 業種べつ / 基礎単語 / コロケーション') {
+    /* **3冊が1冊にまとまった**(第5.199節)。コロケーション / 名詞句 /
+       副詞句は「ビジネス必須チャンク集」の中の段になった。
+       **決まりは同じ** —— 本棚に冊が並んでいるか、を見ている */
+    } else if (初.札.join(' / ')
+      !== '自分の単語帳 / 業種べつ / 基礎単語 / ビジネス必須チャンク集') {
       ng(`${名} … 本棚に冊が並んでいない`, 初.札.join(' / ') || '(無し)')
     } else if (初.押.join('') !== '自分の単語帳') {
       ng(`${名} … 既定が自分の単語帳になっていない`, 初.押.join(' / ') || '(無し)')
@@ -6059,6 +6063,254 @@ for (const W of [1280, 794, 453, 390, 320]) {
   if (名.size < 3) {
     ng('書く欄 … 呼び名が種類ごとに変わっていない', [...名].join(' / '))
   } else ok(`書く欄 … 呼び名は種類ごと(${[...名].join(' / ')})`)
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ビジネス必須チャンク集 — 絞り込んだうえで紙に出す(第5.199節)
+
+     > ビジネス必須チャンク集(冊名)、その中の名詞句、その中の-ing、
+     > 5WH +SV、などなど。副詞句の中の前置詞句、などなど
+
+     > そして、単語帳、quick responseともに絞り込んだ上での印刷、
+     > PDF出力ともにちゃんと出来るようにしてください
+
+   **描いて、絞って、数を読む。** ソースを読んでも
+   「画面は 10 語なのに紙は 120 語」は分からない ——
+   一覧・聞き流し・紙が**別々に絞っていないか**は、押して数えるしかない。
+
+   **「絞る」と「戻す」の両方を見る**(CLAUDE.md)。
+   まとめへ戻せなければ、その段をまるごと練習する道が無くなる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const { chunkGroups, chunkPartCount } = await import('../src/lib/chunkBook.js')
+  const page = await browser.newPage({ viewport: { width: 420, height: 900 } })
+  page.setDefaultTimeout(9000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook&chunk=1`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(1500)
+
+  /** チャンク集の冊へ移る。**名前は書き写さない**(「チャンク」で拾う) */
+  await page.evaluate(() => { document.querySelector('.bookpick')?.click() })
+  await page.waitForTimeout(400)
+  const 冊名 = await page.evaluate(() => {
+    for (const x of document.querySelectorAll('.shelf-pick')) {
+      if ((x.textContent || '').includes('チャンク')) { x.click(); return x.textContent.trim() }
+    }
+    return ''
+  })
+  await page.waitForTimeout(1500)
+  if (!冊名) ng('チャンク集 … 冊の一覧に出ていない')
+  else ok(`チャンク集 … 冊の一覧に出る(${冊名.replace(/\s+/g, ' ')})`)
+
+  /** 欄を開き直す(冊を替えるとシートが畳まれる) */
+  const 開く = async () => {
+    await page.evaluate(() => { document.querySelector('.bookpick')?.click() })
+    await page.waitForTimeout(500)
+  }
+  /** 段 / 組の欄。**`.nfunits` の中の `<select>` を順に** */
+  const えらぶ = async (i, value) => {
+    const got = await page.evaluate(([n, v]) => {
+      const sel = [...document.querySelectorAll('.nfunits select')][n]
+      if (!sel) return null
+      if (![...sel.options].some((o) => o.value === v)) return null
+      sel.value = v
+      sel.dispatchEvent(new Event('change', { bubbles: true }))
+      return sel.options[sel.selectedIndex].textContent.trim()
+    }, [i, value])
+    await page.waitForTimeout(1200)
+    return got
+  }
+  /**
+   * いま画面に出ている数。**聞き流し / 紙 を、それぞれ読む。**
+   *
+   * **練習が始まると、道具は「出しかた」の中に入る**(第5.191節)。
+   * 単語帳は開いた瞬間に始まるので、**絞ったあとはほぼ必ずそちら**である。
+   * 見つからなければ「出しかた」を開いてから読み直す ——
+   * **道が2つあるものは、いまどちらを通ったかを見えるようにする**(CLAUDE.md)。
+   */
+  const 数 = async () => {
+    let got = await 読む()
+    if (got.紙 === null) {
+      await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+      await page.waitForTimeout(500)
+      got = await 読む()
+    }
+    return got
+  }
+  /** 描かれているものを、そのまま読む */
+  const 読む = () => page.evaluate(() => {
+    const 拾う = (re) => {
+      for (const b of document.querySelectorAll('button')) {
+        const m = re.exec((b.textContent || '').replace(/\s+/g, ''))
+        if (m) return Number(m[1])
+      }
+      return null
+    }
+    return {
+      札: Number((document.querySelector('.wb-tally .num, .tally-n')?.textContent ?? '')
+        .replace(/[^0-9]/g, '')) || null,
+      聞き流し: 拾う(/聞き流す\((\d+)語\)/),
+      紙: 拾う(/印刷\/PDFで保存\((\d+)語\)/),
+      題: (document.querySelector('.drill-title')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    }
+  })
+
+  await 開く()
+  const 欄 = await page.evaluate(() =>
+    [...document.querySelectorAll('.nfunits select')].length)
+  if (欄 < 2) ng('チャンク集 … 段と組の欄が2つそろっていない', `いま ${欄} 個`)
+  else ok('チャンク集 … 段(中身)と組の欄が、2つとも出る')
+
+  const 全 = await 数()
+  /* **絞る。** いちばん小さい組をえらぶ —— 数がはっきり変わる */
+  const 組 = chunkGroups('np').filter((g) => g.id).sort((a, b) => a.n - b.n)[0]
+  const 組名 = await えらぶ(1, 組.id)
+  const 絞 = await 数()
+  if (!組名) {
+    ng('チャンク集 … 組をえらべない', 組.id)
+  } else if (絞.紙 === null || 全.紙 === null) {
+    ng('チャンク集 … 印刷のボタンに語数が出ていない', JSON.stringify(絞))
+  } else if (絞.紙 !== 組.n) {
+    /* **ここが本丸。** 一覧だけ絞れて紙が絞れていないと、
+       120 語ぜんぶが刷られる(利用者の指摘そのもの) */
+    ng('チャンク集 … 紙に出る数が、絞ったぶんになっていない',
+      `${組.label} は ${組.n} 語のはずが、紙は ${絞.紙} 語`)
+  } else if (!絞.題.includes(組.label)) {
+    ng('チャンク集 … 題が、えらんだ組になっていない', `「${絞.題}」/ ${組.label}`)
+  } else {
+    ok(`チャンク集 … 絞ると、紙に出る数も題も、その組になる`
+      + `(${組.label} ${組.n} 語)`)
+  }
+
+  /* **戻せるか。** まとめへ戻せなければ、段をまるごと練習する道が無い。
+
+     **「さっきの数に戻ったか」では見ない。** さっきの数も同じ仕組みが
+     出しているので、**まとめが 7 語しか出さない形**に壊しても
+     7 → 7 でそろってしまい、緑のままになる(赤チェックで踏んだ)。
+     **名簿が持っている、その段ぜんぶの数**と突き合わせる */
+  await えらぶ(1, '')
+  const 戻 = await 数()
+  if (戻.紙 !== chunkPartCount('np')) {
+    ng('チャンク集 … 「まとめ」に戻しても、その段ぜんぶにならない',
+      `${chunkPartCount('np')} 語のはずが ${戻.紙}`)
+  } else ok(`チャンク集 … 「まとめ」に戻すと、その段ぜんぶに戻る(${戻.紙} 語)`)
+
+  /* **段を替えたら、組は「まとめ」に戻る。**
+     残すと、その段に無い組が選ばれたままになる(0件の画面) */
+  await えらぶ(1, chunkGroups('np').filter((g) => g.id)[0].id)
+  await えらぶ(0, 'adv')
+  const 段 = await page.evaluate(() => {
+    const sel = [...document.querySelectorAll('.nfunits select')][1]
+    return sel ? { 値: sel.value, 文: sel.options[sel.selectedIndex].textContent.trim() } : null
+  })
+  if (!段) ng('チャンク集 … 段を替えたあと、組の欄が消えた')
+  else if (段.値 !== '') {
+    ng('チャンク集 … 段を替えても、前の段の組が残っている', 段.文)
+  } else ok(`チャンク集 … 段を替えると、組は「まとめ」に戻る(${段.文})`)
+
+  /* ── **出題そのものも絞れているか** ───────────────────────────
+     聞き流しと紙は、どちらも「画面に出ている一覧」から作る
+     (`forScope = shownRows`)。**同じ1つを2通りに数えているだけ**なので、
+     片方を壊してももう片方で捕まる —— つまり**あちらを数えても、
+     出題が絞れているかは分からない**(赤チェックで判った)。
+
+     出題は別の道(`poolNow`)を通る。**組み上がった問の数**は
+     帯の区切りの数がそのまま出しているので、そこを数える ——
+     **出す語数(10)より小さい組**をえらべば、上限に当たらず、
+     組の数がそのまま出る(`いつ` は 6 語)。 */
+  const 小 = chunkGroups('adv').filter((g) => g.id).sort((a, b) => a.n - b.n)[0]
+  const 前 = await page.evaluate(() => document.querySelectorAll('.drill-bar span').length)
+  await えらぶ(1, 小.id)
+  const 区切り = await page.evaluate(() => document.querySelectorAll('.drill-bar span').length)
+  if (小.n >= 前) {
+    ok(`チャンク集 … 出題の数は測らない(いちばん小さい組 ${小.n} が、出す語数 ${前} 以上)`)
+  } else if (区切り !== 小.n) {
+    ng('チャンク集 … 出す問が、絞ったぶんになっていない',
+      `${小.label} は ${小.n} 語のはずが、帯は ${区切り} 区切り`)
+  } else {
+    ok(`チャンク集 … 出題そのものも、その組だけから組む(${前} → ${区切り} 区切り)`)
+  }
+
+  await page.close()
+
+  /* ── Quick Response のほうも、同じ約束を果たしているか ─────────────
+     利用者の指定は「**単語帳、quick responseともに**」である。
+     **型で絞って、紙に出る問の数がそのぶんになるか**を数える ——
+     題だけ直して中身が絞れていなければ、直したことにならない */
+  const qp = await browser.newPage({ viewport: { width: 420, height: 900 } })
+  qp.setDefaultTimeout(9000)
+  await qp.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
+    { waitUntil: 'domcontentloaded' })
+  await qp.waitForTimeout(1500)
+  await qp.evaluate(() => { document.querySelector('.bookpick')?.click() })
+  await qp.waitForTimeout(400)
+  await qp.evaluate(() => {
+    for (const x of document.querySelectorAll('.shelf-pick')) {
+      if ((x.textContent || '').includes('の型')) { x.click(); return }
+    }
+  })
+  await qp.waitForTimeout(1500)
+  await qp.evaluate(() => { document.querySelector('.bookpick')?.click() })
+  await qp.waitForTimeout(500)
+
+  /** 紙のボタンの問数。**練習中は「出しかた」の中に入っている** */
+  const 問数 = async () => {
+    const 拾う = () => qp.evaluate(() => {
+      for (const b of document.querySelectorAll('button')) {
+        const m = /印刷\/PDFで保存\((\d+)問\)/.exec((b.textContent || '').replace(/\s+/g, ''))
+        if (m) return Number(m[1])
+      }
+      return null
+    })
+    let n = await 拾う()
+    if (n === null) {
+      await qp.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+      await qp.waitForTimeout(500)
+      n = await 拾う()
+    }
+    return n
+  }
+
+  const 型なし = await 問数()
+  /* **型を1つえらぶ。** 欄に出ている数と、紙の数を突き合わせる ——
+     **札の数は欄が持っている**ので、こちらで数え直さない */
+  const えらび = await qp.evaluate(() => {
+    const sel = [...document.querySelectorAll('select')].find((x) => x.options.length > 50)
+    if (!sel) return null
+    /* 「〜系ぜんぶ」ではなく、**型ひとつ**をえらぶ(数がはっきり決まる) */
+    const opt = [...sel.options].find((o) => /\(\d+ 問\)$/.test(o.textContent.trim())
+      && !/ぜんぶ/.test(o.textContent))
+    if (!opt) return null
+    sel.value = opt.value
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+    return { 文: opt.textContent.trim(), n: Number(/\((\d+) 問\)$/.exec(opt.textContent.trim())[1]) }
+  })
+  await qp.waitForTimeout(1600)
+  await qp.evaluate(() => { document.querySelector('.sheet-back')?.click() })
+  await qp.waitForTimeout(400)
+  const 型あり = await 問数()
+  const 題 = await qp.evaluate(() =>
+    (document.querySelector('.drill-title')?.textContent ?? '').replace(/\s+/g, ' ').trim())
+
+  if (!えらび) {
+    ng('Quick Response の紙 … 型をえらぶ欄が出ない')
+  } else if (型なし === null || 型あり === null) {
+    ng('Quick Response の紙 … 印刷のボタンに問数が出ていない', `${型なし} → ${型あり}`)
+  } else if (型あり !== えらび.n) {
+    ng('Quick Response の紙 … 紙に出る数が、絞ったぶんになっていない',
+      `${えらび.文} のはずが、紙は ${型あり} 問`)
+  } else if (型あり >= 型なし) {
+    ng('Quick Response の紙 … 絞っても、数が減っていない', `${型なし} → ${型あり}`)
+  } else if (!題) {
+    ng('Quick Response の紙 … いま出しているものの題が無い')
+  } else {
+    ok(`Quick Response の紙 … 型で絞ると、紙もそのぶんになる`
+      + `(${型なし} → ${型あり} 問・${題})`)
+  }
+  await qp.close()
 }
 
 /* ══════════════════════════════════════════════════════════════════

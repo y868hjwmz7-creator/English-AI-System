@@ -81,6 +81,11 @@ import { nowName } from '../lib/bookNow.js'
 import { loadCollocationWordbook } from '../lib/collocationWords.js'
 import { loadNounPhraseWordbook } from '../lib/nounPhraseWords.js'
 import { loadAdverbPhraseWordbook } from '../lib/adverbPhraseWords.js'
+import ChunkParts from './ChunkParts.jsx'
+import {
+  CHUNK_BOOK_LABEL, CHUNK_PARTS, FIRST_CHUNK_PART, chunkGroupOk, chunkGroups,
+  chunkPartCount, chunkPool, chunkTitle,
+} from '../lib/chunkBook.js'
 import { loadBasicWordbook } from '../lib/basicReviews.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
 import { CloseIcon, FocusIcon, MenuIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
@@ -569,16 +574,23 @@ export default function Wordbook({
        (絞りたくなったら `learnerFeatures.js` に1つ足すだけである)。
        **ただし出す場所は呼ぶ側が決める**(`showCol`)—— トレーナーが
        ゲストの単語帳を開く画面には、冊の切り替えをもともと出していない */
-    ...(showCol ? [{ id: 'col', label: 'コロケーション' }] : []),
-    /* **名詞句**(2026-09 利用者の指定)。80 件が `nounPhrases.js` に
-       書いてあるので、コロケーションとまったく同じ扱いでよい。
-       **後ろへ足す。並べ替えない** —— 冊が増えたときに前へ割り込ませると、
-       ゲストが覚えた置き場所が全部ずれる(docs/notes/22 の決まり) */
-    ...(showNp ? [{ id: 'np', label: '名詞句' }] : []),
-    /* **副詞句**(2026-09 利用者の指定)。名詞句とまったく同じ扱い。
-       **後ろへ足す。並べ替えない** —— 前へ割り込ませると、ゲストが
-       覚えた置き場所が全部ずれる(docs/notes/22 の決まり) */
-    ...(showAdv ? [{ id: 'adv', label: '副詞句' }] : []),
+    /* **ビジネス必須チャンク集**(第5.199節・2026-09 利用者の指定)。
+
+         > 今の3冊をこの中へまとめる
+
+       コロケーション / 名詞句 / 副詞句は、**横に3冊並んでいた**。
+       それを**1つの冊の中の3つの段**にする(`14 の型` と同じ形)。
+       段と組は `ChunkParts` が選び、**一覧も数も `chunkBook.js` が持つ。**
+
+       **`hasSub`** … 中にまだ選ぶものがある(第5.173節)。
+       選んでも本棚を閉じない —— 閉じると、組を選ぶのに開き直しになる。
+
+       **出す場所は呼ぶ側が決める**(3つのうち1つでも渡っていれば出す)——
+       トレーナーがゲストの単語帳を開く画面には、冊の切り替えを
+       もともと出していない。
+       **覚え具合は1語も動かない** —— 鍵は語句そのものだからである */
+    ...(showCol || showNp || showAdv
+      ? [{ id: 'chunk', label: CHUNK_BOOK_LABEL, hasSub: true }] : []),
   ]
   const [bookWanted, setBookWanted] = useState('my')
   /* **出せなくなった冊は、黙って自分の単語帳へ落とす**(行き止まりを作らない)。
@@ -588,9 +600,21 @@ export default function Wordbook({
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
   const shelfBook = book === 'shelf'
   const basicBook = book === 'basic'
-  const colBook = book === 'col'
-  const npBook = book === 'np'
-  const advBook = book === 'adv'
+  /**
+   * **チャンク集の、どの段か**(第5.199節)。
+   *
+   * **`colBook` / `npBook` / `advBook` という名前を残してある。**
+   * 下の読み込みも書き分けも、この3つで書いてあるからである ——
+   * **名前を変えると、直す場所の数だけ食い違う**(CLAUDE.md)。
+   * 変わったのは「どこから決まるか」だけで、**意味は1つも変えていない。**
+   */
+  const [chunkPart, setChunkPart] = useState(FIRST_CHUNK_PART)
+  /** いま絞っている組。空は「◯◯まとめ」(**どの段にも必ず在る**) */
+  const [chunkGroup, setChunkGroup] = useState('')
+  const chunkBook = book === 'chunk'
+  const colBook = chunkBook && chunkPart === 'col'
+  const npBook = chunkBook && chunkPart === 'np'
+  const advBook = chunkBook && chunkPart === 'adv'
   /** 自分の単語帳を開いているか。**「棚ではない」で書かない** ——
       書くと、冊を足すたびに置いた場所の数だけ食い違う */
   const myBook = book === 'my'
@@ -844,7 +868,17 @@ export default function Wordbook({
      Quick Response の復習でもまったく同じ判定が要るので、
      **数え方を2通り持たない**(CLAUDE.md)。 */
 
-  const shownRows = applyWordbookFilter(rows, filter)
+  /**
+   * **組で絞ったあとの行**(第5.199節)。
+   *
+   * **ここ1か所で絞る。** 画面に出す一覧も、紙も、聞き流しも、
+   * 出題も、**この先はみな同じものを見る** ——
+   * 別々に絞ると「札には 21 語、紙に出るのは 120 語」になる(CLAUDE.md)。
+   *
+   * チャンク集以外の冊には**組が無い**ので、そのまま通す。
+   */
+  const chunkRows = chunkBook ? chunkPool(rows, chunkPart, chunkGroup) : rows
+  const shownRows = applyWordbookFilter(chunkRows, filter)
 
   /* **札に出す「今日出す数」は、実際に出るものと同じ数え方にする。**
      数え上げ(`counts.due`)は表を直に見ているので、0030 を貼る前は
@@ -973,11 +1007,21 @@ export default function Wordbook({
    * **毎回おなじ「まだ」の語ばかり**が出る(おさらいで踏んだのと同じ)。
    */
   const poolNow = useCallback(
-    () => scopePool(applyWordbookFilter(rowsRef.current, filter), scope, todayKey()),
+    /* **組の絞りも、ここに効かせる**(第5.199節)。
+       ここを忘れると、**札は「-ING 10 語」なのに出題は 120 語から**になる */
+    () => scopePool(
+      applyWordbookFilter(
+        chunkBook ? chunkPool(rowsRef.current, chunkPart, chunkGroup) : rowsRef.current,
+        filter,
+      ),
+      scope, todayKey(),
+    ),
     /* **絞り込みの欄を足したら、ここも一緒に効く。** 鍵を並べ直さない
        (`filter.day, filter.material, …` と書いていたので、レベルを
        足したときに**そこだけ反映されなかった**) */
-    [runKeyOf({ scope, size, filter, order }), scope],
+    /* **組を見張りに入れる。** 入れないと、組を替えても
+       前の池のまま始まる(第5.191節で Quick Response が踏んだのと同じ形) */
+    [runKeyOf({ scope, size, filter, order }), scope, chunkBook, chunkPart, chunkGroup],
   )
 
   const start = useCallback(() => {
@@ -1377,6 +1421,30 @@ export default function Wordbook({
                   saveShelfPick(ids)
                   dropRun()
                 }} />
+  ) : chunkBook ? (
+    /* **段(名詞句 / 副詞句 / コロケーション)と、その中の組**(第5.199節)。
+       **一覧も数も `chunkBook.js` が持つ** —— ここで数え直さない。
+       `FrameParts`(型の冊)とまったく同じ形の部品である */
+    <ChunkParts
+      parts={CHUNK_PARTS}
+      counts={Object.fromEntries(CHUNK_PARTS.map((x) => [x.id, chunkPartCount(x.id)]))}
+      picked={chunkPart}
+      onPick={(id) => {
+        if (id === chunkPart) return
+        setChunkPart(id)
+        /* **段を替えたら、組は「まとめ」に戻す。**
+           組の id は段ごとに違うので、残すと**その段に無い組**が
+           選ばれたままになる(0件の画面が出る・行き止まり) */
+        setChunkGroup('')
+        dropRun()
+      }}
+      groups={chunkGroups(chunkPart)}
+      group={chunkGroupOk(chunkPart, chunkGroup) ? chunkGroup : ''}
+      onGroup={(id) => {
+        if (id === chunkGroup) return
+        setChunkGroup(id)
+        dropRun()
+      }} />
   ) : null
 
   /**
@@ -1428,6 +1496,10 @@ export default function Wordbook({
     : shelfBook
     ? [bookLabel, ...shelfPick
       .map((id) => shelves.find((x) => x.id === id)?.label ?? '')]
+    /* **チャンク集は「冊 / 段(組)」まで出す**(第5.199節・第5.187節)。
+       名前は `chunkTitle()` が作る —— **冊の名前も組の名前も書き写さない** */
+    : chunkBook
+    ? [chunkTitle(chunkPart, chunkGroupOk(chunkPart, chunkGroup) ? chunkGroup : '')]
     : [bookLabel])
   /**
    * **帳面の名前と、進み具合**(第5.180節・2026-09 実機・利用者の指定)。
@@ -2369,6 +2441,11 @@ export default function Wordbook({
             book,
             shelves: shelfPick,
             tier,
+            /* **いま絞っている段と組も、紙の題に出す**(第5.199節)。
+               渡さないと「単語帳」とだけ刷られ、
+               **何を絞って刷ったのかが紙に残らない** */
+            part: chunkPart,
+            group: chunkGroupOk(chunkPart, chunkGroup) ? chunkGroup : '',
           })}
           note={sheetNote({
             count: sheetPairs.length,

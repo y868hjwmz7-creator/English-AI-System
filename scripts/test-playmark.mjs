@@ -5780,6 +5780,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const col = await import('../src/data/collocations.js')
   const np = await import('../src/data/nounPhrases.js')
   const adv = await import('../src/data/adverbPhrases.js')
+  const chunk = await import('../src/lib/chunkBook.js')
   const { normEn, normWord } = await import('../src/lib/textNorm.js')
 
   /* ── ① 一覧を勝手に減らさない ───────────────────────── */
@@ -5903,8 +5904,10 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const wb = noNote(readD('src/components/Wordbook.jsx'))
   ok(/loadCollocationWordbook\(\{ learnerId \}\)/.test(wb),
     '単語帳 … 画面が loadCollocationWordbook() を呼んでいる')
-  ok(/showCol \? \[\{ id: 'col', label: 'コロケーション' \}\] : \[\]/.test(wb),
-    '単語帳 … 冊の一覧に「コロケーション」が在る(出すかは呼ぶ側が決める)')
+  /* **冊ではなく、チャンク集の段になった**(第5.199節)。
+     名前は `chunkBook.js` の `CHUNK_PARTS` が持つので、**画面には無い** */
+  ok(chunk.CHUNK_PARTS.some((x) => x.id === 'col' && x.label === 'コロケーション'),
+    '単語帳 … チャンク集の段に「コロケーション」が在る')
   /* **トレーナーがゲストの単語帳を開く画面を、1ドットも変えていない。**
      既定は「出さない」で、`App.jsx`(自分の単語帳)だけが渡す */
   ok(/showCol = false/.test(wb), '単語帳 … コロケーションの既定は「出さない」')
@@ -5912,8 +5915,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/<Wordbook\s+showCol/.test(app), '単語帳 … 自分の単語帳にだけ出している')
   ok(!/showCol/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
     '単語帳 … ゲストの単語帳を開く画面には渡していない')
-  ok(/colBook = book === 'col'/.test(wb) && /shelfBook \|\| basicBook \|\| colBook/.test(wb),
-    '単語帳 … 表を直に読む冊として扱っている')
+  ok(/colBook = chunkBook && chunkPart === 'col'/.test(wb)
+     && /shelfBook \|\| basicBook \|\| colBook/.test(wb),
+    '単語帳 … コロケーションは、チャンク集の段として表を直に読む')
   /* **並びで見ない。入っているかで見る**(2026-09)。
      もとは `tier, colBook])` と**末尾の並びそのもの**を探していたので、
      見張りに1つ足しただけで赤くなった。**壊れていないものが赤くなると、
@@ -5928,12 +5932,16 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
 
      **コロケーションと1文字も違わない形にしてある**ので、
      見る中身も同じにそろえる(読み方を2通り持たない)。 */
-  /* **100 件**(2026-09 利用者の指定「ビジネスで使用する名詞句100」) */
-  ok(np.NOUN_PHRASES.length === 100,
-    '名詞句 … 100 件ある', `いま ${np.NOUN_PHRASES.length}`)
-  ok(np.NOUN_PHRASE_GROUPS.length === 6
+  /* **120 件**(2026-09 利用者の指定「ビジネスで使用する名詞句100」+
+     第5.199節で `-ing` と `5WH + SV` を 10 件ずつ足した)。
+     **減らさない**ための数なので、足したらここも一緒に上げる */
+  ok(np.NOUN_PHRASES.length === 120,
+    '名詞句 … 120 件ある', `いま ${np.NOUN_PHRASES.length}`)
+  /* **数を書き写さない。** 「組がぜんぶ埋まっているか」という関係で見る ——
+     組を足した日に、ここだけ古くなるのを防ぐ(CLAUDE.md) */
+  ok(np.NOUN_PHRASE_GROUPS.length === 8
      && np.NOUN_PHRASE_GROUPS.every((g) => np.NOUN_PHRASES.some((x) => x.g === g.id)),
-    '名詞句 … 6つの組があり、どれにも中身がある')
+    `名詞句 … ${np.NOUN_PHRASE_GROUPS.length} つの組があり、どれにも中身がある`)
   /* **知らない組を勝手に増やしていないか**(逆も見る) */
   ok(np.NOUN_PHRASES.every((x) => np.nounPhraseGroupOf(x.g)),
     '名詞句 … 一覧に無い組を使っていない')
@@ -5972,8 +5980,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **答えが漏れていないか。** 芯の名詞を意味に混ぜると 4択に英語が出る */
   ok(npRows.every((r) => !/[A-Za-z]{3,}/.test(r.meaning_ja)),
     '名詞句 … 意味の欄に英語を混ぜない(4択で答えが見える)')
-  ok([...new Set(npRows.map((r) => r.material_title))].length === 6,
-    '名詞句 … material_title に組が入っている(6種)')
+  ok([...new Set(npRows.map((r) => r.material_title))].length
+     === np.NOUN_PHRASE_GROUPS.length,
+    '名詞句 … material_title に組が入っている')
   ok(np.nounPhraseGroupOf('zzz') === null && np.nounPhraseTitle('zzz') === '名詞句',
     '名詞句 … 知らない id は null。名前は行き止まりにしない')
 
@@ -5981,27 +5990,35 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      画面が呼んでいなければ何も変わらない */
   ok(/loadNounPhraseWordbook\(\{ learnerId \}\)/.test(wb),
     '単語帳 … 画面が loadNounPhraseWordbook() を呼んでいる')
-  ok(/showNp \? \[\{ id: 'np', label: '名詞句' \}\] : \[\]/.test(wb),
-    '単語帳 … 冊の一覧に「名詞句」が在る(出すかは呼ぶ側が決める)')
+  /* **3冊を1冊にまとめた**(第5.199節・利用者の指定「今の3冊を
+     この中へまとめる」)。冊の一覧に出るのは**チャンク集ひとつ**で、
+     名詞句 / 副詞句 / コロケーションは**その中の段**になった。
+     **名前は書き写さない**(`CHUNK_BOOK_LABEL` から引く) */
+  ok(/showCol \|\| showNp \|\| showAdv/.test(wb)
+     && wb.includes('id: \'chunk\', label: CHUNK_BOOK_LABEL, hasSub: true'),
+    '単語帳 … 冊の一覧に「ビジネス必須チャンク集」が在る(出すかは呼ぶ側が決める)')
   ok(/showNp = false/.test(wb), '単語帳 … 名詞句の既定は「出さない」')
   ok(/showNp/.test(app), '単語帳 … 自分の単語帳にだけ出している')
   ok(!/showNp/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
     '単語帳 … ゲストの単語帳を開く画面には渡していない')
-  ok(/npBook = book === 'np'/.test(wb) && /colBook \|\| npBook/.test(wb),
-    '単語帳 … 表を直に読む冊として扱っている')
+  ok(/npBook = chunkBook && chunkPart === 'np'/.test(wb) && /colBook \|\| npBook/.test(wb),
+    '単語帳 … 名詞句は、チャンク集の段として表を直に読む')
   /* **並びで見ない。入っているかで見る**(2026-09 の教訓) */
   ok(/\}, \[[^\]]*\bnpBook\b[^\]]*\]\)/.test(wb),
     '単語帳 … 冊が変わったら読み直す(見張りに入っている)')
-  /* **冊は後ろへ足す。並べ替えない**(docs/notes/22 の決まり) ——
-     前へ割り込ませると、ゲストが覚えた置き場所が全部ずれる */
-  ok(wb.indexOf("id: 'col'") < wb.indexOf("id: 'np'"),
-    '単語帳 … 新しい冊を後ろへ足している(並べ替えていない)')
+  /* **段は並べ替えない**(docs/notes/22 の決まり) —— 前へ割り込ませると、
+     ゲストが覚えた置き場所がずれる。**冊が段になっても、決まりは同じ** */
+  ok(chunk.CHUNK_PARTS.map((x) => x.id).join(',') === 'np,adv,col',
+    '単語帳 … チャンク集の段を並べ替えていない',
+    chunk.CHUNK_PARTS.map((x) => x.id).join(','))
 
   /* ── ⑧ 副詞句(単語帳の6冊目)─────────────────────────
      2026-09 利用者の指定「ビジネスで使用する副詞句50」。
      **名詞句と1文字も違わない形**にしてあるので、見る中身も同じにそろえる */
-  ok(adv.ADVERB_PHRASES.length === 50,
-    '副詞句 … 50 件ある', `いま ${adv.ADVERB_PHRASES.length}`)
+  /* **66 件**(利用者の指定「副詞句50」+ 第5.199節で前置詞句を 16 件)。
+     **減らさない**ための数である */
+  ok(adv.ADVERB_PHRASES.length === 66,
+    '副詞句 … 66 件ある', `いま ${adv.ADVERB_PHRASES.length}`)
   ok(adv.ADVERB_PHRASE_GROUPS.length > 1
      && adv.ADVERB_PHRASE_GROUPS.every((g) => adv.ADVERB_PHRASES.some((x) => x.g === g.id)),
     `副詞句 … ${adv.ADVERB_PHRASE_GROUPS.length} つの組があり、どれにも中身がある`)
@@ -6045,19 +6062,18 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
 
   ok(/loadAdverbPhraseWordbook\(\{ learnerId \}\)/.test(wb),
     '単語帳 … 画面が loadAdverbPhraseWordbook() を呼んでいる')
-  ok(/showAdv \? \[\{ id: 'adv', label: '副詞句' \}\] : \[\]/.test(wb),
-    '単語帳 … 冊の一覧に「副詞句」が在る(出すかは呼ぶ側が決める)')
+  ok(chunk.CHUNK_PARTS.some((x) => x.id === 'adv' && x.label === '副詞句'),
+    '単語帳 … チャンク集の段に「副詞句」が在る')
   ok(/showAdv = false/.test(wb), '単語帳 … 副詞句の既定は「出さない」')
   ok(/showAdv/.test(app), '単語帳 … 自分の単語帳にだけ出している')
   ok(!/showAdv/.test(noNote(readD('src/components/TrainerLearners.jsx'))),
     '単語帳 … ゲストの単語帳を開く画面には渡していない')
-  ok(/advBook = book === 'adv'/.test(wb) && /npBook \|\| advBook/.test(wb),
-    '単語帳 … 表を直に読む冊として扱っている')
+  ok(/advBook = chunkBook && chunkPart === 'adv'/.test(wb) && /npBook \|\| advBook/.test(wb),
+    '単語帳 … 副詞句は、チャンク集の段として表を直に読む')
   ok(/\}, \[[^\]]*\badvBook\b[^\]]*\]\)/.test(wb),
     '単語帳 … 冊が変わったら読み直す(見張りに入っている)')
-  /* **冊は後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
-  ok(wb.indexOf("id: 'np'") < wb.indexOf("id: 'adv'"),
-    '単語帳 … 新しい冊を後ろへ足している(並べ替えていない)')
+  ok(chunk.CHUNK_PARTS.some((x) => x.id === 'np' && x.label === '名詞句'),
+    '単語帳 … チャンク集の段に「名詞句」が在る')
 
   const qr = noNote(readD('src/components/QrReview.jsx'))
   ok(/loadNativeFlowQr\(\{ learnerId, units:/.test(qr),
@@ -8187,6 +8203,122 @@ console.log('\n▶ 通信が切れたときの、やり直しと知らせ(第5.1
   const 誤診 = /generate-material を配置したか確認/.test(mat)
     || /generate-material を配置し直したか確認/.test(mat)
   ok(!誤診, '「generate-material を配置したか確認してください」が残っていない')
+}
+
+console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第5.199節)')
+{
+  const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+  /** **コメントを落としてから数える**(説明文にも同じ語が出てくる) */
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ')
+  const cb = await import('../src/lib/chunkBook.js')
+  const npD = await import('../src/data/nounPhrases.js')
+  const advD = await import('../src/data/adverbPhrases.js')
+  const colD = await import('../src/data/collocations.js')
+  const sheet = await import('../src/lib/reviewSheet.js')
+
+  /* 2026-09 利用者の指定。
+
+       > ビジネス必須チャンク集(冊名)、その中の名詞句、その中の-ing、
+       > 5WH +SV、などなど。副詞句の中の前置詞句、などなど
+       > 名詞句まとめ、というのも独立して残しておいてください。
+       > この仕様は全てに共通とします。 */
+
+  ok(cb.CHUNK_BOOK_LABEL === 'ビジネス必須チャンク集',
+    `チャンク集 … 冊の名前は「${cb.CHUNK_BOOK_LABEL}」`)
+
+  /* **「まとめ」は、どの段にも必ず在る**(利用者の指定「全てに共通」)。
+     **先頭**でなければならない —— 組の下に埋もれると見つからない */
+  const 先頭 = cb.CHUNK_PARTS.filter((p2) => cb.chunkGroups(p2.id)[0]?.id !== cb.CHUNK_ALL)
+  ok(先頭.length === 0, 'チャンク集 … どの段にも「◯◯まとめ」が先頭に在る',
+    先頭.map((p2) => p2.id).join(' / '))
+  const 名 = cb.CHUNK_PARTS.map((p2) => cb.chunkGroups(p2.id)[0].label)
+  ok(名.join(' / ') === '名詞句まとめ / 副詞句まとめ / コロケーションまとめ',
+    `チャンク集 … まとめの名前は段から作る(${名.join(' / ')})`)
+
+  /* **札の数と、実際に出る数が合うか。** ここがいちばん効く ——
+     別々に数えると「札には 21 語、出てくるのは 20 語」になる(CLAUDE.md)。
+     **まとめも、組も、両方見る** */
+  const 行 = {
+    np: npD.nounPhraseRows([], { today: '2026-09-19' }),
+    adv: advD.adverbPhraseRows([], { today: '2026-09-19' }),
+    col: colD.collocationRows([], { today: '2026-09-19' }),
+  }
+  const ずれ = []
+  for (const p2 of cb.CHUNK_PARTS) {
+    for (const g of cb.chunkGroups(p2.id)) {
+      const n = cb.chunkPool(行[p2.id], p2.id, g.id).length
+      if (n !== g.n) ずれ.push(`${p2.id}/${g.id || 'まとめ'}: 札 ${g.n} ≠ 出る ${n}`)
+    }
+  }
+  ok(ずれ.length === 0, 'チャンク集 … 札の数と、絞って出る数が合う', ずれ.slice(0, 3).join(' / '))
+
+  /* **まとめは、その段ぜんぶ**(絞らない) */
+  const 全 = cb.CHUNK_PARTS.filter(
+    (p2) => cb.chunkPool(行[p2.id], p2.id, '').length !== cb.chunkPartCount(p2.id))
+  ok(全.length === 0, 'チャンク集 … まとめは、その段をぜんぶ出す', 全.map((x) => x.id).join(' / '))
+
+  /* **知らない組は 0 件。** 黙って「ぜんぶ」に落とさない(型の冊と同じ作法) */
+  ok(cb.chunkPool(行.np, 'np', 'zzz').length === 0,
+    'チャンク集 … 知らない組は 0 件(黙ってぜんぶに落とさない)')
+  ok(cb.chunkGroups('zzz').length === 0 && cb.chunkPartOf('zzz') === null,
+    'チャンク集 … 知らない段は、組も空・行も null')
+  ok(!cb.chunkGroupOk('np', 'zzz') && cb.chunkGroupOk('np', '') && cb.chunkGroupOk('np', 'ing'),
+    'チャンク集 … 出せない組かどうかを見分けられる')
+
+  /* **足した組が、本当に在るか**(利用者の指定そのもの) */
+  const advG = cb.chunkGroups('adv').map((g) => g.id)
+  ok(advG.includes('prep'), '副詞句 … 「前置詞句」の組が在る')
+  const npG = cb.chunkGroups('np').map((g) => g.id)
+  ok(npG.includes('ing') && npG.includes('wh'),
+    '名詞句 … 「-ING」と「5WH + SV」の組が在る', npG.join(' / '))
+
+  /* **題。** 組をえらぶと変わるか ——
+     **両方見る**(まとめのときと、組のとき)。片方だけだと、
+     **いつも同じ題を出す形**に書き換えても緑のままになる */
+  const t全 = cb.chunkTitle('np', '')
+  const t組 = cb.chunkTitle('np', 'ing')
+  ok(t全 !== t組 && t全.includes('名詞句まとめ') && t組.includes('-ING'),
+    `チャンク集 … 題が、えらんだ組で変わる(${t全} / ${t組})`)
+  ok(!cb.chunkTitle('np', 'zzz').includes('まとめ'),
+    'チャンク集 … 知らない組に「まとめ」の名前を付けない(題と中身が食い違う)')
+
+  /* ── 紙(第5.199節・利用者の指定「絞り込んだ上での印刷、PDF出力」)──
+     **行はもともと絞れていた。足りなかったのは題である** */
+  const s全 = sheet.sheetTitle({ book: 'chunk', part: 'adv', group: '' })
+  const s組 = sheet.sheetTitle({ book: 'chunk', part: 'adv', group: 'prep' })
+  ok(s全 !== s組, '紙 … 題が、えらんだ組で変わる')
+  ok(s組.includes(cb.CHUNK_BOOK_LABEL) && s組.includes('前置詞句'),
+    `紙 … 冊と組が、題に出る(${s組})`)
+  /* **ほかの冊の題を変えていない**(言われた場所だけを直す) */
+  ok(sheet.sheetTitle({ book: 'my' }) === '単語帳'
+     && sheet.sheetTitle({ book: 'basic', tier: 'core' }).includes('基本'),
+    '紙 … ほかの冊の題は、1文字も変わっていない')
+
+  /* ── 画面が、本当に絞っているか ─────────────────────────────
+     **3か所に効かせる。** 一覧・出題・紙が別々に絞ると、
+     「画面は 10 語なのに紙は 120 語」になる */
+  const wb2 = noC(read('components/Wordbook.jsx'))
+  ok(/const chunkRows = chunkBook \? chunkPool\(rows, chunkPart, chunkGroup\) : rows/.test(wb2)
+     && /applyWordbookFilter\(chunkRows, filter\)/.test(wb2),
+    '単語帳 … 画面に出す一覧を、組で絞っている')
+  ok(/chunkPool\(rowsRef\.current, chunkPart, chunkGroup\)/.test(wb2),
+    '単語帳 … 出題と聞き流しの池も、組で絞っている')
+  ok(/wordSheetPairs\(shownRows/.test(wb2),
+    '単語帳 … 紙は、画面に出ている一覧そのものから作る')
+  ok(/part: chunkPart/.test(wb2) && /group: chunkGroupOk\(chunkPart, chunkGroup\)/.test(wb2),
+    '単語帳 … 紙の題に、いまの段と組を渡している')
+  /* **組を替えたら組み直す。** 見張りに入っていないと、
+     札だけ変わって出題は前のまま(第5.191節で踏んだ形) */
+  ok(/\[runKeyOf\([^\]]*\bchunkGroup\b[^\]]*\]/.test(wb2),
+    '単語帳 … 組を替えたら、出題を組み直す(見張りに入っている)')
+  ok(/<ChunkParts/.test(wb2), '単語帳 … 段と組をえらぶ欄が在る')
+
+  /* ── Quick Response の紙 ────────────────────────────────── */
+  const qr2 = noC(read('components/QrReview.jsx'))
+  ok(/title=\{`\$\{who\}Quick Response 帳\$\{drillLabel/.test(qr2),
+    'Quick Response … 紙の題に、いま絞っているものが出る')
+  ok(/qrSheetPairs\(filtered\)/.test(qr2),
+    'Quick Response … 紙は、絞ったあとの問から作る')
 }
 
 console.log(ng
