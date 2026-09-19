@@ -583,10 +583,24 @@ head('型で絞る')
      **数を書き写さず、4つそろっていることで見る。** */
   const drops = (qr.match(/dropRun\(\)/g) ?? []).length
   const narrows = (qr.match(/^\s+afterNarrow\(\)$/gm) ?? []).length
-  ok(drops === 1, '冊を替えたら、始めからやり直す', `dropRun ${drops} か所`)
+  /* **冊を替える道は2つある**(第5.200節で1つ増えた)。
+       ①本棚からえらぶ ②いまの冊が空なので、中身のある冊へ移る
+     **どちらも「冊が変わる」ので、始めからやり直す。**
+
+     **数を書き写すのではなく、対になっているかで見る** ——
+     `setBookWanted(…)` のすぐあとに `dropRun()` が来ているか。
+     こう見ておけば、**絞る道で `dropRun()` を呼んだ日に赤くなる**
+     (`drops` が対の数を超える)。冊を替える道が増えても、
+     対になってさえいれば緑のままでよい */
+  const bookSets = (qr.match(/setBookWanted\(/g) ?? []).length
+  const pairs = (qr.match(/setBookWanted\([^)]*\)[;\s]*dropRun\(\)/g) ?? []).length
+  ok(bookSets > 0 && bookSets === pairs && drops === pairs,
+    '冊を替える道は、どれも始めからやり直す(絞る道では呼ばない)',
+    `冊を替える ${bookSets} か所 / 対 ${pairs} / dropRun ${drops}`)
   ok(narrows === 3, '冊の中で絞ったら、組み直す(始め直さない)', `afterNarrow ${narrows} か所`)
-  ok(drops + narrows === 4,
-    '冊・Unit・中身・型の4つとも、やりかけを捨てる', String(drops + narrows))
+  ok(bookSets + narrows === 5,
+    '冊(えらぶ / 移る)・Unit・中身・型の5つとも、やりかけを捨てる',
+    String(bookSets + narrows))
   /* **中身を書き写していない。** 1つ足し忘れると、
      **前の冊の問が次の冊で出続ける**(いちばん分かりにくい壊れ方) */
   ok((qr.match(/setRun\(null\); setPending/g) ?? []).length === 1,

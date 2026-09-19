@@ -78,6 +78,7 @@ import {
 import {
   BASICS, LEARNER_FEATURES, featureOf, showsBasics,
 } from '../src/data/learnerFeatures.js'
+import { nextFilledBook } from '../src/lib/bookOpen.js'
 import {
   COMMON_HOBBY_SPEECH_SCENES, DIALOGUE_SCENES, SPEECH_SCENES,
   genresFor, sceneLabel, scenesFor, speechScenesFor,
@@ -8319,6 +8320,114 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     'Quick Response … 紙の題に、いま絞っているものが出る')
   ok(/qrSheetPairs\(filtered\)/.test(qr2),
     'Quick Response … 紙は、絞ったあとの問から作る')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   **空の冊に降ろさない**(第5.200節・2026-09 実機・利用者の指摘)
+
+     > ゲストログインして単語帳にいくと、「ビジネス必須チャンク」
+     > 「基礎単語」「コロケーション」などが全くないので直してください。
+     > また、ゲストログインだと単語帳とクイックレスポンス帳に
+     > トップ画面がいまだにあります。それぞれ排除してください
+
+   **2つは、同じ1つの原因だった。** 既定の冊(自分の単語帳)が
+   入りたてのゲストでは 0 語なので、「1語も無ければ入らない」の例外へ
+   落ち、**昔のトップ画面がそのまま出ていた。**
+
+   ここでは `nextFilledBook()` の振る舞いと、2つの画面が
+   **同じ形で呼んでいるか**を見る。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const B = [{ id: 'my' }, { id: 'shelf' }, { id: 'basic' }, { id: 'chunk' }]
+
+  /* **移る。** ここが効かないと、空の画面で止まったままになる */
+  ok(nextFilledBook(B, 'my', (id) => (id === 'chunk' ? 120 : null)) === 'chunk',
+    '空の冊 … 中身のある冊へ移る')
+
+  /* **数えられない冊へは移らない。**
+     `null` を「ある」と読むと、**空の冊へ移って、また空になる** */
+  ok(nextFilledBook(B, 'my', () => null) === null,
+    '空の冊 … 数えられない冊(null)へは移らない')
+
+  /* **0 と null を取り違えない**(CLAUDE.md)。
+     0 は「数えたら空だった」なので、やはり移らない */
+  ok(nextFilledBook(B, 'my', () => 0) === null,
+    '空の冊 … 0 語と分かっている冊へは移らない')
+
+  /* **いまの冊は選ばない。** 選ぶと、同じ冊を開き直し続ける */
+  ok(nextFilledBook([{ id: 'chunk' }], 'chunk', () => 120) === null,
+    '空の冊 … いま開いている冊そのものは選ばない')
+
+  /* **試した冊は飛ばす。** 飛ばさないと2冊のあいだを行き来して止まらない */
+  ok(nextFilledBook(B, 'my', () => 5, new Set(['shelf', 'basic'])) === 'chunk',
+    '空の冊 … 一度空だった冊は、二度と選ばない')
+  ok(nextFilledBook(B, 'my', () => 5,
+    new Set(['shelf', 'basic', 'chunk'])) === null,
+    '空の冊 … ぜんぶ試したら、もう移らない(一覧の画面に残す)')
+
+  /* **並びのまま、上から選ぶ。** 並べ替えると、
+     利用者が並べた意味(自分の単語帳が先)が消える */
+  ok(nextFilledBook(B, 'my', () => 7) === 'shelf',
+    '空の冊 … 並びのまま、上から選ぶ(並べ替えない)')
+
+  /* **数でないものは、あてにしない**(文字列・undefined) */
+  ok(nextFilledBook(B, 'my', (id) => (id === 'shelf' ? '120' : undefined)) === null,
+    '空の冊 … 数でないものは「ある」と読まない')
+
+  /* ── 2つの画面が、同じ形で呼んでいるか ─────────────────────
+
+     **コメントを落としてから数える**(CLAUDE.md)——
+     説明の中にも同じ語が出るので、落とさないと
+     **書いていないのに書いてあることになる** */
+  const src1 = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/.*$/gm, '')
+  const wb = src1('components/Wordbook.jsx')
+  const qr = src1('components/QrReview.jsx')
+
+  for (const [名, src] of [['単語帳', wb], ['Quick Response', qr]]) {
+    ok(/nextFilledBook\(books, book, bookSizeOf, tried\)/.test(src),
+      `${名} … 空だったら、判断を nextFilledBook に任せる`)
+    /* **いまの冊も「試した」に入れる。** 入れないと次の回で戻ってくる */
+    ok(/tried\.add\(book\);\s*tried\.add\(next\)/.test(src),
+      `${名} … いまの冊と、移る先の両方を「試した」に控える`)
+    /* **自分の帳は数えない。** ここが空だから移ろうとしている */
+    ok(/const bookSizeOf = \(id\) => \{[\s\S]*?\n    return null\n  \}/.test(src),
+      `${名} … 知らない冊は null(数えたふりをしない)`)
+    /* **自分でえらんだ冊からは、絶対に移らない**(第5.200節)。
+       ここが抜けると、空と分かっていて開いた冊(分野を選ぶ前の
+       「業種べつ」など)から**勝手に飛ばされる** ——
+       押したものと違う画面が出る。
+       **本物の画面でも測っている**(`test:bar` の「本棚」)が、
+       そちらは1回まわすのに十数分かかる。**ここでも止める** */
+    ok(/pickedBookRef\.current\s*\?\s*null\s*:\s*nextFilledBook/.test(src),
+      `${名} … 自分でえらんだ冊からは移らない`)
+    ok(/pickedBookRef\.current = true/.test(src),
+      `${名} … 本棚からえらんだら、その印を立てる`)
+  }
+
+  /* **移った先の中身が届くまで待つ**(第5.191節と同じ形)。
+     待たないと、前の冊(空)のまま「やっぱり空だった」と判断する */
+  ok(/triedBooksRef\.current\.size && rowsBookRef\.current !== book/.test(wb),
+    '単語帳 … 移ったあとは、新しい冊の語が届くまで待つ')
+  ok(/rowsBookRef\.current = book/.test(wb),
+    '単語帳 … どの冊の語を控えたかを、控えている')
+  /* Quick Response は、もとから鍵で待っている(第5.191節) */
+  ok(/if \(loaded !== poolKey\) return/.test(qr),
+    'Quick Response … 移ったあとは、新しい冊の問が届くまで待つ')
+
+  /* **「移らない」側も見る。** 中身のある冊を開いている人まで
+     移してしまっては、直したことにならない */
+  ok(/if \(!rowsRef\.current\.length \|\| poolNow\(\)\.length === 0\) \{/.test(wb),
+    '単語帳 … 移るのは、いまの冊が空のときだけ')
+  ok(/if \(shown\.length === 0\) \{/.test(qr),
+    'Quick Response … 移るのは、いまの冊が空のときだけ')
+
+  /* **どれも駄目なら、これまでどおり一覧に残す**(行き止まりを作らない) */
+  ok(/tried\.add\(next\)[\s\S]{0,200}setRunning\(false\)/.test(wb),
+    '単語帳 … 移れなければ、これまでどおり一覧の画面に残す')
+  ok(/tried\.add\(next\)[\s\S]{0,200}setLive\(false\)/.test(qr),
+    'Quick Response … 移れなければ、これまでどおり一覧の画面に残す')
 }
 
 console.log(ng

@@ -120,6 +120,23 @@ const WIDTHS = [
 
 let bad = 0
 const ok = (s) => console.log(`✓ ${s}`)
+/**
+ * **本棚のシートを開く。開いていたら押さない**(第5.200節)。
+ *
+ * `冊名 ▾` は入り切り(トグル)なので、**開いているときに押すと閉じる。**
+ * いつ閉じるかは読み込みの速さで変わる —— `hasSub` の冊は
+ * えらんでも閉じない(第5.173節)、接続が無いと描き分けが変わる、
+ * 空なら中身のある冊へ移る(第5.200節)。
+ * **「押す」ではなく「開いている状態にする」と書く。**
+ */
+const 本棚をひらく = async (pg) => {
+  const 開いている = await pg.evaluate(
+    () => [...document.querySelectorAll('.shelf-pick')].some((e) => e.offsetParent),
+  )
+  if (開いている) return
+  await pg.locator('.bookpick').last().click()
+  await pg.waitForTimeout(350)
+}
 const ng = (s, d = '') => { bad += 1; console.log(`✗ ${s}${d ? `\n    ${d}` : ''}`) }
 
 // ── 検証用の入り口を用意する ──────────────────────────────────
@@ -1475,6 +1492,26 @@ export default defineConfig({
       ok(`${どこ} … 白い(${look.地})・影あり・`
         + `「${look.名}」「${look2.名}」ともメニューと同じ絵`)
     }
+
+    /* **ホームへ戻してから測る**(第5.200節で足した)。
+       すぐ上の絵くらべで**単語帳へ移っている**が、単語帳は
+       「開いた瞬間に1問目」(第5.167節)で集中モードに入り、
+       **わざと画面を止める**(`lockScroll`)。あそこには
+       専用の ☰ が左上にあるので、上の帯そのものが出ていない。
+       **ここで測りたいのは「ふつうに送れる画面で、上の帯が貼り付くか」**
+       なので、ふつうの画面(ホーム)へ戻す。
+       戻さないと、**止めてある画面を「貼り付いていない」と読んでしまう** */
+    await page.evaluate(() => {
+      const burger = document.querySelector('.app-topbar .nav-burger')
+      if (burger && !document.querySelector('.app-nav-item')?.offsetParent) burger.click()
+    })
+    await page.waitForTimeout(150)
+    await page.evaluate(() => {
+      const x = [...document.querySelectorAll('.app-nav-item')]
+        .find((e) => e.querySelector('.app-nav-label').textContent.trim() === 'ホーム')
+      x?.click()
+    })
+    await page.waitForTimeout(250)
 
     /* ── ☰ は、**送ったあとも押せる**(2026-09 実機・利用者の指摘)──────
          > スクロールを始めるとサイドバーのハンバーガーが触れなくなる
@@ -4613,10 +4650,7 @@ export default defineConfig({
   /** 帯の `冊名 ▾` を押して、本棚を開く。
       **いちばん後ろの1つを押す** —— 復習に入っていると
       (第5.167節「開いた瞬間に1問目」)、帯の側があとに描かれる */
-  const 本棚を開く = async (pg) => {
-    await pg.locator('.bookpick').last().click()
-    await pg.waitForTimeout(350)
-  }
+  const 本棚を開く = 本棚をひらく
   /** 本棚から1冊えらぶ(えらぶと、本棚は閉じる) */
   const 冊をえらぶ = async (pg, 名) => {
     await 本棚を開く(pg)
@@ -4627,6 +4661,10 @@ export default defineConfig({
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=mybook`,
       { waitUntil: 'networkidle' })
+    /* **`冊名 ▾` が出るまで待つ。** 決め打ちの 300ms では、
+       語が届く前に測ってしまい「帯に冊名が出ていない」と誤って赤くなる
+       (語を渡すようにして、問い合わせが1往復増えたため) */
+    await page.waitForSelector('.bookpick', { timeout: 10000 })
     await page.waitForTimeout(300)
 
     /* **帯に冊名が出ているか。** トップ画面が無くなったので、
@@ -4680,6 +4718,7 @@ export default defineConfig({
       const page2 = await browser.newPage({ viewport: { width: w, height: 900 } })
       await page2.goto(`http://localhost:${PORT}/__bar.html?screen=mybook`,
         { waitUntil: 'networkidle' })
+      await page2.waitForSelector('.bookpick', { timeout: 10000 })
       await page2.waitForTimeout(300)
       await 冊をえらぶ(page2, '基礎単語')
       await 本棚を開く(page2)
@@ -4715,7 +4754,7 @@ export default defineConfig({
     }
 
     const 名 = `トレーナーの単語帳(${w}px)`
-    if (!帯.includes('自分の単語帳')) {
+    if (!帯.replace('▾', '').trim()) {
       // **帯に冊名が出ていないと、冊を間違えたまま進む**(第5.167節)
       ng(`${名} … 帯に冊名が出ていない`, 帯 || '(無し)')
     /* **3冊が1冊にまとまった**(第5.199節)。コロケーション / 名詞句 /
@@ -4724,8 +4763,18 @@ export default defineConfig({
     } else if (初.札.join(' / ')
       !== '自分の単語帳 / 業種べつ / 基礎単語 / ビジネス必須チャンク集') {
       ng(`${名} … 本棚に冊が並んでいない`, 初.札.join(' / ') || '(無し)')
-    } else if (初.押.join('') !== '自分の単語帳') {
-      ng(`${名} … 既定が自分の単語帳になっていない`, 初.押.join(' / ') || '(無し)')
+    } else if (初.押.join('') === '自分の単語帳') {
+      /* **この土台では、自分の単語帳が 0 語である**(第5.200節で分かった)——
+         `?screen=mybook` は `learnerId` を渡さない「自分の単語帳」なので、
+         ログインした人がいないと窓口を1回も呼ばず、語が1つも入らない。
+         だから**中身のある冊へ移っているのが正しい。**
+
+         **「既定は自分の単語帳」のほうは、語がある土台で見る**
+         (第5.200節の「語があれば移らない」)。**どちらも残してある** ——
+         片方だけだと、いつも移る形・一度も移らない形のどちらに
+         書き換えても緑のままになる */
+      ng(`${名} … 自分の単語帳が空なのに、空のまま開いている`,
+        '第5.200節「空の冊に降ろさない」が効いていない')
     } else if (初.棚 !== 0) {
       ng(`${名} … 自分の単語帳なのに、棚の欄が出ている(混ざって見える)`)
     } else if (開.冊 !== 35) {
@@ -4754,7 +4803,8 @@ export default defineConfig({
     } else if (基.よこ > 0) {
       ng(`${名} … 基礎単語で横にはみ出している`, `${基.よこ}px`)
     } else {
-      ok(`${名} … 帯の「${帯}」から、渡した 35 冊と基礎単語が1冊残らず開ける`)
+      ok(`${名} … 帯の「${帯.replace('▾', '').trim()}」から、`
+        + '渡した 35 冊と基礎単語が1冊残らず開ける')
     }
   }
 
@@ -5603,7 +5653,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
 
   /** 66 の型の冊へ移る。**名前は `FRAME_BOOK_LABEL` 1か所**(書き写さない) */
   const 冊へ = async () => {
-    await page.click('.bookpick')
+    await 本棚をひらく(page)
     await page.waitForTimeout(300)
     await page.evaluate(() => {
       for (const x of document.querySelectorAll('.shelf-pick')) {
@@ -5616,7 +5666,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
   /* **接続の無い骨組みでは、冊を替えた瞬間に描き分けが変わる**
      (「Supabase が設定されていません」の枝 → 本体)。
      そのぶんシートが畳まれるので、ここだけ開き直す */
-  await page.click('.bookpick')
+  await 本棚をひらく(page)
   await page.waitForTimeout(500)
 
   const 型を = async (n) => page.evaluate((i) => {
@@ -5904,7 +5954,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
       { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(1500)
     /* 66 の型の冊へ。**いちばん長い一覧になるように、ぜんぶ「まだ」で答える** */
-    await page.click('.bookpick')
+    await 本棚をひらく(page)
     await page.waitForTimeout(300)
     await page.evaluate(() => {
       for (const x of document.querySelectorAll('.shelf-pick')) {
@@ -6093,8 +6143,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await page.waitForTimeout(1500)
 
   /** チャンク集の冊へ移る。**名前は書き写さない**(「チャンク」で拾う) */
-  await page.evaluate(() => { document.querySelector('.bookpick')?.click() })
-  await page.waitForTimeout(400)
+  await 本棚をひらく(page)
   const 冊名 = await page.evaluate(() => {
     for (const x of document.querySelectorAll('.shelf-pick')) {
       if ((x.textContent || '').includes('チャンク')) { x.click(); return x.textContent.trim() }
@@ -6105,10 +6154,11 @@ for (const W of [1280, 794, 453, 390, 320]) {
   if (!冊名) ng('チャンク集 … 冊の一覧に出ていない')
   else ok(`チャンク集 … 冊の一覧に出る(${冊名.replace(/\s+/g, ' ')})`)
 
-  /** 欄を開き直す(冊を替えるとシートが畳まれる) */
+  /** 欄を開き直す(冊を替えるとシートが畳まれることがある)。
+      **開いていたら押さない**(押すと閉じる・第5.200節) */
   const 開く = async () => {
-    await page.evaluate(() => { document.querySelector('.bookpick')?.click() })
-    await page.waitForTimeout(500)
+    await 本棚をひらく(page)
+    await page.waitForTimeout(300)
   }
   /** 段 / 組の欄。**`.nfunits` の中の `<select>` を順に** */
   const えらぶ = async (i, value) => {
@@ -6245,16 +6295,15 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await qp.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
     { waitUntil: 'domcontentloaded' })
   await qp.waitForTimeout(1500)
-  await qp.evaluate(() => { document.querySelector('.bookpick')?.click() })
-  await qp.waitForTimeout(400)
+  await 本棚をひらく(qp)
   await qp.evaluate(() => {
     for (const x of document.querySelectorAll('.shelf-pick')) {
       if ((x.textContent || '').includes('の型')) { x.click(); return }
     }
   })
   await qp.waitForTimeout(1500)
-  await qp.evaluate(() => { document.querySelector('.bookpick')?.click() })
-  await qp.waitForTimeout(500)
+  await 本棚をひらく(qp)
+  await qp.waitForTimeout(300)
 
   /** 紙のボタンの問数。**練習中は「出しかた」の中に入っている** */
   const 問数 = async () => {
@@ -6337,7 +6386,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await page.waitForTimeout(1500)
 
   /** 66 の型の冊へ移る。**名前は書き写さない**(「の型」で拾う) */
-  await page.click('.bookpick')
+  await 本棚をひらく(page)
   await page.waitForTimeout(300)
   await page.evaluate(() => {
     for (const x of document.querySelectorAll('.shelf-pick')) {
@@ -6348,8 +6397,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
 
   /** 中身(日本語 → 英語 / 言い換え)を、何番目かで選ぶ */
   const 中身を = async (i) => {
-    await page.evaluate(() => { document.querySelector('.bookpick')?.click() })
-    await page.waitForTimeout(400)
+    await 本棚をひらく(page)
     const 名 = await page.evaluate((n) => {
       const s2 = [...document.querySelectorAll('select')].find((x) => x.options.length === 2)
       if (!s2) return null
@@ -7462,6 +7510,119 @@ for (const W of [1280, 794, 453, 390, 320]) {
   } else {
     ok(`すき間 … ${SCREENS.length} 画面 × 2幅、縦と横の両方で、接している組は無い`)
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **空の冊に降ろさない**(第5.200節・2026-09 実機・利用者の指摘)
+
+     > ゲストログインして単語帳にいくと、「ビジネス必須チャンク」
+     > 「基礎単語」「コロケーション」などが全くないので直してください。
+     > また、ゲストログインだと単語帳とクイックレスポンス帳に
+     > トップ画面がいまだにあります。それぞれ排除してください
+
+   **入りたてのゲストそのものを描く** —— `review_words` が空を返す。
+   これが「いちばん危ない形」である(CLAUDE.md「**無ければ素通り**する
+   形の検証を書かない」)。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+   ・移る先がある(`?chunk=1`)… 出題に入り、**トップ画面は出ない**
+   ・移る先が無い(素の `?screen=wordbook`)… これまでどおり一覧に残す。
+     ここを見ないと、**いつでも移る形**に書き換えても緑のままになる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  await page.route('**/rest/v1/**', (route) => {
+    const u = route.request().url()
+    let body = []
+    /* **`review_words` は空のまま。** 入りたてのゲストの単語帳である */
+    if (u.includes('vocab_week')) body = [{ days: 0, answered: 0, correct: 0, weeks: 0 }]
+    if (u.includes('weekly_goal')) {
+      body = [{ words_goal: 0, words_done: 0, sent_goal: 0, sent_done: 0 }]
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(body),
+    })
+  })
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
+  }))
+
+  /* ── ① 移る先がある … そのまま始まる ─────────────────────── */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook&chunk=1`,
+    { waitUntil: 'networkidle' })
+  let 始まった = true
+  try {
+    await page.waitForSelector('.wbfocus .wordcard', { timeout: 10000 })
+  } catch { 始まった = false }
+  if (始まった) {
+    ok('空の単語帳 … 中身のある冊へ移って、そのまま始まる(トップ画面が出ない)')
+  } else {
+    ng('空の単語帳 … 開いてもトップ画面のままで、出題に入らない',
+      '自分の単語帳が 0 語のゲストが、いつも見ている画面である')
+  }
+
+  /* **どの冊へ移ったのかも数える。** 「始まったか」だけだと、
+     **自分の単語帳のまま始まる形**に書き換えても緑になる */
+  const 冊 = await page.evaluate(
+    () => document.querySelector('.bookpick-name')?.textContent?.trim() ?? '',
+  )
+  if (冊 && 冊 !== '自分の単語帳') {
+    ok(`空の単語帳 … 中身のある冊が開いている(${冊})`)
+  } else {
+    ng(`空の単語帳 … 空のままの冊が開いている(${冊 || '名前が出ていない'})`,
+      '移る先が無かったか、移る判断が効いていない')
+  }
+
+  /* ── ② 語があれば、移らない(**「出ない」側**)────────────────
+     ここを見ないと、**いつでも移る形**に書き換えても緑のままになる。
+     `?screen=wordbook` は `learnerId` を渡すので、窓口に語を返せる */
+  const page2 = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  await page2.route('**/rest/v1/**', (route) => {
+    const u = route.request().url()
+    let body = []
+    if (u.includes('review_words')) {
+      body = ['answer', 'engineer', 'quiet'].map((x, i) => ({
+        word_norm: x, display: x, kind: 'phrase', pos: '熟語',
+        status: 'learning', box: 2, learn_streak: 4,
+        due_on: '2020-01-01', added_at: '2026-09-01', meaning_ja: `意味${i}`,
+        seen_in: null, seen_in_ja: null,
+        material_id: null, material_title: null, industry: 'it', topic: null,
+      }))
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(body),
+    })
+  })
+  await page2.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
+  }))
+  await page2.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook&chunk=1`,
+    { waitUntil: 'networkidle' })
+  await page2.waitForSelector('.bookpick', { timeout: 10000 })
+  await page2.waitForTimeout(800)
+  const 語あり = await page2.evaluate(
+    () => document.querySelector('.bookpick-name')?.textContent?.trim() ?? '',
+  )
+  if (語あり === '自分の単語帳') {
+    ok('語がある単語帳 … 既定のまま(自分の単語帳)。勝手に移らない')
+  } else {
+    ng(`語がある単語帳 … 勝手に「${語あり || '(名前なし)'}」へ移っている`,
+      '移ってよいのは、いまの冊が空のときだけ(第5.200節)')
+  }
+  await page2.close()
+
+  /* ── ③ 移る先が無い … これまでどおり一覧に残す ───────────── */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(1500)
+  const 残った = await page.evaluate(() => !document.querySelector('.wbfocus .wordcard'))
+  if (残った) {
+    ok('空の単語帳 … 移る先が1冊も無ければ、これまでどおり一覧に残す')
+  } else {
+    ng('空の単語帳 … 移る先が無いのに、出題に入っている',
+      '1語も無いところから問を作っている(行き止まり)')
+  }
+  await page.close()
 }
 
 await browser.close()

@@ -87,6 +87,7 @@ import {
   chunkPartCount, chunkPool, chunkTitle,
 } from '../lib/chunkBook.js'
 import { loadBasicWordbook } from '../lib/basicReviews.js'
+import { nextFilledBook } from '../lib/bookOpen.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
 import { CloseIcon, FocusIcon, MenuIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
@@ -459,6 +460,15 @@ export default function Wordbook({
      見張りに `rows` そのものを入れると、1語答えるたびに組み直してしまう */
   const rowsRef = useRef([])
   rowsRef.current = rows
+  /**
+   * **いま控えてある語が、どの冊のものか**(第5.200節)。
+   *
+   * 冊を替えた直後の1回は、**まだ前の冊の語が `rowsRef` に入っている。**
+   * `loading` を見るだけでは足りない —— あれは**次の描き直しまで
+   * 立たない**ので、その1回をすり抜ける
+   * (第5.191節で Quick Response が踏んだのと、まったく同じ形)。
+   */
+  const rowsBookRef = useRef(null)
   /** 出題を組み直す合図。読み直したときだけ1つ進む */
   const [deal, setDeal] = useState(0)
   /**
@@ -765,6 +775,9 @@ export default function Wordbook({
       })
       setRows(got)
       rowsRef.current = got
+      /* **どの冊の語を控えたか**(第5.200節)。控えないと、
+         冊を替えた直後の1回で**前の冊の語のまま**判断してしまう */
+      rowsBookRef.current = book
       sendGrown(got)
       setQueue([])
       doneRef.current = []
@@ -836,6 +849,8 @@ export default function Wordbook({
     })
     setRows(got)
     rowsRef.current = got
+    /* **どの冊の語を控えたか**(第5.200節・上と同じ) */
+    rowsBookRef.current = book
     sendGrown(got)
     setQueue([])
     doneRef.current = []
@@ -849,7 +864,8 @@ export default function Wordbook({
        別の配列になる。つないだ文字列(`shelfKey`)で見る
        (`onlyKey` とまったく同じ落とし穴) */
   }, [current.status, current.dueOnly, current.id, learnerId, mine, onlySet,
-    shelfBook, shelfKey, basicBook, tier, colBook, npBook, advBook, sendGrown])
+    book, shelfBook, shelfKey, basicBook, tier, colBook, npBook, advBook,
+    sendGrown])
 
   useEffect(() => { reload() }, [reload])
 
@@ -1083,6 +1099,48 @@ export default function Wordbook({
   }, [isQuiz, loading, started, deal])
 
   /**
+   * **冊ごとの、中身の数**(第5.200節)。開いた冊が空のときに
+   * 「代わりにどこを開くか」を決めるためだけに使う。
+   *
+   * **数えられない冊は `null`**(CLAUDE.md「**0 と `null` を
+   * 取り違えない**」)。`null` を 0 と読むと**あるのに移らず**、
+   * 0 を `null` と読むと**空の冊へ移って、また空になる。**
+   *
+   * - `my`    … **数えない。** ここが空だから移ろうとしている
+   * - `chunk` … ファイルを数えるだけ(**0円**・窓口を呼ばない)
+   * - `basic` … 同上(`basicWords.js`)
+   * - `shelf` … 数は**あとから届く**。届くまでは `null`(移らない)
+   */
+  const bookSizeOf = (id) => {
+    if (id === 'chunk') return chunkPartCount(chunkPart)
+    if (id === 'basic') return wordsForTier(tier).length
+    if (id === 'shelf') {
+      if (!shelfCounts) return null
+      return shelfPick.reduce((n, s) => n + (shelfCounts.get(s) ?? 0), 0)
+    }
+    return null
+  }
+
+  /**
+   * **もう試した冊**(第5.200節)。空だった冊を控えておき、二度と行かない。
+   * **「1回だけ」では足りない** —— たまたま最初に当たった冊が空だと、
+   * 中身のある冊が後ろに控えているのに、空の画面で終わる。
+   */
+  const triedBooksRef = useRef(new Set())
+
+  /**
+   * **自分で冊をえらんだか**(第5.200節)。
+   *
+   * **えらんだ冊からは、勝手に移らない。** 空と分かっていて開く人がいる
+   * (分野をまだ選んでいない「業種べつ」など)。そこで移すと、
+   * **押したものと違う画面が出る** —— いちばんしてはいけないことである。
+   * 移ってよいのは、**まだ一度も自分でえらんでいないとき**だけ。
+   *
+   * 既存の見張り(`test:bar` の「本棚」)が、これを捕まえた。
+   */
+  const pickedBookRef = useRef(false)
+
+  /**
    * **開いた瞬間に1問目**(第5.167節・2026-09 利用者の提案)。
    *
    *   > サイドバーや下のタブからクリックしたらすぐに実際のトレーニングの
@@ -1101,11 +1159,38 @@ export default function Wordbook({
    */
   useEffect(() => {
     if (!isQuiz || loading || opened) return
+    /* **移ったあとは、新しい冊の語が届くまで待つ**(第5.200節)。
+       `loading` は**次の描き直しまで立たない**ので、移った直後の1回を
+       すり抜け、**前の冊(空)のまま「やっぱり空だった」と判断する。**
+       第5.191節で Quick Response が踏んだのと、まったく同じ形である。
+       **移っていないときは、これまでどおり素通りする** */
+    if (triedBooksRef.current.size && rowsBookRef.current !== book) return
     /* **判断が済んだことを、必ず先に立てる。** ここを「始めたときだけ」に
        すると、1語も無い帳面で**帯1本のまま止まる**(第5.172節) */
     setOpened(true)
     setSwitching(false)
     if (!rowsRef.current.length || poolNow().length === 0) {
+      /* **空の冊に降ろさない。中身のある冊へ移って、そのまま始める**
+         (第5.200節・2026-09 実機)。既定の冊は自分の単語帳で、
+         **入りたてのゲストはここが 0 語**である。だから開くたびに
+         ここへ落ち、**昔のトップ画面がそのまま出ていた。**
+
+         判断は `nextFilledBook()` 1か所(`bookOpen.js`)——
+         **画面の中で `id === 'chunk'` と書かない**(CLAUDE.md)。
+         **一度だけ**(`autoBookRef`)。移った先がまた空でも、
+         そこからは動かさない —— **止まる条件を持たせる** */
+      const tried = triedBooksRef.current
+      /* **自分でえらんだ冊からは移らない**(上の `pickedBookRef`) */
+      const next = pickedBookRef.current
+        ? null : nextFilledBook(books, book, bookSizeOf, tried)
+      if (next) {
+        /* **いまの冊も、移る先も「試した」に入れる。**
+           いまの冊を入れないと、次の回でここへ戻ってくる */
+        tried.add(book); tried.add(next)
+        setBookWanted(next)
+        dropRun()
+        return
+      }
       /* **出すものが無い冊に替えたときは、一覧の画面へ戻す**(第5.173節)。
          帯のまま止めると、読み込み中に見えて終わらない */
       setRunning(false)
@@ -1520,7 +1605,11 @@ export default function Wordbook({
   const bookPick = (
     <BookPick books={books} book={book} unit="語" sub={bookSub}
               title="どの単語帳をやりますか"
-              onPick={(id) => { setBookWanted(id); dropRun() }} />
+              onPick={(id) => {
+                /* **ここから先は、勝手に移らない**(第5.200節) */
+                pickedBookRef.current = true
+                setBookWanted(id); dropRun()
+              }} />
   )
 
   /**

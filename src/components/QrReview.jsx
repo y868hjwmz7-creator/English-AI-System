@@ -43,6 +43,7 @@ import {
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
+import { nextFilledBook } from '../lib/bookOpen.js'
 import { nowName } from '../lib/bookNow.js'
 import {
   FIRST_FRAME_PART, FRAME_BOOK_LABEL, FRAME_FORM_KEY, FRAME_PARTS,
@@ -523,6 +524,46 @@ export default function QrReview({
   }
 
   /**
+   * **冊ごとの、中身の数**(第5.200節)。開いた冊が空のときに
+   * 「代わりにどこを開くか」を決めるためだけに使う。
+   * **単語帳の `bookSizeOf()` とまったく同じ作法**である。
+   *
+   * **数えられない冊は `null`**(CLAUDE.md「**0 と `null` を
+   * 取り違えない**」)。
+   *
+   * - `my`    … **数えない。** ここが空だから移ろうとしている
+   * - `nf`    … 名簿が持っている問数(**0円**・窓口を呼ばない)。
+   *             Unit を選んでいれば、その Unit のぶんだけ
+   * - `frame` … ファイルを数えるだけ(`frameQr.js` 1か所)
+   */
+  const bookSizeOf = (id) => {
+    if (id === 'nf') {
+      const list = unit ? nfUnits.filter((u) => u.id === unit) : nfUnits
+      return list.reduce((n, u) => n + (u.n ?? 0), 0)
+    }
+    if (id === 'frame') return partCounts[part] ?? null
+    return null
+  }
+
+  /**
+   * **もう試した冊**(第5.200節)。**単語帳とまったく同じ作法**である ——
+   * 空だった冊を控えておき、二度と行かない。
+   */
+  const triedBooksRef = useRef(new Set())
+
+  /**
+   * **自分で冊をえらんだか**(第5.200節)。
+   *
+   * **えらんだ冊からは、勝手に移らない。** 空と分かっていて開く人がいる
+   * (分野をまだ選んでいない「業種べつ」など)。そこで移すと、
+   * **押したものと違う画面が出る** —— いちばんしてはいけないことである。
+   * 移ってよいのは、**まだ一度も自分でえらんでいないとき**だけ。
+   *
+   * 既存の見張り(`test:bar` の「本棚」)が、これを捕まえた。
+   */
+  const pickedBookRef = useRef(false)
+
+  /**
    * **開いた瞬間に1問目**(第5.167節・2026-09 利用者の提案)。
    *
    *   > サイドバーや下のタブからクリックしたらすぐに実際のトレーニングの
@@ -543,6 +584,22 @@ export default function QrReview({
     setOpened(true)
     setSwitching(false)
     if (shown.length === 0) {
+      /* **空の冊に降ろさない。中身のある冊へ移って、そのまま始める**
+         (第5.200節)。**単語帳とまったく同じ直し方**である ——
+         既定の冊は自分の Quick Response 帳で、入りたてのゲストは
+         ここが 0 問だから、開くたびに昔のトップ画面が出ていた。
+         判断は `nextFilledBook()` 1か所。**一度だけ** */
+      const tried = triedBooksRef.current
+      /* **自分でえらんだ冊からは移らない**(上の `pickedBookRef`) */
+      const next = pickedBookRef.current
+        ? null : nextFilledBook(books, book, bookSizeOf, tried)
+      if (next) {
+        /* **いまの冊も、移る先も「試した」に入れる**(単語帳と同じ) */
+        tried.add(book); tried.add(next)
+        setBookWanted(next)
+        dropRun()
+        return
+      }
       /* **出す問が無い冊に替えたときは、一覧の画面へ戻す**(第5.173節)。
          帯のまま止めると、読み込み中に見えて終わらない */
       setLive(false)
@@ -785,7 +842,11 @@ export default function QrReview({
   const bookPick = (
     <BookPick books={books} book={book} unit="問" sub={bookSub}
               title="どの Quick Response 帳をやりますか"
-              onPick={(id) => { setBookWanted(id); dropRun() }} />
+              onPick={(id) => {
+                /* **ここから先は、勝手に移らない**(第5.200節) */
+                pickedBookRef.current = true
+                setBookWanted(id); dropRun()
+              }} />
   )
 
   /**
