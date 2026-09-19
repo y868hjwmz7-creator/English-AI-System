@@ -1936,8 +1936,11 @@ function fakeMp3({
      形に戻すと、割合を秒に直せなくなる(**音は鳴るので気づけない**) */
   {
     const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
-    if (!/onTime\?\.\(Number\(el\.currentTime\) \|\| 0, Number\(el\.duration\) \|\| 0\)/.test(clips)) {
-      ng('鳴らす側が、長さを渡していない')
+    /* **長さに `|| 0` を付けない**(37手め)。`duration` はメタデータを
+       読むまで `NaN` で、0 にして渡すと受け取った側が
+       「**そろっている**」と読み、合わせがまるごと素通りする */
+    if (!/onTime\?\.\(Number\(el\.currentTime\) \|\| 0, Number\(el\.duration\)\)/.test(clips)) {
+      ng('鳴らす側が、長さをそのまま渡していない(`|| 0` を付けていないか)')
     } else if (!/export function clipDuration\(/.test(clips)) {
       ng('いま鳴っているものの長さを訊く道が無い')
     } else ok('鳴らす側が、いまの秒と長さの両方を渡している')
@@ -2508,8 +2511,21 @@ function fakeMp3({
   {
     const src = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
-    if (!/clockFitOf\(spans, alignEndOf\(got\.alignment\), dur\)/.test(src)) {
+    if (!/clockFitOf\(spans, alignEndOf\(got\.alignment\), durOk\)/.test(src)) {
       ng('1本の道が、時計を突き合わせていない')
+    }
+    /* **長さが分かるまで、錠を下ろさない**(37手め)。
+       下ろすと、そのあと長さが届いても**もう直らない** ——
+       初回だけハイライトが一文ぶん先に進んでいた原因である */
+    if (!/if \(!clockDone && durOk\) \{/.test(src)) {
+      ng('1本の道が、長さの分からないうちに時計を決めている',
+        '初めて鳴らすときは `duration` がまだ `NaN` である')
+    }
+    /* **両方の道で、同じ読み方をしているか。** 片方だけだと、
+       もう片方の教材だけがずれ続ける(10手めで踏んだ形) */
+    if ((src.match(/const durOk = knownDur\(rawDur\)/g) ?? []).length !== 2) {
+      ng('2つの道のどちらかが、長さの読み方をそろえていない',
+        String((src.match(/const durOk = knownDur\(rawDur\)/g) ?? []).length))
     }
     if (!/spans = scaleSpans\(spans, fit\.k\)/.test(src)
       || !/sent = scaleSpans\(sent, fit\.k\)/.test(src)) {
@@ -2550,11 +2566,17 @@ function fakeMp3({
     }
     /* **合わせた区間を先に使い、無ければ見積もりへ落ちる**(24手めで
        落ちたかどうかを `sentSure` に控えるようにしたので、形が変わった) */
-    if (!/sentSecs = fitSents\(dur\)/.test(src)
-      || !/sentSecs = sharesToTimes\(shares, dur\)/.test(src)) {
+    if (!/sentSecs = fitSents\(durOk\)/.test(src)
+      || !/sentSecs = sharesToTimes\(shares, durOk\)/.test(src)) {
       ng('発言ごとの道が、合わせた区間でくり返していない')
     }
-    if (!/holdCursor\(fitSents\(clipDuration\(\) \?\? 0\) \?\? exact\.sents, null\)/.test(src)) {
+    /* **長さが分かってからにする**(37手め)。0 のまま割り当てると
+       区間がぜんぶ 0 秒になり、光る文が音より先に走り切る */
+    if (!/if \(!sentSecs && durOk\) \{/.test(src)) {
+      ng('発言ごとの道が、長さの分からないうちに区間を決めている')
+    }
+    if (!/const d0 = knownDur\(clipDuration\(\)\)/.test(src)
+      || !/holdCursor\(\(d0 \? fitSents\(d0\) : null\) \?\? exact\.sents, null\)/.test(src)) {
       /* **片方だけ合わせない。** 光る文と ◀ ▶ の飛び先が食い違う */
       ng('発言ごとの道が、◀ ▶ の飛び先を合わせていない')
     }
@@ -4129,6 +4151,73 @@ function fakeMp3({
   } else ok('鍵は `eas.seams2` のまま(読まなくなるだけで、居座らせない)')
 
   if (bad === before) ok('古い控え(時刻表・継ぎ目)を読まない')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   **長さが分からないうちは、合わせない**(2026-09 実機・37手め)
+
+     > 未だに文のハイライトが実際の音声よりも先に進んでしまいます。
+     > **初めて再生する時は顕著**で、2、3回目から少し落ち着くのですが、
+     > それでも全体として一文くらいハイライトが先に進んでしまいます。
+
+   `<audio>` はメタデータを読むまで `duration` に `NaN` を返す。
+   それを `|| 0` で 0 にして渡していたので、`clockScaleOf()` が
+   **1(そろっている)**を返し、合わせが**まるごと素通り**していた。
+   しかも合わせるのは鳴り出したあとの1回きりなので、そのあと長さが
+   届いても、もう直らない。
+
+   実機の数字 … **控え 64.96 秒 / 音声 66.04 秒**。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  const { clockFitOf, clockScaleOf, knownDur } =
+    await import('../src/lib/wholeAudio.js')
+
+  /* ── ① **0 も NaN も「分からない」。1つも 0 秒と読まない** ── */
+  for (const d of [0, NaN, Infinity, -1, null, undefined, '']) {
+    if (knownDur(d) !== null) {
+      ng(`長さ … ${String(d)} を「分かっている」と読んでいる`, String(knownDur(d)))
+    }
+  }
+  ok('長さ … 0 / NaN / Infinity / 負 / 空 は、ぜんぶ「分からない」')
+  /* **「分かる」側も見る。** 片方だけだと、いつも null を返す形に
+     書き換えても緑のままになる(CLAUDE.md) */
+  if (knownDur(66.04) !== 66.04) {
+    ng('長さ … 分かっている秒を、そのまま返していない', String(knownDur(66.04)))
+  } else ok('長さ … 分かっている秒は、そのまま返す')
+
+  /* ── ② **実機の数字で、合わせが効くか** ──
+     控え 64.96 / 音声 66.04 の7発言。**これが効かないのが不具合だった** */
+  const ALIGN = 64.96
+  const DUR = 66.04
+  const spans = Array.from({ length: 7 }, (_, i) => ({
+    item: i, start: (ALIGN / 7) * i, end: (ALIGN / 7) * (i + 1),
+  }))
+  const fit = clockFitOf(spans, ALIGN, DUR)
+  if (fit.how === 'same') {
+    ng('実機の数字 … 長さが分かっているのに「そろっている」と言う',
+      `控え ${ALIGN} / 音声 ${DUR}`)
+  } else ok(`実機の数字 … 合わせが効く(${fit.how} / ${fit.per.toFixed(3)} 秒ずつ)`)
+
+  /* ── ③ **0 を渡すと「そろっている」に化ける** ──
+     これが不具合そのものである。**化けること自体を見張る** ——
+     ここが変わったら、呼ぶ側の歯止め(`knownDur`)の意味も変わる */
+  if (clockFitOf(spans, ALIGN, 0).how !== 'same') {
+    ng('長さ 0 … 「そろっている」に化けなくなった。呼ぶ側の歯止めを見直すこと')
+  } else ok('長さ 0 … 「そろっている」に化ける(だから、渡す前に止める)')
+  if (clockScaleOf(ALIGN, 0) !== 1) {
+    ng('長さ 0 … 倍率が 1 でなくなった。呼ぶ側の歯止めを見直すこと')
+  } else ok('長さ 0 … 倍率は 1(そろっている、の意味)')
+
+  /* ── ④ **合わせないと、どれだけ先に進むか** ──
+     **数えて出す。**「ずれる」ではなく、秒で言う */
+  const last = spans[spans.length - 1]
+  const off = (last.start * (DUR / ALIGN)) - last.start
+  if (!(off > 0.5)) {
+    ng('実機の数字 … 合わせないときのずれが、思ったより小さい',
+      `${off.toFixed(2)} 秒`)
+  } else {
+    ok(`実機の数字 … 合わせないと、最後の発言で ${off.toFixed(2)} 秒 先に進む(ほぼ一文)`)
+  }
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

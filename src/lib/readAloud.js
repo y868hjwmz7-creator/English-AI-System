@@ -52,7 +52,8 @@ import { speedPadMs, turnGapMs } from './turnGap.js'
 import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
-  REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, segOffsOf, stickyIndex,
+  REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, knownDur,
+  segOffsOf, stickyIndex,
   makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
   foldWorst, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
 } from './wholeAudio.js'
@@ -929,8 +930,18 @@ export function readAloudSequence(parts, {
       rate,
       startAt: at,
       onStart: started,
-      onTime: (sec, dur) => {
+      onTime: (sec, rawDur) => {
         if (!alive()) return
+        /* **長さが分かってから合わせる**(37手め)。
+           `<audio>` はメタデータを読むまで `NaN` を返す。それを 0 と
+           して受けると `clockScaleOf()` が 1(そろっている)を返し、
+           **合わせが素通りしたまま `clockDone` で錠が下りる** ——
+           初回だけハイライトが 1 秒ぶん先に進んでいた原因である。
+           **分からないうちは、合わせない**(`null` と 0 を取り違えない) */
+        const durOk = knownDur(rawDur)
+        /* ここから下で使う秒。**これまでの振る舞いを変えない**ために、
+           分からないときは 0 のまま渡す(窓も折り返しも今までどおり) */
+        const dur = durOk ?? 0
         /* ── **時計を音声に合わせる**(2026-09 実機・利用者の指摘)────
          *
          *   > 14発言の会話で大体2-3発言分くらい
@@ -939,7 +950,9 @@ export function readAloudSequence(parts, {
          *   長さが分かるのは鳴り出したあとなので、**1回目のここで**
          *   突き合わせる。そろっていれば `clockScaleOf()` が 1 を返し、
          *   **区間は同じ配列のまま**である(1ミリ秒も動かない)。 */
-        if (!clockDone) {
+        /* **分かってから、1回だけ。** 分からないうちは錠を下ろさない ——
+           下ろすと、そのあと長さが届いても**もう直らない**(37手め) */
+        if (!clockDone && durOk) {
           clockDone = true
           /* **余った時間を、どこへ配るか**(2026-09 実機・14手め)。
              比で配ると、発言の長さがばらばらなときに数百ミリ秒ずれる。
@@ -959,7 +972,7 @@ export function readAloudSequence(parts, {
              14手めに自分で「そろっていれば、1ミリ秒も動かさない」と
              書いておきながら、17手めでその歯止めを外していた。
              **直すものが無いときは、直さない。** */
-          const base = clockFitOf(spans, alignEndOf(got.alignment), dur)
+          const base = clockFitOf(spans, alignEndOf(got.alignment), durOk)
           const fit = (segOffs && base.how !== 'same')
             /* **向こうが返した区切り**(32手め)。当て推量が1つも入らない。
                `how === 'same'`(そろっている)なら配る時間が無いので、
@@ -1247,8 +1260,13 @@ export function readAloudSequence(parts, {
           rate,
           onWord: relay,
           alignment: exact?.alignment ?? null,
-          onTime: (sec, dur) => {
+          onTime: (sec, rawDur) => {
             if (!alive()) return
+            /* **長さが分かってから割り当てる**(37手め・1本の道と同じ)。
+               0 のまま `sharesToTimes()` に渡すと、**区間がぜんぶ 0 秒**に
+               なって、光る文が音より先に走り切る */
+            const durOk = knownDur(rawDur)
+            const dur = durOk ?? 0
             /* **文でくり返す。** 全文はこの下の周回が受け持つので、
                `repeatSeek` には文の区間を渡す(単位が違えば `null`)。
                見積もれなかったときも `null` になり、
@@ -1268,10 +1286,10 @@ export function readAloudSequence(parts, {
                `fitSents()` は `.json` に控えた文字ごとの時刻から出すので
                そのまま信じてよい。`sharesToTimes()` は**語の重みからの
                見積もり**なので、これまでどおりの見込みで守る */
-            if (!sentSecs) {
-              sentSecs = fitSents(dur)
+            if (!sentSecs && durOk) {
+              sentSecs = fitSents(durOk)
               sentSure = !!sentSecs
-              if (!sentSecs) sentSecs = sharesToTimes(shares, dur)
+              if (!sentSecs) sentSecs = sharesToTimes(shares, durOk)
               /* **この道の数字も画面に出す**(28手め)。1本の道にしか
                  出していなかったので、**発言ごとに鳴っている教材では
                  届いたかどうかを確かめる術が無かった** */
@@ -1304,7 +1322,12 @@ export function readAloudSequence(parts, {
                誤って飛ぶことはなく、◀ ▶ が一瞬押せなくなることもない */
             /* **◀ ▶ の飛び先も、同じ時計で合わせる。**
                片方だけ合わせると、**光る文と飛ぶ先が食い違う** */
-            if (exact) holdCursor(fitSents(clipDuration() ?? 0) ?? exact.sents, null)
+            /* **長さが分からないうちは、控えのまま**(37手め)。
+               0 を渡すと、**光る文と飛ぶ先が食い違う**(24手めの戒め) */
+            if (exact) {
+              const d0 = knownDur(clipDuration())
+              holdCursor((d0 ? fitSents(d0) : null) ?? exact.sents, null)
+            }
             else holdCursor(shares, null, true)
             started()
             const ahead = list[i + 1]

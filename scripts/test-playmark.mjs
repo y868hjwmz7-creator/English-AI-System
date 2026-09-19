@@ -2010,7 +2010,10 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '`playClip` に控えを渡している(渡し忘れても音は鳴るので気づけない)')
   ok(ra.includes('holdCursor(exact.sents, null)'),
     '文の区間も、控えがあれば本当の時刻で控える')
-  ok(ra.includes('sentenceShares(piece.text)') && ra.includes('sharesToTimes(shares, dur)'),
+  /* **長さが分かってから見積もる**(37手め)。0 のまま渡していたので、
+     区間がぜんぶ 0 秒になり、光る文が音より先に走り切っていた。
+     **落ちる先そのものは、これまでどおり残す**(行き止まりを作らない) */
+  ok(ra.includes('sentenceShares(piece.text)') && ra.includes('sharesToTimes(shares, durOk)'),
     '**控えが無いときの見積もりは残す**(行き止まりを作らない)')
 
   /* **送れなかったときに、控えを進めない**(2026-09)。
