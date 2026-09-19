@@ -19,6 +19,7 @@ import { chunkPlan, needsChunkJa } from './chunkJa.js'
 /* 文法解説(SVOC と修飾要素・0051)。**判断は `grammarNote.js` 1か所** */
 import { grammarPlan, needsGrammar } from './grammarNote.js'
 import { supabase } from './supabase.js'
+import { askWithRetry, genCutNote, isGenCut } from './genRetry.js'
 import { copyTitleFor } from './format.js'
 
 // 教材のレベルはゲストのレベルと同じ物差し(CEFR)を使う
@@ -1034,9 +1035,8 @@ export async function checkGenGateway(force = false) {
       // JSON として読めないので、窓口はいちばん手前で断る
       body: '(版を訊くだけ。JSON として読めない中身です)',
     })
-    if (error && /Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-      return                                  // 届いていない。**古いとは言わない**
-    }
+    /* 届いていない。**古いとは言わない**(見分けは `isGenCut` 1か所) */
+    if (error && isGenCut(error)) return
     const rev = data?.genRev ?? (await genErrBody(error)).genRev
     noteGenRev(rev)
   } catch { /* 届かなくても、教材づくりは止めない */ }
@@ -1050,6 +1050,37 @@ async function genErrBody(error) {
   } catch { return {} }
 }
 
+/**
+ * **生成の窓口を呼ぶ道は、ここ1本**(第5.197節)。
+ *
+ * 呼ぶ場所は5つある(教材 / カタマリの訳 / 文法解説 / 単語帳の語句 / 添削)。
+ * どこも同じ形を書き写していたので、**やり直しも知らせも、
+ * 書いた数だけ食い違う**ところだった(CLAUDE.md「判断は1か所に持つ」)。
+ *
+ * することは2つだけ。
+ *   ①**切れたときだけ、1回だけやり直す**(`askWithRetry`)
+ *   ②断られた理由(窓口が返す日本語)を、**1回だけ**読み出す
+ *     —— `error.context` は body の流れなので、**二度は読めない**
+ *
+ * **文面はここで作らない。** 何ができなかったのかは呼んだ側が
+ * いちばんよく知っている(CLAUDE.md)。`cut` を返すので、
+ * 呼んだ側が `genCutNote('教材の生成', genRev)` のように書く。
+ *
+ * **`checkGenGateway` はここを通さない。** あちらは版を訊くために
+ * **わざと読めない中身**を送って断らせる道で、やり直すと
+ * 断りが二度出るだけである(0円だが、意味が無い)。
+ */
+async function askGen(body) {
+  const got = await askWithRetry(
+    () => supabase.functions.invoke('generate-material', { body }),
+  )
+  if (!got.error) return { ...got, detail: '' }
+  // 受付窓口が返した日本語の理由を拾う(**ここ1か所でだけ読む**)
+  let detail = ''
+  try { detail = (await got.error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+  return { ...got, detail }
+}
+
 export async function generateSection({
   sectionType, count = 10, topic, topics = [], level, industry = '',
   isFirst = false, avoid = [], genre = '', scene = '', subject = '', context = '',
@@ -1059,35 +1090,27 @@ export async function generateSection({
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
-  const { data, error } = await supabase.functions.invoke('generate-material', {
-    body: {
-      sectionType, count, topic, topics, level, industry, isFirst, avoid,
-      // 記事のジャンル / 会話の場面 / 話題の指定 / すでに作った本文
-      genre, scene, subject, context,
-      // 会話に出す人数(2〜4)。**会話のときだけ渡す**(2026-09)。
-      // 窓口を配置し直すまでは無視されるので、これまでどおり2人になる
-      speakers,
-      // 復習として必ず入れる語。**どの種類でも効く。**
-      // 単語・フレーズは「この語で作る」、それ以外は「本文の中で使う」
-      // (言い分けは窓口側でする)
-      reviewWords,
-      /* **同じ話を二度作らない**(0046・2026-09 利用者の指定)。
-         `avoid`(英文)とは別物である。英文が1つも一致しなくても、
-         筋が同じなら「また同じ話」になる。
-         **窓口の置き直しが要る**(それまでは無視される。
-         `NEED_GEN_REV` を見て画面が赤く知らせる) */
-      avoidTopics, angle,
-    },
+  const { data, error, detail, cut } = await askGen({
+    sectionType, count, topic, topics, level, industry, isFirst, avoid,
+    // 記事のジャンル / 会話の場面 / 話題の指定 / すでに作った本文
+    genre, scene, subject, context,
+    // 会話に出す人数(2〜4)。**会話のときだけ渡す**(2026-09)。
+    // 窓口を配置し直すまでは無視されるので、これまでどおり2人になる
+    speakers,
+    // 復習として必ず入れる語。**どの種類でも効く。**
+    // 単語・フレーズは「この語で作る」、それ以外は「本文の中で使う」
+    // (言い分けは窓口側でする)
+    reviewWords,
+    /* **同じ話を二度作らない**(0046・2026-09 利用者の指定)。
+       `avoid`(英文)とは別物である。英文が1つも一致しなくても、
+       筋が同じなら「また同じ話」になる。
+       **窓口の置き直しが要る**(それまでは無視される。
+       `NEED_GEN_REV` を見て画面が赤く知らせる) */
+    avoidTopics, angle,
   })
 
   if (error) {
-    // 受付窓口が返した日本語の理由を拾う
-    let detail = ''
-    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
-    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-      return ng('生成の窓口につながりませんでした。'
-        + 'Supabase に generate-material を配置したか確認してください。')
-    }
+    if (cut) return ng(genCutNote('教材の生成', genRev))
     return ng(detail || `生成に失敗しました: ${error.message}`)
   }
   noteGenRev(data?.genRev)
@@ -1112,16 +1135,9 @@ export async function generateChunkJa(parts) {
   /* 窓口を1回呼ぶ。**カタマリの数が合わない段落は、窓口が落として返す**
      (ずれた対は無いより悪いため)。落ちた段落は下でやり直す */
   const callOnce = async (want) => {
-    const { data, error } = await supabase.functions.invoke('generate-material', {
-      body: { mode: 'chunk_ja', parts: want },
-    })
+    const { data, error, detail, cut } = await askGen({ mode: 'chunk_ja', parts: want })
     if (error) {
-      let detail = ''
-      try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
-      if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-        return ng('訳を作る窓口につながりませんでした。'
-          + 'Supabase の generate-material を配置し直したか確認してください。')
-      }
+      if (cut) return ng(genCutNote('カタマリごとの訳', genRev))
       return ng(detail || `訳を作れませんでした: ${error.message}`)
     }
     if (data?.error) return ng(data.error)
@@ -1192,16 +1208,9 @@ export async function generateGrammar(parts) {
   if (!parts?.length) return ng('解説を作る本文がありません')
 
   const callOnce = async (want) => {
-    const { data, error } = await supabase.functions.invoke('generate-material', {
-      body: { mode: 'grammar', parts: want },
-    })
+    const { data, error, detail, cut } = await askGen({ mode: 'grammar', parts: want })
     if (error) {
-      let detail = ''
-      try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
-      if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-        return ng('文法解説の窓口につながりませんでした。'
-          + 'Supabase の generate-material を配置し直したか確認してください。')
-      }
+      if (cut) return ng(genCutNote('文法解説', genRev))
       /* **古い窓口は、この頼みごとを知らない。**
          `mode` を知らないので、既定の道(教材の下書き)に落ちて
          「演習の種類が正しくありません」と断られる。
@@ -1275,27 +1284,20 @@ export async function generateShelfWords(job) {
   const industry = String(job?.industry ?? '').trim()
   if (!industry) return ng('業種が決まっていません')
 
-  const { data, error } = await supabase.functions.invoke('generate-material', {
-    body: {
-      mode: 'shelf_words',
-      industry,
-      scenes: (Array.isArray(job?.scenes) ? job.scenes : [])
-        .map((s) => String(s ?? '').trim()).filter(Boolean),
-      /* **レベルは渡さない**(2026-09 利用者の指定「レベルは絞り込みで
-         指定できればOK」)。1つの段を頼むと 20 語がそこに寄り、
-         **絞り込みで選べるだけの散らばりが出ない。**
-         窓口の側も受け取る欄ごと消してある */
-      count: Number(job?.count ?? 20),
-      have: Array.isArray(job?.have) ? job.have : [],
-    },
+  const { data, error, detail, cut } = await askGen({
+    mode: 'shelf_words',
+    industry,
+    scenes: (Array.isArray(job?.scenes) ? job.scenes : [])
+      .map((s) => String(s ?? '').trim()).filter(Boolean),
+    /* **レベルは渡さない**(2026-09 利用者の指定「レベルは絞り込みで
+       指定できればOK」)。1つの段を頼むと 20 語がそこに寄り、
+       **絞り込みで選べるだけの散らばりが出ない。**
+       窓口の側も受け取る欄ごと消してある */
+    count: Number(job?.count ?? 20),
+    have: Array.isArray(job?.have) ? job.have : [],
   })
   if (error) {
-    let detail = ''
-    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
-    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-      return ng('単語帳を作る窓口につながりませんでした。'
-        + 'Supabase の generate-material を配置し直したか確認してください。')
-    }
+    if (cut) return ng(genCutNote('単語帳の語句', genRev))
     /* **古い窓口は、この頼みごとを知らない。**
        `mode` を知らないので、既定の道(教材の下書き)に落ちて
        「演習の種類が正しくありません」と断られる。
@@ -1445,16 +1447,11 @@ export async function reviewWriting({
   if (!supabase) return ng('Supabase が設定されていません')
   if (!String(answer ?? '').trim()) return ng('添削する英文がありません')
 
-  const { data, error } = await supabase.functions.invoke('generate-material', {
-    body: { mode: 'review_writing', answer, toneBrief, question, questionJa, context, level },
+  const { data, error, detail, cut } = await askGen({
+    mode: 'review_writing', answer, toneBrief, question, questionJa, context, level,
   })
   if (error) {
-    let detail = ''
-    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
-    if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
-      return ng('添削の窓口につながりませんでした。'
-        + 'Supabase の generate-material を配置し直したか確認してください。')
-    }
+    if (cut) return ng(genCutNote('添削', genRev))
     /* **古い窓口は、この頼みごとを知らない。**
        ゲストなら 403「教材を作る権限がありません」、
        トレーナーなら 400「演習の種類が正しくありません」で断られる。

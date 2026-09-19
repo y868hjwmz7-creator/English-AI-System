@@ -4358,9 +4358,15 @@ console.log('\nスピーチ練習(0054)')
     '準備の状態 … 生成の窓口にも、版を訊きに行く道がある')
   ok(/invoke\('generate-material', \{[\s\S]{0,300}?body: '\(版を訊くだけ/.test(mats4),
     '準備の状態 … 読めない中身を送って、いちばん手前で断らせる(0円)')
-  ok(/Failed to send a request\|FunctionsFetchError/.test(mats4)
-    && /return\s+\/\/ 届いていない/.test(mats4),
-    '準備の状態 … 届かなかったときは「古い」と言わない')
+  /* **見分けは `isGenCut()` 1か所になった**(第5.197節)。
+     見るのは文字ではなく順番 —— 切れたときは、**版を書き留める前に**
+     引き返すこと。ここを通り越すと「版なし = 古い」と読まれ、
+     **置いてすらいないものに「置き直してください」**と言うことになる */
+  const 版訊き4 = /export async function checkGenGateway[\s\S]*?\n}/.exec(mats4)?.[0] ?? ''
+  ok(Boolean(版訊き4)
+    && /if \(error && isGenCut\(error\)\) return/.test(版訊き4)
+    && 版訊き4.indexOf('isGenCut') < 版訊き4.indexOf('noteGenRev'),
+    '準備の状態 … 届かなかったときは「古い」と言わない(版を書き留める前に引き返す)')
 
   /* **窓口の側で、この道を塞がないこと。**
      `req.json()` の断りは Claude を1度も呼ばないいちばん手前にある。
@@ -8086,6 +8092,101 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(!/'ぜんぶ\(順不同\)'/.test(wr), '聞き流し … 呼び名を画面に書き写していない')
   /* **選んだら覚える**(毎回えらび直させない) */
   ok(/saveBgmPick\(/.test(wr), '聞き流し … えらんだ曲を覚える')
+}
+
+console.log('\n▶ 通信が切れたときの、やり直しと知らせ(第5.197節)')
+{
+  const read = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+  const {
+    GEN_TRIES, askWithRetry, genCutNote, isGenCut,
+  } = await import('../src/lib/genRetry.js')
+
+  /* 送った回数を数えながら呼ぶ。**待たせない**(`wait` を差し替える) */
+  const 送る = async (...seq) => {
+    let n = 0
+    const got = await askWithRetry(
+      async () => { n += 1; return seq[n - 1] ?? seq[seq.length - 1] },
+      { wait: async () => {} },
+    )
+    return { 回数: n, ...got }
+  }
+  /** 通信が切れたとき / 断られたとき、窓口から返るもの */
+  const 切れた理由 = { message: 'Failed to send a request to the Edge Function' }
+  const 断り理由 = { message: 'Edge Function returned a non-2xx status code' }
+  const 切れ = { data: null, error: 切れた理由 }
+  const 断り = { data: null, error: 断り理由 }
+  const 通った = { data: { section: {} }, error: null }
+
+  /* **「やり直す」と「やり直さない」の両方を見る**(CLAUDE.md)。
+     片方だけだと、**いつもやり直す形・一度もやり直さない形**の
+     どちらに書き換えても緑のままになる */
+  const 一発 = await 送る(通った)
+  ok(一発.回数 === 1 && !一発.cut,
+    '1回で通ったら、やり直さない', `${一発.回数} 回`)
+
+  const 直った = await 送る(切れ, 通った)
+  ok(直った.回数 === 2 && !直った.cut && 直った.data,
+    '切れたら、もう一度送る(そこで通れば、失敗にしない)', `${直った.回数} 回`)
+
+  const 駄目 = await 送る(切れ, 切れ, 通った)
+  ok(駄目.回数 === GEN_TRIES && 駄目.cut,
+    `切れ続けても ${GEN_TRIES} 回で止める(3回目を送らない)`, `${駄目.回数} 回`)
+
+  /* **断られたものは、やり直さない。** もう一度送っても同じように
+     断られるだけで、**同じ金を二度払う**ことになる */
+  const 断られ = await 送る(断り, 通った)
+  ok(断られ.回数 === 1 && !断られ.cut && 断られ.error,
+    '断られた(4XX / 5XX)ときは、やり直さない', `${断られ.回数} 回`)
+  ok(!isGenCut(断り理由) && isGenCut(切れた理由),
+    '「切れた」と「断られた」を取り違えない')
+
+  /* ── 知らせ。**版を知っているかどうかで変える**(第5.197節)──────
+     実機で「配置したか確認してください」と出したが、**置いてあった。**
+     置いてあることは、開いたときに訊いた版で分かる */
+  const 版あり = genCutNote('教材の生成', '2026-09-13b')
+  const 版なし = genCutNote('教材の生成', null)
+  ok(版あり !== 版なし, '知らせは、窓口の版を知っているかどうかで変わる')
+  ok(!/配置|置かれていない/.test(版あり),
+    '版を知っているときは、配置の確認を求めない(実機で誤診した)', 版あり.slice(0, 24))
+  ok(/切れ/.test(版あり), '版を知っているときは、切れたことをそのまま言う')
+  ok(/generate-material/.test(版なし) && /通信/.test(版なし),
+    '版を知らないときは、両方の可能性を言う')
+  ok(版あり.includes(`${GEN_TRIES}回試しました`),
+    '何回試したのかを、文の中で数えている(書き写していない)')
+  /* **画面にそのまま出る文字列に `**` を混ぜない**(CLAUDE.md) */
+  ok(!/\*\*/.test(版あり + 版なし), '知らせに Markdown の印が混じっていない')
+
+  /* ── 呼ぶ道が1本か。**書き写しが復活したら赤くする** ───────────── */
+  /* **コメントを落としてから数える**(CLAUDE.md)。
+     `askGen` の説明の中に `genCutNote('教材の生成', genRev)` と
+     書き方の例が出てくるので、素のまま数えると1つ多くなる */
+  const mat = read('lib/materials.js')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  const 直呼び = (mat.match(/functions\.invoke\('generate-material'/g) ?? []).length
+  ok(直呼び === 2,
+    '生成の窓口を直に呼ぶのは、askGen と checkGenGateway の2か所だけ',
+    `いま ${直呼び} か所`)
+  ok(/async function askGen\(/.test(mat) && /askWithRetry\(/.test(mat),
+    'askGen が、やり直しの仕組みを通している')
+  /* **版を訊く道は、やり直さない。** あれはわざと断らせる道なので、
+     二度送っても断りが二度出るだけである */
+  const 版訊き = /export async function checkGenGateway[\s\S]*?\n}/.exec(mat)?.[0] ?? ''
+  ok(版訊き && !/askGen\(/.test(版訊き),
+    '版を訊く道は、やり直さない(わざと断らせる道である)')
+
+  /* **5つの窓口が、全部この知らせを使っているか。**
+     1つでも書き写しに戻ったら、そこだけ古い文言のまま残る */
+  const 使い = (mat.match(/genCutNote\('/g) ?? []).length
+  ok(使い === 5, '教材 / 訳 / 文法解説 / 単語帳 / 添削 の5つとも、同じ知らせを使う',
+    `いま ${使い} か所`)
+  for (const 名 of ['教材の生成', 'カタマリごとの訳', '文法解説', '単語帳の語句', '添削']) {
+    ok(mat.includes(`genCutNote('${名}'`), `知らせが「${名}」と名乗る`)
+  }
+  /* **あの誤診の文が、生成の側に残っていないこと。**
+     `create-user` は別の窓口なので、そちらは数えない */
+  const 誤診 = /generate-material を配置したか確認/.test(mat)
+    || /generate-material を配置し直したか確認/.test(mat)
+  ok(!誤診, '「generate-material を配置したか確認してください」が残っていない')
 }
 
 console.log(ng
