@@ -44,6 +44,12 @@ export default function AnswerEn({
   className = '',
   /** 訳の行の見た目。画面ごとに地色が違う */
   jaClassName = 'answer-ja',
+  /**
+   * **語を押して意味を引けるか**(`EnglishText` と同じ値をそのまま渡す)。
+   * 集中モードは `'always'` —— 狭い画面でも押せる(第5.209節)。
+   * **ここで判じ直さない。** 判断は `EnglishText` 1か所である
+   */
+  tappable = 'auto',
 }) {
   const body = String(text ?? '').trim()
   if (!body) return null
@@ -51,7 +57,8 @@ export default function AnswerEn({
     <>
       <div className={className}>
         <span aria-hidden="true">→ </span>
-        <EnglishText text={body} level={level} statuses={statuses} onMark={onMark} />
+        <EnglishText text={body} level={level} statuses={statuses} onMark={onMark}
+                     tappable={tappable} />
       </div>
       {String(ja ?? '').trim() && <div className={jaClassName}>{ja}</div>}
       {clipVoice !== undefined && answerHasAudio(typeId) && (

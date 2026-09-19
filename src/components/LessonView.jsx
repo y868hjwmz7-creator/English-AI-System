@@ -34,10 +34,14 @@ import {
   SpeakerIcon, StepsIcon, StopIcon,
 } from './Icons.jsx'
 import FocusFrame from './FocusFrame.jsx'
+import GrammarNote from './GrammarNote.jsx'
 import FocusReader from './FocusReader.jsx'
 import InkLayer from './InkLayer.jsx'
 import LessonNotes from './LessonNotes.jsx'
 import { loadMyLearners } from '../lib/materials.js'
+/* **文法解説を出すかどうかの判断は `grammarNote.js` 1か所**(0051)。
+   画面で `item.grammar` を直に見ない */
+import { grammarOf } from '../lib/grammarNote.js'
 /* 書き込みの色・道具・太さは `src/data/inkTools.js` 1か所。
    **集中モードでも同じものを出す**ので、ここには持たない */
 import { INK_COLORS, INK_TOOLS, INK_WIDTH } from '../data/inkTools.js'
@@ -685,6 +689,31 @@ export default function LessonView({
 
   /** その問の解答が出ているか */
   const isOpen = (k) => openItems.has(k)
+
+  /**
+   * ── **文法解説を、集中モードでなくても見られるようにする**
+   *    (第5.209節・2026-09 利用者の指定)────────────────────
+   *
+   *   > 文法を見るのはそもそも集中モードでない場所で見れませんか?
+   *   > もし変更を加えるなら全ての場所で同じようにしてください。
+   *
+   *   これまで文法解説は**本文の集中モード(`FocusReader`)の中だけ**に
+   *   あった。紙の上からは開けないので、**開くために集中モードへ入る**
+   *   必要があった。
+   *
+   *   ここは**トレーナーの教材もゲストの教材も、同じ `LessonView`**が
+   *   描いている。だからここに置けば、**全ての場所で同じ**になる。
+   *
+   *   **解答とは別に覚える。** 答えを見ずに文法だけ見たいことがある。
+   */
+  const [gramItems, setGramItems] = useState(() => new Set())
+  const gramOpen = (k) => gramItems.has(k)
+  const toggleGram = (k) => {
+    const next = new Set(gramItems)
+    if (next.has(k)) next.delete(k)
+    else next.add(k)
+    setGramItems(next)
+  }
 
   /** その問の解答を出す / 隠す */
   const toggleItem = (k) => {
@@ -1752,6 +1781,19 @@ export default function LessonView({
     const secTier = voiceTierFor({ exerciseType: sec.exercise_type, tags: allTags })
     const k = (it, i) => key(it, i, si)
     /**
+     * ── **集中モードでは、幅によらず語を押せる**(第5.209節・2026-09 実機)──
+     *
+     *   > 文型トレーニングの集中モードで単語の意味を調べられません
+     *
+     *   `EnglishText` は、**狭い画面ではふだん語を押せなくしている** ——
+     *   語のタップと画面送りが、同じ指の動きから始まるためである。
+     *   **集中モードには送るものが無い**ので、その喧嘩は起きない。
+     *   本文の集中モード(`FocusReader`)は `'always'` を渡しているのに、
+     *   **こちらで渡し忘れていた。** 押せないと `<button>` ですらなくなるので、
+     *   iPhone では「コピー / Google で検索」が出ていた。
+     */
+    const tap = only != null ? 'always' : 'auto'
+    /**
      * **集中モードでの番号**(2026-09 利用者の指定)。
      *
      *   > KENJI が大体画面の中心に来ている時は集中モードを押したら
@@ -1854,6 +1896,7 @@ export default function LessonView({
                                       **本文のときだけ** — 集中モードは本文を出す画面
                                       なので、ドリルや単語では行き先が無い
                                       (右下の「集中モード」を出す条件と同じ) */
+                                   tappable={tap}
                                    onNeedFocus={secIsPassage ? openFocus : null}
                                    readingAt={speakingKey === k(it, i) ? readingAt : null} />
                     </div>
@@ -1873,7 +1916,8 @@ export default function LessonView({
                   {it.question && (
                     <div className="lesson-en">
                       <EnglishText text={it.question} level={material.level}
-                                   statuses={wordStatuses} onMark={markWord} />
+                                   statuses={wordStatuses} onMark={markWord}
+                                   tappable={tap} />
                     </div>
                   )}
                   {/* 設問の訳(0035)。**伏せない。**
@@ -1914,6 +1958,14 @@ export default function LessonView({
                       これまでどおり。** あちらは「段落」ではなく、
                       1問ずつ聴き比べるためのものである
                       (言われた場所だけを直す)。 */}
+                  {/* ── **Listen / 訳 / 文法 は、1つの行にまとめる**
+                      (第5.209節・2026-09 利用者の指摘
+                       「訳を見たり文法を見るためのボタンもわかりにくすぎます」)。
+
+                      **隙間は `gap` で作る。余白で作らない**(CLAUDE.md)——
+                      これまで `.lesson-reveal` が `margin-left` を持っていて、
+                      **横に並べる相手が変わると効かなくなる**形だった */}
+                  <div className="lesson-acts no-print">
                   {secIsPassage ? null
                     : secType?.audioFrom && it[secType.audioFrom]
                     && playingAll && speakingKey === k(it, i) ? (
@@ -1971,6 +2023,24 @@ export default function LessonView({
                     </button>
                   )}
 
+                  {/* ── **文法**(0051・第5.209節)。**解答とは別のボタン**───
+                      答えを見ずに、文の組み立てだけ確かめたいことがある。
+                      **解説が無い問には出さない**(効かない操作を見せない) ——
+                      いまは本文(記事・会話)にだけ作られている */}
+                  {(grammarOf(it) ?? []).length > 0 && (
+                    <button type="button" className="btn btn--small lesson-reveal"
+                            aria-expanded={gramOpen(k(it, i))}
+                            onClick={() => toggleGram(k(it, i))}>
+                      {gramOpen(k(it, i)) ? '文法を隠す' : '文法を見る'}
+                    </button>
+                  )}
+
+                  </div>
+
+                  {gramOpen(k(it, i)) && (
+                    <GrammarNote sentences={grammarOf(it)} unit="文" />
+                  )}
+
                   {isOpen(k(it, i)) && (
                     <>
                       {/* リスニングは英文を見せずに聞かせる。答え合わせでは
@@ -1996,6 +2066,7 @@ export default function LessonView({
                         voice={voiceFor(secCast, it.speaker)}
                         clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                         tier={secTier} rate={rateOf(rateId)}
+                        tappable={tap}
                       />
                       {it.answer_alt && <div className="lesson-note">別解: {it.answer_alt}</div>}
                       {it.note && <div className="lesson-note">{it.note}</div>}

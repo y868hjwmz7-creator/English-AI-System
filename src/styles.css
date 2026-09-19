@@ -5529,7 +5529,24 @@ html, body { overflow-x: clip; }
 }
 
 /* レッスン表示:1問ずつの解答 */
-.lesson-reveal { margin-top: 6px; margin-left: 8px; }
+/* ── **Listen / 訳 / 文法 の行**(第5.209節・2026-09 利用者の指摘)────
+   > 訳を見たり文法を見るためのボタンもわかりにくすぎます
+
+   **隙間は `gap` で作る。余白で作らない**(CLAUDE.md)——
+   `.lesson-reveal` が持っていた `margin-left` は、
+   **横に並ぶ相手が変わると効かなくなる**形だった。
+   **指で押せる大きさ(44px)を下回らせない** */
+.lesson-acts {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-8); margin-top: 8px;
+}
+.lesson-acts .btn { min-height: 44px; }
+/* **押せることが目で分かる形にする。** ふちと文字の色と太さの3つで示し、
+   **色だけに頼らない**(CLAUDE.md) */
+.lesson-reveal {
+  margin: 0;
+  border-color: var(--accent); color: var(--accent); font-weight: 700;
+}
 .lesson-heard {
   margin-top: 6px; padding: 6px 10px;
   border-left: 4px solid var(--accent); border-radius: 0 var(--r-6) var(--r-6) 0;
@@ -7799,7 +7816,15 @@ button.wbfilter-ctl { text-align: left; }
 }
 
 /* 送りボタンは**縮ませない。** 名前が縮むより、押せることが先 */
-.focus-move { flex: 0 0 auto; min-width: 72px; }
+/* ── **送り戻しは、指で押せる大きさに**(第5.209節・2026-09 利用者の指摘)──
+   > 発言や段落を進めたり戻したりするボタンが小さすぎる
+
+   狭い画面でも **44px を下回らせない**(指の当たり)。
+   幅も広げ、**文字も大きく太く**する */
+.focus-move {
+  flex: 0 0 auto; min-width: 104px; min-height: 48px;
+  font-size: var(--fs-16); font-weight: 700;
+}
 .focus-mid {
   flex: 1 1 auto; min-width: 0;
   display: flex; align-items: center; justify-content: center; gap: var(--sp-8);
@@ -7865,14 +7890,14 @@ button.wbfilter-ctl { text-align: left; }
   .focus-bar { gap: var(--sp-6); padding-left: 10px; padding-right: 10px; }
   .focus-bar .btn { font-size: var(--fs-12); padding: 5px 8px; }
   .focus-mid { gap: var(--sp-6); }
-  .focus-move { min-width: 60px; }
+  .focus-move { min-width: 84px; min-height: 46px; }
 }
 
 /* 狭い画面。**言葉を短く → 余白を詰める**の順(CLAUDE.md) */
 @media (max-width: 400px) {
   .focus-top, .focus-bar { padding-left: 12px; padding-right: 12px; }
   .focus-body { padding: 16px 12px; }
-  .focus-move { min-width: 60px; }
+  .focus-move { min-width: 84px; min-height: 46px; }
   .focus-en, .focus-ja { font-size: var(--fs-18); line-height: 1.9; }
 }
 
