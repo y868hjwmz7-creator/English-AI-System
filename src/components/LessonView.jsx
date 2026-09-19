@@ -41,7 +41,7 @@ import LessonNotes from './LessonNotes.jsx'
 import { loadMyLearners } from '../lib/materials.js'
 /* **文法解説を出すかどうかの判断は `grammarNote.js` 1か所**(0051)。
    画面で `item.grammar` を直に見ない */
-import { grammarOf } from '../lib/grammarNote.js'
+import { grammarFull, grammarOf } from '../lib/grammarNote.js'
 /* 書き込みの色・道具・太さは `src/data/inkTools.js` 1か所。
    **集中モードでも同じものを出す**ので、ここには持たない */
 import { INK_COLORS, INK_TOOLS, INK_WIDTH } from '../data/inkTools.js'
@@ -2045,7 +2045,8 @@ export default function LessonView({
                   </div>
 
                   {gramOpen(k(it, i)) && (
-                    <GrammarNote sentences={grammarOf(it, sec.exercise_type)} unit="文" />
+                    <GrammarNote sentences={grammarOf(it, sec.exercise_type)} unit="文"
+                                 full={grammarFull(it, sec.exercise_type)} />
                   )}
 
                   {isOpen(k(it, i)) && (

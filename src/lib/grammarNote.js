@@ -84,6 +84,59 @@ const norm = (text) => String(text ?? '').replace(/\s+/g, ' ').trim()
 const tight = (text) => String(text ?? '').replace(/\s+/g, '')
 
 /**
+ * **字と数字だけを残す。** 句読点も空白も落とす。
+ *
+ * 【なぜ `tight()` と2つ要るのか】(第5.211節・2026-09 実機)
+ *
+ *   `tight()` は空白だけを落とすので、**句読点は残る。**
+ *   1文の中では、それでよい —— かたまりをつないで元の文に戻るかを
+ *   見るときは、`,` や `"` が落ちていないことまで見たい。
+ *
+ *   ところが**文と文のあいだ**では、それが仇になった。
+ *
+ *       Let's see . . . there's a 7:15 departure in the morning.
+ *
+ *   これを文に切ると、**2つめが `"."` だけ**になる。
+ *   `.` に S も V も無いので解説は作れず、
+ *   「1文でも欠けたら項目ごと返さない」で**発言まるごと消えていた**
+ *   (実機の写真。Mary の発言にだけ「文法を見る」が出ていなかった)。
+ *
+ *   **字と数字で見れば、句読点だけの「文」は最初から数に入らない。**
+ *   抜けたのが本物の文なら、字が足りなくなるので必ず気づく。
+ *
+ * **第5.206節(ハイライトが消えた)とまったく同じ穴である。**
+ * あのとき片方だけ直して、こちらを残していた。
+ */
+const bones = (text) => String(text ?? '').replace(/[^\p{L}\p{N}]/gu, '')
+
+/**
+ * 控えた文が、元の英文の**どこに当たるか**を、順に歩いて当てる。
+ *
+ * **並び順どおりに、重ならずに収まっていること**まで見る。
+ * 1つでも見つからなければ `null` —— その控えは信用しない
+ * (別の文の解説が出るくらいなら、何も出さないほうがよい)。
+ *
+ * **位置の物差しは1つ**(`bones`)。出す側(`grammarForPiece`)と
+ * 確かめる側(`storedGrammar`)で別々に数えると、かならず食い違う。
+ *
+ * @returns {{s: object, start: number, end: number}[]|null} 字と数字で数えた位置
+ */
+function placeSentences(list, fullText) {
+  const all = bones(fullText)
+  const out = []
+  let at = 0
+  for (const s of list ?? []) {
+    const b = bones(s?.en)
+    if (!b) return null
+    const i = all.indexOf(b, at)
+    if (i < 0) return null
+    out.push({ s, start: i, end: i + b.length })
+    at = i + b.length
+  }
+  return out
+}
+
+/**
  * **その項目の、解説する英文。** 無ければ空文字。
  *
  * 【なぜ項目だけでは決まらないか】(2026-09 利用者の指摘)
@@ -135,6 +188,23 @@ export const grammarTodo = (sections) =>
   grammarItems(sections).filter((x) => needsGrammar(x.item, x.type))
 
 /**
+ * **その英文の、どこまでに札が付いたか。** 全部なら `true`。
+ *
+ * **数え方はここ1か所。** 項目まるごと(`grammarFull`)でも、
+ * 割ったかけら(`FocusReader`)でも、同じ物差しで数える ——
+ * 別々に数えると、片方だけ「出していない文があります」と出る。
+ *
+ * 句読点だけの「文」は、字も数字も持たないので**数に入らない。**
+ * だから `Let's see . . .` は「全部に札が付いた」になる。
+ */
+export function grammarCovers(list, text) {
+  const spots = placeSentences(list, text)
+  if (!spots) return false
+  const covered = spots.reduce((n, x) => n + (x.end - x.start), 0)
+  return covered >= bones(text).length
+}
+
+/**
  * 教材の項目から、解説を作らせる一覧を組み立てる。
  *
  * **1項目(段落 / 発言 / 1問)= 1件。** 文はこちらで切って渡す。
@@ -147,7 +217,16 @@ export function grammarPlan(list) {
   return (list ?? [])
     .map((x, n) => {
       const en = grammarTextOf(x?.item, x?.type)
-      return { no: n + 1, item: x?.item, en: norm(en), sentences: splitEnSentences(en) }
+      return {
+        no: n + 1,
+        item: x?.item,
+        en: norm(en),
+        /* **字も数字も無い「文」は、はじめから送らない**(第5.211節)。
+           `Let's see . . .` を切ると `"."` だけの「文」ができるが、
+           そこに S も V も無い。**作れないものを頼まない** ——
+           頼めば窓口はそのぶん課金し、返ってきたものは必ず落ちる */
+        sentences: splitEnSentences(en).filter((t) => bones(t)),
+      }
     })
     .filter((p) => p.sentences.length > 0)
 }
@@ -237,40 +316,76 @@ function cleanSentence(raw) {
 }
 
 /**
- * その項目の控えを取り出す。**英文が変わっていたら返さない。**
+ * その項目の控えを読む。**英文が変わっていたら返さない。**
  *
  * あとから本文を直すと、解説と文の対が狂う。
- * **1文でも欠けたら、その項目ごと返さない**(虫食いの解説は、
- * どの文に解説が付いているのかが読む側から分からない)。
  *
- * @returns {{en: string, pattern: string, parts: {t: string, r: string}[], note: string}[]|null}
+ * 【**落とすのは、その1文だけ**】(第5.211節・2026-09 実機の指摘)
+ *
+ *   > 文法ボタンが表示される発言や段落とされないものがあります
+ *
+ *   もとは「**1文でも欠けたら、その項目ごと返さない**」だった。
+ *   虫食いの解説を出さないための決まりだったが、実機では
+ *   **1文のせいで発言まるごと消える**ほうが、ずっと害が大きかった。
+ *
+ *       Let's see . . . there's a 7:15 departure in the morning. …
+ *              ↑ ここが `"."` だけの「文」になり、S も V も無い
+ *
+ *   しかも `GrammarNote` は**1文ごとに、その英文そのものを出す。**
+ *   「どの文に解説が付いているのか分からない」は起きない。
+ *
+ *   **代わりに、順番と場所は厳しく見る**(`placeSentences`)。
+ *   控えた文が、元の英文の中に**並び順どおり・重ならずに**
+ *   収まっていなければ、これまでどおり項目ごと返さない ——
+ *   **別の文の解説が出るくらいなら、何も出さないほうがよい。**
+ *
+ * 【`splitEnSentences()` で数え直さない】
+ *   略語の決まり(`ABBREVIATIONS`)を直すと文の数が変わるので、
+ *   数え直すと**すでに作った解説が丸ごと出なくなる**
+ *   (カタマリの訳で一度踏んだ穴。だから控えた文そのものを持っている)。
+ *
+ * @returns {{list: object[], full: boolean}} `full` は**全部の文に札が付いたか**
  */
-export function storedGrammar(item, typeId) {
+function readGrammar(item, typeId) {
+  const none = { list: [], full: true }
   const en = grammarTextOf(item, typeId)
-  if (!en) return null
+  if (!en) return none
   const g = item?.grammar
-  if (!g || typeof g !== 'object') return null
-  if (norm(g.en) !== norm(en)) return null
+  if (!g || typeof g !== 'object') return none
+  if (norm(g.en) !== norm(en)) return none
   const raw = Array.isArray(g.sentences) ? g.sentences : null
-  if (!raw?.length) return null
+  if (!raw?.length) return none
 
   const out = []
   for (const s of raw) {
     const c = cleanSentence(s)
-    if (!c) return null
-    out.push(c)
+    // **その1文だけ落とす。** 項目ごとは落とさない
+    if (c) out.push(c)
   }
-  /* **控えた文をつないで、本文に戻ることを見る。**
-     ここを見ないと、文が1つ足りない控えでも通ってしまい、
-     **最後の1文だけ解説の無い**教材ができる。
+  if (!out.length) return none
 
-     **`splitEnSentences()` で数え直さない。** 略語の決まり
-     (`ABBREVIATIONS`)を直すと文の数が変わるので、数え直すと
-     **すでに作った解説が丸ごと出なくなる**(カタマリの訳で
-     一度踏んだ穴。だから `chunks.parts` を控えている)。 */
-  if (tight(out.map((s) => s.en).join(' ')) !== tight(en)) return null
-  return out
+  // 並び順どおりに、重ならずに収まっているか
+  if (!placeSentences(out, en)) return none
+  return { list: out, full: grammarCovers(out, en) }
 }
+
+/**
+ * その項目の控えを取り出す。無ければ `null`。
+ *
+ * @returns {{en: string, pattern: string, parts: {t: string, r: string}[], note: string}[]|null}
+ */
+export function storedGrammar(item, typeId) {
+  const { list } = readGrammar(item, typeId)
+  return list.length ? list : null
+}
+
+/**
+ * **全部の文に札が付いたか。**
+ *
+ * `false` のときは、画面が1行そえる(**黙って落とさない**・CLAUDE.md)。
+ * 短い相づち(`Sure.` のような、動詞の無い返事)では起こりうる。
+ */
+export const grammarFull = (item, typeId) => readGrammar(item, typeId).full
 
 /**
  * その項目の解説を、**作り直したほうがよいか。**
@@ -285,6 +400,10 @@ export function storedGrammar(item, typeId) {
  */
 export function needsGrammar(item, typeId) {
   if (!grammarTextOf(item, typeId)) return false
+  /* **1文でも札が付いていれば、作り直さない**(第5.211節)。
+     ここを `grammarFull()` にすると、`Sure.` のような
+     動詞の無い返事が1つ混じっているだけで**開くたびに課金される。**
+     窓口に頼み直しても、同じものが返ってくる */
   return !storedGrammar(item, typeId)
 }
 
@@ -372,16 +491,15 @@ export function grammarForPiece(sentences, fullText, at, pieceText) {
   if (!list.length) return []
   // 割っていないときは、そのまま全部(**余計な計算をしない**)
   if (at == null || !pieceText) return list
-  const start = tight(String(fullText ?? '').slice(0, at)).length
-  const end = start + tight(pieceText).length
-  const out = []
-  let n = 0
-  for (const s of list) {
-    const a = n
-    n += tight(s.en).length
-    if (a >= start && n <= end) out.push(s)
-  }
-  return out
+  /* **位置は `placeSentences()` 1か所で当てる**(第5.211節)。
+     以前はここで「前の文の長さを足していく」形で数えていたが、
+     **札の付かない文が1つあると、そこから先が全部ずれる。**
+     探して当てれば、抜けがあってもずれない */
+  const spots = placeSentences(list, fullText)
+  if (!spots) return []
+  const start = bones(String(fullText ?? '').slice(0, at)).length
+  const end = start + bones(pieceText).length
+  return spots.filter((x) => x.start >= start && x.end <= end).map((x) => x.s)
 }
 
 /**

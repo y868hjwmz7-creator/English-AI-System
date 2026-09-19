@@ -3234,7 +3234,7 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
    ══════════════════════════════════════════════════════════════════ */
 {
   const {
-    PATTERNS, ROLES, VIEWS, grammarForPiece, grammarItems, grammarPlan,
+    PATTERNS, ROLES, VIEWS, grammarForPiece, grammarFull, grammarItems, grammarPlan,
     hasOtherView, needsGrammar, nextView, storedGrammar,
   } = await import('../src/lib/grammarNote.js')
 
@@ -3279,29 +3279,109 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(needsGrammar({ ...good, prompt_en: `${EN} And more.` }, 'article'),
     '文法解説 … 英文が変わっていたら作り直す')
 
-  // ── **つないで元の文に戻らなければ、その項目ごと返さない** ──
+  /* ── **落とすのは、その1文だけ**(第5.211節)────────────────
+     もとは「1文でも欠けたら項目ごと返さない」だったが、実機では
+     **1文のせいで発言まるごと消える**ほうが害が大きかった。
+     いまは**その文だけ札を出さず、ほかは出す。**
+     出していない文があることは `grammarFull()` が `false` で知らせる。
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+     `full` を見ないと、**全部の文を落とす形**に壊しても緑のままになる */
+
+  // ── かたまりをつないで元の文に戻らない文は、その文だけ落ちる ──
   /* **動詞を落とさない。** それだと「動詞が無い」の見張り(③)にも
      引っかかるので、この行だけを外しても赤くならない
      (実際にそうなった)。**飾り(M)を落として、②だけを試す** */
   const dropped = JSON.parse(JSON.stringify(good))
   dropped.grammar.sentences[0].parts.splice(3, 1)   // `last week.` を落とす
-  ok(storedGrammar(dropped, 'article') === null,
-    '文法解説 … かたまりをつないで元の文に戻らなければ返さない')
+  ok(storedGrammar(dropped, 'article')?.length === 1
+    && storedGrammar(dropped, 'article')[0].en.startsWith('She'),
+  '文法解説 … 元の文に戻らない文は、その文だけ落ちる(ほかは出る)')
+  ok(grammarFull(dropped, 'article') === false,
+    '文法解説 … 落ちた文があることを、画面に知らせる')
 
-  // ── **知らない役が混じっていたら返さない** ──
+  // ── 知らない役が混じっている文も、その文だけ落ちる ──
   const weird = JSON.parse(JSON.stringify(good))
   weird.grammar.sentences[1].parts[1].r = 'X'
-  ok(storedGrammar(weird, 'article') === null, '文法解説 … 知らない役が混じっていたら返さない')
+  ok(storedGrammar(weird, 'article')?.length === 1 && !grammarFull(weird, 'article'),
+    '文法解説 … 知らない役が混じっている文は、その文だけ落ちる')
 
-  // ── **動詞が無い文は返さない**(文の解説になっていない) ──
+  // ── 動詞が無い文も、その文だけ落ちる(`Sure.` のような短い返事) ──
   const noV = JSON.parse(JSON.stringify(good))
   noV.grammar.sentences[1].parts[1].r = 'M'
-  ok(storedGrammar(noV, 'article') === null, '文法解説 … 動詞が1つも無ければ返さない')
+  ok(storedGrammar(noV, 'article')?.length === 1 && !grammarFull(noV, 'article'),
+    '文法解説 … 動詞が1つも無い文は、その文だけ落ちる')
 
-  // ── **文が1つ足りなければ返さない**(最後の1文だけ解説が無い、を防ぐ) ──
+  // ── 文が1つ足りないときも、あるぶんは出し、足りないことを知らせる ──
   const short = JSON.parse(JSON.stringify(good))
   short.grammar.sentences.pop()
-  ok(storedGrammar(short, 'article') === null, '文法解説 … 文が足りなければ返さない')
+  ok(storedGrammar(short, 'article')?.length === 1 && !grammarFull(short, 'article'),
+    '文法解説 … 文が足りなければ、足りないと知らせる')
+
+  /* ── **それでも項目ごと落とすもの。**
+        ここを緩めると、**別の文の解説が出る** ── */
+  const alien = JSON.parse(JSON.stringify(good))
+  alien.grammar.sentences[1] = {
+    en: 'The dog ran away.',
+    pattern: 'SV',
+    parts: [{ t: 'The dog', r: 'S' }, { t: 'ran', r: 'V' }, { t: 'away.', r: 'M' }],
+    note: '',
+  }
+  ok(storedGrammar(alien, 'article') === null,
+    '文法解説 … 本文に無い文が混じっていたら、項目ごと返さない')
+
+  const flipped = JSON.parse(JSON.stringify(good))
+  flipped.grammar.sentences.reverse()
+  ok(storedGrammar(flipped, 'article') === null,
+    '文法解説 … 並び順が入れ替わっていたら、項目ごと返さない')
+
+  /* ── **これが実機で起きたもの**(第5.211節)────────────────
+     `Let's see . . .` を文に切ると `"."` だけの「文」ができる。
+     S も V も無いので札を付けようがなく、**発言まるごと消えていた** ── */
+  const DOTS = "Let's see . . . there's a 7:15 departure in the morning."
+  const dots = {
+    prompt_en: DOTS,
+    grammar: {
+      en: DOTS,
+      sentences: [
+        {
+          en: "Let's see .",
+          pattern: '',
+          parts: [{ t: "Let's", r: 'V' }, { t: 'see .', r: 'M' }],
+          note: '',
+        },
+        // **窓口はこれにも札を付けようとする。** 付けようがないので落ちる
+        { en: '.', pattern: '', parts: [{ t: '.', r: 'M' }], note: '' },
+        {
+          en: ". there's a 7:15 departure in the morning.",
+          pattern: 'SVC',
+          parts: [
+            { t: '.', r: 'M' }, { t: "there's", r: 'V' },
+            { t: 'a 7:15 departure', r: 'S' }, { t: 'in the morning.', r: 'M' },
+          ],
+          note: '',
+        },
+      ],
+    },
+  }
+  ok(storedGrammar(dots, 'dialogue')?.length === 2,
+    '文法解説 … 句読点だけの「文」があっても、発言まるごとは落ちない',
+    String(storedGrammar(dots, 'dialogue')?.length))
+  /* **注意書きも出さない。** 句読点は字でも数字でもないので、
+     「出していない文がある」には当たらない(出す文は全部出ている) */
+  ok(grammarFull(dots, 'dialogue') === true,
+    '文法解説 … 句読点だけの「文」は、足りない文として数えない')
+  ok(needsGrammar(dots, 'dialogue') === false,
+    '文法解説 … すでに作ってある解説は、作り直さない(課金しない)')
+
+  /* **窓口にも、はじめから送らない**(作れないものを頼まない = 0円) */
+  const dotPlan = grammarPlan(grammarItems([
+    { exercise_type: 'dialogue', items: [{ prompt_en: DOTS }] },
+  ]))
+  ok(dotPlan[0].sentences.length === 2
+    && dotPlan[0].sentences.every((t) => /[A-Za-z]/.test(t)),
+  '文法解説 … 句読点だけの「文」は、窓口に送らない',
+  JSON.stringify(dotPlan[0].sentences))
 
   // ── **空白の入り方の違いだけでは落とさない** ──
   const spacey = JSON.parse(JSON.stringify(good))
@@ -3326,6 +3406,31 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     JSON.stringify(piece2.map((s) => s.en)))
   ok(grammarForPiece(storedGrammar(good, 'article'), EN, null, null).length === 2,
     '文法解説 … 割っていないときは、そのまま全部')
+
+  /* **札の付かない文があっても、位置がずれないこと**(第5.211節)。
+     以前は「前の文の長さを足していく」形で数えていたので、
+     **抜けが1つあると、そこから先が全部ずれていた** */
+  const piece3 = grammarForPiece(
+    storedGrammar(dots, 'dialogue'), DOTS,
+    DOTS.indexOf(". there's"), DOTS.slice(DOTS.indexOf(". there's")),
+  )
+  ok(piece3.length === 1 && /departure/.test(piece3[0].en),
+    '文法解説 … 札の付かない文があっても、かけらの当てはめがずれない',
+    JSON.stringify(piece3.map((x) => x.en)))
+  ok(grammarForPiece(storedGrammar(dots, 'dialogue'), DOTS, 0,
+    DOTS.slice(0, DOTS.indexOf(". there's"))).length === 1,
+  '文法解説 … 前半のかけらには、前半の文だけが出る')
+
+  /* **落ちたのが「字を持つ文」のときこそ、ずれる。**
+     `dots` の落ちた文は `.` だけなので字を持たず、
+     **足し算で数えても同じ答えになってしまう**(それだと見張りにならない)。
+     ここでは**1文めが丸ごと落ちた**控えで、2文めの位置を見る ——
+     足し算だと 0 文字めから数え直すので、かけらに入らなくなる */
+  const only2 = storedGrammar(dropped, 'article')
+  ok(only2?.length === 1, '文法解説 … 1文めが落ちた控えは、2文めだけが残る')
+  ok(grammarForPiece(only2, EN, at, EN.slice(at)).length === 1,
+    '文法解説 … 字を持つ文が落ちても、残った文の位置はずれない',
+    JSON.stringify(grammarForPiece(only2, EN, at, EN.slice(at)).map((x) => x.en)))
 
   // ── 見せ方は1つのボタンで回る。**無いものは飛ばす** ──
   ok(VIEWS.join(',') === 'en,ja,grammar', '文法解説 … 見せ方は 英語 → 訳 → 文法 の順')

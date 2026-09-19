@@ -210,6 +210,36 @@ const material = asSpeech ? {
     id: 'sec-1', exercise_type: 'translate_en_ja', title: '英文和訳',
     items: [
       {
+        /* **実機で消えていた形**(第5.211節・2026-09 利用者の写真)。
+           `. . .` を文に切ると `"."` だけの「文」ができ、
+           S も V も無いので札を付けようがない。**窓口の控えにも
+           その1文が入っている**(実機と同じ形にしてある) */
+        id: 'd-0', prompt_en: "Let's see . . . there's a 7:15 departure in the morning.",
+        answer: 'ええと……朝7時15分発があります。',
+        grammar: {
+          en: "Let's see . . . there's a 7:15 departure in the morning.",
+          sentences: [
+            {
+              en: "Let's see .",
+              pattern: '',
+              parts: [{ t: "Let's", r: 'V' }, { t: 'see .', r: 'M' }],
+              note: '',
+            },
+            // 札を付けようがない「文」。**ここだけ落ちる**
+            { en: '.', pattern: '', parts: [{ t: '.', r: 'M' }], note: '' },
+            {
+              en: ". there's a 7:15 departure in the morning.",
+              pattern: 'SVC',
+              parts: [
+                { t: '.', r: 'M' }, { t: "there's", r: 'V' },
+                { t: 'a 7:15 departure', r: 'S' }, { t: 'in the morning.', r: 'M' },
+              ],
+              note: '朝の便が1本あります、と言っています。',
+            },
+          ],
+        },
+      },
+      {
         id: 'd-1', prompt_en: 'She has just finished her report.',
         answer: '彼女はちょうど報告書を書き終えた。',
         /* **英文和訳の解説は、問題文(`prompt_en`)に付く**(第5.210節)。

@@ -341,6 +341,10 @@ for (const [label, want] of Object.entries(WANT)) {
     dock: !!document.querySelector('.player--dock'),
     launch: !!document.querySelector('.player-launch'),
     at: document.querySelector('.player-at')?.textContent?.trim() ?? null,
+    /* **いま開いているページの問数。** 操作盤の数と突き合わせる相手である。
+       **数を書き写さない**(CLAUDE.md)—— 骨組みに1問足しただけで
+       赤くなり、直っているのに直っていないように見える(2026-09 に踏んだ) */
+    items: document.querySelectorAll('.lesson-page:not(.is-closed) .lesson-items > li').length,
   }))
   /** ページを送る(◀ ▶ は帯の中にある) */
   const go = async (n) => {
@@ -358,8 +362,9 @@ for (const [label, want] of Object.entries(WANT)) {
   {
     const m = await seen()
     if (!m.bar) ng('文型ドリル(英文和訳)で、上の帯に操作盤が出ていない')
-    else if (!/3/.test(m.at ?? '')) ng('問数が出ていない', `「${m.at}」`)
-    else ok(`英文和訳 … 上の帯に操作盤が出る(${m.at})`)
+    else if (!m.items || !new RegExp(`/ *${m.items} `).test(m.at ?? '')) {
+      ng('問数が、画面に出ている問の数と合っていない', `「${m.at}」/ 画面は ${m.items} 問`)
+    } else ok(`英文和訳 … 上の帯に操作盤が出る(${m.at})`)
 
     /* **本文以外の Listen は残す**(2026-09 利用者の指定は「段落ごと」だけ)。
        ここが 0 になったら、削りすぎている */
@@ -7875,6 +7880,26 @@ for (const W of [1280, 794, 453, 390, 320]) {
   if (await 無し.locator('button', { hasText: '文法' }).count() === 0) {
     ok('文法 … 解説の無い問には、ボタンごと出さない')
   } else ng('文法 … 解説が無いのに「文法を見る」が出ている')
+
+  /* ── **実機で消えていた形**(第5.211節・利用者の写真)。
+        `Let's see . . .` を文に切ると `"."` だけの「文」ができる。
+        S も V も無いので札を付けようがなく、**発言まるごと
+        「文法を見る」が出なくなっていた** ── */
+  const 点 = 問("Let's see")
+  const 点ボタン = 点.locator('button', { hasText: '文法を見る' })
+  if (await 点ボタン.count()) {
+    ok('文法 … `. . .` を含む発言にも「文法を見る」が出る')
+    await 点ボタン.first().click()
+    await page.waitForTimeout(300)
+    const 数 = await 点.locator('.gnote-item').count()
+    if (数 === 2) ok(`文法 … 札の付く2文だけが出る(${数} 文)`)
+    else ng('文法 … 出る文の数が違う', String(数))
+    /* **注意書きは出さない。** 句読点は字でも数字でもないので、
+       「出していない文がある」には当たらない */
+    if (await 点.locator('.gnote-empty').count() === 0) {
+      ok('文法 … 句読点だけの「文」を、足りない文として数えていない')
+    } else ng('文法 … 出ている文は全部出ているのに、注意書きが出ている')
+  } else ng('文法 … `. . .` を含む発言に「文法を見る」が出ない')
 
   /* ── **出る側②(ここが要)** 誤り訂正。
         画面に出るのは**直した英文**であって、誤った文ではない。

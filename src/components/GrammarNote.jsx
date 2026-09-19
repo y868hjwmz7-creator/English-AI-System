@@ -41,7 +41,7 @@ import { PATTERNS, ROLES } from '../lib/grammarNote.js'
  *   意味を持つ画面なので、語ごとに押せると区切りが読み取りにくくなる。
  *   **調べるのは、英語を出しているとき**にする。
  */
-export default function GrammarNote({ sentences, unit = '段落' }) {
+export default function GrammarNote({ sentences, unit = '段落', full = true }) {
   const list = Array.isArray(sentences) ? sentences : []
   if (!list.length) {
     /* **黙って消さない**(CLAUDE.md)。まだ解説が入っていない教材があるので、
@@ -55,34 +55,46 @@ export default function GrammarNote({ sentences, unit = '段落' }) {
   }
 
   return (
-    <ol className="gnote">
-      {list.map((s, i) => (
-        <li className="gnote-item" key={`${i}-${s.en}`}>
-          {/* 文型は**眉**として上に置く。無い(読み取れなかった)ときは出さない
-              —— **あやふやなことを言わない** */}
-          {PATTERNS[s.pattern] && (
-            <p className="gnote-pat">{PATTERNS[s.pattern]}</p>
-          )}
-          <p className="gnote-en" lang="en">
-            {s.parts.map((p, k) => (
-              <span
-                key={`${k}-${p.t}`}
-                /* 骨組み(S / V / O / C)と飾り(M)の2つだけを分ける */
-                className={`gnote-part gnote-part--${p.r === 'M' ? 'mod' : 'core'}`}
-                title={`${p.r} … ${ROLES[p.r]?.label ?? ''}`}
-              >
-                <span className="gnote-t">{p.t}</span>
-                <span className="gnote-r">
-                  {p.r}
-                  {/* 読み上げ機には、日本語の名前も渡す(letter だけでは伝わらない) */}
-                  <span className="visually-hidden">（{ROLES[p.r]?.label ?? ''}）</span>
+    <>
+      <ol className="gnote">
+        {list.map((s, i) => (
+          <li className="gnote-item" key={`${i}-${s.en}`}>
+            {/* 文型は**眉**として上に置く。無い(読み取れなかった)ときは出さない
+                —— **あやふやなことを言わない** */}
+            {PATTERNS[s.pattern] && (
+              <p className="gnote-pat">{PATTERNS[s.pattern]}</p>
+            )}
+            <p className="gnote-en" lang="en">
+              {s.parts.map((p, k) => (
+                <span
+                  key={`${k}-${p.t}`}
+                  /* 骨組み(S / V / O / C)と飾り(M)の2つだけを分ける */
+                  className={`gnote-part gnote-part--${p.r === 'M' ? 'mod' : 'core'}`}
+                  title={`${p.r} … ${ROLES[p.r]?.label ?? ''}`}
+                >
+                  <span className="gnote-t">{p.t}</span>
+                  <span className="gnote-r">
+                    {p.r}
+                    {/* 読み上げ機には、日本語の名前も渡す(letter だけでは伝わらない) */}
+                    <span className="visually-hidden">（{ROLES[p.r]?.label ?? ''}）</span>
+                  </span>
                 </span>
-              </span>
-            ))}
-          </p>
-          {s.note && <p className="gnote-note">{s.note}</p>}
-        </li>
-      ))}
-    </ol>
+              ))}
+            </p>
+            {s.note && <p className="gnote-note">{s.note}</p>}
+          </li>
+        ))}
+      </ol>
+      {/* **黙って落とさない**(CLAUDE.md・第5.211節)。
+          `Sure.` のような動詞の無い短い返事には、骨組みを出しようがない。
+          **その1文だけ出さない**でほかは出すので、
+          「ここに1文あったはず」が読む側から分かるように1行そえる */}
+      {!full && (
+        <p className="gnote-empty">
+          この{unit}には、骨組みを出していない文があります
+          (Sure. のような、動詞の無い短い返事です)。
+        </p>
+      )}
+    </>
   )
 }

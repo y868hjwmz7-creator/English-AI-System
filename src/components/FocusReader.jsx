@@ -82,7 +82,7 @@ import { maxPieces, piecesOf } from '../lib/focusChunks.js'
 import GrammarNote from './GrammarNote.jsx'
 /* 文法解説(0051)。**見せ方の回し方も、ここ1か所が持つ** */
 import {
-  VIEW_LABEL, grammarForPiece, grammarOf, hasOtherView, nextView,
+  VIEW_LABEL, grammarCovers, grammarForPiece, grammarOf, hasOtherView, nextView,
 } from '../lib/grammarNote.js'
 
 /**
@@ -665,7 +665,11 @@ export default function FocusReader({
           {view === 'grammar' ? (
             /* 文法解説(0051)。**割った段落では、そのかけらのぶんだけ**
                (画面に無い文の解説を並べない) */
-            <GrammarNote sentences={gramHere} unit={unit} />
+            /* **いま出しているかけらの中で**、どこまで札が付いたかを見る
+               (第5.211節)。段落まるごとで数えると、別のかけらに
+               札の無い文があるだけで、ここにも注意書きが出る */
+            <GrammarNote sentences={gramHere} unit={unit}
+                         full={grammarCovers(gramHere, piece?.en ?? item.prompt_en)} />
           ) : showJa ? (
             <p className="focus-ja">
               {piece?.ja}
