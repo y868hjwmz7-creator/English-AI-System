@@ -9380,7 +9380,7 @@ button.wbfilter-ctl { text-align: left; }
       **隙間は `gap` で作る**(共通ルール) */
 .notes-day {
   display: grid;
-  gap: 8px;
+  gap: var(--sp-8);
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -9388,14 +9388,35 @@ button.wbfilter-ctl { text-align: left; }
 .notes-day-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-8);
   margin: 0;
   padding: 0;
   list-style: none;
 }
-/* 語は英字が続くので、**折り返せるようにする**(はみ出して押せなくならない) */
+/* **印を付けた語は、開くまで羅列しない**(2026-09 利用者の指定)。
+   何十語にもなるので、そのまま並べると記録が下へ押し出される。
+
+   **`<details>` そのものに `display` を書かない。** 畳んでいても
+   中身が場所を取り続ける(共通ルール)。並べるのは中の入れ物の役目 */
+.notes-words-head {
+  cursor: pointer;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+.notes-words-body {
+  display: grid;
+  gap: var(--sp-8);
+  margin-top: var(--sp-8);
+}
+/* 語は英字が続くので、**折り返せるようにする**(はみ出して押せなくならない)。
+   **`--ink-soft` は使わない** —— あれは紙(`.lesson-sheet` / `.focus-paper`)
+   の中だけの色で、ここでは何にも解決しない(2026-09 に踏んだ) */
 .notes-day-words {
   margin: 0;
   overflow-wrap: anywhere;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
+  font-size: var(--fs-13);
 }
+/* **押せるものを、行いっぱいに伸ばさない。** `grid` の子は既定で
+   横いっぱいになるので、中身なりの幅で左に置く */
+.notes-words-body .btn { justify-self: start; }

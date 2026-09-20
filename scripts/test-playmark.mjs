@@ -8334,8 +8334,8 @@ console.log('\n── セッションの記録を上へ(第5.219節)──')
 
   /* ⑧ **0 と「読めなかった」を取り違えない**(CLAUDE.md)。
         無い日は「ありません」と書く —— 黙って消さない */
-  ok(/この日にアサインされた教材はありません/.test(hwC)
-    && /この日に印を付けた語はありません/.test(hwC),
+  ok(/この日の教材はありません/.test(hwC)
+    && /印を付けた語はありません/.test(hwC),
     'その日のもの … 無い日は「ありません」と書く(黙って消さない)')
 
   /* ⑨ **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
@@ -8348,7 +8348,72 @@ console.log('\n── セッションの記録を上へ(第5.219節)──')
   ok(/印を付けた語/.test(hwC) && !/この日に出た語|この日に学んだ語/.test(hwC),
     'その日のもの … 語は「印を付けた語」と書く(実際より広く言わない)')
 
-  /* ⑪ **何で絞っているのかは、呼ぶ側が言う**(0053 と同じ話)。
+  /* ══ 見た目(第5.221節・2026-09 利用者の指定)══════════════════
+
+       > その日にチェックした単語のリストは開くまでは羅列する必要は
+       > ありません。また、ボタンが白く、見づらいです。青かグレー、
+       > いつものデザインに寄せてください。そして、余計な説明書きは
+       > 全て排除です。これは共通のルールにしてください。
+
+     **共通ルール**(`.claude/rules/common.md`)にした。ここでは
+     **この画面で守れているか**を見る。 */
+
+  /* ⑪ **説明の文を置かない。** 押せば分かる形にする */
+  {
+    const i記録 = hwC.indexOf('notes-card')
+    const 箱 = hwC.slice(i記録, hwC.indexOf('</details>', i記録))
+    ok(i記録 >= 0 && !/card-hint|<p className="tip/.test(箱),
+      '見た目 … セッションの記録に、説明の文を置いていない')
+  }
+
+  /* ⑪-2 **同じことを2つ見せない。** 畳む札(`<summary>`)が
+        「セッションの記録」を出しているので、`LessonNotes` の
+        見出しは消す(`bare`)。渡さないと**2回出る** */
+  ok(/<LessonNotes learnerId=\{learnerId\} bare /.test(hwC),
+    '見た目 … 「セッションの記録」の見出しが2回出ない(`bare` を渡す)')
+
+  /* ⑪-3 **白い箱を新しく作らない**(日付の欄)。既にある形から選ぶ */
+  ok(/className="btn btn--small btn--quiet notes-date"/.test(noC(notes)),
+    '見た目 … 日付の欄も、白いままではない(灰)')
+
+  /* ⑫ **語は、開くまで羅列しない。** 何十語にもなる ——
+        そのまま並べると、下にあるものが画面の外へ押し出される */
+  {
+    const i畳 = hwC.indexOf('<details className="notes-words">')
+    const i羅列 = hwC.indexOf('notes-day-words')
+    ok(i畳 >= 0 && i羅列 > i畳,
+      '見た目 … 印を付けた語は、開くまで羅列しない(数だけ出して畳む)',
+      `畳み ${i畳} / 羅列 ${i羅列}`)
+  }
+
+  /* ⑬ **白い箱を新しく作らない。** 既にある形(青 / 灰)から選ぶ。
+        **「出る」と「出ない」の両方を見る** —— 素のボタンが
+        残っていないことも数える */
+  {
+    const i箱 = hwC.indexOf('const dayBox')
+    const 中 = hwC.slice(i箱, hwC.indexOf('const shown', i箱))
+    const 素 = (中.match(/className="btn btn--small"/g) ?? []).length
+    ok(i箱 >= 0 && /btn--quiet/.test(中) && /btn--primary/.test(中) && 素 === 0,
+      '見た目 … その日の箱のボタンは、灰と青(白いままの素のボタンが無い)',
+      `素のボタン ${素} 個`)
+  }
+
+  /* ⑭ **`<details>` そのものに `display` を書かない。**
+        畳んでいても中身が場所を取り続ける(共通ルール) */
+  {
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    const i = css.indexOf('.notes-words-head')
+    ok(i > 0 && !/\.notes-words\s*\{[^}]*display/.test(css),
+      '見た目 … 畳む箱そのものに `display` を書いていない(中身が場所を取らない)')
+    /* **紙の中だけの色を、紙の外で使わない。**
+       `--ink-soft` は `.lesson-sheet` / `.focus-paper` でしか
+       決まっておらず、ここでは何にも解決しない(2026-09 に踏んだ) */
+    const 語 = css.slice(css.indexOf('.notes-day-words'), css.indexOf('.notes-day-words') + 200)
+    ok(!/--ink-soft/.test(語),
+      '見た目 … 紙の中だけの色(`--ink-soft`)を、紙の外で使っていない')
+  }
+
+  /* ⑮ **何で絞っているのかは、呼ぶ側が言う**(0053 と同じ話)。
         渡さないと、単語帳が**「この教材の語だけ」と出して嘘をつく** ——
         その日に印を付けた語は、どの教材の語でもない */
   {

@@ -178,7 +178,10 @@ export default function LessonNotes({
       <div className="notes-bar">
         <button type="button" className="btn btn--ghost btn--small"
                 aria-label="前の日" onClick={() => setDate((d) => shift(d, -1))}>‹</button>
-        <button type="button" className="btn btn--small notes-date"
+        {/* **白い箱を新しく作らない**(2026-09 利用者の指定・共通ルール)。
+            既にある形から選ぶ —— ここは「ならぶもの」なので灰
+            (`btn--quiet`)。両どなりの ‹ › は枠線だけ */}
+        <button type="button" className="btn btn--small btn--quiet notes-date"
                 onClick={(e) => setCalAt(calAt ? null : e.currentTarget)}
                 aria-expanded={!!calAt}>
           {withWeek(date)}{isToday ? ' 今日' : ''}

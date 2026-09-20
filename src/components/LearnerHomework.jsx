@@ -245,17 +245,20 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
   }
 
   const 知らなかった = dayWords.filter((w) => w.status === 'unknown')
+  /* **日付は出さない。** すぐ上の帯が、選んでいる日をもう出している
+     (同じことをするものを2つ見せない・CLAUDE.md)。
+     **説明の文も置かない**(2026-09 利用者の指定・共通ルール)。
+     ボタンは既にある形から選ぶ —— **白い箱を新しく作らない。**
+       灰(`btn--quiet`)… ならぶもの(その日の教材)
+       青(`btn--primary`)… 次に進むもの(単語帳で練習する) */
   const dayBox = !pickedDay ? null : (
     <div className="notes-day">
-      <p className="field-hint">
-        <strong>{formatDate(`${pickedDay}T00:00:00`)}</strong> のもの
-      </p>
       {/* ── その日にアサインされた教材 ───────────────────────── */}
       {dayItems.length > 0 ? (
         <ul className="notes-day-list">
           {dayItems.map((a) => (
             <li key={a.id}>
-              <button type="button" className="btn btn--small"
+              <button type="button" className="btn btn--small btn--quiet"
                       onClick={() => jumpTo(a.material?.id)}>
                 {a.material?.title || '(題名がありません)'}
               </button>
@@ -264,33 +267,39 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
         </ul>
       ) : (
         /* **黙って消さない。** 0 と「読めなかった」を取り違えない */
-        <p className="muted">この日にアサインされた教材はありません。</p>
+        <p className="muted">この日の教材はありません。</p>
       )}
       {/* ── その日に印を付けた語 ─────────────────────────────
+            **開くまで羅列しない**(2026-09 利用者の指定)。
+            語は何十個にもなるので、畳んでおかないと記録が押し出される。
             **「その日に出た語」ではない。** 押した語である ——
             分かっていないことを、分かったように書かない */}
       {dayWords.length > 0 ? (
-        <>
-          <p className="muted">
-            {`この日に印を付けた語 ${dayWords.length} 語`}
-            {知らなかった.length ? `(うち「知らなかった」${知らなかった.length} 語)` : ''}
-          </p>
-          <p className="notes-day-words" lang="en">
-            {dayWords.map((w) => w.word_norm).join(' / ')}
-          </p>
-          {onPracticeWords && (
-            <button type="button" className="btn btn--small"
-                    onClick={() => onPracticeWords(
-                      dayWords.map((w) => w.word_norm),
-                      formatDate(`${pickedDay}T00:00:00`),
-                      'この日に印を付けた語',
-                    )}>
-              単語帳でこの語だけ練習する
-            </button>
-          )}
-        </>
+        /* **`<details>` そのものに `display` を書かない。**
+           畳んでいても中身が場所を取り続ける(共通ルール) */
+        <details className="notes-words">
+          <summary className="notes-words-head">
+            印を付けた語 {dayWords.length} 語
+            {知らなかった.length ? `(まだ ${知らなかった.length})` : ''}
+          </summary>
+          <div className="notes-words-body">
+            <p className="notes-day-words" lang="en">
+              {dayWords.map((w) => w.word_norm).join(' / ')}
+            </p>
+            {onPracticeWords && (
+              <button type="button" className="btn btn--small btn--primary"
+                      onClick={() => onPracticeWords(
+                        dayWords.map((w) => w.word_norm),
+                        formatDate(`${pickedDay}T00:00:00`),
+                        'この日に印を付けた語',
+                      )}>
+                単語帳で練習する
+              </button>
+            )}
+          </div>
+        </details>
       ) : (
-        <p className="muted">この日に印を付けた語はありません。</p>
+        <p className="muted">印を付けた語はありません。</p>
       )}
     </div>
   )
@@ -348,11 +357,12 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
           <summary className="card-title">セッションの記録</summary>
           {notesOpen && (
             <>
-              <p className="tip card-hint">
-                レッスンで担当トレーナーが書いた記録です。
-                <strong>日付を選ぶと、その日の教材と、その日に印を付けた語も出ます。</strong>
-              </p>
-              <LessonNotes learnerId={learnerId} onDate={setPickedDay} />
+              {/* **説明の文は置かない**(2026-09 利用者の指定・共通ルール)。
+                  日付を選べば、その日のものが出る —— 触れば分かる */}
+              {/* **見出しは、畳む札(`<summary>`)が既に出している。**
+                  `bare` を渡さないと「セッションの記録」が2回出る
+                  (同じことをするものを2つ見せない・CLAUDE.md) */}
+              <LessonNotes learnerId={learnerId} bare onDate={setPickedDay} />
               {dayBox}
             </>
           )}
