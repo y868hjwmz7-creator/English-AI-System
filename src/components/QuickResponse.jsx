@@ -237,7 +237,7 @@ export default function QuickResponse({
               もう一度
             </button>
             {onClose && (
-              <button type="button" className="btn" onClick={onClose}>とじる</button>
+              <button type="button" className="btn btn--ghost" onClick={onClose}>とじる</button>
             )}
           </div>
         </div>

@@ -5715,8 +5715,12 @@ console.log('\nスピーチ練習(0054)')
      押すところが1つしか無く、選んでいなければ「分野をえらぶ」と出る */
   ok(/<option value="">分野をえらぶ/.test(sb),
     '説明の文 … 1冊も選んでいなければ、欄が「分野をえらぶ」と言う')
-  ok(/className="tip basicpick-lead"/.test(sb),
-    '説明の文 … 棚のえらび方の説明も畳んである')
+  /* **畳むのをやめ、説明そのものを置かないことにした**(第5.226節・
+     2026-09 利用者の指定「余計な説明書きは全て排除」)。
+     行き止まりを作らない役目は、**すぐ上の「分野をえらぶ」**が
+     引き継いでいる —— 形で言う、のほうが強い */
+  ok(!/えらんだ分野の語だけを練習します/.test(sb),
+    '説明の文 … 棚のえらび方の説明は置かない(形で言う)')
 
   /* ⑥ 2026-09「こういうの、いらないです」で名指しされた3つ。
         **どれも消していない。畳んであるだけ**である */
@@ -8276,6 +8280,46 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
    赤くなったからといって、また1行足して外せば緑に戻せてしまう ——
    **それをやったら、この決まりは何も守らない。**
    ──────────────────────────────────────────────────────────────── */
+console.log('\n── 押せるものの見た目(第5.227節)──')
+{
+  /* **白い箱を新しく作らない**(共通ルール「見た目も、既にある形から選ぶ」)。
+     押せるものは、**青(次に進む)/ 灰(ならぶ)/ 枠線だけ(控えめ)** の
+     3つから選ぶ。地の色のままの `btn` は、白い紙の上で
+     **「押せるもの」に見えない**(2026-09 利用者の指摘)。
+
+     **見るのはゲストが見る画面だけ**(2026-09 利用者の指定
+     「ゲストが見る画面だけ直す」)。トレーナー専用の画面は、
+     いま手を付けていない —— **勝手に広げない**(CLAUDE.md)。 */
+  const ゲストの画面 = [
+    'LearnerHomework', 'LessonView', 'PassagePractice', 'FocusReader', 'FocusBoard',
+    'StepSentence', 'StepDictation', 'Wordbook', 'QuickResponse', 'QrReview',
+    'SpeechPractice', 'BasicsCourse', 'Progress', 'GlossPopover', 'WritingAnswer',
+    'BookShelf', 'NativeFlowUnits', 'ShelfBooks', 'WordRadio',
+  ]
+  const 素 = []
+  for (const 名 of ゲストの画面) {
+    const 道 = new URL(`../src/components/${名}.jsx`, import.meta.url)
+    if (!existsSync(道)) continue
+    const n = (readFileSync(道, 'utf8')
+      .match(/className="btn btn--small"|className="btn"/g) ?? []).length
+    if (n) 素.push(`${名} ${n} 個`)
+  }
+  ok(素.length === 0,
+    '見た目 … ゲストが見る画面に、色を決めていないボタンが無い', 素.join(' / '))
+  /* **「出る」と「出ない」の両方を見る。** 3つの形が本当に使われているか ——
+     全部を1色にしても、上の1本だけなら緑のままになる */
+  const 使い = { 'btn--primary': 0, 'btn--quiet': 0, 'btn--ghost': 0 }
+  for (const 名 of ゲストの画面) {
+    const 道 = new URL(`../src/components/${名}.jsx`, import.meta.url)
+    if (!existsSync(道)) continue
+    const t = readFileSync(道, 'utf8')
+    for (const k of Object.keys(使い)) 使い[k] += (t.match(new RegExp(k, 'g')) ?? []).length
+  }
+  ok(Object.values(使い).every((n) => n > 0),
+    '見た目 … 青 / 灰 / 枠線だけの3つが、どれも使われている',
+    Object.entries(使い).map(([k, v]) => `${k} ${v}`).join(' / '))
+}
+
 console.log('\n── 呼び名(第5.224節)──')
 {
   /* **「配信」と書かない。「共有」と書く**(CLAUDE.md の呼び名)。

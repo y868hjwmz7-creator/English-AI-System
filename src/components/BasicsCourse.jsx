@@ -218,7 +218,7 @@ export default function BasicsCourse({ me = null }) {
 
                 <div className="btn-row">
                   {/* **押す前に、何語かを出す**(見えない費用は管理できない) */}
-                  <button type="button" className="btn btn--small"
+                  <button type="button" className="btn btn--small btn--primary"
                           disabled={busy} onClick={addAll}>
                     {busy ? '入れています…' : `この日の ${words.length} 語をまとめて単語帳へ`}
                   </button>

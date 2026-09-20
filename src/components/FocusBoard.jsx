@@ -106,12 +106,12 @@ export function useFocusBoard({ learnerId = null, page = 0, bodyRef }) {
                 aria-label={`${c.label}で書く`} aria-pressed={inkColor === c.color}
                 onClick={() => setInkColor(c.color)} />
       ))}
-      <button type="button" className="btn btn--small"
+      <button type="button" className="btn btn--small btn--ghost"
               disabled={!lines.length}
               onClick={() => setLines(lines.slice(0, -1))}>
         ひとつ戻す
       </button>
-      <button type="button" className="btn btn--small"
+      <button type="button" className="btn btn--small btn--ghost"
               disabled={!lines.length}
               onClick={() => setLines([])}>
         全部消す
@@ -129,7 +129,7 @@ export function useFocusBoard({ learnerId = null, page = 0, bodyRef }) {
     <aside className="lesson-notes no-print" aria-label="セッションの記録">
       <div className="lesson-notes-head">
         <strong>セッションの記録</strong>
-        <button type="button" className="btn btn--small"
+        <button type="button" className="btn btn--small btn--ghost"
                 onClick={() => setNotes(false)}>閉じる</button>
       </div>
       <LessonNotes learnerId={learnerId} bare />

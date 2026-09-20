@@ -107,11 +107,6 @@ export default function ShelfBooks({
           })}
         </select>
       </label>
-      <p className="tip basicpick-lead">
-        えらんだ分野の語だけを練習します。
-        <strong>自分の単語帳とは混ざりません。</strong>
-        覚え具合は、この単語帳の側に残ります。
-      </p>
     </div>
   )
 }

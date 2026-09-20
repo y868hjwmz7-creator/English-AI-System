@@ -248,7 +248,7 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
               </button>
               <div className="focus-mid">
                 {/* **並べない。入れ替える**(ふだんの帯と同じ決まり) */}
-                <button type="button" className="btn btn--small"
+                <button type="button" className="btn btn--small btn--ghost"
                         onClick={() => setView((v) => (v === 'en' ? 'ja' : 'en'))}>
                   {view === 'en' ? '訳' : '英語'}
                 </button>

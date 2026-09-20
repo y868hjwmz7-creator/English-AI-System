@@ -558,7 +558,7 @@ export default function FocusReader({
           {canReadAloud() && (
             <SentenceSkip>
               <button type="button"
-                      className="btn btn--small"
+                      className="btn btn--small btn--quiet"
                       aria-label={player.playing ? 'Stop' : 'Listen'}
                       onClick={() => player.toggle(playOpts())}>
                 {/* **「用意しています…」だけは、どんなに狭くても消さない**

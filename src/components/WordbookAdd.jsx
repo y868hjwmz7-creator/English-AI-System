@@ -113,7 +113,7 @@ export default function WordbookAdd({
             <span>
               語句
               <span className="tip field-hint">
-                英語で。2語以上なら言い回しとして入ります
+                英語で
               </span>
             </span>
             <input ref={wordRef} type="text" lang="en" value={word}
@@ -124,9 +124,6 @@ export default function WordbookAdd({
           <label className="field">
             <span>
               出会った文
-              <span className="tip field-hint">
-                任意。あとで思い出す手がかりになります
-              </span>
             </span>
             <input type="text" lang="en" value={seen}
                    placeholder="She stayed resilient through the whole project."

@@ -977,7 +977,7 @@ export default function LessonView({
       {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}
       <Stepper label="幅" options={WIDTHS} value={width} className="lesson-widths"
                onChange={(id) => { setWidth(id); saveWidth(id) }} />
-      <button type="button" className="btn btn--small"
+      <button type="button" className="btn btn--small btn--quiet"
               onClick={() => printElement(document.getElementById('lesson-sheet'))}>
         <PrintIcon />印刷
       </button>
@@ -1099,12 +1099,12 @@ export default function LessonView({
                       onClick={() => setInkColor(c.color)} />
             ))}
             {/* **ひとつ戻す**を先に置く。書き損じはたいてい直前の1本 */}
-            <button type="button" className="btn btn--small"
+            <button type="button" className="btn btn--small btn--ghost"
                     disabled={!(ink[page] ?? []).length}
                     onClick={() => setInk((m) => ({ ...m, [page]: (m[page] ?? []).slice(0, -1) }))}>
               ひとつ戻す
             </button>
-            <button type="button" className="btn btn--small"
+            <button type="button" className="btn btn--small btn--ghost"
                     disabled={!(ink[page] ?? []).length}
                     onClick={() => setInk((m) => ({ ...m, [page]: [] }))}>
               全部消す
@@ -1123,7 +1123,7 @@ export default function LessonView({
             (2026-08 実機)。レッスン中に何度も触るのは
             「閉じる・ページ送り・解答」の3つだけである。
             狭い画面では言葉も短くする(`.wide-text` を隠す)。 */}
-        <button type="button" className="btn btn--small"
+        <button type="button" className="btn btn--small btn--ghost"
                 aria-label="閉じる"
                 onClick={() => { stopReading(); onClose?.() }}>
           ✕<span className="wide-text"> 閉じる</span>
@@ -1135,11 +1135,11 @@ export default function LessonView({
         {!run && (
           <>
             <div className="lesson-pages">
-              <button type="button" className="btn btn--small"
+              <button type="button" className="btn btn--small btn--ghost"
                       disabled={page === 0} aria-label="前のページ"
                       onClick={() => { setPage(page - 1); resetItems() }}>◀</button>
               <span>{page + 1} / {sections.length}</span>
-              <button type="button" className="btn btn--small"
+              <button type="button" className="btn btn--small btn--ghost"
                       disabled={page >= sections.length - 1} aria-label="次のページ"
                       onClick={() => { setPage(page + 1); resetItems() }}>▶</button>
             </div>
@@ -1284,7 +1284,7 @@ export default function LessonView({
           {/* **言葉は `.mid-text` に入れておく。** 帯が入らないときは
               絵だけになる(`.lesson-bar.is-fit2`)。絵は別物なので
               取り違えないが、**`aria-label` は必ず添える** */}
-          <button type="button" className="btn btn--small"
+          <button type="button" className="btn btn--small btn--quiet"
                   aria-label="印刷 / PDFで保存"
                   onClick={() => printElement(document.getElementById('lesson-sheet'))}>
             <PrintIcon /><span className="mid-text">印刷</span>
@@ -1784,7 +1784,7 @@ export default function LessonView({
                  style={{ '--notes-w': `${notesW}px` }}>
             <div className="lesson-notes-head">
               <strong>セッションの記録</strong>
-              <button type="button" className="btn btn--small"
+              <button type="button" className="btn btn--small btn--ghost"
                       onClick={() => setNotes(false)}>閉じる</button>
             </div>
             {owner ? (
@@ -1924,7 +1924,7 @@ export default function LessonView({
                 {/* **三角は付けない**(2026-09 利用者の指定)。
                     送り戻しは**操作盤の1つ**に集めた(下の `PlayerBar`)。
                     同じことをするものを、画面のあちこちに置かない */}
-                <button type="button" className="btn btn--small" onClick={playWhole}>
+                <button type="button" className="btn btn--small btn--quiet" onClick={playWhole}>
                   {playingAll
                     ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
                     : <><SpeakerIcon />Listen (全体)</>}
@@ -2045,7 +2045,7 @@ export default function LessonView({
                        (聞き逃した文へ戻る・先へ飛ばす)。
                        **鳴らす前と後で、形を変えない。** 変わるのは
                        中の言葉(Listen ⇄ Stop)だけにする */
-                    <button type="button" className="btn btn--small"
+                    <button type="button" className="btn btn--small btn--quiet"
                             onClick={() => { stopAll(); setReadingAt(null) }}>
                       <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
                     </button>

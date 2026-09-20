@@ -68,11 +68,6 @@ export default function NativeFlowUnits({ units = [], picked = null, onPick = nu
           ))}
         </select>
       </label>
-      <p className="tip basicpick-lead">
-        えらんだ Unit の問だけを練習します。
-        <strong>自分の Quick Response 帳とは混ざりません。</strong>
-        言えた記録は、Unit を切り替えても残ります。
-      </p>
     </div>
   )
 }

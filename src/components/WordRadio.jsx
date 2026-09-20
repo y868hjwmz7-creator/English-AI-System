@@ -433,7 +433,6 @@ export default function WordRadio({
         </div>
         <p className="card-hint radio-lead">
           {radioLead(mode)}
-          {' '}最後まで行ったら、頭から回り直します。
           <strong>覚えた・まだ の記録は動きません。</strong>
         </p>
         {/* **いま鳴っている曲を出す。** 何が流れているか分からないと、

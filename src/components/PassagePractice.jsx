@@ -592,13 +592,13 @@ export default function PassagePractice({
           </label>
         )}
         {current.unit === 'passage' && (
-          <button type="button" className="btn" onClick={() => setShowJa(!showJa)}>
+          <button type="button" className="btn btn--ghost" onClick={() => setShowJa(!showJa)}>
             {showJa ? '日本語を隠す' : '日本語を見る'}
           </button>
         )}
         {/* ⑤ は本文を見ないで行う。**追いつけないときの逃げ道は残す** */}
         {!current.script && current.unit === 'passage' && (
-          <button type="button" className="btn" onClick={() => setPeek(!peek)}>
+          <button type="button" className="btn btn--ghost" onClick={() => setPeek(!peek)}>
             {peek ? '本文を隠す' : '本文を出す'}
           </button>
         )}
@@ -764,7 +764,7 @@ export default function PassagePractice({
 
               <div className="passage-actions">
                 <button
-                  type="button" className="btn btn--small"
+                  type="button" className="btn btn--small btn--quiet"
                   onClick={() => playOne(item)}
                 >
                   {speakingId === item.id

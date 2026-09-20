@@ -225,7 +225,7 @@ export default function GlossPopover({
       </span>
       {onMark && (
         <span className="etext-pop-actions">
-          <button type="button" className="btn btn--small"
+          <button type="button" className="btn btn--small btn--primary"
                   onClick={() => onMark('known')}>知っていた</button>
           <button type="button" className="btn btn--small btn--quiet"
                   onClick={() => onMark('unknown')}>知らなかった</button>

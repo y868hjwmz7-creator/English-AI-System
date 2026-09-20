@@ -177,7 +177,7 @@ export default function WritingAnswer({
             <span>
               英語で答えを書く
               <span className="field-hint">
-                {MAX_WRITING_CHARS} 文字まで。書いたものは残ります
+                {MAX_WRITING_CHARS} 文字まで
               </span>
             </span>
             <textarea ref={areaRef} lang="en" rows={4} value={text}
@@ -263,7 +263,7 @@ export default function WritingAnswer({
 
               {pairs.length > 1 && (
                 <div className="btn-row">
-                  <button type="button" className="btn btn--small" disabled={busy}
+                  <button type="button" className="btn btn--small btn--primary" disabled={busy}
                           onClick={() => toQr(pairs, '答えぜんぶ')}>
                     <PlusIcon />答えぜんぶを Quick Response へ（{pairs.length} 文）
                   </button>

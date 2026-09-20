@@ -435,6 +435,14 @@ CLAUDE.md が 1.08MB になり、**毎ターン読み込まれて「prompt is to
 - 利用者は **会社PC にアプリをインストールできない**。すべてブラウザで完結させる
 - Chromium と Playwright は使える(`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`)。
   マイクは `--use-fake-device-for-media-stream` で代用する
+- **`npm run test:bar` を途中で止めたら、残った vite を必ず殺す**(2026-09)。
+  あれは**自分用の vite を2つ**立てる(`vite.bar.config.js` /
+  `vite.shell.config.js`・`strictPort`)。止め方が悪いと**居座り**、
+  次の回はポートを取れずに**古いサーバーを測る。**
+  そうすると、**直していない場所が赤くなる**(実際に2回、そうなった ——
+  早すぎる場所で落ちる / `書く欄` `文法解説の指定` が 5 本赤くなる)。
+  **赤が出たら、まず `ps -eo pid,cmd | grep "[v]ite --config"` を見る。**
+  居たら `kill <pid>`、`vite.*.config.js` と `__bar.html` `__shell.html` も消す
 - **`pkill -f "vite"` のような指定で開発サーバーを止めない。**
   実行中のシェル自身が引っかかって落ち、そのコマンドの残りが実行されない
   (2回やった)。止めるなら `fuser -k 5173/tcp`。

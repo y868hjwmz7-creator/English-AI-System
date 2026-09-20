@@ -399,7 +399,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
           (行き止まりを作らない・CLAUDE.md)。 */}
       {assignments.length === 0 && (
         <p className="card-hint">
-          まだ宿題は届いていません。次のレッスンのあとに届きます。
+          まだ宿題は届いていません。
         </p>
       )}
 
@@ -595,7 +595,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                           > 置いてください
                         紙にして手元で解くほうが先に来る、という順序である */}
                     <div className="btn-row no-print">
-                      <button type="button" className="btn btn--small"
+                      <button type="button" className="btn btn--small btn--quiet"
                               onClick={() => { setPrintId(a.id); recordWorked(a) }}>
                         <PrintIcon />印刷 / PDFで保存(問題のみ)
                       </button>
@@ -607,7 +607,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                           **すでにある MP3 を集めてつなぐだけ**なので、
                           窓口は1回も呼ばれず、**課金されない** */}
                       {dlPieces(a.material) > 0 && (
-                        <button type="button" className="btn btn--small"
+                        <button type="button" className="btn btn--small btn--quiet"
                                 disabled={!!dlBusy} onClick={() => dlStart(a.material)}>
                           {/* **進み具合は、必ず数で出す**(CLAUDE.md) */}
                           <DownloadIcon />{dlLabel(a.material)}

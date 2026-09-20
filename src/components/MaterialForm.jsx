@@ -1577,7 +1577,6 @@ export default function MaterialForm({
         <label className="field">
           <span>
             {industryLabel(topIndustry)}の種類
-            <span className="tip field-hint">場面と話題が、その種類のものに変わります</span>
           </span>
           <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
             {industryKinds.map((k) => (
@@ -1591,7 +1590,6 @@ export default function MaterialForm({
         <label className="field">
           <span>
             話題
-            <span className="tip field-hint">業界・趣味と組み合わせて、何の記事にするかが決まります</span>
           </span>
           <select value={genre} onChange={(e) => setGenre(e.target.value)}>
             {genreList.map((g) => (
@@ -1609,9 +1607,6 @@ export default function MaterialForm({
         <label className="field">
           <span>
             シチュエーション
-            <span className="tip field-hint">
-              場面によって丁寧さと言い回しが変わります。同じ話題でも別の教材になります
-            </span>
           </span>
           {/* **空の欄を出さない**(第5.183節・2026-09 利用者の指摘
               「以前ならスピーチの詳細を選べたのに、今は選べなくなっています」)。
@@ -1654,10 +1649,6 @@ export default function MaterialForm({
         <label className="field">
           <span>
             話の切り口
-            <span className="tip field-hint">
-              同じ場面でも、切り口が違えば別の話になります。
-              おまかせなら、まだ使っていない切り口から選びます
-            </span>
           </span>
           <select value={angle} onChange={(e) => setAngle(e.target.value)}>
             <option value="">おまかせ(毎回ちがう切り口)</option>
@@ -1695,9 +1686,6 @@ export default function MaterialForm({
           <label className="field">
             <span>
               自分の原稿(英語)
-              <span className="tip field-hint">
-                貼れば、そのまま本文になります。空行で段落が分かれます
-              </span>
             </span>
             <textarea rows={8} value={script} placeholder={SCRIPT_HINT}
                       onChange={(e) => setScript(e.target.value)} />
@@ -1733,10 +1721,6 @@ export default function MaterialForm({
             <label className="field">
               <span>
                 話し方の型(任意)
-                <span className="tip field-hint">
-                  上の場面に合うものだけが出ます。有名なスピーチの原稿は
-                  使えませんが、話し方はまねられます
-                </span>
               </span>
               <select value={style} onChange={(e) => pickStyle(e.target.value)}>
                 {styleList.map((s) => (
@@ -1758,9 +1742,6 @@ export default function MaterialForm({
             <fieldset className="field">
               <legend>
                 話し手(任意)
-                <span className="tip field-hint">
-                  入れたぶんだけ、その人が話す原稿になります。空でも作れます
-                </span>
               </legend>
               <div className="filter-row">
                 {SPEAKER_FIELDS.map((f) => (
@@ -2341,10 +2322,7 @@ export default function MaterialForm({
         {isVocabKind(kind) && (
           <div className="review-box">
             {shareWith.length !== 1 ? (
-              <p className="field-hint">
-                これまでの宿題から復習する語を混ぜられます。
-                <strong>上でゲストを1人だけ選んでください。</strong>
-              </p>
+              <p className="field-hint">ゲストを1人だけ選ぶと出ます。</p>
             ) : reviewBusy ? (
               <p className="field-hint">これまでの宿題を調べています…</p>
             ) : reviewError ? (
@@ -2570,8 +2548,7 @@ export default function MaterialForm({
             ))}
           </ul>
           <p className="field-hint">
-            右が、前に出した文です。外しすぎだと感じたら教えてください。
-            近さの境目は調整できます。
+            右が、前に出した文です。            近さの境目は調整できます。
           </p>
         </div>
       )}
@@ -2707,7 +2684,6 @@ export default function MaterialForm({
             <label className="field">
               <span>
                 教材名
-                <span className="tip field-hint">空のままなら、日付と弱点から自動で付きます</span>
               </span>
               <input value={title} onChange={(e) => setTitle(e.target.value)}
                      placeholder="作ると自動で入ります" />
@@ -2735,9 +2711,6 @@ export default function MaterialForm({
             <label className="field">
               <span>
                 指導ポイント
-                <span className="tip field-hint">
-                  この文法全体の勘所。作ると自動で入ります
-                </span>
               </span>
               <textarea rows={5} value={teachingPoint}
                         onChange={(e) => setTeachingPoint(e.target.value)}
@@ -2762,7 +2735,7 @@ export default function MaterialForm({
           </button>
         </div>
         <p className="tip field-hint">
-          共有すると他のトレーナーも使えます。50人で共有すれば、必要な教材が7週でそろいます。
+          共有すると他のトレーナーも使えます。
         </p>
       </fieldset>
 

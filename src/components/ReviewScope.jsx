@@ -274,8 +274,6 @@ export default function ReviewScope({
           {compact && (
             <p className="tip card-hint rscope-lead">
               {scopeLead(scope, unit)}
-              {' '}
-              変えると、その場で出し直します。
             </p>
           )}
         </SettingsSheet>

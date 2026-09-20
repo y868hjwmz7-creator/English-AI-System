@@ -311,7 +311,7 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
             <span>
               スピーチの原稿(英語)
               <span className="field-hint">
-                {MAX_SPEECH_CHARS} 文字まで。書いたものは残ります
+                {MAX_SPEECH_CHARS} 文字まで
               </span>
             </span>
             <textarea lang="en" rows={10} value={open.draft ?? ''} disabled={busy}

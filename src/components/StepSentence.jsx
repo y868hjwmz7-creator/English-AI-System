@@ -77,12 +77,12 @@ export default function StepSentence({
                                 else next.add(s.id)
                                 return next
                               })} />
-                <button type="button" className="btn btn--small"
+                <button type="button" className="btn btn--small btn--ghost"
                         onClick={() => setOpenEn((v) => ({ ...v, [s.id]: !en }))}>
                   {en ? '英語を隠す' : '英語を見る'}
                 </button>
                 {s.ja && (
-                  <button type="button" className="btn btn--small"
+                  <button type="button" className="btn btn--small btn--ghost"
                           onClick={() => setOpenJa((v) => ({ ...v, [s.id]: !v[s.id] }))}>
                     {ja ? '日本語を隠す' : '日本語を見る'}
                   </button>

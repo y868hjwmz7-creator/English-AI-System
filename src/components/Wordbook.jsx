@@ -2473,7 +2473,7 @@ export default function Wordbook({
                       **効かないボタンを出さない**ので、足りない語では
                       「まだ」だけになる。 */}
                   {canMarkKnown(row) ? (
-                    <button type="button" className="btn btn--small"
+                    <button type="button" className="btn btn--small btn--primary"
                             disabled={busy === row.word_norm}
                             onClick={() => answer(row, 'known')}>覚えた</button>
                   ) : (

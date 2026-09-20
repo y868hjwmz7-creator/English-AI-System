@@ -169,7 +169,7 @@ export default function BgmLibrary({ userId = null }) {
       {/* ── 一覧 ──────────────────────────────────────────── */}
       {busy ? <p className="hint">読み込み中…</p> : rows.length === 0 ? (
         <p className="hint">
-          まだ1曲も入っていません。上の欄から入れると、聞き流しのときに流れます。
+          まだ1曲も入っていません。
         </p>
       ) : (
         <ul className="bgm-list">

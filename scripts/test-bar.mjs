@@ -7130,8 +7130,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
   const W = 390
   const page = await browser.newPage({ viewport: { width: W, height: 900 } })
 
-  /* ① 既定(出さない) */
-  await page.goto(`http://localhost:${PORT}/__bar.html?screen=shelfpick`,
+  /* ① 既定(出さない)。**単語帳で測る**(第5.226節)。
+
+       業種べつの冊(`shelfpick`)に置いていた説明は、
+       2026-09 の指定「余計な説明書きは全て排除」で**消した。**
+       畳む仕組みそのものは生きているので、**まだ説明がある画面**で
+       ①②を測る。③(形で言う)は、これまでどおり `shelfpick` で測る —— */
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
     { waitUntil: 'networkidle' })
   await page.evaluate(() => { try { localStorage.removeItem('eas.tips') } catch { /* 端末が断ることがある */ } })
   await page.reload({ waitUntil: 'networkidle' })
@@ -7235,14 +7240,14 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ng('説明の文 … オンにしても印が付かない', String(オン.印))
   } else if (オン.見える === 0) {
     ng('説明の文 … オンにしても出てこない(戻す道が死んでいる)')
-  } else if (!オン.文.includes('えらんだ分野')) {
-    ng('説明の文 … オンで出たのが、その欄の説明ではない', オン.文)
+  } else if (オン.文.length < 4) {
+    ng('説明の文 … オンで出たのに、中身が無い', `「${オン.文}」`)
   } else if (読めない.length) {
     ng('説明の文 … えらぶ欄の字が、地に沈んで読めない',
       `${読めない.join(' / ')}。地と同じ色を当てていないか`)
   } else {
-    ok(`説明の文 ${W}px … 既定は 0 / ${既定.在る} 個・オンで ${オン.見える} 個・`
-      + `えらぶ欄の字が読める`
+    ok(`説明の文 ${W}px … 既定は 0 / ${既定.在る} 個・オンで ${オン.見える} 個`
+      + `(「${オン.文}…」)・えらぶ欄の字が読める`
       + `(明 ${青['無し:light']?.差} / 暗 ${青['無し:dark']?.差})`)
   }
 }

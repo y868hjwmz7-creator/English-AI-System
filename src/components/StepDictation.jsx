@@ -136,7 +136,7 @@ export default function StepDictation({
                       ))}
                     </select>
                   </label>
-                  <button type="button" className="btn btn--small"
+                  <button type="button" className="btn btn--small btn--ghost"
                           onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
                     {open ? '解答を隠す' : '解答を見る'}
                   </button>

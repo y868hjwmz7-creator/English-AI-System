@@ -251,7 +251,7 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
       {!picked ? (
         /* **行き止まりを作らない。** 何をすればよいかを書く */
         !learnerId && people?.length > 0 && (
-          <p className="card-hint">ゲストを選ぶと、出せる冊が並びます。</p>
+          <p className="hint">ゲストを選んでください。</p>
         )
       ) : reading ? (
         <Loading />
