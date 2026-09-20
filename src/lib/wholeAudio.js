@@ -606,8 +606,40 @@ export function charTimesOf(alignment, text) {
       gap = []
       if (Number.isFinite(end[m.at])) prevEnd = end[m.at]
     }
-    /* **終わりに残った当てはまらない文字は、埋めない。**
-       そこから先が何秒まで続くのかは、この関数には分からない */
+    /* ── **終わりに残った文字にも、時刻を入れる**(第5.214節・2026-09 実機)
+     *
+     *   > on March 8 でハイライトが前に進んでしまう現象が直っていません
+     *
+     *   **測ったら、そこだけ時刻が1つも入っていなかった。**
+     *
+     *       画面 : I'd like to book a seat on March 8.
+     *       声   : I'd like to book a seat on March eighth.
+     *              …  March  こちら 1.35 / 正解 1.35
+     *                 8.     こちら  --              ← 時刻なし
+     *
+     *   `8.` は声では `eighth.` なので、どの文字にも当たらない。
+     *   ここを空のままにすると、語ごとに光らせる側は
+     *   **その語を飛ばして次へ進む。** 文の終わりが数字の文は、
+     *   そこで必ず1語ぶん先へ出る。利用者の言う
+     *   「**on March 8 で先に進む**」は、これである。
+     *
+     *   **以前は「この関数には分からない」と書いて埋めなかった。**
+     *   それが誤りだった —— **当てはまった最後の文字より後ろに、
+     *   まだ声が残っているなら、それがその文字の音である**
+     *   (ほかの何かが鳴っているわけがない)。あいだを埋めるのと
+     *   まったく同じ理屈で、**推測ではない。**
+     *
+     *   残っていなければ(声もそこで終わっているなら)、これまでどおり
+     *   埋めない。**無いものを、あるように見せない。** */
+    if (gap.length && Number.isFinite(prevEnd)) {
+      const lastK = solid[solid.length - 1].k
+      let tail = null
+      for (let i = got.to.length - 1; i > lastK; i -= 1) {
+        const v = Number(got.to[i])
+        if (Number.isFinite(v) && v > 0) { tail = v; break }
+      }
+      if (Number.isFinite(tail) && tail > prevEnd) fill(prevEnd, tail, gap)
+    }
   }
   return { start, end }
 }
@@ -863,20 +895,25 @@ export const SEG_BACK = 0.05
  *   ずれた対は、無いより悪い(`spansOf` と同じ考え方)。
  *   返さなければ、これまでどおりの受け皿に落ちるだけである。
  */
-export function segOffsOf(segments, spans) {
+function orderSegs(segments, n) {
   const segs = Array.isArray(segments) ? segments : null
-  const list = Array.isArray(spans) ? spans : null
-  if (!segs || !list || !list.length || segs.length !== list.length) return null
-
+  if (!segs || !n || segs.length !== n) return null
   /* **並び順で当てない。** 向こうは `dialogue_input_index` で
      「渡した何番目の入力か」を言っている。無いときだけ並び順に落とす */
-  const by = new Array(list.length).fill(null)
+  const by = new Array(n).fill(null)
   segs.forEach((s, i) => {
     const at = Number.isFinite(Number(s?.dialogue_input_index))
       ? Number(s.dialogue_input_index) : i
     if (at >= 0 && at < by.length && !by[at]) by[at] = s
   })
-  if (by.some((s) => !s)) return null
+  return by.some((s) => !s) ? null : by
+}
+
+export function segOffsOf(segments, spans) {
+  const list = Array.isArray(spans) ? spans : null
+  if (!list || !list.length) return null
+  const by = orderSegs(segments, list.length)
+  if (!by) return null
 
   const offs = []
   for (let i = 0; i < list.length; i += 1) {
@@ -893,6 +930,130 @@ export function segOffsOf(segments, spans) {
   }
   return offs
 }
+
+
+/**
+ * ============================================================================
+ * **発言の「終わり」も使う**(第5.214節・2026-09 実機・利用者の指摘)
+ *
+ *   > 文ごとのリピートをしたら、相変わらず最後まで再生される前に折り返され、
+ *   > 前の文の途中から繰り返されます。学習用アプリとしてこれは致命的です。
+ *
+ * ── なぜ起きるか ─────────────────────────────────────────────
+ *
+ *   控えの時計より、鳴っている音のほうが長い(実機で **控え 64.00 秒 /
+ *   音声 65.41 秒**)。この 1.41 秒が、そのまま症状になる。
+ *
+ *     ・控えの終わり `b` を過ぎた時点で戻す → **音はまだ `b + δ` まで続く**
+ *       ＝ 最後まで再生される前に折り返す
+ *     ・控えの頭 `a` へ飛ぶ → **音の上ではまだ前の文の中**
+ *       ＝ 前の文の途中から繰り返される
+ *
+ *   **2つの症状は、1つの原因である。**
+ *
+ * ── こちらが捨てていた正解 ───────────────────────────────────
+ *
+ *   `voice_segments` は発言ごとに
+ *   **`start_time_seconds` と `end_time_seconds` の両方**を返している。
+ *   ところが 32手め(`segOffsOf`)は**始まりしか読んでいなかった。**
+ *
+ *   だから「発言の頭」だけが実測に合い、**発言の中は控えの時計のまま**
+ *   だった。1つの発言が数文あれば、その中で先へ進んでいく。
+ *
+ *   **もらえる正解を捨てない。まず、返ってくるものを全部読む**(CLAUDE.md)。
+ *   これは 39手のあいだ、ずっと目の前にあった。
+ *
+ * ── 何をするか ───────────────────────────────────────────────
+ *
+ *   発言 i について、**控えの窓**(`said`)を**本当の窓**(`real`)へ写す。
+ *
+ *       t' = real.start + (t − said.start) × (real の幅) ÷ (said の幅)
+ *
+ *   頭も尻も実測に合い、あいだは幅の比で配る。
+ *   **当て推量が1つも入らない** —— どちらの窓も向こうが言った数字である。
+ *
+ * ── 合わなければ、何も返さない ───────────────────────────────
+ *
+ *   当てずっぽうで伸ばすと、**別の文の場所を指す。**
+ *   ずれた対は、無いより悪い(`spansOf` と同じ考え方)。
+ *   返さなければ、これまでどおり `segOffsOf` の受け皿に落ちるだけである。
+ * ============================================================================
+ */
+
+/** 幅の比の、許す範囲。これを外れたら対が食い違っている */
+export const SEG_K_MIN = 0.5
+export const SEG_K_MAX = 2
+
+/**
+ * **発言ごとの「控えの窓 → 本当の窓」。**
+ *
+ * @param {Array} segments 窓口が控えた `voice_segments` そのもの
+ * @param {Array<{start:number,end:number}>} spans 項目ごとの区間(控えの時計)
+ * @returns {{from:number,span:number,to:number,k:number}[]|null}
+ */
+export function segWindowsOf(segments, spans) {
+  const list = Array.isArray(spans) ? spans : null
+  if (!list || !list.length) return null
+  const by = orderSegs(segments, list.length)
+  if (!by) return null
+
+  const out = []
+  let prevEnd = -Infinity
+  for (let i = 0; i < list.length; i += 1) {
+    const a = Number(by[i].start_time_seconds)
+    const b = Number(by[i].end_time_seconds)
+    const p = Number(list[i]?.start)
+    const q = Number(list[i]?.end)
+    if (![a, b, p, q].every(Number.isFinite)) return null
+    // 窓が逆さ・つぶれている / 前の発言より前に戻る → 対が食い違っている
+    if (b <= a || q <= p || a < prevEnd - SEG_BACK) return null
+    const k = (b - a) / (q - p)
+    if (!(k >= SEG_K_MIN && k <= SEG_K_MAX)) return null
+    out.push({ from: p, span: q - p, to: a, k })
+    prevEnd = b
+  }
+  // ①1つめは、どちらの時計でも頭のはずである(`segOffsOf` と同じ歯止め)
+  if (Math.abs(out[0].to - out[0].from) > SEG_HEAD) return null
+  return out
+}
+
+/**
+ * 区間を、**発言ごとの窓へ写す。**
+ *
+ * 何番目の項目かの見方は `shiftItems()` とそろえる ——
+ * `item`(文の区間)、無ければ並び順(項目の区間)。
+ * **数え方を2通り持たない。**
+ */
+export function fitWindows(list, wins) {
+  if (!Array.isArray(list) || !Array.isArray(wins) || !wins.length) return list
+  return list.map((s, i) => {
+    const item = Number.isFinite(s.item) ? s.item : i
+    const w = wins[item]
+    if (!w) return s
+    const at = (t) => w.to + (t - w.from) * w.k
+    return { ...s, start: at(s.start), end: at(s.end) }
+  })
+}
+
+/**
+ * **発言ごとの実測を、いちばん良い形で1つに決める**(第5.214節)。
+ *
+ * **窓(始まり+終わり)が使えるならそちら。** だめなら頭だけ(32手め)。
+ * **呼ぶ側に 2通りの分岐を置かない**(CLAUDE.md「判断は1か所に持つ」)——
+ * 1本の中の1項目を鳴らす道と、通しで鳴らす道の**2か所**から呼ばれる。
+ *
+ * @returns {{how:'windows'|'heads', wins:Array|null, offs:number[]|null}|null}
+ */
+export function segFitOf(segments, spans) {
+  const wins = segWindowsOf(segments, spans)
+  if (wins) return { how: 'windows', wins, offs: null }
+  const offs = segOffsOf(segments, spans)
+  return offs ? { how: 'heads', wins: null, offs } : null
+}
+
+/** その決め方で、区間を写す。**渡さなければ何もしない** */
+export const segApply = (list, fit) => (!fit ? list
+  : fit.wins ? fitWindows(list, fit.wins) : shiftItems(list, fit.offs))
 
 export const SEAM_TIGHT = 0.08
 
@@ -1028,6 +1189,14 @@ export function shiftEach(list, offs) {
 
 /** 控えの秒 → 音声の秒(続きから始めたときの飛び先を合わせ直す) */
 export function fitTime(sec, fit, spans) {
+  /* **窓で写したときは、同じ写し方で秒も写す**(第5.214節)。
+     ここを足し忘れると、続きから始めたときの飛び先だけが古い時計のままで、
+     **鳴り出しの一瞬だけ別の場所へ跳ぶ** */
+  if (fit?.wins) {
+    const t0 = Number(sec) || 0
+    const w = fit.wins[Math.max(0, indexAtTime(spans, t0))]
+    return w ? w.to + (t0 - w.from) * w.k : t0
+  }
   if (fit?.how === 'measured') {
     const t0 = Number(sec) || 0
     const i = Math.max(0, indexAtTime(spans, t0))

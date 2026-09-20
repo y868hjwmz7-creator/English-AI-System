@@ -1430,7 +1430,9 @@ function fakeMp3({
     const want = [
       ['区間を控える', read, /const raw = sentenceSpansFor\(got, whole\.texts\)/],
       // 文の区間にも、同じずれを当てる(32手め)
-      ['文にも区切りを当てる', read, /const sent = \(raw && segShift\) \? shiftItems\(raw, segShift\) : raw/],
+      /* **窓(始まり+終わり)で写す**(第5.214節)。
+         `shiftItems` は発言の頭しか合わせず、**発言の中で先へ進む** */
+      ['文にも区切りを当てる', read, /const sent = \(raw && segShift\) \? segApply\(raw, segShift\) : raw/],
       ['通しでも控える', read, /let sent = sentenceSpansFor\(got, list\.map/],
       ['止めたら捨てる', read, /stopReading\(\) \{\s+setCursor\(null\)/],
       ['動かす道がある', read, /export function skipSentence\(/],
@@ -4082,12 +4084,22 @@ function fakeMp3({
 
     const read = readFileSync(new URL('../src/lib/readAloud.js', import.meta.url), 'utf8')
     /* **「名前が出てくるか」で見ない。** 説明の中にも同じ語がある */
-    if (!/const segOffs = segOffsOf\(got\.segments, got\.spans\)/.test(read)) {
+    /* **窓(始まり+終わり)で決める**(第5.214節)。`segFitOf()` が
+       窓と頭のどちらを使うかを1か所で決め、呼ぶ側は分岐を持たない */
+    if (!/const segOffs = segFitOf\(got\.segments, got\.spans\)/.test(read)) {
       miss.push('通しの道が呼んでいない')
     }
-    if (!/const segShift = segOffsOf\(got\?\.segments, got\?\.spans\)/.test(read)) {
+    if (!/const segShift = segFitOf\(got\?\.segments, got\?\.spans\)/.test(read)) {
       // **道が2つあるものは、両方を数える**(27手めの戒め)
       miss.push('段落ごとの道が呼んでいない')
+    }
+    /* **発言の終わりまで使っていること。** 頭だけに戻すと、
+       文ごとのリピートが最後まで鳴る前に折り返す(第5.214節) */
+    if (!/spans = fit\.wins \? fitWindows\(spans, fit\.wins\)/.test(read)) {
+      miss.push('通しの道が、発言の終わりを使っていない')
+    }
+    if (!/const wSpans = segShift \? segApply\(got\.spans, segShift\)/.test(read)) {
+      miss.push('段落ごとの道が、発言の終わりを使っていない')
     }
     if (!/const fit = \(segOffs && base\.how !== 'same'\)/.test(read)) {
       miss.push('向こうの区切りを、いちばん先に採っていない')
@@ -4558,6 +4570,180 @@ function fakeMp3({
     ng('先読みと支度が、別々に書かれている',
       '片方だけ別の場所を探すようになる')
   } else ok('先読みも支度も、同じ ensureClip を通る')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ⑬ **文の終わりが数字でも、語に時刻が入る**(第5.214節・2026-09 実機)
+
+     > on March 8 でハイライトが前に進んでしまう現象が直っていません
+
+   `8.` は声では `eighth.` なので、どの文字にも当たらない。
+   そこを空のままにすると、語ごとに光らせる側は**その語を飛ばして
+   次へ進む。** 文の終わりが数字の文は、そこで必ず1語ぶん先へ出る。
+
+   **測ったら、本当にそうなっていた**(時刻が1つも入っていなかった)。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n── ⑬ 文の終わりが数字でも、語に時刻が入る(第5.214節)──')
+{
+  const { charTimesOf } = await import('../src/lib/wholeAudio.js')
+  const { speakText } = await import('../src/lib/speakText.js')
+  const PER = 0.05
+  /** 声にした文から、ElevenLabs と同じ形の時刻表を組む */
+  const alignOf = (spoken) => ({
+    characters: [...spoken],
+    character_start_times_seconds: [...spoken].map((_, i) => i * PER),
+    character_end_times_seconds: [...spoken].map((_, i) => (i + 1) * PER),
+  })
+  const wordsAt = (t) => {
+    const out = []
+    const re = /[A-Za-z0-9'’$%.,:-]+/g
+    let m
+    while ((m = re.exec(t))) out.push({ w: m[0], at: m.index })
+    return out
+  }
+
+  /** **終わりが数字の文**(これが出なかった) */
+  const 数字で終わる = [
+    "I'd like to book a seat on March 8.",
+    'The fare is $25.',
+    'Can I change it to March 8 or 9?',
+    'The meeting starts at 10 A.M.',
+  ]
+  /** **終わりが数字でない文**(こちらは前から正しかった。壊していないか見る) */
+  const ふつう = [
+    'How much are the tickets?',
+    'We need to work on the permit application this week.',
+  ]
+
+  const 抜け = []
+  const 逆戻り = []
+  for (const disp of [...数字で終わる, ...ふつう]) {
+    const t = charTimesOf(alignOf(speakText(disp).text), disp)
+    if (!t) { 抜け.push(`${disp}(時刻表そのものが出ない)`); continue }
+    let prev = -1
+    for (const { w, at } of wordsAt(disp)) {
+      const v = t.start[at]
+      if (!Number.isFinite(v)) { 抜け.push(`${disp} → ${w}`); continue }
+      if (v < prev - 0.001) 逆戻り.push(`${disp} → ${w}`)
+      prev = v
+    }
+  }
+  if (抜け.length) {
+    ng('語の時刻 … 時刻の入っていない語がある', 抜け.slice(0, 4).join(' / '))
+  } else ok(`語の時刻 … ${数字で終わる.length + ふつう.length} 文のどの語にも時刻が入る`)
+  if (逆戻り.length) {
+    ng('語の時刻 … 時刻が前へ戻っている', 逆戻り.slice(0, 4).join(' / '))
+  } else ok('語の時刻 … 前へ戻らない(語の順に進む)')
+
+  /* **いちばん大事な1本。** 利用者が名指しした文で、
+     **最後の語が「March」より後ろ**にあること。
+     ここが同じ時刻なら、光りはその語を飛ばす */
+  {
+    const disp = "I'd like to book a seat on March 8."
+    const t = charTimesOf(alignOf(speakText(disp).text), disp)
+    const march = t?.start[disp.indexOf('March')]
+    const eight = t?.start[disp.indexOf('8')]
+    if (Number.isFinite(march) && Number.isFinite(eight) && eight > march) {
+      ok(`語の時刻 … 「March 8.」の 8 は March より後ろ(${march.toFixed(2)} → ${eight.toFixed(2)})`)
+    } else ng('語の時刻 … 「March 8.」の 8 に、March より後ろの時刻が入っていない',
+      `March ${march} / 8 ${eight}`)
+  }
+
+  /* **出ない側。声がそこで終わっているなら、埋めない。**
+     これが無いと「いつでも最後まで引き伸ばす」形に壊しても緑になる */
+  {
+    const disp = 'Book a seat on March 8.'
+    const spoken = speakText(disp).text
+    // **声を、当てはまる最後の文字までで切る**(その先の音が無い形)
+    const cut = spoken.slice(0, spoken.indexOf('March') + 5)
+    const t = charTimesOf(alignOf(cut), disp)
+    const at8 = t?.start[disp.indexOf('8')]
+    if (t && !Number.isFinite(at8)) {
+      ok('語の時刻 … 声がそこで終わっていれば、埋めない(無いものを見せない)')
+    } else ng('語の時刻 … 声が無いところにまで時刻を入れている', String(at8))
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ⑭ **発言の「終わり」も使う**(第5.214節・2026-09 実機)
+
+     > 文ごとのリピートをしたら、相変わらず最後まで再生される前に
+     > 折り返され、前の文の途中から繰り返されます
+
+   控えの時計より音声のほうが長い(実機で 控え 64.00 / 音声 65.41)。
+   `voice_segments` は発言ごとの**始まりと終わりの両方**を返しているのに、
+   32手めは**始まりしか読んでいなかった。** だから発言の頭だけが合い、
+   **発言の中は控えの時計のまま**だった。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n── ⑭ 発言の「終わり」も使う(第5.214節)──')
+{
+  const { fitTime, fitWindows, segApply, segFitOf, segWindowsOf } =
+    await import('../src/lib/wholeAudio.js')
+
+  // 控え: 発言1 = 0〜2 秒 / 発言2 = 2〜5 秒(あいだの無音は数えられていない)
+  const items = [{ start: 0, end: 2 }, { start: 2, end: 5 }]
+  // 実測: 発言1 = 0〜2.2 / 発言2 = 2.6〜5.9(1.41 秒ぶん長い、の形)
+  const segs = [
+    { dialogue_input_index: 0, start_time_seconds: 0, end_time_seconds: 2.2 },
+    { dialogue_input_index: 1, start_time_seconds: 2.6, end_time_seconds: 5.9 },
+  ]
+  const sents = [
+    { start: 0, end: 1, item: 0 }, { start: 1, end: 2, item: 0 },
+    { start: 2, end: 3.5, item: 1 }, { start: 3.5, end: 5, item: 1 },
+  ]
+
+  const wins = segWindowsOf(segs, items)
+  if (!wins) ng('発言の窓 … 取れていない')
+  else {
+    const got = fitWindows(sents, wins)
+    const near = (a, b) => Math.abs(a - b) < 0.001
+    /* **頭も尻も実測に合う。** 頭だけ合わせると、発言の中で先へ進む */
+    if (near(got[0].start, 0) && near(got[1].end, 2.2)
+      && near(got[2].start, 2.6) && near(got[3].end, 5.9)) {
+      ok('発言の窓 … 発言の頭も終わりも、実測とそろう')
+    } else {
+      ng('発言の窓 … 頭か終わりが実測とずれている',
+        got.map((g) => `${g.start.toFixed(2)}〜${g.end.toFixed(2)}`).join(' / '))
+    }
+    /* **発言の中も配る。** 頭だけずらす形(`shiftItems`)だと、
+       発言1の**最後の文の終わり**は 2.0 のままになる ——
+       **そこで折り返すと、まだ 0.2 秒ぶん音が残っている。**
+       これが「最後まで再生される前に折り返される」そのものである */
+    if (got[1].end > 2.0 + 0.001) {
+      ok('発言の窓 … 発言の中の文も、そのぶん伸びる'
+        + `(発言1の最後の文の終わり ${got[1].end.toFixed(2)}・頭だけなら 2.00)`)
+    } else {
+      ng('発言の窓 … 発言の中が控えの時計のまま', `${got[1].end.toFixed(2)}`)
+    }
+    /* **飛び先も同じ写し方で写す。** ここを忘れると、鳴り出しの一瞬だけ
+       別の場所へ跳ぶ */
+    const t = fitTime(1, { how: 'segments', wins }, items)
+    if (near(t, 1.1)) ok(`発言の窓 … 飛び先も同じ写し方(1.00 → ${t.toFixed(2)})`)
+    else ng('発言の窓 … 飛び先が古い時計のまま', String(t))
+  }
+
+  /* **合わなければ、何も返さない。** 当てずっぽうで伸ばすと別の文を指す */
+  const だめ = [
+    ['数が合わない', segs.slice(0, 1)],
+    ['窓が逆さ', [segs[0], { ...segs[1], end_time_seconds: 2.5 }]],
+    ['うしろへ戻る', [segs[0], { ...segs[1], start_time_seconds: 1.0, end_time_seconds: 4.0 }]],
+    ['幅が違いすぎる', [segs[0], { ...segs[1], start_time_seconds: 2.6, end_time_seconds: 20 }]],
+    ['終わりが無い', segs.map((x) => ({ ...x, end_time_seconds: undefined }))],
+  ]
+  const 通った = だめ.filter(([, sg]) => segWindowsOf(sg, items)).map(([n]) => n)
+  if (通った.length) ng('発言の窓 … 合わない形でも返している', 通った.join(' / '))
+  else ok('発言の窓 … 合わない形では返さない(5とおり)')
+
+  /* **終わりが無い古い控えは、これまでどおり頭だけで合わせる**
+     (行き止まりを作らない) */
+  const 頭だけ = segFitOf(segs.map((x) => ({ ...x, end_time_seconds: undefined })), items)
+  if (頭だけ?.how === 'heads' && segFitOf(segs, items)?.how === 'windows') {
+    ok('発言の窓 … 終わりが無い控えは、頭だけで合わせる(受け皿が生きている)')
+  } else ng('発言の窓 … 受け皿に落ちていない', JSON.stringify(頭だけ))
+  /* **呼ぶ側に分岐を置かせない**(判断は1か所) */
+  const 写し = segApply(sents, segFitOf(segs, items))
+  if (Math.abs(写し[3].end - 5.9) < 0.001) ok('発言の窓 … `segApply()` 1つで写せる')
+  else ng('発言の窓 … `segApply()` が写していない', String(写し[3].end))
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

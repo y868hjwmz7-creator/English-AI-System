@@ -53,9 +53,10 @@ import { voiceRateOf } from '../data/clipVoices.js'
 import { finished, nowPlaying, stopped, takeMark } from './playMark.js'
 import {
   REPEAT_UNITS, alignEndOf, charTimesOf, clockFitOf, clockScaleOf, fitTime, knownDur,
-  segOffsOf, stickyIndex,
+  segApply, segFitOf, stickyIndex,
   makeRepeatSeeker, rangeOf, repeatSeek, scaleSpans, seekSentence,
-  foldWorst, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf, spanForRange,
+  foldWorst, fitWindows, sentenceSpansOf, shiftEach, shiftItems, shiftSeams, slipOf,
+  spanForRange,
 } from './wholeAudio.js'
 import {
   sentenceShares, sentenceTimesOf, sharesToTimes, splitSentences,
@@ -395,10 +396,12 @@ export async function readAloud(text, {
        鳴らす道で、控えの秒をそのまま使っていた。会話では発言と発言の
        あいだの無音が控えに入っていないので、**先へ行くほど手前を鳴らす。**
        **道が2つあるものは、両方を数える**(27手めの戒め) */
-    const segShift = segOffsOf(got?.segments, got?.spans)
+    /* **発言の終わりも使う**(第5.214節)。頭だけ合わせると、
+       1つの発言が数文あるとき**その中で先へ進んでいく** */
+    const segShift = segFitOf(got?.segments, got?.spans)
     /* **控えそのものを書き換えない。** `wholeClip` は同じものを
        覚えて返すので、書き換えると押すたびに二重・三重にずれる */
-    const wSpans = segShift ? shiftItems(got.spans, segShift) : got?.spans
+    const wSpans = segShift ? segApply(got.spans, segShift) : got?.spans
     const span = wSpans?.length === whole.texts.length
       ? rangeOf(wSpans, whole.index) : null
     if (span) {
@@ -411,7 +414,7 @@ export async function readAloud(text, {
          **その段落の中だけ**で動かす(押した段落から出ていかない) */
       const raw = sentenceSpansFor(got, whole.texts)
       // 文の区間も、同じだけずらす(`item` を見るので1つの道具で足りる)
-      const sent = (raw && segShift) ? shiftItems(raw, segShift) : raw
+      const sent = (raw && segShift) ? segApply(raw, segShift) : raw
       holdCursor(sent, span)
       /* **いま読んでいる文を光らせる**(2026-09 実機・利用者の指摘)。
          この項目の文だけを送る(ほかの段落を光らせない) */
@@ -840,7 +843,8 @@ export function readAloudSequence(parts, {
      *   返している。31回、こちらはそれを捨てて波形から測ろうとしていた。
      *   **あるときは、波をほどきに行く必要そのものが無い**
      *   (ほどく1〜2秒も、しきい値の当て推量も要らなくなる)。 */
-    const segOffs = segOffsOf(got.segments, got.spans)
+    // **発言の終わりも使う**(第5.214節)。窓が使えなければ頭だけに落ちる
+    const segOffs = segFitOf(got.segments, got.spans)
     const seamOffs = segOffs ? null : await wholeSeams(got.url, got.spans, sent)
     if (!alive()) return true
 
@@ -978,7 +982,14 @@ export function readAloudSequence(parts, {
                `how === 'same'`(そろっている)なら配る時間が無いので、
                20手めの歯止め(直すものが無いときは直さない)は残す */
             ? {
-              how: 'segments', k: 1, per: 0, offs: segOffs, sentOffs: null, gaps: base.gaps,
+              how: 'segments',
+              k: 1,
+              per: 0,
+              offs: segOffs.offs,
+              /* **窓(始まり+終わり)が取れていたら、そちらで写す**(第5.214節) */
+              wins: segOffs.wins,
+              sentOffs: null,
+              gaps: base.gaps,
             }
             : (seamOffs && base.how !== 'same')
             ? {
@@ -1031,11 +1042,16 @@ export function readAloudSequence(parts, {
             const raw = spans
             const want = fitTime(at, fit, raw)
             if (fit.how === 'measured' || fit.how === 'segments') {
-              spans = shiftItems(spans, fit.offs)
+              /* **窓があれば、頭も尻も実測に合う**(第5.214節)。
+                 `shiftItems()` は頭しか合わせないので、
+                 **発言の中で先へ進んでいく**(文ごとのリピートが
+                 最後まで鳴る前に折り返していたのは、これである) */
+              spans = fit.wins ? fitWindows(spans, fit.wins) : shiftItems(spans, fit.offs)
               /* **文まで測れていたら、1文ずつ当てる**(19手め)。
                  `shiftItems()` は同じ発言の文に同じずれしか当てないので、
                  **発言の中の継ぎ目が控えの時計のまま**になる */
-              sent = fit.sentOffs ? shiftEach(sent, fit.sentOffs) : shiftItems(sent, fit.offs)
+              sent = fit.wins ? fitWindows(sent, fit.wins)
+                : (fit.sentOffs ? shiftEach(sent, fit.sentOffs) : shiftItems(sent, fit.offs))
             } else if (fit.how === 'scale') {
               spans = scaleSpans(spans, fit.k)
               sent = scaleSpans(sent, fit.k)
