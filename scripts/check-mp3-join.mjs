@@ -4964,5 +4964,42 @@ console.log('\n── ⑮ 組み上がった道を、丸ごと通す(第5.216節
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   ⑯ **貼れば再現できる控え**(第5.217節・2026-09 実機・5度め)
+
+   5回直しても実機で直らない。**手元で作れる形では、もう誤差 0.00 秒**
+   である(語・文・発言の窓・組み上がった道、どれも)。
+   残る違いは**本物のデータ**にしかなく、こちらは ElevenLabs にも
+   Supabase にも届かないので、**1度も見ていない。**
+
+   だから「この数字をコピー」で**生の `voice_segments` と文の区間**が
+   そのまま貼れるようにした。**これが無いと、次の1手が決められない。**
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n── ⑯ 貼れば再現できる控え(第5.217節)──')
+{
+  const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const clips = noC(read('src/lib/audioClips.js'))
+  const readA = noC(read('src/lib/readAloud.js'))
+  const app = noC(read('src/App.jsx'))
+
+  const miss = []
+  // **生の数字を、貼る側へ渡していること**
+  if (!/raw: \{ segs: got\.segments, texts: /.test(readA)) miss.push('生の数字を渡していない')
+  if (!/segments = \$\{JSON\.stringify\(raw\.segs/.test(clips)) miss.push('`voice_segments` を写していない')
+  if (!/文の区間 = \$\{JSON\.stringify\(/.test(clips)) miss.push('文の区間を写していない')
+  // **ボタンが、短い1行ではなく詳しい控えを写していること**
+  if (!/lastClipReport\(\) \|\| clipNote/.test(app)) miss.push('ボタンが短い1行しか写していない')
+  if (!/export const lastClipReport/.test(clips)) miss.push('詳しい控えの出口が無い')
+  if (miss.length) ng('貼れる控え … 届かない', miss.join(' / '))
+  else ok('貼れる控え … 生の `voice_segments` と文の区間が、1回押せば貼れる')
+
+  /* **画面の1行は短いまま。** 長い控えをそのまま出すと、
+     知らせが画面を埋めてしまう(**邪魔をしない静かな出し方**・CLAUDE.md) */
+  if (/setDetail\(`\[調査中\] 1本で鳴っています。控え/.test(clips)) {
+    ok('貼れる控え … 画面に出す1行は、これまでどおり短い')
+  } else ng('貼れる控え … 画面の1行まで長くしている')
+}
+
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

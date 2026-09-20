@@ -446,7 +446,7 @@ function segText(seg, need) {
 }
 
 export function noteWholeClock({
-  align, dur, fit, sents, kind = null, cut = null, seg = null,
+  align, dur, fit, sents, kind = null, cut = null, seg = null, raw = null,
 }) {
   /* **発言ごとの窓も出す**(第5.215節)。ここが本当の決め手である ——
      控えの窓と実測の窓が、どれだけ食い違っているか。
@@ -479,7 +479,17 @@ export function noteWholeClock({
     + `${gaps ? ` / 継ぎ目 ${gaps}` : ''}`
     + `${Number.isFinite(cut) ? ` / 声の後ろを削る 最大 ${Math.round(cut * 1000)}ms` : ''}`
     + `${wins ? ` / 発言の窓 ${wins}` : ''}`
-    + `${heads ? ` / 文の頭 ${heads}` : ''}`)
+    + `${heads ? ` / 文の頭 ${heads}` : ''}`,
+  /* **貼る用。** 生の `voice_segments` と、文ごとの区間をそのまま出す。
+     **これが無いと、こちらは何も確かめられない**(第5.217節) */
+  raw ? [
+    `[調査中・詳しい控え] 控え ${n(align)} 秒 / 音声 ${n(dur)} 秒 / ${how}`,
+    `segments = ${JSON.stringify(raw.segs ?? null)}`,
+    `文の区間 = ${JSON.stringify((sents ?? []).map((s) => [
+      s.item, Number(s.start.toFixed(3)), Number(s.end.toFixed(3)), s.charIndex,
+    ]))}`,
+    `発言の英文 = ${JSON.stringify(raw.texts ?? null)}`,
+  ].join('\n') : null)
 }
 
 /** 1本にできなかった理由の控え。**`noteSentClock()` が言い添える** */
@@ -512,7 +522,22 @@ export function noteSentClock({ sure, cut }) {
     + `${Number.isFinite(cut) ? ` / 声の後ろを削る 最大 ${Math.round(cut * 1000)}ms` : ''}`)
 }
 
-const setDetail = (d) => {
+/**
+ * **貼れる形の、詳しい控え**(第5.217節)。
+ *
+ * 画面に出す1行は短くしてあるが、**こちらが要るのは生の数字**である
+ * (`voice_segments` と、文ごとの区間と、音声の長さ)。
+ * 5回直しても実機で直らないのは、**本物のデータを1度も見ていない**
+ * からで、手元で作れる形では**誤差 0.00 秒**までしか出ない。
+ *
+ * **「この数字をコピー」は、こちらを写す。** 画面は短いまま、
+ * 貼れば全部が届く。
+ */
+let lastReport = null
+export const lastClipReport = () => lastReport || lastDetail || ''
+
+const setDetail = (d, full = null) => {
+  lastReport = full || d
   lastDetail = d
   // **知らせで画面を落とさない。** 伝えられなくても、音は鳴る
   troubleListeners.forEach((fn) => { try { fn(d) } catch { /* 無視する */ } })

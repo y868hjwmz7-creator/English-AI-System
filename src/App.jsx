@@ -37,7 +37,7 @@ import {
 import JobBar from './components/JobBar.jsx'
 import Loading from './components/Loading.jsx'
 import LearnerBar from './components/LearnerBar.jsx'
-import { onClipTrouble, checkClipGateway } from './lib/audioClips.js'
+import { onClipTrouble, checkClipGateway, lastClipReport } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
 import Progress from './components/Progress.jsx'
@@ -936,7 +936,11 @@ export default function App() {
             {/^\[調査中\]|\[調査中\]/.test(clipNote) && (
               <button type="button" className="btn btn--small"
                       onClick={() => {
-                        navigator.clipboard?.writeText?.(clipNote)
+                        /* **画面の1行ではなく、詳しい控えを写す**
+                           (第5.217節)。生の `voice_segments` と
+                           文ごとの区間が入っているので、
+                           **貼ればこちらで再現できる** */
+                        navigator.clipboard?.writeText?.(lastClipReport() || clipNote)
                           .then(() => setClipCopied(true))
                           .catch(() => setClipCopied(false))
                       }}>

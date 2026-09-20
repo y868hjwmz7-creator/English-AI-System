@@ -1070,6 +1070,9 @@ export function readAloudSequence(parts, {
               /* **区切りが届いているか**も出す(33手め)。無いときは、
                  窓口が古いのか返っていないのかまで言い切る */
               seg: { has: !!segOffs, rev: got.rev },
+              /* **生の数字も添える**(第5.217節)。画面の1行は短いまま、
+                 「この数字をコピー」で全部が貼れる */
+              raw: { segs: got.segments, texts: list.map((p) => p.text) },
             })
             /* 続きから始めたときは、飛んだ先も控えの時計のままだった。
                **鳴り出した直後の1回だけ**、合わせ直す */
@@ -1085,6 +1088,9 @@ export function readAloudSequence(parts, {
               /* **区切りが届いているか**も出す(33手め)。無いときは、
                  窓口が古いのか返っていないのかまで言い切る */
               seg: { has: !!segOffs, rev: got.rev },
+              /* **生の数字も添える**(第5.217節)。画面の1行は短いまま、
+                 「この数字をコピー」で全部が貼れる */
+              raw: { segs: got.segments, texts: list.map((p) => p.text) },
             })
           }
         }
