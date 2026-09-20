@@ -9374,3 +9374,28 @@ button.wbfilter-ctl { text-align: left; }
 .lesson-owner-name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ── セッションの記録の「その日のもの」(第5.219節・2026-09 利用者の指定)
+      記録・その日の教材・その日に印を付けた語を、1か所から たどる。
+      **隙間は `gap` で作る**(共通ルール) */
+.notes-day {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.notes-day-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* 語は英字が続くので、**折り返せるようにする**(はみ出して押せなくならない) */
+.notes-day-words {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+}

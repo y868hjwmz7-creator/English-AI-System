@@ -53,6 +53,14 @@ export default function LessonNotes({
   learnerName = '',
   /** レッスン表示の中に出すときは、見出しを出さない */
   bare = false,
+  /**
+   * **選んでいる日を、呼ぶ側にも知らせる**(第5.219節)。
+   *
+   * 「今週の宿題」は、その日にアサインされた教材とその日に印を付けた語を
+   * 並べて出す。**その判断は呼ぶ側が持つ** —— ここは日付を選ぶ道具で
+   * あって、宿題のことを知らない(**判断を2か所に置かない**)。
+   */
+  onDate = null,
 }) {
   /* **書けるのはトレーナーと管理者だけ**(0032)。
      役割は `viewer.js` に1つだけ置いてある。**判定をここに作らない。**
@@ -81,6 +89,10 @@ export default function LessonNotes({
   meRef.current = me
 
   useEffect(() => { getSession().then((s) => setMe(s?.user?.id ?? null)) }, [])
+
+  /* **選んでいる日を知らせる。** 開いた時点でも1回知らせるので、
+     呼ぶ側は「まだ何も選ばれていない」を考えなくてよい */
+  useEffect(() => { onDate?.(date) }, [date])
 
   // その日の1枚を読む。**日付が変わったら読み直す**
   useEffect(() => {

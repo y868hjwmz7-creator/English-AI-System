@@ -8252,6 +8252,115 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
 }
 
 /* ────────────────────────────────────────────────────────────────
+   第5.219節 セッションの記録を上へ。日付を選んだら、その日のもの
+
+     > 一番下までスクロールすると「セッションの記録」が見れるが、これだと
+     > 教材(宿題)が増えると大変です。セッションの記録を上に持ってきて
+     > ください。そして、日付を選んだら、実際のセッションの記録の書き込みが
+     > 見れるとともに、その日にアサインされた教材のタイトルとリンクが
+     > 出るようにしてください。
+
+   **新しい問い合わせを増やしていない。** 宿題は `assigned_at` を持って
+   いるので、すでに読んである一覧から数えるだけである(語だけ1回読む)。
+   ──────────────────────────────────────────────────────────────── */
+console.log('\n── セッションの記録を上へ(第5.219節)──')
+{
+  const hw = readFileSync(
+    new URL('../src/components/LearnerHomework.jsx', import.meta.url), 'utf8')
+  const notes = readFileSync(
+    new URL('../src/components/LessonNotes.jsx', import.meta.url), 'utf8')
+  const vocab = readFileSync(
+    new URL('../src/lib/vocab.js', import.meta.url), 'utf8')
+  /* **コメントを落としてから、使っている形で数える**(CLAUDE.md)。
+     この節の言葉は、すぐ上の説明の中にも同じだけ出てくる */
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const hwC = noC(hw)
+
+  /* ① **上に出ていること。** 「宿題の一覧より前」で見る ——
+        行の番号を書き写すと、1行足しただけで赤くなる(性質で見る) */
+  {
+    const i記録 = hwC.indexOf('notes-card')
+    const i宿題 = hwC.indexOf('homework-card')
+    ok(i記録 >= 0 && i宿題 >= 0 && i記録 < i宿題,
+      '記録の場所 … セッションの記録が、宿題の一覧より上にある',
+      `記録 ${i記録} / 宿題 ${i宿題}`)
+  }
+
+  /* ② **開くまで問い合わせない。** `<details>` は畳んでいても中身が
+        DOM にあるので、そのまま置くと見ない人のぶんまで読みに行く */
+  {
+    const i合図 = hwC.indexOf('{notesOpen && (')
+    const i呼出 = hwC.indexOf('<LessonNotes')
+    ok(/onToggle=\{\(e\) => setNotesOpen\(e\.currentTarget\.open\)\}/.test(hwC)
+      && i合図 >= 0 && i呼出 > i合図,
+      '記録の場所 … 開いたときに初めて読みに行く(畳んだままなら問い合わせない)',
+      `合図 ${i合図} / 呼び出し ${i呼出}`)
+  }
+
+  /* ③ **選んだ日が、呼ぶ側へ届くこと。** 判断は呼ぶ側(宿題の画面)が
+        持ち、`LessonNotes` は日付を選ぶ道具のままにする */
+  ok(/onDate\?\.\(date\)/.test(noC(notes)) && /onDate=\{setPickedDay\}/.test(hwC),
+    'その日のもの … 選んだ日が、宿題の画面へ届く')
+
+  /* ④ **端末の日付で数えること。** `.slice(0, 10)` だと世界標準時の日に
+        なり、**夜にアサインされた教材が前日に回る** */
+  ok(/toDateKey\(a\.assigned_at\) === pickedDay/.test(hwC)
+    && !/assigned_at[^\n]*slice\(0, ?10\)/.test(hwC),
+    'その日のもの … 教材は端末の日付で数える(夜のぶんが前日に回らない)')
+
+  /* ⑤ **語の日の切れ目も、同じ時計で切ること**(数え方を2通り持たない)。
+        教材を `toDateKey`(端末)で、語を UTC で切ると、
+        **同じ日を選んでいるのに片方だけ前日のものが出る** */
+  {
+    const v = noC(vocab)
+    const 中 = v.slice(v.indexOf('export async function loadWordsMarkedOn'),
+      v.indexOf('export async function loadHomeworkWords'))
+    ok(中.length > 0 && /new Date\(`\$\{day\}T00:00:00`\)/.test(中)
+      && !/slice\(0, ?10\)|T00:00:00Z|setUTC/.test(中),
+      'その日のもの … 語の日の切れ目も、端末の時計で切る(数え方を2通り持たない)')
+  }
+
+  /* ⑥ **新しい問い合わせを増やしていないこと。** 宿題は `assigned_at` を
+        持っているので、すでに読んである一覧から数えるだけでよい */
+  ok(/assignments\.filter\(\(a\) => a\.assigned_at/.test(hwC)
+    && !/loadAssignmentsOn|assignmentsByDay|rpc\('assignments_on/.test(hwC),
+    'その日のもの … 教材は、読んである一覧から数える(問い合わせを増やさない)')
+
+  /* ⑦ **飛び先の目印があること。** 押しても動かない行き止まりを作らない */
+  ok(/data-mid=\{a\.material\?\.id\}/.test(hwC)
+    && /document\.querySelector\(`\[data-mid="\$\{id\}"\]`\)/.test(hwC),
+    'その日のもの … 題名を押すと、その宿題のところへ飛ぶ(行き止まりを作らない)')
+
+  /* ⑧ **0 と「読めなかった」を取り違えない**(CLAUDE.md)。
+        無い日は「ありません」と書く —— 黙って消さない */
+  ok(/この日にアサインされた教材はありません/.test(hwC)
+    && /この日に印を付けた語はありません/.test(hwC),
+    'その日のもの … 無い日は「ありません」と書く(黙って消さない)')
+
+  /* ⑨ **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+        日付を選ぶまでは、その日の箱そのものを出さない */
+  ok(/const dayBox = !pickedDay \? null : \(/.test(hwC),
+    'その日のもの … 日付を選ぶまでは、その日の箱を出さない')
+
+  /* ⑩ **語は「その日に印を付けた語」であって「その日に出た語」ではない。**
+        分かっていないことを、分かったように書かない */
+  ok(/印を付けた語/.test(hwC) && !/この日に出た語|この日に学んだ語/.test(hwC),
+    'その日のもの … 語は「印を付けた語」と書く(実際より広く言わない)')
+
+  /* ⑪ **何で絞っているのかは、呼ぶ側が言う**(0053 と同じ話)。
+        渡さないと、単語帳が**「この教材の語だけ」と出して嘘をつく** ——
+        その日に印を付けた語は、どの教材の語でもない */
+  {
+    const app = noC(readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+    ok(/onPracticeWords\(\s*dayWords\.map[\s\S]{0,200}?'この日に印を付けた語',/.test(hwC)
+      && /onPracticeWords=\{\(words, label, what\) =>/.test(app)
+      && /what: what \|\| 'この教材の語'/.test(app),
+      'その日のもの … 単語帳の札も「印を付けた語」になる(「この教材の語」と嘘をつかない)')
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────
    第5.190節 自由に書く「中身」の欄を、どの種類にも出す
 
      > それとも、スピーチの場合は「話す内容(任意)」に追加すると

@@ -19,6 +19,9 @@ import { printElement } from '../lib/print.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
+/* その日に印を付けた語(第5.219節)。**日の切れ目は `toDateKey` と同じ** */
+import { loadWordsMarkedOn } from '../lib/vocab.js'
+import { toDateKey } from '../lib/format.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
@@ -196,6 +199,93 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
 
   /* **絞る・引く・並べるは `narrowHomework()` 1か所**(トレーナーの
      画面と分け合っている)。ここで数え直すと必ず食い違う */
+  /* ══════════════════════════════════════════════════════════════
+     **その日のもの**(第5.219節・2026-09 利用者の指定)
+
+       > 日付を選んだら、実際のセッションの記録の書き込みが見れるとともに、
+       > その日にアサインされた教材のタイトルとリンクが出るようにしてください。
+
+     **新しい問い合わせを増やしていない。** 宿題は `assigned_at` を
+     持っているので、すでに読んである `assignments` から数えるだけである
+     (語だけは `word_reviews` を1回読む)。
+     ══════════════════════════════════════════════════════════════ */
+  /** セッションの記録を開いているか。**開くまで問い合わせない** */
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [pickedDay, setPickedDay] = useState(null)
+  const [dayWords, setDayWords] = useState([])
+  useEffect(() => {
+    if (!learnerId || !pickedDay) { setDayWords([]); return undefined }
+    let alive = true
+    loadWordsMarkedOn(learnerId, pickedDay).then(({ data }) => {
+      if (alive) setDayWords(data ?? [])
+    })
+    return () => { alive = false }
+  }, [learnerId, pickedDay])
+
+  /** その日にアサインされた宿題。**端末の日付で見る**(`toDateKey`) */
+  const dayItems = pickedDay
+    ? assignments.filter((a) => a.assigned_at && toDateKey(a.assigned_at) === pickedDay)
+    : []
+
+  /* **その宿題のところへ飛ぶ。** 教材のカードは `data-mid` を持っている
+     (リンクで渡す道と同じ目印)。**新しい仕組みを作らない** */
+  const jumpTo = (id) => {
+    const el = document.querySelector(`[data-mid="${id}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const 知らなかった = dayWords.filter((w) => w.status === 'unknown')
+  const dayBox = !pickedDay ? null : (
+    <div className="notes-day">
+      <p className="field-hint">
+        <strong>{formatDate(`${pickedDay}T00:00:00`)}</strong> のもの
+      </p>
+      {/* ── その日にアサインされた教材 ───────────────────────── */}
+      {dayItems.length > 0 ? (
+        <ul className="notes-day-list">
+          {dayItems.map((a) => (
+            <li key={a.id}>
+              <button type="button" className="btn btn--small"
+                      onClick={() => jumpTo(a.material?.id)}>
+                {a.material?.title || '(題名がありません)'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        /* **黙って消さない。** 0 と「読めなかった」を取り違えない */
+        <p className="muted">この日にアサインされた教材はありません。</p>
+      )}
+      {/* ── その日に印を付けた語 ─────────────────────────────
+            **「その日に出た語」ではない。** 押した語である ——
+            分かっていないことを、分かったように書かない */}
+      {dayWords.length > 0 ? (
+        <>
+          <p className="muted">
+            {`この日に印を付けた語 ${dayWords.length} 語`}
+            {知らなかった.length ? `(うち「知らなかった」${知らなかった.length} 語)` : ''}
+          </p>
+          <p className="notes-day-words" lang="en">
+            {dayWords.map((w) => w.word_norm).join(' / ')}
+          </p>
+          {onPracticeWords && (
+            <button type="button" className="btn btn--small"
+                    onClick={() => onPracticeWords(
+                      dayWords.map((w) => w.word_norm),
+                      formatDate(`${pickedDay}T00:00:00`),
+                      'この日に印を付けた語',
+                    )}>
+              単語帳でこの語だけ練習する
+            </button>
+          )}
+        </>
+      ) : (
+        <p className="muted">この日に印を付けた語はありません。</p>
+      )}
+    </div>
+  )
+
   const shown = narrowHomework(assignments, { filter, keyword, sort })
   const todo = shown.filter((a) => !a.learner_done_at)
   const done = shown.filter((a) => a.learner_done_at)
@@ -224,6 +314,41 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
+
+      {/* ── セッションの記録(0032)。**いちばん上に置く**
+             (第5.219節・2026-09 利用者の指定)
+
+               > 一番下までスクロールすると「セッションの記録」が見れるが、
+               > これだと教材(宿題)が増えると大変です。
+               > セッションの記録を上に持ってきてください。
+
+             宿題は増える一方なので、下に置くと**遠くなる一方**である。
+             畳んだままなので場所は取らず、開いたときに初めて読みに行く
+             (見ない人には通信も起きない)。
+
+             **日付を選ぶと、その日のものがまとめて出る**(下の `dayBox`)。
+             記録・教材・語を**1か所から**たどれるようにする。 */}
+      {learnerId && (
+        <details className="card notes-card"
+                 /* **開いたときだけ読みに行く**(第5.219節)。
+                    `<details>` は畳んでいても中身が DOM にあるので、
+                    そのまま置くと**見ない人のぶんまで問い合わせが起きる。**
+                    もとのコメントはそう書いてあったが、実際は
+                    そうなっていなかった(閉じていても読んでいた) */
+                 onToggle={(e) => setNotesOpen(e.currentTarget.open)}>
+          <summary className="card-title">セッションの記録</summary>
+          {notesOpen && (
+            <>
+              <p className="tip card-hint">
+                レッスンで担当トレーナーが書いた記録です。
+                <strong>日付を選ぶと、その日の教材と、その日に印を付けた語も出ます。</strong>
+              </p>
+              <LessonNotes learnerId={learnerId} onDate={setPickedDay} />
+              {dayBox}
+            </>
+          )}
+        </details>
+      )}
 
       {/* **「今週の宿題」の箱は置かない**(2026-09 利用者の指定)。
             > ゲストログインしている画面のトップ、
@@ -326,6 +451,10 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
           <section key={id} className="stack">
             {list.map((a) => (
               <div key={a.id}
+                   /* **セッションの記録から飛ぶための目印**(第5.219節)。
+                      教材の画面(`TrainerMaterials`)が発行の直後に使っている
+                      ものと**同じ名前**にしてある。**新しい仕組みを作らない** */
+                   data-mid={a.material?.id}
                    className={`card material-card homework-card${
                      a.learner_done_at ? ' is-done' : ''}`}>
                 {/* **トレーナー側の教材カードと同じ形にする**(2026-08 利用者の指定)。
@@ -612,19 +741,6 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
         )
       ))}
 
-      {/* ── セッションの記録(0032・2026-09 利用者の判断「ゲストにも見せる」)
-          レッスンでトレーナーが書いた記録。**ここでは読むだけ。**
-          畳んである。開いたときに初めて読みに行くので、
-          見ない人には通信も起きない */}
-      {learnerId && (
-        <details className="card notes-card">
-          <summary className="card-title">セッションの記録</summary>
-          <p className="tip card-hint">
-            レッスンで担当トレーナーが書いた記録です。日付ごとに残ります。
-          </p>
-          <LessonNotes learnerId={learnerId} />
-        </details>
-      )}
     </div>
   )
 }

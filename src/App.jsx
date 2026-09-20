@@ -1022,8 +1022,12 @@ export default function App() {
             ) : view === 'homework' ? (
               <LearnerHomework
                 me={profile}
-                onPracticeWords={(words, label) => {
-                  setOnlyWords({ words, label, what: 'この教材の語' })
+                /* **何で絞っているのかは、呼ぶ側が言う**(第5.219節)。
+                   ここで「この教材の語」と書き切ると、
+                   セッションの記録から入った「その日に印を付けた語」にも
+                   **「この教材の語だけ」と出て嘘になる** */
+                onPracticeWords={(words, label, what) => {
+                  setOnlyWords({ words, label, what: what || 'この教材の語' })
                   setView('wordbook')
                 }}
               />

@@ -919,6 +919,45 @@ export async function loadReviewWords(
   return readWordbook(learnerId, { status, limit, dueOnly })
 }
 
+/**
+ * **その日に印を付けた語**(第5.219節・2026-09 利用者の指定)。
+ *
+ *   > チェックした単語やフレーズ、quick response へのリンクも出せますか？
+ *
+ * `word_reviews` は「いつ印が変わったか」(`updated_at`)を持っている。
+ * だから**新しい表も列も要らない。**
+ *
+ * 【「その日に出た語」ではない】
+ *   ここで取れるのは**その日に「知らなかった / 知っていた」を押した語**
+ *   である。レッスンで出たが押さなかった語は入らない。
+ *   **画面にも、そう書く**(分かっていないことを、分かったように書かない)。
+ *
+ * 【日の切れ目は、端末の日付で見る】
+ *   `updated_at` は時刻付きなので、`.slice(0, 10)` だと世界標準時の日に
+ *   なり、**夜に押した語が前日に回る。** 端末の日の 0 時から翌 0 時までで
+ *   切る(`toDateKey` と同じ考え方・**数え方を2通り持たない**)。
+ *
+ * @param {string} learnerId 誰の
+ * @param {string} day "2026-09-20"
+ */
+export async function loadWordsMarkedOn(learnerId, day) {
+  if (!supabase) return ng('Supabase が設定されていません')
+  if (!learnerId || !/^\d{4}-\d{2}-\d{2}$/.test(String(day ?? ''))) return ok([])
+  const from = new Date(`${day}T00:00:00`)      // 端末の時刻として読まれる
+  if (Number.isNaN(from.getTime())) return ok([])
+  const to = new Date(from)
+  to.setDate(to.getDate() + 1)
+  const { data, error } = await supabase
+    .from('word_reviews')
+    .select('word_norm, status, updated_at')
+    .eq('learner_id', learnerId)
+    .gte('updated_at', from.toISOString())
+    .lt('updated_at', to.toISOString())
+    .order('updated_at', { ascending: true })
+  if (error) return fail(error, 'その日の語を読めませんでした')
+  return ok(data ?? [])
+}
+
 /** これまで配信した教材に出てきた語句(単語・フレーズ・語句の演習から) */
 export async function loadHomeworkWords(learnerId, { limit = 200 } = {}) {
   if (!supabase) return ng('Supabase が設定されていません')
