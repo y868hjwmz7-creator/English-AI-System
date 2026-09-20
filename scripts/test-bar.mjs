@@ -798,7 +798,14 @@ for (const [label, want] of Object.entries(WANT)) {
         .find((e) => (e.textContent || '').includes('集中モードを終える'))
       if (x) x.click()
     })
-    await page.waitForTimeout(200)
+    /* **閉じ終わるのを、時間ではなく「出たか」で待つ**(第5.215節)。
+       200ms の決め打ちでは間に合わないことがあり、**次の幅で
+       「集中モードの入り口が無い」と赤くなった**(同じコードで
+       もう一度走らせると緑だった)。
+       **壊れていないものが赤くなると、本当の赤を見落とす**(CLAUDE.md) */
+    await page.waitForFunction(() => [...document.querySelectorAll('.practice-row button')]
+      .some((e) => (e.textContent || '').includes('集中モード')), null, { timeout: 5000 })
+      .catch(() => {})
   }
   await page.close()
 }

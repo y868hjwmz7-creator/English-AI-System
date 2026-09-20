@@ -398,7 +398,7 @@ export async function readAloud(text, {
        **道が2つあるものは、両方を数える**(27手めの戒め) */
     /* **発言の終わりも使う**(第5.214節)。頭だけ合わせると、
        1つの発言が数文あるとき**その中で先へ進んでいく** */
-    const segShift = segFitOf(got?.segments, got?.spans)
+    const segShift = segFitOf(got?.segments, got?.spans, got?.alignment)
     /* **控えそのものを書き換えない。** `wholeClip` は同じものを
        覚えて返すので、書き換えると押すたびに二重・三重にずれる */
     const wSpans = segShift ? segApply(got.spans, segShift) : got?.spans
@@ -844,7 +844,7 @@ export function readAloudSequence(parts, {
      *   **あるときは、波をほどきに行く必要そのものが無い**
      *   (ほどく1〜2秒も、しきい値の当て推量も要らなくなる)。 */
     // **発言の終わりも使う**(第5.214節)。窓が使えなければ頭だけに落ちる
-    const segOffs = segFitOf(got.segments, got.spans)
+    const segOffs = segFitOf(got.segments, got.spans, got.alignment)
     const seamOffs = segOffs ? null : await wholeSeams(got.url, got.spans, sent)
     if (!alive()) return true
 

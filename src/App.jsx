@@ -208,6 +208,8 @@ export default function App() {
    * **役割が分からないうちも出さない**(既定は「見せない」)。
    */
   const [clipNote, setClipNote] = useState(null)
+  /** 「この数字をコピー」を押したか(押したことが分かるようにする) */
+  const [clipCopied, setClipCopied] = useState(false)
   useEffect(() => onClipTrouble((detail) => {
     const role = viewerRoleOf()
     if (role !== 'trainer' && role !== 'owner') return
@@ -216,6 +218,7 @@ export default function App() {
        **音声が作れるようになっても居座っていた。**
        「音声がちゃんと作られているのにいまだにこの表示が消えない」 */
     setClipNote(detail ? String(detail) : null)
+    setClipCopied(false)      // 知らせが変わったら、押した印も戻す
   }), [])
   /* 試作版の断り書きの開け閉め(`noticeOpen`)は**外した**(2026-09)。
      断り書きそのものを消したので、覚えておくものが無い。
@@ -919,6 +922,27 @@ export default function App() {
                 いないのに「作れませんでした」と出ていた。
                 起きたことは `audioClips.js` の側が書く */}
             <span className="jobnote-text">{clipNote}</span>
+            {/* ── **この数字を、そのまま送れるようにする**(第5.215節)──
+
+                  > まだズレています(2026-09 実機・3度め)
+
+                ハイライトのずれは、**こちらの環境からは1度も再現できない**
+                (ElevenLabs にも Supabase にも届かない)。
+                読み上げて写してもらうのは長すぎるので、**1回押せば
+                そのまま貼れる**形にする。**推測を重ねないための道である。**
+
+                `clipboard` が使えない端末では、**選んで写せるように
+                だけしておく**(行き止まりを作らない)。 */}
+            {/^\[調査中\]|\[調査中\]/.test(clipNote) && (
+              <button type="button" className="btn btn--small"
+                      onClick={() => {
+                        navigator.clipboard?.writeText?.(clipNote)
+                          .then(() => setClipCopied(true))
+                          .catch(() => setClipCopied(false))
+                      }}>
+                {clipCopied ? 'コピーしました' : 'この数字をコピー'}
+              </button>
+            )}
             <button type="button" className="nav-icon-btn"
                     onClick={() => setClipNote(null)} aria-label="お知らせを閉じる">
               <CloseIcon />

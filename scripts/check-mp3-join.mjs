@@ -900,11 +900,24 @@ function fakeMp3({
     else if (seekSentence(sent, s1, -1) !== s0) ng('前の文へ戻れない')
     else ok('◁▷ で1文ずつ動く')
 
-    /* **文の途中まで来ていたら、その文の頭へ戻す。**
-       聞き逃したのは、たいていいま鳴っている文である */
-    if (seekSentence(sent, s1 + 1.5, -1) !== s1) ng('途中から、その文の頭に戻らない')
-    else if (seekSentence(sent, s1 + 0.3, -1) !== s0) ng('入った直後なのに、もう1つ前へ行かない')
-    else ok('入って間もなければ1つ前、途中ならその文の頭へ')
+    /* **押した場所で行き先が変わらない**(第5.215節・2026-09 実機)。
+
+         > 送りと戻しのボタンも効かず変な挙動です。2連続で押すと効きますが、
+         > 一つ飛ばされたり一つだけ戻ったりと不安定です。
+
+       もとは「1.2 秒を過ぎていたらその文の頭へ」だった。
+       **押す前にどちらが起きるか分からない**ので、壊れて見える。
+       **文のどこで押しても、行き先は同じ1つ前**にする。 */
+    /* **同じ文の中の3か所**で押す(次の文へ入らない範囲にする) */
+    const 幅 = sent[2].start - s1
+    const 戻り先 = [0.1, 幅 / 2, 幅 - 0.1].map((d) => seekSentence(sent, s1 + d, -1))
+    if (戻り先.some((v) => v !== s0)) {
+      ng('◁ … 押した場所で行き先が変わる', 戻り先.join(' / '))
+    } else ok('◁ … 文のどこで押しても、行き先は1つ前で同じ')
+    /* **◁ のあと ▷ で、元の文に戻れること**(互いの逆になっている) */
+    if (seekSentence(sent, seekSentence(sent, s1 + 1.5, -1), 1) !== s1) {
+      ng('◁▷ … 押して戻しても、元の文に帰らない')
+    } else ok('◁▷ … 押して戻すと、元の文に帰る')
 
     // **端では動かさない**(`null` を返す → 画面は何もしない)
     if (seekSentence(sent, s0, -1) !== null) ng('先頭より前へ行こうとしている')
@@ -1876,11 +1889,12 @@ function fakeMp3({
   }
 
   /* 送り戻しの作法は、1本にまとめたときとまったく同じ(`seekSentence`)。
-     **文の途中まで来ていたらその文の頭へ、頭すぐなら1つ前へ** */
+     **文のどこで押しても、行き先は1つ前**(第5.215節)。
+     押した場所で変わると、利用者からは壊れて見える */
   {
-    const back = seekSentence(secs, secs[1].start + 2, -1)
+    const back = seekSentence(secs, secs[1].start + 0.9, -1)
     const backHead = seekSentence(secs, secs[1].start + 0.1, -1)
-    if (back !== secs[1].start) ng('文の途中から戻ると、その文の頭に来ない')
+    if (back !== secs[0].start) ng('文の途中から戻ると、1つ前に来ない')
     else if (backHead !== secs[0].start) ng('文の頭すぐから戻ると、1つ前に来ない')
     else if (seekSentence(secs, 0, 1) !== secs[1].start) ng('次の文へ進めない')
     else if (seekSentence(secs, 0, -1) !== null) ng('先頭より前へ戻ろうとしている')
@@ -4086,10 +4100,10 @@ function fakeMp3({
     /* **「名前が出てくるか」で見ない。** 説明の中にも同じ語がある */
     /* **窓(始まり+終わり)で決める**(第5.214節)。`segFitOf()` が
        窓と頭のどちらを使うかを1か所で決め、呼ぶ側は分岐を持たない */
-    if (!/const segOffs = segFitOf\(got\.segments, got\.spans\)/.test(read)) {
+    if (!/const segOffs = segFitOf\(got\.segments, got\.spans, got\.alignment\)/.test(read)) {
       miss.push('通しの道が呼んでいない')
     }
-    if (!/const segShift = segFitOf\(got\?\.segments, got\?\.spans\)/.test(read)) {
+    if (!/const segShift = segFitOf\(got\?\.segments, got\?\.spans, got\?\.alignment\)/.test(read)) {
       // **道が2つあるものは、両方を数える**(27手めの戒め)
       miss.push('段落ごとの道が呼んでいない')
     }
@@ -4744,6 +4758,73 @@ console.log('\n── ⑭ 発言の「終わり」も使う(第5.214節)──')
   const 写し = segApply(sents, segFitOf(segs, items))
   if (Math.abs(写し[3].end - 5.9) < 0.001) ok('発言の窓 … `segApply()` 1つで写せる')
   else ng('発言の窓 … `segApply()` が写していない', String(写し[3].end))
+
+  /* ── **控えの窓は、向こうが言う文字の番号から取る**(第5.215節)──
+
+       こちらは窓の端を**自分の文字合わせ(`spansOf`)から推し量って**いた。
+       画面の英文と声にする英文は別物なので、当てはめはごく小さくずれる。
+       そのずれがそのまま窓の端をずらし、**一定した1語ぶんの食い違い**になる。
+
+       `voice_segments` は `character_start_index` / `character_end_index` を
+       返している —— **どの発言が、時刻表のどの文字からどの文字までか**。 */
+  {
+    const PER2 = 0.1
+    const chars = [...'ABCDEFGHIJ']            // 10 文字。0〜0.5 / 0.5〜1.0
+    const al = {
+      characters: chars,
+      character_start_times_seconds: chars.map((_, i) => i * PER2),
+      character_end_times_seconds: chars.map((_, i) => (i + 1) * PER2),
+    }
+    /* **わざと食い違わせる。** 当てはめが言う窓(下の `ずれた`)は
+       0〜0.4 / 0.4〜1.0 だが、文字の番号が言う本当の窓は 0〜0.5 / 0.5〜1.0 */
+    const ずれた = [{ start: 0, end: 0.4 }, { start: 0.4, end: 1.0 }]
+    const 実測 = [
+      { dialogue_input_index: 0, start_time_seconds: 0, end_time_seconds: 0.5,
+        character_start_index: 0, character_end_index: 5 },
+      { dialogue_input_index: 1, start_time_seconds: 0.8, end_time_seconds: 1.3,
+        character_start_index: 5, character_end_index: 10 },
+    ]
+    // 「含まない」(前の終わり 5 = 次の頭 5)と読めるはずである
+    const w = segWindowsOf(実測, ずれた, al)
+    if (!w) ng('文字の番号 … 窓が取れていない')
+    else if (Math.abs(w[0].from - 0) < 1e-9 && Math.abs(w[0].span - 0.5) < 1e-9
+      && Math.abs(w[1].from - 0.5) < 1e-9 && Math.abs(w[1].span - 0.5) < 1e-9) {
+      ok('文字の番号 … 控えの窓を、当てはめではなく文字の番号から取る')
+    } else {
+      ng('文字の番号 … 当てはめの窓(0.4)をそのまま使っている',
+        w.map((x) => `${x.from}+${x.span}`).join(' / '))
+    }
+
+    /* **「含む」の並びも読めること。** 端の数え方を決め打ちにすると、
+       どちらかで必ず1文字ぶんずれる */
+    const 含む = [
+      { ...実測[0], character_end_index: 4 },
+      { ...実測[1], character_start_index: 5, character_end_index: 9 },
+    ]
+    const w2 = segWindowsOf(含む, ずれた, al)
+    if (w2 && Math.abs(w2[0].span - 0.5) < 1e-9) {
+      ok('文字の番号 … 「含む」の並びも、同じ答えになる')
+    } else ng('文字の番号 … 端の数え方を決め打ちにしている', JSON.stringify(w2))
+
+    /* **どちらとも言えなければ、何も返さない**(受け皿に落ちる)。
+       当て推量で1文字ぶんずらすほうが害が大きい */
+    const あいまい = [
+      { ...実測[0], character_end_index: 7 },
+      { ...実測[1], character_start_index: 5, character_end_index: 10 },
+    ]
+    const w3 = segWindowsOf(あいまい, ずれた, al)
+    if (w3 && Math.abs(w3[0].span - 0.4) < 1e-9) {
+      ok('文字の番号 … 読み取れないときは、当てはめの窓に落ちる')
+    } else ng('文字の番号 … あいまいな並びで当て推量している', JSON.stringify(w3))
+
+    /* **文字の番号が無い古い控えも、これまでどおり動く** */
+    const w4 = segWindowsOf(実測.map((x) => ({
+      ...x, character_start_index: undefined, character_end_index: undefined,
+    })), ずれた, al)
+    if (w4 && Math.abs(w4[0].span - 0.4) < 1e-9) {
+      ok('文字の番号 … 番号が無い控えは、これまでどおり当てはめの窓')
+    } else ng('文字の番号 … 番号が無い控えで落ちている', JSON.stringify(w4))
+  }
 }
 
 console.log(bad === 0 ? '\n✅ 音声のまとめの検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

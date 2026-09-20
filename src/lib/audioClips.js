@@ -448,6 +448,12 @@ function segText(seg, need) {
 export function noteWholeClock({
   align, dur, fit, sents, kind = null, cut = null, seg = null,
 }) {
+  /* **発言ごとの窓も出す**(第5.215節)。ここが本当の決め手である ——
+     控えの窓と実測の窓が、どれだけ食い違っているか。
+     **1回押せばそのまま貼れる**ので、長くても構わない */
+  const wins = (fit?.wins ?? []).slice(0, 6)
+    .map((w) => `${w.from.toFixed(2)}+${w.span.toFixed(2)}→${w.to.toFixed(2)}×${w.k.toFixed(3)}`)
+    .join(' ')
   const n = (v) => (Number.isFinite(v) ? v.toFixed(2) : '—')
   const heads = (sents ?? []).slice(0, 6).map((s) => n(s.start)).join(' / ')
   /* **継ぎ目の間(ま)を出す。** ここが決め手である ——
@@ -472,6 +478,7 @@ export function noteWholeClock({
     + (fit?.how === 'scale' ? ` ${Number.isFinite(fit.k) ? fit.k.toFixed(4) : '—'} 倍` : '')
     + `${gaps ? ` / 継ぎ目 ${gaps}` : ''}`
     + `${Number.isFinite(cut) ? ` / 声の後ろを削る 最大 ${Math.round(cut * 1000)}ms` : ''}`
+    + `${wins ? ` / 発言の窓 ${wins}` : ''}`
     + `${heads ? ` / 文の頭 ${heads}` : ''}`)
 }
 

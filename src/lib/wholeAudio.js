@@ -991,19 +991,70 @@ export const SEG_K_MAX = 2
  * @param {Array<{start:number,end:number}>} spans 項目ごとの区間(控えの時計)
  * @returns {{from:number,span:number,to:number,k:number}[]|null}
  */
-export function segWindowsOf(segments, spans) {
+/**
+ * **控えの窓を、向こうが言う文字の番号から取る**(第5.215節)。
+ *
+ * `voice_segments` は `character_start_index` / `character_end_index` も
+ * 返している —— **どの発言が、時刻表のどの文字からどの文字までか**である。
+ *
+ * こちらはそこを**自分の文字合わせ(`spansOf`)から推し量って**いた。
+ * 画面の英文と声にする英文は別物なので、当てはめはごく小さくずれる。
+ * そのずれがそのまま窓の端をずらし、**一定した1語ぶんの食い違い**になる。
+ *
+ * 【端の数え方は、**並びそのものから決める**】
+ *   `character_end_index` が「含む」のか「含まない」のかは書かれていない。
+ *   **当て推量で決めない。** 次の発言の頭と突き合わせれば分かる ——
+ *   前の終わりが次の頭と**同じ**なら「含まない」、**1つ手前**なら「含む」。
+ *   どちらとも言えなければ、**何も返さない**(これまでの受け皿に落ちる)。
+ *
+ * @returns {{start:number,end:number}[]|null} 控えの時計での、発言ごとの窓
+ */
+function charWindowsOf(by, alignment) {
+  const got = partsOf(alignment)
+  if (!got) return null
+  const n = got.chars.length
+  const cs = by.map((x) => Number(x?.character_start_index))
+  const ce = by.map((x) => Number(x?.character_end_index))
+  if (![...cs, ...ce].every(Number.isFinite)) return null
+  if (cs.some((v, i) => v < 0 || v >= n || ce[i] < v || ce[i] > n)) return null
+
+  // 端の数え方を、並びそのものから決める
+  let excl = 0
+  let incl = 0
+  for (let i = 1; i < cs.length; i += 1) {
+    if (ce[i - 1] === cs[i]) excl += 1
+    else if (ce[i - 1] === cs[i] - 1) incl += 1
+  }
+  if (excl === incl) return null          // どちらとも言えない
+  const lastOf = excl > incl ? (i) => ce[i] - 1 : (i) => ce[i]
+
+  const out = []
+  for (let i = 0; i < by.length; i += 1) {
+    const last = Math.min(Math.max(lastOf(i), cs[i]), n - 1)
+    const a2 = Number(got.from[cs[i]])
+    const b2 = Number(got.to[last])
+    if (!Number.isFinite(a2) || !Number.isFinite(b2) || b2 <= a2) return null
+    out.push({ start: a2, end: b2 })
+  }
+  return out
+}
+
+export function segWindowsOf(segments, spans, alignment = null) {
   const list = Array.isArray(spans) ? spans : null
   if (!list || !list.length) return null
   const by = orderSegs(segments, list.length)
   if (!by) return null
+  /* **向こうが言う文字の番号があれば、そちらを使う**(第5.215節)。
+     無ければ、これまでどおり自分の当てはめから取る */
+  const said = charWindowsOf(by, alignment) ?? list
 
   const out = []
   let prevEnd = -Infinity
   for (let i = 0; i < list.length; i += 1) {
     const a = Number(by[i].start_time_seconds)
     const b = Number(by[i].end_time_seconds)
-    const p = Number(list[i]?.start)
-    const q = Number(list[i]?.end)
+    const p = Number(said[i]?.start)
+    const q = Number(said[i]?.end)
     if (![a, b, p, q].every(Number.isFinite)) return null
     // 窓が逆さ・つぶれている / 前の発言より前に戻る → 対が食い違っている
     if (b <= a || q <= p || a < prevEnd - SEG_BACK) return null
@@ -1044,8 +1095,8 @@ export function fitWindows(list, wins) {
  *
  * @returns {{how:'windows'|'heads', wins:Array|null, offs:number[]|null}|null}
  */
-export function segFitOf(segments, spans) {
-  const wins = segWindowsOf(segments, spans)
+export function segFitOf(segments, spans, alignment = null) {
+  const wins = segWindowsOf(segments, spans, alignment)
   if (wins) return { how: 'windows', wins, offs: null }
   const offs = segOffsOf(segments, spans)
   return offs ? { how: 'heads', wins: null, offs } : null
@@ -1279,12 +1330,24 @@ export function seekSentence(spans, sec, delta, bound = null) {
   for (let i = list.length - 1; i >= 0; i -= 1) {
     if (t >= list[i].start - 0.001) { at = i; break }
   }
-  if (delta < 0) {
-    /* **その文に入って 1.2 秒を過ぎていたら、その文の頭へ。**
-       頭から 1.2 秒以内なら、押した人は「もう1つ前」を求めている */
-    if (t - list[at].start > 1.2) return list[at].start
-    return at > 0 ? list[at - 1].start : null
-  }
+  /* ── **◁ と ▷ は、必ず1文ずつ。互いの逆にする**(第5.215節・2026-09 実機)
+   *
+   *   > 送りと戻しのボタンも効かず変な挙動です。2連続で押すと効きますが、
+   *   > 一つ飛ばされたり一つだけ戻ったりと不安定です。
+   *
+   *   もとは**押した場所で行き先が変わる**決まりだった ——
+   *   その文に入って 1.2 秒を過ぎていたら「その文の頭」へ、
+   *   1.2 秒以内なら「1つ前の文」へ。音楽プレーヤーの ◀◀ と同じ作法である。
+   *
+   *   **これが「不安定」の正体だった。** 途中で押すと同じ文の頭に戻るので
+   *   「効かない」と見え、もう一度押すと前へ行くので「2連続で効く」になる。
+   *   **押す前にどちらが起きるか分からない**のだから、
+   *   利用者から見れば壊れているのと同じである。
+   *
+   *   **いま鳴っている文をもう一度聴く道は、別にある**(文ごとのリピート)。
+   *   ここは「1つ前へ / 1つ先へ」だけを受け持つ。
+   *   **◁ を押して ▷ を押せば、元の文に戻る。** これが読める形である。 */
+  if (delta < 0) return at > 0 ? list[at - 1].start : null
   return at < list.length - 1 ? list[at + 1].start : null
 }
 
