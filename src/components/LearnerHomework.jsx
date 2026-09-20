@@ -296,7 +296,6 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
               <button type="button" className="btn btn--small btn--primary"
                       onClick={() => onPracticeWords(
                         dayWords.map((w) => w.word_norm),
-                        formatDate(`${pickedDay}T00:00:00`),
                         'この日に印を付けた語',
                       )}>
                 単語帳で練習する
@@ -562,9 +561,9 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                           単語帳ぜんぶに混ざると、どれが届いた語か分からない */}
                       {onPracticeWords && (
                         <button type="button" className="btn btn--small btn--primary"
-                                onClick={() => onPracticeWords(
-                                  words.map((w) => w.en), a.material?.title ?? '',
-                                )}>
+                                /* 名前は渡さない。**既定の「この教材の語」**になる
+                                   (教材名は画面に出さない・第5.222節) */
+                                onClick={() => onPracticeWords(words.map((w) => w.en))}>
                           この教材の語だけ練習する
                         </button>
                       )}

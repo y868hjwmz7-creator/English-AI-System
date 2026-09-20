@@ -252,10 +252,12 @@ export default function Wordbook({
    * `add_material_words()` が触らないので(箱を戻さないため)、
    * **前の教材の名前を持ったまま**である。だから**語そのもの**で絞る。
    *
-   * `only`(教材に並んでいる語句)と `onlyLabel`(教材名)。
-   * **絞っていることは必ず画面に出し、外す道もその場に置く**(行き止まりを作らない)。
+   * `only` は、絞りたい語句そのもの。
+   * **絞っていることは、冊の名前が言う**(第5.222節)——
+   * 「自分の単語帳」の代わりに「◯◯だけ ◯語」と出る。
+   * **外す道はメニュー**(どの行き先を押しても絞りは外れる)。
    */
-  only = null, onlyLabel = '', onClearOnly = null,
+  only = null,
   /**
    * **何で絞っているのか**(2026-09)。既定は教材である。
    * 基礎単語(基本360語 / 標準1200語)から絞ったときは
@@ -928,26 +930,13 @@ export default function Wordbook({
    */
   /* **絞っているのは自分の単語帳だけ**(2026-09)。業種べつ・基礎単語では
      `onlySet` を当てていない(冊そのものが別の一覧である)ので、
-     ここで札だけ出すと**絞っていないのに「◯◯だけ」と嘘をつく** */
-  const onlyNote = (myBook && onlySet) ? (
-    <p className="wb-only">
-      <span className="wb-only-label">
-        {/* **何で絞っているのかは、呼ぶ側が言う**(0053)。
-            基礎単語で絞ったときに「この教材の語だけ」と出すと嘘になる */}
-        {onlyWhat}だけ
-        <span className="wb-only-n">{rows.length} 語</span>
-      </span>
-      {/* **教材の名前は、札の外に置く。** AI が付ける名前は長いことがあり、
-          札の中に入れると狭い画面で折り返して読めなくなる
-          (弱点の札で踏んだのと同じ話・CLAUDE.md) */}
-      {onlyLabel && <span className="wb-only-name">{onlyLabel}</span>}
-      {onClearOnly && (
-        <button type="button" className="btn btn--ghost btn--small" onClick={onClearOnly}>
-          単語帳ぜんぶに戻す
-        </button>
-      )}
-    </p>
-  ) : null
+     ここで「◯◯だけ」と出すと**絞っていないのに嘘をつく**
+
+     **札の行は置かない**(2026-09 利用者の指定・第5.222節)。
+     絞っていることは**冊の名前そのもの**が言う(下の `drillLabel`)。
+     日付や教材の名前を横に足さない。「単語帳ぜんぶに戻す」も置かない ——
+     **戻る道はメニュー**(どの行き先を押しても絞りは外れる) */
+  const onlyNow = !!(myBook && onlySet)
 
   /* **「その教材の語だけ」に絞っているときは、期限で切らない**(0047)。
      20語のうち今日出るのが2語だと、押した人には
@@ -1586,6 +1575,16 @@ export default function Wordbook({
     : chunkBook
     ? [chunkTitle(chunkPart, chunkGroupOk(chunkPart, chunkGroup) ? chunkGroup : '')]
     : [bookLabel])
+  /* **絞っているときは、冊の名前そのものを差し替える**
+     (2026-09 利用者の指定・第5.222節)。
+
+       > 「この日に印をつけた語だけ50語」を「自分の単語帳」を消し、
+       > そこに入れてください
+
+     **同じことを2つ見せない。** 「自分の単語帳」と札の両方を出すと、
+     いま何を出しているのかが2か所に散る。
+     **何で絞っているのかは、呼ぶ側が言う**(0053)—— ここで書き写さない */
+  const shownLabel = onlyNow ? `${onlyWhat}だけ ${rows.length} 語` : drillLabel
   /**
    * **帳面の名前と、進み具合**(第5.180節・2026-09 実機・利用者の指定)。
    *
@@ -1599,7 +1598,7 @@ export default function Wordbook({
    * 同じものを出す —— **画面のどこも動かない**(第5.173節)。
    */
   const drillHead = (
-    <DrillHead label={drillLabel} total={runTotal} done={runDone} />
+    <DrillHead label={shownLabel} total={runTotal} done={runDone} />
   )
 
   const bookPick = (
@@ -2119,8 +2118,6 @@ export default function Wordbook({
                     ここ(カードの外・地の上)に置いていたので、
                     Quick Response と**置き場所が違っていた。**
                     いまは `DrillHead` 1つを、2つの画面が分け合う */}
-                {/* **絞っていることを、絞った画面に出す**(0047) */}
-                {onlyNote}
               </div>
           )}
 
@@ -2433,7 +2430,6 @@ export default function Wordbook({
           **一覧は消していない** —— 場所が変わっただけである */}
       {group && !loading && (
         <>
-          {onlyNote}
           {/* **絞り込みはここに置かない。** すぐ上の「出しかた」の中に
               同じものがある(同じものを2か所に出さない・CLAUDE.md) */}
           {!rows.length && <p className="hint">まだありません。</p>}

@@ -117,6 +117,16 @@ export default function App() {
    * 前の教材の名前を持ったままなので、**語そのもの**で渡す。
    */
   const [onlyWords, setOnlyWords] = useState(null)
+  /**
+   * **行き先を選んだら、単語帳の絞りを外す**(第5.222節・2026-09 利用者の指定)。
+   *
+   * 「単語帳ぜんぶに戻す」のボタンを消したので、**これが外す唯一の道**である。
+   * 消したままにすると、単語帳がその語だけに絞られたまま戻れない ——
+   * **行き止まりを作らない**(CLAUDE.md)。
+   *
+   * メニューと下の帯の両方が、ここを通る。**2通りに書かない。**
+   */
+  const goView = (id) => { setOnlyWords(null); setView(id) }
   /* **「発行する画面へ」を押した合図**(2026-09 利用者の指定)。
      数を1つ増やすだけ。`TrainerMaterials` がこれを見て、
      作る画面(下書きが入った状態)を開く。
@@ -816,7 +826,7 @@ export default function App() {
              > ゲストと画面共有中に非常にやりにくい
            上の指定は「**その画面にいるときに**もう一度押したら」なので、
            ここを狭めても指定は1文字も崩れない */
-        onChange={(id) => { if (id === view) setNavTick((n) => n + 1); setView(id) }}
+        onChange={(id) => { if (id === view) setNavTick((n) => n + 1); goView(id) }}
         /* **かぶせて開いているあいだは、柱ではなく引き出しにする**
            (第5.172節)。`wide` を偽にすると `AppNav` が引き出しになる */
         open={navOpen || focusMenu} wide={navPush && !focusMenu} compact={!wide}
@@ -1025,9 +1035,11 @@ export default function App() {
                 /* **何で絞っているのかは、呼ぶ側が言う**(第5.219節)。
                    ここで「この教材の語」と書き切ると、
                    セッションの記録から入った「その日に印を付けた語」にも
-                   **「この教材の語だけ」と出て嘘になる** */
-                onPracticeWords={(words, label, what) => {
-                  setOnlyWords({ words, label, what: what || 'この教材の語' })
+                   **「この教材の語だけ」と出て嘘になる。**
+                   名前(教材名・日付)は受け取らない —— 画面に出さないため
+                   (第5.222節)。**効かない受け渡しを残さない** */
+                onPracticeWords={(words, what) => {
+                  setOnlyWords({ words, what: what || 'この教材の語' })
                   setView('wordbook')
                 }}
               />
@@ -1048,9 +1060,7 @@ export default function App() {
                            `showNp` とまったく同じ扱い */
                         showAdv
                         only={onlyWords?.words ?? null}
-                        onlyLabel={onlyWords?.label ?? ''}
                         onlyWhat={onlyWords?.what ?? 'この教材の語'}
-                        onClearOnly={() => setOnlyWords(null)}
                         /* **基礎単語の段だけを練習する**(0053・2026-09)。
                            絞り込みは**この1か所だけ**が持つ ——
                            「今週の宿題」から来る道とまったく同じ入れ物に置く。
@@ -1137,7 +1147,7 @@ export default function App() {
             ここでは数えない —— あれは**ゲストの一覧に戻す**ための印で、
             ゲストの画面には戻る先の一覧が無い */}
         {showTabs && (
-          <AppTabs pages={tabs} view={view} onChange={setView} />
+          <AppTabs pages={tabs} view={view} onChange={goView} />
         )}
       </div>
     </div>

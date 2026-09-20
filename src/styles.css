@@ -6463,29 +6463,9 @@ button.wbfilter-ctl { text-align: left; }
 }
 .hw-words-line { margin: 0; flex: 1 1 14rem; font-size: var(--fs-13h); line-height: 1.7; }
 
-/* **その教材の語だけに絞っている、という札**(0047)。
-   絞っていることを画面に出し、**外す道もその場に置く**
-   (行き止まりを作らない)。置く場所は2つ(集中モードの帯 / 一覧)だが、
-   中身は `onlyNote` 1つである */
-.wb-only {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
-  margin: 10px 0 0;
-}
-.wb-only-label {
-  display: inline-flex; align-items: center; gap: var(--sp-6);
-  padding: 4px 11px; border-radius: var(--r-pill);
-  background: var(--accent-soft); color: var(--accent);
-  border: 1px solid currentColor;
-  font-size: var(--fs-12); font-weight: 600; line-height: 1.7;
-}
-.wb-only-n { font-variant-numeric: tabular-nums; opacity: .85; }
-/* 教材の名前。**札の外**(長い名前が折り返しても札が崩れない) */
-.wb-only-name {
-  color: var(--text-secondary); font-size: var(--fs-12h);
-  overflow-wrap: break-word; min-width: 0;
-}
-/* 集中モードの帯は暗いので、そこだけ色を塗り直す(`.lesson-bar` と同じ作法) */
-.wbfocus .wb-only { margin: 8px 0 0; }
+/* **絞っている札(`.wb-only`)は消した**(2026-09 利用者の指定・第5.222節)。
+   絞っていることは**冊の名前そのもの**が言う(「◯◯だけ ◯語」)。
+   **効かなくなった指定を残さない** —— 残すと、次に読む人が探しに来る */
 
 .wordbook-blank {
   display: inline-block; min-width: 3em;

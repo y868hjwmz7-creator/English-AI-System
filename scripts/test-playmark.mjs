@@ -1467,7 +1467,11 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(/onPracticeWords=\{/.test(app), 'App が受け取っている')
   ok(/setView\('wordbook'\)/.test(app), '押したら単語帳へ移る')
   ok(/only=\{onlyWords\?\.words/.test(app), '単語帳へ、その語を渡している')
-  ok(/onClearOnly=\{\(\) => setOnlyWords\(null\)\}/.test(app),
+  /* **戻る道は、その場のボタンではなくメニューになった**(第5.222節)。
+     利用者の指定で「単語帳ぜんぶに戻す」を消したので、
+     **行き先を押せば絞りが外れる**形にしてある。
+     見るのは「外す道があるか」であって、ボタンの有無ではない */
+  ok(/const goView = \(id\) => \{ setOnlyWords\(null\); setView\(id\) \}/.test(app),
     '単語帳ぜんぶに戻す道がある(行き止まりを作らない)')
 
   const wb = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
@@ -8118,7 +8122,13 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
   for (const f of ['QrReview', 'Wordbook']) {
     const src = noNote(readFileSync(new URL(`../src/components/${f}.jsx`, import.meta.url), 'utf8'))
-    ok(/<DrillHead label=\{drillLabel\}/.test(src),
+    /* **`Wordbook` は、絞っているあいだ名前が差し替わる**(第5.222節)。
+       それでも**出どころは `drillLabel` 1つ**である ——
+       `shownLabel` は「絞っていなければ `drillLabel`」と書いてある。
+       **書き写していないこと**を、そこで見る */
+    ok(f === 'Wordbook'
+      ? (/<DrillHead label=\{shownLabel\}/.test(src) && /: drillLabel/.test(src))
+      : /<DrillHead label=\{drillLabel\}/.test(src),
       `${f} … いま出しているものの名前を、頭に出している`)
     ok(/nowName\(/.test(src), `${f} … つなぎ方は nowName() 1か所から`)
   }
@@ -8431,15 +8441,56 @@ console.log('\n── セッションの記録を上へ(第5.219節)──')
       '見た目 … 紙の中だけの色(`--ink-soft`)を、紙の外で使っていない')
   }
 
+  /* ══ 単語帳の絞り(第5.222節・2026-09 利用者の指定)══════════════
+
+       > ❌をつけたものは全て排除し、「この日に印をつけた語だけ50語」を
+       > 「自分の単語帳」を消し、そこに入れてください
+
+     消したのは3つ —— 日付(教材名)・「単語帳ぜんぶに戻す」・札の行。
+     絞っていることは**冊の名前そのもの**が言う。 */
+  {
+    const wb = noC(readFileSync(
+      new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8'))
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    const app = noC(readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+
+    /* ① **札の行は、どこにも残っていない**(JSX も CSS も) */
+    ok(!/className="wb-only/.test(wb) && !/^\.wb-only/m.test(css),
+      '単語帳の絞り … 札の行(`wb-only`)は、JSX にも CSS にも残っていない')
+
+    /* ② **「単語帳ぜんぶに戻す」は置かない** */
+    ok(!/単語帳ぜんぶに戻す/.test(wb),
+      '単語帳の絞り … 「単語帳ぜんぶに戻す」のボタンを置いていない')
+
+    /* ③ **冊の名前そのものが、絞りを言う。**
+          「出る」と「出ない」の両方を見る —— 絞っていないときは冊の名前 */
+    ok(/const shownLabel = onlyNow \? `\$\{onlyWhat\}だけ \$\{rows\.length\} 語` : drillLabel/.test(wb)
+      && /<DrillHead label=\{shownLabel\}/.test(wb),
+      '単語帳の絞り … 冊の名前が「◯◯だけ ◯語」に変わる(絞っていなければ冊の名前)')
+
+    /* ④ **行き止まりを作らない。** 戻すボタンを消したので、
+          **メニューと下の帯の両方**が絞りを外す道になる。
+          **数え方を2通り持たない** —— どちらも同じ `goView` を通る */
+    ok(/const goView = \(id\) => \{ setOnlyWords\(null\); setView\(id\) \}/.test(app)
+      && /setNavTick\(\(n\) => n \+ 1\); goView\(id\)/.test(app)
+      && /<AppTabs pages=\{tabs\} view=\{view\} onChange=\{goView\} \/>/.test(app),
+      '単語帳の絞り … 絞りを外す道がある(メニューも下の帯も `goView` を通る)')
+
+    /* ⑤ **効かない受け渡しを残さない。** 名前(教材名・日付)は
+          もう画面に出ないので、窓口からも落とす */
+    ok(!/onlyLabel|onClearOnly/.test(wb) && !/onlyLabel=|onClearOnly=/.test(app),
+      '単語帳の絞り … 出さなくなった名前(`onlyLabel`)を受け渡していない')
+  }
+
   /* ⑮ **何で絞っているのかは、呼ぶ側が言う**(0053 と同じ話)。
         渡さないと、単語帳が**「この教材の語だけ」と出して嘘をつく** ——
         その日に印を付けた語は、どの教材の語でもない */
   {
     const app = noC(readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8'))
-    ok(/onPracticeWords\(\s*dayWords\.map[\s\S]{0,200}?'この日に印を付けた語',/.test(hwC)
-      && /onPracticeWords=\{\(words, label, what\) =>/.test(app)
+    ok(/onPracticeWords\(\s*dayWords\.map[\s\S]{0,120}?'この日に印を付けた語',/.test(hwC)
+      && /onPracticeWords=\{\(words, what\) =>/.test(app)
       && /what: what \|\| 'この教材の語'/.test(app),
-      'その日のもの … 単語帳の札も「印を付けた語」になる(「この教材の語」と嘘をつかない)')
+      'その日のもの … 単語帳の名前も「印を付けた語」になる(「この教材の語」と嘘をつかない)')
   }
 }
 

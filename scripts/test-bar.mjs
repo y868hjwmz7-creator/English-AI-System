@@ -1058,25 +1058,34 @@ for (const [label, want] of Object.entries(WANT)) {
   }
   /* **何語で組まれたかは、進み具合の点の数で数える。**
      以前は「◯ / ◯ 語」の文字を読んでいたが、あれは 2026-09 の指定で
-     画面から消えた。**点は1問=1目盛り**なので、同じ数を指している */
+     画面から消えた。**点は1問=1目盛り**なので、同じ数を指している
+
+     **絞っていることは、冊の名前そのものが言う**(第5.222節・
+     2026-09 利用者の指定)。札の行・日付・「単語帳ぜんぶに戻す」は消した。
+     だから**見る場所が変わった** —— 決まり(黙って絞らない)は同じ */
   const onlyM = await page.evaluate(() => {
     const dots = document.querySelectorAll('.drill-bar > span').length
-    const chip = document.querySelector('.wb-only-label')?.textContent ?? ''
-    const back = [...document.querySelectorAll('.wb-only button')]
-      .some((b) => (b.textContent ?? '').includes('ぜんぶ'))
-    return { dots, chip, back }
+    const name = document.querySelector('.drill-title')?.textContent ?? ''
+    /* **消したものが、本当に消えているか。**「出る」と「出ない」の両方 */
+    const chip = document.querySelectorAll('.wb-only').length
+    const back = [...document.querySelectorAll('button')]
+      .some((b) => (b.textContent ?? '').includes('単語帳ぜんぶに戻す'))
+    return { dots, name, chip, back }
   })
   // 語は12語あるが、`only` で3語に絞ってある
   if (onlyM.dots !== 3) {
     ng(`その教材の語だけ … 3語に絞れていない(${onlyM.dots} 語)`,
       '読み込んだ直後に落としているか(`onlySet`)')
-  } else if (!onlyM.chip.includes('この教材の語だけ') || !/3\s*語/.test(onlyM.chip)) {
-    ng(`その教材の語だけ … 絞っている札が出ていない(${onlyM.chip.trim()})`,
-      '黙って絞ると、単語帳がまるごと減ったように見える')
-  } else if (!onlyM.back) {
-    ng('その教材の語だけ … 単語帳ぜんぶに戻す道が無い', '行き止まりを作らない')
+  } else if (!onlyM.name.includes('この教材の語だけ') || !/3\s*語/.test(onlyM.name)) {
+    ng(`その教材の語だけ … 冊の名前が絞りを言っていない(${onlyM.name.trim()})`,
+      '黙って絞ると、単語帳がまるごと減ったように見える(第5.222節)')
+  } else if (onlyM.chip || onlyM.back) {
+    ng(`その教材の語だけ … 消したはずの札(${onlyM.chip} 個)`
+      + `${onlyM.back ? '・「単語帳ぜんぶに戻す」' : ''}が残っている`,
+      '2026-09 利用者の指定で消した(第5.222節)')
   } else {
-    ok(`その教材の語だけ … ${onlyM.dots} 語・札「${onlyM.chip.trim()}」・戻る道あり`)
+    ok(`その教材の語だけ … ${onlyM.dots} 語・冊の名前「${onlyM.name.trim()}」`
+      + '・札と戻すボタンは無い')
   }
   /* **名前と進み具合は、カードの中の上**(第5.180節・2026-09 実機・
      利用者の指定「quick response のようにコンテンツの上部にタイトルを、
