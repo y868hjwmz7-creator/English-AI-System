@@ -56,7 +56,7 @@ import { isPassageKind } from '../data/materialKinds.js'
 
 /**
  * 自分が担当しているゲスト。
- * 2回に分けて問い合わせている。learner_admins はゲストと講師の両方が
+ * 2回に分けて問い合わせている。learner_admins はゲストとトレーナーの両方が
  * profiles を指しているため、1回でつなぐと指定が複雑になり壊れやすい。
  */
 export async function loadMyLearners() {
@@ -583,16 +583,19 @@ export async function duplicateMaterial(material, { voiceIds, accentName, create
   })
 }
 
-// ── 配信する ──────────────────────────────────────────────────
+// ── 共有する ──────────────────────────────────────────────────
 
 /**
- * 1つの教材を、複数のゲストにまとめて配信する。
+ * 1つの教材を、複数のゲストにまとめて共有する。
  * 週60レッスンの規模では、同じ弱点のゲストが必ず複数いるため
- * まとめて配信できることが前提になる(仕様書 第5.5節)。
+ * まとめて共有できることが前提になる(仕様書 第5.5節)。
+ *
+ * **「配信」と書かない**(CLAUDE.md の呼び名)。不特定多数へ発信する
+ * 響きがあるため、担当ゲストにだけ届くこの仕組みは「共有」と呼ぶ。
  */
 export async function assignMaterial({ materialId, learnerIds, assignedBy, dueOn = null }) {
   if (!supabase) return ng('Supabase が設定されていません')
-  if (!learnerIds?.length) return ng('配信するゲストを選んでください')
+  if (!learnerIds?.length) return ng('共有するゲストを選んでください')
 
   const { error } = await supabase.from('assignments').insert(
     learnerIds.map((learner_id) => ({
@@ -603,7 +606,7 @@ export async function assignMaterial({ materialId, learnerIds, assignedBy, dueOn
     })),
   )
   if (error) {
-    // 休会中・退会済のゲストには配信できない(データベース側で止めている)
+    // 休会中・退会済のゲストには共有できない(データベース側で止めている)
     if (/row-level security|violates/i.test(error.message)) {
       return ng('共有できませんでした。休会中または退会済のゲストが含まれていないか確認してください。')
     }

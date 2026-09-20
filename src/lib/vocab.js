@@ -958,7 +958,7 @@ export async function loadWordsMarkedOn(learnerId, day) {
   return ok(data ?? [])
 }
 
-/** これまで配信した教材に出てきた語句(単語・フレーズ・語句の演習から) */
+/** これまで共有した教材に出てきた語句(単語・フレーズ・語句の演習から) */
 export async function loadHomeworkWords(learnerId, { limit = 200 } = {}) {
   if (!supabase) return ng('Supabase が設定されていません')
   if (!learnerId) return ok([])

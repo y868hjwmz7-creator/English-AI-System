@@ -224,7 +224,7 @@ export default function TrainerMaterials({
   /** 作り終えた数。**成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md) */
   const [gramDone, setGramDone] = useState({})
 
-  const [assigningId, setAssigningId] = useState(null)   // 配信先を選んでいる教材
+  const [assigningId, setAssigningId] = useState(null)   // 共有する相手を選んでいる教材
   const [picked, setPicked] = useState([])
   const [message, setMessage] = useState(null)
   /* **リンクで来た教材**(`?m=…`)。一覧に見つかるまで控えておく */
@@ -342,7 +342,7 @@ export default function TrainerMaterials({
    * カタマリごとの訳を作って控える(0021)。
    *
    * **何が起きるか**を、押す前に title で、押したあとに結果で伝える。
-   * 触るのは `material_items.chunks` の1列だけで、本文・設問・配信には触れない。
+   * 触るのは `material_items.chunks` の1列だけで、本文・設問・共有には触れない。
    */
   const makeChunkJa = async (m) => {
     setMakingJa(m.id)
@@ -370,7 +370,7 @@ export default function TrainerMaterials({
    * 文法解説を作って控える(0051)。
    *
    * 触るのは `material_items.grammar` の1列だけで、
-   * 本文・設問・配信には触れない。
+   * 本文・設問・共有には触れない。
    *
    * 【**呼ぶ前に、回数と語数と金額を画面に出す**】(CLAUDE.md・第5.210節)
    *   2026-09 利用者の指定は「作る(**裏で・金額を出して**)」である。

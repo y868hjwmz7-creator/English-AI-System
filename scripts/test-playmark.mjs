@@ -8276,6 +8276,45 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
    赤くなったからといって、また1行足して外せば緑に戻せてしまう ——
    **それをやったら、この決まりは何も守らない。**
    ──────────────────────────────────────────────────────────────── */
+console.log('\n── 呼び名(第5.224節)──')
+{
+  /* **「配信」と書かない。「共有」と書く**(CLAUDE.md の呼び名)。
+     不特定多数へ発信する響きがあるため —— 実際は担当ゲストにだけ届く。
+     **「講師」「生徒」とも書かない**(トレーナー / ゲスト)。
+
+     **画面に出る文字列とコードの中だけを見る。**
+     `genres.js` などの「配信サービス」(Netflix のような**別の意味**)は
+     数えない —— **一覧を勝手に減らさない**(CLAUDE.md)。 */
+  const 見る = ['src/components', 'src/lib', 'src/styles.css']
+  const 除く = /genres\.js|industries\.js|speakers\.js|modelAudio\.js/
+  const 出た = []
+  const 歩く = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const 道 = `${d}/${e.name}`
+      if (e.isDirectory()) { 歩く(道); continue }
+      if (除く.test(道) || !/\.(jsx?|css)$/.test(道)) continue
+      /* **「と書かない」と書いてある行は数えない。**
+         決まりそのものを書いた行まで赤くすると、決まりが書けなくなる */
+      const 行 = readFileSync(new URL(`../${道}`, import.meta.url), 'utf8')
+        .split('\n').filter((x) => !x.includes('と書かない'))
+      for (const w of ['配信', '講師', '生徒']) {
+        if (行.some((x) => x.includes(w))) 出た.push(`${e.name}:${w}`)
+      }
+    }
+  }
+  for (const d of 見る) {
+    if (d.endsWith('.css')) {
+      const 行 = readFileSync(new URL(`../${d}`, import.meta.url), 'utf8')
+        .split('\n').filter((x) => !x.includes('と書かない'))
+      for (const w of ['配信', '講師', '生徒']) {
+        if (行.some((x) => x.includes(w))) 出た.push(`styles.css:${w}`)
+      }
+    } else 歩く(d)
+  }
+  ok(出た.length === 0, '呼び名 … 「配信」「講師」「生徒」を書いていない(共有 / トレーナー / ゲスト)',
+    出た.join(' / '))
+}
+
 console.log('\n── フックの決まり(第5.223節)──')
 {
   const es = readFileSync(new URL('../eslint.config.js', import.meta.url), 'utf8')

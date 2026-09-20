@@ -2178,7 +2178,7 @@ html, body { overflow-x: clip; }
 }
 .material-item-row input { min-width: 0; flex: 1 1 40%; }
 
-/* 配信先を選ぶ */
+/* 共有する相手を選ぶ */
 .assign-box {
   margin-top: 12px; padding: 12px;
   border: 1px solid var(--accent); border-radius: var(--radius);
@@ -2209,7 +2209,7 @@ html, body { overflow-x: clip; }
   .material-item-row input { flex: 1 1 100%; }
 }
 
-/* ---------------- 生徒一覧 ---------------- */
+/* ---------------- ゲスト一覧 ---------------- */
 
 .learner-card .badge { vertical-align: middle; }
 
