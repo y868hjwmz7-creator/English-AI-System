@@ -1763,6 +1763,76 @@ export default defineConfig({
     }
   }
   await page.close()
+
+  /* ══ **開いて落ちないか。行き先を1つずつ、全部**(第5.220節)══════
+       2026-09 実機・利用者。
+
+       > ゲストログインして宿題を開くと、この画面のまま何も映らなく
+       > なってしまいました(画面が真っ白)
+
+     `if (loading) return <Loading />` の**後ろ**に `useState` を足した。
+     React はフックを「何番目に呼ばれたか」で数えるので、読み込み中と
+     読み込み後で数が変わり、**画面がまるごと落ちた**
+     (Rendered more hooks than during the previous render)。
+     `npm run lint` も `npm run build` も通っていた。
+
+     **ここまで、本物の `LearnerHomework` を一度も描いていなかった。**
+     骨組み(`__screens.jsx`)が描くのは帯やカードなど部品だけで、
+     ゲストの画面の中身はどこも通っていない。
+     **描けないものは測れない**(CLAUDE.md)。
+
+     同じ形そのものは `react-hooks/rules-of-hooks` を
+     `npm run lint` に足して止めた。**こちらは「それでも開いて
+     落ちないか」を実際に描いて見る** —— 落ち方は1つではない。 */
+  {
+    const p2 = await browser.newPage()
+    await p2.setViewportSize({ width: 390, height: 844 })
+    const errs = []
+    p2.on('pageerror', (e) => errs.push(String(e)))
+    await p2.goto(`http://localhost:${PORT2}/__shell.html`, { waitUntil: 'networkidle' })
+    await p2.waitForTimeout(400)
+    /* **行き先は名簿から引く。書き写さない**(増えたら自動で付いてくる) */
+    const 行き先 = await p2.evaluate(() => {
+      const burger = document.querySelector('.app-topbar .nav-burger')
+      if (!document.querySelector('.app-nav-item')?.offsetParent) burger?.click()
+      return [...document.querySelectorAll('.app-nav-item .app-nav-label')]
+        .map((e) => e.textContent.trim())
+    })
+    const 落ちた = []
+    const 空 = []
+    for (const 名 of 行き先) {
+      errs.length = 0
+      /* **毎回、開いた直後へ戻す。** 単語帳は開くと画面を止めるので、
+         続けて押すと次の画面が「空」に見える */
+      await p2.goto(`http://localhost:${PORT2}/__shell.html`, { waitUntil: 'networkidle' })
+      await p2.waitForTimeout(250)
+      const 押せた = await p2.evaluate((n) => {
+        const burger = document.querySelector('.app-topbar .nav-burger')
+        if (!document.querySelector('.app-nav-item')?.offsetParent) burger?.click()
+        const x = [...document.querySelectorAll('.app-nav-item')]
+          .find((e) => e.querySelector('.app-nav-label').textContent.trim() === n)
+        if (!x) return false
+        x.click()
+        return true
+      }, 名)
+      await p2.waitForTimeout(800)
+      const 中身 = await p2.evaluate(() => document.querySelectorAll('#root *').length)
+      if (errs.length) 落ちた.push(`${名} … ${errs[0].slice(0, 140)}`)
+      else if (!押せた) 落ちた.push(`${名} … メニューに無い`)
+      /* **真っ白は 0 個だった。** 「空かどうか」を見ている(数は性質) */
+      else if (中身 < 10) 空.push(`${名}(${中身} 個)`)
+    }
+    if (行き先.length < 4) {
+      ng('開いて落ちないか … 行き先が引けなかった', `${行き先.length} 個`)
+    } else if (落ちた.length) {
+      ng(`開いて落ちないか … ${落ちた.length} 画面で落ちた`, 落ちた.join('\n    '))
+    } else if (空.length) {
+      ng(`開いて落ちないか … ${空.length} 画面が空になった`, 空.join(' / '))
+    } else {
+      ok(`開いて落ちないか … ${行き先.length} 画面すべて、落ちずに中身が出る`)
+    }
+    await p2.close()
+  }
   drop2()
 }
 

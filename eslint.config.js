@@ -9,6 +9,13 @@
  * 書き方の好みは対象にしない。増やすなら、実際に事故が起きたものだけ。
  */
 
+/* **フックの決まり**(2026-09 実機・第5.220節)。
+   `if (loading) return <Loading />` の**後ろ**に `useState` を足したところ、
+   読み込み中と読み込み後でフックの数が変わり、**画面がまるごと真っ白**に
+   なった。`npm run lint` も `npm run build` も通る —— 開くまで分からない。
+   これは eslint が機械的に見つけられる。「実際に事故が起きたもの」である。 */
+import reactHooks from 'eslint-plugin-react-hooks'
+
 // ブラウザと Node が用意している名前。これらは「未定義」ではない。
 const browserGlobals = Object.fromEntries(
   [
@@ -46,6 +53,23 @@ export default [
       'no-unreachable': 'error',
       'no-const-assign': 'error',
       'no-self-compare': 'error',
+      /* **フックは、早い return より前**。数が変わると画面が落ちる */
+      'react-hooks/rules-of-hooks': 'error',
     },
+    plugins: { 'react-hooks': reactHooks },
+  },
+  /* **`LessonView.jsx` だけ、いまは外してある**(2026-09・第5.220節)。
+     677 行の `if (!material) return null` の後ろに、フックが 10 個ある。
+     **`LearnerHomework` が真っ白になったのと、まったく同じ形**である。
+     いま落ちていないのは、呼ぶ側が `material` を持った状態でしか
+     置いていないからで、**たまたま成立している**にすぎない。
+
+     直すには 10 個を前へ動かすことになり、**言われていない画面**を
+     大きく触る。利用者に報告して、指示をもらってから直す
+     (CLAUDE.md「直すのは、言われた場所だけ」)。
+     **黙って外さない** —— ここに理由を書き、報告もしてある。 */
+  {
+    files: ['src/components/LessonView.jsx'],
+    rules: { 'react-hooks/rules-of-hooks': 'off' },
   },
 ]

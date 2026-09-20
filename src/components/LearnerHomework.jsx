@@ -195,19 +195,14 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
     if (e) { setError(e); reload() }
   }
 
-  if (loading) return <Loading />
-
-  /* **絞る・引く・並べるは `narrowHomework()` 1か所**(トレーナーの
-     画面と分け合っている)。ここで数え直すと必ず食い違う */
   /* ══════════════════════════════════════════════════════════════
-     **その日のもの**(第5.219節・2026-09 利用者の指定)
+     **その日のもの**(第5.219節)の控え。
 
-       > 日付を選んだら、実際のセッションの記録の書き込みが見れるとともに、
-       > その日にアサインされた教材のタイトルとリンクが出るようにしてください。
-
-     **新しい問い合わせを増やしていない。** 宿題は `assigned_at` を
-     持っているので、すでに読んである `assignments` から数えるだけである
-     (語だけは `word_reviews` を1回読む)。
+     **フックは、早い return より前に置く。** React はフックを
+     「何番目に呼ばれたか」で数えるので、`if (loading) return` の
+     後ろに置くと、読み込み中(25 個)と読み込み後(26 個)で数が変わり、
+     **画面がまるごと落ちる**(Rendered more hooks than during the
+     previous render)。実際にそうなった(2026-09 実機・第5.220節)。
      ══════════════════════════════════════════════════════════════ */
   /** セッションの記録を開いているか。**開くまで問い合わせない** */
   const [notesOpen, setNotesOpen] = useState(false)
@@ -222,6 +217,20 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
     return () => { alive = false }
   }, [learnerId, pickedDay])
 
+  if (loading) return <Loading />
+
+  /* **絞る・引く・並べるは `narrowHomework()` 1か所**(トレーナーの
+     画面と分け合っている)。ここで数え直すと必ず食い違う */
+  /* ══════════════════════════════════════════════════════════════
+     **その日のもの**(第5.219節・2026-09 利用者の指定)
+
+       > 日付を選んだら、実際のセッションの記録の書き込みが見れるとともに、
+       > その日にアサインされた教材のタイトルとリンクが出るようにしてください。
+
+     **新しい問い合わせを増やしていない。** 宿題は `assigned_at` を
+     持っているので、すでに読んである `assignments` から数えるだけである
+     (語だけは `word_reviews` を1回読む)。
+     ══════════════════════════════════════════════════════════════ */
   /** その日にアサインされた宿題。**端末の日付で見る**(`toDateKey`) */
   const dayItems = pickedDay
     ? assignments.filter((a) => a.assigned_at && toDateKey(a.assigned_at) === pickedDay)
