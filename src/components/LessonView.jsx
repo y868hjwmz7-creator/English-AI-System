@@ -674,21 +674,21 @@ export default function LessonView({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, sections.length])
 
-  if (!material) return null
-  // 弱点は教材名にも入る。**全部入っているなら、札は出さない**(同じ言葉が
-  // 2度並ぶため)。1つでも欠けていれば、**全部**を札で出す。
-  // 一部だけを出すと、何が抜けているのか分からない一覧になる。
-  const allTags = material.tagIds ?? []
-  const titleText = String(material.title ?? '')
-  const extraTags = allTags.every((t) => titleText.includes(weaknessTagLabel(t))) ? [] : allTags
-  const section = sections[page]
-  /* その問を見分ける鍵。**ページ(演習)の番号を頭に置く。**
-     紙には全ページを出すので(下記)、`page` で作っていたころのままだと
-     別の演習の同じ番号の問と鍵がぶつかり、読み上げの色が2か所に付く */
-  const key = (it, i, si = page) => it.id ?? `${si}-${i}`
+  /* ══════════════════════════════════════════════════════════════
+     **フックは、早い `return` より前に置く**(第5.223節)。
 
-  /** その問の解答が出ているか */
-  const isOpen = (k) => openItems.has(k)
+     React はフックを「何番目に呼ばれたか」で数える。
+     `if (!material) return null` の**後ろ**に置くと、
+     **教材が無いときと有るときでフックの数が変わり、画面がまるごと
+     落ちる**(Rendered more hooks than during the previous render)。
+
+     実際に「今週の宿題」でそれが起き、**画面が真っ白になった**
+     (第5.220節)。ここは**たまたま落ちていなかっただけ**である ——
+     呼ぶ側が `material` を持った状態でしか置いていないためで、
+     `null` のまま一度でも置かれれば、同じように落ちる。
+
+     **たまたまに頼るのをやめる。** 中身は1行も変えていない。
+     ══════════════════════════════════════════════════════════════ */
 
   /**
    * ── **文法解説を、集中モードでなくても見られるようにする**
@@ -714,6 +714,92 @@ export default function LessonView({
     else next.add(k)
     setGramItems(next)
   }
+
+  /**
+   * **集中モードに入る前の場所**(利用者の指定「解除したら同じ場所に戻る」)。
+   *
+   * 紙は `overflow-y: auto` の箱なので、送った量は `scrollTop` に入っている。
+   * ただし練習中は `.lesson-sheet.is-running` で**並べ方が変わる**ため、
+   * 戻ってきたときには送りの量が落ちていることがある。だから控えておく。
+   */
+  const backTo = useRef(null)
+  /** 集中モードを、いま見ている発言から始める(`null` なら覚えている場所) */
+  const [focusAt, setFocusAt] = useState(null)
+  /**
+   * 6Steps の最中の集中モード(2026-09 利用者の指定)。
+   *
+   *   > ディクテーション画面でもスラッシュリーディング画面でも
+   *   > 同じにしてください
+   *
+   * ボタンの行は**この画面が持っている**ので、開いているかどうかも
+   * ここで持ち、`PassagePractice` に渡す。中にも同じボタンを置くと、
+   * **1つの画面に同じものが2つ**出る(CLAUDE.md)。
+   */
+  const [sixFocus, setSixFocus] = useState(false)
+  /**
+   * Quick Response の集中モードを開いているか(2026-09 実機・利用者の指摘)。
+   *
+   *   > Quick Response で集中モードを押すと違うトレーニングになってしまいます。
+   *
+   * 6Steps と**まったく同じ取り違え**だった。集中モードは
+   * 「**いま取り組んでいることを1つずつ画面に固定する**」ものであって、
+   * 別のトレーニングへ移るものではない。開いているかどうかは
+   * ボタンのある**この画面**が持ち、`QuickResponse` へ渡す。
+   */
+  const [qrFocus, setQrFocus] = useState(false)
+  /**
+   * 「取り組み方」を開いている演習の id(2026-09 利用者の指定)。
+   * **覚えない。** 「初めは閉じてて欲しい」という指定なので、
+   * 開くたびに閉じたところから始める。
+   */
+  const [howOpen, setHowOpen] = useState(null)
+  /**
+   * **集中モードから 6Steps へ移るときの、行き先**(2026-09 利用者の指定)。
+   *
+   *   > 黒がメインの画面にも6stepsに行くためのタブを上部バーに
+   *   > 実装してください。
+   *
+   * 「本文を読んで語を調べる」集中モード(`FocusReader`)で選ばれた
+   * 取り組み方を、`PassagePractice` へ**1回だけ**渡す。
+   * そのあとは中のプルダウンで自由に切り替えられる。
+   */
+  const [startStep, setStartStep] = useState(null)
+
+  /* 練習をやめたら、集中モードも閉じる。**開きっぱなしにしない**
+     (次に Quick Response を開いたとき、いきなり集中モードに入って驚く) */
+  useEffect(() => { if (run !== 'six') setSixFocus(false) }, [run])
+  useEffect(() => { if (run !== 'qr') setQrFocus(false) }, [run])
+
+  /* 練習をやめて紙に戻ったら、**入る前とぴったり同じ場所**へ送り直す。
+     `useLayoutEffect` にしてあるのは、**描き直しのあと・目に映る前**に
+     戻すため。`useEffect` だと、いったん頭に戻ったのが見えてしまう。
+     並べ方が落ち着くのは次の1コマ先のことがあるので、そこでも念のため戻す */
+  useLayoutEffect(() => {
+    if (run !== null) return undefined
+    const y = backTo.current
+    if (y == null) return undefined
+    backTo.current = null
+    const put = () => { if (sheetRef.current) sheetRef.current.scrollTop = y }
+    put()
+    const id = window.requestAnimationFrame(put)
+    return () => window.cancelAnimationFrame(id)
+  }, [run])
+
+  if (!material) return null
+  // 弱点は教材名にも入る。**全部入っているなら、札は出さない**(同じ言葉が
+  // 2度並ぶため)。1つでも欠けていれば、**全部**を札で出す。
+  // 一部だけを出すと、何が抜けているのか分からない一覧になる。
+  const allTags = material.tagIds ?? []
+  const titleText = String(material.title ?? '')
+  const extraTags = allTags.every((t) => titleText.includes(weaknessTagLabel(t))) ? [] : allTags
+  const section = sections[page]
+  /* その問を見分ける鍵。**ページ(演習)の番号を頭に置く。**
+     紙には全ページを出すので(下記)、`page` で作っていたころのままだと
+     別の演習の同じ番号の問と鍵がぶつかり、読み上げの色が2か所に付く */
+  const key = (it, i, si = page) => it.id ?? `${si}-${i}`
+
+  /** その問の解答が出ているか */
+  const isOpen = (k) => openItems.has(k)
 
   /** その問の解答を出す / 隠す */
   const toggleItem = (k) => {
@@ -798,61 +884,6 @@ export default function LessonView({
     })
     return Number.isFinite(best) ? best : null
   }
-
-  /**
-   * **集中モードに入る前の場所**(利用者の指定「解除したら同じ場所に戻る」)。
-   *
-   * 紙は `overflow-y: auto` の箱なので、送った量は `scrollTop` に入っている。
-   * ただし練習中は `.lesson-sheet.is-running` で**並べ方が変わる**ため、
-   * 戻ってきたときには送りの量が落ちていることがある。だから控えておく。
-   */
-  const backTo = useRef(null)
-  /** 集中モードを、いま見ている発言から始める(`null` なら覚えている場所) */
-  const [focusAt, setFocusAt] = useState(null)
-  /**
-   * 6Steps の最中の集中モード(2026-09 利用者の指定)。
-   *
-   *   > ディクテーション画面でもスラッシュリーディング画面でも
-   *   > 同じにしてください
-   *
-   * ボタンの行は**この画面が持っている**ので、開いているかどうかも
-   * ここで持ち、`PassagePractice` に渡す。中にも同じボタンを置くと、
-   * **1つの画面に同じものが2つ**出る(CLAUDE.md)。
-   */
-  const [sixFocus, setSixFocus] = useState(false)
-  /**
-   * Quick Response の集中モードを開いているか(2026-09 実機・利用者の指摘)。
-   *
-   *   > Quick Response で集中モードを押すと違うトレーニングになってしまいます。
-   *
-   * 6Steps と**まったく同じ取り違え**だった。集中モードは
-   * 「**いま取り組んでいることを1つずつ画面に固定する**」ものであって、
-   * 別のトレーニングへ移るものではない。開いているかどうかは
-   * ボタンのある**この画面**が持ち、`QuickResponse` へ渡す。
-   */
-  const [qrFocus, setQrFocus] = useState(false)
-  /**
-   * 「取り組み方」を開いている演習の id(2026-09 利用者の指定)。
-   * **覚えない。** 「初めは閉じてて欲しい」という指定なので、
-   * 開くたびに閉じたところから始める。
-   */
-  const [howOpen, setHowOpen] = useState(null)
-  /**
-   * **集中モードから 6Steps へ移るときの、行き先**(2026-09 利用者の指定)。
-   *
-   *   > 黒がメインの画面にも6stepsに行くためのタブを上部バーに
-   *   > 実装してください。
-   *
-   * 「本文を読んで語を調べる」集中モード(`FocusReader`)で選ばれた
-   * 取り組み方を、`PassagePractice` へ**1回だけ**渡す。
-   * そのあとは中のプルダウンで自由に切り替えられる。
-   */
-  const [startStep, setStartStep] = useState(null)
-
-  /* 練習をやめたら、集中モードも閉じる。**開きっぱなしにしない**
-     (次に Quick Response を開いたとき、いきなり集中モードに入って驚く) */
-  useEffect(() => { if (run !== 'six') setSixFocus(false) }, [run])
-  useEffect(() => { if (run !== 'qr') setQrFocus(false) }, [run])
 
   const openFocus = () => {
     /* **鳴っている音は止めない**(2026-09 利用者の指定)。
@@ -952,21 +983,6 @@ export default function LessonView({
       </button>
     </>
   )
-
-  /* 練習をやめて紙に戻ったら、**入る前とぴったり同じ場所**へ送り直す。
-     `useLayoutEffect` にしてあるのは、**描き直しのあと・目に映る前**に
-     戻すため。`useEffect` だと、いったん頭に戻ったのが見えてしまう。
-     並べ方が落ち着くのは次の1コマ先のことがあるので、そこでも念のため戻す */
-  useLayoutEffect(() => {
-    if (run !== null) return undefined
-    const y = backTo.current
-    if (y == null) return undefined
-    backTo.current = null
-    const put = () => { if (sheetRef.current) sheetRef.current.scrollTop = y }
-    put()
-    const id = window.requestAnimationFrame(put)
-    return () => window.cancelAnimationFrame(id)
-  }, [run])
 
   /**
    * 通しで鳴らせるもの(色を付ける目印つき)。

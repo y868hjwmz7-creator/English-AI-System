@@ -58,18 +58,4 @@ export default [
     },
     plugins: { 'react-hooks': reactHooks },
   },
-  /* **`LessonView.jsx` だけ、いまは外してある**(2026-09・第5.220節)。
-     677 行の `if (!material) return null` の後ろに、フックが 10 個ある。
-     **`LearnerHomework` が真っ白になったのと、まったく同じ形**である。
-     いま落ちていないのは、呼ぶ側が `material` を持った状態でしか
-     置いていないからで、**たまたま成立している**にすぎない。
-
-     直すには 10 個を前へ動かすことになり、**言われていない画面**を
-     大きく触る。利用者に報告して、指示をもらってから直す
-     (CLAUDE.md「直すのは、言われた場所だけ」)。
-     **黙って外さない** —— ここに理由を書き、報告もしてある。 */
-  {
-    files: ['src/components/LessonView.jsx'],
-    rules: { 'react-hooks/rules-of-hooks': 'off' },
-  },
 ]

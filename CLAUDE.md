@@ -71,9 +71,10 @@ UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
 後ろに足すと、読み込み中と読み込み後でフックの数が変わり、
 画面がまるごと真っ白になる。** `lint` も `build` も通っていた。
 **フックは、早い return より前に置く。**
-`npm run lint` に `react-hooks/rules-of-hooks` を足して止めてある
-(`LessonView.jsx` だけ、同じ形が 10 か所あるため名指しで外してある。
-理由は `eslint.config.js` に書いた。利用者に報告済み・未着手)。
+`npm run lint` に `react-hooks/rules-of-hooks` を足して止めてある。
+**名指しで外しているファイルは1つも無い**(`LessonView.jsx` の 10 か所は
+第5.223節で直した)。`npm run test:play` が「誰も外していないか」を見張る ——
+**赤くなったファイルを1行足して外せば緑に戻せてしまう**ためである。
 
 **出したその日に、本物の入り口から1回開く。**
 `npm run test:bar` が、メニューの行き先を1つずつ開いて落ちないかを見る
