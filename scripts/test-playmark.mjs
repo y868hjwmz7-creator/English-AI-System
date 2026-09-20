@@ -3378,7 +3378,10 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   const dotPlan = grammarPlan(grammarItems([
     { exercise_type: 'dialogue', items: [{ prompt_en: DOTS }] },
   ]))
-  ok(dotPlan[0].sentences.length === 2
+  /* **数を書き写さない。性質で見る**(CLAUDE.md)。
+     第5.216節で `. . .` を切らなくしたので文の数は減ったが、
+     ここで見たいのは**字を持たない「文」を送っていないか**である */
+  ok(dotPlan[0].sentences.length > 0
     && dotPlan[0].sentences.every((t) => /[A-Za-z]/.test(t)),
   '文法解説 … 句読点だけの「文」は、窓口に送らない',
   JSON.stringify(dotPlan[0].sentences))

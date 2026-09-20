@@ -1891,7 +1891,12 @@ function fakeMp3({
   /* 送り戻しの作法は、1本にまとめたときとまったく同じ(`seekSentence`)。
      **文のどこで押しても、行き先は1つ前**(第5.215節)。
      押した場所で変わると、利用者からは壊れて見える */
-  {
+  if (secs.length < 2) {
+    /* **落ちずに、赤く出す**(第5.216節)。ここで例外が飛ぶと、
+       **そのあとの見張りが1本も走らない** —— 壊した場所とは
+       関係のないところまで黙る */
+    ng('送り戻し … 文が2つに切れていない', `${secs.length} 文`)
+  } else {
     const back = seekSentence(secs, secs[1].start + 0.9, -1)
     const backHead = seekSentence(secs, secs[1].start + 0.1, -1)
     if (back !== secs[0].start) ng('文の途中から戻ると、1つ前に来ない')
@@ -1904,7 +1909,10 @@ function fakeMp3({
 
   /* くり返しは**文だけ**をここで受け持つ。段落・全文は周回のほうが
      受け持つので、`repeatSeek` に文の区間だけ渡しても動いてはいけない */
-  {
+  if (secs.length < 2) {
+    // **落ちずに、赤く出す**(すぐ上と同じ理由・第5.216節)
+    ng('くり返し … 文が2つに切れていない', `${secs.length} 文`)
+  } else {
     /* **縁を越えてから折り返す**(2026-09 実機・7手め)。
        この並びは割合の見積もりなので**間(ま)が無い** ——
        縁＝声の切れ目で、手前で折り返すとその文の最後が切れる */
@@ -4824,6 +4832,135 @@ console.log('\n── ⑭ 発言の「終わり」も使う(第5.214節)──')
     if (w4 && Math.abs(w4[0].span - 0.4) < 1e-9) {
       ok('文字の番号 … 番号が無い控えは、これまでどおり当てはめの窓')
     } else ng('文字の番号 … 番号が無い控えで落ちている', JSON.stringify(w4))
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ⑮ **組み上がった道を、丸ごと通す**(第5.216節・2026-09 実機・4度め)
+
+     > 直ってないですね。(利用者)
+
+   ここまでの見張りは**部品**しか測っていなかった
+   (`charTimesOf` / `spansOf` / `segWindowsOf`)。どれも緑なのに
+   実機で直らないのだから、**検証が何を数えていないか**を疑う
+   (CLAUDE.md)。数えていなかったのは**つなぎ目**である。
+
+   会話1本を、文に切るところから「どの文が光るか」まで通して測ったら、
+   **幅ゼロの文**が出た —— `Let's see . . .` が `"."` だけの「文」を作り、
+   それは**決して光らず(＝飛ばされ)**、前後の文の境目も
+   0.1〜0.2 秒(ちょうど1語ぶん)ずれていた。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n── ⑮ 組み上がった道を、丸ごと通す(第5.216節)──')
+{
+  const { sentenceSpansOf: sentSpans, segApply: apply, segFitOf: fitOf, spansOf: itemSpans,
+    indexAtTime: atTime } = await import('../src/lib/wholeAudio.js')
+  const { splitEnSentences } = await import('../src/lib/sentencePair.js')
+  const { speakText } = await import('../src/lib/speakText.js')
+
+  const PER = 0.05          // 1文字 0.05 秒
+  const GAP = 0.23          // 発言と発言のあいだの無音(控えには入らない)
+  /* **実機に近い形にする。** 数字・省略記号・短い相づちを混ぜる ——
+     どれも「当てはまらない文字」を作るもので、**そこが危ない** */
+  const 発言 = [
+    'Hello, this is Mary. How can I help you?',
+    "Hi, I'd like to book a seat on March 8.",
+    "Let's see . . . there's a 7:15 departure in the morning."
+      + " There's also a 10:20 departure at night.",
+    'How long is the ride? Can you tell me the arrival times?',
+    "It's about four hours. The fare is $25.",
+    "Great. I'll take the 7:15 one.",
+  ]
+  const groups = 発言.map((t) => splitEnSentences(t))
+  const 声 = groups.map((ss) => ss.map((x) => speakText(x).text).join(' '))
+  const spoken = 声.join(' ')
+  const al = {
+    characters: [...spoken],
+    character_start_times_seconds: [...spoken].map((_, i) => i * PER),
+    character_end_times_seconds: [...spoken].map((_, i) => (i + 1) * PER),
+  }
+  // 実測(`voice_segments`)。**無音のぶんだけ、あとの発言ほど後ろへずれる**
+  const segs = []
+  let at = 0
+  声.forEach((x, u) => {
+    segs.push({
+      dialogue_input_index: u,
+      start_time_seconds: at * PER + u * GAP,
+      end_time_seconds: (at + x.length) * PER + u * GAP,
+      character_start_index: at,
+      character_end_index: at + x.length,
+    })
+    at += x.length + 1
+  })
+  // 文ごとの本当の時刻
+  const 本当 = []
+  at = 0
+  groups.forEach((ss, u) => {
+    ss.forEach((x) => {
+      const w = speakText(x).text
+      本当.push({ a: at * PER + u * GAP, b: (at + w.length) * PER + u * GAP })
+      at += w.length + 1
+    })
+  })
+
+  const items = itemSpans(al, 発言)
+  const sent = sentSpans(al, groups)
+  if (!items || !sent) {
+    ng('丸ごと … 区間が出せない', `発言 ${!!items} / 文 ${!!sent}`)
+  } else {
+    const fit = fitOf(segs, items, al)
+    if (fit?.how !== 'windows') ng('丸ごと … 発言の窓で写していない', String(fit?.how))
+    else ok('丸ごと … 発言の窓で写している')
+    const got = apply(sent, fit)
+
+    /* ① **幅ゼロの文を作らない。**
+          幅ゼロは**決して光らない** —— そのまま「飛ばされる」になる */
+    const ゼロ = got.filter((x) => !(x.end - x.start > 0.001))
+    if (ゼロ.length) {
+      ng(`丸ごと … 幅ゼロの文が ${ゼロ.length} つある`,
+        '幅ゼロは決して光らない(＝飛ばされる)。文に切るところを疑う')
+    } else ok(`丸ごと … ${got.length} 文とも、幅を持っている`)
+
+    /* ② **数が合っていること。** 切り方を変えたら、ここが先に赤くなる */
+    if (got.length !== 本当.length) {
+      ng('丸ごと … 文の数が合わない', `${got.length} / ${本当.length}`)
+    } else {
+      /* ③ **頭と尻のずれ。** 1文字(0.05 秒)より大きければ赤 */
+      let worst = 0
+      got.forEach((x, i) => {
+        worst = Math.max(worst, Math.abs(x.start - 本当[i].a), Math.abs(x.end - 本当[i].b))
+      })
+      if (worst > PER + 0.001) {
+        ng(`丸ごと … 文の境目が ${worst.toFixed(2)} 秒ずれている`, '1文字ぶん(0.05 秒)まで')
+      } else ok(`丸ごと … 文の境目のずれは、いちばん大きくて ${worst.toFixed(2)} 秒`)
+
+      /* ④ **これが利用者の見ているもの。**
+            鳴っている最中に、正しい文が光るか */
+      let 外れ = 0
+      本当.forEach((t, i) => {
+        for (const f of [0.15, 0.5, 0.85]) {
+          if (atTime(got, t.a + (t.b - t.a) * f) !== i) 外れ += 1
+        }
+      })
+      if (外れ) ng(`丸ごと … 光る文の取り違え ${外れ} / ${本当.length * 3}`)
+      else ok(`丸ごと … ${本当.length * 3} か所とも、正しい文が光る`)
+    }
+  }
+
+  /* ⑤ **省略記号は、文の終わりではない**(第5.216節)。
+        英語の文は「.」では始まらない —— **次の字も点なら、そこは文末でない** */
+  const 点 = splitEnSentences("Let's see . . . there's a 7:15 departure in the morning.")
+  if (点.length !== 1) {
+    ng('省略記号 … `. . .` で文を切っている', JSON.stringify(点))
+  } else ok('省略記号 … `. . .` では切らない(1文のまま)')
+  /* **切るべきところは、これまでどおり切る**(切らない側へ倒していない) */
+  const ふつう = splitEnSentences('He said no. She said yes.')
+  const 略語 = splitEnSentences('I met Mr. Smith. He was late.')
+  const 小数 = splitEnSentences('It costs 3.5 dollars. That is fine.')
+  if (ふつう.length === 2 && 略語.length === 2 && 小数.length === 2) {
+    ok('省略記号 … ふつうの文・略語・小数は、これまでどおり')
+  } else {
+    ng('省略記号 … 切るべきところまで切らなくなっている',
+      `${ふつう.length} / ${略語.length} / ${小数.length}`)
   }
 }
 
