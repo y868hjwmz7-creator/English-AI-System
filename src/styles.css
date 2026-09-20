@@ -9396,17 +9396,25 @@ button.wbfilter-ctl { text-align: left; }
 /* **印を付けた語は、開くまで羅列しない**(2026-09 利用者の指定)。
    何十語にもなるので、そのまま並べると記録が下へ押し出される。
 
-   **`<details>` そのものに `display` を書かない。** 畳んでいても
-   中身が場所を取り続ける(共通ルール)。並べるのは中の入れ物の役目 */
+   **押すものは、一覧より一段上の行に置く**(2026-09 利用者の指定)。
+   一覧の末尾に置くと、語が増えるほど下へ流れて見つからない。
+   見出しの行なら**畳んでいても押せる。**
+
+   **隙間は `gap` で作る**(共通ルール)。狭い画面では2行に折り返す */
+.notes-words { display: grid; gap: var(--sp-8); }
 .notes-words-head {
-  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-8);
+}
+/* 畳みを開け閉てする札。**数がそのまま見出しになる**ので、
+   ボタンらしい枠は残しつつ、文字は本文より一段静かに */
+.notes-words-toggle {
+  gap: var(--sp-6);
   font-size: var(--fs-13);
   color: var(--text-secondary);
-}
-.notes-words-body {
-  display: grid;
-  gap: var(--sp-8);
-  margin-top: var(--sp-8);
 }
 /* 語は英字が続くので、**折り返せるようにする**(はみ出して押せなくならない)。
    **`--ink-soft` は使わない** —— あれは紙(`.lesson-sheet` / `.focus-paper`)
@@ -9417,6 +9425,3 @@ button.wbfilter-ctl { text-align: left; }
   color: var(--text-secondary);
   font-size: var(--fs-13);
 }
-/* **押せるものを、行いっぱいに伸ばさない。** `grid` の子は既定で
-   横いっぱいになるので、中身なりの幅で左に置く */
-.notes-words-body .btn { justify-self: start; }

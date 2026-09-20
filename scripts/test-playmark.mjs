@@ -8377,13 +8377,30 @@ console.log('\n── セッションの記録を上へ(第5.219節)──')
     '見た目 … 日付の欄も、白いままではない(灰)')
 
   /* ⑫ **語は、開くまで羅列しない。** 何十語にもなる ——
-        そのまま並べると、下にあるものが画面の外へ押し出される */
+        そのまま並べると、下にあるものが画面の外へ押し出される。
+        **畳んでいるあいだは描かない**(場所も取らない) */
   {
-    const i畳 = hwC.indexOf('<details className="notes-words">')
+    const i畳 = hwC.indexOf('{wordsOpen && (')
     const i羅列 = hwC.indexOf('notes-day-words')
-    ok(i畳 >= 0 && i羅列 > i畳,
-      '見た目 … 印を付けた語は、開くまで羅列しない(数だけ出して畳む)',
+    ok(i畳 >= 0 && i羅列 > i畳 && /setWordsOpen\(false\)/.test(hwC),
+      '見た目 … 印を付けた語は、開くまで羅列しない(日を変えたら畳み直す)',
       `畳み ${i畳} / 羅列 ${i羅列}`)
+  }
+
+  /* ⑫-2 **押すものは、一覧より一段上の行に置く**(2026-09 利用者の指定)
+
+       > 単語のリストがあって、その一番下に青いボタンではなく、
+       > ボタンをリストよりも一段上の層においてください
+
+     一覧の末尾に置くと、**語が増えるほど下へ流れて見つからない。**
+     見出しの行なら、畳んでいても押せる。 */
+  {
+    const i行 = hwC.indexOf('notes-words-head')
+    const i押す = hwC.indexOf('単語帳で練習する')
+    const i羅列 = hwC.indexOf('notes-day-words')
+    ok(i行 >= 0 && i押す > i行 && i押す < i羅列,
+      '見た目 … 単語帳のボタンは、語の一覧より上の行にある',
+      `行 ${i行} / ボタン ${i押す} / 一覧 ${i羅列}`)
   }
 
   /* ⑬ **白い箱を新しく作らない。** 既にある形(青 / 灰)から選ぶ。
@@ -8398,13 +8415,14 @@ console.log('\n── セッションの記録を上へ(第5.219節)──')
       `素のボタン ${素} 個`)
   }
 
-  /* ⑭ **`<details>` そのものに `display` を書かない。**
-        畳んでいても中身が場所を取り続ける(共通ルール) */
+  /* ⑭ **隙間は `gap` で作る**(共通ルール)。見出しの行は、札と
+        ボタンが**横に並ぶ** —— 余白は横に効かないので、親が離す */
   {
     const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
     const i = css.indexOf('.notes-words-head')
-    ok(i > 0 && !/\.notes-words\s*\{[^}]*display/.test(css),
-      '見た目 … 畳む箱そのものに `display` を書いていない(中身が場所を取らない)')
+    const 行 = css.slice(i, css.indexOf('}', i))
+    ok(i > 0 && /display:\s*flex/.test(行) && /gap:/.test(行) && /flex-wrap:\s*wrap/.test(行),
+      '見た目 … 見出しの行は `gap` で離す(狭い画面では折り返す)')
     /* **紙の中だけの色を、紙の外で使わない。**
        `--ink-soft` は `.lesson-sheet` / `.focus-paper` でしか
        決まっておらず、ここでは何にも解決しない(2026-09 に踏んだ) */

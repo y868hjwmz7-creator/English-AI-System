@@ -208,7 +208,10 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
   const [notesOpen, setNotesOpen] = useState(false)
   const [pickedDay, setPickedDay] = useState(null)
   const [dayWords, setDayWords] = useState([])
+  /** 語の一覧を開いているか。**日を変えたら畳み直す** */
+  const [wordsOpen, setWordsOpen] = useState(false)
   useEffect(() => {
+    setWordsOpen(false)
     if (!learnerId || !pickedDay) { setDayWords([]); return undefined }
     let alive = true
     loadWordsMarkedOn(learnerId, pickedDay).then(({ data }) => {
@@ -275,17 +278,20 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
             **「その日に出た語」ではない。** 押した語である ——
             分かっていないことを、分かったように書かない */}
       {dayWords.length > 0 ? (
-        /* **`<details>` そのものに `display` を書かない。**
-           畳んでいても中身が場所を取り続ける(共通ルール) */
-        <details className="notes-words">
-          <summary className="notes-words-head">
-            印を付けた語 {dayWords.length} 語
-            {知らなかった.length ? `(まだ ${知らなかった.length})` : ''}
-          </summary>
-          <div className="notes-words-body">
-            <p className="notes-day-words" lang="en">
-              {dayWords.map((w) => w.word_norm).join(' / ')}
-            </p>
+        <div className="notes-words">
+          {/* **押すものは、一覧より一段上の行に置く**(2026-09 利用者の指定)。
+              一覧の末尾に置くと、語が増えるほど下へ流れて見つからない。
+              見出しの行なら**畳んでいても押せる。**
+              `<details>` をやめたのは、`<summary>` の中に別のボタンを
+              置くと、押すたびに畳みが動いてしまうためである */}
+          <div className="notes-words-head">
+            <button type="button" className="btn btn--small btn--ghost notes-words-toggle"
+                    aria-expanded={wordsOpen}
+                    onClick={() => setWordsOpen((v) => !v)}>
+              <span aria-hidden="true">{wordsOpen ? '▾' : '▸'}</span>
+              印を付けた語 {dayWords.length} 語
+              {知らなかった.length ? `(まだ ${知らなかった.length})` : ''}
+            </button>
             {onPracticeWords && (
               <button type="button" className="btn btn--small btn--primary"
                       onClick={() => onPracticeWords(
@@ -297,7 +303,13 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
               </button>
             )}
           </div>
-        </details>
+          {/* **開くまで羅列しない。** 畳んでいるあいだは描かない */}
+          {wordsOpen && (
+            <p className="notes-day-words" lang="en">
+              {dayWords.map((w) => w.word_norm).join(' / ')}
+            </p>
+          )}
+        </div>
       ) : (
         <p className="muted">印を付けた語はありません。</p>
       )}
