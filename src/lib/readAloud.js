@@ -984,7 +984,31 @@ export function readAloudSequence(parts, {
             ? {
               how: 'segments',
               k: 1,
-              per: 0,
+              /* ── **区切りは「どこで区切るか」しか言っていない**
+                     (第5.218節・2026-09 実機の数字)──────────────
+
+                   利用者が送ってくれた本物の数字で、はっきりした。
+
+                     控えの終わり           64.00 秒
+                     voice_segments の終わり 64.00 秒  ← **同じ時計**
+                     実際の音声             65.41 秒
+                     発言と発言のあいだの間  10 か所とも 0.00
+
+                   **`voice_segments` は無音を含んでいない。**
+                   32手めは「向こうが本当の秒を返している」と読んだが、
+                   返していたのは**時刻表と同じ時計での区切り**だった。
+
+                   ところがこちらは「区切りが返っている＝これで合っている」
+                   とみなし、**残りの 1.41 秒を配る処理を丸ごと飛ばして
+                   いた**(`sure = true` で守りの余裕まで外していた)。
+
+                   **区切りと、時計合わせは、別の仕事である。**
+                   ・区切り … **どこで**発言が変わるか(実測。これは正しい)
+                   ・時計   … 控えの秒を、**鳴っている音の秒**へ直す
+
+                   10 か所に配ると 1か所 0.141 秒。最後の発言でちょうど
+                   1.41 秒 ＝ 音声の終わりに**ぴたりと合う。** */
+              per: base.how === 'seam' ? base.per : 0,
               offs: segOffs.offs,
               /* **窓(始まり+終わり)が取れていたら、そちらで写す**(第5.214節) */
               wins: segOffs.wins,
@@ -1022,7 +1046,11 @@ export function readAloudSequence(parts, {
              信じないのは `scale` / `seam`(**測れず、均等に配った**)だけ */
           /* `segments` は**向こうが返した実測そのもの**なので、
              `same` / `measured` と同じく信じてよい(32手め) */
-          sure = fit.how === 'same' || fit.how === 'measured' || fit.how === 'segments'
+          /* **継ぎ目に配ったぶんは「見積もり」である**(第5.218節)。
+             区切りそのものは実測だが、余った時間を均等に配るところは
+             当て推量なので、**信じきらない**(守りの余裕を残す) */
+          sure = fit.how === 'same' || fit.how === 'measured'
+            || (fit.how === 'segments' && !(fit.per > 0))
           /* ── **数字を1度だけ出す**(2026-09 実機・12手め・**調べるため**)──
            *
            *   > listen を押しても特に何も表示されず再生が始まり、
@@ -1052,6 +1080,13 @@ export function readAloudSequence(parts, {
                  **発言の中の継ぎ目が控えの時計のまま**になる */
               sent = fit.wins ? fitWindows(sent, fit.wins)
                 : (fit.sentOffs ? shiftEach(sent, fit.sentOffs) : shiftItems(sent, fit.offs))
+              /* **そのうえで、時計も合わせる**(第5.218節)。
+                 区切りは「どこで区切るか」しか言っていないので、
+                 控えと音声の長さの違いは、まだ残っている */
+              if (fit.per > 0) {
+                spans = shiftSeams(spans, fit.per)
+                sent = shiftSeams(sent, fit.per)
+              }
             } else if (fit.how === 'scale') {
               spans = scaleSpans(spans, fit.k)
               sent = scaleSpans(sent, fit.k)

@@ -1245,8 +1245,12 @@ export function fitTime(sec, fit, spans) {
      **鳴り出しの一瞬だけ別の場所へ跳ぶ** */
   if (fit?.wins) {
     const t0 = Number(sec) || 0
-    const w = fit.wins[Math.max(0, indexAtTime(spans, t0))]
-    return w ? w.to + (t0 - w.from) * w.k : t0
+    const i = Math.max(0, indexAtTime(spans, t0))
+    const w = fit.wins[i]
+    const mapped = w ? w.to + (t0 - w.from) * w.k : t0
+    /* **継ぎ目に配ったぶんも足す**(第5.218節)。足し忘れると、
+       続きから始めたときの飛び先だけが古い時計のままになる */
+    return mapped + i * (Number(fit.per) > 0 ? Number(fit.per) : 0)
   }
   if (fit?.how === 'measured') {
     const t0 = Number(sec) || 0
