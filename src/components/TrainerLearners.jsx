@@ -39,7 +39,7 @@ import HomeworkFilter from './HomeworkFilter.jsx'
 /* **絞る・引く・並べるは `homeworkFilter.js` 1か所**(ゲストの
    「今週の宿題」と分け合っている)。画面ごとに書くと必ず食い違う */
 import { homeworkFilterOn, narrowHomework } from '../lib/homeworkFilter.js'
-import { PrintIcon, ScreenIcon } from './Icons.jsx'
+import { PrintIcon, ScreenIcon, DownloadIcon } from './Icons.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
@@ -52,6 +52,13 @@ import {
 } from '../lib/assignBooks.js'
 import { NATIVE_FLOW_UNITS, nfFeature, unitName } from '../data/nativeFlow.js'
 import { printElement } from '../lib/print.js'
+/* **音声のダウンロード**(第5.229節・2026-09 利用者の指定)。
+   持ちものは「教材」「今週の宿題」と同じ `useAudioDownload()` 1か所。
+   **すでにある MP3 を集めるだけ**なので、押しても窓口は呼ばれない = 0円 */
+import { useAudioDownload } from '../lib/useAudioDownload.js'
+import AudioDownloadNote from './AudioDownloadNote.jsx'
+/* **保存する名前は `fileName.js` 1か所**(第5.229節) */
+import { materialFileName } from '../lib/fileName.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 
 
@@ -289,6 +296,37 @@ export default function TrainerLearners({ me, navTick = 0 }) {
    * 一覧は軽くするため中身を持っていない(id と数だけ)。
    * 読み終えてから描き、描き終えてから `printElement` を呼ぶ(下の見張り)。
    */
+  /* **音声のダウンロード**(第5.229節)。文言も進み具合も
+     `useAudioDownload()` が持つ —— **書き写さない** */
+  const {
+    busy: dlBusy, done: dlDone, label: dlLabel, start: dlStart,
+  } = useAudioDownload()
+
+  /**
+   * **中身を読んでから、音声を集める**(第5.229節)。
+   *
+   * この画面の一覧は**中身(`sections`)を持っていない**ので、
+   * 押した時点では「音声が何本あるか」も分からない。
+   * だから**印刷とまったく同じ段取り**にした ——
+   * 読んで控えに入れ、そのうえで集める(`bodies` は使い回す)。
+   *
+   * **集まらなかったときは、その場に知らせが出る**(`AudioDownloadNote`)。
+   */
+  const dlHw = async (a) => {
+    const mid = a.material?.id
+    if (!mid) return
+    let body = bodies[mid]
+    if (!body) {
+      setBodyBusy(mid)
+      const { data, error: e } = await loadMaterial(mid)
+      setBodyBusy(null)
+      if (e) { setError(e); return }
+      body = data
+      setBodies((x) => ({ ...x, [mid]: data }))
+    }
+    await dlStart(body)
+  }
+
   const printHw = async (a) => {
     const mid = a.material?.id
     if (!mid) return
@@ -312,7 +350,8 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     const done = () => setPrintHwId(null)
     window.addEventListener('afterprint', done)
     const timer = window.setTimeout(done, 60000)
-    printElement(el)
+    /* **保存する名前**(第5.229節)。トレーナーが見る紙なので解答つき */
+    printElement(el, { name: materialFileName(a?.material, 'full', 'pdf') })
     return () => {
       window.removeEventListener('afterprint', done)
       window.clearTimeout(timer)
@@ -1216,6 +1255,17 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                               {/* ここから開けば、**このゲストの教材しか映らない。**
                                   「教材」タブから探すと、他のゲストに出したものも
                                   画面に並んでしまう(画面共有では見せたくない) */}
+                              {/* **音声のダウンロード**(第5.229節・利用者の指定)。
+                                    > トレーナーのアカウントの教材やゲストページ内の
+                                    > 教材からも音声のダウンロードができるように
+
+                                  中身を読んでからなので、印刷と同じく少し待つ */}
+                              <button type="button" className="btn btn--small btn--quiet"
+                                      disabled={!!dlBusy || bodyBusy === m.id}
+                                      onClick={() => dlHw(a)}>
+                                <DownloadIcon />
+                                {bodyBusy === m.id ? '開いています…' : dlLabel(m)}
+                              </button>
                               <button type="button" className="btn btn--primary"
                                       disabled={lessonBusy === m.id}
                                       onClick={() => openLesson(m.id)}>
@@ -1224,6 +1274,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                   ? '開いています…' : 'セッションで使う(大きく表示)'}
                               </button>
                             </div>
+                          )}
+                          {/* **集まったか / 足りないかを、押した場所に出す。**
+                              文言は `AudioDownloadNote` 1か所 */}
+                          {m && (
+                            <AudioDownloadNote done={dlDone} materialId={m.id} trainer />
                           )}
 
                           {/* **教材を消す**(2026-09 利用者の指定

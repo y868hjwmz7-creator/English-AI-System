@@ -16,6 +16,8 @@ import Phonetic from './Phonetic.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import AnswerEn from './AnswerEn.jsx'
 import { printElement } from '../lib/print.js'
+/* **保存する名前は `fileName.js` 1か所**(第5.229節) */
+import { materialFileName } from '../lib/fileName.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
@@ -138,7 +140,12 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
     const done = () => setPrintId(null)
     window.addEventListener('afterprint', done)
     const timer = window.setTimeout(done, 60000)
-    printElement(el, { worksheet: true })
+    /* **保存する名前**(第5.229節)。ゲストの紙は「問題のみ」 */
+    printElement(el, {
+      worksheet: true,
+      name: materialFileName(assignments.find((x) => x.id === printId)?.material,
+                             'quiz', 'pdf'),
+    })
     return () => {
       window.removeEventListener('afterprint', done)
       window.clearTimeout(timer)

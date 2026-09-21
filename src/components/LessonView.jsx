@@ -22,6 +22,8 @@ import {
 import AiNote from './AiNote.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { printElement } from '../lib/print.js'
+/* **保存する名前は `fileName.js` 1か所**(第5.229節) */
+import { materialFileName } from '../lib/fileName.js'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
@@ -978,7 +980,8 @@ export default function LessonView({
       <Stepper label="幅" options={WIDTHS} value={width} className="lesson-widths"
                onChange={(id) => { setWidth(id); saveWidth(id) }} />
       <button type="button" className="btn btn--small btn--quiet"
-              onClick={() => printElement(document.getElementById('lesson-sheet'))}>
+              onClick={() => printElement(document.getElementById('lesson-sheet'),
+                             { name: materialFileName(material, 'full', 'pdf') })}>
         <PrintIcon />印刷
       </button>
     </>
@@ -1286,7 +1289,8 @@ export default function LessonView({
               取り違えないが、**`aria-label` は必ず添える** */}
           <button type="button" className="btn btn--small btn--quiet"
                   aria-label="印刷 / PDFで保存"
-                  onClick={() => printElement(document.getElementById('lesson-sheet'))}>
+                  onClick={() => printElement(document.getElementById('lesson-sheet'),
+                             { name: materialFileName(material, 'full', 'pdf') })}>
             <PrintIcon /><span className="mid-text">印刷</span>
           </button>
         </div>

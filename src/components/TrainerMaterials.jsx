@@ -45,6 +45,8 @@ import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { startPrepare, startPrepareAll } from '../lib/prepareJob.js'
 import { printElement } from '../lib/print.js'
+/* **保存する名前は `fileName.js` 1か所**(第5.229節) */
+import { materialFileName } from '../lib/fileName.js'
 import { clearMaterialProgress, hasMaterialProgress } from '../lib/progress.js'
 /* **読み上げ音声を作り直す**(2026-09 実機)。良い段の場所に標準の声が
    居座っている英文を、こちらから作り直させる(`remakeClips.js` の冒頭) */
@@ -417,7 +419,10 @@ export default function TrainerMaterials({
     const done = () => setPrintId(null)
     window.addEventListener('afterprint', done)
     const timer = window.setTimeout(done, 60000)
-    printElement(el)
+    /* **保存する名前**(第5.229節)。トレーナーの紙は解答つき */
+    printElement(el, {
+      name: materialFileName(materials.find((m) => m.id === printId), 'full', 'pdf'),
+    })
     return () => {
       window.removeEventListener('afterprint', done)
       window.clearTimeout(timer)

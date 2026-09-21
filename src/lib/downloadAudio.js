@@ -39,7 +39,11 @@
  * ============================================================================
  */
 import { clipUrl, wholeClipUrl } from './audioClips.js'
-import { audioFileName, joinMp3 } from './mp3Join.js'
+import { joinMp3 } from './mp3Join.js'
+/* **保存する名前は `fileName.js` 1か所**(第5.229節)。
+   `audioFileName()` は `mp3Join.js` に残してあるが、**ここからは呼ばない** ——
+   題名だけでは「日付が無いときに作った日を足す」ができない */
+import { materialFileName } from './fileName.js'
 import { materialAudioClips, materialClipPieces } from './audioPlaylist.js'
 import { PREMIUM } from './voiceTier.js'
 
@@ -90,7 +94,7 @@ export async function downloadMaterialAudio(material, onProgress = null) {
       } catch { /* 届かなければ、②へ落ちる(行き止まりを作らない) */ }
       if (bytes?.length) {
         onProgress?.({ done: 1, total: 1 })
-        saveFile(bytes, audioFileName(material?.title))
+        saveFile(bytes, materialFileName(material, 'audio', 'mp3'))
         return { ok: true, total: 1, missing: 0, bytes: bytes.length, whole: true }
       }
     }
@@ -136,7 +140,7 @@ export async function downloadMaterialAudio(material, onProgress = null) {
   if (!joined.length) {
     return { ok: false, total: list.length, missing: list.length, bytes: 0 }
   }
-  saveFile(joined, audioFileName(material?.title))
+  saveFile(joined, materialFileName(material, 'audio', 'mp3'))
   return { ok: true, total: list.length, missing: 0, bytes: joined.length }
 }
 

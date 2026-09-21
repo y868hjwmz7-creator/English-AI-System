@@ -8280,6 +8280,67 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
    赤くなったからといって、また1行足して外せば緑に戻せてしまう ——
    **それをやったら、この決まりは何も守らない。**
    ──────────────────────────────────────────────────────────────── */
+console.log('\n── 保存するファイルの名前・音声のダウンロード(第5.229節)──')
+{
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ')
+  const 読む = (f) => noC(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'))
+
+  /* ① **紙に出すところは、どこも名前を渡す。**
+        渡さないと、ブラウザは `document.title`(= アプリの名前)で保存する ——
+        **教材名すら入らない**(2026-09 に気づいた) */
+  {
+    const 名なし = []
+    for (const f of ['components/LearnerHomework.jsx', 'components/LessonView.jsx',
+                     'components/TrainerMaterials.jsx', 'components/TrainerLearners.jsx']) {
+      const t = 読む(f)
+      for (const m of t.matchAll(/printElement\(([\s\S]{0,200}?)\)\s*\n/g)) {
+        if (!/name:/.test(m[1])) 名なし.push(f.split('/').pop())
+      }
+    }
+    ok(名なし.length === 0,
+      'ファイル名 … 教材を紙に出すところは、どこも保存名を渡している', 名なし.join(' / '))
+  }
+
+  /* ② **決まりは1か所。** 画面で組み立てると、**置いた場所の数だけ食い違う** */
+  {
+    const 全部 = ['components/LearnerHomework.jsx', 'components/LessonView.jsx',
+                  'components/TrainerMaterials.jsx', 'components/TrainerLearners.jsx',
+                  'lib/downloadAudio.js'].map(読む).join('\n')
+    ok(/materialFileName\(/.test(全部) && !/\.mp3'|\.pdf'/.test(全部.replace(/'(pdf|mp3)'/g, '')),
+      'ファイル名 … 名前は `materialFileName()` が決める(画面で組み立てない)')
+    /* **もう題名だけでは決められない。**
+       日付が無いときに「作った日」を足すには、教材そのものが要る */
+    ok(!/audioFileName\(/.test(読む('lib/downloadAudio.js')),
+      'ファイル名 … 音声も `materialFileName()` を通る(題名だけで決めない)')
+  }
+
+  /* ③ **音声のダウンロードは、教材が出る3つの画面すべてに置く**
+        (2026-09 利用者の指定)。**持ちものは1か所**(`useAudioDownload`) */
+  {
+    const 無い = ['components/LearnerHomework.jsx', 'components/TrainerMaterials.jsx',
+                  'components/TrainerLearners.jsx']
+      .filter((f) => !/useAudioDownload\(\)/.test(読む(f)))
+      .map((f) => f.split('/').pop())
+    ok(無い.length === 0,
+      '音声DL … 教材が出る3つの画面すべてに、音声のダウンロードがある', 無い.join(' / '))
+    /* **結果を、押した場所に出す**(失敗の知らせは、その場に) */
+    const 知らせ無し = ['components/LearnerHomework.jsx', 'components/TrainerMaterials.jsx',
+                        'components/TrainerLearners.jsx']
+      .filter((f) => !/<AudioDownloadNote/.test(読む(f)))
+      .map((f) => f.split('/').pop())
+    ok(知らせ無し.length === 0,
+      '音声DL … 集まったか / 足りないかを、押した場所に出す', 知らせ無し.join(' / '))
+  }
+
+  /* ④ **ゲストのページは、中身を読んでから集める。**
+        あの一覧は `sections` を持っていないので、
+        読まずに渡すと**いつも「0 本」**になる */
+  ok(/const dlHw = async \(a\) => \{[\s\S]{0,400}?loadMaterial\(mid\)[\s\S]{0,300}?dlStart\(body\)/
+    .test(読む('components/TrainerLearners.jsx')),
+    '音声DL … ゲストのページは、教材の中身を読んでから集める')
+}
+
 console.log('\n── 場面はオプション(第5.228節)──')
 {
   const mf = readFileSync(

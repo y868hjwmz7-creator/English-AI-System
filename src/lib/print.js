@@ -68,11 +68,27 @@ export function markPrint(element, { worksheet = false } = {}) {
   }
 }
 
+/**
+ * 紙に出す(「PDF に保存」もここを通る)。
+ *
+ * @param element 出すところ
+ * @param opts.worksheet 問題だけにするか
+ * @param opts.name **保存するときの既定のファイル名**(第5.229節)。
+ *   ブラウザは **`document.title` をそのまま既定の名前にする**ので、
+ *   渡さないと「English AI System」で保存されていた(2026-09 に気づいた)。
+ *   ここで一時的に差し替え、印刷が終わったら**必ず戻す。**
+ */
 export function printElement(element, opts = {}) {
   if (!element) return
   const undo = markPrint(element, opts)
+  /* **もとの題を控えてから差し替える。** 戻し忘れると、
+     そのあと画面の題がファイル名のままになる */
+  const もとの題 = document.title
+  const 名 = String(opts.name ?? '').trim()
+  if (名) document.title = 名
   const cleanup = () => {
     undo()
+    if (名) document.title = もとの題
     window.removeEventListener('afterprint', cleanup)
   }
   window.addEventListener('afterprint', cleanup)
