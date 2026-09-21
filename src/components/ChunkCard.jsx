@@ -98,21 +98,33 @@ export default function ChunkCard({
           </button>
         )}
       </div>
-      {open && !!drills.length && (
-        <ol className="chunk-drills">
+      {/* ── 練習(日→英)────────────────────────────────────
+
+          **描いてから隠す。閉じているあいだも描く**(2026-09 利用者の指定
+          「紙にも表示されるようにしてください」)。
+          描かないでいると、**畳んだまま印刷したときに練習が消える** ——
+          レッスン表示の「取り組み方」が `<details>` をやめたのと
+          まったく同じ理由である(CLAUDE.md)。
+
+          **組みは Quick Response の紙と同じものを使う**(利用者の指定
+          「quick response と同じように、左側に日本語、右側に解答の英語」)。
+          `qrsheet-list` / `qrsheet-ja` / `qrsheet-en` を付けるだけで、
+          紙の指定(丸い通し番号・2列・下の罫線)が**そのまま効く** ——
+          **同じ見た目を2か所に書き写さない**(CLAUDE.md)。
+          画面には1つも響かない(あちらの指定は紙のときだけ効く)。 */}
+      {!!drills.length && (
+        <ol className={`chunk-drills qrsheet-list${open ? '' : ' is-closed'}`}>
           {drills.map((d, i) => (
             <li key={i} className="chunk-drill">
-              <div className="chunk-drill-row">
-                <span className="chunk-drill-ja">{d.ja}</span>
-                <button type="button" className="btn btn--small chunk-drill-show"
-                        aria-expanded={!!shown?.has(i)}
-                        onClick={() => onShow?.(i)}>
-                  {shown?.has(i) ? '解答を隠す' : '解答を見る'}
-                </button>
-              </div>
-              {shown?.has(i) && (
-                <div className="chunk-drill-en" lang="en">{d.en}</div>
-              )}
+              <span className="chunk-drill-ja qrsheet-ja">{d.ja}</span>
+              {/* **紙には出さない。** 紙では解答が最初から右に出ている */}
+              <button type="button" className="btn btn--small chunk-drill-show no-print"
+                      aria-expanded={!!shown?.has(i)}
+                      onClick={() => onShow?.(i)}>
+                {shown?.has(i) ? '解答を隠す' : '解答を見る'}
+              </button>
+              <span className={`chunk-drill-en qrsheet-en${shown?.has(i) ? '' : ' is-hidden'}`}
+                    lang="en">{d.en}</span>
             </li>
           ))}
         </ol>

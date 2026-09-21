@@ -5965,7 +5965,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
   /* ② 押すと問が出る。**片方しか無い問は落ちている**(6 → 5問) */
   {
     const page = await open()
-    const 前 = await page.evaluate(() => document.querySelectorAll('.chunk-drill').length)
+    /* **「見えているか」で数える**(2026-09・第5.230節)。
+       紙に出すために**描いてから隠す**形にしたので、
+       畳んでいても `.chunk-drill` は DOM にある。
+       `querySelectorAll` の数で見ていると、
+       **畳んであっても「開いている」と読まれる** */
+    const 前 = await page.evaluate(() => [...document.querySelectorAll('.chunk-drill')]
+      .filter((e) => e.checkVisibility()).length)
     await page.evaluate(() => {
       const c = [...document.querySelectorAll('.chunk')]
         .find((x) => x.querySelector('.chunk-en')?.textContent.startsWith('come up with'))
@@ -5975,9 +5981,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
     const r = await page.evaluate(() => {
       const c = [...document.querySelectorAll('.chunk')]
         .find((x) => x.querySelector('.chunk-en')?.textContent.startsWith('come up with'))
+      /* **見えているものだけ**(描いてから隠す形なので、数では見られない) */
+      const 見える = (e) => e.checkVisibility()
       return {
-        問: [...c.querySelectorAll('.chunk-drill-ja')].map((e) => e.textContent.trim()),
-        英: [...c.querySelectorAll('.chunk-drill-en')].map((e) => e.textContent.trim()),
+        問: [...c.querySelectorAll('.chunk-drill-ja')].filter(見える)
+          .map((e) => e.textContent.trim()),
+        英: [...c.querySelectorAll('.chunk-drill-en')].filter(見える)
+          .map((e) => e.textContent.trim()),
         札: c.querySelector('.chunk-go').textContent.trim(),
       }
     })
@@ -6004,7 +6014,8 @@ for (const W of [1280, 794, 453, 390, 320]) {
       const c = [...document.querySelectorAll('.chunk')]
         .find((x) => x.querySelector('.chunk-en')?.textContent.startsWith('come up with'))
       return {
-        英: [...c.querySelectorAll('.chunk-drill-en')].map((e) => e.textContent.trim()),
+        英: [...c.querySelectorAll('.chunk-drill-en')].filter((e) => e.checkVisibility())
+          .map((e) => e.textContent.trim()),
         札: [...c.querySelectorAll('.chunk-drill-show')].map((e) => e.textContent.trim()),
       }
     })
@@ -6013,6 +6024,76 @@ for (const W of [1280, 794, 453, 390, 320]) {
     if (/解答を隠す/.test(r2.札[0]) && /解答を見る/.test(r2.札[1])) {
       ok('かたまり … 開いた問だけ「解答を隠す」に変わる')
     } else ng('かたまり … 解答の札が変わらない', r2.札.join(' / '))
+    await page.close()
+  }
+
+  /* ④' **紙にも出る。左が日本語・右が解答の英語**(2026-09 利用者の指定)
+
+       > はい、紙にも表示されるようにしてください。その際は
+       > quick response と同じように、左側に日本語、右側に解答の英語
+       > というフォーマットでお願いします。
+
+     **ソースを読むだけでは分からない。** 紙の見え方は
+     「`no-print` が付いているか」「`.btn` をまとめて消す決まり」
+     「`qrsheet-list` の2列の組み」の**掛け合わせ**で決まる。
+     **印刷の見え方をそのまま描いて測る**(`emulateMedia`)。
+
+     **いちばん危ない形で測る** —— 練習を**畳んだまま**印刷する。
+     「描いてから隠す」をやめて `open &&` に戻すと、ここが赤くなる。
+
+     **「出る」と「出ない」の両方を見る** —— 解答が出ることと、
+     押すもの(練習する / 解答を見る)が紙に出ないことの両方。 */
+  {
+    const page = await open(1280)
+    /* **本物の `printElement()` と同じ印を付ける。**
+       `is-printing` / `print-target` / `print-path` の3つがそろって
+       初めて紙の指定が効く(`src/lib/print.js`) */
+    await page.evaluate(() => {
+      const sheet = document.querySelector('#lesson-sheet') ?? document.querySelector('.lesson-sheet')
+      if (!sheet) return
+      sheet.classList.add('print-target')
+      document.body.classList.add('is-printing')
+      for (let el = sheet.parentElement; el && el !== document.body; el = el.parentElement) {
+        el.classList.add('print-path')
+      }
+    })
+    await page.emulateMedia({ media: 'print' })
+    await page.waitForTimeout(250)
+    const r = await page.evaluate(() => {
+      const 見える = (el) => !!el && el.checkVisibility?.() !== false
+        && el.getBoundingClientRect().height > 0
+      const 箱 = document.querySelector('.print-target [data-type="vocab_note"]')
+      const 行 = [...document.querySelectorAll('.print-target .chunk-drill')].filter(見える)
+      const one = 行[0]
+      const ja = one?.querySelector('.chunk-drill-ja')
+      const en = one?.querySelector('.chunk-drill-en')
+      return {
+        ページ: 見える(箱),
+        問: 行.length,
+        /* **左と右。** 日本語の右端が、英語の左端より左にあること */
+        左右: ja && en ? Math.round(en.getBoundingClientRect().left
+          - ja.getBoundingClientRect().right) : null,
+        解答: 見える(en),
+        /* 通し番号の丸のぶんの余白。**Quick Response の紙の組みが効いた印** */
+        番号よけ: one ? Math.round(parseFloat(window.getComputedStyle(one).paddingLeft)) : 0,
+        押すもの: [...document.querySelectorAll('.print-target .chunk-go, .print-target .chunk-drill-show')]
+          .filter(見える).length,
+      }
+    })
+    if (r.ページ) ok('かたまり(紙) … ページが紙に出る')
+    else ng('かたまり(紙) … ページが紙に出ていない')
+    /* **畳んだままでも出る。** 数は骨組みの中身から決まる(書き写さない) */
+    if (r.問 >= 5) ok(`かたまり(紙) … 畳んだままでも練習が出る(${r.問} 問)`)
+    else ng('かたまり(紙) … 畳んだままだと練習が出ない', `${r.問} 問`)
+    if (r.左右 !== null && r.左右 >= 0) {
+      ok(`かたまり(紙) … 左が日本語・右が解答の英語(あいだ ${r.左右}px)`)
+    } else ng('かたまり(紙) … 左右に分かれていない', `あいだ ${r.左右}px`)
+    if (r.解答) ok('かたまり(紙) … 解答が出ている')
+    else ng('かたまり(紙) … 解答が紙に出ていない')
+    if (r.番号よけ > 0) ok(`かたまり(紙) … 通し番号の場所がある(${r.番号よけ}px)`)
+    else ng('かたまり(紙) … Quick Response の紙の組みが効いていない')
+    if (r.押すもの === 0) ok('かたまり(紙) … 押すものは紙に出ない')
+    else ng('かたまり(紙) … 押すものが紙に出ている', `${r.押すもの} 個`)
     await page.close()
   }
 

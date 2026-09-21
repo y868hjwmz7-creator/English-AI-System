@@ -9637,6 +9637,42 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **説明の文を置かない**(`.claude/rules/common.md`) */
     ok(!/押すと|できます|表示されます/.test(c),
       'カード … 使い方の説明を置いていない')
+    /* ── **紙にも出す**(2026-09 利用者の指定)────────────────
+
+         > はい、紙にも表示されるようにしてください。その際は
+         > quick response と同じように、左側に日本語、右側に解答の英語
+         > というフォーマットでお願いします。
+
+       **描いてから隠す。** `open && (` で囲うと、畳んだまま印刷したときに
+       練習がまるごと消える(`<details>` をやめたのと同じ理由・CLAUDE.md) */
+    ok(!/\{open && !!drills\.length/.test(c) && /\{!!drills\.length && \(/.test(c),
+      'カード … 練習は、畳んでいても描く(紙に出すため)')
+    ok(/is-closed/.test(c), 'カード … 畳むのは、消すのではなく隠す')
+    ok(!/\{shown\?\.has\(i\) && \(/.test(c) && /is-hidden/.test(c),
+      'カード … 解答も、閉じているときは隠すだけ(紙には出す)')
+    /* **組みは Quick Response の紙から借りる。書き写さない** */
+    for (const cls of ['qrsheet-list', 'qrsheet-ja', 'qrsheet-en']) {
+      ok(c.includes(cls), `カード … 紙の組みを借りている(${cls})`)
+    }
+    /* **押すものは紙に出さない**(紙には解答が最初から出ている) */
+    ok(/chunk-drill-show no-print/.test(c), 'カード … 「解答を見る」は紙に出さない')
+  }
+
+  /* ── ⑩' 紙の指定(`styles.css`)──────────────────────────────
+       **走る指定だけを見る**(CLAUDE.md「先に数える」)——
+       この節の説明には、**もとの決まり(「紙に出さない」)がそのまま
+       引用してある。** コメントごと見ると、いつでも赤くなる */
+  {
+    const css = read('src/styles.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    ok(!/\[data-type="vocab_note"\][^{]*\{[^}]*display:\s*none/.test(css),
+      '紙 … 「覚えておきたい表現」を隠す指定が残っていない')
+    /* **畳んでいても紙には出す**(画面の `is-closed` を打ち消す) */
+    ok(/ol\.chunk-drills\.is-closed \{ display: grid !important/.test(css),
+      '紙 … 畳んだままでも、練習を出す')
+    ok(/\.chunk-drill-en\.is-hidden \{ display: block !important/.test(css),
+      '紙 … 解答も出す')
+    /* **かたまり1つを、ページの切れ目でまっぷたつにしない** */
+    ok(/break-inside: avoid/.test(css), '紙 … かたまりを途中で切らない')
   }
   /* **骨組みは、本物と1文字も違えない。**
      いちばん危ない形(分類も練習も無い古い問)を置いていないと、

@@ -3508,8 +3508,47 @@ html, body { overflow-x: clip; }
        4枚目 Quick Response
 
      **「本文に出てきた語句」は紙に出さない。** 語の意味は画面で触れば
-     出るので、紙に写す意味がない。そのぶんを本文の行間に回す。 */
-  body.is-printing .print-target [data-type="vocab_note"] { display: none !important; }
+     出るので、紙に写す意味がない。そのぶんを本文の行間に回す。
+
+     ── **2026-09、ここは逆になった**(利用者の指定・第5.230節)──
+
+       > はい、紙にも表示されるようにしてください。その際は
+       > quick response と同じように、左側に日本語、右側に解答の英語
+       > というフォーマットでお願いします。
+
+     あのページは「語の意味を読むだけ」ではなくなった。
+     **分類の札が付き、日→英の練習が5〜10問付く**ので、
+     **紙があればアプリを開けない場所でも同じ練習ができる**
+     (Quick Response の紙を足したときと、まったく同じ理由)。
+
+     **組みは書き写さない。** 練習の一覧には
+     `qrsheet-list` / `qrsheet-ja` / `qrsheet-en` が付けてあるので、
+     すぐ下の Quick Response の紙の指定が**そのまま効く。** */
+
+  /* **畳んでいても紙には出す。** 画面で「練習する」を押していなくても、
+     紙には練習が要る(**描いてから隠す**・CLAUDE.md) */
+  body.is-printing .print-target ol.chunk-drills.is-closed,
+  .print-target ol.chunk-drills.is-closed { display: grid !important; }
+  body.is-printing .print-target .chunk-drill-en,
+  .print-target .chunk-drill-en { display: block !important; }
+  /* 1つの かたまり を、ページの切れ目でまっぷたつにしない */
+  .print-target [data-type="vocab_note"] ol.material-preview > li,
+  .print-target [data-type="vocab_note"] ol.lesson-items > li {
+    break-inside: avoid; margin-bottom: 10pt;
+  }
+  /* 分類の札。**色だけに頼らない**ので、紙でも枠線で示す */
+  .print-target .chunk-kind {
+    border: 0.8pt solid #666 !important; background: none !important;
+    color: #222 !important; font-size: 8.5pt;
+  }
+  /* 本文の中の1文。画面と同じく、左に線を1本引いて引用と分かるようにする */
+  .print-target .chunk-source {
+    border-left: 1pt solid #999 !important;
+    color: #333 !important; font-size: 9.5pt;
+  }
+  /* **解答は、右の列に出たままにする。**
+     画面では「解答を見る」を押すまで隠れているが、紙には最初から要る */
+  .print-target .chunk-drill-en.is-hidden { display: block !important; }
 
   /* **1つの演習で1枚。** 中途半端なところから次の演習を始めない。
      `[data-type]` を持つのは演習の箱そのものなので、
@@ -9472,20 +9511,29 @@ button.wbfilter-ctl { text-align: left; }
    このカードで次にすることは1つだけ —— 練習することである */
 .chunk-go { flex: 0 0 auto; }
 /* 練習の一覧。**押すものの下**に出す —— 中身が増えても
-   「練習する」の場所は動かない(一覧の末尾に押すものを置かない) */
+   「練習する」の場所は動かない(一覧の末尾に押すものを置かない)。
+
+   **描いてから隠す**(`is-closed`)。描かないでいると、
+   **畳んだまま印刷したときに練習が消える**(2026-09 利用者の指定
+   「紙にも表示されるようにしてください」)。
+   レッスン表示の「取り組み方」が `<details>` をやめたのと同じ作法である */
 .chunk-drills {
   display: grid; gap: var(--sp-8);
   margin: 0; padding: 0 0 0 var(--sp-18);
 }
-/* 日本語と「解答を見る」。**横に並ぶ組のすき間も `gap`** */
-.chunk-drill-row {
+.chunk-drills.is-closed { display: none; }
+/* 日本語と「解答を見る」と解答。**横に並ぶ組のすき間も `gap`** */
+.chunk-drill {
   display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--sp-8);
 }
 .chunk-drill-ja { flex: 1 1 12ch; min-width: 0; }
 /* **灰(塗りつぶし)= ならぶもの。** 問の数だけ並ぶ(既定のボタン) */
 .chunk-drill-show { flex: 0 0 auto; }
+/* 解答は**次の行に、まるごと**(日本語のとなりに置くと、目に入ってしまう) */
 .chunk-drill-en {
-  margin-top: var(--sp-4);
+  flex: 1 1 100%;
   color: var(--series-3); font-weight: 600;
 }
+/* **消すのではなく隠す。** 紙では出す(下の `@media print`) */
+.chunk-drill-en.is-hidden { display: none; }
