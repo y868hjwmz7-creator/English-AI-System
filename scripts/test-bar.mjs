@@ -6273,6 +6273,83 @@ for (const W of [1280, 794, 453, 390, 320]) {
       無い.map((x) => `${x.id}(${x.名})`).join(' / '))
   } else ok(`書く欄 … ${見た.length} つの種類ぜんぶに出る`)
 
+  /* ══ **モノローグは、細かい指定を書けば場面を選ばなくてよい**
+       (第5.228節・2026-09 利用者の指定)══════════════════════════
+
+         > モノローグの教材の場面設定は、「細かい指定」に記入した場合には、
+         > 選択はオプションに出来ないでしょうか?
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+     書く前は出さず、書いたら出て、消したら**場面が戻る** ——
+     どちらも空のまま作れてしまう形にしない。
+     **ソースを読むだけでは言えない**ので、実際に打ち込んで測る。 */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    page.setDefaultTimeout(8000)
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=form&kind=speech`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(500)
+    /** 場面の欄のいま */
+    const 見る = () => page.evaluate(() => {
+      const 名 = (el) => el?.closest('label')?.querySelector('span')?.textContent?.trim() ?? ''
+      const sel = [...document.querySelectorAll('select')]
+        .find((x) => 名(x).startsWith('シチュエーション'))
+      return {
+        欄: !!sel,
+        選ばない: sel ? [...sel.options].some((o) => o.value === '') : false,
+        値: sel?.value ?? null,
+      }
+    })
+    /** 細かい指定に打ち込む(空文字なら消す) */
+    const 書く = (t) => page.evaluate((text) => {
+      const 名 = (el) => el?.closest('label')?.querySelector('span')?.textContent?.trim() ?? ''
+      const ta = [...document.querySelectorAll('textarea')]
+        .find((x) => 名(x).startsWith('細かい指定'))
+      if (!ta) return
+      const set = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype, 'value').set
+      set.call(ta, text)
+      ta.dispatchEvent(new Event('input', { bubbles: true }))
+    }, t)
+
+    const 前 = await 見る()
+    await 書く('新しい安全手順を、現場の全員に伝えるスピーチ')
+    await page.waitForTimeout(400)
+    const 後 = await 見る()
+    await page.evaluate(() => {
+      const 名 = (el) => el?.closest('label')?.querySelector('span')?.textContent?.trim() ?? ''
+      const sel = [...document.querySelectorAll('select')]
+        .find((x) => 名(x).startsWith('シチュエーション'))
+      if (sel) { sel.value = ''; sel.dispatchEvent(new Event('change', { bubbles: true })) }
+    })
+    await page.waitForTimeout(400)
+    const 選んだ = await 見る()
+    await 書く('')
+    await page.waitForTimeout(500)
+    const 消した = await 見る()
+    await page.close()
+
+    if (!前.欄) {
+      ng('場面はオプション … モノローグに場面の欄が無い')
+    } else if (前.選ばない) {
+      ng('場面はオプション … 細かい指定が空なのに「選ばない」が出ている',
+        '**効かない操作を見せない** —— どちらも空のまま作れてしまう')
+    } else if (!後.選ばない) {
+      ng('場面はオプション … 細かい指定を書いても「選ばない」が出ない')
+    } else if (選んだ.値 !== '') {
+      ng('場面はオプション … 「選ばない」を選んでも場面が残る', String(選んだ.値))
+    } else if (消した.選ばない || !消した.値) {
+      ng('場面はオプション … 細かい指定を消しても、場面が戻らない',
+        `選ばない ${消した.選ばない} / 値「${消した.値}」。**黙って無指定にしない**`)
+    } else {
+      ok(`場面はオプション … 書く前は出ない・書けば出る・選べば空(${選んだ.値 === '' ? '空' : 選んだ.値})`
+        + `・消せば戻る(${消した.値})`)
+    }
+  }
+
   const 二重 = 見た.filter((x) => x.数 > 1)
   if (二重.length) {
     ng('書く欄 … 同じ欄が2つ並んでいる',

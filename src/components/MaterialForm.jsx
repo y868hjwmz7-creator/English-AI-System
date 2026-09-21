@@ -303,6 +303,32 @@ export default function MaterialForm({
   const [wordError, setWordError] = useState(null)
   const [wordNote, setWordNote] = useState('')        // 押した結果(その場に出す)
 
+  /**
+   * **モノローグは、細かい指定を書けば場面を選ばなくてよい**
+   * (2026-09 利用者の指定・第5.228節)。
+   *
+   *   > モノローグの教材の場面設定は、「細かい指定」に記入した場合には、
+   *   > 選択はオプションに出来ないでしょうか?
+   *
+   * 場面と細かい指定は、どちらも**どんな話にするか**を決めるものである。
+   * 細かい指定に書いてあるのに場面まで選ばされると、
+   * **書いた中身と食い違う場面が、勝手に混ざる。**
+   *
+   * **判断はここ1か所。** 画面の中で `kind === 'speech' && …` と書かない
+   * (CLAUDE.md「判断は1か所に持つ」)。
+   * **既定は「選ぶ」側** —— 細かい指定が空なら、これまでどおり必ず選ぶ。
+   */
+  const sceneFree = kind === 'speech' && subject.trim().length > 0
+
+  /* **細かい指定が空になったら、場面を選び直す**(第5.228節)。
+     どちらも空のままだと、**何の指定も無いまま**作ることになる。
+     **黙って落とさない** —— 先頭の場面に戻して、選んでいる状態にする */
+  useEffect(() => {
+    if (sceneFree || scene !== '') return
+    const list = kind === 'speech' ? speechScenesFor(industry) : scenesFor(industry)
+    setScene(list[0]?.id ?? '')
+  }, [sceneFree, scene, kind, industry])
+
   /* **分野を変えたら、場面もその分野のものに入れ替える**(2026-08 利用者の指定)。
      入れ替えないと、外科医の教材に「打ち合わせ前の雑談」が残る。
      いまの場面がその分野にもあれば、そのままにする */
@@ -310,7 +336,11 @@ export default function MaterialForm({
     // **スピーチは別の一覧を持つ**(会話の場面を出すと噛み合わない)。
     // 種類を変えたときも入れ替えるので、`kind` も見る
     const list = kind === 'speech' ? speechScenesFor(industry) : scenesFor(industry)
-    if (!list.some((x) => x.id === scene)) setScene(list[0]?.id ?? '')
+    /* **「選ばない」を選んでいるなら、そのままにする**(第5.228節)。
+       ここで書き戻すと、分野を変えただけで場面が復活する */
+    if (!(scene === '' && sceneFree) && !list.some((x) => x.id === scene)) {
+      setScene(list[0]?.id ?? '')
+    }
     const gl = genresFor(industry)
     if (!gl.some((x) => x.id === genre)) setGenre(gl[0]?.id ?? '')
     // scene / genre を依存に入れると、選んだそばから書き換わってしまう
@@ -614,6 +644,8 @@ export default function MaterialForm({
   const pickStyle = (id) => {
     setStyle(id)
     const ok = scenesForStyle(speechScenes, id)
+    /* **「選ばない」は壊さない**(第5.228節)。型は場面が無くても選べる */
+    if (scene === '' && sceneFree) return
     if (!ok.some((x) => x.id === scene)) setScene(ok[0]?.id ?? scene)
   }
 
@@ -1627,6 +1659,11 @@ export default function MaterialForm({
             </p>
           ) : (
             <select value={scene} onChange={(e) => pickScene(e.target.value)}>
+              {/* **細かい指定を書いたときだけ出す**(第5.228節)。
+                  書いていないのに「選ばない」を選べると、
+                  **何の指定も無いまま**作れてしまう
+                  (効かない操作を見せない・CLAUDE.md) */}
+              {sceneFree && <option value="">場面は選ばない(細かい指定にまかせる)</option>}
               {sceneList.map((x) => (
                 <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
               ))}
