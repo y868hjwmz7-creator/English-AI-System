@@ -28,6 +28,7 @@
  *   **見えているかどうかは、描かせないと分からない。**
  */
 import { spawn } from 'node:child_process'
+import zlib from 'node:zlib'
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6095,6 +6096,98 @@ for (const W of [1280, 794, 453, 390, 320]) {
     if (r.押すもの === 0) ok('かたまり(紙) … 押すものは紙に出ない')
     else ng('かたまり(紙) … 押すものが紙に出ている', `${r.押すもの} 個`)
     await page.close()
+  }
+
+  /* ④'' **PDF にも入る**(2026-09 利用者の指定「もちろん pdf にもです」)
+
+     「PDF で保存」は、**印刷の画面から保存するもの**である
+     (`printElement()` → `window.print()`)。別の仕組みは1つも無い。
+     けれども**そう書くだけでは確かめたことにならない** ——
+     `page.pdf()` は本物の PDF を作る道そのものなので、**作って測る。**
+
+     **数を書き写さない**(CLAUDE.md)。同じ画面から
+
+       ①そのまま               … 文字を置く命令 N 個
+       ②表現のページを隠して   … 文字を置く命令 M 個
+
+     の2つを作り、**N が M より、少なくとも「紙に出ている問の数」だけ
+     多い**ことを見る。1問につき、日本語と英語で最低1回ずつ置かれる。
+     もう一度「紙に出さない」指定を足すと、N が M に落ちて赤くなる。
+
+     **ページ数では見ない** —— 実測したところ、練習を消しても
+     3枚のままだった(`break-before: page` の側で決まるため)。
+     **「無ければ素通り」する形の検証を書かない**(CLAUDE.md)。 */
+  {
+    /* PDF の中の「文字を置く命令」を数える。**素の node だけで読む** ——
+       流れ(stream)は FlateDecode で圧縮してあるので、ほどいてから数える。
+       Chromium は16進の文字列(`<0014> Tj`)で書くので、そちらも拾う */
+    const 文字置き = (buf) => {
+      let n = 0
+      let i = 0
+      for (;;) {
+        const a = buf.indexOf('stream', i)
+        if (a < 0) break
+        let st = a + 6
+        if (buf[st] === 0x0d) st += 1
+        if (buf[st] === 0x0a) st += 1
+        const b = buf.indexOf('endstream', st)
+        if (b < 0) break
+        try {
+          n += (zlib.inflateSync(buf.subarray(st, b)).toString('latin1')
+            .match(/(?:\)|>|\])\s*T[jJ]/g) ?? []).length
+        } catch { /* ほどけない流れは数えない(画像など) */ }
+        i = b + 9
+      }
+      return n
+    }
+
+    const page = await open(1280)
+    await page.evaluate(() => {
+      const sheet = document.querySelector('#lesson-sheet') ?? document.querySelector('.lesson-sheet')
+      if (!sheet) return
+      sheet.classList.add('print-target')
+      document.body.classList.add('is-printing')
+      for (let el = sheet.parentElement; el && el !== document.body; el = el.parentElement) {
+        el.classList.add('print-path')
+      }
+    })
+    await page.emulateMedia({ media: 'print' })
+    await page.waitForTimeout(250)
+    /* **紙に出ている問の数**(差の下限は、ここから決める) */
+    const 問数 = await page.evaluate(() => [...document.querySelectorAll('.print-target .chunk-drill')]
+      .filter((e) => e.checkVisibility()).length)
+    const あり = await page.pdf({ format: 'A4', printBackground: true })
+    /* **表現のページごと隠して、もう1枚作る。**
+       打ち消しの強さは、本物の指定(`body.is-printing …`)より上にする */
+    await page.addStyleTag({
+      content: '@media print { body.is-printing .print-target [data-type="vocab_note"],'
+        + ' .print-target [data-type="vocab_note"] { display: none !important } }',
+    })
+    await page.waitForTimeout(200)
+    const 隠れた = await page.evaluate(() => {
+      const el = document.querySelector('.print-target [data-type="vocab_note"]')
+      return el ? window.getComputedStyle(el).display === 'none' : false
+    })
+    const なし = await page.pdf({ format: 'A4', printBackground: true })
+    await page.close()
+
+    if (あり.subarray(0, 5).toString() === '%PDF-') ok('かたまり(PDF) … PDF ができている')
+    else ng('かたまり(PDF) … PDF になっていない', あり.subarray(0, 8).toString())
+    if (!隠れた) {
+      ng('かたまり(PDF) … 比べる相手(ページを隠した紙)を作れていない',
+        '打ち消しの指定が本物に負けている')
+    } else if (問数 < 5) {
+      ng('かたまり(PDF) … 紙に練習が出ていない', `${問数} 問`)
+    } else {
+      const N = 文字置き(あり)
+      const M = 文字置き(なし)
+      if (N - M >= 問数 * 2) {
+        ok(`かたまり(PDF) … 表現のページが PDF に入っている(${N} → ${M}・${問数} 問)`)
+      } else {
+        ng('かたまり(PDF) … 表現のページが PDF に入っていない',
+          `そのまま ${N} / 隠して ${M}(問は ${問数})`)
+      }
+    }
   }
 
   /* ④ **いちばん狭い画面で、はみ出さない。**
