@@ -2660,9 +2660,24 @@ export default function MaterialForm({
                   <span className="material-item-no">{ii + 1}</span>
                   <div className="exercise-fields">
                     {fields.map((f) => (
+                      /* **選ぶ欄は、打たせない**(第5.230節)。
+                         かたまりの分類は7つに決まっているので、
+                         手で打つと綴りの違いで札が出なくなる
+                         (**効かない操作を見せない**・CLAUDE.md)。
+                         一覧は `FIELD_LABELS` 経由で `chunkKinds.js` 1か所から来る */
+                      FIELD_LABELS[f]?.options ? (
+                        <select key={f} value={it[f] ?? ''}
+                                onChange={(e) => patchItem(si, ii, f, e.target.value)}>
+                          <option value="">{FIELD_LABELS[f].label}</option>
+                          {FIELD_LABELS[f].options.map((o) => (
+                            <option key={o.id} value={o.id}>{o.label}</option>
+                          ))}
+                        </select>
+                      ) : (
                       <input key={f} value={it[f] ?? ''} lang={f.endsWith('_en') ? 'en' : undefined}
                              onChange={(e) => patchItem(si, ii, f, e.target.value)}
                              placeholder={`${FIELD_LABELS[f]?.label ?? f} — ${FIELD_LABELS[f]?.placeholder ?? ''}`} />
+                      )
                     ))}
                   </div>
                   {sec.items.length > 1 && (

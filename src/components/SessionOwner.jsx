@@ -44,6 +44,26 @@
  *
  *   一覧も名前も**props で受け取るだけ**なので、骨組み(Supabase 無し)でも
  *   そのまま描ける(**描けないものは測れない**・CLAUDE.md)。
+ *
+ * 【帯の中へ移した — 1行まるごと使うのをやめた】(2026-09 利用者の指摘)
+ *
+ *   > 「この教材で拾った語は〜に入ります」これで１行分のスペースを
+ *   > 使うのがもったいないです。何か代替案はありませんか？
+ *
+ *   **説明の文(「この教材で拾った語は」「に入ります」)をまるごと消した。**
+ *   画面に残してよいのは**いまの状態**だけである
+ *   (`.claude/rules/common.md`「余計な説明書きを置かない」)。
+ *   「自分の記録」という札そのものが、その状態である。
+ *
+ *   文が無くなると札1つになるので、**帯の中に入る。**
+ *   広い画面では**1行まるごと浮き**、狭い画面では帯の2段目へ折り返す
+ *   (2026-09 の実測「320px の帯は満杯」は、
+ *   **`.lesson-bar-main` の中**に入れようとしたときの話である。
+ *   こちらは折り返す側なので、どの幅でも潰れない)。
+ *
+ *   **測るときだけ数に入れない**(`.is-measuring-row`)。
+ *   名前が長いと「あふれている」と読まれ、帯の言葉が
+ *   意味もなく削られる(`fitRow.js` の `over()` は子の `scrollWidth` も見る)。
  * ============================================================================
  *
  * @param learnerId いまの相手。`null` は「自分」
@@ -71,43 +91,32 @@ export default function SessionOwner({
   const btnRef = useRef(null)
   const label = ownerLabel(learnerId, name)
 
-  /* **行ごと、この部品が持つ。**
-     文の前後(「この教材で拾った語は」「に入ります」)を呼ぶ側に書くと、
-     **骨組みと本物が食い違う**(CLAUDE.md で何度も転んだところ)。
-     帯の中には置けなかった —— 320px の帯はすでに満杯で、
-     札が 26px まで潰れて読めなかった(実測・第5.178節) */
-  const row = (inner) => (
-    <div className="lesson-ownerrow no-print">
-      <span className="lesson-ownerrow-lead">この教材で拾った語は</span>
-      {inner}
-      <span className="lesson-ownerrow-lead">に入ります</span>
-    </div>
-  )
-
   /* **受け止める人がいなければ、ただの名札。**
      押せる見た目にすると、押しても何も起きない行き止まりになる */
   if (!onPick) {
-    return row(
-      <span className="lesson-owner lesson-owner--fixed">
+    return (
+      <span className="lesson-owner lesson-owner--fixed no-print">
         <span className="lesson-owner-name">{label}</span>
-      </span>,
+      </span>
     )
   }
 
   return (
     <>
-      {row(
       <button type="button"
               ref={btnRef}
-              className={`btn btn--small lesson-owner${open ? ' chip--on' : ''}`}
+              className={`btn btn--small lesson-owner no-print${open ? ' chip--on' : ''}`}
               aria-expanded={open}
+              /* **見えている言葉は「いまの状態」だけ**(`.claude/rules/common.md`)。
+                 何を選ぶものなのかは、**目では絵と ▾ で分かる**ので
+                 画面には書かない。読み上げにだけ添える */
+              aria-label={`単語の記録先をえらぶ(いまは${label})`}
               onClick={() => { setOpen((v) => !v); if (!open) onOpen?.() }}>
         {/* **名前は切らない。** 狭い画面では入るところまでで「…」になる
             (`.bookpick` とまったく同じ作法・第5.176節) */}
         <span className="lesson-owner-name">{label}</span>
         <span aria-hidden="true">▾</span>
-      </button>,
-      )}
+      </button>
       {open && (
         <SettingsSheet
           anchorEl={btnRef.current}

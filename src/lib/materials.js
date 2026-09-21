@@ -15,6 +15,9 @@ import { kindsOf } from '../data/industries.js'
 import {
   givesAwayAnswer, isBlankItem, isPassageSection, isWrongShape,
 } from '../data/exerciseTypes.js'
+/* かたまりの分類と、練習の問数(第5.230節)。**呼び名はあちら1か所**。
+   窓口(Deno)はここを読み込めないので、**画面から送る** */
+import { CHUNK_KINDS, DRILL_MAX, DRILL_MIN, chunkDrills } from '../data/chunkKinds.js'
 import { chunkPlan, needsChunkJa } from './chunkJa.js'
 /* 文法解説(SVOC と修飾要素・0051)。**判断は `grammarNote.js` 1か所** */
 import { grammarItems, grammarPlan, grammarTodo } from './grammarNote.js'
@@ -136,7 +139,7 @@ export async function searchMaterials({
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')}${optLast('chunk_kind')}${optLast('source_en')}${optLast('practice')} )
       )
     `)
     .order('created_at', { ascending: false })
@@ -269,7 +272,7 @@ export async function loadMaterial(materialId) {
         id, seq, exercise_type, instruction,
         material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                          answer, answer_alt, audio_text, note, tag_id,
-                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')} )
+                         speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')}${optLast('chunk_kind')}${optLast('source_en')}${optLast('practice')} )
       )
     `)
     .eq('id', materialId)
@@ -298,6 +301,9 @@ const ITEM_FIELDS = [
   // 設問と解答の訳(0035)。**内容の理解で使う。**
   // 設問も解答も英語なので、意味が取れないと設問そのものが壁になる
   'question_ja', 'answer_ja',
+  /* かたまりの分類と、本文の中で実際にそう使われていた1文(0065・第5.230節)。
+     **本文に出た表現で使う。** 分類は `chunkKinds.js` の id がそのまま入る */
+  'chunk_kind', 'source_en',
 ]
 
 /** 空の欄を落として、中身のある設問だけを残す */
@@ -320,6 +326,15 @@ const cleanItems = (items) =>
         .filter((ph) => ph.text)
       // 列がまだ無いと分かっているときは送らない(挿入ごと失敗するため)
       if (phrases.length && !missingColumns.has('phrases')) row.phrases = phrases
+      /* かたまりの練習(0065・第5.230節)。**文字ではなく配列なので別に扱う**
+         (`phrases` とまったく同じ形)。
+
+         **そろえ方は `chunkDrills()` 1か所**である —— 片方だけ無い問を
+         落とす決まりを、作る側と出す側で書き写さない(CLAUDE.md)。
+         **0問なら送らない。** 空の配列を入れても場所を取るだけで、
+         画面は「練習する」を出さない(効かない操作を見せない) */
+      const practice = chunkDrills(it)
+      if (practice.length && !missingColumns.has('practice')) row.practice = practice
       // カタマリごとの訳(0021)。**文字ではなくオブジェクトなので別に扱う。**
       // {en: 作ったときの英文, ja: [カタマリごとの訳]}
       const chunks = it.chunks
@@ -684,7 +699,7 @@ export async function loadMyAssignments() {
           id, seq, exercise_type, instruction,
           material_items ( id, seq, prompt_en, prompt_ja, hint, question,
                            answer, answer_alt, audio_text, note, tag_id,
-                           speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')} )
+                           speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')}${optLast('chunk_kind')}${optLast('source_en')}${optLast('practice')} )
         )
       )
     `)
@@ -962,7 +977,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-13b'
+export const NEED_GEN_REV = '2026-09-21'
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -977,6 +992,8 @@ export const genGatewayNote = () => (genGatewayStale()
     + 'また、**書いた答えの添削が使えません**。'
     + '**スピーチの原稿は 1,500 文字を超えたぶんが黙って落ちます**(0054)。'
     + 'また、**業種べつの単語帳(棚)の語句が作れません**(0057)'
+    + '。さらに、**本文に出た表現の「分類の札」と「練習問題」が作られません**'
+    + '(第5.230節)'
     + `(いま置かれているのは ${genRev}、必要なのは ${NEED_GEN_REV} 以降)。`
     + ' Supabase → Edge Functions → generate-material を置き直してください。'
   : null)
@@ -1110,6 +1127,18 @@ export async function generateSection({
        **窓口の置き直しが要る**(それまでは無視される。
        `NEED_GEN_REV` を見て画面が赤く知らせる) */
     avoidTopics, angle,
+    /* **かたまりの分類を、こちらから送る**(第5.230節)。
+
+       窓口(`generate-material`)は Deno なので `src/data/chunkKinds.js` を
+       読み込めない。**書き写すと、分類を1つ直した日に
+       利用者へ窓口の置き直しを頼むことになる**(切り口 `angle` が
+       まさにそれを避けるために、同じ形で送られている)。
+
+       送らなければ窓口は分類の欄そのものを出さない ——
+       **既定は「作らない」側**である(CLAUDE.md)。 */
+    chunkKinds: CHUNK_KINDS.map((k) => ({ id: k.id, label: k.label, what: k.what })),
+    /* 練習の問数。**下限と上限も `chunkKinds.js` 1か所**から来る */
+    drillMin: DRILL_MIN, drillMax: DRILL_MAX,
   })
 
   if (error) {

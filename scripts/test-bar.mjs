@@ -36,6 +36,11 @@ import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs'
 import { frameGroupCount } from '../src/data/sentenceFrames.js'
 /* **冊の数を書き写さない**(冊を足した日に、ここだけ古い数が残る) */
 import { RIZAP_BOOKS } from '../src/data/rizapBooks.js'
+/* 本文(記事・会話)の演習。**一覧を書き写さない** ——
+   種類を足した日に、ここだけ古い一覧が残らないようにする */
+import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
+
+const PASSAGE_TYPES = EXERCISE_TYPES.filter((t) => t.isPassage).map((t) => t.id)
 
 const PORT = 5198
 const ROOT = new URL('..', import.meta.url).pathname
@@ -298,15 +303,55 @@ for (const [label, want] of Object.entries(WANT)) {
     await page.waitForTimeout(200)
     const m = await page.evaluate(() => {
       const bar = document.querySelector('.lesson-bar')
+      const main = document.querySelector('.lesson-bar-main')
+      const own = document.querySelector('.lesson-owner')
+      const h = () => Math.round(bar.getBoundingClientRect().height)
+      const 名札あり = h()
+      /* **名札を外したときと比べる**(第5.230節)。
+         「いつも要る4つ」が1行に収まっているかと、
+         **名札のせいで段が増えていないか**は、別の話である */
+      let 名札なし = 名札あり
+      if (own) {
+        const 前 = own.style.display
+        own.style.display = 'none'
+        名札なし = h()
+        own.style.display = 前
+      }
       return {
-        h: Math.round(bar.getBoundingClientRect().height),
+        h: 名札あり,
+        素: 名札なし,
+        主: Math.round(main.getBoundingClientRect().height),
+        名札: !!own,
         over: document.documentElement.scrollWidth > window.innerWidth,
       }
     })
     const 印 = big ? `${w}px(文字 1.25 倍)` : `${w}px`
-    // 1行はおよそ 50px。**2行になると倍**になるので、そこで見分ける
-    if (m.h > 80) ng(`${印} で帯が折り返している`, `高さ ${m.h}px(1行なら 50px ほど)`)
-    else ok(`${印} … 帯は1行(${m.h}px)`)
+    /* ── **いつも要る4つ(閉じる・ページ送り・解答・表示)は、必ず1行** ──
+         これが第5.80節の決まりそのものである。1行はおよそ 34〜42px */
+    if (m.主 > 60) ng(`${印} で「いつも要る4つ」が折り返している`, `高さ ${m.主}px`)
+    else ok(`${印} … いつも要る4つは1行(${m.主}px)`)
+    /* ── **名札(誰の記録か)は、帯の中で折り返してよい**(第5.230節)──
+         もとは**帯のすぐ下に1行まるごと**使っていた(第5.178節)。
+         いまは帯の中に入れてあるので、
+
+           ・広い画面 … 帯と同じ行に並ぶ = **1行まるごと浮く**
+           ・狭い画面 … 帯の2段目へ折り返す = **前と同じ高さ**
+
+         見るのは「**名札を外したときと比べて、増えた段が1つまでか**」。
+         段の高さを書き写さない —— 名札を外したときの高さから求める */
+    if (m.名札) {
+      const 増えた = m.h - m.素
+      if (増えた === 0) ok(`${印} … 名札は帯と同じ行(1行まるごと浮いた・${m.h}px)`)
+      else if (増えた <= m.素) {
+        ok(`${印} … 名札は帯の2段目(${m.h}px。前は帯 ${m.素}px + 名札の行)`)
+      } else {
+        ng(`${印} で名札が2段以上に折り返している`,
+          `名札あり ${m.h}px / 名札なし ${m.素}px`)
+      }
+    }
+    /* ── **名札を外した帯は、どの幅でも1行**(もとの決まりのまま) ── */
+    if (m.素 > 80) ng(`${印} で帯が折り返している`, `高さ ${m.素}px(1行なら 50px ほど)`)
+    else ok(`${印} … 帯は1行(${m.素}px)`)
     if (m.over) ng(`${印} で横にはみ出している`)
   }
   await page.evaluate(() => document.getElementById('eas-bigbar')?.remove())
@@ -494,15 +539,24 @@ for (const [label, want] of Object.entries(WANT)) {
   for (const w of [1500, 1200, 900, 390]) {
     await page.setViewportSize({ width: w, height: 900 })
     await page.waitForTimeout(300)
-    const m = await page.evaluate(() => ({
+    const m = await page.evaluate((passage) => ({
       /* 本文の各段落に付いていたもの。**言葉で数える**
-         (Listen / Stop のどちらの形でも拾う) */
-      段落: [...document.querySelectorAll('.lesson-items button')]
+         (Listen / Stop のどちらの形でも拾う)。
+
+         **本文の演習の中だけを数える**(2026-09・第5.230節)。
+         もとは `.lesson-items button` を画面ぜんぶから拾っていたが、
+         レッスン表示は**開いていないページも描いてある**(紙のため)ので、
+         語句や単語の演習を1つ足しただけで赤くなっていた。
+         **設問ごとの Listen は残すのが決まり**である
+         (すぐ上の注記「出る側は上の文型ドリルで数えている」)。
+         種類の一覧は `exerciseTypes.js` 1か所から渡している */
+      段落: passage.flatMap((t) =>
+        [...document.querySelectorAll(`.lesson-page[data-type="${t}"] .lesson-items button`)])
         .filter((b) => /^(Listen|Stop)/.test(b.textContent.trim())).length,
       /* **通しの読み上げは残す。** 上の「Listen (全体)」と操作盤は別物 */
       全体: !!document.querySelector('.lesson-listen'),
       操作盤: !!document.querySelector('.player'),
-    }))
+    }), PASSAGE_TYPES)
     if (m.段落) ng(`${w}px … 段落ごとの Listen が ${m.段落} 個 出ている`)
     else if (!m.全体) ng(`${w}px … 「Listen (全体)」まで消えている`)
     else if (!m.操作盤) ng(`${w}px … 操作盤が出ていない`, '鳴らす道が無くなる')
@@ -5686,46 +5740,96 @@ for (const W of [1280, 794, 453, 390, 320]) {
      > 単語帳に登録しているはずなのに、明らかに他のゲストが登録した単語などが
      > 入っていることがあります。しっかり分けて管理する体制にしてください。
 
-   **読めない名札は、無いのと同じである。** はじめ帯の中に置いたところ、
-   320px で **26px まで潰れて**「…」しか見えなかった(実測)。
-   だから帯のすぐ下の1行に移した。**そこが潰れないことを、描いて数える。**
+   **読めない名札は、無いのと同じである。** はじめ `.lesson-bar-main`
+   (折り返さない囲み)の中に置いたところ、320px で **26px まで潰れて**
+   「…」しか見えなかった(実測)。だから帯のすぐ下の1行に移した。
+
+   **2026-09、その1行をやめた**(利用者の指摘)。
+
+     > 「この教材で拾った語は〜に入ります」これで１行分のスペースを
+     > 使うのがもったいないです。何か代替案はありませんか？
+
+   説明の文を消し、札だけを**折り返す `.lesson-bar` の直の子**に置いた。
+   広い画面では帯と同じ行に並び(**1行まるごと浮く**)、
+   狭い画面では帯の2段目へ折り返す(**潰れない**)。
+   **本物のレッスン表示で測る** —— 骨組みには帯の中身が無いので、
+   どんな幅でも入ってしまう(**「無ければ素通り」する形**)。
 
    **「出る」と「出ない」の両方を見る** —— ゲストには出さない
    (相手が自分しかいないので、効かない操作になる)。
    ══════════════════════════════════════════════════════════════════ */
 {
-  /* ① 名札が読める幅で出ているか。**いちばん狭い画面で見る** */
+  /* ① **本物の帯の中で**、名札が読める幅で出ているか。
+       いちばん狭い画面(320px)を必ず入れる */
   for (const w of [320, 390, 1280]) {
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
-    await page.goto(`http://localhost:${PORT}/__bar.html?screen=owner`,
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
       { waitUntil: 'networkidle' })
-    await page.waitForTimeout(200)
+    await page.waitForTimeout(400)
     const r = await page.evaluate(() => {
-      const row = document.querySelector('.lesson-ownerrow')
+      const bar = document.querySelector('.lesson-bar')
       const own = document.querySelector('.lesson-owner')
-      if (!row || !own) return null
+      if (!bar || !own) return null
       const name = own.querySelector('.lesson-owner-name')
       return {
-        はみ出し: Math.round(row.scrollWidth - row.clientWidth),
+        はみ出し: Math.round(bar.scrollWidth - bar.clientWidth),
         /* **切れていないか。** 中身の幅より狭ければ「…」になっている */
         切れ: Math.round(name.scrollWidth - name.clientWidth),
-        文: row.textContent.replace(/\s+/g, ''),
+        /* **帯の中にいるか。** 外に出ると、また1行まるごと使うことになる */
+        帯の中: own.parentElement === bar,
+        /* **説明の文が残っていないか**(`.claude/rules/common.md`) */
+        文: bar.textContent.replace(/\s+/g, ''),
         見える: own.checkVisibility(),
+        /* **名札のせいで帯の言葉が削られていないか**(`.is-measuring-row`)。
+           削る段が付いていたら、測るときに名札を数に入れてしまっている */
+        詰め: [...bar.classList].filter((c) => /^is-fit/.test(c)).join(' '),
       }
     })
-    if (!r) { ng(`誰の記録か … ${w}px で行が描かれていない`); continue }
-    if (r.はみ出し === 0) ok(`誰の記録か … ${w}px で行がはみ出さない`)
-    else ng(`誰の記録か … ${w}px で行がはみ出す`, `${r.はみ出し}px`)
-    /* **名前が「…」で切れていない。** 帯の中に置いていたときは、
-       ここが 320px で切れていた(それが移した理由である) */
+    if (!r) { ng(`誰の記録か … ${w}px で名札が描かれていない`); continue }
+    if (r.はみ出し === 0) ok(`誰の記録か … ${w}px で帯がはみ出さない`)
+    else ng(`誰の記録か … ${w}px で帯がはみ出す`, `${r.はみ出し}px`)
+    /* **名前が「…」で切れていない。**
+       `.lesson-bar-main` の中に置いていたときは、320px で切れていた */
     if (r.切れ <= 0) ok(`誰の記録か … ${w}px で名前が切れない`)
     else ng(`誰の記録か … ${w}px で名前が「…」に切れている`, `${r.切れ}px`)
-    /* **何の記録かまで言えているか**(名前だけでは、何が入るのか分からない) */
-    if (/この教材で拾った語は/.test(r.文) && /に入ります/.test(r.文)) {
-      ok(`誰の記録か … ${w}px で「何が・誰に」入るか書いてある`)
-    } else ng(`誰の記録か … ${w}px で文が足りない`, r.文.slice(0, 40))
+    if (r.帯の中) ok(`誰の記録か … ${w}px で帯の中にいる(1行を使わない)`)
+    else ng(`誰の記録か … ${w}px で帯の外に出ている`)
+    /* **説明の文は置かない**(残してよいのは「いまの状態」だけ) */
+    if (!/この教材で拾った語は/.test(r.文) && !/に入ります/.test(r.文)) {
+      ok(`誰の記録か … ${w}px で説明の文を置いていない`)
+    } else ng(`誰の記録か … ${w}px に説明の文が残っている`, r.文.slice(0, 40))
     if (r.見える) ok(`誰の記録か … ${w}px で見えている`)
     else ng(`誰の記録か … ${w}px で見えていない`)
+    await page.close()
+  }
+
+  /* ①' **広い画面では、名札のせいで帯の言葉が削られない。**
+       `fitRow.js` の `over()` は**子の `scrollWidth`** も見るので、
+       名札(長い名前で「…」に切れる)を数に入れると
+       **いつでもあふれている**と読まれ、「閉じる」の語などが消える。
+       `.is-measuring-row .lesson-owner { display: none }` を外すと赤くなる */
+  {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+    const r = await page.evaluate(() => {
+      const bar = document.querySelector('.lesson-bar')
+      const own = document.querySelector('.lesson-owner')
+      if (!bar || !own) return null
+      /* **測るときの姿で見る。** 印を付けたあいだ、名札は消えていること */
+      bar.classList.add('is-measuring-row')
+      const 消えた = !own.checkVisibility()
+      bar.classList.remove('is-measuring-row')
+      return { 消えた, 詰め: [...bar.classList].filter((c) => /^is-fit/.test(c)).join(' ') }
+    })
+    if (!r) ng('誰の記録か … 1280px で帯が描かれていない')
+    else {
+      if (r.消えた) ok('誰の記録か … 測るあいだは名札を数に入れない')
+      else ng('誰の記録か … 測るあいだも名札が数に入っている')
+      if (!r.詰め) ok('誰の記録か … 1280px で帯の言葉が削られていない')
+      else ng('誰の記録か … 名札のせいで帯の言葉が削られた', r.詰め)
+    }
     await page.close()
   }
 
@@ -5795,9 +5899,141 @@ for (const W of [1280, 794, 453, 390, 320]) {
     await page.goto(`http://localhost:${PORT}/__bar.html?role=${role}&who=g1`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(300)
-    const 在る = await page.evaluate(() => !!document.querySelector('.lesson-ownerrow'))
+    const 在る = await page.evaluate(() => !!document.querySelector('.lesson-owner'))
     if (在る === 出る) ok(`誰の記録か … ${role} には${出る ? '出る' : '出ない'}`)
     else ng(`誰の記録か … ${role} に${出る ? '出ていない' : '出てしまう'}`)
+    await page.close()
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   本文から拾った かたまり(第5.230節・2026-09 利用者の設計)
+
+     > 「練習する」をクリックすると５問から１０問の日本語が表示され、
+     > それぞれ「解答を見る」のボタンがある。このような設計はどうでしょうか？
+
+   **押してみないと分からない**形である。ソースを読んでも
+   「押したら本当に問が出るか」「古い教材で『練習する』が出ないか」は
+   分からない。**本物のレッスン表示を描いて、実際に押す。**
+
+   **「出る」と「出ない」の両方を見る** —— 分類も練習も無い問
+   (0065 を貼る前 / 窓口を置き直す前に作った教材)で、
+   札と「練習する」が**出ないこと**まで見る。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const open = async (w = 390) => {
+    const page = await browser.newPage({ viewport: { width: w, height: 1200 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=chunk`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    return page
+  }
+
+  /* ① カードが並び、**分類の札は、分類のある問にだけ出る** */
+  {
+    const page = await open()
+    const r = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('.chunk')]
+      return cards.map((c) => ({
+        en: c.querySelector('.chunk-en')?.textContent.trim() ?? '',
+        札: c.querySelector('.chunk-kind')?.textContent.trim() ?? '',
+        引用: c.querySelector('.chunk-source')?.textContent.trim() ?? '',
+        練習: !!c.querySelector('.chunk-go'),
+      }))
+    })
+    if (r.length === 3) ok(`かたまり … カードが3枚出ている`)
+    else ng('かたまり … カードの数が合わない', `${r.length} 枚`)
+    const 句 = r.find((x) => x.en.startsWith('come up with'))
+    const 古 = r.find((x) => x.en.startsWith('behind the goal'))
+    if (句?.札 === '句動詞') ok('かたまり … 分類の札が出る(句動詞)')
+    else ng('かたまり … 分類の札が出ない', 句?.札 ?? '(カードが無い)')
+    if (句?.引用) ok('かたまり … 本文の文章が出る')
+    else ng('かたまり … 本文の文章が出ない')
+    if (句?.練習) ok('かたまり … 「練習する」が出る')
+    else ng('かたまり … 「練習する」が出ない')
+    /* **いちばん危ない形。** 分類も本文の文章も練習も無い古い問で、
+       札を出したり、押しても何も起きないボタンを出したりしないこと */
+    if (古 && !古.札) ok('かたまり … 分類の無い問では、札を出さない')
+    else ng('かたまり … 分類が無いのに札が出た', 古?.札 ?? '(カードが無い)')
+    if (古 && !古.引用) ok('かたまり … 本文の文章が無ければ、その行を出さない')
+    else ng('かたまり … 本文の文章が無いのに行が出た')
+    if (古 && !古.練習) ok('かたまり … 練習が無ければ「練習する」を出さない')
+    else ng('かたまり … 練習が0問なのに「練習する」が出た')
+    await page.close()
+  }
+
+  /* ② 押すと問が出る。**片方しか無い問は落ちている**(6 → 5問) */
+  {
+    const page = await open()
+    const 前 = await page.evaluate(() => document.querySelectorAll('.chunk-drill').length)
+    await page.evaluate(() => {
+      const c = [...document.querySelectorAll('.chunk')]
+        .find((x) => x.querySelector('.chunk-en')?.textContent.startsWith('come up with'))
+      c.querySelector('.chunk-go').click()
+    })
+    await page.waitForTimeout(250)
+    const r = await page.evaluate(() => {
+      const c = [...document.querySelectorAll('.chunk')]
+        .find((x) => x.querySelector('.chunk-en')?.textContent.startsWith('come up with'))
+      return {
+        問: [...c.querySelectorAll('.chunk-drill-ja')].map((e) => e.textContent.trim()),
+        英: [...c.querySelectorAll('.chunk-drill-en')].map((e) => e.textContent.trim()),
+        札: c.querySelector('.chunk-go').textContent.trim(),
+      }
+    })
+    if (前 === 0) ok('かたまり … はじめは練習を畳んである')
+    else ng('かたまり … はじめから練習が開いている', `${前} 問`)
+    /* **数を書き写さない。** 骨組みには6問あり、そのうち1問は
+       英語が空である。**落ちて5問になる**のが「そろえ方」の性質である */
+    if (r.問.length === 5) ok(`かたまり … 押すと問が出る(5 問。片方しか無い1問は落ちる)`)
+    else ng('かたまり … 問の数が合わない', `${r.問.length} 問`)
+    if (!r.英.length) ok('かたまり … 解答は、押すまで出ない')
+    else ng('かたまり … 解答が先に出てしまっている', r.英.join(' / '))
+    /* **鳴らすボタンがそのまま止めるに変わる**のが、このアプリの作法 */
+    if (/練習を閉じる/.test(r.札)) ok('かたまり … 開いたら「練習を閉じる」に変わる')
+    else ng('かたまり … 開いても言葉が変わらない', r.札)
+
+    /* ③ 「解答を見る」を押すと、その問だけ英文が出る */
+    await page.evaluate(() => {
+      const c = [...document.querySelectorAll('.chunk')]
+        .find((x) => x.querySelector('.chunk-en')?.textContent.startsWith('come up with'))
+      c.querySelectorAll('.chunk-drill-show')[0].click()
+    })
+    await page.waitForTimeout(200)
+    const r2 = await page.evaluate(() => {
+      const c = [...document.querySelectorAll('.chunk')]
+        .find((x) => x.querySelector('.chunk-en')?.textContent.startsWith('come up with'))
+      return {
+        英: [...c.querySelectorAll('.chunk-drill-en')].map((e) => e.textContent.trim()),
+        札: [...c.querySelectorAll('.chunk-drill-show')].map((e) => e.textContent.trim()),
+      }
+    })
+    if (r2.英.length === 1) ok(`かたまり … 押した問だけ解答が出る(${r2.英[0]})`)
+    else ng('かたまり … 解答の出かたがおかしい', `${r2.英.length} 問ぶん出た`)
+    if (/解答を隠す/.test(r2.札[0]) && /解答を見る/.test(r2.札[1])) {
+      ok('かたまり … 開いた問だけ「解答を隠す」に変わる')
+    } else ng('かたまり … 解答の札が変わらない', r2.札.join(' / '))
+    await page.close()
+  }
+
+  /* ④ **いちばん狭い画面で、はみ出さない。**
+       長いかたまり(to put it another way)と長い日本語を置いてある */
+  for (const w of [320, 390]) {
+    const page = await open(w)
+    await page.evaluate(() => {
+      for (const b of document.querySelectorAll('.chunk-go')) b.click()
+    })
+    await page.waitForTimeout(250)
+    const r = await page.evaluate(() => {
+      const sheet = document.querySelector('.lesson-sheet')
+      const over = [...document.querySelectorAll('.chunk, .chunk-drill-row')]
+        .filter((e) => e.scrollWidth > e.clientWidth + 1).length
+      return { 紙: Math.round(sheet.scrollWidth - sheet.clientWidth), over }
+    })
+    if (r.紙 <= 0) ok(`かたまり … ${w}px で紙が横にはみ出さない`)
+    else ng(`かたまり … ${w}px で紙が横にはみ出す`, `${r.紙}px`)
+    if (r.over === 0) ok(`かたまり … ${w}px でカードがはみ出さない`)
+    else ng(`かたまり … ${w}px で ${r.over} か所はみ出す`)
     await page.close()
   }
 }
@@ -6024,10 +6260,21 @@ for (const W of [1280, 794, 453, 390, 320]) {
     } catch (e) { err.push(String(e).split('\n')[0].slice(0, 120)) }
     const m = await page.evaluate(() => ({
       文字: (document.body.textContent ?? '').replace(/\s+/g, ' ').trim().length,
+      /* **押せるものも数える**(2026-09・第5.230節)。
+
+         文字の数だけで見ていたので、**説明の文を消した画面が
+         「空っぽ」と読まれた** —— `?screen=owner` は
+         「この教材で拾った語は〜に入ります」をやめて札1つになり、
+         文字が 6 つになった(`.claude/rules/common.md`
+         「余計な説明書きを置かない」を守ったら赤くなった)。
+
+         見たいのは「**描かれていない**」であって、
+         「文字が少ない」ではない。**文字も押せるものも無い**ときだけ空とする */
+      物: document.querySelectorAll('button, input, select, textarea, a, img, svg').length,
       よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    })).catch(() => ({ 文字: 0, よこ: 0 }))
+    })).catch(() => ({ 文字: 0, 物: 0, よこ: 0 }))
     if (err.length) 落ちた.push(`${s}: ${err[0]}`)
-    else if (m.文字 < 10 && !空でよい.has(s)) 空.push(s)
+    else if (m.文字 < 10 && m.物 === 0 && !空でよい.has(s)) 空.push(s)
     else if (m.よこ > 0) はみ出た.push(`${s}(${m.よこ}px)`)
     await page.close()
   }
@@ -7808,6 +8055,10 @@ for (const W of [1280, 794, 453, 390, 320]) {
     /* **誰の記録として残るか**(第5.178節)。押せる形と、押せない名札と、
        担当がいないときの3つとも測る */
     ['owner', ''], ['owner', 'owner=fixed'], ['owner', 'owner=empty'],
+    /* **本文から拾った かたまり**(第5.230節)。札・意味・由来・本文の文章・
+       「練習する」が縦に積まれ、練習を開くと**日本語と「解答を見る」が
+       横に並ぶ。** 縦も横も、いちばん接しやすい形である */
+    ['chunk', ''],
     /* **アサインする**(第5.181節 / 第5.186節)。1行1冊で縦に並ぶ。
        **1つも出していない形も測る** —— 印が全部 ○ になり、
        数も出ないので、**行の高さが変わる** */
@@ -7881,6 +8132,10 @@ for (const W of [1280, 794, 453, 390, 320]) {
             const 名 = `${(b.textContent || '').trim()} `
               + `${b.getAttribute('aria-label') || ''}`
             if (/共有|出しかた|分野をえらぶ/.test(名)) b.click()
+            /* **かたまりの練習も開く**(第5.230節)。畳んだままだと
+               日本語と「解答を見る」の横のすき間が**誰にも測られない**
+               (「畳んであるものは開いてから測る」・共通ルール) */
+            if (/^練習する$/.test((b.textContent || '').trim())) b.click()
           }
         })
         await page.waitForTimeout(400)

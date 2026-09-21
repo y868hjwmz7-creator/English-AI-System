@@ -4057,6 +4057,14 @@ html, body { overflow-x: clip; }
 .lesson-bar.is-fit3 .lesson-settings { gap: var(--sp-6); }
 .lesson-bar.is-fit3 .btn { padding-left: 9px; padding-right: 9px; }
 
+/* **名札は、測るあいだ数に入れない**(第5.178節・2026-09)。
+   `fitRow.js` の `over()` は**子の `scrollWidth`** も見る。名札は
+   長い名前のときに「…」で切れる作りなので、そのまま測ると
+   **いつでも「あふれている」**と読まれ、帯の言葉が意味もなく削られる。
+   **折り返してよいのは名札だけ**である(帯の言葉は削らせない)。
+   狭い画面で `.lesson-settings` を数から外しているのと、同じ話である */
+.is-measuring-row .lesson-owner { display: none !important; }
+
 /* **測るあいだだけ、折り返しを止める**(`fitRow.js` の `overWrapping`)。
    折り返す箱は「あふれない」ので、そのままでは `scrollWidth` で
    分からない。止めてあふれさせ、測り終えたらすぐ戻す
@@ -9321,26 +9329,35 @@ button.wbfilter-ctl { text-align: left; }
    `.btn--small` が `flex-shrink: 0` を持っているので、
    打ち消さないと**となりのボタンが画面の外へ押し出される。**
    `.btn--small` そのものは1文字も変えない(ほかの札に響く)。 */
-/* **帯のすぐ下の1行。** 帯の中には入らなかった(320px で 26px まで
-   潰れて読めない・実測)。ここなら**どの幅でも潰れない。**
+/* **帯の中に置く**(2026-09 利用者の指摘「1行分のスペースがもったいない」)。
 
-   すき間は親の `gap` で作る(`.claude/rules/common.md`)——
-   下に何が来ても・いくつ増えても離れる */
-.lesson-ownerrow {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
-  padding: var(--sp-8) var(--sp-12);
-  font-size: var(--fs-13);
-  /* **紙の外(`.lesson` の #3a3a38)の上に乗る。**
-     `--text-secondary` は明るい地色のための色で、ここでは
-     **暗い地に暗い字**になって読めなかった(実機で描いて分かった)。
-     帯と同じ明るい字にそろえる —— **色の名前を2か所に書かない**のは
-     変数のときの話で、ここは帯と地続きの見た目である */
-  color: #dad7cd;
-}
-.lesson-ownerrow-lead { white-space: nowrap; }
+   置き場所は**折り返す `.lesson-bar` の直の子**である。
+   `.lesson-bar-main` の中には入らない(320px で 26px まで潰れて
+   読めない・実測)が、こちらは折り返す側なので**どの幅でも潰れない。**
+
+   ・広い画面 … 帯と同じ行に並ぶ(**1行まるごと浮く**)
+   ・狭い画面 … 帯の2段目へ折り返す(潰れない)
+
+   すき間は親の `gap`(`.lesson-bar` の `--sp-10`)で作る
+   (`.claude/rules/common.md`)—— 折り返した段とのあいだにも効く */
 .lesson-owner {
   flex: 0 1 auto; min-width: 0; max-width: 60vw;
+  /* **並びは `order` で決める**(第5.230節・実測)。
+
+     `.lesson-settings` が `margin-left: auto` を持っているので、
+     **余った幅をあちらが全部食う。** 名札を DOM のうしろに置くと、
+     広い画面でも**必ず2段目へ落ちた**(実測 —— どの幅でも帯が
+     94px になり、`npm run test:bar` が全部赤くなった)。
+
+     いつも要る4つ → 名札 → 設定、の順に並べる。
+     **DOM の順は変えない** —— 名札は「書き込み」のあいだも出したいので、
+     `pen ? … : <>…</>` の**外**に置いてある(いちばん最後の子)。 */
+  order: 1;
 }
+/* いつも要る4つ(閉じる・ページ送り・解答・表示)は、必ず先頭 */
+.lesson-bar-main, .lesson-ink { order: 0; }
+/* 一度決める設定は、いちばん右(`margin-left: auto` は前からある) */
+.lesson-settings { order: 2; }
 /* 押せない名札(相手が決まっているとき)。**ボタンに見せない** ——
    押しても何も起きない行き止まりを作らない(CLAUDE.md)。
    **色だけに頼らない** —— うすい地色 + 枠線 + 太字の3つで示す */
@@ -9404,4 +9421,71 @@ button.wbfilter-ctl { text-align: left; }
   overflow-wrap: anywhere;
   color: var(--text-secondary);
   font-size: var(--fs-13);
+}
+
+/* ── 本文から拾った かたまり(第5.230節・2026-09 利用者の設計)──────────
+
+     > コロケーション、句動詞、イディオム、決まり文句、つなぎ言葉、
+     > 丁寧な言い回し、言い換え表現などに分類されるものをピックアップし、
+     > それぞれに練習問題を追加してほしいです
+
+   **別々の物を、すき間ゼロでくっつけない**(`.claude/rules/common.md`)。
+   縦も横も、離すのは**親の `gap`** である —— 子に `margin` を付けて回ると、
+   下に来るものが変わった日に隙間が 0 になる。 */
+.chunk {
+  display: grid;
+  gap: var(--sp-6);
+}
+/* かたまり と 札。**横に並ぶ組も `gap` で離す**(共通ルール・2度目の指摘) */
+.chunk-head {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: var(--sp-8);
+}
+.chunk-en { font-weight: 700; }
+/* 分類の札。**色だけに頼らない**(CLAUDE.md)——
+   うすい地色 + 枠線 + 太字の3つで示す。
+   **呼び名は `chunkKinds.js` 1か所**なので、ここには分類ごとの指定を置かない
+   (7つぶん色を分けると、足した日に必ず片方だけ古くなる) */
+.chunk-kind {
+  flex: 0 0 auto;
+  padding: 1px 9px;
+  border: 1px solid var(--border); border-radius: var(--r-pill);
+  background: var(--surface-2); color: var(--text-secondary);
+  font-size: var(--fs-11); font-weight: 700;
+}
+.chunk-ja { color: var(--text-primary); }
+.chunk-note { color: var(--text-secondary); font-size: var(--fs-13); }
+/* 本文の中で、実際にそう使われていた1文。**引用だと目で分かるように**
+   左に線を1本引く(色だけに頼らない) */
+.chunk-source {
+  padding-left: var(--sp-10);
+  border-left: 3px solid var(--border);
+  color: var(--text-secondary); font-size: var(--fs-13);
+}
+/* 押すものの行。**読むものと混ぜない**(札の行には入れない) */
+.chunk-acts {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-8);
+  margin-top: var(--sp-4);
+}
+/* **青(塗りつぶし)= 次に進むもの。**(`.claude/rules/common.md`)
+   このカードで次にすることは1つだけ —— 練習することである */
+.chunk-go { flex: 0 0 auto; }
+/* 練習の一覧。**押すものの下**に出す —— 中身が増えても
+   「練習する」の場所は動かない(一覧の末尾に押すものを置かない) */
+.chunk-drills {
+  display: grid; gap: var(--sp-8);
+  margin: 0; padding: 0 0 0 var(--sp-18);
+}
+/* 日本語と「解答を見る」。**横に並ぶ組のすき間も `gap`** */
+.chunk-drill-row {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-8);
+}
+.chunk-drill-ja { flex: 1 1 12ch; min-width: 0; }
+/* **灰(塗りつぶし)= ならぶもの。** 問の数だけ並ぶ(既定のボタン) */
+.chunk-drill-show { flex: 0 0 auto; }
+.chunk-drill-en {
+  margin-top: var(--sp-4);
+  color: var(--series-3); font-weight: 600;
 }

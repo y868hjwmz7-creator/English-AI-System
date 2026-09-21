@@ -33,9 +33,19 @@ import {
   MAX_CHARS, MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
 } from '../src/lib/speechDraft.js'
 import {
+  DEFAULT_SECTIONS,
   EXERCISE_TYPES, SCALABLE_SECTIONS, amountsFor, answerHasAudio, defaultSectionsFor,
-  exerciseLabel, isPassageSection, noteIsAnswer, sectionLabel, sectionsFor,
+  exerciseLabel, isBlankItem, isChunkSection, isIncluded, isPassageSection, isWrongShape,
+  noteIsAnswer, sectionLabel, sectionsFor,
 } from '../src/data/exerciseTypes.js'
+/* かたまりの分類と練習(第5.230節)。**呼び名はここ1か所** */
+import {
+  CHUNK_KINDS, DRILL_MAX, DRILL_MIN, chunkDrills, chunkKindLabel, isChunkText,
+} from '../src/data/chunkKinds.js'
+/* **`materials.js` からは読み込めない** —— あちらは Supabase と
+   `import.meta.env` を引き連れており、素の node では落ちる
+   (CLAUDE.md「素の node で走らせられる形に切り出す」)。
+   窓口の版は、文字として読み出して突き合わせる(下の ⑧) */
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
@@ -5383,9 +5393,15 @@ console.log('\nスピーチ練習(0054)')
   /* **古い窓口の断りを、そのまま出さない**(誤診させない・CLAUDE.md) */
   ok(/業種と場面が要ります/.test(matS),
     '棚 … 古い窓口の断りを「窓口が古い」と読み替える')
-  ok(/NEED_GEN_REV = '2026-09-13b'/.test(matS)
-    && /const FN_REV = '2026-09-13b'/.test(fn),
-    '棚 … 窓口の版が、画面と窓口でそろっている')
+  /* **値を書き写さない。性質で見る**(CLAUDE.md)——
+     版を書き写していたので、**版を上げた日に、直していない検証が赤くなった**
+     (2026-09・第5.230節)。見たいのは「**2つがそろっているか**」だけである */
+  {
+    const needS = /NEED_GEN_REV = '([^']+)'/.exec(matS)?.[1] ?? ''
+    const fnS = /const FN_REV = '([^']+)'/.exec(fn)?.[1] ?? ''
+    ok(!!needS && needS === fnS,
+      '棚 … 窓口の版が、画面と窓口でそろっている', `${needS} / ${fnS}`)
+  }
 
   /* ── **レベル**(2026-09 利用者の指定)──────────────────────
        > ３５冊にした単語帳、それぞれレベルを指定して学べるようにしたい。
@@ -6433,18 +6449,18 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **`setupState.js` は import できない** —— Supabase を引き連れており、
      素の node では `import.meta.env` が無くて落ちる。**ソースで見る** */
   const setup = noNote(readD('src/lib/setupState.js'))
-  /* **いちばん新しい移行は 0064 になった**(教材の冊と UNIT 番号)。
-     0062・0063 のぶんは、まとめた1つと `check.sql` の側で
+  /* **いちばん新しい移行は 0065 になった**(かたまりの分類・練習・第5.230節)。
+     0062〜0064 のぶんは、まとめた1つと `check.sql` の側で
      そのまま見張り続ける(下)—— **消していない** */
-  ok(/NEWEST_MIGRATION = '0064'/.test(setup),
-    '0064 … いちばん新しい移行として登録してある')
-  /* **0064 は `materials` に列を2つ増やす。** 表はもう在るので、
+  ok(/NEWEST_MIGRATION = '0065'/.test(setup),
+    '0065 … いちばん新しい移行として登録してある')
+  /* **0065 は `material_items` に列を3つ増やす。** 表はもう在るので、
      **表の有無で見ると貼る前でも「もう入っています」**になる。
-     だから**列**を印にする */
-  ok(/table: 'materials'/.test(setup) && /column: 'series'/.test(setup),
-    '0064 … 印は materials.series(列が増える移行だから)')
+     だから**列**を印にする(0064 とまったく同じ見方) */
+  ok(/table: 'material_items'/.test(setup) && /column: 'practice'/.test(setup),
+    '0065 … 印は material_items.practice(列が増える移行だから)')
   ok(!/row: \{ column/.test(setup),
-    '0064 … 前の印(行を見る形)が残っていない')
+    '0065 … 前の印(行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')
   ok(/create or replace function public\.qr_limit\(\)/.test(matome),
     '0062 … まとめた1つ(pending_matome.sql)に入っている')
@@ -9362,6 +9378,328 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     '骨組み … 0 UNIT の冊を置いてある(押せる操作を出さない側)')
   ok(/unit_no: 1/.test(skel) && /unit_no: 3/.test(skel),
     '骨組み … UNIT の入っている冊も置いてある')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   本文から拾った かたまり — 分類と練習(第5.230節・2026-09 利用者の指定)
+
+     > 「本文に出た語句」ですが、これを語句というよりも、コロケーション、
+     > 句動詞、イディオム、決まり文句、つなぎ言葉、丁寧な言い回し、
+     > 言い換え表現などに分類されるものをピックアップし、
+     > それぞれに練習問題を追加してほしいです。
+     > …単語単体はここには載せない。
+     > あくまで２語以上のチャンクを練習する場とする
+
+   **「出る」と「出ない」の両方を見る** —— 分類が入っていない古い教材で
+   札を出してしまう形も、新しい教材で札が出ない形も、どちらも落とす。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  /* **コメントを落としてから数える**(CLAUDE.md)——
+     説明にも同じ語が出るので、「名前が出てくるか」では見られない */
+  const noNote = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+
+  console.log('\n▶ 本文から拾った かたまり(第5.230節)')
+
+  /* ── ① 分類は7つ。**呼び名も id も、1つも重なっていない** ── */
+  ok(CHUNK_KINDS.length === 7, `分類 … 7つある(${CHUNK_KINDS.length})`)
+  ok(new Set(CHUNK_KINDS.map((k) => k.id)).size === CHUNK_KINDS.length,
+    '分類 … id が重なっていない')
+  ok(new Set(CHUNK_KINDS.map((k) => k.label)).size === CHUNK_KINDS.length,
+    '分類 … 呼び名が重なっていない')
+  /* **利用者が挙げた7つが、そろっている。**
+     並べ替えも減らすに当たる(CLAUDE.md)ので、名前で確かめる */
+  for (const label of ['コロケーション', '句動詞', 'イディオム', '決まり文句',
+    'つなぎ言葉', '丁寧な言い回し', '言い換え表現']) {
+    ok(CHUNK_KINDS.some((k) => k.label === label), `分類 … 「${label}」がある`)
+  }
+  /* **どの分類にも、AI に渡す手がかりがある**(無いと分類が当てずっぽうになる) */
+  ok(CHUNK_KINDS.every((k) => k.what && k.what.length >= 5),
+    '分類 … どれにも、どういうものかの手がかりがある')
+
+  /* ── ② **当てられなければ黙る。** 知らない値で札を作らない ── */
+  ok(chunkKindLabel('phrasal_verb') === '句動詞', '分類 … 札を引ける')
+  ok(chunkKindLabel('nope') === '', '分類 … 知らない値では札を出さない')
+  ok(chunkKindLabel(undefined) === '' && chunkKindLabel(null) === '',
+    '分類 … 分類が無い(古い教材)ときも札を出さない')
+
+  /* ── ③ **2語以上のかたまりだけ**(利用者の指定)──
+       1語も落とす形と、2語を落としてしまう形の**両方**を見る */
+  ok(isChunkText('come up with') && isChunkText('on the other hand'),
+    'かたまり … 2語以上は かたまり である')
+  ok(!isChunkText('departure'), 'かたまり … 単語1語は かたまり ではない')
+  ok(!isChunkText('well-known'), 'かたまり … ハイフン語は1語と数える')
+  ok(!isChunkText('') && !isChunkText(null), 'かたまり … 空は かたまり ではない')
+  /* **画面の側でも落とす**(指示は読み飛ばされうる・フレーズと同じ考え方) */
+  ok(isWrongShape('vocab_note', { prompt_en: 'departure' }),
+    'かたまり … 1語の問は落とす')
+  ok(!isWrongShape('vocab_note', { prompt_en: 'come up with' }),
+    'かたまり … 2語以上の問は残す')
+
+  /* ── ④ 練習のそろえ方。**片方しか無い問は落とす** ── */
+  {
+    const got = chunkDrills({ practice: [
+      { ja: 'あ', en: 'a' }, { ja: 'い', en: '' }, { ja: '', en: 'c' },
+      { ja: ' う ', en: ' c ' },
+    ] })
+    ok(got.length === 2, `練習 … 片方しか無い問を落とす(${got.length} 問)`)
+    ok(got[1].ja === 'う' && got[1].en === 'c', '練習 … 前後の空白を落とす')
+  }
+  ok(chunkDrills({}).length === 0 && chunkDrills(null).length === 0,
+    '練習 … 練習が無ければ 0 問(効かない操作を見せない)')
+  {
+    /* **上限は書き写さない。性質で見る**(CLAUDE.md) */
+    const many = Array.from({ length: DRILL_MAX + 5 },
+      (_, i) => ({ ja: `お題${i}`, en: `en ${i}` }))
+    ok(chunkDrills({ practice: many }).length === DRILL_MAX,
+      `練習 … 上限(${DRILL_MAX} 問)で切る`)
+    ok(DRILL_MIN >= 1 && DRILL_MIN <= DRILL_MAX, '練習 … 下限が上限を超えていない')
+  }
+
+  /* ── ⑤ **判断は1か所。** 画面に `'vocab_note'` と書かない ── */
+  ok(isChunkSection('vocab_note'), 'かたまり … 演習の見分けがつく')
+  ok(!isChunkSection('article') && !isChunkSection('vocabulary')
+    && !isChunkSection(undefined),
+  'かたまり … ほかの演習は「かたまり」ではない(既定は見せない側)')
+  for (const [what, file] of [
+    ['レッスン表示', 'src/components/LessonView.jsx'],
+    ['教材の中身(紙)', 'src/components/MaterialBody.jsx'],
+    ['かたまりのカード', 'src/components/ChunkCard.jsx'],
+  ]) {
+    ok(!/vocab_note/.test(noNote(read(file))),
+      `${what} … 演習の id を書き写していない(isChunkSection 1か所)`)
+  }
+  /* **札の名前も書き写していない。** 画面に書くと、分類を直した日に
+     片方だけ古くなる(CLAUDE.md「呼び名を2か所に書かない」) */
+  for (const file of ['src/components/ChunkCard.jsx',
+    'src/components/LessonView.jsx', 'src/components/MaterialBody.jsx']) {
+    const t = noNote(read(file))
+    ok(!CHUNK_KINDS.some((k) => t.includes(k.label)),
+      `${file.split('/').pop()} … 分類の呼び名を書き写していない`)
+  }
+
+  /* ── ⑥ 演習の欄。**練習は `fields` に入れない**(配列なので) ── */
+  {
+    const t = EXERCISE_TYPES.find((x) => x.id === 'vocab_note')
+    ok(t.fields.includes('chunk_kind') && t.fields.includes('source_en'),
+      '演習 … 分類と本文の文章を欄に持っている')
+    ok(!t.fields.includes('practice'),
+      '演習 … 練習は欄に入れない(phrases / chunks / grammar と同じ扱い)')
+    ok(t.audioFrom === 'prompt_en',
+      '演習 … 読み上げは かたまり に付ける(本文の1文に付けると二度課金)')
+    /* **「語句」と書かない**(2026-09 利用者の指定「ネーミングを変更して」)。
+       中身は2語以上のかたまりで、単語1語は1つも入らない。
+       **名前そのものは書き写さない** —— 変えたい日に、ここだけ赤くなる形にしない */
+    ok(!/語句/.test(t.label), `演習 … 名前に「語句」と書いていない(${t.label})`)
+    ok(t.label.length >= 3, `演習 … 名前がある(${t.label})`)
+  }
+
+  /* ── ⑥' **本文を持つ教材、どれにも入る**(2026-09 利用者の指定)──
+
+       > このページは記事、ダイアローグ、モノローグ、会議、スピーチ
+       > すべてで生成されるようにしてください。
+       > ただし、チェックを外したり付けたりはできるようにしてください
+
+     **種類の一覧を書き写さない。** 「本文(記事・会話)を持つ教材」を
+     `DEFAULT_SECTIONS` から引く —— 本文を持つ種類を足した日に、
+     **かたまりのページを入れ忘れたら赤くなる。** */
+  {
+    const 本文もち = Object.entries(DEFAULT_SECTIONS)
+      .filter(([, secs]) => secs.some((x) => isPassageSection(x.exercise_type)))
+      .map(([k]) => k)
+    ok(本文もち.length >= 4, `かたまり … 本文を持つ種類が ${本文もち.length} つある`,
+      本文もち.join(' / '))
+    for (const kind of 本文もち) {
+      const 在る = defaultSectionsFor(kind)
+        .some((x) => x.exercise_type === 'vocab_note')
+      ok(在る, `かたまり … ${kind} の既定に入っている`)
+    }
+    /* **入っていないところも見る。** 「出る」と「出ない」の両方 ——
+       本文が無い教材(文型ドリル・単語)には、拾う本文そのものが無い */
+    for (const kind of Object.keys(DEFAULT_SECTIONS)) {
+      if (本文もち.includes(kind)) continue
+      ok(!defaultSectionsFor(kind).some((x) => x.exercise_type === 'vocab_note'),
+        `かたまり … ${kind}(本文が無い)には入れない`)
+    }
+    /* **チェックで外せて、数も選べる**(利用者の指定) */
+    ok(SCALABLE_SECTIONS.includes('vocab_note'),
+      'かたまり … チェックで外せて、数も選べる')
+    ok(isIncluded('vocab_note', null) && !isIncluded('vocab_note', { vocab_note: false }),
+      'かたまり … 既定は入れる。外したら入らない')
+    /* **倍は選べる。3倍は文型ドリルだけ**(前からの決まりを壊していないか) */
+    const amt = amountsFor('vocab_note').map((a) => a.id)
+    ok(amt.includes('default') && amt.includes('double') && !amt.includes('triple'),
+      'かたまり … 標準と倍の2つから選べる', amt.join(' / '))
+  }
+  /* **窓口を置き直す前に作った教材が、1問残らず落ちないこと。**
+     ここが必須だと、利用者が置き直すまで教材そのものを作れなくなる */
+  ok(!isBlankItem('vocab_note',
+    { prompt_en: 'come up with', prompt_ja: '思いつく', note: 'x' }),
+  '演習 … 分類の無い古い問を、空として落とさない')
+  ok(isBlankItem('vocab_note', { prompt_en: '', prompt_ja: '', note: '' }),
+    '演習 … 本当に空の問は落とす')
+
+  /* ── ⑦ 「文化の背景」は廃止した。**でも名前は引ける** ──
+       消すと、その演習を持つ教材が開けなくなる(名前が引けない) */
+  ok(exerciseLabel('culture_note') === '文化の背景',
+    '文化の背景 … 既存の教材のために、名前は引ける')
+  ok(!Object.values(DEFAULT_SECTIONS)
+    .some((secs) => secs.some((x) => x.exercise_type === 'culture_note')),
+  '文化の背景 … 新しく作る教材には入らない')
+  ok(!SCALABLE_SECTIONS.includes('culture_note'),
+    '文化の背景 … 作る画面で数を選ばせない')
+  {
+    const ex = read('src/data/exerciseTypes.js')
+    ok(ex.indexOf('旧「長文」で使っていたもの') < ex.indexOf("id: 'culture_note'"),
+      '文化の背景 … 「新規では使わない」の節に移してある')
+  }
+  /* **データベースの値は消さない**(狭めると貼り直せなくなる・CLAUDE.md) */
+  ok(/culture_note/.test(read('supabase/apply/pending_matome.sql')),
+    '文化の背景 … 貼る SQL からは消していない(値の一覧を狭めない)')
+
+  /* ── ⑧ 窓口(`generate-material`)──
+       **分類の一覧を書き写していない。** 画面から送る(`angle` と同じ作法) */
+  {
+    const fn = read('supabase/functions/generate-material/index.ts')
+    /* **当たる場所を先に絞る**(CLAUDE.md「素の文字列を置き換えるときは
+       先に数える」)。窓口には**別の一覧**として「決まり文句」がすでに
+       書いてある(フレーズの演習で、形を3つに絞っている指示)。
+       ファイルぜんぶを見ると、そちらに当たって**いつでも赤くなる。**
+       見たいのは「**かたまりの指示と道具の形**に、一覧を書き写していないか」 */
+    const vocabAt = fn.indexOf("'本文に出た かたまり")
+    /* **指示の終わりまでで切る。** そのうしろにはフレーズの指示が続き、
+       そちらに「決まり文句」が書いてある(**別の一覧**である) */
+    const vocabEnd = fn.indexOf('// ── 旧「長文」', vocabAt)
+    const toolAt = fn.indexOf("sectionType === 'vocab_note' && chunk.kinds.length")
+    const toolEnd = fn.indexOf("chunkFields.push(", toolAt)
+    ok(vocabAt > 0 && vocabEnd > vocabAt && toolAt > 0 && toolEnd > toolAt,
+      '窓口 … かたまりの指示と道具の形がある')
+    const chunkArea = fn.slice(vocabAt, vocabEnd) + fn.slice(toolAt, toolEnd)
+    ok(!CHUNK_KINDS.some((k) => chunkArea.includes(k.label)),
+      '窓口 … 分類の呼び名を書き写していない(画面から送る)')
+    ok(/chunkKinds/.test(fn), '窓口 … 分類の一覧を受け取っている')
+    ok(/enum: chunk\.kinds\.map/.test(fn),
+      '窓口 … 届いた一覧から、選べる値を組んでいる')
+    /* **届かなければ作らない**(既定は「作らない」側) */
+    ok(/chunk\.kinds\.length/.test(fn),
+      '窓口 … 一覧が届いたときだけ、分類と練習の欄を出す')
+    ok(/\.\.\.fields\.required, \.\.\.chunkFields/.test(fn),
+      '窓口 … 出した欄は、必ず埋めさせる')
+    ok(/2語以上のかたまりだけ/.test(fn) && /単語1語は入れない/.test(fn),
+      '窓口 … 単語1語を作らせない')
+    ok(/source_en/.test(fn), '窓口 … 本文の1文をそのまま写させる')
+    /* **問数を窓口の中に書き写していない**(画面から来た値を使う) */
+    ok(/\$\{chunk\.min\}〜\$\{chunk\.max\}問/.test(fn),
+      '窓口 … 練習の問数は、送られてきた値を使う')
+    /* **置き直しが要るので、版を上げてある。**
+       窓口が返す版(`FN_REV`)と、画面が求める版(`NEED_GEN_REV`)が
+       食い違っていると、**置き直したのに「古い」と言われ続ける** */
+    const rev = fn.match(/const FN_REV = '([^']+)'/)?.[1] ?? ''
+    const need = noNote(read('src/lib/materials.js'))
+      .match(/NEED_GEN_REV = '([^']+)'/)?.[1] ?? ''
+    ok(!!rev && rev === need, `窓口 … 版が画面の求める版と同じ(${rev} / ${need})`)
+    /* **上げ忘れを落とす。** 上げないと、分類の札も練習も作られないまま
+       「窓口は新しい」と出て、誰も気づけない */
+    ok(need > '2026-09-13b', `窓口 … 第5.230節で版を上げてある(${need})`)
+  }
+
+  /* ── ⑨ 画面から窓口へ、そして保存へ ── */
+  {
+    const m = noNote(read('src/lib/materials.js'))
+    ok(/chunkKinds: CHUNK_KINDS\.map/.test(m), '画面 … 分類の一覧を窓口へ送っている')
+    ok(/drillMin: DRILL_MIN, drillMax: DRILL_MAX/.test(m),
+      '画面 … 問数も1か所から送っている')
+    ok(/'chunk_kind', 'source_en',/.test(m), '画面 … 分類と本文の文章を保存している')
+    ok(/const practice = chunkDrills\(it\)/.test(m),
+      '画面 … 練習のそろえ方を書き写していない(chunkDrills 1か所)')
+    ok(/if \(practice\.length && !missingColumns\.has\('practice'\)\)/.test(m),
+      '画面 … 列がまだ無いときは送らない(貼る前でも壊れない)')
+    /* **読む欄にも足してある。** 足し忘れると、保存はできるのに出てこない */
+    ok((m.match(/optLast\('practice'\)/g) ?? []).length === 3,
+      '画面 … 練習を、3つの読み出しすべてで読んでいる')
+    ok((m.match(/optLast\('chunk_kind'\)/g) ?? []).length === 3,
+      '画面 … 分類を、3つの読み出しすべてで読んでいる')
+  }
+
+  /* ── ⑩ カードの形(`ChunkCard`)── */
+  {
+    const c = noNote(read('src/components/ChunkCard.jsx'))
+    ok(/chunkDrills\(item\)/.test(c), 'カード … 練習の数え方を書き写していない')
+    ok(/chunkKindLabel\(item\?\.chunk_kind\)/.test(c), 'カード … 札を1か所から引いている')
+    /* **効かない操作を見せない。** 0問なら「練習する」を出さない */
+    ok(/!!drills\.length && onOpen/.test(c),
+      'カード … 練習が0問なら「練習する」を出さない')
+    ok(/練習する/.test(c) && /解答を見る/.test(c),
+      'カード … 利用者の指定どおりの言葉になっている')
+    /* **説明の文を置かない**(`.claude/rules/common.md`) */
+    ok(!/押すと|できます|表示されます/.test(c),
+      'カード … 使い方の説明を置いていない')
+  }
+  /* **骨組みは、本物と1文字も違えない。**
+     いちばん危ない形(分類も練習も無い古い問)を置いていないと、
+     「無ければ素通り」に書き換えても緑のままになる */
+  {
+    const skel = read('src/__screens.jsx')
+    ok(/exercise_type: 'vocab_note'/.test(skel), '骨組み … かたまり の演習がある')
+    ok(/chunk_kind: 'phrasal_verb'/.test(skel), '骨組み … 分類の入った問がある')
+    /* **その問の中だけを切り出してから見る。**
+       ファイルぜんぶで `chunk_kind` を探すと、上の `ch-1` に当たって
+       いつでも緑になる(CLAUDE.md「先に数える」) */
+    const at = skel.indexOf("id: 'ch-2'")
+    const old = at > 0 ? skel.slice(at, skel.indexOf("id: 'ch-3'", at)) : ''
+    ok(!!old && !/chunk_kind/.test(old) && !/practice/.test(old)
+      && !/source_en/.test(old),
+    '骨組み … **分類も本文の文章も練習も無い問**を置いてある(古い教材の形)')
+  }
+
+  /* ── ⑪ 貼る SQL ── */
+  {
+    const mig = read('supabase/migrations/0065_chunk_practice.sql')
+    for (const col of ['chunk_kind', 'source_en', 'practice']) {
+      ok(new RegExp(`add column if not exists ${col}`).test(mig),
+        `0065 … ${col} の列を足している`)
+    }
+    /* **実際に走る行だけを見る**(CLAUDE.md「先に数える」)。
+       このファイルの説明には、利用者の言葉(7分類ぜんぶ)と
+       「**こう書かない**」という見本がそのまま書いてある。
+       ファイルぜんぶを見ると、そちらに当たって**いつでも赤くなる** */
+    const sqlOnly = mig.replace(/^\s*--.*$/gm, '')
+    ok(!/check \(chunk_kind/.test(sqlOnly),
+      '0065 … 分類の一覧を、走る SQL に書き写していない')
+    ok(!CHUNK_KINDS.some((k) => sqlOnly.includes(k.label)),
+      '0065 … 分類の呼び名を、走る SQL に書き写していない')
+    ok(/演習の種類/.test(mig) && !/add constraint material_sections_type_check/.test(sqlOnly),
+      '0065 … 演習の種類の一覧には触っていない')
+    const matome = read('supabase/apply/pending_matome.sql')
+    ok(/add column if not exists practice   jsonb/.test(matome),
+      '0065 … まとめた1つにも入っている')
+    const check = read('supabase/apply/check.sql')
+    ok(/0065 かたまりの分類・本文の文章・練習/.test(check),
+      '0065 … check.sql に行がある')
+    /* **3つとも見ているか。** 1つでも足りなければ ⬜ になること */
+    ok(/count\(\*\) = 3[\s\S]{0,200}'chunk_kind', 'source_en', 'practice'/.test(check),
+      '0065 … check.sql が3つの列すべてを見ている')
+    /* **冒頭に書いてある行数が、本当の行数とそろっているか。**
+
+       `check.sql` は「**47行の表が出ます**」と自分で名乗っている。
+       移行を足したときにここを直し忘れると、利用者は
+       **出た行数と食い違う案内を読む**ことになり、
+       「1行足りないのでは」と迷う(実際 0062〜0064 のあいだ、
+       43行のままになっていた)。
+       **数を書き写さない** —— `union all select` を数えて突き合わせる
+       (はじめの `select` のぶんが1行あるので +1)。
+       `docs/APPLY.md` の案内も同じ数を名乗っているので、そこも見る */
+    const 本当 = (check.match(/union all select/g) ?? []).length + 1
+    const 名乗り = Number(/(\d+)行の表が出ます/.exec(check)?.[1] ?? 0)
+    ok(本当 === 名乗り,
+      'check.sql … 冒頭の行数が、本当の行数とそろっている', `${名乗り} / ${本当}`)
+    const apply = read('docs/APPLY.md')
+    ok(new RegExp(`\\*\\*${本当}行\\*\\*の表が出て`).test(apply),
+      'APPLY.md … 同じ行数を案内している', `${本当} 行`)
+  }
 }
 
 console.log(ng

@@ -59,7 +59,7 @@
 | 貼る SQL(0031 ゲストのファイルの置き場) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
 | 貼る SQL(0032 セッションの記録) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02.sql` |
 | 貼る SQL(0033 ディスカッション・0034 に含まれるので不要) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02b.sql` |
-| **★いま貼っていただくもの … 0041〜0059 を全部まとめたもの** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_matome.sql` |
+| **★いま貼っていただくもの … 0041〜0065 を全部まとめたもの** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_matome.sql` |
 | (参考)0055 ゲストごとに「出すもの」を決めるところだけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-16.sql` |
 | (参考)0054 スピーチの原稿の置き場だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-15.sql` |
 | (参考)0053 基礎単語を単語帳に入れる関数だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-14.sql` |
@@ -81,7 +81,7 @@
 | 貼る SQL⑥(0039 一覧の「覚えた」・⑤のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03e.sql` |
 | 貼る SQL⑦(0040 Quick Response の復習・⑥のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-04.sql` |
 | 状態を見るだけの SQL | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
-| **★いま置き直していただくもの … 教材を作る関数**(業種べつの単語帳を、場面べつではなく1冊 200 語で作れるようにしました。あわせて、語の段を Basic 〜 Proficiency の8つにして散らすようにしました) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
+| **★いま置き直していただくもの … 教材を作る関数**(本文から拾う「かたまり」に、**分類の札**(句動詞・イディオムなど7つ)と、**日→英の練習 5〜10問**を付けます。単語1語は入れず、2語以上のかたまりだけにします) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
 | **★いま置き直していただくもの … 読み上げ音声の関数**(良い声で作れないときに、端末の声ではなく標準の声で鳴らします。断られた理由も、そのまま画面に出します) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |
 | 語の意味を引く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/lookup-word/index.ts` |
 | 似た英文を弾く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/check-similar/index.ts` |
@@ -124,7 +124,9 @@ GitHub の中を辿らせない。
 ## 確かめ方
 
 貼ったあと、`supabase/apply/check.sql` を実行すると
-13行の表が出て、`✅ もう入っています` / `⬜ まだです` が分かる。
+**47行**の表が出て、`✅ もう入っています` / `⬜ まだです` が分かる。
+(**行数は移行を足すたびに増える。** `check.sql` の冒頭に書いてある数と、
+`union all select` の数 + 1 がそろっているかを `npm run test:play` が見る)
 **何も書き換えない。見るだけ。**
 
 ## 読み上げの鍵(TTS)を入れる場所

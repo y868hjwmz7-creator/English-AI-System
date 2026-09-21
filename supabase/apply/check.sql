@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   43行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   47行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -181,4 +181,11 @@ from (
   union all select '0064 教材に「どの冊の、第何 UNIT か」を控える(pending_matome.sql)',
     exists (select 1 from information_schema.columns
             where table_name = 'materials' and column_name = 'series'), 46
+  -- **列が3つ増える移行**なので、列の有無で見る。
+  -- **3つとも見る** —— `add column if not exists` を1つ書き漏らしても、
+  -- 残り2つが在れば ✅ になってしまう(0063 で2つとも見たのと同じ話)
+  union all select '0065 かたまりの分類・本文の文章・練習(pending_matome.sql)',
+    (select count(*) = 3 from information_schema.columns
+     where table_name = 'material_items'
+       and column_name in ('chunk_kind', 'source_en', 'practice')), 47
 ) t order by 順;

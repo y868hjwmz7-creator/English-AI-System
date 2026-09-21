@@ -36,7 +36,9 @@ import Phonetic from './Phonetic.jsx'
 import { cefrLabel } from '../data/cefr.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { industryLabel } from '../data/industries.js'
-import { countLabel, exerciseType, sectionLabel } from '../data/exerciseTypes.js'
+import { countLabel, exerciseType, isChunkSection, sectionLabel } from '../data/exerciseTypes.js'
+import { chunkDrills } from '../data/chunkKinds.js'
+import ChunkCard from './ChunkCard.jsx'
 import { kindLabel } from '../lib/materials.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
@@ -98,6 +100,47 @@ export default function MaterialBody({
               <ol className="material-preview">
                 {sec.items.map((it) => (
                   <li key={it.id}>
+                    {/* ── **本文から拾った かたまり**(第5.230節)────────
+                        形は `ChunkCard` 1か所が持つ(レッスン表示と同じ)。
+
+                        **紙では、練習を開いたまま・解答も出して刷る。**
+                        ここから出る紙は**解答つきの控え**である
+                        (問題のみの紙はゲストの画面から刷る)。
+                        押すもの(`.chunk-acts`)は `no-print` なので出ない */}
+                    {isChunkSection(sec.exercise_type) ? (
+                      <ChunkCard
+                        item={it}
+                        en={<EnglishText text={it.prompt_en} textJa={it.prompt_ja}
+                                         level={m.level}
+                                         statuses={wordStatuses} onMark={onMarkWord} />}
+                        source={it.source_en
+                          ? <EnglishText text={it.source_en} level={m.level}
+                                         statuses={wordStatuses} onMark={onMarkWord} />
+                          : null}
+                        audio={type?.audioFrom && it[type.audioFrom] ? (
+                          <SpeakButton
+                            text={it[type.audioFrom]}
+                            clipVoice={resolveVoices(m.voiceIds)[0]}
+                            tier={voiceTierFor({
+                              exerciseType: sec.exercise_type, tags: m.tagIds,
+                            })}
+                            whole={wholeSliceOf(
+                              sec,
+                              castClipSpeakers(
+                                (sec.items ?? []).map((x) => x.speaker), m.voiceIds,
+                              ),
+                              resolveVoices(m.voiceIds)[0],
+                              it,
+                            )}
+                          />
+                        ) : null}
+                        open
+                        /* **解答は全部出す。** 数を書き写さない ——
+                           何問あるかは `chunkDrills()` が決める(1か所) */
+                        shown={new Set(chunkDrills(it).map((_, i) => i))}
+                      />
+                    ) : (
+                    <>
                     {it.tag_id && (
                       <span className="item-tag">{weaknessTagLabel(it.tag_id)}</span>
                     )}
@@ -173,6 +216,8 @@ export default function MaterialBody({
                       <div className="muted">別解: {it.answer_alt}</div>
                     )}
                     {it.note && <div className="field-hint">{it.note}</div>}
+                    </>
+                    )}
                   </li>
                 ))}
               </ol>

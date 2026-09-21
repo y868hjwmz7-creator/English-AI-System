@@ -17,7 +17,8 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  countLabel, countUnit, exerciseType, isPassageSection, noteIsAnswer, sectionLabel,
+  countLabel, countUnit, exerciseType, isChunkSection, isPassageSection,
+  noteIsAnswer, sectionLabel,
 } from '../data/exerciseTypes.js'
 import AiNote from './AiNote.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
@@ -53,6 +54,8 @@ import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import SessionOwner from './SessionOwner.jsx'
+/* 本文から拾った かたまり(第5.230節)。props で受け取るだけの部品 */
+import ChunkCard from './ChunkCard.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import CastChip from './CastChip.jsx'
 import QuickResponse from './QuickResponse.jsx'
@@ -718,6 +721,43 @@ export default function LessonView({
   }
 
   /**
+   * **かたまりの練習**(第5.230節・2026-09 利用者の設計)。
+   *
+   *   > 「練習する」をクリックすると５問から１０問の日本語が表示され、
+   *   > それぞれ「解答を見る」のボタンがある
+   *
+   * **解答とも文法とも別に覚える。** ここは「答えを見る / 見ない」では
+   * なく「練習を開く / 閉じる」であり、開いたまま次の表現へ進みたい。
+   *
+   * 解答のほうは `${かたまりの鍵}#${問の番号}` で覚える ——
+   * **鍵を2通り持たない**ように、かたまり側の鍵をそのまま前に付ける。
+   */
+  const [chunkItems, setChunkItems] = useState(() => new Set())
+  const [drillItems, setDrillItems] = useState(() => new Set())
+  const chunkOpen = (k) => chunkItems.has(k)
+  const toggleChunk = (k, on) => {
+    const next = new Set(chunkItems)
+    if (on) next.add(k)
+    else next.delete(k)
+    setChunkItems(next)
+  }
+  /** その かたまり の、解答を開けてある問の番号 */
+  const drillsShown = (k) => {
+    const out = new Set()
+    for (const s of drillItems) {
+      if (s.startsWith(`${k}#`)) out.add(Number(s.slice(k.length + 1)))
+    }
+    return out
+  }
+  const toggleDrill = (k, i) => {
+    const id = `${k}#${i}`
+    const next = new Set(drillItems)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setDrillItems(next)
+  }
+
+  /**
    * **集中モードに入る前の場所**(利用者の指定「解除したら同じ場所に戻る」)。
    *
    * 紙は `overflow-y: auto` の箱なので、送った量は `scrollTop` に入っている。
@@ -1297,31 +1337,44 @@ export default function LessonView({
 
         </>
         )}
-      </div>
 
-      {/* **いま誰の記録として残るか**(第5.178節・2026-09 利用者の指摘)。
+        {/* ── **いま誰の記録として残るか**(第5.178節・2026-09 利用者の指摘)
 
               > 明らかに他のゲストが登録した単語などが入っていることがあります。
               > しっかり分けて管理する体制にしてください。
 
-          **帯の中には置けなかった。** 320px の帯は
-          「閉じる31 + ページ送り103 + 3つの絵38×3 + すき間50 = 324px」で
-          すでに満杯で、札を入れると **26px まで潰れて読めない**(実測)。
-          読めない名札は、無いのと同じである。
+            **帯の中に戻した**(2026-09 利用者の指摘)。
 
-          **だから帯のすぐ下に、1行まるごと使って出す** ——
-          押すところ(切り替え)と読むところ(名前)を分けた第5.176節と
-          同じ考え方で、こちらは**どの幅でも潰れない。**
+              > 「この教材で拾った語は〜に入ります」これで１行分のスペースを
+              > 使うのがもったいないです。何か代替案はありませんか？
 
-          ゲストには出さない —— 相手は自分しかいないので、
-          **効かない操作になる**(CLAUDE.md)。
-          押せるのは、受け止める親がいるとき(教材の画面)だけである */}
-      {canNote && (
-        <SessionOwner
-          learnerId={owner} name={learnerName} people={people}
-          onPick={onLearnerChange}
-          onOpen={() => setWantPeople(true)} />
-      )}
+            もとは**帯のすぐ下に1行まるごと**使っていた。
+            2026-09 の実測「320px の帯は満杯」は、
+            **`.lesson-bar-main`(折り返さない囲み)の中**に
+            入れようとしたときの話である。**あそこには入らない** ——
+            入れると札が 26px まで潰れて読めない。
+
+            ここは**その外側、折り返す `.lesson-bar` の直の子**である。
+            だから広い画面では帯と同じ行に並び(**1行まるごと浮く**)、
+            狭い画面では帯の2段目へ折り返す(**潰れない**)。
+
+            **`.lesson-settings`(「表示」の中)には入れない。**
+            あそこは狭い画面では畳まれていて、押すまで見えない ——
+            **見えない持ち主は管理できない**(この節そのものの理由)。
+
+            **書き込みのあいだも出したままにする。** だから
+            `pen ? … : <>…</>` の**外**に置いてある。
+
+            ゲストには出さない —— 相手は自分しかいないので、
+            **効かない操作になる**(CLAUDE.md)。
+            押せるのは、受け止める親がいるとき(教材の画面)だけである */}
+        {canNote && (
+          <SessionOwner
+            learnerId={owner} name={learnerName} people={people}
+            onPick={onLearnerChange}
+            onOpen={() => setWantPeople(true)} />
+        )}
+      </div>
 
       {/* 紙と、その横のメモ。**入れ物を1つはさむ**(0032)。
           メモを紙の上に重ねると、教材を見ながら書けない。
@@ -1834,6 +1887,10 @@ export default function LessonView({
        答え合わせで出したいのは `note`(日本語の手がかり)のほうである
        (`noteIsAnswer`・`exerciseTypes.js` 1か所) */
     const secNoteIsAnswer = noteIsAnswer(sec.exercise_type)
+    /* **かたまり + 練習の形で描くか**(第5.230節)。
+       **ここで `=== 'vocab_note'` と書かない** —— 判断は
+       `exerciseTypes.js` の `isChunkSection()` 1か所(CLAUDE.md) */
+    const secIsChunk = isChunkSection(sec.exercise_type)
     const secCast = castVoices(voices, (sec.items ?? []).map((it) => it.speaker))
     const secClipCast = castClipSpeakers(
       (sec.items ?? []).map((it) => it.speaker), material.voiceIds,
@@ -1941,6 +1998,53 @@ export default function LessonView({
                 <li key={k(it, i)} data-key={k(it, i)}
                     data-focus={focusNo.has(i) ? String(focusNo.get(i)) : undefined}
                     className={speakingKey === k(it, i) ? 'is-speaking' : undefined}>
+                  {/* ── **本文から拾った かたまり**(第5.230節・利用者の設計)──
+                      札(分類)・意味・由来・本文の文章・[練習する] を
+                      1枚のカードにする。**形は `ChunkCard` が持つ** ——
+                      紙(`MaterialBody`)と、ここと、骨組みの3か所で
+                      同じものを描く(**書き写すと必ず片方だけ古くなる**)。
+
+                      **語に触れる仕掛けは、ここで差し込む。**
+                      レッスン表示は「印を付ける相手」も「集中モードの
+                      行き先」も持っているが、紙は持っていない ——
+                      だから部品の側に置かず、props で渡す */}
+                  {secIsChunk ? (
+                    <ChunkCard
+                      item={it}
+                      en={<EnglishText text={it.prompt_en} textJa={it.prompt_ja}
+                                       level={material.level}
+                                       statuses={wordStatuses} onMark={markWord}
+                                       tappable={tap} onNeedFocus={focusFor(sec, i)} />}
+                      source={it.source_en
+                        ? <EnglishText text={it.source_en} level={material.level}
+                                       statuses={wordStatuses} onMark={markWord}
+                                       tappable={tap} onNeedFocus={focusFor(sec, i)} />
+                        : null}
+                      /* **読み上げは かたまり だけ。** 本文の1文には付けない
+                         —— 本文の側ですでに音になっており、ここで別に
+                         作ると同じ英文にもう一度課金される(CLAUDE.md) */
+                      audio={secType?.audioFrom && it[secType.audioFrom] ? (
+                        <SpeakButton
+                          text={it[secType.audioFrom]}
+                          voice={voiceFor(secCast, it.speaker)}
+                          clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
+                          tier={secTier}
+                          rate={rateOf(rateId)}
+                          whole={wholeSliceOf(sec, secClipCast, soloVoice, it)}
+                          onPlayingChange={(on) => {
+                            setSpeakingKey(on ? k(it, i) : null)
+                            if (!on) setReadingAt(null)
+                          }}
+                          onWord={(w) => setReadingAt(w ? w.charIndex : null)}
+                        />
+                      ) : null}
+                      open={chunkOpen(k(it, i))}
+                      onOpen={(on) => toggleChunk(k(it, i), on)}
+                      shown={drillsShown(k(it, i))}
+                      onShow={(n) => toggleDrill(k(it, i), n)}
+                    />
+                  ) : (
+                  <>
                   {it.tag_id && <span className="lesson-tag">{weaknessTagLabel(it.tag_id)}</span>}
                   {it.speaker && <div className="lesson-speaker" lang="en">{it.speaker}</div>}
 
@@ -2168,6 +2272,8 @@ export default function LessonView({
                       clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                       tier={secTier} rate={rateOf(rateId)}
                     />
+                  )}
+                  </>
                   )}
                 </li>
               )))}

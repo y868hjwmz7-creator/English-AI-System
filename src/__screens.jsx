@@ -319,6 +319,61 @@ const material = asSpeech ? {
         phrases: [{ text: 'behind the goal', note: 'ゴールの裏に' }],
       },
     ],
+  }, {
+    /* **本文から拾った かたまり**(第5.230節・2026-09 利用者の設計)。
+
+       **いちばん危ない形を、必ず1つ置く**(CLAUDE.md)。
+
+       ・`ch-2` … **分類も本文の文章も練習も無い**(0065 を貼る前・
+         窓口を置き直す前に作った教材)。札が出ず、引用が出ず、
+         「練習する」も出ないこと ——
+         **「無ければ素通り」する形を、検証の中に必ず置く**
+       ・`ch-3` … **長いかたまりと長い日本語**。狭い画面で
+         「解答を見る」が押し出されないか(短い語だけだと、
+         幅の指定をやめても同じ見た目になって緑のまま)
+       ・練習は**片方しか無い問**を1つ混ぜてある(`chunkDrills` が落とす) */
+    id: 'sec-2', exercise_type: 'vocab_note', title: '覚えておきたい表現',
+    instruction: '本文に出てきた かたまり です。練習して、言えるようにしてください。',
+    items: [
+      {
+        id: 'ch-1',
+        prompt_en: 'come up with',
+        prompt_ja: '〜を思いつく',
+        chunk_kind: 'phrasal_verb',
+        note: '「上がってくる」= 考えが浮かぶ。think of より「ひねり出す」感じが強い。',
+        source_en: 'We need to come up with a plan before Friday.',
+        practice: [
+          { ja: 'いい案を思いつきました。', en: 'I came up with a good idea.' },
+          { ja: '何も思いつかなかった。', en: "I couldn't come up with anything." },
+          { ja: '名前を思いついてくれますか。', en: 'Could you come up with a name?' },
+          { ja: 'チームで案を出し合いました。', en: 'Our team came up with some ideas.' },
+          { ja: '締め切りまでに案を出さないといけません。',
+            en: 'We have to come up with a plan by the deadline.' },
+          /* **片方しか無い問**。落とされて、6問ではなく5問になる */
+          { ja: '落とされる問', en: '' },
+        ],
+      },
+      {
+        id: 'ch-2',
+        prompt_en: 'behind the goal',
+        prompt_ja: 'ゴールの裏に',
+        note: '場所を言うときの前置詞。behind = 〜の後ろに。',
+      },
+      {
+        id: 'ch-3',
+        prompt_en: 'to put it another way',
+        prompt_ja: '別の言い方をすると / つまり',
+        chunk_kind: 'paraphrase',
+        note: '前に言ったことを、相手に分かる言葉へ置き換えるときの前置き。',
+        source_en: 'To put it another way, the seats behind the goal are for away fans.',
+        practice: [
+          { ja: '別の言い方をすると、この案は費用がかかりすぎるということです。',
+            en: 'To put it another way, this plan costs too much.' },
+          { ja: 'つまり、私たちには時間が足りません。',
+            en: 'To put it another way, we do not have enough time.' },
+        ],
+      },
+    ],
   }],
 }
 
@@ -641,13 +696,22 @@ function OwnerScreen({ fixed = false, people = null }) {
   const [who, setWho] = useState(null)
   return (
     <div className="lesson" style={{ position: 'static' }}>
-      <SessionOwner
-        learnerId={who}
-        name={(people ?? []).find((p) => p.id === who)?.display_name ?? ''}
-        people={people}
-        /* **受け止める親がいるときだけ押せる**(本物と同じ判断) */
-        onPick={fixed ? null : setWho}
-        onOpen={() => {}} />
+      {/* **本物と同じ入れ物に入れる**(`.lesson-bar` の直の子)。
+          ここを変えると、名札の見た目も折り返し方も本物と変わる ——
+          **骨組みが本物と食い違うと、検証は何も守らない**(CLAUDE.md)。
+          **幅の詰まり方は、ここでは測らない。** 帯の中身(閉じる・
+          ページ送り・解答・表示)が無いので、どんな幅でも入ってしまう ——
+          **「無ければ素通り」する形**である。潰れないことは
+          `?role=trainer&who=g1`(本物のレッスン表示)で測る */}
+      <div className="lesson-bar no-print">
+        <SessionOwner
+          learnerId={who}
+          name={(people ?? []).find((p) => p.id === who)?.display_name ?? ''}
+          people={people}
+          /* **受け止める親がいるときだけ押せる**(本物と同じ判断) */
+          onPick={fixed ? null : setWho}
+          onOpen={() => {}} />
+      </div>
     </div>
   )
 }
@@ -1662,13 +1726,32 @@ function NavFootScreen() {
   )
 }
 
+/* **本文から拾った かたまり**(`?screen=chunk`・第5.230節)。
+
+   **本物のレッスン表示を、そのまま描く。**「かたまり」の演習だけを
+   1つ残した教材を渡しているので、**開いた1ページ目がその演習**になる
+   (本物は2ページ目にあり、送らないと測れない)。
+
+   **写した骨組みを作らない** —— `ChunkCard` を素の `<div>` に入れて
+   描くと、紙の地色も文字の大きさも本物と変わり、
+   **骨組みだけ隙間が空いて緑のまま**になる(CLAUDE.md で何度も転んだ形)。 */
+const CHUNK = (
+  <LessonView
+    material={{ ...material, sections: [material.sections[1]] }}
+    learnerId={null} learnerName=""
+    onLearnerChange={() => {}}
+    onClose={() => {}} />
+)
+
 /* **説明の文を出すかどうかも、本物と同じ道を通す**(2026-09)。
    `App.jsx` がやっていることをここでもやらないと、
    `data-tips` が付かず、**既定で畳んであることを測れない。** */
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'progress'
+  q.get('screen') === 'chunk'
+    ? CHUNK
+    : q.get('screen') === 'progress'
     ? PROGRESS
     : q.get('screen') === 'shelf'
     ? SHELF

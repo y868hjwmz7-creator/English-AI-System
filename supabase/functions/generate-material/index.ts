@@ -312,11 +312,30 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     + 'question_ja は自然な日本語にする。語をなぞっただけの直訳にしない。'
     + 'note には、①どの筋道で答えるか(日本語)と ②答えるときに使える'
     + '英語表現を2〜3個、80字以内で書く。',
+  /* 本文に出た表現(第5.230節・2026-09 利用者の指定)。
+
+       > コロケーション、句動詞、イディオム、決まり文句、つなぎ言葉、
+       > 丁寧な言い回し、言い換え表現などに分類されるものをピックアップし、
+       > それぞれに練習問題を追加してほしいです
+       > …単語単体はここには載せない。
+       > あくまで２語以上のチャンクを練習する場とする
+
+     **読むだけの場所を、言う場所にした。**
+     分類の一覧と問数は**画面から送られてくる**(`chunkKinds` / `drillMin`
+     / `drillMax`)。ここに書き写すと、分類を1つ直した日に
+     利用者へ窓口の置き直しを頼むことになる(`angle` と同じ作法)。 */
   vocab_note:
-    '本文に出た語句。**本文に実際に出てきた語句だけ**を選ぶ。出てこない語を作らない。'
-    + 'prompt_en に語句、prompt_ja に意味、note にその語句を使った短い例文(英語)と'
-    + '使いどころの注意を入れる。'
-    + 'ゲストのレベルにとって新しい語、または知っていても使えていない語を選ぶ。',
+    '本文に出た かたまり。**本文に実際に出てきたものだけ**を選ぶ。'
+    + '出てこないものを作らない。'
+    + '\n- **2語以上のかたまりだけ**を選ぶ。**単語1語は入れない**'
+    + '(ハイフンでつながる語は1語と数える)'
+    + '\n- prompt_en … その かたまり。**辞書に載る形**にする'
+    + '(主語・時制・冠詞を付けない。come up with / on the other hand のように)'
+    + '\n- prompt_ja … 意味(日本語)'
+    + '\n- note … **なぜその意味になるのか**(語のイメージの由来)と、'
+    + '使いどころ。日本語で80字以内。**例文はここに書かない**(source_en がある)'
+    + '\n- source_en … 本文の中で、その かたまり が使われている1文を**そのまま写す**'
+    + '\n- ゲストのレベルにとって新しいもの、または知っていても使えていないものを選ぶ',
 
   // ── 旧「長文」で使っていたもの ────────────────────────────
   read_aloud:   '音読。prompt_en に英文、prompt_ja に訳を入れる。',
@@ -389,6 +408,14 @@ const ITEM_FIELDS: Record<string, { type: string; description: string }> = {
   // 本文の要点フレーズ(0015)。**語をまたぐ言い回しは、語1つでは拾えない。**
   // look forward to / put off のようなものを、作る時点で拾っておく。
   // 開くたびに拾わせると、費用が毎回かかり、何が出るかも分からない。
+  /* 本文の中で、実際にそう使われていた1文(0065・第5.230節)。
+     **読み上げは付けない** —— 本文の側ですでに音になっており、
+     ここで別に作ると同じ英文にもう一度課金される */
+  source_en: {
+    type: 'string',
+    description: '本文の中で、その かたまり が実際に使われている1文。'
+      + '**本文からそのまま写す**(言い換えない・短くしない)',
+  },
   phrases: {
     type: 'array',
     description: 'この文の要点となる言い回し(コロケーション・イディオム・句動詞)。'
@@ -448,7 +475,10 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
      ただし**設問の訳は必須**にする —— 日本語が1つも無いと、
      答えられなかったのか聞き取れなかったのかが分からない(0035 と同じ理由) */
   audience_qa:     { required: ['question', 'question_ja', 'note'], optional: [] },
-  vocab_note:      { required: ['prompt_en', 'prompt_ja', 'note'], optional: [] },
+  /* 本文に出た表現(第5.230節)。**分類と練習は、ここに書かない** ——
+     画面が `chunkKinds` を送ってきたときだけ `emitSectionTool` が足す。
+     送られてこなければ**作らない**(既定は「できない」側・CLAUDE.md) */
+  vocab_note:      { required: ['prompt_en', 'prompt_ja', 'note', 'source_en'], optional: [] },
 
   // 発音記号は**必須**にする。発音の練習に使う教材なので、
   // 「あったり無かったり」では困る(`strict: true` が形を保証する)
@@ -469,11 +499,56 @@ const PHRASE_TYPES = new Set(['article', 'dialogue', 'translate_en_ja'])
  * 生成した中身を受け取るための道具の形を、演習の種類に合わせて組み立てる。
  * `strict: true` なので、ここで決めた形どおりの JSON しか返ってこない。
  */
-const emitSectionTool = (sectionType: string, isFirst: boolean) => {
+type ChunkKind = { id: string; label: string; what: string }
+
+const emitSectionTool = (
+  sectionType: string,
+  isFirst: boolean,
+  /* かたまりの分類と練習の問数(第5.230節)。**画面から送られてくる。**
+     ここに一覧を書き写さない —— 分類を直した日に、利用者へ窓口の
+     置き直しを頼むことになる(`angle` と同じ作法) */
+  chunk: { kinds: ChunkKind[]; min: number; max: number } =
+    { kinds: [], min: 5, max: 10 },
+) => {
   const fields = SECTION_FIELDS[sectionType] ?? { required: ['answer'], optional: [] }
   const itemProps: Record<string, unknown> = {}
   for (const name of [...fields.required, ...fields.optional]) {
     itemProps[name] = ITEM_FIELDS[name]
+  }
+
+  /* **分類と練習は、一覧が届いたときだけ出す**(第5.230節)。
+     欄を出さなければ書きようがない(`strict: true`)ので、
+     **既定は「作らない」側**になる(CLAUDE.md)。
+     届いていないのに空の欄を出すと、AI が適当な分類を作り、
+     画面は知らない値として札を出さない —— **黙って課金だけが増える。** */
+  const chunkFields: string[] = []
+  if (sectionType === 'vocab_note' && chunk.kinds.length) {
+    itemProps.chunk_kind = {
+      type: 'string',
+      description: 'この かたまり の分類。**必ず1つ選ぶ。**'
+        + '迷ったら、いちばん近いものにする。'
+        + chunk.kinds.map((k) => `\n- ${k.id} … ${k.label}(${k.what})`).join(''),
+      enum: chunk.kinds.map((k) => k.id),
+    }
+    itemProps.practice = {
+      type: 'array',
+      description: `その かたまり を使って言う練習。**${chunk.min}〜${chunk.max}問。**`
+        + '\n- ja … 日本語のお題。**その かたまり を使わないと言えないもの**にする'
+        + '\n- en … 解答の英文。**その かたまり を必ずそのまま含める**'
+        + '\n- 1問1文。ゲストのレベルで口に出せる長さにする(書き言葉にしない)'
+        + '\n- **場面をばらす。** 同じ言い回しの使い回しにしない'
+        + '\n- 本文と同じ文は入れない(source_en の写しにしない)',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['ja', 'en'],
+        properties: {
+          ja: { type: 'string', description: '日本語のお題' },
+          en: { type: 'string', description: '解答の英文' },
+        },
+      },
+    }
+    chunkFields.push('chunk_kind', 'practice')
   }
 
   const isPassage = sectionType === 'article' || sectionType === 'dialogue'
@@ -499,7 +574,7 @@ const emitSectionTool = (sectionType: string, isFirst: boolean) => {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: fields.required,
+        required: [...fields.required, ...chunkFields],
         properties: itemProps,
       },
     },
@@ -1493,7 +1568,9 @@ const cors = {
  *
  * **窓口に手を入れたら、必ず1つ進める。**
  */
-const FN_REV = '2026-09-13b'
+/* **置き直しが要る変更を入れたら、ここを上げる**(第5.230節で上げた)。
+   画面は `NEED_GEN_REV` と突き合わせて、古ければ赤く知らせる */
+const FN_REV = '2026-09-21'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
@@ -1719,6 +1796,24 @@ Deno.serve(async (req) => {
      (`speechBrief` と同じ考え方)。窓口の中に一覧を置くと、
      切り口を1つ足すたびに利用者に置き直してもらうことになる。 */
   const angle = String(body.angle ?? '').trim().slice(0, 300)
+  /* かたまりの分類と、練習の問数(第5.230節)。**画面から送られてくる。**
+
+     ここに一覧を書き写さない —— 分類を1つ直した日に、利用者へ
+     窓口の置き直しを頼むことになる(すぐ上の `angle` と同じ作法)。
+     **届かなければ、分類も練習も作らない**(既定は「作らない」側)。 */
+  const chunkKinds = (Array.isArray(body.chunkKinds) ? body.chunkKinds : [])
+    .map((k: Record<string, unknown>) => ({
+      id: String(k?.id ?? '').trim(),
+      label: String(k?.label ?? '').trim(),
+      what: String(k?.what ?? '').trim(),
+    }))
+    .filter((k: { id: string; label: string }) => k.id && k.label)
+    .slice(0, 20)
+  /* **上限は決め打ちにしない。** 画面(`chunkKinds.js`)が持っている
+     下限・上限をそのまま使う。**数え方を2通り持たない**(CLAUDE.md)。
+     届かないときだけ、この窓口の中で辻褄の合う値にする */
+  const drillMin = Math.min(Math.max(Number(body.drillMin) || 5, 1), 20)
+  const drillMax = Math.min(Math.max(Number(body.drillMax) || 10, drillMin), 20)
   // 復習として**必ず入れる語**。これまでの宿題に出て、ゲストが
   // 「知らなかった」と付けたものなど(第5.23節)。
   // 上限を切ってあるのは、指示が長くなりすぎると本来の指定が薄まるため。
@@ -1916,7 +2011,9 @@ Deno.serve(async (req) => {
       output_config: { effort: 'medium' },
       // 指示は毎回同じなので、キャッシュを効かせて費用を抑える
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      tools: [emitSectionTool(sectionType, isFirst) as unknown as Anthropic.Tool],
+      tools: [emitSectionTool(sectionType, isFirst, {
+        kinds: chunkKinds, min: drillMin, max: drillMax,
+      }) as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: 'emit_section' },
       messages: [{ role: 'user', content: userPrompt + retryNote }],
     })
