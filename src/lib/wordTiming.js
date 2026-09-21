@@ -16,18 +16,106 @@
  */
 
 /**
+ * ============================================================================
+ * **画面の1文字は、声にすると何文字ぶんか**(第5.231節・2026-09 実機)。
+ *
+ *   > 2019、つまり twenty-nineteen の部分が、
+ *   > twenty が終わったところで折り返されてしまいます。なぜでしょうか?
+ *
+ * 【何が起きていたか】
+ *   `2019` は画面では4文字、声では `twenty nineteen` の15文字である。
+ *   ところが重みは**画面の文字数**で付けていた。しかも `wordSpans()` は
+ *   `[A-Za-z]` しか拾っていなかったので、**数字は語ですらなく、重み 0**
+ *   だった。実測すると、こうなっていた。
+ *
+ *     Our technician found a worn belt inside the motor. It's an old part from 2019.
+ *     ├─────────────── 見積もり 71.8% ───────────────┤├── 28.2% ──┤
+ *     ├──────────── 本当は 56% ────────────┤├────── 44% ──────┤
+ *
+ *   **1文目の終わりが、声より 16% うしろにずれる。**
+ *   その 16% は、ちょうど `twenty` を言い終えたあたりである ——
+ *   だから1文をくり返すと、**次の文の `twenty` まで鳴ってから折り返す。**
+ *
+ * 【直し方 —— もらえる正解を捨てない】(CLAUDE.md)
+ *   読み方は `speakText()` がすでに知っている(`$25` → `twenty-five
+ *   dollars`)。**測り直さない。あちらに訊く。**
+ *   `parts` は「画面の何文字目が、何と読まれたか」なので、
+ *   **その読み方の長さを、覆っている画面の文字に配る。**
+ *
+ * 【語の外は数えない】
+ *   `10 A.M.` のように**ひとかたまりの中に空白**があることがある。
+ *   語の中の文字だけに配るので、**配った合計が語からこぼれない。**
+ *
+ * 【同じ英文を何度も訊かない】
+ *   `weighWords()` は1回の読み上げで何度も呼ばれる。
+ *   控えておく。**止まる条件を持たせる**(CLAUDE.md)ので上限を切る。
+ * ============================================================================
+ */
+const SAY_MEMO = new Map()
+const SAY_MEMO_MAX = 32
+
+const spokenPerChar = (src, spans) => {
+  const per = new Array(src.length).fill(1)
+  if (!src) return per
+  let parts = SAY_MEMO.get(src)
+  if (!parts) {
+    /* **読めなかったら、画面の文字数のまま。** 当てずっぽうで伸ばさない */
+    try { parts = speakText(src).parts ?? [] } catch { parts = [] }
+    if (SAY_MEMO.size >= SAY_MEMO_MAX) SAY_MEMO.clear()
+    SAY_MEMO.set(src, parts)
+  }
+  if (!parts.length) return per
+  // 語の中にいる文字だけに配る(語の外へ配ると、合計がこぼれる)
+  const inWord = new Uint8Array(src.length)
+  for (const w of spans) for (let i = w.at; i < w.end; i += 1) inWord[i] = 1
+  for (const p of parts) {
+    const at = Number(p?.at)
+    const len = Number(p?.len) || 0
+    const say = String(p?.say ?? '')
+    if (!Number.isInteger(at) || at < 0 || len <= 0 || at + len > src.length) continue
+    const mine = []
+    for (let i = at; i < at + len; i += 1) if (inWord[i]) mine.push(i)
+    if (!mine.length) continue
+    /* **語の数ぶんの「間」も配る**(第5.231節)。
+       重みは語ごとに +1 されるが(下の `weighWords`)、画面では
+       `3.5%` が**1語**、声では `three point five percent` の**4語**である。
+       差のぶん(4 − 1 = 3)をここで足しておかないと、
+       **読みが長いかたまりほど、少しずつ短く見積もられる**(実測 3.4%)。
+       **語の数え方は `wordSpans()` 1か所**(ここで数え直さない) */
+    const share = say.length / mine.length
+    for (const i of mine) per[i] = share
+  }
+  return per
+}
+
+/**
  * 語の位置と、その語に配る「重み」を出す。
  *
  * 長い語ほど時間がかかる。読点・句点のあとには**間**が入るので、
  * その分を足しておく。ここがずれると、色だけ先に進んでしまう。
+ *
+ * **長さは「声にしたときの長さ」で数える**(第5.231節・上記)。
+ * 画面の文字数で数えると、数字や略語のところで区間がまるごとずれる。
  */
 export const weighWords = (text) => {
   const src = String(text ?? '')
+  const spans = wordSpans(src)
+  const per = spokenPerChar(src, spans)
   const out = []
-  for (const w of wordSpans(src)) {
-    const after = src.slice(w.end, w.end + 2)
+  for (const w of spans) {
+    /* **語と句読点のあいだの記号は、またいで見る**(第5.231節・実測)。
+
+       `3.5%.` の「間」が付いていなかった —— 語は `3.5`、
+       そのうしろは `%` なので、**2文字の窓には `.` が入らない。**
+       `$25.` `(2019).` `12kg.` でも同じことが起きる。
+       文の終わりの「間」(重み6)は、区間のずれの中でいちばん大きい。
+
+       **飛ばすのは記号だけ。** 空白も、語も、見たい句読点そのものも
+       飛ばさない(飛ばすと、次の語の句読点を自分のものにしてしまう) */
+    const after = src.slice(w.end, w.end + 4).replace(/^[^A-Za-z0-9\s.,;:!?]+/, '')
     // 語そのもの + 続く空白 + 句読点の間
-    let weight = (w.end - w.at) + 1
+    let weight = 1
+    for (let i = w.at; i < w.end; i += 1) weight += per[i]
     if (/^[,;:]/.test(after)) weight += 3
     if (/^[.!?]/.test(after)) weight += 6
     out.push({ at: w.at, weight })
@@ -41,10 +129,19 @@ export const weighWords = (text) => {
  * **語の見つけ方は、ここ1か所。** 見積もる側(`weighWords`)と、
  * 本当の時刻を当てはめる側(`marksFromTimes`)が**別々に語を探すと、
  * 同じ本文なのに語の数が食い違う。**
+ *
+ * **数字も語である**(第5.231節・2026-09 実機)。
+ * `[A-Za-z]` しか拾っていなかったので、`2019` も `7:15` も `3.5` も
+ * **語として存在せず、重み 0** だった。声にはちゃんと出ているのに、
+ * 見積もりの上では一瞬で通り過ぎることになっていた。
+ *
+ * ・`2019` `1,000` `3.5` `7:15` … 数字でつながるあいだは1つの語
+ * ・**うしろのピリオドは食べない**(`2019.` は `2019` と `.`)——
+ *   食べると、文の終わりの「間」が付かなくなる
  */
 export const wordSpans = (text) => {
   const src = String(text ?? '')
-  const re = /[A-Za-z][A-Za-z'-]*/g
+  const re = /[A-Za-z][A-Za-z'-]*|\d(?:[.,:/]?\d)*/g
   const out = []
   let m = re.exec(src)
   while (m) {
@@ -207,117 +304,15 @@ export const markIndexAt = (marks, elapsedMs) => {
  * @returns {Array<{start: number, end: number}>} 本文の何文字目から何文字目まで
  */
 
-/**
- * **ピリオドが付いても、文の終わりではない語**(ピリオドを除いた形・小文字)。
- *
- * **ほかの品詞にならない語だけを入れる**(`chunker.js` の
- * `SURE_PREPS` とまったく同じ考え方)。`no.`(No. 5)や `apt.`(apt)、
- * `etc.` や `sun.` のように**ふつうの語として文末に立つもの**は
- * **入れない** —— 入れると `The answer is no.` が次の文とつながる。
- * **見落としは長い1文になるだけだが、取り違えは文をつなげてしまう。**
- *
- * `U.S.` `e.g.` `a.m.` `Ph.D.` のような**ドットでつないだ形は、
- * 一覧に並べない。** 形だけで見分けられるうえ(下の②)、
- * **最後のドットは本当に文を終えることがある**(`She holds a Ph.D. Everyone…`)。
- * 一覧に入れると、そこで永久に切れなくなる。
- */
-export const ABBREVIATIONS = [
-  // 敬称・肩書き
-  'mr', 'mrs', 'ms', 'mx', 'dr', 'prof', 'rev', 'hon', 'gov', 'sen', 'rep',
-  'capt', 'lt', 'sgt', 'col', 'gen', 'maj', 'adm', 'messrs', 'mme', 'mlle',
-  'jr', 'sr', 'st',
-  // 学位(`Ph. D` のように離して書かれることがある)
-  'ph',
-  // 会社・組織
-  'inc', 'ltd', 'co', 'corp', 'llc', 'plc', 'bros', 'dept', 'univ',
-  // 場所
-  'ave', 'blvd', 'rd', 'mt', 'ste',
-  // 月(**曜日は入れない** —— `sun.` `sat.` はふつうの語である)
-  'jan', 'feb', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
-  // そのほか
-  'vol', 'chap', 'approx', 'cf', 'viz', 'vs',
-]
-
-const ABBREV = new Set(ABBREVIATIONS)
-
-/**
- * その `.` は**文の終わりではない**か。見るのは4つ。
- *
- *   ⓪ すぐ次が数字 … `3.5`(小数点)
- *   ① 次のことばが**小文字で始まる** … `a Ph.D. in physics`
- *      **英語の文は小文字では始まらない。** ここは確かなので、
- *      一覧に無い略語(`etc. and …`)も、これで拾える
- *   ② `U.S.` `a.m.` の**途中**のドット(次が「1文字 + ドット」)。
- *      **最後のドットは見ない** —— あれは文を終えることがある
- *   ③ 上の一覧にある語
- *
- * **`!` `?` は見ない。** 略語に使われることがないためである。
- */
-function abbrevAt(src, end) {
-  let i = end - 1
-  while (i >= 0 && /[\s"'’”)\]]/.test(src[i])) i -= 1
-  if (i < 0 || src[i] !== '.') return false
-  const rest = src.slice(i + 1)
-  if (/^\d/.test(rest)) return true                       // ⓪ 小数点
-  /* ⓪-2 **省略記号(`. . .`)の途中**(第5.216節・2026-09 実機)。
-   *
-   *   > まだ飛ばされている要素があります(利用者・4度め)
-   *
-   *   `Let's see . . . there's a 7:15 departure` を切ると、
-   *   **2つめのピリオドで切れて `"."` だけの「文」ができていた。**
-   *   ①(次が小文字)は次が `.` なので当たらず、②③も当たらない。
-   *
-   *   その「文」は**語を1つも持たない**ので、時刻の上では
-   *   **幅ゼロの区間**になる。幅ゼロは**決して光らず(＝飛ばされ)**、
-   *   前後の文の境目も 0.1〜0.2 秒(ちょうど1語ぶん)ずれる。
-   *
-   *   **第5.206節は、この幅ゼロを「置ける場所へ置く」で済ませていた。**
-   *   症状に蓋をしただけで、**元を断っていなかった。**
-   *   英語の文は「.」では始まらない —— **次の字も点なら、そこは文末でない。**
-   *
-   *   `...`(空白なし)と `…` は、もともと切れない
-   *   (`[.!?]+` がまとめて食う / そもそも `[.!?]` でない)。
-   *   **空白で離した `. . .` だけが抜けていた。** */
-  if (/^\s*\./.test(rest)) return true
-  if (/^["'’”)\]\s]*[a-z]/.test(rest)) return true        // ① 次が小文字
-  if (/^\s?[A-Za-z]\./.test(rest)) return true            // ② つないだ形の途中
-  let j = i
-  while (j > 0 && /[A-Za-z.]/.test(src[j - 1])) j -= 1     // ③ 一覧
-  const raw = src.slice(j, i)
-  return !!raw && ABBREV.has(raw.toLowerCase())
-}
-
-export const splitSentences = (text) => {
-  const src = String(text ?? '')
-  const out = []
-  const re = /[^.!?]*[.!?]+["'’”)\]]*\s*/g
-  let last = 0
-  let from = null                          // 略語でつないでいる最中の頭
-  let m = re.exec(src)
-  while (m) {
-    if (!m[0].length) break
-    const end = m.index + m[0].length
-    if (from === null) from = m.index
-    /* **略語のピリオドなら、次のかたまりとつなぐ。**
-       いちばん最後のかたまりは、つなぐ先が無いのでそのまま出す */
-    if (!(abbrevAt(src, end) && (re.lastIndex < src.length))) {
-      out.push({ start: from, end })
-      from = null
-    }
-    last = end
-    m = re.exec(src)
-  }
-  // 最後が句点で終わっていない本文(見出し・言いさし)も1つの文として扱う
-  if (last < src.length) out.push({ start: from ?? last, end: src.length })
-  else if (from !== null) out.push({ start: from, end: last })
-  return out.length ? out : [{ start: 0, end: src.length }]
-}
-
-/** その位置を含む文。無ければ null */
-export const sentenceAt = (text, at) => {
-  if (at == null) return null
-  return splitSentences(text).find((s) => at >= s.start && at < s.end) ?? null
-}
+/* **文の切れ目は `sentenceSplit.js` が持つ**(第5.231節)。
+   読み上げ用の英文(`speakText.js`)も同じものを使うので、
+   ここに置いたままだと読み込みが輪になる。
+   **呼ぶ側が1行も変わらないよう、ここから出し直す** */
+export { ABBREVIATIONS, sentenceAt, splitSentences } from './sentenceSplit.js'
+import { splitSentences } from './sentenceSplit.js'
+/* **読み方は `speakText()` がすでに知っている。測り直さない**(第5.231節)。
+   `sentenceSplit.js` を切り出したのは、ここが輪にならないようにするため */
+import { speakText } from './speakText.js'
 
 /**
  * **1本の MP3 の中で、文がどこからどこまでか**を「割合」で出す(2026-09)。

@@ -60,7 +60,8 @@ import {
 } from '../src/lib/speechPractice.js'
 import { MAX_WRITING_CHARS } from '../src/lib/writingReview.js'
 import {
-  markIndexAt, marksFromTimes, sentenceShares, sentenceTimesOf, wordSpans,
+  markIndexAt, marksFromTimes, sentenceShares, sentenceTimesOf,
+  totalWeight, weighWords, wordSpans,
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
 import {
@@ -75,6 +76,8 @@ import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
 import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import { spanForRange } from '../src/lib/wholeAudio.js'
 import { ABBREVIATIONS, splitSentences } from '../src/lib/wordTiming.js'
+/* 読み上げ用の英文(第5.231節)。**正解はこちらが持っている** */
+import { spokenForm } from '../src/lib/speakText.js'
 import {
   MATERIAL_PARAM, isEmailLike, mailtoFor, materialIdFromUrl, materialLinkFor,
   urlWithoutMaterial,
@@ -1933,6 +1936,91 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '**控えが無ければ空。** 見積もりに戻る(行き止まりを作らない)')
   ok(marksFromTimes(TEXT, { start: [], end: [] }).length === 0,
     '長さが合わなければ空(当てずっぽうで色を付けない)')
+
+  /* ══════════════════════════════════════════════════════════════
+     **数字は、画面より長く読まれる**(第5.231節・2026-09 実機・利用者の指摘)
+
+       > 2019、つまり twenty-nineteen の部分が、
+       > twenty が終わったところで折り返されてしまいます。なぜでしょうか?
+
+     `2019` は画面で4文字、声では `twenty nineteen` の15文字である。
+     ところが重みは**画面の文字数**で付いており、しかも `wordSpans()` は
+     `[A-Za-z]` しか拾っていなかったので、**数字は語ですらなく、重み 0**
+     だった。1文目の終わりが声より 16% うしろにずれ、
+     そこがちょうど `twenty` を言い終えたあたりだった。
+
+     **どう見張るか —— 声そのもので数えたものと突き合わせる。**
+     `speakText()` は読み方を知っているので、
+     **読み上げ用の英文を、同じ物差しで数えたもの**が正解である。
+     **数を書き写さない**(CLAUDE.md)—— 画面と声で出した区間が、
+     ほとんど同じ割合になることだけを見る。
+     ══════════════════════════════════════════════════════════════ */
+  {
+    /* **いちばん危ない形を、必ず1つ置く**(CLAUDE.md)——
+       利用者の実機の英文そのものを先頭に置く */
+    const CASES = [
+      "Our technician found a worn belt inside the motor. It's an old part from 2019.",
+      'The meeting starts at 10:30. Please be on time.',
+      'It costs $25. That is cheap.',
+      'We need 1,000 units. Can you ship them?',
+      /* **記号が語と句点のあいだに入る形**(`%` で文末の間が消えていた) */
+      'The rate is 3.5%. Everyone agreed.',
+      'The value dropped 40%. Sales fell too.',
+      /* **数字だけの文**(語が1つも無いと、区間ごと落ちていた) */
+      '2019. That was the year.',
+    ]
+    /* **どこまで許すか。** 1語ぶんの重みは全体の数%にあたるので、
+       2% を超えるずれは「語がまるごと抜けている」ということである
+       (直す前は 16% ずれていた) */
+    const 許す = 0.02
+    let わるい = 0
+    for (const t of CASES) {
+      const 声 = spokenForm(t)
+      const 見 = sentenceShares(t)
+      const 真 = sentenceShares(声)
+      if (見.length !== 真.length) { わるい += 1; continue }
+      for (let i = 0; i < 見.length; i += 1) {
+        if (Math.abs(見[i].start - 真[i].start) > 許す) わるい += 1
+      }
+    }
+    ok(わるい === 0,
+      '数字 … 文の区間が、声そのもので数えたものと合う',
+      `${CASES.length} 本のうち ${わるい} か所ずれた`)
+
+    /* **数字も語である。** 拾えていないと重み 0 になる */
+    const 語 = (t) => wordSpans(t).map((w) => t.slice(w.at, w.end))
+    ok(語('It is 2019.').includes('2019'), '数字 … `2019` を語として拾う')
+    ok(語('at 10:30 today').includes('10:30'), '数字 … `10:30` は1つの語')
+    ok(語('about 1,000 units').includes('1,000'), '数字 … `1,000` は1つの語')
+    ok(語('is 3.5 times').includes('3.5'), '数字 … `3.5` は1つの語')
+    /* **うしろのピリオドは食べない。** 食べると文末の「間」が付かなくなる */
+    ok(語('from 2019.').includes('2019') && !語('from 2019.').includes('2019.'),
+      '数字 … うしろのピリオドは語に入れない')
+
+    /* **記号をまたいで、文末の「間」を付ける**(`3.5%.` で消えていた)。
+       **値を書き写さない** —— 記号の有る無しで重みが変わらないことを見る */
+    {
+      const なし = totalWeight(weighWords('The rate is three point five percent.'))
+      const あり = totalWeight(weighWords('The rate is 3.5%.'))
+      ok(Math.abs(あり - なし) <= 1,
+        '数字 … 記号をまたいでも、文末の「間」が付く', `${あり} / ${なし}`)
+    }
+
+    /* **語が1つも無い文を作らない。** 数字だけの文が落ちると、
+       ◀ ▶ もくり返しも、その文を飛ばす */
+    ok(sentenceShares('2019. That was the year.').length === 2,
+      '数字 … 数字だけの文も、区間として残る')
+
+    /* **読み込みが輪にならない。** `wordTiming` が読み方を使うので、
+       文の切れ目は別のファイルへ出した(出した先が読み方を読み込むと輪になる) */
+    {
+      const split = readFileSync(new URL('../src/lib/sentenceSplit.js', import.meta.url), 'utf8')
+      ok(!/from '\.\/speakText\.js'/.test(split),
+        '数字 … 文の切れ目は、読み方を読み込んでいない(輪にしない)')
+      ok(/export const splitSentences/.test(split),
+        '数字 … 文の切れ目は `sentenceSplit.js` が持つ')
+    }
+  }
 
   /* ── **間(ま)のある本物の音声で、光り出す秒がずれないか**(2026-09 実測)
    *

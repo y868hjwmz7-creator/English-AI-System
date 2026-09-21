@@ -55,7 +55,7 @@ import {
   QUARTERS, SUPERSCRIPTS, SYMBOL_WORDS, TIMEZONES, UNICODE_FRACTIONS, UNITS,
   WEEKDAY_ABBR, WORD_ACRONYMS,
 } from '../data/speakDict.js'
-import { splitSentences } from './wordTiming.js'
+import { splitSentences } from './sentenceSplit.js'
 
 /** 使える locale。**減らさない** */
 export const LOCALES = ['en-US', 'en-GB', 'en-AU', 'en-CA', 'en-NZ', 'en-IE']
