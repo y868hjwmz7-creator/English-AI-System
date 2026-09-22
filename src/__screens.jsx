@@ -98,6 +98,8 @@ import SearchBar from './components/SearchBar.jsx'
 /* **アサインの手順**(第5.238節)。本物の部品をそのまま描く ——
    どれも props で受け取るだけなので Supabase が要らない */
 import LearnerPick from './components/LearnerPick.jsx'
+/* **文言は書き写さない。**本物と同じものを取り込む(第5.238節) */
+import { NO_ACTIVE_TEXT, PICK_LABEL } from './lib/learnerPick.js'
 import MaterialTitle from './components/MaterialTitle.jsx'
 import AssignNote from './components/AssignNote.jsx'
 import Loading from './components/Loading.jsx'
@@ -914,7 +916,7 @@ function PickScreen() {
             <>
               <LearnerPick people={active} picked={picked} onPick={setPicked}
                            disabled={manyBusy}
-                           label="誰に出しますか(複数えらべます)" />
+                           label={PICK_LABEL} emptyText={NO_ACTIVE_TEXT} />
               {notActive.length > 0 && (
                 <p className="field-hint">
                   休会中・退会済の {notActive.length} 人とは共有できません。

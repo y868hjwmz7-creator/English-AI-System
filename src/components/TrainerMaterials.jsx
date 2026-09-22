@@ -48,6 +48,9 @@ import MaterialFill from './MaterialFill.jsx'
 /* **ゲストを選ぶ欄は1か所**(第5.238節)。既定は名前で探し、
    一覧は「一覧をひらく」を押したときだけ出る */
 import LearnerPick from './LearnerPick.jsx'
+/* **ゲストを選ぶ欄の文言は、あちら1か所**(第5.238節)。
+   この画面だけで2か所に出る(まとめて共有する帯 / カードの中の「渡す」) */
+import { NO_ACTIVE_TEXT, PICK_LABEL } from '../lib/learnerPick.js'
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
@@ -1037,7 +1040,7 @@ export default function TrainerMaterials({
                       既定は名前で探し、一覧は押したときだけ出る */}
                   <LearnerPick people={active} picked={picked} onPick={setPicked}
                                disabled={manyBusy}
-                               label="誰に出しますか(複数えらべます)" />
+                               label={PICK_LABEL} emptyText={NO_ACTIVE_TEXT} />
                   {notActive.length > 0 && (
                     <p className="field-hint">
                       休会中・退会済の {notActive.length} 人とは共有できません。
@@ -1244,24 +1247,16 @@ export default function TrainerMaterials({
                         </p>
                       ) : (
                         <>
-                          <p className="field-label">
-                            共有するゲストを選んでください(複数可)
-                          </p>
-                          {active.length === 0 && (
-                            <p className="muted">受講中のゲストがいません。</p>
-                          )}
-                          <div className="assign-list">
-                            {active.map((l) => (
-                              <label key={l.id} className="toggle">
-                                <input type="checkbox" checked={picked.includes(l.id)}
-                                       onChange={() => setPicked(
-                                         picked.includes(l.id)
-                                           ? picked.filter((x) => x !== l.id)
-                                           : [...picked, l.id])} />
-                                <span>{l.display_name}</span>
-                              </label>
-                            ))}
-                          </div>
+                          {/* **ゲストを選ぶ欄は1か所**(`LearnerPick`・
+                              第5.238節・2026-09 利用者の指定)。
+                              まとめて共有する帯とまったく同じもの ——
+                              **同じ画面に2つの作法を混ぜない。**
+                              担当は25人なので、**常に並べると
+                              その下の「共有する」が画面の外へ押し出される**
+                              (`.claude/rules/common.md`) */}
+                          <LearnerPick
+                            people={active} picked={picked} onPick={setPicked}
+                            label={PICK_LABEL} emptyText={NO_ACTIVE_TEXT} />
                           {notActive.length > 0 && (
                             <p className="field-hint">
                               休会中・退会済の {notActive.length} 人とは共有できません。

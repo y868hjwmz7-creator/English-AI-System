@@ -147,7 +147,9 @@ import {
 import { NATIVE_FLOW } from '../src/data/nativeFlow.js'
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 /* アサインの手順(第5.238節)。**どちらも素の node で走る形に切り出してある** */
-import { matchLearners, pickedNames, showsLearnerList } from '../src/lib/learnerPick.js'
+import {
+  NO_ACTIVE_TEXT, PICK_LABEL, matchLearners, pickedNames, showsLearnerList,
+} from '../src/lib/learnerPick.js'
 import { manyDoneText, manyStoppedText } from '../src/lib/assignMany.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
@@ -10581,6 +10583,11 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **黙って空にしない。** 読み込み中と、いないときを書き分ける */
     ok(/people === null/.test(lp) && /people !== null && all\.length === 0/.test(lp),
       'ゲストを選ぶ … 読み込み中と、いないときを書き分けている')
+    /* **いないときの1行は、呼ぶ側が決める。**
+       渡された名簿が「担当ぜんぶ」なのか「受講中だけ」なのかは、
+       ここからは分からない(**分かっていないことを、分かったように書かない**) */
+    ok(/\{emptyText\}/.test(lp) && !lp.includes(NO_ACTIVE_TEXT),
+      'ゲストを選ぶ … 「いません」の言い方は、呼ぶ側が決める')
     /* **黙って絞らない。** 当てはまらなかったことを、そのまま言う */
     ok(/hit\.length === 0/.test(lp) && /当てはまるゲストがいません/.test(lp),
       'ゲストを選ぶ … 当てはまらなかったら、そう言う')
@@ -10604,9 +10611,21 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(/!forLearner && pickedMats\.length > 0 &&/.test(tm),
       '先にえらぶ … 1件もえらんでいなければ、帯を出さない')
     /* **ゲストを選ぶ欄は、この画面でも `LearnerPick`** ——
-       25人ぶんのチェックが常に並ぶ形に戻していないか */
-    ok(/<LearnerPick people=\{active\}/.test(tm),
-      '先にえらぶ … ゲストは LearnerPick で選ぶ')
+       25人ぶんのチェックが常に並ぶ形に戻していないか。
+       **2か所とも**見る(まとめて共有する帯 / カードの中の「渡す」・
+       2026-09 利用者の指定「同じ形にしてください」)。
+       片方だけ数えると、**もう片方を素の一覧に戻しても緑のまま**になる */
+    ok((tm.match(/<LearnerPick\s+people=\{active\}/g) ?? []).length === 2,
+      '先にえらぶ … ゲストを選ぶ欄は、帯もカードの中も LearnerPick',
+      `${(tm.match(/<LearnerPick\s+people=\{active\}/g) ?? []).length} か所`)
+    /* **素の一覧が1つも残っていない。**`.assign-list` を自分で組むと、
+       そこだけ25人が並んだままになる(実際にそうなっていた) */
+    ok(!/className="assign-list"/.test(tm),
+      '先にえらぶ … 素のゲスト一覧を、画面の中で組んでいない')
+    /* **文言も2か所に書かない**(`learnerPick.js` から取り込む) */
+    ok(!tm.includes(PICK_LABEL) && !tm.includes(NO_ACTIVE_TEXT)
+      && /label=\{PICK_LABEL\} emptyText=\{NO_ACTIVE_TEXT\}/.test(tm),
+    '先にえらぶ … 見出しと「いません」の文を、画面に書き写していない')
   }
 
   /* ── ⑧ ゲストの画面の一覧も、既定では出さない ── */

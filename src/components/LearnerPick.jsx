@@ -32,6 +32,10 @@
  * @param single  **1人だけ選ぶ形**(アサインする画面)。
  *   選んだらその場で閉じる —— もう一度押さないと先へ進めない、をなくす
  *   (冊をえらぶ本棚とまったく同じ作法・第5.200節)
+ * @param emptyText 1人もいないときの1行。**呼ぶ側が決める** ——
+ *   渡した名簿が「担当ぜんぶ」なのか「受講中だけ」なのかは、
+ *   こちらからは分からない。**分かっていないことを、分かったように書かない**
+ *   (CLAUDE.md)。既定は担当ぜんぶを渡された前提の言い方にしてある
  */
 import { useState } from 'react'
 import SearchBar from './SearchBar.jsx'
@@ -39,7 +43,7 @@ import { matchLearners, pickedNames, showsLearnerList } from '../lib/learnerPick
 
 export default function LearnerPick({
   people = null, picked = [], onPick, label = '誰に出しますか', disabled = false,
-  single = false,
+  single = false, emptyText = '担当しているゲストが、まだいません。',
 }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
@@ -82,7 +86,7 @@ export default function LearnerPick({
       {/* **黙って空にしない**(CLAUDE.md)。読み込み中と、いないときを書き分ける */}
       {people === null && <p className="card-hint">読んでいます…</p>}
       {people !== null && all.length === 0 && (
-        <p className="card-hint">担当しているゲストが、まだいません。</p>
+        <p className="card-hint">{emptyText}</p>
       )}
 
       {出す && hit.length > 0 && (
