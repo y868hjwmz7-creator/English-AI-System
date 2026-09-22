@@ -21,8 +21,15 @@ export function saveSlashLevel(id) {
  */
 const GUIDE_KEY = 'eas.stepGuide'
 
+/**
+ * **既定は畳んだ側**(第5.239節・2026-09 利用者の指定)。
+ *
+ * 開いたままだと、スマホでは**画面の 1/4 を手順が占める**(実測)。
+ * ねらいの1行は画面にいつも出ているので、手順まで開きっぱなしにしない。
+ * **一度開けば覚える**ので、毎回開く人の手間は増えない。
+ */
 export function loadGuideOpen() {
-  try { return localStorage.getItem(GUIDE_KEY) !== 'closed' } catch { return true }
+  try { return localStorage.getItem(GUIDE_KEY) === 'open' } catch { return false }
 }
 
 export function saveGuideOpen(open) {

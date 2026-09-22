@@ -144,6 +144,7 @@ import { frameFormOf } from '../src/lib/frameMatch.js'
 import {
   CLIP_ACCENTS, JA_VOICE, accentsWithVoices, elevenIdOf, voicesOfAccent,
 } from '../src/data/clipVoices.js'
+import { SIX_STEPS } from '../src/lib/sixSteps.js'
 import { NATIVE_FLOW } from '../src/data/nativeFlow.js'
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 /* アサインの手順(第5.238節)。**どちらも素の node で走る形に切り出してある** */
@@ -10724,6 +10725,108 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **長い名前と長い題を混ぜる** —— 短いものだけだと、はみ出すのを見逃す */
     ok(/西大路おさむ/.test(as) && as.includes('受け身の言い回しと、ていねいな依頼'),
       '骨組み … 長い名前と長い題を1つずつ混ぜてある')
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ⑰ **6Steps を、6つ並べて見せる**(第5.239節・2026-09 利用者の指定)
+
+     > 6steps として6つ作ると煩雑だと思うんです。しかも、それぞれの
+     > ステップでやることは違うけども、必要なアプリの挙動はほとんど
+     > 同じだったりします。もう少しスタイリッシュかつシンプル、
+     > 分かりやすく出来ないでしょうか?
+
+   実際に描いて測ったところ、スマホ(390px)では
+   **「やり方」の箱が画面の 1/4 を占め、行の道具が2段に折り返し、
+   下に4行の説明書きが付いて**いた。1文半しか見えていなかった。
+   ════════════════════════════════════════════════════════════════════ */
+{
+  const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noNote = (src) => src
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+
+  console.log('\n▶ 6Steps の帯(第5.239節)')
+
+  const sb = noNote(read('src/components/StepBar.jsx'))
+  const pp = noNote(read('src/components/PassagePractice.jsx'))
+
+  /* ── ① 6つは、一覧から組む。**書き写さない** ── */
+  ok(/SIX_STEPS\.map/.test(sb) && !SIX_STEPS.some((x) => sb.includes(`'${x.label}'`)),
+    '帯 … 6つは SIX_STEPS から組む(名前を書き写していない)')
+  /* **一覧を勝手に減らさない・並べ替えない**(CLAUDE.md)。
+     `filter` や `slice` や `sort` が挟まっていないか */
+  ok(!/SIX_STEPS\s*\.\s*(filter|slice|sort|reverse)/.test(sb),
+    '帯 … 6つを減らしたり、並べ替えたりしていない')
+
+  /* ── ② 色だけに頼らない(CLAUDE.md)── */
+  ok(/aria-current=\{on \? 'step' : undefined\}/.test(sb),
+    '帯 … いまの1つを aria-current でも示す(色だけに頼らない)')
+  /* **狭い画面では名前を消すが、読み上げからは消さない** ——
+     `aria-label` が無いと、番号だけが読まれて何のことか分からない */
+  ok(/aria-label=\{`\$\{s\.no\} \$\{s\.label\}`\}/.test(sb),
+    '帯 … 名前を隠しても、読み上げには残る')
+  {
+    const css = read('src/styles.css')
+    ok(/\.step-bar-name \{ display: none; \}/.test(css)
+      && /min-width: 700px\) \{ \.step-bar-name \{ display: inline/.test(css),
+    '帯 … 狭い画面では番号だけ、広い画面では名前も出す')
+    /* **押せる大きさを割らない**(CLAUDE.md)。素の `.chip` は 30px ほど */
+    ok(/\.step-bar-item \{ min-height: 36px/.test(css),
+      '帯 … 指で押せる高さを持たせてある')
+    /* **横の余白しか詰めていない。**高さを削ると押せなくなる */
+    const at = css.indexOf('.row-tools { gap: 5px; }')
+    const 詰め = at > 0 ? css.slice(at, at + 200) : ''
+    ok(!!詰め && !/min-height|height:|padding-block|font-size/.test(詰め),
+      '行の道具 … 詰めたのは横の余白だけ(高さも字も触っていない)')
+  }
+
+  /* ── ③ 画面からプルダウンが消えている(同じものを2つ見せない)── */
+  ok(/<StepBar step=\{step\}/.test(pp) && !/step-pick/.test(pp),
+    '画面 … 6Steps はプルダウンではなく帯で選ぶ')
+  ok(!/SIX_STEPS/.test(pp),
+    '画面 … 6つの一覧を、画面の中で広げていない')
+
+  /* ── ④ やり方は畳んだ側が既定(CLAUDE.md「既定は見せない側」)── */
+  {
+    const sl = noNote(read('src/lib/slashLevel.js'))
+    /* **次の `export` までを切り出す。**`catch` の直後の `}` で切ると
+       閉じ括弧ごと落ちて、`catch { return false }` に当たらなかった */
+    const at = sl.indexOf('export function loadGuideOpen')
+    const fn = at > 0 ? sl.slice(at, sl.indexOf('\nexport ', at + 10)) : ''
+    ok(!!fn && /=== 'open'/.test(fn) && /catch \{ return false \}/.test(fn),
+      'やり方 … 既定は畳んだ側(覚えていれば開く)')
+    /* **`<details>` を使わない**(共通ルール)—— 畳んでも場所を取り続け、
+       札の中に別のボタンを置くと押すたびに畳みが動く */
+    ok(!/<details className="step-guide"/.test(pp),
+      'やり方 … <details> を使っていない')
+    /* **ねらいの1行は、畳んでいても見えている**(行き止まりを作らない) */
+    ok(/className="step-now-aim">\{current\.aim\}/.test(pp)
+      && !/guideOpen && [\s\S]{0,80}current\.aim/.test(pp),
+    'やり方 … ねらいの1行は、畳んでいても出ている')
+  }
+
+  /* ── ⑤ 説明書きを消した(共通ルール「余計な説明書きは全て排除」)── */
+  ok(!/発音の点数ではありません/.test(pp),
+    '説明書き … 「これは発音の点数ではありません」の4行を消した')
+  /* **「いまの状態」は残す。**これが無いと、話すボタンが出ない理由が
+     どこにも無くなる(行き止まり)——「全部消す」に書き換えたら赤くなる */
+  ok(/!isRecognitionSupported\(\) && \(/.test(pp)
+    && /この端末では、声で確かめる練習は使えません/.test(pp),
+  '説明書き … 端末が対応していないことは、いまの状態として残す')
+
+  /* ── ⑥ 骨組みは、本物と1文字も違えない ── */
+  {
+    const sk = read('src/__screens.jsx')
+    ok(/q\.get\('screen'\) === 'steps'/.test(sk) && /function StepsScreen\(/.test(sk),
+      '骨組み … 6Steps の帯(?screen=steps)がある')
+    ok(/<StepBar step=\{step\} onChange=\{setStep\} \/>/.test(sk),
+      '骨組み … 本物の StepBar を描いている')
+    /* **いちばん危ない形を1つ置く**(CLAUDE.md)——
+       いちばん後ろを選んでいる形(端が切れていないか) */
+    ok(/steps'\) === 'last' \? 'repeat'/.test(sk),
+      '骨組み … いちばん後ろを選んでいる形も描ける')
   }
 }
 

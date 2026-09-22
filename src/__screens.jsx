@@ -98,6 +98,8 @@ import SearchBar from './components/SearchBar.jsx'
 /* **アサインの手順**(第5.238節)。本物の部品をそのまま描く ——
    どれも props で受け取るだけなので Supabase が要らない */
 import LearnerPick from './components/LearnerPick.jsx'
+/* 6Steps の帯(第5.239節)。props だけなので、そのまま描いて測れる */
+import StepBar from './components/StepBar.jsx'
 /* **文言は書き写さない。**本物と同じものを取り込む(第5.238節) */
 import { NO_ACTIVE_TEXT, PICK_LABEL } from './lib/learnerPick.js'
 import MaterialTitle from './components/MaterialTitle.jsx'
@@ -875,6 +877,25 @@ function AssignScreen() {
  * ・`?pick=busy` … 送っている最中(押せない)
  * ・名前は**長いもの**を混ぜる / **休会中の人がいる**1行も出す
  */
+/**
+ * **6Steps の帯**(`?screen=steps`・第5.239節)。
+ *
+ * 本物の `StepBar` をそのまま描く。**1文字も違えない。**
+ * `?steps=last` で**いちばん後ろを選んでいる形**も測れる
+ * (端が切れていないか・折り返していないか)。
+ */
+function StepsScreen() {
+  const [step, setStep] = useState(q.get('steps') === 'last' ? 'repeat' : 'dictation')
+  return (
+    <div className="app-main" style={{ padding: 16 }}>
+      <section className="card">
+        <StepBar step={step} onChange={setStep} />
+      </section>
+    </div>
+  )
+}
+
+
 function PickScreen() {
   const [pickedMats, setPickedMats] = useState(['m1', 'm2'])
   const [manyOpen, setManyOpen] = useState(q.get('pick') !== 'shut')
@@ -2101,6 +2122,8 @@ createRoot(document.getElementById('root')).render(
       ? <AssignScreen />
     : q.get('screen') === 'pick'
       ? <PickScreen />
+    : q.get('screen') === 'steps'
+      ? <StepsScreen />
     : q.get('screen') === 'owner'
       ? (
         <OwnerScreen

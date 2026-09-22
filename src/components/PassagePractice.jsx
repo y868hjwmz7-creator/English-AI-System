@@ -50,9 +50,11 @@ import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { SLASH_LEVELS } from '../lib/chunker.js'
 import {
-  PASSAGE_VIEWS, SIX_STEPS, blocksOf, bodyUnitWord, groupSentences, sentencesOf,
+  PASSAGE_VIEWS, blocksOf, bodyUnitWord, groupSentences, sentencesOf,
   stepOf,
 } from '../lib/sixSteps.js'
+/* **6つの並べ方と色の付け方は、あちら1か所**(第5.239節) */
+import StepBar from './StepBar.jsx'
 import ChunkedText from './ChunkedText.jsx'
 import SlashReading from './SlashReading.jsx'
 import SlashedText from './SlashedText.jsx'
@@ -505,15 +507,12 @@ export default function PassagePractice({
           上のボタンの行に「6Steps」があり、押して開いた先なので、
           ここでもう一度名乗る必要がない。
           **読み上げには残す**(`aria-label`)。目で見えるものが減るだけ */}
+      {/* **6つをそのまま並べる**(第5.239節・2026-09 利用者の指定)。
+          プルダウンは**開くまで6つが見えない** —— 順にやるものなのに、
+          「いま何番目か」「あといくつか」が画面に出ていなかった。
+          並べ方も色の付け方も `StepBar` 1か所が持っている */}
       {!focus && (
-        <label className="step-pick">
-          <select value={step} aria-label="6Steps の切り替え"
-                  onChange={(e) => { stopPlaying(); setStep(e.target.value) }}>
-            {SIX_STEPS.map((m) => (
-              <option key={m.id} value={m.id}>{m.no} {m.label}</option>
-            ))}
-          </select>
-        </label>
+        <StepBar step={step} onChange={(v) => { stopPlaying(); setStep(v) }} />
       )}
       {/* やり方。**1行に1つ。** 1つの段落に流すと、改行も区切りも無い棒になって
           読めない(指導ポイントで一度学んだこと)。
@@ -528,28 +527,40 @@ export default function PassagePractice({
           いちばん上に置く(何のための練習かが先に目に入る)。 */}
       {/* **集中モードでは出さない。** 何度も読むものではないので、
           1つのことに向き合っている場所を、そのぶん狭めない */}
+      {/* **名前・ねらい・やり方を1行にまとめる**(第5.239節)。
+
+          畳んだ水色の箱が、スマホでは**画面の 1/4 を占めていた**
+          (実測)。本文にたどり着く前に、毎回これを越えることになる。
+          **ねらいの1行はいつも見えている**ようにし、
+          手順だけを「やり方」で開く。
+
+          **`<details>` は使わない**(共通ルール)—— 畳んでも中身が
+          場所を取り続け、しかも `<summary>` の中に別のボタンを置くと
+          押すたびに畳みが動く。状態を1つ持ち、閉じているあいだは描かない */}
       {!focus && (
-      <details className="step-guide" open={guideOpen}
-               onToggle={(e) => { setGuideOpen(e.currentTarget.open); saveGuideOpen(e.currentTarget.open) }}>
-        <summary className="step-guide-sum">
-          <span className="step-guide-caret" aria-hidden="true" />
-          <span className="step-guide-label">やり方</span>
-          <span className="step-guide-count">{current.how.length} 手順</span>
-        </summary>
-        <div className="step-guide-body">
-          <p className="step-guide-aimrow">
-            <span className="step-guide-tag">ねらい</span>
-            <span className="step-guide-aim">{current.aim}</span>
-          </p>
-          <ol className="step-guide-how">
-            {current.how.map((line, i) => (
-              <li key={i}>
-                {line.split('**').map((t, k) => (k % 2 ? <strong key={k}>{t}</strong> : t))}
-              </li>
-            ))}
-          </ol>
+      <>
+        {/* **名前と「やり方」を、同じ行に。** ねらいは下の行に置く ——
+            3つを1行に入れると、狭い画面で「やり方」だけが
+            次の行へ落ちて**ひとりぼっちの行**になる(実測) */}
+        <div className="step-now">
+          <span className="step-now-name">{current.label}</span>
+          <button type="button" className="btn btn--small btn--ghost step-now-guide"
+                  aria-expanded={guideOpen}
+                  onClick={() => { setGuideOpen(!guideOpen); saveGuideOpen(!guideOpen) }}>
+            やり方
+          </button>
         </div>
-      </details>
+        <p className="step-now-aim">{current.aim}</p>
+      </>
+      )}
+      {!focus && guideOpen && (
+        <ol className="step-guide-how">
+          {current.how.map((line, i) => (
+            <li key={i}>
+              {line.split('**').map((t, k) => (k % 2 ? <strong key={k}>{t}</strong> : t))}
+            </li>
+          ))}
+        </ol>
       )}
 
       <div className="passage-tools">
@@ -824,21 +835,16 @@ export default function PassagePractice({
       </ol>
       )}
 
-      {/* 音声認識の断り書きは、**話す仕組みがあるステップにだけ**出す。
-          ② スラッシュリーディングには話すボタンが無いので、
-          「発音の点数ではありません」は関係がない(2026-08 の指摘) */}
-      {focus ? null : step === 'slash' ? null : isRecognitionSupported() ? (
-        <p className="field-hint">
-          ※ これは<strong>発音の点数ではありません。</strong>
-          音声認識が聞き取れたかどうかを見ています。
-          ただし聞き取ってもらえない発音は実際にも通じにくいので、
-          直す手がかりとしては使えます。
-        </p>
-      ) : (
-        <p className="field-hint">
-          ※ この端末は音声認識に対応していないため、「話して確かめる」は出ません。
-          お手本を聞いて声に出す練習は、そのまま行えます。
-        </p>
+      {/* **「これは発音の点数ではありません」の4行を消した**(第5.239節)。
+          共通ルール「余計な説明書きは全て排除」——
+          **残してよいのは、いまの状態・失敗の知らせ・取り返しのつかない
+          操作の確認の3つだけ**である。あれは作りの説明だった。
+
+          **端末が音声認識に対応していないときだけ**は残す。
+          これは説明ではなく**いまの状態**で、これが無いと
+          「話すボタンが出ない」理由がどこにも無くなる(行き止まり) */}
+      {!focus && step !== 'slash' && !isRecognitionSupported() && (
+        <p className="field-hint">この端末では、声で確かめる練習は使えません。</p>
       )}
     </div>
   )

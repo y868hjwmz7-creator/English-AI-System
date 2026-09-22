@@ -2743,6 +2743,43 @@ html, body { overflow-x: clip; }
   background: var(--accent-soft); border-color: var(--accent-line);
   color: var(--accent); font-weight: 700;
 }
+/* ── 6Steps の帯(第5.239節)────────────────────────────────
+   6つを**そのまま並べる。** プルダウンは開くまで6つが見えず、
+   「いま何番目か」「あといくつか」が画面に出ていなかった。
+   すき間は `gap` で作る(共通ルール。`margin` で回らない) */
+.step-bar { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin: 0 0 12px; }
+/* **指で押せる高さを割らない**(CLAUDE.md)。素の `.chip` は 30px ほど */
+.step-bar-item { min-height: 36px; padding-inline: 10px; }
+.step-bar-no { font-variant-numeric: tabular-nums; }
+/* **狭い画面では番号だけ。** 名前は `aria-label` に残るので、
+   読み上げからは消えない(見た目だけが減る) */
+.step-bar-name { display: none; }
+@media (min-width: 700px) { .step-bar-name { display: inline; } }
+
+/* いまの取り組み方の名前と、ねらいの1行。**手順は「やり方」で開く** */
+.step-now {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: var(--sp-8); margin: 0;
+}
+.step-now-name { font-size: var(--fs-17); font-weight: 600; }
+.step-now-guide { flex-shrink: 0; }
+.step-now-aim { margin: 2px 0 10px; color: var(--text-secondary); font-size: var(--fs-13); }
+
+/* ── 行の道具を1段に収める(第5.239節)──────────────────────
+   `Listen / くり返し / 速さ / 解答を見る` の4つで 331px 要るのに、
+   390px の画面で使えるのは 318px しかなく、**必ず2段になっていた**
+   (実測。1文ぶんが 40px ぶん縦に伸びる)。
+
+   **字は小さくしない。** 選ぶ欄の字を 16px 未満にすると、
+   **iOS が画面を勝手に拡大する**(`.row-rate > select` の
+   `max-width: 560px` の指定は、そのために置いてある)。
+   **減らしてよいのは横の余白だけ**である。
+
+   **高さには触らない** —— 押せる大きさ(40px)は1ドットも削らない */
+.row-tools { gap: 5px; }
+.row-tools .btn--small { padding-inline: 8px; }
+.row-tools .row-rate > select { padding-inline: 6px; }
+
 .passage-tools { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin: 8px 0 12px; }
 /* **中身が無いときは、場所も取らない**(2026-09)。
    Stop を消したことで、①ディクテーションでは帯が空になった。
@@ -2880,9 +2917,11 @@ html, body { overflow-x: clip; }
 }
 .step-guide-aim { font-weight: 600; }
 
+/* **箱から出して、素の並びにした**(第5.239節)。
+   水色の箱ごと出していたので、スマホでは画面の 1/4 を占めていた */
 .step-guide-how {
   list-style: none; counter-reset: step;
-  margin: 0; padding: 2px 12px 11px;
+  margin: 0 0 12px; padding: 2px 0 4px;
 }
 .step-guide-how > li {
   position: relative; counter-increment: step;
