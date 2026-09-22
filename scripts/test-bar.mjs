@@ -37,6 +37,7 @@ import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs'
 import { frameGroupCount } from '../src/data/sentenceFrames.js'
 /* **冊の数を書き写さない**(冊を足した日に、ここだけ古い数が残る) */
 import { RIZAP_BOOKS } from '../src/data/rizapBooks.js'
+import { SIX_STEPS } from '../src/lib/sixSteps.js'
 /* 本文(記事・会話)の演習。**一覧を書き写さない** ——
    種類を足した日に、ここだけ古い一覧が残らないようにする */
 import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
@@ -6015,6 +6016,71 @@ for (const W of [1280, 794, 453, 390, 320]) {
     else ng(`誰の記録か … ${role} に${出る ? '出ていない' : '出てしまう'}`)
     await page.close()
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   その取り組み方に要らないものは、出さない(第5.239節・2026-09-22)
+
+     > スラッシュリーディングの段階で集中モードは必要ないので排除で良い
+     > かと思いますが。そういう意味での 6steps のスマート化とシンプル化を
+     > 図りたいというのが先ほどからの私の希望です
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   ② だけ消えて、**ほかの5つでは残っている**か。
+   片方だけだと、**どこにも出さない形**に書き換えても緑のままになる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } })
+  page.setDefaultTimeout(6000)
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=learner&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(600)
+  const 集中 = () => page.evaluate(() => [...document.querySelectorAll('.practice-row .btn')]
+    .some((b) => /集中モード/.test(b.textContent)))
+
+  /* **6Steps を開く前は、本文を読む集中モード。**ここは変えていない */
+  if (await 集中()) ok('要らないものを出さない … 6Steps を開く前は、集中モードがある')
+  else ng('要らないものを出さない … 6Steps を開く前から集中モードが消えている')
+
+  /* **押せなくても、そこで止めない**(CLAUDE.md・第5.236節で踏んだ) */
+  let 開けた = true
+  await page.click('.practice-row .btn:has-text("6Steps")', { timeout: 4000 })
+    .catch(() => { 開けた = false })
+  if (!開けた) ng('要らないものを出さない … 6Steps を開けない(この先は測れていない)')
+  await page.waitForTimeout(500)
+
+  for (const s of SIX_STEPS) {
+    let 押せた = true
+    await page.click(`.step-bar-item[aria-label^="${s.no}"]`, { timeout: 4000 })
+      .catch(() => { 押せた = false })
+    if (!押せた) { ng(`要らないものを出さない … ${s.no} の丸を押せない`); continue }
+    await page.waitForTimeout(400)
+    const 出た = await 集中()
+    /* **表(`SIX_STEPS.focus`)と、画面が合っているか。**
+       数を書き写さない —— 表を変えた日に、検証も一緒に動く(性質で見る) */
+    if (出た === s.focus) {
+      ok(`要らないものを出さない … ${s.no} ${s.label} の集中モードは ${s.focus ? 'ある' : '無い'}`)
+    } else {
+      ng(`要らないものを出さない … ${s.no} ${s.label} の集中モードが表と食い違う`,
+        `画面 ${出た ? 'あり' : 'なし'} / 表 ${s.focus ? 'あり' : 'なし'}`)
+    }
+  }
+
+  /* **居座らないか。** ① で入ってから、集中モードの中の切り替えで ② を選ぶ。
+     閉じないと、**出せないはずの形のまま残る**(行き止まり) */
+  await page.click('.step-bar-item[aria-label^="①"]', { timeout: 4000 }).catch(() => {})
+  await page.waitForTimeout(300)
+  await page.click('.practice-row .btn:has-text("集中モード")', { timeout: 4000 }).catch(() => {})
+  await page.waitForTimeout(500)
+  const 入った = await page.evaluate(() => !!document.querySelector('.passage--focus'))
+  if (入った) ok('要らないものを出さない … ① では集中モードに入れる')
+  else ng('要らないものを出さない … ① で集中モードに入れない')
+  await page.selectOption('.stepfocus-pick select', 'slash', { timeout: 4000 }).catch(() => {})
+  await page.waitForTimeout(600)
+  const 残った = await page.evaluate(() => !!document.querySelector('.passage--focus'))
+  if (!残った) ok('要らないものを出さない … 集中モードの中から ② へ移ると、その場で閉じる')
+  else ng('要らないものを出さない … ② へ移っても集中モードが居座る')
+  await page.close()
 }
 
 /* ══════════════════════════════════════════════════════════════════

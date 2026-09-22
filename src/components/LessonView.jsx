@@ -779,6 +779,19 @@ export default function LessonView({
    */
   const [sixFocus, setSixFocus] = useState(false)
   /**
+   * **いまの取り組み方に、集中モードがあるか**(2026-09-22 利用者の指定)。
+   *
+   *   > スラッシュリーディングの段階で集中モードは必要ないので排除で良い
+   *
+   * ここは 6Steps の**中身を知らない**(どの取り組み方かは
+   * `PassagePractice` が持っている)ので、**あちらから知らせてもらう。**
+   * **判断そのものは `canFocusStep()` 1か所**で、ここでは持たない。
+   *
+   * 既定は `true` —— 6Steps を開いていないあいだは、本文を読む集中モードの
+   * ボタンなので、**この値に関わらず出る**(下の条件を参照)。
+   */
+  const [sixFocusable, setSixFocusable] = useState(true)
+  /**
    * Quick Response の集中モードを開いているか(2026-09 実機・利用者の指摘)。
    *
    *   > Quick Response で集中モードを押すと違うトレーニングになってしまいます。
@@ -1494,7 +1507,13 @@ export default function LessonView({
                 そのときは**いまの取り組み方**の集中モード
                 (1文ずつ / 1発言ずつ)に入る。中に同じボタンを置かないので、
                 **同じことをするボタンは、どの画面でも1つだけ**である */}
-            {(passageSection || qr || drillable) && (
+            {/* **6Steps を開いているあいだは、その取り組み方に
+                集中モードがあるときだけ出す**(2026-09-22 利用者の指定)。
+                ② スラッシュリーディングは、自分で区切りを入れていく作業で、
+                1つずつ送る形にしてもやることが変わらない。
+                **効かない操作を見せない**(CLAUDE.md) */}
+            {(passageSection || qr || drillable)
+              && (run !== 'six' || sixFocusable) && (
               <button type="button"
                       className={`btn btn--small${
                         run === 'focus' || run === 'drill' || (run === 'six' && sixFocus)
@@ -1662,6 +1681,9 @@ export default function LessonView({
                ここにも出すと、1つの画面に同じボタンが2つ並ぶ */
             showFocus={false}
             focus={sixFocus} onFocusChange={setSixFocus}
+            /* **いまの取り組み方に集中モードがあるか**を受け取る
+               (2026-09-22 利用者の指定)。**判断は向こうが持っている** */
+            onFocusable={setSixFocusable}
             /* **紙の幅をそのまま引き継ぐ**(2026-09 実機
                「画面幅が引き継がれていません」)。130% にして読んでいた人が、
                集中モードに入った瞬間に別の幅に変わっては落ち着かない。

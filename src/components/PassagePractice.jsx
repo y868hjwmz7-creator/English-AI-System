@@ -93,6 +93,16 @@ export default function PassagePractice({
   /** 集中モードを外から開け閉めする(渡さなければ自分で持つ) */
   focus: focusProp = null, onFocusChange = null,
   /**
+   * **いまの取り組み方に、集中モードがあるか**を親へ知らせる
+   * (2026-09-22 利用者の指定「スラッシュリーディングの段階で
+   * 集中モードは必要ないので排除で良い」)。
+   *
+   * レッスン表示は「集中モード」を**上のボタンの行**に置いているが、
+   * **いまどの取り組み方かを知らない。** 知らせないと、
+   * 押しても何も起きないボタンが残る(**行き止まり**)。
+   */
+  onFocusable = null,
+  /**
    * 集中モードの上の帯に置く、速さ・文字の大きさ・紙の幅・印刷
    * (2026-09 利用者の指定)。**中身は `LessonView` が作る。**
    * 紙の外(ゲストの宿題など)からは渡されないので、そのときは出ない。
@@ -462,6 +472,18 @@ export default function PassagePractice({
   /* 数え方の言葉(文 / 段落 / 発言 / 文章)も、あちら1か所 */
   const focusUnitLabel = focusUnitWord(step, isDialogue, slashUnit)
 
+  /* **集中モードが無い取り組み方へ移ったら、その場で閉じる**
+     (2026-09-22 利用者の指定)。閉じないと、**出せないはずの形のまま
+     居座る** —— 集中モードの中の切り替えから ② を選ぶと、そうなる。
+
+     **親にも知らせる。** レッスン表示は上のボタンの行に
+     「集中モード」を置いているが、**いまどの取り組み方かを知らない。**
+     知らせないと、押しても何も起きないボタンが残る */
+  useEffect(() => {
+    onFocusable?.(current.focus)
+    if (focus && !current.focus) setFocus(false)
+  }, [current.focus, focus, onFocusable, setFocus])
+
   /* ① は「まとめたかたまり」で数えているので、そのかたまりに入っている
      文だけを渡す(`StepDictation` が同じ決まりでまとめ直す)。
      **かたまりそのものを渡さない。** あちらは文の一覧を受け取る作りである */
@@ -492,7 +514,10 @@ export default function PassagePractice({
 
           **単位(段落 / 発言 / 文)を名前に入れない。** 名前は1つにしておき、
           いま何番目かは中の「3 / 14 文」が言う */}
-      {!focus && showFocus && focusTotal > 0 && (
+      {/* **その取り組み方に集中モードが無ければ、出さない**
+          (2026-09-22 利用者の指定・`canFocusStep()` 1か所)。
+          **効かない操作を見せない**(CLAUDE.md) */}
+      {!focus && showFocus && current.focus && focusTotal > 0 && (
         <button type="button" className="btn btn--small btn--ghost passage-focus"
                 onClick={() => { stopPlaying(); setFocus(true) }}>
           集中モード

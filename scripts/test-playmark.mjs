@@ -10844,7 +10844,43 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       '表 … 声で確かめる取り組み方と、そうでない取り組み方の両方がある')
   }
 
-  /* ── ⑦ 行の見出しと、マイクのボタンは1か所 ── */
+  /* ── ⑦ その取り組み方に要らないものは、出さない(2026-09-22)── */
+  {
+    /* **判断は1か所。** ボタンを出す場所は2つある
+       (レッスン表示の上の行 / ゲストの宿題の中) */
+    const sx = noNote(read('src/lib/sixSteps.js'))
+    ok(/export const canFocusStep = \(id\) => stepOf\(id\)\?\.focus === true/.test(sx),
+      '要らないもの … 集中モードがあるかは、sixSteps.js が決める')
+    /* **6つとも `focus` を持っている。**1つ抜けると `undefined` が
+       false として働き、**黙って集中モードが消える** */
+    const 抜け = SIX_STEPS.filter((x) => typeof x.focus !== 'boolean')
+    ok(抜け.length === 0, '要らないもの … 6つとも focus を持っている', 抜け.map((x) => x.id).join(' / '))
+    /* **「ある」と「無い」の両方**(CLAUDE.md)——
+       ぜんぶ true / ぜんぶ false に書き換えても緑のまま、にならないように */
+    ok(SIX_STEPS.some((x) => x.focus) && SIX_STEPS.some((x) => !x.focus),
+      '要らないもの … 集中モードがある取り組み方と、無い取り組み方の両方がある')
+    /* **② だけ無い**(利用者の指定そのもの) */
+    ok(SIX_STEPS.filter((x) => !x.focus).map((x) => x.id).join() === 'slash',
+      '要らないもの … 集中モードが無いのは ② スラッシュリーディングだけ')
+
+    /* **画面の側。** ボタンを出す条件に、表が入っているか */
+    ok(/!focus && showFocus && current\.focus && focusTotal > 0/.test(pp),
+      '要らないもの … 宿題の中のボタンも、表を見てから出す')
+    /* **居座らせない。** 無い取り組み方へ移ったら、その場で閉じる */
+    ok(/if \(focus && !current\.focus\) setFocus\(false\)/.test(pp),
+      '要らないもの … 無い取り組み方へ移ったら、集中モードを閉じる')
+    /* **親にも知らせる** —— 知らせないと、押しても何も起きないボタンが残る */
+    ok(/onFocusable\?\.\(current\.focus\)/.test(pp),
+      '要らないもの … いまの取り組み方を、レッスン表示へ知らせる')
+    const lv = noNote(read('src/components/LessonView.jsx'))
+    ok(/\(run !== 'six' \|\| sixFocusable\)/.test(lv) && /onFocusable=\{setSixFocusable\}/.test(lv),
+      '要らないもの … レッスン表示は、知らせてもらった答えで出し分ける')
+    /* **レッスン表示に判断を書き写していない**(取り組み方の id を持たない) */
+    ok(!/'slash'/.test(lv),
+      '要らないもの … レッスン表示に、取り組み方の id を書いていない')
+  }
+
+  /* ── ⑧ 行の見出しと、マイクのボタンは1か所 ── */
   {
     const 並べている = ['src/components/StepDictation.jsx', 'src/components/StepSentence.jsx',
       'src/components/SlashReading.jsx']
@@ -10876,7 +10912,7 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     'マイク … 押す前の文言は、取り組み方ごとのまま')
   }
 
-  /* ── ⑧ 骨組みは、本物と1文字も違えない ── */
+  /* ── ⑨ 骨組みは、本物と1文字も違えない ── */
   {
     const sk = read('src/__screens.jsx')
     ok(/q\.get\('screen'\) === 'steps'/.test(sk) && /function StepsScreen\(/.test(sk),
