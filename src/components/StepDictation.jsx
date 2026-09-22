@@ -16,12 +16,13 @@
  *   **「to が抜けている」と見えれば直せる。**
  *   点数を1つ出しても、次に何を直せばよいか分からない。
  */
+import SpeakCheckButton from './SpeakCheckButton.jsx'
+import PracticeRow from './PracticeRow.jsx'
 import { useMemo, useState } from 'react'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
-import { MicIcon, StopIcon } from './Icons.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import { DICTATION_LEVELS, bodyUnitWord, groupSentences } from '../lib/sixSteps.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
@@ -101,10 +102,7 @@ export default function StepDictation({
             <li key={s.id} className="qa-row dictation-row">
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                   本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
-              <div className="row-head">
-                <span className="dictation-no">{startNo + n}</span>
-                {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
-                <span className="row-tools">
+              <PracticeRow no={startNo + n} speaker={s.speaker}>
                   <SpeakButton text={s.text} className="etext-listen"
                                clipVoice={clipVoice} tier={tier}
                                /* もとの速さ(取り組み方ごと)に、この文の倍率を掛ける */
@@ -143,16 +141,10 @@ export default function StepDictation({
                   {/* 解答を出したあとが「まね音読」。
                       **出す前に話させない。** 何を言えばよいか分からない */}
                   {open && isRecognitionSupported() && (
-                    <button type="button"
-                            className={`btn btn--small${listeningId === s.id ? ' btn--primary' : ''}`}
-                            onClick={() => onCheck(s)}>
-                      {listeningId === s.id
-                        ? <><StopIcon />話し終わったら押す</>
-                        : <><MicIcon />まねて言う</>}
-                    </button>
+                    <SpeakCheckButton label="まねて言う" on={listeningId === s.id}
+                                      onClick={() => onCheck(s)} />
                   )}
-                </span>
-              </div>
+              </PracticeRow>
 
               <textarea
                 className="dictation-input" lang="en" rows={2}

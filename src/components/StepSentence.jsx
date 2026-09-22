@@ -22,7 +22,8 @@ import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
-import { MicIcon, StopIcon } from './Icons.jsx'
+import PracticeRow from './PracticeRow.jsx'
+import SpeakCheckButton from './SpeakCheckButton.jsx'
 import { spokenRatio } from '../lib/transcriptDiff.js'
 import { useProgress } from '../lib/progress.js'
 import { bodyUnitWord } from '../lib/sixSteps.js'
@@ -60,10 +61,7 @@ export default function StepSentence({
           <li key={s.id} className="qa-row stepsent-row">
             {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                 本文をそのぶん上に寄せられる(2026-08 の指摘) */}
-            <div className="row-head">
-              <span className="dictation-no">{startNo + n}</span>
-              {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
-              <span className="row-tools">
+            <PracticeRow no={startNo + n} speaker={s.speaker}>
                 <SpeakButton text={s.text} className="etext-listen"
                              clipVoice={clipVoice} tier={tier} rate={rate}
                              repeat={loop.has(s.id)} />
@@ -88,16 +86,10 @@ export default function StepSentence({
                   </button>
                 )}
                 {isRecognitionSupported() && (
-                  <button type="button"
-                          className={`btn btn--small${listeningId === s.id ? ' btn--primary' : ''}`}
-                          onClick={() => onCheck(s)}>
-                    {listeningId === s.id
-                      ? <><StopIcon />話し終わったら押す</>
-                      : <><MicIcon />英語で言う</>}
-                  </button>
+                  <SpeakCheckButton label="英語で言う" on={listeningId === s.id}
+                                    onClick={() => onCheck(s)} />
                 )}
-              </span>
-            </div>
+            </PracticeRow>
 
             {/* 英語。**隠しているあいだは、場所だけ残す。**
                 行が消えると、いくつ文があるのか分からなくなる */}

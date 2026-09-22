@@ -41,7 +41,7 @@ import { storedChunks, storedParts } from '../lib/chunkJa.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { progressKey, useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
-import { MicIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
+import { SpeakerIcon, StopIcon } from './Icons.jsx'
 import { preparingLabel } from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
@@ -50,11 +50,14 @@ import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { SLASH_LEVELS } from '../lib/chunker.js'
 import {
-  PASSAGE_VIEWS, blocksOf, bodyUnitWord, groupSentences, sentencesOf,
-  stepOf,
+  PASSAGE_VIEWS, blocksOf, bodyUnitWord, focusListOf, focusUnitWord,
+  groupSentences, sentencesOf, stepOf,
 } from '../lib/sixSteps.js'
 /* **6つの並べ方と色の付け方は、あちら1か所**(第5.239節) */
 import StepBar from './StepBar.jsx'
+/* **声で確かめるボタンは1か所**(第5.239節)。
+   聞いている最中の文言を書き写すと、同じ操作が別のものに見える */
+import SpeakCheckButton from './SpeakCheckButton.jsx'
 import ChunkedText from './ChunkedText.jsx'
 import SlashReading from './SlashReading.jsx'
 import SlashedText from './SlashedText.jsx'
@@ -446,18 +449,18 @@ export default function PassagePractice({
    * **数え方を2通り持たない。** どれも、ふだんの画面が並べているものと
    * まったく同じ並びから1つを取り出しているだけである。
    */
-  const focusUnits = step === 'dictation' ? dictGroups
-    : step === 'slash' ? slashBlocks
-      : current.unit === 'passage' ? section.items
-        : sentences
+  /* **どれを数えるかは `focusListOf()` 1か所**(第5.239節)。
+     画面の中で `step === 'dictation'` と書かない(CLAUDE.md)——
+     取り組み方を足した日に、ここを足し忘れる */
+  const focusUnits = focusListOf(step, {
+    dictation: dictGroups, slash: slashBlocks, passage: section.items, sentence: sentences,
+  })
   const focusTotal = focusUnits.length
   /* **範囲の外に出さない。** 取り組み方や難易度を変えると数が変わる
      (やりかけの控えと同じ注意・CLAUDE.md) */
   const at = Math.min(Math.max(0, focusAt), Math.max(0, focusTotal - 1))
-  const partWord = isDialogue ? '発言' : '段落'
-  const focusUnitLabel = step === 'slash'
-    ? (slashUnit === 'all' ? '文章' : partWord)
-    : current.unit === 'passage' ? partWord : '文'
+  /* 数え方の言葉(文 / 段落 / 発言 / 文章)も、あちら1か所 */
+  const focusUnitLabel = focusUnitWord(step, isDialogue, slashUnit)
 
   /* ① は「まとめたかたまり」で数えているので、そのかたまりに入っている
      文だけを渡す(`StepDictation` が同じ決まりでまとめ直す)。
@@ -591,7 +594,7 @@ export default function PassagePractice({
 
             **Stop はどの取り組み方でも出さない**(2026-09 利用者の指定)。
             鳴らすボタンがそのまま Stop に変わるので、別に置く必要がない。 */}
-        {step !== 'dictation' && (
+        {current.barRate && (
           <label className="rate-pick">
             <span>速さ</span>
             <select value={rateId}
@@ -618,7 +621,7 @@ export default function PassagePractice({
       {notice && <div className="notice notice--warn passage-notice">{notice}</div>}
 
       {/* ── ①②④⑥ は1文ずつ ──────────────────────────── */}
-      {step === 'dictation' && (
+      {current.view === 'dictation' && (
         <StepDictation
           /* 集中モードでは**1つだけ**渡す。中身の描き方は変えない
              (**同じ見た目を2か所に書き写さない**・CLAUDE.md) */
@@ -642,7 +645,7 @@ export default function PassagePractice({
           learnerId={learnerId}
         />
       )}
-      {step === 'slash' && (
+      {current.view === 'slash' && (
         <SlashReading
           blocks={focus ? slashBlocks.slice(at, at + 1) : slashBlocks}
           clipVoice={soloVoice} tier={tier}
@@ -654,7 +657,7 @@ export default function PassagePractice({
           learnerId={learnerId}
         />
       )}
-      {(step === 'meaning' || step === 'repeat') && (
+      {current.view === 'sentence' && (
         <StepSentence
           sentences={focus ? sentences.slice(at, at + 1) : sentences}
           startVisible={current.script}
@@ -801,15 +804,8 @@ export default function PassagePractice({
                     通し表示(段落で区切らない)では**段落そのものを押せば**
                     そこから鳴る(`playAll(item.id)`)。道は残してある。 */}
                 {isRecognitionSupported() && (
-                  <button
-                    type="button"
-                    className={`btn btn--small${listeningId === item.id ? ' btn--primary' : ''}`}
-                    onClick={() => checkOne(item)}
-                  >
-                    {listeningId === item.id
-                      ? <><StopIcon />話し終わったら押す</>
-                      : <><MicIcon />話して確かめる</>}
-                  </button>
+                  <SpeakCheckButton label="話して確かめる" on={listeningId === item.id}
+                                    onClick={() => checkOne(item)} />
                 )}
               </div>
 
@@ -843,7 +839,7 @@ export default function PassagePractice({
           **端末が音声認識に対応していないときだけ**は残す。
           これは説明ではなく**いまの状態**で、これが無いと
           「話すボタンが出ない」理由がどこにも無くなる(行き止まり) */}
-      {!focus && step !== 'slash' && !isRecognitionSupported() && (
+      {!focus && current.speak && !isRecognitionSupported() && (
         <p className="field-hint">この端末では、声で確かめる練習は使えません。</p>
       )}
     </div>

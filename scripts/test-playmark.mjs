@@ -10816,7 +10816,67 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     && /この端末では、声で確かめる練習は使えません/.test(pp),
   '説明書き … 端末が対応していないことは、いまの状態として残す')
 
-  /* ── ⑥ 骨組みは、本物と1文字も違えない ── */
+  /* ── ⑥ **挙動はほとんど同じ**なので、判断は表1枚に持つ ── */
+  {
+    /* **画面の中で `step === '…'` と書かない**(CLAUDE.md)。
+       `docs/notes/06` には前からそう書いてあったのに、5か所残っていた */
+    ok(!/step === '|step !== '/.test(pp),
+      '表 … 画面の中に、取り組み方の id を書いていない')
+    /* **表から引いている**(足した日に、画面は1行も変わらない) */
+    ok(/focusListOf\(step, \{/.test(pp) && /focusUnitWord\(step, isDialogue, slashUnit\)/.test(pp),
+      '表 … 何を数えるかも、その言葉も、sixSteps.js が決める')
+    ok(/\{current\.barRate && \(/.test(pp) && /current\.speak && !isRecognitionSupported/.test(pp),
+      '表 … 帯の速さと、声で確かめる仕組みの有無も、表から引く')
+    for (const v of ['dictation', 'slash', 'sentence']) {
+      ok(pp.includes(`current.view === '${v}'`), `表 … ${v} の練習を view で振り分けている`)
+    }
+    /* **6つとも、新しい列を持っている。**1つでも抜けると
+       `undefined` が false として働き、**黙って何かが出なくなる** */
+    const 抜け = SIX_STEPS.filter((x) => !x.view
+      || typeof x.barRate !== 'boolean' || typeof x.speak !== 'boolean')
+    ok(抜け.length === 0, '表 … 6つとも view / barRate / speak を持っている',
+      抜け.map((x) => x.id).join(' / '))
+    /* **「出る」と「出ない」の両方**(CLAUDE.md)——
+       ぜんぶ true / ぜんぶ false に書き換えても緑のまま、にならないように */
+    ok(SIX_STEPS.some((x) => x.barRate) && SIX_STEPS.some((x) => !x.barRate),
+      '表 … 帯に速さを出す取り組み方と、出さない取り組み方の両方がある')
+    ok(SIX_STEPS.some((x) => x.speak) && SIX_STEPS.some((x) => !x.speak),
+      '表 … 声で確かめる取り組み方と、そうでない取り組み方の両方がある')
+  }
+
+  /* ── ⑦ 行の見出しと、マイクのボタンは1か所 ── */
+  {
+    const 並べている = ['src/components/StepDictation.jsx', 'src/components/StepSentence.jsx',
+      'src/components/SlashReading.jsx']
+    for (const f of 並べている) {
+      const src = noNote(read(f))
+      const 短 = f.split('/').pop()
+      ok(/<PracticeRow no=\{startNo \+ n\} speaker=\{s\.speaker\}>/.test(src),
+        `${短} … 行の見出しは PracticeRow`)
+      /* **入れ物を自分で組み直していないか。** 組み直すと、
+         そこだけ番号の位置も道具の寄せ方も変わる */
+      ok(!/className="row-head"|className="row-tools"/.test(src),
+        `${短} … 行の入れ物を、自分で組んでいない`)
+    }
+    /* **マイクのボタンは1か所。** 押したあとの文言を3か所に書き写すと、
+       同じ操作が別のものに見える */
+    /* **コメントを落としてから数える**(CLAUDE.md)。
+       `SpeakCheckButton.jsx` の説明文の中にも同じ言葉が書いてあるので、
+       素のまま数えると**定数を書き換えても1件のまま**だった(赤チェックで出た) */
+    const 書いてある = ['src/components/PracticeRow.jsx', 'src/components/SpeakCheckButton.jsx',
+      ...並べている, 'src/components/PassagePractice.jsx']
+      .filter((f) => noNote(read(f)).includes('話し終わったら押す'))
+    ok(書いてある.length === 1 && 書いてある[0].endsWith('SpeakCheckButton.jsx'),
+      'マイク … 聞いている最中の文言は、SpeakCheckButton.jsx 1か所',
+      書いてある.join(' / '))
+    /* **押す前の文言は場所ごとに違う**(まねて言う / 英語で言う)。
+       **同じにしない** —— ①は解答をまねる、④⑥は自分で言う */
+    ok(noNote(read('src/components/StepDictation.jsx')).includes('label="まねて言う"')
+      && noNote(read('src/components/StepSentence.jsx')).includes('label="英語で言う"'),
+    'マイク … 押す前の文言は、取り組み方ごとのまま')
+  }
+
+  /* ── ⑧ 骨組みは、本物と1文字も違えない ── */
   {
     const sk = read('src/__screens.jsx')
     ok(/q\.get\('screen'\) === 'steps'/.test(sk) && /function StepsScreen\(/.test(sk),

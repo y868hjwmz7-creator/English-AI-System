@@ -42,6 +42,7 @@
  *   自分の区切りに合わせた訳は `chunkPairsAtMarks()` が控えを組み替えて作る。
  *   控えの無い教材では出さない。**無いものを、あるように見せない。**
  */
+import PracticeRow from './PracticeRow.jsx'
 import { Fragment, useEffect, useState } from 'react'
 import { useProgress } from '../lib/progress.js'
 import { checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
@@ -246,13 +247,7 @@ export default function SlashReading({
             <li key={s.id} className="qa-row slash-row">
               {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
                   本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
-              <div className="row-head">
-                {/* **番号を出す**(2026-09 利用者の指定
-                    「どのページでも段落番号とか全て入れてください」)。
-                    紙とレッスンで「2番のところ」と同じ場所を指せる */}
-                <span className="dictation-no">{startNo + n}</span>
-                {s.speaker && <span className="passage-speaker" lang="en">{s.speaker}</span>}
-                <span className="row-tools">
+              <PracticeRow no={startNo + n} speaker={s.speaker}>
                   <SpeakButton text={s.text} className="etext-listen"
                                clipVoice={clipVoice} tier={tier} rate={rate} />
                   {/* **出せる訳があるときだけ出す。** 押しても何も出ない
@@ -275,8 +270,7 @@ export default function SlashReading({
                       区切りを消す
                     </button>
                   )}
-                </span>
-              </div>
+              </PracticeRow>
 
               {/* 押すのは**語**。押すとその語の前にスラッシュが出る。
                   押すまでは、ただの英文のまま。
