@@ -37,13 +37,17 @@ import { grammarCost, grammarTodo } from '../lib/grammarNote.js'
 import CastChip from './CastChip.jsx'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
-  NEW_MATERIAL_KINDS, addChunkJa, addGrammar, addSections, assignMaterial, duplicateMaterial,
-  isDialogueKind, kindLabel, loadMyLearners, searchMaterials, setMaterialVoices, wordsAddedNote,
+  NEW_MATERIAL_KINDS, addChunkJa, addGrammar, addSections, assignMaterial, assignMaterials,
+  duplicateMaterial, isDialogueKind, kindLabel, loadMyLearners, searchMaterials,
+  setMaterialVoices, wordsAddedNote,
 } from '../lib/materials.js'
 /* **すでにある教材に、足りない演習だけを足す**(第5.234節・2026-09 利用者の指定)。
    **足せるかどうかの判断はあちら1か所。** ここで種類を数え直さない */
 import { canFillMaterial, fillableSections } from '../lib/materialFill.js'
 import MaterialFill from './MaterialFill.jsx'
+/* **ゲストを選ぶ欄は1か所**(第5.238節)。既定は名前で探し、
+   一覧は「一覧をひらく」を押したときだけ出る */
+import LearnerPick from './LearnerPick.jsx'
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
@@ -235,6 +239,15 @@ export default function TrainerMaterials({
   const [gramDone, setGramDone] = useState({})
 
   const [assigningId, setAssigningId] = useState(null)   // 共有する相手を選んでいる教材
+  /* **教材を先にえらび、あとでゲストを選ぶ**(第5.238節・2026-09 利用者の指定
+     「初めに教材の一覧から教材を選択(複数同時選択可)、そしてゲストを
+     選ぶのはその次に」)。
+     **カードごとの「共有」は残す** —— 1件だけのときは、そちらが早い
+     (行き止まりを作らない・CLAUDE.md) */
+  const [pickedMats, setPickedMats] = useState([])
+  /** 選んだぶんをまとめて共有する欄を開いているか */
+  const [manyOpen, setManyOpen] = useState(false)
+  const [manyBusy, setManyBusy] = useState(false)
   const [picked, setPicked] = useState([])
   const [message, setMessage] = useState(null)
   /* **リンクで来た教材**(`?m=…`)。一覧に見つかるまで控えておく */
@@ -634,6 +647,29 @@ export default function TrainerMaterials({
     setMessage(null)
   }
 
+  /**
+   * **えらんだ教材を、まとめて共有する**(第5.238節)。
+   *
+   * 窓口(`assignMaterial`)は**教材1本ずつ**なので、`assignMaterials()` が
+   * 順に呼ぶ。**途中で断られたら、そこで止めて、何本まで済んだかを言う**
+   * (黙って落とさない・CLAUDE.md)。押し直せば残りだけが共有される
+   * —— 同じ相手に同じ教材を二度出しても、宿題は1つにまとまる。
+   */
+  const doAssignMany = async () => {
+    setManyBusy(true)
+    /* **数え方も文も `assignMaterials()` 1か所。**「アサインする」の画面でも
+       同じことをするので、ここで書き写さない(CLAUDE.md) */
+    const { data, error: e } = await assignMaterials({
+      materialIds: pickedMats, learnerIds: picked, assignedBy: me.id,
+    })
+    setManyBusy(false)
+    /* **断られても、通ったぶんは文の中に入っている**(「n 件まで共有しました」)。
+       だから、えらんだものは消さずに残す —— 続きをやり直せる */
+    if (e) { setMessage(e); return }
+    setMessage(data.text)
+    setPickedMats([]); setManyOpen(false); setPicked([])
+  }
+
   const doAssign = async () => {
     const { data, error: e } = await assignMaterial({
       materialId: assigningId, learnerIds: picked, assignedBy: me.id,
@@ -969,6 +1005,57 @@ export default function TrainerMaterials({
         </div>
       ) : (
         <>
+          {/* **えらんだ教材を、まとめて共有する**(第5.238節)。
+
+              **1件もえらんでいないときは出さない**(効かない操作を
+              見せない・CLAUDE.md)。えらぶ道はカードのチェックにある。
+
+              **一覧の上に置く** —— 末尾だと、教材が増えるほど下へ流れて
+              見つからない(`.claude/rules/common.md`) */}
+          {!forLearner && pickedMats.length > 0 && (
+            <div className="card pick-bar">
+              <div className="pick-bar-head">
+                <span className="field-label">
+                  <strong>{pickedMats.length} 件</strong>をえらんでいます
+                </span>
+                <div className="btn-row">
+                  <button type="button" className="btn btn--small btn--quiet"
+                          aria-expanded={manyOpen}
+                          onClick={() => setManyOpen(!manyOpen)}>
+                    {manyOpen ? 'とじる' : 'ゲストに共有する'}
+                  </button>
+                  <button type="button" className="btn btn--small btn--ghost"
+                          disabled={manyBusy}
+                          onClick={() => { setPickedMats([]); setManyOpen(false) }}>
+                    えらび直す
+                  </button>
+                </div>
+              </div>
+              {manyOpen && (
+                <>
+                  {/* **ゲストを選ぶ欄は1か所**(`LearnerPick`)。
+                      既定は名前で探し、一覧は押したときだけ出る */}
+                  <LearnerPick people={active} picked={picked} onPick={setPicked}
+                               disabled={manyBusy}
+                               label="誰に出しますか(複数えらべます)" />
+                  {notActive.length > 0 && (
+                    <p className="field-hint">
+                      休会中・退会済の {notActive.length} 人とは共有できません。
+                    </p>
+                  )}
+                  <div className="btn-row">
+                    <button type="button" className="btn btn--primary"
+                            disabled={!picked.length || manyBusy}
+                            onClick={doAssignMany}>
+                      {manyBusy
+                        ? '共有しています…'
+                        : `${pickedMats.length} 件を共有する`}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {sorted.map((m) => (
             /* `data-mid` … **発行した直後に、ここまで画面を送る**ための目印
                (2026-09 利用者の指定)。`is-just` は少しのあいだだけ光る */
@@ -1001,6 +1088,19 @@ export default function TrainerMaterials({
                   **開くこと自体が回り道**だった。いまはボタンを
                   はじめから出し、囲みは**ただの見出し**にしてある。 */}
               <div className="material-head">
+                {/* **教材を先にえらぶ**(第5.238節・2026-09 利用者の指定)。
+                    **見出しの行のいちばん左**に置く —— どのカードのことか、
+                    行を見れば分かる。**ゲストのページの中では出さない**
+                    (相手がもう決まっているので、まとめてえらぶ意味がない) */}
+                {!forLearner && (
+                  <label className="material-pick"
+                         aria-label={`${m.title} をえらぶ`}>
+                    <input type="checkbox" checked={pickedMats.includes(m.id)}
+                           onChange={() => setPickedMats((now) => (
+                             now.includes(m.id)
+                               ? now.filter((x) => x !== m.id) : [...now, m.id]))} />
+                  </label>
+                )}
                 <div className="material-open">
                   {/* 見出しは弱点だけ。レベル・業界は小さな札。
 

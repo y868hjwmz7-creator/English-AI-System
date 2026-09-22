@@ -50,6 +50,7 @@
  */
 import { useState } from 'react'
 import { RIZAP_ALL, rizapAllLabel } from '../data/rizapBooks.js'
+import AssignNote from './AssignNote.jsx'
 
 export default function AssignRizap({
   books = [], units = {}, picked = {}, onPick = null, onSend = null,
@@ -125,13 +126,7 @@ export default function AssignRizap({
       </div>
       {/* **押した結果は、必ずこの場に出す**(画面のいちばん上に出さない・
           CLAUDE.md)。**成功と失敗を、同じ見た目で終わらせない** */}
-      {note && (
-        <p className={note.kind === 'busy' ? 'field-hint'
-          : `notice notice--${note.kind === 'ok' ? 'ok' : 'warn'}`}
-           role="status">
-          {note.text}
-        </p>
-      )}
+      <AssignNote note={note} />
     </>
   )
 }

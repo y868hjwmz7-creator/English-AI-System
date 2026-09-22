@@ -9,6 +9,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Loading from './Loading.jsx'
 import { CEFR_LEVELS, SCORE_TESTS, cefrLabel, cefrOption, scoreTestLabel } from '../data/cefr.js'
 import { lastLearner, rememberLearner, watchLearner } from '../lib/lastLearner.js'
+/* **一覧を出すかどうかの決まりは1か所**(第5.238節)。
+   ゲストを選ぶ欄(`LearnerPick`)とまったく同じ ——
+   打ったときは、開いていなくても出す */
+import { showsLearnerList } from '../lib/learnerPick.js'
 /* **状態の対応表は `data/learnerStatus.js` 1か所。**
    上に貼り付く箱(`LearnerBar`)でも同じ札を出す */
 import { LEARNER_STATUS, statusCls, statusLabel } from '../data/learnerStatus.js'
@@ -86,6 +90,14 @@ export default function TrainerLearners({ me, navTick = 0 }) {
      名前で引けないと、目当ての人を見つけるのに一覧を送ることになる。
      **覚えない** —— 探すのはその場の操作であって、設定ではない。 */
   const [who, setWho] = useState('')
+  /* **一覧は、押すまで出さない**(第5.238節・2026-09 利用者の指定
+     「ゲストの一覧もデフォルトでは非表示、リストを展開させるための
+     ボタンを配置し、基本的には名前検索に」)。
+     担当は25人。**25枚のカードが常に並んでいると、その下にあるものが
+     画面の外へ押し出される**(`.claude/rules/common.md`)。
+     **覚えない** —— 開くのはその場の操作であって、設定ではない
+     (名前で探すのと同じ扱い) */
+  const [listOpen, setListOpen] = useState(false)
   /* **絞るのは一覧だけ。** 開いているゲストは `openId` で引くので、
      打ち込んだ名前に当てはまらなくても**開いたまま**である
      (絞り込みのせいで、開いていた人が消えては困る)。 */
@@ -683,6 +695,16 @@ export default function TrainerLearners({ me, navTick = 0 }) {
       <div className="card finder">
         <div className="finder-head">
           <h2 className="card-title">担当しているゲスト</h2>
+          {/* **押すものは、一覧の末尾に置かない**(共通ルール)。
+              見出しの行なら、閉じていても押せて、場所が人数で動かない。
+              **0人のときは出さない**(効かない操作を見せない) */}
+          {learners.length > 0 && (
+            <button type="button" className="btn btn--small btn--ghost"
+                    aria-expanded={listOpen}
+                    onClick={() => setListOpen(!listOpen)}>
+              {listOpen ? '一覧をとじる' : `一覧をひらく(${learners.length})`}
+            </button>
+          )}
           {!adding && (
             <button type="button" className="btn btn--primary btn--small"
                     onClick={() => { setAdding(true); setMessage(null) }}>
@@ -764,7 +786,14 @@ export default function TrainerLearners({ me, navTick = 0 }) {
       )}
 
       {/* **開いているゲストだけを描く。** 下へ送っても、次のゲストは出てこない */}
-      {(openId ? learners.filter((l) => l.id === openId) : shown).map((l) => {
+      {/* **一覧は、名前を打ったか「一覧をひらく」を押したときだけ**
+          (第5.238節)。**判断は `showsLearnerList()` 1か所** ——
+          ゲストを選ぶ欄(`LearnerPick`)とまったく同じ決まりである。
+          **開いているゲストは、いつでも描く** —— あちらは `openId` で
+          引いているので、一覧が閉じていても消えない */}
+      {(openId
+        ? learners.filter((l) => l.id === openId)
+        : (showsLearnerList(who, listOpen) ? shown : [])).map((l) => {
         const toeic = l.scores.toeic
         const versant = l.scores.versant
         return (

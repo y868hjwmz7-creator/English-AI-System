@@ -41,7 +41,9 @@
  * @param learnerName その名前(知らせの文に使う)
  */
 import { useEffect, useMemo, useState } from 'react'
-import { loadMyLearners } from '../lib/materials.js'
+import { assignMaterials, loadMyLearners, searchMaterials } from '../lib/materials.js'
+import SearchBar from './SearchBar.jsx'
+import MaterialTitle from './MaterialTitle.jsx'
 import { loadLearnerFeatures, setLearnerFeature } from '../lib/learnerFeatures.js'
 import { shelfFeature } from '../data/shelves.js'
 import { NATIVE_FLOW_UNITS, nfFeature } from '../data/nativeFlow.js'
@@ -52,9 +54,11 @@ import {
 } from '../lib/assignBooks.js'
 import AssignShelf from './AssignShelf.jsx'
 import AssignRizap from './AssignRizap.jsx'
+import AssignNote from './AssignNote.jsx'
 import { RIZAP_BOOKS, RIZAP_LABEL, rizapPickLabel } from '../data/rizapBooks.js'
 import { assignRizap, loadRizapUnits } from '../lib/rizapAssign.js'
 import Loading from './Loading.jsx'
+import LearnerPick from './LearnerPick.jsx'
 
 export default function AssignBooks({ me = null, learnerId = null, learnerName = '' }) {
   /** 担当しているゲスト。**`null` は読み込み中**(いない、ではない) */
@@ -76,6 +80,23 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
   const [rizapUnits, setRizapUnits] = useState({})
   /** 冊ごとに、いま選んでいる UNIT(空は丸ごと) */
   const [rizapPick, setRizapPick] = useState({})
+
+  /* ── **その他の教材**(第5.238節・2026-09 利用者の指定)──
+
+       > その他の教材の検索画面はサブ的な扱いで、デフォルトでは
+       > 閉じていてよいです。
+
+     **主役は上の3つの大項目**(単語帳・RIZAP・Quick Response)である。
+     こちらは**キーワードだけ**にしてある —— 種類・レベル・業界で
+     じっくり探すのは「教材」の画面の仕事で、
+     **同じ絞り込みを2か所に作らない**(CLAUDE.md)。 */
+  const [matOpen, setMatOpen] = useState(false)
+  const [matQ, setMatQ] = useState('')
+  /** さがした結果。**`null` は読み込み中**(無い、ではない) */
+  const [mats, setMats] = useState(null)
+  const [matPicked, setMatPicked] = useState([])
+  const [matBusy, setMatBusy] = useState(false)
+  const [matNote, setMatNote] = useState(null)
   const [rizapBusy, setRizapBusy] = useState(null)
 
   /* ゲストの一覧。**渡されているときは読みに行かない**(0円で済むものは0円で) */
@@ -106,6 +127,23 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
     return () => { alive = false }
   }, [])
 
+  /* **その他の教材をさがす。**開いているあいだだけ読みに行く ——
+     閉じているのに読むと、**見ていない一覧のために毎回通信する。**
+     打つたびに呼ばず、**手が止まってから**(300ms)1回だけ呼ぶ。
+     **追い越された結果は捨てる**(`alive`)—— 捨てないと、
+     古い検索の結果が、あとから新しい結果を上書きする */
+  useEffect(() => {
+    if (!matOpen) return undefined
+    let alive = true
+    setMats(null)
+    const t = setTimeout(() => {
+      searchMaterials({ keyword: matQ }).then(({ data }) => {
+        if (alive) setMats(data ?? [])
+      })
+    }, 300)
+    return () => { alive = false; clearTimeout(t) }
+  }, [matOpen, matQ])
+
   /** いま決めている相手。**名前も一緒に持つ**(知らせの文に要る) */
   const who = useMemo(() => {
     if (!picked) return null
@@ -122,6 +160,8 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
     setWordNote(null)
     setQrNote(null)
     setRizapNote(null)
+    setMatNote(null)
+    setMatPicked([])
     loadLearnerFeatures(who.id).then(({ data }) => {
       if (!alive) return
       setFeatures(data ?? new Set())
@@ -165,6 +205,27 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
       kind: 'ok',
       text: rizapDoneText(who.display_name, title, data.sent, data.already),
     })
+  }
+
+  /**
+   * **えらんだ「その他の教材」を、この人に共有する**(第5.238節)。
+   *
+   * **数え方も文も `assignMaterials()` 1か所**(教材の画面と同じもの)。
+   * ここで「n 件を n 人と」と書き写さない —— **置く場所の数だけ食い違う。**
+   */
+  const sendMats = async () => {
+    if (matBusy || !who || !matPicked.length) return
+    setMatBusy(true)
+    setMatNote({ kind: 'busy', text: `${matPicked.length} 件を共有しています…` })
+    const { data, error } = await assignMaterials({
+      materialIds: matPicked, learnerIds: [who.id], assignedBy: me?.id ?? null,
+    })
+    setMatBusy(false)
+    /* **断られても、通ったぶんは文の中に入っている**(「n 件まで共有しました」)。
+       えらんだものは消さずに残す —— 続きをやり直せる */
+    if (error) { setMatNote({ kind: 'ng', text: `${error}` }); return }
+    setMatNote({ kind: 'ok', text: data.text })
+    setMatPicked([])
   }
 
   const shelfOn = useMemo(() => shelvesOn(features), [features])
@@ -229,21 +290,15 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
       {!learnerId && (
         <section className="card">
           <h2 className="card-title">アサインする</h2>
-          <label className="field">
-            <span className="field-label">誰に出しますか</span>
-            <select className="input" value={picked}
-                    onChange={(e) => setPicked(e.target.value)}>
-              <option value="">選んでください</option>
-              {(people ?? []).map((p) => (
-                <option key={p.id} value={p.id}>{p.display_name}</option>
-              ))}
-            </select>
-          </label>
-          {/* **黙って空にしない。** 読み込み中と、いない場合を書き分ける */}
-          {people === null && <p className="card-hint">読んでいます…</p>}
-          {people?.length === 0 && (
-            <p className="card-hint">担当しているゲストが、まだいません。</p>
-          )}
+          {/* **ゲストを選ぶ欄は1か所**(`LearnerPick`・第5.238節・
+              2026-09 利用者の指定「ゲストのリストは開くためのボタンを
+              一つ配置し、デフォルトでは名前を記入して検索する仕様に」)。
+              **ここは1人だけ** —— 冊は「そのゲストにいま出しているか」を
+              読んで出しているので、相手が2人だと印を出せない。
+              読み込み中・いないときの書き分けも、あちらが持っている */}
+          <LearnerPick
+            people={people} picked={picked ? [picked] : []} single
+            onPick={(ids) => setPicked(ids[0] ?? '')} />
         </section>
       )}
 
@@ -289,6 +344,72 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
               units={NATIVE_FLOW_UNITS} unitsOn={nfOn}
               onUnit={(u) => toggle(nfFeature(u.id), nfUnitTitle(u), setQrNote)}
               onAll={pickNfAll} />
+          </section>
+
+          {/* ── **その他の教材**(第5.238節・2026-09 利用者の指定)──────────
+              > その他の教材の検索画面はサブ的な扱いで、
+              > デフォルトでは閉じていてよいです。
+
+              **大項目は上の3つ。**こちらは4つめで、**既定では閉じている。**
+              `<details>` は使わない —— **畳んでも中身が場所を取る**
+              (`.claude/rules/common.md`)。
+              **押すものは、見出しの行に置く** —— 一覧の末尾だと、
+              教材が増えるほど下へ流れて見つからない */}
+          <section className="card">
+            <div className="assign-mats-head">
+              <h3 className="card-title">その他の教材</h3>
+              <button type="button" className="btn btn--small btn--ghost"
+                      aria-expanded={matOpen}
+                      onClick={() => setMatOpen(!matOpen)}>
+                {matOpen ? 'とじる' : 'さがす'}
+              </button>
+            </div>
+
+            {matOpen && (
+              <>
+                {/* **キーワードだけ**(2026-09 利用者の回答)。
+                    種類・レベル・業界でじっくり探すのは「教材」の画面の
+                    仕事である —— **同じ絞り込みを2か所に作らない** */}
+                <SearchBar keyword={matQ} onKeyword={setMatQ}
+                           placeholder="教材の名前で探す" />
+
+                {/* **黙って空にしない。**読み込み中と、無いときを書き分ける */}
+                {mats === null && <Loading />}
+                {mats !== null && mats.length === 0 && (
+                  <p className="card-hint">当てはまる教材がありません。</p>
+                )}
+
+                {mats !== null && mats.length > 0 && (
+                  <div className="assign-mats">
+                    {mats.map((m) => (
+                      <label key={m.id} className="toggle">
+                        <input type="checkbox" checked={matPicked.includes(m.id)}
+                               disabled={matBusy}
+                               onChange={() => setMatPicked((now) => (
+                                 now.includes(m.id)
+                                   ? now.filter((x) => x !== m.id) : [...now, m.id]))} />
+                        {/* 題の出し方は `MaterialTitle` 1か所(教材の画面と同じ) */}
+                        <MaterialTitle title={m.title} as="span" size="row" hideDate />
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {/* **えらんでいないあいだは出さない**(効かない操作を見せない) */}
+                {matPicked.length > 0 && (
+                  <div className="btn-row">
+                    <button type="button" className="btn btn--primary"
+                            disabled={matBusy} onClick={sendMats}>
+                      {matBusy ? '共有しています…' : `${matPicked.length} 件を共有する`}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* **知らせは、閉じていても出す** —— 共有したあとに閉じても、
+                何が起きたかが消えない(CLAUDE.md「黙って消さない」) */}
+            <AssignNote note={matNote} />
           </section>
         </>
       )}

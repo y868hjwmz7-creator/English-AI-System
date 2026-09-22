@@ -6003,6 +6003,161 @@ for (const W of [1280, 794, 453, 390, 320]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   アサインの手順(第5.238節・2026-09 利用者の指定)
+
+     > 初めに教材の一覧から教材を選択(複数同時選択可)、そしてゲストを
+     > 選ぶのはその次にしてください。また、ゲストのリストは開くための
+     > ボタンを一つ配置し、デフォルトでは名前を記入して検索する仕様に
+     > してください。
+
+   **この決まりは、実際に開くまで分からない。**
+   `lint` も `build` も通ったまま、25人ぶんのチェックが常に並んでいたり、
+   打ったのに何も出なかったり、選んだ人が見えないままになる。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   既定で出ない / 押したら出る / 打ったら出る の3つとも測る。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const 開く = async (q2, w = 1280) => {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    page.setDefaultTimeout(8000)
+    await page.goto(`http://localhost:${PORT}/__bar.html?${q2}`, { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    return page
+  }
+  /** いま並んでいるゲストの行(`.assign-list` の中のチェック) */
+  const 行 = (page) => page.evaluate(() => [...document.querySelectorAll('.assign-list .toggle')]
+    .map((e) => e.textContent.trim()))
+
+  /* ── ① 既定では羅列しない(共通ルール「長い一覧は、開くまで羅列しない」)── */
+  {
+    const page = await 開く('screen=pick&pick=shut')
+    /* **帯そのものは出ている。**出ていなければ、以下は何も測れていない */
+    const 帯 = await page.evaluate(() => !!document.querySelector('.pick-bar'))
+    if (帯) ok('先にえらぶ … えらんだ件数の帯が出ている')
+    else ng('先にえらぶ … 帯そのものが出ていない(この先は何も測れていない)')
+    const n = (await 行(page)).length
+    if (n === 0) ok('先にえらぶ … 畳んでいるあいだは、ゲストを羅列しない')
+    else ng('先にえらぶ … 畳んでいるのにゲストが並んでいる', `${n} 行`)
+    await page.close()
+  }
+
+  /* ── ② 開いても、まだ羅列しない。**「一覧をひらく」を押して初めて出る** ── */
+  {
+    const page = await 開く('screen=pick')
+    const 前 = (await 行(page)).length
+    if (前 === 0) ok('ゲストを選ぶ … 既定では、名前で探す欄だけ')
+    else ng('ゲストを選ぶ … 既定でゲストが並んでいる', `${前} 行`)
+
+    /* **押せなくても、そこで止めない。**`page.click()` は見えない相手を
+       待って**例外を投げる**ので、札を消したとたん
+       **この先の検証がまるごと走らなくなる**(CLAUDE.md・第5.236節で踏んだ) */
+    let 押せた = true
+    await page.click('.learner-pick-head button', { timeout: 3000 })
+      .catch(() => { 押せた = false })
+    if (!押せた) ng('ゲストを選ぶ … 「一覧をひらく」が押せない(消えている)')
+    await page.waitForTimeout(250)
+    const 後 = await 行(page)
+    if (後.length >= 3) ok(`ゲストを選ぶ … 押すと一覧が出る(${後.length} 行)`)
+    else ng('ゲストを選ぶ … 押しても一覧が出ない', 後.join(' / '))
+    await page.close()
+  }
+
+  /* ── ③ 打ったときは、開いていなくても出る(行き止まりを作らない)── */
+  {
+    const page = await 開く('screen=pick')
+    await page.fill('.learner-pick input[type="search"], .learner-pick input[type="text"]', '西大路')
+    await page.waitForTimeout(250)
+    const 当たり = await 行(page)
+    if (当たり.length === 1 && /西大路/.test(当たり[0])) {
+      ok('ゲストを選ぶ … 名前を打つと、開いていなくても絞って出る')
+    } else ng('ゲストを選ぶ … 名前を打っても絞れていない', 当たり.join(' / '))
+
+    /* **黙って絞らない。** 当てはまらなかったことを、そのまま言う */
+    await page.fill('.learner-pick input[type="search"], .learner-pick input[type="text"]', 'いない人')
+    await page.waitForTimeout(250)
+    const 文 = await page.evaluate(() => [...document.querySelectorAll('.learner-pick .card-hint')]
+      .map((e) => e.textContent.trim()).join(' / '))
+    if (/当てはまるゲストがいません/.test(文)) ok('ゲストを選ぶ … 0人のときは、そう書く')
+    else ng('ゲストを選ぶ … 0人のときに黙って空になる', 文.slice(0, 60))
+    await page.close()
+  }
+
+  /* ── ④ 選んだ人は、一覧を畳んでも見えている ── */
+  {
+    const page = await 開く('screen=pick')
+    await page.click('.learner-pick-head button', { timeout: 3000 }).catch(() => {})
+    await page.waitForTimeout(250)
+    await page.click('.assign-list .toggle input', { timeout: 3000 }).catch(() => {})
+    await page.waitForTimeout(250)
+    /* もう一度押して畳む */
+    await page.click('.learner-pick-head button', { timeout: 3000 }).catch(() => {})
+    await page.waitForTimeout(250)
+    const 残り = (await 行(page)).length
+    const 名 = await page.evaluate(() =>
+      document.querySelector('.learner-pick-now')?.textContent?.trim() ?? '')
+    if (残り === 0 && /山田はなこ/.test(名)) {
+      ok('ゲストを選ぶ … 畳んでも、選んだ人は見えている')
+    } else ng('ゲストを選ぶ … 畳むと、誰を選んだのか分からなくなる', `${残り} 行 / ${名}`)
+    await page.close()
+  }
+
+  /* ── ⑤ 「アサインする」の、その他の教材 ── */
+  {
+    /* **既定では畳んである**(利用者の指定「サブ的な扱いで」) */
+    const page = await 開く('screen=assign&mats=shut')
+    const n = await page.evaluate(() =>
+      document.querySelectorAll('.assign-mats .toggle').length)
+    if (n === 0) ok('その他の教材 … 既定では、教材を羅列しない')
+    else ng('その他の教材 … 畳んでいるのに教材が並んでいる', `${n} 件`)
+    await page.close()
+  }
+  {
+    const page = await 開く('screen=assign')
+    const n = await page.evaluate(() =>
+      document.querySelectorAll('.assign-mats .toggle').length)
+    if (n >= 3) ok(`その他の教材 … 開くと並ぶ(${n} 件)`)
+    else ng('その他の教材 … 開いても並ばない', `${n} 件`)
+    /* **大項目が消えていないか**(単語帳・RIZAP・Quick Response)——
+       足したついでに、前からあるものを落としていないかを見る */
+    const 題 = await page.evaluate(() => [...document.querySelectorAll('.card-title')]
+      .map((e) => e.textContent.trim()))
+    for (const t of ['アサインする', '単語帳の冊', 'Quick Response の冊', 'その他の教材']) {
+      if (題.includes(t)) ok(`アサインする … 「${t}」がある`)
+      else ng(`アサインする … 「${t}」が消えている`, 題.join(' / '))
+    }
+    await page.close()
+  }
+  {
+    /* **読み込み中と、0件を書き分ける**(黙って空にしない)。
+       **「出る」と「出ない」の両方を見る** —— `||` でつなぐと、
+       **どちらか片方に当たって素通りする**(CLAUDE.md) */
+    const page = await 開く('screen=assign&mats=wait')
+    const r = await page.evaluate(() => ({
+      待ち: !!document.querySelector('.loading'),
+      無い: /当てはまる教材がありません/.test(document.body.textContent),
+    }))
+    if (r.待ち && !r.無い) ok('その他の教材 … 読み込み中は、そう見える')
+    else ng('その他の教材 … 読み込み中と、0件の区別が付かない',
+      `読み込み中の印 ${r.待ち} / 「ありません」 ${r.無い}`)
+    await page.close()
+  }
+  {
+    const page = await 開く('screen=assign&mats=none')
+    const 文 = await page.evaluate(() => [...document.querySelectorAll('.card-hint')]
+      .map((e) => e.textContent.trim()).join(' / '))
+    if (/当てはまる教材がありません/.test(文)) ok('その他の教材 … 0件のときは、そう書く')
+    else ng('その他の教材 … 0件のときに黙って空になる', 文.slice(0, 60))
+    /* **1件もえらんでいなければ、押せるものを出さない** */
+    const 有 = await page.evaluate(() => [...document.querySelectorAll('.btn--primary')]
+      .some((b) => /件を共有する/.test(b.textContent)))
+    if (!有) ok('その他の教材 … えらんでいなければ、共有のボタンを出さない')
+    else ng('その他の教材 … 0件なのに「共有する」が出ている')
+    await page.close()
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    本文から拾った かたまり(第5.230節・2026-09 利用者の設計)
 
      > 「練習する」をクリックすると５問から１０問の日本語が表示され、
@@ -8453,6 +8608,15 @@ for (const W of [1280, 794, 453, 390, 320]) {
        **1つも出していない形も測る** —— 印が全部 ○ になり、
        数も出ないので、**行の高さが変わる** */
     ['assign', ''], ['assign', 'assign=none'],
+    /* **アサインの手順**(第5.238節)。ゲストを選ぶ欄(名前で探す欄 +
+       「一覧をひらく」+ 選んだ人)と、**その他の教材**の節が縦に積まれる。
+       `mats=shut` は**畳んだ形**(畳みの札と、下の知らせが接しやすい)、
+       `mats=wait` は**読み込み中**、`mats=none` は**0件** */
+    ['assign', 'mats=shut'], ['assign', 'mats=wait'], ['assign', 'mats=none'],
+    /* **教材を先にえらぶ帯**(第5.238節)。見出しの行に**ボタンが2つ
+       横に並び**、その下にゲストを選ぶ欄と「n 件を共有する」が縦に積まれる。
+       `pick=shut` は**畳んだ形**、`pick=busy` は**送っている最中** */
+    ['pick', ''], ['pick', 'pick=shut'], ['pick', 'pick=busy'],
     /* **達成具合**(第5.167節)。`×` と「おわる」の行き先なので、
        ここが行き止まりだと練習へ戻れなくなる */
     ['progress', ''],

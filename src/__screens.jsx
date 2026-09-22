@@ -51,6 +51,8 @@ import AssignShelf from './components/AssignShelf.jsx'
 import AssignRizap from './components/AssignRizap.jsx'
 import { RIZAP_BOOKS, RIZAP_LABEL, rizapPickLabel } from './data/rizapBooks.js'
 import { rizapDoneText } from './lib/assignBooks.js'
+/* まとめて共有したときの1行。**文言はあちら1か所**(第5.238節) */
+import { manyDoneText } from './lib/assignMany.js'
 import { BASICS, FRAME_QR } from './data/learnerFeatures.js'
 import { nfUnitTitle, shelfTitle } from './lib/assignBooks.js'
 import { QUIZ_FORMS, WORD_ORDERS } from './lib/wordQuiz.js'
@@ -93,6 +95,12 @@ import {
 } from './components/Icons.jsx'
 import MaterialShare from './components/MaterialShare.jsx'
 import SearchBar from './components/SearchBar.jsx'
+/* **アサインの手順**(第5.238節)。本物の部品をそのまま描く ——
+   どれも props で受け取るだけなので Supabase が要らない */
+import LearnerPick from './components/LearnerPick.jsx'
+import MaterialTitle from './components/MaterialTitle.jsx'
+import AssignNote from './components/AssignNote.jsx'
+import Loading from './components/Loading.jsx'
 import HomeworkFilter from './components/HomeworkFilter.jsx'
 import { emptyHomeworkFilter } from './lib/homeworkFilter.js'
 import { setViewerRole } from './lib/viewer.js'
@@ -674,6 +682,30 @@ function AssignScreen() {
      UNIT が在る / 0 UNIT / **まだ読めていない**(`undefined`) */
   const [rzPick, setRzPick] = useState({})
   const [rzNote, setRzNote] = useState(null)
+  /* **①誰に**(第5.238節)。**1人だけ選ぶ形**(`single`)。
+     **長い名前を1つ混ぜる** —— 短い名前だけだと、はみ出すのを見逃す */
+  const [picked, setPicked] = useState('g1')
+  const people = empty ? [] : [
+    { id: 'g1', display_name: '山田はなこ' },
+    { id: 'g2', display_name: '西大路おさむ(製造・品質保証)' },
+    { id: 'g3', display_name: '佐藤' },
+  ]
+  /* **その他の教材**(第5.238節)。**いちばん危ない形を1つ置く** ——
+     `?mats=none` で**当てはまらない**、`?mats=wait` で**読み込み中**
+     (`null` を「無い」と取り違えると、黙って空になる) */
+  const [matOpen, setMatOpen] = useState(q.get('mats') !== 'shut')
+  const [matQ, setMatQ] = useState('')
+  const [matPicked, setMatPicked] = useState(q.get('mats') === 'none' ? [] : ['m1'])
+  const [matNote, setMatNote] = useState(null)
+  const matBusy = q.get('busy') === 'on'
+  const mats = q.get('mats') === 'wait' ? null
+    : q.get('mats') === 'none' ? []
+      : [
+        { id: 'm1', title: '2026-09-20 / 数の表現 + 数字 / B1 / 製造' },
+        /* **長い題を1つ混ぜる**(折り返しで印がずれるのを見逃さない) */
+        { id: 'm2', title: '2026-09-18 / 受け身の言い回しと、ていねいな依頼 / B2 / 医薬品・医療機器' },
+        { id: 'm3', title: 'Native Flow Vol.1 UNIT 3' },
+      ]
   const rzUnits = empty ? {} : {
     [RIZAP_BOOKS[0].id]: [
       { id: 'u1', unit_no: 1, headline: 'Booking a Bus' },
@@ -698,6 +730,13 @@ function AssignScreen() {
 
   return (
     <div className="app-main" style={{ padding: 16 }}>
+      {/* ── ①誰に(第5.238節)。**本物と1文字も違えない** ── */}
+      <section className="card">
+        <h2 className="card-title">アサインする</h2>
+        <LearnerPick
+          people={people} picked={picked ? [picked] : []} single
+          onPick={(ids) => setPicked(ids[0] ?? '')} />
+      </section>
       <section className="card">
         <h3 className="card-title">単語帳の冊</h3>
         <AssignShelf
@@ -758,6 +797,161 @@ function AssignScreen() {
               rzPick[id] ? 1 : (rzUnits[id] ?? []).length),
           })} />
       </section>
+
+      {/* ── **その他の教材**(第5.238節)。**本物と1文字も違えない** ──
+          畳みの札は**見出しの行**に置く(一覧の末尾に置かない・共通ルール) */}
+      <section className="card">
+        <div className="assign-mats-head">
+          <h3 className="card-title">その他の教材</h3>
+          <button type="button" className="btn btn--small btn--ghost"
+                  aria-expanded={matOpen}
+                  onClick={() => setMatOpen(!matOpen)}>
+            {matOpen ? 'とじる' : 'さがす'}
+          </button>
+        </div>
+
+        {matOpen && (
+          <>
+            <SearchBar keyword={matQ} onKeyword={setMatQ}
+                       placeholder="教材の名前で探す" />
+
+            {mats === null && <Loading />}
+            {mats !== null && mats.length === 0 && (
+              <p className="card-hint">当てはまる教材がありません。</p>
+            )}
+
+            {mats !== null && mats.length > 0 && (
+              <div className="assign-mats">
+                {mats.map((m) => (
+                  <label key={m.id} className="toggle">
+                    <input type="checkbox" checked={matPicked.includes(m.id)}
+                           disabled={matBusy}
+                           onChange={() => setMatPicked((now) => (
+                             now.includes(m.id)
+                               ? now.filter((x) => x !== m.id) : [...now, m.id]))} />
+                    <MaterialTitle title={m.title} as="span" size="row" hideDate />
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {matPicked.length > 0 && (
+              <div className="btn-row">
+                <button type="button" className="btn btn--primary"
+                        disabled={matBusy}
+                        onClick={() => setMatNote({
+                          kind: 'ok',
+                          text: manyDoneText(matPicked.length, 1, ' 単語帳に 12 語入れました。'),
+                        })}>
+                  {matBusy ? '共有しています…' : `${matPicked.length} 件を共有する`}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        <AssignNote note={matNote} />
+      </section>
+    </div>
+  )
+}
+
+
+/**
+ * **教材を先にえらぶ帯**(`?screen=pick`・第5.238節・2026-09 利用者の指定)。
+ *
+ *   > 初めに教材の一覧から教材を選択(複数同時選択可)、
+ *   > そしてゲストを選ぶのはその次にしてください。
+ *
+ * 教材の画面(`TrainerMaterials`)は Supabase を引き連れているので、
+ * **帯とカードの見出しの行だけ**を、本物と**1文字も違えず**に置く。
+ * ここを変えると、すき間も折り返しも本物と変わる ——
+ * **骨組みが本物と食い違うと、検証は何も守らない**(CLAUDE.md)。
+ *
+ * **いちばん危ない形を、必ず1つ置く。**
+ * ・`?pick=shut` … 帯は出ているが、まだ開いていない
+ * ・`?pick=busy` … 送っている最中(押せない)
+ * ・名前は**長いもの**を混ぜる / **休会中の人がいる**1行も出す
+ */
+function PickScreen() {
+  const [pickedMats, setPickedMats] = useState(['m1', 'm2'])
+  const [manyOpen, setManyOpen] = useState(q.get('pick') !== 'shut')
+  const [picked, setPicked] = useState([])
+  const manyBusy = q.get('pick') === 'busy'
+  const active = [
+    { id: 'g1', display_name: '山田はなこ' },
+    { id: 'g2', display_name: '西大路おさむ(製造・品質保証)' },
+    { id: 'g3', display_name: '佐藤' },
+  ]
+  const notActive = [{ id: 'g9', display_name: '休会 ちから' }]
+  const list = [
+    { id: 'm1', title: '2026-09-20 / 数の表現 + 数字 / B1 / 製造' },
+    { id: 'm2', title: '2026-09-18 / 受け身の言い回しと、ていねいな依頼 / B2 / 医薬品・医療機器' },
+  ]
+
+  return (
+    <div className="app-main" style={{ padding: 16 }}>
+      {pickedMats.length > 0 && (
+        <div className="card pick-bar">
+          <div className="pick-bar-head">
+            <span className="field-label">
+              <strong>{pickedMats.length} 件</strong>をえらんでいます
+            </span>
+            <div className="btn-row">
+              <button type="button" className="btn btn--small btn--quiet"
+                      aria-expanded={manyOpen}
+                      onClick={() => setManyOpen(!manyOpen)}>
+                {manyOpen ? 'とじる' : 'ゲストに共有する'}
+              </button>
+              <button type="button" className="btn btn--small btn--ghost"
+                      disabled={manyBusy}
+                      onClick={() => { setPickedMats([]); setManyOpen(false) }}>
+                えらび直す
+              </button>
+            </div>
+          </div>
+          {manyOpen && (
+            <>
+              <LearnerPick people={active} picked={picked} onPick={setPicked}
+                           disabled={manyBusy}
+                           label="誰に出しますか(複数えらべます)" />
+              {notActive.length > 0 && (
+                <p className="field-hint">
+                  休会中・退会済の {notActive.length} 人とは共有できません。
+                </p>
+              )}
+              <div className="btn-row">
+                <button type="button" className="btn btn--primary"
+                        disabled={!picked.length || manyBusy}
+                        onClick={() => {}}>
+                  {manyBusy
+                    ? '共有しています…'
+                    : `${pickedMats.length} 件を共有する`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {list.map((m) => (
+        <div key={m.id} className="card material-card">
+          <div className="material-head">
+            <label className="material-pick" aria-label={`${m.title} をえらぶ`}>
+              <input type="checkbox" checked={pickedMats.includes(m.id)}
+                     onChange={() => setPickedMats((now) => (
+                       now.includes(m.id)
+                         ? now.filter((x) => x !== m.id) : [...now, m.id]))} />
+            </label>
+            <div className="material-open">
+              <MaterialTitle title={m.title} hideDate />
+              <div className="material-meta">
+                <span className="material-kind">記事</span>
+                <span className="material-when">2026-09-20</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -1903,6 +2097,8 @@ createRoot(document.getElementById('root')).render(
         ? RESULT
         : q.get('screen') === 'assign'
       ? <AssignScreen />
+    : q.get('screen') === 'pick'
+      ? <PickScreen />
     : q.get('screen') === 'owner'
       ? (
         <OwnerScreen

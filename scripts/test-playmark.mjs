@@ -146,6 +146,9 @@ import {
 } from '../src/data/clipVoices.js'
 import { NATIVE_FLOW } from '../src/data/nativeFlow.js'
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
+/* アサインの手順(第5.238節)。**どちらも素の node で走る形に切り出してある** */
+import { matchLearners, pickedNames, showsLearnerList } from '../src/lib/learnerPick.js'
+import { manyDoneText, manyStoppedText } from '../src/lib/assignMany.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -8074,8 +8077,20 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/<AssignBooks me=\{profile\} \/>/.test(app),
     '行き先が描かれていて、出した人(トレーナー)も渡している')
 
-  /* **教材は、ここには出さない**(利用者の指定で冊だけ) */
-  ok(!/loadMaterials|assignMaterial/.test(asg), 'アサインする … 教材は出していない(冊だけ)')
+  /* **大項目は「冊」のまま**(第5.181節)。**その他の教材はサブ**
+     (第5.238節・2026-09 利用者の指定)——
+
+       > メインに固有の教材を単語帳、Quick Response、などのジャンル別に
+       > 分類し、大項目として表示し、その他の教材の検索画面はサブ的な扱いで、
+       > デフォルトでは閉じていてよいです。
+
+     だから「教材を出していない」ではなく、**主従が逆になっていないか**を見る。
+     ここが逆になると、**再利用を最短路にする**という設計の前提が崩れる */
+  ok(asg.indexOf('単語帳の冊') < asg.indexOf('その他の教材')
+    && asg.indexOf('Quick Response の冊') < asg.indexOf('その他の教材'),
+  'アサインする … 大項目は冊。その他の教材は、そのあと')
+  ok(/const \[matOpen, setMatOpen\] = useState\(false\)/.test(asg),
+    'アサインする … その他の教材は、既定では閉じている')
 
   /* **骨組みが、本物の札を描いている** */
   const sc = noNote(read('__screens.jsx'))
@@ -10411,6 +10426,285 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       '0066 … まとめた1つにも入っている')
     ok(/0066 Quick Response の冊/.test(read('supabase/apply/check.sql')),
       '0066 … check.sql に行がある')
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ⑯ **アサインの手順**(第5.238節・2026-09 利用者の指定)
+
+     > 教材のアサイン手順を改正してください。初めに教材の一覧から
+     > 教材を選択(複数同時選択可)、そしてゲストを選ぶのはその次に
+     > してください。また、ゲストのリストは開くためのボタンを一つ配置し、
+     > デフォルトでは名前を記入して検索する仕様にしてください。
+     > 次に、ゲストページ内のゲストの一覧もデフォルトでは非表示、
+     > リストを展開させるためのボタンを配置し、
+     > 基本的には名前検索にしてください。
+
+   **この決まりは、間違えても `lint` にも `build` にも引っかからない。**
+   間違い方はどれも「開いてみるまで分からない」形になる ——
+   一覧が常に出ている / 打ったのに何も出ない / 選んだ人が見えない /
+   件数の言い方が2か所で食い違う。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+   ════════════════════════════════════════════════════════════════════ */
+{
+  const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  /* **コメントを落としてから数える**(CLAUDE.md)——
+     説明にも同じ語が出るので、「名前が出てくるか」では見られない */
+  /* **JSX のコメント(`{/* … *\/}`)を先に落とす。**
+     あとにすると `{}` だけが残り、**閉じ方で見ている検証が空振りする** */
+  const noNote = (src) => src
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+
+  console.log('\n▶ アサインの手順(第5.238節)')
+
+  const みんな = [
+    { id: 'g1', display_name: '山田はなこ' },
+    { id: 'g2', display_name: '西大路おさむ(製造・品質保証)' },
+    { id: 'g3', display_name: 'Sato Ken' },
+  ]
+
+  /* ── ① 名前で絞る。**空なら絞らない** ── */
+  ok(matchLearners(みんな, '').length === 3
+    && matchLearners(みんな, '   ').length === 3,
+  '絞る … 何も打っていなければ、全員を出す')
+  ok(matchLearners(みんな, '山田').map((p) => p.id).join() === 'g1',
+    '絞る … 名前の一部で当たる')
+  /* **大文字小文字を見ない** —— ローマ字の名前で打ち直させない */
+  ok(matchLearners(みんな, 'sato').map((p) => p.id).join() === 'g3'
+    && matchLearners(みんな, ' SATO ').map((p) => p.id).join() === 'g3',
+  '絞る … 大文字小文字と、前後の空白を見ない')
+  /* **「当たる」だけでなく「当たらない」も見る** ——
+     いつも全員を返す形に書き換えても、上だけなら緑のままになる */
+  ok(matchLearners(みんな, 'いない人').length === 0,
+    '絞る … 当てはまらなければ 0 人(黙って全員に戻さない)')
+  /* **読み込み中(`null`)で落ちない** —— 落ちると画面が真っ白になる */
+  ok(matchLearners(null, 'やま').length === 0 && matchLearners(undefined, '').length === 0,
+    '絞る … まだ読めていなくても落ちない')
+
+  /* ── ② 一覧を出すか。**既定は「見せない」側**(CLAUDE.md)── */
+  ok(showsLearnerList('', false) === false && showsLearnerList('  ', false) === false,
+    '一覧 … 既定では出さない(押すか、打つかしていない)')
+  ok(showsLearnerList('', true) === true,
+    '一覧 … 「一覧をひらく」を押したら出す')
+  /* **打ったときは、開いていなくても出す** ——
+     出さないと、打ったのに何も起きない行き止まりになる */
+  ok(showsLearnerList('やま', false) === true,
+    '一覧 … 名前を打ったら、開いていなくても出す')
+
+  /* ── ③ 選んだ人は、一覧を閉じても見えている ── */
+  ok(pickedNames(みんな, ['g1', 'g3']).join(' / ') === '山田はなこ / Sato Ken',
+    '選んだ人 … 名簿の名前で出す')
+  /* **名簿に無い id は落とす**(消えたゲスト)。
+     残すと `undefined` が名前として並ぶ */
+  ok(pickedNames(みんな, ['g1', 'ghost']).length === 1
+    && pickedNames(みんな, []).length === 0
+    && pickedNames(null, ['g1']).length === 0,
+  '選んだ人 … 名簿に無い id は落とす')
+
+  /* ── ④ まとめて共有したときの1行。**数え方は1か所** ── */
+  {
+    const t = manyDoneText(3, 2, ' 単語帳に 12 語入れました。')
+    ok(t.includes('3 件') && t.includes('2 人') && t.includes('12 語'),
+      '知らせ … 件数・人数・語数が、全部入っている')
+    /* **語数が分からないときは、黙る**(`wordsAddedNote` が空を返す)。
+       「0 語入れました」と出すと嘘になる(CLAUDE.md) */
+    ok(!/語/.test(manyDoneText(1, 1)),
+      '知らせ … 語数が無ければ、語の話をしない')
+    /* **0 件でも黙らない** —— 1本目で断られたことが伝わらないと、
+       押したのに何も起きていないように見える */
+    ok(manyStoppedText(0, 'だめでした').includes('0 件')
+      && manyStoppedText(0, 'だめでした').includes('だめでした'),
+    '知らせ … 1本も通らなくても、そう言う')
+    ok(manyStoppedText(2, { message: 'RLS' }).includes('2 件'),
+      '知らせ … 途中で断られたら、通ったぶんを言う')
+  }
+
+  /* ── ⑤ **数え方を2通り持たない**(CLAUDE.md)── */
+  {
+    const mats = noNote(read('src/lib/materials.js'))
+    const at = mats.indexOf('export async function assignMaterials')
+    const fn = at > 0 ? mats.slice(at, mats.indexOf('\nexport ', at + 10)) : ''
+    ok(!!fn && /await assignMaterial\(\{ materialId, learnerIds, assignedBy \}\)/.test(fn),
+      'まとめて … 窓口は1本ずつ呼ぶ(ここで insert を書き直していない)')
+    /* **断られたら、そこで止める。** 止めずに続けると、
+       同じ断りが何度も出て、何件まで済んだのかが分からなくなる */
+    ok(/if \(error\) return ng\(manyStoppedText\(done, error\)\)/.test(fn),
+      'まとめて … 断られたら止めて、通ったぶんを返す')
+    ok(/manyDoneText\(done, learnerIds\.length, wordsAddedNote\(words\)\)/.test(fn),
+      'まとめて … 文は assignMany.js 1か所')
+
+    /* **画面に件数の言い方を書き写していない。**
+       書き写すと、片方だけが古くなる(CLAUDE.md) */
+    /* **まとめて共有する関数の中だけを見る。**
+       ファイル全体で「人と共有しました」を探すと、
+       **1つの教材を出す道(`doAssign`)の1行に当たって**しまい、
+       まとめる側を書き写しに戻しても緑のままになる
+       (CLAUDE.md「置き換える前に `grep -n` で数える」) */
+    for (const [f, 名, 終] of [
+      ['src/components/TrainerMaterials.jsx', 'const doAssignMany', 'const doAssign ='],
+      ['src/components/AssignBooks.jsx', 'const sendMats', 'const shelfOn'],
+    ]) {
+      const src = noNote(read(f))
+      const at = src.indexOf(名)
+      const fn = at > 0 ? src.slice(at, src.indexOf(終, at)) : ''
+      const 短 = f.split('/').pop()
+      ok(!!fn && /assignMaterials\(\{/.test(fn), `${短} … assignMaterials() を呼んでいる`)
+      ok(!!fn && !/共有しました/.test(fn),
+        `${短} … 件数の言い方を書き写していない`)
+      ok(!!fn && /data\.text/.test(fn),
+        `${短} … 知らせは、返ってきた1行をそのまま出す`)
+    }
+  }
+
+  /* ── ⑥ ゲストを選ぶ欄は1か所(`LearnerPick`)── */
+  {
+    const lp = noNote(read('src/components/LearnerPick.jsx'))
+    /* **絞り方を画面に書き写していない** —— 置く場所の数だけ食い違う */
+    ok(/matchLearners\(all, q\)/.test(lp) && /showsLearnerList\(q, open\)/.test(lp)
+      && /pickedNames\(all, picked\)/.test(lp),
+    'ゲストを選ぶ … 絞り方も、出すかどうかも learnerPick.js が決める')
+    ok(!/display_name.*includes\(/.test(lp) && !/toLowerCase\(\)/.test(lp),
+      'ゲストを選ぶ … 画面の中で名前を突き合わせていない')
+    /* **`<details>` を使わない** —— 畳んでも中身が場所を取り続ける
+       (`.claude/rules/common.md`) */
+    ok(!/<details/.test(lp), 'ゲストを選ぶ … <details> を使っていない')
+    /* **押すものは、一覧の末尾に置かない**(共通ルール)——
+       「一覧をひらく」は見出しの行(`.learner-pick-head`)の中にある */
+    const head = lp.slice(lp.indexOf('learner-pick-head'), lp.indexOf('<SearchBar'))
+    ok(/一覧をひらく/.test(head) && /一覧をとじる/.test(head),
+      'ゲストを選ぶ … 「一覧をひらく」は見出しの行にある')
+    ok(lp.indexOf('一覧をひらく') < lp.indexOf('assign-list'),
+      'ゲストを選ぶ … 「一覧をひらく」は、一覧より前にある')
+    /* **黙って空にしない。** 読み込み中と、いないときを書き分ける */
+    ok(/people === null/.test(lp) && /people !== null && all\.length === 0/.test(lp),
+      'ゲストを選ぶ … 読み込み中と、いないときを書き分けている')
+    /* **黙って絞らない。** 当てはまらなかったことを、そのまま言う */
+    ok(/hit\.length === 0/.test(lp) && /当てはまるゲストがいません/.test(lp),
+      'ゲストを選ぶ … 当てはまらなかったら、そう言う')
+    /* **1人だけの形では、丸ぽちにする**(形そのもので分かる) */
+    ok(/type=\{single \? 'radio' : 'checkbox'\}/.test(lp),
+      'ゲストを選ぶ … 1人だけのときは丸ぽち、何人でも選べるときは四角')
+  }
+
+  /* ── ⑦ 教材を先にえらぶ(教材の画面)── */
+  {
+    const tm = noNote(read('src/components/TrainerMaterials.jsx'))
+    /* **見出しの行のいちばん左**に印を置く */
+    const head = tm.slice(tm.indexOf('<div className="material-head">'),
+      tm.indexOf('<div className="material-open">'))
+    ok(/material-pick/.test(head) && /!forLearner &&/.test(head),
+      '先にえらぶ … 印は見出しの行にあり、ゲストのページでは出さない')
+    /* **帯は一覧より前**(末尾だと、教材が増えるほど下へ流れる) */
+    ok(tm.indexOf('className="card pick-bar"') < tm.indexOf('sorted.map((m)'),
+      '先にえらぶ … えらんだ件数の帯は、一覧より前にある')
+    /* **0件のときは帯そのものを出さない**(効かない操作を見せない) */
+    ok(/!forLearner && pickedMats\.length > 0 &&/.test(tm),
+      '先にえらぶ … 1件もえらんでいなければ、帯を出さない')
+    /* **ゲストを選ぶ欄は、この画面でも `LearnerPick`** ——
+       25人ぶんのチェックが常に並ぶ形に戻していないか */
+    ok(/<LearnerPick people=\{active\}/.test(tm),
+      '先にえらぶ … ゲストは LearnerPick で選ぶ')
+  }
+
+  /* ── ⑧ ゲストの画面の一覧も、既定では出さない ── */
+  {
+    const tl = noNote(read('src/components/TrainerLearners.jsx'))
+    /* **`useState(false)` だけで探さない** —— このファイルには5つある
+       (CLAUDE.md「置き換える前に `grep -n` で数える」) */
+    ok(/const \[listOpen, setListOpen\] = useState\(false\)/.test(tl)
+      && /showsLearnerList\(who, listOpen\)/.test(tl),
+    'ゲストの画面 … 既定では一覧を出さない(learnerPick.js が決める)')
+    /* **開いているゲストがあるときは、その人だけ**
+       —— 一覧を畳んでも、開いた人が消えない(行き止まりを作らない) */
+    ok(/openId\s*\?\s*learners\.filter\(\(l\) => l\.id === openId\)/.test(tl),
+      'ゲストの画面 … 開いている人は、一覧を畳んでも出ている')
+    /* **押すものは、一覧の末尾に置かない** */
+    ok(tl.indexOf('一覧をひらく') < tl.indexOf('showsLearnerList('),
+      'ゲストの画面 … 「一覧をひらく」は、一覧より前にある')
+  }
+
+  /* ── ⑨ 「アサインする」の、その他の教材 ── */
+  {
+    const ab = noNote(read('src/components/AssignBooks.jsx'))
+    /* **既定では閉じている**(利用者の指定「サブ的な扱いで」) */
+    ok(/const \[matOpen, setMatOpen\] = useState\(false\)/.test(ab),
+      'その他の教材 … 既定では閉じている')
+    /* **閉じているあいだは読みに行かない** ——
+       見ていない一覧のために毎回通信しない */
+    ok(/if \(!matOpen\) return undefined/.test(ab),
+      'その他の教材 … 閉じているあいだは、さがしに行かない')
+    /* **打つたびに呼ばない**(手が止まってから1回) */
+    ok(/setTimeout\(\(\) => \{[\s\S]{0,200}searchMaterials\(/.test(ab)
+      && /clearTimeout\(t\)/.test(ab),
+    'その他の教材 … 打つたびには呼ばず、手が止まってから呼ぶ')
+    /* **追い越された結果は捨てる** ——
+       捨てないと、古い検索の結果があとから新しい結果を上書きする */
+    ok(/if \(alive\) setMats\(data \?\? \[\]\)/.test(ab),
+      'その他の教材 … 追い越された結果は捨てる')
+    /* **キーワードだけ**(2026-09 利用者の回答)——
+       種類・レベル・業界でじっくり探すのは「教材」の画面の仕事である */
+    ok(/searchMaterials\(\{ keyword: matQ \}\)/.test(ab),
+      'その他の教材 … 渡すのはキーワードだけ')
+    /* **黙って空にしない。** 読み込み中と、無いときを書き分ける */
+    ok(/mats === null && <Loading \/>/.test(ab)
+      && /mats !== null && mats\.length === 0/.test(ab),
+    'その他の教材 … 読み込み中と、無いときを書き分けている')
+    /* **えらんでいないあいだは、押せるものを出さない** */
+    ok(/matPicked\.length > 0 && \(/.test(ab),
+      'その他の教材 … 1件もえらんでいなければ、共有のボタンを出さない')
+    /* **知らせは、閉じても消えない** ——
+       `matOpen &&` の中に入れると、閉じたとたんに結果が消える */
+    ok(ab.indexOf('<AssignNote note={matNote} />') > ab.indexOf('{matOpen && ('),
+      'その他の教材 … 知らせは、畳んでも出ている')
+    /* **「畳みの中に無いか」は、閉じ方で見る。**
+       `{matOpen && (` から `<AssignNote` までを非貪欲に探す形では、
+       **入れ子に関係なく当たる**ので、中へ入れても緑のままだった */
+    const 前 = ab.slice(0, ab.indexOf('<AssignNote note={matNote}'))
+    ok(/<\/>\s*\)\}\s*$/.test(前),
+      'その他の教材 … 知らせを、畳みの中に入れていない')
+    /* **大項目は上の3つ。**その他の教材は、いちばん後ろ(並べ替えない) */
+    ok(ab.indexOf('単語帳の冊') < ab.indexOf('その他の教材')
+      && ab.indexOf('Quick Response の冊') < ab.indexOf('その他の教材'),
+    'その他の教材 … 大項目(単語帳・RIZAP・Quick Response)の後ろにある')
+  }
+
+  /* ── ⑩ 知らせの書き分けは1か所(`AssignNote`)── */
+  {
+    const 書いてある = ['src/components/AssignNote.jsx', 'src/components/AssignShelf.jsx',
+      'src/components/AssignRizap.jsx', 'src/components/AssignBooks.jsx']
+      .filter((f) => /notice--\$\{note\.kind/.test(read(f)))
+    ok(書いてある.length === 1 && 書いてある[0].endsWith('AssignNote.jsx'),
+      '知らせ … 成功と失敗の書き分けは、AssignNote.jsx 1か所',
+      書いてある.join(' / '))
+  }
+
+  /* ── ⑪ 骨組みは、本物と1文字も違えない(CLAUDE.md)── */
+  {
+    const sk = read('src/__screens.jsx')
+    ok(/q\.get\('screen'\) === 'pick'/.test(sk) && /function PickScreen\(/.test(sk),
+      '骨組み … 教材を先にえらぶ帯(?screen=pick)がある')
+    /* **本物の部品を描く**(props だけなので Supabase が要らない) */
+    ok(/<LearnerPick people=\{active\} picked=\{picked\} onPick=\{setPicked\}/.test(sk),
+      '骨組み … 本物の LearnerPick を描いている')
+    /* **アサインする画面にも、①誰に と その他の教材 を置く** */
+    const at = sk.indexOf('function AssignScreen(')
+    const as = at > 0 ? sk.slice(at, sk.indexOf('function PickScreen(', at)) : ''
+    ok(!!as && /<LearnerPick[\s\S]{0,120}single/.test(as),
+      '骨組み … アサインする画面にも、ゲストを選ぶ欄がある')
+    ok(/その他の教材/.test(as) && /assign-mats/.test(as)
+      && /<AssignNote note=\{matNote\} \/>/.test(as),
+    '骨組み … アサインする画面に、その他の教材の節がある')
+    /* **いちばん危ない形を、必ず1つ置く**(CLAUDE.md)——
+       読み込み中(`null`)・0件・畳んだ形の3つ */
+    ok(/mats'\) === 'wait'/.test(as) && /mats'\) === 'none'/.test(as)
+      && /mats'\) !== 'shut'/.test(as),
+    '骨組み … 読み込み中・0件・畳んだ形の3つを描ける')
+    /* **長い名前と長い題を混ぜる** —— 短いものだけだと、はみ出すのを見逃す */
+    ok(/西大路おさむ/.test(as) && as.includes('受け身の言い回しと、ていねいな依頼'),
+      '骨組み … 長い名前と長い題を1つずつ混ぜてある')
   }
 }
 

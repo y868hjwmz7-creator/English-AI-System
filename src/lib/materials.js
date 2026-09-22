@@ -28,6 +28,8 @@ import { grammarItems, grammarPlan, grammarTodo } from './grammarNote.js'
 import { supabase } from './supabase.js'
 import { askWithRetry, genCutNote, isGenCut } from './genRetry.js'
 import { copyTitleFor } from './format.js'
+/* まとめて共有したときの知らせ。**文言はここではなく、あちら1か所** */
+import { manyDoneText, manyStoppedText } from './assignMany.js'
 
 // 教材のレベルはゲストのレベルと同じ物差し(CEFR)を使う
 export { CEFR_LEVELS, cefrLabel }
@@ -640,6 +642,40 @@ export async function assignMaterial({ materialId, learnerIds, assignedBy, dueOn
      語句の演習(単語 / フレーズ)が無い教材では 0 語になるだけである。 */
   const { data: added } = await addMaterialWords({ materialId, learnerIds })
   return ok({ count: learnerIds.length, words: added })
+}
+
+/**
+ * **いくつもの教材を、まとめて共有する**(第5.238節・2026-09 利用者の指定)。
+ *
+ *   > 初めに教材の一覧から教材を選択(複数同時選択可)、
+ *   > そしてゲストを選ぶのはその次にしてください。
+ *
+ * 【なぜ関数にしたか】
+ *
+ *   まとめて共有する場所が**2つ**になった(教材の画面 / 「アサインする」)。
+ *   **数え方を2通り持たない**(CLAUDE.md)—— 何件まで通ったか・何語入ったか・
+ *   何と言うかを、ここ1か所で決める。文は `assignMany.js` が持っている。
+ *
+ * 【1本ずつ順に待つ】
+ *
+ *   まとめて投げると、途中で断られたときに**何本まで済んだのかが
+ *   分からなくなる。** 断られたら、そこで止めて**通ったぶんを言う。**
+ */
+export async function assignMaterials({ materialIds = [], learnerIds = [], assignedBy = null }) {
+  if (!learnerIds?.length) return ng('共有するゲストを選んでください')
+  if (!materialIds?.length) return ng('共有する教材をえらんでください')
+  let done = 0
+  let words = 0
+  for (const materialId of materialIds) {
+    const { data, error } = await assignMaterial({ materialId, learnerIds, assignedBy })
+    /* **通ったぶんは捨てない。** どこまで済んだかを、そのまま返す */
+    if (error) return ng(manyStoppedText(done, error))
+    done += 1
+    /* **数えられなかった(`null`)ときは 0 として足さない** ——
+       0047 を貼る前は数えられないので、`wordsAddedNote()` が黙る */
+    words += Number(data?.words ?? 0)
+  }
+  return ok({ done, words, text: manyDoneText(done, learnerIds.length, wordsAddedNote(words)) })
 }
 
 /**

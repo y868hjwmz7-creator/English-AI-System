@@ -62,6 +62,7 @@ import { featuresIn } from '../data/learnerFeatures.js'
 import { SHELF_BOOK_LABEL } from '../data/shelves.js'
 import { NF_BOOK_LABEL } from '../data/nativeFlow.js'
 import ShelfAssign from './ShelfAssign.jsx'
+import AssignNote from './AssignNote.jsx'
 import NativeFlowAssign from './NativeFlowAssign.jsx'
 
 export default function AssignShelf({
@@ -143,13 +144,7 @@ export default function AssignShelf({
       </div>
       {/* **押した結果は、必ずこの場に出す**(画面のいちばん上に出さない・
           CLAUDE.md)。**成功と失敗を、同じ見た目で終わらせない** */}
-      {note && (
-        <p className={note.kind === 'busy' ? 'field-hint'
-          : `notice notice--${note.kind === 'ok' ? 'ok' : 'warn'}`}
-           role="status">
-          {note.text}
-        </p>
-      )}
+      <AssignNote note={note} />
     </>
   )
 }
