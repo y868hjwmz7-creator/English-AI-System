@@ -42,6 +42,8 @@ import { RIZAP_BOOKS } from '../src/data/rizapBooks.js'
 import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
 
 const PASSAGE_TYPES = EXERCISE_TYPES.filter((t) => t.isPassage).map((t) => t.id)
+/* 「細かい指定」の欄の呼び名(第5.232節)。**書き写さない** */
+import { subjectLabel } from '../src/data/materialKinds.js'
 
 const PORT = 5198
 const ROOT = new URL('..', import.meta.url).pathname
@@ -6208,6 +6210,119 @@ for (const W of [1280, 794, 453, 390, 320]) {
     else ng(`かたまり … ${w}px で紙が横にはみ出す`, `${r.紙}px`)
     if (r.over === 0) ok(`かたまり … ${w}px でカードがはみ出さない`)
     else ng(`かたまり … ${w}px で ${r.over} か所はみ出す`)
+    await page.close()
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **「細かい指定」に書いたら、それが主になる**(第5.232節・2026-09 実機)
+
+     > 唐揚げの加工工場の話だと指定したら、「悪い知らせをする」という
+     > 切り口が強制的に選ばれ、そのような話になってしまいました
+
+   **押してみないと分からない形**である。欄の出し分けは
+   「細かい指定に字があるか」で毎回変わるので、**実際に打って確かめる。**
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   書く前は出ないこと、消したら戻ることまで数える。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const みる = async (kind) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 1400 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=form&kind=${kind}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+    /** いまの欄の様子(選べるものの1つめと、「選ばない」があるか) */
+    const 様子 = () => page.evaluate(() => {
+      const 欄 = (label) => [...document.querySelectorAll('label.field')]
+        .find((l) => (l.querySelector('span')?.textContent ?? '').trim() === label)
+        ?.querySelector('select')
+      const opts = (el) => [...(el?.options ?? [])].map((o) => o.textContent.trim())
+      return {
+        切り口: opts(欄('話の切り口')),
+        場面: opts(欄('シチュエーション')),
+        話題: opts(欄('話題')),
+      }
+    })
+    /* **「細かい指定」の欄を、呼び名で探す**(第5.232節)。
+       `textarea` の1つめでは当たらない —— **モノローグには
+       「原稿を貼る」欄が上にあり、そちらを埋めてしまう**(実際に踏んだ)。
+       **呼び名は書き写さない** —— `materialKinds.js` から借りる */
+    const 指定 = page.locator('label.field', { hasText: subjectLabel(kind) })
+      .locator('textarea')
+    return { page, 様子, 指定 }
+  }
+
+  /* ① 会話 —— 書く前 / 書いたあと / 消したあと */
+  {
+    const { page, 様子, 指定 } = await みる('dialogue')
+    const 前 = await 様子()
+    if (/^おまかせ/.test(前.切り口[0] ?? '')) ok('細かい指定 … 書く前は「おまかせ」')
+    else ng('細かい指定 … 書く前の切り口がおかしい', 前.切り口[0] ?? '(無し)')
+    if (!前.場面.some((x) => /選ばない/.test(x))) ok('細かい指定 … 書く前は「選ばない」を出さない')
+    else ng('細かい指定 … 書いていないのに「選ばない」が出ている')
+
+    const 欄 = 指定
+    await 欄.fill('唐揚げの加工工場で、冷凍ラインの入れ替えを相談する話')
+    await page.waitForTimeout(300)
+    const 後 = await 様子()
+    if (/切り口は付けない/.test(後.切り口[0] ?? '')) {
+      ok('細かい指定 … 書いたら「切り口は付けない」に変わる')
+    } else ng('細かい指定 … 書いても切り口が「おまかせ」のまま', 後.切り口[0] ?? '(無し)')
+    if (後.場面.some((x) => /場面は選ばない/.test(x))) ok('細かい指定 … 場面を「選ばない」にできる')
+    else ng('細かい指定 … 場面の「選ばない」が出ない')
+    /* **切り口そのものは消さない。** 選びたければ選べる(行き止まりを作らない) */
+    if (後.切り口.length > 1) ok(`細かい指定 … 切り口は、選びたければ選べる(${後.切り口.length - 1} 件)`)
+    else ng('細かい指定 … 切り口が選べなくなっている')
+
+    await 欄.fill('')
+    await page.waitForTimeout(300)
+    const 戻り = await 様子()
+    if (/^おまかせ/.test(戻り.切り口[0] ?? '')) ok('細かい指定 … 消したら「おまかせ」に戻る')
+    else ng('細かい指定 … 消しても戻らない', 戻り.切り口[0] ?? '(無し)')
+    if (!戻り.場面.some((x) => /選ばない/.test(x))) ok('細かい指定 … 消したら「選ばない」も消える')
+    else ng('細かい指定 … 消しても「選ばない」が残る')
+    await page.close()
+  }
+
+  /* ② 会議でも同じ(**`kind === 'dialogue'` と書いていたら、ここで落ちる**) */
+  {
+    const { page, 様子, 指定 } = await みる('meeting')
+    await 指定.fill('唐揚げの加工工場の朝礼')
+    await page.waitForTimeout(300)
+    const r = await 様子()
+    if (/切り口は付けない/.test(r.切り口[0] ?? '')) ok('細かい指定 … 会議でも効く')
+    else ng('細かい指定 … 会議で効いていない', r.切り口[0] ?? '(無し)')
+    await page.close()
+  }
+
+  /* ③ 記事 —— こちらは「話題(ジャンル)」のほう */
+  {
+    const { page, 様子, 指定 } = await みる('reading')
+    const 前 = await 様子()
+    if (!前.話題.some((x) => /選ばない/.test(x))) ok('細かい指定 … 記事も、書く前は出さない')
+    else ng('細かい指定 … 記事で、書いていないのに「選ばない」が出ている')
+    await 指定.fill('唐揚げの加工工場の自動化')
+    await page.waitForTimeout(300)
+    const 後 = await 様子()
+    if (後.話題.some((x) => /話題は選ばない/.test(x))) ok('細かい指定 … 記事の話題も「選ばない」にできる')
+    else ng('細かい指定 … 記事の話題の「選ばない」が出ない')
+    if (/切り口は付けない/.test(後.切り口[0] ?? '')) ok('細かい指定 … 記事でも切り口を付けない')
+    else ng('細かい指定 … 記事で切り口が「おまかせ」のまま', 後.切り口[0] ?? '(無し)')
+    await page.close()
+  }
+
+  /* ④ モノローグ —— 切り口はもともと無い。**場面のほうが効く**
+       (第5.228節。**そこを壊していないか**を、ここで押さえる) */
+  {
+    const { page, 様子, 指定 } = await みる('speech')
+    await 指定.fill('唐揚げの加工工場の改善報告')
+    await page.waitForTimeout(300)
+    const r = await 様子()
+    if (!r.切り口.length) ok('細かい指定 … モノローグには、そもそも切り口が無い')
+    else ng('細かい指定 … モノローグに切り口が出ている', r.切り口.join(' / '))
+    if (r.場面.some((x) => /場面は選ばない/.test(x))) ok('細かい指定 … モノローグの場面は、これまでどおり選ばなくてよい')
+    else ng('細かい指定 … 第5.228節が壊れている(モノローグの場面)')
     await page.close()
   }
 }

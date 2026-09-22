@@ -83,10 +83,12 @@ import {
   urlWithoutMaterial,
 } from '../src/lib/materialLink.js'
 import {
-  DIALOGUE_ANGLES, READING_ANGLES, angleBrief, angleLabel, anglesFor, pickAngle,
+  DIALOGUE_ANGLES, READING_ANGLES, angleBrief, angleLabel, angleWithSubject,
+  anglesFor, pickAngle,
 } from '../src/data/materialAngles.js'
 import {
   MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
+  freeFromSubject,
 } from '../src/data/materialKinds.js'
 import {
   BASICS, LEARNER_FEATURES, featureOf, showsBasics,
@@ -1210,7 +1212,8 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
       new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
     ok(/pickAngle\(kind, past\.map/.test(form),
       '画面が、まだ使っていない切り口から引いている')
-    ok(/angle: angleBrief\(angleId\)/.test(form), '画面が、切り口を窓口へ渡している')
+    ok(/angle: angleWithSubject\(angleBrief\(angleId\), subject/.test(form),
+      '画面が、切り口を窓口へ渡している(話題があれば、話題のほうを強くして)')
     ok(/loadRecentStories\(likeQuery\(\)\)/.test(form),
       '画面が、同じ組み合わせの過去の話を引いている')
     ok(/avoidTopics: past\.map/.test(form), '画面が、過去の話を窓口へ渡している')
@@ -1936,6 +1939,123 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '**控えが無ければ空。** 見積もりに戻る(行き止まりを作らない)')
   ok(marksFromTimes(TEXT, { start: [], end: [] }).length === 0,
     '長さが合わなければ空(当てずっぽうで色を付けない)')
+
+
+  /* ══════════════════════════════════════════════════════════════
+     **「細かい指定」に書いたら、それが主になる**(第5.232節・2026-09 実機)
+
+       > ダイアローグや会議、モノローグ、記事で内容の詳細を指定しているのに、
+       > 「切り口」や他の選択肢の要素が強制的に選ばれてしまうので
+       > 意図しない話になってしまいます。たとえば一番新しい教材は、
+       > 唐揚げの加工工場の話だと指定したら、「悪い知らせをする」という
+       > 切り口が強制的に選ばれ、そのような話になってしまいました。
+
+     「おまかせ」は**そのときどきで決める**という意味であって、
+     「必ず1つ付ける」ではない。中身が書いてあるなら、それが答えである。
+     ══════════════════════════════════════════════════════════════ */
+  {
+    /* ── 判断は1か所。**本文を持つ4種類すべて**(第5.228節は speech だけだった) ── */
+    for (const k of ['reading', 'dialogue', 'meeting', 'speech']) {
+      ok(freeFromSubject(k, '唐揚げの加工工場の話'),
+        `細かい指定 … ${k} で、書いてあれば主になる`)
+      /* **「出る」と「出ない」の両方を見る**(CLAUDE.md) */
+      ok(!freeFromSubject(k, ''), `細かい指定 … ${k} で、空なら主にならない`)
+      ok(!freeFromSubject(k, '  \n '),
+        `細かい指定 … ${k} で、空白だけなら主にならない`)
+    }
+    /* **本文を持たない種類には効かない**(場面も切り口もそもそも無い) */
+    for (const k of ['pattern', 'vocab', 'word', 'phrase']) {
+      ok(!freeFromSubject(k, '唐揚げ'), `細かい指定 … ${k} には効かない`)
+    }
+    ok(!freeFromSubject(undefined, '唐揚げ') && !freeFromSubject('dialogue', null),
+      '細かい指定 … 渡されなくても落ちない(既定は「選ぶ」側)')
+
+    /* ── 両方選んだときは、話題のほうを強くする ── */
+    {
+      const brief = angleBrief('an_badnews')
+      const both = angleWithSubject(brief, true)
+      ok(both.startsWith(brief) && both.length > brief.length,
+        '切り口 … 話題もあるときは、切り口に but を添える')
+      ok(/優先/.test(both), '切り口 … どちらが優先かを、はっきり書いている')
+      ok(angleWithSubject(brief, false) === brief,
+        '切り口 … 話題が無ければ、これまでどおりそのまま')
+      /* **切り口が無ければ、何も足さない**(空に but だけ渡さない) */
+      ok(angleWithSubject('', true) === '', '切り口 … 選んでいなければ、何も渡さない')
+    }
+
+    /* ── 画面が、本当にそう作っているか ── */
+    {
+      const form = readFileSync(
+        new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+      /* **細かい指定があるときは、切り口を引かない** */
+      ok(/const angleId = angle\s*\n?\s*\|\| \(subjectLeads \? '' : pickAngle\(/.test(form),
+        '切り口 … 細かい指定があるときは、勝手に引かない')
+      /* **判断を画面に書き写していない**(`kind === 'speech' && subject…`) */
+      ok(/const subjectLeads = freeFromSubject\(kind, subject\)/.test(form),
+        '細かい指定 … 判断を画面に書き写していない(freeFromSubject 1か所)')
+      ok(!/kind === 'speech' && subject/.test(form),
+        '細かい指定 … 古い書き方(speech だけ)が残っていない')
+      /* **場面・話題の両方に、まかせる道がある** */
+      ok(/subjectLeads && <option value="">場面は選ばない/.test(form),
+        '細かい指定 … 場面を「選ばない」にできる')
+      ok(/subjectLeads && <option value="">話題は選ばない/.test(form),
+        '細かい指定 … 記事の話題も「選ばない」にできる')
+      /* **切り口の欄は、いまどちらの意味かを出す**(値は変えない) */
+      ok(/切り口は付けない\(細かい指定にまかせる\)/.test(form)
+        && /おまかせ\(毎回ちがう切り口\)/.test(form),
+      '切り口 … 欄が、いまどちらの意味かを出している')
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     **`materials.js` から取り込む名前は、あちらに在るか**(第5.232節)
+
+     `freeFromSubject` を `materialKinds.js` に足して画面から呼んだが、
+     **`materials.js` の「出し直し」に足し忘れていた。**
+     `npm run lint` も `npm run build` も**通った** ——
+     CLAUDE.md の「開いた瞬間に落ちる」形である。
+
+     **名前で数える。** 画面が `../lib/materials.js` から取り込んでいる
+     名前を1つずつ、あちらが出しているかを見る。
+     ══════════════════════════════════════════════════════════════ */
+  {
+    const here = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    const mat = here('src/lib/materials.js')
+    /* あちらが出している名前(`export const X` / `export function X` /
+       `export { A, B } from …` のどれでも拾う) */
+    const 出している = new Set()
+    for (const m of mat.matchAll(/export\s+(?:const|let|function|async function|class)\s+([A-Za-z_$][\w$]*)/g)) {
+      出している.add(m[1])
+    }
+    for (const m of mat.matchAll(/export\s*\{([^}]*)\}/g)) {
+      for (const one of m[1].split(',')) {
+        const name = one.split(/\s+as\s+/).pop().trim().replace(/\/\*[\s\S]*?\*\//g, '').trim()
+        if (/^[A-Za-z_$][\w$]*$/.test(name)) 出している.add(name)
+      }
+    }
+    ok(出している.size > 20, `materials.js … 出している名前を数えられた(${出している.size} 個)`)
+
+    /* 画面が取り込んでいる名前 */
+    const 足りない = []
+    for (const f of ['src/components/MaterialForm.jsx', 'src/components/TrainerMaterials.jsx',
+      'src/components/LessonView.jsx', 'src/App.jsx']) {
+      const src = here(f)
+      /* **直前の `{ … }` だけを見る。** `[\s\S]*?` だと
+         ファイルの先頭の `import {` から食べてしまい、
+         **ほかのファイルから取り込んだ名前まで数えて**赤くなる(実際に出た) */
+      const m = /import\s*\{([^}]*)\}\s*from\s*'[^']*lib\/materials\.js'/.exec(src)
+      if (!m) continue
+      const 中 = m[1].replace(/\/\*[\s\S]*?\*\//g, '')
+      for (const one of 中.split(',')) {
+        const name = one.trim()
+        if (!/^[A-Za-z_$][\w$]*$/.test(name)) continue
+        if (!出している.has(name)) 足りない.push(`${f.split('/').pop()} → ${name}`)
+      }
+    }
+    ok(足りない.length === 0,
+      'materials.js … 画面が取り込む名前は、すべて出し直してある',
+      足りない.join(' / '))
+  }
 
   /* ══════════════════════════════════════════════════════════════
      **数字は、画面より長く読まれる**(第5.231節・2026-09 実機・利用者の指摘)
@@ -8454,29 +8574,41 @@ console.log('\n── 場面はオプション(第5.228節)──')
   const c = noC(mf)
 
   /* ① **判断は1か所。** 画面の中で `kind === 'speech' && subject…` と
-        書き散らすと、**置いた場所の数だけ食い違う**(CLAUDE.md) */
+        書き散らすと、**置いた場所の数だけ食い違う**(CLAUDE.md)。
+
+        **2026-09(第5.232節)、判断は `materialKinds.js` の
+        `freeFromSubject()` へ移した** —— 同じ困り方が会話・会議・記事でも
+        起きていたので、本文を持つ4種類すべてに広げたためである。
+        画面に残るのは、それを受ける1行だけ */
   {
-    const 定義 = (c.match(/const sceneFree = /g) ?? []).length
+    const 定義 = (c.match(/const subjectLeads = freeFromSubject\(kind, subject\)/g) ?? []).length
     const 生 = (c.match(/kind === 'speech' && subject/g) ?? []).length
-    ok(定義 === 1 && 生 === 1,
-      '場面はオプション … 判断は `sceneFree` 1か所(画面の中で書き足していない)',
-      `定義 ${定義} / 生の判定 ${生}`)
+    ok(定義 === 1 && 生 === 0,
+      '場面はオプション … 判断は `freeFromSubject()` 1か所(画面に書き写していない)',
+      `受ける1行 ${定義} / 生の判定 ${生}`)
   }
 
   /* ② **細かい指定を書いたときだけ出す。** 書いていないのに選べると、
         場面も中身も無いまま作れてしまう(効かない操作を見せない) */
-  ok(/\{sceneFree && <option value="">/.test(c),
+  ok(/\{subjectLeads && <option value="">/.test(c),
     '場面はオプション … 「選ばない」は、細かい指定を書いたときだけ出す')
 
   /* ③ **黙って無指定にしない。** 細かい指定を消したら場面へ戻す */
-  ok(/if \(sceneFree \|\| scene !== ''\) return/.test(c),
+  ok(/if \(subjectLeads\) return/.test(c) && /setScene\(list\[0\]\?\.id \?\? ''\)/.test(c),
     '場面はオプション … 細かい指定を消したら、場面を選び直す')
 
   /* ④ **「選ばない」を、ほかの操作が壊さない。**
         分野を変えても・型を選んでも、選んだ状態が残る */
-  ok(/!\(scene === '' && sceneFree\) && !list\.some/.test(c)
-    && /if \(scene === '' && sceneFree\) return/.test(c),
+  ok(/!\(scene === '' && subjectLeads\) && !list\.some/.test(c)
+    && /if \(scene === '' && subjectLeads\) return/.test(c),
     '場面はオプション … 分野を変えても型を選んでも、「選ばない」が壊れない')
+
+  /* ⑤ **記事の話題も同じ**(第5.232節)。片方だけ直すと、
+        「会話では効くのに記事では効かない」になる */
+  ok(/!\(genre === '' && subjectLeads\) && !gl\.some/.test(c),
+    '場面はオプション … 記事の話題も、分野を変えて壊れない')
+  ok(/if \(genre === ''\) setGenre\(/.test(c),
+    '場面はオプション … 細かい指定を消したら、記事の話題も選び直す')
 }
 
 console.log('\n── 押せるものの見た目(第5.227節)──')

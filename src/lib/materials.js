@@ -48,6 +48,9 @@ export {
   MATERIAL_KINDS, NEW_MATERIAL_KINDS, isPassageKind, isDialogueKind, isVocabKind,
   isDrillKind,
   bodyWord, usesScene, canPasteBody, kindLabel,
+  /* **細かい指定を書いたら、それが主になる**(第5.232節)。
+     場面・話題・切り口を勝手に付けない判断は、あちら1か所 */
+  freeFromSubject,
   /* 自由に書く「中身」の欄の呼び名(第5.190節)。
      **種類で言い方が変わるので、画面で書き分けない** */
   subjectLabel, subjectHint, subjectExample,

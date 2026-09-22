@@ -38,7 +38,8 @@ import {
 import {
   NEW_MATERIAL_KINDS, assignMaterial, countMaterialsLike, createMaterial, estimateCost,
   fillGrammar, generateChunkJa, generateSection,
-  bodyWord, canPasteBody, generateSectionUnique, isDialogueKind, isPassageKind, isVocabKind,
+  bodyWord, canPasteBody, freeFromSubject, generateSectionUnique,
+  isDialogueKind, isPassageKind, isVocabKind,
   isDrillKind,
   kindLabel, usesScene,
   subjectLabel, subjectHint, subjectExample,
@@ -49,7 +50,9 @@ import {
      「選んだシチュエーションや場面が同じでも、全然違う感じになって欲しい」)。
    一覧も、窓口へ渡す文の組み立ても**画面が持つ**(`speechBrief` と同じ考え方)。
    窓口の中に置くと、切り口を1つ足すたびに置き直してもらうことになる */
-import { angleBrief, anglesFor, pickAngle } from '../data/materialAngles.js'
+import {
+  angleBrief, angleWithSubject, anglesFor, pickAngle,
+} from '../data/materialAngles.js'
 import { chunkPlan } from '../lib/chunkJa.js'
 import {
   genreHint, genreLabel, genresFor, sceneHint, sceneLabel, scenesFor,
@@ -304,30 +307,31 @@ export default function MaterialForm({
   const [wordNote, setWordNote] = useState('')        // 押した結果(その場に出す)
 
   /**
-   * **モノローグは、細かい指定を書けば場面を選ばなくてよい**
-   * (2026-09 利用者の指定・第5.228節)。
+   * **「細かい指定」に書いたら、それが主になる**(第5.228節 → 第5.232節)。
    *
-   *   > モノローグの教材の場面設定は、「細かい指定」に記入した場合には、
-   *   > 選択はオプションに出来ないでしょうか?
+   * はじめはモノローグの場面だけだった(第5.228節)。
+   * **同じ困り方が、会話・会議・記事でも起きていた**(第5.232節)。
    *
-   * 場面と細かい指定は、どちらも**どんな話にするか**を決めるものである。
-   * 細かい指定に書いてあるのに場面まで選ばされると、
-   * **書いた中身と食い違う場面が、勝手に混ざる。**
+   *   > 唐揚げの加工工場の話だと指定したら、「悪い知らせをする」という
+   *   > 切り口が強制的に選ばれ、そのような話になってしまいました
    *
-   * **判断はここ1か所。** 画面の中で `kind === 'speech' && …` と書かない
-   * (CLAUDE.md「判断は1か所に持つ」)。
-   * **既定は「選ぶ」側** —— 細かい指定が空なら、これまでどおり必ず選ぶ。
+   * **判断は `materialKinds.js` の `freeFromSubject()` 1か所。**
+   * ここで `kind === 'speech' && …` と書かない(CLAUDE.md)。
+   * **既定は「選ぶ」側** —— 細かい指定が空なら、これまでどおりである。
    */
-  const sceneFree = kind === 'speech' && subject.trim().length > 0
+  const subjectLeads = freeFromSubject(kind, subject)
 
-  /* **細かい指定が空になったら、場面を選び直す**(第5.228節)。
+  /* **細かい指定が空になったら、場面と話題を選び直す**(第5.228節 / 第5.232節)。
      どちらも空のままだと、**何の指定も無いまま**作ることになる。
-     **黙って落とさない** —— 先頭の場面に戻して、選んでいる状態にする */
+     **黙って落とさない** —— 先頭に戻して、選んでいる状態にする */
   useEffect(() => {
-    if (sceneFree || scene !== '') return
-    const list = kind === 'speech' ? speechScenesFor(industry) : scenesFor(industry)
-    setScene(list[0]?.id ?? '')
-  }, [sceneFree, scene, kind, industry])
+    if (subjectLeads) return
+    if (scene === '') {
+      const list = kind === 'speech' ? speechScenesFor(industry) : scenesFor(industry)
+      setScene(list[0]?.id ?? '')
+    }
+    if (genre === '') setGenre(genresFor(industry)[0]?.id ?? '')
+  }, [subjectLeads, scene, genre, kind, industry])
 
   /* **分野を変えたら、場面もその分野のものに入れ替える**(2026-08 利用者の指定)。
      入れ替えないと、外科医の教材に「打ち合わせ前の雑談」が残る。
@@ -338,11 +342,15 @@ export default function MaterialForm({
     const list = kind === 'speech' ? speechScenesFor(industry) : scenesFor(industry)
     /* **「選ばない」を選んでいるなら、そのままにする**(第5.228節)。
        ここで書き戻すと、分野を変えただけで場面が復活する */
-    if (!(scene === '' && sceneFree) && !list.some((x) => x.id === scene)) {
+    if (!(scene === '' && subjectLeads) && !list.some((x) => x.id === scene)) {
       setScene(list[0]?.id ?? '')
     }
     const gl = genresFor(industry)
-    if (!gl.some((x) => x.id === genre)) setGenre(gl[0]?.id ?? '')
+    /* **話題の側にも同じ守りが要る**(第5.232節)。
+       ここで書き戻すと、分野を変えただけで話題が復活する */
+    if (!(genre === '' && subjectLeads) && !gl.some((x) => x.id === genre)) {
+      setGenre(gl[0]?.id ?? '')
+    }
     // scene / genre を依存に入れると、選んだそばから書き換わってしまう
   }, [industry, kind])
 
@@ -645,7 +653,7 @@ export default function MaterialForm({
     setStyle(id)
     const ok = scenesForStyle(speechScenes, id)
     /* **「選ばない」は壊さない**(第5.228節)。型は場面が無くても選べる */
-    if (scene === '' && sceneFree) return
+    if (scene === '' && subjectLeads) return
     if (!ok.some((x) => x.id === scene)) setScene(ok[0]?.id ?? scene)
   }
 
@@ -912,8 +920,19 @@ export default function MaterialForm({
     /* **切り口を1枚引く。** おまかせのときは、
        **その組み合わせでまだ使っていない切り口**から選ぶ。
        Sonnet 5 は `temperature` を指定できないので、
-       **ばらつきは入力の側で作るしかない**(`materialAngles.js`) */
-    const angleId = angle || pickAngle(kind, past.map((x) => x.angle))?.id || ''
+       **ばらつきは入力の側で作るしかない**(`materialAngles.js`)。
+
+       **細かい指定が書いてあるときは、引かない**(第5.232節・利用者の指摘)。
+
+         > 唐揚げの加工工場の話だと指定したら、「悪い知らせをする」という
+         > 切り口が強制的に選ばれ、そのような話になってしまいました
+
+       「おまかせ」は**そのときどきで決める**という意味であって、
+       「必ず1つ付ける」ではない。**中身が書いてあるなら、
+       それが答えである。** ばらつきは、書いた中身が作る。
+       切り口を選びたければ、これまでどおり選べる(欄は残っている)。 */
+    const angleId = angle
+      || (subjectLeads ? '' : pickAngle(kind, past.map((x) => x.angle))?.id || '')
 
     step(0, exerciseLabel(bodyPlan.exercise_type))
     const { data: body, error: bodyError } = await generateSection({
@@ -948,7 +967,11 @@ export default function MaterialForm({
       avoid: (used ?? []).slice(-40),
       // **話の重複を避ける2つ**(0046)。窓口の置き直しが要る
       avoidTopics: past.map((x) => x.text).filter(Boolean),
-      angle: angleBrief(angleId),
+      /* **両方選んだときは、話題のほうを強くする**(第5.232節)。
+         窓口はどちらも命令として渡すので、噛み合わないと
+         どちらへ転ぶか分からない。**窓口は置き直さない** ——
+         切り口は画面が作る文字列なので、ここで足せば届く */
+      angle: angleWithSubject(angleBrief(angleId), subject.trim().length > 0),
     })
     // **どの段階で失敗したのかを、必ず名前で言う。**
     // 記事・会話は「本文 → 内容の理解 → 語句」と3回に分けて作る。
@@ -1624,6 +1647,10 @@ export default function MaterialForm({
             話題
           </span>
           <select value={genre} onChange={(e) => setGenre(e.target.value)}>
+            {/* **細かい指定を書いたときだけ出す**(第5.232節・場面と同じ)。
+                書いていないのに「選ばない」を選べると、
+                **何の指定も無いまま**作れてしまう */}
+            {subjectLeads && <option value="">話題は選ばない(細かい指定にまかせる)</option>}
             {genreList.map((g) => (
               <option key={g.id} value={g.id}>{g.label} — {g.hint}</option>
             ))}
@@ -1663,7 +1690,7 @@ export default function MaterialForm({
                   書いていないのに「選ばない」を選べると、
                   **何の指定も無いまま**作れてしまう
                   (効かない操作を見せない・CLAUDE.md) */}
-              {sceneFree && <option value="">場面は選ばない(細かい指定にまかせる)</option>}
+              {subjectLeads && <option value="">場面は選ばない(細かい指定にまかせる)</option>}
               {sceneList.map((x) => (
                 <option key={x.id} value={x.id}>{x.label} — {x.hint}</option>
               ))}
@@ -1688,7 +1715,17 @@ export default function MaterialForm({
             話の切り口
           </span>
           <select value={angle} onChange={(e) => setAngle(e.target.value)}>
-            <option value="">おまかせ(毎回ちがう切り口)</option>
+            {/* **「おまかせ」は、そのときどきで決めるという意味**である
+                (第5.232節)。細かい指定が書いてあるなら、
+                **その答えは「付けない」**である ——
+                書いた中身を上書きしないために、切り口は引かない。
+                **値(`''`)は変えない。** 変えると、これまでの教材の
+                控えと食い違う。出すのは**いまの状態**だけ */}
+            <option value="">
+              {subjectLeads
+                ? '切り口は付けない(細かい指定にまかせる)'
+                : 'おまかせ(毎回ちがう切り口)'}
+            </option>
             {angleList.map((a) => (
               <option key={a.id} value={a.id}>{a.label} — {a.hint}</option>
             ))}
