@@ -32,6 +32,7 @@ import GoalBar from './components/GoalBar.jsx'
 import MaterialForm from './components/MaterialForm.jsx'
 import VoiceRemake from './components/VoiceRemake.jsx'
 import MaterialFill from './components/MaterialFill.jsx'
+import QuickResponse from './components/QuickResponse.jsx'
 import { styledVoiceId } from './data/clipVoices.js'
 import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
@@ -489,6 +490,54 @@ const FILL = (
       }}
       busy={false}
       onRun={() => {}} onCancel={() => {}} />
+  </div>
+)
+
+/* **教材の中の Quick Response**(`?screen=qrmode`・第5.235節)。
+
+   **取り組み方が3つになった**(文章 / フレーズ・単語 / 覚えておきたい表現)。
+   ここは**本物の `QuickResponse`** を描く —— `QrCard` だけを描いた
+   `?screen=qr` には**切り替えの行そのものが無く、誰も測っていなかった。**
+
+   3つ並ぶと**帯からはみ出しやすい。** いちばん長い呼び名
+   (「覚えておきたい表現」)を入れてあるので、狭い画面で切れれば分かる。
+
+   `?groups=one` … **文章しか無い形**(切り替えの行ごと出ない)。
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)。 */
+const QRMODE = (
+  <div className="app-main">
+    <QuickResponse
+      material={{
+        id: 'm1',
+        kind: 'dialogue',
+        sections: [
+          { id: 's1', exercise_type: 'dialogue', items: [
+            { id: 'i1', speaker: 'Mika',
+              prompt_en: "Hi, I'd like to book a bus for our team trip.",
+              prompt_ja: 'こんにちは、社員旅行のバスを予約したいのですが。' },
+            { id: 'i2', speaker: 'Ken',
+              prompt_en: 'Sure. How many people are coming?',
+              prompt_ja: 'かしこまりました。何名様ですか?' },
+          ] },
+          ...(q.get('groups') === 'one' ? [] : [
+            { id: 's2', exercise_type: 'vocabulary', items: [
+              { id: 'i3', prompt_en: 'reservation', prompt_ja: '予約' },
+            ] },
+            /* **かたまりそのものと、その練習の両方**が出る形
+               (第5.235節・「すべての日本語と英語」) */
+            { id: 's3', exercise_type: 'vocab_note', items: [
+              { id: 'i4', prompt_en: 'book a bus', prompt_ja: 'バスを予約する',
+                chunk_kind: 'collocation',
+                source_en: "I'd like to book a bus for our team trip.",
+                practice: [
+                  { ja: '来週のバスを予約したいです。', en: "I'd like to book a bus for next week." },
+                  { ja: 'もうバスは予約しましたか。', en: 'Have you booked a bus yet?' },
+                ] },
+            ] },
+          ]),
+        ],
+      }}
+      onClose={() => {}} />
   </div>
 )
 
@@ -1786,7 +1835,9 @@ const CHUNK = (
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'fill'
+  q.get('screen') === 'qrmode'
+    ? QRMODE
+    : q.get('screen') === 'fill'
     ? FILL
     : q.get('screen') === 'chunk'
     ? CHUNK

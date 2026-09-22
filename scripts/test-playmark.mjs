@@ -95,6 +95,10 @@ import {
 import {
   bodyTextOf, canFillMaterial, fillGuess, fillMakesAudio, fillableSections,
 } from '../src/lib/materialFill.js'
+/* 教材の中の Quick Response(第5.235節)。**取り組み方の一覧はあちら1か所** */
+import {
+  QR_MODES, quickResponseCounts, quickResponsePairs,
+} from '../src/lib/quickResponse.js'
 import {
   BASICS, LEARNER_FEATURES, featureOf, showsBasics,
 } from '../src/data/learnerFeatures.js'
@@ -10072,10 +10076,14 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     const need = fillableSections(booking)
     ok(idsOf(need).length === 1 && isChunkSection(idsOf(need)[0]),
       '足す … 覚えておきたい表現だけが無い教材で、それだけが出る', idsOf(need).join(' / '))
-    /* **問数を書き写さない。** 既定の構成から引く */
+    /* **問数を書き写さない。** 既定の構成から引く。
+       **ここで落ちないようにする** —— 既定から「覚えておきたい表現」が
+       外れると `need[0]` が無くなり、**例外で検証ごと止まって
+       この先が1本も走らなくなっていた**(2026-09 に踏んだ)。
+       **赤は出すが、止まらない**形にする */
     const want = sectionsFor('dialogue').find((s2) => isChunkSection(s2.exercise_type))
-    ok(need[0].count === want.count,
-      '足す … 問数は既定の構成から引いている', `${need[0].count}`)
+    ok(!!want && need[0]?.count === want.count,
+      '足す … 問数は既定の構成から引いている', `${need[0]?.count ?? 'なし'}`)
 
     /* ── **「出ない」側も見る**(CLAUDE.md「両方を見る」)── */
     ok(!canFillMaterial(mat('dialogue',
@@ -10188,6 +10196,123 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **「出る」と「出ない」の両方を描けるようにしてある** */
     ok(/full/.test(fillSk) && /vocab_note/.test(fillSk),
       '骨組み … ぜんぶ揃っている形も描ける(出ない側)')
+  }
+
+  /* ── ⑭ 覚えておきたい表現を、Quick Response の独立した選択肢に(第5.235節)── */
+  {
+    const 教材 = (opt = {}) => ({
+      id: 'm1', kind: 'dialogue',
+      sections: [
+        { id: 's1', exercise_type: 'dialogue', items: [
+          { id: 'i1', prompt_en: 'Hi. How are you?', prompt_ja: 'やあ。元気?' },
+        ] },
+        { id: 's2', exercise_type: 'vocabulary', items: [
+          { id: 'i2', prompt_en: 'reservation', prompt_ja: '予約' },
+        ] },
+        ...(opt.noChunk ? [] : [{ id: 's3', exercise_type: 'vocab_note', items: [
+          { id: 'i3', prompt_en: 'book a bus', prompt_ja: 'バスを予約する',
+            practice: [
+              { ja: '来週のバスを予約したいです。', en: "I'd like to book a bus for next week." },
+              /* **英語が2文の組**。ここが「切り直さない」の効きどころで、
+                 文の数で突き合わせると**黙って捨てられる** */
+              { ja: 'もう予約した?まだです。', en: 'Have you booked it? Not yet.' },
+              /* **片方しか無い組**は `chunkDrills()` が落とす(出てはいけない) */
+              { ja: '片方だけ', en: '' },
+            ] },
+        ] }]),
+      ],
+    })
+
+    /* **すべての教材の既定にする**(第5.235節・利用者の指定
+       「RIZAP ENGLISH の教材も含め、すべての教材のデフォルトに」)。
+
+       **本文を持つ種類には、どれも入っている。** 本文の無い種類
+       (文型ドリル・単語 / フレーズ)には入れられない ——
+       かたまりは**本文から拾う**ものだからである。
+       **「入る」と「入らない」の両方を見る**(CLAUDE.md) */
+    {
+      const 入る = []
+      const 入らない = []
+      for (const k of MATERIAL_KINDS) {
+        const plan = sectionsFor(k.id)
+        const 本文 = plan.some((x) => isPassageSection(x.exercise_type))
+        const 表現 = plan.some((x) => isChunkSection(x.exercise_type))
+        ;(本文 === 表現 ? 入る : 入らない).push(`${k.label}${本文 ? '(本文あり)' : ''}`)
+      }
+      ok(入らない.length === 0 && 入る.length > 1,
+        '既定 … 本文のある種類には必ず入り、本文の無い種類には入らない',
+        入らない.length ? `食い違い: ${入らない.join(' / ')}` : `${入る.length} 種類`)
+    }
+
+    /* **取り組み方は3つ。** 一覧はあちら1か所なので、数を書き写さずに中身で見る */
+    ok(QR_MODES.some((m) => m.id === 'chunk'),
+      'QR … 覚えておきたい表現が、取り組み方にある')
+    ok(QR_MODES.filter((m) => ['sentence', 'word'].includes(m.id)).length === 2,
+      'QR … 文章とフレーズ・単語は、いままで通り残っている')
+    /* **いちばん後ろに足す**(一覧を並べ替えない・CLAUDE.md) */
+    ok(QR_MODES[QR_MODES.length - 1].id === 'chunk',
+      'QR … 新しい取り組み方は、いちばん後ろ')
+
+    const 数 = quickResponseCounts(教材())
+    /* **単語 / フレーズは、かたまりを含まない**(独立した選択肢にした)。
+       **数を書き写さない** —— `vocabulary` の1件だけが入る */
+    const 語 = quickResponsePairs(教材(), 'word')
+    ok(語.length === 1 && 語[0].en === 'reservation',
+      'QR … フレーズ・単語に、かたまりが混ざらない', 語.map((x) => x.en).join(' / '))
+
+    const 塊 = quickResponsePairs(教材(), 'chunk')
+    /* **かたまりそのものが先、練習がその後ろ** */
+    ok(塊[0]?.en === 'book a bus',
+      'QR … かたまりそのものが、いちばん先に出る', 塊[0]?.en)
+    /* **「すべての日本語と英語」**(利用者の指定)。練習も全部入る。
+       **2文の英語も落とさない**(切り直さないので) */
+    ok(塊.some((x) => /next week/.test(x.en)) && 塊.some((x) => /Not yet/.test(x.en)),
+      'QR … 練習もぜんぶ入る(英語が2文の組も落とさない)', `${塊.length} 問`)
+    /* **片方しか無い組は入らない**(`chunkDrills()` が落とす) */
+    ok(!塊.some((x) => !x.en || !x.ja) && !塊.some((x) => x.ja === '片方だけ'),
+      'QR … 片方しか無い練習は入らない')
+    ok(数.chunk === 塊.length,
+      'QR … 数え上げと、出てくる問がそろっている', `${数.chunk} / ${塊.length}`)
+
+    /* ── **「出ない」側も見る** ── */
+    const 無し = quickResponseCounts(教材({ noChunk: true }))
+    ok(無し.chunk === 0 && 無し.sentence > 0 && 無し.word > 0,
+      'QR … 覚えておきたい表現が無い教材では 0 件(選択肢ごと出ない)')
+    /* **数え方を2通り持たない。** `QR_MODES` の id が、そのまま鍵になっているか */
+    ok(QR_MODES.every((m) => typeof 数[m.id] === 'number'),
+      'QR … 数え上げの鍵は、取り組み方の一覧から作っている',
+      Object.keys(数).join(' / '))
+
+    /* ── 画面と紙 ── **どちらも一覧から組む。種類を書き写さない** ── */
+    const qr = read('src/components/QuickResponse.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+    ok(/QR_MODES\.filter\(\(m\) => counts\[m\.id\] > 0\)/.test(qr),
+      '画面 … 0件の取り組み方は出さない')
+    ok(!/vocab_note|'chunk'/.test(qr),
+      '画面 … 取り組み方の id を書き写していない')
+    const sheet = read('src/components/QuickResponseSheet.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+    /* **「どこかに QR_MODES と書いてあるか」では見ない。** 取り込みの行が
+       残っているので、**一覧を literal に書き換えても緑のまま**だった
+       (CLAUDE.md「先に数える」)。**組を作っている行**を見て、
+       あわせて**呼び名が書き写されていないこと**も見る */
+    ok(/const groups = QR_MODES/.test(sheet)
+      && /quickResponsePairs\(material, m\.id\)/.test(sheet)
+      && !QR_MODES.some((m) => sheet.includes(`'${m.label}'`)),
+    '紙 … 取り組み方の一覧から組む(足した日に自動で載る)')
+    ok(/qrsheet-ja/.test(sheet) && /qrsheet-en/.test(sheet)
+      && sheet.indexOf('qrsheet-ja') < sheet.indexOf('qrsheet-en'),
+    '紙 … 左が日本語・右が英語')
+    ok(!/vocab_note|'chunk'/.test(sheet),
+      '紙 … 取り組み方の id を書き写していない')
+
+    /* ── 骨組み ── **本物の QuickResponse を描いてある** ── */
+    const sk2 = read('src/__screens.jsx')
+    const at2 = sk2.indexOf('const QRMODE = (')
+    const qmSk = at2 > 0 ? sk2.slice(at2, sk2.indexOf('const WORDBOOK', at2)) : ''
+    ok(!!qmSk && /<QuickResponse/.test(qmSk) && /vocab_note/.test(qmSk)
+      && /practice:/.test(qmSk),
+    '骨組み … 本物の QuickResponse を、練習つきの教材で描いている')
+    ok(/groups/.test(qmSk),
+      '骨組み … 取り組み方が1つしか無い形も描ける(切り替えごと出ない)')
   }
 }
 

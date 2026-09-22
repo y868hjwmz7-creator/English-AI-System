@@ -17,7 +17,10 @@
  *   記事と会話には**話の流れ**があり、混ぜると場面が飛ぶ。
  *   1本の教材を通しでやるものなので、順番はそのままにする。
  */
-import { exerciseLabel } from '../data/exerciseTypes.js'
+import { exerciseLabel, isChunkSection } from '../data/exerciseTypes.js'
+/* かたまりの練習(第5.230節)。**そろえ方は `chunkDrills()` 1か所** ——
+   片方しか無い組を落とす決まりを、出す側で書き写さない(CLAUDE.md) */
+import { chunkDrills } from '../data/chunkKinds.js'
 import { alignedSentences } from './sentencePair.js'
 
 /**
@@ -35,7 +38,12 @@ const PAIR_FIELDS = {
   translate_ja_en: { ja: 'prompt_ja', en: 'answer', group: 'sentence' },
   article:         { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
   dialogue:        { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
-  vocab_note:      { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
+  /* **覚えておきたい表現は、単語 / フレーズとは別の組**(第5.235節・
+     2026-09 利用者の指定「独立した選択肢として追加してください」)。
+     もとは `word` に混ぜていたので、**単語 / フレーズを選ぶと
+     かたまりも一緒に出てきていた。** 狙いが違う ——
+     あちらは「語をすばやく引き出す」、こちらは「本文に出たかたまりを言う」 */
+  vocab_note:      { ja: 'prompt_ja', en: 'prompt_en', group: 'chunk' },
   vocabulary:      { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
   phrase:          { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
   // 旧「長文」。既存の教材でも使えるように残す
@@ -61,6 +69,15 @@ const PAIR_FIELDS = {
 export const QR_MODES = [
   { id: 'sentence', label: '文章' },
   { id: 'word', label: 'フレーズ・単語' },
+  /* **覚えておきたい表現**(第5.235節・2026-09 利用者の指定)。
+
+       > 「単語/フレーズ」と「文章」をいままで通り入れ、そして新たに
+       > 「覚えておきたい表現」が選択された教材はそれも quick response に
+       > **独立した選択肢として**追加してください
+
+     **その教材に無ければ、選択肢ごと出ない**(0件の取り組み方は出さない)。
+     中身は**かたまりそのもの + その練習ぜんぶ**である(`chunkPairs`)。 */
+  { id: 'chunk', label: '覚えておきたい表現' },
 ]
 
 /** その種類が Quick Response に使えるか */
@@ -103,6 +120,24 @@ export function quickResponsePairs(material, mode = null) {
           key: `${key}-${k}`,
         })
       })
+      /* **かたまりの練習も、ぜんぶ対にする**(第5.235節・利用者の指定
+         「**すべての**日本語と英語もクイックレスポンスと同じように」)。
+
+         **かたまりの後ろに置く。** 先に「その表現そのもの」を言えてから、
+         それを使った文へ進む(教材の紙もこの順で並んでいる)。
+
+         **切り直さない。** 練習は作るときから1問1対で、
+         `chunkDrills()` が片方しか無い組をすでに落としている。
+         ここで `alignedSentences` に通すと、英文が2文になっている組を
+         **黙って捨てる**ことになる(CLAUDE.md「黙って落とさない」)。 */
+      if (isChunkSection(sec.exercise_type)) {
+        chunkDrills(it).forEach((d, k) => {
+          out.push({
+            ja: d.ja, en: d.en, from, speaker, group: map.group,
+            key: `${key}-d${k}`,
+          })
+        })
+      }
     })
   }
   return out
@@ -114,10 +149,12 @@ export function quickResponsePairs(material, mode = null) {
  */
 export function quickResponseCounts(material) {
   const all = quickResponsePairs(material)
-  return {
-    sentence: all.filter((x) => x.group === 'sentence').length,
-    word: all.filter((x) => x.group === 'word').length,
-  }
+  /* **一覧は `QR_MODES` 1か所。** ここに `sentence` / `word` と書き並べて
+     いたので、**取り組み方を足した日に、その1つだけ 0 件のまま**になり
+     (`counts[m.id] > 0` で画面から消える)、**誰も気づけない**
+     (CLAUDE.md「数え方を2通り持たない」) */
+  return Object.fromEntries(QR_MODES.map((m) =>
+    [m.id, all.filter((x) => x.group === m.id).length]))
 }
 
 /** その教材で Quick Response ができるか(1つでも対があるか) */
