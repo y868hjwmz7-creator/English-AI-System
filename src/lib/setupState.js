@@ -137,7 +137,10 @@ export const NEWEST_MIGRATION = '0065'
 export const NEWEST_MARK = {
   table: 'material_items',
   column: 'practice',
-  label: 'かたまりの練習(material_items.practice)',
+  /* **呼び名は、画面に出ているものと同じにする**(2026-09)。
+     演習の名前は「覚えておきたい表現」である(第5.232節で確定)。
+     ここは**利用者が読む帯**に出るので、別の言い方を置かない */
+  label: '「覚えておきたい表現」の練習(material_items.practice)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */
