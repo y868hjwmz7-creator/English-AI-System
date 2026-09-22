@@ -93,7 +93,21 @@
 > 分けたほうが読みやすいのですが、配置の手順が増えると事故のもとになるため、
 > あえて `index.ts` 1つに収めてあります。
 
-### 方法1:Supabase の画面から(できればこちら)
+### 方法0:GitHub にまかせる(**いまはこれ。手を動かさない**)
+
+`.github/workflows/deploy-functions.yml` が、`supabase/functions/` の中身が
+変わるたびに**自動で Supabase へ配る**(2026-09-22・第5.233節)。
+
+- 必要なのは、GitHub に `SUPABASE_ACCESS_TOKEN` を1回登録することだけ。
+  **手順は `docs/APPLY.md` の「関数(窓口)は、もう貼らなくてよい」にある**
+- 手で動かしたいときは GitHub → **Actions** → **Deploy Supabase Functions**
+  → **Run workflow**。1つだけ配りたいときは、`only` に関数名を入れる
+- 既定で **Verify JWT = ON**(下の `--no-verify-jwt=false` と同じ)。
+  5つの窓口はどれもログインを前提にしているので、これが正しい
+
+下の方法1・方法2は、**自動の配りが止まったときの逃げ道**として残してある。
+
+### 方法1:Supabase の画面から(自動が動かないとき)
 
 1. 左メニュー **Edge Functions** を開く
 2. **Deploy a new function**(または **Create a new function**)を押す

@@ -1,0 +1,141 @@
+# ------------------------------------------------------------------
+# このファイルの役目
+#
+# GitHub のリポジトリにある「窓口(Edge Function)」のコードを、
+# 変更が入るたびに **自動で Supabase へ配ります。**
+#
+# これが動いていれば、Supabase の画面でコードを貼り替える作業は
+# もう要りません(iPhone で全選択できずに困る、ということも起きません)。
+#
+# 【最初に1回だけ必要な設定】
+#   GitHub のリポジトリ画面 → Settings → Secrets and variables →
+#   Actions → New repository secret で、次の1つを登録してください。
+#
+#     名前:  SUPABASE_ACCESS_TOKEN
+#     中身:  https://supabase.com/dashboard/account/tokens で作る
+#            「Personal access token」
+#
+#   接続先(プロジェクト番号)は、すでに登録してある VITE_SUPABASE_URL から
+#   取り出します。**番号をもう一度どこかに書くことはしません**
+#   (同じものを2か所に書くと、必ず片方だけ古くなるため)。
+#
+# 【この仕組みが触るもの・触らないもの】
+#   触る   … Supabase → Edge Functions にある関数の **コード** だけ
+#   触らない … データベース(表・行・SQL)、
+#              Edge Functions → **Secrets**(API キー)、
+#              ゲストや教材のデータ
+#
+# 【上書きについて】
+#   リポジトリの中身が、Supabase 側を **上書きします。**
+#   Supabase の画面で直接書き換えたものがあれば、それは消えます。
+#   これまでどおり「リポジトリが正」で運用してください。
+#
+# 【JWT の検証について】
+#   Supabase CLI は既定で「Verify JWT = ON」で配ります。
+#   5つの窓口はどれもログインを前提にしており、コードの中でも
+#   Authorization を見ているので、これが正しい設定です
+#   (docs/AI_GENERATION_SETUP.md の `--no-verify-jwt=false` と同じ意味)。
+# ------------------------------------------------------------------
+name: Deploy Supabase Functions
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      # 窓口のコードを変えたときだけ動かす。
+      # (アプリの画面だけを直したときに、関数まで配り直す必要はない)
+      - 'supabase/functions/**'
+      - '.github/workflows/deploy-functions.yml'
+  workflow_dispatch: # GitHub の画面から手動で実行することもできます
+    inputs:
+      only:
+        description: '1つだけ配るときは関数名(例 generate-material)。空なら全部'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  # 続けて push したときに、途中で打ち切らない。
+  # 打ち切ると「一部だけ配られた」状態になりうるため、順番待ちにする。
+  group: deploy-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - name: 配り先と鍵がそろっているか確かめる
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN が登録されていません。GitHub の Settings → Secrets and variables → Actions で登録してください。"
+            exit 1
+          fi
+
+          # 接続先 https://xxxxxxxx.supabase.co から、プロジェクト番号だけを取り出す
+          REF="${SUPABASE_URL:-}"
+          REF="${REF#https://}"; REF="${REF#http://}"
+          REF="${REF%%/*}"
+          REF="${REF%%.*}"
+
+          if ! printf '%s' "$REF" | grep -qE '^[a-z0-9]{15,40}$'; then
+            echo "::error::VITE_SUPABASE_URL から Supabase のプロジェクト番号を取り出せませんでした。https://xxxxxxxx.supabase.co の形で登録されているか確かめてください。"
+            exit 1
+          fi
+
+          echo "SUPABASE_PROJECT_REF=$REF" >> "$GITHUB_ENV"
+          echo "配り先のプロジェクト: $REF"
+
+      - name: 窓口を配る
+        env:
+          # Supabase CLI は、この名前の環境変数を自分で読みます
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          ONLY: ${{ github.event.inputs.only }}
+        run: |
+          set -euo pipefail
+
+          only="$(printf '%s' "${ONLY:-}" | tr -d '[:space:]')"
+          sent=0
+          skipped=''
+
+          # 関数の一覧は **フォルダから読む。** ここに名前を書き並べない
+          # (書き並べると、窓口を増やした日に足し忘れて、黙って配られなくなる)
+          for dir in supabase/functions/*/; do
+            name="$(basename "$dir")"
+            [ -f "${dir}index.ts" ] || continue
+            if [ -n "$only" ] && [ "$only" != "$name" ]; then
+              skipped="$skipped $name"
+              continue
+            fi
+            echo "::group::$name を配る"
+            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
+            echo "::endgroup::"
+            sent=$((sent + 1))
+            echo "- \`$name\` を配りました" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          if [ "$sent" -eq 0 ]; then
+            echo "::error::配った窓口が0件です。指定した名前「$only」の関数が supabase/functions/ にありません。"
+            exit 1
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**合計 ${sent} 件を配りました。**" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$skipped" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "配らなかったもの:$skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi

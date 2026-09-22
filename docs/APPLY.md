@@ -28,6 +28,47 @@
 
 ---
 
+## 関数(窓口)は、**もう貼らなくてよい**(2026-09-22)
+
+GitHub のリポジトリにある窓口のコードを、**変更が入るたびに GitHub が
+自動で Supabase へ配る**ようにした(`.github/workflows/deploy-functions.yml`)。
+
+- Supabase の画面でコードを全部選んで貼り替える作業は、**もう要らない**
+- iPhone で「すべてを選択」が出せずに詰まる、ということも起きない
+- **触るのは窓口のコードだけ。** データベースの中身にも、
+  Edge Functions → **Secrets**(API キー)にも触らない
+- **リポジトリが正。** Supabase の画面で直接書き換えたものは、次の配りで消える
+
+### 最初に1回だけ … 鍵を GitHub に登録する(全3ステップ・約3分)
+
+#### ステップ1 … Supabase で鍵を作る
+どこで: `https://supabase.com/dashboard/account/tokens`
+何を: **Generate new token** を押す → 名前に `github-actions` と入れる → 作る
+成功の目安: `sbp_` で始まる長い文字列が**1回だけ**表示される。
+**この画面を閉じると二度と見られない**ので、閉じる前に次へ進む
+> **この鍵は、こちらには貼らないでください。** チャットに貼る必要はありません。
+
+#### ステップ2 … GitHub に登録する
+どこで: `https://github.com/y868hjwmz7-creator/English-AI-System/settings/secrets/actions`
+何を: **New repository secret** を押す
+  - Name … `SUPABASE_ACCESS_TOKEN`
+  - Secret … ステップ1でコピーした `sbp_…` を貼る
+  - **Add secret** を押す
+成功の目安: 一覧に `SUPABASE_ACCESS_TOKEN` が増える(中身は二度と表示されない)
+
+#### ステップ3 … 1回だけ手で動かす
+どこで: `https://github.com/y868hjwmz7-creator/English-AI-System/actions/workflows/deploy-functions.yml`
+何を: 右の **Run workflow** → ブランチは `claude/project-spec-document-k5wmwy` →
+緑の **Run workflow** を押す
+何が起きるか: 5つの窓口が Supabase へ配られます(1〜3分)
+どこまで影響するか: **窓口のコードだけ。** 教材・ゲスト・SQL・鍵には触れません
+成功の目安: 実行が緑の ✓ になり、まとめ欄に **「合計 5 件を配りました。」** と出る
+うまくいかないとき: 赤い ✗ を押すと、日本語で理由が出ます。その文章をそのまま貼ってください
+
+**これ以降は、こちらが窓口を直して push するたびに、自動で配られます。**
+
+---
+
 ## 場所の一覧(何がどこにあるか)
 
 | 何 | どこ |
@@ -81,11 +122,15 @@
 | 貼る SQL⑥(0039 一覧の「覚えた」・⑤のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-03e.sql` |
 | 貼る SQL⑦(0040 Quick Response の復習・⑥のあとに貼る) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-04.sql` |
 | 状態を見るだけの SQL | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/check.sql` |
-| **★いま置き直していただくもの … 教材を作る関数**(本文から拾う「かたまり」に、**分類の札**(句動詞・イディオムなど7つ)と、**日→英の練習 5〜10問**を付けます。単語1語は入れず、2語以上のかたまりだけにします) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
-| **★いま置き直していただくもの … 読み上げ音声の関数**(良い声で作れないときに、端末の声ではなく標準の声で鳴らします。断られた理由も、そのまま画面に出します) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |
-| 語の意味を引く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/lookup-word/index.ts` |
-| 似た英文を弾く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/check-similar/index.ts` |
-| アカウントを作る関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/create-user/index.ts` |
+| (自動で配られる)教材を作る関数(本文から拾う「かたまり」に、**分類の札**(句動詞・イディオムなど7つ)と、**日→英の練習 5〜10問**を付けます。単語1語は入れず、2語以上のかたまりだけにします) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/generate-material/index.ts` |
+| (自動で配られる)読み上げ音声の関数(良い声で作れないときに、端末の声ではなく標準の声で鳴らします。断られた理由も、そのまま画面に出します) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/speak/index.ts` |
+| (自動で配られる)語の意味を引く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/lookup-word/index.ts` |
+| (自動で配られる)似た英文を弾く関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/check-similar/index.ts` |
+| (自動で配られる)アカウントを作る関数 | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/functions/create-user/index.ts` |
+
+> **関数(窓口)の5つは、上の「もう貼らなくてよい」で自動的に配られる。**
+> ここに URL を残してあるのは、**自動の配りが止まったときの逃げ道**として、
+> および中身を読みたいときのためである。
 
 この URL を開くと、そのファイルの中身がそのまま出る。
 右上の**コピーの絵(四角が2枚重なった印)**を押せば、**全部がコピーされる。**

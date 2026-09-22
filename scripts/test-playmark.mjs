@@ -9956,6 +9956,70 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(new RegExp(`\\*\\*${本当}行\\*\\*の表が出て`).test(apply),
       'APPLY.md … 同じ行数を案内している', `${本当} 行`)
   }
+
+  /* ── ⑫ 窓口を、GitHub から自動で配る(第5.233節) ──
+
+     利用者が Supabase の画面でコードを貼り替える作業を無くした。
+     ここで見張るのは「**黙って配られなくなる**」形である。
+     配られなくても画面は何も言わない —— 古い窓口が動き続けるだけなので、
+     気づくのは「直したはずのものが出ない」と言われたときになる。 */
+  {
+    const wf = read('.github/workflows/deploy-functions.yml')
+    const 窓口 = readdirSync('supabase/functions', { withFileTypes: true })
+      .filter((d) => d.isDirectory()
+        && existsSync(`supabase/functions/${d.name}/index.ts`))
+      .map((d) => d.name)
+
+    /* **一覧を2か所に書かない。** フォルダから読んでいるか */
+    ok(/for dir in supabase\/functions\/\*\//.test(wf),
+      '配り … 窓口の一覧を、フォルダから読んでいる')
+    ok(/supabase functions deploy "\$name"/.test(wf),
+      '配り … 配るのは、その場で読んだ名前')
+    /* **空振りしない形にしてある。** はじめ「窓口が2つ以上ある」を別の1本に
+       していたが、**その1本は赤にできなかった** —— 窓口を減らすと、
+       この検証のもっと手前が `generate-material` と `speak` の中身を読んでいて
+       そこで落ちるためである(CLAUDE.md「ほかの見張りに吸われると緑になる」)。
+       **赤にできない見張りは置かない。** 数の条件を、この1本に畳んである */
+    const 書き並べ = 窓口.filter((n) => new RegExp(`functions deploy\\s+["']?${n}`).test(wf))
+    ok(窓口.length > 1 && 書き並べ.length === 0,
+      '配り … 窓口の名前を1つずつ書き並べていない(足し忘れが起きない)',
+      書き並べ.length ? `書いてある: ${書き並べ.join(' / ')}` : 窓口.join(' / '))
+
+    /* **接続先も鍵も、ここに書き写さない。** すでにある Secrets から取る */
+    ok(/VITE_SUPABASE_URL/.test(wf) && !/[a-z0-9]{15,}\.supabase\.co/.test(wf),
+      '配り … プロジェクト番号を書き写していない')
+    ok(!/--project-ref\s+[a-z0-9]{15,}/.test(wf),
+      '配り … --project-ref に生の番号を書いていない')
+    /* **「どこかに secrets. と書いてある」では見たことにならない。**
+       2か所あるので、片方を生の鍵に書き換えても緑のままだった
+       (CLAUDE.md「先に数える」)。**行を1本ずつ**見る */
+    const 鍵行 = wf.match(/^\s*\w+:[^\n]*SUPABASE_ACCESS_TOKEN[^\n]*$/gm) ?? []
+    ok(鍵行.length > 1 && 鍵行.every((l) => /\$\{\{\s*secrets\./.test(l))
+      && !/sbp_[A-Za-z0-9]/.test(wf),
+    '配り … 鍵は、どの行も Secrets から渡している', `${鍵行.length} 行`)
+
+    /* **窓口を触ったときに動くか。** ここを狭めると、黙って配られなくなる */
+    ok(/- 'supabase\/functions\/\*\*'/.test(wf),
+      '配り … supabase/functions を触ったら動く')
+    ok(/- '\.github\/workflows\/deploy-functions\.yml'/.test(wf),
+      '配り … このワークフロー自体を直したときも動く')
+    ok(/branches:[\s\S]{0,60}'claude\/\*\*'/.test(wf),
+      '配り … 作業ブランチから動く')
+
+    /* **失敗を、成功と同じ見た目で終わらせない**(CLAUDE.md) */
+    ok((wf.match(/set -euo pipefail/g) ?? []).length === 2,
+      '配り … 途中で失敗したら、そこで止まる')
+    ok(/配った窓口が0件です/.test(wf),
+      '配り … 1つも配らなかったら赤くなる')
+    ok(/GITHUB_STEP_SUMMARY/.test(wf),
+      '配り … 何を配ったかが、実行の画面に出る')
+
+    /* **手順書が古びていないか。** 貼る作業は、もう案内しない */
+    ok(/deploy-functions/.test(read('docs/APPLY.md')),
+      'APPLY.md … 自動で配られることを案内している')
+    ok(/deploy-functions/.test(read('docs/AI_GENERATION_SETUP.md')),
+      'AI_GENERATION_SETUP.md … 自動で配られることを案内している')
+  }
 }
 
 console.log(ng
