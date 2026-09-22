@@ -93,7 +93,7 @@ import {
 /* すでにある教材に、足りない演習だけを足す(第5.234節)。
    **判断はあちら1か所**なので、ここで数え直さずに呼んで確かめる */
 import {
-  bodyTextOf, canFillMaterial, fillGuess, fillableSections,
+  bodyTextOf, canFillMaterial, fillGuess, fillMakesAudio, fillableSections,
 } from '../src/lib/materialFill.js'
 import {
   BASICS, LEARNER_FEATURES, featureOf, showsBasics,
@@ -10108,6 +10108,18 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(fillGuess([{ exercise_type: 'vocab_note', count: 0 }]).yen === 0,
       '足す … 0問の組は、数にも金額にも入らない')
 
+    /* **音声が付くかどうかは `audioFrom` 1か所**(`exerciseTypes.js`)。
+       **「出る」と「出ない」の両方を見る** —— どれでも true / どれでも false に
+       書き換えても緑になる形にしない */
+    ok(fillMakesAudio([{ exercise_type: 'vocab_note' }]),
+      '足す … 覚えておきたい表現には、音声が付く')
+    /* **実在する「音声の付かない演習」で見る**(`fill_blank` は
+       ( )が開いたままなので読み上げられない)。知らない id だけで見ると、
+       **どの演習も false にする書き換え**が素通りする */
+    ok(!fillMakesAudio([{ exercise_type: 'fill_blank' }])
+      && !fillMakesAudio([]) && !fillMakesAudio([{}]),
+    '足す … 音声の付かない演習・空のときは、断り書きを出さない')
+
     /* ── 画面 ── **判断を画面に書き写していないか** ── */
     const tm = read('src/components/TrainerMaterials.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
     ok(/canFillMaterial\(m\)/.test(tm),
@@ -10124,6 +10136,10 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **押す前に金額が読めるか**(見えない費用は管理できない・CLAUDE.md) */
     ok(/guess\.yen/.test(mf) && /課金/.test(mf),
       '欄 … 押す前に、金額と課金になることを出している')
+    /* **足したぶんの音声も課金される。** 本文の作り直しとは別の話で、
+       ここを黙っていると「音声はかからない」と読める(2026-09) */
+    ok(/fillMakesAudio\(picked\)/.test(mf) && /ElevenLabs/.test(mf),
+      '欄 … 足したぶんの読み上げ音声も、押す前に断っている')
     /* **やめる道がある**(行き止まりを作らない・2026-09 実機) */
     ok(/onCancel/.test(mf) && /やめる/.test(mf), '欄 … やめる道が並べて置いてある')
 

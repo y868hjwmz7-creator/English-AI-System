@@ -36,7 +36,7 @@
  *   **素の node で一度も走らせられない**(`playMark.js` と同じ考え方)。
  *   算段だけをここに置けば `npm run test:play` で数字を見られる。
  */
-import { isPassageSection, sectionsFor } from '../data/exerciseTypes.js'
+import { exerciseType, isPassageSection, sectionsFor } from '../data/exerciseTypes.js'
 
 /** その教材が、もう持っている演習の種類 */
 export const sectionTypesOf = (material) =>
@@ -82,10 +82,42 @@ export const fillableSections = (material) => {
  */
 export const canFillMaterial = (material) => fillableSections(material).length > 0
 
-/** 窓口を1回呼ぶたびの土台(指示文と本文)ぶん(円) */
-export const FILL_CALL_YEN = 0.5
+/**
+ * **足した演習に、あとから読み上げ音声が作られるか。**
+ *
+ * 「覚えておきたい表現」も内容の理解もディスカッションも、英文を持つので
+ * **お手本音声が付く**(`audioFrom`)。作るのは足した直後ではなく、
+ * 支度のとき / 初めて Listen を押したときだが、**ElevenLabs に課金される。**
+ *
+ * **本文の作り直しとは別の話である。** 本文の英文は1文字も変わらないので、
+ * すでにある音声はそのまま使われる(鍵は英文の指紋)。
+ * ここで言っているのは「**足したぶん**の音声」だけ。
+ *
+ * **判断は `audioFrom` 1か所**(`exerciseTypes.js`)。
+ * ここで演習の id を書き写さない —— 音声の付かない演習を足した日に、
+ * 画面だけが「作られます」と言い続けることになる。
+ */
+export const fillMakesAudio = (list) => (list ?? [])
+  .some((s) => !!exerciseType(s?.exercise_type)?.audioFrom)
+
+/* ── 見積もりの根拠(**数を置いた理由を、ここに書いておく**)──
+
+   `materials.js` の `PRICE_PER_MTOK` は 100万トークンあたりのドルで、
+   **入り $2 / 出 $10**。1ドル150円として丸めてある。
+
+   | 何 | だいたいの量 | 円 |
+   |---|---|---|
+   | 窓口を1回呼ぶ土台(指示文・分類の一覧・本文) | 入り 3,000 トークン | 約 0.9 |
+   | 1問ぶんの答え(かたまり・訳・由来・練習5〜10組) | 出 250 トークン | 約 0.4 |
+
+   **これは見積もりであって、実額ではない。** 本文が長いほど上ぶれする。
+   **実額は `addSections()` が `spent` で返す**ので、ずれが分かったら
+   **ここの2つだけを直す**(画面には「およそ」と添えてある)。 */
+
+/** 窓口を1回呼ぶたびの土台(指示文・分類の一覧・本文)ぶん(円) */
+export const FILL_CALL_YEN = 0.9
 /** 1問あたり(円) */
-export const FILL_ITEM_YEN = 0.3
+export const FILL_ITEM_YEN = 0.4
 
 /**
  * **作る前の見積もり。**

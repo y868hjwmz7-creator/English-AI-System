@@ -23,7 +23,7 @@
  */
 import { useState } from 'react'
 import { exerciseLabel } from '../data/exerciseTypes.js'
-import { fillGuess, fillableSections } from '../lib/materialFill.js'
+import { fillGuess, fillMakesAudio, fillableSections } from '../lib/materialFill.js'
 
 export default function MaterialFill({ material, busy, onRun, onCancel }) {
   /* **外したものだけを持つ。** 既定は全部作る。
@@ -63,8 +63,8 @@ export default function MaterialFill({ material, busy, onRun, onCancel }) {
 
       <p className="notice notice--warn">
         <strong>本文はそのままです。</strong>
-        いまの本文から、選んだ演習だけを作って後ろに足します
-        (<strong>読み上げ音声は作り直しになりません</strong>)。
+        いまの本文から、選んだ演習だけを作って後ろに足します。
+        <strong>いまある読み上げ音声も、作り直しになりません。</strong>
         <br />
         {/* **0 と `null` を取り違えない**(CLAUDE.md)。
             1つも選ばれていないのは「数えられなかった」のではなく、
@@ -76,6 +76,16 @@ export default function MaterialFill({ material, busy, onRun, onCancel }) {
           </>
         ) : (
           <>作る演習が、1つも選ばれていません。</>
+        )}
+        {/* **足したぶんの音声は、別に課金される**(見えない費用は管理できない)。
+            **音声の付く演習を選んだときだけ出す**(効かない断り書きを置かない)。
+            判断は `audioFrom` 1か所 —— ここで演習の id を見ない */}
+        {fillMakesAudio(picked) && (
+          <>
+            <br />
+            足した英文には、あとで<strong>読み上げ音声</strong>も作られます
+            (ElevenLabs に課金されます)。
+          </>
         )}
       </p>
 
