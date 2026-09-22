@@ -2665,7 +2665,11 @@ export default defineConfig({
       '`SearchBar` を使い回す(同じ見た目を書き写さない)')
   /* **一覧に本当に効いているか。** 欄だけ置いて絞っていなければ、
      打ち込んでも何も起きない(しかも画面は普通に出るので気づけない) */
-  } else if (!/: shown\)\.map\(/.test(tl)) {
+  /* **形が変わった**(第5.238節)。一覧は既定で畳むようになったので、
+     `: shown).map(` ではなく `? shown : [])).map(` になっている。
+     見たいのは**絞ったほう(`shown`)を描いているか** ——
+     ここが `learners` に戻ると、打ち込んでも絞られない */
+  } else if (!/showsLearnerList\(who, listOpen\) \? shown : \[\]\)\)\.map\(/.test(tl)) {
     ng('ゲストの一覧 … 打ち込んだ名前で絞っていない',
       '欄を置いただけでは何も起きない。`shown` を描く')
   /* **開いているゲストは、絞り込みに関係なく開いたまま。**
@@ -4569,9 +4573,15 @@ export default defineConfig({
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(250)
 
-    /* **畳んだままの形**を先に測る。ここが利用者の見る形である */
+    /* **畳んだままの形**を先に測る。ここが利用者の見る形である。
+
+       **「いちばん上のカード」で引かない**(第5.238節で踏んだ)——
+       ゲストを選ぶカードが上に増えた日に、**単語帳の冊が0行に見えて
+       赤くなった。** 画面の並びは変わってよいので、
+       **冊の行を持っているカード**を名指しで引く */
     const 畳 = await page.evaluate(() => {
-      const card = document.querySelector('.card')
+      const card = [...document.querySelectorAll('.card')]
+        .find((c) => c.querySelector('.shelf-row'))
       const rows = [...card.querySelectorAll('.shelf-row')]
       return {
         行: rows.length,
@@ -4599,7 +4609,8 @@ export default defineConfig({
     await page.waitForTimeout(200)
 
     const 前 = await page.evaluate(() => {
-      const card = document.querySelector('.card')
+      const card = [...document.querySelectorAll('.card')]
+        .find((c) => c.querySelector('.shelf-row'))
       const sel = card.querySelector('.shelf-sub select')
       if (!sel) return null
       const r = sel.getBoundingClientRect()
@@ -4628,7 +4639,8 @@ export default defineConfig({
       await page.selectOption('.card .shelf-sub select', v)
       await page.waitForTimeout(200)
       後 = await page.evaluate(() => {
-        const card = document.querySelector('.card')
+        const card = [...document.querySelectorAll('.card')]
+          .find((c) => c.querySelector('.shelf-row'))
         const n = card.querySelector('.notice')
         return {
           札: card.querySelectorAll('.shelf-sub .chip--on').length,
@@ -6066,7 +6078,14 @@ for (const W of [1280, 794, 453, 390, 320]) {
   /* ── ③ 打ったときは、開いていなくても出る(行き止まりを作らない)── */
   {
     const page = await 開く('screen=pick')
-    await page.fill('.learner-pick input[type="search"], .learner-pick input[type="text"]', '西大路')
+    /* **`type` で引かない。**`SearchBar` の欄は `type` を持っていない
+       (端末が勝手な ✕ を付けるので、わざと外してある)。
+       **打てなくても、そこで止めない** —— `page.fill()` は見えない相手を
+       待って例外を投げ、**その先がまるごと走らなくなる**(CLAUDE.md) */
+    const 欄 = '.learner-pick .searchbar-field input'
+    let 打てた = true
+    await page.fill(欄, '西大路', { timeout: 3000 }).catch(() => { 打てた = false })
+    if (!打てた) ng('ゲストを選ぶ … 名前を打つ欄が無い')
     await page.waitForTimeout(250)
     const 当たり = await 行(page)
     if (当たり.length === 1 && /西大路/.test(当たり[0])) {
@@ -6074,7 +6093,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
     } else ng('ゲストを選ぶ … 名前を打っても絞れていない', 当たり.join(' / '))
 
     /* **黙って絞らない。** 当てはまらなかったことを、そのまま言う */
-    await page.fill('.learner-pick input[type="search"], .learner-pick input[type="text"]', 'いない人')
+    await page.fill(欄, 'いない人', { timeout: 3000 }).catch(() => {})
     await page.waitForTimeout(250)
     const 文 = await page.evaluate(() => [...document.querySelectorAll('.learner-pick .card-hint')]
       .map((e) => e.textContent.trim()).join(' / '))
