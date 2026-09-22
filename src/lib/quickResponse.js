@@ -84,6 +84,47 @@ export const QR_MODES = [
 export const canQuickRespond = (exerciseType) => Boolean(PAIR_FIELDS[exerciseType])
 
 /**
+ * **「まだ」を押したとき、どの冊に溜めるか**(0066・第5.237節)。
+ *
+ *   > 教材の中の quick response の「覚えておきたい表現」から「まだ」を押して
+ *   > 自分の quick response 帳の中に加えられたものは、「覚えておきたい表現集」の
+ *   > タグをつけておき、自分の quick response とは別に、単体の冊として
+ *   > ためていけないですか?
+ *   (2026-09 利用者の指定)
+ *
+ * **取り組み方の id を、そのまま冊の id にしてある。**
+ * 2か所で訳すと必ず食い違う(CLAUDE.md「呼び名を2か所に書かない」)。
+ *
+ * **ここに無い取り組み方は、溜めない。既定は溜めない側**である ——
+ * 単語・フレーズ(`word`)は**単語帳**が持っており、
+ * 同じ語の覚え具合を2か所で動かさない(このファイルの冒頭)。
+ */
+export const QR_SAVED_MODES = ['sentence', 'chunk']
+
+/** その1問を復習に溜めるか。**画面の中で `group === '…'` と書かない** */
+export const qrSaves = (pair) => QR_SAVED_MODES.includes(pair?.group)
+
+/** どの冊へ溜めるか(`null` なら溜めない) */
+export const qrSourceOf = (pair) => (qrSaves(pair) ? pair.group : null)
+
+/**
+ * **「覚えておきたい表現集」の呼び名。ここ1か所**(0066・第5.237節)。
+ * 演習の名前(「覚えておきたい表現」)とは**別の文字列**である ——
+ * あちらは教材の中の1節、こちらは溜まっていく冊の名前。
+ */
+export const CHUNK_BOOK_LABEL = '覚えておきたい表現集'
+
+/**
+ * その冊が読む、溜めた文の種類(0066)。
+ *
+ * **ファイルの冊(Native Flow / 66 の型)は `null`** —— あちらは
+ * `qr_reviews` から引くのではなく、ファイルの問に覚え具合をかぶせている。
+ * **判断はここ1か所**(画面で冊の id を比べない)。
+ */
+export const qrSourceOfBook = (book) => (
+  book === 'chunk' ? 'chunk' : book === 'my' ? 'sentence' : null)
+
+/**
  * 教材から、日本語と英語の対をぜんぶ集める。
  *
  * @param material 教材

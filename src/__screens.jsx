@@ -33,6 +33,7 @@ import MaterialForm from './components/MaterialForm.jsx'
 import VoiceRemake from './components/VoiceRemake.jsx'
 import MaterialFill from './components/MaterialFill.jsx'
 import QuickResponse from './components/QuickResponse.jsx'
+import { CHUNK_BOOK_LABEL } from './lib/quickResponse.js'
 import { styledVoiceId } from './data/clipVoices.js'
 import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
@@ -1134,6 +1135,11 @@ const qrScreen = (plain) => (
                   { id: 'my', label: '自分の Quick Response 帳' },
                   { id: 'nf', label: 'Native Flow', hasSub: true },
                   { id: 'frame', label: FRAME_BOOK_LABEL, hasSub: true },
+                  /* **覚えておきたい表現集**(0066・第5.237節)。
+                     **本物と同じ冊数にしておく** —— 冊が増えると
+                     選ぶ一覧の高さが変わる(CLAUDE.md「骨組みは本物と
+                     1文字も違えない」)。**呼び名は書き写さない** */
+                  { id: 'chunk', label: CHUNK_BOOK_LABEL },
                 ]} book="my" unit="問" onPick={() => {}} />
               ) : null}
               /* **「出しかた」も本物と同じく帯に置く**(第5.176節)。

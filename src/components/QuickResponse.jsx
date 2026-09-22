@@ -34,7 +34,9 @@
  *   仕組みは `src/lib/qrReviews.js` 1か所。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { QR_MODES, quickResponseCounts, quickResponsePairs } from '../lib/quickResponse.js'
+import {
+  QR_MODES, qrSaves, qrSourceOf, quickResponseCounts, quickResponsePairs,
+} from '../lib/quickResponse.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { stopReading } from '../lib/readAloud.js'
@@ -122,12 +124,17 @@ export default function QuickResponse({
        ・**まだ**   → 溜める
        ・**言えた** → **すでに溜まっている文だけ**箱を1つ上げる
          (`onlyExisting`)。言えた文をわざわざ溜めない
-       溜めるのは**文章だけ**(単語・フレーズは単語帳に任せる・利用者の指定)。
+       溜めるかどうかと、**どの冊へ溜めるか**は `quickResponse.js` 1か所
+       (`qrSaves()` / `qrSourceOf()`)。**ここで `group === '…'` と書かない** ——
+       取り組み方を足した日に、画面の数だけ直すことになる(CLAUDE.md)。
+       単語・フレーズは**単語帳**が持つので溜めない(利用者の指定)。
+       「覚えておきたい表現」は**別の冊**へ溜まる(0066・第5.237節)。
        誰の記録になるかは `learnerId` が決める(0025 と同じ考え方)。
        **待たない。** 溜めるのは裏の仕事で、次の問へ進むのを止める理由がない */
-    if (card?.group === 'sentence') {
+    if (qrSaves(card)) {
       markQr(card, ok ? 'learning' : 'unknown', {
         materialId: material?.id ?? null, learnerId, onlyExisting: ok,
+        source: qrSourceOf(card),
       })
     }
     doneRef.current = [...doneRef.current, { ...card, ok }]

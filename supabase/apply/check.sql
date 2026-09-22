@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   47行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   48行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -188,4 +188,18 @@ from (
     (select count(*) = 3 from information_schema.columns
      where table_name = 'material_items'
        and column_name in ('chunk_kind', 'source_en', 'practice')), 47
+  -- **列だけでは足りない。** 冊で絞って読めなければ、
+  -- 「覚えておきたい表現集」は**空のまま**になる。
+  -- だから **`qr_items()` が新しい形(p_source つき)か**も見る
+  union all select '0066 Quick Response の冊(pending_matome.sql)',
+    (select count(*) = 1 from information_schema.columns
+     where table_name = 'qr_reviews' and column_name = 'source')
+    -- **引数の形を文字列で突き合わせない**(`pg_get_function_identity_arguments`
+    -- は名前まで返すので、書き写すと必ず食い違う・実測)。
+    -- **「p_source を受け取れるか」を、引数の名前で見る**
+    and (select count(*) = 2 from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public'
+           and p.proname in ('qr_items', 'mark_qr')
+           and 'p_source' = any(p.proargnames)), 48
 ) t order by 順;

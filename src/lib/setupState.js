@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0065'
+export const NEWEST_MIGRATION = '0066'
 
 /**
  * その移行が入っているかを見る印。
@@ -135,12 +135,12 @@ export const NEWEST_MIGRATION = '0065'
  * 練習が無ければ「練習する」は出ない(**使えるようになった印**である)。
  */
 export const NEWEST_MARK = {
-  table: 'material_items',
-  column: 'practice',
+  table: 'qr_reviews',
+  column: 'source',
   /* **呼び名は、画面に出ているものと同じにする**(2026-09)。
-     演習の名前は「覚えておきたい表現」である(第5.232節で確定)。
+     冊の名前は「覚えておきたい表現集」である(`quickResponse.js` 1か所)。
      ここは**利用者が読む帯**に出るので、別の言い方を置かない */
-  label: '「覚えておきたい表現」の練習(material_items.practice)',
+  label: '「覚えておきたい表現集」の冊(qr_reviews.source)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */

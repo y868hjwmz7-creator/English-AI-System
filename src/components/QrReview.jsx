@@ -29,6 +29,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   QR_ORDERS, loadQrReviews, markQr, orderQrPairs, qrPairOf, qrReviewSupported,
+  qrSourceSupported,
 } from '../lib/qrReviews.js'
 import Loading from './Loading.jsx'
 import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
@@ -51,6 +52,9 @@ import {
   frameQrCounts, frameQrGroups,
 } from '../lib/frameQr.js'
 import { loadFrameQr } from '../lib/frameQrLoad.js'
+/* 覚えておきたい表現集(0066・第5.237節)。**呼び名と、どの冊が何を読むかは
+   あちら1か所**。ここで冊の id を比べたり、名前を書き写したりしない */
+import { CHUNK_BOOK_LABEL, qrSourceOfBook } from '../lib/quickResponse.js'
 import { NF_BOOK_LABEL, NF_UNIT_KEY, unitName, unitOf } from '../data/nativeFlow.js'
 import NativeFlowUnits from './NativeFlowUnits.jsx'
 import QrCard from './QrCard.jsx'
@@ -179,6 +183,20 @@ export default function QrReview({
        判断は `showsFrameQr()` 1か所で、ここでは受け取るだけである ——
        Native Flow(`nfUnits`)とまったく同じ作法にしてある */
     ...(frameOn ? [{ id: 'frame', label: FRAME_BOOK_LABEL, hasSub: true }] : []),
+    /* **覚えておきたい表現集**(0066・第5.237節・2026-09 利用者の指定)。
+
+         > 「覚えておきたい表現」から「まだ」を押して…加えられたものは、
+         > 「覚えておきたい表現集」のタグをつけておき、自分の quick response
+         > とは別に、**単体の冊として**ためていけないですか?
+
+       **中身は `qr_reviews` の `source = 'chunk'`。** 自分の Quick Response 帳
+       (`sentence`)とは、同じ表の中で冊だけが分かれている。
+
+       **0066 を貼る前は出さない** —— あの引数が無い Supabase では冊で
+       絞れず、**自分の Quick Response 帳とまったく同じ中身が2つ並ぶ。**
+       判断は `qrSourceSupported()` 1か所(`qrReviews.js`)。
+       **後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
+    ...(qrSourceSupported() ? [{ id: 'chunk', label: CHUNK_BOOK_LABEL }] : []),
   ]
   const [bookWanted, setBookWanted] = useState('my')
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
@@ -425,7 +443,11 @@ export default function QrReview({
         ? loadFrameQr({ learnerId, part, form })
         : nfBook
         ? loadNativeFlowQr({ learnerId, units: unit ? [unit] : nfUnitIds })
-        : loadQrReviews(learnerId, { status: 'todo', limit: 500 }),
+        /* **冊で絞る**(0066・第5.237節)。どの冊が何を読むかは
+           `qrSourceOfBook()` 1か所 —— ここで冊の id を比べない */
+        : loadQrReviews(learnerId, {
+          status: 'todo', limit: 500, source: qrSourceOfBook(book),
+        }),
       /* 0042 を貼る前は 0 が返る。**数が出ないだけで、復習はできる** */
       loadQrWeek(learnerId),
       loadWeeklyGoal(learnerId),

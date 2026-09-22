@@ -53,10 +53,37 @@ export { normEn }
  */
 let notReady = false
 
+/**
+ * **0066(冊)が入っているか**(第5.237節)。
+ *
+ * 入っていない Supabase に `p_source` を送ると、**呼び出しごと断られる**
+ * (「そんな引数は無い」)。そうなると**「まだ」を押しても1問も溜まらない** ——
+ * いちばん悪い壊れ方である。
+ *
+ * **はじめは送ってみて、断られたら二度と送らない。** そのあとも
+ * これまでどおり溜まり続ける(冊が分かれないだけ)。
+ * **黙って落とさない**(CLAUDE.md)—— 画面には `qrSourceSupported()` で出せる。
+ */
+let sourceReady = true
+
+/** 0066 が入っているか。**画面が冊を出すかどうかの判断に使う** */
+export const qrSourceSupported = () => sourceReady
+
 /** 0040 が入っているか。画面がボタンや札を出すかどうかの判断に使う */
 export const qrReviewSupported = () => !notReady
 
 const missing = (error) => /qr_reviews|mark_qr|qr_items|drop_qr|schema cache|PGRST202|does not exist/i
+  .test(`${error?.message ?? ''} ${error?.code ?? ''}`)
+
+/**
+ * **「p_source という引数は無い」と断られたか**(0066 を貼る前)。
+ *
+ * PostgREST は、引数の合う関数が見つからないと `PGRST202` を返す。
+ * `missing()` とは**分けて見る** —— あちらは「関数そのものが無い」で、
+ * そのときは**溜めるのをあきらめる**。こちらは**冊を外して溜め直す**。
+ * **同じ扱いにすると、0066 を貼る前に1問も溜まらなくなる。**
+ */
+const noSourceArg = (error) => /p_source|PGRST202|does not exist|schema cache/i
   .test(`${error?.message ?? ''} ${error?.code ?? ''}`)
 
 /**
@@ -72,9 +99,16 @@ const missing = (error) => /qr_reviews|mark_qr|qr_items|drop_qr|schema cache|PGR
  *     渡さなければログインしている本人のもの
  *   - `onlyExisting` … **すでに溜まっている文だけ**を動かす。
  *     教材の中で「言えた」を押したときに使う(新しく溜めない)
+ *   - `source` … **どの冊に溜めるか**(0066・第5.237節)。
+ *     `'sentence'`(自分の Quick Response 帳)/ `'chunk'`(覚えておきたい表現集)。
+ *     **決めるのは `qrSourceOf()` 1か所**(`quickResponse.js`)。
+ *     **入れるときだけ効き、あとから移らない**(SQL 側で `on conflict` から
+ *     外してある)—— 途中で移すと、ゲストが溜めた冊から黙って消える。
+ *     **0066 を貼る前の Supabase では、渡しても静かに無視される**
+ *     (関数に無い引数なので、そもそも送らない)
  */
 export async function markQr(pair, status, {
-  materialId = null, learnerId = null, onlyExisting = false,
+  materialId = null, learnerId = null, onlyExisting = false, source = null,
 } = {}) {
   if (!supabase || notReady) return ok(null)
   const en = String(pair?.en ?? '').trim()
@@ -92,8 +126,19 @@ export async function markQr(pair, status, {
     // 渡さないときは既定(自分)になる
     ...(learnerId ? { p_learner: learnerId } : {}),
     ...(onlyExisting ? { p_only_existing: true } : {}),
+    /* **0066 より前の関数には無い引数なので、渡さない**
+       (`p_learner` とまったく同じ作法)。渡すと呼び出しごと断られ、
+       **「まだ」を押しても1問も溜まらなくなる** */
+    ...(sourceReady && source ? { p_source: source } : {}),
   })
   if (error) {
+    /* **0066 を貼る前は、冊なしでやり直す**(第5.237節)。
+       ここで戻ると**「まだ」を押しても1問も溜まらない。**
+       冊が分かれないだけで、溜まること自体はこれまでどおりにする */
+    if (sourceReady && source && noSourceArg(error)) {
+      sourceReady = false
+      return markQr(pair, status, { materialId, learnerId, onlyExisting })
+    }
     // **貼る前は静かに何もしない**(押した本人には Quick Response が
     // ふつうに進む。溜まらないだけである)
     if (missing(error)) { notReady = true; return ok(null) }
@@ -113,7 +158,7 @@ export async function markQr(pair, status, {
  *   `status` は `'todo'`(まだ + 言えかけ)/ `'unknown'` / `'learning'` / `'known'`
  */
 export async function loadQrReviews(learnerId = null, {
-  status = 'todo', limit = 200, dueOnly = false,
+  status = 'todo', limit = 200, dueOnly = false, source = null,
 } = {}) {
   if (!supabase || notReady) return ok([])
   let who = learnerId
@@ -122,10 +167,21 @@ export async function loadQrReviews(learnerId = null, {
     if (!user) return ok([])
     who = user.id
   }
+  /* **冊で絞る**(0066・第5.237節)。渡さなければ、これまでどおりぜんぶ返る
+     (達成具合の集計・Native Flow・66 の型は、こちらを使う)。
+     **0066 より前の関数には無い引数なので、送らない**(`markQr` と同じ作法) */
+  const 冊 = sourceReady && source ? { p_source: source } : {}
   const { data, error } = await supabase.rpc('qr_items', {
-    p_learner: who, p_status: status, p_limit: limit, p_due_only: dueOnly,
+    p_learner: who, p_status: status, p_limit: limit, p_due_only: dueOnly, ...冊,
   })
   if (error) {
+    /* **0066 を貼る前は、冊なしで読み直す。** ここで戻ると
+       **復習の一覧そのものが空になる**(いちばん悪い壊れ方)。
+       そのときは冊が分かれず、これまでどおり全部が出る */
+    if (sourceReady && source && noSourceArg(error)) {
+      sourceReady = false
+      return loadQrReviews(learnerId, { status, limit, dueOnly })
+    }
     if (missing(error)) { notReady = true; return ok([]) }
     return fail(error, '復習を読めませんでした')
   }

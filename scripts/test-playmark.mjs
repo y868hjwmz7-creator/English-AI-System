@@ -97,7 +97,8 @@ import {
 } from '../src/lib/materialFill.js'
 /* 教材の中の Quick Response(第5.235節)。**取り組み方の一覧はあちら1か所** */
 import {
-  QR_MODES, quickResponseCounts, quickResponsePairs,
+  CHUNK_BOOK_LABEL, QR_MODES, qrSaves, qrSourceOf, qrSourceOfBook,
+  quickResponseCounts, quickResponsePairs,
 } from '../src/lib/quickResponse.js'
 import {
   BASICS, LEARNER_FEATURES, featureOf, showsBasics,
@@ -6666,18 +6667,21 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **`setupState.js` は import できない** —— Supabase を引き連れており、
      素の node では `import.meta.env` が無くて落ちる。**ソースで見る** */
   const setup = noNote(readD('src/lib/setupState.js'))
-  /* **いちばん新しい移行は 0065 になった**(かたまりの分類・練習・第5.230節)。
-     0062〜0064 のぶんは、まとめた1つと `check.sql` の側で
-     そのまま見張り続ける(下)—— **消していない** */
-  ok(/NEWEST_MIGRATION = '0065'/.test(setup),
-    '0065 … いちばん新しい移行として登録してある')
-  /* **0065 は `material_items` に列を3つ増やす。** 表はもう在るので、
+  /* **いちばん新しい移行は 0066 になった**(Quick Response の冊・第5.237節)。
+     0062〜0065 のぶんは、まとめた1つと `check.sql` の側で
+     そのまま見張り続ける(下)—— **消していない**
+
+     **番号そのものは、ここでは見ない。** 上の「準備の状態 … 印がいちばん
+     新しい移行にそろっている」が、`supabase/migrations/` の
+     いちばん大きい番号と突き合わせている。
+     **同じことをする見張りを2つ置かない**(CLAUDE.md) */
+  /* **0066 は `qr_reviews` に列を1つ増やす。** 表はもう在るので、
      **表の有無で見ると貼る前でも「もう入っています」**になる。
-     だから**列**を印にする(0064 とまったく同じ見方) */
-  ok(/table: 'material_items'/.test(setup) && /column: 'practice'/.test(setup),
-    '0065 … 印は material_items.practice(列が増える移行だから)')
+     だから**列**を印にする(0064 / 0065 とまったく同じ見方) */
+  ok(/table: 'qr_reviews'/.test(setup) && /column: 'source'/.test(setup),
+    '0066 … 印は qr_reviews.source(列が増える移行だから)')
   ok(!/row: \{ column/.test(setup),
-    '0065 … 前の印(行を見る形)が残っていない')
+    '0066 … 前の印(行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')
   ok(/create or replace function public\.qr_limit\(\)/.test(matome),
     '0062 … まとめた1つ(pending_matome.sql)に入っている')
@@ -10313,6 +10317,100 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     '骨組み … 本物の QuickResponse を、練習つきの教材で描いている')
     ok(/groups/.test(qmSk),
       '骨組み … 取り組み方が1つしか無い形も描ける(切り替えごと出ない)')
+  }
+
+  /* ── ⑮ 「覚えておきたい表現集」を、別の冊として溜める(第5.237節)── */
+  {
+    /* ── 溜めるかどうか。**既定は溜めない側**(CLAUDE.md)── */
+    ok(qrSaves({ group: 'sentence' }) && qrSaves({ group: 'chunk' }),
+      '冊 … 文章と覚えておきたい表現は、復習に溜める')
+    /* **単語 / フレーズは単語帳が持つ。** ここへ入れると
+       同じ語の覚え具合が2か所で動く(`quickResponse.js` の冒頭) */
+    ok(!qrSaves({ group: 'word' }) && !qrSaves({}) && !qrSaves(null),
+      '冊 … 単語 / フレーズと、知らない取り組み方は溜めない')
+    ok(qrSourceOf({ group: 'chunk' }) === 'chunk'
+      && qrSourceOf({ group: 'sentence' }) === 'sentence'
+      && qrSourceOf({ group: 'word' }) === null,
+    '冊 … どこへ溜めるかは、取り組み方の id そのもの')
+
+    /* ── どの冊が何を読むか。**「読む」と「読まない」の両方** ── */
+    ok(qrSourceOfBook('my') === 'sentence' && qrSourceOfBook('chunk') === 'chunk',
+      '冊 … 自分の帳は文章、覚えておきたい表現集はかたまり')
+    /* **ファイルの冊は `null`**(qr_reviews から引かない)。
+       ここが `'sentence'` に落ちると、Native Flow と 66 の型の
+       覚え具合がまるごと消える */
+    ok(qrSourceOfBook('nf') === null && qrSourceOfBook('frame') === null
+      && qrSourceOfBook(undefined) === null,
+    '冊 … Native Flow と 66 の型は、冊で絞らない')
+
+    /* **冊の名前と、演習の名前は別の文字列**(似ているが役目が違う) */
+    const 演習名 = QR_MODES.find((m) => m.id === 'chunk')?.label
+    ok(!!CHUNK_BOOK_LABEL && CHUNK_BOOK_LABEL !== 演習名,
+      '冊 … 冊の呼び名は、演習の呼び名と別にしてある',
+      `${演習名} / ${CHUNK_BOOK_LABEL}`)
+
+    /* ── 画面 ── **判断を書き写していないか** ── */
+    const qrv = read('src/components/QuickResponse.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+    ok(/qrSaves\(card\)/.test(qrv) && /source: qrSourceOf\(card\)/.test(qrv),
+      '画面 … 溜めるかどうかと冊は、quickResponse.js が決める')
+    ok(!/group === 'sentence'/.test(qrv),
+      '画面 … 取り組み方の id を書き写していない(溜める側)')
+    const rev = read('src/components/QrReview.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+    ok(/source: qrSourceOfBook\(book\)/.test(rev),
+      '冊 … 復習の画面が、冊で絞って読んでいる')
+    ok(/label: CHUNK_BOOK_LABEL/.test(rev) && !rev.includes(`'${CHUNK_BOOK_LABEL}'`),
+      '冊 … 復習の画面が、冊の呼び名を書き写していない')
+    /* **0066 を貼る前は出さない** —— 絞れないので、自分の Quick Response 帳と
+       まったく同じ中身が2つ並ぶ(**同じことをするものを2つ見せない**) */
+    ok(/qrSourceSupported\(\) \? \[\{ id: 'chunk'/.test(rev),
+      '冊 … 0066 を貼る前は、冊そのものを出さない')
+
+    /* ── 窓口 ── **貼る前でも、溜まること自体は止めない** ── */
+    const qrl = read('src/lib/qrReviews.js').replace(/\/\*[\s\S]*?\*\//g, '')
+    /* **「どこかに `sourceReady &&` と書いてあるか」では見ない。**
+       溜める側と読む側の**2か所**にあるので、片方を外しても
+       もう片方に当たって緑のままだった(CLAUDE.md「先に数える」) */
+    ok((qrl.match(/sourceReady && source \? \{ p_source: source \}/g) ?? []).length === 2,
+      '冊 … 0066 が無いと分かっていれば、p_source を送らない(溜める側と読む側)')
+    ok((qrl.match(/sourceReady = false/g) ?? []).length === 2,
+      '冊 … 断られたら、溜める側も読む側も冊なしでやり直す')
+    ok(/noSourceArg/.test(qrl) && /const missing/.test(qrl)
+      && qrl.indexOf('const noSourceArg') !== qrl.indexOf('const missing'),
+    '冊 … 「引数が無い」と「関数が無い」を別に見ている')
+
+    /* ── 貼る SQL ── */
+    const mig = read('supabase/migrations/0066_qr_source.sql')
+    const sqlOnly = mig.replace(/^\s*--.*$/gm, '')
+    ok(/add column if not exists source text not null default 'sentence'/.test(sqlOnly),
+      '0066 … 冊の欄を足し、いまある行は文章として埋まる')
+    /* **値の一覧を SQL に書かない**(0065 とまったく同じ考え方)。
+       書くと、冊を1つ増やすたびに利用者へ貼り直しを頼むことになる */
+    ok(!/check \(source/.test(sqlOnly),
+      '0066 … 冊の一覧を、走る SQL に書き写していない')
+    ok(!sqlOnly.includes(CHUNK_BOOK_LABEL),
+      '0066 … 冊の呼び名を、走る SQL に書き写していない')
+    /* **古い形と新しい形の両方を落とす。** 残ると PostgREST が
+       「どちらか分からない」と断り、画面から呼べなくなる(CLAUDE.md) */
+    for (const fn of ['mark_qr', 'qr_items']) {
+      const drops = (sqlOnly.match(new RegExp(`drop function if exists public\\.${fn}\\(`, 'g')) ?? []).length
+      ok(drops === 2, `0066 … ${fn}() は、古い形と新しい形の両方を落としている`, `${drops} 本`)
+      ok(sqlOnly.indexOf(`drop function if exists public.${fn}(`)
+        < sqlOnly.indexOf(`create or replace function public.${fn}(`),
+      `0066 … ${fn}() は drop を先に置いている`)
+    }
+    /* **冊は動かさない。** `on conflict` で書き換えると、
+       ゲストが溜めた冊から黙って消える(教材と話す人と同じ扱い) */
+    {
+      const at = sqlOnly.indexOf('on conflict (learner_id, en_norm) do update')
+      const 上書き = at > 0 ? sqlOnly.slice(at, sqlOnly.indexOf('returning', at)) : ''
+      ok(!!上書き && !/source/.test(上書き),
+        '0066 … 冊は、あとから上書きされない(最初に溜めた冊のまま)')
+    }
+    const matome66 = read('supabase/apply/pending_matome.sql')
+    ok(/add column if not exists source text not null default 'sentence'/.test(matome66),
+      '0066 … まとめた1つにも入っている')
+    ok(/0066 Quick Response の冊/.test(read('supabase/apply/check.sql')),
+      '0066 … check.sql に行がある')
   }
 }
 
