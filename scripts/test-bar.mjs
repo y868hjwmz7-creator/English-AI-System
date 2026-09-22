@@ -5842,8 +5842,18 @@ for (const W of [1280, 794, 453, 390, 320]) {
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=owner`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(200)
-    const 前 = await page.evaluate(() => document.querySelector('.lesson-owner-name').textContent.trim())
-    await page.click('.lesson-owner')
+    const 名 = () => page.evaluate(() =>
+      document.querySelector('.lesson-owner-name')?.textContent?.trim() ?? '')
+    const 前 = await 名()
+    /* **押せなくても、そこで止めない**(第5.235節 / 第5.236節)。
+       `page.click()` は見えない相手を 30 秒待って**例外を投げる**ので、
+       名札を消す書き方をしたとたん、**この先の検証がまるごと走らなくなる**
+       (実際そうなった —— 新しい見張りが「緑」に見えていた)。
+       **止まる検証は、その先ぜんぶを黙って見逃す。**
+       ここはマウスの画面なので、見えていないこと自体が赤である */
+    let 押せた = true
+    await page.click('.lesson-owner', { timeout: 3000 }).catch(() => { 押せた = false })
+    if (!押せた) ng('誰の記録か … マウスの画面で名札を押せない(消えている)')
     await page.waitForTimeout(300)
     const 行 = await page.evaluate(() => [...document.querySelectorAll('.shelf-pick')]
       .map((el) => el.textContent.replace(/\s+/g, '')))
@@ -5853,10 +5863,11 @@ for (const W of [1280, 794, 453, 390, 320]) {
     } else ng('誰の記録か … 選ぶ一覧が出ない', 行.join(' / '))
     await page.evaluate(() => {
       const rows = [...document.querySelectorAll('.shelf-pick')]
-      rows[rows.length - 1].click()
+      // **空でも落とさない**(上と同じ理由。落ちるとこの先が走らない)
+      rows[rows.length - 1]?.click()
     })
     await page.waitForTimeout(300)
-    const 後 = await page.evaluate(() => document.querySelector('.lesson-owner-name').textContent.trim())
+    const 後 = await 名()
     /* **選んだら、名札がその人に変わる。**
        変わらなければ、どこに入るのか分からないまま書き込むことになる */
     if (後 !== 前 && /さんの記録/.test(後)) ok(`誰の記録か … 選ぶと名札が変わる(${前} → ${後})`)
@@ -5866,6 +5877,88 @@ for (const W of [1280, 794, 453, 390, 320]) {
     if (!開いたまま) ok('誰の記録か … 選ぶと閉じる')
     else ng('誰の記録か … 選んでも閉じない')
     await page.close()
+  }
+
+  /* ③ **指で使う端末では、名札を出さない**(第5.236節・2026-09 実機)
+
+       > スマホとタブレット端末においては「自分の記録」のタブは排除して
+       > ください。折り返されて2行目に表示され、画面が狭くなるからです。
+       > PCでは残してください。
+
+     **幅では見分けられない。** iPad を横にすると 1024px、12.9インチなら
+     1366px で、**ノートパソコンと同じか、それより広い。**
+     見分けるのは `pointer: coarse`(その端末のおもな入力が指か)である。
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+     指のときだけ消えて、**マウスのときは同じ幅でも残っている**か。
+     片方だけだと、**どの端末でも消す**書き方でも緑のままになる。
+
+     **高さを書き写さない。** 「消えたぶん帯が低くなったか」は、
+     **同じ幅のマウスのときと比べて**確かめる(性質で見る・CLAUDE.md)。 */
+  {
+    const 測る = async (w, touch) => {
+      const page = await browser.newPage({ viewport: { width: w, height: 900 }, hasTouch: touch })
+      await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+        { waitUntil: 'networkidle' })
+      await page.waitForTimeout(400)
+      const r = await page.evaluate(() => {
+        const bar = document.querySelector('.lesson-bar')
+        const own = document.querySelector('.lesson-owner')
+        return {
+          帯あり: !!bar,
+          名札あり: !!own,
+          見える: own ? own.checkVisibility() : null,
+          高さ: bar ? Math.round(bar.getBoundingClientRect().height) : 0,
+          はみ出し: bar ? Math.round(bar.scrollWidth - bar.clientWidth) : 0,
+          /* **指のときだけ消える決まりが効いているか。**
+             `matchMedia` そのものを見て、**端末の見分けが付いているか**
+             まで確かめる —— 付いていなければ、上の「見える」は
+             ただ幅で消えているだけかもしれない */
+          指: window.matchMedia('(pointer: coarse)').matches,
+        }
+      })
+      await page.close()
+      return r
+    }
+
+    /* **狭いほうも広いほうも見る。** タブレットの横向き(1024 / 1366)は
+       **ノートパソコンより広い**ので、ここを外すと何も守らない */
+    for (const w of [320, 390, 1024, 1366]) {
+      const 指 = await 測る(w, true)
+      const マウス = await 測る(w, false)
+      if (!指.帯あり || !マウス.帯あり) { ng(`名札を消す … ${w}px で帯が描かれていない`); continue }
+      if (!指.指) { ng(`名札を消す … ${w}px で「指の端末」と見分けられていない`); continue }
+      if (マウス.指) { ng(`名札を消す … ${w}px のマウスが「指」と読まれている`); continue }
+
+      if (指.名札あり && !指.見える) ok(`名札を消す … ${w}px の指の端末では出ない`)
+      else ng(`名札を消す … ${w}px の指の端末に名札が出ている`)
+
+      /* **マウスでは残す**(利用者の指定「PCでは残してください」) */
+      if (マウス.見える) ok(`名札を消す … ${w}px のマウスでは残っている`)
+      else ng(`名札を消す … ${w}px のマウスでも消えている(PCでは残す決まり)`)
+
+      /* **消したぶん、帯が低くなっているか。** 同じ幅で比べる ——
+         名札が2段目へ折り返していた幅では、必ず低くなる */
+      if (指.高さ <= マウス.高さ) ok(`名札を消す … ${w}px で帯が高くならない(${マウス.高さ} → ${指.高さ}px)`)
+      else ng(`名札を消す … ${w}px で帯が高くなった`, `${マウス.高さ} → ${指.高さ}px`)
+
+      if (指.はみ出し === 0) ok(`名札を消す … ${w}px の指の端末で帯がはみ出さない`)
+      else ng(`名札を消す … ${w}px の指の端末で帯がはみ出す`, `${指.はみ出し}px`)
+    }
+
+    /* **いちばん効いてほしい幅では、本当に段が減っているか。**
+       390px(スマホ)と 1024px(タブレットの横向き)は、
+       **マウスだと名札が2段目へ折り返す**幅である。
+       ここで高さが変わらなければ、**消しても画面は広くなっていない** */
+    for (const w of [390, 1024]) {
+      const 指 = await 測る(w, true)
+      const マウス = await 測る(w, false)
+      if (指.高さ < マウス.高さ) {
+        ok(`名札を消す … ${w}px で1段ぶん戻った(${マウス.高さ} → ${指.高さ}px)`)
+      } else {
+        ng(`名札を消す … ${w}px で画面が広くなっていない`, `${マウス.高さ} → ${指.高さ}px`)
+      }
+    }
   }
 
   /* ③ 相手が決まっているときは、**押せない名札**(取り違えを起こさない) */
