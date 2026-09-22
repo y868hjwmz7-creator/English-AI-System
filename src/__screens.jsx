@@ -31,6 +31,7 @@ import CollectRows from './components/CollectRows.jsx'
 import GoalBar from './components/GoalBar.jsx'
 import MaterialForm from './components/MaterialForm.jsx'
 import VoiceRemake from './components/VoiceRemake.jsx'
+import MaterialFill from './components/MaterialFill.jsx'
 import { styledVoiceId } from './data/clipVoices.js'
 import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
@@ -451,6 +452,42 @@ const REMAKE = (
           (id) => styledVoiceId(id, q.get('style') === 'emotion' ? 'emotion' : 'accent')),
       }}
       clipCount={14} clipChars={1820} mine busy={false}
+      onRun={() => {}} onCancel={() => {}} />
+  </div>
+)
+
+/* **足りない演習を足す欄**(`?screen=fill`・第5.234節)。
+
+   `MaterialFill` は props で受け取るだけなので Supabase が要らない。
+   **足りないものが本当に出るか**・**選び直すと金額が動くか**を、
+   本物の部品と本物の CSS で測る。
+
+   ここに置いてある教材は「会話 + 内容の理解 + ディスカッション」で、
+   **「覚えておきたい表現」だけが無い**形である ——
+   利用者の「Booking a Bus」がまさにこれだった。
+
+   `?full=1` … **ぜんぶ揃っている**形(欄そのものが出ない)。
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)。 */
+const FILL = (
+  <div className="app-main" style={{ padding: 16 }}>
+    <MaterialFill
+      material={{
+        id: 'm1',
+        kind: 'dialogue',
+        /* **本物と同じ形**(`bodyTextOf` は `prompt_en` を読む) */
+        sections: [
+          { exercise_type: 'dialogue', items: [
+            { speaker: 'Mika', prompt_en: "Hi, I'd like to book a bus for our team trip." },
+            { speaker: 'Ken', prompt_en: 'Sure. How many people are coming?' },
+          ] },
+          { exercise_type: 'comprehension', items: [{ prompt_en: 'Why did Mika call?' }] },
+          { exercise_type: 'discussion', items: [{ prompt_en: 'How do you book a bus?' }] },
+          ...(q.get('full') === '1'
+            ? [{ exercise_type: 'vocab_note', items: [{ prompt_en: 'book a bus' }] }]
+            : []),
+        ],
+      }}
+      busy={false}
       onRun={() => {}} onCancel={() => {}} />
   </div>
 )
@@ -1749,7 +1786,9 @@ const CHUNK = (
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'chunk'
+  q.get('screen') === 'fill'
+    ? FILL
+    : q.get('screen') === 'chunk'
     ? CHUNK
     : q.get('screen') === 'progress'
     ? PROGRESS

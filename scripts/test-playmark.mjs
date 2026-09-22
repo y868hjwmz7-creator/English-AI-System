@@ -87,9 +87,14 @@ import {
   anglesFor, pickAngle,
 } from '../src/data/materialAngles.js'
 import {
-  MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, usesScene,
+  MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, kindLabel, usesScene,
   freeFromSubject,
 } from '../src/data/materialKinds.js'
+/* すでにある教材に、足りない演習だけを足す(第5.234節)。
+   **判断はあちら1か所**なので、ここで数え直さずに呼んで確かめる */
+import {
+  bodyTextOf, canFillMaterial, fillGuess, fillableSections,
+} from '../src/lib/materialFill.js'
 import {
   BASICS, LEARNER_FEATURES, featureOf, showsBasics,
 } from '../src/data/learnerFeatures.js'
@@ -10019,6 +10024,154 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       'APPLY.md … 自動で配られることを案内している')
     ok(/deploy-functions/.test(read('docs/AI_GENERATION_SETUP.md')),
       'AI_GENERATION_SETUP.md … 自動で配られることを案内している')
+  }
+
+  /* ── ⑬ すでにある教材に、足りない演習だけを足す(第5.234節)── */
+  {
+    /** 本物と同じ形の教材を組み立てる(`prompt_en` を読む) */
+    const mat = (kind, types, { body = ['A: Hi.', 'B: Hello.'] } = {}) => ({
+      id: 'm1', kind, level: 'B1',
+      sections: types.map((t) => ({
+        exercise_type: t,
+        items: (isPassageSection(t) ? body : ['Q'])
+          .map((en) => ({ prompt_en: en })),
+      })),
+    })
+    const idsOf = (list) => list.map((s2) => s2.exercise_type)
+
+    /* **本文は、絶対に返らない。** ここが崩れると、押した瞬間に
+       本文が作り直されて英文が変わり、**音声が丸ごと再課金になる**
+
+       **種類と、中身の本文が食い違っている教材で見る。** 下の
+       「もう在る種類は返さない」に吸われてしまうと、
+       **本文を外す1行を消しても緑のまま**になる(実際そうだった)。
+       食い違いは起こりうる —— 会議は `kind` だけを足して中身は会話のまま
+       (`DEFAULT_SECTIONS.meeting`)であり、種類を選び直せば
+       **既定の本文と、入っている本文がずれる** */
+    {
+      const chigau = mat('reading', ['dialogue', 'comprehension'])
+      const got = idsOf(fillableSections(chigau))
+      ok(!got.some(isPassageSection),
+        '足す … 種類と中身が食い違っていても、本文を作らない', got.join(' / '))
+    }
+    for (const kind of ['reading', 'dialogue', 'meeting', 'speech']) {
+      const body = sectionsFor(kind).find((s2) => isPassageSection(s2.exercise_type))
+      const only = mat(kind, [body.exercise_type])
+      const got = idsOf(fillableSections(only))
+      ok(got.length > 0 && !got.some(isPassageSection),
+        `足す … ${kindLabel(kind)}で、本文を作り直さない`, got.join(' / '))
+      /* **既定の並びのぶんが、ぜんぶ足りないと出る**(本文のほかに何も無いので)。
+         **数を書き写さない** —— 既定の構成と突き合わせる */
+      ok(got.length === sectionsFor(kind).length - 1,
+        `足す … ${kindLabel(kind)}で、足りないものが全部出る`,
+        `${got.length} / ${sectionsFor(kind).length - 1}`)
+    }
+
+    /* **利用者の「Booking a Bus」の形。** 覚えておきたい表現だけが無い */
+    const booking = mat('dialogue', ['dialogue', 'comprehension', 'discussion'])
+    const need = fillableSections(booking)
+    ok(idsOf(need).length === 1 && isChunkSection(idsOf(need)[0]),
+      '足す … 覚えておきたい表現だけが無い教材で、それだけが出る', idsOf(need).join(' / '))
+    /* **問数を書き写さない。** 既定の構成から引く */
+    const want = sectionsFor('dialogue').find((s2) => isChunkSection(s2.exercise_type))
+    ok(need[0].count === want.count,
+      '足す … 問数は既定の構成から引いている', `${need[0].count}`)
+
+    /* ── **「出ない」側も見る**(CLAUDE.md「両方を見る」)── */
+    ok(!canFillMaterial(mat('dialogue',
+      ['dialogue', 'comprehension', 'discussion', 'vocab_note'])),
+    '足す … ぜんぶ揃っている教材には、出ない')
+    /* **本文が無ければ、何も足せない。** 設問は本文を渡して作るためである。
+       **いちばん危ない形**(文型ドリル・単語帳)を検証の中に置く */
+    ok(!canFillMaterial(mat('pattern', ['translate_en_ja', 'listening'])),
+      '足す … 本文の無い教材(文型ドリル)には、出ない')
+    ok(!canFillMaterial(mat('dialogue', ['dialogue'], { body: ['', '  '] })),
+      '足す … 本文が空白だけの教材には、出ない')
+    ok(!canFillMaterial({}) && !canFillMaterial(null),
+      '足す … 教材が無いときも落ちない(既定は「できない」側)')
+
+    /* **本文の渡し方は、作るときと同じ形。**(`generateFromScript` は `\n\n`)
+       **2通りに数えない** —— ここがずれると、設問が本文と噛み合わなくなる */
+    ok(bodyTextOf(booking) === 'A: Hi.\n\nB: Hello.',
+      '足す … 本文は、作るときと同じ形でつなぐ', JSON.stringify(bodyTextOf(booking)))
+
+    /* ── 見積もり ── **値を書き写さない。性質で見る** ── */
+    ok(fillGuess([]).yen === 0 && fillGuess([]).items === 0,
+      '足す … 1つも選ばなければ 0 円(呼ばないので土台もかからない)')
+    const one = fillGuess([{ exercise_type: 'vocab_note', count: 6 }])
+    const two = fillGuess([
+      { exercise_type: 'vocab_note', count: 6 },
+      { exercise_type: 'discussion', count: 5 },
+    ])
+    ok(one.yen > 0 && two.yen > one.yen && two.items > one.items,
+      '足す … 選ぶほど、問数も金額も増える', `${one.yen} → ${two.yen} 円`)
+    ok(fillGuess([{ exercise_type: 'vocab_note', count: 0 }]).yen === 0,
+      '足す … 0問の組は、数にも金額にも入らない')
+
+    /* ── 画面 ── **判断を画面に書き写していないか** ── */
+    const tm = read('src/components/TrainerMaterials.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+    ok(/canFillMaterial\(m\)/.test(tm),
+      '画面 … 出すかどうかは canFillMaterial() が決める')
+    ok(/addSections\(m, plan/.test(tm),
+      '画面 … 足すのは addSections()')
+    ok(!/vocab_note/.test(tm),
+      '画面 … 演習の種類を書き写していない')
+    const mf = read('src/components/MaterialFill.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+    ok(/fillableSections\(material\)/.test(mf) && /fillGuess\(picked\)/.test(mf),
+      '欄 … 足りないものと金額は、materialFill.js が決める')
+    ok(!/vocab_note|exercise_type === /.test(mf),
+      '欄 … 演習の種類を書き写していない')
+    /* **押す前に金額が読めるか**(見えない費用は管理できない・CLAUDE.md) */
+    ok(/guess\.yen/.test(mf) && /課金/.test(mf),
+      '欄 … 押す前に、金額と課金になることを出している')
+    /* **やめる道がある**(行き止まりを作らない・2026-09 実機) */
+    ok(/onCancel/.test(mf) && /やめる/.test(mf), '欄 … やめる道が並べて置いてある')
+
+    /* ── 窓口の側 ── **本文を作らない**・**在る種類は作らない** ── */
+    const ml = read('src/lib/materials.js').replace(/\/\*[\s\S]*?\*\//g, '')
+    /* **その関数の中だけを見る。** ファイルの終わりまで取ると、
+       あとに出てくる別の関数の `break` や `failed` に当たり、
+       **壊しても緑のまま**になる(実際そうだった・CLAUDE.md「先に数える」) */
+    const fnAt = ml.indexOf('export async function addSections')
+    const fn = ml.slice(fnAt, ml.indexOf('export async function createAccount', fnAt))
+    ok(/fillableSections\(material\)/.test(fn),
+      '足す … 作る組は fillableSections() が絞る(本文は入らない)')
+    ok(/const maxSeq/.test(fn) && /maxSeq \+ i \+ 1/.test(fn),
+      '足す … 末尾に足す(在る行の並びを動かさない)')
+    ok(/isChunkSection/.test(fn) && /0065/.test(fn),
+      '足す … 置き場が無ければ、作る前に断る(課金だけ残さない)')
+    /* **窓口が受け取る言葉を、作るときと食い違わせない**(CLAUDE.md
+       「数え方を2通り持たない」)。作る画面は `industryLabel()` を通す */
+    ok(/industryLabel\(material\.industry\)/.test(fn),
+      '足す … 業界は、作る画面と同じ「呼び名」で渡す')
+    /* **もらえる正解を捨てない**(CLAUDE.md)。2つ目で断られたときに
+       そのまま戻ると、**1つ目の課金だけが残り、押し直すと二度払う** */
+    ok(/break/.test(fn) && /failed \|\|/.test(fn)
+      && !/if \(error\) \{[\s\S]{0,120}?return ng\(/.test(fn),
+    '足す … 途中で断られても、作れたぶんは捨てない')
+    /* 窓口が別の名前を返しても、**頼んだ種類で入れる** ——
+       `material_sections_type_check` に断られると、作ったぶんが丸ごと消える */
+    ok(/exercise_type: list\[i\]\.exercise_type,/.test(fn),
+      '足す … 演習の種類は、こちらが頼んだもので入れる')
+    ok(/if \(!material\?\.id\)/.test(fn),
+      '足す … 教材が指定されていなければ、何もしない')
+    /* **失敗を、成功と同じ見た目で終わらせない**(CLAUDE.md) */
+    ok(/fillDone\.failed \? ' notice--warn'/.test(tm),
+      '画面 … 途中まで足せたときは、成功とも失敗とも違う見た目にする')
+
+    /* ── 骨組み ── **本物と1文字も違えない**(CLAUDE.md)── */
+    const sk = read('src/__screens.jsx')
+    const at = sk.indexOf('const FILL = (')
+    const fillSk = at > 0 ? sk.slice(at, sk.indexOf('const WORDBOOK', at)) : ''
+    /* **`prompt_en` が「どこかに在るか」では見ない。** 1行だけ別の名前に
+       しても、残りに当たって緑のままになる(CLAUDE.md「先に数える」)。
+       **すぐ上の `VoiceRemake` の骨組みは `en:` を使っている**ので、
+       写し間違いは実際に起こる。**その形が無いこと**まで見る */
+    ok(!!fillSk && /prompt_en:/.test(fillSk) && !/\{ speaker: '[^']*', en: /.test(fillSk),
+      '骨組み … 本物と同じ形(prompt_en)で本文を持っている')
+    /* **「出る」と「出ない」の両方を描けるようにしてある** */
+    ok(/full/.test(fillSk) && /vocab_note/.test(fillSk),
+      '骨組み … ぜんぶ揃っている形も描ける(出ない側)')
   }
 }
 

@@ -1089,6 +1089,14 @@ input, select, textarea {
 /* 選んだ声の並び。**押す前に、何で作られるのかが読める** */
 .voice-remake-cast { font-weight: 700; }
 
+/* 足りない演習を足す欄(第5.234節)。**読み上げ音声の作り直しと同じ形**
+   —— どちらも「押す前に中身と金額を読む」ための箱である */
+.material-fill {
+  margin: 8px 0 4px; padding: 12px;
+  border: 1px solid var(--border); border-radius: var(--r-10);
+  background: var(--surface-2);
+}
+
 /* 入力欄。**password / email も必ず含める。**
    抜けていると、その欄だけ見た目が揃わず、下の16pxの決まりも効かない */
 input[type='text'], input[type='password'], input[type='email'],

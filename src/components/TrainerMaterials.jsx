@@ -37,9 +37,13 @@ import { grammarCost, grammarTodo } from '../lib/grammarNote.js'
 import CastChip from './CastChip.jsx'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
-  NEW_MATERIAL_KINDS, addChunkJa, addGrammar, assignMaterial, duplicateMaterial, isDialogueKind,
-  kindLabel, loadMyLearners, searchMaterials, setMaterialVoices, wordsAddedNote,
+  NEW_MATERIAL_KINDS, addChunkJa, addGrammar, addSections, assignMaterial, duplicateMaterial,
+  isDialogueKind, kindLabel, loadMyLearners, searchMaterials, setMaterialVoices, wordsAddedNote,
 } from '../lib/materials.js'
+/* **すでにある教材に、足りない演習だけを足す**(第5.234節・2026-09 利用者の指定)。
+   **足せるかどうかの判断はあちら1か所。** ここで種類を数え直さない */
+import { canFillMaterial, fillableSections } from '../lib/materialFill.js'
+import MaterialFill from './MaterialFill.jsx'
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { prefetchGlosses } from '../lib/vocab.js'
@@ -143,6 +147,10 @@ export default function TrainerMaterials({
   const [voiceAsk, setVoiceAsk] = useState(null)
   const [voiceBusy, setVoiceBusy] = useState(null)   // {id, done, total}
   const [voiceDone, setVoiceDone] = useState(null)   // {id, done, failed, total}
+  /* 足りない演習を足す(第5.234節)。**進み具合は必ず数で出す**(CLAUDE.md) */
+  const [fillAsk, setFillAsk] = useState(null)
+  const [fillBusy, setFillBusy] = useState(null)     // {id, done, total, label}
+  const [fillDone, setFillDone] = useState(null)     // {id, made, items, error}
   /* **音声のダウンロード**(2026-09 利用者の指定)。
      **ゲストの「今週の宿題」にも置いた**ので、持ちものは
      `useAudioDownload()` 1か所にしてある(**書き写さない**)。
@@ -580,6 +588,35 @@ export default function TrainerMaterials({
     /* **一覧を読み直して、できたものを目の前に出す**(発行と同じ作法)。
        複製は新しい1本なので、読み直さないと画面に出てこない */
     if (mode === 'copy') setJustId(target.id)
+    await search()
+  }
+
+  /**
+   * **足りない演習だけを作って、この教材に足す**(第5.234節)。
+   *
+   * **本文には触れない。** 英文が1文字も変わらないので、
+   * 読み上げ音声も作り直しにならない(CLAUDE.md「1回だけ課金される」)。
+   *
+   * 途中で失敗したら、そこで止まる。**もう一度押せば残りだけが作られる**
+   * (在る種類は `fillableSections()` が外す)。行き止まりを作らない。
+   */
+  const runFill = async (m, plan) => {
+    setFillAsk(null)
+    setFillDone(null)
+    setFillBusy({ id: m.id, done: 0, total: plan.length, label: '' })
+
+    const { data, error: e } = await addSections(m, plan, (done, total, label) => {
+      setFillBusy({ id: m.id, done, total, label })
+    })
+    setFillBusy(null)
+    if (e) { setFillDone({ id: m.id, made: 0, items: 0, error: e }); return }
+    /* **途中で断られたぶんも、そのまま伝える**(黙って落とさない・CLAUDE.md)。
+       作れたところまでは足してあるので、押し直せば残りだけが作られる */
+    setFillDone({
+      id: m.id, made: data.made, items: data.items, error: null, failed: data.failed,
+    })
+    /* **一覧を読み直して、足したものを目の前に出す**(作り直しと同じ作法)。
+       読み直さないと、足したはずの演習がカードに出てこない */
     await search()
   }
 
@@ -1255,6 +1292,29 @@ export default function TrainerMaterials({
 
                       **良い声を使う教材のときだけ出す**(効かない操作を
                       見せない)。**2段にする** — 押し間違いがそのまま課金になる */}
+                  {/* **足りない演習を作る**(第5.234節・2026-09 利用者の指定)。
+
+                      > この教材を改めて新しい Generate material で
+                      > 作成しなおせませんか
+
+                      **足せるものがある教材にだけ出す**(効かない操作を
+                      見せない)。**判断は `canFillMaterial()` 1か所**で、
+                      ここで演習の種類を数え直さない。
+                      **2段にする** —— 押し間違いがそのまま課金になる */}
+                  {canFillMaterial(m) && (
+                    <IconButton icon={<PlusIcon />}
+                                label={`足りない演習を作る(${fillableSections(m).length})`}
+                                // **進み具合は、必ず数で出す**(CLAUDE.md)
+                                text={fillBusy?.id === m.id
+                                  ? `作っています… ${fillBusy.done} / ${fillBusy.total}`
+                                    + `${fillBusy.label ? ` ${fillBusy.label}` : ''}` : null}
+                                pressed={fillAsk === m.id}
+                                disabled={!!fillBusy}
+                                onClick={() => {
+                                  setFillDone(null)
+                                  setFillAsk(fillAsk === m.id ? null : m.id)
+                                }} />
+                  )}
                   {premiumClipsOf(m).length > 0 && (
                     <IconButton icon={<RefreshIcon />} label="読み上げ音声を作り直す"
                                 // **進み具合は、必ず数で出す**(CLAUDE.md)
@@ -1293,6 +1353,29 @@ export default function TrainerMaterials({
                       setDeleted({ id, title: m.title })
                     }} />
                 </div>
+              )}
+              {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
+                  足すのは課金になるので、**押す前に問数と金額を書く** */}
+              {fillAsk === m.id && !fillBusy && (
+                <MaterialFill material={m}
+                              busy={!!fillBusy}
+                              onRun={(plan) => runFill(m, plan)}
+                              onCancel={() => setFillAsk(null)} />
+              )}
+              {fillDone?.id === m.id && (
+                /* **成功と失敗を、同じ見た目で終わらせない**(CLAUDE.md)。
+                   途中まで足せたときは、成功でも失敗でもない黄色にする */
+                <p className={`notice${fillDone.error ? ' notice--error'
+                  : fillDone.failed ? ' notice--warn' : ' notice--ok'}`}>
+                  {fillDone.error || (
+                    <>演習を <strong>{fillDone.made} つ</strong>
+                      (<strong>{fillDone.items} 問</strong>)足しました。
+                      <strong>本文は変わっていません。</strong>
+                      {fillDone.failed && <><br />{fillDone.failed}
+                        <br />もう一度押すと、<strong>残りだけ</strong>を作ります。</>}
+                    </>
+                  )}
+                </p>
               )}
               {/* **押した場所のすぐ下に出す**(CLAUDE.md)。
                   作り直しは課金になるので、**押す前に本数と費用を書く**。

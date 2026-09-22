@@ -11,10 +11,14 @@
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { normEn } from './textNorm.js'
-import { kindsOf } from '../data/industries.js'
+import { industryLabel, kindsOf } from '../data/industries.js'
 import {
-  givesAwayAnswer, isBlankItem, isPassageSection, isWrongShape,
+  exerciseLabel, givesAwayAnswer, isBlankItem, isChunkSection, isPassageSection, isWrongShape,
 } from '../data/exerciseTypes.js'
+/* すでにある教材に、足りない演習だけを足す(第5.234節)。
+   **足せるかどうかの判断は `materialFill.js` 1か所。**
+   ここで「本文が在るか」「もう在る種類か」を書き直さない(CLAUDE.md) */
+import { bodyTextOf, fillableSections } from './materialFill.js'
 /* かたまりの分類と、練習の問数(第5.230節)。**呼び名はあちら1か所**。
    窓口(Deno)はここを読み込めないので、**画面から送る** */
 import { CHUNK_KINDS, DRILL_MAX, DRILL_MIN, chunkDrills } from '../data/chunkKinds.js'
@@ -1582,6 +1586,148 @@ export async function addChunkJa(material) {
     made += 1
   }
   return ok({ made, skipped: data.skipped ?? 0, spent: data.usage ?? null })
+}
+
+// ── すでにある教材に、足りない演習だけを足す(第5.234節)────────────
+
+/**
+ * その教材に**無い演習**を、**いまの本文から**作って足す。
+ *
+ * 【何を解いているか】(2026-09 利用者の指定)
+ *
+ *   > この教材を改めて新しい Generate material で作成しなおせませんか
+ *
+ *   新しい演習は、これから作る教材にしか付かない。作り直すと
+ *   **本文が別の文章になる。** 欲しいのは「この教材のまま、足す」ことである。
+ *
+ * 【本文には触れない】
+ *   作るのは、渡された組だけ。**本文(記事・会話)は作り直さない**ので、
+ *   英文が1文字も変わらず、**読み上げ音声も作り直しにならない**
+ *   (置き場所の鍵は英文の指紋・CLAUDE.md「1回だけ課金される」)。
+ *
+ * 【途中で失敗したら、そこで止める】
+ *   `createMaterial` と違って**巻き戻さない** —— もとの教材は残っているので、
+ *   消すわけにいかない。1つ目が入って2つ目で落ちたら、1つ目は残る。
+ *   **もう一度押せば、残りだけが作られる**(在る種類は `fillableSections()`
+ *   が外す)。行き止まりを作らない(CLAUDE.md)。
+ *
+ * @param material `searchMaterials` / `loadMaterial` が返す教材(本文つき)
+ * @param plan     `fillableSections()` が返す組のうち、作ると選ばれたもの
+ * @param onStep   進み具合(`(done, total, label) => void`)。**数で出す**
+ */
+export async function addSections(material, plan, onStep = null) {
+  if (!supabase) return ng('Supabase が設定されていません')
+
+  if (!material?.id) return ng('教材が指定されていません')
+
+  const context = bodyTextOf(material)
+  if (!context) return ng('この教材には本文がありません(本文をもとに作るので、足せません)')
+
+  /* **本当に足りないものだけにそろえる。** 画面が古い一覧を持っていても、
+     ここで在る種類は落ちる(**判断は `fillableSections()` 1か所**) */
+  const want = new Set((plan ?? []).map((p) => p?.exercise_type).filter(Boolean))
+  const list = fillableSections(material).filter((p) => want.has(p.exercise_type))
+  if (!list.length) return ng('足せる演習がありません')
+
+  /* **置き場が無ければ、作る前に断る。** 作ってから落とすと課金だけが残る。
+     **種類を書き写さない** —— 分類の欄を持つ演習かどうかで見る(0065) */
+  if (list.some((p) => isChunkSection(p.exercise_type))
+    && (missingColumns.has('chunk_kind') || missingColumns.has('practice'))) {
+    return ng('「覚えておきたい表現」の置き場(0065)が、まだ Supabase にありません。'
+      + ' GitHub のリポジトリにあるファイル(supabase/apply/pending_matome.sql)を、'
+      + 'Supabase の 左メニュー「SQL Editor」で実行してから、もう一度お試しください'
+      + '(教材・宿題・ゲストの情報には触れない SQL です)。')
+  }
+
+  const spent = { input: 0, output: 0, cacheRead: 0 }
+  const made = []
+  /** 途中で断られたときの理由。**黙って落とさない**(CLAUDE.md) */
+  let failed = null
+  for (let i = 0; i < list.length; i += 1) {
+    if (onStep) onStep(i, list.length, exerciseLabel(list[i].exercise_type))
+    const { data, error } = await generateSection({
+      sectionType: list[i].exercise_type,
+      count: list[i].count,
+      topic: String(material?.topic ?? '').trim(),
+      level: material?.level,
+      /* **窓口には、業界の「呼び名」を渡す。** 作る画面と同じ形にしてある
+         (`industryText = industryLabel(industry)`)。id のまま渡すと、
+         窓口が受け取る言葉だけが作るときと食い違う(CLAUDE.md
+         「数え方を2通り持たない」) */
+      industry: material?.industry ? industryLabel(material.industry) : '',
+      context,
+    })
+    if (error) {
+      /* **もらえる正解を捨てない**(CLAUDE.md)。ここで戻ると、
+         手前で作ったぶんの課金だけが残り、押し直すと**二度払う**。
+         **作れたところまでを足してから**、作れなかったものを伝える */
+      failed = `${exerciseLabel(list[i].exercise_type)}を作れませんでした。${error}`
+      break
+    }
+    spent.input += data.usage?.input ?? 0
+    spent.output += data.usage?.output ?? 0
+    spent.cacheRead += data.usage?.cacheRead ?? 0
+    /* **演習の種類は、こちらが頼んだものにする。** 窓口が別の名前を返すと
+       `material_sections_type_check` で挿入ごと断られ、
+       **作った(=課金済みの)ぶんが丸ごと消える** */
+    made.push({
+      ...data.section,
+      exercise_type: list[i].exercise_type,
+      items: cleanItems(data.section?.items),
+    })
+  }
+
+  const full = made.filter((sec) => sec.items.length)
+  if (!full.length) return ng(failed || '作れた設問が1つもありませんでした')
+
+  /* **末尾に足す。** `unique (material_id, seq)` があるので、在る行の番号は
+     動かさない(`materialFill.js` の見出し)。**いまの番号は DB に訊く** ——
+     画面が持っている控えは古いことがある */
+  const { data: seqRows, error: seqError } = await supabase
+    .from('material_sections')
+    .select('seq')
+    .eq('material_id', material.id)
+  if (seqError) return fail(seqError, '演習の並びを読めませんでした')
+  const maxSeq = (seqRows ?? []).reduce((n, r) => Math.max(n, r.seq ?? 0), 0)
+
+  const { data: madeSections, error: sectionError } = await supabase
+    .from('material_sections')
+    .insert(full.map((sec, i) => ({
+      material_id: material.id,
+      seq: maxSeq + i + 1,
+      exercise_type: sec.exercise_type,
+      instruction: String(sec.instruction ?? '').trim() || null,
+    })))
+    .select('id, seq, exercise_type, instruction')
+  if (sectionError) return fail(sectionError, '演習を足せませんでした')
+
+  const idOfSeq = new Map((madeSections ?? []).map((r) => [r.seq, r.id]))
+  const rows = full.flatMap((sec, i) => sec.items.map((it, j) => ({
+    ...it,
+    section_id: idOfSeq.get(maxSeq + i + 1),
+    material_id: material.id,
+    seq: j + 1,
+  })))
+  const { error: itemsError } = await supabase.from('material_items').insert(rows)
+  if (itemsError) {
+    /* **黙って中途半端に残さない。** 設問の入らなかった演習の行を消す
+       (空の演習が残ると、画面に見出しだけが出る) */
+    await supabase.from('material_sections')
+      .delete()
+      .in('id', (madeSections ?? []).map((r) => r.id))
+    return fail(itemsError, '設問を足せませんでした')
+  }
+
+  /* 足した演習を、**中身ごと**返す。画面はこれを見て
+     「いくつ・何問を足したか」を出す(**起きたことを、そのまま言う**) */
+  const sections = full.map((sec, i) => ({
+    id: idOfSeq.get(maxSeq + i + 1),
+    seq: maxSeq + i + 1,
+    exercise_type: sec.exercise_type,
+    instruction: String(sec.instruction ?? '').trim() || null,
+    items: sec.items,
+  }))
+  return ok({ sections, made: sections.length, items: rows.length, spent, failed })
 }
 
 // ── アカウントを発行する ──────────────────────────────────────
