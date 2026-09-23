@@ -8,7 +8,7 @@
  *   npm run test:chunk
  */
 import {
-  checkSlashes, chunksOf, postModifier, slashesFor, wordsOf,
+  checkSlashes, chunksOf, mainVerbHere, postModifier, slashesFor, wordsOf,
 } from '../src/lib/chunker.js'
 import {
   baseChunks, chunkPairs, chunkPairsAtMarks, needsChunkJa, storedChunks,
@@ -601,6 +601,82 @@ console.log('\n▶ 作り直しが要るかの判断は1か所(needsChunkJa)')
     baseChunks(long).length > 2 && needsChunkJa({
       prompt_en: long, chunks: { en: long, ja: ['＜0＞', '＜1＞'], parts: coarse },
     }) === true)
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   本動詞を、前の名詞とまとめない(第5.240節・2026-09-23 実機)
+
+     > スラッシュリーディングで、区切っているのにまとめて訳にされている
+     > ところがまだまだ散見されます。英文法に則りこういうことが起こらない
+     > ように徹底的に調べて、区切りの訳を**最小限の細かい単位**でされた時と
+     > 安定して区切れるよう改善してください。
+
+   実測すると、**本動詞も修飾語も6例とも区別できていなかった**
+   (どれも「まとめる」)。分詞の形をした語が名詞のうしろに立てば、
+   中身を見ずに前の名詞とまとめていた。
+
+   文法での切り分けは1つ —— **うしろにもう1つ動詞があるか。**
+   あれば前の名詞の説明、無ければそれが本動詞である。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 本動詞を、前の名詞とまとめない(第5.240節)')
+{
+  const 見る = (t, w) => {
+    const ws = wordsOf(t)
+    const i = ws.findIndex((x) => x.replace(/[^A-Za-z]/g, '').toLowerCase() === w)
+    return { ws, i }
+  }
+  /* **「まとめる」と「まとめない」の両方を見る**(CLAUDE.md)——
+     片方だけだと、**どれもまとめない形・どれもまとめる形**に
+     書き換えても緑のままになる */
+  const 例 = [
+    // ── 本動詞。**まとめてはいけない**(利用者の写真そのもの)──
+    ['only about thirty percent of our counseling customers signed a contract within the first month.', 'signed', false],
+    ['Our team finished the report last night.', 'finished', false],
+    ['Our sales team reached the target early this year.', 'reached', false],
+    // **別の節の動詞は数えない。** 数えると、また本動詞をまとめる
+    ['Our customers signed a contract because we needed it.', 'signed', false],
+    // ── 前の名詞の説明。**まとめてよい**(2026-09 利用者の指定)──
+    ['The boy running in the park just said hello to me.', 'running', true],
+    ['The money raised by the fund was not enough.', 'raised', true],
+    ['Phone scams targeting elderly people are hard to ignore.', 'targeting', true],
+    ['The report written last year says the market grew.', 'written', true],
+    ['The team selected last week will start on Monday.', 'selected', true],
+  ]
+  for (const [t, w, まとめる] of 例) {
+    const { ws, i } = 見る(t, w)
+    ok(`${w} … ${まとめる ? '前の名詞の説明(まとめる)' : '本動詞(まとめない)'}`,
+      postModifier(ws, i) === まとめる, t)
+    /* **本動詞なら、その前で区切る。** 区切りが無いと、ゲストがそこに
+       印を入れても訳を分けられない(実機の写真の出どころ) */
+    if (!まとめる) {
+      ok(`${w} … 主語と述語のあいだで区切る`, mainVerbHere(ws, i), t)
+    }
+  }
+
+  /* **画面の区切りの数と、訳の単位の数がそろっているか。**
+     ずれていると「区切っているのに、まとめて訳にされる」——
+     利用者が写真で送ってきたのは、これである。
+     **数を書き写さない。** どちらも同じ決まりから出しているので、
+     決まりを変えた日に、この検証も一緒に動く */
+  for (const t of [
+    'Last autumn, before we tried anything like this, only about thirty percent of our counseling customers signed a contract within the first month.',
+    'I believe we are losing customers simply because we give them too much time to think.',
+    'The boy running in the park just said hello to me.',
+  ]) {
+    const 画面 = slashesFor(t, 'beginner').length + 1
+    const 訳 = baseChunks(t).length
+    /* 分詞は**わざとまとめる**ので、訳のほうが少なくてよい。
+       **多いことは無い**(訳が細かすぎると対が作れない) */
+    ok(`区切りと訳の数(画面 ${画面} / 訳 ${訳})`, 訳 <= 画面 && 訳 > 0, t)
+  }
+
+  /* ── 程度の語は、うしろと離さない(2026-09-23 実機)── */
+  {
+    const t = 'We give them too much time to think.'
+    const 組 = baseChunks(t)
+    ok('too much time … 1つの名詞のかたまりにする',
+      組.some((c) => /too much time/.test(c)), 組.join(' | '))
+  }
 }
 
 console.log(ng === 0 ? '\n✅ 区切りの検証はすべて意図どおりです' : `\n❌ ${ng} 件おかしい`)

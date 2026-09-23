@@ -543,7 +543,16 @@ const LINKING_VERBS = new Set([
   'grew', 'grow', 'grows', 'getting', 'got', 'gets',
 ])
 
-/** 形容詞の前に立つ副詞。`is very happy /` でも述語だと分かるようにする */
+/**
+ * 形容詞の前に立つ副詞。`is very happy /` でも述語だと分かるようにする。
+ *
+ * **名詞のかたまりの前に立つときも、離さない**(2026-09-23 利用者の指摘)。
+ * `we give them / too / much time` と切れて、訳が
+ * 「あまりに」「多くの時間を」に割れていた(実機の写真)。
+ * `too much time` は1つの名詞のかたまりで、`too` は `much` を強めている。
+ * `-ly` で終わらないので `isAdverb()` では拾えず、
+ * 冠詞でもないので `DETERMINERS` にも入っていない。
+ */
 const DEGREE_WORDS = new Set([
   'very', 'so', 'too', 'quite', 'really', 'pretty', 'rather', 'extremely',
   'fairly', 'incredibly', 'especially', 'particularly', 'always', 'still',
@@ -671,6 +680,10 @@ function objectHere(words, i) {
   if (prev === 'to' || prev === 'as' || prev === 'than') return false
   // 副詞の前でも切ってあるので、ここでは切らない(`quickly / the report`)
   if (isAdverb(prev)) return false
+  /* **程度の語は、うしろと離さない**(2026-09-23 実機)。
+     `too / much time` と切れて、訳が「あまりに」「多くの時間を」に
+     割れていた。`too much time` で1つの名詞のかたまりである */
+  if (DEGREE_WORDS.has(prev)) return false
   /* **前の語が、名詞のかたまりの中身なら動詞ではない。**
      `We need the plan / a week before …` の `plan` は名詞である
      (`the` で始まったかたまりの中にいる)。
@@ -708,7 +721,121 @@ const MAIN_VERB_AUX = new Set(['have', 'has', 'had', 'do', 'does', 'did'])
  * 訳されてしまうので、名詞と1つにまとめる(`chunkJa.js` の `baseChunks`)。
  * **同じ判断を2か所に書かない**ので、ここから配る。
  */
-export function postModifier(words, i) {
+/**
+ * **動詞にしかならない過去形**(2026-09-23)。
+ *
+ * 「うしろにもう1つ動詞があるか」を見るためだけに使う。
+ *
+ * 【消した `COMMON_VERBS` とは役目が違う】
+ *
+ *   あちらは「**この一覧に載っていれば**、そのあとで切る」だったので、
+ *   **載っていない他動詞で切れなかった**(2026-09 の覚え書き)。
+ *   こちらは逆で、**載っていなければ「まとめない」**に倒れる ——
+ *   つまり訳が細かくなるだけで、利用者の指定
+ *   (「最小限の細かい単位で」)に近づく。**見落としに害が無い。**
+ *
+ * 【だから「確かなもの」だけを入れる】
+ *
+ *   名詞や形容詞にもなる語は**入れない** ——
+ *   `saw`(のこぎり)`rose`(ばら)`left`(左)`led`(LED)`ran`
+ *   `put` `cut` `set` `cost` `read` `hit`。
+ *   取り違えて「動詞がある」と読むと、**本動詞をまとめてしまう。**
+ *   害があるのは、そちら向きだけである。
+ */
+const SURE_PAST = new Set([
+  'said', 'went', 'came', 'took', 'told', 'thought', 'gave', 'knew',
+  'brought', 'bought', 'caught', 'taught', 'sought', 'understood',
+  'became', 'began', 'chose', 'drove', 'wrote', 'spoke', 'threw', 'flew',
+  'met', 'forgot', 'found', 'spent',
+])
+
+/**
+ * **この文に、もう1つ動詞があるか**(2026-09-23 利用者の指摘)。
+ *
+ * ════════════════════════════════════════════════════════════════
+ *   > 区切っているのにまとめて訳にされているところがまだまだ散見されます。
+ *   > 英文法に則りこういうことが起こらないように徹底的に調べて、
+ *   > 区切りの訳を**最小限の細かい単位**でされた時と安定して区切れるよう
+ *
+ * 【何が起きていたか】
+ *
+ *   `postModifier()` は「名詞のうしろの分詞」を**前の名詞とまとめて**
+ *   訳させる(`baseChunks`)。ところが**本動詞まで巻き込んでいた。**
+ *
+ *     … only about thirty percent of our counseling customers / signed a contract
+ *                                                    ↑ ここでまとめられ、
+ *       「私たちのカウンセリング顧客のうち契約を結びました」と1つの訳になる
+ *
+ *   `signed` は**この文の本動詞**であって、`customers` の説明ではない。
+ *   実測すると、本動詞も修飾語も**6例とも区別できていなかった。**
+ *
+ * 【文法での切り分け】
+ *
+ *   分詞が前の名詞を説明しているなら、**その文の動詞はもっとうしろにある。**
+ *
+ *     The boy / running in the park / just **said** hello to me.   → 説明
+ *     The money / raised by the fund / **was** not enough.          → 説明
+ *     … our customers / **signed** a contract within the first month. → 本動詞
+ *
+ *   だから「うしろにもう1つ動詞があるか」を見る。
+ *
+ * 【見つけられなくてよい】
+ *
+ *   動詞の一覧は、どこまで書いても**必ず足りない。**
+ *   けれども**見落としても害が無い**側に倒してある ——
+ *   見つからなければ「本動詞」と見なし、**まとめない。**
+ *   まとめないほうが訳は細かくなり、利用者の指定
+ *   (「最小限の細かい単位で」)に近づく。
+ *   **害があるのは逆向き**(動詞でないものを動詞と読んでまとめる)なので、
+ *   一覧は**確かなものだけ**にしてある。
+ *
+ * 【同じ文の中だけを見る】
+ *
+ *   `… customers signed a contract because we needed it.` の `needed` は
+ *   **別の節**の動詞である。ここまで数えると、また本動詞をまとめてしまう。
+ *   接続詞・関係詞・文の切れ目で**打ち切る。**
+ * ════════════════════════════════════════════════════════════════
+ */
+function verbFollows(words, i) {
+  for (let k = i + 1; k < words.length; k += 1) {
+    const raw = String(words[k] ?? '')
+    const w = bare(raw)
+    if (!w) continue
+    /* **別の節に入ったら、そこまで。** あちらの動詞は数えない ——
+       `… customers signed a contract because we needed it.` の
+       `needed` を数えると、また本動詞をまとめてしまう */
+    if (HEAD_WORDS.has(w) || CONNECTORS.has(w)) return false
+    /* いちばん確かなもの。**be 動詞・助動詞は、動詞以外にならない** */
+    if (MODALS.has(w) || LINKING_VERBS.has(w) || SURE_PAST.has(w)) return true
+    /* もう1つの分詞らしい語。**この文には動詞が2つ以上ある** */
+    if (IRREGULAR_PARTICIPLES.has(w) || /^[a-z]{4,}ed$/.test(w)) return true
+    /* **`objectHere()` は使わない**(2026-09-23 に試して外した)。
+       あれは「動詞と目的語の切れ目」を名詞の側から当てるので、
+
+         Our sales team reached / the target early / this year.
+                                                   ↑ ここで切れ目が立ち、
+       `early` が動詞に見えて「うしろに動詞がある」と読んでしまう。
+       **害があるのは、この向きだけ**である(本動詞をまとめる)。
+       上の4つ(助動詞・be 動詞・確かな過去形・分詞の形)で足りることを、
+       9つの文で確かめてある。 */
+    if (endsSentence(raw)) return false
+  }
+  return false
+}
+
+/**
+ * **名詞のうしろに立つ、分詞の形をした語か**(2026-09-23 に切り出した)。
+ *
+ * ここまでは「前の名詞の説明」も「本動詞」も同じ形に見える。
+ * どちらなのかは `verbFollows()` が決める ——
+ * **うしろにもう1つ動詞があれば説明、無ければ本動詞。**
+ *
+ *   ・説明   → `postModifier()`  … 訳を名詞とまとめる
+ *   ・本動詞 → `mainVerbHere()`  … **その前で区切る**(主語と述語を離す)
+ *
+ * **同じ見分けを2か所に書かない**(CLAUDE.md)。
+ */
+function participleAfterNoun(words, i) {
   const b = bare(words[i])
   if (!b) return false
   /* **`-ing` で終わるだけの名詞・代名詞を、分詞と間違えない**(2026-09 実測)。
@@ -728,6 +855,43 @@ export function postModifier(words, i) {
   if (takesGerund(prev)) return false         // `stopped guessing` は離さない
   if (DETERMINERS.has(prev) || isAdjective(prev)) return false
   return true
+}
+
+/**
+ * **前の名詞を説明する語句**(訳を名詞とまとめる)。
+ *
+ * **うしろにもう1つ動詞があるときだけ**(2026-09-23 利用者の指摘)。
+ * 無ければそれは本動詞で、まとめると主語と述語が1つの訳に潰れる ——
+ * 「私たちのカウンセリング顧客のうち契約を結びました」。
+ */
+export function postModifier(words, i) {
+  return participleAfterNoun(words, i) && verbFollows(words, i)
+}
+
+/**
+ * **名詞のすぐうしろに立つ本動詞か**(2026-09-23 利用者の指摘)。
+ *
+ *   > 区切っているのにまとめて訳にされているところがまだまだ散見されます
+ *
+ * 【なぜ要るか】
+ *
+ *   `… of our counseling customers / signed a contract` のように、
+ *   ゲストが**主語と述語のあいだ**で区切っても、
+ *   **控えにその切れ目が無い**と訳を分けられない。
+ *   だから画面には `/` が出ているのに、訳は1つのまま出ていた
+ *   (実機の写真)。
+ *
+ *   助動詞のある文(`we / are losing …`)はすでに切れていた。
+ *   **過去形1語でできている述語**だけが、どの決まりにも当たらなかった。
+ *
+ * 【消した `COMMON_VERBS` を持ち出さずに当てる】
+ *
+ *   語の一覧では当てられない(2026-09 の覚え書き)。
+ *   かわりに**形**で見る —— `-ed` / 不規則の分詞の形をしていて、
+ *   前が名詞で、**うしろにもう1つ動詞が無ければ**、それが本動詞である。
+ */
+export function mainVerbHere(words, i) {
+  return participleAfterNoun(words, i) && !verbFollows(words, i)
 }
 
 /**
@@ -962,6 +1126,16 @@ export function idealSlashes(sentence) {
     // 助動詞のあと(`is spreading` `was raised`)や冠詞のあと
     // (`a broken window`)は `postModifier()` と `add()` が断る
     else if (postModifier(words, i)) add(i, 1, `${b} の前(前の名詞を説明する)`)
+    /* **名詞のすぐうしろに立つ本動詞の前**(2026-09-23 利用者の指摘)。
+       `… of our counseling customers / signed a contract`。
+
+       助動詞のある述語(`we / are losing …`)はすでに切れていたが、
+       **過去形1語でできている述語**だけが、どの決まりにも当たらず、
+       ゲストがそこで区切っても**訳を分けられなかった**(実機の写真)。
+
+       強さは1(初級だけ)。**主語と述語を離して読むのは、初心者の読み方**で、
+       中級以上は1つのまとまりとして読める。 */
+    else if (mainVerbHere(words, i)) add(i, 1, `${b} の前(主語と述語を離す)`)
     // **比べる `than` の前**(`it feels safer / than reading a textbook.`)。
     // ただし `more than` `less than` は数量のひとかたまりなので切らない
     else if (b === 'than' && !['more', 'less', 'fewer'].includes(bare(words[i - 1] ?? ''))) {
