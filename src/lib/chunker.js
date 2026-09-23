@@ -1116,7 +1116,13 @@ export function idealSlashes(sentence) {
          接続詞の**前**ではすでに切ってあるので、そこで足りている
          (「接続詞・関係詞のあと、次のまとまりの先頭に置く」・CLAUDE.md) */
       const prev = bare(words[i - 1] ?? '')
-      if (!CONNECTORS.has(prev) && !COORDINATORS.has(prev) && !HEAD_WORDS.has(prev)) {
+      /* **程度の語のうしろでも切らない**(第5.241節・2026-09-23)。
+         `She writes very / clearly` と切れていた ——
+         `very clearly` は1つの副詞のかたまりで、`very` は `clearly` を
+         強めている(`too much time` とまったく同じ話)。
+         文法タグ「形容詞と副詞」の例文で見つかった */
+      if (!CONNECTORS.has(prev) && !COORDINATORS.has(prev) && !HEAD_WORDS.has(prev)
+        && !DEGREE_WORDS.has(prev)) {
         add(i, 1, `${b} の前`)
       }
     }
@@ -1148,6 +1154,17 @@ export function idealSlashes(sentence) {
     // 当てられない(`run` は名詞にも動詞にもなる)が、
     // **助動詞と be動詞は数が決まっていて、しかも必ず動詞である。**
     // 強さ1なので**初級でしか出ない。** 初心者向けの決まりだからである
+    /* **`There is / are` は切らない**(第5.241節・2026-09-23)。
+
+       `There / are two options` と切れていた。`there` は**場所取りの語**で、
+       主語ではない(中学文法「there の文」)。切ると「そこに」「2つある」と
+       いう訳になり、**日本語として成り立たない。**
+       文法タグ「there の文」の例文で見つかった。
+
+       **主語と動詞を切る決まりそのものは変えていない**(下の行)。
+       `there` だけが、主語の顔をした別のものである。 */
+    else if (MODALS.has(b) && bare(words[i - 1] ?? '') === 'there') { /* 切らない */ }
+    // 助動詞・be動詞の前。**主語と動詞を切って、動詞から先に訳す**
     else if (MODALS.has(b)) add(i, 1, `${b} の前(主語と動詞を切り、動詞から先に訳す)`)
 
     /* **目的語の前**(2026-08 / 2026-09 利用者の指定)。

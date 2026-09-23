@@ -14,6 +14,10 @@ import {
   baseChunks, chunkPairs, chunkPairsAtMarks, needsChunkJa, storedChunks,
 } from '../src/lib/chunkJa.js'
 import { alignedSentences } from '../src/lib/sentencePair.js'
+/* **文法タグごとの区切りのお手本**(第5.241節)。
+   タグを足したら例文も足す —— 足すまでここが赤い */
+import { GRAMMAR_SLASH } from '../src/data/grammarSlash.js'
+import { weaknessTagLabel, weaknessTags } from '../src/data/weaknessTags.js'
 
 let ng = 0
 const ok = (name, cond, detail = '') => {
@@ -677,6 +681,73 @@ console.log('\n▶ 本動詞を、前の名詞とまとめない(第5.240節)')
     ok('too much time … 1つの名詞のかたまりにする',
       組.some((c) => /too much time/.test(c)), 組.join(' | '))
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   文法タグごとに、区切り方を確かめる(第5.241節・2026-09-23 利用者の指定)
+
+     > 間違えている区切りをその度に送るのは時間がかかり過ぎます。
+     > **中学英文法の文法タグ**がありますよね。それらの文法を鑑みれば
+     > 区切り方のルールをさらに精度上げることができるはずです。
+
+   `weaknessTags.js` の**文法タグ 37 件**それぞれに例文を1つ置き
+   (`src/data/grammarSlash.js`)、「ここでは切らない」「ここでは切る」を
+   機械で見る。**1件ずつ送ってもらわなくても、穴が出る。**
+
+   はじめて通したとき、**37 件中 9 件**が引っかかった。
+   そのうち**2件が本当の間違い**で、7件は**こちらの期待が厳しすぎた**
+   (アプリがわざと切っている場所だった)。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 文法タグごとの区切り(第5.241節)')
+{
+  const そろえ = (w) => String(w ?? '').replace(/[^A-Za-z']/g, '').toLowerCase()
+  /** `keep` の語の並びが、文の何語目から何語目までか */
+  const 範囲 = (words, span) => {
+    const need = wordsOf(span).map(そろえ)
+    for (let i = 0; i + need.length <= words.length; i += 1) {
+      if (need.every((w, k) => そろえ(words[i + k]) === w)) return [i, i + need.length]
+    }
+    return null
+  }
+
+  /* **タグを足したら、例文も足す。** 足すまで赤い ——
+     「一覧は `seed_rows.sql` に書かない。制約から読み取る」と同じ考え方 */
+  const タグ = weaknessTags
+    .filter((t) => t.category === 'grammar' && t.kind === 'weakness').map((t) => t.id)
+  const 在る = new Set(GRAMMAR_SLASH.map((x) => x.tag))
+  const 足りない = タグ.filter((x) => !在る.has(x))
+  ok(`文法タグ ${タグ.length} 件すべてに例文がある`, 足りない.length === 0, 足りない.join(', '))
+  const 余計 = [...在る].filter((x) => !タグ.includes(x))
+  ok('無くなったタグの例文が残っていない', 余計.length === 0, 余計.join(', '))
+
+  for (const c of GRAMMAR_SLASH) {
+    const words = wordsOf(c.en)
+    const cuts = new Set(slashesFor(c.en, 'beginner').map((x) => x.at))
+    const 罪 = []
+    /* **切ってはいけない組**(文法上ひとかたまりのもの) */
+    for (const span of c.keep) {
+      const r = 範囲(words, span)
+      if (!r) { 罪.push(`「${span}」が文に無い`); continue }
+      const 中 = [...cuts].filter((i) => i > r[0] && i < r[1])
+      if (中.length) 罪.push(`「${span}」の中で切っている(${中.map((i) => words[i]).join(' ')})`)
+    }
+    /* **切らなければいけないところ。** これが無いと、
+       「どこにも切らない」形に書き換えても緑のまま(CLAUDE.md) */
+    for (const w of c.cut) {
+      const r = 範囲(words, w)
+      if (!r) { 罪.push(`「${w}」が文に無い`); continue }
+      if (r[0] > 0 && !cuts.has(r[0])) 罪.push(`「${w}」の前で切っていない`)
+    }
+    ok(`${weaknessTagLabel(c.tag)} … ${c.en}`, 罪.length === 0,
+      `${罪.join(' / ')}\n    区切り: ${[...cuts].sort((a, b) => a - b).map((i) => words[i]).join(' | ')}`)
+  }
+
+  /* **「切る」を1つも書いていない例文があってはならない** ——
+     `keep` だけの例文ばかりだと、「どこにも切らない」形で全部緑になる。
+     **少なくとも半分は、切る場所も見ている**ことを確かめる */
+  const 切るあり = GRAMMAR_SLASH.filter((c) => c.cut.length > 0).length
+  ok(`切る場所も見ている例文が、半分以上ある(${切るあり} / ${GRAMMAR_SLASH.length})`,
+    切るあり * 2 >= GRAMMAR_SLASH.length)
 }
 
 console.log(ng === 0 ? '\n✅ 区切りの検証はすべて意図どおりです' : `\n❌ ${ng} 件おかしい`)
