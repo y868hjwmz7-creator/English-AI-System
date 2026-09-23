@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   48行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   49行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -20,6 +20,7 @@
 --     supabase/apply/pending_matome.sql   ← これ1つで 0041 以降が全部入ります
 --
 --   それより古いところが「まだです」のときは、こちら。
+--     0009       … supabase/migrations/0009_semantic_dedup.sql
 --     0013〜0023 … supabase/apply/pending_2026-08-29.sql
 --     0024       … supabase/apply/pending_2026-08-31.sql
 --     0025       … supabase/apply/pending_2026-08-31b.sql
@@ -32,8 +33,20 @@
 
 select 何が要るか, case when 済 then '✅ もう入っています' else '⬜ まだです' end as 状態
 from (
-  select '0013〜0019(発音記号・復習の箱・音声の置き場など)' as 何が要るか,
-         exists (select 1 from pg_tables where tablename = 'vocab_days') as 済, 1 as 順
+  -- **0009 だけ、貼る SQL の一覧に無かった**(2026-09-23 に気づいた)。
+  -- `supabase/apply/` は 0013 から始まっている。0009 が入っていないと
+  -- **「言い換えただけの文」の判定がまるごと働かない**のに、
+  -- この表では ✅ とも ⬜ とも出ていなかった。
+  -- 表と関数の**両方**を見る —— 片方だけだと、途中まで入った状態を見逃す
+  select '0009 意味の近さで重複を弾く(supabase/migrations/0009_semantic_dedup.sql)' as 何が要るか,
+         (exists (select 1 from pg_tables where tablename = 'sentence_embeddings')
+          and (select count(*) = 2 from pg_proc p
+                join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public'
+                 and p.proname in ('similar_sentences',
+                                   'sentences_without_embedding'))) as 済, 0 as 順
+  union all select '0013〜0019(発音記号・復習の箱・音声の置き場など)',
+         exists (select 1 from pg_tables where tablename = 'vocab_days'), 1
   union all select '0020 単語・フレーズの発音記号',
     exists (select 1 from information_schema.columns
             where table_name = 'material_items' and column_name = 'phonetic'), 2
