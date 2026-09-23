@@ -37,9 +37,10 @@
  *   プレインでも見分けられる。数の丸も `.chip-count` がすでにある。
  *   **ここで新しい配色を作らない。**
  */
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import {
-  SCOPES, SIZES, scopeCounts, scopeLead, scopePool, sizeLabel, takeCount, todayKey, isDueNow,
+  SCOPES, SCOPE_GROUPS, SIZES, scopeCounts, scopeLead, scopePool, sizeLabel,
+  takeCount, todayKey, isDueNow,
 } from '../lib/reviewScope.js'
 import SettingsSheet from './SettingsSheet.jsx'
 import { FocusIcon, RepeatIcon, SortIcon } from './Icons.jsx'
@@ -115,28 +116,45 @@ export default function ReviewScope({
      ここを外にも書くと、同じものが2か所に出る */
   const 選ぶ欄 = (
     <>
-      <p className="rscope-head" id="rscope-when">いつのぶん</p>
-      <div className="chiprow" role="group" aria-labelledby="rscope-when">
-        {SCOPES.map((s) => {
-          const n = counts[s.id] ?? 0
-          const on = s.id === scope
-          return (
-            <button
-              key={s.id}
-              type="button"
-              /* **0件の札は押せない。** ただし**消さない** ——
-                 「1か月以内には無い」ことも、それ自体が知らせである */
-              disabled={n === 0}
-              aria-pressed={on}
-              className={`chip rscope-chip${on ? ' chip--on' : ''}`}
-              onClick={() => onScope(s.id)}
-            >
-              {s.label}
-              <span className="chip-count">{n}</span>
-            </button>
-          )
-        })}
-      </div>
+      {/* **性質ごとに、行を分ける**(第5.245節・2026-09-23 実機)。
+
+            > 今日出す、とかの意味が分かりにくいです。もっと直感的に
+
+          1つの行に「復習の予定」と「いつ出会ったか」が混ざっていたので、
+          **「1週間」が『1週間後に出る』なのか『1週間以内に出会った』なのか、
+          読んだだけでは決まらなかった。**
+          **見出しと並びで示す**(共通ルール)—— 説明の文は足さない。
+          **どの札がどの行かは `SCOPES` の `group` 1か所**で決まる */}
+      {SCOPE_GROUPS.map((g) => {
+        const 札 = SCOPES.filter((s) => s.group === g.id)
+        if (!札.length) return null
+        return (
+          <Fragment key={g.id}>
+            <p className="rscope-head" id={`rscope-when-${g.id}`}>{g.label}</p>
+            <div className="chiprow" role="group" aria-labelledby={`rscope-when-${g.id}`}>
+              {札.map((s) => {
+                const n = counts[s.id] ?? 0
+                const on = s.id === scope
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    /* **0件の札は押せない。** ただし**消さない** ——
+                       「1か月以内には無い」ことも、それ自体が知らせである */
+                    disabled={n === 0}
+                    aria-pressed={on}
+                    className={`chip rscope-chip${on ? ' chip--on' : ''}`}
+                    onClick={() => onScope(s.id)}
+                  >
+                    {s.label}
+                    <span className="chip-count">{n}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </Fragment>
+        )
+      })}
 
       <p className="rscope-head" id="rscope-many">{`何${unit}ずつ`}</p>
       <div className="chiprow" role="group" aria-labelledby="rscope-many">

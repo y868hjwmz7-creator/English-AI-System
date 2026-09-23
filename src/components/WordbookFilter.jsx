@@ -171,8 +171,15 @@ export default function WordbookFilter({
       {show.day && (
         <div className="wbfilter-row">
           <span className="wbfilter-name">日付</span>
+          {/* **選んでいなくても色を持つ**(第5.244節・`npm run test:bar` が
+              見つけた)。`day ? ' btn--quiet' : ''` と書いてあったので、
+              **日付をまだ選んでいないあいだは、地の色のまま**だった ——
+              となりの「分野」「場面」「教材」は選ぶ欄(`select`)で色があるのに、
+              **この1つだけが白い箱**に見えていた。
+              選んでいるかどうかは、**中の文字**が言う(「すべて」 → 「09/20」)。
+              **色だけに頼らない**(CLAUDE.md) */}
           <button type="button" ref={btnRef}
-                  className={`btn btn--small wbfilter-ctl${day ? ' btn--quiet' : ''}`}
+                  className="btn btn--small btn--quiet wbfilter-ctl"
                   aria-expanded={openCal}
                   onClick={() => setOpenCal((x) => !x)}>
             <CalendarIcon />

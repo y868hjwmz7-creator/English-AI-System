@@ -89,15 +89,39 @@ export function daysAgo(n, today = todayKey()) {
  * (機能は消えていない —— これまでは0件になるまで見えなかったので、
  * むしろ届きやすくなる)。
  */
+/**
+ * **札は、性質ごとに2つの行へ分ける**(第5.245節・2026-09-23 実機)。
+ *
+ *   > 今日出す、とかの意味が分かりにくいです。もっと直感的に
+ *
+ * 1つの行に、**性質のちがう2種類**が混ざっていた。
+ *
+ *   ・`due` … **復習の予定**の話(間隔の仕組みで、今日が復習の日のもの)
+ *   ・`d7`〜`d182` … **いつ出会ったか**の話(単語帳・復習に入った日)
+ *
+ * 「今日出す」と「1週間」が横に並んでいるので、
+ * **「1週間」が『1週間後に出る』なのか『1週間以内に出会った』なのか、
+ * 読んだだけでは決まらない。** 言葉だけ直しても、混ざっていること自体が
+ * 分かりにくさの元である。
+ *
+ * **見出しと並びで示す**(共通ルール「余計な説明書きを置かない。
+ * かわりに見出しと並びで示す」)。
+ */
+export const SCOPE_GROUPS = [
+  { id: 'basic', label: '何を出す' },
+  { id: 'met', label: '出会った時期' },
+]
+
 export const SCOPES = [
-  { id: 'due', kind: 'due', label: '今日出す' },
-  { id: 'd7', kind: 'days', days: 7, label: '1週間' },
-  { id: 'd14', kind: 'days', days: 14, label: '2週間' },
-  { id: 'd21', kind: 'days', days: 21, label: '3週間' },
-  { id: 'd30', kind: 'days', days: 30, label: '1か月' },
-  { id: 'd90', kind: 'days', days: 90, label: '3か月' },
-  { id: 'd182', kind: 'days', days: 182, label: '半年' },
-  { id: 'all', kind: 'all', label: 'ぜんぶ' },
+  /* **`due` は先頭のまま。** `scopeOf()` が既定として `SCOPES[0]` を返す */
+  { id: 'due', kind: 'due', group: 'basic', label: '今日の復習' },
+  { id: 'd7', kind: 'days', days: 7, group: 'met', label: '1週間以内' },
+  { id: 'd14', kind: 'days', days: 14, group: 'met', label: '2週間以内' },
+  { id: 'd21', kind: 'days', days: 21, group: 'met', label: '3週間以内' },
+  { id: 'd30', kind: 'days', days: 30, group: 'met', label: '1か月以内' },
+  { id: 'd90', kind: 'days', days: 90, group: 'met', label: '3か月以内' },
+  { id: 'd182', kind: 'days', days: 182, group: 'met', label: '半年以内' },
+  { id: 'all', kind: 'all', group: 'basic', label: 'ぜんぶ' },
 ]
 
 export const scopeOf = (id) => SCOPES.find((s) => s.id === id) ?? SCOPES[0]
@@ -171,9 +195,11 @@ export function scopeCounts(rows, today = todayKey()) {
  */
 export function scopeLead(scopeId, unit = '問') {
   const sc = scopeOf(scopeId)
-  if (sc.kind === 'due') return `今日出すぶんから出します。`
+  /* **札の言葉を、そのまま文に続ける**(第5.245節)。
+     札が「1週間以内」になったので、ここで「以内」を足すと二重になる */
+  if (sc.kind === 'due') return `今日が復習の日のものから出します。`
   if (sc.kind === 'all') return `溜まっている${unit}ぜんぶから出します。期限は見ません。`
-  return `${sc.label}以内に出会った${unit}から出します。`
+  return `${sc.label}に出会った${unit}から出します。`
 }
 
 /**
