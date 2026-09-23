@@ -12,7 +12,7 @@ import AppTabs from './components/AppTabs.jsx'
 import AppHome, { HOME_ID } from './components/AppHome.jsx'
 import {
   BoltIcon, BookIcon, CardsIcon, ChartIcon, CloseIcon, HomeIcon, MicIcon, MusicIcon,
-  PeopleIcon, ShareIcon, ShelfIcon, StepsIcon, TaskIcon, TrendIcon,
+  PeopleIcon, ShareIcon, StepsIcon, TaskIcon,
 } from './components/Icons.jsx'
 import { applyTheme, loadTheme } from './lib/theme.js'
 import { applyPalette, loadPalette } from './lib/palette.js'
@@ -40,16 +40,16 @@ import LearnerBar from './components/LearnerBar.jsx'
 import { onClipTrouble, checkClipGateway, lastClipReport } from './lib/audioClips.js'
 import { viewerRoleOf } from './lib/viewer.js'
 import Wordbook from './components/Wordbook.jsx'
-import Progress from './components/Progress.jsx'
 import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import BgmLibrary from './components/BgmLibrary.jsx'
-import ShelfBuilder from './components/ShelfBuilder.jsx'
 import AssignBooks from './components/AssignBooks.jsx'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadLearnerFeatures } from './lib/learnerFeatures.js'
 import { showsBasics, showsFrameQr } from './data/learnerFeatures.js'
 import { shelfList, shelvesFor } from './data/shelves.js'
+/* **冊ごとの語数**(第5.246節)。中身の無い冊を出さないために読む */
+import { loadShelfCounts } from './lib/shelfWords.js'
 import { NATIVE_FLOW_UNITS, nfUnitsFor } from './data/nativeFlow.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 
@@ -397,6 +397,27 @@ export default function App() {
   const isOwner = profile?.role === 'owner'
   const isLearner = profile?.role === 'learner'
 
+  /* **冊ごとの語数**(第5.246節・2026-09-23 利用者の指定
+     「まだ中身のないものは表示されないようにしましょう」)。
+
+     **`isTrainer` の下に置く。** 上に書いたら、まだ作られていない名前を
+     見張りの一覧(`[isTrainer]`)で読むことになり、**開いた瞬間に落ちる**
+     (`lint` も `build` も通る・CLAUDE.md「ビルドが通っても安心しない」)。
+
+     **トレーナーのときだけ読む。** ゲストは「出された冊だけ」なので、
+     数で絞る必要がない —— **要らない問い合わせを投げない。**
+
+     **読めなかったら `null` のまま。** 0 と「数えられなかった」を
+     取り違えない(CLAUDE.md)—— 通信が届かないだけで冊が消えると、
+     **あるはずのものが黙って無くなる。** */
+  const [shelfCounts, setShelfCounts] = useState(null)
+  useEffect(() => {
+    if (!isTrainer) { setShelfCounts(null); return undefined }
+    let alive = true
+    loadShelfCounts().then((r) => { if (alive) setShelfCounts(r.data ?? null) }, () => {})
+    return () => { alive = false }
+  }, [isTrainer])
+
   /* **文法30日集中講座と基礎単語を、この人に出すか**(0055)。
      判断は `showsBasics()` 1か所。**ここで `role === 'learner'` と書かない。**
      Supabase が未設定のとき(手元で画面を確かめるとき)は、
@@ -404,12 +425,27 @@ export default function App() {
   const basicsOn = !isSupabaseConfigured || showsBasics({ role: profile?.role ?? null, features })
 
   /* **業種べつの単語帳(棚)のうち、この人に出すもの**(0057)。
-     判断は `shelvesFor()` 1か所。**ここで役割を見ない** ——
-     2026-09 の指定で**トレーナーも「出された冊だけ」**になったので、
-     渡すのは `features` だけである(出す道は 0059。自分で自分に出す)。
+     判断は `shelvesFor()` 1か所。**ここで `filter` を書き写さない。**
+
+     【トレーナーには 35 冊ぜんぶ】(第5.246節・2026-09-23 利用者の指定)
+
+       > トレーナーの単語帳の冊選択のタブには常に入れておきたいですが、
+       > まだ中身のないものは表示されないようにしましょう。
+
+     2026-09 の指定で**トレーナーも「出された冊だけ」**にしていたが、
+     作った本人が、自分に出す操作をもう1回しないと開けなかった。
+     **ゲストはこれまでどおり**「トレーナーが出した冊だけ」である
+     (そこは権限の話なので変えない)。
+
+     **中身の無い冊は出さない。** 数は `shelfCounts` が持つ ——
+     **読めなかったときは `null`** なので、数では絞らない
+     (0 と「数えられなかった」を取り違えない・CLAUDE.md)。
+
      Supabase が未設定のとき(手元で画面を確かめるとき)は、
      ほかの画面と同じように**そのまま出す** */
-  const myShelves = isSupabaseConfigured ? shelvesFor({ features }) : shelfList()
+  const myShelves = isSupabaseConfigured
+    ? shelvesFor({ features, all: isTrainer, counts: shelfCounts })
+    : shelfList()
 
   /* **Native Flow(Quick Response)のうち、この人に出す Unit**
      (2026-09 利用者の指定)。
@@ -565,24 +601,10 @@ export default function App() {
       id: 'qr', label: 'Quick Response', icon: BoltIcon,
       desc: '日本語を見て、英語で言う',
     },
-    /**
-     * **達成具合**(第5.167節・2026-09 利用者の指定)。
-     *
-     *   > 達成具合を確認するには別の専用ページに飛んで出来るようにすれば良いので
-     *
-     * 単語帳と Quick Response が**開いた瞬間に始まる**形になり、
-     * 進み具合の札を出していたトップ画面が無くなった。
-     * **ゲストには、いま自分の積み上がりを見る場所が1つも無い**(調べた)。
-     *
-     * **誰にでも出す** —— 単語帳と Quick Response はトレーナーも使う。
-     * **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている
-     */
-    {
-      /* **絵は「集計」と分ける**(ChartIcon はあちらが使っている)。
-         同じ絵を2つの行き先に付けると、どちらがどちらか分からない */
-      id: 'progress', label: '達成具合', icon: TrendIcon,
-      desc: 'どこまで進んだかを、じっくり見る',
-    },
+    /* **「達成具合」は廃止した**(第5.246節・2026-09-23 利用者の指定
+       「達成具合、これ要らないね。排除しましょう」)。
+       単語帳と Quick Response の「おわる」「×」の行き先だったので、
+       **ホームへ戻す** —— 行き止まりを作らない(CLAUDE.md) */
     /* **発音練習だけは独立した機能にする**(2026-08 利用者の指定)。
        **名前は「スピーチ練習」**(2026-09 利用者の指定)。
        > 「発音を練習」を「スピーチ練習」にしてください
@@ -598,16 +620,10 @@ export default function App() {
        ゲストには出さない —— ゲストは**聞き流しのときに聴くだけ**である
        (**効かない操作を見せない**)。
        **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている */
-    /* **業種べつの単語帳(棚)**(0057・2026-09 利用者の指定)。
-       > 何冊も違う単語帳を持てるようにしてほしいんです。
-       作るのも育てるのも**トレーナーと管理者だけ**なので、ゲストには
-       出さない —— ゲストは単語帳の中の欄から**追加するだけ**である
-       (**効かない操作を見せない**)。
-       **下の帯(`TAB_IDS`)には足さない。** あちらは利用者が4つと決めている */
-    (!isSupabaseConfigured || isTrainer) && {
-      id: 'shelves', label: '業種べつの単語帳', icon: ShelfIcon,
-      desc: '業種・趣味ごとの語句を作る',
-    },
+    /* **「業種べつの単語帳」は、アサインの中へ移した**(第5.246節・
+       2026-09-23 利用者の指定「業種別の単語帳も『アサイン』内に移しましょう」)。
+       出す欄(`AssignShelf`)のすぐ近くになり、
+       **「作って、出す」が1つの画面で済む。** 行き先は1つ減った */
     (!isSupabaseConfigured || isTrainer) && {
       id: 'bgm', label: '音楽', icon: MusicIcon,
       desc: '聞き流しのときに流す曲',
@@ -1028,7 +1044,12 @@ export default function App() {
                  `assignments.assigned_by` に入れる人が要る ——
                  単語帳・Quick Response の冊(`learner_features`)には
                  要らなかったので、渡していなかった */
-              <AssignBooks me={profile} />
+              /* **自分自身にも棚を出せる**(0059)。`me` を渡すのは、
+                 `loadMyLearners()` に**自分は入らない**ためである。
+                 出したら `features` を読み直す(第5.246節で
+                 `ShelfBuilder` をこの中へ移したので、ここを通す)——
+                 さもないと、自分の単語帳に冊が増えるのが**次に開くまで**になる */
+              <AssignBooks me={profile} onSelfChange={reloadFeatures} />
             ) : view === 'homework' ? (
               <LearnerHomework
                 me={profile}
@@ -1078,9 +1099,10 @@ export default function App() {
                         /* **業種べつの単語帳も、トレーナーが指定した棚だけ**
                            (0057)。判断は `shelvesFor()` が済ませてある */
                         shelves={myShelves}
-                        /* **終わったら達成具合へ**(第5.167節)。
-                           トップ画面が無くなったので、戻り先をそこにする */
-                        onClose={() => setView('progress')}
+                        /* **終わったらホームへ**(第5.246節)。
+                           達成具合を廃止したので、戻り先はメニューの一覧である
+                           —— **行き止まりを作らない**(CLAUDE.md) */
+                        onClose={() => setView(HOME_ID)}
                         /* **左上は ☰**(第5.172節)。ここはメニューから
                            開いたページそのものなので、✕ には行き先が無い */
                         onMenu={openFocusMenu} />
@@ -1092,26 +1114,14 @@ export default function App() {
                  ゲストのページから開く画面には、冊の切り替えを
                  もともと出していない(単語帳とまったく同じ判断) */
               <QrReview nfUnits={myNfUnits} frameOn={myFrameQr}
-                        /* **終わったら達成具合へ**(第5.167節) */
-                        onClose={() => setView('progress')}
+                        /* **終わったらホームへ**(第5.246節。単語帳と同じ) */
+                        onClose={() => setView(HOME_ID)}
                         /* **左上は ☰**(第5.172節。単語帳とまったく同じ) */
                         onMenu={openFocusMenu} />
-            ) : view === 'progress' ? (
-              /* **達成具合**(第5.167節)。単語帳と Quick Response の
-                 `×` と「おわる」の行き先でもあるので、
-                 **必ず練習へ戻る道を置く**(行き止まりを作らない) */
-              <Progress onGo={setView} />
             ) : view === 'pronunciation' ? (
               <PronunciationPractice me={profile} />
             ) : view === 'bgm' ? (
               <BgmLibrary userId={profile?.id ?? null} />
-            ) : view === 'shelves' ? (
-              /* **自分自身にも出せる**(0059・2026-09 利用者の指定)。
-                 `me` を渡すのは、`loadMyLearners()` に**自分は入らない**
-                 ためである(あれは担当ゲストの一覧)。
-                 出したら `features` を読み直す —— さもないと、
-                 自分の単語帳に冊が増えるのが**次に開くまで**になる */
-              <ShelfBuilder me={profile} onSelfChange={reloadFeatures} />
             ) : (
               <AdminDashboard />
             )}

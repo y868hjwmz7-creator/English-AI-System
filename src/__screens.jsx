@@ -44,7 +44,6 @@ import BookShelf from './components/BookShelf.jsx'
 import BookPick from './components/BookPick.jsx'
 import DrillTitle from './components/DrillTitle.jsx'
 import { nowName } from './lib/bookNow.js'
-import Progress from './components/Progress.jsx'
 import ReviewScope from './components/ReviewScope.jsx'
 import SessionOwner from './components/SessionOwner.jsx'
 import AssignShelf from './components/AssignShelf.jsx'
@@ -685,6 +684,8 @@ const CARD_LEARNERS = [
 function AssignScreen() {
   const busy = q.get('busy') === 'on' ? BASICS : null
   const empty = q.get('assign') === 'none'
+  /* **業種べつの単語帳を作る欄**(第5.246節)。本物と同じく、既定は閉じている */
+  const [buildOpen, setBuildOpen] = useState(false)
   const all = shelfList()
   /** **出している冊**。押すと本当に変わる —— 印だけ描いても意味がない */
   const [features, setFeatures] = useState(new Set(empty ? [] : [FRAME_QR]))
@@ -867,6 +868,22 @@ function AssignScreen() {
         )}
 
         <AssignNote note={matNote} />
+      </section>
+
+      {/* ── **業種べつの単語帳を作る**(第5.246節)。**本物と1文字も違えない** ──
+          左メニューの行き先を1つ減らして、ここへ移した。
+          **既定では閉じている**(「その他の教材」と同じ作法)。
+          中身(`ShelfBuilder`)は Supabase を引き連れているので、
+          骨組みでは**閉じた形だけ**を置く —— 本物も既定では閉じている */}
+      <section className="card">
+        <div className="assign-mats-head">
+          <h3 className="card-title">業種べつの単語帳を作る</h3>
+          <button type="button" className="btn btn--small btn--ghost"
+                  aria-expanded={buildOpen}
+                  onClick={() => setBuildOpen(!buildOpen)}>
+            {buildOpen ? 'とじる' : 'ひらく'}
+          </button>
+        </div>
       </section>
     </div>
   )
@@ -1861,20 +1878,6 @@ const SHELF = (
   </div>
 )
 
-/* **達成具合**(`?screen=progress`・第5.167節)。
-
-   単語帳と Quick Response の `×` と「おわる」の行き先である。
-   **ここが行き止まりになると、練習へ戻る道が無くなる。**
-
-   本物の `Progress` をそのまま描く。Supabase が無い環境では
-   「溜まりません」の側が出るが、**練習へ戻るボタンはどちらにも出る** ——
-   測りたいのはそこ(行き止まりを作らない・すき間ゼロにしない)である。 */
-const PROGRESS = (
-  <div className="app-main" style={{ padding: 16 }}>
-    <Progress onGo={() => {}} />
-  </div>
-)
-
 
 /* スピーチ練習(`?screen=speech`・0054・2026-09 利用者の指定)。
 
@@ -2076,8 +2079,6 @@ createRoot(document.getElementById('root')).render(
     ? FILL
     : q.get('screen') === 'chunk'
     ? CHUNK
-    : q.get('screen') === 'progress'
-    ? PROGRESS
     : q.get('screen') === 'shelf'
     ? SHELF
     : q.get('screen') === 'shift'

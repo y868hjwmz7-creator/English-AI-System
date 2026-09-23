@@ -5402,12 +5402,25 @@ console.log('\nスピーチ練習(0054)')
     '棚 … 棚でないものは、誰にも出さない')
   ok(shelvesFor({ features: new Set(['shelf:it']) }).length === 1,
     '棚 … その人に出す棚だけを並べる(画面で `filter` を書き写さない)')
-  ok(shelvesFor({ role: 'trainer', features: new Set() }).length === 0,
-    '棚 … トレーナーも、1冊も出していなければ0冊')
-  ok(shelvesFor({ role: 'owner', features: new Set() }).length === 0,
-    '棚 … 管理者も同じ(指定なしで全冊にしない)')
   ok(shelvesFor({ role: 'learner', features: new Set() }).length === 0,
     '棚 … ゲストは、指定が無ければ0冊')
+  /* **トレーナーには 35 冊ぜんぶ**(第5.246節・2026-09-23 利用者の指定
+     「トレーナーの単語帳の冊選択のタブには常に入れておきたい」)。
+     **役割はここでは見ない** —— 呼ぶ側が `all` で言う(0059 のまま) */
+  ok(shelvesFor({ all: true, features: new Set() }).length === list.length,
+    '棚 … `all` なら、1冊も出していなくても 35 冊ぜんぶ')
+  /* **中身の無い冊は出さない**(行き止まりを作らない)。
+     **「出る」と「出ない」の両方を見る** —— 0 語は落ち、語のある冊は残る */
+  {
+    const counts = new Map([[list[0].id, 7]])
+    const got = shelvesFor({ all: true, features: new Set(), counts })
+    ok(got.length === 1 && got[0].id === list[0].id,
+      '棚 … 語のある冊だけが並ぶ(一覧に無い冊は 0 語)')
+  }
+  /* **数えられなかったときは落とさない。** 0 と `null` を取り違えない ——
+     通信が届かないだけで冊が消えると、あるはずのものが黙って無くなる */
+  ok(shelvesFor({ all: true, features: new Set(), counts: null }).length === list.length,
+    '棚 … 語数が読めなかったら、数では絞らない(0 と null を取り違えない)')
   ok(list.length > 0
     && shelvesFor({ features: new Set(list.map((s) => `shelf:${s.id}`)) }).length
       === list.length,
@@ -5417,12 +5430,17 @@ console.log('\nスピーチ練習(0054)')
      **「名前が出てくるか」で見ない**(CLAUDE.md)。
      説明の中にも同じ言葉があるので、**使っている形**で見る */
   const appS = noCS(readS('src/App.jsx'))
-  ok(/shelvesFor\(\{ features \}\)/.test(appS),
-    '棚 … `App.jsx` が `shelvesFor()` で出し分けている')
+  ok(/shelvesFor\(\{ features, all: isTrainer, counts: shelfCounts \}\)/.test(appS),
+    '棚 … `App.jsx` が `shelvesFor()` で出し分けている(全冊と語数も渡す)')
   /* **役割を渡し戻していないか。** 渡すと、判断そのものは1か所のままでも
-     「トレーナーだけ別」を書き足す下地に戻る */
+     「トレーナーだけ別」を書き足す下地に戻る。
+     **`all` は役割ではない** —— 「ぜんぶ出すか」という問いで、
+     誰がそうなるかは呼ぶ側が決める(0059 のまま) */
   ok(!/shelvesFor\(\{\s*role:/.test(appS),
     '棚 … `App.jsx` は `shelvesFor()` に役割を渡していない(0059)')
+  /* **語数は、トレーナーのときだけ読む**(要らない問い合わせを投げない) */
+  ok(/if \(!isTrainer\) \{ setShelfCounts\(null\); return undefined \}/.test(appS),
+    '棚 … 語数は、トレーナーのときだけ読む')
   ok(/shelves=\{myShelves\}/.test(appS),
     '棚 … 単語帳に、その人の棚を渡している')
   ok(!/'shelf:'\s*\+/.test(appS), '棚 … 画面で名前を組み立てていない')
@@ -5742,10 +5760,19 @@ console.log('\nスピーチ練習(0054)')
     '自分に出す … 自分のぶんだと窓口に伝える(断り方を読み替えるため)')
   ok(/if \(who\.self\) onSelfChange\?\.\(\)/.test(build),
     '自分に出す … 出したら、その場で読み直させる(次に開くまで増えない、を防ぐ)')
-  /* **`App.jsx` が渡しているか。** 受け取る側だけでは何も起きない */
+  /* **呼ぶ側が渡しているか。** 受け取る側だけでは何も起きない。
+     **`ShelfBuilder` はアサインの中へ移った**(第5.246節・利用者の指定
+     「業種別の単語帳も『アサイン』内に移しましょう」)ので、
+     `App` → `AssignBooks` → `ShelfBuilder` と**2段で渡る。**
+     **両方を見る** —— どちらか片方だけだと、途中で切れても緑のまま */
   const app59 = noCS(readS('src/App.jsx'))
-  ok(/<ShelfBuilder me=\{profile\} onSelfChange=\{reloadFeatures\} \/>/.test(app59),
-    '自分に出す … `App.jsx` が自分と読み直しを渡している')
+  const assign59 = noCS(readS('src/components/AssignBooks.jsx'))
+  ok(/<AssignBooks me=\{profile\} onSelfChange=\{reloadFeatures\} \/>/.test(app59),
+    '自分に出す … `App.jsx` がアサインへ、自分と読み直しを渡している')
+  ok(/<ShelfBuilder me=\{me\} onSelfChange=\{onSelfChange\} \/>/.test(assign59),
+    '自分に出す … アサインが、そのまま作る画面へ通している')
+  ok(!/'shelves'/.test(app59) && !/ShelfBuilder/.test(app59),
+    '自分に出す … 左メニューの「業種べつの単語帳」は残っていない')
   ok(/loadLearnerFeatures\(\)\.then\(\(r\) => setFeatures\(r\.data\)/.test(app59),
     '自分に出す … 読み直すと `features` が入れ替わる')
   /* **0059 より前の断りを、そのまま出さない**(CLAUDE.md
@@ -7223,7 +7250,6 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const app = noNote(readD('src/App.jsx'))
   const pick = noNote(readD('src/components/BookPick.jsx'))
   const shelf = noNote(readD('src/components/BookShelf.jsx'))
-  const prog = noNote(readD('src/components/Progress.jsx'))
   const scope = noNote(readD('src/components/ReviewScope.jsx'))
 
   // ── ① 開いた瞬間に1問目 ────────────────────────────────
@@ -7295,30 +7321,20 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '単語帳の2つのとじる口が、どちらも渡された行き先へ行く')
   ok(/onClose\?\.\(\)/.test(qr),
     'Quick Response の「おわる」も同じ')
-  ok((app.match(/onClose=\{\(\) => setView\('progress'\)\}/g) ?? []).length === 2,
-    '自分の単語帳と Quick Response の行き先が、どちらも達成具合')
-  ok(/id: 'progress', label: '達成具合'/.test(app),
-    '左メニューに「達成具合」が1行ある')
+  /* **「達成具合」は廃止した**(第5.246節・2026-09-23 利用者の指定
+     「達成具合、これ要らないね。排除しましょう」)。
+     **とじたときの行き先は、ホームへ変えた** ——
+     消しただけだと、どこへも行けない枝が残って**行き止まり**になる。
+     **「出る」と「出ない」の両方を見る** ——
+     行き先が2つともあることと、達成具合がどこにも残っていないこと */
+  ok((app.match(/onClose=\{\(\) => setView\(HOME_ID\)\}/g) ?? []).length === 2,
+    '自分の単語帳と Quick Response の行き先が、どちらもホーム')
+  ok(!/'progress'/.test(app) && !/達成具合/.test(app),
+    '左メニューにも行き先にも、達成具合は残っていない')
+  ok(!existsSync(new URL('../src/components/Progress.jsx', import.meta.url)),
+    '達成具合のページそのものが残っていない')
   ok(!/'progress'/.test(app.match(/const TAB_IDS = [\s\S]*?\n\n/)?.[0] ?? ''),
     '下の帯は4つのまま(利用者が決めている)')
-  /* **ここも数える。** 達成具合の画面は2つある(Supabase が設定されている
-     ときと、されていないとき)。**どちらにも戻る道を置く** */
-  ok(/function Practice\(\{ onGo \}\)/.test(prog)
-    && (prog.match(/<Practice onGo=\{onGo\} \/>/g) ?? []).length === 2,
-    '達成具合の2つの画面の、どちらからも練習へ戻れる(行き止まりを作らない)')
-  ok(/status: null, limit: 1000/.test(prog),
-    '達成具合は段ごと読む(`todo` だけだと「できた」がいつでも 0 になる)')
-  /* **もう1つの「0 と null を取り違えない」。** 0040 を貼っていない
-     Supabase では `loadQrReviews()` が**黙って空の一覧を返す**ので、
-     そのまま数えると「まだ 0 / 練習中 0 / できた 0」と出て、
-     **やり切ったように見える** */
-  ok((prog.match(/qrReviewSupported\(\)/g) ?? []).length >= 2,
-    '入れ物(0040)が無いときは、数えずにそう言う(0 と嘘をつかない)')
-  /* `tip` は**説明を畳む印**(第5.166節)であって、数に付けるものではない。
-     じっくり見るためのページなのに、いちばん見たい「◯週つづけて」が
-     既定で畳まれていた */
-  ok(/\{weekLine\(week\) && </.test(prog) && !/"tip[^"]*">\{weekLine/.test(prog),
-    '続けた記録を畳まない。1日も記録が無ければ、行ごと出ない')
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -8077,7 +8093,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **出した人(トレーナー)を渡す**(第5.202節)。RIZAP ENGLISH の教材は
      宿題として届けるので、`assignments.assigned_by` に入れる人が要る。
      **渡し忘れると、出せたように見えて断られる** */
-  ok(/<AssignBooks me=\{profile\} \/>/.test(app),
+  ok(/<AssignBooks me=\{profile\} onSelfChange=\{reloadFeatures\} \/>/.test(app),
     '行き先が描かれていて、出した人(トレーナー)も渡している')
 
   /* **大項目は「冊」のまま**(第5.181節)。**その他の教材はサブ**

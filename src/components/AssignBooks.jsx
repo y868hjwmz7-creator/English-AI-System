@@ -53,6 +53,9 @@ import {
   shelfTitle, shelvesOff, shelvesOn, stoppedText,
 } from '../lib/assignBooks.js'
 import AssignShelf from './AssignShelf.jsx'
+/* **作る画面は、もともと左メニューにあったものをそのまま置く**(第5.246節)。
+   中身は1行も変えていない —— 置き場所だけが変わった */
+import ShelfBuilder from './ShelfBuilder.jsx'
 import AssignRizap from './AssignRizap.jsx'
 import AssignNote from './AssignNote.jsx'
 import { RIZAP_BOOKS, RIZAP_LABEL, rizapPickLabel } from '../data/rizapBooks.js'
@@ -60,7 +63,17 @@ import { assignRizap, loadRizapUnits } from '../lib/rizapAssign.js'
 import Loading from './Loading.jsx'
 import LearnerPick from './LearnerPick.jsx'
 
-export default function AssignBooks({ me = null, learnerId = null, learnerName = '' }) {
+export default function AssignBooks({
+  me = null, learnerId = null, learnerName = '',
+  /**
+   * **自分に棚を出したときの知らせ**(第5.246節)。
+   * 「業種べつの単語帳を作る」をこの画面へ移したので、
+   * **呼ぶ側(`App`)が `features` を読み直す**必要がある ——
+   * さもないと、自分の単語帳に冊が増えるのが**次に開くまで**になる。
+   * `ShelfBuilder` がもともと持っていた受け渡しを、そのまま通すだけ。
+   */
+  onSelfChange = null,
+}) {
   /** 担当しているゲスト。**`null` は読み込み中**(いない、ではない) */
   const [people, setPeople] = useState(null)
   /** いま選んでいるゲスト。渡されていれば、それが答え(選ばせない) */
@@ -91,6 +104,12 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
      じっくり探すのは「教材」の画面の仕事で、
      **同じ絞り込みを2か所に作らない**(CLAUDE.md)。 */
   const [matOpen, setMatOpen] = useState(false)
+  /* **業種べつの単語帳を作る欄**(第5.246節・2026-09-23 利用者の指定
+     「業種別の単語帳も『アサイン』内に移しましょう」)。
+     左メニューの行き先を1つ減らして、ここへ入れた。
+     **既定では閉じている** ——「その他の教材」とまったく同じ作法である
+     (大項目は上の3つ。作る欄は、毎日使うものではない) */
+  const [buildOpen, setBuildOpen] = useState(false)
   const [matQ, setMatQ] = useState('')
   /** さがした結果。**`null` は読み込み中**(無い、ではない) */
   const [mats, setMats] = useState(null)
@@ -413,6 +432,34 @@ export default function AssignBooks({ me = null, learnerId = null, learnerName =
           </section>
         </>
       )}
+
+      {/* ── **業種べつの単語帳を作る**(第5.246節・2026-09-23 利用者の指定)──
+
+            > 業種別の単語帳も「アサイン」内に移しましょう。
+
+          左メニューの行き先を1つ減らし、ここへ移した。
+          **出す欄(上の「単語帳の冊」)のすぐ近くにある**ので、
+          「作って、出す」が1つの画面で済む。
+
+          **ゲストを選んでいなくても出す。** 作るのは棚そのもので、
+          誰に出すかとは別の話である(選ぶ前から使える)。
+
+          **既定では閉じている**(「その他の教材」と同じ作法)。
+          `<details>` は使わない —— **畳んでも中身が場所を取る**
+          (`.claude/rules/common.md`)。
+          **押すものは見出しの行に置く** —— 一覧の末尾だと、
+          冊が増えるほど下へ流れて見つからない */}
+      <section className="card">
+        <div className="assign-mats-head">
+          <h3 className="card-title">業種べつの単語帳を作る</h3>
+          <button type="button" className="btn btn--small btn--ghost"
+                  aria-expanded={buildOpen}
+                  onClick={() => setBuildOpen(!buildOpen)}>
+            {buildOpen ? 'とじる' : 'ひらく'}
+          </button>
+        </div>
+        {buildOpen && <ShelfBuilder me={me} onSelfChange={onSelfChange} />}
+      </section>
     </div>
   )
 }
