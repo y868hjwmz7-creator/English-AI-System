@@ -166,9 +166,20 @@ if (!ground) {
   } else ok(`1段落おきの地色は、紙と違う色(${paper} → ${stripe})`)
   /* **本当に使われているか。** 変数だけ用意して、どこにも書いていなければ
      何も起きない(「無ければ素通り」する形の検証を書かない・CLAUDE.md) */
-  if (/nth-child\(even\)[\s\S]{0,120}var\(--qa-stripe/.test(css)) {
+  if (/nth-child\(even\)[\s\S]{0,160}var\(--qa-stripe/.test(css)) {
     ok('1段落おきの地色を、実際に1つおきの行へ当てている')
   } else ng('1段落おきの地色が、どこにも当たっていない', '変数を用意しただけになっている')
+  /* **1文ずつ並ぶ画面は、3つとも同じにする**(2026-09-23 利用者の回答
+     「はい、同じ形でお願いします」)。1つ抜けると、**同じ作りなのに
+     そこだけ見え方が違う** —— 目で見つけるのは難しい */
+  {
+    const at = css.indexOf('nth-child(even)')
+    const 塊 = at > 0 ? css.slice(Math.max(0, at - 200), css.indexOf('}', at)) : ''
+    const 抜け = ['slash-list', 'dictation-list', 'stepsent-list']
+      .filter((x) => !塊.includes(`.${x} > .qa-row:nth-child(even)`))
+    if (抜け.length === 0) ok('1文ずつ並ぶ3つの画面すべてに、地色が入っている')
+    else ng('地色が入っていない一覧がある', `${抜け.join(' / ')}(同じ作りなのに見え方が違う)`)
+  }
 }
 
 console.log(bad === 0 ? '\n✅ 紙の色の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
