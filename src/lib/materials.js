@@ -1020,7 +1020,25 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-21'
+export const NEED_GEN_REV = '2026-09-23'
+
+/**
+ * **窓口が古いときに、利用者へ頼むこと**(第5.249節)。
+ *
+ * **「Supabase の画面で置き直してください」とは、もう書かない。**
+ * 窓口は `.github/workflows/deploy-functions.yml` が自動で配る(第5.233節)。
+ * 利用者にできるのは**配布が終わるのを待つ**か、
+ * **落ちていないかを見る**ことだけである。
+ *
+ * 実際 2026-09-23 に、外の混み具合で配布が落ちたまま緑のように見えていた。
+ * **文はここ1か所に持つ** —— 4か所に書き写していたので、
+ * 自動で配るようになった日に、3か所が古い案内のまま残った。
+ */
+export const STALE_GEN_WHAT = ' GitHub の Actions →「Deploy Supabase Functions」が'
+  + '緑になっているか確かめて、1〜2分おいてからもう一度お試しください。'
+
+/** 古い窓口の断りを、そのまま出さずに読み替える(誤診させない) */
+const staleGen = (what) => ng(`${what}の窓口が、まだ新しくなっていません。${STALE_GEN_WHAT}`)
 
 let genRev = null
 /** 生成の窓口の版。まだ一度も呼んでいなければ `null` */
@@ -1037,8 +1055,10 @@ export const genGatewayNote = () => (genGatewayStale()
     + 'また、**業種べつの単語帳(棚)の語句が作れません**(0057)'
     + '。さらに、**本文に出た表現の「分類の札」と「練習問題」が作られません**'
     + '(第5.230節)'
+    + '。また、**単語 / フレーズの「日本語 → 英語で言う」が作れません**'
+    + '(第5.248節)'
     + `(いま置かれているのは ${genRev}、必要なのは ${NEED_GEN_REV} 以降)。`
-    + ' Supabase → Edge Functions → generate-material を置き直してください。'
+    + STALE_GEN_WHAT
   : null)
 
 const noteGenRev = (rev) => {
@@ -1186,6 +1206,11 @@ export async function generateSection({
 
   if (error) {
     if (cut) return ng(genCutNote('教材の生成', genRev))
+    /* **演習を1つ足した日は、古い窓口がその名前を知らない**(第5.249節)。
+       「演習の種類が正しくありません: vocab_recall」とだけ出ていたので、
+       利用者には**こちらの作りかけなのか、配布が落ちたのか**が
+       分からなかった。**起きたことを、そのまま言う**(CLAUDE.md) */
+    if (/演習の種類が正しくありません/.test(detail)) return staleGen('教材を作る')
     return ng(detail || `生成に失敗しました: ${error.message}`)
   }
   noteGenRev(data?.genRev)
@@ -1291,8 +1316,7 @@ export async function generateGrammar(parts) {
          「演習の種類が正しくありません」と断られる。
          **添削のときとまったく同じ落とし穴**で、そのまま出すと誤診させる */
       if (/演習の種類が正しくありません/.test(detail)) {
-        return ng('文法解説の窓口が古いため、まだ使えません。'
-          + 'Supabase → Edge Functions → generate-material を置き直してください。')
+        return staleGen('文法解説')
       }
       return ng(detail || `解説を作れませんでした: ${error.message}`)
     }
@@ -1382,8 +1406,7 @@ export async function generateShelfWords(job) {
        こちらはもう送らないので「業種と場面が要ります」と断られる ——
        **そのまま出すと、業種を選び直させることになる** */
     if (/演習の種類が正しくありません|業種と場面が要ります/.test(detail)) {
-      return ng('単語帳を作る窓口が古いため、まだ使えません。'
-        + 'Supabase → Edge Functions → generate-material を置き直してください。')
+      return staleGen('単語帳を作る')
     }
     return ng(detail || `語句を作れませんでした: ${error.message}`)
   }
@@ -1543,8 +1566,7 @@ export async function reviewWriting({
        トレーナーなら 400「演習の種類が正しくありません」で断られる。
        どちらも**添削とは関係のない文**なので、そのまま出すと誤診させる */
     if (/権限がありません|演習の種類が正しくありません/.test(detail)) {
-      return ng('添削の窓口が古いため、まだ使えません。'
-        + 'Supabase → Edge Functions → generate-material を置き直してください。')
+      return staleGen('添削')
     }
     return ng(detail || `添削に失敗しました: ${error.message}`)
   }

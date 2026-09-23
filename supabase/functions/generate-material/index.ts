@@ -1612,7 +1612,7 @@ const cors = {
  */
 /* **置き直しが要る変更を入れたら、ここを上げる**(第5.230節で上げた)。
    画面は `NEED_GEN_REV` と突き合わせて、古ければ赤く知らせる */
-const FN_REV = '2026-09-21'
+const FN_REV = '2026-09-23'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
