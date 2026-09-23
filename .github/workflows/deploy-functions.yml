@@ -111,6 +111,7 @@ jobs:
           only="$(printf '%s' "${ONLY:-}" | tr -d '[:space:]')"
           sent=0
           skipped=''
+          failed=''
 
           # 関数の一覧は **フォルダから読む。** ここに名前を書き並べない
           # (書き並べると、窓口を増やした日に足し忘れて、黙って配られなくなる)
@@ -122,13 +123,40 @@ jobs:
               continue
             fi
             echo "::group::$name を配る"
-            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
+
+            # ------------------------------------------------------------
+            # **やり直す。** 外の混み具合で落ちることがある(2026-09-23 実測)。
+            # Supabase CLI が使う ghcr.io が toomanyrequests を返し、
+            # **1つ目の check-similar で止まった。** そのため、うしろにいた
+            # generate-material は**一度も配られなかった** ——
+            # 画面には「演習の種類が正しくありません」とだけ出る。
+            # 2秒・4秒・8秒・16秒と待って、最大4回やり直す
+            # (.claude/rules/common.md の push と同じ作法)。
+            # ------------------------------------------------------------
+            ok=''
+            for wait in 2 4 8 16 0; do
+              if supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"; then
+                ok=1
+                break
+              fi
+              [ "$wait" = 0 ] && break
+              echo "::warning::$name を配れませんでした。${wait} 秒待ってやり直します"
+              sleep "$wait"
+            done
             echo "::endgroup::"
-            sent=$((sent + 1))
-            echo "- \`$name\` を配りました" >> "$GITHUB_STEP_SUMMARY"
+
+            # **1つ落ちても、残りは配る。** 途中で打ち切ると、
+            # 落ちた窓口のうしろにいるものが道連れになる(上のとおり)
+            if [ -n "$ok" ]; then
+              sent=$((sent + 1))
+              echo "- \`$name\` を配りました" >> "$GITHUB_STEP_SUMMARY"
+            else
+              failed="$failed $name"
+              echo "- **\`$name\` を配れませんでした**" >> "$GITHUB_STEP_SUMMARY"
+            fi
           done
 
-          if [ "$sent" -eq 0 ]; then
+          if [ "$sent" -eq 0 ] && [ -z "$failed" ]; then
             echo "::error::配った窓口が0件です。指定した名前「$only」の関数が supabase/functions/ にありません。"
             exit 1
           fi
@@ -138,4 +166,13 @@ jobs:
           if [ -n "$skipped" ]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "配らなかったもの:$skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # 最後に、落ちたものがあれば**赤くして終わる。**
+          # 緑で終わると「配られたはず」と思い込んでしまう
+          if [ -n "$failed" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**配れなかった窓口:$failed**" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::配れなかった窓口があります:$failed"
+            exit 1
           fi
