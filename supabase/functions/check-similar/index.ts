@@ -48,22 +48,43 @@ const reply = (body: unknown, status = 200) =>
 const normEn = (text: string) =>
   String(text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
-// ★ここは実機のログで決めた値である。勝手に増やさないこと。
+// ============================================================================
+// **件数ではなく、時間で止める**(第5.247節・2026-09-23)
 //
 // Edge Function は **1回の呼び出しで CPU 2秒** までしか使えない。
 // 英文を数値に変換する処理は CPU を使うため、まとめて行うと
 // 「CPU Time exceeded」で関数ごと落ちる。落ちると応答に CORS の印が
 // 付かず、画面には「窓口につながりません」としか出ない(2026-08 実機)。
 //
-// 一度に変換するのは、
-//   ・今回の候補(最大 CANDIDATE_LIMIT 件)
-//   ・まだ変換していない古い英文(最大 BACKFILL_LIMIT 件)
-// の合計だけにする。
+// 【なぜ件数をやめたか】
+//   もとは「候補12件 + 古い英文5件」と**件数で**決め打ちしていた。
+//   ところが1件にかかる時間は決め打ちできない ——
+//   **1回目の変換には、模型を読み込む時間がまるごと乗る。**
+//   だから「17件なら2秒に収まる」とは言えず、収まらない日は
+//   **判定がまるごと落ちる**(利用者の実機で、黄色い知らせが出ていた)。
 //
-// 0009 以降に作った教材の英文は、作られた時点で候補として変換され
-// 保存されるので、追いつきが要るのは 0009 より前の教材だけである。
+//   **時間を測って、境目の手前で止める。** そうすれば、
+//   速い日は多く見られるし、遅い日でも**落ちずに、見た分だけ返せる。**
+//
+// 【順番も変えた。**頼まれた仕事を先にやる**】
+//   もとは「古い英文の埋め合わせ」を**先に**していた。
+//   予算を先に使い切るので、**肝心の候補を見る前に落ちる。**
+//   いまは 候補 → 照合 → (余った時間で)埋め合わせ の順である。
+//
+// 【見た数を必ず返す】
+//   時間切れで全部は見られなかったとき、**黙って「近いものは無い」と
+//   返さない**(CLAUDE.md「黙って絞らない」)。`checked` を返し、
+//   画面がそれを知らせる。
+// ============================================================================
+
+/** 変換に使ってよい時間。2秒の手前で止める(残りは照合と後片づけに使う) */
+const BUDGET_MS = 1200
+
+/** 1回に見る候補の上限。**1つの演習の上限(30問)にそろえてある** */
+const CANDIDATE_LIMIT = 30
+
+/** ついでに埋め合わせる古い英文の上限(時間が余ったときだけ) */
 const BACKFILL_LIMIT = 5
-const CANDIDATE_LIMIT = 12
 
 /**
  * 実際の処理。
@@ -76,6 +97,15 @@ const CANDIDATE_LIMIT = 12
 const handle = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return reply({ error: 'POST で呼んでください' }, 405)
+
+  /* **どこまで進んだかを持つ**(第5.247節)。
+     落ちたときに「窓口につながりません」としか出ないのが、
+     いちばん困るところだった。**どの段で、何ミリ秒使って落ちたか**を
+     返せば、画面にそのまま出せる(CLAUDE.md「道が2つあるものは、
+     いまどちらを通ったかを見えるようにしてから直す」)。 */
+  const t0 = performance.now()
+  const ms = () => Math.round(performance.now() - t0)
+  let stage = '受け取り'
 
   const url = Deno.env.get('SUPABASE_URL')!
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -108,11 +138,18 @@ const handle = async (req: Request): Promise<Response> => {
     return reply({ error: '送られた内容を読めませんでした' }, 400)
   }
 
-  // 上限を超えた分は見ない。全部見ようとして関数が落ちるより、
-  // 見た範囲で確実に返すほうがよい(落ちると1件も判定できない)。
+  /* **番号をずらさない**(第5.247節)。
+     もとは `filter()` で空の候補を**取り除いて**いたので、
+     **そのうしろの番号が1つずつ繰り上がっていた。**
+     返す `idx` は呼んだ側の並びの番号でなければならないので、
+     ずれると**違う問を落とす。**
+     取り除かず、**空の候補はその場に残したまま飛ばす。** */
   const candidates = (Array.isArray(body.candidates) ? body.candidates : [])
-    .map((c) => String(c ?? '')).filter((c) => normEn(c))
+    .map((c) => String(c ?? ''))
     .slice(0, CANDIDATE_LIMIT)
+  /** 中身のある候補の番号だけ(空の行は、変換も照合もしない) */
+  const liveIdx = candidates
+    .map((c, i) => (normEn(c) ? i : -1)).filter((i) => i >= 0)
   const learnerId = body.learnerId ? String(body.learnerId) : null
   const tagIds = Array.isArray(body.tagIds) && body.tagIds.length
     ? body.tagIds.map((t) => String(t))
@@ -121,7 +158,7 @@ const handle = async (req: Request): Promise<Response> => {
     ? Math.min(Math.max(Number(body.threshold), 0.5), 1)
     : 0.92
 
-  if (!candidates.length) return reply({ tooSimilar: [], indexed: 0 })
+  if (!liveIdx.length) return reply({ tooSimilar: [], indexed: 0, checked: 0, ms: ms() })
   if (!learnerId && !tagIds) {
     return reply({ error: '照合する範囲(ゲストか弱点)を指定してください' }, 400)
   }
@@ -137,6 +174,7 @@ const handle = async (req: Request): Promise<Response> => {
     }
   }
 
+  stage = '変換の仕組みを用意する'
   let session: { run: (t: string, o: unknown) => Promise<number[]> }
   try {
     // deno-lint-ignore no-explicit-any
@@ -145,51 +183,38 @@ const handle = async (req: Request): Promise<Response> => {
     return reply({
       error: '英文を数値に変換する仕組みを使えませんでした。'
         + 'Supabase の Edge Runtime が古い可能性があります。',
+      stage, ms: ms(),
     }, 500)
   }
 
   const embed = (text: string) => session.run(text, { mean_pool: true, normalize: true })
 
-  // ── 3. まだ変換していない既存の英文を埋める ──────────────
-  //   0008 より前からある教材の英文には並びが無い。並びが無い文は
-  //   照合の対象にならず、素通りしてしまう。呼ばれるたびに少しずつ埋める。
-  let indexed = 0
-  try {
-    // 読み出しは**呼び出した人として**行う。管理者の鍵で呼ぶと
-    // auth.uid() が空になり、関数の中の権限の確認が働かない。
-    const { data: missing } = await asCaller.rpc('sentences_without_embedding', {
-      p_learner: learnerId, p_tags: tagIds, p_limit: BACKFILL_LIMIT,
-    })
-    const list: string[] = (missing ?? []).map((r: unknown) =>
-      typeof r === 'string' ? r : String((r as { sentences_without_embedding?: string })
-        ?.sentences_without_embedding ?? ''))
-      .filter(Boolean)
+  /* ── 3. **頼まれた仕事を先にやる。候補を変換する** ──────────
+     もとはここで「古い英文の埋め合わせ」をしていた(いまは第5段)。
+     **予算を先に使い切ると、肝心の候補を見る前に落ちる。**
 
-    if (list.length) {
-      const rows = []
-      for (const text of list) {
-        rows.push({ text_norm: text, embedding: JSON.stringify(await embed(text)) })
-      }
-      await admin.from('sentence_embeddings').upsert(rows, { onConflict: 'text_norm' })
-      indexed = rows.length
+     **時間で止める。** 1件目には模型の読み込みがまるごと乗るので、
+     件数では決め打ちできない(第5.247節)。
+     **1件は必ず変換する** —— 0件で「近いものは無し」を返すと、
+     それは嘘になる。 */
+  stage = '候補を数値にする'
+  const sent: number[] = []          // 実際に送った候補の、呼んだ側での番号
+  const embeddings: number[][] = []
+  try {
+    for (const i of liveIdx) {
+      if (sent.length && ms() > BUDGET_MS) break   // **境目の手前で止める**
+      embeddings.push(await embed(candidates[i]))
+      sent.push(i)
     }
   } catch (e) {
-    // 埋めきれなくても照合そのものは続ける。次の呼び出しで続きが埋まる。
-    console.error('既存の英文の変換に失敗しました', e)
-  }
-
-  // ── 4. 候補を変換して照合する ────────────────────────────
-  let embeddings: number[][]
-  try {
-    embeddings = []
-    for (const text of candidates) embeddings.push(await embed(text))
-  } catch (e) {
     console.error(e)
-    return reply({ error: '英文を数値に変換できませんでした' }, 500)
+    return reply({ error: '英文を数値に変換できませんでした', stage, ms: ms() }, 500)
   }
 
-  // ここも呼び出した人として。関数の中でトレーナーかどうかと、
-  // 担当しているゲストかどうかが確かめられる。
+  // ── 4. 照合する ──────────────────────────────────────────
+  //   ここも**呼び出した人として**。関数の中でトレーナーかどうかと、
+  //   担当しているゲストかどうかが確かめられる。
+  stage = '近さを照合する'
   const { data: hits, error } = await asCaller.rpc('similar_sentences', {
     p_learner: learnerId,
     p_tags: tagIds,
@@ -198,25 +223,67 @@ const handle = async (req: Request): Promise<Response> => {
   })
   if (error) {
     console.error(error)
-    return reply({ error: `近さを照合できませんでした: ${error.message}` }, 500)
+    return reply({
+      error: `近さを照合できませんでした: ${error.message}`, stage, ms: ms(),
+    }, 500)
   }
 
-  // 候補の並びも貯めておく。次に同じ文が出たときの変換を省ける。
+  // 候補の変換結果を貯めておく。次に同じ文が出たときの変換を省ける。
+  stage = '候補を控える'
   try {
-    const rows = candidates.map((text, i) => ({
-      text_norm: normEn(text), embedding: JSON.stringify(embeddings[i]),
+    const rows = sent.map((idx, k) => ({
+      text_norm: normEn(candidates[idx]), embedding: JSON.stringify(embeddings[k]),
     }))
     await admin.from('sentence_embeddings').upsert(rows, { onConflict: 'text_norm' })
   } catch (e) {
     console.error('候補の変換結果を保存できませんでした', e)
   }
 
+  /* ── 5. **時間が余っていたら**、古い英文を埋め合わせる ──────
+     0008 より前からある教材の英文には並びが無い。並びが無い文は
+     照合の相手にならず、素通りしてしまう。**余った時間でだけ**進める ——
+     ここで落ちると、せっかく出した答えごと失う。 */
+  stage = '古い英文を埋め合わせる'
+  let indexed = 0
+  try {
+    if (ms() < BUDGET_MS) {
+      // 読み出しは**呼び出した人として**行う。管理者の鍵で呼ぶと
+      // auth.uid() が空になり、関数の中の権限の確認が働かない。
+      const { data: missing } = await asCaller.rpc('sentences_without_embedding', {
+        p_learner: learnerId, p_tags: tagIds, p_limit: BACKFILL_LIMIT,
+      })
+      const list: string[] = (missing ?? []).map((r: unknown) =>
+        typeof r === 'string' ? r : String((r as { sentences_without_embedding?: string })
+          ?.sentences_without_embedding ?? ''))
+        .filter(Boolean)
+
+      const rows = []
+      for (const text of list) {
+        if (ms() > BUDGET_MS) break            // **ここでも境目を見る**
+        rows.push({ text_norm: text, embedding: JSON.stringify(await embed(text)) })
+      }
+      if (rows.length) {
+        await admin.from('sentence_embeddings').upsert(rows, { onConflict: 'text_norm' })
+        indexed = rows.length
+      }
+    }
+  } catch (e) {
+    // 埋めきれなくても、出した答えはそのまま返す。次の呼び出しで続きが埋まる
+    console.error('既存の英文の変換に失敗しました', e)
+  }
+
   return reply({
     indexed,
     threshold,
+    /** **見た数と、渡された数。** 足りなければ画面がそう言う(黙って絞らない) */
+    checked: sent.length,
+    total: liveIdx.length,
+    ms: ms(),
+    /* `idx` は**送った並び**の番号なので、**呼んだ側の並びに戻す。**
+       空の候補を飛ばしているぶん、そのままでは1つずつずれる */
     tooSimilar: (hits ?? []).map((h: { idx: number; matched: string; similarity: number }) => ({
-      index: h.idx,
-      sentence: candidates[h.idx],
+      index: sent[h.idx],
+      sentence: candidates[sent[h.idx]],
       matched: h.matched,
       similarity: h.similarity,
     })),

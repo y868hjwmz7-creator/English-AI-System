@@ -2080,14 +2080,20 @@ export const SIMILARITY_THRESHOLD = 0.92
  * サーバー上で完結するので、文章が外部に出ず、費用もかからない
  * (仕様書 第5.16.2節)。
  *
- * 返るのは [{ index, sentence, matched, similarity }] の並び。
- * index は渡した candidates の何番目か。
+ * 返るのは `{ hits, checked, total }`。
+ * `hits` は [{ index, sentence, matched, similarity }] の並びで、
+ * `index` は渡した candidates の何番目か。
+ *
+ * **`checked` は、窓口が実際に見た数である**(第5.247節)。
+ * 2秒の境目の手前で止めることがあるので、`total` より少ないことがある。
+ * **少なかったことを黙っていない**(CLAUDE.md「黙って絞らない」)。
  */
 export async function findSimilarSentences(candidates, {
   learnerId = null, tagIds = null, threshold = SIMILARITY_THRESHOLD,
 } = {}) {
-  if (!supabase || !candidates?.length) return ok([])
-  if (!learnerId && !tagIds?.length) return ok([])
+  const none = { hits: [], checked: 0, total: candidates?.length ?? 0 }
+  if (!supabase || !candidates?.length) return ok(none)
+  if (!learnerId && !tagIds?.length) return ok(none)
 
   const { data, error } = await supabase.functions.invoke('check-similar', {
     body: { candidates, learnerId: learnerId || null, tagIds: tagIds ?? null, threshold },
@@ -2095,7 +2101,14 @@ export async function findSimilarSentences(candidates, {
 
   if (error) {
     let detail = ''
-    try { detail = (await error.context?.json())?.error ?? '' } catch { /* 読めなければ無視 */ }
+    let where = ''
+    try {
+      const body = await error.context?.json()
+      detail = body?.error ?? ''
+      /* **どの段で落ちたか**(第5.247節)。
+         「窓口につながりません」としか出ないのが、いちばん困るところだった */
+      where = body?.stage ? `(${body.stage} / ${body.ms ?? '?'} ミリ秒)` : ''
+    } catch { /* 読めなければ無視 */ }
     if (/Failed to send a request|FunctionsFetchError/i.test(error.message ?? '')) {
       // 配置していない場合と、配置したが関数の中で落ちた場合の両方でここに来る。
       // 落ちると応答に CORS の印が付かず、ブラウザからは区別がつかない。
@@ -2105,10 +2118,19 @@ export async function findSimilarSentences(candidates, {
         + 'Supabase → Edge Functions → check-similar → Logs に '
         + '「CPU Time exceeded」と出ていれば、それです。')
     }
-    return ng(detail || `意味の近さを調べられませんでした: ${error.message}`)
+    return ng([detail || `意味の近さを調べられませんでした: ${error.message}`, where]
+      .filter(Boolean).join(' '))
   }
   if (data?.error) return ng(data.error)
-  return ok(data?.tooSimilar ?? [])
+  return ok({
+    hits: data?.tooSimilar ?? [],
+    /* **0 と「数えていない」を取り違えない。** 窓口が古くて `checked` を
+       返さないときは、**渡した数をそのまま入れる** ——
+       そうしないと「1問も見ていない」と嘘の知らせが出る */
+    checked: Number.isFinite(Number(data?.checked))
+      ? Number(data.checked) : candidates.length,
+    total: Number.isFinite(Number(data?.total)) ? Number(data.total) : candidates.length,
+  })
 }
 
 /**
@@ -2246,7 +2268,7 @@ export async function generateSectionUnique(params, {
       const texts = survived.map((it) => rawSentencesOf(it)[0] ?? '')
       // 意味の近さは変換に時間がかかるため、1人ずつは回さない。
       // 相手が1人ならその人、複数ならライブラリ全体(弱点)で見る。
-      const { data: hits, error: simError } = await findSimilarSentences(texts, {
+      const { data: found, error: simError } = await findSimilarSentences(texts, {
         learnerId: learnerIds.length === 1 ? learnerIds[0] : null, tagIds, threshold,
       })
       if (simError) {
@@ -2256,7 +2278,16 @@ export async function generateSectionUnique(params, {
         warning = simError
         useSimilar = false
       }
-      for (const h of hits ?? []) {
+      /* **全部を見られなかったときも黙らない**(第5.247節)。
+         窓口は 2秒の境目の手前で止まることがある。
+         そのとき「近いものは無し」とだけ返すと、
+         **見ていないものを『無い』と言った**ことになる */
+      if (found && found.checked < found.total) {
+        warning = warning || `意味の近さを見られたのは ${found.total} 問のうち `
+          + `${found.checked} 問までです(窓口の上限は1回 2秒)。`
+          + '残りは一字一句の照合だけで通しています。'
+      }
+      for (const h of found?.hits ?? []) {
         close.add(h.index)
         tooSimilar.push(h)
       }

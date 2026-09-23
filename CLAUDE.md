@@ -48,14 +48,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **英文の「型」の見分けの検証** | `npm run test:frame` |
 | **66 の型の Quick Response の検証** | `npm run test:shift` |
 | **読み上げ用の英文への書き換えの検証** | `npm run test:speak` |
+| **意味の近さで重複を弾く窓口の検証** | `npm run test:similar` |
 | お手本音声の生成(Azure の鍵が必要) | `npm run audio` |
 | **英文の「型」の資料を PDF にする**(トレーナー向け) | `node scripts/make-frames-pdf.mjs` |
 | **英文の「型」のプレゼン資料を作る**(素人向け) | `npm run slides` |
 
 自動テストは `npm run test:db` / `test:chunk` / `test:audio` / `test:mp3` /
 `test:gap` / `test:play` / `test:paper` / `test:bar` / `test:voice` /
-`test:frame` / `test:shift` / `test:speak` の12個。
+`test:frame` / `test:shift` / `test:speak` / `test:similar` の13個。
 ユニットテストの枠組みは無く、どれも素の node / psql で走る。
+**`test:similar` は、窓口(Deno)を素の node で走らせる**(第5.247節)——
+Supabase も Deno も AI も偽物に差し替え、算段だけを確かめる。
+**この環境では窓口を1度も動かせない**ので、走らせられる形を作った。
 **`test:audio` は耳の代わりである**(こちらには音が聞こえない)。
 UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
 必要なら Playwright で実際に触って確かめる。
@@ -393,7 +397,7 @@ CLAUDE.md が 1.08MB になり、**毎ターン読み込まれて「prompt is to
 
 | ファイル | 何が書いてあるか |
 |---|---|
-| [`01-教材の生成と演習.md`](docs/notes/01-教材の生成と演習.md) | 演習の種類を足す4か所・誤り訂正・ディスカッション・想定される質問・スピーチ練習・添削・被らない教材・空の応答・**かたまりの分類と練習(第5.230節)**・**Quick Response の独立した組(第5.235節)** |
+| [`01-教材の生成と演習.md`](docs/notes/01-教材の生成と演習.md) | 演習の種類を足す4か所・誤り訂正・ディスカッション・想定される質問・スピーチ練習・添削・被らない教材・空の応答・**かたまりの分類と練習(第5.230節)**・**Quick Response の独立した組(第5.235節)**・**意味の近さの判定が落ちていた / test:similar(第5.247節)** |
 | [`02-音声・音量と間と声.md`](docs/notes/02-音声・音量と間と声.md) | 音量そろえ・会話の間・声の速さ・Speech練習の原稿・会議・役の性別・訛りの指定・作り直し・1本の MP3 |
 | [`03-生成のきまり.md`](docs/notes/03-生成のきまり.md) | 0件で成功を返さない・道具の形で強制する・略語のピリオド・レベル14段・GSE・費用 |
 | [`04-起動と窓口と通信.md`](docs/notes/04-起動と窓口と通信.md) | 起動画面・ホーム・SetupStatus・古い index.html・待ち時間の上限・止まる条件・CPU 2秒・150秒・**窓口は GitHub が配る(第5.233節)** |
