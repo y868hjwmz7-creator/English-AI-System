@@ -40,8 +40,6 @@ import { RIZAP_BOOKS } from '../src/data/rizapBooks.js'
 import { SIX_STEPS } from '../src/lib/sixSteps.js'
 /* **色の一覧を書き写さない**(第5.242節)。3つの色は `btnTone.js` 1か所 */
 import { hasTone } from '../src/lib/btnTone.js'
-/* **語の数え方を2通り持たない**(CLAUDE.md)。画面と同じ関数で数える */
-import { wordsOf } from '../src/lib/chunker.js'
 /* 本文(記事・会話)の演習。**一覧を書き写さない** ——
    種類を足した日に、ここだけ古い一覧が残らないようにする */
 import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
@@ -9294,18 +9292,42 @@ for (const W of [1280, 794, 453, 390, 320]) {
   else ng('② … 消したはずの押すものが戻っている', 消した.join(' / '))
 
   /* ── ④ **英文は1つだけ。**押して区切る行と、確かめる箱で
-        **同じ英文を2回**出していた。語の数で見る ——
-        **画面と同じ `wordsOf()` で数える**(数え方を2通り持たない) */
-  const 本文 = await page.evaluate(() => [...document.querySelectorAll('.slash-row')]
-    .map((li) => li.querySelector('.slash-body')?.innerText.replace(/\s+/g, ' ').trim() ?? ''))
-  const 出た語 = await page.evaluate(() => document.querySelectorAll('.slash-w').length)
-  const はずの語 = 本文.reduce((n, t) => n + wordsOf(t).length, 0)
-  if (出た語 > 0 && 出た語 === はずの語) {
-    ok(`② … 英文は1つだけ(${出た語} 語をそのまま1回)`)
-  } else {
-    ng('② … 英文の語数が合わない(2回出している / 描けていない)',
-      `画面 ${出た語} 語 / 本文 ${はずの語} 語`)
-  }
+        **同じ英文を2回**出していた。
+
+        **描いたものから期待値を作らない**(2026-09-23 に、ここで一度転んだ)。
+        はじめ「`.slash-body` の字を `wordsOf()` で数えた数 = `.slash-w` の数」
+        と書いたが、**2回描くと両方とも倍になる**ので、
+        わざと2回描いても緑のままだった。
+        **外に持ち出せる期待値が無いときは、中だけで成り立つ性質で見る。**
+
+          ・押せる語は、**どれか1つのカタマリの中**にいる
+          ・**同じ4語のつながりが、二度出てこない**
+            —— 英文を2回描けば、どの4語も必ず二度出る。
+               ふつうの英文で同じ4語が並ぶことは、まず無い */
+  const 二重 = await page.evaluate(() => {
+    const out = []
+    const rows = [...document.querySelectorAll('.slash-row')]
+    if (!rows.length) return ['そもそも本文が1つも描かれていない']
+    for (const li of rows) {
+      const body = li.querySelector('.slash-body')
+      if (!body) { out.push('本文の箱が無い'); continue }
+      const 札 = [...body.querySelectorAll('.slash-w')]
+      if (!札.length) { out.push('押せる語が1つも無い'); continue }
+      const 外 = 札.filter((e) => !e.closest('.slash-chunk')).length
+      if (外) out.push(`${外} 語が、カタマリの外にいる`)
+      const 語 = 札.map((e) => e.textContent.trim().toLowerCase()).filter(Boolean)
+      const 見た = new Set()
+      for (let i = 0; i + 4 <= 語.length; i += 1) {
+        const key = 語.slice(i, i + 4).join(' ')
+        if (見た.has(key)) { out.push(`「${key}」が二度出ている`); break }
+        見た.add(key)
+      }
+    }
+    return out
+  })
+  const 語数 = await page.evaluate(() => document.querySelectorAll('.slash-w').length)
+  if (二重.length === 0 && 語数 > 0) ok(`② … 英文は1つだけ(${語数} 語を、1回ずつ)`)
+  else ng('② … 英文を2回描いている / 描けていない', 二重.join(' / ') || `${語数} 語`)
 
   /* ── ⑤ **区切りを入れるまで訳は出ない。入れたら、その場に出る** ──
         「出る」と「出ない」の両方を見る —— 片方だけだと、
