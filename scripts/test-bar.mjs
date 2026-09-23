@@ -8717,6 +8717,25 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ['', 'role=trainer&who=g1'],
   ]
   const 見つかった = []
+  /* **色を決めずに置いたボタン**(第5.244節)。すき間と同じ周回で数える */
+  const 色なし = []
+  /**
+   * **わざと地の色のままにしてあるもの。**
+   *
+   * ここに書いてよいのは、**そう作ってある理由が言えるもの**だけである。
+   * 「見た目が違うから」では外さない —— それをやると何も守らなくなる
+   * (共通ルール「わざと接している横の組は、別の一覧で名指しに外す」と同じ)。
+   */
+  const 白でよい = [
+    // 浮いているもの。**紙の色 + 影**で浮かせてある。色を敷くと浮遊感が消える
+    'sheet-float', 'finder-float', 'focus-exit',
+    // 冊をえらぶプルダウン(`冊名 ▾`)。となりの `select` と同じ見た目が正しい
+    'bookpick',
+    // 単語帳の選択肢。押すと**緑 / 赤**になる。休みに灰を敷くと差が弱まる
+    'wordbook-choice',
+    // 絵だけのボタン。上の3つと同じ帯に並ぶ
+    'rscope-sort', 'iconbtn',
+  ]
   for (const [s, extra] of SCREENS) {
     for (const w of [390, 1280]) {
       const page = await browser.newPage({ viewport: { width: w, height: 900 } })
@@ -8788,6 +8807,41 @@ for (const W of [1280, 794, 453, 390, 320]) {
         })
         await page.waitForTimeout(400)
         hits = hits.concat(await page.evaluate(FIND, [TOUCH_OK, TOUCH_OK_X]))
+        /* **地の色のままのボタンを拾う**(第5.244節)。
+           畳んだ箱を開いたあとで数える —— 閉じたままでは測れない。
+
+           **class の名前では見ない。** 黒い帯やプレーヤーは
+           **箱のほうが色を決めている**(`.lesson-bar .btn` など)ので、
+           `btn--quiet` などが付いていなくても、ちゃんと色がある。
+           **描いた地色を、その面が決めている「素の色」と突き合わせる** ——
+           `#fff` とは書き写さない(**値を書き写さない。性質で見る**)。
+           枠線だけ(`btn--ghost`)は透明なので、ここには当たらない */
+        for (const b of await page.evaluate(() => {
+          const 色 = (v) => {
+            const d = document.createElement('div')
+            d.style.background = v
+            document.body.appendChild(d)
+            const got = window.getComputedStyle(d).backgroundColor
+            d.remove()
+            return got
+          }
+          return [...document.querySelectorAll('.btn')]
+            .filter((e) => e.getBoundingClientRect().width > 0)
+            .map((e) => {
+              const 面 = e.closest('.lesson-sheet, .focus-paper, .qr--paper') ?? document.body
+              const 素 = window.getComputedStyle(面).getPropertyValue('--btn-bg').trim()
+              return {
+                cls: e.className,
+                t: e.textContent.trim().slice(0, 18),
+                素のまま: window.getComputedStyle(e).backgroundColor === 色(素 || '#ffffff'),
+              }
+            })
+            .filter((x) => x.素のまま)
+        })) {
+          const names = String(b.cls).split(/\s+/)
+          if (names.some((c) => 白でよい.includes(c))) continue
+          色なし.push(`${s || 'レッスン表示'}@${w}px  ${b.cls} 「${b.t || '(絵だけ)'}」`)
+        }
         for (const h of hits) {
           見つかった.push(`${s || 'レッスン表示'}@${w}px  ${h.dir} ${h.gap}px  ${h.a} / ${h.b}`)
         }
@@ -8798,13 +8852,30 @@ for (const W of [1280, 794, 453, 390, 320]) {
       await page.close()
     }
   }
-  /** 同じ組は1回だけ言う(同じ指定が何画面にも出るため) */
+  /* ── **色を決めずに置いたボタンが1つも無いか**(第5.244節)──
+
+       共通ルール「**既定のボタン(地の色のまま)は、白い紙の上で
+       『押せるもの』に見えない。色を決めずに置かない。**」
+
+       **わざとそうしているものだけを、名指しで外す**(すき間の決まりで
+       「わざと接している横の組は、別の一覧で名指しに外す」としたのと
+       まったく同じ作法)。**「見た目が違うから」では外さない** ——
+       それをやると、何も守らなくなる。 */
   const 一覧 = [...new Set(見つかった)]
   if (一覧.length) {
     ng(`すき間 … 別々の物が ${一覧.length} 組、すき間ゼロで接している`,
       一覧.slice(0, 12).join('\n    '))
   } else {
     ok(`すき間 … ${SCREENS.length} 画面 × 2幅、縦と横の両方で、接している組は無い`)
+  }
+
+  /* **色を決めずに置いたボタン**(第5.244節)。同じ組は1回だけ言う */
+  const 色の一覧 = [...new Set(色なし)]
+  if (色の一覧.length) {
+    ng(`ボタンの色 … ${色の一覧.length} 個が、地の色のまま置かれている`,
+      色の一覧.slice(0, 12).join('\n    '))
+  } else {
+    ok(`ボタンの色 … ${SCREENS.length} 画面 × 2幅、地の色のままのボタンは無い`)
   }
 }
 

@@ -111,7 +111,7 @@ export default function AssignRizap({
                           ))}
                         </select>
                       </label>
-                      <button type="button" className="btn btn--small rizap-send"
+                      <button type="button" className="btn btn--small btn--quiet rizap-send"
                               disabled={!!busy}
                               onClick={() => onSend?.(b.id)}>
                         {busy === b.id ? '出しています…' : '出す'}

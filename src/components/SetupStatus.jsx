@@ -74,7 +74,7 @@ export default function SetupStatus({ role = null }) {
         ))}
       </ol>
       <div className="btn-row">
-        <button type="button" className="btn btn--small" onClick={again} disabled={busy}>
+        <button type="button" className="btn btn--small btn--primary" onClick={again} disabled={busy}>
           {busy ? '確かめています…' : '済ませたので、確かめ直す'}
         </button>
       </div>

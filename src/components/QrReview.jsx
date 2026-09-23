@@ -39,8 +39,8 @@ import ReviewScope from './ReviewScope.jsx'
 import FrameParts from './FrameParts.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import {
-  QR_GROUPS, SCOPES, groupLead, loadScope, loadSize, qrGroupPool, qrTally,
-  runKeyOf, saveScope, saveSize, scopeCounts, scopePool, shouldRecord,
+  QR_GROUPS, SCOPES, groupLead, loadRepeat, loadScope, loadSize, qrGroupPool, qrTally,
+  runKeyOf, saveRepeat, saveScope, saveSize, scopeCounts, scopePool, shouldRecord,
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
@@ -62,7 +62,7 @@ import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import WordRadio from './WordRadio.jsx'
-import { MusicIcon, PrintIcon } from './Icons.jsx'
+import { MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
 import { qrSheetPairs, sheetNote, wordSheetSections } from '../lib/reviewSheet.js'
@@ -286,6 +286,14 @@ export default function QrReview({
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState(emptyFilter)
   const [order, setOrder] = useState(loadOrder)
+  /* **繰り返すか**(第5.244節・2026-09-23 利用者の指摘
+     「個数を指定して繰り返す指定もなくなってしまっていませんか?」)。
+
+     **仕組みは前からあった**(`reviewScope.js` の `loadRepeat`)。
+     単語帳は使っていたのに、**こちらが `ReviewScope` へ渡していなかった**
+     ので、画面のどこにも出ていなかった。
+     鍵は `'qr'`(単語帳は `'word'`)—— 別々に覚える */
+  const [repeat, setRepeat] = useState(() => loadRepeat('qr'))
   /**
    * **出題範囲と、1回ぶんの個数**(2026-09 利用者の指定)。
    *
@@ -660,7 +668,11 @@ export default function QrReview({
   /* **冊の中の区切り(Unit・中身・型)も、ここに入れる**(第5.191節)。
      入れていなかったので、練習の最中に型を選んでも組み直されなかった ——
      **絞ったのに、出る問が前のまま**だった */
-  const runKey = `${runKeyOf({ scope, size, filter, group })}|${poolKey}`
+  /* **並べ方も鍵に入れる**(第5.244節)。入っていなかったので、
+     練習の最中に「ランダム / 教材ごと」を変えても**組み直されなかった**
+     —— 第5.191節で「絞ったのに出る問が前のまま」を直したときと、
+     まったく同じ抜け方である */
+  const runKey = `${runKeyOf({ scope, size, filter, group })}|${order}|${poolKey}`
   const runKeyRef = useRef(runKey)
   useEffect(() => {
     if (!run) { runKeyRef.current = runKey; return }
@@ -1075,15 +1087,28 @@ export default function QrReview({
               missLead="上に出ているのが、言えなかった文です。また明日出ます。"
             >
               {/* **行き止まりを作らない。** 範囲に残りがあれば、
-                  読み直さずにそのまま次の区切りへ進める(並びも保たれる) */}
+                  読み直さずにそのまま次の区切りへ進める(並びも保たれる)。
+
+                  **残りが無くても、「繰り返す」が入っていれば回す**
+                  (第5.244節・2026-09-23 利用者の指摘)——
+                  単語帳にはこれがあったのに、こちらには無かった。
+                  **間隔の決まりは壊れない。** 先取りしたぶんは
+                  `shouldRecord()` が記録しないので、何周しても
+                  明日の復習は空にならない(単語帳とまったく同じ) */}
               <div className="btn-row">
                 {pending.length > 0 && (
                   <button type="button" className="btn btn--primary" onClick={next}>
                     つぎの {takeCount(size, pending.length)} 問
                   </button>
                 )}
+                {pending.length === 0 && repeat && (
+                  <button type="button" className="btn btn--primary" onClick={start}>
+                    <RepeatIcon />
+                    もう一度この範囲を回す
+                  </button>
+                )}
                 <button type="button"
-                        className={`btn ${pending.length > 0 ? 'btn--quiet' : 'btn--primary'}`}
+                        className={`btn ${pending.length > 0 || repeat ? 'btn--quiet' : 'btn--primary'}`}
                         onClick={stop}>
                   おわる
                 </button>
@@ -1171,6 +1196,13 @@ export default function QrReview({
             narrowed={narrowed}
             onScope={(id) => { setScope(id); saveScope('qr', id) }}
             onSize={(sz) => { setSize(sz); saveSize('qr', sz) }}
+            /* **単語帳とまったく同じ札を出す**(第5.244節)。
+               並べ方も繰り返すも、ここには1つも無かった */
+            orders={QR_ORDERS}
+            order={order}
+            onOrder={(id) => { setOrder(id); saveOrder(id) }}
+            repeat={repeat}
+            onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
             onStart={start}
             /* **言う練習・聞き流し・紙に出すも、この中**(第5.167節)。
                トップ画面が無くなったので、置き場所がここだけになった */
@@ -1288,21 +1320,21 @@ export default function QrReview({
             narrowed={narrowed}
             onScope={(id) => { setScope(id); saveScope('qr', id) }}
             onSize={(s) => { setSize(s); saveSize('qr', s) }}
+            /* **並べ方は札にする**(第5.244節・2026-09-23 利用者の指摘)。
+               「しぼる」の中の小さなプルダウンだったので、
+               **単語帳と同じ札を探した人には見つからなかった。**
+               **同じことをするものを2つ見せない**ので、あちらは消した */
+            orders={QR_ORDERS}
+            order={order}
+            onOrder={(id) => { setOrder(id); saveOrder(id) }}
+            repeat={repeat}
+            onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
             onStart={start}
           >
             {/* **絞り込みは単語帳と同じ部品**(`WordbookFilter`)。
                 ちがうのは、**教材名のプルダウンを出す**という1点だけ
                 (2026-09 利用者の指定「『テキスト』= 教材の名前で絞る」) */}
             <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
-            <label className="wbfilter-row">
-              <span className="wbfilter-name">並べ方</span>
-              <select className="wbfilter-ctl" value={order}
-                      onChange={(e) => { setOrder(e.target.value); saveOrder(e.target.value) }}>
-                {QR_ORDERS.map((o) => (
-                  <option key={o.id} value={o.id}>{o.label}</option>
-                ))}
-              </select>
-            </label>
           </ReviewScope>
 
           {/* **聞き流し**と**紙に出す**。中身は `toolsBox` 1か所 ——

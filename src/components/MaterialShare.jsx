@@ -103,7 +103,7 @@ export default function MaterialShare({ material, guest = null, open, onOpen, on
           残すのは「誰に」ではなく「何をするか」だけでよい。
           長い名前だと、狭い画面で「印刷 / PDF」「音声」と3つ並ばない */}
       <button type="button"
-              className={`btn btn--small share-open${open ? ' is-on' : ''}`}
+              className={`btn btn--small btn--quiet share-open${open ? ' is-on' : ''}`}
               aria-expanded={open}
               onClick={toggle}>
         <ShareIcon />共有
@@ -153,7 +153,7 @@ export default function MaterialShare({ material, guest = null, open, onOpen, on
                        autoComplete="email" inputMode="email"
                        onChange={(e) => setTo(e.target.value)} />
                 {/* **選ばせてから断らない。** 宛先の形が違ううちは押せない */}
-                <a className={`btn btn--small${mail ? '' : ' is-off'}`}
+                <a className={`btn btn--small btn--quiet${mail ? '' : ' is-off'}`}
                    href={mail ?? undefined}
                    aria-disabled={mail ? undefined : 'true'}
                    onClick={(e) => { if (!mail) e.preventDefault() }}>
@@ -174,7 +174,7 @@ export default function MaterialShare({ material, guest = null, open, onOpen, on
                 <input type="text" className="input share-url" ref={urlRef}
                        value={url} readOnly aria-label="教材のリンク"
                        onFocus={(e) => e.target.select()} />
-                <button type="button" className="btn btn--small" onClick={copy}>
+                <button type="button" className="btn btn--small btn--quiet" onClick={copy}>
                   コピーする
                 </button>
               </div>

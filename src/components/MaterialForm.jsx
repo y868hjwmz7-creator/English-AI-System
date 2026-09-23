@@ -2347,7 +2347,7 @@ export default function MaterialForm({
                   {wordHit > 0 && ` この中から ${Math.min(wordCount, wordHit)} 語を選びます。`}
                 </p>
                 <div className="btn-row">
-                  <button type="button" className="btn btn--small"
+                  <button type="button" className="btn btn--small btn--quiet"
                           disabled={wordHit === 0}
                           onClick={addDrillWords}>
                     この条件から語を足す
@@ -2565,7 +2565,7 @@ export default function MaterialForm({
               </p>
             )}
             <div className="btn-row">
-              <button type="button" className="btn"
+              <button type="button" className="btn btn--ghost"
                       onClick={() => setShowEditor(true)}>
                 中身をすべて見る
               </button>
@@ -2647,7 +2647,7 @@ export default function MaterialForm({
                   {sections.map((sec) => `${sectionLabel(kind, sec.exercise_type)} ${sec.items.length}問`)
                     .join(' / ')}
                 </p>
-                <button type="button" className="btn btn--small"
+                <button type="button" className="btn btn--small btn--ghost"
                         onClick={() => setShowEditor(true)}>
                   中身を見て直す
                 </button>
@@ -2728,7 +2728,7 @@ export default function MaterialForm({
                 </div>
               ))}
 
-              <button type="button" className="btn btn--small"
+              <button type="button" className="btn btn--small btn--quiet"
                       onClick={() => patchSection(si, { items: [...sec.items, {}] })}>
                 ＋ 設問を追加
               </button>
@@ -2737,7 +2737,7 @@ export default function MaterialForm({
         })}
 
         <div className="btn-row">
-          <button type="button" className="btn btn--small"
+          <button type="button" className="btn btn--small btn--quiet"
                   onClick={() => setSections([...sections, newSection()])}>
             ＋ 演習を追加
           </button>
@@ -2838,7 +2838,7 @@ export default function MaterialForm({
               ? `発行して ${shareWith.length}人と共有する`
               : '発行する(共有はあとで)'}
         </button>
-        <button type="button" className="btn" onClick={onCancel}>やめる</button>
+        <button type="button" className="btn btn--ghost" onClick={onCancel}>やめる</button>
       </div>
     </form>
   )

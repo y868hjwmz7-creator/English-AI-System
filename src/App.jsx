@@ -944,7 +944,7 @@ export default function App() {
                 `clipboard` が使えない端末では、**選んで写せるように
                 だけしておく**(行き止まりを作らない)。 */}
             {/^\[調査中\]|\[調査中\]/.test(clipNote) && (
-              <button type="button" className="btn btn--small"
+              <button type="button" className="btn btn--small btn--ghost"
                       onClick={() => {
                         /* **画面の1行ではなく、詳しい控えを写す**
                            (第5.217節)。生の `voice_segments` と

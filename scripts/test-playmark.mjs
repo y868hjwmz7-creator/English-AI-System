@@ -9124,9 +9124,20 @@ console.log('\n── セッションの記録を上へ(第5.219節)──')
   }
 
   /* ③ **組み直しの鍵にも、冊の中の区切りを入れる。**
-     入れないと、練習の最中に型を選んでも組み直されない */
-  ok(/const runKey = `\$\{runKeyOf\([^)]*\)\}\|\$\{poolKey\}`/.test(qr),
-    '組み直しの鍵に、冊の中の区切りが入っている')
+     入れないと、練習の最中に型を選んでも組み直されない。
+
+     **書いてある形そのままで見ない**(第5.244節でここが赤くなった)。
+     並べ方(`order`)を鍵に足したとき、**直していない仕組みのほうが
+     赤くなった** —— 鍵に1つ足すたびに、この行も書き直すことになる。
+     見るのは**中身が入っているか**であって、並び順ではない。 */
+  {
+    const m = qr.match(/const runKey = `([^`]*)`/)
+    const 鍵 = m ? m[1] : ''
+    const 要る = ['runKeyOf(', 'poolKey']
+    const 抜け = 要る.filter((k) => !鍵.includes(k))
+    ok(Boolean(鍵) && 抜け.length === 0,
+      '組み直しの鍵に、冊の中の区切りが入っている', 抜け.join(', ') || 鍵)
+  }
 
   /* ④ **絞っただけでは、練習を始め直さない。**
      `dropRun()` は絞り込み(`filter` / `group`)も消すので、
@@ -10924,6 +10935,54 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(/steps'\) === 'last' \? 'repeat'/.test(sk),
       '骨組み … いちばん後ろを選んでいる形も描ける')
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   出しかたの呼び名は、単語帳と Quick Response でそろえる
+   (第5.244節・2026-09-23 利用者の指摘)
+
+     > Quick Response帳のソートに「ランダムにだす」がないです。
+
+   **まったく同じことをするのに、名前が違っていた** ——
+   単語帳は「ランダム / 教材ごと」、Quick Response は「混ぜる / 教材の順」。
+   利用者は「ランダム」を探して、見つけられなかった。
+   **同じものを2つの名前で呼ばない**(CLAUDE.md)。
+
+   **一覧を書き写さない。** 両方の一覧を取り込んで、
+   **同じ id の札どうし**を突き合わせる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  /* Quick Response の `shuffle` と 単語帳の `random` は**同じこと**である。
+     id が違うのは、端末に覚えさせてある値を変えられないため
+     (変えると、いまの指定が黙って既定に戻る)。
+     **だから、ここで対応表を1つだけ持つ** */
+  const 同じもの = [['shuffle', 'random'], ['material', 'material']]
+  const qr = new Map(QR_ORDERS.map((o) => [o.id, o.label]))
+  const wb = new Map(WORD_ORDERS.map((o) => [o.id, o.label]))
+  /* **「無ければ素通り」しないように、まず在ることを見る** */
+  const 揃い = 同じもの.filter(([a, b]) => qr.has(a) && wb.has(b))
+  ok(揃い.length === 同じもの.length,
+    '出しかた … ランダムと教材ごとが、どちらの冊にもある',
+    `QR ${[...qr.values()].join(' / ')} | 単語帳 ${[...wb.values()].join(' / ')}`)
+  const 食い違い = 揃い.filter(([a, b]) => qr.get(a) !== wb.get(b))
+  ok(食い違い.length === 0,
+    '出しかた … 同じことをする札は、同じ呼び名',
+    食い違い.map(([a, b]) => `${qr.get(a)} ≠ ${wb.get(b)}`).join(' / '))
+  /* **Quick Response の画面が、その一覧を本当に渡しているか。**
+     渡していなかったので、札そのものが画面に出ていなかった。
+     **コメントを落としてから、使っている形で数える**(CLAUDE.md) */
+  const 素 = readFileSync(new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  ok((素.match(/orders=\{QR_ORDERS\}/g) ?? []).length === 2,
+    'Quick Response … 並べ方の札を、始める前と練習中の両方に渡している',
+    `${(素.match(/orders=\{QR_ORDERS\}/g) ?? []).length} か所`)
+  ok((素.match(/onRepeat=\{/g) ?? []).length === 2,
+    'Quick Response … 繰り返すの札も、両方に渡している',
+    `${(素.match(/onRepeat=\{/g) ?? []).length} か所`)
+  /* **組み直しの鍵に並べ方が入っているか。**
+     入っていないと、練習中に並べ方を変えても出る問が前のままになる */
+  ok(/const runKey = [^\n]*\$\{order\}/.test(素),
+    'Quick Response … 練習中に並べ方を変えたら、その場で組み直す')
 }
 
 console.log(ng

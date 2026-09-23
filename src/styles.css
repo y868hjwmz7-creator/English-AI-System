@@ -1303,7 +1303,14 @@ audio { width: 100%; margin-top: 4px; }
   border-color: var(--border);
   color: var(--text-secondary);
 }
+/* **休んでいるときも色を持つ**(第5.244節・共通ルール
+   「既定のボタンは、白い紙の上で押せるものに見えない」)。
+   `.is-active` のときだけ青、それ以外は**灰**。
+   `btnTone.js` の `toneOn()` と同じ考え方を、CSS 側で1か所に持つ */
 .btn--toggle { padding: 5px 12px; font-size: var(--fs-13); }
+.btn--toggle:not(.is-active) {
+  background: var(--quiet-bg); border-color: var(--quiet-bg); color: var(--text-primary);
+}
 .btn--toggle.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* **答えの3段目**(0027)。まだ / 覚えかけ / 覚えた のまん中。
@@ -4217,6 +4224,14 @@ html, body { overflow-x: clip; }
 }
 .lesson-bar .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
 .lesson-bar .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* **黒い帯でも、3色とも生かす**(第5.244節・2026-09-23)。
+   `.lesson-bar .btn` が全部を `#33332d` にそろえるので、
+   青だけ塗り直していた ——
+   **`btn--quiet` も `btn--ghost` も、書いても効かなかった。**
+   紙(`.lesson-sheet`)でまったく同じ抜け方をしていたのと同じ話である。
+   黒い帯では、灰は**一段明るい黒**、枠線だけは**地に溶かす** */
+.lesson-bar .btn--quiet { background: #45453f; border-color: #45453f; color: #f2f2ee; }
+.lesson-bar .btn--ghost { background: transparent; border-color: #55554e; color: #cfcfc8; }
 .lesson-bar .btn:disabled { opacity: .4; }
 .lesson-pages { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-8); font-size: var(--fs-14); }
 .lesson-pages > span { white-space: nowrap; }
@@ -5568,6 +5583,9 @@ html, body { overflow-x: clip; }
 }
 .etext-pop--paper .btn:hover { border-color: #a9a294; background: #f7f6f3; }
 .etext-pop--paper .btn--link { background: none; border-color: transparent; color: #2f6f86; }
+/* **3色とも生かす**(第5.244節)。上の1行が全部を白い紙色に塗り直している */
+.etext-pop--paper .btn--quiet { background: #efede8; border-color: #dcd8cf; color: #24292f; }
+.etext-pop--paper .btn--ghost { background: transparent; border-color: #dcd8cf; color: #5a5348; }
 
 
 @media (max-width: 600px) {
@@ -7684,6 +7702,13 @@ button.wbfilter-ctl { text-align: left; }
 .focus-top .btn--primary, .focus-bar .btn--primary {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
+/* **3色とも生かす**(第5.244節)。`.lesson-bar` とまったく同じ抜け方 */
+.focus-top .btn--quiet, .focus-bar .btn--quiet {
+  background: #45453f; border-color: #45453f; color: #f2f2ee;
+}
+.focus-top .btn--ghost, .focus-bar .btn--ghost {
+  background: transparent; border-color: #55554e; color: #cfcfc8;
+}
 .focus-top .btn:disabled, .focus-bar .btn:disabled { opacity: .4; }
 .focus-top select {
   background: #33332d; color: #f2f2ee; border-color: #55554e;
@@ -7721,6 +7746,16 @@ button.wbfilter-ctl { text-align: left; }
 }
 .focus--plain .focus-top .btn--primary {
   background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+}
+/* **3色とも生かす**(第5.244節・2026-09-23 実機で測って分かった)。
+   ここが `var(--btn-bg)` で全部を塗り直していたので、
+   **紙を持たない集中モードの帯では、`btn--ghost` の「閉じる」まで
+   白く塗られていた。** 青だけを塗り直していたのが原因である */
+.focus--plain .focus-top .btn--quiet {
+  background: var(--quiet-bg); border-color: var(--quiet-bg); color: var(--text-primary);
+}
+.focus--plain .focus-top .btn--ghost {
+  background: transparent; border-color: var(--border); color: var(--text-secondary);
 }
 .focus--plain .focus-top select {
   background: var(--btn-bg); color: var(--text-primary); border-color: var(--border);
@@ -8681,6 +8716,9 @@ button.wbfilter-ctl { text-align: left; }
    狭い、という逆さまにしない。 */
 .player--dock { justify-content: center; gap: var(--sp-16); }
 .player--dock .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
+/* **3色とも生かす**(第5.244節)。黒い帯と同じ作法 */
+.player--dock .btn--quiet { background: #45453f; border-color: #45453f; color: #f2f2ee; }
+.player--dock .btn--ghost { background: transparent; border-color: #55554e; color: #cfcfc8; }
 .player--dock .btn:disabled { opacity: .4; }
 .player--dock .repeat-unit { color: #f2f2ee; }
 /* **進み具合の線は出さない**(上の帯とまったく同じ理由)。

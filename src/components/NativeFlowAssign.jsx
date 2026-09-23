@@ -88,7 +88,7 @@ export default function NativeFlowAssign({
           **すき間は `.btn-row` の `gap`** で付く —— 子に余白を付けて回らない */}
       {onAll && (
         <div className="btn-row">
-          <button type="button" className="btn btn--small" disabled={busy || n === units.length}
+          <button type="button" className="btn btn--small btn--quiet" disabled={busy || n === units.length}
                   onClick={() => onAll(true)}>
             ぜんぶ出す({units.length} Unit・{allQ} 問)
           </button>

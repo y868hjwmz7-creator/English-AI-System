@@ -780,7 +780,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
             <button type="submit" className="btn btn--primary" disabled={addBusy}>
               {addBusy ? '追加しています…' : '追加する'}
             </button>
-            <button type="button" className="btn" onClick={() => setAdding(false)}>やめる</button>
+            <button type="button" className="btn btn--ghost" onClick={() => setAdding(false)}>やめる</button>
           </div>
         </form>
       )}
@@ -1275,7 +1275,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                               印刷は中身を読んでからなので、押すと少し待つ */}
                           {m && (
                             <div className="btn-row">
-                              <button type="button" className="btn btn--small"
+                              <button type="button" className="btn btn--small btn--quiet"
                                       disabled={bodyBusy === m.id}
                                       onClick={() => printHw(a)}>
                                 <PrintIcon />
@@ -1521,7 +1521,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                   })()}
                   <input type="date" value={form.takenOn}
                          onChange={(e) => setForm({ ...form, takenOn: e.target.value })} />
-                  <button type="button" className="btn btn--small" onClick={() => submitScore(l)}>
+                  <button type="button" className="btn btn--small btn--quiet" onClick={() => submitScore(l)}>
                     記録する
                   </button>
                 </div>
@@ -1566,7 +1566,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                            placeholder="文" value={goal.sentences}
                            onChange={(e) => setGoal({ ...goal, sentences: e.target.value })} />
                   </label>
-                  <button type="button" className="btn btn--small"
+                  <button type="button" className="btn btn--small btn--quiet"
                           disabled={goalBusy} onClick={() => submitGoal(l)}>
                     {goalBusy ? '決めています…' : '決める'}
                   </button>
@@ -1640,7 +1640,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                   <div className="erase-box">
                     <p className="field-label">記録をすべて消す</p>
                     {erasing?.id !== l.id ? (
-                      <button type="button" className="btn btn--small"
+                      <button type="button" className="btn btn--small btn--ghost"
                               onClick={() => { setErasing({ id: l.id, typed: '' }); setError(null) }}>
                         このゲストの記録をすべて消す…
                       </button>
@@ -1663,7 +1663,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                   onClick={() => eraseNow(l)}>
                             {erasing.busy ? '消しています…' : '消す'}
                           </button>
-                          <button type="button" className="btn btn--small"
+                          <button type="button" className="btn btn--small btn--ghost"
                                   onClick={() => setErasing(null)}>やめる</button>
                         </div>
                       </>
@@ -1675,7 +1675,7 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 )}
 
                 <div className="btn-row">
-                  <button type="button" className="btn" onClick={() => setOpenId(null)}>閉じる</button>
+                  <button type="button" className="btn btn--ghost" onClick={() => setOpenId(null)}>閉じる</button>
                 </div>
               </div>
             ) : null}

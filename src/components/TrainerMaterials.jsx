@@ -783,7 +783,7 @@ export default function TrainerMaterials({
         <div className="finder-head">
           <h2 className="card-title">教材をさがす</h2>
           {/* ③ 作る。**いつも見えるところに置く**(押せる場所が分かる) */}
-          <button type="button" className="btn btn--small"
+          <button type="button" className="btn btn--small btn--quiet"
                   onClick={goCreate}>
             <PlusIcon />教材を作る
           </button>
@@ -1203,7 +1203,7 @@ export default function TrainerMaterials({
                     ⬇ 音声      … 絵が「落とす」、字が「何を」
                     ⤳ 共有      … 絵が「渡す」、字が「何をするか」 */}
               <div className="btn-row card-tools">
-                <button type="button" className="btn btn--small"
+                <button type="button" className="btn btn--small btn--quiet"
                         onClick={() => setPrintId(m.id)}>
                   <PrintIcon />PDF
                 </button>
@@ -1214,7 +1214,7 @@ export default function TrainerMaterials({
                     **本文がある教材だけ**に出す(効かない操作を見せない)。
                     すでにある MP3 を集めてつなぐだけなので、**課金されない** */}
                 {dlPieces(m) > 0 && (
-                  <button type="button" className="btn btn--small"
+                  <button type="button" className="btn btn--small btn--quiet"
                           disabled={!!dlBusy} onClick={() => dlStart(m)}>
                     {/* **進み具合は、必ず数で出す**(CLAUDE.md)。
                         14 本を集めるあいだ、名前のままでは止まって見える。
@@ -1524,7 +1524,7 @@ export default function TrainerMaterials({
               ? 'この中に使えるものが無ければ、いまの条件のまま作れます。'
               : 'さがしても見つからなかったときは、新しく作ります。'}
           </p>
-          <button type="button" className="btn" onClick={goCreate}>
+          <button type="button" className="btn btn--primary" onClick={goCreate}>
             <PlusIcon />{filterCount ? 'この条件で教材を作る' : '教材を作る'}
           </button>
         </div>

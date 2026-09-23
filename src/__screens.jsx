@@ -1058,10 +1058,10 @@ function ToolsScreen() {
 
             **絵だけには戻さない。** 何のボタンかを言う語は1つずつ残す */}
         <div className="btn-row card-tools" data-hits="0">
-          <button type="button" className="btn btn--small" onClick={hit}>
+          <button type="button" className="btn btn--small btn--quiet" onClick={hit}>
             <PrintIcon />PDF
           </button>
-          <button type="button" className="btn btn--small" onClick={hit}>
+          <button type="button" className="btn btn--small btn--quiet" onClick={hit}>
             <DownloadIcon />
             {/* **集めているあいだも、数は1文字も削らない**(CLAUDE.md) */}
             {busy ? '3 / 14' : '音声'}
