@@ -3027,14 +3027,33 @@ html, body { overflow-x: clip; }
    「最初から全部にスラッシュが入っているように見える」「壊滅的に
    使いづらい」と言われた(2026-08)。語は大きいので指で確実に狙え、
    押すまでは**素の英文のまま**である。 */
-.slash-head {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10) var(--sp-16); margin-bottom: 10px;
-}
-.slash-head .rate-pick:first-child { margin-left: auto; }
+/* **`.slash-head` は消した**(第5.242節・2026-09-23)。
+   ②の「単位」と①の「難易度」だけが**自分用の行を別に持ち、右寄せ**に
+   なっていた。ステップを切り替えるたびに選ぶ欄の場所が動くので、
+   「統一感が無い」の正体の1つだった。いまは6つとも `.passage-tools` に並ぶ。 */
 .slash-list { list-style: none; margin: 0; padding: 0; }
 /* **広げすぎない。** 広いと「もう区切られている」ように見える
    (2026-08 の指摘)。語のあいだは、押せる幅ぶん(左右 4px)だけで足りるので、
    `word-spacing` は足さない */
+/* ── 英文は1つだけ。**そのカタマリの訳を、真下に置く**
+      (第5.242節・2026-09-23 利用者の指定)
+
+        > 結局スラッシュを入れ終えれば、必要なのは
+        > スラッシュを入れ終えた英文と訳が並んでいる部分だけです
+
+   これまでは**押して区切る行**と**確かめる箱**で英文を2回出していた。
+   すき間は `gap` で作る(共通ルール)。 */
+.slash-body { display: grid; gap: var(--sp-8); margin: 4px 0 0; }
+/* 1つのカタマリ。英語とその訳を、縦に重ねて1組に見せる */
+.slash-chunk { display: grid; gap: 2px; }
+/* **訳は、英語より小さく・うすく。** 先に目が行くのは英語のほうである */
+.slash-chunk-ja {
+  margin: 0; color: var(--text-secondary);
+  font-size: var(--fs-13); line-height: 1.7;
+}
+/* 控えが2つ以上まとまったときは、**行を分けて出す**(棒にしない) */
+.slash-chunk-ja > span { display: block; }
+
 .slash-line { margin: 0; line-height: 2.2; font-size: var(--fs-17); }
 .slash-w { white-space: nowrap; }
 /* 語。**ふだんは、ただの文字に見せる。** 枠も地色も付けない */
@@ -5474,6 +5493,28 @@ html, body { overflow-x: clip; }
 .focus-paper .btn.btn--primary {
   background: var(--accent-soft); border-color: var(--accent-line);
   color: var(--accent); font-weight: 700;
+}
+/* **紙の上でも、3つの色をそのまま生かす**(第5.242節・2026-09-23 利用者の指摘)。
+
+     > ボタンが全て白なのも分かりにくい要因の一つです
+
+   原因はここだった。`.lesson-sheet .btn` が**全部を紙の白**にそろえるので、
+   6Steps の画面ではどのボタンも白い枠になっていた ——
+   `btn--quiet`(灰)も `btn--ghost`(枠線だけ)も、**指定しても効かない。**
+   だからボタンを足す側は色を決める意味がなく、**全部が白いまま**育った。
+
+   すぐ上の注記に「**部品ごとに打ち消して回らない**(新しい部品で必ず抜ける)」
+   と書いてある。青だけを塗り直していたので、**残り2つで抜けていた。**
+   共通ルールの3つ(青 / 灰 / 枠線だけ)を、**ここで3つとも**紙向けに置く。
+   べた塗りにはせず、うすい地色 + 枠線 + 太さで分ける。**色だけに頼らない** */
+.lesson-sheet .btn.btn--quiet,
+.focus-paper .btn.btn--quiet {
+  background: var(--qa-answer); border-color: var(--rule);
+  color: var(--ink); font-weight: 600;
+}
+.lesson-sheet .btn.btn--ghost,
+.focus-paper .btn.btn--ghost {
+  background: transparent; border-color: var(--rule); color: var(--ink-soft);
 }
 
 /* 紙の上に出る吹き出し。**紙は暗い配色でも白のまま**なので、
@@ -8193,8 +8234,7 @@ button.wbfilter-ctl { text-align: left; }
 /* 「速さ」「単位」「難易度」の見出し。**うすい灰色をやめる** */
 .passage--focus .rate-pick > span { color: var(--text-primary); font-weight: 600; }
 /* 本文と、その上の帯を分ける線。1本あるだけで、どこからが本文か分かる */
-.passage--focus .slash-head,
-.passage--focus .dictation-head { padding-bottom: 10px; }
+.passage--focus .passage-tools { padding-bottom: 10px; }
 
 /* 段落・発言の番号と、話す人(③⑤)。**どのページでも番号を出す**
    (2026-09 利用者の指定「どのページでも段落番号とか全て入れてください」) */

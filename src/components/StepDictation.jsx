@@ -24,14 +24,14 @@ import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
-import { DICTATION_LEVELS, bodyUnitWord, groupSentences } from '../lib/sixSteps.js'
+import { bodyUnitWord, groupSentences } from '../lib/sixSteps.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { useProgress } from '../lib/progress.js'
 
 export default function StepDictation({
   sentences, clipVoice, tier, rate, level,
   wordStatuses, onMarkWord, listeningId, onCheck, results,
-  size, onSizeChange, progressAt = null, learnerId = null,
+  size, progressAt = null, learnerId = null,
   /**
    * 何番から数えるか(2026-09 利用者の指定「段落番号とか全て入れてください」)。
    * 集中モードでは**1つだけ**を渡すので、そのままだと何番目でも「1」に
@@ -78,19 +78,11 @@ export default function StepDictation({
 
   return (
     <div className="dictation">
-      <div className="slash-head">
-        <label className="rate-pick">
-          <span>難易度</span>
-          <select value={DICTATION_LEVELS.find((x) => x.size === size)?.id ?? 'easy'}
-                  onChange={(e) => onSizeChange(
-                    DICTATION_LEVELS.find((x) => x.id === e.target.value)?.size ?? 1,
-                  )}>
-            {DICTATION_LEVELS.map((l) => (
-              <option key={l.id} value={l.id} title={l.hint}>{l.label}({l.size}文ずつ)</option>
-            ))}
-          </select>
-        </label>
-      </div>
+      {/* **「難易度」の選びは、ここには置かない**(第5.242節・2026-09-23)。
+          ほかのステップと同じ帯(`.passage-tools`)へ移した ——
+          ①②だけが自分用の行を別に持ち、しかも**右寄せ**だったので、
+          ステップを切り替えるたびに選ぶ欄の場所が動いていた。
+          どのステップに出すかは `SIX_STEPS.barLevel` 1か所にある */}
 
       <ol className="dictation-list">
         {blocks.map((s, n) => {

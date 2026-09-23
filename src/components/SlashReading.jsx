@@ -43,11 +43,11 @@
  *   控えの無い教材では出さない。**無いものを、あるように見せない。**
  */
 import PracticeRow from './PracticeRow.jsx'
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect } from 'react'
 import { useProgress } from '../lib/progress.js'
 import { checkSlashes, judgeSlashes, wordsOf } from '../lib/chunker.js'
 import { chunkPairsOfAtMarks, storedChunks } from '../lib/chunkJa.js'
-import { bodyUnitWord, slashUnitsFor } from '../lib/sixSteps.js'
+import { bodyUnitWord } from '../lib/sixSteps.js'
 import SpeakButton from './SpeakButton.jsx'
 
 /**
@@ -82,7 +82,7 @@ const partsOf = (s) => s.parts ?? [{ id: s.id, prompt_en: s.text }]
 const hasJaOf = (s) => partsOf(s).some((p) => storedChunks(p))
 
 export default function SlashReading({
-  blocks, clipVoice, tier, rate, unit, onUnitChange, progressAt = null,
+  blocks, clipVoice, tier, rate, progressAt = null,
   learnerId = null,
   /** 会話・会議か。**単位の言葉が変わる**(段落ごと / 発言ごと・2026-09) */
   isDialogue = false,
@@ -93,24 +93,25 @@ export default function SlashReading({
      20か所入れたあとで別のタブを見に行くと、やり直しになっていた。
      鍵の形は `progress.js` に1か所だけ置いてある。 */
   const [marks, setMarks] = useProgress(`${progressAt}.marks`, {}, learnerId)
-  const [shown, setShown] = useProgress(`${progressAt}.shown`, {}, learnerId)
-  // **通しで見る**(2026-08 利用者の指定)。段落ごとの作業と切り替える
-  const [review, setReview] = useState(false)
 
-  // **まとめて出せるようにする**(2026-08 利用者の指定)。
-  //
-  //   > これは段落ごとでも全体を一度にでもどちらでもできるようにして
-  //   > 欲しいです。
-  //
-  // 段落ごとに区切っていくと、押すボタンが段落の数だけになる。
-  // 全部入れ終わってから見直したいときは、**1回で出せたほうが早い。**
-  // 段落ごとに出す道は残す(1つずつ確かめたいときのため)。
-  const jaBlocks = blocks.filter((b) => hasJaOf(b) || b.ja)
-  const allOpen = jaBlocks.length > 0 && jaBlocks.every((b) => shown[b.id])
-  const toggleAll = () => setShown(allOpen
-    ? {}
-    : Object.fromEntries(jaBlocks.map((b) => [b.id, true])))
+  /* ── **訳は、区切りを入れたらその場に出る**(第5.242節・2026-09-23)──
 
+       > スラッシュリーディングの「区切りを出す、隠す」「訳を出す、隠す」
+       > 「通しで見る」などの UI がアプリの作成をしている私でも
+       > よくわからず混乱します。**結局スラッシュを入れ終えれば、
+       > 必要なのはスラッシュを入れ終えた英文と訳が並んでいる部分だけです。**
+
+     押すところを**3つとも消した。**
+       ・段落ごとの「この区切りで訳を出す / 訳を隠す」
+       ・帯の「すべての区切りで訳を出す / すべての訳を隠す」
+       ・帯の「通しで見る / 区切りに戻る」(画面ごと入れ替わっていた)
+
+     **同じことをするものを3つ見せていた**(CLAUDE.md)。しかも3つめは
+     画面が入れ替わるので、**戻り方を探す**ことになっていた。
+
+     いまは**区切りを1つ入れた時点で、そのカタマリの下に訳が出る。**
+     上から下へ見ていけば、それがそのまま「通しの一枚」である ——
+     **別に作る必要が無い。** */
   //
   // **まちがいは、次にどこかを触ったら消える**(2026-08 利用者の指定)。
   // 指摘を読んだあと、自分で消して回らなくてよい。
@@ -157,58 +158,11 @@ export default function SlashReading({
 
   return (
     <div className="slash">
-      <div className="slash-head">
-        {/* **1文ずつでは細かすぎる**(2026-08 の指摘)。
-            段落(会話・会議は発言)ごとか、本文まるごとかを選ぶ。
-            **言葉は教材の形から決める**(2026-09 利用者の指定)。
-            会話なのに「段落ごと」と出ていた */}
-        <label className="rate-pick">
-          <span>単位</span>
-          <select value={unit} onChange={(e) => onUnitChange(e.target.value)}>
-            {slashUnitsFor(isDialogue).map((u) => (
-              <option key={u.id} value={u.id} title={u.hint}>{u.label}</option>
-            ))}
-          </select>
-        </label>
-        {/* **2つ以上あるときだけ出す。** 1つしかないなら、
-            その段落のボタンと同じことをする札が2つ並ぶだけになる */}
-        {jaBlocks.length > 1 && !review && (
-          <button type="button"
-                  className={`btn btn--small${allOpen ? '' : ' btn--primary'}`}
-                  onClick={toggleAll}>
-            {allOpen ? 'すべての訳を隠す' : 'すべての区切りで訳を出す'}
-          </button>
-        )}
-        {/* ★ **つないだものを1枚で**見られるようにする(2026-08 利用者の指定)
-
-              > 全ての段落が終わった後には、各段落の区切った文と訳を全て
-              > 繋いであるものを用意してあげて参照できるようにしたいな。
-              > ボタンを押せば切り替わるような仕組みが良い
-
-            【いつでも押せるようにした】(2026-09 利用者の指摘)
-
-              > 段落ごとに分けた英文と訳は、すべてつながって見れる場所が
-              > 欲しいです。
-
-            はじめは**全段落の訳を出したあとだけ**出していた。虫食いの一枚を
-            見せないためである。ところが**そこへ行き着く道が見えず**、
-            「そういう場所が欲しい」と言われた。
-
-            **押したときに、こちらで全段落の訳を出してから切り替える。**
-            そうすれば虫食いにならず、しかも1回で着く。
-            「効かないボタンを出さない」も守れている。 */}
-        {jaBlocks.length > 1 && (
-          <button type="button"
-                  className={`btn btn--small${review ? '' : ' btn--primary'}`}
-                  onClick={() => {
-                    // **通しへ行くときは、足りない訳をここで出しておく**
-                    if (!review && !allOpen) toggleAll()
-                    setReview((v) => !v)
-                  }}>
-            {review ? '区切りに戻る' : '通しで見る'}
-          </button>
-        )}
-      </div>
+      {/* **「単位」の選びは、ここには置かない**(第5.242節・2026-09-23)。
+          速さと同じ帯(`.passage-tools`)へ移した ——
+          同じ形の選びが2つ、**違う行・違う寄せ方**で出ていたのが、
+          「統一感が無い」の正体の1つだった。
+          どのステップに出すかは `SIX_STEPS.barUnit` 1か所にある */}
 
       {/* **やり方の説明は、ここには置かない**(2026-09 利用者の指定)。
             > 青くハイライトした文言は不必要です。消してください
@@ -217,110 +171,117 @@ export default function SlashReading({
           畳んで開ける形になっている。**同じ説明を2か所に置かない。**
           読むものが増えると、本文そのものが下へ押し出される。 */}
 
-      {/* ★ 通しの一枚。**押すところは置かない。** 参照するためのものなので、
-          区切りを触れるようにすると練習用と見分けが付かなくなる */}
-      {review ? (
-        <div className="answer-box slash-review">
-          <p className="answer-box-label">通し(自分の区切りと訳)</p>
-          {blocks.map((b) => (
-            <div className="slash-review-block" key={b.id}>
-              {b.speaker && (
-                <span className="passage-speaker" lang="en">{b.speaker}</span>
-              )}
-              <MinePairs parts={partsOf(b)} marks={marks[b.id] ?? []} />
-            </div>
-          ))}
-        </div>
-      ) : (
+      {/* **通しの一枚は、もう作らない**(第5.242節)。
+          段落を上から下へ見ていけば、それがそのまま通しである ——
+          **同じものを2か所に作らない**(CLAUDE.md) */}
       <ol className="slash-list">
         {blocks.map((s, n) => {
           const words = wordsOf(s.text)
           const mine = marks[s.id] ?? []
-          const open = shown[s.id]
           // **1本ずつ、その場で判定する**(2026-08 利用者の指定)。
           // 見るのは「決まりに反していないか」だけ。模範とは比べない
           const judge = judgeSlashes(s.text, mine)
-          // 自分の区切りに合わせた訳。控えが無い教材では null
           const parts = partsOf(s)
           const hasJa = hasJaOf(s)
+          /* **英文は1つだけ**(第5.242節・2026-09-23 利用者の指定)。
+             押して区切る行と、確かめる箱で**同じ英文を2回出していた。**
+             いまは1つの英文を、訳のカタマリで束ねて描き、
+             **その下に訳を置く。** 区切りを入れるまで、訳は出ない */
+          const groups = jaGroupsOf(parts, mine)
+
+          /** 語を1つ描く(番号は**ブロック全体**で数える) */
+          const 語 = (i) => (
+            <Fragment key={i}>
+              <span className="slash-w">
+                {mine.includes(i) && (
+                  <span className={`slash-mark is-${judge.at[i]?.state ?? 'plain'}`}
+                        title={judge.at[i]?.why || ''}
+                        aria-label={judge.at[i]?.state === 'ng'
+                          ? '決まりに反する区切り' : '区切り'}>
+                    /
+                  </span>
+                )}
+                {/* **まちがいは、その場に吹き出しで出す。**
+                    下にまとめて並べていたので、どの区切りの話なのか
+                    ぱっと見て分からなかった(2026-08 の指摘)。
+                    **押すと、そのまちがいごと消える**(2026-08 利用者の指定) */}
+                {judge.at[i]?.state === 'ng' && (
+                  <button type="button" className="slash-tip"
+                          title={`${judge.at[i].why}(押すと消えます)`}
+                          aria-label={`${judge.at[i].short}。押すとこの区切りを消します`}
+                          onClick={() => remove(s.id, i)}>
+                    {judge.at[i].short}
+                  </button>
+                )}
+                {i === 0 ? (
+                  <span className="slash-word is-first">{words[i]}</span>
+                ) : (
+                  <button type="button"
+                          className={`slash-word${mine.includes(i) ? ' is-on' : ''}`}
+                          aria-pressed={mine.includes(i)}
+                          aria-label={`${words[i]} の前で区切る`}
+                          onClick={() => toggle(s.id, i, s.text)}>
+                    {words[i]}
+                  </button>
+                )}
+              </span>
+              {' '}
+            </Fragment>
+          )
+
           return (
             <li key={s.id} className="qa-row slash-row">
-              {/* **操作は右上にまとめる。** 話者の名前と反対側に置くと、
-                  本文と解答をそのぶん上に寄せられる(2026-08 の指摘) */}
-              <PracticeRow no={startNo + n} speaker={s.speaker}>
-                  <SpeakButton text={s.text} className="etext-listen"
-                               clipVoice={clipVoice} tier={tier} rate={rate} />
-                  {/* **出せる訳があるときだけ出す。** 押しても何も出ない
-                      ボタンを置かない(無いものをあるように見せない)。
+              {/* **音の要素は置かない**(2026-09-23 利用者の指定)。
 
-                      **控えが無い教材でも、段落の訳は出す**(2026-08 実機)。
-                      ② を作り直したときに `hasJa` だけで出し分けてしまい、
-                      **段落ごとに訳を見る道を落としていた。**
-                      > 各段落ごとに訳を出す機能がなくなってしまいました。 */}
-                  {(hasJa || s.ja) && (
-                    <button type="button"
-                            className={`btn btn--small${open ? '' : ' btn--primary'}`}
-                            onClick={() => setShown((v) => ({ ...v, [s.id]: !v[s.id] }))}>
-                      {open ? '訳を隠す' : (hasJa ? 'この区切りで訳を出す' : '訳を出す')}
-                    </button>
-                  )}
-                  {mine.length > 0 && (
-                    <button type="button" className="btn btn--small btn--link"
-                            onClick={() => setMarks((m) => ({ ...m, [s.id]: [] }))}>
-                      区切りを消す
-                    </button>
-                  )}
+                    > スラッシュリーディングには「自分で言う」とか
+                    > 「真似て言う」とか言う音の要素は要らないです。
+                    > 音声プレーヤーだけ常に残しておいてもらえれば十分です
+
+                  残すのは Listen と、入れた区切りを消すものだけ。
+                  **色は3つから選ぶ**(共通ルール)—— 素の白は使わない */}
+              <PracticeRow no={startNo + n} speaker={s.speaker}>
+                <SpeakButton text={s.text} className="etext-listen"
+                             clipVoice={clipVoice} tier={tier} rate={rate} />
+                {mine.length > 0 && (
+                  <button type="button" className="btn btn--small btn--ghost"
+                          onClick={() => setMarks((m) => ({ ...m, [s.id]: [] }))}>
+                    区切りを消す
+                  </button>
+                )}
               </PracticeRow>
 
-              {/* 押すのは**語**。押すとその語の前にスラッシュが出る。
-                  押すまでは、ただの英文のまま。
-                  **訳を出したあとも、ここは訳なしのまま**にしておく
-                  (2026-08 利用者の指定。ここが練習用、下が確認用) */}
-              <p className="slash-line" lang="en">
-                {/* 空白は**囲みの外**に置く。中に入れると `white-space: nowrap`
-                    が効いて改行できる場所が無くなり、長い文が画面から
-                    はみ出した(実測) */}
-                {words.map((w, i) => (
-                  <Fragment key={i}>
-                    <span className="slash-w">
-                      {mine.includes(i) && (
-                        <span className={`slash-mark is-${judge.at[i]?.state ?? 'plain'}`}
-                              title={judge.at[i]?.why || ''}
-                              aria-label={judge.at[i]?.state === 'ng'
-                                ? '決まりに反する区切り' : '区切り'}>
-                          /
-                        </span>
-                      )}
-                      {/* **まちがいは、その場に吹き出しで出す。**
-                          下にまとめて並べていたので、どの区切りの話なのか
-                          ぱっと見て分からなかった(2026-08 の指摘)。
-                          ここに出せば、直せば消える */}
-                      {judge.at[i]?.state === 'ng' && (
-                        /* **吹き出しを押すと、そのまちがいごと消える**
-                           (2026-08 利用者の指定)。読んだらすぐ片づけられる */
-                        <button type="button" className="slash-tip"
-                                title={`${judge.at[i].why}(押すと消えます)`}
-                                aria-label={`${judge.at[i].short}。押すとこの区切りを消します`}
-                                onClick={() => remove(s.id, i)}>
-                          {judge.at[i].short}
-                        </button>
-                      )}
-                      {i === 0 ? (
-                        <span className="slash-word is-first">{w}</span>
-                      ) : (
-                        <button type="button"
-                                className={`slash-word${mine.includes(i) ? ' is-on' : ''}`}
-                                aria-pressed={mine.includes(i)}
-                                aria-label={`${w} の前で区切る`}
-                                onClick={() => toggle(s.id, i, s.text)}>
-                          {w}
-                        </button>
-                      )}
-                    </span>
-                    {' '}
-                  </Fragment>
+              {/* 押すのは**語**。押すとその語の前にスラッシュが出て、
+                  **そのカタマリの訳が下に出る。**
+                  空白は**囲みの外**に置く。中に入れると `white-space: nowrap`
+                  が効いて改行できる場所が無くなり、長い文がはみ出す(実測) */}
+              <div className="slash-body">
+                {groups.map((g) => (
+                  <div className="slash-chunk" key={g.from}>
+                    <p className="slash-line" lang="en">
+                      {Array.from({ length: g.to - g.from }, (_, k) => 語(g.from + k))}
+                    </p>
+                    {/* **区切りを入れるまでは出さない。**
+                        入れた瞬間から、そのカタマリの訳がここに並ぶ */}
+                    {mine.length > 0 && g.jaParts && (
+                      <p className="slash-chunk-ja">
+                        {g.jaParts.map((x, k) => <span key={k}>{x}</span>)}
+                      </p>
+                    )}
+                  </div>
                 ))}
-              </p>
+              </div>
+
+              {/* 控えが無い教材では、これまでどおり文ぜんぶの訳を出す。
+                  **無いものを、あるように見せない** */}
+              {mine.length > 0 && !hasJa && s.ja && (
+                <p className="slash-ja">
+                  {/* **会話・会議では「発言の訳」**(2026-09 利用者の指定) */}
+                  {s.jaIsWhole && (
+                    <span className="slash-ja-label">{bodyUnitWord(isDialogue)}の訳</span>
+                  )}
+                  {s.ja}
+                </p>
+              )}
 
               {/* **数えない。** 合っている数・模範には無い数・あと何か所、は
                   採点であり、区切り方に正解が無い以上、意味を持たない(2026-08)。
@@ -330,112 +291,46 @@ export default function SlashReading({
                   <span className="slash-score-done">{praiseFor(s.id)}</span>
                 </p>
               )}
-
-              {open && (
-                <div className="answer-box slash-answer">
-                  <p className="answer-box-label">自分の区切りと訳</p>
-                  <MinePairs parts={parts} marks={mine} />
-                  {/* 控えが無い教材では、これまでどおり文ぜんぶの訳を出す。
-                      **無いものを、あるように見せない** */}
-                  {!hasJa && s.ja && (
-                    <p className="slash-ja">
-                      {/* **会話・会議では「発言の訳」**(2026-09 利用者の指定) */}
-                      {s.jaIsWhole && (
-                        <span className="slash-ja-label">{bodyUnitWord(isDialogue)}の訳</span>
-                      )}
-                      {s.ja}
-                    </p>
-                  )}
-                </div>
-              )}
             </li>
           )
         })}
       </ol>
-      )}
     </div>
   )
 }
 
 /**
- * ブロック全体で持っている区切りの位置を、**項目ごとに割り直す。**
+ * **ブロックぜんぶを、訳のカタマリで束ねる**(第5.242節・2026-09-23)。
  *
- * 「文章全体」を選ぶと、段落をつないだ1本の英文になる(`blocksOf`)。
- * 区切りの位置はそのつないだ英文の語数で数えているが、
- * **訳の控えは項目(段落 / 発言)ごと**にある。割り直さないと、
- * 2段落目以降の区切りが訳と食い違う。
+ *   > 結局スラッシュを入れ終えれば、必要なのは
+ *   > スラッシュを入れ終えた英文と訳が並んでいる部分だけです
+ *
+ * これまでは**英文を2回**出していた —— 押して区切る行と、確かめる箱。
+ * 1つにまとめるために、**押せる語を、訳のカタマリの区切りで束ねる。**
+ *
+ * **語の番号は、ブロック全体で数える。**「文章全体」を選ぶと段落を
+ * つないだ1本になるが、**訳の控えは項目(段落 / 発言)ごと**にあるので、
+ * ここで足し合わせて番号をそろえる。
+ *
+ * @returns {{from: number, to: number, jaParts: string[]|null}[]}
+ *   `jaParts` が `null` なのは**控えが無い項目**。英文だけを描く
  */
-function splitMarks(parts, marks) {
+function jaGroupsOf(parts, marks) {
+  const out = []
   let off = 0
-  return parts.map((part) => {
+  for (const part of parts) {
     const n = wordsOf(part.prompt_en).length
     const local = marks.filter((k) => k > off && k < off + n).map((k) => k - off)
-    off += n
-    return { part, local }
-  })
-}
-
-/**
- * 自分の区切りに訳を当てたものを描く。
- * **段落の箱からも、通しの一覧からも同じものを使う。**
- * 見た目を2か所に書き写すと、片方だけ直り忘れる。
- */
-function MinePairs({ parts, marks }) {
-  return splitMarks(parts, marks).map(({ part, local }, i) => {
     const pairs = chunkPairsOfAtMarks(part, local)
-    // 控えが無い / 数が合わない。**黙って英語だけを出さない。**
-    // 何が起きたのか分からず、直す道も見えない(2026-08 実機)
     if (!pairs) {
-      return (
-        <div key={part.id ?? i}>
-          <p className="slash-out" lang="en">{part.prompt_en}</p>
-          {storedChunks(part) && (
-            <p className="notice notice--warn slash-stale">
-              この本文の訳は、まだ用意できていません。
-              <br />
-              教材をさがす画面でこの教材を開くと、<strong>裏で作り直します</strong>
-              (少し待ってから、もう一度開いてください)。
-            </p>
-          )}
-        </div>
-      )
+      // **控えが無い / 数が合わない。** 英文はそのまま1つのかたまりで描く
+      out.push({ from: off, to: off + n, jaParts: null })
+    } else {
+      for (const p of pairs) {
+        out.push({ from: off + p.from, to: off + p.to, jaParts: p.jaParts })
+      }
     }
-    return (
-      <p className="slash-out slash-out--mine" key={part.id ?? i}>
-        <span className="chunked">
-          {pairs.map((p, n) => (
-            <span className="chunk" key={n}>
-              <span className="chunk-en" lang="en">
-                {n > 0 && <span className="chunk-bar" aria-hidden="true">/</span>}
-                {/* 控えの境目でない自分の区切りも、英語には出す。
-                    訳はそのカタマリぶんをまとめて置く */}
-                {p.segs.map((seg, k) => (
-                  <Fragment key={k}>
-                    {k > 0 && (
-                      <span className="chunk-bar chunk-bar--mine" aria-hidden="true">/</span>
-                    )}
-                    {seg}
-                  </Fragment>
-                ))}
-              </span>
-              {/* **訳がいくつも重なったときは、行を分ける**(2026-09 実機)。
-                  自分の区切りが控えの境目と重ならないと、そのカタマリには
-                  **いくつもの訳がまとまって入る。** つないで1本にすると
-                  「今日時間を作ってくれて話しておきたかったスケジュールに…」と、
-                  日本語として読めない棒になっていた(利用者の写真)。
-                  **区切り記号は足さない**(訳の側にスラッシュは出さない
-                  ・2026-08 利用者の指定)。行を分けるだけで読めるようになる */}
-              {(p.jaParts?.length ?? 0) > 1 ? (
-                <span className="chunk-ja chunk-ja--many">
-                  {p.jaParts.map((t, k) => <span key={k}>{t}</span>)}
-                </span>
-              ) : (
-                <span className="chunk-ja">{p.ja || '　'}</span>
-              )}
-            </span>
-          ))}
-        </span>
-      </p>
-    )
-  })
+    off += n
+  }
+  return out
 }

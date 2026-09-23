@@ -318,6 +318,18 @@ const material = asSpeech ? {
         id: 'it-1', speaker: 'Mika',
         prompt_en: 'Could you tell me where the away fans usually sit?',
         prompt_ja: 'アウェーのファンが普段どこに座るか教えてもらえますか?',
+        /* **カタマリの訳の控え**(0021)。**ここに1つも無かった**(第5.242節)。
+           そのため ② の**本物の道は、一度も描かれていなかった** ——
+           検証はずっと逃げ道(文まるごとの訳)を測っていたことになる。
+           `parts` は `baseChunks()` が出す切れ目そのまま。
+           **`it-2` にはわざと置いていない** —— 控えの無い教材で
+           逃げ道(`.slash-ja`)が出ることも、同じ画面で測るためである
+           (「無ければ素通り」する形を、検証の中に必ず置く) */
+        chunks: {
+          en: 'Could you tell me where the away fans usually sit?',
+          parts: ['Could you tell', 'me', 'where the away fans', 'usually sit?'],
+          ja: ['教えてもらえますか', '私に', 'アウェーのファンがどこで', 'ふだん座るのか'],
+        },
         /* **「この文の要点」を持たせてある**(2026-09 利用者の指定
            「印刷すると『この文の要点』が消えてしまいます」)。
            札は1つずつ `<button>` なので、紙の指定を1つ間違えると

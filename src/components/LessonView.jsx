@@ -49,6 +49,10 @@ import { grammarFull, grammarOf } from '../lib/grammarNote.js'
    **集中モードでも同じものを出す**ので、ここには持たない */
 import { INK_COLORS, INK_TOOLS, INK_WIDTH } from '../data/inkTools.js'
 import { viewerRoleOf } from '../lib/viewer.js'
+/* **ボタンの色は1か所で決める**(第5.242節・2026-09-23 利用者の指摘
+   「ボタンが全て白なのも分かりにくい要因の一つです」)。
+   押している / いないで替える札は、**押していないときも灰**にする */
+import { toneOn } from '../lib/btnTone.js'
 import { NAV_PUSH_AT, useWide } from '../lib/nav.js'
 import EnglishText from './EnglishText.jsx'
 import { prefetchGlosses } from '../lib/vocab.js'
@@ -1456,7 +1460,7 @@ export default function LessonView({
                 文型ドリルや単語には本文が無く、音読も区切りもできない */}
             {passageSection && (
               <button type="button"
-                      className={`btn btn--small${run === 'six' ? ' btn--primary' : ''}`}
+                      className={`btn btn--small ${toneOn(run === 'six')}`}
                       aria-pressed={run === 'six'}
                       onClick={() => { stopAll(); setRun(run === 'six' ? null : 'six') }}>
                 <StepsIcon />6Steps
@@ -1464,7 +1468,7 @@ export default function LessonView({
             )}
             {qrPossible && (
               <button type="button"
-                      className={`btn btn--small${qr ? ' btn--primary' : ''}`}
+                      className={`btn btn--small ${toneOn(qr)}`}
                       aria-pressed={qr}
                       onClick={() => {
                         stopAll()
@@ -1515,9 +1519,9 @@ export default function LessonView({
             {(passageSection || qr || drillable)
               && (run !== 'six' || sixFocusable) && (
               <button type="button"
-                      className={`btn btn--small${
+                      className={`btn btn--small ${toneOn(
                         run === 'focus' || run === 'drill' || (run === 'six' && sixFocus)
-                        || (qr && qrFocus) ? ' btn--primary' : ''}`}
+                        || (qr && qrFocus))}`}
                       aria-pressed={run === 'focus' || run === 'drill'
                         || (run === 'six' && sixFocus) || (qr && qrFocus)}
                       onClick={() => {
@@ -2205,7 +2209,7 @@ export default function LessonView({
                       レッスンで1問ずつ答え合わせをするために、問ごとが要る。 */}
                   {(it.answer || it.audio_text || (secNoteIsAnswer && it.note)
                     || (secIsPassage && it.prompt_ja)) && (
-                    <button type="button" className="btn btn--small lesson-reveal"
+                    <button type="button" className="btn btn--small btn--ghost lesson-reveal"
                             aria-expanded={isOpen(k(it, i))}
                             onClick={() => toggleItem(k(it, i))}>
                       {secIsPassage
@@ -2229,7 +2233,7 @@ export default function LessonView({
 
                       **解説が無い問には出さない**(効かない操作を見せない) */}
                   {(grammarOf(it, sec.exercise_type) ?? []).length > 0 && (
-                    <button type="button" className="btn btn--small lesson-reveal"
+                    <button type="button" className="btn btn--small btn--ghost lesson-reveal"
                             aria-expanded={gramOpen(k(it, i))}
                             onClick={() => toggleGram(k(it, i))}>
                       {gramOpen(k(it, i)) ? '文法を隠す' : '文法を見る'}

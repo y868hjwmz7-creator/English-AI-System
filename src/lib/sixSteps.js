@@ -47,6 +47,16 @@ import { alignedSentences } from './sentencePair.js'
  *   帯に「速さ」を置くか。**① だけ false** —— 書き取りは1文ずつの練習なので、
  *   速さは文ごとに置いてある(2026-09 利用者の指定
  *   「再生スピード調整タブも、削除しする代わりに各文につけてください」)
+ * @property {boolean} barLevel
+ *   帯に「難易度」(何文ずつ書き取るか)を置くか。**① だけ true**(第5.242節)。
+ *   **6つの帯は、どれも同じ場所・同じ並べ方にする** ——
+ *   ①②だけが自分用の行を別に作り、しかも**右寄せ**になっていた
+ * @property {boolean} barUnit
+ *   帯に「区切る単位」を置くか。**② だけ true**(第5.242節)——
+ *   ② にだけ「発言ごと / 会話全体」の選びがある。
+ *   **選ぶ欄は、速さと同じ帯に並べる** —— 別の行に置いていたので、
+ *   同じ形の選びが2つ、違う場所・違う寄せ方で出ていた
+ *   (2026-09-23 利用者の指摘「全体の統一感…をかいぜんしてください」)
  * @property {boolean} speak
  *   声で確かめる仕組みがあるか。**② だけ false** ——
  *   自分で区切る画面なので、話すボタンが無い
@@ -64,7 +74,7 @@ export const SIX_STEPS = [
   {
     id: 'dictation', no: '①', label: 'ディクテーション',
     unit: 'sentence', rate: 0.9, script: false,
-    view: 'dictation', barRate: false, speak: true, focus: true,
+    view: 'dictation', barRate: false, barUnit: false, barLevel: true, speak: true, focus: true,
     aim: '聞こえた音を、そのまま文字にできるようにする',
     how: [
       '**1文ずつ Listen を押し、何度でも聞く。**',
@@ -76,19 +86,22 @@ export const SIX_STEPS = [
   {
     id: 'slash', no: '②', label: 'スラッシュリーディング',
     unit: 'sentence', rate: 0.9, script: true,
-    view: 'slash', barRate: true, speak: false, focus: false,
+    view: 'slash', barRate: true, barUnit: true, barLevel: false, speak: false, focus: false,
     aim: '意味のカタマリごとに、前から順に訳せるようにする',
     how: [
+      /* **いまの画面と、1行も食い違わせない**(第5.242節)。
+         「解答を見る」で模範の区切りを出す形は 2026-08 にやめてあるのに、
+         ここだけ残っていた —— **効かない操作を、やり方に書いていた** */
       '**新しいカタマリが始まる語を押す。** その語の前にスラッシュが入る。',
+      '押すとすぐ、そのカタマリの**下に訳が出る。**',
       '前から順に、カタマリごとの意味を**声に出して**言ってみる。',
-      '区切り方がおかしいと、その場で**指摘が出る。**',
-      '「解答を見る」で**模範の区切りと、その理由**が出る。',
+      '区切り方がおかしいと、その場で**指摘が出る。**押すとその区切りが消える。',
     ],
   },
   {
     id: 'overlap', no: '③', label: 'オーバーラッピング',
     unit: 'passage', rate: 0.85, script: true,
-    view: 'passage', barRate: true, speak: true, focus: true,
+    view: 'passage', barRate: true, barUnit: false, barLevel: false, speak: true, focus: true,
     aim: 'お手本と同じ速さ・リズム・音で読めるようにする',
     // **「同時に重ねて」ではない**(2026-08 利用者の指定)。
     //
@@ -107,7 +120,7 @@ export const SIX_STEPS = [
   {
     id: 'meaning', no: '④', label: '意味音読',
     unit: 'sentence', rate: 0.9, script: true,
-    view: 'sentence', barRate: true, speak: true, focus: true,
+    view: 'sentence', barRate: true, barUnit: false, barLevel: false, speak: true, focus: true,
     aim: '意味と文法を分かったうえで読めるようにする',
     how: [
       '②で分かった意味と文法を**考えながら**読む。',
@@ -119,7 +132,7 @@ export const SIX_STEPS = [
   {
     id: 'shadow', no: '⑤', label: 'シャドーイング',
     unit: 'passage', rate: 0.85, script: false,
-    view: 'passage', barRate: true, speak: true, focus: true,
+    view: 'passage', barRate: true, barUnit: false, barLevel: false, speak: true, focus: true,
     aim: '文字を見ないでも、音についていけるようにする',
     how: [
       '③を、**本文を見ないで**行う。',
@@ -130,7 +143,7 @@ export const SIX_STEPS = [
   {
     id: 'repeat', no: '⑥', label: 'リピーティング',
     unit: 'sentence', rate: 0.9, script: false,
-    view: 'sentence', barRate: true, speak: true, focus: true,
+    view: 'sentence', barRate: true, barUnit: false, barLevel: false, speak: true, focus: true,
     aim: '聞いた1文を、覚えて口に出せるようにする',
     how: [
       '1文を**通して聞き**、聞き終わってから同じ英文を口に出す。',

@@ -19,6 +19,12 @@ import { loadEnglishVoices } from '../lib/speech.js'
 import { canReadAloud, readAloud, stopReading } from '../lib/readAloud.js'
 import { STANDARD } from '../lib/voiceTier.js'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
+/* **色は1か所で決める**(第5.242節・2026-09-23 利用者の指摘
+   「ボタンが全て白なのも分かりにくい要因の一つです」)。
+   Listen は**行ごとに1つずつ並ぶ**ものなので灰。
+   鳴っているあいだだけ青にする —— 同時に鳴るのは1本だけなので、
+   「青は1つの画面に1つだけ」も守れる */
+import { toneOn } from '../lib/btnTone.js'
 import { loadRateId, rateOf } from '../lib/speechRate.js'
 
 /** 声の読み込みは1回だけ。以降は同じ約束を使い回す */
@@ -176,7 +182,9 @@ export default function SpeakButton({
   }
 
   return (
-    <button type="button" className={`btn btn--small no-print ${className}`} onClick={play}>
+    <button type="button"
+            className={`btn btn--small no-print ${toneOn(playing, className)} ${className}`}
+            onClick={play}>
       {playing
         ? <><StopIcon />{waiting ? preparingLabel(secs) : 'Stop'}</>
         : <><SpeakerIcon />{label}</>}

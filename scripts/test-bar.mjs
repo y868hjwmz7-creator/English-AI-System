@@ -38,6 +38,10 @@ import { frameGroupCount } from '../src/data/sentenceFrames.js'
 /* **冊の数を書き写さない**(冊を足した日に、ここだけ古い数が残る) */
 import { RIZAP_BOOKS } from '../src/data/rizapBooks.js'
 import { SIX_STEPS } from '../src/lib/sixSteps.js'
+/* **色の一覧を書き写さない**(第5.242節)。3つの色は `btnTone.js` 1か所 */
+import { hasTone } from '../src/lib/btnTone.js'
+/* **語の数え方を2通り持たない**(CLAUDE.md)。画面と同じ関数で数える */
+import { wordsOf } from '../src/lib/chunker.js'
 /* 本文(記事・会話)の演習。**一覧を書き写さない** ——
    種類を足した日に、ここだけ古い一覧が残らないようにする */
 import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
@@ -9179,6 +9183,160 @@ for (const W of [1280, 794, 453, 390, 320]) {
     if (await 誤り.locator('.gnote').count() === 0) ok('文法 … もう一度押すと閉じる')
     else ng('文法 … 押しても閉じない')
   } else ng('文法 … 開いたあとのボタンが「文法を隠す」になっていない')
+
+  await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ② スラッシュリーディングと、ボタンの色(第5.242節・2026-09-23)
+
+     > スラッシュリーディングの「区切りを出す、隠す」「訳を出す、隠す」
+     > 「通しで見る」などの UI がアプリの作成をしている私でもよくわからず
+     > 混乱します。結局スラッシュを入れ終えれば、必要なのは
+     > **スラッシュを入れ終えた英文と訳が並んでいる部分だけです。**
+     > そして、何よりも全体の統一感というかわかりやすさをかいぜんして
+     > ください。
+
+     > **ボタンが全て白なのも分かりにくい要因の一つです**
+
+   **この4つは、実際に描くまで分からない。**
+   `lint` も `build` も通ったまま、押すものが3つに戻っていたり、
+   英文が2回出ていたり、紙の上で全部が白くなっていたりする。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 420, height: 1200 } })
+  page.setDefaultTimeout(6000)
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=learner&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(600)
+
+  /* **押せなくても、そこで止めない**(CLAUDE.md)——
+     ここで例外を投げると、**この先ぜんぶが黙って測られなくなる** */
+  let 開けた = true
+  await page.click('.practice-row .btn:has-text("6Steps")').catch(() => { 開けた = false })
+  if (!開けた) ng('②と色 … 6Steps を開けない(この先は何も測れていない)')
+  await page.waitForTimeout(500)
+
+  /** いま出ている紙の中のボタンを読む(**見えているものだけ**) */
+  const 紙のボタン = () => page.evaluate(() => {
+    const sheet = document.querySelector('.lesson-sheet')
+    // **紙そのものが決めている「素の地色」**を読む。#fff と書き写さない
+    const 素 = window.getComputedStyle(sheet ?? document.body)
+      .getPropertyValue('--btn-bg').trim()
+    const 色 = (v) => {
+      const d = document.createElement('div')
+      d.style.background = v
+      document.body.appendChild(d)
+      const out = window.getComputedStyle(d).backgroundColor
+      d.remove()
+      return out
+    }
+    const 素の色 = 色(素)
+    return [...(sheet?.querySelectorAll('.btn') ?? [])]
+      .filter((e) => e.getBoundingClientRect().width > 0)
+      .map((e) => ({
+        t: e.textContent.trim().slice(0, 18),
+        cls: e.className,
+        素のまま: window.getComputedStyle(e).backgroundColor === 素の色,
+      }))
+  })
+
+  /* ── ① **色を決めずに置かない。**6つのステップぜんぶを見て回る ──
+        (共通ルール「既定のボタンは、白い紙の上で押せるものに見えない」)
+
+        **2通りで見る。片方だけでは足りない。**
+          ・描いた地色が、紙の素の色と同じではないか(**性質で見る**)
+          ・`btnTone.js` の3つの色のどれかを持っているか(**一覧は書き写さない**) */
+  for (const s of SIX_STEPS) {
+    let 押せた = true
+    await page.click(`.step-bar-item[aria-label^="${s.no}"]`).catch(() => { 押せた = false })
+    if (!押せた) { ng(`ボタンの色 … ${s.no} の丸を押せない`); continue }
+    await page.waitForTimeout(450)
+    const 並び = await 紙のボタン()
+    if (!並び.length) { ng(`ボタンの色 … ${s.no} ${s.label} に、紙のボタンが1つも無い`); continue }
+    const 白 = 並び.filter((b) => b.素のまま).map((b) => b.t)
+    const 無色 = 並び.filter((b) => !hasTone(b.cls)).map((b) => b.t)
+    if (白.length) {
+      ng(`ボタンの色 … ${s.no} ${s.label} に、紙の地色のままのボタンがある`, 白.join(' / '))
+    } else if (無色.length) {
+      ng(`ボタンの色 … ${s.no} ${s.label} に、色を決めていないボタンがある`, 無色.join(' / '))
+    } else {
+      ok(`ボタンの色 … ${s.no} ${s.label} の ${並び.length} 個とも、色を持っている`)
+    }
+  }
+
+  /* ── ② **選ぶ欄は、6つとも同じ帯に並ぶ** ──
+        ①の「難易度」と②の「単位」だけが**自分用の行を別に持ち、右寄せ**
+        だった。ステップを移るたびに選ぶ欄の場所が動くので、
+        「統一感が無い」の正体の1つだった。
+        **「帯に在る」と「帯の外に無い」の両方を見る** */
+  for (const no of ['①', '②']) {
+    await page.click(`.step-bar-item[aria-label^="${no}"]`).catch(() => {})
+    await page.waitForTimeout(450)
+    const 数 = await page.evaluate(() => ({
+      帯: document.querySelectorAll('.passage-tools .rate-pick').length,
+      外: [...document.querySelectorAll('.rate-pick')]
+        .filter((e) => !e.closest('.passage-tools') && e.getBoundingClientRect().width > 0).length,
+    }))
+    if (数.帯 > 0 && 数.外 === 0) ok(`選ぶ欄 … ${no} の選ぶ欄 ${数.帯} 個は、ぜんぶ帯の中`)
+    else ng(`選ぶ欄 … ${no} の選ぶ欄が帯の外にある`, `帯 ${数.帯} / 外 ${数.外}`)
+  }
+
+  /* ── ③ ②に押すものは、Listen と「区切りを消す」だけ ──
+        消した3つ(「訳を出す / 隠す」「すべての訳」「通しで見る」)が
+        戻ってきたら赤くする。**文言そのものを見る** */
+  await page.click('.step-bar-item[aria-label^="②"]').catch(() => {})
+  await page.waitForTimeout(500)
+  const 消した = await page.evaluate(() => [...document.querySelectorAll('.slash .btn')]
+    .map((e) => e.textContent.trim())
+    .filter((t) => /訳を出す|訳を隠す|通しで見る|区切りに戻る|すべての/.test(t)))
+  if (消した.length === 0) ok('② … 「訳を出す」「通しで見る」は、もう出していない')
+  else ng('② … 消したはずの押すものが戻っている', 消した.join(' / '))
+
+  /* ── ④ **英文は1つだけ。**押して区切る行と、確かめる箱で
+        **同じ英文を2回**出していた。語の数で見る ——
+        **画面と同じ `wordsOf()` で数える**(数え方を2通り持たない) */
+  const 本文 = await page.evaluate(() => [...document.querySelectorAll('.slash-row')]
+    .map((li) => li.querySelector('.slash-body')?.innerText.replace(/\s+/g, ' ').trim() ?? ''))
+  const 出た語 = await page.evaluate(() => document.querySelectorAll('.slash-w').length)
+  const はずの語 = 本文.reduce((n, t) => n + wordsOf(t).length, 0)
+  if (出た語 > 0 && 出た語 === はずの語) {
+    ok(`② … 英文は1つだけ(${出た語} 語をそのまま1回)`)
+  } else {
+    ng('② … 英文の語数が合わない(2回出している / 描けていない)',
+      `画面 ${出た語} 語 / 本文 ${はずの語} 語`)
+  }
+
+  /* ── ⑤ **区切りを入れるまで訳は出ない。入れたら、その場に出る** ──
+        「出る」と「出ない」の両方を見る —— 片方だけだと、
+        **どこにも出さない形・はじめから全部出す形**に書き換えても緑のまま */
+  const 訳の数 = () => page.evaluate(() => ({
+    かたまり: document.querySelectorAll('.slash-chunk-ja').length,
+    まるごと: document.querySelectorAll('.slash-ja').length,
+  }))
+  const 前 = await 訳の数()
+  if (前.かたまり === 0 && 前.まるごと === 0) ok('② … 区切りを入れる前は、訳を出さない')
+  else ng('② … 区切っていないのに訳が出ている', JSON.stringify(前))
+
+  /* **控えのある段落**(`it-1`)で区切る。`me` の前は決まりに反しない */
+  let 押せた = true
+  await page.click('.slash-word:text-is("me")').catch(() => { 押せた = false })
+  if (!押せた) ng('② … 語を押せない(この先は測れていない)')
+  await page.waitForTimeout(500)
+  const 後 = await 訳の数()
+  if (後.かたまり > 0) ok(`② … 区切ると、そのカタマリの下に訳が出る(${後.かたまり} 個)`)
+  else ng('② … 区切っても、カタマリの訳が出ない')
+
+  /* ── ⑥ **控えが無い段落**(骨組みの `it-2`)でも、黙って落とさない ──
+        **「無ければ素通り」する形を、検証の中に必ず置く**(CLAUDE.md)。
+        カタマリの訳が無ければ、これまでどおり発言まるごとの訳を出す */
+  let 押せた2 = true
+  await page.click('.slash-word:text-is("behind")').catch(() => { 押せた2 = false })
+  if (!押せた2) ng('② … 控えの無い段落の語を押せない(この先は測れていない)')
+  await page.waitForTimeout(500)
+  const 逃げ道 = await 訳の数()
+  if (逃げ道.まるごと > 0) ok('② … カタマリの訳が無い教材では、発言まるごとの訳を出す')
+  else ng('② … 控えの無い教材で、訳が1つも出ない(黙って落としている)')
 
   await page.close()
 }

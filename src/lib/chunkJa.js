@@ -350,7 +350,15 @@ export function chunkPairsAtMarks(text, ja, marks, parts = null) {
        **訳の側にスラッシュを出さない**と決めてあるからである
        (2026-08 利用者の指定)。 */
     const jaParts = joinJaParts(jp)
-    out.push({ segs, ja: jaParts.join('').trim(), jaParts })
+    /* **何語目から何語目までか**も返す(第5.242節・2026-09-23 利用者の指定)。
+
+         > 結局スラッシュを入れ終えれば、必要なのは
+         > スラッシュを入れ終えた英文と訳が並んでいる部分だけです
+
+       画面は**英文を2回出していた** —— 押して区切る行と、確かめる箱。
+       1つにまとめるには、**押せる語を、このカタマリの区切りで束ねる**
+       必要がある。文字列(`segs`)だけでは語の番号が分からない。 */
+    out.push({ segs, ja: jaParts.join('').trim(), jaParts, from, to: at })
     jp = []
     from = at
   })

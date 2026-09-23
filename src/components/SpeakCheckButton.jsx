@@ -18,6 +18,9 @@
  * @param on    いま聞いているか
  */
 import { MicIcon, StopIcon } from './Icons.jsx'
+/* **色は1か所で決める**(第5.242節)。
+   `on ? ' btn--primary' : ''` と書いていたので、**押す前が白**だった */
+import { toneOn } from '../lib/btnTone.js'
 
 /** **聞いている最中の文言は、ここ1か所** */
 export const LISTENING_LABEL = '話し終わったら押す'
@@ -25,7 +28,7 @@ export const LISTENING_LABEL = '話し終わったら押す'
 export default function SpeakCheckButton({ label, on = false, onClick, disabled = false }) {
   return (
     <button type="button" disabled={disabled}
-            className={`btn btn--small${on ? ' btn--primary' : ''}`}
+            className={`btn btn--small ${toneOn(on)}`}
             onClick={onClick}>
       {on ? <><StopIcon />{LISTENING_LABEL}</> : <><MicIcon />{label}</>}
     </button>

@@ -118,7 +118,9 @@ export default function ChunkCard({
             <li key={i} className="chunk-drill">
               <span className="chunk-drill-ja qrsheet-ja">{d.ja}</span>
               {/* **紙には出さない。** 紙では解答が最初から右に出ている */}
-              <button type="button" className="btn btn--small chunk-drill-show no-print"
+              {/* **色を決めずに置かない**(共通ルール・第5.242節)。
+                  「解答を見る」は答えではなく**開く**ものなので、枠線だけ */}
+              <button type="button" className="btn btn--small btn--ghost chunk-drill-show no-print"
                       aria-expanded={!!shown?.has(i)}
                       onClick={() => onShow?.(i)}>
                 {shown?.has(i) ? '解答を隠す' : '解答を見る'}

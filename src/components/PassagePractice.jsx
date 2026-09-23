@@ -43,6 +43,10 @@ import { progressKey, useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
 import { preparingLabel } from './SpeakButton.jsx'
+/* **色は1か所で決める**(第5.242節・2026-09-23 利用者の指摘
+   「ボタンが全て白なのも分かりにくい要因の一つです」)。
+   休んでいるあいだが白だと、紙の上で押せるものに見えない */
+import { toneOn } from '../lib/btnTone.js'
 import EnglishText from './EnglishText.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import StepFocus from './StepFocus.jsx'
@@ -50,8 +54,8 @@ import { isRecognitionSupported, startRecognition } from '../lib/recognition.js'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
 import { SLASH_LEVELS } from '../lib/chunker.js'
 import {
-  PASSAGE_VIEWS, blocksOf, bodyUnitWord, focusListOf, focusUnitWord,
-  groupSentences, sentencesOf, stepOf,
+  DICTATION_LEVELS, PASSAGE_VIEWS, blocksOf, bodyUnitWord, focusListOf, focusUnitWord,
+  groupSentences, sentencesOf, slashUnitsFor, stepOf,
 } from '../lib/sixSteps.js'
 /* **6つの並べ方と色の付け方は、あちら1か所**(第5.239節) */
 import StepBar from './StepBar.jsx'
@@ -603,7 +607,7 @@ export default function PassagePractice({
             止める場所を探さなくてよい(`SpeakButton` も同じ形)。 */}
         {current.unit === 'passage' && (
           <button type="button"
-                  className={`btn${playingAll ? ' btn--primary' : ''}`}
+                  className={`btn ${toneOn(playingAll)}`}
                   onClick={() => (playingAll ? stopPlaying() : playAll())}>
             {playingAll
               ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop (全体)'}</>
@@ -626,6 +630,39 @@ export default function PassagePractice({
                     onChange={(e) => { setRateId(e.target.value); saveRateId(e.target.value); stopPlaying() }}>
               {SPEECH_RATES.map((r) => (
                 <option key={r.id} value={r.id}>{r.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {/* **区切る単位は、速さと同じ帯に並べる**(第5.242節・2026-09-23
+            利用者の指摘「全体の統一感というかわかりやすさをかいぜんして
+            ください」)。これまでは ② の中だけが**別の行で、右寄せ**に
+            なっていたので、同じ形の選びが2つ、違う場所に出ていた。
+            **どのステップか(`current.view === 'slash'`)は、ここで書かない**
+            —— 表の `barUnit` 1か所に持つ(`barRate` と同じ作り) */}
+        {/* **難易度(何文ずつ書き取るか)も、同じ帯に**(第5.242節)。
+            **どのステップかを、ここで書かない** —— 表の `barLevel` 1か所 */}
+        {current.barLevel && (
+          <label className="rate-pick">
+            <span>難易度</span>
+            <select value={DICTATION_LEVELS.find((x) => x.size === dictSize)?.id ?? 'easy'}
+                    onChange={(e) => {
+                      const v = DICTATION_LEVELS.find((x) => x.id === e.target.value)?.size ?? 1
+                      setDictSize(v); saveDictSize(v)
+                    }}>
+              {DICTATION_LEVELS.map((l) => (
+                <option key={l.id} value={l.id} title={l.hint}>{l.label}({l.size}文ずつ)</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {current.barUnit && (
+          <label className="rate-pick">
+            <span>単位</span>
+            <select value={slashUnit}
+                    onChange={(e) => { setSlashUnit(e.target.value); saveSlashUnit(e.target.value) }}>
+              {slashUnitsFor(isDialogue).map((u) => (
+                <option key={u.id} value={u.id} title={u.hint}>{u.label}</option>
               ))}
             </select>
           </label>
@@ -664,7 +701,6 @@ export default function PassagePractice({
              集中モードでは1つしか渡さないので、外から番号を渡さないと
              何番目でも「1」になってしまう */
           startNo={focus ? at + 1 : 1}
-          onSizeChange={(v) => { setDictSize(v); saveDictSize(v) }}
           /* **書きかけを覚えておく**(2026-08 利用者の指定)。鍵の形は1か所 */
           progressAt={progressKey(materialId, section.id, 'dictation')}
           learnerId={learnerId}
@@ -675,8 +711,7 @@ export default function PassagePractice({
           blocks={focus ? slashBlocks.slice(at, at + 1) : slashBlocks}
           clipVoice={soloVoice} tier={tier}
           rate={rateOf(rateId, current.rate)}
-          unit={slashUnit} isDialogue={isDialogue} startNo={focus ? at + 1 : 1}
-          onUnitChange={(v) => { setSlashUnit(v); saveSlashUnit(v) }}
+          isDialogue={isDialogue} startNo={focus ? at + 1 : 1}
           /* **入れかけの区切りを覚えておく**(2026-08 利用者の指定) */
           progressAt={progressKey(materialId, section.id, `slash-${slashUnit}`)}
           learnerId={learnerId}

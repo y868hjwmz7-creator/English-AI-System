@@ -21,11 +21,13 @@
  *   (0.3秒に満たずに終わったら失敗とみなしてやめる)
  */
 import { RepeatIcon } from './Icons.jsx'
+/* **色は1か所で決める**(第5.242節)。押す前が白だと、押せるものに見えない */
+import { toneOn } from '../lib/btnTone.js'
 
 export default function RepeatToggle({ on = false, onChange, className = '' }) {
   return (
     <button type="button"
-            className={`btn btn--small${on ? ' btn--primary' : ''}${className ? ` ${className}` : ''}`}
+            className={`btn btn--small ${toneOn(on, className)}${className ? ` ${className}` : ''}`}
             aria-pressed={on}
             title={on
               ? '止めるまでくり返します(押すと1回だけに戻ります)'
