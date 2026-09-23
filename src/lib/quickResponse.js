@@ -151,6 +151,16 @@ export function quickResponsePairs(material, mode = null) {
       // **1文ずつにほどく**(2026-08 の指摘)。
       // 記事の1項目は段落なので、そのままでは日本語が5行も出てしまう。
       // 訳の数が合わないときは切らない(`alignedSentences`)
+      /* **どの表現にぶら下がっているか**(第5.243節・2026-09-23 利用者の指定)。
+         かたまりの節では、**その表現そのもの**と**その表現を使った練習**が
+         ひと続きに並ぶ。紙では表現を見出しにして、練習を表現ごとに
+         数え直すので、**どの表現の下にいるか**を対そのものに持たせる。
+         鍵(`key`)の形を紙の側で読み解かせない ——
+         **数え方を2通り持たない**(CLAUDE.md)。
+         かたまりの節でなければ、3つとも入らない(既定は「無い」側)。 */
+      const 表現 = isChunkSection(sec.exercise_type)
+        ? { headKey: key, head: en, headJa: ja }
+        : null
       alignedSentences(en, ja).forEach((pair, k) => {
         // **1文ごとの問題が Quick Response の定義である**(2026-08 の指定)。
         // 訳が段落ぶんしか無いものは、1文の問題にならないので**出さない。**
@@ -159,6 +169,7 @@ export function quickResponsePairs(material, mode = null) {
         out.push({
           ja: pair.ja, en: pair.en, from, speaker, group: map.group,
           key: `${key}-${k}`,
+          ...(表現 ? { ...表現, isHead: true } : {}),
         })
       })
       /* **かたまりの練習も、ぜんぶ対にする**(第5.235節・利用者の指定
@@ -175,7 +186,7 @@ export function quickResponsePairs(material, mode = null) {
         chunkDrills(it).forEach((d, k) => {
           out.push({
             ja: d.ja, en: d.en, from, speaker, group: map.group,
-            key: `${key}-d${k}`,
+            key: `${key}-d${k}`, ...表現,
           })
         })
       }
@@ -200,3 +211,43 @@ export function quickResponseCounts(material) {
 
 /** その教材で Quick Response ができるか(1つでも対があるか) */
 export const hasQuickResponse = (material) => quickResponsePairs(material).length > 0
+
+/**
+ * **覚えておきたい表現を、表現ごとに束ねる**(第5.243節・2026-09-23 実機)。
+ *
+ *   > 覚えておきたい表現の見出しをしっかりつけてほしいです。
+ *   > PDF化したときに①の「bring up」⑧の「look into」⑭の「keep up with」など、
+ *   > これらピックアップした表現ごとに見出しにして、問題の番号も
+ *   > それぞれ①〜⑥(問題数に応じて)にするべきです。
+ *
+ * 紙では 42 問が**ひと続きの通し番号**で並んでいた。表現そのもの(bring up)も
+ * 番号の付いた1問として混ざっているので、**どこからどこまでが同じ表現の
+ * 練習なのか、紙を見ても分からない。**
+ *
+ * **表現を見出しにして、練習をその下で数え直す。**
+ *
+ * 【画面はこれまでどおり】
+ *   画面の Quick Response は1問ずつ出すので、見出しは要らない。
+ *   表現そのものも**1問として出す**(言えるようにするのが狙い)。
+ *   変えたのは**紙の並べ方**だけで、問の中身は1つも増えても減ってもいない。
+ *
+ * @param {{headKey?: string}[]} pairs `quickResponsePairs(material, 'chunk')`
+ * @returns {{key: string, en: string, ja: string, pairs: object[]}[]}
+ *   **表現そのものは `pairs` に入れない**(見出しになるため)
+ */
+export function chunkGroups(pairs) {
+  const out = []
+  const byKey = new Map()
+  for (const p of pairs ?? []) {
+    // **かたまりでない対は、ここでは束ねない**(既定は「入れない」側)
+    if (!p?.headKey) continue
+    let g = byKey.get(p.headKey)
+    if (!g) {
+      g = { key: p.headKey, en: p.head ?? '', ja: p.headJa ?? '', pairs: [] }
+      byKey.set(p.headKey, g)
+      out.push(g)
+    }
+    if (!p.isHead) g.pairs.push(p)
+  }
+  return out
+}

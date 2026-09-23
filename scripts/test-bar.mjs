@@ -9363,6 +9363,124 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await page.close()
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   紙の「覚えておきたい表現」は、表現ごとに見出しを立てる
+   (第5.243節・2026-09-23 実機・利用者の指定)
+
+     > 覚えておきたい表現の見出しをしっかりつけてほしいです。
+     > PDF化したときに①の「bring up」⑧の「look into」⑭の「keep up with」
+     > など、これらピックアップした表現ごとに見出しにして、問題の番号も
+     > それぞれ①〜⑥(問題数に応じて)にするべきです。
+
+   42 問がひと続きの通し番号で並び、**表現そのものも1問として混ざって
+   いた。** どこからどこまでが同じ表現の練習なのか、紙では分からない。
+
+   **紙の見え方は、描くまで分からない**(`print-only` で画面には出ない)。
+   **数を書き写さない** —— 紙の見出しを、**画面のかたまりの札**と
+   突き合わせる(同じものを2通りに数えない・CLAUDE.md)。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 1400 } })
+  page.setDefaultTimeout(6000)
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(600)
+
+  /* **画面に出ているかたまり**(これが期待値。どこにも書き写さない) */
+  const 画面 = await page.evaluate(() => [...document.querySelectorAll('.chunk .chunk-en')]
+    .map((e) => e.textContent.trim()).filter(Boolean))
+
+  /* **本物の `printElement()` と同じ印を付ける**(`src/lib/print.js`)。
+     3つそろって初めて紙の指定が効く */
+  await page.evaluate(() => {
+    const sheet = document.querySelector('#lesson-sheet') ?? document.querySelector('.lesson-sheet')
+    if (!sheet) return
+    sheet.classList.add('print-target')
+    document.body.classList.add('is-printing')
+    for (let el = sheet.parentElement; el && el !== document.body; el = el.parentElement) {
+      el.classList.add('print-path')
+    }
+  })
+  await page.emulateMedia({ media: 'print' })
+  await page.waitForTimeout(300)
+
+  const 紙 = await page.evaluate(() => ({
+    見出し: [...document.querySelectorAll('.qrsheet-sub [lang="en"]')]
+      .map((e) => e.textContent.trim()),
+    訳: [...document.querySelectorAll('.qrsheet-subja')].map((e) => e.textContent.trim()),
+    束: [...document.querySelectorAll('.qrsheet-head')].map((h) => {
+      const ol = h.querySelector('ol.qrsheet-list')
+      return {
+        // **番号を振り直す指定が、本当に当たっているか。**
+        // `.qrsheet-groups` に包むと `counter-reset: none` で通しになる
+        /* **練習が1つも無い表現には `<ol>` が無い**(`ch-2`)。
+           そこは `null` にして、下では**問のある束だけ**を見る */
+        振り直す: ol ? window.getComputedStyle(ol).counterReset : null,
+        問: [...h.querySelectorAll('ol.qrsheet-list > li .qrsheet-ja')]
+          .map((e) => e.textContent.trim()),
+      }
+    }),
+    組: [...document.querySelectorAll('.qrsheet-title')].map((e) => e.textContent.trim()),
+  }))
+  await page.close()
+
+  /* ── ① **表現ごとに見出しが立っている。**画面の札と突き合わせる ── */
+  if (!画面.length) {
+    ng('紙の表現 … 画面にかたまりが1つも無い(この先は何も測れていない)')
+  } else if (紙.見出し.join('|') === 画面.join('|')) {
+    ok(`紙の表現 … ${画面.length} 個とも、表現ごとに見出しになっている`)
+  } else {
+    ng('紙の表現 … 見出しが画面のかたまりと合わない',
+      `紙 ${紙.見出し.join(' / ') || '(無し)'} / 画面 ${画面.join(' / ')}`)
+  }
+
+  /* ── ② **番号は表現ごとに1から。**振り直す指定が効いているか ──
+        `.qrsheet-groups` に包むと `counter-reset: none` になり、
+        番号が表現をまたいで通しになる。**そこを直に見る** */
+  const 問のある束 = 紙.束.filter((b) => b.問.length > 0)
+  const 通し = 問のある束.filter((b) => !/\bqr\b/.test(b.振り直す ?? ''))
+  if (!問のある束.length) {
+    ng('紙の表現 … 練習の付いた表現が1つも無い(この行は何も測れていない)')
+  } else if (!通し.length) {
+    ok(`紙の表現 … 番号は表現ごとに振り直す(${問のある束.length} 束とも)`)
+  } else {
+    ng('紙の表現 … 番号が表現をまたいで続いている',
+      通し.map((b) => b.振り直す ?? '(一覧が無い)').join(' / '))
+  }
+
+  /* ── ③ **表現そのものが、番号の付いた問に混ざっていない** ──
+        いちばん直したかったところ。「① (話題を)持ち出す・切り出す |
+        bring up」が1問として並んでいた */
+  const 訳の集合 = new Set(紙.訳.filter(Boolean))
+  const 混ざり = 紙.束.flatMap((b) => b.問).filter((ja) => 訳の集合.has(ja))
+  if (訳の集合.size && !混ざり.length) {
+    ok('紙の表現 … 表現そのものは、番号の付いた問に混ざっていない')
+  } else if (!訳の集合.size) {
+    ng('紙の表現 … 見出しに意味が出ていない(この行は何も測れていない)')
+  } else {
+    ng('紙の表現 … 表現そのものが、まだ1問として並んでいる', 混ざり.join(' / '))
+  }
+
+  /* ── ④ **練習が1つも無い表現も、見出しだけ出す** ──
+        **「無ければ素通り」する形を、検証の中に必ず置く**(CLAUDE.md)。
+        骨組みの `ch-2`(behind the goal)には練習が無い。
+        落としてしまうと、教材にあるものが紙から黙って消える */
+  const 空 = 紙.束.filter((b) => b.問.length === 0).length
+  if (空 > 0) ok(`紙の表現 … 練習の無い表現も、見出しは出る(${空} 個)`)
+  else ng('紙の表現 … 練習の無い表現が、紙から落ちている')
+
+  /* ── ⑤ **組の見出しは、数え直した数を出す** ──
+        表現を見出しにしたぶん、問の数は減る。書き写すと片方だけ古くなる */
+  const 問の数 = 紙.束.reduce((n, b) => n + b.問.length, 0)
+  const 組 = 紙.組.find((t) => /表現/.test(t)) ?? ''
+  if (組.includes(`${紙.束.length} 表現`) && 組.includes(`${問の数} 問`)) {
+    ok(`紙の表現 … 組の見出しが、いまの中身と合っている(${組})`)
+  } else {
+    ng('紙の表現 … 組の見出しの数が、並んでいるものと合わない',
+      `${組 || '(無し)'} / 実際は ${紙.束.length} 表現・${問の数} 問`)
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
