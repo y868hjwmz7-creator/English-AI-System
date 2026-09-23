@@ -1010,7 +1010,9 @@ alter table public.material_sections
     -- すでに作った教材を開くために残す
     'fill_blank',
     -- 単語・フレーズ
-    'vocabulary', 'phrase'
+    'vocabulary', 'phrase',
+    -- 日本語を見て英語で言う(0067・第5.248節)
+    'vocab_recall', 'phrase_recall'
   ));
 
 
@@ -4357,7 +4359,9 @@ alter table public.material_sections
     -- すでに作った教材を開くために残す
     'fill_blank',
     -- 単語・フレーズ
-    'vocabulary', 'phrase'
+    'vocabulary', 'phrase',
+    -- 日本語を見て英語で言う(0067・第5.248節)
+    'vocab_recall', 'phrase_recall'
   ));
 
 -- ────────────────────────────────────────────────────────────────
@@ -4783,6 +4787,32 @@ comment on function public.qr_items(uuid, text, int, boolean, text) is
   'p_source で冊を絞る(0066)。渡さなければぜんぶ返す。';
 
 grant execute on function public.qr_items(uuid, text, int, boolean, text) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════
+-- 0067 … 単語 / フレーズに「日本語 → 英語で言う」を足す(第5.248節)
+-- ════════════════════════════════════════════════════════════════════
+
+-- 0067 単語 / フレーズに「日本語 → 英語で言う」を足す
+--
+--   > そして単語、フレーズそれぞれについて日本語→英語の練習が7個ずつ。
+--     (2026-09-23 利用者の指定)
+--
+--   演習の種類に `vocab_recall`(単語を言う)と
+--   `phrase_recall`(フレーズを言う)を足します。
+--   **表も行も増えません。** 制約の一覧が広がるだけです。
+
+alter table public.material_sections drop constraint if exists material_sections_type_check;
+alter table public.material_sections
+  add constraint material_sections_type_check check (exercise_type in (
+    'translate_en_ja', 'error_correction', 'translate_ja_en', 'listening',
+    'article', 'dialogue',
+    'comprehension', 'discussion', 'audience_qa', 'vocab_note', 'culture_note',
+    'read_aloud', 'overlapping', 'shadowing', 'repeating',
+    'fill_blank',
+    'vocabulary', 'phrase',
+    -- 日本語を見て英語で言う(0067・第5.248節)
+    'vocab_recall', 'phrase_recall'
+  ));
 
 -- ============================================================================
 -- 完了。

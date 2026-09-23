@@ -53,5 +53,7 @@ alter table public.material_sections
     -- すでに作った教材を開くために残す
     'fill_blank',
     -- 単語・フレーズ
-    'vocabulary', 'phrase'
+    'vocabulary', 'phrase',
+    -- 日本語を見て英語で言う(0067・第5.248節)
+    'vocab_recall', 'phrase_recall'
   ));

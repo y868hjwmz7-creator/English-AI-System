@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrOption } from '../data/cefr.js'
 import {
-  EXERCISE_TYPES, FIELD_LABELS, MAX_ITEMS, SCALABLE_SECTIONS, amountsFor,
+  EXERCISE_TYPES, FIELD_LABELS, SCALABLE_SECTIONS, amountsFor, countOf,
   defaultSectionsFor, exerciseLabel, exerciseType, grammarSource, isIncluded,
   isPassageSection, sectionLabel, sectionsFor,
 } from '../data/exerciseTypes.js'
@@ -2184,9 +2184,16 @@ export default function MaterialForm({
                                     ...amounts, [s2.exercise_type]: a.id,
                                   })}>
                             {a.label}
-                            <span className="amount-count">
-                              {Math.min(base * a.times, MAX_ITEMS)}
-                            </span>
+                            {/* **倍率の札にだけ、実際の数を添える**(第5.248節)。
+                                単語 / フレーズは札そのものが「10 問」なので、
+                                添えると「10 問 10」と二重になる。
+                                数は `countOf()` 1か所から出す ——
+                                書き写すと、片方だけが古くなる(CLAUDE.md) */}
+                            {a.times != null && (
+                              <span className="amount-count">
+                                {countOf(base, a)}
+                              </span>
+                            )}
                           </button>
                         ))}
                       </div>

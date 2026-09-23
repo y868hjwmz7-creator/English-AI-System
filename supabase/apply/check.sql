@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   49行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   50行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -215,4 +215,11 @@ from (
          where n.nspname = 'public'
            and p.proname in ('qr_items', 'mark_qr')
            and 'p_source' = any(p.proargnames)), 48
+  -- **制約そのものを見る**(0067)。表も行も増えない移行なので、
+  -- 表の有無では分からない —— **一覧に値が入っているか**で見る
+  union all select '0067 単語 / フレーズに「日本語 → 英語で言う」(pending_matome.sql)',
+    exists (select 1 from pg_constraint
+            where conname = 'material_sections_type_check'
+              and pg_get_constraintdef(oid) like '%vocab_recall%'
+              and pg_get_constraintdef(oid) like '%phrase_recall%'), 49
 ) t order by 順;

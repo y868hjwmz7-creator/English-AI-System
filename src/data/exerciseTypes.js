@@ -337,6 +337,39 @@ export const EXERCISE_TYPES = [
   { id: 'phrase', label: 'フレーズ', instruction: '場面ごと覚えてください。',
     fields: ['prompt_en', 'phonetic', 'prompt_ja'], audioFrom: 'prompt_en',
     grammarFrom: 'prompt_en' },
+  /* ══════════════════════════════════════════════════════════════
+     **覚えたものを、日本語から言う**(第5.248節・2026-09-23 利用者の指定)
+
+       > そして単語、フレーズそれぞれについて日本語→英語の練習が7個ずつ。
+
+     単語とフレーズの教材は、これまで**並んだものを見るだけ**だった。
+     見て分かることと、**何も見ずに口から出る**ことは別である。
+     日本語だけを見せ、英語を言わせる段を1つ足す。
+
+     **形は和文英訳(`translate_ja_en`)とそろえてある** ——
+     日本語が `prompt_ja`、英語が `answer`。**音声も解説も `answer` の側**
+     である(英語はそこにしかない)。**数え方を2通り持たない。**
+
+     **答えは、ゲストには伏せる**(`hideAnswerFromLearner`)。
+     出したままでは「言う練習」にならない。 */
+  {
+    id: 'vocab_recall', label: '単語を言う',
+    instruction: '日本語を見て、英語で言ってください。',
+    fields: ['prompt_ja', 'answer', 'answer_alt'], audioFrom: 'answer',
+    /* **単語に SVOC は無い**(`vocabulary` と同じ理由)。文ではない */
+    grammarFrom: null,
+    answerLang: 'en',
+    hideAnswerFromLearner: true,
+  },
+  {
+    id: 'phrase_recall', label: 'フレーズを言う',
+    instruction: '日本語を見て、英語で言ってください。',
+    fields: ['prompt_ja', 'answer', 'answer_alt'], audioFrom: 'answer',
+    /* **フレーズには骨組みがある**(`phrase` と同じ)。英語は `answer` の側 */
+    grammarFrom: 'answer',
+    answerLang: 'en',
+    hideAnswerFromLearner: true,
+  },
 ]
 
 export const exerciseType = (id) => EXERCISE_TYPES.find((t) => t.id === id)
@@ -603,9 +636,15 @@ export const DEFAULT_SECTIONS = {
    * そのうえで「倍」を選べば**もとの20問とまったく同じ**になる。
    * **こちらで勝手に減らしていない。**
    */
+  /* **見るだけで終わらせない**(第5.248節・2026-09-23 利用者の指定
+     「単語、フレーズそれぞれについて日本語→英語の練習が7個ずつ」)。
+     **並びは 覚える → 言う の順**。単語を覚えてから単語を言い、
+     そのあとフレーズへ移る —— 覚えたばかりのものを、その場で試す */
   vocab: [
-    { exercise_type: 'vocabulary', count: 10 },
-    { exercise_type: 'phrase',     count: 10 },
+    { exercise_type: 'vocabulary',    count: 10 },
+    { exercise_type: 'vocab_recall',  count: 7 },
+    { exercise_type: 'phrase',        count: 10 },
+    { exercise_type: 'phrase_recall', count: 7 },
   ],
   // 旧「単語」「フレーズ」。新規では選べないが、既存の教材を開くために残す
   word:   [{ exercise_type: 'vocabulary', count: 20 }],
@@ -797,6 +836,25 @@ export const DRILL_SECTIONS = [
  * 増やすと読み物の長さそのものが変わる。長さは第5.13節で決めてある。
  * 増やすのは**本文に対して作る設問と語句**、そして**文型ドリルの4演習**である。
  */
+/**
+ * **単語 / フレーズの本体**(第5.248節)。数は**倍率ではなく問数**でえらぶ。
+ */
+export const WORD_SECTIONS = ['vocabulary', 'phrase']
+
+/**
+ * **その演習が、どの演習にぶら下がっているか**(第5.248節)。
+ *
+ * 「単語だけ / フレーズだけ」を**チェック1つ**で切り替えるためにある。
+ * 単語を外したのに「単語を言う」だけが残ると、
+ * **覚えていないものを言わせる**ことになる(行き止まり)。
+ *
+ * **判断はここ1か所。** 画面で `type === 'vocab_recall'` と書かない。
+ */
+export const PARENT_SECTION = {
+  vocab_recall: 'vocabulary',
+  phrase_recall: 'phrase',
+}
+
 export const SCALABLE_SECTIONS = [
   // ディスカッションも「標準(5問)/ 倍(10問)」で選べる
   // (2026-09 利用者の指定「基本は５問、設定により１０問に」)
@@ -855,10 +913,29 @@ export const AMOUNTS = [
   { id: 'triple', label: '3倍', times: 3 },
 ]
 
+/**
+ * **単語 / フレーズは、倍率ではなく問数そのものでえらぶ**
+ * (第5.248節・2026-09-23 利用者の指定
+ * 「問題数は、単語、フレーズそれぞれ10、15、20の3種類」)。
+ *
+ * **id は `default` / `double` を使い回す。** 前に作りかけた下書きが
+ * 持っている id がそのまま 10問 / 20問に当たるので、
+ * **開き直したときに数が黙って変わらない**(0 と null を取り違えない、
+ * と同じ考え方)。真ん中の 15 問だけが新しい id である。
+ */
+export const WORD_AMOUNTS = [
+  { id: 'default', label: '10 問', count: 10 },
+  { id: 'n15',     label: '15 問', count: 15 },
+  { id: 'double',  label: '20 問', count: 20 },
+]
+
 /** その演習で選べる増やし方。**3倍は文型ドリルだけ** */
-export const amountsFor = (typeId) => (DRILL_SECTIONS.includes(typeId)
-  ? AMOUNTS
-  : AMOUNTS.filter((a) => a.id !== 'triple'))
+export const amountsFor = (typeId) => {
+  if (WORD_SECTIONS.includes(typeId)) return WORD_AMOUNTS
+  return DRILL_SECTIONS.includes(typeId)
+    ? AMOUNTS
+    : AMOUNTS.filter((a) => a.id !== 'triple')
+}
 
 /**
  * **1つの演習の上限。** 窓口(`generate-material`)も同じ数で丸める。
@@ -866,6 +943,21 @@ export const amountsFor = (typeId) => (DRILL_SECTIONS.includes(typeId)
  * (窓口を配置し直すまでは、20問より多くは作られない)。
  */
 export const MAX_ITEMS = 30
+
+/**
+ * **その選択肢で、実際に何問になるか。**(第5.248節)
+ *
+ * **数え方を2通り持たない**(CLAUDE.md)。`sectionsFor()` が組む数と、
+ * 作る画面の札に出る数を、**同じ1か所**から出す。
+ * 書き写すと、15 問を足した日に**画面だけが `NaN` になる**
+ * (倍率を持たない選択肢に `base * a.times` を掛けるため・実際にそうなった)。
+ *
+ * @param base    既定の問数
+ * @param option  `AMOUNTS` か `WORD_AMOUNTS` の1つ
+ */
+export const countOf = (base, option) => Math.min(
+  option?.count ?? (base * (option?.times ?? 1)), MAX_ITEMS,
+)
 
 /**
  * **その演習を入れるか。**(2026-09 利用者の指定)
@@ -882,6 +974,12 @@ export const MAX_ITEMS = 30
  * **本文が無くなると、そもそも何も作れない。**
  */
 export const isIncluded = (typeId, include = null) => {
+  /* **親を外したら、ぶら下がっているものも外れる**(第5.248節)。
+     単語を外したのに「単語を言う」だけが残ると、
+     **覚えていないものを言わせる**ことになる。
+     これで「単語だけ / フレーズだけ」が**チェック1つ**で切り替わる */
+  const parent = PARENT_SECTION[typeId]
+  if (parent && include?.[parent] === false) return false
   if (!SCALABLE_SECTIONS.includes(typeId)) return true
   return include?.[typeId] !== false
 }
@@ -901,8 +999,13 @@ export const sectionsFor = (kind, amounts = null, include = null) =>
     .filter((s) => isIncluded(s.exercise_type, include))
     .map((s) => {
       if (!SCALABLE_SECTIONS.includes(s.exercise_type)) return s
-      const pick = amounts?.[s.exercise_type]
-      const times = AMOUNTS.find((a) => a.id === pick)?.times ?? 1
-      if (times === 1) return s
-      return { ...s, count: Math.min(s.count * times, MAX_ITEMS) }
+      /* **その演習で選べるものの中から探す**(第5.248節)。
+         `AMOUNTS` を直に見ると、単語 / フレーズの「15 問」が
+         **どこにも見つからず、黙って既定に落ちる** */
+      const pick = amountsFor(s.exercise_type)
+        .find((a) => a.id === amounts?.[s.exercise_type])
+      if (!pick) return s
+      /* **何問になるかは `countOf()` 1か所**(画面の札と同じもの) */
+      const n = countOf(s.count, pick)
+      return n === s.count ? s : { ...s, count: n }
     })

@@ -33,7 +33,7 @@ import {
   MAX_CHARS, MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
 } from '../src/lib/speechDraft.js'
 import {
-  DEFAULT_SECTIONS,
+  DEFAULT_SECTIONS, PARENT_SECTION,
   EXERCISE_TYPES, SCALABLE_SECTIONS, amountsFor, answerHasAudio, defaultSectionsFor,
   exerciseLabel, isBlankItem, isChunkSection, isIncluded, isPassageSection, isWrongShape,
   noteIsAnswer, sectionLabel, sectionsFor,
@@ -1388,18 +1388,20 @@ console.log('\n▶ 単語 / フレーズ — 1つの種類にまとめる')
   ok(MATERIAL_KINDS.some((k) => k.id === 'phrase' && k.legacy),
     '旧「フレーズ」は残っている(新しくは作れない)')
 
+  /* **言う練習が付いて4つになった**(第5.248節)。
+     覚える2つと、日本語 → 英語で言う2つである */
   const secs = defaultSectionsFor('vocab')
-  ok(secs.length === 2, '演習は2つ(単語とフレーズ)', `${secs.length} 個`)
+  ok(secs.length === 4, '演習は4つ(覚える2つと、言う2つ)', `${secs.length} 個`)
   ok(secs[0].exercise_type === 'vocabulary' && secs[0].count === 10, '単語10問')
-  ok(secs[1].exercise_type === 'phrase' && secs[1].count === 10, 'フレーズ10問')
+  ok(secs[2].exercise_type === 'phrase' && secs[2].count === 10, 'フレーズ10問')
 
-  /* **片方だけにも戻せる。** 外したうえで「倍」を選べば、
-     もとの「単語20問」とまったく同じになる(こちらで勝手に減らさない) */
+  /* **片方だけにも戻せる。** 外せば、その言う練習も一緒に外れる */
   ok(SCALABLE_SECTIONS.includes('vocabulary') && SCALABLE_SECTIONS.includes('phrase'),
     '単語もフレーズも、数を変えられて外せる')
   const only = sectionsFor('vocab', { vocabulary: 'double' }, { phrase: false })
-  ok(only.length === 1 && only[0].exercise_type === 'vocabulary' && only[0].count === 20,
-    'フレーズを外して「倍」にすると、もとの単語20問と同じになる')
+  ok(only.length === 2 && only[0].exercise_type === 'vocabulary' && only[0].count === 20
+    && only[1].exercise_type === 'vocab_recall',
+  'フレーズを外して 20 問にすると、単語20問 + 言う練習だけになる')
   // **3倍は文型ドリルだけ**(弱点が3つまで選べるため)
   ok(!amountsFor('vocabulary').some((a) => a.id === 'triple'),
     '単語に3倍は出さない(3倍は文型ドリルだけ)')
@@ -4857,6 +4859,8 @@ console.log('\nスピーチ練習(0054)')
      だから**その列を足しているか**で見る */
   const markC = /NEWEST_MARK = \{[\s\S]{0,80}?column: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
   const markF = /NEWEST_MARK = \{\s*rpc: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
+  /* **制約の一覧に値を足すだけの印**(0067)。`section_types()` に訊く */
+  const markH = /has: '([a-z_]+)'/.exec(noC4(state))?.[1] ?? ''
   /* **行そのものを印にすることもある**(0060 は弱点タグを2行足すだけで、
      表も列も関数も1つも増えない)。`weakness_tags` は 0001 からあるので、
      表の有無で見ると**貼る前でも「もう入っています」と出る** ——
@@ -4875,12 +4879,17 @@ console.log('\nスピーチ練習(0054)')
         `alter table public\\.${markT}[\\s\\S]{0,400}add column if not exists ${markC}\\b`,
       ).test(src)
     }
+    /* **値を1つ足すだけの移行もある**(0067)。表も列も関数も増えない ——
+       増えるのは制約の一覧の中の値だけである。
+       関数の有無で見ると、その関数を作った回に「もう入っています」と
+       出てしまう(いちばん悪い壊れ方)。**その値が書かれているか**で見る */
+    if (markH) return new RegExp(`'${markH}'`).test(src)
     if (markT) return new RegExp(`create table if not exists public\\.${markT}\\b`).test(src)
     if (markF) return new RegExp(`create or replace function public\\.${markF}\\(`).test(src)
     return false
   }
   ok(makesMark(read4(`supabase/migrations/${newest}`)),
-    `準備の状態 … 印(${markC || markT || markF || '(無し)'})は、その移行が本当に作るものである`)
+    `準備の状態 … 印(${markC || markH || markT || markF || '(無し)'})は、その移行が本当に作るものである`)
   /* **列の印は、その列を名指しで読んでいるか**(0064)。
      `select('*')` のままだと、**列が無くても素通り**して
      「もう入っています」になる(いちばん悪い壊れ方) */
@@ -5254,8 +5263,17 @@ console.log('\nスピーチ練習(0054)')
     '紙 … ページ数を余白の箱に出す(`counter(page) / counter(pages)`)')
   ok(/@bottom-left\s*\{[^}]*var\(--sheet-name, ""\)/.test(css),
     '紙 … どのページの下にも題を出す(控えは空の文字列)')
-  ok(/@page \{ size: A4;[^}]*\}/.test(css),
-    '紙 … 用紙の大きさは、余白の箱とは別の `@page` に書く')
+  /* **用紙の大きさは、こちらで決めない**(第5.248節・2026-09-23 実機)。
+     `size: A4` と書くと、印刷機の紙と食い違ったときに
+     「入るように縮める」が働き、**中身だけが小さくなって余白が広がる。**
+     余白は別の `@page` に、これまでどおり書く */
+  ok(/@page \{ size: auto;[^}]*margin:[^}]*\}/.test(css),
+    '紙 … 用紙の大きさは印刷機にまかせ、余白だけを決める')
+  ok(!/size: A4/.test(css), '紙 … `size: A4` と書いていない(縮む元になる)')
+  /* **`html` も紙では戻す。** 画面の `overflow-x: clip` が残ると、
+     はみ出したぶんが切れる */
+  ok(/html \{\s*overflow: visible !important;/.test(css),
+    '紙 … `html` のはみ出しの切り取りを戻している')
 
   const qrS = noCS(readS('src/components/QrReview.jsx'))
   ok(/=\s*qrSheetPairs\(filtered\)/.test(qrS),
@@ -6708,11 +6726,12 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      新しい移行にそろっている」が、`supabase/migrations/` の
      いちばん大きい番号と突き合わせている。
      **同じことをする見張りを2つ置かない**(CLAUDE.md) */
-  /* **0066 は `qr_reviews` に列を1つ増やす。** 表はもう在るので、
-     **表の有無で見ると貼る前でも「もう入っています」**になる。
-     だから**列**を印にする(0064 / 0065 とまったく同じ見方) */
-  ok(/table: 'qr_reviews'/.test(setup) && /column: 'source'/.test(setup),
-    '0066 … 印は qr_reviews.source(列が増える移行だから)')
+  /* **0067 は、制約の一覧に値を2つ足すだけ。** 表も列も関数も増えない ——
+     関数の有無で見ると、その関数を作った 0063 の時点で
+     **貼る前でも「もう入っています」**になる。
+     だから `section_types()` に訊き、**値が返ってくるか**を印にする */
+  ok(/rpc: 'section_types'/.test(setup) && /has: 'vocab_recall'/.test(setup),
+    '0067 … 印は section_types() が vocab_recall を返すか(値だけ増える移行だから)')
   ok(!/row: \{ column/.test(setup),
     '0066 … 前の印(行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')
@@ -10573,8 +10592,9 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
        **1つの教材を出す道(`doAssign`)の1行に当たって**しまい、
        まとめる側を書き写しに戻しても緑のままになる
        (CLAUDE.md「置き換える前に `grep -n` で数える」) */
+    /* **教材の画面からは消えた**(第5.248節)。まとめて共有するのは
+       「アサインする」の画面だけになったので、**見るのも1か所**である */
     for (const [f, 名, 終] of [
-      ['src/components/TrainerMaterials.jsx', 'const doAssignMany', 'const doAssign ='],
       ['src/components/AssignBooks.jsx', 'const sendMats', 'const shelfOn'],
     ]) {
       const src = noNote(read(f))
@@ -10587,6 +10607,83 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       ok(!!fn && /data\.text/.test(fn),
         `${短} … 知らせは、返ってきた1行をそのまま出す`)
     }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     **単語 / フレーズのトレーニング**(第5.248節・2026-09-23 利用者の指定)
+
+       > このトレーニングですが、単語だけ、フレーズだけ、どちらかを
+       > 選べるようにしたいですね。問題数は、単語、フレーズそれぞれ
+       > 10、15、20の3種類。
+       > そして単語、フレーズそれぞれについて日本語→英語の練習が7個ずつ。
+     ══════════════════════════════════════════════════════════════ */
+  {
+    /* **値を書き写さない。性質で見る**(CLAUDE.md)。
+       10/15/20 という数そのものではなく、
+       **「3つある」「選んだとおりの数になる」**を見る */
+    const opts = amountsFor('vocabulary')
+    ok(opts.length === 3 && opts.every((o) => o.count > 0),
+      '単語 / フレーズ … 数は倍率ではなく、問数そのものでえらぶ',
+      opts.map((o) => o.label).join(' / '))
+    ok(amountsFor('vocabulary') === amountsFor('phrase'),
+      '単語 / フレーズ … 単語とフレーズで、同じ選択肢を出す')
+    /* **倍率のほうを壊していないか**(「出る」と「出ない」の両方) */
+    ok(amountsFor('listening').every((o) => o.times > 0 && o.count == null),
+      '文型ドリル … これまでどおり倍率のまま')
+
+    /* **えらんだとおりの数になるか。** 真ん中(15)は新しい id なので、
+       `AMOUNTS` を直に見ていると**黙って既定に落ちる** */
+    const n = (id) => sectionsFor('vocab', { vocabulary: id })
+      .find((x) => x.exercise_type === 'vocabulary')?.count
+    const 三つ = opts.map((o) => n(o.id))
+    ok(三つ.length === 3 && new Set(三つ).size === 3
+      && 三つ.every((v, i) => v === opts[i].count),
+    '単語 / フレーズ … えらんだ札のとおりの問数になる', 三つ.join(' / '))
+
+    /* **日本語 → 英語が、それぞれに付く** */
+    const plan = sectionsFor('vocab')
+    ok(plan.length === 4, '単語 / フレーズ … 覚える2つと、言う2つ',
+      plan.map((x) => `${exerciseLabel(x.exercise_type)}${x.count}`).join(' + '))
+    ok(plan.filter((x) => PARENT_SECTION[x.exercise_type]).every((x) => x.count === 7),
+      '単語 / フレーズ … 日本語 → 英語は、それぞれ7問')
+    /* **並びは 覚える → 言う。** 言う番が先に来ると、
+       まだ見ていないものを言わせることになる */
+    ok(plan[0].exercise_type === 'vocabulary' && plan[1].exercise_type === 'vocab_recall'
+      && plan[2].exercise_type === 'phrase' && plan[3].exercise_type === 'phrase_recall',
+    '単語 / フレーズ … 覚えてから言う順に並ぶ')
+
+    /* **「単語だけ」「フレーズだけ」が、チェック1つで切り替わる。**
+       **「出る」と「出ない」の両方を見る** —— 外した側が消え、
+       残した側は**言う練習まで**残っていること */
+    const だけ = (off) => sectionsFor('vocab', null, { [off]: false })
+      .map((x) => x.exercise_type)
+    ok(JSON.stringify(だけ('phrase')) === JSON.stringify(['vocabulary', 'vocab_recall']),
+      '単語だけ … フレーズを外すと、フレーズを言う練習も外れる',
+      だけ('phrase').join(' / '))
+    ok(JSON.stringify(だけ('vocabulary')) === JSON.stringify(['phrase', 'phrase_recall']),
+      'フレーズだけ … 単語を外すと、単語を言う練習も外れる',
+      だけ('vocabulary').join(' / '))
+
+    /* **数え方を2通り持たない。** 作る画面は `countOf()` を呼ぶ ——
+       `base * a.times` を書き写すと、倍率を持たない札で `NaN` になる
+       (実際になった) */
+    const readF = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    const mf = readF('src/components/MaterialForm.jsx')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    ok(/countOf\(base, a\)/.test(mf) && !/base \* a\.times/.test(mf),
+      '単語 / フレーズ … 画面は countOf() を呼ぶ(数を書き写していない)')
+
+    /* **窓口にも足したか**(CLAUDE.md「演習の種類を足す場所は4つ」)。
+       画面にだけ足すと、**作った瞬間に断られる** */
+    const gm = readF('supabase/functions/generate-material/index.ts')
+    for (const t of ['vocab_recall', 'phrase_recall']) {
+      ok(new RegExp(`^  ${t}:`, 'm').test(gm), `窓口 … ${t} の指示がある`)
+      ok(new RegExp(`${t}: *\\{ required:`).test(gm), `窓口 … ${t} の欄がある`)
+    }
+    /* **表の制約**(4か所め)。ここを忘れると、発行した瞬間に止まる */
+    const sql = readF('supabase/apply/pending_matome.sql')
+    ok(/'vocab_recall', 'phrase_recall'/.test(sql),
+      '貼る SQL … 演習の種類に、言う練習の2つが入っている')
   }
 
   /* ── ⑥ ゲストを選ぶ欄は1か所(`LearnerPick`)── */
@@ -10624,27 +10721,23 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       'ゲストを選ぶ … 1人だけのときは丸ぽち、何人でも選べるときは四角')
   }
 
-  /* ── ⑦ 教材を先にえらぶ(教材の画面)── */
+  /* ── ⑦ まとめて共有するチェックは排除した(第5.248節)── */
   {
     const tm = noNote(read('src/components/TrainerMaterials.jsx'))
-    /* **見出しの行のいちばん左**に印を置く */
-    const head = tm.slice(tm.indexOf('<div className="material-head">'),
-      tm.indexOf('<div className="material-open">'))
-    ok(/material-pick/.test(head) && /!forLearner &&/.test(head),
-      '先にえらぶ … 印は見出しの行にあり、ゲストのページでは出さない')
-    /* **帯は一覧より前**(末尾だと、教材が増えるほど下へ流れる) */
-    ok(tm.indexOf('className="card pick-bar"') < tm.indexOf('sorted.map((m)'),
-      '先にえらぶ … えらんだ件数の帯は、一覧より前にある')
-    /* **0件のときは帯そのものを出さない**(効かない操作を見せない) */
-    ok(/!forLearner && pickedMats\.length > 0 &&/.test(tm),
-      '先にえらぶ … 1件もえらんでいなければ、帯を出さない')
-    /* **ゲストを選ぶ欄は、この画面でも `LearnerPick`** ——
+    /* **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+       消したものが戻っていないことと、**残すと決めたものが残っていること** */
+    ok(!/material-pick/.test(tm) && !/pick-bar/.test(tm)
+      && !/pickedMats/.test(tm),
+      'まとめて共有 … チェックも帯も、教材の画面に残っていない')
+    /* **道は塞いでいない。** カードごとの「共有」は残る
+       (**行き止まりを作らない**・CLAUDE.md) */
+    ok(/const doAssign = async \(\) => \{/.test(tm) && /assignMaterial\(\{/.test(tm),
+      'まとめて共有 … カードごとの「共有」は残っている')
+    /* **ゲストを選ぶ欄は `LearnerPick`** ——
        25人ぶんのチェックが常に並ぶ形に戻していないか。
-       **2か所とも**見る(まとめて共有する帯 / カードの中の「渡す」・
-       2026-09 利用者の指定「同じ形にしてください」)。
-       片方だけ数えると、**もう片方を素の一覧に戻しても緑のまま**になる */
-    ok((tm.match(/<LearnerPick\s+people=\{active\}/g) ?? []).length === 2,
-      '先にえらぶ … ゲストを選ぶ欄は、帯もカードの中も LearnerPick',
+       帯を消したので **1か所**になった */
+    ok((tm.match(/<LearnerPick\s+people=\{active\}/g) ?? []).length === 1,
+      'まとめて共有 … ゲストを選ぶ欄は、カードの中も LearnerPick',
       `${(tm.match(/<LearnerPick\s+people=\{active\}/g) ?? []).length} か所`)
     /* **素の一覧が1つも残っていない。**`.assign-list` を自分で組むと、
        そこだけ25人が並んだままになる(実際にそうなっていた) */

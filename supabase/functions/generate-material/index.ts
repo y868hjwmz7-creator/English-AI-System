@@ -373,6 +373,44 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     + '1と2は小文字で始め、終止符を付けない'
     + '\n- **本当に使われている言い方だけ**にする。'
     + 'それらしく作った言い回しを入れない',
+
+  /* ══════════════════════════════════════════════════════════════
+     **覚えたものを、日本語から言う**(0067・第5.248節・2026-09-23)
+
+       > そして単語、フレーズそれぞれについて日本語→英語の練習が7個ずつ。
+
+     **日本語を1つに決めさせる。** 「対応」だけ見せると
+     `support` / `handle` / `deal with` のどれでも当たってしまい、
+     **答え合わせができない。** 使う場面まで日本語に入れさせる。
+
+     **別解は必ず出させる。** 英語は1つに決まらないので、
+     出さないと「合っているのに×」になる(**行き止まりを作らない**)。
+     ══════════════════════════════════════════════════════════════ */
+  vocab_recall:
+    '単語を、日本語から英語で言う練習。'
+    + 'prompt_ja に日本語、answer にその英語1語、'
+    + 'answer_alt に別解(改行区切り、1〜2個)を入れる。'
+    + '\n- **answer は1語**(ハイフンでつながる語は1語と数える)。'
+    + '**辞書に載る形**(動詞は原形、名詞は単数)にする'
+    + '\n- **prompt_ja だけで英語が1つに決まるようにする。**'
+    + '「対応」のような一語では決まらない。'
+    + '使う場面か品詞を添える(例「(問題に)対応する」)'
+    + '\n- **prompt_ja に英語を混ぜない。** 答えが見えてしまう',
+  phrase_recall:
+    'フレーズを、日本語から英語で言う練習。'
+    + 'prompt_ja に日本語、answer にその英語のフレーズ、'
+    + 'answer_alt に別解(改行区切り、1〜2個)を入れる。'
+    /* **形は `phrase` とまったく同じ3つ。**
+       ここだけ別の形を許すと、同じ教材の中で並びが揃わない */
+    + '\n\n**answer は、次の3つのどれかの形にする。ほかの形にしない。**'
+    + '\n1. **動詞から始まるかたまり**(原形)… read the room / drop the beat'
+    + '\n2. **名詞のかたまり**… a packed dance floor / the back of the venue'
+    + '\n3. **そのまま声に出せる決まり文句**… Sorry, that\'s not really my thing.'
+    + '\n\n**守ること。**'
+    + '\n- **主語を付けない。動詞は必ず原形。** 2〜7語'
+    + '\n- **prompt_ja だけで英語が1つに決まるようにする。**'
+    + '短すぎる日本語にしない(使う場面を添える)'
+    + '\n- **prompt_ja に英語を混ぜない。** 答えが見えてしまう',
 }
 
 /** 1問(1段落・1発言)の欄の説明 */
@@ -484,6 +522,10 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
   // 「あったり無かったり」では困る(`strict: true` が形を保証する)
   vocabulary:      { required: ['prompt_en', 'prompt_ja', 'phonetic'], optional: ['note', 'tag_no'] },
   phrase:          { required: ['prompt_en', 'prompt_ja', 'phonetic'], optional: ['note', 'tag_no'] },
+  /* 日本語 → 英語で言う(0067)。**形は和文英訳とそろえてある** ——
+     日本語が prompt_ja、英語が answer。別解は**必ず**出させる */
+  vocab_recall:    { required: ['prompt_ja', 'answer'], optional: ['answer_alt', 'note', 'tag_no'] },
+  phrase_recall:   { required: ['prompt_ja', 'answer'], optional: ['answer_alt', 'note', 'tag_no'] },
 
   // 旧「長文」で使っていたもの。既存の教材を作り直せるように残す
   read_aloud:      { required: ['prompt_en', 'prompt_ja'], optional: [] },

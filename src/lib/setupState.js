@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0066'
+export const NEWEST_MIGRATION = '0067'
 
 /**
  * その移行が入っているかを見る印。
@@ -134,13 +134,23 @@ export const NEWEST_MIGRATION = '0066'
  * これが**いちばん最後に効く** —— 分類と本文の文章だけ入っていても、
  * 練習が無ければ「練習する」は出ない(**使えるようになった印**である)。
  */
+/*
+ * 0067(単語 / フレーズの「日本語 → 英語で言う」)は、
+ * **表も列も関数も増やさない。** 増えるのは
+ * `material_sections_type_check` の**値2つだけ**である。
+ *
+ * だから **`section_types()` に訊く**(0063 で作った関数)。
+ * あれは制約そのものを読んで返すので、
+ * **貼ったかどうかが、そのまま値の有無になる。**
+ * 関数の有無で見ると、0063 を貼った時点で「もう入っています」と出る ——
+ * CLAUDE.md が「いちばん悪い壊れ方」と呼んでいるものである。
+ */
 export const NEWEST_MARK = {
-  table: 'qr_reviews',
-  column: 'source',
+  rpc: 'section_types',
+  has: 'vocab_recall',
   /* **呼び名は、画面に出ているものと同じにする**(2026-09)。
-     冊の名前は「覚えておきたい表現集」である(`quickResponse.js` 1か所)。
-     ここは**利用者が読む帯**に出るので、別の言い方を置かない */
-  label: '「覚えておきたい表現集」の冊(qr_reviews.source)',
+     演習の名前は「単語を言う」である(`exerciseTypes.js` 1か所) */
+  label: '単語 / フレーズの「単語を言う」(vocab_recall)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */

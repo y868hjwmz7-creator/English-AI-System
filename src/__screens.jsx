@@ -891,18 +891,18 @@ function AssignScreen() {
 
 
 /**
- * **教材を先にえらぶ帯**(`?screen=pick`・第5.238節・2026-09 利用者の指定)。
+ * **カードの「共有」でゲストを選ぶ**(`?screen=pick`)。
  *
- *   > 初めに教材の一覧から教材を選択(複数同時選択可)、
- *   > そしてゲストを選ぶのはその次にしてください。
+ * **まとめて共有する帯とチェックは、第5.248節で排除した**
+ * (2026-09-23 利用者の指定「教材の一括共有用のチェック☑️、
+ * やはり排除しましょう。不細工です」)。
  *
- * 教材の画面(`TrainerMaterials`)は Supabase を引き連れているので、
- * **帯とカードの見出しの行だけ**を、本物と**1文字も違えず**に置く。
- * ここを変えると、すき間も折り返しも本物と変わる ——
- * **骨組みが本物と食い違うと、検証は何も守らない**(CLAUDE.md)。
+ * **ゲストを選ぶ欄そのものは残っている** —— カードの「共有」を押すと
+ * 出るのがこれで、`TrainerMaterials` の本物と**1文字も違えず**に置く。
+ * 帯を消したついでに、ここの見張りまで落とすと
+ * **25人ぶんのチェックが常に並ぶ形に戻しても緑のまま**になる。
  *
- * **いちばん危ない形を、必ず1つ置く。**
- * ・`?pick=shut` … 帯は出ているが、まだ開いていない
+ * ・`?pick=shut` … 押す前(まだ一覧を開いていない)
  * ・`?pick=busy` … 送っている最中(押せない)
  * ・名前は**長いもの**を混ぜる / **休会中の人がいる**1行も出す
  */
@@ -924,10 +924,7 @@ function StepsScreen() {
   )
 }
 
-
 function PickScreen() {
-  const [pickedMats, setPickedMats] = useState(['m1', 'm2'])
-  const [manyOpen, setManyOpen] = useState(q.get('pick') !== 'shut')
   const [picked, setPicked] = useState([])
   const manyBusy = q.get('pick') === 'busy'
   const active = [
@@ -936,77 +933,31 @@ function PickScreen() {
     { id: 'g3', display_name: '佐藤' },
   ]
   const notActive = [{ id: 'g9', display_name: '休会 ちから' }]
-  const list = [
-    { id: 'm1', title: '2026-09-20 / 数の表現 + 数字 / B1 / 製造' },
-    { id: 'm2', title: '2026-09-18 / 受け身の言い回しと、ていねいな依頼 / B2 / 医薬品・医療機器' },
-  ]
 
   return (
     <div className="app-main" style={{ padding: 16 }}>
-      {pickedMats.length > 0 && (
-        <div className="card pick-bar">
-          <div className="pick-bar-head">
-            <span className="field-label">
-              <strong>{pickedMats.length} 件</strong>をえらんでいます
-            </span>
-            <div className="btn-row">
-              <button type="button" className="btn btn--small btn--quiet"
-                      aria-expanded={manyOpen}
-                      onClick={() => setManyOpen(!manyOpen)}>
-                {manyOpen ? 'とじる' : 'ゲストに共有する'}
-              </button>
-              <button type="button" className="btn btn--small btn--ghost"
-                      disabled={manyBusy}
-                      onClick={() => { setPickedMats([]); setManyOpen(false) }}>
-                えらび直す
-              </button>
-            </div>
-          </div>
-          {manyOpen && (
-            <>
-              <LearnerPick people={active} picked={picked} onPick={setPicked}
-                           disabled={manyBusy}
-                           label={PICK_LABEL} emptyText={NO_ACTIVE_TEXT} />
-              {notActive.length > 0 && (
-                <p className="field-hint">
-                  休会中・退会済の {notActive.length} 人とは共有できません。
-                </p>
-              )}
-              <div className="btn-row">
-                <button type="button" className="btn btn--primary"
-                        disabled={!picked.length || manyBusy}
-                        onClick={() => {}}>
-                  {manyBusy
-                    ? '共有しています…'
-                    : `${pickedMats.length} 件を共有する`}
-                </button>
-              </div>
-            </>
-          )}
+      <div className="card material-card">
+        <LearnerPick people={active} picked={picked} onPick={setPicked}
+                     disabled={manyBusy}
+                     label={PICK_LABEL} emptyText={NO_ACTIVE_TEXT} />
+        {notActive.length > 0 && (
+          <p className="field-hint">
+            休会中・退会済の {notActive.length} 人とは共有できません。
+          </p>
+        )}
+        <div className="btn-row">
+          <button type="button" className="btn btn--primary"
+                  disabled={!picked.length || manyBusy}
+                  onClick={() => {}}>
+            {picked.length ? `${picked.length} 人と共有する` : '共有する'}
+          </button>
         </div>
-      )}
-      {list.map((m) => (
-        <div key={m.id} className="card material-card">
-          <div className="material-head">
-            <label className="material-pick" aria-label={`${m.title} をえらぶ`}>
-              <input type="checkbox" checked={pickedMats.includes(m.id)}
-                     onChange={() => setPickedMats((now) => (
-                       now.includes(m.id)
-                         ? now.filter((x) => x !== m.id) : [...now, m.id]))} />
-            </label>
-            <div className="material-open">
-              <MaterialTitle title={m.title} hideDate />
-              <div className="material-meta">
-                <span className="material-kind">記事</span>
-                <span className="material-when">2026-09-20</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
+      </div>
     </div>
   )
 }
+
+
 
 
 /* **いま誰の記録として残るか**(`?screen=owner`・第5.178節)。

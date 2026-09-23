@@ -3543,6 +3543,12 @@ html, body { overflow-x: clip; }
   }
   /* 道筋を「ただの入れ物」に戻す。**位置・大きさ・送りが残っていると崩れる。**
      `.lesson`(画面全体にかぶせる箱)も、ここでただの `block` になる */
+  /* **`html` も戻す**(第5.248節)。画面では横揺れを止めるために
+     `html, body { overflow-x: clip }` を掛けてあるが、
+     **紙では「はみ出したぶんを切る」ことになる。** 戻し忘れていた */
+  html {
+    overflow: visible !important; width: auto !important; max-width: none !important;
+  }
   body.is-printing,
   body.is-printing .print-path {
     display: block !important; position: static !important; inset: auto !important;
@@ -3561,7 +3567,11 @@ html, body { overflow-x: clip; }
      (`.lesson-sheet--xl` は 23px。そのまま刷ると11ページになった) */
   body.is-printing .print-target {
     position: static !important; overflow: visible !important; flex: none !important;
-    width: auto !important; max-width: none !important;
+    /* **紙の幅いっぱいに広げる**(第5.248節)。`display` が
+       `inline-block` / `flex` / `table` のままだと、`width: auto` は
+       **中身なりに縮む** —— 細い列が真ん中に置かれ、まわりが余白になる */
+    display: block !important;
+    width: 100% !important; max-width: none !important;
     height: auto !important; min-height: 0 !important; max-height: none !important;
     margin: 0 !important; padding: 0 !important;
     border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
@@ -3944,7 +3954,28 @@ html, body { overflow-x: clip; }
      - **下だけ広いまま**にしてある —— ここに**ページ番号と紙の名前**が
        入る(`@bottom-left` / `@bottom-right`・9pt)。
        詰めすぎると、その行が入らない */
-  @page { size: A4; margin: 12mm 10mm 14mm; }
+  /* ══════════════════════════════════════════════════════════════
+     **`size: A4` と書かない**(第5.248節・2026-09-23 実機)
+
+       > PDFを一度ダウンロードし、それを開いて印刷すると綺麗に印刷される
+       > のですが、教材からそのまま印刷しようとすると、余白が異常に広く
+       > なり、A4に印刷したのに実際のコンテンツはA5かB5のような大きさに
+       > なってしまいます。
+
+     **用紙の大きさをこちらで決めると、印刷機の用紙と食い違ったときに
+     「入るように縮める」が働く。** 210mm ぶんの絵を、印刷機が使える幅
+     (Letter や、余白を引いた印刷可能領域)に押し込むので、
+     **中身だけが小さくなり、まわりの余白が広がる。**
+     「PDF に保存」ではこれが起きない —— 保存先の紙がそのまま A4 だからである。
+
+     **`auto` なら、印刷機が選んでいる紙のままで組む。** 縮めるものが無い。
+     余白(12/10/14mm)はこちらで決めたままなので、**見た目は変わらない。**
+
+     **Chromium では、どちらでも A4(595×842pt)のまま**であることを
+     実測してある(`preferCSSPageSize` を両方で試した)。
+     つまりこの1行は**縮む側だけ**を消している。
+     ══════════════════════════════════════════════════════════════ */
+  @page { size: auto; margin: 12mm 10mm 14mm; }
 
   /* ── どのページの下にも、何の紙かとページ数を出す ────────────────
      2026-09 実機・利用者の指定。
