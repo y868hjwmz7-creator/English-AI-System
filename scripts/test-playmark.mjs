@@ -120,8 +120,9 @@ import {
   BGM_PLACES, DEFAULT_RADIO_GAP, DEFAULT_SAY_GAP, QR_RADIO_MODES,
   RADIO_GAPS, RADIO_MODES, SAY_GAPS,
   bgmPlaysIn, hidesAnswer,
+  loadRadioGap,
   nextIndex, radioGapsFor, radioGapsOf, radioJaOf, radioLead, radioModeOf,
-  radioModesFor, radioSteps, radioTextOf, radioWarmups,
+  radioModesFor, radioSteps, radioTextOf, radioWarmups, saveRadioGap,
 } from '../src/lib/wordRadio.js'
 import {
   DEFAULT_BGM, DEFAULT_VOICE, VOL_STEP,
@@ -7234,6 +7235,15 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(radioSteps(row(), 'say', SAY_GAPS[SAY_GAPS.length - 1].id).find((x) => x.you)?.ms
     === SAY_GAPS[SAY_GAPS.length - 1].id,
   '選んだ秒が、そのまま「日本語 → 英語」のあいだになる')
+  /* **くり返しのほうは、読む順そのものから見る**(第5.251節)。
+     `radioGapsOf()` を直に呼ぶだけだと、**`radioSteps` が読み方を
+     渡していなくても緑のまま**になる —— そこがまさに踏んだところである */
+  {
+    const 末 = (ms) => radioSteps(row(), 'say', ms).filter((st) => st.kind === 'wait').pop()?.ms
+    ok(末(500) === 末(3000),
+      '**くり返しのあいだは、間を変えても動かない**(読む順で見る)',
+      `${末(500)} / ${末(3000)}ms`)
+  }
   /* **ほかの2つは、いちばん速いところで固定。** 同じ比で動かすと、
      「すぐ」を選んだ日に**くり返しまで 0 になる** */
   {
@@ -7250,6 +7260,40 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
       '**「英語だけ」の間は、これまでどおり同じ比で動く**',
       `${前.word}/${前.repeat}ms`)
   }
+  /* ── **英語だけの「間」とは、別に覚える**(第5.251節)──────────
+       同じ鍵に入れると、「英語だけ」で選んだ 3秒が、そのまま
+       「日本語 → 英語」のあいだに化ける。
+
+       **鍵の名前では見ない。入れて出して見る** —— 名前を比べるだけだと、
+       `gapSetOf()` が鍵を返す先を間違えても気づけない。
+       端末の控えが無い素の node なので、**その場で偽物を置く。** */
+  {
+    const 箱 = new Map()
+    const 前 = globalThis.localStorage
+    globalThis.localStorage = {
+      getItem: (k) => (箱.has(k) ? 箱.get(k) : null),
+      setItem: (k, v) => { 箱.set(k, String(v)) },
+      removeItem: (k) => { 箱.delete(k) },
+    }
+    try {
+      saveRadioGap(3000, 'qr', 'en')
+      saveRadioGap(500, 'qr', 'say')
+      const 英 = loadRadioGap('qr', 'en')
+      const 言 = loadRadioGap('qr', 'say')
+      ok(英 === 3000 && 言 === 500,
+        '**「英語だけ」と「日本語 → 英語」は、別に覚える**',
+        `英語だけ ${英}ms / 言う練習 ${言}ms`)
+      ok(箱.size === 2, '鍵そのものが2つある', [...箱.keys()].join(' / '))
+      /* **知らない値は、その読み方の既定に落とす**(行き止まりを作らない) */
+      saveRadioGap(9999, 'qr', 'say')
+      ok(loadRadioGap('qr', 'say') === DEFAULT_SAY_GAP,
+        '段に無い値は、その読み方の既定に落ちる')
+    } finally {
+      if (前 === undefined) delete globalThis.localStorage
+      else globalThis.localStorage = 前
+    }
+  }
+
   /* **間の一覧は、読み方ごとに違う。** 「英語だけ」に「すぐ」を出すと、
      語と語の間まで 0 になる(あちらは比で動くため) */
   ok(radioGapsFor('qr', 'say') === SAY_GAPS
