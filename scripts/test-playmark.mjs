@@ -117,10 +117,11 @@ import {
   lastLearner, openLearner, rememberLearner, watchLearner,
 } from '../src/lib/lastLearner.js'
 import {
-  BGM_PLACES, DEFAULT_RADIO_GAP, QR_RADIO_MODES, RADIO_GAPS, RADIO_MODES,
-  bgmPlaysIn, drillChunks, hidesAnswer,
-  nextIndex, radioGapsOf, radioJaOf, radioLead, radioModeOf,
-  radioModesFor, radioSteps, radioTextOf,
+  BGM_PLACES, DEFAULT_RADIO_GAP, DEFAULT_SAY_GAP, QR_RADIO_MODES,
+  RADIO_GAPS, RADIO_MODES, SAY_GAPS,
+  bgmPlaysIn, hidesAnswer,
+  nextIndex, radioGapsFor, radioGapsOf, radioJaOf, radioLead, radioModeOf,
+  radioModesFor, radioSteps, radioTextOf, radioWarmups,
 } from '../src/lib/wordRadio.js'
 import {
   DEFAULT_BGM, DEFAULT_VOICE, VOL_STEP,
@@ -145,8 +146,6 @@ import {
   CLIP_ACCENTS, JA_VOICE, accentsWithVoices, elevenIdOf, voicesOfAccent,
 } from '../src/data/clipVoices.js'
 import { SIX_STEPS } from '../src/lib/sixSteps.js'
-import { NATIVE_FLOW } from '../src/data/nativeFlow.js'
-import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 /* アサインの手順(第5.238節)。**どちらも素の node で走る形に切り出してある** */
 import {
   NO_ACTIVE_TEXT, PICK_LABEL, matchLearners, pickedNames, showsLearnerList,
@@ -2919,8 +2918,10 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '聞き流し … 先に進めてから、語のあいだの間を置く(画面が追いつく)')
     /* **語と語のあいだも、選んだ間から出す。** ここで `WORD_GAP_MS` を
        直に使うと、間を変えても**そこだけ動かない**(しかも音は鳴る) */
-    ok(/const gaps = radioGapsOf\(gap\)/.test(radio) && !/wait\(WORD_GAP_MS\)/.test(radio),
-      '聞き流し … 3つの間を `radioGapsOf()` 1か所から出している')
+    /* **読み方も渡す**(第5.251節)。渡さないと「言う練習」でも
+       英語だけの道を通り、「すぐ」が既定の 1.5 秒に落ちる */
+    ok(/const gaps = radioGapsOf\(gap, mode\)/.test(radio) && !/wait\(WORD_GAP_MS\)/.test(radio),
+      '聞き流し … 3つの間を `radioGapsOf()` 1か所から、読み方ごとに出している')
     /* ── **次の語を、いま鳴らしているあいだに用意しているか**
      *   (2026-09 実機・利用者の指定「違う単語に移る際の間を…」)
      *
@@ -2931,8 +2932,11 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      *
      *   **「名前が出てくるか」で見ない**(CLAUDE.md)—— 説明の中にも
      *   `prepareRead` と書いてあるので、**呼んでいる形**で見る。 */
-    ok(/prepareRead\(radioTextOf\(list\[nextIndex\(/.test(radio),
-      '聞き流し … 次の語を、いま鳴らしているあいだに用意している')
+    /* **用意するものは `radioWarmups()` が決める**(第5.251節)。
+       もとは英語1本を名指ししていたが、**訳が抜けていた** ——
+       言う練習は訳から始まるので、そこで毎回待たされていた */
+    ok(/for \(const w of radioWarmups\(list\[nextIndex\(/.test(radio),
+      '聞き流し … 次の1つを、いま鳴らしているあいだに用意している')
     /* **`readAloud()` と同じ既定で用意する。** `prefetchClip` を画面から
        直に呼ぶと、話者と段を**呼ぶ側が書き写す**ことになり、
        用意した場所と実際に鳴らす場所が食い違う(しかも音は鳴る) */
@@ -7087,15 +7091,33 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
 
   const LONG = 'If you think you are going to be late for the meeting, '
     + 'please let us know as early as you can.'
-  const SHORT = 'Absolutely.'
   const JA = '締め切りが厳しくても、できるだけ早く知らせてください。'
   const row = (o = {}) => ({ en: LONG, ja: JA, box: 0, ...o })
   const GAP = 2000
   const g = radioGapsOf(GAP)
 
   // ── 読み方の一覧
-  ok(QR_RADIO_MODES.length === 4,
-    `Quick Response の読み方が4つある(${QR_RADIO_MODES.map((m) => m.id).join('/')})`)
+  /* ══════════════════════════════════════════════════════════
+     **チャンク系の2つは排除した**(第5.251節・2026-09-23 利用者の指定)
+
+       > quick response の聞き流しモードのチャンク系の2つは排除です。
+       > ややこしく、分かりにくいので排除です。
+
+     残るのは**英語だけ**と**言う練習(日本語 → 英語)**の2つ。
+     **「無い」ほうも名指しで見る** —— 数だけだと、
+     別のものを2つ置いても緑のままになる。 */
+  ok(QR_RADIO_MODES.length === 2,
+    `Quick Response の読み方は2つ(${QR_RADIO_MODES.map((m) => m.id).join('/')})`)
+  ok(QR_RADIO_MODES.map((m) => m.id).join('/') === 'en/say',
+    '残っているのは「英語だけ」と「言う練習」だけ')
+  ok(!QR_RADIO_MODES.some((m) => m.id === 'chunk' || m.id === 'step'),
+    '**チャンク系の2つが、一覧に無い**')
+  /* **道具ごと消えているか。** 一覧から外すだけだと、
+     `radioSteps(row, 'chunk')` は**まだかたまりを返す** ——
+     端末に `chunk` が残っている人が、消したはずの読み方を聞き続ける */
+  ok(!radioSteps(row(), 'chunk', GAP).some((st) => st.kind === 'chunk')
+    && !radioSteps(row({ box: 0 }), 'step', GAP).some((st) => st.kind === 'chunk'),
+  '**端末に `chunk` / `step` が残っていても、かたまりは鳴らない**')
   ok(QR_RADIO_MODES[0].id === 'en', '**いちばん上はこれまでの「英語だけ」**(既定を変えていない)')
   /* **単語帳は1ドットも変えていない。** 言われたのは Quick Response である */
   ok(RADIO_MODES.length === 1 && RADIO_MODES[0].id === 'en',
@@ -7127,63 +7149,6 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(!noJa.some((st) => st.kind === 'ja'), '訳が無ければ、訳は鳴らさない')
   ok(noJa[0].kind === 'wait' && noJa[0].you === true, '訳が無ければ、言う番から始まる')
 
-  // ── ② チャンクで積む
-  const ch = radioSteps(row(), 'chunk', GAP)
-  ok(ch[0].kind === 'ja',
-    '**かたまりで積むときも、訳から**(何を言うのか分からないままでは音真似になる)')
-  const chunks = ch.filter((st) => st.kind === 'chunk')
-  ok(chunks.length >= 3, `かたまりに割れている(${chunks.length} かたまり)`)
-  /* **約束できることだけを見る**(CLAUDE.md「当てられることだけを見る」)。
-     パタプラのかたまりは 2〜8語だが、**上は約束できない** ——
-     区切りはスラッシュリーディングが決めており、長い節は長いままである。
-     **下は約束できる**(1語のかたまりは、となりへ寄せてある) */
-  ok(chunks.every((st) => st.text.split(' ').length >= 2),
-    '**1語だけのかたまりを作らない**(1語では言い直す単位にならない)',
-    chunks.map((st) => st.text.split(' ').length).join(','))
-  ok(ch[ch.length - 1].kind === 'en' && ch[ch.length - 3].kind === 'en',
-    '**最後は1文まるごと**(積み上げて終わる)')
-  ok(chunks.map((st) => st.text).join(' ') === LONG,
-    'かたまりを足すと、もとの文に戻る(**1語も落としていない**)')
-  /* **「言う番」は、どれも同じ長さ。** 4〜8語のかたまりを
-     「語と語のあいだ」(既定 268ms)で言い直させていた、を直した回 */
-  ok(ch.filter((st) => st.you).every((st) => st.ms === g.recall),
-    '**かたまりのあとの「言う番」も「考える間」**(短い間では言い直せない)')
-  /* **割れない文は、1文まるごとに落ちる**(同じ音が3回続かない) */
-  ok(radioSteps(row({ en: SHORT }), 'chunk', GAP)
-    .every((st) => st.kind !== 'chunk'),
-  '割れない短い文は、かたまりにしない')
-
-  /* **実データで数える。** 1文だけ見ても「たまたま合っていた」が分からない */
-  {
-    const ens = [...NATIVE_FLOW.map((x) => x.en),
-      ...FRAME_SECTIONS.flatMap((sec) => sec.groups.flatMap((gr) => gr.rows.map((r) => r.ex)))]
-    const sizes = []
-    let broken = 0
-    let split = 0
-    for (const en of ens) {
-      const cs = drillChunks(en)
-      if (!cs.length) continue
-      split += 1
-      if (cs.join(' ') !== en.trim().replace(/\s+/g, ' ')) broken += 1
-      for (const c of cs) sizes.push(c.split(' ').length)
-    }
-    ok(split > 100, `実データで、かたまりに割れる文がある(${split} 文 / ${ens.length} 文)`)
-    ok(broken === 0, '**どの文も、かたまりを足せばもとに戻る**(1語も落としていない)')
-    ok(Math.min(...sizes) >= 2, `1語のかたまりが1つも無い(いちばん短くて ${Math.min(...sizes)} 語)`)
-    /* **ほとんどが 8語以下**(パタプラの粒度)。**割合で見る** ——
-       ぴったりの数を書き写すと、文を足した日に期待値も一緒に動く */
-    ok(sizes.filter((n) => n <= 8).length > sizes.length * 0.9,
-      `かたまりのほとんどが8語以下(${(sizes.filter((n) => n <= 8).length / sizes.length * 100).toFixed(1)}%)`)
-  }
-
-  // ── ③ Type A → Type B(箱で切り替える)
-  ok(radioSteps(row({ box: 0 }), 'step', GAP).some((st) => st.kind === 'chunk'),
-    '**まだ言えていない文(箱0)は、かたまりから**(Type A)')
-  ok(!radioSteps(row({ box: 1 }), 'step', GAP).some((st) => st.kind === 'chunk'),
-    '**一度言えた文(箱1以上)は、1文まるごと**(Type B)')
-  ok(!radioSteps(row({ box: 6 }), 'step', GAP).some((st) => st.kind === 'chunk'),
-    '進んだ文も1文まるごと')
-
   /* ── **訳を読むのは、窓口の声だけ。端末の声には二度と戻さない** ──
      2026-09 に外したのは端末の声のほうで、そこは戻していない */
   ok(!radioSteps(row(), 'en', GAP).some((st) => st.kind === 'ja'),
@@ -7212,22 +7177,118 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '訳は良い段で頼む(標準の段に落とすと、代役の英語の声になる)')
 
   // ── 答えを隠すか。**「出る」と「出ない」の両方**
-  ok(hidesAnswer('say') && hidesAnswer('chunk') && hidesAnswer('step'),
-    '言う練習では、答えを先に見せない')
+  ok(hidesAnswer('say'), '言う練習では、答えを先に見せない')
   ok(!hidesAnswer('en'), '**聞き流し(英語だけ)では、これまでどおり見せる**')
 
   // ── 押す前に、何が起きるかを言う
-  const leads = ['en', 'say', 'chunk', 'step'].map((m) => radioLead(m))
+  const leads = ['en', 'say'].map((m) => radioLead(m))
   ok(new Set(leads).size === leads.length, '読み方ごとに、違う説明が出る')
   ok(leads.every((t) => t.length > 10), 'どの読み方にも説明がある(黙って始めない)')
 
-  // ── かたまりの割り方は `chunker.js` 1か所
-  ok(drillChunks(SHORT).length === 0, '割れない文は、かたまりを返さない')
-  ok(drillChunks('').length === 0, '空の文でも落ちない')
   const wr = noNote(readD('src/lib/wordRadio.js'))
-  ok(/slashesFor\(en, 'middle'\)/.test(wr),
-    'かたまりはスラッシュリーディングの「中級」から作る(割り方を2つ持たない)')
-  ok(!/\bsplit\(\/\[,\.\]/.test(wr), '自前で文を切り直していない')
+  /* **道具ごと消えているか**(第5.251節)。一覧から外すだけだと、
+     次に見た人が「まだ使うのかもしれない」と読む
+     (`duckBgm` を道具ごと消したのと同じ作法) */
+  ok(!/drillChunks|chunkSteps|MODE_CHUNK|MODE_STEP/.test(wr),
+    '**かたまりを作る道具も、まるごと消えている**')
+  ok(!/from '\.\/chunker\.js'/.test(wr),
+    '割り方(`chunker.js`)を、もう取り込んでいない')
+
+  /* ══════════════════════════════════════════════════════════
+     **「日本語 → 英語」のあいだ**(第5.251節・2026-09-23 利用者の指定)
+
+       > 日本語が言われてから英語が言われるまでの時間、そして
+       > そもそも日本が言われるまでの時間、これが今は長い。
+       > これも最速にしましょう。その上で日本語→英語の間の設定を
+       > できるようにしたい。
+     ══════════════════════════════════════════════════════════ */
+  ok(SAY_GAPS.some((g) => g.id === 0),
+    '**いちばん速い「すぐ」(0秒)が選べる**', SAY_GAPS.map((g) => g.label).join(' / '))
+  ok(SAY_GAPS.some((g) => g.id === DEFAULT_SAY_GAP),
+    '既定が段の中にある(選び直せる)', `${DEFAULT_SAY_GAP}ms`)
+  ok(DEFAULT_SAY_GAP < DEFAULT_RADIO_GAP,
+    '**既定はこれまでより速い**',
+    `${DEFAULT_SAY_GAP}ms(これまで ${DEFAULT_RADIO_GAP}ms)`)
+  /* **「すぐ」では、言う番そのものを置かない。**
+     `ms: 0` の段を残すと、待たないと決めたのに
+     画面に「言う番」が一瞬ちらつく */
+  {
+    const すぐ = radioSteps(row(), 'say', 0)
+    ok(!すぐ.some((st) => st.you),
+      '**「すぐ」では、言う番の段そのものが無い**',
+      すぐ.map((st) => st.kind).join(' '))
+    ok(すぐ[0].kind === 'ja' && すぐ[1].kind === 'en',
+      '**訳のつぎが、そのまま答え**')
+  }
+  /* **選んだ値が、そのまま「日本語 → 英語」のあいだになる。**
+     `radioSteps` が読み方を `radioGapsOf` に渡していないと、
+     **英語だけの道を通って「すぐ」が 1.5 秒に落ちる**(実測で見つけた) */
+  for (const ms of SAY_GAPS.map((g) => g.id).filter((n) => n > 0)) {
+    const st = radioSteps(row(), 'say', ms).find((x) => x.you)
+    if (st?.ms !== ms) {
+      ng(`「日本語 → 英語」に ${ms}ms を選んだのに ${st?.ms}ms になった`,
+        '読み方を `radioGapsOf()` に渡していない(英語だけの道に落ちている)')
+      break
+    }
+  }
+  ok(radioSteps(row(), 'say', SAY_GAPS[SAY_GAPS.length - 1].id).find((x) => x.you)?.ms
+    === SAY_GAPS[SAY_GAPS.length - 1].id,
+  '選んだ秒が、そのまま「日本語 → 英語」のあいだになる')
+  /* **ほかの2つは、いちばん速いところで固定。** 同じ比で動かすと、
+     「すぐ」を選んだ日に**くり返しまで 0 になる** */
+  {
+    const 速 = radioGapsOf(0, 'say')
+    const 遅 = radioGapsOf(5000, 'say')
+    ok(速.repeat === 遅.repeat && 速.word === 遅.word,
+      '**語と語・くり返しは、間を変えても動かない**(言う練習)',
+      `${速.word}/${速.repeat}ms`)
+    ok(速.repeat > 0 && 速.word > 0,
+      '**「すぐ」を選んでも、くり返しの間まで 0 にならない**')
+    /* **英語だけは1ミリも変えていない**(言われた場所だけを直す) */
+    const 前 = radioGapsOf(1500)
+    ok(前.recall === 1500 && 前.word > 200 && 前.word < 330,
+      '**「英語だけ」の間は、これまでどおり同じ比で動く**',
+      `${前.word}/${前.repeat}ms`)
+  }
+  /* **間の一覧は、読み方ごとに違う。** 「英語だけ」に「すぐ」を出すと、
+     語と語の間まで 0 になる(あちらは比で動くため) */
+  ok(radioGapsFor('qr', 'say') === SAY_GAPS
+    && radioGapsFor('qr', 'en') === RADIO_GAPS
+    && radioGapsFor('word', 'en') === RADIO_GAPS,
+  '間の一覧も、場面と読み方から1か所で引く')
+  ok(!RADIO_GAPS.some((g) => g.id === 0),
+    '**「英語だけ」には「すぐ」を出さない**(語と語の間まで 0 になる)')
+
+  /* ── **そもそも日本語が言われるまでが長い** ──────────────
+       訳は**一度も先読みしていなかった。** 問が変わるたびに
+       MP3 を取りに行くので、**間をいくら縮めても縮まらない** */
+  {
+    const w = radioWarmups(row(), 'say')
+    ok(w.some((x) => x.ja) && w.some((x) => !x.ja),
+      '**言う練習では、訳も英語も先読みする**', `${w.length} 本`)
+    ok(w.filter((x) => !x.ja).length === 1,
+      '英語は2回鳴るが、取りに行くのは1回だけ')
+    ok(radioWarmups(row(), 'en').every((x) => !x.ja),
+      '**「英語だけ」では、訳を取りに行かない**(要らないものに課金しない)')
+    ok(radioWarmups({ en: 'Sure.' }, 'say').length === 1,
+      '訳が無い問では、訳を取りに行かない')
+    ok(radioWarmups(null, 'say').length === 0, '空の行でも落ちない')
+  }
+  {
+    const rd = noNote(readD('src/components/WordRadio.jsx'))
+    ok(/radioWarmups\(list\[nextIndex\(i, list\.length\)\], mode\)/.test(rd),
+      '聞き流し … 次の1つを、`radioWarmups()` にそろえて先読みする')
+    ok(/clipVoice: JA_VOICE, clipTier: PREMIUM/.test(rd),
+      '訳の先読みも、鳴らすときと同じ声・同じ段(別の鍵で二度課金しない)')
+    ok(/radioGapsOf\(gap, mode\)/.test(rd),
+      '聞き流し … 3つの間を、読み方ごとに出している')
+    ok(/loadRadioGap\(where, mode\)/.test(rd) && /saveRadioGap\(ms, where, mode\)/.test(rd),
+      '聞き流し … 間は読み方ごとに覚える')
+    ok(/setGap\(loadRadioGap\(where, next\)\)/.test(rd),
+      '**読み方を変えたら、間もその読み方のものに持ち替える**')
+    ok(/radioGapsFor\(where, mode\)/.test(rd) && !/RADIO_GAPS\.map/.test(rd),
+      '聞き流し … 選べる間の一覧も、画面に書き写していない')
+  }
 
   // ── 型でまとめる(パターンプラクティスの芯)
   ok(QR_ORDERS.some((o) => o.id === 'frame'), '並べ方に「型でまとめる」が在る')

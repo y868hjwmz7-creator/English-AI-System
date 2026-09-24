@@ -44,10 +44,11 @@ import {
   bgmChoices, bgmPickOf, bgmPlan, loadBgmPick, saveBgmPick,
 } from '../lib/bgmPick.js'
 import {
-  RADIO_GAPS, bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
+  bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
   hidesAnswer,
-  nextIndex, radioGapsOf, radioJaOf, radioLead, radioModesFor, radioSteps,
-  radioTextOf, saveRadioGap, saveRadioMode,
+  nextIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf, radioLead,
+  radioModesFor,
+  radioSteps, radioTextOf, radioWarmups, saveRadioGap, saveRadioMode,
 } from '../lib/wordRadio.js'
 
 export default function WordRadio({
@@ -85,7 +86,9 @@ export default function WordRadio({
    * くり返しのあいだも**同じ比でそろって動く**(`radioGapsOf()` 1か所)。
    * **片方だけ縮めると、そこだけ不自然に詰まる**(`turnGap.js` と同じ考え方)。
    */
-  const [gap, setGap] = useState(() => loadRadioGap(where))
+  /* **読み方ごとに別に覚える**(第5.251節)。「英語だけ」の間と
+     「日本語 → 英語」のあいだは**別のもの**である */
+  const [gap, setGap] = useState(() => loadRadioGap(where, mode))
   const [at, setAt] = useState(0)
   /**
    * **いま鳴っている文字**(かたまりのときは、そのかたまり)。
@@ -181,7 +184,7 @@ export default function WordRadio({
     /* **3つの間は、選んだ秒から一度に出す**(`radioGapsOf()` 1か所)。
        ここで `WORD_GAP_MS` を直に使うと、間を変えても
        **語と語のあいだだけが動かない** */
-    const gaps = radioGapsOf(gap)
+    const gaps = radioGapsOf(gap, mode)
 
     const run = async () => {
       while (alive()) {
@@ -205,7 +208,31 @@ export default function WordRadio({
            **1つ先だけ**(`readAloudSequence` の `ahead` と同じ作法)。
            どのみち次に鳴らすものなので、**費用は増えない**。
            失敗しても何もしない —— 先読みのために画面を止めない */
-        prepareRead(radioTextOf(list[nextIndex(i, list.length)]))
+        /* ══════════════════════════════════════════════════════
+           **訳も先読みする**(第5.251節・2026-09-23 利用者の指定)
+
+             > そしてそもそも日本が言われるまでの時間、これが今は長い。
+             > これも最速にしましょう。
+
+           **英語しか先読みしていなかった。** 言う練習は訳から始まるので、
+           問が変わるたびに**訳の MP3 を取りに行ってから**鳴っていた ——
+           これが「そもそも日本語が言われるまで」の正体である。
+           **間の値をいくら縮めても、ここは1ミリも縮まらない。**
+
+           **何を先読みするかは `radioWarmups()` が決める**
+           (歩みそのものから読む)。ここで「言う練習なら訳も」と
+           書くと、読む順を変えた日に先読みだけが古くなる。
+
+           **費用は増えない。** どのみち次に鳴らすもので、鍵が同じなら
+           0円である(CLAUDE.md「音声は鍵が同じなら 0 円」)。
+           **1つ先だけ**にしてあるので、鳴らす前に取り終わる ——
+           同じ瞬間に2回作りに行くことも無い。
+           ══════════════════════════════════════════════════════ */
+        for (const w of radioWarmups(list[nextIndex(i, list.length)], mode)) {
+          prepareRead(w.text, w.ja
+            ? { clipVoice: JA_VOICE, clipTier: PREMIUM }
+            : undefined)
+        }
         if (!steps.length) {
           /* **読むものが無い語は、待たずに次へ。**「読んだことにして」
              間だけ置くと、無音の時間が延びるだけである。
@@ -337,7 +364,14 @@ export default function WordRadio({
             <label className="wb-formpick radio-pick">
               <span className="sr-only">読み方</span>
               <select value={mode}
-                      onChange={(e) => { setMode(e.target.value); saveRadioMode(e.target.value, where) }}>
+                      onChange={(e) => {
+                        const next = e.target.value
+                        setMode(next); saveRadioMode(next, where)
+                        /* **間も、その読み方のものに持ち替える**(第5.251節)。
+                           持ち替えないと、**「英語だけ」で選んだ 3秒が
+                           「日本語 → 英語」のあいだに化ける** */
+                        setGap(loadRadioGap(where, next))
+                      }}>
                 {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
             </label>
@@ -367,13 +401,14 @@ export default function WordRadio({
           {/* **間の長さ。** 数(秒)は1文字も削らない —— そこが読めないと、
               何を選んでいるのか分からない(CLAUDE.md) */}
           <label className="wb-formpick radio-pick radio-pick--gap">
-            <span className="sr-only">間の長さ</span>
+            <span className="sr-only">{radioGapLabelFor(where, mode)}</span>
             <select value={gap}
                     onChange={(e) => {
                       const ms = Number(e.target.value)
-                      setGap(ms); saveRadioGap(ms, where)
+                      setGap(ms); saveRadioGap(ms, where, mode)
                     }}>
-              {RADIO_GAPS.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+              {radioGapsFor(where, mode)
+                .map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
             </select>
           </label>
         </>
@@ -397,7 +432,7 @@ export default function WordRadio({
             {say === 'you' ? '声に出して言ってください' : 'つぎの英語を思い出してください'}
           </p>
         ) : (
-          <p className={`radio-en${say === 'en' || say === 'chunk' ? ' is-now' : ''}`} lang="en">
+          <p className={`radio-en${say === 'en' ? ' is-now' : ''}`} lang="en">
             {(hidden ? line : null) || radioTextOf(now) || '—'}
           </p>
         )}
