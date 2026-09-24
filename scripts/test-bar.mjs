@@ -3991,8 +3991,12 @@ export default defineConfig({
       return {
         文: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
         訳: document.querySelector('.radio-ja')?.textContent?.trim() ?? '',
-        読み方: [...document.querySelectorAll('.focus-top .radio-pick:not(.radio-pick--gap) select')]
-          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
+        /* **曲の欄を混ぜない**(2026-09-23)。`--gap` だけを外していたので、
+           **曲の題まで「読み方」として数えていた** —— 読み方の数を
+           見ようとして、はじめ赤くなった。曲は `--song` である */
+        読み方: [...document.querySelectorAll(
+          '.focus-top .radio-pick:not(.radio-pick--gap):not(.radio-pick--song) select',
+        )].flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
         間: [...document.querySelectorAll('.focus-top .radio-pick--gap select')]
           .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
         たて: body ? body.scrollHeight - body.clientHeight : 0,
