@@ -352,13 +352,20 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
      原因は指示が「prompt_en にフレーズ」としか言っていなかったこと。
      **形を言葉で決めていなければ、形は決まらない。** */
   vocabulary:
-    '単語。prompt_en に語、prompt_ja に意味と使い方を入れる。'
+    '単語。prompt_en に語、prompt_ja に意味を入れる。'
+    /* **1語ずつのまとまりにする**(第5.254節・2026-09-23 利用者の指定)。
+       note は**由来と使いどころ**。かたまり(`vocab_note`)と同じ書き方に
+       そろえてある —— **同じものを2通りに書かせない** */
+    + '\n- note … **なぜその意味になるのか**(語のイメージの由来)と、'
+    + '使いどころ。日本語で80字以内。**例文はここに書かない**(examples がある)'
     + '\n- **prompt_en は1語**(ハイフンでつながる語は1語と数える)。'
     + '句や文を入れない'
     + '\n- **辞書に載る形**(見出し語)にする。動詞は原形、名詞は単数。'
     + '主語・冠詞・時制を付けない',
   phrase:
     'フレーズ。prompt_en にフレーズ、prompt_ja に意味と使う場面を入れる。'
+    + '\n- note … **なぜその意味になるのか**と、使いどころ。'
+    + '日本語で80字以内。**例文はここに書かない**(examples がある)'
     /* **形を3つに絞る。** 絞らないと、主語付きの平叙文と、
        動詞句と、決まり文句が混ざって並びが読めなくなる */
     + '\n\n**prompt_en は、次の3つのどれかの形にする。ほかの形にしない。**'
@@ -520,8 +527,10 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
 
   // 発音記号は**必須**にする。発音の練習に使う教材なので、
   // 「あったり無かったり」では困る(`strict: true` が形を保証する)
-  vocabulary:      { required: ['prompt_en', 'prompt_ja', 'phonetic'], optional: ['note', 'tag_no'] },
-  phrase:          { required: ['prompt_en', 'prompt_ja', 'phonetic'], optional: ['note', 'tag_no'] },
+  /* **解説(note)は必須**(第5.254節)。利用者の指定が「■意味、解説」なので、
+     **あったり無かったりでは困る**(発音記号を必須にしたのと同じ理由) */
+  vocabulary:      { required: ['prompt_en', 'prompt_ja', 'phonetic', 'note'], optional: ['tag_no'] },
+  phrase:          { required: ['prompt_en', 'prompt_ja', 'phonetic', 'note'], optional: ['tag_no'] },
   /* 日本語 → 英語で言う(0067)。**形は和文英訳とそろえてある** ——
      日本語が prompt_ja、英語が answer。別解は**必ず**出させる */
   vocab_recall:    { required: ['prompt_ja', 'answer'], optional: ['answer_alt', 'note', 'tag_no'] },
@@ -551,6 +560,11 @@ const emitSectionTool = (
      置き直しを頼むことになる(`angle` と同じ作法) */
   chunk: { kinds: ChunkKind[]; min: number; max: number } =
     { kinds: [], min: 5, max: 10 },
+  /* 単語 / フレーズの例文と練習の数(第5.254節)。**画面から送られてくる。**
+     ここで決め打ちにすると、画面の札と食い違う
+     (`chunkKinds` / `angle` とまったく同じ作法)。
+     **届かなければ、欄そのものを出さない** —— 既定は「作らない」側。 */
+  word: { ex: number; min: number; max: number } = { ex: 0, min: 0, max: 0 },
 ) => {
   const fields = SECTION_FIELDS[sectionType] ?? { required: ['answer'], optional: [] }
   const itemProps: Record<string, unknown> = {}
@@ -591,6 +605,55 @@ const emitSectionTool = (
       },
     }
     chunkFields.push('chunk_kind', 'practice')
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     **単語 / フレーズは、1語ずつのまとまりにする**(第5.254節・2026-09-23)
+
+       > 基本的には、単語、またはフレーズ毎に以下のようにまとめます。
+       > ■見出し ■意味、解説 ■練習する3〜6問(作成時に指定)
+       > 基本、例文が小見出しとして3つくらいあってから日→英があるとベスト。
+
+     **「かたまり」とまったく同じ作り**である(`practice` も同じ欄を使う)。
+     違いは**例文が付く**ことだけ。
+     ══════════════════════════════════════════════════════════════ */
+  if ((sectionType === 'vocabulary' || sectionType === 'phrase')
+      && word.ex > 0 && word.max > 0) {
+    itemProps.examples = {
+      type: 'array',
+      description: `その語を使った例文。**${word.ex}問。**`
+        + '\n- en … 例文。**その語をそのまま含める**'
+        + '\n- ja … その訳'
+        + '\n- **場面をばらす。** 同じ言い回しの使い回しにしない'
+        + '\n- ゲストのレベルで声に出せる長さにする(書き言葉にしない)',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['en', 'ja'],
+        properties: {
+          en: { type: 'string', description: '例文(英語)' },
+          ja: { type: 'string', description: 'その訳' },
+        },
+      },
+    }
+    itemProps.practice = {
+      type: 'array',
+      description: `その語を使って言う練習。**${word.min}〜${word.max}問。**`
+        + '\n- ja … 日本語のお題。**その語を使わないと言えないもの**にする'
+        + '\n- en … 解答の英文。**その語を必ずそのまま含める**'
+        + '\n- 1問1文。ゲストのレベルで口に出せる長さにする'
+        + '\n- **例文と同じ文を入れない。** 言い回しも場面もずらす',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['ja', 'en'],
+        properties: {
+          ja: { type: 'string', description: '日本語のお題' },
+          en: { type: 'string', description: '解答の英文' },
+        },
+      },
+    }
+    chunkFields.push('examples', 'practice')
   }
 
   const isPassage = sectionType === 'article' || sectionType === 'dialogue'
@@ -1612,7 +1675,7 @@ const cors = {
  */
 /* **置き直しが要る変更を入れたら、ここを上げる**(第5.230節で上げた)。
    画面は `NEED_GEN_REV` と突き合わせて、古ければ赤く知らせる */
-const FN_REV = '2026-09-23'
+const FN_REV = '2026-09-24'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
@@ -1856,6 +1919,12 @@ Deno.serve(async (req) => {
      届かないときだけ、この窓口の中で辻褄の合う値にする */
   const drillMin = Math.min(Math.max(Number(body.drillMin) || 5, 1), 20)
   const drillMax = Math.min(Math.max(Number(body.drillMax) || 10, drillMin), 20)
+  /* 単語 / フレーズの例文と練習の数(第5.254節)。**画面が決める。**
+     **届かなければ 0** —— 欄そのものを出さないので、
+     古い画面から呼ばれても、これまでどおりの一覧が返るだけである */
+  const wordEx = Math.min(Math.max(Number(body.wordEx) || 0, 0), 10)
+  const wordMin = Math.min(Math.max(Number(body.wordMin) || 0, 0), 20)
+  const wordMax = Math.min(Math.max(Number(body.wordMax) || 0, wordMin), 20)
   // 復習として**必ず入れる語**。これまでの宿題に出て、ゲストが
   // 「知らなかった」と付けたものなど(第5.23節)。
   // 上限を切ってあるのは、指示が長くなりすぎると本来の指定が薄まるため。
@@ -2055,7 +2124,7 @@ Deno.serve(async (req) => {
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       tools: [emitSectionTool(sectionType, isFirst, {
         kinds: chunkKinds, min: drillMin, max: drillMax,
-      }) as unknown as Anthropic.Tool],
+      }, { ex: wordEx, min: wordMin, max: wordMax }) as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: 'emit_section' },
       messages: [{ role: 'user', content: userPrompt + retryNote }],
     })

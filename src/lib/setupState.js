@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0067'
+export const NEWEST_MIGRATION = '0068'
 
 /**
  * その移行が入っているかを見る印。
@@ -146,11 +146,12 @@ export const NEWEST_MIGRATION = '0067'
  * CLAUDE.md が「いちばん悪い壊れ方」と呼んでいるものである。
  */
 export const NEWEST_MARK = {
-  rpc: 'section_types',
-  has: 'vocab_recall',
-  /* **呼び名は、画面に出ているものと同じにする**(2026-09)。
-     演習の名前は「単語を言う」である(`exerciseTypes.js` 1か所) */
-  label: '単語 / フレーズの「単語を言う」(vocab_recall)',
+  /* **列の印**(0068・第5.254節)。単語 / フレーズの例文が入る欄である。
+     **その列を名指しで読む** —— `select('*')` では、列が無くても
+     素通りして「もう入っています」になる(いちばん悪い壊れ方) */
+  table: 'material_items',
+  column: 'examples',
+  label: '単語 / フレーズの「例文」(0068)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */

@@ -22,6 +22,8 @@ import { bodyTextOf, fillableSections } from './materialFill.js'
 /* かたまりの分類と、練習の問数(第5.230節)。**呼び名はあちら1か所**。
    窓口(Deno)はここを読み込めないので、**画面から送る** */
 import { CHUNK_KINDS, DRILL_MAX, DRILL_MIN, chunkDrills } from '../data/chunkKinds.js'
+/* 単語 / フレーズの例文と練習の数(第5.254節)。**数はあちら1か所** */
+import { WORD_EX_COUNT, wordDrillOf, wordExamples } from '../data/exerciseTypes.js'
 import { chunkPlan, needsChunkJa } from './chunkJa.js'
 /* 文法解説(SVOC と修飾要素・0051)。**判断は `grammarNote.js` 1か所** */
 import { grammarItems, grammarPlan, grammarTodo } from './grammarNote.js'
@@ -344,6 +346,10 @@ const cleanItems = (items) =>
          画面は「練習する」を出さない(効かない操作を見せない) */
       const practice = chunkDrills(it)
       if (practice.length && !missingColumns.has('practice')) row.practice = practice
+      /* 単語 / フレーズの例文(0068・第5.254節)。**練習とまったく同じ作法。**
+         そろえ方は `wordExamples()` 1か所、0件なら送らない */
+      const examples = wordExamples(it)
+      if (examples.length && !missingColumns.has('examples')) row.examples = examples
       // カタマリごとの訳(0021)。**文字ではなくオブジェクトなので別に扱う。**
       // {en: 作ったときの英文, ja: [カタマリごとの訳]}
       const chunks = it.chunks
@@ -1020,7 +1026,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-23'
+export const NEED_GEN_REV = '2026-09-24'
 
 /**
  * **窓口が古いときに、利用者へ頼むこと**(第5.249節)。
@@ -1168,6 +1174,10 @@ export async function generateSection({
   sectionType, count = 10, topic, topics = [], level, industry = '',
   isFirst = false, avoid = [], genre = '', scene = '', subject = '', context = '',
   reviewWords = [], speakers = undefined,
+  /* 単語 / フレーズの「日本語 → 英語」を何問にするか(第5.254節)。
+     **作成時にトレーナーがえらぶ**(3〜6)。
+     知らない値は既定に落とす(`wordDrillOf()` 1か所) */
+  wordDrill = undefined,
   // **被らないための2つ**(0046)。`avoid` は英文、こちらは話である
   avoidTopics = [], angle = '',
 }) {
@@ -1200,6 +1210,13 @@ export async function generateSection({
        送らなければ窓口は分類の欄そのものを出さない ——
        **既定は「作らない」側**である(CLAUDE.md)。 */
     chunkKinds: CHUNK_KINDS.map((k) => ({ id: k.id, label: k.label, what: k.what })),
+    /* 単語 / フレーズの例文と練習の数(第5.254節)。**画面が決める。**
+       窓口に書き写すと、数を変えた日に置き直しを頼むことになる
+       (`chunkKinds` とまったく同じ作法)。
+       **届かなければ窓口は欄を出さない** —— 既定は「作らない」側 */
+    wordEx: WORD_EX_COUNT,
+    wordMin: wordDrillOf(wordDrill),
+    wordMax: wordDrillOf(wordDrill),
     /* 練習の問数。**下限と上限も `chunkKinds.js` 1か所**から来る */
     drillMin: DRILL_MIN, drillMax: DRILL_MAX,
   })
@@ -1845,12 +1862,23 @@ export { normEn }
  * その設問は「前に出した文」である。穴埋めの提示文は「___」が
  * 空白に潰れるため、解答文と同じ形になる。
  */
+/* **例文と練習の英文も数に入れる**(第5.254節)。
+   単語 / フレーズは1語ずつのまとまりになり、**英文はその中にもある。**
+   ここに入れないと、**あとの「ランダムで出題」が同じ文を作り直す**
+   (利用者の指定「これらの問題は始めの問題とは被らない内容とすること」)。
+   **拾い方はここ1か所** —— 作る側と照合する側で書き写さない */
+const insideEn = (item) => [
+  ...(Array.isArray(item?.practice) ? item.practice : []).map((d) => d?.en),
+  ...(Array.isArray(item?.examples) ? item.examples : []).map((x) => x?.en),
+]
+
 export const sentencesOf = (item) =>
-  [item?.prompt_en, item?.audio_text, item?.answer].map(normEn).filter(Boolean)
+  [item?.prompt_en, item?.audio_text, item?.answer, ...insideEn(item)]
+    .map(normEn).filter(Boolean)
 
 /** 設問から、そのまま照合に出せる生の英文を取り出す */
 export const rawSentencesOf = (item) =>
-  [item?.prompt_en, item?.audio_text, item?.answer]
+  [item?.prompt_en, item?.audio_text, item?.answer, ...insideEn(item)]
     .map((v) => String(v ?? '').trim()).filter(Boolean)
 
 /**

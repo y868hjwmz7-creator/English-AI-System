@@ -17,7 +17,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  countLabel, countUnit, exerciseType, isChunkSection, isPassageSection,
+  countLabel, countUnit, exerciseType, isCardSection, isPassageSection,
   noteIsAnswer, sectionLabel,
 } from '../data/exerciseTypes.js'
 import AiNote from './AiNote.jsx'
@@ -738,12 +738,22 @@ export default function LessonView({
    */
   const [chunkItems, setChunkItems] = useState(() => new Set())
   const [drillItems, setDrillItems] = useState(() => new Set())
+  /* 例文(第5.254節・2026-09-23 利用者の指定「例文も折りたたみ」)。
+     **練習とは別に覚える** —— 例文を見たまま練習を開きたい */
+  const [exItems, setExItems] = useState(() => new Set())
   const chunkOpen = (k) => chunkItems.has(k)
   const toggleChunk = (k, on) => {
     const next = new Set(chunkItems)
     if (on) next.add(k)
     else next.delete(k)
     setChunkItems(next)
+  }
+  const exOpen = (k) => exItems.has(k)
+  const toggleEx = (k, on) => {
+    const next = new Set(exItems)
+    if (on) next.add(k)
+    else next.delete(k)
+    setExItems(next)
   }
   /** その かたまり の、解答を開けてある問の番号 */
   const drillsShown = (k) => {
@@ -1915,8 +1925,9 @@ export default function LessonView({
     const secNoteIsAnswer = noteIsAnswer(sec.exercise_type)
     /* **かたまり + 練習の形で描くか**(第5.230節)。
        **ここで `=== 'vocab_note'` と書かない** —— 判断は
-       `exerciseTypes.js` の `isChunkSection()` 1か所(CLAUDE.md) */
-    const secIsChunk = isChunkSection(sec.exercise_type)
+       `exerciseTypes.js` の `isCardSection()` 1か所(CLAUDE.md)。
+       単語 / フレーズも同じカードで出す(第5.254節) */
+    const secIsChunk = isCardSection(sec.exercise_type)
     const secCast = castVoices(voices, (sec.items ?? []).map((it) => it.speaker))
     const secClipCast = castClipSpeakers(
       (sec.items ?? []).map((it) => it.speaker), material.voiceIds,
@@ -2066,6 +2077,8 @@ export default function LessonView({
                       ) : null}
                       open={chunkOpen(k(it, i))}
                       onOpen={(on) => toggleChunk(k(it, i), on)}
+                      exOpen={exOpen(k(it, i))}
+                      onExOpen={(on) => toggleEx(k(it, i), on)}
                       shown={drillsShown(k(it, i))}
                       onShow={(n) => toggleDrill(k(it, i), n)}
                     />

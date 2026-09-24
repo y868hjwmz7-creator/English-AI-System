@@ -52,13 +52,27 @@
  * @param audio    読み上げのボタン(呼ぶ側が組む)
  */
 import { chunkDrills, chunkKindLabel } from '../data/chunkKinds.js'
+/* 例文(第5.254節)。**そろえ方はあちら1か所**(`chunkDrills` と同じ作法) */
+import { wordExamples } from '../data/exerciseTypes.js'
 
 export default function ChunkCard({
   item, open = false, onOpen = null,
   shown = null, onShow = null,
   en = null, source = null, audio = null,
+  /**
+   * **例文を開いているか**(第5.254節・2026-09-23 利用者の指定)。
+   *
+   *   > 基本、例文が小見出しとして3つくらいあってから日→英があるとベスト。
+   *   > 例文は折りたたみ式に。日→英も折りたたみ。
+   *
+   * **渡さなければ「例文」を出さない**(`onOpen` と同じ作法)。
+   * かたまりには例文が無い(本文の1文がその役をしている)ので、
+   * あちらはこれまでどおり1つも変わらない。
+   */
+  exOpen = false, onExOpen = null,
 }) {
   const drills = chunkDrills(item)
+  const examples = wordExamples(item)
   /* **当てられなければ黙る**(CLAUDE.md)。分類が入っていない
      古い教材で「その他」と書くと、無いものを在るように見せる */
   const kind = chunkKindLabel(item?.chunk_kind)
@@ -89,6 +103,15 @@ export default function ChunkCard({
           練習の一覧は、このボタンの**下**に出る */}
       <div className="chunk-acts no-print">
         {audio}
+        {/* **例文が先、練習があと**(第5.254節・利用者の指定の順)。
+            **効かない操作を見せない** —— 例文が1つも無ければ出さない */}
+        {!!examples.length && onExOpen && (
+          <button type="button" className="btn btn--small btn--ghost chunk-ex-go"
+                  aria-expanded={exOpen}
+                  onClick={() => onExOpen(!exOpen)}>
+            {exOpen ? '例文を閉じる' : `例文(${examples.length})`}
+          </button>
+        )}
         {/* **効かない操作を見せない。** 練習が1問も無ければ出さない */}
         {!!drills.length && onOpen && (
           <button type="button" className="btn btn--small btn--primary chunk-go"
@@ -98,6 +121,19 @@ export default function ChunkCard({
           </button>
         )}
       </div>
+      {/* ── 例文(第5.254節)────────────────────────────────
+          **練習とまったく同じ作法** —— 描いてから隠す。
+          畳んだまま印刷したときに例文が消えないようにする */}
+      {!!examples.length && (
+        <ul className={`chunk-examples${exOpen ? '' : ' is-closed'}`}>
+          {examples.map((x, i) => (
+            <li key={i} className="chunk-example">
+              <span className="chunk-example-en" lang="en">{x.en}</span>
+              <span className="chunk-example-ja">{x.ja}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {/* ── 練習(日→英)────────────────────────────────────
 
           **描いてから隠す。閉じているあいだも描く**(2026-09 利用者の指定

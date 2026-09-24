@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   50行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   51行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -222,4 +222,10 @@ from (
             where conname = 'material_sections_type_check'
               and pg_get_constraintdef(oid) like '%vocab_recall%'
               and pg_get_constraintdef(oid) like '%phrase_recall%'), 49
+  -- **列そのものを見る**(0068)。表は前からあるので、
+  -- 表の有無では分からない —— **その欄が在るか**で見る
+  union all select '0068 単語 / フレーズの「例文」(pending_matome.sql)',
+    exists (select 1 from information_schema.columns
+            where table_schema = 'public' and table_name = 'material_items'
+              and column_name = 'examples'), 50
 ) t order by 順;

@@ -6764,12 +6764,15 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      新しい移行にそろっている」が、`supabase/migrations/` の
      いちばん大きい番号と突き合わせている。
      **同じことをする見張りを2つ置かない**(CLAUDE.md) */
-  /* **0067 は、制約の一覧に値を2つ足すだけ。** 表も列も関数も増えない ——
-     関数の有無で見ると、その関数を作った 0063 の時点で
-     **貼る前でも「もう入っています」**になる。
-     だから `section_types()` に訊き、**値が返ってくるか**を印にする */
-  ok(/rpc: 'section_types'/.test(setup) && /has: 'vocab_recall'/.test(setup),
-    '0067 … 印は section_types() が vocab_recall を返すか(値だけ増える移行だから)')
+  /* **0068 は、列を1つ足すだけ。** 表は前からある ——
+     表の有無で見ると、**貼る前でも「もう入っています」**になる。
+     だから `material_items.examples` を**名指しで読む**のを印にする
+     (0064 と同じ作法・第5.254節)。
+
+     0067(制約に値を2つ足す)は、まとめた1つと `check.sql` の側で
+     そのまま見張り続ける —— **消していない** */
+  ok(/table: 'material_items'/.test(setup) && /column: 'examples'/.test(setup),
+    '0068 … 印は material_items.examples の列そのもの(列だけ増える移行だから)')
   ok(!/row: \{ column/.test(setup),
     '0066 … 前の印(行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')

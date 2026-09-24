@@ -36,7 +36,7 @@ import Phonetic from './Phonetic.jsx'
 import { cefrLabel } from '../data/cefr.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { industryLabel } from '../data/industries.js'
-import { countLabel, exerciseType, isChunkSection, sectionLabel } from '../data/exerciseTypes.js'
+import { countLabel, exerciseType, isCardSection, sectionLabel } from '../data/exerciseTypes.js'
 import { chunkDrills } from '../data/chunkKinds.js'
 import ChunkCard from './ChunkCard.jsx'
 import { kindLabel } from '../lib/materials.js'
@@ -107,7 +107,7 @@ export default function MaterialBody({
                         ここから出る紙は**解答つきの控え**である
                         (問題のみの紙はゲストの画面から刷る)。
                         押すもの(`.chunk-acts`)は `no-print` なので出ない */}
-                    {isChunkSection(sec.exercise_type) ? (
+                    {isCardSection(sec.exercise_type) ? (
                       <ChunkCard
                         item={it}
                         en={<EnglishText text={it.prompt_en} textJa={it.prompt_ja}

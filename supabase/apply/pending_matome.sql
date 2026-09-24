@@ -4814,6 +4814,19 @@ alter table public.material_sections
     'vocab_recall', 'phrase_recall'
   ));
 
+-- ────────────────────────────────────────────────────────────────
+-- 0068 単語 / フレーズに「例文」を持たせる(第5.254節)
+--
+--   `material_items` に `examples` という欄を1つ足すだけです。
+--   **表も行も増えません。** 古い教材では空のままで、
+--   画面は「例文」の札を出しません。
+
+alter table public.material_items
+  add column if not exists examples jsonb;
+
+comment on column public.material_items.examples is
+  '単語 / フレーズの例文(0068)。[{"en": 英文, "ja": 訳}] を3つほど。';
+
 -- ============================================================================
 -- 完了。
 --

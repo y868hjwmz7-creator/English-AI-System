@@ -680,6 +680,19 @@ export const isChunkSection = (typeId) =>
   (exerciseType(typeId)?.fields ?? []).includes('chunk_kind')
 
 /**
+ * **1語ずつのカードで出す段か**(第5.254節・2026-09-23 利用者の指定)。
+ *
+ *   > 基本的には、単語、またはフレーズ毎に以下のようにまとめます。
+ *   > ■見出し ■意味、解説 ■練習する3〜6問
+ *
+ * かたまり(`vocab_note`)と、単語 / フレーズがこれに当たる。
+ * **画面の中で `exercise_type === 'vocabulary'` と書かない**
+ * —— 置く場所の数だけ食い違う(CLAUDE.md)。
+ */
+export const isCardSection = (typeId) =>
+  isChunkSection(typeId) || WORD_SECTIONS.includes(typeId)
+
+/**
  * **`note` が「答えの側」に来る演習かどうか。**
  *
  * ディスカッションと想定される質問には**正解が無い**ので `answer` を持たない
@@ -943,6 +956,52 @@ export const amountsFor = (typeId) => {
  * (窓口を配置し直すまでは、20問より多くは作られない)。
  */
 export const MAX_ITEMS = 30
+
+/* ══════════════════════════════════════════════════════════════════
+   **単語 / フレーズは、1語ずつのまとまりにする**(第5.254節・2026-09-23)
+
+     > 基本的には、単語、またはフレーズ毎に以下のようにまとめます。
+     > ■見出し ■意味、解説 ■練習する3〜6問 (作成時に指定)
+     >
+     > 基本、例文が小見出しとして3つくらいあってから日→英があるとベスト。
+     > 例文は折りたたみ式に。日→英も折りたたみ。
+     >
+     > そして、次のページで全てのフレーズをランダムで出題。
+     > 形式は日→英の英作文。問題数は各フレーズ3-7問。
+     > これらの問題は始めの問題とは被らない内容とすること
+
+   **数はここ1か所。** 画面の札にも、窓口にも書き写さない ——
+   書き写すと、片方だけ古くなる(CLAUDE.md)。
+   ══════════════════════════════════════════════════════════════════ */
+
+/** 1語あたりの例文。**「3つくらい」** */
+export const WORD_EX_COUNT = 3
+
+/** 1語あたりの「日本語 → 英語」。**作成時にこの中からえらぶ** */
+export const WORD_DRILLS = [
+  { id: 3, label: '3問' },
+  { id: 4, label: '4問' },
+  { id: 5, label: '5問' },
+  { id: 6, label: '6問' },
+]
+
+/** えらばなかったときの数。**まん中**(3〜6 の) */
+export const DEFAULT_WORD_DRILL = 4
+
+/** 知らない値は既定に落とす(行き止まりを作らない) */
+export const wordDrillOf = (n) => (
+  WORD_DRILLS.some((d) => d.id === Number(n)) ? Number(n) : DEFAULT_WORD_DRILL
+)
+
+/**
+ * **例文をそろえる**(第5.254節)。`chunkDrills()` とまったく同じ作法 ——
+ * **片方しか無いものは落とす**(英文だけでは訳が出ず、訳だけでは読めない)。
+ * **0件なら空を返す**ので、呼ぶ側は「例文」の札そのものを出さない。
+ */
+export const wordExamples = (item) => (Array.isArray(item?.examples) ? item.examples : [])
+  .map((x) => ({ en: String(x?.en ?? '').trim(), ja: String(x?.ja ?? '').trim() }))
+  .filter((x) => x.en && x.ja)
+  .slice(0, WORD_EX_COUNT + 2)
 
 /**
  * **その選択肢で、実際に何問になるか。**(第5.248節)
