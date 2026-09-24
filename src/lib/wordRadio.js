@@ -482,13 +482,13 @@ export function radioSteps(row, modeId = DEFAULT_RADIO_MODE, gapMs = DEFAULT_RAD
  */
 export const hidesAnswer = (modeId) => modeId === MODE_SAY.id
 
-/** 押す前に、何が起きるかを1行で言う(`scopeLead` と同じ作法) */
-export function radioLead(modeId = DEFAULT_RADIO_MODE) {
-  if (modeId === MODE_SAY.id) {
-    return '訳が読まれます。間のあいだに声に出して言い、そのあと答えが鳴ります。'
-  }
-  return '英語だけを2回ずつ読みます。意味は画面に出ます。'
-}
+/* **押す前の1行(`radioLead`)は、まるごと消した**(第5.252節)。
+
+     > 下の説明と曲名を消して
+
+   画面に出す先が無くなったものを、道具だけ残さない ——
+   次に見た人が「まだ使うのかもしれない」と読む
+   (`duckBgm` / `chunkSteps` と同じ作法)。 */
 
 /**
  * **その1つを鳴らすのに、どの音声が要るか**(第5.251節)。

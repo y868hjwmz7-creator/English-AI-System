@@ -38,7 +38,7 @@ import { CloseIcon, PlayIcon, StopIcon } from './Icons.jsx'
 import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
 import { JA_VOICE } from '../data/clipVoices.js'
 import { PREMIUM } from '../lib/voiceTier.js'
-import { nowPlaying, startBgm, stopBgm } from '../lib/bgm.js'
+import { startBgm, stopBgm } from '../lib/bgm.js'
 /* **どの曲を流すか**(第5.194節)。選び方も文言も、あちら1か所が持つ */
 import {
   bgmChoices, bgmPickOf, bgmPlan, loadBgmPick, saveBgmPick,
@@ -46,7 +46,7 @@ import {
 import {
   bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
   hidesAnswer,
-  nextIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf, radioLead,
+  nextIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf,
   radioModesFor,
   radioSteps, radioTextOf, radioWarmups, saveRadioGap, saveRadioMode,
 } from '../lib/wordRadio.js'
@@ -111,7 +111,6 @@ export default function WordRadio({
   const [open, setOpen] = useState(false)
   const [say, setSay] = useState(null)   // いま読んでいるもの('en' / 'ja')
   const [on, setOn] = useState(true)     // 鳴らしているか
-  const [song, setSong] = useState(null) // いま鳴っている曲の題
   /** 止めるための印。**画面を離れたら、そこで終わる**(止まる条件を持たせる) */
   const liveRef = useRef(0)
   /**
@@ -158,14 +157,13 @@ export default function WordRadio({
      混ぜるかどうかも、あちらが決める —— 1曲だけのときに順を混ぜても
      意味がないので、**画面で書き分けない** */
   useEffect(() => {
-    let alive = true
     if (bgmPlaysIn(loadBgmPlace(), 'radio')) {
       const 計画 = bgmPlan(tracks, 選んでいる)
-      startBgm(計画.tracks, { shuffle: 計画.shuffle }).then((started) => {
-        if (alive && started) setSong(nowPlaying()?.title ?? null)
-      })
+      /* **題は覚えない**(第5.252節)。画面に出さなくなったので、
+         覚えておく先がどこにも無い */
+      startBgm(計画.tracks, { shuffle: 計画.shuffle })
     }
-    return () => { alive = false; stopBgm() }
+    return () => { stopBgm() }
   }, [tracks, 選んでいる])
 
   /**
@@ -303,7 +301,6 @@ export default function WordRadio({
         }
         if (!alive()) return
         setSay(null)
-        setSong(nowPlaying()?.title ?? null)
         /* 「次へ」で移されていたら、**語のあいだの間は置かない。**
            押したのに 0.9 秒だまるのは、効いていないように見える */
         if (atRef.current !== i) continue
@@ -466,13 +463,21 @@ export default function WordRadio({
             </button>
           )}
         </div>
-        <p className="card-hint radio-lead">
-          {radioLead(mode)}
-          <strong>覚えた・まだ の記録は動きません。</strong>
-        </p>
-        {/* **いま鳴っている曲を出す。** 何が流れているか分からないと、
-            曲を入れ替えたくなったときに探せない */}
-        {song && <p className="card-hint radio-song">♪ {song}</p>}
+        {/* ══════════════════════════════════════════════════════
+            **説明書きと曲名は置かない**(第5.252節・2026-09-23 利用者の指定)
+
+              > 下の説明と曲名を消して
+
+            ここには2つ出ていた。
+            ①この読み方で何が起きるかの文(`radioLead`)
+            ②いま鳴っている曲の題
+
+            **どちらも「押せば分かる」ことである**
+            (共通ルール「余計な説明書きは全て排除」)。
+            曲は上の欄で選ぶので、**選んだものが在るところに在る。**
+
+            **消したのは画面の文だけ**で、鳴らす仕組みは1つも触っていない。
+            ══════════════════════════════════════════════════════ */}
       </div>
     </FocusFrame>
   )

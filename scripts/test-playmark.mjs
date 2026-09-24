@@ -121,7 +121,7 @@ import {
   RADIO_GAPS, RADIO_MODES, SAY_GAPS,
   bgmPlaysIn, hidesAnswer,
   loadRadioGap,
-  nextIndex, radioGapsFor, radioGapsOf, radioJaOf, radioLead, radioModeOf,
+  nextIndex, radioGapsFor, radioGapsOf, radioJaOf, radioModeOf,
   radioModesFor, radioSteps, radioTextOf, radioWarmups, saveRadioGap,
 } from '../src/lib/wordRadio.js'
 import {
@@ -6012,7 +6012,10 @@ console.log('\nスピーチ練習(0054)')
     ['SpeechBoard.jsx', '書いた原稿はトレーナーに届いています', '黙って消さない'],
     ['MaterialBody.jsx', '{sec.instruction}', '教材の中身'],
     ['MaterialBody.jsx', '{it.note}', '教材の中身'],
-    ['WordRadio.jsx', '覚えた・まだ の記録は動きません', '黙って動かさない'],
+    /* **聞き流しの但し書きは消えた**(第5.252節・2026-09-23 利用者の指定
+       「下の説明と曲名を消して」)。あの画面には「覚えた / まだ」の札が
+       1つも無いので、**動くと思わせるものが、そもそも出ていない。**
+       残っているかを見張ると、消した指定のほうが破れる */
   ]
   for (const [f, text, why] of keep) {
     const src = readS(`src/components/${f}`)
@@ -7181,12 +7184,29 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(hidesAnswer('say'), '言う練習では、答えを先に見せない')
   ok(!hidesAnswer('en'), '**聞き流し(英語だけ)では、これまでどおり見せる**')
 
-  // ── 押す前に、何が起きるかを言う
-  const leads = ['en', 'say'].map((m) => radioLead(m))
-  ok(new Set(leads).size === leads.length, '読み方ごとに、違う説明が出る')
-  ok(leads.every((t) => t.length > 10), 'どの読み方にも説明がある(黙って始めない)')
-
   const wr = noNote(readD('src/lib/wordRadio.js'))
+  /* ══════════════════════════════════════════════════════════
+     **説明書きと曲名は置かない**(第5.252節・2026-09-23 利用者の指定)
+
+       > 下の説明と曲名を消して
+
+     共通ルール「余計な説明書きは全て排除」。**道具ごと消す**ので、
+     画面の側とあちらの側の**両方**を見る —— 片方だけだと、
+     文を戻しても緑のままになる。 */
+  ok(!/radioLead/.test(wr), '押す前の1行(`radioLead`)は、道具ごと消えている')
+  {
+    const rd = noNote(readD('src/components/WordRadio.jsx'))
+    ok(!/radio-lead|radioLead\(/.test(rd), '聞き流し … 下の説明書きを出していない')
+    ok(!/覚えた・まだ の記録/.test(rd), '聞き流し … 記録の但し書きも出していない')
+    ok(!/radio-song/.test(rd), '聞き流し … 曲の題を出していない')
+    ok(!/nowPlaying/.test(rd), '聞き流し … 題を覚えておく道も残っていない')
+    /* **「出ない」だけを見ない。** 鳴らす仕組みまで落としていないこと */
+    ok(/startBgm\(計画\.tracks/.test(rd) && /stopBgm\(\)/.test(rd),
+      '聞き流し … 曲そのものは、これまでどおり鳴る')
+    ok(/radio-pick--song/.test(rd), '聞き流し … 曲をえらぶ欄は残っている')
+  }
+  ok(!/\.radio-lead|\.radio-song/.test(readD('src/styles.css')),
+    '当たる先の無い見た目の決まりも残していない')
   /* **道具ごと消えているか**(第5.251節)。一覧から外すだけだと、
      次に見た人が「まだ使うのかもしれない」と読む
      (`duckBgm` を道具ごと消したのと同じ作法) */
@@ -7357,7 +7377,6 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   // ── 画面が呼んでいるか
   const rj = noNote(readD('src/components/WordRadio.jsx'))
   ok(/hidesAnswer\(mode\)/.test(rj), '画面が `hidesAnswer()` を呼んでいる(判断を書き写さない)')
-  ok(/radioLead\(mode\)/.test(rj), '説明も読み方から出している')
   ok(/setLine\(st\.text\)/.test(rj),
     '**鳴っているものを、そのまま画面に出す**(かたまりのときはかたまり)')
   ok(/setLine\(null\); setOpen\(false\)/.test(rj),
