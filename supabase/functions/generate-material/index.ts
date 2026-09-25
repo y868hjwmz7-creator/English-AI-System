@@ -439,6 +439,27 @@ const ITEM_FIELDS: Record<string, { type: string; description: string }> = {
   audio_text: { type: 'string', description: '読み上げる英文' },
   note:       { type: 'string', description: '1問ごとの補足' },
   speaker:    { type: 'string', description: '話す人(名前と肩書き。例: Sarah (Product Manager))' },
+  /* ══════════════════════════════════════════════════════════════
+     **性別は、名前から当てない。言わせる**(第5.255節・2026-09-25)
+
+       > 今だに会話や会議の登場人物と、音声の性別が合わないことが
+       > 多いです。そろそろちゃんと直してください。何度やるんですか
+
+     仕組みは前からあった(`voiceOrder.js`)。**入力が弱かった。**
+     画面は**名前から性別を当てて**並べ替えていたが、当てるのは
+     110 語の閉じた一覧で、**一覧に無い名前は `unknown` → 何もしない。**
+     AI は名前を自由に付けるので、そこに落ちたぶんが**半々でずれる。**
+
+     **頼むのではなく、道具の形で強制する**(CLAUDE.md)。
+     欄にすれば `strict: true` が「必ず書く」ことを保証する。
+     ══════════════════════════════════════════════════════════════ */
+  speaker_gender: {
+    type: 'string',
+    description: 'その人の性別。**読み上げの声がこれに合わせて当たる。**'
+      + '名前の見た目ではなく、**役として決めたほう**を入れる。'
+      + '同じ人の発言には、毎回同じものを入れる',
+    enum: ['male', 'female'],
+  },
   tag_no:     { type: 'integer', description: 'その問がどの弱点か(1から始まる番号)' },
   // 発音記号(0020)。**単語・フレーズの教材だけ。**
   // 発音の練習をする教材なのに、どう読むのかが書いていなかった
@@ -503,7 +524,9 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
 
   // 本文。**英語と訳が必ず要る。** これが無いと音声も出せない
   article:         { required: ['prompt_en', 'prompt_ja'], optional: ['phrases'] },
-  dialogue:        { required: ['speaker', 'prompt_en', 'prompt_ja'], optional: ['phrases'] },
+  /* **`speaker_gender` は必須**(第5.255節)。任意にすると、
+     書かれなかったときに**また名前から当てる**ことになる */
+  dialogue:        { required: ['speaker', 'speaker_gender', 'prompt_en', 'prompt_ja'], optional: ['phrases'] },
   /* 内容の理解。**訳も必須にする**(0035・2026-09 利用者の指定)。
      必須にしないと、そのときの気分で入ったり入らなかったりする
      (発音記号を必須にしたのと同じ理由)。
@@ -1675,7 +1698,7 @@ const cors = {
  */
 /* **置き直しが要る変更を入れたら、ここを上げる**(第5.230節で上げた)。
    画面は `NEED_GEN_REV` と突き合わせて、古ければ赤く知らせる */
-const FN_REV = '2026-09-24'
+const FN_REV = '2026-09-25'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {

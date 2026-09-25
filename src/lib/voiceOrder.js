@@ -36,11 +36,15 @@
  *   出てくる声の顔ぶれは1人も変わらないので、トレーナーが指名した声は
  *   **必ず全員そのまま使われる。** 変わるのは「誰がどれを読むか」だけである。
  *
- * 【当てられないものは、当てない】
- *   名前からの性別は `guessGender()` の**閉じた一覧**で見る。
- *   一覧に無い名前は `unknown` で、**そこは何もしない**
- *   (`chunker.js` の `SURE_PREPS` と同じ考え方 ——
- *   **見落としは今までどおりだが、取り違えは害になる**)。
+ * 【当てない。言わせる】(第5.255節・2026-09-25)
+ *   はじめは名前から当てていた(`guessGender()` の閉じた一覧)。
+ *   **一覧に無い名前は `unknown` で、そこは何もしない**ので、
+ *   AI が一覧の外の名前を付けたぶんが**まるごとずれ続けた。**
+ *   直す仕組みを入れておきながら、**入力の側が弱かった。**
+ *
+ *   いまは窓口が `speaker_gender` を必ず書く(`strict: true` が保証する)。
+ *   **言われたほうを先に見る。** 当てるのは、
+ *   言われていないとき(古い教材・古い窓口)だけである。
  *
  * 【いつ効くか】
  *   **発行するときに1回だけ。** そのとき保存する `voice_ids` の並びを
@@ -86,7 +90,7 @@ export function distinctSpeakers(speakers) {
  *        声 id → 性別(名簿を引く。**この関数は名簿を持たない**)
  * @returns {Array<string>} 並べ替えた声。**入れ替えないときは元の配列そのもの**
  */
-export function orderVoicesByNames(voiceIds, speakers, genderOfId) {
+export function orderVoicesByNames(voiceIds, speakers, genderOfId, saidGender = null) {
   const ids = Array.isArray(voiceIds) ? voiceIds : []
   // **2人に満たなければ、入れ替えようがない**(行き止まりを作らない)
   if (ids.length < 2) return ids
@@ -94,9 +98,27 @@ export function orderVoicesByNames(voiceIds, speakers, genderOfId) {
   const names = distinctSpeakers(speakers)
   if (names.length < 2) return ids
 
-  /* 名前から確かに読める性別だけを見る。**`unknown` は何もしない。**
-     2人以上そろっていなければ、そもそも入れ替える根拠がない */
-  const want = names.slice(0, ids.length).map((n) => guessGender(n))
+  /* ══════════════════════════════════════════════════════════════
+     **まず、言われたほうを見る**(第5.255節・2026-09-25 利用者の指摘)
+
+       > 今だに会話や会議の登場人物と、音声の性別が合わないことが多いです。
+       > そろそろちゃんと直してください。何度やるんですか
+
+     ここは**名前から当てて**いた。当てるのは 110 語の閉じた一覧で、
+     **一覧に無い名前は `unknown` → 何もしない**(下の行で引き返す)。
+     AI は名前を自由に付けるので、そこに落ちたぶんが**半々でずれる。**
+     「見落としは今までどおり」と書いたが、**見落としがそのまま不具合**
+     だった —— 直す仕組みを入れておきながら、入力の側が弱かった。
+
+     **だから当てない。窓口に言わせる**(`speaker_gender`)。
+     言われていれば、名前が一覧に在ろうが無かろうが関係ない。
+     **言われていないとき(古い教材・古い窓口)だけ、これまでどおり当てる。**
+     ══════════════════════════════════════════════════════════════ */
+  const want = names.slice(0, ids.length).map((n) => {
+    const said = saidGender?.(n)
+    if (said === 'male' || said === 'female') return said
+    return guessGender(n)
+  })
   if (want.filter((g) => g === 'male' || g === 'female').length < 2) return ids
 
   /* いま当たっている声の性別。名簿に無い声は空にして**落とさない** ——

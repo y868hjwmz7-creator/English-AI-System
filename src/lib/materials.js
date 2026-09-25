@@ -1026,7 +1026,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-24'
+export const NEED_GEN_REV = '2026-09-25'
 
 /**
  * **窓口が古いときに、利用者へ頼むこと**(第5.249節)。

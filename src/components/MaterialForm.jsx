@@ -69,6 +69,9 @@ import {
    窓口へ性別を渡してはいたが、**そのあと一度も確かめていなかった。**
    算段は `voiceOrder.js` 1か所(素の node で確かめられる形にしてある) */
 import { orderVoicesByNames } from '../lib/voiceOrder.js'
+/* 話す人の鍵(第5.255節)。** とまったく同じ数え方**
+   でなければ、直した並びが別の人に当たる */
+import { speakerKey } from '../lib/voiceCast.js'
 import { collectReviewWords, loadMyWordbook, normWord } from '../lib/vocab.js'
 /* **文型ドリルで使う語を、単語帳から絞って指定する**(2026-09 利用者の指定)。
      > 文型トレーニングに、どの単語帳からどのレベルのどの品詞を使用するか、
@@ -1459,16 +1462,28 @@ export default function MaterialForm({
    * トレーナーが指名した声は必ず全員そのまま使われる。
    * 名前から性別が読めないときは、何もしない。
    */
-  const orderedCast = () => (
-    isDialogueKind(kind)
-      ? orderVoicesByNames(
-        cast,
-        (sections.find((sec) => isPassageSection(sec.exercise_type))?.items ?? [])
-          .map((it) => it.speaker),
-        (id) => findVoice(id)?.gender,
-      )
-      : cast
-  )
+  const orderedCast = () => {
+    if (!isDialogueKind(kind)) return cast
+    const items = sections.find((sec) => isPassageSection(sec.exercise_type))?.items ?? []
+    /* **窓口が言ってきた性別**(第5.255節)。名前から当てない ——
+       当てる一覧は 110 語しか無く、**そこに無い名前はまるごと素通り**
+       していた(それが「何度やっても直らない」の正体である)。
+       **同じ人に違うものが来たら、先に出たほうを採る**
+       (1人に2つの性別を持たせない) */
+    const said = new Map()
+    for (const it of items) {
+      const k = speakerKey(it?.speaker)
+      const g = it?.speaker_gender
+      if (!k || said.has(k)) continue
+      if (g === 'male' || g === 'female') said.set(k, g)
+    }
+    return orderVoicesByNames(
+      cast,
+      items.map((it) => it.speaker),
+      (id) => findVoice(id)?.gender,
+      (name) => said.get(name) ?? null,
+    )
+  }
 
   /**
    * 保存する声の並びに、**読み方を付ける**(第5.196節)。

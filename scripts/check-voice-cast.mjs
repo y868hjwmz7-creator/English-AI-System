@@ -39,6 +39,8 @@ import {
 import { wholeMark } from '../src/lib/wholeAudio.js'
 import { SPEAK_MAX, speakChunks } from '../src/lib/speakChunks.js'
 import { orderVoicesByNames } from '../src/lib/voiceOrder.js'
+/* 名前から当てるほう(第5.255節)。**一覧の外の名前で測る**ために要る */
+import { guessGender } from '../src/lib/voiceCast.js'
 
 let bad = 0
 const ok = (s) => console.log(`✓ ${s}`)
@@ -1282,6 +1284,93 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   if (orderVoicesByNames(ids, ['Mika (Agent)', 'Speaker B (y)'], gOf) !== ids) {
     ng('1人しか読めないのに並びを変えている')
   } else ok('読める名前が1人だけなら、動かさない')
+
+  /* ══════════════════════════════════════════════════════════════
+     **⑥ 一覧に無い名前でも、言われた性別で並ぶ**(第5.255節・2026-09-25)
+
+       > 今だに会話や会議の登場人物と、音声の性別が合わないことが
+       > 多いです。そろそろちゃんと直してください。何度やるんですか
+
+     **ここまでの①〜④は、ずっと緑だった。** 見ていたのが
+     **一覧に載っている名前ばかり**だったからである
+     (`Mika` も `Kenji` も一覧の中にいる)。
+     AI は名前を自由に付けるので、**一覧の外の名前が本番では普通に出る。**
+     そこが `unknown` に落ち、④「何もしない」がそのまま**不具合**になる。
+
+     **いちばん危ない形を、検証の中に必ず置く**(CLAUDE.md)。
+     ══════════════════════════════════════════════════════════════ */
+  {
+    // **どちらも `guessGender()` の一覧に無い名前**(ここが肝)
+    const 外 = ['Takumi (Sales)', 'Elise (Buyer)']
+    if (guessGender(外[0]) !== 'unknown' || guessGender(外[1]) !== 'unknown') {
+      ng('検証の名前が一覧に載ってしまった',
+        '**一覧の外の名前**で見ないと、この穴は測れない')
+    } else ok('検証に使う名前は、名前からは読めない(いちばん危ない形)')
+
+    // **言われていなければ、これまでどおり何もしない**(「出ない」側)
+    if (orderVoicesByNames(ids, 外, gOf) !== ids) {
+      ng('言われてもいないのに、並びを変えている')
+    } else ok('言われなければ、名前から読めないので何もしない')
+
+    /* **言われたら、そのとおりに並ぶ**(「出る」側)。
+       ids は [男, 女] の順。1人目 Takumi が男なら、そのまま */
+    const 言 = (n) => (n.startsWith('takumi') ? 'male' : 'female')
+    const そのまま = orderVoicesByNames(ids, 外, gOf, 言)
+    const c1 = castClipSpeakers(外, そのまま)
+    if (gOf(c1.get('takumi (sales)')) !== 'male' || gOf(c1.get('elise (buyer)')) !== 'female') {
+      ng('言われた性別のとおりに声が当たっていない',
+        `takumi → ${gOf(c1.get('takumi (sales)'))} / elise → ${gOf(c1.get('elise (buyer)'))}`)
+    } else ok('**一覧に無い名前でも、言われた性別で声が当たる**')
+
+    /* **逆に言われたら、入れ替わる。** これを見ないと、
+       **いつも元の並びを返す**形でも上の1本は緑になる */
+    const 逆 = (n) => (n.startsWith('takumi') ? 'female' : 'male')
+    const 入替 = orderVoicesByNames(ids, 外, gOf, 逆)
+    const c2 = castClipSpeakers(外, 入替)
+    if (gOf(c2.get('takumi (sales)')) !== 'female' || gOf(c2.get('elise (buyer)')) !== 'male') {
+      ng('逆に言われたのに、入れ替わっていない',
+        `takumi → ${gOf(c2.get('takumi (sales)'))} / elise → ${gOf(c2.get('elise (buyer)'))}`)
+    } else ok('逆に言われたら、そのとおりに入れ替わる')
+
+    /* **言われたほうが先。** 名前からの当てと食い違っても、言われたほうを採る
+       (`Mika` は一覧では女性。それを男と言われたら、男の声にする) */
+    const 食違 = orderVoicesByNames(ids, ['Mika (Agent)', 'Kenji (Manager)'], gOf,
+      (n) => (n.startsWith('mika') ? 'male' : 'female'))
+    const c3 = castClipSpeakers(['Mika (Agent)', 'Kenji (Manager)'], 食違)
+    if (gOf(c3.get('mika (agent)')) !== 'male') {
+      ng('名前からの当てが、言われたほうより勝っている',
+        '当てるのは、言われていないときだけである')
+    } else ok('名前から読めても、言われたほうを先に採る')
+  }
+
+  /* ⑦ **窓口が、必ず書くことになっているか**(第5.255節)。
+       任意の欄にすると、書かれなかった日に**また名前から当てる**ことになる。
+       **頼むのではなく、道具の形で強制する**(CLAUDE.md) */
+  {
+    const fn = read('supabase/functions/generate-material/index.ts')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    if (!/speaker_gender: \{[\s\S]{0,400}?enum: \['male', 'female'\]/.test(fn)) {
+      ng('窓口に `speaker_gender` の欄が無い(male / female の2つから選ばせる)')
+    } else ok('窓口 … 性別は male / female の2つから選ばせる')
+    if (!/required: \['speaker', 'speaker_gender'/.test(fn)) {
+      ng('窓口 … `speaker_gender` が必須になっていない',
+        '任意だと、書かれなかった日にまた名前から当てることになる')
+    } else ok('窓口 … 会話・会議では `speaker_gender` が必須')
+  }
+
+  /* ⑧ **画面が、窓口の言ってきた性別を渡しているか**(第5.255節)。
+       ここを見ないと、**画面が渡すのをやめても緑のまま**になる ——
+       算段だけ直して、入力が来ていない形である
+       (それが「何度やっても直らない」の正体だった) */
+  {
+    const form4 = read('src/components/MaterialForm.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+    if (!/it\?\.speaker_gender/.test(form4)) {
+      ng('画面が、窓口の言ってきた性別を読んでいない')
+    } else if (!/\(name\) => said\.get\(name\)/.test(form4)) {
+      ng('画面が、言われた性別を並べ替えに渡していない',
+        '読んでいても、渡さなければ1ミリも効かない')
+    } else ok('画面 … 窓口の言ってきた性別を、そのまま並べ替えに渡す')
+  }
 
   // ⑤ **画面が本当に呼んでいるか。** 定義だけあっても何も起きない
   const form3 = read('src/components/MaterialForm.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
