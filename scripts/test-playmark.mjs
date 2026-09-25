@@ -159,6 +159,11 @@ import {
   MIX_KINDS, MIX_MAX, REVIEW_MAX,
   canMixText, mixNote, mixWords, overNote, pickMix,
 } from '../src/lib/textMix.js'
+/* ゲストの持ちものからテストを作る(第5.260節)。**AI を使わない** */
+import {
+  BLANK_MARK, DEFAULT_EXAM_FORM, EXAM_FORMS, EXAM_SOURCES,
+  blankOf, buildExam, examCountNote, examItem, examNote, examTitle,
+} from '../src/lib/examBuild.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -11620,6 +11625,164 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **0 と「読めなかった」を取り違えない** */
     ok(/const ng = \(message\) => \(\{ data: null, error: message \}\)/.test(books),
       '混ぜる … 読めなかったら `null` を返す(空の配列にしない)')
+  }
+}
+
+/* ==========================================================================
+ * **ゲストの持ちものからテストを作る**(第5.260節・2026-09-25 利用者の指定)
+ *
+ *   > ゲストのページに教材や彼らの単語帳、quick response 帳があります。
+ *   > それらのデータを基にテストを作りたいです。
+ *
+ *   ・出どころは都度えらぶ(複数同時) ・日→英 と 穴埋めを混ぜる
+ *   ・画面と紙の両方        ・**AI は使わない(0円)**
+ * ========================================================================== */
+{
+  console.log('\n▶ テストを作る')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+
+  /* ── ① **出どころは、利用者が名指しした3つ** ────────────────── */
+  {
+    const WANT = ['material', 'word', 'qr']
+    const 無い = WANT.filter((id) => !EXAM_SOURCES.some((s2) => s2.id === id))
+    ok(無い.length === 0 && EXAM_SOURCES.length === 3,
+      `テスト … 出どころは3つ(${EXAM_SOURCES.map((x) => x.label).join(' / ')})`)
+    /* **「混ぜる」が既定**(利用者の指定「日→英と穴埋めを混ぜる」)。
+       片方だけを選ぶ道も残す —— 単語帳だけだと穴埋めにできない語が多い */
+    ok(DEFAULT_EXAM_FORM === 'mix' && EXAM_FORMS.length === 3,
+      `テスト … 既定は「混ぜる」。片方だけの道も残っている(${EXAM_FORMS.length} つ)`)
+  }
+
+  /* ── ② **穴埋め。いちばん危ない形を、検証の中に置く**(CLAUDE.md)── */
+  {
+    const b = blankOf('We decided to take on the project.')
+    ok(b && b.answer === 'project' && b.question.includes(BLANK_MARK),
+      'テスト … 穴埋めは、いちばん長い中身のある語を伏せる', b ? b.question : 'なし')
+    /* **働きの語は伏せない。** `the` を伏せても英語の練習にならない */
+    ok(!/\bthe\b/.test(String(blankOf('We take the bus.')?.answer ?? 'the')),
+      'テスト … 働きの語(the / is / have)は伏せない')
+    /* **伏せられない文がある。** 短い文・働きの語だけの文 ——
+       **`null` を返す**(黙って空の問題を作らない) */
+    ok(blankOf('I see.') === null, 'テスト … 伏せられない文は `null`(空の問題を作らない)')
+    ok(blankOf('') === null && blankOf(null) === null,
+      'テスト … 空の文でも落ちない')
+    /* **同じ綴りが2回出てくる文で、1つだけを伏せる。**
+       文字列の置き換えで書くと、**両方が伏せられて答えが2つになる** */
+    const 二 = blankOf('Please please the client.')
+    ok(二 && (二.question.match(new RegExp(BLANK_MARK, 'g')) ?? []).length === 1,
+      'テスト … 同じ綴りが2回出ても、伏せるのは1つだけ', 二 ? 二.question : 'なし')
+    /* **伏せられない行は、日本語 → 英語に落とす**(黙って捨てない) */
+    const 落 = examItem({ en: 'I see.', ja: 'なるほど。' }, 'blank')
+    ok(落.form === 'ja_en' && 落.answer === 'I see.',
+      'テスト … 穴埋めにできない行は、日本語 → 英語に落とす(捨てない)')
+  }
+
+  /* ── ③ **組み立て。被らない・混ざる・足りなければ足りないと言う** ── */
+  {
+    const rows = [
+      { en: 'We decided to take on the project.', ja: 'あ', from: '教材' },
+      { en: 'Could you walk me through the numbers?', ja: 'い', from: '教材' },
+      /* **同じ文が2つの帳に入っている形**(帳は教材から溜まる)——
+         **いちばん危ない形**なので、必ず1つ置く */
+      { en: 'we decided to take on the project.', ja: 'う', from: 'QR' },
+      /* **訳の無い行**。問題にならないので落ちる */
+      { en: 'No translation here at all.', ja: '', from: '教材' },
+    ]
+    const q = buildExam(rows, { count: 10, form: 'mix', order: 'keep' })
+    ok(q.length === 2, `テスト … 同じ英文を二度出さない・訳の無い行は出さない(${q.length} 問)`)
+    ok(q[0].no === 1 && q[1].no === 2, 'テスト … 通し番号が振られる')
+    /* **混ぜるは1問おき。** まとめて出すと、前半と後半で別のテストに見える */
+    const 多 = buildExam(
+      Array.from({ length: 8 }, (_, i) => ({
+        en: `The important document number ${i} arrived.`, ja: `やく ${i}`,
+      })), { count: 8, form: 'mix', order: 'keep' })
+    const 形 = 多.map((x) => x.form).join(',')
+    ok(形 === 'ja_en,blank,ja_en,blank,ja_en,blank,ja_en,blank',
+      'テスト … 「混ぜる」は1問おき(まとめて出さない)', 形)
+    /* **片方だけの道も、本当に片方だけか**(出る / 出ないの両方) */
+    const 日 = buildExam(rows, { count: 10, form: 'ja_en', order: 'keep' })
+    ok(日.every((x) => x.form === 'ja_en'), 'テスト … 「日本語 → 英語」だけを選べる')
+    ok(buildExam(rows, { count: 0 }).length === 0, 'テスト … 0 問と言われたら 0 問')
+    /* **並べ替えても、元の一覧を動かさない**(凍らせて見る・運に頼らない) */
+    {
+      const 凍 = Object.freeze([...rows])
+      let 動 = false
+      try { buildExam(凍, { count: 2 }) } catch { 動 = true }
+      ok(!動, 'テスト … 元の一覧を並べ替えていない(凍らせた一覧でも通る)')
+    }
+  }
+
+  /* ── ④ **起きたことをそのまま言う**(「作りました」で終わらせない)── */
+  {
+    ok(examNote(0, 20, []).includes('えらんで'),
+      'テスト … 出どころを選んでいなければ、そう言う')
+    ok(examNote(0, 20, ['word']).includes('ありません'),
+      'テスト … 1問もできなければ「作りました」と言わない')
+    ok(examNote(8, 20, ['word']).includes('8') && examNote(8, 20, ['word']).includes('20'),
+      'テスト … 足りなかったら、欲しかった数も言う')
+    const items = buildExam([
+      { en: 'The important document arrived.', ja: 'あ' },
+      { en: 'I see.', ja: 'い' },
+    ], { count: 2, form: 'mix', order: 'keep' })
+    ok(examCountNote(items).includes('全 2 問'),
+      'テスト … 何問あるかを、画面にも紙にも同じ言い方で出す', examCountNote(items))
+    ok(examTitle('田中', '2026-09-25').includes('田中') && examTitle('田中', '2026-09-25').includes('2026-09-25'),
+      'テスト … 題に、誰のいつのテストかを入れる')
+  }
+
+  /* ── ⑤ **画面が、本当に呼んでいるか** ────────────────────── */
+  {
+    const maker = noC(readS('src/components/ExamMaker.jsx'))
+    const sheet = noC(readS('src/components/ExamSheet.jsx'))
+    const src = noC(readS('src/lib/examSources.js'))
+    const build = noC(readS('src/lib/examBuild.js'))
+    const lea = noC(readS('src/components/TrainerLearners.jsx'))
+
+    /* **算段は素の node で確かめられる**(`playMark.js` と同じ作法) */
+    ok(!/supabase|import\.meta\.env/.test(build),
+      'テスト … 組む算段は Supabase を持たない(素の node で確かめられる)')
+    /* **AI を1回も呼ばない(0円)。** 窓口を通る道が1つも無いこと */
+    ok(!/generateSection|generate-material|lookupWord|generateGrammar/.test(maker)
+      && !/generateSection|generate-material|lookupWord/.test(src),
+    'テスト … AI を1回も呼んでいない(0円)')
+    /* **新しい読み方を作らない。** 紙に出すときと同じ対が出る */
+    ok(/wordSheetPairs/.test(src) && /qrPairOf/.test(src)
+      && /quickResponsePairs/.test(src),
+    'テスト … 読む道は、単語帳 / QR / 教材のすでにあるものを通る')
+    /* **画面と紙が、同じ問題を見ているか。** 組むのは1回だけ */
+    ok((maker.match(/buildExam\(/g) ?? []).length === 1,
+      'テスト … 組むのは1回だけ(画面と紙で問題が食い違わない)')
+    ok(/items=\{items\}/.test(maker),
+      'テスト … 紙にも、画面と同じ `items` を渡している')
+    /* **刷れるのは、問題があるときだけ**(効かない操作を見せない) */
+    ok(/items\.length > 0 && \(/.test(maker) && /usePrintSheet\(printing/.test(maker),
+      'テスト … 問題があるときだけ「印刷 / PDFで保存」を出す')
+    /* **答えは、同じ紙に刷らない** —— テストにならない */
+    ok(/examsheet-answers/.test(sheet),
+      'テスト … 答えは別の紙(`.examsheet-answers` が改ページを持つ)')
+    ok(/\.print-target \.examsheet-answers \{ break-before: page; \}/
+      .test(readS('src/styles.css')),
+    'テスト … 答えの紙が、本当に新しいページから始まる')
+    /* **紙の段取りは、すでにある1か所に乗る**(書き写さない) */
+    ok(/SHEET_ID/.test(sheet) && /printSheet\.js/.test(sheet),
+      'テスト … 紙の出し先は `printSheet.js` 1か所')
+    /* **黙って絞らない。** 読めなかった出どころを言う */
+    ok(/if \(failed\.length\) setWarn\(/.test(maker),
+      'テスト … 読めなかった出どころがあれば、その場で言う')
+    /* **行き止まりを作らない** —— 何も選んでいなければ押せない */
+    ok(/disabled=\{busy \|\| 足りない\}/.test(maker),
+      'テスト … 出どころを1つも選んでいなければ、押せない')
+    /* **ゲストのページから入れるか。** 出どころのとなりに置く */
+    ok(/<option value="quiz">テストを作る<\/option>/.test(lea)
+      && /detailTab === 'quiz' &&/.test(lea),
+    'テスト … ゲストのページの札から開ける')
+    /* **教材の一覧は、過去の宿題と同じものを渡す**(数え方を2通り持たない) */
+    ok(/materials=\{assignments/.test(lea),
+      'テスト … えらべる教材は、この人に出してあるもの(宿題と同じ一覧)')
+    /* **新しい表も SQL も要らない。** テストは残さない */
+    ok(!/from\('quiz|insert\(/.test(maker) && !/insert\(/.test(src),
+      'テスト … どこにも書き込まない(新しい表も貼る SQL も要らない)')
   }
 }
 

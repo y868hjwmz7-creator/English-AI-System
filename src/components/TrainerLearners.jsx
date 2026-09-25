@@ -34,6 +34,8 @@ import Wordbook from './Wordbook.jsx'
    ゲストのページの中でも、トレーナーの「教材」とまったく同じものを出す */
 import TrainerMaterials from './TrainerMaterials.jsx'
 import QrReview from './QrReview.jsx'
+/* **ゲストの持ちものからテストを作る**(第5.260節)。AI は呼ばない(0円) */
+import ExamMaker from './ExamMaker.jsx'
 import LearnerFiles from './LearnerFiles.jsx'
 import LessonNotes from './LessonNotes.jsx'
 import SpeechBoard from './SpeechBoard.jsx'
@@ -955,6 +957,17 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         押した文が溜まる。単語帳と同じで、レッスン中に
                         一緒に取り組めば、それはゲストの学習として残る */}
                     <option value="qr">Quick Response</option>
+                    {/* **テストを作る**(第5.260節・2026-09-25 利用者の指定)。
+
+                          > ゲストのページに教材や彼らの単語帳、
+                          > quick response 帳があります。
+                          > それらのデータを基にテストを作りたいです。
+
+                        **出どころのすぐ下に置く** —— 単語帳と
+                        Quick Response のとなりなら、何から作るのかが
+                        並びで分かる(説明の文を足さずに済む)。
+                        **AI は1回も呼ばない(0円)** */}
+                    <option value="quiz">テストを作る</option>
                     {/* **スピーチ**(0054・2026-09 利用者の指定)。
                           > トレーナー側からもゲスト毎にスピーチを
                           > 登録できます。
@@ -1463,6 +1476,20 @@ export default function TrainerLearners({ me, navTick = 0 }) {
 
                     <QrReview learnerId={l.id} learnerName={l.display_name} />
                   </>
+                )}
+
+                {/* **テストを作る**(第5.260節・2026-09-25 利用者の指定)。
+                    出どころは都度えらぶ(複数同時にえらべる)。
+                    **教材は、この人に出してあるものから選ぶ** ——
+                    過去の宿題と**同じ一覧**を渡す(数え方を2通り持たない)。
+                    **新しい表も SQL も要らない。** テストは残さない ——
+                    作って、見て、刷るだけである */}
+                {detailTab === 'quiz' && (
+                  <ExamMaker
+                    learnerId={l.id} learnerName={l.display_name}
+                    materials={assignments
+                      .map((a) => ({ id: a.material?.id, title: a.material?.title ?? '' }))
+                      .filter((m) => m.id && m.title)} />
                 )}
 
                 {/* **スピーチの原稿と、その添削**(0054)。

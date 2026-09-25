@@ -79,6 +79,8 @@ import {
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
 import NavSettings from './components/NavSettings.jsx'
+/* **ゲストの持ちものからテストを作る**(第5.260節)。AI は呼ばない(0円) */
+import ExamMaker from './components/ExamMaker.jsx'
 import { bgmLevel, setVoiceLevel, voiceLevel } from './lib/mixVolume.js'
 import { setBgmVolume, stopBgm } from './lib/bgm.js'
 /* 音楽を流すか / どの曲か(第5.257節)。**本物と同じ3つを渡すため** */
@@ -1954,6 +1956,29 @@ const SPEECH = (
   />
 )
 
+/* **テストを作る**(`?screen=exam`・第5.260節・2026-09-25 利用者の指定)。
+
+     > ゲストのページに教材や彼らの単語帳、quick response 帳があります。
+     > それらのデータを基にテストを作りたいです。
+
+   **本物の `ExamMaker` をそのまま描く**(骨組みを写さない・CLAUDE.md)。
+   ちがうのは**えらべる教材を props で渡している**ところだけで、
+   本物は過去の宿題から作った同じ形の一覧を渡す。
+
+   **長い題を1つ混ぜる** —— 短い題ばかりだと、
+   札が横にはみ出すのを見逃す(第5.176節で踏んだところ)。
+   `?screen=exam&materials=none` で、**1本も出していない形**も測れる ——
+   **「無ければ素通りする形」を作らない**(CLAUDE.md)。 */
+const EXAM = (
+  <ExamMaker
+    learnerId="g1" learnerName="山田はなこ"
+    materials={q.get('materials') === 'none' ? [] : [
+      { id: 'm1', title: 'トラブル対応' },
+      { id: 'm2', title: '風力タービンの過熱トラブルに立ち会ったときの引き継ぎ' },
+      { id: 'm3', title: '朝のあいさつ' },
+    ]} />
+)
+
 /* 左のメニューのいちばん下(`?screen=navfoot`・2026-09 利用者の指定)。
 
      > サイドバーの「配色」から「教材の支度」までの項目をすべてまとめて
@@ -2060,6 +2085,8 @@ createRoot(document.getElementById('root')).render(
     ? SHELF
     : q.get('screen') === 'shift'
     ? SHIFT
+    : q.get('screen') === 'exam'
+    ? EXAM
     : q.get('screen') === 'navfoot'
     ? <NavFootScreen />
     : q.get('screen') === 'sheet'

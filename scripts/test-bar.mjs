@@ -9762,6 +9762,160 @@ for (const W of [1280, 390]) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   **ゲストの持ちものからテストを作る**(第5.260節・2026-09-25 利用者の指定)
+
+     > ゲストのページに教材や彼らの単語帳、quick response 帳があります。
+     > それらのデータを基にテストを作りたいです。
+
+   **算段は `npm run test:play` が見る。ここは描いて測る。**
+
+   ①出どころの3つが、押して入り切りできるか
+   ②1つも選んでいなければ、押せないか(行き止まりを作らない)
+   ③「教材」を選んだときだけ、どの教材かの欄が出るか(出る / 出ないの両方)
+   ④**1本も出していないゲスト**では、札ではなくその旨を出すか
+   ⑤押したら、何か言うか(黙って終わらない)
+   ⑥狭い画面で横にはみ出さないか
+   ══════════════════════════════════════════════════════════════ */
+for (const W of [1280, 390]) {
+  const page = await browser.newPage({ viewport: { width: W, height: 900 } })
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{}',
+  }))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=exam`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(700)
+
+  const 見る = () => page.evaluate(() => {
+    const box = document.querySelector('.exammaker')
+    const 押 = (label) => [...document.querySelectorAll(`[aria-label="${label}"] .theme-btn`)]
+      .map((b) => `${b.textContent.trim()}${b.getAttribute('aria-pressed') === 'true' ? '*' : ''}`)
+    const make = [...document.querySelectorAll('.exammaker .btn')]
+      .find((b) => /テストを作る|作っています/.test(b.textContent))
+    return {
+      有る: !!box,
+      出どころ: 押('どこから出すか'),
+      作れる: make ? !make.disabled : null,
+      教材欄: document.querySelectorAll('.exammaker-list .theme-btn').length,
+      無い文: [...document.querySelectorAll('.exammaker .field-hint')]
+        .some((p2) => /まだありません/.test(p2.textContent)),
+      言った: [...document.querySelectorAll('.exammaker .field-hint, .exammaker .notice')]
+        .map((p2) => p2.textContent.trim()).filter(Boolean),
+      はみ出し: box ? Math.max(0, box.scrollWidth - box.clientWidth) : 0,
+    }
+  })
+  /* **押すのは、利用者と同じ道で。** `aria-label` で組を絞ってから文字で選ぶ */
+  const 押す = async (label, text) => {
+    await page.evaluate(([l, t]) => {
+      const b = [...document.querySelectorAll(`[aria-label="${l}"] .theme-btn`)]
+        .find((x) => x.textContent.trim() === t)
+      b?.click()
+    }, [label, text])
+    await page.waitForTimeout(250)
+  }
+
+  const 初 = await 見る()
+  if (!初.有る) {
+    ng(`テスト ${W}px … 画面が描けていない`, '`?screen=exam` が開かない')
+  } else if (初.出どころ.join(' ') !== '教材 単語帳* Quick Response 帳*') {
+    ng(`テスト ${W}px … 出どころの既定が読み取れない(${初.出どころ.join(' / ')})`,
+      '「単語帳」と「Quick Response 帳」が押されていること')
+  } else if (初.教材欄 !== 0) {
+    ng(`テスト ${W}px … 「教材」を選んでいないのに、教材の札が ${初.教材欄} 個出ている`,
+      '効かない操作を見せない(CLAUDE.md)')
+  } else if (初.はみ出し > 0) {
+    ng(`テスト ${W}px … ${初.はみ出し}px 横にはみ出している`)
+  } else {
+    ok(`テスト ${W}px … 出どころ3つ(既定は単語帳 / QR 帳)・教材の札は出ない`)
+  }
+
+  if (初.有る) {
+    /* ── ② **1つも選んでいなければ押せない** ── */
+    await 押す('どこから出すか', '単語帳')
+    await 押す('どこから出すか', 'Quick Response 帳')
+    const 空 = await 見る()
+    if (空.作れる !== false) {
+      ng(`テスト ${W}px … 出どころを1つも選んでいないのに押せる`,
+        '行き止まりを作らない(押しても何も起きない、を作らない)')
+    } else {
+      ok(`テスト ${W}px … 出どころを1つも選ばなければ、押せない`)
+    }
+
+    /* ── ③ **「教材」を選ぶと、どの教材かの欄が出る**(出る / 出ないの両方)── */
+    await 押す('どこから出すか', '教材')
+    const 教 = await 見る()
+    if (教.教材欄 < 3) {
+      ng(`テスト ${W}px … 「教材」を選んでも、えらぶ札が ${教.教材欄} 個`,
+        '骨組みには3本入れてある')
+    } else if (教.作れる !== false) {
+      ng(`テスト ${W}px … 教材を1本も選んでいないのに押せる`)
+    } else {
+      ok(`テスト ${W}px … 「教材」を選ぶと、どれから出すかの札が ${教.教材欄} 個出る`)
+    }
+
+    /* ── ⑤ **押したら、何か言う**(黙って終わらない)── */
+    await 押す('どこから出すか', '単語帳')
+    await page.evaluate(() => {
+      [...document.querySelectorAll('.exammaker .btn')]
+        .find((b) => /テストを作る/.test(b.textContent))?.click()
+    })
+    await page.waitForTimeout(700)
+    const 後 = await 見る()
+    /* Supabase に届かないので**1問もできない。** そのときに
+       「作りました」と言わないこと、**黙って終わらないこと**を見る */
+    const 言 = 後.言った.join(' / ')
+    if (!言) {
+      ng(`テスト ${W}px … 押したのに、何も言わずに終わった`,
+        '成功と失敗を、同じ見た目で終わらせない(CLAUDE.md)')
+    } else if (/問できました/.test(言)) {
+      ng(`テスト ${W}px … 1問もできていないのに「できました」と言っている(${言})`)
+    } else {
+      ok(`テスト ${W}px … 押すと、起きたことをそのまま言う(${言})`)
+    }
+  }
+  await page.close()
+}
+/* **1本も教材を出していないゲスト**では、札ではなくその旨を出す ——
+   **「無ければ素通り」する形を、検証の中に必ず置く**(CLAUDE.md) */
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{}',
+  }))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=exam&materials=none`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(700)
+  await page.evaluate(() => {
+    [...document.querySelectorAll('[aria-label="どこから出すか"] .theme-btn')]
+      .find((b) => b.textContent.trim() === '教材')?.click()
+  })
+  await page.waitForTimeout(250)
+  const 無 = await page.evaluate(() => ({
+    札: document.querySelectorAll('.exammaker-list .theme-btn').length,
+    文: [...document.querySelectorAll('.exammaker .field-hint')]
+      .some((p2) => /まだありません/.test(p2.textContent)),
+  }))
+  if (無.札 > 0) {
+    ng('テスト … 教材が1本も無いのに、えらぶ札が出ている', `${無.札} 個`)
+  } else if (!無.文) {
+    ng('テスト … 教材が1本も無いことを、画面で言っていない',
+      '黙って空にしない(CLAUDE.md)')
+  } else {
+    ok('テスト … 教材が1本も無いゲストでは、札ではなくその旨を出す')
+  }
+  await page.close()
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
