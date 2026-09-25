@@ -21,6 +21,8 @@ import { exerciseLabel, isChunkSection } from '../data/exerciseTypes.js'
 /* かたまりの練習(第5.230節)。**そろえ方は `chunkDrills()` 1か所** ——
    片方しか無い組を落とす決まりを、出す側で書き写さない(CLAUDE.md) */
 import { chunkDrills } from '../data/chunkKinds.js'
+/* 例文(第5.254節)。**そろえ方は  1か所** */
+import { wordExamples } from '../data/exerciseTypes.js'
 import { alignedSentences } from './sentencePair.js'
 
 /**
@@ -46,6 +48,19 @@ const PAIR_FIELDS = {
   vocab_note:      { ja: 'prompt_ja', en: 'prompt_en', group: 'chunk' },
   vocabulary:      { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
   phrase:          { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
+  /* ══════════════════════════════════════════════════════════════
+     **「日本語 → 英語で言う」も、同じ組に入れる**(第5.256節・2026-09-25)
+
+       > 教材内の Quick Response に、文章と単語フレーズと別れていてほしいのに、
+       > Quick Response がある所によって仕様に偏りがある気がします
+
+     0067 で演習を2つ足したとき、**ここに足し忘れていた。**
+     そのため単語 / フレーズの教材では、**言う練習の問が
+     Quick Response に1問も出てこなかった。**
+     「演習の種類を足す4か所」に、**ここが入っていなかった**
+     (`docs/notes/01` の一覧に5つめとして足した)。 */
+  vocab_recall:    { ja: 'prompt_ja', en: 'answer', group: 'word' },
+  phrase_recall:   { ja: 'prompt_ja', en: 'answer', group: 'word' },
   // 旧「長文」。既存の教材でも使えるように残す
   read_aloud:      { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
   overlapping:     { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
@@ -80,8 +95,39 @@ export const QR_MODES = [
   { id: 'chunk', label: '覚えておきたい表現' },
 ]
 
+/**
+ * ============================================================================
+ * **Quick Response に出さない種類。理由つきで、ここに名指しする**(第5.256節)
+ *
+ * 2026-09-25 利用者の指摘。
+ *
+ *   > 教材内の Quick Response に、文章と単語フレーズと別れていてほしいのに、
+ *   > Quick Response がある所によって仕様に偏りがある気がします
+ *
+ * 偏りの出どころは**足し忘れ**だった。0067 で演習を2つ足したとき、
+ * `PAIR_FIELDS` に入れ忘れ、**その教材だけ Quick Response が薄かった。**
+ *
+ * **「入れ忘れ」と「わざと入れない」を、見分けられるようにする。**
+ * 上の `PAIR_FIELDS` と、この一覧の**どちらにも入っていない種類**が
+ * あれば `npm run test:play` が赤くなる —— 演習を足した人は、
+ * **どちらかに入れるまで気づける。**
+ * ============================================================================
+ */
+export const QR_SKIP = {
+  fill_blank: '日本語が無い(英文の穴埋め)',
+  listening: '日本語が無い(音を聞いて答える)',
+  error_correction: '日本語が無い(英文の誤りを直す)',
+  comprehension: '設問も答えも英語。訳して言うものではない',
+  discussion: '設問は英語で、**正解が無い**。対にならない',
+  audience_qa: '同上(聴衆からの質問。正解が無い)',
+  culture_note: '2026-09 に廃止した演習。古い教材のためだけに残っている',
+}
+
 /** その種類が Quick Response に使えるか */
 export const canQuickRespond = (exerciseType) => Boolean(PAIR_FIELDS[exerciseType])
+
+/** 対にできる種類(**画面に一覧を書き写さない**) */
+export const QR_PAIR_TYPES = Object.keys(PAIR_FIELDS)
 
 /**
  * **「まだ」を押したとき、どの冊に溜めるか**(0066・第5.237節)。
@@ -138,7 +184,12 @@ export function quickResponsePairs(material, mode = null) {
   for (const sec of material?.sections ?? []) {
     const map = PAIR_FIELDS[sec.exercise_type]
     if (!map) continue
-    if (mode && map.group !== mode) continue
+    /* **段では切り捨てない**(第5.256節・2026-09-25)。
+       もとはここで `map.group !== mode` の段をまるごと飛ばしていた。
+       ところが**段の中には、別の組の対が入っている** ——
+       単語の段の中の例文と練習は「文章」である。
+       段で切ると、**それがまるごと落ちて1問も出てこなかった。**
+       **絞るのは、1問ずつ。いちばん最後に1回だけ。** */
     const from = exerciseLabel(sec.exercise_type)
     ;(sec.items ?? []).forEach((it, i) => {
       const ja = String(it[map.ja] ?? '').trim()
@@ -182,17 +233,40 @@ export function quickResponsePairs(material, mode = null) {
          `chunkDrills()` が片方しか無い組をすでに落としている。
          ここで `alignedSentences` に通すと、英文が2文になっている組を
          **黙って捨てる**ことになる(CLAUDE.md「黙って落とさない」)。 */
-      if (isChunkSection(sec.exercise_type)) {
-        chunkDrills(it).forEach((d, k) => {
-          out.push({
-            ja: d.ja, en: d.en, from, speaker, group: map.group,
-            key: `${key}-d${k}`, ...表現,
-          })
+      /* ══════════════════════════════════════════════════════════
+         **対になっているものは、全部出す**(第5.256節・2026-09-25)
+
+         もとは**かたまりのときだけ**練習をほどいていた。
+         単語 / フレーズにも練習と例文が付いた日(第5.254節)、
+         **そこだけ出てこない**ことになった —— これが「所によって偏る」
+         の正体である。**種類で分けるのをやめる。**
+
+         **組は、中身の形で決める。**
+         ・かたまり … 利用者が**独立した組**にした(第5.235節)ので、
+           その表現も、その練習も、まとめて「覚えておきたい表現」
+         ・それ以外 … **文は「文章」**である
+           (単語 / フレーズそのものは上の `map.group` で「フレーズ・単語」)
+         ══════════════════════════════════════════════════════════ */
+      const 中の組 = isChunkSection(sec.exercise_type) ? map.group : 'sentence'
+      chunkDrills(it).forEach((d, k) => {
+        out.push({
+          ja: d.ja, en: d.en, from, speaker, group: 中の組,
+          key: `${key}-d${k}`, ...表現,
         })
-      }
+      })
+      /* 例文(第5.254節)。**練習とまったく同じ扱い** ——
+         英語と日本語が対になっているものを、片方だけ出さない */
+      wordExamples(it).forEach((x, k) => {
+        out.push({
+          ja: x.ja, en: x.en, from, speaker, group: 中の組,
+          key: `${key}-x${k}`, ...表現,
+        })
+      })
     })
   }
-  return out
+  /* **絞るのは、1問ずつ**(第5.256節)。段ごとではない ——
+     段の組と、その中の対の組は**別物**である */
+  return mode ? out.filter((p) => p.group === mode) : out
 }
 
 /**

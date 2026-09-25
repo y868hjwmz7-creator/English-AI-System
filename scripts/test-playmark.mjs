@@ -97,7 +97,8 @@ import {
 } from '../src/lib/materialFill.js'
 /* 教材の中の Quick Response(第5.235節)。**取り組み方の一覧はあちら1か所** */
 import {
-  CHUNK_BOOK_LABEL, QR_MODES, qrSaves, qrSourceOf, qrSourceOfBook,
+  CHUNK_BOOK_LABEL, QR_MODES, QR_PAIR_TYPES, QR_SKIP,
+  qrSaves, qrSourceOf, qrSourceOfBook,
   quickResponseCounts, quickResponsePairs,
 } from '../src/lib/quickResponse.js'
 import {
@@ -10498,6 +10499,67 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       'QR … 片方しか無い練習は入らない')
     ok(数.chunk === 塊.length,
       'QR … 数え上げと、出てくる問がそろっている', `${数.chunk} / ${塊.length}`)
+
+    /* ══════════════════════════════════════════════════════════
+       **所によって偏らない**(第5.256節・2026-09-25 利用者の指摘)
+
+         > 教材内の Quick Response に、文章と単語フレーズと別れていて
+         > ほしいのに、Quick Response がある所によって仕様に偏りがある
+
+       偏りの出どころは**足し忘れ**だった。0067 で演習を2つ足したとき、
+       `PAIR_FIELDS` に入れ忘れ、**単語 / フレーズの教材だけ
+       Quick Response が薄かった**(言う練習が1問も出なかった)。
+
+       **「入れ忘れ」と「わざと入れない」を、機械で見分ける。**
+       どちらにも入っていない種類があれば、ここが赤くなる ——
+       演習を足した人は、**どちらかに入れるまで気づける。** */
+    {
+      const 漏れ = EXERCISE_TYPES.map((t) => t.id)
+        .filter((id) => !QR_PAIR_TYPES.includes(id) && !(id in QR_SKIP))
+      ok(漏れ.length === 0,
+        'QR … どの演習も「対にする」か「わざと出さない」のどちらかに入っている',
+        漏れ.length ? `どちらにも無い: ${漏れ.join(' / ')}` : `${EXERCISE_TYPES.length} 種類`)
+      /* **両方が空では、上の1本が意味を失う**(「無ければ素通り」を作らない) */
+      ok(QR_PAIR_TYPES.length > 5 && Object.keys(QR_SKIP).length > 3,
+        'QR … 「対にする」と「わざと出さない」が、どちらも中身を持っている',
+        `${QR_PAIR_TYPES.length} / ${Object.keys(QR_SKIP).length}`)
+      /* **理由を書かせる。** 空の理由で並べると、一覧が「ただの穴」になる */
+      ok(Object.values(QR_SKIP).every((why) => String(why).length > 5),
+        'QR … 出さない種類には、理由が書いてある')
+    }
+
+    /* **単語 / フレーズの教材で、文章とフレーズ・単語の両方が出る**
+       (利用者の「別れていてほしい」)。
+       **中身の形で見る** —— 語そのものと言う練習は「フレーズ・単語」、
+       例文と練習の文は「文章」である */
+    {
+      const 語の教材 = () => ({
+        kind: 'vocab',
+        sections: [
+          { id: 'v', exercise_type: 'vocabulary', items: [{
+            id: 'v1', prompt_en: 'come up with', prompt_ja: '〜を思いつく',
+            examples: [{ en: 'I came up with a plan.', ja: '案を思いついた。' }],
+            practice: [{ ja: 'いい案を思いついた。', en: 'I came up with a good idea.' }],
+          }] },
+          { id: 'r', exercise_type: 'vocab_recall', items: [{
+            id: 'r1', prompt_ja: '〜を持ち出す', answer: 'bring up',
+          }] },
+        ],
+      })
+      const c = quickResponseCounts(語の教材())
+      ok(c.word >= 2 && c.sentence >= 2,
+        '**単語 / フレーズの教材でも、文章とフレーズ・単語の両方が出る**',
+        `文章 ${c.sentence} / フレーズ・単語 ${c.word}`)
+      /* **言う練習が、本当に入っているか**(0067 で入れ忘れたところ) */
+      ok(quickResponsePairs(語の教材(), 'word').some((x) => x.en === 'bring up'),
+        'QR … 「日本語 → 英語で言う」の問も、フレーズ・単語に入る')
+      /* **例文と練習の文は「文章」の側**(語そのものと混ぜない) */
+      const 文 = quickResponsePairs(語の教材(), 'sentence').map((x) => x.en)
+      ok(文.some((x) => /a plan/.test(x)) && 文.some((x) => /a good idea/.test(x)),
+        'QR … 例文と練習の文は、文章の側に入る', 文.join(' / '))
+      ok(!文.includes('come up with') && !文.includes('bring up'),
+        'QR … 語そのものは、文章の側に混ざらない')
+    }
 
     /* ── **「出ない」側も見る** ── */
     const 無し = quickResponseCounts(教材({ noChunk: true }))
