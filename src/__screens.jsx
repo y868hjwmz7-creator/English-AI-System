@@ -80,7 +80,10 @@ import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
 import NavSettings from './components/NavSettings.jsx'
 import { bgmLevel, setVoiceLevel, voiceLevel } from './lib/mixVolume.js'
-import { setBgmVolume } from './lib/bgm.js'
+import { setBgmVolume, stopBgm } from './lib/bgm.js'
+/* 音楽を流すか / どの曲か(第5.257節)。**本物と同じ3つを渡すため** */
+import { bgmOn, setBgmOn } from './lib/wordRadio.js'
+import { bgmChoices, bgmPickOf, loadBgmPick, saveBgmPick } from './lib/bgmPick.js'
 import { loadTheme } from './lib/theme.js'
 import { loadPalette } from './lib/palette.js'
 import { soundOn } from './lib/sfx.js'
@@ -1974,6 +1977,24 @@ function NavFootScreen() {
   const [prepAll, setPrepAll] = useState(prepareAllOn)
   const [voiceVol, setVoiceVol] = useState(voiceLevel)
   const [bgmVol, setBgmVol] = useState(bgmLevel)
+  /* **音楽を流すか / どの曲か**(第5.257節・2026-09-25 利用者の指定)。
+     **渡す3つも、押したときに呼ぶものも、`App.jsx` とまったく同じ**にする
+     —— 骨組みが本物と食い違うと、検証は何も守らない(CLAUDE.md)。
+
+     曲の一覧だけは Supabase から読めないので、ここに置いてある。
+     **2曲入れてある** —— **1曲だと選ぶ欄そのものが出ない**(`bgmChoices`)
+     ので、欄を消しても緑のままになる(`?screen=navfoot&songs=one` で
+     その1曲の形も測れる)。**長い題を1つ混ぜる**(帯からのはみ出し) */
+  const [music, setMusic] = useState(bgmOn)
+  const [song, setSong] = useState(loadBgmPick)
+  const tracks = q.get('songs') === 'one'
+    ? [{ id: 't1', title: '朝の光', path: 'a.mp3' }]
+    : [
+      { id: 't1', title: '朝の光', path: 'a.mp3' },
+      { id: 't2', title: '雨あがりの街をゆっくり歩くときのためのピアノ', path: 'b.mp3' },
+    ]
+  const songs = bgmChoices(tracks)
+  const songNow = bgmPickOf(tracks, song)
   return (
     <div className="app-nav-foot" style={{ width: '248px' }}>
       <NavSettings
@@ -1983,6 +2004,11 @@ function NavFootScreen() {
         sound={sound} onSound={setSound}
         voiceVol={voiceVol} onVoiceVol={(v) => setVoiceVol(setVoiceLevel(v))}
         bgmVol={bgmVol} onBgmVol={(v) => setBgmVol(setBgmVolume(v))}
+        music={music} onMusic={(v) => {
+          setMusic(v); setBgmOn(v)
+          if (!v) stopBgm()
+        }}
+        songs={songs} song={songNow} onSong={(v) => { setSong(v); saveBgmPick(v) }}
         showPrepare
         prepare={prepAll} onPrepare={setPrepAll}
       />

@@ -27,7 +27,13 @@ import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 /* 英語の音声と音楽の大きさ(2026-09 利用者の指定)。
    **覚えるのは `mixVolume.js`、曲に当てるのは `bgm.js` 1か所** */
 import { bgmLevel, setVoiceLevel, voiceLevel } from './lib/mixVolume.js'
-import { setBgmVolume } from './lib/bgm.js'
+import { listTracks, setBgmVolume, stopBgm } from './lib/bgm.js'
+/* 音楽を流すか(第5.257節)。**判断は `wordRadio.js` 1か所** ——
+   「どこで流すか」のいちばん上が「流さない」なので、そこを切り替える */
+import { bgmOn, setBgmOn } from './lib/wordRadio.js'
+/* 曲のえらび。**2曲以上あるときだけ出る**(`bgmChoices()` が決める)。
+   **聞き流しとまったく同じ道具を通す** —— `WordRadio` もこの3つで数える */
+import { bgmChoices, bgmPickOf, loadBgmPick, saveBgmPick } from './lib/bgmPick.js'
 /* 左のメニューの下の「設定」。**7つとも中に入っている**(2026-09 利用者の指定) */
 import NavSettings from './components/NavSettings.jsx'
 import { forgetJob, markJobSeen, useJob, watchJob } from './lib/generateJob.js'
@@ -159,6 +165,31 @@ export default function App() {
      自動で下げる仕組み(`duckBgm`)は道具ごと消してある */
   const [voiceVol, setVoiceVol] = useState(voiceLevel)
   const [bgmVol, setBgmVol] = useState(bgmLevel)
+  /* ── **音楽を流すか / どの曲か**(第5.257節・2026-09-25 利用者の指定)──
+       **値はここが持つ。** `NavSettings` は受け取って描くだけなので、
+       `npm run test:bar` が Supabase 無しでそのまま描いて測れる。
+       曲の一覧は**開いたときに1回だけ**読む(Supabase の一覧・0円) */
+  const [music, setMusic] = useState(bgmOn)
+  const [tracks, setTracks] = useState([])
+  const [song, setSong] = useState(loadBgmPick)
+  useEffect(() => {
+    let alive = true
+    listTracks().then(({ data }) => {
+      if (alive) setTracks(data ?? [])
+    }).catch(() => { /* 読めなくても、曲のえらびが出ないだけ */ })
+    return () => { alive = false }
+  }, [])
+  /* **「音楽」の画面(トレーナーだけ)で「流さない」に変えられる。**
+     あちらと**同じ鍵**を見ているので食い違いようは無いが、
+     **こちらが覚えた値は古いまま**になる —— 画面を移るたびに読み直す
+     (`localStorage` を1回読むだけ。**0円**)。
+     **同じ設定を2か所に置かない**の、置いたあとの後始末である */
+  useEffect(() => { setMusic(bgmOn()) }, [view])
+  /* **選べるものも、選んでいるものも、聞き流しと同じ関数から出す**
+     (数え方を2通り持たない・CLAUDE.md)。`bgmPickOf()` が
+     **消された曲を握ったままにしない** —— 無ければ「ぜんぶ」に落ちる */
+  const songs = bgmChoices(tracks)
+  const songNow = bgmPickOf(tracks, song)
   /* 本文の読み上げを1本にまとめるか。**戻せる道を残す**(利用者の指定) */
   /**
    * 裏で作っている教材のお知らせ(2026-09 利用者の指定)。
@@ -787,6 +818,13 @@ export default function App() {
         sound={sound} onSound={(v) => { setSound(v); setSoundOn(v) }}
         voiceVol={voiceVol} onVoiceVol={(v) => setVoiceVol(setVoiceLevel(v))}
         bgmVol={bgmVol} onBgmVol={(v) => setBgmVol(setBgmVolume(v))}
+        music={music} onMusic={(v) => {
+          setMusic(v); setBgmOn(v)
+          /* **切ったら、いま鳴っているものも止める**(第5.257節)。
+             次に開いたときから効く、では「切れていない」と言われる */
+          if (!v) stopBgm()
+        }}
+        songs={songs} song={songNow} onSong={(v) => { setSong(v); saveBgmPick(v) }}
         showPrepare={profile?.role === 'trainer' || profile?.role === 'owner'}
         prepare={prepAll} onPrepare={(v) => { setPrepAll(v); setPrepareAllOn(v) }}
       />

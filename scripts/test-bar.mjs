@@ -8374,8 +8374,8 @@ for (const W of [1280, 794, 453, 390, 320]) {
   const before = await 見る()
   if (before.本数 !== 2) {
     ng(`音量 … メニューの下のつまみが ${before.本数} 本`,
-      '「英語の音声」と「音楽」の2本を、それぞれ別に決められること')
-  } else if (before.名[0] !== '英語の音声' || before.名[1] !== '音楽') {
+      '「英語の音声」と「音楽の大きさ」の2本を、それぞれ別に決められること')
+  } else if (before.名[0] !== '英語の音声' || before.名[1] !== '音楽の大きさ') {
     ng(`音量 … 名前が「${before.名.join(' / ')}」`, '何のつまみか読み取れない')
   } else if (!/^\d+%$/.test(before.数[0]) || !/^\d+%$/.test(before.数[1])) {
     ng(`音量 … いまの大きさが数で出ていない(${before.数.join(' / ')})`,
@@ -8385,7 +8385,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
   } else if (before.はみ出し > 0) {
     ng(`音量 … メニューの下が ${before.はみ出し}px 横にはみ出している`)
   } else {
-    ok(`音量 1280px … 「英語の音声 ${before.数[0]}」「音楽 ${before.数[1]}」`
+    ok(`音量 1280px … 「英語の音声 ${before.数[0]}」「音楽の大きさ ${before.数[1]}」`
       + `(高さ ${before.高.join(' / ')}px・はみ出し無し)`)
   }
 
@@ -8411,7 +8411,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
         + `(${before.値[1]} → ${after.値[1]})`,
       '**独立してそれぞれ**調整できること(利用者の指定)')
     } else {
-      ok(`音量 1280px … 英語の音声だけが 30% になり、音楽は ${after.数[1]} のまま`)
+      ok(`音量 1280px … 英語の音声だけが 30% になり、音楽の大きさは ${after.数[1]} のまま`)
     }
   }
   await page.close()
@@ -8442,8 +8442,10 @@ for (const W of [1280, 794, 453, 390, 320]) {
    ④押せる大きさ(40px)か ⑤開くと**7つとも**出るか ⑥はみ出さないか
    ══════════════════════════════════════════════════════════════ */
 {
+  /* **9つある**(第5.257節で「音楽」が3つに割れた ——
+     オン / オフ・曲・大きさ)。**一度入れたものを勝手に減らさない** */
   const WANT_SET = ['配色', '色づかい', '説明の文', '押したときの音',
-    '英語の音声', '音楽', '教材の支度']
+    '英語の音声', '音楽', '曲', '音楽の大きさ', '教材の支度']
   for (const W of [1280, 390]) {
     const page = await browser.newPage({ viewport: { width: W, height: 900 } })
     page.setDefaultTimeout(8000)
@@ -8557,6 +8559,152 @@ for (const W of [1280, 794, 453, 390, 320]) {
     }
     await page.close()
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   **音楽のオン / オフと、曲のえらび**(第5.257節・2026-09-25 利用者の指定)
+
+     > 設定から音楽の音量を0%にしても音楽が消えません。
+     > 音量設定はそのまましっかり機能するようにし、
+     > それに加えて音楽on / offの設定も追加してください。
+     > on にしたら曲が選べるプルダインも出るように
+
+   **算段は `npm run test:play` が見る。ここは描いて測る。**
+
+   【「出る」と「出ない」の両方を見る】(CLAUDE.md)
+   **「オンのとき出るか」だけを見ると、いつでも出す形に書き換えても
+   緑のまま**になる —— それでは「オフにしたら曲が選べる」という、
+   いちばん妙な画面を素通りさせる。**押して、消えることまで見る。**
+
+   【いちばん危ない形を、検証の中に置く】(CLAUDE.md)
+   **曲が1つしか無い**形(`&songs=one`)も測る。あそこで欄を出すと、
+   「ぜんぶ」とその1曲が並ぶだけで、**押しても何も変わらない。**
+
+   ①オンのとき、曲と大きさが出るか ②オフにしたら、その2つが消えるか
+   ③オンに戻したら、また出るか ④曲が1つのときは、えらびを出さないか
+   ⑤プルダウンが指で狙える高さか ⑥横にはみ出していないか
+   ══════════════════════════════════════════════════════════════ */
+for (const W of [1280, 390]) {
+  const page = await browser.newPage({ viewport: { width: W, height: 900 } })
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{}',
+  }))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=navfoot`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(600)
+  await page.click('.nav-settings-sum')
+  await page.waitForTimeout(250)
+
+  const 見る = () => page.evaluate(() => {
+    const foot = document.querySelector('.app-nav-foot')
+    const 名 = (r) => r.querySelector('.nav-setting-label')
+      ?.firstChild?.textContent?.trim() ?? ''
+    const rows = [...document.querySelectorAll('.app-nav-foot .nav-setting')]
+      .filter((r) => r.checkVisibility?.() ?? true)
+    const pick = document.querySelector('.nav-song-pick')
+    return {
+      見える: rows.map(名),
+      曲数: pick ? pick.options.length : 0,
+      曲高: pick ? Math.round(pick.getBoundingClientRect().height) : 0,
+      /* **いま押されているほうが、見て分かるか**(色だけに頼らない) */
+      押: [...document.querySelectorAll('[aria-label="音楽"] .theme-btn')]
+        .map((b) => `${b.textContent.trim()}${b.classList.contains('is-active') ? '*' : ''}`)
+        .join(' '),
+      はみ出し: foot ? Math.max(0, foot.scrollWidth - foot.clientWidth) : 0,
+    }
+  })
+  /* **押すのは、利用者と同じ道で。** `aria-label` で組を絞ってから
+     文字で選ぶ —— 並び順で決めると、入れ替えた日に黙って別のものを押す */
+  const 押す = async (文字) => {
+    await page.evaluate((t) => {
+      const b = [...document.querySelectorAll('[aria-label="音楽"] .theme-btn')]
+        .find((x) => x.textContent.trim() === t)
+      b?.click()
+    }, 文字)
+    await page.waitForTimeout(250)
+  }
+
+  const 入 = await 見る()
+  if (!入.見える.includes('曲') || !入.見える.includes('音楽の大きさ')) {
+    ng(`音楽 ${W}px … オンなのに「曲」か「音楽の大きさ」が出てこない`,
+      `出ているのは ${入.見える.join(' / ')}`)
+  } else if (入.曲数 < 3) {
+    ng(`音楽 ${W}px … 曲のえらびが ${入.曲数} 行`,
+      '「ぜんぶ(順不同)」+ 登録した曲が並ぶこと')
+  } else if (入.曲高 < 40) {
+    ng(`音楽 ${W}px … 曲のえらびが ${入.曲高}px しかなく、指で狙えない`)
+  } else if (入.押 !== 'オン* オフ') {
+    ng(`音楽 ${W}px … いま押されているほうが読み取れない(${入.押})`,
+      '既定はオン(これまでどおり鳴る)')
+  } else if (入.はみ出し > 0) {
+    ng(`音楽 ${W}px … メニューの下が ${入.はみ出し}px 横にはみ出している`)
+  } else {
+    ok(`音楽 ${W}px … オン … 曲(${入.曲数} 行・${入.曲高}px)と`
+      + '「音楽の大きさ」が出る')
+  }
+
+  await 押す('オフ')
+  const 切 = await 見る()
+  if (切.見える.includes('曲') || 切.見える.includes('音楽の大きさ')) {
+    ng(`音楽 ${W}px … オフにしても「${
+      ['曲', '音楽の大きさ'].filter((n) => 切.見える.includes(n)).join(' / ')
+    }」が出たまま`, '鳴らないのに選ばせない(効かない操作を見せない)')
+  } else if (!切.見える.includes('音楽')) {
+    ng(`音楽 ${W}px … オフにしたら「音楽」の行そのものが消えた`,
+      '戻せなくなる(行き止まりを作らない)')
+  } else if (切.押 !== 'オン オフ*') {
+    ng(`音楽 ${W}px … オフを押しても、押されたほうが変わらない(${切.押})`)
+  } else {
+    ok(`音楽 ${W}px … オフ … 曲も大きさも消える(${切.見える.length} 行)`)
+  }
+
+  await 押す('オン')
+  const 戻 = await 見る()
+  if (!戻.見える.includes('曲') || !戻.見える.includes('音楽の大きさ')) {
+    ng(`音楽 ${W}px … オンに戻しても出てこない`, `${戻.見える.join(' / ')}`)
+  } else {
+    ok(`音楽 ${W}px … オンに戻すと、また曲と大きさが出る`)
+  }
+  await page.close()
+}
+/* **曲が1つのときは、えらびそのものを出さない**(`bgmChoices`)——
+   「ぜんぶ」とその1曲は同じもので、押しても何も変わらない */
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{}',
+  }))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=navfoot&songs=one`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(600)
+  await page.click('.nav-settings-sum')
+  await page.waitForTimeout(250)
+  const 一 = await page.evaluate(() => ({
+    曲: !!document.querySelector('.nav-song-pick'),
+    大: [...document.querySelectorAll('.app-nav-foot .nav-setting')]
+      .some((r) => r.querySelector('.nav-setting-label')
+        ?.firstChild?.textContent?.trim() === '音楽の大きさ'),
+  }))
+  if (一.曲) {
+    ng('音楽 … 曲が1つしか無いのに、えらぶ欄が出ている',
+      '「ぜんぶ」とその1曲は同じもの(効かない操作を見せない)')
+  } else if (!一.大) {
+    ng('音楽 … 曲が1つだと「音楽の大きさ」まで消えている',
+      '大きさは曲の数と関わりがない')
+  } else {
+    ok('音楽 … 曲が1つのときは、えらぶ欄を出さない(大きさは出る)')
+  }
+  await page.close()
 }
 
 /* ══════════════════════════════════════════════════════════════

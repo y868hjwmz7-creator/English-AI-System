@@ -12,8 +12,12 @@
  *
  * 【だから畳む。消さない】
  *   **1つも減らしていない**(「一度入れたものを勝手に減らさない」・共通ルール)。
- *   押すものを**「設定」1つ**にして、中に7つとも入れてある。
+ *   押すものを**「設定」1つ**にして、中に全部入れてある。
  *   ふだんは閉じているので、メニューは行き先だけになる。
+ *
+ * 【いまは9つある】(第5.257節・2026-09-25 利用者の指定)
+ *   「音楽」が3つに割れた —— **オン / オフ・曲・音楽の大きさ**。
+ *   **オフのあいだは、下の2つを出さない**(効かない操作を見せない)。
  *
  * 【開け閉めは覚えない】
  *   毎回触るものではない。覚えていると、次にメニューを開いたときに
@@ -57,6 +61,8 @@ function Pick({ label, options, value, onChange }) {
 }
 
 const SOUNDS = [{ id: true, label: '鳴らす' }, { id: false, label: '鳴らさない' }]
+/** 音楽を流すか(第5.257節・2026-09-25 利用者の指定「音楽on / offの設定も」) */
+const MUSICS = [{ id: true, label: 'オン' }, { id: false, label: 'オフ' }]
 const PREPARES = [
   { id: true, label: '自動', hint: '過去の教材も、裏で順に用意しておく' },
   { id: false, label: '使うときだけ', hint: '発行と「セッションで使う」のときだけ' },
@@ -69,6 +75,20 @@ export default function NavSettings({
   sound, onSound,
   voiceVol, onVoiceVol,
   bgmVol, onBgmVol,
+  /**
+   * **音楽を流すか**(第5.257節・2026-09-25 利用者の指定)。
+   *
+   *   > 音量設定はそのまましっかり機能するようにし、
+   *   > それに加えて音楽on / offの設定も追加してください。
+   *   > on にしたら曲が選べるプルダインも出るように
+   *
+   * **新しい設定を足していない。** 「どこで流すか」のいちばん上が
+   * すでに「流さない」なので、そこを切り替えているだけである
+   * (判断は `bgmOn()` / `setBgmOn()` 1か所)。
+   */
+  music, onMusic,
+  /** 曲のえらび(**2曲以上あるときだけ出る** —— `bgmChoices()` が決める) */
+  songs = [], song, onSong,
   /** 「教材の支度」を出すか。**トレーナーと管理者だけ**(費用が出ていく) */
   showPrepare = false,
   prepare, onPrepare,
@@ -98,7 +118,7 @@ export default function NavSettings({
             (2026-09 に「鳴らさない」から改めた・利用者の指定) */}
         <Pick label="押したときの音" options={SOUNDS} value={sound} onChange={onSound} />
 
-        {/* **英語の音声と音楽の大きさ**(2026-09 利用者の指定)。
+        {/* **英語の音声の大きさ**(2026-09 利用者の指定)。
 
               > アプリに好きな音楽を追加し、英語の音声と音楽を独立して
               > それぞれ音量を調整出来るようにしたいです。
@@ -116,10 +136,7 @@ export default function NavSettings({
             `volumeWorks()` が実際に入れて読み返すので、
             いつか受け付けるようになった日には**ひとりでに出る。** */}
         {volumeWorks() ? (
-          <>
-            <VolumeRow label="英語の音声" value={voiceVol} onChange={onVoiceVol} />
-            <VolumeRow label="音楽" value={bgmVol} onChange={onBgmVol} />
-          </>
+          <VolumeRow label="英語の音声" value={voiceVol} onChange={onVoiceVol} />
         ) : (
           <div className="nav-setting">
             <span className="nav-setting-label">音量</span>
@@ -128,6 +145,39 @@ export default function NavSettings({
               (iPhone・iPad)。端末の音量ボタンで調整してください。
             </p>
           </div>
+        )}
+
+        {/* ── **音楽**(第5.257節・2026-09-25 利用者の指定)──────────────
+
+              > 設定から音楽の音量を0%にしても音楽が消えません。
+              > 音量設定はそのまましっかり機能するようにし、
+              > それに加えて音楽on / offの設定も追加してください。
+              > on にしたら曲が選べるプルダインも出るように
+
+            **3つを、この順に1かたまりで置く。**
+            オフにしたら、下の2つは出さない ——
+            選んでも何も鳴らないものを見せない(効かない操作を見せない)。
+
+              音楽    [オン][オフ]
+              曲      [ぜんぶ(順不同) ▾]   ← 2曲以上あるときだけ
+              音楽の大きさ [────●──] 40%   ← 音量が効く端末だけ
+
+            **「音楽」という名前を2つ置かない**(CLAUDE.md
+            「違うものに同じ名前を付けない」)。つまみのほうは
+            **「音楽の大きさ」**と呼び分ける —— すぐ上の行が
+            オン / オフ なので、同じ名前だと**どちらが何なのか読めない。** */}
+        <Pick label="音楽" options={MUSICS} value={music} onChange={onMusic} />
+        {music && songs.length > 0 && (
+          <label className="nav-setting nav-song">
+            <span className="nav-setting-label">曲</span>
+            <select className="nav-song-pick" value={song}
+                    onChange={(e) => onSong?.(e.target.value)}>
+              {songs.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+            </select>
+          </label>
+        )}
+        {music && volumeWorks() && (
+          <VolumeRow label="音楽の大きさ" value={bgmVol} onChange={onBgmVol} />
         )}
 
         {/* **過去の教材も、裏で順に支度するか**(2026-09 利用者の指定)。

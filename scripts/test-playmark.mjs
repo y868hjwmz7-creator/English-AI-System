@@ -118,12 +118,13 @@ import {
   lastLearner, openLearner, rememberLearner, watchLearner,
 } from '../src/lib/lastLearner.js'
 import {
-  BGM_PLACES, DEFAULT_RADIO_GAP, DEFAULT_SAY_GAP, QR_RADIO_MODES,
+  BGM_PLACES, DEFAULT_BGM_PLACE, DEFAULT_RADIO_GAP, DEFAULT_SAY_GAP, QR_RADIO_MODES,
   RADIO_GAPS, RADIO_MODES, SAY_GAPS,
-  bgmPlaysIn, hidesAnswer,
-  loadRadioGap,
+  bgmOn, bgmPlaysIn, hidesAnswer,
+  loadBgmPlace, loadRadioGap,
   nextIndex, radioGapsFor, radioGapsOf, radioJaOf, radioModeOf,
-  radioModesFor, radioSteps, radioTextOf, radioWarmups, saveRadioGap,
+  radioModesFor, radioSteps, radioTextOf, radioWarmups, saveBgmPlace, saveRadioGap,
+  setBgmOn,
 } from '../src/lib/wordRadio.js'
 import {
   DEFAULT_BGM, DEFAULT_VOICE, VOL_STEP,
@@ -3091,6 +3092,112 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       /* **部品は自分で覚えない**(`test:bar` がそのまま描いて測れる) */
       ok(!/localStorage|setVoiceLevel|setBgmVolume/.test(row),
         '音量 … つまみの部品は、受け取って描くだけ(自分では覚えない)')
+
+      /* ══════════════════════════════════════════════════════════
+         **0% にしたら、音楽が消える**(第5.257節・2026-09-25 利用者の指摘)
+
+           > 設定から音楽の音量を0%にしても音楽が消えません。
+           > 音量設定はそのまましっかり機能するようにし、
+           > それに加えて音楽on / offの設定も追加してください。
+           > on にしたら曲が選べるプルダインも出るように
+
+         【なぜ 0% で消えなかったのか】
+           `volumeWorks()` は **`src` の無い `<audio>`** に 0.5 を入れて
+           読み返している。あれは**鳴らす前の箱**なので、iOS でも
+           素直に 0.5 を返す —— だから**「効く」と答えてつまみが出る**のに、
+           実際に曲を鳴らすと `volume` は無視される。
+           **0 と「小さい」を取り違えない**(CLAUDE.md)。
+           0% は「うんと小さくする」ではなく「**鳴らさない**」である。
+
+         【だから、音量に頼らず止める】
+           止めるのは、どの端末でも効く。**3か所とも要る。**
+           1つでも抜けると、そこだけ鳴り続ける(しかも音は出るので、
+           聴いた人にしか分からない —— いちばん見つけにくい形)。
+         ══════════════════════════════════════════════════════════ */
+      ok(/if \(got <= 0\) \{/.test(bgmjs) && /el\?\.pause\(\)/.test(bgmjs),
+        '音楽 … **0% にしたら、鳴っている曲を止める**(音量に頼らない)')
+      /* **鳴らし始めるほうも塞ぐ。** 止めるだけだと、次の曲に移った
+         とたん(`ended` → `next()` → `play()`)にまた鳴り出す */
+      ok(/if \(bgmLevel\(\) <= 0\) return/.test(bgmjs),
+        '音楽 … 0% のあいだは、次の曲も鳴らし始めない')
+      /* **上げたら戻る。行き止まりを作らない**(CLAUDE.md)。
+         止めっぱなしだと、つまみを上げても音が返ってこない */
+      ok(/el\.play\(\)\.then\(\(\) => to\(got, 400\)\)/.test(bgmjs),
+        '音楽 … 0% から上げ直したら、また鳴り出す')
+
+      /* ── **オン / オフ は、新しい鍵を作らない** ────────────────
+           「どこで流すか」の**いちばん上がすでに「流さない」**である
+           (`BGM_PLACES`)。別の鍵を足すと、**片方を切ったのに
+           もう片方で鳴る** —— `bgmPlaysIn()` が見るのは場所のほうなので、
+           新しい鍵は**誰にも読まれない**まま画面にだけ残る。
+
+           **入れて出して見る**(名前を比べるだけにしない)。
+           端末の控えが無い素の node なので、その場で偽物を置く。 */
+      {
+        const 箱 = new Map()
+        const 前 = globalThis.localStorage
+        globalThis.localStorage = {
+          getItem: (k) => (箱.has(k) ? 箱.get(k) : null),
+          setItem: (k, v) => { 箱.set(k, String(v)) },
+          removeItem: (k) => { 箱.delete(k) },
+        }
+        try {
+          ok(bgmOn() === true && loadBgmPlace() === DEFAULT_BGM_PLACE,
+            '音楽 … 何も触っていなければ、これまでどおり鳴る(既定はオン)')
+          /* **いちばん危ない形を置く**(CLAUDE.md)——
+             既定ではない場所を選んでおく。既定(`radio`)のまま試すと、
+             **控えを取り違えて既定に落としても緑のまま**になる */
+          saveBgmPlace('always')
+          setBgmOn(false)
+          ok(bgmOn() === false && !bgmPlaysIn(loadBgmPlace(), 'radio'),
+            '音楽 … オフにしたら、聞き流しでも鳴らない')
+          setBgmOn(true)
+          ok(loadBgmPlace() === 'always',
+            '音楽 … オンに戻したら、**切る前に選んでいた場所へ戻る**',
+            `いま ${loadBgmPlace()}(「ずっと」だったのに既定へ落ちていないか)`)
+          /* **「戻す先」を覚えるのは、切ったときだけ。**
+             オフのまま押し直しても、控えが `off` に上書きされないこと ——
+             上書きすると、次にオンにしたとき**どこへも戻れなくなる** */
+          setBgmOn(false)
+          setBgmOn(false)
+          setBgmOn(true)
+          ok(loadBgmPlace() === 'always',
+            '音楽 … オフを2回押しても、戻る先は消えない')
+        } finally {
+          if (前 === undefined) delete globalThis.localStorage
+          else globalThis.localStorage = 前
+        }
+      }
+
+      /* ── 画面が、本当に呼んでいるか ──────────────────────
+           **定義だけあって誰も呼ばなければ、何も起きない。**
+           `stopBgm()` が抜けると、**次に開いたときから効く**形になり、
+           利用者には「切れていない」としか見えない。 */
+      ok(/setMusic\(v\); setBgmOn\(v\)/.test(app) && /if \(!v\) stopBgm\(\)/.test(app),
+        '音楽 … オフにしたら、いま鳴っているものもその場で止まる')
+      /* **「音楽」の画面(トレーナーだけ)でも、同じ鍵を書き換えられる。**
+         覚えた値をそのままにすると、**設定のオン / オフだけが古いまま**になる
+         —— 鍵は1つなのに、画面に出る答えが2通りになる */
+      ok(/useEffect\(\(\) => \{ setMusic\(bgmOn\(\)\) \}, \[view\]\)/.test(app),
+        '音楽 … 画面を移ったら、オン / オフを読み直す(「音楽」の画面と食い違わない)')
+      /* **オフのときは、曲も大きさも出さない**(効かない操作を見せない)。
+         **「出る」と「出ない」の両方**を描いて測るのは `npm run test:bar` */
+      ok(/\{music && songs\.length > 0 && \(/.test(navset)
+        && /\{music && volumeWorks\(\) && \(/.test(navset),
+      '音楽 … オフのあいだは、曲のえらびも大きさのつまみも出さない')
+      /* **「音楽」という名前を2つ置かない**(CLAUDE.md
+         「違うものに同じ名前を付けない」)。つまみのほうは「音楽の大きさ」。
+         **数えてから見る** —— `label="音楽"` が2つあると、
+         画面には同じ名前の行が2つ並ぶ */
+      ok((navset.match(/label="音楽"/g) ?? []).length === 1
+        && /label="音楽の大きさ"/.test(navset),
+      '音楽 … 「音楽」(オン / オフ)と「音楽の大きさ」を呼び分けている')
+      /* **曲の数え方を2通り持たない。** 聞き流し(`WordRadio`)と
+         同じ `bgmChoices()` / `bgmPickOf()` を通す —— 自前で数えると、
+         **消された曲を握ったまま**になったり、1曲でも欄が出たりする */
+      ok(/const songs = bgmChoices\(tracks\)/.test(app)
+        && /const songNow = bgmPickOf\(tracks, song\)/.test(app),
+      '音楽 … 曲のえらびは、聞き流しと同じ `bgmChoices()` / `bgmPickOf()` を通る')
     }
 
     ok(/id: 'bgm', label: '音楽'/.test(app) && /<BgmLibrary/.test(app),
@@ -3113,7 +3220,8 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
  * 占めていた。**畳んで1つにまとめ、いちばん下へ置いた。**
  *
  * 【ここは算段。描いて測るのは `npm run test:bar`】
- *   ①7つとも入っているか ②既定で閉じているか ③いちばん下にいるか
+ *   ①9つとも入っているか(第5.257節で「音楽」が3つに割れた)
+ *   ②既定で閉じているか ③いちばん下にいるか
  *   ④画面が本当に呼んでいるか ⑤部品が自分で覚えていないか
  * ========================================================================== */
 {
@@ -3123,13 +3231,15 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   const app = noCS(readS('src/App.jsx'))
   const set = noCS(readS('src/components/NavSettings.jsx'))
 
-  /* ① **7つとも入っている。一度入れたものを勝手に減らさない**(共通ルール) */
+  /* ① **9つとも入っている。一度入れたものを勝手に減らさない**(共通ルール)。
+     第5.257節で「音楽」が3つに割れた(オン / オフ・曲・大きさ)。
+     **描いて測るのは `npm run test:bar`**(オフのときは下の2つを出さない) */
   {
     const WANT = ['配色', '色づかい', '説明の文', '押したときの音',
-      '英語の音声', '音楽', '教材の支度']
+      '英語の音声', '音楽', '曲', '音楽の大きさ', '教材の支度']
     const 無い = WANT.filter((n) => !set.includes(n))
     ok(無い.length === 0,
-      `設定 … 7つとも入っている${無い.length ? `(足りない: ${無い.join(' / ')})` : ''}`)
+      `設定 … 9つとも入っている${無い.length ? `(足りない: ${無い.join(' / ')})` : ''}`)
   }
 
   /* ② **既定は閉じている。** `open` を書くと、まとめた意味が無くなる。
@@ -3173,10 +3283,12 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       /sound=\{sound\} onSound=/,
       /voiceVol=\{voiceVol\} onVoiceVol=/,
       /bgmVol=\{bgmVol\} onBgmVol=/,
+      /music=\{music\} onMusic=/,
+      /songs=\{songs\} song=\{songNow\} onSong=/,
       /prepare=\{prepAll\} onPrepare=/,
     ]
     const 抜け = WANT.filter((re) => !re.test(app)).length
-    ok(抜け === 0, `設定 … 画面が7つとも渡している${抜け ? `(${抜け} 件が抜けている)` : ''}`)
+    ok(抜け === 0, `設定 … 画面が9つとも渡している${抜け ? `(${抜け} 件が抜けている)` : ''}`)
   }
   /* **「教材の支度」はトレーナーと管理者だけ**(費用が出ていく) */
   ok(/showPrepare=\{profile\?\.role === 'trainer' \|\| profile\?\.role === 'owner'\}/.test(app),

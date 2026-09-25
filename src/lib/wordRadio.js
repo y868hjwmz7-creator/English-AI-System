@@ -579,6 +579,50 @@ export function saveBgmPlace(id) {
   try { localStorage.setItem(PLACE_KEY, String(id)) } catch { /* 使えなくても困らない */ }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   **音楽を鳴らすか、鳴らさないか**(第5.257節・2026-09-25 利用者の指定)
+
+     > 音量設定はそのまましっかり機能するようにし、
+     > それに加えて音楽on / offの設定も追加してください。
+     > on にしたら曲が選べるプルダインも出るように
+
+   **新しい設定を足さない。** 「どこで流すか」の**いちばん上が
+   すでに「流さない」**である(`BGM_PLACES`)。
+   別の鍵を作ると、**片方を切ったのにもう片方で鳴る**ことになる
+   (**同じことをするものを2つ持たない**・CLAUDE.md)。
+
+   **切る前に、どこで流していたかを覚えておく。** 覚えないと、
+   戻したときに既定へ落ちて、**選んでいた場所が黙って変わる。**
+   ══════════════════════════════════════════════════════════════════ */
+
+/** いま音楽を鳴らすか。**判断はここ1か所**(画面で `=== 'off'` と書かない) */
+export const bgmOn = () => loadBgmPlace() !== 'off'
+
+/** 切る前に流していた場所。**戻すときに使う** */
+const BACK_KEY = 'eas.bgmPlaceBack'
+
+/**
+ * 音楽を鳴らす / 鳴らさないを決める。**決まった場所を返す。**
+ * 切るときは、いまの場所を控えてから「流さない」にする。
+ */
+export function setBgmOn(on) {
+  if (!on) {
+    const now = loadBgmPlace()
+    if (now !== 'off') {
+      try { localStorage.setItem(BACK_KEY, now) } catch { /* 同上 */ }
+    }
+    saveBgmPlace('off')
+    return 'off'
+  }
+  let back = DEFAULT_BGM_PLACE
+  try {
+    const saved = localStorage.getItem(BACK_KEY)
+    if (saved && saved !== 'off' && BGM_PLACES.some((p) => p.id === saved)) back = saved
+  } catch { /* 同上 */ }
+  saveBgmPlace(back)
+  return back
+}
+
 /**
  * 覚えている読み方。**場面ごとに別に覚える**(単語帳 / Quick Response)。
  * `loadScope('qr')` と同じ形で、**呼ぶ側は場面の名前だけを渡す。**

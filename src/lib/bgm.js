@@ -222,6 +222,10 @@ function to(v, ms = 400) {
 async function play(i) {
   const a = audio()
   if (!a || !list.length) return
+  /* **0% のときは、鳴らし始めない**(第5.257節)。
+     `volume = 0` で始めても、**音量を無視する端末では全開で鳴る。**
+     **署名を取りに行く前に返す** —— 鳴らさないものの URL は要らない */
+  if (bgmLevel() <= 0) return
   at = ((i % list.length) + list.length) % list.length
   const url = await trackUrl(list[at])
   if (!url) return
@@ -275,6 +279,31 @@ export const bgmPlaying = () => Boolean(el && !el.paused && list.length)
  */
 export function setBgmVolume(v) {
   const got = setBgmLevel(v)
+  /* ══════════════════════════════════════════════════════════════
+     **0% は、止める**(第5.257節・2026-09-25 利用者の指摘)
+
+       > 設定から音楽の音量を0%にしても音楽が消えません
+
+     **音量に頼れない端末がある。** iOS は `<audio>` の `volume` を
+     黙って無視するので、0 を入れても**そのまま鳴り続ける。**
+     しかも `volumeWorks()` は **src の無い `<audio>` で試している**ため、
+     iPhone でも「効く」と答える —— **つまみは出るのに、効かない。**
+
+     **止めるのは、どの端末でも効く。** だから 0% は「小さくする」
+     ではなく「**止める**」にする。**0 と「無い」を取り違えない**
+     (0 は「音量が小さい」ではなく「鳴らさない」という指定である)。 */
+  if (got <= 0) {
+    if (ramp) { clearInterval(ramp); ramp = null }
+    try { el?.pause() } catch { /* 端末が拒むことがある */ }
+    return got
+  }
+  /* **0 から戻したら、また鳴らす。** 止めたままだと、
+     上げても音が返ってこない(**行き止まりを作らない**) */
+  if (el && el.paused && list.length && el.getAttribute('src')) {
+    el.volume = 0
+    el.play().then(() => to(got, 400)).catch(() => { /* 端末が拒む */ })
+    return got
+  }
   if (el && !el.paused) to(got, 150)
   return got
 }
