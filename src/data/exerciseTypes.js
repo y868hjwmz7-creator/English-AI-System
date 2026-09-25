@@ -1053,8 +1053,10 @@ export const isIncluded = (typeId, include = null) => {
  * **上限は `MAX_ITEMS`(30)。** 窓口(`generate-material`)も同じ数で
  * 丸めるので、**片方だけ変えない。**
  */
-export const sectionsFor = (kind, amounts = null, include = null) =>
-  defaultSectionsFor(kind)
+export const RECALL_PER_WORD = 3
+
+export const sectionsFor = (kind, amounts = null, include = null) => {
+  const out = defaultSectionsFor(kind)
     .filter((s) => isIncluded(s.exercise_type, include))
     .map((s) => {
       if (!SCALABLE_SECTIONS.includes(s.exercise_type)) return s
@@ -1068,3 +1070,27 @@ export const sectionsFor = (kind, amounts = null, include = null) =>
       const n = countOf(s.count, pick)
       return n === s.count ? s : { ...s, count: n }
     })
+
+  /* ══════════════════════════════════════════════════════════════
+     **ランダムに出す段は、語の数から出す**(第5.254節・2026-09-23)
+
+       > そして、次のページで全てのフレーズをランダムで出題。
+       > 形式は日→英の英作文。問題数は各フレーズ3-7問
+
+     **7問の決め打ちをやめる。** 語が10でも20でも7問では、
+     触れられない語が出る。**語の数 × 3**(いちばん下の数)にする ——
+     3なら、いちばん多くの語に行き渡る。
+
+     **上限は `MAX_ITEMS`(30)。** 1回の頼みで作れる数である。
+     語が10なら各3問でちょうど 30。20 なら頭打ちになる ——
+     **黙って減らさない**ので、画面には出た数がそのまま出る。
+     ══════════════════════════════════════════════════════════════ */
+  return out.map((s) => {
+    const parent = PARENT_SECTION[s.exercise_type]
+    if (!parent) return s
+    const head = out.find((x) => x.exercise_type === parent)
+    if (!head) return s
+    const n = Math.min(head.count * RECALL_PER_WORD, MAX_ITEMS)
+    return n === s.count ? s : { ...s, count: n }
+  })
+}

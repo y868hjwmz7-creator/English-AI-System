@@ -33,7 +33,7 @@ import {
   MAX_CHARS, MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
 } from '../src/lib/speechDraft.js'
 import {
-  DEFAULT_SECTIONS, PARENT_SECTION,
+  DEFAULT_SECTIONS, MAX_ITEMS, PARENT_SECTION, RECALL_PER_WORD,
   EXERCISE_TYPES, SCALABLE_SECTIONS, amountsFor, answerHasAudio, defaultSectionsFor,
   exerciseLabel, isBlankItem, isChunkSection, isIncluded, isPassageSection, isWrongShape,
   noteIsAnswer, sectionLabel, sectionsFor,
@@ -10801,8 +10801,30 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     const plan = sectionsFor('vocab')
     ok(plan.length === 4, '単語 / フレーズ … 覚える2つと、言う2つ',
       plan.map((x) => `${exerciseLabel(x.exercise_type)}${x.count}`).join(' + '))
-    ok(plan.filter((x) => PARENT_SECTION[x.exercise_type]).every((x) => x.count === 7),
-      '単語 / フレーズ … 日本語 → 英語は、それぞれ7問')
+    /* ══════════════════════════════════════════════════════════
+       **ランダムに出す段は、語の数から出す**(第5.254節・2026-09-23)
+
+         > 次のページで全てのフレーズをランダムで出題。
+         > 問題数は各フレーズ3-7問
+
+       **7問の決め打ちはやめた。** 語が10でも20でも7問では、
+       触れられない語が出る。**値は書き写さない。性質で見る**(CLAUDE.md) */
+    ok(plan.filter((x) => PARENT_SECTION[x.exercise_type])
+      .every((x) => {
+        const head = plan.find((h) => h.exercise_type === PARENT_SECTION[x.exercise_type])
+        return x.count === Math.min(head.count * RECALL_PER_WORD, MAX_ITEMS)
+      }),
+    '単語 / フレーズ … 日本語 → 英語は、語の数 × 3(上限まで)',
+    plan.filter((x) => PARENT_SECTION[x.exercise_type]).map((x) => x.count).join(' / '))
+    /* **語を増やしても、上限を超えない**(1回の頼みで作れる数である) */
+    ok(sectionsFor('vocab', { vocabulary: 'double' })
+      .find((x) => x.exercise_type === 'vocab_recall').count <= MAX_ITEMS,
+    '単語 / フレーズ … 語を増やしても、上限を超えない')
+    /* **語が少ないときは、ちゃんと減る**(上限に貼り付いたままにしない)。
+       **「無ければ素通り」する形の検証を書かない**(CLAUDE.md) */
+    ok(sectionsFor('vocab', { vocabulary: 'default' })
+      .find((x) => x.exercise_type === 'vocab_recall').count === 10 * RECALL_PER_WORD,
+    '単語 / フレーズ … 語が少なければ、そのぶん少なくなる')
     /* **並びは 覚える → 言う。** 言う番が先に来ると、
        まだ見ていないものを言わせることになる */
     ok(plan[0].exercise_type === 'vocabulary' && plan[1].exercise_type === 'vocab_recall'

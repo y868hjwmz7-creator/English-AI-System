@@ -17,7 +17,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, cefrOption } from '../data/cefr.js'
 import {
-  EXERCISE_TYPES, FIELD_LABELS, SCALABLE_SECTIONS, amountsFor, countOf,
+  EXERCISE_TYPES, FIELD_LABELS, SCALABLE_SECTIONS, WORD_DRILLS,
+  DEFAULT_WORD_DRILL, amountsFor, countOf,
   defaultSectionsFor, exerciseLabel, exerciseType, grammarSource, isIncluded,
   isPassageSection, sectionLabel, sectionsFor,
 } from '../data/exerciseTypes.js'
@@ -301,6 +302,10 @@ export default function MaterialForm({
   const [wordLevel, setWordLevel] = useState('')      // レベル(空=すべて)
   const [wordPos, setWordPos] = useState('')          // 品詞(空=すべて)
   const [wordCount, setWordCount] = useState(10)      // 何語足すか
+  /* 単語 / フレーズの「日本語 → 英語」を、1語につき何問にするか
+     (第5.254節・2026-09-23 利用者の指定「練習する3〜6問(作成時に指定)」)。
+     **数の一覧は `exerciseTypes.js` 1か所**(ここに書き写さない) */
+  const [wordDrill, setWordDrill] = useState(DEFAULT_WORD_DRILL)
   const [wordRows, setWordRows] = useState([])        // 引けた語
   const [wordBusy, setWordBusy] = useState(false)
   const [wordError, setWordError] = useState(null)
@@ -1169,6 +1174,11 @@ export default function MaterialForm({
           // 選んだものなので、自動で拾った語より優先する。
           // 文型ドリルは**4演習に配る**、単語・フレーズは最初の演習だけ
           reviewWords: share ? (share[i] ?? []) : (i === 0 ? mergedReview() : []),
+          /* 1語につき何問の「日本語 → 英語」を付けるか(第5.254節)。
+             **どの演習にも渡す** —— 効くのは単語 / フレーズだけだが、
+             ここで種類を見分けると、判断が2か所になる
+             (窓口の側が「その欄を出すかどうか」を決めている) */
+          wordDrill,
         },
         { usedSet, learnerIds: shareWith, tagIds },
       )
@@ -2211,6 +2221,33 @@ export default function MaterialForm({
             ? `${bodyWord(kind)}の本文は必ず入ります。`
             : '最後の1つは外せません(作るものが無くなるため)。'}
         </p>
+
+        {/* ── **1語につき、日本語 → 英語を何問つけるか**(第5.254節)──
+            2026-09-23 利用者の指定:
+              > ■練習する3〜6問 (作成時に指定)
+
+            **単語 / フレーズにだけ出す**(言われた場所だけを直す)。
+            数の一覧は `exerciseTypes.js` 1か所から引く ——
+            ここに 3/4/5/6 と書き写すと、変えた日に片方だけ古くなる。
+            **札の形は、すぐ上の問数とそろえる**(`theme-switch`) */}
+        {isVocabKind(kind) && (
+          <div className="amount-row">
+            <div className="amount-pick">
+              <span className="amount-label">1語につき 日本語 → 英語</span>
+              <div className="theme-switch" role="group"
+                   aria-label="1語につける日本語 → 英語の数">
+                {WORD_DRILLS.map((d) => (
+                  <button key={d.id} type="button"
+                          className={`theme-btn${wordDrill === d.id ? ' is-active' : ''}`}
+                          aria-pressed={wordDrill === d.id}
+                          onClick={() => setWordDrill(d.id)}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── **文法解説を作るかどうか**(第5.213節・2026-09 利用者の指定)──
 
