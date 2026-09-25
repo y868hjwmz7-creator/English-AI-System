@@ -154,6 +154,11 @@ import {
   NO_ACTIVE_TEXT, PICK_LABEL, matchLearners, pickedNames, showsLearnerList,
 } from '../src/lib/learnerPick.js'
 import { manyDoneText, manyStoppedText } from '../src/lib/assignMany.js'
+/* テキストで出た表現を混ぜる(第5.259節)。**算段は素の node で走る** */
+import {
+  MIX_KINDS, MIX_MAX, REVIEW_MAX,
+  canMixText, mixNote, mixWords, overNote, pickMix,
+} from '../src/lib/textMix.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -11445,6 +11450,177 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
      入っていないと、練習中に並べ方を変えても出る問が前のままになる */
   ok(/const runKey = [^\n]*\$\{order\}/.test(素),
     'Quick Response … 練習中に並べ方を変えたら、その場で組み直す')
+}
+
+/* ==========================================================================
+ * **テキストで出た表現を混ぜる**(第5.259節・2026-09-25 利用者の指定)
+ *
+ *   > 記事、モノローグ、ダイアローグ、会議、文系トレーニングに
+ *   > NATIVE FLOW や RIZAP English のテキストで出た表現を混ぜれるようにしたい。
+ *   > ユニットに分かれている教材は盛り込みたいフレーズがある
+ *   > ユニットを選べたら最高です。
+ *
+ * 【ここは算段。引いてくるのは `textBooks.js`(あちらは Supabase を持つ)】
+ * ========================================================================== */
+{
+  console.log('\n▶ テキストの表現を混ぜる')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+
+  /* ── ① **出す種類と、出さない種類の両方を見る**(CLAUDE.md)────────
+       「5つに出る」だけを見ると、**どの種類にも出す形**に書き換えても
+       緑のままになる。単語 / フレーズに出ないことまで見る */
+  {
+    const WANT = ['reading', 'speech', 'dialogue', 'meeting', 'pattern']
+    const 無い = WANT.filter((k) => !canMixText(k))
+    ok(無い.length === 0,
+      `混ぜる … 利用者が名指しした5つに出る${無い.length ? `(出ない: ${無い.join(' / ')})` : ''}`)
+    ok(!canMixText('vocab') && !canMixText('word') && !canMixText('phrase'),
+      '混ぜる … 単語 / フレーズには出さない(表現そのものがお題なので混ざらない)')
+    ok(MIX_KINDS.length === WANT.length,
+      `混ぜる … 5つだけ(${MIX_KINDS.length})`, MIX_KINDS.join(' / '))
+  }
+
+  /* ── ② **二度入れない・足りなければあるだけ・元を動かさない** ──────
+       **いちばん危ない形を、検証の中に必ず置く**(CLAUDE.md)——
+       「もう全部入っている」形と「欲しい数より少ない」形の2つ */
+  {
+    const rows = [
+      { en: 'Totally.', ja: 'まったくその通り。' },
+      { en: 'No way.', ja: 'ありえない。' },
+      { en: 'I see.', ja: 'なるほど。' },
+    ]
+    ok(pickMix(rows, { count: 2 }).length === 2, '混ぜる … 欲しい数だけ返る')
+    /* ── **元の一覧を動かさないか** ────────────────────────────
+         **3つで見てはいけない。** 3つを混ぜると 1/6 でそのままの順に戻り、
+         **壊してあっても緑になる日がある**(実際、赤チェックで踏んだ)。
+         **凍らせて、書き込もうとしたら止まる形**にする —— これなら運に頼らない。 */
+    {
+      const 凍 = Object.freeze([...rows])
+      let 動かした = false
+      try { pickMix(凍, { count: 2 }) } catch { 動かした = true }
+      ok(!動かした && JSON.stringify(凍) === JSON.stringify(rows),
+        '混ぜる … 元の一覧を並べ替えていない(凍らせた一覧でも通る)')
+    }
+    /* **そろえ方は大文字小文字を見ない。** 一覧には `Totally.` が入るが、
+       次に引いたときは小文字で来るかもしれない */
+    const のこり = pickMix(rows, { count: 3, taken: ['totally.', 'NO WAY.'] })
+    ok(のこり.length === 1 && のこり[0].en === 'I see.',
+      '混ぜる … もう入っているものは、二度入れない(大文字小文字を見ない)')
+    ok(pickMix(rows, { count: 9 }).length === 3,
+      '混ぜる … 足りなければ、あるだけ返す(黙って埋めない)')
+    ok(pickMix(rows, { count: 3, taken: ['totally.', 'no way.', 'i see.'] }).length === 0,
+      '混ぜる … もう全部入っていれば、0 個を返す')
+    ok(pickMix(rows, { count: 0 }).length === 0, '混ぜる … 0 個と言われたら 0 個')
+    /* **上限を超えて積まない。** `reviewWords` はテキストの表現だけの
+       ものではない —— ここで積みすぎると、単語帳から選んだ語が押し出される。
+
+       **3つの一覧で見てはいけない**(CLAUDE.md「無ければ素通りする形の
+       検証を書かない」)—— 上限より少なければ、上限を外しても緑になる。
+       **上限より多い一覧**を、その場で作って渡す */
+    {
+      const 多い = Array.from({ length: MIX_MAX + 8 },
+        (_, i) => ({ en: `Phrase ${i + 1}.`, ja: `表現 ${i + 1}` }))
+      ok(pickMix(多い, { count: 999 }).length === MIX_MAX,
+        `混ぜる … 一度に ${MIX_MAX} 個を超えて積まない`,
+        `${MIX_MAX + 8} 個ある一覧から ${pickMix(多い, { count: 999 }).length} 個`)
+    }
+    /* **訳は窓口へ渡さない**(指示が倍の長さになり、本来の指定が薄まる) */
+    const w = mixWords(rows)
+    ok(w.length === 3 && w.every((x) => typeof x === 'string') && !w.join('').includes('なるほど'),
+      '混ぜる … 窓口へ渡すのは英語だけ(訳は渡さない)')
+  }
+
+  /* ── ③ **起きたことをそのまま言う**(「追加しました」で終わらせない)── */
+  {
+    ok(/0 個/.test(mixNote('Native Flow', '', 0, 5)) === false
+      && /ありません/.test(mixNote('Native Flow', '', 0, 5)),
+    '混ぜる … 0 個のときは「足しました」と言わない')
+    ok(/3 個/.test(mixNote('Native Flow', '【Unit 3】句', 3, 5))
+      && /5/.test(mixNote('Native Flow', '【Unit 3】句', 3, 5)),
+    '混ぜる … 足りなかったときは、欲しかった数も言う')
+    ok(mixNote('Native Flow', '【Unit 3】句', 5, 5).includes('【Unit 3】句'),
+      '混ぜる … どの UNIT から足したのかを言う')
+  }
+
+  /* ── ④ **窓口が切る数と、画面が言う数が合っているか** ────────────
+       窓口は Deno の中にいるので、**この値を分け合えない**
+       (`V3_STABILITY` と同じ形)。だから**ソースと突き合わせる。**
+       片方を変えたら赤くなる —— **数え方を2通り持たない**(CLAUDE.md) */
+  {
+    const gen = readS('supabase/functions/generate-material/index.ts')
+    const m = gen.match(/reviewWords = \(Array[\s\S]{0,200}?slice\(0, (\d+)\)/)
+    const 窓口 = m ? Number(m[1]) : null
+    ok(窓口 === REVIEW_MAX,
+      '混ぜる … 窓口が `reviewWords` を切る数と、画面が言う数が同じ',
+      `窓口 ${窓口} / 画面 ${REVIEW_MAX}`)
+    ok(!overNote(REVIEW_MAX) && overNote(REVIEW_MAX + 1).includes(String(REVIEW_MAX)),
+      '混ぜる … 上限を超えたときだけ、そのことを言う(出る / 出ないの両方)')
+    /* **画面にそのまま出る文字列に `**` を混ぜない**(CLAUDE.md) */
+    ok(!overNote(REVIEW_MAX + 1).includes('**'),
+      '混ぜる … 知らせの文に `**` を混ぜていない')
+  }
+
+  /* ── ⑤ **画面が、本当に呼んでいるか** ──────────────────────
+       **定義だけあって誰も呼ばなければ、何も起きない**(CLAUDE.md) */
+  {
+    const form = noC(readS('src/components/MaterialForm.jsx'))
+    ok(/const mixOn = canMixText\(kind\)/.test(form),
+      '混ぜる … 出すかどうかは `canMixText()` 1か所(画面で種類を書いていない)')
+    /* **一覧を画面に書き写さない。** 書き写すと、種類を足した日に
+       `textMix.js` と画面の2か所を直すことになり、必ず片方が古くなる。
+       (`genre` のように**もとからある `kind === 'reading'`** は、
+        言われた場所ではないので触っていない・CLAUDE.md) */
+    ok(!/MIX_KINDS/.test(form) && !/mixOn = [^\n]*'reading'/.test(form),
+      '混ぜる … 5つの一覧を画面に書き写していない(`canMixText()` に任せる)')
+    /* **同じ一覧に足す。** 別の一覧を作ると、窓口へ渡すところが2つに割れる */
+    /* **同じ形が2か所にある**(単語帳から選ぶ道にも同じ1行がある)。
+       **行だけで探すと、そちらに当たって素通りする** ——
+       赤チェックで実際に踏んだので、**`addMix` の中に限って**見る
+       (CLAUDE.md「置き換える前に `grep -n` で数える」) */
+    ok(/const addMix = async[\s\S]{0,900}?setMustUse\(\[\.\.\.mustUse, \.\.\.add\]\)/.test(form),
+      '混ぜる … 足した表現は、単語帳から選んだ語と同じ一覧に入る')
+    ok(/loadTextPhrases\(mixBook, mixUnit\)/.test(form)
+      && /pickMix\(data \?\? \[\], \{ count: mixCount, taken: mustUse \}\)/.test(form),
+    '混ぜる … いま一覧に入っているものを渡して、二度入れないようにしている')
+    /* **AI を1回も呼ばない(0円)。** `generateSection` を通らないこと */
+    ok(!/addMix[\s\S]{0,600}?generateSection/.test(form),
+      '混ぜる … 表現を足すのに AI を呼んでいない(0円)')
+    /* **読んでいる最中・0 UNIT・読めなかった を取り違えない** */
+    ok(/mixUnits === null \?/.test(form) && /mixUnits\.length === 0 \?/.test(form),
+      '混ぜる … 「読んでいます」と「まだ入っていません」を分けて出す')
+    /* **効かない操作を見せない** —— UNIT が無い冊では押せない */
+    ok(/disabled=\{mixBusy \|\| mixUnits === null \|\| mixUnits\.length === 0\}/.test(form),
+      '混ぜる … UNIT が1つも無い冊では、押せるボタンを出さない')
+    /* **失敗の知らせは、その操作をした場所に出す** */
+    ok(/\{mixError && <p className="notice notice--warn">/.test(form),
+      '混ぜる … 読めなかったら、その場に出す(画面のいちばん下に出さない)')
+    /* **「単語帳から」と言い切らない。** テキストの表現もここに並ぶ */
+    ok(!/単語帳から選んだ \{mustUse\.length\}/.test(form)
+      && /選んだ \{mustUse\.length\} 個/.test(form),
+    '混ぜる … 一覧の言い方が、中身より狭くなっていない')
+  }
+
+  /* ── ⑥ **置き場所が2つあることを、呼ぶ側に書かせない** ────────── */
+  {
+    const books = noC(readS('src/lib/textBooks.js'))
+    const mix = noC(readS('src/lib/textMix.js'))
+    /* 算段は**素の node で確かめられる**(`playMark.js` と同じ作法) */
+    ok(!/supabase|import\.meta\.env/.test(mix),
+      '混ぜる … 算段は Supabase を持たない(素の node で確かめられる)')
+    /* **Native Flow はファイルの中。** 読みに行かない = 必ず引ける・0円 */
+    ok(/book\.local/.test(books) && /NATIVE_FLOW\.filter/.test(books),
+      '混ぜる … Native Flow はファイルから引く(Supabase を呼ばない)')
+    /* **UNIT の数を書かない。** RIZAP は `rizapAssign.js` と同じ関数で数える */
+    ok(/loadRizapUnits/.test(books) && !/UNIT は \d+/.test(books),
+      '混ぜる … RIZAP の UNIT は読んで数える(数を書き写さない)')
+    /* **丸ごとでも、読みに行くのは1回。** UNIT ごとに往復しない */
+    ok(/\.in\('material_id', ids\)/.test(books),
+      '混ぜる … 丸ごとのときも、中身を読むのは1回の問い合わせ')
+    /* **0 と「読めなかった」を取り違えない** */
+    ok(/const ng = \(message\) => \(\{ data: null, error: message \}\)/.test(books),
+      '混ぜる … 読めなかったら `null` を返す(空の配列にしない)')
+  }
 }
 
 console.log(ng

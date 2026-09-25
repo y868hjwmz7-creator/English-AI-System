@@ -82,6 +82,20 @@ import { collectReviewWords, loadMyWordbook, normWord } from '../lib/vocab.js'
 import {
   BASIC_TIERS, DRILL_COUNTS, booksFor, narrowRows, optionsOf, pickWords, spreadWords,
 } from '../lib/drillWords.js'
+/* **テキストで出た表現を混ぜる**(第5.259節・2026-09-25 利用者の指定)。
+     > 記事、モノローグ、ダイアローグ、会議、文系トレーニングに
+     > NATIVE FLOW や RIZAP English のテキストで出た表現を混ぜれるようにしたい。
+     > ユニットに分かれている教材は盛り込みたいフレーズがある
+     > ユニットを選べたら最高です。
+   **新しい渡し道を作らない** —— すでにある `mustUse` に足すだけである。
+   算段は `textMix.js`(**素の node で確かめられる**)、
+   引いてくるのは `textBooks.js`(あちらが Supabase を持つ) */
+import {
+  DEFAULT_MIX, MIX_ALL_UNITS, MIX_COUNTS, canMixText, mixNote, mixWords, overNote, pickMix,
+} from '../lib/textMix.js'
+import {
+  NF_BOOK_ID, TEXT_BOOKS, loadTextPhrases, loadTextUnits, textBookLabel,
+} from '../lib/textBooks.js'
 import { levelOf, posOf } from '../lib/wordbookFilter.js'
 import { loadShelfWordbook } from '../lib/shelfReviews.js'
 import { basicRows } from '../lib/basicsCourse.js'
@@ -227,6 +241,21 @@ export default function MaterialForm({
   // **復習が宿題に化ける。** 単語帳で「知らなかった」と付いた語から
   // そのまま教材を作れる。消せるようにしておく(全部使う必要はない)
   const [mustUse, setMustUse] = useState(() => (initial.mustUse ?? []).slice(0, 20))
+  /* ── **テキストで出た表現を混ぜる**(第5.259節・2026-09-25 利用者の指定)──
+       冊 → UNIT → いくつ、の3つだけ。足したものは、すぐ下の
+       「必ず入れます」の一覧(`mustUse`)に並ぶ ——
+       **一覧を2つに割らない**(同じことをするものを2つ見せない・CLAUDE.md)。
+
+       **UNIT は読みに行く。数を書かない** ——
+       RIZAP は Supabase にあり、UNIT が増えるためである
+       (`textBooks.js` が、置き場所の違いを呼ぶ側から隠している)。 */
+  const [mixBook, setMixBook] = useState(NF_BOOK_ID)
+  const [mixUnits, setMixUnits] = useState(null)   // **null は「まだ読んでいない」**
+  const [mixUnit, setMixUnit] = useState(MIX_ALL_UNITS)
+  const [mixCount, setMixCount] = useState(DEFAULT_MIX)
+  const [mixBusy, setMixBusy] = useState(false)
+  const [mixSaid, setMixSaid] = useState('')
+  const [mixError, setMixError] = useState('')
   const [accent, setAccent] = useState(initial.accent || DEFAULT_ACCENT)
   /*
    * **会話に出す人数**(2026-09 利用者の要望「会議というジャンルを作りたい」)。
@@ -469,6 +498,53 @@ export default function MaterialForm({
      ゲストを1人だけ選んでいるときにしか出さない
      (「これまでの宿題から復習する」とまったく同じ決まり)。 */
   const drillOn = isDrillKind(kind)
+
+  /* ── **テキストの表現を混ぜる**(第5.259節)──────────────────
+       **どの種類で出すかは `canMixText()` 1か所が決める**
+       (画面で `kind === 'reading'` と書かない・CLAUDE.md)。
+
+       UNIT は**冊を選び直すたびに読み直す。**
+       **null のまま残さない** —— 「読んでいる最中」と「0 UNIT」と
+       「読めなかった」を、画面で取り違えないためである。 */
+  const mixOn = canMixText(kind)
+  useEffect(() => {
+    if (!mixOn) return undefined
+    let alive = true
+    setMixUnits(null); setMixUnit(MIX_ALL_UNITS); setMixError('')
+    loadTextUnits(mixBook).then(({ data, error }) => {
+      if (!alive) return
+      if (error) { setMixUnits([]); setMixError(error); return }
+      setMixUnits(data ?? [])
+    }).catch(() => { if (alive) { setMixUnits([]); setMixError('UNIT を読めませんでした') } })
+    return () => { alive = false }
+  }, [mixOn, mixBook])
+
+  /**
+   * **その UNIT の表現を、必ず入れる一覧へ足す。**
+   *
+   * **AI は1回も呼ばない(0円)。** 表現はもう手元にある
+   * (Native Flow はファイル、RIZAP は Supabase の教材)。
+   * **二度入れない**(`pickMix` が `taken` を見る)。
+   */
+  const addMix = async () => {
+    if (mixBusy) return
+    setMixBusy(true); setMixSaid(''); setMixError('')
+    try {
+      const { data, error } = await loadTextPhrases(mixBook, mixUnit)
+      if (error) { setMixError(error); return }
+      const got = pickMix(data ?? [], { count: mixCount, taken: mustUse })
+      const add = mixWords(got)
+      if (add.length) setMustUse([...mustUse, ...add])
+      /* **起きたことをそのまま言う。**「追加しました」で終わらせない */
+      const unit = (mixUnits ?? []).find((u) => u.key === mixUnit)
+      setMixSaid(mixNote(textBookLabel(mixBook), unit?.label ?? '', add.length, mixCount))
+    } catch {
+      setMixError('表現を読めませんでした')
+    } finally {
+      setMixBusy(false)
+    }
+  }
+
   const wordLearner = shareWith.length === 1 ? shareWith[0] : null
   const wordBooks = booksFor({ hasLearner: !!wordLearner })
   /** 選べなくなった冊は、黙って基礎単語へ落とす(**行き止まりを作らない**) */
@@ -2419,6 +2495,87 @@ export default function MaterialForm({
           </div>
         )}
 
+        {/* ── **テキストで出た表現を混ぜる**(第5.259節・2026-09-25 利用者の指定)──
+
+              > 記事、モノローグ、ダイアローグ、会議、文系トレーニングに
+              > NATIVE FLOW や RIZAP English のテキストで出た表現を
+              > 混ぜれるようにしたい。ユニットに分かれている教材は
+              > 盛り込みたいフレーズがあるユニットを選べたら最高です。
+
+            **新しい渡し道を1つも作っていない。** 足した表現は、すぐ下の
+            「必ず入れます」の一覧(`mustUse`)に並ぶ —— 単語帳から選んだ語と
+            **同じ一覧**である(同じことをするものを2つ見せない・CLAUDE.md)。
+
+            **AI は1回も呼ばない(0円)。** 表現はもう手元にある。
+
+            **出すのは5つの種類だけ**(`canMixText`)。単語 / フレーズには
+            出さない —— あちらは表現そのものがお題なので、混ぜると
+            何を練習しているのか分からなくなる。 */}
+        {mixOn && (
+          <div className="review-box">
+            <p className="field-hint">
+              <strong>テキストで出た表現を混ぜる。</strong>
+              選んだ表現を、本文や問題文の中で使わせます。
+              <strong> AI は1回も呼びません(0円)。</strong>
+            </p>
+
+            <div className="wbfilter">
+              <label className="wbfilter-row">
+                <span className="wbfilter-name">テキスト</span>
+                <select className="wbfilter-ctl" value={mixBook}
+                        onChange={(e) => { setMixBook(e.target.value); setMixSaid('') }}>
+                  {TEXT_BOOKS.map((b) => (
+                    <option key={b.id} value={b.id}>{b.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              {/* **読んでいる最中・0 UNIT・読めなかった を、取り違えない**
+                  (0 と null を取り違えない・CLAUDE.md)。
+                  **UNIT が1つも無い冊では、えらぶ欄そのものを出さない**
+                  —— 押せるのに何も起きない、を作らない */}
+              <label className="wbfilter-row">
+                <span className="wbfilter-name">UNIT</span>
+                {mixUnits === null ? (
+                  <span className="wbfilter-ctl">読んでいます…</span>
+                ) : mixUnits.length === 0 ? (
+                  <span className="wbfilter-ctl">まだ入っていません</span>
+                ) : (
+                  <select className="wbfilter-ctl" value={mixUnit}
+                          onChange={(e) => { setMixUnit(e.target.value); setMixSaid('') }}>
+                    <option value={MIX_ALL_UNITS}>ぜんぶの UNIT から</option>
+                    {mixUnits.map((u) => (
+                      <option key={u.key} value={u.key}>{u.label}</option>
+                    ))}
+                  </select>
+                )}
+              </label>
+
+              <label className="wbfilter-row">
+                <span className="wbfilter-name">いくつ</span>
+                <select className="wbfilter-ctl" value={mixCount}
+                        onChange={(e) => { setMixCount(Number(e.target.value)); setMixSaid('') }}>
+                  {MIX_COUNTS.map((n) => (
+                    <option key={n} value={n}>{n} 個</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="btn-row">
+              <button type="button" className="btn btn--ghost"
+                      disabled={mixBusy || mixUnits === null || mixUnits.length === 0}
+                      onClick={addMix}>
+                {mixBusy ? '足しています…' : '表現を足す'}
+              </button>
+            </div>
+
+            {/* **失敗の知らせは、その操作をした場所に出す**(CLAUDE.md) */}
+            {mixError && <p className="notice notice--warn">{mixError}</p>}
+            {mixSaid && <p className="field-hint">{mixSaid}</p>}
+          </div>
+        )}
+
         {/* ── 単語帳から名指しで渡された語 ──────────────────────
             ゲストの単語帳で選んで「この語で教材を作る」を押すと、ここに並ぶ。
             **復習が、そのまま次の宿題になる。** これがこのアプリの要である。
@@ -2427,15 +2584,24 @@ export default function MaterialForm({
         {mustUse.length > 0 && (
           <div className="review-box">
             <p className="field-hint">
-              <strong>単語帳から選んだ {mustUse.length} 語を、必ず入れます。</strong>
+              {/* **「単語帳から」と言い切らない**(第5.259節)——
+                  ここにはテキストの表現も並ぶようになった。
+                  **画面に出す言葉を、中身より狭く書かない** */}
+              <strong>選んだ {mustUse.length} 個を、必ず入れます。</strong>
               {isVocabKind(kind)
                 ? ' 先頭から順に、この語で作らせます。'
                 : isPassageKind(kind)
                   ? ' 本文の中で使わせます。'
                   : ' 問題文の中で使わせます。'}
               <br />
-              外したい語は ✕ を押してください。
+              外したいものは ✕ を押してください。
             </p>
+            {/* **黙って落とさない**(CLAUDE.md)。窓口は先頭の 20 個で切るので、
+                超えたら**そのことをその場で言う** ——
+                言わないと、押した人には「入れたのに使われない」としか見えない */}
+            {overNote(mustUse.length) && (
+              <p className="notice notice--warn">{overNote(mustUse.length)}</p>
+            )}
             <div className="review-words">
               {mustUse.map((w) => (
                 <button key={w} type="button" className="tagchip is-unknown"
