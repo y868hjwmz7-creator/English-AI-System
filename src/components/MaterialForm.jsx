@@ -96,6 +96,8 @@ import {
 import {
   NF_BOOK_ID, TEXT_BOOKS, loadTextPhrases, loadTextUnits, textBookLabel,
 } from '../lib/textBooks.js'
+/* **「この英文は避けて」と渡す本数**(第5.261節)。**1か所に持つ** */
+import { AVOID_MAX } from '../lib/avoidLimit.js'
 import { levelOf, posOf } from '../lib/wordbookFilter.js'
 import { loadShelfWordbook } from '../lib/shelfReviews.js'
 import { basicRows } from '../lib/basicsCourse.js'
@@ -1048,7 +1050,12 @@ export default function MaterialForm({
          「女性の声が男性役をしゃべる」が起きる。
          **声に名前を合わせる**(逆は当てられない) */
       speakerGenders: isDialogueKind(kind) ? castGenders() : undefined,
-      avoid: (used ?? []).slice(-40),
+      /* **集めた英文を、ぜんぶ渡す**(第5.261節・2026-09-26)。
+         もとは `slice(-40)` で、**集めた 120 本のうち 80 本を捨てていた。**
+         しかも捨て方が「後ろから」で、集めるところに並び順が無いので、
+         **どの 80 本が消えるかは、そのときの取り出し順しだい**だった。
+         窓口は 150 本まで受けられる(`AVOID_GATE`)ので、余白も残る */
+      avoid: (used ?? []).slice(-AVOID_MAX),
       // **話の重複を避ける2つ**(0046)。窓口の置き直しが要る
       avoidTopics: past.map((x) => x.text).filter(Boolean),
       /* **両方選んだときは、話題のほうを強くする**(第5.232節)。

@@ -159,6 +159,8 @@ import {
   MIX_KINDS, MIX_MAX, REVIEW_MAX,
   canMixText, mixNote, mixWords, overNote, pickMix,
 } from '../src/lib/textMix.js'
+/* 「この英文は避けて」と渡す本数(第5.261節)。**1か所に持つ** */
+import { AVOID_GATE, AVOID_MAX, avoidFits } from '../src/lib/avoidLimit.js'
 /* ゲストの持ちものからテストを作る(第5.260節)。**AI を使わない** */
 import {
   BLANK_MARK, DEFAULT_EXAM_FORM, EXAM_FORMS, EXAM_SOURCES,
@@ -11784,6 +11786,87 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(!/from\('quiz|insert\(/.test(maker) && !/insert\(/.test(src),
       'テスト … どこにも書き込まない(新しい表も貼る SQL も要らない)')
   }
+}
+
+/* ==========================================================================
+ * **「この英文は避けて」と渡す本数**(第5.261節・2026-09-26 利用者の問い)
+ *
+ *   > 弱点タグで指定した時に出てくる単語や表現、決まり文句、つなぎことば、
+ *   > 言い換え表現、イディオムや句動詞、コロケーションです。
+ *   > これは数に限りはあるのですか？
+ *
+ * 出てくる表現そのものに上限は無い(AI がその場で作る)。
+ * 限りがあったのは「**同じものが出ない**」の保証のほうで、
+ * **120 本集めて 40 本しか渡していなかった。**
+ * ========================================================================== */
+{
+  console.log('\n▶ 避けさせる英文の本数')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const mat = noC(readS('src/lib/materials.js'))
+  const form = noC(readS('src/components/MaterialForm.jsx'))
+
+  /* ── ① **窓口が受け取る本数と、こちらが写している数が同じか** ────────
+       窓口は Deno の中にいるので、この値を分け合えない
+       (`textMix.js` の `REVIEW_MAX`・`V3_STABILITY` とまったく同じ形)。
+       **ソースと突き合わせる** —— 片方を変えたら赤くなる */
+  {
+    const gen = readS('supabase/functions/generate-material/index.ts')
+    const m = gen.match(/body\.avoid\.slice\(0, (\d+)\)/)
+    const 窓口 = m ? Number(m[1]) : null
+    ok(窓口 === AVOID_GATE,
+      '避ける … 窓口が受け取る本数と、こちらが写している数が同じ',
+      `窓口 ${窓口} / ここ ${AVOID_GATE}`)
+    /* **余白を残す。ぴったりにしない** —— ぴったりだと、1本増えた日に
+       窓口が黙って切り捨てる(しかも画面からは見えない) */
+    ok(AVOID_MAX < AVOID_GATE,
+      `避ける … 窓口に切り捨てられない(渡す ${AVOID_MAX} / 受ける ${AVOID_GATE})`)
+    /* **出る / 出ないの両方を見る**(片方だけだと、いつも真を返す形でも緑) */
+    ok(avoidFits(AVOID_MAX) && !avoidFits(AVOID_GATE) && !avoidFits(AVOID_GATE + 1),
+      '避ける … 余白の判断は、収まるときだけ真を返す')
+  }
+
+  /* ── ② **集める本数と、渡す本数を、別の数にしない** ──────────────
+       もとは「120 本集めて 40 本渡す」だった。**捨てる段があると、
+       どれが捨てられるかを誰も決めていない**ことになる
+       (集めるところに並び順が無いので、そのときの取り出し順しだい)。
+
+       **「名前が出てくるか」で見ない**(CLAUDE.md)—— 説明にも
+       `AVOID_MAX` と書いてあるので、**コメントを落としてから、
+       使っている形**で数える。 */
+  {
+    ok(/loadUsedSentences\(tagIds, limit = AVOID_MAX\)/.test(mat),
+      '避ける … 集める本数は `AVOID_MAX`(素の数を書いていない)')
+    ok(/limit = AVOID_MAX,\n\} = \{\}\) \{/.test(mat),
+      '避ける … 業界・場面から集める道も、同じ `AVOID_MAX`')
+    ok(/avoid: \(used \?\? \[\]\)\.slice\(-AVOID_MAX\)/.test(form),
+      '避ける … 教材を作るとき、集めたぶんをぜんぶ渡している')
+    ok(/avoid: \[\.\.\.usedSet\]\.slice\(-AVOID_MAX\)/.test(mat),
+      '避ける … 足りない演習を足す道も、同じ本数を渡している')
+    /* **素の数が1つも残っていないこと。** 1か所でも数で書いてあると、
+       次に数を変えた日に**そこだけ古くなる**(呼び名・数を2か所に書かない)。
+
+       **見るのは `avoid` の道だけ。** `limit = 50`(過去の宿題)のような
+       **関わりのない数まで拾うと、言われていない場所を縛ることになる**
+       (CLAUDE.md「直すのは、言われた場所だけ」)。
+       はじめ `limit = \d{2,}` で広く拾って、そこで赤くなった */
+    const 素 = [
+      ...(mat.match(/avoid: [^\n]*?\d+\)/g) ?? []),
+      ...(form.match(/avoid: [^\n]*?\d+\)/g) ?? []),
+      ...(mat.match(/loadUsedSentences\w*\([^)]*?= \d+/g) ?? []),
+    ]
+    /* **話の筋(`avoidTopics`)の 15 は、別の数である。**
+       あちらは「同じ話を二度作らない」ための本数で、窓口の側も 15 で
+       受けている。**ここで一緒に縛らない** —— 言われた場所ではない
+       (気づいたことは報告する、が共通ルール) */
+    ok(素.length === 0,
+      '避ける … `avoid` の道に、素の数が1つも残っていない',
+      素.join(' / '))
+  }
+
+  /* ── ③ **算段は素の node で確かめられる**(`playMark.js` と同じ作法)── */
+  ok(!/supabase|import\.meta\.env/.test(noC(readS('src/lib/avoidLimit.js'))),
+    '避ける … 本数の決まりは Supabase を持たない')
 }
 
 console.log(ng

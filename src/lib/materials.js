@@ -11,6 +11,11 @@
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { normEn } from './textNorm.js'
+/* **「この英文は避けて」と渡す本数**(第5.261節)。
+   集める本数と渡す本数を**同じ数にする** —— 別にすると、集めたうちの
+   いくつかを捨てることになり、**どれが捨てられるかを誰も決めていない**
+   状態になる(実際、120 本集めて 40 本しか渡していなかった) */
+import { AVOID_MAX } from './avoidLimit.js'
 import { industryLabel, kindsOf } from '../data/industries.js'
 import {
   exerciseLabel, givesAwayAnswer, isBlankItem, isChunkSection, isPassageSection, isWrongShape,
@@ -1887,7 +1892,7 @@ export const rawSentencesOf = (item) =>
  * 上限をかけている。全部渡すと指示が長くなりすぎるため。
  * 取りこぼしは②で止まるので、ここは網羅していなくてよい。
  */
-export async function loadUsedSentences(tagIds, limit = 120) {
+export async function loadUsedSentences(tagIds, limit = AVOID_MAX) {
   if (!supabase || !tagIds?.length) return ok([])
 
   const { data: tagged, error: tagError } = await supabase
@@ -1909,7 +1914,7 @@ export async function loadUsedSentences(tagIds, limit = 120) {
  *   **そこから集める。**
  */
 export async function loadUsedSentencesLike({
-  kind = '', industry = '', genre = '', scene = '', limit = 120,
+  kind = '', industry = '', genre = '', scene = '', limit = AVOID_MAX,
 } = {}) {
   if (!supabase || !kind) return ok([])
   let query = supabase
@@ -2237,7 +2242,7 @@ export async function generateSectionUnique(params, {
     const { data, error } = await generateSection({
       ...params,
       count: wanted - items.length,
-      avoid: [...usedSet].slice(-120),
+      avoid: [...usedSet].slice(-AVOID_MAX),
     })
     if (error) return { error }
     instruction = instruction || data.section?.instruction || ''
