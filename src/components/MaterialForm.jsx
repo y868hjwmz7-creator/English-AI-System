@@ -1642,8 +1642,14 @@ export default function MaterialForm({
      *
      *   **待たない。** 支度は裏で走り、画面はすぐ次へ進む
      *   (`prepareJob.js` がモジュールに1つだけ持つので、画面が消えても続く)。 */
+    /* **支度に渡すのは、保存された側の演習**(第5.269節)。
+       画面が持っている `sections` は**読み方を直す前**の英文なので、
+       それで音を作ると、あとで探す場所と指紋が食い違い、
+       **同じ文に二度課金される**(読み方を直した教材だけで起きる)。
+       `createMaterial()` が組み直したものを返すので、それを使う。
+       **返ってこなかったときは、これまでどおり**(古い窓口・失敗の受け皿) */
     startPrepare(
-      { id: data.id, sections, voiceIds, tags: tagIds },
+      { id: data.id, sections: data.sections ?? sections, voiceIds, tags: tagIds },
       { title: title.trim() || autoTitle(), level },
     )
 

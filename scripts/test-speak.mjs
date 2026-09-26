@@ -46,6 +46,8 @@ import { COLLOCATIONS } from '../src/data/collocations.js'
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
 /* **読み方の指定**(第5.266節)。素の node でそのまま走る */
 import { applySayAs, parseSayAs, sayAsText, spellKana } from '../src/lib/sayAs.js'
+/* **読み名簿**(第5.269節)。大文字の並びでも文字ずつに開かない名前 */
+import { SAY_AS_BOOK } from '../src/data/speakDict.js'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const readD = (p) => readFileSync(ROOT + p, 'utf8')
@@ -486,6 +488,46 @@ console.log('\n── ⑦ 本当に呼んでいるか ──')
     && sayAsText('Nothing changes here.', 表) === '',
   '読み方 … 変えるものが無ければ、1文字も変えない(0円)')
 
+  /* ══════════════════════════════════════════════════════════════
+     **読み名簿 —— 1文字ずつに開いていたのは、こちらのコードだった**
+     (第5.269節・2026-09-26 実機・利用者の指摘)
+
+       > UMITOの読み方が全く直っていません。
+       > 細かい指定で読み方を指定するべきなのですか?
+
+     `speakText()` が `We visited UMITO.` を
+     `We visited U M I T O.` に**書き換えていた。**
+     細かい指定に書いても、根っこはそのままだった。
+     ══════════════════════════════════════════════════════════════ */
+  {
+    const 名 = Object.keys(SAY_AS_BOOK)[0] ?? ''
+    ok(!!名 && SAY_AS_BOOK[名] && !/\s/.test(SAY_AS_BOOK[名]),
+      `読み名簿 … 名前が登録してあり、読みに空白が無い(${名} = ${SAY_AS_BOOK[名]})`)
+    /* **名簿の値を書き写さない。** 名簿から引いて突き合わせる ——
+       書き写すと、読みを直した日に期待値も一緒に動く(CLAUDE.md) */
+    const 言う = (t) => speakText(t).text
+    ok(言う(`We visited ${名} today.`) === `We visited ${SAY_AS_BOOK[名]} today.`,
+      '読み名簿 … 文の途中の名前を、文字ずつに開かない',
+      言う(`We visited ${名} today.`))
+    /* **文の終わりでも効く。** 点まで名前として拾うと、名簿に当たらず
+       素通りする —— いちばん見落としやすい形 */
+    ok(言う(`I work at ${名}.`).includes(SAY_AS_BOOK[名]),
+      '読み名簿 … 文の終わり(ピリオドの直前)でも効く', 言う(`I work at ${名}.`))
+    /* **語の途中には当てない**(`UMITOS` の頭に当たらない) */
+    ok(!言う(`${名}S is different.`).includes(SAY_AS_BOOK[名]),
+      '読み名簿 … 語の途中には当てない', 言う(`${名}S is different.`))
+    /* **名簿に無いものは、これまでどおり。** ここが緩むと
+       `IBM` まで語として読まれる(**迷ったら文字ずつ**・CLAUDE.md) */
+    ok(言う('IBM and USA are fine.') === 'I B M and U S A are fine.',
+      '読み名簿 … 名簿に無い大文字の並びは、これまでどおり文字ずつ',
+      言う('IBM and USA are fine.'))
+    ok(言う('NASA is fine.') === 'NASA is fine.',
+      '読み名簿 … 語として読む頭字語(NASA)も、これまでどおり')
+    /* **意味のクラスも持つ**(検証がここを数える) */
+    ok(speakText(`${名} is here.`).parts.some((p2) => p2.klass === 'NAME'),
+      '読み名簿 … 名前として数えている(`NAME`)')
+  }
+
   /* ── ④ 画面と保存の側が、本当にそれを通しているか ────────── */
   const play6 = noC6(read6('src/lib/audioPlaylist.js'))
   /* **読み上げにする欄は `audioTextOf()` 1か所** */
@@ -513,6 +555,15 @@ console.log('\n── ⑦ 本当に呼んでいるか ──')
   /* **リスニングには焼き込まない・上書きしない・空なら欄を作らない** */
   ok(/from !== 'audio_text' && !row\.audio_text/.test(mat6) && /if \(said\) row\.audio_text = said/.test(mat6),
     '読み方 … リスニングには焼き込まず、もう在る欄も上書きしない')
+  /* **支度は、読み方を直したあとの英文で作る**(第5.269節)。
+     画面が持っている元の `sections` を渡すと、支度で作った音と
+     あとで探す場所の指紋が食い違い、**同じ文に二度課金される** */
+  ok(/return ok\(\{ id: material\.id, sections: cleanSections \}\)/.test(mat6),
+    '読み方 … 組み直したあとの演習を返している(支度が同じ英文で作れる)')
+  const form6 = noC6(read6('src/components/MaterialForm.jsx'))
+  ok(/sections: data\.sections \?\? sections/.test(form6),
+    '読み方 … 発行の直後の支度は、保存された側の演習で作る(二度課金しない)')
+
   /* **書き方の案内は1か所**(6つの種類に書き写さない) */
   const kinds6 = noC6(read6('src/data/materialKinds.js'))
   ok((kinds6.match(/UMITO=ウミト/g) ?? []).length === 1

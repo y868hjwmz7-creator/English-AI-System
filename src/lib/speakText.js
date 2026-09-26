@@ -52,6 +52,7 @@ import {
   CURRENCY_CODES, CURRENCY_SYMBOLS, DEGREE_ABBR, FILE_EXTENSIONS, GENERAL_ABBR,
   GREEK_LETTERS, HALVES, KEY_NAMES, LATIN_ABBR, MATH_OPERATORS, MIXED_ABBR, MONEY_SCALE,
   MONTHS, MONTH_ABBR, NAME_SUFFIXES, NUMBERED_PLACES, PERSON_TITLES, PER_UNITS,
+  SAY_AS_BOOK,
   QUARTERS, SUPERSCRIPTS, SYMBOL_WORDS, TIMEZONES, UNICODE_FRACTIONS, UNITS,
   WEEKDAY_ABBR, WORD_ACRONYMS,
 } from '../data/speakDict.js'
@@ -74,6 +75,8 @@ export const CLASSES = [
   'SCIENTIFIC_NUMBER', 'MATH', 'ADDRESS', 'TELEPHONE', 'IDENTIFIER',
   'SERIAL_NUMBER', 'ROOM_NUMBER', 'FLIGHT_NUMBER', 'POSTAL_CODE', 'EMAIL',
   'URL', 'DOMAIN', 'FILE', 'VERSION', 'ABBREVIATION', 'INITIALISM', 'ACRONYM',
+  /* 読み名簿にある名前(第5.269節)。**文字ずつに開かない** */
+  'NAME',
   'TITLE', 'ROMAN_NUMERAL', 'CHEMISTRY', 'STATISTICS', 'PROGRAMMING',
   'PUNCTUATION', 'SOCIAL_MEDIA', 'EMOJI', 'RANGE', 'AGE', 'OTHER',
 ]
@@ -955,6 +958,35 @@ function mAbbrev(c) {
   return null
 }
 
+/**
+ * ⓪ **読み名簿にある名前**(第5.269節・2026-09-26 利用者の指摘)。
+ *
+ *   > UMITOの読み方が全く直っていません。
+ *
+ * **いちばん先に見る。** あとに回すと、`mInitialism` が
+ * 大文字の並びとして拾って**文字ずつに開いてしまう**
+ * (それがこの不具合そのものだった)。
+ *
+ * ・**点は入れない。** 文の終わりの `UMITO.` でも名前だけを拾い、
+ *   ピリオドはこれまでどおり文の終わりとして扱う
+ * ・**語の途中には当てない**(`UMITOS` の頭に当たらない)。
+ *   **ここでは見ない。** 当てはめる人を回す側が
+ *   「うしろが字や数字なら、当てはめない」を**全員にまとめて**掛けている
+ *   (`isWordCh(src[i + hit.len])`)。
+ *   はじめ同じ確かめをここにも書いたが、**赤チェックで一度も赤くならず**、
+ *   **効いていない1行**だと分かったので外した
+ *   (CLAUDE.md「効かない指定を残さない」「判断は1か所に持つ」)
+ * ・名簿は `speakDict.js` 1か所。**ここに名前を書かない**
+ */
+function mSayAs(c) {
+  const m = at(/[A-Za-z][A-Za-z0-9&'-]*/, c.src, c.i)
+  if (!m) return null
+  if (isWordCh(c.src[c.i - 1])) return null
+  const say = SAY_AS_BOOK[m[0]]
+  if (!say) return null
+  return { len: m[0].length, say, klass: 'NAME' }
+}
+
 /** ㉞ 点の付かない略語・頭字語(`CEO` `NASA` `EST`) */
 function mInitialism(c) {
   const m = at(/[A-Z]{2,6}\b/, c.src, c.i)
@@ -1001,6 +1033,9 @@ function mSymbol(c) {
  * 入れ替えると、URL も版番号も IP アドレスも壊れる。
  */
 const MATCHERS = [
+  /* **読み名簿がいちばん先**(第5.269節)。あとに回すと、
+     `mInitialism` が大文字の並びとして拾って文字ずつに開く */
+  mSayAs,
   mEmail, mUrl, mIpMac, mFile, mVersion, mPhone,
   mDuration, mTime, mDateWord, mDateDayFirst, mDateNumeric, mEra, mDecade,
   mMoney, mPercent, mDegree, mScientific, mDimension, mMeasure,

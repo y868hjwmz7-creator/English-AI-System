@@ -524,7 +524,14 @@ export async function createMaterial({
     if (tagsError) return rollback(`弱点タグを登録できませんでした: ${tagsError.message}`)
   }
 
-  return ok({ id: material.id })
+  /* **組み直したあとの演習も返す**(第5.269節)。
+     発行の直後の「支度」は、**読み方を直した英文**で音声を作らなければ
+     ならない。画面が持っている元の `sections` を渡すと、
+     **支度で作った音と、あとで探す場所の指紋が食い違い、
+     同じ文に二度課金される。**
+     **数え方を2通り持たない**(CLAUDE.md)—— 焼き込む場所は
+     `cleanItems()` 1か所なので、その結果をそのまま渡す */
+  return ok({ id: material.id, sections: cleanSections })
 }
 
 // ── 声を選び直す(2026-09 利用者の指定)────────────────────────────
