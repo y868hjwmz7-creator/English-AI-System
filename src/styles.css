@@ -7135,6 +7135,33 @@ button.wbfilter-ctl { text-align: left; }
      問題が真っ白になることはない(下限は残る)。 */
   max-height: calc(100dvh - 15rem);
   display: flex; flex-direction: column;
+  /* ★ **横のそろえ方を、必ず自分で書く**(第5.270節・2026-09-26 実機・
+       利用者の指摘「日本語の時だけ番号が左に行ってしまいます」)。
+
+     この箱は、**伏せているあいだは `<button>`、出したあとは `<div>`** である
+     (第5.262節)。ところが `<button>` には**ブラウザ自身の決まり**で
+     `align-items: flex-start` が入っている端末がある(iPhone = WebKit)。
+     入ると、中の行が**中身なりの幅に縮んで左端に寄る。**
+
+     実際に起きた形がこれである。
+
+     | 行 | 余白 | どうなったか |
+     |---|---|---|
+     | `.qr-from`(番号の丸) | `margin: 0 0 4px` | **左端へ寄った** |
+     | `.qr-ja`(日本語) | `margin: 0 auto` | **中央のまま**(auto が空きを分ける) |
+
+     だから「**日本語のときだけ、番号だけが**左に行く」ように見える。
+     **`<div>` の側(英語を出したあと)は既定が stretch なので中央のまま** ——
+     同じ見た目のはずの2つが、要素の違いだけで食い違っていた。
+
+     `flex-start` を**書いていないから安全**ではない。
+     **書いていないと、ブラウザの決まりが入ってくる。**
+     ここで `stretch` と書いておけば、どちらの要素でも1ドット違わない。
+
+     **こちらの Chromium では再現しない**(`normal` に落ちる)。
+     `button { align-items: flex-start }` を足して測って、初めて出た ——
+     `npm run test:bar` が、その形で見張っている。 */
+  align-items: stretch;
   gap: var(--sp-6); overflow-y: auto;
   justify-content: safe center;
   padding: 6px 0;

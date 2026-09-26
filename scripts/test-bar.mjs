@@ -3228,6 +3228,112 @@ export default defineConfig({
     }
   }
 
+  /* ══ **番号の丸は、日本語のときも英語のときも同じ場所**(第5.270節)══
+
+       2026-09-26 実機・利用者の指摘。
+
+       > 日本語の時だけ番号が左に行ってしまいます。直してください
+
+     出題の箱は、**伏せているあいだは `<button>`、出したあとは `<div>`**
+     である(第5.262節)。`<button>` には**ブラウザ自身の決まり**で
+     `align-items: flex-start` が入っている端末があり(iPhone = WebKit)、
+     入ると縦に積んだ行が**中身なりの幅に縮んで左端へ寄る**
+     (実測 336px → 59px)。`.qr-ja` は `margin: 0 auto` を持っているので
+     中央のまま残るため、**日本語のときだけ、番号だけが**左へ行くように見えた。
+
+     **こちらの Chromium では再現しない**(`align-items` が `normal` に落ちる)。
+     だから**その決まりを足してから測る** —— `button { align-items: flex-start }`
+     は、ブラウザ自身の決まりより**弱い**書き方である。つまり
+     `.qr-body` の側がきちんと書けていれば、こちらが勝つ。
+     **足さずに測ると、壊れていても緑になる**
+     (「無ければ素通り」する形の検証を書かない・CLAUDE.md)。
+
+     **見るのは3つ。どれも1本ずつ外して赤くなるのを確かめてある。**
+       ①行(`.qr-from`)が、箱の幅いっぱいに広がっているか
+         —— 縮んだら左端へ寄る。**これが利用者の見た形**である
+       ②丸の場所が、**2つの形で同じ**か(「日本語の時だけ」がこれ)
+       ③行の中身が、その行のまん中に来ているか
+         —— ①②だけだと、**両方とも左に寄せる**書き換えで緑のままになる
+
+     **丸そのものが箱のまん中に来るとは限らない。** 話す人の名前が
+     同じ行に並ぶので(`子の数` 2)、**2つを合わせたまん中**になる。
+     だから「丸がまん中か」では測らない(実測 18px ずれる)。 */
+  {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrrev`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.qr-card')
+    /* **ブラウザ自身の `<button>` の決まりを、弱い形で足す** */
+    await page.addStyleTag({ content: 'button { align-items: flex-start; }' })
+    const 測る = () => page.evaluate(() => {
+      const 箱 = document.querySelector('.qr-body')
+      const 行 = document.querySelector('.qr-from')
+      const 丸 = document.querySelector('.qr-from .num-badge')
+      /* **無ければ素通りさせない。** 丸が消えた日に、ここが黙ってはいけない */
+      if (!箱 || !行 || !丸) return { ある: false }
+      const 内 = (el) => {
+        const r = el.getBoundingClientRect()
+        const p = window.getComputedStyle(el)
+        const px = (v) => parseFloat(v) || 0
+        return {
+          左: r.left + px(p.paddingLeft) + px(p.borderLeftWidth),
+          右: r.right - px(p.paddingRight) - px(p.borderRightWidth),
+        }
+      }
+      const b = 内(箱)
+      const f = 内(行)
+      const 子 = [...行.children].map((c) => c.getBoundingClientRect())
+      return {
+        ある: true,
+        形: 箱.tagName,
+        そろえ方: window.getComputedStyle(箱).alignItems,
+        行の幅: Math.round(f.右 - f.左),
+        箱の幅: Math.round(b.右 - b.左),
+        // 行の中身(丸 + 話す人)が、行のまん中に来ているか
+        中身のずれ: Math.round(
+          (Math.min(...子.map((r) => r.left)) - f.左)
+          - (f.右 - Math.max(...子.map((r) => r.right)))),
+        丸の左: Math.round(丸.getBoundingClientRect().left),
+      }
+    })
+    const 伏せ = await 測る()          // 日本語が出ている(`<button>`)
+    await page.click('.qr-body')
+    await page.waitForTimeout(200)
+    const 出し = await 測る()          // 英語が出ている(`<div>`)
+
+    if (!伏せ.ある || !出し.ある) {
+      ng('QR 番号の丸 … 行(`.qr-from`)か丸(`.num-badge`)が見つからない',
+        '出題の箱・番号の行・丸が在ることが前提の見張りである(黙らせない)')
+    } else if (伏せ.形 !== 'BUTTON' || 出し.形 !== 'DIV') {
+      ng(`QR 番号の丸 … 箱の形が変わった(伏せ ${伏せ.形} / 出し ${出し.形})`,
+        '第5.262節で「伏せているあいだだけ `<button>`」にした。'
+        + '形が変わったのなら、この見張りの前提も見直す')
+    } else if (伏せ.行の幅 !== 伏せ.箱の幅 || 出し.行の幅 !== 出し.箱の幅) {
+      ng(`QR 番号の丸 … 行が箱の幅いっぱいに広がっていない`
+        + `(伏せ ${伏せ.行の幅}/${伏せ.箱の幅}px・出し ${出し.行の幅}/${出し.箱の幅}px)`,
+        '`.qr-body` に `align-items: stretch` を書く。書かないと '
+        + '`<button>` にブラウザ自身の `flex-start` が入り、'
+        + '**日本語のときだけ**番号が左端へ寄る(利用者の指摘)')
+    } else if (伏せ.丸の左 !== 出し.丸の左) {
+      ng(`QR 番号の丸 … 日本語のときと英語のときで場所が違う`
+        + `(伏せ ${伏せ.丸の左}px / 出し ${出し.丸の左}px)`,
+        '同じ `face` から描いているので、場所が動く理由は無い。'
+        + '箱の側(`<button>` / `<div>`)の食い違いを疑う')
+    } else if (Math.abs(伏せ.中身のずれ) > 2 || Math.abs(出し.中身のずれ) > 2) {
+      ng(`QR 番号の丸 … 行の中身がまん中に無い`
+        + `(伏せ ${伏せ.中身のずれ}px / 出し ${出し.中身のずれ}px)`,
+        '`.qr-from` は `justify-content: center`。'
+        + '**両方とも左に寄せても、上の2つは緑のまま**になる')
+    } else if (伏せ.そろえ方 !== 出し.そろえ方) {
+      ng(`QR 番号の丸 … 2つの形でそろえ方が違う`
+        + `(伏せ ${伏せ.そろえ方} / 出し ${出し.そろえ方})`,
+        '同じ見た目のはずの2つが食い違うと、端末によって寄り方が変わる')
+    } else {
+      ok(`QR 番号の丸 … 日本語(${伏せ.形})でも英語(${出し.形})でも同じ場所`
+        + `(左 ${伏せ.丸の左}px・行 ${伏せ.行の幅}px・${伏せ.そろえ方})`)
+    }
+  }
+
   /* ── **「AI が作っています」の1行は、教材の中に出る**(2026-09 利用者の問い)──
        > 音声や教材を「AIで作成してます」という注意書きはいらないのか？
 
