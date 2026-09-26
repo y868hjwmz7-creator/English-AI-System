@@ -758,14 +758,14 @@ function fakeMp3({
     ng('窓口(speak)に mp3-fade の印が無い', '印を消すと、この検証が何も見なくなる')
   } else {
     const block = src.slice(a, b)
-    const { fadeMp3Tail, FADE_RAMP } = new Function(
-      `${block}\nreturn { fadeMp3Tail, FADE_RAMP }`,
+    const { fadeMp3Tail, FADE_RAMP, lowerMp3, JA_VOICE_ID, JA_CUT_DB } = new Function(
+      `${block}\nreturn { fadeMp3Tail, FADE_RAMP, lowerMp3, JA_VOICE_ID, JA_CUT_DB }`,
     )()
 
     // 窓口が**実際に呼んでいる**か。定義だけあって誰も呼ばなければ同じこと
     /* **`madeBy`(実際に作った会社)で見る。** `provider`(頼まれた会社)の
        ままだと、良い声に断られて標準に落ちたときに食い違う */
-    if (!/const stored = madeBy === 'eleven' \? fadeMp3Tail\(audio\) : audio/.test(src)) {
+    if (!/const stored = madeBy === 'eleven' \? fadeMp3Tail\(evened\) : audio/.test(src)) {
       ng('窓口が fadeMp3Tail を呼んでいない')
     } else if (!/body: stored,/.test(src)) {
       ng('なだらかにしたほうを置いていない', 'body: audio のままでは何も変わらない')
@@ -862,6 +862,93 @@ function fakeMp3({
 
     if (fadeMp3Tail(new Uint8Array(0)).length !== 0) ng('空を渡すと落ちる')
     else ok('空を渡しても落ちない')
+
+    /* ══ **日本語の声だけ、置く前に小さくする**(第5.274節)══════════
+
+         > 日本語と英語のボリュームも調整したいです。
+         > 今は日本語の shohei の声が英語の声に対して比較的大きいです。
+
+       画面側の「声ごとにそろえる」は `<audio>` の `volume` を動かすので、
+       **iPhone では1ミリも効かない。** だから置くときに小さくする。
+       `fadeMp3Tail` とまったく同じ道具(`global_gain`)を使う。 */
+    {
+      const 刻み = Math.round(JA_CUT_DB / 1.5)
+      const 元 = fakeMp3({ frames: 6 })
+      const 小 = lowerMp3(元.bytes, JA_CUT_DB)
+      const 場所 = spots(元.bytes)
+
+      /* ① **ぜんぶのグラニュールが、同じだけ下がっているか。**
+           終わりだけを下げる `fadeMp3Tail` と、ここが違う */
+      let 違う = 0
+      let 下がった = 0
+      for (const at of 場所) {
+        for (const gr of [0, 1]) {
+          const was = gainAt(元.bytes, at, gr)
+          const now = gainAt(小, at, gr)
+          const want = Math.max(0, was - 刻み)
+          if (now !== want) 違う += 1
+          if (now !== was) 下がった += 1
+        }
+      }
+      if (違う) ng(`日本語を小さくする … ${違う} グラニュールが思ったとおりでない`)
+      else if (下がった !== 場所.length * 2) {
+        ng('日本語を小さくする … ぜんぶのグラニュールが下がっていない',
+          `${下がった} ≠ ${場所.length * 2}`)
+      } else {
+        ok(`日本語を小さくする … ぜんぶを ${JA_CUT_DB}dB`
+          + `(${刻み} 目盛り)下げている`)
+      }
+
+      /* ② **音のデータは1バイトも触らない。** 長さも変わらない */
+      if (小.length !== 元.bytes.length) {
+        ng('日本語を小さくする … 長さが変わっている', `${小.length} ≠ ${元.bytes.length}`)
+      } else {
+        let 外 = 0
+        for (let i = 0; i < 小.length; i += 1) {
+          if (小[i] === 元.bytes[i]) continue
+          if (!場所.some((at) => i >= at + 4 && i < at + 4 + 17)) 外 += 1
+        }
+        if (外) ng(`日本語を小さくする … side info の外を ${外} バイト書き換えている`)
+        else ok('日本語を小さくする … 書き換えたのは side info の中だけ(長さもそのまま)')
+      }
+
+      /* ③ **触れない形には何もしない**(Azure / Google は 24kHz = MPEG2)。
+           「無ければ素通り」を避けるため、**出ない側も必ず見る** */
+      const m24 = fakeMp3({ mpeg1: false, kbps: 48, hz: 24000, frames: 6 })
+      if (lowerMp3(m24.bytes, JA_CUT_DB).some((v, i) => v !== m24.bytes[i])) {
+        ng('日本語を小さくする … MPEG2(24kHz)を書き換えている')
+      } else ok('日本語を小さくする … MPEG2(24kHz)には何もしない')
+
+      /* ④ **0 や負を渡したら、何もしない**(1.5dB の目盛りにならない) */
+      if (lowerMp3(元.bytes, 0).some((v, i) => v !== 元.bytes[i])
+        || lowerMp3(元.bytes, -3).some((v, i) => v !== 元.bytes[i])) {
+        ng('日本語を小さくする … 0 や負を渡しても書き換えている')
+      } else ok('日本語を小さくする … 0 や負を渡したら何もしない')
+
+      /* ⑤ **下げ切っても 0 より下へ行かない**(音が裏返らない) */
+      const 底 = lowerMp3(元.bytes, 255 * 1.5)
+      let 負 = 0
+      for (const at of 場所) for (const gr of [0, 1]) if (gainAt(底, at, gr) !== 0) 負 += 1
+      if (負) ng(`日本語を小さくする … 下げ切ったのに 0 でないものが ${負} 個`)
+      else ok('日本語を小さくする … 下げ切っても 0 で止まる')
+
+      /* ⑥ **窓口が、日本語のときだけ呼んでいるか。**
+           定義だけあって誰も呼ばなければ、何も起きない */
+      if (!/const evened = madeBy === 'eleven' && voiceId === JA_VOICE_ID\s*\n\s*\? lowerMp3\(audio, JA_CUT_DB\) : audio/.test(src)) {
+        ng('窓口が lowerMp3 を、日本語のときだけ呼ぶ形になっていない')
+      } else ok('窓口は、日本語の声のときだけ小さくして置く')
+
+      /* ⑦ **声の id を2か所に書かない。**
+           `src/data/clipVoices.js` の `JA_VOICE` と同じでなければならない */
+      const cv = readFileSync(
+        new URL('../src/data/clipVoices.js', import.meta.url), 'utf8')
+      const 名 = cv.match(/export const JA_VOICE = '([^']+)'/)?.[1] ?? ''
+      if (!名) ng('`clipVoices.js` から `JA_VOICE` を読めない')
+      else if (名 !== JA_VOICE_ID) {
+        ng('日本語の声の id が、窓口と画面で食い違っている',
+          `窓口 "${JA_VOICE_ID}" / 画面 "${名}"`)
+      } else ok(`日本語の声の id は、窓口と画面で同じ("${名}")`)
+    }
   }
 }
 

@@ -40,7 +40,7 @@ import VolumeRow from './VolumeRow.jsx'
 import { THEMES } from '../lib/theme.js'
 import { PALETTES } from '../lib/palette.js'
 import { TIPS } from '../lib/tips.js'
-import { volumeWorks } from '../lib/mixVolume.js'
+import { VOL_NO_TEXT, volumeWorks } from '../lib/mixVolume.js'
 
 /** 「どれか1つ」を選ぶ帯。**4つとも同じ形なので、書き写さない** */
 function Pick({ label, options, value, onChange }) {
@@ -140,10 +140,9 @@ export default function NavSettings({
         ) : (
           <div className="nav-setting">
             <span className="nav-setting-label">音量</span>
-            <p className="nav-vol-no">
-              この端末は、アプリからの音量指定を受け付けません
-              (iPhone・iPad)。端末の音量ボタンで調整してください。
-            </p>
+            {/* **言い方は `mixVolume.js` 1か所**(第5.274節)——
+                聞き流しの設定にも同じ文が要る */}
+            <p className="nav-vol-no">{VOL_NO_TEXT}</p>
           </div>
         )}
 

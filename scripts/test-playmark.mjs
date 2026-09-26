@@ -3108,8 +3108,24 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
         new URL('../src/components/NavSettings.jsx', import.meta.url), 'utf8'))
       ok(/volumeWorks\(\) \? \(/.test(navset) && /nav-vol-no/.test(navset),
         '音量 … 受け付けない端末では、つまみを出さずに理由を1行で言う')
-      ok(!/iPhone|iPad|userAgent/.test(mix),
-        '音量 … 端末の名前(UA)では決めない')
+      /* **「名前が出てくるか」で見ない**(CLAUDE.md・第5.274節で踏んだ)。
+
+         画面に出す文(`VOL_NO_TEXT`)には「(iPhone・iPad)」と書いてある ——
+         **利用者に読ませる文であって、端末の判定ではない。**
+         文字を探すだけだと、文を足した日に赤くなる(実際そうなった)。
+
+         **禁じたいのは「端末の名前を読むこと」**なので、そちらを見る。
+         `navigator` に触れずに `<audio>` へ入れて読み返せば、
+         iOS がいつか受け付けるようになった日に**ひとりでに出る。** */
+      const mixCode = mix.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""')
+      ok(!/navigator/.test(mixCode),
+        '音量 … 端末の名前(UA)を1度も読まない')
+      ok(!/iPhone|iPad|Safari/.test(mixCode),
+        '音量 … 端末の名前で分けていない(文字の中の「iPhone・iPad」は、画面に出す文)')
+      /* **出る側も見る。** 「読まない」だけだと、
+         `volumeWorks()` を空にしても緑のままになる */
+      ok(/new Audio\(\)/.test(mix) && /probe\.volume = 0\.5/.test(mix),
+        '音量 … 実際に `<audio>` へ入れて、読み返して決めている')
       /* **部品は自分で覚えない**(`test:bar` がそのまま描いて測れる) */
       ok(!/localStorage|setVoiceLevel|setBgmVolume/.test(row),
         '音量 … つまみの部品は、受け取って描くだけ(自分では覚えない)')
@@ -7358,11 +7374,37 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     ok(/startBgm\(計画\.tracks/.test(rd) && /stopBgm\(\)/.test(rd),
       '聞き流し … 曲そのものは、これまでどおり鳴る')
     ok(/radio-set-pick--song/.test(rd), '聞き流し … 曲をえらぶ欄は残っている')
-    /* **設定は、上の帯ではなく下に置く**(第5.271節・2026-09-26 実機・
-       利用者の指摘「これではなんのことかよく分かりません」)。
-       帯は「細く1行」なので**名前を置く場所が無く**、値だけが出ていた。
-       **帯へ戻していないこと**を、ここで見張る(`topEnd` を渡さない) */
-    ok(!/topEnd=/.test(rd), '聞き流し … 選び欄を上の帯へ戻していない')
+    /* **帯に置くのは、押すもの1つだけ**(第5.271 → 第5.274節)。
+
+         > これではなんのことかよく分かりません(第5.271節)
+         > どうせ設定ボタンにするなら右上に置いてください(第5.274節)
+
+       帯は「細く1行」なので**名前を置く場所が無い。** だから
+       **選び欄(`<select>`)は1つも置かず**、歯車だけを置く。
+       中身は `SettingsSheet`(スマホは下から / PC は吹き出し)が出す。 */
+    ok(/topEnd=\{\(\s*<button type="button" ref=\{gearRef\}/.test(rd),
+      '聞き流し … 上の帯に置くのは、設定を開く歯車だけ')
+    /* **帯の中に選び欄を戻していないか。** `topEnd=` から、その閉じまでを見る */
+    {
+      const i = rd.indexOf('topEnd={(')
+      const j = rd.indexOf(')}', i)
+      ok(i > 0 && j > i && !/<select/.test(rd.slice(i, j)),
+        '聞き流し … 上の帯に選び欄を戻していない')
+    }
+    /* **入れ物は「出しかた」と同じもの**(同じ決まりを2か所に持たない) */
+    ok(/<SettingsSheet/.test(rd) && /anchorEl=\{gearRef\.current\}/.test(rd),
+      '聞き流し … 設定は `SettingsSheet` を、歯車の近くに出す')
+    /* **音楽などの設定も、ここに入れる**(第5.274節・利用者の指定) */
+    ok(/label="音楽の大きさ"/.test(rd) && /label="英語の音声"/.test(rd),
+      '聞き流し … 音量(英語の音声・音楽の大きさ)も設定の中にある')
+    /* **効かない端末には、つまみを出さずに理由を言う。**
+       言い方は `mixVolume.js` 1か所(メニューの設定と同じ文) */
+    ok(/volumeWorks\(\)/.test(rd) && /VOL_NO_TEXT/.test(rd),
+      '聞き流し … 音量が効かない端末では、つまみを出さずに理由を言う')
+    /* **言い方を2か所に書いていないか**(第5.274節)——
+       メニューの設定も、同じ `VOL_NO_TEXT` を使っていること */
+    ok(/\{VOL_NO_TEXT\}/.test(noNote(readD('src/components/NavSettings.jsx'))),
+      '音量が効かない端末の文は、`mixVolume.js` 1か所から取っている')
     /* **名前が見えているか**(第5.271節)。`sr-only` のままだと
        読み上げには届くが、**目には見えない** —— それが指摘そのものである */
     ok(/radio-set-name/.test(rd) && !/sr-only/.test(rd),

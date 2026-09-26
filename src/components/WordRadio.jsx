@@ -37,11 +37,22 @@ import FocusFrame from './FocusFrame.jsx'
 /* **題と進み具合は、練習の2画面とまったく同じ部品**(第5.264節)。
    書き写すと、必ずどこかだけ古くなる(CLAUDE.md) */
 import DrillHead from './DrillHead.jsx'
+/* **設定の出し方は、アプリに1つ**(第5.274節)——
+   スマホでは下から出るシート、パソコンでは吹き出し。
+   「出しかた」(`ReviewScope`)とまったく同じ入れ物を使う。
+   **同じ決まりを2か所に持たない**(CLAUDE.md) */
+import SettingsSheet from './SettingsSheet.jsx'
+/* 音量のつまみ。**覚えるのは `mixVolume.js`、鳴っている曲に当てるのは
+   `bgm.js`** —— ここは受け取って描くだけ */
+import VolumeRow from './VolumeRow.jsx'
 import { CloseIcon, GearIcon, PlayIcon, StopIcon } from './Icons.jsx'
 import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
 import { JA_VOICE } from '../data/clipVoices.js'
 import { PREMIUM } from '../lib/voiceTier.js'
-import { startBgm, stopBgm } from '../lib/bgm.js'
+import { setBgmVolume, startBgm, stopBgm } from '../lib/bgm.js'
+import {
+  VOL_NO_TEXT, bgmLevel, setVoiceLevel, voiceLevel, volumeWorks,
+} from '../lib/mixVolume.js'
 /* **どの曲を流すか**(第5.194節)。選び方も文言も、あちら1か所が持つ */
 import {
   bgmChoices, bgmPickOf, bgmPlan, loadBgmPick, saveBgmPick,
@@ -193,6 +204,11 @@ export default function WordRadio({
    * いまは名前と欄を、2列の格子に**直に**並べている。
    */
   const uid = useId()
+  /** 設定を開く歯車。**吹き出しは、これの近くに出る** */
+  const gearRef = useRef(null)
+  /* 音量。**覚えるのは `mixVolume.js`** —— ここは画面に出すための写しだけ */
+  const [voiceVol, setVoiceVol] = useState(voiceLevel)
+  const [bgmVol, setBgmVol] = useState(bgmLevel)
   const 読めるもの = (rows ?? []).filter((r) => radioTextOf(r))
   /* **数えるのは `takeCount()` 1か所**(`reviewScope.js`)——
      出しかたの札とまったく同じ数え方である。
@@ -413,6 +429,24 @@ export default function WordRadio({
          しかも**何を聞き流しているのかはどこにも出ていなかった。**
          題も数も、下の `DrillHead` がコンテンツの上に出す ——
          **練習の2画面とまったく同じ形**である。 */
+      /* ★ **設定は、右上の歯車から開く**(第5.274節・2026-09-26 実機・
+           利用者の指定「どうせ設定ボタンにするなら右上に置いてください」)。
+
+         **帯に置くのは、押すもの1つだけ。** 選び欄は1つも置かない
+         —— 帯は「細く1行」で名前を出す場所が無く、値だけが並ぶと
+         何の設定か分からない(第5.271節の指摘)。
+
+         中身は `SettingsSheet` が出す —— **スマホでは下から出るシート、
+         パソコンでは吹き出し。**「出しかた」(`ReviewScope`)と同じ入れ物で、
+         閉じ方(✕ / 外側 / Esc)もあちらが持っている。 */
+      topEnd={(
+        <button type="button" ref={gearRef}
+                className="nav-icon-btn radio-gear"
+                aria-label="設定" aria-expanded={setsOpen}
+                onClick={() => setSetsOpen((v) => !v)}>
+          <GearIcon />
+        </button>
+      )}
       /* **設定は、上の帯に置かない**(第5.271節・2026-09-26 実機・利用者の指摘)。
 
            > quick response の聞き流しの上のバー、これではなんのことか
@@ -486,123 +520,6 @@ export default function WordRadio({
           )}
         </div>
 
-        {/* ── **設定**(第5.271節・2026-09-26 実機・利用者の指摘)───────
-
-               > 一度に出す問題数とか、間の長さの設定をどこか違うところに
-               > 移動させれないですか?
-
-             **名前と値を、同じ行に並べる。** 上の帯では値しか出せず、
-             「5 問」「3 秒」が何の設定なのか分からなかった。
-
-             **畳んでおく。** 一度決めれば何度も触らないものなので、
-             出したままだと聞き流している語より場所を取る
-             (**長い一覧は、開くまで羅列しない**・共通ルール)。
-
-             **`<details>` は使わない**(共通ルール)—— 畳んでいても
-             `display` を持つと中身が場所を取り続ける。状態を1つ持ち、
-             **畳んでいるあいだは中身を描かない。**
-
-             **隙間は親の `gap` が作る**(子に `margin` を付けて回らない)。 */}
-        <div className="radio-set">
-          <button type="button"
-                  className={`btn btn--small btn--ghost${setsOpen ? ' chip--on' : ''}`}
-                  aria-expanded={setsOpen}
-                  onClick={() => setSetsOpen((v) => !v)}>
-            <GearIcon />設定
-          </button>
-          {setsOpen && (
-            <div className="radio-set-body">
-              {/* **何問ずつ流すか**(第5.262節・2026-09-26 利用者の指定)。
-
-                    > そういう場合は聞き流しモードもそれに合わせて5問を
-                    > 繰り返してください。30問選んでいれば30問を繰り返すように。
-                    > というよりも聞き流しモードの中でそれを選べるように
-                    > してください。
-
-                  **「出しかた」で選んでいる数を持ち込んで始まる**ので、
-                  5問に絞って練習していた人には、そのまま5問が回る。
-                  ここで変えれば、その場で切り替わる。
-
-                  **札の一覧も、数え方も `reviewScope.js` 1か所**である ——
-                  出しかたの札とまったく同じ 5 / 10 / 20 / 30 / ぜんぶ が並ぶ
-                  (**数え方を2通り持たない**・CLAUDE.md)。 */}
-              <label className="radio-set-name" htmlFor={`${uid}-take`}>何問ずつ</label>
-              <select id={`${uid}-take`} className="radio-set-pick radio-set-pick--take"
-                      value={String(take)}
-                        onChange={(e) => {
-                          setTake(sizeOfValue(e.target.value))
-                          /* **頭から読み直す。** 減らしたときに、いま読んでいる
-                             場所が一覧の外へ出たままになるのを防ぐ */
-                          move(0)
-                        }}>
-                {SIZES.map((n) => (
-                  <option key={String(n)} value={String(n)}>{sizePickLabel(n, '問')}</option>
-                ))}
-              </select>
-              {/* **読み方は、選べるものが2つ以上あるときだけ出す**
-                  (**効かない操作を見せない**・CLAUDE.md)。
-                  日本語の読み上げを外したので、いまは「英語だけ」1つである。
-
-                  **自分の名前(`--mode`)を持つ**(第5.262節)。見張りは
-                  「`--gap` と `--song` 以外」という**外して数える形**だったので、
-                  欄が1つ増えるたびに巻き込まれていた
-                  (曲の題を数えてしまった 2026-09-23 と、まったく同じ形)。
-                  **欲しいものを名指しする**ほうが、増えても壊れない */}
-              {modes.length > 1 && (
-                <>
-                  <label className="radio-set-name" htmlFor={`${uid}-mode`}>読み方</label>
-                  <select id={`${uid}-mode`} className="radio-set-pick radio-set-pick--mode"
-                          value={mode}
-                          onChange={(e) => {
-                            const next = e.target.value
-                            setMode(next); saveRadioMode(next, where)
-                            /* **間も、その読み方のものに持ち替える**(第5.251節)。
-                               持ち替えないと、**「英語だけ」で選んだ 3秒が
-                               「日本語 → 英語」のあいだに化ける** */
-                            setGap(loadRadioGap(where, next))
-                          }}>
-                    {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                  </select>
-                </>
-              )}
-              {/* **どの曲を流すか**(第5.194節・2026-09 利用者の指定)。
-
-                  > 複数登録した曲から選べるようにしてください。
-
-                  **2曲以上あるときだけ出す**(`bgmChoices` が決める)——
-                  1曲しか無ければ「ぜんぶ」とその1曲は同じもので、
-                  **押しても何も変わらない**(効かない操作を見せない・CLAUDE.md)。 */}
-              {song選び.length > 0 && (
-                <>
-                  <label className="radio-set-name" htmlFor={`${uid}-song`}>曲</label>
-                  <select id={`${uid}-song`} className="radio-set-pick radio-set-pick--song"
-                          value={選んでいる}
-                          onChange={(e) => { setPick(e.target.value); saveBgmPick(e.target.value) }}>
-                    {song選び.map((x) => (
-                      <option key={x.id || 'all'} value={x.id}>{x.label}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-              {/* **間の長さ。** 数(秒)は1文字も削らない —— そこが読めないと、
-                  何を選んでいるのか分からない(CLAUDE.md)。
-                  **名前も `wordRadio.js` 1か所から取る**(書き写さない)——
-                  読み方によって「間」の意味が変わる */}
-              <label className="radio-set-name" htmlFor={`${uid}-gap`}>
-                {radioGapLabelFor(where, mode)}
-              </label>
-              <select id={`${uid}-gap`} className="radio-set-pick radio-set-pick--gap"
-                      value={gap}
-                        onChange={(e) => {
-                          const ms = Number(e.target.value)
-                          setGap(ms); saveRadioGap(ms, where, mode)
-                        }}>
-                {radioGapsFor(where, mode)
-                  .map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-              </select>
-            </div>
-          )}
-        </div>
         {/* ══════════════════════════════════════════════════════
             **説明書きと曲名は置かない**(第5.252節・2026-09-23 利用者の指定)
 
@@ -620,6 +537,153 @@ export default function WordRadio({
             **消したのは画面の文だけ**で、鳴らす仕組みは1つも触っていない。
             ══════════════════════════════════════════════════════ */}
       </div>
+
+      {/* ── **設定**(第5.274節・2026-09-26 実機・利用者の指定)──────────
+
+             > どうせ設定ボタンにするなら右上に置いてください。
+             > そして、音楽などの設定もここに入れてください。
+
+           **入れ物は「出しかた」と同じ**(`SettingsSheet`)——
+           スマホでは下から出るシート、パソコンでは吹き出し。
+           閉じ方(✕ / 外側 / Esc)もあちらが持っている。
+
+           **名前と欄は2列の格子でそろえる**(第5.273節)。
+           名前の長さがまちまちでも、欄は同じ場所から始まり同じ幅になる。 */}
+      {setsOpen && (
+        <SettingsSheet
+          anchorEl={gearRef.current}
+          onClose={() => setSetsOpen(false)}
+          title="設定"
+          /* 読み方を変えると間の札が入れ替わり、箱の高さが変わる。
+             **置き直す合図を渡す** */
+          placeKey={`${take}/${mode}/${選んでいる}/${gap}`}
+        >
+          {/* **別々の物を、すき間ゼロでくっつけない**(共通ルール)。
+              入れ物(`.sheet-body` / `.setpop`)は素の箱で `gap` を持たないので、
+              **ここで1つ束ねて `gap` で離す** —— 子に `margin` を付けて回らない。
+              `align-items` は既定(stretch)のまま ——
+              `center` を入れると、行が中身なりの幅に縮んで左端がぎざぎざになる */}
+          <div className="radio-set">
+          <div className="radio-set-body">
+          {/* **何問ずつ流すか**(第5.262節・2026-09-26 利用者の指定)。
+
+                > そういう場合は聞き流しモードもそれに合わせて5問を
+                > 繰り返してください。30問選んでいれば30問を繰り返すように。
+                > というよりも聞き流しモードの中でそれを選べるように
+                > してください。
+
+              **「出しかた」で選んでいる数を持ち込んで始まる**ので、
+              5問に絞って練習していた人には、そのまま5問が回る。
+              ここで変えれば、その場で切り替わる。
+
+              **札の一覧も、数え方も `reviewScope.js` 1か所**である ——
+              出しかたの札とまったく同じ 5 / 10 / 20 / 30 / ぜんぶ が並ぶ
+              (**数え方を2通り持たない**・CLAUDE.md)。 */}
+          <label className="radio-set-name" htmlFor={`${uid}-take`}>何問ずつ</label>
+          <select id={`${uid}-take`} className="radio-set-pick radio-set-pick--take"
+                  value={String(take)}
+                    onChange={(e) => {
+                      setTake(sizeOfValue(e.target.value))
+                      /* **頭から読み直す。** 減らしたときに、いま読んでいる
+                         場所が一覧の外へ出たままになるのを防ぐ */
+                      move(0)
+                    }}>
+            {SIZES.map((n) => (
+              <option key={String(n)} value={String(n)}>{sizePickLabel(n, '問')}</option>
+            ))}
+          </select>
+          {/* **読み方は、選べるものが2つ以上あるときだけ出す**
+              (**効かない操作を見せない**・CLAUDE.md)。
+              日本語の読み上げを外したので、いまは「英語だけ」1つである。
+
+              **自分の名前(`--mode`)を持つ**(第5.262節)。見張りは
+              「`--gap` と `--song` 以外」という**外して数える形**だったので、
+              欄が1つ増えるたびに巻き込まれていた
+              (曲の題を数えてしまった 2026-09-23 と、まったく同じ形)。
+              **欲しいものを名指しする**ほうが、増えても壊れない */}
+          {modes.length > 1 && (
+            <>
+              <label className="radio-set-name" htmlFor={`${uid}-mode`}>読み方</label>
+              <select id={`${uid}-mode`} className="radio-set-pick radio-set-pick--mode"
+                      value={mode}
+                      onChange={(e) => {
+                        const next = e.target.value
+                        setMode(next); saveRadioMode(next, where)
+                        /* **間も、その読み方のものに持ち替える**(第5.251節)。
+                           持ち替えないと、**「英語だけ」で選んだ 3秒が
+                           「日本語 → 英語」のあいだに化ける** */
+                        setGap(loadRadioGap(where, next))
+                      }}>
+                {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </>
+          )}
+          {/* **どの曲を流すか**(第5.194節・2026-09 利用者の指定)。
+
+              > 複数登録した曲から選べるようにしてください。
+
+              **2曲以上あるときだけ出す**(`bgmChoices` が決める)——
+              1曲しか無ければ「ぜんぶ」とその1曲は同じもので、
+              **押しても何も変わらない**(効かない操作を見せない・CLAUDE.md)。 */}
+          {song選び.length > 0 && (
+            <>
+              <label className="radio-set-name" htmlFor={`${uid}-song`}>曲</label>
+              <select id={`${uid}-song`} className="radio-set-pick radio-set-pick--song"
+                      value={選んでいる}
+                      onChange={(e) => { setPick(e.target.value); saveBgmPick(e.target.value) }}>
+                {song選び.map((x) => (
+                  <option key={x.id || 'all'} value={x.id}>{x.label}</option>
+                ))}
+              </select>
+            </>
+          )}
+          {/* **間の長さ。** 数(秒)は1文字も削らない —— そこが読めないと、
+              何を選んでいるのか分からない(CLAUDE.md)。
+              **名前も `wordRadio.js` 1か所から取る**(書き写さない)——
+              読み方によって「間」の意味が変わる */}
+          <label className="radio-set-name" htmlFor={`${uid}-gap`}>
+            {radioGapLabelFor(where, mode)}
+          </label>
+          <select id={`${uid}-gap`} className="radio-set-pick radio-set-pick--gap"
+                  value={gap}
+                    onChange={(e) => {
+                      const ms = Number(e.target.value)
+                      setGap(ms); saveRadioGap(ms, where, mode)
+                    }}>
+            {radioGapsFor(where, mode)
+              .map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+          </select>
+          </div>
+
+          {/* ── **音量**(第5.274節・利用者の指定「音楽などの設定もここに」)──
+
+                 聴きながら「曲が大きい」「声が小さい」と思うものなので、
+                 **メニューまで戻らずに、ここで動かせる**ようにする。
+                 覚えるのは `mixVolume.js`、鳴っている曲に当てるのは `bgm.js`
+                 (**数え方を2通り持たない**・CLAUDE.md)。
+
+                 **効かない端末では、つまみを出さずに理由を言う。**
+                 iOS は `<audio>` の `volume` を無視する。
+                 **端末の名前では決めない**(`volumeWorks()` が実際に試す)。
+                 **日本語の声は、ここでは下げない** —— iPhone で効かないので、
+                 窓口が置くときに小さくしてある(第5.274節・`speak`)。 */}
+          {volumeWorks() ? (
+            <>
+              <VolumeRow label="英語の音声" value={voiceVol}
+                         onChange={(v) => { setVoiceVol(v); setVoiceLevel(v) }} />
+              {/* **曲が1つも無ければ出さない**(効かない操作を見せない) */}
+              {tracks.length > 0 && (
+                <VolumeRow label="音楽の大きさ" value={bgmVol}
+                           onChange={(v) => { setBgmVol(v); setBgmVolume(v) }} />
+              )}
+            </>
+          ) : (
+            /* **言い方は `mixVolume.js` 1か所**(メニューの設定と同じ文) */
+            <p className="nav-vol-no">{VOL_NO_TEXT}</p>
+          )}
+          </div>
+        </SettingsSheet>
+      )}
     </FocusFrame>
   )
 }

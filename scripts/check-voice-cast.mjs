@@ -1218,7 +1218,13 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   } else ok('作り直しのときは落とさない(断った理由をそのまま返す)')
 
   // 実際に作った会社で見ているか(`provider` のままだと、落ちたあとに食い違う)
-  if (!/const stored = madeBy === 'eleven' \? fadeMp3Tail\(audio\) : audio/.test(speak)) {
+  //
+  // **2つとも見る**(第5.274節で、日本語を小さくする1本が増えた)。
+  //   ① `evened` … 日本語の声だけ、置く前に小さくする
+  //   ② `stored` … 終わりをなだらかにする
+  // どちらも `madeBy`(実際に作った会社)で分けていなければならない
+  if (!/const stored = madeBy === 'eleven' \? fadeMp3Tail\(evened\) : audio/.test(speak)
+    || !/const evened = madeBy === 'eleven' && voiceId === JA_VOICE_ID/.test(speak)) {
     ng('置く前のなだらかにする判断が、実際に作った会社を見ていない')
   } else if (!/provider: madeBy,/.test(speak)) {
     ng('返している会社が、実際に作った会社ではない')

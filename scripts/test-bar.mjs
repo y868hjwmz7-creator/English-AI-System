@@ -4065,7 +4065,7 @@ export default defineConfig({
     /* **畳んだままで1つも出ていないこと**も見る(第5.271節)——
        開かずに並んでいたら、上の帯にあったのと同じ読みにくさになる */
     const 畳んだまま = await 欄を読む()
-    await page.click('.radio-set button')
+    await page.click('.radio-gear')
     await page.waitForTimeout(150)
     const 設定 = await 欄を読む()
     const 開いて横 = await page.evaluate(() => {
@@ -4165,7 +4165,7 @@ export default defineConfig({
       }
     })
     const 畳んだまま = await 欄を読む()
-    await page.click('.radio-set button')
+    await page.click('.radio-gear')
     await page.waitForTimeout(150)
     const 設定 = await 欄を読む()
     /* ★ **いちばん長い名前で測る**(第5.273節・2026-09-26 実機・
@@ -7251,9 +7251,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio${q}`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(300)
-    /* **設定を開いてから測る**(第5.271節)。上の帯から下の「設定」へ
-       移したので、開かないと欄そのものが描かれていない */
-    await page.click('.radio-set button')
+    /* **設定を開いてから測る**(第5.271節 → 第5.274節で右上の歯車へ)。
+       開かないと欄そのものが描かれていない */
+    await page.click('.radio-gear')
     await page.waitForTimeout(150)
     const r = await page.evaluate(() => {
       const sel = document.querySelector('.radio-set-pick--song')
@@ -10231,9 +10231,9 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
      「4/5などの数字は、コンテンツ部分内へ」)。
      帯の `.focus-count` から `.drill-count` へ移した ——
      **測る場所も一緒に移す**(移さないと、この見張りが黙る) */
-  /* **設定を開いてから測る**(第5.271節)。「何問ずつ」の欄も
-     上の帯から下の「設定」へ移した —— 開かないと描かれていない */
-  await page.click('.radio-set button')
+  /* **設定を開いてから測る**(第5.271節 → 第5.274節で右上の歯車へ)。
+     「何問ずつ」の欄も設定の中なので、開かないと描かれていない */
+  await page.click('.radio-gear')
   await page.waitForTimeout(150)
   const m = await page.evaluate(() => ({
     数: (document.querySelector('.drill-count')?.textContent ?? '').trim(),
@@ -10281,8 +10281,8 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio&size=5`,
     { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(700)
-  /* **設定を開いてから変える**(第5.271節) */
-  await page.click('.radio-set button')
+  /* **設定を開いてから変える**(第5.271節 → 第5.274節) */
+  await page.click('.radio-gear')
   await page.waitForTimeout(150)
   await page.selectOption('.radio-set-pick--take', 'all')
   await page.waitForTimeout(400)

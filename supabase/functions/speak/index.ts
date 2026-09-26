@@ -627,6 +627,84 @@ function fadeMp3Tail(input) {
   }
   return out
 }
+/**
+ * ============================================================================
+ * 【日本語の声だけ、置く前に小さくする】(第5.274節・2026-09-26 実機)
+ *
+ *   > 日本語と英語のボリュームも調整したいです。
+ *   > 今は日本語の shohei の声が英語の声に対して比較的大きいです。
+ *
+ * 【なぜ画面側で下げないのか】
+ *   画面には**声ごとの音量をそろえる仕組み**がある(`src/lib/loudness.js`)。
+ *   ところがそれは `<audio>` の `volume` を動かすもので、
+ *   **iPhone は `volume` を黙って無視する。**
+ *   利用者の端末では1ミリも効かない —— だから**そろわないまま**だった。
+ *
+ *   Web Audio に通せば iPhone でも効くが、**2026-09 にそれをやって
+ *   「全部の声でバリバリ雑音」になり、戻した道**である(`mixVolume.js`)。
+ *   **同じ失敗をくり返さない。**
+ *
+ * 【だから、置くときに小さくする】
+ *   `fadeMp3Tail` とまったく同じ道具を使う —— MP3 の
+ *   `global_gain`(グラニュールごとの 8 ビットの数)を減らすだけ。
+ *
+ *   - **音は1ビットも作り直していない**(mp3gain と同じ考え方)
+ *   - **1バイトも増えない。1ミリ秒も削らない**
+ *   - **どの端末でも効く**(`volume` を使っていないので iPhone でも)
+ *   - **0円。** 作り直しではないので、ElevenLabs を呼び直さない
+ *
+ * 【すでに置いてある日本語の音声は、大きいまま】(利用者の判断)
+ *   置き場所は(版・段・声の id・英文の指紋)で決まる。
+ *   ここで音を小さくしても**指紋は変わらない**ので、
+ *   すでにある音声はそのまま使われる。**これから作るものから**小さくなる。
+ *   作り直せば全部そろうが、**1本ずつ課金される**ので、しない。
+ *
+ * 【下げ幅は、耳で決めてもらう】
+ *   こちらからは ElevenLabs を呼べないので、**実際の大きさを測れない。**
+ *   4.5dB は**最初の置き場所**である。合わなければ、この数を1つ直す。
+ * ============================================================================
+ */
+
+/**
+ * 日本語の声。
+ * **`src/data/clipVoices.js` の `JA_VOICE` と必ず同じ値にすること。**
+ * (`npm run test:mp3` が、2つが同じかを見張っている)
+ */
+const JA_VOICE_ID = 'ja-1'
+
+/** 日本語の声を、どれだけ小さくして置くか(dB)。**1.5dB 刻みに丸まる** */
+const JA_CUT_DB = 4.5
+
+/**
+ * MP3 ぜんぶの `global_gain` を下げた写しを返す。
+ *
+ * **触れない形(MPEG2・ステレオ・CRC 付き)のときは、元のものをそのまま返す。**
+ * 「直せないなら、何もしない」(`fadeMp3Tail` と同じ作法)。
+ */
+function lowerMp3(input, cutDb) {
+  const bytes = new Uint8Array(input)
+  /* **1.5dB が1目盛り。** 目盛りにならない小さな指定は「何もしない」 */
+  const cut = Math.round(Number(cutDb) / 1.5)
+  if (!(cut > 0)) return bytes
+  const out = new Uint8Array(bytes)
+  let i = 0
+  let touched = 0
+  while (i < out.length) {
+    const f = fadeFrameAt(out, i)
+    if (!f) { i += 1; continue }
+    const base = f.at + 4
+    for (const off of FADE_GAIN_BITS) {
+      const cur = fadeReadBits(out, base, off, 8)
+      /* **0 より下は無い。** 下げ切ったところで止まる(音は消えない) */
+      fadeWriteBits(out, base, off, 8, Math.max(0, cur - cut))
+    }
+    touched += 1
+    i = f.at + f.len
+  }
+  /* **1枚も触れなかったら、元のものを返す**(写しを返しても同じだが、
+     「何もしていない」ことを呼ぶ側が見て分かるようにする) */
+  return touched ? out : bytes
+}
 // ── ここまで mp3-fade ────────────────────────────────────────────────
 
 /**
@@ -1381,7 +1459,12 @@ Deno.serve(async (req) => {
      */
     // **`madeBy` で見る。** 良い声に断られて標準に落ちたときは、
     // 24kHz(MPEG2)なので `fadeMp3Tail` はどのみち何もしない
-    const stored = madeBy === 'eleven' ? fadeMp3Tail(audio) : audio
+    /* **日本語の声だけ、先に小さくする**(第5.274節)。
+       iPhone は `<audio>` の `volume` を無視するので、
+       **置くときに小さくしておかないと、あちらでは一生そろわない** */
+    const evened = madeBy === 'eleven' && voiceId === JA_VOICE_ID
+      ? lowerMp3(audio, JA_CUT_DB) : audio
+    const stored = madeBy === 'eleven' ? fadeMp3Tail(evened) : audio
     // **文字ごとの時刻**(ElevenLabs のときだけ返ってくる)
     const alignment = made.alignment ?? null
 
