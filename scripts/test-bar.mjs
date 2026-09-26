@@ -10374,6 +10374,12 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
 
    **「右に寄っているか」だけを見ない。** 手前のものに重ねても
    右端には着くので、**あいだが空いているか**も一緒に数える。
+
+   **帯の左が ☰ かどうかも、ここで見る**(第5.278節・2026-09-27)。
+   `?screen=mybook` は**本物と同じく `onMenu` を渡す** ——
+   渡さないと「✕ とじる」が出て、**利用者が毎日見ている帯とは
+   別のものを測る**ことになる(第5.276節で `?screen=qrradio` に
+   踏んだのと同じ)。骨組みが戻ってしまわないよう、**赤くする。**
    ══════════════════════════════════════════════════════════════════ */
 {
   const IN_SENTENCE = ['answer', 'engineer', 'stayed', 'quiet', 'during', 'whole',
@@ -10426,6 +10432,7 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
         .filter((r) => r.right <= sr.right + 0.5)
         .sort((a, b) => b.right - a.right)[0] ?? null
       return {
+        左はメニュー: !!bar.firstElementChild?.classList.contains('focus-burger'),
         右端との差: Math.round(br.right - sr.right),
         手前とのあいだ: 手前 ? Math.round(sr.left - 手前.right) : null,
         帯の高さ: Math.round(br.height),
@@ -10443,7 +10450,12 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
     /* **重ねて右端に着けていないか。** すき間ゼロもここで捕まえる
        (`.claude/rules/common.md`「別々の物を、すき間ゼロでくっつけない」) */
     const 離れている = 測る.手前とのあいだ === null || 測る.手前とのあいだ >= 4
-    if (!寄っている) {
+    /* **本物は ☰ を渡す**(`App.jsx`)。`?screen=wordbook` だけは
+       トレーナーがゲストの単語帳を開く側なので、あちらは「✕ とじる」 */
+    if (SCR === 'mybook' && !測る.左はメニュー) {
+      ng(`${名} … 帯の左が ☰ ではない`,
+        '骨組みが `onMenu` を渡していない。本物(`App.jsx`)は渡している')
+    } else if (!寄っている) {
       ng(`${名} … 絞り込みが右端に寄っていない`,
         `右端まで ${測る.右端との差}px 空いている`)
     } else if (!一行) {

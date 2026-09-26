@@ -615,9 +615,18 @@ const WORDBOOK = (
    **基礎単語(3冊目)もここで測る**(2026-09 利用者の指定
    「基礎単語360/1200も業種別の横に置いてください」)。
    `showBasics` の既定は真なので、渡さなくても出る。 */
+/* **☰ を渡す。本物(`App.jsx`)がそうしている**(第5.278節・2026-09-27)。
+
+   渡さなければ `Wordbook` は「✕ とじる」を出す。あちらも本物ではある
+   (トレーナーがゲストの単語帳を開くとき = `?screen=wordbook` の側)が、
+   **自分の単語帳はメニューから開くので、本物は必ず ☰ である。**
+   渡していなかったので、**利用者が毎日見ている帯を、検証は1度も
+   描いていなかった**(第5.276節で `?screen=qrradio` に踏んだのと同じ)。
+
+   **骨組みは、本物と1文字も違えない**(CLAUDE.md)。 */
 const MYBOOK = (
   <div className="app-main">
-    <Wordbook shelves={shelfList()} showCol />
+    <Wordbook shelves={shelfList()} showCol onMenu={() => {}} />
   </div>
 )
 
