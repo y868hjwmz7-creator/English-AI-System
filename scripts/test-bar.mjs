@@ -10353,6 +10353,114 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   await page.close()
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   **単語帳の帯 — 絞り込み(出しかた)は、いちばん右**(第5.277節)
+
+   2026-09-26 実機・利用者の指定。
+
+     > ちなみに、単語帳の絞り込みも同じデザインにして、右に寄せてね
+
+   絵も部品も Quick Response と同じ(`.rscope-sort`)。ちがったのは
+   **置き場所だけ**で、単語帳には `🔊 聞き流し` が無いぶん、
+   帯の右が大きく空いたまま左に寄っていた。
+
+   **ソースでは測れない。** `margin-left: auto` は空きがあるときだけ
+   効くので、**描いて、右端との差を読む**しかない。
+
+   **いちばん危ない形を、必ず1つ置く**(CLAUDE.md)——
+   ①広い画面(1280px)…… 空きがいちばん大きく、寄せ忘れが出る
+   ②狭い画面(320px)…… 空きが無い。ここで2段に折れないか
+   ③冊名が出る画面(`?screen=mybook`)と、出ない画面(`?screen=wordbook`)
+
+   **「右に寄っているか」だけを見ない。** 手前のものに重ねても
+   右端には着くので、**あいだが空いているか**も一緒に数える。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const IN_SENTENCE = ['answer', 'engineer', 'stayed', 'quiet', 'during', 'whole',
+    'review', 'meeting', 'later', 'admitted', 'nervous', 'anything']
+  const WORDS = IN_SENTENCE.map((w, i) => ({
+    word_norm: w, display: w, kind: 'phrase', pos: '熟語',
+    status: 'learning', box: 2, learn_streak: 4,
+    due_on: '2020-01-01', added_at: '2026-09-01', meaning_ja: `意味${i}`,
+    seen_in: 'Not knowing the answer, the new engineer stayed quiet.',
+    seen_in_ja: '答えを知らなかったので、黙っていた。',
+    material_id: null, material_title: null, industry: 'it', topic: null,
+  }))
+  /* `wordbook` = 冊が1つ(えらぶ欄が出ない側)/ `mybook` = 棚を渡す側。
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md) */
+  for (const [W, SCR] of [[1280, 'mybook'], [390, 'mybook'], [320, 'wordbook']]) {
+    const page = await browser.newPage({ viewport: { width: W, height: 844 } })
+    page.setDefaultTimeout(9000)
+    await page.route('**/rest/v1/**', (r) => {
+      const u = r.request().url()
+      let body = []
+      if (u.includes('review_words')) body = WORDS
+      if (u.includes('vocab_week')) body = [{ days: 3, answered: 20, correct: 15, weeks: 5 }]
+      if (u.includes('weekly_goal')) body = [{ words_goal: 0, words_done: 0, sent_goal: 0, sent_done: 0 }]
+      return r.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(body),
+      })
+    })
+    await page.route('**/auth/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
+    }))
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=${SCR}`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(1800)
+
+    const 測る = await page.evaluate(() => {
+      const bar = document.querySelector('.wb-run-head')
+      if (!bar) return { なし: '.wb-run-head' }
+      const sort = bar.querySelector('.rscope-sort')
+      if (!sort) return { なし: '.rscope-sort' }
+      const br = bar.getBoundingClientRect()
+      const sr = sort.getBoundingClientRect()
+      /* **流れの中にいるものだけ**を数える(浮いているものは、
+         ただ上に重なっているだけである・.claude/rules/common.md) */
+      const 兄弟 = [...bar.children].filter((k) => {
+        const p = window.getComputedStyle(k).position
+        return p !== 'fixed' && p !== 'absolute' && k.getBoundingClientRect().width > 0
+      })
+      const 手前 = 兄弟.filter((k) => k !== sort && !k.contains(sort))
+        .map((k) => k.getBoundingClientRect())
+        .filter((r) => r.right <= sr.right + 0.5)
+        .sort((a, b) => b.right - a.right)[0] ?? null
+      return {
+        右端との差: Math.round(br.right - sr.right),
+        手前とのあいだ: 手前 ? Math.round(sr.left - 手前.right) : null,
+        帯の高さ: Math.round(br.height),
+        ボタンの高さ: Math.round(sr.height),
+        並ぶ数: 兄弟.length,
+      }
+    })
+
+    const 名 = `単語帳の帯 ${W}px(${SCR})`
+    if (測る.なし) { ng(`${名} … ${測る.なし} が描かれていない`); await page.close(); continue }
+    const 寄っている = 測る.右端との差 <= 2
+    /* 帯は1行。**押すものを足したときの壊れ方**(2段になる)を見る ——
+       ボタン1つぶんの 1.6 倍を超えたら、もう折り返している */
+    const 一行 = 測る.帯の高さ <= 測る.ボタンの高さ * 1.6
+    /* **重ねて右端に着けていないか。** すき間ゼロもここで捕まえる
+       (`.claude/rules/common.md`「別々の物を、すき間ゼロでくっつけない」) */
+    const 離れている = 測る.手前とのあいだ === null || 測る.手前とのあいだ >= 4
+    if (!寄っている) {
+      ng(`${名} … 絞り込みが右端に寄っていない`,
+        `右端まで ${測る.右端との差}px 空いている`)
+    } else if (!一行) {
+      ng(`${名} … 帯が2段になっている`,
+        `帯 ${測る.帯の高さ}px / ボタン ${測る.ボタンの高さ}px`)
+    } else if (!離れている) {
+      ng(`${名} … 絞り込みが、手前のものに接している`,
+        `あいだ ${測る.手前とのあいだ}px`)
+    } else {
+      ok(`${名} … 絞り込みは帯のいちばん右(右端まで ${測る.右端との差}px`
+        + ` / 手前とのあいだ ${測る.手前とのあいだ ?? '—'}px / 帯 ${測る.帯の高さ}px・1行`
+        + ` / 並ぶもの ${測る.並ぶ数}個)`)
+    }
+    await page.close()
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
