@@ -1487,6 +1487,14 @@ const RADIO = (
 const QRRADIO = (
   <WordRadio
     where="qr"
+    /* **「出しかた」で選んでいる数を持ち込む**(第5.262節・
+       2026-09-26 利用者の指定)。`?screen=qrradio&size=5` で、
+       **5問に絞って練習していた人が開いた形**を測れる。
+       渡さなければ「ぜんぶ」(本物の既定と同じ) */
+    size={q.get('size') === '5' ? 5 : 'all'}
+    /* **上限より多い文を入れておく**(CLAUDE.md「無ければ素通りする形の
+       検証を書かない」)—— 5問に絞っても減らない数しか無いと、
+       絞りを外しても緑のままになる */
     rows={[
       {
         en: 'We decided to take on the project even though the deadline was extremely tight.',
@@ -1496,6 +1504,12 @@ const QRRADIO = (
         en: 'Could you walk me through the numbers one more time?',
         ja: '数字をもう一度説明していただけますか。',
       },
+      { en: 'Let me get back to you on that.', ja: 'その件は、あらためてご連絡します。' },
+      { en: 'I am afraid that will not work for us.', ja: '申し訳ありませんが、それでは難しいです。' },
+      { en: 'Could you put that in writing?', ja: '書面にしていただけますか。' },
+      { en: 'We are running behind schedule.', ja: '予定より遅れています。' },
+      { en: 'That makes a lot of sense.', ja: 'とても納得できます。' },
+      { en: 'I will look into it right away.', ja: 'すぐに調べます。' },
     ]}
     /* **曲を2つ以上入れておく**(第5.194節・2026-09 利用者の指定
        「複数登録した曲から選べるようにしてください」)。

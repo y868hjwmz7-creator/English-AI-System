@@ -59,6 +59,9 @@ import {
   runKeyOf, saveForm, saveOrder, saveRepeat, saveScope, saveSize,
   scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
 } from '../lib/reviewScope.js'
+/* **問題の箱をタップして切り替える**(第5.262節・2026-09-26 利用者の指定)。
+   「英語を見る」のボタンは廃止した。**判断は `tapReveal.js` 1か所** */
+import { canTapReveal, revealKindOf, revealLabel } from '../lib/tapReveal.js'
 import { clozeAt } from '../lib/clozeSentence.js'
 import { promoteGrownWords } from '../lib/qrReviews.js'
 import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
@@ -2010,6 +2013,11 @@ export default function Wordbook({
         <WordRadio
           rows={radio}
           tracks={tracks}
+          /* **「出しかた」で選んでいる数を、そのまま持ち込む**
+             (第5.262節・2026-09-26 利用者の指定)。
+             5問に絞って練習していた人には、そのまま5問が回る。
+             **聞き流しの中で変えられる**ので、ここは始めの値だけである */
+          size={size}
           rate={rateOf(loadRateId())}
           learnerId={learnerId}
           /* **聞き流しの左上も ☰**(第5.172節・利用者の指定) */
@@ -2209,7 +2217,39 @@ export default function Wordbook({
                 入れ替えなら**箱の高さが変わらない**ので、
                 押す場所も、目を向ける場所も動かない
                 (集中モードの「訳は並べるのではなく入れ替える」と同じ考え方)。 */}
-            <div className={`wordcard-face${form === 'cloze' ? ' wordcard-face--cloze' : ''}`}>
+            {/* ── **箱ぜんぶをタップで切り替える**(第5.262節・
+                   2026-09-26 利用者の指定)──────────────────────
+
+                 > 単語帳や quick response の「英語を見る」ボタンは廃止。
+                 > 日本語の表示されているあたりをタップすれば英語に
+                 > 切り替わるようにしてください。
+                 > タップできる範囲は広めにとってください。
+
+                 **4択には付けない**(利用者の指定)—— あちらは選択肢を
+                 押して答える形で、切り替える余地がそもそも無い。
+                 **どの出し方に付くかは `canTapReveal()` 1か所**が決める
+                 (画面で `form === 'ja2en'` と書かない)。
+
+                 **押せるものの中に押せるものを入れない。**
+                 4択のときだけ中に `SpeakButton` が入るが、
+                 そのときはこの印が付かないので、ぶつからない。
+
+                 **読み上げには `aria-label` で届く** —— ボタンの文字を
+                 消しただけで、言葉そのものは消していない。 */}
+            <div className={`wordcard-face${form === 'cloze' ? ' wordcard-face--cloze' : ''}${
+              canTapReveal(form) ? ' wordcard-face--tap' : ''}`}
+                 {...(canTapReveal(form) ? {
+                   role: 'button',
+                   tabIndex: 0,
+                   'aria-expanded': shown,
+                   'aria-label': revealLabel(shown, revealKindOf(form)),
+                   onClick: () => setShown((v) => !v),
+                   onKeyDown: (e) => {
+                     if (e.key !== 'Enter' && e.key !== ' ') return
+                     e.preventDefault()
+                     setShown((v) => !v)
+                   },
+                 } : {})}>
               {/* **穴埋め**(2026-09)。出会った文の、その語だけを伏せる。
                   下の「出会った文」は出さない —— 同じ文が2つ並ぶうえ、
                   そちらには答えがそのまま見えている */}
@@ -2356,15 +2396,12 @@ export default function Wordbook({
                     自分で言ってから**耳で答え合わせをする**ほうが素直である
                     (Quick Response で同じ判断をしている)。 */}
                 <div className="wordcard-peek">
-                  <button type="button" className="btn btn--ghost btn--small"
-                          aria-expanded={shown}
-                          onClick={() => setShown((v) => !v)}>
-                    {/* **穴埋めも「英語を見る」**(2026-09)。
-                        伏せてあるのは語そのものなので、出てくるのは英語である */}
-                    {form === 'ja2en' || form === 'cloze'
-                      ? (shown ? '英語を隠す' : '英語を見る')
-                      : (shown ? '意味を隠す' : '意味を見る')}
-                  </button>
+                  {/* **「英語を見る」のボタンは廃止した**(第5.262節・
+                      2026-09-26 利用者の指定)。**問題の箱そのものを押す**
+                      ようにしたので、同じことをするボタンが2つ並ぶことになる
+                      (**同じことをするものを2つ見せない**・CLAUDE.md)。
+                      言葉は消していない —— 読み上げには `aria-label` で届く
+                      (`revealLabel()` 1か所) */}
                   {/* 「思い出す」の向きは英語が出ているので、
                       Listen は語のとなりにある。**同じものを2つ見せない** */}
                   {/* **見た目は「英語を見る」とそろえる**(どちらも枠線だけ)。

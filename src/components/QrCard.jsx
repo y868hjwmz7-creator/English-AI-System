@@ -38,6 +38,9 @@ import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
 import { stopReading } from '../lib/readAloud.js'
 import { frameFormOf } from '../lib/frameMatch.js'
+/* **問題の箱をタップして切り替える**(第5.262節・2026-09-26 利用者の指定)。
+   「英語を見る」のボタンは廃止した。**判断は `tapReveal.js` 1か所** */
+import { revealLabel, tapToggles } from '../lib/tapReveal.js'
 import { HintIcon } from './Icons.jsx'
 
 /**
@@ -128,6 +131,87 @@ export default function QrCard({
 
   if (!pair) return null
 
+  /**
+   * **問題と答えの中身**(第5.262節)。
+   *
+   * **1つの変数から描く。** 伏せているとき(`<button>`)と
+   * 出しているとき(素の入れ物)で**同じものを出す**ためである ——
+   * 2か所に書き写すと、必ず片方だけ古くなる(CLAUDE.md)。
+   */
+  const face = (
+    <>
+          {/* 話す人だけは残す。誰のせりふかで言い方が変わる。
+              **「記事」「会話」の札は出さない**(2026-08 の指定)。
+              **何問目か、丸の番号で出す**(2026-09 利用者の指定)。
+              上の「2 / 25」は**どこまで来たか**の目安で、役目が違う */}
+          <p className="qr-from">
+            <span className="num-badge">{no}</span>
+            {pair.speaker && <span>{pair.speaker}</span>}
+          </p>
+
+          {/* **答えは「足す」のではなく、同じ場所で入れ替える**
+              (2026-09 利用者の指定・**方針の変更**)。
+
+                > quick reponse内の表示だが、単語帳と同じにしてくれ
+
+              2026-08 は「入るなら問題と答えを並べる。入らないときだけ
+              入れ替える」だった。ところが**単語帳は入れ替えである**
+              (「英語を見るにすると日本語と入れ替えで同じ場所に表示して
+              ください」)。同じことをする2つの画面で、**開いたときの
+              動きが違っていた。**
+
+              入れ替えなら箱の高さが変わらないので、
+              **押す場所も、目を向ける場所も動かない。**
+              測って出し分ける必要もなくなった(`is-tight` ごと消した)。 */}
+          {!shown && (
+            <>
+              {/* **言い換えは、英文が問である**(第5.198節・利用者の指摘
+                  「言い換えは英語が書いてあり、それを型に則って別の形の
+                  英語で言い換えるトレーニングです」)。
+
+                  それまでは日本語しか持っていなかったので、
+                  **日本語 → 英語とまったく同じ画面**になっていた。
+                  素の英文(`askEn`)を持つ問だけ、そちらを出す。
+                  **持たない問はこれまでどおり日本語**(書き分けはここ1か所)。
+
+                  **語をタップできる形(`EnglishText`)にはしない。**
+                  あれは意味を引きに行く道で、**出題を読むだけで課金が動く。**
+                  答えの側は残してあるので、意味はそこで引ける */}
+              {pair.askEn
+                ? <p className="qr-ask">{pair.askEn}</p>
+                : <p className="qr-ja">{pair.ja}</p>}
+              {/* **訳**(第5.198節)。英文が問のときだけ出せる ——
+                  日本語が問のときは、押しても同じものが2つ並ぶだけである */}
+              {pair.askEn && jaOn && <p className="qr-ask-ja">{pair.ja}</p>}
+              {/* **ヒントは、問の下に置く**(2026-09 利用者の指定)。
+                  答えではないので、答えの囲み(`.answer-box`)には入れない。
+                  **出すのは、答えの下に出るのとまったく同じ札**である
+                  (利用者の指定「青で囲まれた『〜の型』をヒントに」)。
+                  型の名前は `frameQr.js` が持つ。**書き写さない** */}
+              {hintOn && <FrameTag form={pair.hint} />}
+            </>
+          )}
+          {shown && (
+            /* **答えはうすい色の囲みに入れる**(2026-08 の指定)。
+               ほかのトレーニングの解答(`.answer-box`)と同じ形にそろえる */
+            <div className="answer-box qr-answer" ref={enRef}>
+              {/* **答えのすぐ横に Listen を置かない**(2026-09 利用者の指定)。
+                  下のボタンの行にも Listen がある。
+                  **同じことをするボタンを2つ見せない**(CLAUDE.md) */}
+              <div className="qr-en">
+                <EnglishText text={pair.en} textJa={pair.ja} level={level}
+                             statuses={wordStatuses} onMark={onMarkWord} />
+              </div>
+              {/* **型**(2026-09 利用者の指定)。**ヒントと同じ札**
+                  (`FrameTag`)—— 書き写すと、片方だけ古くなる */}
+              <FrameTag form={frame} />
+            </div>
+          )}
+
+    </>
+  )
+
+
   return (
     <div className="qr-card">
       {/* 出題と答えは**まん中**に、ボタンは**いつも同じ場所**に置く。
@@ -136,90 +220,48 @@ export default function QrCard({
           **枠の高さは入れ物が決める**(中身では決まらない)ので、
           文の長さが変わってもボタンは動かない。長すぎる英文だけが、
           この中で送られる。 */}
-      <div className="qr-body" ref={bodyRef}>
-        {/* 話す人だけは残す。誰のせりふかで言い方が変わる。
-            **「記事」「会話」の札は出さない**(2026-08 の指定)。
-            **何問目か、丸の番号で出す**(2026-09 利用者の指定)。
-            上の「2 / 25」は**どこまで来たか**の目安で、役目が違う */}
-        <p className="qr-from">
-          <span className="num-badge">{no}</span>
-          {pair.speaker && <span>{pair.speaker}</span>}
-        </p>
+      {/* ── **箱ぜんぶをタップで切り替える**(第5.262節・2026-09-26 利用者の指定)──
 
-        {/* **答えは「足す」のではなく、同じ場所で入れ替える**
-            (2026-09 利用者の指定・**方針の変更**)。
+            > 単語帳や quick response の「英語を見る」ボタンは廃止。
+            > 日本語の表示されているあたりをタップすれば英語に切り替わる
+            > ようにしてください。タップできる範囲は広めにとってください。
 
-              > quick reponse内の表示だが、単語帳と同じにしてくれ
+          **伏せているあいだは、本物の `<button>`。** 中に押せるものが
+          1つも無いので、そのまま押せるものにできる ——
+          キーボードでも読み上げでも、ふつうに押せる。
 
-            2026-08 は「入るなら問題と答えを並べる。入らないときだけ
-            入れ替える」だった。ところが**単語帳は入れ替えである**
-            (「英語を見るにすると日本語と入れ替えで同じ場所に表示して
-            ください」)。同じことをする2つの画面で、**開いたときの
-            動きが違っていた。**
+          **出したあとは素の入れ物**にする。答えの側には語ごとの
+          `<button>`(`EnglishText`)が並ぶので、箱ごとボタンにすると
+          **押せるものの中に押せるものが入る。** 語を押したつもりが
+          問題に戻ってしまう。だから**押された場所を見て**、
+          押せるものを踏んでいたら切り替えない(`tapToggles`)。
 
-            入れ替えなら箱の高さが変わらないので、
-            **押す場所も、目を向ける場所も動かない。**
-            測って出し分ける必要もなくなった(`is-tight` ごと消した)。 */}
-        {!shown && (
-          <>
-            {/* **言い換えは、英文が問である**(第5.198節・利用者の指摘
-                「言い換えは英語が書いてあり、それを型に則って別の形の
-                英語で言い換えるトレーニングです」)。
-
-                それまでは日本語しか持っていなかったので、
-                **日本語 → 英語とまったく同じ画面**になっていた。
-                素の英文(`askEn`)を持つ問だけ、そちらを出す。
-                **持たない問はこれまでどおり日本語**(書き分けはここ1か所)。
-
-                **語をタップできる形(`EnglishText`)にはしない。**
-                あれは意味を引きに行く道で、**出題を読むだけで課金が動く。**
-                答えの側は残してあるので、意味はそこで引ける */}
-            {pair.askEn
-              ? <p className="qr-ask">{pair.askEn}</p>
-              : <p className="qr-ja">{pair.ja}</p>}
-            {/* **訳**(第5.198節)。英文が問のときだけ出せる ——
-                日本語が問のときは、押しても同じものが2つ並ぶだけである */}
-            {pair.askEn && jaOn && <p className="qr-ask-ja">{pair.ja}</p>}
-            {/* **ヒントは、問の下に置く**(2026-09 利用者の指定)。
-                答えではないので、答えの囲み(`.answer-box`)には入れない。
-                **出すのは、答えの下に出るのとまったく同じ札**である
-                (利用者の指定「青で囲まれた『〜の型』をヒントに」)。
-                型の名前は `frameQr.js` が持つ。**書き写さない** */}
-            {hintOn && <FrameTag form={pair.hint} />}
-          </>
-        )}
-        {shown && (
-          /* **答えはうすい色の囲みに入れる**(2026-08 の指定)。
-             ほかのトレーニングの解答(`.answer-box`)と同じ形にそろえる */
-          <div className="answer-box qr-answer" ref={enRef}>
-            {/* **答えのすぐ横に Listen を置かない**(2026-09 利用者の指定)。
-                下のボタンの行にも Listen がある。
-                **同じことをするボタンを2つ見せない**(CLAUDE.md) */}
-            <div className="qr-en">
-              <EnglishText text={pair.en} textJa={pair.ja} level={level}
-                           statuses={wordStatuses} onMark={onMarkWord} />
-            </div>
-            {/* **型**(2026-09 利用者の指定)。**ヒントと同じ札**
-                (`FrameTag`)—— 書き写すと、片方だけ古くなる */}
-            <FrameTag form={frame} />
-          </div>
-        )}
-      </div>
+          **送りの面倒(`bodyRef`)は、どちらの形でも同じところに付ける。** */}
+      {!shown ? (
+        <button type="button" className="qr-body qr-body--tap" ref={bodyRef}
+                aria-expanded={false}
+                aria-label={revealLabel(false, pair.askEn ? 'answer' : 'en')}
+                onClick={() => setShown(true)}>
+          {face}
+        </button>
+      ) : (
+        <div className="qr-body qr-body--tap is-shown" ref={bodyRef}
+             onClick={(e) => { if (tapToggles(e.target)) setShown(false) }}>
+          {face}
+        </div>
+      )}
 
       {/* **単語帳と同じ形にそろえる**(言葉づかいも見た目も並べ方も)。
           「英語を見る」は答えではないので1段上に出し、
           **答えの2つはとなりどうし**に置く(2026-08 利用者の指定) */}
       <div className="qr-actions">
         <div className="qr-peek">
-          <button type="button" className="btn btn--ghost btn--small"
-                  aria-expanded={shown}
-                  onClick={() => setShown((v) => !v)}>
-            {/* **言い換えでは「英語を見る」と書けない** ——
-                問がすでに英語だからである(第5.198節) */}
-            {pair.askEn
-              ? (shown ? '答えを隠す' : '答えを見る')
-              : (shown ? '英語を隠す' : '英語を見る')}
-          </button>
+          {/* **「英語を見る」のボタンは廃止した**(第5.262節・2026-09-26
+              利用者の指定)。**問題の箱そのものを押す**ようにしたので、
+              同じことをするボタンが2つ並ぶことになる
+              (**同じことをするものを2つ見せない**・CLAUDE.md)。
+              言葉は消していない —— 読み上げには `aria-label` で届く
+              (`revealLabel()` 1か所) */}
           {/* **英語を出さなくても、答えの音は聞ける**(2026-09 利用者の指定)。
               Quick Response は**口に出して言う**練習なので、自分で言ってから
               **耳で答え合わせをする**ほうが素直である */}

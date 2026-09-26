@@ -181,7 +181,18 @@ export function SearchIcon({ className = 'icon' }) {
  *   > 単語帳とクイックレスポンスの右上の「出し方」を添付した
  *   > 「ソートアイコン」にして、文字をなくしてください
  *
- * **長さの違う3本の横線。** 添付の絵と同じ形である。
+ * **じょうご(ろうと)の形**(第5.262節・2026-09-26 利用者の指定)。
+ *
+ *   > ソートボタンですが、今はアディダスのマークのようになっていますが、
+ *   > これは扇状に直してください。
+ *
+ * もとは**長さの違う3本の横線**だった。斜めに見えなくても、
+ * 3本が段々に短くなる形は**あの運動靴の印に見える**と言われた。
+ *
+ * **じょうごは「絞る」を表す絵として定着している** ——
+ * 上が広く、下がすぼまる。この帯から開くのは
+ * 「何問ずつ・並べ方・日付・型」で、**まさに絞る操作**である。
+ *
  * **歯車(`GearIcon`)とは役目が違う** —— あちらは「設定」、
  * こちらは「並べ方・絞り方」を指す。
  * **同じ絵を2つの行き先に付けない**(CLAUDE.md)。
@@ -189,8 +200,12 @@ export function SearchIcon({ className = 'icon' }) {
 export function SortIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <path d="M4 6h12M4 10h8M4 14h4" fill="none" stroke="currentColor"
-            strokeWidth="1.7" strokeLinecap="round" />
+      {/* 上の口 → すぼまり → 注ぎ口、までを**1本の輪郭**で描く。
+          離れた線の集まりにすると、小さい寸法(18px)でばらけて見える
+          (歯車で踏んだところと同じ・`GearIcon` の節) */}
+      <path d="M3.2 4.4h13.6l-5.3 6.3v5.2l-3 1.7v-6.9z"
+            fill="none" stroke="currentColor"
+            strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   )
 }

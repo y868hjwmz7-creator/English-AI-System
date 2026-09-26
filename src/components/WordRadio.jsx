@@ -43,6 +43,10 @@ import { startBgm, stopBgm } from '../lib/bgm.js'
 import {
   bgmChoices, bgmPickOf, bgmPlan, loadBgmPick, saveBgmPick,
 } from '../lib/bgmPick.js'
+/* **何問ずつ流すか**(第5.262節)。**単語帳・Quick Response と同じ一覧**を
+   使う —— 出しかたの札で 5 / 10 / 20 / 30 / ぜんぶ を選ぶのと同じものである
+   (**数え方を2通り持たない**・CLAUDE.md) */
+import { SIZES, sizeOfValue, sizePickLabel, takeCount } from '../lib/reviewScope.js'
 import {
   bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
   hidesAnswer,
@@ -61,6 +65,19 @@ export default function WordRadio({
    * **間の長さは場面ごとに覚える** —— 語は短く、文は長い。
    */
   where = 'word',
+  /**
+   * **何問ずつ流すか、の初期値**(第5.262節・2026-09-26 利用者の指定)。
+   *
+   *   > この写真だと絞り込みで絞っているのは5問、そして繰り返しにしてある。
+   *   > そういう場合は聞き流しモードもそれに合わせて5問を繰り返してください。
+   *   > 30問選んでいれば30問を繰り返すように。
+   *   > というよりも聞き流しモードの中でそれを選べるようにしてください。
+   *
+   * **「出しかた」で選んでいる数を、そのまま持ち込む**(利用者の指定)。
+   * 中で変えられるので、ここは**始めの値**だけである。
+   * `SIZES` の1つ(5 / 10 / 20 / 30 / 'all')。
+   */
+  size = 'all',
   /** 曲(`listTracks()` が返したもの)。無ければ音楽は流れない */
   tracks = [],
   rate = 1,
@@ -135,7 +152,19 @@ export default function WordRadio({
   /* **読むものがある語だけを並べる。** 「読むものがあるか」の判断は
      `radioTextOf()` 1か所(`wordRadio.js`)—— ここで書き写すと、
      空白だけの語が残って**鳴らす側が待たずに回り続ける** */
-  const list = (rows ?? []).filter((r) => radioTextOf(r))
+  /**
+   * **何問ずつ流すか**(第5.262節)。
+   *
+   * **持ち込んだ数から始める** —— 5問に絞って練習していた人が
+   * 聞き流しを開いたら、そのまま5問が回る。
+   * **知らない値は既定に落とす**(`sizeOfValue()`・行き止まりを作らない)。
+   */
+  const [take, setTake] = useState(() => sizeOfValue(size))
+  const 読めるもの = (rows ?? []).filter((r) => radioTextOf(r))
+  /* **数えるのは `takeCount()` 1か所**(`reviewScope.js`)——
+     出しかたの札とまったく同じ数え方である。
+     **`'all'` を画面で `=== 'all'` と書かない** */
+  const list = 読めるもの.slice(0, takeCount(take, 読めるもの.length))
   const now = list[at] ?? null
 
   /**
@@ -354,6 +383,34 @@ export default function WordRadio({
          (単語帳の「出題の形」を進み具合の行へ移したのと同じ考え方) */
       topEnd={(
         <>
+          {/* **何問ずつ流すか**(第5.262節・2026-09-26 利用者の指定)。
+
+                > そういう場合は聞き流しモードもそれに合わせて5問を
+                > 繰り返してください。30問選んでいれば30問を繰り返すように。
+                > というよりも聞き流しモードの中でそれを選べるようにして
+                > ください。
+
+              **「出しかた」で選んでいる数を持ち込んで始まる**ので、
+              5問に絞って練習していた人には、そのまま5問が回る。
+              ここで変えれば、その場で切り替わる。
+
+              **札の一覧も、数え方も `reviewScope.js` 1か所**である ——
+              出しかたの札とまったく同じ 5 / 10 / 20 / 30 / ぜんぶ が並ぶ
+              (**数え方を2通り持たない**・CLAUDE.md)。 */}
+          <label className="wb-formpick radio-pick radio-pick--take">
+            <span className="sr-only">何問ずつ</span>
+            <select value={String(take)}
+                    onChange={(e) => {
+                      setTake(sizeOfValue(e.target.value))
+                      /* **頭から読み直す。** 減らしたときに、いま読んでいる
+                         場所が一覧の外へ出たままになるのを防ぐ */
+                      move(0)
+                    }}>
+              {SIZES.map((n) => (
+                <option key={String(n)} value={String(n)}>{sizePickLabel(n, '問')}</option>
+              ))}
+            </select>
+          </label>
           {/* **読み方は、選べるものが2つ以上あるときだけ出す**
               (**効かない操作を見せない**・CLAUDE.md)。
               日本語の読み上げを外したので、いまは「英語だけ」1つである */}

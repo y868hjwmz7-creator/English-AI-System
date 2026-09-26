@@ -159,6 +159,10 @@ import {
   MIX_KINDS, MIX_MAX, REVIEW_MAX,
   canMixText, mixNote, mixWords, overNote, pickMix,
 } from '../src/lib/textMix.js'
+/* 問題の箱をタップして切り替える(第5.262節)。**算段は素の node で走る** */
+import {
+  TAP_FORMS, canTapReveal, revealKindOf, revealLabel, tapToggles,
+} from '../src/lib/tapReveal.js'
 /* 「この英文は避けて」と渡す本数(第5.261節)。**1か所に持つ** */
 import { AVOID_GATE, AVOID_MAX, avoidFits } from '../src/lib/avoidLimit.js'
 /* ゲストの持ちものからテストを作る(第5.260節)。**AI を使わない** */
@@ -7938,9 +7942,23 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const title = noNote(readD('src/components/DrillTitle.jsx'))
   const st = css(readD('src/styles.css'))
 
-  // ── (1) 帯は3つ。単語帳と同じ並び ─────────────────────────
-  ok(/top=\{bookPick\}/.test(qr),
-    'Quick Response の冊名 ▾ は帯にある(単語帳と同じ並び)')
+  // ── (1) 帯の並び。**☰ / 冊名 ▾ / 聞き流し / じょうご** ─────────
+  /* **聞き流しが冊名のすぐ右、じょうごがいちばん右端**
+     (第5.262節・2026-09-26 利用者の指定)。
+       > quick response の冊のタブの右側に「聞き流し」ボタンを
+       > つけてください。一番右端にソートボタンを配置します。
+     `FocusFrame` は `{top}{topEnd}` の順に描くので、
+     **`top` の中の並びと、`topEnd` に何が入るかの両方**を見る ——
+     片方だけだと、入れ替えても緑のままになる */
+  ok(/top=\{<>\{bookPick\}\{listenBtn\}<\/>\}/.test(qr),
+    'Quick Response の帯は 冊名 ▾ → 聞き流し の順')
+  ok(/topEnd=\{\(\s*<ReviewScope/.test(qr),
+    'Quick Response の帯は、いちばん右端が「出しかた」(じょうご)')
+  /* **押すのは `listen()` 1か所。** 「出しかた」の中のボタンと
+     同じものを呼ぶ(同じことをする道を2つ作らない・CLAUDE.md) */
+  ok((qr.match(/onClick=\{listen\}/g) ?? []).length === 2,
+    'Quick Response の聞き流しは、帯からも「出しかた」からも同じ `listen()` を呼ぶ',
+    `${(qr.match(/onClick=\{listen\}/g) ?? []).length} か所`)
   ok(!/focus-count|qrrev-at|qrrev-head/.test(qr),
     '帯にも紙にも「1 / 30」は無い(進み具合の帯が言う)')
   ok(!/focus-top-right/.test(qr) && !/\.focus-top-right \{/.test(st),
@@ -8482,18 +8500,33 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const icons = read('components/Icons.jsx')
   const rs = read('components/ReviewScope.jsx')
 
-  /* **絵そのものがあるか。** 添付の絵は**長さの違う横3本線**である */
+  /* **絵そのものがあるか。**
+     いまは**じょうご(ろうと)**である(第5.262節・2026-09-26 利用者の指定)。
+       > ソートボタンですが、今はアディダスのマークのようになっていますが、
+       > これは扇状に直してください。
+     もとは「長さの違う横3本線」で、**あの運動靴の印に見える**と言われた。 */
   ok(/export function SortIcon\b/.test(icons), 'ソートアイコンがある(`SortIcon`)')
   {
     const m = icons.match(/export function SortIcon[\s\S]*?\n\}/)
     const d = (m?.[0].match(/d="([^"]+)"/) ?? [])[1] ?? ''
-    /* **`h` の長さを読む。** 3本とも同じ長さだと「ただの三本線(☰)」で、
-       メニューの絵と見分けが付かない ——
-       **値を書き写さず、性質(短くなっていく)で見る**(CLAUDE.md) */
-    const 長さ = [...d.matchAll(/h(\d+(?:\.\d+)?)/g)].map((x) => Number(x[1]))
-    ok(長さ.length === 3, '横線は3本', 長さ.join(' / '))
-    ok(長さ.length === 3 && 長さ[0] > 長さ[1] && 長さ[1] > 長さ[2],
-      '上から順に短くなる(☰ と見分けが付く)', 長さ.join(' / '))
+    /* **値を書き写さず、性質で見る**(CLAUDE.md)。
+       じょうごの性質は3つ —— ①1本の輪郭 ②閉じている ③上が広く下がすぼまる。
+
+       ①②があるので、**3本線に戻したら必ず赤くなる**
+       (あちらは `M` が3つで、閉じない)。
+       歯車で踏んだところとまったく同じ見方である。 */
+    const 切れ目 = (d.match(/M/gi) ?? []).length
+    ok(切れ目 === 1, 'じょうごは1本の輪郭(離れた線の集まりではない)', `M が ${切れ目} 個`)
+    ok(/z\s*$/i.test(d.trim()), 'じょうごの輪郭は閉じている')
+    /* ③ **上の口(横に走る1本)と、注ぎ口の幅を比べる。**
+       横に走る線が1本しかないことが、**3本線ではない**ことの裏でもある */
+    const 横 = [...d.matchAll(/h(-?\d+(?:\.\d+)?)/g)].map((x) => Math.abs(Number(x[1])))
+    const 斜め = [...d.matchAll(/l(-?\d+(?:\.\d+)?)/g)].map((x) => Math.abs(Number(x[1])))
+    const 口 = 横[0] ?? 0
+    const 注ぎ口 = 斜め.length ? Math.min(...斜め) : 0
+    ok(横.length === 1, '横に走る線は、上の口の1本だけ(3本線ではない)', 横.join(' / '))
+    ok(口 > 注ぎ口 * 3,
+      'じょうごは、上が広く下がすぼまっている', `上の口 ${口} / 注ぎ口 ${注ぎ口}`)
   }
 
   /* **使っているのは、その絵か。** 絵を足しただけで使っていなければ
@@ -11867,6 +11900,115 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
   /* ── ③ **算段は素の node で確かめられる**(`playMark.js` と同じ作法)── */
   ok(!/supabase|import\.meta\.env/.test(noC(readS('src/lib/avoidLimit.js'))),
     '避ける … 本数の決まりは Supabase を持たない')
+}
+
+/* ==========================================================================
+ * **問題の箱をタップして切り替える / 聞き流しの問数**
+ * (第5.262節・2026-09-26 利用者の指定)
+ *
+ *   > 単語帳や quick response の「英語を見る」ボタンは廃止。
+ *   > 日本語の表示されているあたりをタップすれば英語に切り替わるように
+ *   > してください。タップできる範囲は広めにとってください。
+ *
+ *   > この写真だと絞り込みで絞っているのは5問、そして繰り返しにしてある。
+ *   > そういう場合は聞き流しモードもそれに合わせて5問を繰り返してください。
+ *   > というよりも聞き流しモードの中でそれを選べるようにしてください。
+ * ========================================================================== */
+{
+  console.log('\n▶ タップで切り替える / 聞き流しの問数')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const card = noC(readS('src/components/QrCard.jsx'))
+  const wb2 = noC(readS('src/components/Wordbook.jsx'))
+  const qr2 = noC(readS('src/components/QrReview.jsx'))
+  const radio = noC(readS('src/components/WordRadio.jsx'))
+
+  /* ── ① **どの出し方に付くか。出る / 出ないの両方**(CLAUDE.md)────── */
+  {
+    const WANT = ['ja2en', 'recall', 'cloze']
+    const 無い = WANT.filter((f) => !canTapReveal(f))
+    ok(無い.length === 0 && TAP_FORMS.length === 3,
+      `タップ … 3つの出し方に付く(${TAP_FORMS.join(' / ')})`)
+    /* **4択には付けない**(利用者の指定)。あちらは選択肢を押して答える */
+    ok(!canTapReveal('choice') && !canTapReveal(''),
+      'タップ … 4択には付けない(切り替える余地がそもそも無い)')
+  }
+
+  /* ── ② **中の押せるものを踏んだ押しは、切り替えにしない** ────────
+       ここが抜けると、**答えの語を押したつもりが問題に戻る。**
+       `EnglishText` の語は `<button>` なので、それで拾える */
+  {
+    const 偽 = (sel) => ({ closest: (q) => (q.includes(sel) ? {} : null) })
+    ok(!tapToggles(偽('button')), 'タップ … 語(`<button>`)を押しても、切り替わらない')
+    ok(!tapToggles(偽('summary')), 'タップ … 畳みの札を押しても、切り替わらない')
+    /* **素の文字の上なら、切り替わる**(`closest` が何にも当たらない) */
+    ok(tapToggles({ closest: () => null }), 'タップ … 素の文字の上なら、切り替わる')
+    /* **分からなければ「切り替える」に倒す**(押したのに何も起きない、を作らない) */
+    ok(tapToggles(null) && tapToggles({}) && tapToggles(undefined),
+      'タップ … `closest` を持たない相手でも落ちない')
+  }
+
+  /* ── ③ **言葉は消していない**(黙って消さない・CLAUDE.md)────────
+       ボタンの**文字**を消しただけで、読み上げには届く */
+  {
+    ok(revealLabel(false, 'en') === '英語を見る' && revealLabel(true, 'en') === '英語を隠す',
+      'タップ … 読み上げの名前は「英語を見る / 隠す」')
+    ok(revealLabel(false, 'ja') === '意味を見る' && revealLabel(false, 'answer') === '答えを見る',
+      'タップ … 何が出てくるかで、名前が変わる(意味 / 答え)')
+    /* **画面で `form === 'ja2en'` と書かない。** 判断は1か所 */
+    ok(revealKindOf('recall') === 'ja' && revealKindOf('ja2en') === 'en'
+      && revealKindOf('cloze') === 'en',
+    'タップ … 伏せてあるのが英語か意味かは、`revealKindOf()` が決める')
+  }
+
+  /* ── ④ **画面が、本当に呼んでいるか** ────────────────────── */
+  {
+    /* **「英語を見る」のボタンは消えている。**
+       **文字列で探す前に数えた** —— 説明(コメント)にも同じ語があるので、
+       コメントを落としてから、**画面に出る形**で見る(CLAUDE.md) */
+    ok(!/'英語を見る'|'英語を隠す'|'意味を見る'|'答えを見る'/.test(card)
+      && !/'英語を見る'|'英語を隠す'|'意味を見る'|'意味を隠す'/.test(wb2),
+    'タップ … 「英語を見る」のボタンは、どちらの画面からも消えている')
+    /* **伏せているあいだは本物の `<button>`。** キーボードでも押せる */
+    ok(/<button type="button" className="qr-body qr-body--tap"/.test(card),
+      'タップ … Quick Response は、伏せているあいだ本物のボタン')
+    /* **出したあとは素の入れ物 + 押された場所を見る** */
+    ok(/if \(tapToggles\(e\.target\)\) setShown\(false\)/.test(card),
+      'タップ … 答えを出したあとは、押せるものを踏んだか見てから戻す')
+    /* **単語帳は、付ける出し方を `canTapReveal()` に任せる** */
+    ok(/canTapReveal\(form\) \? ' wordcard-face--tap' : ''/.test(wb2)
+      && /\.\.\.\(canTapReveal\(form\) \? \{/.test(wb2),
+    'タップ … 単語帳は、付ける出し方を `canTapReveal()` 1か所に任せている')
+    /* **キーボードでも押せる**(`role="button"` を付けたら、鍵も要る) */
+    ok(/onKeyDown:/.test(wb2) && /e\.key !== 'Enter' && e\.key !== ' '/.test(wb2),
+      'タップ … 単語帳は、Enter とスペースでも切り替わる')
+    /* **押せる範囲を広めに**(利用者の指定)。余白で稼いでいるか */
+    const st2 = readS('src/styles.css').replace(/\/\*[\s\S]*?\*\//g, ' ')
+    ok(/\.wordcard-face--tap \{[^}]*padding:/.test(st2),
+      'タップ … 単語帳の箱は、余白で押せる高さを稼いでいる')
+    ok(/\.qr-body--tap \{[^}]*width: 100%/.test(st2),
+      'タップ … Quick Response の箱は、横いっぱいが押せる')
+  }
+
+  /* ── ⑤ **聞き流しの問数** ───────────────────────────────
+       **「出しかた」で選んでいる数を持ち込む**(利用者の指定)。
+       **数え方を2通り持たない** —— 札の一覧も数え方も `reviewScope.js` */
+  {
+    ok(/size = 'all',/.test(radio), '聞き流し … 何問ずつの初期値を受け取る')
+    ok(/takeCount\(take, 読めるもの\.length\)/.test(radio),
+      '聞き流し … 数えるのは `takeCount()` 1か所(出しかたの札と同じ)')
+    /* **`SIZES` を書き写していない**(足した日に、ここだけ古くなる) */
+    ok(/\{SIZES\.map\(\(n\) =>/.test(radio) && !/\[5, 10, 20, 30/.test(radio),
+      '聞き流し … 札の一覧を書き写していない')
+    /* **`'all'` を画面で書き分けない**(「ぜんぶ 問」を作らない) */
+    ok(/sizePickLabel\(n, '問'\)/.test(radio) && !/=== 'all'/.test(radio),
+      '聞き流し … 「ぜんぶ」の言い方も `reviewScope.js` 1か所')
+    /* **両方の画面が渡しているか。** 片方だけだと、そちらは効かない */
+    ok(/size=\{size\}/.test(qr2) && /size=\{size\}/.test(wb2),
+      '聞き流し … 単語帳と Quick Response の両方が、選んでいる数を渡している')
+    /* **減らしたら、頭から読み直す**(いま読んでいる場所が一覧の外へ出ない) */
+    ok(/move\(0\)/.test(radio), '聞き流し … 数を変えたら、頭から読み直す')
+  }
 }
 
 console.log(ng

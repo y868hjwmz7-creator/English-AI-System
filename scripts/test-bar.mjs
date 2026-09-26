@@ -1089,9 +1089,8 @@ for (const [label, want] of Object.entries(WANT)) {
        せめて絵にして残す)。答えを開いた形も撮る */
     if (process.env.SHOT && useForm === 'cloze' && w === 390) {
       await page.screenshot({ path: `${process.env.SHOT}/cloze-q.png` })
-      for (const btn of await page.$$('button')) {
-        if (((await btn.textContent()) ?? '').includes('英語を見る')) { await btn.click(); break }
-      }
+      /* **箱そのものを押す**(第5.262節)。「英語を見る」のボタンは廃止した */
+      await page.click('.wordcard-face--tap')
       await page.waitForTimeout(200)
       await page.screenshot({ path: `${process.env.SHOT}/cloze-a.png` })
     }
@@ -2996,7 +2995,9 @@ export default defineConfig({
         中身: b.scrollHeight,
       }
     })
-    await page.locator('.qr-peek .btn').first().click()
+    /* **箱そのものを押す**(第5.262節・2026-09-26 利用者の指定)。
+       「英語を見る」のボタンは廃止したので、`.qr-peek` の先頭は Listen になる */
+    await page.click('.qr-body--tap')
     await page.waitForTimeout(250)
     const after = await page.evaluate(() => {
       const r = document.querySelector('.qr-answers').getBoundingClientRect()
@@ -6841,14 +6842,10 @@ for (const W of [1280, 794, 453, 390, 320]) {
      実機で起きていたのは、まさにそれである */
   await page.evaluate(() => { document.querySelector('.sheet-back')?.click() })
   await page.waitForTimeout(400)
-  /* **押すボタンの名前は、中身で変わる**(第5.198節)。
-     言い換えは出題そのものが英語なので「答えを見る」と書いてある ——
-     **文字を決め打ちにすると、ここで見張りが黙る** */
-  await page.evaluate(() => {
-    const b2 = [...document.querySelectorAll('button')]
-      .find((x) => /英語を見る|答えを見る/.test(x.textContent || ''))
-    if (b2) b2.click()
-  })
+  /* **箱そのものを押す**(第5.262節・2026-09-26 利用者の指定)。
+     「英語を見る / 答えを見る」のボタンは廃止した ——
+     **文字で探していたので、廃止した日にここが黙るところだった** */
+  await page.evaluate(() => { document.querySelector('.qr-body--tap')?.click() })
   await page.waitForTimeout(700)
   const 出た = await 見る()
   /* 型の名前は `S enables 人 to do` のような形。**動詞だけを取り出して**
@@ -6861,7 +6858,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ng('冊の絞り込み … 出ている問の型が、えらんだ型と違う',
       `${型} を選んだのに、札は「${出た.札}」(${出た.英文.slice(0, 80)})`)
   } else if (!出た.英文) {
-    ng('冊の絞り込み … 英文が読めない(`英語を見る` が効いていない)')
+    ng('冊の絞り込み … 英文が読めない(箱を押しても切り替わっていない)')
   } else if (!new RegExp(動詞, 'i').test(出た.英文)) {
     ng('冊の絞り込み … 出ている英文が、えらんだ型のものではない',
       `${型} を選んだのに「${出た.英文.slice(0, 120)}」`)
@@ -7705,12 +7702,21 @@ for (const W of [1280, 794, 453, 390, 320]) {
       .replace(/^型/, '').replace(/\s+/g, ' ').trim(),
     ボタン: [...document.querySelectorAll('.qr-peek button')]
       .map((x) => (x.textContent || '').trim()).filter(Boolean),
+    /* **箱そのものが押すもの**(第5.262節・2026-09-26 利用者の指定)。
+       「英語を見る / 答えを見る」のボタンは廃止したので、
+       **言葉は読み上げの名前(`aria-label`)に移った。**
+       文字を消しただけで、**言葉は消していない**(黙って消さない) */
+    箱: document.querySelector('.qr-body--tap')?.getAttribute('aria-label') ?? '',
   }))
+  /* **ボタンの文字でも、箱の読み上げの名前でも探す**(第5.262節)。
+     「答えを見る」はボタンから箱へ移ったが、「訳を見る」はボタンのままである */
   const 押す = async (名) => page.evaluate((t) => {
     const b2 = [...document.querySelectorAll('.qr-peek button')]
       .find((x) => (x.textContent || '').trim() === t)
-    if (b2) b2.click()
-    return !!b2
+    if (b2) { b2.click(); return true }
+    const box = document.querySelector('.qr-body--tap')
+    if (box && box.getAttribute('aria-label') === t) { box.click(); return true }
+    return false
   }, 名)
 
   /* ── ① 日本語 → 英語(冊に入った時点の既定)────────────────────
@@ -7726,8 +7732,14 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ng('日本語 → 英語 … 日本語の問が出ていない', JSON.stringify(和).slice(0, 120))
   } else if (和.ボタン.includes('訳を見る')) {
     ng('日本語 → 英語 … 効かない「訳を見る」が出ている', 和.ボタン.join(' / '))
-  } else if (!和.ボタン.includes('英語を見る')) {
-    ng('日本語 → 英語 … 「英語を見る」が無い', 和.ボタン.join(' / '))
+  } else if (和.ボタン.includes('英語を見る')) {
+    /* **ボタンは廃止した**(第5.262節)。残っていたら、箱と同じことをする
+       ものが2つ並ぶ(同じことをするものを2つ見せない・CLAUDE.md) */
+    ng('日本語 → 英語 … 廃止したはずの「英語を見る」ボタンが残っている',
+      和.ボタン.join(' / '))
+  } else if (和.箱 !== '英語を見る') {
+    ng('日本語 → 英語 … 箱の読み上げの名前が「英語を見る」ではない',
+      `いま「${和.箱}」`)
   } else {
     ok(`日本語 → 英語 … これまでどおり日本語が問(${和.出題和.slice(0, 30)})`)
   }
@@ -7755,15 +7767,16 @@ for (const W of [1280, 794, 453, 390, 320]) {
   if (言.訳) ng('言い換え … 押していないのに、訳が出ている', 言.訳.slice(0, 40))
   else ok('言い換え … 訳は、押すまで出ない')
 
-  /* **ボタンの名前。** 出題が英語なのに「英語を見る」とは書けない */
-  const 名前 = 言.ボタン.join(' / ')
-  if (言.ボタン.includes('英語を見る')) {
-    ng('言い換え … 出題が英語なのに「英語を見る」と書いてある', 名前)
-  } else if (!言.ボタン.includes('答えを見る')) {
-    ng('言い換え … 答えを開くボタンが無い', 名前)
+  /* **名前は、中身で変わる。** 出題が英語なのに「英語を見る」とは書けない。
+     **答えを開く言葉は、箱の読み上げの名前へ移った**(第5.262節) */
+  const 名前 = `箱「${言.箱}」/ ボタン ${言.ボタン.join(' / ')}`
+  if (言.箱 === '英語を見る') {
+    ng('言い換え … 出題が英語なのに、箱が「英語を見る」と名乗っている', 名前)
+  } else if (言.箱 !== '答えを見る') {
+    ng('言い換え … 箱が「答えを見る」と名乗っていない', 名前)
   } else if (!言.ボタン.includes('訳を見る')) {
     ng('言い換え … 「訳を見る」が無い(日本語にたどり着けない)', 名前)
-  } else ok(`言い換え … ボタンは「答えを見る」と「訳を見る」(${名前})`)
+  } else ok(`言い換え … 箱は「答えを見る」、ボタンに「訳を見る」(${名前})`)
 
   // ── ③ 訳を押したら、日本語が出るか ───────────────────────────
   const 押せた = await 押す('訳を見る')
@@ -7793,14 +7806,19 @@ for (const W of [1280, 794, 453, 390, 320]) {
     英文: (document.querySelector('.qr-en')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
     ボタン: [...document.querySelectorAll('.qr-peek button')]
       .map((x) => (x.textContent || '').trim()).filter(Boolean),
+    /* 開いたあとも、**戻せることが名前で分かるか**(第5.262節) */
+    箱: document.querySelector('.qr-body--tap')?.getAttribute('aria-label') ?? '',
   }))
   const そろえる = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
   if (!答.英文) {
     ng('言い換え … 「答えを見る」を押しても、答えが出ない')
   } else if (そろえる(答.英文) === そろえる(言.出題英)) {
     ng('言い換え … 答えが、出題とまったく同じ文である', 答.英文.slice(0, 60))
-  } else if (!答.ボタン.includes('答えを隠す')) {
-    ng('言い換え … 開いたあと、閉じるボタンの名前が変わっていない', 答.ボタン.join(' / '))
+  } else if (答.箱 !== '答えを隠す') {
+    /* **開いたあとは「隠す」に変わる。** 変わらないと、
+       読み上げでは開いているのか閉じているのか分からない */
+    ng('言い換え … 開いたあと、箱の名前が「答えを隠す」に変わっていない',
+      `いま「${答.箱}」`)
   } else ok(`言い換え … 答えは別の英文になる(${答.英文.slice(0, 44)})`)
 
   await page.close()
@@ -9912,6 +9930,78 @@ for (const W of [1280, 390]) {
       '黙って空にしない(CLAUDE.md)')
   } else {
     ok('テスト … 教材が1本も無いゲストでは、札ではなくその旨を出す')
+  }
+  await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════
+   **聞き流しの「何問ずつ」**(第5.262節・2026-09-26 利用者の指定)
+
+     > この写真だと絞り込みで絞っているのは5問、そして繰り返しにしてある。
+     > そういう場合は聞き流しモードもそれに合わせて5問を繰り返してください。
+     > 30問選んでいれば30問を繰り返すように。というよりも聞き流しモードの
+     > 中でそれを選べるようにしてください。
+
+   **算段は `npm run test:play` が見る。ここは描いて測る。**
+   骨組みには**8問**入れてある(上限より多い形・CLAUDE.md)ので、
+   5問に絞れば本当に減る —— **絞りを外したら赤くなる。**
+   ══════════════════════════════════════════════════════════════ */
+for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['', 8, '絞っていない人']]) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{}',
+  }))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio${q2}`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(700)
+  const m = await page.evaluate(() => ({
+    数: (document.querySelector('.focus-count')?.textContent ?? '').trim(),
+    札: [...(document.querySelector('.radio-pick--take select')?.options ?? [])]
+      .map((o) => o.textContent.trim()),
+    いま: document.querySelector('.radio-pick--take select')?.value ?? '',
+  }))
+  const 出た = Number((m.数.split('/')[1] ?? '').trim())
+  if (!m.札.length) {
+    ng(`聞き流し 390px … 「何問ずつ」の欄が出ていない(${何})`)
+  } else if (出た !== 期待) {
+    ng(`聞き流し 390px … ${何}なのに ${出た} 問で始まっている`,
+      `「${m.数}」—— 期待は ${期待} 問`)
+  } else if (!m.札.includes('ぜんぶ') || !m.札.includes('5 問')) {
+    ng('聞き流し 390px … 札の一覧が「出しかた」と合っていない', m.札.join(' / '))
+  } else {
+    ok(`聞き流し 390px … ${何}は ${出た} 問で始まる(${m.札.join(' / ')})`)
+  }
+  await page.close()
+}
+/* **中で変えたら、その場で切り替わるか**(出る / 出ないの両方)。
+   **「持ち込めている」だけを見ると、中で変えられなくても緑**になる */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{}',
+  }))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio&size=5`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(700)
+  await page.selectOption('.radio-pick--take select', 'all')
+  await page.waitForTimeout(400)
+  const 後 = await page.evaluate(() => (
+    document.querySelector('.focus-count')?.textContent ?? '').trim())
+  const n = Number((後.split('/')[1] ?? '').trim())
+  if (n !== 8) {
+    ng('聞き流し 390px … 中で「ぜんぶ」にしても、問数が変わらない', `「${後}」`)
+  } else {
+    ok(`聞き流し 390px … 中で変えれば、その場で切り替わる(${後})`)
   }
   await page.close()
 }

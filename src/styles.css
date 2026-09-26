@@ -6771,6 +6771,28 @@ button.wbfilter-ctl { text-align: left; }
    **左そろえ。** 文をまん中に置くと、行が変わるたびに行頭が動いて
    目が迷う(カタマリの訳を狭い画面で左寄せにしたのと同じ理由)。 */
 .wordcard-face--cloze { display: block; }
+/* **箱ぜんぶをタップで切り替える**(第5.262節・2026-09-26 利用者の指定
+   「日本語の表示されているあたりをタップすれば英語に切り替わるように…
+     タップできる範囲は広めにとってください」)。
+
+   **見た目は1ドットも変えない** —— 押せるようになっただけである。
+   **押せる高さを、上下の余白で稼ぐ** ——「タップできる範囲は広めに」。
+   語1つだけの短いカードでも、指で狙える高さになる。 */
+.wordcard-face--tap {
+  cursor: pointer;
+  padding: 14px 8px;
+  border-radius: var(--r-8);
+  /* **長押しで文字を選ばせない。** 指で押す場所なので、
+     少しずれると選択が始まって切り替わらない(実機で起きる) */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+/* **押した手応えは、うっすらと。** 色だけに頼らないので、これは飾りである
+   (何が起きるかは `aria-label` が言う) */
+.wordcard-face--tap:active { background: var(--surface-1); }
+.wordcard-face--tap:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
 .wordcard-cloze-en {
   margin: 0; text-align: left;
   font-size: clamp(17px, 4.4vw, 20px); line-height: 1.9;
@@ -7115,6 +7137,37 @@ button.wbfilter-ctl { text-align: left; }
   gap: var(--sp-6); overflow-y: auto;
   justify-content: safe center;
   padding: 6px 0;
+}
+/* **箱ぜんぶをタップで切り替える**(第5.262節・2026-09-26 利用者の指定
+   「日本語の表示されているあたりをタップすれば英語に切り替わるように…
+     タップできる範囲は広めにとってください」)。
+
+   伏せているあいだは本物の `<button>` なので、**素に戻す** ——
+   枠も地色も丸みも、字の並びも、`<div>` だったときと1ドットも変えない
+   (**押せるようになっただけ**で、見た目は変わらない)。
+
+   **押せることは、指の下でだけ知らせる。** 枠を出すと、
+   「押すもの」が画面に1つ増えたように見える(説明書きを置かないのと同じ考え方)。 */
+.qr-body--tap {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  /* **長押しで文字を選ばせない。** 指で押す場所なので、
+     少しずれると選択が始まって切り替わらない(実機で起きる) */
+  -webkit-tap-highlight-color: transparent;
+}
+/* 出したあとは素の入れ物。**答えの中の語は、これまでどおり選べる** */
+.qr-body--tap.is-shown { cursor: default; }
+/* **押した手応えは、うっすらと。** 色だけに頼らないので、
+   これは飾りである(何が起きるかは `aria-label` が言う) */
+.qr-body--tap:not(.is-shown):active { background: var(--surface-1); }
+.qr-body--tap:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-8);
 }
 /* ★ 広い画面では、**1行ぶん上**に置く(2026-08 利用者の指定)
 
@@ -7926,6 +7979,19 @@ button.wbfilter-ctl { text-align: left; }
   flex: 1 1 0; min-width: 0;
   display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-10);
 }
+/* **帯からそのまま聞き流しへ**(第5.262節・2026-09-26 利用者の指定
+   「quick response の冊のタブの右側に『聞き流し』ボタンをつけてください。
+     一番右端にソートボタンを配置します」)。
+
+   **縮ませない。** 帯で縮んでよいのは冊名(`冊名 ▾`)だけで、
+   あれは「…」で切れても読める。**絵だけのボタンは、縮むと潰れる。**
+   **指で狙える幅を決め打ちにする**(絵は 18px なので、余白で稼ぐ)。 */
+.qr-top-listen {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding-inline: 10px;
+}
+
 /* `.focus-top-right`(帯の右端へ寄せる)は**消した**(第5.176節)。
    冊名 ▾ が帯へ戻り、単語帳とまったく同じ3つ(☰ / 冊名 ▾ / 出しかた)に
    なったので、**左から並べるだけでよい。**

@@ -136,6 +136,31 @@ export const SIZES = [5, 10, 20, 30, 'all']
 export const DEFAULT_SIZE = SESSION_SIZE
 export const sizeLabel = (size) => (size === 'all' ? 'ぜんぶ' : String(size))
 
+/**
+ * **プルダウンに出す言い方**(第5.262節)。「5 問」「ぜんぶ」。
+ *
+ * 札(`ReviewScope`)は横に並ぶので数だけで読めるが、
+ * **プルダウンは1つしか見えない**ので、何の数か分からなくなる。
+ *
+ * **`'all'` かどうかを画面に書かせない**(判断は1か所・CLAUDE.md)——
+ * 「ぜんぶ 問」という妙な言い方は、ここで塞ぐ。
+ */
+/**
+ * **プルダウンから戻ってきた値を、`SIZES` の1つに直す**(第5.262節)。
+ *
+ * `<select>` の値は**いつも文字**なので、`'5'` は数の 5 に、
+ * `'all'` は `'all'` のまま返す。
+ *
+ * **画面に `v === 'all' ? 'all' : Number(v)` と書かせない** ——
+ * `'all'` をどう扱うかは、このファイルの持ちものである(判断は1か所)。
+ * **知らない値は既定に落とす**(行き止まりを作らない)。
+ */
+export const sizeOfValue = (v) =>
+  SIZES.find((n) => String(n) === String(v)) ?? DEFAULT_SIZE
+
+export const sizePickLabel = (size, unit = '問') =>
+  (size === 'all' ? sizeLabel(size) : `${sizeLabel(size)} ${unit}`)
+
 /** 実際に出す数。`'all'` なら範囲にあるものを全部 */
 export const takeCount = (size, poolLength) => (size === 'all'
   ? poolLength
