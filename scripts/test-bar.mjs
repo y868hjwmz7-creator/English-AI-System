@@ -4028,26 +4028,49 @@ export default defineConfig({
       return {
         語: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
         訳: document.querySelector('.radio-ja')?.textContent?.trim() ?? '',
-        /* **読み方と間は、別々の欄である。**
-           `.focus-top select option` をまとめて数えると、
-           片方を消しても合計が合ってしまう(素通りする)。
-           **並び順で取らない** —— 読み方の欄が消えると、そこが
-           間の欄に入れ替わって**気づけない**(実際にそうなった) */
-        /* **欲しいものを名指しする**(第5.262節)。もとは
-           「`--gap` 以外」という**外して数える形**だったので、
-           欄が1つ増えるたびに巻き込まれていた
-           (曲の題を数えた 2026-09-23、何問ずつを数えた 2026-09-26)。
-           **読み方は `--mode` である** */
-        読み方: [...document.querySelectorAll('.focus-top .radio-pick--mode select')]
-          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
-        間: [...document.querySelectorAll('.focus-top .radio-pick--gap select')]
-          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
         ボタン: btns.map((b) => ({ 文言: b.textContent.trim(), 高さ: px(b) })),
         // **送るものが無いか。** ここが出た瞬間、この画面の意味が消える
         たて: body ? body.scrollHeight - body.clientHeight : 0,
         よこ: body ? body.scrollWidth - body.clientWidth : 0,
         右: card ? Math.round(card.getBoundingClientRect().right) : 0,
       }
+    })
+    /* **設定は、下の「設定」を開かないと出てこない**(第5.271節)。
+       上の帯から移したので、**帯を見ているだけでは何も数えられない。**
+       開く前と開いたあとを、別々に測る */
+    const 欄を読む = () => page.evaluate(() => {
+      const 並び = (sel) => [...document.querySelectorAll(sel)]
+        .flatMap((s) => [...s.options].map((o) => o.textContent.trim()))
+      return {
+        /* **欲しいものを名指しする**(第5.262節)。もとは
+           「`--gap` 以外」という**外して数える形**だったので、
+           欄が1つ増えるたびに巻き込まれていた
+           (曲の題を数えた 2026-09-23、何問ずつを数えた 2026-09-26)。
+           **読み方は `--mode` である** */
+        読み方: 並び('.radio-set-body .radio-set-row--mode select'),
+        間: 並び('.radio-set-body .radio-set-row--gap select'),
+        /* **名前が見えているか**(第5.271節)。これが無いと
+           「5 問」「3 秒」とだけ出て、何の設定か分からない
+           —— それが利用者の指摘そのものである。
+           **`sr-only` は数えない**(読み上げには届くが、目には見えない) */
+        名前: [...document.querySelectorAll('.radio-set-body .radio-set-name')]
+          .filter((el) => el.getBoundingClientRect().width > 0)
+          .map((el) => el.textContent.trim()),
+        /* **上の帯に、選び欄が1つも残っていないこと**(「出る」と「出ない」の
+           両方を見る・CLAUDE.md)。移したつもりで置き忘れても、
+           下だけを数えていると緑のままになる */
+        帯の欄: document.querySelectorAll('.focus-top select').length,
+      }
+    })
+    /* **畳んだままで1つも出ていないこと**も見る(第5.271節)——
+       開かずに並んでいたら、上の帯にあったのと同じ読みにくさになる */
+    const 畳んだまま = await 欄を読む()
+    await page.click('.radio-set button')
+    await page.waitForTimeout(150)
+    const 設定 = await 欄を読む()
+    const 開いて横 = await page.evaluate(() => {
+      const b = document.querySelector('.focus-body')
+      return b ? b.scrollWidth - b.clientWidth : 0
     })
     await page.close()
 
@@ -4059,17 +4082,35 @@ export default defineConfig({
       ng(`聞き流し(${w}px) … 語が出ていない`, got.語 || '(空)')
     } else if (!/[぀-ヿ㐀-鿿]/.test(got.訳)) {
       ng(`聞き流し(${w}px) … 訳が出ていない`, got.訳 || '(空)')
-    } else if (got.読み方.length !== 0) {
+    } else if (畳んだまま.帯の欄 !== 0 || 設定.帯の欄 !== 0) {
+      /* **上の帯に選び欄を戻していないか**(第5.271節・利用者の指摘
+         「これではなんのことかよく分かりません」)。
+         帯は細く1行なので、**名前を置く場所が無い** */
+      ng(`聞き流し(${w}px) … 上の帯に選び欄が残っている`,
+        `畳んで ${畳んだまま.帯の欄} 個 / 開いて ${設定.帯の欄} 個`
+        + ' —— 設定は下の「設定」の中に置く')
+    } else if (畳んだまま.間.length !== 0) {
+      /* **畳んでいるあいだは、中身を描かない**(共通ルール)。
+         `<details>` に `display` を書くと、畳んでも場所を取り続ける */
+      ng(`聞き流し(${w}px) … 畳んでいるのに、設定の中身が出ている`,
+        `間の札が ${畳んだまま.間.length} 個`)
+    } else if (設定.名前.length < 2) {
+      /* **名前が見えているか**(第5.271節)。値だけでは何の設定か分からない */
+      ng(`聞き流し(${w}px) … 設定の名前が見えていない`,
+        設定.名前.join('/') || '(名前が1つも無い)')
+    } else if (開いて横 > 0) {
+      ng(`聞き流し(${w}px) … 設定を開くと横にはみ出す`, `${開いて横}px`)
+    } else if (設定.読み方.length !== 0) {
       /* **読み方は「英語だけ」1つになった**(2026-09 利用者の指定
          「日本語入りはいらないですね!こえの質が悪すぎます!」)。
          選べるものが1つなら、**欄そのものを出さない**
          —— 効かない操作を見せない(CLAUDE.md) */
       ng(`聞き流し(${w}px) … 選べるものが1つなのに、読み方の欄が出ている`,
-        got.読み方.join('/'))
-    } else if (got.間.length < 4 || !got.間.some((t) => /秒/.test(t))) {
+        設定.読み方.join('/'))
+    } else if (設定.間.length < 4 || !設定.間.some((t) => /秒/.test(t))) {
       /* **間の欄が出ているか**(2026-09 利用者の指定
          「単語帳もだが、間の時間設定もできるようにしてくれ」) */
-      ng(`聞き流し(${w}px) … 間の長さを選べない`, got.間.join('/') || '(欄が無い)')
+      ng(`聞き流し(${w}px) … 間の長さを選べない`, 設定.間.join('/') || '(欄が無い)')
     } else if (got.ボタン.length !== 2 || got.ボタン.some((b) => b.高さ < 40)) {
       ng(`聞き流し(${w}px) … 押せる大きさ(40px)を割っている`,
         got.ボタン.map((b) => `${b.文言}:${b.高さ}`).join(' / '))
@@ -4079,7 +4120,8 @@ export default defineConfig({
       ng(`聞き流し(${w}px) … 縦に送るものが出ている`,
         `${got.たて}px —— 1語だけに向き合う画面である`)
     } else {
-      ok(`聞き流し(${w}px) … 語も訳も出て、間も選べて、送るものが無い`)
+      ok(`聞き流し(${w}px) … 語も訳も出て、送るものが無く、`
+        + `設定は下に名前つきで畳んである(${設定.名前.join(' / ')})`)
     }
   }
 
@@ -4103,19 +4145,32 @@ export default defineConfig({
       return {
         文: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
         訳: document.querySelector('.radio-ja')?.textContent?.trim() ?? '',
-        /* **外して数えるのをやめた**(第5.262節)。
-           `--gap` を外し、次に `--song` を外し、それでも
-           **「何問ずつ」が増えたとたんにまた巻き込まれた。**
-           外す側を足し続けるかぎり、欄が増えるたびに同じことが起きる ——
-           **欲しいものを名指しする**(読み方は `--mode`) */
-        読み方: [...document.querySelectorAll('.focus-top .radio-pick--mode select')]
-          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
-        間: [...document.querySelectorAll('.focus-top .radio-pick--gap select')]
-          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
         たて: body ? body.scrollHeight - body.clientHeight : 0,
         よこ: body ? body.scrollWidth - body.clientWidth : 0,
         右: card ? Math.round(card.getBoundingClientRect().right) : 0,
       }
+    })
+    /* **設定は下の「設定」の中**(第5.271節)。単語帳とまったく同じ読み方を
+       する —— **書き写さない**ために、同じ選び方(`.radio-set-row--◯◯`)を使う */
+    const 欄を読む = () => page.evaluate(() => {
+      const 並び = (sel) => [...document.querySelectorAll(sel)]
+        .flatMap((s) => [...s.options].map((o) => o.textContent.trim()))
+      return {
+        読み方: 並び('.radio-set-body .radio-set-row--mode select'),
+        間: 並び('.radio-set-body .radio-set-row--gap select'),
+        名前: [...document.querySelectorAll('.radio-set-body .radio-set-name')]
+          .filter((el) => el.getBoundingClientRect().width > 0)
+          .map((el) => el.textContent.trim()),
+        帯の欄: document.querySelectorAll('.focus-top select').length,
+      }
+    })
+    const 畳んだまま = await 欄を読む()
+    await page.click('.radio-set button')
+    await page.waitForTimeout(150)
+    const 設定 = await 欄を読む()
+    const 開いて横 = await page.evaluate(() => {
+      const b = document.querySelector('.focus-body')
+      return b ? b.scrollWidth - b.clientWidth : 0
     })
     await page.close()
 
@@ -4126,28 +4181,44 @@ export default defineConfig({
       ng(`QRの聞き流し(${w}px) … 文が出ていない`, got.文 || '(空)')
     } else if (!/[぀-ヿ㐀-鿿]/.test(got.訳)) {
       ng(`QRの聞き流し(${w}px) … 訳が出ていない`, got.訳 || '(空)')
-    } else if (got.読み方.length < 2) {
+    } else if (畳んだまま.帯の欄 !== 0 || 設定.帯の欄 !== 0) {
+      /* **上の帯に選び欄を戻していないか**(第5.271節・利用者の指摘)。
+         **こちらの画面が言われた場所である** —— 単語帳のほうも
+         同じ部品なので、2つとも見る */
+      ng(`QRの聞き流し(${w}px) … 上の帯に選び欄が残っている`,
+        `畳んで ${畳んだまま.帯の欄} 個 / 開いて ${設定.帯の欄} 個`)
+    } else if (畳んだまま.読み方.length !== 0 || 畳んだまま.間.length !== 0) {
+      ng(`QRの聞き流し(${w}px) … 畳んでいるのに、設定の中身が出ている`,
+        `読み方 ${畳んだまま.読み方.length} 個 / 間 ${畳んだまま.間.length} 個`)
+    } else if (設定.名前.length < 3) {
+      /* **こちらは読み方もあるので、名前は3つ以上**
+         (何問ずつ / 読み方 / 間。曲は登録があるときだけ増える) */
+      ng(`QRの聞き流し(${w}px) … 設定の名前が見えていない`,
+        設定.名前.join('/') || '(名前が1つも無い)')
+    } else if (開いて横 > 0) {
+      ng(`QRの聞き流し(${w}px) … 設定を開くと横にはみ出す`, `${開いて横}px`)
+    } else if (設定.読み方.length < 2) {
       /* **ここは利用者の指定で反転した**(2026-09「パタプラのようにしたい」)。
          Quick Response には「言う練習」が足してあるので、
          **読み方の欄が出ていなければならない。**
          単語帳(すぐ上)は「英語だけ」1つのままなので、**あちらは出ない** ——
          同じ部品が、場面で正しく分かれていることを、ここで見ている */
       ng(`QRの聞き流し(${w}px) … 読み方をえらべない(言う練習にたどり着けない)`,
-        got.読み方.join('/') || '(欄が無い)')
-    } else if (!got.読み方.some((t) => /日本語→英語/.test(t))) {
-      ng(`QRの聞き流し(${w}px) … 「日本語→英語」が読み方に無い`, got.読み方.join('/'))
-    } else if (got.読み方.some((t) => /チャンク/.test(t))) {
+        設定.読み方.join('/') || '(欄が無い)')
+    } else if (!設定.読み方.some((t) => /日本語→英語/.test(t))) {
+      ng(`QRの聞き流し(${w}px) … 「日本語→英語」が読み方に無い`, 設定.読み方.join('/'))
+    } else if (設定.読み方.some((t) => /チャンク/.test(t))) {
       /* **チャンク系の2つは排除した**(第5.251節・2026-09-23 利用者の指定
          「ややこしく、分かりにくいので排除です」)。
          **「出る」だけでなく「出ない」も見る** —— 一覧に戻しても
          緑のままだと、消したことを誰も守らない */
       ng(`QRの聞き流し(${w}px) … チャンク系の読み方が戻っている`,
-        got.読み方.join('/'))
-    } else if (got.読み方.length !== 2) {
-      ng(`QRの聞き流し(${w}px) … 読み方が2つではない`, got.読み方.join('/'))
-    } else if (!got.間.some((t) => /秒/.test(t))) {
+        設定.読み方.join('/'))
+    } else if (設定.読み方.length !== 2) {
+      ng(`QRの聞き流し(${w}px) … 読み方が2つではない`, 設定.読み方.join('/'))
+    } else if (!設定.間.some((t) => /秒/.test(t))) {
       /* **間の欄は、Quick Response にも出る**(語は短く、文は長い) */
-      ng(`QRの聞き流し(${w}px) … 間の長さを選べない`, got.間.join('/') || '(欄が無い)')
+      ng(`QRの聞き流し(${w}px) … 間の長さを選べない`, 設定.間.join('/') || '(欄が無い)')
     } else if (got.よこ > 0 || got.右 > w) {
       ng(`QRの聞き流し(${w}px) … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
     } else if (got.たて > 0) {
@@ -7116,8 +7187,12 @@ for (const W of [1280, 794, 453, 390, 320]) {
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio${q}`,
       { waitUntil: 'networkidle' })
     await page.waitForTimeout(300)
+    /* **設定を開いてから測る**(第5.271節)。上の帯から下の「設定」へ
+       移したので、開かないと欄そのものが描かれていない */
+    await page.click('.radio-set button')
+    await page.waitForTimeout(150)
     const r = await page.evaluate(() => {
-      const sel = document.querySelector('.radio-pick--song select')
+      const sel = document.querySelector('.radio-set-row--song select')
       const bar = document.querySelector('.focus-top')
       return {
         ある: !!sel,
@@ -10092,13 +10167,17 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
      「4/5などの数字は、コンテンツ部分内へ」)。
      帯の `.focus-count` から `.drill-count` へ移した ——
      **測る場所も一緒に移す**(移さないと、この見張りが黙る) */
+  /* **設定を開いてから測る**(第5.271節)。「何問ずつ」の欄も
+     上の帯から下の「設定」へ移した —— 開かないと描かれていない */
+  await page.click('.radio-set button')
+  await page.waitForTimeout(150)
   const m = await page.evaluate(() => ({
     数: (document.querySelector('.drill-count')?.textContent ?? '').trim(),
     題: (document.querySelector('.drill-title')?.textContent ?? '').trim(),
     帯の数: document.querySelectorAll('.focus-top .focus-count').length,
-    札: [...(document.querySelector('.radio-pick--take select')?.options ?? [])]
+    札: [...(document.querySelector('.radio-set-row--take select')?.options ?? [])]
       .map((o) => o.textContent.trim()),
-    いま: document.querySelector('.radio-pick--take select')?.value ?? '',
+    いま: document.querySelector('.radio-set-row--take select')?.value ?? '',
   }))
   const 出た = Number((m.数.split('/')[1] ?? '').trim())
   if (!m.札.length) {
@@ -10138,7 +10217,10 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio&size=5`,
     { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(700)
-  await page.selectOption('.radio-pick--take select', 'all')
+  /* **設定を開いてから変える**(第5.271節) */
+  await page.click('.radio-set button')
+  await page.waitForTimeout(150)
+  await page.selectOption('.radio-set-row--take select', 'all')
   await page.waitForTimeout(400)
   const 後 = await page.evaluate(() => (
     document.querySelector('.drill-count')?.textContent ?? '').trim())

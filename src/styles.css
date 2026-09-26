@@ -6582,19 +6582,60 @@ button.wbfilter-ctl { text-align: left; }
 .radio--qr .radio-ja { font-size: var(--fs-15); }
 @media (max-width: 360px) { .radio--qr .radio-en { font-size: var(--fs-17); } }
 
-/* 読み方と間は、上の帯にとなりどうしで並ぶ。**入らないぶんは
-   読み方のほうが縮む** —— 間は「1.5秒」という**値**なので、
-   1文字も削らない(CLAUDE.md「数は1文字も削らない」) */
-.radio-pick { min-width: 0; }
-.radio-pick > select {
-  min-width: 0;
-  max-width: 100%;
+/* ── **設定は、操作の行の下に、名前つきで**(第5.271節・2026-09-26 実機)──
+
+     > quick response の聞き流しの上のバー、これではなんのことか
+     > よく分かりません。一度に出す問題数とか、間の長さの設定を
+     > どこか違うところに移動させれないですか?
+
+   もとは**上の帯**に、名前のない選び欄が4つ並んでいた。
+   帯は「細く1行」という決まりなので**名前を置く場所が無く**、
+   値だけが「5 問」「3 秒」と出て、何の設定か分からなかった。
+
+   **下なら名前を添えられる。** 名前と値を1行に並べて、畳んでおく。 */
+.radio-set {
+  /* **横幅は、カードいっぱいまで使える。** ここを縮めると、
+     名前と値が同じ行に入らなくなる */
+  align-self: stretch;
+  display: flex; flex-direction: column;
+  /* **札と中身を、すき間ゼロでくっつけない**(共通ルール)。
+     隙間は `gap` で作る —— 子に `margin` を付けて回らない */
+  align-items: center; gap: var(--sp-10);
+}
+/* **畳んでいるあいだは、そもそも描かれない**(JSX 側が決める)——
+   `<details>` に `display` を書くと、畳んでも場所を取り続ける(共通ルール)。
+
+   **`align-items` は親の `center` のまま**で良い ——
+   この箱は**自分の幅を持っている**ので、中身なりに縮まない
+   (共通ルール「縦積みにしたとたん左端がぎざぎざになる」の形にならない) */
+.radio-set-body {
+  width: min(100%, 320px);
+  display: flex; flex-direction: column;
+  gap: var(--sp-10);
+  /* カードは中央そろえだが、**名前は左端にそろえる** ——
+     4行の名前の頭が揺れると読めない */
+  text-align: left;
+}
+/* 名前と値を、同じ行に。**名前は左、値は右** */
+.radio-set-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-12);
+}
+.radio-set-name {
+  /* **名前を縮ませない。** flex の子は既定で縮む(`flex-shrink: 1`) */
+  flex: 0 0 auto;
+  font-size: var(--fs-13); font-weight: 700; color: var(--text-secondary);
+}
+/* 値の側。**間は「1.5 秒」という値**なので、1文字も削らない
+   (CLAUDE.md「数は1文字も削らない」)。入らないぶんは曲の題が縮む */
+.radio-set-row > select {
+  flex: 0 1 auto;
+  min-width: 0; max-width: 62%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.radio-pick--gap { flex: 0 0 auto; }
-.radio-pick--gap > select { padding-right: 24px; padding-left: 8px; }
+.radio-set-row--gap > select { flex: 0 0 auto; }
 
 /* ==========================================================================
    音楽(0049)
