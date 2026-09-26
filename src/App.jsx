@@ -209,7 +209,21 @@ export default function App() {
   /* 過去の教材も裏で支度するか。**費用が出ていくので切れるようにする** */
   const [prepAll, setPrepAll] = useState(prepareAllOn)
   useEffect(() => watchJob((j) => {
-    if (!j || j.seen) return
+    /* **仕事が片づいたら、知らせも一緒に消える**(第5.265節・2026-09-26 実機)。
+
+         > 教材が完成して発行した後もこの帯がしつこく残ります。
+
+       下書きを受け取った時点(`takeJobResult()`)で仕事は `null` になり、
+       帯は消える。**ところがこの知らせは別の入れ物**なので、
+       「発行する画面へ」を押したあとも残っていた ——
+       しかも押す先は、もう受け取り済みの画面である。
+       **効かない操作を見せない**(CLAUDE.md)。
+
+       ログインした人が変わったときにも同じことが起きていて、
+       そちらは下の `useEffect` が `setJobNote(null)` で消している ——
+       **同じ後始末が2か所に割れていた。** */
+    if (!j) { setJobNote(null); return }
+    if (j.seen) return
     if (j.state === 'done') {
       playSfx('done')
       setJobNote({ state: 'done', text: `${j.title}の下書きができました。` })
