@@ -4047,8 +4047,8 @@ export default defineConfig({
            欄が1つ増えるたびに巻き込まれていた
            (曲の題を数えた 2026-09-23、何問ずつを数えた 2026-09-26)。
            **読み方は `--mode` である** */
-        読み方: 並び('.radio-set-body .radio-set-row--mode select'),
-        間: 並び('.radio-set-body .radio-set-row--gap select'),
+        読み方: 並び('.radio-set-body .radio-set-pick--mode'),
+        間: 並び('.radio-set-body .radio-set-pick--gap'),
         /* **名前が見えているか**(第5.271節)。これが無いと
            「5 問」「3 秒」とだけ出て、何の設定か分からない
            —— それが利用者の指摘そのものである。
@@ -4151,13 +4151,13 @@ export default defineConfig({
       }
     })
     /* **設定は下の「設定」の中**(第5.271節)。単語帳とまったく同じ読み方を
-       する —— **書き写さない**ために、同じ選び方(`.radio-set-row--◯◯`)を使う */
+       する —— **書き写さない**ために、同じ選び方(`.radio-set-pick--◯◯`)を使う */
     const 欄を読む = () => page.evaluate(() => {
       const 並び = (sel) => [...document.querySelectorAll(sel)]
         .flatMap((s) => [...s.options].map((o) => o.textContent.trim()))
       return {
-        読み方: 並び('.radio-set-body .radio-set-row--mode select'),
-        間: 並び('.radio-set-body .radio-set-row--gap select'),
+        読み方: 並び('.radio-set-body .radio-set-pick--mode'),
+        間: 並び('.radio-set-body .radio-set-pick--gap'),
         名前: [...document.querySelectorAll('.radio-set-body .radio-set-name')]
           .filter((el) => el.getBoundingClientRect().width > 0)
           .map((el) => el.textContent.trim()),
@@ -4168,10 +4168,58 @@ export default defineConfig({
     await page.click('.radio-set button')
     await page.waitForTimeout(150)
     const 設定 = await 欄を読む()
-    const 開いて横 = await page.evaluate(() => {
-      const b = document.querySelector('.focus-body')
-      return b ? b.scrollWidth - b.clientWidth : 0
-    })
+    /* ★ **いちばん長い名前で測る**(第5.273節・2026-09-26 実機・
+         利用者の指摘「この UI は不細工ですね」)。
+
+       第5.271節の見張りは、**既定の読み方でしか測っていなかった。**
+       そのときの名前は短い「間の長さ」で、何も起きない。
+       利用者が読み方を「日本語→英語」に変えたとたん、名前が長くなり、
+       **選び欄が画面の右端からはみ出した。**
+       「無ければ素通り」する形の検証を書かない(CLAUDE.md)——
+       **いちばん危ない形を、検証の中に必ず1つ置く。**
+
+       ここでは**読み方を1つずつ選び直して、すべての名前で測る。**
+       名前を長くした日にも、ひとりでに試される(名前を書き写さない)。 */
+    const 一番長い名前で = await (async () => {
+      const 欄 = '.radio-set-body .radio-set-pick--mode'
+      const 値 = await page.$$eval(`${欄} option`, (os) => os.map((o) => o.value))
+      let 悪い = null
+      for (const v of 値.length ? 値 : [null]) {
+        if (v !== null) {
+          await page.selectOption(欄, v)
+          await page.waitForTimeout(120)
+        }
+        const r = await page.evaluate(() => {
+          const b = document.querySelector('.focus-body')
+          const 名 = [...document.querySelectorAll('.radio-set-body .radio-set-name')]
+          const 欄 = [...document.querySelectorAll('.radio-set-body .radio-set-pick')]
+          const box = (el) => el.getBoundingClientRect()
+          return {
+            よこ: b ? b.scrollWidth - b.clientWidth : 0,
+            /* **欄が、はみ出していないか。** 右端が入れ物より外なら不合格 */
+            はみ出し: b
+              ? Math.round(Math.max(0, ...欄.map((el) => box(el).right - box(b).right)))
+              : 0,
+            /* **そろっているか。** 名前の長さがまちまちでも、
+               欄は同じ場所から始まり、同じ幅でなければならない ——
+               そこが揺れているのが「不細工」の中身である */
+            始まりの幅: 欄.length
+              ? Math.round(Math.max(...欄.map((el) => box(el).left))
+                - Math.min(...欄.map((el) => box(el).left)))
+              : 0,
+            幅の差: 欄.length
+              ? Math.round(Math.max(...欄.map((el) => box(el).width))
+                - Math.min(...欄.map((el) => box(el).width)))
+              : 0,
+            名前: 名.map((el) => el.textContent.trim()),
+            欄の数: 欄.length,
+          }
+        })
+        if (!悪い || r.はみ出し > 悪い.はみ出し || r.始まりの幅 > 悪い.始まりの幅) 悪い = r
+      }
+      return 悪い
+    })()
+    const 開いて横 = 一番長い名前で.よこ
     await page.close()
 
     /* **どの文が出ているかは、測るたびに変わる**(上と同じ理由)。
@@ -4195,8 +4243,23 @@ export default defineConfig({
          (何問ずつ / 読み方 / 間。曲は登録があるときだけ増える) */
       ng(`QRの聞き流し(${w}px) … 設定の名前が見えていない`,
         設定.名前.join('/') || '(名前が1つも無い)')
-    } else if (開いて横 > 0) {
-      ng(`QRの聞き流し(${w}px) … 設定を開くと横にはみ出す`, `${開いて横}px`)
+    } else if (開いて横 > 0 || 一番長い名前で.はみ出し > 1) {
+      /* **どの読み方でも、欄がはみ出さないこと**(第5.273節)。
+         いちばん長い名前のときに、ここが赤くなる */
+      ng(`QRの聞き流し(${w}px) … 設定の欄が横にはみ出す`,
+        `画面 ${開いて横}px / 欄 ${一番長い名前で.はみ出し}px`
+        + `(名前「${一番長い名前で.名前.join(' / ')}」)`)
+    } else if (一番長い名前で.欄の数 < 3) {
+      /* **測る相手が居ることを、先に確かめる** ——
+         欄が1つしか無ければ「そろっている」は必ず成り立ち、素通りする */
+      ng(`QRの聞き流し(${w}px) … 設定の欄が ${一番長い名前で.欄の数} 個しかない`,
+        'そろっているかを測るには、欄が3つ以上要る')
+    } else if (一番長い名前で.始まりの幅 > 1 || 一番長い名前で.幅の差 > 1) {
+      /* **名前の長さがまちまちでも、欄はそろう**(第5.273節)。
+         行ごとの `flex` に戻すと、ここが赤くなる */
+      ng(`QRの聞き流し(${w}px) … 設定の欄がそろっていない`,
+        `始まりの差 ${一番長い名前で.始まりの幅}px / 幅の差 ${一番長い名前で.幅の差}px`
+        + `(名前「${一番長い名前で.名前.join(' / ')}」)`)
     } else if (設定.読み方.length < 2) {
       /* **ここは利用者の指定で反転した**(2026-09「パタプラのようにしたい」)。
          Quick Response には「言う練習」が足してあるので、
@@ -4225,7 +4288,8 @@ export default defineConfig({
       ng(`QRの聞き流し(${w}px) … 縦に送るものが出ている`,
         `${got.たて}px —— 1問だけに向き合う画面である`)
     } else {
-      ok(`QRの聞き流し(${w}px) … 文も訳も出て、送るものが無い`)
+      ok(`QRの聞き流し(${w}px) … 文も訳も出て、送るものが無く、`
+        + `どの読み方でも設定の欄がそろう(名前「${一番長い名前で.名前.join(' / ')}」)`)
     }
   }
 
@@ -7192,7 +7256,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
     await page.click('.radio-set button')
     await page.waitForTimeout(150)
     const r = await page.evaluate(() => {
-      const sel = document.querySelector('.radio-set-row--song select')
+      const sel = document.querySelector('.radio-set-pick--song')
       const bar = document.querySelector('.focus-top')
       return {
         ある: !!sel,
@@ -10175,9 +10239,9 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
     数: (document.querySelector('.drill-count')?.textContent ?? '').trim(),
     題: (document.querySelector('.drill-title')?.textContent ?? '').trim(),
     帯の数: document.querySelectorAll('.focus-top .focus-count').length,
-    札: [...(document.querySelector('.radio-set-row--take select')?.options ?? [])]
+    札: [...(document.querySelector('.radio-set-pick--take')?.options ?? [])]
       .map((o) => o.textContent.trim()),
-    いま: document.querySelector('.radio-set-row--take select')?.value ?? '',
+    いま: document.querySelector('.radio-set-pick--take')?.value ?? '',
   }))
   const 出た = Number((m.数.split('/')[1] ?? '').trim())
   if (!m.札.length) {
@@ -10220,7 +10284,7 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   /* **設定を開いてから変える**(第5.271節) */
   await page.click('.radio-set button')
   await page.waitForTimeout(150)
-  await page.selectOption('.radio-set-row--take select', 'all')
+  await page.selectOption('.radio-set-pick--take', 'all')
   await page.waitForTimeout(400)
   const 後 = await page.evaluate(() => (
     document.querySelector('.drill-count')?.textContent ?? '').trim())

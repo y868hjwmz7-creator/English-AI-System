@@ -6608,34 +6608,45 @@ button.wbfilter-ctl { text-align: left; }
    **`align-items` は親の `center` のまま**で良い ——
    この箱は**自分の幅を持っている**ので、中身なりに縮まない
    (共通ルール「縦積みにしたとたん左端がぎざぎざになる」の形にならない) */
+/* ★ **名前の列と、欄の列。2列の格子にする**(第5.273節・2026-09-26 実機・
+     利用者の指摘「この UI は不細工ですね」)。
+
+   もとは1組ずつ `<label>` で包んだ `flex` の行で、名前を左・欄を右へ離していた。
+   **名前の長さがまちまち**(「曲」1文字 /「日本語 → 英語のあいだ」11文字)
+   なので、**行ごとに欄の始まる場所も幅も変わっていた。**
+   いちばん長い名前の行では、欄が**画面の右端からはみ出していた**
+   (古い形を描いて確かめた —— 利用者の写真とまったく同じ形になる)。
+
+   格子にすると、**名前の列はいちばん長い名前で1つに決まり**、
+   欄の列は残り全部になる —— どの行も同じ場所から始まり、同じ幅になる。
+   名前を1つ増やしても、長い名前に変えても、**ひとりでにそろう。**
+
+   **`auto` は「いちばん長い名前ぶん」**という意味である(数を書かない)。
+   **`minmax(0, 1fr)`** の `0` が要る —— `1fr` だけだと欄が中身より
+   小さくなれず、**長い曲の題でまたはみ出す。** */
 .radio-set-body {
   width: min(100%, 320px);
-  display: flex; flex-direction: column;
-  gap: var(--sp-10);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  /* **縦の隙間と横の隙間を、別々に決める。** 隙間は `gap` で作る
+     —— 子に `margin` を付けて回らない(共通ルール) */
+  gap: var(--sp-10) var(--sp-12);
   /* カードは中央そろえだが、**名前は左端にそろえる** ——
-     4行の名前の頭が揺れると読めない */
+     名前の頭が揺れると読めない */
   text-align: left;
 }
-/* 名前と値を、同じ行に。**名前は左、値は右** */
-.radio-set-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--sp-12);
-}
 .radio-set-name {
-  /* **名前を縮ませない。** flex の子は既定で縮む(`flex-shrink: 1`) */
-  flex: 0 0 auto;
   font-size: var(--fs-13); font-weight: 700; color: var(--text-secondary);
 }
 /* 値の側。**間は「1.5 秒」という値**なので、1文字も削らない
    (CLAUDE.md「数は1文字も削らない」)。入らないぶんは曲の題が縮む */
-.radio-set-row > select {
-  flex: 0 1 auto;
-  min-width: 0; max-width: 62%;
+.radio-set-pick {
+  min-width: 0; max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.radio-set-row--gap > select { flex: 0 0 auto; }
 
 /* ==========================================================================
    音楽(0049)

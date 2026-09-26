@@ -177,7 +177,14 @@ const gapSetOf = (where, modeId) => {
   return String(modeId) === MODE_SAY.id && w.sayGapKey
     ? {
       list: SAY_GAPS, key: w.sayGapKey, def: DEFAULT_SAY_GAP,
-      label: '日本語 → 英語のあいだ',
+      /* **短くする**(第5.273節・2026-09-26 実機・利用者の指摘
+           「日本語→英語の間を2行にするなり日→英の間、など工夫できませんか?」)。
+
+         もとは「日本語 → 英語のあいだ」。**名前だけで画面の半分を取り**、
+         選び欄が右端からはみ出していた(iPhone 実機・こちらでも再現した)。
+         1つ上の行に「読み方 日本語→英語」と出ているので、
+         ここは**どこの間か**さえ分かればよい。 */
+      label: '日→英の間',
     }
     : {
       list: RADIO_GAPS, key: w.gapKey, def: DEFAULT_RADIO_GAP,

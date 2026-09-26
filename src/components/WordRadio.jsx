@@ -32,7 +32,7 @@
  *   聞き流しは**答える練習ではない**ので、箱も次に出す日も1ミリも動かさない。
  *   「遅く出す方へは動かさない」よりさらに手前の話である。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import FocusFrame from './FocusFrame.jsx'
 /* **題と進み具合は、練習の2画面とまったく同じ部品**(第5.264節)。
    書き写すと、必ずどこかだけ古くなる(CLAUDE.md) */
@@ -184,6 +184,15 @@ export default function WordRadio({
    * 覚えない —— 一度決めれば触らないものなので、次に開いたときは畳んでおく。
    */
   const [setsOpen, setSetsOpen] = useState(false)
+  /**
+   * 設定の欄の名札を、欄に結びつけるための id(第5.273節)。
+   *
+   * **`<label>` で1組ずつ包む形をやめた**ので、結びつけを自分で書く ——
+   * 包む形だと名前と欄が**行ごと**の入れ物に入り、名前の長さがまちまちなので
+   * **行によって欄の始まる場所も幅も変わっていた**(利用者の指摘「不細工」)。
+   * いまは名前と欄を、2列の格子に**直に**並べている。
+   */
+  const uid = useId()
   const 読めるもの = (rows ?? []).filter((r) => radioTextOf(r))
   /* **数えるのは `takeCount()` 1か所**(`reviewScope.js`)——
      出しかたの札とまったく同じ数え方である。
@@ -517,20 +526,19 @@ export default function WordRadio({
                   **札の一覧も、数え方も `reviewScope.js` 1か所**である ——
                   出しかたの札とまったく同じ 5 / 10 / 20 / 30 / ぜんぶ が並ぶ
                   (**数え方を2通り持たない**・CLAUDE.md)。 */}
-              <label className="radio-set-row radio-set-row--take">
-                <span className="radio-set-name">何問ずつ</span>
-                <select value={String(take)}
+              <label className="radio-set-name" htmlFor={`${uid}-take`}>何問ずつ</label>
+              <select id={`${uid}-take`} className="radio-set-pick radio-set-pick--take"
+                      value={String(take)}
                         onChange={(e) => {
                           setTake(sizeOfValue(e.target.value))
                           /* **頭から読み直す。** 減らしたときに、いま読んでいる
                              場所が一覧の外へ出たままになるのを防ぐ */
                           move(0)
                         }}>
-                  {SIZES.map((n) => (
-                    <option key={String(n)} value={String(n)}>{sizePickLabel(n, '問')}</option>
-                  ))}
-                </select>
-              </label>
+                {SIZES.map((n) => (
+                  <option key={String(n)} value={String(n)}>{sizePickLabel(n, '問')}</option>
+                ))}
+              </select>
               {/* **読み方は、選べるものが2つ以上あるときだけ出す**
                   (**効かない操作を見せない**・CLAUDE.md)。
                   日本語の読み上げを外したので、いまは「英語だけ」1つである。
@@ -541,9 +549,10 @@ export default function WordRadio({
                   (曲の題を数えてしまった 2026-09-23 と、まったく同じ形)。
                   **欲しいものを名指しする**ほうが、増えても壊れない */}
               {modes.length > 1 && (
-                <label className="radio-set-row radio-set-row--mode">
-                  <span className="radio-set-name">読み方</span>
-                  <select value={mode}
+                <>
+                  <label className="radio-set-name" htmlFor={`${uid}-mode`}>読み方</label>
+                  <select id={`${uid}-mode`} className="radio-set-pick radio-set-pick--mode"
+                          value={mode}
                           onChange={(e) => {
                             const next = e.target.value
                             setMode(next); saveRadioMode(next, where)
@@ -554,7 +563,7 @@ export default function WordRadio({
                           }}>
                     {modes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                   </select>
-                </label>
+                </>
               )}
               {/* **どの曲を流すか**(第5.194節・2026-09 利用者の指定)。
 
@@ -564,31 +573,33 @@ export default function WordRadio({
                   1曲しか無ければ「ぜんぶ」とその1曲は同じもので、
                   **押しても何も変わらない**(効かない操作を見せない・CLAUDE.md)。 */}
               {song選び.length > 0 && (
-                <label className="radio-set-row radio-set-row--song">
-                  <span className="radio-set-name">曲</span>
-                  <select value={選んでいる}
+                <>
+                  <label className="radio-set-name" htmlFor={`${uid}-song`}>曲</label>
+                  <select id={`${uid}-song`} className="radio-set-pick radio-set-pick--song"
+                          value={選んでいる}
                           onChange={(e) => { setPick(e.target.value); saveBgmPick(e.target.value) }}>
                     {song選び.map((x) => (
                       <option key={x.id || 'all'} value={x.id}>{x.label}</option>
                     ))}
                   </select>
-                </label>
+                </>
               )}
               {/* **間の長さ。** 数(秒)は1文字も削らない —— そこが読めないと、
                   何を選んでいるのか分からない(CLAUDE.md)。
                   **名前も `wordRadio.js` 1か所から取る**(書き写さない)——
                   読み方によって「間」の意味が変わる */}
-              <label className="radio-set-row radio-set-row--gap">
-                <span className="radio-set-name">{radioGapLabelFor(where, mode)}</span>
-                <select value={gap}
+              <label className="radio-set-name" htmlFor={`${uid}-gap`}>
+                {radioGapLabelFor(where, mode)}
+              </label>
+              <select id={`${uid}-gap`} className="radio-set-pick radio-set-pick--gap"
+                      value={gap}
                         onChange={(e) => {
                           const ms = Number(e.target.value)
                           setGap(ms); saveRadioGap(ms, where, mode)
                         }}>
-                  {radioGapsFor(where, mode)
-                    .map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-                </select>
-              </label>
+                {radioGapsFor(where, mode)
+                  .map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+              </select>
             </div>
           )}
         </div>
