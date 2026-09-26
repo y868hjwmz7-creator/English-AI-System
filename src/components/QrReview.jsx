@@ -62,7 +62,7 @@ import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import WordRadio from './WordRadio.jsx'
-import { MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
+import { MusicIcon, PrintIcon, RepeatIcon, SpeakerIcon } from './Icons.jsx'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
 import { qrSheetPairs, sheetNote, wordSheetSections } from '../lib/reviewSheet.js'
@@ -899,10 +899,23 @@ export default function QrReview({
    * **押すのは `listen()` 1か所** —— 「出しかた」の中のボタンと
    * まったく同じものを呼ぶ(**同じことをする道を2つ作らない**・CLAUDE.md)。
    *
-   * **絵だけにする。** 帯には ☰ / 冊名 ▾ / これ / じょうご の4つが並ぶので、
-   * 文字を入れると 390px で冊名が押し出される
-   * (冊名は「…」で切れてよいが、**消えてはいけない**)。
-   * **何のボタンかは `aria-label` と `title` で言う。**
+   * ── **絵だけにするのをやめた**(2026-09-26 実機・利用者の指定)──
+   *
+   *   > 「🎵マーク」はダサすぎるので、「🔊聞き流し」にしてください
+   *
+   *   はじめは音符の絵だけにしていた。帯に ☰ / 冊名 ▾ / これ / じょうご の
+   *   4つが並ぶので、**文字を入れると 390px で冊名が押し出される**と
+   *   考えたためである。**そこは測っていなかった。**
+   *   実際には `.focus-top` が `flex-wrap: wrap` なので、
+   *   狭いときは**2段目に落ちるだけ**で、冊名は消えない
+   *   (`npm run test:bar` が 390px で測っている)。
+   *
+   *   絵も**音符から `SpeakerIcon`(🔊)へ**変えた ——
+   *   音符は「曲を選ぶ」の絵で、**BGM の欄が同じ音符を使っている。**
+   *   **違うものに、同じ絵を付けない**(共通ルール)。
+   *
+   * **`aria-label` は残す。** 見えている文字より詳しく、
+   * **いま何問あるか**まで言う(見えている「聞き流し」も含んでいる)。
    */
   const listenBtn = (
     <button type="button" className="btn btn--ghost btn--small qr-top-listen"
@@ -910,7 +923,7 @@ export default function QrReview({
             aria-label={`言う練習・聞き流し(${shown.length} 問)`}
             title={`言う練習・聞き流し(${shown.length} 問)`}
             onClick={listen}>
-      <MusicIcon />
+      <SpeakerIcon />聞き流し
     </button>
   )
 

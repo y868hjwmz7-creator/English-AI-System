@@ -7978,6 +7978,23 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      片方だけだと、入れ替えても緑のままになる */
   ok(/top=\{<>\{bookPick\}\{listenBtn\}<\/>\}/.test(qr),
     'Quick Response の帯は 冊名 ▾ → 聞き流し の順')
+  /* ── **帯のボタンは「🔊 聞き流し」**(2026-09-26 実機・利用者の指定)──
+       > 「🎵マーク」はダサすぎるので、「🔊聞き流し」にしてください
+     **絵と文字の両方を見る。** 片方だけだと、
+     **絵だけに戻しても・音符に戻しても**緑のままになる。
+     音符(`MusicIcon`)は**曲をえらぶ側の絵**である(BGM の欄が使っている)——
+     **違うものに、同じ絵を付けない**(共通ルール)。 */
+  const 帯listen = qr.slice(qr.indexOf('const listenBtn'),
+    qr.indexOf('</button>', qr.indexOf('const listenBtn')))
+  /* **`aria-label` にも「聞き流し」と書いてある。**
+     `/聞き流し/` だけで見ると、**文字を消しても緑**になる ——
+     だから**絵のすぐ後ろに文字が来ているか**を、続きで見る */
+  ok(/<SpeakerIcon \/>聞き流し/.test(帯listen) && !/<MusicIcon/.test(帯listen),
+    '帯の聞き流しは 🔊 の絵と「聞き流し」の文字(音符ではない)')
+  /* **縮ませない。** 狭い画面では帯そのものが折り返す(`flex-wrap: wrap`) */
+  ok(/\.qr-top-listen \{[^}]*flex: 0 0 auto/.test(st)
+    && /\.focus-top \{[^}]*flex-wrap: wrap/.test(st),
+  '帯の聞き流しは縮まず、狭い画面では帯が折り返す')
   ok(/topEnd=\{\(\s*<ReviewScope/.test(qr),
     'Quick Response の帯は、いちばん右端が「出しかた」(じょうご)')
   /* **押すのは `listen()` 1か所。** 「出しかた」の中のボタンと

@@ -7917,10 +7917,14 @@ button.wbfilter-ctl { text-align: left; }
    **縮ませない。** 帯で縮んでよいのは冊名(`冊名 ▾`)だけで、
    あれは「…」で切れても読める。**絵だけのボタンは、縮むと潰れる。**
    **指で狙える幅を決め打ちにする**(絵は 18px なので、余白で稼ぐ)。 */
+/* **文字も出す**(2026-09-26 実機・利用者の指定「🔊聞き流し にしてください」)。
+   絵だけのときに詰めていた `padding-inline: 10px` は**消した** ——
+   `.btn--small` の余白のまま、ほかの押せるものとそろえる。
+   **縮ませない**(`flex: 0 0 auto`)。狭い画面では、帯そのものが
+   折り返して2段目に落ちる(`.focus-top` の `flex-wrap: wrap`) */
 .qr-top-listen {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
-  padding-inline: 10px;
 }
 
 /* `.focus-top-right`(帯の右端へ寄せる)は**消した**(第5.176節)。

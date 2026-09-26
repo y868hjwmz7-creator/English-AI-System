@@ -6879,8 +6879,15 @@ for (const W of [1280, 794, 453, 390, 320]) {
   const 道具 = await page.evaluate(() =>
     [...document.querySelectorAll('.sheet .wb-listen, .setpop .wb-listen')]
       .map((x) => x.textContent.trim()))
+  /* **「出しかた」の中のものを、名指しで押す。**
+     2026-09-26 に帯のボタンが「🔊 聞き流し」になり、**文字が同じになった。**
+     `querySelectorAll('button')` から文字で探すと、
+     **DOM で先に出てくる帯のほうに当たる** ——
+     どちらも `listen()` を呼ぶので**緑のまま**で、
+     この見張りは「出しかた」を測らなくなる
+     (CLAUDE.md「置き換える前に `grep -n` で数える」の、測る側での同じ話)。 */
   await page.evaluate(() => {
-    const b2 = [...document.querySelectorAll('button')]
+    const b2 = [...document.querySelectorAll('.sheet .wb-listen, .setpop .wb-listen')]
       .find((x) => (x.textContent || '').includes('聞き流し'))
     if (b2) b2.click()
   })
