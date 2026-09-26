@@ -1460,6 +1460,11 @@ const RSCOPE = (() => {
    曲は渡さない(0本でも聞き流しは始まる・行き止まりを作らない)。 */
 const RADIO = (
   <WordRadio
+    /* **何を聞き流しているのか**(第5.264節)。本物は練習の画面に
+       出している題(`shownLabel`)をそのまま渡す。
+       **長い題にしてある** —— 短い題だと、縮む指定をやめても
+       同じ見た目になって緑のままになる */
+    label="自分の単語帳 / 製造業 / 動詞だけ 12 語"
     rows={[
       {
         word_norm: 'take on', display: 'take on',
@@ -1487,6 +1492,9 @@ const RADIO = (
 const QRRADIO = (
   <WordRadio
     where="qr"
+    /* **何を聞き流しているのか**(第5.264節)。本物は `drillLabel` ——
+       冊の名前と、絞り込んでいれば Unit・中身・型まで入る */
+    label="Native Flow Vol.1 / UNIT 3 / S V O to do"
     /* **「出しかた」で選んでいる数を持ち込む**(第5.262節・
        2026-09-26 利用者の指定)。`?screen=qrradio&size=5` で、
        **5問に絞って練習していた人が開いた形**を測れる。

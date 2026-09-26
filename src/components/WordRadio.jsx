@@ -34,6 +34,9 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import FocusFrame from './FocusFrame.jsx'
+/* **題と進み具合は、練習の2画面とまったく同じ部品**(第5.264節)。
+   書き写すと、必ずどこかだけ古くなる(CLAUDE.md) */
+import DrillHead from './DrillHead.jsx'
 import { CloseIcon, PlayIcon, StopIcon } from './Icons.jsx'
 import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
 import { JA_VOICE } from '../data/clipVoices.js'
@@ -58,6 +61,19 @@ import {
 export default function WordRadio({
   /** 読むもの(**絞り込みと範囲を当てたあとの一覧**)。語でも文でもよい */
   rows,
+  /**
+   * **いま何を聞き流しているのか**(第5.264節・2026-09-26 実機・利用者の指定)。
+   *
+   *   > まず、何を聞き流しているのかをちゃんと表示しましょう。
+   *   > 既存の quick response と同じ仕様に。
+   *
+   * 冊の名前(と、絞り込んでいれば Unit・中身・型まで)。
+   * **ここでは組み立てない** —— 呼ぶ側が練習の画面に出しているものを
+   * **そのまま**渡す(`drillLabel` / `shownLabel`)。
+   * **数え方を2通り持たない**(CLAUDE.md)—— 練習と聞き流しで
+   * 題が食い違うと、「いま何を聞いているのか」が分からなくなる。
+   */
+  label = '',
   /**
    * どの画面から来たか(`word` = 単語帳 / `qr` = Quick Response)。
    *
@@ -372,11 +388,14 @@ export default function WordRadio({
       onClose={stop}
       /* **左上は ☰**(第5.172節)。渡されなければ ✕ 閉じるのまま */
       onMenu={onMenu}
-      top={(
-        <span className="focus-count">
-          {list.length ? `${at + 1} / ${list.length}` : '0'}
-        </span>
-      )}
+      /* **帯に数を置かない**(第5.264節・2026-09-26 実機・利用者の指定)。
+
+           > そして4/5などの数字は、コンテンツ部分内へ
+
+         帯に置くと、**☰ と欄のあいだに数字が挟まって**読みにくく、
+         しかも**何を聞き流しているのかはどこにも出ていなかった。**
+         題も数も、下の `DrillHead` がコンテンツの上に出す ——
+         **練習の2画面とまったく同じ形**である。 */
       /* **間は、変えたくなる場所のとなりに置く。**
          **聴きながら「もう少し長く」と思う**ものなので、
          画面のはるか上ではなく、ここに置く
@@ -474,6 +493,14 @@ export default function WordRadio({
         </>
       )}
     >
+      {/* ── **何を聞き流しているのか**(第5.264節)────────────────
+             部品は `DrillHead` 1つで、**練習の2画面と分け合う。**
+             ちがうのは「4 / 5」を渡すところだけである ——
+             聞き流しは**画面を見ていない**ので、ふと目を落としたときに
+             一目で読める数が要る(30 個の区切りは数えられない)。
+             `count` を渡さない画面は、これまでどおり数を出さない */}
+      <DrillHead label={label} total={list.length} done={at}
+                 count={list.length ? `${at + 1} / ${list.length}` : ''} />
       <div className="radio-card">
         {/* **いま読んでいるものを、目でも分かるようにする。**
             聞き流しは耳だけの練習だが、ふと見たときに追えないと

@@ -13,11 +13,29 @@
  *   特大のときに絵だけ小さく取り残される。
  */
 
-/** スピーカー。お手本の読み上げ */
+/**
+ * スピーカー。**音を鳴らすもの**(Listen・聞き流し)。
+ *
+ * ── **塗りつぶしをやめて、線画にそろえた**(2026-09-26 利用者の指定)──
+ *
+ *   > 絞り込みのマークと聞き流しのマークももっと統一感を出して
+ *   > ちゃんとデザインしてください
+ *
+ *   本体だけが**塗りつぶし**で、波は細い線だった。
+ *   となりに並ぶじょうご(`SortIcon`)は 1.6px の線画なので、
+ *   **小さい寸法では、片方だけが黒い塊に見える。**
+ *   この絵の束はぜんぶ線画なので、**ここだけが例外だった。**
+ *
+ *   太さ・角の丸め・線の始末を `SortIcon` とそろえてある。
+ *   **どこか1つだけ変えない** —— 変えると、また片方だけが浮く。
+ */
 export function SpeakerIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <path d="M4 8h3l4-3.5v11L7 12H4z" fill="currentColor" />
+      {/* 本体は**1本の輪郭**(じょうごと同じ描き方)。
+          離れた線の集まりにすると、18px でばらけて見える */}
+      <path d="M4 8h3l4-3.5v11L7 12H4z" fill="none" stroke="currentColor"
+            strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
       <path d="M13.5 7.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor"
             strokeWidth="1.6" strokeLinecap="round" />
       <path d="M15.8 5.2a6.5 6.5 0 0 1 0 9.6" fill="none" stroke="currentColor"

@@ -8006,6 +8006,85 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '帯にも紙にも「1 / 30」は無い(進み具合の帯が言う)')
   ok(!/focus-top-right/.test(qr) && !/\.focus-top-right \{/.test(st),
     '右端へ寄せる指定は消してある(効かない指定を残さない)')
+
+  /* ══════════════════════════════════════════════════════════════
+     **聞き流しの画面を、Quick Response と同じ形にする**
+     (第5.264節・2026-09-26 実機・利用者の指定)
+
+       > 「聞き流し」内の仕様ですが、ここをもっとみやすく改善しましょう。
+       > まず、何を聞き流しているのかをちゃんと表示しましょう。
+       > 既存の quick response と同じ仕様に。
+       > 絞り込みのマークと聞き流しのマークももっと統一感を出して
+       > ちゃんとデザインしてください。
+       > そして4/5などの数字は、コンテンツ部分内へ。
+     ══════════════════════════════════════════════════════════════ */
+  {
+    const radio = noNote(readD('src/components/WordRadio.jsx'))
+    const head = noNote(readD('src/components/DrillHead.jsx'))
+    const wb2 = noNote(readD('src/components/Wordbook.jsx'))
+    const sc = noNote(readD('src/components/ReviewScope.jsx'))
+    const ic = readD('src/components/Icons.jsx')
+
+    /* ── ① **何を聞き流しているのか** ───────────────────────
+         **部品は練習の2画面と同じ `DrillHead`。** 書き写すと片方だけ古くなる */
+    ok(/<DrillHead label=\{label\}/.test(radio),
+      '聞き流し … 何を聞き流しているのかを、コンテンツの上に出す')
+    /* **題は、練習の画面に出しているものをそのまま渡す。**
+       ここで組み直すと、練習と聞き流しで題が食い違う */
+    ok(/label=\{drillLabel\}/.test(qr) && /label=\{shownLabel\}/.test(wb2),
+      '聞き流し … 題は、練習の画面に出しているものと同じ(組み直さない)')
+
+    /* ── ② **「4 / 5」はコンテンツの中** ────────────────────
+         **出る側と出ない側の両方を見る。**
+         片方だけだと、帯へ戻しても・どこにも出さなくても緑のままになる */
+    ok(/count=\{list\.length \? `\$\{at \+ 1\} \/ \$\{list\.length\}` : ''\}/.test(radio),
+      '聞き流し … 「4 / 5」をコンテンツの中に出す')
+    ok(!/focus-count/.test(radio),
+      '聞き流し … 帯には数を置いていない(移したつもりで2か所に出さない)')
+    /* **数を出すのは聞き流しだけ。** 練習の2画面は、これまでどおり出さない
+       (第5.176節・第5.180節「目で数えられるものを、もう一度言わない」) */
+    ok(!/<DrillHead[^>]*count=/.test(qr) && !/<DrillHead[^>]*count=/.test(wb2),
+      '聞き流し … 練習の2画面は、これまでどおり数を出さない')
+    /* **渡されなければ出さない。** 既定で出す形にすると、
+       上の「練習の2画面は出さない」が**書いただけ**になる */
+    ok(/count = null/.test(head) && /\{数 && <span className="drill-count">/.test(head),
+      '聞き流し … 数は、渡されたときだけ出る(既定は出さない)')
+
+    /* ── ③ **Quick Response と同じ骨組み** ───────────────────
+         題が上・本文はまん中。`.qrfocus` とまったく同じ3行を当てる */
+    ok(/\.radio \.focus-body \{ justify-content: stretch; \}/.test(st)
+      && /\.radio \.focus-body > \.focus-plainbox \{[^}]*flex: 1 1 auto/.test(st)
+      && /\.radio \.radio-card \{ flex: 1 1 auto; \}/.test(st),
+    '聞き流し … 題は上、本文は残りいっぱいのまん中(Quick Response と同じ)')
+    /* **題と本文を、すき間ゼロでくっつけない**(共通ルール)。
+       **`gap` で作る** —— 余白で作ると、下に何が来るかで効かなくなる */
+    ok(/\.radio \.focus-body > \.focus-plainbox \{[^}]*gap: var\(--sp-12\)/.test(st),
+      '聞き流し … 題と本文のあいだは `gap` で離してある')
+
+    /* ── ④ **2つのマークの統一感** ────────────────────────
+         **絵と、ボタンの形の両方**を見る。片方だけだと、
+         塗りつぶしに戻しても・地の色を変えても緑のままになる */
+    const 切る = (from, to) => ic.slice(ic.indexOf(from), ic.indexOf(to))
+    const speaker = 切る('export function SpeakerIcon', 'export function MicIcon')
+    const sort = 切る('export function SortIcon', 'export function BookIcon')
+    ok(!/fill="currentColor"/.test(speaker),
+      '🔊 は塗りつぶさない(となりのじょうごと同じ線画)')
+    /* **太さを書き写さない。** じょうごの側から読んで突き合わせる ——
+       どちらかを変えた日に、**片方だけ**が変わっていれば赤くなる */
+    const 太さ = (t) => (t.match(/strokeWidth="[\d.]+"/g) ?? [])
+    ok(太さ(speaker).length >= 3 && 太さ(sort).length >= 1
+      && new Set([...太さ(speaker), ...太さ(sort)]).size === 1,
+    '🔊 とじょうごは、同じ太さの線で描いてある',
+    [...new Set([...太さ(speaker), ...太さ(sort)])].join(' / '))
+    /* **ボタンの地と枠もそろえる。** となりの聞き流しは `btn--ghost` である */
+    ok(/btn btn--small btn--ghost rscope-sort/.test(sc)
+      && /qr-top-listen/.test(qr) && /btn--ghost btn--small qr-top-listen/.test(qr),
+    '帯の2つのボタン(聞き流し / 絞り込み)は、同じ地・同じ枠')
+    /* **絞り込みは、文字を出さない**(2026-09「文字をなくしてください」)。
+       そろえるのは形と絵の描き方だけである */
+    ok(/aria-label=\{出しかたと呼ぶ\}/.test(sc) && !/<SortIcon \/>[^{<\s]/.test(sc),
+      '帯の絞り込みは絵だけ(文字は出さない・2026-09 の指定のまま)')
+  }
   /* **進み具合は、1問=1つの区切りで出す**(第5.180節で帯から変えた)。
      数字は出さない —— 目で数えられるものを、もう一度言わない */
   /* **題は `drillLabel`**(第5.187節)—— 冊の名前だけでなく、
@@ -8334,9 +8413,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **名前の部品を、二重に持たない** */
   ok(/<DrillTitle label=\{label\} \/>/.test(head),
     '名前は、これまでの部品(DrillTitle)をそのまま使う')
-  /* **空の帯を出さない・空の行で場所を取らない**(黙って出さない) */
-  ok(/if \(!String\(label \?\? ''\)\.trim\(\) && n === 0\) return null/.test(head),
-    '名前も数も無ければ、入れ物ごと出さない')
+  /* **空の帯を出さない・空の行で場所を取らない**(黙って出さない)。
+     **数(`count`)も見る**(第5.264節)—— 見ないと、
+     題も問数も無いのに数だけ渡したときに、入れ物ごと消える */
+  ok(/if \(!String\(label \?\? ''\)\.trim\(\) && n === 0 && !数\) return null/.test(head),
+    '名前も数も問数も無ければ、入れ物ごと出さない')
   ok(/\{n > 0 && \(/.test(head), '数が 0 ならバーを出さない')
   /* **数えられない値を 0 として描かない**(「1問しかない」と読めてしまう) */
   ok(/Number\.isFinite\(Number\(total\)\)/.test(head),

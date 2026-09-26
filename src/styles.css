@@ -6466,6 +6466,28 @@ button.wbfilter-ctl { text-align: left; }
   cursor: pointer;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   **聞き流しも、Quick Response と同じ骨組みにする**
+   (第5.264節・2026-09-26 実機・利用者の指定)
+
+     > 既存の quick response と同じ仕様に。
+     > そして4/5などの数字は、コンテンツ部分内へ
+
+   題(何を聞き流しているのか)と進み具合を**コンテンツの上に**置き、
+   本文は**残りいっぱいの中でまん中**に来る。
+   指定は `.qrfocus` とまったく同じ3行で、**値を書き写していない** ——
+   同じ言葉で並べて書くことで、次に触る人が見比べられる。
+   ══════════════════════════════════════════════════════════════════ */
+.radio .focus-body { justify-content: stretch; }
+.radio .focus-body > .focus-plainbox {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+  /* **題と本文を、すき間ゼロでくっつけない**(共通ルール)。
+     隙間は `gap` で作る —— 下に何が来ても離れる */
+  gap: var(--sp-12);
+}
+.radio .radio-card { flex: 1 1 auto; }
+
 /* 1語だけに向き合う。**骨組みは `FocusFrame`(`plain`)をそのまま使う** */
 .radio-card {
   display: flex;
@@ -7011,6 +7033,23 @@ button.wbfilter-ctl { text-align: left; }
   margin: 0;
   font-size: var(--fs-13); font-weight: 700;
   color: var(--text-secondary); line-height: 1.5;
+}
+/* **名前と数は、同じ行**(第5.264節・2026-09-26 利用者の指定
+   「4/5などの数字は、コンテンツ部分内へ」)。
+
+   縦に積むと、聞き流しで**中身より見出しのほうが高くなる。**
+   **隙間は `gap` で作る**(共通ルール)—— 数のほうに余白を付けて回らない。
+   **数は縮めない。** 縮むのは題のほう(長い冊名は「…」で切れてよい) */
+.drill-headline {
+  display: flex; align-items: baseline; gap: var(--sp-10); min-width: 0;
+}
+.drill-headline > .drill-title {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.drill-count {
+  flex: 0 0 auto; margin-left: auto;
+  font-size: var(--fs-13); font-weight: 700; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
 .qr-bar {

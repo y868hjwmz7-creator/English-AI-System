@@ -236,7 +236,13 @@ export default function ReviewScope({
       <button
         type="button"
         ref={gearRef}
-        className={`btn btn--small rscope-sort${open ? ' chip--on' : ''}`}
+        /* **聞き流しのボタンと、ひと組に見せる**(第5.264節・
+           2026-09-26 実機・利用者の指定「もっと統一感を出して」)。
+           となりの「🔊 聞き流し」は `btn--ghost` なので、
+           **こちらも同じ地・同じ枠**にする。
+           **文字は出さない** —— 2026-09 の指定(「文字をなくしてください」)
+           のままで、そろえるのは**形と絵の描き方**だけである */
+        className={`btn btn--small btn--ghost rscope-sort${open ? ' chip--on' : ''}`}
         aria-expanded={open}
         /* **文字を消したので、名前は `aria-label` が持つ**(第5.184節・
            2026-09 利用者の指定「文字をなくしてください」)。

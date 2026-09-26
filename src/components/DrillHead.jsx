@@ -37,24 +37,47 @@
  * @param label 帳面の名前(全文)。空なら名前の行ごと出さない
  * @param total その回に出す数。**0 ならバーを出さない**(空の帯を出さない)
  * @param done  いくつ終えたか
+ * @param count 「4 / 5」のような数。**渡さなければ出さない**(既定)
+ *
+ * ── **数を出すのは、聞き流しだけ**(第5.264節・2026-09-26 利用者の指定)──
+ *
+ *     > そして4/5などの数字は、コンテンツ部分内へ
+ *
+ *   練習の2画面(単語帳 / Quick Response)は、いまも**数を出さない** ——
+ *   第5.176節・第5.180節の「目で数えられるものを、もう一度言わない」は
+ *   そのままである(`count` を渡していない)。
+ *
+ *   聞き流しだけが違うのは、**画面を見ていない**からである。
+ *   ふと目を落としたときに「4 / 5」は一目で読めるが、
+ *   **30 個の区切りは数えられない。**
  */
 import DrillTitle from './DrillTitle.jsx'
 
-export default function DrillHead({ label = '', total = 0, done = 0 }) {
+export default function DrillHead({ label = '', total = 0, done = 0, count = null }) {
   /* **数えられない値を、0 として描かない。** 文字や NaN が来たときに
      区切りが1つだけ出ると、「1問しかない」と読めてしまう */
   const n = Number.isFinite(Number(total)) ? Math.max(0, Math.floor(Number(total))) : 0
   const at = Math.min(n, Number.isFinite(Number(done))
     ? Math.max(0, Math.floor(Number(done))) : 0)
 
-  /** **どちらも無ければ、入れ物ごと出さない**(空の行で場所を取らない) */
-  if (!String(label ?? '').trim() && n === 0) return null
+  const 数 = String(count ?? '').trim()
+
+  /** **どれも無ければ、入れ物ごと出さない**(空の行で場所を取らない) */
+  if (!String(label ?? '').trim() && n === 0 && !数) return null
 
   return (
     <div className="drill-head">
-      <DrillTitle label={label} />
-      {/* **数を出さない。** 「1 / 30」は帯からはずした(第5.176節)——
-          目で数えられるものを、もう一度数字で言わない */}
+      {/* **名前と数は、同じ行に並べる。** 別の行にすると、
+          聞き流しで**中身より見出しのほうが高くなる** */}
+      <div className="drill-headline">
+        <DrillTitle label={label} />
+        {/* **渡されたときだけ出す**(第5.264節)。
+            `0` と `null` を取り違えない —— 文字にしてから空かどうかを見る */}
+        {数 && <span className="drill-count">{数}</span>}
+      </div>
+      {/* **バーそのものには、数を書かない。** 「1 / 30」は帯からはずした
+          (第5.176節)—— 目で数えられるものを、もう一度数字で言わない。
+          数が要る画面は、上の `count` で受け取る(第5.264節) */}
       {n > 0 && (
         <div className="drill-bar" role="presentation">
           {Array.from({ length: n }, (unused, i) => (

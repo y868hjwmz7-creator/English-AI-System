@@ -2012,6 +2012,10 @@ export default function Wordbook({
       {radio && (
         <WordRadio
           rows={radio}
+          /* **練習の画面に出している題を、そのまま渡す**(第5.264節)。
+             `shownLabel` は「◯◯だけ 12 語」まで含んだもの ——
+             **画面に出ているものと1文字も違わない** */
+          label={shownLabel}
           tracks={tracks}
           /* **「出しかた」で選んでいる数を、そのまま持ち込む**
              (第5.262節・2026-09-26 利用者の指定)。

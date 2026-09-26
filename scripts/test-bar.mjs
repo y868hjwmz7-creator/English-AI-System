@@ -9982,8 +9982,14 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio${q2}`,
     { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(700)
+  /* **数はコンテンツの中**(第5.264節・2026-09-26 実機・利用者の指定
+     「4/5などの数字は、コンテンツ部分内へ」)。
+     帯の `.focus-count` から `.drill-count` へ移した ——
+     **測る場所も一緒に移す**(移さないと、この見張りが黙る) */
   const m = await page.evaluate(() => ({
-    数: (document.querySelector('.focus-count')?.textContent ?? '').trim(),
+    数: (document.querySelector('.drill-count')?.textContent ?? '').trim(),
+    題: (document.querySelector('.drill-title')?.textContent ?? '').trim(),
+    帯の数: document.querySelectorAll('.focus-top .focus-count').length,
     札: [...(document.querySelector('.radio-pick--take select')?.options ?? [])]
       .map((o) => o.textContent.trim()),
     いま: document.querySelector('.radio-pick--take select')?.value ?? '',
@@ -9991,13 +9997,23 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   const 出た = Number((m.数.split('/')[1] ?? '').trim())
   if (!m.札.length) {
     ng(`聞き流し 390px … 「何問ずつ」の欄が出ていない(${何})`)
+  } else if (!m.題) {
+    /* **何を聞き流しているのかを出す**(第5.264節・利用者の指定)。
+       題が無いと、開いた本人にも「どの冊を流しているのか」が分からない */
+    ng(`聞き流し 390px … 何を聞き流しているのかが出ていない(${何})`,
+      '題(冊の名前)がコンテンツの上に要る')
+  } else if (m.帯の数 > 0) {
+    /* **帯に数を残さない。** 移したつもりで両方に出ていると、
+       同じものが2か所に並ぶ(**同じことをするものを2つ見せない**) */
+    ng(`聞き流し 390px … 帯にまだ数が残っている(${何})`)
   } else if (出た !== 期待) {
     ng(`聞き流し 390px … ${何}なのに ${出た} 問で始まっている`,
       `「${m.数}」—— 期待は ${期待} 問`)
   } else if (!m.札.includes('ぜんぶ') || !m.札.includes('5 問')) {
     ng('聞き流し 390px … 札の一覧が「出しかた」と合っていない', m.札.join(' / '))
   } else {
-    ok(`聞き流し 390px … ${何}は ${出た} 問で始まる(${m.札.join(' / ')})`)
+    ok(`聞き流し 390px … ${何}は ${出た} 問で始まる`
+      + `(題「${m.題}」・${m.札.join(' / ')})`)
   }
   await page.close()
 }
@@ -10019,7 +10035,7 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   await page.selectOption('.radio-pick--take select', 'all')
   await page.waitForTimeout(400)
   const 後 = await page.evaluate(() => (
-    document.querySelector('.focus-count')?.textContent ?? '').trim())
+    document.querySelector('.drill-count')?.textContent ?? '').trim())
   const n = Number((後.split('/')[1] ?? '').trim())
   if (n !== 8) {
     ng('聞き流し 390px … 中で「ぜんぶ」にしても、問数が変わらない', `「${後}」`)
