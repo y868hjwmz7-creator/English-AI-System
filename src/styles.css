@@ -4855,6 +4855,37 @@ html, body { overflow-x: clip; }
   background: var(--surface-0);
 }
 .notes-foot { font-size: var(--fs-13); }
+
+/* ══════════════════════════════════════════════════════════════════
+   **記録の欄は2つ**(0070・第5.267節・2026-09-26 利用者の指定)
+
+     > ゲストログインしたさいの「セッションの記録」を、
+     > ゲストも入力、編集できるようにしたいです。
+
+   トレーナーの記録とゲストの記録。**別々の物なので、`gap` で離す**
+   (共通ルール「別々の物を、すき間ゼロでくっつけない」)。
+   ══════════════════════════════════════════════════════════════════ */
+.notes-fields { display: flex; flex-direction: column; gap: var(--sp-14); }
+.notes-one { display: flex; flex-direction: column; gap: var(--sp-6); }
+
+/* ── **大きく表示**(第5.267節)──────────────────────────────
+     画面共有のときに、記録そのものを大きくして使う。
+     **紙いっぱいまで伸ばす** —— 高さを決め打ちにすると、
+     せっかく大きくしても欄だけが小さいままになる。 */
+/* **紙は、残りいっぱいに伸ばす**(`.qrfocus` / `.radio` とまったく同じ3行)。
+   まん中に寄せたままだと、欄が縦に伸びない */
+.notesbig .focus-body { justify-content: stretch; }
+.notesbig .focus-body > .focus-plainbox {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+}
+.notes--big { flex: 1 1 auto; min-height: 0; }
+.notes--big .notes-fields { flex: 1 1 auto; min-height: 0; }
+.notes--big .notes-one { flex: 1 1 auto; min-height: 0; }
+.notes--big .notes-board { flex: 1 1 auto; min-height: 6rem; }
+/* **半分**(第5.267節・利用者の指定「画面いっぱい、または半分などに」)。
+   数字は `.focus--w*` の並びと同じ考え方で、100% の半分にする */
+.focus--w50 .focus-body > * { max-width: 430px; }
 /* ゲストの「今週の宿題」では畳んでおく。開いたときに初めて読みに行く */
 .notes-card > summary { cursor: pointer; }
 

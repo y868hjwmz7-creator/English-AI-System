@@ -2,13 +2,13 @@
 -- ★★ いま貼っていただくのは、このファイル1つだけです ★★
 --
 -- 【これは何か】
---   Supabase(データの置き場)に、まだ入っていない29個の追加を
+--   Supabase(データの置き場)に、まだ入っていない30個の追加を
 --   **1つにまとめたもの**です。
 --   これまで「0041」「0042」…と別々のファイルでお願いしていたものを、
 --   1回で済むようにまとめ直しました。
 --   **もう別々のファイルを貼る必要はありません。**
 --
--- 【中身(29個・0041 から 0069 まで)】
+-- 【中身(30個・0041 から 0070 まで)】
 --   0041 … ゲストの記録を、まとめて消せるようにする(退会したとき)
 --   0042 … 続けた記録(Quick Response)と、週の目標
 --   0043 … 教材の種類に「Speech練習」を足す
@@ -44,6 +44,7 @@
 --   0067 … 単語 / フレーズに「日本語 → 英語で言う」を足す
 --   0068 … 単語 / フレーズに「例文」を持たせる
 --   0069 … 教材の種類に「テスト」を足す(ゲストの持ちものから組む・AI は使いません)
+--   0070 … セッションの記録を、ゲストも書けるようにする(欄を2つに分けます)
 --
 -- 【何が起きるか】
 --   ・`materials` の表に、列が2つ増えます(0046)。**どちらも空から始まります。**
@@ -4895,6 +4896,98 @@ comment on function public.material_kinds() is
   'section_types()(0063)とまったく同じ立て付け。';
 
 grant execute on function public.material_kinds() to authenticated;
+
+-- ────────────────────────────────────────────────────────────────
+-- 0070 セッションの記録を、ゲストも書けるようにする(第5.267節)
+--
+--   > ゲストログインしたさいの「セッションの記録」を、
+--   > ゲストも入力、編集できるようにしたいです。
+--   > 同時に書いても大丈夫なようにしてください。
+--     (2026-09-26 利用者の指定)
+--
+--   **欄を2つに分けます。** トレーナーは `body`、ゲストは `learner_body`。
+--   お互いの欄は見えますが、書けるのは自分の欄だけなので、
+--   **同時に書いても、どちらも消えません。**
+--
+--   ゲストが書く道は**関数1つ**です —— 列ごとの権限では
+--   トレーナーとゲストを分けられないためです
+--   (CLAUDE.md「RLS は『行』しか絞れない」)。
+--
+--   **表も行も増えません。** いままでの記録は1文字も変わりません。
+
+-- ────────────────────────────────────────────────────────────────
+-- 1. ゲストの欄
+-- ────────────────────────────────────────────────────────────────
+alter table public.lesson_notes
+  add column if not exists learner_body text not null default '';
+
+comment on column public.lesson_notes.learner_body is
+  'ゲスト本人が書く記録(0070)。トレーナーの body とは別の欄にしてあるので、'
+  '同時に書いても上書きされない。書けるのは set_learner_note() からだけ。';
+
+-- ────────────────────────────────────────────────────────────────
+-- 2. ゲストが、自分の欄だけを書く
+--
+--   **security definer** にしてあるのは、0032 の RLS が
+--   「書けるのは担当トレーナーと管理者だけ」と決めているためです。
+--   この関数の中では **auth.uid() の行の learner_body しか**触りません。
+--
+--   **返す型を変えていなくても drop を置きます**(CLAUDE.md)——
+--   あとで誰かが返すものを足したときに、このファイルだけを貼り直すと
+--   `cannot change return type` で止まるためです。
+-- ────────────────────────────────────────────────────────────────
+drop function if exists public.set_learner_note(date, text);
+
+create or replace function public.set_learner_note(p_on_date date, p_body text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  txt text := coalesce(p_body, '');
+  left_body text;
+begin
+  if me is null then
+    raise exception 'ログインしていません';
+  end if;
+  if p_on_date is null then
+    raise exception '日付がありません';
+  end if;
+
+  /* **自分の行だけ。** learner_id は auth.uid() で決め打ちなので、
+     ほかの人の記録には触れようがない */
+  insert into public.lesson_notes (learner_id, on_date, learner_body, updated_by)
+  values (me, p_on_date, txt, me)
+  on conflict (learner_id, on_date) do update
+    /* **トレーナーの欄(body)には触らない。** ここが「同時に書いても
+       大丈夫」の要である */
+    set learner_body = excluded.learner_body;
+
+  /* **両方とも空になったら、行ごと消す。**
+     白紙の日をカレンダーに残さない(0032 と同じ決まり) */
+  delete from public.lesson_notes
+   where learner_id = me and on_date = p_on_date
+     and coalesce(body, '') = '' and coalesce(learner_body, '') = '';
+
+  select coalesce(body, '') into left_body
+    from public.lesson_notes where learner_id = me and on_date = p_on_date;
+
+  /* **起きたことを、そのまま返す**(成功と失敗を同じ見た目で終わらせない) */
+  return jsonb_build_object(
+    'ok', true,
+    'kept', coalesce(left_body, '') <> '' or txt <> ''
+  );
+end;
+$$;
+
+comment on function public.set_learner_note(date, text) is
+  'ゲストが、自分のその日の記録(learner_body)だけを書く(0070)。'
+  'トレーナーの欄(body)には触らないので、同時に書いても上書きされない。';
+
+grant execute on function public.set_learner_note(date, text) to authenticated;
+
 
 -- ============================================================================
 -- 完了。

@@ -6898,21 +6898,17 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      新しい移行にそろっている」が、`supabase/migrations/` の
      いちばん大きい番号と突き合わせている。
      **同じことをする見張りを2つ置かない**(CLAUDE.md) */
-  /* **0069 は、制約に値を1つ足すだけ**(`materials_kind_check` の `test`)。
-     表も列も行も増えない —— 表や列で見ると**貼る前でも
+  /* **0070 は、列を1つ足す**(`lesson_notes.learner_body`)。
+     表は 0032 からあるので、**表の有無で見ると貼る前でも
      「もう入っています」**になる(いちばん悪い壊れ方・CLAUDE.md)。
+     だから**その列を名指しで読む**(0064 / 0068 と同じ作法)。
 
-     だから `material_kinds()` に訊き、**返ってきた一覧に `test` が
-     入っているか**まで見る(0067 と同じ作法・第5.263節)。
-     **関数の有無だけでは足りない** ——
-     関数を貼って制約を貼り忘れる形がありうる。
-
-     0064〜0068 のぶんは、まとめた1つと `check.sql` の側で
+     0064〜0069 のぶんは、まとめた1つと `check.sql` の側で
      そのまま見張り続ける —— **消していない** */
-  ok(/rpc: 'material_kinds'/.test(setup) && /has: 'test'/.test(setup),
-    '0069 … 印は material_kinds() の一覧の中の `test`(値だけ増える移行だから)')
-  ok(!/column: 'examples'/.test(setup) && !/row: \{ column/.test(setup),
-    '0068 / 0066 … 前の印(列を見る形・行を見る形)が残っていない')
+  ok(/table: 'lesson_notes'/.test(setup) && /column: 'learner_body'/.test(setup),
+    '0070 … 印は lesson_notes.learner_body の列そのもの(列だけ増える移行だから)')
+  ok(!/rpc: 'material_kinds'/.test(setup) && !/row: \{ column/.test(setup),
+    '0069 / 0066 … 前の印(関数に訊く形・行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')
   /* **0068 の列は、まとめた1つの側で見張り続ける**(印から外しただけ) */
   ok(/add column if not exists examples jsonb/.test(matome),
@@ -12292,6 +12288,118 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
   /* **人が変わったときの後始末は、そのまま残っている**(消したついでに落とさない) */
   ok(/forgetJob\(\)[\s\S]{0,120}setJobNote\(null\)/.test(app),
     '下書きの知らせ … 人が変わったときにも消える(前からの決まり)')
+}
+
+/* ==========================================================================
+ * **セッションの記録を、ゲストも書けるようにする**(第5.267節・0070)
+ *
+ *   > ゲストログインしたさいの「セッションの記録」を、
+ *   > ゲストも入力、編集できるようにしたいです。
+ *   > また、セッション中にセッションの記録をトレーナーが画面共有している
+ *   > ときに、これを画面いっぱい、または半分などに大きくして使用できる
+ *   > ようにしてほしいです。(2026-09-26 利用者の指定)
+ *
+ *   > 同時に書いても大丈夫なようにしてください。(訊いたうえでの答え)
+ * ========================================================================== */
+{
+  console.log('\n▶ セッションの記録(第5.267節)')
+  const noC7 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const readS7 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const note = noC7(readS7('src/components/LessonNotes.jsx'))
+  const lib = noC7(readS7('src/lib/lessonNotes.js'))
+  const sql = readS7('supabase/migrations/0070_learner_note.sql')
+  const matome7 = readS7('supabase/apply/pending_matome.sql')
+  const widths = noC7(readS7('src/data/sheetWidths.js'))
+  const lv7 = noC7(readS7('src/components/LessonView.jsx'))
+  const st7 = readS7('src/styles.css').replace(/\/\*[\s\S]*?\*\//g, ' ')
+
+  /* ── ① **欄を2つに分ける。だから同時に書いても消えない** ────────── */
+  ok(/learner_body/.test(sql) && /add column if not exists learner_body/.test(sql),
+    '記録 … 0070 がゲストの欄(`learner_body`)を足している')
+  /* **トレーナーの欄に触らない**のが、上書きしない仕掛けの要である */
+  ok(/set learner_body = excluded\.learner_body;/.test(sql)
+    && !/set body = /.test(sql),
+  '記録 … ゲストが書いても、トレーナーの欄(`body`)には触らない')
+  /* **自分の行だけ。** learner_id は `auth.uid()` で決め打ち */
+  ok(/me uuid := auth\.uid\(\)/.test(sql) && /values \(me, p_on_date/.test(sql),
+    '記録 … 書けるのは自分の行だけ(ほかの人の記録に触りようがない)')
+  /* **白紙の日を残さない。** ただし**両方とも空のときだけ**消す */
+  ok(/coalesce\(body, ''\) = '' and coalesce\(learner_body, ''\) = ''/.test(sql),
+    '記録 … 行ごと消すのは、両方の欄が空になったときだけ')
+  /* **まとめた1つにも入っていなければ、貼っても現れない** */
+  ok(/create or replace function public\.set_learner_note/.test(matome7)
+    && /add column if not exists learner_body/.test(matome7),
+  '記録 … まとめた1つ(`pending_matome.sql`)にも入っている')
+  ok(/proname = 'set_learner_note'/.test(readS7('supabase/apply/check.sql')),
+    '記録 … `check.sql` が、列と関数の両方を見ている')
+
+  /* ── ② **画面。片方だけ書ける** ──────────────────────────
+       **書ける側と書けない側の両方を見る。** 片方だけだと、
+       誰でも書ける形にしても緑のままになる */
+  ok(/const canWriteMine = !!me && me === learnerId/.test(note),
+    '記録 … ゲストが書けるのは、自分の記録だけ')
+  ok(/saveLearnerNote\(myPending\.current\)/.test(note)
+    && /saveNote\(\{ \.\.\.pending\.current/.test(note),
+  '記録 … 2つの欄は、別々の送り先へ別々に送る')
+  /* **控えも片付けも2つ。** 1つにすると、あとから書いたほうが前のぶんを消す */
+  ok(/const myTimer = useRef\(null\)/.test(note) && /const myPending = useRef\(null\)/.test(note),
+    '記録 … 書きかけの控えも、欄ごとに別に持つ')
+  /* **閉じるとき・日を変えるときに、両方とも送り切る** */
+  /* **送り切るのは2か所**(日を変えるとき / 閉じるとき)。
+     3つめの `saveLearnerNote` は 1.2 秒の本体なので、**数えるのは
+     「控えが残っていたら送る」の形のほう**である
+     (CLAUDE.md「使っている形で数える」) */
+  ok((note.match(/if \(myPending\.current\) \{/g) ?? []).length === 2,
+    '記録 … ゲストの書きかけも、閉じるとき・日を変えるときに送り切る',
+    `${(note.match(/if \(myPending\.current\) \{/g) ?? []).length} か所`)
+  /* **読むときに、ゲストの欄も持ってくる** */
+  ok(/on_date, body, learner_body, updated_by/.test(lib),
+    '記録 … 読むときに、ゲストの欄も一緒に持ってくる')
+  /* **トレーナーが自分の欄を空にしても、ゲストのぶんは消えない** */
+  ok(/if \(String\(now\?\.learner_body \?\? ''\)\.trim\(\)\)/.test(lib),
+    '記録 … ゲストの欄が残っていたら、行ごと消さない')
+
+  /* ── ③ **大きく表示**(全画面 + 幅を選べる)────────────────── */
+  ok(/<FocusFrame\n?\s*className="notesbig"/.test(note) || /className="notesbig"/.test(note),
+    '記録 … 大きく表示は `FocusFrame`(教材と同じ骨組み)')
+  ok(/options=\{NOTE_WIDTHS\}/.test(note),
+    '記録 … 幅は `NOTE_WIDTHS` から選ぶ(書き写していない)')
+  /* **「半分」は記録の側だけ。** 教材の幅は1つも変えていない
+     (**言われた場所だけを直す**・CLAUDE.md) */
+  /* **「だけ」を見るには、教材の一覧の中身を見るしかない。**
+     `w50` が在るかどうかだけでは、**教材の側に足しても緑のまま**になる
+     (赤チェックで実測した)。**出る側と出ない側の両方を見る** */
+  const 教材の幅 = widths.slice(widths.indexOf('export const SHEET_WIDTHS'),
+    widths.indexOf('export const NOTE_WIDTHS'))
+  ok(/export const NOTE_WIDTHS = \[\s*\{ id: 'w50', label: '半分' \}/.test(widths)
+    && !/w50/.test(教材の幅),
+  '記録 … 「半分」は記録の幅にだけ足してある(教材の一覧には無い)')
+  ok(/const WIDTHS = SHEET_WIDTHS/.test(lv7) && !/id: 'w50'/.test(lv7),
+    '記録 … 教材の幅は1つも変わっていない(`SHEET_WIDTHS` のまま)')
+  ok(/\.focus--w50 \.focus-body > \* \{ max-width: \d+px; \}/.test(st7),
+    '記録 … 「半分」の幅が、見た目の側にもある')
+  /* **大きくしている最中は、大きくするボタンを出さない**
+     (同じことをするものを2つ見せない) */
+  ok(/\{!bare && !big && \(/.test(note),
+    '記録 … 大きくしている最中は「大きく表示」を出さない')
+
+  /* ── ④ **ゲストを消去**(第5.268節)──────────────────────
+       > 次に、ゲストを消去する機能を実装してください
+       仕組みは 0041 から入っていた。**呼び名と置き場所**を直した */
+  const tl7 = noC7(readS7('src/components/TrainerLearners.jsx'))
+  ok(/<option value="erase">ゲストを消去<\/option>/.test(tl7),
+    'ゲストを消去 … 切り替えの一覧から選べる')
+  /* **管理者だけ。** 一覧にも、中身にも、両方に効かせる */
+  ok(/viewerRoleOf\(\) === 'owner' && \(\s*<option value="erase">/.test(tl7)
+    && /detailTab === 'erase' && viewerRoleOf\(\) === 'owner'/.test(tl7),
+  'ゲストを消去 … 出すのは管理者だけ(一覧も中身も)')
+  /* **名前の打ち込みは残す。** 取り返しがつかない操作である */
+  ok(/erasing\.typed\.trim\(\) !== \(l\.display_name \?\? ''\)\.trim\(\)/.test(tl7),
+    'ゲストを消去 … 名前を打ち込まないと押せない(前からの決まり)')
+  /* **「レベルとスコア」には残っていない**(同じものを2か所に出さない) */
+  ok((tl7.match(/erase-box/g) ?? []).length === 1,
+    'ゲストを消去 … 消す箱は1か所だけ',
+    `${(tl7.match(/erase-box/g) ?? []).length} か所`)
 }
 
 console.log(ng

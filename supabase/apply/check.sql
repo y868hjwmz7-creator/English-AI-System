@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   52行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   53行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -238,4 +238,11 @@ from (
             where conname = 'materials_kind_check'
               and pg_get_constraintdef(oid) like '%''test''%')
     and exists (select 1 from pg_proc where proname = 'material_kinds'), 51
+  -- **列と関数の両方を見る**(0070・第5.267節)。列だけ足して関数を貼り忘れると、
+  -- ゲストは欄が見えるのに1文字も書けない(0063 とまったく同じ見方)
+  union all select '0070 セッションの記録を、ゲストも書ける(pending_matome.sql)',
+    exists (select 1 from information_schema.columns
+            where table_schema = 'public' and table_name = 'lesson_notes'
+              and column_name = 'learner_body')
+    and exists (select 1 from pg_proc where proname = 'set_learner_note'), 52
 ) t order by 順;

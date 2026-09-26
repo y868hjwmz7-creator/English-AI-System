@@ -30,6 +30,10 @@ import { stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { audioTextOf, wholeSliceOf } from '../lib/audioPlaylist.js'
+/* **紙の幅の一覧は `sheetWidths.js` 1か所**(第5.267節)。
+   セッションの記録でも同じ幅を選ぶので、ここに書き写さない。
+   **この画面に出る中身は1つも変わっていない**(「半分」は記録の側だけ) */
+import { SHEET_WIDTHS } from '../data/sheetWidths.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import {
@@ -111,15 +115,7 @@ const SIZES = [
  * (紙の左右の余白 24px だけを残す)。%で足していくと、
  * どの端末でも「ちょうどいっぱい」にはならない。
  */
-const WIDTHS = [
-  { id: 'w100', label: '100%' },
-  { id: 'w110', label: '110%' },
-  { id: 'w120', label: '120%' },
-  { id: 'w130', label: '130%' },
-  { id: 'w140', label: '140%' },
-  { id: 'w150', label: '150%' },
-  { id: 'wfit', label: '画面いっぱい' },
-]
+const WIDTHS = SHEET_WIDTHS
 /**
  * **メモの幅**(2026-09 利用者の指定)。
  *

@@ -49,7 +49,7 @@ export async function loadNote(learnerId, dateKey) {
   try {
     const { data, error } = await withTimeout(
       supabase.from(TABLE)
-        .select('id, learner_id, on_date, body, updated_by, updated_at')
+        .select('id, learner_id, on_date, body, learner_body, updated_by, updated_at')
         .eq('learner_id', learnerId)
         .eq('on_date', dateKey)
         .maybeSingle(),
@@ -94,6 +94,28 @@ export async function saveNote({ learnerId, dateKey, body, updatedBy }) {
   const text = String(body ?? '')
   try {
     if (!text.trim()) {
+      /* ── **ゲストの欄が残っていたら、行ごと消さない**(第5.267節)──
+           0070 で `learner_body`(ゲストの記録)が増えた。
+           これまでどおり行ごと消すと、**トレーナーが自分の欄を空にした
+           だけで、ゲストの書いたものまで消える。**
+           **黙って消さない**(CLAUDE.md)。
+
+           **読んでから決める。** 「空なら消す」を画面側に書かせない ——
+           置く場所の数だけ食い違う(判断は1か所)。 */
+      const { data: now, error: readError } = await withTimeout(
+        supabase.from(TABLE).select('learner_body')
+          .eq('learner_id', learnerId).eq('on_date', dateKey).maybeSingle(),
+      )
+      if (readError) return { data: null, error: fail(readError) }
+      if (String(now?.learner_body ?? '').trim()) {
+        /* ゲストの欄は残す。**トレーナーの欄だけを空にする** */
+        const { error } = await withTimeout(
+          supabase.from(TABLE).update({ body: '', updated_by: updatedBy ?? null })
+            .eq('learner_id', learnerId).eq('on_date', dateKey),
+        )
+        if (error) return { data: null, error: fail(error) }
+        return { data: null, error: null }
+      }
       const { error } = await withTimeout(
         supabase.from(TABLE).delete()
           .eq('learner_id', learnerId).eq('on_date', dateKey),
@@ -109,8 +131,46 @@ export async function saveNote({ learnerId, dateKey, body, updatedBy }) {
           body: text,
           updated_by: updatedBy ?? null,
         }, { onConflict: 'learner_id,on_date' })
-        .select('id, learner_id, on_date, body, updated_by, updated_at')
+        .select('id, learner_id, on_date, body, learner_body, updated_by, updated_at')
         .single(),
+    )
+    if (error) return { data: null, error: fail(error) }
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: fail(e) }
+  }
+}
+
+/**
+ * ============================================================================
+ * **ゲストが、自分の欄だけを書く**(0070・第5.267節)
+ *
+ * 2026-09-26 利用者の指定。
+ *
+ *   > ゲストログインしたさいの「セッションの記録」を、
+ *   > ゲストも入力、編集できるようにしたいです。
+ *   > 同時に書いても大丈夫なようにしてください。
+ *
+ * **トレーナーの欄(`body`)には触らない。** だから同時に書いても、
+ * どちらも消えない。
+ *
+ * **`upsert` ではなく関数を呼ぶ。** 0032 の RLS は
+ * 「書けるのは担当トレーナーと管理者だけ」なので、
+ * ゲストの `update` はそのまま断られる。
+ * **列ごとの権限ではトレーナーとゲストを分けられない**
+ * (CLAUDE.md「RLS は『行』しか絞れない」)ので、
+ * `set_learner_note()` が**自分の行の `learner_body` だけ**を書き換える。
+ *
+ * 誰の記録かは**渡さない。** 窓口(関数)の中で `auth.uid()` から決まるので、
+ * ほかの人の記録に書きようがない。
+ * ============================================================================
+ */
+export async function saveLearnerNote({ dateKey, body }) {
+  if (!supabase) return { data: null, error: 'Supabase に接続していません' }
+  if (!dateKey) return { data: null, error: 'どの日の記録か分かりません' }
+  try {
+    const { data, error } = await withTimeout(
+      supabase.rpc('set_learner_note', { p_on_date: dateKey, p_body: String(body ?? '') }),
     )
     if (error) return { data: null, error: fail(error) }
     return { data, error: null }

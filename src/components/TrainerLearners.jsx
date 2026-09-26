@@ -981,6 +981,22 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         **ゲスト本人も読める。** 書けるのはトレーナーだけ */}
                     <option value="notes">セッションの記録</option>
                     <option value="record">レベルとスコア</option>
+                    {/* **ゲストを消去**(0041 → 置き場所と呼び名を第5.268節で直した)。
+
+                          > 次に、ゲストを消去する機能を実装してください
+                          > (2026-09-26 利用者の指定)
+
+                        仕組みは 0041 から入っていたが、**「レベルとスコア」の
+                        いちばん下**にあり、しかも名前が「記録をすべて消す」
+                        だったので、**探しても見つからなかった。**
+
+                        ・**出すのは管理者だけ**(判定は `viewer.js` を通す。
+                          守っているのは画面ではなく `erase_learner()` の中)
+                        ・**選んでから、名前を打ち込む**という2段は変えていない
+                          —— 取り返しがつかない操作である */}
+                    {viewerRoleOf() === 'owner' && (
+                      <option value="erase">ゲストを消去</option>
+                    )}
                   </select>
                 </label>
               </div>
@@ -1657,11 +1673,24 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                   ))}
                 </div>
 
-                {/* ── 記録をすべて消す(0041・管理者だけ)────────────────
+
+                </>
+                )}
+
+                {/* ── **ゲストを消去**(0041・管理者だけ)──────────────────
                     2026-09 の安全性レビュー 03-3位。
 
                       > 退会したときに、まとめて消す手順がありません。
                       > 「消してほしい」と言われたときに応えられない状態です。
+
+                    **呼び名と置き場所を直した**(第5.268節・2026-09-26)。
+
+                      > 次に、ゲストを消去する機能を実装してください
+
+                    仕組みは 0041 から入っていたが、「レベルとスコア」の
+                    **いちばん下**にあり、名前も「記録をすべて消す」だった。
+                    **探しても見つからない。** いまは切り替えの一覧に
+                    「ゲストを消去」として出る(**管理者だけ**)。
 
                     **取り返しがつかないので、押し間違いでは進めない。**
                     ・出すのは管理者だけ(判定は `viewer.js` を通す。
@@ -1670,13 +1699,12 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                       並んだカードの取り違えを防げない
                     ・**何件消したかを返して、そのまま出す**
                       (成功と失敗を、同じ見た目で終わらせない) */}
-                {viewerRoleOf() === 'owner' && (
+                {detailTab === 'erase' && viewerRoleOf() === 'owner' && (
                   <div className="erase-box">
-                    <p className="field-label">記録をすべて消す</p>
                     {erasing?.id !== l.id ? (
                       <button type="button" className="btn btn--small btn--ghost"
                               onClick={() => { setErasing({ id: l.id, typed: '' }); setError(null) }}>
-                        このゲストの記録をすべて消す…
+                        このゲストを消去する…
                       </button>
                     ) : (
                       <>
@@ -1703,9 +1731,6 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                       </>
                     )}
                   </div>
-                )}
-
-                </>
                 )}
 
                 <div className="btn-row">
