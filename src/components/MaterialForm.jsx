@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
-import { CEFR_LEVELS, cefrOption } from '../data/cefr.js'
+import { CEFR_LEVELS, DEFAULT_CEFR, cefrOption } from '../data/cefr.js'
 import {
   EXERCISE_TYPES, FIELD_LABELS, SCALABLE_SECTIONS, WORD_DRILLS,
   DEFAULT_WORD_DRILL, amountsFor, countOf,
@@ -162,7 +162,8 @@ export default function MaterialForm({
   // 入れ直すことになる。実際に「先に選んだはずの弱点が選ばれていない」と
   // なってやり直しになった(2026-08)。
   const [title, setTitle] = useState('')
-  const [level, setLevel] = useState(initial.level || 'B1')
+  /* 既定の段は `DEFAULT_CEFR` 1か所(テストも同じ段に落ちる・第5.263節) */
+  const [level, setLevel] = useState(initial.level || DEFAULT_CEFR)
   // **種類も引き継ぐ。** さがす画面で「ダイアローグ」を選んで作成に移ったのに
   // 「文型トレーニング」に戻っていた(2026-08 の指摘)。
   // 引き継ぐのは、さがす画面にある指定すべて(弱点・レベル・業界・種類・

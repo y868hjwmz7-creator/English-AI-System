@@ -56,6 +56,16 @@ export const CEFR_LEVELS = [
   { id: 'Proficiency', label: 'Proficiency', ja: 'C2 を超える運用力', gse: '90' },
 ]
 
+/**
+ * **レベルが分かっていないときに置く段**(第5.263節)。
+ *
+ * `materials.level` は空にできない(0001 の `not null`)。
+ * ゲストの段がまだ決まっていないときに何を置くかを、
+ * **ここ1か所で決める** —— 置く場所の数だけ食い違う(CLAUDE.md)。
+ * 中級(B1)にしてあるのは、教材を作る画面の既定と同じだからである。
+ */
+export const DEFAULT_CEFR = 'B1'
+
 export const cefrLabel = (id) => {
   const level = CEFR_LEVELS.find((l) => l.id === id)
   return level ? `${level.label}(${level.ja})` : '未判定'

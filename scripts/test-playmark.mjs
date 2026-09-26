@@ -89,6 +89,9 @@ import {
 import {
   MATERIAL_KINDS, bodyWord, canPasteBody, isPassageKind, kindLabel, usesScene,
   freeFromSubject,
+  /* テストは「作れないが、探せる」種類である(第5.263節)。
+     **弱点タグを必須にするかの判断も、あちら1か所** */
+  FIND_MATERIAL_KINDS, NEW_MATERIAL_KINDS, isTestKind, needsWeakTag,
 } from '../src/data/materialKinds.js'
 /* すでにある教材に、足りない演習だけを足す(第5.234節)。
    **判断はあちら1か所**なので、ここで数え直さずに呼んで確かめる */
@@ -165,10 +168,12 @@ import {
 } from '../src/lib/tapReveal.js'
 /* 「この英文は避けて」と渡す本数(第5.261節)。**1か所に持つ** */
 import { AVOID_GATE, AVOID_MAX, avoidFits } from '../src/lib/avoidLimit.js'
-/* ゲストの持ちものからテストを作る(第5.260節)。**AI を使わない** */
+/* ゲストの持ちものからテストを作る(第5.260節 → 第5.263節で作り直した)。
+   **AI を使わない**。**穴埋めは廃止**(日本語 → 英語だけ) */
 import {
-  BLANK_MARK, DEFAULT_EXAM_FORM, EXAM_FORMS, EXAM_SOURCES,
-  blankOf, buildExam, examCountNote, examItem, examNote, examTitle,
+  EXAM_KIND, EXAM_SOURCES, EXAM_TYPE,
+  buildExam, examEmptyNote, examInstruction, examLevel, examMadeText,
+  examSections, examTitle,
 } from '../src/lib/examBuild.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
@@ -6893,18 +6898,39 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      新しい移行にそろっている」が、`supabase/migrations/` の
      いちばん大きい番号と突き合わせている。
      **同じことをする見張りを2つ置かない**(CLAUDE.md) */
-  /* **0068 は、列を1つ足すだけ。** 表は前からある ——
-     表の有無で見ると、**貼る前でも「もう入っています」**になる。
-     だから `material_items.examples` を**名指しで読む**のを印にする
-     (0064 と同じ作法・第5.254節)。
+  /* **0069 は、制約に値を1つ足すだけ**(`materials_kind_check` の `test`)。
+     表も列も行も増えない —— 表や列で見ると**貼る前でも
+     「もう入っています」**になる(いちばん悪い壊れ方・CLAUDE.md)。
 
-     0067(制約に値を2つ足す)は、まとめた1つと `check.sql` の側で
+     だから `material_kinds()` に訊き、**返ってきた一覧に `test` が
+     入っているか**まで見る(0067 と同じ作法・第5.263節)。
+     **関数の有無だけでは足りない** ——
+     関数を貼って制約を貼り忘れる形がありうる。
+
+     0064〜0068 のぶんは、まとめた1つと `check.sql` の側で
      そのまま見張り続ける —— **消していない** */
-  ok(/table: 'material_items'/.test(setup) && /column: 'examples'/.test(setup),
-    '0068 … 印は material_items.examples の列そのもの(列だけ増える移行だから)')
-  ok(!/row: \{ column/.test(setup),
-    '0066 … 前の印(行を見る形)が残っていない')
+  ok(/rpc: 'material_kinds'/.test(setup) && /has: 'test'/.test(setup),
+    '0069 … 印は material_kinds() の一覧の中の `test`(値だけ増える移行だから)')
+  ok(!/column: 'examples'/.test(setup) && !/row: \{ column/.test(setup),
+    '0068 / 0066 … 前の印(列を見る形・行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')
+  /* **0068 の列は、まとめた1つの側で見張り続ける**(印から外しただけ) */
+  ok(/add column if not exists examples jsonb/.test(matome),
+    '0068 … まとめた1つ(pending_matome.sql)に例文の欄が入っている')
+  /* **0069 の関数も、まとめた1つに入っていなければ印は現れない。**
+     **作り直す前に drop を置く**(0063 とまったく同じ決まり)。
+     「無ければ素通り」を書かない —— `lastIndexOf` は -1 を返すので、
+     **在ることを先に見る** */
+  const drop69 = matome.lastIndexOf('drop function if exists public.material_kinds();')
+  const make69 = matome.lastIndexOf('create or replace function public.material_kinds()')
+  ok(drop69 >= 0 && make69 >= 0 && drop69 < make69,
+    '0069 … 作り直す前に drop を置いている', `drop ${drop69} / create ${make69}`)
+  /* **種類を書き写していない。** 制約そのものから読む ——
+     種類を足した日に、関数の中だけ古い一覧が残らない(0063 と同じ) */
+  ok(/pg_get_constraintdef\(oid\)[\s\S]{0,200}materials_kind_check/.test(matome),
+    '0069 … 教材の種類を書き写さず、制約そのものから読んでいる')
+  ok(/proname = 'material_kinds'/.test(readD('supabase/apply/check.sql')),
+    '0069 … check.sql が、関数と制約の両方を見ている')
   ok(/create or replace function public\.qr_limit\(\)/.test(matome),
     '0062 … まとめた1つ(pending_matome.sql)に入っている')
   ok(/least\(coalesce\(p_limit, 200\), public\.qr_limit\(\)\)/.test(matome),
@@ -11664,13 +11690,27 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
 }
 
 /* ==========================================================================
- * **ゲストの持ちものからテストを作る**(第5.260節・2026-09-25 利用者の指定)
+ * **ゲストの持ちものから、テストを1本の教材として作る**
+ * (第5.260節 → **第5.263節で作り直した**)
  *
  *   > ゲストのページに教材や彼らの単語帳、quick response 帳があります。
- *   > それらのデータを基にテストを作りたいです。
+ *   > それらのデータを基にテストを作りたいです。(2026-09-25)
  *
- *   ・出どころは都度えらぶ(複数同時) ・日→英 と 穴埋めを混ぜる
- *   ・画面と紙の両方        ・**AI は使わない(0円)**
+ *   > テストですが、こんなのでは使い物になりません。
+ *   > 穴埋め問題の日本語がないのをまず直してください。
+ *   > 基本は左に日本語、右に英語です。解答とか入りません。
+ *   > その場で答えが見れないとだめです。(2026-09-26 実機)
+ *
+ *   ・**穴埋めは廃止。日本語 → 英語だけ**
+ *   ・**テストは1本の教材として残す**(次のレッスンで開け、共有でき、探せる)
+ *   ・**AI は使わない(0円)**
+ *
+ * 【この検証が守るもの】
+ *   ・**穴埋めが1つも残っていないこと**(残っていると日本語の無い問がまた出る)
+ *   ・**紙の左右が入れ替わらないこと** —— 日本語は `prompt_ja`、英語は `answer`。
+ *     `quickResponse.js` の `PAIR_FIELDS` がこの置き場所から左右を決めている
+ *   ・**作ったら共有すること**(作っただけでは、ゲストの手元に出ない)
+ *   ・**消したものが、本当に消えていること**(専用の紙・専用の見た目)
  * ========================================================================== */
 {
   console.log('\n▶ テストを作る')
@@ -11680,40 +11720,34 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
   /* ── ① **出どころは、利用者が名指しした3つ** ────────────────── */
   {
     const WANT = ['material', 'word', 'qr']
-    const 無い = WANT.filter((id) => !EXAM_SOURCES.some((s2) => s2.id === id))
+    const 無い 
+      = WANT.filter((id) => !EXAM_SOURCES.some((s2) => s2.id === id))
     ok(無い.length === 0 && EXAM_SOURCES.length === 3,
       `テスト … 出どころは3つ(${EXAM_SOURCES.map((x) => x.label).join(' / ')})`)
-    /* **「混ぜる」が既定**(利用者の指定「日→英と穴埋めを混ぜる」)。
-       片方だけを選ぶ道も残す —— 単語帳だけだと穴埋めにできない語が多い */
-    ok(DEFAULT_EXAM_FORM === 'mix' && EXAM_FORMS.length === 3,
-      `テスト … 既定は「混ぜる」。片方だけの道も残っている(${EXAM_FORMS.length} つ)`)
   }
 
-  /* ── ② **穴埋め。いちばん危ない形を、検証の中に置く**(CLAUDE.md)── */
+  /* ── ② **問いの形は1つだけ。穴埋めは1つも残っていない** ──────────
+       2026-09-26 実機・利用者の指摘「穴埋め問題の日本語がない」。
+       **消し忘れが1つでもあると、また日本語の無い問が出る。**
+       だから「日→英になっているか」と「穴埋めが無いか」の**両方**を見る
+       (出る / 出ないの両方・CLAUDE.md)。 */
   {
-    const b = blankOf('We decided to take on the project.')
-    ok(b && b.answer === 'project' && b.question.includes(BLANK_MARK),
-      'テスト … 穴埋めは、いちばん長い中身のある語を伏せる', b ? b.question : 'なし')
-    /* **働きの語は伏せない。** `the` を伏せても英語の練習にならない */
-    ok(!/\bthe\b/.test(String(blankOf('We take the bus.')?.answer ?? 'the')),
-      'テスト … 働きの語(the / is / have)は伏せない')
-    /* **伏せられない文がある。** 短い文・働きの語だけの文 ——
-       **`null` を返す**(黙って空の問題を作らない) */
-    ok(blankOf('I see.') === null, 'テスト … 伏せられない文は `null`(空の問題を作らない)')
-    ok(blankOf('') === null && blankOf(null) === null,
-      'テスト … 空の文でも落ちない')
-    /* **同じ綴りが2回出てくる文で、1つだけを伏せる。**
-       文字列の置き換えで書くと、**両方が伏せられて答えが2つになる** */
-    const 二 = blankOf('Please please the client.')
-    ok(二 && (二.question.match(new RegExp(BLANK_MARK, 'g')) ?? []).length === 1,
-      'テスト … 同じ綴りが2回出ても、伏せるのは1つだけ', 二 ? 二.question : 'なし')
-    /* **伏せられない行は、日本語 → 英語に落とす**(黙って捨てない) */
-    const 落 = examItem({ en: 'I see.', ja: 'なるほど。' }, 'blank')
-    ok(落.form === 'ja_en' && 落.answer === 'I see.',
-      'テスト … 穴埋めにできない行は、日本語 → 英語に落とす(捨てない)')
+    const build = noC(readS('src/lib/examBuild.js'))
+    ok(EXAM_TYPE === 'translate_ja_en',
+      `テスト … 問いは和文英訳(日本語 → 英語)1つだけ(${EXAM_TYPE})`)
+    /* **穴埋めの仕掛けが、算段に1つも残っていないか。**
+       コメントを落としてから見る —— 説明の中の「穴埋め」に当たると、
+       消してあっても赤くなる(CLAUDE.md「名前が出てくるかで見ない」) */
+    ok(!/BLANK_MARK|blankOf|clozeAt|_{6}/.test(build),
+      'テスト … 穴埋めの仕掛けは1つも残っていない(日本語の無い問が出ない)')
+    /* **画面にも「出し方」の欄を残していない** ——
+       形が1つしか無いものを選ばせない(効かない操作を見せない) */
+    const maker = noC(readS('src/components/ExamMaker.jsx'))
+    ok(!/EXAM_FORMS|出し方/.test(maker),
+      'テスト … 「出し方」をえらぶ欄は無い(問いの形は1つだから)')
   }
 
-  /* ── ③ **組み立て。被らない・混ざる・足りなければ足りないと言う** ── */
+  /* ── ③ **組み立て。被らない・足りなければ足りないと言う** ────────── */
   {
     const rows = [
       { en: 'We decided to take on the project.', ja: 'あ', from: '教材' },
@@ -11721,24 +11755,21 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       /* **同じ文が2つの帳に入っている形**(帳は教材から溜まる)——
          **いちばん危ない形**なので、必ず1つ置く */
       { en: 'we decided to take on the project.', ja: 'う', from: 'QR' },
-      /* **訳の無い行**。問題にならないので落ちる */
+      /* **訳の無い行**。日本語 → 英語にできないので落ちる */
       { en: 'No translation here at all.', ja: '', from: '教材' },
     ]
-    const q = buildExam(rows, { count: 10, form: 'mix', order: 'keep' })
+    const q = buildExam(rows, { count: 10, order: 'keep' })
     ok(q.length === 2, `テスト … 同じ英文を二度出さない・訳の無い行は出さない(${q.length} 問)`)
     ok(q[0].no === 1 && q[1].no === 2, 'テスト … 通し番号が振られる')
-    /* **混ぜるは1問おき。** まとめて出すと、前半と後半で別のテストに見える */
-    const 多 = buildExam(
-      Array.from({ length: 8 }, (_, i) => ({
-        en: `The important document number ${i} arrived.`, ja: `やく ${i}`,
-      })), { count: 8, form: 'mix', order: 'keep' })
-    const 形 = 多.map((x) => x.form).join(',')
-    ok(形 === 'ja_en,blank,ja_en,blank,ja_en,blank,ja_en,blank',
-      'テスト … 「混ぜる」は1問おき(まとめて出さない)', 形)
-    /* **片方だけの道も、本当に片方だけか**(出る / 出ないの両方) */
-    const 日 = buildExam(rows, { count: 10, form: 'ja_en', order: 'keep' })
-    ok(日.every((x) => x.form === 'ja_en'), 'テスト … 「日本語 → 英語」だけを選べる')
+    ok(q.every((x) => x.ja && x.en), 'テスト … どの問も、日本語と英語の両方を持つ')
     ok(buildExam(rows, { count: 0 }).length === 0, 'テスト … 0 問と言われたら 0 問')
+    /* **欲しい数より多い一覧を渡す。** 少ない一覧で見ると、
+       上限を無くしても素通りする(「無ければ素通り」を作らない・CLAUDE.md) */
+    const 多 = buildExam(
+      Array.from({ length: 30 }, (_, i) => ({
+        en: `The important document number ${i} arrived.`, ja: `やく ${i}`,
+      })), { count: 10, order: 'keep' })
+    ok(多.length === 10, `テスト … 言われた数で止まる(30 本から 10 問・${多.length})`)
     /* **並べ替えても、元の一覧を動かさない**(凍らせて見る・運に頼らない) */
     {
       const 凍 = Object.freeze([...rows])
@@ -11748,28 +11779,66 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     }
   }
 
-  /* ── ④ **起きたことをそのまま言う**(「作りました」で終わらせない)── */
+  /* ── ④ **教材の演習に組み直す。左右が入れ替わらないこと** ──────────
+       2026-09-26 利用者の指定「基本は左に日本語、右に英語です」。
+       **紙を新しく作っていない** —— `QuickResponseSheet` が刷る。
+       その左右は `quickResponse.js` の `PAIR_FIELDS` が決めているので、
+       **あちらのソースと突き合わせる**(書き写さない・CLAUDE.md)。 */
   {
-    ok(examNote(0, 20, []).includes('えらんで'),
-      'テスト … 出どころを選んでいなければ、そう言う')
-    ok(examNote(0, 20, ['word']).includes('ありません'),
-      'テスト … 1問もできなければ「作りました」と言わない')
-    ok(examNote(8, 20, ['word']).includes('8') && examNote(8, 20, ['word']).includes('20'),
-      'テスト … 足りなかったら、欲しかった数も言う')
-    const items = buildExam([
-      { en: 'The important document arrived.', ja: 'あ' },
-      { en: 'I see.', ja: 'い' },
-    ], { count: 2, form: 'mix', order: 'keep' })
-    ok(examCountNote(items).includes('全 2 問'),
-      'テスト … 何問あるかを、画面にも紙にも同じ言い方で出す', examCountNote(items))
-    ok(examTitle('田中', '2026-09-25').includes('田中') && examTitle('田中', '2026-09-25').includes('2026-09-25'),
-      'テスト … 題に、誰のいつのテストかを入れる')
+    const got = buildExam([
+      { en: 'Let me get back to you on that.', ja: 'あとで連絡します。' },
+      { en: 'I have a lot of emails to reply to.', ja: '返信すべきメールが多い。' },
+    ], { count: 2, order: 'keep' })
+    const secs = examSections(got)
+    ok(secs.length === 1 && secs[0].exercise_type === EXAM_TYPE,
+      `テスト … 演習は1つ(${secs[0]?.exercise_type})`)
+    ok(secs[0].instruction === examInstruction() && secs[0].instruction.length > 0,
+      'テスト … 指示は `exerciseTypes.js` のものを使う(書き写さない)')
+    ok(secs[0].items.length === 2
+      && secs[0].items[0].prompt_ja === 'あとで連絡します。'
+      && secs[0].items[0].answer === 'Let me get back to you on that.',
+    'テスト … 日本語は `prompt_ja`、英語は `answer`(紙の左右がここで決まる)')
+    /* **左右の決まりを、あちらのソースで確かめる。**
+       ここで入れ替えると、紙の列が逆になる(左が英語になる) */
+    const qr = readS('src/lib/quickResponse.js')
+    ok(new RegExp(`${EXAM_TYPE}:\\s*\\{ ja: 'prompt_ja', en: 'answer'`).test(qr),
+      'テスト … Quick Response の対も「左=日本語・右=英語」になっている')
+    /* **紙が本当に左=日本語で刷るか**(`QuickResponseSheet` の1行) */
+    const sheet = noC(readS('src/components/QuickResponseSheet.jsx'))
+    ok(sheet.indexOf('qrsheet-ja') < sheet.indexOf('qrsheet-en'),
+      'テスト … 教材の紙は、日本語を先(左)に刷る')
+    /* **片方だけの行は入れない**(黙って空の問題を作らない) */
+    ok(examSections([{ ja: 'あ', en: '' }, { ja: '', en: 'b' }]).length === 0,
+      'テスト … 片方だけの行は、演習に入れない')
+    ok(examSections([]).length === 0 && examSections(null).length === 0,
+      'テスト … 1問も無ければ、演習を作らない(空の教材を残さない)')
   }
 
-  /* ── ⑤ **画面が、本当に呼んでいるか** ────────────────────── */
+  /* ── ⑤ **起きたことをそのまま言う**(「作りました」で終わらせない)── */
+  {
+    ok(examEmptyNote([]).includes('えらんで'),
+      'テスト … 出どころを選んでいなければ、そう言う')
+    ok(examEmptyNote(['word']).includes('ありません'),
+      'テスト … 1問もできなければ「作りました」と言わない')
+    const 足 = examMadeText(8, 20, '田中')
+    ok(足.includes('8') && 足.includes('20') && 足.includes('田中'),
+      'テスト … 足りなかったら、欲しかった数も言う', 足)
+    ok(!examMadeText(20, 20, '田中').includes('足りません'),
+      'テスト … そろっているときに「足りません」と言わない')
+    ok(examMadeText(20, 20, '田中').includes('共有'),
+      'テスト … 誰に共有したかを言う')
+    ok(examTitle('田中', '2026-09-26').includes('田中')
+      && examTitle('田中', '2026-09-26').includes('2026-09-26'),
+    'テスト … 教材名に、誰のいつのテストかを入れる')
+    /* **段は、そのゲストのものをそのまま使う。** 分からなければ既定に落ちる
+       (`materials.level` は空にできない) */
+    ok(examLevel('A2+') === 'A2+' && examLevel(null).length > 0 && examLevel('') === examLevel(null),
+      'テスト … 段はゲストのものを使い、分からなければ既定に落ちる')
+  }
+
+  /* ── ⑥ **画面が、本当に教材を作って共有しているか** ────────────── */
   {
     const maker = noC(readS('src/components/ExamMaker.jsx'))
-    const sheet = noC(readS('src/components/ExamSheet.jsx'))
     const src = noC(readS('src/lib/examSources.js'))
     const build = noC(readS('src/lib/examBuild.js'))
     const lea = noC(readS('src/components/TrainerLearners.jsx'))
@@ -11785,29 +11854,41 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(/wordSheetPairs/.test(src) && /qrPairOf/.test(src)
       && /quickResponsePairs/.test(src),
     'テスト … 読む道は、単語帳 / QR / 教材のすでにあるものを通る')
-    /* **画面と紙が、同じ問題を見ているか。** 組むのは1回だけ */
+    /* ── **ここが第5.263節の本体** ──
+       **1本の教材として残し、そのゲストに共有する。**
+       どちらか片方だと行き止まりになる(作っただけでは手元に出ない) */
+    ok(/createMaterial\(\{/.test(maker),
+      'テスト … テストは教材として残る(`createMaterial`)')
+    ok(/assignMaterial\(\{/.test(maker),
+      'テスト … 作ったら、そのゲストに共有する(`assignMaterial`)')
+    ok(/kind: EXAM_KIND/.test(maker) && EXAM_KIND === 'test',
+      'テスト … 種類は `test`(画面に文字を書き写していない)')
+    ok(/sections: examSections\(items\)/.test(maker),
+      'テスト … 演習を組むのは `examSections()` 1か所')
+    /* **組むのは1回だけ。** 作るときと共有するときで問題が食い違わない */
     ok((maker.match(/buildExam\(/g) ?? []).length === 1,
-      'テスト … 組むのは1回だけ(画面と紙で問題が食い違わない)')
-    ok(/items=\{items\}/.test(maker),
-      'テスト … 紙にも、画面と同じ `items` を渡している')
-    /* **刷れるのは、問題があるときだけ**(効かない操作を見せない) */
-    ok(/items\.length > 0 && \(/.test(maker) && /usePrintSheet\(printing/.test(maker),
-      'テスト … 問題があるときだけ「印刷 / PDFで保存」を出す')
-    /* **答えは、同じ紙に刷らない** —— テストにならない */
-    ok(/examsheet-answers/.test(sheet),
-      'テスト … 答えは別の紙(`.examsheet-answers` が改ページを持つ)')
-    ok(/\.print-target \.examsheet-answers \{ break-before: page; \}/
-      .test(readS('src/styles.css')),
-    'テスト … 答えの紙が、本当に新しいページから始まる')
-    /* **紙の段取りは、すでにある1か所に乗る**(書き写さない) */
-    ok(/SHEET_ID/.test(sheet) && /printSheet\.js/.test(sheet),
-      'テスト … 紙の出し先は `printSheet.js` 1か所')
+      'テスト … 組むのは1回だけ')
+    /* **1問もできなければ、作らない**(空の教材を残さない) */
+    ok(/if \(!items\.length\)/.test(maker),
+      'テスト … 1問もできなければ、教材を作らない')
+    /* **共有に失敗したら「作って共有しました」と言わない。**
+       教材はできているので「作れませんでした」とも言わない
+       (起きたことをそのまま言う・CLAUDE.md) */
+    ok(/shareError[\s\S]{0,200}?テストは作りましたが/.test(maker),
+      'テスト … 共有だけ失敗したときは、そのとおりに言う')
+    /* **行き止まりを作らない** —— 作ったら過去の宿題へ移す */
+    ok(/if \(onMade\) onMade\(/.test(maker)
+      && /onMade=\{\(\) => openDetail\(l\.id, 'homework'\)\}/.test(lea),
+    'テスト … 作ったら、過去の宿題へ移る(そこから開いて刷れる)')
     /* **黙って絞らない。** 読めなかった出どころを言う */
     ok(/if \(failed\.length\) setWarn\(/.test(maker),
       'テスト … 読めなかった出どころがあれば、その場で言う')
     /* **行き止まりを作らない** —— 何も選んでいなければ押せない */
-    ok(/disabled=\{busy \|\| 足りない\}/.test(maker),
+    ok(/disabled=\{busy \|\| !つくれる\}/.test(maker),
       'テスト … 出どころを1つも選んでいなければ、押せない')
+    /* **「教材」だけ選んで1本も選んでいない形も、押せない** */
+    ok(/sources\.some\(\(s\) => s !== 'material' \|\| picked\.length > 0\)/.test(maker),
+      'テスト … 「教材」だけ選んで1本も選んでいなければ、押せない')
     /* **ゲストのページから入れるか。** 出どころのとなりに置く */
     ok(/<option value="quiz">テストを作る<\/option>/.test(lea)
       && /detailTab === 'quiz' &&/.test(lea),
@@ -11815,9 +11896,64 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **教材の一覧は、過去の宿題と同じものを渡す**(数え方を2通り持たない) */
     ok(/materials=\{assignments/.test(lea),
       'テスト … えらべる教材は、この人に出してあるもの(宿題と同じ一覧)')
-    /* **新しい表も SQL も要らない。** テストは残さない */
-    ok(!/from\('quiz|insert\(/.test(maker) && !/insert\(/.test(src),
-      'テスト … どこにも書き込まない(新しい表も貼る SQL も要らない)')
+    /* **教材を作るのに要るものを渡しているか**(誰が作ったか・段) */
+    ok(/createdBy=\{me\.id\}/.test(lea) && /level=\{l\.cefr \?\? null\}/.test(lea),
+      'テスト … 誰が作ったかと、そのゲストの段を渡している')
+  }
+
+  /* ── ⑦ **消したものが、本当に消えているか** ────────────────────
+       専用の紙(`ExamSheet`)と、その見た目(`.examsheet-*`)、
+       画面に問題を並べていた見た目(`.exammaker-quiz` など)。
+       **残っていると、同じことをするものが2つになる**(CLAUDE.md)。 */
+  {
+    ok(!existsSync(new URL('../src/components/ExamSheet.jsx', import.meta.url)),
+      'テスト … 専用の紙は無い(教材の紙で刷る)')
+    const css = readS('src/styles.css')
+    ok(!/\.examsheet-(who|line|list|q|a|answers|full)\b/.test(css),
+      'テスト … 専用の紙の見た目も残っていない')
+    ok(!/\.exammaker-(quiz|q|ans|full|from)\b/.test(css),
+      'テスト … 画面に問題を並べていた見た目も残っていない')
+    /* **えらぶところの見た目は残す** —— そこは今も使っている */
+    ok(/\.exammaker-pick\b/.test(css) && /\.exammaker-list\b/.test(css),
+      'テスト … えらぶところの見た目は残っている')
+  }
+
+  /* ── ⑧ **種類を足したぶんの後片づけ**(第5.232節で踏んだ落とし穴)──
+       `materialKinds.js` に足した名前を、出し直しと画面に足し忘れると
+       **その名前は存在しない**のに `lint` も `build` も通る。 */
+  {
+    ok(isTestKind(EXAM_KIND) && MATERIAL_KINDS.some((k) => k.id === EXAM_KIND),
+      'テスト … 種類の一覧に「テスト」が入っている')
+    /* **作れないが、探せる。** どちらも確かめる(出る / 出ないの両方) */
+    ok(!NEW_MATERIAL_KINDS.some((k) => k.id === EXAM_KIND),
+      'テスト … 「教材を作る」画面には出さない(AI では作らない)')
+    ok(FIND_MATERIAL_KINDS.some((k) => k.id === EXAM_KIND),
+      'テスト … 「さがす」では選べる(作った本人が次のレッスンで探せる)')
+    /* **弱点タグは要らない。** 判断は `needsWeakTag()` 1か所 */
+    ok(needsWeakTag(EXAM_KIND) === false && needsWeakTag('pattern') === true,
+      'テスト … 弱点タグは必須にしない(判断は `needsWeakTag()` 1か所)')
+    ok(/if \(!tagIds\.length && needsWeakTag\(kind\)\)/.test(readS('src/lib/materials.js')),
+      'テスト … `createMaterial` が、その判断を使っている')
+    /* **表の制約にも入っているか**(入れ忘れると発行した瞬間に止まる) */
+    const mig = readS('supabase/migrations/0069_test_kind.sql')
+    ok(/'test',/.test(mig) && /materials_kind_check/.test(mig),
+      'テスト … 0069 が `materials_kind_check` に `test` を足している')
+    /* **いちばん最後に書き直される一覧を見る。**
+       まとめた1つは 0041 以降を**順に並べたもの**なので、**あとの段が勝つ。**
+       前の段に入っていても、**あとで狭い段が来たら止まる**
+       (2026-09 実機で踏んだ "violated by some row")。
+
+       **「どこかに 'test' と書いてあるか」では見ない。**
+       0043 / 0047 の段も同じ一覧を持っているので、
+       **0069 の段を消しても緑のまま**だった(赤チェックで実測した)。
+       段そのものが消えたことは、`material_kinds()` を見る2本が捕まえる */
+    const mat = readS('supabase/apply/pending_matome.sql')
+    const 最後 = mat.lastIndexOf('add constraint materials_kind_check')
+    const 一覧 = 最後 < 0 ? '' : mat.slice(最後, mat.indexOf('));', 最後))
+    ok(最後 >= 0 && /'test'/.test(一覧),
+      'テスト … まとめた1つで、いちばん最後に書き直される一覧に `test` が入っている')
+    ok(/0069 教材の種類に「テスト」/.test(readS('supabase/apply/check.sql')),
+      'テスト … 利用者が見る `check.sql` にも行が増えている')
   }
 }
 

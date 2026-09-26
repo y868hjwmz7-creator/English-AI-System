@@ -37,7 +37,7 @@ import { grammarCost, grammarTodo } from '../lib/grammarNote.js'
 import CastChip from './CastChip.jsx'
 import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
-  NEW_MATERIAL_KINDS, addChunkJa, addGrammar, addSections, assignMaterial,
+  FIND_MATERIAL_KINDS, addChunkJa, addGrammar, addSections, assignMaterial,
   duplicateMaterial, isDialogueKind, kindLabel, loadMyLearners, searchMaterials,
   setMaterialVoices, wordsAddedNote,
 } from '../lib/materials.js'
@@ -831,7 +831,10 @@ export default function TrainerMaterials({
             <span>トレーニングの種類</span>
             <select value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="">すべて</option>
-              {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+              {/* **さがすときは、作れないものも出す**(第5.263節)——
+                  テストは「教材を作る」画面からは作れないが、
+                  **作ったあと探せなければ意味がない** */}
+              {FIND_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
             </select>
           </label>
 

@@ -1,68 +1,78 @@
 /**
  * ============================================================================
- * **ゲストの持ちものから、テストを作る**(第5.260節)
+ * **ゲストの持ちものから、テストを1本の教材として作る**(第5.263節)
  *
  * 2026-09-25 利用者の指定。
  *
  *   > ゲストのページに教材や彼らの単語帳、quick response 帳があります。
  *   > それらのデータを基にテストを作りたいです。
  *
- * 利用者の答え(その場で訊いた)。
+ * 2026-09-26 実機・利用者の指摘(**作り直した理由**)。
  *
- *   ・出どころは **都度えらぶ。複数同時にえらべる**
- *   ・形は **日本語 → 英語 と 穴埋めを混ぜる**
- *   ・**画面と紙の両方**
- *   ・**AI は使わない(0円)**
+ *   > テストですが、こんなのでは使い物になりません。
+ *   > 穴埋め問題の日本語がないのをまず直してください。
+ *   > 基本は左に日本語、右に英語です。解答とか入りません。
+ *   > その場で答えが見れないとだめです。
  *
- * 【新しい表も、新しい SQL も要らない】
- *   テストは**残さない。** 作って、見て、刷るだけである。
- *   残す形にすると表が1つ増え、貼る SQL が増え、
- *   「いつのテストか」を管理する画面まで要る ——
- *   **言われた範囲を超える**(勝手に広げない・CLAUDE.md)。
+ *   訊いたうえでの答え —— **穴埋めをやめて日本語 → 英語だけに**、
+ *   そして**テストは、ひとつの教材としてちゃんと作る。**
  *
- * 【自分では組まない・自分では引かない】
+ * 【前の作りが間違っていた】
+ *   「テストは残さない。作って、見て、刷るだけ」と判断したのは
+ *   **こちらの都合**だった(表を増やしたくなかった)。
+ *   残らないと、次のレッスンで開けず・共有できず・探せない。
+ *   **利用者が言った「テスト」は、教材のことだった。**
+ *
+ * 【新しい画面も、新しい紙も作らない】
+ *   作るのは `kind = 'test'` の教材1本である。あとは全部もうある。
+ *
+ *   | 見たいもの | どこが出すか |
+ *   |---|---|
+ *   | 画面(その場で答えを見る) | `LessonView` の「解答を見る」 |
+ *   | 紙(左=日本語・右=英語) | `QuickResponseSheet`(教材の紙) |
+ *   | さがす | トレーナーの「教材」→ 種類「テスト」 |
+ *   | ゲストの手元 | 今週の宿題(共有するので) |
+ *
+ * 【ここは、つなぐだけ】
  *   組むのは `examBuild.js`(**素の node で確かめられる**)、
- *   引いてくるのは `examSources.js`、紙は `ExamSheet`。
- *   ここは**つなぐだけ**である。
+ *   引いてくるのは `examSources.js`、作るのは `createMaterial()`。
  *
- * 【画面と紙は、同じ問題を出す】
- *   **組むのは1回だけ**で、画面も紙も**同じ `items`** を見る。
- *   押すたびに組み直すと、画面で見た問題と紙の問題が食い違う
- *   (**数え方を2通り持たない**・CLAUDE.md)。
+ * 【AI を1回も呼ばない = 0円】
+ *   問題は作らない。**すでにある英文と訳の対を組み替えるだけ**である。
  * ============================================================================
  */
 import { useState } from 'react'
 import {
-  DEFAULT_EXAM_COUNT, DEFAULT_EXAM_FORM, EXAM_COUNTS, EXAM_FORMS, EXAM_SOURCES,
-  buildExam, examCountNote, examNote, examTitle,
+  DEFAULT_EXAM_COUNT, EXAM_COUNTS, EXAM_KIND, EXAM_SOURCES,
+  buildExam, examEmptyNote, examLevel, examMadeText, examSections, examTitle,
 } from '../lib/examBuild.js'
 import { loadExamRows } from '../lib/examSources.js'
-import { SHEET_ID, usePrintSheet } from '../lib/printSheet.js'
+import { assignMaterial, createMaterial } from '../lib/materials.js'
 import { today } from '../lib/format.js'
-import ExamSheet from './ExamSheet.jsx'
 
-export default function ExamMaker({ learnerId, learnerName = '', materials = [] }) {
+export default function ExamMaker({
+  learnerId, learnerName = '', level = null, createdBy = null,
+  materials = [], onMade = null,
+}) {
   /* **出どころは複数。既定は「単語帳」と「Quick Response 帳」** ——
      この2つは問い合わせ1回ずつで済み、教材のえらび直しが要らない */
   const [sources, setSources] = useState(['word', 'qr'])
   const [picked, setPicked] = useState([])          // どの教材から引くか
   const [count, setCount] = useState(DEFAULT_EXAM_COUNT)
-  const [form, setForm] = useState(DEFAULT_EXAM_FORM)
-  const [items, setItems] = useState([])
   const [said, setSaid] = useState('')
   const [warn, setWarn] = useState('')
   const [busy, setBusy] = useState(false)
-  const [printing, setPrinting] = useState(false)
-
-  const title = examTitle(learnerName, today())
-  usePrintSheet(printing, () => setPrinting(false))
 
   const toggle = (list, id) =>
     (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
 
+  /* 押しても何も起きない形は、押せるようにしない(行き止まりを作らない)。
+     「教材」だけをえらんで1本も選んでいなければ、引ける英文が無い */
+  const つくれる = sources.some((s) => s !== 'material' || picked.length > 0)
+
   /**
-   * **テストを組む。AI は1回も呼ばない(0円)。**
-   * もう入っているものを読んで、並べ替えるだけである。
+   * **テストを1本の教材にして、そのゲストに共有する。**
+   * **AI は1回も呼ばない(0円)** —— もう入っているものを組み替えるだけ。
    */
   const make = async () => {
     if (busy) return
@@ -71,23 +81,51 @@ export default function ExamMaker({ learnerId, learnerName = '', materials = [] 
       const { rows, failed } = await loadExamRows(learnerId, {
         sources, materialIds: picked,
       })
-      const got = buildExam(rows, { count, form })
-      setItems(got)
-      setSaid(examNote(got.length, count, sources))
-      /* **黙って絞らない**(CLAUDE.md)。読めなかった出どころがあれば、
-         問題数が少ない理由をその場で言う */
+      const items = buildExam(rows, { count })
+      /* **1問もできなかったら、作らない。** 空の教材を残さない。
+         **何が足りなかったのかを言う**(黙って落とさない・CLAUDE.md) */
+      if (!items.length) {
+        setWarn(failed.length
+          ? `${failed.join(' / ')} を読めませんでした`
+          : examEmptyNote(sources))
+        return
+      }
+      const { data, error } = await createMaterial({
+        title: examTitle(learnerName, today()),
+        level: examLevel(level),
+        kind: EXAM_KIND,
+        /* **弱点タグは要らない**(`needsWeakTag()`)。中身はこの人の
+           持ちものそのもので、弱点で引くものではない */
+        sections: examSections(items),
+        createdBy,
+        /* **共有の範囲は既定(スクール)のまま。** 別のトレーナーが
+           代わりに入ったときも、この人の宿題を開けるようにしておく */
+      })
+      if (error) { setWarn(error); return }
+      /* **作ったら、その人に共有する。** ここまでやらないと
+         ゲストの手元に出ない(作っただけでは行き止まりである) */
+      const { error: shareError } = await assignMaterial({
+        materialId: data.id, learnerIds: [learnerId], assignedBy: createdBy,
+      })
+      if (shareError) {
+        /* **起きたことをそのまま言う。** 教材はできている ——
+           「作れませんでした」と言うと、二重に作ることになる */
+        setWarn(`テストは作りましたが、共有できませんでした: ${shareError}`)
+        return
+      }
+      setSaid(examMadeText(items.length, count, learnerName))
+      /* **読めなかった出どころは、黙って飲み込まない** ——
+         問題が少ない理由を、その場で言う(CLAUDE.md) */
       if (failed.length) setWarn(`${failed.join(' / ')} を読めませんでした`)
+      /* **次にすることを、その場に1つだけ。** 過去の宿題へ移す ——
+         作ったテストが先頭に出るので、そこから開いて刷れる */
+      if (onMade) onMade(data.id)
     } catch {
-      setItems([])
       setWarn('テストを作れませんでした')
     } finally {
       setBusy(false)
     }
   }
-
-  /* **教材をえらんだのに1本も選んでいない**、は行き止まりである */
-  const 足りない = sources.length === 0
-    || (sources.includes('material') && picked.length === 0 && sources.length === 1)
 
   return (
     <div className="card card--form exammaker">
@@ -129,19 +167,8 @@ export default function ExamMaker({ learnerId, learnerName = '', materials = [] 
         )
       )}
 
-      <div className="exammaker-pick">
-        <span className="nav-setting-label">出し方</span>
-        <div className="theme-switch" role="group" aria-label="出し方">
-          {EXAM_FORMS.map((f) => (
-            <button key={f.id} type="button" title={f.hint}
-                    className={`theme-btn${form === f.id ? ' is-active' : ''}`}
-                    onClick={() => { setForm(f.id); setSaid('') }}>
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
+      {/* **「出し方」の欄は無い**(第5.263節)。問いは日本語 → 英語だけである
+          —— 形が1つしか無いものを選ばせない(効かない操作を見せない) */}
       <div className="exammaker-pick">
         <span className="nav-setting-label">何問</span>
         <div className="theme-switch" role="group" aria-label="何問">
@@ -157,59 +184,14 @@ export default function ExamMaker({ learnerId, learnerName = '', materials = [] 
 
       <div className="btn-row">
         <button type="button" className="btn btn--primary"
-                disabled={busy || 足りない} onClick={make}>
-          {busy ? '作っています…' : 'テストを作る'}
+                disabled={busy || !つくれる} onClick={make}>
+          {busy ? '作っています…' : 'テストを作って共有する'}
         </button>
-        {/* **刷れるのは、問題があるときだけ**(効かない操作を見せない) */}
-        {items.length > 0 && (
-          <button type="button" className="btn btn--ghost"
-                  disabled={printing} onClick={() => setPrinting(true)}>
-            {printing ? '紙にしています…' : '印刷 / PDFで保存'}
-          </button>
-        )}
       </div>
 
       {/* **失敗の知らせは、その操作をした場所に出す**(CLAUDE.md) */}
       {warn && <p className="notice notice--warn">{warn}</p>}
       {said && <p className="field-hint">{said}</p>}
-
-      {/* ── 画面に出す ──────────────────────────────────
-          **紙とまったく同じ問題**である(組むのは1回だけ) */}
-      {items.length > 0 && (
-        <>
-          <p className="field-hint">{examCountNote(items)}</p>
-          <ol className="exammaker-quiz">
-            {items.map((q) => (
-              <li key={q.no}>
-                <span className={`exammaker-q${q.form === 'blank' ? ' exammaker-q--en' : ''}`}
-                      {...(q.form === 'blank' ? { lang: 'en' } : {})}>
-                  {q.question}
-                </span>
-                {/* **答えは畳んでおく。** 開いたまま並べると、
-                    画面で見ながら解けない */}
-                <details className="exammaker-ans">
-                  <summary>答え</summary>
-                  <div className="exammaker-ans-body">
-                    <span lang="en">{q.answer}</span>
-                    {q.form === 'blank' && (
-                      <span className="exammaker-full" lang="en">{q.en}</span>
-                    )}
-                    {q.from && <span className="exammaker-from">{q.from}</span>}
-                  </div>
-                </details>
-              </li>
-            ))}
-          </ol>
-        </>
-      )}
-
-      {/* **紙は、押されてから描く**(`usePrintSheet` が描き終わってから刷る)。
-          ふだんは `.print-only` が隠している */}
-      {printing && (
-        <ExamSheet title={title} note={examCountNote(items)} items={items} />
-      )}
-      {/* 紙の出し先。**id は `printSheet.js` 1か所が持つ** */}
-      {!printing && <div id={SHEET_ID} hidden />}
     </div>
   )
 }

@@ -58,7 +58,13 @@ const fail = (e, fallback) => ng(e?.message ? `${fallback}: ${e.message}` : fall
  * (`playMark.js` / `gamify.js` / `speechDraft.js` と同じ考え方)。
  */
 export {
-  MATERIAL_KINDS, NEW_MATERIAL_KINDS, isPassageKind, isDialogueKind, isVocabKind,
+  MATERIAL_KINDS, NEW_MATERIAL_KINDS,
+  /* **さがすときに選べる種類**(第5.263節)。作れないもの(テスト)も出る。
+     **ここへ足し忘れると、画面からは「存在しない名前」になる** ——
+     `lint` も `build` も通ってしまう(第5.232節で踏んだところ。
+     `npm run test:play` が、画面が取り込む名前を1つずつ見張っている) */
+  FIND_MATERIAL_KINDS,
+  isPassageKind, isDialogueKind, isVocabKind,
   isDrillKind,
   bodyWord, usesScene, canPasteBody, kindLabel,
   /* **細かい指定を書いたら、それが主になる**(第5.232節)。
@@ -68,8 +74,9 @@ export {
      **種類で言い方が変わるので、画面で書き分けない** */
   subjectLabel, subjectHint, subjectExample,
 } from '../data/materialKinds.js'
-// このファイルの中でも使うので、出し直すだけでなく取り込む
-import { isPassageKind } from '../data/materialKinds.js'
+/* このファイルの中でも使うので、出し直すだけでなく取り込む。
+   **弱点タグを必須にする種類の判断は `needsWeakTag()` 1か所**(第5.263節) */
+import { needsWeakTag } from '../data/materialKinds.js'
 
 // ── ゲストの一覧 ────────────────────────────────────────────────
 
@@ -397,10 +404,14 @@ export async function createMaterial({
 
   if (!String(title).trim()) return ng('教材名を入れてください')
   if (!cleanSections.length) return ng('設問を1つ以上入れてください')
-  // 弱点タグは、あとから教材を見つけるための索引である(第5.5節)。
-  // ただし記事と会話は、ジャンル・場面・見出しで探せるので必須にしない。
-  // 弱点に紐づかない読み物を作れないと、そもそも作れる幅が狭くなる。
-  if (!tagIds.length && !isPassageKind(kind)) {
+  /* 弱点タグは、あとから教材を見つけるための索引である(第5.5節)。
+     ただし記事と会話は、ジャンル・場面・見出しで探せるので必須にしない。
+     弱点に紐づかない読み物を作れないと、そもそも作れる幅が狭くなる。
+     **どの種類で必須かは `needsWeakTag()` 1か所**(第5.263節)——
+     テストも必須にしない(中身はゲストの持ちものそのもので、
+     弱点で引くものではない)。ここに種類を書き並べると、
+     種類を足した人が**直すとは気づけない** */
+  if (!tagIds.length && needsWeakTag(kind)) {
     return ng('弱点タグを1つ以上選んでください(選ばないと、あとから見つけられません)')
   }
 

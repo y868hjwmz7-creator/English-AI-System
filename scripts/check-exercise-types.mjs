@@ -23,7 +23,7 @@
 import { EXERCISE_TYPES, DEFAULT_SECTIONS, isBlankItem, isWrongShape } from '../src/data/exerciseTypes.js'
 // **`src/lib/materials.js` からは読まない。** あちらは Supabase を
 // 引き連れているので、素の node では読み込めない(だから種類だけ分けてある)
-import { MATERIAL_KINDS } from '../src/data/materialKinds.js'
+import { MATERIAL_KINDS, NEW_MATERIAL_KINDS } from '../src/data/materialKinds.js'
 /* **弱点タグは、表(`weakness_tags`)にも同じものが要る。**
    `material_tags.tag_id` が参照しているので、画面にだけ足すと
    **そのタグで教材を発行した瞬間に外部キー違反で止まる**(2026-09)。
@@ -77,14 +77,37 @@ if (kindMissing.length) {
   console.error('   supabase/migrations の制約 materials_kind_check に足してください。')
   process.exit(1)
 }
-const noPlan = MATERIAL_KINDS.map((k) => k.id).filter((id) => !DEFAULT_SECTIONS[id])
+/* **AI に書かせない種類は、既定の構成を持たない**(第5.263節)。
+   テスト(`noForm`)は**ゲストの持ちものを組み替えて作る**ので、
+   演習の構成は `examBuild.js` の `examSections()` が持っている。
+   ここに構成を置くと、**「AI でテストが作れる」と読めるものが画面に出る**
+   (`MaterialForm` は `DEFAULT_SECTIONS` を並べて問数を選ばせる)。
+   **数え方を2通り持たない**(CLAUDE.md)。 */
+const planned = MATERIAL_KINDS.filter((k) => !k.noForm)
+const noPlan = planned.map((k) => k.id).filter((id) => !DEFAULT_SECTIONS[id])
 if (noPlan.length) {
   console.error(`❌ 演習の構成が無い教材の種類があります: ${noPlan.join(', ')}`)
   console.error('   src/data/exerciseTypes.js の DEFAULT_SECTIONS に足してください。')
   console.error('   (無いと、黙って文型ドリルの構成に落ちます)')
   process.exit(1)
 }
-console.log(`  画面の教材の種類 ${MATERIAL_KINDS.length} 個も、すべて表の制約に入っています`)
+/* **外したぶんは、別の見張りで受ける。**
+   `noForm` の種類が「教材を作る」画面に出ていたら、
+   **構成が無いまま `defaultSectionsFor()` に入り、黙って文型ドリルに落ちる。**
+   つまり `noForm` を外した日には、**上か下のどちらかが必ず赤くなる** ——
+   片方を緩めただけでは、すり抜けられない。 */
+const leaked = MATERIAL_KINDS
+  .filter((k) => k.noForm)
+  .filter((k) => NEW_MATERIAL_KINDS.some((n) => n.id === k.id))
+  .map((k) => k.id)
+if (leaked.length) {
+  console.error(`❌ AI に書かせない種類が、教材を作る画面に出ています: ${leaked.join(', ')}`)
+  console.error('   src/data/materialKinds.js の NEW_MATERIAL_KINDS から外してください。')
+  console.error('   (出ていると、既定の構成が無いまま文型ドリルの構成に落ちます)')
+  process.exit(1)
+}
+console.log(`  画面の教材の種類 ${MATERIAL_KINDS.length} 個も、すべて表の制約に入っています`
+  + `(そのうち ${planned.length} 個が AI に書かせる種類)`)
 
 /*
  * ============================================================================

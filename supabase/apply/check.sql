@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   51行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   52行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -228,4 +228,14 @@ from (
     exists (select 1 from information_schema.columns
             where table_schema = 'public' and table_name = 'material_items'
               and column_name = 'examples'), 50
+  -- **制約そのものを見る**(0069・第5.263節)。表も列も行も増えない移行なので、
+  -- 表の有無では分からない —— **一覧に `test` が入っているか**で見る
+  -- (0067 とまったく同じ見方)。
+  -- **2つとも見る**(0063 と同じ)—— 制約だけ貼って関数を貼り忘れると、
+  -- 画面の「準備の状態」が 0069 を見つけられなくなる
+  union all select '0069 教材の種類に「テスト」(pending_matome.sql)',
+    exists (select 1 from pg_constraint
+            where conname = 'materials_kind_check'
+              and pg_get_constraintdef(oid) like '%''test''%')
+    and exists (select 1 from pg_proc where proname = 'material_kinds'), 51
 ) t order by 順;

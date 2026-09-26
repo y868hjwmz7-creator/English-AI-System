@@ -1478,18 +1478,25 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                   </>
                 )}
 
-                {/* **テストを作る**(第5.260節・2026-09-25 利用者の指定)。
+                {/* **テストを作る**(第5.260節 → **第5.263節で作り直した**)。
                     出どころは都度えらぶ(複数同時にえらべる)。
                     **教材は、この人に出してあるものから選ぶ** ——
                     過去の宿題と**同じ一覧**を渡す(数え方を2通り持たない)。
-                    **新しい表も SQL も要らない。** テストは残さない ——
-                    作って、見て、刷るだけである */}
+
+                    **テストは1本の教材になる**(2026-09-26 利用者の指定
+                    「テストは、ひとつの教材としてちゃんと作ってください」)。
+                    だから `createdBy` と段(レベル)が要る ——
+                    「この人に教材を作る」とまったく同じものを渡す。
+                    できたら**過去の宿題へ移す** —— 作ったテストが先頭に出るので、
+                    そこから開いて画面でも紙でも使える(行き止まりを作らない) */}
                 {detailTab === 'quiz' && (
                   <ExamMaker
                     learnerId={l.id} learnerName={l.display_name}
+                    level={l.cefr ?? null} createdBy={me.id}
                     materials={assignments
                       .map((a) => ({ id: a.material?.id, title: a.material?.title ?? '' }))
-                      .filter((m) => m.id && m.title)} />
+                      .filter((m) => m.id && m.title)}
+                    onMade={() => openDetail(l.id, 'homework')} />
                 )}
 
                 {/* **スピーチの原稿と、その添削**(0054)。

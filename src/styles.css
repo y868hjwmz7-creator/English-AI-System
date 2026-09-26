@@ -3858,45 +3858,10 @@ html, body { overflow-x: clip; }
 
      **新しい紙から始める。** 語の一覧の余りに続けて出すと、
      最後の品詞の続きのように見える(`.qrsheet` と同じ作法)。 */
-  /* ══════════════════════════════════════════════════════════
-     **テストの紙**(第5.260節)。問題が1枚目、答えが2枚目。
-     **同じ紙に答えを刷らない** —— テストにならない。
-     ══════════════════════════════════════════════════════════ */
-  .print-target .examsheet-who {
-    display: flex; align-items: baseline; gap: 6pt;
-    margin: 0 0 10pt; font-size: 10pt;
-  }
-  .print-target .examsheet-line {
-    flex: 1 1 auto; border-bottom: 0.8pt solid #333; min-width: 60pt;
-  }
-  .print-target .examsheet-line--short { flex: 0 0 60pt; }
-  .print-target ol.examsheet-list {
-    margin: 0; padding-left: 0; list-style: none; counter-reset: exam;
-  }
-  .print-target ol.examsheet-list > li {
-    position: relative; padding: 0 0 4pt 22pt; margin: 0 0 10pt;
-    break-inside: avoid; counter-increment: exam;
-  }
-  .print-target ol.examsheet-list > li::before {
-    content: counter(exam);
-    position: absolute; left: 0; top: 1pt;
-    width: 15pt; height: 15pt; line-height: 15pt; text-align: center;
-    border: 1pt solid #333; border-radius: var(--r-circle);
-    font-size: 9pt; font-weight: 700; color: #000 !important;
-  }
-  .print-target .examsheet-q { display: block; font-size: 11pt; line-height: 1.5; }
-  /* **書く場所を必ず1行あける。** 無いと、紙に書けない */
-  .print-target .examsheet-line--answer {
-    display: block; margin-top: 10pt; border-bottom: 0.8pt solid #999;
-  }
-  /* 答えの紙。**新しい紙から始める** */
-  .print-target .examsheet-answers { break-before: page; }
-  .print-target ol.examsheet-list--key > li { margin: 0 0 5pt; }
-  .print-target ol.examsheet-list--key .examsheet-line--answer { display: none; }
-  .print-target .examsheet-a { display: block; font-size: 11pt; font-weight: 700; }
-  .print-target .examsheet-full {
-    display: block; font-size: 9.5pt; color: #444 !important;
-  }
+  /* **テストの紙は、教材の紙そのものである**(第5.263節)。
+     `kind = 'test'` の教材は和文英訳の演習1つでできているので、
+     **`.qrsheet` が「左=日本語・右=英語」で刷る。**
+     専用の紙(`.examsheet-*`)は消した —— 同じことをするものを2つ持たない */
 
   .print-target .frames-sheet { break-before: page; }
   /* **節と節のあいだで紙を変える。**
@@ -4299,43 +4264,9 @@ html, body { overflow-x: clip; }
   border: 1px solid var(--border); border-radius: var(--r-pill);
   max-width: 100%; overflow-wrap: anywhere; text-align: left;
 }
-/* 画面に出す問題 */
-.exammaker-quiz {
-  margin: 0; padding-left: 0; list-style: none;
-  display: flex; flex-direction: column; gap: var(--sp-10);
-  counter-reset: exam;
-}
-.exammaker-quiz > li {
-  display: flex; flex-direction: column; gap: var(--sp-6);
-  padding: 10px 12px 10px 38px; position: relative;
-  border: 1px solid var(--border); border-radius: var(--r-8);
-  background: var(--surface-0);
-  counter-increment: exam;
-}
-.exammaker-quiz > li::before {
-  content: counter(exam);
-  position: absolute; left: 10px; top: 10px;
-  width: 20px; height: 20px; line-height: 20px; text-align: center;
-  border: 1px solid var(--border); border-radius: var(--r-circle);
-  font-size: var(--fs-11h); font-weight: 700; color: var(--text-secondary);
-}
-.exammaker-q { font-size: var(--fs-15); line-height: 1.6; overflow-wrap: anywhere; }
-.exammaker-q--en { font-family: var(--font-en, inherit); }
-.exammaker-ans > summary {
-  cursor: pointer; list-style: none;
-  min-height: 32px; display: inline-flex; align-items: center;
-  color: var(--text-muted); font-size: var(--fs-12h);
-}
-.exammaker-ans > summary::-webkit-details-marker { display: none; }
-.exammaker-ans > summary::after { content: ' \25B8'; }
-.exammaker-ans[open] > summary::after { content: ' \25BE'; }
-.exammaker-ans-body {
-  display: flex; flex-direction: column; gap: var(--sp-4);
-  padding-top: 4px; font-size: var(--fs-14);
-}
-.exammaker-full, .exammaker-from {
-  color: var(--text-muted); font-size: var(--fs-12h);
-}
+/* **問題は、この画面には並べない**(第5.263節)。
+   テストは1本の教材になるので、見るのも刷るのも教材の画面である
+   (**同じことをするものを2つ見せない**・CLAUDE.md) */
 
 /* ── 配色の切り替え ────────────────────────────────────────── */
 .theme-switch {
