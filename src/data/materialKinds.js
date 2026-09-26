@@ -214,9 +214,20 @@ const SUBJECT_TAIL = '(任意)'
    口を残してあるのは、呼ぶ側を1つも書き換えずに済ませるためである */
 export const subjectLabel = (kind) => `${SUBJECT_LABEL}${SUBJECT_TAIL}`
 
+/**
+ * **読み方の書き方**(第5.266節・2026-09-26 利用者の指定)。
+ *
+ *   > 例えば「細かい指定」内に読み方も含めればOKなど、、、
+ *
+ * **書くのはここ1か所。** 6つの種類それぞれに書き写すと、
+ * 言い方を直した日に**5つが古いまま**になる(CLAUDE.md)。
+ * **新しい欄は作らない** —— 利用者が名指しした場所がここである。
+ */
+export const SAY_AS_HINT = '。会社名などの読みは「UMITO=ウミト」と書けます'
+
 /** その種類での、欄の下に出す1行 */
-export const subjectHint = (kind) => (SUBJECT_WORDS[subjectKey(kind)]
-  ?? SUBJECT_WORDS.reading).hint
+export const subjectHint = (kind) => `${(SUBJECT_WORDS[subjectKey(kind)]
+  ?? SUBJECT_WORDS.reading).hint}${SAY_AS_HINT}`
 
 /** その種類での、書く前に薄く出しておく例 */
 export const subjectExample = (kind) => (SUBJECT_WORDS[subjectKey(kind)]

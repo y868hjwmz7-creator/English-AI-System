@@ -18,8 +18,13 @@ import { normEn } from './textNorm.js'
 import { AVOID_MAX } from './avoidLimit.js'
 import { industryLabel, kindsOf } from '../data/industries.js'
 import {
-  exerciseLabel, givesAwayAnswer, isBlankItem, isChunkSection, isPassageSection, isWrongShape,
+  exerciseLabel, exerciseType, givesAwayAnswer, isBlankItem, isChunkSection,
+  isPassageSection, isWrongShape,
 } from '../data/exerciseTypes.js'
+/* **読み方の指定**(第5.266節)。「細かい指定」に `UMITO=ウミト` と
+   書いてあれば、**読み上げにする英文だけ**を書き換える。
+   算段はあちら1か所(素の node で走る) */
+import { parseSayAs, sayAsText } from './sayAs.js'
 /* すでにある教材に、足りない演習だけを足す(第5.234節)。
    **足せるかどうかの判断は `materialFill.js` 1か所。**
    ここで「本文が在るか」「もう在る種類か」を書き直さない(CLAUDE.md) */
@@ -329,8 +334,13 @@ const ITEM_FIELDS = [
   'chunk_kind', 'source_en',
 ]
 
-/** 空の欄を落として、中身のある設問だけを残す */
-const cleanItems = (items) =>
+/**
+ * 空の欄を落として、中身のある設問だけを残す。
+ *
+ * @param typeId 演習の種類。**読み上げにする欄を決める**のに使う
+ * @param say    読み方の表(`parseSayAs()` が返したもの)。空なら何もしない
+ */
+const cleanItems = (items, typeId = null, say = null) =>
   (items ?? [])
     .map((it) => {
       const row = {}
@@ -384,6 +394,25 @@ const cleanItems = (items) =>
           sentences: grammar.sentences,
         }
       }
+      /* ── **読み方の指定**(第5.266節・2026-09-26 利用者の指定)──────
+           > UMITO のような会社の名前を…「ゆーえむあいてぃーおー」と
+           > 言われてしまいます。例えば「細かい指定」内に読み方も含めれば OK
+
+         **画面に出る英文は1文字も変えない。** 書き換えるのは
+         「お手本音声にする英文」(`audio_text`)だけである
+         (第5.205節「画面の英文と声にする英文を分ける」と同じ決まり)。
+
+         ・**リスニングには当てない**(`audioFrom` がその欄そのもので、
+           答え合わせのときに**その文字がそのまま画面に出る**)
+         ・**もう `audio_text` が入っている問にも当てない**(上書きしない)
+         ・**置き換えが1つも起きなければ、欄ごと作らない** ——
+           `sayAsText()` が空を返すので、**指紋も音も変わらない(0円)** */
+      const from = exerciseType(typeId)?.audioFrom
+      if (say && from && from !== 'audio_text' && !row.audio_text
+        && !missingColumns.has('audio_text')) {
+        const said = sayAsText(row[from] ?? '', say)
+        if (said) row.audio_text = said
+      }
       return row
     })
     .filter((row) => Object.keys(row).length > 0)
@@ -398,8 +427,12 @@ export async function createMaterial({
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
+  /* **読み方の指定は「細かい指定」から拾う**(第5.266節)。
+     新しい欄も、新しい列も作らない —— `topic` はもう保存している。
+     `UMITO=ウミト` のような形が1つも無ければ、空の表が返るだけである */
+  const say = parseSayAs(topic)
   const cleanSections = sections
-    .map((sec) => ({ ...sec, items: cleanItems(sec.items) }))
+    .map((sec) => ({ ...sec, items: cleanItems(sec.items, sec.exercise_type, say) }))
     .filter((sec) => sec.items.length)
 
   if (!String(title).trim()) return ng('教材名を入れてください')

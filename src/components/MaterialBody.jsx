@@ -43,7 +43,7 @@ import { kindLabel } from '../lib/materials.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { castClipSpeakers } from '../lib/voiceCast.js'
-import { wholeSliceOf } from '../lib/audioPlaylist.js'
+import { audioTextOf, wholeSliceOf } from '../lib/audioPlaylist.js'
 import QuickResponseSheet from './QuickResponseSheet.jsx'
 
 export default function MaterialBody({
@@ -117,9 +117,10 @@ export default function MaterialBody({
                           ? <EnglishText text={it.source_en} level={m.level}
                                          statuses={wordStatuses} onMark={onMarkWord} />
                           : null}
-                        audio={type?.audioFrom && it[type.audioFrom] ? (
+                        /* **読む欄は `audioTextOf()` 1か所**(第5.266節) */
+                        audio={audioTextOf(it, sec.exercise_type) ? (
                           <SpeakButton
-                            text={it[type.audioFrom]}
+                            text={audioTextOf(it, sec.exercise_type)}
                             clipVoice={resolveVoices(m.voiceIds)[0]}
                             tier={voiceTierFor({
                               exerciseType: sec.exercise_type, tags: m.tagIds,
@@ -147,10 +148,11 @@ export default function MaterialBody({
                     {it.speaker && (
                       <div className="passage-speaker" lang="en">{it.speaker}</div>
                     )}
-                    {type?.audioFrom && it[type.audioFrom] && (
+                    {audioTextOf(it, sec.exercise_type) && (
                       <div className="item-audio">
                         <SpeakButton
-                          text={it[type.audioFrom]}
+                          /* **読む欄は `audioTextOf()` 1か所**(第5.266節) */
+                          text={audioTextOf(it, sec.exercise_type)}
                           clipVoice={resolveVoices(m.voiceIds)[0]}
                           tier={voiceTierFor({
                             exerciseType: sec.exercise_type,

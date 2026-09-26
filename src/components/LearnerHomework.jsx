@@ -26,6 +26,9 @@ import { loadWordsMarkedOn } from '../lib/vocab.js'
 import { toDateKey } from '../lib/format.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
+/* **読み上げにする英文は `audioTextOf()` 1か所**(第5.266節)。
+   読み方を直した英文(`audio_text`)があれば、そちらを読む */
+import { audioTextOf } from '../lib/audioPlaylist.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { DownloadIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
 /* **音声のダウンロード**(2026-09 利用者の指定「各ゲストのアカウント内でも
@@ -695,10 +698,13 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                 )}
                                 {/* 読み上げ。リスニングは英文を見せずに音だけ出す。
                                     聞く手段が無いと、この演習は解きようがない。 */}
-                                {type?.audioFrom && it[type.audioFrom] && (
+                                {audioTextOf(it, sec.exercise_type) && (
                                   <div className="item-audio">
                                     <SpeakButton
-                                      text={it[type.audioFrom]}
+                                      /* **読む欄は `audioTextOf()` 1か所**(第5.266節)。
+                                         書き写すと、読み方を直した英文が
+                                         ここだけ素通りする */
+                                      text={audioTextOf(it, sec.exercise_type)}
                                       clipVoice={resolveVoices(a.material?.voiceIds)[0]}
                                       tier={voiceTierFor({
                                         exerciseType: sec.exercise_type,

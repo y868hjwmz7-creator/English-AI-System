@@ -562,9 +562,12 @@ function fakeMp3({
   const { audioItemsOf, audioTextOf } = await import('../src/lib/audioPlaylist.js')
   console.log('\n── どの演習でも、読む欄を間違えない ──')
 
+  /* **読み方を直した英文(`audio_text`)は持たない形**で、まず表を通す。
+     ここが見ているのは「**`audioFrom` が、どの欄を読むかを決めている**」
+     であって、第5.266節の上書きとは別の話である */
   const it = {
     prompt_en: 'She has finished.', prompt_ja: '彼女は終えた。',
-    answer: 'She has already finished.', audio_text: 'Listen carefully.',
+    answer: 'She has already finished.',
     question: 'What did she finish?', note: 'メモ',
   }
   const cases = [
@@ -573,7 +576,9 @@ function fakeMp3({
     ['英文和訳', 'translate_en_ja', 'She has finished.'],
     // **和文英訳は解答を読む。** 問題文は日本語なので、読み上げようがない
     ['和文英訳', 'translate_ja_en', 'She has already finished.'],
-    ['リスニング', 'listening', 'Listen carefully.'],
+    /* **リスニングは `audio_text` そのものを読む。**
+       この形では持っていないので、読むものが無い(空を返す) */
+    ['リスニング', 'listening', ''],
     ['内容の理解', 'comprehension', 'What did she finish?'],
     ['ディスカッション', 'discussion', 'What did she finish?'],
     ['想定される質問', 'audience_qa', 'What did she finish?'],
@@ -590,6 +595,36 @@ function fakeMp3({
     const got = audioTextOf(it, typeId)
     if (got !== want) ng(`${what} … 読む欄がちがう`, `「${got}」≠「${want}」`)
     else ok(`${what} … ${want ? `「${want}」を読む` : '読み上げない'}`)
+  }
+
+  /* ── **読み方を直した英文があれば、そちらを読む**(第5.266節)────────
+       2026-09-26 利用者の指定。
+
+         > UMITO のような会社の名前を…「ゆーえむあいてぃーおー」と
+         > 言われてしまいます
+
+       `audio_text` は「お手本音声にする英文」の欄(0007)。
+       画面に出るのは `audioFrom` の欄のままで、**音にする文字だけ**が変わる。
+
+       **出る側と出ない側の両方を見る** ——
+       ①在れば、そちらを読む ②無ければ、これまでどおり `audioFrom` の欄
+       ③**音声を付けない演習には、何が在っても付けない**(誤り訂正・穴埋め) */
+  const 直した = { ...it, audio_text: 'Oo-mee-toh has finished.' }
+  const 上書き = [
+    ['記事', 'article', 'Oo-mee-toh has finished.'],
+    ['和文英訳', 'translate_ja_en', 'Oo-mee-toh has finished.'],
+    ['内容の理解', 'comprehension', 'Oo-mee-toh has finished.'],
+    /* **リスニングは二重にしない。** あちらは `audioFrom` がその欄そのもので、
+       しかも答え合わせでその文字が画面に出る */
+    ['リスニング', 'listening', 'Oo-mee-toh has finished.'],
+    /* **誤った英文を手本にしない。** ここが緩むと、音は鳴るので誰も気づけない */
+    ['誤り訂正', 'error_correction', ''],
+    ['穴埋め', 'fill_blank', ''],
+  ]
+  for (const [what, typeId, want] of 上書き) {
+    const got = audioTextOf(直した, typeId)
+    if (got !== want) ng(`読み方を直した ${what} … 読む欄がちがう`, `「${got}」≠「${want}」`)
+    else ok(`読み方を直した ${what} … ${want ? `「${want}」を読む` : '読み上げない'}`)
   }
 
   // 数え上げも同じ絞り方。**空の項目は数えない**
@@ -1797,8 +1832,13 @@ function fakeMp3({
       ng('操作盤に「用意しています…」を渡している')
     /* **本文以外(内容の理解・語句・単語・フレーズ)の Listen は残す。**
        あちらは「段落」ではなく、1問ずつ聴き比べるためのものである
-       (言われた場所だけを直す) */
-    if (!/<SpeakButton\n\s+text=\{it\[secType\.audioFrom\]\}/.test(lv))
+       (言われた場所だけを直す)。
+
+       **読む欄の書き方が変わった**(第5.266節)——
+       `it[secType.audioFrom]` を書き写すのをやめ、`audioTextOf()` 1か所に
+       通すようにした。**見るのは「その枝が在るか」**であって、
+       どの欄から読むかではない(そちらは上の表が見ている) */
+    if (!/\) : audioTextOf\(it, sec\.exercise_type\) && \(/.test(lv))
       ng('本文以外の Listen まで消えている', '言われたのは段落ごとだけである')
     else ok('本文以外(語句・単語・フレーズ)の Listen は残っている')
     /* **段落ごとの錠剤は、道具ごと消えている。**

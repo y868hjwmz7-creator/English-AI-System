@@ -70,7 +70,25 @@ export const audioItemsOf = (items, typeId) => (items ?? [])
  */
 export const audioTextOf = (it, typeId) => {
   const from = exerciseType(typeId)?.audioFrom
-  return from ? String(it?.[from] ?? '').trim() : ''
+  if (!from) return ''
+  /* ── **読み方を直した英文があれば、そちらを読む**(第5.266節)──
+     2026-09-26 利用者の指定。
+
+       > UMITO のような会社の名前を…英語の読みが
+       > 「ゆーえむあいてぃーおー」と言われてしまいます。
+
+     `audio_text` は「お手本音声にする英文」の欄で、0007 からある。
+     **画面に出るのは `from` の欄のまま**で、ここが返すのは
+     **音にする文字**である(第5.205節「画面の英文と声にする英文を分ける」)。
+
+     ・**リスニングは二重にしない** —— あちらは `from` そのものが
+       `audio_text` で、しかも答え合わせでその文字がそのまま画面に出る
+     ・**これまでの教材は1文字も変わらない** —— 窓口が `audio_text` を
+       返すのはリスニングだけなので、ほかの演習では空のままである
+       (= 指紋が変わらない = **作り直しにならない・0円**) */
+  const said = String(it?.audio_text ?? '').trim()
+  if (said && from !== 'audio_text') return said
+  return String(it?.[from] ?? '').trim()
 }
 
 /**

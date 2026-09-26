@@ -44,6 +44,8 @@ import { UNITS, WORD_ACRONYMS } from '../src/data/speakDict.js'
 import { NATIVE_FLOW } from '../src/data/nativeFlow.js'
 import { COLLOCATIONS } from '../src/data/collocations.js'
 import { FRAME_SECTIONS } from '../src/data/sentenceFrames.js'
+/* **読み方の指定**(第5.266節)。素の node でそのまま走る */
+import { applySayAs, parseSayAs, sayAsText, spellKana } from '../src/lib/sayAs.js'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const readD = (p) => readFileSync(ROOT + p, 'utf8')
@@ -416,6 +418,106 @@ console.log('\n── ⑦ 本当に呼んでいるか ──')
     `locale ${LOCALES.length} / domain ${DOMAINS.length} / クラス ${CLASSES.length}`)
   ok(Object.keys(UNITS).length >= 40 && WORD_ACRONYMS.size >= 20,
     `単位 ${Object.keys(UNITS).length} / 語として読む頭字語 ${WORD_ACRONYMS.size}`)
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **読み方の指定**(第5.266節・2026-09-26 利用者の指定)
+
+     > UMITO のような会社の名前をしてして記事やダイアローグを作ろうとすると、
+     > 英語の読みが「ゆーえむあいてぃーおー」と言われてしまいます。
+     > これを何とかできませんか?
+     > 他のケースでもうまく対応できるよう汎用性のある解決策を考えてください。
+     > 例えば「細かい指定」内に読み方も含めればOKなど、、、
+   ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 読み方の指定(第5.266節)')
+  const noC6 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const read6 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+
+  /* ── ① かな → 英語風のつづり ────────────────────────── */
+  ok(spellKana('ウミト') === 'Oo-mee-toh',
+    'かな → つづり … ウミト は Oo-mee-toh', String(spellKana('ウミト')))
+  /* **ひらがなでも同じ。** 書き方の違いで読めなくなるのは、こちらの都合 */
+  ok(spellKana('うみと') === spellKana('ウミト'),
+    'かな → つづり … ひらがなでも同じ結果になる')
+  /* **促音は、次の子音を重ねる**(いちばん危ない形を置く) */
+  ok(spellKana('サッポロ') === 'Sap-poh-roh',
+    'かな → つづり … 小さい「ッ」は、次の子音を重ねる', String(spellKana('サッポロ')))
+  /* **拗音を割らない**(`キャ` を `キ` + `ャ` にしない) */
+  ok(spellKana('キャノン') === 'Kya-noh-n',
+    'かな → つづり … 拗音(キャ)を2文字に割らない', String(spellKana('キャノン')))
+  /* **読めない字が混ざったら、黙る**(当てずっぽうで音を作らない)。
+     **いちばん危ないのは「半分だけ読める」形**である ——
+     `ウミ人` を `Oo-mee` にしてしまうと、**直したつもりで別の音**になる。
+     読めない字がぜんぶの形(`UMITO` / `海人`)だけを見ていると、
+     **読み飛ばす作りに壊しても緑のまま**になる(赤チェックで実測) */
+  ok(spellKana('ウミ人') === null,
+    'かな → つづり … 半分だけ読める形も `null`(半分だけ直さない)',
+    String(spellKana('ウミ人')))
+  ok(spellKana('UMITO') === null && spellKana('海人') === null && spellKana('') === null,
+    'かな → つづり … 読めない字が混ざったら `null`(黙る)')
+  /* **空白を作らない。** 語の数が変わると、語ごとの色がずれる */
+  ok(!/\s/.test(String(spellKana('トヨタジドウシャ'))),
+    'かな → つづり … 空白を入れない(語の数を変えない)')
+
+  /* ── ② 「細かい指定」からの拾い方 ──────────────────── */
+  const 表 = parseSayAs('唐揚げ工場の話。UMITO=ウミト、KDDI＝ケーディーディーアイ / Sakura=さくら')
+  ok(表.UMITO === 'Oo-mee-toh' && 表.KDDI && 表.Sakura,
+    `読み方 … 句点のあと・全角の＝・スラッシュ区切りでも拾う(${Object.keys(表).join(' / ')})`)
+  /* **書いていないものは拾わない**(ふつうの指定を読み方にしない) */
+  ok(Object.keys(parseSayAs('生成AIのルール作り。賛成と反対の両方を出す')).length === 0,
+    '読み方 … `=` が無ければ、1つも拾わない')
+  /* **1文字の名前は拾わない。** 本文の `a` が総取り替えになると
+     取り返しがつかない(いちばん危ない形) */
+  ok(!('a' in parseSayAs('a=あ')) && !('3' in parseSayAs('3=three')),
+    '読み方 … 1文字の名前も、数字で始まる名前も拾わない')
+  /* **読めない読みは、その1件だけ捨てる**(半分だけ直さない) */
+  ok(Object.keys(parseSayAs('UMITO=海人')).length === 0,
+    '読み方 … 読めない読みは、その1件を捨てる')
+
+  /* ── ③ 英文への当て方 ──────────────────────────── */
+  ok(applySayAs('We visited UMITO today.', 表) === 'We visited Oo-mee-toh today.',
+    '読み方 … 英文の中の名前を置き換える')
+  /* **語の切れ目でだけ当てる**(`UMITOS` の中に当たらない) */
+  ok(applySayAs('UMITOS is different.', 表) === 'UMITOS is different.',
+    '読み方 … 語の途中には当てない')
+  /* **表が空なら、1文字も変えない**(指紋が変わらない = 0円) */
+  ok(applySayAs('Nothing changes here.', {}) === 'Nothing changes here.'
+    && sayAsText('Nothing changes here.', 表) === '',
+  '読み方 … 変えるものが無ければ、1文字も変えない(0円)')
+
+  /* ── ④ 画面と保存の側が、本当にそれを通しているか ────────── */
+  const play6 = noC6(read6('src/lib/audioPlaylist.js'))
+  /* **読み上げにする欄は `audioTextOf()` 1か所** */
+  ok(/const said = String\(it\?\.audio_text \?\? ''\)\.trim\(\)/.test(play6)
+    && /if \(said && from !== 'audio_text'\) return said/.test(play6),
+  '読み方 … 読み上げにする英文は `audioTextOf()` 1か所が決める')
+  /* **リスニングでは二重にしない**(あちらは `audio_text` が画面にも出る) */
+  ok(/from !== 'audio_text'/.test(play6),
+    '読み方 … リスニングでは二重にしない(その文字は画面にも出る)')
+  /* **画面が書き写していないか。** 書き写すと、そこだけ素通りする */
+  for (const f of [
+    'src/components/LessonView.jsx',
+    'src/components/MaterialBody.jsx',
+    'src/components/LearnerHomework.jsx',
+  ]) {
+    const src6 = noC6(read6(f))
+    ok(!/it\[(secType|type)\.audioFrom\]/.test(src6),
+      `読み方 … ${f.split('/').pop()} が読む欄を書き写していない`)
+  }
+  /* **保存の側**。`topic`(細かい指定)から表を作って、設問に焼き込む */
+  const mat6 = noC6(read6('src/lib/materials.js'))
+  ok(/const say = parseSayAs\(topic\)/.test(mat6)
+    && /cleanItems\(sec\.items, sec\.exercise_type, say\)/.test(mat6),
+  '読み方 … 「細かい指定」から表を作って、設問に渡している')
+  /* **リスニングには焼き込まない・上書きしない・空なら欄を作らない** */
+  ok(/from !== 'audio_text' && !row\.audio_text/.test(mat6) && /if \(said\) row\.audio_text = said/.test(mat6),
+    '読み方 … リスニングには焼き込まず、もう在る欄も上書きしない')
+  /* **書き方の案内は1か所**(6つの種類に書き写さない) */
+  const kinds6 = noC6(read6('src/data/materialKinds.js'))
+  ok((kinds6.match(/UMITO=ウミト/g) ?? []).length === 1
+    && /export const SAY_AS_HINT/.test(kinds6),
+  '読み方 … 書き方の案内は `SAY_AS_HINT` 1か所')
 }
 
 /* ────────────────────────────────────────────────────────────

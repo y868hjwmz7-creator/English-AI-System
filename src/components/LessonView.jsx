@@ -2060,9 +2060,12 @@ export default function LessonView({
                       /* **読み上げは かたまり だけ。** 本文の1文には付けない
                          —— 本文の側ですでに音になっており、ここで別に
                          作ると同じ英文にもう一度課金される(CLAUDE.md) */
-                      audio={secType?.audioFrom && it[secType.audioFrom] ? (
+                      /* **読む欄は `audioTextOf()` 1か所**(第5.266節)。
+                         `it[secType.audioFrom]` と書き写すと、
+                         **読み方を直した英文がここだけ素通りする** */
+                      audio={audioTextOf(it, sec.exercise_type) ? (
                         <SpeakButton
-                          text={it[secType.audioFrom]}
+                          text={audioTextOf(it, sec.exercise_type)}
                           voice={voiceFor(secCast, it.speaker)}
                           clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                           tier={secTier}
@@ -2178,7 +2181,10 @@ export default function LessonView({
                       **横に並べる相手が変わると効かなくなる**形だった */}
                   <div className="lesson-acts no-print">
                   {secIsPassage ? null
-                    : secType?.audioFrom && it[secType.audioFrom]
+                    /* **「音があるか」も `audioTextOf()` で見る**(第5.266節)。
+                       片方だけ書き写すと、**ボタンは出るのに鳴らすものが無い**
+                       (または、その逆)という食い違いが起きる */
+                    : audioTextOf(it, sec.exercise_type)
                     && playingAll && speakingKey === k(it, i) ? (
                     /* **止めるときも、錠剤のまま**(2026-09 実機・利用者の指定)。
 
@@ -2196,13 +2202,14 @@ export default function LessonView({
                             onClick={() => { stopAll(); setReadingAt(null) }}>
                       <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
                     </button>
-                  ) : secType?.audioFrom && it[secType.audioFrom] && (
+                  ) : audioTextOf(it, sec.exercise_type) && (
                     /* **三角は添えない。** ここへ来るのは本文以外
                        (内容の理解・語句・単語・フレーズ)だけで、
                        1本の音声に入っていないので文で送る先が無い
                        (効かない操作を見せない) */
                     <SpeakButton
-                      text={it[secType.audioFrom]}
+                      /* **読む欄は `audioTextOf()` 1か所**(第5.266節) */
+                      text={audioTextOf(it, sec.exercise_type)}
                       voice={voiceFor(secCast, it.speaker)}
                       clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                       tier={secTier}
