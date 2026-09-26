@@ -245,7 +245,14 @@ export default function QrCard({
           {face}
         </button>
       ) : (
+        /* **出したあとも、名前を持たせる**(第5.262節・test:bar が見つけた)。
+           無いと、**開いているのか閉じているのか、読み上げで分からない。**
+           `role` は付けない —— 中に押せるもの(語ごとの `<button>`)が
+           入るので、**押せるものの中に押せるものが入る**ことになる。
+           **キーボードで閉じる道は無い** —— そちらは「まだ / 言える」で
+           次の問へ進むと、ひとりでに閉じた状態から始まる */
         <div className="qr-body qr-body--tap is-shown" ref={bodyRef}
+             aria-label={revealLabel(true, pair.askEn ? 'answer' : 'en')}
              onClick={(e) => { if (tapToggles(e.target)) setShown(false) }}>
           {face}
         </div>

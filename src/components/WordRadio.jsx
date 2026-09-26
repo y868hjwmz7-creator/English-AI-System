@@ -413,9 +413,15 @@ export default function WordRadio({
           </label>
           {/* **読み方は、選べるものが2つ以上あるときだけ出す**
               (**効かない操作を見せない**・CLAUDE.md)。
-              日本語の読み上げを外したので、いまは「英語だけ」1つである */}
+              日本語の読み上げを外したので、いまは「英語だけ」1つである。
+
+              **自分の名前(`--mode`)を持つ**(第5.262節)。見張りは
+              「`--gap` と `--song` 以外」という**外して数える形**だったので、
+              欄が1つ増えるたびに巻き込まれていた
+              (曲の題を数えてしまった 2026-09-23 と、まったく同じ形)。
+              **欲しいものを名指しする**ほうが、増えても壊れない */}
           {modes.length > 1 && (
-            <label className="wb-formpick radio-pick">
+            <label className="wb-formpick radio-pick radio-pick--mode">
               <span className="sr-only">読み方</span>
               <select value={mode}
                       onChange={(e) => {

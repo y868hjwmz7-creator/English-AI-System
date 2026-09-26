@@ -3927,7 +3927,12 @@ export default defineConfig({
            片方を消しても合計が合ってしまう(素通りする)。
            **並び順で取らない** —— 読み方の欄が消えると、そこが
            間の欄に入れ替わって**気づけない**(実際にそうなった) */
-        読み方: [...document.querySelectorAll('.focus-top .radio-pick:not(.radio-pick--gap) select')]
+        /* **欲しいものを名指しする**(第5.262節)。もとは
+           「`--gap` 以外」という**外して数える形**だったので、
+           欄が1つ増えるたびに巻き込まれていた
+           (曲の題を数えた 2026-09-23、何問ずつを数えた 2026-09-26)。
+           **読み方は `--mode` である** */
+        読み方: [...document.querySelectorAll('.focus-top .radio-pick--mode select')]
           .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
         間: [...document.querySelectorAll('.focus-top .radio-pick--gap select')]
           .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
@@ -3992,12 +3997,13 @@ export default defineConfig({
       return {
         文: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
         訳: document.querySelector('.radio-ja')?.textContent?.trim() ?? '',
-        /* **曲の欄を混ぜない**(2026-09-23)。`--gap` だけを外していたので、
-           **曲の題まで「読み方」として数えていた** —— 読み方の数を
-           見ようとして、はじめ赤くなった。曲は `--song` である */
-        読み方: [...document.querySelectorAll(
-          '.focus-top .radio-pick:not(.radio-pick--gap):not(.radio-pick--song) select',
-        )].flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
+        /* **外して数えるのをやめた**(第5.262節)。
+           `--gap` を外し、次に `--song` を外し、それでも
+           **「何問ずつ」が増えたとたんにまた巻き込まれた。**
+           外す側を足し続けるかぎり、欄が増えるたびに同じことが起きる ——
+           **欲しいものを名指しする**(読み方は `--mode`) */
+        読み方: [...document.querySelectorAll('.focus-top .radio-pick--mode select')]
+          .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
         間: [...document.querySelectorAll('.focus-top .radio-pick--gap select')]
           .flatMap((s) => [...s.options].map((o) => o.textContent.trim())),
         たて: body ? body.scrollHeight - body.clientHeight : 0,
