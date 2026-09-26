@@ -23,6 +23,8 @@ import {
   DEFAULT_FORM, DEFAULT_ORDER, QUIZ_FORMS, SESSION_SIZE, WORD_ORDERS,
   buildSession, formOf, isSelfGraded, orderOf, orderWords, pickForm,
 } from '../src/lib/wordQuiz.js'
+/* **色の一覧を書き写さない**(第5.242節)。3つの色は `btnTone.js` 1か所 */
+import { hasTone } from '../src/lib/btnTone.js'
 import { clozeAt, hasCloze } from '../src/lib/clozeSentence.js'
 import { hasMaterialWords, materialWordsOf } from '../src/lib/materialWords.js'
 import {
@@ -7382,15 +7384,33 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
        帯は「細く1行」なので**名前を置く場所が無い。** だから
        **選び欄(`<select>`)は1つも置かず**、歯車だけを置く。
        中身は `SettingsSheet`(スマホは下から / PC は吹き出し)が出す。 */
-    ok(/topEnd=\{\(\s*<button type="button" ref=\{gearRef\}/.test(rd),
-      '聞き流し … 上の帯に置くのは、設定を開く歯車だけ')
-    /* **帯の中に選び欄を戻していないか。** `topEnd=` から、その閉じまでを見る */
+    /* **帯に置くのは、押すものだけ**(第5.274 → 第5.276節)。
+       いまは2つ —— **やめる**と**歯車**である。
+         > ×聞き流しをやめる、ボタンも上に移動、そして白にしてください */
+    ok(/topEnd=\{\(\s*<div className="radio-topend">/.test(rd),
+      '聞き流し … 上の帯に置くのは、押すもの(やめる・歯車)だけ')
+    /* **帯の中に選び欄を戻していないか。** `topEnd=` から、その閉じまでを見る。
+       **中に `)}` がいくつも入る**(条件付きで出すもの)ので、
+       **同じ深さの閉じ**で切る —— 最初の `)}` で切ると、途中までしか見ない */
     {
       const i = rd.indexOf('topEnd={(')
-      const j = rd.indexOf(')}', i)
-      ok(i > 0 && j > i && !/<select/.test(rd.slice(i, j)),
-        '聞き流し … 上の帯に選び欄を戻していない')
+      const j = rd.indexOf('\n      )}', i)
+      const 中 = i > 0 && j > i ? rd.slice(i, j) : ''
+      ok(中 && !/<select/.test(中), '聞き流し … 上の帯に選び欄を戻していない')
+      /* **やめる道も、帯にある**(第5.276節)。
+         下の行に残したままだと、同じものが2つ並ぶ */
+      ok(/radio-quit/.test(中) && /聞き流しをやめる/.test(中),
+        '聞き流し … やめる道も、上の帯にある')
+      /* ★ **白にする**(利用者の指定)。色(`btn--primary` / `btn--quiet` /
+         `btn--ghost`)を**1つも足さない**ので、帯の決まりが `--btn-bg`(白)で
+         塗る。**3色の一覧は `btnTone.js` 1か所**から読む(書き写さない) */
+      const やめるの色 = (中.match(/className="([^"]*radio-quit[^"]*)"/) ?? [])[1] ?? ''
+      ok(やめるの色 && !hasTone(やめるの色),
+        '聞き流し … やめるは白(3色のどれも足していない)', やめるの色)
     }
+    /* **下の行には残していない**(同じことをするものを2つ見せない) */
+    ok(!/radio-tools[\s\S]{0,400}?聞き流しをやめる/.test(rd),
+      '聞き流し … やめるを、下の行に二重に置いていない')
     /* **入れ物は「出しかた」と同じもの**(同じ決まりを2か所に持たない) */
     ok(/<SettingsSheet/.test(rd) && /anchorEl=\{gearRef\.current\}/.test(rd),
       '聞き流し … 設定は `SettingsSheet` を、歯車の近くに出す')

@@ -440,12 +440,32 @@ export default function WordRadio({
          パソコンでは吹き出し。**「出しかた」(`ReviewScope`)と同じ入れ物で、
          閉じ方(✕ / 外側 / Esc)もあちらが持っている。 */
       topEnd={(
-        <button type="button" ref={gearRef}
-                className="nav-icon-btn radio-gear"
-                aria-label="設定" aria-expanded={setsOpen}
-                onClick={() => setSetsOpen((v) => !v)}>
-          <GearIcon />
-        </button>
+        /* **2つまとめて右へ寄せる**(第5.276節)。
+           片方ずつ `margin-left: auto` を持たせると、
+           **空きを分け合って**まん中に散らばる */
+        <div className="radio-topend">
+          {/* **やめる道も、上の帯に置く**(第5.276節・2026-09-26 利用者の指定
+              「×聞き流しをやめる、ボタンも上に移動、そして白にしてください」)。
+
+              **左上が ☰ の画面にだけ出す**(第5.172節)。
+              ✕ のままの画面では、左上と2つになってしまう。
+
+              **白にする** —— 色を1つも足さないと、帯の決まり
+              (`.focus--plain .focus-top .btn`)が `--btn-bg`(白)で塗る。
+              帯の地は灰色(`--surface-0`)なので、白は**浮いて見える**
+              (紙の上で白が見えなくなるのとは、地が逆である)。 */}
+          {onMenu && (
+            <button type="button" className="btn btn--small radio-quit" onClick={stop}>
+              <CloseIcon />聞き流しをやめる
+            </button>
+          )}
+          <button type="button" ref={gearRef}
+                  className="nav-icon-btn radio-gear"
+                  aria-label="設定" aria-expanded={setsOpen}
+                  onClick={() => setSetsOpen((v) => !v)}>
+            <GearIcon />
+          </button>
+        </div>
       )}
       /* **設定は、上の帯に置かない**(第5.271節・2026-09-26 実機・利用者の指摘)。
 
@@ -508,16 +528,10 @@ export default function WordRadio({
                   onClick={() => { stopReading(); move(nextIndex(atRef.current, list.length)) }}>
             次へ
           </button>
-          {/* **やめる道は、ここに残す**(第5.172節)。
-              左上が ☰ になったので、**押さないと練習へ戻れなくなる。**
-              ☰ から戻ることもできるが、それはメニューを1周する道である
-              (**行き止まりを作らない**・CLAUDE.md)。
-              ✕ のままの画面では、左上と2つになってしまうので出さない */}
-          {onMenu && (
-            <button type="button" className="btn btn--ghost" onClick={stop}>
-              <CloseIcon />聞き流しをやめる
-            </button>
-          )}
+          {/* **やめる道は、上の帯へ移した**(第5.276節)。
+              ここには「とめる」と「次へ」だけを残す ——
+              **同じことをするものを2つ見せない**(CLAUDE.md)。
+              道そのものは消していない(第5.172節「行き止まりを作らない」)。 */}
         </div>
 
         {/* ══════════════════════════════════════════════════════

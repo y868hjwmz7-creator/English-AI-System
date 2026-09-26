@@ -4164,6 +4164,32 @@ export default defineConfig({
         帯の欄: document.querySelectorAll('.focus-top select').length,
       }
     })
+    /* ★ **やめる道は、上の帯にあって、白い**(第5.276節・利用者の指定
+         「×聞き流しをやめる、ボタンも上に移動、そして白にしてください」)。
+       **地の色は、帯と比べて決める** —— 値を書き写すと、配色を直した日に
+       画面は正しいのに赤くなる(**性質で見る**・CLAUDE.md)。 */
+    const やめる = await page.evaluate(() => {
+      const 帯 = document.querySelector('.focus-top')
+      const q = document.querySelector('.focus-top .radio-quit')
+      const 下 = [...document.querySelectorAll('.radio-tools .btn')]
+        .map((b) => b.textContent.trim())
+      if (!帯) return { 帯なし: true }
+      const 明るさ = (c) => {
+        const [r, g, b] = (String(c).match(/\d+/g) ?? []).map(Number)
+        return [r, g, b].some((v) => v === undefined) ? -1 : (r + g + b) / 3
+      }
+      return {
+        ある: !!q,
+        字: q ? q.textContent.trim() : '',
+        帯の明るさ: Math.round(明るさ(window.getComputedStyle(帯).backgroundColor)),
+        やめるの明るさ: q
+          ? Math.round(明るさ(window.getComputedStyle(q).backgroundColor)) : -1,
+        // 帯が2段になっていないか(押すものを足して太らせない)
+        帯の高さ: Math.round(帯.getBoundingClientRect().height),
+        下に残っている: 下.some((t) => t.includes('やめる')),
+        下のボタン: 下,
+      }
+    })
     const 畳んだまま = await 欄を読む()
     await page.click('.radio-gear')
     await page.waitForTimeout(150)
@@ -4229,6 +4255,22 @@ export default defineConfig({
       ng(`QRの聞き流し(${w}px) … 文が出ていない`, got.文 || '(空)')
     } else if (!/[぀-ヿ㐀-鿿]/.test(got.訳)) {
       ng(`QRの聞き流し(${w}px) … 訳が出ていない`, got.訳 || '(空)')
+    } else if (!やめる.ある) {
+      /* **やめる道が、帯にあるか**(第5.276節)。
+         消してしまうと、☰ の画面では練習へ戻れなくなる */
+      ng(`QRの聞き流し(${w}px) … やめる道が上の帯に無い`, `下は ${やめる.下のボタン.join(' / ')}`)
+    } else if (やめる.下に残っている) {
+      /* **下にも残っていないか**(同じことをするものを2つ見せない) */
+      ng(`QRの聞き流し(${w}px) … やめるが上と下の両方にある`, やめる.下のボタン.join(' / '))
+    } else if (やめる.やめるの明るさ <= やめる.帯の明るさ) {
+      /* **白い**(利用者の指定)。**値を書き写さず、帯と比べる** ——
+         帯の地(灰)より明るければ、押せるものとして浮いて見える */
+      ng(`QRの聞き流し(${w}px) … やめるが帯より明るくない(白く見えない)`,
+        `帯 ${やめる.帯の明るさ} / やめる ${やめる.やめるの明るさ}`)
+    } else if (やめる.帯の高さ > 72) {
+      /* **帯を2段にしない**(`.focus-top` は「細く1行」という決まり)。
+         押すものを足したときに、いちばん起きやすい壊れ方である */
+      ng(`QRの聞き流し(${w}px) … 帯が2段になっている`, `${やめる.帯の高さ}px`)
     } else if (畳んだまま.帯の欄 !== 0 || 設定.帯の欄 !== 0) {
       /* **上の帯に選び欄を戻していないか**(第5.271節・利用者の指摘)。
          **こちらの画面が言われた場所である** —— 単語帳のほうも
@@ -4289,7 +4331,9 @@ export default defineConfig({
         `${got.たて}px —— 1問だけに向き合う画面である`)
     } else {
       ok(`QRの聞き流し(${w}px) … 文も訳も出て、送るものが無く、`
-        + `どの読み方でも設定の欄がそろう(名前「${一番長い名前で.名前.join(' / ')}」)`)
+        + `どの読み方でも設定の欄がそろう(名前「${一番長い名前で.名前.join(' / ')}」)。`
+        + `やめるは帯に白く(帯 ${やめる.帯の明るさ} → ${やめる.やめるの明るさ}・`
+        + `帯 ${やめる.帯の高さ}px)`)
     }
   }
 
@@ -9221,6 +9265,18 @@ for (const W of [1280, 390]) {
     'wordbook-choice',
     // 絵だけのボタン。上の3つと同じ帯に並ぶ
     'rscope-sort', 'iconbtn',
+    /* **聞き流しをやめる**(第5.276節・2026-09-26 利用者の指定
+         「×聞き流しをやめる、ボタンも上に移動、そして白にしてください」)。
+
+       この決まりは「**白い紙の上**で押せるものに見えない」という話である。
+       ところがこのボタンが載るのは**集中モードの帯**で、地は灰色
+       (`--surface-0`)—— **白は地の色ではなく、浮いて見える色**である。
+       となりの `冊名 ▾`(`bookpick`)を外してあるのと、まったく同じ理由。
+
+       **代わりに、もっと強い見張りを置いてある**(第5.276節)——
+       「やめるの地が、帯の地より**明るい**か」を描いて測る。
+       名指しで外しても、白く見えなくなれば、そちらが赤くなる。 */
+    'radio-quit',
   ]
   for (const [s, extra] of SCREENS) {
     for (const w of [390, 1280]) {
