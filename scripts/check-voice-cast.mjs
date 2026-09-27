@@ -1502,5 +1502,100 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   } else ok('RIZAP の配役 … 画面に出す名前を書き写していない')
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   **文型ドリルの声は、必ず女性から選ぶ**(第5.291節・2026-09-27 実機)
+
+     > 文系トレーニングの音声の男性の声がよくないです。女性の方が良いです
+
+   **「たまたま男性だった」のではない。必ず男性だった。**
+   `pickVoices()` は人数の多い性別から交互に選ぶ。アメリカの
+   ナレーション向きは 女2人 / 男4人 なので、いつも男性から始まる。
+   文型ドリルは**声が1人**なので、その1人目がそのまま使われていた。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const { pickVoices, findVoice, voiceCountFor, voicePurposeFor, voiceFirstGenderFor }
+    = await import('../src/data/clipVoices.js')
+
+  /* **画面(`MaterialForm` の `cast`)とまったく同じ引き方をする。**
+     ここで別の引き方をすると、画面が直っていなくても緑になる */
+  const えらぶ = (kind, accent = 'us') => {
+    const n = voiceCountFor(kind)
+    return pickVoices(accent, n * 2, voicePurposeFor(kind), voiceFirstGenderFor(kind))[0]
+  }
+  const 数える = (kind, accent = 'us') => {
+    const c = { female: 0, male: 0 }
+    /* **`pickVoices` は毎回混ぜる。** 1回だけ見ると、
+       直っていなくても当たることがある —— **何度もまわす** */
+    for (let i = 0; i < 200; i += 1) c[findVoice(えらぶ(kind, accent))?.gender] += 1
+    return c
+  }
+
+  /* ── ① **文型ドリルは、何度まわしても女性** ── */
+  const 型 = 数える('pattern')
+  if (型.male) {
+    ng('文型ドリル … 1人目に男性が選ばれることがある', `女 ${型.female} / 男 ${型.male}`)
+  } else ok(`文型ドリル … 200 回まわして 200 回とも女性(前は 200 回とも男性)`)
+
+  /* ── ② **「出る」と「出ない」の両方を見る** ──
+     どの種類でも女性にしてしまう形に書き換えたら、ここが赤くなる。
+     **言われた場所だけを直す**(記事・単語 / フレーズ・Speech練習は触っていない) */
+  const よそ = ['reading', 'vocab', 'speech'].filter((k) => voiceFirstGenderFor(k) !== null)
+  if (よそ.length) {
+    ng('文型ドリル … 言われていない種類まで女性にしている', よそ.join(' / '))
+  } else ok('文型ドリル … 記事・単語 / フレーズ・Speech練習には手を出していない')
+
+  /* ── ③ **会話は、これまでどおり交互** ──
+     1人目を決める仕組みを足したせいで、会話の2人が同じ性別になっていないか */
+  const 組 = pickVoices('us', 2, 'conversation')
+  const 性 = 組.map((id) => findVoice(id)?.gender)
+  if (組.length !== 2 || 性[0] === 性[1]) {
+    ng('会話 … 2人が同じ性別になっている(聞き分けられない)', 性.join(' / '))
+  } else ok(`会話 … これまでどおり男女が交互(${性.join(' / ')})`)
+
+  /* ── ④ **足りなくなったら、もう一方から選ぶ**(黙って落とさない)──
+     **「無ければ素通り」する検証を書かない**(CLAUDE.md)。
+     どの訛りも男女そろっているので「女性のいない訛り」は作れないが、
+     **人数より多く求めれば、必ず足りなくなる** ——
+     アメリカのナレーション向きは女2人なので、6人求めれば
+     3人目の女性で尽きる。そこで男性に落ちなければ、
+     **返る人数が足りなくなる**(= 声の当たらない役が出る) */
+  {
+    const 六人 = pickVoices('us', 6, 'narration', 'female')
+    const 男女 = 六人.map((id) => findVoice(id)?.gender)
+    if (六人.length !== 6) {
+      ng('おまかせ … 女性が尽きたところで人数が足りなくなる',
+        `${六人.length} 人(${男女.join(' / ')})`)
+    } else if (男女[0] !== 'female') {
+      ng('おまかせ … 言われた性別から始まっていない', 男女.join(' / '))
+    } else if (new Set(六人).size !== 6) {
+      ng('おまかせ … 同じ声を二度出している', 六人.join(' / '))
+    } else {
+      ok(`おまかせ … 女性が尽きたら男性に落ちる(${男女.join(' / ')})`)
+    }
+  }
+
+  /* ── ⑤ **画面が、その判断を通っているか** ──
+     定義だけあって誰も呼ばなければ、何も起きない */
+  const form = readFileSync(new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  if (!/pickVoices\(accent, voiceCount \* 2, voicePurpose,\s*voiceFirstGenderFor\(kind\)\)/
+    .test(form)) {
+    ng('文型ドリル … 教材を作る画面が、1人目の性別を渡していない')
+  } else ok('文型ドリル … 教材を作る画面が、`voiceFirstGenderFor(kind)` を渡す')
+  /* **見張り(`useMemo`)に `kind` が入っているか。**
+     `voicePurpose` は文型ドリルと記事でどちらも `narration` なので、
+     `kind` が無いと**種類を変えても選び直されない** */
+  if (!/\}, \[accent, voiceCount, voicePurpose, picked, kind\]\)/.test(form)) {
+    ng('文型ドリル … 種類を変えても、声が選び直されない',
+      '`useMemo` の見張りに `kind` が無い')
+  } else ok('文型ドリル … 種類を変えたら、声を選び直す(`useMemo` に `kind` がある)')
+
+  /* ── ⑥ **判断は1か所。画面の中で種類を見ていない** ── */
+  if (/kind === 'pattern'/.test(form)) {
+    ng('文型ドリル … 画面の中で種類を見ている',
+      '判断は `voiceFirstGenderFor()` 1か所に置くこと')
+  } else ok('文型ドリル … 画面の中で `kind === \'pattern\'` と書いていない')
+}
+
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

@@ -101,6 +101,48 @@ export const voicePurposeFor = (kind) =>
   (kind === 'dialogue' ? 'conversation' : 'narration')
 
 /**
+ * ============================================================================
+ * **おまかせの1人目を、どの性別から選ぶか**(第5.291節・2026-09-27 利用者の指定)
+ *
+ *   > 文系トレーニングの音声の男性の声がよくないです。女性の方が良いです
+ *
+ * ── 「たまたま男性だった」のではない。**必ず男性だった** ──────────
+ *
+ *   `pickVoices()` は**人数の多い性別から**交互に選ぶ。
+ *   アメリカ・ナレーション向きの名簿は
+ *
+ *       女 2 人(Jessica / Nichalia)/ 男 4 人(David / Zhan / Adam / Joe)
+ *
+ *   なので、いつも男性から始まっていた。**文型ドリルは声が1人**
+ *   (`voiceCountFor` が 1 を返す)なので、**その1人目がそのまま使われる。**
+ *   素の node で 400 回まわして、**400 回とも男性**だった ——
+ *   **女性が選ばれる道が1本も無かった。**
+ *
+ * ── 交互にする決まりは、1人のときには意味が無い ────────────────
+ *
+ *   「人数の多い性別から」は、**会話でできるだけ多くの声を使う**ための
+ *   決まりである。1人しか使わない教材では何の役にも立たないので、
+ *   ここで**指定できる**ようにした。
+ *
+ * ── 直したのは文型ドリルだけ(**言われた場所だけを直す**)────────
+ *
+ *   記事・単語 / フレーズ・Speech練習・テストも**同じく必ず男性**になる。
+ *   **別の画面なので触っていない。** 広げるなら、ここへ種類を足すだけ
+ *   —— **判断はこの1か所**にある(画面の中で `kind === '…'` と書かない)。
+ *
+ * ── すでに作った教材は変わらない ──────────────────────────
+ *
+ *   声は**作ったときに1回だけ決めて教材に保存する**(開くたびに選び直すと
+ *   毎回ちがう声になり、そのたびに課金される)。だからここを変えても
+ *   **これから作る教材にだけ効く。** すでにある教材を女性にするには、
+ *   さがす画面の「読み上げ音声を作り直す」で声を選び直す(= 課金される)。
+ * ============================================================================
+ *
+ * @returns {'female'|'male'|null} `null` なら、これまでどおり人数で決める
+ */
+export const voiceFirstGenderFor = (kind) => (kind === 'pattern' ? 'female' : null)
+
+/**
  * 会話に出せる人数(2026-09 利用者の要望)。
  *
  *   > スピーカーが揃ったので、「会議」というジャンルを作りたいです。
@@ -793,15 +835,25 @@ export const accentsWithVoices = (purpose = null) =>
  * 選ぶのは**教材を作るとき1回だけ**で、結果は教材に保存する。
  * 開くたびに選び直すと、**同じ教材なのに毎回ちがう声になり、
  * そのたびに音声を作り直す(= 課金される)。**
+ *
+ * @param firstGender **1人目をどちらから選ぶか**(第5.291節)。
+ *   渡さなければ、これまでどおり**人数の多いほうから**始める。
+ *   渡した性別の声が1人もいなければ、もう一方から選ぶ(黙って落とさない)。
+ *   **どの種類で何を渡すかは `voiceFirstGenderFor()` 1か所が決める。**
  */
-export function pickVoices(accent, n = 1, purpose = null) {
+export function pickVoices(accent, n = 1, purpose = null, firstGender = null) {
   const pool = voicesOfAccent(accent, purpose)
   if (!pool.length) return []
   const shuffled = [...pool].sort(() => Math.random() - 0.5)
   const byGender = { female: shuffled.filter((v) => v.gender === 'female'),
     male: shuffled.filter((v) => v.gender === 'male') }
   const out = []
-  let want = byGender.female.length >= byGender.male.length ? 'female' : 'male'
+  /* **1人目の性別を言われていれば、そちらから。**
+     言われていなければ、これまでどおり**人数の多いほうから**始める
+     (会話でできるだけ多くの声を使うための決まりである) */
+  let want = (firstGender === 'female' || firstGender === 'male')
+    ? firstGender
+    : (byGender.female.length >= byGender.male.length ? 'female' : 'male')
   while (out.length < n) {
     const other = want === 'female' ? 'male' : 'female'
     const pick = byGender[want].shift() ?? byGender[other].shift()

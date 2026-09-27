@@ -62,7 +62,7 @@ import {
 import {
   CLIP_ACCENTS, DEFAULT_ACCENT, DEFAULT_READ_STYLE, MIN_MEETING_SPEAKERS,
   READ_STYLES, findVoice, pickVoices, readStyleHint, speakerCountsFor, styledVoiceId,
-  voiceCountFor, voicePurposeFor, voicesOfAccent,
+  voiceCountFor, voiceFirstGenderFor, voicePurposeFor, voicesOfAccent,
 } from '../data/clipVoices.js'
 /* **出来上がった名前に、声の並びを合わせる**(2026-09 利用者の指摘
      「男の役に女性の声、女性の役に男の声がアサインされることがほとんど」)。
@@ -440,7 +440,11 @@ export default function MaterialForm({
     }
     if (chosen.length >= voiceCount) return chosen
     // 足りないぶんをおまかせで足す。**すでに指名した人とは重ねない**
-    for (const id of pickVoices(accent, voiceCount * 2, voicePurpose)) {
+    /* **1人目をどちらの性別から選ぶかは `voiceFirstGenderFor()` 1か所**
+       (第5.291節・利用者の指定「文型トレーニングの…女性の方が良いです」)。
+       ここで `kind === 'pattern'` と書かない —— 置く場所の数だけ食い違う */
+    for (const id of pickVoices(accent, voiceCount * 2, voicePurpose,
+      voiceFirstGenderFor(kind))) {
       if (chosen.length >= voiceCount) break
       if (!chosen.includes(id)) chosen.push(id)
     }
@@ -449,8 +453,12 @@ export default function MaterialForm({
        **描き直すたびに別の配列**になり、そのたびにおまかせを引き直す
        (= 保存する声が毎回変わる)。中身は `accent` と `voicePurpose` で
        決まっているので、その2つを見ていれば足りる。
-       「見張りに、自分が書き換えるものを入れない」と同じ落とし穴である */
-  }, [accent, voiceCount, voicePurpose, picked])
+       「見張りに、自分が書き換えるものを入れない」と同じ落とし穴である。
+
+       **`kind` は必ず入れる**(第5.291節)。`voicePurpose` は
+       文型ドリルと記事で**どちらも `narration`** なので、
+       `kind` が無いと**種類を変えても1人目の性別が選び直されない** */
+  }, [accent, voiceCount, voicePurpose, picked, kind])
 
   /**
    * 窓口へ渡す「話す人の性別」。**声の並びと同じ順**である。
