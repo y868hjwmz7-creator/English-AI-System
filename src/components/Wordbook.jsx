@@ -1135,6 +1135,19 @@ export default function Wordbook({
   const pickedBookRef = useRef(false)
 
   /**
+   * **冊を替えても、聞き流しを続ける**(第5.283節・2026-09-27 利用者の指定)。
+   *
+   * `dropRun()` は `setRadio(null)` を含むので、冊を替えると
+   * **聞き流しから放り出される。** 替えたのは「次はあの冊を聴きたい」
+   * からであって、やめたいわけではない。
+   *
+   * **`dropRun()` は変えない** —— 帯の `冊名 ▾` から替えた人は、
+   * これまでどおり練習へ降りる。**どちらから替えたかを、この印で分ける。**
+   * **Quick Response とまったく同じ作り**(`QrReview.jsx`)。
+   */
+  const keepRadioRef = useRef(false)
+
+  /**
    * **開いた瞬間に1問目**(第5.167節・2026-09 利用者の提案)。
    *
    *   > サイドバーや下のタブからクリックしたらすぐに実際のトレーニングの
@@ -1159,6 +1172,12 @@ export default function Wordbook({
        第5.191節で Quick Response が踏んだのと、まったく同じ形である。
        **移っていないときは、これまでどおり素通りする** */
     if (triedBooksRef.current.size && rowsBookRef.current !== book) return
+    /* ★ **聞き流しの中で冊を替えたときも、新しい冊の語が届くまで待つ**
+       (第5.283節)。届く前に開き直すと、**前の冊の語を読み続ける** ——
+       第5.191節・第5.200節で踏んだのと、まったく同じ抜け方である。
+       **`opened` を立てる前に返す**(立ててから戻すと、
+       届かなかったときに描き直しが止まらない) */
+    if (keepRadioRef.current && rowsBookRef.current !== book) return
     /* **判断が済んだことを、必ず先に立てる。** ここを「始めたときだけ」に
        すると、1語も無い帳面で**帯1本のまま止まる**(第5.172節) */
     setOpened(true)
@@ -1187,7 +1206,18 @@ export default function Wordbook({
       }
       /* **出すものが無い冊に替えたときは、一覧の画面へ戻す**(第5.173節)。
          帯のまま止めると、読み込み中に見えて終わらない */
+      /* **聞き流しへ戻れないなら、印も下ろす**(持ち越すと、
+         次に冊を替えたときに勝手に聞き流しが始まる) */
+      keepRadioRef.current = false
       setRunning(false)
+      return
+    }
+    /* ★ **聞き流しの中で冊を替えた人は、聞き流しのまま**(第5.283節)。
+         新しい冊の語が届いたので、ここで開き直す。
+         **`listen()` を呼ぶ** —— 読む語の選び方を書き写さない */
+    if (keepRadioRef.current) {
+      keepRadioRef.current = false
+      listen()
       return
     }
     start()
@@ -2012,6 +2042,18 @@ export default function Wordbook({
       {radio && (
         <WordRadio
           rows={radio}
+          /* **聞き流しの中でも、教材(冊)をえらべる**(第5.283節・
+             2026-09-27 利用者の指定)。**一覧は `books` 1つ**
+             (帯の `冊名 ▾` と同じもの・書き写さない) */
+          books={books}
+          book={book}
+          onBook={(id) => {
+            /* **聞き流しのまま、次の冊へ**(上の `keepRadioRef`)。
+               ここから先は勝手に移らない(第5.200節・`pickedBookRef`) */
+            keepRadioRef.current = true
+            pickedBookRef.current = true
+            setBookWanted(id); dropRun()
+          }}
           /* **練習の画面に出している題を、そのまま渡す**(第5.264節)。
              `shownLabel` は「◯◯だけ 12 語」まで含んだもの ——
              **画面に出ているものと1文字も違わない** */

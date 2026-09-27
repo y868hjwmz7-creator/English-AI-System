@@ -79,6 +79,22 @@ export default function WordRadio({
   /** 読むもの(**絞り込みと範囲を当てたあとの一覧**)。語でも文でもよい */
   rows,
   /**
+   * **聞き流しの中でも、教材(冊)をえらぶ**(第5.283節・2026-09-27
+   * 実機・利用者の指定「聞き流し内でも教材を選び…できるようにしたい」)。
+   *
+   * いままでは**いったん出て、冊を選び、もう一度入る**しかなかった。
+   * 聴きながら「次はあの冊にしよう」と思うものなので、ここで替えられる。
+   *
+   * **`BookPick`(冊名 ▾)は置かない。** あれは**自分のシート**を開くので、
+   * 設定のシートの中で開くと**二重になり、外を触ると両方閉じる**
+   * (どちらも同じ `SettingsSheet`・portal どうしでも React では
+   * 親へ伝わる)。だから**選び欄だけ**にして、ほかの設定と同じ形に並べる。
+   *
+   * **渡さなければ、その行ごと出ない**(効かない操作を見せない・CLAUDE.md)。
+   * 冊が1つしか無いときも出さない —— 押しても何も変わらないためである。
+   */
+  books = null, book = null, onBook = null,
+  /**
    * **いま何を聞き流しているのか**(第5.264節・2026-09-26 実機・利用者の指定)。
    *
    *   > まず、何を聞き流しているのかをちゃんと表示しましょう。
@@ -665,6 +681,26 @@ export default function WordRadio({
               **札の一覧も、数え方も `reviewScope.js` 1か所**である ——
               出しかたの札とまったく同じ 5 / 10 / 20 / 30 / ぜんぶ が並ぶ
               (**数え方を2通り持たない**・CLAUDE.md)。 */}
+          {/* ★ **どの教材(冊)を聞き流すか**(第5.283節・2026-09-27
+                利用者の指定「聞き流し内でも教材を選び…」)。
+
+              **いちばん上に置く。** ほかの設定(何問ずつ・読み方・並べ方)は
+              **その冊の中の話**なので、先に「どれを」が来る。
+
+              **冊が2つ以上あるときだけ出す**(`BookPick` と同じ判断)——
+              1つしか無ければ、押しても何も変わらない */}
+          {onBook && (books ?? []).length > 1 && (
+            <>
+              <label className="radio-set-name" htmlFor={`${uid}-book`}>教材</label>
+              <select id={`${uid}-book`} className="radio-set-pick radio-set-pick--book"
+                      value={book ?? ''}
+                      onChange={(e) => onBook(e.target.value)}>
+                {books.map((b) => (
+                  <option key={b.id} value={b.id}>{b.label}</option>
+                ))}
+              </select>
+            </>
+          )}
           <label className="radio-set-name" htmlFor={`${uid}-take`}>何問ずつ</label>
           <select id={`${uid}-take`} className="radio-set-pick radio-set-pick--take"
                   value={String(take)}

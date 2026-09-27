@@ -12488,6 +12488,121 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **減らしたら、頭から読み直す**(いま読んでいる場所が一覧の外へ出ない) */
     ok(/move\(0\)/.test(radio), '聞き流し … 数を変えたら、頭から読み直す')
   }
+
+  /* ── ⑥ **聞き流しの中でも、教材(冊)をえらべる** ──────────────
+   *    第5.283節・2026-09-27 利用者の指定
+   *
+   *      > 聞き流し内でも教材を選び、ランダムなどの設定をできるように
+   *      > したいです。
+   *
+   *    いままでは**いったん出て、冊を選び、もう一度入る**しかなかった。
+   *
+   *    **いちばん危ない壊れ方は「選べるのに、前の冊が鳴り続ける」である** ——
+   *    欄だけ足して `dropRun()` の後始末を忘れると、そうなる。
+   *    だから**欄があるか**と**聞き流しが続くか**の両方を見る。
+   */
+  {
+    const scr = noC(readS('src/__screens.jsx'))
+    /* ★ **見る場所を、先に切り出す。** ここで**3度空振りした** ——
+       どれも「ファイル全体で探すと、別の同じ形に当たる」形だった
+       (CLAUDE.md「置き換える前に `grep -n` で数える」の、見張り側の話)。
+
+       | 探していたもの | 当たっていた先 |
+       |---|---|
+       | `books={books}` | **帯の `BookPick`**(こちらにも同じ形で渡す) |
+       | `loaded !== poolKey` | **組み直しの側**(同じ待ち方をする) |
+       | `q.get('books') === 'one'` | **本棚の骨組み**(同じ合図を使う) |
+
+       **どれも、直したところを消しても緑のまま**だった。 */
+    const 聞き流しへ渡す = (src) => {
+      const i = src.indexOf('<WordRadio')
+      return i < 0 ? '' : src.slice(i, src.indexOf('/>', i) + 2)
+    }
+    /* **開く仕掛け**(`setOpened(true)` を持つ `useEffect`)だけを見る */
+    const 開く仕掛け = (src) => {
+      const j = src.indexOf('setOpened(true)')
+      if (j < 0) return ''
+      return src.slice(src.lastIndexOf('useEffect(() => {', j), src.indexOf('start()', j) + 7)
+    }
+    const 骨組み = (名) => {
+      const i = scr.indexOf(`const ${名} = (`)
+      return i < 0 ? '' : scr.slice(i, scr.indexOf('\n)\n', i))
+    }
+    /* **見るところが取れていることを、先に確かめる**(CLAUDE.md
+       「無ければ素通りする形の検証を書かない」)—— 切り出しに失敗すると
+       空文字になり、**下の「無い」を見る見張りが全部緑になる** */
+    ok(聞き流しへ渡す(wb2).includes('onClose') && 聞き流しへ渡す(qr2).includes('onClose')
+      && 開く仕掛け(wb2).includes('setOpened(true)') && 開く仕掛け(qr2).includes('setOpened(true)')
+      && 骨組み('RADIO').includes('<WordRadio') && 骨組み('QRRADIO').includes('<WordRadio'),
+    '聞き流し … 見張りが、見るところ(聞き流しへ渡す欄・開く仕掛け・骨組み)を取れている')
+
+    /* ── 欄そのもの ── */
+    ok(/radio-set-pick--book/.test(radio) && /books\.map\(\(b\) =>/.test(radio),
+      '聞き流し … 設定に「教材」の欄がある')
+    /* **冊が1つのときは出さない**(押しても何も変わらない・
+       効かない操作を見せない)。**「出る」と「出ない」の両方を見る** */
+    ok(/onBook && \(books \?\? \[\]\)\.length > 1 &&/.test(radio),
+      '聞き流し … 冊が1つしか無いときは、教材の欄を出さない')
+    /* **一覧は受け取るだけ。** 聞き流しの中で冊を組み立てると、
+       帯の `冊名 ▾` と食い違う(呼び名を2か所に書かない・CLAUDE.md) */
+    ok(/books = null, book = null, onBook = null,/.test(radio)
+      && !/nextFilledBook|bookSizeOf/.test(radio),
+    '聞き流し … 冊の一覧を、聞き流しの中で組み立てていない')
+    /* ★ **`BookPick`(冊名 ▾)は置かない。** あれは自分の `SettingsSheet` を
+       開くので、設定のシートの中で開くと**二重になり、外を触ると両方閉じる**
+       (portal どうしでも、React ではイベントが親へ伝わる)。
+       **選び欄だけ**にして、ほかの設定と同じ格子に並べる */
+    ok(!/BookPick/.test(radio),
+      '聞き流し … 冊えらびのシートを、設定のシートの中で開いていない')
+
+    /* ── 両方の画面が渡しているか(片方だけだと、入口で挙動が変わる)── */
+    for (const [名, src] of [['単語帳', wb2], ['Quick Response', qr2]]) {
+      /* **`<WordRadio` に渡しているか。** ファイル全体で探すと
+         **帯の `BookPick`** に当たる(上の表) */
+      const 渡す = 聞き流しへ渡す(src)
+      ok(/books=\{books\}/.test(渡す) && /book=\{book\}/.test(渡す)
+        && /onBook=\{\(id\) => \{/.test(渡す),
+      `聞き流し … ${名}が、冊の一覧といまの冊を渡している`)
+      /* ★ **冊を替えても、聞き流しを続ける。** `dropRun()` は
+         `setRadio(null)` を含むので、印を立てないと**放り出される** */
+      ok(/keepRadioRef\.current = true\s*pickedBookRef\.current = true\s*setBookWanted\(id\); dropRun\(\)/
+        .test(src),
+      `聞き流し … ${名}は、冊を替えても聞き流しのままにする印を立てる`)
+      /* **印を見て `listen()` を呼ぶ**(`start()` に落とさない)。
+         **読む文の選び方は書き写さない** —— `listen()` 1か所である */
+      ok(/if \(keepRadioRef\.current\) \{\s*keepRadioRef\.current = false\s*listen\(\)\s*return/
+        .test(開く仕掛け(src)),
+      `聞き流し … ${名}は、新しい冊で聞き流しを開き直す`)
+      /* **空の冊に当たったら、印を下ろす**(持ち越すと、次に冊を
+         替えたときに**勝手に聞き流しが始まる**) */
+      ok(/keepRadioRef\.current = false\s*set(Live|Running)\(false\)/.test(開く仕掛け(src)),
+        `聞き流し … ${名}は、聞き流しへ戻れないときは印を下ろす`)
+    }
+    /* ★ **新しい冊の中身が届くまで、開き直さない。**
+       届く前に `listen()` を呼ぶと**前の冊の文を読み続ける** ——
+       第5.191節・第5.200節で踏んだのと、まったく同じ抜け方である。
+       **待ち方は画面ごとに違う**(鍵で見る / どの冊の行かで見る)ので、
+       2つとも名指しで見る */
+    ok(/if \(loaded !== poolKey\) return/.test(開く仕掛け(qr2)),
+      '聞き流し … Quick Response は、新しい冊の問が届くまで待つ')
+    ok(/if \(keepRadioRef\.current && rowsBookRef\.current !== book\) return/.test(開く仕掛け(wb2)),
+      '聞き流し … 単語帳は、新しい冊の語が届くまで待つ')
+
+    /* ── **骨組みも渡しているか**(骨組みは本物と1文字も違えない)── */
+    for (const [名, 骨] of [['単語帳', 'RADIO'], ['Quick Response', 'QRRADIO']]) {
+      const 中 = 骨組み(骨)
+      ok(/books=\{/.test(中) && /book="/.test(中) && /onBook=\{\(\) => \{\}\}/.test(中),
+        `骨組み … ${名}の聞き流しも、教材の欄を描く`)
+      /* **2冊以上入れてある**(1冊だと欄が出ないので、素通りする) */
+      ok((中.match(/\{ id: '/g) ?? []).length > 1,
+        `骨組み … ${名}の聞き流しに、冊が2つ以上入っている`)
+    }
+    /* **1冊のときの形も測れるようにしてある**(欄が出ない側)。
+       **`?books=one` は本棚の骨組みも使っている**ので、
+       ファイル全体で探すと、そちらに当たって緑のままになる */
+    ok(/q\.get\('books'\) === 'one'/.test(骨組み('QRRADIO')),
+      '骨組み … 冊が1つのとき(欄が出ない側)も測れる')
+  }
 }
 
 /* ==========================================================================

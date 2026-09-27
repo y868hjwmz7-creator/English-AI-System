@@ -200,6 +200,17 @@ export default function QrReview({
        **後ろへ足す。並べ替えない**(docs/notes/22 の決まり) */
     ...(qrSourceSupported() ? [{ id: 'chunk', label: CHUNK_BOOK_LABEL }] : []),
   ]
+  /**
+   * **冊を替えても、聞き流しを続ける**(第5.283節・2026-09-27 利用者の指定)。
+   *
+   * `dropRun()` は `setRadio(null)` を含むので、冊を替えると
+   * **聞き流しから放り出される。** 替えたのは「次はあの冊を聴きたい」
+   * からであって、やめたいわけではない。
+   *
+   * **`dropRun()` は変えない** —— 帯の `冊名 ▾` から替えた人は、
+   * これまでどおり練習へ降りる。**どちらから替えたかを、この印で分ける。**
+   */
+  const keepRadioRef = useRef(false)
   const [bookWanted, setBookWanted] = useState('my')
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
   const nfBook = book === 'nf'
@@ -634,7 +645,18 @@ export default function QrReview({
       }
       /* **出す問が無い冊に替えたときは、一覧の画面へ戻す**(第5.173節)。
          帯のまま止めると、読み込み中に見えて終わらない */
+      /* **聞き流しへ戻れないなら、印も下ろす**(持ち越すと、
+         次に冊を替えたときに勝手に聞き流しが始まる) */
+      keepRadioRef.current = false
       setLive(false)
+      return
+    }
+    /* ★ **聞き流しの中で冊を替えた人は、聞き流しのまま**(第5.283節)。
+         新しい冊の問が届いたので、ここで開き直す。
+         **`listen()` を呼ぶ** —— 読む文の選び方を書き写さない */
+    if (keepRadioRef.current) {
+      keepRadioRef.current = false
+      listen()
       return
     }
     start()
@@ -1029,6 +1051,17 @@ export default function QrReview({
              ここで組み直さない —— 練習と聞き流しで題が食い違うと、
              「いま何を聞いているのか」が分からなくなる */
           label={drillLabel}
+          /* **聞き流しの中でも、教材(冊)をえらべる**(第5.283節)。
+             **一覧は `books` 1つ**(帯の `冊名 ▾` と同じもの・書き写さない) */
+          books={books}
+          book={book}
+          onBook={(id) => {
+            /* **聞き流しのまま、次の冊へ**(上の `keepRadioRef`)。
+               ここから先は勝手に移らない(第5.200節・`pickedBookRef`) */
+            keepRadioRef.current = true
+            pickedBookRef.current = true
+            setBookWanted(id); dropRun()
+          }}
           /* **「出しかた」で選んでいる数を、そのまま持ち込む**
              (第5.262節・2026-09-26 利用者の指定)。
              5問に絞って練習していた人には、そのまま5問が回る。

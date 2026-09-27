@@ -4375,6 +4375,102 @@ export default defineConfig({
     }
   }
 
+  /* ── ★ **聞き流しの中でも、教材(冊)をえらべる** ──────────────────
+   *      第5.283節・2026-09-27 利用者の指定
+   *
+   *        > 聞き流し内でも教材を選び、ランダムなどの設定をできるように
+   *        > したいです。
+   *
+   *      **描いて測る。** 欄を足しただけで満足すると、次の4つを
+   *      1つも確かめられない —— どれも**画面を開くまで分からない**形である。
+   *        ① 畳んだままでは出ない(開いて初めて出る)
+   *        ② **いま鳴っている冊が選ばれている**
+   *           (`value` が札に無い id だと、**空っぽの欄**になる)
+   *        ③ **いちばん上**にある(ほかの設定は、その冊の中の話である)
+   *        ④ 長い冊名でも、横にはみ出さない
+   */
+  for (const [名, screen, いまの冊] of [
+    ['単語帳', 'radio', '自分の単語帳'],
+    ['QR', 'qrradio', 'Native Flow Vol.1'],
+  ]) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=${screen}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    /* **畳んだままでは出ていないこと**(すぐ上の設定と同じ読み方) */
+    const 畳んだまま = await page.evaluate(
+      () => document.querySelectorAll('.radio-set-pick--book').length)
+    await page.click('.radio-gear')
+    await page.waitForTimeout(200)
+    const 開いて = await page.evaluate(() => {
+      const s = document.querySelector('.radio-set-pick--book')
+      const 箱 = document.querySelector('.radio-set-body')
+      return {
+        ある: Boolean(s),
+        札: s ? [...s.options].map((o) => o.textContent.trim()) : [],
+        いま: s ? (s.options[s.selectedIndex]?.textContent?.trim() ?? '') : '',
+        名前: [...document.querySelectorAll('.radio-set-body .radio-set-name')]
+          .map((el) => el.textContent.trim()),
+        はみ出し: s && 箱
+          ? Math.round(s.getBoundingClientRect().right - 箱.getBoundingClientRect().right)
+          : 0,
+      }
+    })
+    await page.close()
+
+    if (畳んだまま !== 0) {
+      ng(`${名}の聞き流し … 畳んでいるのに、教材の欄が出ている`, `${畳んだまま} 個`)
+    } else if (!開いて.ある) {
+      ng(`${名}の聞き流し … 設定に教材の欄が無い`,
+        開いて.名前.join(' / ') || '(名前が1つも無い)')
+    } else if (開いて.札.length < 2) {
+      /* **測る相手が居ることを、先に確かめる** ——
+         札が1つなら「選べる」は確かめられない */
+      ng(`${名}の聞き流し … 教材の札が ${開いて.札.length} 個しかない`, 開いて.札.join('/'))
+    } else if (開いて.いま !== いまの冊) {
+      ng(`${名}の聞き流し … いま鳴っている冊が選ばれていない`,
+        `「${開いて.いま}」(「${いまの冊}」のはず)`)
+    } else if (開いて.名前[0] !== '教材') {
+      ng(`${名}の聞き流し … 教材が設定のいちばん上に無い`, 開いて.名前.join(' / '))
+    } else if (開いて.はみ出し > 1) {
+      ng(`${名}の聞き流し … 長い冊名で、欄が横にはみ出す`, `${開いて.はみ出し}px`)
+    } else {
+      ok(`${名}の聞き流し … 設定のいちばん上で教材をえらべる`
+        + `(${開いて.札.length} 冊・いま「${開いて.いま}」・名前 ${開いて.名前.join('/')})`)
+    }
+  }
+
+  /* ★ **冊が1つしか無いときは、欄そのものを出さない**(第5.283節)。
+       押しても何も変わらないものを見せない(CLAUDE.md)。
+       **「出る」と「出ない」の両方を見る** —— これが無いと、
+       いつでも出す形に書き換えても緑のままになる。
+       **`?books=one` を持っているのは Quick Response の骨組みだけ**なので、
+       ここはその1つで測る(骨組みの持ちものは、上の見張りが数えている) */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio&books=one`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(300)
+    await page.click('.radio-gear')
+    await page.waitForTimeout(200)
+    const 見えたもの = await page.evaluate(() => ({
+      教材: document.querySelectorAll('.radio-set-pick--book').length,
+      ほか: document.querySelectorAll('.radio-set-body .radio-set-pick').length,
+    }))
+    await page.close()
+    if (見えたもの.ほか === 0) {
+      /* **設定そのものが開いていないなら、何も測れていない**
+         (無ければ素通りする形の検証を書かない・CLAUDE.md) */
+      ng('QRの聞き流し … 冊が1つのとき、設定が1つも開いていない',
+        '教材の欄が「無い」ことを確かめられていない')
+    } else if (見えたもの.教材 !== 0) {
+      ng('QRの聞き流し … 冊が1つなのに、教材の欄が出ている', `${見えたもの.教材} 個`)
+    } else {
+      ok('QRの聞き流し … 冊が1つのときは、教材の欄を出さない'
+        + `(ほかの設定は ${見えたもの.ほか} 個そのまま)`)
+    }
+  }
+
   /* ── **本当に鳴らしてみる**(2026-09 実機・利用者の指摘)────────────
    *
    *   > 一つの単語が4回読み上げられたり、3回だったり、2回だったり、
