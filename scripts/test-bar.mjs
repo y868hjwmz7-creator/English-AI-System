@@ -10763,6 +10763,87 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   **つまみを動かしても、画面が横へ滑らない**(第5.282節)
+
+   2026-09-27 実機・利用者の指定。
+
+     > 音楽や音声のボリュームを調整しようとすると
+     > 画面が横にスワイプされるような挙動になり使いづらいです。
+     > 同じことが起きる場所は全て固定してください。
+
+   指で横へ引くと、ブラウザは**まず「画面を横へ送る合図」**として
+   受け取る。つまみは横に引いて使うものなので、**まともにぶつかる。**
+
+   ══ 見方 ══
+   **一覧を持たない。** つまみを名指しで並べると、足した日に守られない。
+   **描いて、`touch-action` を読む。**
+
+     ・`auto` / `pan-x` / `manipulation` … **横をブラウザに渡す**。だめ
+     ・`pan-y` … 縦だけブラウザ。横はつまみに届く。よい
+     ・`none`  … どちらも渡さない。よい(ただし縦に送れなくなる)
+
+   **「1つも見つけていない」を赤くする** —— つまみが1本も描かれて
+   いなければ、この見張りは何もしていないのと同じである。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  /** 横の指の動きを、ブラウザに渡してしまう指定 */
+  const だめ = ['auto', 'pan-x', 'manipulation', 'pan-x pinch-zoom']
+  const 見つけた = []
+  const 悪い = []
+  for (const [s, extra] of SCREENS) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    page.setDefaultTimeout(8000)
+    page.setDefaultNavigationTimeout(8000)
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    await page.route('**/auth/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '{}',
+    }))
+    try {
+      await page.goto(
+        `http://localhost:${PORT}/__bar.html?screen=${s}${extra ? `&${extra}` : ''}`,
+        { waitUntil: 'domcontentloaded' },
+      )
+      await page.waitForTimeout(500)
+      /* ★ **畳んであるものは開いてから測る**(`.claude/rules/common.md`)。
+           つまみは**設定の中**にいる —— メニューの設定は `<details>`、
+           聞き流しの設定は歯車の吹き出しで、どちらも**既定では畳んである。**
+           開かずに測ったら「つまみが1本も無い」になり、
+           **素通りのガードが正しく赤くなった**(2026-09-27)。 */
+      await page.evaluate(() => {
+        for (const d of document.querySelectorAll('details')) d.open = true
+        for (const b of document.querySelectorAll('[aria-expanded="false"]')) b.click()
+      })
+      await page.waitForTimeout(400)
+      const つまみ = await page.evaluate(() => (
+        [...document.querySelectorAll('input[type="range"]')].map((el) => ({
+          名: el.getAttribute('aria-label') || el.className || '(名前なし)',
+          指: window.getComputedStyle(el).touchAction,
+        }))))
+      for (const t of つまみ) {
+        見つけた.push(`${s}:${t.名}`)
+        if (だめ.includes(t.指)) 悪い.push(`${s} 「${t.名}」 touch-action: ${t.指}`)
+      }
+    } catch (e) {
+      ng(`つまみ … ${s} を描けなかった`, e.message.split('\n')[0])
+    }
+    await page.close()
+  }
+  if (!見つけた.length) {
+    /* **測る相手が居ることを、先に確かめる**(CLAUDE.md) */
+    ng('つまみ … `input[type=range]` を1本も描いていない',
+      `${SCREENS.length} 画面を見た。見張りが素通りしている`)
+  } else if (悪い.length) {
+    ng(`つまみ … 横に引くと画面が滑るものが ${悪い.length} 本ある`,
+      悪い.slice(0, 8).join('\n    '))
+  } else {
+    ok(`つまみ … ${見つけた.length} 本とも、横に引いても画面が滑らない`
+      + `(${[...new Set(見つけた)].slice(0, 4).join(' / ')})`)
+  }
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

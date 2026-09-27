@@ -2907,6 +2907,10 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       new URL('../src/components/WordRadio.jsx', import.meta.url), 'utf8'))
     const bgmjs = 落とす(readFileSync(
       new URL('../src/lib/bgm.js', import.meta.url), 'utf8'))
+    /* **算段の側**(第5.282節)。流す一覧を作る決まりは、
+       画面ではなく `wordRadio.js` が持つ */
+    const wrjs = 落とす(readFileSync(
+      new URL('../src/lib/wordRadio.js', import.meta.url), 'utf8'))
     const app = 落とす(readFileSync(
       new URL('../src/App.jsx', import.meta.url), 'utf8'))
 
@@ -2969,9 +2973,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     ok(!/prefetchClip/.test(radio),
       '聞き流し … 話者と段を書き写していない(`prepareRead()` に任せる)')
     /* **見張り(`useEffect`)に間を入れる。** 入れないと、
-       選び直しても**押し直すまで効かない** */
-    ok(/\[on, mode, gap, list\.length, rate\]/.test(radio),
-      '聞き流し … 間を変えたら、その場で読み直す')
+       選び直しても**押し直すまで効かない**。
+
+       **`list.length` ではなく `list` そのもの**を見る(第5.282節)——
+       並べ方を「ランダム」にしても**長さは同じ**なので、
+       長さだけ見ていると組み直されず、**鳴る文と画面がずれる。** */
+    ok(/\[on, mode, gap, list, rate\]/.test(radio),
+      '聞き流し … 間や並べ方を変えたら、その場で読み直す')
     /* **出す文字も1か所を通す**(鳴らす側と画面で数え方を2通り持たない) */
     ok(/radioTextOf\(now\)/.test(radio) && /radioJaOf\(now\)/.test(radio),
       '聞き流し … 画面に出す文字も `radioTextOf()` / `radioJaOf()` を通る')
@@ -3015,9 +3023,18 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     ok(!/const listen[\s\S]{0,400}?markQr/.test(qr),
       '聞き流し … Quick Response でも、箱も次に出す日も動かさない')
     /* 「読むものがあるか」の判断を書き写さない —— 空白だけの語が残ると、
-       鳴らす側が待たずに回り続けて画面ごと固まる */
-    ok(/filter\(\(r\) => radioTextOf\(r\)\)/.test(radio),
+       鳴らす側が待たずに回り続けて画面ごと固まる。
+
+       **`wordRadio.js` の `radioList()` へ移した**(第5.282節)。
+       「読めるものだけ」「混ぜる」「数で切る」の**順**まであちらが持つ ——
+       画面に置くと、並べ方を足した日に順を間違える。
+       **見張りも一緒に移す**(第5.271節と同じ作法・弱めない) */
+    ok(/filter\(\(r\) => radioTextOf\(r\)\)/.test(wrjs),
       '聞き流し … 読む語の絞り込みは `radioTextOf()` に任せている')
+    ok(!/filter\(\(r\) => radioTextOf\(r\)\)/.test(radio),
+      '聞き流し … 画面の中で絞り込みを書き写していない')
+    ok(/radioList\(rows, order, take\)/.test(radio),
+      '聞き流し … 流す一覧は `radioList()` 1か所から受け取る')
     ok(/const en = radioTextOf\(row\)/.test(
       落とす(readFileSync(new URL('../src/lib/wordRadio.js', import.meta.url), 'utf8'))),
     '聞き流し … `radioSteps()` も同じ `radioTextOf()` を通る')
@@ -12421,8 +12438,44 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
        **数え方を2通り持たない** —— 札の一覧も数え方も `reviewScope.js` */
   {
     ok(/size = 'all',/.test(radio), '聞き流し … 何問ずつの初期値を受け取る')
-    ok(/takeCount\(take, 読めるもの\.length\)/.test(radio),
+    /* **`radioList()` へ移した**(第5.282節)。数え方は変えていない */
+    ok(/takeCount\(take, 並べた\.length\)/.test(readS('src/lib/wordRadio.js')),
       '聞き流し … 数えるのは `takeCount()` 1か所(出しかたの札と同じ)')
+    ok(!/takeCount\(/.test(radio),
+      '聞き流し … 画面の中で数え直していない')
+    /* ★ **問題数に関わらず、ランダム**(第5.282節・2026-09-27 利用者の指定)。
+
+         > 問題数に関わらず「ランダム」機能をつけてください
+
+       **混ぜてから、数で切る。** 逆にすると、いつも同じ先頭 N 個の中で
+       並べ替えるだけになり、「5問ずつ」では**毎回同じ5問**が出る ——
+       「問題数に関わらず」とは、この順のことである。
+
+       **順そのものを見る。** 「`shuffled` が出てくるか」だけだと、
+       切ったあとに混ぜる形に書き換えても緑のままになる
+       (CLAUDE.md「名前が出てくるかで見ない」)。 */
+    {
+      const w = readS('src/lib/wordRadio.js')
+      const 本文 = w.slice(w.indexOf('export function radioList'))
+      const 混ぜる = 本文.indexOf('shuffled(')
+      const 切る = 本文.indexOf('.slice(')
+      ok(混ぜる > 0 && 切る > 0 && 混ぜる < 切る,
+        '聞き流し … 混ぜてから、数で切る(問題数に関わらずランダムになる)')
+      /* **混ぜ方は `shuffle.js` 1か所**(Quick Response の並べ方と同じもの) */
+      ok(/from '\.\/shuffle\.js'/.test(w) && !/Math\.random\(\)/.test(w),
+        '聞き流し … 混ぜ方を書き写していない(`shuffle.js` 1か所)')
+      ok(/from '\.\/shuffle\.js'/.test(readS('src/lib/qrOrder.js')),
+        'Quick Response の並べ方も、同じ `shuffle.js` を使う')
+      /* **呼び名は復習とそろえる**(第5.244節・同じものを2つの名前で呼ばない) */
+      ok(/label: 'ランダム'/.test(w),
+        '聞き流し … 呼び名は「ランダム」(復習の出しかたと同じ言葉)')
+      /* **覚える鍵は場面ごと**(読み方・間と同じ作法) */
+      ok(/orderKey: 'eas\.radioOrder'/.test(w) && /orderKey: 'eas\.qrRadioOrder'/.test(w),
+        '聞き流し … 並べ方は、単語帳と Quick Response で別に覚える')
+      /* **画面に欄が出ているか。** 算段だけ足して出し忘れる、を捕まえる */
+      ok(/radio-set-pick--order/.test(radio) && /RADIO_ORDERS\.map/.test(radio),
+        '聞き流し … 設定に「並べ方」の欄がある')
+    }
     /* **`SIZES` を書き写していない**(足した日に、ここだけ古くなる) */
     ok(/\{SIZES\.map\(\(n\) =>/.test(radio) && !/\[5, 10, 20, 30/.test(radio),
       '聞き流し … 札の一覧を書き写していない')

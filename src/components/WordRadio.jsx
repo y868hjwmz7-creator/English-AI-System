@@ -32,7 +32,7 @@
  *   聞き流しは**答える練習ではない**ので、箱も次に出す日も1ミリも動かさない。
  *   「遅く出す方へは動かさない」よりさらに手前の話である。
  */
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import FocusFrame from './FocusFrame.jsx'
 /* **題と進み具合は、練習の2画面とまったく同じ部品**(第5.264節)。
    書き写すと、必ずどこかだけ古くなる(CLAUDE.md) */
@@ -65,10 +65,11 @@ import {
 /* **何問ずつ流すか**(第5.262節)。**単語帳・Quick Response と同じ一覧**を
    使う —— 出しかたの札で 5 / 10 / 20 / 30 / ぜんぶ を選ぶのと同じものである
    (**数え方を2通り持たない**・CLAUDE.md) */
-import { SIZES, sizeOfValue, sizePickLabel, takeCount } from '../lib/reviewScope.js'
+import { SIZES, sizeOfValue, sizePickLabel } from '../lib/reviewScope.js'
 import {
   bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
   hidesAnswer,
+  RADIO_ORDERS, loadRadioOrder, radioList, saveRadioOrder,
   nextIndex, prevIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf,
   radioModesFor,
   radioSteps, radioTextOf, radioWarmups, saveRadioGap, saveRadioMode,
@@ -193,6 +194,25 @@ export default function WordRadio({
    */
   const [take, setTake] = useState(() => sizeOfValue(size))
   /**
+   * **並べ方**(第5.282節・2026-09-27 実機・利用者の指定)。
+   *
+   *   > 問題数に関わらず「ランダム」機能をつけてください
+   *
+   * **一覧も鍵も既定も `wordRadio.js` 1か所**(読み方・間と同じ作法)。
+   */
+  const [order, setOrder] = useState(() => loadRadioOrder(where))
+  /**
+   * **混ぜ直す合図**(第5.282節)。
+   *
+   * `radioList()` は呼ぶたびに違う並びを返すので、**そのまま描くと
+   * 画面が描き直されるたびに順が変わる。** `useMemo` で押さえ、
+   * **並べ方・数・一覧が変わったときだけ**混ぜ直す。
+   */
+  const list = useMemo(
+    () => radioList(rows, order, take),
+    [rows, order, take],
+  )
+  /**
    * **設定を開いているか**(第5.271節)。
    *
    * **`open` とは別のもの**である(あちらは答えを出しているか)——
@@ -214,11 +234,10 @@ export default function WordRadio({
   /* 音量。**覚えるのは `mixVolume.js`** —— ここは画面に出すための写しだけ */
   const [voiceVol, setVoiceVol] = useState(voiceLevel)
   const [bgmVol, setBgmVol] = useState(bgmLevel)
-  const 読めるもの = (rows ?? []).filter((r) => radioTextOf(r))
-  /* **数えるのは `takeCount()` 1か所**(`reviewScope.js`)——
-     出しかたの札とまったく同じ数え方である。
-     **`'all'` を画面で `=== 'all'` と書かない** */
-  const list = 読めるもの.slice(0, takeCount(take, 読めるもの.length))
+  /* **一覧を作るのは `radioList()` 1か所**(`wordRadio.js`)——
+     「読めるものだけ」「混ぜる」「数で切る」の**順**まであちらが持つ。
+     **混ぜてから切る** ので、5問ずつでも毎回ちがう5問になる
+     (利用者の指定「**問題数に関わらず**ランダム」の中身) */
   const now = list[at] ?? null
 
   /**
@@ -399,7 +418,11 @@ export default function WordRadio({
     }
     run()
     return () => { liveRef.current += 1; stopReading() }
-  }, [on, mode, gap, list.length, rate])
+    /* **`list` そのものを見る**(第5.282節)。`list.length` だけを見ていると、
+       **並べ方を変えても長さは同じ**なので組み直されず、
+       **鳴る文と画面がずれる。** `list` は `useMemo` で押さえてあり、
+       呼ぶ側の `rows` は state なので、ふだんの描き直しでは変わらない */
+  }, [on, mode, gap, list, rate])
 
   const stop = () => {
     liveRef.current += 1
@@ -681,6 +704,33 @@ export default function WordRadio({
               </select>
             </>
           )}
+          {/* ★ **並べ方**(第5.282節・2026-09-27 実機・利用者の指定)。
+
+                > 問題数に関わらず「ランダム」機能をつけてください
+
+              いままでは**一覧の先頭から順に、選んだ数だけ**流していた。
+              5問に絞ると、いつも**同じ5問**である。
+
+              **混ぜてから、数で切る**(`radioList()`)ので、
+              「5問ずつ」でも毎回ちがう5問になる ——
+              「**問題数に関わらず**」とは、この意味である。
+
+              **呼び名は復習の「出しかた」とそろえる**(「ランダム」)。
+              同じことをするのに違う名前を付けない(第5.244節)。
+
+              **読み方のすぐ下に置く** —— どちらも「どう出すか」である */}
+          <label className="radio-set-name" htmlFor={`${uid}-order`}>並べ方</label>
+          <select id={`${uid}-order`} className="radio-set-pick radio-set-pick--order"
+                  value={order}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setOrder(next); saveRadioOrder(next, where)
+                    /* **頭から読み直す。** 並びが変わったのに途中から
+                       続けると、いま読んでいる文と画面がずれる */
+                    move(0)
+                  }}>
+            {RADIO_ORDERS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
           {/* **どの曲を流すか**(第5.194節・2026-09 利用者の指定)。
 
               > 複数登録した曲から選べるようにしてください。

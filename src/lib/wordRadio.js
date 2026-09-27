@@ -30,6 +30,13 @@
  *   **日本語は端末の声で読む**(窓口は英語の声しか持っていない)。0円である。
  */
 
+/* **混ぜるのは `shuffle.js` 1か所**(第5.282節)。Quick Response の
+   並べ方と同じものを使う —— 書き写すと混ぜ方が2通りになる */
+import { shuffled } from './shuffle.js'
+/* **数えるのも `reviewScope.js` 1か所。**「ぜんぶ」を数に直す決まりは
+   あちらが持っている(出しかたの札とまったく同じ数え方) */
+import { takeCount } from './reviewScope.js'
+
 
 /**
  * 読み方。**もとは「英語だけ」1つだった。**
@@ -148,8 +155,36 @@ export const DEFAULT_RADIO_MODE = 'en'
  * **間の長さが場面で違う**からである(語は短く、文は長い)。
  * 読み方が1つに戻ったいまも、この分けかたは変えない。
  */
+/**
+ * **並べ方**(第5.282節・2026-09-27 実機・利用者の指定)。
+ *
+ *   > 問題数に関わらず「ランダム」機能をつけてください
+ *
+ * いままでは**一覧の先頭から順に、選んだ数だけ**流していた。
+ * 5問に絞ると、いつも**同じ5問**である。
+ *
+ * **混ぜてから、数で切る。** そうすれば「5問ずつ」でも
+ * 毎回ちがう5問になる —— **問題数に関わらず**効く、というのはこの意味である。
+ *
+ * **呼び名は「ランダム」にそろえる**(第5.244節・利用者の指摘
+ * 「Quick Response帳のソートに『ランダムにだす』がないです」)。
+ * 復習の「出しかた」と**同じ言葉**にする(同じものを2つの名前で呼ばない)。
+ */
+export const RADIO_ORDERS = [
+  { id: 'seq', label: '出た順' },
+  { id: 'shuffle', label: 'ランダム' },
+]
+
+/** 覚えていない / 知らない値は、こちらに落とす。**既定は出た順** */
+export const DEFAULT_RADIO_ORDER = 'seq'
+
 const WHERES = {
-  word: { modes: RADIO_MODES, modeKey: 'eas.radioMode', gapKey: 'eas.radioGap' },
+  word: {
+    modes: RADIO_MODES,
+    modeKey: 'eas.radioMode',
+    gapKey: 'eas.radioGap',
+    orderKey: 'eas.radioOrder',
+  },
   /* `sayGapKey` … **「日本語 → 英語」のあいだ**(第5.251節)。
      英語だけの「間」とは意味が違うので、**別に覚える** */
   qr: {
@@ -157,6 +192,9 @@ const WHERES = {
     modeKey: 'eas.qrRadioMode',
     gapKey: 'eas.qrRadioGap',
     sayGapKey: 'eas.qrSayGap',
+    /* **場面ごとに別に覚える**(読み方・間と同じ作法)——
+       単語帳は出た順で流したい人が、Quick Response では混ぜたい */
+    orderKey: 'eas.qrRadioOrder',
   },
 }
 
@@ -662,6 +700,37 @@ export function loadRadioMode(where = 'word') {
 
 export function saveRadioMode(id, where = 'word') {
   try { localStorage.setItem(whereOf(where).modeKey, String(id)) } catch { /* 同上 */ }
+}
+
+/**
+ * 覚えている並べ方(第5.282節)。
+ * **知らない値は既定に落とす**(行き止まりを作らない・`loadRadioMode` と同じ)。
+ */
+export function loadRadioOrder(where = 'word') {
+  try {
+    const saved = localStorage.getItem(whereOf(where).orderKey)
+    return RADIO_ORDERS.some((o) => o.id === saved) ? saved : DEFAULT_RADIO_ORDER
+  } catch { return DEFAULT_RADIO_ORDER }
+}
+
+export function saveRadioOrder(id, where = 'word') {
+  try { localStorage.setItem(whereOf(where).orderKey, String(id)) } catch { /* 同上 */ }
+}
+
+/**
+ * **流す一覧を作る**(第5.282節)。
+ *
+ * **混ぜてから、数で切る。** 逆にすると、いつも同じ先頭 N 個の中で
+ * 並べ替えるだけになり、**「5問ずつ」では毎回同じ5問**が出る。
+ * 利用者の指定「**問題数に関わらず**ランダム」は、この順のことである。
+ *
+ * **混ぜ方は `qrOrder.js` の `shuffled()` 1か所**(書き写さない)。
+ * **数え方も `takeCount()` 1か所**(`reviewScope.js`)。
+ */
+export function radioList(rows, order = DEFAULT_RADIO_ORDER, take = 'all') {
+  const 読める = (rows ?? []).filter((r) => radioTextOf(r))
+  const 並べた = order === 'shuffle' ? shuffled(読める) : 読める
+  return 並べた.slice(0, takeCount(take, 並べた.length))
 }
 
 /**

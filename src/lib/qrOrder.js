@@ -16,6 +16,9 @@
  * ============================================================================
  */
 import { frameFormOf } from './frameMatch.js'
+/* **混ぜるのは `shuffle.js` 1か所**(第5.282節)——
+   聞き流しの「ランダム」も、同じものを使う */
+import { shuffled } from './shuffle.js'
 
 /* **呼び名を、単語帳とそろえる**(第5.244節・2026-09-23 利用者の指摘
    「Quick Response帳のソートに『ランダムにだす』がないです」)。
@@ -72,9 +75,5 @@ export function orderQrPairs(list, order) {
       return String(a.added_at ?? '').localeCompare(String(b.added_at ?? ''))
     })
   }
-  for (let i = rows.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[rows[i], rows[j]] = [rows[j], rows[i]]
-  }
-  return rows
+  return shuffled(rows)
 }
