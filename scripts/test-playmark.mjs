@@ -12817,6 +12817,140 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     '語の意味 … 「その文でふさわしい意味を先頭に」は落としていない')
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   **報告だけして直していなかった3つを、直す**(第5.284節・2026-09-27)
+
+     > 全部やります(残り5つを、こちらで直す)
+
+   ①教材の中の意味にも「語句そのものの意味に限る」を入れる
+   ②当たる先の無い名前(`wb-formpick`)を落とす
+   ③貼るファイルの案内が古かった(`pending_2026-09-05.sql`)
+   ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 報告だけしていた3つ(第5.284節)')
+  const read4 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const gen = read4('supabase/functions/generate-material/index.ts')
+
+  /* ── ① **教材の中の 単語・フレーズ・かたまり の意味** ──────────────
+       第5.272節で `lookup-word` に入れた決まりを、こちらにも入れる。
+       **1つの文を3か所が使う**(書き写すと、直した日にどれかが古くなる)。 */
+  {
+    /* **指示文の中身を見る。** ファイル全体を探すと、上のコメントに
+       同じ語を書いた日に素通りする(第5.272節と同じ作法) */
+    const i = gen.indexOf('const MEANING_ONLY')
+    const 決まり = i < 0 ? '' : gen.slice(i, gen.indexOf('\nconst SECTION_INSTRUCTIONS', i))
+    ok(決まり.includes('意味は、その語句そのものの意味に限る'),
+      '教材の意味 … 「語句そのものの意味に限る」と指示している')
+    ok(/否定・主語・時・疑問・受け身・助動詞/.test(決まり),
+      '教材の意味 … 持ち込ませないものを名指ししている(否定・主語・時・疑問…)')
+    /* **起きた形そのものを例に置く**(決まりだけでは、AI は
+       「文脈に合わせた」と思って同じことをする・第5.272節) */
+    ok(/Nobody expected it to matter/.test(決まり) && /誤り/.test(決まり),
+      '教材の意味 … 実際に起きた形(Nobody 〜)を誤りの例として置いている')
+
+    /* **3つの段が、その1つを使っているか。** 段ごとに切り出して見る ——
+       ファイル全体で `MEANING_ONLY` を数えるだけだと、
+       **別の段に付けても緑のまま**になる */
+    const 段 = (名) => {
+      const i2 = gen.indexOf(`\n  ${名}:`)
+      if (i2 < 0) return ''
+      /* 次の段の頭までが、その段の指示文である(`,\n` で終わる) */
+      const j2 = gen.indexOf("',\n", i2)
+      return j2 < 0 ? gen.slice(i2) : gen.slice(i2, gen.indexOf('\n', j2 + 3))
+    }
+    for (const [名, よびな] of [
+      ['vocab_note', '本文に出たかたまり'], ['vocabulary', '単語'], ['phrase', 'フレーズ'],
+    ]) {
+      const 中 = 段(名)
+      /* **切り出せていることを先に確かめる**(空なら下は必ず素通りする) */
+      ok(中.includes(`${名}:`) && 中.length > 80,
+        `教材の意味 … ${よびな}(${名})の指示文を切り出せている`)
+      ok(/\+ MEANING_ONLY,?\s*$/m.test(中),
+        `教材の意味 … ${よびな}(${名})が、その決まりを使っている`)
+    }
+    /* **書き写していないか。** 決まりの本文は**1か所だけ**にある。
+       **コメントを落としてから数える** —— 説明(JSDoc)にも同じ語を
+       書いてあるので、そのまま数えると 2 になる
+       (CLAUDE.md「コメントを落としてから、使っている形で数える」。
+       この見張りを足したその場で、実際に引っかかった) */
+    const 指示だけ = gen.replace(/\/\*[\s\S]*?\*\//g, ' ')
+    ok((指示だけ.match(/その語句そのものの意味に限る/g) ?? []).length === 1,
+      '教材の意味 … 決まりの本文を書き写していない(1か所だけ)')
+    /* **もとからあった決まりを落としていないか**(出る / 出ないの両方)。
+       「辞書に載る形」を落とすと、また crowd reads the room が戻る */
+    ok(/\*\*辞書に載る形\*\*/.test(gen) && /本文に実際に出てきたものだけ/.test(gen),
+      '教材の意味 … もとからあった決まり(辞書に載る形・本文に出たものだけ)は残っている')
+    /* **カタマリの訳は、もともと同じ線引きを持っている**(寄せていない) */
+    ok(/カタマリの中に無い語の意味を、そのカタマリの訳に入れない/.test(gen),
+      'カタマリの訳 … 同じ線引きを、もとから持っている(触っていない)')
+  }
+
+  /* ── ② **当たる先の無い名前を落とす**(`wb-formpick`)────────────
+       CSS の決まりは第5.246節で消えていたのに、
+       **`StepFocus` と `FocusReader` の2つが名前だけ持ち続けていた。**
+       見た目は1px も変わらない —— だからこそ、誰も気づかない。 */
+  {
+    const src4 = ['src/styles.css', 'src/components/StepFocus.jsx',
+      'src/components/FocusReader.jsx', 'src/components/Wordbook.jsx',
+      'src/components/WordRadio.jsx', 'src/components/QrReview.jsx']
+      .map((f) => read4(f)).join('\n')
+    ok(!/wb-formpick/.test(src4),
+      '出しかた … 当たる先の無い名前(`wb-formpick`)は、どこにも残っていない')
+    /* **落とした先には、当たる先がある**(名前ごと消してしまっていない)。
+       `stepfocus-pick` は幅と寄せを持っている */
+    const css4 = read4('src/styles.css')
+    ok(/\.stepfocus-pick \{/.test(css4)
+      && /className="stepfocus-pick"/.test(read4('src/components/StepFocus.jsx'))
+      && /className="stepfocus-pick"/.test(read4('src/components/FocusReader.jsx')),
+    '出しかた … 残した名前(`stepfocus-pick`)には、CSS の当たる先がある')
+  }
+
+  /* ── ③ **貼るファイルの案内が、実在するものを指しているか** ──────
+       「ゲストを消去」の案内が `pending_2026-09-05.sql` を指していた ——
+       0041 だけを切り出した昔のもので、いまは
+       **0041 以降を並べた `pending_matome.sql` 1つ**を貼る。
+
+       **名前を数えるのではなく、性質で見る**(CLAUDE.md)——
+       案内しているファイルが**実在するか**、そして
+       **その中に、その仕組みが本当に入っているか**を見る。 */
+  {
+    const 画面 = ['src/lib/materials.js', 'src/lib/practice.js', 'src/lib/vocab.js',
+      'src/components/AdminDashboard.jsx', 'src/components/ShelfBuilder.jsx',
+      'src/components/BgmLibrary.jsx', 'src/lib/setupState.js']
+      .map((f) => read4(f)).join('\n')
+    const 案内 = [...画面.matchAll(/supabase\/apply\/([A-Za-z0-9_.-]+\.sql)/g)]
+      .map((m) => m[1])
+    /* **1つも拾えていなければ、何も確かめていない**(素通り防止) */
+    ok(案内.length >= 4, `貼る SQL … 案内が ${案内.length} か所ある(数えられている)`)
+    const 無い = [...new Set(案内)].filter((f) => !existsSync(
+      new URL(`../supabase/apply/${f}`, import.meta.url)))
+    ok(無い.length === 0,
+      '貼る SQL … 画面が案内するファイルは、どれも実在する', 無い.join(' / '))
+    /* **ゲストを消去の案内は、その仕組みが入っているファイルを指す** */
+    const mat = read4('src/lib/materials.js')
+    const 枝 = mat.slice(mat.indexOf('export async function eraseLearner'),
+      mat.indexOf('export async function eraseLearner') + 1600)
+    const 名 = (枝.match(/supabase\/apply\/([A-Za-z0-9_.-]+\.sql)/g) ?? [])
+      .map((t) => t.replace('supabase/apply/', ''))
+    ok(名.length > 0, 'ゲストを消去 … 断りの文が、貼るファイルを名指ししている')
+    /* ★ **「名前が出てくるか」で見ない**(CLAUDE.md)。
+       `check.sql` にも `erase_learner` の字はある —— あちらは
+       **入っているかを確かめるだけ**で、作らない。
+       だから**作っている形**(`create … function public.erase_learner`)で見る。
+       赤チェックで実際に引っかかった:案内を `check.sql` に書き換えても、
+       字を数えるだけでは緑のままだった。 */
+    const 作っている = (f) => existsSync(new URL(`../supabase/apply/${f}`, import.meta.url))
+      && /create (or replace )?function public\.erase_learner/.test(read4(`supabase/apply/${f}`))
+    ok(名.length > 0 && 名.every(作っている),
+      'ゲストを消去 … 案内するファイルが、その仕組み(`erase_learner`)を本当に作っている',
+      名.join(' / '))
+    /* **「どこのファイルか」から書いてあるか**(CLAUDE.md ——
+       `supabase/apply` は Supabase の中ではなく GitHub の中である) */
+    ok(/GitHub のリポジトリにある supabase\/apply\/pending_matome\.sql/.test(枝),
+      'ゲストを消去 … 「GitHub のリポジトリにある」から書いている')
+  }
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')

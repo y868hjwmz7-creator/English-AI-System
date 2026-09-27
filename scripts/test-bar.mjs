@@ -10605,6 +10605,82 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   **Quick Response の練習の帯も、絞り込みは右端**(第5.284節・2026-09-27)
+
+     > 全部やります(残り5つを、こちらで直す)
+
+   第5.277節で単語帳を寄せたとき、**あちらは聞き流しが無いから左に寄って
+   見えるのだ**と書いて、こちらは測らなかった。**測ってみたら空いていた** ——
+   1280px で右端まで **952px**、390px で 89px、320px で 51px。
+
+   **ソースでは測れない**(`margin-left: auto` は空きがあるときだけ効く)。
+   単語帳とまったく同じ読み方をする —— **入れ物だけが違う**
+   (`.wb-run-head` ↔ `.focus-top-main`)。
+
+   **いちばん危ない形を置く。** ①広い画面(空きが最大)②狭い画面
+   (空きが無い。ここで2段に折れないか)③重ねて右端に着けていないか。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  for (const W of [1280, 390, 320]) {
+    const page = await browser.newPage({ viewport: { width: W, height: 844 } })
+    page.setDefaultTimeout(9000)
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrrev`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(1800)
+    /* **読み方は単語帳と同じ**(書き写しではなく、同じ見方をする) */
+    const 測る = await page.evaluate(() => {
+      const bar = document.querySelector('.qrfocus .focus-top-main')
+      if (!bar) return { なし: '.qrfocus .focus-top-main' }
+      const sort = bar.querySelector('.rscope-sort')
+      if (!sort) return { なし: '.rscope-sort' }
+      const br = bar.getBoundingClientRect()
+      const sr = sort.getBoundingClientRect()
+      const 兄弟 = [...bar.children].filter((k) => {
+        const p = window.getComputedStyle(k).position
+        return p !== 'fixed' && p !== 'absolute' && k.getBoundingClientRect().width > 0
+      })
+      const 手前 = 兄弟.filter((k) => k !== sort && !k.contains(sort))
+        .map((k) => k.getBoundingClientRect())
+        .filter((r) => r.right <= sr.right + 0.5)
+        .sort((a, b) => b.right - a.right)[0] ?? null
+      const top = document.querySelector('.qrfocus .focus-top')
+      return {
+        左はメニュー: !!bar.firstElementChild?.classList.contains('focus-burger'),
+        右端との差: Math.round(br.right - sr.right),
+        手前とのあいだ: 手前 ? Math.round(sr.left - 手前.right) : null,
+        帯の高さ: Math.round((top ?? bar).getBoundingClientRect().height),
+        ボタンの高さ: Math.round(sr.height),
+        並ぶ数: 兄弟.length,
+      }
+    })
+    const 名 = `QRの練習の帯 ${W}px`
+    if (測る.なし) { ng(`${名} … ${測る.なし} が描かれていない`); await page.close(); continue }
+    if (!測る.左はメニュー) {
+      /* **本物は ☰ を渡す**(`QrReview` が `onMenu` を受け取る)。
+         骨組みが渡さなくなったら、利用者の見ている帯とは別のものを測る */
+      ng(`${名} … 帯の左が ☰ ではない`, '骨組みが `onMenu` を渡していない')
+    } else if (測る.右端との差 > 2) {
+      ng(`${名} … 絞り込みが右端に寄っていない`,
+        `右端まで ${測る.右端との差}px 空いている`)
+    } else if (測る.帯の高さ > 測る.ボタンの高さ * 2.2) {
+      /* **帯は1行。** 押すものを足したときの壊れ方(2段)を見る。
+         こちらの帯は上下に余白と切り欠きのぶんを持つので、
+         単語帳(1.6倍)より緩い倍率で見る —— **実測 61px / 34px = 1.8倍** */
+      ng(`${名} … 帯が2段になっている`,
+        `帯 ${測る.帯の高さ}px / ボタン ${測る.ボタンの高さ}px`)
+    } else if (測る.手前とのあいだ !== null && 測る.手前とのあいだ < 4) {
+      ng(`${名} … 絞り込みが、手前のものに接している`,
+        `あいだ ${測る.手前とのあいだ}px`)
+    } else {
+      ok(`${名} … 絞り込みは帯のいちばん右(右端まで ${測る.右端との差}px`
+        + ` / 手前とのあいだ ${測る.手前とのあいだ ?? '—'}px / 帯 ${測る.帯の高さ}px・1行`
+        + ` / 並ぶもの ${測る.並ぶ数}個)`)
+    }
+    await page.close()
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    **聞き流しに「前へ」がある**(第5.280節)
 
    2026-09-27 利用者の指定。

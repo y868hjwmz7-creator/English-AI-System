@@ -1042,10 +1042,18 @@ export async function eraseLearner(learnerId) {
   const { data, error } = await supabase.rpc('erase_learner', { p_learner: learnerId })
   if (error) {
     /* 0041 をまだ貼っていない Supabase でも、**行き止まりにしない。**
-       何が足りないのかを、貼るファイル名まで書いて伝える */
+       何が足りないのかを、貼るファイル名まで書いて伝える。
+
+       **案内していたファイル名が古かった**(第5.284節・2026-09-27)。
+       `pending_2026-09-05.sql` は 0041 だけを切り出した昔のもので、
+       いまは **0041 以降を順に並べた `pending_matome.sql` 1つ**を貼る
+       (`setupState.js` の `MATOME_URL` と同じもの。何度貼っても安全)。
+       **「supabase/apply」は Supabase の中ではない。GitHub の中である** ——
+       だから「GitHub のリポジトリにある」から書く(CLAUDE.md)。 */
     if (/function .*erase_learner.* does not exist|PGRST202/i.test(error.message ?? '')) {
       return ng('記録を消す仕組みが、まだデータベースに入っていません。'
-        + 'supabase/apply/pending_2026-09-05.sql を Supabase の SQL Editor に貼ってください。')
+        + 'GitHub のリポジトリにある supabase/apply/pending_matome.sql を、'
+        + 'Supabase の SQL Editor に貼ってください。')
     }
     return fail(error, '記録を消せませんでした')
   }

@@ -497,7 +497,7 @@ export default function FocusReader({
               先頭は「読んで調べる」= いまの画面そのもので、
               **選び直しても何も起きない**(戻る先がここだから) */}
           {onGoStep && (
-            <label className="wb-formpick stepfocus-pick">
+            <label className="stepfocus-pick">
               <span className="sr-only">6Steps へ移る</span>
               <select value="" onChange={(e) => {
                 if (e.target.value) onGoStep(e.target.value)

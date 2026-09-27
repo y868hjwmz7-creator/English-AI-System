@@ -93,7 +93,7 @@ export default function StepFocus({
               いちいち出て、選び直して、また入る…では続かない。
               **置き場所は「閉じる」のとなり**(`FocusReader` と同じ)。
               あちらにも同じプルダウンがあるので、**場所を変えない** */}
-          <label className="wb-formpick stepfocus-pick">
+          <label className="stepfocus-pick">
             <span className="sr-only">6Steps の切り替え</span>
             <select value={step} onChange={(e) => onStepChange?.(e.target.value)}>
               {SIX_STEPS.map((m) => (
