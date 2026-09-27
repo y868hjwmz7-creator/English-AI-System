@@ -29,7 +29,10 @@ import { loadEnglishVoices } from '../lib/speech.js'
 import { stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
-import { audioTextOf, wholeSliceOf } from '../lib/audioPlaylist.js'
+import { audioTextOf, sectionRestClips, wholeSliceOf } from '../lib/audioPlaylist.js'
+/* **いま開いているページの音声を、先に温める**(第5.289節)。
+   `ensureClip` は「置いてあれば問い合わせだけ(0円)、無いときだけ作る」 */
+import { ensureClip } from '../lib/audioClips.js'
 /* **紙の幅の一覧は `sheetWidths.js` 1か所**(第5.267節)。
    セッションの記録でも同じ幅を選ぶので、ここに書き写さない。
    **この画面に出る中身は1つも変わっていない**(「半分」は記録の側だけ) */
@@ -59,7 +62,7 @@ import { viewerRoleOf } from '../lib/viewer.js'
 import { toneOn } from '../lib/btnTone.js'
 import { NAV_PUSH_AT, useWide } from '../lib/nav.js'
 import EnglishText from './EnglishText.jsx'
-import { prefetchGlosses } from '../lib/vocab.js'
+import { prefetchSectionGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import SessionOwner from './SessionOwner.jsx'
 /* 本文から拾った かたまり(第5.230節)。props で受け取るだけの部品 */
@@ -638,12 +641,65 @@ export default function LessonView({
   useEffect(() => {
     const sec = sections[page]
     if (!sec) return
-    const texts = sec.items
-      .map((it) => it.prompt_en || it.question || '')
-      .filter(Boolean)
-      .map((text) => ({ text }))
-    prefetchGlosses(texts, { level: material?.level })
+    /* **どの欄が英語かは `exerciseTypes.js` 1か所**(第5.289節)。
+       `it.prompt_en || it.question` と書き写していたので、
+       **和文英訳・リスニング・単語を言う段の英文が落ちていた** */
+    prefetchSectionGlosses(sec, { level: material?.level })
   }, [page, sections, material?.level])
+
+  /**
+   * ==========================================================================
+   * **いま開いているページの読み上げを、先に温める**(第5.289節)
+   *
+   * 2026-09-27 利用者の指定。
+   *
+   *   > 文系トレーニング、単語やフレーズの音声が
+   *   > 待ち時間なしでパッと聞けるようにすることです。
+   *
+   * 支度(`prepareJob.js`)は**教材ぜんぶを1本ずつ順に**作るので、
+   * うしろのページへ届くのは最後になる。しかも支度は
+   * **トレーナーの画面からしか始まらない。**
+   * **開いたページのぶんだけなら、待たずに温められる。**
+   *
+   * ── 費用は増えない ──────────────────────────────────────
+   *
+   *   `prefetchClip` は `ensureClip` を通る ——
+   *   **置いてあれば問い合わせだけで 0円**、無いときだけ作る。
+   *   どのみち Listen を押したときに作られるものを、早めているだけである。
+   *
+   * ── 本文(記事・会話)は入れない ────────────────────────
+   *
+   *   あちらは**1本にまとめた音声**が受け持つ。ここで発言ごとにも作ると
+   *   **本文の音声代が倍になる**(CLAUDE.md)。
+   *   その判断は `sectionRestClips()` 1か所が持っている ——
+   *   **ここで `isPassageSection` と書かない。**
+   *
+   * ── **1本ずつ順に。まとめて投げない** ──────────────────
+   *
+   *   支度(`prepareJob.js`)と同じ作法である。10 本を一度に投げると、
+   *   **いくらかかったのか分からないうちに終わる**うえ、
+   *   窓口(`speak`)に同時に10本ぶら下がる。
+   *   **上から順**に温めるので、**先に触るものから先に用意される。**
+   *
+   * ── 閉じたら、そこで止まる ────────────────────────────
+   *
+   *   ページを送ったら前のページの続きは追わない(**止まる条件**)。
+   * ==========================================================================
+   */
+  useEffect(() => {
+    const sec = sections[page]
+    if (!sec) return
+    let alive = true
+    ;(async () => {
+      /* **声も段も、支度とまったく同じ決め方。** 書き写すと、
+         別の場所の MP3 を探して「無い」ことになる(= 二度課金) */
+      for (const c of sectionRestClips(material, sec)) {
+        if (!alive) return
+        try { await ensureClip(c.text, c.voiceId, c.tier) } catch { /* 次へ */ }
+      }
+    })()
+    return () => { alive = false }
+  }, [page, sections, material])
 
   // 開いているあいだは、後ろの画面を動かさない(鍵は `scrollLock.js` 1か所)
   useEffect(() => lockScroll(), [])

@@ -19,6 +19,11 @@ import { supabase } from './supabase.js'
 import { canSeeSystemDetail } from './viewer.js'
 import { normWord } from './textNorm.js'
 import { KNOWN_AFTER } from './qrPromote.js'
+/* **英語が入っている欄は `exerciseTypes.js` 1か所が決める**(第5.289節)。
+   ここで `it.prompt_en || it.question` と書き写すと、
+   **演習ごとに違う置き場所を取りこぼす**(単語 / フレーズの「言う」段が
+   まる落ちしていたのが、これである) */
+import { materialEnglishTexts, sectionEnglishTexts } from '../data/exerciseTypes.js'
 
 const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
@@ -320,6 +325,47 @@ export async function prefetchGlosses(entries, { level = 'B1' } = {}) {
   }
   await Promise.all(Array.from({ length: PREFETCH_PARALLEL }, run))
 }
+
+/**
+ * ============================================================================
+ * **教材ぜんぶの語を、先に引いておく**(第5.289節)
+ *
+ * 2026-09-27 実機・利用者の指摘。
+ *
+ *   > 単語やフレーズの意味も事前にロードしておいてパッとみれる仕様に
+ *   > したはずなのにいつのまにかまた元に戻っています。
+ *
+ * ── なぜ画面から `prefetchGlosses` を直に呼ばないのか ──────────
+ *
+ *   呼んでいたのは**5か所**で、どこにも同じ1行が書き写してあった。
+ *
+ *       .map((it) => it.prompt_en || it.question || '')
+ *
+ *   **英語が入る欄は演習ごとに違う**(`englishTextsOf`)。
+ *   書き写した5か所は、**5か所そろって同じ取りこぼしをしていた** ——
+ *   単語 / フレーズの「日本語 → 英語で言う」段は英文が `answer` に入るので、
+ *   **1語も先読みされていなかった。**
+ *
+ *   **「どの欄が英語か」は `exerciseTypes.js` 1か所、
+ *   「それを先に引く」はここ1か所**にする。画面は教材か段を渡すだけである。
+ * ============================================================================
+ *
+ * @param {object} material 教材(`sections` を持つ形)
+ * @param {object} o
+ * @param {string} o.level 語のレベル
+ */
+export const prefetchMaterialGlosses = (material, { level = 'B1' } = {}) =>
+  prefetchGlosses(materialEnglishTexts(material).map((text) => ({ text })), { level })
+
+/**
+ * **その段(演習1つ)ぶんだけ先に引く。**
+ *
+ * **見えているページのぶんだけ**である(レッスン表示・本文の練習)。
+ * 全ページを一度に引くと、`PREFETCH_LIMIT` の枠を
+ * **いま見ていないページに使ってしまう。**
+ */
+export const prefetchSectionGlosses = (section, { level = 'B1' } = {}) =>
+  prefetchGlosses(sectionEnglishTexts(section).map((text) => ({ text })), { level })
 
 /**
  * 断りを、**見ている人に合わせて**選ぶ。

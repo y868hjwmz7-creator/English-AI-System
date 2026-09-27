@@ -210,6 +210,50 @@ export const PIECE_GAP_MS = 90
  * @returns {Array<{text, voiceId, tier, gapMs}>} `gapMs` は**そのあとの間**
  */
 /**
+ * **その段(演習1つ)の、読み上げが付く英文。**
+ *
+ * **本文(記事・会話)なら、必ず空を返す** ——
+ * あちらは1本にまとめたものが受け持つので、ここで発言ごとにも作ると
+ * **本文の音声代が倍になる**(CLAUDE.md)。
+ *
+ * 【切り出した理由】(第5.289節・2026-09-27 利用者の指定)
+ *
+ *   > 文系トレーニング、単語やフレーズの音声が
+ *   > 待ち時間なしでパッと聞けるようにすることです。
+ *
+ *   支度(`prepareJob.js`)は**教材ぜんぶを1本ずつ順に**作るので、
+ *   うしろのページへ届くのが最後になる。**いま開いているページだけ**を
+ *   先に温めたいが、そのために「本文は入れない」「声はどれか」「段はどれか」を
+ *   画面の側に書き写すと、**支度した MP3 と、押したときに探す MP3 の
+ *   置き場所が食い違って1本も当たらない**(`materialClipPieces` と同じ根)。
+ *   **だから同じこの関数から引く。**
+ *
+ * @returns {Array<{text, voiceId, tier}>}
+ */
+export function sectionRestClips(material, section) {
+  const body = bodySectionOf(material)
+  /* **本文は入れない**(1本にまとめたものが受け持つ) */
+  if (!section || (body && section === body)) return []
+  if (!exerciseType(section?.exercise_type)?.audioFrom) return []
+  const voiceIds = material?.voiceIds ?? material?.voice_ids ?? null
+  const solo = resolveVoices(voiceIds)[0]
+  const tags = material?.tags ?? material?.tagIds ?? []
+  const tier = voiceTierFor({ exerciseType: section.exercise_type, tags })
+  const out = []
+  for (const it of section.items ?? []) {
+    /* **読む欄は `audioTextOf()` 1か所**(第5.266節)。
+       ここは `it[from]` と書き写していたので、
+       **読み方を直した英文(`audio_text`)では、支度が別の音声を作り、
+       押したときには無い**という形になっていた(第5.289節で実測)。
+       無駄な課金と、押したときの待ちが同時に起きる */
+    const text = audioTextOf(it, section.exercise_type)
+    if (!text) continue
+    out.push({ text, voiceId: solo, tier })
+  }
+  return out
+}
+
+/**
  * ============================================================================
  * **本文のほかに、読み上げが付く英文をぜんぶ並べる**(第5.203節)
  *
@@ -250,33 +294,29 @@ export const PIECE_GAP_MS = 90
  *
  *   `exerciseTypes.js` の `audioFrom` 1か所から引く。
  *   種類を足した日に、ここだけ古いままにならない。
+ *
+ * ── **数えるのは、段ごとに引いたものを集めるだけ**(第5.289節)──
+ *
+ *   中身は `sectionRestClips()` へ移した。**いま開いているページだけ**を
+ *   先に温めたい画面(`LessonView`)が、同じ決め方で引けるようにするためで、
+ *   **数え方を2通り持たない。** ここがすることは、
+ *   **同じ英文を二度数えないこと**だけである。
  * ============================================================================
  *
  * @returns {Array<{text, voiceId, tier}>} 鳴る順
  */
 export function materialRestClips(material) {
-  const body = bodySectionOf(material)
-  const voiceIds = material?.voiceIds ?? material?.voice_ids ?? null
-  const solo = resolveVoices(voiceIds)[0]
-  const tags = material?.tags ?? material?.tagIds ?? []
   const out = []
   const seen = new Set()
   for (const sec of material?.sections ?? []) {
-    /* **本文は入れない**(1本にまとめたものが受け持つ) */
-    if (body && sec === body) continue
-    const from = exerciseType(sec?.exercise_type)?.audioFrom
-    if (!from) continue
-    const tier = voiceTierFor({ exerciseType: sec.exercise_type, tags })
-    for (const it of sec.items ?? []) {
-      const text = String(it?.[from] ?? '').trim()
-      if (!text) continue
+    for (const c of sectionRestClips(material, sec)) {
       /* **同じ英文を二度作らない。** 置き場所は(段・声・英文の指紋)なので、
          同じ3つなら**同じ1本**である —— 二度数えると、
          画面に出す本数だけが水増しになる(数え方を2通り持たない) */
-      const key = `${tier}|${solo}|${text}`
+      const key = `${c.tier}|${c.voiceId}|${c.text}`
       if (seen.has(key)) continue
       seen.add(key)
-      out.push({ text, voiceId: solo, tier })
+      out.push(c)
     }
   }
   return out

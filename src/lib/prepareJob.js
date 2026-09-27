@@ -34,7 +34,9 @@
 import { useEffect, useState } from 'react'
 import { ensureClip, lastWholeDetail, wholeClip } from './audioClips.js'
 import { materialAudioClips, materialRestClips } from './audioPlaylist.js'
-import { prefetchGlosses } from './vocab.js'
+/* **英語が入っている欄は `exerciseTypes.js` 1か所が決める**(第5.289節) */
+import { materialEnglishTexts } from '../data/exerciseTypes.js'
+import { prefetchMaterialGlosses } from './vocab.js'
 import { PREMIUM } from './voiceTier.js'
 
 /**
@@ -173,9 +175,23 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
   /* **走っているあいだは、順番待ちにする**(2026-09 実機)。
      以前はここで `false` を返して**そのまま捨てて**いた。
      呼ぶ側(画面)は同じ条件では二度と呼ばないので、
-     **その教材の支度は永久に行われない。** 落とさずに並べる */
+     **その教材の支度は永久に行われない。** 落とさずに並べる
+
+     ── **並べる先は「先頭」である**(第5.289節・2026-09-27)──
+
+     2026-09-27 利用者の指摘。
+
+       > 文系トレーニング、単語やフレーズの音声が
+       > 待ち時間なしでパッと聞けるようにすることです。
+
+     ここに来るのは**「発行した直後」と「セッションで使う」の2つだけ**
+     で、どちらも**これから使う**という合図である。ところが
+     `startPrepareAll()` が**過去の教材を最大50件**積んでいるので、
+     後ろに並べると**50本ぶん待ってから**支度が始まっていた。
+     **いま要るものを先にする。**(裏の50件は落ちない ——
+     先頭に1つ挟まるだけで、順番は繰り下がる) */
   if (prepareRunning()) {
-    if (!queue.some((q) => q.id === id)) queue.push({ material, title, level, id })
+    if (!queue.some((q) => q.id === id)) queue.unshift({ material, title, level, id })
     return true
   }
 
@@ -186,7 +202,9 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
      だから「どの Listen を押しても数秒待つ」になっていた */
   const rest = materialRestClips(material)
   // 語の意味だけの教材(読み上げも本文も無い)には、支度することが無い
-  const words = clips.length ? clips : bodyTextsOf(material)
+  /* **語の意味を引ける英文があるか。** 本文が無い教材(文型ドリル・
+     単語 / フレーズ)でも、英文は `answer` や `audio_text` に入っている */
+  const words = materialEnglishTexts(material)
   if (!words.length && !rest.length) return false
 
   done.add(id)
@@ -268,12 +286,18 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
       }
       if (!alive()) return
 
-      // ③ 語の意味。**開いてから引くと、レッスン中に待つことになる**
+      /* ③ 語の意味。**開いてから引くと、レッスン中に待つことになる**
+
+         **拾うのは教材ぜんぶの英文である**(第5.289節)。
+         ここは `clips`(本文)か `bodyTextsOf`(`prompt_en` だけ)しか
+         渡していなかったので、**単語 / フレーズの「言う」段・和文英訳・
+         リスニング・内容の理解の英文が、1語も先読みされていなかった。**
+         どの欄が英語かは `exerciseTypes.js` 1か所が決める */
       step(2, '語の意味')
-      const list = (clips.length ? clips : words).map((c) => ({ text: c.text }))
-      await prefetchGlosses(list, { level })
+      const glossed = materialEnglishTexts(material).length
+      await prefetchMaterialGlosses(material, { level })
       if (!alive()) return
-      task = { ...task, state: 'done', step: 3, label: '', audio, words: list.length, note }
+      task = { ...task, state: 'done', step: 3, label: '', audio, words: glossed, note }
       emit()
       /* **うまくいった知らせは、ひとりでに閉じる**(第5.265節)。
          失敗したときは下の `catch` へ行くので、ここを通らない */
@@ -333,17 +357,14 @@ function runNext() {
   startPrepare(next.material, { title: next.title, level: next.level })
 }
 
-/** 本文の演習が無いときのための、英文の拾い方(語の意味だけ支度する) */
-function bodyTextsOf(material) {
-  const out = []
-  for (const sec of material?.sections ?? []) {
-    for (const it of sec.items ?? []) {
-      const t = String(it?.prompt_en ?? '').trim()
-      if (t) out.push({ text: t })
-    }
-  }
-  return out
-}
+/**
+ * **支度することが1つも無い教材か**を見分けるための数え上げ。
+ *
+ * **`bodyTextsOf`(`prompt_en` だけ)は第5.289節でやめた。**
+ * あれは「英語が入る欄は演習ごとに違う」を知らなかったので、
+ * 単語 / フレーズの「言う」段を**丸ごと落としていた。**
+ * いまは `materialEnglishTexts()` 1か所が数える。
+ */
 
 /**
  * **いま作った音声の数と、その文字数**(第5.203節・利用者の指定)。

@@ -1979,13 +1979,26 @@ function fakeMp3({
     const finder = readFileSync(new URL('../src/components/TrainerMaterials.jsx', import.meta.url), 'utf8')
     const want = [
       ['音声を先に作る', prep, /await wholeClip\(\{/],
-      ['語の意味も先に引く', prep, /await prefetchGlosses\(/],
+      /* **教材ぜんぶの英文から引く**(第5.289節)。
+         `prefetchGlosses(list)` と書いてあったころは、渡していたのが
+         `prompt_en` だけの一覧で、**単語 / フレーズの「言う」段・
+         和文英訳・リスニングの英文が1語も先読みされていなかった** */
+      ['語の意味も先に引く', prep, /await prefetchMaterialGlosses\(material, \{ level \}\)/],
       ['同じ教材は二度やらない', prep, /if \(!id \|\| done\.has\(id\)\) return false/],
       ['走っているあいだは始めない', prep, /if \(prepareRunning\(\)\) \{/],
       ['失敗してもやり直さない', prep, /state: 'done', audio, error:/],
       ['発行したら支度する', form, /startPrepare\(\s*\{ id: data\.id/],
       ['「セッションで使う」でも支度する', finder, /startPrepare\(m, \{ title: m\.title/],
-      ['走っていたら順番待ちにする', prep, /queue\.push\(\{ material, title, level, id \}\)/],
+      /* **並べる先は「先頭」である**(第5.289節)。`queue.push` だと
+         `startPrepareAll()` が積んだ過去の教材 最大50件のうしろに回り、
+         **「セッションで使う」で開いた教材の支度が最後になる** */
+      ['走っていたら順番待ちの先頭へ割り込む', prep,
+        /if \(prepareRunning\(\)\) \{[\s\S]{0,200}queue\.unshift\(\{ material, title, level, id \}\)/],
+      /* **裏で積むほうは、後ろのままでなければならない。**
+         あちらまで先頭に入れると、一覧を開いた順が逆さまになるうえ、
+         **割り込みの意味そのものが無くなる**(「出る」と「出ない」の両方を見る) */
+      ['裏で積むぶんは後ろに並べる', prep,
+        /export function startPrepareAll\([\s\S]{0,900}queue\.push\(\{ material: m, title/],
       ['終わったら次を始める', prep, /runNext\(\)/],
       ['何ができたかを持ち帰る', prep, /audio = got \? 'ok' : 'ng'/],
       ['できなかった理由を出す', prep, /lastWholeDetail\(\)/],
@@ -4768,6 +4781,174 @@ function fakeMp3({
     ng('支度 … 本文のほかの読み上げが、いちばん最初の声で読まれていない',
       String(one?.voiceId))
   } else ok('支度 … 本文のほかは、いちばん最初の声で読む(画面と同じ)')
+
+  /* ══════════════════════════════════════════════════════════════════
+     **第5.289節 … 待ち時間なしでパッと聞ける・パッと見える**
+     2026-09-27 利用者の指摘。
+
+       > 文系トレーニング、単語やフレーズの音声が待ち時間なしで
+       > パッと聞けるようにすることです。単語やフレーズの意味も
+       > 事前にロードしておいてパッとみれる仕様にしたはずなのに
+       > いつのまにかまた元に戻っています。
+     ══════════════════════════════════════════════════════════════════ */
+
+  /* ── ⑧ **支度が作る英文と、押したときに探す英文が同じか** ──
+     `materialRestClips` は `it[from]` と書き写していたので、
+     **読み方を直した英文(`audio_text`・第5.266節)では、
+     支度が別の音声を作り、押したときには無い**という形になっていた。
+     **無駄な課金と、押したときの待ちが同時に起きる。**
+
+     **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+     ここでは「読み方を指定した問が1つある教材」である */
+  {
+    const { audioTextOf } = await import('../src/lib/audioPlaylist.js')
+    const say = {
+      voiceIds: ['us-1'], tags: [],
+      sections: [{
+        exercise_type: 'vocabulary',
+        items: [
+          /* **`prompt_en` と `audio_text` が違う。** 画面には UMITO と出て、
+             声にするのは「ゆーみと」のほうである(第5.266節) */
+          { prompt_en: 'UMITO', audio_text: 'You me toe' },
+          { prompt_en: 'reluctant' },
+        ],
+      }],
+    }
+    const made = materialRestClips(say).map((c) => c.text)
+    const asked = say.sections[0].items.map((it) => audioTextOf(it, 'vocabulary'))
+    const 足りない = asked.filter((t) => !made.includes(t))
+    const 余り = made.filter((t) => !asked.includes(t))
+    if (足りない.length || 余り.length) {
+      ng('支度 … 押したときに探す英文と食い違っている(待ちと二重課金)',
+        `支度が作る ${made.join(' / ')} / 押して探す ${asked.join(' / ')}`)
+    } else ok('支度 … 読み方を直した英文でも、押したときと同じ1本を作る')
+  }
+
+  /* ── ⑨ **開いているページだけを温められるか** ──
+     教材ぜんぶを1本ずつ順に作ると、**うしろのページへ届くのが最後**になる。
+     段ごとに引ける形が無いと、画面の側で
+     「本文は入れない」「声はどれか」を書き写すことになり、
+     **別の場所の MP3 を探して「無い」ことになる。**
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+     本文の段では**必ず空**でなければならない(入れると音声代が倍) */
+  {
+    const { sectionRestClips } = await import('../src/lib/audioPlaylist.js')
+    const dlg2 = mkMat('dialogue')
+    const bodySec = dlg2.sections[0]           // 会話(本文)
+    const restSec = dlg2.sections[1]           // 内容の理解
+    const bodyGot = sectionRestClips(dlg2, bodySec).length
+    if (bodyGot !== 0) {
+      ng('段ごとの温め … 本文まで入れている(本文の音声代が倍になる)', `${bodyGot} 本`)
+    } else ok('段ごとの温め … 本文の段は空(1本にまとめたものが受け持つ)')
+    const restGot = sectionRestClips(dlg2, restSec)
+    if (restGot.length !== restSec.items.length) {
+      ng('段ごとの温め … 本文でない段を取りこぼしている',
+        `${restGot.length} 本 / ${restSec.items.length} 問`)
+    } else ok(`段ごとの温め … 本文でない段は ${restGot.length} 本ぜんぶ出す`)
+    /* **教材ぜんぶと、段ごとの合計が同じでなければならない** ——
+       ここがずれると「数え方を2通り持った」ことになる */
+    const 合計 = dlg2.sections
+      .flatMap((sec) => sectionRestClips(dlg2, sec).map((c) => `${c.tier}|${c.voiceId}|${c.text}`))
+    const 全体 = materialRestClips(dlg2).map((c) => `${c.tier}|${c.voiceId}|${c.text}`)
+    if ([...new Set(合計)].length !== 全体.length) {
+      ng('段ごとの温め … 教材ぜんぶと数が合わない(数え方が2通りある)',
+        `段ごとの合計 ${[...new Set(合計)].length} / 教材ぜんぶ ${全体.length}`)
+    } else ok('段ごとの温め … 教材ぜんぶと、段ごとの合計が一致する')
+
+    /* **画面が本当に呼んでいるか。** 定義だけあって誰も呼ばなければ、
+       何も起きない(`noteFnRev` と同じ落とし穴) */
+    const lesson = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    if (!/for \(const c of sectionRestClips\(material, sec\)\)[\s\S]{0,160}await ensureClip\(c\.text, c\.voiceId, c\.tier\)/
+      .test(lesson)) {
+      ng('段ごとの温め … レッスン表示が、開いたページを温めていない')
+    } else ok('段ごとの温め … レッスン表示が、開いたページを温める')
+    /* **1本ずつ順に。** まとめて投げると、いくらかかったか分からないうちに
+       終わるうえ、窓口に同時に10本ぶら下がる(支度と同じ作法) */
+    if (!/for \(const c of sectionRestClips[\s\S]{0,120}if \(!alive\) return/.test(lesson)) {
+      ng('段ごとの温め … ページを送っても、前のページを追い続ける(止まる条件が無い)')
+    } else ok('段ごとの温め … ページを送ったら、そこで止まる')
+  }
+
+  /* ── ⑩ **語の意味の先読みが、英語のある欄をぜんぶ拾うか** ──
+     5か所に `it.prompt_en || it.question` と書き写してあったので、
+     **5か所そろって同じ取りこぼし**をしていた。
+     いちばん効いていたのは**単語 / フレーズの「日本語 → 英語で言う」段**で、
+     英文が `answer` に入るため**1語も先読みされていなかった。** */
+  {
+    const { materialEnglishTexts, englishTextsOf } =
+      await import('../src/data/exerciseTypes.js')
+    /* **「出る」と「出ない」の両方を見る。**
+       日本語の欄まで拾う形に書き換えたら赤くならなければならない */
+    const 言う = { prompt_ja: '気が進まない', answer: 'reluctant', answer_alt: 'unwilling' }
+    const 英語 = englishTextsOf(言う, 'vocab_recall')
+    if (!英語.includes('reluctant') || !英語.includes('unwilling')) {
+      ng('先読み … 「言う」段の英文(`answer`)を拾っていない', 英語.join(' / '))
+    } else ok('先読み … 「言う」段の英文(`answer` / `answer_alt`)も拾う')
+    if (英語.includes('気が進まない')) {
+      ng('先読み … 日本語の欄まで拾っている(英語でない語を引きに行く)')
+    } else ok('先読み … 日本語の欄(`prompt_ja`)は拾わない')
+    /* **解答が日本語の演習では、`answer` を拾ってはいけない** ——
+       英文和訳の解答は和訳である(`answerLang: 'ja'`) */
+    const 和訳 = englishTextsOf({ prompt_en: 'I have a lot to do.', answer: 'やることが多い' },
+      'translate_en_ja')
+    if (和訳.includes('やることが多い')) {
+      ng('先読み … 解答が日本語の演習でも `answer` を拾っている')
+    } else ok('先読み … 解答が日本語の演習では `answer` を拾わない')
+
+    /* **数で言う**(CLAUDE.md「『増えた』ではなく『30 本』」)。
+       いまの書き写しの形と突き合わせて、**落ちていたぶんを数える** */
+    const 古い形 = (m) => [...new Set(m.sections.flatMap((sec) => sec.items
+      .map((it) => it.prompt_en || it.question || '').filter(Boolean)))]
+    /* **その演習が持っている欄だけを埋める。**
+       上の `mkMat` はどの問にも `prompt_en` を入れているので、
+       **`prompt_ja` + `answer` しか無い「単語を言う」段でも
+       `prompt_en` が拾えてしまい、取りこぼしが隠れる**
+       (「無ければ素通り」する検証を書かない・CLAUDE.md) */
+    const 実物 = (kind) => ({
+      voiceIds: ['us-1'], tags: [],
+      sections: (defaultSectionsFor(kind) ?? []).map((sec) => {
+        const t = EXERCISE_TYPES.find((x) => x.id === sec.exercise_type)
+        return {
+          exercise_type: sec.exercise_type,
+          items: Array.from({ length: sec.count }, (_, i) => Object.fromEntries(
+            (t?.fields ?? []).map((f) => [f, `${f} ${i} for ${sec.exercise_type}`]),
+          )),
+        }
+      }),
+    })
+    for (const [kind, least] of [['vocab', 2], ['pattern', 3]]) {
+      const m = 実物(kind)
+      const 全部 = materialEnglishTexts(m).length
+      const 前 = 古い形(m).length
+      if (全部 <= 前) {
+        ng(`先読み … ${kind} で、前と同じ数しか拾えていない`, `${全部} 本 / 前 ${前} 本`)
+      } else ok(`先読み … ${kind} は ${前} 本 → ${全部} 本(${全部 - 前} 本が落ちていた)`)
+      if (前 < least) ng(`先読み … ${kind} の数え方がおかしい`, `前 ${前} 本`)
+    }
+
+    /* **5か所ぜんぶが、寄せた1か所を通っているか。**
+       1つでも書き写しが残っていると、**その画面だけ古い取りこぼし**になる */
+    const 呼ぶ先 = [
+      ['レッスン表示', 'LessonView.jsx', /prefetchSectionGlosses\(sec, \{ level: material\?\.level \}\)/],
+      ['本文の練習', 'PassagePractice.jsx', /prefetchSectionGlosses\(section, \{ level \}\)/],
+      ['教材の一覧', 'TrainerMaterials.jsx', /prefetchMaterialGlosses\(m, \{ level: m\.level \}\)/],
+      ['今週の宿題', 'LearnerHomework.jsx', /prefetchMaterialGlosses\(m, \{ level: m\.level \}\)/],
+    ]
+    let 残り = []
+    for (const [what, file, re] of 呼ぶ先) {
+      const src2 = readFileSync(new URL(`../src/components/${file}`, import.meta.url), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+      if (!re.test(src2)) 残り.push(`${what}(${file})`)
+      /* **書き写しが1つも残っていないか。** 残っていれば、
+         そこだけ `prompt_en` しか拾わないままである */
+      if (/it\.prompt_en \|\| it\.question/.test(src2)) 残り.push(`${what} … 書き写しが残っている`)
+    }
+    if (残り.length) {
+      ng('先読み … 寄せた1か所を通っていない画面がある', 残り.join('\n    '))
+    } else ok('先読み … 4つの画面ぜんぶが、寄せた1か所を通る(書き写しは0)')
+  }
 
   /* ── ⑥ **支度が、本当にそれを呼んでいるか** ──
      **「名前が出てくるか」で見ない**(CLAUDE.md)。使っている形で数える */

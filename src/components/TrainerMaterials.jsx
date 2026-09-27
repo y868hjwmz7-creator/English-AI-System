@@ -53,7 +53,7 @@ import LearnerPick from './LearnerPick.jsx'
 import { NO_ACTIVE_TEXT, PICK_LABEL } from '../lib/learnerPick.js'
 import { genresFor, scenesFor } from '../data/genres.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
-import { prefetchGlosses } from '../lib/vocab.js'
+import { prefetchMaterialGlosses } from '../lib/vocab.js'
 import { startPrepare, startPrepareAll } from '../lib/prepareJob.js'
 import { printElement } from '../lib/print.js'
 /* **保存する名前は `fileName.js` 1か所**(第5.229節) */
@@ -506,11 +506,8 @@ export default function TrainerMaterials({
     // 開いた直後に触れた語でも待たされない
     const m = materials.find((x) => x.id === lessonOf?.id)
     if (!m) return
-    const texts = m.sections.flatMap((sec) => sec.items
-      .map((it) => it.prompt_en || it.question || '')
-      .filter(Boolean)
-      .map((text) => ({ text })))
-    prefetchGlosses(texts, { level: m.level })
+    /* **どの欄が英語かは `exerciseTypes.js` 1か所**(第5.289節) */
+    prefetchMaterialGlosses(m, { level: m.level })
     /* **読み上げ音声も、ここで支度しておく**(2026-09 利用者の指定)。
      *
      *   > 初めて再生するときの待ち時間が３０秒近くあり…

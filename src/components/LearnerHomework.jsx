@@ -39,7 +39,7 @@ import { useAudioDownload } from '../lib/useAudioDownload.js'
 import AudioDownloadNote from './AudioDownloadNote.jsx'
 import useWordStatuses from '../lib/useWordStatuses.js'
 import EnglishText from './EnglishText.jsx'
-import { normWord, prefetchGlosses } from '../lib/vocab.js'
+import { normWord, prefetchMaterialGlosses } from '../lib/vocab.js'
 /* **その教材に並んでいる語句**(0047)。素の node で確かめられる形にしてある */
 import { materialWordsOf } from '../lib/materialWords.js'
 import { markIn } from '../lib/useWordStatuses.js'
@@ -168,11 +168,8 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
   useEffect(() => {
     const m = lessonOf
     if (!m) return
-    const texts = (m.sections ?? []).flatMap((sec) => (sec.items ?? [])
-      .map((it) => it.prompt_en || it.question || '')
-      .filter(Boolean)
-      .map((text) => ({ text })))
-    prefetchGlosses(texts, { level: m.level })
+    /* **どの欄が英語かは `exerciseTypes.js` 1か所**(第5.289節) */
+    prefetchMaterialGlosses(m, { level: m.level })
   }, [lessonOf])
 
   /**

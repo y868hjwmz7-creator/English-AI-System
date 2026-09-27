@@ -36,7 +36,7 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { wholeSliceOf } from '../lib/audioPlaylist.js'
-import { prefetchGlosses } from '../lib/vocab.js'
+import { prefetchSectionGlosses } from '../lib/vocab.js'
 import { storedChunks, storedParts } from '../lib/chunkJa.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { progressKey, useProgress } from '../lib/progress.js'
@@ -228,10 +228,8 @@ export default function PassagePractice({
 
   // 開いた時点で、まだ控えに無い語を裏で引いておく(2026-08 の要望)
   useEffect(() => {
-    prefetchGlosses(
-      section.items.map((it) => ({ text: it.prompt_en })).filter((x) => x.text),
-      { level },
-    )
+    /* **どの欄が英語かは `exerciseTypes.js` 1か所**(第5.289節) */
+    prefetchSectionGlosses(section, { level })
   }, [section, level])
 
   // 読んでいるところまで画面を送る。すでに見えていれば動かない

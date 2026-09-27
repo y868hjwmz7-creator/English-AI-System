@@ -760,6 +760,108 @@ export const noteIsAnswer = (typeId) => {
 export const answerHasAudio = (typeId) => exerciseType(typeId)?.answerLang === 'en'
 
 /**
+ * ============================================================================
+ * **その項目に入っている、英語の文字ぜんぶ**(第5.289節)
+ *
+ * 2026-09-27 実機・利用者の指摘。
+ *
+ *   > 単語やフレーズの意味も事前にロードしておいてパッとみれる仕様に
+ *   > したはずなのにいつのまにかまた元に戻っています。
+ *
+ * ── 元に戻ったのではなく、**はじめから半分しか拾っていなかった** ──
+ *
+ *   語の意味の先読みは、**5か所**に同じ1行が書き写してあった。
+ *
+ *       it.prompt_en || it.question || ''
+ *
+ *   ところが**英語が入る欄は、演習ごとに違う。** 素の node で数えると
+ *   こうなる(`scripts/check-mp3-join.mjs` が同じ数を見張っている)。
+ *
+ *   | 教材 | 触れる英文 | いま拾えていた | 落ちていたもの |
+ *   |---|---|---|---|
+ *   | 単語 / フレーズ | 4 | **2** | 単語を言う・フレーズを言う(`answer`) |
+ *   | 文型ドリル | 7 | **3** | 誤り訂正・和文英訳・リスニング |
+ *   | 記事 | 5 | 4 | 内容の理解(`answer`) |
+ *
+ *   **利用者が見ていたのは、まさに落ちていたところである** ——
+ *   単語 / フレーズの「日本語 → 英語で言う」段(第5.248節)は
+ *   英文が `answer` に入るので、**1語も先読みされていなかった。**
+ *
+ * ── 欄の一覧を、新しく書かない ──────────────────────────────
+ *
+ *   `enFields` のような欄をもう1つ足すと、**演習を足した日に
+ *   そこだけ古くなる**(`answerLang` と `grammarFrom` で2度やっている)。
+ *   ここは**すでにある `fields` と `answerLang` から決める。**
+ *
+ *   ・`…_en` で終わる欄(`prompt_en` / `source_en`)……英語
+ *   ・`question` / `audio_text` / `hint` ……英語
+ *     (`question_ja` は `_ja` で終わるので入らない。
+ *      `hint` は「与える語」= `reply to` のような英語である)
+ *   ・`answer` / `answer_alt` ……**`answerLang === 'en'` のときだけ**
+ *   ・それ以外(`prompt_ja` / `note` / `speaker` / `phonetic` /
+ *     `chunk_kind` / `answer_ja` / `question_ja`)……英語ではない
+ *
+ *   **既定は「英語ではない」側**である(CLAUDE.md)。
+ *   欄を足した人が英語だと思ったら、その欄の名前を `_en` で終えるか、
+ *   ここに1行足すことになる —— **どちらも1か所で済む。**
+ *
+ * ── なぜ `audioTextOf` ではないのか ────────────────────────
+ *
+ *   あちらは**声にする文字**を返す(第5.266節・読み方を直した英文)。
+ *   ここがほしいのは**画面に出ている文字**で、
+ *   ゲストが指で触るのはそちらである。**別のものなので、別に持つ。**
+ * ============================================================================
+ */
+
+/** 欄の名前だけで英語と決まるもの。**`_en` で終わるものは、ここに書かない** */
+const EN_NAMED = new Set(['question', 'audio_text', 'hint'])
+
+/** 解答の言葉づかいで決まるもの(`answerLang === 'en'` のときだけ英語) */
+const EN_IF_ANSWER = new Set(['answer', 'answer_alt'])
+
+/**
+ * その欄に入るのは英語か。
+ *
+ * **画面の中で欄の名前を並べない**(判断は1か所・CLAUDE.md)。
+ */
+export const isEnglishField = (field, typeId) => {
+  const f = String(field ?? '')
+  if (f.endsWith('_en')) return true
+  if (EN_NAMED.has(f)) return true
+  if (EN_IF_ANSWER.has(f)) return answerHasAudio(typeId)
+  return false
+}
+
+/**
+ * その項目の、英語が入っている文字ぜんぶ。**並びは `fields` の順**。
+ *
+ * @param {object} item 1問
+ * @param {string} typeId 演習の種類
+ * @returns {string[]} 空のものは落としてある
+ */
+export const englishTextsOf = (item, typeId) => {
+  const type = exerciseType(typeId)
+  if (!type || !item) return []
+  const out = []
+  for (const f of type.fields ?? []) {
+    if (!isEnglishField(f, typeId)) continue
+    const t = String(item[f] ?? '').trim()
+    if (t) out.push(t)
+  }
+  return out
+}
+
+/** その段(演習1つ)に入っている英文ぜんぶ。**同じ文は1回だけ** */
+export const sectionEnglishTexts = (section) => [...new Set(
+  (section?.items ?? []).flatMap((it) => englishTextsOf(it, section?.exercise_type)),
+)]
+
+/** その教材に入っている英文ぜんぶ。**同じ文は1回だけ**(二度引かない) */
+export const materialEnglishTexts = (material) => [...new Set(
+  (material?.sections ?? []).flatMap((sec) => sectionEnglishTexts(sec)),
+)]
+
+/**
  * **文法解説(SVOC)を作る元にする欄。** 無ければ `null`。
  *
  * 【なぜ欄で見分けられないか】(2026-09 利用者の指摘)
