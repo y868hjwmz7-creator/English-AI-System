@@ -45,7 +45,12 @@ import SettingsSheet from './SettingsSheet.jsx'
 /* 音量のつまみ。**覚えるのは `mixVolume.js`、鳴っている曲に当てるのは
    `bgm.js`** —— ここは受け取って描くだけ */
 import VolumeRow from './VolumeRow.jsx'
-import { CloseIcon, GearIcon, PlayIcon, StopIcon } from './Icons.jsx'
+/* **絵は、復習の「出しかた」と同じ**(第5.279節・2026-09-27 実機・
+   利用者の指定「右上のソートボタンは新しく採用した、
+   3本線と丸の組み合わせのものに変えてください」)。
+   `SortIcon` は第5.275節で決めたつまみ3本で、**同じ働きの
+   ボタンに同じ絵**を出す(呼び名・絵を2か所に書かない・CLAUDE.md) */
+import { CloseIcon, PlayIcon, SortIcon, StopIcon } from './Icons.jsx'
 import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
 import { JA_VOICE } from '../data/clipVoices.js'
 import { PREMIUM } from '../lib/voiceTier.js'
@@ -459,11 +464,17 @@ export default function WordRadio({
               <CloseIcon />聞き流しをやめる
             </button>
           )}
+          {/* **絵はつまみ3本**(第5.279節)。復習の「出しかた」
+              (`.rscope-sort`)とまったく同じ `SortIcon` を出す ——
+              **同じ働きのボタンに、同じ絵。**
+              名前(`aria-label` / `title`)は「設定」のままである。
+              あちらは絞り込みも入るので「出しかた」、
+              こちらは何問ずつ・読み方・曲・間・音量なので「設定」 */}
           <button type="button" ref={gearRef}
                   className="nav-icon-btn radio-gear"
-                  aria-label="設定" aria-expanded={setsOpen}
+                  aria-label="設定" title="設定" aria-expanded={setsOpen}
                   onClick={() => setSetsOpen((v) => !v)}>
-            <GearIcon />
+            <SortIcon />
           </button>
         </div>
       )}
