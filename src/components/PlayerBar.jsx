@@ -46,6 +46,9 @@ import { SpeakerIcon, StopIcon } from './Icons.jsx'
 import SentenceSkip from './SentenceSkip.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
 import { useFitRow } from '../lib/fitRow.js'
+/* **通しで鳴らすボタンの文字は1か所**(第5.290節)。
+   狭い画面で落とすのは `WIDE` のほうだけ —— `CORE` は必ず残る */
+import { WHOLE_PLAY_CORE, WHOLE_PLAY_WIDE } from '../lib/wholePlay.js'
 
 /**
  * @param place     'bar'(上の帯)/ 'dock'(画面の下の黒帯)/ 'float'(浮かせる)
@@ -139,12 +142,18 @@ export default function PlayerBar({
               段落を続けて送るときにいちばん困る形になる */}
           {playing
             ? <><StopIcon /><span className="listen-word">Stop</span></>
-            /* **狭い画面では「(全体)」を落とす**(2026-09 実機・利用者の指定
+            /* **狭い画面では「全体を」を落とす**(2026-09 実機・利用者の指定
                  「再生プレーヤーが2行になるのは絶対にダメです」)。
                すぐ右に「3 / 6 段落」があるので、通しであることは伝わる。
-               **落とすのは添えの言葉だけ** —— 「Listen」は必ず残る */
+               **落とすのは添えの言葉だけ** —— 「聞く」は必ず残る。
+
+               **文字は `wholePlay.js` 1か所**(第5.290節)。
+               段の中のボタン(`LessonView`)と**同じ動きの同じボタン**なので、
+               ここに書き写すと片方だけ古くなる */
             : <><SpeakerIcon />
-              <span className="listen-word">Listen<span className="wide-text"> (全体)</span></span>
+              <span className="listen-word">
+                <span className="wide-text">{WHOLE_PLAY_WIDE}</span>{WHOLE_PLAY_CORE}
+              </span>
             </>}
         </button>
       </SentenceSkip>

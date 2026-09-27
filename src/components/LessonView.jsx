@@ -80,6 +80,10 @@ import PhraseChips from './PhraseChips.jsx'
 import Phonetic from './Phonetic.jsx'
 import Stepper from './Stepper.jsx'
 import PlayerBar from './PlayerBar.jsx'
+/* **通しで鳴らすボタンの文字は `wholePlay.js` 1か所**(第5.290節)。
+   ここと `PlayerBar` は**同じ動き(`playWhole`)の同じボタン**なので、
+   文字を書き写すと片方だけ古くなる(呼び名を2か所に書かない) */
+import { wholePlayText } from '../lib/wholePlay.js'
 import useBodyAudio from '../lib/useBodyAudio.js'
 import { FIT_STAGES, overWrapping, useFitRow } from '../lib/fitRow.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../lib/playerPlace.js'
@@ -1513,7 +1517,7 @@ export default function LessonView({
         {/* ── 通しで練習する ────────────────────────────────
             **「ページを見る」とは別の行為。** ページは教材の中身を
             順に見るもので、こちらは教材1本を通しで練習するもの。
-            紙の中に置くのは、`Listen (全体)` と同じ考え方である
+            紙の中に置くのは、`全体を聞く` と同じ考え方である
             (操作欄は狭い画面で場所が無い。第5.25節)。
             共有先には見えるが、印刷には出さない */}
         {(qrPossible || passageSection) && (
@@ -1643,7 +1647,7 @@ export default function LessonView({
                 > 右下の集中モードの横あたりに再生中ならstop、
                 > 停止中ならlistenが出てる仕様にしてください。
 
-                「Listen (全体)」は**本文のいちばん上**にある。押したあと
+                「全体を聞く」は**本文のいちばん上**にある。押したあと
                 読み進めると、**止めるボタンごと画面の外へ出ていく。**
                 鳴らすボタンがそのまま Stop に変わる作法(CLAUDE.md)は
                 合っていても、**その1つが見えないところにあっては止められない。**
@@ -2096,7 +2100,7 @@ export default function LessonView({
                 <button type="button" className="btn btn--small btn--quiet" onClick={playWhole}>
                   {playingAll
                     ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
-                    : <><SpeakerIcon />Listen (全体)</>}
+                    : <><SpeakerIcon />{wholePlayText()}</>}
                 </button>
               </div>
             )}

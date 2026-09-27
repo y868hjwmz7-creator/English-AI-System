@@ -40,6 +40,10 @@ import { RIZAP_BOOKS } from '../src/data/rizapBooks.js'
 import { SIX_STEPS } from '../src/lib/sixSteps.js'
 /* **色の一覧を書き写さない**(第5.242節)。3つの色は `btnTone.js` 1か所 */
 import { hasTone } from '../src/lib/btnTone.js'
+/* **通しで鳴らすボタンの文字は `wholePlay.js` 1か所**(第5.290節)。
+   ここに `'全体を聞く'` と書き写すと、**名前を変えた日に見張りだけが古くなる**
+   (値を書き写さない。性質で見る・CLAUDE.md) */
+import { WHOLE_PLAY_CORE, wholePlayText } from '../src/lib/wholePlay.js'
 /* 本文(記事・会話)の演習。**一覧を書き写さない** ——
    種類を足した日に、ここだけ古い一覧が残らないようにする */
 import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
@@ -60,7 +64,7 @@ const ROOT = new URL('..', import.meta.url).pathname
  *   相手(ゲスト)がいなくても出し、**開いた中で選ばせる**
  *   (2026-09 利用者の指摘。セッションの記録は「ゲスト × 日付」で
  *   1行だが、それは書けない理由であってボタンを消す理由ではなかった)
- * ・`Listen (全体)` と操作盤 … 本文のページを開いているときだけ。
+ * ・`全体を聞く` と操作盤 … 本文のページを開いているときだけ。
  *   **`くり返し`(反復の単位)も操作盤の持ちもの**(2026-09 利用者の指定
  *   「文章単位、段落単位、全文単位、三つ選べるような」)。
  *   狭い画面では操作盤ごと右下に浮くので、帯には出ない
@@ -78,7 +82,7 @@ const WANT = {
   'トレーナーが、ゲストと一緒に開いている': {
     q: '?role=trainer&who=g1',
     /* パソコン(1440px)。**「表示」は出ない** — 畳まないので札も要らない */
-    wide: ['閉じる', '書き込む', 'メモ', '印刷', 'Listen (全体)', 'しない', '速さ', '文字', '幅'],
+    wide: ['閉じる', '書き込む', 'メモ', '印刷', wholePlayText(), 'しない', '速さ', '文字', '幅'],
     /* スマホ(390px)。「表示」に畳まれる(検証は開いてから数える)。
        通しの読み上げは**右下に浮く**ので帯には無く、帯にはスイッチだけ */
     narrow: ['閉じる', '表示', '書き込む', 'メモ', '印刷', '速さ', '文字', '幅',
@@ -95,14 +99,14 @@ const WANT = {
        **それは書けない理由であって、ボタンを消す理由ではなかった。**
        利用者はふだんこの画面から開くので、一度も出てこなかった。
        いまは**開いた中で相手を選ばせる**(担当ゲストだけが並ぶ)。 */
-    wide: ['閉じる', '書き込む', 'メモ', '印刷', 'Listen (全体)', 'しない', '速さ', '文字', '幅'],
+    wide: ['閉じる', '書き込む', 'メモ', '印刷', wholePlayText(), 'しない', '速さ', '文字', '幅'],
     narrow: ['閉じる', '表示', '書き込む', 'メモ', '印刷', '速さ', '文字', '幅',
       '読み上げの操作を閉じる', '集中モード'],
     hasNot: [],
   },
   'ゲスト自身が開いている': {
     q: '?role=learner&who=g1',
-    wide: ['閉じる', '書き込む', '印刷', 'Listen (全体)', 'しない', '速さ', '文字', '幅'],
+    wide: ['閉じる', '書き込む', '印刷', wholePlayText(), 'しない', '速さ', '文字', '幅'],
     narrow: ['閉じる', '表示', '書き込む', '印刷', '速さ', '文字', '幅',
       '読み上げの操作を閉じる', '集中モード'],
     // メモを書けるのは担当トレーナー(と管理者)だけ(0032)
@@ -559,12 +563,12 @@ for (const [label, want] of Object.entries(WANT)) {
       段落: passage.flatMap((t) =>
         [...document.querySelectorAll(`.lesson-page[data-type="${t}"] .lesson-items button`)])
         .filter((b) => /^(Listen|Stop)/.test(b.textContent.trim())).length,
-      /* **通しの読み上げは残す。** 上の「Listen (全体)」と操作盤は別物 */
+      /* **通しの読み上げは残す。** 上の「全体を聞く」と操作盤は別物 */
       全体: !!document.querySelector('.lesson-listen'),
       操作盤: !!document.querySelector('.player'),
     }), PASSAGE_TYPES)
     if (m.段落) ng(`${w}px … 段落ごとの Listen が ${m.段落} 個 出ている`)
-    else if (!m.全体) ng(`${w}px … 「Listen (全体)」まで消えている`)
+    else if (!m.全体) ng(`${w}px … 「${wholePlayText()}」まで消えている`)
     else if (!m.操作盤) ng(`${w}px … 操作盤が出ていない`, '鳴らす道が無くなる')
     else ok(`${w}px … 段落ごとは0個・通しと操作盤は残っている`)
   }
@@ -4794,6 +4798,46 @@ export default defineConfig({
       ok(`文型ドリル … 「全体を聞く」が出る(${英文和訳のページ.文字})/`
         + ' 鳴らせない誤り訂正には出ない')
     }
+  }
+
+  /* ── ★ **通しで鳴らすボタンの名前は、1か所から来ているか**(第5.290節)──
+   *
+   *   2026-09-27 利用者の指定「はい、全体を聞く、に変えます」。
+   *
+   *   `Listen (全体)` は**4か所に書き写してあった** —— 段の中のボタン
+   *   (`LessonView`)、送っていったときの居場所(`PlayerBar`)、
+   *   **音声をまとめたあとの案内**(`AudioDownloadNote`)、そして**この見張り**
+   *   である。案内のほうを追いかけ忘れると、
+   *   **もう無いボタンを「押してください」と書くことになる。**
+   *   ──────────────────────────────────────────────── */
+  {
+    const 読む = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    /* **コメントを落としてから数える**(CLAUDE.md)——
+       説明の中の同じ語に当たって素通りする */
+    const 素 = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/^\s*\/\/.*$/gm, '')
+    const 書き写し = []
+    for (const f of ['components/LessonView.jsx', 'components/PlayerBar.jsx',
+      'components/AudioDownloadNote.jsx']) {
+      const t = 素(読む(f))
+      /* **古い名前が残っていないか** */
+      if (/Listen \(全体\)/.test(t)) 書き写し.push(`${f} … 古い名前が残っている`)
+      /* **新しい名前を直に書いていないか**(書いたら、次の改名で片方だけ古くなる) */
+      if (new RegExp(wholePlayText()).test(t)) 書き写し.push(`${f} … 文字を直に書いている`)
+    }
+    if (書き写し.length) {
+      ng('全体を聞く … 名前を書き写している場所がある', 書き写し.join('\n    '))
+    } else ok('全体を聞く … 3つの場所とも `wholePlay.js` 1か所から引く(書き写しは0)')
+
+    /* **落とすのは添えの言葉だけ。**
+       `CORE`(`聞く`)が `.wide-text` の中に入ると、
+       狭い画面で**言葉がまるごと消えて、絵だけになる**
+       (利用者の指定は「Listen は必ず残る」の作法である) */
+    const pb = 素(読む('components/PlayerBar.jsx'))
+    if (!/wide-text">\{WHOLE_PLAY_WIDE\}<\/span>\s*\{WHOLE_PLAY_CORE\}/.test(pb)) {
+      ng(`全体を聞く … 狭い画面で「${WHOLE_PLAY_CORE}」まで落ちる`,
+        '`.wide-text` の中に入れてよいのは、添えの言葉だけである')
+    } else ok(`全体を聞く … 狭い画面でも「${WHOLE_PLAY_CORE}」は残る(落とすのは添えだけ)`)
   }
 
   /* ── ★ **画面を消しても、聞き流しは進むか**(第5.285節)─────────────

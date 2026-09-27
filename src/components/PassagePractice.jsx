@@ -858,7 +858,7 @@ export default function PassagePractice({
 
                     Listen のとなりに「ここから」を並べると、
                     **どちらも「鳴らすボタン」に見えて選ばせることになる。**
-                    通しで聴きたいときは右下の「Listen (全体)」があり、
+                    通しで聴きたいときは右下の「全体を聞く」があり、
                     通し表示(段落で区切らない)では**段落そのものを押せば**
                     そこから鳴る(`playAll(item.id)`)。道は残してある。 */}
                 {isRecognitionSupported() && (
