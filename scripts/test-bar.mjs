@@ -4111,9 +4111,21 @@ export default defineConfig({
       /* **間の欄が出ているか**(2026-09 利用者の指定
          「単語帳もだが、間の時間設定もできるようにしてくれ」) */
       ng(`聞き流し(${w}px) … 間の長さを選べない`, 設定.間.join('/') || '(欄が無い)')
-    } else if (got.ボタン.length !== 2 || got.ボタン.some((b) => b.高さ < 40)) {
+    } else if (got.ボタン.some((b) => b.高さ < 40)) {
+      /* **押せる大きさ(40px)を割っていないか。**
+         **数は書かない**(第5.280節)—— ここは `!== 2` と書いてあったので、
+         「前へ」を1つ足した日に、**割ってもいないのに赤くなった。**
+         **値を書き写さない。性質で見る**(CLAUDE.md)。
+         「何が並ぶか」は下の行の見張りが名前で見ている */
       ng(`聞き流し(${w}px) … 押せる大きさ(40px)を割っている`,
         got.ボタン.map((b) => `${b.文言}:${b.高さ}`).join(' / '))
+    } else if (!['とめる', 'つづける'].some((t) => got.ボタン.some((b) => b.文言.includes(t)))
+      || !got.ボタン.some((b) => b.文言.includes('前へ'))
+      || !got.ボタン.some((b) => b.文言.includes('次へ'))) {
+      /* ★ **下の行に並ぶもの**(第5.280節・2026-09-27 利用者の指定)。
+         とめる(つづける)/ 前へ / 次へ の3つ。**名前で見る** */
+      ng(`聞き流し(${w}px) … 下の行に、とめる・前へ・次へ がそろっていない`,
+        got.ボタン.map((b) => b.文言).join(' / '))
     } else if (got.よこ > 0 || got.右 > w) {
       ng(`聞き流し(${w}px) … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
     } else if (got.たて > 0) {
@@ -4178,12 +4190,30 @@ export default defineConfig({
         const [r, g, b] = (String(c).match(/\d+/g) ?? []).map(Number)
         return [r, g, b].some((v) => v === undefined) ? -1 : (r + g + b) / 3
       }
+      /* **白は「いちばん明るい」で見る。** 値(#ffffff)を書き写すと、
+         配色を直した日に画面は正しいのに赤くなる(性質で見る・CLAUDE.md)。
+         比べる相手は、同じ帯にいる**白いままのもの**ではなく、
+         **白そのもの** —— `--btn-bg` を実際に描いて読む */
+      const 白 = (() => {
+        const el = document.createElement('div')
+        el.style.background = 'var(--btn-bg)'
+        document.body.appendChild(el)
+        const v = 明るさ(window.getComputedStyle(el).backgroundColor)
+        el.remove()
+        return Math.round(v)
+      })()
+      const qs = q ? window.getComputedStyle(q) : null
       return {
         ある: !!q,
         字: q ? q.textContent.trim() : '',
         帯の明るさ: Math.round(明るさ(window.getComputedStyle(帯).backgroundColor)),
         やめるの明るさ: q
           ? Math.round(明るさ(window.getComputedStyle(q).backgroundColor)) : -1,
+        白の明るさ: 白,
+        /* **枠線があるか。** 地を帯と同じにするなら、枠が無いと
+           「押せるもの」に見えなくなる(共通ルール) */
+        枠: qs ? Math.round(parseFloat(qs.borderTopWidth) * 10) / 10 : -1,
+        枠の色: qs ? qs.borderTopColor : '',
         // 帯が2段になっていないか(押すものを足して太らせない)
         帯の高さ: Math.round(帯.getBoundingClientRect().height),
         下に残っている: 下.some((t) => t.includes('やめる')),
@@ -4262,11 +4292,19 @@ export default defineConfig({
     } else if (やめる.下に残っている) {
       /* **下にも残っていないか**(同じことをするものを2つ見せない) */
       ng(`QRの聞き流し(${w}px) … やめるが上と下の両方にある`, やめる.下のボタン.join(' / '))
-    } else if (やめる.やめるの明るさ <= やめる.帯の明るさ) {
-      /* **白い**(利用者の指定)。**値を書き写さず、帯と比べる** ——
-         帯の地(灰)より明るければ、押せるものとして浮いて見える */
-      ng(`QRの聞き流し(${w}px) … やめるが帯より明るくない(白く見えない)`,
-        `帯 ${やめる.帯の明るさ} / やめる ${やめる.やめるの明るさ}`)
+    } else if (やめる.やめるの明るさ >= やめる.白の明るさ) {
+      /* ★ **グレー**(第5.280節・利用者の指定「白は浮いて見えますね。
+           グレーに戻しましょう」)。**値を書き写さず、白そのものと比べる** ——
+         白と同じ明るさまで行ったら、また浮いている。
+         (第5.276節はここが逆向き「帯より明るいか」だった) */
+      ng(`QRの聞き流し(${w}px) … やめるが白いまま(グレーになっていない)`,
+        `白 ${やめる.白の明るさ} / やめる ${やめる.やめるの明るさ} / 帯 ${やめる.帯の明るさ}`)
+    } else if (!(やめる.枠 >= 0.5) || /rgba\(0, 0, 0, 0\)/.test(やめる.枠の色)) {
+      /* **地を帯と同じにするなら、枠が要る。**
+         地も枠も無くすと、**押せるものに見えない**(共通ルール)。
+         白をやめたぶん、ここで埋める —— 弱めない */
+      ng(`QRの聞き流し(${w}px) … やめるに枠線が無い(押せるものに見えない)`,
+        `枠 ${やめる.枠}px / ${やめる.枠の色}`)
     } else if (やめる.帯の高さ > 72) {
       /* **帯を2段にしない**(`.focus-top` は「細く1行」という決まり)。
          押すものを足したときに、いちばん起きやすい壊れ方である */
@@ -4332,8 +4370,8 @@ export default defineConfig({
     } else {
       ok(`QRの聞き流し(${w}px) … 文も訳も出て、送るものが無く、`
         + `どの読み方でも設定の欄がそろう(名前「${一番長い名前で.名前.join(' / ')}」)。`
-        + `やめるは帯に白く(帯 ${やめる.帯の明るさ} → ${やめる.やめるの明るさ}・`
-        + `帯 ${やめる.帯の高さ}px)`)
+        + `やめるは帯にグレーで(白 ${やめる.白の明るさ} / やめる ${やめる.やめるの明るさ}`
+        + ` / 枠 ${やめる.枠}px・帯 ${やめる.帯の高さ}px)`)
     }
   }
 
@@ -9265,18 +9303,14 @@ for (const W of [1280, 390]) {
     'wordbook-choice',
     // 絵だけのボタン。上の3つと同じ帯に並ぶ
     'rscope-sort', 'iconbtn',
-    /* **聞き流しをやめる**(第5.276節・2026-09-26 利用者の指定
-         「×聞き流しをやめる、ボタンも上に移動、そして白にしてください」)。
+    /* **「聞き流しをやめる」の名指しは外した**(第5.280節・2026-09-27)。
 
-       この決まりは「**白い紙の上**で押せるものに見えない」という話である。
-       ところがこのボタンが載るのは**集中モードの帯**で、地は灰色
-       (`--surface-0`)—— **白は地の色ではなく、浮いて見える色**である。
-       となりの `冊名 ▾`(`bookpick`)を外してあるのと、まったく同じ理由。
-
-       **代わりに、もっと強い見張りを置いてある**(第5.276節)——
-       「やめるの地が、帯の地より**明るい**か」を描いて測る。
-       名指しで外しても、白く見えなくなれば、そちらが赤くなる。 */
-    'radio-quit',
+       第5.276節では白(色を1つも足さない)にしたので、
+       ここに名指しで置くしかなかった。利用者の指定で
+       **グレー(`btn--ghost`)に戻した**いま、**この決まりを
+       そのまま守れる** —— だから外す。
+       **名指しの外しは、減らせるときに減らす。** 増えるほど、
+       見張りは何も守らなくなる。 */
   ]
   for (const [s, extra] of SCREENS) {
     for (const w of [390, 1280]) {
@@ -10471,6 +10505,95 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
     }
     await page.close()
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **聞き流しに「前へ」がある**(第5.280節)
+
+   2026-09-27 利用者の指定。
+
+     > 「次へ」ボタンに加えて「前へ」ボタンを追加してください
+
+   **押して、数で確かめる。** ソースに `prevIndex` と書いてあるかは
+   `npm run test:play` が見ている。ここで見るのは
+   **押したときに、本当に1つ戻るか**である
+   (「効かない操作を見せない」・CLAUDE.md)。
+
+   **いちばん危ない形を1つ置く**(CLAUDE.md)——
+   **1問目で「前へ」**。ここは末尾へ回り込むところで、
+   `(at - 1) % n` と書くと JavaScript は負を返すので、
+   **回り込まずに固まる**(`prevIndex` が `+ length` してある理由)。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  page.setDefaultTimeout(8000)
+  page.setDefaultNavigationTimeout(8000)
+  await page.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+  await page.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{}',
+  }))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(700)
+
+  /** いま何問目か(`1 / 8` の左)。**数え方は画面から読む**(書き写さない) */
+  const いま = async () => Number(((await page.evaluate(() => (
+    document.querySelector('.drill-count')?.textContent ?? ''))).split('/')[0] ?? '')
+    .trim())
+  /** 下の行に並んでいる押すもの */
+  const 下のボタン = () => page.evaluate(() => (
+    [...document.querySelectorAll('.radio-tools .btn')].map((b) => b.textContent.trim())))
+  /** その字のボタンを押す(**名前で探す** —— class を書き写さない) */
+  const 押す = (字) => page.evaluate((t) => {
+    const b = [...document.querySelectorAll('.radio-tools .btn')]
+      .find((x) => x.textContent.trim() === t)
+    if (b) b.click()
+    return !!b
+  }, 字)
+
+  /* **まず止める。** 流れたままだと、押した結果か、ひとりでに進んだのかが
+     分からない(道が2つあるものは、どちらを通ったかを見えるようにする) */
+  await 押す('とめる')
+  await page.waitForTimeout(250)
+
+  const 並び = await 下のボタン()
+  const 総数 = Number(((await page.evaluate(() => (
+    document.querySelector('.drill-count')?.textContent ?? ''))).split('/')[1] ?? '')
+    .trim())
+  if (!並び.includes('前へ') || !並び.includes('次へ')) {
+    ng('聞き流し … 下の行に「前へ」と「次へ」がそろっていない', 並び.join(' / '))
+  } else if (並び.indexOf('前へ') > 並び.indexOf('次へ')) {
+    ng('聞き流し … 並びが「次へ」「前へ」の順になっている', 並び.join(' / '))
+  } else if (!(総数 > 1)) {
+    /* **測る相手が居ることを、先に確かめる。**
+       1問しか無ければ、どこへ動いても同じところに見える */
+    ng('聞き流し … 問が1つしか無く、「前へ」を測れない', `${総数} 問`)
+  } else {
+    const 初め = await いま()
+    await 押す('次へ'); await page.waitForTimeout(250)
+    const 次へ後 = await いま()
+    await 押す('前へ'); await page.waitForTimeout(250)
+    const 戻った = await いま()
+    /* ★ **1問目で「前へ」。** ここが末尾へ回り込むこと */
+    while (await いま() !== 1) { await 押す('前へ'); await page.waitForTimeout(150) }
+    await 押す('前へ'); await page.waitForTimeout(250)
+    const 回り込み = await いま()
+    if (次へ後 !== 初め + 1) {
+      ng('聞き流し … 「次へ」で1つ進まない', `${初め} → ${次へ後}`)
+    } else if (戻った !== 初め) {
+      ng('聞き流し … 「前へ」で1つ戻らない', `${次へ後} → ${戻った}(${初め} のはず)`)
+    } else if (回り込み !== 総数) {
+      ng('聞き流し … 1問目で「前へ」を押しても、末尾へ回り込まない',
+        `1 → ${回り込み}(${総数} のはず)`)
+    } else {
+      ok(`聞き流し … 「前へ」で1つ戻る(${次へ後} → ${戻った})`
+        + ` / 1問目からは末尾へ回り込む(1 → ${回り込み} / 全 ${総数} 問)`
+        + ` / 下の行は ${並び.join(' ')}`)
+    }
+  }
+  await page.close()
 }
 
 await browser.close()

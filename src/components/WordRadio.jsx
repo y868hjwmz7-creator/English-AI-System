@@ -69,7 +69,7 @@ import { SIZES, sizeOfValue, sizePickLabel, takeCount } from '../lib/reviewScope
 import {
   bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
   hidesAnswer,
-  nextIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf,
+  nextIndex, prevIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf,
   radioModesFor,
   radioSteps, radioTextOf, radioWarmups, saveRadioGap, saveRadioMode,
 } from '../lib/wordRadio.js'
@@ -459,8 +459,27 @@ export default function WordRadio({
               (`.focus--plain .focus-top .btn`)が `--btn-bg`(白)で塗る。
               帯の地は灰色(`--surface-0`)なので、白は**浮いて見える**
               (紙の上で白が見えなくなるのとは、地が逆である)。 */}
+          {/* ★ **グレーに戻す**(第5.280節・2026-09-27 実機・利用者の指定)。
+
+                > 「聞き流しをやめる」ボタンを白くしたのは間違いでした。
+                > この背景に白は浮いて見えますね。グレーに戻しましょう。
+
+              第5.276節で色を1つも足さず、帯の決まりが `--btn-bg`(白)で
+              塗っていた。**帯の地は灰色**(`--surface-0` = #eaecef)なので、
+              白は**浮きすぎた。**
+
+              `btn--ghost`(枠線だけ)に戻す —— 地は帯のまま透け、
+              枠と字がグレーになる。共通ルールでも
+              **枠線だけ = 控えめなもの(送る・戻す・開く)**で、
+              「やめる」はまさにこれである。
+              第5.276節より**前の色**でもある(戻した、の意味どおり)。
+
+              **灰の塗りつぶし(`btn--quiet`)にはしない。**
+              あれは #e4e7ea で、帯の #eaecef とほとんど同じ ——
+              枠も持たないので、**押せるものに見えなくなる**。 */}
           {onMenu && (
-            <button type="button" className="btn btn--small radio-quit" onClick={stop}>
+            <button type="button" className="btn btn--small btn--ghost radio-quit"
+                    onClick={stop}>
               <CloseIcon />聞き流しをやめる
             </button>
           )}
@@ -530,6 +549,25 @@ export default function WordRadio({
         <div className="btn-row radio-tools">
           <button type="button" className="btn btn--primary" onClick={() => setOn((v) => !v)}>
             {on ? <><StopIcon />とめる</> : <><PlayIcon />つづける</>}
+          </button>
+          {/* ★ **「前へ」**(第5.280節・2026-09-27 利用者の指定
+                「『次へ』ボタンに加えて『前へ』ボタンを追加してください」)。
+
+              聞き流しは**手を離して聴く**ものなので、聞き逃しても
+              戻る道が無かった。最初から回し直すしかなく、
+              **行き止まり**になっていた(CLAUDE.md)。
+
+              **「次へ」とまったく同じ作り。** `move()` を通し、
+              鳴っているものはその場で止める。ちがうのは向きだけで、
+              **向きの決まりは `wordRadio.js` 1か所**(`prevIndex`)——
+              先頭で押すと末尾へ回り込むのも、あちらが持つ。
+
+              **並びは「前へ」「次へ」の順。** 読む向きと同じにする。
+              色は2つとも灰(`btn--quiet`)—— **ならぶもの**である
+              (共通ルール)。青は「とめる」1つだけ。 */}
+          <button type="button" className="btn btn--quiet"
+                  onClick={() => { stopReading(); move(prevIndex(atRef.current, list.length)) }}>
+            前へ
           </button>
           {/* **「次へ」も `move()` を通す。** `setAt` だけを動かすと
               控えと食い違い、読んでいる語と画面がずれる。

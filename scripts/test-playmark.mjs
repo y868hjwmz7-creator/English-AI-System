@@ -24,7 +24,7 @@ import {
   buildSession, formOf, isSelfGraded, orderOf, orderWords, pickForm,
 } from '../src/lib/wordQuiz.js'
 /* **色の一覧を書き写さない**(第5.242節)。3つの色は `btnTone.js` 1か所 */
-import { hasTone } from '../src/lib/btnTone.js'
+import { TONE_GO, TONE_ROW, TONE_SIDE, hasTone } from '../src/lib/btnTone.js'
 import { clozeAt, hasCloze } from '../src/lib/clozeSentence.js'
 import { hasMaterialWords, materialWordsOf } from '../src/lib/materialWords.js'
 import {
@@ -7401,16 +7401,60 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
          下の行に残したままだと、同じものが2つ並ぶ */
       ok(/radio-quit/.test(中) && /聞き流しをやめる/.test(中),
         '聞き流し … やめる道も、上の帯にある')
-      /* ★ **白にする**(利用者の指定)。色(`btn--primary` / `btn--quiet` /
-         `btn--ghost`)を**1つも足さない**ので、帯の決まりが `--btn-bg`(白)で
-         塗る。**3色の一覧は `btnTone.js` 1か所**から読む(書き写さない) */
+      /* ★ **グレーにする**(第5.280節・2026-09-27 実機・利用者の指定)。
+
+           > 「聞き流しをやめる」ボタンを白くしたのは間違いでした。
+           > この背景に白は浮いて見えますね。グレーに戻しましょう。
+
+         第5.276節は色を1つも足さず、帯の決まりが `--btn-bg`(白)で
+         塗っていた。**帯の地は灰色なので、白は浮きすぎた。**
+
+         いまは `btn--ghost`(枠線だけ)。**3色の一覧は `btnTone.js`
+         1か所**から読む(書き写さない)。**「色がある」だけで見ない** ——
+         青(`TONE_GO`)や灰の塗りつぶし(`TONE_ROW`)に変わったら、
+         そちらも赤くなるように**名指しで**見る。
+         `btn--quiet` は #e4e7ea で、帯の #eaecef とほとんど同じ ——
+         枠も持たないので、押せるものに見えなくなる。 */
       const やめるの色 = (中.match(/className="([^"]*radio-quit[^"]*)"/) ?? [])[1] ?? ''
-      ok(やめるの色 && !hasTone(やめるの色),
-        '聞き流し … やめるは白(3色のどれも足していない)', やめるの色)
+      const やめるの組 = String(やめるの色).split(/\s+/)
+      ok(やめるの色 && hasTone(やめるの色) && やめるの組.includes(TONE_SIDE),
+        '聞き流し … やめるはグレー(`btn--ghost`・枠線だけ)', やめるの色)
+      ok(!やめるの組.includes(TONE_ROW) && !やめるの組.includes(TONE_GO),
+        '聞き流し … やめるを、灰の塗りつぶしにも青にもしていない', やめるの色)
     }
     /* **下の行には残していない**(同じことをするものを2つ見せない) */
     ok(!/radio-tools[\s\S]{0,400}?聞き流しをやめる/.test(rd),
       '聞き流し … やめるを、下の行に二重に置いていない')
+    /* ★ **「前へ」を足した**(第5.280節・2026-09-27 利用者の指定
+         「『次へ』ボタンに加えて『前へ』ボタンを追加してください」)。
+
+       聞き流しは手を離して聴くものなので、**聞き逃しても戻れない**
+       のは行き止まりである(CLAUDE.md)。
+
+       **向きの決まりは `wordRadio.js` 1か所**(`prevIndex`)。
+       画面の中で `(at - 1 + n) % n` と書くと、**数え方が2通り**になる。
+       **`nextIndex` と同じ作り**(`move()` を通し、鳴っているものは止める)
+       であることも見る —— 片方だけ素通りさせない。 */
+    {
+      const 下 = rd.slice(rd.indexOf('className="btn-row radio-tools"'))
+      const 前 = 下.indexOf('前へ')
+      const 次 = 下.indexOf('次へ')
+      ok(前 > 0 && 次 > 0, '聞き流し … 「前へ」と「次へ」が、どちらも下の行にある')
+      /* **読む向きと同じ並び。** 「次へ」より先に「前へ」 */
+      ok(前 > 0 && 次 > 0 && 前 < 次, '聞き流し … 並びは「前へ」「次へ」の順')
+      /* **向きは1か所から。** 画面の中で数え直していないこと */
+      ok(/prevIndex\(atRef\.current, list\.length\)/.test(rd)
+        && !/\(\s*atRef\.current\s*-\s*1/.test(rd),
+        '聞き流し … 「前へ」の向きは `wordRadio.js` の `prevIndex` 1か所')
+      /* **「次へ」と同じ作り。** 鳴っているものを止めてから移る */
+      const 前の中 = 下.slice(Math.max(0, 前 - 260), 前)
+      ok(/stopReading\(\);\s*move\(prevIndex/.test(前の中),
+        '聞き流し … 「前へ」も、鳴っているものを止めてから `move()` で移る')
+      /* **色は灰。** 青は「とめる」1つだけ(共通ルール) */
+      const 色 = (前の中.match(/className="([^"]*)"\s*$/m) ?? [])[1] ?? 前の中
+      ok(new RegExp(TONE_ROW).test(色) && !new RegExp(`${TONE_GO}\\b`).test(色),
+        '聞き流し … 「前へ」は灰(ならぶもの)。青は「とめる」1つだけ')
+    }
     /* **入れ物は「出しかた」と同じもの**(同じ決まりを2か所に持たない) */
     ok(/<SettingsSheet/.test(rd) && /anchorEl=\{gearRef\.current\}/.test(rd),
       '聞き流し … 設定は `SettingsSheet` を、歯車の近くに出す')

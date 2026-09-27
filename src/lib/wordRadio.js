@@ -544,6 +544,18 @@ export const radioWarmups = (row, modeId = DEFAULT_RADIO_MODE) => {
  * **止まる条件は呼ぶ側が持つ**(「やめる」を押すまで)。
  */
 export const nextIndex = (at, length) => (length > 0 ? (at + 1) % length : 0)
+/**
+ * 1つ前へ(第5.280節・2026-09-27 利用者の指定「『前へ』ボタンを追加して」)。
+ *
+ * **`nextIndex` のとなりに置く。** 画面の中で `(at - 1 + n) % n` と
+ * 書くと、**数え方が2通り**になる(CLAUDE.md)——
+ * 先頭で1つ戻ると末尾へ回り込むという決まりも、ここ1か所が持つ。
+ * `+ length` を足してから割るのは、**JavaScript の % は負を返す**ためである
+ * (`-1 % 8` は `7` ではなく `-1`)。
+ */
+export const prevIndex = (at, length) => (
+  length > 0 ? ((at - 1) % length + length) % length : 0
+)
 
 /* ==========================================================================
  * 音楽を流す場所(2026-09 利用者の指定「選べるようにしたい」)
