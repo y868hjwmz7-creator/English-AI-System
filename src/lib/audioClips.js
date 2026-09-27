@@ -71,6 +71,8 @@ import {
 import { voiceLevel } from './mixVolume.js'
 /* **間を音で置く**(第5.285節)。作り方は `silentWav.js` 1か所 */
 import { SILENT_STEP_MS, silentKey, silentNeeded, silentWav } from './silentWav.js'
+/* **調べるための控えを画面に出すかは `clipProbe.js` 1か所**(第5.292節) */
+import { showsOnScreen } from './clipProbe.js'
 /* **端末に「いま鳴らしている」と伝える**(第5.285節)。
    画面の中で `navigator.mediaSession` を直に触らない */
 import { showPaused, showPlaying } from './mediaSession.js'
@@ -542,8 +544,17 @@ let lastReport = null
 export const lastClipReport = () => lastReport || lastDetail || ''
 
 const setDetail = (d, full = null) => {
+  /* **控えるのは、画面に出すかどうかより先**(第5.292節)。
+     ここを下げると、`[調査中]` の中身が**どこにも残らなくなる** ——
+     ずれの報告が来たときに、送ってもらう数字そのものが消える */
   lastReport = full || d
   lastDetail = d
+  /* **調べるための控えは、画面に出さない**(第5.292節・利用者の指摘
+     「なぜこの数字を貼ったかというと、トップページに現れたからです」)。
+     うまくいっているときにも必ず出ていたので、**どの画面を開いても
+     英数字の羅列が目に入っていた。** 判断は `clipProbe.js` 1か所。
+     **失敗の知らせは、これまでどおり出す** */
+  if (!showsOnScreen(d)) return
   // **知らせで画面を落とさない。** 伝えられなくても、音は鳴る
   troubleListeners.forEach((fn) => { try { fn(d) } catch { /* 無視する */ } })
 }
