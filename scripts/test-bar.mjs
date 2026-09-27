@@ -4804,11 +4804,16 @@ export default defineConfig({
    *
    *   2026-09-27 利用者の指定「はい、全体を聞く、に変えます」。
    *
-   *   `Listen (全体)` は**4か所に書き写してあった** —— 段の中のボタン
+   *   `Listen (全体)` は**6か所に書き写してあった** —— 段の中のボタン
    *   (`LessonView`)、送っていったときの居場所(`PlayerBar`)、
-   *   **音声をまとめたあとの案内**(`AudioDownloadNote`)、そして**この見張り**
-   *   である。案内のほうを追いかけ忘れると、
+   *   **音声をまとめたあとの案内**(`AudioDownloadNote`)、
+   *   **本文の練習の ③⑤**(`PassagePractice`)、**Speech練習**
+   *   (`SpeechPractice`)、そして**この見張り**である。
+   *   案内のほうを追いかけ忘れると、
    *   **もう無いボタンを「押してください」と書くことになる。**
+   *
+   *   はじめは前の3つだけを直したが、利用者の指定
+   *   「もちろん、全てに全体を聞くを追加して」で残り2つもそろえた。
    *   ──────────────────────────────────────────────── */
   {
     const 読む = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
@@ -4818,7 +4823,8 @@ export default defineConfig({
       .replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/^\s*\/\/.*$/gm, '')
     const 書き写し = []
     for (const f of ['components/LessonView.jsx', 'components/PlayerBar.jsx',
-      'components/AudioDownloadNote.jsx']) {
+      'components/AudioDownloadNote.jsx', 'components/PassagePractice.jsx',
+      'components/SpeechPractice.jsx']) {
       const t = 素(読む(f))
       /* **古い名前が残っていないか** */
       if (/Listen \(全体\)/.test(t)) 書き写し.push(`${f} … 古い名前が残っている`)
@@ -4827,7 +4833,7 @@ export default defineConfig({
     }
     if (書き写し.length) {
       ng('全体を聞く … 名前を書き写している場所がある', 書き写し.join('\n    '))
-    } else ok('全体を聞く … 3つの場所とも `wholePlay.js` 1か所から引く(書き写しは0)')
+    } else ok('全体を聞く … 5つの場所とも `wholePlay.js` 1か所から引く(書き写しは0)')
 
     /* **落とすのは添えの言葉だけ。**
        `CORE`(`聞く`)が `.wide-text` の中に入ると、
@@ -5945,7 +5951,7 @@ for (const w of [1280, 390, 320]) {
     ng(`${名} … 文に番号(紙と同じ丸)が付いていない`, got.番号.join('/'))
   } else if (got.聴く !== 2) {
     ng(`${名} … 1文ずつの Listen が無い`, String(got.聴く))
-  } else if (!got.通し.includes('Listen (全体)')) {
+  } else if (!got.通し.includes(wholePlayText())) {
     ng(`${名} … 通しの Listen が無い`, got.通し)
   } else if (got.英 !== 2 || got.訳 !== 0) {
     ng(`${名} … はじめは英語だけを出す`, `英 ${got.英} / 訳 ${got.訳}`)

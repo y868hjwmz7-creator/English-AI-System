@@ -42,6 +42,9 @@ import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { lookupWord, normWord, setWordStatus } from '../lib/vocab.js'
 import { PREMIUM } from '../lib/voiceTier.js'
+/* **通しで鳴らすボタンの文字は `wholePlay.js` 1か所**(第5.290節・利用者の指定
+   「もちろん、全てに全体を聞くを追加して」)*/
+import { wholePlayText } from '../lib/wholePlay.js'
 import { phraseKind, seenSentenceFor } from '../lib/writingReview.js'
 import EnglishText from './EnglishText.jsx'
 import FocusFrame from './FocusFrame.jsx'
@@ -182,7 +185,7 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
                   parts, rate: rateOf(rateId), tier: PREMIUM,
                   resumeKey: `speech|${speech.id}`,
                 })}>
-          {audio.playing ? <><StopIcon />Stop</> : <><SpeakerIcon />Listen (全体)</>}
+          {audio.playing ? <><StopIcon />Stop</> : <><SpeakerIcon />{wholePlayText()}</>}
           {audio.waiting && audio.secs > 1 && `（用意しています… ${audio.secs} 秒）`}
         </button>
         {/* **`RepeatUnit`(しない / 文 / 段落 / 全文)は使わない。**

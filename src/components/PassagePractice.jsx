@@ -37,6 +37,9 @@ import { resolveVoices } from '../data/clipVoices.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import { wholeSliceOf } from '../lib/audioPlaylist.js'
 import { prefetchSectionGlosses } from '../lib/vocab.js'
+/* **通しで鳴らすボタンの文字は `wholePlay.js` 1か所**(第5.290節・利用者の指定
+   「もちろん、全てに全体を聞くを追加して」)*/
+import { wholePlayText } from '../lib/wholePlay.js'
 import { storedChunks, storedParts } from '../lib/chunkJa.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { progressKey, useProgress } from '../lib/progress.js'
@@ -609,7 +612,7 @@ export default function PassagePractice({
                   onClick={() => (playingAll ? stopPlaying() : playAll())}>
             {playingAll
               ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop (全体)'}</>
-              : <><SpeakerIcon />Listen (全体)</>}
+              : <><SpeakerIcon />{wholePlayText()}</>}
           </button>
         )}
         {/* **速さは、①ディクテーションでは出さない**(2026-09 利用者の指定)。
