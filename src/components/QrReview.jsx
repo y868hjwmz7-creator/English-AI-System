@@ -767,6 +767,11 @@ export default function QrReview({
    * **前の冊の問が次の冊で出続ける**。
    */
   const dropRun = () => {
+    /* ★ **聞き流しの中から替えたときは、聞き流しのまま続ける**
+       (第5.288節)。**印はここ1か所で立てる** —— 呼ぶ側それぞれに
+       書くと、道を1つ足した日にそこだけ落ちる(単語帳と同じ作法)。
+       聞き流しが開いていないときは、これまでどおり(印は立たない) */
+    if (radio) keepRadioRef.current = true
     setRun(null); setPending([]); setAt(0); setDone([])
     setRadio(null); setGroup(null); setFilter(emptyFilter)
     /* **「開いた瞬間に1問目」をもう一度走らせる**(第5.167節)。
@@ -797,9 +802,34 @@ export default function QrReview({
    * 聞き流しは止める(前の冊の文を読み続けない)。
    */
   const afterNarrow = () => {
-    setRadio(null)
+    /* ★ **聞き流しは、もう止めない**(第5.288節・2026-09-27 利用者の指摘
+       「聞き流し内のモードのソート内で冊の中のUNITなどが選べません」)。
+
+       止めていたのは、鳴らす一覧が**絞る前の控え**だったからである。
+       いまは下の「組み直す」仕掛けが、**新しい中身が届いた時点で**
+       一覧を入れ替える —— 聞いたまま UNIT や型を選び直せる。 */
     gradedRef.current = new Set()
   }
+
+  /**
+   * ★ **聞き流しの一覧を、絞り込みに合わせて組み直す**(第5.288節)。
+   *
+   * 鳴らす一覧は**控え**である(`orderQrPairs` は呼ぶたびに混ぜ直すので、
+   * 描くたびに作ると順が毎回変わってしまう)。だから
+   * **変わったときだけ**組み直す —— 鍵は練習と同じ `runKey`
+   * (`poolKey` を含む)で、**数え方を2通り持たない。**
+   *
+   * **届いてから組む**(`loaded !== poolKey` のあいだは待つ)——
+   * 先に組むと、**絞る前の文をもう一周**鳴らすことになる。
+   */
+  const radioKeyRef = useRef(runKey)
+  useEffect(() => {
+    if (!radio) { radioKeyRef.current = runKey; return }
+    if (radioKeyRef.current === runKey) return
+    if (loaded !== poolKey) return
+    radioKeyRef.current = runKey
+    setRadio(orderQrPairs(shown.map(qrPairOf), order))
+  }, [runKey, radio, loaded, poolKey, shown, order])
 
   const who = learnerName ? `${learnerName} さんの` : ''
 
@@ -1055,10 +1085,14 @@ export default function QrReview({
              **一覧は `books` 1つ**(帯の `冊名 ▾` と同じもの・書き写さない) */
           books={books}
           book={book}
+          /* ★ **冊の中の区切りも、そのまま渡す**(第5.288節)。
+             帯の `冊名 ▾` の中で使っているものと**同じ1つ**である ——
+             UNIT・中身・型を、聞きながら選び直せる */
+          sub={bookSub}
           onBook={(id) => {
-            /* **聞き流しのまま、次の冊へ**(上の `keepRadioRef`)。
+            /* **聞き流しのまま、次の冊へ** —— 印は `dropRun()` が立てる
+               (第5.288節・1か所に寄せた)。
                ここから先は勝手に移らない(第5.200節・`pickedBookRef`) */
-            keepRadioRef.current = true
             pickedBookRef.current = true
             setBookWanted(id); dropRun()
           }}

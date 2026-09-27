@@ -41,13 +41,20 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { stopReading } from '../lib/readAloud.js'
 import QrCard from './QrCard.jsx'
-import { CloseIcon } from './Icons.jsx'
+import { CloseIcon, SpeakerIcon } from './Icons.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import { progressKey, useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { markQr } from '../lib/qrReviews.js'
 import { answerFeedback } from '../lib/haptics.js'
+/* ★ **教材の中の Quick Response でも聞き流す**(第5.287節・
+   2026-09-27 利用者の指定「教材内のquick responseにも聞き流しの機能を」)。
+   **部品は `WordRadio` 1つ** —— 復習の Quick Response(`QrReview`)と
+   まったく同じものを使い、渡すのは対の一覧と題だけである
+   (読み方も、間も、並べ方も、覚える鍵も、あちら1か所が持っている) */
+import WordRadio from './WordRadio.jsx'
+import { listTracks } from '../lib/bgm.js'
 
 export default function QuickResponse({
   material, onClose, wordStatuses = null, onMarkWord = null, paper = false,
@@ -101,6 +108,27 @@ export default function QuickResponse({
   const at = Math.min(Math.max(0, savedAt), Math.max(0, pairs.length - 1))
   const doneRef = useRef([])          // 言えた / 言えなかったの記録(この1回ぶん)
   const [finished, setFinished] = useState(false)
+
+  /**
+   * ★ **教材の中の Quick Response も聞き流す**(第5.287節・
+   * 2026-09-27 利用者の指定「教材内のquick responseにも聞き流しの機能を」)。
+   *
+   * **材料は、いま画面に出している対そのもの**(`pairs`)——
+   * 取り組み方(文章 / フレーズ・単語 / 覚えておきたい表現)で
+   * 絞ったあとのものが、そのまま流れる。**組み直さない**ので、
+   * 練習と聞き流しで中身が食い違うことがない。
+   *
+   * 曲は**押したときに引く**(押さない人には1回も問い合わせが飛ばない)。
+   * **曲が0本でも聞き流しは始まる**(音楽が鳴らないだけ・行き止まりを作らない)。
+   */
+  const [radio, setRadio] = useState(null)
+  const [tracks, setTracks] = useState([])
+  const listen = async () => {
+    if (!pairs.length) return
+    setRadio(pairs)
+    const { data } = await listTracks()
+    setTracks(data ?? [])
+  }
 
   /* 出題の枠まわり(開く・入るかどうかを測る・送りを戻す・くり返し)は
      **`QrCard` が持つ**(0040)。復習の画面と同じ部品にするためである */
@@ -216,6 +244,16 @@ export default function QuickResponse({
         <span className="qr-count">
           {finished ? `${pairs.length} / ${pairs.length}` : `${at + 1} / ${pairs.length}`}
         </span>
+        {/* ★ **聞き流し**(第5.287節)。**見た目も言葉も、復習の
+            Quick Response とまったく同じ**(`qr-top-listen`)——
+            同じことをするものを、別の見た目で出さない */}
+        <button type="button" className="btn btn--ghost btn--small qr-top-listen"
+                disabled={pairs.length === 0}
+                aria-label={`聞き流し(${pairs.length} 問)`}
+                title={`聞き流し(${pairs.length} 問)`}
+                onClick={listen}>
+          <SpeakerIcon />聞き流し
+        </button>
         {onClose && !focus && (
           <button type="button" className="nav-icon-btn" onClick={onClose}
                   aria-label="Quick Response を閉じる"><CloseIcon /></button>
@@ -266,23 +304,54 @@ export default function QuickResponse({
     </section>
   )
 
+  /**
+   * ★ **聞き流しは、どちらの出し方の上にも置く**(第5.287節)。
+   *
+   * この画面は**2通りの返し方**を持っている(紙の中と、集中モード)。
+   * 片方にだけ置くと、**入口によって聞き流せたり聞き流せなかったり**する。
+   *
+   * 題は**いま出している教材と取り組み方**をそのまま並べる ——
+   * 聞きながら「何を聞いているのか」が分かる(第5.264節)。
+   */
+  const overlays = radio ? (
+    <WordRadio
+      rows={radio}
+      where="qr"
+      label={[material?.title, QR_MODES.find((m) => m.id === mode)?.label]
+        .filter(Boolean).join(' / ')}
+      tracks={tracks}
+      learnerId={learnerId}
+      onClose={() => setRadio(null)}
+    />
+  ) : null
+
   /* **骨組みは `FocusFrame` 1つ**(`FocusReader` / `StepFocus` と共通)。
      下の帯は**渡さない** — Quick Response は「まだ / 言えた」で進むので、
      ◀ 前 / 次 ▶ を置くと進め方が2つになる */
-  if (!focus) return body
+  if (!focus) {
+    return (
+      <>
+        {body}
+        {overlays}
+      </>
+    )
+  }
   return (
-    <FocusFrame
-      className="qrfocus"
-      /* **紙の幅をそのまま引き継ぐ**(ほかの集中モードと同じ) */
-      width={focusWidth}
-      learnerId={learnerId}
-      /* 線は**取り組み方 × 何問目**ごとに持つ */
-      page={`${mode}:${at}`}
-      scrollKey={`${mode}:${at}`}
-      onClose={onFocusClose}
-      settings={focusSettings}
-    >
-      {body}
-    </FocusFrame>
+    <>
+      <FocusFrame
+        className="qrfocus"
+        /* **紙の幅をそのまま引き継ぐ**(ほかの集中モードと同じ) */
+        width={focusWidth}
+        learnerId={learnerId}
+        /* 線は**取り組み方 × 何問目**ごとに持つ */
+        page={`${mode}:${at}`}
+        scrollKey={`${mode}:${at}`}
+        onClose={onFocusClose}
+        settings={focusSettings}
+      >
+        {body}
+      </FocusFrame>
+      {overlays}
+    </>
   )
 }

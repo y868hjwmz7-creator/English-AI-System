@@ -43,8 +43,10 @@
 import {
   DEFAULT_CLIP_VOICE, canUseClips, clipAlignment, clipDuration, clipTime,
   lastWholeDetail, noteFellBack, noteSentClock, noteWholeClock, noteWholeFallback,
-  playClip, prefetchClip, seekClip, stopClip, wholeClip, wholeSeams,
+  playClip, prefetchClip, quietWait, seekClip, stopClip, wholeClip, wholeSeams,
 } from './audioClips.js'
+/* **ロック画面の帯**(第5.285節)。画面を閉じたら片づける */
+import { clearNowPlaying, setMediaActions } from './mediaSession.js'
 import { FADE_STEP } from './loudness.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
@@ -293,6 +295,11 @@ export function stopReading() {
   const at = stopClip()
   stopSpeaking()
   stopped(at)
+  /* ★ **ロック画面の帯を片づける**(第5.285節)。
+     残したままにすると、**何も鳴っていないのに曲名が出続ける** ——
+     しかも ▶ を押されても、もう誰も受け取らない(行き止まりを作らない) */
+  clearNowPlaying()
+  setMediaActions({})
 }
 
 /**
@@ -752,13 +759,12 @@ export function readAloudSequence(parts, {
    * まとめて待つと、Stop を押しても最大 1.4 秒黙って動かない。
    * 50 ミリ秒ずつに刻んで、そのつど生きているかを見る。
    */
-  const pause = async (ms) => {
-    const until = Date.now() + ms
-    while (Date.now() < until) {
-      if (!alive()) return
-      await new Promise((r) => { setTimeout(r, Math.min(50, until - Date.now())) })
-    }
-  }
+  /* ★ **間は `quietWait()` 1か所**(第5.285節・2026-09-27 利用者の指定)。
+     画面を消すと端末は**時計を止める**ので、長い間は**無音の音**で置く
+     —— 終わりは `ended`(音の側)が知らせるので、消えていても届く。
+     鳴らせない端末では、これまでどおり時計で待つ。
+     刻んで待つのも、止められるのも、あちらが受け持つ */
+  const pause = (ms) => quietWait(ms, alive)
 
   /* ══════════════════════════════════════════════════════════════
    * **本文まるごとを1本で鳴らす**(2026-09 利用者の指定)

@@ -51,6 +51,10 @@ import {
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
 import { clampPos } from '../src/lib/dragBox.js'
+/* **間を音で置く**(第5.285節)。DOM を引き連れていないので、素の node で走る */
+import {
+  SILENT_MIN_MS, SILENT_RATE, SILENT_STEP_MS, silentKey, silentNeeded, silentWav,
+} from '../src/lib/silentWav.js'
 import {
   bookLabel, cssString, qrSheetPairs, sheetNote, sheetTitle, wordSheetPairs,
 } from '../src/lib/reviewSheet.js'
@@ -12564,9 +12568,15 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
         && /onBook=\{\(id\) => \{/.test(渡す),
       `聞き流し … ${名}が、冊の一覧といまの冊を渡している`)
       /* ★ **冊を替えても、聞き流しを続ける。** `dropRun()` は
-         `setRadio(null)` を含むので、印を立てないと**放り出される** */
-      ok(/keepRadioRef\.current = true\s*pickedBookRef\.current = true\s*setBookWanted\(id\); dropRun\(\)/
-        .test(src),
+         `setRadio(null)` を含むので、印を立てないと**放り出される**。
+
+         **印を立てる場所は `dropRun()` 1か所へ移した**(第5.288節)——
+         冊を替える道も、冊の中で絞る道も、どれもあそこを通るためである。
+         **弱めずに、移し先を見る** —— ①冊をえらぶ道が `dropRun()` を
+         通ること ②その `dropRun()` が、聞き流しが開いているときだけ
+         印を立てること。**両方**が要る */
+      ok(/onBook=\{\(id\) => \{\s*pickedBookRef\.current = true\s*setBookWanted\(id\); dropRun\(\)/
+        .test(src) && /if \(radio\) keepRadioRef\.current = true/.test(src),
       `聞き流し … ${名}は、冊を替えても聞き流しのままにする印を立てる`)
       /* **印を見て `listen()` を呼ぶ**(`start()` に落とさない)。
          **読む文の選び方は書き写さない** —— `listen()` 1か所である */
@@ -12949,6 +12959,269 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(/GitHub のリポジトリにある supabase\/apply\/pending_matome\.sql/.test(枝),
       'ゲストを消去 … 「GitHub のリポジトリにある」から書いている')
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **画面を消しても、鳴り続ける**(第5.285節・2026-09-27 実機)
+
+     > 聞き流しの途中にスマホの電源を押して画面をオフにすると
+     > 音声も消えてしまいます。ポケットにスマホを入れたまま
+     > 聞き流せるように直してください。
+     > これは全ての機能で同じ仕様にしておきたいです。
+
+   **音が出せなくなったのではない。** 画面を消すと端末は
+   **そのページの時計(`setTimeout`)を止める**ので、
+   「鳴らす → 時計で間を置く → 次を鳴らす」の**合図が来なくなる。**
+   だから間を、時計ではなく**無音の音**で置く。
+   終わりを知らせるのは `ended`(音の側)なので、画面が消えていても届く。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 画面を消しても鳴り続ける(第5.285節)')
+  const read5 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC5 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+
+  /* ── ① **無音そのもの**(素の node で、中身を数える)────────────── */
+  {
+    const w = silentWav(1000)
+    const dv = new DataView(w.buffer, w.byteOffset, w.byteLength)
+    const txt = (at, n) => String.fromCharCode(
+      ...[...Array(n)].map((_, i) => dv.getUint8(at + i)))
+    ok(txt(0, 4) === 'RIFF' && txt(8, 4) === 'WAVE' && txt(36, 4) === 'data',
+      '無音 … WAV の形になっている(RIFF / WAVE / data)')
+    ok(dv.getUint16(22, true) === 1 && dv.getUint16(34, true) === 16
+      && dv.getUint32(24, true) === SILENT_RATE,
+    `無音 … モノラル・16bit・${SILENT_RATE}Hz`)
+    /* **長さは、渡したミリ秒どおり**(書き写さず、性質で見る) */
+    const 中身 = dv.getUint32(40, true)
+    ok(中身 === (SILENT_RATE * 1000) / 1000 * 2 && w.length === 44 + 中身,
+      `無音 … 1秒ぶんの中身がある(${中身} バイト + ヘッダ 44)`)
+    ok(silentWav(2000).length - 44 === (silentWav(1000).length - 44) * 2,
+      '無音 … 倍の長さを頼めば、中身も倍になる')
+    /* **本当に無音か。** 1バイトでも 0 でなければ、耳に「ブツッ」と届く */
+    ok(w.slice(44).every((b) => b === 0), '無音 … 中身は1バイトも 0 以外にならない')
+    /* **0 を渡されても、鳴らせないものを作らない**
+       (長さ 0 の音声は `ended` が来ないので、そこで止まる) */
+    ok(silentKey(0) === SILENT_STEP_MS && silentWav(0).length > 44,
+      '無音 … 0 を渡されても、鳴らせる長さで作る')
+    /* **控えの鍵は丸める**(0.05 秒ちがいを作り分けない) */
+    ok(silentKey(1490) === silentKey(1500) && silentKey(1490) === 1500,
+      '無音 … 近い長さは、同じ1本を使い回す')
+    /* **どこから音にするか**の境目。**両側を見る**(CLAUDE.md) */
+    ok(silentNeeded(SILENT_MIN_MS) && !silentNeeded(SILENT_MIN_MS - 1),
+      `無音 … ${SILENT_MIN_MS}ms から音にする(それ未満は時計のまま)`)
+    ok(!silentNeeded(0), '無音 … 描き替えを1手待つだけの 0ms は、音にしない')
+  }
+
+  /* ── ② **待ちを音で置いているか**(画面と算段の両方)────────────── */
+  {
+    const radio = noC5(read5('src/components/WordRadio.jsx'))
+    const aloud = noC5(read5('src/lib/readAloud.js'))
+    /* ★ **間は `quietWait()` 1か所**(第5.285節)。聞き流しも読み上げも、
+       **呼ぶだけ** —— どちらかに書き写すと、直した日に片方だけ古くなる */
+    ok(/const wait = \(ms\) => quietWait\(ms, alive\)/.test(radio),
+      '聞き流し … 長い間を、無音の音で置く(`quietWait()` に任せる)')
+    /* **読み上げ**(本文・6Steps・集中モード。「全ての機能で同じ仕様に」) */
+    ok(/const pause = \(ms\) => quietWait\(ms, alive\)/.test(aloud),
+      '読み上げ … 発言と発言のあいだも、同じ `quietWait()` で置く')
+    /* **画面の中で、間の置き方を組み立てていない** */
+    ok(!/playSilence|silentNeeded/.test(radio) && !/playSilence|silentNeeded/.test(aloud),
+      '間 … 置き方を、画面にも読み上げにも書き写していない')
+    /* **境目の値を書き写していない**(150 を直に書かない) */
+    ok(!/>= 150|>=150/.test(radio) && !/>= 150|>=150/.test(aloud),
+      '間 … 境目の値を、どこにも書き写していない')
+    /* ── ★ **鳴らせなかったら、時計で待ち直す**(第5.285節)──────────
+         無音は**鳴らせないことがある**(端末がまだ解錠されていない)。
+         そのまま進むと**間が 0 になって早口で回り続ける** ——
+         `npm run test:bar` の「間の設定は、本当に効いているか」が
+         これを捕まえた(3秒のはずが 11ms だった)。 */
+    const clips5 = noC5(read5('src/lib/audioClips.js'))
+    const 間 = clips5.slice(clips5.indexOf('export async function quietWait'),
+      clips5.indexOf('export async function quietWait') + 700)
+    ok(/if \(silentNeeded\(ms\) && canUseClips\(\) && await playSilence\(ms\)\) return/.test(間),
+      '間 … 音で置けたときだけ、そこで終わる')
+    ok(/window\.setTimeout/.test(間) && /do \{[\s\S]*?\} while \(Date\.now\(\) < 終わり\)/.test(間),
+      '間 … 鳴らせなかったぶんは、時計で待ち直す(行き止まりを作らない)')
+    /* **0 でも1手ゆずる**(`do { } while`)。返してしまうと
+       「音が先、文字があと」になる(第5.205節) */
+    ok(/do \{/.test(間) && !/while \(Date\.now\(\) < 終わり\) \{/.test(間),
+      '間 … 0 ミリ秒でも1手ゆずる(描き替えを待つ)')
+    /* **止められる**(まとめて待たない) */
+    ok(/if \(!alive\(\)\) return/.test(間) && /Math\.min\(50,/.test(間),
+      '間 … 時計で待つあいだも、50 ミリ秒ごとに止められる')
+  }
+
+  /* ── ③ **無音は、鳴らす道を1つしか持たない** ──────────────────── */
+  {
+    const clips = read5('src/lib/audioClips.js')
+    const body = clips.slice(clips.indexOf('export function playSilence'),
+      clips.indexOf('export function playSilence') + 260)
+    ok(/return playClip\(\{ srcUrl: silenceUrl\(ms\), text: '' \}\)/.test(body),
+      '無音 … 鳴らす道は `playClip()` 1つ(`<audio>` を別に持たない)')
+    /* **控える**(1語ごとに `createObjectURL` を増やさない) */
+    ok(/const silences = new Map\(\)/.test(clips) && /silences\.set\(key, url\)/.test(clips),
+      '無音 … 同じ長さは作り直さない(控えから返す)')
+    /* **解錠の無音も、同じ作り方から取る**(同じものを2か所に書かない) */
+    ok(/el\.src = silenceUrl\(SILENT_STEP_MS\)/.test(clips)
+      && !/put\(0, 'RIFF'\)/.test(clips),
+    '無音 … 解錠に使う無音も、同じ `silentWav()` から作る')
+  }
+
+  /* ── ④ **端末に「いま鳴らしている」と伝える** ──────────────────── */
+  {
+    const clips = noC5(read5('src/lib/audioClips.js'))
+    const aloud = noC5(read5('src/lib/readAloud.js'))
+    const radio = noC5(read5('src/components/WordRadio.jsx'))
+    ok(/showPlaying\(\)/.test(clips) && /showPaused\(\)/.test(clips),
+      'ロック画面 … 鳴り始め・止まりを、鳴らす道1か所から伝える')
+    ok(/clearNowPlaying\(\)/.test(aloud) && /setMediaActions\(\{\}\)/.test(aloud),
+      'ロック画面 … 読み上げを止めたら、帯ごと片づける')
+    /* **画面の中で `navigator.mediaSession` を直に触らない**(1か所に持つ) */
+    const 画面 = ['src/components/WordRadio.jsx', 'src/components/LessonView.jsx',
+      'src/components/FocusReader.jsx', 'src/components/StepFocus.jsx',
+      'src/App.jsx'].map((f) => noC5(read5(f))).join('\n')
+    ok(!/navigator\.mediaSession/.test(画面),
+      'ロック画面 … 画面の中で `navigator.mediaSession` を直に触っていない')
+    /* **題は画面に出ているものをそのまま**(書き写さない) */
+    ok(/setNowPlaying\(\{ title: label \|\| '聞き流し' \}\)/.test(radio),
+      'ロック画面 … 題は、画面に出ている題(`label`)をそのまま渡す')
+    /* **操作は、画面の「次へ」「前へ」と同じ関数**(2つの道を作らない) */
+    ok(/onNext: \(\) => \{ stopReading\(\); move\(nextIndex\(atRef\.current, list\.length\)\) \}/.test(radio)
+      && /onPrev: \(\) => \{ stopReading\(\); move\(prevIndex\(atRef\.current, list\.length\)\) \}/.test(radio),
+    'ロック画面 … 次へ / 前へ は、画面のボタンと同じ道を通る')
+    /* **閉じたら外す**(効かないボタンを残さない) */
+    ok(/return \(\) => \{ setMediaActions\(\{\}\) \}/.test(radio),
+      'ロック画面 … 閉じたら、操作を外す')
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **「全体を聞く」を文型ドリルにも / 教材の Quick Response に聞き流し**
+   (第5.286・5.287節・2026-09-27 利用者の指定)
+   ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 全体を聞く / 教材の中の聞き流し(第5.286・5.287節)')
+  const read6 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC6 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+
+  /* ── ① **通して聞く道は、本文だけのものではない**(第5.286節)── */
+  {
+    const lv = noC6(read6('src/components/LessonView.jsx'))
+    /* **判断は `canPlayAll` 1か所**(操作盤を出すかと同じもの)。
+       `secIsPassage` で出し分けに戻したら赤くなる */
+    ok(/\{sec === section && canPlayAll && \(/.test(lv),
+      '全体を聞く … 出すかどうかは、操作盤と同じ `canPlayAll` で決める')
+    ok(!/\{secIsPassage && \(\s*<div className="lesson-listen/.test(lv),
+      '全体を聞く … 「本文かどうか」で出し分けていない')
+    /* **`sec === section` が要る。** 紙のために全部の段を描いて隠すので、
+       付けないと隠れている段にもボタンが付き、
+       押すと**いま開いている段**が鳴る(別の段の音が出る) */
+    ok(/sec === section/.test(lv),
+      '全体を聞く … いま開いている段にだけ出す(紙のために隠してある段には出さない)')
+  }
+
+  /* ── ② **教材の中の Quick Response にも聞き流し**(第5.287節)── */
+  {
+    const qr6 = noC6(read6('src/components/QuickResponse.jsx'))
+    /* **部品は `WordRadio` 1つ**(復習の Quick Response と同じもの) */
+    ok(/import WordRadio from '\.\/WordRadio\.jsx'/.test(qr6) && /<WordRadio/.test(qr6),
+      '教材の聞き流し … 部品は `WordRadio` 1つ(作り直していない)')
+    ok(/where="qr"/.test(qr6),
+      '教材の聞き流し … Quick Response として渡している(語ではなく文)')
+    /* **材料は、いま画面に出している対そのもの**(組み直さない) */
+    ok(/setRadio\(pairs\)/.test(qr6),
+      '教材の聞き流し … 流すのは、いま出している対そのもの(`pairs`)')
+    /* ★ **2通りの返し方の、どちらにも置く。**
+       片方だけだと、入口によって聞き流せたり聞き流せなかったりする */
+    const 置き場 = (qr6.match(/\{overlays\}/g) ?? []).length
+    ok(置き場 === 2,
+      `教材の聞き流し … 紙の中と集中モードの両方に置いている(${置き場} か所)`)
+    /* **題は、教材と取り組み方をそのまま**(第5.264節・書き写さない) */
+    ok(/label=\{\[material\?\.title, QR_MODES\.find/.test(qr6),
+      '教材の聞き流し … 題は、教材の名前と取り組み方をそのまま出す')
+    /* **曲は押したときに引く**(押さない人には1回も問い合わせが飛ばない) */
+    ok(/const listen = async \(\) => \{[\s\S]{0,160}?await listTracks\(\)/.test(qr6),
+      '教材の聞き流し … 曲は押したときに引く(開くだけで問い合わせない)')
+    /* **中身が無ければ押せない**(行き止まりを作らない) */
+    ok(/disabled=\{pairs\.length === 0\}/.test(qr6),
+      '教材の聞き流し … 対が1つも無ければ押せない')
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **聞き流しの中でも、冊の中の区切りをえらべる**(第5.288節・2026-09-27)
+
+     > 聞き流し内のモードのソート内で冊の中のUNITなどが選べません。
+     > 冊の中にUNITや章や型などに分かれているものは
+     > 元々と同じように指定できるようにしてください。先ほども依頼したはずです
+
+   第5.283節で**冊をえらぶ欄だけ**を入れ、**その中の区切りを渡していなかった。**
+   ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n▶ 冊の中の区切り(第5.288節)')
+  const read8 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC8 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+  const radio8 = noC8(read8('src/components/WordRadio.jsx'))
+  const qr8 = noC8(read8('src/components/QrReview.jsx'))
+  const wb8 = noC8(read8('src/components/Wordbook.jsx'))
+  const scr8 = noC8(read8('src/__screens.jsx'))
+
+  /* ── ① **受け取って、そのまま描く**(組み立てない)── */
+  ok(/sub = null,/.test(radio8) && /\{sub && <div className="radio-set-sub">\{sub\}<\/div>\}/.test(radio8),
+    '区切り … 聞き流しは、渡されたものをそのまま描く(組み立てない)')
+  /* **区切りの無い冊では、行ごと出さない**(効かない操作を見せない) */
+  ok(/\{sub && </.test(radio8),
+    '区切り … 区切りの無い冊では、行ごと出さない')
+  /* **中で組み立てていない** —— UNIT も型も段も、名前を1つも書かない */
+  ok(!/NativeFlowUnits|FrameParts|ChunkParts|COURSE_TIERS/.test(radio8),
+    '区切り … 聞き流しの中で、冊ごとの区切りを組み立てていない')
+  /* **2列をまたぐ**(値の列だけに入れると、札の行が折り返す) */
+  const css8 = noC8(read8('src/styles.css'))
+  ok(/\.radio-set-sub \{[^}]*grid-column: 1 \/ -1/.test(css8),
+    '区切り … 設定の格子の2列をまたぐ')
+
+  /* ── ② **練習の画面と同じ1つを渡している**(書き写さない)── */
+  for (const [名, src] of [['Quick Response', qr8], ['単語帳', wb8]]) {
+    /* `BookPick`(帯の `冊名 ▾`)と `WordRadio` の**両方**に、
+       同じ `bookSub` が渡っていること */
+    ok(/sub=\{bookSub\}/.test(src)
+      && (src.match(/sub=\{bookSub\}/g) ?? []).length === 2,
+    `区切り … ${名}は、帯と聞き流しに同じ bookSub を渡している`)
+  }
+
+  /* ── ③ **選んでも、聞き流しは止まらない** ── */
+  /* Quick Response … 絞る道は `afterNarrow()`。**止めない**うえで、
+     新しい中身が届いたら一覧を組み直す */
+  ok(!/const afterNarrow = \(\) => \{\s*setRadio\(null\)/.test(qr8),
+    '区切り … Quick Response は、絞っても聞き流しを止めない')
+  ok(/radioKeyRef\.current = runKey\s*setRadio\(orderQrPairs\(shown\.map\(qrPairOf\), order\)\)/.test(qr8),
+    '区切り … Quick Response は、絞ったら鳴らす一覧を組み直す')
+  /* **届いてから組む**(先に組むと、絞る前の文をもう一周鳴らす) */
+  ok(/if \(loaded !== poolKey\) return\s*radioKeyRef\.current = runKey/.test(qr8),
+    '区切り … 新しい中身が届くまで、組み直さない')
+  /* 単語帳 … 絞る道も冊を替える道も `dropRun()` を通る。
+     **印は1か所**(呼ぶ側それぞれに書かない) */
+  for (const [名, src] of [['Quick Response', qr8], ['単語帳', wb8]]) {
+    ok(/if \(radio\) keepRadioRef\.current = true/.test(src),
+      `区切り … ${名}は、聞き流しが開いているときだけ印を立てる(dropRun 1か所)`)
+    /* **呼ぶ側に書き写していない**(1か所に寄せた) */
+    ok((src.match(/keepRadioRef\.current = true/g) ?? []).length === 1,
+      `区切り … ${名}は、印を立てる場所を2つ持たない`)
+  }
+
+  /* ── ④ **骨組みも渡している**(骨組みは本物と1文字も違えない)── */
+  /* **その骨組みの中だけを見る。** ファイル全体で `sub={` を数えると、
+     **本棚の骨組み**(`BookShelf` にも `sub` がある)に当たって
+     **消しても緑のまま**になる(第5.283節で3度踏んだのと同じ形) */
+  const 骨組み8 = (名) => {
+    const i = scr8.indexOf(`const ${名} = (`)
+    return i < 0 ? '' : scr8.slice(i, scr8.indexOf('\n)\n', i))
+  }
+  for (const [名, 骨] of [['単語帳', 'RADIO'], ['Quick Response', 'QRRADIO']]) {
+    ok(/sub=\{/.test(骨組み8(骨)) && 骨組み8(骨).includes('<WordRadio'),
+      `骨組み … ${名}の聞き流しも、冊の中の区切りを描く`)
+  }
+  ok(/q\.get\('sub'\) === 'none'/.test(scr8),
+    '骨組み … 区切りの無い冊(欄が出ない側)も測れる')
 }
 
 console.log(ng

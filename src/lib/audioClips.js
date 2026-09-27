@@ -69,6 +69,11 @@ import {
   FADE_STEP, FADE_STOP, applyGain, fadeGain, isMeasured, measureClip,
 } from './loudness.js'
 import { voiceLevel } from './mixVolume.js'
+/* **間を音で置く**(第5.285節)。作り方は `silentWav.js` 1か所 */
+import { SILENT_STEP_MS, silentKey, silentNeeded, silentWav } from './silentWav.js'
+/* **端末に「いま鳴らしている」と伝える**(第5.285節)。
+   画面の中で `navigator.mediaSession` を直に触らない */
+import { showPaused, showPlaying } from './mediaSession.js'
 
 /** 0016 で作るバケツ。窓口(supabase/functions/speak)と同じ名前にすること */
 const BUCKET = 'tts'
@@ -648,24 +653,88 @@ function audioElement() {
   return element
 }
 
+/**
+ * **無音の置き場**(第5.285節)。長さごとに1つだけ作って使い回す。
+ *
+ * 作り直すと `URL.createObjectURL` が増え続ける ——
+ * 聞き流しは1語ごとに間を置くので、**1時間で数千本**になる。
+ */
+const silences = new Map()
+
+/** その長さの無音の URL。**無ければ作る**(0円・その場で作れる) */
+function silenceUrl(ms) {
+  const key = silentKey(ms)
+  const had = silences.get(key)
+  if (had) return had
+  const url = URL.createObjectURL(new Blob([silentWav(key)], { type: 'audio/wav' }))
+  silences.set(key, url)
+  return url
+}
+
+/**
+ * **間を、無音として鳴らす**(第5.285節・2026-09-27 利用者の指定)。
+ *
+ *   > 聞き流しの途中にスマホの電源を押して画面をオフにすると
+ *   > 音声も消えてしまいます。
+ *
+ * 画面を消すと端末は**そのページの時計を止める。** 時計で間を置いていると、
+ * **いま鳴っている1本が終わったところで止まる。**
+ * 間を音にすれば、終わりは `ended`(音の側)が知らせるので届く。
+ *
+ * **鳴らす道は `playClip()` 1か所**(`srcUrl` で渡すだけ)——
+ * 止め方(`stopClip`)も、音量も、なだらかな上げ下げも、あちらのものを使う。
+ * ここで `<audio>` を別に持つと、**止める道が2つ**になる。
+ */
+export function playSilence(ms) {
+  return playClip({ srcUrl: silenceUrl(ms), text: '' })
+}
+
+/**
+ * ★ **間を置く。音で置けるならそれで、置けなければ時計で**(第5.285節)。
+ *
+ * **`playSilence()` を直に呼ばない。** 無音は**鳴らせないことがある** ——
+ * 端末がまだ解錠されていない(利用者が一度も触れていない)ときは
+ * `play()` が断られ、**その場で返ってくる。**
+ * そのまま次へ進むと、**間が 0 になって早口で回り続ける**
+ * (`npm run test:bar` の「間の設定は、本当に効いているか」が
+ * これを捕まえた —— 3秒に設定しても 11ms しか空いていなかった)。
+ *
+ * **鳴らせなかったぶんは、時計で待ち直す**(行き止まりを作らない)。
+ *
+ * **止められるようにする。** まとめて待つと、止めても最大1.4秒
+ * 黙って動かない。50 ミリ秒ずつに刻んで、そのつど生きているかを見る
+ * (音で置いたときは `stopClip()` が `generation` を進めて止める)。
+ *
+ * @param ms   置きたい間(ミリ秒)
+ * @param alive まだ続けてよいか。**時計で待つあいだだけ**見る
+ */
+export async function quietWait(ms, alive = () => true) {
+  const 始め = Date.now()
+  /* **音で置けたら、それで終わり。** 終わりは `ended`(音の側)が
+     知らせるので、**画面を消していても届く**(第5.285節) */
+  if (silentNeeded(ms) && canUseClips() && await playSilence(ms)) return
+  /* 鳴らせなかった。**残りを時計で待つ**(もう過ぎていれば 0) */
+  const 終わり = 始め + (Number(ms) || 0)
+  /* **0 でも1手ゆずる。** 描き替えを待つための `wait(0)` がこれである
+     —— ここで返してしまうと、**音が先、文字があと**になる(第5.205節) */
+  do {
+    if (!alive()) return
+    await new Promise((r) => {
+      window.setTimeout(r, Math.max(0, Math.min(50, 終わり - Date.now())))
+    })
+  } while (Date.now() < 終わり)
+}
+
 /** 無音を1回鳴らして解錠する。**利用者が触れた流れの中で呼ぶこと** */
 function prime() {
   if (primed) return
   primed = true
   try {
     const el = audioElement()
-    // 0.05 秒の無音(16bit モノラル 8kHz)。
-    // 中身を作るのは、長い base64 の文字列をコードに貼らないため
-    const samples = 400
-    const buf = new ArrayBuffer(44 + samples * 2)
-    const view = new DataView(buf)
-    const put = (o, t) => { for (let i = 0; i < t.length; i += 1) view.setUint8(o + i, t.charCodeAt(i)) }
-    put(0, 'RIFF'); view.setUint32(4, 36 + samples * 2, true); put(8, 'WAVEfmt ')
-    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true)
-    view.setUint32(24, 8000, true); view.setUint32(28, 16000, true)
-    view.setUint16(32, 2, true); view.setUint16(34, 16, true)
-    put(36, 'data'); view.setUint32(40, samples * 2, true)
-    el.src = URL.createObjectURL(new Blob([view], { type: 'audio/wav' }))
+    /* 0.05 秒の無音。**作り方は `silentWav()` 1か所**(第5.285節)——
+       もとはここに同じ組み立てを書いていたが、間を音で置くようになって
+       **同じものが2か所**になった(CLAUDE.md「数え方を2通り持たない」) */
+    el.src = silenceUrl(SILENT_STEP_MS)
     const played = el.play()
     if (played?.catch) played.catch(() => { /* 解錠できなくても、押した直後の再生は鳴る */ })
   } catch { /* ここで落ちても、読み上げそのものは止めない */ }
@@ -1702,6 +1771,14 @@ export function stopClip() {
   fadeOrigin = null
   // **戻したあとの見張りを、必ず外す**(止めたのに鳴り直しては困る)
   clearSeekWatch()
+  /* ★ **止めたことも端末に伝える**(第5.285節)。
+     帯そのものは消さない —— 続きから鳴らせるようにしておく。
+     消すのは画面を閉じるとき(`stopReading()` → `clearNowPlaying()`)。
+
+     **`clearSeekWatch()` の後ろに置く。** 前に挟んだら
+     `check-mp3-join.mjs` の「止めたら見張りを外す」が赤くなった ——
+     **見張りを緩めずに、こちらを動かす**(CLAUDE.md) */
+  showPaused()
   const end = endCurrent
   endCurrent = null
   let at = 0
@@ -2040,6 +2117,11 @@ export async function playClip({
       })
     }
     onStart?.()
+    /* ★ **端末に「いま鳴らしている」と伝える**(第5.285節)。
+       ロック画面に帯が出ると、端末はこのページを**止めてはいけない音**
+       として扱う。**入れるのはここ1か所** —— 鳴らす道は
+       `playClip()` しかないので、間の無音も含めて全部がここを通る */
+    showPlaying()
     /* **印が無くても回す。** 語の色だけでなく、入りと終わりの
        なだらかさ(`fade`)もここが受け持っている */
     frame = window.setInterval(tick, FADE_STEP)

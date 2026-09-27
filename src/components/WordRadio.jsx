@@ -52,6 +52,11 @@ import VolumeRow from './VolumeRow.jsx'
    ボタンに同じ絵**を出す(呼び名・絵を2か所に書かない・CLAUDE.md) */
 import { CloseIcon, PlayIcon, SortIcon, StopIcon } from './Icons.jsx'
 import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
+/* ★ **画面を消しても鳴り続ける**(第5.285節・2026-09-27 利用者の指定)。
+   間を「時計」ではなく「無音」で置く。判断も作り方も `silentWav.js` /
+   `audioClips.js` 1か所で、ここは呼ぶだけである */
+import { quietWait } from '../lib/audioClips.js'
+import { setMediaActions, setNowPlaying } from '../lib/mediaSession.js'
 import { JA_VOICE } from '../data/clipVoices.js'
 import { PREMIUM } from '../lib/voiceTier.js'
 import { setBgmVolume, startBgm, stopBgm } from '../lib/bgm.js'
@@ -94,6 +99,22 @@ export default function WordRadio({
    * 冊が1つしか無いときも出さない —— 押しても何も変わらないためである。
    */
   books = null, book = null, onBook = null,
+  /**
+   * ★ **冊の中の区切り**(UNIT・章・型・段)(第5.288節・2026-09-27
+   * 実機・利用者の指摘)。
+   *
+   *   > 聞き流し内のモードのソート内で冊の中のUNITなどが選べません。
+   *   > 冊の中にUNITや章や型などに分かれているものは
+   *   > 元々と同じように指定できるようにしてください。
+   *
+   * 第5.283節で**冊をえらぶ欄だけ**を入れ、**その中の区切りを渡していなかった。**
+   *
+   * **練習の画面が持っている部品(`bookSub`)を、そのまま受け取る** ——
+   * Native Flow なら UNIT、型の冊なら 中身と型、基礎単語なら段、
+   * 棚なら冊、チャンク集なら段と組。**ここで組み立てない**ので、
+   * 冊を1つ足した日に、聞き流しだけが古くなることがない。
+   */
+  sub = null,
   /**
    * **いま何を聞き流しているのか**(第5.264節・2026-09-26 実機・利用者の指定)。
    *
@@ -296,7 +317,20 @@ export default function WordRadio({
     liveRef.current = mine
     const alive = () => liveRef.current === mine
 
-    const wait = (ms) => new Promise((r) => { setTimeout(r, ms) })
+    /* ★ **長い間は、音で置く**(第5.285節・2026-09-27 実機・利用者の指定)。
+
+         > 聞き流しの途中にスマホの電源を押して画面をオフにすると
+         > 音声も消えてしまいます。
+
+       画面を消すと端末は**このページの時計を止める。** だから
+       「鳴らす → 時計で待つ → 次を鳴らす」は、**いま鳴っている1本の
+       終わりで止まっていた。** 音が出せなくなったのではなく、
+       **次を鳴らす合図が来なくなっていた。**
+
+       無音を鳴らせば、終わりを知らせるのは `ended`(音の側)なので届く。
+       **判断は `silentNeeded()` 1か所**(画面の中で 150 と書かない)。
+       短い間(描き替えを1手待つ `wait(0)` など)は、これまでどおり時計。 */
+    const wait = (ms) => quietWait(ms, alive)
     /* **3つの間は、選んだ秒から一度に出す**(`radioGapsOf()` 1か所)。
        ここで `WORD_GAP_MS` を直に使うと、間を変えても
        **語と語のあいだだけが動かない** */
@@ -446,6 +480,31 @@ export default function WordRadio({
     stopBgm()
     onClose?.()
   }
+
+  /**
+   * ★ **ロック画面に、いま聞いているものを出す**(第5.285節)。
+   *
+   * 題は**画面に出ているものをそのまま**渡す(`label`)——
+   * 書き写すと、冊を替えた日にロック画面だけが古くなる。
+   *
+   * **操作も渡す。** ポケットに入れたまま次へ送れる ——
+   * `nexttrack` / `previoustrack` は、画面の「次へ」「前へ」と
+   * **同じ関数**である(2つの道を作らない)。
+   *
+   * **`list` を見張りに入れない。** 中身が入れ替わるたびに
+   * 入れ直すことになるが、渡している関数は `atRef` を読むので
+   * **入れ直さなくても、いつも最新の場所から動く。**
+   */
+  useEffect(() => {
+    setNowPlaying({ title: label || '聞き流し' })
+    setMediaActions({
+      onStop: stop,
+      onNext: () => { stopReading(); move(nextIndex(atRef.current, list.length)) },
+      onPrev: () => { stopReading(); move(prevIndex(atRef.current, list.length)) },
+    })
+    /* **閉じたら外す。** 効かないボタンをロック画面に残さない */
+    return () => { setMediaActions({}) }
+  }, [label, list.length])
 
   /* **答えを隠す読み方か。** 判断は `hidesAnswer()` 1か所(`wordRadio.js`) */
   const hidden = hidesAnswer(mode)
@@ -701,6 +760,14 @@ export default function WordRadio({
               </select>
             </>
           )}
+          {/* ★ **冊の中の区切り**(第5.288節)。**教材のすぐ下**に置く ——
+              「どの冊の、どこ」が続けて決まる(練習の画面と同じ並び)。
+
+              **格子の2列をまたぐ。** 中身は札の行(UNIT・型・段)なので、
+              値の列だけに入れると狭くて折り返す。
+              **名前は添えない** —— 部品が自分で名乗っている
+              (余計な説明書きを置かない・共通ルール) */}
+          {sub && <div className="radio-set-sub">{sub}</div>}
           <label className="radio-set-name" htmlFor={`${uid}-take`}>何問ずつ</label>
           <select id={`${uid}-take`} className="radio-set-pick radio-set-pick--take"
                   value={String(take)}

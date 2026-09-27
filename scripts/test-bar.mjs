@@ -4018,7 +4018,13 @@ export default defineConfig({
   for (const [w, h] of [[390, 844], [320, 568], [1280, 900]]) {
     const page = await browser.newPage({ viewport: { width: w, height: h } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=radio`,
-      { waitUntil: 'networkidle' })
+      /* ★ **`networkidle` を待たない**(第5.285節)。聞き流しは
+         **間も音で置く**ようになったので、`<audio>` が途切れずに
+         読み込み続ける —— Chromium はそれを「まだ通信中」と数えるため、
+         **この画面は二度と `networkidle` にならない**(実測・30 秒で落ちた)。
+         描けたかどうかは、**出るはずのものを待って**確かめる */
+      { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('.radio-card', { timeout: 20000 })
     await page.waitForTimeout(300)
     const got = await page.evaluate(() => {
       const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
@@ -4149,7 +4155,13 @@ export default defineConfig({
   for (const [w, h] of [[390, 844], [320, 568], [1280, 900]]) {
     const page = await browser.newPage({ viewport: { width: w, height: h } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio`,
-      { waitUntil: 'networkidle' })
+      /* ★ **`networkidle` を待たない**(第5.285節)。聞き流しは
+         **間も音で置く**ようになったので、`<audio>` が途切れずに
+         読み込み続ける —— Chromium はそれを「まだ通信中」と数えるため、
+         **この画面は二度と `networkidle` にならない**(実測・30 秒で落ちた)。
+         描けたかどうかは、**出るはずのものを待って**確かめる */
+      { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('.radio-card', { timeout: 20000 })
     await page.waitForTimeout(300)
     const got = await page.evaluate(() => {
       const card = document.querySelector('.radio-card')
@@ -4394,8 +4406,15 @@ export default defineConfig({
     ['QR', 'qrradio', 'Native Flow Vol.1'],
   ]) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    /* ★ **`networkidle` を待たない**(第5.285節)。聞き流しは間も音で置く
+       ようになったので、`<audio>` が途切れずに読み込み続ける ——
+       Chromium はそれを「まだ通信中」と数えるため、
+       **この画面は二度と `networkidle` にならない**(実測・30 秒で落ちた)。
+       **`?screen=${screen}` のように組み立てている行は、探し漏らしやすい**
+       —— `screen=radio` の字で探して、ここだけ1度見落とした */
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=${screen}`,
-      { waitUntil: 'networkidle' })
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.radio-card', { timeout: 20000 })
     await page.waitForTimeout(300)
     /* **畳んだままでは出ていないこと**(すぐ上の設定と同じ読み方) */
     const 畳んだまま = await page.evaluate(
@@ -4405,6 +4424,8 @@ export default defineConfig({
     const 開いて = await page.evaluate(() => {
       const s = document.querySelector('.radio-set-pick--book')
       const 箱 = document.querySelector('.radio-set-body')
+      /* ★ **冊の中の区切り**(第5.288節・UNIT・章・型・段) */
+      const sub = document.querySelector('.radio-set-sub')
       return {
         ある: Boolean(s),
         札: s ? [...s.options].map((o) => o.textContent.trim()) : [],
@@ -4414,6 +4435,15 @@ export default defineConfig({
         はみ出し: s && 箱
           ? Math.round(s.getBoundingClientRect().right - 箱.getBoundingClientRect().right)
           : 0,
+        区切り: sub ? {
+          押せるもの: sub.querySelectorAll('button, select').length,
+          /* **教材のすぐ下か**(「どの冊の、どこ」が続けて決まる) */
+          教材の次: [...箱.children].indexOf(sub)
+            === [...箱.children].findIndex((c) => c.classList.contains('radio-set-pick--book')) + 1,
+          はみ出し: Math.round(Math.max(0,
+            sub.getBoundingClientRect().right - 箱.getBoundingClientRect().right,
+            箱.getBoundingClientRect().left - sub.getBoundingClientRect().left)),
+        } : null,
       }
     })
     await page.close()
@@ -4434,9 +4464,53 @@ export default defineConfig({
       ng(`${名}の聞き流し … 教材が設定のいちばん上に無い`, 開いて.名前.join(' / '))
     } else if (開いて.はみ出し > 1) {
       ng(`${名}の聞き流し … 長い冊名で、欄が横にはみ出す`, `${開いて.はみ出し}px`)
+    } else if (!開いて.区切り) {
+      /* ★ **冊の中の区切り**(第5.288節・2026-09-27 利用者の指摘
+         「聞き流し内のモードのソート内で冊の中のUNITなどが選べません」)。
+         冊をえらべても、**その中の UNIT・型・段**が選べなければ、
+         元の画面と同じことができない */
+      ng(`${名}の聞き流し … 冊の中の区切り(UNIT・型・段)が出ていない`,
+        開いて.名前.join(' / '))
+    } else if (開いて.区切り.押せるもの === 0) {
+      ng(`${名}の聞き流し … 区切りの欄はあるが、押せるものが1つも無い`)
+    } else if (!開いて.区切り.教材の次) {
+      ng(`${名}の聞き流し … 区切りが、教材のすぐ下に無い`, 開いて.名前.join(' / '))
+    } else if (開いて.区切り.はみ出し > 1) {
+      ng(`${名}の聞き流し … 区切りの欄が、設定の箱からはみ出す`,
+        `${開いて.区切り.はみ出し}px`)
     } else {
       ok(`${名}の聞き流し … 設定のいちばん上で教材をえらべる`
-        + `(${開いて.札.length} 冊・いま「${開いて.いま}」・名前 ${開いて.名前.join('/')})`)
+        + `(${開いて.札.length} 冊・いま「${開いて.いま}」・名前 ${開いて.名前.join('/')})`
+        + ` / そのすぐ下で冊の中の区切り(押せるもの ${開いて.区切り.押せるもの} 個)`)
+    }
+  }
+
+  /* ★ **区切りの無い冊では、その行ごと出さない**(第5.288節)。
+       「出る」と「出ない」の両方を見る —— これが無いと、
+       **いつでも出す形**に書き換えても緑のままになる */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    page.setDefaultTimeout(9000)
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio&sub=none`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.radio-card', { timeout: 20000 })
+    await page.waitForTimeout(300)
+    await page.click('.radio-gear')
+    await page.waitForTimeout(200)
+    const 見えたもの = await page.evaluate(() => ({
+      区切り: document.querySelectorAll('.radio-set-sub').length,
+      ほか: document.querySelectorAll('.radio-set-body .radio-set-pick').length,
+    }))
+    await page.close()
+    if (見えたもの.ほか === 0) {
+      ng('QRの聞き流し … 区切りが無い冊で、設定が1つも開いていない',
+        '「区切りの欄が無い」ことを確かめられていない')
+    } else if (見えたもの.区切り !== 0) {
+      ng('QRの聞き流し … 区切りの無い冊なのに、その行が出ている',
+        `${見えたもの.区切り} 個`)
+    } else {
+      ok('QRの聞き流し … 区切りの無い冊では、その行ごと出さない'
+        + `(ほかの設定は ${見えたもの.ほか} 個そのまま)`)
     }
   }
 
@@ -4449,7 +4523,13 @@ export default defineConfig({
   {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio&books=one`,
-      { waitUntil: 'networkidle' })
+      /* ★ **`networkidle` を待たない**(第5.285節)。聞き流しは
+         **間も音で置く**ようになったので、`<audio>` が途切れずに
+         読み込み続ける —— Chromium はそれを「まだ通信中」と数えるため、
+         **この画面は二度と `networkidle` にならない**(実測・30 秒で落ちた)。
+         描けたかどうかは、**出るはずのものを待って**確かめる */
+      { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('.radio-card', { timeout: 20000 })
     await page.waitForTimeout(300)
     await page.click('.radio-gear')
     await page.waitForTimeout(200)
@@ -4621,6 +4701,182 @@ export default defineConfig({
         ずれ.map((r) => `読「${r.読んだ.slice(0, 20)}」画面「${r.画面.slice(0, 20)}」`).join(' / '))
     } else {
       ok(`QRの聞き流し … 英語だけを、画面とそろって読む(${英.length} 文・日本語は0回)`)
+    }
+  }
+
+  /* ── ★ **教材の中の Quick Response にも聞き流し**(第5.287節)────────
+   *
+   *   2026-09-27 利用者の指定「教材内のquick responseにも聞き流しの機能を」。
+   *
+   *   **押してみて、本当に聞き流しが開くか**まで見る ——
+   *   ボタンだけ置いて、開く先を繋ぎ忘れても、
+   *   「ボタンがあるか」だけの見張りは緑のままになる。
+   *   ══════════════════════════════════════════════════════════════ */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    page.setDefaultTimeout(9000)
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrmode`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(800)
+    const 押す = page.locator('.qr-head button', { hasText: '聞き流し' })
+    const 数 = await 押す.count()
+    if (!数) {
+      const 並ぶもの = await page.evaluate(() => [...document.querySelectorAll('.qr-head button')]
+        .map((b) => b.textContent.trim()).join(' / '))
+      ng('教材の Quick Response … 聞き流しのボタンが無い', 並ぶもの || '(ボタンが1つも無い)')
+    } else {
+      await 押す.first().click()
+      await page.waitForTimeout(900)
+      const 開いた = await page.evaluate(() => {
+        const card = document.querySelector('.radio-card')
+        return {
+          ある: !!card,
+          題: document.querySelector('.focus-top')?.textContent?.trim().slice(0, 40) ?? '',
+          文: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
+        }
+      })
+      if (!開いた.ある) ng('教材の Quick Response … 押しても聞き流しが開かない')
+      else if (!開いた.文) ng('教材の Quick Response … 聞き流しは開いたが、文が出ていない')
+      else ok(`教材の Quick Response … 聞き流しが開く(「${開いた.文.slice(0, 28)}」)`)
+    }
+    await page.close()
+  }
+
+  /* ── ★ **「全体を聞く」は、文型ドリルにも出るか**(第5.286節)──────
+   *
+   *   2026-09-27 利用者の指定「文型トレーニングに『全体を聞く』ボタンを
+   *   作ってください」。もとは**本文(記事・会話)のときだけ**出していた。
+   *
+   *   **出る側と出ない側の両方を見る**(CLAUDE.md)。
+   *     ・文型ドリルの英文和訳のページ(英文和訳)… 鳴らせる → **出る**
+   *     ・3ページめ(誤り訂正)… `audioFrom: null` で1本も鳴らせない
+   *       → **出ない**(効かない操作を見せない)
+   *   出る側だけを見ていると、「どのページにも出す」形に壊しても緑になる。
+   *   ══════════════════════════════════════════════════════════════ */
+  {
+    const page = await browser.newPage({ viewport: { width: 1100, height: 900 } })
+    page.setDefaultTimeout(9000)
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1&kind=drill`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(500)
+    /** 見えている「全体を聞く」の数と、その文字 */
+    const 読む = () => page.evaluate(() => {
+      const 見える = [...document.querySelectorAll('.lesson-listen button')]
+        .filter((b) => b.getBoundingClientRect().width > 0)
+      return { 数: 見える.length, 文字: 見える.map((b) => b.textContent.trim()).join(' / ') }
+    })
+    const 英文和訳のページ = await 読む()
+    /* 3ページめ(誤り訂正)へ。**▶ を2回** */
+    for (let i = 0; i < 2; i += 1) {
+      await page.locator('button[aria-label="次のページ"]').click()
+      await page.waitForTimeout(350)
+    }
+    const 誤り訂正 = await 読む()
+    const 何ページ = await page.evaluate(
+      () => document.querySelector('.lesson-pages span')?.textContent?.trim() ?? '')
+    await page.close()
+
+    if (英文和訳のページ.数 !== 1) {
+      ng('文型ドリル … 「全体を聞く」が出ていない',
+        `英文和訳のページに ${英文和訳のページ.数} 個(${英文和訳のページ.文字 || '無し'})`)
+    } else if (!/全体/.test(英文和訳のページ.文字)) {
+      ng('文型ドリル … ボタンはあるが、通して聞くものではない', 英文和訳のページ.文字)
+    } else if (何ページ !== '3 / 3') {
+      /* **測る相手のところへ着いているか**(素通り防止) */
+      ng('文型ドリル … 3ページめ(誤り訂正)へ移れていない', 何ページ || '(数が出ていない)')
+    } else if (誤り訂正.数 !== 0) {
+      ng('文型ドリル … 鳴らせない演習にも「全体を聞く」が出ている',
+        誤り訂正.文字)
+    } else {
+      ok(`文型ドリル … 「全体を聞く」が出る(${英文和訳のページ.文字})/`
+        + ' 鳴らせない誤り訂正には出ない')
+    }
+  }
+
+  /* ── ★ **画面を消しても、聞き流しは進むか**(第5.285節)─────────────
+   *
+   *   2026-09-27 実機・利用者の指定。
+   *
+   *     > 聞き流しの途中にスマホの電源を押して画面をオフにすると
+   *     > 音声も消えてしまいます。ポケットにスマホを入れたまま
+   *     > 聞き流せるように直してください。
+   *
+   *   **画面を消した端末のまねをする。** iPhone は画面を消すと
+   *   **そのページの時計(`setTimeout`)を止める**ので、
+   *   ここでも **0.15 秒以上の時計を1つも鳴らさない**ようにして測る。
+   *
+   *   **ソースを読んでも分からない。** 「時計を使っていないか」だけを
+   *   見ても、どこか1か所に残っていれば止まる ——
+   *   **実際に止めてみて、先へ進むかどうか**で見る。
+   *
+   *   **「ふつうの時計」でも測る**(出る / 出ないの両方・CLAUDE.md)。
+   *   これが無いと、そもそも鳴っていないのに「進まない」を見逃す。
+   *
+   *   置き場所(Storage)は**無音の WAV で答える。** 窓口へは1度も行かない
+   *   —— この環境からは届かないし、**1本ずつ課金**される道でもある。
+   *   ══════════════════════════════════════════════════════════════ */
+  {
+    /** 無音の WAV。**画面側の `silentWav()` とは別に、ここで作る** ——
+        検証が、測る相手の道具を使って自分を正当化しないため */
+    const wav = (ms) => {
+      const rate = 8000
+      const n = Math.round((rate * ms) / 1000)
+      const b = Buffer.alloc(44 + n * 2)
+      b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8)
+      b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22)
+      b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate * 2, 28)
+      b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34)
+      b.write('data', 36); b.writeUInt32LE(n * 2, 40)
+      return b
+    }
+    for (const 時計 of ['ふつう', '止めた']) {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+      page.setDefaultTimeout(9000)
+      if (時計 === '止めた') {
+        await page.addInitScript(() => {
+          const real = window.setTimeout.bind(window)
+          window.setTimeout = (fn, ms, ...rest) => (
+            Number(ms) >= 150 ? 0 : real(fn, ms, ...rest))
+        })
+      }
+      await page.route('**/storage/v1/object/public/**', (r) => r.fulfill({
+        status: 200, contentType: 'audio/wav', body: wav(700),
+      }))
+      /* 窓口は断る(作らせない)。読み書きは空で答える */
+      await page.route('**/functions/v1/**', (r) => r.fulfill({ status: 500, body: '{}' }))
+      await page.route('**/rest/v1/**', (r) => r.fulfill({
+        status: 200, contentType: 'application/json', body: '[]',
+      }))
+      await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio`,
+        { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(2000)
+      /* **触ってから鳴らす**(iPhone と同じで、解錠が要る) */
+      await page.mouse.click(195, 400)
+      const 見た = new Set()
+      for (let i = 0; i < 36; i += 1) {
+        const t = await page.evaluate(
+          () => document.querySelector('.radio-en')?.textContent?.trim() ?? '')
+        if (t) 見た.add(t)
+        await page.waitForTimeout(500)
+      }
+      const 帯 = await page.evaluate(() => {
+        const m = navigator.mediaSession?.metadata
+        return m ? `${m.title}/${navigator.mediaSession.playbackState}` : ''
+      })
+      await page.close()
+      if (見た.size < 3) {
+        ng(`聞き流し(時計 ${時計}) … 先へ進まない`,
+          `18 秒で ${見た.size} 文しか出ていない`
+          + (時計 === '止めた' ? '(間を時計で置いている)' : '(そもそも鳴っていない)'))
+      } else if (!帯) {
+        /* **ロック画面の帯**。これが無いと、端末はページごと寝かせる */
+        ng(`聞き流し(時計 ${時計}) … ロック画面に出す題が入っていない`)
+      } else {
+        ok(`聞き流し(時計 ${時計}) … 18 秒で ${見た.size} 文すすむ / ロック画面 ${帯}`)
+      }
     }
   }
 
@@ -7427,7 +7683,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
   const 見る = async (w, q = '') => {
     const page = await browser.newPage({ viewport: { width: w, height: 800 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio${q}`,
-      { waitUntil: 'networkidle' })
+      /* ★ **`networkidle` を待たない**(第5.285節)。聞き流しは
+         **間も音で置く**ようになったので、`<audio>` が途切れずに
+         読み込み続ける —— Chromium はそれを「まだ通信中」と数えるため、
+         **この画面は二度と `networkidle` にならない**(実測・30 秒で落ちた)。
+         描けたかどうかは、**出るはずのものを待って**確かめる */
+      { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('.radio-card', { timeout: 20000 })
     await page.waitForTimeout(300)
     /* **設定を開いてから測る**(第5.271節 → 第5.274節で右上の歯車へ)。
        開かないと欄そのものが描かれていない */
@@ -9861,7 +10123,7 @@ const SCREENS = [
   /* ── **出ない側。** 控えの無い問にはボタンを出さない
         (効かない操作を見せない)。**これが無いと、
         「どの問にも出す」形に壊しても緑のまま**になる。
-        同じ1ページめにある問で見る ── */
+        同じ英文和訳のページにある問で見る ── */
   const 無し = 問('They have known each other for ten years.')
   if (await 無し.locator('button', { hasText: '文法' }).count() === 0) {
     ok('文法 … 解説の無い問には、ボタンごと出さない')
@@ -9897,7 +10159,7 @@ const SCREENS = [
   const 送り = page.locator('.lesson-pages button[aria-label="次のページ"]')
   await 送り.click()
   await page.waitForTimeout(300)
-  await 送り.click()          // 1ページめ(和訳)→ 2(英訳)→ 3(誤り訂正)
+  await 送り.click()          // 英文和訳のページ(和訳)→ 2(英訳)→ 3(誤り訂正)
   await page.waitForTimeout(400)
   const 誤り = 問('I have went to the office already.')
   const 誤りボタン = 誤り.locator('button', { hasText: '文法を見る' })

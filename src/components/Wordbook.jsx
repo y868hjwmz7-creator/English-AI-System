@@ -1478,6 +1478,15 @@ export default function Wordbook({
    * `started` を戻すので、**新しい冊の1問目がそのまま出る**(第5.167節)。
    */
   const dropRun = () => {
+    /* ★ **聞き流しの中から替えたときは、聞き流しのまま続ける**
+       (第5.288節・2026-09-27 利用者の指摘)。
+
+       冊を替える道も、冊の中で絞る道(段・棚の冊・チャンクの組)も、
+       **どれもここを通る。** だから**ここ1か所で印を立てる** ——
+       呼ぶ側それぞれに書くと、道を1つ足した日にそこだけ落ちる。
+
+       **聞き流しが開いていないときは、これまでどおり**(印は立たない)。 */
+    if (radio) keepRadioRef.current = true
     setStarted(false); setRadio(null)
     /* 冊が変われば語も変わる。**判断からやり直す** */
     setOpened(false)
@@ -2047,10 +2056,14 @@ export default function Wordbook({
              (帯の `冊名 ▾` と同じもの・書き写さない) */
           books={books}
           book={book}
+          /* ★ **冊の中の区切りも、そのまま渡す**(第5.288節)。
+             帯の `冊名 ▾` の中で使っているものと**同じ1つ**である ——
+             段(基礎単語)・棚の冊・チャンクの段と組を、聞きながら選び直せる */
+          sub={bookSub}
           onBook={(id) => {
-            /* **聞き流しのまま、次の冊へ**(上の `keepRadioRef`)。
+            /* **聞き流しのまま、次の冊へ** —— 印は `dropRun()` が立てる
+               (第5.288節・1か所に寄せた)。
                ここから先は勝手に移らない(第5.200節・`pickedBookRef`) */
-            keepRadioRef.current = true
             pickedBookRef.current = true
             setBookWanted(id); dropRun()
           }}

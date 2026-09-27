@@ -6704,6 +6704,14 @@ button.wbfilter-ctl { text-align: left; }
 .radio-set-name {
   font-size: var(--fs-13); font-weight: 700; color: var(--text-secondary);
 }
+/* **冊の中の区切り**(UNIT・章・型・段)(第5.288節・2026-09-27)。
+
+   中身は**札の行**(`NativeFlowUnits` / `FrameParts` / `chiprow`)なので、
+   値の列(右half)だけに入れると狭くて折り返す。**2列をまたぐ。**
+
+   離すのは `gap`(親の `.radio-set-body` が持っている)—— ここに
+   `margin` を足さない(`.claude/rules/common.md`「隙間は `gap` で作る」)。 */
+.radio-set-sub { grid-column: 1 / -1; min-width: 0; }
 /* 値の側。**間は「1.5 秒」という値**なので、1文字も削らない
    (CLAUDE.md「数は1文字も削らない」)。入らないぶんは曲の題が縮む */
 .radio-set-pick {

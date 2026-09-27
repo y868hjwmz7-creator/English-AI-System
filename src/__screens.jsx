@@ -1499,6 +1499,15 @@ const RADIO = (
     ]}
     book="my"
     onBook={() => {}}
+    /* ★ **冊の中の区切り**(第5.288節)。本物(`Wordbook`)は `bookSub` ——
+       基礎単語なら段、棚なら冊、チャンク集なら段と組である。
+       ここは**札の行**(`chiprow`)を1つ置く */
+    sub={(
+      <div className="chiprow" role="group" aria-label="基礎単語の段">
+        <button type="button" className="chip chip--on">基本360語</button>
+        <button type="button" className="chip">標準1200語</button>
+      </div>
+    )}
     tracks={[]}
     onClose={() => {}}
   />
@@ -1580,6 +1589,14 @@ const QRRADIO = (
       ]}
     book="nf"
     onBook={() => {}}
+    /* ★ **冊の中の区切り**(第5.288節・2026-09-27 利用者の指摘
+       「冊の中のUNITなどが選べません」)。本物(`QrReview`)は
+       `bookSub` —— Native Flow の冊なら **UNIT の欄**である。
+       **骨組みは本物と1文字も違えない**ので、同じ部品をそのまま渡す。
+       `?sub=none` で、**区切りの無い冊**(欄が出ない側)も測れる */
+    sub={q.get('sub') === 'none' ? null : (
+      <NativeFlowUnits units={NATIVE_FLOW_UNITS} picked={null} onPick={() => {}} />
+    )}
     onClose={() => {}}
   />
 )
