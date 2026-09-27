@@ -9065,6 +9065,58 @@ for (const W of [1280, 390]) {
   await page.close()
 }
 
+/* 見る画面。**押すものが縦に積まれるところ**を中心に並べる。
+   **画面を足したら、ここにも足す** —— 足すまで見張られない */
+const SCREENS = [
+  ['tools', ''], ['form', ''], ['search', ''], ['qr', ''], ['qrrev', ''],
+  /* **音声を作り直す欄**(第5.196節)。訛り・話す人・読み方が
+     横に並ぶので、**横のすき間**がいちばん出やすい */
+  ['remake', ''],
+  ['rscope', ''], ['wordbook', ''], ['mybook', ''], ['result', ''],
+  ['radio', ''], ['qrradio', ''], ['course', ''], ['basicpick', ''],
+  ['shelfpick', ''], ['speech', ''], ['gnote', ''], ['tabs', ''],
+  ['volume', ''], ['shift', ''],
+  /* **冊をえらぶ本棚**(第5.167節)。トップ画面を無くしたので、
+     冊をえらぶ場所は**この1枚だけ**になった。
+     `books=one` は**冊が1つのとき**(えらぶ場所そのものが出ない) */
+  ['shelf', ''], ['shelf', 'books=one'],
+  /* **誰の記録として残るか**(第5.178節)。押せる形と、押せない名札と、
+     担当がいないときの3つとも測る */
+  ['owner', ''], ['owner', 'owner=fixed'], ['owner', 'owner=empty'],
+  /* **本文から拾った かたまり**(第5.230節)。札・意味・由来・本文の文章・
+     「練習する」が縦に積まれ、練習を開くと**日本語と「解答を見る」が
+     横に並ぶ。** 縦も横も、いちばん接しやすい形である */
+  ['chunk', ''],
+  /* **足りない演習を足す欄**(第5.234節)。チェックの行・知らせ・
+     ボタンの行が縦に積まれ、**ボタンは横に2つ並ぶ。**
+     `full=1` は**ぜんぶ揃っている形**(欄そのものが出ない) */
+  ['fill', ''], ['fill', 'full=1'],
+  /* **教材の中の Quick Response**(第5.235節)。取り組み方が
+     **3つ横に並ぶ**ようになったので、横のすき間がいちばん出やすい。
+     `groups=one` は**切り替えの行ごと出ない**形 */
+  ['qrmode', ''], ['qrmode', 'groups=one'],
+  /* **アサインする**(第5.181節 / 第5.186節)。1行1冊で縦に並ぶ。
+     **1つも出していない形も測る** —— 印が全部 ○ になり、
+     数も出ないので、**行の高さが変わる** */
+  ['assign', ''], ['assign', 'assign=none'],
+  /* **アサインの手順**(第5.238節)。ゲストを選ぶ欄(名前で探す欄 +
+     「一覧をひらく」+ 選んだ人)と、**その他の教材**の節が縦に積まれる。
+     `mats=shut` は**畳んだ形**(畳みの札と、下の知らせが接しやすい)、
+     `mats=wait` は**読み込み中**、`mats=none` は**0件** */
+  ['assign', 'mats=shut'], ['assign', 'mats=wait'], ['assign', 'mats=none'],
+  /* **`pick`(教材を先にえらぶ帯)は廃止した**(第5.248節・
+     2026-09-23 利用者の指定)。本物からチェックと帯が消えたので、
+     骨組みにも測るものが無い */
+  /* **6Steps の帯**(第5.239節)。**6つが横に並ぶ**ので、
+     狭い画面では折り返す。`steps=last` は**いちばん後ろを選んでいる形**
+     (端が切れていないか) */
+  ['steps', ''], ['steps', 'steps=last'],
+  /* **「達成具合」は廃止した**(第5.246節・2026-09-23 利用者の指定)。
+     `×` と「おわる」の行き先だったので、**ホームへ戻す**ように変えた。
+     ホーム(`['', …]`)は、この一覧のいちばん下で測っている */
+  ['', 'role=trainer&who=g1'],
+]
+
 /* ══════════════════════════════════════════════════════════════
    **別々の物を、すき間ゼロでくっつけない**(2026-09 実機・利用者の指定)
 
@@ -9233,57 +9285,6 @@ for (const W of [1280, 390]) {
     return out
   }
 
-  /* 見る画面。**押すものが縦に積まれるところ**を中心に並べる。
-     **画面を足したら、ここにも足す** —— 足すまで見張られない */
-  const SCREENS = [
-    ['tools', ''], ['form', ''], ['search', ''], ['qr', ''], ['qrrev', ''],
-    /* **音声を作り直す欄**(第5.196節)。訛り・話す人・読み方が
-       横に並ぶので、**横のすき間**がいちばん出やすい */
-    ['remake', ''],
-    ['rscope', ''], ['wordbook', ''], ['mybook', ''], ['result', ''],
-    ['radio', ''], ['qrradio', ''], ['course', ''], ['basicpick', ''],
-    ['shelfpick', ''], ['speech', ''], ['gnote', ''], ['tabs', ''],
-    ['volume', ''], ['shift', ''],
-    /* **冊をえらぶ本棚**(第5.167節)。トップ画面を無くしたので、
-       冊をえらぶ場所は**この1枚だけ**になった。
-       `books=one` は**冊が1つのとき**(えらぶ場所そのものが出ない) */
-    ['shelf', ''], ['shelf', 'books=one'],
-    /* **誰の記録として残るか**(第5.178節)。押せる形と、押せない名札と、
-       担当がいないときの3つとも測る */
-    ['owner', ''], ['owner', 'owner=fixed'], ['owner', 'owner=empty'],
-    /* **本文から拾った かたまり**(第5.230節)。札・意味・由来・本文の文章・
-       「練習する」が縦に積まれ、練習を開くと**日本語と「解答を見る」が
-       横に並ぶ。** 縦も横も、いちばん接しやすい形である */
-    ['chunk', ''],
-    /* **足りない演習を足す欄**(第5.234節)。チェックの行・知らせ・
-       ボタンの行が縦に積まれ、**ボタンは横に2つ並ぶ。**
-       `full=1` は**ぜんぶ揃っている形**(欄そのものが出ない) */
-    ['fill', ''], ['fill', 'full=1'],
-    /* **教材の中の Quick Response**(第5.235節)。取り組み方が
-       **3つ横に並ぶ**ようになったので、横のすき間がいちばん出やすい。
-       `groups=one` は**切り替えの行ごと出ない**形 */
-    ['qrmode', ''], ['qrmode', 'groups=one'],
-    /* **アサインする**(第5.181節 / 第5.186節)。1行1冊で縦に並ぶ。
-       **1つも出していない形も測る** —— 印が全部 ○ になり、
-       数も出ないので、**行の高さが変わる** */
-    ['assign', ''], ['assign', 'assign=none'],
-    /* **アサインの手順**(第5.238節)。ゲストを選ぶ欄(名前で探す欄 +
-       「一覧をひらく」+ 選んだ人)と、**その他の教材**の節が縦に積まれる。
-       `mats=shut` は**畳んだ形**(畳みの札と、下の知らせが接しやすい)、
-       `mats=wait` は**読み込み中**、`mats=none` は**0件** */
-    ['assign', 'mats=shut'], ['assign', 'mats=wait'], ['assign', 'mats=none'],
-    /* **`pick`(教材を先にえらぶ帯)は廃止した**(第5.248節・
-       2026-09-23 利用者の指定)。本物からチェックと帯が消えたので、
-       骨組みにも測るものが無い */
-    /* **6Steps の帯**(第5.239節)。**6つが横に並ぶ**ので、
-       狭い画面では折り返す。`steps=last` は**いちばん後ろを選んでいる形**
-       (端が切れていないか) */
-    ['steps', ''], ['steps', 'steps=last'],
-    /* **「達成具合」は廃止した**(第5.246節・2026-09-23 利用者の指定)。
-       `×` と「おわる」の行き先だったので、**ホームへ戻す**ように変えた。
-       ホーム(`['', …]`)は、この一覧のいちばん下で測っている */
-    ['', 'role=trainer&who=g1'],
-  ]
   const 見つかった = []
   /* **色を決めずに置いたボタン**(第5.244節)。すき間と同じ周回で数える */
   const 色なし = []
@@ -10594,6 +10595,172 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
     }
   }
   await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **押しても、まわりの物が動かない**(第5.281節)
+
+   2026-09-27 実機・利用者の指定。
+
+     > 音声を「繰り返す」にすると文字数が増えた分表示が2段組になります。
+     > こういう仕様が二度とどこでも起こらないように改善してください。
+     > UI の配置が変化することをどの場所においても防いでください。
+
+   実機で起きたのは、`.qr-peek`(折り返す行)の中で
+   「くり返す」(4文字)→「1回」(2文字)とボタンが縮み、
+   **3つ目が上の段へ上がって、2段が1段に組み変わった**ことだった。
+   押した人は「もう出さない」を押そうとしていて、**指の下で入れ替わる。**
+
+   ══ この見張りの考え方 ══
+   **一覧を持たない。** 「文字が変わるボタン」を名指しで並べると、
+   足した日に見張られない(CLAUDE.md)。だから **押して、確かめる。**
+
+     ①画面を描く → ②ボタンを1つ押す → ③文字が変わったか見る
+     ④変わったなら、**そのボタンの幅**と**まわりの物の場所**を比べる
+
+   **文字が変わらなかったものは、この決まりの相手ではない**ので飛ばす。
+   **画面ごと変わったもの**(次の問へ進む・シートが開く)も飛ばす ——
+   利用者が禁じたのは「値が変わったときに動くこと」である。
+
+   **押すたびに描き直す。** 続けて押すと状態が積み重なり、
+   何が原因で動いたのか分からなくなる(道が2つあるものは、
+   いまどちらを通ったかを見えるようにする・CLAUDE.md)。
+
+   **狭い画面で測る。** 折り返しが起きるのは、たいてい狭いほうである。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  /** どれだけ動いたら「動いた」と言うか(小数の丸めぶんは許す) */
+  const 許す = 0.6
+  const 動いた = []
+  let 押した数 = 0
+  let 変わった数 = 0
+
+  for (const [s, extra] of SCREENS) {
+    for (const w of [390, 320]) {
+      const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+      page.setDefaultTimeout(8000)
+      page.setDefaultNavigationTimeout(8000)
+      await page.route('**/rest/v1/**', (r) => r.fulfill({
+        status: 200, contentType: 'application/json', body: '[]',
+      }))
+      await page.route('**/auth/v1/**', (r) => r.fulfill({
+        status: 200, contentType: 'application/json', body: '{}',
+      }))
+      await page.route('**/functions/v1/**', (r) => r.fulfill({ status: 500, body: '{}' }))
+      const url = `http://localhost:${PORT}/__bar.html?screen=${s}${extra ? `&${extra}` : ''}`
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded' })
+        await page.waitForTimeout(600)
+        /** その画面に、押せるものがいくつあるか */
+        const 数 = await page.evaluate(() => (
+          [...document.querySelectorAll('button')]
+            .filter((b) => !b.disabled && b.getBoundingClientRect().width > 0).length))
+        for (let i = 0; i < 数; i += 1) {
+          /* **押すたびに描き直す**(状態を積み重ねない) */
+          if (i > 0) {
+            await page.goto(url, { waitUntil: 'domcontentloaded' })
+            await page.waitForTimeout(500)
+          }
+          const 結果 = await page.evaluate(async (n) => {
+            const 押せる = () => [...document.querySelectorAll('button')]
+              .filter((b) => !b.disabled && b.getBoundingClientRect().width > 0)
+            const b = 押せる()[n]
+            if (!b) return null
+            /* ★ **開け閉めするものは、この決まりの相手ではない。**
+                 利用者が禁じたのは「**値が変わったとき**に動くこと」で、
+                 出たり消えたりは別の話である(`.claude/rules/common.md`)。
+
+                 **名指しの一覧で外さない。** `aria-expanded` は
+                 **その札自身が「わたしは開け閉めします」と言っている**印で、
+                 markup に書いてある。名前で外すと、足した日に守られない */
+            if (b.hasAttribute('aria-expanded')) return { 画面が変わった: true }
+            /* **描かれている物だけを、場所ごと控える。**
+               浮いているもの(fixed / absolute)は流れの中にいないので数えない */
+            const 控え = () => {
+              const out = new Map()
+              for (const el of document.querySelectorAll('body *')) {
+                const st = window.getComputedStyle(el)
+                if (st.position === 'fixed' || st.position === 'absolute') continue
+                if (st.visibility === 'hidden' || st.display === 'none') continue
+                const r = el.getBoundingClientRect()
+                if (r.width < 1 || r.height < 1) continue
+                out.set(el, { x: r.left, y: r.top, w: r.width, h: r.height })
+              }
+              return out
+            }
+            const 名 = (el) => (el.className && typeof el.className === 'string'
+              ? el.className.split(/\s+/).slice(0, 2).join('.') : el.tagName.toLowerCase())
+            const 前の字 = (b.textContent || '').replace(/\s+/g, '')
+            const 前 = 控え()
+            const 前のb = 前.get(b)
+            const 前たけ = document.body.scrollHeight
+            b.click()
+            await new Promise((r) => setTimeout(r, 220))
+            /* **押したもの自身が消えたら、画面が変わったということ** */
+            if (!b.isConnected) return { 画面が変わった: true }
+            const 後の字 = (b.textContent || '').replace(/\s+/g, '')
+            if (後の字 === 前の字) return { 変わらない: true }
+            const 後 = 控え()
+            const 後たけ = document.body.scrollHeight
+            /* **増えた / 消えた物があるなら、画面が変わったということ**
+               (出たり消えたりは、この決まりの相手ではない) */
+            if (後.size !== 前.size) return { 画面が変わった: true, 字: `${前の字}→${後の字}` }
+            /* **数が同じでも、背が伸びたら画面が変わったということ**
+               (読み込み中は何も描かない部品があり、数だけでは分からない) */
+            if (Math.abs(後たけ - 前たけ) > 0.6) {
+              return { 画面が変わった: true, 字: `${前の字}→${後の字}` }
+            }
+            const ずれ = []
+            for (const [el, a] of 前) {
+              const c = 後.get(el)
+              if (!c) return { 画面が変わった: true, 字: `${前の字}→${後の字}` }
+              /* **押したもの自身の中は数えない。**
+                 中身が変わるのは当たり前で、字がまん中にそろい直すぶん
+                 必ず動く。**守りたいのは「その箱の大きさ」と
+                 「まわりの物の場所」**である(大きさは `幅の差` が見る) */
+              if (b.contains(el)) continue
+              const d = Math.max(Math.abs(a.x - c.x), Math.abs(a.y - c.y))
+              if (d > 0.6) ずれ.push(`${名(el)} が ${Math.round(d)}px`)
+            }
+            const 幅の差 = Math.abs((前のb?.w ?? 0) - (後.get(b)?.w ?? 0))
+            return {
+              字: `${前の字}→${後の字}`,
+              幅の差: Math.round(幅の差 * 10) / 10,
+              ずれ: ずれ.slice(0, 3),
+              ずれた数: ずれ.length,
+            }
+          }, i)
+          if (!結果 || 結果.画面が変わった) continue
+          押した数 += 1
+          if (結果.変わらない) continue
+          変わった数 += 1
+          if (結果.幅の差 > 許す || 結果.ずれた数 > 0) {
+            動いた.push(`${s}@${w}px 「${結果.字}」`
+              + (結果.幅の差 > 許す ? ` 幅が ${結果.幅の差}px 変わった` : '')
+              + (結果.ずれた数 ? ` / ${結果.ずれた数} 個が動いた(${結果.ずれ.join(' / ')})` : ''))
+          }
+        }
+      } catch (e) {
+        ng(`動かない … ${s}@${w}px を描けなかった`, e.message.split('\n')[0])
+      }
+      await page.close()
+    }
+  }
+
+  const 一覧 = [...new Set(動いた)]
+  if (!(変わった数 > 0)) {
+    /* **測る相手が居ることを、先に確かめる**(CLAUDE.md)——
+       1つも「文字が変わるボタン」を踏んでいなければ、
+       この見張りは何もしていないのと同じである */
+    ng('動かない … 文字が変わるボタンを1つも踏んでいない',
+      `押せたのは ${押した数} 個。見張りが素通りしている`)
+  } else if (一覧.length) {
+    ng(`動かない … 押したら動くところが ${一覧.length} か所ある`,
+      一覧.slice(0, 12).join('\n    '))
+  } else {
+    ok(`動かない … ${SCREENS.length} 画面 × 2幅で、`
+      + `文字が変わるボタン ${変わった数} 個を押しても、幅も場所も動かない`)
+  }
 }
 
 await browser.close()

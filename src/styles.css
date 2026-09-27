@@ -8566,7 +8566,7 @@ button.wbfilter-ctl { text-align: left; }
   /* 添えの言葉(「くり返し:」と、数のうしろの「段落 / 発言」)を落とす。
      **数と単位そのものは必ず見えている**(紙のプレーヤーと同じ作法) */
   .focus-mid .wide-text { display: none; }
-  .focus-mid .repeat-unit .repeat-unit-now { min-width: 0; }
+  /* `min-width: 3em` を消したので、打ち消しも要らない(第5.281節) */
 }
 
 /* ── 入るまで詰める段(`useFitRow` が付け外しする)──────────────
@@ -8929,9 +8929,11 @@ button.wbfilter-ctl { text-align: left; }
    そのぶんを先に取っておく。**言葉は削らない** —— 何の単位かが
    分からなくなる。狭い画面で落とすのは「くり返し」の側だけである。 */
 .repeat-unit { padding-left: 8px; padding-right: 8px; }
-.repeat-unit .repeat-unit-now {
-  display: inline-block; min-width: 3em; text-align: center;
-}
+/* **幅は `SteadyLabel` が取る**(第5.281節)。
+   ここには `min-width: 3em` という**決め打ち**が書いてあり、
+   しかも `.focus-mid` で `min-width: 0` と**打ち消されていた** ——
+   だから狭い帯では縮み、となりの物が 13px 動いていた(実測)。
+   いまは**起こりうる言葉そのもの**から幅が決まるので、数を書かない。 */
 /* **上の帯では「くり返し」を落とす**(2026-09 実測)。
    帯にはもともと9つ並んでいて、1440px でぎりぎり1行だった。
    そのまま足すと**折り返して2行になり、紙がそのぶん狭くなる**
@@ -9295,6 +9297,29 @@ button.wbfilter-ctl { text-align: left; }
   display: flex; align-items: center; justify-content: center;
   flex-wrap: wrap; gap: var(--sp-8);
 }
+
+/* ── **中身が変わっても、場所を動かさない札**(第5.281節・2026-09-27
+      実機・利用者の指定)────────────────────────────────
+
+     > 音声を「繰り返す」にすると文字数が増えた分表示が2段組になります。
+     > こういう仕様が二度とどこでも起こらないように改善してください。
+     > UI の配置が変化することをどの場所においても防いでください。
+
+   **起こりうる中身を、同じ場所に重ねて置く。**
+   1つの升目(`grid-area: 1 / 1`)に全部を入れるので、
+   **升目の幅は「いちばん長いもの」**になり、中身が変わっても動かない。
+
+   **数を書かない**(`min-width: 5em` のような決め打ちは、
+   言葉を変えた日に足りなくなる)。幅は**中身そのもの**から決まる。
+
+   `visibility: hidden` にするのは、**場所は取るが見せない**ため ——
+   `display: none` では幅を数えてもらえない。 */
+.steady {
+  display: inline-grid;
+  justify-items: center; align-items: center;
+}
+.steady > * { grid-area: 1 / 1; }
+.steady-keep { visibility: hidden; pointer-events: none; }
 
 /* ── 発行した直後の教材(2026-09 利用者の指定)────────────────────
      > 教材を発行した直後、発行した教材が画面上に来るように調整して

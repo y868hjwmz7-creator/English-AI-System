@@ -24,6 +24,10 @@
  *   **ここで数え直さない。**
  */
 import { RepeatIcon } from './Icons.jsx'
+/* **中身が変わっても、場所を動かさない**(第5.281節)。
+   しない(3) / 文(1) / 段落(2) / 全文(2)と、**言葉の長さがまちまち**なので、
+   そのままだとボタンが伸び縮みして、となりの物が動く */
+import SteadyLabel from './SteadyLabel.jsx'
 import { REPEAT_UNITS } from '../lib/wholeAudio.js'
 
 /** その単位の呼び名。**「段落 / 発言」だけが教材で変わる** */
@@ -63,7 +67,15 @@ export default function RepeatUnit({
       {/* **狭い画面では「くり返し」を落とす。**
           単位そのもの(文 / 段落 / 全文)は必ず見えている */}
       <span className="wide-text">くり返し:</span>
-      <span className="repeat-unit-now">{now}</span>
+      {/* ★ **起こりうる言葉ぶんの場所を、先に取っておく**(第5.281節)。
+             一覧は `REPEAT_UNITS` から組む —— **書き写さない**ので、
+             単位を足した日にも、ひとりでに広くなる。
+             (前は `min-width: 3em` という**決め打ち**で、
+              しかも `.focus-mid` で打ち消されていた。**数を書かない**) */}
+      <SteadyLabel className="repeat-unit-now"
+                   keep={REPEAT_UNITS.map((id) => repeatLabel(id, unit))}>
+        {now}
+      </SteadyLabel>
     </button>
   )
 }

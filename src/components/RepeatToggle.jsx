@@ -21,8 +21,19 @@
  *   (0.3秒に満たずに終わったら失敗とみなしてやめる)
  */
 import { RepeatIcon } from './Icons.jsx'
+/* **中身が変わっても、場所を動かさない**(第5.281節)——
+   「くり返す」(4文字)と「1回」(2文字)で幅が変わると、
+   折り返す行では**3つ目が上の段へ上がる**(実機で起きた) */
+import SteadyLabel from './SteadyLabel.jsx'
 /* **色は1か所で決める**(第5.242節)。押す前が白だと、押せるものに見えない */
 import { toneOn } from '../lib/btnTone.js'
+
+/**
+ * 出す言葉。**一覧はここ1つ**(`[1回, くり返す]` の順)。
+ * 書き写すと、片方だけ古くなる(CLAUDE.md)——
+ * **場所を取るのにも、出すのにも、この同じ一覧を使う。**
+ */
+const 文言 = ['1回', 'くり返す']
 
 export default function RepeatToggle({ on = false, onChange, className = '' }) {
   return (
@@ -33,7 +44,7 @@ export default function RepeatToggle({ on = false, onChange, className = '' }) {
               ? '止めるまでくり返します(押すと1回だけに戻ります)'
               : '1回だけ鳴らします(押すとくり返します)'}
             onClick={() => onChange?.(!on)}>
-      <RepeatIcon />{on ? 'くり返す' : '1回'}
+      <RepeatIcon /><SteadyLabel keep={文言}>{文言[on ? 1 : 0]}</SteadyLabel>
     </button>
   )
 }
