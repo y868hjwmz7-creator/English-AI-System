@@ -9672,12 +9672,44 @@ button.wbfilter-ctl { text-align: left; }
 .speech-flag.is-done { border-color: var(--ok); color: var(--ok); }
 
 /* ── 原稿を書くところ ───────────────────────────────── */
-.speech-edit > .field > textarea { min-height: 12rem; line-height: 1.8; }
+/* **畳みの中に入っても効くように、直接の子で見ない**(第5.301節)。
+   添削が済むと原稿は `<details>` の中に入るので、
+   `> .field >` のままでは**背が縮む**(測って気づいた)。
+   この箱の中に `textarea` はこれ1つだけである */
+.speech-edit textarea { min-height: 12rem; line-height: 1.8; }
 /* **いま何文字かを、いつも出す。** 上限に当たってから知らせない */
 .speech-count {
   margin: -6px 0 12px; font-size: var(--fs-12); color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
+/* ── **添削が済んだら、出すのは「直した本文」のほう**(第5.301節)──
+   2026-09-28 利用者の指定。
+
+     > 一度添削が済んだらこのグレーの部分はもう必要ないですよね。
+     > 本文として一本化したきれいな表示を用意し、
+     > 閉じたり開いたりできるようにすべきです
+
+   **`<details>` そのものに `display` を書かない** —— 畳んでも
+   中身が場所を取り続け、下の物と重なる(共通ルール・実測で出た)。
+   並べるのは中の入れ物の役目である。 */
+.speech-edit > .details-box > summary {
+  cursor: pointer;
+  font-size: var(--fs-14); font-weight: 600;
+}
+/* 札の中の数は、控えめに横へ。**数そのものは削らない**(状態だから) */
+.speech-edit > .details-box > summary > .field-hint {
+  margin-left: var(--sp-8); font-weight: 400;
+}
+/* **読ませる英文。** 紙のように行間を広く取る
+   (`.speech-edit > .field > textarea` と同じ 1.8) */
+.speech-body-text {
+  margin: var(--sp-10) 0 0;
+  line-height: 1.8; font-size: var(--fs-15);
+  /* **原稿の改行はそのまま出す。** `speechText()` は1本につないだ文なので
+     折り返しだけだが、長い語で横に溢れさせない */
+  overflow-wrap: anywhere;
+}
+
 /* **消す道は、いちばん下に。** 後戻りが利かない操作を、ふだんの操作と離す */
 .speech-danger { margin-top: var(--sp-12); }
 

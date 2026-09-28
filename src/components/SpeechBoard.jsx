@@ -46,7 +46,7 @@ import { reviewWriting } from '../lib/materials.js'
 import { createSpeech, deleteSpeech, loadSpeeches, saveSpeech, speechesSupported } from '../lib/speeches.js'
 import {
   MAX_SPEECH_CHARS, isBlankDraft, isReviewed, sortSpeeches, speechCostYen,
-  speechLevelOf, speechTitleOf, tooLongDraft,
+  speechLevelOf, speechText, speechTitleOf, tooLongDraft,
 } from '../lib/speechPractice.js'
 import {
   canAskReview, loadWritingTone, normalizeReview, saveWritingTone, toneBrief,
@@ -101,6 +101,11 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
 
   const open = rows.find((r) => r.id === openId) ?? null
   const reviewed = isReviewed(open)
+  /* **添削が済んだら、原稿は畳んでおく**(第5.301節・利用者の指定)。
+     直した本文のほうも畳んでおく —— **開けば読める**ので、
+     画面のいちばん上が原稿で埋まらない */
+  const [bodyOpen, setBodyOpen] = useState(false)
+  const [draftOpen, setDraftOpen] = useState(false)
 
   const reload = async (keep = null) => {
     const { data, error: e } = await loadSpeeches(learnerId)
@@ -245,6 +250,24 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
     )
   }
 
+  /* **原稿の欄は1つだけ作る。** 畳むときも、そのまま出すときも、これを置く ——
+     **書き写すと、片方だけ古くなる**(CLAUDE.md) */
+  const draftBox = open && (
+    <label className="field">
+      <span>
+        スピーチの原稿(英語)
+        <span className="field-hint">{MAX_SPEECH_CHARS} 文字まで</span>
+      </span>
+      <textarea lang="en" rows={10} value={open.draft ?? ''} disabled={busy}
+                placeholder={'Good morning, everyone. Thank you for making time today.\n'
+                  + 'I want to talk about ...'}
+                onChange={(e) => {
+                  patchRow(open.id, { draft: e.target.value })
+                  later(open.id, { draft: e.target.value })
+                }} />
+    </label>
+  )
+
   return (
     <div className="stack speechboard">
       <div className="card">
@@ -307,24 +330,59 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
                    }} />
           </label>
 
-          <label className="field">
-            <span>
-              スピーチの原稿(英語)
-              <span className="field-hint">
-                {MAX_SPEECH_CHARS} 文字まで
-              </span>
-            </span>
-            <textarea lang="en" rows={10} value={open.draft ?? ''} disabled={busy}
-                      placeholder={'Good morning, everyone. Thank you for making time today.\n'
-                        + 'I want to talk about ...'}
-                      onChange={(e) => {
-                        patchRow(open.id, { draft: e.target.value })
-                        later(open.id, { draft: e.target.value })
-                      }} />
-          </label>
-          <p className="speech-count">
-            {String(open.draft ?? '').trim().length.toLocaleString()} / {MAX_SPEECH_CHARS} 文字
-          </p>
+          {/* ── **添削が済んだら、出すのは「直した本文」のほう**(第5.301節)──
+               2026-09-28 利用者の指定。
+
+                 > 一度添削が済んだらこのグレーの部分はもう必要ないですよね。
+                 > 本文として一本化したきれいな表示を用意し、
+                 > 閉じたり開いたりできるようにすべきです
+
+               ・**一本化した文章は `speechText()` 1か所**。
+                 スピーチ練習の「文章をコピー」が渡すものと**同じ**である
+                 (数え方を2通り持たない・CLAUDE.md)
+               ・**原稿も消さない。** 「もう一度 添削してもらう」は
+                 原稿から作るので、**開けば直せる**ようにしておく
+                 (行き止まりを作らない)
+               ・`<details>` そのものに `display` を書かない ——
+                 **畳んでも中身が場所を取り続ける**(共通ルール) */}
+          {reviewed && (
+            <details className="details-box speech-body" open={bodyOpen}
+                     onToggle={(e) => setBodyOpen(e.currentTarget.open)}>
+              <summary>
+                直した本文
+                <span className="field-hint">
+                  {speechText(open).trim().length.toLocaleString()} 文字
+                </span>
+              </summary>
+              <p className="speech-body-text" lang="en">{speechText(open)}</p>
+            </details>
+          )}
+
+          {/* **原稿の欄。** 添削が済むまでは、これが中身そのものなので、そのまま出す。
+               済んだら畳んでおく —— **もう読む必要がない** */}
+          {reviewed ? (
+            <details className="details-box" open={draftOpen}
+                     onToggle={(e) => setDraftOpen(e.currentTarget.open)}>
+              <summary>
+                原稿を直す
+                <span className="field-hint">
+                  {String(open.draft ?? '').trim().length.toLocaleString()}
+                  {' / '}{MAX_SPEECH_CHARS} 文字
+                </span>
+              </summary>
+              {draftBox}
+            </details>
+          ) : (
+            <>
+              {draftBox}
+              <p className="speech-count">
+                {String(open.draft ?? '').trim().length.toLocaleString()}
+                {' / '}{MAX_SPEECH_CHARS} 文字
+              </p>
+            </>
+          )}
+          {/* **長すぎの知らせは、畳みの外に出す。** 中に入れると、
+              閉じているあいだ**押せないボタンの理由が見えなくなる** */}
           {tooLongDraft(open.draft) && (
             <p className="notice notice--error">
               長すぎます。{MAX_SPEECH_CHARS} 文字までにしてください
