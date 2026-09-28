@@ -103,6 +103,8 @@ import { loadShelfWordbook } from '../lib/shelfReviews.js'
 import { basicRows } from '../lib/basicsCourse.js'
 import { shelfLabel, shelfList, shelfOf } from '../data/shelves.js'
 import { startPrepare } from '../lib/prepareJob.js'
+/* **失敗の知らせを空にしない**(第5.295節) */
+import { failText } from '../lib/failText.js'
 
 /** 弱点を混ぜられる上限。4つ以上は、1つあたりの問数が足りなくなる */
 const MAX_TAGS = 3
@@ -1385,7 +1387,11 @@ export default function MaterialForm({
   /** 失敗の知らせを画面に出し、そこまで送る */
   const fail = (message) => {
     setGenerating(null)
-    setError(message)
+    /* **見出しだけで終わらせない**(第5.295節・利用者の指摘
+       「1、2回目はただの『作成できませんでした』…という表示でした」)。
+       箱は `作れませんでした。` + 中身 の2段なので、中身が空だと
+       **何が起きたのか誰にも分からない。** 判断は `failText()` 1か所 */
+    setError(failText(message))
     // 描画を待ってから寄せる。すぐ呼ぶと、まだ要素が無い。
     window.setTimeout(() => {
       errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })

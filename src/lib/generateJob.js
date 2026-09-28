@@ -32,6 +32,8 @@
  */
 
 import { useEffect, useState } from 'react'
+/* **失敗の理由を空にしない**(第5.295節) */
+import { failText } from './failText.js'
 
 /**
  * いまの仕事。無ければ `null`。
@@ -210,7 +212,10 @@ export function startJob({ title, total, run }) {
       emit()
     } catch (e) {
       if (job?.id !== id || job.cancelled) return
-      job = { ...job, state: 'error', error: e?.message ?? String(e) }
+      /* **理由を空にしない**(第5.295節)。`??` は空っぽの文字を
+         素通りさせるので、画面に「作れませんでした。」だけが残っていた。
+         判断は `failText()` 1か所(素の node で確かめられる) */
+      job = { ...job, state: 'error', error: failText(e) }
       emit()
     }
   })()

@@ -104,5 +104,68 @@ if (at < 0) {
   } else ok('断り … 記録にも `stop_reason` と分類が残る')
 }
 
-console.log(bad === 0 ? '\n✅ 教材を作る窓口の断りは、すべて意図どおりです' : `\n❌ ${bad} 件`)
+/* ══════════════════════════════════════════════════════════════════
+   **失敗の知らせを、空にしない**(第5.295節・2026-09-28 実機)
+
+     > 1、2回目はただの「作成できませんでした」だか「失敗しました」
+     > という表示でした
+
+   知らせの箱は `作れませんでした。` + 中身 の2段でできている。
+   中身が空だと**見出しだけ**が残り、何が起きたのか誰にも分からない。
+   `e?.message ?? String(e)` は **`??` が空っぽの文字を素通りさせる**ので、
+   `e.message` が `''` のとき、そのまま `''` が入っていた。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const { failText, FAIL_UNKNOWN } = await import('../src/lib/failText.js')
+
+  /* ── ① **空っぽは、ぜんぶ言葉に変わる** ──
+     **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+     ここでは `new Error('')`(実際に起きた形)である */
+  const 空 = [new Error(''), new Error('   '), '', '   ', undefined, null,
+    'undefined', 'null', {}, { message: '' }]
+  const 残り = 空.filter((v) => failText(v) !== FAIL_UNKNOWN)
+  if (残り.length) {
+    ng('失敗の知らせ … 空のまま画面へ出る形がある',
+      残り.map((v) => `${JSON.stringify(v) ?? String(v)} → "${failText(v)}"`).join('\n    '))
+  } else ok(`失敗の知らせ … ${空.length} とおりの空っぽが、ぜんぶ言葉になる`)
+
+  /* ── ② **「出る」と「出ない」の両方を見る** ──
+     何でも決まり文句に置き換える形に書き換えたら、
+     **本当の理由まで消える。** そちらも赤くする */
+  const 本物 = [[new Error('本当の理由'), '本当の理由'],
+    ['生成に失敗しました: 504', '生成に失敗しました: 504'],
+    ['  前後に空白  ', '前後に空白']]
+  const 消えた = 本物.filter(([v, want]) => failText(v) !== want)
+  if (消えた.length) {
+    ng('失敗の知らせ … 本当の理由まで置き換えている',
+      消えた.map(([v, want]) => `ほしい "${want}" / 出た "${failText(v)}"`).join('\n    '))
+  } else ok('失敗の知らせ … 理由があるときは、そのまま出す(消さない)')
+
+  /* ── ③ **決まり文句に、推測を書いていない** ──
+     「通信が切れた」「時間切れ」は**確かめていない**
+     (分かっていないことを、分かったように書かない・CLAUDE.md) */
+  if (/通信が切れ|時間切れ|タイムアウト|混雑/.test(FAIL_UNKNOWN)) {
+    ng('失敗の知らせ … 確かめていない原因を書いている', FAIL_UNKNOWN)
+  } else ok('失敗の知らせ … 決まり文句に、確かめていない原因を書いていない')
+
+  /* ── ④ **呼ぶ側が、本当に通っているか** ──
+     定義だけあって誰も呼ばなければ、何も起きない */
+  const 通る = [
+    ['仕事の記録', 'src/lib/generateJob.js', /error: failText\(e\)/],
+    ['教材を作る画面', 'src/components/MaterialForm.jsx', /setError\(failText\(message\)\)/],
+  ]
+  const 抜け = []
+  for (const [what, file, re] of 通る) {
+    const t = readFileSync(join(ROOT, file), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    if (!re.test(t)) 抜け.push(`${what}(${file})`)
+    /* **素通りさせる形が残っていないか** */
+    if (/\?\.message \?\? String\(/.test(t)) 抜け.push(`${what} … \`??\` の素通りが残っている`)
+  }
+  if (抜け.length) {
+    ng('失敗の知らせ … `failText()` を通っていない場所がある', 抜け.join('\n    '))
+  } else ok('失敗の知らせ … 記録する側も、画面に出す側も `failText()` 1か所を通る')
+}
+
+console.log(bad === 0 ? '\n✅ 教材を作る失敗の知らせは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
