@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   53行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   54行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -250,7 +250,5 @@ from (
   -- 消えているか**で見る。Supabase がそれを断るようになったため、
   -- 1行でも残っていると**ゲストが1人も消せない**
   union all select '0071 ゲストの消去から、ストレージの直接削除を外す(pending_matome.sql)',
-    exists (select 1 from pg_proc
-            where proname = 'erase_learner'
-              and pg_get_functiondef(oid) not like '%storage.objects%'), 53
+    coalesce((select public.erase_uses_storage_api()), false), 53
 ) t order by 順;

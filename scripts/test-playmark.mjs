@@ -6937,15 +6937,23 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      新しい移行にそろっている」が、`supabase/migrations/` の
      いちばん大きい番号と突き合わせている。
      **同じことをする見張りを2つ置かない**(CLAUDE.md) */
-  /* **0070 は、列を1つ足す**(`lesson_notes.learner_body`)。
-     表は 0032 からあるので、**表の有無で見ると貼る前でも
+  /* **0071 は、関数の中身が変わるだけ**(第5.300節)。
+     `erase_learner()` から「ストレージを直接消す」1行を外しただけなので、
+     **表も列も関数も増えない。** 表や列で見ると、**貼る前でも
      「もう入っています」**になる(いちばん悪い壊れ方・CLAUDE.md)。
-     だから**その列を名指しで読む**(0064 / 0068 と同じ作法)。
 
-     0064〜0069 のぶんは、まとめた1つと `check.sql` の側で
+     だから 0071 が**その判定そのものを関数にして**返し、印はそれに訊く。
+     0064〜0070 のぶんは、まとめた1つと `check.sql` の側で
      そのまま見張り続ける —— **消していない** */
-  ok(/table: 'lesson_notes'/.test(setup) && /column: 'learner_body'/.test(setup),
-    '0070 … 印は lesson_notes.learner_body の列そのもの(列だけ増える移行だから)')
+  ok(/rpc: 'erase_uses_storage_api'/.test(setup),
+    '0071 … 印は「ストレージを直接消していないか」を返す関数(中身だけ変わる移行だから)')
+  /* **判定を2か所に書いていないか。** `check.sql` も同じ関数に訊く ——
+     書き写すと、片方だけが古くなる(CLAUDE.md) */
+  ok(/erase_uses_storage_api\(\)/.test(readD('supabase/apply/check.sql')),
+    '0071 … `check.sql` も同じ関数に訊く(判定を2か所に書かない)')
+  ok(!/pg_get_functiondef[\s\S]{0,120}storage\.objects/
+    .test(readD('supabase/apply/check.sql')),
+    '0071 … `check.sql` が、判定を自分で書き写していない')
   ok(!/rpc: 'material_kinds'/.test(setup) && !/row: \{ column/.test(setup),
     '0069 / 0066 … 前の印(関数に訊く形・行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')

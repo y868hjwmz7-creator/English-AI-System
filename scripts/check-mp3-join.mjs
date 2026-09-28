@@ -483,10 +483,49 @@ function fakeMp3({
   const bare = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
 
+  /** その関数の中だけを取り出す。**またいで探すと、次の関数に当たる**
+      (実際に `downloadClips()` の `joinMp3(` を拾って空振りした) */
+  const 関数の中 = (src, name) => {
+    const at = src.indexOf(`function ${name}(`)
+    if (at < 0) return ''
+    const end = src.indexOf('\n}', at)
+    return end < 0 ? src.slice(at) : src.slice(at, end + 2)
+  }
+
   const dl = bare('../src/lib/downloadAudio.js')
-  if (!/=\s*materialClipPieces\(material\)/.test(dl)) {
+  /* **渡し方は変わりうる**(`=` でも `pieces:` でも) ——
+     見たいのは「**かけら**で集めているか」である(第5.300節で
+     教材とスピーチを1か所に寄せたとき、`=` だけを探していて空振りした) */
+  if (!/[=:]\s*materialClipPieces\(material\)/.test(dl)) {
     ng('ダウンロードが、かけらではなく段落まるごとで集めている')
   } else ok('ダウンロードは `materialClipPieces(material)` で集めている')
+
+  /* ── **スピーチも、同じ道を通っているか**(第5.300節)──────────
+     利用者の指定「ゲストのスピーチの添削、音声のダウンロードと
+     文章を一本化したもののコピペを可能にしてください」。
+
+     **新しい仕組みを作らない。** 教材と同じ `downloadClips()` を通す ——
+     道を2つ持つと、**片方だけ直して片方が古くなる**(CLAUDE.md) */
+  if (!/[=:]\s*speechClipPieces\(/.test(dl)) {
+    ng('スピーチのダウンロードが、かけらで集めていない')
+  } else if ((dl.match(/downloadClips\(\{/g) ?? []).length < 2) {
+    ng('スピーチのダウンロードが、教材と別の道を通っている',
+      '集めてつなぐところは1か所にする')
+  } else if (/joinMp3\(/.test(関数の中(dl, 'downloadSpeechAudio'))) {
+    ng('スピーチのダウンロードが、自分でつないでいる')
+  } else ok('スピーチのダウンロードも、教材と同じ `downloadClips()` を通る')
+
+  /* **並べるところも書き写していないか。** スピーチの並びは
+     `audioPlaylist.js` 1か所で、**分け方と間は教材と同じ道具**を使う */
+  const pl = bare('../src/lib/audioPlaylist.js')
+  const 自前 = !/speakChunks\(/.test(pl.slice(pl.indexOf('function speechClipPieces')))
+    || !/turnGapMs\(/.test(pl.slice(pl.indexOf('function speechClipPieces')))
+  if (!/export function speechClipPieces\(/.test(pl)) {
+    ng('スピーチの並びが `audioPlaylist.js` に無い')
+  } else if (自前) {
+    ng('スピーチの並びが、分け方か間(ま)を自前で持っている',
+      '`speakChunks` / `turnGapMs` を通すこと(数え方を2通り持たない)')
+  } else ok('スピーチの並びも、分け方と間は教材と同じ道具を通る')
 
   /* ── **鳴っているのと同じ1本を、先に探す**(2026-09 実機)─────────
    *
@@ -530,8 +569,12 @@ function fakeMp3({
   const hook = bare('../src/lib/useAudioDownload.js')
   if (/materialAudioClips\(/.test(hook)) {
     ng('段落まるごとの本数を出している(進み具合が実際と食い違う)')
-  } else if (!/materialClipPieces\(m\)\.length/.test(hook)) {
+  } else if (!/count = materialClipPieces\b/.test(hook)) {
+    /* **既定は教材のかけら**(第5.300節でスピーチにも使えるようにしたが、
+       何も渡さなければ、これまでどおりでなければならない) */
     ng('`materialClipPieces` で数えていない')
+  } else if (!/count\(m\)\.length/.test(hook)) {
+    ng('数えるところが1か所になっていない')
   } else if (!/total: pieces\(m\)/.test(hook)) {
     /* **ボタンの出し分けと進み具合を、別々に数えない** */
     ng('進み具合の本数を、別に数え直している')

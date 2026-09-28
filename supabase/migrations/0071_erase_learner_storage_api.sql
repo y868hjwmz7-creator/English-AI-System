@@ -34,6 +34,29 @@
 
 drop function if exists public.erase_learner(uuid);
 
+-- ────────────────────────────────────────────────────────────────
+-- **貼ったかどうかを、外から訊けるようにする**(第5.300節)
+--
+--   この移行は**表も列も関数も増やさない** —— `erase_learner()` の
+--   中身から1行を外すだけである。だから「表が在るか」では見分けられない。
+--   **貼る前でも「もう入っています」と出る**のは、CLAUDE.md が
+--   「いちばん悪い壊れ方」と呼んでいるものである。
+--
+--   **判定は、ここ1か所。** `supabase/apply/check.sql` も、
+--   アプリの「準備の状態」も、この関数に訊く
+--   (**数え方を2通り持たない**・CLAUDE.md)。
+--
+--   **読むだけ**なので、訊いても何も書き換わらない。
+-- ────────────────────────────────────────────────────────────────
+create or replace function public.erase_uses_storage_api()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from pg_proc
+     where proname = 'erase_learner'
+       and pg_get_functiondef(oid) not like '%storage.objects%'
+  );
+$$;
+
 create or replace function public.erase_learner(p_learner uuid)
 returns jsonb
 language plpgsql

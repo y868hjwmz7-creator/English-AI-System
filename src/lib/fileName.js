@@ -81,3 +81,19 @@ export function materialFileName(material, what, ext) {
   const 尾 = FILE_PARTS[what]
   return `${本体}${尾 ? `_${尾}` : ''}.${ext}`
 }
+
+/**
+ * スピーチを保存するときの名前(第5.300節)。
+ *
+ * **作り方は教材とまったく同じ**(日付が無ければ作った日を足す・
+ * 使えない字を落とす・80 字で切る)。
+ * **題名の決め方は呼ぶ側**(`speechTitleOf()`)—— ここは
+ * Supabase も何も引き連れないままにしておく(素の node で走らせられる)。
+ *
+ * @param title  題名(`speechTitleOf()` が作ったもの)
+ * @param madeAt 作った日(`created_at`)
+ * @param what   `'audio'` など
+ * @param ext    `'mp3'` など
+ */
+export const speechFileName = (title, madeAt, what, ext) =>
+  materialFileName({ title, created_at: madeAt }, what, ext)

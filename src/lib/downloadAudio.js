@@ -43,8 +43,10 @@ import { joinMp3 } from './mp3Join.js'
 /* **保存する名前は `fileName.js` 1か所**(第5.229節)。
    `audioFileName()` は `mp3Join.js` に残してあるが、**ここからは呼ばない** ——
    題名だけでは「日付が無いときに作った日を足す」ができない */
-import { materialFileName } from './fileName.js'
-import { materialAudioClips, materialClipPieces } from './audioPlaylist.js'
+import { materialFileName, speechFileName } from './fileName.js'
+import { materialAudioClips, materialClipPieces, speechClipPieces } from './audioPlaylist.js'
+/* **スピーチの題名の作り方は、あちら1か所**(書き写さない) */
+import { speechTitleOf } from './speechPractice.js'
 import { PREMIUM } from './voiceTier.js'
 
 /* 並べるところは `audioPlaylist.js` にある。
@@ -65,6 +67,56 @@ export { materialAudioClips, materialClipPieces }
  * @returns {{ok: boolean, total: number, missing: number, bytes: number, error?: string}}
  */
 export async function downloadMaterialAudio(material, onProgress = null) {
+  return downloadClips({
+    whole: materialAudioClips(material),
+    pieces: materialClipPieces(material),
+    name: materialFileName(material, 'audio', 'mp3'),
+  }, onProgress)
+}
+
+/**
+ * ============================================================================
+ * **スピーチ(添削ずみ)の音声を渡す**(第5.300節・2026-09-28 利用者の指定)
+ * ============================================================================
+ *
+ *   > ゲストのスピーチの添削、音声のダウンロードと
+ *   > 文章を一本化したもののコピペを可能にしてください
+ *
+ * **教材とまったく同じ道**を通る(下の `downloadClips`)——
+ * ①1本にまとまっていればそれをそのまま渡す ②無ければ集めてつなぐ。
+ * **新しい仕組みを1つも作っていない。**
+ *
+ * スピーチは1人が最後まで話すので、並びは `speechClipPieces()` 1つで足りる
+ * (教材のように「通しの並び」と「かけらの並び」を分けなくてよい ——
+ * 分けているのは**長い段落があるから**である)。
+ *
+ * **窓口は呼ばない = 1円もかからない。**
+ *
+ * @param speech 添削ずみのスピーチ(`review.sentences` と `voice_id` を見る)
+ * ============================================================================
+ */
+export async function downloadSpeechAudio(speech, onProgress = null) {
+  const texts = (speech?.review?.sentences ?? [])
+    .map((x) => String(x?.en ?? '').trim()).filter(Boolean)
+  const pieces = speechClipPieces(texts, speech?.voice_id || null)
+  return downloadClips({
+    /* **1本にまとめたものを探すときは、文そのもの**で探す ——
+       鳴らすとき(`speechWholeSlice`)が、かけらではなく
+       **文の並び**で指紋を作っているためである */
+    whole: texts.map((t) => ({ text: t, voiceId: speech?.voice_id || null, tier: PREMIUM })),
+    pieces,
+    name: speechFileName(speechTitleOf(speech), speech?.created_at, 'audio', 'mp3'),
+  }, onProgress)
+}
+
+/**
+ * 集めて、つないで、渡す。**教材もスピーチも、ここ1か所を通る。**
+ *
+ * @param whole  1本にまとまっているかを探すための並び
+ * @param pieces 1本が無いときに集めてつなぐ並び
+ * @param name   保存する名前
+ */
+async function downloadClips({ whole, pieces: list, name }, onProgress = null) {
   /* ── ① **鳴っているのと同じ1本**が置いてあれば、それをそのまま渡す ──
    *
    *   > 2度通しで再生しているのにこう表示される
@@ -78,7 +130,7 @@ export async function downloadMaterialAudio(material, onProgress = null) {
    *
    *   **つなぐ必要も無い。すでに1本である。**
    *   継ぎ目も無いので、②でつないだものより音がよい。 */
-  const clips = materialAudioClips(material)
+  const clips = whole ?? []
   if (clips.length >= 2 && clips[0].tier === PREMIUM) {
     onProgress?.({ done: 0, total: 1 })
     /* **作らない。置いてあるものだけを見る**(1円もかからない) */
@@ -94,7 +146,7 @@ export async function downloadMaterialAudio(material, onProgress = null) {
       } catch { /* 届かなければ、②へ落ちる(行き止まりを作らない) */ }
       if (bytes?.length) {
         onProgress?.({ done: 1, total: 1 })
-        saveFile(bytes, materialFileName(material, 'audio', 'mp3'))
+        saveFile(bytes, name)
         return { ok: true, total: 1, missing: 0, bytes: bytes.length, whole: true }
       }
     }
@@ -108,8 +160,7 @@ export async function downloadMaterialAudio(material, onProgress = null) {
      **鳴らすときとまったく同じ「かけら」で集める**(2026-09 実機)。
      段落まるごとの英文で探すと、貼った原稿(Speech練習)では
      その指紋の MP3 がどこにも無く、「◯本足りません」としか出なかった */
-  const list = materialClipPieces(material)
-  if (!list.length) return { ok: false, total: 0, missing: 0, bytes: 0, error: '本文がありません' }
+  if (!list?.length) return { ok: false, total: 0, missing: 0, bytes: 0, error: '本文がありません' }
 
   const parts = []
   let missing = 0
@@ -140,7 +191,7 @@ export async function downloadMaterialAudio(material, onProgress = null) {
   if (!joined.length) {
     return { ok: false, total: list.length, missing: list.length, bytes: 0 }
   }
-  saveFile(joined, materialFileName(material, 'audio', 'mp3'))
+  saveFile(joined, name)
   return { ok: true, total: list.length, missing: 0, bytes: joined.length }
 }
 

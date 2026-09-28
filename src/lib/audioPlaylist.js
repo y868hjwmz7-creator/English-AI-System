@@ -36,7 +36,7 @@
 import { castClipSpeakers, voiceFor } from './voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { exerciseType, isPassageSection } from '../data/exerciseTypes.js'
-import { voiceTierFor } from './voiceTier.js'
+import { PREMIUM, voiceTierFor } from './voiceTier.js'
 import { turnGapMs } from './turnGap.js'
 import { speakChunks } from './speakChunks.js'
 
@@ -337,5 +337,53 @@ export function materialClipPieces(material) {
       out.push({ ...p, gapMs: i === pieces.length - 1 ? clip.gapMs : PIECE_GAP_MS })
     })
   }
+  return out
+}
+
+/**
+ * ============================================================================
+ * **スピーチ(添削ずみ)の音声を、順に並べる**(第5.300節・2026-09-28 利用者の指定)
+ * ============================================================================
+ *
+ *   > ゲストのスピーチの添削、音声のダウンロードと
+ *   > 文章を一本化したもののコピペを可能にしてください
+ *
+ * 【教材の並べ方を、書き写さない】
+ *   スピーチは**1人が最後まで話しきる**ので、話者の割り当ても
+ *   段の判定も要らない —— 声は1つ、段は必ず `PREMIUM` である
+ *   (`SpeechPractice` が `tier={PREMIUM}` で鳴らしているのと同じ)。
+ *   ただし**分け方と間(ま)の決め方は、教材とまったく同じ道具**を通す
+ *   (`speakChunks` / `turnGapMs` / `PIECE_GAP_MS`)。
+ *   **数え方を2通り持つと、別の場所の MP3 を探して
+ *   「足りません」と言うことになる**(CLAUDE.md)。
+ *
+ * 【`sameVoice` は必ず true】
+ *   同じ人が続けて話すので、受け答えの規則(間を詰める)は当てない。
+ *
+ * @param {string[]} texts   直した英文を、出てくる順に
+ * @param {string}   voiceId その人の声
+ * @returns {Array<{text, voiceId, tier, gapMs}>} `gapMs` は**そのあとの間**
+ * ============================================================================
+ */
+export function speechClipPieces(texts, voiceId) {
+  const list = (texts ?? []).map((t) => String(t ?? '').trim()).filter(Boolean)
+  const out = []
+  list.forEach((text, i) => {
+    const next = list[i + 1]
+    const gapMs = next ? turnGapMs(text, next, { sameVoice: true }) : 0
+    const pieces = speakChunks(text)
+      .map((p) => String(p.text ?? '').trim())
+      .filter(Boolean)
+    if (!pieces.length) return
+    pieces.forEach((t, k) => {
+      out.push({
+        text: t,
+        voiceId,
+        tier: PREMIUM,
+        /* **文の間は、最後のかけらのうしろにだけ置く**(教材と同じ) */
+        gapMs: k === pieces.length - 1 ? gapMs : PIECE_GAP_MS,
+      })
+    })
+  })
   return out
 }

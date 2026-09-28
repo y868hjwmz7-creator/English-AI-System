@@ -30,13 +30,18 @@
  * @param done `useAudioDownload()` の `done`(まだなら null)
  * @param materialId いま出している教材。**別の教材の知らせを出さない**
  * @param trainer トレーナーの画面か(足りないときの逃げ道が1つ増える)
+ * @param speech スピーチ練習の画面か(第5.300節)。
+ *   あちらには「大きく表示する」も「読み上げ音声を作り直す」も無いので、
+ *   **そこに無いボタンを探させない** —— 押すのは「全体を聞く」だけである
  */
 /* **押す相手の名前は `wholePlay.js` 1か所**(第5.290節)。
    ここに文字を書き写すと、ボタンの名前を変えた日に
    **もう無いボタンを押してくださいと案内する**ことになる */
 import { wholePlayText } from '../lib/wholePlay.js'
 
-export default function AudioDownloadNote({ done, materialId, trainer = false }) {
+export default function AudioDownloadNote({
+  done, materialId, trainer = false, speech = false,
+}) {
   if (!done || done.id !== materialId) return null
 
   return (
@@ -57,12 +62,17 @@ export default function AudioDownloadNote({ done, materialId, trainer = false })
                   ここに書き写していたので、ボタンを「全体を聞く」に
                   変えたとき、**もう無いボタンを押してくださいと案内する**
                   形になりかけた(呼び名を2か所に書かない) */}
-              {trainer
-                ? <>先に「セッションで使う(大きく表示)」で
-                    <strong>{wholePlayText()}</strong> を通して聴くか、
-                    「読み上げ音声を作り直す」で作ってから、もう一度押してください。</>
-                : <>先に「大きく表示する」で <strong>{wholePlayText()}</strong> を
-                    通して聴いてから、もう一度押してください。</>}</>
+              {/* **できない操作を案内しない。** スピーチの画面には
+                  「大きく表示する」も「作り直す」も無い(第5.300節) */}
+              {speech
+                ? <>先に <strong>{wholePlayText()}</strong> を通して聴いてから、
+                    もう一度押してください。</>
+                : trainer
+                  ? <>先に「セッションで使う(大きく表示)」で
+                      <strong>{wholePlayText()}</strong> を通して聴くか、
+                      「読み上げ音声を作り直す」で作ってから、もう一度押してください。</>
+                  : <>先に「大きく表示する」で <strong>{wholePlayText()}</strong> を
+                      通して聴いてから、もう一度押してください。</>}</>
           : <>音声をまとめられませんでした。{done.error}</>}
     </p>
   )

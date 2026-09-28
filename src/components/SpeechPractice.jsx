@@ -35,9 +35,17 @@
  */
 import { useEffect, useState } from 'react'
 import {
-  speechLevelOf, speechLines, speechParts, speechPhrases, speechWholeSlice, speechWordList,
+  speechLevelOf, speechLines, speechParts, speechPhrases, speechText,
+  speechWholeSlice, speechWordList,
 } from '../lib/speechPractice.js'
 import useBodyAudio from '../lib/useBodyAudio.js'
+/* **音声のダウンロードと、文章のコピー**(第5.300節・利用者の指定)。
+   押したあとの段取りも知らせの文言も、**教材とまったく同じ1か所**を使う
+   —— 書き写すと、直したときに片方だけ古くなる(CLAUDE.md) */
+import { useAudioDownload } from '../lib/useAudioDownload.js'
+import { downloadSpeechAudio } from '../lib/downloadAudio.js'
+import { speechClipPieces } from '../lib/audioPlaylist.js'
+import AudioDownloadNote from './AudioDownloadNote.jsx'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import useWordStatuses, { markIn } from '../lib/useWordStatuses.js'
 import { lookupWord, normWord, setWordStatus } from '../lib/vocab.js'
@@ -48,10 +56,17 @@ import { wholePlayText } from '../lib/wholePlay.js'
 import { phraseKind, seenSentenceFor } from '../lib/writingReview.js'
 import EnglishText from './EnglishText.jsx'
 import FocusFrame from './FocusFrame.jsx'
-import { FocusIcon, MicIcon, PlusIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
+import {
+  DownloadIcon, FileIcon, FocusIcon, MicIcon, PlusIcon, SpeakerIcon, StopIcon,
+} from './Icons.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import SpeakButton from './SpeakButton.jsx'
+/* **押しても、まわりの物が動かない**(第5.281節) —— 文字数が変わるので要る */
+import SteadyLabel from './SteadyLabel.jsx'
 import Stepper from './Stepper.jsx'
+
+/** コピーのボタンの言葉。**出すのにも、場所を取るのにも、この同じ一覧** */
+const コピーの文言 = ['文章をコピー', 'コピーしました']
 
 export default function SpeechPractice({ speech, learnerId = null, level = null }) {
   const [rateId, setRateId] = useState(loadRateId)
@@ -66,6 +81,16 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
      鳴っているか / 用意しています… / 止めた場所からの再開は、
      ぜんぶあちらが持っている。**書き写さない** */
   const audio = useBodyAudio()
+  /* **数え方も落とし方も、スピーチのものを渡すだけ。**
+     状態・進み具合・文言は教材と同じ道具が持っている */
+  const dl = useAudioDownload({
+    count: (sp) => speechClipPieces(
+      (sp?.review?.sentences ?? []).map((x) => x?.en), sp?.voice_id || null,
+    ),
+    download: downloadSpeechAudio,
+  })
+  /** 一本化した文章をコピーしたか。**成功と失敗を同じ見た目で終わらせない** */
+  const [copied, setCopied] = useState(null)
 
   const parts = speechParts(speech)
   const phrases = speechPhrases(speech)
@@ -211,7 +236,44 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
                 onClick={() => setFocusAt(audio.now ?? audio.at ?? 0)}>
           <FocusIcon />集中モード
         </button>
+        {/* **文章を一本化したもののコピー**(第5.300節・利用者の指定)。
+            出すのは `speechText()` —— **画面に出ている英文をつないだもの**で、
+            作り方は `speechPractice.js` 1か所である(書き写さない) */}
+        <button type="button" className="btn btn--small btn--ghost speech-copy"
+                onClick={async () => {
+                  const text = speechText(speech)
+                  try {
+                    await navigator.clipboard.writeText(text)
+                    setCopied('ok')
+                  } catch {
+                    /* 断られた。**行き止まりにしない** ——
+                       画面の英文はそのまま選んで取れる */
+                    setCopied('ng')
+                  }
+                }}>
+          <FileIcon />
+          <SteadyLabel keep={コピーの文言}>
+            {コピーの文言[copied === 'ok' ? 1 : 0]}
+          </SteadyLabel>
+        </button>
+        {/* **音声のダウンロード**(第5.300節)。
+            集めるのも文言も、教材と同じ1か所を通る。
+            **窓口は呼ばないので、1円もかからない** */}
+        {dl.pieces(speech) > 0 && (
+          <button type="button" className="btn btn--small btn--ghost speech-dl"
+                  disabled={!!dl.busy} onClick={() => dl.start(speech)}>
+            <DownloadIcon />
+            <SteadyLabel keep={dl.labelKeep(speech)}>{dl.label(speech)}</SteadyLabel>
+          </button>
+        )}
       </div>
+      {/* **知らせは、押した場所のすぐ下**(行の中に入れると横に並ぶ) */}
+      <AudioDownloadNote done={dl.done} materialId={speech.id} speech />
+      {copied === 'ng' && (
+        <p className="notice notice--warn">
+          コピーできませんでした。英文をなぞって選んでください。
+        </p>
+      )}
 
       <ol className="speech-sentences">
         {sentences.map((s, i) => (

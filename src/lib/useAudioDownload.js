@@ -37,20 +37,49 @@ import { downloadMaterialAudio, materialClipPieces } from './downloadAudio.js'
  *   start: (m: object) => Promise<void>,
  * }}
  */
-export function useAudioDownload() {
+/**
+ * **スピーチでも、この1つを使う**(第5.300節・2026-09-28 利用者の指定)。
+ *
+ *   > ゲストのスピーチの添削、音声のダウンロードと
+ *   > 文章を一本化したもののコピペを可能にしてください
+ *
+ * 状態も進み具合も文言も**まったく同じ**なので、
+ * 書き写さずに**数え方と落とし方だけ**を差し替える
+ * (**同じものを2か所に書き写さない**・CLAUDE.md)。
+ * 何も渡さなければ、これまでどおり教材のふるまいである。
+ *
+ * @param count    何本あるか(既定: 教材のかけら)
+ * @param download 落とす(既定: 教材)
+ */
+/** ボタンの言葉。**2か所に書き写さない**(`label` も `labelKeep` もここから) */
+const 待っている = '音声ダウンロード'
+const 集めている = (done, total) => `集めています… ${done} / ${total}`
+
+export function useAudioDownload({
+  count = materialClipPieces,
+  download = downloadMaterialAudio,
+} = {}) {
   const [busy, setBusy] = useState(null)
   const [done, setDone] = useState(null)
 
-  /** その教材に、集められる音声が何本あるか(0 ならボタンごと出さない) */
-  const pieces = (m) => materialClipPieces(m).length
+  /** それに、集められる音声が何本あるか(0 ならボタンごと出さない) */
+  const pieces = (m) => count(m).length
 
   /**
    * ボタンの文言。**進み具合は、必ず数で出す**(CLAUDE.md) ——
    * 14 本を集めるあいだ、名前のままでは止まって見える。
    */
-  const label = (m) => (busy?.id === m?.id
-    ? `集めています… ${busy.done} / ${busy.total}`
-    : '音声ダウンロード')
+  const label = (m) => (busy?.id === m?.id ? 集めている(busy.done, busy.total) : 待っている)
+
+  /**
+   * **いちばん広くなった形**(第5.300節)。`SteadyLabel` に渡すと、
+   * 押しても**ボタンの大きさも、まわりの物の場所も動かない**
+   * (共通ルール「押しても、まわりの物が動かない」)。
+   *
+   * **言葉はここ1か所。** 呼ぶ側に書き写すと、言い方を変えた日に
+   * **取っておく幅だけが古くなる**(それでは何も守らない)。
+   */
+  const labelKeep = (m) => [待っている, 集めている(pieces(m), pieces(m))]
 
   /**
    * **3つ並ぶ行のための、短い言い方**(2026-09 利用者の指定)。
@@ -80,7 +109,7 @@ export function useAudioDownload() {
     setBusy({ id: m.id, done: 0, total: pieces(m) })
     let r
     try {
-      r = await downloadMaterialAudio(m, ({ done: d, total }) => {
+      r = await download(m, ({ done: d, total }) => {
         setBusy({ id: m.id, done: d, total })
       })
     } catch (e) {
@@ -90,5 +119,5 @@ export function useAudioDownload() {
     setDone({ id: m.id, ...r })
   }
 
-  return { busy, done, pieces, label, short, start }
+  return { busy, done, pieces, label, labelKeep, short, start }
 }
