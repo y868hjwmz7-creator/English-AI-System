@@ -195,6 +195,58 @@ emit_section という道具だけを使って返すこと。文章での説明�
 const MODEL = 'claude-sonnet-5'
 
 /**
+ * ============================================================================
+ * **断られたときは、断った理由をそのまま出す**(第5.294節・2026-09-28 実機)
+ *
+ *   > 何が起きていますか？ 文型トレーニングが3回連続で作れませんでした
+ *
+ * ── 何が起きていたか ────────────────────────────────────────
+ *
+ *   画面にはこう出ていた。
+ *
+ *     作れませんでした。内容が安全上の理由で断られました。
+ *     弱点の指定を見直してください。
+ *
+ *   **「弱点の指定」が原因だとは、誰も確かめていなかった。**
+ *   こちらが勝手に決めつけて、利用者にそう伝えていた
+ *   (**分かっていないことを、分かったように書かない**・CLAUDE.md)。
+ *
+ * ── 返ってきているのに、捨てていた ──────────────────────────
+ *
+ *   断りは HTTP 200 で返り、`stop_reason: 'refusal'` に加えて
+ *   **`stop_details` が付いてくる**(`category` と `explanation`)。
+ *   `category` は開いた一覧で、`cyber` / `bio` / `reasoning_extraction` /
+ *   `frontier_llm` などが入る。**それを1文字も読まずに捨てていた。**
+ *
+ *   **もらえる正解を捨てない**(CLAUDE.md)。そのまま出す。
+ *
+ * ── 5か所に同じ1行が書き写してあった ────────────────────────
+ *
+ *   本文 / カタマリの訳 / 文法解説 / 添削 / 演習の5つが、どれも
+ *   `{ error: '内容が安全上の理由で断られました。' }` を返していた。
+ *   **断りの文は、ここ1か所**にする(呼び名を2か所に書かない)。
+ *
+ * @param hint その場でできること(演習だけ「1つずつ外して確かめる」を添える)
+ * ============================================================================
+ */
+function refusalNote(response: { stop_reason?: string | null }, hint = '') {
+  const d = (response as {
+    stop_details?: { category?: string | null; explanation?: string | null }
+  }).stop_details
+  const cat = String(d?.category ?? '').trim()
+  const why = String(d?.explanation ?? '').trim()
+  /* **理由が返らないこともある**(`category` は `null` になりうる)。
+     そのときは「返ってこなかった」と書く —— **黙って消さない** */
+  const inside = [cat && `分類: ${cat}`, why].filter(Boolean).join(' / ')
+  return {
+    error: '内容が安全上の理由で断られました。'
+      + (inside ? `(${inside})` : '(理由は返ってきませんでした)')
+      + (hint ? ` ${hint}` : ''),
+    detail: `stop_reason: refusal / category: ${cat || 'なし'} / ${why || '説明なし'}`,
+  }
+}
+
+/**
  * **意味は、その語句そのものの意味に限る**(第5.284節・2026-09-27)。
  *
  * 第5.272節で**単語帳の意味**(`lookup-word`)に入れた決まりを、
@@ -991,7 +1043,8 @@ async function makeChunkJa(apiKey: string, body: Record<string, unknown>) {
   const response = await stream.finalMessage()
 
   if (response.stop_reason === 'refusal') {
-    return { error: '内容が安全上の理由で断られました。' }
+    /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
+    return refusalNote(response)
   }
   if (response.stop_reason === 'max_tokens') {
     return { error: '本文が長すぎて途中で切れました。段落を分けてお試しください。' }
@@ -1225,7 +1278,8 @@ async function makeGrammar(apiKey: string, body: Record<string, unknown>) {
   const response = await stream.finalMessage()
 
   if (response.stop_reason === 'refusal') {
-    return { error: '内容が安全上の理由で断られました。' }
+    /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
+    return refusalNote(response)
   }
   if (response.stop_reason === 'max_tokens') {
     return { error: '本文が長すぎて途中で切れました。段落を分けてお試しください。' }
@@ -1441,7 +1495,8 @@ async function makeShelfWords(apiKey: string, body: Record<string, unknown>) {
   const response = await stream.finalMessage()
 
   if (response.stop_reason === 'refusal') {
-    return { error: '内容が安全上の理由で断られました。' }
+    /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
+    return refusalNote(response)
   }
   if (response.stop_reason === 'max_tokens') {
     return { error: '返しが長すぎて途中で切れました。件数を減らしてお試しください。' }
@@ -1680,7 +1735,8 @@ async function reviewWriting(apiKey: string, body: Record<string, unknown>) {
   const response = await stream.finalMessage()
 
   if (response.stop_reason === 'refusal') {
-    return { error: '内容が安全上の理由で断られました。' }
+    /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
+    return refusalNote(response)
   }
   if (response.stop_reason === 'max_tokens') {
     return { error: '答えが長すぎて途中で切れました。短く分けてお試しください。' }
@@ -2195,7 +2251,13 @@ Deno.serve(async (req) => {
     const response = await stream.finalMessage()
 
     if (response.stop_reason === 'refusal') {
-      return { error: '内容が安全上の理由で断られました。弱点の指定を見直してください。' }
+      /* **断りの文は `refusalNote()` 1か所**(第5.294節)。
+         **「弱点が原因だ」と決めつけない** —— 何が引っかかったのかは
+         返ってきた `category` に書いてある。こちらから言えるのは
+         **切り分け方**だけである */
+      return refusalNote(response,
+        '弱点・業種・場面・「細かい指定」を1つずつ外して、'
+        + 'どれで通るようになるかを確かめてください。')
     }
     // **途中で切られた場合は、必ずここで止める。**
     // 切られると、道具に渡す JSON が途中までしか届かない。SDK は読める
