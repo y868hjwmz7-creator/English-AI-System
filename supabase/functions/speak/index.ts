@@ -149,8 +149,15 @@ const CLIP_REV = '1'
  *   利用者が Azure の `RyanMultilingualNeural` を好まないので、
  *   アメリカの男性を Google(`Chirp3-HD-Charon`)へ移す。
  *
- *   **イギリスの男性は Azure のまま**(言われた場所だけを直す)。
- *   そのぶん Azure の無料枠も残る。
+ *   **その翌日、イギリスの男性も Google にした**(第5.296節・利用者の指定)。
+ *
+ *     > イギリスの男性もgoogleにしてください。(中略)
+ *     > 全ての国籍において同じ仕様にしてください
+ *
+ *   `baseOf()` は **us / ca 以外をぜんぶ `uk-` に寄せる**ので、
+ *   これで**どの訛りでも、標準の段は Google** になった。
+ *   **Azure の無料枠(毎月50万文字)は、もう使わない。**
+ *   そのぶん Google の 100 万文字に寄る —— 超えたら 100 万文字あたり $30。
  *
  * 【**CLIP_REV は進めない**】
  *
@@ -177,7 +184,10 @@ const SPEAKER_PROVIDER: Record<string, 'google' | 'azure'> = {
      Google の `Chirp3-HD-Charon` に移した。戻すならここを 'azure' に */
   'us-male': 'google',
   'uk-female': 'google',
-  'uk-male': 'azure',
+  /* **イギリスの男性も Google へ**(第5.296節・利用者の指定
+     「全ての国籍において同じ仕様にしてください」)。
+     これで4人とも Google になり、**どの訛りでも同じ会社**が読む */
+  'uk-male': 'google',
 }
 
 /**

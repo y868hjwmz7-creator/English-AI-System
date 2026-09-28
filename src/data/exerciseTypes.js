@@ -760,6 +760,18 @@ export const noteIsAnswer = (typeId) => {
 export const answerHasAudio = (typeId) => exerciseType(typeId)?.answerLang === 'en'
 
 /**
+ * **その演習に、読み上げが付くか**(第5.296節)。
+ *
+ * 判断は **`audioFrom` 1か所**である(`audioTextOf()` と同じ元)。
+ * `null` なのは**誤り訂正と穴埋め** —— 誤った英文をお手本として
+ * 聞かせられないので、鳴らすものが無い。
+ *
+ * **「音があるページ」を数えるときは、必ずこれを通す。**
+ * 通さないと、**1本も鳴らないページを「◯◯で読みます」と数えて**しまう。
+ */
+export const hasSpokenAudio = (typeId) => !!exerciseType(typeId)?.audioFrom
+
+/**
  * ============================================================================
  * **その項目に入っている、英語の文字ぜんぶ**(第5.289節)
  *

@@ -713,6 +713,36 @@ export const voiceSettingsOf = (id) => ({
 /** 標準の段(Google / Azure)がそのまま持っている声 */
 export const BASE_VOICES = ['us-female', 'us-male', 'uk-female', 'uk-male']
 
+/**
+ * **その代役を、どの会社が読むか**(第5.296節・2026-09-28 利用者の指定)。
+ *
+ *   > 選択画面には名前、性別と(Google)の評価を入れてください。
+ *   > そうでないとややこしいです。全ての国籍において同じ仕様にして
+ *
+ * 【なぜ画面にも要るのか】
+ *   会社を決めているのは**窓口の `SPEAKER_PROVIDER`** である。
+ *   ところが画面にも出す必要が出た(どの会社が読むのかを見せる)ので、
+ *   **2か所に同じ表を持つことになった。**
+ *
+ *   **必ず片方だけ古くなる**(CLAUDE.md)。そこで
+ *   **`npm run test:voice` が、窓口の表とこの表を1行ずつ突き合わせる。**
+ *   片方を変えたら、もう片方を変えるまで赤いままになる
+ *   (`CLIP_REV` を窓口と画面でそろえるのと、まったく同じ作法)。
+ *
+ * 【値は、画面にそのまま出す文字である】
+ *   `'google'` ではなく **`'Google'`** と書く ——
+ *   画面に出す言葉を、出すところで作り直さない。
+ */
+export const BASE_PROVIDER = {
+  'us-female': 'Google',
+  'us-male': 'Google',
+  'uk-female': 'Google',
+  'uk-male': 'Google',
+}
+
+/** その訛り・性別を、どの会社が読むか(画面に出す名前) */
+export const providerOf = (accent, gender) => BASE_PROVIDER[baseOf(accent, gender)] ?? ''
+
 export const DEFAULT_BASE = 'us-female'
 
 /** 訛りと性別から、標準の段での代役を決める */

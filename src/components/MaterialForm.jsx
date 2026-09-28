@@ -62,8 +62,11 @@ import {
 import {
   CLIP_ACCENTS, DEFAULT_ACCENT, DEFAULT_READ_STYLE, MIN_MEETING_SPEAKERS,
   READ_STYLES, findVoice, pickVoices, readStyleHint, speakerCountsFor, styledVoiceId,
-  voiceCountFor, voiceFirstGenderFor, voicePurposeFor, voicesOfAccent,
+  voiceCountFor, voiceFirstGenderFor, voicePurposeFor, voicesOfAccent, providerOf,
 } from '../data/clipVoices.js'
+/* **どのページを、えらんだ声 / 代役 のどちらが読むか**(第5.296節)。
+   判断は `voicePlan.js` 1か所(素の node で確かめられる) */
+import { voicePlanLine } from '../lib/voicePlan.js'
 /* **出来上がった名前に、声の並びを合わせる**(2026-09 利用者の指摘
      「男の役に女性の声、女性の役に男の声がアサインされることがほとんど」)。
    窓口へ性別を渡してはいたが、**そのあと一度も確かめていなかった。**
@@ -2076,7 +2079,28 @@ export default function MaterialForm({
 
           {voicePool.length > 0 && Array.from({ length: voiceCount }, (unused, i) => (
             <label className="field" key={i}>
-              <span>{voiceCount > 1 ? `話す人 ${i + 1}` : '話す人'}</span>
+              <span>
+                {voiceCount > 1 ? `話す人 ${i + 1}` : '話す人'}
+                {/* ── **どこで、その声が鳴るのか**(第5.296節・利用者の指定
+                      「選択画面には名前、性別と(Google)の…そうでないと
+                       ややこしいです」)──────────────────────────
+
+                    欄に並ぶのは **ElevenLabs の声**だが、**その声で読む
+                    ページと、読まないページがある。** 名前と性別だけでは
+                    **どこで鳴るのか分からない。**
+
+                    **説明の文ではなく「いまの状態」である**(CLAUDE.md)——
+                    いま選んでいる種類と弱点で、どちらがどのページを読むか。
+                    `tip` を付けない(説明を消している人にも必ず出す)。
+                    「声の出し方」の `field-hint` と同じ作法である */}
+                {i === 0 && (
+                  <span className="field-hint">
+                    {voicePlanLine(kind, tagIds,
+                      providerOf(accent, findVoice(cast[0])?.gender ?? 'female'),
+                      findVoice(cast[0])?.gender ?? 'female')}
+                  </span>
+                )}
+              </span>
               <select
                 value={picked[i] ?? ''}
                 onChange={(e) => setPicked((list) => {
@@ -2086,10 +2110,14 @@ export default function MaterialForm({
                 })}
               >
                 <option value="">おまかせ</option>
+                {/* **名前・性別・どこの声か**(第5.296節)。
+                    並んでいるのは ElevenLabs の声なので、そう書く ——
+                    **代役(Google)の話は、上の1行が受け持つ。**
+                    会社の名前を**ここで作り直さない**(呼び名を2か所に書かない) */}
                 {voicePool.map((v) => (
                   <option key={v.id} value={v.id}
                           disabled={picked.some((x, j) => x === v.id && j !== i)}>
-                    {v.label}({v.gender === 'male' ? '男性' : '女性'})
+                    {v.label}({v.gender === 'male' ? '男性' : '女性'}・ElevenLabs)
                   </option>
                 ))}
               </select>

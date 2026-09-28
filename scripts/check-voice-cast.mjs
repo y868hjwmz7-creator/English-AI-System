@@ -1610,7 +1610,8 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
    **こちらからは窓口を1度も動かせない**ので、机の上で突き合わせる。
    ══════════════════════════════════════════════════════════════════ */
 {
-  const { BASE_VOICES } = await import('../src/data/clipVoices.js')
+  const { BASE_VOICES, BASE_PROVIDER, providerOf } =
+    await import('../src/data/clipVoices.js')
   const ts = readFileSync(new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8')
 
   /** 窓口の表を1つ読む。**名前で探す**(行の順番に頼らない) */
@@ -1663,7 +1664,75 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
     if (欠け.length) {
       ng('標準の段 … アメリカの男女がそろっていない', 欠け.join(' / '))
     } else ok('標準の段 … アメリカは男女とも鳴らせる')
+
+    /* ── ④ **画面に出す会社の名前が、窓口とそろっているか**(第5.296節)──
+       会社を決めているのは窓口だが、**画面にも出すことになった**ので、
+       同じ表が2か所にある。**必ず片方だけ古くなる**(CLAUDE.md)。
+       `CLIP_REV` を窓口と画面でそろえるのと、まったく同じ作法で見張る */
+    const ずれ = Object.entries(会社)
+      .filter(([who, どこ]) => (BASE_PROVIDER[who] ?? '').toLowerCase() !== どこ)
+      .map(([who, どこ]) => `${who} … 窓口 ${どこ} / 画面 ${BASE_PROVIDER[who] ?? '(無し)'}`)
+    if (ずれ.length) {
+      ng('標準の段 … 窓口と画面で、会社の表が食い違っている', ずれ.join('\n    '))
+    } else ok('標準の段 … 窓口と画面で、会社の表がそろっている')
+
+    /* ── ⑤ **どの訛りでも同じ会社か**(利用者の指定
+           「全ての国籍において同じ仕様にしてください」)── */
+    const { CLIP_ACCENTS } = await import('../src/data/clipVoices.js')
+    const 会社たち = [...new Set(CLIP_ACCENTS
+      .flatMap((a) => ['female', 'male'].map((g) => providerOf(a.id, g))))]
+    if (会社たち.length !== 1 || !会社たち[0]) {
+      ng('標準の段 … 訛りや性別で会社が変わる', 会社たち.join(' / ') || '(空)')
+    } else ok(`標準の段 … どの訛り・どちらの性別でも ${会社たち[0]}`)
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **えらんだ声が、どのページで鳴るのか**(第5.296節)
+
+     > 選択画面には名前、性別と(Google)の評価を入れてください。
+     > そうでないとややこしいです。
+
+   欄に並ぶのは ElevenLabs の声だが、**その声で読むページと読まない
+   ページがある。** 名前と性別だけでは、どこで鳴るのか分からなかった。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const { voicePlan, voicePlanLine } = await import('../src/lib/voicePlan.js')
+
+  /* ── ① **3つの形が、それぞれ違う1行になる** ──
+     「出る」と「出ない」の両方を見る(CLAUDE.md) */
+  const 文型 = voicePlanLine('pattern', [], 'Google', 'female')
+  const 単語 = voicePlanLine('vocab', [], 'Google', 'female')
+  const 発音 = voicePlanLine('pattern', ['l-r'], 'Google', 'female')
+  if (!/えらんだ声/.test(文型) || !/Google/.test(文型)) {
+    ng('声の行 … 文型ドリルで、両方を書いていない', 文型)
+  } else ok(`声の行 … 文型ドリル: ${文型}`)
+  if (/えらんだ声/.test(単語) || !/Google/.test(単語)) {
+    ng('声の行 … 単語 / フレーズは、ぜんぶ代役のはず', 単語)
+  } else ok(`声の行 … 単語 / フレーズ: ${単語}`)
+  if (/Google/.test(発音)) {
+    ng('声の行 … 発音の弱点が付いた教材で、代役が混じっている', 発音)
+  } else ok(`声の行 … 発音の弱点つき: ${発音}`)
+
+  /* ── ② **音の付かない演習を、どちらにも入れない** ──
+     入れると「読みます」と書いた場所で1本も鳴らない。
+     誤り訂正(`audioFrom: null`)がそれである */
+  const { pick, base } = voicePlan('pattern', [])
+  if ([...pick, ...base].includes('誤り訂正')) {
+    ng('声の行 … 音の付かない演習まで数えている', [...pick, ...base].join(' / '))
+  } else ok('声の行 … 音の付かない演習(誤り訂正)は、どちらにも入れない')
+
+  /* ── ③ **画面が、その1行を本当に出しているか** ──
+     定義だけあって誰も呼ばなければ、何も起きない */
+  const form = readFileSync(new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  if (!/voicePlanLine\(kind, tagIds,/.test(form)) {
+    ng('声の行 … 教材を作る画面が、その1行を出していない')
+  } else ok('声の行 … 教材を作る画面が、`voicePlanLine()` を出す')
+  /* **欄には「名前(性別・どこの声か)」を出す** */
+  if (!/\{v\.label\}\(\{v\.gender === 'male' \? '男性' : '女性'\}・ElevenLabs\)/.test(form)) {
+    ng('声の行 … 欄に、どこの声かを書いていない')
+  } else ok('声の行 … 欄は「名前(性別・ElevenLabs)」')
 }
 
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
