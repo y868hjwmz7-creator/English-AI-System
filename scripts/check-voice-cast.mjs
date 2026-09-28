@@ -1597,5 +1597,74 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   } else ok('文型ドリル … 画面の中で `kind === \'pattern\'` と書いていない')
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   **標準の段は、割り当てた会社に本当にその声があるか**(第5.293節)
+
+     > なぜ US male が Google ではなく azure なのですか？あの声は好きでは
+     > ないです。Google の male の声が悪くなければそちらにし、
+     > 男女を両方使えるようにしたい
+
+   窓口は「話者 → 会社」の表と、「会社ごとの声の名前」の表を**別々に**
+   持っている。会社を1つ書き換えたときに、**その会社の表にその話者が
+   載っていなければ、その声は1本も鳴らない**(窓口が引けない)。
+   **こちらからは窓口を1度も動かせない**ので、机の上で突き合わせる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const { BASE_VOICES } = await import('../src/data/clipVoices.js')
+  const ts = readFileSync(new URL('../supabase/functions/speak/index.ts', import.meta.url), 'utf8')
+
+  /** 窓口の表を1つ読む。**名前で探す**(行の順番に頼らない) */
+  const 表 = (名) => {
+    const at = ts.indexOf(`const ${名}`)
+    if (at < 0) return null
+    const body = ts.slice(at, ts.indexOf('\n}', at))
+    return body
+  }
+  const 割り当て = 表('SPEAKER_PROVIDER')
+  const 会社 = 割り当て
+    ? Object.fromEntries([...割り当て.matchAll(/'([a-z-]+)':\s*'(google|azure)'/g)]
+      .map((m) => [m[1], m[2]]))
+    : null
+  const 声の名前 = (名) => {
+    const body = 表(名)
+    return body ? [...body.matchAll(/'([a-z-]+)':\s*\{\s*voice:/g)].map((m) => m[1]) : null
+  }
+  const g = 声の名前('GOOGLE_VOICES')
+  const a = 声の名前('AZURE_VOICES')
+
+  if (!会社 || !g || !a) {
+    ng('標準の段 … 窓口の表を読めなかった',
+      `SPEAKER_PROVIDER ${!!会社} / GOOGLE_VOICES ${!!g} / AZURE_VOICES ${!!a}`)
+  } else {
+    /* ── ① **割り当てた会社に、その話者の声があるか** ── */
+    const 無い = Object.entries(会社)
+      .filter(([who, どこ]) => !(どこ === 'google' ? g : a).includes(who))
+      .map(([who, どこ]) => `${who} → ${どこ}(その会社の表に無い)`)
+    if (無い.length) {
+      ng('標準の段 … 声の無い会社に任せている(1本も鳴らない)', 無い.join('\n    '))
+    } else {
+      ok(`標準の段 … ${Object.entries(会社).map(([w, d]) => `${w}=${d}`).join(' / ')}`)
+    }
+
+    /* ── ② **画面の名簿と、窓口の割り当てがそろっているか** ──
+       片方にしかいない話者がいると、**画面は頼むのに窓口が引けない**
+       (またはその逆で、誰も使わない行が残る) */
+    const 画面だけ = BASE_VOICES.filter((v) => !(v in 会社))
+    const 窓口だけ = Object.keys(会社).filter((v) => !BASE_VOICES.includes(v))
+    if (画面だけ.length || 窓口だけ.length) {
+      ng('標準の段 … 画面の名簿と窓口の割り当てが食い違っている',
+        `画面だけ ${画面だけ.join(' / ') || '無し'} / 窓口だけ ${窓口だけ.join(' / ') || '無し'}`)
+    } else ok('標準の段 … 画面の名簿(BASE_VOICES)と窓口の割り当てが、同じ4人')
+
+    /* ── ③ **男女とも標準の段で鳴らせる**(第5.293節・利用者の指定
+           「男女を両方使えるようにしたい」)。
+       どちらかが抜けると、その性別の声をえらんだ教材が鳴らない ── */
+    const 欠け = ['us-female', 'us-male'].filter((v) => !(v in 会社))
+    if (欠け.length) {
+      ng('標準の段 … アメリカの男女がそろっていない', 欠け.join(' / '))
+    } else ok('標準の段 … アメリカは男女とも鳴らせる')
+  }
+}
+
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
