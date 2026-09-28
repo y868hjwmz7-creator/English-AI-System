@@ -1530,7 +1530,16 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                 )}
 
                 {detailTab === 'notes' && (
-                  <LessonNotes learnerId={l.id} learnerName={l.display_name} />
+                  <LessonNotes
+                    learnerId={l.id} learnerName={l.display_name}
+                    /* **記録の中の語句から教材を作る**(第5.303節・
+                       2026-09-28 利用者の指定)。**単語帳とまったく同じ道**
+                       (`Wordbook` の `onMakeMaterial` と1文字も違わない)——
+                       `mustUse` に入れて「教材を作る」へ移す */
+                    onMakeMaterial={(words) => {
+                      setMustUse(words); setDetailTab('create')
+                    }}
+                  />
                 )}
 
                 {detailTab === 'record' && (

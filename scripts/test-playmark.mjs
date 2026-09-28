@@ -181,6 +181,11 @@ import {
   buildExam, examEmptyNote, examInstruction, examLevel, examMadeText,
   examSections, examTitle,
 } from '../src/lib/examBuild.js'
+/* **セッションの記録のまとめ**(第5.303節)。Supabase を引き連れていないので、
+   素の node でそのまま走る(CLAUDE.md「素の node で走らせられる形に切り出す」) */
+import {
+  NOTE_LEARNER, NOTE_TRAINER, noteDay, noteSections, noteSheetTitle, noteWords,
+} from '../src/lib/noteDigest.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -12734,14 +12739,27 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
   /* **控えも片付けも2つ。** 1つにすると、あとから書いたほうが前のぶんを消す */
   ok(/const myTimer = useRef\(null\)/.test(note) && /const myPending = useRef\(null\)/.test(note),
     '記録 … 書きかけの控えも、欄ごとに別に持つ')
-  /* **閉じるとき・日を変えるときに、両方とも送り切る** */
-  /* **送り切るのは2か所**(日を変えるとき / 閉じるとき)。
-     3つめの `saveLearnerNote` は 1.2 秒の本体なので、**数えるのは
-     「控えが残っていたら送る」の形のほう**である
-     (CLAUDE.md「使っている形で数える」) */
-  ok((note.match(/if \(myPending\.current\) \{/g) ?? []).length === 2,
-    '記録 … ゲストの書きかけも、閉じるとき・日を変えるときに送り切る',
-    `${(note.match(/if \(myPending\.current\) \{/g) ?? []).length} か所`)
+  /* **閉じるとき・日を変えるとき・まとめを開くときに、両方とも送り切る**
+
+     **送り切る道は、1つに寄せた**(第5.303節)。まとめを開くときにも
+     要るので3か所めができ、書き写すと**必ず片方だけ古くなる**
+     (CLAUDE.md「判断は1か所に持つ」)。
+     だから**その1つの中で、2つの欄を両方とも送っているか**を見る ——
+     片方を外せば赤くなる。1.2 秒の本体(`saveLearnerNote` そのもの)は
+     数えない。**「控えが残っていたら送る」の形のほう**である */
+  const 送り本体 = (() => {
+    const i = note.indexOf('const 送り切る = () => {')
+    return i < 0 ? '' : note.slice(i, note.indexOf('\n  }', i))
+  })()
+  ok(/if \(pending\.current\) \{/.test(送り本体)
+    && /if \(myPending\.current\) \{/.test(送り本体),
+  '記録 … 送り切る1つの中で、2つの欄の書きかけを両方とも送る',
+  `${送り本体.length} 字`)
+  /* **呼ぶ側も見る。** 中身があっても、呼ばれなければ何も起きない */
+  ok(/送り切る\(\)\n    ready\.current = false/.test(note),
+    '記録 … 日を変えるときに送り切る')
+  ok(/useEffect\(\(\) => \(\) => \{ 送り切る\(\) \}, \[\]\)/.test(note),
+    '記録 … 閉じるときに送り切る')
   /* **読むときに、ゲストの欄も持ってくる** */
   ok(/on_date, body, learner_body, updated_by/.test(lib),
     '記録 … 読むときに、ゲストの欄も一緒に持ってくる')
@@ -13238,6 +13256,134 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
   }
   ok(/q\.get\('sub'\) === 'none'/.test(scr8),
     '骨組み … 区切りの無い冊(欄が出ない側)も測れる')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * **セッションの記録を、まとめて一本化**(第5.303節・2026-09-28 利用者の指定)
+ *
+ *   > ゲストとトレーナー共有のセッションの記録をまとめて一本化、
+ *   > つまり日付と内容を見出しをつけてまとめて出力する機能や、
+ *   > セッションの記録内の単語やフレーズを元に教材を作れたりすると最高です。
+ *
+ * **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+ * 空の欄・日付の無い行・改行をまたぐ英語・同じ語の2度め・1文字。
+ * 「無ければ素通り」する形の検証にしない。
+ * ══════════════════════════════════════════════════════════════════════ */
+console.log('\n▶ セッションの記録を、まとめて一本化(第5.303節)')
+{
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}|\/\/[^\n]*/g, '')
+
+  const ROWS = [
+    /* **わざと古い日を先に置く。** 並べ替えているかを見る */
+    { on_date: '2026-09-24', body: 'would rather を使えていない', learner_body: '' },
+    {
+      on_date: '2026-09-27',
+      body: '"run into trouble" が出なかった\nHe go to school → goes',
+      learner_body: 'make time の使い方。would rather も気になります',
+    },
+    /* **中身がまったく無い日**(見出しだけの節を作らない) */
+    { on_date: '2026-09-25', body: '   ', learner_body: '' },
+    /* **日付が無い行**(壊れた行で落ちない) */
+    { on_date: '', body: 'ignored', learner_body: '' },
+  ]
+  const sec = noteSections(ROWS)
+
+  ok(sec.length === 2, 'まとめ … 中身のある日だけが節になる', `${sec.length} 節`)
+  ok(sec[0].date === '2026-09-27' && sec[1].date === '2026-09-24',
+    'まとめ … 新しい日から並ぶ', sec.map((x) => x.date).join(' / '))
+  ok(sec[0].parts.length === 2 && sec[1].parts.length === 1,
+    'まとめ … 空の欄は、節に入らない',
+    sec.map((x) => x.parts.length).join(' / '))
+  ok(sec[0].parts[0].who === NOTE_TRAINER && sec[0].parts[1].who === NOTE_LEARNER,
+    'まとめ … 誰の記録かが、節ごとに付く')
+  /* **「出る」と「出ない」の両方**(CLAUDE.md)。1つも無いときに
+     空の節を返してはいけない */
+  ok(noteSections([]).length === 0 && noteSections(null).length === 0,
+    'まとめ … 1つも無ければ、節も0')
+
+  const words = noteWords(ROWS)
+  /* **句はまとめる。** 1語ずつに割ると `run into trouble` が拾えない */
+  ok(words.includes('run into trouble'),
+    'まとめ … 空白でつながる英語は、まとめて1つの句にする', words.join(' / '))
+  /* **行をまたがない。** またぐと `goes` が前の行の末尾にくっつく */
+  ok(words.includes('He go to school') && words.includes('goes'),
+    'まとめ … 改行で切れる(前の行の続きにしない)', words.join(' / '))
+  /* **同じものは1つ。** 大文字小文字も同じ語として見る */
+  ok(words.filter((w) => /^would rather$/i.test(w)).length === 1,
+    'まとめ … 同じ語句は1つだけ', words.join(' / '))
+  /* **1文字は捨てる**(教材の「必ず使う語」にならない) */
+  ok(!words.includes('a') && !words.includes('I'),
+    'まとめ … 1文字だけのものは拾わない', words.join(' / '))
+  /* **出てきた順**(新しい日から)。並べ替えない */
+  ok(words[0] === 'run into trouble',
+    'まとめ … 新しい日の語句から並ぶ', words[0])
+  /* **無ければ空**(「無ければ素通り」を作らない) */
+  ok(noteWords([{ on_date: '2026-09-27', body: '日本語だけです', learner_body: '' }])
+    .length === 0, 'まとめ … 英語が1つも無ければ、語句も0')
+
+  ok(noteDay('2026-09-27') === '9/27(日)',
+    'まとめ … 見出しは日付と曜日', noteDay('2026-09-27'))
+  ok(noteSheetTitle('山田はなこ').includes('山田はなこ')
+    && !noteSheetTitle('').includes('('),
+    'まとめ … 紙の題に、誰の記録かを書く', noteSheetTitle('山田はなこ'))
+
+  /* ── **0円。** 語句を拾うのに窓口を呼んでいない ────────────────
+       **コメントを落としてから、使っている形で数える**(CLAUDE.md) */
+  const 道具 = noC(readS('src/lib/noteDigest.js'))
+  ok(!/from '\.\/(supabase|vocab|materials)\.js'/.test(道具)
+    && !/lookupWord|\.rpc\(|fetch\(/.test(道具),
+    'まとめ … 語句は決まりで拾う(窓口を呼ばない = 0円)')
+
+  /* ── **呼び名は1か所**(2か所に書くと、片方だけ古くなる)── */
+  const 画面 = noC(readS('src/components/LessonNotes.jsx'))
+  for (const 名 of [NOTE_TRAINER, NOTE_LEARNER]) {
+    ok(!new RegExp(`['"\`]${名}['"\`]`).test(画面),
+      `まとめ … 画面は「${名}」を直に書いていない`)
+  }
+  ok(/noteDigest\.js'/.test(画面) && /NOTE_TRAINER/.test(画面),
+    'まとめ … 画面は、呼び名を `noteDigest.js` から読む')
+  /* **日付の見出しも1か所。** 画面が自前で曜日を組んでいない */
+  ok(!/const WEEK = \[/.test(画面) && /noteDay\(/.test(画面),
+    'まとめ … 日付の見出しも `noteDay()` 1か所')
+
+  /* ── **画面が本当に置いているか**(検証の入り口だけ直しても出ない)── */
+  ok(/loadAllNotes\(learnerId\)/.test(画面),
+    'まとめ … 開いたときに、記録をぜんぶ読む')
+  ok(/usePrintSheet\(printing,/.test(画面),
+    'まとめ … 描き終わってから刷る(`usePrintSheet` 1か所)')
+  ok(/\{printing && \(\s*<NotesSheet/.test(画面),
+    'まとめ … 紙は、押す一瞬だけ描く')
+  /* **書きかけを送り切る道は1つ**(第5.303節で3か所めができたので寄せた) */
+  ok((画面.match(/送り切る\(\)/g) ?? []).length === 3
+    && (画面.match(/const 送り切る = \(\) => \{/g) ?? []).length === 1,
+    'まとめ … 書きかけを送り切る道は1つ(日を変える・閉じる・まとめを開く)',
+    String((画面.match(/送り切る\(\)/g) ?? []).length))
+
+  const 紙 = noC(readS('src/components/NotesSheet.jsx'))
+  ok(/id=\{SHEET_ID\}/.test(紙),
+    'まとめ … 紙は `SHEET_ID` を使っている(id を書き写していない)')
+  ok(/noteDay\(/.test(紙),
+    'まとめ … 紙の見出しも、画面と同じ `noteDay()`')
+
+  /* ── **教材を作る道は、単語帳とまったく同じ1つ** ── */
+  const 一覧 = noC(readS('src/components/TrainerLearners.jsx'))
+  const 渡し = (一覧.match(/onMakeMaterial=\{\(words\)/g) ?? []).length
+  ok(渡し === 2,
+    'まとめ … 記録からも、単語帳と同じ `onMakeMaterial` で教材を作る',
+    `${渡し} か所`)
+  ok((一覧.match(/setMustUse\(words\)/g) ?? []).length === 2,
+    'まとめ … 行き先(`mustUse`)も同じ1つ')
+
+  /* ── **骨組みが本物を描いているか**(骨組みは本物と1文字も違えない)── */
+  const 骨 = noC(readS('src/__screens.jsx'))
+  ok(/<NotesDigest/.test(骨) && /noteSections\(rows\)/.test(骨),
+    '骨組み … 本物の `NotesDigest` を、本物の `noteSections()` で描く')
+  ok(/q\.get\('screen'\) === 'notesdigest'/.test(骨),
+    '骨組み … `?screen=notesdigest` で開ける')
+  /* **出る / 出ない の両方**(教材を作れない人の側も測れる) */
+  ok(/role'\) !== 'learner'/.test(骨),
+    '骨組み … 教材を作れない人の側も描ける')
 }
 
 console.log(ng

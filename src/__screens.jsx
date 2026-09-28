@@ -83,6 +83,8 @@ import NavSettings from './components/NavSettings.jsx'
 import ExamMaker from './components/ExamMaker.jsx'
 /* セッションの記録(第5.267節)。**本物をそのまま描く** */
 import LessonNotes from './components/LessonNotes.jsx'
+import NotesDigest from './components/NotesDigest.jsx'
+import { noteSections, noteWords } from './lib/noteDigest.js'
 import { bgmLevel, setVoiceLevel, voiceLevel } from './lib/mixVolume.js'
 import { setBgmVolume, stopBgm } from './lib/bgm.js'
 /* 音楽を流すか / どの曲か(第5.257節)。**本物と同じ3つを渡すため** */
@@ -1616,6 +1618,50 @@ const NOTES = (
   <LessonNotes learnerId="g1" learnerName="山田はなこ" />
 )
 
+/* セッションの記録を**まとめて一本化**(`?screen=notesdigest&role=…`・
+   第5.303節・2026-09-28 利用者の指定)。
+
+     > 日付と内容を見出しをつけてまとめて出力する機能や、
+     > セッションの記録内の単語やフレーズを元に教材を作れたりすると最高です
+
+   **本物の `NotesDigest` を、本物の `noteSections()` / `noteWords()` で
+   描く**(骨組みを写さない・CLAUDE.md)。`LessonNotes` は Supabase から
+   読むので、この環境では**中身が1つも描かれない** —— だから並べる側だけを
+   props で受け取る形に切り出してある。
+
+   `?role=trainer` で語句の欄が出る形、`?role=learner` で出ない側 ——
+   **出る / 出ないの両方**を測れる。 */
+const DIGEST_ROWS = [
+  {
+    on_date: '2026-09-27',
+    body: '"run into trouble" が出てこなかった。\n次回は言い換えから。',
+    learner_body: 'make time の使い方を聞きたいです。',
+  },
+  {
+    on_date: '2026-09-24',
+    body: 'would rather を使えていない。\nHe go to school → goes',
+    learner_body: '',
+  },
+]
+const digestScreen = (trainer) => {
+  const rows = DIGEST_ROWS
+  return (
+    <NotesDigest
+      sections={noteSections(rows)}
+      words={trainer ? noteWords(rows) : []}
+      /* **選んでいる形も測る** —— 選ぶと「この語で教材を作る」が出る */
+      picked={trainer ? ['run into trouble'] : []}
+      wordsOpen={trainer}
+      onWordsOpen={() => {}}
+      onPick={() => {}}
+      onClear={() => {}}
+      onMake={trainer ? () => {} : null}
+      onPrint={() => {}}
+      onBack={() => {}}
+    />
+  )
+}
+
 /* 支度の帯(`?screen=jobbar&role=…`・2026-09 実機・利用者の指定)。
 
      > そもそもゲストには出さない(役割で判定する)
@@ -2215,6 +2261,8 @@ createRoot(document.getElementById('root')).render(
     ? QRRADIO
     : q.get('screen') === 'notes'
     ? NOTES
+    : q.get('screen') === 'notesdigest'
+    ? digestScreen(q.get('role') !== 'learner')
     : q.get('screen') === 'sticky'
     ? STICKY
     : q.get('screen') === 'rscope'

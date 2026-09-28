@@ -3840,6 +3840,27 @@ html, body { overflow-x: clip; }
 
      **教材の紙は1ドットも変わらない** —— あちらに `.qrsheet-groups` は無い
      (`QuickResponseSheet` は `.qrsheet-group` を直に並べている)。 */
+  /* ── セッションの記録の紙(第5.303節・2026-09-28 利用者の指定)──────
+       > 日付と内容を見出しをつけてまとめて出力する機能
+
+     **日付の見出しは、次の中身と離さない**(`break-after: avoid`)——
+     ページの切れ目に見出しだけが残ると、何の記録か分からない紙になる。
+     **改行はそのまま刷る**(書いたとおりに出す)。 */
+  .print-target .notesheet-day { margin: 0 0 12pt; }
+  .print-target .notesheet-date {
+    margin: 0 0 4pt; font-size: 12pt; font-weight: 700; color: #000;
+    padding-bottom: 2pt; border-bottom: 0.5pt solid #999;
+    break-after: avoid; page-break-after: avoid;
+  }
+  .print-target .notesheet-part { margin: 0 0 6pt; }
+  .print-target .notesheet-who {
+    font-size: 9pt; color: #333;
+    break-after: avoid; page-break-after: avoid;
+  }
+  .print-target .notesheet-text {
+    white-space: pre-wrap; font-size: 11pt; line-height: 1.7; color: #000;
+  }
+
   .print-target .qrsheet-groups { counter-reset: qr; }
   .print-target .qrsheet-groups ol.qrsheet-list { counter-reset: none; }
   /* 小見出しは**次の語と離さない**(`break-after: avoid` は `.qrsheet-title`
@@ -4904,6 +4925,45 @@ html, body { overflow-x: clip; }
 .focus--w50 .focus-body > * { max-width: 430px; }
 /* ゲストの「今週の宿題」では畳んでおく。開いたときに初めて読みに行く */
 .notes-card > summary { cursor: pointer; }
+
+/* ══════════════════════════════════════════════════════════════════
+   **まとめて一本化**(第5.303節・2026-09-28 利用者の指定)
+
+     > ゲストとトレーナー共有のセッションの記録をまとめて一本化、
+     > つまり日付と内容を見出しをつけてまとめて出力する機能
+
+   **名前は `ndg-` で始める。** `.notes-words` は「今週の宿題」の
+   その日に印を付けた語(第5.219節)で**別の物**である ——
+   **違うものに、同じ名前を付けない**(共通ルール)。
+
+   **隙間は `gap` で作る**(共通ルール「別々の物を、すき間ゼロでくっつけない」)。
+   ══════════════════════════════════════════════════════════════════ */
+/* **隙間は `.stack` が持っている。** ここで数を書き直さない
+   (**値を書き写さない**・CLAUDE.md) */
+.ndg-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
+}
+.ndg-count { font-size: var(--fs-13); }
+/* 語句の欄。**押すものは、見出しの行に置く**(一覧の末尾に置かない) */
+.ndg-words { display: grid; gap: var(--sp-8); }
+.ndg-words-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
+}
+.ndg-words-toggle { font-size: var(--fs-13); color: var(--text-secondary); }
+.ndg-picked { font-size: var(--fs-13); }
+/* 語句の札。**英字が続くので折り返せるようにする**(はみ出して押せなくならない) */
+.ndg-chips {
+  display: flex; flex-wrap: wrap; gap: var(--sp-8);
+  overflow-wrap: anywhere;
+}
+/* 日付ごとの節。**別々の日なので、`gap` で離す** */
+.ndg-list { display: flex; flex-direction: column; gap: var(--sp-14); }
+.ndg-day { display: flex; flex-direction: column; gap: var(--sp-8); }
+.ndg-date {
+  margin: 0; font-size: var(--fs-15); font-weight: 700;
+  padding-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.ndg-part { display: flex; flex-direction: column; gap: var(--sp-6); }
 
 /* 書き込みの色を選ぶ丸。**塗りつぶした丸そのものが見本**になる */
 /* 書き込みの道具。**帯をまるごと入れ替える**(2026-09 利用者の指定)。

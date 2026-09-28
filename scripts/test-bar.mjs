@@ -6040,6 +6040,107 @@ for (const w of [1280, 390, 320]) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+ * **セッションの記録を、まとめて一本化**(第5.303節・2026-09-28 利用者の指定)
+ *
+ *   > ゲストとトレーナー共有のセッションの記録をまとめて一本化、
+ *   > つまり日付と内容を見出しをつけてまとめて出力する機能や、
+ *   > セッションの記録内の単語やフレーズを元に教材を作れたりすると最高です。
+ *
+ * **描かないと分からないこと**を測る ——
+ *   ①日付ごとに見出しが付いて並ぶか(**新しい日から**)
+ *   ②誰の記録かが、節ごとに出るか(トレーナー / ゲスト)
+ *   ③**改行がそのまま**出ているか(白い紙と同じ見え方)
+ *   ④語句の札が出て、選んでいるときだけ「この語で教材を作る」が出るか
+ *   ⑤押せる大きさ ⑥横にはみ出していないか
+ *
+ * **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+ * ④は `role=learner`(教材を作れない人)で**欄ごと出ない**ことまで見る。
+ * 出す側だけを見ていると、**誰にでも出す形**に変えても緑のままになる。
+ * ══════════════════════════════════════════════════════════════════════ */
+for (const w of [1280, 390, 320]) {
+  const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=notesdigest`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(250)
+  const got = await page.evaluate(() => {
+    const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
+    const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
+    const days = [...document.querySelectorAll('.ndg-day')]
+    const btns = [...document.querySelectorAll('.ndg .btn')]
+    const text = document.querySelector('.ndg-part .notes-read')
+    return {
+      日: days.length,
+      見出し: days.map((d) => d.querySelector('.ndg-date')?.textContent.trim() ?? ''),
+      /* **誰の記録かを、節ごとに出す。** 1本にまとめた紙で、
+         どちらが書いたか分からなくなってはいけない */
+      誰: days.map((d) => [...d.querySelectorAll('.field-label')]
+        .map((e) => e.textContent.trim()).join('|')),
+      /* **改行はそのまま**(`white-space: pre-wrap`)。
+         **値ではなく性質で見る**(CLAUDE.md)—— 書いた数を写さない */
+      改行: text ? window.getComputedStyle(text).whiteSpace : '',
+      語句: document.querySelectorAll('.ndg-chips .btn').length,
+      作る: [...document.querySelectorAll('.ndg-words-head .btn')]
+        .some((b) => b.textContent.includes('教材を作る')),
+      刷る: !!document.querySelector('.ndg-print'),
+      /* **紙は、押すまで描かない**(単語帳と同じ作法)*/
+      紙: document.querySelectorAll('#review-sheet').length,
+      小: Math.min(...btns.map(px)),
+      よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      右: Math.max(0, ...btns.map(right), ...days.map(right)),
+    }
+  })
+  await page.close()
+
+  /* **ゲスト(教材を作れない人)には、語句の欄ごと出さない** */
+  const p2 = await browser.newPage({ viewport: { width: w, height: 900 } })
+  await p2.goto(`http://localhost:${PORT}/__bar.html?screen=notesdigest&role=learner`,
+    { waitUntil: 'networkidle' })
+  await p2.waitForTimeout(200)
+  const 素 = await p2.evaluate(() => ({
+    欄: document.querySelectorAll('.ndg-words').length,
+    札: document.querySelectorAll('.ndg-chips .btn').length,
+    日: document.querySelectorAll('.ndg-day').length,
+  }))
+  await p2.close()
+
+  const 名 = `記録のまとめ(${w}px)`
+  if (got.日 !== 2) {
+    ng(`${名} … 日付ごとの節が並んでいない`, String(got.日))
+  } else if (!/^9\/27/.test(got.見出し[0]) || !/^9\/24/.test(got.見出し[1])) {
+    // **新しい日から**(1日ずつの画面と同じ向き)
+    ng(`${名} … 見出しが日付になっていない(新しい日から)`, got.見出し.join(' / '))
+  } else if (got.誰[0] !== 'トレーナーの記録|ゲストの記録') {
+    ng(`${名} … 誰の記録かが節ごとに出ていない`, got.誰.join(' / '))
+  } else if (got.誰[1] !== 'トレーナーの記録') {
+    // **空の欄は出さない**(見出しだけの節を作らない)
+    ng(`${名} … 空の欄まで見出しが出ている`, got.誰.join(' / '))
+  } else if (got.改行 !== 'pre-wrap') {
+    ng(`${名} … 改行がそのまま出ていない`, got.改行)
+  } else if (got.語句 < 3) {
+    ng(`${名} … 記録の中の語句が拾えていない`, String(got.語句))
+  } else if (!got.作る) {
+    ng(`${名} … 選んでいるのに「この語で教材を作る」が出ない`)
+  } else if (!got.刷る) {
+    ng(`${名} … 紙に出すボタンが無い`)
+  } else if (got.紙 !== 0) {
+    ng(`${名} … 押していないのに紙を描いている`, String(got.紙))
+  } else if (got.小 < 34) {
+    ng(`${名} … 押せる大きさを割っている`, `${got.小}px`)
+  } else if (got.よこ > 0 || got.右 > w) {
+    ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
+  } else if (素.欄 !== 0 || 素.札 !== 0) {
+    // **出ない側**。教材を作れない人に、効かない操作を見せない
+    ng(`${名} … 教材を作れない人にも語句の欄が出ている`, `${素.欄} / ${素.札}`)
+  } else if (素.日 !== 2) {
+    // **消しすぎていないか。** 記録そのものは、どちらにも出る
+    ng(`${名} … 教材を作れない人には記録まで出ていない`, String(素.日))
+  } else {
+    ok(`${名} … ${got.日} 日ぶんが見出し付きで並び、語句 ${got.語句} から教材を作れる`
+      + '(教材を作れない人には語句の欄ごと出ない)')
+  }
+}
+
 /* **画面が本当に置いているか。** 検証の入り口(`__screens.jsx`)だけ
    直しても、利用者の画面には出ない。
    **「名前が出てくるか」で見ない** —— 説明にも同じ語があるので、
@@ -9569,6 +9670,10 @@ const SCREENS = [
   /* **「達成具合」は廃止した**(第5.246節・2026-09-23 利用者の指定)。
      `×` と「おわる」の行き先だったので、**ホームへ戻す**ように変えた。
      ホーム(`['', …]`)は、この一覧のいちばん下で測っている */
+  /* **セッションの記録のまとめ**(第5.303節)。帯・語句の札・日付ごとの節が
+     縦に積まれ、**帯の中と語句の見出しの行は横に並ぶ。**
+     `role=learner` は**語句の欄そのものが出ない**形(節の数が変わる) */
+  ['notesdigest', ''], ['notesdigest', 'role=learner'],
   ['', 'role=trainer&who=g1'],
 ]
 

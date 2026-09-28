@@ -46,15 +46,24 @@
  *   これから書く日を選べないと、その日のメモが作れない。
  */
 import { useEffect, useRef, useState } from 'react'
-import { loadNote, loadNoteDays, saveLearnerNote, saveNote } from '../lib/lessonNotes.js'
+import {
+  loadAllNotes, loadNote, loadNoteDays, saveLearnerNote, saveNote,
+} from '../lib/lessonNotes.js'
 import { shortDate, toDateKey, today } from '../lib/format.js'
+/* **まとめて一本化**(第5.303節)。組み立ても呼び名も `noteDigest.js` 1か所 */
+import {
+  NOTE_LEARNER, NOTE_TRAINER, noteDay, noteSections, noteSheetTitle, noteWords,
+} from '../lib/noteDigest.js'
+import { usePrintSheet } from '../lib/printSheet.js'
+import NotesDigest, { MAX_PICK } from './NotesDigest.jsx'
+import NotesSheet from './NotesSheet.jsx'
 import { getSession } from '../lib/auth.js'
 import { viewerRoleOf } from '../lib/viewer.js'
 import CalendarPopover from './CalendarPopover.jsx'
 /* **大きく表示**(第5.267節)。教材の「セッションで使う」と同じ骨組み */
 import FocusFrame from './FocusFrame.jsx'
 import Stepper from './Stepper.jsx'
-import { ScreenIcon } from './Icons.jsx'
+import { NoteIcon, ScreenIcon } from './Icons.jsx'
 import { NOTE_WIDTHS, widthOf } from '../data/sheetWidths.js'
 
 /** 大きく表示したときの幅。**覚える**(一度決めれば毎回は触らない) */
@@ -73,12 +82,6 @@ const shift = (key, days) => {
   return toDateKey(d)
 }
 
-const WEEK = ['日', '月', '火', '水', '木', '金', '土']
-const withWeek = (key) => {
-  const d = new Date(`${key}T00:00:00`)
-  return `${shortDate(key)}(${WEEK[d.getDay()]})`
-}
-
 export default function LessonNotes({
   /** 誰のセッションの記録か */
   learnerId,
@@ -93,6 +96,19 @@ export default function LessonNotes({
    * あって、宿題のことを知らない(**判断を2か所に置かない**)。
    */
   onDate = null,
+  /**
+   * **記録の中の語句から、教材を作る**(第5.303節・2026-09-28 利用者の指定)。
+   *
+   *   > セッションの記録内の単語やフレーズを元に教材を作れたりすると最高です
+   *
+   * **単語帳の「この語で教材を作る」と、まったく同じ道**である
+   * (`Wordbook` の `onMakeMaterial`)—— 呼ぶ側が `mustUse` に入れて
+   * 「教材を作る」へ移す。**新しい仕組みは1つも作っていない**(CLAUDE.md)。
+   *
+   * **渡されなければ、語句の欄ごと出ない**(効かない操作を見せない)。
+   * 教材を作れるのはトレーナーだけなので、ゲストの画面には出ない。
+   */
+  onMakeMaterial = null,
 }) {
   /* **書けるのはトレーナーと管理者だけ**(0032)。
      役割は `viewer.js` に1つだけ置いてある。**判定をここに作らない。**
@@ -119,6 +135,19 @@ export default function LessonNotes({
   const [wrote, setWrote] = useState(null)    // 最後に書かれた時刻
   const [calAt, setCalAt] = useState(null)
 
+  /* ── **まとめて一本化**(第5.303節・2026-09-28 利用者の指定)──────
+       > 日付と内容を見出しをつけてまとめて出力する機能
+
+     **開いたときにだけ読む。** 押さない人には問い合わせが1回も飛ばない
+     (`SpeechWordsPick` と同じ作法)。 */
+  const [all, setAll] = useState(false)
+  const [rows, setRows] = useState([])
+  const [allLoading, setAllLoading] = useState(false)
+  const [allError, setAllError] = useState('')
+  const [picked, setPicked] = useState([])
+  const [wordsOpen, setWordsOpen] = useState(false)
+  const [printing, setPrinting] = useState(false)
+
   /* **読み終わるまで送らない。** 読み込みの途中で `body` が変わると、
      まだ空のままの中身でサーバーを上書きしてしまう(0025 と同じ落とし穴) */
   const ready = useRef(false)
@@ -137,6 +166,32 @@ export default function LessonNotes({
 
   useEffect(() => { getSession().then((s) => setMe(s?.user?.id ?? null)) }, [])
 
+  /**
+   * **まだ送っていない書きかけを、いま送り切る。**
+   *
+   * 日を変えるとき・閉じるとき・**まとめを開くとき**に呼ぶ。
+   * 1.2 秒を待たずに移っただけで書いたものが消えるのでは、
+   * 「保存」を押させないようにした意味がない。
+   *
+   * **1か所に持つ**(第5.303節で3か所めができたので寄せた)——
+   * 置く場所の数だけ食い違う(CLAUDE.md)。
+   * 戻り値は待たない(消えてゆく画面には何も出せない)。
+   */
+  const 送り切る = () => {
+    if (pending.current) {
+      window.clearTimeout(timer.current)
+      saveNote({ ...pending.current, updatedBy: meRef.current })
+      pending.current = null
+    }
+    /* **ゲストの書きかけも送り切る**(第5.267節)。
+       片方だけ送ると、移っただけで消える */
+    if (myPending.current) {
+      window.clearTimeout(myTimer.current)
+      saveLearnerNote(myPending.current)
+      myPending.current = null
+    }
+  }
+
   /* **選んでいる日を知らせる。** 開いた時点でも1回知らせるので、
      呼ぶ側は「まだ何も選ばれていない」を考えなくてよい */
   useEffect(() => { onDate?.(date) }, [date])
@@ -146,18 +201,7 @@ export default function LessonNotes({
     let alive = true
     /* **日を変える前に、書きかけを送り切る。**
        控えには書いていた日が入っているので、行き先を間違えない */
-    if (pending.current) {
-      window.clearTimeout(timer.current)
-      saveNote({ ...pending.current, updatedBy: meRef.current })
-      pending.current = null
-    }
-    /* **ゲストの書きかけも、同じように送り切る**(第5.267節)。
-       片方だけ送ると、日を変えただけで消える */
-    if (myPending.current) {
-      window.clearTimeout(myTimer.current)
-      saveLearnerNote(myPending.current)
-      myPending.current = null
-    }
+    送り切る()
     ready.current = false
     setLoading(true)
     setError('')
@@ -175,6 +219,27 @@ export default function LessonNotes({
     })
     return () => { alive = false }
   }, [learnerId, date])
+
+  /* **まとめを開いたら、そこで初めて読む**(第5.303節)。
+     書いたものが増えているかもしれないので、開くたびに読み直す ——
+     **黙って古いものを見せない**(CLAUDE.md) */
+  useEffect(() => {
+    if (!all) return undefined
+    let alive = true
+    setAllLoading(true)
+    setAllError('')
+    loadAllNotes(learnerId).then(({ data, error: e }) => {
+      if (!alive) return
+      setAllLoading(false)
+      if (e) { setAllError(e); return }
+      setRows(data)
+    })
+    return () => { alive = false }
+  }, [all, learnerId])
+
+  /* **描き終わってから刷る**(`usePrintSheet`)。単語帳・Quick Response 帳と
+     まったく同じ段取りである —— **同じ段取りを書き写さない**(CLAUDE.md) */
+  usePrintSheet(printing, () => setPrinting(false))
 
   // カレンダーの印(書いてある日)
   useEffect(() => {
@@ -243,20 +308,7 @@ export default function LessonNotes({
      1.2 秒を待たずに閉じただけで消えるのでは、書いた人には
      「押しても何も起きない」のと同じに見える。
      戻り値は待たない(消えてゆく画面には何も出せない) */
-  useEffect(() => () => {
-    window.clearTimeout(timer.current)
-    if (pending.current) {
-      saveNote({ ...pending.current, updatedBy: meRef.current })
-      pending.current = null
-    }
-    /* **ゲストの書きかけも送り切る**(第5.267節)。
-       片方だけだと、閉じただけで消える */
-    window.clearTimeout(myTimer.current)
-    if (myPending.current) {
-      saveLearnerNote(myPending.current)
-      myPending.current = null
-    }
-  }, [])
+  useEffect(() => () => { 送り切る() }, [])
 
   const isToday = date === today()
 
@@ -275,7 +327,7 @@ export default function LessonNotes({
           value={value}
           onChange={(e) => onEdit(e.target.value)}
           placeholder={hint}
-          aria-label={`${withWeek(date)} の${what}`}
+          aria-label={`${noteDay(date)} の${what}`}
         />
       ) : value.trim() ? (
         /* **改行はそのまま出す**(白い紙と同じ見え方) */
@@ -288,7 +340,7 @@ export default function LessonNotes({
 
   /* ── 中身。**大きく表示でも、ふだんの画面でも同じものを出す** ──────
        書き写すと、片方だけ古くなる(CLAUDE.md) */
-  const 中身 = (
+  const 日ごと = (
     <>
       {/* ── どの日か ────────────────────────────────────────
           **日付は、いちばん上に大きく出す。** どの日の記録を書いて
@@ -302,7 +354,7 @@ export default function LessonNotes({
         <button type="button" className="btn btn--small btn--quiet notes-date"
                 onClick={(e) => setCalAt(calAt ? null : e.currentTarget)}
                 aria-expanded={!!calAt}>
-          {withWeek(date)}{isToday ? ' 今日' : ''}
+          {noteDay(date)}{isToday ? ' 今日' : ''}
         </button>
         <button type="button" className="btn btn--ghost btn--small"
                 aria-label="次の日" onClick={() => setDate((d) => shift(d, 1))}>›</button>
@@ -320,6 +372,12 @@ export default function LessonNotes({
             <ScreenIcon />大きく表示
           </button>
         )}
+        {/* **まとめて見る**(第5.303節・2026-09-28 利用者の指定)。
+            日付ごとの見出しを付けて1本にし、紙にも出せる */}
+        <button type="button" className="btn btn--small btn--ghost"
+                onClick={() => { 送り切る(); setAll(true) }}>
+          <NoteIcon />まとめて見る
+        </button>
         {/* **書いたかどうかを、そのつど出す。**
             成功と失敗が同じ見た目で終わってはいけない(CLAUDE.md) */}
         <span className="notes-state muted">{state}</span>
@@ -344,11 +402,11 @@ export default function LessonNotes({
              読むだけの人に空の欄を見せても、できることが何も無い
              (**効かない操作を見せない**・CLAUDE.md)。 */
         <div className="notes-fields">
-          {欄('トレーナーの記録', body, canWrite, edit,
+          {欄(NOTE_TRAINER, body, canWrite, edit,
             'この日のセッションのこと。\n'
             + '・つまずいたところ\n・次までにやってもらうこと\n・次回すること')}
           {(canWriteMine || mine.trim()) && 欄(
-            'ゲストの記録', mine, canWriteMine, editMine,
+            NOTE_LEARNER, mine, canWriteMine, editMine,
             '気づいたこと・聞きたいこと・次までにやること',
           )}
         </div>
@@ -361,6 +419,47 @@ export default function LessonNotes({
       )}
     </>
   )
+
+  /* ── **まとめて一本化**(第5.303節・2026-09-28 利用者の指定)────────
+
+       > 日付と内容を見出しをつけてまとめて出力する機能や、
+       > セッションの記録内の単語やフレーズを元に教材を作れたりすると最高です
+
+       **並べるのは `NotesDigest`、組み立てるのは `noteDigest.js`。**
+       ここは読んだものを渡すだけである(**判断を2か所に置かない**)。
+
+       語句は**記録に書いてある英字を決まりで拾うだけ**なので **0円**
+       (AI を呼ばない・CLAUDE.md「ファイルに書いてあるものは引き直さない」)。 */
+  const sections = noteSections(rows)
+  const 語句 = onMakeMaterial ? noteWords(rows) : []
+  const まとめ = (
+    <>
+      <NotesDigest
+        sections={sections}
+        words={語句}
+        picked={picked}
+        wordsOpen={wordsOpen}
+        onWordsOpen={setWordsOpen}
+        onPick={(w) => setPicked((prev) => (prev.includes(w)
+          ? prev.filter((x) => x !== w)
+          : prev.length >= MAX_PICK ? prev : [...prev, w]))}
+        onClear={() => setPicked([])}
+        /* **教材を作る道は、単語帳とまったく同じ1つ**(`onMakeMaterial`) */
+        onMake={onMakeMaterial ? (list) => onMakeMaterial(list) : null}
+        onPrint={() => setPrinting(true)}
+        printing={printing}
+        onBack={() => setAll(false)}
+        loading={allLoading}
+        error={allError}
+      />
+      {/* **中身は、紙に出す一瞬だけ描く**(単語帳・Quick Response 帳と同じ作法) */}
+      {printing && (
+        <NotesSheet title={noteSheetTitle(learnerName)} sections={sections} />
+      )}
+    </>
+  )
+
+  const 中身 = all ? まとめ : 日ごと
 
   /* ── **大きく表示**(第5.267節)────────────────────────────
        骨組みは `FocusFrame`(`plain`)—— 教材の「セッションで使う」と

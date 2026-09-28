@@ -28,6 +28,10 @@ import { supabase, withTimeout, TIMEOUT_MARK } from './supabase.js'
 
 const TABLE = 'lesson_notes'
 
+/** 一度に読む日数の上限。**日付だけのときも、中身ごとのときも同じ数**
+    (数を2か所に書くと、片方だけ古くなる・CLAUDE.md) */
+const DAYS_MAX = 400
+
 const fail = (e) => {
   const m = String(e?.message ?? e ?? '')
   if (m === TIMEOUT_MARK) return '時間内に返事がありませんでした。通信を確かめてください'
@@ -73,10 +77,42 @@ export async function loadNoteDays(learnerId) {
         .select('on_date')
         .eq('learner_id', learnerId)
         .order('on_date', { ascending: false })
-        .limit(400),
+        .limit(DAYS_MAX),
     )
     if (error) return { data: [], error: fail(error) }
     return { data: (data ?? []).map((r) => String(r.on_date).slice(0, 10)), error: null }
+  } catch (e) {
+    return { data: [], error: fail(e) }
+  }
+}
+
+/**
+ * **書いてあるものを、ぜんぶ読む**(第5.303節・2026-09-28 利用者の指定)。
+ *
+ *   > ゲストとトレーナー共有のセッションの記録をまとめて一本化、
+ *   > つまり日付と内容を見出しをつけてまとめて出力する機能
+ *
+ * **日付だけの `loadNoteDays()` とは別に持つ。** あちらはカレンダーの印で、
+ * 中身を1文字も持ってこない(印のために毎回ぜんぶ読むのは無駄である)。
+ *
+ * **誰に何が見えるかは 0032 の RLS が決める。** ここで絞らない
+ * (**判定を窓口と画面の2か所に置かない**・CLAUDE.md)。
+ *
+ * 上限は `loadNoteDays()` と**同じ 400**。週2回で約4年ぶんにあたる。
+ * **数を書き写さない**ので、`DAYS_MAX` を1つ持って両方が読む。
+ */
+export async function loadAllNotes(learnerId) {
+  if (!supabase || !learnerId) return { data: [], error: null }
+  try {
+    const { data, error } = await withTimeout(
+      supabase.from(TABLE)
+        .select('id, on_date, body, learner_body, updated_at')
+        .eq('learner_id', learnerId)
+        .order('on_date', { ascending: false })
+        .limit(DAYS_MAX),
+    )
+    if (error) return { data: [], error: fail(error) }
+    return { data: data ?? [], error: null }
   } catch (e) {
     return { data: [], error: fail(e) }
   }
