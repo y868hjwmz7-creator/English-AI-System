@@ -245,4 +245,12 @@ from (
             where table_schema = 'public' and table_name = 'lesson_notes'
               and column_name = 'learner_body')
     and exists (select 1 from pg_proc where proname = 'set_learner_note'), 52
+  -- **関数の中身そのものを見る**(0071・第5.299節)。表も列も行も増えない
+  -- 移行なので、表の有無では分からない —— **ストレージの直接削除が
+  -- 消えているか**で見る。Supabase がそれを断るようになったため、
+  -- 1行でも残っていると**ゲストが1人も消せない**
+  union all select '0071 ゲストの消去から、ストレージの直接削除を外す(pending_matome.sql)',
+    exists (select 1 from pg_proc
+            where proname = 'erase_learner'
+              and pg_get_functiondef(oid) not like '%storage.objects%'), 53
 ) t order by 順;

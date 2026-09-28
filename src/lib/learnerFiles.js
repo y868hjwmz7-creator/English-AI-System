@@ -191,3 +191,71 @@ export async function deleteLearnerFile(row) {
     return { error: fail(e) }
   }
 }
+
+/**
+ * ============================================================================
+ * **そのゲストの置き場を、まるごと空にする**(第5.299節・2026-09-28 実機)
+ * ============================================================================
+ *
+ * ゲストを消そうとして、こう出て止まった。
+ *
+ *     記録を消せませんでした:
+ *     Direct deletion from storage tables is not allowed.
+ *     Use the Storage API instead.
+ *
+ * `erase_learner()` は 0041 から 0058 まで、SQL の中で
+ * `delete from storage.objects` をやっていた。**Supabase がそれを断る
+ * ようになった。** 関数は1行でも失敗すると丸ごと巻き戻るので、
+ * **ゲストは1人も消せない状態**だった。
+ *
+ * 【消す順】**中身が先。表はあと**
+ *   ・中身を消せなければ、**表には手をつけない**(何も失われない)
+ *   ・中身が消えて表が残っても、**もう一度押せば続きからやり直せる**
+ *   逆にすると、表が消えたあとに道が分からなくなり、
+ *   **置き場に中身だけが残って、誰も消せなくなる**
+ *
+ * 【全部めくる】
+ *   `list()` は**既定で 100 件**しか返さない。
+ *   1回だけ読んで消すと、**101 件目から先が静かに残る**
+ *   (**黙って消さない・黙って絞らない**・CLAUDE.md)。
+ *
+ * 【道は1段だけ】
+ *   `pathFor()` が `<ゲストの id>/<名前>` を作るので、
+ *   入れ子のフォルダは無い。**上の関数と同じ形**を使う
+ *   (**呼び名を2か所に書かない**)。
+ *
+ * @returns {{data: number|null, error: string|null}} 消した本数
+ * ============================================================================
+ */
+export async function removeAllLearnerFiles(learnerId) {
+  if (!supabase) return { data: null, error: 'Supabase に接続していません' }
+  if (!learnerId) return { data: null, error: 'どのゲストか分かりません' }
+  const folder = String(learnerId)
+  const PAGE = 100
+  const paths = []
+  try {
+    for (let page = 0; ; page += 1) {
+      const { data, error } = await withTimeout(
+        supabase.storage.from(BUCKET).list(folder, {
+          limit: PAGE, offset: page * PAGE,
+        }),
+      )
+      if (error) return { data: null, error: fail(error) }
+      const rows = data ?? []
+      for (const f of rows) {
+        /* **フォルダは消さない。** `list()` は入れ子の入れ物も返すが、
+           あれは `id` を持たない(消す相手ではない) */
+        if (f?.id && f.name) paths.push(`${folder}/${f.name}`)
+      }
+      if (rows.length < PAGE) break
+    }
+    if (!paths.length) return { data: 0, error: null }
+    const { error } = await withTimeout(
+      supabase.storage.from(BUCKET).remove(paths),
+    )
+    if (error) return { data: null, error: fail(error) }
+    return { data: paths.length, error: null }
+  } catch (e) {
+    return { data: null, error: fail(e) }
+  }
+}

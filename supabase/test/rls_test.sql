@@ -1387,10 +1387,29 @@ select pg_temp.expect('単語帳が消えている',
 select pg_temp.expect('セッションの記録が消えている',
   (select count(*)::int from public.lesson_notes
    where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
-select pg_temp.expect('置いたファイルの中身も消えている',
+-- **置いた中身は、この関数では消さない**(0071・第5.299節・2026-09-28 実機)。
+--   Supabase が `storage.objects` への直接の delete を断るようになった。
+--     Direct deletion from storage tables is not allowed.
+--     Use the Storage API instead.
+--   関数は1行でも失敗すると丸ごと巻き戻るので、**ゲストが1人も消せなく
+--   なっていた。** いまは画面の側が Storage API で先に消してから呼ぶ。
+--
+-- **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+--   ①控え(表)は、ここで消える  ②置き場の中身には、手を出さない
+select pg_temp.expect('ファイルの控え(表)は消えている',
+  (select count(*)::int from public.learner_files
+   where learner_id = '33333333-3333-3333-3333-333333333333'), 0);
+select pg_temp.expect('置き場の中身には手を出さない(Storage API の仕事)',
   (select count(*)::int from storage.objects
    where bucket_id = 'learner-files'
-     and name like '33333333-3333-3333-3333-333333333333/%'), 0);
+     and name like '33333333-3333-3333-3333-333333333333/%'), 1);
+-- **関数の中に、直接の delete が1行も残っていないか。**
+--   上の数え上げだけだと、**行が無いときに素通りする**
+--   (置いた中身が0件の DB では、消しても消さなくても 0 になる)
+select pg_temp.expect('erase_learner は storage を直接消さない',
+  (select count(*)::int from pg_proc
+   where proname = 'erase_learner'
+     and pg_get_functiondef(oid) like '%delete from storage.objects%'), 0);
 select pg_temp.expect('文の日ごとの記録が消えている(0042)',
   (select count(*)::int from public.qr_days
    where learner_id = '33333333-3333-3333-3333-333333333333'), 0);

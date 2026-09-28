@@ -38,6 +38,9 @@ import { chunkPlan, needsChunkJa } from './chunkJa.js'
 /* 文法解説(SVOC と修飾要素・0051)。**判断は `grammarNote.js` 1か所** */
 import { grammarItems, grammarPlan, grammarTodo } from './grammarNote.js'
 import { supabase } from './supabase.js'
+/* **置いた中身は Storage API で消す**(第5.299節)——
+   SQL からの直接削除は Supabase が断る */
+import { removeAllLearnerFiles } from './learnerFiles.js'
 import { askWithRetry, genCutNote, isGenCut } from './genRetry.js'
 import { copyTitleFor } from './format.js'
 /* まとめて共有したときの知らせ。**文言はここではなく、あちら1か所** */
@@ -1039,6 +1042,21 @@ export async function setLearnerStatus(learnerId, status, note) {
  */
 export async function eraseLearner(learnerId) {
   if (!supabase) return ng('Supabase が設定されていません')
+
+  /* **置いた中身が先。表はあと**(第5.299節・2026-09-28 実機)。
+
+     `erase_learner()` は SQL の中で `delete from storage.objects` を
+     していたが、**Supabase がそれを断るようになった** ——
+     `Direct deletion from storage tables is not allowed.`
+     関数は1行でも失敗すると丸ごと巻き戻るので、
+     **ゲストは1人も消せない状態**だった。
+
+     **消せなかったら、表には手をつけない。** 何も失われないので、
+     もう一度押せばやり直せる。逆にすると、表が消えたあとに
+     道が分からなくなり、**置き場に中身だけが残る**。 */
+  const files = await removeAllLearnerFiles(learnerId)
+  if (files.error) return ng(`置いたファイルを消せませんでした: ${files.error}`)
+
   const { data, error } = await supabase.rpc('erase_learner', { p_learner: learnerId })
   if (error) {
     /* 0041 をまだ貼っていない Supabase でも、**行き止まりにしない。**
@@ -1057,7 +1075,11 @@ export async function eraseLearner(learnerId) {
     }
     return fail(error, '記録を消せませんでした')
   }
-  return ok(data ?? {})
+  /* **数えたものは、そのまま画面に出す。** 0 と `null` を取り違えない ——
+     数えられなかったら、その行ごと出さない(CLAUDE.md) */
+  return ok(files.data === null
+    ? (data ?? {})
+    : { '置いたファイル': files.data, ...(data ?? {}) })
 }
 
 // ── AI に下書きを作らせる ─────────────────────────────────────
