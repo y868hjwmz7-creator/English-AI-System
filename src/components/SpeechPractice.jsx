@@ -20,9 +20,8 @@
  *   まったく同じ考え方)。
  *
  * 【新しい仕組みを1つも作っていない】
- *   通しは `useBodyAudio`(紙・集中モードと同じ道具)、
+ *   通しは `useBodyAudio`(紙と同じ道具)、
  *   1文ずつは `SpeakButton`、単語帳は `lookupWord` → `setWordStatus`、
- *   集中モードは `FocusFrame`(`FocusReader` / `StepFocus` と同じ骨組み)。
  *
  * 【音声は1本にまとめる】(2026-09 利用者の指定)
  *
@@ -33,15 +32,16 @@
  *   いまは `speechWholeSlice()` を渡して、**その1本の中の区間**を鳴らす
  *   (段落ごとの Listen を `wholeSliceOf()` で直したのと同じ考え方)。
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
-  speechLevelOf, speechLines, speechParts, speechPhrases, speechText,
+  speechLevelOf, speechLines, speechParts, speechPhrases,
   speechWholeSlice, speechWordList,
 } from '../lib/speechPractice.js'
 import useBodyAudio from '../lib/useBodyAudio.js'
-/* **音声のダウンロードと、文章のコピー**(第5.300節・利用者の指定)。
+/* **音声のダウンロード**(第5.300節・利用者の指定)。
    押したあとの段取りも知らせの文言も、**教材とまったく同じ1か所**を使う
-   —— 書き写すと、直したときに片方だけ古くなる(CLAUDE.md) */
+   —— 書き写すと、直したときに片方だけ古くなる(CLAUDE.md)。
+   **「文章をコピー」と「集中モード」は第5.302節で外した**(利用者の指定) */
 import { useAudioDownload } from '../lib/useAudioDownload.js'
 import { downloadSpeechAudio } from '../lib/downloadAudio.js'
 import { speechClipPieces } from '../lib/audioPlaylist.js'
@@ -55,18 +55,12 @@ import { PREMIUM } from '../lib/voiceTier.js'
 import { wholePlayText } from '../lib/wholePlay.js'
 import { phraseKind, seenSentenceFor } from '../lib/writingReview.js'
 import EnglishText from './EnglishText.jsx'
-import FocusFrame from './FocusFrame.jsx'
-import {
-  DownloadIcon, FileIcon, FocusIcon, MicIcon, PlusIcon, SpeakerIcon, StopIcon,
-} from './Icons.jsx'
+import { DownloadIcon, MicIcon, PlusIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 /* **押しても、まわりの物が動かない**(第5.281節) —— 文字数が変わるので要る */
 import SteadyLabel from './SteadyLabel.jsx'
 import Stepper from './Stepper.jsx'
-
-/** コピーのボタンの言葉。**出すのにも、場所を取るのにも、この同じ一覧** */
-const コピーの文言 = ['文章をコピー', 'コピーしました']
 
 export default function SpeechPractice({ speech, learnerId = null, level = null }) {
   const [rateId, setRateId] = useState(loadRateId)
@@ -74,8 +68,6 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
   const [added, setAdded] = useState(() => new Set())
-  /** 集中モードで開いている文。**`null` なら閉じている** */
-  const [focusAt, setFocusAt] = useState(null)
   const { statuses, mark } = useWordStatuses(learnerId)
   /* **通しの読み上げは `useBodyAudio` に任せる。**
      鳴っているか / 用意しています… / 止めた場所からの再開は、
@@ -89,8 +81,6 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
     ),
     download: downloadSpeechAudio,
   })
-  /** 一本化した文章をコピーしたか。**成功と失敗を同じ見た目で終わらせない** */
-  const [copied, setCopied] = useState(null)
 
   const parts = speechParts(speech)
   const phrases = speechPhrases(speech)
@@ -101,32 +91,6 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
   /* **レベルはゲストのものを使う**(2026-09 利用者の指定)。
      判断は `speechLevelOf()` 1か所 —— 画面で `'B1'` と書かない */
   const lv = speechLevelOf(level)
-  /** いちばん後ろの文。**添削をやり直すと文の数が変わる**ので、必ず収める */
-  const lastAt = Math.max(0, sentences.length - 1)
-
-  /* **鳴っている文を、そのまま開く**(紙で光る段落がまん中に来るのと同じ)。
-     追わないと、通しで鳴らしているあいだ**開いている1文だけが取り残される。**
-     **閉じているときは何もしない**(勝手に開かない) */
-  useEffect(() => {
-    if (audio.now === null) return
-    setFocusAt((a) => (a === null ? null : audio.now))
-  }, [audio.now])
-
-  /* Esc で終える。矢印で送る(`StepFocus` とまったく同じ作法)。
-     **文字を打っている最中は横取りしない** —— 語の吹き出しや
-     メモの中でカーソルを動かせなくなる */
-  useEffect(() => {
-    if (focusAt === null) return undefined
-    const onKey = (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); setFocusAt(null); return }
-      const el = e.target
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
-      if (e.key === 'ArrowRight') setFocusAt((a) => Math.min(lastAt, a + 1))
-      if (e.key === 'ArrowLeft') setFocusAt((a) => Math.max(0, a - 1))
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  })
 
   /** 覚えたい語句を単語帳へ。**`WordbookAdd` / `WritingAnswer` と同じ道** */
   const toWordbook = async (p) => {
@@ -157,12 +121,8 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
 
   if (!sentences.length) return null
 
-  /** 集中モードで出す文。**必ず範囲に収める**(添削をやり直すと数が変わる) */
-  const at = focusAt === null ? null : Math.min(Math.max(focusAt, 0), lastAt)
-
   /**
-   * 1文ぶんの中身。**ふだんの一覧でも、集中モードでも、これ1つ。**
-   * **書き写すと、必ずどちらかだけ古くなる**(CLAUDE.md)。
+   * 1文ぶんの中身。
    *
    * 部品(`const Line = …`)にはしない —— 描き直すたびに別の型になり、
    * `EnglishText` ごと組み直されて、語の吹き出しが閉じてしまう。
@@ -223,38 +183,10 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
         {/* 速さは**端末に覚えた1つ**を使う(どの画面でも同じ速さで鳴る) */}
         <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
                  onChange={(id) => { audio.stop(); setRateId(id); saveRateId(id) }} />
-        {/* **並べない。入れ替える**(集中モードの訳と同じ決まり)。
-            並べると箱が2倍になり、送るものが増える */}
+        {/* **並べない。入れ替える。** 並べると箱が2倍になる */}
         <button type="button" className="btn btn--small btn--ghost speech-swap"
                 onClick={() => setView((v) => (v === 'en' ? 'ja' : 'en'))}>
           {view === 'en' ? '訳を見る' : '英語に戻す'}
-        </button>
-        {/* **集中モード**(2026-09 利用者の指定「今のままに集中モードだけつけて」)。
-            **1文ずつだけを画面に出す。** 足したのはこのボタンだけで、
-            6Steps は足していない(**言われた場所だけを直す**・共通ルール) */}
-        <button type="button" className="btn btn--small btn--ghost speech-focus-open"
-                onClick={() => setFocusAt(audio.now ?? audio.at ?? 0)}>
-          <FocusIcon />集中モード
-        </button>
-        {/* **文章を一本化したもののコピー**(第5.300節・利用者の指定)。
-            出すのは `speechText()` —— **画面に出ている英文をつないだもの**で、
-            作り方は `speechPractice.js` 1か所である(書き写さない) */}
-        <button type="button" className="btn btn--small btn--ghost speech-copy"
-                onClick={async () => {
-                  const text = speechText(speech)
-                  try {
-                    await navigator.clipboard.writeText(text)
-                    setCopied('ok')
-                  } catch {
-                    /* 断られた。**行き止まりにしない** ——
-                       画面の英文はそのまま選んで取れる */
-                    setCopied('ng')
-                  }
-                }}>
-          <FileIcon />
-          <SteadyLabel keep={コピーの文言}>
-            {コピーの文言[copied === 'ok' ? 1 : 0]}
-          </SteadyLabel>
         </button>
         {/* **音声のダウンロード**(第5.300節)。
             集めるのも文言も、教材と同じ1か所を通る。
@@ -269,11 +201,6 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
       </div>
       {/* **知らせは、押した場所のすぐ下**(行の中に入れると横に並ぶ) */}
       <AudioDownloadNote done={dl.done} materialId={speech.id} speech />
-      {copied === 'ng' && (
-        <p className="notice notice--warn">
-          コピーできませんでした。英文をなぞって選んでください。
-        </p>
-      )}
 
       <ol className="speech-sentences">
         {sentences.map((s, i) => (
@@ -283,56 +210,6 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
         ))}
       </ol>
 
-      {/* ── 集中モード ──────────────────────────────────────────
-          **骨組みは `FocusFrame` 1つ**(`FocusReader` / `StepFocus` /
-          Quick Response と同じもの)。**中身は作らない** ——
-          ふだんの一覧とまったく同じ `lineOf()` をそのまま渡す。
-
-          **別の練習へ移さない**(CLAUDE.md)。ここで出るのは
-          **いま取り組んでいるスピーチの、その1文**である */}
-      {focusAt !== null && (
-        <FocusFrame
-          className="speechfocus"
-          learnerId={learnerId}
-          page={`speech:${speech.id}:${at}`}
-          scrollKey={at}
-          onClose={() => setFocusAt(null)}
-          /* **速さは、どの集中モードでも上の帯に置く**(利用者の指定)。
-             中身はふだんの帯と**同じ `Stepper`** で、押したときの動きも同じ */
-          settings={(
-            <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
-                     onChange={(id) => { audio.stop(); setRateId(id); saveRateId(id) }} />
-          )}
-          top={<span className="focus-count">{at + 1} / {sentences.length} 文</span>}
-          bar={(
-            <>
-              <button type="button" className="btn focus-move"
-                      onClick={() => setFocusAt((a) => Math.max(0, a - 1))}
-                      disabled={at === 0}>
-                ◀ 前
-              </button>
-              <div className="focus-mid">
-                {/* **並べない。入れ替える**(ふだんの帯と同じ決まり) */}
-                <button type="button" className="btn btn--small btn--ghost"
-                        onClick={() => setView((v) => (v === 'en' ? 'ja' : 'en'))}>
-                  {view === 'en' ? '訳' : '英語'}
-                </button>
-              </div>
-              <button type="button" className="btn focus-move"
-                      onClick={() => setFocusAt((a) => Math.min(lastAt, a + 1))}
-                      disabled={at >= lastAt}>
-                次 ▶
-              </button>
-            </>
-          )}
-        >
-          <ol className="speech-sentences speech-sentences--focus" start={at + 1}>
-            <li className={audio.now === at ? 'is-on' : ''}>
-              {lineOf(sentences[at], at)}
-            </li>
-          </ol>
-        </FocusFrame>
-      )}
 
       {notes.length > 0 && (
         <>

@@ -4916,16 +4916,24 @@ console.log('\nスピーチ練習(0054)')
      **音は鳴る**ので押してみても気づけない */
   ok(/whole=\{speechWholeSlice\(speech, i\)\}/.test(prac),
     'スピーチ … 1文ずつの Listen に、1本の中の区間を渡している')
-  /* **集中モードは `FocusFrame` をそのまま使う**(骨組みを2つ持たない)。
-     **6Steps は足していない**(利用者の指定「今のままに集中モードだけつけて」) */
-  ok(/<FocusFrame/.test(prac) && /className="speechfocus"/.test(prac),
-    'スピーチ … 集中モードの骨組みは `FocusFrame` 1つ')
+  /* **集中モードと「文章をコピー」は外した**(第5.302節・利用者の指定)。
+
+       > 集中モードと文章コピーはやはり排除でよいです
+
+     **出ない側も見る**(CLAUDE.md)—— 戻したら赤くなる。
+     **持ちものごと消えているか**まで見る ——
+     ボタンだけ消して中身を残すと、誰も押せない仕掛けが残る */
+  ok(!/<FocusFrame/.test(prac) && !/speechfocus/.test(prac) && !/focusAt/.test(prac),
+    'スピーチ … 集中モードは、持ちものごと外してある')
+  ok(!/speech-copy/.test(prac) && !/clipboard/.test(prac),
+    'スピーチ … 「文章をコピー」は、持ちものごと外してある')
   ok(!/SIX_STEPS|StepFocus/.test(prac),
     'スピーチ … 6Steps は足していない(言われた場所だけを直す)')
-  /* **中身は書き写さない。** ふだんの一覧と同じ `lineOf()` を渡す */
-  ok(/\{lineOf\(sentences\[at\], at\)\}/.test(prac)
-    && /\{lineOf\(s, i\)\}/.test(prac),
-    'スピーチ … 集中モードの中身は、ふだんの一覧とまったく同じもの')
+  /* **消しすぎていないか。** 1文ずつの並びと、音声のダウンロードは残す */
+  ok(/\{lineOf\(s, i\)\}/.test(prac),
+    'スピーチ … 1文ずつの並びは残っている(消しすぎていない)')
+  ok(/downloadSpeechAudio/.test(prac) && /useAudioDownload/.test(prac),
+    'スピーチ … 音声のダウンロードは残っている(第5.300節)')
   ok(/level=\{lv\}/.test(prac) && /level: lv/.test(prac) && !/level="B1"/.test(prac),
     'スピーチ … 語の意味も、ゲストのレベルで引く')
 

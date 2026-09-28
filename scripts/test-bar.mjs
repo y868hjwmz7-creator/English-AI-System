@@ -3196,22 +3196,27 @@ export default defineConfig({
     /* **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
          上だけだと、**どの画面にも出さない**形に書き換えても緑になる。
          消えるのは「帯を渡していない画面」だけで、
-         読む・6Steps・レッスン・スピーチは**これまでどおり出る。** */
+         読む・6Steps・レッスンは**これまでどおり出る。**
+
+         **スピーチは第5.302節で集中モードごと外した**(利用者の指定
+         「集中モードと文章コピーはやはり排除でよいです」)ので、
+         ここには入れない —— **数を書き写さない。一覧から数える** */
     {
       const 骨 = readFileSync(join(ROOT, 'src/components/FocusFrame.jsx'), 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
       const 帯で決める = /\{plain \|\| !bar \? null : \(/.test(骨)
-      const 帯を渡す = ['StepFocus', 'FocusReader', 'LessonView', 'SpeechPractice']
+      const 出る画面 = ['StepFocus', 'FocusReader', 'LessonView']
+      const 帯を渡す = 出る画面
         .filter((n) => /\n\s*bar=\{/.test(
           readFileSync(join(ROOT, `src/components/${n}.jsx`), 'utf8')))
       if (!帯で決める) {
         ng('集中モードを終える … 出す / 出さないを、帯の有無で決めていない',
           '幅や画面の名前で分けると、置き場所の数だけ食い違う')
-      } else if (帯を渡す.length !== 4) {
+      } else if (帯を渡す.length !== 出る画面.length) {
         ng(`集中モードを終える … 帯を渡す画面が ${帯を渡す.length} つになった`,
-          `出るはずの4画面が減っている(${帯を渡す.join(' / ')})`)
+          `出るはずの ${出る画面.length} 画面が減っている(${帯を渡す.join(' / ')})`)
       } else {
-        ok('集中モードを終える … 帯のある4画面では、これまでどおり出る')
+        ok(`集中モードを終える … 帯のある ${出る画面.length} 画面では、これまでどおり出る`)
       }
     }
 
@@ -5977,39 +5982,21 @@ for (const w of [1280, 390, 320]) {
     札: document.querySelector('.speech-swap')?.textContent.trim() ?? '',
   }))
 
-  /* ── **集中モード**(2026-09 利用者の指定「今のままに集中モードだけつけて」)──
+  /* ── **集中モードと「文章をコピー」は外した**(第5.302節・利用者の指定)──
+
+       > 集中モードと文章コピーはやはり排除でよいです
+
      **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
-     開く前に `.focus` があってはいけない(勝手に集中モードで始まらない)。 */
-  const 前 = await page.evaluate(() => document.querySelectorAll('.focus').length)
-  await page.click('.speech-swap')          // **英語に戻してから**開く
-  await page.click('.speech-focus-open')
-  await page.waitForTimeout(200)
-  const 集 = await page.evaluate((re) => {
-    const el = document.querySelector('.focus.speechfocus')
-    const rows = [...document.querySelectorAll('.speechfocus .speech-sentences > li')]
-    return {
-      開く: !!el,
-      紙: !!document.querySelector('.speechfocus .focus-paper'),
-      文: rows.length,
-      英: rows[0]?.querySelector('.writing-en')?.textContent.trim() ?? '',
-      聴く: rows.filter((r) => [...r.querySelectorAll('button')]
-        .some((b) => new RegExp(re).test(b.textContent.trim()))).length,
-      数: document.querySelector('.speechfocus .focus-count')?.textContent.trim() ?? '',
-      速さ: !!document.querySelector('.speechfocus .stepper'),
-      よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    }
-  }, 聴くの形)
-  /* **送れるか。** 1文ずつ出す画面なので、送れないと2文目へ行けない */
-  await page.click('.speechfocus .focus-bar > .btn:last-child')
-  await page.waitForTimeout(150)
-  const 次 = await page.evaluate(() => ({
-    数: document.querySelector('.speechfocus .focus-count')?.textContent.trim() ?? '',
-    英: document.querySelector('.speechfocus .writing-en')?.textContent.trim() ?? '',
+     ここは**出ない側**である —— 戻したら赤くなる。
+     `.focus` が1つも無いことも見る(**勝手に集中モードで始まらない**) */
+  const 消えた = await page.evaluate(() => ({
+    集中: document.querySelectorAll('.speech-focus-open').length,
+    コピー: document.querySelectorAll('.speech-copy').length,
+    焦点: document.querySelectorAll('.focus').length,
+    /* **残った帯の持ちもの。** 消しすぎていないかも見る */
+    帯: [...document.querySelectorAll('.speech-bar .btn')]
+      .map((b) => b.textContent.trim()),
   }))
-  /* **戻る道。** 閉じられないと行き止まりになる */
-  await page.click('.speechfocus .focus-exit')
-  await page.waitForTimeout(150)
-  const 閉 = await page.evaluate(() => document.querySelectorAll('.focus').length)
   await page.close()
 
   const 名 = `スピーチ(${w}px)`
@@ -6037,27 +6024,19 @@ for (const w of [1280, 390, 320]) {
     ng(`${名} … 押せる大きさを割っている`, `${got.小}px`)
   } else if (got.よこ > 0 || got.右 > w) {
     ng(`${名} … 横にはみ出している`, `${got.よこ}px / 右 ${got.右}`)
-  } else if (前 !== 0) {
-    // **勝手に集中モードで始まらない**(押したときだけ開く)
-    ng(`${名} … 開いた瞬間から集中モードになっている`, String(前))
-  } else if (!集.開く || !集.紙) {
-    ng(`${名} … 集中モードが開かない(黒い地に白い紙)`, `${集.開く} / 紙 ${集.紙}`)
-  } else if (集.文 !== 1) {
-    // **1つずつ出す。** これが集中モードの役目そのものである
-    ng(`${名} … 集中モードで1文だけになっていない`, String(集.文))
-  } else if (集.数 !== '1 / 2 文') {
-    ng(`${名} … 集中モードに「何文めか」が出ていない`, 集.数)
-  } else if (集.聴く !== 1 || !集.速さ) {
-    ng(`${名} … 集中モードに Listen / 速さが無い`, `${集.聴く} / 速さ ${集.速さ}`)
-  } else if (集.よこ > 0) {
-    ng(`${名} … 集中モードが横にはみ出している`, `${集.よこ}px`)
-  } else if (次.数 !== '2 / 2 文' || 次.英 === 集.英) {
-    // **送ると、本当に別の文が出る**(数字だけ動いても意味がない)
-    ng(`${名} … 集中モードで次の文へ送れない`, `${次.数} / 同じ文 ${次.英 === 集.英}`)
-  } else if (閉 !== 0) {
-    ng(`${名} … 集中モードから戻れない(行き止まり)`, String(閉))
+  } else if (消えた.集中) {
+    // **外したものが戻っていないか**(第5.302節)
+    ng(`${名} … 集中モードが戻っている`, String(消えた.集中))
+  } else if (消えた.コピー) {
+    ng(`${名} … 「文章をコピー」が戻っている`, String(消えた.コピー))
+  } else if (消えた.焦点) {
+    ng(`${名} … 集中モードの枠が残っている`, String(消えた.焦点))
+  } else if (!消えた.帯.some((t) => /音声ダウンロード|集めています/.test(t))) {
+    // **消しすぎていないか。** 帯に残すものは残っているか
+    ng(`${名} … 音声ダウンロードまで消えている`, 消えた.帯.join(' / '))
   } else {
-    ok(`${名} … 1文ずつ聴けて、訳は入れ替わり、集中モードも1文ずつ`)
+    ok(`${名} … 1文ずつ聴けて、訳は入れ替わる(集中モードとコピーは出ない`
+      + ` / 帯は ${消えた.帯.length} 個)`)
   }
 }
 
