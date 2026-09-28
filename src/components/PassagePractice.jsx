@@ -40,6 +40,9 @@ import { prefetchSectionGlosses } from '../lib/vocab.js'
 /* **通しで鳴らすボタンの文字は `wholePlay.js` 1か所**(第5.290節・利用者の指定
    「もちろん、全てに全体を聞くを追加して」)*/
 import { wholePlayText } from '../lib/wholePlay.js'
+/* **1文ずつのボタンの文字は `speakLabel.js` 1か所**(第5.297節)。
+   ここに書き写すと、片方だけ古くなる */
+import { SPEAK_LISTEN, SPEAK_STOP } from '../lib/speakLabel.js'
 import { storedChunks, storedParts } from '../lib/chunkJa.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import { progressKey, useProgress } from '../lib/progress.js'
@@ -843,8 +846,8 @@ export default function PassagePractice({
                   onClick={() => playOne(item)}
                 >
                   {speakingId === item.id
-                    ? <><StopIcon />Stop</>
-                    : <><SpeakerIcon />Listen</>}
+                    ? <><StopIcon />{SPEAK_STOP}</>
+                    : <><SpeakerIcon />{SPEAK_LISTEN}</>}
                 </button>
                 {/* **Listen のとなりに、くり返し**(2026-09 利用者の指定) */}
                 <RepeatToggle on={loopIds.has(item.id)}

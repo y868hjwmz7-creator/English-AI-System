@@ -44,6 +44,11 @@ import { hasTone } from '../src/lib/btnTone.js'
    ここに `'全体を聞く'` と書き写すと、**名前を変えた日に見張りだけが古くなる**
    (値を書き写さない。性質で見る・CLAUDE.md) */
 import { WHOLE_PLAY_CORE, wholePlayText } from '../src/lib/wholePlay.js'
+/* **1文ずつ鳴らすボタンの文字は `speakLabel.js` 1か所**(第5.297節)。
+   **ここに `'聞く'` と書き写さない** —— 書き写すと、画面を戻しても緑になる */
+import { SPEAK_LISTEN, SPEAK_STOP } from '../src/lib/speakLabel.js'
+/** 1文ずつ鳴らすボタンかどうか。**頭で見る**(「全体を聞く」は頭が違うので混ざらない) */
+const 聴くの形 = `^(${SPEAK_LISTEN}|${SPEAK_STOP})`
 /* 本文(記事・会話)の演習。**一覧を書き写さない** ——
    種類を足した日に、ここだけ古い一覧が残らないようにする */
 import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
@@ -410,8 +415,9 @@ for (const [label, want] of Object.entries(WANT)) {
   }
 
   /** 設問ごとに出ている Listen の数 */
-  const listens = () => page.evaluate(() => [...document.querySelectorAll('.lesson-items button')]
-    .filter((b) => /^(Listen|Stop)/.test(b.textContent.trim())).length)
+  const listens = () => page.evaluate((re) =>
+    [...document.querySelectorAll('.lesson-items button')]
+      .filter((b) => new RegExp(re).test(b.textContent.trim())).length, 聴くの形)
 
   // ① 英文和訳(`prompt_en` を読む)。**広い画面では帯の中に出る**
   {
@@ -490,12 +496,12 @@ for (const [label, want] of Object.entries(WANT)) {
        **いつも1つめの演習を見てしまう**(実測して気づいた) */
 
     /** その演習の1問目に出ている Listen の数 */
-    const inItem = (type) => page.evaluate((t) => {
+    const inItem = (type) => page.evaluate(([t, re]) => {
       const li = document.querySelector(`[data-type="${t}"] .lesson-items > li`)
       if (!li) return null
       return [...li.querySelectorAll('button')]
-        .filter((b) => /^(Listen|Stop)/.test(b.textContent.trim())).length
-    }, type)
+        .filter((b) => new RegExp(re).test(b.textContent.trim())).length
+    }, [type, 聴くの形])
     /** その演習の1問目の「解答を見る」を押す */
     const open = async (type) => {
       await page.evaluate((t) => {
@@ -549,7 +555,7 @@ for (const [label, want] of Object.entries(WANT)) {
   for (const w of [1500, 1200, 900, 390]) {
     await page.setViewportSize({ width: w, height: 900 })
     await page.waitForTimeout(300)
-    const m = await page.evaluate((passage) => ({
+    const m = await page.evaluate(([passage, re]) => ({
       /* 本文の各段落に付いていたもの。**言葉で数える**
          (Listen / Stop のどちらの形でも拾う)。
 
@@ -562,11 +568,11 @@ for (const [label, want] of Object.entries(WANT)) {
          種類の一覧は `exerciseTypes.js` 1か所から渡している */
       段落: passage.flatMap((t) =>
         [...document.querySelectorAll(`.lesson-page[data-type="${t}"] .lesson-items button`)])
-        .filter((b) => /^(Listen|Stop)/.test(b.textContent.trim())).length,
+        .filter((b) => new RegExp(re).test(b.textContent.trim())).length,
       /* **通しの読み上げは残す。** 上の「全体を聞く」と操作盤は別物 */
       全体: !!document.querySelector('.lesson-listen'),
       操作盤: !!document.querySelector('.player'),
-    }), PASSAGE_TYPES)
+    }), [PASSAGE_TYPES, 聴くの形])
     if (m.段落) ng(`${w}px … 段落ごとの Listen が ${m.段落} 個 出ている`)
     else if (!m.全体) ng(`${w}px … 「${wholePlayText()}」まで消えている`)
     else if (!m.操作盤) ng(`${w}px … 操作盤が出ていない`, '鳴らす道が無くなる')
@@ -4846,6 +4852,63 @@ export default defineConfig({
     } else ok(`全体を聞く … 狭い画面でも「${WHOLE_PLAY_CORE}」は残る(落とすのは添えだけ)`)
   }
 
+  /* ── ★ **1文ずつ鳴らすボタンの名前も、1か所から来ているか**(第5.297節)──
+   *
+   *   2026-09-28 利用者の指定。
+   *
+   *     > 文型トレーニングにおいては全体を通して聞く、と共に
+   *     > 文章ごとの「聞く」も必要です。直してください。
+   *     > 勝手になくすの、やめてください
+   *
+   *   **ボタンは消えていなかった。** 描いて数えたら出ていた
+   *   (英文和訳 4/4・和文英訳 2/2)。**文字が `Listen` のまま**で、
+   *   上が「全体を聞く」になったぶん、**見分けがつかなくなっていた。**
+   *
+   *   出る場所は3つある —— `SpeakButton`(設問ごと)、
+   *   `FocusReader`(集中モード)、`PassagePractice`(本文の練習)。
+   *   **「全体を聞く」とまったく同じ作法**で、
+   *   `speakLabel.js` 1か所から引く。
+   *   ──────────────────────────────────────────────── */
+  {
+    const 読む = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
+    /* **コメントを落としてから数える**(CLAUDE.md)——
+       説明の中に `Listen` が何十個も出てくるので、そのままでは永久に赤い */
+    const 素 = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/^\s*\/\/.*$/gm, '')
+    const 場所 = ['components/SpeakButton.jsx', 'components/FocusReader.jsx',
+      'components/PassagePractice.jsx']
+    const 書き写し = []
+    for (const f of 場所) {
+      const t = 素(読む(f))
+      /* ①**取り込んでいるか**(定義だけあって誰も呼ばなければ、何も起きない) */
+      if (!/from '\.\.\/lib\/speakLabel\.js'/.test(t)) {
+        書き写し.push(`${f} … speakLabel.js から引いていない`)
+      }
+      /* ②**古い名前が残っていないか**(`addEventListener` などは頭が違う) */
+      if (/['"`>]Listen\b/.test(t)) 書き写し.push(`${f} … 古い名前(Listen)が残っている`)
+      /* ③**新しい名前を直に書いていないか**(書いたら、次の改名で片方だけ古くなる) */
+      if (new RegExp(`['"\`>]${SPEAK_LISTEN}`).test(t)) {
+        書き写し.push(`${f} … 「${SPEAK_LISTEN}」を直に書いている`)
+      }
+    }
+    if (書き写し.length) {
+      ng('1文ずつの聞く … 名前を書き写している場所がある', 書き写し.join('\n    '))
+    } else {
+      ok(`1文ずつの聞く … ${場所.length}つの場所とも \`speakLabel.js\` 1か所から引く`
+        + '(書き写しは0)')
+    }
+
+    /* **見張り自身が書き写していないか。**
+       ここに `'聞く'` と書くと、画面を `Listen` に戻しても緑のままになる */
+    const 自分 = 素(readFileSync(new URL(import.meta.url), 'utf8'))
+    if (new RegExp(`聴くの形 = \`\\^\\(\\$\\{SPEAK_LISTEN\\}`).test(自分)) {
+      ok('1文ずつの聞く … 見張りも `speakLabel.js` から読む(文字を書き写していない)')
+    } else {
+      ng('1文ずつの聞く … 見張りが文字を書き写している',
+        '画面を戻しても緑になるので、何も守らない')
+    }
+  }
+
   /* ── ★ **画面を消しても、聞き流しは進むか**(第5.285節)─────────────
    *
    *   2026-09-27 実機・利用者の指定。
@@ -5877,7 +5940,7 @@ for (const w of [1280, 390, 320]) {
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=speech`,
     { waitUntil: 'networkidle' })
   await page.waitForTimeout(250)
-  const got = await page.evaluate(() => {
+  const got = await page.evaluate((re) => {
     const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
     const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
     const rows = [...document.querySelectorAll('.speech-sentences > li')]
@@ -5888,7 +5951,11 @@ for (const w of [1280, 390, 320]) {
     return {
       文: rows.length,
       番号: rows.map((r) => r.querySelector('.num-badge')?.textContent.trim() ?? ''),
-      聴く: rows.filter((r) => /Listen|Stop/.test(r.textContent)).length,
+      /* **押すものそのものを数える。** 行ぜんぶの文字で数えると、
+         **英文が頭に来る**ので「頭が『聞く』か」で見られない ——
+         数え方が2通りになって、片方が甘くなる(CLAUDE.md) */
+      聴く: rows.filter((r) => [...r.querySelectorAll('button')]
+        .some((b) => new RegExp(re).test(b.textContent.trim()))).length,
       英: rows.filter((r) => r.querySelector('.writing-en')).length,
       訳: rows.filter((r) => r.querySelector('.writing-ja')).length,
       通し: document.querySelector('.speech-bar .btn--primary')?.textContent.trim() ?? '',
@@ -5900,7 +5967,7 @@ for (const w of [1280, 390, 320]) {
       右: Math.max(0, ...btns.map(right),
         ...rows.map(right)),
     }
-  })
+  }, 聴くの形)
   // ③ 「訳を見る」で**入れ替わる**(並べない)
   await page.click('.speech-swap')
   await page.waitForTimeout(150)
@@ -5917,7 +5984,7 @@ for (const w of [1280, 390, 320]) {
   await page.click('.speech-swap')          // **英語に戻してから**開く
   await page.click('.speech-focus-open')
   await page.waitForTimeout(200)
-  const 集 = await page.evaluate(() => {
+  const 集 = await page.evaluate((re) => {
     const el = document.querySelector('.focus.speechfocus')
     const rows = [...document.querySelectorAll('.speechfocus .speech-sentences > li')]
     return {
@@ -5925,12 +5992,13 @@ for (const w of [1280, 390, 320]) {
       紙: !!document.querySelector('.speechfocus .focus-paper'),
       文: rows.length,
       英: rows[0]?.querySelector('.writing-en')?.textContent.trim() ?? '',
-      聴く: rows.filter((r) => /Listen|Stop/.test(r.textContent)).length,
+      聴く: rows.filter((r) => [...r.querySelectorAll('button')]
+        .some((b) => new RegExp(re).test(b.textContent.trim()))).length,
       数: document.querySelector('.speechfocus .focus-count')?.textContent.trim() ?? '',
       速さ: !!document.querySelector('.speechfocus .stepper'),
       よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     }
-  })
+  }, 聴くの形)
   /* **送れるか。** 1文ずつ出す画面なので、送れないと2文目へ行けない */
   await page.click('.speechfocus .focus-bar > .btn:last-child')
   await page.waitForTimeout(150)

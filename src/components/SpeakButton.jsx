@@ -15,6 +15,9 @@
  *   端末の声は、MP3 がまだ無いときの受け皿として渡している。
  */
 import { useEffect, useRef, useState } from 'react'
+/* **1文ずつのボタンの文字は `speakLabel.js` 1か所**(第5.297節)。
+   ここに書き写すと、片方だけ古くなる */
+import { SPEAK_LISTEN, SPEAK_STOP } from '../lib/speakLabel.js'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { canReadAloud, readAloud, stopReading } from '../lib/readAloud.js'
 import { STANDARD } from '../lib/voiceTier.js'
@@ -39,7 +42,7 @@ const bestVoice = () => {
 // **対になる操作は、どちらも同じ言葉づかいにする。**
 // Listen と「止める」が並ぶと、押し分けが一瞬わからない。
 export default function SpeakButton({
-  text, label = 'Listen', rate = null, className = '', voice: given = null,
+  text, label = SPEAK_LISTEN, rate = null, className = '', voice: given = null,
   clipVoice = null, tier = STANDARD, onPlayingChange = null, onWord = null,
   /**
    * **くり返し鳴らすか**(2026-09 利用者の指定・ディクテーション)。
@@ -186,7 +189,7 @@ export default function SpeakButton({
             className={`btn btn--small no-print ${toneOn(playing, className)} ${className}`}
             onClick={play}>
       {playing
-        ? <><StopIcon />{waiting ? preparingLabel(secs) : 'Stop'}</>
+        ? <><StopIcon />{waiting ? preparingLabel(secs) : SPEAK_STOP}</>
         : <><SpeakerIcon />{label}</>}
     </button>
   )

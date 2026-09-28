@@ -64,6 +64,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import EnglishText from './EnglishText.jsx'
 import SentenceSkip from './SentenceSkip.jsx'
+/* **1文ずつのボタンの文字は `speakLabel.js` 1か所**(第5.297節)。
+   ここに書き写すと、片方だけ古くなる */
+import { SPEAK_LISTEN, SPEAK_STOP } from '../lib/speakLabel.js'
 import RepeatUnit from './RepeatUnit.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
@@ -559,15 +562,15 @@ export default function FocusReader({
             <SentenceSkip>
               <button type="button"
                       className="btn btn--small btn--quiet"
-                      aria-label={player.playing ? 'Stop' : 'Listen'}
+                      aria-label={player.playing ? SPEAK_STOP : SPEAK_LISTEN}
                       onClick={() => player.toggle(playOpts())}>
                 {/* **「用意しています…」だけは、どんなに狭くても消さない**
                     (音が出るまで何も起きていないように見えるため) */}
                 {player.playing
                   ? <><StopIcon />{player.waiting
                       ? preparingLabel(player.secs)
-                      : <span className="listen-word">Stop</span>}</>
-                  : <><SpeakerIcon /><span className="listen-word">Listen</span></>}
+                      : <span className="listen-word">{SPEAK_STOP}</span>}</>
+                  : <><SpeakerIcon /><span className="listen-word">{SPEAK_LISTEN}</span></>}
               </button>
             </SentenceSkip>
           )}
