@@ -229,21 +229,95 @@ const MODEL = 'claude-sonnet-5'
  * @param hint その場でできること(演習だけ「1つずつ外して確かめる」を添える)
  * ============================================================================
  */
-function refusalNote(response: { stop_reason?: string | null }, hint = '') {
-  const d = (response as {
+type StopInfo = { category: string; explanation: string; raw: string }
+
+/**
+ * 断られた理由を取り出す。**生の出来事を先に見る**(第5.298節)。
+ *
+ * **まず、返ってくるものを全部読む**(CLAUDE.md)。
+ * `category` という名前でなかったときのために、`message_delta` の中身を
+ * **まるごと控えて**おき、理由が空のときは**それをそのまま出す。**
+ */
+function stopInfoOf(raw: Record<string, unknown> | null, response: unknown): StopInfo {
+  const pick = (o: unknown) => (o as {
     stop_details?: { category?: string | null; explanation?: string | null }
-  }).stop_details
-  const cat = String(d?.category ?? '').trim()
-  const why = String(d?.explanation ?? '').trim()
-  /* **理由が返らないこともある**(`category` は `null` になりうる)。
-     そのときは「返ってこなかった」と書く —— **黙って消さない** */
-  const inside = [cat && `分類: ${cat}`, why].filter(Boolean).join(' / ')
+  } | null)?.stop_details
+  const d = pick(raw) ?? pick(response) ?? null
   return {
-    error: '内容が安全上の理由で断られました。'
-      + (inside ? `(${inside})` : '(理由は返ってきませんでした)')
-      + (hint ? ` ${hint}` : ''),
-    detail: `stop_reason: refusal / category: ${cat || 'なし'} / ${why || '説明なし'}`,
+    category: String(d?.category ?? '').trim(),
+    explanation: String(d?.explanation ?? '').trim(),
+    /* **控えは短く切る。** 長い JSON をそのまま出すと、
+       知らせの箱が画面を埋める(第5.292節・調べものを読ませない) */
+    raw: raw ? JSON.stringify(raw).slice(0, 200) : '',
   }
+}
+
+/**
+ * ============================================================================
+ * **断られた理由は、流し込みの途中でしか取れない**(第5.298節・2026-09-28 実測)
+ * ============================================================================
+ *
+ * 第5.294節で「理由をそのまま出す」ようにしたが、**一度も動いていなかった。**
+ * 利用者の画面には毎回こう出ていた。
+ *
+ *     内容が安全上の理由で断られました。(理由は返ってきませんでした)
+ *
+ * ── なぜ出なかったのか(SDK の中を読んで測った)────────────────
+ *
+ *   ここは5か所とも `client.messages.stream(...)` で受け取っている。
+ *   `@anthropic-ai/sdk@0.71.0` の `MessageStream` は、`message_delta` から
+ *
+ *       snapshot.stop_reason    snapshot.stop_sequence    usage の各欄
+ *
+ *   **この3つしか写していない。** `stop_details` はどこにも写さない
+ *   (`stop_details` という語は、あの版のどこにも出てこない)。
+ *   だから `finalMessage()` の返り値を何度読んでも、**永久に空**である。
+ *
+ *   **「何も変わらない」は、届いていないという意味である**(CLAUDE.md)。
+ *   値を足す前に、**届いているか**を確かめるべきだった。
+ *
+ * ── `detail` も、誰も読んでいなかった ────────────────────────
+ *
+ *   理由は `detail` にも入れていたが、**画面の側にそれを読む場所が無い**
+ *   (`grep` で数えたら 0 件)。**二重に届いていなかった。**
+ *   だから理由は、利用者に見える `error` の中に入れる。
+ *
+ * ── 直し方 ───────────────────────────────────────────────
+ *
+ *   **生の出来事(`streamEvent`)を自分で見る。**
+ *   **見張りを付けてから待つ**のを、ここ1か所に閉じ込める ——
+ *   呼ぶ側で書き写すと、足した日に片方だけ付け忘れる
+ *   (**数え方を2通り持たない**・CLAUDE.md)。
+ * ============================================================================
+ */
+async function finishStream(stream: { finalMessage: () => Promise<Anthropic.Message> }) {
+  let raw: Record<string, unknown> | null = null
+  ;(stream as unknown as {
+    on: (name: string, cb: (event: unknown) => void) => void
+  }).on('streamEvent', (event) => {
+    const ev = event as { type?: string; delta?: Record<string, unknown> }
+    if (ev.type === 'message_delta' && ev.delta) raw = { ...ev.delta }
+  })
+  const msg = await stream.finalMessage()
+  return { response: msg, stopInfo: stopInfoOf(raw, msg) }
+}
+
+/**
+ * 断られたときの知らせ。**5か所が同じ文を使う。**
+ *
+ * @param hint その場でできること。**確かめていないことは書かない**
+ *   (第5.294節では「弱点の指定を見直してください」と決めつけていた)
+ */
+function refusalNote(info: StopInfo, hint = '') {
+  const inside = [info.category && `分類: ${info.category}`, info.explanation]
+    .filter(Boolean).join(' / ')
+  /* **理由が返らないこともある。** そのときは
+     **返ってきたものをそのまま出す** —— 「何も返ってこなかった」で
+     終わらせると、次もここで手が止まる */
+  const 中身 = inside
+    ? `(${inside})`
+    : (info.raw ? `(返ってきたのは ${info.raw} だけでした)` : '(理由は返ってきませんでした)')
+  return { error: `内容が安全上の理由で断られました。${中身}${hint ? ` ${hint}` : ''}` }
 }
 
 /**
@@ -1024,7 +1098,7 @@ async function makeChunkJa(apiKey: string, body: Record<string, unknown>) {
     .join('\n\n')
 
   const client = new Anthropic({ apiKey })
-  const stream = client.messages.stream({
+  const { response, stopInfo } = await finishStream(client.messages.stream({
     model: MODEL,
     max_tokens: 16000,
     output_config: { effort: 'medium' },
@@ -1039,12 +1113,11 @@ async function makeChunkJa(apiKey: string, body: Record<string, unknown>) {
         + `**1つのカタマリの訳に、そのカタマリに無い語の意味を入れないこと。**`
         + `主語だけのカタマリは主語だけ、目的語だけのカタマリは目的語だけを訳す。`,
     }],
-  })
-  const response = await stream.finalMessage()
+  }))
 
   if (response.stop_reason === 'refusal') {
     /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
-    return refusalNote(response)
+    return refusalNote(stopInfo)
   }
   if (response.stop_reason === 'max_tokens') {
     return { error: '本文が長すぎて途中で切れました。段落を分けてお試しください。' }
@@ -1259,7 +1332,7 @@ async function makeGrammar(apiKey: string, body: Record<string, unknown>) {
     .join('\n\n')
 
   const client = new Anthropic({ apiKey })
-  const stream = client.messages.stream({
+  const { response, stopInfo } = await finishStream(client.messages.stream({
     model: MODEL,
     max_tokens: 16000,
     output_config: { effort: 'medium' },
@@ -1274,12 +1347,11 @@ async function makeGrammar(apiKey: string, body: Record<string, unknown>) {
         + `**parts をつなぐと、渡した英文にそのまま戻ること**`
         + `(語も記号も落とさない)。`,
     }],
-  })
-  const response = await stream.finalMessage()
+  }))
 
   if (response.stop_reason === 'refusal') {
     /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
-    return refusalNote(response)
+    return refusalNote(stopInfo)
   }
   if (response.stop_reason === 'max_tokens') {
     return { error: '本文が長すぎて途中で切れました。段落を分けてお試しください。' }
@@ -1469,7 +1541,7 @@ async function makeShelfWords(apiKey: string, body: Record<string, unknown>) {
   }
 
   const client = new Anthropic({ apiKey })
-  const stream = client.messages.stream({
+  const { response, stopInfo } = await finishStream(client.messages.stream({
     model: MODEL,
     max_tokens: 8000,
     output_config: { effort: 'medium' },
@@ -1491,12 +1563,11 @@ async function makeShelfWords(apiKey: string, body: Record<string, unknown>) {
         + `**段(level)は、やさしいものから難しいものまで散らすこと。**`
         + `**例文には、その語句をそのまま含めること。**`,
     }],
-  })
-  const response = await stream.finalMessage()
+  }))
 
   if (response.stop_reason === 'refusal') {
     /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
-    return refusalNote(response)
+    return refusalNote(stopInfo)
   }
   if (response.stop_reason === 'max_tokens') {
     return { error: '返しが長すぎて途中で切れました。件数を減らしてお試しください。' }
@@ -1718,7 +1789,7 @@ async function reviewWriting(apiKey: string, body: Record<string, unknown>) {
   ].filter(Boolean)
 
   const client = new Anthropic({ apiKey })
-  const stream = client.messages.stream({
+  const { response, stopInfo } = await finishStream(client.messages.stream({
     model: MODEL,
     max_tokens: 8000,
     output_config: { effort: 'medium' },
@@ -1731,12 +1802,11 @@ async function reviewWriting(apiKey: string, body: Record<string, unknown>) {
         + '**内容は変えずに**、言い方だけを直してください。'
         + '直した英文は**1文ずつ**に分けて、それぞれに訳を付けてください。',
     }],
-  })
-  const response = await stream.finalMessage()
+  }))
 
   if (response.stop_reason === 'refusal') {
     /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
-    return refusalNote(response)
+    return refusalNote(stopInfo)
   }
   if (response.stop_reason === 'max_tokens') {
     return { error: '答えが長すぎて途中で切れました。短く分けてお試しください。' }
@@ -2230,7 +2300,7 @@ Deno.serve(async (req) => {
   const runOnce = async (retryNote: string) => {
     // Anthropic 側は必ず streaming で受け取る。40問ぶんの長い応答を
     // 一括で待つと、SDK の HTTP タイムアウトに掛かる。
-    const stream = client.messages.stream({
+    const { response, stopInfo } = await finishStream(client.messages.stream({
       model: MODEL,
       // **上限であって、使う量ではない。** 実際に出た分しか課金されないので、
       // 上げても費用は増えない。ここで足りないと、途中で切られた中途半端な
@@ -2247,17 +2317,19 @@ Deno.serve(async (req) => {
       }, { ex: wordEx, min: wordMin, max: wordMax }) as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: 'emit_section' },
       messages: [{ role: 'user', content: userPrompt + retryNote }],
-    })
-    const response = await stream.finalMessage()
+    }))
 
     if (response.stop_reason === 'refusal') {
       /* **断りの文は `refusalNote()` 1か所**(第5.294節)。
          **「弱点が原因だ」と決めつけない** —— 何が引っかかったのかは
          返ってきた `category` に書いてある。こちらから言えるのは
          **切り分け方**だけである */
-      return refusalNote(response,
-        '弱点・業種・場面・「細かい指定」を1つずつ外して、'
-        + 'どれで通るようになるかを確かめてください。')
+      /* **確かめていないことを書かない**(第5.298節)。
+         第5.294節では「弱点・業種・場面・細かい指定を1つずつ外して」と
+         書いたが、**そのどれが原因かは一度も確かめていなかった。**
+         利用者は「弱点は指定しています」と返してきた ——
+         **こちらの文が、原因を決めつけていた** */
+      return refusalNote(stopInfo, 'この知らせをそのまま貼ってください。')
     }
     // **途中で切られた場合は、必ずここで止める。**
     // 切られると、道具に渡す JSON が途中までしか届かない。SDK は読める

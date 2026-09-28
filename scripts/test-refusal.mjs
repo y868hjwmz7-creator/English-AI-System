@@ -59,49 +59,155 @@ if (/弱点の指定を見直してください/.test(素)) {
 } else ok('断り … 原因を決めつけない(切り分け方だけを書く)')
 
 /* ── ③ **本当にそう返るか。** 切り出して、素の node で呼ぶ ── */
-const at = src.indexOf('function refusalNote(')
-if (at < 0) {
-  ng('断り … `refusalNote()` が無い')
-} else {
-  const body = src.slice(at, src.indexOf('\n}', at) + 2)
-  const dir = mkdtempSync(join(tmpdir(), 'refusal-'))
-  const js = execFileSync(join(ROOT, 'node_modules/.bin/esbuild'),
-    ['--loader=ts', '--format=esm'], { encoding: 'utf8', input: `export ${body}` })
-  const mod = join(dir, 'refusal.mjs')
-  writeFileSync(mod, js)
-  const { refusalNote } = await import(mod)
+{
+  /** 本物のファイルから、その関数の本体だけを取り出す(**書き写さない**) */
+  const 取り出す = (名) => {
+    const at = src.indexOf(`function ${名}(`)
+    if (at < 0) return ''
+    /* 宣言の頭(`async ` や `export ` の手前)まで戻す */
+    const 頭 = src.lastIndexOf('\n', at) + 1
+    return src.slice(頭, src.indexOf('\n}', at) + 2)
+  }
+  const みっつ = ['stopInfoOf', 'finishStream', 'refusalNote'].map(取り出す)
+  if (みっつ.some((b) => !b)) {
+    ng('断り … 取り出せない関数がある',
+      ['stopInfoOf', 'finishStream', 'refusalNote']
+        .filter((n, i) => !みっつ[i]).join(' / '))
+  } else {
+    const dir = mkdtempSync(join(tmpdir(), 'refusal-'))
+    const js = execFileSync(join(ROOT, 'node_modules/.bin/esbuild'),
+      ['--loader=ts', '--format=esm'], {
+        encoding: 'utf8',
+        input: みっつ.map((b) => `export ${b.replace(/^\s*(async )?function/, '$1function')}`)
+          .join('\n'),
+      })
+    const mod = join(dir, 'refusal.mjs')
+    writeFileSync(mod, js)
+    const { refusalNote, finishStream } = await import(mod)
 
-  /* **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
-     ここでは「理由が1つも返ってこない」形である */
-  const 出る = refusalNote(
-    { stop_reason: 'refusal', stop_details: { category: 'cyber', explanation: 'なんとかの理由' } })
-  if (!/cyber/.test(出る.error) || !/なんとかの理由/.test(出る.error)) {
-    ng('断り … 返ってきた分類と説明を、画面に出していない', 出る.error)
-  } else ok(`断り … 分類と説明をそのまま出す(${出る.error.slice(0, 40)}…)`)
+    /* ══════════════════════════════════════════════════════════════
+       **ここが第5.298節の本体である。**
 
-  const 出ない = refusalNote({ stop_reason: 'refusal' })
-  if (!/理由は返ってきませんでした/.test(出ない.error)) {
-    ng('断り … 理由が無いときに、黙って消している', 出ない.error)
-  } else ok('断り … 理由が返らなければ「返ってきませんでした」と書く')
+       SDK(`@anthropic-ai/sdk@0.71.0`)の `MessageStream` は、
+       `message_delta` から `stop_reason` / `stop_sequence` / 使用量しか
+       写さない。**`stop_details` はどこにも写らない。**
+       だから `finalMessage()` の返りを何度読んでも、永久に空だった。
 
-  /* **null が来ても「null」と書かない**(0 と null を取り違えない) */
-  const ぬる = refusalNote({ stop_reason: 'refusal', stop_details: { category: null, explanation: null } })
-  if (/null|undefined/.test(ぬる.error)) {
-    ng('断り … 空の値がそのまま画面に出ている', ぬる.error)
-  } else ok('断り … 空の値を、そのまま画面に出さない')
+       **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+       ここでは「**最後の返りに理由が無い**」(= 本物と同じ形)である。
+       `finalMessage()` の側から読む書き方に戻したら、ここが赤くなる。
+       ══════════════════════════════════════════════════════════════ */
+    /** 本物の SDK と同じふるまいをする、にせの流し込み */
+    const にせ = (delta, 最後 = { stop_reason: 'refusal' }) => ({
+      on: (name, cb) => {
+        if (name !== 'streamEvent') return
+        cb({ type: 'message_start', message: { stop_reason: null } })
+        if (delta) cb({ type: 'message_delta', delta })
+        cb({ type: 'message_stop' })
+      },
+      finalMessage: async () => 最後,
+    })
 
-  /* **添え書きは、渡したときだけ**(効かない案内を出さない) */
-  const 添え = refusalNote({ stop_reason: 'refusal' }, '1つずつ外してください。')
-  if (!/1つずつ外してください。$/.test(添え.error)) {
-    ng('断り … 添え書きが付いていない', 添え.error)
-  } else if (/1つずつ外して/.test(出ない.error)) {
-    ng('断り … 渡していないのに添え書きが付く', 出ない.error)
-  } else ok('断り … 添え書きは、渡したときだけ付く')
+    const 生から = await finishStream(にせ({
+      stop_reason: 'refusal',
+      stop_details: { category: 'cyber', explanation: 'なんとかの理由' },
+    }))
+    if (生から.stopInfo.category !== 'cyber'
+      || 生から.stopInfo.explanation !== 'なんとかの理由') {
+      ng('断り … 生の出来事から理由を取っていない(SDK は写してくれない)',
+        JSON.stringify(生から.stopInfo))
+    } else ok('断り … 最後の返りに理由が無くても、生の出来事から取る')
 
-  /* **記録にも残る**(画面に出す文とは別に、切り分け用) */
-  if (!/stop_reason: refusal/.test(出る.detail ?? '')) {
-    ng('断り … 記録(detail)に残っていない', String(出る.detail))
-  } else ok('断り … 記録にも `stop_reason` と分類が残る')
+    /* **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+       最後の返りにだけ理由があっても、ちゃんと拾う(SDK が直った日のため) */
+    const 返りから = await finishStream(にせ(null,
+      { stop_reason: 'refusal', stop_details: { category: 'bio', explanation: '' } }))
+    if (返りから.stopInfo.category !== 'bio') {
+      ng('断り … 最後の返りに理由があるのに読んでいない',
+        JSON.stringify(返りから.stopInfo))
+    } else ok('断り … 最後の返りに理由があれば、そちらからも取る')
+
+    /* **理由が1つも無いとき、返ってきたものをそのまま出す** ——
+       「返ってきませんでした」で終えると、次もここで手が止まる */
+    const 中身だけ = await finishStream(にせ({ stop_reason: 'refusal' }))
+    const 出た = refusalNote(中身だけ.stopInfo)
+    if (!/stop_reason/.test(出た.error)) {
+      ng('断り … 理由が無いときに、返ってきたものを捨てている', 出た.error)
+    } else ok(`断り … 理由が無ければ、返ってきたものをそのまま出す`)
+
+    const 出る = refusalNote({ category: 'cyber', explanation: 'なんとかの理由', raw: '' })
+    if (!/cyber/.test(出る.error) || !/なんとかの理由/.test(出る.error)) {
+      ng('断り … 返ってきた分類と説明を、画面に出していない', 出る.error)
+    } else ok(`断り … 分類と説明をそのまま出す(${出る.error.slice(0, 40)}…)`)
+
+    const 出ない = refusalNote({ category: '', explanation: '', raw: '' })
+    if (!/理由は返ってきませんでした/.test(出ない.error)) {
+      ng('断り … 理由が無いときに、黙って消している', 出ない.error)
+    } else ok('断り … 何も返らなければ「返ってきませんでした」と書く')
+
+    /* **null が来ても「null」と書かない**(0 と null を取り違えない) */
+    const ぬる = refusalNote(
+      (await finishStream(にせ({ stop_details: { category: null, explanation: null } }))).stopInfo)
+    if (/\bnull\b|\bundefined\b/.test(ぬる.error.replace(/\{[\s\S]*\}/, ''))) {
+      ng('断り … 空の値がそのまま画面に出ている', ぬる.error)
+    } else ok('断り … 空の値を、そのまま画面に出さない')
+
+    /* **添え書きは、渡したときだけ**(効かない案内を出さない) */
+    const 添え = refusalNote({ category: '', explanation: '', raw: '' }, '1つずつ外してください。')
+    if (!/1つずつ外してください。$/.test(添え.error)) {
+      ng('断り … 添え書きが付いていない', 添え.error)
+    } else if (/1つずつ外して/.test(出ない.error)) {
+      ng('断り … 渡していないのに添え書きが付く', 出ない.error)
+    } else ok('断り … 添え書きは、渡したときだけ付く')
+
+    /* **控えは短く切る**(長い JSON で知らせの箱が画面を埋めない) */
+    const 長い = await finishStream(にせ(
+      { stop_reason: 'refusal', なにか: 'あ'.repeat(500) }))
+    if (長い.stopInfo.raw.length > 200) {
+      ng('断り … 控えを切っていない', `${長い.stopInfo.raw.length} 文字`)
+    } else ok(`断り … 控えは ${長い.stopInfo.raw.length} 文字までに切る`)
+  }
+}
+
+/* ── ④ **理由を、誰も読まない欄に隠していないか**(第5.298節)──
+   第5.294節では理由を `detail` にも入れていたが、**画面の側に
+   それを読む場所が無かった**(`grep` で 0 件)。**二重に届いていなかった。**
+   だから `refusalNote()` は **`error` 1つだけ**を返す。
+   (**空っぽのときの `detail` は別の話** —— あちらは
+   「仕組みの内側の言葉を画面に出さない」という 2026-08 の指定であり、
+   利用者に出す文はそれだけで足りている) */
+{
+  const at = src.indexOf('function refusalNote(')
+  const body = at < 0 ? '' : src.slice(at, src.indexOf('\n}', at) + 2)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+  if (!body) {
+    ng('断り … `refusalNote()` が無い')
+  } else if (/\bdetail\b/.test(body)) {
+    ng('断り … 理由を、画面が読まない欄(`detail`)に入れている',
+      '利用者には一生届かない。`error` に入れること')
+  } else ok('断り … 理由は `error` 1つだけに入れる(隠し場所を作らない)')
+}
+
+/* ── ⑤ **生の出来事を見る道を、通っているか**(第5.298節)──
+   定義だけあって誰も呼ばなければ、何も起きない。
+   **`finalMessage()` を直に呼ぶ形が戻っていないか**も見る。
+
+   **道具そのものは数えない** —— `finishStream()` の中では
+   `finalMessage()` を呼ぶのが正しい(ここを数えると永久に赤い) */
+{
+  const at = 素.indexOf('function finishStream(')
+  const 道具 = at < 0 ? '' : 素.slice(at, 素.indexOf('\n}', at) + 2)
+  const よそ = 道具 ? 素.replace(道具, '') : 素
+  const 呼ぶ数 = (よそ.match(/await finishStream\(client\.messages\.stream\(\{/g) ?? []).length
+  const 直呼び = (よそ.match(/await stream\.finalMessage\(\)/g) ?? []).length
+  if (!道具) {
+    ng('断り … `finishStream()` が無い')
+  } else if (呼ぶ数 < 5) {
+    ng('断り … `finishStream()` を通っていない道がある', `${呼ぶ数} か所`)
+  } else if (直呼び) {
+    ng('断り … `finalMessage()` を直に呼ぶ形が戻っている',
+      `${直呼び} か所。理由が取れなくなる`)
+  } else ok(`断り … ${呼ぶ数} か所とも \`finishStream()\` を通る(直呼びは0)`)
 }
 
 /* ══════════════════════════════════════════════════════════════════
