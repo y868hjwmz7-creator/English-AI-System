@@ -4542,7 +4542,8 @@ html, body { overflow-x: clip; }
 }
 /* 紙の幅だけは「画面いっぱい」という長い値があるので、
    そのぶんの幅を先に取っておく。**押すたびに隣の印刷が動かない** */
-.lesson-widths .stepper-now { min-width: 6.2em; }
+/* (幅の値だけ広く取る決まりは、`.setrow .stepper-now` が
+   **どの行も 6.2em** にそろえたので要らなくなった・第5.319節) */
 
 /* 帯の上。**帯の色は決め打ちである**(`.lesson-bar .btn` と同じ作法)。
    暗い配色を選んでいなくても、この帯だけはいつも暗い */
@@ -4951,7 +4952,8 @@ html, body { overflow-x: clip; }
 @media (max-width: 860px) {
   /* **狭い画面では、紙の幅を選ばせない。** 紙はもともと画面いっぱいで、
      広げる余地が無い(効かない操作を見せない・CLAUDE.md) */
-  .lesson-widths { display: none; }
+  /* (紙の幅を隠す決まりは、`.setrow` より**後ろ**へ移した・第5.319節。
+     ここに書くと `.setrow { display: flex }` に負ける) */
   /* 縦に積むので、**幅をつまむ意味が無い**(効かない操作を見せない) */
   .lesson-grip { display: none; }
   .lesson-body { flex-direction: column; }
@@ -9264,7 +9266,76 @@ button.wbfilter-ctl { text-align: left; }
 .lesson-sets { flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
 /* 吹き出しの中。**すき間は `gap` で作る**(共通ルール)。
    子に `margin` を付けて回らない */
-.lesson-sets-body { display: flex; flex-direction: column; gap: var(--sp-10); }
+/* ══════════════════════════════════════════════════════════════════
+   ★ **設定は、用途ごとに分ける**(2026-09-30 利用者の指定・第5.319節)
+     > 設定項目を用途別にグループ化してください…各グループの境目と
+     > 見出しを分かりやすくしてください
+     > 現在のように、複数の異なる操作を一つの横長のカプセルに
+     > 詰め込まないでください
+     > 余白、角丸、境界線、アイコン、文字サイズ、ボタンの高さを統一して
+     > 全ての操作ボタンに押しやすいタップ領域を確保してください
+
+     **押せる大きさは 44px にそろえる**(このアプリの下限。
+     `.nav-icon-btn` と同じ)。角丸・線・余白も、ここで1度だけ決める。
+   ══════════════════════════════════════════════════════════════════ */
+.setgrid {
+  --set-tap: 44px;
+  display: flex; flex-direction: column; gap: var(--sp-16);
+}
+.setgroup { display: flex; flex-direction: column; gap: var(--sp-8); }
+/* **境目は線で。** 2つめから上に線を引き、そのぶん余白も足す
+   (すき間ゼロでくっつけない・共通ルール) */
+.setgroup + .setgroup,
+.setfoot {
+  padding-top: var(--sp-16); border-top: 1px solid var(--rule, var(--border));
+}
+/* 見出し。**小さく、うすく** —— 中身より先に目が行ってはいけない */
+.setgroup-title {
+  margin: 0; font-size: var(--fs-12); font-weight: 700;
+  color: var(--text-muted); letter-spacing: .04em;
+}
+/* 書き込む・メモ。**幅も高さもそろえる。**
+   `auto-fit` なので、メモが出ないゲストの画面では横いっぱいになる
+   (半分だけ残って、空きができるのを避ける) */
+.setpair {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--sp-8);
+}
+.setpair .btn {
+  width: 100%; min-height: var(--set-tap);
+  justify-content: center; border-radius: var(--r-10);
+}
+/* 1行に1つの設定(速さ / 文字 / 幅)。
+   **ラベルは左、いまの値と ◀ ▶ は右** —— 行をまたいで位置がそろう */
+.setrow { display: flex; }
+.setrow .stepper {
+  width: 100%; min-height: var(--set-tap);
+  border-radius: var(--r-10); padding: 2px 6px 2px 12px;
+}
+.setrow .stepper-label {
+  margin-right: auto; font-size: var(--fs-13); color: var(--text-primary);
+}
+/* **値の幅は、いちばん長い語(「画面いっぱい」)に合わせる。**
+   行ごとに変えると、◀ ▶ の位置が段でずれる */
+.setrow .stepper-now { min-width: 6.2em; }
+.setrow .stepper-arrow { width: 40px; min-height: 40px; font-size: var(--fs-13); }
+/* 印刷。**設定ではないので、線で区切っていちばん下に幅いっぱい** */
+.setfoot { display: flex; }
+.setfoot .btn {
+  width: 100%; min-height: var(--set-tap);
+  justify-content: center; border-radius: var(--r-10);
+}
+/* ★ **紙の幅は、狭い画面では出さない**(効かない操作を見せない)。
+     紙はもともと画面いっぱいで、広げる余地が無い。
+     **行ごと隠す** —— 中の `Stepper` だけ隠すと、空の行が残る。
+
+     ★ **ここに置くのは、`.setrow` より後ろだから**である。
+       もとは 860px のまとまった `@media` の中(ずっと上)に書いてあり、
+       **`.setrow { display: flex }` に負けて、狭い画面でも出ていた**
+       (実測。**打ち消しは、いちばん後ろに置く**・CLAUDE.md)。 */
+@media (max-width: 860px) {
+  .lesson-widths { display: none; }
+}
 /* 帯の中の「集中モード」。**狭い画面でだけ出す**(2026-09 利用者の指定)。
    広い画面では、これまでどおり右下に固定してある(`.sheet-float`)。
    **同時に2つは出さない** —— 出し分けは幅だけで決める */

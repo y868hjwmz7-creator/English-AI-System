@@ -1239,7 +1239,10 @@ export default function LessonView({
      吹き出しに置くだけである(**同じものを2つ書くと、片方だけ古くなる**)。
      境目は `.lesson-settings` を畳んでいた CSS と**同じ 860px** ——
      2か所に別の数を書くと、どちらかの幅で「どこにも無い」が起きる。 */
-  const 道具 = (
+  /* ★ **中身は1つ、並べ方は2つ**(2026-09-30 利用者の指定・第5.319節)。
+       帯(広い窓)では横1列に、シート(狭い窓)では**用途ごとに分けて**置く。
+       **同じボタンを2度書かない** —— 書くと、片方だけ古くなる。 */
+  const 学習ツール = (
     <>
           {/* ── 紙への書き込み(2026-09 利用者の指定でここへ移した)──
               > 書き込む、の機能が画面に収まってません。
@@ -1283,17 +1286,20 @@ export default function LessonView({
               紙の幅は7段になったので、並べるやり方はもう成り立たない。
               **見出し(速さ / 文字 / 幅)は残す。** 3つとも同じ形になったので、
               見出しが無いとどれがどれか分からない(しかも2つは「%」である) */}
-          {/* **速さだけは帯に残す**(2026-09-29 利用者の指定)。
-              鳴らしながら「速い / 遅い」を直すものなので、
-              **吹き出しを開いてからでは間に合わない。**
-              文字・幅・印刷の3つは、右上の「設定」の中へ移した */}
-          <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
-                   /* **黒帯の「100%」から来たときだけ、ここへ焦点を移す**
-                      (第5.318節)。光らせる飾りは足さない */
-                   focusMe={wantRate && viewSets}
-                   onChange={(id) => { setRateId(id); saveRateId(id); stopAll() }} />
     </>
   )
+
+  /** 読み上げの速さ。**欄そのものは1つ**(帯にも、シートにも、これを置く) */
+  const 速さの欄 = (
+    <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
+             /* **黒帯の「100%」から来たときだけ、ここへ焦点を移す**
+                (第5.318節)。光らせる飾りは足さない */
+             focusMe={wantRate && viewSets}
+             onChange={(id) => { setRateId(id); saveRateId(id); stopAll() }} />
+  )
+
+  /** 帯に並べるとき(広い窓)。**横1列** */
+  const 道具 = (<>{学習ツール}{速さの欄}</>)
 
   return (
     /* **黒帯のぶん、紙の下に余白を足す**(下記の CSS)。
@@ -1566,26 +1572,57 @@ export default function LessonView({
         >
           {/* **別々の物を、すき間ゼロでくっつけない**(共通ルール)。
               入れ物は素の箱で `gap` を持たないので、ここで1つ束ねて離す */}
-          <div className="lesson-sets-body">
+          {/* ★ **用途ごとに分ける**(2026-09-30 利用者の指定・第5.319節)
+              > 設定項目を用途別にグループ化してください。たとえば
+              > 「学習ツール」(書き込む・メモ)と「表示」(再生速度・文字サイズ)
+              > のように分け、各グループの境目と見出しを分かりやすく
+              > 現在のように、複数の異なる操作を一つの横長のカプセルに
+              > 詰め込まないでください
+
+              もとは**書き込む・メモ・速さが1つの行**に詰まっていた。
+              性質がまるで違う3つ(道具 / 道具 / 数の設定)なので、
+              **1つの部品に見えてしまう。** */}
+          <div className="setgrid">
             {/* **狭い窓では、帯に入りきらない道具もここに入る。**
                 広い窓では帯に並んでいるので、ここには出さない
                 (**同じことをするものを2つ見せない**) */}
-            {narrowSets && <div className="lesson-sets-tools">{道具}</div>}
-            <Stepper label="文字" options={SIZES} value={size}
-                     onChange={(id) => { setSize(id); saveSize(id) }} />
-            {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}
-            <Stepper label="幅" options={WIDTHS} value={width} className="lesson-widths"
-                     onChange={(id) => { setWidth(id); saveWidth(id) }} />
-            {/* **押したら閉じる。** 紙を刷ったあとに吹き出しが残っていると、
+            {narrowSets && (
+              <section className="setgroup">
+                <h3 className="setgroup-title">学習ツール</h3>
+                {/* **幅も高さもそろえる**(升目で並べる)。
+                    メモが出ないゲストの画面では、書き込むが横いっぱいになる */}
+                <div className="setpair">{学習ツール}</div>
+              </section>
+            )}
+            <section className="setgroup">
+              <h3 className="setgroup-title">表示</h3>
+              {/* **1行に1つの設定。** ラベル・いまの値・◀ ▶ の位置は
+                  CSS がそろえる(値の幅はいちばん長い語に合わせる) */}
+              {narrowSets && <div className="setrow">{速さの欄}</div>}
+              <div className="setrow">
+                <Stepper label="文字" options={SIZES} value={size}
+                         onChange={(id) => { setSize(id); saveSize(id) }} />
+              </div>
+              {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で行ごと隠す) */}
+              <div className="setrow lesson-widths">
+                <Stepper label="幅" options={WIDTHS} value={width}
+                         onChange={(id) => { setWidth(id); saveWidth(id) }} />
+              </div>
+            </section>
+            {/* **印刷は、設定ではない。** 押すと画面が変わるので、
+                線で区切って**いちばん下に、幅いっぱい**で置く。
+                **押したら閉じる** —— 紙を刷ったあとにシートが残っていると、
                 紙が見えない(次にすることを、その場に1つだけ置く) */}
-            <button type="button" className="btn btn--small btn--quiet"
-                    onClick={() => {
-                      setViewSets(false)
-                      printElement(document.getElementById('lesson-sheet'),
-                        { name: materialFileName(material, 'full', 'pdf') })
-                    }}>
-              <PrintIcon />印刷 / PDF
-            </button>
+            <div className="setfoot">
+              <button type="button" className="btn btn--small btn--quiet"
+                      onClick={() => {
+                        setViewSets(false)
+                        printElement(document.getElementById('lesson-sheet'),
+                          { name: materialFileName(material, 'full', 'pdf') })
+                      }}>
+                <PrintIcon />印刷 / PDF
+              </button>
+            </div>
           </div>
         </SettingsSheet>
       )}

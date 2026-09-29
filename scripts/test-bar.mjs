@@ -1026,6 +1026,154 @@ for (const [label, want] of Object.entries(WANT)) {
   } else ok('黒帯 … セーフエリアのぶんだけ、下に余白を取っている')
 }
 
+
+/* ══════════════════════════════════════════════════════════════════
+   ── **設定のシートは、用途ごとに分かれている**(第5.319節)
+        2026-09-30 実機・利用者の指定。
+
+        > 「書き込む」「メモ」「速さ」の操作が1列に詰め込まれ、
+        > 文字サイズ調整も横に間延びしていて、
+        > 設定項目同士のまとまりが分かりにくく見えます
+        > 上部にドラッグ用ハンドル、タイトル「設定」、閉じるボタンを
+        > まとめたヘッダーを設けてください
+        > 現在のように、複数の異なる操作を一つの横長のカプセルに
+        > 詰め込まないでください
+
+      **375 / 390 / 430px で、実際に開いて測る。**
+      **画面が低いときも見る** —— シートが画面を占めすぎないか、
+      中が長ければ送れるかは、**高さでしか出てこない**
+      (「無ければ素通り」する形の検証を書かない・CLAUDE.md)。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(400)
+  console.log('\n── 設定のシート(用途ごとに分ける・第5.319節) ──')
+  for (const [w, h] of [[375, 844], [390, 844], [430, 844], [390, 520]]) {
+    await page.setViewportSize({ width: w, height: h })
+    await page.waitForTimeout(280)
+    await page.click('.lesson-sets')
+    await page.waitForTimeout(350)
+    const m = await page.evaluate(() => {
+      const sheet = document.querySelector('.sheet')
+      if (!sheet) return null
+      const body = sheet.querySelector('.sheet-body')
+      const R = (el) => el.getBoundingClientRect()
+      const 見えている = (el) => { const r = R(el); return r.width > 0 && r.height > 0 }
+      const 群 = [...sheet.querySelectorAll('.setgroup')].filter(見えている)
+      const 対 = [...sheet.querySelectorAll('.setpair .btn')].filter(見えている)
+      const 行 = [...sheet.querySelectorAll('.setrow')].filter(見えている)
+      const 足 = sheet.querySelector('.setfoot .btn')
+      /* **押せる大きさ。** 一覧を持たず、**シートの中の押すものを全部**拾う */
+      const 押す = [...sheet.querySelectorAll('.setpair .btn, .setrow .stepper-arrow, .setfoot .btn')]
+        .filter(見えている).map((b) => Math.round(R(b).height))
+      return {
+        つまみ: !!sheet.querySelector('.sheet-grip'),
+        見出し: sheet.querySelector('.sheet-title')?.textContent?.trim() ?? '',
+        閉じる: !!sheet.querySelector('.sheet-head .nav-icon-btn'),
+        群の数: 群.length,
+        群の見出し: 群.map((g) => g.querySelector('.setgroup-title')?.textContent?.trim() ?? ''),
+        /* **境目の線。** 2つめの群と、印刷の上に引く */
+        線: 群.slice(1).concat(足 ? [足.parentElement] : [])
+          .map((g) => Math.round(parseFloat(window.getComputedStyle(g).borderTopWidth) || 0)),
+        対の幅: 対.map((b) => Math.round(R(b).width)),
+        対の高さ: 対.map((b) => Math.round(R(b).height)),
+        /* **いまの値の左端。** 行をまたいでそろっていること */
+        値の左: 行.map((r) => {
+          const n = r.querySelector('.stepper-now')
+          return n ? Math.round(R(n).left) : null
+        }),
+        行の名: 行.map((r) => r.querySelector('.stepper-label')?.textContent?.trim() ?? ''),
+        印刷の幅: 足 ? Math.round(R(足).width) : null,
+        群の幅: 群.length ? Math.round(R(群[0]).width) : null,
+        押せる大きさ: 押す.length ? Math.min(...押す) : null,
+        シートの高さ: Math.round(R(sheet).height),
+        窓の高さ: window.innerHeight,
+        送れる: body ? Math.round(body.scrollHeight) > Math.round(body.clientHeight) + 1 : null,
+        あふれ: Math.round(R(sheet).bottom) - window.innerHeight,
+      }
+    })
+    const 印 = `${w}×${h}`
+    if (!m) { ng(`設定のシート ${印} … 開かない`); continue }
+    if (!m.つまみ || m.見出し !== '設定' || !m.閉じる) {
+      ng(`設定のシート ${印} … 頭にそろっていない`,
+        `つまみ ${m.つまみ} / 見出し「${m.見出し}」/ 閉じる ${m.閉じる}`)
+    } else if (m.群の数 < 2) {
+      ng(`設定のシート ${印} … まとまりが ${m.群の数} つしかない`,
+        '**用途別にグループ化する**(学習ツール / 表示)')
+    } else if (m.群の見出し.some((t) => !t)) {
+      ng(`設定のシート ${印} … 見出しの無いまとまりがある`, m.群の見出し.join(' / '))
+    } else if (m.線.some((v) => v < 1)) {
+      ng(`設定のシート ${印} … まとまりの境目に線が無い`, `${m.線.join(' / ')}px`)
+    } else if (new Set(m.対の幅).size !== 1 || new Set(m.対の高さ).size !== 1) {
+      ng(`設定のシート ${印} … 書き込む / メモの大きさがそろっていない`,
+        `幅 ${m.対の幅.join(' / ')} / 高さ ${m.対の高さ.join(' / ')}`)
+    } else if (m.値の左.some((v) => v == null) || new Set(m.値の左).size !== 1) {
+      ng(`設定のシート ${印} … 設定の行で、いまの値の位置がそろっていない`,
+        `${m.行の名.join(' / ')} → ${m.値の左.join(' / ')}px`)
+    } else if (m.印刷の幅 !== m.群の幅) {
+      ng(`設定のシート ${印} … 印刷が幅いっぱいでない`,
+        `印刷 ${m.印刷の幅}px / まとまり ${m.群の幅}px`)
+    } else if (m.押せる大きさ < 40) {
+      ng(`設定のシート ${印} … 押せる大きさが足りない`,
+        `いちばん低いもので ${m.押せる大きさ}px(40px 以上)`)
+    } else if (m.あふれ > 1) {
+      ng(`設定のシート ${印} … シートが画面からはみ出している`, `${m.あふれ}px`)
+    } else if (m.シートの高さ > m.窓の高さ * 0.9) {
+      ng(`設定のシート ${印} … シートが画面を占めすぎている`,
+        `${m.シートの高さ} / ${m.窓の高さ}px`)
+    } else {
+      ok(`設定のシート ${印} … 頭(つまみ・設定・✕)+ ${m.群の数} まとまり`
+        + `(${m.群の見出し.join(' / ')})・書き込む/メモは ${m.対の幅[0]}×${m.対の高さ[0]}px・`
+        + `値の左は ${m.値の左[0]}px でそろう・印刷は幅いっぱい ${m.印刷の幅}px・`
+        + `高さ ${m.シートの高さ}/${m.窓の高さ}px${m.送れる ? '(中だけ送れる)' : ''}`)
+    }
+    /* **閉じるのは Esc**(狭い窓では後ろの覆いがボタンを隠す・第5.316節) */
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(220)
+  }
+
+  /* ── **紙の幅は、狭い画面では行ごと出さない**(効かない操作を見せない)。
+         **中の `Stepper` だけ隠すと、空の行が残る。**
+         ここは1度、`.setrow { display: flex }` に負けて出たままだった
+         (打ち消しは、いちばん後ろに置く・CLAUDE.md) */
+  for (const [w, 出るはず] of [[390, false], [1440, true]]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(280)
+    await page.click('.lesson-sets')
+    await page.waitForTimeout(350)
+    const m = await page.evaluate(() => {
+      const el = document.querySelector('.lesson-widths')
+      if (!el) return { 無い: true }
+      const r = el.getBoundingClientRect()
+      return { 見える: r.width > 0 && r.height > 0 }
+    })
+    if (m.無い) ng(`紙の幅 ${w}px … 行そのものが無い`)
+    else if (m.見える !== 出るはず) {
+      ng(`紙の幅 ${w}px … ${出るはず ? '出ていない' : '出ている'}`,
+        出るはず ? '広い画面では選べる' : '狭い画面では紙を広げる余地が無い(効かない操作を見せない)')
+    } else ok(`紙の幅 ${w}px … ${出るはず ? '出る' : '行ごと出ない'}`)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(200)
+  }
+  await page.close()
+}
+
+/* ── **シートは、端末の下の切り欠きを避ける**(2026-09-30 利用者の指定)
+       > iPhoneのセーフエリアに対応させ、ホームインジケーターの背後に
+       > ボタンが入り込まないようにしてください
+     **描いて測れない**(この環境にセーフエリアが無い)ので、決まりの字で見る */
+{
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+  const i = css.indexOf('.sheet {')
+  const 決まり = css.slice(i, i + 600)
+  if (!/padding-bottom:\s*env\(safe-area-inset-bottom\)/.test(決まり)) {
+    ng('設定のシート … セーフエリアを読んでいない',
+      'iPhone のホームバーに、いちばん下のボタンが隠れる')
+  } else ok('設定のシート … セーフエリアのぶんだけ、下に余白を取っている')
+}
+
 /* ── **一度決める設定は、右上のアイコン1つの中**(2026-09-29 利用者の指定)──
  *
  *    > 文字サイズ、幅、印刷/PDFボタンを設定ボタンを作って右上にアイコンを
