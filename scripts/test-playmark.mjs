@@ -190,6 +190,8 @@ import {
    どちらも DOM を引き連れていないので、素の node でそのまま走る */
 import { SPEAK_LISTEN } from '../src/lib/speakLabel.js'
 import { WHOLE_PLAY_CORE, wholePlayText } from '../src/lib/wholePlay.js'
+/* **何本かを同時に走らせる**(第5.307節)。何にも依存していないので素の node で走る */
+import { runPool } from '../src/lib/runPool.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -13460,6 +13462,88 @@ console.log('\n▶ 通しと1文ずつで、字を揃える(第5.304節)')
   ok(wholePlayText().endsWith(SPEAK_LISTEN) && wholePlayText() !== SPEAK_LISTEN,
     '聴く … 通しは「全体を」を添えた形(狭い画面で添えだけ落ちる)',
     wholePlayText())
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * **支度を、1本ずつではなく何本か同時に**(第5.307節・2026-09-29 利用者の指摘)
+ *
+ *   > 教材の音声…は作成している段階で裏ですぐなるようにロードされるという
+ *   > 仕様にしましたよね。…相変わらず初めて聴くときに30-50秒くらい
+ *   > 待たされます
+ *
+ * 支度は音声を **1本ずつ順に**作っていた(30問なら 30〜90 秒)。
+ * **全部を一度に投げるのではなく、本数を決めて**走らせる ——
+ * 1本ごとの結果は、これまでどおり1つずつ数えられる(費用が見える)。
+ * ══════════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 支度を、何本か同時に走らせる(第5.307節)')
+{
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+
+  /* ── ① **同時に走る本数を、決めた数で抑える** ──────────────────
+       **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+       ここでは「本数より多い一覧」である(少ないと抑えが素通りする) */
+  {
+    let いま = 0
+    let 最大 = 0
+    const 見た = []
+    const n = await runPool([1, 2, 3, 4, 5, 6, 7], async (x) => {
+      いま += 1
+      最大 = Math.max(最大, いま)
+      await new Promise((r) => setTimeout(r, 15))
+      いま -= 1
+      return `ok${x}`
+    }, { size: 3, onEach: (got) => 見た.push(got) })
+    ok(n === 7 && 見た.length === 7, '同時 … 1つも落とさない', `${n} 本`)
+    ok(最大 === 3, '同時 … 決めた本数より多くは走らせない', `いちばん多くて ${最大} 本`)
+  }
+
+  /* ── ② **1本で投げられても、残りを諦めない** ──────────────────
+       30 問のうち1本が作れなかっただけで、残り 29 本を諦めては困る */
+  {
+    const 見た = []
+    const n = await runPool([1, 2, 3], async (x) => {
+      if (x === 2) throw new Error('だめ')
+      return 'made'
+    }, { size: 2, onEach: (got) => 見た.push(got) })
+    ok(n === 3 && 見た.filter((g) => g === 'made').length === 2
+      && 見た.filter((g) => g === 'ng').length === 1,
+    '同時 … 1本が駄目でも、残りは作る(駄目だった1本は ng として数える)',
+    見た.join('/'))
+  }
+
+  /* ── ③ **やめると言われたら、新しくは始めない** ──────────────── */
+  {
+    let 走った = 0
+    let 生きている = true
+    await runPool([1, 2, 3, 4, 5, 6], async () => {
+      走った += 1
+      if (走った >= 2) 生きている = false
+      await new Promise((r) => setTimeout(r, 5))
+      return 'made'
+    }, { size: 1, alive: () => 生きている })
+    ok(走った === 2, '同時 … やめたら、次を始めない', `${走った} 本で止まった`)
+  }
+
+  /* ── ④ **無ければ素通りさせない**(空・本数が変でも動く)───────── */
+  ok(await runPool([], async () => 'x', { size: 3 }) === 0,
+    '同時 … 1つも無ければ 0 本')
+  ok(await runPool([1, 2], async () => 'x', { size: 0 }) === 2,
+    '同時 … 本数が 0 でも、1本ずつは走る(何も走らないほうが分かりにくい)')
+
+  /* ── ⑤ **支度が本当に使っているか**(道具だけあっても速くならない)── */
+  const job = noC(readS('src/lib/prepareJob.js'))
+  ok(/runPool\(rest,/.test(job) && /size: CLIP_PARALLEL/.test(job),
+    '支度 … 音声は `runPool()` で、決めた本数だけ同時に作る')
+  /* **1本ずつの `for` が残っていないか。** 残っていたら速くならない */
+  ok(!/for \(const c of rest\)/.test(job),
+    '支度 … 1本ずつ順に待つ書き方は残っていない')
+  /* **数えるのは1本ごとのまま**(費用が見えなくなっていないか) */
+  ok(/made: now\.made \+ \(got === 'made' \? 1 : 0\)/.test(job)
+    && /chars: now\.chars \+ \(got === 'made' \? c\.text\.length : 0\)/.test(job),
+  '支度 … 1本ごとに数える(新しく作ったぶんだけ課金として数える)')
+  /* **やめたら止まる**(消えた画面に数を足さない) */
+  ok(/alive,/.test(job), '支度 … やめると言われたら、次を始めない')
 }
 
 console.log(ng

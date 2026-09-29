@@ -34,6 +34,9 @@
 import { useEffect, useState } from 'react'
 import { ensureClip, lastWholeDetail, wholeClip } from './audioClips.js'
 import { materialAudioClips, materialRestClips } from './audioPlaylist.js'
+/* **何本かを同時に走らせる**(第5.307節)。算段は `runPool.js` 1か所で、
+   素の node で確かめられる(ここは Supabase を引き連れている) */
+import { runPool } from './runPool.js'
 /* **英語が入っている欄は `exerciseTypes.js` 1か所が決める**(第5.289節) */
 import { materialEnglishTexts } from '../data/exerciseTypes.js'
 import { prefetchMaterialGlosses } from './vocab.js'
@@ -253,36 +256,47 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
 
       /* ② **本文のほかの読み上げを、ぜんぶ用意する**(第5.203節)。
 
-         **1本ずつ順に。** まとめて投げると、いくらかかったのか
-         分からないうちに終わる(`startPrepareAll` と同じ作法)。
          **やり直さない** —— 作れなかった1本は、押したときに作られる。
-
          **置いてあるものは作り直さない = 0円。** `ensureClip()` が
-         見に行って、無いときだけ窓口を呼ぶ */
+         見に行って、無いときだけ窓口を呼ぶ。
+
+         ── **1本ずつではなく、何本かを同時に**(第5.307節・2026-09-29)──
+
+           > 相変わらず初めて聴くときに30-50秒くらい待たされます
+
+           ここは `for` で**1本ずつ順に**待っていた。1本あたり1〜3秒なので、
+           **30問の教材は全部そろうまで 30〜90 秒**かかる。その最中に押すと、
+           その1本ができるまで待つことになる ——
+           これが「支度したはずなのに待たされる」の正体である。
+
+           **まとめて全部を投げるのではない**(それでは、いくらかかったのか
+           分からないうちに終わる)。**本数を決めて、その数だけ**走らせる ——
+           1本ごとの結果は、これまでどおり1つずつ数えられる。
+           語の意味の先読み(`vocab.js` の `PREFETCH_PARALLEL`)と同じ考え方で、
+           **音声だけが1本ずつ残っていた。** */
       if (rest.length) {
         step(1, '本文のほかの読み上げ')
-        for (const c of rest) {
-          if (!alive()) return
-          let got = 'ng'
-          try {
-            got = await ensureClip(c.text, c.voiceId, c.tier)
-          } catch { got = 'ng' }
-          if (!alive()) return
-          const now = task.clips
-          task = {
-            ...task,
-            clips: {
-              ...now,
-              done: now.done + 1,
-              made: now.made + (got === 'made' ? 1 : 0),
-              had: now.had + (got === 'had' ? 1 : 0),
-              /* **課金は、新しく作ったぶんだけ数える。**
-                 もう置いてあった1本を足すと、**払っていない額**が出る */
-              chars: now.chars + (got === 'made' ? c.text.length : 0),
-            },
-          }
-          emit()
-        }
+        await runPool(rest, (c) => ensureClip(c.text, c.voiceId, c.tier), {
+          size: CLIP_PARALLEL,
+          alive,
+          onEach: (got, c) => {
+            const now = task.clips
+            task = {
+              ...task,
+              clips: {
+                ...now,
+                done: now.done + 1,
+                made: now.made + (got === 'made' ? 1 : 0),
+                had: now.had + (got === 'had' ? 1 : 0),
+                /* **課金は、新しく作ったぶんだけ数える。**
+                   もう置いてあった1本を足すと、**払っていない額**が出る */
+                chars: now.chars + (got === 'made' ? c.text.length : 0),
+              },
+            }
+            emit()
+          },
+        })
+        if (!alive()) return
       }
       if (!alive()) return
 
@@ -316,6 +330,16 @@ export function startPrepare(material, { title = '', level = 'B1' } = {}) {
   })()
   return true
 }
+
+/**
+ * **音声を、同時に何本まで作るか**(第5.307節)。
+ *
+ * **全部を一度に投げない。** 窓口を叩きすぎると断られるうえ、
+ * いくらかかったのか分からないうちに終わる(CLAUDE.md)。
+ * 語の意味の先読み(`vocab.js`)と同じ 3 本にしてある ——
+ * **どちらも「1本ずつでは間に合わない」を直したもの**である。
+ */
+const CLIP_PARALLEL = 3
 
 /** 順番待ち。**落とさない**(落とすと、その教材は永久に支度されない) */
 const queue = []
