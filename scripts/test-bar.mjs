@@ -86,13 +86,27 @@ const ROOT = new URL('..', import.meta.url).pathname
 const WANT = {
   'トレーナーが、ゲストと一緒に開いている': {
     q: '?role=trainer&who=g1',
-    /* パソコン(1440px)。**「表示」は出ない** — 畳まないので札も要らない */
-    wide: ['閉じる', '書き込む', 'メモ', '印刷', wholePlayText(), 'しない', '速さ', '文字', '幅'],
+    /* パソコン(1440px)。**「表示」は出ない** — 畳まないので札も要らない。
+
+       ★ **「文字」「幅」「印刷」は帯から消えた**(2026-09-29 利用者の指定)。
+         > 文字サイズ、幅、印刷/PDFボタンを設定ボタンを作って右上に
+         > アイコンを置いてください
+         3つは右上の「設定」の吹き出しの中にある(下の節で数えている)。
+
+       ★ **`wholePlayText()` も帯には出ない。** 上の帯のプレーヤーは
+         **絵だけ**になった(利用者の指定「『聴く』は必要なく、
+         『▷』など、アイコンだけで作って」)。名前は `aria-label` に
+         残っているので、そちらで数える(下の節)。 */
+    wide: ['閉じる', '書き込む', 'メモ', 'しない', '速さ'],
     /* スマホ(390px)。「表示」に畳まれる(検証は開いてから数える)。
-       通しの読み上げは**右下に浮く**ので帯には無く、帯にはスイッチだけ */
-    narrow: ['閉じる', '表示', '書き込む', 'メモ', '印刷', '速さ', '文字', '幅',
+       通しの読み上げは**画面の下の黒帯**なので、帯にはスイッチだけ */
+    narrow: ['閉じる', '表示', '書き込む', 'メモ', '速さ',
       '読み上げの操作を閉じる', '集中モード'],
-    hasNot: [],
+    /* **帯から消えたことも数える。** 片方だけだと、戻しても緑のまま。
+       **`wholePlayText()` はここに書かない** —— 絵だけになっても
+       `aria-label` には残っている(残っていないと、何のボタンか分からない)。
+       **見えているかどうか**は、下の「上の帯」の節が字で数えている */
+    hasNot: ['文字', '幅', '印刷'],
   },
   'トレーナーが「教材」の画面から開いている': {
     q: '?role=trainer',
@@ -104,18 +118,18 @@ const WANT = {
        **それは書けない理由であって、ボタンを消す理由ではなかった。**
        利用者はふだんこの画面から開くので、一度も出てこなかった。
        いまは**開いた中で相手を選ばせる**(担当ゲストだけが並ぶ)。 */
-    wide: ['閉じる', '書き込む', 'メモ', '印刷', wholePlayText(), 'しない', '速さ', '文字', '幅'],
-    narrow: ['閉じる', '表示', '書き込む', 'メモ', '印刷', '速さ', '文字', '幅',
+    wide: ['閉じる', '書き込む', 'メモ', 'しない', '速さ'],
+    narrow: ['閉じる', '表示', '書き込む', 'メモ', '速さ',
       '読み上げの操作を閉じる', '集中モード'],
-    hasNot: [],
+    hasNot: ['文字', '幅', '印刷'],
   },
   'ゲスト自身が開いている': {
     q: '?role=learner&who=g1',
-    wide: ['閉じる', '書き込む', '印刷', wholePlayText(), 'しない', '速さ', '文字', '幅'],
-    narrow: ['閉じる', '表示', '書き込む', '印刷', '速さ', '文字', '幅',
+    wide: ['閉じる', '書き込む', 'しない', '速さ'],
+    narrow: ['閉じる', '表示', '書き込む', '速さ',
       '読み上げの操作を閉じる', '集中モード'],
     // メモを書けるのは担当トレーナー(と管理者)だけ(0032)
-    hasNot: ['メモ'],
+    hasNot: ['メモ', '文字', '幅', '印刷'],
   },
 }
 
@@ -580,6 +594,119 @@ for (const [label, want] of Object.entries(WANT)) {
   }
   await page.close()
 }
+
+/* ── **一度決める設定は、右上のアイコン1つの中**(2026-09-29 利用者の指定)──
+ *
+ *    > 文字サイズ、幅、印刷/PDFボタンを設定ボタンを作って右上にアイコンを
+ *    > 置いてください。三本線と丸の組み合わせのアイコンにしてください
+ *    > そして、上部のバーのボタンは「聴く」は必要なく、「▷」など、
+ *    > アイコンだけで作って、下部に置くものと同じにしてください
+ *
+ *    3つを帯に出しっぱなしにしていたので、**パソコンでも帯が2段**に
+ *    折り返していた(実機の写真)。**出す / 出さないの両方を見る** ——
+ *    帯から消えたことは上の `WANT.hasNot` が、
+ *    **吹き出しの中に在ること**をここが見る。片方だけだと、
+ *    「どこにも無い」形に書き換えても緑のままになる。
+ */
+{
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(400)
+  console.log('\n── 一度決める設定(右上のアイコン) ──')
+
+  for (const w of [1440, 390]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(350)
+    /* **狭い窓では「表示」に畳まれている。** `inventory()` と同じ作法で、
+       開いてから数える —— 開かずに測ると、幅も高さも 0 になる(実測して踏んだ) */
+    const more = await page.$('.lesson-more')
+    if (more && await more.isVisible()) { await more.click(); await page.waitForTimeout(250) }
+    const 札 = await page.$('.lesson-sets')
+    if (!札 || !await 札.isVisible()) { ng(`設定 ${w}px … 設定のアイコンが出ていない`); continue }
+    /* **絵だけ**(言葉を添えない)。押せる大きさは割らない */
+    const m = await page.evaluate(() => {
+      const b = document.querySelector('.lesson-sets')
+      const r = b.getBoundingClientRect()
+      return {
+        字: (b.textContent || '').trim(),
+        名: b.getAttribute('aria-label') ?? '',
+        絵: b.querySelectorAll('svg').length,
+        大きさ: `${Math.round(r.width)}x${Math.round(r.height)}`,
+        高さ: Math.round(r.height),
+      }
+    })
+    if (m.字) ng(`設定 ${w}px … アイコンに言葉が添えてある`, `「${m.字}」`)
+    else if (m.絵 !== 1) ng(`設定 ${w}px … 絵が ${m.絵} つある`)
+    else if (!m.名) ng(`設定 ${w}px … 名前(aria-label)が無い`, '絵だけなので、名前が要る')
+    else if (m.高さ < 30) ng(`設定 ${w}px … 押すには小さい`, m.大きさ)
+    else ok(`設定 ${w}px … 絵だけ・名前は「${m.名}」(${m.大きさ})`)
+
+    /* **押したら3つが出る。** `SettingsSheet` は広い窓では吹き出し、
+       狭い窓では下から出るシートになる(どちらも同じ中身) */
+    await page.click('.lesson-sets')
+    await page.waitForTimeout(400)
+    const 中 = await page.evaluate(() => {
+      const pop = document.querySelector('.setpop, .sheet')
+      return pop ? pop.innerText.replace(/\s+/g, ' ') : null
+    })
+    if (!中) ng(`設定 ${w}px … 押しても吹き出しが出ない`)
+    else {
+      /* **紙の幅は広い窓だけ**(スマホでは紙が画面いっぱいなので意味がない)。
+         もとから CSS が `.lesson-widths` を狭い窓で隠している。
+         **出る側と出ない側の両方を見る** —— 片方だけだと、
+         「どの幅でも出さない」に書き換えても緑のままになる */
+      const 要る = w >= 1024 ? ['文字', '幅', '印刷'] : ['文字', '印刷']
+      const 無い = 要る.filter((t) => !中.includes(t))
+      if (無い.length) ng(`設定 ${w}px … 吹き出しに ${無い.join(' / ')} が無い`, 中.slice(0, 80))
+      else if (w < 1024 && 中.includes('幅')) {
+        ng(`設定 ${w}px … 狭い窓に「幅」が出ている`, '紙は画面いっぱいなので、効かない操作になる')
+      } else ok(`設定 ${w}px … 吹き出しに ${要る.join(' / ')} が入っている`)
+    }
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(250)
+  }
+
+  /* ── **上の帯のプレーヤーは、絵だけ。黒帯と同じ絵** ──────────────
+       > 上部のバーのボタンは「聴く」は必要なく、「▷」など、
+       > アイコンだけで作って、下部に置くものと同じにしてください
+
+     **言葉が消えても、名前は消えない** —— `aria-label` は
+     `wholePlay.js` の言葉をそのまま言う(書き写さない)。
+     **絵が同じであることは、同じ部品を使っているかで見る**
+     (`.player-key` / `.player-big` は黒帯と共通) */
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.waitForTimeout(400)
+  {
+    const m = await page.evaluate(() => {
+      const p = document.querySelector('.player--bar')
+      if (!p) return null
+      const 押す = [...p.querySelectorAll('button')]
+      return {
+        字: p.innerText.replace(/\s+/g, ' ').trim(),
+        送り戻し: p.querySelectorAll('.player-key').length,
+        鳴らす: p.querySelectorAll('.player-big').length,
+        札: p.querySelectorAll('.player-key-cap').length,
+        名前なし: 押す.filter((b) => !(b.getAttribute('aria-label') || b.textContent.trim())).length,
+        鳴らすの名前: p.querySelector('.player-big')?.getAttribute('aria-label') ?? '',
+        高さ: Math.round(p.getBoundingClientRect().height),
+      }
+    })
+    if (!m) ng('上の帯 … プレーヤーが出ていない')
+    else if (m.送り戻し !== 4) ng(`上の帯 … 送り戻しが4つ無い(${m.送り戻し} 個)`, '黒帯と同じ並びにする')
+    else if (m.鳴らす !== 1) ng(`上の帯 … 鳴らすボタンが ${m.鳴らす} つある`)
+    else if (m.札) ng(`上の帯 … 絵の下の札が ${m.札} つ出ている`, '1行しかないので出さない')
+    else if (m.名前なし) ng(`上の帯 … 名前(aria-label)の無いボタンが ${m.名前なし} つある`)
+    /* **名前は `wholePlay.js` 1か所から来る。** ここに書き写さない */
+    else if (!m.鳴らすの名前.includes(WHOLE_PLAY_CORE)) {
+      ng('上の帯 … 鳴らすボタンの名前が違う', `「${m.鳴らすの名前}」`)
+    } else if (m.字.includes(WHOLE_PLAY_CORE)) {
+      ng('上の帯 … 鳴らすボタンに言葉が出たままになっている', `「${m.字}」`)
+    } else ok(`上の帯 … 絵だけ(送り戻し4つ + 鳴らす1つ)・名前は「${m.鳴らすの名前}」`)
+  }
+  await page.close()
+}
+
 
 /* ── **黒帯は3段。押すものの行は、絶対に折り返さない**(第5.311節)──────
  *

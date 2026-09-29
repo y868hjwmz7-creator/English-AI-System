@@ -17,10 +17,14 @@
  *
  * 【置き場所は2通り。**覚える**】(**浮かせるは廃止**・第5.311節)
  *
- *   | どこ | いつ向くか |
- *   |---|---|
- *   | **上の帯の中**(`bar`)  | 画面共有のとき。相手にも見える。**広い窓だけ** |
- *   | **画面の下の黒帯**(`dock`) | それ以外ぜんぶ。親指が届く |
+ *   | どこ | いつ向くか | 形 |
+ *   |---|---|---|
+ *   | **上の帯の中**(`bar`)  | 画面共有。相手にも見える。**広い窓だけ** | 絵だけの1行 |
+ *   | **画面の下の黒帯**(`dock`) | それ以外ぜんぶ。親指が届く | 3段 |
+ *
+ *   **押すものは、どちらも同じ `PlayKey` と同じ鳴らすボタン**である
+ *   (2026-09-29 利用者の指定「下部に置くものと同じにしてください」)。
+ *   違うのは**札を出すかどうか**だけ —— 上の帯は1行しかないためである。
  *
  *   **どこへ出すかの判断は `playerPlace.js` 1か所**(画面に持たせない)。
  *
@@ -69,7 +73,6 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
-import SentenceSkip from './SentenceSkip.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
 import Stepper from './Stepper.jsx'
 import { SPEECH_RATES } from '../lib/speechRate.js'
@@ -86,10 +89,10 @@ import { WHOLE_PLAY_CORE, WHOLE_PLAY_WIDE } from '../lib/wholePlay.js'
  * 外側(段落)は三角2つ + 縦棒、内側(文)は三角1つ + 縦棒にして、
  * **絵だけで「どちらが大きく飛ぶか」**が分かるようにする。
  */
-function PlayKey({ dir, label, wide, disabled, onClick }) {
+function PlayKey({ dir, label, wide, disabled, onClick, cap = true }) {
   const say = `${label}${dir < 0 ? 'もどる' : 'すすむ'}`
   return (
-    <span className="player-key">
+    <span className={`player-key${cap ? '' : ' player-key--bare'}`}>
       <button type="button" className="player-key-btn"
               aria-label={say} title={say}
               disabled={disabled} onClick={onClick}>
@@ -111,8 +114,16 @@ function PlayKey({ dir, label, wide, disabled, onClick }) {
         </svg>
       </button>
       {/* **どちらを送るのかを、絵の下に書く。**
-          絵だけでは「2つ三角なら段落」と分かるまでに時間がかかる */}
-      <span className="player-key-cap" aria-hidden="true">{label}</span>
+          絵だけでは「2つ三角なら段落」と分かるまでに時間がかかる。
+
+          **上の帯では出さない**(2026-09-29 利用者の指定
+            「上部のバーのボタンは『聴く』は必要なく、『▷』など、
+              アイコンだけで作って、下部に置くものと同じにしてください」)。
+          あちらは1行しかないので、札を置くと帯が2段になる。
+          **名前は消えていない** —— `aria-label` と `title` は
+          どちらの置き場所でも同じ言葉を言う(読み上げにも、
+          マウスを乗せたときにも出る) */}
+      {cap && <span className="player-key-cap" aria-hidden="true">{label}</span>}
     </span>
   )
 }
@@ -186,40 +197,49 @@ export default function PlayerBar({
   const playSay = playing ? '止める' : `${WHOLE_PLAY_WIDE}${WHOLE_PLAY_CORE}`
 
   /* ══════════════════════════════════════════════════════════════
-     **上の帯(`bar`)は、これまでの1行のまま**(第5.311節)。
-     言われたのは「画面下部分」なので、そちらは触っていない
-     (**言われた場所だけを直す**・CLAUDE.md)
+     **上の帯(`bar`)—— 絵だけの1行**(2026-09-29 利用者の指定)
+
+       > 上部のバーのボタンは「聴く」は必要なく、「▷」など、
+       > アイコンだけで作って、下部に置くものと同じにしてください
+
+     **下の黒帯と同じ `PlayKey` と同じ鳴らすボタン**を使う ——
+     絵を2組持つと、片方だけ古くなる(**判断は1か所**・CLAUDE.md)。
+     違うのは**札を出さないこと**だけで、それは1行しかないためである
+     (名前は `aria-label` と `title` に、どちらも同じ言葉で残っている)。
      ══════════════════════════════════════════════════════════════ */
   if (place !== 'dock') {
     return (
       <div className={`player player--${place} no-print`}
            ref={place === 'bar' ? null : barRef}
            role="group" aria-label="読み上げの操作">
-        <SentenceSkip>
-          <button type="button"
-                  className={`btn btn--small player-play${playing ? ' is-on' : ''}`}
-                  onClick={onToggle}>
-            {playing
-              ? <><StopIcon /><span className="listen-word">Stop</span></>
-              : <><SpeakerIcon />
-                <span className="listen-word">
-                  <span className="wide-text">{WHOLE_PLAY_WIDE}</span>{WHOLE_PLAY_CORE}
-                </span>
-              </>}
-          </button>
-        </SentenceSkip>
+        <span className="player-at">
+          {shown == null ? `— / ${total}` : `${shown} / ${total}`}
+          <span className="wide-text"> {unit}</span>
+        </span>
 
-        <SentenceSkip
-          label={`${unit}を`}
-          onStep={(d) => onJump?.(now + d)}
-          canBack={!!onJump && now != null && now > 0}
-          canNext={!!onJump && now != null && now < total - 1}
-        >
-          <span className="player-at">
-            {shown == null ? `— / ${total}` : `${shown} / ${total}`}
-            <span className="wide-text"> {unit}</span>
-          </span>
-        </SentenceSkip>
+        {/* **外側が段落・内側が文**(黒帯とまったく同じ並び) */}
+        <div className="player-keys player-keys--bar">
+          <PlayKey dir={-1} label={unit} wide cap={false}
+                   disabled={!onJump || now == null || now <= 0}
+                   onClick={() => onJump?.(now - 1)} />
+          <PlayKey dir={-1} label="文" cap={false}
+                   disabled={!bySentence}
+                   onClick={() => skipSentence(-1)} />
+
+          <button type="button"
+                  className={`player-big player-big--bar${playing ? ' is-on' : ''}`}
+                  aria-label={playSay} title={playSay}
+                  onClick={onToggle}>
+            {playing ? <StopIcon className="icon" /> : <SpeakerIcon className="icon" />}
+          </button>
+
+          <PlayKey dir={1} label="文" cap={false}
+                   disabled={!bySentence}
+                   onClick={() => skipSentence(1)} />
+          <PlayKey dir={1} label={unit} wide cap={false}
+                   disabled={!onJump || now == null || now >= total - 1}
+                   onClick={() => onJump?.(now + 1)} />
+        </div>
 
         {onRepeat && (
           <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />

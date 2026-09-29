@@ -8896,7 +8896,15 @@ button.wbfilter-ctl { text-align: left; }
   min-height: 34px;
 }
 /* 背丈をそろえたぶん、中の文字は**上下のまん中**に置く
-   (`align-items: stretch` で伸びるので、そのままだと上に張り付く) */
+   (`align-items: stretch` で伸びるので、そのままだと上に張り付く)。
+
+   ★ **左右の余白は足さない**(2026-09-29・一度足して、戻した)。
+     上の帯の `— / 5` が仕切りにぶつかって見えたので 8px 足したが、
+     **上の帯はそのあと錠剤をやめた**(第5.312節・絵だけになった)ので、
+     直す相手がそもそも居なくなった。
+     残ったのは**集中モードの下の帯**で、あちらは 320px + 文字 1.25 倍で
+     **16px ぶんあふれて隠れた**(`npm run test:bar` が捕まえた)。
+     **言われた場所だけを直す** —— あちらは言われていない */
 .listenpill .player-at { display: inline-flex; align-items: center; }
 /* ── 三角は「押せるもの」に見せる(2026-09 実機・利用者の指摘)────
    > プレーヤーの文章を飛ばすボタンが白過ぎで見にくいです。
@@ -9024,6 +9032,20 @@ button.wbfilter-ctl { text-align: left; }
    そのぶんを先に取っておく。**言葉は削らない** —— 何の単位かが
    分からなくなる。狭い画面で落とすのは「くり返し」の側だけである。 */
 .repeat-unit { padding-left: 8px; padding-right: 8px; }
+/* ★ **押しても、この箱の幅が変わらない**(2026-09-29・第5.311節のつづき)。
+     `SteadyLabel` は**言葉の長さ**の取り合いを片づけたが、
+     もう1つ、**字の太さ**が残っていた ——
+     くり返しを入れると `btn--primary` が付き、`font-weight` が
+     400 → 600 になる。`SteadyLabel` の中は升目で幅が決まっているので
+     動かないが、**その外にいる「くり返し:」だけが 0.81px 太る。**
+     箱の幅も 145.33 → 146.14px に変わり、となりの物が動いた(実測)。
+
+     **太さを、どちらの状態でも1つにする。** 入っている印は
+     地色と `aria-pressed`、それに**言葉そのもの**(しない / 文 / 問 / 全文)が
+     受け持っているので、太さは要らない(**色だけに頼っていない**)。
+     `test:bar` の「押しても動かない」が捕まえた —— **浮くプレーヤーを
+     やめて「くり返し:」が見えるようになった日に、初めて表に出た。** */
+.repeat-unit, .repeat-unit.btn--primary { font-weight: 600; }
 /* **幅は `SteadyLabel` が取る**(第5.281節)。
    ここには `min-width: 3em` という**決め打ち**が書いてあり、
    しかも `.focus-mid` で `min-width: 0` と**打ち消されていた** ——
@@ -9093,14 +9115,24 @@ button.wbfilter-ctl { text-align: left; }
    ここは言葉を短くすると何のボタンか分からなくなる)。
    実測: 1440px で 50px の1行に収まる */
 .player--bar { gap: var(--sp-6); }
-.player--bar .listenpill-arrow { min-width: 32px; padding: 0 7px; }
-.player--bar .listenpill .btn { padding-left: 8px; padding-right: 8px; }
+
 
 /* ③ 幅が入らないときは、**スイッチだけ**を帯に置く(2026-09 利用者の指定)。
    押すと右下の操作盤が開く。**絵だけ**なので 320px でも1行に収まる。
    押している印は `.lesson-bar .btn--primary` と同じ青
    (**色だけに頼らない** — `aria-pressed` も付けてある) */
 .player-launch { flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
+/* ── **一度決める設定は、右上のアイコン1つ**(2026-09-29 利用者の指定)──
+     > 文字サイズ、幅、印刷/PDFボタンを設定ボタンを作って右上に
+     > アイコンを置いてください
+
+   **いちばん右**(`order: 4`)。`.lesson-settings`(order: 2)の外にいるので、
+   狭い窓で「表示」に畳まれても**ここだけは必ず押せる**(行き止まりを作らない)。
+   **絵だけ**なので、320px でも場所を取らない */
+.lesson-sets { flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
+/* 吹き出しの中。**すき間は `gap` で作る**(共通ルール)。
+   子に `margin` を付けて回らない */
+.lesson-sets-body { display: flex; flex-direction: column; gap: var(--sp-10); }
 /* 帯の中の「集中モード」。**狭い画面でだけ出す**(2026-09 利用者の指定)。
    広い画面では、これまでどおり右下に固定してある(`.sheet-float`)。
    **同時に2つは出さない** —— 出し分けは幅だけで決める */
@@ -9225,6 +9257,13 @@ button.wbfilter-ctl { text-align: left; }
   width: 100%; height: 22px; margin: 0; padding: 0;
   appearance: none; -webkit-appearance: none; background: transparent;
   cursor: pointer;
+  /* ★ **つまみを動かしても、画面が横へ滑らない**(第5.282節の決まり)。
+       指で横へ引くと、ブラウザは**まず「画面を横へ送る合図」**として
+       受け取る。つまみは横に引いて使うものなので、まともにぶつかる。
+       `pan-y` にすると、横の動きはつまみに届き、**縦の送りは残る。**
+       `.nav-vol`(762)/ `.sheet-grip` / ペンの紙が、同じ理由で持っている
+       —— **足した日に、ここだけ持っていなかった**(`test:bar` が捕まえた) */
+  touch-action: pan-y;
 }
 .player-range:disabled { cursor: default; }
 .player-range::-webkit-slider-thumb {
@@ -9288,6 +9327,36 @@ button.wbfilter-ctl { text-align: left; }
 .player-big:hover { background: #ffffff; }
 .player-big:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .player-big .icon { width: 24px; height: 24px; }
+
+/* ── **上の帯も、同じ絵・同じ並び。大きさだけ1段詰める** ──────────
+     (2026-09-29 利用者の指定)
+     > 上部のバーのボタンは「聴く」は必要なく、「▷」など、
+     > アイコンだけで作って、下部に置くものと同じにしてください
+
+   **黒帯とまったく同じ `PlayKey`** を使う(絵を2組持たない)。
+   違うのは**札を出さないこと**と、**大きさ**だけである。
+
+   ★ **打ち消しは、いちばん後ろに置く**(CLAUDE.md)。
+     はじめ `.player--bar` のところ(上の 9100 台)に書いたので、
+     **あとに来る `.player-big` / `.player-key-btn` に負けて**
+     帯が 70px に伸び、押すものが「書き込む」に重なっていた(実測)。
+     同じ細かさなら**後ろが勝つ** —— だからここに置く。
+
+   ★ **横いっぱいに広げない。** 黒帯の押す行は `space-between` +
+     `width: 100%` で余りを隙間に配る作りだが、上の帯では
+     **並ぶものの1つ**にすぎない。広げると隣を押しのける(実測)。 */
+.player-keys--bar {
+  flex: 0 0 auto; width: auto; max-width: none;
+  justify-content: flex-start; gap: var(--sp-2);
+  margin-left: 0; margin-right: 0;
+}
+/* 札を出さないので、絵と札のあいだの隙間も要らない */
+.player-key--bare { gap: 0; }
+.player-keys--bar .player-key-btn { width: 32px; height: 30px; border-radius: var(--r-8); }
+.player-keys--bar .player-key-icon { width: 18px; height: 18px; }
+/* いちばん押すものは、上の帯でも**白い丸**のまま(明るさで示す) */
+.player-keys--bar .player-big { width: 34px; height: 34px; border-radius: 17px; }
+.player-keys--bar .player-big .icon { width: 18px; height: 18px; }
 
 /* いちばん狭い端末。**左右の余白だけを詰める**(押せる大きさは割らない) */
 @media (max-width: 400px) {

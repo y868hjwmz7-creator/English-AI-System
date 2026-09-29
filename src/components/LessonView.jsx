@@ -41,8 +41,13 @@ import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import {
   BoltIcon, FocusIcon, GearIcon, NoteIcon, PenIcon, PrintIcon,
-  SpeakerIcon, StepsIcon, StopIcon,
+  SortIcon, SpeakerIcon, StepsIcon, StopIcon,
 } from './Icons.jsx'
+/* **一度決める設定は、右上のアイコン1つの中へ**(2026-09-29 利用者の指定)。
+   絵は `SortIcon`(三本線と丸)——**すでに「設定」に使っている絵**である
+   (聞き流し `.radio-gear` / 復習の「出しかた」)。
+   **同じ働きのボタンに、同じ絵。** ここで新しい絵を描かない */
+import SettingsSheet from './SettingsSheet.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import GrammarNote from './GrammarNote.jsx'
 import FocusReader from './FocusReader.jsx'
@@ -265,6 +270,16 @@ export default function LessonView({
   const [openSettings, setOpenSettings] = useState(false)
   // Esc の扱いで今の状態を見たい。`useEffect` の中から読めるように控える
   const openSettingsRef = useRef(false)
+  /* ── **一度決める設定は、右上のアイコン1つの中へ**(2026-09-29 利用者の指定)
+       > 文字サイズ、幅、印刷/PDFボタンを設定ボタンを作って右上にアイコンを
+       > 置いてください。三本線と丸の組み合わせのアイコンにしてください
+
+     3つとも**セッション中に何度も触るものではない。** 帯に出しっぱなしに
+     すると、パソコンでも帯が2段に折り返していた(実機の写真)。
+     吹き出しは `SettingsSheet` —— 聞き流しの設定(第5.274節)と
+     **同じ部品・同じ作法**である(狭い窓では下から出るシートになる)。 */
+  const [viewSets, setViewSets] = useState(false)
+  const viewSetsRef = useRef(null)
   /**
    * **紙への書き込み**(2026-09 利用者の指定)。
    *
@@ -1397,21 +1412,37 @@ export default function LessonView({
               紙の幅は7段になったので、並べるやり方はもう成り立たない。
               **見出し(速さ / 文字 / 幅)は残す。** 3つとも同じ形になったので、
               見出しが無いとどれがどれか分からない(しかも2つは「%」である) */}
+          {/* **速さだけは帯に残す**(2026-09-29 利用者の指定)。
+              鳴らしながら「速い / 遅い」を直すものなので、
+              **吹き出しを開いてからでは間に合わない。**
+              文字・幅・印刷の3つは、右上の「設定」の中へ移した */}
           <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
                    onChange={(id) => { setRateId(id); saveRateId(id); stopAll() }} />
-          <Stepper label="文字" options={SIZES} value={size}
-                   onChange={(id) => { setSize(id); saveSize(id) }} />
-          {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}
-          <Stepper label="幅" options={WIDTHS} value={width} className="lesson-widths"
-                   onChange={(id) => { setWidth(id); saveWidth(id) }} />
-          {/* **言葉は `.mid-text` に入れておく。** 帯が入らないときは
-              絵だけになる(`.lesson-bar.is-fit2`)。絵は別物なので
-              取り違えないが、**`aria-label` は必ず添える** */}
-          <button type="button" className="btn btn--small btn--quiet"
-                  aria-label="印刷 / PDFで保存"
-                  onClick={() => printElement(document.getElementById('lesson-sheet'),
-                             { name: materialFileName(material, 'full', 'pdf') })}>
-            <PrintIcon /><span className="mid-text">印刷</span>
+
+          {/* ── 一度決める設定(文字 / 幅 / 印刷)は、アイコン1つに
+              ──────────────────────────────────────────────
+              2026-09-29 利用者の指定。
+
+                > 文字サイズ、幅、印刷/PDFボタンを設定ボタンを作って
+                > 右上にアイコンを置いてください。
+                > 三本線と丸の組み合わせのアイコンにしてください
+
+              絵は `SortIcon` —— **すでに「設定」に使っている三本線と丸**で、
+              新しく描いていない(**同じ働きのボタンに、同じ絵**)。
+
+              **置き場所は `.lesson-settings` の末尾**(= 帯のいちばん右)。
+              はじめ外に出したところ、**320px で帯が2段になった**(実測 86px)
+              —— あの幅には「表示」と並べる余地が無い。
+              中に入れておけば、広い窓では**帯の右端**にそのまま出て、
+              狭い窓では「表示」の中へ一緒に畳まれる
+              (**押すものが2つ並ばない** —— 同じことをするものを2つ見せない)。 */}
+          <button type="button" ref={viewSetsRef}
+                  className={`btn btn--small lesson-sets${viewSets ? ' btn--primary' : ''}`}
+                  aria-label="設定(文字の大きさ・紙の幅・印刷)"
+                  title="設定(文字の大きさ・紙の幅・印刷)"
+                  aria-expanded={viewSets}
+                  onClick={() => setViewSets((v) => !v)}>
+            <SortIcon />
           </button>
         </div>
 
@@ -1455,6 +1486,44 @@ export default function LessonView({
             onOpen={() => setWantPeople(true)} />
         )}
       </div>
+
+      {/* ── 一度決める設定(2026-09-29 利用者の指定)────────────────
+          **帯には出しっぱなしにしない。** 文字の大きさも紙の幅も印刷も、
+          セッション中に何度も触るものではない。出しっぱなしにしていたので
+          パソコンでも帯が2段に折り返していた(実機の写真)。
+
+          **`SettingsSheet` は聞き流しの設定(第5.274節)と同じ部品**である
+          —— 広い窓では吹き出し、狭い窓では下から出るシートになる。
+          置き直す合図(`placeKey`)には**いまの値**を渡す ——
+          「特大」と「小」で箱の高さが変わるので、渡さないと吹き出しがずれる */}
+      {viewSets && (
+        <SettingsSheet
+          anchorEl={viewSetsRef.current}
+          onClose={() => setViewSets(false)}
+          title="設定"
+          placeKey={`${size}/${width}`}
+        >
+          {/* **別々の物を、すき間ゼロでくっつけない**(共通ルール)。
+              入れ物は素の箱で `gap` を持たないので、ここで1つ束ねて離す */}
+          <div className="lesson-sets-body">
+            <Stepper label="文字" options={SIZES} value={size}
+                     onChange={(id) => { setSize(id); saveSize(id) }} />
+            {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}
+            <Stepper label="幅" options={WIDTHS} value={width} className="lesson-widths"
+                     onChange={(id) => { setWidth(id); saveWidth(id) }} />
+            {/* **押したら閉じる。** 紙を刷ったあとに吹き出しが残っていると、
+                紙が見えない(次にすることを、その場に1つだけ置く) */}
+            <button type="button" className="btn btn--small btn--quiet"
+                    onClick={() => {
+                      setViewSets(false)
+                      printElement(document.getElementById('lesson-sheet'),
+                        { name: materialFileName(material, 'full', 'pdf') })
+                    }}>
+              <PrintIcon />印刷 / PDF
+            </button>
+          </div>
+        </SettingsSheet>
+      )}
 
       {/* 紙と、その横のメモ。**入れ物を1つはさむ**(0032)。
           メモを紙の上に重ねると、教材を見ながら書けない。
