@@ -8786,13 +8786,9 @@ button.wbfilter-ctl { text-align: left; }
 .focus-bar.is-fit3 .focus-mid .btn { padding: 5px 4px; }
 .focus-bar.is-fit3 .focus-mid .listenpill-arrow { min-width: 28px; padding: 0 5px; }
 .focus-bar.is-fit3 .focus-move { min-width: 30px; }
-/* ★ **くり返しが3つになったぶん、ここも詰める**(2026-09-30・第5.319節)。
-     1つのボタン(「⤺ しない」)から**絵3つ**にしたので、
-     320px + 端末の「表示を大きく」で**集中モードの帯があふれた**
-     (`test:bar` が1件で捕まえた)。
-     **押すものは1つも消さない** —— 隙間と幅だけを詰める */
-.focus-bar.is-fit3 .repeat-keys { gap: 1px; }
-.focus-bar.is-fit3 .repeat-key { width: 26px; height: 26px; }
+/* いちばん詰めた段では、くり返しも1段小さく(第5.319 → 5.320節。
+   3つ並べていたころは 26px まで詰めていたが、**1つに戻したので余裕がある**) */
+.focus-bar.is-fit3 .repeat-key { width: 28px; height: 26px; }
 .focus-bar.is-fit3 .repeat-key .icon { width: 16px; height: 16px; }
 
 /* 紙には出さない。画面の中でやることである */
@@ -9139,18 +9135,24 @@ button.wbfilter-ctl { text-align: left; }
    1つのボタンで回す形をやめ、**3つ並べて、押したものが光る**形にした。
    **言葉が無いので、伸び縮みもしない** —— 下にあった「幅をそろえる」
    「字の太さを1つにする」という苦労は、まるごと要らなくなった。 */
-.repeat-keys {
-  /* **すき間ゼロでくっつけない**(共通ルール)。3つで1つの組に見せるため、
-     組の中は詰めめ、組の外(`.player-head` の `gap`)は広く取る */
-  display: inline-flex; align-items: center; gap: var(--sp-4); flex: 0 0 auto;
-}
+/* ★ **ボタンは1つ**(2026-09-30 利用者の指定・第5.320節)。
+     3つ並べる形は帯の幅を 110px 使い、集中モードの帯であふれた。
+     いまは**押すたびに回る**ので、幅は 34px 1つぶんである。 */
 .repeat-key {
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 30px; padding: 0;
   border: 1px solid transparent; border-radius: var(--r-8);
   background: none; color: inherit; cursor: pointer;
 }
+.repeat-key {
+  /* **押せる大きさは割らない。** 絵だけなので、幅も高さも決め打ちでよい */
+  flex: 0 0 auto;
+}
 .repeat-key .icon { margin-right: 0; width: 20px; height: 20px; }
+/* ★ **「しない」は、うすく**(利用者が選んだ案A)。
+     **色だけに頼っていない** —— 絵の側も、回す範囲の線が無い */
+.repeat-key:not(.is-on) { opacity: .45; }
+.repeat-key:not(.is-on):hover { opacity: .75; }
 .repeat-key:hover:not(.is-on) { background: color-mix(in srgb, currentColor 14%, transparent); }
 .repeat-key:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* いま選んでいるもの。**色だけに頼らない** —— 地色 + 枠線 + 文字色の3つ
@@ -9489,7 +9491,7 @@ button.wbfilter-ctl { text-align: left; }
 .player--dock .btn--quiet { background: #45453f; border-color: #45453f; color: #f2f2ee; }
 .player--dock .btn--ghost { background: transparent; border-color: #55554e; color: var(--player-ink); }
 .player--dock .btn:disabled { opacity: .4; }
-.player--dock .repeat-keys { color: var(--player-ink); }
+.player--dock .repeat-key { color: var(--player-ink); }
 
 /* ── ① いまどこか・くり返し・速さ ────────────────────────────────
      **いまどこかは左**(いちばん読む)、操作は右へ寄せる。
@@ -9660,7 +9662,6 @@ button.wbfilter-ctl { text-align: left; }
 .player-head.is-fit3 { gap: var(--sp-2); }
 .player-head.is-fit3 .player-at { font-size: var(--fs-11); }
 .player-head.is-fit3 .player-place { padding-left: 4px; padding-right: 4px; }
-.player-head.is-fit3 .repeat-keys { gap: var(--sp-2); }
 .player-head.is-fit3 .repeat-key { width: 30px; }
 .player-head.is-fit3 .player-at .wide-text { display: none; }
 

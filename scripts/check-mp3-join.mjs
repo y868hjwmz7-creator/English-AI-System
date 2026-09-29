@@ -1786,18 +1786,16 @@ function fakeMp3({
       const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
       const lv2 = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
       const want3 = [
-        ['単位は4つ(しない + 3つ)', ru, /REPEAT_UNITS/],
-        /* ★ **押すたびに回す形はやめた**(2026-09-30・第5.318節)。
-             3つ並べて選ぶので、`nextRepeat` は呼ぶ人がいなくなった。
-             **消えたことを数える** —— 戻した日に気づけるように */
-        /* **「名前が出てくるか」で見ない**(CLAUDE.md)——
-             消した経緯そのものを説明に書いてあるので、素の語で探すと
-             **いつまでも赤いまま**になる(実際そうなった)。
-             **使っている形**(`export const nextRepeat`)で数える */
-        ['押すたびに回す形は、もう無い', rl, /^(?![\s\S]*export const nextRepeat)[\s\S]*$/],
+        /* 単位は4つ(しない + 文 + 段落/発言 + 全文)。**一覧は
+           `wholeAudio.js` 1か所**で、それを読むのは `repeatLabel.js` である
+           (部品は `.jsx` なので素の node から呼べない・第5.316節で切り出した) */
+        ['単位は4つ(しない + 3つ)', rl, /REPEAT_UNITS/],
+        /* ★ **押すたびに回る形に戻した**(第5.318 → 5.320節)。
+             3つ並べる形は帯の幅を 110px 使い、集中モードであふれた。
+             **使っている形で数える**(説明の中の同じ語に当たらないように) */
+        ['押すたびに次へ回る', rl, /export const nextRepeat/],
         ['呼び名は、素の node から呼べる形にある', rl, /export const repeatLabel/],
-        /* 押しているものをもう一度押せば「しない」に戻る(4つめのボタンを置かない) */
-        ['もう一度押すと、くり返しをやめる', ru, /onChange\?\.\(on \? 'off' : id\)/],
+        ['部品が「次へ」を渡す', ru, /onChange\?\.\(nextRepeat\(value\)\)/],
 
         ['操作盤が出す', bar2, /<RepeatUnit value=\{repeat \?\? 'off'\}/],
         ['集中モードも出す', fr, /<RepeatUnit value=\{player\.repeat\}/],

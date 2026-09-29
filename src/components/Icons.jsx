@@ -478,11 +478,28 @@ export function RepeatIcon({ className = 'icon' }) {
  *   ・線は1本なので、どんなに小さくても潰れない
  *   ・**長さの差は、3つ並べば一目で分かる**(4 / 8.5 / 13)
  *
- * @param range 'sentence'(文)/ 'item'(段落・発言)/ 'all'(全文)
+ * ★ **`off`(くり返さない)も、この絵で出す**(2026-09-30 利用者の指定・第5.320節)。
+ *
+ *   > 3つ並んだリピートのマークをひとつにして、押すたびに切り替わるように
+ *   > できませんか? …4つ目の普通の再生を示すマークを作るか、
+ *   > それとも普通の再生の時はグレーアウトさせるか
+ *
+ *   2案を 20 / 28 / 36px で描いて見比べ、**利用者が案A を選んだ**。
+ *
+ *   | 案 | 「しない」の見せ方 | 20px で |
+ *   |---|---|---|
+ *   | **A(採った)** | **線を描かない + うすく** | はっきり見分けられる |
+ *   | B | 輪に斜線 | **線が重なって潰れ、何の絵か読めない** |
+ *
+ *   **色だけに頼っていない**(CLAUDE.md)—— 「しない」は
+ *   **うすい**だけでなく、**回す範囲の線が無い**。形でも分かる。
+ *
+ * @param range 'off'(しない)/ 'sentence'(文)/ 'item'(段落・発言)/ 'all'(全文)
  */
 export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
-  /* **長さは1か所で決める。** 画面の中で数を書かない */
-  const w = { sentence: 4, item: 8.5, all: 13 }[range] ?? 8.5
+  /* **長さは1か所で決める。** 画面の中で数を書かない。
+     `off` は 0 —— **回す範囲が無いので、線も無い** */
+  const w = { off: 0, sentence: 4, item: 8.5, all: 13 }[range] ?? 8.5
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
       {/* 輪(2本の矢印)。**`RepeatIcon` と同じ形** —— 聞き流しの
@@ -494,8 +511,10 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
       <path d="M7 3.6 3.4 6.6 7 9.6z" fill="currentColor" />
       {/* 回す範囲。**まん中ぞろえ**にすると、3つ並べたとき
           「だんだん広がる」ことが分かる */}
-      <rect x={(20 - w) / 2} y="15.4" width={w} height="2.4" rx="1.2"
-            fill="currentColor" />
+      {w > 0 && (
+        <rect x={(20 - w) / 2} y="15.4" width={w} height="2.4" rx="1.2"
+              fill="currentColor" />
+      )}
     </svg>
   )
 }

@@ -61,7 +61,7 @@ import { subjectLabel } from '../src/data/materialKinds.js'
 import { FIT_SLACK } from '../src/lib/fitRow.js'
 /* **くり返しの4つは `wholeAudio.js` 1か所**。呼び名は `repeatLabel.js` */
 import { REPEAT_UNITS } from '../src/lib/wholeAudio.js'
-import { repeatLabel } from '../src/lib/repeatLabel.js'
+import { repeatLabel, repeatSay } from '../src/lib/repeatLabel.js'
 /* **速さの段と端は `speechRate.js` 1か所** */
 import { SPEECH_RATES } from '../src/lib/speechRate.js'
 
@@ -91,16 +91,18 @@ const ROOT = new URL('..', import.meta.url).pathname
  *   良くないですか?」)。広い画面ではこれまでどおり右下に固定してある
  * ・`速さ` `文字` `幅` … 「◀ いま ▶」の3つ
  */
-/* ★ **くり返しの呼び名は、書き写さない**(2026-09-30・第5.318節)。
-     もとは「しない」の3文字を数えていたが、**1つのボタンで回す形を
-     やめてアイコン3つにした日**に、その文字はどこにも無くなった
-     (`test:bar` が3件で捕まえた)。
-     いまは `aria-label` の「◯◯をくり返す」を、
-     `REPEAT_UNITS` と `repeatLabel()` から組む —— **範囲を足した日も、
-     呼び名を変えた日も、ひとりでに付いてくる。**
+/* ★ **くり返しの言い方は、書き写さない**(2026-09-30・第5.320節)。
+     **2度、ここで赤くなった。**
+       ①「しない」の3文字を数えていた → **アイコン3つ**にした日に消えた
+       ②「◯◯をくり返す」を3件数えていた → **ボタン1つ**に戻した日に消えた
+     どちらも**見張りだけが古くなった**のであって、画面は正しかった。
+
+     いまは `repeatSay()`(`repeatLabel.js`)から**そのまま**もらう ——
+     範囲を足しても、言い方を変えても、**ひとりでに付いてくる。**
+     開いた直後は「しない」なので、出るのは `REPEAT_UNITS[0]` のぶん1つ。
+     **4つとも出てくることは、専用の節が押して確かめている。**
      単位は `countUnit()` が決めるが、骨組みの教材は会話なので「発言」 */
-const くり返しの名 = REPEAT_UNITS.filter((id) => id !== 'off')
-  .map((id) => `${repeatLabel(id, '発言')}をくり返す`)
+const くり返しの名 = [repeatSay(REPEAT_UNITS[0], '発言')]
 
 const WANT = {
   'トレーナーが、ゲストと一緒に開いている': {
@@ -780,64 +782,85 @@ for (const [label, want] of Object.entries(WANT)) {
     }
   }
 
-  /* ── **くり返しは3つ並ぶ。押したものが光り、もう一度で消える**
-         (2026-09-30 利用者の指定・第5.318節)
-         > リピート設定の「繰り返し」という表示文言は削除し、
-         > アイコン中心の操作にしてください
-         > リピートしない状態も選べるようにし、現在の状態は
-         > アイコンの選択表示などで分かるようにしてください
+  /* ── **くり返しはボタン1つ。押すたびに4つを回る**
+         (2026-09-30 利用者の指定・第5.320節)
+         > 3つ並んだリピートのマークをひとつにして、
+         > 押すたびに切り替わるようにできませんか?
+         > 普通の再生の時はグレーアウトさせるか
 
-       **一覧は `REPEAT_UNITS` から**(書き写さない)。「しない」はボタンに
-       しないので、**ボタンの数は `REPEAT_UNITS.length - 1`** である。
-       **4つの状態ぜんぶに行けるか**を、実際に押して確かめる。 */
+       **一度は3つ並べた**(第5.318節)。帯の幅を 110px 使い、
+       集中モードの帯であふれたので、**1つに戻した。**
+       「しない」は**線を描かない + うすく**(利用者が選んだ案A)。
+
+       **一覧は `REPEAT_UNITS` から**(書き写さない)。 */
   await page.setViewportSize({ width: 390, height: 844 })
   await page.waitForTimeout(250)
   {
-    const 範囲 = REPEAT_UNITS.filter((id) => id !== 'off')
     const 数 = await page.$$eval('.player--dock .repeat-key', (xs) => xs.length)
-    /* **文字が残っていないか。** 「繰り返し」「くり返し」の語は消す指定 */
     const 文字 = await page.evaluate(() => {
-      const g = document.querySelector('.player--dock .repeat-keys')
-      return g ? (g.textContent || '').trim() : null
+      const b = document.querySelector('.player--dock .repeat-key')
+      return b ? (b.textContent || '').trim() : null
     })
-    if (数 !== 範囲.length) {
-      ng(`くり返し … ボタンが ${数} 個(${範囲.length} 個のはず)`,
-        '「しない」はボタンにしない —— 押しているものをもう一度押せば消える')
+    if (数 !== 1) {
+      ng(`くり返し … ボタンが ${数} 個(1つのはず)`, '押すたびに回る形にした(第5.320節)')
     } else if (文字) {
       ng('くり返し … 文字が残っている', `「${文字}」。**アイコン中心にする**指定である`)
     } else {
-      /* ①ぜんぶ押して、押したものだけが光るか ②もう一度押すと消えるか */
+      /* **ひと回りするか。** 見るのは ①名前(`aria-label`)②押している印
+         ③**絵そのもの**(「しない」は線が無い) */
       const 見た = []
-      let 悪い = ''
-      for (let i = 0; i < 範囲.length; i += 1) {
-        await page.click(`.player--dock .repeat-key >> nth=${i}`)
+      for (let i = 0; i <= REPEAT_UNITS.length; i += 1) {
+        const m = await page.evaluate(() => {
+          const b = document.querySelector('.player--dock .repeat-key')
+          if (!b) return null
+          const cs = window.getComputedStyle(b)
+          return {
+            名: b.getAttribute('aria-label') || '',
+            押している: b.getAttribute('aria-pressed') === 'true',
+            /* **回す範囲の線**(`rect`)が在るか。「しない」は無い */
+            線: b.querySelectorAll('svg rect').length,
+            /* **長さ**で範囲を見分ける。3つとも違っていないと意味が無い */
+            長さ: [...b.querySelectorAll('svg rect')]
+              .map((r) => Math.round(r.getBoundingClientRect().width * 10) / 10)
+              .join('/'),
+            うすい: Math.round((parseFloat(cs.opacity) || 1) * 100),
+          }
+        })
+        if (!m) break
+        見た.push(m)
+        await page.click('.player--dock .repeat-key')
         await page.waitForTimeout(120)
-        const m = await page.$$eval('.player--dock .repeat-key',
-          (xs) => xs.map((x) => x.getAttribute('aria-pressed') === 'true'))
-        if (m.filter(Boolean).length !== 1 || !m[i]) {
-          悪い = `${i + 1} 番を押したのに、光っているのが ${m.filter(Boolean).length} 個`
-          break
-        }
-        見た.push(範囲[i])
-        /* もう一度押すと「しない」に戻るか */
-        await page.click(`.player--dock .repeat-key >> nth=${i}`)
-        await page.waitForTimeout(120)
-        const m2 = await page.$$eval('.player--dock .repeat-key',
-          (xs) => xs.map((x) => x.getAttribute('aria-pressed') === 'true'))
-        if (m2.some(Boolean)) { 悪い = `${i + 1} 番をもう一度押しても消えない`; break }
       }
-      /* **絵が3つとも違うか。** 同じ絵を3つ置いても「選べる」だけは通る */
-      const 絵 = await page.$$eval('.player--dock .repeat-key svg',
-        (xs) => xs.map((x) => x.innerHTML.replace(/\s+/g, '')))
-      if (悪い) ng(`くり返し … ${悪い}`)
-      else if (見た.length !== 範囲.length) ng('くり返し … 押せない範囲がある')
-      else if (new Set(絵).size !== 範囲.length) {
-        ng('くり返し … 3つの絵が同じ形になっている',
-          '**範囲が見分けられる異なる矢印**にする(利用者の指定)')
+      const 名 = REPEAT_UNITS.map((id) => repeatLabel(id, '発言'))
+      const 足りない = 名.filter((n) => !見た.some((v) => v.名.includes(`いまは ${n}`)))
+      const しない = 見た.find((v) => v.名.includes(`いまは ${repeatLabel('off', '発言')}`))
+      const 回す = 見た.filter((v) => v.押している)
+      if (足りない.length) {
+        ng(`くり返し … ${足りない.join(' / ')} が選べない`, `見えたのは ${見た.length} 通り`)
+      } else if (見た[0]?.名 !== 見た[REPEAT_UNITS.length]?.名) {
+        ng('くり返し … ひと回りして元に戻らない',
+          `${見た[0]?.名} → ${見た[REPEAT_UNITS.length]?.名}`)
+      } else if (!しない || しない.押している) {
+        ng('くり返し … 「しない」が押している印のままになっている')
+      } else if (しない.線 !== 0) {
+        ng('くり返し … 「しない」なのに、回す範囲の線が描いてある',
+          `${しない.線} 本。**線が無いことでも分かる**(色だけに頼らない)`)
+      } else if (しない.うすい >= 90) {
+        ng('くり返し … 「しない」がうすくなっていない', `${しない.うすい}%`)
+      } else if (回す.some((v) => v.線 === 0)) {
+        ng('くり返し … くり返す範囲なのに、線が描かれていない')
+      } else if (new Set(回す.map((v) => v.線)).size !== 1) {
+        ng('くり返し … 範囲によって線の本数が違う', '長さで見分ける(本数ではない)')
+      } else if (回す.length !== REPEAT_UNITS.length - 1) {
+        ng(`くり返し … 押している印が ${回す.length} 通り`,
+          `くり返す範囲は ${REPEAT_UNITS.length - 1} 通りある`)
+      } else if (new Set(回す.map((v) => v.長さ)).size !== 回す.length) {
+        ng('くり返し … 範囲が見分けられない',
+          `線の長さが ${回す.map((v) => v.長さ).join(' / ')} で、同じものがある`)
       } else {
-        ok(`くり返し … ${範囲.map((id) => repeatLabel(id, '発言')).join(' / ')}`
-          + ` の ${範囲.length} つが別の絵で並び、押すと1つだけ光り、`
-          + 'もう一度押すと「しない」に戻る')
+        ok(`くり返し … ボタン1つで ${名.join(' → ')} と回る。`
+          + `「しない」は線なし・${しない.うすい}% のうすさ。`
+          + `範囲は線の長さ ${回す.map((v) => v.長さ).join(' / ')}px で見分ける`)
       }
     }
   }
