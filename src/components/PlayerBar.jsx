@@ -95,10 +95,10 @@ import { WHOLE_PLAY_CORE, WHOLE_PLAY_WIDE } from '../lib/wholePlay.js'
  * 外側(段落)は三角2つ + 縦棒、内側(文)は三角1つ + 縦棒にして、
  * **絵だけで「どちらが大きく飛ぶか」**が分かるようにする。
  */
-function PlayKey({ dir, label, wide, disabled, onClick, cap = true }) {
+function PlayKey({ dir, label, wide, disabled, onClick }) {
   const say = `${label}${dir < 0 ? 'もどる' : 'すすむ'}`
   return (
-    <span className={`player-key${cap ? '' : ' player-key--bare'}`}>
+    <span className="player-key">
       <button type="button" className="player-key-btn"
               aria-label={say} title={say}
               disabled={disabled} onClick={onClick}>
@@ -119,17 +119,13 @@ function PlayKey({ dir, label, wide, disabled, onClick, cap = true }) {
           )}
         </svg>
       </button>
-      {/* **どちらを送るのかを、絵の下に書く。**
-          絵だけでは「2つ三角なら段落」と分かるまでに時間がかかる。
+      {/* ★ **札(文 / 段落)は出さない**(2026-09-29 実機・利用者の指定)。
+            > 文、段落、の文字が不必要です
 
-          **上の帯では出さない**(2026-09-29 利用者の指定
-            「上部のバーのボタンは『聴く』は必要なく、『▷』など、
-              アイコンだけで作って、下部に置くものと同じにしてください」)。
-          あちらは1行しかないので、札を置くと帯が2段になる。
-          **名前は消えていない** —— `aria-label` と `title` は
-          どちらの置き場所でも同じ言葉を言う(読み上げにも、
-          マウスを乗せたときにも出る) */}
-      {cap && <span className="player-key-cap" aria-hidden="true">{label}</span>}
+          **名前は消えていない** —— `aria-label` と `title` が
+          「段落すすむ」「文もどる」と言う(読み上げにも、
+          マウスを乗せたときにも出る)。
+          絵のほうも、**三角の数**で見分けられる(2つ = 段落・1つ = 文)。 */}
     </span>
   )
 }
@@ -180,24 +176,12 @@ export default function PlayerBar({
   const [bySentence, setBySentence] = useState(canSkipSentence)
   useEffect(() => watchSentenceSkip(setBySentence), [])
 
-  /* つまみを動かしているあいだの見た目。**離すまで鳴らし直さない**
-     (`onInput` のたびに飛ばすと、指をすべらせる間ずっと鳴り直す) */
-  const [dragAt, setDragAt] = useState(null)
 
   if (!total) return null
   const now = Number.isFinite(at) ? at : null
   // **鳴っていないときは、どこまで来たかを 0 にしない。**
   // 止めた場所から再開するので、その場所を出しておくほうが正しい
   const shown = now == null ? null : now + 1
-  const ratio = shown == null ? 0 : shown / total
-  /* **つまみの居場所。ここ1か所で数える**(第5.311節)。
-     指で動かしているあいだは、そちらが本当の居場所である */
-  const seekAt = dragAt ?? (now ?? 0)
-  /* **帯の塗りも、出す数字も、これを見る。**
-     塗りだけ別の式で出すと、**つまみと塗りの先が食い違う**
-     (実際にそうなっていた —— 2つのうち1つしかない教材で、
-     つまみは左端なのに帯が半分白かった。**数え方を2通り持たない**) */
-  const seekRatio = total > 1 ? seekAt / (total - 1) : 0
 
   /** 鳴らす・止めるボタンの説明。**言葉は `wholePlay.js` 1か所**(第5.290節) */
   const playSay = playing ? '止める' : `${WHOLE_PLAY_WIDE}${WHOLE_PLAY_CORE}`
@@ -225,10 +209,10 @@ export default function PlayerBar({
 
         {/* **外側が段落・内側が文**(黒帯とまったく同じ並び) */}
         <div className="player-keys player-keys--bar">
-          <PlayKey dir={-1} label={unit} wide cap={false}
+          <PlayKey dir={-1} label={unit} wide
                    disabled={!onJump || now == null || now <= 0}
                    onClick={() => onJump?.(now - 1)} />
-          <PlayKey dir={-1} label="文" cap={false}
+          <PlayKey dir={-1} label="文"
                    disabled={!bySentence}
                    onClick={() => skipSentence(-1)} />
 
@@ -239,10 +223,10 @@ export default function PlayerBar({
             {playing ? <StopIcon className="icon" /> : <PlayIcon className="icon" />}
           </button>
 
-          <PlayKey dir={1} label="文" cap={false}
+          <PlayKey dir={1} label="文"
                    disabled={!bySentence}
                    onClick={() => skipSentence(1)} />
-          <PlayKey dir={1} label={unit} wide cap={false}
+          <PlayKey dir={1} label={unit} wide
                    disabled={!onJump || now == null || now >= total - 1}
                    onClick={() => onJump?.(now + 1)} />
         </div>
@@ -250,10 +234,6 @@ export default function PlayerBar({
         {onRepeat && (
           <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
         )}
-
-        <span className="player-track" aria-hidden="true">
-          <span className="player-fill" style={{ width: `${Math.round(ratio * 100)}%` }} />
-        </span>
 
         {onPlace && placeNext && (
           <button type="button" className="btn btn--small btn--ghost player-place"
@@ -267,10 +247,9 @@ export default function PlayerBar({
   /* ══════════════════════════════════════════════════════════════
      **画面の下の黒帯 —— 3段**(第5.311節・利用者の指定した案A)
      ══════════════════════════════════════════════════════════════ */
-  const canJump = !!onJump && total > 1
-  /* **動かしているあいだは、その段落の番号を出す。**
-     つまみだけ動いて数字が `—` のままだと、どこへ飛ぶのか分からない */
-  const dockShown = dragAt != null ? dragAt + 1 : shown
+  /* 進み具合のバーを取り払ったので、動かしているあいだの見た目も要らない
+     (2026-09-29 利用者の指定)。出す数字は、鳴っている場所そのもの */
+  const dockShown = shown
   return (
     <div className="player player--dock no-print"
          role="group" aria-label="読み上げの操作">
@@ -301,36 +280,15 @@ export default function PlayerBar({
         )}
       </div>
 
-      {/* ── ② 進み具合。**つまんで動かせる**(2026-09-29 利用者の指定)──
-            > 動かせるようにして段落を進めたり戻せるようにしてください
+      {/* ★ **進み具合のバーは取り払った**(2026-09-29 実機・利用者の指定)。
+            > また、この再生バーは不必要なので取り払いましょう。
+            > 場所を取るだけですね
 
-          **数えているのは段落まで**なので、`step=1` が段落1つぶん ——
-          つまみは**必ず段落に吸い付く**(秒の位置には止まらない)。
-          `<input type="range">` にしてあるので、**指でもマウスでも
-          キーボードでも**動かせる(つまむ操作しか無いと、届かない人がいる)。
+          段落を選ぶ道は**なくなっていない** —— 送り戻しの ⏮⏮ / ⏭⏭ と、
+          本文の**発言ごとの再生ボタン**(同じ日に戻した)が受け持つ。
+          いまどこかは、上の行の「3 / 14 発言」がそのまま言っている。 */}
 
-          **鳴らし直すのは離したとき**(`onChange`)。動かしているあいだ
-          (`onInput`)は見た目だけ動かす —— 1段落ごとに鳴らし直すと、
-          指をすべらせるあいだ音がぶつ切りになる */}
-      <span className="player-seek">
-        <span className="player-track" aria-hidden="true">
-          {/* **塗りの先を、つまみの真ん中で終わらせる。**
-              つまみには太さがあるので、端末は左右にその半分ずつ余白を取る ——
-              素の `%` で塗ると、**両端でつまみと先がずれる**(実測) */}
-          <span className="player-fill"
-                style={{ width: `calc(var(--seek-dot) / 2 + ${seekRatio} * (100% - var(--seek-dot)))` }} />
-        </span>
-        <input type="range" className="player-range"
-               min={0} max={Math.max(0, total - 1)} step={1}
-               value={seekAt}
-               disabled={!canJump}
-               aria-label={`${unit}を選ぶ`}
-               aria-valuetext={`${seekAt + 1} / ${total} ${unit}`}
-               onInput={(e) => setDragAt(Number(e.target.value))}
-               onChange={(e) => { const v = Number(e.target.value); setDragAt(null); onJump?.(v) }} />
-      </span>
-
-      {/* ── ③ 送り戻しと、鳴らすボタン ──────────────────────────
+      {/* ── ② 送り戻しと、鳴らすボタン ──────────────────────────
             **外側が段落・内側が文**(利用者がえらんだ案A)。
             どちらを送るのかが、指の位置で決まる */}
       <div className="player-keys">

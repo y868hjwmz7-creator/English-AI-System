@@ -553,49 +553,61 @@ for (const [label, want] of Object.entries(WANT)) {
   await page.close()
 }
 
-/* ── **段落ごとの Listen は、どの端末でも出さない**(2026-09 利用者の指定)
+/* ── **発言ごとの再生ボタンは、どの端末でも出す**(2026-09-29 利用者の指定)
  *
- *    > 段落ごとの listen も全てのデバイスで廃止にしましょう
+ *    > 記事やダイアローグ、会議の発言ごとの再生ボタンがなく非常に不便です。
+ *    > やはり戻してください。
  *
- *    もとは**操作盤との入れ替え**だった(浮いていれば隠し、上の帯に
- *    しまってあれば出す)。ところが記事は6段落・会話は14発言あるので、
- *    同じものが6組も14組も並ぶ。操作盤の「◀ 3 / 6 段落 ▶」で同じことが
- *    できるので、**押すところを1か所に絞った。**
+ *    **一度は「出さない」を数えていた**(2026-09「段落ごとの listen も
+ *    全てのデバイスで廃止にしましょう」)。記事は6段落・会話は14発言あるので
+ *    同じものが並ぶ、というのが理由で、操作盤の送り戻しで代われると考えていた。
+ *    **代われていなかった** —— n 番目まで行くのに n 回押すことになり、
+ *    **読んでいるその発言を鳴らす**のがいちばん遠かった。
  *
- *    **出る側は上の文型ドリルで数えている**(設問ごとの Listen は残す)。
- *    ここでは**出ない側**を、幅を変えて数える。
+ *    **この節は「出す」側を数える形に書き直した。** 幅を変えて、
+ *    どの端末でも出ていることを見る(狭い画面だけ消す作りに戻すと赤くなる)。
  */
 {
   const page = await browser.newPage({ viewport: { width: 1500, height: 900 } })
   await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
     { waitUntil: 'networkidle' })
   await page.waitForTimeout(400)
-  console.log('\n── 段落ごとの Listen は、どの端末でも出さない ──')
+  console.log('\n── 発言ごとの再生ボタンは、どの端末でも出す ──')
   for (const w of [1500, 1200, 900, 390]) {
     await page.setViewportSize({ width: w, height: 900 })
     await page.waitForTimeout(300)
     const m = await page.evaluate(([passage, re]) => ({
-      /* 本文の各段落に付いていたもの。**言葉で数える**
+      /* 本文の各発言に付くもの。**言葉で数える**
          (Listen / Stop のどちらの形でも拾う)。
 
          **本文の演習の中だけを数える**(2026-09・第5.230節)。
-         もとは `.lesson-items button` を画面ぜんぶから拾っていたが、
-         レッスン表示は**開いていないページも描いてある**(紙のため)ので、
-         語句や単語の演習を1つ足しただけで赤くなっていた。
-         **設問ごとの Listen は残すのが決まり**である
-         (すぐ上の注記「出る側は上の文型ドリルで数えている」)。
+         `.lesson-items button` を画面ぜんぶから拾うと、レッスン表示は
+         **開いていないページも描いてある**(紙のため)ので、
+         語句や単語の演習を1つ足しただけで数が動く。
          種類の一覧は `exerciseTypes.js` 1か所から渡している */
       段落: passage.flatMap((t) =>
         [...document.querySelectorAll(`.lesson-page[data-type="${t}"] .lesson-items button`)])
         .filter((b) => new RegExp(re).test(b.textContent.trim())).length,
+      /* **鳴らすものがある発言の数**(= 出るはずの数)。
+         解答を開く「訳を見る」しか無い発言は数えない */
+      発言: passage.flatMap((t) =>
+        [...document.querySelectorAll(`.lesson-page[data-type="${t}"] .lesson-items > li`)])
+        .filter((li) => li.querySelector('.lesson-acts')).length,
       /* **通しの読み上げは残す。** 上の「全体を聞く」と操作盤は別物 */
       全体: !!document.querySelector('.lesson-listen'),
       操作盤: !!document.querySelector('.player'),
     }), [PASSAGE_TYPES, 聴くの形])
-    if (m.段落) ng(`${w}px … 段落ごとの Listen が ${m.段落} 個 出ている`)
-    else if (!m.全体) ng(`${w}px … 「${wholePlayText()}」まで消えている`)
+    /* **「鳴らすものがある発言」の数だけ出る。** 数を書き写さない ——
+       骨組みの発言を1つ足した日に、期待値も一緒に動く */
+    if (!m.段落) {
+      ng(`${w}px … 発言ごとの再生ボタンが1つも出ていない`,
+        '記事・会話・会議のどれにも付ける(2026-09-29 利用者の指定で戻した)')
+    } else if (m.段落 < m.発言) {
+      ng(`${w}px … 発言ごとの再生ボタンが ${m.段落} / ${m.発言} 個しか出ていない`,
+        '鳴らすものがある発言には、全部付ける')
+    } else if (!m.全体) ng(`${w}px … 「${wholePlayText()}」まで消えている`)
     else if (!m.操作盤) ng(`${w}px … 操作盤が出ていない`, '鳴らす道が無くなる')
-    else ok(`${w}px … 段落ごとは0個・通しと操作盤は残っている`)
+    else ok(`${w}px … 発言ごと ${m.段落} 個・通しと操作盤も残っている`)
   }
   await page.close()
 }
@@ -740,8 +752,11 @@ for (const [label, want] of Object.entries(WANT)) {
  *      | 段 | 何を見るか |
  *      |---|---|
  *      | `.player-head` | 1行に収まっているか(`useFitRow` が詰める) |
- *      | `.player-seek` | つまみが在るか。**塗りの先とつまみが同じ場所か** |
  *      | `.player-keys` | **折り返していないか**(利用者の「絶対にダメ」) |
+ *
+ *    **進み具合のバーは取り払った**(2026-09-29 利用者の指定
+ *    「この再生バーは不必要なので取り払いましょう。場所を取るだけですね」)。
+ *    つまみを数えていた本は消し、**出ていないこと**を数える本に替えた。
  *
  *    右端が画面から出ていないか・中身があふれていないかは、
  *    **これまでどおり**見る(押せなくなるため)。
@@ -945,37 +960,20 @@ for (const [label, want] of Object.entries(WANT)) {
       ng(`${w}px … 送り戻しの背丈がそろっていない`, `${hs.join(' / ')}px`)
     } else ok(`${w}px … 送り戻しの4つは全部 ${hs[0]}px(背丈がそろっている)`)
 
-    /* ── ③ **つまみと、塗りの先が同じ場所か**(第5.311節・実測で見つけた)
-           はじめ塗りだけ `(いま + 1) / ぜんぶ` で出していたので、
-           **つまみは左端なのに帯が半分白い**という形になっていた。
-           **数え方を2通り持たない**(CLAUDE.md)。
+    /* ── ③ **取り払ったものが、戻っていないか**(2026-09-29 利用者の指定)
+           > また、この再生バーは不必要なので取り払いましょう
+           > 文、段落、の文字が不必要です
 
-         つまみは端末が描くので掴めない。だから
-         **`<input>` が持っている値から居場所を出して**、塗りの先と比べる。
-         `--seek-dot`(つまみの太さ)も、書き写さず CSS から読む。 */
-    const s = await page.evaluate(() => {
-      const p = document.querySelector('.player--dock')
-      const seek = p?.querySelector('.player-seek')
-      const rng = p?.querySelector('.player-range')
-      const fill = p?.querySelector('.player-fill')
-      if (!seek || !rng || !fill) return null
-      const r = seek.getBoundingClientRect()
-      const dot = parseFloat(window.getComputedStyle(seek).getPropertyValue('--seek-dot')) || 0
-      const max = Number(rng.max); const val = Number(rng.value)
-      const ratio = max > 0 ? val / max : 0
-      return {
-        つまみの太さ: dot,
-        つまみの真ん中: r.left + dot / 2 + ratio * (r.width - dot),
-        塗りの先: fill.getBoundingClientRect().right,
-        ぜんぶ: max + 1,
-      }
-    })
-    if (!s) ng(`${w}px … 進み具合のつまみが無い`, '動かして段落を送れない')
-    else if (!s.つまみの太さ) ng(`${w}px … つまみの太さ(--seek-dot)が読めない`)
-    else if (Math.abs(s.つまみの真ん中 - s.塗りの先) > 1) {
-      ng(`${w}px … つまみと塗りの先がずれている`,
-        `つまみ ${Math.round(s.つまみの真ん中)}px / 塗り ${Math.round(s.塗りの先)}px`)
-    } else ok(`${w}px … つまみと塗りの先が同じ場所(${Math.round(s.塗りの先)}px)`)
+         **消したものは、消えたことを数える。** でないと、
+         戻した日に誰も気づかない(黙って戻さない)。 */
+    const 余分 = await page.evaluate(() => ({
+      つまみ: document.querySelectorAll('.player--dock .player-seek,'
+        + ' .player--dock .player-range, .player--dock .player-track').length,
+      札: document.querySelectorAll('.player--dock .player-key-cap').length,
+    }))
+    if (余分.つまみ) ng(`${w}px … 進み具合のバーが戻っている`, `${余分.つまみ} 個`)
+    else if (余分.札) ng(`${w}px … 送り戻しの札(文 / 段落)が戻っている`, `${余分.札} 個`)
+    else ok(`${w}px … 進み具合のバーも、文 / 段落 の札も出ていない`)
 
     /* ── ④ **速さは、黒帯にも置く**(2026-09-29 利用者の指定)
            > ①ふたつ実装してください(これは例外でOKです)
@@ -987,43 +985,40 @@ for (const [label, want] of Object.entries(WANT)) {
     else ok(`${w}px … 黒帯に速さがある`)
   }
 
-  /* ── ⑤ **つまみを動かすと、段落が1つ動く。ページは送られない** ────────
-       **矢印で測る**(第5.311節・実測)。指でなぞる形だけを試すと、
-       **キーボードで動かす人**のぶんが測れない。しかもここで
-       **本当の不具合が出た** —— レッスン表示は窓ぜんぶで矢印を聞いており、
-       つまみを動かすと**同時にページまで送られていた。**
-       (つまみは1段落ぶん動き、紙は次のページへ行く。どちらも当てにならない) */
-  await page.setViewportSize({ width: 390, height: 900 })
+  /* ── ⑤ **矢印は、いま選ばれている物のもの**(第5.311節・実測で出た不具合)
+       レッスン表示は**窓ぜんぶで矢印を聞いて**いる(ページ送り)。
+       欄やつまみを触っているあいだも奪っていたので、
+       **欄の中で矢印を押すと、紙のページまで送られていた。**
+
+       ★ **測る相手が変わった**(2026-09-29 利用者の指定で、進み具合の
+         バーを取り払った)。もとは操作盤のつまみで測っていたが、
+         **決まりは「欄の中の矢印を奪わない」で、つまみ専用ではない。**
+         だから**画面の中の欄(`input` / `textarea`)**で測る。
+       **1つも無ければ赤** —— そのときは何も数えていない(CLAUDE.md)。 */
+  await page.setViewportSize({ width: 1500, height: 900 })
   await page.waitForTimeout(350)
   {
-    const 見る = () => page.evaluate(() => {
-      const p = document.querySelector('.player--dock')
-      const rng = p?.querySelector('.player-range')
-      return {
-        数字: p?.querySelector('.player-at')?.innerText.replace(/\s+/g, ' ') ?? null,
-        値: rng ? Number(rng.value) : null,
-        最大: rng ? Number(rng.max) : null,
-        ページ: document.querySelector('.lesson-bar [aria-label="次のページ"]')
-          ? [...document.querySelectorAll('.lesson-page')].findIndex((e) => !e.classList.contains('is-closed'))
-          : null,
-      }
-    })
-    const a = await 見る()
-    if (a.値 == null) ng('つまみが無いので、動かせない')
-    else if (!(a.最大 > 0)) ng('つまみが動かせない形になっている', `最大 ${a.最大}`)
-    else {
-      await page.focus('.player--dock .player-range')
+    const いまのページ = () => page.evaluate(() =>
+      [...document.querySelectorAll('.lesson-page')].findIndex((e) => !e.classList.contains('is-closed')))
+    const 欄 = await page.$$eval('.lesson input:not([type=hidden]), .lesson textarea',
+      (xs) => xs.filter((x) => x.offsetParent !== null).length)
+    if (!欄) {
+      ng('矢印 … 画面に欄(input / textarea)が1つも無い',
+        'この見張りは何も数えていない(測る相手が居ることを、先に確かめる)')
+    } else {
+      const 前 = await いまのページ()
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('.lesson input:not([type=hidden]), .lesson textarea')]
+          .find((x) => x.offsetParent !== null)
+        el.focus()
+      })
       await page.keyboard.press('ArrowRight')
-      await page.waitForTimeout(400)
-      const b = await 見る()
-      if (b.値 !== a.値 + 1) {
-        ng('つまみ … 矢印で1段落ぶん動かない', `${a.値} → ${b.値}`)
-      } else if (b.ページ !== a.ページ) {
-        ng('つまみ … 動かしたら、紙のページまで送られた',
-          `${a.ページ} → ${b.ページ}。矢印は、いま選ばれている物のもの`)
-      } else if (b.数字 === a.数字) {
-        ng('つまみ … 動かしても、いまどこかの数字が変わらない', `「${a.数字}」のまま`)
-      } else ok(`つまみ … 矢印で1段落ぶん動く(「${a.数字}」→「${b.数字}」)・ページは送られない`)
+      await page.waitForTimeout(350)
+      const 後 = await いまのページ()
+      if (後 !== 前) {
+        ng('矢印 … 欄の中で押したのに、紙のページが送られた',
+          `${前} → ${後}。矢印は、いま選ばれている物のもの`)
+      } else ok(`矢印 … 欄(${欄} 個)の中で押しても、ページは送られない`)
     }
   }
   await page.close()

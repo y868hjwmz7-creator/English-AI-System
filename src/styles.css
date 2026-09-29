@@ -9024,15 +9024,6 @@ button.wbfilter-ctl { text-align: left; }
   font-size: var(--fs-12); font-weight: 700; color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
-/* 進み具合。**段落の単位**である(秒までは数えていない) */
-.player-track {
-  flex: 1 1 60px; min-width: 40px; height: 4px; border-radius: var(--r-pill);
-  background: var(--border); overflow: hidden;
-}
-.player-fill {
-  display: block; height: 100%; border-radius: var(--r-pill);
-  background: var(--accent);
-}
 .player-place { flex: 0 0 auto; padding-left: 8px; padding-right: 8px; }
 
 /* ── くり返しの単位(2026-09 利用者の指定)────────────────────────
@@ -9164,7 +9155,6 @@ button.wbfilter-ctl { text-align: left; }
    40px の細い線で言い直しているだけである。
    **画面の下の黒帯では、これまでどおり出す**(そこはつまんで動かせる
    ものになった・第5.311節)—— あちらは幅の取り合いをしていない。 */
-.player--bar .player-track { display: none; }
 /* **色は帯に合わせて決め打ち**(`.lesson-bar .btn` と同じ作法)。
    変数のままだと、**明るい配色のときだけ黒い帯に黒い文字**が乗る
    (実測 rgb(74,78,84) on rgb(36,36,31))。明るい側でも暗いまま */
@@ -9187,7 +9177,6 @@ button.wbfilter-ctl { text-align: left; }
      次に色を変える日に必ずどれかが古くなる */
 .player--bar, .player--dock { --player-ink: #ffffff; }
 .player--bar .player-at, .player--dock .player-at { color: var(--player-ink); }
-.player--bar .player-track, .player--dock .player-track { background: #55554e; }
 
 /* ═══════════════════════════════════════════════════════════════════
    ③ **画面の下の黒帯**(`dock`・2026-09 利用者の指定)
@@ -9263,53 +9252,14 @@ button.wbfilter-ctl { text-align: left; }
 .player--dock .player-rate .stepper-arrow:hover:not(:disabled) { background: #45453d; }
 .player--dock .player-rate .stepper-label { color: var(--player-ink); }
 
-/* ── ② 進み具合。**つまんで動かせる**(2026-09-29 利用者の指定)──────
-     > 動かせるようにして段落を進めたり戻せるようにしてください
+/* ★ **進み具合のバーは取り払った**(2026-09-29 実機・利用者の指定)。
+     > また、この再生バーは不必要なので取り払いましょう。場所を取るだけですね
+   `.player-seek` / `.player-range` / `.player-track` の決まりも、
+   **呼ぶ人がいなくなったので消した**(使われないものを残さない)。
+   `.player--bar` の側の細い帯(`.player-track`)は、もともと
+   `display: none` で出していない。 */
 
-   **見た目の帯と、掴む `<input>` を重ねる。**
-   `<input type="range">` の見た目は端末ごとにまるで違うので、
-   **透明にして上に乗せ、見えるほうは自分で描く**
-   (`appearance: none` だけでは Safari のつまみが残る)。
-   **押せる高さは 34px 取る** —— 線は細くても、指は太い。 */
-/* **つまみの太さは、ここ1か所。**(第5.311節)
-   塗りの先をつまみの真ん中で終わらせるのに、画面の側もこの値を読む
-   (`calc(var(--seek-dot) / 2 + …)`)。**2か所に書くと、必ず片方が古くなる** */
-.player-seek { position: relative; display: block; height: 22px; --seek-dot: 14px; }
-.player--dock .player-track {
-  display: block; position: absolute; left: 0; right: 0; top: 9px;
-  height: 4px; border-radius: 2px; background: #45453f;
-}
-.player--dock .player-fill { display: block; height: 4px; border-radius: 2px; background: #f2f2ee; }
-.player-range {
-  position: absolute; left: 0; right: 0; top: 0;
-  width: 100%; height: 22px; margin: 0; padding: 0;
-  appearance: none; -webkit-appearance: none; background: transparent;
-  cursor: pointer;
-  /* ★ **つまみを動かしても、画面が横へ滑らない**(第5.282節の決まり)。
-       指で横へ引くと、ブラウザは**まず「画面を横へ送る合図」**として
-       受け取る。つまみは横に引いて使うものなので、まともにぶつかる。
-       `pan-y` にすると、横の動きはつまみに届き、**縦の送りは残る。**
-       `.nav-vol`(762)/ `.sheet-grip` / ペンの紙が、同じ理由で持っている
-       —— **足した日に、ここだけ持っていなかった**(`test:bar` が捕まえた) */
-  touch-action: pan-y;
-}
-.player-range:disabled { cursor: default; }
-.player-range::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none;
-  width: var(--seek-dot); height: var(--seek-dot);
-  border-radius: calc(var(--seek-dot) / 2);
-  background: #ffffff; border: 0; cursor: pointer;
-}
-.player-range::-moz-range-thumb {
-  width: var(--seek-dot); height: var(--seek-dot);
-  border-radius: calc(var(--seek-dot) / 2);
-  background: #ffffff; border: 0; cursor: pointer;
-}
-.player-range:disabled::-webkit-slider-thumb { opacity: .4; }
-.player-range:disabled::-moz-range-thumb { opacity: .4; }
-.player-range:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 11px; }
-
-/* ── ③ 送り戻しと、鳴らすボタン ──────────────────────────────────
+/* ── ② 送り戻しと、鳴らすボタン ──────────────────────────────────
      **余った幅は、機能と機能のあいだへ配る**(2026-09 実機・利用者の指定)
        > 各機能の間にバランスよくマージンを入れてください。
        > 触れすぎていて押し間違えをしそうな緊張感があります
@@ -9328,8 +9278,8 @@ button.wbfilter-ctl { text-align: left; }
   max-width: 420px; margin-left: auto; margin-right: auto; width: 100%;
 }
 .player-key {
-  display: inline-flex; flex-direction: column; align-items: center;
-  gap: 2px; flex: 0 0 auto;
+  /* 札を出さなくなったので、縦積みも隙間も要らない(2026-09-29) */
+  display: inline-flex; align-items: center; flex: 0 0 auto;
 }
 .player-key-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -9341,20 +9291,32 @@ button.wbfilter-ctl { text-align: left; }
 .player-key-btn:disabled { opacity: .35; cursor: default; }
 .player-key-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .player-key-icon { width: 22px; height: 22px; }
-/* **どちらを送るのかを、絵の下に書く。** 色だけに頼らない(CLAUDE.md) */
-.player-key-cap { font-size: var(--fs-11); color: var(--player-ink); line-height: 1; }
+/* 札(文 / 段落)は出さない(2026-09-29 利用者の指定)。
+   見分けは**三角の数**(2つ = 段落・1つ = 文)と `aria-label` が受け持つ */
 
 /* **鳴らすボタンは、まん中に大きく1つ。** いちばん押すものを、
    いちばん大きく・いちばん明るくする(押せるものに見せる) */
 .player-big {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 54px; height: 54px; flex: 0 0 auto;
-  padding: 0; border: 0; border-radius: 27px;
+  /* **もう少し大きく**(2026-09-29 実機・利用者の指定
+     「丸ももう少し大きくて良いと感じます」)。54 → 60px。
+     進み具合のバーを取り払ったぶん、黒帯は低くなっている */
+  width: 60px; height: 60px; flex: 0 0 auto;
+  padding: 0; border: 0; border-radius: 30px;
   background: #f2f2ee; color: #24241f; cursor: pointer;
 }
+/* ★ **絵を、丸のまん中に置く**(2026-09-29 実機・利用者の指定)。
+     > 再生ボタンとストップボタンが丸の中心からズレていて非常にダサいです
+
+   `.icon` は **`margin-right: .38em`** を持っている ——
+   「絵のうしろに言葉が来る」ための隙間である(`✎ 書き込む` など)。
+   **言葉の無い丸ボタンでは、その余白のぶんだけ絵が左へ寄る。**
+   実測でぴったり **3.05px** 左だった(.38em の半分)。
+   **数を打ち消しで足さない。** 余白そのものを 0 にする */
+.player-big .icon { margin-right: 0; }
 .player-big:hover { background: #ffffff; }
 .player-big:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.player-big .icon { width: 24px; height: 24px; }
+.player-big .icon { width: 26px; height: 26px; }
 
 /* ── **上の帯も、同じ絵・同じ並び。大きさだけ1段詰める** ──────────
      (2026-09-29 利用者の指定)
@@ -9378,8 +9340,6 @@ button.wbfilter-ctl { text-align: left; }
   justify-content: flex-start; gap: var(--sp-2);
   margin-left: 0; margin-right: 0;
 }
-/* 札を出さないので、絵と札のあいだの隙間も要らない */
-.player-key--bare { gap: 0; }
 .player-keys--bar .player-key-btn { width: 32px; height: 30px; border-radius: var(--r-8); }
 .player-keys--bar .player-key-icon { width: 18px; height: 18px; }
 /* いちばん押すものは、上の帯でも**白い丸**のまま(明るさで示す) */
@@ -9394,7 +9354,7 @@ button.wbfilter-ctl { text-align: left; }
 @media (max-width: 340px) {
   .player-dock { padding-left: 6px; padding-right: 6px; }
   .player-key-btn { width: 34px; }
-  .player-big { width: 48px; height: 48px; border-radius: 24px; }
+  .player-big { width: 52px; height: 52px; border-radius: 26px; }
 }
 
 /* **上の行だけ、入るまで詰める**(`useFitRow`・2026-09 実測)。
