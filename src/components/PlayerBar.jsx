@@ -72,7 +72,13 @@
  *   絵文字は端末ごとに形も大きさも違う(`Stepper.jsx` と同じ理由)。
  */
 import { useEffect, useRef, useState } from 'react'
-import { SpeakerIcon, StopIcon } from './Icons.jsx'
+/* ★ **まん中は ▶ と ■**(2026-09-29 実機・利用者の指定)。
+     > 中央の再生ボタンはスピーカーのマークではなく▶︎と■にしてください
+   スピーカーの絵は「音が出る」としか言っていない ——
+   **鳴っているのか止まっているのか**が、絵から分からなかった。
+   `PlayIcon`(三角)/ `StopIcon`(四角)は**すでにある絵**である
+   (聞き流しの「つづける」と同じ)。ここで新しく描かない */
+import { PlayIcon, StopIcon } from './Icons.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
 import Stepper from './Stepper.jsx'
 import { SPEECH_RATES } from '../lib/speechRate.js'
@@ -230,7 +236,7 @@ export default function PlayerBar({
                   className={`player-big player-big--bar${playing ? ' is-on' : ''}`}
                   aria-label={playSay} title={playSay}
                   onClick={onToggle}>
-            {playing ? <StopIcon className="icon" /> : <SpeakerIcon className="icon" />}
+            {playing ? <StopIcon className="icon" /> : <PlayIcon className="icon" />}
           </button>
 
           <PlayKey dir={1} label="文" cap={false}
@@ -339,7 +345,7 @@ export default function PlayerBar({
                 className={`player-big${playing ? ' is-on' : ''}`}
                 aria-label={playSay} title={playSay}
                 onClick={onToggle}>
-          {playing ? <StopIcon className="icon" /> : <SpeakerIcon className="icon" />}
+          {playing ? <StopIcon className="icon" /> : <PlayIcon className="icon" />}
         </button>
 
         <PlayKey dir={1} label="文"
