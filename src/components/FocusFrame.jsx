@@ -105,10 +105,24 @@ export default function FocusFrame({
    * 閉じたら**読んでいた教材に戻る** —— あちらの ✕ には行き先がある。
    */
   onMenu = null,
+  /**
+   * **外から「表示」を開ける道**(2026-09-30・第5.321節)。
+   *
+   *   黒帯の速さは**押すと設定が開く**(第5.318節・利用者の指定
+   *   「速度表示をタップすると、画面右上にある既存の設定パネルを開き」)。
+   *   集中モードにも同じプレーヤーを入れたので、**同じ動き**が要る。
+   *
+   *   渡すのは**箱1つ**(`{ current }`)で、ここが `open()` を入れる。
+   *   **状態は、これまでどおりここが持つ** —— 2か所に持つと食い違う。
+   */
+  openRef = null,
 }) {
   /* 狭い画面で「表示」を開いているか。**覚えない** —
      一度決める設定なので、開くたびに畳んだところから始めてよい */
   const [openSettings, setOpenSettings] = useState(false)
+  /* **開く道を、外へ預ける。** 閉じる道は預けない ——
+     閉じるのは札を押すか、画面を出るときだけである */
+  if (openRef) openRef.current = () => setOpenSettings(true)
   const ownRef = useRef(null)
   const ref = bodyRef ?? ownRef
   const board = useFocusBoard({ learnerId, page, bodyRef: ref })

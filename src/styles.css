@@ -8644,6 +8644,9 @@ button.wbfilter-ctl { text-align: left; }
    判断は**幅だけ**(レッスン表示の帯と同じ 860px) */
 @media (max-width: 860px) {
   .focus-top .wide-text { display: none; }
+  /* ★ 訳**を見る** → 「訳」。**上の帯へ移したので、ここで落とす**
+       (第5.321節。以前は下の帯の `is-fit2` が落としていた) */
+  .focus-top .ja-word { display: none; }
   .focus-top { gap: var(--sp-8); }
 }
 
@@ -8778,8 +8781,48 @@ button.wbfilter-ctl { text-align: left; }
 
 /* ── 入るまで詰める段(`useFitRow` が付け外しする)──────────────
      **幅は書かない。** どの幅で効くかは、測った結果が決める */
-.focus-bar.is-fit1 .listen-word { display: none; }
-.focus-bar.is-fit2 .ja-word { display: none; }
+/* ══════════════════════════════════════════════════════════════════
+   ★ **集中モードの下の帯は、紙の黒帯そのもの**(2026-09-30 利用者の指定・
+     第5.321節)
+
+     > 音声プレーヤーは、今これがあるところは全て同じ仕様にしてください
+     > 集中モードもです。例外はありません。
+
+   中身は `PlayerBar place="dock"` そのままなので、**見た目の決まりは
+   `.player--dock` が持っている。** ここで足すのは「この帯の中で
+   横いっぱいに広がる」ことと、**左右の余白を紙の黒帯とそろえる**ことだけ。
+
+   **2段になる。** 以前ここには「1行にまとめてください」という指定が
+   あったが、それは**この古い帯**への指定である(第5.208節)。
+   利用者はそのあと**黒帯を2段の案A に自分で決め**、今回
+   「例外はありません」と言った。**新しいほうが効く。**
+   ══════════════════════════════════════════════════════════════════ */
+.focus-mid .player--dock { flex: 1 1 auto; min-width: 0; }
+/* 左右は、紙の黒帯(`.player-dock`)とまったく同じ数にそろえる。
+   **数を2か所に書いている** —— ここは `@media` の打ち消しがあるので
+   変数にできない。足す日は、両方を直す */
+.focus-bar:has(.player--dock) {
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+}
+@media (max-width: 400px) {
+  .focus-bar:has(.player--dock) {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+}
+@media (max-width: 340px) {
+  .focus-bar:has(.player--dock) {
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+}
+
+/* ★ **`is-fit1` / `is-fit2` で落としていたものは、帯から出た**(第5.321節)。
+     `.listen-word`(聴く)は音声プレーヤーが受け持ち、
+     `.ja-word`(訳**を見る**)は上の帯へ移った。
+     **呼ぶ人がいなくなった決まりは残さない**(CLAUDE.md)。
+   上の帯のほうは、狭い画面で「訳」「文法」だけにする(下の `@media`)。 */
 .focus-bar.is-fit3 { gap: var(--sp-4); padding-left: 8px; padding-right: 8px; }
 .focus-bar.is-fit3 .btn { padding: 5px 5px; }
 .focus-bar.is-fit3 .focus-mid { gap: var(--sp-4); }

@@ -78,8 +78,11 @@ import { useEffect, useRef, useState } from 'react'
    **鳴っているのか止まっているのか**が、絵から分からなかった。
    `PlayIcon`(三角)/ `StopIcon`(四角)は**すでにある絵**である
    (聞き流しの「つづける」と同じ)。ここで新しく描かない */
-import { PlayIcon, StopIcon } from './Icons.jsx'
+import { PlayIcon, StopIcon, WaitIcon } from './Icons.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
+/* **待ちの言い方は `SpeakButton.jsx` 1か所**(「用意しています…」/
+   「用意中 3 秒」)。ここで書き写すと、片方だけ古くなる */
+import { preparingLabel } from './SpeakButton.jsx'
 import { canSkipSentence, skipSentence, watchSentenceSkip } from '../lib/readAloud.js'
 import { useFitRow } from '../lib/fitRow.js'
 /* **通しで鳴らすボタンの文字は1か所**(第5.290節)。
@@ -149,6 +152,34 @@ function PlayKey({ dir, label, wide, disabled, onClick }) {
  *
  * @param rateText  いまの速さ(「100%」)。**読むだけ。枠も三角も無い**
  * @param onOpenRate 速さの表示を押したとき(右上の「設定」を開く)
+ *
+ * ★ **外側(段落)のキーを、1枚ずつにもできる**(2026-09-30・第5.321節)。
+ *
+ *   紙は段落の番号で飛べばよい(`onJump`)。ところが**集中モードは
+ *   長い段落を割って出す**ので、まず**その段落の中の次の1枚**へ進む。
+ *   これは段落の番号では表せない。
+ *
+ *   `onStep` を渡すと、外側のキーは `onStep(-1) / onStep(+1)` を呼び、
+ *   押せるかどうかは `canBack` / `canNext` で決まる。
+ *   **渡さなければ、これまでどおり `onJump(now ± 1)`** ——
+ *   紙の動きは1ドットも変えていない。
+ *
+ * @param onStep    1枚ずつ動かす(渡した画面だけ)
+ * @param canBack   戻れるか(`onStep` を渡したときだけ見る)
+ * @param canNext   進めるか(同上)
+ *
+ * ★ **用意しているあいだも、鳴らすボタンが黙らない**(第5.321節)。
+ *
+ *   > 「用意しています…」だけは、どんなに狭くても消さない
+ *   > (音が出るまで何も起きていないように見えるため)
+ *
+ *   集中モードの「聴く」はこれを出していた。**絵だけのボタンに
+ *   そろえるときに、落とすわけにはいかない。**
+ *   **丸の大きさは変えない**(押しても、まわりの物が動かない)——
+ *   中の絵を待ちの点に差し替え、秒は `aria-label` と `title` が言う。
+ *
+ * @param waiting   音を作っているあいだ
+ * @param secs      何秒たったか(`preparingLabel` に渡す)
  *   > プレーヤー上には現在の速度だけを、枠のないシンプルな表示で置いて
  *   > 速度表示をタップすると、画面右上にある既存の設定パネルを開き
  *   **数字は読めたほうがよい**(いま何%かを知らずに聴くことになる)が、
@@ -159,6 +190,8 @@ export default function PlayerBar({
   playing = false, at = null, total = 0, unit = '段落',
   onToggle, onJump = null, repeat = null, onRepeat = null,
   rateText = null, onOpenRate = null,
+  onStep = null, canBack = false, canNext = false,
+  waiting = false, secs = 0,
 }) {
   /**
    * **入るまで詰める**(2026-09 実機・利用者の指摘
@@ -188,12 +221,28 @@ export default function PlayerBar({
 
   if (!total) return null
   const now = Number.isFinite(at) ? at : null
+  /* **外側(段落)のキーの決まりは、ここ1か所。**
+     `onStep` を渡した画面は1枚ずつ、渡さない画面は番号で飛ぶ。
+     **描くところで `if` を書かない**(左右で食い違う) */
+  const 外 = (d) => (onStep
+    ? { disabled: !(d < 0 ? canBack : canNext), onClick: () => onStep(d) }
+    : {
+      disabled: !onJump || now == null
+        || (d < 0 ? now <= 0 : now >= total - 1),
+      onClick: () => onJump?.(now + d),
+    })
   // **鳴っていないときは、どこまで来たかを 0 にしない。**
   // 止めた場所から再開するので、その場所を出しておくほうが正しい
   const shown = now == null ? null : now + 1
 
-  /** 鳴らす・止めるボタンの説明。**言葉は `wholePlay.js` 1か所**(第5.290節) */
-  const playSay = playing ? '止める' : `${WHOLE_PLAY_WIDE}${WHOLE_PLAY_CORE}`
+  /** 鳴らす・止めるボタンの説明。**言葉は `wholePlay.js` 1か所**(第5.290節)。
+      **用意しているあいだは、そう言う**(第5.321節)——
+      音が出るまで何も起きていないように見えるため */
+  const playSay = waiting ? preparingLabel(secs)
+    : playing ? '止める' : `${WHOLE_PLAY_WIDE}${WHOLE_PLAY_CORE}`
+  /** まん中の丸の中身。**箱の大きさは3つとも同じ** */
+  const playMark = waiting ? <WaitIcon className="icon" />
+    : playing ? <StopIcon className="icon" /> : <PlayIcon className="icon" />
 
   /* ══════════════════════════════════════════════════════════════
      **上の帯(`bar`)—— 絵だけの1行**(2026-09-29 利用者の指定)
@@ -218,26 +267,23 @@ export default function PlayerBar({
 
         {/* **外側が段落・内側が文**(黒帯とまったく同じ並び) */}
         <div className="player-keys player-keys--bar">
-          <PlayKey dir={-1} label={unit} wide
-                   disabled={!onJump || now == null || now <= 0}
-                   onClick={() => onJump?.(now - 1)} />
+          <PlayKey dir={-1} label={unit} wide {...外(-1)} />
           <PlayKey dir={-1} label="文"
                    disabled={!bySentence}
                    onClick={() => skipSentence(-1)} />
 
           <button type="button"
-                  className={`player-big player-big--bar${playing ? ' is-on' : ''}`}
+                  className={`player-big player-big--bar${playing ? ' is-on' : ''}`
+                    + (waiting ? ' is-waiting' : '')}
                   aria-label={playSay} title={playSay}
                   onClick={onToggle}>
-            {playing ? <StopIcon className="icon" /> : <PlayIcon className="icon" />}
+            {playMark}
           </button>
 
           <PlayKey dir={1} label="文"
                    disabled={!bySentence}
                    onClick={() => skipSentence(1)} />
-          <PlayKey dir={1} label={unit} wide
-                   disabled={!onJump || now == null || now >= total - 1}
-                   onClick={() => onJump?.(now + 1)} />
+          <PlayKey dir={1} label={unit} wide {...外(1)} />
         </div>
 
         {onRepeat && (
@@ -310,26 +356,23 @@ export default function PlayerBar({
             **外側が段落・内側が文**(利用者がえらんだ案A)。
             どちらを送るのかが、指の位置で決まる */}
       <div className="player-keys">
-        <PlayKey dir={-1} label={unit} wide
-                 disabled={!onJump || now == null || now <= 0}
-                 onClick={() => onJump?.(now - 1)} />
+        <PlayKey dir={-1} label={unit} wide {...外(-1)} />
         <PlayKey dir={-1} label="文"
                  disabled={!bySentence}
                  onClick={() => skipSentence(-1)} />
 
         <button type="button"
-                className={`player-big${playing ? ' is-on' : ''}`}
+                className={`player-big${playing ? ' is-on' : ''}`
+                  + (waiting ? ' is-waiting' : '')}
                 aria-label={playSay} title={playSay}
                 onClick={onToggle}>
-          {playing ? <StopIcon className="icon" /> : <PlayIcon className="icon" />}
+          {playMark}
         </button>
 
         <PlayKey dir={1} label="文"
                  disabled={!bySentence}
                  onClick={() => skipSentence(1)} />
-        <PlayKey dir={1} label={unit} wide
-                 disabled={!onJump || now == null || now >= total - 1}
-                 onClick={() => onJump?.(now + 1)} />
+        <PlayKey dir={1} label={unit} wide {...外(1)} />
       </div>
     </div>
   )

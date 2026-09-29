@@ -1678,20 +1678,23 @@ for (const [label, want] of Object.entries(WANT)) {
 }
 
 
-/* ── **集中モードの下の帯も、絶対に1行**(2026-09 実機・利用者の指定)──
+/* ── **集中モードの音声プレーヤーは、紙の黒帯とまったく同じもの** ──────
+ *    (2026-09-30 利用者の指定・第5.321節)
  *
- *    > このスマホのプレーヤーのUI、2行ではなく1行にまとめてください
+ *    > 音声プレーヤーは、今これがあるところは全て同じ仕様にしてください
+ *    > 集中モードもです。例外はありません。
  *
- *    こちらは右下の操作盤とは**別の帯**である(集中モードの下)。
- *    文の ◀ ▶ とくり返しを足したぶん、iPhone(390px)で
- *    **61px → 97px の2段**になっていた。
+ *    **ここは以前「絶対に1行」を見ていた**(第5.208節)。あの指定は
+ *    **この画面が自前で組んでいた古い帯**に向いたものである。
+ *    利用者はそのあと黒帯を**2段の案A** に自分で決め、今回
+ *    「例外はありません」と言った。**新しいほうが効く。**
  *
- *    **最後の段落も必ず測る。** そこだけ「次 ▶」が
- *    **「まとめ」という言葉のボタン**に変わるので、ふだんの段落を
- *    測っているだけでは気づけない(実際に 320px で 13px あふれていた)。
+ *    **見るのは「同じかどうか」**である。持ちものを名前で数えて、
+ *    紙の黒帯と1つも違わないことを見る ——
+ *    **数だけ数えると、別のボタンに入れ替わっても緑になる。**
  *
- *    折り返さない指定にしてあるので、**足りなくなると外へあふれる**
- *    (隠れる)。だから高さだけでなく `scrollWidth` も見る。
+ *    あわせて**あふれていないこと**も見る。折り返さない指定なので、
+ *    足りなくなると外へ出て隠れる(高さでは分からない)。
  */
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
@@ -1699,27 +1702,67 @@ for (const [label, want] of Object.entries(WANT)) {
     { waitUntil: 'networkidle' })
   await page.waitForTimeout(300)
 
-  const look = () => page.evaluate(() => {
-    const bar = document.querySelector('.focus-bar')
-    const top = document.querySelector('.focus-top')
-    if (!bar || !top) return null
-    const spill = (el) => [el, ...el.children].some((b) => b.scrollWidth > b.clientWidth + 1)
-    const mid = bar.querySelector('.focus-mid')
-    return {
-      h: Math.round(bar.getBoundingClientRect().height),
-      上: Math.round(top.getBoundingClientRect().height),
-      // **上の帯も一緒に見る。** 最後の段落では「まとめ」がそちらに増える
-      over: spill(bar) || spill(top) || (mid ? spill(mid) : false),
-      // 最後の段落だけ「まとめ」が出る。**そこまで送って測る**
-      末: /まとめ/.test(top.textContent || '') ? 'まとめ' : '中ほど',
-    }
-  })
+  /** その黒帯に並んでいる、押せるものの名前(左から順に) */
+  const 持ちもの = (sel) => page.evaluate((s) => {
+    const p = document.querySelector(s)
+    if (!p) return null
+    return [...p.querySelectorAll('button')]
+      .map((b) => (b.getAttribute('aria-label') || b.textContent || '').trim())
+      .filter(Boolean)
+  }, sel)
 
-  /* **境目でない幅も混ぜる。** 決め打ちの境目で詰めていたころは、
-     360px は入るのに **375px だけ余りが 8px** という穴があった。
-     いまは測って詰めるので、**どの幅でも入る**はずである。
-     あわせて **端末の「表示を大きく」** も模す(帯の文字を 1.25 倍)。
-     幅が同じでも入るかどうかは変わる —— そこが幅の境目では拾えない */
+  /* ① 紙の黒帯を読む。**先に出しておく**(通しの読み上げが在る教材) */
+  const 紙 = await 持ちもの('.player-dock .player--dock')
+  if (!紙 || !紙.length) {
+    ng('集中モード … くらべる相手(紙の黒帯)が出ていない',
+      '**測る相手が居ることを、先に確かめる**(CLAUDE.md)')
+  }
+
+  /* ② 集中モードへ入って、同じものが並んでいるか */
+  const 入る = async () => {
+    const ok2 = await page.evaluate(() => {
+      const b = [...document.querySelectorAll('.practice-row button')]
+        .find((e) => (e.textContent || '').includes('集中モード'))
+      if (!b) return false
+      b.click(); return true
+    })
+    if (ok2) await page.waitForTimeout(400)
+    return ok2
+  }
+  const 出る = async () => {
+    await page.evaluate(() => {
+      const x = [...document.querySelectorAll('.focus button')]
+        .find((e) => (e.textContent || '').includes('集中モードを終える'))
+      if (x) x.click()
+    })
+    await page.waitForFunction(() => [...document.querySelectorAll('.practice-row button')]
+      .some((e) => (e.textContent || '').includes('集中モード')), null, { timeout: 5000 })
+      .catch(() => {})
+  }
+
+  if (紙 && 紙.length && await 入る()) {
+    const 集中 = await 持ちもの('.focus-bar .player--dock')
+    if (!集中) {
+      ng('集中モード … 下の帯が、紙の黒帯と別のものになっている',
+        '`.focus-bar` の中に `.player--dock` が無い(自前で組んでいる)')
+    } else {
+      /* **数(3 / 6 段落)は教材のどこに居るかで変わる**ので、名前だけ見る。
+         それ以外は1文字も違ってはいけない */
+      const 落とす = (xs) => xs.filter((x) => !/^[—\d]+\s*\/\s*\d+/.test(x))
+      const a = 落とす(紙).join(' / ')
+      const b = 落とす(集中).join(' / ')
+      if (a !== b) {
+        ng('集中モード … プレーヤーの持ちものが、紙の黒帯と違う',
+          `紙  : ${a}\n    集中: ${b}`)
+      } else {
+        ok(`集中モード … プレーヤーは紙の黒帯とまったく同じ(${落とす(集中).length} つ)`)
+      }
+    }
+    await 出る()
+  }
+
+  /* ③ **どの幅でもあふれない。** 最後の段落(「まとめ」が出る)まで送る。
+       端末の「表示を大きく」も模す —— 幅が同じでも入るかは変わる */
   for (const [w, big] of [
     [560, false], [430, false], [402, false], [393, false], [390, false],
     [384, false], [375, false], [368, false], [360, false], [344, false], [320, false],
@@ -1733,62 +1776,55 @@ for (const [label, want] of Object.entries(WANT)) {
       if (!on) return
       const st = document.createElement('style')
       st.id = id
-      st.textContent = '.focus-bar .btn, .focus-bar .player-at { font-size: 15px !important }'
+      st.textContent = '.focus-bar .btn, .focus-bar .player-at,'
+        + ' .focus-top .btn { font-size: 15px !important }'
       document.head.appendChild(st)
     }, big)
     await page.waitForTimeout(150)
     const 印 = big ? `${w}px(文字 1.25 倍)` : `${w}px`
-    // 集中モードへ入る(紙の「練習の行」から)
-    const opened = await page.evaluate(() => {
-      const b = [...document.querySelectorAll('.practice-row button')]
-        .find((e) => (e.textContent || '').includes('集中モード'))
-      if (!b) return false
-      b.click(); return true
-    })
-    if (!opened) { ng(`${印} で集中モードの入り口が無い`); continue }
-    await page.waitForTimeout(350)
+    if (!await 入る()) { ng(`${印} で集中モードの入り口が無い`); continue }
 
     let bad = false
     for (let step = 0; step < 12; step++) {
-      const m = await look()
+      const m = await page.evaluate(() => {
+        const bar = document.querySelector('.focus-bar')
+        const top = document.querySelector('.focus-top')
+        if (!bar || !top) return null
+        const spill = (el) => !!el
+          && [el, ...el.children].some((b) => b.scrollWidth > b.clientWidth + 1)
+        return {
+          上: Math.round(top.getBoundingClientRect().height),
+          /* **押す行**(⏮⏮ ⏮ ▶ ⏭ ⏭⏭)と、その上の行。どちらも1行 */
+          keys: spill(bar.querySelector('.player-keys')),
+          head: spill(bar.querySelector('.player-head')),
+          top上: spill(top),
+          末: /まとめ/.test(top.textContent || '') ? 'まとめ' : '中ほど',
+        }
+      })
       if (!m) { ng(`${印} で集中モードの下の帯が出ていない`); bad = true; break }
-      if (m.h > 70 || m.上 > 70) {
-        ng(`${印} で集中モードの帯が2段になっている(${m.末})`,
-          `下 ${m.h}px / 上 ${m.上}px(どちらも1行なら 60px ほど)`)
+      if (m.keys || m.head) {
+        ng(`${印} で集中モードのプレーヤーがあふれている(${m.末})`,
+          `${m.keys ? '押す行' : '上の行'} … 折り返さない指定なので、隠れて押せなくなる`)
         bad = true; break
       }
-      if (m.over) {
-        ng(`${印} で集中モードの下の帯があふれている(${m.末})`,
-          '折り返さない指定なので、あふれると隠れて押せなくなる')
+      if (m.上 > 70 || m.top上) {
+        ng(`${印} で集中モードの上の帯があふれている(${m.末})`,
+          `高さ ${m.上}px(1行なら 60px ほど)`)
         bad = true; break
       }
-      if (m.末.includes('まとめ')) break        // 最後の段落まで見た
-      // 段落を送るのは**プレーヤーの「◀ 3 / 6 段落 ▶」**(2026-09 利用者の指定
-      // 「これと同じにすれば収まりますよね?」で、両端の「前 / 次」は無くした)
+      if (m.末.includes('まとめ')) break
+      // 段落を送るのは**プレーヤーのいちばん外側のボタン**(⏭⏭)
       const moved = await page.evaluate(() => {
-        const pill = document.querySelector('.focus-mid .player-at')?.closest('.listenpill')
-        const b = pill ? [...pill.querySelectorAll('.listenpill-arrow')].pop() : null
+        const keys = document.querySelector('.focus-bar .player-keys')
+        const b = keys ? [...keys.querySelectorAll('.player-key-btn')].pop() : null
         if (!b || b.disabled) return false
         b.click(); return true
       })
       if (!moved) break
       await page.waitForTimeout(150)
     }
-    if (!bad) ok(`${印} … 集中モードの帯は上下とも1行(最後の段落まで)`)
-
-    await page.evaluate(() => {
-      const x = [...document.querySelectorAll('.focus button')]
-        .find((e) => (e.textContent || '').includes('集中モードを終える'))
-      if (x) x.click()
-    })
-    /* **閉じ終わるのを、時間ではなく「出たか」で待つ**(第5.215節)。
-       200ms の決め打ちでは間に合わないことがあり、**次の幅で
-       「集中モードの入り口が無い」と赤くなった**(同じコードで
-       もう一度走らせると緑だった)。
-       **壊れていないものが赤くなると、本当の赤を見落とす**(CLAUDE.md) */
-    await page.waitForFunction(() => [...document.querySelectorAll('.practice-row button')]
-      .some((e) => (e.textContent || '').includes('集中モード')), null, { timeout: 5000 })
-      .catch(() => {})
+    if (!bad) ok(`${印} … 集中モードのプレーヤーは、どの段落でもあふれない`)
+    await 出る()
   }
   await page.close()
 }

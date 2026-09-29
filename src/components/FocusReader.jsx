@@ -64,13 +64,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import EnglishText from './EnglishText.jsx'
 import SentenceSkip from './SentenceSkip.jsx'
-/* **1文ずつのボタンの文字は `speakLabel.js` 1か所**(第5.297節)。
-   ここに書き写すと、片方だけ古くなる */
-import { SPEAK_LISTEN, SPEAK_STOP } from '../lib/speakLabel.js'
-import RepeatUnit from './RepeatUnit.jsx'
+/* ★ **音声プレーヤーは、紙とまったく同じ部品**(2026-09-30・第5.321節)。
+     > 音声プレーヤーは、今これがあるところは全て同じ仕様にしてください
+     > 集中モードもです。例外はありません。
+   もとはここで `SentenceSkip` と `RepeatUnit` を並べて**別に組んで**
+   いた。同じものを2通りに組むと、**片方だけ古くなる**(CLAUDE.md)。 */
+import PlayerBar from './PlayerBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
-import { SpeakerIcon, StopIcon } from './Icons.jsx'
-import { preparingLabel } from './SpeakButton.jsx'
 import { castClipSpeakers, voiceFor } from '../lib/voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import useBodyAudio from '../lib/useBodyAudio.js'
@@ -111,6 +111,9 @@ export default function FocusReader({
   section, isDialogue = false, voiceIds = null, tier,
   level = 'B1', wordStatuses = null, onMarkWord = null,
   materialId = null, learnerId = null, onClose,
+  /* いまの速さ(「100%」)。**持っているのは紙の側**なので、
+     そちらから受け取る(ここで数え直さない) */
+  rateText = null,
   /**
    * **どこから始めるか**(2026-09 利用者の指定)。
    *
@@ -318,6 +321,9 @@ export default function FocusReader({
    *   まん中に来るのと同じこと**である(役目が同じなら、動きもそろえる)。
    *   「その段落だけを回したい」ときは、くり返しを「段落」にする。
    * ══════════════════════════════════════════════════════════════ */
+  /* **速さを押したら、右上の「表示」が開く**(紙の黒帯と同じ動き)。
+     開く道は `FocusFrame` が入れてくれる(状態はあちらが持つ) */
+  const openSets = useRef(null)
   const atRef = useRef(index)
   atRef.current = index
   const goRef = useRef(null)
@@ -489,6 +495,8 @@ export default function FocusReader({
       bodyRef={bodyRef}
       onClose={onClose}
       settings={settings}
+      /* 速さを押したら「表示」が開く(紙の黒帯とまったく同じ動き) */
+      openRef={openSets}
       top={(
         <>
           {/* **どこまで来たかは、下の帯のプレーヤーが出す**(2026-09 利用者の指定
@@ -516,10 +524,30 @@ export default function FocusReader({
       )}
       topEnd={(
         <>
+          {/* ★ **1つのボタンで、英語 → 訳 → 文法 → 英語 と回る**(0051)。
+                **上の帯へ移した**(2026-09-30・第5.321節)——
+                下の帯は**音声プレーヤーそのもの**になったので、
+                プレーヤーでないものを、そこへ混ぜない
+                (利用者の指定「例外はありません」)。
+
+              見せ方を変えるものなので、**「表示」のとなりが本来の居場所**
+              でもある。**無いものは飛ばす**(訳の無い段落・解説の無い教材)。
+              どちらも無ければ、ボタンごと出さない —— 効かない操作を見せない。
+              名前は `aria-label` が持っている */}
+          {!wrap && hasOtherView(have) && (
+            <button type="button" className="btn btn--small btn--ghost"
+                    aria-label={`${VIEW_LABEL[nextV].head}${VIEW_LABEL[nextV].tail}`}
+                    onClick={() => setView(nextV)}>
+              {/* **1つの塊にする。** ボタンは `gap` を持つので、
+                  ばらばらに置くと「訳 を見る」と隙間が空く(実測) */}
+              <span>
+                {VIEW_LABEL[nextV].head}
+                <span className="ja-word">{VIEW_LABEL[nextV].tail}</span>
+              </span>
+            </button>
+          )}
           {/* **まとめは、上の帯に置く**(2026-09 実機・実測)。
-              下の帯は「紙の右下のプレーヤーと同じ形」にすると決めたので
-              (利用者の指定)、押すものは3つ + 訳を見るで埋まっている。
-              **5つめを足すと、狭い画面であふれる。**
+              下の帯は音声プレーヤーそのものなので、そこへは足せない。
               最後の段落に着いたときだけ出す(それまでは行き先が無い) */}
           {last && !wrap && (
             <button type="button" className="btn btn--small btn--primary"
@@ -543,81 +571,51 @@ export default function FocusReader({
           本文に戻る
         </button>
       ) : (
-        /* ★ **紙の右下のプレーヤーと、まったく同じ形にする**
-             (2026-09 実機・利用者の指定)
+        /* ★ **紙とまったく同じ音声プレーヤー**(2026-09-30 利用者の指定・
+             第5.321節)
 
-             > これと同じにすれば収まりますよね?色は黒くしたいですが
+             > 音声プレーヤーは、今これがあるところは全て同じ仕様にして
+             > ください。集中モードもです。例外はありません。
 
-           あちらが1行に収まっているのは、押すものが3つ
-           (Listen / 段落の送り / くり返し)しかないからである。
-           こちらには**両端の「前 / 次」**が加わっていて、そのぶん入らなかった。
+           もとはここで `SentenceSkip`(聴く)+ `SentenceSkip`(段落)+
+           `RepeatUnit` を**並べて別に組んで**いた。見た目も並びも紙と違い、
+           **同じことをする道具が2通り**あった。いまは `PlayerBar` を
+           そのまま置く —— 送り戻しも、くり返しも、速さも、紙と1つの部品。
 
-           **段落の送りは、プレーヤーの「◀ 3 / 6 段落 ▶」に一本化した**
-           (利用者の判断)。両端の大きなボタンは無くなるが、
-           **送るところが1か所になり、紙とまったく同じ操作**になる。
-           色はこの帯のもの(黒)のまま —— `.focus-bar` が塗り直している。 */
+           **2段になる。** 以前ここには「1行にまとめてください」という
+           指定があったが(第5.208節)、それは**この古い帯**への指定である。
+           利用者はそのあと**黒帯を2段の案A に自分で決め**、今回
+           「例外はありません」と言った。**新しいほうが効く。**
+
+           **段落の送りだけ、渡すものが違う**(`onStep`)——
+           集中モードは長い段落を割って出すので、まず**その段落の中の
+           次の1枚**へ進む。番号で飛ぶと、割った残りが飛ばされる。 */
         <div className="focus-mid">
-          {/* 文で送る ◀ ▶ のあいだに Listen。**紙と同じ `SentenceSkip`** */}
-          {canReadAloud() && (
-            <SentenceSkip>
-              <button type="button"
-                      className="btn btn--small btn--quiet"
-                      aria-label={player.playing ? SPEAK_STOP : SPEAK_LISTEN}
-                      onClick={() => player.toggle(playOpts())}>
-                {/* **「用意しています…」だけは、どんなに狭くても消さない**
-                    (音が出るまで何も起きていないように見えるため) */}
-                {player.playing
-                  ? <><StopIcon />{player.waiting
-                      ? preparingLabel(player.secs)
-                      : <span className="listen-word">{SPEAK_STOP}</span>}</>
-                  : <><SpeakerIcon /><span className="listen-word">{SPEAK_LISTEN}</span></>}
-              </button>
-            </SentenceSkip>
-          )}
-
-          {/* **段落の送り。** ここが「前 / 次」の代わりである。
-              数の両脇に三角を置くのも、紙のプレーヤーとまったく同じ */}
-          <SentenceSkip
-            label={`${unit}を`}
-            /* **1枚ずつ動く。** 割れている段落では、まず段落の中を進む
-               (数は段落のままなので、そのあいだ数字は動かない。
-               何枚目かは**本文の番号のとなり**に出ている) */
-            onStep={step}
-            canBack={canBack}
-            canNext={canNext}
-          >
-            <span className="player-at">
-              {index + 1} / {total}
-              <span className="wide-text"> {unit}</span>
-            </span>
-          </SentenceSkip>
-
-          {/* **くり返し**(2026-09 利用者の指定
-              「これは集中モードで、全てのデバイスで同じにしてください」)。
-              単位は**文 / 段落(発言)/ 全文**の3つ(紙と同じ部品) */}
-          {canReadAloud() && (
-            <RepeatUnit value={player.repeat} unit={unit} onChange={player.setRepeat} />
-          )}
-
-          {/* **1つのボタンで、英語 → 訳 → 文法 → 英語 と回る**(0051)。
-              下の帯はすでに4つで埋まっており、5つめは狭い画面であふれる
-              (実測)。`RepeatUnit` とまったく同じ形にしてある。
-
-              **無いものは飛ばす**(訳の無い段落・解説の無い教材)。
-              どちらも無ければ、ボタンごと出さない —— 効かない操作を見せない。
-              **詰まったときは「訳」「文法」だけになる**(`is-fit2`)。
-              名前は `aria-label` が持っている */}
-          {hasOtherView(have) && (
-            <button type="button" className="btn btn--small btn--ghost"
-                    aria-label={`${VIEW_LABEL[nextV].head}${VIEW_LABEL[nextV].tail}`}
-                    onClick={() => setView(nextV)}>
-              {/* **1つの塊にする。** ボタンは `gap` を持つので、
-                  ばらばらに置くと「訳 を見る」と隙間が空く(実測) */}
-              <span>
-                {VIEW_LABEL[nextV].head}
-                <span className="ja-word">{VIEW_LABEL[nextV].tail}</span>
+          {canReadAloud() ? (
+            <PlayerBar
+              place="dock"
+              playing={player.playing}
+              waiting={player.waiting} secs={player.secs}
+              at={index} total={total} unit={unit}
+              onToggle={() => player.toggle(playOpts())}
+              onStep={step} canBack={canBack} canNext={canNext}
+              repeat={player.repeat} onRepeat={player.setRepeat}
+              rateText={rateText}
+              onOpenRate={() => openSets.current?.()}
+            />
+          ) : (
+            /* **読み上げが使えないときも、段落は送れる**(Supabase 未設定・
+               1ファイル版)。**行き止まりを作らない**(CLAUDE.md)。
+               プレーヤーは出さない —— 効かない操作を見せない */
+            <SentenceSkip
+              label={`${unit}を`}
+              onStep={step} canBack={canBack} canNext={canNext}
+            >
+              <span className="player-at">
+                {index + 1} / {total}
+                <span className="wide-text"> {unit}</span>
               </span>
-            </button>
+            </SentenceSkip>
           )}
         </div>
       )}

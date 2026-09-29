@@ -1140,6 +1140,11 @@ export default function LessonView({
    * 1つだけだが、紙は教材まるごとの控えである(CLAUDE.md
    * 「紙は教材まるごとの控え」)。
    */
+  /** いまの速さ(「100%」)。**数えるのはここ1か所**(第5.321節)——
+      紙の黒帯と集中モードの両方が、これを受け取る。
+      2か所で数えると、段を足した日に片方だけが古くなる */
+  const rateText = SPEECH_RATES.find((r) => r.id === rateId)?.label ?? null
+
   const focusSettings = (
     <>
       <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
@@ -1889,6 +1894,9 @@ export default function LessonView({
             onGoStep={passageSection ? goStep : null}
             /* 速さ・文字・幅・印刷。**3つの集中モードで同じもの** */
             settings={focusSettings}
+            /* **音声プレーヤーは紙とまったく同じ部品**(第5.321節)。
+               いまの速さは、この画面が持っているのでそのまま渡す */
+            rateText={rateText}
             onClose={() => setRun(null)}
           />
         ) : run === 'six' ? (
@@ -2039,7 +2047,7 @@ export default function LessonView({
                    > 速度表示をタップすると、画面右上にある既存の設定パネルを開き
                  **変える道は1つ**(`道具` の中の `Stepper`)。
                  段も刻みも `SPEECH_RATES` 1か所なので、食い違わない */
-              rateText={SPEECH_RATES.find((r) => r.id === rateId)?.label ?? null}
+              rateText={rateText}
               onOpenRate={() => { setWantRate(true); setViewSets(true) }}
             />
           </div>

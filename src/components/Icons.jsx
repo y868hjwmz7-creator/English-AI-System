@@ -520,6 +520,27 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
 }
 
 /** セッションの記録(0032)。**罫線の入った紙**。書くところだと分かる */
+/**
+ * **音を用意しているあいだの絵**(2026-09-30・第5.321節)。
+ *
+ *   点が3つ、順に濃くなる。**ほかの絵と同じ箱に入る**ので、
+ *   ▶ / ■ と差し替えても**丸の大きさが1px も変わらない**
+ *   (押しても、まわりの物が動かない・`.claude/rules/common.md`)。
+ *
+ *   **何秒たったかは、ここに描かない** —— `aria-label` と `title` が
+ *   「用意中 3 秒」と言う。数が伸びると、その行が動くためである。
+ */
+export function WaitIcon({ className = 'icon' }) {
+  return (
+    <svg className={`${className} wait-icon`} viewBox="0 0 20 20"
+         aria-hidden="true" focusable="false" fill="currentColor">
+      <circle cx="4" cy="10" r="1.9" />
+      <circle cx="10" cy="10" r="1.9" />
+      <circle cx="16" cy="10" r="1.9" />
+    </svg>
+  )
+}
+
 export function NoteIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
