@@ -1,75 +1,77 @@
 /**
- * **くり返しの単位を選ぶボタン**(2026-09 利用者の指定)。
+ * **くり返す範囲を選ぶ**(2026-09-30 利用者の指定で作り直した・第5.318節)。
+ *
+ * ============================================================================
+ * 【もとは、ボタン1つで回していた】
  *
  *   > UIを、もう少し大きくするか、上部バーに配置するかで反復ボタンを
  *   > 作って欲しいです。文章単位、段落単位、全文単位、三つ選べるような。
  *
- * ============================================================================
- * 【なぜ3つ要るのか】
+ *   「しない → 文 → 段落 → 全文」と押すたびに移る形にしていた。
+ *   場所は取らないが、**いま何を回しているかを読むために、
+ *   文字を出す必要があった**(「くり返し: しない」)。
  *
- *   これまでのくり返し(`RepeatToggle`)は**「くり返す / 1回」の2つ**で、
- *   回るのは**その1本まるごと**だけだった。ところが、まねて言う練習は
- *   **1文だけを何度も回したい**ことのほうが多い。逆に、聞き流したい人は
- *   **本文ぜんぶ**を回したい。単位が1つしかないと、どちらもできない。
+ * 【いまは、3つ並べる】(2026-09-30 利用者の指定)
  *
- * 【1つのボタンで、押すたびに移る】
- *   選択肢を4つ並べると、めったに触らないものが帯の場所を食う
- *   (`Stepper` を作ったときと同じ話)。**いまの単位を書いた
- *   ボタン1つ**にして、押すたびに次へ移す。多くても3回で戻ってこられる。
+ *   > リピート設定の「繰り返し」という表示文言は削除し、
+ *   > アイコン中心の操作にしてください。
+ *   > それぞれ、リピート範囲が見分けられる異なる矢印アイコンを
+ *   > デザインしてください。
+ *   > リピートしない状態も選べるようにし、現在の状態はアイコンの
+ *   > 選択表示などで分かるようにしてください。
  *
- *   **押している印は、色と文字の両方で出す**(色だけに頼らない・CLAUDE.md)。
+ *   **押したものが光る。** もう一度押すと消える(= くり返さない)。
+ *   これで4つの状態がぜんぶ選べて、**いまどれかが一目で分かる。**
+ *
+ * 【言葉は消していない】
+ *   絵だけになったが、**名前は `aria-label` と `title` に残してある**
+ *   (「段落をくり返す」「文をくり返す」「全文をくり返す」)。
+ *   読み上げにも、マウスを乗せたときにも出る。
+ *   **色だけに頼らない**(CLAUDE.md)—— 光っている印は
+ *   地色 + 文字色 + `aria-pressed` の3つで示す。
  *
  * 【「段落」か「発言」かは、呼ぶ側が言う】
  *   記事は段落、会話・会議は発言(`countUnit()` の決まり)。
  *   **ここで数え直さない。**
  */
-import { RepeatIcon } from './Icons.jsx'
-/* **中身が変わっても、場所を動かさない**(第5.281節)。
-   しない(3) / 文(1) / 段落(2) / 全文(2)と、**言葉の長さがまちまち**なので、
-   そのままだとボタンが伸び縮みして、となりの物が動く */
-import SteadyLabel from './SteadyLabel.jsx'
+import { RepeatRangeIcon } from './Icons.jsx'
 import { REPEAT_UNITS } from '../lib/wholeAudio.js'
-import { repeatLabel, nextRepeat } from '../lib/repeatLabel.js'
+import { repeatLabel } from '../lib/repeatLabel.js'
 
-/* ★ **呼び名と「次へ」は `repeatLabel.js` へ出した**(第5.316節)。
-     純粋な算段が `.jsx` の中にいると、**素の node から呼べない** ——
-     見張りが4つの呼び名を書き写すしかなくなり、
-     呼び名を変えた日に見張りだけが古くなる。
-     ここからも出し直しておく(前から `RepeatUnit.jsx` を見ている人のため) */
-export { repeatLabel, nextRepeat } from '../lib/repeatLabel.js'
+/* **呼び名は `repeatLabel.js` 1か所**(素の node からも呼べる形)。
+   前から `RepeatUnit.jsx` を見ている人のために、ここからも出し直す */
+export { repeatLabel } from '../lib/repeatLabel.js'
 
 /**
  * @param value   'off' / 'sentence' / 'item' / 'all'
  * @param unit    段落 / 発言(教材の形から決まる言葉)
- * @param onChange 次の単位
+ * @param onChange 選んだ範囲(もう一度押したら 'off')
  */
 export default function RepeatUnit({
   value = 'off', unit = '段落', onChange, className = '',
 }) {
-  const on = value !== 'off'
-  const now = repeatLabel(value, unit)
-  const next = repeatLabel(nextRepeat(value), unit)
-
+  /* **一覧は `REPEAT_UNITS` から作る。**「しない」はボタンにしない ——
+     **押しているものをもう一度押せば消える**ので、4つめは要らない
+     (効かない操作を見せない・同じことをするものを2つ見せない) */
+  const 範囲 = REPEAT_UNITS.filter((id) => id !== 'off')
   return (
-    <button type="button"
-            className={`btn btn--small repeat-unit${on ? ' btn--primary' : ''}${className ? ` ${className}` : ''}`}
-            aria-pressed={on}
-            title={`くり返し … いまは「${now}」。押すと「${next}」になります`}
-            aria-label={`くり返しの単位。いまは ${now}。押すと ${next} になります`}
-            onClick={() => onChange?.(nextRepeat(value))}>
-      <RepeatIcon />
-      {/* **狭い画面では「くり返し」を落とす。**
-          単位そのもの(文 / 段落 / 全文)は必ず見えている */}
-      <span className="wide-text">くり返し:</span>
-      {/* ★ **起こりうる言葉ぶんの場所を、先に取っておく**(第5.281節)。
-             一覧は `REPEAT_UNITS` から組む —— **書き写さない**ので、
-             単位を足した日にも、ひとりでに広くなる。
-             (前は `min-width: 3em` という**決め打ち**で、
-              しかも `.focus-mid` で打ち消されていた。**数を書かない**) */}
-      <SteadyLabel className="repeat-unit-now"
-                   keep={REPEAT_UNITS.map((id) => repeatLabel(id, unit))}>
-        {now}
-      </SteadyLabel>
-    </button>
+    <span className={`repeat-keys${className ? ` ${className}` : ''}`}
+          role="group" aria-label="くり返す範囲">
+      {範囲.map((id) => {
+        const on = value === id
+        const 名 = `${repeatLabel(id, unit)}をくり返す`
+        return (
+          <button key={id} type="button"
+                  className={`repeat-key${on ? ' is-on' : ''}`}
+                  aria-pressed={on}
+                  /* **押すと消える**ことも言っておく —— 押す前に分かる */
+                  aria-label={on ? `${名}(いま選んでいる。押すとやめる)` : 名}
+                  title={on ? `${名} … 押すとやめる` : 名}
+                  onClick={() => onChange?.(on ? 'off' : id)}>
+            <RepeatRangeIcon range={id} />
+          </button>
+        )
+      })}
+    </span>
   )
 }

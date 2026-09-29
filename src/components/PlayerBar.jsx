@@ -141,18 +141,24 @@ function PlayKey({ dir, label, wide, disabled, onClick }) {
  * @param repeat    くり返しの単位('off' / 'sentence' / 'item' / 'all')
  * @param onRepeat  単位を変える
  *
- * ★ **速さは、もう受け取らない**(2026-09-30 利用者の指定・第5.316節)。
+ * ★ **速さを変える欄は、持たない**(2026-09-30 利用者の指定・第5.316節)。
  *     > 速度は上部UIで変更できるので下部のプレーヤーからは排除しましょう
  *   一度は両方に置いた(第5.311節「①ふたつ実装してください(これは例外で
  *   OKです)」)が、**上の UI で変えられるものを、下にも置かない** ——
  *   同じことをするものを2つ見せない(CLAUDE.md)。
- *   **欄そのものを持たせない**ので、「渡し忘れ」も「片方だけ残る」も
- *   起こりえない(「用意しています…」を持たせなかったのと同じ形)。
+ *
+ * @param rateText  いまの速さ(「100%」)。**読むだけ。枠も三角も無い**
+ * @param onOpenRate 速さの表示を押したとき(右上の「設定」を開く)
+ *   > プレーヤー上には現在の速度だけを、枠のないシンプルな表示で置いて
+ *   > 速度表示をタップすると、画面右上にある既存の設定パネルを開き
+ *   **数字は読めたほうがよい**(いま何%かを知らずに聴くことになる)が、
+ *   **変える道は1つ**にする。
  */
 export default function PlayerBar({
   place = 'dock', onPlace = null, placeNext = null,
   playing = false, at = null, total = 0, unit = '段落',
   onToggle, onJump = null, repeat = null, onRepeat = null,
+  rateText = null, onOpenRate = null,
 }) {
   /**
    * **入るまで詰める**(2026-09 実機・利用者の指摘
@@ -268,11 +274,22 @@ export default function PlayerBar({
           <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
         )}
 
-        {/* ★ **速さは置かない**(2026-09-30 利用者の指定・第5.316節)。
-              > 速度は上部UIで変更できるので下部のプレーヤーからは排除しましょう
-            一度は両方に置いたが(第5.311節)、**上で変えられるものを
-            下にも置かない。** 速さは上の帯(広い窓)か、
-            右上の「設定」の中(狭い窓)にある —— どちらも `道具` 1か所である */}
+        {/* ★ **速さは「いま何%か」だけ。枠も三角も置かない**
+              (2026-09-30 利用者の指定・第5.318節)
+              > プレーヤー上には現在の速度だけを、枠のないシンプルな表示で
+              > 速度表示をタップすると、画面右上にある既存の設定パネルを開き
+              > プレーヤー上に速度変更用の矢印や枠付きボタンは置かないで
+
+            **押せることは、押してみれば分かる**(説明書きを置かない)。
+            読み上げには「速さ …。押すと設定が開きます」と出る */}
+        {rateText && (
+          <button type="button" className="player-rate-now"
+                  aria-label={`速さ ${rateText}。押すと設定が開きます`}
+                  title={`速さ ${rateText} … 押すと設定が開きます`}
+                  onClick={onOpenRate} disabled={!onOpenRate}>
+            {rateText}
+          </button>
+        )}
 
         {onPlace && placeNext && (
           <button type="button" className="btn btn--small btn--ghost player-place"

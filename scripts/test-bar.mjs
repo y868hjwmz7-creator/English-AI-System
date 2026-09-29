@@ -769,124 +769,236 @@ for (const [label, want] of Object.entries(WANT)) {
     }
   }
 
-  /* ── **くり返しは4つとも選べる**(2026-09-30 利用者の指定)
-         > リピートしない / 段落ごと / 文ごと / 全文をリピート
-         > すべて選択できるようにしてください
+  /* ── **くり返しは3つ並ぶ。押したものが光り、もう一度で消える**
+         (2026-09-30 利用者の指定・第5.318節)
+         > リピート設定の「繰り返し」という表示文言は削除し、
+         > アイコン中心の操作にしてください
+         > リピートしない状態も選べるようにし、現在の状態は
+         > アイコンの選択表示などで分かるようにしてください
 
-       **一覧は `REPEAT_UNITS` から**(書き写さない)。押すたびに次へ移る
-       作りなので、**その数だけ押して、ひと回りするか**を見る。 */
+       **一覧は `REPEAT_UNITS` から**(書き写さない)。「しない」はボタンに
+       しないので、**ボタンの数は `REPEAT_UNITS.length - 1`** である。
+       **4つの状態ぜんぶに行けるか**を、実際に押して確かめる。 */
   await page.setViewportSize({ width: 390, height: 844 })
   await page.waitForTimeout(250)
   {
-    const 見た = []
-    let 出ない = false
-    for (let i = 0; i <= REPEAT_UNITS.length; i += 1) {
-      const now = await page.evaluate(() => {
-        const b = document.querySelector('.player--dock .repeat-unit')
-        return b ? (b.getAttribute('aria-label') || '') : null
-      })
-      if (now == null) { 出ない = true; break }
-      見た.push(now)
-      await page.click('.player--dock .repeat-unit')
-      await page.waitForTimeout(120)
-    }
-    const 名 = REPEAT_UNITS.map((id) => repeatLabel(id, '発言'))
-    if (出ない) ng('くり返し … 黒帯にくり返しのボタンが無い')
-    else {
-      /* **4つとも出たか。** `aria-label` は「いまは ◯◯。押すと △△…」なので、
-         その中に単位の名前が入っている */
-      const 足りない = 名.filter((n) => !見た.some((s) => s.includes(`いまは ${n}`)))
-      if (足りない.length) {
-        ng(`くり返し … ${足りない.join(' / ')} が選べない`,
-          `見えたのは ${見た.length} 通り`)
-      } else if (見た[0] !== 見た[REPEAT_UNITS.length]) {
-        ng('くり返し … ひと回りして元に戻らない', `${見た[0]} → ${見た[REPEAT_UNITS.length]}`)
-      } else ok(`くり返し … ${名.join(' / ')} の ${名.length} つを、押すたびに回れる`)
+    const 範囲 = REPEAT_UNITS.filter((id) => id !== 'off')
+    const 数 = await page.$$eval('.player--dock .repeat-key', (xs) => xs.length)
+    /* **文字が残っていないか。** 「繰り返し」「くり返し」の語は消す指定 */
+    const 文字 = await page.evaluate(() => {
+      const g = document.querySelector('.player--dock .repeat-keys')
+      return g ? (g.textContent || '').trim() : null
+    })
+    if (数 !== 範囲.length) {
+      ng(`くり返し … ボタンが ${数} 個(${範囲.length} 個のはず)`,
+        '「しない」はボタンにしない —— 押しているものをもう一度押せば消える')
+    } else if (文字) {
+      ng('くり返し … 文字が残っている', `「${文字}」。**アイコン中心にする**指定である`)
+    } else {
+      /* ①ぜんぶ押して、押したものだけが光るか ②もう一度押すと消えるか */
+      const 見た = []
+      let 悪い = ''
+      for (let i = 0; i < 範囲.length; i += 1) {
+        await page.click(`.player--dock .repeat-key >> nth=${i}`)
+        await page.waitForTimeout(120)
+        const m = await page.$$eval('.player--dock .repeat-key',
+          (xs) => xs.map((x) => x.getAttribute('aria-pressed') === 'true'))
+        if (m.filter(Boolean).length !== 1 || !m[i]) {
+          悪い = `${i + 1} 番を押したのに、光っているのが ${m.filter(Boolean).length} 個`
+          break
+        }
+        見た.push(範囲[i])
+        /* もう一度押すと「しない」に戻るか */
+        await page.click(`.player--dock .repeat-key >> nth=${i}`)
+        await page.waitForTimeout(120)
+        const m2 = await page.$$eval('.player--dock .repeat-key',
+          (xs) => xs.map((x) => x.getAttribute('aria-pressed') === 'true'))
+        if (m2.some(Boolean)) { 悪い = `${i + 1} 番をもう一度押しても消えない`; break }
+      }
+      /* **絵が3つとも違うか。** 同じ絵を3つ置いても「選べる」だけは通る */
+      const 絵 = await page.$$eval('.player--dock .repeat-key svg',
+        (xs) => xs.map((x) => x.innerHTML.replace(/\s+/g, '')))
+      if (悪い) ng(`くり返し … ${悪い}`)
+      else if (見た.length !== 範囲.length) ng('くり返し … 押せない範囲がある')
+      else if (new Set(絵).size !== 範囲.length) {
+        ng('くり返し … 3つの絵が同じ形になっている',
+          '**範囲が見分けられる異なる矢印**にする(利用者の指定)')
+      } else {
+        ok(`くり返し … ${範囲.map((id) => repeatLabel(id, '発言')).join(' / ')}`
+          + ` の ${範囲.length} つが別の絵で並び、押すと1つだけ光り、`
+          + 'もう一度押すと「しない」に戻る')
+      }
     }
   }
 
-  /* ── **速さは 70〜130%。端から外へは出ない。**
-         **そして、黒帯には無い**(2026-09-30 利用者の指定)
-         > 再生速度は70%から130%まで、5%刻みです。
-         > 最小・最大に達したときに範囲外へ進まないように
-         > 速度は上部UIで変更できるので下部のプレーヤーからは排除しましょう
+  /* ── **速さは「いま何%か」だけ。押すと右上の設定が開く**
+         (2026-09-30 利用者の指定・第5.318節)
+         > プレーヤー上には現在の速度だけを、枠のないシンプルな表示で
+         > 速度表示をタップすると、画面右上にある既存の設定パネルを開き
+         > プレーヤー上に速度変更用の矢印や枠付きボタンは置かないでください
+         > 設定パネル内では、速度を70%から130%まで5%刻みで変更できる仕様を維持
 
-       **上の UI にあることを、実際に開いて確かめる。** 黒帯から外した以上、
-       「どこにも無い」と見分けられなければ、この見張りは何も守らない
-       (**出ると出ないの両方を見る**・CLAUDE.md)。
-       スマホの幅では、速さは**右上の「設定」の吹き出しの中**にいる。
-
-       **端の値も刻みも `SPEECH_RATES` 1か所**(書き写さない)。 */
+       **出ると出ないの両方を見る。** 黒帯から欄を外した以上、
+       「どこにも無い」と見分けられなければ、この見張りは何も守らない。 */
   {
-    /* ①黒帯には無い(幅ごとの節でも数えているが、**ここでも押さえる** ——
-         あちらは「戻っていないか」、こちらは「代わりがあるか」を見る) */
-    const 黒帯に速さ = await page.$$eval('.player--dock .stepper', (xs) => xs.length)
-    if (黒帯に速さ) ng('速さ … 黒帯に速さが残っている', `${黒帯に速さ} 個`)
-    else ok('速さ … 黒帯には無い(上の UI にある)')
-
-    /* ②右上の「設定」を開く。**開けなければ赤**(行き止まりを作らない) */
-    await page.click('.lesson-sets')
-    await page.waitForTimeout(250)
-    /* **「速さ」の欄を探す。** `Stepper` は `role="group"` に
-       `速さ(いま 100%)` と入れている(`Stepper.jsx`)。
-       この言葉は `WANT`(帯の持ちもの)にも出てくるので、
-       呼び名を変えた日は**そちらも一緒に赤くなる** */
-    const 欄 = '[role="group"][aria-label^="速さ"]'
-    const ある = await page.$$eval(欄, (xs) => xs.length)
-    if (!ある) {
-      ng('速さ … 「設定」を開いても、速さの欄が無い',
-        '黒帯から外したのに、上にも無ければ「どこにも無い」')
+    /* ①黒帯にあるのは「表示」だけ。**枠も三角も無い** */
+    const m = await page.evaluate(() => {
+      const el = document.querySelector('.player--dock .player-rate-now')
+      if (!el) return null
+      const cs = window.getComputedStyle(el)
+      return {
+        字: (el.textContent || '').trim(),
+        枠: Math.round(parseFloat(cs.borderTopWidth) || 0)
+          + Math.round(parseFloat(cs.borderLeftWidth) || 0),
+        地色: cs.backgroundColor,
+        三角: document.querySelectorAll('.player--dock .stepper-arrow').length,
+        欄: document.querySelectorAll('.player--dock .stepper').length,
+      }
+    })
+    if (!m) ng('速さ … 黒帯に「いまの速さ」が出ていない')
+    else if (m.欄 || m.三角) {
+      ng('速さ … 黒帯に、速さを変える欄が戻っている', `欄 ${m.欄} / 三角 ${m.三角}`)
+    } else if (m.枠 > 0) {
+      ng('速さ … 黒帯の速さに枠が付いている', `${m.枠}px。**枠のないシンプルな表示**にする`)
+    } else if (!/^\d+%$/.test(m.字)) {
+      ng('速さ … 黒帯の速さが「◯◯%」の形で出ていない', `「${m.字}」`)
     } else {
-      /* いちばん下まで下げる → ◀ が押せなくなるか */
-      for (let i = 0; i < SPEECH_RATES.length + 2; i += 1) {
-        const done = await page.evaluate((sel) => {
-          const a2 = document.querySelector(`${sel} .stepper-arrow`)
-          if (!a2 || a2.disabled) return true
-          a2.click(); return false
-        }, 欄)
-        if (done) break
-        await page.waitForTimeout(40)
-      }
-      const 下 = await page.evaluate((sel) => ({
-        値: document.querySelector(`${sel} .stepper-now`)?.textContent?.trim(),
-        止まる: document.querySelector(`${sel} .stepper-arrow`)?.disabled,
-      }), 欄)
-      for (let i = 0; i < SPEECH_RATES.length + 2; i += 1) {
-        const done = await page.evaluate((sel) => {
-          const a2 = [...document.querySelectorAll(`${sel} .stepper-arrow`)][1]
-          if (!a2 || a2.disabled) return true
-          a2.click(); return false
-        }, 欄)
-        if (done) break
-        await page.waitForTimeout(40)
-      }
-      const 上 = await page.evaluate((sel) => ({
-        値: document.querySelector(`${sel} .stepper-now`)?.textContent?.trim(),
-        止まる: [...document.querySelectorAll(`${sel} .stepper-arrow`)][1]?.disabled,
-      }), 欄)
-      const 最小 = SPEECH_RATES[0].label
-      const 最大 = SPEECH_RATES[SPEECH_RATES.length - 1].label
-      if (下.値 !== 最小) ng(`速さ … いちばん下まで下げても ${最小} にならない`, `${下.値}`)
-      else if (!下.止まる) ng(`速さ … ${最小} なのに、まだ下げられる`)
-      else if (上.値 !== 最大) ng(`速さ … いちばん上まで上げても ${最大} にならない`, `${上.値}`)
-      else if (!上.止まる) ng(`速さ … ${最大} なのに、まだ上げられる`)
-      else {
-        ok(`速さ … 右上の「設定」の中に在り、${最小} 〜 ${最大}`
-          + `(${SPEECH_RATES.length} 段)で端から外へ出ない`)
-      }
-      /* **元に戻す。** 速さは端末に覚えさせる作りなので、
-         130% のままにすると**あとの節が別の速さで測る** */
-      await page.evaluate((sel) => {
-        try { window.localStorage.removeItem('eas.speechRate') } catch { /* 使えなくても困らない */ }
-        void sel
+      /* ②押すと右上の設定が開き、**速さに焦点が当たる** */
+      await page.click('.player--dock .player-rate-now')
+      await page.waitForTimeout(350)
+      const 欄 = '[role="group"][aria-label^="速さ"]'
+      const 開いた = await page.evaluate((sel) => {
+        const g = document.querySelector(sel)
+        if (!g) return { 無い: true }
+        return { 焦点: g.contains(document.activeElement) }
       }, 欄)
-      /* **閉じるのは Esc。** 狭い窓では吹き出しが下から出るシートになり、
-         **後ろの覆い(`.sheet-back`)が設定のボタンを隠す**ので、
-         もう一度押すことはできない(実測して分かった) */
+      if (開いた.無い) {
+        ng('速さ … 黒帯の速さを押しても、設定の中に速さが出ない',
+          '黒帯から外したのに、上にも無ければ「どこにも無い」')
+      } else if (!開いた.焦点) {
+        ng('速さ … 設定は開いたが、速さに焦点が当たっていない',
+          '**見つけやすいようにする**(利用者の指定)')
+      } else {
+        /* ③その場で 70〜130% を端まで動かす */
+        for (let i = 0; i < SPEECH_RATES.length + 2; i += 1) {
+          const done = await page.evaluate((sel) => {
+            const a2 = document.querySelector(`${sel} .stepper-arrow`)
+            if (!a2 || a2.disabled) return true
+            a2.click(); return false
+          }, 欄)
+          if (done) break
+          await page.waitForTimeout(40)
+        }
+        const 下 = await page.evaluate((sel) => ({
+          値: document.querySelector(`${sel} .stepper-now`)?.textContent?.trim(),
+          止まる: document.querySelector(`${sel} .stepper-arrow`)?.disabled,
+        }), 欄)
+        for (let i = 0; i < SPEECH_RATES.length + 2; i += 1) {
+          const done = await page.evaluate((sel) => {
+            const a2 = [...document.querySelectorAll(`${sel} .stepper-arrow`)][1]
+            if (!a2 || a2.disabled) return true
+            a2.click(); return false
+          }, 欄)
+          if (done) break
+          await page.waitForTimeout(40)
+        }
+        const 上 = await page.evaluate((sel) => ({
+          値: document.querySelector(`${sel} .stepper-now`)?.textContent?.trim(),
+          止まる: [...document.querySelectorAll(`${sel} .stepper-arrow`)][1]?.disabled,
+        }), 欄)
+        const 最小 = SPEECH_RATES[0].label
+        const 最大 = SPEECH_RATES[SPEECH_RATES.length - 1].label
+        if (下.値 !== 最小) ng(`速さ … いちばん下まで下げても ${最小} にならない`, `${下.値}`)
+        else if (!下.止まる) ng(`速さ … ${最小} なのに、まだ下げられる`)
+        else if (上.値 !== 最大) ng(`速さ … いちばん上まで上げても ${最大} にならない`, `${上.値}`)
+        else if (!上.止まる) ng(`速さ … ${最大} なのに、まだ上げられる`)
+        else {
+          ok(`速さ … 黒帯は「${m.字}」の表示だけ(枠なし)。押すと右上の設定が開いて`
+            + `焦点が当たり、${最小} 〜 ${最大}(${SPEECH_RATES.length} 段)で端から外へ出ない`)
+        }
+      }
+      /* **元に戻す。** 速さは端末に覚えさせるので、130% のままにすると
+         あとの節が別の速さで測る。**閉じるのは Esc**(狭い窓では
+         後ろの覆いが設定のボタンを隠す・第5.316節で実測) */
+      await page.evaluate(() => {
+        try { window.localStorage.removeItem('eas.speechRate') } catch { /* 使えなくても困らない */ }
+      })
       await page.keyboard.press('Escape')
       await page.waitForTimeout(200)
     }
   }
+
+  /* ── **黒帯は、端で窮屈にならない。押す行はまん中で左右対称**
+         (2026-09-30 実機・利用者の指定・第5.318節)
+         > 段落番号の表示とリピート操作が画面端に近すぎます。
+         > 左右に十分なパディングを設け、端で窮屈に見えないように
+         > 再生ボタンを中心に、…左右対称に見えるよう整えてください
+         > 操作ボタンを画面幅いっぱいに広げるのではなく、操作群を中央にまとめ */
+  for (const w of [375, 390, 430]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.waitForTimeout(280)
+    const m = await page.evaluate(() => {
+      const dock = document.querySelector('.player-dock')
+      const keys = document.querySelector('.player--dock .player-keys')
+      const big = document.querySelector('.player--dock .player-big')
+      const head = document.querySelector('.player-head')
+      if (!dock || !keys || !big || !head) return null
+      const cs = window.getComputedStyle(dock)
+      const kr = keys.getBoundingClientRect()
+      const brr = big.getBoundingClientRect()
+      const kids = [...keys.children].map((c) => c.getBoundingClientRect())
+      const 隙間 = []
+      for (let i = 1; i < kids.length; i += 1) 隙間.push(Math.round(kids[i].left - kids[i - 1].right))
+      /* 上の段のいちばん左と、いちばん右 */
+      const hs = [...head.children].filter((c) => c.getBoundingClientRect().width > 0)
+        .map((c) => c.getBoundingClientRect())
+      return {
+        左余白: Math.round(parseFloat(cs.paddingLeft) || 0),
+        右余白: Math.round(parseFloat(cs.paddingRight) || 0),
+        上段の左: hs.length ? Math.round(hs[0].left) : null,
+        上段の右: hs.length ? Math.round(window.innerWidth - hs[hs.length - 1].right) : null,
+        丸の中心: Math.round((brr.left + brr.right) / 2),
+        窓の中心: Math.round(window.innerWidth / 2),
+        押す行の左: Math.round(kr.left),
+        押す行の右: Math.round(window.innerWidth - kr.right),
+        押す行の幅: Math.round(kr.width),
+        数: kids.length,
+        隙間,
+      }
+    })
+    if (!m) { ng(`黒帯 ${w}px … 黒帯が出ていない`); continue }
+    /* **余白の下限は、押せる大きさの 1/3。** 数を書き写さず、
+       いちばん狭い押すもの(34px)から決める —— 端に貼り付いて見えない広さ */
+    const 要る余白 = 12
+    if (m.左余白 < 要る余白 || m.右余白 < 要る余白) {
+      ng(`黒帯 ${w}px … 左右の余白が足りない`,
+        `左 ${m.左余白} / 右 ${m.右余白}px(${要る余白}px 以上)。端で窮屈に見える`)
+    } else if (m.上段の左 < 要る余白 || m.上段の右 < 要る余白) {
+      ng(`黒帯 ${w}px … 段落番号かくり返しが、画面の端に近すぎる`,
+        `左 ${m.上段の左} / 右 ${m.上段の右}px`)
+    } else if (Math.abs(m.丸の中心 - m.窓の中心) > 1) {
+      ng(`黒帯 ${w}px … 鳴らすボタンが画面のまん中にいない`,
+        `丸 ${m.丸の中心} / まん中 ${m.窓の中心}`)
+    } else if (Math.abs(m.押す行の左 - m.押す行の右) > 1) {
+      ng(`黒帯 ${w}px … 押す行の左右の余りがそろっていない`,
+        `左 ${m.押す行の左} / 右 ${m.押す行の右}px`)
+    } else if (m.押す行の左 <= m.左余白) {
+      /* ★ **黒帯の余白と同じでは、「中央にまとめた」ことにならない。**
+           はじめ「余りが 8px 以上か」で見ていたが、`max-width` を外しても
+           黒帯の余白(16px)がそのまま残るので**赤くならなかった**(実測)。
+           **押す行は、黒帯の内側よりさらに内へ**入っていなければならない */
+      ng(`黒帯 ${w}px … 押す行が黒帯の内側いっぱいに広がっている`,
+        `押す行の余り ${m.押す行の左}px ≤ 黒帯の余白 ${m.左余白}px。`
+        + '**操作群は中央にまとめ、左右にも均等な余白を残す**(利用者の指定)')
+    } else if (m.数 !== 5 || new Set(m.隙間).size !== 1) {
+      ng(`黒帯 ${w}px … 送り戻しの隙間がそろっていない`,
+        `${m.数} 個・隙間 ${m.隙間.join(' / ')}px`)
+    } else {
+      ok(`黒帯 ${w}px … 余白 左右 ${m.左余白}px・押す行は幅 ${m.押す行の幅}px で`
+        + `まん中(左右の余り ${m.押す行の左}px)・5つの隙間はぜんぶ ${m.隙間[0]}px`)
+    }
+  }
+
   await page.close()
 }
 

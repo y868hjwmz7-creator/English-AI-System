@@ -24,7 +24,6 @@
  * 【「段落」か「発言」かは、呼ぶ側が言う】
  *   記事は段落、会話・会議は発言(`countUnit()` の決まり)。**ここで数え直さない。**
  */
-import { REPEAT_UNITS } from './wholeAudio.js'
 
 /** その単位の呼び名。**「段落 / 発言」だけが教材で変わる** */
 export const repeatLabel = (id, unit = '段落') => ({
@@ -34,8 +33,8 @@ export const repeatLabel = (id, unit = '段落') => ({
   all: '全文',
 }[id] ?? 'しない')
 
-/** 次に移る先。**並びは `REPEAT_UNITS` 1か所**(2か所に持たない) */
-export const nextRepeat = (id) => {
-  const i = REPEAT_UNITS.indexOf(id)
-  return REPEAT_UNITS[(i < 0 ? 0 : i + 1) % REPEAT_UNITS.length]
-}
+/* ★ **`nextRepeat`(押すたびに次へ回す)は消した**(第5.318節)。
+     3つ並べて選ぶ形にしたので、**呼ぶ人がいなくなった**
+     (使われないものを残さない・第5.311節と同じ作法)。
+     押しているものをもう一度押せば「しない」に戻る —— その判断は
+     `RepeatUnit.jsx` が持つ(`onChange?.(on ? 'off' : id)`)。 */

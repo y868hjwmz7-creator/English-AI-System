@@ -328,6 +328,20 @@ export default function LessonView({
   /** 画面の下の黒帯。**測って `--dock-h` に入れる**(第5.316節) */
   const dockRef = useRef(null)
   useDockHeight(dockRef)
+
+  /**
+   * **黒帯の「100%」を押して設定を開いたか**(2026-09-30 利用者の指定・第5.318節)。
+   *
+   *   > 速度表示をタップすると、画面右上にある既存の設定パネルを開き、
+   *   > そこで速度を変更できるようにしてください
+   *   > すでに同じ設定パネルを開いている場合は、既存の構造や
+   *   > 状態管理に合わせて自然に動作させてください
+   *
+   * **開き直さない。** すでに開いていれば、そのまま速さへ焦点を移すだけ。
+   * `useState` で持つのは「今回は速さが目当てだった」という1つの事実で、
+   * 閉じたら消す(次に「設定」を押したときは、ふつうに開く)。
+   */
+  const [wantRate, setWantRate] = useState(false)
   /**
    * **セッションの記録**(0032・2026-09 利用者の指定)。
    *
@@ -1274,6 +1288,9 @@ export default function LessonView({
               **吹き出しを開いてからでは間に合わない。**
               文字・幅・印刷の3つは、右上の「設定」の中へ移した */}
           <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
+                   /* **黒帯の「100%」から来たときだけ、ここへ焦点を移す**
+                      (第5.318節)。光らせる飾りは足さない */
+                   focusMe={wantRate && viewSets}
                    onChange={(id) => { setRateId(id); saveRateId(id); stopAll() }} />
     </>
   )
@@ -1541,7 +1558,9 @@ export default function LessonView({
       {viewSets && (
         <SettingsSheet
           anchorEl={viewSetsRef.current}
-          onClose={() => setViewSets(false)}
+          /* **閉じたら、速さ目当ての控えも消す。** 残すと、次に
+             「設定」を押したときに勝手に速さへ焦点が飛ぶ */
+          onClose={() => { setViewSets(false); setWantRate(false) }}
           title="設定"
           placeKey={`${size}/${width}`}
         >
@@ -1978,11 +1997,13 @@ export default function LessonView({
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}
               repeat={player.repeat} onRepeat={player.setRepeat}
-              /* ★ **速さは渡さない**(2026-09-30 利用者の指定・第5.316節)。
-                   > 速度は上部UIで変更できるので
-                   > 下部のプレーヤーからは排除しましょう
-                 一度は両方に置いた(第5.311節)。速さは `道具` 1か所にあり、
-                 広い窓では帯に、狭い窓では右上の「設定」の中に出る */
+              /* ★ **速さは「いま何%か」だけ渡す**(2026-09-30・第5.318節)。
+                   > プレーヤー上には現在の速度だけを、枠のないシンプルな表示で
+                   > 速度表示をタップすると、画面右上にある既存の設定パネルを開き
+                 **変える道は1つ**(`道具` の中の `Stepper`)。
+                 段も刻みも `SPEECH_RATES` 1か所なので、食い違わない */
+              rateText={SPEECH_RATES.find((r) => r.id === rateId)?.label ?? null}
+              onOpenRate={() => { setWantRate(true); setViewSets(true) }}
             />
           </div>
         )}

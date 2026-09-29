@@ -25,6 +25,7 @@
  *   ・読み上げ機には「いま何が選ばれているか」を言葉で伝える
  *     (`aria-label` に見出しと値の両方を入れる)
  */
+import { useEffect, useRef } from 'react'
 export default function Stepper({
   /** 何の設定か(「速さ」「文字」「幅」)。**画面にも出す。**
       3つとも同じ形になったので、見出しが無いとどれがどれか分からない */
@@ -34,8 +35,21 @@ export default function Stepper({
   value,
   onChange,
   className = '',
+  /**
+   * **開いた直後に、ここへ焦点を当てる**(2026-09-30 利用者の指定・第5.318節)。
+   *   > 速度表示をタップしたときに、設定パネル内の速度設定が
+   *   > 見つけやすいようにしてください
+   * 光らせる飾りは足さない —— **焦点の輪郭**がそのまま目印になり、
+   * キーボードでもそのまま ◀ ▶ を押せる(**飾りより、実がある**)。
+   */
+  focusMe = false,
 }) {
   const list = options ?? []
+  const 下げるRef = useRef(null)
+  /* **描いたあとに当てる。** `focusMe` が立った回だけ */
+  useEffect(() => {
+    if (focusMe) 下げるRef.current?.focus()
+  }, [focusMe])
   const at = Math.max(0, list.findIndex((o) => o.id === value))
   const now = list[at] ?? null
   const go = (step) => {
@@ -49,7 +63,7 @@ export default function Stepper({
     <div className={`stepper ${className}`} role="group"
          aria-label={`${label}(いま ${now?.label ?? ''})`}>
       <span className="stepper-label" aria-hidden="true">{label}</span>
-      <button type="button" className="stepper-arrow"
+      <button type="button" className="stepper-arrow" ref={下げるRef}
               onClick={() => go(-1)} disabled={at <= 0}
               aria-label={`${label}を1つ下げる`}>◀</button>
       {/* **数字は幅がそろうようにする**(`tabular-nums`)。

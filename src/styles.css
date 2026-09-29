@@ -9123,7 +9123,47 @@ button.wbfilter-ctl { text-align: left; }
    (`.player-at` と同じ作法)。いちばん長いのは「しない」の3文字なので、
    そのぶんを先に取っておく。**言葉は削らない** —— 何の単位かが
    分からなくなる。狭い画面で落とすのは「くり返し」の側だけである。 */
-.repeat-unit { padding-left: 8px; padding-right: 8px; }
+/* ★ **ここから下は作り直した**(2026-09-30 利用者の指定・第5.318節)
+     > リピート設定の「繰り返し」という表示文言は削除し、
+     > アイコン中心の操作にしてください
+   1つのボタンで回す形をやめ、**3つ並べて、押したものが光る**形にした。
+   **言葉が無いので、伸び縮みもしない** —— 下にあった「幅をそろえる」
+   「字の太さを1つにする」という苦労は、まるごと要らなくなった。 */
+.repeat-keys {
+  /* **すき間ゼロでくっつけない**(共通ルール)。3つで1つの組に見せるため、
+     組の中は詰めめ、組の外(`.player-head` の `gap`)は広く取る */
+  display: inline-flex; align-items: center; gap: var(--sp-4); flex: 0 0 auto;
+}
+.repeat-key {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 30px; padding: 0;
+  border: 1px solid transparent; border-radius: var(--r-8);
+  background: none; color: inherit; cursor: pointer;
+}
+.repeat-key .icon { margin-right: 0; width: 20px; height: 20px; }
+.repeat-key:hover:not(.is-on) { background: color-mix(in srgb, currentColor 14%, transparent); }
+.repeat-key:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* いま選んでいるもの。**色だけに頼らない** —— 地色 + 枠線 + 文字色の3つ
+   (`aria-pressed` と `title` も付けてある) */
+.repeat-key.is-on {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+
+/* ★ **速さは「いま何%か」だけ。枠も三角も無い**(第5.318節)
+     > プレーヤー上には現在の速度だけを、枠のないシンプルな表示で置いて
+     > プレーヤー上に速度変更用の矢印や枠付きボタンは置かないでください */
+.player-rate-now {
+  flex: 0 0 auto;
+  min-height: 30px; padding: 0 var(--sp-4);
+  border: 0; background: none; cursor: pointer;
+  color: var(--player-ink); font-size: var(--fs-13); font-weight: 600;
+  /* **数字の幅をそろえる。** そろえないと、変えるたびに隣が動く
+     (押しても、まわりの物が動かない・共通ルール) */
+  font-variant-numeric: tabular-nums;
+}
+.player-rate-now:hover { color: #fff; text-decoration: underline; }
+.player-rate-now:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.player-rate-now:disabled { opacity: .5; cursor: default; }
 /* ★ **押しても、この箱の幅が変わらない**(2026-09-29・第5.311節のつづき)。
      `SteadyLabel` は**言葉の長さ**の取り合いを片づけたが、
      もう1つ、**字の太さ**が残っていた ——
@@ -9137,7 +9177,7 @@ button.wbfilter-ctl { text-align: left; }
      受け持っているので、太さは要らない(**色だけに頼っていない**)。
      `test:bar` の「押しても動かない」が捕まえた —— **浮くプレーヤーを
      やめて「くり返し:」が見えるようになった日に、初めて表に出た。** */
-.repeat-unit, .repeat-unit.btn--primary { font-weight: 600; }
+/* (「字の太さを1つにする」は、**言葉が無くなったので要らない**) */
 /* **幅は `SteadyLabel` が取る**(第5.281節)。
    ここには `min-width: 3em` という**決め打ち**が書いてあり、
    しかも `.focus-mid` で `min-width: 0` と**打ち消されていた** ——
@@ -9150,10 +9190,10 @@ button.wbfilter-ctl { text-align: left; }
    **落とすのは説明の側だけ** —— 単位そのもの(しない / 文 / 段落 / 全文)は
    必ず見えているので、何をくり返すのかは分かる。
    丸い矢印の絵も「くり返し」を言っている。 */
-.player--bar .repeat-unit .wide-text { display: none; }
-/* あわせて、単位の幅ぞろえも解く(帯では左右に動くものが隣にない) */
-.player--bar .repeat-unit .repeat-unit-now { min-width: 0; }
-.player--bar .repeat-unit { padding-left: 7px; padding-right: 7px; }
+/* 上の帯・集中モードの帯でも、くり返しの3つは同じ形。
+   **大きさだけ1段詰める** —— 帯は1行しかないので、場所を取りすぎない */
+.player--bar .repeat-key, .focus-bar .repeat-key { width: 30px; height: 28px; }
+.player--bar .repeat-key .icon, .focus-bar .repeat-key .icon { width: 18px; height: 18px; }
 
 /* ① 右下に浮かべる(既定)。**これまで Listen (全体) があった場所**
    **自分では貼り付かない。** 貼り付く役は `.sheet-floats`(親)が持って
@@ -9314,10 +9354,17 @@ button.wbfilter-ctl { text-align: left; }
        > 現在のように大きな操作エリアが画面を占め続けないようにし、
        > 教材本文の表示領域を確保してください
      上下の余白を 8 → 6px。**左右は触らない**(押すものの幅に効く) */
-  padding: 6px 16px;
+  /* ★ **左右は広めに取る**(2026-09-30 実機・利用者の指定・第5.318節)
+       > 段落番号の表示とリピート操作が画面端に近すぎます。
+       > 左右に十分なパディングを設け、端で窮屈に見えないように
+     16 → 20px。**狭い端末でも 14px より狭くしない**(下の `@media`) */
+  padding: 6px 20px;
   /* **セーフエリア。** iPhone のホームバーにボタンが重ならないようにする。
-     `max()` なので、セーフエリアの無い端末では 6px のまま */
+     `max()` なので、セーフエリアの無い端末では書いた値のまま。
+     左右も見る —— 横向きにしたときのノッチを避ける */
   padding-bottom: max(6px, env(safe-area-inset-bottom));
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
   border-top: 1px solid #45453f;
   background: #24241f; color: #f2f2ee;
   box-shadow: 0 -6px 24px rgb(0 0 0 / 22%);
@@ -9363,7 +9410,7 @@ button.wbfilter-ctl { text-align: left; }
 .player--dock .btn--quiet { background: #45453f; border-color: #45453f; color: #f2f2ee; }
 .player--dock .btn--ghost { background: transparent; border-color: #55554e; color: var(--player-ink); }
 .player--dock .btn:disabled { opacity: .4; }
-.player--dock .repeat-unit { color: var(--player-ink); }
+.player--dock .repeat-keys { color: var(--player-ink); }
 
 /* ── ① いまどこか・くり返し・速さ ────────────────────────────────
      **いまどこかは左**(いちばん読む)、操作は右へ寄せる。
@@ -9403,7 +9450,15 @@ button.wbfilter-ctl { text-align: left; }
      **1つの操作盤に見えなくなる**(マウスの移動も長い)。
      狭い窓では効かない(`max-width` なので、幅が足りなければ素通り)ため、
      **親指で押すときの広がりはそのまま**である */
-  max-width: 420px; margin-left: auto; margin-right: auto; width: 100%;
+  /* ★ **操作群は中央にまとめる**(2026-09-30 実機・利用者の指定・第5.318節)
+       > 段落送りと文送りのボタンを、再生ボタンの周辺へ少し寄せてください
+       > 操作ボタンを画面幅いっぱいに広げるのではなく、操作群を中央にまとめ、
+       > 左右にも均等な余白を残してください
+     420 → 288px。5つの押すもの(44+44+52+44+44 = 228px)に対して
+     **余りは 60px** —— 4つの隙間に 15px ずつ配られる。
+     `space-between` なので**左右対称**になり、まん中の丸から
+     等しい距離に ⏮ ⏭ が並ぶ(数を書かずに、割り算が決める)。 */
+  max-width: 288px; margin-left: auto; margin-right: auto; width: 100%;
 }
 .player-key {
   /* 札を出さなくなったので、縦積みも隙間も要らない(2026-09-29) */
@@ -9491,12 +9546,22 @@ button.wbfilter-ctl { text-align: left; }
    px で書くと、丸の大きさが違うぶん釣り合いが変わる —— 割合で書く */
 
 /* いちばん狭い端末。**左右の余白だけを詰める**(押せる大きさは割らない) */
+/* いちばん狭い端末。**左右の余白は、詰めても 14px まで**(第5.318節)。
+   もとは 10 / 6px まで詰めていたので、**段落番号とくり返しが画面の端に
+   貼り付いて見えた**(利用者の指摘)。押すものの幅のほうを先に詰める ——
+   下の段は中央にまとまっているので、余白を残しても窮屈にならない */
 @media (max-width: 400px) {
-  .player-dock { padding-left: 10px; padding-right: 10px; }
+  .player-dock {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
   .player-key-btn { width: 40px; }
 }
 @media (max-width: 340px) {
-  .player-dock { padding-left: 6px; padding-right: 6px; }
+  .player-dock {
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
   .player-key-btn { width: 34px; }
   .player-big { width: 46px; height: 46px; border-radius: 23px; }
 }
@@ -9507,17 +9572,17 @@ button.wbfilter-ctl { text-align: left; }
    削る順は①言葉 ②余白 ③数字の大きさ。**数と単位は1文字も削らない。**
    **下の行は測らない** —— あちらは言葉を削る余地がそもそも無く、
    幅は上の `@media` がボタンごと縮める */
-.player-head.is-fit1 .repeat-unit .wide-text { display: none; }
+/* ★ **くり返しの文字は、もう無い**(第5.318節)。文字を落とす段も、
+     幅の予備を手放す段も、**相手がいなくなったので消した**
+     (使われないものを残さない)。**絵だけなので、そもそも伸び縮みしない。** */
 .player-head.is-fit1 .stepper-label { display: none; }
 .player-head.is-fit2 { gap: var(--sp-4); }
 .player-head.is-fit2 .btn { padding: 5px 6px; }
 .player-head.is-fit3 { gap: var(--sp-2); }
 .player-head.is-fit3 .player-at { font-size: var(--fs-11); }
-.player-head.is-fit3 .player-place,
-.player-head.is-fit3 .repeat-unit { padding-left: 4px; padding-right: 4px; }
-/* 単位を出すための幅を、いちばん長い語に合わせて取っている。
-   ここまで詰まったら、その予備の幅は手放す(**中身は1文字も消さない**) */
-.player-head.is-fit3 .repeat-unit .repeat-unit-now { min-width: 0; }
+.player-head.is-fit3 .player-place { padding-left: 4px; padding-right: 4px; }
+.player-head.is-fit3 .repeat-keys { gap: var(--sp-2); }
+.player-head.is-fit3 .repeat-key { width: 30px; }
 .player-head.is-fit3 .player-at .wide-text { display: none; }
 
 /* ★ **紙の下の余白は、黒帯を測って決める**(2026-09-30・第5.316節)。

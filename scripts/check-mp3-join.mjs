@@ -1787,9 +1787,18 @@ function fakeMp3({
       const lv2 = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
       const want3 = [
         ['単位は4つ(しない + 3つ)', ru, /REPEAT_UNITS/],
-        ['押すたびに次へ移る', rl, /export const nextRepeat/],
-        ['呼び名も、素の node から呼べる形にある', rl, /export const repeatLabel/],
-        ['部品が単位を渡す', ru, /onChange\?\.\(nextRepeat\(value\)\)/],
+        /* ★ **押すたびに回す形はやめた**(2026-09-30・第5.318節)。
+             3つ並べて選ぶので、`nextRepeat` は呼ぶ人がいなくなった。
+             **消えたことを数える** —— 戻した日に気づけるように */
+        /* **「名前が出てくるか」で見ない**(CLAUDE.md)——
+             消した経緯そのものを説明に書いてあるので、素の語で探すと
+             **いつまでも赤いまま**になる(実際そうなった)。
+             **使っている形**(`export const nextRepeat`)で数える */
+        ['押すたびに回す形は、もう無い', rl, /^(?![\s\S]*export const nextRepeat)[\s\S]*$/],
+        ['呼び名は、素の node から呼べる形にある', rl, /export const repeatLabel/],
+        /* 押しているものをもう一度押せば「しない」に戻る(4つめのボタンを置かない) */
+        ['もう一度押すと、くり返しをやめる', ru, /onChange\?\.\(on \? 'off' : id\)/],
+
         ['操作盤が出す', bar2, /<RepeatUnit value=\{repeat \?\? 'off'\}/],
         ['集中モードも出す', fr, /<RepeatUnit value=\{player\.repeat\}/],
         ['紙が渡す', lv2, /repeat=\{player\.repeat\} onRepeat=\{player\.setRepeat\}/],
