@@ -41,18 +41,17 @@ import { useEffect, useRef, useState } from 'react'
 import {
   DEFAULT_ACCENT, accentsWithVoices, findVoice, pickVoices, voicesOfAccent,
 } from '../data/clipVoices.js'
-import { WRITING_TONES } from '../data/writingTones.js'
 import { reviewWriting } from '../lib/materials.js'
 import { createSpeech, deleteSpeech, loadSpeeches, saveSpeech, speechesSupported } from '../lib/speeches.js'
 import {
-  MAX_SPEECH_CHARS, isBlankDraft, isReviewed, sortSpeeches, speechCostYen,
-  speechLevelOf, speechText, speechTitleOf, tooLongDraft,
+  MAX_SPEECH_CHARS, isBlankDraft, isReviewed, sortSpeeches,
+  speechLevelOf, tooLongDraft,
 } from '../lib/speechPractice.js'
 import {
   canAskReview, loadWritingTone, normalizeReview, saveWritingTone, toneBrief,
 } from '../lib/writingReview.js'
-import { PlusIcon } from './Icons.jsx'
 import SpeechPractice from './SpeechPractice.jsx'
+import SpeechBoardView from './SpeechBoardView.jsx'
 
 /** スピーチは1人が最後まで話しきる。**声の向きは朗読** */
 const PURPOSE = 'narration'
@@ -250,246 +249,38 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
     )
   }
 
-  /* **原稿の欄は1つだけ作る。** 畳むときも、そのまま出すときも、これを置く ——
-     **書き写すと、片方だけ古くなる**(CLAUDE.md) */
-  const draftBox = open && (
-    <label className="field">
-      <span>
-        スピーチの原稿(英語)
-        <span className="field-hint">{MAX_SPEECH_CHARS} 文字まで</span>
-      </span>
-      <textarea lang="en" rows={10} value={open.draft ?? ''} disabled={busy}
-                placeholder={'Good morning, everyone. Thank you for making time today.\n'
-                  + 'I want to talk about ...'}
-                onChange={(e) => {
-                  patchRow(open.id, { draft: e.target.value })
-                  later(open.id, { draft: e.target.value })
-                }} />
-    </label>
-  )
-
   return (
-    <div className="stack speechboard">
-      <div className="card">
-        <h3 className="card-title">{whose}のスピーチ</h3>
-        <p className="tip card-hint">
-          スピーチの原稿を書いて出すと、<strong>トレーナーが添削</strong>します。
-          直った英文は<strong>1文ずつ音で聴けて</strong>、そのまま練習できます。
-          {/* **黙って消さない。** ゲストにも、どこへ行くのかを言う */}
-          {!mayAsk && <><br />書いたものは<strong>そのままトレーナーに届きます。</strong></>}
-        </p>
-
-        <div className="btn-row">
-          <button type="button" className="btn btn--primary btn--small"
-                  disabled={busy} onClick={add}>
-            <PlusIcon />新しいスピーチ
-          </button>
-        </div>
-
-        {loading ? (
-          <p className="muted">読み込んでいます…</p>
-        ) : !rows.length ? (
-          /* **行き止まりを作らない。** 1本も無いことも1行で言う */
-          <p className="muted">まだスピーチがありません。「新しいスピーチ」から始められます。</p>
-        ) : (
-          <ul className="speech-list">
-            {rows.map((r) => (
-              <li key={r.id}>
-                <button type="button"
-                        className={`speech-pick${r.id === openId ? ' is-on' : ''}`}
-                        aria-pressed={r.id === openId}
-                        onClick={() => setOpenId(r.id === openId ? null : r.id)}>
-                  <span className="speech-pick-name">{speechTitleOf(r)}</span>
-                  {/* **色だけに頼らない**(CLAUDE.md)。言葉でも言う */}
-                  <span className={`speech-flag${isReviewed(r) ? ' is-done' : ''}`}>
-                    {isReviewed(r) ? '添削ずみ' : '下書き'}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* **押した場所のすぐ下に出す**(CLAUDE.md) */}
-        {error && <p className="notice notice--error">{error}</p>}
-        {note && <p className="notice notice--ok">{note}</p>}
-      </div>
-
-      {open && (
-        <div className="card speech-edit">
-          <label className="field">
-            <span>
-              題名
-              <span className="tip field-hint">空でもよい(原稿の1行目から作ります)</span>
-            </span>
-            <input type="text" value={open.title ?? ''} disabled={busy}
-                   placeholder="来週の全社集会であいさつ"
-                   onChange={(e) => {
-                     patchRow(open.id, { title: e.target.value })
-                     later(open.id, { title: e.target.value })
-                   }} />
-          </label>
-
-          {/* ── **添削が済んだら、出すのは「直した本文」のほう**(第5.301節)──
-               2026-09-28 利用者の指定。
-
-                 > 一度添削が済んだらこのグレーの部分はもう必要ないですよね。
-                 > 本文として一本化したきれいな表示を用意し、
-                 > 閉じたり開いたりできるようにすべきです
-
-               ・**一本化した文章は `speechText()` 1か所**。
-                 スピーチ練習の「文章をコピー」が渡すものと**同じ**である
-                 (数え方を2通り持たない・CLAUDE.md)
-               ・**原稿も消さない。** 「もう一度 添削してもらう」は
-                 原稿から作るので、**開けば直せる**ようにしておく
-                 (行き止まりを作らない)
-               ・`<details>` そのものに `display` を書かない ——
-                 **畳んでも中身が場所を取り続ける**(共通ルール) */}
-          {reviewed && (
-            <details className="details-box speech-body" open={bodyOpen}
-                     onToggle={(e) => setBodyOpen(e.currentTarget.open)}>
-              <summary>
-                直した本文
-                <span className="field-hint">
-                  {speechText(open).trim().length.toLocaleString()} 文字
-                </span>
-              </summary>
-              <p className="speech-body-text" lang="en">{speechText(open)}</p>
-            </details>
-          )}
-
-          {/* **原稿の欄。** 添削が済むまでは、これが中身そのものなので、そのまま出す。
-               済んだら畳んでおく —— **もう読む必要がない** */}
-          {reviewed ? (
-            <details className="details-box" open={draftOpen}
-                     onToggle={(e) => setDraftOpen(e.currentTarget.open)}>
-              <summary>
-                原稿を直す
-                <span className="field-hint">
-                  {String(open.draft ?? '').trim().length.toLocaleString()}
-                  {' / '}{MAX_SPEECH_CHARS} 文字
-                </span>
-              </summary>
-              {draftBox}
-            </details>
-          ) : (
-            <>
-              {draftBox}
-              <p className="speech-count">
-                {String(open.draft ?? '').trim().length.toLocaleString()}
-                {' / '}{MAX_SPEECH_CHARS} 文字
-              </p>
-            </>
-          )}
-          {/* **長すぎの知らせは、畳みの外に出す。** 中に入れると、
-              閉じているあいだ**押せないボタンの理由が見えなくなる** */}
-          {tooLongDraft(open.draft) && (
-            <p className="notice notice--error">
-              長すぎます。{MAX_SPEECH_CHARS} 文字までにしてください
-              (<strong>こちらでは切りません</strong> —— 切ると原稿が変わってしまいます)。
-            </p>
-          )}
-
-          {/* ── 読み上げの声 ──────────────────────────────
-              **1人が最後まで話しきる**ので、選ぶのは1人だけ。
-              名簿と選び方は `clipVoices.js` に任せる(**判断を2か所に置かない**) */}
-          <div className="voice-row">
-            <label className="field">
-              <span>読み上げの国</span>
-              <select value={accent} disabled={busy}
-                      onChange={(e) => {
-                        const id = pickVoices(e.target.value, 1, PURPOSE)[0] ?? null
-                        patchRow(open.id, { voice_id: id })
-                        flush(open.id, { voiceId: id })
-                      }}>
-                {accents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.label} — {a.hint}</option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>話す人</span>
-              <select value={open.voice_id ?? ''} disabled={busy}
-                      onChange={(e) => {
-                        patchRow(open.id, { voice_id: e.target.value })
-                        flush(open.id, { voiceId: e.target.value })
-                      }}>
-                {pool.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}({v.gender === 'male' ? '男性' : '女性'})
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {/* ── 添削 ────────────────────────────────────
-              **走らせるのはトレーナーと管理者だけ**(利用者の指定)。
-              ゲストにはボタンも調子の欄も出さない(効かない操作を見せない) */}
-          {mayAsk ? (
-            <div className="writing-tools">
-              <label className="writing-tone">
-                <span>添削の調子</span>
-                <select value={tone} disabled={busy}
-                        onChange={(e) => {
-                          setTone(e.target.value)
-                          saveWritingTone(e.target.value, TONE_WHERE)
-                        }}>
-                  {WRITING_TONES.map((t) => (
-                    <option key={t.id} value={t.id}>{t.label} — {t.hint}</option>
-                  ))}
-                </select>
-              </label>
-              {/* **費用を出す**(見えない費用は管理できない・CLAUDE.md) */}
-              <button type="button" className="btn btn--primary btn--small"
-                      disabled={busy || isBlankDraft(open.draft) || tooLongDraft(open.draft)}
-                      onClick={ask}>
-                {busy ? `添削してもらっています…（${secs} 秒）`
-                  : `${reviewed ? 'もう一度 ' : ''}添削してもらう`
-                    + `（およそ ${speechCostYen(open.draft)} 円）`}
-              </button>
-            </div>
-          ) : (
-            <p className="field-hint writing-handoff">
-              添削は<strong>トレーナーが行います。</strong>
-              書いた原稿はトレーナーに届いています。
-            </p>
-          )}
-
-          {/* **消す道を、その場に置く。** 2段で押させる(元に戻せない) */}
-          <div className="btn-row speech-danger">
-            {askDelete ? (
-              <>
-                <button type="button" className="btn btn--small btn--quiet"
-                        disabled={busy} onClick={remove}>
-                  本当に消す
-                </button>
-                <button type="button" className="btn btn--small btn--ghost"
-                        disabled={busy} onClick={() => setAskDelete(false)}>
-                  やめる
-                </button>
-              </>
-            ) : (
-              <button type="button" className="btn btn--small btn--ghost"
-                      disabled={busy} onClick={() => setAskDelete(true)}>
-                このスピーチを消す
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── 練習 ────────────────────────────────────────
-          **添削が済むまで出さない。** 直す前の英文を読み上げると、
+    <SpeechBoardView
+      whose={whose} mayAsk={mayAsk} busy={busy} loading={loading}
+      rows={rows} openId={openId} error={error} note={note}
+      onPick={(id) => setOpenId(id === openId ? null : id)}
+      onAdd={add}
+      open={open} reviewed={reviewed}
+      bodyOpen={bodyOpen} onBodyOpen={setBodyOpen}
+      draftOpen={draftOpen} onDraftOpen={setDraftOpen}
+      /* **打っているそばから消えないように、控えを先に書き換える。**
+         送るのは 1.2 秒だまってから(**「保存」を押させない**) */
+      onTitle={(v) => { patchRow(open.id, { title: v }); later(open.id, { title: v }) }}
+      onDraft={(v) => { patchRow(open.id, { draft: v }); later(open.id, { draft: v }) }}
+      accents={accents} accent={accent} pool={pool}
+      /* **国を変えたら、その国の1人目に付け替える**(空の欄を作らない) */
+      onAccent={(id) => {
+        const v = pickVoices(id, 1, PURPOSE)[0] ?? null
+        patchRow(open.id, { voice_id: v })
+        flush(open.id, { voiceId: v })
+      }}
+      onVoice={(id) => { patchRow(open.id, { voice_id: id }); flush(open.id, { voiceId: id }) }}
+      tone={tone}
+      onTone={(v) => { setTone(v); saveWritingTone(v, TONE_WHERE) }}
+      secs={secs} onAsk={ask}
+      askDelete={askDelete} onAskDelete={setAskDelete} onRemove={remove}
+    >
+      {/* **添削が済むまで、練習は出さない。** 直す前の英文を読み上げると、
           まちがった英語を手本として聞かせることになる。
-
-          中身は `SpeechPractice` が持つ —— **props で受け取る形**に
-          しておくと、`npm run test:bar` が本物の部品のまま測れる
-          (この部品は自分で読み込むので、Supabase の無い骨組みでは
-          何も描かれない) */}
+          **この判断はここ1か所**(描く側へ持ち込まない) */}
       {open && reviewed && (
         <SpeechPractice speech={open} learnerId={learnerId} level={level} />
       )}
-    </div>
+    </SpeechBoardView>
   )
 }

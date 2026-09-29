@@ -78,6 +78,8 @@ import {
 } from './lib/frameQr.js'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
+import SpeechBoardView from './components/SpeechBoardView.jsx'
+import { accentsWithVoices, voicesOfAccent } from './data/clipVoices.js'
 import NavSettings from './components/NavSettings.jsx'
 /* **ゲストの持ちものからテストを作る**(第5.260節)。AI は呼ばない(0円) */
 import ExamMaker from './components/ExamMaker.jsx'
@@ -2104,6 +2106,70 @@ const SPEECH = (
   />
 )
 
+/* **トレーナーのスピーチの画面**(`?screen=speechboard&…`・第5.305節・
+   2026-09-29 利用者の指定「測れる形に切り出しますか →はい」)。
+
+   **`npm run test:bar` は、この画面を1度も描いていなかった** ——
+   `SpeechBoard` は自分で `loadSpeeches()` を呼ぶので、Supabase の無い
+   この環境では「読み込んでいます…」のままだったからである。
+   描くところを `SpeechBoardView` に出したので、**本物のまま**測れる。
+
+   ・`?done=no` … **まだ添削していない**形(原稿がそのまま出て、畳みが無い)
+   ・`?role=learner` … **ゲストの側**(添削のボタンも調子の欄も出ない)
+   ・`?long=1` … **長すぎる原稿**(押せないボタンと、その理由の行が出る) */
+const SB_REVIEW = {
+  good: '話し出しの呼びかけが自然で、聞き手のほうを向いています。',
+  sentences: [
+    {
+      en: 'Good morning, everyone, and thank you very much for making time '
+        + 'in your busy schedule to be here with us today.',
+      ja: 'みなさん、おはようございます。'
+        + 'お忙しいなか、本日はお時間をいただきありがとうございます。',
+    },
+    { en: 'I want to talk about our new plan.', ja: '新しい計画についてお話しします。' },
+  ],
+  notes: [{
+    before: 'thank you for your time to be here',
+    after: 'thank you for making time to be here',
+    why: '「時間をつくる」は make time と言います。for のあとは動名詞にします。',
+  }],
+  phrases: [
+    { en: 'make time', ja: '時間をつくる' },
+    { en: 'busy schedule', ja: '立て込んだ予定' },
+  ],
+}
+function speechBoardScreen() {
+  const done = q.get('done') !== 'no'
+  const trainer = q.get('role') !== 'learner'
+  /* **長すぎる原稿も描く** —— 押せないボタンと、畳みの外に出した
+     長すぎの知らせが、下の物と接していないかを測る */
+  const draft = q.get('long')
+    ? 'Good morning. '.repeat(600)
+    : 'Good morning, everyone. Thank you for your time to be here.\n'
+      + 'I want to talk about our new plan.'
+  const rows = [
+    { id: 'sp1', title: '来週の全社集会であいさつ', draft, voice_id: 'us-1',
+      review: done ? SB_REVIEW : null },
+    /* **題の無い下書き**も混ぜる(`speechTitleOf()` が原稿から作る) */
+    { id: 'sp2', title: '', draft: 'Thanks for coming.', voice_id: 'uk-1', review: null },
+  ]
+  const open = rows[0]
+  return (
+    <div className="app">
+      <SpeechBoardView
+        whose="山田はなこ さん" mayAsk={trainer}
+        rows={rows} openId={open.id} open={open} reviewed={done}
+        /* **畳みは開いた形でも測る** —— 閉じた箱は測れない(共通ルール) */
+        bodyOpen draftOpen
+        accents={accentsWithVoices('narration')} accent="us"
+        pool={voicesOfAccent('us', 'narration')} tone="formal"
+      >
+        {done && <SpeechPractice speech={open} />}
+      </SpeechBoardView>
+    </div>
+  )
+}
+
 /* **テストを作る**(`?screen=exam`・第5.260節 → **第5.263節で作り直した**)。
 
      > ゲストのページに教材や彼らの単語帳、quick response 帳があります。
@@ -2263,6 +2329,8 @@ createRoot(document.getElementById('root')).render(
     ? NOTES
     : q.get('screen') === 'notesdigest'
     ? digestScreen(q.get('role') !== 'learner')
+    : q.get('screen') === 'speechboard'
+    ? speechBoardScreen()
     : q.get('screen') === 'sticky'
     ? STICKY
     : q.get('screen') === 'rscope'

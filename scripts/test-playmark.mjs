@@ -186,6 +186,10 @@ import {
 import {
   NOTE_LEARNER, NOTE_TRAINER, noteDay, noteSections, noteSheetTitle, noteWords,
 } from '../src/lib/noteDigest.js'
+/* **鳴らすボタンの呼び名**(第5.290節 / 第5.297節 / 第5.304節)。
+   どちらも DOM を引き連れていないので、素の node でそのまま走る */
+import { SPEAK_LISTEN } from '../src/lib/speakLabel.js'
+import { WHOLE_PLAY_CORE, wholePlayText } from '../src/lib/wholePlay.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 let ng = 0
@@ -4893,8 +4897,39 @@ console.log('\nスピーチ練習(0054)')
   /* **調子は、スピーチだけ別に覚える**(利用者の指定)。
      鍵の名前を画面に書かない —— `writingReview.js` の `TONE_KEYS` が持つ */
   ok(/loadWritingTone\(TONE_WHERE\)/.test(board)
-    && /saveWritingTone\(e\.target\.value, TONE_WHERE\)/.test(board),
+    && /saveWritingTone\(v, TONE_WHERE\)/.test(board),
     'スピーチ … 添削の調子は、ディスカッションとは別に覚える')
+
+  /* ── ⑨ **描くところは、props で受け取るだけの形に出してある**
+         (第5.305節・2026-09-29 利用者の指定)────────────────────────
+
+       > `npm run test:bar` は `SpeechBoard` を1度も描いていません。
+       > 測れる形に切り出しますか →はい
+
+     `SpeechBoard` は自分で `loadSpeeches()` を呼ぶので、Supabase の無い
+     この環境では**1度も描かれなかった**(**描けないものは測れない**)。
+
+     **「取り込んでいるか」だけを見ない** —— 取り込んだうえで、
+     描くところを**また自分でも持って**いたら意味がない。
+     **画面の骨(`<div className="card"`)が残っていないか**まで見る。 */
+  const view = noC3(read3('src/components/SpeechBoardView.jsx'))
+  ok(/<SpeechBoardView/.test(board) && /SpeechBoardView\.jsx'/.test(board),
+    'スピーチ … 描くところは `SpeechBoardView`(props で受け取るだけ)')
+  ok(!/className="card speech-edit"/.test(board)
+    && /className="card speech-edit"/.test(view),
+    'スピーチ … 欄の骨は、描く側だけが持っている(2か所に無い)')
+  /* **読み込みは、描く側へ持ち込んでいない**(あちらが描けなくなる) */
+  ok(!/loadSpeeches|saveSpeech|reviewWriting/.test(view),
+    'スピーチ … 描く側は、読み書きを1つもしない(だから骨組みで描ける)')
+  /* **骨組みが本物を描いているか。** 入り口だけ直しても、利用者には出ない */
+  {
+    const scr = noC3(read3('src/__screens.jsx'))
+    ok(/<SpeechBoardView/.test(scr) && /q\.get\('screen'\) === 'speechboard'/.test(scr),
+      '骨組み … `?screen=speechboard` で、本物の `SpeechBoardView` を描く')
+    /* **出る / 出ない の両方を測れるか**(まだ添削していない形・ゲストの側) */
+    ok(/q\.get\('done'\) !== 'no'/.test(scr) && /q\.get\('role'\) !== 'learner'/.test(scr),
+      '骨組み … 添削ずみ / まだ と、トレーナー / ゲストの両方を描ける')
+  }
   ok(!/eas\.speechTone|eas\.writingTone/.test(board),
     'スピーチ … 覚える鍵の名前を、画面に書き写していない')
   {
@@ -6195,7 +6230,9 @@ console.log('\nスピーチ練習(0054)')
     ['LearnerHomework.jsx', 'まだ宿題は届いていません', '0件の知らせ'],
     ['LearnerHomework.jsx', 'この条件に当てはまる宿題はありません', '絞り込みの知らせ'],
     ['WritingAnswer.jsx', 'そのままトレーナーに届きます', '黙って消さない'],
-    ['SpeechBoard.jsx', '書いた原稿はトレーナーに届いています', '黙って消さない'],
+    /* **描くところは `SpeechBoardView.jsx` へ移した**(第5.305節)。
+       文そのものは1文字も変えていない */
+    ['SpeechBoardView.jsx', '書いた原稿はトレーナーに届いています', '黙って消さない'],
     ['MaterialBody.jsx', '{sec.instruction}', '教材の中身'],
     ['MaterialBody.jsx', '{it.note}', '教材の中身'],
     /* **聞き流しの但し書きは消えた**(第5.252節・2026-09-23 利用者の指定
@@ -13384,6 +13421,45 @@ console.log('\n▶ セッションの記録を、まとめて一本化(第5.303�
   /* **出る / 出ない の両方**(教材を作れない人の側も測れる) */
   ok(/role'\) !== 'learner'/.test(骨),
     '骨組み … 教材を作れない人の側も描ける')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * **通しと1文ずつで、字を揃える**(第5.304節・2026-09-29 利用者の指定)
+ *
+ *   > 聴く、と全体を聴く、で揃えてください
+ *
+ * 通しは「全体を**聞**く」、1文ずつは「**聴**く」で揃っていなかった。
+ * 第5.297節で1文ずつだけを直したとき、**通しは言われていなかったので
+ * 変えなかった**(言われた場所だけを直す)—— その結果、
+ * **同じ画面に2つの字が並んだ。**
+ *
+ * **「揃っているか」だけを見ない** —— 両方に `'聴く'` と書き写しても
+ * 揃ってしまい、次の改名でまた片方だけ古くなる。
+ * **道具そのものが読み合っているか**まで見る(CLAUDE.md)。
+ * ══════════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 通しと1文ずつで、字を揃える(第5.304節)')
+{
+  const readS = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+
+  ok(WHOLE_PLAY_CORE === SPEAK_LISTEN,
+    '聴く … 通しと1文ずつで、字が揃っている',
+    `通し「${wholePlayText()}」/ 1文ずつ「${SPEAK_LISTEN}」`)
+  const wp = noC(readS('src/lib/wholePlay.js'))
+  ok(/WHOLE_PLAY_CORE = SPEAK_LISTEN/.test(wp) && /from '\.\/speakLabel\.js'/.test(wp),
+    '聴く … 通しは、1文ずつの呼び名をそのまま使う(書き写していない)')
+  /* **`'聴く'` と書いてある場所は、1つだけ** ——
+     コメントを落としてから、**使っている形**で数える(CLAUDE.md) */
+  const 書き = []
+  for (const f of ['src/lib/speakLabel.js', 'src/lib/wholePlay.js']) {
+    if (/'聴く'/.test(noC(readS(f)))) 書き.push(f)
+  }
+  ok(書き.length === 1 && 書き[0] === 'src/lib/speakLabel.js',
+    '聴く … 呼び名が書いてあるのは `speakLabel.js` 1か所だけ', 書き.join(' / '))
+  /* **添えの言葉は落ちてよい。** 残るのは `CORE` のほう */
+  ok(wholePlayText().endsWith(SPEAK_LISTEN) && wholePlayText() !== SPEAK_LISTEN,
+    '聴く … 通しは「全体を」を添えた形(狭い画面で添えだけ落ちる)',
+    wholePlayText())
 }
 
 console.log(ng

@@ -4843,8 +4843,8 @@ export default defineConfig({
       if (new RegExp(wholePlayText()).test(t)) 書き写し.push(`${f} … 文字を直に書いている`)
     }
     if (書き写し.length) {
-      ng('全体を聞く … 名前を書き写している場所がある', 書き写し.join('\n    '))
-    } else ok('全体を聞く … 5つの場所とも `wholePlay.js` 1か所から引く(書き写しは0)')
+      ng('通しのボタン … 名前を書き写している場所がある', 書き写し.join('\n    '))
+    } else ok('通しのボタン … 5つの場所とも `wholePlay.js` 1か所から引く(書き写しは0)')
 
     /* **落とすのは添えの言葉だけ。**
        `CORE`(`聞く`)が `.wide-text` の中に入ると、
@@ -4852,9 +4852,9 @@ export default defineConfig({
        (利用者の指定は「Listen は必ず残る」の作法である) */
     const pb = 素(読む('components/PlayerBar.jsx'))
     if (!/wide-text">\{WHOLE_PLAY_WIDE\}<\/span>\s*\{WHOLE_PLAY_CORE\}/.test(pb)) {
-      ng(`全体を聞く … 狭い画面で「${WHOLE_PLAY_CORE}」まで落ちる`,
+      ng(`通しのボタン … 狭い画面で「${WHOLE_PLAY_CORE}」まで落ちる`,
         '`.wide-text` の中に入れてよいのは、添えの言葉だけである')
-    } else ok(`全体を聞く … 狭い画面でも「${WHOLE_PLAY_CORE}」は残る(落とすのは添えだけ)`)
+    } else ok(`通しのボタン … 狭い画面でも「${WHOLE_PLAY_CORE}」は残る(落とすのは添えだけ)`)
   }
 
   /* ── ★ **1文ずつ鳴らすボタンの名前も、1か所から来ているか**(第5.297節)──
@@ -6138,6 +6138,115 @@ for (const w of [1280, 390, 320]) {
   } else {
     ok(`${名} … ${got.日} 日ぶんが見出し付きで並び、語句 ${got.語句} から教材を作れる`
       + '(教材を作れない人には語句の欄ごと出ない)')
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * **トレーナーのスピーチの画面**(第5.305節・2026-09-29 利用者の指定)
+ *
+ *   > `npm run test:bar` は `SpeechBoard`(トレーナーのスピーチ画面)を
+ *   > 1度も描いていません。測れる形に切り出しますか →はい
+ *
+ * **これまで1度も描いていなかった。** `SpeechBoard` が自分で
+ * `loadSpeeches()` を呼ぶので、Supabase の無いこの環境では
+ * 「読み込んでいます…」のままだったためである。
+ *
+ *   ①一覧・畳み・欄・声・添削・消す が、ぜんぶ描かれるか
+ *   ②**添削ずみ / まだ** の両方で形が変わるか(畳みが出る / 出ない)
+ *   ③**ゲストには、添削のボタンも調子の欄も出ない**(出ない側)
+ *   ④長すぎる原稿で、**押せないボタンと、その理由**が出るか
+ *   ⑤押せる大きさ ⑥横にはみ出していないか
+ * ══════════════════════════════════════════════════════════════════════ */
+for (const w of [1280, 390, 320]) {
+  const 見る = async (q) => {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=speechboard${q}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(250)
+    const got = await page.evaluate(() => {
+      const px = (el) => (el ? Math.round(el.getBoundingClientRect().height) : 0)
+      const right = (el) => (el ? Math.round(el.getBoundingClientRect().right) : 0)
+      const btns = [...document.querySelectorAll('.speechboard .btn')]
+      const ask = [...document.querySelectorAll('.writing-tools .btn')][0] ?? null
+      return {
+        一覧: document.querySelectorAll('.speech-list .speech-pick').length,
+        札: [...document.querySelectorAll('.speech-flag')].map((e) => e.textContent.trim()),
+        欄: document.querySelectorAll('.speech-edit .field').length,
+        原稿: !!document.querySelector('.speech-edit textarea'),
+        /* **畳みは、添削が済んだときだけ**(第5.301節) */
+        畳み: [...document.querySelectorAll('.speech-edit > details > summary')]
+          .map((e) => e.textContent.replace(/\s+/g, ' ').trim()),
+        本文: document.querySelectorAll('.speech-body-text').length,
+        数: document.querySelectorAll('.speech-count').length,
+        声: document.querySelectorAll('.voice-row select').length,
+        調子: document.querySelectorAll('.writing-tone select').length,
+        頼む: ask ? ask.textContent.trim() : '',
+        押せる: ask ? !ask.disabled : null,
+        断り: document.querySelectorAll('.writing-handoff').length,
+        長い: [...document.querySelectorAll('.speech-edit .notice--error')]
+          .some((e) => /長すぎます/.test(e.textContent)),
+        消す: [...btns].some((b) => b.textContent.includes('このスピーチを消す')),
+        練習: document.querySelectorAll('.speech-practice').length,
+        小: btns.length ? Math.min(...btns.map(px)) : 0,
+        よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        右: Math.max(0, ...btns.map(right),
+          ...[...document.querySelectorAll('.speech-edit .field')].map(right)),
+      }
+    })
+    await page.close()
+    return got
+  }
+
+  const 済 = await 見る('')            // トレーナー・添削ずみ
+  const 未 = await 見る('&done=no')    // まだ添削していない
+  const 客 = await 見る('&role=learner')
+  const 長 = await 見る('&long=1')
+
+  const 名 = `スピーチの画面(${w}px)`
+  if (済.一覧 !== 2) {
+    ng(`${名} … スピーチの一覧が描かれていない`, String(済.一覧))
+  } else if (済.札.join('/') !== '添削ずみ/下書き') {
+    // **色だけに頼らない**(言葉でも言う)
+    ng(`${名} … 添削ずみ / 下書きの札が出ていない`, 済.札.join('/'))
+  } else if (!済.原稿 || 済.声 !== 2) {
+    ng(`${名} … 原稿の欄か、声の欄が出ていない`, `原稿 ${済.原稿} / 声 ${済.声}`)
+  } else if (済.畳み.length !== 2 || !/直した本文/.test(済.畳み[0])
+    || !/原稿を直す/.test(済.畳み[1])) {
+    // **添削が済んだら、直した本文と原稿の2つが畳まれる**(第5.301節)
+    ng(`${名} … 添削ずみなのに、畳みが2つそろっていない`, 済.畳み.join(' / '))
+  } else if (済.本文 !== 1) {
+    ng(`${名} … 一本化した本文が出ていない`, String(済.本文))
+  } else if (未.畳み.length !== 0 || 未.本文 !== 0 || 未.数 !== 1) {
+    /* **まだ添削していないときは、畳まない。** これが「出ない側」——
+       いつも畳む形に変えても、上だけ見ていれば緑のままになる */
+    ng(`${名} … まだ添削していないのに畳んでいる`,
+      `畳み ${未.畳み.length} / 本文 ${未.本文} / 文字数 ${未.数}`)
+  } else if (済.調子 !== 1 || !/添削してもらう/.test(済.頼む) || 済.断り !== 0) {
+    ng(`${名} … トレーナーに添削の欄が出ていない`, `${済.調子} / ${済.頼む}`)
+  } else if (客.調子 !== 0 || 客.頼む !== '' || 客.断り !== 1) {
+    /* **ゲストには出さない**(効かない操作を見せない)。
+       ただし**どこへ行くのか**は1行で言う(黙って消さない) */
+    ng(`${名} … ゲストにも添削のボタンが出ている`,
+      `調子 ${客.調子} / ボタン「${客.頼む}」/ 断り ${客.断り}`)
+  } else if (客.一覧 !== 2 || !客.原稿) {
+    // **消しすぎていないか。** 原稿も一覧も、ゲストにも出る
+    ng(`${名} … ゲストには原稿まで出ていない`, `${客.一覧} / ${客.原稿}`)
+  } else if (!長.長い || 長.押せる !== false) {
+    /* **押せないボタンの理由が、畳みの外に出ているか**(第5.301節) */
+    ng(`${名} … 長すぎる原稿で、理由が出ないか、まだ押せる`,
+      `知らせ ${長.長い} / 押せる ${長.押せる}`)
+  } else if (!済.消す) {
+    ng(`${名} … 消す道がその場に無い`)
+  } else if (済.練習 !== 1 || 未.練習 !== 0) {
+    /* **添削が済むまで練習を出さない**(まちがった英語を手本にしない) */
+    ng(`${名} … 練習の出し分けが効いていない`, `済 ${済.練習} / 未 ${未.練習}`)
+  } else if (済.小 < 34) {
+    ng(`${名} … 押せる大きさを割っている`, `${済.小}px`)
+  } else if (済.よこ > 0 || 済.右 > w || 長.よこ > 0) {
+    ng(`${名} … 横にはみ出している`, `${済.よこ}px / 右 ${済.右} / 長い原稿 ${長.よこ}px`)
+  } else {
+    ok(`${名} … 一覧 ${済.一覧} 本・畳み2つ・声2つ・添削と練習が出る`
+      + '(まだ添削していないときは畳まない / ゲストには添削の欄ごと出ない)')
   }
 }
 
@@ -9674,6 +9783,11 @@ const SCREENS = [
      縦に積まれ、**帯の中と語句の見出しの行は横に並ぶ。**
      `role=learner` は**語句の欄そのものが出ない**形(節の数が変わる) */
   ['notesdigest', ''], ['notesdigest', 'role=learner'],
+  /* **トレーナーのスピーチの画面**(第5.305節)。一覧・畳み・欄・声の行・
+     添削の行・消す行が縦に積まれ、**声は2つ横に並ぶ。**
+     `done=no` は**まだ添削していない**形(畳みが無く、文字数の行が出る)、
+     `role=learner` は**添削の欄ごと出ない**形 */
+  ['speechboard', ''], ['speechboard', 'done=no'], ['speechboard', 'role=learner'],
   ['', 'role=trainer&who=g1'],
 ]
 
