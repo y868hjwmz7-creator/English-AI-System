@@ -682,7 +682,10 @@ body {
 .app-nav.is-drawer {
   position: fixed; z-index: 60; top: 0; left: 0; bottom: 0;
   width: min(var(--nav-w), 84vw);
-  overflow-y: auto;
+  /* ★ **外側は動かさない**(2026-09-30 実機・第5.317節)。
+       中を「頭・一覧・設定」の3段に分け、**送るのは一覧だけ**にする。
+       下の `.app-nav.is-drawer .app-nav-list` を見ること */
+  overflow: hidden;
   box-shadow: 0 0 0 100vmax transparent;
   transform: translateX(-100%);
   transition: transform 0.18s ease, visibility 0.18s;
@@ -690,6 +693,42 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 .app-nav.is-drawer.is-open { transform: translateX(0); box-shadow: var(--shadow-2); }
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **「設定」は、いつも見えるところに貼り付ける**
+     (2026-09-30 実機・利用者の指摘・第5.317節)
+
+       > Safariの方が明らかに全てがデカいままじゃないですか。
+       > 窮屈に感じて勉強のする気が起きません。
+
+     写真で**いちばん困っていたのはここ**である。Safari は
+     ページのズームのぶん CSS 上の画面が狭く・低くなるので、
+     **メニューのいちばん下の「設定」が画面から出ていた。**
+
+       | 窓 | 「設定」の位置 | 見えるか |
+       |---|---|---|
+       | Chrome 相当 393×632 | 567〜632 | 見えている |
+       | **Safari 相当 362×581** | 560〜625 | **44px はみ出す** |
+       | Safari 125% 相当 314×520 | 560〜625 | はみ出す |
+
+     送れば出てくるのだが、**下に何かあることが画面から分からない**
+     (区切り線ごと隠れている)。**効かない操作より、見えない操作のほうが悪い。**
+
+     **押すものは、一覧の末尾に置かない**(共通ルール)。
+     メニューを「頭・一覧・設定」の3段にし、**送るのは一覧だけ**にする。
+     こうすれば**画面がどれだけ低くても、設定はいつも見えている。**
+   ══════════════════════════════════════════════════════════════════ */
+.app-nav.is-drawer .app-nav-head { flex: 0 0 auto; }
+.app-nav.is-drawer .app-nav-list {
+  /* **`min-height: 0` を忘れない。** 入れないと flex の子は縮まず、
+     一覧そのものが伸びて、下の設定を押し出す(それが元の姿である) */
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+}
+.app-nav.is-drawer .app-nav-foot {
+  /* `margin-top: auto` は要らない —— 3段になったので、
+     いちばん下にいることは並びが決めている(数を2か所に書かない) */
+  flex: 0 0 auto; margin-top: 0;
+}
 /* 閉じているあいだは、キーボードでも触れないようにする。
    **`visibility` も一緒に移り変わらせる。** すぐ `hidden` にすると、
    閉じるときの滑りが見えないまま消える */

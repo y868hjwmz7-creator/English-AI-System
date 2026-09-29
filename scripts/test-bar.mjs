@@ -2461,6 +2461,86 @@ export default defineConfig({
   }
   await page.close()
 
+  /* ══ **メニューの「設定」は、画面が低くても必ず見える**(第5.317節)══
+       2026-09-30 実機・利用者の指摘(Safari と Chrome の写真を並べて)。
+
+       > Safariの方が明らかに全てがデカいままじゃないですか。
+       > 窮屈に感じて勉強のする気が起きません。
+
+     **写真でいちばん困っていたのはここ**である。Safari はページの
+     ズームのぶん CSS 上の画面が狭く・低くなるので、メニューの
+     **いちばん下の「設定」が画面から出ていた**(実測 44px)。
+
+       | 窓 | 直す前の「設定」 | 見えたか |
+       |---|---|---|
+       | Chrome 相当 393×632 | 567〜632 | 見えていた |
+       | **Safari 相当 362×581** | 560〜625 | **はみ出す** |
+       | Safari 125% 相当 314×520 | 560〜625 | はみ出す |
+
+     送れば出てくるのだが、**下に何かあることが画面から分からない。**
+     メニューを「頭・一覧・設定」の3段にし、**送るのは一覧だけ**にした。
+
+     **低い窓で測る。** 幅だけ変えても出てこない —— この不具合は
+     **高さ**で決まる(「無ければ素通り」する形の検証を書かない・CLAUDE.md)。 */
+  {
+    const nav = await browser.newPage()
+    for (const [名, w, h] of [
+      ['Chrome 相当', 393, 632],
+      ['Safari 相当', 362, 581],
+      ['Safari 125% 相当', 314, 520],
+      /* **いちばん低いところも見る。** ここが素通りすると、
+         「3段にした」ことを何も守っていない */
+      ['低い窓', 360, 420],
+    ]) {
+      await nav.setViewportSize({ width: w, height: h })
+      await nav.goto(`http://localhost:${PORT2}/__shell.html`, { waitUntil: 'networkidle' })
+      await nav.waitForTimeout(400)
+      const 開いた = await nav.evaluate(() => {
+        const b = [...document.querySelectorAll('button')]
+          .find((x) => /メニュー/.test(x.getAttribute('aria-label') || ''))
+        if (!b) return false
+        b.click(); return true
+      })
+      await nav.waitForTimeout(350)
+      const m = await nav.evaluate(() => {
+        const el = document.querySelector('.app-nav')
+        const foot = el?.querySelector('.app-nav-foot')
+        const list = el?.querySelector('.app-nav-list')
+        if (!el || !foot || !list) return null
+        const f = foot.getBoundingClientRect()
+        const l = list.getBoundingClientRect()
+        return {
+          設定の下端: Math.round(f.bottom),
+          設定の上端: Math.round(f.top),
+          窓の高さ: window.innerHeight,
+          /* **一覧だけが送れる**(外側は動かさない) */
+          外が動く: Math.round(el.scrollHeight) > Math.round(el.clientHeight) + 1,
+          一覧が送れる: Math.round(list.scrollHeight) > Math.round(list.clientHeight) + 1,
+          一覧の高さ: Math.round(l.height),
+          行の数: el.querySelectorAll('.app-nav-item').length,
+        }
+      })
+      if (!開いた) { ng(`メニュー ${名} … ☰ が見つからない`); continue }
+      if (!m) { ng(`メニュー ${名}(${w}×${h}) … メニューか「設定」が無い`); continue }
+      if (!m.行の数) ng(`メニュー ${名} … 行き先が1つも無い`, '見張りが何もしていない')
+      else if (m.設定の下端 > m.窓の高さ + 0.5) {
+        ng(`メニュー ${名}(${w}×${h}) … 「設定」が画面からはみ出している`,
+          `下端 ${m.設定の下端} > 窓 ${m.窓の高さ}(${m.設定の下端 - m.窓の高さ}px 出ている)`)
+      } else if (m.設定の上端 < -0.5) {
+        ng(`メニュー ${名}(${w}×${h}) … 「設定」が画面より上へ出ている`, `${m.設定の上端}px`)
+      } else if (m.外が動く) {
+        ng(`メニュー ${名}(${w}×${h}) … メニューまるごとが送れてしまう`,
+          '送るのは一覧だけ。外が動くと「設定」も一緒に流れる')
+      } else {
+        ok(`メニュー ${名}(${w}×${h}) … 行き先 ${m.行の数} 個・`
+          + `「設定」は ${m.設定の上端}〜${m.設定の下端}(窓 ${m.窓の高さ})で見えている`
+          + `${m.一覧が送れる ? '・一覧だけ送れる' : ''}`)
+      }
+    }
+    await nav.close()
+  }
+
+
   /* ══ **開いて落ちないか。行き先を1つずつ、全部**(第5.220節)══════
        2026-09 実機・利用者。
 
