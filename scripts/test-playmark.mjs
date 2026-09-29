@@ -3302,9 +3302,36 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '設定 … 既定で畳んである(`open` を書いていない)')
   ok(!/localStorage|loadTheme|loadPalette|loadTips|soundOn|prepareAllOn/.test(set),
     '設定 … 部品は受け取って描くだけ(自分では覚えない)')
-  /* **絵文字を使わない**(端末ごとに形も大きさも違う) */
-  ok(/GearIcon/.test(set) && !/⚙/.test(set),
-    '設定 … 歯車は `GearIcon`(絵文字を使わない)')
+  /* **絵文字を使わない**(端末ごとに形も大きさも違う)。
+     **設定の絵は `SortIcon`(三本線と丸)1つ**(2026-09-29 利用者の指定
+     「これから歯車は使いません。全て3本線と丸のものに統一です」) */
+  ok(/SortIcon/.test(set) && !/⚙/.test(set),
+    '設定 … 絵は `SortIcon`(三本線と丸。絵文字を使わない)')
+
+  /* ── **歯車は、どこにも残っていない**(2026-09-29 利用者の指定)────
+       > これから歯車は使いません。全て3本線と丸のものに統一です
+
+     **画面を1つずつ名指しで見ない。** 画面を足した日に見張られなくなる。
+     `src/` をまるごと探して、**1つでも出てきたら赤**にする
+     (`Icons.jsx` に残っている経緯の説明は、`GearIcon(` という
+     **使っている形**では出てこない) */
+  {
+    const dir = new URL('../src/', import.meta.url)
+    const 出た = []
+    const 見る = (d) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const u = new URL(e.name + (e.isDirectory() ? '/' : ''), d)
+        if (e.isDirectory()) { 見る(u); continue }
+        if (!/\.(jsx?|css)$/.test(e.name)) continue
+        const t = readFileSync(u, 'utf8')
+        /* **使っている形で数える**(コメントの中の語では赤くしない) */
+        if (/<GearIcon|GearIcon\s*\}|\{\s*GearIcon|function GearIcon/.test(t)) 出た.push(e.name)
+      }
+    }
+    見る(dir)
+    ok(出た.length === 0, `歯車 … `
+      + (出た.length ? `まだ ${出た.join(' / ')} に残っている` : 'どこにも残っていない'))
+  }
 
   /* ③ **いちばん下。** 自分の欄(名前・役割・ログアウト)より下にいること。
      **ソースの並びで見る** —— 描いた位置は `npm run test:bar` が測る */

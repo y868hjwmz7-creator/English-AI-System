@@ -40,7 +40,7 @@ import { SHEET_WIDTHS } from '../data/sheetWidths.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import {
-  BoltIcon, FocusIcon, GearIcon, NoteIcon, PenIcon, PrintIcon,
+  BoltIcon, FocusIcon, NoteIcon, PenIcon, PrintIcon,
   SortIcon, SpeakerIcon, StepsIcon, StopIcon,
 } from './Icons.jsx'
 /* **一度決める設定は、右上のアイコン1つの中へ**(2026-09-29 利用者の指定)。
@@ -65,7 +65,7 @@ import { viewerRoleOf } from '../lib/viewer.js'
    「ボタンが全て白なのも分かりにくい要因の一つです」)。
    押している / いないで替える札は、**押していないときも灰**にする */
 import { toneOn } from '../lib/btnTone.js'
-import { NAV_PUSH_AT, useWide } from '../lib/nav.js'
+import { NAV_PUSH_AT, SETTINGS_INLINE_AT, useWide } from '../lib/nav.js'
 import EnglishText from './EnglishText.jsx'
 import { prefetchSectionGlosses } from '../lib/vocab.js'
 import { markIn } from '../lib/useWordStatuses.js'
@@ -264,12 +264,15 @@ export default function LessonView({
   const [width, setWidth] = useState(loadWidth)
   // メモの幅。境目をつまんで変える(2026-09 利用者の指定)
   const [notesW, setNotesW] = useState(loadNotesW)
-  // 画面の狭い端末では、めったに触らない設定をしまっておく。
-  // **一度決めれば何度も要らないもの**(速さ・配色・文字の大きさ・印刷)。
-  // パソコンでは常に出したままにする(CSS が決める。第5.22節)
-  const [openSettings, setOpenSettings] = useState(false)
-  // Esc の扱いで今の状態を見たい。`useEffect` の中から読めるように控える
-  const openSettingsRef = useRef(false)
+  /* ── **設定は1つだけ**(2026-09-29 利用者の指定)────────────────
+       > ひとつにまとめます。これから歯車は使いません。
+       > 全て3本線と丸のものに統一です
+
+     もとは2つあった —— 歯車の「表示」(狭い窓で帯に入りきらないものを
+     畳む)と、三本線と丸の「設定」(文字・幅・印刷)。
+     **中身は別ものだが、どちらも「もっとある」に見えていた。**
+     いまは**押すものも吹き出しも1つ**で、狭い窓では
+     書き込む・メモ・速さも同じ吹き出しに入る(下の `道具`)。 */
   /* ── **一度決める設定は、右上のアイコン1つの中へ**(2026-09-29 利用者の指定)
        > 文字サイズ、幅、印刷/PDFボタンを設定ボタンを作って右上にアイコンを
        > 置いてください。三本線と丸の組み合わせのアイコンにしてください
@@ -279,7 +282,11 @@ export default function LessonView({
      吹き出しは `SettingsSheet` —— 聞き流しの設定(第5.274節)と
      **同じ部品・同じ作法**である(狭い窓では下から出るシートになる)。 */
   const [viewSets, setViewSets] = useState(false)
+  /** 吹き出しを出す位置のもと(押した札そのもの) */
   const viewSetsRef = useRef(null)
+  /* Esc の扱いで今の状態を見たい。`useEffect` の中から読めるように控える */
+  const viewSetsOpen = useRef(false)
+  viewSetsOpen.current = viewSets
   /**
    * **紙への書き込み**(2026-09 利用者の指定)。
    *
@@ -363,7 +370,6 @@ export default function LessonView({
     loadMyLearners().then(({ data }) => { if (alive) setPeople(data ?? []) })
     return () => { alive = false }
   }, [wantPeople, people])
-  openSettingsRef.current = openSettings
   // 通しの練習を出しているか。
   // null / 'qr'(Quick Response)/ 'six'(6Steps)/ 'focus'(集中モード)。
   // **教材1本 / 本文1本を通しでやる**ので、出しているあいだは
@@ -485,6 +491,14 @@ export default function LessonView({
    * `spot` より先に要るので、ここで出しておく。
    */
   const padUp = useWide(NAV_PUSH_AT)
+  /* ── **道具(書き込む / メモ / 速さ)を、帯に並べられる広さか** ────
+       (2026-09-29 利用者の指定「ひとつにまとめます」・第5.314節)
+
+     狭ければ「設定」の吹き出しの中へ入れる。
+     **フックは、早い `return` より前に置く**(第5.220節)——
+     下に置いたら `react-hooks/rules-of-hooks` が止めてくれた。
+     読み込み中と読み込み後でフックの数が変わると、画面が真っ白になる。 */
+  const narrowSets = !useWide(SETTINGS_INLINE_AT)
   /**
    * 実際にどこへ出すか。**判断は `placeFor()` 1か所**(`playerPlace.js`)。
    *
@@ -718,7 +732,7 @@ export default function LessonView({
       if (e.key === 'Escape') {
         // **開いているものから閉じる。** いきなり画面ごと閉じない
         if (notesRef.current) { setNotes(false); return }
-        if (openSettingsRef.current) { setOpenSettings(false); return }
+        if (viewSetsOpen.current) { setViewSets(false); return }
         if (runRef.current) { setRun(null); return }
         stopReading(); onClose?.()
         return
@@ -1193,6 +1207,70 @@ export default function LessonView({
     player.jump(playOpts(i))
   }
 
+  /* ── **設定は1つ。狭い窓では、道具もその中へ**(2026-09-29 利用者の指定)
+       > ひとつにまとめます
+
+     もとは歯車の「表示」が、狭い窓で帯に入りきらないものを畳んでいた。
+     その札を廃したので、**畳んでいたものの行き先が要る。**
+     行き先は「設定」の吹き出し1つ —— 押すものが2つ並ばない。
+
+     **書き分けない。** 同じ `道具` を、広い窓では帯に、狭い窓では
+     吹き出しに置くだけである(**同じものを2つ書くと、片方だけ古くなる**)。
+     境目は `.lesson-settings` を畳んでいた CSS と**同じ 860px** ——
+     2か所に別の数を書くと、どちらかの幅で「どこにも無い」が起きる。 */
+  const 道具 = (
+    <>
+          {/* ── 紙への書き込み(2026-09 利用者の指定でここへ移した)──
+              > 書き込む、の機能が画面に収まってません。
+              > 文字の大きさや明暗の切り替えの機能と同じところに入れてください。
+
+              いつも要るのは「閉じる・ページ送り・解答・表示」の4つだけで、
+              **その1行に5つめを足したので、iPhone(390px)で
+              画面の外へはみ出していた**(2026-09 実機)。
+              書き込みは、始めるときと終わるときに1回ずつ触るものなので、
+              **一度決める設定と同じところ**でよい。 */}
+          <button type="button"
+                  className={`btn btn--small${pen ? ' btn--primary' : ''}`}
+                  aria-pressed={pen}
+                  title="紙に書き込む(閉じると消えます)"
+                  onClick={() => setPen((v) => !v)}>
+            <PenIcon /><span className="mid-text">書き込む</span>
+          </button>
+
+          {/* ── セッションの記録(0032)──────────────────────
+              **書き込むと同じ理由でここに置く。** いつも要る1行に
+              足すと、同じようにはみ出す。
+              出すのは、ゲストと一緒に開いているときだけ
+              (トレーナーの「教材」画面には相手がいない)。 */}
+          {canNote && (
+            <button type="button"
+                    className={`btn btn--small${notes ? ' btn--primary' : ''}`}
+                    aria-pressed={notes}
+                    title="この日のセッションの記録(日付ごとに残ります)"
+                    onClick={() => setNotes((v) => !v)}>
+              <NoteIcon /><span className="mid-text">メモ</span>
+            </button>
+          )}
+
+          {/* ── 3つとも「◀ いま ▶」にそろえる(2026-09 利用者の指定)──
+              > 画面幅、文字の大きさ、そして読み上げの速さ、全てを
+              > 画面幅と文字の大きさのUIに統一し、そして、現在の設定の
+              > 左右に三角を置くデザインにしてください。
+              > そうすればスペースを有効に使えます。◀︎標準▶︎
+
+              選択肢を全部並べる形は**段の数だけ横に伸びる。** 速さは13段、
+              紙の幅は7段になったので、並べるやり方はもう成り立たない。
+              **見出し(速さ / 文字 / 幅)は残す。** 3つとも同じ形になったので、
+              見出しが無いとどれがどれか分からない(しかも2つは「%」である) */}
+          {/* **速さだけは帯に残す**(2026-09-29 利用者の指定)。
+              鳴らしながら「速い / 遅い」を直すものなので、
+              **吹き出しを開いてからでは間に合わない。**
+              文字・幅・印刷の3つは、右上の「設定」の中へ移した */}
+          <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
+                   onChange={(id) => { setRateId(id); saveRateId(id); stopAll() }} />
+    </>
+  )
+
   return (
     /* **黒帯のぶん、紙の下に余白を足す**(下記の CSS)。
        足さないと、いちばん下の段落が帯に隠れて読めない */
@@ -1329,19 +1407,12 @@ export default function LessonView({
           </button>
         )}
 
-        {/* ── しまっておくもの ────────────────────────────────
-            速さ・配色・文字の大きさ・印刷は、**一度決めれば何度も
-            要らない。** 狭い画面ではここに畳み、押したときだけ出す。
-            パソコンでは畳まない(CSS が決めるので、この札も出ない)。 */}
-        <button type="button" className="btn btn--small lesson-more"
-                aria-expanded={openSettings} aria-controls="lesson-settings"
-                onClick={() => setOpenSettings((v) => !v)}>
-          <GearIcon /><span className="mid-text">表示</span>
-        </button>
         </div>
 
-        <div className={`lesson-settings${openSettings ? ' is-open' : ''}`}
-             id="lesson-settings">
+        {/* **畳む札(歯車の「表示」)は廃止した**(2026-09-29 利用者の指定)。
+            設定は末尾の「三本線と丸」1つだけ。狭い窓では、ここに並ぶもの
+            (書き込む・メモ・速さ)も、その吹き出しの中に入る */}
+        <div className="lesson-settings" id="lesson-settings">
           {/* ── 読み上げの操作盤(2026-09 利用者の指定)──────────────
               > 上部のバーに配置している際もフロート時と同じ幅、同じUIに
               > して、2行にならないようにしてください。つまり、「書き込む」
@@ -1370,54 +1441,7 @@ export default function LessonView({
             />
           )}
 
-          {/* ── 紙への書き込み(2026-09 利用者の指定でここへ移した)──
-              > 書き込む、の機能が画面に収まってません。
-              > 文字の大きさや明暗の切り替えの機能と同じところに入れてください。
-
-              いつも要るのは「閉じる・ページ送り・解答・表示」の4つだけで、
-              **その1行に5つめを足したので、iPhone(390px)で
-              画面の外へはみ出していた**(2026-09 実機)。
-              書き込みは、始めるときと終わるときに1回ずつ触るものなので、
-              **一度決める設定と同じところ**でよい。 */}
-          <button type="button"
-                  className={`btn btn--small${pen ? ' btn--primary' : ''}`}
-                  aria-pressed={pen}
-                  title="紙に書き込む(閉じると消えます)"
-                  onClick={() => setPen((v) => !v)}>
-            <PenIcon /><span className="mid-text">書き込む</span>
-          </button>
-
-          {/* ── セッションの記録(0032)──────────────────────
-              **書き込むと同じ理由でここに置く。** いつも要る1行に
-              足すと、同じようにはみ出す。
-              出すのは、ゲストと一緒に開いているときだけ
-              (トレーナーの「教材」画面には相手がいない)。 */}
-          {canNote && (
-            <button type="button"
-                    className={`btn btn--small${notes ? ' btn--primary' : ''}`}
-                    aria-pressed={notes}
-                    title="この日のセッションの記録(日付ごとに残ります)"
-                    onClick={() => setNotes((v) => !v)}>
-              <NoteIcon /><span className="mid-text">メモ</span>
-            </button>
-          )}
-
-          {/* ── 3つとも「◀ いま ▶」にそろえる(2026-09 利用者の指定)──
-              > 画面幅、文字の大きさ、そして読み上げの速さ、全てを
-              > 画面幅と文字の大きさのUIに統一し、そして、現在の設定の
-              > 左右に三角を置くデザインにしてください。
-              > そうすればスペースを有効に使えます。◀︎標準▶︎
-
-              選択肢を全部並べる形は**段の数だけ横に伸びる。** 速さは13段、
-              紙の幅は7段になったので、並べるやり方はもう成り立たない。
-              **見出し(速さ / 文字 / 幅)は残す。** 3つとも同じ形になったので、
-              見出しが無いとどれがどれか分からない(しかも2つは「%」である) */}
-          {/* **速さだけは帯に残す**(2026-09-29 利用者の指定)。
-              鳴らしながら「速い / 遅い」を直すものなので、
-              **吹き出しを開いてからでは間に合わない。**
-              文字・幅・印刷の3つは、右上の「設定」の中へ移した */}
-          <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
-                   onChange={(id) => { setRateId(id); saveRateId(id); stopAll() }} />
+          {!narrowSets && 道具}
 
           {/* ── 一度決める設定(文字 / 幅 / 印刷)は、アイコン1つに
               ──────────────────────────────────────────────
@@ -1438,8 +1462,10 @@ export default function LessonView({
               (**押すものが2つ並ばない** —— 同じことをするものを2つ見せない)。 */}
           <button type="button" ref={viewSetsRef}
                   className={`btn btn--small lesson-sets${viewSets ? ' btn--primary' : ''}`}
-                  aria-label="設定(文字の大きさ・紙の幅・印刷)"
-                  title="設定(文字の大きさ・紙の幅・印刷)"
+                  /* **中身は窓の広さで変わる**(狭い窓では道具も入る)ので、
+                     名前は「設定」1語にする —— 中身を数え上げると、
+                     **片方の窓で嘘になる**(呼び名を2か所に書かない) */
+                  aria-label="設定" title="設定"
                   aria-expanded={viewSets}
                   onClick={() => setViewSets((v) => !v)}>
             <SortIcon />
@@ -1506,6 +1532,10 @@ export default function LessonView({
           {/* **別々の物を、すき間ゼロでくっつけない**(共通ルール)。
               入れ物は素の箱で `gap` を持たないので、ここで1つ束ねて離す */}
           <div className="lesson-sets-body">
+            {/* **狭い窓では、帯に入りきらない道具もここに入る。**
+                広い窓では帯に並んでいるので、ここには出さない
+                (**同じことをするものを2つ見せない**) */}
+            {narrowSets && <div className="lesson-sets-tools">{道具}</div>}
             <Stepper label="文字" options={SIZES} value={size}
                      onChange={(id) => { setSize(id); saveSize(id) }} />
             {/* 紙の幅。**広い画面だけ**(CSS が狭い画面で隠す) */}

@@ -97,16 +97,20 @@ const WANT = {
          **絵だけ**になった(利用者の指定「『聴く』は必要なく、
          『▷』など、アイコンだけで作って」)。名前は `aria-label` に
          残っているので、そちらで数える(下の節)。 */
-    wide: ['閉じる', '書き込む', 'メモ', 'しない', '速さ'],
-    /* スマホ(390px)。「表示」に畳まれる(検証は開いてから数える)。
+    wide: ['閉じる', '書き込む', 'メモ', 'しない', '速さ', '設定'],
+    /* スマホ(390px)。**歯車の「表示」は廃止した**(2026-09-29 利用者の
+       指定「ひとつにまとめます」)。道具(書き込む / メモ / 速さ)は
+       「設定」の吹き出しの中へ移ったので、**帯には無い**(下の節が数える)。
        通しの読み上げは**画面の下の黒帯**なので、帯にはスイッチだけ */
-    narrow: ['閉じる', '表示', '書き込む', 'メモ', '速さ',
-      '読み上げの操作を閉じる', '集中モード'],
+    narrow: ['閉じる', '設定', '読み上げの操作を閉じる', '集中モード'],
     /* **帯から消えたことも数える。** 片方だけだと、戻しても緑のまま。
        **`wholePlayText()` はここに書かない** —— 絵だけになっても
        `aria-label` には残っている(残っていないと、何のボタンか分からない)。
        **見えているかどうか**は、下の「上の帯」の節が字で数えている */
-    hasNot: ['文字', '幅', '印刷'],
+    hasNot: ['文字', '幅', '印刷', '表示'],
+    /* 狭い窓だけで「無い」もの。**広い窓では帯に並んでいる** ——
+       だから `hasNot` には書けない(**出る側と出ない側の両方を見る**) */
+    narrowHasNot: ['書き込む', 'メモ', '速さ'],
   },
   'トレーナーが「教材」の画面から開いている': {
     q: '?role=trainer',
@@ -118,18 +122,18 @@ const WANT = {
        **それは書けない理由であって、ボタンを消す理由ではなかった。**
        利用者はふだんこの画面から開くので、一度も出てこなかった。
        いまは**開いた中で相手を選ばせる**(担当ゲストだけが並ぶ)。 */
-    wide: ['閉じる', '書き込む', 'メモ', 'しない', '速さ'],
-    narrow: ['閉じる', '表示', '書き込む', 'メモ', '速さ',
-      '読み上げの操作を閉じる', '集中モード'],
-    hasNot: ['文字', '幅', '印刷'],
+    wide: ['閉じる', '書き込む', 'メモ', 'しない', '速さ', '設定'],
+    narrow: ['閉じる', '設定', '読み上げの操作を閉じる', '集中モード'],
+    hasNot: ['文字', '幅', '印刷', '表示'],
+    narrowHasNot: ['書き込む', 'メモ', '速さ'],
   },
   'ゲスト自身が開いている': {
     q: '?role=learner&who=g1',
-    wide: ['閉じる', '書き込む', 'しない', '速さ'],
-    narrow: ['閉じる', '表示', '書き込む', '速さ',
-      '読み上げの操作を閉じる', '集中モード'],
+    wide: ['閉じる', '書き込む', 'しない', '速さ', '設定'],
+    narrow: ['閉じる', '設定', '読み上げの操作を閉じる', '集中モード'],
     // メモを書けるのは担当トレーナー(と管理者)だけ(0032)
-    hasNot: ['メモ', '文字', '幅', '印刷'],
+    hasNot: ['メモ', '文字', '幅', '印刷', '表示'],
+    narrowHasNot: ['書き込む', '速さ'],
   },
 }
 
@@ -267,9 +271,9 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
 
 /** その画面の帯に、いま並んでいるものの名前 */
 async function inventory(page) {
-  // 狭い画面では「表示」に畳まれている。**開いてから数える**
-  const more = await page.$('.lesson-more')
-  if (more && await more.isVisible()) await more.click()
+  /* **畳む札(歯車の「表示」)は廃止した**(2026-09-29 利用者の指定)。
+     狭い窓で帯に入りきらないものは「設定」の吹き出しへ移ったので、
+     **帯そのものを数えれば足りる。** 吹き出しの中身は、別の節が数える */
   await page.waitForTimeout(150)
   return page.$$eval('.lesson-bar', (bars) => {
     const bar = bars[0]
@@ -299,7 +303,8 @@ for (const [label, want] of Object.entries(WANT)) {
     const got = await inventory(page)
 
     const missing = has.filter((n) => !got.some((g) => g === n || g.includes(n)))
-    const extra = want.hasNot.filter((n) => got.some((g) => g === n))
+    const 無いはず = [...want.hasNot, ...(where === 'スマホ' ? (want.narrowHasNot ?? []) : [])]
+    const extra = 無いはず.filter((n) => got.some((g) => g === n))
     const head = `${label}(${where})`
     if (missing.length) {
       ng(`${head} — 帯から消えている`,
@@ -618,10 +623,7 @@ for (const [label, want] of Object.entries(WANT)) {
   for (const w of [1440, 390]) {
     await page.setViewportSize({ width: w, height: 900 })
     await page.waitForTimeout(350)
-    /* **狭い窓では「表示」に畳まれている。** `inventory()` と同じ作法で、
-       開いてから数える —— 開かずに測ると、幅も高さも 0 になる(実測して踏んだ) */
-    const more = await page.$('.lesson-more')
-    if (more && await more.isVisible()) { await more.click(); await page.waitForTimeout(250) }
+    /* **畳む札は廃止した。** 「設定」は、どの幅でも帯にそのまま出ている */
     const 札 = await page.$('.lesson-sets')
     if (!札 || !await 札.isVisible()) { ng(`設定 ${w}px … 設定のアイコンが出ていない`); continue }
     /* **絵だけ**(言葉を添えない)。押せる大きさは割らない */
@@ -639,6 +641,7 @@ for (const [label, want] of Object.entries(WANT)) {
     if (m.字) ng(`設定 ${w}px … アイコンに言葉が添えてある`, `「${m.字}」`)
     else if (m.絵 !== 1) ng(`設定 ${w}px … 絵が ${m.絵} つある`)
     else if (!m.名) ng(`設定 ${w}px … 名前(aria-label)が無い`, '絵だけなので、名前が要る')
+    else if (m.名 !== '設定') ng(`設定 ${w}px … 名前が「設定」ではない`, `「${m.名}」`)
     else if (m.高さ < 30) ng(`設定 ${w}px … 押すには小さい`, m.大きさ)
     else ok(`設定 ${w}px … 絵だけ・名前は「${m.名}」(${m.大きさ})`)
 
@@ -654,13 +657,24 @@ for (const [label, want] of Object.entries(WANT)) {
     else {
       /* **紙の幅は広い窓だけ**(スマホでは紙が画面いっぱいなので意味がない)。
          もとから CSS が `.lesson-widths` を狭い窓で隠している。
+
+         ★ **狭い窓では、道具もここに入る**(2026-09-29 利用者の指定
+           「ひとつにまとめます」)。畳む札を廃したので、
+           **行き先はこの吹き出し1つ**である。
+           入っていなければ**どこにも無い** —— 効かない操作より悪い。
+
          **出る側と出ない側の両方を見る** —— 片方だけだと、
          「どの幅でも出さない」に書き換えても緑のままになる */
-      const 要る = w >= 1024 ? ['文字', '幅', '印刷'] : ['文字', '印刷']
+      const 要る = w >= 1024
+        ? ['文字', '幅', '印刷']
+        : ['書き込む', 'メモ', '速さ', '文字', '印刷']
       const 無い = 要る.filter((t) => !中.includes(t))
-      if (無い.length) ng(`設定 ${w}px … 吹き出しに ${無い.join(' / ')} が無い`, 中.slice(0, 80))
+      if (無い.length) ng(`設定 ${w}px … 吹き出しに ${無い.join(' / ')} が無い`, 中.slice(0, 120))
       else if (w < 1024 && 中.includes('幅')) {
         ng(`設定 ${w}px … 狭い窓に「幅」が出ている`, '紙は画面いっぱいなので、効かない操作になる')
+      } else if (w >= 1024 && ['書き込む', 'メモ'].some((t) => 中.includes(t))) {
+        ng(`設定 ${w}px … 広い窓で、帯にもある道具が吹き出しにも出ている`,
+          '同じことをするものを2つ見せない')
       } else ok(`設定 ${w}px … 吹き出しに ${要る.join(' / ')} が入っている`)
     }
     await page.keyboard.press('Escape')

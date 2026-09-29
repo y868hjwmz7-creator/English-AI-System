@@ -31,11 +31,17 @@
  *   (`QrCard` / `WordRadio` / `SpeechPractice` と同じ作法 ——
  *   **描けないものは測れない**)。
  *
- * 【絵文字(⚙)を使わない】
- *   端末ごとに形も大きさも違う。すでにある `GearIcon` を使う
- *   (**足す前に、同じ絵がもう無いか探す**・CLAUDE.md)。
+ * 【絵は「三本線と丸」(`SortIcon`)。**歯車は使わない**】
+ *   2026-09-29 利用者の指定。
+ *
+ *     > これから歯車は使いません。全て3本線と丸のものに統一です
+ *
+ *   絵文字(⚙)は端末ごとに形も大きさも違うので、もともと使っていない。
+ *   **設定の絵は、アプリ全体で `SortIcon` 1つにそろえた**
+ *   (聞き流しの設定・復習の「出しかた」・レッスン表示の設定と同じ絵)。
+ *   `GearIcon` は、誰も呼ばなくなったので**消した**。
  */
-import { GearIcon } from './Icons.jsx'
+import { SortIcon } from './Icons.jsx'
 import VolumeRow from './VolumeRow.jsx'
 import { THEMES } from '../lib/theme.js'
 import { PALETTES } from '../lib/palette.js'
@@ -96,7 +102,7 @@ export default function NavSettings({
   return (
     <details className="nav-settings">
       <summary className="nav-settings-sum">
-        <GearIcon className="icon nav-settings-icon" />
+        <SortIcon className="icon nav-settings-icon" />
         設定
       </summary>
       <div className="nav-settings-body">

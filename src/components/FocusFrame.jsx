@@ -32,7 +32,9 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CloseIcon, GearIcon, MenuIcon } from './Icons.jsx'
+/* **設定の絵は `SortIcon`(三本線と丸)1つ**(2026-09-29 利用者の指定
+   「これから歯車は使いません。全て3本線と丸のものに統一です」) */
+import { CloseIcon, MenuIcon, SortIcon } from './Icons.jsx'
 import { useFocusBoard } from './FocusBoard.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 
@@ -180,7 +182,7 @@ export default function FocusFrame({
                 <button type="button" className="btn btn--small lesson-more"
                         aria-expanded={openSettings} aria-controls="focus-settings"
                         onClick={() => setOpenSettings((v) => !v)}>
-                  <GearIcon /><span className="mid-text">表示</span>
+                  <SortIcon /><span className="mid-text">表示</span>
                 </button>
                 <div id="focus-settings"
                      className={`lesson-settings${openSettings ? ' is-open' : ''}`}>
