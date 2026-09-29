@@ -8936,8 +8936,8 @@ button.wbfilter-ctl { text-align: left; }
    > なってしまっています。
 
    はじめは `.player` に当てていたので、**右下に浮かせたとき**にも
-   効いてしまった。あちらは**明るい面の上**(`.player--float` の
-   `--surface-1`)なので、そこだけ黒い錠剤が残る。
+   効いてしまった。あちらは**明るい面の上**にいたので、
+   そこだけ黒い錠剤が残っていた(浮かせるのは第5.311節で廃止)。
 
    **暗いのは上の帯だけ**である(`.player--bar` は帯の中にいる)。
    `.player--bar .player-at` が同じ作法で書かれていたのに、
@@ -8967,20 +8967,12 @@ button.wbfilter-ctl { text-align: left; }
 .focus-bar .listenpill-arrow:hover:not(:disabled),
 .player--dock .listenpill-arrow:hover:not(:disabled) { background: #45453d; }
 
-/* ── 右下に浮かせたときは、**錠剤を二重にしない** ───────────────
-   `.player--float` そのものが、すでに角丸・枠線・影を持った錠剤である。
-   その中にもう1枚錠剤を置くと、**丸の中に丸**が見えて落ち着かない。
-   浮いているときは、外側の1枚に任せて中は透ける。 */
-/* **右下では、外側の枠だけを外す。** `.player--float` そのものが
-   角丸と枠を持っているので、二重にしない。
-   **三角の地色と仕切りは残す** —— あれが「押せる」の合図である
-   (2026-09 実機「文章を飛ばすボタンが白過ぎで見にくい」) */
-/* **右下でも、面は1枚**(2026-09 実機・利用者の指摘)。
-   外側の `.player--float` がすでに角丸と枠を持っているので**枠だけ外す。**
-   面(`--surface-2`)は残す —— これが「押せるひとかたまり」の合図である */
-.player--float .listenpill { border: 0; background: var(--surface-2); }
-.player--float .listenpill-arrow { color: var(--text-primary); }
-.player--float .listenpill-arrow:hover:not(:disabled) { background: var(--border); }
+/* **右下に浮かせる操作盤は廃止した**(2026-09-29 利用者の指定・第5.311節)。
+     > そして浮くプレーヤーは廃止で。結局今まで使ったことがないです。
+   「錠剤を二重にしない」「面は1枚」「三角の地色は残す」——
+   あれらは浮いた錠剤のための決まりだったので、まとめて落とした。
+   **学んだことは残っている** —— 面は1枚・仕切りは線だけ、は
+   上の `.listenpill` がいまも守っている */
 /* **まん中の文字を、三角より薄くしない**(2026-09 実機・利用者の指摘)。
 
      > プレーヤーの真ん中の文字が薄すぎて見えないですよ
@@ -8996,7 +8988,6 @@ button.wbfilter-ctl { text-align: left; }
    (**片方だけ直さない**。実際、右下だけ直して段落を見落としていた)。 */
 .lesson-sheet .listenpill .btn,
 .focus-paper .listenpill .btn { color: var(--ink); }
-.player--float .repeat-unit { color: var(--text-primary); }
 
 /* 紙の中(明るい配色の島)。**変数から取っているので、そのままで正しい** */
 .lesson-sheet .listenpill, .focus-paper .listenpill {
@@ -9054,17 +9045,7 @@ button.wbfilter-ctl { text-align: left; }
    **自分では貼り付かない。** 貼り付く役は `.sheet-floats`(親)が持って
    いる。ここでも `position: fixed` にすると、同じ隅に2枚重なり、
    **「集中モード」が下敷きになって押せなくなる**(実測)。 */
-.player--float {
-  flex: 0 1 auto;
-  /* **角の丸い四角にそろえる**(2026-09 実機・利用者の指定)。
-     中の三角が四角い箱になったので、外側が楕円のままだと
-     **端の三角が丸みに食われて**形が合わない(実測して気づいた) */
-  padding: 5px 7px; border-radius: var(--r-12);
-  background: var(--surface-1); border: 1px solid var(--border);
-  box-shadow: var(--shadow-2);
-}
 /* 右下では、進み具合の帯は場所を取らせない(押すものが先) */
-.player--float .player-track { flex: 0 1 48px; }
 
 /* ── 右下の操作盤は、入るまで詰める(`useFitRow`)──────────────────
    2026-09 実機・利用者の指摘「スマホで『繰り返す』がはみ出てしまう」。
@@ -9087,12 +9068,6 @@ button.wbfilter-ctl { text-align: left; }
    そこが読めないと、何をしているのか分からない。
    **置き場所の切り替え(▲)も消さない** —— 消すと上の帯へ戻す道が
    無くなる(行き止まりを作らない)。 */
-.player--float.is-fit1 .listen-word { display: none; }
-.player--float.is-fit2 { gap: var(--sp-4); padding: 4px; }
-.player--float.is-fit2 .btn { padding: 5px 6px; }
-.player--float.is-fit3 .listenpill-arrow { min-width: 28px; padding: 0 5px; }
-.player--float.is-fit3 .player-at { font-size: var(--fs-11); }
-.player--float.is-fit3 .player-place { padding-left: 5px; padding-right: 5px; }
 
 /* ② 上の帯のすぐ下に貼り付ける(`.jobbar` と同じ作法)。
    **いつも要る1行には足さない** — あそこは 390px でぎりぎり1行で、
@@ -9140,8 +9115,8 @@ button.wbfilter-ctl { text-align: left; }
    落とすものは**同じことを2つ言っているほう**にする。
    すぐ左に「3 / 6 段落」があり、進み具合はそれとまったく同じことを、
    40px の細い線で言い直しているだけである。
-   **右下(`player--float`)では、これまでどおり出す**
-   —— あちらは幅の取り合いをしていない。 */
+   **画面の下の黒帯では、これまでどおり出す**(そこはつまんで動かせる
+   ものになった・第5.311節)—— あちらは幅の取り合いをしていない。 */
 .player--bar .player-track { display: none; }
 /* **色は帯に合わせて決め打ち**(`.lesson-bar .btn` と同じ作法)。
    変数のままだと、**明るい配色のときだけ黒い帯に黒い文字**が乗る
@@ -9178,76 +9153,171 @@ button.wbfilter-ctl { text-align: left; }
   background: #24241f; color: #f2f2ee;
   box-shadow: 0 -6px 24px rgb(0 0 0 / 22%);
 }
-/* **まん中にまとめる。** 横いっぱいなので、端に寄せると指が届かない。
+/* ══════════════════════════════════════════════════════════════════
+   **画面の下の黒帯は、3段**(2026-09-29 利用者の指定・第5.311節)
 
-   **隙間は 16px**(2026-09 実機・利用者の指定「各機能の間にバランスよく
-   マージンを入れてください。触れすぎていて押し間違えをしそうな緊張感が
-   あります」)。広い窓では 272px 余っているので、詰める理由が無かった。
-   **狭い窓の隙間(実測 16px)と同じ数**にそろえてある —— 広い端末のほうが
-   狭い、という逆さまにしない。 */
-.player--dock { justify-content: center; gap: var(--sp-16); }
+     > 画面下部分の音声プレーヤーを添付の写真のようなスタイルに
+     > 変更してもらえませんか？ ここにどうやって段落と文章ごとの
+     > 先送りと戻しボタンをしれこむかが課題です。
+
+   4枚描いて見比べてもらい、**案A**(外側が段落・内側が文)に決まった。
+
+       ┌──────────────────────────────────────────┐
+       │  3 / 6 段落        ⤺ しない   速さ ◀100%▶ │  ← ①
+       │  ━━━━━━━━━●────────────────────────────  │  ← ②
+       │    ⏮⏮      ⏮      ( ▶ )     ⏭      ⏭⏭    │  ← ③
+       │    段落     文               文     段落   │
+       └──────────────────────────────────────────┘
+
+   **1行だったころの決まりは、ここで置き換わる。**
+   「高さ 50px の1行」「並ぶものの背丈をそろえる」は、3段の形では
+   意味が変わる —— いま守るのは**下の行が折り返さないこと**である
+   (利用者の「再生プレーヤーが2行になるのは絶対にダメです」は、
+    **押すものの行**の話であって、段を分けることの話ではない)。
+   ══════════════════════════════════════════════════════════════════ */
+.player--dock {
+  /* **段は縦に積む。** 隙間は `gap` で作る(余白で作らない・共通ルール) */
+  flex-direction: column; align-items: stretch;
+  gap: var(--sp-8); flex-wrap: nowrap;
+}
 .player--dock .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
 /* **3色とも生かす**(第5.244節)。黒い帯と同じ作法 */
 .player--dock .btn--quiet { background: #45453f; border-color: #45453f; color: #f2f2ee; }
 .player--dock .btn--ghost { background: transparent; border-color: #55554e; color: #cfcfc8; }
 .player--dock .btn:disabled { opacity: .4; }
 .player--dock .repeat-unit { color: #f2f2ee; }
-/* **進み具合の線は出さない**(上の帯とまったく同じ理由)。
-   すぐ左の「3 / 6 段落」と**同じことを2つ言っている**うえ、
-   帯の上に細い線が1本だけ浮いて、まわりの錠剤と釣り合わない
-   (2026-09 実機・利用者の指摘「黒のプレーヤーのデザインの破綻」)。 */
-.player--dock .player-track { display: none; }
-@media (max-width: 560px) {
+
+/* ── ① いまどこか・くり返し・速さ ────────────────────────────────
+     **いまどこかは左**(いちばん読む)、操作は右へ寄せる。
+     `margin-left: auto` は使わず、**`.player-at` を伸ばす** ——
+     伸ばす側を決めておけば、右の物が増えても位置が動かない */
+.player-head {
+  display: flex; align-items: center; gap: var(--sp-8);
+  flex-wrap: nowrap; min-width: 0;
+}
+.player-head .player-at { flex: 1 1 auto; min-width: 0; }
+.player-head > * { flex: 0 0 auto; }
+/* 速さは黒帯の上でも読めるように(`Stepper` の地の色は明るい面用) */
+.player--dock .player-rate { border-color: #55554e; background: #33332d; color: #f2f2ee; }
+.player--dock .player-rate .stepper-arrow { color: #f2f2ee; }
+.player--dock .player-rate .stepper-arrow:hover:not(:disabled) { background: #45453d; }
+.player--dock .player-rate .stepper-label { color: #cfcfc8; }
+
+/* ── ② 進み具合。**つまんで動かせる**(2026-09-29 利用者の指定)──────
+     > 動かせるようにして段落を進めたり戻せるようにしてください
+
+   **見た目の帯と、掴む `<input>` を重ねる。**
+   `<input type="range">` の見た目は端末ごとにまるで違うので、
+   **透明にして上に乗せ、見えるほうは自分で描く**
+   (`appearance: none` だけでは Safari のつまみが残る)。
+   **押せる高さは 34px 取る** —— 線は細くても、指は太い。 */
+/* **つまみの太さは、ここ1か所。**(第5.311節)
+   塗りの先をつまみの真ん中で終わらせるのに、画面の側もこの値を読む
+   (`calc(var(--seek-dot) / 2 + …)`)。**2か所に書くと、必ず片方が古くなる** */
+.player-seek { position: relative; display: block; height: 22px; --seek-dot: 14px; }
+.player--dock .player-track {
+  display: block; position: absolute; left: 0; right: 0; top: 9px;
+  height: 4px; border-radius: 2px; background: #45453f;
+}
+.player--dock .player-fill { display: block; height: 4px; border-radius: 2px; background: #f2f2ee; }
+.player-range {
+  position: absolute; left: 0; right: 0; top: 0;
+  width: 100%; height: 22px; margin: 0; padding: 0;
+  appearance: none; -webkit-appearance: none; background: transparent;
+  cursor: pointer;
+}
+.player-range:disabled { cursor: default; }
+.player-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: var(--seek-dot); height: var(--seek-dot);
+  border-radius: calc(var(--seek-dot) / 2);
+  background: #ffffff; border: 0; cursor: pointer;
+}
+.player-range::-moz-range-thumb {
+  width: var(--seek-dot); height: var(--seek-dot);
+  border-radius: calc(var(--seek-dot) / 2);
+  background: #ffffff; border: 0; cursor: pointer;
+}
+.player-range:disabled::-webkit-slider-thumb { opacity: .4; }
+.player-range:disabled::-moz-range-thumb { opacity: .4; }
+.player-range:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 11px; }
+
+/* ── ③ 送り戻しと、鳴らすボタン ──────────────────────────────────
+     **余った幅は、機能と機能のあいだへ配る**(2026-09 実機・利用者の指定)
+       > 各機能の間にバランスよくマージンを入れてください。
+       > 触れすぎていて押し間違えをしそうな緊張感があります
+     `space-between` なので、余りがそのまま隙間になる(決め打ちを足さない)。
+
+     **折り返さない**(`flex-wrap: nowrap`)—— 利用者の
+     「再生プレーヤーが2行になるのは絶対にダメです」は、この行の話である */
+.player-keys {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-8); flex-wrap: nowrap; min-width: 0;
+  /* **広い窓でも、5つは真ん中にまとめる**(2026-09-29 実測)。
+     横いっぱいに散らすと、1280px では ⏮⏮ と ⏭⏭ が画面の両端に離れ、
+     **1つの操作盤に見えなくなる**(マウスの移動も長い)。
+     狭い窓では効かない(`max-width` なので、幅が足りなければ素通り)ため、
+     **親指で押すときの広がりはそのまま**である */
+  max-width: 420px; margin-left: auto; margin-right: auto; width: 100%;
+}
+.player-key {
+  display: inline-flex; flex-direction: column; align-items: center;
+  gap: 2px; flex: 0 0 auto;
+}
+.player-key-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 34px; padding: 0;
+  border: 0; border-radius: var(--r-10); background: transparent;
+  color: #f2f2ee; cursor: pointer;
+}
+.player-key-btn:hover:not(:disabled) { background: #3a3a34; }
+.player-key-btn:disabled { opacity: .35; cursor: default; }
+.player-key-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.player-key-icon { width: 22px; height: 22px; }
+/* **どちらを送るのかを、絵の下に書く。** 色だけに頼らない(CLAUDE.md) */
+.player-key-cap { font-size: var(--fs-11); color: #cfcfc8; line-height: 1; }
+
+/* **鳴らすボタンは、まん中に大きく1つ。** いちばん押すものを、
+   いちばん大きく・いちばん明るくする(押せるものに見せる) */
+.player-big {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 54px; height: 54px; flex: 0 0 auto;
+  padding: 0; border: 0; border-radius: 27px;
+  background: #f2f2ee; color: #24241f; cursor: pointer;
+}
+.player-big:hover { background: #ffffff; }
+.player-big:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.player-big .icon { width: 24px; height: 24px; }
+
+/* いちばん狭い端末。**左右の余白だけを詰める**(押せる大きさは割らない) */
+@media (max-width: 400px) {
   .player-dock { padding-left: 10px; padding-right: 10px; }
-  /* **余った幅は、機能と機能のあいだへ配る**(2026-09 実機・利用者の指定)
-
-       > せっかくスペースに余裕ができたので、各機能の間にバランスよく
-       > マージンを入れてください。触れすぎていて押し間違えをしそうな
-       > 緊張感があります
-
-     スマホから置き場所の切り替えを外したので、**390px で 33px 余った。**
-     ところが `gap` は決め打ちなので、余りはただの空白として
-     まん中に溜まり、押すものどうしは 6px のまま隣り合っていた。
-
-     **`space-between` にすると、余りがそのまま隙間になる。**
-     決め打ちの数を1つも増やさずに、端末の幅ぶんだけ広がる
-     (実測: 390px で 16px / 375px で 9px / 320px で 31px)。
-     **あふれる心配も無い** —— 配るのは「余っているぶん」だけなので、
-     余りが 0 になれば下の `gap` まで自然に詰まる。
-
-     `gap` は**いちばん詰まったときの下限**として残す。
-     `useFitRow` の `is-fit2` / `is-fit3` がここをさらに縮める。 */
-  .player--dock { justify-content: space-between; gap: var(--sp-6); }
+  .player-key-btn { width: 40px; }
 }
-/* いちばん狭い端末。**左右の余白だけを詰める**(押せる大きさは割らない)。
-   実測 320px で、詰める前は 4px あふれていた */
-@media (max-width: 360px) {
-  .player-dock { padding-left: 4px; padding-right: 4px; }
+@media (max-width: 340px) {
+  .player-dock { padding-left: 6px; padding-right: 6px; }
+  .player-key-btn { width: 34px; }
+  .player-big { width: 48px; height: 48px; border-radius: 24px; }
 }
 
-/* **黒帯でも、入るまで詰める**(`useFitRow`・2026-09 実測)。
+/* **上の行だけ、入るまで詰める**(`useFitRow`・2026-09 実測)。
    横いっぱいでも iPhone(390px)では入りきらず、
    **くり返しの単位が画面の外へ切れていた。**
-   削る順は右下の錠剤とまったく同じ ——
-   ①言葉 ②余白 ③三角の幅。**数と単位は1文字も削らない。** */
-.player--dock.is-fit1 .listen-word { display: none; }
-/* 「くり返し:」の見出しだけを落とす(`.player--bar` と同じ作法)。
-   **単位(しない / 文 / 段落 / 全文)は残す** —— そこが読めないと、
-   何をしているのか分からない */
-.player--dock.is-fit1 .repeat-unit .wide-text { display: none; }
-.player--dock.is-fit2 { gap: var(--sp-4); }
-.player--dock.is-fit2 .btn { padding: 5px 6px; }
-.player--dock.is-fit3 { gap: var(--sp-2); }
-.player--dock.is-fit3 .listenpill-arrow { min-width: 28px; padding: 0 5px; }
-.player--dock.is-fit3 .player-at { font-size: var(--fs-11); }
-.player--dock.is-fit3 .player-place,
-.player--dock.is-fit3 .repeat-unit { padding-left: 4px; padding-right: 4px; }
-.player--dock.is-fit3 .listenpill .btn { padding-left: 6px; padding-right: 6px; }
+   削る順は①言葉 ②余白 ③数字の大きさ。**数と単位は1文字も削らない。**
+   **下の行は測らない** —— あちらは言葉を削る余地がそもそも無く、
+   幅は上の `@media` がボタンごと縮める */
+.player-head.is-fit1 .repeat-unit .wide-text { display: none; }
+.player-head.is-fit1 .stepper-label { display: none; }
+.player-head.is-fit2 { gap: var(--sp-4); }
+.player-head.is-fit2 .btn { padding: 5px 6px; }
+.player-head.is-fit3 { gap: var(--sp-2); }
+.player-head.is-fit3 .player-at { font-size: var(--fs-11); }
+.player-head.is-fit3 .player-place,
+.player-head.is-fit3 .repeat-unit { padding-left: 4px; padding-right: 4px; }
 /* 単位を出すための幅を、いちばん長い語に合わせて取っている。
-   ここまで詰まったら、その予備の幅は手放す(**中身は1文字も消さない**)。
-   実測: 320px で端末の文字を 1.25 倍にすると、これが無いとあふれる */
-.player--dock.is-fit3 .repeat-unit .repeat-unit-now { min-width: 0; }
-.player--dock.is-fit3 .player-at .wide-text { display: none; }
+   ここまで詰まったら、その予備の幅は手放す(**中身は1文字も消さない**) */
+.player-head.is-fit3 .repeat-unit .repeat-unit-now { min-width: 0; }
+.player-head.is-fit3 .player-at .wide-text { display: none; }
 
 /* **紙の下にも、帯のぶんだけ余白を足す。**
    足さないと、いちばん下の段落が帯に隠れて読めない
@@ -9261,30 +9331,13 @@ button.wbfilter-ctl { text-align: left; }
   .sheet-floats.is-above-dock { bottom: calc(60px + env(safe-area-inset-bottom)); }
 }
 
-/* ── つまみ(2026-09 利用者の指定)──────────────────────────────
-     > フロートにした時は端っこにドラッグできる部分を作って
-     > 移動させれるようにしたいです
-
-   **端に置く。** 中に置くと、押すものと押し間違える。
-   縦の点線2本で「掴むところ」だと分かるようにしてある(絵文字は使わない)。
-   `touch-action: none` … 指でつまんでいるあいだ、画面を送らせない */
-.player-grip {
-  flex: 0 0 auto; align-self: stretch;
-  width: 14px; min-height: 26px; margin-right: 2px;
-  cursor: grab; touch-action: none;
-  border-radius: var(--r-4);
-  background:
-    radial-gradient(circle, var(--text-muted) 1px, transparent 1.2px) 3px 50% / 5px 6px repeat-y,
-    radial-gradient(circle, var(--text-muted) 1px, transparent 1.2px) 8px 50% / 5px 6px repeat-y;
-}
-.player-grip:active { cursor: grabbing; }
-/* 動かした位置を元へ戻す。**動かしたときだけ出る** */
-.player-home { flex: 0 0 auto; padding-left: 7px; padding-right: 7px; }
+/* **つまんで動かすつまみ・元へ戻す ⌖ は落とした**(第5.311節)。
+   動かせたのは浮かせた操作盤だけで、それを廃止したためである
+   (**効かない操作を見せない**の、いちばん素直な形 —— 操作ごと無くす)。 */
 
 /* 狭い画面。**文言は削らない**(何のボタンか分からなくなる)。
    削るのは余白と、いちばん端の置き場所の切り替えだけ */
 @media (max-width: 560px) {
-  .player--float { gap: var(--sp-6); padding: 4px 6px; }
   /* **狭い画面では、右下の行を折り返させる**(2026-09 実測)。
      操作盤と「集中モード」を 320px の1行に入れると、
      操作盤の中身がはみ出して**「集中モード」の下に潜り込み、
@@ -9307,7 +9360,6 @@ button.wbfilter-ctl { text-align: left; }
   .sheet-floats { flex-wrap: nowrap; align-items: center; }
   .sheet-float { display: none; }
   .lesson-focus { display: inline-flex; }
-  .player--float { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; }
   /* 進み具合の帯は落とす。**切り替えのボタンは残す** —
      消すと、右下にしたあと上へ戻す道が無くなる(行き止まりを作らない)。
 
@@ -9315,13 +9367,9 @@ button.wbfilter-ctl { text-align: left; }
      段落を送る ◀ ▶ がこの数をはさんでいるので、消すと
      **中身の無い三角**になり、何を送るのか分からなくなる。
      落とすのは**単位の言葉だけ**(`.wide-text`)。 */
-  .player--float .player-track { display: none; }
   /* **数は残し、単位の言葉だけを落とす。** 320px では
      「— / 2 発言」まで出すと**右端が切れて、送る ▶ が画面の外**へ出る
      (実測。切れたことに気づけないのがいちばん困る) */
-  .player--float .wide-text { display: none; }
-  .player--float .player-at { min-width: 0; }
-  .player--float .listenpill-arrow { min-width: 32px; padding: 0 7px; }
   .player .btn { padding: 5px 9px; }
 }
 
@@ -9329,11 +9377,6 @@ button.wbfilter-ctl { text-align: left; }
    (2026-09 実機・利用者の指定「2行になるのは絶対にダメです」)
    削るのは**余白と三角の幅**だけで、押せる大きさ(28px)は割らない */
 @media (max-width: 360px) {
-  .player--float { gap: var(--sp-4); padding: 4px; }
-  .player--float .listenpill-arrow { min-width: 28px; padding: 0 5px; }
-  .player--float .btn { padding: 5px 6px; }
-  .player--float .player-at { font-size: var(--fs-11); }
-  .player--float .player-place { padding-left: 5px; padding-right: 5px; }
   /* **操作盤は、絶対に折り返さない**(2026-09 実機・利用者の指定)。
 
        > 再生プレーヤーが2行になるのは絶対にダメです

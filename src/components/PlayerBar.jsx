@@ -15,81 +15,157 @@
  *   押した結果を確かめられない。あわせて**段落を送り戻す**道も要る
  *   (聞き逃した1つ前へ戻るのに、いちいち紙を探して押すことになる)。
  *
- * 【置き場所は3通り。**覚える**】(利用者の指定「切り替えられると最高」)
+ * 【置き場所は2通り。**覚える**】(**浮かせるは廃止**・第5.311節)
  *
  *   | どこ | いつ向くか |
  *   |---|---|
  *   | **上の帯の中**(`bar`)  | 画面共有のとき。相手にも見える。**広い窓だけ** |
- *   | **画面の下の黒帯**(`dock`) | スマホ・パッドの既定。親指が届く |
- *   | **浮かせる**(`float`) | 紙の見たいところを空けたいとき。**パッド以上ではつまんで動かせる** |
- *
- *   2026-09、利用者の指定で**画面の下の黒帯**を足した。
- *
- *     > スマホの再生プレーヤーがダサいですね。。。いっそのこと画面の下部に
- *     > 黒帯にした中に固定にした方がスタイリッシュな気がします。
- *     > パッドでもデフォルトは同じ仕様で、任意でフロート型にして移動できる
- *     > ように。PCの画面でもフロートにした時は端っこにドラッグできる部分を
- *     > 作って移動させれるようにしたいです
+ *   | **画面の下の黒帯**(`dock`) | それ以外ぜんぶ。親指が届く |
  *
  *   **どこへ出すかの判断は `playerPlace.js` 1か所**(画面に持たせない)。
+ *
+ * ============================================================================
+ * 【**黒帯は3段。音楽プレーヤーの形**】(2026-09-29 利用者の指定・第5.311節)
+ *
+ *   > 画面下部分の音声プレーヤーを添付の写真のようなスタイルに
+ *   > 変更してもらえませんか？ ここにどうやって段落と文章ごとの
+ *   > 先送りと戻しボタンをしれこむかが課題です。
+ *
+ *   4枚描いて見比べてもらい、**案A**(外側が段落・内側が文)に決まった。
+ *
+ *       ╭──────────────────────────────────────────╮
+ *       │  3 / 6 段落        ⤺ しない   速さ ◀100%▶ │
+ *       │  ━━━━━━━━━●────────────────────────────  │
+ *       │    ⏮⏮      ⏮      ( ▶ )     ⏭      ⏭⏭    │
+ *       │    段落     文               文     段落   │
+ *       ╰──────────────────────────────────────────╯
+ *
+ *   **送り戻しが「外側 = 段落 / 内側 = 文」**になっているので、
+ *   どちらを送るのかが**指の位置で決まる**(札も添えてある)。
+ *
+ *   **上の帯(`bar`)は1行のまま。** 言われたのは「画面下部分」なので、
+ *   そちらは触っていない(**言われた場所だけを直す**・CLAUDE.md)。
+ *
+ * 【速さは、ここにも置く】(2026-09-29 利用者の指定)
+ *
+ *   > ①ふたつ実装してください(これは例外でOKです)
+ *
+ *   速さは「大きく表示」の帯にもある。**同じことをするものを2つ見せない**
+ *   という決まりの例外として、利用者の指定で**両方に置く。**
+ *   **中身は同じ `Stepper` と同じ `SPEECH_RATES`** なので、
+ *   段の数や刻みが食い違うことは無い(呼び名も数え方も1か所)。
  *
  * 【出す数字は「段落」まで】
  *   1つの段落の中で何秒めか、までは出さない。**数えていないものを、
  *   数えているように見せない**(CLAUDE.md)。段落の単位なら、
  *   紙の上で光っている段落とぴったり合う。
+ *   **つまみも段落に吸い付く**(2026-09-29 利用者の指定
+ *   「動かせるようにして段落を進めたり戻せるようにしてください」)——
+ *   `<input type="range">` の `step=1` がそのまま段落1つぶんである。
+ *   指でもマウスでもキーボードでも動かせる。
  *
  * 【三角は文字で描く】
  *   絵文字は端末ごとに形も大きさも違う(`Stepper.jsx` と同じ理由)。
  */
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
 import SentenceSkip from './SentenceSkip.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
+import Stepper from './Stepper.jsx'
+import { SPEECH_RATES } from '../lib/speechRate.js'
+import { canSkipSentence, skipSentence, watchSentenceSkip } from '../lib/readAloud.js'
 import { useFitRow } from '../lib/fitRow.js'
 /* **通しで鳴らすボタンの文字は1か所**(第5.290節)。
    狭い画面で落とすのは `WIDE` のほうだけ —— `CORE` は必ず残る */
 import { WHOLE_PLAY_CORE, WHOLE_PLAY_WIDE } from '../lib/wholePlay.js'
 
 /**
- * @param place     'bar'(上の帯)/ 'dock'(画面の下の黒帯)/ 'float'(浮かせる)
+ * **送り戻しのボタン1つ**(黒帯の下の行)。
+ *
+ * **三角は自分で描く**(絵文字は端末ごとに形が違う・CLAUDE.md)。
+ * 外側(段落)は三角2つ + 縦棒、内側(文)は三角1つ + 縦棒にして、
+ * **絵だけで「どちらが大きく飛ぶか」**が分かるようにする。
+ */
+function PlayKey({ dir, label, wide, disabled, onClick }) {
+  const say = `${label}${dir < 0 ? 'もどる' : 'すすむ'}`
+  return (
+    <span className="player-key">
+      <button type="button" className="player-key-btn"
+              aria-label={say} title={say}
+              disabled={disabled} onClick={onClick}>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+             fill="currentColor" className="player-key-icon">
+          {dir < 0 ? (
+            <>
+              <rect x="4" y="5" width="2.6" height="14" rx="1.3" />
+              <path d="M16 5.6v12.8L7.6 12z" />
+              {wide && <path d="M23 5.6v12.8L14.6 12z" />}
+            </>
+          ) : (
+            <>
+              {wide && <path d="M1 5.6v12.8L9.4 12z" />}
+              <path d="M8 5.6v12.8L16.4 12z" />
+              <rect x="17.4" y="5" width="2.6" height="14" rx="1.3" />
+            </>
+          )}
+        </svg>
+      </button>
+      {/* **どちらを送るのかを、絵の下に書く。**
+          絵だけでは「2つ三角なら段落」と分かるまでに時間がかかる */}
+      <span className="player-key-cap" aria-hidden="true">{label}</span>
+    </span>
+  )
+}
+
+/**
+ * @param place     'bar'(上の帯)/ 'dock'(画面の下の黒帯)
  * @param onPlace   置き場所を変える(次の行き先を渡してくる)
  * @param placeNext 次に移る先の名前(ボタンの説明に出す)
- * @param onGrab    つまんで動かすためのつまみ。**渡されたときだけ出す**
- *                  (スマホでは渡ってこない —— 動かす余地が無い)
  * @param playing   いま鳴っているか
  * @param at        いま何番目(0 から)。鳴っていなければ null
  * @param total     ぜんぶで何個か
  * @param unit      数え方の名前(段落 / 発言)
  * @param onToggle  鳴らす・止める
- * @param onJump    その番号から鳴らす(送り戻し)
+ * @param onJump    その番号から鳴らす(送り戻し・つまみ)
  * @param repeat    くり返しの単位('off' / 'sentence' / 'item' / 'all')
  * @param onRepeat  単位を変える
+ * @param rate      読み上げの速さ(`SPEECH_RATES` の id)
+ * @param onRate    速さを変える。**渡されたときだけ出す**
  */
 export default function PlayerBar({
-  place = 'float', onPlace = null, placeNext = null,
-  onGrab = null, moved = false, onResetPos = null,
+  place = 'dock', onPlace = null, placeNext = null,
   playing = false, at = null, total = 0, unit = '段落',
   onToggle, onJump = null, repeat = null, onRepeat = null,
+  rate = null, onRate = null,
 }) {
   /**
-   * **右下では、入るまで詰める**(2026-09 実機・利用者の指摘
+   * **入るまで詰める**(2026-09 実機・利用者の指摘
    * 「スマホで『繰り返す』がはみ出てしまう」)。
    *
    * 狭い画面の詰め方は **560px / 360px の境目**で書いてあった。
    * ところが端末の「表示を大きく」で文字が 1.25 倍になると、
    * **390px でも入らない**(くり返しの単位が画面の外へ切れる)。
-   * **幅だけでは決まらない**ので、`useFitRow` で実際に測って詰める
-   * (集中モードの下の帯・レッスン表示の帯と同じ考え方)。
+   * **幅だけでは決まらない**ので、`useFitRow` で実際に測って詰める。
    *
    * **上の帯のときは測らない。** あちらは `.lesson-bar` の側が
    * 帯まるごとを測って詰めており、**二重に詰めると食い違う。**
    *
-   * **画面の下の黒帯でも測る**(2026-09)。横いっぱいでも、
-   * iPhone(390px)では押すものが入りきらず、
-   * **くり返しが画面の外へ切れていた**(実測して気づいた)。
+   * **黒帯では、測るのは上の行だけ。**(第5.311節)
+   * 下の行は5つのボタンだけで、言葉を削る余地がそもそも無い ——
+   * あちらは CSS の側が、幅に合わせてボタンを縮める。
    */
-  const boxRef = useRef(null)
-  useFitRow(boxRef)
+  const barRef = useRef(null)
+  const headRef = useRef(null)
+  useFitRow(place === 'dock' ? headRef : barRef)
+
+  /* 1文ずつ動かせるか。**知っているのは `readAloud.js`** なので、そちらに訊く
+     (`SentenceSkip` とまったく同じ引き方 —— 判断を画面に持たせない) */
+  const [bySentence, setBySentence] = useState(canSkipSentence)
+  useEffect(() => watchSentenceSkip(setBySentence), [])
+
+  /* つまみを動かしているあいだの見た目。**離すまで鳴らし直さない**
+     (`onInput` のたびに飛ばすと、指をすべらせる間ずっと鳴り直す) */
+  const [dragAt, setDragAt] = useState(null)
 
   if (!total) return null
   const now = Number.isFinite(at) ? at : null
@@ -97,122 +173,162 @@ export default function PlayerBar({
   // 止めた場所から再開するので、その場所を出しておくほうが正しい
   const shown = now == null ? null : now + 1
   const ratio = shown == null ? 0 : shown / total
+  /* **つまみの居場所。ここ1か所で数える**(第5.311節)。
+     指で動かしているあいだは、そちらが本当の居場所である */
+  const seekAt = dragAt ?? (now ?? 0)
+  /* **帯の塗りも、出す数字も、これを見る。**
+     塗りだけ別の式で出すと、**つまみと塗りの先が食い違う**
+     (実際にそうなっていた —— 2つのうち1つしかない教材で、
+     つまみは左端なのに帯が半分白かった。**数え方を2通り持たない**) */
+  const seekRatio = total > 1 ? seekAt / (total - 1) : 0
 
+  /** 鳴らす・止めるボタンの説明。**言葉は `wholePlay.js` 1か所**(第5.290節) */
+  const playSay = playing ? '止める' : `${WHOLE_PLAY_WIDE}${WHOLE_PLAY_CORE}`
+
+  /* ══════════════════════════════════════════════════════════════
+     **上の帯(`bar`)は、これまでの1行のまま**(第5.311節)。
+     言われたのは「画面下部分」なので、そちらは触っていない
+     (**言われた場所だけを直す**・CLAUDE.md)
+     ══════════════════════════════════════════════════════════════ */
+  if (place !== 'dock') {
+    return (
+      <div className={`player player--${place} no-print`}
+           ref={place === 'bar' ? null : barRef}
+           role="group" aria-label="読み上げの操作">
+        <SentenceSkip>
+          <button type="button"
+                  className={`btn btn--small player-play${playing ? ' is-on' : ''}`}
+                  onClick={onToggle}>
+            {playing
+              ? <><StopIcon /><span className="listen-word">Stop</span></>
+              : <><SpeakerIcon />
+                <span className="listen-word">
+                  <span className="wide-text">{WHOLE_PLAY_WIDE}</span>{WHOLE_PLAY_CORE}
+                </span>
+              </>}
+          </button>
+        </SentenceSkip>
+
+        <SentenceSkip
+          label={`${unit}を`}
+          onStep={(d) => onJump?.(now + d)}
+          canBack={!!onJump && now != null && now > 0}
+          canNext={!!onJump && now != null && now < total - 1}
+        >
+          <span className="player-at">
+            {shown == null ? `— / ${total}` : `${shown} / ${total}`}
+            <span className="wide-text"> {unit}</span>
+          </span>
+        </SentenceSkip>
+
+        {onRepeat && (
+          <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
+        )}
+
+        <span className="player-track" aria-hidden="true">
+          <span className="player-fill" style={{ width: `${Math.round(ratio * 100)}%` }} />
+        </span>
+
+        {onPlace && placeNext && (
+          <button type="button" className="btn btn--small btn--ghost player-place"
+                  aria-label={placeNext} title={placeNext}
+                  onClick={onPlace}>▼</button>
+        )}
+      </div>
+    )
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     **画面の下の黒帯 —— 3段**(第5.311節・利用者の指定した案A)
+     ══════════════════════════════════════════════════════════════ */
+  const canJump = !!onJump && total > 1
+  /* **動かしているあいだは、その段落の番号を出す。**
+     つまみだけ動いて数字が `—` のままだと、どこへ飛ぶのか分からない */
+  const dockShown = dragAt != null ? dragAt + 1 : shown
   return (
-    <div className={`player player--${place} no-print`}
-         ref={place === 'bar' ? null : boxRef}
+    <div className="player player--dock no-print"
          role="group" aria-label="読み上げの操作">
-      {/* ── つまみ(2026-09 利用者の指定)────────────────────────────
-            > フロートにした時は端っこにドラッグできる部分を作って
-            > 移動させれるようにしたいです
 
-          **浮かせていて、しかもパッド以上のときだけ出す**
-          (`onGrab` が渡ってこなければ出さない)。
-          帯の中・画面の下の黒帯は動かしようがなく、
-          スマホは動かす余地が無い —— **効かない操作を見せない。**
-
-          **押すボタンにしない。** ここは掴む場所であって、押しても何も
-          起きない。**戻す道はとなりの ⌖** が受け持つ */}
-      {onGrab && (
-        <span className="player-grip" aria-hidden="true"
-              title="つまんで動かす" onPointerDown={onGrab} />
-      )}
-
-      {/* **鳴らすボタンの両脇は「文」**(2026-09 利用者の指定)。
-          1本にまとめた音声のときだけ効く(時刻を控えてあるため) */}
-      <SentenceSkip>
-        <button type="button"
-                className={`btn btn--small player-play${playing ? ' is-on' : ''}`}
-                onClick={onToggle}>
-          {/* **言葉は `.listen-word` に入れておく。** それでも入らないときは
-              絵だけになる(`.player--float.is-fit1`)。すぐ右に「3 / 6」が
-              あるので、鳴らすボタンだと分かる。
-
-              **「用意しています…」は、どの端末でも出さない**
-              (2026-09 実機・利用者の指定)。
-
-                > どのデバイスでも段落送りをした時に再生ツールに
-                > 「用意しています」が表示されて幅が広くなると、
-                > 連続で押すときに押しにくいです。
-                > 全てスマホと同じ、幅が変わらない仕様にして下さい
-
-              **押したことは、絵が Speaker → Stop に変わることで伝わる。**
-              ここで文言を出すと**ボタンの幅が伸び縮みし**、
-              ◀ ▶ が左右に動いて押し間違える(実測 30 → 141px)。
-              段落を続けて送るときにいちばん困る形になる */}
-          {playing
-            ? <><StopIcon /><span className="listen-word">Stop</span></>
-            /* **狭い画面では「全体を」を落とす**(2026-09 実機・利用者の指定
-                 「再生プレーヤーが2行になるのは絶対にダメです」)。
-               すぐ右に「3 / 6 段落」があるので、通しであることは伝わる。
-               **落とすのは添えの言葉だけ** —— 「聞く」は必ず残る。
-
-               **文字は `wholePlay.js` 1か所**(第5.290節)。
-               段の中のボタン(`LessonView`)と**同じ動きの同じボタン**なので、
-               ここに書き写すと片方だけ古くなる */
-            : <><SpeakerIcon />
-              <span className="listen-word">
-                <span className="wide-text">{WHOLE_PLAY_WIDE}</span>{WHOLE_PLAY_CORE}
-              </span>
-            </>}
-        </button>
-      </SentenceSkip>
-
-      {/* **段落の数の両脇は「段落」**(2026-09 利用者の指定)。
-            > 段落の数字の左右に◁▷を配置して、一つのプレーヤーで
-            > 段落と文章どちらも飛ばせるようにしてください
-
-          いまどこか。**幅をそろえる**(そろえないと、送るたびに隣が動く) */}
-      <SentenceSkip
-        label={`${unit}を`}
-        onStep={(d) => onJump?.(now + d)}
-        canBack={!!onJump && now != null && now > 0}
-        canNext={!!onJump && now != null && now < total - 1}
-      >
+      {/* ── ① いまどこか・くり返し・速さ ────────────────────────── */}
+      <div className="player-head" ref={headRef}>
         <span className="player-at">
-          {shown == null ? `— / ${total}` : `${shown} / ${total}`}
-          {/* **単位の言葉だけを、狭い画面で落とす**(2026-09 実測)。
-              数ごと消していたので、**中身の無い ◀ ▶** になっていた。
-              数が残っていれば、何を送っているかは分かる */}
+          {dockShown == null ? `— / ${total}` : `${dockShown} / ${total}`}
           <span className="wide-text"> {unit}</span>
         </span>
-      </SentenceSkip>
 
-      {/* **くり返し**(2026-09 利用者の指定)。
-            > 文章単位、段落単位、全文単位、三つ選べるような。
+        {onRepeat && (
+          <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
+        )}
 
-          押すたびに単位が移る。**渡されなければ出さない**
-          (効かない操作を見せない) */}
-      {onRepeat && (
-        <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
-      )}
+        {/* **速さも、ここに置く**(2026-09-29 利用者の指定「ふたつ実装して」)。
+            **段も刻みも `SPEECH_RATES` 1か所**なので、
+            「大きく表示」の帯にあるものと食い違わない */}
+        {onRate && (
+          <Stepper label="速さ" options={SPEECH_RATES} value={rate}
+                   onChange={onRate} className="player-rate" />
+        )}
 
-      {/* 進み具合。**段落の単位**である(秒までは数えていない) */}
-      <span className="player-track" aria-hidden="true">
-        <span className="player-fill" style={{ width: `${Math.round(ratio * 100)}%` }} />
+        {onPlace && placeNext && (
+          <button type="button" className="btn btn--small btn--ghost player-place"
+                  aria-label={placeNext} title={placeNext}
+                  onClick={onPlace}>▲</button>
+        )}
+      </div>
+
+      {/* ── ② 進み具合。**つまんで動かせる**(2026-09-29 利用者の指定)──
+            > 動かせるようにして段落を進めたり戻せるようにしてください
+
+          **数えているのは段落まで**なので、`step=1` が段落1つぶん ——
+          つまみは**必ず段落に吸い付く**(秒の位置には止まらない)。
+          `<input type="range">` にしてあるので、**指でもマウスでも
+          キーボードでも**動かせる(つまむ操作しか無いと、届かない人がいる)。
+
+          **鳴らし直すのは離したとき**(`onChange`)。動かしているあいだ
+          (`onInput`)は見た目だけ動かす —— 1段落ごとに鳴らし直すと、
+          指をすべらせるあいだ音がぶつ切りになる */}
+      <span className="player-seek">
+        <span className="player-track" aria-hidden="true">
+          {/* **塗りの先を、つまみの真ん中で終わらせる。**
+              つまみには太さがあるので、端末は左右にその半分ずつ余白を取る ——
+              素の `%` で塗ると、**両端でつまみと先がずれる**(実測) */}
+          <span className="player-fill"
+                style={{ width: `calc(var(--seek-dot) / 2 + ${seekRatio} * (100% - var(--seek-dot)))` }} />
+        </span>
+        <input type="range" className="player-range"
+               min={0} max={Math.max(0, total - 1)} step={1}
+               value={seekAt}
+               disabled={!canJump}
+               aria-label={`${unit}を選ぶ`}
+               aria-valuetext={`${seekAt + 1} / ${total} ${unit}`}
+               onInput={(e) => setDragAt(Number(e.target.value))}
+               onChange={(e) => { const v = Number(e.target.value); setDragAt(null); onJump?.(v) }} />
       </span>
 
-      {/* 動かした位置を元へ戻す。**動かしたときだけ出す**
-          (押す前から出すと、何が「元」なのか分からない) */}
-      {moved && onResetPos && (
-        <button type="button" className="btn btn--small btn--ghost player-home"
-                aria-label="元の場所へ戻す" title="元の場所へ戻す"
-                onClick={onResetPos}>
-          ⌖
-        </button>
-      )}
+      {/* ── ③ 送り戻しと、鳴らすボタン ──────────────────────────
+            **外側が段落・内側が文**(利用者がえらんだ案A)。
+            どちらを送るのかが、指の位置で決まる */}
+      <div className="player-keys">
+        <PlayKey dir={-1} label={unit} wide
+                 disabled={!onJump || now == null || now <= 0}
+                 onClick={() => onJump?.(now - 1)} />
+        <PlayKey dir={-1} label="文"
+                 disabled={!bySentence}
+                 onClick={() => skipSentence(-1)} />
 
-      {/* 置き場所。**一度決めれば触らない**ので、いちばん端に小さく置く。
-          **押すたびに次へ移る**(上の帯 → 画面の下 → 浮かせる)。
-          4つ並べると、めったに触らないものが場所を食う(`Stepper` と同じ)。
-          **行き先を名前で言う** —— ▲▼ だけでは、3つあることが伝わらない */}
-      {onPlace && placeNext && (
-        <button type="button" className="btn btn--small btn--ghost player-place"
-                aria-label={placeNext} title={placeNext}
-                onClick={onPlace}>
-          {place === 'bar' ? '▼' : place === 'dock' ? '◱' : '▲'}
+        <button type="button"
+                className={`player-big${playing ? ' is-on' : ''}`}
+                aria-label={playSay} title={playSay}
+                onClick={onToggle}>
+          {playing ? <StopIcon className="icon" /> : <SpeakerIcon className="icon" />}
         </button>
-      )}
+
+        <PlayKey dir={1} label="文"
+                 disabled={!bySentence}
+                 onClick={() => skipSentence(1)} />
+        <PlayKey dir={1} label={unit} wide
+                 disabled={!onJump || now == null || now >= total - 1}
+                 onClick={() => onJump?.(now + 1)} />
+      </div>
     </div>
   )
 }

@@ -50,7 +50,8 @@ import {
    窓口の版は、文字として読み出して突き合わせる(下の ⑧) */
 import { canDeleteMaterial, deleteWarning } from '../src/lib/materialDelete.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../src/lib/playerPlace.js'
-import { clampPos } from '../src/lib/dragBox.js'
+/* **`dragBox.js` はもう無い**(第5.311節)。浮くプレーヤーを廃した日に
+   呼ぶ人がいなくなったので、道具ごと消した(使われないものを残さない) */
 /* **間を音で置く**(第5.285節)。DOM を引き連れていないので、素の node で走る */
 import {
   SILENT_MIN_MS, SILENT_RATE, SILENT_STEP_MS, silentKey, silentNeeded, silentWav,
@@ -1573,53 +1574,34 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
    ══════════════════════════════════════════════════════════════════ */
 {
   console.log('\n── 操作盤の置き場所 ──')
-  ok(PLACES.length === 3, '置き場所は3つ(上の帯 / 画面の下 / 浮かせる)')
+  ok(PLACES.length === 2, '置き場所は2つ(上の帯 / 画面の下)')
   // **狭い窓に「上の帯」は無い**(1行に収まらない)。既定は画面の下
   ok(placeFor('bar', false) === 'dock', '狭い窓では、上の帯を選んでいても画面の下')
   ok(placeFor('dock', false) === 'dock', '狭い窓の既定は画面の下')
-  ok(placeFor('float', false) === 'float', 'パッドでは、浮かせるも選べる')
   ok(placeFor('bar', true) === 'bar', '広い窓では、上の帯のまま')
   ok(placeFor(null, true) === 'bar', '知らない値は上の帯に落とす')
   ok(placeFor('nowhere', false) === 'dock', '知らない値は、狭い窓では画面の下')
 
-  /* ── **スマホには「浮かせる」を持たせない**(2026-09 実機・利用者の指定)
-         > フロートさせると下に変な隙間ができる、しかも戻せない。
-         > フロートさせると機能を無くしてくださいと先ほど頼みませんでしたか?
+  /* ── **浮くプレーヤーは廃止した**(2026-09-29 利用者の指定・第5.311節)
+         > そして浮くプレーヤーは廃止で。結局今まで使ったことがないです。
 
-       浮かせると、押すものが画面の幅に入りきらず
-       **置き場所のボタンが画面の外**へ出て、黒帯へ戻せなくなっていた。
-       だから**選べる場所そのものを黒帯だけ**にする。
-       ここを「スマホでも float を返す」に戻すと、この3行が赤くなる */
-  ok(placeFor('float', false, false) === 'dock', 'スマホでは、覚えていても黒帯')
-  ok(placeFor('dock', false, false) === 'dock', 'スマホの既定も黒帯')
-  ok(nextPlace('dock', false, false) === null
-    && nextPlace('float', false, false) === null,
-  'スマホには行き先が無い(切り替えのボタンごと出ない)')
+       もとは「スマホにだけ出さない」だった。いまは**どの窓にも無い。**
+       覚えている値が `float` でも、**知らない値**として落とす。
+       ここを「float も選べる」に戻すと、この4行が赤くなる */
+  ok(!PLACES.includes('float'), '浮かせるは、選べる場所に残っていない')
+  ok(placeFor('float', false) === 'dock', '狭い窓 … 覚えていても黒帯')
+  ok(placeFor('float', true) === 'bar', '広い窓 … 覚えていても上の帯(既定)')
+  ok(!PLACE_TO.float, '浮かせるへ移す言葉も残っていない')
 
-  // **押すたびに次へ移る。** 3回で必ず元へ戻る(行き止まりを作らない)
-  ok(nextPlace('bar', true) === 'dock' && nextPlace('dock', true) === 'float'
-    && nextPlace('float', true) === 'bar', '広い窓は3つを回る')
-  ok(nextPlace('dock', false) === 'float' && nextPlace('float', false) === 'dock',
-    'パッドは2つを行き来する(上の帯へは行かない)')
+  /* **狭い窓には行き先が無い。** `PlayerBar` はこれを見て
+     ボタンごと出さない(効かない操作を見せない・行き止まりを作らない) */
+  ok(nextPlace('dock', false) === null && nextPlace('bar', false) === null,
+    '狭い窓には行き先が無い(切り替えのボタンごと出ない)')
+  // **押すたびに次へ移る。** 2回で必ず元へ戻る(行き止まりを作らない)
+  ok(nextPlace('bar', true) === 'dock' && nextPlace('dock', true) === 'bar',
+    '広い窓は2つを行き来する')
   ok(PLACES.every((p) => PLACE_TO[p] && !PLACE_TO[p].includes('undefined')),
     'どの行き先にも、読める言葉が付いている')
-
-  /* **画面の外に残さない。** 窓を小さくしたあと外に出ると、
-     二度と掴めなくなる */
-  const box = { w: 300, h: 50 }
-  ok(clampPos({ x: 999, y: 999 }, box, { w: 400, h: 300 })?.x === 100,
-    '窓の外へ出したら、右端で止める')
-  ok(clampPos({ x: -50, y: -50 }, box, { w: 400, h: 300 })?.y === 0,
-    '左上より外へは出さない')
-  ok(clampPos({ x: 10, y: 10 }, { w: 500, h: 400 }, { w: 400, h: 300 })?.x === 0,
-    '箱が窓より大きいときは、左上にそろえる')
-  ok(clampPos(null, box, { w: 400, h: 300 }) === null, '決めていなければ何も返さない')
-  ok(clampPos({ x: NaN, y: 0 }, box, { w: 400, h: 300 }) === null, '数でなければ何も返さない')
-
-  /* つまんで動かせるのは**パッド以上**だけ(2026-09 利用者の判断)。
-     スマホでは浮いた操作盤だけで画面幅のほとんどを使うので、
-     動かす余地が無い —— 効かない操作を見せない */
-  ok(clampPos({ x: 5, y: 5 }, box, { w: 400, h: 300 })?.x === 5, '中にあればそのまま')
 
   /* **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、
      いまと同じ「右下に浮いたまま」に戻る */

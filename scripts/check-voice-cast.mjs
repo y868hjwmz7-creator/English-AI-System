@@ -1942,11 +1942,15 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   /* **欄の下の1行にも、えらんだ声を渡しているか。**
      道具の側(⑦)だけ見ていたので、**画面が渡し忘れても緑のまま**だった
      —— 赤チェックで1本だけ緑のままになり、それで気づいた(第5.308節) */
-  if (!/voicePlanLine\(kind, tagIds,[\s\S]{0,200}?, cast\)/.test(form)) {
+  /* **引数の並びを丸ごと書き写さない**(2026-09-29 に踏んだ)。
+     第5.309節で `examKey` を足した日に、`cast)` で閉じなくなり、
+     **画面は正しいのに、この見張りだけが赤くなった。**
+     見たいのは「`cast` を渡しているか」1つだけなので、そこだけ見る */
+  if (!/voicePlanLine\(kind, tagIds,[\s\S]{0,300}?, cast[,)]/.test(form)) {
     ng('Google の声 … 欄の下の1行に、えらんだ声を渡していない(黙って落とす)')
   } else ok('Google の声 … 欄の下の1行にも、えらんだ声を渡す')
   /* **効かない操作を見せない** —— Google に `stability` は無い */
-  if (!/voicePool\.length > 0 && !picksBaseVoice\(cast\) &&/.test(form)) {
+  if (!/voicePool\.length > 0 &&[\s\S]{0,40}?!picksBaseVoice\(cast\) &&/.test(form)) {
     ng('Google の声 … 「声の出し方」が、効かないのに出たままになっている')
   } else ok('Google の声 … Google をえらぶと「声の出し方」を出さない')
   if (!picksBaseVoice(['us-1', 'uk-female']) || picksBaseVoice(['us-1'])

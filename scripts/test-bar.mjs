@@ -581,22 +581,31 @@ for (const [label, want] of Object.entries(WANT)) {
   await page.close()
 }
 
-/* ── **狭い画面の操作盤は、絶対に1行**(2026-09 実機・利用者の指定)──────
+/* ── **黒帯は3段。押すものの行は、絶対に折り返さない**(第5.311節)──────
  *
  *    > 再生プレーヤーが2行になるのは絶対にダメです
+ *    > 画面下部分の音声プレーヤーを添付の写真のようなスタイルに
+ *    > ①ふたつ実装してください(これは例外でOKです)
+ *    > ②動かせるようにして段落を進めたり戻せるようにしてください
+ *    > ③案Aは「画面下の黒帯」だけに当てます、そして浮くプレーヤーは廃止で
  *
- *    押すものを1つ足すたびに折り返しやすくなるが、**折り返すこと自体が
- *    駄目**である。だから幅を変えて**実際に描かせ、高さで数える。**
- *    1行はおよそ 50px。2行になると倍になるので、そこで見分ける。
- *    右端が画面から出ていないかも一緒に見る(押せなくなるため)。
+ *    **「1行」の意味が変わった。** もとは操作盤まるごとが1行だったが、
+ *    いまは**わざと3段**である(いまどこか / 進み具合 / 送り戻し)。
+ *    だから**高さでは数えられない** —— 高さで見ていたころの本を
+ *    そのまま残すと、案Aにした日から**必ず赤**になってしまう。
  *
- *    **高さと右端だけでは足りない**(2026-09 実機・利用者の指摘
- *    「スマホで『繰り返す』がはみ出てしまう」)。操作盤は
- *    `flex: 0 1 auto; min-width: 0` で**自分は縮む**ので、右端は画面の
- *    内側のままでも、**中身がその箱からあふれて切れる。**
- *    だから `scrollWidth` も見る。
+ *    **見る先を、段ごとに分ける。**
  *
- *    あわせて**端末の「表示を大きく」**も模す(操作盤の文字を 1.25 倍)。
+ *      | 段 | 何を見るか |
+ *      |---|---|
+ *      | `.player-head` | 1行に収まっているか(`useFitRow` が詰める) |
+ *      | `.player-seek` | つまみが在るか。**塗りの先とつまみが同じ場所か** |
+ *      | `.player-keys` | **折り返していないか**(利用者の「絶対にダメ」) |
+ *
+ *    右端が画面から出ていないか・中身があふれていないかは、
+ *    **これまでどおり**見る(押せなくなるため)。
+ *
+ *    あわせて**端末の「表示を大きく」**も模す(黒帯の文字を 1.25 倍)。
  *    幅が同じでも入るかどうかは変わるので、**幅の一覧では拾えない。**
  */
 {
@@ -604,6 +613,7 @@ for (const [label, want] of Object.entries(WANT)) {
   await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
     { waitUntil: 'networkidle' })
   await page.waitForTimeout(300)
+  console.log('\n── 画面の下の黒帯(3段) ──')
   for (const [w, big] of [
     [560, false], [430, false], [402, false], [393, false], [390, false],
     [384, false], [375, false], [368, false], [360, false], [344, false], [320, false],
@@ -617,7 +627,7 @@ for (const [label, want] of Object.entries(WANT)) {
       const st = document.createElement('style')
       st.id = 'eas-bigplayer'
       st.textContent = '.player--dock .btn, .player--dock .player-at,'
-        + ' .player--float .btn, .player--float .player-at'
+        + ' .player--dock .player-key-cap'
         + ' { font-size: 16px !important }'
       document.head.appendChild(st)
     }, big)
@@ -628,142 +638,256 @@ for (const [label, want] of Object.entries(WANT)) {
     await page.evaluate(() => window.dispatchEvent(new Event('resize')))
     await page.waitForTimeout(180)
     const m = await page.evaluate(() => {
-      /* **既定は「画面の下の黒帯」**(2026-09 利用者の指定)。
-         浮かせているときは、そちらを測る */
-      const p = document.querySelector('.player--dock') ?? document.querySelector('.player--float')
+      const p = document.querySelector('.player--dock')
       if (!p) return null
       const r = p.getBoundingClientRect()
+      const head = p.querySelector('.player-head')
+      const keys = p.querySelector('.player-keys')
+      /** その行の子が、いちばん上の子より下へ落ちていないか(= 折り返した) */
+      const 折り返した = (row) => {
+        if (!row) return null
+        const kids = [...row.children].filter((c) => c.getBoundingClientRect().width > 0)
+        if (kids.length < 2) return false
+        const 頭 = kids[0].getBoundingClientRect()
+        return kids.some((c) => c.getBoundingClientRect().top > 頭.bottom - 1)
+      }
       return {
         h: Math.round(r.height), right: Math.round(r.right), win: window.innerWidth,
-        // **自分は縮むので、中身のあふれも見る**(切れても高さは変わらない)
-        spill: [p, ...p.children].some((b) => b.scrollWidth > b.clientWidth + 1),
+        /* **自分は縮むので、中身のあふれも見る**(切れても高さは変わらない)。
+           **段ごとに見る** —— 外側だけでは、中の行の切れを見落とす */
+        spill: [p, head, keys].filter(Boolean)
+          .some((b) => b.scrollWidth > b.clientWidth + 1),
+        頭が折り返した: 折り返した(head),
+        押す行が折り返した: 折り返した(keys),
+        頭の高さ: head ? Math.round(head.getBoundingClientRect().height) : null,
+        押す行: keys ? Math.round(keys.getBoundingClientRect().height) : null,
       }
     })
     const 印 = big ? `${w}px(文字 1.25 倍)` : `${w}px`
-    if (!m) { ng(`${印} で操作盤が出ていない`); continue }
-    if (m.h > 70) ng(`${印} で操作盤が2行になっている`, `高さ ${m.h}px(1行なら 50px ほど)`)
-    else if (m.right > m.win) ng(`${印} で操作盤が画面からはみ出している`, `右端 ${m.right} > ${m.win}`)
-    else if (m.spill) ng(`${印} で操作盤の中身があふれている`, 'くり返しの単位が画面の外へ切れる')
-    else ok(`${印} … 操作盤は1行(${m.h}px)・あふれ無し`)
+    if (!m) { ng(`${印} で黒帯が出ていない`); continue }
+    /* ★ **押すものの行が折り返したら赤**(利用者の「絶対にダメです」)。
+         高さでは見ない —— 3段なのだから、高さは 120px ほどが正しい */
+    if (m.押す行が折り返した) {
+      ng(`${印} で、送り戻しの行が折り返している`, `高さ ${m.押す行}px`)
+    } else if (m.頭が折り返した) {
+      ng(`${印} で、いちばん上の行が折り返している`, `高さ ${m.頭の高さ}px`)
+    } else if (m.right > m.win) {
+      ng(`${印} で黒帯が画面からはみ出している`, `右端 ${m.right} > ${m.win}`)
+    } else if (m.spill) {
+      ng(`${印} で黒帯の中身があふれている`, 'くり返しの単位が画面の外へ切れる')
+    } else ok(`${印} … 3段とも折り返さない(黒帯 ${m.h}px / 押す行 ${m.押す行}px)`)
   }
   await page.evaluate(() => document.getElementById('eas-bigplayer')?.remove())
 
-  /* ── **スマホには「浮かせる」を出さない**(2026-09 実機・利用者の指定)
-         > フロートさせると下に変な隙間ができる、しかも戻せない。
-         > フロートさせると機能を無くしてくださいと先ほど頼みませんでしたか?
+  /* ── **浮くプレーヤーは廃止した**(2026-09-29 利用者の指定・第5.311節)
+         > そして浮くプレーヤーは廃止で。結局今まで使ったことがないです。
 
-       浮かせると押すものが画面の幅に入りきらず、
-       **置き場所のボタンが画面の外**へ出て黒帯へ戻せなくなっていた。
-       しかも浮いた錠剤の下に、黒帯のぶんの余白だけが残る。
-
-       だから**選べる場所そのものを黒帯だけ**にした。
-       切り替えのボタンが1つも無いことを、ここで数える
-       (`placeFor` を「スマホでも float」に戻すと赤くなる)。 */
-  for (const w of [390, 375, 320]) {
+       もとは「スマホにだけ出さない」だった。いまは**どの幅にも無い。**
+       `.player--float` も、つまんで動かすつまみ(`.player-grip`)も、
+       元の場所へ戻す ⌖(`.player-home`)も、**1つも出ない。**
+       **広い窓でも数える** —— 狭い窓だけ見ていると、
+       `placeFor` に `float` を戻した日に**広い窓だけ緑のまま**になる。 */
+  for (const w of [1440, 900, 390, 375, 320]) {
     await page.setViewportSize({ width: w, height: 900 })
     await page.waitForTimeout(300)
-    const m = await page.evaluate(() => {
-      const p = document.querySelector('.player--dock')
-      return {
-        float: !!document.querySelector('.player--float'),
-        dock: !!p,
-        place: document.querySelectorAll('.player-place').length,
-        grip: document.querySelectorAll('.player-grip').length,
-        h: p ? Math.round(p.getBoundingClientRect().height) : null,
-      }
-    })
-    if (m.float) ng(`${w}px で、浮かせた操作盤が出ている`, 'スマホには浮かせる道を持たせない')
-    else if (!m.dock) ng(`${w}px で、画面の下の黒帯が出ていない`)
-    else if (m.place) ng(`${w}px に、置き場所の切り替えが出ている`, '行き先が無い(効かない操作)')
+    const m = await page.evaluate(() => ({
+      float: document.querySelectorAll('.player--float').length,
+      grip: document.querySelectorAll('.player-grip').length,
+      home: document.querySelectorAll('.player-home').length,
+    }))
+    if (m.float) ng(`${w}px に、浮くプレーヤーが出ている`, '第5.311節で廃止した')
     else if (m.grip) ng(`${w}px に、つまんで動かすつまみが出ている`)
-    else ok(`${w}px … 黒帯だけ・切り替えもつまみも出さない`)
+    else if (m.home) ng(`${w}px に、元の場所へ戻す ⌖ が出ている`)
+    else ok(`${w}px … 浮くプレーヤーも、つまみも、⌖ も出さない`)
+  }
 
-    /* ── **余った幅は、機能と機能のあいだへ配る**(2026-09 利用者の指定)
+  /* ── **置き場所は2つ。行き先が無ければ、ボタンごと出さない** ──────
+       上の帯は 1380px より狭いと1行に収まらない(`playerPlace.js`)。
+       **出る / 出ないの両方を見る** —— 片方だけだと、
+       「どこにも出さない」「全部に出す」に書き換えても緑のままになる。 */
+  for (const [w, 出る] of [[1440, true], [900, false], [390, false], [320, false]]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(300)
+    const n = await page.$$eval('.player-place', (xs) => xs.length)
+    if (出る && !n) ng(`${w}px で、置き場所の切り替えが出ていない`, '上の帯へ移す道が無い')
+    else if (!出る && n) ng(`${w}px に、置き場所の切り替えが出ている`, '行き先が無い(効かない操作)')
+    else ok(`${w}px … 置き場所の切り替えは ${出る ? '出る' : '出ない'}`)
+  }
+
+  /* ── **広い窓では、上の帯と黒帯を行き来できる**(行き止まりを作らない) ── */
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.waitForTimeout(350)
+  {
+    const 見る = () => page.evaluate(() => ({
+      bar: !!document.querySelector('.player--bar'),
+      dock: !!document.querySelector('.player--dock'),
+      次: document.querySelector('.player-place')?.getAttribute('aria-label') ?? null,
+    }))
+    const a = await 見る()
+    if (!a.次) ng('1440px … 置き場所の切り替えが無い')
+    else {
+      await page.click('.player-place'); await page.waitForTimeout(350)
+      const b = await 見る()
+      if (a.bar === b.bar && a.dock === b.dock) {
+        ng('1440px … 切り替えを押しても場所が変わらない', `${JSON.stringify(a)} → ${JSON.stringify(b)}`)
+      } else if (b.bar && b.dock) {
+        ng('1440px … 上の帯と黒帯が両方出ている', '同じものを2つ見せない')
+      } else if (!b.次) {
+        ng('1440px … 移したきり、戻る道が無い')
+      } else {
+        await page.click('.player-place'); await page.waitForTimeout(350)
+        const c = await 見る()
+        if (c.bar !== a.bar || c.dock !== a.dock) {
+          ng('1440px … もう一度押しても元へ戻らない', JSON.stringify(c))
+        } else ok(`1440px … ${a.bar ? '上の帯' : '黒帯'} ⇄ ${b.bar ? '上の帯' : '黒帯'} を行き来できる`)
+      }
+    }
+  }
+
+  /* ── ここから下は**黒帯の3段**を、段ごとに見る ───────────────── */
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.waitForTimeout(350)
+
+  for (const w of [1280, 820, 390, 375, 320]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(320)
+
+    /* ── ① **余った幅は、機能と機能のあいだへ配る**(2026-09 利用者の指定)
            > せっかくスペースに余裕ができたので、各機能の間にバランスよく
            > マージンを入れてください。触れすぎていて押し間違えをしそうな
            > 緊張感があります
 
-         `space-between` にしてあるので、**余りがそのまま隙間になる。**
-         決め打ちの数を足していないので、ここでは
-         「**余っているのに詰まったままではないか**」だけを見る
+         **見る先は押す行の中**(第5.311節)。3段にした日から、
+         黒帯の直の子は「上の行 / つまみ / 押す行」の**縦積み**になったので、
+         横の隙間をそこで数えても意味が無い。
+         `space-between` にしてあるので、**余りがそのまま隙間になる**
          (`justify-content` を `center` に戻すと赤くなる)。 */
     const g = await page.evaluate(() => {
-      const p = document.querySelector('.player--dock')
-      const kids = [...p.children].filter((c) => c.getBoundingClientRect().width > 0)
-      const 器 = p.parentElement
-      const cs = window.getComputedStyle(器)
-      const 内側 = 器.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+      const keys = document.querySelector('.player--dock .player-keys')
+      if (!keys) return null
+      const kids = [...keys.children].filter((c) => c.getBoundingClientRect().width > 0)
+      const cs = window.getComputedStyle(keys)
+      const 内側 = keys.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
       const 中身 = kids.reduce((s, c) => s + c.getBoundingClientRect().width, 0)
       return {
+        数: kids.length,
         余り: Math.round(内側 - 中身),
         隙間: kids.slice(1).map((c, i) =>
           Math.round(c.getBoundingClientRect().left - kids[i].getBoundingClientRect().right)),
       }
     })
-    const 最小 = Math.min(...g.隙間)
-    /* **余りのほとんどが隙間になっているか。** 端数(1px)は数えない */
-    if (最小 * g.隙間.length < g.余り - 1) {
-      ng(`${w}px … 余った幅が隙間になっていない`,
-        `余り ${g.余り}px なのに 隙間 ${g.隙間.join(' / ')}px`)
-    } else ok(`${w}px … 余り ${g.余り}px を隙間へ配った(${g.隙間.join(' / ')}px)`)
+    if (!g) { ng(`${w}px … 押す行が無い`); continue }
+    /* **5つ揃っているか。** 段落もどる / 文もどる / 鳴らす / 文すすむ /
+       段落すすむ。**数を書き写さず、絵の中身で数える**のは下の本 */
+    if (g.数 < 5) ng(`${w}px … 押す行に ${g.数} 個しかない`, '段落・文・鳴らすで5つ要る')
+    else {
+      const 最小 = Math.min(...g.隙間)
+      /* **余りのほとんどが隙間になっているか。** 端数(1px)は数えない */
+      if (最小 * g.隙間.length < g.余り - 1) {
+        ng(`${w}px … 余った幅が隙間になっていない`,
+          `余り ${g.余り}px なのに 隙間 ${g.隙間.join(' / ')}px`)
+      } else ok(`${w}px … 余り ${g.余り}px を隙間へ配った(${g.隙間.join(' / ')}px)`)
+    }
 
-    /* ── **並ぶものの背丈をそろえる**(2026-09 実機・利用者の指定)
+    /* ── ② **並ぶものの背丈をそろえる**(2026-09 実機・利用者の指定)
            > 段落送りの枠だけ細いのを、他のやつと同じにしてください
 
-         錠剤の背丈は**中身なり**である。Listen のまん中は
-         `.btn--small`(34px)なので 36px になるが、段落送りのまん中は
-         `.player-at` という**ただの文字**なので 22.4px しかなく、
-         隣に並ぶと1つだけ細く見えていた(実測)。
+         **数えるのは押す行の中の5つ**(第5.311節)。
+         まん中の鳴らすボタンだけは**わざと大きい**ので外す ——
+         **名指しで外したことを、ここに書き残す。**
+         送り戻しの4つは、絵も札も同じ形なので**1px も違わないはず**である。 */
+    const hs = await page.evaluate(() => [...document.querySelectorAll('.player--dock .player-key')]
+      .filter((c) => c.getBoundingClientRect().width > 0)
+      .map((c) => Math.round(c.getBoundingClientRect().height)))
+    if (hs.length !== 4) ng(`${w}px … 送り戻しが4つ無い(${hs.length} 個)`)
+    else if (new Set(hs).size !== 1) {
+      ng(`${w}px … 送り戻しの背丈がそろっていない`, `${hs.join(' / ')}px`)
+    } else ok(`${w}px … 送り戻しの4つは全部 ${hs[0]}px(背丈がそろっている)`)
 
-         **1つでも背丈が違えば赤くする。** `.listenpill-mid` の
-         `min-height` を外すと、ここが 36 / 22 / 36 になる。 */
-    const hs = await page.evaluate(() => {
+    /* ── ③ **つまみと、塗りの先が同じ場所か**(第5.311節・実測で見つけた)
+           はじめ塗りだけ `(いま + 1) / ぜんぶ` で出していたので、
+           **つまみは左端なのに帯が半分白い**という形になっていた。
+           **数え方を2通り持たない**(CLAUDE.md)。
+
+         つまみは端末が描くので掴めない。だから
+         **`<input>` が持っている値から居場所を出して**、塗りの先と比べる。
+         `--seek-dot`(つまみの太さ)も、書き写さず CSS から読む。 */
+    const s = await page.evaluate(() => {
       const p = document.querySelector('.player--dock')
-      return [...p.children]
-        .filter((c) => c.getBoundingClientRect().width > 0)
-        .map((c) => Math.round(c.getBoundingClientRect().height))
+      const seek = p?.querySelector('.player-seek')
+      const rng = p?.querySelector('.player-range')
+      const fill = p?.querySelector('.player-fill')
+      if (!seek || !rng || !fill) return null
+      const r = seek.getBoundingClientRect()
+      const dot = parseFloat(window.getComputedStyle(seek).getPropertyValue('--seek-dot')) || 0
+      const max = Number(rng.max); const val = Number(rng.value)
+      const ratio = max > 0 ? val / max : 0
+      return {
+        つまみの太さ: dot,
+        つまみの真ん中: r.left + dot / 2 + ratio * (r.width - dot),
+        塗りの先: fill.getBoundingClientRect().right,
+        ぜんぶ: max + 1,
+      }
     })
-    if (new Set(hs).size !== 1) {
-      ng(`${w}px … 操作盤に並ぶものの背丈がそろっていない`, `${hs.join(' / ')}px`)
-    } else ok(`${w}px … 並ぶものは全部 ${hs[0]}px(背丈がそろっている)`)
+    if (!s) ng(`${w}px … 進み具合のつまみが無い`, '動かして段落を送れない')
+    else if (!s.つまみの太さ) ng(`${w}px … つまみの太さ(--seek-dot)が読めない`)
+    else if (Math.abs(s.つまみの真ん中 - s.塗りの先) > 1) {
+      ng(`${w}px … つまみと塗りの先がずれている`,
+        `つまみ ${Math.round(s.つまみの真ん中)}px / 塗り ${Math.round(s.塗りの先)}px`)
+    } else ok(`${w}px … つまみと塗りの先が同じ場所(${Math.round(s.塗りの先)}px)`)
+
+    /* ── ④ **速さは、黒帯にも置く**(2026-09-29 利用者の指定)
+           > ①ふたつ実装してください(これは例外でOKです)
+
+         「大きく表示」の帯にもあるが、**例外として両方に置く。**
+         落とすと、黒帯だけで使っているときに速さを変えられない。 */
+    const 速さ = await page.$$eval('.player--dock .player-rate', (xs) => xs.length)
+    if (!速さ) ng(`${w}px … 黒帯に速さが出ていない`, '利用者の指定で両方に置く')
+    else ok(`${w}px … 黒帯に速さがある`)
   }
 
-  /* **パッド以上では、これまでどおり浮かせられる**(利用者の判断
-     「移動式のプレーヤーは、PCやパッドでは残しましょう」)。
-     **出す / 出さないの両方を見る** —— 片方だけだと、
-     「全部に出す」と書き換えても緑のままになる */
-  await page.setViewportSize({ width: 900, height: 900 })
-  await page.waitForTimeout(300)
+  /* ── ⑤ **つまみを動かすと、段落が1つ動く。ページは送られない** ────────
+       **矢印で測る**(第5.311節・実測)。指でなぞる形だけを試すと、
+       **キーボードで動かす人**のぶんが測れない。しかもここで
+       **本当の不具合が出た** —— レッスン表示は窓ぜんぶで矢印を聞いており、
+       つまみを動かすと**同時にページまで送られていた。**
+       (つまみは1段落ぶん動き、紙は次のページへ行く。どちらも当てにならない) */
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.waitForTimeout(350)
   {
-    const has = await page.$$eval('.player-place', (xs) => xs.length)
-    if (!has) ng('パッドで、置き場所の切り替えが出ていない', '浮かせる道が無くなっている')
+    const 見る = () => page.evaluate(() => {
+      const p = document.querySelector('.player--dock')
+      const rng = p?.querySelector('.player-range')
+      return {
+        数字: p?.querySelector('.player-at')?.innerText.replace(/\s+/g, ' ') ?? null,
+        値: rng ? Number(rng.value) : null,
+        最大: rng ? Number(rng.max) : null,
+        ページ: document.querySelector('.lesson-bar [aria-label="次のページ"]')
+          ? [...document.querySelectorAll('.lesson-page')].findIndex((e) => !e.classList.contains('is-closed'))
+          : null,
+      }
+    })
+    const a = await 見る()
+    if (a.値 == null) ng('つまみが無いので、動かせない')
+    else if (!(a.最大 > 0)) ng('つまみが動かせない形になっている', `最大 ${a.最大}`)
     else {
-      await page.click('.player-place')
-      await page.waitForTimeout(300)
-      const m = await page.evaluate(() => {
-        const p = document.querySelector('.player--float')
-        if (!p) return null
-        const r = p.getBoundingClientRect()
-        return {
-          h: Math.round(r.height), right: Math.round(r.right), win: window.innerWidth,
-          grip: !!document.querySelector('.player-grip'),
-          dock: !!document.querySelector('.player--dock'),
-          back: document.querySelectorAll('.player-place').length,
-          spill: [p, ...p.children].some((b) => b.scrollWidth > b.clientWidth + 1),
-        }
-      })
-      if (!m) ng('パッドで、浮かせる形に切り替えられない')
-      else if (m.dock) ng('浮かせたのに、画面の下の黒帯も出ている', '同じものを2つ見せない')
-      else if (!m.grip) ng('パッドで、つまんで動かすつまみが出ていない')
-      /* **戻す道が要る。** これが 0 だと、浮かせたきり黒帯へ帰れない */
-      else if (!m.back) ng('浮かせたあと、黒帯へ戻す道が無い')
-      else if (m.h > 70) ng('浮かせた操作盤が2行になっている', `高さ ${m.h}px`)
-      else if (m.right > m.win || m.spill) ng('浮かせた操作盤があふれている')
-      else ok(`900px … 浮かせても1行(${m.h}px)・つまみと戻る道がある`)
+      await page.focus('.player--dock .player-range')
+      await page.keyboard.press('ArrowRight')
+      await page.waitForTimeout(400)
+      const b = await 見る()
+      if (b.値 !== a.値 + 1) {
+        ng('つまみ … 矢印で1段落ぶん動かない', `${a.値} → ${b.値}`)
+      } else if (b.ページ !== a.ページ) {
+        ng('つまみ … 動かしたら、紙のページまで送られた',
+          `${a.ページ} → ${b.ページ}。矢印は、いま選ばれている物のもの`)
+      } else if (b.数字 === a.数字) {
+        ng('つまみ … 動かしても、いまどこかの数字が変わらない', `「${a.数字}」のまま`)
+      } else ok(`つまみ … 矢印で1段落ぶん動く(「${a.数字}」→「${b.数字}」)・ページは送られない`)
     }
   }
   await page.close()
 }
+
 
 /* ── **集中モードの下の帯も、絶対に1行**(2026-09 実機・利用者の指定)──
  *

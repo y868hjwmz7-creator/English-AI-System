@@ -14,29 +14,37 @@
  *   横いっぱいの帯にすれば、削る理由がそもそも無くなる。
  *
  * ============================================================================
- * 【置き場所は3つ】
+ * 【置き場所は2つ】(**浮かせるは廃止した**・第5.311節)
  *
  *   | id | どこ | いつ向くか |
  *   |---|---|---|
  *   | `bar`   | 上の帯の中 | 画面共有。相手にも見える。**広い窓だけ** |
- *   | `dock`  | **画面の下の黒帯** | スマホ・パッドの既定。親指が届く |
- *   | `float` | 浮かせる(右下) | 紙の見たいところを空けたいとき。**パッド以上だけ** |
+ *   | `dock`  | **画面の下の黒帯** | それ以外ぜんぶ。親指が届く |
  *
  * 【`bar` は広い窓にしか置けない】
  *   上の帯は 1380px より狭いと1行に収まらない(`fitsInBar`・実測)。
- *   だから狭い窓では **`dock` か `float` のどちらか**にする。
- *   覚えている値が `bar` でも、狭い窓では `dock` として扱う ——
- *   **行き止まりを作らない**(戻す道が無くなる)。
+ *   だから狭い窓では **`dock`**。覚えている値が `bar` でも、
+ *   狭い窓では `dock` として扱う —— **行き止まりを作らない**。
+ *
+ * ============================================================================
+ * 【**浮かせるのは廃止した**】(2026-09-29 利用者の指定・第5.311節)
+ *
+ *   > そして浮くプレーヤーは廃止で。結局今まで使ったことがないです。
+ *
+ *   下の「スマホには出さない」の経緯は**残してある** —— そこで学んだこと
+ *   (行き止まりを作らない・効かない操作を見せない)は、いまも効いている。
+ *   **使われないものを、作りだけ残さない。** 浮かせるのをやめたことで
+ *   つまんで動かす仕組み(`dragBox`)・元の場所へ戻す ⌖・
+ *   `.player--float` の見た目が、まとめて要らなくなった。
  */
 
 /** 覚えてよい値。**これ以外は既定に落とす** */
-export const PLACES = ['bar', 'dock', 'float']
+export const PLACES = ['bar', 'dock']
 
 /** 画面に出す名前。**1か所に置く** */
 export const PLACE_LABEL = {
   bar: '上の帯',
   dock: '画面の下',
-  float: '浮かせる',
 }
 
 /**
@@ -47,7 +55,6 @@ export const PLACE_LABEL = {
 export const PLACE_TO = {
   bar: '上の帯に入れる',
   dock: '画面の下に出す',
-  float: '右下に浮かせる',
 }
 
 /**
@@ -85,11 +92,10 @@ export const PLACE_TO = {
 export function placeFor(saved, fitsInBar, padUp = true) {
   const v = PLACES.includes(saved) ? saved : 'bar'
   if (fitsInBar) return v
-  // **スマホには浮かせる道が無い**(覚えている値によらず黒帯)。
-  // 行き止まりにならないよう、`nextPlace()` も `null` を返す
-  if (!padUp) return 'dock'
-  // 狭い窓に「上の帯」は無い。**既定は画面の下**(利用者の指定)
-  return v === 'float' ? 'float' : 'dock'
+  /* 狭い窓に「上の帯」は無い。**画面の下だけ**(浮かせるは廃止・第5.311節)。
+     `padUp` は受け取るが、もう答えを変えない —— **呼ぶ側を1つも
+     書き換えずに済ませる**ため、口だけ残してある */
+  return 'dock'
 }
 
 /**
@@ -103,11 +109,8 @@ export function placeFor(saved, fitsInBar, padUp = true) {
  */
 export function nextPlace(place, fitsInBar, padUp = true) {
   const now = placeFor(place, fitsInBar, padUp)
-  if (!fitsInBar) {
-    if (!padUp) return null           // スマホ … 黒帯だけ。移す先が無い
-    return now === 'dock' ? 'float' : 'dock'
-  }
-  if (now === 'bar') return 'dock'
-  if (now === 'dock') return 'float'
-  return 'bar'
+  // 狭い窓は黒帯だけ。**移す先が無いので `null`** —— 呼ぶ側は
+  // これを見てボタンごと出さない(効かない操作を見せない)
+  if (!fitsInBar) return null
+  return now === 'bar' ? 'dock' : 'bar'
 }

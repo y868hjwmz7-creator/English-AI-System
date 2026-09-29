@@ -87,7 +87,6 @@ import { wholePlayText } from '../lib/wholePlay.js'
 import useBodyAudio from '../lib/useBodyAudio.js'
 import { FIT_STAGES, overWrapping, useFitRow } from '../lib/fitRow.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../lib/playerPlace.js'
-import useDragBox from '../lib/dragBox.js'
 import { lockScroll } from '../lib/scrollLock.js'
 
 /** 本文のときだけ ◀ ▶ で挟む。**呼ぶ側に条件を書き散らさない** */
@@ -527,27 +526,13 @@ export default function LessonView({
   /** 書き込み中に上の帯へ入れていたら、行き場が無くなる。**画面の下へ逃がす** */
   const shownSpot = pen && spot === 'bar' ? 'dock' : spot
 
-  /* ── 浮かせた箱は、つまんで動かせる(2026-09 利用者の指定)──────────
-       > PCの画面でもフロートにした時は端っこにドラッグできる部分を作って
-       > 移動させれるようにしたいです
-
-       > 移動式のプレーヤーは、PCやパッドでは残しましょう。
-       > スマホでは狭すぎて意味がありません。
-
-     **動かすのは箱ぜんぶ**(`.sheet-floats`)。中には「集中モード」も
-     並んでいるので、操作盤だけを動かすと**別々に `fixed` で置く**ことに
-     なり、片方が消えたときにもう片方が飛ぶ(CLAUDE.md)。
-
-     **スマホには、そもそも浮かせる道が無い**(`placeFor` が黒帯に落とす)
-     ので、ここも自然につまみが出ない。`padUp` は上で出してある。 */
-  const floatsRef = useRef(null)
-
   /* ── 置き場所の切り替え。**行き先と押したときを、1組で持つ** ────────
-       出す場所は3つ(上の帯 / 黒帯 / 浮かせたもの)ある。
-       書き写すと必ずどこかだけ古くなるので、ここで1度だけ決める。
+       出す場所は2つ(上の帯 / 黒帯)。**浮かせるは廃止した**(第5.311節)
+         > そして浮くプレーヤーは廃止で。結局今まで使ったことがないです。
+       書き写すと必ずどちらかだけ古くなるので、ここで1度だけ決める。
 
        **`placeNext` が `null` なら、ボタンごと出ない**(`PlayerBar`)。
-       スマホは黒帯しか無いので、そこが `null` になる ——
+       上の帯が1行に収まらない窓では、行き先が無いので `null` になる ——
        **効かない操作を見せない。** */
   const placeNext = PLACE_TO[nextPlace(spot, fitsInBar, padUp)] ?? null
   const movePlayer = () => {
@@ -555,7 +540,6 @@ export default function LessonView({
     if (!v) return          // 行き先が無い(スマホ)。何もしない
     setPlace(v); savePlace(v)
   }
-  const drag = useDragBox(floatsRef, { enabled: shownSpot === 'float' && padUp })
 
   /* ── **「用意しています…」は、操作盤には出さない**(2026-09 利用者の指定)
 
@@ -726,6 +710,17 @@ export default function LessonView({
       }
       // 通しの練習のあいだはページという考え方が無い(教材1本を通す)
       if (runRef.current) return
+      /* ★ **矢印は、いま選ばれている物のもの**(2026-09-29 実測・第5.311節)。
+           黒帯に進み具合のつまみ(`<input type="range">`)を足したところ、
+           **矢印でつまみを動かすと、同時にページまで送られた。**
+           つまみは1段落ぶん動き、紙は次のページへ行く —— **どちらも
+           起きたので、どちらも当てにならない。**
+           窓ぜんぶで聞いているので、**中の欄が使う矢印まで奪っていた。**
+           欄・つまみ・一覧に入っているあいだは、ページを送らない
+           (メモや検索の欄でも、同じことが起きていた)。
+           **名指しの一覧にしない** —— 欄を足した日に守られなくなる */
+      const 的 = e.target
+      if (的 && (/^(INPUT|TEXTAREA|SELECT)$/.test(的.tagName) || 的.isContentEditable)) return
       if (e.key === 'ArrowRight') {
         setPage((p) => Math.min(p + 1, sections.length - 1))
         resetItems()
@@ -1631,15 +1626,11 @@ export default function LessonView({
             (出るほうは `FocusReader` の `.focus-exit`)。
             通しの練習(6Steps / Quick Response)のあいだは出さない。
             あちらはあちらで下にボタンがあり、重なる */}
+        {/* **つまんで動かす仕組みは落とした**(第5.311節)。
+            動かせたのは浮かせた操作盤だけで、それを廃止したためである。
+            右下の箱そのもの(集中モード・止めるボタン)は**そのまま** */}
         {(passageSection || canPlayAll) && !run && (
           <div
-            ref={floatsRef}
-            /* つまんでいるあいだ、指が箱の外へ出ても追いかける
-               (`setPointerCapture` はつまみに付けてある) */
-            onPointerMove={drag.enabled ? drag.onMove : undefined}
-            onPointerUp={drag.enabled ? drag.onDrop : undefined}
-            onPointerCancel={drag.enabled ? drag.onDrop : undefined}
-            style={drag.style}
             /* **黒帯に隠されないよう、そのぶん上へ逃がす** */
             className={`sheet-floats no-print${
               outside && shownSpot === 'dock' ? ' is-above-dock' : ''}`}
@@ -1659,27 +1650,14 @@ export default function LessonView({
                 (`.finder-float` と同じ考え方)。
                 本文のページを開いているときだけ出す — ほかのページでは
                 通しで鳴らすものが無い(効かない操作を見せない)。 */}
-            {/* **右下に出す。** 選ばれているときと、**狭い画面のとき。**
-                狭い画面では上の帯の設定が「表示」に畳まれるので、
-                そちらに置くと鳴らすボタンがしまい込まれてしまう */}
-            {/* **`!fitsInBar` を必ず添える。** 添えないと、右下を開いたまま
-                窓を広げたときに**帯と右下の2つ**が出る(実測で確かめた) */}
-            {canPlayAll && outside && shownSpot === 'float' && (
-              <PlayerBar
-                place="float"
-                /* **狭い窓でも切り替えを出す**(2026-09 利用者の指定
-                   「パッドでも…任意でフロート型にして移動できるように」)。
-                   行き先は `nextPlace()` が決める(判断を2か所に置かない) */
-                placeNext={placeNext}
-                onPlace={movePlayer}
-                onGrab={drag.onGrab} moved={drag.moved} onResetPos={drag.reset}
-                playing={playingAll}
-                at={playAt} total={playableAll.length}
-                unit={countUnit(section?.exercise_type)}
-                onToggle={playWhole} onJump={jumpTo}
-                repeat={player.repeat} onRepeat={player.setRepeat}
-              />
-            )}
+            {/* **浮かせる操作盤は廃止した**(2026-09-29 利用者の指定・第5.311節)。
+
+                  > そして浮くプレーヤーは廃止で。
+                  > 結局今まで使ったことがないです。
+
+                置き場所は**上の帯 / 画面の下の黒帯**の2つになった。
+                つまんで動かす仕組み(`dragBox`)・元の場所へ戻す ⌖ も、
+                これで要らなくなっている。 */}
 
             {/* ── 右下に貼り付く「集中モード」(2026-09 利用者の指定)──────
                 > このボタンは「教材を作る」のように常に右下にも固定してください。
@@ -1885,6 +1863,14 @@ export default function LessonView({
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}
               repeat={player.repeat} onRepeat={player.setRepeat}
+              /* **速さも黒帯に置く**(2026-09-29 利用者の指定
+                   「①ふたつ実装してください(これは例外でOKです)」)。
+                 「大きく表示」の帯にもあるが、**同じ `rateId` を
+                 同じ `Stepper` で動かす**ので、値が食い違うことは無い。
+                 **止めるところまで同じ**(`stopAll`)—— 速さを変えたら
+                 鳴っているものを止める、は第5.192節からの決まりである */
+              rate={rateId}
+              onRate={(id) => { setRateId(id); saveRateId(id); stopAll() }}
             />
           </div>
         )}
