@@ -75,6 +75,7 @@ export function premiumClipsOf(material) {
     const tier = voiceTierFor({
       exerciseType: sec.exercise_type,
       tags: material?.tags ?? [],
+      voiceIds,
     })
     if (tier !== PREMIUM) continue
     // 話す人 → 声。**鳴らすときとまったく同じ決め方**でなければ、

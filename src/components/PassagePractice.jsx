@@ -266,7 +266,7 @@ export default function PassagePractice({
   // 記事のように話す人がいない本文は、1つめの声で読む
   const soloVoice = resolveVoices(voiceIds)[0]
   // 本文はシャドーイングの素材なので、**良い声を使う**(`voiceTier.js`)
-  const tier = voiceTierFor({ exerciseType: section.exercise_type, tags })
+  const tier = voiceTierFor({ exerciseType: section.exercise_type, tags, voiceIds })
   const voice = voices[0] ?? null
 
   // ステップを移ったら、鳴っているものを止め、⑤ の「本文を出す」も戻す

@@ -63,10 +63,12 @@ import {
   CLIP_ACCENTS, DEFAULT_ACCENT, DEFAULT_READ_STYLE, MIN_MEETING_SPEAKERS,
   READ_STYLES, findVoice, pickVoices, readStyleHint, speakerCountsFor, styledVoiceId,
   voiceCountFor, voiceFirstGenderFor, voicePurposeFor, voicesOfAccent, providerOf,
+  voiceChoicesOf, providerOfVoice,
 } from '../data/clipVoices.js'
 /* **どのページを、えらんだ声 / 代役 のどちらが読むか**(第5.296節)。
    判断は `voicePlan.js` 1か所(素の node で確かめられる) */
 import { voicePlanLine } from '../lib/voicePlan.js'
+import { picksBaseVoice } from '../lib/voiceTier.js'
 /* **出来上がった名前に、声の並びを合わせる**(2026-09 利用者の指摘
      「男の役に女性の声、女性の役に男の声がアサインされることがほとんど」)。
    窓口へ性別を渡してはいたが、**そのあと一度も確かめていなかった。**
@@ -419,6 +421,23 @@ export default function MaterialForm({
   const voicePurpose = voicePurposeFor(kind)
   const voiceCount = voiceCountFor(kind, speakers)
   const voicePool = voicesOfAccent(accent, voicePurpose)
+  /**
+   * ── **欄に並べる声**(第5.308節・2026-09-29 利用者の指摘)────────────
+   *
+   *   > そして、文型トレーニングの音声の選択肢に Google がひとつも
+   *   > ありませんが、忘れていませんか？
+   *
+   *   並んでいたのは **ElevenLabs の声だけ**だった。ところが文型トレーニングは
+   *   30 問の大半を **Google が読む**(段が標準に落ちるため)。
+   *   その声は性別と訛りから**自動で**決まっていて、**選べなかった。**
+   *
+   *   **`voicePool` はそのまま残す。** あちらは
+   *   ①おまかせの埋め合わせ ②欄そのものを出すかどうか
+   *   ③「声の出し方」を出すかどうか に使っており、**どれも ElevenLabs の話**
+   *   である。ここで混ぜると、**何も指定していない教材の声が変わる**
+   *   (= 置き場所が変わる = 課金)。
+   */
+  const voiceChoices = voiceChoicesOf(accent, voicePurpose)
 
   /**
    * 保存する声の並び。
@@ -439,7 +458,9 @@ export default function MaterialForm({
     const chosen = []
     for (let i = 0; i < voiceCount; i += 1) {
       const want = picked[i]
-      if (want && voicePool.some((v) => v.id === want) && !chosen.includes(want)) {
+      /* **指名の検査は `voiceChoices`。** `voicePool` で見ると、
+         えらんだ Google の声がここで落ちて、おまかせに戻る(第5.308節) */
+      if (want && voiceChoices.some((v) => v.id === want) && !chosen.includes(want)) {
         chosen.push(want)
       }
     }
@@ -2095,9 +2116,11 @@ export default function MaterialForm({
                     「声の出し方」の `field-hint` と同じ作法である */}
                 {i === 0 && (
                   <span className="field-hint">
+                    {/* **えらんだ声も渡す**(第5.308節)。Google をえらぶと
+                        「すべて ◯◯ で読みます」に変わる —— **黙って落とさない** */}
                     {voicePlanLine(kind, tagIds,
                       providerOf(accent, findVoice(cast[0])?.gender ?? 'female'),
-                      findVoice(cast[0])?.gender ?? 'female')}
+                      findVoice(cast[0])?.gender ?? 'female', cast)}
                   </span>
                 )}
               </span>
@@ -2111,13 +2134,13 @@ export default function MaterialForm({
               >
                 <option value="">おまかせ</option>
                 {/* **名前・性別・どこの声か**(第5.296節)。
-                    並んでいるのは ElevenLabs の声なので、そう書く ——
-                    **代役(Google)の話は、上の1行が受け持つ。**
-                    会社の名前を**ここで作り直さない**(呼び名を2か所に書かない) */}
-                {voicePool.map((v) => (
+                    **Google の声も並ぶ**(第5.308節)。会社の名前を
+                    **ここで書き分けない** —— `providerOfVoice()` 1か所から
+                    引く(呼び名を2か所に書かない・CLAUDE.md) */}
+                {voiceChoices.map((v) => (
                   <option key={v.id} value={v.id}
                           disabled={picked.some((x, j) => x === v.id && j !== i)}>
-                    {v.label}({v.gender === 'male' ? '男性' : '女性'}・ElevenLabs)
+                    {v.label}({v.gender === 'male' ? '男性' : '女性'}・{providerOfVoice(v.id)})
                   </option>
                 ))}
               </select>
@@ -2139,12 +2162,15 @@ export default function MaterialForm({
               見せない)。標準の段(Google / Azure)に `stability` は無く、
               どちらを選んでも同じ音が鳴る。
 
+              **同じ理由で、Google の声をえらんだときも出さない**(第5.308節)。
+              判断は `picksBaseVoice()` 1か所 —— ここで id を見比べない。
+
               **選んだ側は、保存する声の id の後ろに付いて回る**
               (`styledVoiceId`)。置き場所も指紋も別になるので、
               **同じ英文を2つの読み方で持てるし、混ざらない。**
               既定(訛りを活かす)は素の id のままなので、
               **すでに作った音声は1本も無駄にならない。** */}
-          {voicePool.length > 0 && (
+          {voicePool.length > 0 && !picksBaseVoice(cast) && (
             <label className="field voice-style">
               <span>
                 声の出し方

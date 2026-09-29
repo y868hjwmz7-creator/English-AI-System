@@ -142,6 +142,7 @@ export function materialAudioClips(material) {
   const tier = voiceTierFor({
     exerciseType: body.exercise_type,
     tags: material?.tags ?? [],
+    voiceIds,
   })
 
   const items = audioItemsOf(body.items, body.exercise_type)
@@ -238,7 +239,7 @@ export function sectionRestClips(material, section) {
   const voiceIds = material?.voiceIds ?? material?.voice_ids ?? null
   const solo = resolveVoices(voiceIds)[0]
   const tags = material?.tags ?? material?.tagIds ?? []
-  const tier = voiceTierFor({ exerciseType: section.exercise_type, tags })
+  const tier = voiceTierFor({ exerciseType: section.exercise_type, tags, voiceIds })
   const out = []
   for (const it of section.items ?? []) {
     /* **読む欄は `audioTextOf()` 1か所**(第5.266節)。

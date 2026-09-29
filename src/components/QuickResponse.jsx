@@ -138,7 +138,11 @@ export default function QuickResponse({
 
   const card = pairs[at] ?? null
   // 本文は良い声で読む。判断は `voiceTier.js` 1か所
-  const tier = voiceTierFor({ exerciseType: 'article', tags: material?.tagIds })
+  const tier = voiceTierFor({
+    exerciseType: 'article',
+    tags: material?.tagIds,
+    voiceIds: material?.voiceIds ?? material?.voice_ids,
+  })
   const clipVoice = resolveVoices(material?.voiceIds ?? material?.voice_ids)[0]
 
   const answer = (ok) => {

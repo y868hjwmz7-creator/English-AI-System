@@ -26,7 +26,7 @@
  * (実際に出来上がる名前)は確かめようがないが、
  * **こちらの側の食い違いは、ここで全部止まる。**
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import {
   castClipSpeakers, castLine, castList, remakeModeOf, sameVoices,
 } from '../src/lib/voiceCast.js'
@@ -1761,10 +1761,198 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
   if (!/voicePlanLine\(kind, tagIds,/.test(form)) {
     ng('声の行 … 教材を作る画面が、その1行を出していない')
   } else ok('声の行 … 教材を作る画面が、`voicePlanLine()` を出す')
-  /* **欄には「名前(性別・どこの声か)」を出す** */
-  if (!/\{v\.label\}\(\{v\.gender === 'male' \? '男性' : '女性'\}・ElevenLabs\)/.test(form)) {
+  /* **欄には「名前(性別・どこの声か)」を出す**。
+     会社の名前は `providerOfVoice()` 1か所から引く(第5.308節)——
+     ここに `ElevenLabs` と書き写すと、Google の声にまでそう出る */
+  if (!/\{v\.label\}\(\{v\.gender === 'male' \? '男性' : '女性'\}・\{providerOfVoice\(v\.id\)\}\)/.test(form)) {
     ng('声の行 … 欄に、どこの声かを書いていない')
-  } else ok('声の行 … 欄は「名前(性別・ElevenLabs)」')
+  } else ok('声の行 … 欄は「名前(性別・どこの声か)」')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   **Google の声も、欄に並べる**(第5.308節・2026-09-29 利用者の指摘)
+
+     > そして、文型トレーニングの音声の選択肢に Google がひとつも
+     > ありませんが、忘れていませんか？
+
+   欄に並んでいたのは ElevenLabs の声だけで、**実際に読んでいる Google の
+   声は選べなかった。** 並べたうえで、えらばれたら段を標準に落とす。
+
+   **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+   ここでは「**おまかせが Google を引き当てないか**」である。
+   引き当てたら、何も指定していない教材の声が変わり、
+   **すでにある音声が全部作り直しになる**(= 再課金)。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const {
+    BASE_CAST, BASE_VOICES, CLIP_ACCENTS: 訛り一覧, isBaseVoice, pickVoices: おまかせ,
+    providerOfVoice, resolveVoices: 整える, voiceChoicesOf, voiceLabel: 名前,
+    voicesOfAccent: 良い声だけ,
+  } = await import('../src/data/clipVoices.js')
+  const { PREMIUM: 良い段, STANDARD: 標準段, picksBaseVoice, voiceTierFor: 段 }
+    = await import('../src/lib/voiceTier.js')
+  const { voicePlanLine: 行 } = await import('../src/lib/voicePlan.js')
+
+  /* ── ① **欄に、Google の声が並ぶ** ──
+     「出る」と「出ない」の両方を見る(CLAUDE.md)——
+     `voiceChoicesOf` には出て、`voicesOfAccent`(おまかせが使う)には出ない */
+  const 並び = voiceChoicesOf('us').map((v) => v.id)
+  const 混ぜ物 = 良い声だけ('us').map((v) => v.id).filter((id) => isBaseVoice(id))
+  if (!並び.includes('us-female') || !並び.includes('us-male')) {
+    ng('Google の声 … 欄に並んでいない', 並び.join(' / '))
+  } else ok(`Google の声 … 欄に並ぶ(${並び.length} 人のうち us-female / us-male)`)
+  if (混ぜ物.length) {
+    ng('Google の声 … おまかせの名簿にまで混ざっている(既存の教材の声が変わる)',
+      混ぜ物.join(' / '))
+  } else ok('Google の声 … おまかせの名簿(`voicesOfAccent`)には混ざっていない')
+
+  /* **おまかせを実際に 200 回まわす。** 名簿を見るだけでは、
+     `pickVoices` が別の道で引いていたときに素通りする */
+  const 引いた = new Set()
+  for (let i = 0; i < 200; i += 1) {
+    for (const 訛 of 訛り一覧) for (const id of おまかせ(訛.id, 3)) 引いた.add(id)
+  }
+  const 事故 = [...引いた].filter((id) => isBaseVoice(id))
+  if (事故.length) {
+    ng('Google の声 … おまかせが引き当てた(= 再課金)', 事故.join(' / '))
+  } else ok(`Google の声 … おまかせを ${訛り一覧.length} 訛り × 200 回まわしても引かない`)
+
+  /* ── ② **どの訛りでも、男女2人ずつ並ぶ** ──
+     1つの訛りだけ見ると「無ければ素通り」になる(CLAUDE.md) */
+  const 足りない = 訛り一覧
+    .map((a) => [a.id, voiceChoicesOf(a.id).filter((v) => v.base).map((v) => v.gender)])
+    .filter(([, g]) => !(g.includes('female') && g.includes('male')))
+    .map(([id, g]) => `${id} … ${g.join(' / ') || '(0人)'}`)
+  if (足りない.length) {
+    ng('Google の声 … 男女そろっていない訛りがある', 足りない.join('\n    '))
+  } else ok(`Google の声 … ${訛り一覧.length} 訛りぜんぶで男女2人`)
+
+  /* ── ③ **えらぶと、段が標準に落ちる** ──
+     **落ちる / 落ちない の両方**を見る。片方だけだと、
+     **いつも標準に落とす形**に書き換えても緑のままになる */
+  const 本文 = { exerciseType: 'article', tags: [] }
+  if (段({ ...本文, voiceIds: ['us-1'] }) !== 良い段) {
+    ng('Google の声 … ElevenLabs をえらんだのに、良い段にならない')
+  } else ok('Google の声 … ElevenLabs をえらべば、本文は良い段のまま')
+  if (段({ ...本文, voiceIds: ['us-female'] }) !== 標準段) {
+    ng('Google の声 … えらんでも、良い段のままになっている(中身は標準の音)')
+  } else ok('Google の声 … えらぶと、本文でも標準の段に落ちる')
+  /* **1人でも混じっていれば落とす**(会話で役ごとに段は変えられない) */
+  if (段({ ...本文, voiceIds: ['us-1', 'us-male'] }) !== 標準段) {
+    ng('Google の声 … 2人のうち1人が Google でも、良い段のままになっている')
+  } else ok('Google の声 … 2人のうち1人でも Google なら、ぜんぶ標準の段')
+  /* **えらんでいないときは、これまでと1つも変わらない**(= 作り直さない) */
+  for (const 空 of [undefined, null, []]) {
+    if (段({ ...本文, voiceIds: 空 }) !== 良い段) {
+      ng('Google の声 … 声をえらんでいない教材の段まで変わった(= 全部作り直し)',
+        String(空))
+    }
+  }
+  ok('Google の声 … 声をえらんでいない教材の段は、これまでどおり')
+  /* **弱点タグ(発音)より強い。** 読む声が無いのだから、そちらが勝つ */
+  if (段({ exerciseType: 'jp_to_en', tags: ['l-r'], voiceIds: ['uk-male'] }) !== 標準段) {
+    ng('Google の声 … 発音の弱点が付くと、良い段に引き戻されている')
+  } else ok('Google の声 … 発音の弱点が付いていても、標準の段に落ちる')
+
+  /* ── ④ **すべての `voiceTierFor(` が、えらんだ声を渡しているか** ──
+     1か所でも渡し忘れると、**そこだけ良い段の置き場所を探し**、
+     支度した MP3 と食い違って1本も当たらない(CLAUDE.md「数え方を2通り持たない」)。
+     **名前が出てくるかでは見ない** —— コメントを落としてから、
+     呼び出しの丸かっこを数えて中身を見る */
+  {
+    const 見る = (dir) => {
+      const out = []
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const q = `${dir}/${e.name}`
+        if (e.isDirectory()) out.push(...見る(q))
+        else if (/\.(js|jsx)$/.test(e.name)) out.push(q)
+      }
+      return out
+    }
+    const 抜け = []
+    let 数 = 0
+    for (const f of 見る(new URL('../src', import.meta.url).pathname)) {
+      if (f.endsWith('voiceTier.js')) continue
+      const src = readFileSync(f, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '')
+      let i = 0
+      for (;;) {
+        const at = src.indexOf('voiceTierFor({', i)
+        if (at < 0) break
+        let d = 0; let j = at + 'voiceTierFor('.length; let end = -1
+        for (; j < src.length; j += 1) {
+          if (src[j] === '{' || src[j] === '(') d += 1
+          else if (src[j] === '}' || src[j] === ')') { d -= 1; if (d === 0) { end = j; break } }
+        }
+        数 += 1
+        if (!/\bvoiceIds\b/.test(src.slice(at, end + 1))) {
+          抜け.push(`${f.split('/src/')[1]} … ${src.slice(at, end + 1).replace(/\s+/g, ' ')}`)
+        }
+        i = end + 1
+      }
+    }
+    if (数 < 10) ng('Google の声 … 呼び出しを数えられていない(探し方が壊れている)', 数)
+    else if (抜け.length) {
+      ng('Google の声 … えらんだ声を渡していない `voiceTierFor(` がある', 抜け.join('\n    '))
+    } else ok(`Google の声 … ${数} か所の \`voiceTierFor(\` が、ぜんぶ えらんだ声を渡す`)
+  }
+
+  /* ── ⑤ **えらんだ Google の声が、保存まで残るか** ──
+     `findVoice()` が引けないと `resolveVoices()` が黙って落とし、
+     **代役に戻って、何も変わらない**(「何も変わらない = 届いていない」) */
+  if (整える(['us-male'])[0] !== 'us-male') {
+    ng('Google の声 … 保存する並びから落ちている', 整える(['us-male']).join(' / '))
+  } else ok('Google の声 … 保存する並びに残る')
+
+  /* ── ⑥ **呼び名を変えていない** ──
+     `BASE_CAST` を足した日に、画面に出る文字が変わってはいけない */
+  if (名前('us-female') !== '標準の声(アメリカ・女性)') {
+    ng('Google の声 … 画面に出る名前が変わった', 名前('us-female'))
+  } else ok(`Google の声 … 画面に出る名前は これまでどおり(${名前('us-female')})`)
+  const 会社 = BASE_CAST.map((v) => providerOfVoice(v.id))
+  if (会社.some((c) => c !== 'Google') || 会社.length !== BASE_VOICES.length) {
+    ng('Google の声 … 会社の名前が Google になっていない', 会社.join(' / '))
+  } else ok(`Google の声 … ${会社.length} 人とも「Google」と出る`)
+  if (providerOfVoice('us-1') !== 'ElevenLabs') {
+    ng('Google の声 … ElevenLabs の声にまで Google と出ている', providerOfVoice('us-1'))
+  } else ok('Google の声 … ElevenLabs の声は「ElevenLabs」のまま')
+
+  /* ── ⑦ **黙って落とさない。欄の下の1行が変わる** ── */
+  const 良い行 = 行('pattern', [], 'Google', 'female', ['us-1'])
+  const 標準行 = 行('pattern', [], 'Google', 'female', ['us-female'])
+  if (!/えらんだ声/.test(良い行)) {
+    ng('声の行 … ElevenLabs をえらんだのに「えらんだ声」が消えた', 良い行)
+  } else ok(`声の行 … ElevenLabs をえらぶと: ${良い行}`)
+  if (/えらんだ声/.test(標準行) || !/すべて/.test(標準行)) {
+    ng('声の行 … Google をえらんでも「えらんだ声で読む」と出ている(黙って落としている)',
+      標準行)
+  } else ok(`声の行 … Google をえらぶと: ${標準行}`)
+
+  /* ── ⑧ **画面が、本当にこの形になっているか** ──
+     道具だけ直しても、画面が古い名簿を見ていれば何も変わらない。
+     **コメントを落としてから、使っている形で数える**(CLAUDE.md) */
+  const form = readFileSync(new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  if (!/voiceChoices\.map\(\(v\) =>/.test(form)) {
+    ng('Google の声 … 欄が、まだ ElevenLabs だけの名簿を並べている')
+  } else ok('Google の声 … 欄は `voiceChoices`(ElevenLabs + Google)を並べる')
+  if (!/voiceChoices\.some\(\(v\) => v\.id === want\)/.test(form)) {
+    ng('Google の声 … 指名の検査が ElevenLabs だけの名簿を見ている(えらんでもおまかせに戻る)')
+  } else ok('Google の声 … 指名の検査も `voiceChoices` を見る')
+  /* **欄の下の1行にも、えらんだ声を渡しているか。**
+     道具の側(⑦)だけ見ていたので、**画面が渡し忘れても緑のまま**だった
+     —— 赤チェックで1本だけ緑のままになり、それで気づいた(第5.308節) */
+  if (!/voicePlanLine\(kind, tagIds,[\s\S]{0,200}?, cast\)/.test(form)) {
+    ng('Google の声 … 欄の下の1行に、えらんだ声を渡していない(黙って落とす)')
+  } else ok('Google の声 … 欄の下の1行にも、えらんだ声を渡す')
+  /* **効かない操作を見せない** —— Google に `stability` は無い */
+  if (!/voicePool\.length > 0 && !picksBaseVoice\(cast\) &&/.test(form)) {
+    ng('Google の声 … 「声の出し方」が、効かないのに出たままになっている')
+  } else ok('Google の声 … Google をえらぶと「声の出し方」を出さない')
+  if (!picksBaseVoice(['us-1', 'uk-female']) || picksBaseVoice(['us-1'])
+      || picksBaseVoice([]) || picksBaseVoice(null)) {
+    ng('Google の声 … `picksBaseVoice()` の見分けが合っていない')
+  } else ok('Google の声 … `picksBaseVoice()` は、混じっているときだけ true')
 }
 
 console.log(bad === 0 ? '\n✅ 声と役の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

@@ -33,12 +33,14 @@ import { PREMIUM, voiceTierFor } from './voiceTier.js'
 /**
  * @param {string} kind 教材の種類
  * @param {Array<string>} tags 弱点タグ
+ * @param {Array<string>} voiceIds **えらんだ声**(第5.308節)。
+ *   Google の声が混じっていれば、`voiceTierFor()` が全ページを代役に落とす
  * @returns {{ pick: string[], base: string[] }}
  *   `pick` … **えらんだ声**で読むページの名前
  *   `base` … **代役**で読むページの名前
  *   どちらも**音声の付くページだけ**(付かないページは、どちらにも入らない)
  */
-export function voicePlan(kind, tags = []) {
+export function voicePlan(kind, tags = [], voiceIds = null) {
   const pick = []
   const base = []
   for (const sec of defaultSectionsFor(kind) ?? []) {
@@ -50,7 +52,7 @@ export function voicePlan(kind, tags = []) {
        **見張りがこれを捕まえた**(書いたつもりで、書いていなかった) */
     if (!hasSpokenAudio(t)) continue
     const name = sectionLabel(kind, t)
-    const tier = voiceTierFor({ exerciseType: t, tags })
+    const tier = voiceTierFor({ exerciseType: t, tags, voiceIds })
     if (tier === PREMIUM) pick.push(name)
     else base.push(name)
   }
@@ -67,9 +69,12 @@ export function voicePlan(kind, tags = []) {
  * @param {Array<string>} tags 弱点タグ
  * @param {string} provider 代役の会社(`providerOf()` から)
  * @param {string} gender 代役の性別(`'male'` / `'female'`)
+ * @param {Array<string>} voiceIds **えらんだ声**(第5.308節)。
+ *   Google の声をえらぶと「すべて ◯◯ で読みます」に変わる ——
+ *   **黙って落とさない**(CLAUDE.md)
  */
-export function voicePlanLine(kind, tags, provider, gender) {
-  const { pick, base } = voicePlan(kind, tags)
+export function voicePlanLine(kind, tags, provider, gender, voiceIds = null) {
+  const { pick, base } = voicePlan(kind, tags, voiceIds)
   const 代役 = `${provider}の${gender === 'male' ? '男性' : '女性'}`
   if (!pick.length && !base.length) return ''
   if (!base.length) return 'すべて、えらんだ声で読みます'

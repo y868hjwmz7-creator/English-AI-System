@@ -947,7 +947,9 @@ export default function LessonView({
   const soloVoice = resolveVoices(material.voiceIds)[0]
   // 良い声を使うか、標準の声で足りるか(`voiceTier.js`)。
   // 記事・会話とリスニング、それに**発音・リズムの弱点**なら良い声にする
-  const tier = voiceTierFor({ exerciseType: section?.exercise_type, tags: allTags })
+  const tier = voiceTierFor({
+    exerciseType: section?.exercise_type, tags: allTags, voiceIds: material.voiceIds,
+  })
   // 日本語と英語が対になった文が1つでもあれば、Quick Response ができる。
   // **穴埋め・リスニング・内容の理解しか無い教材では出さない**(`quickResponse.js`)
   const qrPossible = hasQuickResponse(material)
@@ -1721,7 +1723,10 @@ export default function LessonView({
             section={passageSection}
             isDialogue={passageSection.exercise_type === 'dialogue'}
             voiceIds={material.voiceIds}
-            tier={voiceTierFor({ exerciseType: passageSection.exercise_type, tags: allTags })}
+            tier={voiceTierFor({
+              exerciseType: passageSection.exercise_type, tags: allTags,
+              voiceIds: material.voiceIds,
+            })}
             level={material.level}
             /* **紙のまん中に出ていた発言から始める**(2026-09 利用者の指定)。
                `null` のときだけ、覚えている場所から始まる */
@@ -1988,7 +1993,9 @@ export default function LessonView({
     const secClipCast = castClipSpeakers(
       (sec.items ?? []).map((it) => it.speaker), material.voiceIds,
     )
-    const secTier = voiceTierFor({ exerciseType: sec.exercise_type, tags: allTags })
+    const secTier = voiceTierFor({
+      exerciseType: sec.exercise_type, tags: allTags, voiceIds: material.voiceIds,
+    })
     const k = (it, i) => key(it, i, si)
     /**
      * ── **集中モードでは、幅によらず語を押せる**(第5.209節・2026-09 実機)──

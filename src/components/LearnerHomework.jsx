@@ -706,6 +706,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                       tier={voiceTierFor({
                                         exerciseType: sec.exercise_type,
                                         tags: a.material?.tagIds,
+                                        voiceIds: a.material?.voiceIds,
                                       })}
                                     />
                                   </div>
@@ -749,6 +750,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                       tier={voiceTierFor({
                                         exerciseType: sec.exercise_type,
                                         tags: a.material?.tagIds,
+                                        voiceIds: a.material?.voiceIds,
                                       })}
                                     />
                                     {it.answer_alt && (

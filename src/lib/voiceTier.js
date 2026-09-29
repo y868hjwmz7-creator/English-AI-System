@@ -36,7 +36,7 @@
  *   同じ英文でも段が違えば別の音声になるので、置き場所の鍵にも段が入る
  *   (`tts/<版>/<段>/<話者>/<指紋>.mp3`)。
  */
-import { CLIP_VOICES } from '../data/clipVoices.js'
+import { CLIP_VOICES, isBaseVoice } from '../data/clipVoices.js'
 import { isPassageSection } from '../data/exerciseTypes.js'
 import { weaknessTags } from '../data/weaknessTags.js'
 
@@ -58,18 +58,52 @@ export const hasSoundTag = (tagIds) =>
 const SOUND_TYPES = new Set(['listening'])
 
 /**
+ * ============================================================================
+ * **Google の声をえらんだか**(第5.308節・2026-09-29 利用者の指定)
+ *
+ *   > そして、文型トレーニングの音声の選択肢に Google がひとつもありませんが、
+ *   > 忘れていませんか？
+ *
+ *   欄に Google の声を並べた(`voiceChoicesOf()`)。えらばれたときは、
+ *   **その教材をぜんぶ標準の段で読む。**
+ *
+ * 【なぜ「ぜんぶ」なのか】
+ *   Google の声には **ElevenLabs の Voice ID が無い**(`elevenId` が空)。
+ *   良い段のまま鳴らそうとすると、窓口は読む声を持っていないので
+ *   **代役に落として鳴らす** —— つまり `tts/<版>/premium/…` に
+ *   **中身は標準の音**が置かれる。良い声にした日に、そこだけ古い音が残る。
+ *   **段と、実際に鳴る声を食い違わせない。**
+ *
+ * 【1人でも Google なら、ぜんぶ落とす】
+ *   会話で役ごとに段を変えることはできない(段は教材の演習ごとに1つ)。
+ *   **既定は「できない」側**(CLAUDE.md)。黙ってはいない ——
+ *   声の欄の下の1行(`voicePlanLine`)が「すべて Google の…で読みます」と出す。
+ *
+ * 【すでにある教材は1つも変わらない】
+ *   これまで `findVoice()` が Google の id を引けなかったので、
+ *   `voice_ids` に Google の id が入っている教材は**存在しない。**
+ *   つまり**置き場所は1つも変わらず、作り直しも再課金も起きない。**
+ * ============================================================================
+ */
+export const picksBaseVoice = (voiceIds) =>
+  (voiceIds ?? []).some((id) => isBaseVoice(id))
+
+/**
  * 段を決める。
  *
  * @param {object} o
  * @param {string} o.exerciseType 演習の種類(`exerciseTypes.js` の id)
  * @param {Array<string>} o.tags  その教材の弱点タグ
+ * @param {Array<string>} o.voiceIds その教材に**えらばれた声**(第5.308節)
  */
-export function voiceTierFor({ exerciseType = '', tags = [] } = {}) {
+export function voiceTierFor({ exerciseType = '', tags = [], voiceIds = null } = {}) {
   // **良い声を1つも登録していないなら、求めない。**
   // 求めると「無い場所を取りに行って、窓口に作らせる」を英文ごとに
   // 繰り返すことになる。標準の声(Google / Azure)で鳴るほうが速い。
   // 名簿(`src/data/clipVoices.js`)に1行足せば、すぐ良い段に戻る
   if (!hasPremiumVoices()) return STANDARD
+  // **Google の声がえらばれていたら、良い声は作りようがない**(第5.308節)
+  if (picksBaseVoice(voiceIds)) return STANDARD
   if (isPassageSection(exerciseType)) return PREMIUM
   if (SOUND_TYPES.has(exerciseType)) return PREMIUM
   if (hasSoundTag(tags)) return PREMIUM

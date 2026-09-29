@@ -124,6 +124,7 @@ export default function MaterialBody({
                             clipVoice={resolveVoices(m.voiceIds)[0]}
                             tier={voiceTierFor({
                               exerciseType: sec.exercise_type, tags: m.tagIds,
+                              voiceIds: m.voiceIds,
                             })}
                             whole={wholeSliceOf(
                               sec,
@@ -157,6 +158,7 @@ export default function MaterialBody({
                           tier={voiceTierFor({
                             exerciseType: sec.exercise_type,
                             tags: m.tagIds,
+                            voiceIds: m.voiceIds,
                           })}
                           /* **1本の中の、その区間だけを鳴らす**(2026-09)。
                              本文でなければ null が返るので、そのまま渡してよい */
@@ -212,7 +214,9 @@ export default function MaterialBody({
                       className="detail-answer"
                       typeId={sec.exercise_type}
                       clipVoice={resolveVoices(m.voiceIds)[0]}
-                      tier={voiceTierFor({ exerciseType: sec.exercise_type, tags: m.tagIds })}
+                      tier={voiceTierFor({
+                        exerciseType: sec.exercise_type, tags: m.tagIds, voiceIds: m.voiceIds,
+                      })}
                     />
                     {it.answer_alt && (
                       <div className="muted">別解: {it.answer_alt}</div>

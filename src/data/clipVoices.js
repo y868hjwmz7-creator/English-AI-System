@@ -786,13 +786,18 @@ export const DEFAULT_BASE = 'us-female'
  *   **えらばれた声を見て標準に落とす**(`voiceTier.js`)。
  * ============================================================================
  */
-const BASE_LABEL = { us: 'アメリカの声', uk: 'イギリスの声' }
+/**
+ * **標準の声の呼び名。1か所に持つ**(CLAUDE.md「呼び名を2か所に書かない」)。
+ * `voiceLabel()` の「名簿に無い id」の枝も、ここから引く ——
+ * **`BASE_CAST` を足した日に、画面の文字が変わってはいけない。**
+ */
+export const BASE_VOICE_NAME = '標準の声'
 
 /** 欄に並べる Google の声。**`CLIP_VOICES` には入れない** */
 export const BASE_CAST = BASE_VOICES.map((id) => {
   const [accent, gender] = id.split('-')
   return {
-    id, accent, gender, use: 'both', label: BASE_LABEL[accent] ?? id, base: true,
+    id, accent, gender, use: 'both', label: BASE_VOICE_NAME, base: true,
   }
 })
 
@@ -902,7 +907,7 @@ export const voiceLabel = (id) => {
      「標準の声」であることと、訛り・性別を日本語で言う。
      `baseOf()` の作りに合わせて `<訛り>-<性別>` を読み解く */
   const m = /^([a-z]{2})-(male|female)$/.exec(plainVoiceId(id))
-  if (m) return `標準の声(${accentLabel(m[1])}・${m[2] === 'male' ? '男性' : '女性'})`
+  if (m) return `${BASE_VOICE_NAME}(${accentLabel(m[1])}・${m[2] === 'male' ? '男性' : '女性'})`
   return id
 }
 
