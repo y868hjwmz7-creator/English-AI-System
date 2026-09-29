@@ -753,6 +753,80 @@ export const providerOf = (accent, gender) => BASE_PROVIDER[baseOf(accent, gende
 
 export const DEFAULT_BASE = 'us-female'
 
+/**
+ * ============================================================================
+ * **Google の声も、欄に並べる**(第5.308節・2026-09-29 利用者の指摘)
+ *
+ *   > そして、文型トレーニングの音声の選択肢に Google がひとつもありませんが、
+ *   > 忘れていませんか？
+ *
+ * ── なぜ無かったのか ────────────────────────────────────────
+ *
+ *   欄に並んでいたのは **ElevenLabs の声だけ**だった。
+ *   ところが文型トレーニングは、**30 問の大半(英文和訳・和文英訳)を
+ *   Google が読む。** その声は「えらんだ声の性別と国」から**自動で**
+ *   決まっていて、**選べなかった。**
+ *
+ *   第5.296節で言われた「選択画面には名前、性別と(Google)の評価を」を、
+ *   こちらは「並んでいる ElevenLabs の声に会社名を書き添える」と読んだ。
+ *   **利用者が言っていたのは「Google の声そのものを選べるように」だった。**
+ *
+ * ── おまかせでは選ばれない ──────────────────────────────────
+ *
+ *   **`CLIP_VOICES`(利用者が編集する名簿)には入れない。**
+ *   入れると `pickVoices()`(おまかせ)が Google を引き当ててしまい、
+ *   **何も指定していない教材の声が変わる**(= 置き場所が変わる = 課金)。
+ *   だから**欄に並べるときだけ**足す(`voiceChoicesOf()`)。
+ *
+ * ── えらぶと、その教材はぜんぶ Google になる ────────────────
+ *
+ *   2026-09-29 利用者の指定(「同じ欄に並べる」)。
+ *   Google の声には ElevenLabs の id が無いので、**良い声は作りようがない。**
+ *   段を決めるのは `voiceTierFor()` 1か所で、そこが
+ *   **えらばれた声を見て標準に落とす**(`voiceTier.js`)。
+ * ============================================================================
+ */
+const BASE_LABEL = { us: 'アメリカの声', uk: 'イギリスの声' }
+
+/** 欄に並べる Google の声。**`CLIP_VOICES` には入れない** */
+export const BASE_CAST = BASE_VOICES.map((id) => {
+  const [accent, gender] = id.split('-')
+  return {
+    id, accent, gender, use: 'both', label: BASE_LABEL[accent] ?? id, base: true,
+  }
+})
+
+/** その声は Google の声か(**良い声の id を持っていない**) */
+export const isBaseVoice = (id) => BASE_VOICES.includes(plainVoiceId(id))
+
+/**
+ * その訛りで選べる Google の声(女性・男性の2つ)。
+ *
+ * **`baseOf()` から引く。** us / ca はアメリカ、それ以外はイギリスという
+ * 決まりを**ここに書き写さない**(呼び名を2か所に書かない・CLAUDE.md)。
+ */
+export const baseVoicesOf = (accent) =>
+  ['female', 'male'].map((g) => BASE_CAST.find((v) => v.id === baseOf(accent, g)))
+    .filter(Boolean)
+
+/**
+ * **欄に並べる声**(第5.308節)。ElevenLabs のあとに Google の2つ。
+ *
+ * **おまかせ(`pickVoices`)はこれを使わない** —— あちらは
+ * `voicesOfAccent()`(ElevenLabs だけ)のままである。
+ */
+export const voiceChoicesOf = (accent, purpose = null) =>
+  [...voicesOfAccent(accent, purpose), ...baseVoicesOf(accent)]
+
+/**
+ * **その声を、どの会社が読むか**(画面にそのまま出す文字)。
+ *
+ * **会社の名前をここで作り直さない** —— Google の側は `BASE_PROVIDER`、
+ * 良い声の側は1つしかない。
+ */
+export const providerOfVoice = (id) =>
+  (isBaseVoice(id) ? (BASE_PROVIDER[plainVoiceId(id)] ?? '') : 'ElevenLabs')
+
 /** 訛りと性別から、標準の段での代役を決める */
 export const baseOf = (accent, gender) =>
   `${['us', 'ca'].includes(accent) ? 'us' : 'uk'}-${gender === 'male' ? 'male' : 'female'}`
@@ -775,7 +849,14 @@ export const JA_VOICE = 'ja-1'
  * ここで外しておけば、名前・性別・Voice ID・モデル・速さを引く仕組みが
  * **どれも書き換えずに済む**(判断は1か所)。
  */
-export const findVoice = (id) => CLIP_VOICES.find((v) => v.id === plainVoiceId(id)) ?? null
+/**
+ * 名簿から1行引く。**Google の声(`BASE_CAST`)も引ける**(第5.308節)——
+ * 引けないと `resolveVoices()` が落としてしまい、
+ * **えらんだ Google の声が保存されない。**
+ */
+export const findVoice = (id) => CLIP_VOICES.find((v) => v.id === plainVoiceId(id))
+  ?? BASE_CAST.find((v) => v.id === plainVoiceId(id))
+  ?? null
 
 /** 名簿に無い id でも落とさない。代役だけは必ず決まる */
 export const baseVoiceOf = (id) => {
