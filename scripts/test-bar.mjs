@@ -975,6 +975,51 @@ for (const [label, want] of Object.entries(WANT)) {
     else if (余分.札) ng(`${w}px … 送り戻しの札(文 / 段落)が戻っている`, `${余分.札} 個`)
     else ok(`${w}px … 進み具合のバーも、文 / 段落 の札も出ていない`)
 
+    /* ── ③の2 **鳴らすボタンの絵は、丸のまん中に・丸に見合う大きさで**
+           (2026-09-29 実機・利用者の指定を**2度**受けた)
+           > 再生ボタンとストップボタンが丸の中心からズレていて非常にダサいです
+           > 円に対して▶︎や■が私が渡した写真のデザインではもっと大きいでしょう
+
+         **枠の大きさでは数えない。** `PlayIcon` は 20×20 の枠の中で
+         三角が4〜5割しか塗っていないので、**枠を大きくしても絵は小さい。**
+         実際それで1度ずれた(26px の枠で、見える三角は 10×12px)。
+         **見える絵そのもの**(`path` / `rect` の箱)を測る。
+
+         ★ **中心は、三角の「箱」では数えない。** 右向きの三角は
+           箱の真ん中より重心が左にある(重心 9.67 / 箱の中心 11)ので、
+           箱でそろえると**左に寄って見える。** 目で見て真ん中に来るのは
+           **箱が少し右**のときである。だから「箱の中心が、丸の中心から
+           右へ 0〜8%」を良しとする(左に出たら赤)。
+           四角(■)は重心と箱が同じなので、そのまま真ん中に来る。 */
+    const 絵 = await page.evaluate(() => {
+      const big = document.querySelector('.player--dock .player-big')
+      const g = big?.querySelector('svg path, svg rect')
+      if (!g) return null
+      const br = big.getBoundingClientRect(); const gr = g.getBoundingClientRect()
+      return {
+        丸: Math.round(br.height),
+        高さの割合: Math.round((gr.height / br.height) * 100),
+        横のずれ: Math.round(((gr.left + gr.right) / 2 - (br.left + br.right) / 2)
+          / br.width * 1000) / 10,
+        縦のずれ: Math.round(((gr.top + gr.bottom) / 2 - (br.top + br.bottom) / 2)
+          / br.height * 1000) / 10,
+        形: g.tagName,
+      }
+    })
+    if (!絵) ng(`${w}px … 鳴らすボタンに絵が無い`)
+    else if (絵.高さの割合 < 33) {
+      ng(`${w}px … 鳴らすボタンの絵が小さい`,
+        `丸 ${絵.丸}px に対して高さ ${絵.高さの割合}%(写真は4割ほど)`)
+    } else if (絵.縦のずれ < -2 || 絵.縦のずれ > 2) {
+      ng(`${w}px … 鳴らすボタンの絵が、丸の上下の中心にいない`, `${絵.縦のずれ}%`)
+    } else if (絵.横のずれ < 0 || 絵.横のずれ > 8) {
+      ng(`${w}px … 鳴らすボタンの絵が、丸の左右の中心からずれている`,
+        `${絵.横のずれ}%(0〜8% に収める。左に出たら「ズレて見える」側)`)
+    } else {
+      ok(`${w}px … 鳴らすボタンの絵は丸の ${絵.高さの割合}%・`
+        + `中心から 横 ${絵.横のずれ}% / 縦 ${絵.縦のずれ}%`)
+    }
+
     /* ── ④ **速さは、黒帯にも置く**(2026-09-29 利用者の指定)
            > ①ふたつ実装してください(これは例外でOKです)
 
@@ -1000,11 +1045,30 @@ for (const [label, want] of Object.entries(WANT)) {
   {
     const いまのページ = () => page.evaluate(() =>
       [...document.querySelectorAll('.lesson-page')].findIndex((e) => !e.classList.contains('is-closed')))
+    /* **欄を1つ出す。** 紙の上に欄が無いページもあるので、
+       「メモ」を開いて確実に用意する(開かないと測る相手が居ない)。
+
+       ★ **偽の応答を先に用意する。** セッションの記録は Supabase から
+         読んでから欄を描く。この画面には差し替えを置いていなかったので、
+         **押しても欄が出ず、見張りが「測る相手が居ない」と言っていた**
+         (持ち帰らせた `{"メモの札":true,"欄ぜんぶ":0}` で分かった)。 */
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    const メモ = await page.$('.lesson-bar button[title^="この日のセッションの記録"]')
+    if (メモ) { await メモ.click(); await page.waitForTimeout(700) }
     const 欄 = await page.$$eval('.lesson input:not([type=hidden]), .lesson textarea',
       (xs) => xs.filter((x) => x.offsetParent !== null).length)
     if (!欄) {
+      /* **どこまで来たかを、必ず持ち帰る**(CLAUDE.md) */
+      const 様子 = await page.evaluate(() => ({
+        帯: !!document.querySelector('.lesson-bar'),
+        メモの札: !!document.querySelector('.lesson-bar button[title^="この日のセッションの記録"]'),
+        欄ぜんぶ: document.querySelectorAll('input, textarea').length,
+      }))
       ng('矢印 … 画面に欄(input / textarea)が1つも無い',
-        'この見張りは何も数えていない(測る相手が居ることを、先に確かめる)')
+        `この見張りは何も数えていない(測る相手が居ることを、先に確かめる)`
+        + `\n    ${JSON.stringify(様子)}`)
     } else {
       const 前 = await いまのページ()
       await page.evaluate(() => {

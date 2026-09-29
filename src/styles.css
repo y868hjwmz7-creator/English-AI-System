@@ -9316,7 +9316,19 @@ button.wbfilter-ctl { text-align: left; }
 .player-big .icon { margin-right: 0; }
 .player-big:hover { background: #ffffff; }
 .player-big:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.player-big .icon { width: 26px; height: 26px; }
+/* ★ **絵は、丸に対して大きく**(2026-09-29 実機・利用者の指定)。
+     > 円に対して▶︎や■が私が渡した写真のデザインではもっと大きいでしょう。
+     > もっと寄せてください。
+
+   **枠の大きさと、見える絵の大きさは違う。** `PlayIcon` は 20×20 の
+   枠の中で三角が **x 7〜15 / y 5.2〜14.8** にあるので、
+   **枠の4〜5割しか塗っていない。** 26px の枠に入れても、
+   見えるのは **10×12px** —— 60px の丸に対して**高さ 2割**にしかならなかった
+   (実測)。写真のプレーヤーは、三角の高さが丸の**4割ほど**ある。
+
+   **数を書かない。割合で書く。** 丸の大きさは幅で変わる(60 / 52px)ので、
+   px で書くと狭い端末だけ釣り合いが崩れる。 */
+.player-big .icon { width: 84%; height: 84%; }
 
 /* ── **上の帯も、同じ絵・同じ並び。大きさだけ1段詰める** ──────────
      (2026-09-29 利用者の指定)
@@ -9344,7 +9356,8 @@ button.wbfilter-ctl { text-align: left; }
 .player-keys--bar .player-key-icon { width: 18px; height: 18px; }
 /* いちばん押すものは、上の帯でも**白い丸**のまま(明るさで示す) */
 .player-keys--bar .player-big { width: 34px; height: 34px; border-radius: 17px; }
-.player-keys--bar .player-big .icon { width: 18px; height: 18px; }
+/* 絵の割合は**上の帯でも同じ**(下に置くものと同じにする・利用者の指定)。
+   px で書くと、丸の大きさが違うぶん釣り合いが変わる —— 割合で書く */
 
 /* いちばん狭い端末。**左右の余白だけを詰める**(押せる大きさは割らない) */
 @media (max-width: 400px) {
