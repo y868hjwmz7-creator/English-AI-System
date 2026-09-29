@@ -40,7 +40,7 @@ import {
   NEW_MATERIAL_KINDS, assignMaterial, countMaterialsLike, createMaterial, estimateCost,
   fillGrammar, generateChunkJa, generateSection,
   bodyWord, canPasteBody, freeFromSubject, generateSectionUnique,
-  isDialogueKind, isPassageKind, isVocabKind,
+  isDialogueKind, isExamKind, isPassageKind, isVocabKind, needsWeakTag,
   isDrillKind,
   kindLabel, usesScene,
   subjectLabel, subjectHint, subjectExample,
@@ -67,7 +67,11 @@ import {
 } from '../data/clipVoices.js'
 /* **どのページを、えらんだ声 / 代役 のどちらが読むか**(第5.296節)。
    判断は `voicePlan.js` 1か所(素の node で確かめられる) */
-import { voicePlanLine } from '../lib/voicePlan.js'
+import { hasAnyAudio, voicePlanLine } from '../lib/voicePlan.js'
+import {
+  DEFAULT_EXAM, examBriefByKey, examKeyOf, examOutline, examPartLine, examPartsOf,
+  examSkipLine, examTitle, EXAMS, firstPartOf,
+} from '../data/examPrep.js'
 import { picksBaseVoice } from '../lib/voiceTier.js'
 /* **出来上がった名前に、声の並びを合わせる**(2026-09 利用者の指摘
      「男の役に女性の声、女性の役に男の声がアサインされることがほとんど」)。
@@ -177,6 +181,12 @@ export default function MaterialForm({
   // ジャンル・場面)。一部だけ引き継ぐと、どれが残ってどれが消えるのか
   // 利用者には見分けられない。
   const [kind, setKind] = useState(initial.kind || 'pattern')
+  /* ── **テスト対策の、試験と PART**(第5.309節)────────────────
+     **2つとも持つ。** 試験だけでは問題が作れない(TOEIC の Part 5 と
+     Part 7 はまるで別物)。**一覧は `src/data/examPrep.js` 1か所**で、
+     ここには id しか置かない(呼び名を2か所に書かない・CLAUDE.md) */
+  const [examId, setExamId] = useState(initial.examId || DEFAULT_EXAM)
+  const [partId, setPartId] = useState(initial.partId || firstPartOf(DEFAULT_EXAM))
   /**
    * 内容理解・語句を**どれだけ作るか**(2026-09 利用者の指定)。
    *
@@ -842,6 +852,10 @@ export default function MaterialForm({
    */
   const autoTitle = () => {
     const parts = [todayLabel()]
+    /* **試験と PART は、どこにも保存していない**(第5.309節)。
+       列を増やすと利用者に貼ってもらう SQL が増えるので、
+       **名前に入れて残す** —— さがす画面で「Part 5」と打てば見つかる */
+    if (isExamKind(kind)) parts.push(examTitle(examId, partId))
     if (kind === 'reading') parts.push(genreLabel(genre))
     else if (usesScene(kind)) parts.push(sceneLabel(scene))
     if (tagIds.length) parts.push(tagIds.map(weaknessTagLabel).join(' + '))
@@ -863,7 +877,15 @@ export default function MaterialForm({
    * **1か所に置く。** 数を出す場所が画面に4つあるので、
    * 別々に計算すると「40問 作ります」と実際の数が食い違う。
    */
-  const planNow = () => sectionsFor(kind, amounts, include)
+  /* **試験と PART を1つの鍵にする**(`"toeic_lr:p5"`)。
+     **組み立てるのも読み解くのも `examPrep.js` 1か所**である ——
+     ここで `${examId}:${partId}` と書き写さない(数え方を2通り持たない) */
+  const examKey = examKeyOf(examId, partId)
+  /* **その構成に、読み上げの付く段が1つでもあるか**(第5.309節)。
+     無ければ声の欄を出さない(効かない操作を見せない)。
+     **`hasAnyAudio()` 1か所**から引く —— 画面で演習を数え直さない */
+  const 読み上げあり = hasAnyAudio(kind, tagIds, isExamKind(kind) ? examKey : '')
+  const planNow = () => sectionsFor(kind, amounts, include, isExamKind(kind) ? examKey : '')
 
   /**
    * **文法解説を作る問は、いくつあるか**(第5.213節)。
@@ -887,8 +909,11 @@ export default function MaterialForm({
    * 何を作るのかを押す前に読めることが、この文言の役目である。
    */
   const planLabel = (plan) => plan
+    /* **空のときは演習の名前に落とす**(第5.309節)。テスト対策は
+       PART で本文が変わるので、種類だけでは呼び名が決まらない */
     .map((s2) => `${isPassageSection(s2.exercise_type)
-      ? bodyWord(kind) : exerciseLabel(s2.exercise_type)}${s2.count}`)
+      ? (bodyWord(kind) || exerciseLabel(s2.exercise_type))
+      : exerciseLabel(s2.exercise_type)}${s2.count}`)
     .join(' + ')
 
   /**
@@ -938,6 +963,11 @@ export default function MaterialForm({
         count: rest[i].count,
         topic: tagIds.map(topicOf).join(' / '),
         level, industry: industryText, context,
+        /* **本文のあとの段にも渡す**(第5.309節)。渡さないと、
+           本文だけ TOEIC Part 7 の形で、設問はふつうの内容理解になる。
+           **2つの道(AI が書く / 原稿を貼る)の両方に置く** ——
+           片方だけだと、そちらを通った日にだけ形が変わる */
+        examPart: isExamKind(kind) ? examBriefByKey(examKey) : '',
       })
       if (e) throw new Error(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`)
       spent.input += data.usage?.input ?? 0
@@ -1098,6 +1128,11 @@ export default function MaterialForm({
          どちらへ転ぶか分からない。**窓口は置き直さない** ——
          切り口は画面が作る文字列なので、ここで足せば届く */
       angle: angleWithSubject(angleBrief(angleId), subject.trim().length > 0),
+      /* **その PART の作り方を、そのまま送る**(第5.309節)。
+         **窓口に一覧を書き写さない**(`angle` / `chunkKinds` と同じ作法)——
+         書き写すと、PART を1つ直したいだけで窓口を配り直すことになる。
+         テスト対策でなければ空なので、ほかの種類は1文字も変わらない */
+      examPart: isExamKind(kind) ? examBriefByKey(examKey) : '',
     })
     // **どの段階で失敗したのかを、必ず名前で言う。**
     // 記事・会話は「本文 → 内容の理解 → 語句」と3回に分けて作る。
@@ -1136,6 +1171,11 @@ export default function MaterialForm({
         count: rest[i].count,
         topic: tagIds.map(topicOf).join(' / '),
         level, industry: industryText, context,
+        /* **本文のあとの段にも渡す**(第5.309節)。渡さないと、
+           本文だけ TOEIC Part 7 の形で、設問はふつうの内容理解になる。
+           **2つの道(AI が書く / 原稿を貼る)の両方に置く** ——
+           片方だけだと、そちらを通った日にだけ形が変わる */
+        examPart: isExamKind(kind) ? examBriefByKey(examKey) : '',
       })
       if (e) throw new Error(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`)
       spent.input += data.usage?.input ?? 0
@@ -1300,6 +1340,11 @@ export default function MaterialForm({
              ここで種類を見分けると、判断が2か所になる
              (窓口の側が「その欄を出すかどうか」を決めている) */
           wordDrill,
+          /* **その PART の作り方を、そのまま送る**(第5.309節)。
+             テスト対策でなければ空なので、ほかの種類は1文字も変わらない。
+             **弱点タグが無くても作れるのは、これが「何の練習か」を
+             決めているから**である(窓口の側もそう見ている) */
+          examPart: isExamKind(kind) ? examBriefByKey(examKey) : '',
         },
         { usedSet, learnerIds: shareWith, tagIds },
       )
@@ -1425,7 +1470,12 @@ export default function MaterialForm({
   const generate = async () => {
     // 記事と会話は、弱点を選ばなくても作れる(読み物として成立するため)。
     // 文型ドリルは、何の練習かが決まらないと作れない。
-    if (!isPassageKind(kind) && tagIds.length === 0) {
+    /* **弱点タグが要るかどうかは `needsWeakTag()` 1か所**(第5.263節)。
+       ここで `!isPassageKind(kind) && …` と書き直していたので、
+       **テスト対策を足した日に、ここだけ古くなるところだった**
+       (保存のときの検査は、はじめからあちらを見ている)。
+       テスト対策に弱点タグは要らない ——「何の練習か」は PART が決める */
+    if (needsWeakTag(kind) && tagIds.length === 0) {
       setError('弱点タグを選んでください。何の練習かが決まらないと作れません。')
       // 知らせを出すだけでなく、直す場所まで画面を送る。
       // どこを直せばよいか分からないと、探し回ることになる。
@@ -1457,6 +1507,15 @@ export default function MaterialForm({
        返ってきた下書きの行き場が無くなる。仕事の状態は
        `src/lib/generateJob.js` に置く(あちらは画面が消えても残る)。 */
     const plan = planNow()
+    /* ── **本文から作るか、1問ずつ作るか**(第5.309節)───────────────
+       これまでは種類で決めていた(`isPassageKind`)。
+       **テスト対策は PART で変わる** —— TOEIC Part 7 は本文から作り、
+       Part 5 は1問ずつである。だから**組み立てた構成の1つめ**を見る。
+       これがそもそもの条件で、`generatePassage` の中も
+       `const [bodyPlan, ...rest] = plan` と、同じ前提で書いてある。
+       **これまでの6種類では、答えは1つも変わらない**
+       (本文はチェックで外せないため)—— `npm run test:exam` が数える */
+    const bodyFirst = isPassageSection(plan[0]?.exercise_type)
     const started = startJob({
       title: kindLabel(kind),
       /* 本文のときは、そのあとに**カタマリごとの訳(0021)と
@@ -1466,9 +1525,9 @@ export default function MaterialForm({
          カタマリごとの訳は本文にしか無いので、こちらは +1 である。
          **文法解説を外したら、その1段も引く**(第5.213節)——
          引かないと、作り終えても帯が最後まで行かない */
-      total: (isPassageKind(kind) ? plan.length + 1 : plan.length)
+      total: (bodyFirst ? plan.length + 1 : plan.length)
         + (withGrammar && grammarCount() > 0 ? 1 : 0),
-      run: (ctl) => (isPassageKind(kind) ? generatePassage(ctl) : generateDrill(ctl)),
+      run: (ctl) => (bodyFirst ? generatePassage(ctl) : generateDrill(ctl)),
     })
     if (!started) {
       setError('いま別の教材を作っています。'
@@ -1479,6 +1538,10 @@ export default function MaterialForm({
   /** いまの入力を控える。**別の画面から戻ったときに、そのまま戻すため** */
   const formSnapshot = () => ({
     kind, level, industry, tagIds, genre, scene, subject,
+    /* **試験と PART も控える**(第5.309節)。控えないと、別の画面から
+       戻ったときに TOEIC の Part 2 に戻っており、**作ったはずの PART と
+       名前が食い違う**(人数・演習の数とまったく同じ理由) */
+    examId, partId,
     // 話の切り口(0046)。**選んだものだけを控える** ——
     // 実際に引いた切り口を入れると、戻ったときにおまかせが効かなくなる
     angle,
@@ -1514,6 +1577,10 @@ export default function MaterialForm({
     setIndustry(f.industry ?? '')
     if (f.tagIds) setTagIds(f.tagIds)
     if (f.genre != null) setGenre(f.genre)
+    /* **試験と PART も戻す**(第5.309節)。戻さないと、
+       作ったはずの PART と、画面に出ている PART が食い違う */
+    if (f.examId) setExamId(f.examId)
+    if (f.partId) setPartId(f.partId)
     if (f.scene != null) setScene(f.scene)
     if (f.subject != null) setSubject(f.subject)
     if (f.angle != null) setAngle(f.angle)
@@ -1739,6 +1806,60 @@ export default function MaterialForm({
           {NEW_MATERIAL_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
         </select>
       </label>
+
+      {/* ══════════════════════════════════════════════════════════
+          **テスト対策 —— 試験と PART**(第5.309節・2026-09-29 利用者の指定)
+
+            > 教材→テスト対策→TOEIC L＆R / 英検 / VERSANT /
+            > TOEIC Speaking / TOEFL / IELTS などを選べると最高です。
+            > 各テストの試験の構成を調べ、各PART毎に対策の練習問題を
+            > 作成できるようにしたいです。
+
+          **テスト対策のときだけ出す**(効かない操作を見せない)。
+          一覧も、本番の問数も、作り方も **`examPrep.js` 1か所**から引く。
+          ══════════════════════════════════════════════════════════ */}
+      {isExamKind(kind) && (
+        <div className="field-row">
+          <label className="field">
+            <span>
+              試験
+              {/* **いまの状態**(本番は何問で何分か)。説明の文ではない */}
+              <span className="field-hint">{examOutline(examId)}</span>
+            </span>
+            <select value={examId}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setExamId(next)
+                      /* **PART も一緒に入れ替える。** 残すと、
+                         別の試験の PART が選ばれたままになり、
+                         **選択肢に無い値がプルダウンに残って空欄に見える**
+                         (会議に切り替えたときの人数と同じ落とし穴) */
+                      setPartId(firstPartOf(next))
+                    }}>
+              {EXAMS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>
+              PART
+              {/* **本番では何問で、何をする問題か。** そのまま出す */}
+              <span className="field-hint">{examPartLine(examId, partId)}</span>
+            </span>
+            <select value={partId} onChange={(e) => setPartId(e.target.value)}>
+              {examPartsOf(examId).map((x) => (
+                <option key={x.id} value={x.id}>{x.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      {/* **黙って消さない**(CLAUDE.md)。写真が要る PART は選択肢に
+          出していないので、**出していないことを1行で言う。**
+          無ければ行ごと出さない(空白を残さない) */}
+      {isExamKind(kind) && examSkipLine(examId) && (
+        <p className="field-hint exam-skip">{examSkipLine(examId)}</p>
+      )}
 
       {/* **業界と趣味は、2つのプルダウンに分けて左右に並べる**
           (2026-08 利用者の指定)。
@@ -2098,7 +2219,13 @@ export default function MaterialForm({
             </label>
           )}
 
-          {voicePool.length > 0 && Array.from({ length: voiceCount }, (unused, i) => (
+          {/* **読み上げが1つも無い構成では、声の欄を出さない**(第5.309節)。
+              テスト対策には音の無い PART がある(TOEIC Part 5・
+              IELTS Writing など)。出しても**何も鳴らない欄**になる ——
+              効かない操作を見せない(CLAUDE.md)。
+              判断は `hasAnyAudio()` 1か所 */}
+          {voicePool.length > 0 && 読み上げあり
+            && Array.from({ length: voiceCount }, (unused, i) => (
             <label className="field" key={i}>
               <span>
                 {voiceCount > 1 ? `話す人 ${i + 1}` : '話す人'}
@@ -2120,7 +2247,11 @@ export default function MaterialForm({
                         「すべて ◯◯ で読みます」に変わる —— **黙って落とさない** */}
                     {voicePlanLine(kind, tagIds,
                       providerOf(accent, findVoice(cast[0])?.gender ?? 'female'),
-                      findVoice(cast[0])?.gender ?? 'female', cast)}
+                      findVoice(cast[0])?.gender ?? 'female', cast,
+                      /* **テスト対策は PART で構成が変わる**(第5.309節)。
+                         渡さないと、Part 7 をえらんでいても
+                         「リスニングは えらんだ声」と出る */
+                      isExamKind(kind) ? examKey : '')}
                   </span>
                 )}
               </span>
@@ -2170,7 +2301,7 @@ export default function MaterialForm({
               **同じ英文を2つの読み方で持てるし、混ざらない。**
               既定(訛りを活かす)は素の id のままなので、
               **すでに作った音声は1本も無駄にならない。** */}
-          {voicePool.length > 0 && !picksBaseVoice(cast) && (
+          {voicePool.length > 0 && 読み上げあり && !picksBaseVoice(cast) && (
             <label className="field voice-style">
               <span>
                 声の出し方
@@ -2806,7 +2937,12 @@ export default function MaterialForm({
                     ? `この原稿で教材にする(${planLabel(planNow().slice(1))})`
                     : 'この原稿で教材にする')
                   : `${bodyWord(kind)}を作る(${planLabel(planNow())})`
-                : `下書きを作る(${planNow().reduce((n, s2) => n + s2.count, 0)} 問)`}
+                /* **テスト対策は、中身を並べて出す**(第5.309節)。
+                   本文のある PART(TOEIC Part 7 など)で「19 問」と
+                   書くと、段落まで問に数えたことになる */
+                : isExamKind(kind)
+                  ? `下書きを作る(${planLabel(planNow())})`
+                  : `下書きを作る(${planNow().reduce((n, s2) => n + s2.count, 0)} 問)`}
         </button>
         {/* **止まるのは、ここを押したときだけ**(2026-09 利用者の指定)。
             画面を離れても、閉じても止まらない */}

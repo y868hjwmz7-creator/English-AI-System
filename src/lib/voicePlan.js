@@ -35,15 +35,18 @@ import { PREMIUM, voiceTierFor } from './voiceTier.js'
  * @param {Array<string>} tags 弱点タグ
  * @param {Array<string>} voiceIds **えらんだ声**(第5.308節)。
  *   Google の声が混じっていれば、`voiceTierFor()` が全ページを代役に落とす
+ * @param {string} examKey **テスト対策の、試験と PART**(第5.309節)。
+ *   `exam` だけは PART で構成が変わる —— 渡さないと、
+ *   **いつも最初の PART(リスニング)の話をしてしまう**
  * @returns {{ pick: string[], base: string[] }}
  *   `pick` … **えらんだ声**で読むページの名前
  *   `base` … **代役**で読むページの名前
  *   どちらも**音声の付くページだけ**(付かないページは、どちらにも入らない)
  */
-export function voicePlan(kind, tags = [], voiceIds = null) {
+export function voicePlan(kind, tags = [], voiceIds = null, examKey = '') {
   const pick = []
   const base = []
-  for (const sec of defaultSectionsFor(kind) ?? []) {
+  for (const sec of defaultSectionsFor(kind, examKey) ?? []) {
     const t = sec.exercise_type
     /* **音の付かない演習は、どちらにも入れない**(誤り訂正・穴埋め)。
        入れると「読みます」と書いた場所で**1本も鳴らない。**
@@ -72,9 +75,26 @@ export function voicePlan(kind, tags = [], voiceIds = null) {
  * @param {Array<string>} voiceIds **えらんだ声**(第5.308節)。
  *   Google の声をえらぶと「すべて ◯◯ で読みます」に変わる ——
  *   **黙って落とさない**(CLAUDE.md)
+ * @param {string} examKey **テスト対策の、試験と PART**(第5.309節)
  */
-export function voicePlanLine(kind, tags, provider, gender, voiceIds = null) {
-  const { pick, base } = voicePlan(kind, tags, voiceIds)
+/**
+ * **その構成に、読み上げの付く段が1つでもあるか**(第5.309節)。
+ *
+ * **テスト対策には、音の無い PART がある**(TOEIC Part 5・IELTS Writing など)。
+ * そこで「話す人」「声の出し方」を出すと、**押しても何も鳴らない欄**になる
+ * (効かない操作を見せない・CLAUDE.md)。
+ *
+ * **判断はここ1か所。** 画面で「穴埋めだけなら…」と書き分けない ——
+ * 演習を足した日に、置いた場所の数だけ食い違う。
+ * `voicePlan()` から引くので、**数え方も1つ**である。
+ */
+export const hasAnyAudio = (kind, tags = [], examKey = '') => {
+  const { pick, base } = voicePlan(kind, tags, null, examKey)
+  return pick.length + base.length > 0
+}
+
+export function voicePlanLine(kind, tags, provider, gender, voiceIds = null, examKey = '') {
+  const { pick, base } = voicePlan(kind, tags, voiceIds, examKey)
   const 代役 = `${provider}の${gender === 'male' ? '男性' : '女性'}`
   if (!pick.length && !base.length) return ''
   if (!base.length) return 'すべて、えらんだ声で読みます'

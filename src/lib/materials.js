@@ -73,6 +73,14 @@ export {
      `npm run test:play` が、画面が取り込む名前を1つずつ見張っている) */
   FIND_MATERIAL_KINDS,
   isPassageKind, isDialogueKind, isVocabKind,
+  /* **テスト対策か**(第5.309節)。**ここへ足し忘れると、画面からは
+     「存在しない名前」になる** —— `lint` も `build` も通ってしまう
+     (第5.232節で踏んだところ) */
+  isExamKind,
+  /* **弱点タグが要る種類かどうか**(第5.263節)。画面でも同じ判断が
+     要るので、出し直す。**画面で `!isPassageKind(kind) && …` と
+     書き直さない** —— 種類を足した日に、必ず片方だけ古くなる */
+  needsWeakTag,
   isDrillKind,
   bodyWord, usesScene, canPasteBody, kindLabel,
   /* **細かい指定を書いたら、それが主になる**(第5.232節)。
@@ -1112,7 +1120,7 @@ export async function eraseLearner(learnerId) {
  * **`undefined` は「古い」と読む。** 版を返さない = 版を付ける前のもの。
  * ============================================================================
  */
-export const NEED_GEN_REV = '2026-09-25'
+export const NEED_GEN_REV = '2026-09-29'
 
 /**
  * **窓口が古いときに、利用者へ頼むこと**(第5.249節)。
@@ -1266,6 +1274,11 @@ export async function generateSection({
   wordDrill = undefined,
   // **被らないための2つ**(0046)。`avoid` は英文、こちらは話である
   avoidTopics = [], angle = '',
+  /* **試験の PART の作り方**(第5.309節・0072)。
+     **一覧は `src/data/examPrep.js` が持ち、窓口には書き写さない**
+     (`angle` / `chunkKinds` とまったく同じ作法)。
+     空なら窓口は何も足さないので、**ほかの種類は1文字も変わらない** */
+  examPart = '',
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
 
@@ -1286,6 +1299,10 @@ export async function generateSection({
        **窓口の置き直しが要る**(それまでは無視される。
        `NEED_GEN_REV` を見て画面が赤く知らせる) */
     avoidTopics, angle,
+    /* **試験の PART の作り方**(第5.309節)。**窓口の置き直しは要らない**
+       —— `deploy-functions.yml` が、窓口を変えるたびに自動で配る。
+       古い窓口に届いても、知らない欄は読まれないだけである */
+    examPart,
     /* **かたまりの分類を、こちらから送る**(第5.230節)。
 
        窓口(`generate-material`)は Deno なので `src/data/chunkKinds.js` を

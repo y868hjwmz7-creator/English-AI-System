@@ -17,6 +17,9 @@
 /* **本文の呼び名**(記事 / 会話 / 会議 / スピーチ)。
    `sectionLabel()` で使う。**種類の一覧は持たない**(あちらが1か所) */
 import { bodyWord } from './materialKinds.js'
+import {
+  DEFAULT_EXAM, EXAM_KIND, examSectionsByKey, examSectionsOf, firstPartOf,
+} from './examPrep.js'
 /* かたまりの分類(第5.230節)。**呼び名はあちら1か所** */
 import { CHUNK_KINDS, isChunkText } from './chunkKinds.js'
 
@@ -646,6 +649,20 @@ export const DEFAULT_SECTIONS = {
     { exercise_type: 'phrase',        count: 10 },
     { exercise_type: 'phrase_recall', count: 7 },
   ],
+  /**
+   * **テスト対策**(第5.309節・0072)。
+   *
+   * ここに書いてあるのは**いちばん最初にえらばれる PART の形**だけである。
+   * 実際の構成は PART ごとに変わるので、`src/data/examPrep.js` が持つ
+   * (`defaultSectionsFor(kind, 鍵)` が差し替える)。
+   *
+   * **ここに 69 個の PART を書き写さない。** 書き写すと、
+   * PART を1つ直した日に**必ず片方だけ古くなる**(CLAUDE.md)。
+   * それでも 1行だけ置いてあるのは、**鍵が来なかったときに
+   * 黙って文型ドリルへ落ちないため**である
+   * (`scripts/check-exercise-types.mjs` が、種類ごとに構成の有無を見ている)。
+   */
+  [EXAM_KIND]: examSectionsOf(DEFAULT_EXAM, firstPartOf(DEFAULT_EXAM)),
   // 旧「単語」「フレーズ」。新規では選べないが、既存の教材を開くために残す
   word:   [{ exercise_type: 'vocabulary', count: 20 }],
   phrase: [{ exercise_type: 'phrase',     count: 20 }],
@@ -932,9 +949,32 @@ export const grammarSource = (typeId) => exerciseType(typeId)?.grammarFrom ?? nu
  *   **この判断を画面ごとに書き写さない** —— 出す場所は6か所ある。
  */
 export const sectionLabel = (kind, typeId) =>
-  (isPassageSection(typeId) ? bodyWord(kind) : exerciseLabel(typeId))
+  (isPassageSection(typeId)
+    /* **本文の呼び名が種類で決まらないこともある**(第5.309節・テスト対策)。
+       そのときは演習の名前そのもの(「記事」「会話」)に落とす */
+    ? (bodyWord(kind) || exerciseLabel(typeId))
+    : exerciseLabel(typeId))
 
-export const defaultSectionsFor = (kind) => DEFAULT_SECTIONS[kind] ?? DEFAULT_SECTIONS.pattern
+/**
+ * その種類の、既定の構成。
+ *
+ * **テスト対策(`exam`)だけは、PART で形が変わる**(第5.309節)——
+ * TOEIC Part 7 は「本文 + 設問 + 語句」、Part 5 は「穴埋め」1つである。
+ * だから**鍵(`"toeic_lr:p5"`)を受け取る。**
+ * 鍵が無いとき(まだ PART をえらんでいない)は
+ * `DEFAULT_SECTIONS.exam` —— **いちばん最初にえらばれる PART**の形に落ちる。
+ * **黙って文型ドリルに落とさない。**
+ *
+ * @param {string} kind    教材の種類
+ * @param {string} examKey `examKeyOf(試験, PART)`。テスト対策のときだけ使う
+ */
+export const defaultSectionsFor = (kind, examKey = '') => {
+  if (kind === EXAM_KIND) {
+    const byPart = examSectionsByKey(examKey)
+    return byPart.length ? byPart : DEFAULT_SECTIONS[EXAM_KIND]
+  }
+  return DEFAULT_SECTIONS[kind] ?? DEFAULT_SECTIONS.pattern
+}
 
 /**
  * **文型ドリルの4演習**(2026-09 利用者の指定)。
@@ -1169,8 +1209,8 @@ export const isIncluded = (typeId, include = null) => {
  */
 export const RECALL_PER_WORD = 3
 
-export const sectionsFor = (kind, amounts = null, include = null) => {
-  const out = defaultSectionsFor(kind)
+export const sectionsFor = (kind, amounts = null, include = null, examKey = '') => {
+  const out = defaultSectionsFor(kind, examKey)
     .filter((s) => isIncluded(s.exercise_type, include))
     .map((s) => {
       if (!SCALABLE_SECTIONS.includes(s.exercise_type)) return s

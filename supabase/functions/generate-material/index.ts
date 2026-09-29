@@ -684,8 +684,17 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
   translate_en_ja: { required: ['prompt_en', 'answer'], optional: ['note', 'tag_no', 'phrases'] },
   // 誤り訂正は **note が必須。** なぜ間違いなのかが無いと、直す意味が薄い
   error_correction: { required: ['prompt_en', 'answer', 'note'], optional: ['tag_no'] },
-  // 穴埋め。新規では使わないが、既存の教材を作り直せるように残す
-  fill_blank:      { required: ['prompt_en', 'hint', 'answer'], optional: ['note', 'tag_no'] },
+  /* 穴埋め。文型ドリルでは使わないが、**テスト対策が使う**(第5.309節)。
+     TOEIC Part 5/6・英検 大問1/2・TOEFL Complete the Words がこの形である。
+
+     **`hint`(与える語)を「必須」から外した。** 本番の試験に
+     「与える語」は無く、選択肢は `prompt_en` の中に並べる。
+     必須のままだと、**空の `hint` を持つ問が1つ残らず落とされ**、
+     5回作り直しても 0 問になる(下の「中身が0件のまま成功を返さない」)。
+     **落とす仕組みが、教材そのものを作れなくしてはいけない**(CLAUDE.md)。
+     文型ドリルの側は、上の `SECTION_INSTRUCTIONS` が
+     これまでどおり `hint` を書かせている。 */
+  fill_blank:      { required: ['prompt_en', 'answer'], optional: ['hint', 'note', 'tag_no'] },
   translate_ja_en: { required: ['prompt_ja', 'answer'], optional: ['answer_alt', 'note', 'tag_no'] },
   listening:       { required: ['audio_text', 'question', 'answer'], optional: ['note', 'tag_no'] },
 
@@ -1865,7 +1874,7 @@ const cors = {
  */
 /* **置き直しが要る変更を入れたら、ここを上げる**(第5.230節で上げた)。
    画面は `NEED_GEN_REV` と突き合わせて、古ければ赤く知らせる */
-const FN_REV = '2026-09-25'
+const FN_REV = '2026-09-29'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {
@@ -2091,6 +2100,13 @@ Deno.serve(async (req) => {
      (`speechBrief` と同じ考え方)。窓口の中に一覧を置くと、
      切り口を1つ足すたびに利用者に置き直してもらうことになる。 */
   const angle = String(body.angle ?? '').trim().slice(0, 300)
+  /* ── **試験の PART の作り方**(第5.309節・テスト対策)────────────
+     **一覧はここに書き写さない。** 試験と PART の構成は画面が持ち
+     (`src/data/examPrep.js`)、その PART の作り方を文字列で送ってくる
+     (`angle` / `chunkKinds` とまったく同じ作法)。
+     ここに 69 個の PART を書くと、**1つ直したいだけで窓口を配り直す**
+     ことになる。**届かなければ、これまでどおり**動く */
+  const examPart = String(body.examPart ?? '').trim().slice(0, 2000)
   /* かたまりの分類と、練習の問数(第5.230節)。**画面から送られてくる。**
 
      ここに一覧を書き写さない —— 分類を1つ直した日に、利用者へ
@@ -2134,7 +2150,10 @@ Deno.serve(async (req) => {
   const needsContext = sectionType === 'comprehension'
     || sectionType === 'discussion' || sectionType === 'audience_qa'
     || sectionType === 'vocab_note'
-  if (!topic && !isPassage && !needsContext) {
+  /* **テスト対策では、PART が「何の練習か」である**(第5.309節)。
+     TOEIC の Part 5 に弱点タグを付けさせる意味は無い ——
+     何を練習するのかは、その PART がすでに決めている */
+  if (!topic && !isPassage && !needsContext && !examPart) {
     return reply({ error: '弱点(何の練習か)を指定してください' }, 400)
   }
   if (needsContext && !context) {
@@ -2208,6 +2227,11 @@ Deno.serve(async (req) => {
       : '',
     context ? `\n# 本文(この内容から作ること)\n${context}` : '',
     ``,
+    /* ── **試験の PART**(第5.309節)────────────────────────────
+       **演習の指示より前に置く。** あとに置くと、ふつうの記事や
+       穴埋めの作り方が上書きしてしまう。
+       本番そっくりにするのがこの教材の目的なので、ここがいちばん強い */
+    examPart ? `${examPart}\n` : '',
     `# 作る演習`,
     `${SECTION_INSTRUCTIONS[sectionType]}`,
     /* **会話に出す人数**(2026-09 利用者の要望「会議というジャンル」)。

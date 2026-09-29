@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   54行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   55行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -251,4 +251,14 @@ from (
   -- 1行でも残っていると**ゲストが1人も消せない**
   union all select '0071 ゲストの消去から、ストレージの直接削除を外す(pending_matome.sql)',
     coalesce((select public.erase_uses_storage_api()), false), 53
+  -- **制約そのものを見る**(0072・第5.309節)。表も列も行も増えない移行なので、
+  -- 表の有無では分からない —— **一覧に `exam` が入っているか**で見る
+  -- (0069 とまったく同じ見方)。
+  -- **2つとも見る** —— 制約だけ貼って関数を貼り忘れると、
+  -- 画面の「準備の状態」が 0072 を見つけられなくなる
+  union all select '0072 教材の種類に「テスト対策」(pending_matome.sql)',
+    exists (select 1 from pg_constraint
+            where conname = 'materials_kind_check'
+              and pg_get_constraintdef(oid) like '%''exam''%')
+    and exists (select 1 from pg_proc where proname = 'material_kinds'), 54
 ) t order by 順;

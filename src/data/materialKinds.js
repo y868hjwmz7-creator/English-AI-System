@@ -30,6 +30,8 @@
  *   3つとも `npm run test:db` が見張っている。
  */
 
+import { EXAM_KIND } from './examPrep.js'
+
 export const MATERIAL_KINDS = [
   { id: 'pattern',  label: '文型ドリル',
     hint: '同じ文法で違う文章をくり返す。定着が狙い。4演習 × 10問 = 40問' },
@@ -118,6 +120,31 @@ export const MATERIAL_KINDS = [
 
   { id: 'vocab',    label: '単語 / フレーズ',
     hint: '単語10問 + フレーズ10問。共有すると、その語がゲストの単語帳に入る' },
+  /* ══════════════════════════════════════════════════════════════
+     **テスト対策**(第5.309節・2026-09-29 利用者の指定)
+
+       > 教材→テスト対策→TOEIC L＆R / 英検 / VERSANT / TOEIC Speaking /
+       > TOEFL / IELTS などを選べると最高です。
+       > 各テストの試験の構成を調べ、各PART毎に対策の練習問題を
+       > 作成できるようにしたいです。
+
+     【演習の種類は1つも増えない】
+       PART ごとの構成は `src/data/examPrep.js` が持ち、中身は
+       **0007 からある演習の組み合わせ**である
+       (`article` / `dialogue` / `comprehension` / `discussion` /
+        `listening` / `fill_blank` / `read_aloud` / `vocab_note` /
+        `translate_ja_en`)。
+       **足したのは `kind` の値1つだけ**(0072)——
+       0037(会議)・0043(モノローグ)・0069(テスト)と同じやり方である。
+
+     【「テスト」(0069)とは別物である】
+       あちらは**ゲストの持ちものから組む日本語 → 英語のテスト**で、
+       AI を1回も呼ばない。こちらは**試験の PART に似せた練習問題**を
+       AI に作らせる。**違うものに同じ名前を付けない**(共通ルール)ので、
+       呼び名も id も分けてある。
+     ══════════════════════════════════════════════════════════════ */
+  { id: 'exam',     label: 'テスト対策',
+    hint: 'TOEIC / 英検 / VERSANT / TOEFL / IELTS の PART べつの練習問題' },
   /* 旧「単語」「フレーズ」。**行ごと消さない** ——
      消すと、その種類で作った教材の呼び名が出なくなる。
      新しく作るときは上の「単語 / フレーズ」を選ぶ */
@@ -189,6 +216,13 @@ const SUBJECT_WORDS = {
   vocab:    { hint: '空のままなら、業界とレベルに合う語を AI が決めます',
     example: '例: 地盤調査と基礎工事で使う語にする。'
       + 'カタカナ語になっているものを優先する' },
+  /* **テスト対策**(第5.309節)。
+     **PART がすでに「どんな問題か」を決めている**ので、ここに書くのは
+     「その PART の中で、どんな話を出すか」である。
+     問題の形そのものを書かせない —— それは PART の仕事である */
+  exam:     { hint: '空のままなら、PART に合う話題を AI が決めます',
+    example: '例: 出てくる場面を、物流と倉庫の仕事にそろえる。'
+      + '担当者が納期の遅れをわびる流れを1つ入れる' },
 }
 
 /**
@@ -276,6 +310,19 @@ export const isPassageKind = (kind) =>
   || kind === 'speech'
 
 /**
+ * **テスト対策か**(第5.309節)。
+ *
+ * **画面の中で `kind === 'exam'` と書かない**(判断は1か所・CLAUDE.md)。
+ *
+ * この種類だけは、**本文から作るかどうかが PART で変わる** ——
+ * TOEIC Part 7 は本文から作り、Part 5 は1問ずつ作る。
+ * だから `isPassageKind()` には入れない。
+ * どちらの道を通るかは、**組み立てた構成の1つめを見て**決める
+ * (`MaterialForm` の `bodyFirst`)。
+ */
+export const isExamKind = (kind) => kind === EXAM_KIND
+
+/**
  * **弱点タグを必須にする種類**かどうか(第5.263節)。
  *
  * タグは「あとから教材を見つけるための索引」である(第5.5節)。
@@ -289,7 +336,12 @@ export const isPassageKind = (kind) =>
  * `!isPassageKind(kind) && kind !== 'test'` と書くと、
  * 種類を足した人が**そこを直すとは気づけない。**
  */
-export const needsWeakTag = (kind) => !isPassageKind(kind) && !isTestKind(kind)
+/* **テスト対策も要らない**(第5.309節)——「何の練習か」は
+   えらんだ PART が決めている。TOEIC の Part 5 に弱点タグを
+   付けさせる意味は無い。**保存のときの検査も、ここを見ている**
+   (`materials.js` の `createMaterial`)ので、ここ1か所で足りる */
+export const needsWeakTag = (kind) =>
+  !isPassageKind(kind) && !isTestKind(kind) && !isExamKind(kind)
 
 /**
  * **会話の形をした種類**(会話・会議)かどうか。
@@ -331,7 +383,13 @@ export const bodyWord = (kind) => (
   kind === 'reading' ? '記事'
     : kind === 'meeting' ? '会議'
       : kind === 'speech' ? 'スピーチ'
-        : '会話'
+        /* **テスト対策は、種類だけでは決まらない**(第5.309節)——
+           TOEIC Part 7 の本文は記事、Part 3 は会話である。
+           **空を返す。** 呼ぶ側が演習の名前(`exerciseLabel`)に落とす。
+           ここで演習の名前を引くと、`exerciseTypes.js` を取り込むことになり、
+           **取り込みが輪になる**(あちらがこのファイルを取り込んでいる) */
+        : kind === EXAM_KIND ? ''
+          : '会話'
 )
 
 /**

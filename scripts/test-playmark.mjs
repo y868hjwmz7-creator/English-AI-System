@@ -6989,25 +6989,34 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      新しい移行にそろっている」が、`supabase/migrations/` の
      いちばん大きい番号と突き合わせている。
      **同じことをする見張りを2つ置かない**(CLAUDE.md) */
-  /* **0071 は、関数の中身が変わるだけ**(第5.300節)。
-     `erase_learner()` から「ストレージを直接消す」1行を外しただけなので、
-     **表も列も関数も増えない。** 表や列で見ると、**貼る前でも
-     「もう入っています」**になる(いちばん悪い壊れ方・CLAUDE.md)。
+  /* **0072 は、制約の一覧に値を1つ足すだけ**(第5.309節)。
+     `materials_kind_check` に `exam` が増えるだけなので、
+     **表も列も関数も増えない。** 関数の有無で見ると、
+     **0069 を貼った時点で「もう入っています」**になる
+     (いちばん悪い壊れ方・CLAUDE.md)。
 
-     だから 0071 が**その判定そのものを関数にして**返し、印はそれに訊く。
-     0064〜0070 のぶんは、まとめた1つと `check.sql` の側で
+     だから **`material_kinds()` に訊いて、`exam` が入っているか**で見る
+     (0067 で `section_types()` に訊いたのと、まったく同じ立て付け)。
+     0064〜0071 のぶんは、まとめた1つと `check.sql` の側で
      そのまま見張り続ける —— **消していない** */
-  ok(/rpc: 'erase_uses_storage_api'/.test(setup),
-    '0071 … 印は「ストレージを直接消していないか」を返す関数(中身だけ変わる移行だから)')
-  /* **判定を2か所に書いていないか。** `check.sql` も同じ関数に訊く ——
-     書き写すと、片方だけが古くなる(CLAUDE.md) */
+  ok(/rpc: 'material_kinds'/.test(setup) && /has: 'exam'/.test(setup),
+    '0072 … 印は「種類の一覧に exam が入っているか」(値を1つ足すだけの移行だから)')
+  /* **0071 の判定は、`check.sql` の側に残っている。**
+     印が 0072 へ進んでも、あちらの行は消さない ——
+     消すと「全部 ✅」なのに本当は足りない、という壊れ方になる
+     (CLAUDE.md「いちばん悪い壊れ方」) */
   ok(/erase_uses_storage_api\(\)/.test(readD('supabase/apply/check.sql')),
-    '0071 … `check.sql` も同じ関数に訊く(判定を2か所に書かない)')
+    '0071 … `check.sql` は、いまも同じ関数に訊いている(判定を2か所に書かない)')
   ok(!/pg_get_functiondef[\s\S]{0,120}storage\.objects/
     .test(readD('supabase/apply/check.sql')),
     '0071 … `check.sql` が、判定を自分で書き写していない')
-  ok(!/rpc: 'material_kinds'/.test(setup) && !/row: \{ column/.test(setup),
-    '0069 / 0066 … 前の印(関数に訊く形・行を見る形)が残っていない')
+  /* **`check.sql` にも 0072 の行があるか。**
+     足し忘れると「全部 ✅」なのに本当は足りない
+     (0042〜0045 のあいだ、実際にそうなっていた・CLAUDE.md) */
+  ok(/0072 .*(?:テスト対策)/.test(readD('supabase/apply/check.sql')),
+    '0072 … `check.sql` にも行がある(足し忘れると「全部 ✅」と嘘をつく)')
+  ok(!/rpc: 'erase_uses_storage_api'/.test(setup) && !/row: \{ column/.test(setup),
+    '0071 / 0066 … 前の印(関数の中身を見る形・行を見る形)が残っていない')
   const matome = readD('supabase/apply/pending_matome.sql')
   /* **0068 の列は、まとめた1つの側で見張り続ける**(印から外しただけ) */
   ok(/add column if not exists examples jsonb/.test(matome),
