@@ -168,6 +168,27 @@ GitHub の中を辿らせない。
 
 ## 確かめ方
 
+### いちばん短い確認 —— これだけチャットからコピーして貼れる
+
+**ファイルを探さなくてよい。** Supabase → 左メニュー **SQL Editor** →
+**New query** に、この6行をそのまま貼って **Run**。
+
+```sql
+select case when exists (
+  select 1 from pg_constraint
+  where conname = 'materials_kind_check'
+    and pg_get_constraintdef(oid) like '%''exam''%'
+) and exists (select 1 from pg_proc where proname = 'material_kinds')
+then '✅ テスト対策が使えます'
+else '⬜ まだです。pending_matome.sql を貼ってください' end as 結果;
+```
+
+**判定は `check.sql` の 0072 の行とまったく同じ**にしてある
+(数え方を2通り持たない・CLAUDE.md)。
+
+**利用者の DB と同じ作り方**(0071 までを、テスト対策を入れる前の版で流したもの)
+で確かめてある —— 貼る前は `⬜`、`pending_matome.sql` を貼ると `✅` になる。
+
 貼ったあと、`supabase/apply/check.sql` を実行すると
 **55行**の表が出て、`✅ もう入っています` / `⬜ まだです` が分かる。
 (**行数は移行を足すたびに増える。** `check.sql` の冒頭に書いてある数と、
