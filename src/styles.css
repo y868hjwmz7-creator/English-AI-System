@@ -8786,6 +8786,14 @@ button.wbfilter-ctl { text-align: left; }
 .focus-bar.is-fit3 .focus-mid .btn { padding: 5px 4px; }
 .focus-bar.is-fit3 .focus-mid .listenpill-arrow { min-width: 28px; padding: 0 5px; }
 .focus-bar.is-fit3 .focus-move { min-width: 30px; }
+/* ★ **くり返しが3つになったぶん、ここも詰める**(2026-09-30・第5.319節)。
+     1つのボタン(「⤺ しない」)から**絵3つ**にしたので、
+     320px + 端末の「表示を大きく」で**集中モードの帯があふれた**
+     (`test:bar` が1件で捕まえた)。
+     **押すものは1つも消さない** —— 隙間と幅だけを詰める */
+.focus-bar.is-fit3 .repeat-keys { gap: 1px; }
+.focus-bar.is-fit3 .repeat-key { width: 26px; height: 26px; }
+.focus-bar.is-fit3 .repeat-key .icon { width: 16px; height: 16px; }
 
 /* 紙には出さない。画面の中でやることである */
 @media print { .focus { display: none !important; } }
