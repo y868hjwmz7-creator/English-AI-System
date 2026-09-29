@@ -80,8 +80,6 @@ import { useEffect, useRef, useState } from 'react'
    (聞き流しの「つづける」と同じ)。ここで新しく描かない */
 import { PlayIcon, StopIcon } from './Icons.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
-import Stepper from './Stepper.jsx'
-import { SPEECH_RATES } from '../lib/speechRate.js'
 import { canSkipSentence, skipSentence, watchSentenceSkip } from '../lib/readAloud.js'
 import { useFitRow } from '../lib/fitRow.js'
 /* **通しで鳴らすボタンの文字は1か所**(第5.290節)。
@@ -142,14 +140,19 @@ function PlayKey({ dir, label, wide, disabled, onClick }) {
  * @param onJump    その番号から鳴らす(送り戻し・つまみ)
  * @param repeat    くり返しの単位('off' / 'sentence' / 'item' / 'all')
  * @param onRepeat  単位を変える
- * @param rate      読み上げの速さ(`SPEECH_RATES` の id)
- * @param onRate    速さを変える。**渡されたときだけ出す**
+ *
+ * ★ **速さは、もう受け取らない**(2026-09-30 利用者の指定・第5.316節)。
+ *     > 速度は上部UIで変更できるので下部のプレーヤーからは排除しましょう
+ *   一度は両方に置いた(第5.311節「①ふたつ実装してください(これは例外で
+ *   OKです)」)が、**上の UI で変えられるものを、下にも置かない** ——
+ *   同じことをするものを2つ見せない(CLAUDE.md)。
+ *   **欄そのものを持たせない**ので、「渡し忘れ」も「片方だけ残る」も
+ *   起こりえない(「用意しています…」を持たせなかったのと同じ形)。
  */
 export default function PlayerBar({
   place = 'dock', onPlace = null, placeNext = null,
   playing = false, at = null, total = 0, unit = '段落',
   onToggle, onJump = null, repeat = null, onRepeat = null,
-  rate = null, onRate = null,
 }) {
   /**
    * **入るまで詰める**(2026-09 実機・利用者の指摘
@@ -265,13 +268,11 @@ export default function PlayerBar({
           <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
         )}
 
-        {/* **速さも、ここに置く**(2026-09-29 利用者の指定「ふたつ実装して」)。
-            **段も刻みも `SPEECH_RATES` 1か所**なので、
-            「大きく表示」の帯にあるものと食い違わない */}
-        {onRate && (
-          <Stepper label="速さ" options={SPEECH_RATES} value={rate}
-                   onChange={onRate} className="player-rate" />
-        )}
+        {/* ★ **速さは置かない**(2026-09-30 利用者の指定・第5.316節)。
+              > 速度は上部UIで変更できるので下部のプレーヤーからは排除しましょう
+            一度は両方に置いたが(第5.311節)、**上で変えられるものを
+            下にも置かない。** 速さは上の帯(広い窓)か、
+            右上の「設定」の中(狭い窓)にある —— どちらも `道具` 1か所である */}
 
         {onPlace && placeNext && (
           <button type="button" className="btn btn--small btn--ghost player-place"

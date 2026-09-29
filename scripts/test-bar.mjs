@@ -805,58 +805,86 @@ for (const [label, want] of Object.entries(WANT)) {
     }
   }
 
-  /* ── **速さは 70〜130%。端から外へは出ない**(2026-09-30 利用者の指定)
+  /* ── **速さは 70〜130%。端から外へは出ない。**
+         **そして、黒帯には無い**(2026-09-30 利用者の指定)
          > 再生速度は70%から130%まで、5%刻みです。
          > 最小・最大に達したときに範囲外へ進まないように
+         > 速度は上部UIで変更できるので下部のプレーヤーからは排除しましょう
+
+       **上の UI にあることを、実際に開いて確かめる。** 黒帯から外した以上、
+       「どこにも無い」と見分けられなければ、この見張りは何も守らない
+       (**出ると出ないの両方を見る**・CLAUDE.md)。
+       スマホの幅では、速さは**右上の「設定」の吹き出しの中**にいる。
 
        **端の値も刻みも `SPEECH_RATES` 1か所**(書き写さない)。 */
   {
-    const m = await page.evaluate(() => {
-      const st = document.querySelector('.player--dock .player-rate')
-      if (!st) return null
-      const arrows = [...st.querySelectorAll('.stepper-arrow')]
-      return {
-        いま: st.querySelector('.stepper-now')?.textContent?.trim() ?? '',
-        下げる止まり: arrows[0]?.disabled ?? null,
-        上げる止まり: arrows[1]?.disabled ?? null,
-      }
-    })
-    if (!m) ng('速さ … 黒帯に速さの欄が無い')
-    else {
+    /* ①黒帯には無い(幅ごとの節でも数えているが、**ここでも押さえる** ——
+         あちらは「戻っていないか」、こちらは「代わりがあるか」を見る) */
+    const 黒帯に速さ = await page.$$eval('.player--dock .stepper', (xs) => xs.length)
+    if (黒帯に速さ) ng('速さ … 黒帯に速さが残っている', `${黒帯に速さ} 個`)
+    else ok('速さ … 黒帯には無い(上の UI にある)')
+
+    /* ②右上の「設定」を開く。**開けなければ赤**(行き止まりを作らない) */
+    await page.click('.lesson-sets')
+    await page.waitForTimeout(250)
+    /* **「速さ」の欄を探す。** `Stepper` は `role="group"` に
+       `速さ(いま 100%)` と入れている(`Stepper.jsx`)。
+       この言葉は `WANT`(帯の持ちもの)にも出てくるので、
+       呼び名を変えた日は**そちらも一緒に赤くなる** */
+    const 欄 = '[role="group"][aria-label^="速さ"]'
+    const ある = await page.$$eval(欄, (xs) => xs.length)
+    if (!ある) {
+      ng('速さ … 「設定」を開いても、速さの欄が無い',
+        '黒帯から外したのに、上にも無ければ「どこにも無い」')
+    } else {
       /* いちばん下まで下げる → ◀ が押せなくなるか */
       for (let i = 0; i < SPEECH_RATES.length + 2; i += 1) {
-        const done = await page.evaluate(() => {
-          const a = document.querySelector('.player--dock .player-rate .stepper-arrow')
-          if (!a || a.disabled) return true
-          a.click(); return false
-        })
+        const done = await page.evaluate((sel) => {
+          const a2 = document.querySelector(`${sel} .stepper-arrow`)
+          if (!a2 || a2.disabled) return true
+          a2.click(); return false
+        }, 欄)
         if (done) break
         await page.waitForTimeout(40)
       }
-      const 下 = await page.evaluate(() => ({
-        値: document.querySelector('.player--dock .player-rate .stepper-now')?.textContent?.trim(),
-        止まる: document.querySelector('.player--dock .player-rate .stepper-arrow')?.disabled,
-      }))
+      const 下 = await page.evaluate((sel) => ({
+        値: document.querySelector(`${sel} .stepper-now`)?.textContent?.trim(),
+        止まる: document.querySelector(`${sel} .stepper-arrow`)?.disabled,
+      }), 欄)
       for (let i = 0; i < SPEECH_RATES.length + 2; i += 1) {
-        const done = await page.evaluate(() => {
-          const a = [...document.querySelectorAll('.player--dock .player-rate .stepper-arrow')][1]
-          if (!a || a.disabled) return true
-          a.click(); return false
-        })
+        const done = await page.evaluate((sel) => {
+          const a2 = [...document.querySelectorAll(`${sel} .stepper-arrow`)][1]
+          if (!a2 || a2.disabled) return true
+          a2.click(); return false
+        }, 欄)
         if (done) break
         await page.waitForTimeout(40)
       }
-      const 上 = await page.evaluate(() => ({
-        値: [...document.querySelectorAll('.player--dock .player-rate .stepper-now')][0]?.textContent?.trim(),
-        止まる: [...document.querySelectorAll('.player--dock .player-rate .stepper-arrow')][1]?.disabled,
-      }))
+      const 上 = await page.evaluate((sel) => ({
+        値: document.querySelector(`${sel} .stepper-now`)?.textContent?.trim(),
+        止まる: [...document.querySelectorAll(`${sel} .stepper-arrow`)][1]?.disabled,
+      }), 欄)
       const 最小 = SPEECH_RATES[0].label
       const 最大 = SPEECH_RATES[SPEECH_RATES.length - 1].label
       if (下.値 !== 最小) ng(`速さ … いちばん下まで下げても ${最小} にならない`, `${下.値}`)
       else if (!下.止まる) ng(`速さ … ${最小} なのに、まだ下げられる`)
       else if (上.値 !== 最大) ng(`速さ … いちばん上まで上げても ${最大} にならない`, `${上.値}`)
       else if (!上.止まる) ng(`速さ … ${最大} なのに、まだ上げられる`)
-      else ok(`速さ … ${最小} 〜 ${最大}(${SPEECH_RATES.length} 段)で、端から外へ出ない`)
+      else {
+        ok(`速さ … 右上の「設定」の中に在り、${最小} 〜 ${最大}`
+          + `(${SPEECH_RATES.length} 段)で端から外へ出ない`)
+      }
+      /* **元に戻す。** 速さは端末に覚えさせる作りなので、
+         130% のままにすると**あとの節が別の速さで測る** */
+      await page.evaluate((sel) => {
+        try { window.localStorage.removeItem('eas.speechRate') } catch { /* 使えなくても困らない */ }
+        void sel
+      }, 欄)
+      /* **閉じるのは Esc。** 狭い窓では吹き出しが下から出るシートになり、
+         **後ろの覆い(`.sheet-back`)が設定のボタンを隠す**ので、
+         もう一度押すことはできない(実測して分かった) */
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(200)
     }
   }
   await page.close()
@@ -1283,14 +1311,18 @@ for (const [label, want] of Object.entries(WANT)) {
         + `中心から 横 ${絵.横のずれ}% / 縦 ${絵.縦のずれ}%`)
     }
 
-    /* ── ④ **速さは、黒帯にも置く**(2026-09-29 利用者の指定)
-           > ①ふたつ実装してください(これは例外でOKです)
+    /* ── ④ **速さは、黒帯には置かない**(2026-09-30 利用者の指定)
+           > 速度は上部UIで変更できるので下部のプレーヤーからは排除しましょう
 
-         「大きく表示」の帯にもあるが、**例外として両方に置く。**
-         落とすと、黒帯だけで使っているときに速さを変えられない。 */
-    const 速さ = await page.$$eval('.player--dock .player-rate', (xs) => xs.length)
-    if (!速さ) ng(`${w}px … 黒帯に速さが出ていない`, '利用者の指定で両方に置く')
-    else ok(`${w}px … 黒帯に速さがある`)
+         一度は両方に置いた(第5.311節「①ふたつ実装してください」)。
+         **消したものは、消えたことを数える** —— でないと、
+         戻した日に誰も気づかない(黙って戻さない)。
+         速さは `道具` 1か所にあり、広い窓では帯に、狭い窓では
+         右上の「設定」の中に出る(それは下の節が数える)。 */
+    const 速さ = await page.$$eval(
+      '.player--dock .player-rate, .player--dock .stepper', (xs) => xs.length)
+    if (速さ) ng(`${w}px … 黒帯に速さが戻っている`, `${速さ} 個`)
+    else ok(`${w}px … 黒帯に速さは出ていない(上の UI にある)`)
   }
 
   /* ── ⑤ **矢印は、いま選ばれている物のもの**(第5.311節・実測で出た不具合)

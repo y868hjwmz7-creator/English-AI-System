@@ -1978,14 +1978,11 @@ export default function LessonView({
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}
               repeat={player.repeat} onRepeat={player.setRepeat}
-              /* **速さも黒帯に置く**(2026-09-29 利用者の指定
-                   「①ふたつ実装してください(これは例外でOKです)」)。
-                 「大きく表示」の帯にもあるが、**同じ `rateId` を
-                 同じ `Stepper` で動かす**ので、値が食い違うことは無い。
-                 **止めるところまで同じ**(`stopAll`)—— 速さを変えたら
-                 鳴っているものを止める、は第5.192節からの決まりである */
-              rate={rateId}
-              onRate={(id) => { setRateId(id); saveRateId(id); stopAll() }}
+              /* ★ **速さは渡さない**(2026-09-30 利用者の指定・第5.316節)。
+                   > 速度は上部UIで変更できるので
+                   > 下部のプレーヤーからは排除しましょう
+                 一度は両方に置いた(第5.311節)。速さは `道具` 1か所にあり、
+                 広い窓では帯に、狭い窓では右上の「設定」の中に出る */
             />
           </div>
         )}

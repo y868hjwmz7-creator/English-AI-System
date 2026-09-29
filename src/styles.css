@@ -9336,11 +9336,10 @@ button.wbfilter-ctl { text-align: left; }
 }
 .player-head .player-at { flex: 1 1 auto; min-width: 0; }
 .player-head > * { flex: 0 0 auto; }
-/* 速さは黒帯の上でも読めるように(`Stepper` の地の色は明るい面用) */
-.player--dock .player-rate { border-color: #55554e; background: #33332d; color: var(--player-ink); }
-.player--dock .player-rate .stepper-arrow { color: var(--player-ink); }
-.player--dock .player-rate .stepper-arrow:hover:not(:disabled) { background: #45453d; }
-.player--dock .player-rate .stepper-label { color: var(--player-ink); }
+/* ★ **速さは黒帯に置かない**(2026-09-30 利用者の指定・第5.316節)。
+     > 速度は上部UIで変更できるので下部のプレーヤーからは排除しましょう
+   黒帯の上で読めるようにするための決まりも、**呼ぶ人がいなくなったので
+   消した**(使われないものを残さない・第5.311節と同じ作法)。 */
 
 /* ★ **進み具合のバーは取り払った**(2026-09-29 実機・利用者の指定)。
      > また、この再生バーは不必要なので取り払いましょう。場所を取るだけですね
