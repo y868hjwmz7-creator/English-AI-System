@@ -5869,15 +5869,23 @@ html, body { overflow-x: clip; }
      集中モード(`FocusFrame`)の「表示」は**そのまま**である ——
      あちらは別の帯で、言われていない(言われた場所だけを直す)。 */
   /* 集中モードの「表示」は、狭い窓で出す(あちらは1つしかないので、
-     まとめる相手がいない。絵だけ `SortIcon` に替えてある) */
-  .focus-bar .lesson-more { display: inline-flex; margin-left: auto; }
-  .focus-bar .lesson-settings { display: none; }
-  .focus-bar .lesson-settings.is-open {
+     まとめる相手がいない。絵だけ `SortIcon` に替えてある)。
+
+     ★ **囲みは `.focus`(集中モード全体)。`.focus-bar` ではない。**
+       はじめ `.focus-bar` で囲んだが、あの「表示」は**上の帯**
+       (`.focus-top`)の中にいる。だから畳まれず、
+       **上の帯が 60px → 140px の2段**になっていた(`test:bar` が捕まえた)。
+       `.focus` は `createPortal` で body の直下に出るので、
+       **レッスン表示の帯(`.lesson-bar`)はこの中に入らない** ——
+       あちらまで畳んでしまう心配はない。 */
+  .focus .lesson-more { display: inline-flex; margin-left: auto; }
+  .focus .lesson-settings { display: none; }
+  .focus .lesson-settings.is-open {
     display: flex; flex-basis: 100%; margin-left: 0;
     padding-top: 8px; border-top: 1px solid #45453f;
   }
-  .is-measuring-row .focus-bar .lesson-settings { display: none !important; }
-  .focus-bar .lesson-settings.is-open .focus-ver { display: inline; }
+  .is-measuring-row .focus .lesson-settings { display: none !important; }
+  .focus .lesson-settings.is-open .focus-ver { display: inline; }
 }
 
 /* いちばん狭い端末(iPhone SE = 320px)では、集中モードの「表示」を
