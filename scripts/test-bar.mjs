@@ -56,6 +56,14 @@ import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
 const PASSAGE_TYPES = EXERCISE_TYPES.filter((t) => t.isPassage).map((t) => t.id)
 /* 「細かい指定」の欄の呼び名(第5.232節)。**書き写さない** */
 import { subjectLabel } from '../src/data/materialKinds.js'
+/* **余りの決まりは `fitRow.js` 1か所**(第5.316節)。**書き写さない** ——
+   8 と書くと、値を変えた日に見張りだけが古くなる */
+import { FIT_SLACK } from '../src/lib/fitRow.js'
+/* **くり返しの4つは `wholeAudio.js` 1か所**。呼び名は `repeatLabel.js` */
+import { REPEAT_UNITS } from '../src/lib/wholeAudio.js'
+import { repeatLabel } from '../src/lib/repeatLabel.js'
+/* **速さの段と端は `speechRate.js` 1か所** */
+import { SPEECH_RATES } from '../src/lib/speechRate.js'
 
 const PORT = 5198
 const ROOT = new URL('..', import.meta.url).pathname
@@ -610,6 +618,261 @@ for (const [label, want] of Object.entries(WANT)) {
     else ok(`${w}px … 発言ごと ${m.段落} 個・通しと操作盤も残っている`)
   }
   await page.close()
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ── **上の帯は、どの端末でも1段。黒帯は本文を隠さない**(第5.316節)
+        2026-09-30 実機・利用者の指定(Safari と Chrome の写真を並べて)
+
+          > Chromeでは上部の操作ボタンが1列に収まっていますが、
+          > Safariでは設定アイコンだけが次の段に落ち…
+          > 特定のブラウザーだけを場当たり的に小さくするのではなく…
+
+        **原因はブラウザの中身の違いではない**(iOS はどちらも WebKit)。
+        2枚の写真を測ると、同じ端末で Safari のほうが **1.13 倍**大きく
+        描かれていた(白い丸 161px 対 142px)。つまり
+        **Safari の CSS 上の画面幅が狭い**(393px に対しおよそ 345px)——
+        ページのズームが 100% でないと、iOS はそのぶん幅を狭くする。
+
+        こちらから直せるのは**幅が狭くても崩れないこと**である。だから
+        ①どの幅でも1段 ②**余りを必ず残す**(`FIT_SLACK`)の2つを見る。
+        **余りが 0 の行は、字形の違う端末で必ず折り返す** ——
+        実際、直す前は 300〜430px のどこで測っても余りが **0px** だった。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(400)
+  console.log('\n── 上の帯は、どの端末でも1段(第5.316節)──')
+  /* **名札は隠して測る。** 利用者の写真に名札は出ていない
+     (名札はもともと2段目へ落ちてよい・第5.178節)。
+     隠すのは測るあいだだけで、本物の CSS は1行も変えていない */
+  await page.addStyleTag({ content: '.lesson-owner { display: none !important }' })
+  await page.waitForTimeout(150)
+  for (const [w, big] of [
+    [290, false], [300, false], [314, false], [320, false], [345, false],
+    [360, false], [375, false], [390, false], [430, false],
+    /* **端末の「表示を大きく」も模す。** 幅が同じでも入るかどうかは変わる */
+    [375, true], [390, true], [430, true],
+  ]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.evaluate((on) => {
+      document.getElementById('eas-bigbar')?.remove()
+      if (!on) return
+      const st = document.createElement('style')
+      st.id = 'eas-bigbar'
+      st.textContent = '.lesson-bar .btn, .lesson-bar .lesson-pages,'
+        + ' .lesson-bar .stepper { font-size: 16px !important }'
+      document.head.appendChild(st)
+    }, big)
+    await page.evaluate(() => window.dispatchEvent(new Event('resize')))
+    await page.waitForTimeout(220)
+    const m = await page.evaluate((slack) => {
+      const bar = document.querySelector('.lesson-bar')
+      const main = document.querySelector('.lesson-bar-main')
+      const sets = document.querySelector('.lesson-settings')
+      if (!bar || !main || !sets) return null
+      const 段 = (el) => Math.round(el.getBoundingClientRect().top)
+      /* **余りは「測る形」にしてから見る。** ふだんは `margin-left: auto` で
+         設定が右端に貼り付くので、どの幅でも 0 に見えてしまう
+         (`fitRow.js` の `overWrapping` とまったく同じ形にする) */
+      bar.classList.add('is-measuring-row')
+      const cs = window.getComputedStyle(bar)
+      const edge = bar.getBoundingClientRect().right - (parseFloat(cs.paddingRight) || 0)
+      let 右 = -Infinity
+      for (const k of bar.children) {
+        const r = k.getBoundingClientRect()
+        if (!r.width && !r.height) continue
+        if (r.right > 右) 右 = r.right
+      }
+      bar.classList.remove('is-measuring-row')
+      /* **絵だけのボタンは、全部おなじ大きさか**(2026-09-30 利用者の指定
+           > 既存のアイコンセットを使って、他のボタンと大きさ・線・余白を
+           > 揃えてください
+         一覧は**画面に出ている絵だけのボタン**から作る —— 名指しで並べると、
+         足した日に見張られなくなる */
+      const 絵だけ = [...bar.querySelectorAll(
+        '.lesson-pages .btn, .player-launch, .lesson-focus, .lesson-sets')]
+        .filter((b) => b.getBoundingClientRect().width > 0)
+        .map((b) => {
+          const r = b.getBoundingClientRect()
+          return { 名: b.getAttribute('aria-label') || b.className, w: Math.round(r.width), h: Math.round(r.height) }
+        })
+      return {
+        段の数: new Set([...bar.children]
+          .filter((c) => c.getBoundingClientRect().width > 0).map(段)).size,
+        設定が1段目: 段(sets) === 段(main),
+        余り: Math.round(edge - 右),
+        要る余り: slack,
+        絵だけ,
+        帯の高さ: Math.round(bar.getBoundingClientRect().height),
+      }
+    }, FIT_SLACK)
+    const 印 = big ? `${w}px(文字 1.25 倍)` : `${w}px`
+    if (!m) { ng(`${印} … 上の帯が出ていない`); continue }
+    if (!m.設定が1段目) {
+      ng(`${印} … 設定の絵だけが、次の段に落ちている`,
+        `帯が ${m.段の数} 段・高さ ${m.帯の高さ}px`)
+    } else if (m.余り < m.要る余り) {
+      ng(`${印} … 上の帯の余りが足りない`,
+        `${m.余り}px しか無い(${m.要る余り}px 要る)。`
+        + '**余りが 0 の行は、字形の違う端末で折り返す**')
+    } else if (!m.絵だけ.length) {
+      ng(`${印} … 絵だけのボタンが1つも見つからない`, '見張りが何もしていない')
+    } else if (new Set(m.絵だけ.map((b) => `${b.w}x${b.h}`)).size !== 1) {
+      ng(`${印} … 絵だけのボタンの大きさがそろっていない`,
+        m.絵だけ.map((b) => `${b.名} ${b.w}x${b.h}`).join(' / '))
+    } else {
+      ok(`${印} … 1段・余り ${m.余り}px・絵だけのボタン ${m.絵だけ.length} 個が`
+        + `ぜんぶ ${m.絵だけ[0].w}x${m.絵だけ[0].h}px`)
+    }
+  }
+  await page.evaluate(() => document.getElementById('eas-bigbar')?.remove())
+
+  /* ── **黒帯は、本文を隠さない**(2026-09-30 利用者の指定)
+         > プレーヤーが本文に重ならないよう、スクロール領域にも
+         > 必要な余白を確保してください
+
+       もとは紙の下余白が **72px の決め打ち**で、黒帯は **118px** あった。
+       **46px ぶん、本文の最後が隠れていた。**
+       いまは `dockHeight.js` が黒帯を測って `--dock-h` に入れ、
+       紙の余白はそれを読む(**数を2か所に書かない**)。 */
+  console.log('\n── 黒帯は、本文を隠さない(第5.316節)──')
+  for (const w of [320, 375, 390, 430]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.waitForTimeout(250)
+    const m = await page.evaluate(() => {
+      const dock = document.querySelector('.player-dock')
+      const sheet = document.querySelector('.lesson-sheet')
+      if (!dock || !sheet) return null
+      const 高さ = Math.round(dock.getBoundingClientRect().height)
+      const v = window.getComputedStyle(document.documentElement)
+        .getPropertyValue('--dock-h').trim()
+      return {
+        黒帯: 高さ,
+        変数: Math.round(parseFloat(v) || 0),
+        紙の下余白: Math.round(parseFloat(window.getComputedStyle(sheet).paddingBottom) || 0),
+      }
+    })
+    if (!m) { ng(`${w}px … 黒帯か紙が出ていない`); continue }
+    if (!m.変数) {
+      ng(`${w}px … --dock-h が入っていない`, '紙の余白が控えの数のままになる')
+    } else if (Math.abs(m.変数 - m.黒帯) > 1) {
+      ng(`${w}px … --dock-h が黒帯の高さと合っていない`,
+        `変数 ${m.変数}px / 実寸 ${m.黒帯}px`)
+    } else if (m.紙の下余白 <= m.黒帯) {
+      ng(`${w}px … 紙の下余白が、黒帯より狭い`,
+        `余白 ${m.紙の下余白}px ≤ 黒帯 ${m.黒帯}px。いちばん下の段落が隠れる`)
+    } else {
+      ok(`${w}px … 黒帯 ${m.黒帯}px・紙の下余白 ${m.紙の下余白}px(隠れない)`)
+    }
+  }
+
+  /* ── **くり返しは4つとも選べる**(2026-09-30 利用者の指定)
+         > リピートしない / 段落ごと / 文ごと / 全文をリピート
+         > すべて選択できるようにしてください
+
+       **一覧は `REPEAT_UNITS` から**(書き写さない)。押すたびに次へ移る
+       作りなので、**その数だけ押して、ひと回りするか**を見る。 */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.waitForTimeout(250)
+  {
+    const 見た = []
+    let 出ない = false
+    for (let i = 0; i <= REPEAT_UNITS.length; i += 1) {
+      const now = await page.evaluate(() => {
+        const b = document.querySelector('.player--dock .repeat-unit')
+        return b ? (b.getAttribute('aria-label') || '') : null
+      })
+      if (now == null) { 出ない = true; break }
+      見た.push(now)
+      await page.click('.player--dock .repeat-unit')
+      await page.waitForTimeout(120)
+    }
+    const 名 = REPEAT_UNITS.map((id) => repeatLabel(id, '発言'))
+    if (出ない) ng('くり返し … 黒帯にくり返しのボタンが無い')
+    else {
+      /* **4つとも出たか。** `aria-label` は「いまは ◯◯。押すと △△…」なので、
+         その中に単位の名前が入っている */
+      const 足りない = 名.filter((n) => !見た.some((s) => s.includes(`いまは ${n}`)))
+      if (足りない.length) {
+        ng(`くり返し … ${足りない.join(' / ')} が選べない`,
+          `見えたのは ${見た.length} 通り`)
+      } else if (見た[0] !== 見た[REPEAT_UNITS.length]) {
+        ng('くり返し … ひと回りして元に戻らない', `${見た[0]} → ${見た[REPEAT_UNITS.length]}`)
+      } else ok(`くり返し … ${名.join(' / ')} の ${名.length} つを、押すたびに回れる`)
+    }
+  }
+
+  /* ── **速さは 70〜130%。端から外へは出ない**(2026-09-30 利用者の指定)
+         > 再生速度は70%から130%まで、5%刻みです。
+         > 最小・最大に達したときに範囲外へ進まないように
+
+       **端の値も刻みも `SPEECH_RATES` 1か所**(書き写さない)。 */
+  {
+    const m = await page.evaluate(() => {
+      const st = document.querySelector('.player--dock .player-rate')
+      if (!st) return null
+      const arrows = [...st.querySelectorAll('.stepper-arrow')]
+      return {
+        いま: st.querySelector('.stepper-now')?.textContent?.trim() ?? '',
+        下げる止まり: arrows[0]?.disabled ?? null,
+        上げる止まり: arrows[1]?.disabled ?? null,
+      }
+    })
+    if (!m) ng('速さ … 黒帯に速さの欄が無い')
+    else {
+      /* いちばん下まで下げる → ◀ が押せなくなるか */
+      for (let i = 0; i < SPEECH_RATES.length + 2; i += 1) {
+        const done = await page.evaluate(() => {
+          const a = document.querySelector('.player--dock .player-rate .stepper-arrow')
+          if (!a || a.disabled) return true
+          a.click(); return false
+        })
+        if (done) break
+        await page.waitForTimeout(40)
+      }
+      const 下 = await page.evaluate(() => ({
+        値: document.querySelector('.player--dock .player-rate .stepper-now')?.textContent?.trim(),
+        止まる: document.querySelector('.player--dock .player-rate .stepper-arrow')?.disabled,
+      }))
+      for (let i = 0; i < SPEECH_RATES.length + 2; i += 1) {
+        const done = await page.evaluate(() => {
+          const a = [...document.querySelectorAll('.player--dock .player-rate .stepper-arrow')][1]
+          if (!a || a.disabled) return true
+          a.click(); return false
+        })
+        if (done) break
+        await page.waitForTimeout(40)
+      }
+      const 上 = await page.evaluate(() => ({
+        値: [...document.querySelectorAll('.player--dock .player-rate .stepper-now')][0]?.textContent?.trim(),
+        止まる: [...document.querySelectorAll('.player--dock .player-rate .stepper-arrow')][1]?.disabled,
+      }))
+      const 最小 = SPEECH_RATES[0].label
+      const 最大 = SPEECH_RATES[SPEECH_RATES.length - 1].label
+      if (下.値 !== 最小) ng(`速さ … いちばん下まで下げても ${最小} にならない`, `${下.値}`)
+      else if (!下.止まる) ng(`速さ … ${最小} なのに、まだ下げられる`)
+      else if (上.値 !== 最大) ng(`速さ … いちばん上まで上げても ${最大} にならない`, `${上.値}`)
+      else if (!上.止まる) ng(`速さ … ${最大} なのに、まだ上げられる`)
+      else ok(`速さ … ${最小} 〜 ${最大}(${SPEECH_RATES.length} 段)で、端から外へ出ない`)
+    }
+  }
+  await page.close()
+}
+
+/* ── **セーフエリア。** iPhone のホームバーにボタンが重ならない
+       (2026-09-30 利用者の指定「iPhoneのセーフエリアに対応してください」)。
+     **描いて測れない**(この環境にセーフエリアが無い)ので、
+     `env(safe-area-inset-bottom)` を読んでいるかを、決まりの字で見る。 */
+{
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+  const 決まり = css.slice(css.indexOf('.player-dock {'), css.indexOf('.player-dock {') + 700)
+  if (!/padding-bottom:\s*max\([^)]*env\(safe-area-inset-bottom\)/.test(決まり)) {
+    ng('黒帯 … セーフエリアを読んでいない',
+      'iPhone のホームバーに、鳴らすボタンが重なる')
+  } else ok('黒帯 … セーフエリアのぶんだけ、下に余白を取っている')
 }
 
 /* ── **一度決める設定は、右上のアイコン1つの中**(2026-09-29 利用者の指定)──

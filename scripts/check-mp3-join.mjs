@@ -1778,12 +1778,17 @@ function fakeMp3({
     {
       const hook = readFileSync(new URL('../src/lib/useBodyAudio.js', import.meta.url), 'utf8')
       const ru = readFileSync(new URL('../src/components/RepeatUnit.jsx', import.meta.url), 'utf8')
+      /* **「次へ」の算段は `repeatLabel.js` へ出した**(第5.316節)——
+         `.jsx` の中にいると素の node から呼べず、見張りが呼び名を
+         書き写すしかなくなるためである。**探す先も、そちらへ移す** */
+      const rl = readFileSync(new URL('../src/lib/repeatLabel.js', import.meta.url), 'utf8')
       const bar2 = readFileSync(new URL('../src/components/PlayerBar.jsx', import.meta.url), 'utf8')
       const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
       const lv2 = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
       const want3 = [
         ['単位は4つ(しない + 3つ)', ru, /REPEAT_UNITS/],
-        ['押すたびに次へ移る', ru, /export const nextRepeat/],
+        ['押すたびに次へ移る', rl, /export const nextRepeat/],
+        ['呼び名も、素の node から呼べる形にある', rl, /export const repeatLabel/],
         ['部品が単位を渡す', ru, /onChange\?\.\(nextRepeat\(value\)\)/],
         ['操作盤が出す', bar2, /<RepeatUnit value=\{repeat \?\? 'off'\}/],
         ['集中モードも出す', fr, /<RepeatUnit value=\{player\.repeat\}/],

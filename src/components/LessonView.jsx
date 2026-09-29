@@ -91,6 +91,9 @@ import PlayerBar from './PlayerBar.jsx'
 import { wholePlayText } from '../lib/wholePlay.js'
 import useBodyAudio from '../lib/useBodyAudio.js'
 import { FIT_STAGES, overWrapping, useFitRow } from '../lib/fitRow.js'
+/* **黒帯の高さを、そのまま CSS へ流す**(第5.316節)。
+   紙の下余白を決め打ちにすると、段が増えた日に本文が隠れる */
+import { useDockHeight } from '../lib/dockHeight.js'
 import { PLACES, PLACE_TO, nextPlace, placeFor } from '../lib/playerPlace.js'
 import { lockScroll } from '../lib/scrollLock.js'
 
@@ -321,6 +324,10 @@ export default function LessonView({
    */
   const barRef = useRef(null)
   useFitRow(barRef, FIT_STAGES, barOverflows)
+
+  /** 画面の下の黒帯。**測って `--dock-h` に入れる**(第5.316節) */
+  const dockRef = useRef(null)
+  useDockHeight(dockRef)
   /**
    * **セッションの記録**(0032・2026-09 利用者の指定)。
    *
@@ -1339,7 +1346,7 @@ export default function LessonView({
             (2026-08 実機)。レッスン中に何度も触るのは
             「閉じる・ページ送り・解答」の3つだけである。
             狭い画面では言葉も短くする(`.wide-text` を隠す)。 */}
-        <button type="button" className="btn btn--small btn--ghost"
+        <button type="button" className="btn btn--small btn--ghost lesson-close"
                 aria-label="閉じる"
                 onClick={() => { stopReading(); onClose?.() }}>
           ✕<span className="wide-text"> 閉じる</span>
@@ -1377,8 +1384,17 @@ export default function LessonView({
                 「いま鳴っている」ことが、この1つで分かる */}
             {canPlayAll && !fitsInBar && (
               <button type="button"
+                      /* ★ **開いているか / 鳴っているかを、別の印にする**
+                           (2026-09-30 利用者の指定・第5.316節)
+                           > プレーヤーの開閉状態が見た目で分かるように
+
+                         もとは**どちらでも同じ青**だった。鳴っているあいだは
+                         閉じていても青くなるので、**開いているのかどうかが
+                         分からなかった。** 塗り(開いている)と
+                         枠線(鳴っている)に分ける ——
+                         **飾りは増やさない。すでにある2つの見せ方を使う** */
                       className={`btn btn--small player-launch${
-                        floatOpen || playingAll ? ' is-on' : ''}`}
+                        floatOpen ? ' is-open' : ''}${playingAll ? ' is-playing' : ''}`}
                       aria-label={floatOpen ? '読み上げの操作を閉じる' : '読み上げの操作を開く'}
                       aria-pressed={floatOpen}
                       onClick={() => setFloatOpen((v) => !v)}>
@@ -1952,7 +1968,7 @@ export default function LessonView({
             **`.sheet-floats` の外に置く。** あちらは右下に固定した箱で、
             こちらは画面の下いっぱいである。中に入れると幅を取り合う。 */}
         {canPlayAll && outside && shownSpot === 'dock' && !run && (
-          <div className="player-dock no-print">
+          <div className="player-dock no-print" ref={dockRef}>
             <PlayerBar
               place="dock"
               placeNext={placeNext}

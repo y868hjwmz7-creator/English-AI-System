@@ -39,13 +39,26 @@
  *   - **描き直すたびに測る。** 中身が変わる(Listen ⇄ Stop、
  *     次 ▶ ⇄ まとめ、訳を見る が出たり消えたり)ので、
  *     幅が同じでも入るかどうかは変わる
- *   - **足すのは3つまで。** それでも入らないなら、あふれたままにする。
- *     **言葉を削り続けて、何のボタンか分からなくするほうが悪い**
+ *   - **足すのは `FIT_STAGES` の数まで。** それでも入らないなら、
+ *     あふれたままにする。**言葉を削り続けて、何のボタンか
+ *     分からなくするほうが悪い**
+ *   - **「ぴったり入った」を、入ったと数えない**(第5.316節)。
+ *     余りが 0 のまま出すと、**字形が少し違う端末で折り返す。**
+ *     `overWrapping()` は `>=` で見ているので、ぴったりは「入っていない」
  */
 import { useLayoutEffect } from 'react'
 
-/** 詰める段。**順に足す。** 何を削るかは `styles.css` が持つ */
-export const FIT_STAGES = ['is-fit1', 'is-fit2', 'is-fit3']
+/**
+ * 詰める段。**順に足す。** 何を削るかは `styles.css` が持つ。
+ *
+ * ★ **4つめを足した**(2026-09-30 実機・第5.316節)。
+ *   3つめまで詰めても、iPhone の Safari(ページのズームが 100% でない ——
+ *   **CSS 上の画面幅が狭くなる**)では入りきらず、**設定の絵だけが
+ *   次の段へ落ちていた。** Chromium で測ると 345px のとき
+ *   **余りがちょうど 0px** で、字形がほんの少し広いだけで折り返す。
+ *   **「入っているが、余りが 0」は、入っていないのと同じ**である。
+ */
+export const FIT_STAGES = ['is-fit1', 'is-fit2', 'is-fit3', 'is-fit4']
 
 /** その箱(と直の子)が、幅からあふれているか */
 export function over(row) {
@@ -70,6 +83,26 @@ export function over(row) {
 const MEASURING = 'is-measuring-row'
 
 /**
+ * **必ず残す余り(px)。**(2026-09-30 実機・第5.316節)
+ *
+ * これまでは「1px でも入っていれば入った」と数えていた。実測すると、
+ * どの幅でも**余りがちょうど 0〜1px** で止まっていた ——
+ * `fitRow()` は入った瞬間に手を止めるので、当然そうなる。
+ *
+ * ところが**同じ CSS でも、端末が変われば行の幅は変わる。**
+ * 字形(iPhone はヒラギノ・この環境は Noto)も、
+ * 太字の出かたも、丸めも違う。**余りが 0 なら、その差だけで折り返す。**
+ * 実際そうなっていた —— iPhone の Safari で設定の絵だけが次の段へ落ち、
+ * Chrome では落ちなかった(利用者の写真)。
+ *
+ * **iOS の字形は、この環境では1度も測れない。**
+ * だから「測って合わせる」ことはできない。**余りを取っておく**ほうを選ぶ。
+ * 8px は、絵だけのボタン1つ(32px)の 1/4 —— これ以上広げると、
+ * 詰める必要のない幅まで詰まってしまう。
+ */
+export const FIT_SLACK = 8
+
+/**
  * 折り返す帯が、1行に収まっていないか。
  *
  * **`scrollWidth` では見分けられない**(実測)。`clientWidth` には
@@ -77,7 +110,7 @@ const MEASURING = 'is-measuring-row'
  * そのぶん(右の余白)だけ、あふれを見落とす。
  * だから**子の右端**が、余白の内側からはみ出していないかを見る。
  */
-export function overWrapping(row) {
+export function overWrapping(row, slack = FIT_SLACK) {
   row.classList.add(MEASURING)
   const r = row.getBoundingClientRect()
   const cs = window.getComputedStyle(row)
@@ -88,9 +121,11 @@ export function overWrapping(row) {
   for (const kid of row.children) {
     const k = kid.getBoundingClientRect()
     if (!k.width && !k.height) continue
-    // **ぴったりは「入っていない」と見る。** 端数の丸めで折り返すため
-    // (実測。900px で「1px 入る」と読んだのに2行になっていた)
-    if (k.right >= edge) { bad = true; break }
+    /* **ぴったりは「入っていない」と見る。** 端数の丸めで折り返すため
+       (実測。900px で「1px 入る」と読んだのに2行になっていた)。
+       ★ さらに `slack` のぶん手前で「入っていない」と見る ——
+         **余りが 0 の行は、字形の違う端末で必ず折り返す**(第5.316節) */
+    if (k.right >= edge - slack) { bad = true; break }
   }
   row.classList.remove(MEASURING)
   return bad

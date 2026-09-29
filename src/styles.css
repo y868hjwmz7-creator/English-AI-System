@@ -4390,6 +4390,53 @@ html, body { overflow-x: clip; }
 .lesson-bar.is-fit3 .lesson-settings { gap: var(--sp-6); }
 .lesson-bar.is-fit3 .btn { padding-left: 9px; padding-right: 9px; }
 
+/* ══════════════════════════════════════════════════════════════════
+   ★ **絵だけのボタンは、正方形1つの大きさにそろえる**
+     (2026-09-30 実機・利用者の指定・第5.316節)
+
+       > 音声プレーヤーを開くボタンは、既存のアイコンセットを使って、
+       > 他のボタンと大きさ・線・余白を揃えてください
+       > Safariでもボタンが意図せず2段に折り返されないようにしてください
+
+     これまでは**中身なりの幅**だった。絵は同じ 20×20 でも、
+     ボタンごとに左右の余白が違って **2〜4px ずつずれ**、
+     並びが乱れていた。**幅は1か所で決める**(`--bar-key`)。
+
+     ★ **折り返しが直るのも、ここである。** 中身なりの幅だと、
+       iPhone の Safari(**ページのズームが 100% でないと、CSS 上の
+       画面幅がそのぶん狭くなる** —— 実測で Chrome の 393px に対し
+       およそ 345px)で**余りが 0px** になり、字形がほんの少し違う
+       だけで設定の絵が次の段へ落ちていた(第5.316節)。
+   ══════════════════════════════════════════════════════════════════ */
+.lesson-bar { --bar-key: 36px; }
+/* 絵のうしろの余白は、言葉が続くためのもの。**絵だけなら要らない**
+   (黒帯の丸で踏んだのと同じ話・第5.315節) */
+.lesson-bar .lesson-pages .btn .icon,
+.lesson-bar .player-launch .icon,
+.lesson-bar .lesson-focus .icon,
+.lesson-bar .lesson-sets .icon { margin-right: 0; }
+/* 「✕ 閉じる」も、言葉を落としてから正方形にする
+   (落とす前に正方形にすると、言葉がはみ出す)。**決まりは下にまとめてある** */
+/* ページの数。**三角とのあいだは詰める**(◀ 1 / 4 ▶ で1つの部品に見せる)。
+   **わざと接してはいない** —— 4px は残す(共通ルール) */
+.lesson-bar .lesson-pages { gap: var(--sp-4); }
+.lesson-bar .lesson-pages > span {
+  min-width: 2.6em; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* ③ではボタンも1段小さく(押せる大きさ 34px は割らない) */
+.lesson-bar.is-fit3 { --bar-key: 34px; }
+.lesson-bar.is-fit3 .lesson-pages { gap: var(--sp-2); }
+/* ④ **最後の一手。** ここまで来るのは、端末の文字を大きくしているか、
+      ブラウザのズームを上げている画面である。
+      **押すものは1つも消さない** —— 余白と隙間だけを詰める */
+.lesson-bar.is-fit4 { gap: var(--sp-4); padding-left: 6px; padding-right: 6px; }
+.lesson-bar.is-fit4 .lesson-bar-main,
+.lesson-bar.is-fit4 .lesson-settings { gap: var(--sp-4); }
+.lesson-bar.is-fit4 { --bar-key: 32px; }
+.lesson-bar.is-fit4 .lesson-pages { gap: var(--sp-2); }
+.lesson-bar.is-fit4 .lesson-pages > span { font-size: var(--fs-12); min-width: 2.2em; }
+
 /* **名札は、測るあいだ数に入れない**(第5.178節・2026-09)。
    `fitRow.js` の `over()` は**子の `scrollWidth`** も見る。名札は
    長い名前のときに「…」で切れる作りなので、そのまま測ると
@@ -9143,9 +9190,37 @@ button.wbfilter-ctl { text-align: left; }
    広い画面では、これまでどおり右下に固定してある(`.sheet-float`)。
    **同時に2つは出さない** —— 出し分けは幅だけで決める */
 .lesson-focus { display: none; flex: 0 0 auto; padding-left: 9px; padding-right: 9px; }
-.lesson-bar .player-launch.is-on {
+/* ★ **開いている**(塗りつぶし)と **鳴っている**(枠線だけ)を分ける
+     (2026-09-30 利用者の指定・第5.316節)。
+     もとはどちらも `is-on` の同じ青で、**閉じていても鳴っていれば青**だった
+     —— それでは開閉が分からない。
+     **色だけに頼らない**(共通ルール)ので、開閉は `aria-pressed` と
+     `aria-label`(「読み上げの操作を開く / 閉じる」)にも出してある */
+.lesson-bar .player-launch.is-open {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
+.lesson-bar .player-launch.is-playing:not(.is-open) {
+  border-color: var(--accent); color: #cfe3ff;
+}
+
+/* ★ **絵だけのボタンの大きさは、ここで決める**(第5.316節)。
+     **打ち消しは、いちばん後ろに置く**(CLAUDE.md・3度踏んだ) ——
+     すぐ上の `.player-launch` / `.lesson-focus` / `.lesson-sets` が
+     左右の余白を持っているので、前に書くと負ける。 */
+.lesson-bar .lesson-pages .btn,
+.lesson-bar .player-launch,
+.lesson-bar .lesson-focus,
+.lesson-bar .lesson-sets {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--bar-key); min-width: var(--bar-key); height: var(--bar-key);
+  padding: 0;
+}
+.lesson-bar.is-fit1 .lesson-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--bar-key); min-width: var(--bar-key); height: var(--bar-key);
+  padding: 0;
+}
+.lesson-bar.is-fit4 .btn { padding-left: 6px; padding-right: 6px; }
 /* **上の帯では、進み具合の帯を出さない**(2026-09 実測)。
    くり返しのボタンを足したら、**1440px で帯が2行になった**
    (実測 96px。1行なら 50px)。紙がそのぶん狭くなる。
@@ -9196,8 +9271,14 @@ button.wbfilter-ctl { text-align: left; }
    ═══════════════════════════════════════════════════════════════════ */
 .player-dock {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
-  padding: 8px 16px;
-  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  /* ★ **背を低くする**(2026-09-30 実機・利用者の指定・第5.316節)
+       > 現在のように大きな操作エリアが画面を占め続けないようにし、
+       > 教材本文の表示領域を確保してください
+     上下の余白を 8 → 6px。**左右は触らない**(押すものの幅に効く) */
+  padding: 6px 16px;
+  /* **セーフエリア。** iPhone のホームバーにボタンが重ならないようにする。
+     `max()` なので、セーフエリアの無い端末では 6px のまま */
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
   border-top: 1px solid #45453f;
   background: #24241f; color: #f2f2ee;
   box-shadow: 0 -6px 24px rgb(0 0 0 / 22%);
@@ -9227,8 +9308,17 @@ button.wbfilter-ctl { text-align: left; }
 .player--dock {
   /* **段は縦に積む。** 隙間は `gap` で作る(余白で作らない・共通ルール) */
   flex-direction: column; align-items: stretch;
-  gap: var(--sp-8); flex-wrap: nowrap;
+  /* 段のあいだは 8 → 6px(第5.316節・背を低くする)。
+     **0 にはしない** —— 別々の物を、すき間ゼロでくっつけない(共通ルール) */
+  gap: var(--sp-6); flex-wrap: nowrap;
 }
+/* ★ **上の段(いまどこか・くり返し・速さ)は、控えめに低く**(第5.316節)。
+     いちばん押すのは下の段の丸である。上の段は**読む**ためのもので、
+     押す回数はずっと少ない。**消さずに、低くする** */
+.player--dock .player-head .btn,
+.player--dock .player-head .stepper { min-height: 30px; }
+.player--dock .player-head .btn { padding-top: 3px; padding-bottom: 3px; }
+.player--dock .player-head .stepper-arrow { min-height: 28px; }
 .player--dock .btn { border-color: #55554e; background: #33332d; color: #f2f2ee; }
 /* **3色とも生かす**(第5.244節)。黒い帯と同じ作法 */
 .player--dock .btn--quiet { background: #45453f; border-color: #45453f; color: #f2f2ee; }
@@ -9301,8 +9391,11 @@ button.wbfilter-ctl { text-align: left; }
   /* **もう少し大きく**(2026-09-29 実機・利用者の指定
      「丸ももう少し大きくて良いと感じます」)。54 → 60px。
      進み具合のバーを取り払ったぶん、黒帯は低くなっている */
-  width: 60px; height: 60px; flex: 0 0 auto;
-  padding: 0; border: 0; border-radius: 30px;
+  /* ★ 60 → 52px(2026-09-30 実機・利用者の指定・第5.316節)。
+       > 現在のように大きな操作エリアが画面を占め続けないように
+     **絵の割合は変えない**(下の 84%)ので、▶ と ■ の見え方は同じである */
+  width: 52px; height: 52px; flex: 0 0 auto;
+  padding: 0; border: 0; border-radius: 26px;
   background: #f2f2ee; color: #24241f; cursor: pointer;
 }
 /* ★ **絵を、丸のまん中に置く**(2026-09-29 実機・利用者の指定)。
@@ -9367,7 +9460,7 @@ button.wbfilter-ctl { text-align: left; }
 @media (max-width: 340px) {
   .player-dock { padding-left: 6px; padding-right: 6px; }
   .player-key-btn { width: 34px; }
-  .player-big { width: 52px; height: 52px; border-radius: 26px; }
+  .player-big { width: 46px; height: 46px; border-radius: 23px; }
 }
 
 /* **上の行だけ、入るまで詰める**(`useFitRow`・2026-09 実測)。
@@ -9389,14 +9482,26 @@ button.wbfilter-ctl { text-align: left; }
 .player-head.is-fit3 .repeat-unit .repeat-unit-now { min-width: 0; }
 .player-head.is-fit3 .player-at .wide-text { display: none; }
 
-/* **紙の下にも、帯のぶんだけ余白を足す。**
-   足さないと、いちばん下の段落が帯に隠れて読めない
-   (紙は送れる箱なので、いちばん下まで送っても出てこない) */
-.lesson--dock .lesson-sheet { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+/* ★ **紙の下の余白は、黒帯を測って決める**(2026-09-30・第5.316節)。
+     > プレーヤーが本文に重ならないよう、スクロール領域にも
+     > 必要な余白を確保してください
+
+   もとは **`72px` の決め打ち**だった。ところが黒帯は段が増えて
+   **実測 118px** になっており、**本文の最後が隠れて読めなかった。**
+   紙は送れる箱なので、いちばん下まで送っても出てこない。
+
+   `--dock-h` は `dockHeight.js` が黒帯そのものを測って入れる。
+   **セーフエリアのぶんは、その高さに入っている**(黒帯の padding)ので、
+   ここで足し直さない —— **二重に足すと、そのぶん白く空く。**
+   黒帯が無い画面では変数ごと外れるので、控えの 96px も効かない。 */
+.lesson--dock .lesson-sheet {
+  padding-bottom: calc(var(--dock-h, 96px) + var(--sp-16));
+}
 
 /* 黒帯に隠されないよう、右下の箱をそのぶん上へ逃がす。
-   **「集中モード」が押せなくなる**のを防ぐ(行き止まりを作らない) */
-.sheet-floats.is-above-dock { bottom: calc(66px + env(safe-area-inset-bottom)); }
+   **「集中モード」が押せなくなる**のを防ぐ(行き止まりを作らない)。
+   **同じ `--dock-h` を読む** —— 数を2か所に書かない */
+.sheet-floats.is-above-dock { bottom: calc(var(--dock-h, 96px) + var(--sp-8)); }
 @media (max-width: 560px) {
   .sheet-floats.is-above-dock { bottom: calc(60px + env(safe-area-inset-bottom)); }
 }

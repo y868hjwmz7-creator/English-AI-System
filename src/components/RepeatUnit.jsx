@@ -29,20 +29,14 @@ import { RepeatIcon } from './Icons.jsx'
    そのままだとボタンが伸び縮みして、となりの物が動く */
 import SteadyLabel from './SteadyLabel.jsx'
 import { REPEAT_UNITS } from '../lib/wholeAudio.js'
+import { repeatLabel, nextRepeat } from '../lib/repeatLabel.js'
 
-/** その単位の呼び名。**「段落 / 発言」だけが教材で変わる** */
-export const repeatLabel = (id, unit = '段落') => ({
-  off: 'しない',
-  sentence: '文',
-  item: unit,
-  all: '全文',
-}[id] ?? 'しない')
-
-/** 次に移る先。**並びは `REPEAT_UNITS` 1か所**(2か所に持たない) */
-export const nextRepeat = (id) => {
-  const i = REPEAT_UNITS.indexOf(id)
-  return REPEAT_UNITS[(i < 0 ? 0 : i + 1) % REPEAT_UNITS.length]
-}
+/* ★ **呼び名と「次へ」は `repeatLabel.js` へ出した**(第5.316節)。
+     純粋な算段が `.jsx` の中にいると、**素の node から呼べない** ——
+     見張りが4つの呼び名を書き写すしかなくなり、
+     呼び名を変えた日に見張りだけが古くなる。
+     ここからも出し直しておく(前から `RepeatUnit.jsx` を見ている人のため) */
+export { repeatLabel, nextRepeat } from '../lib/repeatLabel.js'
 
 /**
  * @param value   'off' / 'sentence' / 'item' / 'all'
