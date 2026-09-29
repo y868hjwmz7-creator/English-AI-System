@@ -2187,8 +2187,19 @@ for (const [label, want] of Object.entries(WANT)) {
     const seen = []
     for (let i = 0; i < 10; i += 1) {
       seen.push(await look(page))
-      const pills = await page.$$('.focus-mid .listenpill')
-      const next = pills.length ? await pills[pills.length - 1].$('.listenpill-arrow:last-child') : null
+      /* ★ **送るのは、音声プレーヤーのいちばん外側のボタン**(⏭⏭)。
+             2026-09-30・第5.321節で、集中モードの帯は紙の黒帯そのものに
+             なった。**錠剤(`.listenpill`)はもう無い。**
+             読み上げが使えない画面(Supabase 未設定)だけは錠剤なので、
+             **両方さがす** —— 片方だけ見ると、送れずに1枚で止まり、
+             「語が落ちている」という**嘘の赤**が出る(実際に出た)。 */
+      const keys = await page.$$('.focus-bar .player-keys .player-key-btn')
+      let next = keys.length ? keys[keys.length - 1] : null
+      if (!next) {
+        const pills = await page.$$('.focus-mid .listenpill')
+        next = pills.length
+          ? await pills[pills.length - 1].$('.listenpill-arrow:last-child') : null
+      }
       if (!next || await next.isDisabled()) break
       await next.click()
       await page.waitForTimeout(300)
@@ -5912,10 +5923,19 @@ export default defineConfig({
    *   (英文和訳 4/4・和文英訳 2/2)。**文字が `Listen` のまま**で、
    *   上が「全体を聞く」になったぶん、**見分けがつかなくなっていた。**
    *
-   *   出る場所は3つある —— `SpeakButton`(設問ごと)、
-   *   `FocusReader`(集中モード)、`PassagePractice`(本文の練習)。
+   *   出す場所は2つ —— `SpeakButton`(設問ごと)と
+   *   `PassagePractice`(本文の練習)。
    *   **「全体を聞く」とまったく同じ作法**で、
    *   `speakLabel.js` 1か所から引く。
+   *
+   *   ★ **`FocusReader`(集中モード)は、出す側から外れた**
+   *     (2026-09-30・第5.321節)。あの帯は**音声プレーヤーそのもの**に
+   *     なったので、鳴らすボタンの名前は `wholePlay.js` が持つ
+   *     (そちらは上の節が見張っている)。
+   *
+   *     **「引いているか」と「書き写していないか」は、別に見る。**
+   *     引く必要がなくなっても、**直に書いてよくなったわけではない** ——
+   *     ここへ「聴く」と書き足した日に、赤くなってほしい。
    *   ──────────────────────────────────────────────── */
   {
     const 読む = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
@@ -5923,18 +5943,22 @@ export default defineConfig({
        説明の中に `Listen` が何十個も出てくるので、そのままでは永久に赤い */
     const 素 = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/^\s*\/\/.*$/gm, '')
-    const 場所 = ['components/SpeakButton.jsx', 'components/FocusReader.jsx',
-      'components/PassagePractice.jsx']
+    /** **出す場所** —— `speakLabel.js` から引いていなければならない */
+    const 出す = ['components/SpeakButton.jsx', 'components/PassagePractice.jsx']
+    /** **出さない場所** —— 引く必要は無いが、**直に書いてもいけない** */
+    const 書かない = ['components/FocusReader.jsx']
     const 書き写し = []
-    for (const f of 場所) {
+    for (const f of [...出す, ...書かない]) {
       const t = 素(読む(f))
-      /* ①**取り込んでいるか**(定義だけあって誰も呼ばなければ、何も起きない) */
-      if (!/from '\.\.\/lib\/speakLabel\.js'/.test(t)) {
+      /* ①**取り込んでいるか**(定義だけあって誰も呼ばなければ、何も起きない)。
+         **出す場所だけ**見る */
+      if (出す.includes(f) && !/from '\.\.\/lib\/speakLabel\.js'/.test(t)) {
         書き写し.push(`${f} … speakLabel.js から引いていない`)
       }
       /* ②**古い名前が残っていないか**(`addEventListener` などは頭が違う) */
       if (/['"`>]Listen\b/.test(t)) 書き写し.push(`${f} … 古い名前(Listen)が残っている`)
-      /* ③**新しい名前を直に書いていないか**(書いたら、次の改名で片方だけ古くなる) */
+      /* ③**新しい名前を直に書いていないか**(書いたら、次の改名で片方だけ古くなる)。
+         **出さない場所でも見る** —— あとで書き足されたら赤くなってほしい */
       if (new RegExp(`['"\`>]${SPEAK_LISTEN}`).test(t)) {
         書き写し.push(`${f} … 「${SPEAK_LISTEN}」を直に書いている`)
       }
@@ -5942,8 +5966,8 @@ export default defineConfig({
     if (書き写し.length) {
       ng('1文ずつの聞く … 名前を書き写している場所がある', 書き写し.join('\n    '))
     } else {
-      ok(`1文ずつの聞く … ${場所.length}つの場所とも \`speakLabel.js\` 1か所から引く`
-        + '(書き写しは0)')
+      ok(`1文ずつの聞く … 出す ${出す.length}つは \`speakLabel.js\` 1か所から引き、`
+        + `出さない ${書かない.length}つも直に書いていない`)
     }
 
     /* **見張り自身が書き写していないか。**
