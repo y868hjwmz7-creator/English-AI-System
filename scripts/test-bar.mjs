@@ -2005,6 +2005,23 @@ for (const [label, want] of Object.entries(WANT)) {
  *   ⑥**押しても、まわりの物が動かない**(箱の大きさも、隣の場所も)
  * ══════════════════════════════════════════════════════════════════════ */
 {
+  /**
+   * ★ **混ぜたら、番号も「もとの何番か」に変わるか**(第5.329節)。
+   *
+   * **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   *   ・混ぜていないとき … 差し替えていない(`counter(lq)` が返る)
+   *   ・混ぜたとき       … **並びとぴったり同じ順**に番号が並ぶ
+   *
+   * **値を書き写さない。性質で見る。** 「5,2,6…」と書くと、
+   * まぐれの並びでしか緑にならない。**並びから求めた番号**と突き合わせる。
+   */
+  const 混ぜたら番号も動く = (もと, 入, 戻) => {
+    const 元の位置 = new Map(もと.並び.split(',').map((k, i) => [k, i + 1]))
+    if (!戻.every((x) => x.番号 === もと.番号)) return false
+    return 入.every((x) => x.番号
+      === x.並び.split(',').map((k) => 元の位置.get(k)).join(','))
+  }
+
   /** その画面の、シャッフルまわり */
   const 見る = (page) => page.evaluate(() => {
     const R = (el) => { const b = el.getBoundingClientRect()
@@ -2027,6 +2044,16 @@ for (const [label, want] of Object.entries(WANT)) {
       くり返し: rep ? R(rep) : null,
       並び: [...document.querySelectorAll('.lesson-page:not(.is-closed) li[data-key]')]
         .map((x) => x.getAttribute('data-key')).join(','),
+      /* ★ **画面に出ている番号**(2026-09-30 実機・第5.329節)。
+           > シャッフルボタンをオンにしていても番号順に進み、
+           > シャッフルされません
+         **並びは変わっていた。番号だけが 1・2・3… のままだった** ——
+         番号は CSS の数え上げ(`counter(lq)`)なので、
+         中身をどう並べ替えても振り直される。
+         **並びだけを数えていたから、緑のまま見落とした。**
+         渡していないときは `counter(lq)` が返る(差し替えていない印) */
+      番号: [...document.querySelectorAll('.lesson-page:not(.is-closed) li[data-key]')]
+        .map((x) => window.getComputedStyle(x, '::before').content.replace(/"/g, '')).join(','),
     }
   })
 
@@ -2084,10 +2111,52 @@ for (const [label, want] of Object.entries(WANT)) {
         ng('シャッフル … 押すと、箱の大きさかとなりの場所が動く',
           `箱 ${a.箱.w} → ${見た.map((x) => x.箱?.w).join('/')} /`
           + ` くり返しの左 ${a.くり返し.l} → ${見た.map((x) => x.くり返し?.l).join('/')}`)
+      } else if (!混ぜたら番号も動く(a, 入, 戻)) {
+        ng('シャッフル … 並びは変わっても、画面の番号が 1・2・3… のまま',
+          `もと ${a.番号} → ${入.map((x) => x.番号).join(' / ')}`)
       } else {
         ok(`シャッフル … 文型ドリルの数のすぐ右にあり、押すと並びが変わって`
           + `(${a.並び} → ${入.find((x) => x.並び !== a.並び).並び})`
+          + `、番号ももとの何番かに変わり`
+          + `(${入.find((x) => x.並び !== a.並び).番号})`
           + `、もう一度押すと戻る。押しても 1px も動かない`)
+      }
+    }
+    await page.close()
+  }
+
+  /* ── ①' **テスト対策(TOEIC L&R Part 2 の形)**(第5.329節)─────────
+        利用者の指摘「TOEIC L&R の PART2 問題の教材ですが、シャッフル
+        ボタンが出てきません」。**骨組みにテスト対策の教材が1本も無く、
+        `canShuffleKind()` が真になる道のうち exam のほうを
+        誰も描いていなかった。**
+        設問が「(A) … (B) … (C) …」で見分けが付かない教材なので、
+        **番号が変わるかどうかが、唯一の手がかり**である */
+  {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?kind=exam&role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+    const a = await 見る(page)
+    if (!a.有る) {
+      ng('シャッフル … テスト対策に出ていない', '`.shuffle-key` が無い')
+    } else {
+      const 見た = []
+      for (let n = 0; n < 6; n += 1) {
+        await page.click('.player--dock .shuffle-key')
+        await page.waitForTimeout(160)
+        見た.push(await 見る(page))
+      }
+      const 入 = 見た.filter((x, i) => i % 2 === 0)
+      const 戻 = 見た.filter((x, i) => i % 2 === 1)
+      if (!入.some((x) => x.並び !== a.並び)) {
+        ng('シャッフル … テスト対策で、問の並びが1度も変わらない', a.並び)
+      } else if (!混ぜたら番号も動く(a, 入, 戻)) {
+        ng('シャッフル … テスト対策で、画面の番号が 1・2・3… のまま',
+          `もと ${a.番号} → ${入.map((x) => x.番号).join(' / ')}`)
+      } else {
+        ok('シャッフル … テスト対策にも出て、並びと番号がそろって変わる'
+          + `(${入.find((x) => x.並び !== a.並び).番号})`)
       }
     }
     await page.close()

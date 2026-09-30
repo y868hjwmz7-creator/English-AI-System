@@ -338,6 +338,16 @@ export default function LessonView({
      **`null` = もとの並び。** 押すたびに作り直し、もう一度押すと戻る。 */
   const [mixed, setMixed] = useState(null)
   /**
+   * ★ **混ぜ直すたびに1つ進む印**(2026-09-30 実機・第5.329節)。
+   *
+   * 「止めた場所から鳴らす」の目印(`resumeKey`)は
+   * **教材 + 演習**だけで組んでいたので、**並べ替えても同じ鍵**だった。
+   * 止めてから混ぜて ▶ を押すと、**新しい並びの「途中」から**鳴り出す
+   * —— 押した人には「シャッフルの挙動が変」に見える。
+   * 並びが変わったら別の鍵にして、**頭から**鳴らす。
+   */
+  const [mixSeq, setMixSeq] = useState(0)
+  /**
    * ★ **まるごとなぞって、Quick Response 帳へ入れた問**(第5.329節)。
    *
    *   > 全文を選ぶと単語帳ではなく quick response 帳に飛ぶ仕様に。
@@ -763,6 +773,8 @@ export default function LessonView({
          並びが変わった以上、途中から続けても意味が無いので**頭から**。 */
     鳴らし直す.current = playingAll
     stopAll()
+    /* 並びが変われば、止めた場所の控えは引き継がない(上の `mixSeq`) */
+    setMixSeq((n) => n + 1)
     setMixed((m) => (m ? null : rawSections.map((sec) => shuffled(sec.items ?? []))))
   }
   /* 並べ替えが画面に行き渡ってから鳴らす(`playableAll` は下で組み直される) */
@@ -1365,7 +1377,7 @@ export default function LessonView({
 
        目印は**教材 + 演習**。何段落目の何秒めかは
        `readAloud.js` が1か所で覚える(画面ごとに持たない) */
-    resumeKey: `all|${material.id}|${section?.id ?? ''}`,
+    resumeKey: `all|${material.id}|${section?.id ?? ''}|${mixed ? mixSeq : 0}`,
     startIndex,
     /* ★ **並べ替えたら、1本にまとめない**(第5.328節)。
          1本の鍵は **(声の並び, 英文の並び)** なので、混ぜると鍵が変わり、
@@ -2343,6 +2355,34 @@ export default function LessonView({
     })
     const k = (it, i) => key(it, i, si)
     /**
+     * ★ **混ぜたときは、もとの何番かを出す**(2026-09-30 実機・第5.329節)。
+     *
+     *   > シャッフルボタンをオンにしていても番号順に進み、
+     *   > シャッフルされません
+     *
+     * **並びは、はじめから変わっていた**(測って確かめた)。
+     * 変わって見えなかったのは、番号が **CSS の数え上げ**
+     * (`counter(lq)`)だったからである —— 中身をどう並べ替えても
+     * **1・2・3… と振り直される。**
+     * しかも応答問題は、どの問も「(A) … (B) … (C) …」で見分けが付かない。
+     * **見えないものは、合っていても信じられない**(第5.187節)。
+     *
+     * もとの番号を出せば、**5・2・7・1…** と並ぶので一目で分かるうえ、
+     * 答え合わせのときに**もとの紙と突き合わせられる。**
+     *
+     * **混ぜていないときは何も渡さない** —— これまでの見た目を1px も
+     * 変えないため(`content: var(--lq-no, counter(lq))` の既定に落ちる)。
+     * 同じ `it` が `rawSections` にそのまま入っているので、
+     * **`indexOf` で引ける**(`shuffled()` は写しを並べ替えるだけ)。
+     */
+    const 元の番号 = mixed
+      ? (sec.items ?? []).map((it, i) => {
+        const もと = rawSections[si]?.items ?? []
+        const at = もと.indexOf(it)
+        return (at >= 0 ? at : i) + 1
+      })
+      : null
+    /**
      * ── **集中モードでは、幅によらず語を押せる**(第5.209節・2026-09 実機)──
      *
      *   > 文型トレーニングの集中モードで単語の意味を調べられません
@@ -2463,6 +2503,8 @@ export default function LessonView({
               {sec.items.map((it, i) => (only != null && i !== only ? null : (
                 <li key={k(it, i)} data-key={k(it, i)}
                     data-focus={focusNo.has(i) ? String(focusNo.get(i)) : undefined}
+                    /* ★ 混ぜたときだけ、もとの番号を渡す(第5.329節) */
+                    style={元の番号 ? { '--lq-no': `"${元の番号[i]}"` } : undefined}
                     className={speakingKey === k(it, i) ? 'is-speaking' : undefined}>
                   {/* ── **本文から拾った かたまり**(第5.230節・利用者の設計)──
                       札(分類)・意味・由来・本文の文章・[練習する] を

@@ -5726,7 +5726,12 @@ html, body { overflow-x: clip; }
    ・上の位置 …… 1行目の高さ(li の line-height 1.9em)の中で丸を中央に置く
                   (1.9 - 1.19) / 2 = 0.355 li-em = 0.52em(この要素の em) */
 .lesson-items > li::before {
-  content: counter(lq);
+  /* ★ **混ぜたときは、もとの番号を出す**(2026-09-30 実機・第5.329節)。
+       > シャッフルボタンをオンにしていても番号順に進み、シャッフルされません
+     並びは変わっていたのに、ここが **CSS の数え上げ**だったので
+     **いつも 1・2・3… と振り直され**、変わって見えなかった。
+     渡されたときだけ差し替える —— **混ぜていない画面は1px も変わらない** */
+  content: var(--lq-no, counter(lq));
   position: absolute; left: 14px; top: calc(8px + 0.52em);
   width: 1.75em; height: 1.75em; line-height: 1.68em; text-align: center;
   border: 1px solid transparent; border-radius: var(--r-circle); font-size: .68em;

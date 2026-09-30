@@ -146,6 +146,13 @@ const asDrill = q.get('kind') === 'drill'
    桁違いに長く、集中モードに入ってもそこで送ることになっていた
    (2026-09 利用者の指摘)。**この形でしか確かめられない** */
 const asLong = q.get('kind') === 'long'
+/* ★ **テスト対策(TOEIC L&R Part 2 の形)**(`?kind=exam`・第5.329節)。
+     2026-09-30 実機・利用者の指摘「シャッフルボタンをオンにしていても
+     番号順に進み、シャッフルされません」を**測るために足した。**
+     **骨組みにテスト対策の教材が1本も無かった**ので、
+     `canShuffleKind()` が真になる道のうち、**exam のほうを
+     誰も描いていなかった**(文型ドリルだけが描かれていた)。 */
+const asExam = q.get('kind') === 'exam'
 
 /** 検証に使う教材。**本文(会話)が1つあれば、帯はすべて出そろう** */
 const material = asSpeech ? {
@@ -225,6 +232,49 @@ const material = asSpeech ? {
         prompt_en: 'Let me start with the first release. It shipped in March.',
         prompt_ja: '最初のリリースから始めます。3月に出したものです。',
       },
+    ],
+  }],
+} : asExam ? {
+  /* ★ **TOEIC L&R Part 2 の形**(`examPrep.js` の `toeic_lr` / `p2`)。
+     `listening` の段が1つ、その中に問が並ぶ。
+     **設問は1本の文字列**で、同じ指示文 + 3つの選択肢が入っている
+     —— 実機の教材とまったく同じ形にしてある(第5.329節)。
+     `answer_ja`(解答の訳)は**2026-09-30 から作らせているもの**なので、
+     **半分の問にだけ入れてある** —— 訳のある問と無い問が混ざったときに、
+     訳の行とまるごとなぞる道が**片方だけに出る**ことを測るためである。 */
+  id: 'test-exam', level: 'B1', title: 'TOEIC L&R Part 2', kind: 'exam',
+  headline: '', tagIds: [],
+  sections: [{
+    id: 'sec-1', exercise_type: 'listening', title: 'リスニング + 理解',
+    instruction: '英文は見ずに聞くこと。聞いたあとの質問に答えなさい。',
+    items: [
+      { id: 'x-1', audio_text: 'When does the new branch open downtown?',
+        question: 'Choose the best response. (A) Next Monday morning. '
+          + "(B) It's on the second floor. (C) She opened the door.",
+        answer: '(A) Next Monday morning.',
+        answer_ja: '(A) 来週の月曜の朝です。' },
+      { id: 'x-2', audio_text: 'Who is going to lead the training session?',
+        question: 'Choose the best response. (A) In the main hall. '
+          + '(B) Ms. Tanaka from human resources. (C) Twice a week.',
+        answer: '(B) Ms. Tanaka from human resources.',
+        answer_ja: '(B) 人事部の田中さんです。' },
+      { id: 'x-3', audio_text: "You've already sent the invoice, haven't you?",
+        question: 'Choose the best response. (A) A new invoice form. '
+          + '(B) Yes, this morning. (C) The voice was too loud.',
+        answer: '(B) Yes, this morning.' },
+      { id: 'x-4', audio_text: 'Would you like the report by email or by post?',
+        question: 'Choose the best response. (A) Email is fine. '
+          + '(B) I reported it already. (C) About thirty pages.',
+        answer: '(A) Email is fine.' },
+      { id: 'x-5', audio_text: 'Why was the shipment delayed again?',
+        question: 'Choose the best response. (A) To the west warehouse. '
+          + '(B) The truck broke down. (C) Yes, it was shipped.',
+        answer: '(B) The truck broke down.',
+        answer_ja: '(B) トラックが故障したからです。' },
+      { id: 'x-6', audio_text: 'I think we should move the meeting to Thursday.',
+        question: 'Choose the best response. (A) That works for me. '
+          + '(B) On the third floor. (C) He moved last year.',
+        answer: '(A) That works for me.' },
     ],
   }],
 } : asDrill ? {
