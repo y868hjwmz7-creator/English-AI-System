@@ -289,8 +289,11 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
         onMarkWord={markWord}
         /* 閉じたら、スピーチの一覧へ戻る(行き止まりを作らない) */
         onClose={() => setOpenId(null)}
-        extraLabel="このスピーチの原稿と添削"
-        extra={(
+        /* ★ **添削の結果は、教材の2ページ目**(2026-09-30 利用者の指定)
+             > というよりも教材の中の2ページ目に添削の結果を入れます */
+        extraPage={{
+          label: '添削の結果',
+          node: (
           <>
             <SpeechPractice speech={open} learnerId={learnerId} level={level} />
             <SpeechEditCard
@@ -314,7 +317,8 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
             {error && <p className="notice notice--error">{error}</p>}
             {note && <p className="notice notice--ok">{note}</p>}
           </>
-        )}
+          ),
+        }}
       />
     )
   }

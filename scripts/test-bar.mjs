@@ -7152,92 +7152,104 @@ export default defineConfig({
  *   > 普通の他の教材の画面、つまり1枚目の写真と同じ仕様にする様にして
  *   > ください。仕組みも同じです。つまり、モノローグの教材と全て同じです。
  *   > quick response もあります。
+ *   > というよりも教材の中の2ページ目に添削の結果を入れます。
+ *   > そのページ内では写真に写ってる聴くボタンを伴う各文章の表示は
+ *   > 削除します。
  *
  *   もとはスピーチが**自前で練習の画面を組んで**いた(全体を聞く・
  *   文の一覧・訳を見る・速さ)。音声プレーヤーを入れたときに
  *   **見た目が食い違った**(利用者の写真)。
  *
  *   いまは `speechAsMaterial()` で**モノローグ教材の形に組み立て**、
- *   同じ `LessonView` に渡すだけである。
+ *   同じ `LessonView` に渡す。添削の結果は **2ページ目**である
+ *   (`extraPage`)—— 教材はもともと `◀ 1 / 2 ▶` でページを送るので、
+ *   **すでにある道の上に乗る。**
  *
  * **見るのは「同じかどうか」。**
  *   ①教材の枠で開く ②練習の行(6Steps / Quick Response / 集中モード)
- *   ③黒帯が**ふつうの黒帯**である ④1文ずつ 聴く / 訳を見る が出る
+ *   ③黒帯が**ふつうの黒帯**である ④1ページ目に1文ずつ 聴く / 訳を見る
  *   ⑤**自前の道具が戻っていない**(出ない側も見る)
- *   ⑥添削の結果は**畳んである**(開くまでは教材と同じ画面に見える)
- *   ⑦横にはみ出さない
+ *   ⑥**2ページ目が「添削の結果」**で、直したところ・語句・原稿がある
+ *   ⑦**2ページ目には、聴くボタンつきの文を1つも出さない**
+ *   ⑧横にはみ出さない
  * ══════════════════════════════════════════════════════════════════════ */
 for (const w of [1280, 390, 320]) {
   const page = await browser.newPage({ viewport: { width: w, height: 900 } })
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=speechboard`,
     { waitUntil: 'networkidle' })
   await page.waitForTimeout(400)
-  const got = await page.evaluate(() => {
+  /** いま開いているページの中身。**教材は全ページを描いて、CSS で隠す** */
+  const 見る = () => page.evaluate(() => {
     const t = (sel) => [...document.querySelectorAll(sel)]
       .map((x) => (x.getAttribute('aria-label') || x.textContent || '').trim())
-    const 札 = document.querySelector('.lesson-extra')
+    const 開 = [...document.querySelectorAll('.lesson-page:not(.is-closed)')]
     const dock = document.querySelector('.player-dock .player--dock')
     return {
       枠: !!document.querySelector('.lesson'),
       練習: t('.practice-row button'),
       黒帯: dock ? t('.player-dock .player--dock button') : null,
-      文ごと: t('.lesson-items button').filter((x) => /聴く|訳|文法/.test(x)),
-      札: 札 ? (札.querySelector('summary')?.textContent ?? '').trim() : null,
-      畳んである: 札 ? 札.open === false : null,
-      /* **開いたら、添削の中身が出るか**(閉じた箱は測れない・共通ルール) */
-      中身: (() => {
-        if (!札) return null
-        札.open = true
-        return {
-          直し: document.querySelectorAll('.writing-notes > li').length,
-          語句: document.querySelectorAll('.writing-phrases > li').length,
-          原稿: !!document.querySelector('.speech-edit textarea'),
-        }
-      })(),
+      ページ: document.querySelector('.lesson-pages span')?.textContent?.trim() ?? null,
+      見出し: 開.map((x) => (x.querySelector('.lesson-section')?.textContent ?? '').trim()),
+      /* **そのページの中**の、聴くボタンつきの文の数 */
+      聴く: 開.reduce((n, x) => n + [...x.querySelectorAll('button')]
+        .filter((b) => /聴く/.test(b.textContent || '')).length, 0),
+      直し: 開.reduce((n, x) => n + x.querySelectorAll('.writing-notes > li').length, 0),
+      語句: 開.reduce((n, x) => n + x.querySelectorAll('.writing-phrases > li').length, 0),
+      原稿: 開.some((x) => !!x.querySelector('.speech-edit textarea')),
       /* **出ない側。** 自前の道具が戻っていないか */
-      自前: {
-        プレーヤー: document.querySelectorAll('.player-dock--inline').length,
-        文の一覧: document.querySelectorAll('.speech-sentences').length,
-        訳の切り替え: document.querySelectorAll('.speech-swap').length,
-      },
+      自前: document.querySelectorAll('.player-dock--inline').length
+        + document.querySelectorAll('.speech-sentences').length
+        + document.querySelectorAll('.speech-swap').length,
       よこ: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     }
   })
+  const 一 = await 見る()
+  /* **2ページ目へ送る。** 送れなければ、ページが増えていない */
+  const 送れた = await page.evaluate(() => {
+    const b = document.querySelector('.lesson-pages button[aria-label="次のページ"]')
+    if (!b || b.disabled) return false
+    b.click(); return true
+  })
+  await page.waitForTimeout(300)
+  const 二 = 送れた ? await 見る() : null
   await page.close()
 
   const 名 = `スピーチ(${w}px)`
-  /* **持ちものは、ふつうの教材の黒帯と同じ7つ**(名前で数える) */
-  const 黒帯の数 = got.黒帯?.length ?? 0
-  if (!got.枠) {
+  const 黒帯の数 = 一.黒帯?.length ?? 0
+  if (!一.枠) {
     ng(`${名} … 教材の画面で開いていない`, '`.lesson` が無い')
-  } else if (!got.練習.includes('6Steps') || !got.練習.includes('Quick Response')
-    || !got.練習.includes('集中モード')) {
+  } else if (!一.練習.includes('6Steps') || !一.練習.includes('Quick Response')
+    || !一.練習.includes('集中モード')) {
     /* **利用者の指定「quick response もあります」** */
-    ng(`${名} … 練習の行がそろっていない`, got.練習.join(' / ') || '(空)')
+    ng(`${名} … 練習の行がそろっていない`, 一.練習.join(' / ') || '(空)')
   } else if (黒帯の数 !== 7) {
     /* くり返し / 速さ / 段落もどる / 文もどる / 全体を聴く / 文すすむ / 段落すすむ */
     ng(`${名} … 黒帯の持ちものが ${黒帯の数} 個(ふつうの教材は 7 個)`,
-      (got.黒帯 ?? []).join(' / ') || '黒帯そのものが無い')
-  } else if (!got.文ごと.length) {
-    ng(`${名} … 1文ずつの「聴く」「訳を見る」が出ていない`)
-  } else if (got.自前.プレーヤー || got.自前.文の一覧 || got.自前.訳の切り替え) {
-    ng(`${名} … 自前で組んだ練習の道具が戻っている`,
-      `プレーヤー ${got.自前.プレーヤー} / 文の一覧 ${got.自前.文の一覧}`
-      + ` / 訳の切り替え ${got.自前.訳の切り替え}`)
-  } else if (!got.札) {
-    ng(`${名} … 添削の結果と原稿の置き場所が無い`, '畳んだ札ごと消えている')
-  } else if (!got.畳んである) {
-    /* **畳んである**から、開くまでは1枚目の写真と同じ画面に見える */
-    ng(`${名} … 添削の結果が畳まれていない`, got.札)
-  } else if (!got.中身 || got.中身.直し !== 1 || got.中身.語句 !== 2 || !got.中身.原稿) {
-    /* **開いたら、ちゃんと中身がある**(黙って消さない) */
-    ng(`${名} … 札を開いても、添削の結果や原稿が出ない`, JSON.stringify(got.中身))
-  } else if (got.よこ > 0) {
-    ng(`${名} … 横にはみ出している`, `${got.よこ}px`)
+      (一.黒帯 ?? []).join(' / ') || '黒帯そのものが無い')
+  } else if (!一.聴く) {
+    ng(`${名} … 1ページ目に、1文ずつの「聴く」が出ていない`)
+  } else if (一.自前) {
+    ng(`${名} … 自前で組んだ練習の道具が戻っている`, `${一.自前} 個`)
+  } else if (!送れた || !二) {
+    ng(`${名} … 2ページ目が無い`, `札は「${一.ページ}」`)
+  } else if (!二.見出し.includes('添削の結果')) {
+    ng(`${名} … 2ページ目が「添削の結果」になっていない`,
+      二.見出し.join(' / ') || '(見出しなし)')
+  } else if (二.聴く !== 0) {
+    /* **利用者の指定**「そのページ内では…各文章の表示は削除します」 */
+    ng(`${名} … 2ページ目に、聴くボタンつきの文が ${二.聴く} 個ある`,
+      '添削の結果のページには出さない')
+  } else if (二.直し !== 1 || 二.語句 !== 2 || !二.原稿) {
+    /* **黙って消さない。** 移した先に、ちゃんと中身がある */
+    ng(`${名} … 2ページ目に、添削の結果や原稿が出ていない`,
+      `直し ${二.直し} / 語句 ${二.語句} / 原稿 ${二.原稿}`)
+  } else if (一.よこ > 0 || 二.よこ > 0) {
+    ng(`${名} … 横にはみ出している`, `${一.よこ}px / ${二.よこ}px`)
   } else {
     ok(`${名} … モノローグ教材とまったく同じ画面`
-      + `(練習の行 ${got.練習.length} / 黒帯 ${黒帯の数} / 文ごと ${got.文ごと.length} /`
-      + ` 添削は「${got.札}」に畳んである)`)
+      + `(${一.ページ} → ${二.ページ} / 練習の行 ${一.練習.length} /`
+      + ` 黒帯 ${黒帯の数} / 1ページ目の聴く ${一.聴く} /`
+      + ` 2ページ目は「添削の結果」で聴く ${二.聴く})`)
   }
 }
 

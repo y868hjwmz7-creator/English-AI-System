@@ -236,19 +236,22 @@ export default function LessonView({
    */
   onLearnerChange = null,
   /**
-   * **その教材だけに付いてくるもの**(2026-09-30・第5.323節)。
+   * **その教材だけの、もう1ページ**(2026-09-30 利用者の指定・第5.323節)。
+   *
+   *   > というよりも教材の中の2ページ目に添削の結果を入れます。
    *
    *   スピーチは、添削の結果(講評・直したところ・覚えておきたい語句・
-   *   もう一度添削・音声ダウンロード)を持っている。
-   *   **ほかの教材には無いもの**なので、**畳んで**置く ——
-   *   開くまでは、1枚目の写真の教材とまったく同じ画面に見える
-   *   (利用者が選んだ案「添削の結果は畳んでおく」)。
+   *   もう一度添削・音声ダウンロード・原稿)を持っている。
+   *   **ほかの教材には無いもの**なので、**ページを1枚足して**そこに置く。
+   *   はじめは畳んだ札にしていたが、利用者の指定で**ページ**にした ——
+   *   教材はもともと `◀ 1 / 3 ▶` でページを送るものなので、
+   *   **すでにある道の上に乗る**(新しい見せ方を作らない)。
    *
-   *   **渡されなければ、札そのものを出さない**(効かない操作を見せない)。
+   *   **渡されなければ、ページそのものが増えない**(`◀ 1 / 1 ▶` のまま)。
+   *
+   * @type {{label: string, node: JSX.Element}|null}
    */
-  extra = null,
-  /** 畳んだ札に書く名前(`extra` を渡すときだけ) */
-  extraLabel = '',
+  extraPage = null,
 }) {
   /**
    * **いま、誰の記録として残るか**(第5.178節・2026-09 利用者の指摘)。
@@ -265,6 +268,11 @@ export default function LessonView({
   const markWord = markIn(onMarkWord, material?.id, owner)
   const sections = material?.sections ?? []
   const [page, setPage] = useState(0)
+  /** **ぜんぶで何ページか。** 足したページがあれば1枚多い(第5.323節)。
+      **数え方を2通り持たない** —— 送りも札もキーボードも、これを見る */
+  const pageCount = sections.length + (extraPage ? 1 : 0)
+  /** いま、足したページを見ているか(そこには本文も設問も無い) */
+  const onExtraPage = Boolean(extraPage) && page >= sections.length
   // 解答の出し方は2通り。**両方要る。**
   //   ・右上のボタン … 全部まとめて出す / 隠す(答え合わせのとき)
   //   ・問ごとのボタン … 1問ずつ出す / 隠す(一緒に進めるとき)
@@ -786,7 +794,9 @@ export default function LessonView({
       const 的 = e.target
       if (的 && (/^(INPUT|TEXTAREA|SELECT)$/.test(的.tagName) || 的.isContentEditable)) return
       if (e.key === 'ArrowRight') {
-        setPage((p) => Math.min(p + 1, sections.length - 1))
+        /* **足したページも送り先である**(第5.323節)。
+           `sections.length` を見ると、2ページ目へ行けない */
+        setPage((p) => Math.min(p + 1, pageCount - 1))
         resetItems()
       }
       if (e.key === 'ArrowLeft') {
@@ -796,7 +806,7 @@ export default function LessonView({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, sections.length])
+  }, [onClose, pageCount])
 
   /* ══════════════════════════════════════════════════════════════
      **フックは、早い `return` より前に置く**(第5.223節)。
@@ -1403,9 +1413,9 @@ export default function LessonView({
               <button type="button" className="btn btn--small btn--ghost"
                       disabled={page === 0} aria-label="前のページ"
                       onClick={() => { setPage(page - 1); resetItems() }}>◀</button>
-              <span>{page + 1} / {sections.length}</span>
+              <span>{page + 1} / {pageCount}</span>
               <button type="button" className="btn btn--small btn--ghost"
-                      disabled={page >= sections.length - 1} aria-label="次のページ"
+                      disabled={page >= pageCount - 1} aria-label="次のページ"
                       onClick={() => { setPage(page + 1); resetItems() }}>▶</button>
             </div>
 
@@ -1700,16 +1710,6 @@ export default function LessonView({
               「書き込むための用紙」で、中身は決まっている(仕様書 5.70) */}
           <CastChip material={material} className="cast-chip--quiet" />
         </div>
-
-        {/* ★ **その教材だけに付いてくるもの**(第5.323節)。
-              **畳んである**ので、開くまでは ほかの教材と同じ画面に見える。
-              紙には出さない —— 添削の控えは、教材の中身ではない */}
-        {extra && (
-          <details className="lesson-extra no-print">
-            <summary>{extraLabel || 'この教材について'}</summary>
-            <div className="lesson-extra-body">{extra}</div>
-          </details>
-        )}
 
         {/* ── 通しで練習する ────────────────────────────────
             **「ページを見る」とは別の行為。** ページは教材の中身を
@@ -2027,6 +2027,17 @@ export default function LessonView({
             **描いてから隠す**(`is-closed`)。紙用の指定が
             `display: block` に戻す。 */}
         {sections.map((sec, si) => renderSection(sec, si))}
+
+        {/* ★ **その教材だけの、もう1ページ**(第5.323節)。
+              ページの開け閉めは**ほかのページとまったく同じ作法**
+              (`is-closed` を付けて、CSS が隠す)。
+              **紙には出さない** —— 添削の控えは、教材の中身ではない */}
+        {extraPage && (
+          <section className={`lesson-page no-print${onExtraPage ? '' : ' is-closed'}`}>
+            <h3 className="lesson-section">{extraPage.label}</h3>
+            {extraPage.node}
+          </section>
+        )}
 
         {/* **AI が作っていることを、教材の中で1行だけ言う**
             (2026-09 利用者の問い「音声や教材を『AIで作成してます』という

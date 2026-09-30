@@ -78,6 +78,7 @@ import {
 } from './lib/frameQr.js'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
+import SpeechEditCard from './components/SpeechEditCard.jsx'
 /* 添削ずみのスピーチは、モノローグ教材の形にして同じ画面で開く(第5.323節) */
 import { speechAsMaterial } from './lib/speechPractice.js'
 import SpeechBoardView from './components/SpeechBoardView.jsx'
@@ -2179,8 +2180,22 @@ function speechBoardScreen() {
         <LessonView
           material={speechAsMaterial(open, { level: 'B1' })}
           onClose={() => {}}
-          extraLabel="このスピーチの原稿と添削"
-          extra={<SpeechPractice speech={open} />}
+          /* **本物(`SpeechBoard`)が渡すのと同じものを、そのまま渡す** ——
+             骨組みが1つでも欠けると、そこは誰も測っていないことになる */
+          extraPage={{
+            label: '添削の結果',
+            node: (
+              <>
+                <SpeechPractice speech={open} />
+                <SpeechEditCard
+                  open={open} mayAsk={trainer} reviewed={done}
+                  bodyOpen draftOpen
+                  accents={accentsWithVoices('narration')} accent="us"
+                  pool={voicesOfAccent('us', 'narration')} tone="formal"
+                />
+              </>
+            ),
+          }}
         />
       )}
     </div>
