@@ -15,7 +15,7 @@
  *     答え合わせのときに出す。トレーナーが手元で決める
  *   ・文字の大きさを3段階で変えられる。共有先の画面の大きさが分からないため
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   countLabel, countUnit, exerciseType, isCardSection, isPassageSection,
   noteIsAnswer, sectionLabel,
@@ -103,6 +103,9 @@ import { PLACES, PLACE_TO, nextPlace, placeFor } from '../lib/playerPlace.js'
 import { lockScroll } from '../lib/scrollLock.js'
 
 /** 本文のときだけ ◀ ▶ で挟む。**呼ぶ側に条件を書き散らさない** */
+
+/** **空の演習の一覧は、この1つ**(第5.325節のつづき)。`?? []` を書かない */
+const NO_SECTIONS = []
 
 const SIZES = [
   { id: 'm', label: '標準' },
@@ -271,7 +274,10 @@ export default function LessonView({
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る。
      語に触れる場所は多いので、**教材が分かるここで1回だけかぶせる** */
   const markWord = markIn(onMarkWord, material?.id, owner)
-  const rawSections = material?.sections ?? []
+  /* **中身が無いときの「空」も、同じ1つを使う**(第5.325節のつづき)。
+     `?? []` と書くと**描き直すたびに別の空**になり、
+     下の `useMemo` と `useEffect` が毎回走り直す */
+  const rawSections = material?.sections ?? NO_SECTIONS
   const [page, setPage] = useState(0)
 
   /* ══════════════════════════════════════════════════════════════
@@ -305,9 +311,16 @@ export default function LessonView({
   const canShuffle = isDrillKind(material?.kind)
   /* 教材が変われば、混ぜたものは捨てる(別の教材の並びを持ち越さない) */
   useEffect(() => { setMixed(null) }, [material?.id])
-  const sections = mixed
+  /* ★ **覚え込ませる**(第5.325節のつづき)。
+       `map` は**呼ぶたびに別の一覧**を返すので、そのまま使うと
+       描き直すたびに `sections` が別物になり、
+       **これを見ている `useEffect` が毎回走り直す** ——
+       語の意味の先読み(**AI を呼ぶ = 課金**)と音声の先読みが、
+       シャッフル中ずっと回りつづけることになる。
+       **混ぜた中身と、元の一覧が変わったときだけ**組み直す */
+  const sections = useMemo(() => (mixed
     ? rawSections.map((sec, i) => (mixed[i] ? { ...sec, items: mixed[i] } : sec))
-    : rawSections
+    : rawSections), [mixed, rawSections])
   /** **ぜんぶで何ページか。** 足したページがあれば1枚多い(第5.323節)。
       **数え方を2通り持たない** —— 送りも札もキーボードも、これを見る */
   const pageCount = sections.length + (extraPage ? 1 : 0)
