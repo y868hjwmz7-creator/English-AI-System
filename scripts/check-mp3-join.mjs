@@ -1807,6 +1807,10 @@ function fakeMp3({
            「聞き流しなどのリピートも同じく絵に揃えてください」)。
          **輪そのものを1か所**に持たせたので、描き替えると両方が変わる */
       const icons = readFileSync(new URL('../src/components/Icons.jsx', import.meta.url), 'utf8')
+      /* ★ **並べ替えたら、1本にまとめない**(第5.328節)。
+           1本の鍵は (声の並び, 英文の並び) なので、混ぜると鍵が変わり、
+           **同じ英文なのにまるごと作り直す = もう一度課金**になる */
+      const hook2 = readFileSync(new URL('../src/lib/useBodyAudio.js', import.meta.url), 'utf8')
       const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
       const lv2 = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
       const sp2 = readFileSync(new URL('../src/components/SpeechPractice.jsx', import.meta.url), 'utf8')
@@ -1819,6 +1823,25 @@ function fakeMp3({
              第5.324節でプレーヤーの側だけ2本矢印にしたので、
              **聞き流しだけ矢印1本のまま残っていた** ——
              同じものに違う絵が付いていた(CLAUDE.md「同じものには同じ絵」) */
+        /* ── **シャッフルと、1本にまとめる音声**(第5.328節)──────────
+             2026-09-30 実機・利用者の指摘
+               > シャッフルのボタンを押してもシャッフルにならず挙動が変です。
+               > そのまま止まったり、元の順番でなったりします。
+             通しの読み上げは `clipTier === PREMIUM` のとき**まるごと1本**を
+             取りに行く(`wholeClip`)。**無ければ作る = 課金**である。
+             並べ替えると鍵((声の並び, 英文の並び))が変わるので、
+             **混ぜるたびに作り直し**、作っているあいだは止まって見える。 */
+        ['並べ替えたら、1本にまとめない', read,
+          /const canWhole = canJoin && clipTier === PREMIUM/],
+        ['道具が「1本にしてよいか」を受け渡す', hook2, /^\s+canJoin,$/m],
+        ['紙が、混ぜているあいだは 1本にしないと言う', lv2, /canJoin: !mixed,/],
+        /* **出ない側。** `canJoin` を外して書き直したら赤くなる */
+        ['1本にする条件を、2通り書いていない', read,
+          (t) => (t.match(/clipTier === PREMIUM && list\.length >= 2/g) ?? []).length === 1],
+        /* ★ **止めるだけで終わらせない**(利用者の「そのまま止まったり」)。
+             鳴っていたなら、新しい並びで頭から鳴らし直す */
+        ['シャッフルのあと、鳴っていたなら鳴らし直す', lv2,
+          /鳴らし直す\.current = playingAll/],
         ['くり返しの輪は1か所にある', icons, /function RepeatLoop\(\)/],
         ['聞き流しのくり返しも、その輪を使う', icons,
           /export function RepeatIcon[\s\S]{0,400}?<RepeatLoop \/>/],

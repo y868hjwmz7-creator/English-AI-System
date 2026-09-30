@@ -105,6 +105,9 @@ export default function useBodyAudio({ onIndex = null, onWord = null } = {}) {
   const play = useCallback(({
     parts = [], resumeKey = null, rate = 0.9, tier = STANDARD,
     startIndex = null, keep = false, partRangeOf = null,
+    /* ★ **1本にまとめてよいか**(第5.328節)。並べ替えたときは `false` ——
+         鍵が変わって**まるごと作り直す = もう一度課金**になるため */
+    canJoin = true,
   } = {}) => {
     const list = parts ?? []
     if (!list.length) return
@@ -127,6 +130,7 @@ export default function useBodyAudio({ onIndex = null, onWord = null } = {}) {
     stopRef.current = readAloudSequence(list, {
       rate,
       clipTier: tier,
+      canJoin,
       resumeKey,
       /* **単位は訊きに行く。** 鳴らしている最中に切り替えられる */
       repeatOf: () => repeatRef.current,

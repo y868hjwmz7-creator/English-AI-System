@@ -700,6 +700,10 @@ export default function LessonView({
 
   /** 通しの読み上げを止める */
   const stopAll = player.stop
+  /** シャッフルを押したとき、鳴っていたかどうか(第5.328節) */
+  const 鳴らし直す = useRef(false)
+  /** いちばん新しい「そこから鳴らす」。**下で毎回入れ直す**(順が逆なので) */
+  const jumpToRef = useRef(null)
 
   /**
    * **シャッフルを入れる / 外す**(第5.325節)。
@@ -715,9 +719,20 @@ export default function LessonView({
    *   **もう一度押すと、もとの並びに戻る**(`null`)。
    */
   const toggleShuffle = () => {
+    /* ★ **鳴っていたなら、新しい並びで鳴らし直す**(第5.328節・
+         2026-09-30 実機・利用者の指摘「そのまま止まったり」)。
+         止めるだけだと、押した人には**壊れたように見える。**
+         並びが変わった以上、途中から続けても意味が無いので**頭から**。 */
+    鳴らし直す.current = playingAll
     stopAll()
     setMixed((m) => (m ? null : rawSections.map((sec) => shuffled(sec.items ?? []))))
   }
+  /* 並べ替えが画面に行き渡ってから鳴らす(`playableAll` は下で組み直される) */
+  useEffect(() => {
+    if (!鳴らし直す.current) return
+    鳴らし直す.current = false
+    jumpToRef.current?.(0)
+  }, [mixed])
 
   /** ページを移ったら、1問ずつの開け閉めと読み上げを元に戻す */
   const resetItems = () => {
@@ -1314,6 +1329,13 @@ export default function LessonView({
        `readAloud.js` が1か所で覚える(画面ごとに持たない) */
     resumeKey: `all|${material.id}|${section?.id ?? ''}`,
     startIndex,
+    /* ★ **並べ替えたら、1本にまとめない**(第5.328節)。
+         1本の鍵は **(声の並び, 英文の並び)** なので、混ぜると鍵が変わり、
+         **同じ英文なのにまるごと作り直す = もう一度課金**になる。
+         しかも作っているあいだは止まって見える(実機で言われたとおり)。
+         1本ずつの音声は**その英文そのもの**が鍵なので、
+         混ぜても**すでに置いてあるものがそのまま鳴る(0円)。** */
+    canJoin: !mixed,
   })
 
   /** 鳴らす・止める(右下のボタンと操作盤の ▶ / ■ は同じもの) */
@@ -1327,6 +1349,8 @@ export default function LessonView({
     if (!playableAll.length) return
     player.jump(playOpts(i))
   }
+  /* **シャッフルのあとに、いちばん新しいものを呼べるように**(第5.328節) */
+  jumpToRef.current = jumpTo
 
   /* ── **設定は1つ。狭い窓では、道具もその中へ**(2026-09-29 利用者の指定)
        > ひとつにまとめます
