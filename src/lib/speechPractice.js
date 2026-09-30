@@ -228,3 +228,89 @@ export const sortSpeeches = (rows) => [...(rows ?? [])].sort((a, b) => {
   if (at !== 0) return at
   return speechTitleOf(a).localeCompare(speechTitleOf(b))
 })
+
+/**
+ * **添削ずみのスピーチを、モノローグ教材の形にする**(2026-09-30 利用者の指定・
+ * 第5.323節)。
+ *
+ *   > 普通の他の教材の画面、つまり1枚目の写真と同じ仕様にする様にして
+ *   > ください。仕組みも同じです。つまり、モノローグの教材と全て同じです。
+ *   > quick response もあります。
+ *
+ * ── なぜ「組み立てる」のか ─────────────────────────────────────
+ *
+ *   スピーチは**自前で練習の画面を組んで**いた(全体を聞く・文の一覧・
+ *   訳を見る・速さ)。教材の画面とは別物だったので、音声プレーヤーを
+ *   入れたときに**見た目が食い違った**(利用者の写真)。
+ *
+ *   **同じことをする道具を2通り持たない**(CLAUDE.md)。
+ *   教材の形にして渡せば、**画面も仕組みも `LessonView` 1つ**になる ——
+ *   6Steps も Quick Response も集中モードも、語のタップも、
+ *   1文ずつの聴くも、**書き写さずに付いてくる。**
+ *
+ * ── **音声は1円もかからない** ───────────────────────────────
+ *
+ *   1本にまとめた音声の鍵は **(声の並び, 英文の並び)** だけで決まる
+ *   (`wholeKeyOf`)。
+ *
+ *   | | スピーチの道(これまで) | 教材の道(これから) |
+ *   |---|---|---|
+ *   | 声 | `speechParts` の `clipVoice: speech.voice_id` | `resolveVoices([voice_id])[0]` = **同じ id** |
+ *   | 英文 | `s.en` | `audioTextOf(it, 'article')` = `prompt_en` = **同じ** |
+ *
+ *   **だから鍵が変わらない = 作り直しにならない = 0円**である。
+ *
+ * ── 教材そのものにはしない ───────────────────────────────────
+ *
+ *   **`materials` の行は作らない。** 教材は既定で全トレーナーに見える
+ *   (`visibility = 'school'`)ので、ゲスト1人が書いたスピーチが
+ *   スクール中に並んでしまう。**画面の形だけを借りる。**
+ *
+ *   `id` は **`null`** にする —— 語に触れた記録の `material_id` は
+ *   `materials` を指しているので、無い id を入れると壊れる
+ *   (集中モードが `markIn(mark, null, …)` と渡しているのと同じ理由)。
+ *
+ * ── **これが「添削ずみか」の判断そのもの** ─────────────────────
+ *
+ *   直した文が1つも無ければ `null` を返す —— これは `isReviewed()` と
+ *   **まったく同じ条件**である(どちらも `review.sentences` に
+ *   英文が1つでもあるか)。
+ *
+ *   **だから呼ぶ側は `reviewed &&` と書かない。**
+ *   書くと判断が2か所になり、**骨組みと本物が食い違って、
+ *   見張りが何も守らなくなる**(実際そうなった —— 本物を壊しても
+ *   骨組みは緑のままだった・第5.323節)。
+ *
+ * @returns {object|null} 直した文が1つも無ければ `null`(**0件で成功を返さない**)
+ */
+export const speechAsMaterial = (speech, { level = null } = {}) => {
+  const lines = speechLines(speech)
+  if (!lines.length) return null
+  return {
+    /* **教材の id は持たせない**(上の説明) */
+    id: null,
+    /* `speech` は**モノローグ**(`materialKinds.js` の呼び名) */
+    kind: 'speech',
+    title: speechTitleOf(speech),
+    headline: '',
+    headlineJa: '',
+    level: speechLevelOf(level),
+    /* **声は1人。** スピーチは1人が最後まで話しきるもの */
+    voiceIds: speech?.voice_id ? [speech.voice_id] : [],
+    tagIds: [],
+    sections: [{
+      /* **止めた場所を覚える目印**になる(`resumeKey`)。
+         スピーチごとに別でなければ、別のスピーチの続きから鳴る */
+      id: `speech:${speech?.id ?? 'x'}`,
+      /* `article` は**本文**(`isPassage: true`)—— これが本文だと、
+         6Steps・Quick Response・集中モードがひとりでに出る */
+      exercise_type: 'article',
+      instruction: '',
+      items: lines.map((s, i) => ({
+        id: `${speech?.id ?? 'x'}-${i}`,
+        prompt_en: String(s.en).trim(),
+        prompt_ja: String(s.ja ?? '').trim(),
+      })),
+    }],
+  }
+}

@@ -78,6 +78,8 @@ import {
 } from './lib/frameQr.js'
 import { shelfList } from './data/shelves.js'
 import SpeechPractice from './components/SpeechPractice.jsx'
+/* 添削ずみのスピーチは、モノローグ教材の形にして同じ画面で開く(第5.323節) */
+import { speechAsMaterial } from './lib/speechPractice.js'
 import SpeechBoardView from './components/SpeechBoardView.jsx'
 import { accentsWithVoices, voicesOfAccent } from './data/clipVoices.js'
 import NavSettings from './components/NavSettings.jsx'
@@ -2164,8 +2166,23 @@ function speechBoardScreen() {
         accents={accentsWithVoices('narration')} accent="us"
         pool={voicesOfAccent('us', 'narration')} tone="formal"
       >
-        {done && <SpeechPractice speech={open} />}
+        {/* ★ **添削が済んだスピーチは、教材の画面へ移った**(第5.323節)。
+               ここに残るのは**下書きだけ**である(`SpeechBoard` と同じ判断) */}
       </SpeechBoardView>
+      {/* 添削ずみのときは、**モノローグ教材とまったく同じ画面**。
+          `SpeechBoard` が渡すのと同じものを、そのまま渡す ——
+          **骨組みは本物と1文字も違えない**(CLAUDE.md) */}
+      {/* **`done &&` と書かない**(第5.323節)。`speechAsMaterial()` が
+          「直した文があるか」で `null` を返す —— **本物と同じ1つの判断**
+          を見る。書き分けると、本物を壊しても骨組みが緑のままになる */}
+      {speechAsMaterial(open, { level: 'B1' }) && (
+        <LessonView
+          material={speechAsMaterial(open, { level: 'B1' })}
+          onClose={() => {}}
+          extraLabel="このスピーチの原稿と添削"
+          extra={<SpeechPractice speech={open} />}
+        />
+      )}
     </div>
   )
 }

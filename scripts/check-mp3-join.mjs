@@ -1806,6 +1806,7 @@ function fakeMp3({
       const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
       const lv2 = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
       const sp2 = readFileSync(new URL('../src/components/SpeechPractice.jsx', import.meta.url), 'utf8')
+      const sb2 = readFileSync(new URL('../src/components/SpeechBoard.jsx', import.meta.url), 'utf8')
       const want3 = [
         /* 単位は4つ(しない + 文 + 段落/発言 + 全文)。**一覧は
            `wholeAudio.js` 1か所**で、それを読むのは `repeatLabel.js` である
@@ -1828,10 +1829,20 @@ function fakeMp3({
         /* ★ **集中モードは、操作盤を通して出す**(第5.321節)——
              自前で `<RepeatUnit>` を置くのをやめた */
         ['集中モードも出す', fr, /repeat=\{player\.repeat\} onRepeat=\{player\.setRepeat\}/],
-        /* ★ **スピーチ練習も出す**(第5.322節・利用者の指定
-             「スピーチ練習にも同じプレーヤーを配置してください」) */
-        ['スピーチ練習も出す', sp2, /repeat=\{audio\.repeat\} onRepeat=\{audio\.setRepeat\}/],
-        ['スピーチ練習は、紙とおなじ部品を使う', sp2, /<PlayerBar\n\s+place="dock"/],
+        /* ★ **スピーチは、モノローグ教材の画面そのもの**(第5.323節・
+             利用者の指定「モノローグの教材と全て同じです」)。
+             自前でプレーヤーを持つのをやめたので、
+             **見るのは「教材の形に組み立てているか」**である ——
+             組み立てさえすれば、くり返しも `LessonView` が付けてくる。
+             **出ない側も見る** …… 自前の部品が戻ったら赤くなる */
+        ['スピーチは教材の形に組み立てる', sb2, /speechAsMaterial\(open, \{ level \}\)/],
+        ['スピーチは、紙とおなじ画面で開く', sb2, /<LessonView\n\s+material=\{asMaterial\}/],
+        ['添削の結果は、畳んだ札に入れる', sb2, /extraLabel="このスピーチの原稿と添削"/],
+        /* **出ない側。** 自前の練習の道具が戻っていないか
+           (**「出る」と「出ない」の両方を見る**・CLAUDE.md)。
+           戻すと、また見た目が食い違う(利用者の写真) */
+        ['スピーチに、自前のプレーヤーは無い', sp2, (t) => !/<PlayerBar/.test(t)],
+        ['スピーチに、自前の文の一覧は無い', sp2, (t) => !/speech-sentences/.test(t)],
         ['紙が渡す', lv2, /repeat=\{player\.repeat\} onRepeat=\{player\.setRepeat\}/],
         /* **値ではなく、訊きに行く形で渡す。** 値で渡すと、
            鳴らしている最中に切り替えても押し直すまで効かない */

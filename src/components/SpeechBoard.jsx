@@ -45,13 +45,22 @@ import { reviewWriting } from '../lib/materials.js'
 import { createSpeech, deleteSpeech, loadSpeeches, saveSpeech, speechesSupported } from '../lib/speeches.js'
 import {
   MAX_SPEECH_CHARS, isBlankDraft, isReviewed, sortSpeeches,
-  speechLevelOf, tooLongDraft,
+  speechAsMaterial, speechLevelOf, tooLongDraft,
 } from '../lib/speechPractice.js'
+/* **語に触れた記録は、スピーチでも残す**(0025)。
+   これまで `SpeechPractice` が持っていたが、語をタップするところが
+   教材の画面へ移ったので、**渡す側もここへ上がってきた** */
+import useWordStatuses from '../lib/useWordStatuses.js'
 import {
   canAskReview, loadWritingTone, normalizeReview, saveWritingTone, toneBrief,
 } from '../lib/writingReview.js'
 import SpeechPractice from './SpeechPractice.jsx'
 import SpeechBoardView from './SpeechBoardView.jsx'
+import SpeechEditCard from './SpeechEditCard.jsx'
+/* ★ **添削ずみのスピーチは、モノローグ教材とまったく同じ画面で開く**
+     (2026-09-30 利用者の指定・第5.323節)。
+   **同じ `LessonView` をそのまま使う** —— 部品を作り直さない */
+import LessonView from './LessonView.jsx'
 
 /** スピーチは1人が最後まで話しきる。**声の向きは朗読** */
 const PURPOSE = 'narration'
@@ -91,6 +100,8 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
   const [askDelete, setAskDelete] = useState(false)
+  /* 語に触れた記録(教材の画面へそのまま渡す) */
+  const { statuses: wordStatuses, mark: markWord } = useWordStatuses(learnerId)
   const [tone, setTone] = useState(() => loadWritingTone(TONE_WHERE))
   const timer = useRef(null)
 
@@ -249,6 +260,65 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
     )
   }
 
+  /* ★ **添削が済んだスピーチは、モノローグ教材の画面で開く**
+       (2026-09-30 利用者の指定・第5.323節)
+
+       > 普通の他の教材の画面、つまり1枚目の写真と同じ仕様にする様に
+       > してください。仕組みも同じです。つまり、モノローグの教材と
+       > 全て同じです。quick response もあります。
+
+     **教材の形に組み立てて、同じ `LessonView` に渡すだけ**である
+     (`speechAsMaterial()`)。6Steps も Quick Response も集中モードも、
+     語のタップも、1文ずつの聴くも、**書き写さずに付いてくる。**
+
+     **音声は1円もかからない** —— 声も英文も同じなので鍵が変わらない
+     (`speechAsMaterial()` の説明)。
+
+     添削の結果と、原稿・声・消すは、**畳んだ札の中**に入れる
+     (利用者が選んだ案「添削の結果は畳んでおく」)。 */
+  /* **`reviewed &&` と書かない。** `speechAsMaterial()` が
+     「直した文があるか」で `null` を返す —— **判断は1か所** */
+  const asMaterial = open ? speechAsMaterial(open, { level }) : null
+  if (asMaterial) {
+    return (
+      <LessonView
+        material={asMaterial}
+        learnerId={learnerId}
+        learnerName={learnerName}
+        wordStatuses={wordStatuses}
+        onMarkWord={markWord}
+        /* 閉じたら、スピーチの一覧へ戻る(行き止まりを作らない) */
+        onClose={() => setOpenId(null)}
+        extraLabel="このスピーチの原稿と添削"
+        extra={(
+          <>
+            <SpeechPractice speech={open} learnerId={learnerId} level={level} />
+            <SpeechEditCard
+              open={open} mayAsk={mayAsk} busy={busy} reviewed={reviewed}
+              bodyOpen={bodyOpen} onBodyOpen={setBodyOpen}
+              draftOpen={draftOpen} onDraftOpen={setDraftOpen}
+              onTitle={(v) => { patchRow(open.id, { title: v }); later(open.id, { title: v }) }}
+              onDraft={(v) => { patchRow(open.id, { draft: v }); later(open.id, { draft: v }) }}
+              accents={accents} accent={accent} pool={pool}
+              onAccent={(id) => {
+                const v = pickVoices(id, 1, PURPOSE)[0] ?? null
+                patchRow(open.id, { voice_id: v })
+                flush(open.id, { voiceId: v })
+              }}
+              onVoice={(id) => { patchRow(open.id, { voice_id: id }); flush(open.id, { voiceId: id }) }}
+              tone={tone} onTone={(v) => { setTone(v); saveWritingTone(v, TONE_WHERE) }}
+              secs={secs} onAsk={ask}
+              askDelete={askDelete} onAskDelete={setAskDelete} onRemove={remove}
+            />
+            {/* **押した場所のすぐ下に出す**(CLAUDE.md) */}
+            {error && <p className="notice notice--error">{error}</p>}
+            {note && <p className="notice notice--ok">{note}</p>}
+          </>
+        )}
+      />
+    )
+  }
+
   return (
     <SpeechBoardView
       whose={whose} mayAsk={mayAsk} busy={busy} loading={loading}
@@ -275,12 +345,10 @@ export default function SpeechBoard({ learnerId = null, learnerName = '', level 
       secs={secs} onAsk={ask}
       askDelete={askDelete} onAskDelete={setAskDelete} onRemove={remove}
     >
-      {/* **添削が済むまで、練習は出さない。** 直す前の英文を読み上げると、
-          まちがった英語を手本として聞かせることになる。
-          **この判断はここ1か所**(描く側へ持ち込まない) */}
-      {open && reviewed && (
-        <SpeechPractice speech={open} learnerId={learnerId} level={level} />
-      )}
+      {/* ★ **添削が済んだスピーチは、ここまで来ない**(第5.323節)。
+             上で教材の画面を返している。ここに残るのは**下書きだけ**で、
+             下書きには読み上げる英文がまだ無い
+             (直す前の英文を手本として聞かせない・もとからの決まり) */}
     </SpeechBoardView>
   )
 }
