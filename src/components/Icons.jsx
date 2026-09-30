@@ -502,13 +502,28 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
   const w = { off: 0, sentence: 4, item: 8.5, all: 13 }[range] ?? 8.5
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      {/* 輪(2本の矢印)。**`RepeatIcon` と同じ形** —— 聞き流しの
-          「繰り返す」と同じ記号にそろえる(違うものに同じ名前を付けない、
-          の裏返し。**同じものには同じ絵**) */}
-      <path d="M4.2 6.6h8.6a2.9 2.9 0 0 1 0 5.8H4.6"
-            fill="none" stroke="currentColor" strokeWidth="1.8"
+      {/* ★ **2本の矢印**(2026-09-30 利用者の指定・写真つき)。
+
+          > リピートのアイコンですが、もっとこういう風にして
+          > もらえませんか? 線は周囲のデザインとバランスを取るために、
+          > これより細くて良いです。2本矢印が欲しいです。
+
+          **前は矢印が1本だった**(輪を1周して、左端にだけ穂先)。
+          いちばん普通のリピートの記号は、**上を右へ・下を左へ**の
+          2本である。上下は 180 度まわすと重なる(同じ形)。
+
+          **線は 1.6。** 渡された写真はもっと太いが、
+          「細くてよい」との指定である —— 黒帯の絵はどれも細いので、
+          太いと**そこだけ浮く。**
+          穂先だけは塗りつぶす(送るボタンと同じ見え方にそろえる)。 */}
+      <path d="M3.2 8.6V7.8a2.2 2.2 0 0 1 2.2-2.2h7.2"
+            fill="none" stroke="currentColor" strokeWidth="1.6"
             strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M7 3.6 3.4 6.6 7 9.6z" fill="currentColor" />
+      <path d="M12.4 3.9 15.6 5.6 12.4 7.3z" fill="currentColor" />
+      <path d="M16.8 8.6v.8a2.2 2.2 0 0 1-2.2 2.2H7.4"
+            fill="none" stroke="currentColor" strokeWidth="1.6"
+            strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7.6 9.9 4.4 11.6 7.6 13.3z" fill="currentColor" />
       {/* 回す範囲。**まん中ぞろえ**にすると、3つ並べたとき
           「だんだん広がる」ことが分かる */}
       {w > 0 && (
