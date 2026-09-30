@@ -378,6 +378,19 @@ export const isVocabKind = (kind) =>
  */
 export const isDrillKind = (kind) => kind === 'pattern'
 
+/**
+ * **問の並びを混ぜられる種類**(2026-09-30 利用者の指定・第5.329節)。
+ *
+ *   > TOEIC L&R の PART 2 問題の教材ですが、シャッフルボタンが出てきません。
+ *
+ * 文型ドリルだけに出していた(第5.325節)。**テスト対策も同じ形**である
+ * —— どちらも「独立した問が並ぶ」教材で、順を混ぜると本番に近づく。
+ * 記事・会話・モノローグは**話の流れ**があるので混ぜない。
+ *
+ * **判断はここ1か所。** 画面の中で `kind === …` と書かない(CLAUDE.md)。
+ */
+export const canShuffleKind = (kind) => isDrillKind(kind) || kind === EXAM_KIND
+
 /** 画面に出す短い呼び名(「記事」「会話」「会議」「スピーチ」)。文の中で使う */
 export const bodyWord = (kind) => (
   kind === 'reading' ? '記事'

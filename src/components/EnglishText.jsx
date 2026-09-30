@@ -122,6 +122,17 @@ const HINT_HOLD_MS = 450
 
 export default function EnglishText({
   text, textJa = '', level = 'B1', statuses = null, onMark = null,
+  /**
+   * ★ **まるごとなぞったときの行き先**(2026-09-30 利用者の指定・第5.329節)。
+   *
+   *   > 全文を選ぶと単語帳ではなく quick response 帳に飛ぶ仕様に。
+   *
+   * 端から端までなぞったときだけ呼ぶ。**意味は引きに行かない** ——
+   * 1文まるごとの「意味」を AI に訊いても訳が返るだけで、
+   * **押すたびに課金される**(見えない費用を作らない・CLAUDE.md)。
+   * **渡されなければ、これまでどおり単語帳の道**(既定は変えない)。
+   */
+  onWhole = null,
   className = '', lang = 'en', readingAt = null,
   /**
    * 語を押して意味を引けるようにするか(2026-09 利用者の指定)。
@@ -404,6 +415,20 @@ export default function EnglishText({
     if (!head?.word || !tail?.word) return
     const phrase = (text ?? '').slice(head.at, tail.at + tail.text.length).trim()
     if (!phrase) return
+
+    /* ★ **端から端までなぞったら、まるごと1文**(第5.329節)。
+         単語帳ではなく、呼ぶ側が決めた行き先(Quick Response 帳)へ。
+         **語が2つ以上あるときだけ** —— 1語の文で当たると、
+         語をなぞる道がまるごと消える */
+    const 語の位置 = parts.map((p, i) => (p.word ? i : -1)).filter((i) => i >= 0)
+    const まるごと = 語の位置.length > 1
+      && a === 語の位置[0] && b === 語の位置[語の位置.length - 1]
+    if (まるごと && onWhole) {
+      setRange(null)
+      dragFrom.current = null
+      await onWhole(phrase)
+      return
+    }
 
     setRange([a, b])
     setOpenIndex(a)

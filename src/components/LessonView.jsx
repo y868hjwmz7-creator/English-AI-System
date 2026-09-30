@@ -40,7 +40,12 @@ import { SHEET_WIDTHS } from '../data/sheetWidths.js'
 import { resolveVoices } from '../data/clipVoices.js'
 /* ★ **シャッフルは文型ドリルだけ**(第5.325節)。**判断は1か所** ——
      画面の中で `kind === 'pattern'` と書かない(CLAUDE.md) */
-import { isDrillKind } from '../data/materialKinds.js'
+import { canShuffleKind } from '../data/materialKinds.js'
+/* **選択肢を行に割る**(第5.329節)。何にも依存しない形に出してある */
+import { commonLead, splitChoices } from '../lib/choiceLines.js'
+/* **Quick Response 帳へ溜める道**(第5.329節)。「まだ」を押したときと
+   **まったく同じ関数**を呼ぶ —— 溜め方を2通り持たない(CLAUDE.md) */
+import { markQr } from '../lib/qrReviews.js'
 /* **混ぜるのは `shuffle.js` 1か所**(単語帳・Quick Response と同じ・第5.282節) */
 import { shuffled } from '../lib/shuffle.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
@@ -106,6 +111,31 @@ import { lockScroll } from '../lib/scrollLock.js'
 
 /** **空の演習の一覧は、この1つ**(第5.325節のつづき)。`?? []` を書かない */
 const NO_SECTIONS = []
+
+/**
+ * **設問を、選択肢ごとの行にして出す**(2026-09-30 利用者の指定・第5.329節)。
+ *
+ *   > 毎問題に choose... は不必要なので省き、1番上の取り組み方を開いた
+ *   > 時に見れるようにすれば十分です。
+ *   > そして、選択肢だけ3行に改行して並べてください。
+ *
+ * **教材そのものは1文字も書き換えない。** 画面に出すときに割るだけなので、
+ * **すでにある教材にもそのまま効く**(作り直し = 課金をしない)。
+ *
+ * `drop` … 演習ぜんぶで同じ指示文(「取り組み方」へ回したもの)。
+ *          **その問だけ違う指示なら、ここに残して出す**(黙って消さない)。
+ */
+function ChoiceLines({ text, drop = '', en }) {
+  const { lead, choices } = splitChoices(text)
+  if (!choices.length) return <div className="lesson-en">{en(text)}</div>
+  const 前 = drop && lead === drop ? '' : lead
+  return (
+    <div className="choice-lines">
+      {前 && <div className="lesson-en">{en(前)}</div>}
+      {choices.map((c) => <div className="lesson-en" key={c}>{en(c)}</div>)}
+    </div>
+  )
+}
 
 const SIZES = [
   { id: 'm', label: '標準' },
@@ -307,8 +337,16 @@ export default function LessonView({
 
      **`null` = もとの並び。** 押すたびに作り直し、もう一度押すと戻る。 */
   const [mixed, setMixed] = useState(null)
+  /**
+   * ★ **まるごとなぞって、Quick Response 帳へ入れた問**(第5.329節)。
+   *
+   *   > 全文を選ぶと単語帳ではなく quick response 帳に飛ぶ仕様に。
+   *
+   * **入れたことを、その場で言う**(成功と失敗を同じ見た目で終わらせない)。
+   * 鍵は問の鍵。`{ [鍵]: '入れました' | 断りの文 }` */
+  const [qrAdded, setQrAdded] = useState({})
   /** **文型ドリルだけ**。判断は `isDrillKind()` 1か所(画面で `kind ===` と書かない) */
-  const canShuffle = isDrillKind(material?.kind)
+  const canShuffle = canShuffleKind(material?.kind)
   /* 教材が変われば、混ぜたものは捨てる(別の教材の並びを持ち越さない) */
   useEffect(() => { setMixed(null) }, [material?.id])
   /* ★ **覚え込ませる**(第5.325節のつづき)。
@@ -2280,6 +2318,11 @@ export default function LessonView({
    */
   function renderSection(sec, si, only = null) {
     if (!sec) return null
+    /* ★ **その演習ぜんぶで同じ指示文**(第5.329節・2026-09-30 利用者の指定)。
+         「Choose the best response.」が問の数だけ並ぶので、
+         **取り組み方に1つ**だけ置き、問からは外す。
+         **1つでも違えばまとめない**(`commonLead` が決める) */
+    const 共通の指示 = commonLead((sec.items ?? []).map((x) => x.question))
     const secType = exerciseType(sec.exercise_type)
     const secIsPassage = isPassageSection(sec.exercise_type)
     /* **ディスカッションと想定される質問には、解答が無い。**
@@ -2362,7 +2405,7 @@ export default function LessonView({
                 こちらは1つの教材に1つなので、毎回閉じたところから始める。
 
                 **紙には出す**(`open` を付ける)。紙で解く人には説明が要る */}
-            {sec.instruction && (
+            {(sec.instruction || 共通の指示) && (
               <div className="lesson-guide">
                 <button type="button"
                         className={`lesson-guide-sum no-print${howOpen === sec.id ? ' is-open' : ''}`}
@@ -2374,7 +2417,9 @@ export default function LessonView({
                     紙にも出せない(`content-visibility` で消える)。
                     **描いてから隠す**——`.lesson-page` と同じ作法にする */}
                 <p className={`lesson-instruction${howOpen === sec.id ? '' : ' is-closed'}`}>
-                  {sec.instruction}
+                  {/* ★ **問から外した指示文も、ここに出す**(第5.329節)。
+                        **黙って消さない** —— 置き場所を移しただけである */}
+                  {[sec.instruction, 共通の指示].filter(Boolean).join(' ')}
                 </p>
               </div>
             )}
@@ -2506,17 +2551,21 @@ export default function LessonView({
                     ? isOpen(k(it, i)) && <div className="lesson-ja">{it.prompt_ja}</div>
                     : <div className="lesson-ja">{it.prompt_ja}</div>)}
                   {it.question && (
-                    <div className="lesson-en">
-                      <EnglishText text={it.question} level={material.level}
-                                   statuses={wordStatuses} onMark={markWord}
-                                   tappable={tap}
-                                   /* **設問にも誘導を出す**(第5.212節)。
-                                      ここには1つも渡していなかったので、
-                                      内容の理解・ディスカッション・
-                                      リスニングの設問では、狭い画面から
-                                      語を調べる道が**どこにも無かった** */
-                                   onNeedFocus={focusFor(sec, i)} />
-                    </div>
+                    /* ★ **選択肢は1行ずつ**(第5.329節)。同じ指示文は
+                         「取り組み方」へ回してある(`共通の指示`) */
+                    <ChoiceLines
+                      text={it.question} drop={共通の指示}
+                      en={(t) => (
+                        <EnglishText text={t} level={material.level}
+                                     statuses={wordStatuses} onMark={markWord}
+                                     tappable={tap}
+                                     /* **設問にも誘導を出す**(第5.212節)。
+                                        ここには1つも渡していなかったので、
+                                        内容の理解・ディスカッション・
+                                        リスニングの設問では、狭い画面から
+                                        語を調べる道が**どこにも無かった** */
+                                     onNeedFocus={focusFor(sec, i)} />
+                      )} />
                   )}
                   {/* 設問の訳(0035)。**伏せない。**
                       設問は「何を訊かれているか」であって、答えではない
@@ -2680,7 +2729,31 @@ export default function LessonView({
                         /* 解答の語も、同じ行き先で調べられるようにする
                            (第5.212節)。開いてある解答だけに出る */
                         onNeedFocus={focusFor(sec, i)}
+                        /* ★ **まるごとなぞったら Quick Response 帳へ**
+                             (2026-09-30 利用者の指定・第5.329節)。
+                             **訳が無い問には出さない** —— Quick Response は
+                             「日本語を見て英語で言う」ので、日本語が要る
+                             (`markQr` も訳が無ければ何もしない) */
+                        onWhole={String(it.answer_ja ?? '').trim()
+                          ? async (phrase) => {
+                            const { error: e } = await markQr(
+                              { en: phrase, ja: it.answer_ja, speaker: it.speaker },
+                              'unknown',
+                              { materialId: material.id, learnerId: owner, source: 'sentence' },
+                            )
+                            setQrAdded((m) => ({
+                              ...m,
+                              [k(it, i)]: e || 'Quick Response 帳に入れました',
+                            }))
+                          }
+                          : null}
                       />
+                      {qrAdded[k(it, i)] && (
+                        <p className={/入れました/.test(qrAdded[k(it, i)])
+                          ? 'notice notice--ok' : 'notice notice--error'}>
+                          {qrAdded[k(it, i)]}
+                        </p>
+                      )}
                       {it.answer_alt && <div className="lesson-note">別解: {it.answer_alt}</div>}
                       {it.note && <div className="lesson-note">{it.note}</div>}
                     </>

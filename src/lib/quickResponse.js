@@ -47,6 +47,25 @@ const PAIR_FIELDS = {
      あちらは「語をすばやく引き出す」、こちらは「本文に出たかたまりを言う」 */
   vocab_note:      { ja: 'prompt_ja', en: 'prompt_en', group: 'chunk' },
   vocabulary:      { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
+  /* ★ **リスニング(TOEIC Part 2 など)**(2026-09-30 利用者の指定・第5.329節)。
+
+       > また、ここにも quick response を付け足してください。
+
+     **2通りとも出す**(利用者の指定「両方を選べるようにする」)。
+     ・**文章** … 応答の訳を見て、応答の英文を言う(ほかの教材と同じ形)
+     ・**質問 → 応答** … 質問の英文を見て、応答の英文を言う(本番と同じ形)
+
+     **訳(`answer_ja`)は 2026-09-30 から作らせている。**
+     それより前の教材には入っていないので、
+     **文章のほうは1問も出ない**(片方が欠けた対は出さない・下記)。
+     質問 → 応答のほうは、古い教材でもそのまま出る。 */
+  listening: [
+    { ja: 'answer_ja', en: 'answer', group: 'sentence' },
+    /* **`ask` … 出題を英文にする。** 仕組みは**すでにある `askEn`**
+       (第5.198節の言い換え・型シフトと同じもの)を使う ——
+       新しく作らない。訳(`ja`)は「訳を見る」で出る */
+    { ja: 'answer_ja', en: 'answer', ask: 'audio_text', group: 'respond' },
+  ],
   phrase:          { ja: 'prompt_ja', en: 'prompt_en', group: 'word' },
   /* ══════════════════════════════════════════════════════════════
      **「日本語 → 英語で言う」も、同じ組に入れる**(第5.256節・2026-09-25)
@@ -93,6 +112,12 @@ export const QR_MODES = [
      **その教材に無ければ、選択肢ごと出ない**(0件の取り組み方は出さない)。
      中身は**かたまりそのもの + その練習ぜんぶ**である(`chunkPairs`)。 */
   { id: 'chunk', label: '覚えておきたい表現' },
+  /* ★ **質問 → 応答**(2026-09-30 利用者の指定・第5.329節)。
+       出す側が**英語**という、ここだけの形である ——
+       TOEIC Part 2 は「質問を聞いて、応答を選ぶ」試験なので、
+       日本語をはさまないほうが本番に近い。
+       **その教材に無ければ、選択肢ごと出ない**(0件の取り組み方は出さない)。 */
+  { id: 'respond', label: '質問 → 応答' },
 ]
 
 /**
@@ -115,7 +140,9 @@ export const QR_MODES = [
  */
 export const QR_SKIP = {
   fill_blank: '日本語が無い(英文の穴埋め)',
-  listening: '日本語が無い(音を聞いて答える)',
+  /* ★ **リスニングは、2026-09-30 から出す**(第5.329節・利用者の指定)。
+       `answer_ja`(解答の訳)を作らせるようにしたので、日本語が付いた。
+       あわせて「質問 → 応答」の組も足した(上の `PAIR_FIELDS`)。 */
   error_correction: '日本語が無い(英文の誤りを直す)',
   comprehension: '設問も答えも英語。訳して言うものではない',
   discussion: '設問は英語で、**正解が無い**。対にならない',
@@ -182,8 +209,11 @@ export const qrSourceOfBook = (book) => (
 export function quickResponsePairs(material, mode = null) {
   const out = []
   for (const sec of material?.sections ?? []) {
-    const map = PAIR_FIELDS[sec.exercise_type]
-    if (!map) continue
+    /* ★ **1つの演習が、2通りの対になることがある**(第5.329節)。
+         リスニングは「訳 → 応答」と「質問 → 応答」の2つを出す。
+         **書き写さずに、同じ道を2度たどる** */
+    const maps = [].concat(PAIR_FIELDS[sec.exercise_type] ?? [])
+    if (!maps.length) continue
     /* **段では切り捨てない**(第5.256節・2026-09-25)。
        もとはここで `map.group !== mode` の段をまるごと飛ばしていた。
        ところが**段の中には、別の組の対が入っている** ——
@@ -191,12 +221,22 @@ export function quickResponsePairs(material, mode = null) {
        段で切ると、**それがまるごと落ちて1問も出てこなかった。**
        **絞るのは、1問ずつ。いちばん最後に1回だけ。** */
     const from = exerciseLabel(sec.exercise_type)
-    ;(sec.items ?? []).forEach((it, i) => {
+    /* ★ **組の数だけ、同じ道をたどる**(第5.329節)。
+         鍵(`key`)には組を混ぜる —— 混ぜないと、2通りの問が
+         **同じ鍵**になって片方しか描かれない。
+         **組が1つの教材では、鍵をこれまでどおりにする**
+         (溜めてある控えの鍵を、こちらから動かさない) */
+    const 鍵 = (k, g) => (maps.length > 1 ? `${k}-${g}` : k)
+    for (const map of maps) (sec.items ?? []).forEach((it, i) => {
       const ja = String(it[map.ja] ?? '').trim()
       const en = String(it[map.en] ?? '').trim()
       // **どちらか欠けているものは出さない。**
       // 日本語だけ出して英語が空だと、答え合わせができない
       if (!ja || !en) return
+      /* ★ **出題を英文にする組**(第5.329節)。その欄が空なら出さない
+           —— 出題の無い問は、押しても何も読めない */
+      const askEn = map.ask ? String(it[map.ask] ?? '').trim() : ''
+      if (map.ask && !askEn) return
       const key = it.id ?? `${sec.id ?? sec.exercise_type}-${i}`
       const speaker = String(it.speaker ?? '').trim()
       // **1文ずつにほどく**(2026-08 の指摘)。
@@ -219,10 +259,26 @@ export function quickResponsePairs(material, mode = null) {
         if (!pair.aligned) return
         out.push({
           ja: pair.ja, en: pair.en, from, speaker, group: map.group,
-          key: `${key}-${k}`,
+          key: 鍵(`${key}-${k}`, map.group),
+          ...(askEn ? { askEn } : {}),
           ...(表現 ? { ...表現, isHead: true } : {}),
         })
       })
+    })
+
+    /* ★ **練習と例文は、組が2つでも1度だけ**(第5.329節)。
+         上の輪の中に置くと、同じ問が組の数だけ出る。
+         **組は、いちばん最初の対のもの**を使う(かたまりの節は組が1つ) */
+    ;(sec.items ?? []).forEach((it, i) => {
+      const key = it.id ?? `${sec.id ?? sec.exercise_type}-${i}`
+      const speaker = String(it.speaker ?? '').trim()
+      const 表現 = isChunkSection(sec.exercise_type)
+        ? {
+          headKey: key,
+          head: String(it[maps[0].en] ?? '').trim(),
+          headJa: String(it[maps[0].ja] ?? '').trim(),
+        }
+        : null
       /* **かたまりの練習も、ぜんぶ対にする**(第5.235節・利用者の指定
          「**すべての**日本語と英語もクイックレスポンスと同じように」)。
 
@@ -247,7 +303,7 @@ export function quickResponsePairs(material, mode = null) {
          ・それ以外 … **文は「文章」**である
            (単語 / フレーズそのものは上の `map.group` で「フレーズ・単語」)
          ══════════════════════════════════════════════════════════ */
-      const 中の組 = isChunkSection(sec.exercise_type) ? map.group : 'sentence'
+      const 中の組 = isChunkSection(sec.exercise_type) ? maps[0].group : 'sentence'
       chunkDrills(it).forEach((d, k) => {
         out.push({
           ja: d.ja, en: d.en, from, speaker, group: 中の組,

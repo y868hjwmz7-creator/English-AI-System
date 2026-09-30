@@ -9152,6 +9152,11 @@ button.wbfilter-ctl { text-align: left; }
 .lesson-sheet .listenpill, .focus-paper .listenpill {
   border-color: var(--qa-line, var(--border));
 }
+/* ★ **選択肢は1行ずつ**(2026-09-30 利用者の指定・第5.329節)。
+     > 選択肢だけ3行に改行して並べてください
+   **隙間は `gap` で作る**(余白で作らない・共通ルール) */
+.choice-lines { display: grid; gap: var(--sp-6); }
+
 .player-move { padding-left: 9px; padding-right: 9px; font-size: var(--fs-12); }
 /* いまどこか。**幅をそろえる**(そろえないと、送るたびに隣が動く)。
    数字は等幅で出す(`Stepper` と同じ作法) */

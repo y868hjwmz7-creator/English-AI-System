@@ -402,7 +402,13 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
     '和文英訳。prompt_ja に日本語、answer に解答例、answer_alt に別解(改行区切り、1〜2個)を入れる。',
   listening:
     'リスニング。audio_text に読み上げる英文、question に英語の設問、answer に解答を入れる。'
-    + '設問は、英文を聞かないと答えられないものにする。',
+    + '設問は、英文を聞かないと答えられないものにする。'
+    /* ★ **解答の訳も必ず作る**(2026-09-30 利用者の指定・第5.329節)。
+         > 解答を見た際に日本語訳がないので付け足してください
+       必須にしないと、そのときの気分で入ったり入らなかったりする
+       (内容の理解で訳を必須にしたのと、まったく同じ理由) */
+    + 'answer_ja に**解答の日本語訳**を入れる。'
+    + '選択肢から選ぶ形では、**選んだ応答そのものの訳**にする。',
 
   // ── 本文(まとまった1本)────────────────────────────────
   // ここは「設問」ではなく「読み物」を作らせる。1項目 = 1段落 / 1発言。
@@ -696,7 +702,13 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
      これまでどおり `hint` を書かせている。 */
   fill_blank:      { required: ['prompt_en', 'answer'], optional: ['hint', 'note', 'tag_no'] },
   translate_ja_en: { required: ['prompt_ja', 'answer'], optional: ['answer_alt', 'note', 'tag_no'] },
-  listening:       { required: ['audio_text', 'question', 'answer'], optional: ['note', 'tag_no'] },
+  /* ★ **解答の訳は必須**(第5.329節)。あったり無かったりでは、
+       訳が出る問と出ない問が混ざる(発音記号を必須にしたのと同じ理由)。
+       **0072 より前に作った教材には入っていない**が、
+       `isBlankItem` は訳を「無くても成り立つ欄」に入れてあるので、
+       古い教材が落とされることはない */
+  listening:       { required: ['audio_text', 'question', 'answer', 'answer_ja'],
+    optional: ['note', 'tag_no'] },
 
   // 本文。**英語と訳が必ず要る。** これが無いと音声も出せない
   article:         { required: ['prompt_en', 'prompt_ja'], optional: ['phrases'] },
@@ -1874,7 +1886,7 @@ const cors = {
  */
 /* **置き直しが要る変更を入れたら、ここを上げる**(第5.230節で上げた)。
    画面は `NEED_GEN_REV` と突き合わせて、古ければ赤く知らせる */
-const FN_REV = '2026-09-29'
+const FN_REV = '2026-09-30'
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify({ ...(body as object), genRev: FN_REV }), {

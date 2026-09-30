@@ -1060,6 +1060,45 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
   ok(/カジュアル/.test(toneBrief('casual')) && toneBrief('casual').length > 20,
     '調子は、窓口へ渡す1文になる')
 
+  /* ══════════════════════════════════════════════════════════════
+     **選択肢を行に割る / シャッフルできる種類**(第5.329節・利用者の指定)
+
+       > 毎問題に choose... は不必要なので省き、1番上の取り組み方を
+       > 開いた時に見れるようにすれば十分です。
+       > そして、選択肢だけ3行に改行して並べてください。
+       > TOEIC L&R の PART 2 問題の教材ですが、シャッフルボタンが出てきません。
+     ══════════════════════════════════════════════════════════════ */
+  {
+    const { splitChoices, commonLead } = await import('../src/lib/choiceLines.js')
+    const { canShuffleKind } = await import('../src/data/materialKinds.js')
+    const q = "Choose the best response. (A) That's right. (B) On the desk. (C) He left."
+    const 割 = splitChoices(q)
+    ok(割.lead === 'Choose the best response.' && 割.choices.length === 3
+      && 割.choices[0].startsWith('(A)') && 割.choices[2].startsWith('(C)'),
+      '選択肢 … 指示文と3つの選択肢に割れる', JSON.stringify(割))
+    /* **いちばん危ない形**(CLAUDE.md)—— 選択肢が無い設問。
+       割ってはいけない(そのまま1行で出す) */
+    ok(splitChoices('What does the man suggest?').choices.length === 0,
+      '選択肢 … 選択肢の無い設問は、割らない')
+    /* **1つ足りない形**も置く。(A) だけの文は「選択肢」ではない */
+    ok(splitChoices('See (A) below.').choices.length === 0,
+      '選択肢 … 印が1つだけなら、割らない')
+    /* **指示文がばらばらなら、まとめない**(黙って別の指示を付けない) */
+    ok(commonLead([q, q]) === 'Choose the best response.',
+      '取り組み方 … 同じ指示文なら、1つにまとめる')
+    ok(commonLead([q, 'Pick one. (A) a (B) b']) === '',
+      '取り組み方 … 指示文が違えば、まとめない')
+    ok(commonLead(['What is it?', 'Who is he?']) === '',
+      '取り組み方 … 選択肢が無ければ、まとめない')
+    /* **シャッフルできる種類**(第5.325 → 5.329節)。
+       **出る側と出ない側の両方**を見る */
+    ok(canShuffleKind('pattern') && canShuffleKind('exam'),
+      'シャッフル … 文型ドリルとテスト対策には出る')
+    ok(!canShuffleKind('dialogue') && !canShuffleKind('reading')
+      && !canShuffleKind('speech'),
+      'シャッフル … 話の流れがある教材には出ない')
+  }
+
   // ── 添削の結果のそろえ方 ──
   ok(normalizeReview(null) === null, '空の結果は null(成功として扱わない)')
   ok(normalizeReview({ sentences: [] }) === null,
@@ -11080,9 +11119,49 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       'QR … 覚えておきたい表現が、取り組み方にある')
     ok(QR_MODES.filter((m) => ['sentence', 'word'].includes(m.id)).length === 2,
       'QR … 文章とフレーズ・単語は、いままで通り残っている')
-    /* **いちばん後ろに足す**(一覧を並べ替えない・CLAUDE.md) */
-    ok(QR_MODES[QR_MODES.length - 1].id === 'chunk',
-      'QR … 新しい取り組み方は、いちばん後ろ')
+    /* **並べ替えない。新しいものは、うしろに足す**(CLAUDE.md)。
+       ★ もとは「いちばん後ろが `chunk`」と**いちばん新しい id を
+         書き写して**いたので、次に1つ足した日に赤くなった(第5.329節)。
+       **見るのは「もとからある3つが、この順のまま先頭にいるか」**である
+       —— 足しても赤くならず、並べ替えたら赤くなる(値を書き写さない) */
+    ok(QR_MODES.slice(0, 3).map((m) => m.id).join(',') === 'sentence,word,chunk',
+      'QR … もとからある3つは、この順のまま先頭にある',
+      QR_MODES.map((m) => m.id).join(','))
+
+    /* ══════════════════════════════════════════════════════════════
+       **TOEIC Part 2(リスニング)の Quick Response**
+       (2026-09-30 利用者の指定・第5.329節)
+
+         > また、ここにも quick response を付け足してください。
+         > 「両方を選べるようにする」
+
+       **2通り出す。** ①訳 → 応答(ほかの教材と同じ)
+       ②**質問 → 応答**(本番と同じ。出題が英文 = `askEn`)。
+       `askEn` は**すでにある仕組み**(第5.198節)——新しく作っていない。
+
+       **いちばん危ない形を、必ず1つ置く**(CLAUDE.md)——
+       **訳が無い問**を混ぜる。あれは①に出てはいけない。
+       ══════════════════════════════════════════════════════════════ */
+    {
+      const mat = { sections: [{ id: 's1', exercise_type: 'listening', items: [
+        { id: 'i1', audio_text: 'When is the report due?', answer: '(A) Tomorrow.', answer_ja: '(A) 明日です。' },
+        // **訳が無い問**。①には出ず、②にも出ない(対にならない)
+        { id: 'i2', audio_text: 'Could you send it today?', answer: '(A) Sure.' },
+      ] }] }
+      const pairs = quickResponsePairs(mat)
+      const 文章 = pairs.filter((p) => p.group === 'sentence')
+      const 応答 = pairs.filter((p) => p.group === 'respond')
+      ok(文章.length === 1 && 文章[0].ja === '(A) 明日です。' && !文章[0].askEn,
+        'QR(Part 2)… 訳 → 応答が出る(訳の無い問は出ない)',
+        `${文章.length} 問`)
+      ok(応答.length === 1 && 応答[0].askEn === 'When is the report due?'
+        && 応答[0].en === '(A) Tomorrow.',
+        'QR(Part 2)… 質問 → 応答が出る(出題は英文)',
+        応答.map((p) => `${p.askEn} → ${p.en}`).join(' / '))
+      ok(new Set(pairs.map((p) => p.key)).size === pairs.length,
+        'QR(Part 2)… 2通りの問が、同じ鍵にならない',
+        pairs.map((p) => p.key).join(' / '))
+    }
 
     const 数 = quickResponseCounts(教材())
     /* **単語 / フレーズは、かたまりを含まない**(独立した選択肢にした)。

@@ -98,7 +98,11 @@ export const EXERCISE_TYPES = [
   {
     id: 'listening', label: 'リスニング + 理解',
     instruction: '英文は見ずに聞くこと。聞いたあとの質問に答えなさい。',
-    fields: ['audio_text', 'question', 'answer'], audioFrom: 'audio_text',
+    /* ★ **解答の訳も作る**(2026-09-30 利用者の指定・第5.329節)。
+         > 解答を見た際に日本語訳がないので付け足してください
+       訳があると Quick Response(日本語 → 英語)にも回せる。
+       **効くのはこれから作る教材だけ**(利用者がそれでよいと決めた) */
+    fields: ['audio_text', 'question', 'answer', 'answer_ja'], audioFrom: 'audio_text',
     /* **聞く英文そのもの**を解説する。設問や解答より、こちらが本体である */
     grammarFrom: 'audio_text',
     answerLang: 'en',

@@ -55,6 +55,9 @@ export default function AnswerEn({
    * **ここで判じ直さない。** 誰が行き先を決めるかは呼ぶ側の話である
    */
   onNeedFocus = null,
+  /** ★ **まるごとなぞったときの行き先**(第5.329節)。
+      **ここで判じ直さない** —— `EnglishText` にそのまま渡す */
+  onWhole = null,
 }) {
   const body = String(text ?? '').trim()
   if (!body) return null
@@ -63,7 +66,8 @@ export default function AnswerEn({
       <div className={className}>
         <span aria-hidden="true">→ </span>
         <EnglishText text={body} level={level} statuses={statuses} onMark={onMark}
-                     tappable={tappable} onNeedFocus={onNeedFocus} />
+                     tappable={tappable} onNeedFocus={onNeedFocus}
+                     onWhole={onWhole} />
       </div>
       {String(ja ?? '').trim() && <div className={jaClassName}>{ja}</div>}
       {clipVoice !== undefined && answerHasAudio(typeId) && (
