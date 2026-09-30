@@ -29,3 +29,15 @@ vite.bar.config.js
 
 # `npm run test:bar` が骨組みを描くために一時的に作る(中の道が /tmp なので、残しても次は使えない)
 vite.shell.config.js
+
+# 検証を切り出して部分的に走らせるときの一時ファイル(第5.320節〜)
+#
+#   `npm run test:bar` は 45 分かかるので、直した節だけを
+#   `scripts/test-bar.mjs` から**機械で切り出して**別ポートで走らせる
+#   (`__redbar.mjs` / `__meas.mjs` / `__tail.mjs` など)。
+#   **終わったら消す**ものなので、Git には入れない。
+#   毎回ちがう名前になるため、**形で書く。**
+#   `vite.config.js` は当たらない(`vite.` と `.config.js` のあいだが要る)
+scripts/__*.mjs
+vite.*.config.js
+__*.html
