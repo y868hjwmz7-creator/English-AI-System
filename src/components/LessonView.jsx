@@ -46,6 +46,10 @@ import { commonLead, splitChoices } from '../lib/choiceLines.js'
 /* **Quick Response 帳へ溜める道**(第5.329節)。「まだ」を押したときと
    **まったく同じ関数**を呼ぶ —— 溜め方を2通り持たない(CLAUDE.md) */
 import { markQr } from '../lib/qrReviews.js'
+/* **添削した文章も Quick Response に混ぜる**(第5.330節)。
+   **対を組み直さない** —— 教材に段を1つ足した写しを渡すだけ */
+import { loadMaterialScopes } from '../lib/progress.js'
+import { normalizeReview, reviewPairs } from '../lib/writingReview.js'
 /* **混ぜるのは `shuffle.js` 1か所**(単語帳・Quick Response と同じ・第5.282節) */
 import { shuffled } from '../lib/shuffle.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
@@ -87,7 +91,9 @@ import CastChip from './CastChip.jsx'
 import QuickResponse from './QuickResponse.jsx'
 import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
-import { hasQuickResponse } from '../lib/quickResponse.js'
+/* **添削した文章も Quick Response に混ぜる**(第5.330節)。
+   **対を組み直さない** —— 教材に段を1つ足した写しを渡すだけ */
+import { hasQuickResponse, withWritingReviews } from '../lib/quickResponse.js'
 import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
 import AnswerEn from './AnswerEn.jsx'
 import WritingAnswer from './WritingAnswer.jsx'
@@ -355,10 +361,53 @@ export default function LessonView({
    * **入れたことを、その場で言う**(成功と失敗を同じ見た目で終わらせない)。
    * 鍵は問の鍵。`{ [鍵]: '入れました' | 断りの文 }` */
   const [qrAdded, setQrAdded] = useState({})
+  /**
+   * ★ **この教材で添削してもらった文章**(2026-09-30 利用者の指定・第5.330節)。
+   *
+   *   > 教材の中のディスカッションなどで添削してもらった文章は
+   *   > 全て quick response に飛ばせるようにしたいです。
+   *
+   * 添削は `material_progress`(0025)に**問ごと**に入っていて、
+   * **教材の中身ではない。** だから `quickResponsePairs()` からは見えず、
+   * 教材を開いて Quick Response を練習しても**1文も出てこなかった。**
+   *
+   * ここで集めて、`withWritingReviews()` が**教材に段を1つ足した写し**を作る。
+   * **対を組み直さない**ので、練習・紙・聞き流しがそろって拾う。
+   *
+   * **AI は1度も呼ばない = 0円**(すでに添削してあるものを読むだけ)。
+   */
+  const [reviewPairsAll, setReviewPairsAll] = useState([])
   /** **文型ドリルだけ**。判断は `isDrillKind()` 1か所(画面で `kind ===` と書かない) */
   const canShuffle = canShuffleKind(material?.kind)
   /* 教材が変われば、混ぜたものは捨てる(別の教材の並びを持ち越さない) */
   useEffect(() => { setMixed(null) }, [material?.id])
+  /* ★ **添削を集める**(第5.330節)。教材か相手が変わったら引き直す。
+       **読むだけ**なので、失敗しても静かに空のままにする
+       (添削がまだ無いのと同じ見え方 —— 行き止まりを作らない) */
+  useEffect(() => {
+    let alive = true
+    setReviewPairsAll([])
+    if (!material?.id) return undefined
+    loadMaterialScopes(material.id, owner, 'writing').then((rows) => {
+      if (!alive) return
+      const out = []
+      for (const row of rows) {
+        /* **添削の形をそろえるのは `normalizeReview()` 1か所。**
+           対を落とす決まりも `reviewPairs()` 1か所(書き写さない) */
+        const got = normalizeReview(row?.data?.review)
+        if (got) out.push(...reviewPairs(got))
+      }
+      setReviewPairsAll(out)
+    }).catch(() => { if (alive) setReviewPairsAll([]) })
+    return () => { alive = false }
+  }, [material?.id, owner])
+  /**
+   * **Quick Response に渡す教材**(第5.330節)。
+   * **本文には出さない** —— 渡すのはここだけで、`material` そのものは触らない。
+   */
+  const qrMaterial = useMemo(
+    () => withWritingReviews(material, reviewPairsAll), [material, reviewPairsAll],
+  )
   /* ★ **覚え込ませる**(第5.325節のつづき)。
        `map` は**呼ぶたびに別の一覧**を返すので、そのまま使うと
        描き直すたびに `sections` が別物になり、
@@ -1156,8 +1205,11 @@ export default function LessonView({
     exerciseType: section?.exercise_type, tags: allTags, voiceIds: material.voiceIds,
   })
   // 日本語と英語が対になった文が1つでもあれば、Quick Response ができる。
-  // **穴埋め・リスニング・内容の理解しか無い教材では出さない**(`quickResponse.js`)
-  const qrPossible = hasQuickResponse(material)
+  // **穴埋め・内容の理解しか無い教材では出さない**(`quickResponse.js`)
+  /* ★ **添削を足した写しで数える**(第5.330節)。ディスカッションだけの
+       教材でも、添削した文章があれば Quick Response ができる ——
+       `material` のままだと**ボタンごと出ず、行き止まりになる** */
+  const qrPossible = hasQuickResponse(qrMaterial)
   // 6Steps は本文(記事・会話)に対する練習である。**本文のページを探して渡す。**
   // いま開いているページが語句や設問でも、6Steps は本文に対して行う
   const passageSection = sections.find((x) => isPassageSection(x.exercise_type)) ?? null
@@ -2152,7 +2204,7 @@ export default function LessonView({
             {renderSection(section, page, drillNow)}
           </FocusFrame>
         ) : qr ? (
-          <QuickResponse material={material} paper learnerId={owner}
+          <QuickResponse material={qrMaterial} paper learnerId={owner}
                          /* **集中モードは、この画面のボタンが持つ**
                             (中にも同じボタンを置くと2つ並ぶ) */
                          focus={qrFocus} onFocusClose={() => setQrFocus(false)}
@@ -2201,7 +2253,7 @@ export default function LessonView({
         {/* Quick Response の控え。**紙のいちばん後ろに置く**
             (2026-09 利用者の指定「ページは一番後ろで大丈夫です」)。
             画面には出さない(`print-only`)。練習は上のボタンから行う */}
-        <QuickResponseSheet material={material} />
+        <QuickResponseSheet material={qrMaterial} />
       </div>
 
         {/* ── 画面の下の黒帯(2026-09 利用者の指定)────────────────────

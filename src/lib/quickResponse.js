@@ -220,7 +220,10 @@ export function quickResponsePairs(material, mode = null) {
        単語の段の中の例文と練習は「文章」である。
        段で切ると、**それがまるごと落ちて1問も出てこなかった。**
        **絞るのは、1問ずつ。いちばん最後に1回だけ。** */
-    const from = exerciseLabel(sec.exercise_type)
+    /* ★ **段が自分で呼び名を持っていれば、そちらを使う**(第5.330節)。
+         添削した文章の段は、演習の種類を借りているだけなので
+         「記事」と出ては困る。**持っていない段はこれまでどおり** */
+    const from = sec.qrFrom || exerciseLabel(sec.exercise_type)
     /* ★ **組の数だけ、同じ道をたどる**(第5.329節)。
          鍵(`key`)には組を混ぜる —— 混ぜないと、2通りの問が
          **同じ鍵**になって片方しか描かれない。
@@ -380,4 +383,67 @@ export function chunkGroups(pairs) {
     if (!p.isHead) g.pairs.push(p)
   }
   return out
+}
+
+/**
+ * ★ **添削した文章を、その教材の Quick Response に混ぜる**
+ * (2026-09-30 利用者の指定・第5.330節)。
+ *
+ *   > 教材の中のディスカッションなどで添削してもらった文章は
+ *   > 全て quick response に飛ばせるようにしたいです。
+ *
+ * ============================================================================
+ * 【なぜ「段を1つ足す」形にしたか】
+ *
+ *   添削は `material_progress`(0025)に入っていて、**教材の中身ではない。**
+ *   だから `quickResponsePairs()` からは見えず、
+ *   教材を開いて Quick Response を練習しても**1文も出てこなかった。**
+ *
+ *   ここで対を組み直すと、**数え方が2通りになる**(CLAUDE.md)——
+ *   1文ずつにほどく決まりも、片方が欠けた対を落とす決まりも、
+ *   溜める冊の決まりも、ぜんぶ書き写すことになる。
+ *
+ *   そこで**教材に段を1つ足した形**を返す。そうすれば
+ *   `quickResponsePairs()` / `quickResponseCounts()` / 紙 / 聞き流しが
+ *   **1行も変わらずに**添削を拾う。
+ *
+ * 【本物の教材は書き換えない】
+ *
+ *   返すのは**写し**である。もとの `material` を触ると、
+ *   **画面の本文にも添削の段が出てしまう**(レッスン表示は
+ *   `material.sections` をそのまま描く)。
+ *   **Quick Response に渡すときだけ**、この写しを渡す。
+ *
+ * 【演習の種類は借りるだけ】
+ *
+ *   `article` を借りている —— 対の欄(`prompt_en` / `prompt_ja`)と
+ *   組(`sentence` = 文章)が、まさに欲しい形だからである。
+ *   **新しい演習の種類は作らない** —— 作ると教材を作る画面にも、
+ *   表の制約にも、窓口にも足すことになる(「演習の種類を足す4か所」)。
+ *   画面に出る呼び名だけ `qrFrom` で差し替える。
+ *
+ * @param {object} material もとの教材
+ * @param {Array<{en: string, ja: string}>} pairs 添削した文(`reviewPairs()`)
+ * @returns {object} **対が1つも無ければ、もとの教材をそのまま返す**
+ */
+export const REVIEW_QR_LABEL = '添削した文章'
+
+export function withWritingReviews(material, pairs) {
+  /* **片方が欠けた対は入れない。** Quick Response は
+     「日本語を見て英語で言う」ので、どちらも要る(`markQr` も弾く) */
+  const rows = (pairs ?? [])
+    .map((p) => ({ en: String(p?.en ?? '').trim(), ja: String(p?.ja ?? '').trim() }))
+    .filter((p) => p.en && p.ja)
+  if (!material || !rows.length) return material
+  return {
+    ...material,
+    sections: [...(material.sections ?? []), {
+      id: 'writing-review',
+      exercise_type: 'article',
+      qrFrom: REVIEW_QR_LABEL,
+      items: rows.map((p, i) => ({
+        id: `wr-${i}`, prompt_en: p.en, prompt_ja: p.ja,
+      })),
+    }],
+  }
 }

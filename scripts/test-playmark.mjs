@@ -110,7 +110,11 @@ import {
   CHUNK_BOOK_LABEL, QR_MODES, QR_PAIR_TYPES, QR_SKIP,
   qrSaves, qrSourceOf, qrSourceOfBook,
   quickResponseCounts, quickResponsePairs,
+  /* **添削した文章を混ぜる**(第5.330節)。**対を組み直していない**ことも見る */
+  REVIEW_QR_LABEL, hasQuickResponse, withWritingReviews,
 } from '../src/lib/quickResponse.js'
+/* **添削の形をそろえるのと、対を落とす決まり**(第5.330節) */
+import { normalizeReview, reviewPairs } from '../src/lib/writingReview.js'
 import {
   BASICS, LEARNER_FEATURES, featureOf, showsBasics,
 } from '../src/data/learnerFeatures.js'
@@ -11163,6 +11167,64 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
         pairs.map((p) => p.key).join(' / '))
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       ★ **添削した文章が、教材の Quick Response に出る**(第5.330節・
+          2026-09-30 利用者の指定)
+
+         > 教材の中のディスカッションなどで添削してもらった文章は
+         > 全て quick response に飛ばせるようにしたいです。
+
+       添削は `material_progress` に入っていて**教材の中身ではない**ので、
+       `quickResponsePairs()` からは1文も見えなかった。
+       **対を組み直さず、教材に段を1つ足した写し**を渡して拾わせる。
+       ══════════════════════════════════════════════════════════════ */
+    {
+      /** ディスカッションしか無い教材。**このままでは Quick Response が0問** */
+      const 討論 = {
+        id: 'm-d', sections: [{
+          id: 's1', exercise_type: 'discussion',
+          items: [{ id: 'q1', question: 'What do you think?' }],
+        }],
+      }
+      ok(!hasQuickResponse(討論),
+        'QR(添削)… 添削が無ければ、これまでどおり0問',
+        `${quickResponsePairs(討論).length} 問`)
+
+      /* **窓口が返す形そのまま**から通す(`normalizeReview` → `reviewPairs`)——
+         画面が通る道と1つも違えない */
+      const 添削 = normalizeReview({
+        sentences: [
+          { en: 'I agree with the plan.', ja: 'その案に賛成です。' },
+          // **訳の無い文**。Quick Response は日本語が要るので出ない
+          { en: 'It saves time.', ja: '' },
+        ],
+      })
+      const 対 = reviewPairs(添削)
+      const 混ぜた = withWritingReviews(討論, 対)
+
+      ok(混ぜた !== 討論 && (討論.sections ?? []).length === 1,
+        'QR(添削)… もとの教材は書き換えない(写しを返す)',
+        `もと ${討論.sections.length} 段 / 写し ${混ぜた.sections.length} 段`)
+
+      const 出た = quickResponsePairs(混ぜた)
+      ok(出た.length === 1 && 出た[0].en === 'I agree with the plan.'
+        && 出た[0].ja === 'その案に賛成です。',
+        'QR(添削)… 添削した文章が出る(訳の無い文は出ない)',
+        出た.map((p) => `${p.ja} / ${p.en}`).join(' / '))
+      ok(出た[0]?.group === 'sentence',
+        'QR(添削)… 「文章」の組に入る', 出た[0]?.group)
+      /* **呼び名は借りた演習のものにしない**(`qrFrom`)。
+         **文字を書き写さない** —— あちらの `REVIEW_QR_LABEL` から受け取る */
+      ok(出た[0]?.from === REVIEW_QR_LABEL,
+        'QR(添削)… どこから来たかが「記事」にならない', 出た[0]?.from)
+      ok(hasQuickResponse(混ぜた),
+        'QR(添削)… ディスカッションだけの教材でも、ボタンが出る')
+      /* **「無ければ素通り」を赤くする。** 対が0件なら、写しを作らない */
+      ok(withWritingReviews(討論, []) === 討論
+        && withWritingReviews(討論, [{ en: 'x' }]) === 討論,
+        'QR(添削)… 対が1つも無ければ、段を足さない(空の段を作らない)')
+    }
+
     const 数 = quickResponseCounts(教材())
     /* **単語 / フレーズは、かたまりを含まない**(独立した選択肢にした)。
        **数を書き写さない** —— `vocabulary` の1件だけが入る */
@@ -11274,6 +11336,29 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     '紙 … 左が日本語・右が英語')
     ok(!/vocab_note|'chunk'/.test(sheet),
       '紙 … 取り組み方の id を書き写していない')
+
+    /* ★ **画面まで通っているか**(第5.330節)。
+         上の見張りは**素の関数**を確かめているだけなので、
+         **画面が `material` を渡したままでも緑になる** ——
+         そのときは添削が1文も出てこない(利用者が見ているのは、そちら)。
+         **渡している側**を数える(CLAUDE.md「出したその日に本物の入り口から」) */
+    {
+      const lv = read('src/components/LessonView.jsx').replace(/\/\*[\s\S]*?\*\//g, '')
+      const 添削を集める = /loadMaterialScopes\(material\.id, owner, 'writing'\)/.test(lv)
+      const 写しを作る = /withWritingReviews\(material, reviewPairsAll\)/.test(lv)
+      /* **3か所とも写しを渡す。** 1か所でも `material` のままだと、
+         そこだけ添削が出ない(練習に出て紙に出ない、のような食い違い) */
+      const 渡す = (/<QuickResponse material=\{qrMaterial\}/.test(lv)
+        && /<QuickResponseSheet material=\{qrMaterial\} \/>/.test(lv)
+        && /hasQuickResponse\(qrMaterial\)/.test(lv))
+      ok(添削を集める && 写しを作る && 渡す,
+        'QR(添削)… 画面が、添削を集めて写しを渡している(練習・紙・ボタン)',
+        `集める ${添削を集める} / 写し ${写しを作る} / 渡す ${渡す}`)
+      /* **「出ない」側も見る。** 本文まで写しにすると、
+         **添削の段が教材の本文に出てしまう**(段を1つ足した写しなので) */
+      ok(!/\bsections = qrMaterial|rawSections = qrMaterial/.test(lv),
+        'QR(添削)… 本文は、もとの教材のまま描く(添削の段を本文に出さない)')
+    }
 
     /* ── 骨組み ── **本物の QuickResponse を描いてある** ── */
     const sk2 = read('src/__screens.jsx')

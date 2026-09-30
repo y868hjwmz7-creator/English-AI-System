@@ -224,3 +224,58 @@ export function hasMaterialProgress(materialId) {
   } catch { /* 使えない端末では無い */ }
   return false
 }
+
+/**
+ * **その教材の、同じ種類の途中経過を、まとめて読む**
+ * (2026-09-30 利用者の指定・第5.330節)。
+ *
+ *   > 教材の中のディスカッションなどで添削してもらった文章は
+ *   > 全て quick response に飛ばせるようにしたいです。
+ *
+ * `useProgress` は**1つの鍵につき1つ**である。ところが添削は
+ * **問ごとに別の鍵**(`<段>.<問>.writing`)なので、
+ * 「その教材の添削ぜんぶ」を集めるには、まとめて読む道が要る。
+ *
+ * **鍵の組み立ては `progressKey()` と同じ形をここでも使う** ——
+ * 頭が `eas.prog.<教材>.`、終わりが `.<種類>`。
+ *
+ * ・**端末の控えを先に読む**(Supabase が無くても動く・0025 と同じ作法)
+ * ・**サーバーがあれば、そちらで上書きする**(あちらが新しい)
+ * ・**読めなくても落ちない。** 空を返す(黙って落ちない・CLAUDE.md)
+ *
+ * @param {string} materialId
+ * @param {string|null} learnerId 誰のぶんか(渡さなければサーバーは読まない)
+ * @param {string} what `progressKey()` の3つめ(`'writing'` など)
+ * @returns {Promise<Array<{scope: string, data: any}>>} **scope の順**
+ */
+export async function loadMaterialScopes(materialId, learnerId, what) {
+  const head = `${PREFIX}${materialId ?? 'x'}.`
+  const tail = `.${what}`
+  const found = new Map()
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = localStorage.key(i)
+      if (!k || !k.startsWith(head) || !k.endsWith(tail)) continue
+      const v = read(k, null)
+      if (v != null) found.set(k.slice(head.length), v)
+    }
+  } catch { /* 使えない端末では、端末の控えが無いだけ */ }
+
+  if (supabase && learnerId && materialId) {
+    const { data, error } = await supabase
+      .from('material_progress')
+      .select('scope, data')
+      .eq('learner_id', learnerId)
+      .eq('material_id', materialId)
+      .like('scope', `%${tail}`)
+    // **表が無くても静かに端末の控えを使う**(`pull()` と同じ決まり)
+    if (!error) {
+      for (const row of data ?? []) {
+        if (row?.scope && row.data != null) found.set(row.scope, row.data)
+      }
+    }
+  }
+  return [...found.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([scope, data]) => ({ scope, data }))
+}
