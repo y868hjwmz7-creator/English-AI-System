@@ -62,6 +62,9 @@ import { FIT_SLACK } from '../src/lib/fitRow.js'
 /* **くり返しの4つは `wholeAudio.js` 1か所**。呼び名は `repeatLabel.js` */
 import { REPEAT_UNITS } from '../src/lib/wholeAudio.js'
 import { repeatLabel, repeatSay } from '../src/lib/repeatLabel.js'
+/* **シャッフルの言い方も、あちらから受け取る**(第5.325節)。
+   文字を書き写すと、言い方を変えた日に**見張りだけが古くなる** */
+import { shuffleSay } from '../src/lib/shuffleSay.js'
 /* **速さの段と端は `speechRate.js` 1か所** */
 import { SPEECH_RATES } from '../src/lib/speechRate.js'
 
@@ -1981,6 +1984,134 @@ for (const [label, want] of Object.entries(WANT)) {
       ok(`押す行の余りは、${余りたち.length} 画面とも ${値[0]}px でそろっている`
         + '(隙間の詰まり具合が同じに見える)')
     }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * **シャッフル**(2026-09-30 利用者の指定・第5.325節)
+ *
+ *   > 文型トレーニングで使うシャッフルボタンを追加してください。
+ *   > プレーヤー上段の段落数／発言数表示のすぐ右隣に置き、
+ *   > 数とシャッフルをひとまとまりに見せてください。
+ *   > 使用中かどうかが見た目で分かる状態表示を付けてください。
+ *   > 文型トレーニング以外では表示しないなど、既存の画面や機能に
+ *   > 合わせてください。
+ *
+ * **見るのは6つ。「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+ *   ①文型ドリルには出る  ②**本文の教材には出ない**
+ *   ③**数のすぐ右**にいる(同じまとまりの中で、あいだに何も挟まない)
+ *   ④押すと**問の並びが変わり**、もう一度押すと**もとに戻る**
+ *   ⑤名前と押している印が変わる(**言い方は `shuffleSay()` から受け取る**)
+ *   ⑥**押しても、まわりの物が動かない**(箱の大きさも、隣の場所も)
+ * ══════════════════════════════════════════════════════════════════════ */
+{
+  /** その画面の、シャッフルまわり */
+  const 見る = (page) => page.evaluate(() => {
+    const R = (el) => { const b = el.getBoundingClientRect()
+      return { l: Math.round(b.left * 10) / 10, r: Math.round(b.right * 10) / 10,
+        w: Math.round(b.width * 10) / 10 } }
+    const sh = document.querySelector('.player--dock .shuffle-key')
+    const at = document.querySelector('.player--dock .player-at')
+    const rep = document.querySelector('.player--dock .repeat-key')
+    const 左 = document.querySelector('.player--dock .player-head-l')
+    return {
+      有る: !!sh,
+      名: sh?.getAttribute('aria-label') ?? '',
+      押: sh?.getAttribute('aria-pressed') ?? '',
+      箱: sh ? R(sh) : null,
+      /* **数と同じまとまりの中に居るか。** 別の入れ物にいると、
+         狭い画面で離れて折り返す */
+      同じ組: !!(左 && at && sh && 左.contains(at) && 左.contains(sh)),
+      /* **数のすぐ右。** あいだに押せるものが挟まっていないこと */
+      すぐ右: !!(at && sh && sh.previousElementSibling === at),
+      くり返し: rep ? R(rep) : null,
+      並び: [...document.querySelectorAll('.lesson-page:not(.is-closed) li[data-key]')]
+        .map((x) => x.getAttribute('data-key')).join(','),
+    }
+  })
+
+  const w = 390
+  /* ── ①④⑤⑥ 文型ドリル ────────────────────────────────── */
+  {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill&role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+    const a = await 見る(page)
+    if (!a.有る) {
+      ng('シャッフル … 文型ドリルに出ていない', '`.shuffle-key` が無い')
+    } else if (!a.同じ組 || !a.すぐ右) {
+      ng('シャッフル … 数のすぐ右に置かれていない',
+        `同じまとまり ${a.同じ組} / すぐ右 ${a.すぐ右}`)
+    } else if (a.名 !== shuffleSay(false) || a.押 !== 'false') {
+      /* **言い方は1か所から受け取る。** 書き写すと、変えた日に古くなる */
+      ng('シャッフル … はじめの名前か押している印が違う', `「${a.名}」/ ${a.押}`)
+    } else {
+      /* **押して、並びが変わるか。** 4つしかない骨組みでは、
+         まぐれで同じ並びになることがある(24 通りに1回)。
+         **何度か押して、1度でも変われば良し**とする ——
+         「1度で変わること」を求めると、**まぐれで赤くなる** */
+      const 見た = []
+      for (let n = 0; n < 6; n += 1) {
+        await page.click('.player--dock .shuffle-key')
+        await page.waitForTimeout(160)
+        見た.push(await 見る(page))
+      }
+      const 入 = 見た.filter((x, i) => i % 2 === 0)    // 奇数回め = シャッフル中
+      const 戻 = 見た.filter((x, i) => i % 2 === 1)    // 偶数回め = もとの並び
+      const 変わった = 入.some((x) => x.並び !== a.並び)
+      const 同じ数 = 入.every((x) => x.並び.split(',').sort().join(',')
+        === a.並び.split(',').sort().join(','))
+      /* ⑥ **押しても、まわりの物が動かない**(共通ルール)。
+           箱の大きさも、となりのくり返しの場所も 1px も変えない */
+      const 動いた = 見た.some((x) => !x.箱 || !x.くり返し
+        || Math.abs(x.箱.w - a.箱.w) > 0.5
+        || Math.abs(x.くり返し.l - a.くり返し.l) > 0.5)
+      if (!入.every((x) => x.押 === 'true') || !戻.every((x) => x.押 === 'false')) {
+        ng('シャッフル … 押している印が、押すたびに入れ替わらない',
+          見た.map((x) => x.押).join(' → '))
+      } else if (入[0]?.名 !== shuffleSay(true)) {
+        ng('シャッフル … 押したあとの名前が違う', `「${入[0]?.名}」`)
+      } else if (!変わった) {
+        ng('シャッフル … 3回押しても、問の並びが1度も変わらない', a.並び)
+      } else if (!同じ数) {
+        ng('シャッフル … 問が増えるか減っている(並べ替えではない)',
+          `もと ${a.並び} → ${入.map((x) => x.並び).join(' / ')}`)
+      } else if (!戻.every((x) => x.並び === a.並び)) {
+        ng('シャッフル … もう一度押しても、もとの並びに戻らない',
+          `もと ${a.並び} → ${戻.map((x) => x.並び).join(' / ')}`)
+      } else if (動いた) {
+        ng('シャッフル … 押すと、箱の大きさかとなりの場所が動く',
+          `箱 ${a.箱.w} → ${見た.map((x) => x.箱?.w).join('/')} /`
+          + ` くり返しの左 ${a.くり返し.l} → ${見た.map((x) => x.くり返し?.l).join('/')}`)
+      } else {
+        ok(`シャッフル … 文型ドリルの数のすぐ右にあり、押すと並びが変わって`
+          + `(${a.並び} → ${入.find((x) => x.並び !== a.並び).並び})`
+          + `、もう一度押すと戻る。押しても 1px も動かない`)
+      }
+    }
+    await page.close()
+  }
+
+  /* ── ② **出ない側。** 本文の教材(会話)には出さない ────────────
+        文型トレーニング以外で順を混ぜても意味が無い
+        (**効かない操作を見せない**・CLAUDE.md) */
+  {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+    const b = await 見る(page)
+    const 黒帯 = await page.$('.player--dock')
+    if (!黒帯) {
+      ng('シャッフル … 会話の教材で、黒帯そのものが出ていない',
+        '出ない側を測れない(この見張りは何も守らない)')
+    } else if (b.有る) {
+      ng('シャッフル … 文型ドリル以外にも出ている', '会話の教材に `.shuffle-key` がある')
+    } else {
+      ok('シャッフル … 文型ドリル以外(会話の教材)には出ない')
+    }
+    await page.close()
   }
 }
 

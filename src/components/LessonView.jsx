@@ -38,6 +38,11 @@ import { ensureClip } from '../lib/audioClips.js'
    **この画面に出る中身は1つも変わっていない**(「半分」は記録の側だけ) */
 import { SHEET_WIDTHS } from '../data/sheetWidths.js'
 import { resolveVoices } from '../data/clipVoices.js'
+/* ★ **シャッフルは文型ドリルだけ**(第5.325節)。**判断は1か所** ——
+     画面の中で `kind === 'pattern'` と書かない(CLAUDE.md) */
+import { isDrillKind } from '../data/materialKinds.js'
+/* **混ぜるのは `shuffle.js` 1か所**(単語帳・Quick Response と同じ・第5.282節) */
+import { shuffled } from '../lib/shuffle.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import {
   BoltIcon, FocusIcon, NoteIcon, PenIcon, PrintIcon,
@@ -266,8 +271,43 @@ export default function LessonView({
   /* **どの教材で会ったかを添える**(0024)。単語帳を教材名で絞るのに要る。
      語に触れる場所は多いので、**教材が分かるここで1回だけかぶせる** */
   const markWord = markIn(onMarkWord, material?.id, owner)
-  const sections = material?.sections ?? []
+  const rawSections = material?.sections ?? []
   const [page, setPage] = useState(0)
+
+  /* ══════════════════════════════════════════════════════════════
+     **シャッフル**(2026-09-30 利用者の指定・第5.325節)
+
+       > 文型トレーニングで使うシャッフルボタンを追加してください。
+       > 文型トレーニング以外では表示しないなど、既存の画面や機能に
+       > 合わせてください。現在のトレーニング内容と音声の対応関係を
+       > 壊さず、既存のシャッフル仕様があればそれを維持してください。
+
+     **もともとシャッフルは1つも無かった**(`grep` で数えた)ので、
+     維持するものは無い。ここで新しく作る。
+
+     **混ぜるのは `shuffle.js` 1か所**(単語帳・Quick Response と同じ)。
+     画面の中で `Math.random()` を書かない。
+
+     **何が起きるか。** 演習の中の問の並びだけが変わる。
+     問そのもの(英文・訳・解答・解説・読み上げる英文)は**1文字も
+     動かない**ので、**中身と音声の対応は壊れない。**
+
+     **0円である。** 通しの音声を1本にまとめるのは本文(記事・会話)
+     だけで(`wholeSliceOf` が `isPassageSection` でなければ `null` を
+     返す)、**文型ドリルは問ごとの音声**である。
+     問ごとの音声の鍵は**その英文そのもの**なので、並べ替えても
+     鍵は1つも変わらない ——「英文の並び」が鍵に入るのは
+     1本にまとめたほうだけである(CLAUDE.md「音声は1回だけ課金される」)。
+
+     **`null` = もとの並び。** 押すたびに作り直し、もう一度押すと戻る。 */
+  const [mixed, setMixed] = useState(null)
+  /** **文型ドリルだけ**。判断は `isDrillKind()` 1か所(画面で `kind ===` と書かない) */
+  const canShuffle = isDrillKind(material?.kind)
+  /* 教材が変われば、混ぜたものは捨てる(別の教材の並びを持ち越さない) */
+  useEffect(() => { setMixed(null) }, [material?.id])
+  const sections = mixed
+    ? rawSections.map((sec, i) => (mixed[i] ? { ...sec, items: mixed[i] } : sec))
+    : rawSections
   /** **ぜんぶで何ページか。** 足したページがあれば1枚多い(第5.323節)。
       **数え方を2通り持たない** —— 送りも札もキーボードも、これを見る */
   const pageCount = sections.length + (extraPage ? 1 : 0)
@@ -647,6 +687,24 @@ export default function LessonView({
 
   /** 通しの読み上げを止める */
   const stopAll = player.stop
+
+  /**
+   * **シャッフルを入れる / 外す**(第5.325節)。
+   *
+   *   **先に止める。** 鳴らしている最中に並びを変えると、
+   *   画面の並びだけが変わって**音は前の並びのまま**進む ——
+   *   利用者の指定「現在のトレーニング内容と音声の対応関係を壊さず」に
+   *   まっこうから反する。止めてから並べ替える。
+   *
+   *   **演習ぜんぶを、いちどに混ぜる。** ページを送るたびに
+   *   混ざり直すと、いま何番目を見ているのか分からなくなる。
+   *
+   *   **もう一度押すと、もとの並びに戻る**(`null`)。
+   */
+  const toggleShuffle = () => {
+    stopAll()
+    setMixed((m) => (m ? null : rawSections.map((sec) => shuffled(sec.items ?? []))))
+  }
 
   /** ページを移ったら、1問ずつの開け閉めと読み上げを元に戻す */
   const resetItems = () => {
@@ -1506,6 +1564,10 @@ export default function LessonView({
               unit={countUnit(section?.exercise_type)}
               onToggle={playWhole} onJump={jumpTo}
               repeat={player.repeat} onRepeat={player.setRepeat}
+              /* ★ **シャッフルは文型ドリルだけ**(第5.325節)。
+                   渡さなければ**ボタンごと出ない**(効かない操作を見せない) */
+              shuffle={Boolean(mixed)}
+              onShuffle={canShuffle ? toggleShuffle : null}
             />
           )}
 
@@ -2084,6 +2146,10 @@ export default function LessonView({
                  段も刻みも `SPEECH_RATES` 1か所なので、食い違わない */
               rateText={rateText}
               onOpenRate={() => { setWantRate(true); setViewSets(true) }}
+              /* ★ **シャッフルは文型ドリルだけ**(第5.325節)。
+                   上の帯とまったく同じものを渡す(道を2つ作らない) */
+              shuffle={Boolean(mixed)}
+              onShuffle={canShuffle ? toggleShuffle : null}
             />
           </div>
         )}

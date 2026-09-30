@@ -190,6 +190,9 @@ import {
 /* **鳴らすボタンの呼び名**(第5.290節 / 第5.297節 / 第5.304節)。
    どちらも DOM を引き連れていないので、素の node でそのまま走る */
 import { SPEAK_LISTEN } from '../src/lib/speakLabel.js'
+/* **段は、算段そのものに訊く**(第5.323節)。値を書き写すと、
+   決め方を変えた日に期待値も一緒に動き、仕組みを壊しても素通りする */
+import { PREMIUM, voiceTierFor } from '../src/lib/voiceTier.js'
 import { WHOLE_PLAY_CORE, wholePlayText } from '../src/lib/wholePlay.js'
 /* **何本かを同時に走らせる**(第5.307節)。何にも依存していないので素の node で走る */
 import { runPool } from '../src/lib/runPool.js'
@@ -4926,9 +4929,15 @@ console.log('\nスピーチ練習(0054)')
   const view = noC3(read3('src/components/SpeechBoardView.jsx'))
   ok(/<SpeechBoardView/.test(board) && /SpeechBoardView\.jsx'/.test(board),
     'スピーチ … 描くところは `SpeechBoardView`(props で受け取るだけ)')
+  /* ★ **原稿のカードは `SpeechEditCard` へ切り出した**(第5.323節)。
+       添削の結果が**教材の2ページ目**へ移ったので、
+       `SpeechBoardView`(一覧)と `SpeechBoard`(読み書き)の
+       **どちらにも骨は無い。** 3か所で数える */
+  const edit = noC3(read3('src/components/SpeechEditCard.jsx'))
   ok(!/className="card speech-edit"/.test(board)
-    && /className="card speech-edit"/.test(view),
-    'スピーチ … 欄の骨は、描く側だけが持っている(2か所に無い)')
+    && !/className="card speech-edit"/.test(view)
+    && /className="card speech-edit"/.test(edit),
+    'スピーチ … 欄の骨は `SpeechEditCard` だけが持っている(3か所に無い)')
   /* **読み込みは、描く側へ持ち込んでいない**(あちらが描けなくなる) */
   ok(!/loadSpeeches|saveSpeech|reviewWriting/.test(view),
     'スピーチ … 描く側は、読み書きを1つもしない(だから骨組みで描ける)')
@@ -4954,10 +4963,23 @@ console.log('\nスピーチ練習(0054)')
      `SpeechBoard` は自分で読み込むので、Supabase の無い骨組みでは
      **何も描かれない**(描けないものは測れない) */
   const prac = noC3(read3('src/components/SpeechPractice.jsx'))
-  ok(/useBodyAudio\(\)/.test(prac),
-    'スピーチ … 通しの読み上げは `useBodyAudio`(紙・集中モードと同じ道具)')
-  ok(/tier=\{PREMIUM\}/.test(prac) && /tier: PREMIUM/.test(prac),
-    'スピーチ … 良い声の段で鳴らす(1文ずつも、通しも)')
+  /* ★ **通しの読み上げは、教材の画面が受け持つ**(第5.323節・利用者の指定
+       「モノローグの教材と全て同じです」)。
+     `SpeechPractice` は**自前の読み上げを1つも持たない** ——
+     持つと、同じことをする道具が2つになる(**出ない側も見る**)。 */
+  ok(!/useBodyAudio|<PlayerBar|<SpeakButton/.test(prac),
+    'スピーチ … 添削の結果は、自前の読み上げを1つも持たない(第5.323節)')
+  ok(/speechAsMaterial\(open, \{ level \}\)/.test(board)
+    && /<LessonView\n\s+material=\{asMaterial\}/.test(board),
+    'スピーチ … 通しの読み上げは、教材の画面(`LessonView` → `useBodyAudio`)が受け持つ')
+  /* ★ **段が変わっていないことを、算段そのもので確かめる**(第5.323節)。
+       置き場所の鍵は **(版, 段, 声, 英文の指紋)** なので、
+       **段が変わると、同じ英文でも音声を作り直す = もう一度課金**になる。
+       スピーチは本文(`article`)として組み立てるので、
+       `isPassageSection` が真 → **良い声の段**。前と同じである。
+       **文字で探さない。呼んで確かめる**(値を書き写さない) */
+  ok(voiceTierFor({ exerciseType: 'article', tags: [], voiceIds: ['us-1'] }) === PREMIUM,
+    'スピーチ … 教材の形(本文)でも、良い声の段のまま(段が変わると再課金)')
   ok(/await lookupWord\(/.test(prac) && /await setWordStatus\(/.test(prac),
     'スピーチ … 1語ずつ単語帳へ入れる道も、`WordbookAdd` と同じ')
   ok(!/RepeatUnit/.test(prac),
@@ -4965,8 +4987,12 @@ console.log('\nスピーチ練習(0054)')
   /* **1本にまとめた音声の区間を鳴らす**(2026-09 利用者の指定)。
      渡さなくなると**その文だけの MP3 を別に作って二度課金する**が、
      **音は鳴る**ので押してみても気づけない */
-  ok(/whole=\{speechWholeSlice\(speech, i\)\}/.test(prac),
-    'スピーチ … 1文ずつの Listen に、1本の中の区間を渡している')
+  /* ★ **1本にまとめた音声の区間を鳴らすのは、いま `LessonView` である**
+       (第5.323節)。`wholeSliceOf()` は**本文の演習にだけ**効くので、
+       スピーチを `article` として組み立てていることがそのまま条件になる。
+       ここを別の種類に変えると、**文ごとの MP3 を別に作って二度課金する** */
+  ok(/exercise_type: 'article'/.test(noC3(read3('src/lib/speechPractice.js'))),
+    'スピーチ … 本文の演習(`article`)として組み立てる(1本の中の区間が効く)')
   /* **集中モードと「文章をコピー」は外した**(第5.302節・利用者の指定)。
 
        > 集中モードと文章コピーはやはり排除でよいです
@@ -4981,11 +5007,17 @@ console.log('\nスピーチ練習(0054)')
   ok(!/SIX_STEPS|StepFocus/.test(prac),
     'スピーチ … 6Steps は足していない(言われた場所だけを直す)')
   /* **消しすぎていないか。** 1文ずつの並びと、音声のダウンロードは残す */
-  ok(/\{lineOf\(s, i\)\}/.test(prac),
-    'スピーチ … 1文ずつの並びは残っている(消しすぎていない)')
+  /* ★ **聴くボタンつきの文は、2ページ目には出さない**(第5.323節・
+       2026-09-30 利用者の指定)
+         > そのページ内では写真に写ってる聴くボタンを伴う各文章の表示は
+         > 削除します
+     **1ページ目(本文)にまったく同じものが既にある。**
+     **出ない側**で見る —— 戻したら赤くなる */
+  ok(!/speech-sentences/.test(prac) && !/lineOf\(/.test(prac),
+    'スピーチ … 添削の結果に、聴くボタンつきの文は1つも出さない(第5.323節)')
   ok(/downloadSpeechAudio/.test(prac) && /useAudioDownload/.test(prac),
     'スピーチ … 音声のダウンロードは残っている(第5.300節)')
-  ok(/level=\{lv\}/.test(prac) && /level: lv/.test(prac) && !/level="B1"/.test(prac),
+  ok(/level: lv/.test(prac) && !/level="B1"|level: 'B1'/.test(prac),
     'スピーチ … 語の意味も、ゲストのレベルで引く')
 
   const pron = noC3(read3('src/components/PronunciationPractice.jsx'))
@@ -6241,9 +6273,10 @@ console.log('\nスピーチ練習(0054)')
     ['LearnerHomework.jsx', 'まだ宿題は届いていません', '0件の知らせ'],
     ['LearnerHomework.jsx', 'この条件に当てはまる宿題はありません', '絞り込みの知らせ'],
     ['WritingAnswer.jsx', 'そのままトレーナーに届きます', '黙って消さない'],
-    /* **描くところは `SpeechBoardView.jsx` へ移した**(第5.305節)。
+    /* **描くところは `SpeechBoardView.jsx` へ移し**(第5.305節)、
+       そこから**原稿のカード `SpeechEditCard.jsx`** へ切り出した(第5.323節)。
        文そのものは1文字も変えていない */
-    ['SpeechBoardView.jsx', '書いた原稿はトレーナーに届いています', '黙って消さない'],
+    ['SpeechEditCard.jsx', '書いた原稿はトレーナーに届いています', '黙って消さない'],
     ['MaterialBody.jsx', '{sec.instruction}', '教材の中身'],
     ['MaterialBody.jsx', '{it.note}', '教材の中身'],
     /* **聞き流しの但し書きは消えた**(第5.252節・2026-09-23 利用者の指定

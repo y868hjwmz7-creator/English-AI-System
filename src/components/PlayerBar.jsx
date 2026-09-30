@@ -78,12 +78,15 @@ import { useEffect, useRef, useState } from 'react'
    **鳴っているのか止まっているのか**が、絵から分からなかった。
    `PlayIcon`(三角)/ `StopIcon`(四角)は**すでにある絵**である
    (聞き流しの「つづける」と同じ)。ここで新しく描かない */
-import { PlayIcon, StopIcon, WaitIcon } from './Icons.jsx'
+import { PlayIcon, ShuffleIcon, StopIcon, WaitIcon } from './Icons.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
 /* **「文」の呼び名も `repeatLabel.js` 1か所**(第5.322節)。
    内側のキーの札と、くり返しの「文」は**同じ言葉**である ——
    2か所に書くと、片方だけ古くなる */
 import { repeatLabel } from '../lib/repeatLabel.js'
+/* **シャッフルの言い方も1か所**(第5.325節)。押すボタン・読み上げ・
+   見張りが、同じ `shuffleSay()` を読む(書き写さない) */
+import { shuffleSay } from '../lib/shuffleSay.js'
 /* **待ちの言い方は `SpeakButton.jsx` 1か所**(「用意しています…」/
    「用意中 3 秒」)。ここで書き写すと、片方だけ古くなる */
 import { preparingLabel } from './SpeakButton.jsx'
@@ -132,6 +135,35 @@ function PlayKey({ dir, label, wide, disabled, onClick }) {
           マウスを乗せたときにも出る)。
           絵のほうも、**三角の数**で見分けられる(2つ = 段落・1つ = 文)。 */}
     </span>
+  )
+}
+
+/**
+ * **シャッフル**(2026-09-30 利用者の指定・第5.325節)。
+ *
+ *   > プレーヤー上段の段落数／発言数表示のすぐ右隣に置き、
+ *   > 数とシャッフルをひとまとまりに見せてください。
+ *   > 使用中かどうかが見た目で分かる状態表示を付けてください。
+ *
+ * **くり返しのボタンとまったく同じ形**(`.repeat-key` と同じ大きさ・
+ * 同じ余白・同じ地色の付き方)。並ぶものなので、片方だけ違うと浮く。
+ *
+ * **押していないときは、うすい。** 色だけに頼らず、`aria-pressed` と
+ * `title` でも言う(CLAUDE.md)。**言葉は足さない** ——
+ * 「繰り返し」の文字を外したのと同じ理由である(第5.318節)。
+ *
+ * **渡されなければ、ボタンごと出ない** —— 文型ドリル以外では
+ * 順を混ぜても意味が無い(**効かない操作を見せない**)。
+ */
+function ShuffleKey({ on, onChange }) {
+  const say = shuffleSay(on)
+  return (
+    <button type="button"
+            className={`shuffle-key${on ? ' is-on' : ''}`}
+            aria-pressed={on} aria-label={say} title={say}
+            onClick={() => onChange(!on)}>
+      <ShuffleIcon />
+    </button>
   )
 }
 
@@ -199,6 +231,7 @@ export default function PlayerBar({
   rateText = null, onOpenRate = null,
   onStep = null, canBack = false, canNext = false,
   waiting = false, secs = 0,
+  shuffle = false, onShuffle = null,
 }) {
   /**
    * **入るまで詰める**(2026-09 実機・利用者の指摘
@@ -283,9 +316,13 @@ export default function PlayerBar({
            ref={place === 'bar' ? null : barRef}
            role="group" aria-label="読み上げの操作">
         <span className="player-at">
-          {shown == null ? `— / ${total}` : `${shown} / ${total}`}
-          <span className="wide-text"> {unit}</span>
+          <span className="player-at-n">{shown == null ? '—' : shown}</span>
+          <span className="player-at-sep"> / </span>
+          <span className="player-at-n">{total}</span>
+          <span className="wide-text player-at-unit"> {unit}</span>
         </span>
+        {/* **数のすぐ右**(第5.325節)。黒帯とまったく同じ置き方 */}
+        {onShuffle && <ShuffleKey on={shuffle} onChange={onShuffle} />}
 
         {/* **外側が段落・内側が文**(黒帯とまったく同じ並び) */}
         <div className="player-keys player-keys--bar">
@@ -337,11 +374,28 @@ export default function PlayerBar({
 
       {/* ── ① いまどこか・くり返し・速さ ────────────────────────── */}
       <div className="player-head" ref={headRef}>
-        <span className="player-at">
-          {dockShown == null ? `— / ${total}` : `${dockShown} / ${total}`}
-          <span className="wide-text"> {unit}</span>
+        {/* ── 左のまとまり … いまどこか + シャッフル ──────────────
+              2026-09-30 利用者の指定(第5.325節)。
+
+                > 左側：段落数／発言数の表示＋シャッフル
+                > 数とシャッフルをひとまとまりに見せてください
+                > 必要以上に大きな枠や装飾を使わず、
+                > 小さなステータス表示としてまとめる
+
+              **数が主で、単位は添え物。** 単位のほうを小さく・うすくする
+              (中身と意味は1文字も変えていない)。 */}
+        <span className="player-head-l">
+          <span className="player-at">
+            <span className="player-at-n">{dockShown == null ? '—' : dockShown}</span>
+            <span className="player-at-sep"> / </span>
+            <span className="player-at-n">{total}</span>
+            <span className="wide-text player-at-unit"> {unit}</span>
+          </span>
+          {onShuffle && <ShuffleKey on={shuffle} onChange={onShuffle} />}
         </span>
 
+        {/* ── 右のまとまり … くり返し + 速さ ──────────────────── */}
+        <span className="player-head-r">
         {onRepeat && (
           <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
         )}
@@ -368,6 +422,7 @@ export default function PlayerBar({
                   aria-label={placeNext} title={placeNext}
                   onClick={onPlace}>▲</button>
         )}
+        </span>
       </div>
 
       {/* ★ **進み具合のバーは取り払った**(2026-09-29 実機・利用者の指定)。

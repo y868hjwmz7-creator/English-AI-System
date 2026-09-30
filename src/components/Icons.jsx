@@ -534,6 +534,37 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
   )
 }
 
+/**
+ * **シャッフル**(2026-09-30 利用者の指定・写真つき・第5.325節)。
+ *
+ *   > 文型トレーニングで使うシャッフルボタンを追加してください。
+ *   > シャッフルは、他の操作ボタンと大きさ・余白・アイコンの線を
+ *   > 揃えたコンパクトなアイコンボタンにしてください。
+ *
+ * **2本の矢印が交差する**、いちばん普通のシャッフルの記号である。
+ * 上の筋は左上から右下へ、下の筋は左下から右上へ。
+ *
+ * **線は 1.6・穂先は塗りつぶし** —— `RepeatRangeIcon`(くり返し)と
+ * **まったく同じ太さ・同じ描き方**にそろえてある(第5.324節)。
+ * となりに並ぶので、片方だけ太いと**そこだけ浮く。**
+ */
+export function ShuffleIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      {/* 左上 → 右下 */}
+      <path d="M2.4 6.4h3l6.8 7.2h2.6"
+            fill="none" stroke="currentColor" strokeWidth="1.6"
+            strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14.4 11.9 17.6 13.6 14.4 15.3z" fill="currentColor" />
+      {/* 左下 → 右上 */}
+      <path d="M2.4 13.6h3l6.8-7.2h2.6"
+            fill="none" stroke="currentColor" strokeWidth="1.6"
+            strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14.4 4.7 17.6 6.4 14.4 8.1z" fill="currentColor" />
+    </svg>
+  )
+}
+
 /** セッションの記録(0032)。**罫線の入った紙**。書くところだと分かる */
 /**
  * **音を用意しているあいだの絵**(2026-09-30・第5.321節)。

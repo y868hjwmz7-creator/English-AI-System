@@ -232,7 +232,13 @@ const material = asSpeech ? {
      和文英訳を混ぜてあるのは、**読み上げるのが `answer`** だからで、
      `prompt_en` を直に見ていると1本も拾えない。
      誤り訂正は **`audioFrom: null`** —— 読み上げてはいけない演習である */
-  id: 'test-drill', level: 'B1', title: '現在完了', kind: 'drill',
+  /* ★ **`kind` は `'pattern'`**(2026-09-30・第5.325節)。
+     もとは `'drill'` と書いてあったが、**`materials.kind` にそんな値は無い**
+     (文型ドリルは `'pattern'`・`materialKinds.js`)。
+     **骨組みは、本物と1文字も違えない**(CLAUDE.md)——
+     食い違っていたので、`isDrillKind()` で決まるもの
+     (シャッフル)が骨組みでは1度も描かれなかった。 */
+  id: 'test-drill', level: 'B1', title: '現在完了', kind: 'pattern',
   headline: '', tagIds: ['present_perfect'],
   sections: [{
     id: 'sec-1', exercise_type: 'translate_en_ja', title: '英文和訳',
@@ -2179,6 +2185,9 @@ function speechBoardScreen() {
       {speechAsMaterial(open, { level: 'B1' }) && (
         <LessonView
           material={speechAsMaterial(open, { level: 'B1' })}
+          /* **誰の記録として残るか**(第5.178節)。本物も渡している ——
+             骨組みが落とすと、そこは誰も測っていないことになる */
+          learnerId={q.get('who') || null} learnerName="山田はなこ"
           onClose={() => {}}
           /* **本物(`SpeechBoard`)が渡すのと同じものを、そのまま渡す** ——
              骨組みが1つでも欠けると、そこは誰も測っていないことになる */
