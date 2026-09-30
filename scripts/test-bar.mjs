@@ -1870,12 +1870,21 @@ for (const [label, want] of Object.entries(WANT)) {
       /* いちばん右にあるもの。速さが無い画面ではくり返しが右端になる */
       const 右端 = 上.querySelector('.player-rate-now') ?? 上.querySelector('.repeat-key')
       if (!鍵.length || !番号 || !右端) { out.push({ 名, 欠け: '測る相手が居ない' }); continue }
+      /* **押すものの合計**(⏮⏮ ⏮ ▶ ⏭ ⏭⏭ / 少ない画面は ⏮ ▶ ⏭)。
+         `space-between` は**余り**を隙間に配るので、
+         **余りが同じなら、どの画面でも同じ詰まり具合に見える** */
+      const 丸 = 下.querySelector('.player-big')
+      const 中身 = [...鍵, ...(丸 ? [丸] : [])]
+        .reduce((n, b) => n + R(b).w, 0)
       out.push({
         名,
         左: Math.round((R(番号).l - R(鍵[0]).l) * 10) / 10,
         右: Math.round((R(鍵[鍵.length - 1]).r - R(右端).r) * 10) / 10,
         /* **上段が下段より広くないこと**も見る(囲みそのものの幅) */
         幅の差: Math.round((R(上).w - R(下).w) * 10) / 10,
+        /* **余り**(押す行の幅 − 押すものの合計)。**数は書かない** ——
+           画面どうしで**同じ**であることだけを見る */
+        余り: Math.round(R(下).w - 中身),
         あふれ: [sp(上) && '上段', sp(下) && '下段'].filter(Boolean).join(',') || '',
       })
     }
@@ -1887,6 +1896,8 @@ for (const [label, want] of Object.entries(WANT)) {
   const 大きく = '.player--dock .player-at,'
     + ' .player--dock .player-rate-now { font-size: 15px !important }'
 
+  /** 画面ごとの「余り」。**あとで突き合わせる**(下のまとめ) */
+  const 余りたち = []
   for (const [画面, q, 開く] of [
     ['レッスン(ドリル)', '?kind=drill&role=trainer&who=g1', null],
     ['レッスン(本文)', '?role=trainer&who=g1', null],
@@ -1918,6 +1929,8 @@ for (const [label, want] of Object.entries(WANT)) {
       for (const m of ms) {
         見た += 1
         if (m.欠け) { 悪い.push(`${印} ${m.名} … ${m.欠け}`); continue }
+        /* 広い窓でだけ集める(狭い窓はボタンごと縮むので、余りも変わる) */
+        if (w === 430 && !big) 余りたち.push([`${画面} / ${m.名}`, m.余り])
         if (Math.abs(m.左) > 許す || Math.abs(m.右) > 許す) {
           悪い.push(`${印} ${m.名} … 左が ${m.左}px / 右が ${m.右}px ずれている`)
         } else if (m.幅の差 > 許す) {
@@ -1937,6 +1950,31 @@ for (const [label, want] of Object.entries(WANT)) {
     } else {
       ok(`${画面} … 上段の数字と絵が、下段の再生操作とぴったり同じ左右`
         + `(${見た} 通りの幅と文字の大きさで測った)`)
+    }
+  }
+
+  /* ── ★ **押す行の「余り」は、どの画面でも同じ**(第5.322節)──────
+       `space-between` は余りを隙間に配るので、**余りが同じなら
+       どの画面でも同じ詰まり具合に見える。**
+
+       スピーチ練習は押すものが3つ(内側の「文」が無い)。
+       そこだけ幅を詰めていないと、**余りが 148px に開いて**
+       隙間が 74px になり、1つの操作盤に見えなくなる
+       (5つのときは 15px)。
+
+       **数は書かない。** 画面どうしで**同じ**であることだけを見る ——
+       余りそのものを変えた日は、ぜんぶ一緒に動く。 */
+  if (余りたち.length < 2) {
+    ng('押す行の余り … くらべる相手が居ない',
+      `${余りたち.length} 画面しか測れていない(見張りが素通りしている)`)
+  } else {
+    const 値 = [...new Set(余りたち.map(([, v]) => v))]
+    if (値.length !== 1) {
+      ng('押す行の余りが、画面によって違う',
+        余りたち.map(([名, v]) => `${名} … 余り ${v}px`).join('\n    '))
+    } else {
+      ok(`押す行の余りは、${余りたち.length} 画面とも ${値[0]}px でそろっている`
+        + '(隙間の詰まり具合が同じに見える)')
     }
   }
 }
@@ -7142,7 +7180,15 @@ for (const w of [1280, 390, 320]) {
         .some((b) => new RegExp(re).test(b.textContent.trim()))).length,
       英: rows.filter((r) => r.querySelector('.writing-en')).length,
       訳: rows.filter((r) => r.querySelector('.writing-ja')).length,
-      通し: document.querySelector('.speech-bar .btn--primary')?.textContent.trim() ?? '',
+      /* ★ **通しの再生は、音声プレーヤーの丸へ移った**(2026-09-30・第5.322節・
+           利用者の指定「スピーチ練習にも同じプレーヤーを配置してください」)。
+         絵だけのボタンなので、**名前は `aria-label` にしか無い** */
+      通し: (() => {
+        const b = document.querySelector('.player-dock--inline .player-big')
+        return b ? (b.getAttribute('aria-label') || '').trim() : ''
+      })(),
+      /* **自前で組んでいた「全体を聞く」が戻っていないか**(出ない側も見る) */
+      自前: document.querySelectorAll('.speech-bar .btn--primary').length,
       直し: document.querySelectorAll('.writing-notes > li').length,
       語句: document.querySelectorAll('.writing-phrases > li').length,
       案内: document.querySelector('.speech-tolist')?.textContent.trim() ?? '',
@@ -7186,7 +7232,12 @@ for (const w of [1280, 390, 320]) {
   } else if (got.聴く !== 2) {
     ng(`${名} … 1文ずつの Listen が無い`, String(got.聴く))
   } else if (!got.通し.includes(wholePlayText())) {
-    ng(`${名} … 通しの Listen が無い`, got.通し)
+    ng(`${名} … 音声プレーヤーの丸から、通しの再生が消えている`,
+      got.通し || '`.player-dock--inline .player-big` が無い')
+  } else if (got.自前) {
+    /* **出ない側。** 自前で組んだ「全体を聞く」に戻したら赤くなる */
+    ng(`${名} … 自前の「全体を聞く」が戻っている(${got.自前} 個)`,
+      '音声プレーヤーに一本化したはずである')
   } else if (got.英 !== 2 || got.訳 !== 0) {
     ng(`${名} … はじめは英語だけを出す`, `英 ${got.英} / 訳 ${got.訳}`)
   } else if (訳.訳 !== 2 || 訳.英 !== 0) {
