@@ -1720,9 +1720,21 @@ function fakeMp3({
       /* 上の帯と黒帯で1組ずつ = 4 × 2 */
       if (n !== 8) ng(`操作盤の送り戻しが ${n} 個(上の帯と黒帯で4つずつ = 8)`)
     }
-    if (!/onClick=\{\(\) => onJump\?\.\(now - 1\)\}/.test(bar)
-      || !/onClick=\{\(\) => onJump\?\.\(now \+ 1\)\}/.test(bar)) {
-      ng('外側の2つが、段落を送っていない')
+    /* ★ **外側の決まりは `外(d)` 1か所に寄せた**(第5.321節)。
+         もとは `onJump?.(now - 1)` を字で探していたが、
+         **左右で同じ `if` を2度書かない**形にしたので、探す先も寄せる。
+         上の帯と黒帯で1組ずつ = `{...外(-1)}` と `{...外(1)}` が2つずつ */
+    {
+      const 戻 = (bar.match(/\{\.\.\.外\(-1\)\}/g) ?? []).length
+      const 進 = (bar.match(/\{\.\.\.外\(1\)\}/g) ?? []).length
+      if (戻 !== 2 || 進 !== 2) {
+        ng(`外側の2つが、1か所の決まりを使っていない(戻 ${戻} / 進 ${進}・2つずつのはず)`)
+      } else if (!/onClick: \(\) => onJump\?\.\(now \+ d\)/.test(bar)) {
+        ng('外側の2つが、段落を送っていない')
+      } else if (!/onClick: \(\) => onStep\(d\)/.test(bar)) {
+        /* **集中モードは長い段落を割る**ので、1枚ずつ進む道も要る(第5.321節) */
+        ng('外側の2つが、1枚ずつ送る道を持っていない')
+      }
     }
     if (!/onClick=\{\(\) => skipSentence\(-1\)\}/.test(bar)
       || !/onClick=\{\(\) => skipSentence\(1\)\}/.test(bar)) {
@@ -1743,16 +1755,24 @@ function fakeMp3({
        もとは「文の三角は1組だけ。段落は両端の『前 / 次』が受け持つ」と
        していた。ところが両端のボタンが場所を食って**狭い画面で入らず**、
        利用者の判断で**紙の右下のプレーヤーに一本化した。**
-       だから錠剤は `PlayerBar` と同じ**2つ**(文 / 段落)である。
-       **「前 / 次」は無い** —— 戻すと、また入らなくなる */
+
+       ★ **いまは `PlayerBar` そのもの**(2026-09-30・第5.321節・利用者の指定
+         「音声プレーヤーは…全て同じ仕様に。例外はありません」)。
+         自前で組んでいた錠剤は消え、**残る1組は逃げ道だけ** ——
+         読み上げが使えない画面(Supabase 未設定・1ファイル版)でも
+         段落は送れるようにしてある(**行き止まりを作らない**)。 */
     {
       const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
       const n = (fr.match(/<SentenceSkip[\s>]/g) ?? []).length
-      if (n !== 2) ng(`集中モードの錠剤が ${n} 組ある(文 / 段落 の2組であってほしい)`)
+      if (!/<PlayerBar\n\s+place="dock"/.test(fr)) {
+        ng('集中モードが、紙とおなじ音声プレーヤーを使っていない',
+          '自前で組むと、片方だけ古くなる')
+      } else if (n !== 1) {
+        ng(`集中モードの錠剤が ${n} 組ある(読み上げが使えないときの1組だけのはず)`)
       /* **1枚ずつ動く**(2026-09 利用者の指定で、長い段落を割るようになった)。
          割れている段落では、まず段落の中を進む。
          `go(index + d)` に戻すと、**割った段落の 2 枚目以降へ行けなくなる** */
-      else if (!/onStep=\{step\}/.test(fr)) {
+      } else if (!/onStep=\{step\}/.test(fr)) {
         ng('集中モードで、段落の数の両脇が1枚ずつ送っていない')
       } else if (!/const step = \(d\) => \{[\s\S]{0,400}go\(index \+ d, d < 0 \? 'tail' : 'head'\)/.test(fr)) {
         ng('集中モードで、段落をまたぐときに端の1枚へ着けていない')
@@ -1762,7 +1782,7 @@ function fakeMp3({
       } else if (!/readingAt=\{inPiece \? readingAt - \(piece\?\.at \?\? 0\) : null\}/.test(fr)) {
         ng('集中モードで、いま読んでいる文が光らない',
           'かけらの頭(`at`)を引かないと、段落の先頭に戻って光る')
-      } else ok('集中モードの下の帯は、操作盤と同じ2組 + ハイライト(1枚ずつ送る)')
+      } else ok('集中モードの下の帯は、紙とおなじ音声プレーヤー + ハイライト(1枚ずつ送る)')
     }
 
     /* ══════════════════════════════════════════════════════════
@@ -1785,6 +1805,7 @@ function fakeMp3({
       const bar2 = readFileSync(new URL('../src/components/PlayerBar.jsx', import.meta.url), 'utf8')
       const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
       const lv2 = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
+      const sp2 = readFileSync(new URL('../src/components/SpeechPractice.jsx', import.meta.url), 'utf8')
       const want3 = [
         /* 単位は4つ(しない + 文 + 段落/発言 + 全文)。**一覧は
            `wholeAudio.js` 1か所**で、それを読むのは `repeatLabel.js` である
@@ -1795,10 +1816,22 @@ function fakeMp3({
              **使っている形で数える**(説明の中の同じ語に当たらないように) */
         ['押すたびに次へ回る', rl, /export const nextRepeat/],
         ['呼び名は、素の node から呼べる形にある', rl, /export const repeatLabel/],
-        ['部品が「次へ」を渡す', ru, /onChange\?\.\(nextRepeat\(value\)\)/],
+        /* ★ **単位も渡す**(第5.322節)。呼び名の重なる段を飛ばすため */
+        ['部品が「次へ」を渡す', ru, /onChange\?\.\(nextRepeat\(value, unit\)\)/],
+        /* ★ **呼び名が重なる段は出さない**(第5.322節)。スピーチ練習は
+             1つの部が1文なので、`sentence` と `item` がどちらも「文」に
+             なる —— 押すと「文 → 文」と回り、何が変わったか分からない */
+        ['重なる段は出さない', rl, /export const repeatUnitsFor/],
+        ['「次へ」も、その一覧をたどる', rl, /const list = repeatUnitsFor\(unit\)/],
 
         ['操作盤が出す', bar2, /<RepeatUnit value=\{repeat \?\? 'off'\}/],
-        ['集中モードも出す', fr, /<RepeatUnit value=\{player\.repeat\}/],
+        /* ★ **集中モードは、操作盤を通して出す**(第5.321節)——
+             自前で `<RepeatUnit>` を置くのをやめた */
+        ['集中モードも出す', fr, /repeat=\{player\.repeat\} onRepeat=\{player\.setRepeat\}/],
+        /* ★ **スピーチ練習も出す**(第5.322節・利用者の指定
+             「スピーチ練習にも同じプレーヤーを配置してください」) */
+        ['スピーチ練習も出す', sp2, /repeat=\{audio\.repeat\} onRepeat=\{audio\.setRepeat\}/],
+        ['スピーチ練習は、紙とおなじ部品を使う', sp2, /<PlayerBar\n\s+place="dock"/],
         ['紙が渡す', lv2, /repeat=\{player\.repeat\} onRepeat=\{player\.setRepeat\}/],
         /* **値ではなく、訊きに行く形で渡す。** 値で渡すと、
            鳴らしている最中に切り替えても押し直すまで効かない */

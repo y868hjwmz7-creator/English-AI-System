@@ -1829,6 +1829,118 @@ for (const [label, want] of Object.entries(WANT)) {
   await page.close()
 }
 
+/* ── **上段と下段は、同じ左右にそろう**(2026-09-30 実機・利用者の指定・
+ *    第5.322節)
+ *
+ *    > 上段の「−/30問」と、右側のリピートアイコン・「105%」が
+ *    > 左右の端に寄りすぎて、数字やアイコンだけが外へ張り出して見えます
+ *    > プレーヤー上段の情報と下段の再生操作を、同じ左右の余白を基準に
+ *    > 揃えてください
+ *
+ *    **上段だけが黒帯の幅いっぱいだった。** 実測で 390px のとき
+ *    左右それぞれ **35px**、430px では **51px** 外へ出ていた。
+ *
+ *    **見るのは「そろっているか」。** 幅そのものは書かない
+ *    (`--player-w` を変えた日に、期待値も一緒に動いてしまう)——
+ *    **番号の左端と外側キーの左端**、**速さの右端と外側キーの右端**が
+ *    ぴったり並ぶことを見る。
+ *
+ *    **プレーヤーが在る画面をぜんぶ見る**(レッスン / 集中モード /
+ *    スピーチ練習)。1つだけ見ると、**そろえ忘れた画面**が残る。
+ */
+{
+  /** そのプレーヤーの、上段と下段の並び */
+  const 並び = (page) => page.evaluate(() => {
+    const out = []
+    for (const [名, sel] of [
+      ['レッスンの黒帯', '.player-dock:not(.player-dock--inline) .player--dock'],
+      ['集中モード', '.focus-bar .player--dock'],
+      ['スピーチ練習', '.player-dock--inline .player--dock'],
+    ]) {
+      const p = document.querySelector(sel)
+      if (!p) continue
+      const 上 = p.querySelector('.player-head')
+      const 下 = p.querySelector('.player-keys')
+      if (!上 || !下) { out.push({ 名, 欠け: '上段か下段が無い' }); continue }
+      const R = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, w: b.width } }
+      const sp = (el) => !!el && [el, ...el.children]
+        .some((b) => b.scrollWidth > b.clientWidth + 1)
+      const 鍵 = [...下.querySelectorAll('.player-key-btn')]
+      const 番号 = 上.querySelector('.player-at')
+      /* いちばん右にあるもの。速さが無い画面ではくり返しが右端になる */
+      const 右端 = 上.querySelector('.player-rate-now') ?? 上.querySelector('.repeat-key')
+      if (!鍵.length || !番号 || !右端) { out.push({ 名, 欠け: '測る相手が居ない' }); continue }
+      out.push({
+        名,
+        左: Math.round((R(番号).l - R(鍵[0]).l) * 10) / 10,
+        右: Math.round((R(鍵[鍵.length - 1]).r - R(右端).r) * 10) / 10,
+        /* **上段が下段より広くないこと**も見る(囲みそのものの幅) */
+        幅の差: Math.round((R(上).w - R(下).w) * 10) / 10,
+        あふれ: [sp(上) && '上段', sp(下) && '下段'].filter(Boolean).join(',') || '',
+      })
+    }
+    return out
+  })
+
+  /** どれだけずれたら「ずれている」と言うか(小数の丸めぶんは許す) */
+  const 許す = 1
+  const 大きく = '.player--dock .player-at,'
+    + ' .player--dock .player-rate-now { font-size: 15px !important }'
+
+  for (const [画面, q, 開く] of [
+    ['レッスン(ドリル)', '?kind=drill&role=trainer&who=g1', null],
+    ['レッスン(本文)', '?role=trainer&who=g1', null],
+    ['集中モード', '?role=trainer&who=g1', '集中モード'],
+    ['スピーチ練習', '?screen=speech', null],
+  ]) {
+    const 悪い = []
+    let 見た = 0
+    for (const [w, big] of [
+      [430, false], [402, false], [390, false], [375, false], [344, false], [320, false],
+      [430, true], [390, true], [375, true], [320, true],
+    ]) {
+      const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+      await page.goto(`http://localhost:${PORT}/__bar.html${q}`, { waitUntil: 'networkidle' })
+      await page.waitForTimeout(400)
+      if (開く) {
+        await page.evaluate((t) => {
+          const b = [...document.querySelectorAll('.practice-row button')]
+            .find((e) => (e.textContent || '').includes(t))
+          if (b) b.click()
+        }, 開く)
+        await page.waitForTimeout(450)
+      }
+      /* **端末の「表示を大きく」も模す。** 幅が同じでも、そろうかは変わる */
+      if (big) { await page.addStyleTag({ content: 大きく }); await page.waitForTimeout(250) }
+      const 印 = `${w}px${big ? '(文字1.25倍)' : ''}`
+      const ms = await 並び(page)
+      if (!ms.length) 悪い.push(`${印} … プレーヤーが1つも出ていない`)
+      for (const m of ms) {
+        見た += 1
+        if (m.欠け) { 悪い.push(`${印} ${m.名} … ${m.欠け}`); continue }
+        if (Math.abs(m.左) > 許す || Math.abs(m.右) > 許す) {
+          悪い.push(`${印} ${m.名} … 左が ${m.左}px / 右が ${m.右}px ずれている`)
+        } else if (m.幅の差 > 許す) {
+          悪い.push(`${印} ${m.名} … 上段が下段より ${m.幅の差}px 広い`)
+        } else if (m.あふれ) {
+          悪い.push(`${印} ${m.名} … ${m.あふれ} があふれている`)
+        }
+      }
+      await page.close()
+    }
+    if (!見た) {
+      /* **測る相手が居ることを、先に確かめる**(CLAUDE.md) */
+      ng(`${画面} … プレーヤーを1度も測れなかった`, '見張りが素通りしている')
+    } else if (悪い.length) {
+      ng(`${画面} … 上段と下段の左右がそろっていない(${悪い.length} 件)`,
+        悪い.slice(0, 6).join('\n    '))
+    } else {
+      ok(`${画面} … 上段の数字と絵が、下段の再生操作とぴったり同じ左右`
+        + `(${見た} 通りの幅と文字の大きさで測った)`)
+    }
+  }
+}
+
 // ── ページそのものが横に送れないこと(2026-09 実機・利用者の指摘)────
 //
 //    > スマホで教材ページやその他のページを表示しスクロールする際に

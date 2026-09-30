@@ -61,7 +61,7 @@ export default function RepeatUnit({
             className={`repeat-key${on ? ' is-on' : ''}${className ? ` ${className}` : ''}`}
             aria-pressed={on}
             aria-label={言い方} title={言い方}
-            onClick={() => onChange?.(nextRepeat(value))}>
+            onClick={() => onChange?.(nextRepeat(value, unit))}>
       {/* **「しない」は線が無く、うすい**(`.repeat-key` が色を決める) */}
       <RepeatRangeIcon range={value} />
     </button>

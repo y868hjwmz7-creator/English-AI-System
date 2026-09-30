@@ -35,6 +35,29 @@ export const repeatLabel = (id, unit = '段落') => ({
 }[id] ?? 'しない')
 
 /**
+ * **その画面で出す単位**(2026-09-30・第5.322節)。
+ *
+ *   **呼び名が重なるものは出さない。** スピーチ練習では
+ *   **1つの部が1文**なので、`sentence`(文)と `item`(その単位)が
+ *   **どちらも「文」**になる —— 押すと「文 → 文」と回り、
+ *   何が変わったのか分からない
+ *   (**同じことをするものを2つ見せない**・CLAUDE.md)。
+ *
+ *   **一覧を画面ごとに持たせない。性質で見る** ——
+ *   呼び名が同じものを落とすだけなので、単位の名前を変えた日も、
+ *   単位を足した日も、ひとりでに付いてくる。
+ */
+export const repeatUnitsFor = (unit = '段落') => {
+  const 見た = new Set()
+  return REPEAT_UNITS.filter((id) => {
+    const 名 = repeatLabel(id, unit)
+    if (見た.has(名)) return false
+    見た.add(名)
+    return true
+  })
+}
+
+/**
  * 次に移る先。**並びは `REPEAT_UNITS` 1か所**(2か所に持たない)。
  *
  * ★ **一度消して、また戻した**(第5.318 → 5.320節)。
@@ -42,10 +65,13 @@ export const repeatLabel = (id, unit = '段落') => ({
  *   利用者の指定で**ボタン1つに戻した**(場所を取りすぎるため)。
  *   **消した経緯も残す** —— 次に「並べたい」と言われたときに、
  *   どちらも試したことが分かる。
+ *
+ * ★ **単位も受け取る**(第5.322節)。呼び名が重なる段は飛ばす。
  */
-export const nextRepeat = (id) => {
-  const i = REPEAT_UNITS.indexOf(id)
-  return REPEAT_UNITS[(i < 0 ? 0 : i + 1) % REPEAT_UNITS.length]
+export const nextRepeat = (id, unit = '段落') => {
+  const list = repeatUnitsFor(unit)
+  const i = list.indexOf(id)
+  return list[(i < 0 ? 0 : i + 1) % list.length]
 }
 
 /**
@@ -61,4 +87,4 @@ export const nextRepeat = (id) => {
  */
 export const repeatSay = (id, unit = '段落') =>
   `くり返し。いまは ${repeatLabel(id, unit)}`
-  + `。押すと ${repeatLabel(nextRepeat(id), unit)} になります`
+  + `。押すと ${repeatLabel(nextRepeat(id, unit), unit)} になります`

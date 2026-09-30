@@ -9493,6 +9493,23 @@ button.wbfilter-ctl { text-align: left; }
   background: #24241f; color: #f2f2ee;
   box-shadow: 0 -6px 24px rgb(0 0 0 / 22%);
 }
+/* ★ **スピーチ練習は、画面に貼り付けない**(2026-09-30 利用者の指定・
+     第5.322節)
+     > スピーチ練習にも同じプレーヤーを配置してください
+
+   あちらは**ページの中のカード**なので、下端に固定すると本文に重なる。
+   **見た目(黒・白い絵・段の組み)は上の `.player-dock` 1か所のまま**で、
+   貼り付けだけを外す。**打ち消しは、いちばん後ろに置く**
+   (同じ細かさなら後ろが勝つ・CLAUDE.md)。 */
+.player-dock--inline {
+  position: static; z-index: auto;
+  border-top: 0; border-radius: var(--r-12);
+  box-shadow: none;
+  /* セーフエリアは要らない(画面の下端ではない) */
+  padding-bottom: 6px;
+  margin-bottom: var(--sp-12);
+}
+
 /* ══════════════════════════════════════════════════════════════════
    **画面の下の黒帯は、3段**(2026-09-29 利用者の指定・第5.311節)
 
@@ -9516,6 +9533,19 @@ button.wbfilter-ctl { text-align: left; }
     **押すものの行**の話であって、段を分けることの話ではない)。
    ══════════════════════════════════════════════════════════════════ */
 .player--dock {
+  /* ★ **上段と下段の幅は、ここ1か所**(2026-09-30 実機・利用者の指定・
+       第5.322節)
+
+       > 上段の「−/30問」と、右側のリピートアイコン・「105%」が
+       > 左右の端に寄りすぎて、数字やアイコンだけが外へ張り出して見えます
+       > プレーヤー上段の情報と下段の再生操作を、同じ左右の余白を基準に
+       > 揃えてください
+
+     **上段だけが黒帯の幅いっぱいだった。** 下段は 288px にまとめて
+     中央へ置いてあったので、実測で **390px のとき左右それぞれ 35px**、
+     430px では **51px** 外へ出ていた。
+     **数を2か所に書かない** —— 上段も下段も、この1つを見る。 */
+  --player-w: 288px;
   /* **段は縦に積む。** 隙間は `gap` で作る(余白で作らない・共通ルール) */
   flex-direction: column; align-items: stretch;
   /* 段のあいだは 8 → 6px(第5.316節・背を低くする)。
@@ -9536,6 +9566,24 @@ button.wbfilter-ctl { text-align: left; }
 .player--dock .btn:disabled { opacity: .4; }
 .player--dock .repeat-key { color: var(--player-ink); }
 
+/* ★ **内側(文)のキーが無い画面**(スピーチ練習・第5.322節)。
+
+     ★ **`.player--dock` より後ろに置く。** 同じ細かさなら**後ろが勝つ** ——
+       前に置いて 288px のままになった(この決まりで**5度め**)。
+     押すものが3つになるので、**上段と下段の幅を同じだけ詰める。**
+     詰めないと、押す行だけがまん中へ寄って**上段のほうが外**になる
+     (実測で左右 60px ずつ)。
+
+     | 押すもの | 中身 | 余り | 幅 |
+     |---|---|---|---|
+     | 5つ | 44+44+52+44+44 = 228px | 60px | **288px** |
+     | 3つ | 44+52+44 = 140px | 60px | **200px** |
+
+     **余りの 60px は同じ。** `space-between` が余りを隙間に配るので、
+     3つのときは 30px ずつ(5つのときは 15px ずつ)になる。 */
+.player--few { --player-w: 200px; }
+
+
 /* ── ① いまどこか・くり返し・速さ ────────────────────────────────
      **いまどこかは左**(いちばん読む)、操作は右へ寄せる。
      `margin-left: auto` は使わず、**`.player-at` を伸ばす** ——
@@ -9543,6 +9591,11 @@ button.wbfilter-ctl { text-align: left; }
 .player-head {
   display: flex; align-items: center; gap: var(--sp-8);
   flex-wrap: nowrap; min-width: 0;
+  /* ★ **下段とまったく同じ幅・同じ中央寄せ**(第5.322節)。
+       これで「番号の左端」と「⏮⏮ の左端」、
+       「速さの右端」と「⏭⏭ の右端」がぴったり並ぶ */
+  width: 100%; max-width: var(--player-w);
+  margin-left: auto; margin-right: auto;
 }
 .player-head .player-at { flex: 1 1 auto; min-width: 0; }
 .player-head > * { flex: 0 0 auto; }
@@ -9581,8 +9634,14 @@ button.wbfilter-ctl { text-align: left; }
      420 → 288px。5つの押すもの(44+44+52+44+44 = 228px)に対して
      **余りは 60px** —— 4つの隙間に 15px ずつ配られる。
      `space-between` なので**左右対称**になり、まん中の丸から
-     等しい距離に ⏮ ⏭ が並ぶ(数を書かずに、割り算が決める)。 */
-  max-width: 288px; margin-left: auto; margin-right: auto; width: 100%;
+     等しい距離に ⏮ ⏭ が並ぶ(数を書かずに、割り算が決める)。
+
+     ★ **数は `--player-w` 1か所**(第5.322節)。上段も同じ幅を見る。
+       `.player--bar`(上の帯)では `.player-keys--bar` が
+       `max-width: none` で打ち消している —— あちらは**並ぶものの1つ**
+       にすぎず、広げると隣を押しのける。 */
+  max-width: var(--player-w, 288px);
+  margin-left: auto; margin-right: auto; width: 100%;
 }
 .player-key {
   /* 札を出さなくなったので、縦積みも隙間も要らない(2026-09-29) */

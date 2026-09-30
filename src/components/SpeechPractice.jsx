@@ -52,11 +52,15 @@ import { lookupWord, normWord, setWordStatus } from '../lib/vocab.js'
 import { PREMIUM } from '../lib/voiceTier.js'
 /* **通しで鳴らすボタンの文字は `wholePlay.js` 1か所**(第5.290節・利用者の指定
    「もちろん、全てに全体を聞くを追加して」)*/
-import { wholePlayText } from '../lib/wholePlay.js'
 import { phraseKind, seenSentenceFor } from '../lib/writingReview.js'
 import EnglishText from './EnglishText.jsx'
-import { DownloadIcon, MicIcon, PlusIcon, SpeakerIcon, StopIcon } from './Icons.jsx'
-import RepeatToggle from './RepeatToggle.jsx'
+import { DownloadIcon, MicIcon, PlusIcon } from './Icons.jsx'
+/* ★ **音声プレーヤーは、紙とまったく同じ部品**(2026-09-30 利用者の指定・
+     第5.322節)
+     > スピーチ練習にも同じプレーヤーを配置してください
+   もとは「全体を聞く」+「繰り返す」+ 速さの欄を自分で並べていた。
+   **同じことをする道具を2通り持つと、片方だけ古くなる**(CLAUDE.md)。 */
+import PlayerBar from './PlayerBar.jsx'
 import SpeakButton from './SpeakButton.jsx'
 /* **押しても、まわりの物が動かない**(第5.281節) —— 文字数が変わるので要る */
 import SteadyLabel from './SteadyLabel.jsx'
@@ -65,6 +69,9 @@ import Stepper from './Stepper.jsx'
 export default function SpeechPractice({ speech, learnerId = null, level = null }) {
   const [rateId, setRateId] = useState(loadRateId)
   const [view, setView] = useState('en')          // 'en' | 'ja'
+  /* プレーヤーの速さの数字を押した回数。**真偽ではなく数で持つ** ——
+     真偽だと、2度めに押しても値が変わらず、欄へ寄らない */
+  const [wantRate, setWantRate] = useState(0)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
   const [added, setAdded] = useState(() => new Set())
@@ -164,24 +171,40 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
           次に書く気が起きない */}
       {speech.review.good && <p className="writing-good">{speech.review.good}</p>}
 
+      {/* ★ **紙とまったく同じ音声プレーヤー**(第5.322節)。
+             `place="dock"` そのままで、**画面に貼り付けない**だけ
+             (`--inline`)—— ここはページの中のカードである。
+
+           **単位は「文」。** ここでは1つの部が1文なので、
+           くり返しは **しない / 文 / 全文** の3段になる
+           (`repeatUnitsFor()` が、呼び名の重なる段を落とす)。 */}
+      <div className="player-dock player-dock--inline no-print">
+        <PlayerBar
+          place="dock"
+          playing={audio.playing}
+          waiting={audio.waiting} secs={audio.secs}
+          at={audio.now} total={parts.length} unit="文"
+          onToggle={() => audio.toggle({
+            parts, rate: rateOf(rateId), tier: PREMIUM,
+            resumeKey: `speech|${speech.id}`,
+          })}
+          onJump={(n) => audio.jump({
+            parts, rate: rateOf(rateId), tier: PREMIUM,
+            resumeKey: `speech|${speech.id}`, startIndex: n,
+          })}
+          repeat={audio.repeat} onRepeat={audio.setRepeat}
+          /* **いまの速さは読むだけ。** 変えるのは下の欄1つ
+             (紙が「設定」を開くのと同じ考え方) */
+          rateText={SPEECH_RATES.find((r) => r.id === rateId)?.label ?? null}
+          onOpenRate={() => setWantRate((n) => n + 1)}
+        />
+      </div>
+
       <div className="speech-bar">
-        <button type="button" className="btn btn--small btn--primary"
-                onClick={() => audio.toggle({
-                  parts, rate: rateOf(rateId), tier: PREMIUM,
-                  resumeKey: `speech|${speech.id}`,
-                })}>
-          {audio.playing ? <><StopIcon />Stop</> : <><SpeakerIcon />{wholePlayText()}</>}
-          {audio.waiting && audio.secs > 1 && `（用意しています… ${audio.secs} 秒）`}
-        </button>
-        {/* **`RepeatUnit`(しない / 文 / 段落 / 全文)は使わない。**
-            ここでは**1文が1つの部**なので、「文」と「段落」が
-            まったく同じものを指してしまう ——
-            **同じことをするものを2つ見せない**(CLAUDE.md)。
-            だから「くり返す / 1回」の2つにして、回すのは全文にする */}
-        <RepeatToggle on={audio.repeat === 'all'}
-                      onChange={(on) => audio.setRepeat(on ? 'all' : 'off')} />
-        {/* 速さは**端末に覚えた1つ**を使う(どの画面でも同じ速さで鳴る) */}
+        {/* 速さは**端末に覚えた1つ**を使う(どの画面でも同じ速さで鳴る)。
+            **プレーヤーの数字を押すと、ここへ来る**(道は1つ) */}
         <Stepper label="速さ" options={SPEECH_RATES} value={rateId}
+                 focusMe={wantRate}
                  onChange={(id) => { audio.stop(); setRateId(id); saveRateId(id) }} />
         {/* **並べない。入れ替える。** 並べると箱が2倍になる */}
         <button type="button" className="btn btn--small btn--ghost speech-swap"

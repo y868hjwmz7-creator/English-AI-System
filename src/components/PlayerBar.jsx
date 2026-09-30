@@ -80,6 +80,10 @@ import { useEffect, useRef, useState } from 'react'
    (聞き流しの「つづける」と同じ)。ここで新しく描かない */
 import { PlayIcon, StopIcon, WaitIcon } from './Icons.jsx'
 import RepeatUnit from './RepeatUnit.jsx'
+/* **「文」の呼び名も `repeatLabel.js` 1か所**(第5.322節)。
+   内側のキーの札と、くり返しの「文」は**同じ言葉**である ——
+   2か所に書くと、片方だけ古くなる */
+import { repeatLabel } from '../lib/repeatLabel.js'
 /* **待ちの言い方は `SpeakButton.jsx` 1か所**(「用意しています…」/
    「用意中 3 秒」)。ここで書き写すと、片方だけ古くなる */
 import { preparingLabel } from './SpeakButton.jsx'
@@ -185,6 +189,9 @@ function PlayKey({ dir, label, wide, disabled, onClick }) {
  *   **数字は読めたほうがよい**(いま何%かを知らずに聴くことになる)が、
  *   **変える道は1つ**にする。
  */
+/** 内側のキーの札。**「文」の1か所**(`repeatLabel.js`) */
+const SENT = repeatLabel('sentence')
+
 export default function PlayerBar({
   place = 'dock', onPlace = null, placeNext = null,
   playing = false, at = null, total = 0, unit = '段落',
@@ -221,6 +228,21 @@ export default function PlayerBar({
 
   if (!total) return null
   const now = Number.isFinite(at) ? at : null
+  /**
+   * **内側(文)のキーを出すか**(2026-09-30・第5.322節)。
+   *
+   *   スピーチ練習は**1つの部が1文**なので、単位そのものが「文」になる。
+   *   すると内側のキーは外側とまったく同じ働きになり、
+   *   **札まで「文すすむ」が2つ**並ぶ(実測でそうなった)。
+   *   しかも部の中に次の文が無いので、押しても**動かない。**
+   *   **効かない操作を見せない / 同じことをするものを2つ見せない**
+   *   (CLAUDE.md)。
+   *
+   *   **画面ごとに `if` を書かない。** 単位の呼び名が「文」と重なるか
+   *   だけで決める —— `repeatUnitsFor()` が、くり返しの段を
+   *   同じ考え方で落としているのと揃えてある。
+   */
+  const 内側 = unit !== SENT
   /* **外側(段落)のキーの決まりは、ここ1か所。**
      `onStep` を渡した画面は1枚ずつ、渡さない画面は番号で飛ぶ。
      **描くところで `if` を書かない**(左右で食い違う) */
@@ -268,9 +290,11 @@ export default function PlayerBar({
         {/* **外側が段落・内側が文**(黒帯とまったく同じ並び) */}
         <div className="player-keys player-keys--bar">
           <PlayKey dir={-1} label={unit} wide {...外(-1)} />
-          <PlayKey dir={-1} label="文"
-                   disabled={!bySentence}
-                   onClick={() => skipSentence(-1)} />
+          {内側 && (
+            <PlayKey dir={-1} label={SENT}
+                     disabled={!bySentence}
+                     onClick={() => skipSentence(-1)} />
+          )}
 
           <button type="button"
                   className={`player-big player-big--bar${playing ? ' is-on' : ''}`
@@ -280,9 +304,11 @@ export default function PlayerBar({
             {playMark}
           </button>
 
-          <PlayKey dir={1} label="文"
-                   disabled={!bySentence}
-                   onClick={() => skipSentence(1)} />
+          {内側 && (
+            <PlayKey dir={1} label={SENT}
+                     disabled={!bySentence}
+                     onClick={() => skipSentence(1)} />
+          )}
           <PlayKey dir={1} label={unit} wide {...外(1)} />
         </div>
 
@@ -306,7 +332,7 @@ export default function PlayerBar({
      (2026-09-29 利用者の指定)。出す数字は、鳴っている場所そのもの */
   const dockShown = shown
   return (
-    <div className="player player--dock no-print"
+    <div className={`player player--dock no-print${内側 ? '' : ' player--few'}`}
          role="group" aria-label="読み上げの操作">
 
       {/* ── ① いまどこか・くり返し・速さ ────────────────────────── */}
@@ -357,9 +383,11 @@ export default function PlayerBar({
             どちらを送るのかが、指の位置で決まる */}
       <div className="player-keys">
         <PlayKey dir={-1} label={unit} wide {...外(-1)} />
-        <PlayKey dir={-1} label="文"
-                 disabled={!bySentence}
-                 onClick={() => skipSentence(-1)} />
+        {内側 && (
+          <PlayKey dir={-1} label={SENT}
+                   disabled={!bySentence}
+                   onClick={() => skipSentence(-1)} />
+        )}
 
         <button type="button"
                 className={`player-big${playing ? ' is-on' : ''}`
@@ -369,9 +397,11 @@ export default function PlayerBar({
           {playMark}
         </button>
 
-        <PlayKey dir={1} label="文"
-                 disabled={!bySentence}
-                 onClick={() => skipSentence(1)} />
+        {内側 && (
+          <PlayKey dir={1} label={SENT}
+                   disabled={!bySentence}
+                   onClick={() => skipSentence(1)} />
+        )}
         <PlayKey dir={1} label={unit} wide {...外(1)} />
       </div>
     </div>
