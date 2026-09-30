@@ -442,13 +442,42 @@ export function HintIcon({ className = 'icon' }) {
   )
 }
 
+/**
+ * **くり返しの輪(2本の矢印)。ここ1か所**
+ * (2026-09-30 利用者の指定・第5.326節)。
+ *
+ *   > 聞き流しなどのリピートも同じく絵に揃えてください。
+ *
+ * **同じものには同じ絵**(CLAUDE.md)。`RepeatIcon`(聞き流しの
+ * 「繰り返す」)と `RepeatRangeIcon`(音声プレーヤーのくり返し)は、
+ * **この1つの輪を共に使う** —— 2か所に描くと、片方だけ古くなる
+ * (実際そうなっていた。第5.324節でプレーヤーの側だけ2本矢印にしたので、
+ *  聞き流しだけ矢印1本のまま残っていた)。
+ *
+ * 上を右へ・下を左へ。上下は 180 度まわすと重なる。
+ * 線は 1.6、穂先だけ塗りつぶし(シャッフルの絵とも同じ描き方)。
+ */
+function RepeatLoop() {
+  return (
+    <>
+      <path d="M3.2 8.6V7.8a2.2 2.2 0 0 1 2.2-2.2h7.2"
+            fill="none" stroke="currentColor" strokeWidth="1.6"
+            strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12.4 3.9 15.6 5.6 12.4 7.3z" fill="currentColor" />
+      <path d="M16.8 8.6v.8a2.2 2.2 0 0 1-2.2 2.2H7.4"
+            fill="none" stroke="currentColor" strokeWidth="1.6"
+            strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7.6 9.9 4.4 11.6 7.6 13.3z" fill="currentColor" />
+    </>
+  )
+}
+
 export function RepeatIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <path d="M5 7.5h8.5a2.5 2.5 0 0 1 2.5 2.5v0a2.5 2.5 0 0 1-2.5 2.5H5"
-            fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M7 5.2 4.6 7.5 7 9.8" fill="none" stroke="currentColor"
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* ★ **プレーヤーのくり返しと、まったく同じ輪**(第5.326節)。
+            **輪は上の1か所**にあるので、描き替えると両方が一緒に変わる */}
+      <RepeatLoop />
     </svg>
   )
 }
@@ -502,7 +531,7 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
   const w = { off: 0, sentence: 4, item: 8.5, all: 13 }[range] ?? 8.5
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      {/* ★ **2本の矢印**(2026-09-30 利用者の指定・写真つき)。
+      {/* ★ **2本の矢印**(2026-09-30 利用者の指定・写真つき・第5.324節)。
 
           > リピートのアイコンですが、もっとこういう風にして
           > もらえませんか? 線は周囲のデザインとバランスを取るために、
@@ -512,18 +541,10 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
           いちばん普通のリピートの記号は、**上を右へ・下を左へ**の
           2本である。上下は 180 度まわすと重なる(同じ形)。
 
-          **線は 1.6。** 渡された写真はもっと太いが、
-          「細くてよい」との指定である —— 黒帯の絵はどれも細いので、
-          太いと**そこだけ浮く。**
-          穂先だけは塗りつぶす(送るボタンと同じ見え方にそろえる)。 */}
-      <path d="M3.2 8.6V7.8a2.2 2.2 0 0 1 2.2-2.2h7.2"
-            fill="none" stroke="currentColor" strokeWidth="1.6"
-            strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12.4 3.9 15.6 5.6 12.4 7.3z" fill="currentColor" />
-      <path d="M16.8 8.6v.8a2.2 2.2 0 0 1-2.2 2.2H7.4"
-            fill="none" stroke="currentColor" strokeWidth="1.6"
-            strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M7.6 9.9 4.4 11.6 7.6 13.3z" fill="currentColor" />
+          ★ **輪は `RepeatLoop` 1か所**(第5.326節)——
+            聞き流しの `RepeatIcon` と**同じ絵**を使う。
+            ここに書き写すと、片方だけ古くなる(実際そうなった)。 */}
+      <RepeatLoop />
       {/* 回す範囲。**まん中ぞろえ**にすると、3つ並べたとき
           「だんだん広がる」ことが分かる */}
       {w > 0 && (

@@ -1803,6 +1803,10 @@ function fakeMp3({
          書き写すしかなくなるためである。**探す先も、そちらへ移す** */
       const rl = readFileSync(new URL('../src/lib/repeatLabel.js', import.meta.url), 'utf8')
       const bar2 = readFileSync(new URL('../src/components/PlayerBar.jsx', import.meta.url), 'utf8')
+      /* ★ **くり返しの絵は、2つの場所で使う**(第5.326節・利用者の指定
+           「聞き流しなどのリピートも同じく絵に揃えてください」)。
+         **輪そのものを1か所**に持たせたので、描き替えると両方が変わる */
+      const icons = readFileSync(new URL('../src/components/Icons.jsx', import.meta.url), 'utf8')
       const fr = readFileSync(new URL('../src/components/FocusReader.jsx', import.meta.url), 'utf8')
       const lv2 = readFileSync(new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
       const sp2 = readFileSync(new URL('../src/components/SpeechPractice.jsx', import.meta.url), 'utf8')
@@ -1811,6 +1815,19 @@ function fakeMp3({
         /* 単位は4つ(しない + 文 + 段落/発言 + 全文)。**一覧は
            `wholeAudio.js` 1か所**で、それを読むのは `repeatLabel.js` である
            (部品は `.jsx` なので素の node から呼べない・第5.316節で切り出した) */
+        /* ★ **くり返しの絵は、輪を1か所から**(第5.326節)。
+             第5.324節でプレーヤーの側だけ2本矢印にしたので、
+             **聞き流しだけ矢印1本のまま残っていた** ——
+             同じものに違う絵が付いていた(CLAUDE.md「同じものには同じ絵」) */
+        ['くり返しの輪は1か所にある', icons, /function RepeatLoop\(\)/],
+        ['聞き流しのくり返しも、その輪を使う', icons,
+          /export function RepeatIcon[\s\S]{0,400}?<RepeatLoop \/>/],
+        ['プレーヤーのくり返しも、その輪を使う', icons,
+          /export function RepeatRangeIcon[\s\S]{0,3000}?<RepeatLoop \/>/],
+        /* **出ない側。** 輪の道を2か所に書き写していないか
+           —— 書き写すと、片方だけ古くなる(実際そうなった) */
+        ['輪の道は、1つしか書いていない', icons,
+          (t) => (t.match(/M3\.2 8\.6V7\.8/g) ?? []).length === 1],
         ['単位は4つ(しない + 3つ)', rl, /REPEAT_UNITS/],
         /* ★ **押すたびに回る形に戻した**(第5.318 → 5.320節)。
              3つ並べる形は帯の幅を 110px 使い、集中モードであふれた。
