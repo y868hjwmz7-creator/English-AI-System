@@ -103,7 +103,9 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
 
   return (
     <div className="card speech-practice">
-      <h4 className="card-title">添削の結果</h4>
+      {/* ★ **題は付けない**(第5.323節)。**教材の2ページ目そのものが
+          「添削の結果」**という見出しを持っている —— ここにも書くと
+          同じ言葉が2つ並ぶ(CLAUDE.md「呼び名を2か所に書かない」) */}
 
       {/* **できていたところを先に出す。** 直すところしか言われないと、
           次に書く気が起きない */}
