@@ -2162,35 +2162,25 @@ function speechBoardScreen() {
     /* **題の無い下書き**も混ぜる(`speechTitleOf()` が原稿から作る) */
     { id: 'sp2', title: '', draft: 'Thanks for coming.', voice_id: 'uk-1', review: null },
   ]
-  const open = rows[0]
-  return (
-    <div className="app">
-      <SpeechBoardView
-        whose="山田はなこ さん" mayAsk={trainer}
-        rows={rows} openId={open.id} open={open} reviewed={done}
-        /* **畳みは開いた形でも測る** —— 閉じた箱は測れない(共通ルール) */
-        bodyOpen draftOpen
-        accents={accentsWithVoices('narration')} accent="us"
-        pool={voicesOfAccent('us', 'narration')} tone="formal"
-      >
-        {/* ★ **添削が済んだスピーチは、教材の画面へ移った**(第5.323節)。
-               ここに残るのは**下書きだけ**である(`SpeechBoard` と同じ判断) */}
-      </SpeechBoardView>
-      {/* 添削ずみのときは、**モノローグ教材とまったく同じ画面**。
-          `SpeechBoard` が渡すのと同じものを、そのまま渡す ——
-          **骨組みは本物と1文字も違えない**(CLAUDE.md) */}
-      {/* **`done &&` と書かない**(第5.323節)。`speechAsMaterial()` が
-          「直した文があるか」で `null` を返す —— **本物と同じ1つの判断**
-          を見る。書き分けると、本物を壊しても骨組みが緑のままになる */}
-      {speechAsMaterial(open, { level: 'B1' }) && (
+  /* ★ **開いていない形も描く**(2026-09-30・第5.325節のつづき)。
+       本物(`SpeechBoard`)は**添削ずみのスピーチを開くと、教材の画面を
+       返してそこで終わる**(`if (asMaterial) return …`)。
+       つまり**一覧と教材の画面が、同時に出ることは無い。**
+       骨組みが両方を並べて描いていたので、
+       **本物には無い画面**を測っていた(**骨組みは本物と1文字も違えない**)。 */
+  const open = q.get('open') === 'no' ? null : rows[0]
+  /* **判断は1つ**(`speechAsMaterial()`)。本物とまったく同じ書き方 */
+  const asMaterial = open ? speechAsMaterial(open, { level: 'B1' }) : null
+  if (asMaterial) {
+    return (
+      <div className="app">
+        {/* 添削ずみのときは、**モノローグ教材とまったく同じ画面**。
+            `SpeechBoard` が渡すのと同じものを、そのまま渡す */}
         <LessonView
-          material={speechAsMaterial(open, { level: 'B1' })}
-          /* **誰の記録として残るか**(第5.178節)。本物も渡している ——
-             骨組みが落とすと、そこは誰も測っていないことになる */
+          material={asMaterial}
+          /* **誰の記録として残るか**(第5.178節)。本物も渡している */
           learnerId={q.get('who') || null} learnerName="山田はなこ"
           onClose={() => {}}
-          /* **本物(`SpeechBoard`)が渡すのと同じものを、そのまま渡す** ——
-             骨組みが1つでも欠けると、そこは誰も測っていないことになる */
           extraPage={{
             label: '添削の結果',
             node: (
@@ -2206,7 +2196,22 @@ function speechBoardScreen() {
             ),
           }}
         />
-      )}
+      </div>
+    )
+  }
+  return (
+    <div className="app">
+      <SpeechBoardView
+        whose="山田はなこ さん" mayAsk={trainer}
+        rows={rows} openId={open?.id ?? null} open={open} reviewed={done}
+        /* **畳みは開いた形でも測る** —— 閉じた箱は測れない(共通ルール) */
+        bodyOpen draftOpen
+        accents={accentsWithVoices('narration')} accent="us"
+        pool={voicesOfAccent('us', 'narration')} tone="formal"
+      >
+        {/* ★ **添削が済んだスピーチは、教材の画面へ移った**(第5.323節)。
+               ここに残るのは**下書きだけ**である(`SpeechBoard` と同じ判断) */}
+      </SpeechBoardView>
     </div>
   )
 }
