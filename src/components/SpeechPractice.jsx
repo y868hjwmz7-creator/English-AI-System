@@ -178,10 +178,17 @@ export default function SpeechPractice({ speech, learnerId = null, level = null 
               </li>
             ))}
           </ul>
+          {/* ★ **文は、まるごと1つの入れ物に入れる**(第5.323節)。
+              この行は `display: flex` である(絵と字を並べるため)——
+              **字を直に置くと、`<strong>` の前後で3つの部品に分かれ**、
+              それぞれが別々に折り返して**3列組みのように崩れる。**
+              測って初めて見えた(撮ったら3列に見えた) */}
           <p className="muted speech-tolist">
             <MicIcon />
-            この {speechWordList(speech).length} 語句は、単語帳の
-            <strong>「スピーチの語句」</strong>からまとめて練習できます。
+            <span>
+              この {speechWordList(speech).length} 語句は、単語帳の
+              <strong>「スピーチの語句」</strong>からまとめて練習できます。
+            </span>
           </p>
         </>
       )}
