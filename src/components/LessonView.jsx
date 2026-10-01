@@ -44,7 +44,7 @@ import { resolveVoices } from '../data/clipVoices.js'
      画面の中で `kind === 'pattern'` と書かない(CLAUDE.md) */
 import { canShuffleKind } from '../data/materialKinds.js'
 /* **選択肢を行に割る**(第5.329節)。何にも依存しない形に出してある */
-import { commonLead } from '../lib/choiceLines.js'
+import { askFields, commonLead } from '../lib/choiceLines.js'
 /* ★ **選択肢を行に割る部品は、ここから出した**(第5.338節)。
      レッスン表示の中にだけ在ったので、**ゲストの宿題と紙では
      4つの選択肢が1行の団子**になっていた。中身は1文字も変えていない */
@@ -2466,7 +2466,9 @@ export default function LessonView({
          「Choose the best response.」が問の数だけ並ぶので、
          **取り組み方に1つ**だけ置き、問からは外す。
          **1つでも違えばまとめない**(`commonLead` が決める) */
-    const 共通の指示 = commonLead((sec.items ?? []).map((x) => x.question))
+    /* ★ **本文の欄に混ざっていた設問も、そろえてから数える**(第5.343節)。
+         ここだけ生の `x.question` を読むと、**同じ設問が 10 回並ぶ** */
+    const 共通の指示 = commonLead((sec.items ?? []).map((x) => askFields(x).question))
     const secType = exerciseType(sec.exercise_type)
     const secIsPassage = isPassageSection(sec.exercise_type)
     /* **ディスカッションと想定される質問には、解答が無い。**
@@ -2632,7 +2634,13 @@ export default function LessonView({
             )}
 
             <ol className="lesson-items">
-              {sec.items.map((it, i) => (only != null && i !== only ? null : (
+              {sec.items.map((生の問, i) => {
+                if (only != null && i !== only) return null
+                /* ★ **設問と選択肢が本文の欄に混ざっていたら、ここで分ける**
+                     (第5.343節)。**判断は `askFields()` 1か所** ——
+                     下の `it.prompt_en` / `it.question` は 1 行も書き換えていない */
+                const it = { ...生の問, ...askFields(生の問) }
+                return (
                 <li key={k(it, i)} data-key={k(it, i)}
                     data-focus={focusNo.has(i) ? String(focusNo.get(i)) : undefined}
                     /* ★ 混ぜたときだけ、もとの番号を渡す(第5.329節) */
@@ -2963,7 +2971,8 @@ export default function LessonView({
                   </>
                   )}
                 </li>
-              )))}
+              )
+              })}
             </ol>
           </section>
     )

@@ -28,6 +28,8 @@
  */
 import AiNote from './AiNote.jsx'
 import ChoiceLines from './ChoiceLines.jsx'
+/* ★ **本文の欄に混ざった設問と選択肢を取り出す**(第5.343節) */
+import { askFields } from '../lib/choiceLines.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -99,7 +101,12 @@ export default function MaterialBody({
               </h4>
               {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
               <ol className="material-preview">
-                {sec.items.map((it) => (
+                {sec.items.map((生の問) => {
+                  /* ★ **設問と選択肢が本文の欄に混ざっていたら、ここで分ける**
+                       (第5.343節)。**判断は `askFields()` 1か所**で、
+                       3つの画面(レッスン表示・紙・ゲストの宿題)が同じものを通す */
+                  const it = { ...生の問, ...askFields(生の問) }
+                  return (
                   <li key={it.id}>
                     {/* ── **本文から拾った かたまり**(第5.230節)────────
                         形は `ChunkCard` 1か所が持つ(レッスン表示と同じ)。
@@ -242,7 +249,8 @@ export default function MaterialBody({
                     </>
                     )}
                   </li>
-                ))}
+                  )
+                })}
               </ol>
             </section>
           )

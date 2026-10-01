@@ -7,6 +7,8 @@
  */
 import { useEffect, useState } from 'react'
 import ChoiceLines from './ChoiceLines.jsx'
+/* ★ **本文の欄に混ざった設問と選択肢を取り出す**(第5.343節) */
+import { askFields } from '../lib/choiceLines.js'
 import Loading from './Loading.jsx'
 import { cefrLabel } from '../data/cefr.js'
 import { exerciseType, isPassageSection, sectionLabel } from '../data/exerciseTypes.js'
@@ -687,7 +689,11 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                           {/* 解答を隠す演習は、紙に書き込む余白を出す */}
                           <ol className={`material-preview${
                             type?.hideAnswerFromLearner ? ' writable' : ''}`}>
-                            {sec.items.map((it) => (
+                            {sec.items.map((生の問) => {
+                              /* ★ **設問と選択肢が本文の欄に混ざっていたら分ける**
+                                   (第5.343節)。**判断は `askFields()` 1か所** */
+                              const it = { ...生の問, ...askFields(生の問) }
+                              return (
                               <li key={it.id}>
                                 {/* 混合ドリルでは、どの弱点の問題かを見せる。
                                     何に注意して解くかが分からないと練習にならない。 */}
@@ -776,7 +782,8 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                   it.note && <div className="field-hint">{it.note}</div>
                                 )}
                               </li>
-                            ))}
+                              )
+                            })}
                           </ol>
                         </section>
                       )

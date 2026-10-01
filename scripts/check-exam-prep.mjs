@@ -38,7 +38,7 @@ const {
 } = await import('../src/data/examPrep.js')
 const { DROP_REASONS, emptyDropCounts, isExhausted }
   = await import('../src/lib/dropReasons.js')
-const { dropsLead } = await import('../src/lib/choiceLines.js')
+const { askFields, dropsLead, splitAsk } = await import('../src/lib/choiceLines.js')
 const { EXERCISE_TYPES, defaultSectionsFor, isBlankItem, isPassageSection, sectionsFor }
   = await import('../src/data/exerciseTypes.js')
 const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, isExamKind, needsWeakTag }
@@ -1556,6 +1556,146 @@ console.log('\n▶ 問題文が2回出ないか(第5.342節)')
   if (自前.length) {
     ng('問題文の写し … 画面の中で突き合わせている(判断を2か所に持たない)', 自前.join(' / '))
   } else ok('問題文の写し … 比べ方は `dropsLead()` 1か所だけ')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **設問と選択肢が、1行ずつになるか**(第5.343節・2026-10-02 実機)
+
+     > 設問は必ず改行、見やすく！選択肢も改行！
+
+   TOEIC Part 6 で、**10 問ぜんぶ**が本文・設問・選択肢の団子だった。
+
+     | 欄 | 入っていたもの |
+     |---|---|
+     | `prompt_en` | 本文 + 設問 + 選択肢(A)(B)(C)(D) ← **ぜんぶ** |
+     | `question`  | **空** |
+
+   第5.342節は `question` の側しか見ていなかったので、**素通りした。**
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 設問と選択肢が、1行ずつになるか(第5.343節)')
+{
+  /* ── ① **どこからが設問か**。**出る側と出ない側の両方**(CLAUDE.md)── */
+  const 本文 = 'The office will close early on Friday.'
+  const 設問 = 'What should fill the blank?'
+  const 割れた = splitAsk(`${本文} ${設問}`)
+  const 設問だけ = splitAsk(設問)
+  const 割らない = splitAsk(`${本文} The notice says so.`)
+  /* **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+     略語のピリオドで切ると、設問が「Smith. Who …?」になる */
+  const 略語 = splitAsk(`Please contact Mr. Smith at once. ${設問}`)
+  if (割れた.body !== 本文 || 割れた.ask !== 設問) {
+    ng('設問の行 … 本文と設問に割れない', JSON.stringify(割れた))
+  } else if (設問だけ.body || 設問だけ.ask !== 設問) {
+    ng('設問の行 … 設問だけのときに、空の本文を作っている', JSON.stringify(設問だけ))
+  } else if (割らない.ask) {
+    ng('設問の行 … 「?」で終わらない文まで設問にしている', JSON.stringify(割らない))
+  } else if (略語.ask !== 設問) {
+    ng('設問の行 … 略語のピリオドを文末と取り違えている', JSON.stringify(略語))
+  } else ok('設問の行 … 「?」で終わる最後の1文だけを分ける(略語では切らない)')
+
+  /* ── ② **本文の欄に混ざった設問と選択肢を、取り出せるか** ──
+         ★ **実機の文そのもので測る**(第5.341節で学んだ)。
+         決まりだけ見ても、本当に作られる形は通らない */
+  const 団子 = 'To All Staff, Starting next Monday, the main elevator will be closed.'
+    + ' （　　　）, please use the stairs during this period.'
+    + ' Question: What should fill the blank?'
+    + ' (A) Therefore (B) However (C) For example (D) In addition'
+  const 出した = askFields({ prompt_en: 団子, question: '' })
+  const 行 = [splitAsk(出した.question).body, splitAsk(出した.question).ask,
+    ...(出した.question.match(/\([A-D]\)/g) ?? [])].filter(Boolean)
+  if (/\([A-D]\)/.test(出した.prompt_en)) {
+    ng('設問の行 … 本文の欄に選択肢が残っている', 出した.prompt_en)
+  } else if (!/Question: What should fill the blank\?$/
+    .test(出した.question.split('\n')[0])) {
+    ng('設問の行 … 設問が、設問の欄の1行目になっていない', 出した.question.split('\n')[0])
+  } else if (出した.question.split('\n').length !== 5) {
+    ng('設問の行 … 設問1行 + 選択肢4行になっていない',
+      `${出した.question.split('\n').length} 行`)
+  } else if (行.length !== 5) {
+    ng('設問の行 … 画面に出る行が 5 つにならない', String(行.length))
+  } else ok('設問の行 … 本文の欄の団子が、本文 / 設問 / 選択肢 4 行に分かれる')
+
+  /* ── ③ **選択肢が入っていない本文は、1文字も触らない** ──
+         ★ **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)。
+         はじめ `He was late for the meeting.` で測っていたが、
+         **「選択肢が2つ未満なら触らない」を外しても緑のまま**だった ——
+         `?` で終わらない文は、どうせ割れないからである。
+         **`?` で終わる本文**で測ると、欄ごと動いて赤くなる */
+  const 記事 = 'Mr. Smith arrived late. Why was he late?'
+  const 素通り = askFields({ prompt_en: 記事, question: '' })
+  /* 選択肢が1つだけ(本文の中の「(A)」)でも触らない */
+  const ひとつの英文 = 'Plan (A) was chosen. Was that right?'
+  const ひとつ = askFields({ prompt_en: ひとつの英文, question: '' })
+  if (素通り.prompt_en !== 記事 || 素通り.question) {
+    ng('設問の行 … ふつうの本文まで割っている', JSON.stringify(素通り))
+  } else if (ひとつ.prompt_en !== ひとつの英文) {
+    ng('設問の行 … 選択肢が1つしかないのに割っている', ひとつ.prompt_en)
+  } else ok('設問の行 … 選択肢が2つ未満の本文は、`?` で終わっても触らない')
+
+  /* ── ④ **設問の欄にも書いてあるとき** ──
+         **同じものだけ落とす。ちがえば残す**(黙って消さない・CLAUDE.md)*/
+  const 同じ = askFields({ prompt_en: 団子, question: '(A) Therefore\n(B) However\n(C) For example\n(D) In addition' })
+  const ちがう = askFields({ prompt_en: 団子, question: '(A) First\n(B) Second\n(C) Third\n(D) Fourth' })
+  if (/\([A-D]\)/.test(同じ.prompt_en)) {
+    ng('設問の行 … 同じ選択肢が両方に残っている(2回出る)')
+  } else if (!/\([A-D]\)/.test(ちがう.prompt_en)) {
+    ng('設問の行 … ちがう選択肢を黙って消している', ちがう.prompt_en)
+  } else ok('設問の行 … 設問の欄にもあるとき、同じものだけ落とす(ちがえば残す)')
+
+  /* ── ⑤ **3つの画面とも、同じ判断を通しているか** ──
+         1つでも抜けると、**その画面だけ団子のまま**になる */
+  const 画面 = ['LessonView', 'MaterialBody', 'LearnerHomework']
+  const 通していない = 画面.filter((名) => !/askFields\(/.test(noC(read(`src/components/${名}.jsx`))))
+  /* **判断を2か所に持たない。** 画面の中で自前に割っていないか */
+  const 自前に割る = [...画面, 'ChoiceLines']
+    .filter((名) => /splitChoices\(/.test(noC(read(`src/components/${名}.jsx`)))
+      && 名 !== 'ChoiceLines')
+  if (通していない.length) {
+    ng('設問の行 … 本文の欄を分けていない画面がある', 通していない.join(' / '))
+  } else if (自前に割る.length) {
+    ng('設問の行 … 画面の中で自前に割っている(判断を2か所に持たない)', 自前に割る.join(' / '))
+  } else ok(`設問の行 … ${画面.length} 画面とも \`askFields()\` 1か所を通している`)
+
+  /* ── ⑥ **部品が、本文・設問・選択肢を別々の行に出しているか** ──
+         ★ **関数の名前を書き写さない**(CLAUDE.md)。
+         `choiceLines.js` から**読み取ってから**、その名前で性質を見る */
+  const lib = noC(read('src/lib/choiceLines.js'))
+  const 割る名 = (lib.match(/export function (\w+)\(lead\)/) ?? [])[1]
+  const cl = noC(read('src/components/ChoiceLines.jsx'))
+  if (!割る名) {
+    ng('設問の行 … 設問を割る関数が `choiceLines.js` に無い')
+  } else if (!cl.includes(`${割る名}(`)) {
+    ng('設問の行 … 部品が、設問の切り方を自前に持っている', 割る名)
+  } else if (!/\{body &&/.test(cl) || !/\{ask &&/.test(cl)) {
+    ng('設問の行 … 本文と設問が、別々の行になっていない')
+  } else ok('設問の行 … 部品は本文 / 設問 / 選択肢を、別々の行に出す')
+
+  /* ── ⑦ **作り方が「本文の欄に選択肢を書かない」と言っているか** ──
+         **出る側と出ない側の両方。** 設問が `question` にしか無い演習
+         (内容の理解・リスニング)で言うと、嘘になる */
+  const 穴埋め = PICKABLE.filter(({ part }) => choicesOf(part) >= 2
+    && (part.sections ?? []).some((x) => x.exercise_type === 'fill_blank'))
+  const 読む聞く = PICKABLE.filter(({ part }) => choicesOf(part) >= 2
+    && !(part.sections ?? []).some((x) => x.exercise_type === 'fill_blank')
+    && (part.sections ?? []).some((x) => ['comprehension', 'listening']
+      .includes(x.exercise_type)))
+  const 言っていない = 穴埋め.filter(({ exam, part }) =>
+    !/に選択肢を書かない/.test(examBrief(exam.id, part.id)))
+  const 余計 = 読む聞く.filter(({ exam, part }) =>
+    /に選択肢を書かない/.test(examBrief(exam.id, part.id)))
+  if (穴埋め.length < 5 || 読む聞く.length < 5) {
+    ng('設問の行 … 片側の PART が少なすぎる(見張りが素通りする)',
+      `穴埋め ${穴埋め.length} / 読む・聞く ${読む聞く.length}`)
+  } else if (言っていない.length) {
+    ng('設問の行 … 穴埋めで「本文の欄に選択肢を書かない」と言っていない',
+      言っていない.map(({ exam, part }) => `${exam.id}/${part.id}`).slice(0, 3).join(' / '))
+  } else if (余計.length) {
+    ng('設問の行 … 設問が同じ欄の PART にまで言っている(嘘になる)',
+      余計.map(({ exam, part }) => `${exam.id}/${part.id}`).slice(0, 3).join(' / '))
+  } else {
+    ok(`設問の行 … 穴埋め ${穴埋め.length} 個だけが「本文の欄に選択肢を書かない」`)
+  }
 }
 
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

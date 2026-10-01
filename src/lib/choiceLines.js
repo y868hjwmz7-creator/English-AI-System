@@ -15,8 +15,11 @@
  * **画面に出すときに割る。** 教材そのものは1文字も書き換えない ——
  * **すでにある教材にも、そのまま効く**(作り直し = 課金をしない)。
  *
- * **何にも依存しない形**(素の node でそのまま確かめられる)。
+ * **素の node で、そのまま確かめられる形**。
+ * 取り込んでいるのは、同じく何も取り込んでいないものだけにする。
  */
+
+import { splitSentences } from './sentenceSplit.js'
 
 /** 選択肢の目印。**(A)(B)(C)(D) まで**(Part 5 は4つ) */
 const MARK = /\(([A-D])\)\s*/g
@@ -38,6 +41,39 @@ export function splitChoices(text) {
     return s.slice(m.index, to).trim()
   })
   return { lead, choices }
+}
+
+/* ======================================================================
+   ★ **設問は、それだけで 1 行にする**（2026-10-02 実機・第5.343節）
+
+     > 設問は必ず改行、見やすく！選択肢も改行！
+
+   TOEIC Part 6 で、**本文と設問と選択肢が、ひとつの団子**になっていた。
+
+       To All Staff, … during this period. Question: What should fill the
+       blank? (A) Therefore (B) However (C) For example (D) In addition
+
+   **文の切れ目を、ここで自前に数えない** —— `splitSentences()` が
+   すでに持っている（`Mr.` のような**略語のピリオドを文末と
+   取り違えない**）。**数え方を 2 通り持たない**（CLAUDE.md）。
+   ====================================================================== */
+
+/**
+ * **選択肢の手前にある文を、「本文」と「設問」に分ける。**
+ *
+ * 設問は**いちばん後ろの 1 文で、`?` で終わるもの**だけ。
+ * そうでなければ、**1 文字も分けない**（疑わしいものは触らない）。
+ *
+ * @returns {{body: string, ask: string}} `body` … 設問を除いた前の部分
+ */
+export function splitAsk(lead) {
+  const s = String(lead ?? '').trim()
+  if (!s) return { body: '', ask: '' }
+  const spans = splitSentences(s)
+  const last = spans[spans.length - 1]
+  const ask = s.slice(last.start, last.end).trim()
+  if (!/[?？]$/.test(ask)) return { body: s, ask: '' }
+  return { body: s.slice(0, last.start).trim(), ask }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -197,4 +233,56 @@ export function spreadAnswerMarks(items) {
       : p.bodies[p.at]
   }
   return rows
+}
+
+/* ======================================================================
+   ★ **設問と選択肢が「本文の欄」に混ざっていたら、取り出す**
+      (2026-10-02 実機・利用者の指摘・第5.343節)
+
+     > 設問は必ず改行、見やすく！選択肢も改行！
+
+   TOEIC Part 6 で、**10 問ぜんぶ**がこうなっていた。
+
+     | 欄 | 入っていたもの |
+     |---|---|
+     | `prompt_en` | 本文 + 設問 + 選択肢(A)(B)(C)(D) ← **ぜんぶ** |
+     | `question`  | **空** |
+
+   **作り方は「question に選択肢だけを入れる」と言っている。**
+   それでも AI は本文の欄へまとめて書いた。**指示は読み飛ばされうる**
+   (CLAUDE.md)。ここで分けておけば、**すでに作った教材もそのまま直る**
+   (作り直し = 課金をしない)。
+
+   ── 触らない場合を、先に決めておく ──────────────────────
+     ・**選択肢が2つ未満**なら、1文字も触らない(ふつうの本文・記事・会話)
+     ・`question` にも書いてあるときは、**まったく同じ選択肢のときだけ**
+       本文の側から落とす。**黙って消さない**(CLAUDE.md)
+
+   ── なぜ画面の中で分けないのか ───────────────────────────
+     3つの画面(レッスン表示・紙・ゲストの宿題)が同じ問を描く。
+     **判断を3か所に書き写すと、必ずどこかだけ古くなる。**
+     呼ぶ側は `{ ...it, ...askFields(it) }` と書くだけでよい ——
+     **中の `it.prompt_en` / `it.question` は1行も直らない。**
+   ====================================================================== */
+
+/**
+ * @param {object} item 問(`prompt_en` と `question` を持つ)
+ * @returns {{prompt_en: string, question: string}}
+ *   **そのまま `{ ...it, ...askFields(it) }` と重ねて使う形**で返す
+ */
+export const askFields = (item) => {
+  const 本文 = String(item?.prompt_en ?? '')
+  const 設問 = String(item?.question ?? '')
+  const { lead, choices } = splitChoices(本文)
+  /* ふつうの本文。**選択肢が入っていないものは、1文字も触らない** */
+  if (choices.length < 2) return { prompt_en: 本文, question: 設問 }
+  const { body, ask } = splitAsk(lead)
+  if (!設問.trim()) {
+    return { prompt_en: body, question: [ask, ...choices].filter(Boolean).join('\n') }
+  }
+  /* 設問の欄にも書いてある。**同じ選択肢のときだけ**本文から落とす */
+  const よそ = splitChoices(設問).choices
+  const 同じ = よそ.length === choices.length
+    && よそ.every((x, i) => flat(choiceBody(x)) === flat(choiceBody(choices[i])))
+  return { prompt_en: 同じ ? body : 本文, question: 設問 }
 }

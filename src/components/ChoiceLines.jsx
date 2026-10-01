@@ -1,4 +1,4 @@
-import { dropsLead, splitChoices } from '../lib/choiceLines.js'
+import { dropsLead, splitAsk, splitChoices } from '../lib/choiceLines.js'
 
 /**
  * **設問を、選択肢ごとの行にして出す**(2026-09-30 利用者の指定・第5.329節)。
@@ -24,6 +24,13 @@ import { dropsLead, splitChoices } from '../lib/choiceLines.js'
  *   (画面ごとに字の大きさの決まりが違うため)。
  *   既定は `lesson-en` なので、**レッスン表示は1ミリも変わらない。**
  *
+ * ── ★ **設問を、それだけで 1 行にする**(第5.343節・2026-10-02)────
+ *
+ *   > 設問は必ず改行、見やすく！選択肢も改行！
+ *
+ *   選択肢の手前に**本文と設問が並んでいる**ときは、2 行に割って出す。
+ *   どこからが設問かは **`splitAsk()` 1 か所**が決める。
+ *
  * @param {string} text  設問(選択肢を含むことがある)
  * @param {string|string[]} drop 出さなくてよいもの。**1つでも配列でも受ける**。
  *        ①演習ぜんぶで同じ指示文(「取り組み方」へ回したもの)
@@ -37,10 +44,15 @@ import { dropsLead, splitChoices } from '../lib/choiceLines.js'
 export default function ChoiceLines({ text, drop = '', en, cls = 'lesson-en' }) {
   const { lead, choices } = splitChoices(text)
   if (!choices.length) return <div className={cls}>{en(text)}</div>
-  const 前 = dropsLead(lead, drop) ? '' : lead
+  const 残り = dropsLead(lead, drop) ? '' : lead
+  /* ★ **設問は、それだけで 1 行**(第5.343節)。
+       本文にくっついていると、どこからが設問か分からない。
+       **切り方は `splitAsk()` 1か所**(ここで文を割らない) */
+  const { body, ask } = splitAsk(残り)
   return (
     <div className="choice-lines">
-      {前 && <div className={cls}>{en(前)}</div>}
+      {body && <div className={cls}>{en(body)}</div>}
+      {ask && <div className={cls}>{en(ask)}</div>}
       {choices.map((c) => <div className={cls} key={c}>{en(c)}</div>)}
     </div>
   )
