@@ -145,6 +145,26 @@ export const MATERIAL_KINDS = [
      ══════════════════════════════════════════════════════════════ */
   { id: 'exam',     label: 'テスト対策',
     hint: 'TOEIC / 英検 / VERSANT / TOEFL / IELTS の PART べつの練習問題' },
+  /* ══════════════════════════════════════════════════════════════
+     **応答問題**(0073・第5.332節・2026-10-01 利用者の指定)
+
+       > TOEIC L&R の PART2 問題を応用して、NATIVE FLOW の応答問題を
+       > 作りたい。NATIVE FLOW で学ぶ表現が応答の正解となるように
+
+     **ふつうの教材と向きが逆である。** 答え(覚えたい表現)が先に
+     決まっていて、**それを引き出す質問を AI に作らせる。**
+     もとになる表現は、テキスト(Native Flow / RIZAP)・ゲストの単語帳・
+     Quick Response 帳から引く —— **すでにある読み方をそのまま使う。**
+
+     【「テスト対策」(0072)とは別物である】
+       あちらは**試験の PART に似せた練習問題**で、何を書くかは AI が決める。
+       こちらは**こちらが決めた表現が正解**になる。
+       **違うものに同じ名前を付けない**(共通ルール)ので id も分けてある。
+
+     中身は「リスニング + 理解」1つだけなので、**演習の種類は増えていない。**
+     ══════════════════════════════════════════════════════════════ */
+  { id: 'response', label: '応答問題',
+    hint: '覚えたい表現が「応答の正解」になる。質問を聞いて応答を選ぶ / 言う' },
   /* 旧「単語」「フレーズ」。**行ごと消さない** ——
      消すと、その種類で作った教材の呼び名が出なくなる。
      新しく作るときは上の「単語 / フレーズ」を選ぶ */
@@ -223,6 +243,13 @@ const SUBJECT_WORDS = {
   exam:     { hint: '空のままなら、PART に合う話題を AI が決めます',
     example: '例: 出てくる場面を、物流と倉庫の仕事にそろえる。'
       + '担当者が納期の遅れをわびる流れを1つ入れる' },
+  /* ★ **応答問題**(0073・第5.332節)。
+       **正解になる表現は、こちらが欄でえらんでいる。**
+       ここに書くのは「その応答を、どんな場面で言わせるか」である ——
+       表現そのものを書かせない(それは出どころの欄の仕事である) */
+  response: { hint: '空のままなら、表現に合う場面を AI が決めます',
+    example: '例: 質問は社内の立ち話にそろえる。'
+      + '相手は同僚で、かたい言い方にしない' },
 }
 
 /**
@@ -323,6 +350,14 @@ export const isPassageKind = (kind) =>
 export const isExamKind = (kind) => kind === EXAM_KIND
 
 /**
+ * **応答問題か**(0073・第5.332節)。
+ *
+ * **画面で `kind === 'response'` と書かない**(置く場所の数だけ食い違う)。
+ * 弱点タグを必須にしない・欄の出し入れ・シャッフルの可否が、ここで決まる。
+ */
+export const isResponseKind = (kind) => kind === 'response'
+
+/**
  * **弱点タグを必須にする種類**かどうか(第5.263節)。
  *
  * タグは「あとから教材を見つけるための索引」である(第5.5節)。
@@ -342,6 +377,10 @@ export const isExamKind = (kind) => kind === EXAM_KIND
    (`materials.js` の `createMaterial`)ので、ここ1か所で足りる */
 export const needsWeakTag = (kind) =>
   !isPassageKind(kind) && !isTestKind(kind) && !isExamKind(kind)
+  /* ★ **応答問題にも要らない**(0073・第5.332節)。
+       **何の練習かは「どの表現を正解にしたか」で決まる** ——
+       テスト対策で PART がその役を果たすのと、まったく同じ理由である */
+  && !isResponseKind(kind)
 
 /**
  * **会話の形をした種類**(会話・会議)かどうか。
@@ -389,7 +428,8 @@ export const isDrillKind = (kind) => kind === 'pattern'
  *
  * **判断はここ1か所。** 画面の中で `kind === …` と書かない(CLAUDE.md)。
  */
-export const canShuffleKind = (kind) => isDrillKind(kind) || kind === EXAM_KIND
+export const canShuffleKind = (kind) =>
+  isDrillKind(kind) || kind === EXAM_KIND || isResponseKind(kind)
 
 /** 画面に出す短い呼び名(「記事」「会話」「会議」「スピーチ」)。文の中で使う */
 export const bodyWord = (kind) => (
