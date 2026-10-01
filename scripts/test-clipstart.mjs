@@ -43,6 +43,10 @@ const dir = mkdtempSync(join(tmpdir(), 'eas-clip-'))
 const CFG = join(ROOT, 'vite.clip.config.js')
 const PAGE = join(ROOT, '__clip.js')
 const HTML = join(ROOT, '__clip.html')
+/* ★ **本物の画面も、この同じサーバーから出す**(第5.335節)。
+     算段だけを見ても、**画面が渡していなければ気づけない** ——
+     利用者が押すのはボタンである(CLAUDE.md「本物の入り口から1回開く」) */
+const SCREEN = join(ROOT, '__clipscreen.html')
 
 /** 音の入った WAV(**0円・その場で作れる**)。長さだけ変えられる */
 function toneWav(seconds) {
@@ -90,6 +94,7 @@ writeFileSync(HTML, `<!doctype html>
 
 writeFileSync(CFG, `
 import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 const DIR = ${JSON.stringify(dir)}
@@ -97,7 +102,7 @@ export default defineConfig({
   envDir: DIR,
   cacheDir: join(DIR, 'vite'),
   server: { port: ${PORT}, strictPort: true },
-  plugins: [{
+  plugins: [react(), {
     name: 'tone',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -133,10 +138,23 @@ writeFileSync(join(dir, '.env'), [
   'VITE_SUPABASE_ANON_KEY=sb_publishable_dummy_for_test',
 ].join('\n'))
 
+writeFileSync(SCREEN, `<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本物の画面で、鳴らし始めを測る</title></head>
+<body><div id="root"></div>
+<script>
+  window.__made = []
+  const R = window.Audio
+  window.Audio = function (...a) { const e = new R(...a); window.__made.push(e); return e }
+</script>
+<script type="module" src="/src/__screens.jsx"></script></body></html>
+`)
+
 const vite = spawn('npx', ['vite', '--config', CFG], { cwd: ROOT, stdio: 'ignore' })
 const cleanup = () => {
   try { vite.kill('SIGTERM') } catch { /* もう止まっている */ }
-  for (const f of [CFG, PAGE, HTML]) {
+  for (const f of [CFG, PAGE, HTML, SCREEN]) {
     try { rmSync(f) } catch { /* もう無い */ }
   }
   try { rmSync(dir, { recursive: true, force: true }) } catch { /* もう無い */ }
@@ -326,6 +344,117 @@ console.log('\n▶ 前の文を最後まで聴いたあと、次の文を押す(
   } else {
     ok(`次の文は頭から鳴る(はじめに見えた秒 ${got.次の頭.toFixed(2)})`)
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ★ **本物のボタンを押して、どこから鳴り出すかを測る**(第5.335節)
+
+     > 問題ごとに音声を聴くと文の途中から再生されて使い物になりません
+
+   **第5.333節では「文が2つ以上なら控える」と当てた。外していた。**
+   1文の問は直ったが、**2文の問はそのまま途中から鳴っていた**(実測)。
+
+   ── なぜ算段だけでは足りないか ──────────────────────────
+   `npm run test:play` は「`SpeakButton` が何で決めているか」を見る。
+   ところが**画面が演習の種類を渡していなければ**、部品がいくら正しくても
+   本文の段落で控えなくなる(第5.330節で踏んだ形)。
+   **利用者が押すのはボタン**なので、ここは本物の画面を開いて押す。
+
+   ── 測り方で1度外した ────────────────────────────────
+   押した直後は**前の音がまだ鳴っている**(止めるときの 60ms の下げ)ので、
+   「いちばん先に見えた秒」で見ると**前の音の残り**を拾う。
+   だから **`src` ごとに、はじめの秒**を見る。
+   ══════════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 本物のボタンで、押す → 止める → もう一度押す(第5.335節)')
+{
+  const page2 = await browser.newPage({ viewport: { width: 1280, height: 1000 } })
+  page2.on('pageerror', (e) => ng('画面が落ちた', String(e)))
+  /* 画面は Supabase を見に行くが、この環境からは届かない。
+     **測りたいのは音だけ**なので、そこは空で返す */
+  await page2.route('**/auth/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
+  }))
+  await page2.route('**/rest/v1/**', (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }))
+
+  const 仕掛ける = () => page2.evaluate(() => {
+    window.__rows = []
+    clearInterval(window.__w)
+    window.__w = setInterval(() => {
+      for (const [i, el] of window.__made.entries()) {
+        if (el.paused) continue
+        window.__rows.push({ i, src: String(el.currentSrc || el.src).slice(-12),
+          at: Number(el.currentTime) || 0 })
+      }
+    }, 10)
+  })
+  /** いちばん最後に鳴り出したものの、**はじめの秒** */
+  const 鳴り出し = () => page2.evaluate(() => {
+    clearInterval(window.__w)
+    const 初 = new Map()
+    for (const r of window.__rows ?? []) {
+      const k = `${r.i}|${r.src}`
+      if (!初.has(k)) 初.set(k, r.at)
+    }
+    const v = [...初.values()]
+    return v.length ? v[v.length - 1] : null
+  })
+  const みんな止める = async () => {
+    await page2.evaluate(() => window.__made.forEach((e) => {
+      try { e.pause() } catch { /* 止められなくても困らない */ }
+    }))
+    await page2.waitForTimeout(300)
+  }
+
+  /** その画面の n 番めの「聴く」を、押す → 止める → もう一度押す */
+  const 押し直す = async (qs, n) => {
+    await page2.goto(`http://localhost:${PORT}/__clipscreen.html?${qs}`,
+      { waitUntil: 'domcontentloaded' })
+    await page2.waitForSelector('.lesson', { timeout: 20000 })
+    await page2.waitForTimeout(900)
+    const 聴 = page2.getByRole('button', { name: /^聴く$/ })
+    if (await 聴.count() <= n) return null
+    await 聴.nth(n).click()
+    await page2.waitForTimeout(900)
+    /* 鳴っているボタンは **Stop**(用意中なら「用意…」)に変わる */
+    await page2.getByRole('button', { name: /Stop|用意/ }).first().click()
+    await page2.waitForTimeout(400)
+    await 仕掛ける()
+    await page2.getByRole('button', { name: /^聴く$/ }).nth(n).click()
+    await page2.waitForTimeout(1100)
+    const at = await 鳴り出し()
+    await みんな止める()
+    return at
+  }
+
+  const 応答 = 'screen=lesson&role=trainer&who=g1&kind=response'
+  /* **骨組みは、本物と1文字も違えない**(CLAUDE.md)。
+     応答問題の `r-1` は1文、**`r-3` は2文**にしてある ——
+     **いちばん危ない形を、検証の中に必ず1つ置く** */
+  const 一文 = await 押し直す(応答, 0)
+  const 二文 = await 押し直す(応答, 2)
+  /* **出る側。** 本文の段落は、頼まれたとおり途中から鳴る(第5.306節) */
+  const 段落 = await 押し直す('screen=lesson&role=trainer&who=g1', 0)
+
+  if (一文 === null || 二文 === null || 段落 === null) {
+    ng('本物のボタン … 押せなかった(測れていない)',
+      `1文 ${一文} / 2文 ${二文} / 段落 ${段落}`)
+  } else {
+    if (一文 > 0.3) {
+      ng('本物のボタン … 1文の問が、途中から鳴り出す', `${一文.toFixed(2)} 秒から`)
+    } else ok(`本物のボタン … 1文の問は頭から(${一文.toFixed(2)} 秒)`)
+    /* ★ **ここが第5.333節で見落ちていた形** */
+    if (二文 > 0.3) {
+      ng('本物のボタン … **2文の問**が、途中から鳴り出す', `${二文.toFixed(2)} 秒から`)
+    } else ok(`本物のボタン … 2文の問も頭から(${二文.toFixed(2)} 秒)`)
+    /* **出ない側を見ないと、どこでも控えない形に書き換えても緑のまま** */
+    if (段落 <= 0.3) {
+      ng('本文の段落 … 止めた場所から鳴らなくなっている(第5.306節の仕様が消えた)',
+        `${段落.toFixed(2)} 秒から`)
+    } else ok(`本文の段落 … 止めた場所から鳴る(${段落.toFixed(2)} 秒・頼まれた仕様)`)
+  }
+  await page2.close()
 }
 
 await browser.close()

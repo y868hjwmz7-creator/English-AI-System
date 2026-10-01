@@ -2689,6 +2689,9 @@ export default function LessonView({
                       audio={audioTextOf(it, sec.exercise_type) ? (
                         <SpeakButton
                           text={audioTextOf(it, sec.exercise_type)}
+                          /* ★ **止めた場所から鳴らすのは、本文の段落だけ**(第5.335節)。
+                               判断は `isPassageSection()` 1か所。ここで種類を見分けない */
+                          typeId={sec.exercise_type}
                           voice={voiceFor(secCast, it.speaker)}
                           clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                           tier={secTier}
@@ -2837,6 +2840,9 @@ export default function LessonView({
                     <SpeakButton
                       /* **読む欄は `audioTextOf()` 1か所**(第5.266節) */
                       text={audioTextOf(it, sec.exercise_type)}
+                      /* ★ **止めた場所から鳴らすのは、本文の段落だけ**(第5.335節)。
+                           判断は `isPassageSection()` 1か所。ここで種類を見分けない */
+                      typeId={sec.exercise_type}
                       voice={voiceFor(secCast, it.speaker)}
                       clipVoice={voiceFor(secClipCast, it.speaker, soloVoice)}
                       tier={secTier}

@@ -702,6 +702,9 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                          書き写すと、読み方を直した英文が
                                          ここだけ素通りする */
                                       text={audioTextOf(it, sec.exercise_type)}
+                                      /* ★ **止めた場所から鳴らすのは、本文の段落だけ**(第5.335節)。
+                                           判断は `isPassageSection()` 1か所。ここで種類を見分けない */
+                                      typeId={sec.exercise_type}
                                       clipVoice={resolveVoices(a.material?.voiceIds)[0]}
                                       tier={voiceTierFor({
                                         exerciseType: sec.exercise_type,

@@ -264,7 +264,11 @@ const material = asSpeech ? {
           + "(B) That's exactly what I had in mind. (C) She lives near the station.",
         answer: "That's exactly what I had in mind.",
         answer_ja: 'まさにそう考えていました。' },
-      { id: 'r-3', audio_text: 'How did the presentation go this morning?',
+      /* ★ **2文の問を1つ混ぜてある**(第5.335節)。
+           第5.333節は「文が2つ以上なら控える」と当てたので、
+           **この形だけが途中から鳴っていた。**
+           **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md) */
+      { id: 'r-3', audio_text: 'Do you have a moment? I would like to ask about the schedule.',
         question: 'Choose the best response. (A) It went better than expected. '
           + '(B) Two coffees, please. (C) The bridge is under construction.',
         answer: 'It went better than expected.' },

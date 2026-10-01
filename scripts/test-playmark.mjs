@@ -13888,40 +13888,89 @@ console.log('\n▶ 支度を、何本か同時に走らせる(第5.307節)')
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   ★ **短い1文では、途中から鳴らさない**(2026-10-01 実機・第5.333節)
+   ★ **止めた場所から鳴らすのは、本文の段落だけ**(2026-10-01 実機・第5.335節)
 
-     > 問題ごとの音声が、文の頭から始まらず、文の途中から始まります。
-     > たまに頭から始まることもありますが、5,6回に一回だけです。
+     > 問題ごとに音声を聴くと文の途中から再生されて使い物になりません
 
    鳴らしかけて止める(別の問を押す・待ちきれずにもう一度押す)と、
    **その場所が控えに残り、次に押すと途中から鳴る。**
-   利用者が頼んだのは**段落ごと**の再生で、あれは長いので意味がある。
-   **1文(10〜15語)には意味が無い。**
+
+   **第5.333節では「文が2つ以上なら控える」と当てた。外していた。**
+   本物の音を鳴らして測ったら、こうだった。
+
+     | 問の英文 | もう一度押したとき |
+     |---|---|
+     | 1文 | 0.01 秒(頭から) |
+     | **2文** | **0.73 秒(途中から)** |
+
+   **長さは手がかりではない。** 利用者が頼んだのは
+   **本文の段落ごとの再生**(第5.306節)で、問の読み上げではない。
+   だから**演習の種類**で決める —— `isPassageSection()` 1か所。
    ══════════════════════════════════════════════════════════════════════ */
 {
   const read5 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
-  const btn = read5('src/components/SpeakButton.jsx')
-    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-  const { splitEnSentences } = await import('../src/lib/sentencePair.js')
+  const noC5 = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const btn = noC5(read5('src/components/SpeakButton.jsx'))
+  const { isPassageSection } = await import('../src/data/exerciseTypes.js')
 
-  /* **控えるかどうかを、文の数で決めているか** */
-  ok(/splitEnSentences\(text\)\.length > 1/.test(btn) && /resumeKey:/.test(btn),
-    '1文ずつの聞く … 文が2つ以上のときだけ、止めた場所を控える')
-  /* **長さを数で決め打ちしていないか**(CLAUDE.md) */
-  ok(!/text\.length\s*>\s*\d/.test(btn),
-    '1文ずつの聞く … 長さを文字数で決め打ちしていない')
+  /* **控えるかどうかを、演習の種類で決めているか** */
+  ok(/\.\.\.\(isPassageSection\(typeId\)/.test(btn) && /resumeKey:/.test(btn),
+    '1文ずつの聞く … 本文の段落のときだけ、止めた場所を控える')
+  /* **長さで当てていないか。** ここで外した(第5.333節) */
+  ok(!/splitEnSentences/.test(btn) && !/text\.length\s*>\s*\d/.test(btn),
+    '1文ずつの聞く … 長さ(文の数・文字数)で当てていない')
+  /* **判断を書き写していないか** —— 画面で種類を見分けない */
+  ok(!/typeId === '/.test(btn),
+    '1文ずつの聞く … 種類を名指しで見分けていない(判断は1か所)')
 
-  /* ★ **本当に見分けられるか。** ここを `speakChunks` で見ようとして
-       外した —— あちらは**読み上げに渡せる長さ**で割るので、
-       **3文の段落でも1つ**になる(測って分かった)。
-       **出る側と出ない側の両方を見る**(CLAUDE.md) */
-  const 問 = 'Did you remember to send the report to the client this morning?'
-  const 段落 = 'We opened the new branch last month. It has been busy since then.'
-    + ' The team is happy about it.'
-  ok(splitEnSentences(問).length === 1,
-    '1文ずつの聞く … 問は1文(控えない)', `${splitEnSentences(問).length} 文`)
-  ok(splitEnSentences(段落).length > 1,
-    '1文ずつの聞く … 段落は2文以上(控える)', `${splitEnSentences(段落).length} 文`)
+  /* ★ **その判断そのものが、出る側と出ない側で分かれているか**
+       (CLAUDE.md)。本文は真・問と語は偽でなければ、何も守らない */
+  ok(isPassageSection('article') && isPassageSection('dialogue'),
+    '1文ずつの聞く … 本文(記事・会話)は控える側')
+  ok(!isPassageSection('listening') && !isPassageSection('translate_ja_en')
+    && !isPassageSection(null),
+  '1文ずつの聞く … 問(リスニング・和文英訳)と、渡っていないものは控えない')
+
+  /* ★ **画面が本当に渡しているか。**
+       素の部品だけ見ると、**画面が `typeId` を渡していなくても緑になる**
+       —— そのときは本文の段落でも控えなくなる(第5.330節で踏んだ形)。
+       **本文を描く画面は3つ**(レッスン表示・共有された紙・ゲストの宿題) */
+  for (const f of [
+    'src/components/LessonView.jsx',
+    'src/components/MaterialBody.jsx',
+    'src/components/LearnerHomework.jsx',
+  ]) {
+    /* ★ **ここは素のまま数える**(2026-10-01 に踏んだ)。
+       コメントを落とす決まり(`noC5`)が **`<SpeakButton>` を1つ食べていた**
+       —— どこかの開き印が遠くの閉じ印と組んで、あいだをまるごと消す。
+       **2個あるのに1個しか見えず、片方が見張られていなかった。**
+       塊の中のコメントは、この数え方のじゃまにならない。
+
+       (この但し書き自体でも転んだ。コメントの中に閉じ印をそのまま
+        書くと、**そこでコメントが終わる**。だから言葉で書いてある) */
+    const src5 = read5(f)
+    /* **`<SpeakButton …/>` の塊ごとに見る。**
+       `typeId={sec.exercise_type}` の数だけを数えると、
+       **`AnswerEn` が同じ名前で受け取っている**ぶんまで混ざる
+       (あちらは「解答に読み上げが付くか」を見るための別の役目)。
+       **違うものを同じ数え方に混ぜない**(1度混ぜて外した) */
+    const 塊 = src5.match(/<SpeakButton[\s\S]*?\/>/g) ?? []
+    const 読む = 塊.filter((b) => /text=\{audioTextOf\(it, sec\.exercise_type\)\}/.test(b))
+    const 渡す = 読む.filter((b) => /typeId=\{sec\.exercise_type\}/.test(b))
+    ok(読む.length > 0 && 読む.length === 渡す.length,
+      `1文ずつの聞く … ${f.split('/').pop()} が、演習の種類もそろえて渡している`,
+      `本文を読むボタン ${読む.length} 個 / 種類を渡している ${渡す.length} 個`)
+  }
+  /* **出ない側。** 解答・Quick Response・単語帳は渡さない(= 控えない) */
+  for (const f of [
+    'src/components/AnswerEn.jsx', 'src/components/QrCard.jsx',
+  ]) {
+    const src5 = read5(f)
+    const 塊 = src5.match(/<SpeakButton[\s\S]*?\/>/g) ?? []
+    ok(塊.length > 0 && !塊.some((b) => /typeId=\{sec\.exercise_type\}/.test(b)),
+      `1文ずつの聞く … ${f.split('/').pop()} の Listen は種類を渡さない(控えない)`,
+      `${塊.length} 個`)
+  }
 }
 
 console.log(ng
