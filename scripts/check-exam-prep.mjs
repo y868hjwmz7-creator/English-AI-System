@@ -36,7 +36,9 @@ const {
   examSectionsOf, examSkipLine, examSkipsOf, examTitle, firstPartOf,
   BLANK_AXES, FORMATS, TRAPS, choiceBrief, choicesOf, formatOf, partialOf,
 } = await import('../src/data/examPrep.js')
-const { EXERCISE_TYPES, defaultSectionsFor, isPassageSection, sectionsFor }
+const { DROP_REASONS, emptyDropCounts, isExhausted }
+  = await import('../src/lib/dropReasons.js')
+const { EXERCISE_TYPES, defaultSectionsFor, isBlankItem, isPassageSection, sectionsFor }
   = await import('../src/data/exerciseTypes.js')
 const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, isExamKind, needsWeakTag }
   = await import('../src/data/materialKinds.js')
@@ -1358,6 +1360,122 @@ console.log('\n▶ 空所補充の軸(第5.340節)')
         + `(窓口の上限 ${上限} 文字の ${Math.round(最長[1] / 上限 * 100)}%)`)
     }
   }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **窓口で任意の欄を、画面が必須にしていないか**(第5.341節・実機)
+
+     > 3回とも設問が作られないです
+
+   TOEIC Part 5 が**毎回 0 問**になっていた。
+   作り方は「hint は空にする」(本番に与える語は無い)と言っているのに、
+   **画面の `isBlankItem` が `hint` を必須にしていた** ——
+   正しく作られた問が1問残らず「空の問」として落ちていた。
+
+   **窓口の側は、同じことに気づいて先に直してあった。**
+   `SECTION_FIELDS.fill_blank` の `hint` は任意で、コメントにも
+   「必須のままだと 5回作り直しても 0 問になる」と書いてある。
+   **片方だけ直して、片方に書き写し忘れた**のがこれである。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 必須の欄が、窓口と画面でそろっているか(第5.341節)')
+{
+  const fnSrc = read('supabase/functions/generate-material/index.ts')
+  const blk = /const SECTION_FIELDS[\s\S]*?\n}\n/.exec(fnSrc)?.[0] ?? ''
+  const 窓口 = {}
+  for (const mm of blk.matchAll(
+    /(\w+):\s*\{\s*required:\s*\[([^\]]*)\],\s*optional:\s*\[([^\]]*)\]/g)) {
+    窓口[mm[1]] = {
+      req: new Set([...mm[2].matchAll(/'(\w+)'/g)].map((x) => x[1])),
+      opt: new Set([...mm[3].matchAll(/'(\w+)'/g)].map((x) => x[1])),
+    }
+  }
+
+  if (Object.keys(窓口).length < 10) {
+    ng('必須の欄 … 窓口の一覧を読み取れていない(探し方が壊れている)',
+      Object.keys(窓口).length)
+  } else {
+    /* ── ① **画面が必須とみなす欄は、窓口でも必須か** ──
+           ★ **ここが今回の根。** 窓口が任意にしている欄を画面が必須にすると、
+              **窓口は空で返してよいのに、画面が1問残らず落とす。**
+           **欄の名前を書き写さない** —— `isBlankItem` に
+           「その欄だけ空の問」を渡して、落とされるかで測る */
+    const ずれ = []
+    let 数えた = 0
+    for (const t of EXERCISE_TYPES) {
+      const w = 窓口[t.id]
+      if (!w) continue
+      数えた += 1
+      for (const f of t.fields) {
+        /* **その欄だけを空にした問**を作って、落とされるかを見る */
+        const 問 = Object.fromEntries(t.fields.map((x) => [x, x === f ? '' : 'x']))
+        if (!isBlankItem(t.id, 問)) continue      // 無くても成り立つ欄
+        if (w.opt.has(f)) {
+          ずれ.push(`${t.id}/${f} … 窓口は任意なのに、画面は必須(空で返ると全部落ちる)`)
+        } else if (!w.req.has(f)) {
+          ずれ.push(`${t.id}/${f} … 画面は必須なのに、窓口はその欄を知らない`)
+        }
+      }
+    }
+    if (数えた < 10) {
+      ng('必須の欄 … 突き合わせた演習が少なすぎる(見張りが素通りする)', 数えた)
+    } else if (ずれ.length) {
+      ng('必須の欄 … 窓口と画面で食い違っている', ずれ.slice(0, 5).join('\n    '))
+    } else ok(`必須の欄 … ${数えた} 種類とも、画面が必須にする欄は窓口でも必須`)
+
+    /* ── ② **本番そっくりの問が、落とされないか** ──
+           ★ **決まりだけ見ても足りない。** 実際に作られる形を1つ通す
+             (CLAUDE.md「いちばん危ない形を、検証の中に必ず1つ置く」) */
+    const Part5の問 = {
+      prompt_en: 'The new assistant manager （　　　） the weekly reports since she joined.',
+      question: 'Choose the best answer.\n(A) prepare\n(B) prepares\n(C) has prepared\n(D) will prepare',
+      hint: '',
+      answer: '(C) has prepared',
+      note: '現在完了が要るため',
+    }
+    /* **出る側と出ない側の両方**(CLAUDE.md) */
+    const 本当に空 = { prompt_en: '', question: '', hint: '', answer: '' }
+    if (isBlankItem('fill_blank', Part5の問)) {
+      ng('必須の欄 … 本番そっくりの Part 5 の問が、空として落とされる(0 問になる)')
+    } else if (!isBlankItem('fill_blank', 本当に空)) {
+      ng('必須の欄 … 本当に空の問が落とされない(落とす仕組みが効いていない)')
+    } else ok('必須の欄 … 本番そっくりの Part 5 の問は残り、本当に空の問だけが落ちる')
+
+    /* ── ③ **文型ドリルの穴埋め(選択肢なし)も残るか** ──
+           `question` を必須にすると、**あちらが1問残らず落ちる** */
+    const ドリルの問 = { prompt_en: 'I （　　　） it yesterday.', hint: 'do', answer: 'did' }
+    if (isBlankItem('fill_blank', ドリルの問)) {
+      ng('必須の欄 … 選択肢の無い穴埋め(文型ドリル)が落とされる')
+    } else ok('必須の欄 … 選択肢の無い穴埋め(文型ドリル)も残る')
+  }
+
+  /* ── ④ **落とした理由を、取り違えずに出しているか** ──
+         ★ **「前と同じ・似すぎていた」と決めつけて出していた。**
+            本当は「欄が空」で落ちていたので、**嘘の知らせ**だった */
+  const form = noC(read('src/components/MaterialForm.jsx'))
+  const lib = noC(read('src/lib/materials.js'))
+  const 理由の数 = Object.keys(DROP_REASONS).length
+  if (理由の数 < 5) {
+    ng('落とした理由 … 種類が少なすぎる(数え分けていない)', 理由の数)
+  } else if (new Set(Object.values(DROP_REASONS)).size !== 理由の数) {
+    ng('落とした理由 … 同じ呼び名の理由がある', Object.values(DROP_REASONS).join(' / '))
+  } else if (!/落とす\('blank'\)/.test(lib) || !/落とす\('similar'\)/.test(lib)) {
+    ng('落とした理由 … 理由を付けずに数えている場所がある')
+  } else if (/前と同じ・似すぎていた \$\{dropped\}/.test(form)) {
+    ng('落とした理由 … 画面が、理由を決めつけて出している(嘘の知らせになる)')
+  } else if (!/dropReasonLine\(droppedWhy\)/.test(form)) {
+    ng('落とした理由 … 画面が、理由を出していない')
+  } else ok(`落とした理由 … ${理由の数} 種類を数え分けて、そのまま画面に出す`)
+
+  /* ── ⑤ **「出尽くした」と言ってよいかを、決まりで分けているか** ──
+         空や形で落ちているのに「英文が出尽くしています」と言わない */
+  const 出尽くし = isExhausted({ ...emptyDropCounts(), dup: 10 })
+  const 出尽くしでない = isExhausted({ ...emptyDropCounts(), blank: 10 })
+  const 数えていない = isExhausted(emptyDropCounts())
+  if (!出尽くし) ng('出尽くし … 同じ英文ばかりでも「出尽くした」と言わない')
+  else if (出尽くしでない) ng('出尽くし … 欄が空で落ちたのに「出尽くした」と言う(嘘になる)')
+  else if (数えていない) ng('出尽くし … 1問も落ちていないのに「出尽くした」と言う')
+  else ok('出尽くし … 前に出た英文で落ちたときだけ言う(空・形のときは言わない)')
 }
 
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

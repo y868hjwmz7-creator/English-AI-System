@@ -10,6 +10,11 @@
  * error は日本語の文字列(そのまま画面に出せる)。
  */
 import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
+/* ★ **落とした理由の呼び名と算段**(第5.341節)。
+     **何も取り込んでいないファイル**に切り出してある ——
+     ここは Supabase を引き連れているので、`npm run test:exam` が
+     素の node で読めない(CLAUDE.md「走らせられる形に切り出す」) */
+import { emptyDropCounts } from './dropReasons.js'
 import { normEn } from './textNorm.js'
 /* **「この英文は避けて」と渡す本数**(第5.261節)。
    集める本数と渡す本数を**同じ数にする** —— 別にすると、集めたうちの
@@ -2351,7 +2356,11 @@ export async function generateSectionUnique(params, {
    */
   const shaped = []
   const tooSimilar = []
+  /* ★ **理由ごとに数える**(第5.341節)。1つに足すと、
+       **なぜ落ちたのかが分からなくなる**(それで3回ぶん無駄にした) */
+  const droppedBy = emptyDropCounts()
   let droppedTotal = 0
+  const 落とす = (why) => { droppedBy[why] += 1; droppedTotal += 1 }
   let instruction = ''
   let teachingPoint = null
   let warning = null
@@ -2374,7 +2383,7 @@ export async function generateSectionUnique(params, {
 
     // ① 手元で分かる重複
     const { kept: unique, dropped } = dropDuplicates(data.section?.items ?? [], usedSet)
-    droppedTotal += dropped.length
+    dropped.forEach(() => 落とす('dup'))
 
     // ①' **答えが問題文の中に見えている問**(2026-09 実機・利用者の指摘)
     //     穴埋めで「与える語: tell / 解答: tell」が出ていた。
@@ -2389,20 +2398,20 @@ export async function generateSectionUnique(params, {
     const kept = []
     for (const it of unique) {
       if (isBlankItem(params.sectionType, it)) {
-        droppedTotal += 1
+        落とす('blank')
         continue                            // 空なので、控える鍵も取れない
       }
       // ①''' **単語とフレーズの取り違え**(2026-09 実機)。
       //      フレーズが1語・単語が2語以上のものを落とす。
       //      **ただし取っておく。** 下の安全弁で戻すことがある
       if (isWrongShape(params.sectionType, it)) {
-        droppedTotal += 1
+        落とす('shape')
         shaped.push(it)
         sentencesOf(it).forEach((k) => usedSet.add(k))
         continue
       }
       if (givesAwayAnswer(params.sectionType, it)) {
-        droppedTotal += 1
+        落とす('giveaway')
         // **同じ文をもう一度作らせない。** `dropDuplicates` が
         // すでに控えているが、鍵が取れない形もあるので念のため入れる
         sentencesOf(it).forEach((k) => usedSet.add(k))
@@ -2428,7 +2437,7 @@ export async function generateSectionUnique(params, {
     for (const it of kept) {
       const keys = sentencesOf(it)
       if (keys.some((k) => used.has(k))) {
-        droppedTotal += 1
+        落とす('used')
         keys.forEach((k) => usedSet.add(k))   // 二度と候補に出さない
       } else {
         survived.push(it)
@@ -2470,7 +2479,7 @@ export async function generateSectionUnique(params, {
 
     survived.forEach((it, i) => {
       if (close.has(i)) {
-        droppedTotal += 1
+        落とす('similar')
         sentencesOf(it).forEach((k) => usedSet.add(k))
       } else if (items.length < wanted) {
         items.push(it)
@@ -2488,12 +2497,15 @@ export async function generateSectionUnique(params, {
       if (items.length >= wanted) break
       items.push(it)
       droppedTotal -= 1
+      droppedBy.shape = Math.max(droppedBy.shape - 1, 0)
     }
   }
 
   return {
     section: { exercise_type: params.sectionType, instruction, items },
     dropped: Math.max(droppedTotal, 0),
+    /* ★ **理由も返す**(第5.341節)。画面はこれをそのまま出す */
+    droppedBy,
     tooSimilar,
     warning,
     short: wanted - items.length,

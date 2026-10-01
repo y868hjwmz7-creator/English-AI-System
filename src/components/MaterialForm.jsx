@@ -47,6 +47,10 @@ import {
   loadRecentStories, loadUsedSentences, loadUsedSentencesLike, normEn,
   genGatewayNote,
 } from '../lib/materials.js'
+/* ★ **外した理由の呼び名と組み立て**(第5.341節)。
+     **画面で書き写さない** —— 理由の名前も、出す順も、
+     「出尽くした」と言ってよいかの判断も `dropReasons.js` 1か所にある */
+import { dropReasonLine, emptyDropCounts, isExhausted } from '../lib/dropReasons.js'
 /* **話の切り口**(0046・2026-09 利用者の指定
      「選んだシチュエーションや場面が同じでも、全然違う感じになって欲しい」)。
    一覧も、窓口へ渡す文の組み立ても**画面が持つ**(`speechBrief` と同じ考え方)。
@@ -239,7 +243,10 @@ export default function MaterialForm({
   const [generating, setGenerating] = useState(null)   // 生成中の進み具合
   const [elapsed, setElapsed] = useState(0)            // 生成に掛かっている秒数
   const [showEditor, setShowEditor] = useState(false)  // 手で直す欄を出すか
-  const [dropped, setDropped] = useState(0)            // 重複で外した数
+  const [dropped, setDropped] = useState(0)            // 外した数(ぜんぶ)
+  /* ★ **外した理由**(第5.341節)。**ぜんぶを1つに足さない** ——
+       「前と同じ」と決めつけて出していたので、**嘘の知らせ**になっていた */
+  const [droppedWhy, setDroppedWhy] = useState(emptyDropCounts)
   const [short, setShort] = useState(0)                // 作り直しても足りなかった数
   // 誰に出すか。**画面のいちばん上で、最初から選べる。**
   // 以前は全部指定し終えてからでないと選べず、やりにくかった(2026-08)。
@@ -1434,6 +1441,7 @@ export default function MaterialForm({
     let point = teachingPoint
     let warn = null
     let droppedCount = 0
+    const droppedWhy = emptyDropCounts()      // ★ 落とした理由(第5.341節)
     let shortCount = 0
     const spent = { input: 0, output: 0, cacheRead: 0 }
 
@@ -1486,6 +1494,11 @@ export default function MaterialForm({
       if (result.error) throw new Error(result.error)
 
       droppedCount += result.dropped
+      /* ★ **理由も足す**(第5.341節)。1つに足すだけだと、
+           **なぜ落ちたのかが分からない**(それで3回ぶん無駄にした) */
+      for (const [k, v] of Object.entries(result.droppedBy ?? {})) {
+        droppedWhy[k] = (droppedWhy[k] ?? 0) + v
+      }
       shortCount += result.short
       notes.push(...(result.tooSimilar ?? []))
       warn = warn || result.warning
@@ -1556,7 +1569,7 @@ export default function MaterialForm({
 
     return {
       made, spent, headline: null, headlineJa: null, teachingPoint: point,
-      dropped: droppedCount, short: shortCount, notes, warn,
+      dropped: droppedCount, droppedWhy, short: shortCount, notes, warn,
       autoTitle: autoTitle(),
       form: formSnapshot(),
     }
@@ -1741,6 +1754,7 @@ export default function MaterialForm({
     setGist(r.gist ?? '')
     if (r.teachingPoint) setTeachingPoint(r.teachingPoint)
     setDropped(r.dropped ?? 0)
+    setDroppedWhy(r.droppedWhy ?? emptyDropCounts())
     setShort(r.short ?? 0)
     setSimilarNotes(r.notes ?? [])
     setWarning(r.warn ?? null)
@@ -3401,8 +3415,20 @@ export default function MaterialForm({
           演習
           <span className="field-hint">
             {sections.length} 種類 / 合計 {totalItems} 問
-            {dropped > 0 && ` / 前と同じ・似すぎていた ${dropped} 問は作り直しました`}
-            {short > 0 && ` / ${short} 問は足りません(この弱点で英文が出尽くしています)`}
+            {/* ★ **落とした理由を、そのまま出す**(第5.341節)。
+                   それまで**いつも**「前と同じ・似すぎていた」と出していたが、
+                   実際には**欄が空だと見なされて**落ちていた ——
+                   **嘘の知らせ**だったので、3回ぶん無駄にさせた。
+                   **呼び名は `materials.js` 1か所**(ここで書き写さない) */}
+            {dropped > 0 && ` / ${dropped} 問は作り直しました`}
+            {dropped > 0 && dropReasonLine(droppedWhy)
+              && `(${dropReasonLine(droppedWhy)})`}
+            {short > 0 && (isExhausted(droppedWhy)
+              ? ` / ${short} 問は足りません(この弱点で英文が出尽くしています)`
+              /* **出尽くしたとは限らない。** 空や形で落ちているなら、
+                 それは作りの問題である。**分かっていないことを、
+                 分かったように書かない**(CLAUDE.md) */
+              : ` / ${short} 問は足りません`)}
           </span>
         </legend>
 
