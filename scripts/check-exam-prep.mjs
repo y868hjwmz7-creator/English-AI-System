@@ -34,6 +34,7 @@ const {
   DEFAULT_EXAM, EXAMS, EXAM_KIND, examBrief, examBriefByKey, examKeyOf, examLabel,
   examOf, examOutline, examPartLine, examPartOf, examPartsOf, examSectionsByKey,
   examSectionsOf, examSkipLine, examSkipsOf, examTitle, firstPartOf,
+  FORMATS, choiceBrief, choicesOf, formatOf,
 } = await import('../src/data/examPrep.js')
 const { EXERCISE_TYPES, defaultSectionsFor, isPassageSection, sectionsFor }
   = await import('../src/data/exerciseTypes.js')
@@ -166,6 +167,11 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
   /* ══════════════════════════════════════════════════════════════
      **書いた欄が、その演習に本当に在るか**
 
+     ★ **`answer_ja` が一覧から漏れていた**(2026-10-01・第5.336節)。
+     `answer` のほうが先に当たり、そのあと `_ja` が続くので
+     **どの場所でも拾えていなかった** —— あの欄を間違えても素通りした。
+     **長い名前を先に並べる**(`answer_ja` → `answer_alt` → `answer`)。
+
      道具の形は `strict: true` なので、**在らない欄は必ず消える。**
      しかも **必須の欄が空のまま返ると、その問は丸ごと落とされる** ——
      5回作り直しても 0 問になり、「中身が空で返ってきました」としか出ない。
@@ -195,13 +201,17 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
       /* **日本語の「◯◯ に」「◯◯ は」だけを拾う。**
          英語の「your answer」まで数えると、どの PART も赤くなる */
       const RE = new RegExp('(?:^|[^a-z_])(prompt_en|prompt_ja|question_ja|question'
-        + '|answer_alt|answer|audio_text|hint|note|source_en|phonetic)\\s*(?:に|には|は)', 'g')
+        + '|answer_ja|answer_alt|answer|audio_text|hint|note|source_en|phonetic)\\s*(?:に|には|は)', 'g')
       const 無い = []
       let 言及ぜんぶ = 0
       for (const { exam, part } of PICKABLE) {
         const ある = new Set((part.sections ?? [])
           .flatMap((sec) => [...(欄[sec.exercise_type] ?? [])]))
-        const 言及 = [...new Set([...part.make.matchAll(RE)].map((x) => x[1]))]
+        /* ★ **窓口へ渡る文ぜんぶを見る**(第5.336節)。
+             `make` だけを見ていたが、選択肢の指示(`choiceBrief`)も
+             **欄を名指しする。** そちらが間違っていても気づけなかった */
+        const 言及 = [...new Set([...examBrief(exam.id, part.id).matchAll(RE)]
+          .map((x) => x[1]))]
         言及ぜんぶ += 言及.length
         const 外 = 言及.filter((f) => !ある.has(f))
         if (外.length) 無い.push(`${exam.id} / ${part.id} … ${外.join(', ')}`)
@@ -526,6 +536,196 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
   ]
   if (落ちない.some((x) => !x)) ng('知らない id … 何かを返している(別の試験に化ける)')
   else ok('知らない id … どれも空を返す(落ちない・化けない)')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ★ **答え方が、本番と同じ形になっているか**(第5.336節・2026-10-01)
+
+     > 先ほど TOEIC L&R の PART7 を作ったら、基本4択の選択肢問題の
+     > はずなのに記述形式だった、意見を問う問題があったりして
+     > めちゃくちゃでした。
+
+   出どころは「選択肢の指示を PART ごとに手で書いていたこと」である。
+   Part 2・5・6 には書いてあったが、**Part 3・4・7 には1行も無かった** ——
+   設問が `comprehension`(内容の理解)で、あれは**自由記述**だからである。
+
+   いまは PART が「本番は何択か」だけを宣言し、文は `choiceBrief()` が作る。
+   **ここが見張るのは、その宣言と、組み立てた文が食い違っていないこと。**
+   ══════════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 答え方(第5.336節)')
+{
+  /* ── ① **全 PART が答え方を宣言しているか** ──
+         宣言が無いと `choicesOf()` は 0 を返すので、
+         **4択の PART でも選択肢の指示が入らない**(報告された壊れ方) */
+  const 無宣言 = ALL.filter(({ part }) => !formatOf(part))
+  if (無宣言.length) {
+    ng('答え方 … 宣言していない PART がある(選択肢の指示が入らない)',
+      無宣言.map(({ exam, part }) => `${exam.id} / ${part.id}`).join(' / '))
+  } else ok(`答え方 … ${ALL.length} 個とも宣言している`)
+
+  /* **一覧に無い id を書いていないか**(書いても静かに 0 になる) */
+  const 知らない = ALL.filter(({ part }) => part.format && !FORMATS[part.format])
+  if (知らない.length) {
+    ng('答え方 … 一覧に無い id を書いている', 知らない.map(({ part }) => part.format).join(' / '))
+  } else ok(`答え方 … id は ${Object.keys(FORMATS).length} 種類の中だけ`)
+
+  /* ── ② **選択肢の数と、組み立てた文が合っているか** ──
+         **値を書き写さない。性質で見る**(CLAUDE.md)——
+         「(D)」という文字ではなく、**宣言した数だけ記号が出ているか**を数える */
+  const 記号 = ['(A)', '(B)', '(C)', '(D)']
+  const 食い違い = []
+  const 足りない = []
+  for (const { exam, part } of PICKABLE) {
+    const n = choicesOf(part)
+    const brief = examBrief(exam.id, part.id)
+    const 出た = 記号.filter((m) => brief.includes(m)).length
+    if (n >= 2) {
+      if (出た !== n) 食い違い.push(`${exam.id}/${part.id} … ${n}択なのに記号 ${出た} 個`)
+      /* ★ **報告された壊れ方そのものを、名指しで禁じているか** */
+      if (!brief.includes('自由記述') || !brief.includes('意見を問う問にしない')) {
+        足りない.push(`${exam.id}/${part.id}`)
+      }
+    } else if (出た > 0) {
+      /* **出ない側。** 話す・書く・音読の PART に選択肢の指示が混ざっていないか */
+      食い違い.push(`${exam.id}/${part.id} … 選択肢なしなのに記号 ${出た} 個`)
+    }
+  }
+  if (食い違い.length) {
+    ng('答え方 … 宣言した数と、作り方の中の記号が合っていない', 食い違い.join('\n    '))
+  } else {
+    const 択 = PICKABLE.filter(({ part }) => choicesOf(part) >= 2).length
+    ok(`答え方 … 選択肢のある ${択} 個は宣言どおりの記号・`
+      + `残り ${PICKABLE.length - 択} 個には記号が1つも出ない`)
+  }
+  if (足りない.length) {
+    ng('答え方 … 「自由記述にしない / 意見を問う問にしない」が入っていない',
+      足りない.join(' / '))
+  } else ok('答え方 … 選択肢のある PART はぜんぶ、自由記述と意見の問を名指しで禁じている')
+
+  /* ── ③ **調べた事実と合っているか**(2026-10-01 に調べた)──
+         **数を書き写すのではなく、本番の形との食い違いを見る** */
+  const toeic = examOf('toeic_lr')
+  const 三択 = toeic.parts.filter((p) => choicesOf(p) === 3).map((p) => p.id)
+  const 四択 = toeic.parts.filter((p) => choicesOf(p) === 4).map((p) => p.id)
+  if (三択.join() !== 'p2' || 四択.length !== toeic.parts.length - 1) {
+    ng('TOEIC L&R … 本番は Part 2 だけが3択で、ほかはぜんぶ4択',
+      `3択 ${三択.join('/') || 'なし'} / 4択 ${四択.join('/')}`)
+  } else ok(`TOEIC L&R … Part 2 だけ3択・ほか ${四択.length} 個は4択(本番どおり)`)
+
+  /** その試験の PART に書いてある問数を足す(「2問」→ 2) */
+  const 問数 = (examId) => (examOf(examId)?.parts ?? [])
+    .reduce((n, p) => n + Number(/^(\d+)/.exec(p.real ?? '')?.[1] ?? 0), 0)
+
+  /* **TOEIC Speaking は 11 問。** もとは古い構成(Q3 が1問・Q10 が解決策)で、
+     **本番に無い PART が1つ並んでいた** */
+  if (問数('toeic_s') !== 11) {
+    ng('TOEIC Speaking … 本番は 11 問(音読2 + 写真2 + 応答3 + 提示情報3 + 意見1)',
+      `${問数('toeic_s')} 問になっている`)
+  } else ok('TOEIC Speaking … PART の問数を足すと 11 問(本番どおり)')
+  const 解決策 = examOf('toeic_s').parts.some((p) => /解決策/.test(p.label))
+  if (解決策) {
+    ng('TOEIC Speaking … いまの公式の構成に無い「解決策を提案する問題」が残っている')
+  } else ok('TOEIC Speaking … 古い構成の PART は残っていない')
+
+  /* **VERSANT は 63 問**(8 + 16 + 24 + 10 + 3 + 2) */
+  if (問数('versant') !== 63) {
+    ng('VERSANT … 本番は 63 問', `${問数('versant')} 問になっている`)
+  } else ok('VERSANT … PART の問数を足すと 63 問(本番どおり)')
+
+  /* **TOEFL iBT(2026年の形)。** Speaking 11問 / Writing 12題 と、
+     PART に書いてある数が合っていること */
+  const toefl = examOf('toefl').parts
+  const 数 = (pre) => toefl.filter((p) => p.id.startsWith(pre))
+    .reduce((n, p) => n + Number(/^(\d+)/.exec(p.real ?? '')?.[1] ?? 0), 0)
+  if (数('s_') !== 11 || 数('w_') !== 12) {
+    ng('TOEFL iBT … 2026年の形は Speaking 11問 / Writing 12題',
+      `Speaking ${数('s_')} / Writing ${数('w_')}`)
+  } else ok('TOEFL iBT … Speaking 11問 / Writing 12題(2026年の形どおり)')
+
+  /* ── ④ **本番の1セット**を書いた PART は、作り方にそれが入るか ── */
+  const セット = ALL.filter(({ part }) => part.set)
+  if (セット.length < 4) {
+    ng('本番の1セット … 書いてある PART が少なすぎる(見張りが素通りする)', セット.length)
+  } else {
+    const 漏れ = セット.filter(({ exam, part }) =>
+      !examBrief(exam.id, part.id).includes(part.set))
+    if (漏れ.length) {
+      ng('本番の1セット … 作り方に入っていない',
+        漏れ.map(({ part }) => part.id).join(' / '))
+    } else ok(`本番の1セット … ${セット.length} 個とも、そのまま窓口へ渡る`)
+  }
+
+  /* ── ③' **選択肢の指示が、その演習に在る欄だけを名指ししているか** ──
+         上の「欄」の節は **PART の演習ぜんぶの和**で見るので、
+         本文(`article`)が `prompt_en` を持っていると、
+         **設問の選択肢を本文の欄に入れさせても気づけない**(赤チェックで
+         実際に素通りした)。だから**演習1つだけ**を渡して確かめる */
+  {
+    const fnSrc2 = read('supabase/functions/generate-material/index.ts')
+    const blk2 = /const SECTION_FIELDS[\s\S]*?\n}\n/.exec(fnSrc2)?.[0] ?? ''
+    const 欄2 = {}
+    for (const mm of blk2.matchAll(
+      /(\w+):\s*\{\s*required:\s*\[([^\]]*)\],\s*optional:\s*\[([^\]]*)\]/g)) {
+      欄2[mm[1]] = new Set([...mm[2].matchAll(/'(\w+)'/g), ...mm[3].matchAll(/'(\w+)'/g)]
+        .map((x) => x[1]))
+    }
+    const RE2 = new RegExp('(?:^|[^a-z_])(prompt_en|prompt_ja|question_ja|question'
+      + '|answer_ja|answer_alt|answer|audio_text|hint|note|source_en|phonetic)\\s*(?:に|には|は)', 'g')
+    const 外2 = []
+    let 見た = 0
+    for (const t of ['fill_blank', 'comprehension', 'listening']) {
+      const 文 = choiceBrief(4, [{ exercise_type: t }])
+      if (!文) { 外2.push(`${t} … 選択肢の指示が組み立てられない`); continue }
+      for (const f of new Set([...文.matchAll(RE2)].map((x) => x[1]))) {
+        見た += 1
+        if (!(欄2[t] ?? new Set()).has(f)) 外2.push(`${t} に無い欄 ${f} を名指ししている`)
+      }
+    }
+    if (見た < 6) {
+      ng('選択肢の指示 … 欄の名前をほとんど拾えていない(見張りが素通りしている)', 見た)
+    } else if (外2.length) {
+      ng('選択肢の指示 … その演習に無い欄を名指ししている(選択肢が別の欄へ入る)',
+        外2.join('\n    '))
+    } else ok(`選択肢の指示 … ${見た} 個の欄は、どれもその演習そのものに在る`)
+  }
+
+  /* ── ④' **画面の1行に、答え方が出ているか** ──
+         「4択のはずなのに記述形式だった」とき、**作る前に何択なのかが
+         どこにも出ていなかった**(第5.187節「見えないものは信じられない」)。
+         **同じことを2つ出さないこと**も見る(CLAUDE.md) */
+  {
+    const 出ない = []
+    const 重なり = []
+    for (const { exam, part } of PICKABLE) {
+      const 行 = examPartLine(exam.id, part.id)
+      const 答 = formatOf(part)?.label ?? ''
+      if (答 && !行.includes(答)) 出ない.push(`${exam.id}/${part.id}`)
+      const 部 = 行.split(' … ')
+      if (new Set(部).size !== 部.length) 重なり.push(`${exam.id}/${part.id} … ${行}`)
+    }
+    if (出ない.length) {
+      ng('画面の1行 … 答え方が出ていない(作る前に何択か分からない)',
+        出ない.join(' / '))
+    } else ok(`画面の1行 … ${PICKABLE.length} 個とも、答え方が出る`)
+    if (重なり.length) {
+      ng('画面の1行 … 同じことを2つ出している', 重なり.join('\n    '))
+    } else ok('画面の1行 … 同じことを2度書いていない')
+  }
+
+  /* ── ⑤ **設問の数が、本番の1セットを超えていないか** ──
+         Part 3 は「会話1本につき3問」なのに設問 6 問だった ——
+         **会話1本に2セット分**が付いていた(本番に無い形) */
+  const 超過 = []
+  for (const { exam, part } of PICKABLE) {
+    const m = /設問(\d+)問/.exec(part.set ?? '')
+    if (!m) continue
+    const 問 = (part.sections ?? [])
+      .find((x) => x.exercise_type === 'comprehension')?.count ?? 0
+    if (問 > Number(m[1])) 超過.push(`${exam.id}/${part.id} … 1セット ${m[1]}問 なのに ${問}問`)
+  }
+  if (超過.length) {
+    ng('本番の1セット … 設問が1セット分を超えている', 超過.join('\n    '))
+  } else ok('本番の1セット … 設問は、どれも1セット分をはみ出していない')
 }
 
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
