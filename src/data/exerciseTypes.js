@@ -667,6 +667,21 @@ export const DEFAULT_SECTIONS = {
    * (`scripts/check-exercise-types.mjs` が、種類ごとに構成の有無を見ている)。
    */
   [EXAM_KIND]: examSectionsOf(DEFAULT_EXAM, firstPartOf(DEFAULT_EXAM)),
+  /**
+   * ★ **応答問題**(0073・第5.332節・2026-10-01 利用者の指定)。
+   *
+   * 演習は**「リスニング + 理解」1つだけ。** 質問を聞いて応答を選ぶ / 言う
+   * という形が、まるごとそれである(TOEIC L&R Part 2 と同じ)。
+   * **新しい演習の種類は作っていない。**
+   *
+   * **問数はここで決まらない。** 「えらんだ表現の数 × 2」なので、
+   * 画面が `responseCount()` で差し替える(`responseDrill.js` 1か所)。
+   * ここに置いてあるのは、**鍵が来なかったときに黙って文型ドリルへ
+   * 落ちないため**である(`[EXAM_KIND]` と同じ理由)。
+   * `0` にしてあるのは、**表現をえらぶまで「0 問」と正直に出す**ためで、
+   * 数を決め打ちすると**えらんでいないのに作れるように見える。**
+   */
+  response: [{ exercise_type: 'listening', count: 0 }],
   // 旧「単語」「フレーズ」。新規では選べないが、既存の教材を開くために残す
   word:   [{ exercise_type: 'vocabulary', count: 20 }],
   phrase: [{ exercise_type: 'phrase',     count: 20 }],

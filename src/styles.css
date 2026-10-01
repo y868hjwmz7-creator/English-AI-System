@@ -10869,3 +10869,17 @@ button.wbfilter-ctl { text-align: left; }
 }
 /* **消すのではなく隠す。** 紙では出す(下の `@media print`) */
 .chunk-drill-en.is-hidden { display: none; }
+
+/* ★ **応答問題の表現えらび**(0073・第5.332節・2026-10-01 利用者の指定)。
+     **隙間は `gap` で作る**(余白で作らない・共通ルール) */
+.res-pick-body {
+  display: flex; flex-wrap: wrap; gap: var(--sp-8);
+  margin-top: var(--sp-8);
+}
+.res-pick-body .btn { display: grid; gap: 2px; text-align: left; }
+.res-pick-ja { font-size: .78em; opacity: .85; }
+.res-chosen-body { display: grid; gap: var(--sp-8); margin: var(--sp-8) 0 0; padding: 0; list-style: none; }
+.res-chosen-body > li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
+}
+.res-chosen-body > li > [lang="en"] { font-weight: 600; }

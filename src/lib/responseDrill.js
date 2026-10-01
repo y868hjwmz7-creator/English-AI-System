@@ -35,6 +35,9 @@
  * ============================================================================
  */
 
+/* **出どころの呼び名は、テストと分け合う**(第5.260節・下の `RESPONSE_SOURCES`) */
+import { EXAM_SOURCES } from './examBuild.js'
+
 /**
  * **選べる問題数**(2026-10-01 利用者の指定「選べる問題数は 10 20 30」)。
  * **既定はいちばん軽いもの** —— 多いほうを既定にすると、
@@ -152,15 +155,30 @@ export function responseBrief({ form = DEFAULT_RESPONSE_FORM, phrases = [], time
  * 冊(テキスト)は `textBooks.js` が一覧を持っているので、**ここには書かない** ——
  * 冊を足した日に、ここだけ古くなる。
  */
+export const TEXT_SOURCE = 'text'
+
 export const RESPONSE_SOURCES = [
-  { id: 'text', label: 'テキスト', hint: 'Native Flow / RIZAP の冊。UNIT を選べる' },
-  { id: 'wordbook', label: 'ゲストの単語帳', hint: '印を付けた語・フレーズ' },
-  { id: 'qr', label: 'ゲストの Quick Response 帳', hint: '溜めた文' },
+  { id: TEXT_SOURCE, label: 'テキスト', hint: 'Native Flow / RIZAP の冊。UNIT を選べる' },
+  /* **ゲストの単語帳と Quick Response 帳は、テストとまったく同じ出どころ**
+     (第5.260節)。**呼び名も id も書き写さない** —— あちら1か所から受け取る。
+
+     **「教材」は出さない。** 応答問題の正解は**覚えたい表現**であって、
+     教材の本文ではない(効かない操作を見せない・CLAUDE.md)。
+     外すものを名指しするのは、**足された出どころが黙って消えない**ため ——
+     `filter` で残すものを並べると、新しい出どころが出てこない */
+  ...EXAM_SOURCES.filter((s) => s.id !== 'material'),
 ]
-export const DEFAULT_RESPONSE_SOURCE = 'text'
+export const DEFAULT_RESPONSE_SOURCE = TEXT_SOURCE
 
 /** 「テキスト」をえらんでいるか。**判断は1か所**(画面で `=== 'text'` と書かない) */
-export const usesTextBook = (sourceId) => sourceId === 'text'
+export const usesTextBook = (sourceId) => sourceId === TEXT_SOURCE
+
+/** その出どころに、ゲストを選んでおく必要があるか(持ちものだから) */
+export const needsLearner = (sourceId) => !usesTextBook(sourceId)
+
+/** 呼び名。**一覧はここ1か所**(画面に書き写さない) */
+export const responseSourceLabel = (id) =>
+  RESPONSE_SOURCES.find((s) => s.id === id)?.label ?? ''
 
 /**
  * **引いてきた行から、正解にする表現をえらぶ。**
@@ -204,3 +222,20 @@ export function responseNote(got, total) {
   }
   return `${n} 個の表現を、それぞれ ${TIMES_PER_PHRASE} 回ずつ出します（全 ${questionsFrom(got)} 問）。`
 }
+
+/**
+ * **応答問題の構成に、問数を差し替える**(0073・第5.332節)。
+ *
+ * 問数は「えらんだ表現の数 × `TIMES_PER_PHRASE`」なので、
+ * `DEFAULT_SECTIONS` には書けない(作るたびに変わる)。
+ * **画面が計算して書き写さない** —— ここ1か所で差し替える。
+ *
+ * **応答問題でなければ、1つも触らない**(渡されたものをそのまま返す)。
+ *
+ * @param {Array} plan `sectionsFor()` が返した構成
+ * @param {boolean} on 応答問題か(`isResponseKind(kind)`。**ここで判じ直さない**)
+ * @param {Array} phrases 正解にする表現
+ */
+export const responsePlan = (plan, on, phrases) => (on
+  ? (plan ?? []).map((s) => ({ ...s, count: questionsFrom(phrases) }))
+  : plan)

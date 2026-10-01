@@ -40,7 +40,7 @@ import {
   NEW_MATERIAL_KINDS, assignMaterial, countMaterialsLike, createMaterial, estimateCost,
   fillGrammar, generateChunkJa, generateSection,
   bodyWord, canPasteBody, freeFromSubject, generateSectionUnique,
-  isDialogueKind, isExamKind, isPassageKind, isVocabKind, needsWeakTag,
+  isDialogueKind, isExamKind, isPassageKind, isResponseKind, isVocabKind, needsWeakTag,
   isDrillKind,
   kindLabel, usesScene,
   subjectLabel, subjectHint, subjectExample,
@@ -102,6 +102,17 @@ import {
 import {
   DEFAULT_MIX, MIX_ALL_UNITS, MIX_COUNTS, canMixText, mixNote, mixWords, overNote, pickMix,
 } from '../lib/textMix.js'
+/* ★ **応答問題**(0073・第5.332節)。算段は `responseDrill.js` 1か所、
+     引いてくるのは `responseSources.js`(あちらが置き場所の違いを隠す) */
+import {
+  DEFAULT_RESPONSE_COUNT, DEFAULT_RESPONSE_FORM, DEFAULT_RESPONSE_PICK,
+  DEFAULT_RESPONSE_SOURCE, RESPONSE_COUNTS, RESPONSE_FORMS, RESPONSE_PICKS,
+  RESPONSE_SOURCES, TIMES_PER_PHRASE, needsLearner, phrasesNeeded, pickPhrases,
+  questionsFrom, responseBrief, responseNote, responsePlan, usesTextBook,
+} from '../lib/responseDrill.js'
+import { loadResponseRows } from '../lib/responseSources.js'
+/* **混ぜ方は `shuffle.js` 1か所**(自前の混ぜ方を書かない・第5.282節) */
+import { shuffled } from '../lib/shuffle.js'
 import {
   NF_BOOK_ID, TEXT_BOOKS, loadTextPhrases, loadTextUnits, textBookLabel,
 } from '../lib/textBooks.js'
@@ -276,6 +287,31 @@ export default function MaterialForm({
   const [mixBusy, setMixBusy] = useState(false)
   const [mixSaid, setMixSaid] = useState('')
   const [mixError, setMixError] = useState('')
+  /* ══════════════════════════════════════════════════════════════
+     ★ **応答問題**(0073・第5.332節・2026-10-01 利用者の指定)
+
+       > NATIVE FLOW で学ぶ表現が応答の正解となるように
+       > 選択肢 A-C から選ぶ / または、選択肢なしにも出来るように
+       > 20問選んだ時は10個の表現がそれぞれ2回ずつ正解になるように
+
+     **冊と UNIT のえらび方は、上の「テキストの表現を混ぜる」と同じ形**
+     (同じことをするものを2つ見せない・CLAUDE.md)。
+     ちがうのは**出どころが3つある**ことと、
+     **えらんだ表現が「正解」になる**ことである。 */
+  const [resSource, setResSource] = useState(DEFAULT_RESPONSE_SOURCE)
+  const [resBook, setResBook] = useState(NF_BOOK_ID)
+  const [resUnits, setResUnits] = useState(null)   // **null は「まだ読んでいない」**
+  const [resUnit, setResUnit] = useState(MIX_ALL_UNITS)
+  const [resCount, setResCount] = useState(DEFAULT_RESPONSE_COUNT)
+  const [resForm, setResForm] = useState(DEFAULT_RESPONSE_FORM)
+  const [resPick, setResPick] = useState(DEFAULT_RESPONSE_PICK)
+  /** 引いてきた表現ぜんぶ(**自分でえらぶ**ときに並べる) */
+  const [resRows, setResRows] = useState(null)      // **null は「まだ引いていない」**
+  /** **正解になる表現。** これが決まるまで教材は作れない */
+  const [resPhrases, setResPhrases] = useState([])
+  const [resBusy, setResBusy] = useState(false)
+  const [resSaid, setResSaid] = useState('')
+  const [resError, setResError] = useState('')
   const [accent, setAccent] = useState(initial.accent || DEFAULT_ACCENT)
   /*
    * **会話に出す人数**(2026-09 利用者の要望「会議というジャンルを作りたい」)。
@@ -592,6 +628,85 @@ export default function MaterialForm({
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     ★ **応答問題の表現を引く**(0073・第5.332節)
+
+       **読み方は1つも作っていない** —— テキストは `loadTextPhrases()`、
+       ゲストの持ちものは `loadExamRows()`(第5.259 / 5.260節)。
+       **数え方を2通り持たない**(CLAUDE.md)。
+
+       **AI は1回も呼ばない(0円)。** もう手元にあるものを読むだけである。
+     ══════════════════════════════════════════════════════════════ */
+  const resOn = isResponseKind(kind)
+  /* 冊を選び直すたびに UNIT を読み直す。**テキストのときだけ** ——
+     単語帳 / Quick Response 帳に UNIT は無い(効かない操作を見せない) */
+  useEffect(() => {
+    if (!resOn || !usesTextBook(resSource)) return undefined
+    let alive = true
+    setResUnits(null); setResUnit(MIX_ALL_UNITS); setResError('')
+    loadTextUnits(resBook).then(({ data, error }) => {
+      if (!alive) return
+      if (error) { setResUnits([]); setResError(error); return }
+      setResUnits(data ?? [])
+    }).catch(() => { if (alive) { setResUnits([]); setResError('UNIT を読めませんでした') } })
+    return () => { alive = false }
+  }, [resOn, resSource, resBook])
+
+  /* **出どころを変えたら、えらんだ表現は捨てる。**
+     残すと、別の出どころの表現で作ってしまう(黙って混ざる) */
+  useEffect(() => {
+    setResRows(null); setResPhrases([]); setResSaid(''); setResError('')
+  }, [resSource, resBook, resUnit, resPick])
+
+  /** 誰の持ちものから引くか。**共有相手が1人に決まっているときだけ** */
+  const resLearner = shareWith.length === 1 ? shareWith[0] : null
+
+  /**
+   * **表現を引いて、正解にするものを決める。**
+   *
+   * ・**おまかせ** … 必要な数だけ引く(`pickPhrases` が混ぜる)
+   * ・**自分でえらぶ** … 引いた全部を並べて、チェックで選ばせる
+   */
+  const loadRes = async () => {
+    if (resBusy) return
+    setResBusy(true); setResSaid(''); setResError(''); setResPhrases([])
+    try {
+      const { data, error } = await loadResponseRows({
+        source: resSource, learnerId: resLearner, bookId: resBook, unitKey: resUnit,
+      })
+      if (error) { setResError(error.message); setResRows(null); return }
+      const rows = data ?? []
+      setResRows(rows)
+      if (resPick === 'manual') {
+        /* **自分でえらぶときは、こちらで決めない。**
+           並べるだけ —— 何個えらべばよいかは下の1行が言う */
+        setResSaid(`${rows.length} 個の表現から、えらんでください`
+          + `（${resCount} 問には ${phrasesNeeded(resCount)} 個）。`)
+        return
+      }
+      /* **混ぜ方は `shuffle.js` 1か所**(自前の混ぜ方を書かない) */
+      const got = pickPhrases(rows, resCount, shuffled)
+      setResPhrases(got)
+      /* **起きたことをそのまま言う。** 足りなければ足りないと言う */
+      setResSaid(responseNote(got, resCount))
+    } catch {
+      setResError('表現を読めませんでした')
+    } finally {
+      setResBusy(false)
+    }
+  }
+
+  /** 自分でえらぶときの、入れ外し。**上限は言うが、止めない** */
+  const toggleResPhrase = (row) => {
+    const key = String(row?.en ?? '').trim().toLowerCase()
+    const at = resPhrases.findIndex((p) => p.en.trim().toLowerCase() === key)
+    const next = at >= 0
+      ? resPhrases.filter((_, i) => i !== at)
+      : [...resPhrases, { en: row.en, ja: row.ja, ...(row.from ? { from: row.from } : {}) }]
+    setResPhrases(next)
+    setResSaid(responseNote(next, resCount))
+  }
+
   const wordLearner = shareWith.length === 1 ? shareWith[0] : null
   const wordBooks = booksFor({ hasLearner: !!wordLearner })
   /** 選べなくなった冊は、黙って基礎単語へ落とす(**行き止まりを作らない**) */
@@ -885,7 +1000,27 @@ export default function MaterialForm({
      無ければ声の欄を出さない(効かない操作を見せない)。
      **`hasAnyAudio()` 1か所**から引く —— 画面で演習を数え直さない */
   const 読み上げあり = hasAnyAudio(kind, tagIds, isExamKind(kind) ? examKey : '')
-  const planNow = () => sectionsFor(kind, amounts, include, isExamKind(kind) ? examKey : '')
+  /* ★ **問数は、えらんだ表現の数 × 2**(応答問題・第5.332節)。
+       差し替えは `responsePlan()` 1か所 —— 画面で掛け算を書かない */
+  const planNow = () => responsePlan(
+    sectionsFor(kind, amounts, include, isExamKind(kind) ? examKey : ''),
+    isResponseKind(kind), resPhrases,
+  )
+  /**
+   * ★ **窓口へ渡す「作り方」**(第5.332節)。
+   *
+   * テスト対策は PART の作り方、応答問題は**正解にする表現と出し方**。
+   * **役目が同じなので、渡す欄も1つ**(`examPart`)にしてある ——
+   * 窓口を1行も触らずに済む(配り直しが要らない)。
+   *
+   * **4か所に書き写していたのを、ここ1か所に寄せた** ——
+   * 応答問題を足すのに、同じ式を5つ書くことになるためである。
+   */
+  const makeBrief = () => {
+    if (isExamKind(kind)) return examBriefByKey(examKey)
+    if (isResponseKind(kind)) return responseBrief({ form: resForm, phrases: resPhrases })
+    return ''
+  }
 
   /**
    * **文法解説を作る問は、いくつあるか**(第5.213節)。
@@ -967,7 +1102,7 @@ export default function MaterialForm({
            本文だけ TOEIC Part 7 の形で、設問はふつうの内容理解になる。
            **2つの道(AI が書く / 原稿を貼る)の両方に置く** ——
            片方だけだと、そちらを通った日にだけ形が変わる */
-        examPart: isExamKind(kind) ? examBriefByKey(examKey) : '',
+        examPart: makeBrief(),
       })
       if (e) throw new Error(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`)
       spent.input += data.usage?.input ?? 0
@@ -1132,7 +1267,7 @@ export default function MaterialForm({
          **窓口に一覧を書き写さない**(`angle` / `chunkKinds` と同じ作法)——
          書き写すと、PART を1つ直したいだけで窓口を配り直すことになる。
          テスト対策でなければ空なので、ほかの種類は1文字も変わらない */
-      examPart: isExamKind(kind) ? examBriefByKey(examKey) : '',
+      examPart: makeBrief(),
     })
     // **どの段階で失敗したのかを、必ず名前で言う。**
     // 記事・会話は「本文 → 内容の理解 → 語句」と3回に分けて作る。
@@ -1175,7 +1310,7 @@ export default function MaterialForm({
            本文だけ TOEIC Part 7 の形で、設問はふつうの内容理解になる。
            **2つの道(AI が書く / 原稿を貼る)の両方に置く** ——
            片方だけだと、そちらを通った日にだけ形が変わる */
-        examPart: isExamKind(kind) ? examBriefByKey(examKey) : '',
+        examPart: makeBrief(),
       })
       if (e) throw new Error(`${exerciseLabel(rest[i].exercise_type)}を作れませんでした。${e}`)
       spent.input += data.usage?.input ?? 0
@@ -1344,7 +1479,7 @@ export default function MaterialForm({
              テスト対策でなければ空なので、ほかの種類は1文字も変わらない。
              **弱点タグが無くても作れるのは、これが「何の練習か」を
              決めているから**である(窓口の側もそう見ている) */
-          examPart: isExamKind(kind) ? examBriefByKey(examKey) : '',
+          examPart: makeBrief(),
         },
         { usedSet, learnerIds: shareWith, tagIds },
       )
@@ -1859,6 +1994,167 @@ export default function MaterialForm({
           無ければ行ごと出さない(空白を残さない) */}
       {isExamKind(kind) && examSkipLine(examId) && (
         <p className="field-hint exam-skip">{examSkipLine(examId)}</p>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          ★ **応答問題**(0073・第5.332節・2026-10-01 利用者の指定)
+
+            > NATIVE FLOW で学ぶ表現が応答の正解となるように
+            > 選択肢 A-C から選ぶ / または、選択肢なしにも出来るように
+            > 20問選んだ時は10個の表現がそれぞれ2回ずつ正解になるように
+
+          **応答問題のときだけ出す**(効かない操作を見せない)。
+          一覧(出どころ・問題数・形・えらび方)はぜんぶ
+          `responseDrill.js` 1か所から引く —— **画面に書き写さない。**
+          ══════════════════════════════════════════════════════════ */}
+      {resOn && (
+        <div className="review-box">
+          <div className="wbfilter">
+            <label className="wbfilter-row">
+              <span className="wbfilter-name">出どころ</span>
+              <select className="wbfilter-ctl" value={resSource}
+                      onChange={(e) => setResSource(e.target.value)}>
+                {RESPONSE_SOURCES.map((x) => (
+                  <option key={x.id} value={x.id}>{x.label}</option>
+                ))}
+              </select>
+            </label>
+
+            {/* **テキストのときだけ、冊と UNIT を出す** ——
+                単語帳 / Quick Response 帳に UNIT は無い */}
+            {usesTextBook(resSource) && (
+              <>
+                <label className="wbfilter-row">
+                  <span className="wbfilter-name">テキスト</span>
+                  <select className="wbfilter-ctl" value={resBook}
+                          onChange={(e) => setResBook(e.target.value)}>
+                    {TEXT_BOOKS.map((b) => (
+                      <option key={b.id} value={b.id}>{b.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {/* **読んでいる最中・0 UNIT・読めなかった を、取り違えない**
+                    (0 と null を取り違えない・CLAUDE.md) */}
+                <label className="wbfilter-row">
+                  <span className="wbfilter-name">UNIT</span>
+                  {resUnits === null ? (
+                    <span className="wbfilter-ctl">読んでいます…</span>
+                  ) : resUnits.length === 0 ? (
+                    <span className="wbfilter-ctl">まだ入っていません</span>
+                  ) : (
+                    <select className="wbfilter-ctl" value={resUnit}
+                            onChange={(e) => setResUnit(e.target.value)}>
+                      <option value={MIX_ALL_UNITS}>ぜんぶの UNIT から</option>
+                      {resUnits.map((u) => (
+                        <option key={u.key} value={u.key}>{u.label}</option>
+                      ))}
+                    </select>
+                  )}
+                </label>
+              </>
+            )}
+
+            <label className="wbfilter-row">
+              <span className="wbfilter-name">問題数</span>
+              <select className="wbfilter-ctl" value={resCount}
+                      onChange={(e) => setResCount(Number(e.target.value))}>
+                {RESPONSE_COUNTS.map((n) => (
+                  <option key={n} value={n}>
+                    {n} 問（表現 {phrasesNeeded(n)} 個 × {TIMES_PER_PHRASE} 回）
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="wbfilter-row">
+              <span className="wbfilter-name">出し方</span>
+              <select className="wbfilter-ctl" value={resForm}
+                      onChange={(e) => setResForm(e.target.value)}>
+                {RESPONSE_FORMS.map((x) => (
+                  <option key={x.id} value={x.id}>{x.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="wbfilter-row">
+              <span className="wbfilter-name">えらび方</span>
+              <select className="wbfilter-ctl" value={resPick}
+                      onChange={(e) => setResPick(e.target.value)}>
+                {RESPONSE_PICKS.map((x) => (
+                  <option key={x.id} value={x.id}>{x.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {/* **ゲストの持ちものは、相手が1人に決まっていないと引けない。**
+              押せるのに何も起きない、を作らない(行き止まりを作らない) */}
+          <div className="btn-row">
+            <button type="button" className="btn btn--ghost"
+                    disabled={resBusy
+                      || (usesTextBook(resSource)
+                        && (resUnits === null || resUnits.length === 0))
+                      || (needsLearner(resSource) && !resLearner)}
+                    onClick={loadRes}>
+              {resBusy ? '読んでいます…' : '表現をえらぶ'}
+            </button>
+          </div>
+          {needsLearner(resSource) && !resLearner && (
+            <p className="notice notice--warn">
+              その出どころから引くには、下で共有するゲストを1人だけ選んでください。
+            </p>
+          )}
+
+          {/* **失敗の知らせは、その操作をした場所に出す**(CLAUDE.md) */}
+          {resError && <p className="notice notice--error">{resError}</p>}
+          {resSaid && <p className="field-hint">{resSaid}</p>}
+
+          {/* **自分でえらぶ**(利用者の指定「完全手動でも選べるオプション」)。
+              引いた全部を並べて、押すたびに入れ外しする。
+              **長い一覧は畳む**(CLAUDE.md)—— 690 件が並ぶことがある */}
+          {resPick === 'manual' && resRows !== null && resRows.length > 0 && (
+            <details className="res-pick">
+              <summary>
+                えらべる表現 {resRows.length} 個（いま {resPhrases.length} 個）
+              </summary>
+              <div className="res-pick-body">
+                {resRows.map((r) => {
+                  const on = resPhrases
+                    .some((p) => p.en.trim().toLowerCase() === r.en.trim().toLowerCase())
+                  return (
+                    <button type="button" key={`${r.en}-${r.ja}`}
+                            className={`btn btn--small ${on ? 'btn--primary' : 'btn--ghost'}`}
+                            onClick={() => toggleResPhrase(r)}>
+                      <span lang="en">{r.en}</span>
+                      <span className="res-pick-ja">{r.ja}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </details>
+          )}
+
+          {/* **何が正解になるかを、押す前に見せる**(見えないものは信じられない)。
+              1つずつ外せる —— 混ぜた結果に1つだけ要らないものが混じることがある */}
+          {resPhrases.length > 0 && (
+            <details className="res-chosen" open>
+              <summary>
+                正解にする表現 {resPhrases.length} 個 → 全 {questionsFrom(resPhrases)} 問
+              </summary>
+              <ul className="res-chosen-body">
+                {resPhrases.map((p) => (
+                  <li key={p.en}>
+                    <span lang="en">{p.en}</span>
+                    <span className="res-pick-ja">{p.ja}</span>
+                    <button type="button" className="btn btn--ghost btn--small"
+                            onClick={() => toggleResPhrase(p)}>外す</button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
       )}
 
       {/* **業界と趣味は、2つのプルダウンに分けて左右に並べる**
@@ -2919,8 +3215,19 @@ export default function MaterialForm({
           </p>
         )}
 
+        {/* ★ **表現をえらぶ前は、作らせない**(0073・第5.332節)。
+              問数が「えらんだ表現 × 2」なので、0個だと**0問の教材**が
+              できてしまう(効かない操作を見せない・CLAUDE.md)。
+              **なぜ押せないかを、その場で言う** */}
+        {resOn && resPhrases.length === 0 && (
+          <p className="notice notice--warn">
+            先に「表現をえらぶ」を押して、正解にする表現を決めてください。
+          </p>
+        )}
         <button type="button" className="btn btn--primary"
-                onClick={generate} disabled={!!generating || busy}>
+                onClick={generate}
+                disabled={!!generating || busy
+                  || (resOn && resPhrases.length === 0)}>
           {generating
             ? `作っています… ${generating.label}`
               + `(${generating.done + 1}/${generating.total})${elapsed ? ` ${elapsed}秒` : ''}`
@@ -2942,7 +3249,12 @@ export default function MaterialForm({
                    書くと、段落まで問に数えたことになる */
                 : isExamKind(kind)
                   ? `下書きを作る(${planLabel(planNow())})`
-                  : `下書きを作る(${planNow().reduce((n, s2) => n + s2.count, 0)} 問)`}
+                  /* ★ **応答問題は「表現 × 回数」で言う**(第5.332節)。
+                       ただ「20 問」と書くと、**20 個の表現を使うように読める** */
+                  : isResponseKind(kind)
+                    ? `下書きを作る(${resPhrases.length} 個 × ${TIMES_PER_PHRASE} 回`
+                      + ` = ${questionsFrom(resPhrases)} 問)`
+                    : `下書きを作る(${planNow().reduce((n, s2) => n + s2.count, 0)} 問)`}
         </button>
         {/* **止まるのは、ここを押したときだけ**(2026-09 利用者の指定)。
             画面を離れても、閉じても止まらない */}
