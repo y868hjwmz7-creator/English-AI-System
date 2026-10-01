@@ -40,6 +40,49 @@ export function splitChoices(text) {
   return { lead, choices }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   ★ **設問の頭が、すぐ上の英文の写しになっていないか**
+      (第5.342節・2026-10-01 実機・利用者の指摘)
+
+     > 問題文がふたつずつ同じものが繰り返されてしまってます
+
+   TOEIC Part 5 で、こう出ていた。
+
+       ① The marketing department （　　　） a new advertising strategy …
+          The marketing department （　　　） a new advertising strategy …   ← 写し
+          (A) has been developing
+          (B) develops …
+
+   **出どころは作り方の文**である。「question には**設問と**、4つの選択肢を
+   入れ」と書いてあったので、AI は**設問 = 問題文そのもの**と読んで、
+   `prompt_en` と同じ英文をもう一度書いた。
+   (内容の理解やリスニングでは、設問は `question` にしか無いので正しい。
+   **穴埋めだけ、設問が `prompt_en` の側にある。**)
+
+   **作り方は直したが、指示は読み飛ばされうる**(CLAUDE.md)。
+   ここで落としておけば、**すでに作った教材もそのまま直る**
+   (作り直し = 課金をしない)。
+   ══════════════════════════════════════════════════════════════════ */
+
+/** 突き合わせる形。空白と全角の空白をそろえるだけで、中身は変えない */
+const flat = (s) => String(s ?? '').replace(/[\s　]+/g, ' ').trim()
+
+/**
+ * その**先頭の1行**(`lead`)は、出さなくてよいか。
+ *
+ * @param {string} lead 選択肢の手前にある文
+ * @param {string|string[]} drop 出さなくてよいもの。
+ *        **1つでも配列でも受ける** —— 呼ぶ側に条件を書き散らさない
+ *        (演習ぜんぶで同じ指示文 / すぐ上に出ている英文)
+ */
+export const dropsLead = (lead, drop) => {
+  const a = flat(lead)
+  if (!a) return true
+  return (Array.isArray(drop) ? drop : [drop])
+    .map(flat).filter(Boolean)
+    .some((b) => a === b)
+}
+
 /**
  * **その演習ぜんぶで同じ指示文か。**
  *

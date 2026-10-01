@@ -735,7 +735,8 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                      指示文を落とすと**どこにも出なくなる**) */}
                                 {it.question && (
                                   <ChoiceLines
-                                    text={it.question} cls="homework-en"
+                                    /* ★ **すぐ上の英文は、もう一度出さない**(第5.342節) */
+                                    text={it.question} drop={it.prompt_en} cls="homework-en"
                                     en={(t) => (
                                       <EnglishText text={t} level={a.material?.level}
                                                    statuses={wordStatuses}

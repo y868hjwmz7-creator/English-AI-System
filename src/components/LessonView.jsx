@@ -2731,7 +2731,11 @@ export default function LessonView({
                     /* ★ **選択肢は1行ずつ**(第5.329節)。同じ指示文は
                          「取り組み方」へ回してある(`共通の指示`) */
                     <ChoiceLines
-                      text={it.question} drop={共通の指示}
+                      /* ★ **すぐ上の英文も渡す**(第5.342節)。穴埋めでは
+                           `question` の頭に `prompt_en` の写しが入ることがあり、
+                           **同じ問題文が2回出る**(実機・利用者の指摘)。
+                           **判断は `dropsLead()` 1か所**(ここで比べない) */
+                      text={it.question} drop={[共通の指示, it.prompt_en]}
                       en={(t) => (
                         <EnglishText text={t} level={material.level}
                                      statuses={wordStatuses} onMark={markWord}

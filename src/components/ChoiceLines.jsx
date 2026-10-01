@@ -1,4 +1,4 @@
-import { splitChoices } from '../lib/choiceLines.js'
+import { dropsLead, splitChoices } from '../lib/choiceLines.js'
 
 /**
  * **設問を、選択肢ごとの行にして出す**(2026-09-30 利用者の指定・第5.329節)。
@@ -25,15 +25,19 @@ import { splitChoices } from '../lib/choiceLines.js'
  *   既定は `lesson-en` なので、**レッスン表示は1ミリも変わらない。**
  *
  * @param {string} text  設問(選択肢を含むことがある)
- * @param {string} drop  演習ぜんぶで同じ指示文(「取り組み方」へ回したもの)。
- *                       **その問だけ違う指示なら、ここに残して出す**(黙って消さない)
+ * @param {string|string[]} drop 出さなくてよいもの。**1つでも配列でも受ける**。
+ *        ①演習ぜんぶで同じ指示文(「取り組み方」へ回したもの)
+ *        ②★**すぐ上に出ている英文**(第5.342節)——
+ *          穴埋めでは `question` の頭に `prompt_en` の写しが入ることがあり、
+ *          **同じ文が2回出る。** 判断は `dropsLead()` 1か所。
+ *        **その問だけ違う指示なら、ここに残して出す**(黙って消さない)
  * @param {(t: string) => React.ReactNode} en 英文を描く中身(画面ごとに違う)
  * @param {string} cls   1行を包む箱の名前
  */
 export default function ChoiceLines({ text, drop = '', en, cls = 'lesson-en' }) {
   const { lead, choices } = splitChoices(text)
   if (!choices.length) return <div className={cls}>{en(text)}</div>
-  const 前 = drop && lead === drop ? '' : lead
+  const 前 = dropsLead(lead, drop) ? '' : lead
   return (
     <div className="choice-lines">
       {前 && <div className={cls}>{en(前)}</div>}

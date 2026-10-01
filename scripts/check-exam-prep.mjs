@@ -38,6 +38,7 @@ const {
 } = await import('../src/data/examPrep.js')
 const { DROP_REASONS, emptyDropCounts, isExhausted }
   = await import('../src/lib/dropReasons.js')
+const { dropsLead } = await import('../src/lib/choiceLines.js')
 const { EXERCISE_TYPES, defaultSectionsFor, isBlankItem, isPassageSection, sectionsFor }
   = await import('../src/data/exerciseTypes.js')
 const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, isExamKind, needsWeakTag }
@@ -1476,6 +1477,85 @@ console.log('\n▶ 必須の欄が、窓口と画面でそろっているか(第
   else if (出尽くしでない) ng('出尽くし … 欄が空で落ちたのに「出尽くした」と言う(嘘になる)')
   else if (数えていない) ng('出尽くし … 1問も落ちていないのに「出尽くした」と言う')
   else ok('出尽くし … 前に出た英文で落ちたときだけ言う(空・形のときは言わない)')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **問題文が2回出ないか**(第5.342節・2026-10-01 実機・利用者の指摘)
+
+     > 問題文がふたつずつ同じものが繰り返されてしまってます
+
+   TOEIC Part 5 で、空所を含む英文が**上下に2回**出ていた。
+   作り方が「question には**設問と**、4つの選択肢を入れ」と言っていたので、
+   AI は**設問 = 問題文そのもの**と読んで、`prompt_en` と同じ英文を書いた。
+
+   **穴埋めだけが違う** —— 設問文が `prompt_en` の側にある。
+   内容の理解やリスニングは `question` にしか無いので、あちらは正しい。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 問題文が2回出ないか(第5.342節)')
+{
+  /* ── ① **設問文が別の欄にある演習では、「選択肢だけ」と言っているか** ──
+         **欄の名前を書き写さない。** `ASK` の宣言から読み取る */
+  const 別の欄 = PICKABLE.filter(({ part }) => choicesOf(part) >= 2
+    && (part.sections ?? []).some((x) => x.exercise_type === 'fill_blank'))
+  const 設問が同じ欄 = PICKABLE.filter(({ part }) => choicesOf(part) >= 2
+    && (part.sections ?? []).some((x) => ['comprehension', 'listening']
+      .includes(x.exercise_type)))
+  const 漏れ = []
+  for (const { exam, part } of 別の欄) {
+    const b = examBrief(exam.id, part.id)
+    if (!/選択肢[^。]*だけ/.test(b)) 漏れ.push(`${exam.id}/${part.id} … 「選択肢だけ」と言っていない`)
+    if (!/もう一度書かない/.test(b)) 漏れ.push(`${exam.id}/${part.id} … 「もう一度書かない」が無い`)
+  }
+  /* **出る側と出ない側の両方**(CLAUDE.md)。
+     設問が `question` にしかない演習では、**設問も入れさせる** */
+  const 余り = 設問が同じ欄.filter(({ exam, part }) =>
+    !/設問と、/.test(examBrief(exam.id, part.id)))
+  if (別の欄.length < 5 || 設問が同じ欄.length < 5) {
+    ng('問題文の写し … 片側の PART が少なすぎる(見張りが素通りする)',
+      `別の欄 ${別の欄.length} / 同じ欄 ${設問が同じ欄.length}`)
+  } else if (漏れ.length) {
+    ng('問題文の写し … 穴埋めで「選択肢だけ」と言っていない', 漏れ.slice(0, 3).join('\n    '))
+  } else if (余り.length) {
+    ng('問題文の写し … 設問が同じ欄の PART で、設問を入れさせていない',
+      余り.map(({ exam, part }) => `${exam.id}/${part.id}`).slice(0, 3).join(' / '))
+  } else {
+    ok(`問題文の写し … 穴埋め ${別の欄.length} 個は「選択肢だけ」、`
+      + `読む / 聞く ${設問が同じ欄.length} 個は「設問と選択肢」`)
+  }
+
+  /* ── ② **画面でも落ちるか**(指示は読み飛ばされうる・CLAUDE.md)──
+         ★ **すでに作った教材がそのまま直る**(作り直し = 課金をしない)。
+         **実際の文で測る** —— 決まりだけ見ても足りない */
+  const 本文 = 'The marketing department （　　　） a new advertising strategy'
+    + ' since the beginning of this quarter.'
+  const 写し = dropsLead(本文, ['', 本文])
+  const ちがう指示 = dropsLead('Choose the best answer.', ['', 本文])
+  const 共通の指示 = dropsLead('Choose the best answer.', ['Choose the best answer.', 本文])
+  /* **空白のちがいだけなら、同じものとして落とす** */
+  const 空白ちがい = dropsLead(`  ${本文.replace(' a new', '  a  new')}  `, ['', 本文])
+  if (!写し) ng('問題文の写し … 画面で落ちない(同じ文が2回出る)')
+  else if (ちがう指示) ng('問題文の写し … その問だけの指示まで落ちる(黙って消している)')
+  else if (!共通の指示) ng('問題文の写し … 演習ぜんぶで同じ指示文が落ちない')
+  else if (!空白ちがい) ng('問題文の写し … 空白のちがいだけで落ちなくなる')
+  else ok('問題文の写し … 画面でも落ちる(ちがう指示は残る・空白のちがいは同じ扱い)')
+
+  /* ── ③ **3つの画面とも、すぐ上の英文を渡しているか** ──
+         1つでも渡し忘れると、**その画面だけ2回出る** */
+  const 渡していない = ['LessonView', 'MaterialBody', 'LearnerHomework'].filter((名) => {
+    const src = noC(read(`src/components/${名}.jsx`))
+    return !/drop=\{[^}]*it\.prompt_en[^}]*\}/.test(src)
+  })
+  if (渡していない.length) {
+    ng('問題文の写し … すぐ上の英文を渡していない画面がある', 渡していない.join(' / '))
+  } else ok('問題文の写し … 3画面とも、すぐ上の英文を渡している')
+
+  /* ── ④ **比べ方は1か所か**(画面の中で文字を突き合わせていないか) ── */
+  const 自前 = ['LessonView', 'MaterialBody', 'LearnerHomework', 'ChoiceLines']
+    .filter((名) => /lead === |lead\.trim\(\) ===/.test(noC(read(`src/components/${名}.jsx`))))
+  if (自前.length) {
+    ng('問題文の写し … 画面の中で突き合わせている(判断を2か所に持たない)', 自前.join(' / '))
+  } else ok('問題文の写し … 比べ方は `dropsLead()` 1か所だけ')
 }
 
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

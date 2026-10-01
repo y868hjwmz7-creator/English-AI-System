@@ -205,7 +205,8 @@ export default function MaterialBody({
                          指示文を落とすと**どこにも出なくなる**) */}
                     {it.question && (
                       <ChoiceLines
-                        text={it.question} cls=""
+                        /* ★ **すぐ上の英文は、もう一度出さない**(第5.342節) */
+                        text={it.question} drop={it.prompt_en} cls=""
                         en={(t) => (
                           <EnglishText text={t} level={m.level}
                                        statuses={wordStatuses} onMark={onMarkWord} />

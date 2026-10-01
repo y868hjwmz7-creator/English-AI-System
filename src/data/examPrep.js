@@ -365,7 +365,16 @@ const ASK = {
      **置き場所が食い違うと、4択にしても1行の団子になり、
      正解が全部 (A) に戻る。** 欄は、既にみんなが見ているほうへそろえる。
      `prompt_en` は**空所を含む1文**のままで、本番の見た目とも合う。 */
-  fill_blank: { ask: 'question', why: 'note', trap: TRAPS.fill_blank },
+  /* ★ `stem` … **設問文が、別の欄にある**(第5.342節・実機の指摘)。
+
+       > 問題文がふたつずつ同じものが繰り返されてしまってます
+
+     穴埋めは**空所を含む英文が `prompt_en` の側にある。**
+     それまで「question には**設問と**、4つの選択肢を入れ」と言っていたので、
+     AI は**設問 = 問題文そのもの**と読んで、同じ英文をもう一度書いた。
+     内容の理解やリスニングは設問が `question` にしか無いので、
+     **穴埋めだけが違う。** ここで宣言すれば、書き分けは `choiceBrief` が作る */
+  fill_blank: { ask: 'question', stem: 'prompt_en', why: 'note', trap: TRAPS.fill_blank },
   comprehension: { ask: 'question', ja: 'answer_ja', trap: TRAPS.read },
   listening: { ask: 'question', ja: 'answer_ja', why: 'note', trap: TRAPS.listen },
 }
@@ -394,8 +403,13 @@ export const choiceBrief = (n, sections) => {
     `**${n}択の問である。本番とまったく同じ形にそろえる。**`,
     /* **欄の名前のすぐ後ろに「には」を置く。** 検証が欄の名前を
        機械で拾えるようにするためである(拾えないと素通りする) */
-    `${f.ask} には**設問と、${n}つの選択肢${MARKS.slice(0, n).join('')}を`,
-    '1つずつ改行して**入れ、',
+    /* ★ **設問文が別の欄にあるときは、選択肢だけ**(第5.342節)。
+         「設問と」と言うと、AI は**問題文をもう一度書く** */
+    f.stem
+      ? `${f.ask} には**${n}つの選択肢${MARKS.slice(0, n).join('')}だけ**を`
+        + `1つずつ改行して入れる。**${f.stem} の英文を、もう一度書かない。**`
+      : `${f.ask} には**設問と、${n}つの選択肢${MARKS.slice(0, n).join('')}を`
+        + '1つずつ改行して**入れ、',
     'answer には**記号と語句の両方**(例「(B) has been」)を入れる。',
     `**選択肢は ${n} つだけ。**それより多くも少なくもしない。`,
     /* ★ ここが報告された壊れ方そのものである */
