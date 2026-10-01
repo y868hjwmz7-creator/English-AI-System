@@ -34,7 +34,7 @@ const {
   DEFAULT_EXAM, EXAMS, EXAM_KIND, examBrief, examBriefByKey, examKeyOf, examLabel,
   examOf, examOutline, examPartLine, examPartOf, examPartsOf, examSectionsByKey,
   examSectionsOf, examSkipLine, examSkipsOf, examTitle, firstPartOf,
-  FORMATS, choiceBrief, choicesOf, formatOf, partialOf,
+  FORMATS, TRAPS, choiceBrief, choicesOf, formatOf, partialOf,
 } = await import('../src/data/examPrep.js')
 const { EXERCISE_TYPES, defaultSectionsFor, isPassageSection, sectionsFor }
   = await import('../src/data/exerciseTypes.js')
@@ -1117,6 +1117,133 @@ console.log('\n▶ 4択が4択になるか(第5.338節)')
   if (写し.length) {
     ng('選択肢の行割り … 画面の中に部品の写しが残っている', 写し.join(' / '))
   } else ok('選択肢の行割り … 部品は `components/ChoiceLines.jsx` 1つだけ')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **誤りの選択肢が、ちゃんと紛らわしいか**(第5.339節・利用者の指定)
+
+     > 選択肢は TOEIC の傾向を研究して、正解が簡単にはわかりにくくして
+     > ください
+
+   それまで「**紛らわしい選択肢**にする」の1行だけだった。
+   AI は**明らかに違うもの**を並べるので、読まなくても消去法で当たる。
+   いまは**演習の種類ごとの作り方**(`TRAPS`)を1か所に持つ。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 誤りの選択肢の作り方(第5.339節)')
+{
+  const 選べる = PICKABLE.filter(({ part }) => choicesOf(part) >= 2)
+  if (選べる.length < 10) {
+    ng('誤りの選択肢 … 選択肢のある PART が少なすぎる(見張りが素通りする)', 選べる.length)
+  } else {
+    /* ── ① **どの PART にも、誤りの作り方がそのまま入っているか** ──
+           ★ **はじめ「『誤りの選択肢は、次の作り方から』が在るか」で見て、
+              空所補充だけ赤くなった。** あちらにはその一文が無かった
+              (「4つを1つの軸でそろえる」しか書いていなかった)——
+              **見張りが見つけた本当の抜け**だったので、作り方を足した。
+           **文を書き写さない。** `TRAPS` を読み取って突き合わせる */
+    const 演習の = (part) => (part.sections ?? []).find((x) =>
+      ['fill_blank', 'comprehension', 'listening'].includes(x.exercise_type))?.exercise_type
+    const 対応 = { fill_blank: TRAPS.fill_blank, comprehension: TRAPS.read, listening: TRAPS.listen }
+    const 無い = []
+    for (const { exam, part } of 選べる) {
+      const t = 演習の(part)
+      if (!t) { 無い.push(`${exam.id}/${part.id} … 設問を持つ演習が無い`); continue }
+      if (!examBrief(exam.id, part.id).includes(対応[t])) {
+        無い.push(`${exam.id}/${part.id} … ${t} の作り方が入っていない`)
+      }
+    }
+    if (無い.length) {
+      ng('誤りの選択肢 … 作り方が入っていない PART がある', 無い.slice(0, 4).join('\n    '))
+    } else ok(`誤りの選択肢 … ${選べる.length} 個とも、その演習の作り方がそのまま入る`)
+
+    /* ── ② **3つの作り方が、どれも別の文になっているか** ──
+           書き写して作ると、読む問と聞く問が同じ文になる */
+    const 文 = Object.values(TRAPS)
+    const 使われている = new Set(選べる.map(({ part }) => 演習の(part)).filter(Boolean))
+    if (文.length < 3) {
+      ng('誤りの選択肢 … 作り方が3種類そろっていない', 文.length)
+    } else if (new Set(文).size !== 文.length) {
+      ng('誤りの選択肢 … 作り方が同じ文になっている種類がある',
+        `${文.length} 種類 / 文は ${new Set(文).size} 通り`)
+    } else if (使われている.size !== 3) {
+      ng('誤りの選択肢 … 使われていない作り方がある', [...使われている].join(' / '))
+    } else ok(`誤りの選択肢 … ${文.length} 種類の作り方は、どれも別の文で、どれも使われている`)
+
+    /* ── ③ **正解は言い換え、誤答は元の語そのまま** が入っているか ──
+           ★ **これが TOEIC で正解を落とす最大の理由**だと、解説がそろって
+              書いている。読む問と聞く問の両方に入っていること */
+    const 言い換え = 選べる.filter(({ exam, part }) => {
+      const b = examBrief(exam.id, part.id)
+      const t = (part.sections ?? []).find((x) => ['comprehension', 'listening']
+        .includes(x.exercise_type))
+      return t && /そのまま使わずに言い換える|言い換えで書く/.test(b)
+        && /誤りの選択肢にこそ/.test(b)
+    })
+    const 対象 = 選べる.filter(({ part }) => (part.sections ?? [])
+      .some((x) => ['comprehension', 'listening'].includes(x.exercise_type)))
+    if (対象.length < 5) {
+      ng('誤りの選択肢 … 読む / 聞く問が少なすぎる(見張りが素通りする)', 対象.length)
+    } else if (言い換え.length !== 対象.length) {
+      ng('誤りの選択肢 … 「正解は言い換え・誤答は元の語そのまま」が抜けている PART がある',
+        `${言い換え.length} / ${対象.length}`)
+    } else {
+      ok(`誤りの選択肢 … 読む / 聞く ${対象.length} 個とも、`
+        + '「正解は言い換え・誤答は元の語そのまま」が入る')
+    }
+
+    /* ── ④ **空所補充は「1つの軸でそろえる」が入っているか** ──
+           4つがばらばらだと、本番の Part 5 の形にならない */
+    const 空所 = 選べる.filter(({ part }) => (part.sections ?? [])
+      .some((x) => x.exercise_type === 'fill_blank'))
+    const 軸 = 空所.filter(({ exam, part }) =>
+      /1つの軸でそろえる/.test(examBrief(exam.id, part.id)))
+    if (空所.length < 5) {
+      ng('誤りの選択肢 … 空所補充の PART が少なすぎる(見張りが素通りする)', 空所.length)
+    } else if (軸.length !== 空所.length) {
+      ng('誤りの選択肢 … 空所補充に「1つの軸でそろえる」が入っていない',
+        `${軸.length} / ${空所.length}`)
+    } else ok(`誤りの選択肢 … 空所補充 ${空所.length} 個とも、4つを1つの軸でそろえる`)
+
+    /* ── ⑤ **選択肢の数を書き写していないか** ──
+           ★ **その場で踏んだ。**「4つの選択肢は、長さと形をそろえる」と
+              書いたら、**3択の Part 2 でもそう出た。**
+           **3択の PART には「3つ」、4択には「4つ」**と出ること */
+    const 数の食い違い = []
+    for (const { exam, part } of 選べる) {
+      const n = choicesOf(part)
+      const b = examBrief(exam.id, part.id)
+      const m = /\*\*(\d)つの選択肢は、長さと形/.exec(b)
+      if (!m) 数の食い違い.push(`${exam.id}/${part.id} … 長さの決まりが無い`)
+      else if (Number(m[1]) !== n) {
+        数の食い違い.push(`${exam.id}/${part.id} … 本番は ${n} 択なのに「${m[1]}つ」と出る`)
+      }
+    }
+    /* **3択と4択の両方を数える。** 片方しか無ければ、書き写しても気づけない */
+    const 三択 = 選べる.filter(({ part }) => choicesOf(part) === 3).length
+    const 四択 = 選べる.filter(({ part }) => choicesOf(part) === 4).length
+    if (!(三択 > 0 && 四択 > 0)) {
+      ng('誤りの選択肢 … 3択と4択の両方が無いと、数の書き写しを見つけられない',
+        `3択 ${三択} / 4択 ${四択}`)
+    } else if (数の食い違い.length) {
+      ng('誤りの選択肢 … 選択肢の数を書き写している', 数の食い違い.slice(0, 3).join('\n    '))
+    } else {
+      ok(`誤りの選択肢 … 長さの決まりは、3択 ${三択} 個 / 4択 ${四択} 個とも本番の数で出る`)
+    }
+
+    /* ── ⑥ **作り方を2か所に書いていないか** ──
+           PART ごとの `make` に書き写すと、片方だけ古くなる */
+    const 写し = []
+    for (const { exam, part } of ALL) {
+      if (!part.make) continue
+      if (/音が似ている語|音の似た語/.test(part.make)) {
+        写し.push(`${exam.id}/${part.id} … 「音が似ている語」を make に書いている`)
+      }
+    }
+    if (写し.length) {
+      ng('誤りの選択肢 … 作り方を PART ごとに書き写している', 写し.join('\n    '))
+    } else ok('誤りの選択肢 … 作り方は `TRAPS` 1か所だけ(PART に写しが無い)')
+  }
 }
 
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
