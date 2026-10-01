@@ -86,10 +86,45 @@
  *   古い形(Reading 2パッセージ / Speaking 4タスク)は書いていない。
  *
  *   ★ **2026-10-01 に、もう一度ぜんぶ調べ直した**(第5.336節)。
- *   **この環境からは公式サイト(iibc-global.org / eiken.or.jp / ets.org)に
- *   届かない**(egress で塞がれている)ので、**検索の結果に出てくる
- *   公式ページの中身**で確かめた。**2つ以上の出どころで一致したものだけ**を
- *   書いてある。確かめられなかったものは、空のままにしてある。
+ *   **この環境からは公式サイト(iibc-global.org / eiken.or.jp / ets.org /
+ *   pearson.com)に届かない**(egress で塞がれている)ので、**検索の結果に
+ *   出てくる公式ページの中身**で確かめた。**2つ以上の出どころで一致した
+ *   ものだけ**を書いてある。確かめられなかったものは、空のままにしてある。
+ *
+ * ── ★ **6つの試験を、形式・問数・表示まで突き合わせた**(第5.337節)──
+ *
+ *   2026-10-01 利用者の指定。
+ *
+ *     > テスト対策内の全てのテストについて公式に公表されているテスト形式と
+ *     > 傾向や表示を確認して、アプリ内の対策の教材も揃えてください
+ *
+ *   **食い違いが4つ見つかった。重いほうから並べる。**
+ *
+ *   ① **英検 —— 6つの級ぜんぶに、まったく同じ7つの PART を出していた。**
+ *      実際は級によって大問が違う。**3級には「長文の語句空所補充」が無く**、
+ *      かわりに**3級と準2級だけに「会話文の文空所補充」がある。**
+ *      つまり**3級では、本番に無い大問を出していた。**
+ *      あわせて **準2級プラスの英作文は要約**(Eメールではない)。
+ *      **二次試験も級ごとに3つの形**で、準1級は4コマイラストなので作れない。
+ *
+ *   ② **TOEFL iBT —— セクションの順番が変わっていた。**
+ *      2026年の形は Reading → Listening → **Writing → Speaking**。
+ *      さらに **Listening は公式に4つの型**に分かれており、
+ *      ここを1つにまとめていたので**型ごとの対策ができなかった。**
+ *
+ *   ③ **IELTS —— Not Given が2種類ある。**
+ *      **事実**を照らす True/False/Not Given と、**筆者の意見**を照らす
+ *      Yes/No/Not Given は**別の設問形式**である。前者しか書いていなかった。
+ *      語数制限も「NO MORE THAN TWO WORDS **AND/OR A NUMBER**」が正しい
+ *      (IELTS は**数字を1語と数えない**)。
+ *
+ *   ④ **答える秒数が入っていなかった。** VERSANT(15 / 30 / 40秒)と
+ *      TOEIC Speaking(準備45秒・解答15/30/45/60秒)は、
+ *      **秒数が文の長さを決める。** 画面にも作り方にも入れた。
+ *
+ *   **`partial`(一部だけ作れない)を足した。** 英検の二次試験は
+ *   **音読とパッセージの質問は作れるが、イラストの問だけ作れない。**
+ *   PART ごと消す `cannot` だと、作れるはずの練習までできなくなる。
  *
  * ── Supabase を引き連れない ─────────────────────────────────
  *
@@ -230,7 +265,12 @@ export const EXAMS = [
         what: '1枚の写真について4つの説明を聞き、いちばん合うものを選ぶ',
         cannot: '写真が要るため' },
       { id: 'p2', label: 'Part 2 応答問題', real: '25問', format: 'choice3',
-        what: '質問や発言を聞き、3つの応答からいちばん合うものを選ぶ',
+        /* ★ **本番の表示**(第5.337節)。Part 2 は**問題冊子に何も印刷されない** ——
+             質問も3つの応答も、放送だけである。ここでは**答え合わせのために
+             応答を出す**(出さないと画面で選べない)。
+             **本番との違いなので、ゲストに伝わる形で書いておく** */
+        what: '質問や発言を聞き、3つの応答からいちばん合うものを選ぶ(本番は何も印刷されない)',
+        set: '1問につき質問1文 + 応答3つ',
         sections: [{ exercise_type: 'listening', count: 10 }],
         make: `TOEIC L&R Part 2(応答問題)。${COMMON}`
           + 'audio_text に**質問または発言を1文**(10〜15語)、'
@@ -311,47 +351,134 @@ export const EXAMS = [
           + '必ず混ぜる。' },
     ],
   },
-
   /* ────────────────────────────────────────────────────────────
      英検(実用英語技能検定)
 
      **級ごとに1つの試験として並べる。** 級が変われば語彙も話題も
      まるで違うので、「英検」だけえらべても問題は作れない。
 
+     ★ **2026-10-01、級ごとに大問がちがうことを調べ直した(第5.337節)。**
+
+       それまで**6つの級ぜんぶに、まったく同じ7つの PART** を出していた。
+       実際は級によって大問の並びが違う。
+
+       | 級 | リーディングの大問 |
+       |---|---|
+       | 1級 / 準1級 / 2級 / 準2級プラス | 短文 → **長文の語句空所補充** → 長文の内容一致 |
+       | 準2級 | 短文 → **会話文の文空所補充** → 長文の語句空所補充 → 長文の内容一致 |
+       | 3級 | 短文 → **会話文の文空所補充** → 長文の内容一致(長文の語句空所補充は無い) |
+
+       **「会話文の文空所補充」は、3級と準2級にしか無い。** それまで
+       この大問はどの級にも出しておらず、代わりに**3級には存在しない
+       「長文の語句空所補充」を出していた。**
+
      2024年度の変更(3級以上):**ライティングが1題 → 2題**になった。
-       ・1級 / 準1級 / 2級 … 要約問題が加わった
-       ・準2級 / 3級       … Eメール問題が加わった
-     あわせてリーディングの問数が減っている。
+     あわせてリーディングの問数が減っている(下の表の問数は、その後のもの)。
+
+       | 級 | 加わった1題 |
+       |---|---|
+       | 1級 / 準1級 / 2級 / **準2級プラス** | **要約** |
+       | 準2級 / 3級 | **Eメール** |
+
+       ★ **準2級プラスは要約である(Eメールではない)。** それまで
+       Eメールにしていた。準2級と2級のあいだの級だが、
+       **ライティングは2級と同じ形**で、ここが準2級といちばん違う
+       (英検協会の「英文要約問題 ポイント解説」でも確かめた)。
+
+     ★ **二次試験は、級によってまるで違う(第5.337節)。**
+
+       | 級 | 二次試験 | ここでは |
+       |---|---|---|
+       | 1級 | **5つのトピックから1つ選び、2分スピーチ** → Q&A | **作れる**(絵が要らない) |
+       | 準1級 | **4コマイラストのナレーション**(2分)→ Q&A | **作れない** |
+       | 2級 / 準2級プラス / 準2級 / 3級 | 音読 → パッセージの質問 → **イラストの質問** → 意見 | **イラストの問だけ作れない** |
+
+       それまで**6級ぜんぶに同じ「二次試験(面接)」**を出しており、
+       準1級では**本番に無い形の問題**を作っていた。
+
      **準2級プラスは 2025年度の新設級**である。
      ──────────────────────────────────────────────────────────── */
   ...[
-    { id: 'eiken_1', label: '英検 1級', cefr: 'C1 相当', write: 'summary',
-      outline: '筆記100分 + リスニング約35分 + 二次試験(面接)', real1: '' },
-    { id: 'eiken_p1', label: '英検 準1級', cefr: 'B2 相当', write: 'summary',
-      /* ★ 2026-10-01 に調べ直した(第5.336節)。2024年度のリニューアルで
-           **リーディングは 41問 → 31問**(大問1 で7問・大問3 で3問 減)。
-           リスニングは**変更なしで 29問**(第1部 12 / 第2部 12 / 第3部 5) */
-      outline: '筆記90分(リーディング31問)+ リスニング約30分(29問)+ 二次試験(面接)',
-      real1: '', listen: '29問(第1部 会話 12問 / 第2部 説明文 12問 / 第3部 Real-Life 5問)' },
-    { id: 'eiken_2', label: '英検 2級', cefr: 'B1 相当', write: 'summary',
-      /* ★ 2026-10-01 に調べ直した。2024年度のリニューアルで
-           **リーディングは 38問 → 31問**(大問1 で3問・大問3B で4問 減)。
-           ここに書いてある 17 + 6 + 8 = 31 は、その総数と合っている */
-      outline: '筆記85分(リーディング31問)+ リスニング約25分(30問)+ 二次試験(面接)',
-      real1: '17問', real2: '6問', real3: '8問' },
-    { id: 'eiken_p2p', label: '英検 準2級プラス', cefr: 'A2〜B1 相当', write: 'email',
-      outline: '2025年度に新設された級(準2級と2級のあいだ)', real1: '' },
-    { id: 'eiken_p2', label: '英検 準2級', cefr: 'A2 相当', write: 'email',
-      outline: '筆記75分 + リスニング約25分 + 二次試験(面接)', real1: '' },
-    { id: 'eiken_3', label: '英検 3級', cefr: 'A1 相当', write: 'email',
-      outline: '筆記65分 + リスニング約25分 + 二次試験(面接)', real1: '' },
+    /**
+     * 級ごとの数と形。**空の欄は「調べられなかった」ではなく「その級に無い」**
+     * ことを表す —— `conv` が空なら会話文の文空所補充が無く、
+     * `r2` が空なら長文の語句空所補充が無い(3級)。
+     */
+    {
+      id: 'eiken_1', label: '英検 1級', cefr: 'C1 相当',
+      outline: '筆記100分(リーディング35問 + ライティング2題)+ リスニング約35分(27問)'
+        + ' + 二次試験(面接 約10分)',
+      r1: '22問', conv: '', r2: '6問', r3: '7問',
+      write: 'summary', sumWords: '90〜110語', opinionWords: '200〜240語',
+      listen: '27問(Part 1 会話 10問 / Part 2 パッセージ 10問'
+        + ' / Part 3 Real-Life 5問 / Part 4 インタビュー 2問)',
+      speak: 'speech', speakReal: '約10分(スピーチ2分 + Q&A)',
+    },
+    {
+      id: 'eiken_p1', label: '英検 準1級', cefr: 'B2 相当',
+      outline: '筆記90分(リーディング31問 + ライティング2題)+ リスニング約30分(29問)'
+        + ' + 二次試験(面接 約8分)',
+      r1: '18問', conv: '', r2: '6問', r3: '7問',
+      write: 'summary', sumWords: '60〜70語', opinionWords: '120〜150語',
+      listen: '29問(第1部 会話 12問 / 第2部 パッセージ 12問 / 第3部 Real-Life 5問)',
+      /* ★ **4コマイラストのナレーション。** 絵が無ければ問題にならない */
+      speak: 'narration', speakReal: '約8分(ナレーション2分 + Q&A 4問)',
+    },
+    {
+      id: 'eiken_2', label: '英検 2級', cefr: 'B1 相当',
+      outline: '筆記85分(リーディング31問 + ライティング2題)+ リスニング約25分(30問)'
+        + ' + 二次試験(面接 約7分)',
+      r1: '17問', conv: '', r2: '6問', r3: '8問',
+      write: 'summary', sumWords: '45〜55語', opinionWords: '80〜100語',
+      listen: '30問(第1部 会話の内容一致選択 15問 / 第2部 文の内容一致選択 15問)',
+      speak: 'passage', speakReal: '約7分(音読 約60語 + 質問4問)', aloudWords: '60語',
+    },
+    {
+      id: 'eiken_p2p', label: '英検 準2級プラス', cefr: 'A2〜B1 相当',
+      outline: '筆記85分(リーディング31問 + ライティング2題)+ リスニング約25分(30問)'
+        + ' + 二次試験(面接 約7分)・2025年度に新設された級(準2級と2級のあいだ)',
+      r1: '17問', conv: '', r2: '6問', r3: '8問',
+      /* ★ **要約である。** 準2級の Eメールとは違う(第5.337節) */
+      write: 'summary', sumWords: '45〜55語', opinionWords: '50〜60語',
+      listen: '30問(第1部 会話の応答文選択 15問 / 第2部 文の内容一致選択 15問)',
+      speak: 'passage', speakReal: '約7分(音読 約55語 + 質問4問)', aloudWords: '55語',
+    },
+    {
+      id: 'eiken_p2', label: '英検 準2級', cefr: 'A2 相当',
+      outline: '筆記80分(リーディング29問 + ライティング2題)+ リスニング約25分(30問)'
+        + ' + 二次試験(面接 約6分)',
+      /* ★ **会話文の文空所補充がある級**(第5.337節) */
+      r1: '15問', conv: '5問', r2: '2問', r3: '7問',
+      write: 'email', emailWords: '40〜50語', opinionWords: '50〜60語',
+      listen: '30問(第1部 会話の応答文選択 10問 / 第2部 会話の内容一致選択 10問'
+        + ' / 第3部 文の内容一致選択 10問)',
+      speak: 'passage', speakReal: '約6分(音読 約50語 + 質問5問)', aloudWords: '50語',
+    },
+    {
+      id: 'eiken_3', label: '英検 3級', cefr: 'A1 相当',
+      outline: '筆記65分(リーディング30問 + ライティング2題)+ リスニング約25分(30問)'
+        + ' + 二次試験(面接 約5分)',
+      /* ★ **長文の語句空所補充が無い級。** `r2` を空にしてある(第5.337節) */
+      r1: '15問', conv: '5問', r2: '', r3: '10問',
+      write: 'email', emailWords: '15〜25語', opinionWords: '25〜35語',
+      listen: '30問(第1部 会話の応答文選択 10問 / 第2部 会話の内容一致選択 10問'
+        + ' / 第3部 文の内容一致選択 10問)',
+      speak: 'passage', speakReal: '約5分(音読 約30語 + 質問5問)', aloudWords: '30語',
+    },
   ].map((g) => ({
     id: g.id,
     label: g.label,
     full: `実用英語技能検定 ${g.label.replace('英検 ', '')}`,
     outline: `${g.outline}・${g.cefr}`,
+    /**
+     * ★ **その級にある大問だけを並べる**(第5.337節)。
+     *
+     * `.filter(Boolean)` で落ちる —— **無い大問は `null` を返す。**
+     * 「どの級にも同じ7つ」をやめたのは、**3級に無い大問を出していた**
+     * からである(CLAUDE.md「効かない操作を見せない」)。
+     */
     parts: [
-      { id: 'r1', label: '大問1 短文の語句空所補充', real: g.real1 ?? '', format: 'choice4',
+      { id: 'r1', label: '大問1 短文の語句空所補充', real: g.r1, format: 'choice4',
         what: '短い文や会話文の空所に入る語句を4つから選ぶ(単語・熟語・文法)',
         sections: [{ exercise_type: 'fill_blank', count: 10 }],
         make: `${g.label} 大問1(短文の語句空所補充)。${COMMON}`
@@ -361,56 +488,78 @@ export const EXAMS = [
           + '**単語・熟語(句動詞)・文法を、10問におよそ 5:3:2 で配る**'
           + ' —— 本番はこの順に並ぶ。'
           + '会話形式(A: … B: …)の問も 2〜3 問混ぜる。' },
-      { id: 'r2', label: '大問2 長文の語句空所補充', real: g.real2 ?? '', format: 'choice4',
+      /* ★ **3級と準2級だけにある大問**(第5.337節)。
+           **語句ではなく「文」を入れる** —— ここが大問1といちばん違う */
+      g.conv && { id: 'r_conv', label: '大問2 会話文の文空所補充', real: g.conv, format: 'choice4',
+        what: '会話の空所に入る「文」を4つから選ぶ', set: '1つの会話につき空所1〜2つ',
+        sections: [{ exercise_type: 'fill_blank', count: 10 }],
+        make: `${g.label} 会話文の文空所補充。${COMMON}`
+          + `**${g.cefr}** にそろえる。`
+          + 'prompt_en に、**A: / B: の会話を 4〜6 往復**書き、'
+          + 'その中の**1つの発言まるごとを空所（　　　）にする。**'
+          + 'hint は空にする。answer には**入る1文**を入れる。'
+          + '**語句ではなく「文」を入れる問である** —— ここが大問1と'
+          + 'いちばん違うので、空所に単語1語が入る形にしない。'
+          + '狙いは**会話のきまり文句と、前後のつながり** ——'
+          + '聞き返し・申し出・断り・言いかえ・相手の話を受ける言い方。'
+          + '**空所の後ろの発言まで読まないと決まらない**ようにする。' },
+      /* ★ **3級には無い**(第5.337節)。`g.r2` が空の級では、この行ごと落ちる */
+      g.r2 && { id: 'r2', label: '大問 長文の語句空所補充', real: g.r2, format: 'choice4',
         what: '説明文の空所に入る語句を4つから選ぶ。前後を読まないと決まらない',
         sections: [{ exercise_type: 'fill_blank', count: 10 }],
-        make: `${g.label} 大問2(長文の語句空所補充)。${COMMON}`
+        make: `${g.label} 長文の語句空所補充。${COMMON}`
           + `**${g.cefr}** にそろえる。`
           + 'prompt_en に、**空所（　　　）を1つ含む 3〜4 文のかたまり**を'
           + '入れる(説明文の一部)。'
           + '狙いは**つなぎ言葉(However / As a result / For example)と、'
           + '前の文を受ける言い換え**。'
           + '**1文だけで決まる問は作らない**(それは大問1である)。' },
-      { id: 'r3', label: '大問3 長文の内容一致選択', real: g.real3 ?? '', format: 'choice4',
+      { id: 'r3', label: '大問 長文の内容一致選択', real: g.r3, format: 'choice4',
         what: 'Eメールや説明文を読み、内容に合うものを4つから選ぶ',
+        /* ★ **本番の1セット**。英検の長文は**段落の順に**問われる */
+        set: '1つの長文につき設問3〜5問(段落の順に問う)',
         sections: [
           { exercise_type: 'article', count: 5 },
-          { exercise_type: 'comprehension', count: 8 },
+          { exercise_type: 'comprehension', count: 4 },
           { exercise_type: 'vocab_note', count: 6 },
         ],
-        make: `${g.label} 大問3(長文の内容一致選択)。${COMMON}`
+        make: `${g.label} 長文の内容一致選択。${COMMON}`
           + `**${g.cefr}** の語彙で書く。`
           + '**英検の長文らしい話題**にする —— 環境・科学・歴史・'
           + '社会のしくみ・ある人物の取り組みなど。'
+          + '**掲示やお知らせ・Eメール・説明文のどれか**にする'
+          + '(本番はこの3つの型から出る)。'
           + '各段落に**1つずつ設問の種**を置く(本番は段落の順に問われる)。'
           + '設問は、本文の語をそのまま使わず**言い換えて**訊く。' },
-      { id: 'w1', label: g.write === 'summary' ? '英作文 要約' : '英作文 Eメール', format: 'write',
-        real: '1題(2024年度から加わった)',
-        what: g.write === 'summary'
-          ? '英文を読み、決められた語数で要約する'
-          : '外国人の友達からのEメールに返信する',
-        sections: g.write === 'summary'
-          ? [
+      /* ★ **要約か Eメールか**(級によって違う・第5.337節)。
+           **語数も級ごとに違う**ので、ここで書き写さず `g` から引く */
+      g.write === 'summary'
+        ? { id: 'w1', label: '英作文 要約', real: `1題・${g.sumWords}`, format: 'write',
+          what: `英文を読み、${g.sumWords}で要約する`,
+          sections: [
             { exercise_type: 'article', count: 4 },
             { exercise_type: 'discussion', count: 5 },
-          ]
-          : [{ exercise_type: 'discussion', count: 5 }],
-        make: g.write === 'summary'
-          ? `${g.label} 英作文(要約)。${COMMON}`
+          ],
+          make: `${g.label} 英作文(要約)。${COMMON}`
             + `**${g.cefr}** で書く。`
             + '本文は**意見が分かれる話題**にし、賛成・反対の両方を出す'
             + '(要約するときに「何を落とすか」の判断が要るようにする)。'
-            + '設問(question)は「この英文を◯語程度で要約しなさい」の形にし、'
+            + `設問(question)は「この英文を ${g.sumWords} で要約しなさい」の形にし、`
             + 'note に**要約に必ず入れるべき点を3つ**、日本語で書く'
             + '(ゲストが自分で見比べられるようにする)。'
-          : `${g.label} 英作文(Eメール)。${COMMON}`
+            + '**自分の意見や感想は書かせない**(本番では減点される)。' }
+        : { id: 'w1', label: '英作文 Eメール', real: `1題・${g.emailWords}`, format: 'write',
+          what: `外国人の友達からのEメールに、${g.emailWords}で返信する`,
+          sections: [{ exercise_type: 'discussion', count: 5 }],
+          make: `${g.label} 英作文(Eメール)。${COMMON}`
             + `**${g.cefr}** で書く。`
             + 'question に、外国人の友達から届いた**5〜6文のEメール**を'
             + '英語でそのまま入れる。**下線部の話題について質問が2つ**'
             + '含まれるようにする(本番はそこに答える)。'
-            + 'note に**返信に必ず入れる点**を日本語で書く。' },
-      { id: 'w2', label: '英作文 意見論述', real: '1題', format: 'write',
-        what: '与えられた話題について、自分の意見とその理由を書く',
+            + `note に**返信に必ず入れる点**と、${g.emailWords}で書くことを`
+            + '日本語で書く。' },
+      { id: 'w2', label: '英作文 意見論述', real: `1題・${g.opinionWords}`, format: 'write',
+        what: `与えられた話題について、自分の意見とその理由を ${g.opinionWords} で書く`,
         sections: [{ exercise_type: 'discussion', count: 5 }],
         make: `${g.label} 英作文(意見論述)。${COMMON}`
           + `**${g.cefr}** の受験者が書ける話題にする。`
@@ -423,10 +572,9 @@ export const EXAMS = [
             ? 'note に**書くときの型**(主張 → 理由2つ → まとめ)と、'
               + '使える観点を3つ、日本語で書く。'
             : 'POINTS(使ってよい観点)を2つ英語で添える。'
-              + 'note に**書くときの型**(主張 → 理由2つ → まとめ)を日本語で書く。') },
-      /* ★ **級ごとの内訳を使う**(第5.336節)。
-           `g.listen` を持っている級だけ、第1部〜第3部の数まで出す */
-      { id: 'l1', label: 'リスニング', real: g.listen ?? '', format: 'choice4',
+              + 'note に**書くときの型**(主張 → 理由2つ → まとめ)を日本語で書く。')
+          + `**${g.opinionWords}で書くこと**も note に書く。` },
+      { id: 'l1', label: 'リスニング', real: g.listen, format: 'choice4',
         what: '会話や説明文を聞き、内容に合うものを選ぶ',
         sections: [{ exercise_type: 'listening', count: 10 }],
         make: `${g.label} リスニング。${COMMON}`
@@ -434,22 +582,48 @@ export const EXAMS = [
           + 'audio_text に**読み上げる英文**(会話なら A: / B: を付けて 4〜6 往復、'
           + '説明文なら 60〜90 語)、question に英語の設問、answer に解答を入れる。'
           + '**会話と説明文を半分ずつ**にする。'
-          + '設問は、英文を聞かないと答えられないものにする。' },
-      { id: 's1', label: '二次試験(面接)', real: '', format: 'speak',
-        what: 'パッセージの音読 → 内容についての質問 → 自分の意見',
-        sections: [
-          { exercise_type: 'article', count: 3 },
-          { exercise_type: 'comprehension', count: 3 },
-          { exercise_type: 'discussion', count: 4 },
-        ],
-        make: `${g.label} 二次試験(面接)。${COMMON}`
-          + `**${g.cefr}** にそろえる。`
-          + '本文は**声に出して読む 50〜70 語のパッセージ**にする'
-          + '(1文が長すぎないこと。音読するためである)。'
-          + '内容の理解は**パッセージを見ながら答える問**にする。'
-          + 'ディスカッションは**パッセージから離れた、社会についての質問**に'
-          + 'する —— 本番の No.3 / No.4 はそうなっている。' },
-    ],
+          + `本番の内訳は「${g.listen}」なので、その型にそろえる。`
+          + '設問は、英文を聞かないと答えられないものにする。'
+          + '**放送は1回だけ**なので、1文に情報を詰め込みすぎない。' },
+      /* ★ **二次試験は級によってまるで違う**(第5.337節)。
+           1級はスピーチ・準1級は4コマイラスト・ほかはパッセージの音読 */
+      g.speak === 'narration'
+        ? { id: 's1', label: '二次試験(4コマイラストのナレーション)', real: g.speakReal,
+          format: 'speak',
+          what: '4コマのイラストの展開を2分で語り、そのあと4つの質問に答える',
+          cannot: 'イラスト(4コマ)が要るため' }
+        : g.speak === 'speech'
+          ? { id: 's1', label: '二次試験(スピーチ)', real: g.speakReal, format: 'speak',
+            what: '5つのトピックから1つ選び、1分の準備のあと2分スピーチし、Q&A に答える',
+            sections: [{ exercise_type: 'discussion', count: 5 }],
+            make: `${g.label} 二次試験(スピーチ)。${COMMON}`
+              + `**${g.cefr}** にそろえる。`
+              + '**本番はカードに5つのトピックが並び、その中から1つ選ぶ。**'
+              + 'question に、**社会・経済・教育・科学技術・環境のそれぞれから'
+              + '1つずつ、英語のトピック文を5つ**並べ、'
+              + '「Choose one topic and speak for two minutes.」を添える。'
+              + 'note に**2分の組み立て**を日本語で書く ——'
+              + '立場(5〜10秒)→ 理由1と説明(50秒)→ 理由2と説明(50秒)→ まとめ(10秒)。'
+              + 'あわせて**スピーチのあとに来る Q&A で訊かれそうなこと**を'
+              + '2つ、日本語で書く。' }
+          : { id: 's1', label: '二次試験(面接)', real: g.speakReal, format: 'speak',
+            what: `約${g.aloudWords}のパッセージを音読し、その内容と自分の考えについて答える`,
+            /* ★ **イラストの問だけ作れない**(第5.337節)。
+                 PART ごと消すと、音読とパッセージの質問まで練習できなくなる */
+            partial: 'イラストについての質問は、絵が要るため',
+            sections: [
+              { exercise_type: 'article', count: 3 },
+              { exercise_type: 'comprehension', count: 3 },
+              { exercise_type: 'discussion', count: 4 },
+            ],
+            make: `${g.label} 二次試験(面接)。${COMMON}`
+              + `**${g.cefr}** にそろえる。`
+              + `本文は**声に出して読む 約${g.aloudWords}のパッセージ**にする`
+              + '(1文が長すぎないこと。音読するためである)。'
+              + '内容の理解は**パッセージを見ながら答える問**にする。'
+              + 'ディスカッションは**パッセージから離れた、社会や'
+              + '自分自身についての質問**にする —— 本番の最後の2問はそうなっている。' },
+    ].filter(Boolean),
   })),
 
   /* ────────────────────────────────────────────────────────────
@@ -462,13 +636,17 @@ export const EXAMS = [
     full: 'Versant English Test(スピーキング・リスニング)',
     outline: '63問・15〜20分。Part A〜F の6つ。CEFR A2〜C1 を見分ける',
     parts: [
-      { id: 'a', label: 'Part A 音読(Reading)', real: '8問', format: 'aloud',
-        what: '画面に出た英文を、指示された番号のものだけ読み上げる',
+      { id: 'a', label: 'Part A 音読(Reading)', real: '8問・1問15秒', format: 'aloud',
+        /* ★ **本番の表示**(第5.337節)。画面には**番号つきの文が並び**、
+             「Now, please read sentence 7.」のように**番号で指示される。**
+             だから1問1文で、話がつながっていてはいけない */
+        what: '番号つきで並んだ英文のうち、指示された番号のものだけを15秒で読み上げる',
         sections: [{ exercise_type: 'read_aloud', count: 12 }],
         make: `Versant Part A(音読)。${COMMON}`
           + 'prompt_en に**1文だけ**(8〜14語)、prompt_ja にその訳を入れる。'
           + '**文どうしをつなげない** —— 1問1文で、話はつながらなくてよい。'
           + '構文も語彙もやさしくする(本番は「すらすら読めるか」を見ている)。'
+          + '**15秒で読みきれる長さ**にする(本番の応答時間である)。'
           + '**読みまちがえやすい音**を必ず入れる —— '
           + '子音が3つ続くところ(strengths)・th と s・l と r・'
           + '語尾の -ed と -s・数字と固有名詞。' },
@@ -483,6 +661,7 @@ export const EXAMS = [
           + 'ばらばらの語を並べただけの文にしない —— 意味が取れれば覚えられる。' },
       { id: 'c', label: 'Part C 短文質問への応答(Short Answer Questions)', real: '24問', format: 'short',
         what: '短い質問を聞き、1語か短い句で答える',
+        set: '1問につき質問1文',
         sections: [{ exercise_type: 'listening', count: 12 }],
         make: `Versant Part C(短文質問への応答)。${COMMON}`
           + 'audio_text に**質問1文**(8〜15語)、question には'
@@ -493,7 +672,7 @@ export const EXAMS = [
           + '専門知識・固有名詞・計算の要る問は作らない。'
           + 'note に**聞き取りの山になる語**を日本語で書く。' },
       { id: 'd', label: 'Part D 文の構築(Sentence Builds)', real: '10問', format: 'order',
-        what: 'ばらばらの3つのかたまりを、意味の通る1文に並べ替えて言う',
+        what: '読み上げられる3つのかたまりを、意味の通る1文に並べ替えて言う',
         sections: [{ exercise_type: 'translate_ja_en', count: 10 }],
         make: `Versant Part D(文の構築)。${COMMON}`
           + '**prompt_ja に、並べ替える3つのかたまりを日本語で書かずに、'
@@ -504,8 +683,8 @@ export const EXAMS = [
           + 'answer_alt には、**別の並べ方でも通る場合だけ**その文を入れる'
           + '(無ければ空)。'
           + '1文は 8〜14 語。**並べ方が1つに決まる文**にする。' },
-      { id: 'e', label: 'Part E ストーリーリテリング(Story Retelling)', real: '3問', format: 'speak',
-        what: '短い話を聞き、自分の言葉で言い直す',
+      { id: 'e', label: 'Part E ストーリーリテリング(Story Retelling)', real: '3問・1問30秒', format: 'speak',
+        what: '短い話を聞き、自分の言葉で30秒で言い直す',
         sections: [
           { exercise_type: 'article', count: 3 },
           { exercise_type: 'discussion', count: 3 },
@@ -517,9 +696,10 @@ export const EXAMS = [
           + '意見や説明ではなく、**出来事**にする。'
           + 'ディスカッションの question は'
           + '「Retell this story in your own words.」の形にし、'
-          + 'note に**言い直すときに落としてはいけない点**を日本語で3つ書く。' },
-      { id: 'f', label: 'Part F 自由回答(Open Questions)', real: '2問', format: 'speak',
-        what: '身近な話題について、自分の考えを話す',
+          + 'note に**言い直すときに落としてはいけない点**を日本語で3つ書く。'
+          + '**30秒で言い直せる量**にする(本番の応答時間である)。' },
+      { id: 'f', label: 'Part F 自由回答(Open Questions)', real: '2問・1問40秒', format: 'speak',
+        what: '身近な話題について、自分の考えを40秒で話す',
         sections: [{ exercise_type: 'discussion', count: 6 }],
         make: `Versant Part F(自由回答)。${COMMON}`
           + 'question に**英語の質問1文**を入れる。'
@@ -527,7 +707,8 @@ export const EXAMS = [
           + '(家族・仕事・住んでいる街・休みの日・好きな食べ物など)。'
           + '専門知識の要る話題にしない。'
           + 'note に**答えの組み立て方**(結論 → 理由 → 具体例)と、'
-          + '使える表現を2つ、日本語で書く。' },
+          + '使える表現を2つ、日本語で書く。'
+          + '**40秒で話しきれる組み立て**にする(本番の応答時間である)。' },
     ],
   },
 
@@ -556,8 +737,8 @@ export const EXAMS = [
     full: 'TOEIC Speaking Test',
     outline: '11問・約20分・200点満点',
     parts: [
-      { id: 'q12', label: 'Q1-2 音読問題', real: '2問', format: 'aloud',
-        what: '画面の英文を、45秒の準備のあと読み上げる',
+      { id: 'q12', label: 'Q1-2 音読問題', real: '2問・準備45秒 / 解答45秒', format: 'aloud',
+        what: '画面の英文を、45秒の準備のあと45秒で読み上げる',
         sections: [{ exercise_type: 'read_aloud', count: 8 }],
         make: `TOEIC Speaking Q1-2(音読問題)。${COMMON}`
           + 'prompt_en に**40〜60 語のまとまった読み上げ原稿**を1問分、'
@@ -571,11 +752,12 @@ export const EXAMS = [
              `npm run test:exam` が、欄の有る無しを突き合わせて見張る */
           + '数字・固有名詞・カンマで区切る列挙を必ず入れ、'
           + '**息の切れ目がはっきりする文**にする。' },
-      { id: 'q34', label: 'Q3-4 写真描写問題', real: '2問', format: 'speak',
+      { id: 'q34', label: 'Q3-4 写真描写問題', real: '2問・準備45秒 / 解答30秒', format: 'speak',
         what: '1枚の写真を45秒で準備し、30秒で説明する(2問)',
         cannot: '写真が要るため' },
-      { id: 'q57', label: 'Q5-7 応答問題', real: '3問', format: 'speak',
-        what: '身近な話題について、電話インタビューに答える(15秒/15秒/30秒)',
+      { id: 'q57', label: 'Q5-7 応答問題', real: '3問・準備なし / 解答15秒・15秒・30秒', format: 'speak',
+        what: '身近な話題について、電話インタビューに答える(準備時間なし)',
+        set: '1つの話題につき3問ひと組',
         sections: [{ exercise_type: 'discussion', count: 6 }],
         make: `TOEIC Speaking Q5-7(応答問題)。${COMMON}`
           + '**1つの話題について3問ひと組**で作る(6問なら2組)。'
@@ -585,11 +767,16 @@ export const EXAMS = [
           + '3問目は**理由や意見を30秒話す問**にする。'
           + '話題は身近なもの(買い物・通勤・食事・休日・スマートフォン)。'
           + 'note に**答えの組み立て方**と、使える表現を日本語で書く。' },
-      { id: 'q810', label: 'Q8-10 提示された情報に基づく応答問題', real: '3問', format: 'speak',
-        what: '予定表や日程表を読み、それを見ながら電話の質問に答える',
+      { id: 'q810', label: 'Q8-10 提示された情報に基づく応答問題',
+        real: '3問・資料を読む45秒 / 解答15秒・15秒・30秒', format: 'speak',
+        what: '予定表や日程表を45秒で読み、それを見ながら電話の質問に答える',
+        set: '1つの資料につき設問3問',
+        /* ★ **本番の1セット**(第5.337節)。もとは設問 6 問で、
+             **1つの資料に2セット分の設問**が付いていた(本番に無い形)。
+             もっと練習したいときは、作る画面の**倍率**で増やす */
         sections: [
           { exercise_type: 'article', count: 3 },
-          { exercise_type: 'comprehension', count: 6 },
+          { exercise_type: 'comprehension', count: 3 },
         ],
         make: `TOEIC Speaking Q8-10(提示された情報に基づく応答)。${COMMON}`
           + '本文は**予定表そのもの**にする —— 会議の議事日程・研修の時間割・'
@@ -604,7 +791,7 @@ export const EXAMS = [
            音読2 + 写真描写2 + 応答3 + 提示情報3 + 意見1 で埋まっており、
            解決策を提案する問が入る場所がない(古い構成のものだった)。
            **黙って消していない** —— 経緯は docs/notes/11 に書いてある。 */
-      { id: 'q11', label: 'Q11 意見を述べる問題', real: '1問', format: 'speak',
+      { id: 'q11', label: 'Q11 意見を述べる問題', real: '1問・準備45秒 / 解答60秒', format: 'speak',
         what: '示された意見に賛成か反対かを、60秒で理由とともに話す',
         sections: [{ exercise_type: 'discussion', count: 6 }],
         make: `TOEIC Speaking Q11(意見を述べる問題)。${COMMON}`
@@ -616,30 +803,55 @@ export const EXAMS = [
           + '使える表現を日本語で書く。' },
     ],
   },
-
   /* ────────────────────────────────────────────────────────────
      TOEFL iBT
 
-     **2026年1月21日から形が変わっている。** 全体で約90分。
+     **2026年1月21日から形が変わっている。**
      Reading と Listening は**2つのモジュールに分かれ、
      1つ目の出来で2つ目の難しさが変わる**(アダプティブ)。
      古い形(Reading 2パッセージ / Speaking Task 1-4)は、もう無い。
+
+     ★ **2026-10-01 に調べ直して、2つ直した(第5.337節)。**
+
+     ① **セクションの順番が変わっていた。**
+        古い形は Reading → Listening → **Speaking → Writing** だったが、
+        2026年の形は Reading → Listening → **Writing → Speaking** である。
+        ここの並びは**えらぶ一覧の並び**にそのまま出るので、
+        **本番の順にそろえた**(CLAUDE.md「勝手に並べ替えない」は
+        利用者が並べたものの話で、**本番の順に合わせるのはそろえること**である)。
+
+     ② **Listening は、公式に4つの型に分かれている。**
+        それまで「Listening」1つにまとめていたので、
+        **型ごとの対策ができなかった。** ETS の Test Blueprint の型は4つ。
+
+        | 型 | 本番の問数 | 何をするか |
+        |---|---|---|
+        | Listen and Choose a Response | 15〜19問 | **1文**を聞いて、合う応答を選ぶ |
+        | Listen to a Conversation | 10問 | 2人のやりとりを聞いて答える |
+        | Listen to an Announcement | 6〜10問 | 1人が話す**学内のお知らせ**(20〜30秒)を聞いて答える |
+        | Listen to an Academic Talk | 8〜16問 | **講義**を聞いて答える |
+
+        **1つ目の型は、TOEIC L&R の Part 2 とほとんど同じ形**である
+        (1文を聞いて応答を選ぶ)。
      ──────────────────────────────────────────────────────────── */
   {
     id: 'toefl',
     label: 'TOEFL iBT',
     full: 'TOEFL iBT(2026年1月21日からの形)',
-    /* ★ 2026-10-01 に調べ直した(第5.336節)。問数は
-         **Reading 約50問 / Listening 47問 / Speaking 11問 / Writing 12題**。
+    /* ★ 2026-10-01 に調べ直した(第5.337節)。**セクションごとの時間**は
+         Reading 最大30分 / Listening 約29分 / Writing 約23分 / Speaking 約8分。
+         **問数は Reading と Listening がアダプティブ**なので幅がある。
          Speaking と Writing は、この下の PART の数とも合っている
-         (7 + 4 = 11 / 10 + 1 + 1 = 12)。
-         **Reading と Listening は PART ごとの数を書いていない** ——
-         アダプティブで、1つ目の出来によって2つ目が変わるためである。 */
-    outline: '約90分。Reading 約50問(最大30分)/ Listening 47問(29分)'
-      + '/ Speaking 11問(約8分)/ Writing 12題(最大23分)',
+         (7 + 4 = 11 / 10 + 1 + 1 = 12)。 */
+    outline: '約90分。Reading 最大30分 / Listening 約29分(47問まで)'
+      + ' / Writing 約23分(12題)/ Speaking 約8分(11問)'
+      + '・順番は Reading → Listening → Writing → Speaking',
     parts: [
-      { id: 'r_daily', label: 'Reading: Read in Daily Life', real: '', format: 'choice4',
+      /* ── Reading(3つの型)────────────────────────────── */
+      { id: 'r_daily', label: 'Reading: Read in Daily Life', real: '1つの文につき2問', format: 'choice4',
         what: '暮らしの中の短い文章(掲示・案内・やりとり)を読んで答える',
+        /* ★ **本番の1セット**(第5.337節)。15〜150語の短い文に**2問ずつ** */
+        set: '15〜150語の短い文1つにつき設問2問',
         sections: [
           { exercise_type: 'article', count: 3 },
           { exercise_type: 'comprehension', count: 6 },
@@ -648,62 +860,101 @@ export const EXAMS = [
           + '**大学の暮らしの中の短い文章**にする —— 寮の掲示・'
           + '学生向けメール・イベントの案内・図書館の利用案内。'
           + '学術論文の文体にしない。'
+          + '**1つの文章は 15〜150 語**におさめる(本番はこの長さである)。'
           + '日付・場所・条件・締切といった**具体**を必ず入れる。' },
-      { id: 'r_acad', label: 'Reading: Read an Academic Passage', real: '', format: 'choice4',
+      { id: 'r_acad', label: 'Reading: Read an Academic Passage', real: '1つのパッセージにつき最大5問', format: 'choice4',
         what: '学術的な文章を読んで答える',
+        /* ★ **本番の1セット**(第5.337節)。約200語に**最大5問** */
+        set: '約200語のパッセージ1つにつき設問5問まで',
         sections: [
           { exercise_type: 'article', count: 6 },
-          { exercise_type: 'comprehension', count: 8 },
+          { exercise_type: 'comprehension', count: 5 },
           { exercise_type: 'vocab_note', count: 8 },
         ],
         make: `TOEFL iBT Reading「Read an Academic Passage」。${COMMON}`
           + '**大学1年生の教科書の1節**のように書く —— '
           + '生物学・地質学・天文学・考古学・心理学・美術史のいずれか。'
+          + '**1つのパッセージは 約200語**にする(本番はこの長さである)。'
           + '**専門用語は出したらその場で言い換えて説明する**(本番もそうする)。'
           + '設問には「言い換えを訊く問」「筆者の意図を訊く問」'
           + '「NOT / EXCEPT で訊く問」を必ず混ぜる。' },
-      { id: 'r_words', label: 'Reading: Complete the Words', real: '', format: 'fill',
-        what: '文章の中の、文字が欠けた語を完成させる',
+      { id: 'r_words', label: 'Reading: Complete the Words', real: '1つの段落につき10か所', format: 'fill',
+        what: '文章の中の、後ろが欠けた語を完成させる',
+        /* ★ **本番の1セット**(第5.337節)。約70語の段落に**10か所** */
+        set: '約70語の段落1つにつき欠けた語10か所',
         sections: [{ exercise_type: 'fill_blank', count: 10 }],
         make: `TOEFL iBT Reading「Complete the Words」。${COMMON}`
           + '**選択肢を出さない問である。**'
           + 'prompt_en に **2〜3 文のかたまり**を入れ、その中の1語を'
-          + '「gr____」のように**先頭の2〜3文字だけ残して**欠けさせる。'
+          /* ★ **「後ろが欠ける」である**(第5.337節)。それまで
+               「先頭の2〜3文字だけ残して」と書いており、**消しすぎていた**。
+               本番は語の**後半(語尾)**が欠ける形で、語形を見ている */
+          + '**後半だけ欠けさせる** —— 「The results were cons______」のように、'
+          + '**前半は残したまま、後ろにアンダースコアを置く。**'
           + 'hint は空にする。answer に**その語のつづり全体**を入れる。'
           + '**前後を読めば1語に決まる**ようにする(何語も当てはまる欄にしない)。'
           + 'note に**なぜその語に決まるのか**を日本語で書く。'
           + '欠けさせるのは、**その文章の話題を支える中身のある語**にする'
-          + '(the / of のような機能語を欠けさせない)。' },
-      { id: 'l1', label: 'Listening', real: '', format: 'choice4',
-        what: '講義や会話を聞いて答える',
+          + '(the / of のような機能語を欠けさせない)。'
+          + '**語形(-tion / -ment / -ive / -ly など)が問われる語**を半分入れる'
+          + ' —— 本番はそこを見ている。' },
+      /* ── Listening(4つの型・第5.337節で分けた)───────────── */
+      { id: 'l_resp', label: 'Listening: Listen and Choose a Response', real: '15〜19問', format: 'choice4',
+        what: '1文(質問・依頼・感想)を聞き、いちばん合う応答を4つから選ぶ',
+        set: '1文につき設問1問',
         sections: [{ exercise_type: 'listening', count: 10 }],
-        make: `TOEFL iBT Listening。${COMMON}`
-          + 'audio_text に**読み上げる英文**を入れる —— '
-          + '半分は**大学の講義の一部**(80〜120 語・1人が話す)、'
-          + '半分は**学生と職員(または教授)のやりとり**'
-          + '(A: / B: を付けて 4〜6 往復)にする。'
-          + 'question に英語の設問、answer に解答を入れる。'
-          + '**話し手の態度や言いよどみを訊く問**を必ず2問入れる'
-          + '(本番はそこを見ている)。' },
-      { id: 's_repeat', label: 'Speaking: Listen and Repeat', real: '7問', format: 'aloud',
-        what: '聞こえた短い文を、そのまま繰り返す(準備時間なし)',
-        sections: [{ exercise_type: 'read_aloud', count: 14 }],
-        make: `TOEFL iBT Speaking「Listen and Repeat」。${COMMON}`
-          + 'prompt_en に**1文だけ**、prompt_ja にその訳を入れる。'
-          + '**だんだん長くする**(はじめは 6 語ほど、終わりは 18 語ほど)。'
-          + '話題は**大学の暮らしか、日常**にする。'
-          + '**口に出して自然な文**にする —— 書き言葉の1文にしない。' },
-      { id: 's_interview', label: 'Speaking: Take an Interview', real: '4問', format: 'speak',
-        what: '1つの話題について4つの質問に、それぞれ45秒で答える',
-        sections: [{ exercise_type: 'discussion', count: 8 }],
-        make: `TOEFL iBT Speaking「Take an Interview」。${COMMON}`
-          + '**1つの話題について4問ひと組**で作る(8問なら2組)。'
-          + 'question に英語の質問を入れる。'
-          + '**同じ話題を4問で掘り下げる** —— '
-          + '経験 → その理由 → 別の見方 → 自分の考え、の順にする。'
-          + '話題は**大学生活か、若い社会人の暮らし**にする。'
-          + 'note に**45秒の組み立て**を日本語で書く。' },
-      { id: 'w_sentence', label: 'Writing: Build a Sentence', real: '10問', format: 'order',
+        make: `TOEFL iBT Listening「Listen and Choose a Response」。${COMMON}`
+          + 'audio_text に**1文だけ**(8〜16語)入れる ——'
+          + '質問・依頼・感想・事実の述べのいずれか。'
+          + 'question に「Choose the best response.」と4つの応答を入れる。'
+          + '**TOEIC L&R の Part 2 と同じ形だが、選択肢は4つ**である。'
+          + '**Yes / No で答えられない形**(WH疑問文・依頼・平叙文)を'
+          + '半分以上入れる。'
+          + '話題は**大学の暮らし**(授業・寮・図書館・食堂・事務手続き)にする。'
+          + 'やさしいものから難しいものまで混ぜる(本番は A1〜B2 を見分ける)。' },
+      { id: 'l_conv', label: 'Listening: Listen to a Conversation', real: '10問', format: 'choice4',
+        what: '2人の短いやりとりを聞いて答える',
+        set: '1つのやりとりにつき設問2問',
+        sections: [
+          { exercise_type: 'dialogue', count: 8 },
+          { exercise_type: 'comprehension', count: 2 },
+        ],
+        make: `TOEFL iBT Listening「Listen to a Conversation」。${COMMON}`
+          + '**学生どうし、または学生と大学の職員・教授のやりとり**にする。'
+          + '1つのやりとりは **6〜8 発言**で、**速さのあるやりとり**にする。'
+          + '設問は「要点は何か」「事実か意見か」「2人は同意しているか」'
+          + 'の型を混ぜる —— 本番はそこを見ている。'
+          + '**言いよどみ・言い直し**を1回入れる。' },
+      { id: 'l_ann', label: 'Listening: Listen to an Announcement', real: '6〜10問', format: 'choice4',
+        what: '1人が話す学内のお知らせ(20〜30秒)を聞いて答える',
+        set: 'お知らせ1本につき設問2問',
+        sections: [
+          { exercise_type: 'article', count: 3 },
+          { exercise_type: 'comprehension', count: 2 },
+        ],
+        make: `TOEFL iBT Listening「Listen to an Announcement」。${COMMON}`
+          + '**1人が話す学内のお知らせ**にする —— これから行われる催し・'
+          + 'サービスの変更・規則の変更・工事のお知らせ。'
+          + '**1本は 20〜30 秒で読める長さ**(50〜80 語)にする。'
+          + '**日付・場所・だれが対象か・何が変わるか**を必ず入れる'
+          + '(本番の設問はそこを訊く)。'
+          + '書き言葉の記事にしない —— **声に出して読むもの**である。' },
+      { id: 'l_talk', label: 'Listening: Listen to an Academic Talk', real: '8〜16問', format: 'choice4',
+        what: '講義を聞いて答える',
+        set: '講義1本につき設問3〜4問',
+        sections: [
+          { exercise_type: 'article', count: 3 },
+          { exercise_type: 'comprehension', count: 4 },
+        ],
+        make: `TOEFL iBT Listening「Listen to an Academic Talk」。${COMMON}`
+          + '**大学の講義の一部**にする(1人が話す・100〜140 語)。'
+          + '分野は生物学・地質学・天文学・考古学・心理学・美術史のいずれか。'
+          + '設問は**要点・細部・ことばの働き(なぜそう言ったのか)・'
+          + '言っていないが導ける結論**の4つの型を混ぜる。'
+          + '**専門用語は出したらその場で言い換えて説明する。**'
+          + '**話し手の態度や言いよどみを訊く問**を必ず1問入れる。' },
+      /* ── Writing(本番は Listening の次・第5.337節)──────────── */
+      { id: 'w_sentence', label: 'Writing: Build a Sentence', real: '10問・約6分', format: 'order',
         what: 'ばらばらの語句を並べ替えて、やりとりに合う1文を作る',
         sections: [{ exercise_type: 'translate_ja_en', count: 10 }],
         make: `TOEFL iBT Writing「Build a Sentence」。${COMMON}`
@@ -713,9 +964,10 @@ export const EXAMS = [
           + '**わざと順番を入れ替えて**出すこと。'
           + 'answer に**正しく並べた1文**を入れる。'
           + '**並べ方が1つに決まる文**にする。'
-          + '狙いは**語順・時制の一致・関係詞・従属節の位置**。' },
-      { id: 'w_email', label: 'Writing: Write an Email', real: '1問', format: 'write',
-        what: '場面に合わせて、必要なことを伝えるメールを7分で書く',
+          + '狙いは**語順・時制の一致・関係詞・従属節の位置**。'
+          + '**1問は 30 秒ほどで解ける長さ**にする(本番は10問で約6分)。' },
+      { id: 'w_email', label: 'Writing: Write an Email', real: '1問・7分・80〜120語', format: 'write',
+        what: '場面に合わせて、必要なことを 80〜120 語のメールで伝える',
         sections: [{ exercise_type: 'discussion', count: 5 }],
         make: `TOEFL iBT Writing「Write an Email」。${COMMON}`
           + 'question に、**メールを書く場面を英語で**入れる'
@@ -725,8 +977,8 @@ export const EXAMS = [
           + 'イベントの手伝いを申し出る。'
           + '**伝えるべきことを2つ**、場面の中にはっきり置く。'
           + 'note に**メールの型**(件名 → 名乗り → 用件 → 依頼 → 結び)と、'
-          + '使える表現を日本語で書く。' },
-      { id: 'w_discussion', label: 'Writing: Write for an Academic Discussion', real: '1問', format: 'write',
+          + '**80〜120 語で7分で書くこと**、使える表現を日本語で書く。' },
+      { id: 'w_discussion', label: 'Writing: Write for an Academic Discussion', real: '1問・10分', format: 'write',
         what: '授業の掲示板で、教授の問いと学生の書き込みに応えて書く',
         sections: [{ exercise_type: 'discussion', count: 5 }],
         make: `TOEFL iBT Writing「Write for an Academic Discussion」。${COMMON}`
@@ -736,24 +988,75 @@ export const EXAMS = [
           + '**学生2人の意見は食い違わせる**(どちらに寄るかを選べるようにする)。'
           + '話題は**授業で議論になるもの**(都市計画・教育・技術と仕事・'
           + '環境政策)にする。'
-          + 'note に**書き方**(どちらかの意見に触れてから自分の立場を出す)を'
-          + '日本語で書く。' },
+          + 'note に**書き方**(どちらかの意見に触れてから自分の立場を出す)と、'
+          + '**10分で書くこと**を日本語で書く。' },
+      /* ── Speaking(本番はいちばん最後・第5.337節)──────────── */
+      { id: 's_repeat', label: 'Speaking: Listen and Repeat', real: '7問(短2 / 中3 / 長2)', format: 'aloud',
+        what: '聞こえた短い文を、そのまま繰り返す(準備時間なし・1文 8〜12秒)',
+        /* ★ **本番の1セット**(第5.337節)。短2・中3・長2 の7問ひと組 */
+        set: '7問ひと組(短い文2 → 中くらい3 → 長い文2)',
+        sections: [{ exercise_type: 'read_aloud', count: 14 }],
+        make: `TOEFL iBT Speaking「Listen and Repeat」。${COMMON}`
+          + 'prompt_en に**1文だけ**、prompt_ja にその訳を入れる。'
+          + '**7問ひと組で、短い文2つ → 中くらい3つ → 長い文2つ**の順にする'
+          + '(14問なら2組)。短い文は 6〜8 語、中くらいは 10〜13 語、'
+          + '長い文は 16〜20 語。'
+          + '**1文は 8〜12 秒で言いきれる長さ**におさめる(本番の応答時間である)。'
+          + '話題は**大学の暮らしか、日常**にする。'
+          + '**口に出して自然な文**にする —— 書き言葉の1文にしない。' },
+      { id: 's_interview', label: 'Speaking: Take an Interview', real: '4問・各45秒', format: 'speak',
+        what: '1つの話題について4つの質問に、それぞれ45秒で答える',
+        set: '1つの話題につき4問ひと組',
+        sections: [{ exercise_type: 'discussion', count: 8 }],
+        make: `TOEFL iBT Speaking「Take an Interview」。${COMMON}`
+          + '**1つの話題について4問ひと組**で作る(8問なら2組)。'
+          + 'question に英語の質問を入れる。'
+          + '**同じ話題を4問で掘り下げる** —— '
+          + '経験 → その理由 → 別の見方 → 自分の考え、の順にする。'
+          + '**話題は日常のこと**にする(本番はここが学術ではない)。'
+          + 'note に**45秒の組み立て**を日本語で書く。' },
     ],
   },
 
   /* ────────────────────────────────────────────────────────────
+  /* ────────────────────────────────────────────────────────────
      IELTS
      2時間45分。Listening 30分(40問)/ Reading 60分(40問)/
      Writing 60分(2題)/ Speaking 11〜14分(3パート)
+
+     ★ **2026-10-01 に調べ直した(第5.337節)。**
+
+     ① **Listening は4つの Part、各10問で 40 問。** 設問の形は**10種類**ある ——
+        合わせる / 4択 / メモの記入 / 申込書の記入 / 表の記入 /
+        文の記入 / 要約の記入 / 短答 / 地図と図面のラベル /
+        図と流れ図の記入。**放送は1回だけ。**
+
+     ② **Reading には「2つの Not Given」がある。**
+        それまで **True / False / Not Given しか書いていなかった。**
+
+        | 形 | 何を照らし合わせるか |
+        |---|---|
+        | **True / False / Not Given** | **事実**が本文と合うか |
+        | **Yes / No / Not Given** | **筆者の意見・主張**と合うか |
+
+        **この2つは公式に別の設問形式**である。混ぜて出題されるので、
+        どちらも作れるようにしてある。
+
+     ③ **語数制限の書き方は「NO MORE THAN TWO WORDS AND/OR A NUMBER」。**
+        それまで「NO MORE THAN TWO WORDS」だけで、**数字の扱いが落ちていた。**
+        IELTS の記入式は**数字を1語と数えない**ので、ここが違うと
+        正解の形が変わってしまう。
      ──────────────────────────────────────────────────────────── */
   {
     id: 'ielts',
     label: 'IELTS',
     full: 'IELTS(Academic)',
-    outline: '2時間45分。Listening 30分40問 / Reading 60分40問 / Writing 60分 / Speaking 11〜14分',
+    outline: '2時間45分。Listening 30分40問(4つの Part・各10問)/ Reading 60分40問(3パッセージ)'
+      + ' / Writing 60分2題 / Speaking 11〜14分3パート・放送と読み上げは1回だけ',
     parts: [
       { id: 'l1', label: 'Listening Part 1・2(日常の場面)', real: '各10問', format: 'mixed',
         what: 'Part 1 は2人の会話、Part 2 は1人の説明。どちらも日常の場面',
+        set: '1つの放送につき設問10問',
         sections: [{ exercise_type: 'listening', count: 10 }],
         make: `IELTS Listening Part 1・2(日常の場面)。${COMMON}`
           + 'audio_text に**読み上げる英文**を入れる —— '
@@ -763,9 +1066,14 @@ export const EXAMS = [
           + '**数字・つづり・固有名詞**(電話番号・郵便番号・人名のつづり・'
           + '金額・日付)を必ず入れる —— 本番はそこを書き取らせる。'
           + '設問は**語数制限つきの記入式**にし、'
-          + 'question の末尾に「(NO MORE THAN TWO WORDS)」を付ける。' },
+          /* ★ **数字を落とさない**(第5.337節)。IELTS は数字を1語と数えない */
+          + 'question の末尾に「(NO MORE THAN TWO WORDS AND/OR A NUMBER)」を付ける。'
+          + '**申込書の記入・メモの記入・表の記入**の3つの形を混ぜる'
+          + '(本番の Part 1・2 はこの3つが多い)。'
+          + '**放送は1回だけ**なので、同じ情報を2度言わない。' },
       { id: 'l2', label: 'Listening Part 3・4(学びの場面)', real: '各10問', format: 'mixed',
         what: 'Part 3 は学生どうしの話し合い、Part 4 は講義',
+        set: '1つの放送につき設問10問',
         sections: [{ exercise_type: 'listening', count: 10 }],
         make: `IELTS Listening Part 3・4(学びの場面)。${COMMON}`
           + 'audio_text に**読み上げる英文**を入れる —— '
@@ -773,9 +1081,15 @@ export const EXAMS = [
           + '半分は**講義**(1人が話す・100〜140 語)。'
           + '**イギリス英語**にする。'
           + '**意見が変わるところ・言い直すところ**を必ず入れる'
-          + '(本番の Part 3 はそこを訊く)。' },
+          + '(本番の Part 3 はそこを訊く)。'
+          + '設問は**4択と、合わせる問、文の記入**を混ぜる'
+          + '(Part 3 は4択と合わせる問、Part 4 はメモの記入が多い)。'
+          + '語数制限つきの問には'
+          + '「(NO MORE THAN TWO WORDS AND/OR A NUMBER)」を付ける。' },
       { id: 'r1', label: 'Reading Passage', real: '3パッセージ・40問', format: 'mixed',
         what: '学術的な長文を読み、さまざまな形式の設問に答える',
+        /* ★ **本番の1セット**(第5.337節)。1パッセージにつき 13〜14 問 */
+        set: '1パッセージにつき設問13〜14問(3パッセージで40問)',
         sections: [
           { exercise_type: 'article', count: 6 },
           { exercise_type: 'comprehension', count: 8 },
@@ -786,13 +1100,19 @@ export const EXAMS = [
           + '(新聞の日曜版や雑誌の特集のような文体)。'
           + '**段落ごとに主題をはっきり**させる —— '
           + '本番は「見出しと段落を結ぶ問」があるためである。'
-          + '設問には必ず'
-          + '**True / False / Not Given の問を3問**入れる'
-          + '(question を「True, False or Not Given:」で始め、'
-          + '**Not Given になる問を1問は必ず入れる**)。'
-          + '残りは見出し合わせ・語数制限つきの記入式にする。' },
-      { id: 'w1', label: 'Writing Task 1(図表の説明)', real: '150語以上・20分', format: 'write',
-        what: 'グラフや図の特徴を選んで、比べながら説明する',
+          + '設問には必ず、**公式の2つの Not Given を両方**入れる ——'
+          /* ★ **2つは別の設問形式である**(第5.337節) */
+          + '①**事実**を照らし合わせる「True, False or Not Given:」を2問'
+          + '(**Not Given になる問を1問は必ず入れる**)、'
+          + '②**筆者の意見・主張**を照らし合わせる「Yes, No or Not Given:」を2問'
+          + '(こちらも Not Given を1問は入れる)。'
+          + '**この2つを混同しない** —— ①は本文に書いてある事実、'
+          + '②は筆者がそう考えているかどうかである。'
+          + '残りは**見出し合わせ・情報の在りか合わせ・文の後半合わせ・'
+          + '語数制限つきの記入式**にし、'
+          + '記入式には「(NO MORE THAN TWO WORDS AND/OR A NUMBER)」を付ける。' },
+      { id: 'w1', label: 'Writing Task 1(図表の説明)', real: '1題・150語以上・20分', format: 'write',
+        what: 'グラフや図の特徴を選んで、比べながら 150 語以上で説明する',
         sections: [{ exercise_type: 'discussion', count: 5 }],
         make: `IELTS Academic Writing Task 1(図表の説明)。${COMMON}`
           + 'question に、**図表そのものを文字で**書く ——'
@@ -801,16 +1121,20 @@ export const EXAMS = [
           + '数字が読み取れる形にする)。'
           + '年・国・項目・単位を必ず入れ、**上がり下がりや山**が'
           + 'はっきり読み取れる数字にする。'
+          + '末尾に「Summarise the information by selecting and reporting '
+          + 'the main features, and make comparisons where relevant.」と'
+          + '「Write at least 150 words.」を入れる(本番の文言である)。'
           + 'note に**書き方**(全体の傾向を1文 → 目立つ2点 → 比較)と、'
           + '使える表現(increase / peak / remain steady など)を日本語で書く。'
           + '**自分の意見は書かせない**(Task 1 では減点される)。' },
-      { id: 'w2', label: 'Writing Task 2(小論文)', real: '250語以上・40分', format: 'write',
-        what: '与えられた主張について、自分の考えを論じる',
+      { id: 'w2', label: 'Writing Task 2(小論文)', real: '1題・250語以上・40分', format: 'write',
+        what: '与えられた主張について、自分の考えを 250 語以上で論じる',
         sections: [{ exercise_type: 'discussion', count: 5 }],
         make: `IELTS Writing Task 2(小論文)。${COMMON}`
           + 'question に **IELTS の設問そのままの形**で入れる ——'
           + '背景1文 + 問い1文 + 「Give reasons for your answer and include '
-          + 'any relevant examples from your own knowledge or experience.」。'
+          + 'any relevant examples from your own knowledge or experience.」'
+          + ' + 「Write at least 250 words.」。'
           + '**問いの型を混ぜる** —— 賛否を問うもの、両方の見方を求めるもの、'
           + '利点と欠点を問うもの、原因と対策を問うもの。'
           + '話題は**社会について**(教育・環境・都市・技術・働き方)。'
@@ -818,6 +1142,7 @@ export const EXAMS = [
           + '**問いの型ごとに答え方が違うこと**を日本語で書く。' },
       { id: 's1', label: 'Speaking Part 1(身近な質問)', real: '4〜5分', format: 'speak',
         what: '自分のことや身の回りのことについて、短く答える',
+        set: '1つの話題につき3〜4問ひと組',
         sections: [{ exercise_type: 'discussion', count: 8 }],
         make: `IELTS Speaking Part 1(身近な質問)。${COMMON}`
           + 'question に**英語の質問1文**を入れる。'
@@ -839,6 +1164,7 @@ export const EXAMS = [
           + 'note に**1〜2分の配り方**(観点1つにつき2〜3文)を日本語で書く。' },
       { id: 's3', label: 'Speaking Part 3(掘り下げ)', real: '4〜5分', format: 'speak',
         what: 'Part 2 の話題を広げ、社会についての考えを問われる',
+        set: '1つの話題につき4問ひと組',
         sections: [{ exercise_type: 'discussion', count: 8 }],
         make: `IELTS Speaking Part 3(掘り下げ)。${COMMON}`
           + 'question に**英語の質問1文**を入れる。'
@@ -888,6 +1214,19 @@ export const formatOf = (part) => FORMATS[part?.format] ?? null
 
 /** ★ **本番の選択肢の数**(選択肢なしは 0)。宣言が無ければ 0(= 押しつけない) */
 export const choicesOf = (part) => formatOf(part)?.choices ?? 0
+
+/**
+ * ★ **その PART の、作れない部分**(第5.337節)。無ければ空。
+ *
+ * `cannot`(PART ごと作れない)と**別のもの**である ——
+ * 英検の二次試験は、**音読とパッセージの質問は作れるが、
+ * イラストについての質問だけ作れない。** PART ごと消すと、
+ * 作れるはずの練習までできなくなる。
+ *
+ * **黙って絞らない**(CLAUDE.md)ので、
+ * ①画面の1行に出し ②窓口にも「作らない」と伝える。
+ */
+export const partialOf = (part) => String(part?.partial ?? '').trim()
 
 /** その PART。無ければ null */
 export const examPartOf = (examId, partId) =>
@@ -948,6 +1287,13 @@ export const examBrief = (examId, partId) => {
          設問が自由記述になり、意見を問う問まで混ざった(利用者の指摘) */
     choiceBrief(choicesOf(part), part.sections),
     part.make,
+    /* ★ **作れない部分は「作らない」と伝える**(第5.337節)。
+         英検の二次試験は、音読とパッセージの質問は作れるが、
+         **イラストについての質問だけ作れない。** 言わないと、
+         AI は本番どおりに作ろうとして**絵の無い絵の問**を書く */
+    partialOf(part)
+      ? `**ここでは、${partialOf(part)}作れない。その問は1つも作らないこと。**`
+      : '',
     '**この PART の形に、必ずそろえること。**',
   ].filter(Boolean).join('\n')
 }
@@ -1002,6 +1348,14 @@ export const examPartLine = (examId, partId) => {
   /* **同じことを2つ出さない**(CLAUDE.md)。Versant Part C の
      「1語か短い句で答える」のように、**何をする問題か**の説明に
      もう入っていることがある */
-  return [part.real, part.what, part.what?.includes(答え方) ? '' : 答え方]
-    .filter(Boolean).join(' … ')
+  /* ★ **作れない部分も出す**(第5.337節)。**黙って絞らない**(CLAUDE.md) ——
+       英検の二次試験は、イラストについての質問だけが作れない。
+       **理由もいっしょに言う**(`examSkipLine` と同じ書き方) */
+  const 一部 = partialOf(part)
+  return [
+    part.real,
+    part.what,
+    part.what?.includes(答え方) ? '' : 答え方,
+    一部 ? `${一部}作れません` : '',
+  ].filter(Boolean).join(' … ')
 }

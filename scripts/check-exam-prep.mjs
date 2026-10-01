@@ -34,7 +34,7 @@ const {
   DEFAULT_EXAM, EXAMS, EXAM_KIND, examBrief, examBriefByKey, examKeyOf, examLabel,
   examOf, examOutline, examPartLine, examPartOf, examPartsOf, examSectionsByKey,
   examSectionsOf, examSkipLine, examSkipsOf, examTitle, firstPartOf,
-  FORMATS, choiceBrief, choicesOf, formatOf,
+  FORMATS, choiceBrief, choicesOf, formatOf, partialOf,
 } = await import('../src/data/examPrep.js')
 const { EXERCISE_TYPES, defaultSectionsFor, isPassageSection, sectionsFor }
   = await import('../src/data/exerciseTypes.js')
@@ -712,20 +712,297 @@ console.log('\n▶ 答え方(第5.336節)')
     } else ok('画面の1行 … 同じことを2度書いていない')
   }
 
-  /* ── ⑤ **設問の数が、本番の1セットを超えていないか** ──
+  /* ── ⑤ **設問の数が、本番の1セットで割り切れるか** ──
          Part 3 は「会話1本につき3問」なのに設問 6 問だった ——
-         **会話1本に2セット分**が付いていた(本番に無い形) */
-  const 超過 = []
+         **会話1本に2セット分**が付いていた(本番に無い形)。
+
+         ★ **はじめ「1セット分を超えたら赤」と書いて、2つ空振りした**
+            (第5.337節)。TOEFL の Read in Daily Life は
+            「短い文1つにつき2問」で、**短い文を3つ作るから設問 6 問が正しい。**
+            **超えているかではなく、何セット分になるかで見る。**
+
+           ①**1セットの問数で割り切れる**(端数の問が宙に浮かない)
+           ②**セット数が、本文の数を超えない**(1つの段落に2セット分を付けない) */
+  const 端数 = []
+  const はみ出し = []
+  let 数えた = 0
   for (const { exam, part } of PICKABLE) {
     const m = /設問(\d+)問/.exec(part.set ?? '')
     if (!m) continue
+    const ひと組 = Number(m[1])
     const 問 = (part.sections ?? [])
       .find((x) => x.exercise_type === 'comprehension')?.count ?? 0
-    if (問 > Number(m[1])) 超過.push(`${exam.id}/${part.id} … 1セット ${m[1]}問 なのに ${問}問`)
+    if (!問) continue
+    数えた += 1
+    if (問 % ひと組) {
+      端数.push(`${exam.id}/${part.id} … 1セット ${ひと組}問 なのに 設問 ${問}問(割り切れない)`)
+      continue
+    }
+    /* 本文の数(段落・発言)より多くのセットを作らせない */
+    const 本文 = (part.sections ?? [])
+      .find((x) => x.exercise_type === 'article' || x.exercise_type === 'dialogue')?.count ?? 0
+    const セット数 = 問 / ひと組
+    if (本文 && セット数 > 本文) {
+      はみ出し.push(`${exam.id}/${part.id} … ${セット数} セット分なのに、本文は ${本文} しかない`)
+    }
   }
-  if (超過.length) {
-    ng('本番の1セット … 設問が1セット分を超えている', 超過.join('\n    '))
-  } else ok('本番の1セット … 設問は、どれも1セット分をはみ出していない')
+  /* **1つも数えていなければ赤**(見張りが何もしていないのと同じ) */
+  if (数えた < 5) {
+    ng('本番の1セット … 設問の数を数えた PART が少なすぎる(見張りが素通りする)', 数えた)
+  } else if (端数.length) {
+    ng('本番の1セット … 設問が1セット分で割り切れない', 端数.join('\n    '))
+  } else if (はみ出し.length) {
+    ng('本番の1セット … セット数が本文の数を超えている', はみ出し.join('\n    '))
+  } else ok(`本番の1セット … ${数えた} 個とも、設問がセットできれいに割れる`)
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **級ごと・型ごとに、本番とそろっているか**(第5.337節)
+
+     > テスト対策内の全てのテストについて公式に公表されているテスト形式と
+     > 傾向や表示を確認して、アプリ内の対策の教材も揃えてください
+
+   いちばん大きな食い違いは**英検**だった ——
+   **6つの級ぜんぶに、まったく同じ7つの PART** を出していた。
+   ここは「どの級にも同じものを出していないか」を機械で見る。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 級ごと・型ごとの形(第5.337節)')
+{
+  const 英検 = EXAMS.filter((e) => e.id.startsWith('eiken_'))
+  const 大問 = (id) => (examOf(id)?.parts ?? []).map((p) => p.id).join(',')
+
+  /* ── ① **級ごとに大問の並びが違う** ──
+         ぜんぶ同じだったら赤(**それが直す前の姿**である) */
+  const 並び = new Set(英検.map((e) => 大問(e.id)))
+  if (英検.length < 6) ng('英検 … 級が少なすぎる(見張りが素通りする)', 英検.length)
+  else if (並び.size < 2) {
+    ng('英検 … どの級も、まったく同じ大問を出している(級ごとの違いが落ちている)',
+      [...並び][0])
+  } else ok(`英検 … ${英検.length} 級で、大問の並びが ${並び.size} 通り(級ごとに違う)`)
+
+  /* ── ② **会話文の文空所補充は、3級と準2級だけ** ──
+         **出る側と出ない側の両方を見る**(CLAUDE.md) */
+  const 会話あり = 英検.filter((e) => 大問(e.id).includes('r_conv')).map((e) => e.id).sort()
+  const 会話なし = 英検.filter((e) => !大問(e.id).includes('r_conv')).map((e) => e.id).sort()
+  const 会話の正 = ['eiken_3', 'eiken_p2'].sort()
+  if (String(会話あり) !== String(会話の正)) {
+    ng('英検 … 会話文の文空所補充が、本番と違う級に出ている',
+      `出ている: ${会話あり} / 本番は: ${会話の正}`)
+  } else if (会話なし.length !== 4) {
+    ng('英検 … 会話文の文空所補充が無い級の数が合わない', 会話なし.length)
+  } else ok(`英検 … 会話文の文空所補充は ${会話あり.length} 級だけ・残り ${会話なし.length} 級には無い`)
+
+  /* ── ③ **長文の語句空所補充は、3級に無い** ── */
+  const 長文空所なし = 英検.filter((e) => !大問(e.id).includes('r2')).map((e) => e.id)
+  if (String(長文空所なし) !== String(['eiken_3'])) {
+    ng('英検 … 長文の語句空所補充が無い級が、本番と違う',
+      `無い級: ${長文空所なし} / 本番は: eiken_3 だけ`)
+  } else ok('英検 … 長文の語句空所補充は、3級にだけ無い(本番どおり)')
+
+  /* ── ④ **英作文の1題めは、級によって要約か Eメールか** ──
+         ★ **準2級プラスは要約である。** それまで Eメールにしていた */
+  const 要約 = []
+  const メール = []
+  for (const e of 英検) {
+    const w = (e.parts ?? []).find((p) => p.id === 'w1')
+    if (!w) { ng('英検 … 英作文の1題めが無い級がある', e.id); continue }
+    if (w.label.includes('要約')) 要約.push(e.id)
+    else if (w.label.includes('Eメール')) メール.push(e.id)
+    else ng('英検 … 英作文の1題めが、要約でも Eメールでもない', `${e.id} … ${w.label}`)
+  }
+  const 要約の正 = ['eiken_1', 'eiken_p1', 'eiken_2', 'eiken_p2p']
+  const メールの正 = ['eiken_p2', 'eiken_3']
+  if (String(要約.sort()) !== String(要約の正.sort())) {
+    ng('英検 … 要約が出る級が、本番と違う', `いま: ${要約} / 本番は: ${要約の正.sort()}`)
+  } else if (String(メール.sort()) !== String(メールの正.sort())) {
+    ng('英検 … Eメールが出る級が、本番と違う', `いま: ${メール} / 本番は: ${メールの正.sort()}`)
+  } else ok(`英検 … 要約 ${要約.length} 級 / Eメール ${メール.length} 級(準2級プラスは要約)`)
+
+  /* ── ⑤ **リーディングの大問の問数の和が、公式の総数と合う** ──
+         **数を書き写さない。** 大問の `real` から足して、総数と突き合わせる */
+  const 総数 = {
+    eiken_1: 35, eiken_p1: 31, eiken_2: 31, eiken_p2p: 31, eiken_p2: 29, eiken_3: 30,
+  }
+  const 合わない = []
+  for (const e of 英検) {
+    const 和 = (e.parts ?? [])
+      .filter((p) => ['r1', 'r_conv', 'r2', 'r3'].includes(p.id))
+      .reduce((n, p) => n + (Number(/(\d+)問/.exec(p.real ?? '')?.[1]) || 0), 0)
+    if (和 !== 総数[e.id]) 合わない.push(`${e.id} … 大問の和 ${和}問 / 公式は ${総数[e.id]}問`)
+  }
+  if (合わない.length) {
+    ng('英検 … リーディングの大問の和が、公式の総数と合わない', 合わない.join('\n    '))
+  } else ok(`英検 … ${英検.length} 級とも、大問の和が公式のリーディング総数と合う`)
+
+  /* ── ⑥ **二次試験は、級ごとに3つの形** ──
+         1級はスピーチ(作れる)/ 準1級は4コマイラスト(**作れない**)/
+         ほかは面接(**イラストの問だけ作れない**) */
+  const 面接 = Object.fromEntries(英検.map((e) =>
+    [e.id, (e.parts ?? []).find((p) => p.id === 's1')]))
+  const 無い = Object.entries(面接).filter(([, p]) => !p).map(([id]) => id)
+  if (無い.length) ng('英検 … 二次試験が無い級がある', 無い.join(' / '))
+  else {
+    const 作れない = Object.entries(面接).filter(([, p]) => p.cannot).map(([id]) => id)
+    const 一部 = Object.entries(面接).filter(([, p]) => partialOf(p)).map(([id]) => id)
+    const 丸ごと作れる = Object.entries(面接)
+      .filter(([, p]) => !p.cannot && !partialOf(p)).map(([id]) => id)
+    if (String(作れない) !== String(['eiken_p1'])) {
+      ng('英検 … 二次試験を丸ごと作れない級が、本番と違う',
+        `いま: ${作れない} / 本番で絵が要るのは準1級(4コマ)だけ`)
+    } else if (String(丸ごと作れる) !== String(['eiken_1'])) {
+      ng('英検 … 絵の要らない二次試験が、1級だけになっていない', `いま: ${丸ごと作れる}`)
+    } else if (一部.length !== 4) {
+      ng('英検 … イラストの問だけ作れない級の数が合わない', `${一部.length} 級 … ${一部}`)
+    } else {
+      ok(`英検 … 二次試験は3つの形(スピーチ 1級 / 4コマで作れない 準1級`
+        + ` / イラストの問だけ作れない ${一部.length} 級)`)
+    }
+  }
+
+  /* ── ⑦ **英作文の語数が、級ごとに違う** ──
+         **級ごとに書き写していないこと**を見る ——
+         同じ語数を使い回していたら、どこかの級が間違っている */
+  const 語数 = 英検.map((e) => {
+    const w2 = (e.parts ?? []).find((p) => p.id === 'w2')
+    return /(\d+〜\d+語)/.exec(w2?.real ?? '')?.[1] ?? ''
+  })
+  if (語数.some((x) => !x)) {
+    ng('英検 … 意見論述の語数が入っていない級がある', 語数.join(' / '))
+  } else if (new Set(語数).size < 5) {
+    ng('英検 … 意見論述の語数が、級をまたいで同じになっている', 語数.join(' / '))
+  } else ok(`英検 … 意見論述の語数は ${new Set(語数).size} 通り(${語数.join(' / ')})`)
+
+  /* ── ⑧ **同じ大問でも、級ごとに別の作り方になっている** ──
+         ★ **はじめ「作り方に級の名前が入っているか」で見て、空振りした**
+            (第5.337節)。級の名前は `e.label` から引いているので、
+            **同じ出どころを突き合わせていた** ——
+            どの級も「英検」に書き換えても緑のままだった。
+            **自分と同じところを見ない。級どうしを見比べる。**
+
+         ★ **2度めも空振りした。** `examBrief()` には**問数**が入るので、
+            級ごとに問数が違うだけで**ぜんぶ違う文**になってしまう ——
+            作り方(`make`)から級の名前と CEFR を落としても緑だった。
+            **窓口に渡る文の全体ではなく、`make` そのものを見比べる。**
+
+         どの級にもある大問で、**6つの `make` がぜんぶ違う**ことを見る。
+         1つでも同じなら、**その2つの級で同じ問ができる。** */
+  const 共通の大問 = ['r1', 'r3', 'w2', 'l1']
+  const かぶり = []
+  for (const id of 共通の大問) {
+    const 文 = 英検.map((e) => examPartOf(e.id, id)?.make).filter(Boolean)
+    if (文.length !== 英検.length) { かぶり.push(`${id} … 持っていない級がある`); continue }
+    if (new Set(文).size !== 文.length) かぶり.push(`${id} … 作り方が同じ級がある`)
+  }
+  if (かぶり.length) {
+    ng('英検 … 級がちがうのに、作り方が同じ大問がある', かぶり.join('\n    '))
+  } else {
+    ok(`英検 … どの級にもある ${共通の大問.length} 個の大問は、`
+      + `${英検.length} 級ぶんの作り方(make)がぜんぶ違う`)
+  }
+
+  /* ── ⑨ **TOEFL のセクションの順番が、本番どおり** ──
+         2026年の形は Reading → Listening → **Writing → Speaking**。
+         それまで Speaking が Writing より先に並んでいた */
+  const toefl = examPartsOf('toefl').map((p) => p.id)
+  const 段 = (id) => (id.startsWith('r_') ? 0 : id.startsWith('l_') ? 1
+    : id.startsWith('w_') ? 2 : 3)
+  const 逆 = toefl.map(段).some((v, i, a) => i > 0 && v < a[i - 1])
+  if (toefl.length < 10) ng('TOEFL iBT … PART が少なすぎる(見張りが素通りする)', toefl.length)
+  else if (逆) {
+    ng('TOEFL iBT … セクションの順番が本番と違う(Reading → Listening → Writing → Speaking)',
+      toefl.join(' / '))
+  } else ok(`TOEFL iBT … ${toefl.length} 個が本番の順(Reading → Listening → Writing → Speaking)`)
+
+  /* ── ⑩ **TOEFL の Listening は4つの型** ──
+         それまで「Listening」1つにまとめていた(古い `l1` は消えている) */
+  const 聞く = examPartsOf('toefl').filter((p) => p.id.startsWith('l'))
+  if (聞く.length !== 4) {
+    ng('TOEFL iBT … Listening の型が4つになっていない', 聞く.map((p) => p.id).join(' / '))
+  } else if (聞く.some((p) => p.id === 'l1')) {
+    ng('TOEFL iBT … まとめていた古い Listening(l1)が残っている')
+  } else {
+    /* **問数の幅の下限の和が、公式の上限(47問)を超えない** */
+    const 下限 = 聞く.reduce((n, p) => n + (Number(/(\d+)/.exec(p.real ?? '')?.[1]) || 0), 0)
+    if (!(下限 > 0 && 下限 <= 47)) {
+      ng('TOEFL iBT … Listening の問数が、公式の 47 問に収まらない', 下限)
+    } else ok(`TOEFL iBT … Listening は4つの型・問数の下限の和 ${下限} 問(公式は 47 問まで)`)
+  }
+
+  /* ── ⑪ **IELTS には「2つの Not Given」が両方ある** ──
+         事実を見る True/False/Not Given と、
+         筆者の意見を見る Yes/No/Not Given は**別の設問形式**である */
+  const ielts読む = examBrief('ielts', 'r1')
+  const 事実 = ielts読む.includes('True, False or Not Given')
+  const 意見 = ielts読む.includes('Yes, No or Not Given')
+  if (!事実 || !意見) {
+    ng('IELTS … Not Given の2つの形がそろっていない',
+      `事実(True/False): ${事実} / 意見(Yes/No): ${意見}`)
+  } else ok('IELTS … Not Given は2つとも入っている(事実 True/False / 意見 Yes/No)')
+
+  /* ── ⑫ **IELTS の語数制限に、数字の扱いが入っている** ──
+         IELTS は**数字を1語と数えない**ので、
+         「NO MORE THAN TWO WORDS」だけだと正解の形が変わる */
+  const 記入 = ['l1', 'l2', 'r1'].map((id) => examBrief('ielts', id))
+  const 足りない = 記入.filter((b) => !b.includes('AND/OR A NUMBER'))
+  if (足りない.length) {
+    ng('IELTS … 語数制限に「AND/OR A NUMBER」が入っていない PART がある', 足りない.length)
+  } else ok(`IELTS … 記入式の ${記入.length} 個とも、語数制限に数字の扱いが入っている`)
+
+  /* ── ⑬ **作れない部分は、画面にも窓口にも出る** ──
+         **出る側と出ない側の両方**(CLAUDE.md)。
+         `partial` を持つ PART には出て、持たない PART には出ない */
+  const 一部ある = PICKABLE.filter(({ part }) => partialOf(part))
+  const 一部ない = PICKABLE.filter(({ part }) => !partialOf(part))
+  if (一部ある.length < 4) {
+    ng('作れない部分 … `partial` を持つ PART が少なすぎる(見張りが素通りする)', 一部ある.length)
+  } else {
+    const 漏れ = []
+    for (const { exam, part } of 一部ある) {
+      const 行 = examPartLine(exam.id, part.id)
+      const 文 = examBrief(exam.id, part.id)
+      if (!行.includes(partialOf(part))) 漏れ.push(`${exam.id}/${part.id} … 画面の1行に出ていない`)
+      if (!文.includes(partialOf(part))) 漏れ.push(`${exam.id}/${part.id} … 窓口に伝えていない`)
+      if (!/1つも作らない/.test(文)) 漏れ.push(`${exam.id}/${part.id} … 「作らない」と言っていない`)
+    }
+    /* **持たない PART に出ていたら赤**(どこにでも出す形に書き換えても緑にならないため) */
+    const 余り = 一部ない.filter(({ exam, part }) =>
+      /作れません/.test(examPartLine(exam.id, part.id))
+      || /1つも作らない/.test(examBrief(exam.id, part.id)))
+    if (漏れ.length) ng('作れない部分 … 伝わっていない', 漏れ.slice(0, 4).join('\n    '))
+    else if (余り.length) {
+      ng('作れない部分 … 持っていない PART にも出ている',
+        余り.map(({ exam, part }) => `${exam.id}/${part.id}`).slice(0, 4).join(' / '))
+    } else {
+      ok(`作れない部分 … ${一部ある.length} 個は画面と窓口の両方に出て、`
+        + `残り ${一部ない.length} 個には1つも出ない`)
+    }
+  }
+
+  /* ── ⑭ **VERSANT は、答える秒数が本番どおり** ──
+         本番は Part A 15秒 / Part E 30秒 / Part F 40秒。
+         **作り方の文にも入れる** —— 長さを決める根拠だからである */
+  const 秒 = { a: 15, e: 30, f: 40 }
+  const 秒の漏れ = []
+  for (const [id, n] of Object.entries(秒)) {
+    const part = examPartOf('versant', id)
+    if (!part) { 秒の漏れ.push(`versant/${id} … PART が無い`); continue }
+    if (!part.real.includes(`${n}秒`)) 秒の漏れ.push(`versant/${id} … ${n}秒 が問数の欄に無い`)
+    if (!examBrief('versant', id).includes(`${n}秒`)) {
+      秒の漏れ.push(`versant/${id} … ${n}秒 が作り方に無い`)
+    }
+  }
+  if (秒の漏れ.length) ng('VERSANT … 本番の応答時間が入っていない', 秒の漏れ.join('\n    '))
+  else ok(`VERSANT … ${Object.keys(秒).length} 個とも、本番の応答時間が画面と作り方の両方に入る`)
+
+  /* ── ⑮ **TOEIC Speaking は、準備と解答の秒数が全 PART に入る** ── */
+  const sp = examPartsOf('toeic_s')
+  const 秒なし = sp.filter((p) => !/秒/.test(p.real ?? ''))
+  if (sp.length < 4) ng('TOEIC Speaking … PART が少なすぎる(見張りが素通りする)', sp.length)
+  else if (秒なし.length) {
+    ng('TOEIC Speaking … 解答の秒数が入っていない PART がある',
+      秒なし.map((p) => p.id).join(' / '))
+  } else ok(`TOEIC Speaking … ${sp.length} 個とも、準備と解答の秒数が出る`)
 }
 
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
