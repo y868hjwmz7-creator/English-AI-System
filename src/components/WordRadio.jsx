@@ -77,7 +77,7 @@ import {
   RADIO_ORDERS, loadRadioOrder, radioList, saveRadioOrder,
   nextIndex, prevIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf,
   radioModesFor,
-  radioSteps, radioTextOf, radioWarmups, saveRadioGap, saveRadioMode,
+  radioSteps, radioTextOf, radioVoiceOf, radioWarmups, saveRadioGap, saveRadioMode,
 } from '../lib/wordRadio.js'
 
 export default function WordRadio({
@@ -378,10 +378,17 @@ export default function WordRadio({
            **1つ先だけ**にしてあるので、鳴らす前に取り終わる ——
            同じ瞬間に2回作りに行くことも無い。
            ══════════════════════════════════════════════════════ */
-        for (const w of radioWarmups(list[nextIndex(i, list.length)], mode)) {
+        /* ★ **声と段も、その行から読む**(第5.334節)。
+             応答問題の「正解の聞き流し」は、**その教材の声**で支度されて
+             いるので、ここで既定の声を取りに行くと**支度した MP3 に
+             1本も当たらない**(待つうえ、二度目の課金)。
+             **判断は `radioVoiceOf()` 1か所** —— 鳴らす側(下)と
+             同じものを通す(書き写すと先読みだけが別の声を取る) */
+        const 次の行 = list[nextIndex(i, list.length)]
+        for (const w of radioWarmups(次の行, mode)) {
           prepareRead(w.text, w.ja
             ? { clipVoice: JA_VOICE, clipTier: PREMIUM }
-            : undefined)
+            : radioVoiceOf(次の行))
         }
         if (!steps.length) {
           /* **読むものが無い語は、待たずに次へ。**「読んだことにして」
@@ -449,7 +456,10 @@ export default function WordRadio({
               clipTier: PREMIUM,
               clipOnly: true,
             })
-            : readAloud(st.text, { rate }))
+            /* ★ **声と段は、その行から**(第5.334節)。
+               **渡っていなければ、これまでどおり**(単語帳と Quick Response
+               の行には `clipVoice` が無いので、1ミリも変わらない) */
+            : readAloud(st.text, { rate, ...radioVoiceOf(row) }))
         }
         if (!alive()) return
         setSay(null)

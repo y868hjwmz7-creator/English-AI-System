@@ -3102,8 +3102,18 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      *   `prepareRead` と書いてあるので、**呼んでいる形**で見る。 */
     /* **用意するものは `radioWarmups()` が決める**(第5.251節)。
        もとは英語1本を名指ししていたが、**訳が抜けていた** ——
-       言う練習は訳から始まるので、そこで毎回待たされていた */
-    ok(/for \(const w of radioWarmups\(list\[nextIndex\(/.test(radio),
+       言う練習は訳から始まるので、そこで毎回待たされていた。
+
+       ★ **式を書き写さない**(2026-10-01・第5.334節で踏んだ)。
+       もとは `radioWarmups(list[nextIndex(` と**式ごと**書いてあったので、
+       第5.334節で**声も渡すために次の行を変数へ出した**日に、
+       **この見張りだけが古くなって赤くなった。**
+       仕組みは1ミリも壊れていない。
+       見るのは性質 —— **先読みするのは「次の1つ」**で、
+       **何を取りに行くかは `radioWarmups()` が決める** */
+    const 次の名 = radio.match(/const (\S+) = list\[nextIndex\(i, list\.length\)\]/)?.[1]
+    ok(!!次の名
+      && new RegExp(`for \\(const w of radioWarmups\\(${次の名}, mode\\)\\)`).test(radio),
       '聞き流し … 次の1つを、いま鳴らしているあいだに用意している')
     /* **`readAloud()` と同じ既定で用意する。** `prefetchClip` を画面から
        直に呼ぶと、話者と段を**呼ぶ側が書き写す**ことになり、
@@ -7918,8 +7928,15 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   }
   {
     const rd = noNote(readD('src/components/WordRadio.jsx'))
-    ok(/radioWarmups\(list\[nextIndex\(i, list\.length\)\], mode\)/.test(rd),
-      '聞き流し … 次の1つを、`radioWarmups()` にそろえて先読みする')
+    /* ★ **式を書き写さない**(上と同じ理由・第5.334節)。
+       あわせて **声も同じ行から読んでいるか**を見る ——
+       鳴らす側と先読みする側で別の行を見ると、
+       **先読みだけが別の声を取りに行って二度課金**になる(第5.289節) */
+    const 次名 = rd.match(/const (\S+) = list\[nextIndex\(i, list\.length\)\]/)?.[1]
+    ok(!!次名
+      && new RegExp(`radioWarmups\\(${次名}, mode\\)`).test(rd)
+      && new RegExp(`radioVoiceOf\\(${次名}\\)`).test(rd),
+      '聞き流し … 次の1つを、`radioWarmups()` にそろえて先読みする(声も同じ行から)')
     ok(/clipVoice: JA_VOICE, clipTier: PREMIUM/.test(rd),
       '訳の先読みも、鳴らすときと同じ声・同じ段(別の鍵で二度課金しない)')
     ok(/radioGapsOf\(gap, mode\)/.test(rd),

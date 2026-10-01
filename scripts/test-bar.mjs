@@ -2184,6 +2184,131 @@ for (const [label, want] of Object.entries(WANT)) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   ★ **正解の聞き流し**(第5.334節・2026-10-01 利用者の指定)
+
+     > その上で、応答問題には正解の聞き流しモードを作ります。
+     > 問題順をシャッフルもできる仕様です。
+
+   **素の関数だけ見ると、画面が渡していなくても緑になる**(第5.330節で
+   踏んだ)。`npm run test:response` が算段を数えているので、**ここは
+   「本物の入り口から1回開く」ほうを受け持つ** ——
+   押せるか・開くか・題が出るか・混ぜる欄があるか。
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   応答問題にだけ出て、**ほかの教材には1つも出ない。**
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  const 名 = '正解を聞き流す'
+  /* ── ① **出る側。** 応答問題で押せて、聞き流しが開く ───────────── */
+  for (const w of [1280, 390]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 820 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?kind=response&role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+    const 札 = await page.evaluate(() => [...document.querySelectorAll('.practice-row button')]
+      .map((b) => b.textContent.trim()))
+    /* ページに出ている問数(「リスニング + 理解(4 問)」の 4)。
+       **ここも書き写さない** —— 骨組みの教材から読む */
+    const ページの問数 = await page.evaluate(() => Number(
+      document.body.innerText.match(/[(（]\s*(\d+)\s*問\s*[)）]/)?.[1] ?? 0,
+    ))
+    if (!札.includes(名)) {
+      ng(`正解の聞き流し ${w}px … 応答問題にボタンが出ていない`, JSON.stringify(札))
+      await page.close()
+      continue
+    }
+    if (!(ページの問数 > 0)) {
+      ng(`正解の聞き流し ${w}px … ページの問数が読めない`, '比べる相手が無い')
+      await page.close()
+      continue
+    }
+    await page.getByRole('button', { name: new RegExp(名) }).click()
+    await page.waitForTimeout(900)
+    /* **題は、聞きながら何を聞いているか分かるように**(第5.264節)。
+       **問数も、英文の無い問を落としたあとの数**でなければならない ——
+       そこを落とさないと、空の英文で窓口を呼ぶ */
+    const 中 = await page.evaluate(() => {
+      /* **いちばん後ろの題**(聞き流しのもの)。ページ送りの
+         「1 / 1」を拾わないよう、聞き流しの題だけを見る */
+      const hs = [...document.querySelectorAll('.drill-head')]
+      const h = hs[hs.length - 1]
+      return {
+        題: h?.innerText?.replace(/\n+/g, ' / ') ?? '',
+        とめる: [...document.querySelectorAll('button')]
+          .some((b) => b.offsetParent && /とめる|聞き流しをやめる/.test(b.textContent)),
+      }
+    })
+    /* **値を書き写さない。性質で見る**(CLAUDE.md)——
+       骨組みの応答問題には**解答の無い問が1つ混ざっている**ので、
+       聞き流しの問数は**ページの問数より必ず少なく、0 より多い。**
+       「3 問」と書くと、問を1つ足した日に見張りだけが古くなる。
+
+       **読むのは斜線の右(ぜんぶで何問か)。** 左(いま何問目)は
+       鳴り進むと動くので、**そちらを見ると 4 問のままでも通ってしまう。**
+
+       **ここが守るのは「渡しているのが、ページの問ぜんぶではない」**
+       ことである。**空の解答を落とすこと自体は、ここでは測れない** ——
+       聞き流しの側(`radioList`)が**英文の無い行をどのみち落とす**ので、
+       `responseAnswers()` の `continue` を外しても緑のままだった(実測)。
+       **ほかの見張りに吸われる**という、あの形である(CLAUDE.md)。
+       あちらは `npm run test:response` が名指しで数えている */
+    const 聞 = Number(中.題.match(/(\d+)\s*\/\s*(\d+)\s*$/)?.[2] ?? 0)
+    if (!中.とめる) {
+      ng(`正解の聞き流し ${w}px … 押しても聞き流しが開かない`, 中.題 || '(題も無い)')
+    } else if (!/正解/.test(中.題)) {
+      ng(`正解の聞き流し ${w}px … 題に「正解」が入っていない`, 中.題)
+    } else if (!(聞 > 0 && 聞 < ページの問数)) {
+      ng(`正解の聞き流し ${w}px … 流れているのが、ページの問ぜんぶになっている`,
+        `聞き流し ${聞} 問 / ページ ${ページの問数} 問`)
+    } else {
+      ok(`正解の聞き流し ${w}px … 押すと開き、題と問数が出る(${中.題}`
+        + `・ページの ${ページの問数} 問に対して、正解だけの ${聞} 問)`)
+    }
+    /* ── ② **問題順のシャッフル**(利用者の指定)。
+             **設定の中に「ランダム」がある**こと。
+             **混ぜ方を2つ持たない**ので、ここは聞き流しが元から持つ欄である */
+    const 設定 = page.locator('button[aria-label="設定"]').last()
+    await 設定.click()
+    await page.waitForTimeout(500)
+    const 一覧 = await page.evaluate(() => [...document.querySelectorAll('select')]
+      .filter((e) => e.offsetParent !== null)
+      .map((s2) => [...s2.options].map((o) => o.textContent.trim()).join('/')))
+    const 並べ方 = 一覧.find((x) => /ランダム/.test(x))
+    if (!並べ方) {
+      ng(`正解の聞き流し ${w}px … 問題順を混ぜる欄が無い`, JSON.stringify(一覧))
+    } else {
+      ok(`正解の聞き流し ${w}px … 問題順を混ぜられる(${並べ方})`)
+    }
+    await page.close()
+  }
+
+  /* ── ③ **出ない側。** ほかの教材には1つも出ない
+           (効かない操作を見せない・CLAUDE.md)。
+           **ここを見ないと、どの教材にも出す形に書き換えても緑のまま**である */
+  for (const [名前, qs] of [
+    ['テスト対策', 'kind=exam'], ['会話', ''], ['文型ドリル', 'kind=drill'],
+    ['スピーチ', 'kind=speech'],
+  ]) {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1&${qs}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+    const 行 = await page.$('.practice-row')
+    const 札 = await page.evaluate(() => [...document.querySelectorAll('.practice-row button')]
+      .map((b) => b.textContent.trim()))
+    if (!行) {
+      ng(`正解の聞き流し … ${名前} で練習の行そのものが出ていない`,
+        '出ない側を測れない(この見張りは何も守らない)')
+    } else if (札.includes(名)) {
+      ng(`正解の聞き流し … ${名前} にも出ている`, JSON.stringify(札))
+    } else {
+      ok(`正解の聞き流し … ${名前} には出ない(${札.join(' / ')})`)
+    }
+    await page.close()
+  }
+}
+
 // ── ページそのものが横に送れないこと(2026-09 実機・利用者の指摘)────
 //
 //    > スマホで教材ページやその他のページを表示しスクロールする際に
@@ -11289,6 +11414,11 @@ const SCREENS = [
      `role=learner` は**添削の欄ごと出ない**形 */
   ['speechboard', ''], ['speechboard', 'done=no'], ['speechboard', 'role=learner'],
   ['', 'role=trainer&who=g1'],
+  /* ★ **応答問題のレッスン表示**(第5.334節)。練習の行に
+       「正解を聞き流す」が増えて **4つ横に並ぶ**ので、
+       狭い画面では折り返す —— **横のすき間がいちばん出やすい形**である。
+       **ボタンの色**も、ここで数えられる(地の色のままなら赤くなる) */
+  ['', 'role=trainer&who=g1&kind=response'],
 ]
 
 /* ══════════════════════════════════════════════════════════════

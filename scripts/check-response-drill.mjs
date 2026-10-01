@@ -361,5 +361,106 @@ console.log('\n▶ 正解の英文を、鳴る順に並べられるか(聞き流
     '段が1つも無い教材でも落ちない')
 }
 
+console.log('\n▶ 正解の聞き流し(第5.334節)')
+{
+  /* ★ 2026-10-01 利用者の指定。
+
+       > その上で、応答問題には正解の聞き流しモードを作ります。
+       > 問題順をシャッフルもできる仕様です。
+
+     **新しい画面を作っていない。** 聞き流し(`WordRadio`)は
+     「音声が自動で進み、間を選べて、やめるまで回りつづける」——
+     **必要なものが、もうぜんぶ在る**(`radioSteps` の節と同じ考え方)。
+     足りなかったのは**何を鳴らすか**だけである。 */
+  const { responseRadioRows } = await import('../src/lib/audioPlaylist.js')
+  const { radioVoiceOf, radioTextOf, radioJaOf, radioList, RADIO_ORDERS }
+    = await import('../src/lib/wordRadio.js')
+  const mat = {
+    kind: 'response', voiceIds: [], tags: [],
+    sections: [{ exercise_type: 'listening', items: [
+      { audio_text: 'Q1', answer: 'Me too.', answer_ja: '私も' },
+      { audio_text: 'Q2', answer: 'Not yet.', answer_ja: 'まだ' },
+      { audio_text: 'Q3', answer: '  ' },
+    ] }],
+  }
+  const rows = responseRadioRows(mat)
+  const 解答のある問 = mat.sections[0].items.filter((it) => D.answerSpeakText(it)).length
+  is(rows.length === 解答のある問, '正解だけが並ぶ(英文の無い問は落ちる)',
+    `${rows.length} 件 / 解答のある問 ${解答のある問}`)
+  /* **聞き流しが読む欄に、そのまま入っているか。**
+     ここが食い違うと、**1件も鳴らずに素通りする**(`radioTextOf` が空を返す) */
+  is(rows.every((r) => radioTextOf(r)) && radioTextOf(rows[0]) === 'Me too.',
+    '聞き流しが読む欄(`radioTextOf`)に入っている', radioTextOf(rows[0]))
+  is(radioJaOf(rows[0]) === '私も', '訳も、聞き流しが読む欄に入っている')
+  /* ★ **声と段は、支度(`sectionRestClips`)から引いているか。**
+       書き写すと、**支度した MP3 に1本も当たらない**(待ち + 二度課金) */
+  const { sectionRestClips } = await import('../src/lib/audioPlaylist.js')
+  const 支度 = sectionRestClips(mat, mat.sections[0]).find((c) => c.text === 'Me too.')
+  const 声 = radioVoiceOf(rows[0])
+  is(声.clipVoice === 支度?.voiceId && 声.clipTier === 支度?.tier,
+    '聞き流しの声と段が、支度した音声とまったく同じ',
+    `${声.clipTier} / ${声.clipVoice}`)
+  /* **出ない側。** 単語帳と Quick Response の行には `clipVoice` が無いので、
+     **あの2つは1ミリも変わらない** */
+  is(Object.keys(radioVoiceOf({ en: 'x' })).length === 0
+    && Object.keys(radioVoiceOf(null)).length === 0,
+    '声の渡っていない行では、これまでどおり(単語帳と QR は変わらない)')
+  /* **段が分からないときは渡さない。** 当て推量で `standard` と書くと、
+     良い声で支度したものを取りに行かなくなる(= もう一度作る) */
+  is(!('clipTier' in radioVoiceOf({ clipVoice: 'us-female' })),
+    '段が分からないときは、段を当て推量で渡さない')
+  /* **応答問題でなければ、1件も返さない**(渡す側が判じ直さないため) */
+  is(responseRadioRows({ ...mat, kind: 'exam' }).length === 0
+    && responseRadioRows(null).length === 0,
+    '応答問題でなければ、聞き流しに渡すものが無い')
+
+  /* ★ **問題順のシャッフル**(利用者の指定)。
+       **混ぜ方を2つ持たない** —— 聞き流しがもう持っている
+       「ランダム」(`radioList`)に載せる。だから `responseRadioRows()` は
+       **混ぜない**(渡す前に混ぜると、あちらの欄と二重になる) */
+  is(RADIO_ORDERS.some((o) => o.id === 'shuffle') && RADIO_ORDERS.some((o) => o.id === 'seq'),
+    '聞き流しに「出た順」と「ランダム」の両方がある')
+  const 多い = Array.from({ length: 24 }, (_, i) => ({ en: `s${i}`, ja: '' }))
+  const 出た順 = radioList(多い, 'seq', 'all').map((r) => r.en).join(',')
+  const 混ぜた = Array.from({ length: 8 },
+    () => radioList(多い, 'shuffle', 'all').map((r) => r.en).join(','))
+  is(出た順 === 多い.map((r) => r.en).join(','), '「出た順」は、並べ替えない')
+  is(混ぜた.some((x) => x !== 出た順), '「ランダム」は、並びが変わる')
+  /* **渡す側が混ぜていないこと。** 二重に混ぜると「出た順」が効かなくなる */
+  const pl = noC(R('src/lib/audioPlaylist.js'))
+  is(!/shuffled\(/.test(pl), '渡す側では混ぜていない(混ぜ方を2つ持たない)')
+
+  /* ★ **画面が本当に通しているか。**
+       素の関数だけ見ると、**画面が渡していなくても緑になる**(第5.330節で踏んだ) */
+  const lv = noC(R('src/components/LessonView.jsx'))
+  is(/responseRadioRows\(material\)/.test(lv),
+    'レッスン表示が、聞き流しに渡す一覧を引いている')
+  is(/<WordRadio[\s\S]{0,400}rows=\{answerRadio\}/.test(lv),
+    'レッスン表示が、その一覧で `WordRadio` を描いている')
+  is(/answerRows\.length > 0 && \(/.test(lv),
+    '正解が1つも無ければ、ボタンごと出さない(行き止まりを作らない)')
+  /* **判断を画面に置いていないか**(置く場所の数だけ食い違う) */
+  is(!/isResponseKind\(/.test(lv),
+    'レッスン表示は、応答問題かどうかを一度も見ない(判断は1か所)')
+  /* ★ **鳴らす側と先読みする側の両方が、同じ声を通っているか。**
+       片方だけだと、**先読みが別の声を取りに行って二度課金**になる
+       (`materialRestClips` で踏んだのと同じ形・第5.289節) */
+  const wr = noC(R('src/components/WordRadio.jsx'))
+  is(/readAloud\(st\.text, \{ rate, \.\.\.radioVoiceOf\(row\) \}\)/.test(wr),
+    '聞き流しが鳴らすとき、その行の声で鳴らす')
+  is(/prepareRead\(w\.text, w\.ja[\s\S]{0,120}: radioVoiceOf\(次の行\)\)/.test(wr),
+    '聞き流しが先読みするときも、同じ声を取りに行く')
+  /* **骨組みは、本物と1文字も違えない**(CLAUDE.md)——
+     応答問題の教材が骨組みに無いと、ボタンが1度も描かれない */
+  const sc = noC(R('src/__screens.jsx'))
+  is(/kind: 'response'/.test(sc), '骨組みに、応答問題の教材がある')
+  is(/asResponse = q\.get\('kind'\) === 'response'/.test(sc),
+    '骨組みを `?kind=response` で開ける')
+  /* **いちばん危ない形を、骨組みの中に1つ置く**(CLAUDE.md)——
+     **英文の無い問**。落とさなければ、空の英文で窓口を呼ぶ */
+  const 骨 = sc.match(/id: 'test-response'[\s\S]*?\n\} : asExam/)?.[0] ?? ''
+  is(/answer: ''/.test(骨), '骨組みの応答問題に、英文の無い問が混ざっている')
+}
+
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

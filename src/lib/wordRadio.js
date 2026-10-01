@@ -468,6 +468,34 @@ export const radioTextOf = (row) => String(
 export const radioJaOf = (row) => String(row?.meaning_ja || row?.ja || '').trim()
 
 /**
+ * ★ **その行を、どの声・どの段で鳴らすか**(第5.334節・2026-10-01
+ * 利用者の指定「応答問題には正解の聞き流しモードを作ります」)。
+ *
+ * **渡っていなければ、これまでどおり**(空を返す)——
+ * 単語帳と Quick Response の行には `clipVoice` が無いので、
+ * **あの2つは1ミリも変わらない。**
+ *
+ * 応答問題の「正解の聞き流し」だけが、**その教材の声と段**で鳴る。
+ * そうでないと、**支度した MP3 と置き場所が食い違って1本も当たらない**
+ * (待つうえ、二度目の課金になる。CLAUDE.md)。
+ *
+ * **判断はここ1か所。** 画面の中で `row.clipVoice ? …` と書かない ——
+ * 鳴らす側と先読みする側の2か所に書くと、**先読みだけが別の声を取りに行く**
+ * (`materialRestClips` で踏んだのと同じ形・第5.289節)。
+ *
+ * @param {object} row 読むもの1つ
+ * @returns {{clipVoice?: string, clipTier?: string}} `readAloud` にそのまま広げる
+ */
+export const radioVoiceOf = (row) => {
+  const clipVoice = String(row?.clipVoice ?? '').trim()
+  if (!clipVoice) return {}
+  const clipTier = String(row?.tier ?? '').trim()
+  /* **段は、分かっているときだけ渡す。** 当て推量で `standard` と書くと、
+     良い声で支度したものを取りに行かなくなる(= もう一度作る) */
+  return clipTier ? { clipVoice, clipTier } : { clipVoice }
+}
+
+/**
  * その1つを、どの順で読むか。
  *
  * `{ kind: 'en' | 'wait', text?, ms? }` を並べて返す。

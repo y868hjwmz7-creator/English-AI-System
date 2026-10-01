@@ -29,7 +29,9 @@ import { loadEnglishVoices } from '../lib/speech.js'
 import { stopReading } from '../lib/readAloud.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
-import { audioTextOf, sectionRestClips, wholeSliceOf } from '../lib/audioPlaylist.js'
+import {
+  audioTextOf, responseRadioRows, sectionRestClips, wholeSliceOf,
+} from '../lib/audioPlaylist.js'
 /* **いま開いているページの音声を、先に温める**(第5.289節)。
    `ensureClip` は「置いてあれば問い合わせだけ(0円)、無いときだけ作る」 */
 import { ensureClip } from '../lib/audioClips.js'
@@ -88,6 +90,11 @@ import SessionOwner from './SessionOwner.jsx'
 import ChunkCard from './ChunkCard.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import CastChip from './CastChip.jsx'
+/* ★ **聞き流しの部品は `WordRadio` 1つ**(第5.334節)。単語帳・
+   Quick Response とまったく同じものを使う —— 書き写すと片方だけ古くなる */
+import WordRadio from './WordRadio.jsx'
+/* 曲は**押したときに引く**(押さない人には1回も問い合わせが飛ばない) */
+import { listTracks } from '../lib/bgm.js'
 import QuickResponse from './QuickResponse.jsx'
 import QuickResponseSheet from './QuickResponseSheet.jsx'
 import PassagePractice from './PassagePractice.jsx'
@@ -1126,6 +1133,14 @@ export default function LessonView({
    * ボタンのある**この画面**が持ち、`QuickResponse` へ渡す。
    */
   const [qrFocus, setQrFocus] = useState(false)
+  /* ★ **正解の聞き流し**(第5.334節)。中身は下の `listenAnswers()` で入れる。
+     **フックは、早い return より前に置く**(第5.220節)——
+     読み込み中と読み込み後でフックの数が変わると、
+     **画面がまるごと真っ白になる**(`lint` も `build` も通ってしまう) */
+  const [answerRadio, setAnswerRadio] = useState(null)
+  /* 曲は**押したときに引く**(押さない人には1回も問い合わせが飛ばない)。
+     **曲が0本でも聞き流しは始まる**(音楽が鳴らないだけ・行き止まりを作らない) */
+  const [radioTracks, setRadioTracks] = useState([])
   /**
    * 「取り組み方」を開いている演習の id(2026-09 利用者の指定)。
    * **覚えない。** 「初めは閉じてて欲しい」という指定なので、
@@ -1210,6 +1225,35 @@ export default function LessonView({
        教材でも、添削した文章があれば Quick Response ができる ——
        `material` のままだと**ボタンごと出ず、行き止まりになる** */
   const qrPossible = hasQuickResponse(qrMaterial)
+  /* ══════════════════════════════════════════════════════════════════
+     ★ **正解の聞き流し**(第5.334節・2026-10-01 利用者の指定)
+
+       > その上で、応答問題には正解の聞き流しモードを作ります。
+       > 問題順をシャッフルもできる仕様です。
+
+     **応答問題だけ。** `responseRadioRows()` が空を返すので、
+     ほかの教材ではボタンごと出ない(効かない操作を見せない・CLAUDE.md)。
+
+     **声と段は支度(`sectionRestClips`)から引いてある** ——
+     ここで声を決め直すと、**支度した MP3 に1本も当たらない**
+     (待つうえ、鳴らしたときに二度目の課金)。
+
+     **混ぜるのは聞き流しの中の「ランダム」**(`RADIO_ORDERS`)である。
+     単語帳・Quick Response とまったく同じ欄で、**混ぜ方を2つ持たない。**
+     ここで混ぜて渡すと、あちらの欄と二重になる。
+
+     **この画面は `isResponseKind()` を一度も呼んでいない。**
+     空が返るかどうかで足りるので、呼ぶ必要が無い ——
+     **判断を置く場所の数だけ食い違う**(CLAUDE.md)。
+     ══════════════════════════════════════════════════════════════════ */
+  const answerRows = responseRadioRows(material)
+  const listenAnswers = async () => {
+    if (!answerRows.length) return
+    stopAll()
+    setAnswerRadio(answerRows)
+    const { data } = await listTracks()
+    setRadioTracks(data ?? [])
+  }
   // 6Steps は本文(記事・会話)に対する練習である。**本文のページを探して渡す。**
   // いま開いているページが語句や設問でも、6Steps は本文に対して行う
   const passageSection = sections.find((x) => isPassageSection(x.exercise_type)) ?? null
@@ -1918,7 +1962,7 @@ export default function LessonView({
             紙の中に置くのは、`全体を聞く` と同じ考え方である
             (操作欄は狭い画面で場所が無い。第5.25節)。
             共有先には見えるが、印刷には出さない */}
-        {(qrPossible || passageSection) && (
+        {(qrPossible || passageSection || answerRows.length > 0) && (
           <div className="practice-row no-print">
             {/* 6Steps は**本文があるときだけ。**
                 文型ドリルや単語には本文が無く、音読も区切りもできない */}
@@ -1954,6 +1998,33 @@ export default function LessonView({
                         setRun(qr ? null : 'qr')
                       }}>
                 <BoltIcon />Quick Response
+              </button>
+            )}
+            {/* ══════════════════════════════════════════════════════
+                ★ **正解を聞き流す**(第5.334節・2026-10-01 利用者の指定)
+
+                  > その上で、応答問題には正解の聞き流しモードを作ります。
+                  > 問題順をシャッフルもできる仕様です。
+
+                **応答問題だけ出る**(`responseRadioRows()` が空を返す)。
+                この教材は**答えが先に決まっている**ので、
+                正解だけを並べれば**覚えたい表現が並ぶ**ことになる。
+
+                **見た目も言葉も、Quick Response の聞き流しとまったく同じ**
+                (`SpeakerIcon` + 「聞き流し」)—— 同じことをするものを、
+                別の見た目で出さない(CLAUDE.md)。
+                **「正解を」と添える**のは、この画面には問題文の読み上げも
+                あるためで、**何が鳴るのかを、そのまま書く。**
+
+                **問題順のシャッフルは、聞き流しの中の「ランダム」**である
+                (単語帳・Quick Response と同じ欄)。ここに2つ目を置かない。
+                ══════════════════════════════════════════════════════ */}
+            {answerRows.length > 0 && (
+              <button type="button"
+                      className={`btn btn--small ${toneOn(!!answerRadio)}`}
+                      aria-pressed={!!answerRadio}
+                      onClick={listenAnswers}>
+                <SpeakerIcon />正解を聞き流す
               </button>
             )}
             {/* **集中モード**(2026-09 実機「どこにも集中モードがありません」)。
@@ -2365,6 +2436,35 @@ export default function LessonView({
         </>
       )}
       </div>
+      {/* ══════════════════════════════════════════════════════════
+          ★ **正解の聞き流し**(第5.334節・2026-10-01 利用者の指定)
+
+          **部品は `WordRadio` 1つ** —— 単語帳・Quick Response と
+          まったく同じものを使う(書き写すと片方だけ古くなる)。
+          **問題順のシャッフル・間の長さ・音楽・何問ずつ**は、
+          ぜんぶあちらがもう持っている。**足りなかったのは
+          「何を鳴らすか」だけ**である。
+
+          **題は、聞きながら何を聞いているか分かるように**(第5.264節)。
+          教材の名前 + 「正解」。**ここで組み立てて書き写さない** ——
+          教材の名前は `material.title` そのままである。
+
+          **速さは、この画面でえらんだものをそのまま渡す**
+          (`AnswerEn` の「聞く」と同じ) —— 同じ音声が、
+          入口によって違う速さで鳴るのはおかしい。
+          速さは鳴らし方だけで、**置き場所(= 課金)には関係しない。**
+          ══════════════════════════════════════════════════════ */}
+      {answerRadio && (
+        <WordRadio
+          rows={answerRadio}
+          where="qr"
+          label={[material.title, '正解'].filter(Boolean).join(' / ')}
+          tracks={radioTracks}
+          rate={rateOf(rateId)}
+          learnerId={owner}
+          onClose={() => setAnswerRadio(null)}
+        />
+      )}
     </div>
   )
 

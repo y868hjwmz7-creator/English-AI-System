@@ -153,6 +153,13 @@ const asLong = q.get('kind') === 'long'
      `canShuffleKind()` が真になる道のうち、**exam のほうを
      誰も描いていなかった**(文型ドリルだけが描かれていた)。 */
 const asExam = q.get('kind') === 'exam'
+/* ★ **応答問題**(`?kind=response`・0073・第5.334節)。
+     2026-10-01 利用者の指定「応答問題には正解の聞き流しモードを作ります」を
+     **測るために足した。** 形は TOEIC L&R Part 2 と同じだが、
+     **正解が Native Flow の表現**である。
+     **骨組みに応答問題の教材が1本も無いと、「正解を聞き流す」が
+     1度も描かれない**(= 出ていなくても緑のまま・第5.325節で踏んだ形)。 */
+const asResponse = q.get('kind') === 'response'
 
 /** 検証に使う教材。**本文(会話)が1つあれば、帯はすべて出そろう** */
 const material = asSpeech ? {
@@ -232,6 +239,38 @@ const material = asSpeech ? {
         prompt_en: 'Let me start with the first release. It shipped in March.',
         prompt_ja: '最初のリリースから始めます。3月に出したものです。',
       },
+    ],
+  }],
+} : asResponse ? {
+  /* ★ **応答問題**(0073・第5.334節)。段は `listening` 1つで、
+     **解答こそが覚えたい表現**である。
+     **訳(`answer_ja`)を半分にしてある** —— 無い問が混ざったときに、
+     聞き流しの札が片方だけになることを測るため(exam と同じ作法)。
+     **英文の無い問を1つ混ぜてある**(`r-4`)—— 正解の聞き流しは
+     そこを**落とさなければならない**(いちばん危ない形・CLAUDE.md) */
+  id: 'test-response', level: 'B1', title: 'Native Flow Vol.1 / UNIT 3', kind: 'response',
+  headline: '', tagIds: [],
+  sections: [{
+    id: 'sec-1', exercise_type: 'listening', title: 'リスニング + 理解',
+    instruction: '英文は見ずに聞くこと。聞いたあとの質問に答えなさい。',
+    items: [
+      { id: 'r-1', audio_text: 'Could you give me a hand with these boxes?',
+        question: 'Choose the best response. (A) I appreciate your help. '
+          + '(B) The museum closes at six. (C) My brother plays the violin.',
+        answer: 'I appreciate your help.',
+        answer_ja: '助かります。' },
+      { id: 'r-2', audio_text: 'Shall we go over the numbers one more time?',
+        question: 'Choose the best response. (A) The rain stopped an hour ago. '
+          + "(B) That's exactly what I had in mind. (C) She lives near the station.",
+        answer: "That's exactly what I had in mind.",
+        answer_ja: 'まさにそう考えていました。' },
+      { id: 'r-3', audio_text: 'How did the presentation go this morning?',
+        question: 'Choose the best response. (A) It went better than expected. '
+          + '(B) Two coffees, please. (C) The bridge is under construction.',
+        answer: 'It went better than expected.' },
+      { id: 'r-4', audio_text: 'Do you have a moment to talk?',
+        question: 'Choose the best response. (A) …… (B) …… (C) ……',
+        answer: '' },
     ],
   }],
 } : asExam ? {

@@ -547,11 +547,23 @@ console.log('\n── ⑦ 本当に呼んでいるか ──')
     ok(!/it\[(secType|type)\.audioFrom\]/.test(src6),
       `読み方 … ${f.split('/').pop()} が読む欄を書き写していない`)
   }
-  /* **保存の側**。`topic`(細かい指定)から表を作って、設問に焼き込む */
+  /* **保存の側**。`topic`(細かい指定)から表を作って、設問に焼き込む。
+
+     ★ **関数の名前を書き写さない**(2026-10-01・第5.334節で踏んだ)。
+     もとは `cleanItems(sec.items, sec.exercise_type, say)` と**名前ごと**
+     書いてあったので、第5.331節で `bakeItems()`(記号を散らす段を足した
+     包み)に差し替えた日から、**この見張りだけが古くなって赤くなった。**
+     **仕組みは1ミリも壊れていなかった。**
+
+     見るのは**性質**である ——
+     ①読み方の表を作っている ②**その表を、段の設問ごと渡している**
+     ③渡し先は**1種類だけ**(道が2つあると、片方が表を落とす) */
   const mat6 = noC6(read6('src/lib/materials.js'))
+  const 焼く = [...mat6.matchAll(/(\w+)\(sec\.items, sec\.exercise_type, say\)/g)]
+    .map((m) => m[1])
   ok(/const say = parseSayAs\(topic\)/.test(mat6)
-    && /cleanItems\(sec\.items, sec\.exercise_type, say\)/.test(mat6),
-  '読み方 … 「細かい指定」から表を作って、設問に渡している')
+    && 焼く.length > 0 && new Set(焼く).size === 1,
+  `読み方 … 「細かい指定」から表を作って、設問に渡している（${焼く.join(' / ') || '渡していない'}）`)
   /* **リスニングには焼き込まない・上書きしない・空なら欄を作らない** */
   ok(/from !== 'audio_text' && !row\.audio_text/.test(mat6) && /if \(said\) row\.audio_text = said/.test(mat6),
     '読み方 … リスニングには焼き込まず、もう在る欄も上書きしない')

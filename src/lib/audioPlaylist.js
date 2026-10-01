@@ -42,7 +42,7 @@ import { isResponseKind } from '../data/materialKinds.js'
 /* ★ **解答として鳴らす英文は `answerSpeakText()` 1か所**(第5.334節)。
      ここで `it.answer` と書き写すと、**支度した音声と、聞き流しが探す音声の
      置き場所が食い違って1本も当たらない**(CLAUDE.md) */
-import { answerSpeakText } from './responseDrill.js'
+import { answerSpeakText, responseAnswers } from './responseDrill.js'
 import { PREMIUM, voiceTierFor } from './voiceTier.js'
 import { turnGapMs } from './turnGap.js'
 import { speakChunks } from './speakChunks.js'
@@ -277,6 +277,55 @@ export function sectionRestClips(material, section) {
     }
   }
   return out
+}
+
+/**
+ * ★ **応答問題の「正解の聞き流し」に渡す一覧**(第5.334節・2026-10-01
+ * 利用者の指定)。
+ *
+ *   > その上で、応答問題には正解の聞き流しモードを作ります。
+ *   > 問題順をシャッフルもできる仕様です。
+ *
+ * ── なぜ、ここに置くのか ──────────────────────────────────
+ *
+ *   聞き流しが鳴らすのは **MP3** である。置き場所は
+ *   **(版, 段, 声の id, 英文の指紋)** で決まるので、
+ *   **支度した音声と、聞き流しが探す音声の声・段が1つでも違うと、
+ *   1本も当たらない** —— 待つうえ、鳴らしたときに**二度目の課金**になる。
+ *
+ *   だから声と段を**書き写さない。支度そのもの(`sectionRestClips`)から
+ *   引く。** こうしておけば、支度の側を変えた日に聞き流しが古くなることが
+ *   構造上ありえない(第5.266節・第5.289節と同じ根。CLAUDE.md
+ *   「数え方を2通り持たない。作る側と探す側」)。
+ *
+ *   **並べ方は `responseAnswers()` 1か所**(素の node で測れる側)。
+ *   混ぜるのは聞き流しの側(`radioList()` の「ランダム」)が受け持つ ——
+ *   **混ぜ方を2つ持たない。**
+ *
+ * **応答問題でなければ、1件も返さない**(渡す側が判じ直さない)。
+ *
+ * @returns {Array<{en, ja, clipVoice, tier}>} `WordRadio` の `rows` に
+ *          そのまま渡せる形(`radioTextOf` が `en`、`radioJaOf` が `ja`、
+ *          `radioVoiceOf` が `clipVoice` / `tier` を読む)
+ */
+export function responseRadioRows(material) {
+  const on = isResponseKind(material?.kind)
+  if (!on) return []
+  /* **支度の札を、英文で引けるようにしておく。**
+     ここで `resolveVoices` / `voiceTierFor` を書き写さない */
+  const 札 = new Map()
+  for (const sec of material?.sections ?? []) {
+    for (const c of sectionRestClips(material, sec)) {
+      if (!札.has(c.text)) 札.set(c.text, c)
+    }
+  }
+  return responseAnswers(material, on).map((r) => {
+    const c = 札.get(r.en)
+    /* **声が引けなかったぶんは、そのまま返す**(`clipVoice` が無い)。
+       聞き流しは**これまでどおりの声**で鳴らす —— 黙らせない
+       (行き止まりを作らない・CLAUDE.md) */
+    return c ? { ...r, clipVoice: c.voiceId, tier: c.tier } : r
+  })
 }
 
 /**
