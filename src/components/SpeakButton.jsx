@@ -29,6 +29,10 @@ import { SpeakerIcon, StopIcon } from './Icons.jsx'
    「青は1つの画面に1つだけ」も守れる */
 import { toneOn } from '../lib/btnTone.js'
 import { loadRateId, rateOf } from '../lib/speechRate.js'
+/* **長いかどうかは「文がいくつあるか」で見る**(第5.333節)。
+   **`speakChunks` では見分けられない** —— あちらは読み上げに渡せる
+   長さで割るので、**3文の段落でも1つ**になる(実際に測った) */
+import { splitEnSentences } from '../lib/sentencePair.js'
 
 /** 声の読み込みは1回だけ。以降は同じ約束を使い回す */
 let voicePromise = null
@@ -143,8 +147,28 @@ export default function SpeakButton({
          目印は**英文と声**そのものにしてある。この部品はアプリ中の
          Listen をすべて受け持っているので、ここに1つ書けば
          **紙・宿題・単語帳・ディクテーション、どこでも同じように効く。**
-         呼ぶ側に鍵を配らせると、必ずどこかが渡し忘れる(CLAUDE.md)。 */
-      resumeKey: `one|${clipVoice ?? ''}|${text}`,
+         呼ぶ側に鍵を配らせると、必ずどこかが渡し忘れる(CLAUDE.md)。
+
+         ★ **ただし、短い1文では途中から鳴らさない**
+            (2026-10-01 実機・利用者の指摘・第5.333節)。
+
+              > 問題ごとの音声が、文の頭から始まらず、文の途中から
+              > 始まります。たまに頭から始まることもありますが、
+              > 5,6回に一回だけです。
+
+            鳴らしかけて止める(別の問を押す・待ちきれずにもう一度押す)と
+            **その場所が控えに残り、次に押すと途中から鳴る。**
+            利用者が頼んだのは**段落ごと**の再生で、あれは長いので
+            途中から鳴らす意味がある。**1文(10〜15語)には意味が無い。**
+
+            **長さを数で決め打ちしない**(CLAUDE.md)——
+            **文がいくつあるか**で見る。段落は2文以上、問は1文である。
+            (はじめ `speakChunks` で見ようとしたが、あちらは
+             読み上げに渡せる長さで割るので**3文の段落でも1つ**だった ——
+             測って分かった) */
+      ...(splitEnSentences(text).length > 1
+        ? { resumeKey: `one|${clipVoice ?? ''}|${text}` }
+        : {}),
     }).then(() => {
       heard()
       onWord?.(null)

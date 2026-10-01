@@ -13870,6 +13870,43 @@ console.log('\n▶ 支度を、何本か同時に走らせる(第5.307節)')
   ok(/alive,/.test(job), '支度 … やめると言われたら、次を始めない')
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   ★ **短い1文では、途中から鳴らさない**(2026-10-01 実機・第5.333節)
+
+     > 問題ごとの音声が、文の頭から始まらず、文の途中から始まります。
+     > たまに頭から始まることもありますが、5,6回に一回だけです。
+
+   鳴らしかけて止める(別の問を押す・待ちきれずにもう一度押す)と、
+   **その場所が控えに残り、次に押すと途中から鳴る。**
+   利用者が頼んだのは**段落ごと**の再生で、あれは長いので意味がある。
+   **1文(10〜15語)には意味が無い。**
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  const read5 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const btn = read5('src/components/SpeakButton.jsx')
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const { splitEnSentences } = await import('../src/lib/sentencePair.js')
+
+  /* **控えるかどうかを、文の数で決めているか** */
+  ok(/splitEnSentences\(text\)\.length > 1/.test(btn) && /resumeKey:/.test(btn),
+    '1文ずつの聞く … 文が2つ以上のときだけ、止めた場所を控える')
+  /* **長さを数で決め打ちしていないか**(CLAUDE.md) */
+  ok(!/text\.length\s*>\s*\d/.test(btn),
+    '1文ずつの聞く … 長さを文字数で決め打ちしていない')
+
+  /* ★ **本当に見分けられるか。** ここを `speakChunks` で見ようとして
+       外した —— あちらは**読み上げに渡せる長さ**で割るので、
+       **3文の段落でも1つ**になる(測って分かった)。
+       **出る側と出ない側の両方を見る**(CLAUDE.md) */
+  const 問 = 'Did you remember to send the report to the client this morning?'
+  const 段落 = 'We opened the new branch last month. It has been busy since then.'
+    + ' The team is happy about it.'
+  ok(splitEnSentences(問).length === 1,
+    '1文ずつの聞く … 問は1文(控えない)', `${splitEnSentences(問).length} 文`)
+  ok(splitEnSentences(段落).length > 1,
+    '1文ずつの聞く … 段落は2文以上(控える)', `${splitEnSentences(段落).length} 文`)
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
