@@ -388,7 +388,13 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
       '画面 … 道の分かれ目は、組んだ構成の1つめで決める'],
     [/examId, partId,/.test(form), '画面 … 試験と PART を控えている(戻ったときに食い違わない)'],
     [/if \(f\.examId\) setExamId\(f\.examId\)/.test(form), '画面 … 控えから戻している'],
-    [/examPart: isExamKind\(kind\) \? examBriefByKey\(examKey\) : ''/.test(form),
+    /* ★ **式そのものを書き写していた**(2026-10-01・第5.332節で赤くなった)。
+         応答問題を足したとき、**4か所の同じ式を関数1つに寄せた** ——
+         それだけでここが赤くなった。**画面は正しいのに、見張りが古い。**
+         **値を書き写さない。性質で見る**(CLAUDE.md)——
+         「作り方を返す関数が、テスト対策では `examBriefByKey()` を返す」
+         「`examPart:` は、どれもその同じ関数を通る」の2つで見る */
+    [/isExamKind\(kind\)\) return examBriefByKey\(examKey\)/.test(form),
       '画面 … その PART の作り方を、窓口へ送っている'],
     [/examPart = ''/.test(mats), '道具 … `generateSection` が `examPart` を受け取る'],
     [/^\s*examPart,$/m.test(mats), '道具 … `generateSection` が `examPart` を窓口へ渡す'],
@@ -402,7 +408,19 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
 
   /* ── **送る回数を数える。** 本文のあとの段に渡し忘れると、
        本文だけ試験の形で、設問はふつうの内容理解になる ── */
-  const 回 = (form.match(/examPart: isExamKind\(kind\)/g) ?? []).length
+  /* ★ **寄せた関数の名前で数える**(第5.332節)。
+       **1つでも素通りすると、その道だけ試験の形にならない。**
+
+       **「3か所以上あるか」では見ない**(赤チェックで素通りした)——
+       4か所のうち1つを空にしても、残り3つで通ってしまった。
+       **全部が同じ1つの関数を通っているか**で見る:
+         ・`examPart:` の数(どう書いてあっても拾う)
+         ・そのうち「関数を呼んでいる」数
+       **2つが一致し、関数が1種類**でなければ赤くする。
+       関数の名前は書き写さない(寄せ先を変えても付いてくる) */
+  const 全 = (form.match(/examPart:/g) ?? []).length
+  const 渡す = [...form.matchAll(/examPart:\s*([A-Za-z_$][\w$]*)\(\)/g)].map((m) => m[1])
+  const 回 = (全 === 渡す.length && new Set(渡す).size === 1) ? 渡す.length : 0
   if (回 < 3) {
     ng('画面 … 作る道のどれかで、PART の作り方を送っていない', `${回} か所`)
   } else ok(`画面 … 作る道 ${回} か所すべてで、PART の作り方を送っている`)
