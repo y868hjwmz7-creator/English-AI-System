@@ -2758,7 +2758,20 @@ export default function MaterialForm({
             **並べるのは「既定の構成」のほう**(`defaultSectionsFor`)。
             `planNow()` は外したものが消えているので、そちらを並べると
             **一度外した演習が画面から消えて、戻せなくなる。** */}
-        {defaultSectionsFor(kind).some((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type)) && (
+        {/* ★ **応答問題には出さない**(2026-10-01 実機・利用者の指摘・第5.332節)。
+
+              > 応答問題の問題数、0, 0、3倍という意味がわかりません。
+              > 先に選んだぶぶんでじどうにきまるようにしてください
+
+            **問数は、上でえらんだ「問題数」と表現の数で決まっている**
+            (`responsePlan()`)。ここに倍率を出すと、
+            **同じことを決める場所が2つになり、しかも噛み合わない** ——
+            既定が 0 問なので「標準 0 / 倍 0 / 3倍 0」と出ていた。
+            **効かない操作を見せない。同じことをするものを2つ見せない**
+            (CLAUDE.md)。
+            演習も1つしか無いので、チェックで外す意味も無い */}
+        {!isResponseKind(kind)
+          && defaultSectionsFor(kind).some((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type)) && (
           <div className="amount-row">
             {defaultSectionsFor(kind)
               .filter((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type))

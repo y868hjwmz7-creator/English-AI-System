@@ -233,6 +233,20 @@ console.log('\n▶ 画面と窓口まで、本当に通っているか')
   /* **表現をえらぶ前に作らせないか** */
   is(/resOn && resPhrases\.length === 0/.test(form),
     '表現をえらぶ前は、作るボタンを押せない')
+  /* ★ **倍率の欄を出していないか**(2026-10-01 実機・利用者の指摘)。
+
+       > 応答問題の問題数、0, 0、3倍という意味がわかりません。
+
+     問数は上でえらんだ問題数と表現で決まっているので、**同じことを
+     決める場所が2つ**になっていた。しかも既定が 0 問なので
+     「標準 0 / 倍 0 / 3倍 0」と出ていた。
+     **出る側と出ない側の両方を見る**(CLAUDE.md)——
+     ほかの種類では、いままでどおり出ること */
+  const 倍率 = form.match(/\{\s*(!?[^\n]*?)\s*\n?\s*&&\s*defaultSectionsFor\(kind\)\.some/)
+  is(/!isResponseKind\(kind\)/.test(倍率?.[0] ?? ''),
+    '応答問題には、問数の倍率の欄を出さない', 倍率?.[1] ?? '(見つからない)')
+  is(/defaultSectionsFor\(kind\)\.some\(\(s2\) => SCALABLE_SECTIONS/.test(form),
+    'ほかの種類には、いままでどおり倍率の欄を出す')
 
   /* **SQL も見る。** 制約に `response` が無いと、発行した瞬間に止まる */
   const sql = R('supabase/apply/pending_matome.sql')
