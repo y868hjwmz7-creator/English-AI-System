@@ -34,7 +34,7 @@ const {
   DEFAULT_EXAM, EXAMS, EXAM_KIND, examBrief, examBriefByKey, examKeyOf, examLabel,
   examOf, examOutline, examPartLine, examPartOf, examPartsOf, examSectionsByKey,
   examSectionsOf, examSkipLine, examSkipsOf, examTitle, firstPartOf,
-  FORMATS, TRAPS, choiceBrief, choicesOf, formatOf, partialOf,
+  BLANK_AXES, FORMATS, TRAPS, choiceBrief, choicesOf, formatOf, partialOf,
 } = await import('../src/data/examPrep.js')
 const { EXERCISE_TYPES, defaultSectionsFor, isPassageSection, sectionsFor }
   = await import('../src/data/exerciseTypes.js')
@@ -1192,18 +1192,28 @@ console.log('\n▶ 誤りの選択肢の作り方(第5.339節)')
         + '「正解は言い換え・誤答は元の語そのまま」が入る')
     }
 
-    /* ── ④ **空所補充は「1つの軸でそろえる」が入っているか** ──
-           4つがばらばらだと、本番の Part 5 の形にならない */
+    /* ── ④ **空所補充に、軸がぜんぶ並んでいるか** ──
+           ★ **はじめ「1つの軸でそろえる」という文字そのもので探して、
+              第5.340節で赤くなった**(軸を8つにしたとき言い回しが変わった)。
+              **仕組みは1ミリも壊れていないのに、見張りだけが赤くなる**形である
+              (CLAUDE.md「式も、関数の名前も書き写さない」)。
+           **`BLANK_AXES` から読み取って、1つ残らず並ぶか**を見る */
     const 空所 = 選べる.filter(({ part }) => (part.sections ?? [])
       .some((x) => x.exercise_type === 'fill_blank'))
-    const 軸 = 空所.filter(({ exam, part }) =>
-      /1つの軸でそろえる/.test(examBrief(exam.id, part.id)))
+    const 欠け = []
+    for (const { exam, part } of 空所) {
+      const b = examBrief(exam.id, part.id)
+      const 無い = BLANK_AXES.filter((x) => !b.includes(x.aim) || !b.includes(x.opts))
+      if (無い.length) 欠け.push(`${exam.id}/${part.id} … ${無い.map((x) => x.aim).join(' / ')}`)
+    }
     if (空所.length < 5) {
       ng('誤りの選択肢 … 空所補充の PART が少なすぎる(見張りが素通りする)', 空所.length)
-    } else if (軸.length !== 空所.length) {
-      ng('誤りの選択肢 … 空所補充に「1つの軸でそろえる」が入っていない',
-        `${軸.length} / ${空所.length}`)
-    } else ok(`誤りの選択肢 … 空所補充 ${空所.length} 個とも、4つを1つの軸でそろえる`)
+    } else if (欠け.length) {
+      ng('誤りの選択肢 … 空所補充に、並んでいない軸がある', 欠け.slice(0, 3).join('\n    '))
+    } else {
+      ok(`誤りの選択肢 … 空所補充 ${空所.length} 個とも、`
+        + `${BLANK_AXES.length} つの軸がぜんぶ並ぶ`)
+    }
 
     /* ── ⑤ **選択肢の数を書き写していないか** ──
            ★ **その場で踏んだ。**「4つの選択肢は、長さと形をそろえる」と
@@ -1243,6 +1253,110 @@ console.log('\n▶ 誤りの選択肢の作り方(第5.339節)')
     if (写し.length) {
       ng('誤りの選択肢 … 作り方を PART ごとに書き写している', 写し.join('\n    '))
     } else ok('誤りの選択肢 … 作り方は `TRAPS` 1か所だけ(PART に写しが無い)')
+  }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **空所補充の軸**(第5.340節・利用者の指定)
+
+     > 接続詞、前置詞問題 / 関係詞問題 / 受動、能動と分詞形容詞をからめた問題
+     > / 数の問題 / 代名詞、再帰代名詞問題。これらも忘れずに
+
+   軸が3つ(品詞 / 動詞の形 / 語彙)しか無かった。言われた5つを足して8つ。
+   **一覧は1か所**(`BLANK_AXES`)にして、作り方の文も数もそこから組む。
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 空所補充の軸(第5.340節)')
+{
+  /* ── ① **言われた5つが、ぜんぶ入っているか** ──
+         **名前そのものではなく、何で決まるかで探す**(言い回しを変えても残る) */
+  const 要る = [
+    ['接続詞と前置詞', /接続詞.*前置詞|前置詞.*接続詞/],
+    ['関係詞', /関係詞/],
+    ['受動と能動・分詞形容詞', /受動.*能動|分詞/],
+    ['数(可算と不可算)', /可算|単数と複数|数を表す語/],
+    ['代名詞と再帰代名詞', /再帰代名詞/],
+  ]
+  const 名 = BLANK_AXES.map((x) => `${x.aim}${x.opts}`).join('\n')
+  const 無い = 要る.filter(([, re]) => !re.test(名)).map(([x]) => x)
+  if (BLANK_AXES.length < 8) {
+    ng('軸 … 8つに足りない(言われた5つを足したはず)', BLANK_AXES.length)
+  } else if (無い.length) {
+    ng('軸 … 言われた型が入っていない', 無い.join(' / '))
+  } else ok(`軸 … ${BLANK_AXES.length} つあり、言われた ${要る.length} つがぜんぶ入っている`)
+
+  /* ── ② **どの軸にも「4つの関係」が書いてあるか** ──
+         何を問うかだけでは、**AI は4つをばらばらに作る** */
+  const 空 = BLANK_AXES.filter((x) => !String(x.aim ?? '').trim()
+    || String(x.opts ?? '').trim().length < 20)
+  if (空.length) {
+    ng('軸 … 4つの関係が書かれていない軸がある', 空.map((x) => x.aim).join(' / '))
+  } else ok(`軸 … ${BLANK_AXES.length} つとも、4つがどう関係するかまで書いてある`)
+
+  /* ── ③ **軸の数を書き写していないか** ──
+         ★ **文の中の番号(①②…)を数えて、宣言した数と突き合わせる。**
+            数を手で書いていたら、軸を足した日にここがずれる */
+  /* **選択肢の無い空所補充は、軸の話ではない**(第5.340節で赤くなった)。
+     TOEFL の Complete the Words は**語そのものを書き入れる**ので、
+     4つの選択肢が無い。**見張りのほうが広すぎた** */
+  const 空所の = PICKABLE.filter(({ part }) => choicesOf(part) >= 2
+    && (part.sections ?? []).some((x) => x.exercise_type === 'fill_blank'))
+  const ずれ = []
+  for (const { exam, part } of 空所の) {
+    const b = examBrief(exam.id, part.id)
+    const 言った = Number(/次の (\d+) つの軸/.exec(b)?.[1])
+    const 数えた = [...'①②③④⑤⑥⑦⑧⑨⑩'].filter((c) => b.includes(c)).length
+    if (!言った) ずれ.push(`${exam.id}/${part.id} … 軸の数が出ていない`)
+    else if (言った !== BLANK_AXES.length) {
+      ずれ.push(`${exam.id}/${part.id} … 「${言った}つ」と出るが、一覧は ${BLANK_AXES.length} つ`)
+    } else if (数えた < BLANK_AXES.length) {
+      ずれ.push(`${exam.id}/${part.id} … 「${言った}つ」と言って ${数えた} つしか並べていない`)
+    }
+  }
+  if (空所の.length < 5) {
+    ng('軸 … 空所補充の PART が少なすぎる(見張りが素通りする)', 空所の.length)
+  } else if (ずれ.length) {
+    ng('軸 … 数を書き写している(一覧と食い違う)', ずれ.slice(0, 3).join('\n    '))
+  } else ok(`軸 … 空所補充 ${空所の.length} 個とも、数も並びも一覧から出ている`)
+
+  /* ── ④ **一覧を PART の `make` に書き写していないか** ──
+         両方に書くと、片方に足して片方に足し忘れる(今回がそれだった) */
+  const 写し = []
+  for (const { exam, part } of ALL) {
+    if (!part.make) continue
+    const 当たり = BLANK_AXES.filter((x) => part.make.includes(x.aim))
+    if (当たり.length >= 2) {
+      写し.push(`${exam.id}/${part.id} … 軸の名前を ${当たり.length} つ書き写している`)
+    }
+  }
+  if (写し.length) {
+    ng('軸 … PART の作り方に、一覧を書き写している', 写し.join('\n    '))
+  } else ok('軸 … 一覧は `BLANK_AXES` 1か所だけ(PART に写しが無い)')
+
+  /* ── ⑤ **窓口へ渡る文が、切られる長さを超えていないか** ──
+         ★ **軸を足すと文が伸びる。** 窓口は `.slice(0, 2000)` で切るので、
+            超えたぶんは**黙って消える**(いちばん悪い壊れ方)。
+         **上限を書き写さない。窓口から読み取る**(あちらを変えたら付いてくる) */
+  const fnSrc = noC(read('supabase/functions/generate-material/index.ts'))
+  const 上限 = Number(/examPart[^\n]*slice\(0,\s*(\d+)\)/.exec(fnSrc)?.[1])
+  if (!上限) {
+    ng('長さ … 窓口の上限を読み取れない(探し方が壊れている)')
+  } else {
+    const 長さ = PICKABLE.map(({ exam, part }) =>
+      [`${exam.id}/${part.id}`, examBrief(exam.id, part.id).length])
+    const 超え = 長さ.filter(([, n]) => n > 上限)
+    const 最長 = 長さ.reduce((a, b) => (b[1] > a[1] ? b : a))
+    if (超え.length) {
+      ng(`長さ … 窓口の上限 ${上限} 文字を超えている(そのぶん黙って消える)`,
+        超え.map(([k, n]) => `${k} … ${n} 文字`).slice(0, 3).join('\n    '))
+    } else if (最長[1] > 上限 * 0.95) {
+      /* **あと5%を切ったら赤。** 1つ足した日に、気づかず切られるのを防ぐ */
+      ng(`長さ … 上限 ${上限} 文字まで、あと ${上限 - 最長[1]} 文字しかない`,
+        `いちばん長いのは ${最長[0]} の ${最長[1]} 文字`)
+    } else {
+      ok(`長さ … いちばん長い ${最長[0]} で ${最長[1]} 文字`
+        + `(窓口の上限 ${上限} 文字の ${Math.round(最長[1] / 上限 * 100)}%)`)
+    }
   }
 }
 
