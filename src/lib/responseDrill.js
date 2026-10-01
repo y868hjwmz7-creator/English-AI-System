@@ -257,3 +257,46 @@ export function responseNote(got, total) {
 export const responsePlan = (plan, on, phrases) => (on
   ? (plan ?? []).map((s) => ({ ...s, count: questionsFrom(phrases) }))
   : plan)
+
+/**
+ * ★ **応答問題で、解答として鳴らす英文**(2026-10-01・第5.334節)。
+ *
+ * **ここだけが決める。** 支度(`sectionRestClips`)も、聞き流しに渡す一覧
+ * (`responseAnswers`)も、この1行を通る ——
+ * 片方だけが別の欄を読むと、**支度した音声と、鳴らすときに探す音声の
+ * 置き場所が食い違って1本も当たらない**(CLAUDE.md
+ * 「数え方を2通り持たない。作る側と探す側」)。
+ *
+ * **`audioTextOf()` ではない。** あちらは**その演習の読み上げ欄**
+ * (リスニングなら `audio_text`)を返すもので、解答の欄は見ない。
+ */
+export const answerSpeakText = (it) => String(it?.answer ?? '').trim()
+
+/**
+ * ★ **正解の英文を、鳴る順に並べる**(2026-10-01 利用者の指定・第5.334節)。
+ *
+ *   > その上で、応答問題には正解の聞き流しモードを作ります。
+ *   > 問題順をシャッフルもできる仕様です。
+ *
+ * **支度もこれを使い、聞き流しもこれを使う。**
+ * 片方だけ別の並べ方をすると、**支度した音声と、鳴らすときに探す音声の
+ * 置き場所が食い違って1本も当たらない**(CLAUDE.md「数え方を2通り持たない」)。
+ *
+ * **訳も添える**(聞き流しの札に出す)。英文の無い問は落とす。
+ *
+ * @param {object} material 教材(**応答問題でなければ空**)
+ * @param {boolean} on 応答問題か(`isResponseKind(kind)`。**ここで判じ直さない**)
+ * @returns {Array<{en: string, ja: string}>}
+ */
+export function responseAnswers(material, on) {
+  if (!on) return []
+  const out = []
+  for (const sec of material?.sections ?? []) {
+    for (const it of sec?.items ?? []) {
+      const en = answerSpeakText(it)
+      if (!en) continue
+      out.push({ en, ja: String(it?.answer_ja ?? '').trim() })
+    }
+  }
+  return out
+}

@@ -35,7 +35,14 @@
  */
 import { castClipSpeakers, voiceFor } from './voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
-import { exerciseType, isPassageSection } from '../data/exerciseTypes.js'
+import { answerHasAudio, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
+/* ★ **応答問題では、解答の音声も支度する**(2026-10-01 利用者の指定・第5.334節)。
+     **判断は `isResponseKind()` 1か所**(ここで `kind === …` と書かない) */
+import { isResponseKind } from '../data/materialKinds.js'
+/* ★ **解答として鳴らす英文は `answerSpeakText()` 1か所**(第5.334節)。
+     ここで `it.answer` と書き写すと、**支度した音声と、聞き流しが探す音声の
+     置き場所が食い違って1本も当たらない**(CLAUDE.md) */
+import { answerSpeakText } from './responseDrill.js'
 import { PREMIUM, voiceTierFor } from './voiceTier.js'
 import { turnGapMs } from './turnGap.js'
 import { speakChunks } from './speakChunks.js'
@@ -248,8 +255,26 @@ export function sectionRestClips(material, section) {
        押したときには無い**という形になっていた(第5.289節で実測)。
        無駄な課金と、押したときの待ちが同時に起きる */
     const text = audioTextOf(it, section.exercise_type)
-    if (!text) continue
-    out.push({ text, voiceId: solo, tier })
+    if (text) out.push({ text, voiceId: solo, tier })
+    /* ★ **応答問題では、解答も支度する**(2026-10-01 利用者の指定・第5.334節)。
+
+         > 応答問題だけ先に作ってください。
+
+       測ったら、30 問の応答問題で**質問 30 本・解答 0 本**だった ——
+       `audioTextOf()` は**その演習の読み上げ欄**(リスニングなら
+       `audio_text`)しか見ないためである。
+       **応答問題では、解答こそが練習したい表現**なので、ここが効く。
+
+       **応答問題だけにする**(利用者がそう決めた)。ほかの種類で同じことを
+       すると、**押さなかった解答の音声まで作る**ことになり、
+       使わないぶんが課金になる(見えない費用を作らない・CLAUDE.md)。
+
+       **声も段も、質問とまったく同じ**にする —— 画面(`AnswerEn`)が
+       そう渡しているので、変えると**支度した音声が1本も当たらない。** */
+    if (isResponseKind(material?.kind) && answerHasAudio(section.exercise_type)) {
+      const ans = answerSpeakText(it)
+      if (ans) out.push({ text: ans, voiceId: solo, tier })
+    }
   }
   return out
 }

@@ -268,5 +268,98 @@ console.log('\n▶ 画面と窓口まで、本当に通っているか')
   is(/'%''response''%'/.test(chk), '利用者が見る確認 SQL に、行がある')
 }
 
+console.log('\n▶ 解答の音声を、開く前に支度しているか(第5.334節)')
+{
+  /* ★ 2026-10-01 実機・利用者の指摘。
+
+       > しかもロードが遅いです。開く前に音声が完成していてすぐに
+       > 聴けるという仕様はどこに行ってしまったのですか？
+
+     測ったら、30 問の応答問題で**質問 30 本・解答 0 本**だった ——
+     支度(`sectionRestClips`)は `audioTextOf()` しか見ておらず、
+     あれは**その演習の読み上げ欄**(リスニングなら `audio_text`)を返す。
+     **応答問題では、解答こそが練習したい表現**である。
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+     応答問題では解答が入り、**テスト対策では入らない**
+     (ほかの種類まで入れると、押さなかった解答の音声まで課金になる)。 */
+  const { sectionRestClips } = await import('../src/lib/audioPlaylist.js')
+  const { answerHasAudio } = await import('../src/data/exerciseTypes.js')
+  /* **いちばん危ない形を1つ置く**(CLAUDE.md)——
+     **解答が空の問**。入れてしまうと、空の英文で窓口を呼ぶ */
+  const items = [
+    { question: 'Q1', audio_text: 'Q1 spoken', answer: 'Me too.', answer_ja: '私も' },
+    { question: 'Q2', audio_text: 'Q2 spoken', answer: 'Not yet.', answer_ja: 'まだ' },
+    { question: 'Q3', audio_text: 'Q3 spoken', answer: '  ', answer_ja: '' },
+  ]
+  const mat = (kind) => ({
+    kind, voiceIds: [], tags: [],
+    sections: [{ exercise_type: 'listening', items }],
+  })
+  /* **値を書き写さない。性質で見る**(CLAUDE.md)——
+     「5本」と書くと、問を1つ足した日に見張りだけが古くなる */
+  const 解答のある問 = items.filter((it) => D.answerSpeakText(it)).length
+  const 質問 = items.length
+  const 応答 = sectionRestClips(mat('response'), mat('response').sections[0])
+  is(応答.length === 質問 + 解答のある問,
+    '応答問題では、質問と解答の両方を支度する',
+    `${応答.length} 本 = 質問 ${質問} + 解答 ${解答のある問}`)
+  is(応答.some((c) => c.text === 'Me too.'),
+    '支度する英文が、解答そのものになっている')
+  is(!応答.some((c) => !String(c.text ?? '').trim()),
+    '解答が空の問は、支度しない(空の英文で窓口を呼ばない)')
+  /* **声も段も、画面(`AnswerEn` → `SpeakButton`)とまったく同じ**で
+     なければ、**支度した音声が1本も当たらない**(= 待つ + 二度課金) */
+  const 質問の札 = 応答.find((c) => c.text === 'Q1 spoken')
+  const 解答の札 = 応答.find((c) => c.text === 'Me too.')
+  is(質問の札?.voiceId === 解答の札?.voiceId && 質問の札?.tier === 解答の札?.tier,
+    '解答の声と段が、質問とまったく同じ(置き場所が食い違わない)',
+    `${解答の札?.tier} / ${解答の札?.voiceId}`)
+  /* **出ない側。** テスト対策も同じリスニングの段だが、解答は支度しない */
+  const テスト = sectionRestClips(mat('exam'), mat('exam').sections[0])
+  is(テスト.length === 質問 && !テスト.some((c) => c.text === 'Me too.'),
+    'テスト対策では、解答を支度しない(ほかの種類に広げていない)',
+    `${テスト.length} 本`)
+  /* **解答が英語の演習でなければ、支度しない。**
+     ここを見ずに足すと、英文和訳(`translate_en_ja`)の**日本語の解答**を
+     英語の声で読ませることになる(判断は `answerHasAudio()` 1か所)。 */
+  const 聞ける = noC(R('src/lib/audioPlaylist.js'))
+  is(/answerHasAudio\(section\.exercise_type\)/.test(聞ける),
+    '読み上げが付く解答だけに絞っている(判断は answerHasAudio 1か所)')
+  is(answerHasAudio('listening') && !answerHasAudio('translate_en_ja'),
+    'その判断そのものが、出る側と出ない側で分かれている')
+  /* **欄を書き写していないか。** 聞き流しと支度で別の欄を読むと、
+     置き場所が食い違って1本も当たらない(CLAUDE.md) */
+  is(/answerSpeakText\(it\)/.test(聞ける) && !/it\?\.answer \?\? ''/.test(聞ける),
+    '解答の欄を、支度の側に書き写していない(answerSpeakText 1か所)')
+}
+
+console.log('\n▶ 正解の英文を、鳴る順に並べられるか(聞き流しの材料)')
+{
+  const mat = {
+    kind: 'response',
+    sections: [
+      { exercise_type: 'listening', items: [
+        { answer: 'Me too.', answer_ja: '私も' },
+        { answer: '', answer_ja: 'から' },
+      ] },
+      { exercise_type: 'listening', items: [
+        { answer: 'Not yet.', answer_ja: 'まだ' },
+      ] },
+    ],
+  }
+  const got = D.responseAnswers(mat, true)
+  is(got.length === 2, '英文の無い問は落とす', `${got.length} 件`)
+  is(got[0]?.en === 'Me too.' && got[1]?.en === 'Not yet.',
+    '段をまたいで、出た順に並ぶ')
+  is(got[0]?.ja === '私も', '訳も添える(聞き流しの札に出す)')
+  /* **出ない側。** 応答問題でなければ空 —— 渡す側が判じ直さないため */
+  is(D.responseAnswers(mat, false).length === 0,
+    '応答問題でなければ、1件も返さない')
+  /* **いちばん危ない形**(CLAUDE.md)—— 段が1つも無い教材 */
+  is(D.responseAnswers({ kind: 'response' }, true).length === 0,
+    '段が1つも無い教材でも落ちない')
+}
+
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
