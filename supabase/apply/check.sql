@@ -261,4 +261,11 @@ from (
             where conname = 'materials_kind_check'
               and pg_get_constraintdef(oid) like '%''exam''%')
     and exists (select 1 from pg_proc where proname = 'material_kinds'), 54
+  -- **制約そのものを見る**(0073・第5.332節)。0069 / 0072 と同じ見方 ——
+  -- 表も列も行も増えない移行なので、**一覧に `response` が入っているか**で見る
+  union all select '0073 教材の種類に「応答問題」(pending_matome.sql)',
+    exists (select 1 from pg_constraint
+            where conname = 'materials_kind_check'
+              and pg_get_constraintdef(oid) like '%''response''%')
+    and exists (select 1 from pg_proc where proname = 'material_kinds'), 55
 ) t order by 順;
