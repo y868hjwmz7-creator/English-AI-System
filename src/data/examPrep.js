@@ -202,7 +202,24 @@ export const FORMATS = {
  *   | `listening` | `question` | `answer` | `answer_ja` | `note` |
  */
 const ASK = {
-  fill_blank: { ask: 'prompt_en', why: 'note' },
+  /* ★ **選択肢は `question` に入れる**(第5.338節・2026-10-01 利用者の指摘)。
+
+       > TOEIC PART5 は四択でしょう？調べて同じようにしてくださいと
+       > 依頼したはずですが。
+
+     それまで `prompt_en` と書いていたが、**4択にするのに要るものは
+     どれも `question` しか見ていない。**
+
+       | 仕組み | 見ている欄 |
+       |---|---|
+       | 正解の記号を散らす(`spreadAnswerMarks`・第5.331節) | `question` |
+       | 画面で選択肢を行に割る(`ChoiceLines`・第5.329節) | `question` |
+       | 同じ指示文を「取り組み方」へ回す(`commonLead`) | `question` |
+
+     **置き場所が食い違うと、4択にしても1行の団子になり、
+     正解が全部 (A) に戻る。** 欄は、既にみんなが見ているほうへそろえる。
+     `prompt_en` は**空所を含む1文**のままで、本番の見た目とも合う。 */
+  fill_blank: { ask: 'question', why: 'note' },
   comprehension: { ask: 'question', ja: 'answer_ja' },
   listening: { ask: 'question', ja: 'answer_ja', why: 'note' },
 }

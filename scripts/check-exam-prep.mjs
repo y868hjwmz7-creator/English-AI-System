@@ -412,7 +412,12 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
       '窓口 … `examPart` を受け取る'],
     [/!needsContext && !examPart/.test(fn),
       '窓口 … テスト対策では、弱点タグが無くても断らない'],
-    [/examPart \? `\$\{examPart\}/.test(fn), '窓口 … 依頼の文に差し込んでいる'],
+    /* ★ **式を書き写していた**(第5.338節でまた踏んだ・3度め)。
+         もとは「examPart ? `${examPart}` と書いてあるか」を**そのまま**
+         探していたので、**改行を1つ足しただけで赤くなった。**
+         **名前で在ることだけを見て、中身の形は見ない**(CLAUDE.md) */
+    [fn.includes('examPart') && /\bexamPart\b[^\n]*\?/.test(fn),
+      '窓口 … 依頼の文に差し込んでいる'],
   ]
   for (const [pass, name] of 見る) (pass ? ok(name) : ng(name))
 
@@ -1003,6 +1008,115 @@ console.log('\n▶ 級ごと・型ごとの形(第5.337節)')
     ng('TOEIC Speaking … 解答の秒数が入っていない PART がある',
       秒なし.map((p) => p.id).join(' / '))
   } else ok(`TOEIC Speaking … ${sp.length} 個とも、準備と解答の秒数が出る`)
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **4択が4択にならなかった根**(第5.338節・2026-10-01 利用者の指摘)
+
+     > TOEIC PART5 は四択でしょう？調べて同じようにしてくださいと
+     > 依頼したはずですが。
+
+   前日に「4択にする」と窓口へ伝える文は作った(第5.336節)。
+   **それでも4択にならなかった。** 根は3つ重なっていた。
+
+     ①**窓口で、PART の指示が演習の説明より「前」にあった。**
+       あとに書いたほうが勝つので、**後ろの「hint に与える語」**が効いた
+     ②**選択肢の置き場所が食い違っていた。** 作り方は `prompt_en` と
+       言っていたが、**記号を散らす仕組みも、行に割る仕組みも `question`**
+     ③**行に割る部品がレッスン表示の中にだけ在った。**
+       ゲストの画面と紙では、4つの選択肢が1行の団子だった
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 4択が4択になるか(第5.338節)')
+{
+  const fn = noC(read('supabase/functions/generate-material/index.ts'))
+
+  /* ── ① **PART の指示は、演習の説明より「後ろ」にあるか** ──
+         **ここが今回の根である。** 前に置くと、後ろの演習の説明に負ける */
+  /* ★ **はじめ、別の場所にある同じ名前を測っていた**(第5.338節)。
+       `SECTION_INSTRUCTIONS[sectionType]` も `examPart` も**ファイルに
+       何度も出てくる**(欄の定義・受け取り・弱点タグの判定)。
+       いちばん手前と、いちばん後ろを比べていたので、
+       **並べ替えても必ず「後ろにある」ことになり、緑のままだった。**
+       **いちばん近い対**(依頼の文を組み立てている並びの中の2つ)で測る。
+       どちらも**この形では1つしか無い**ことを、先に数えて確かめてある。 */
+  const 演習の説明 = fn.indexOf('`${SECTION_INSTRUCTIONS[sectionType]}`')
+  const PARTの指示 = fn.search(/\n\s*examPart\s*\n\s*\?/)
+  if (演習の説明 < 0 || PARTの指示 < 0) {
+    ng('窓口 … 並び順を測れない(探し方が壊れている)', `${演習の説明} / ${PARTの指示}`)
+  } else if (PARTの指示 < 演習の説明) {
+    ng('窓口 … PART の指示が、演習の説明より前にある(後ろの説明に負ける)',
+      `PART ${PARTの指示} < 演習 ${演習の説明}`)
+  } else ok('窓口 … PART の指示は、演習の説明より後ろにある(あとが勝つ)')
+
+  /* ── ② **食い違ったときどちらが勝つかを、言葉でも言っているか** ── */
+  if (!/食い違う[^\n]*PART の指示が勝つ/.test(fn)) {
+    ng('窓口 … 食い違ったときどちらが勝つかを言っていない')
+  } else ok('窓口 … 食い違ったら PART の指示が勝つ、と言っている')
+
+  /* ── ③ **選択肢の置き場所が、みんなが見ている欄と同じか** ──
+         **値を書き写さない。** 「記号を散らす仕組み」が読んでいる欄を
+         `choiceLines.js` から**読み取って**、作り方が名指しする欄と比べる */
+  const lines = noC(read('src/lib/choiceLines.js'))
+  const 散らす = /splitChoices\(it\.(\w+)\)/.exec(lines)?.[1] ?? ''
+  const 作り方 = /\$\{f\.ask\} には/.test(noC(read('src/data/examPrep.js')))
+  const 四択の欄 = new Set()
+  for (const { exam, part } of PICKABLE) {
+    if (choicesOf(part) < 2) continue
+    const b = examBrief(exam.id, part.id)
+    for (const f of ['question', 'prompt_en']) {
+      if (new RegExp(`(?:^|[^a-z_])${f} には`).test(b)) 四択の欄.add(f)
+    }
+  }
+  if (!散らす || !作り方) {
+    ng('選択肢の欄 … 読み取れない(探し方が壊れている)', `${散らす} / ${作り方}`)
+  } else if (四択の欄.size !== 1 || !四択の欄.has(散らす)) {
+    ng('選択肢の欄 … 作り方と、記号を散らす仕組みで食い違っている',
+      `作り方: ${[...四択の欄]} / 散らす仕組み: ${散らす}`)
+  } else ok(`選択肢の欄 … 作り方も記号を散らす仕組みも \`${散らす}\`(1つにそろっている)`)
+
+  /* ── ④ **その欄が、道具の形で許されているか** ──
+         許されていないと、**書かせても落とされて4択にならない** */
+  const blk = /const SECTION_FIELDS[\s\S]*?\n}\n/.exec(fn)?.[0] ?? ''
+  const 穴埋めの欄 = /fill_blank:\s*\{[\s\S]*?optional:\s*\[([^\]]*)\]/.exec(blk)?.[1] ?? ''
+  const 画面の欄 = /id: 'fill_blank'[\s\S]*?fields: \[([^\]]*)\]/
+    .exec(noC(read('src/data/exerciseTypes.js')))?.[1] ?? ''
+  const ある = (t) => new RegExp(`'${散らす}'`).test(t)
+  if (!blk || !画面の欄) {
+    ng('選択肢の欄 … 道具の形を読み取れない(探し方が壊れている)')
+  } else if (!ある(穴埋めの欄) || !ある(画面の欄)) {
+    ng(`選択肢の欄 … 穴埋めで \`${散らす}\` が許されていない(書かせても落ちる)`,
+      `窓口: ${ある(穴埋めの欄)} / 画面: ${ある(画面の欄)}`)
+  } else ok(`選択肢の欄 … 穴埋めでも \`${散らす}\` が許されている(窓口と画面の両方)`)
+
+  /* ── ⑤ **行に割る部品を、3つの画面ぜんぶが通しているか** ──
+         ★ **レッスン表示の中にだけ在った。** ゲストの画面と紙では
+            4つの選択肢が1行の団子だった。**開く場所で形が違っていた** */
+  const 部品 = 'ChoiceLines'
+  const 画面 = ['LessonView', 'MaterialBody', 'LearnerHomework']
+  const 通っていない = []
+  for (const 名 of 画面) {
+    const src = noC(read(`src/components/${名}.jsx`))
+    if (!new RegExp(`import ${部品} from`).test(src)) {
+      通っていない.push(`${名} … 部品を取り込んでいない`)
+      continue
+    }
+    /* **設問を、その部品に渡しているか**(取り込んだだけでは何もしない) */
+    if (!new RegExp(`<${部品}[\\s\\S]{0,400}?text=\\{it\\.question\\}`).test(src)) {
+      通っていない.push(`${名} … 設問を部品に渡していない`)
+    }
+  }
+  if (通っていない.length) {
+    ng('選択肢の行割り … 通っていない画面がある', 通っていない.join('\n    '))
+  } else ok(`選択肢の行割り … ${画面.length} 画面とも、設問を同じ部品に通している`)
+
+  /* ── ⑥ **部品は1つだけ**(画面の中に写しが残っていないか) ──
+         出したつもりで**元が残る**と、片方だけ古くなる(CLAUDE.md) */
+  const 写し = 画面.filter((名) =>
+    /function ChoiceLines\s*\(/.test(noC(read(`src/components/${名}.jsx`))))
+  if (写し.length) {
+    ng('選択肢の行割り … 画面の中に部品の写しが残っている', 写し.join(' / '))
+  } else ok('選択肢の行割り … 部品は `components/ChoiceLines.jsx` 1つだけ')
 }
 
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

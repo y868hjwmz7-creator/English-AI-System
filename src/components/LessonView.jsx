@@ -44,7 +44,11 @@ import { resolveVoices } from '../data/clipVoices.js'
      画面の中で `kind === 'pattern'` と書かない(CLAUDE.md) */
 import { canShuffleKind } from '../data/materialKinds.js'
 /* **選択肢を行に割る**(第5.329節)。何にも依存しない形に出してある */
-import { commonLead, splitChoices } from '../lib/choiceLines.js'
+import { commonLead } from '../lib/choiceLines.js'
+/* ★ **選択肢を行に割る部品は、ここから出した**(第5.338節)。
+     レッスン表示の中にだけ在ったので、**ゲストの宿題と紙では
+     4つの選択肢が1行の団子**になっていた。中身は1文字も変えていない */
+import ChoiceLines from './ChoiceLines.jsx'
 /* **Quick Response 帳へ溜める道**(第5.329節)。「まだ」を押したときと
    **まったく同じ関数**を呼ぶ —— 溜め方を2通り持たない(CLAUDE.md) */
 import { markQr } from '../lib/qrReviews.js'
@@ -125,30 +129,6 @@ import { lockScroll } from '../lib/scrollLock.js'
 /** **空の演習の一覧は、この1つ**(第5.325節のつづき)。`?? []` を書かない */
 const NO_SECTIONS = []
 
-/**
- * **設問を、選択肢ごとの行にして出す**(2026-09-30 利用者の指定・第5.329節)。
- *
- *   > 毎問題に choose... は不必要なので省き、1番上の取り組み方を開いた
- *   > 時に見れるようにすれば十分です。
- *   > そして、選択肢だけ3行に改行して並べてください。
- *
- * **教材そのものは1文字も書き換えない。** 画面に出すときに割るだけなので、
- * **すでにある教材にもそのまま効く**(作り直し = 課金をしない)。
- *
- * `drop` … 演習ぜんぶで同じ指示文(「取り組み方」へ回したもの)。
- *          **その問だけ違う指示なら、ここに残して出す**(黙って消さない)。
- */
-function ChoiceLines({ text, drop = '', en }) {
-  const { lead, choices } = splitChoices(text)
-  if (!choices.length) return <div className="lesson-en">{en(text)}</div>
-  const 前 = drop && lead === drop ? '' : lead
-  return (
-    <div className="choice-lines">
-      {前 && <div className="lesson-en">{en(前)}</div>}
-      {choices.map((c) => <div className="lesson-en" key={c}>{en(c)}</div>)}
-    </div>
-  )
-}
 
 const SIZES = [
   { id: 'm', label: '標準' },

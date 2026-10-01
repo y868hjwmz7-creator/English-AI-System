@@ -27,6 +27,7 @@
  *   紙用の見出し(`print-only`)もここに入っている。
  */
 import AiNote from './AiNote.jsx'
+import ChoiceLines from './ChoiceLines.jsx'
 import MaterialTitle from './MaterialTitle.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -197,9 +198,18 @@ export default function MaterialBody({
                         訳を出さない(スラッシュを手書きするための用紙なので)。
                         画面には指定を1つも足していないので、見た目は変わらない */}
                     {it.prompt_ja && <div className="preview-ja">{it.prompt_ja}</div>}
+                    {/* ★ **選択肢は1行ずつ**(第5.338節)。
+                         レッスン表示にだけ在った部品を、ここでも使う ——
+                         同じ教材なのに、**紙では4つの選択肢が1行の団子**だった。
+                         `drop` は渡さない(この画面に「取り組み方」が無いので、
+                         指示文を落とすと**どこにも出なくなる**) */}
                     {it.question && (
-                      <div><EnglishText text={it.question} level={m.level}
-                                        statuses={wordStatuses} onMark={onMarkWord} /></div>
+                      <ChoiceLines
+                        text={it.question} cls=""
+                        en={(t) => (
+                          <EnglishText text={t} level={m.level}
+                                       statuses={wordStatuses} onMark={onMarkWord} />
+                        )} />
                     )}
                     {/* 設問の訳(0035)。**伏せない。**
                         設問は「何を訊かれているか」であって、答えではない

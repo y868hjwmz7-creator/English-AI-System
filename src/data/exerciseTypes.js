@@ -77,7 +77,13 @@ export const EXERCISE_TYPES = [
   {
     id: 'fill_blank', label: '穴埋め',
     instruction: 'カッコ内の語を使って文を完成させなさい。',
-    fields: ['prompt_en', 'hint', 'answer'], audioFrom: null,
+    /* ★ **`question` を足した**(第5.338節)。**選択肢の置き場所である。**
+         テスト対策(TOEIC Part 5/6・英検 大問1)は**4択**で、
+         `prompt_en` に空所を含む1文、`question` に選択肢(A)〜(D)が入る。
+         **正解の記号を散らす仕組みも、行に割る仕組みも `question` を見る**
+         ので、ここに無いと**落とされて4択にならない。**
+         文型ドリルの穴埋めには `question` が無いので、**あちらは変わらない。** */
+    fields: ['prompt_en', 'question', 'hint', 'answer'], audioFrom: null,
     /* **解説できる英文が、どこにも無い。**
        `prompt_en` は（　　　）が開いたままで文になっておらず、
        `answer` は空欄に入る語1つである。**当てずっぽうで埋めない**

@@ -6,6 +6,7 @@
  * 提出期限やトレーナーの確認印には触れられない(列単位の権限で絞ってある)。
  */
 import { useEffect, useState } from 'react'
+import ChoiceLines from './ChoiceLines.jsx'
 import Loading from './Loading.jsx'
 import { cefrLabel } from '../data/cefr.js'
 import { exerciseType, isPassageSection, sectionLabel } from '../data/exerciseTypes.js'
@@ -726,11 +727,20 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                   </div>
                                 )}
                                 {it.prompt_ja && <div>{it.prompt_ja}</div>}
+                                {/* ★ **選択肢は1行ずつ**(第5.338節)。
+                                     レッスン表示にだけ在った部品を、ここでも使う ——
+                                     同じ教材なのに、**ゲストの画面では4つの選択肢が
+                                     1行の団子**だった。`drop` は渡さない
+                                     (この画面に「取り組み方」が無いので、
+                                     指示文を落とすと**どこにも出なくなる**) */}
                                 {it.question && (
-                                  <div className="homework-en">
-                                    <EnglishText text={it.question} level={a.material?.level}
-                                                 statuses={wordStatuses} onMark={markIn(markWord, a.material?.id)} />
-                                  </div>
+                                  <ChoiceLines
+                                    text={it.question} cls="homework-en"
+                                    en={(t) => (
+                                      <EnglishText text={t} level={a.material?.level}
+                                                   statuses={wordStatuses}
+                                                   onMark={markIn(markWord, a.material?.id)} />
+                                    )} />
                                 )}
                                 {/* 設問の訳(0035)。**伏せない。**
                                     設問は「何を訊かれているか」であって、答えではない */}
