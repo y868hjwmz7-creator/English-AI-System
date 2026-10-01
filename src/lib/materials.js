@@ -25,6 +25,8 @@ import {
    書いてあれば、**読み上げにする英文だけ**を書き換える。
    算段はあちら1か所(素の node で走る) */
 import { parseSayAs, sayAsText } from './sayAs.js'
+/* **正解の記号を散らす**(第5.331節)。算段はあちら1か所 */
+import { spreadAnswerMarks } from './choiceLines.js'
 /* すでにある教材に、足りない演習だけを足す(第5.234節)。
    **足せるかどうかの判断は `materialFill.js` 1か所。**
    ここで「本文が在るか」「もう在る種類か」を書き直さない(CLAUDE.md) */
@@ -428,6 +430,23 @@ const cleanItems = (items, typeId = null, say = null) =>
     })
     .filter((row) => Object.keys(row).length > 0)
 
+/* ★ **正解の記号を散らす**(2026-10-01 利用者の指摘・第5.331節)。
+
+     > 昨日初めて作成した TOEIC L&R の PART2 問題は正解が全て A に
+     > なっていました。これを改善してください
+
+   **`cleanItems()` を通ったあと、保存する直前に1度だけ**振り直す。
+   ここに置く理由は3つ(算段は `choiceLines.js` に書いてある)——
+     ①画面・紙・音声・Quick Response が**自動でそろう**
+     ②答えの読み上げは `answer` そのものが鍵なので、
+       **表示のたびに変えると二度課金**になる
+     ③窓口(Deno)に置くと、この算段を書き写すことになる
+
+   **選択肢が無い演習では何も起きない**(`spreadAnswerMarks` が素通りする)ので、
+   ここを通る演習の種類を数えない —— **判断はあちら1か所**。 */
+const bakeItems = (items, typeId = null, say = null) =>
+  spreadAnswerMarks(cleanItems(items, typeId, say))
+
 export async function createMaterial({
   title, level, kind, instruction_ja = '', teaching_point = '',
   visibility = 'school', industry = null,
@@ -443,7 +462,7 @@ export async function createMaterial({
      `UMITO=ウミト` のような形が1つも無ければ、空の表が返るだけである */
   const say = parseSayAs(topic)
   const cleanSections = sections
-    .map((sec) => ({ ...sec, items: cleanItems(sec.items, sec.exercise_type, say) }))
+    .map((sec) => ({ ...sec, items: bakeItems(sec.items, sec.exercise_type, say) }))
     .filter((sec) => sec.items.length)
 
   if (!String(title).trim()) return ng('教材名を入れてください')
@@ -1851,7 +1870,7 @@ export async function addSections(material, plan, onStep = null) {
     made.push({
       ...data.section,
       exercise_type: list[i].exercise_type,
-      items: cleanItems(data.section?.items),
+      items: bakeItems(data.section?.items),
     })
   }
 

@@ -58,3 +58,100 @@ export function commonLead(texts) {
   if (!first) return ''
   return list.every((x) => x.lead === first) ? first : ''
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   **正解の記号を散らす**(2026-10-01 利用者の指摘・第5.331節)
+
+     > 昨日初めて作成した TOEIC L&R の PART2 問題は正解が全て A に
+     > なっていました。これを改善してください
+
+   AI は**正解を先に書く。** だから (A) に寄る —— 実機で 10 問すべてが
+   (A) だった。**お願いして直るものではない**(文の並べ方の癖である)。
+
+   **道具の形で強制する**(第5.294節と同じ考え方)。発行する直前に、
+   **決まりで**選択肢を並べ替える。
+
+   ── なぜ「発行する直前」なのか ────────────────────────────
+     ① **画面・紙・音声・Quick Response が自動でそろう。**
+        表示のときに振り直すと、紙と画面で正解の記号が食い違う
+     ② **答えの読み上げは `answer` そのものが鍵である**(`answerHasAudio`)。
+        表示のたびに記号を変えると**指紋が変わって二度課金**になる。
+        保存する前に1度だけ決めれば、鍵は1つのまま
+     ③ 窓口(Deno)に置くと、**この算段を書き写す**ことになる
+        (CLAUDE.md「数え方を2通り持たない」)
+
+   ── 混ぜ方は `shuffle.js` 1か所 ──────────────────────────
+     自前の混ぜ方を書かない(単語帳・Quick Response・シャッフルと同じ)。
+   ══════════════════════════════════════════════════════════════════════ */
+import { shuffled } from './shuffle.js'
+
+/** 記号(`(A) ` など)を落とした中身。**突き合わせるのはこの形** */
+export const choiceBody = (text) =>
+  String(text ?? '').replace(/^\s*\(([A-D])\)\s*/, '').trim()
+
+/** その文が記号で始まっているか(元の書き方を崩さないため) */
+const hasMark = (text) => /^\s*\([A-D]\)/.test(String(text ?? ''))
+
+/** 何番目を何の記号にするか。**`(A)` から順に振り直す** */
+const MARKS = ['A', 'B', 'C', 'D']
+
+/**
+ * **その段の問の、正解の位置を散らす。**
+ *
+ * **選択肢の数ごとに分けて、均す**(3つの問と4つの問が混ざっても偏らない)。
+ * 位置の一覧は `[0,1,2,0,1,2,…]` を混ぜたものなので、
+ * **10 問なら 4・3・3 に必ず割れる** —— まぐれで全部 (A) になりようがない。
+ *
+ * **読み取れない問は、1文字も触らない**(黙って壊さない):
+ *   ・選択肢が2つ未満
+ *   ・`answer` がどの選択肢とも合わない
+ *
+ * @param {Array<object>} items `question` と `answer` を持つ問
+ * @returns {Array<object>} 写し(**元の配列は触らない**)
+ */
+export function spreadAnswerMarks(items) {
+  const rows = (items ?? []).map((it) => ({ ...it }))
+  /** 振り直せる問だけを、選択肢の数ごとに分ける */
+  const groups = new Map()
+  const parsed = rows.map((it, i) => {
+    const { lead, choices } = splitChoices(it.question)
+    if (choices.length < 2) return null
+    const bodies = choices.map(choiceBody)
+    const want = choiceBody(it.answer)
+    // **どの選択肢とも合わなければ触らない。** 当てずっぽうで動かさない
+    const at = bodies.findIndex((b) => b && b === want)
+    if (at < 0) return null
+    const g = groups.get(choices.length) ?? []
+    g.push(i)
+    groups.set(choices.length, g)
+    return { i, lead, bodies, at }
+  })
+
+  /** 位置の一覧。**均してから混ぜる**(混ぜてから均すと偏る) */
+  const target = new Map()
+  for (const [count, idxs] of groups) {
+    const spread = shuffled(idxs.map((_, k) => k % count))
+    idxs.forEach((i, k) => target.set(i, spread[k]))
+  }
+
+  for (const p of parsed) {
+    if (!p) continue
+    const to = target.get(p.i) ?? 0
+    /* 正解を `to` へ動かし、残りを順に詰める。
+       **選択肢の中身は1つも足さない・落とさない**(並べ替えだけ) */
+    const others = p.bodies.filter((_, k) => k !== p.at)
+    const body = []
+    let o = 0
+    for (let k = 0; k < p.bodies.length; k += 1) {
+      body.push(k === to ? p.bodies[p.at] : others[o++])
+    }
+    const lines = body.map((b, k) => `(${MARKS[k]}) ${b}`)
+    const row = rows[p.i]
+    row.question = [p.lead, ...lines].filter(Boolean).join(' ')
+    /* **元の書き方にそろえる。** 記号なしで来た答えに記号を足さない */
+    row.answer = hasMark(row.answer)
+      ? `(${MARKS[to]}) ${p.bodies[p.at]}`
+      : p.bodies[p.at]
+  }
+  return rows
+}

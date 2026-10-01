@@ -1094,6 +1094,101 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
       '取り組み方 … 指示文が違えば、まとめない')
     ok(commonLead(['What is it?', 'Who is he?']) === '',
       '取り組み方 … 選択肢が無ければ、まとめない')
+
+    /* ══════════════════════════════════════════════════════════════
+       ★ **正解の記号を散らす**(2026-10-01 利用者の指摘・第5.331節)
+
+         > 昨日初めて作成した TOEIC L&R の PART2 問題は正解が全て A に
+         > なっていました。これを改善してください
+
+       **値を書き写さない。性質で見る**(CLAUDE.md)——
+       並びは毎回変わるので、「BCBAACABAC」とは書けない。
+       **均されているか・記号と中身が合っているか**を数える。
+       ══════════════════════════════════════════════════════════════ */
+    const { spreadAnswerMarks, choiceBody } = await import('../src/lib/choiceLines.js')
+    {
+      /** 実機と同じ形 —— **正解がぜんぶ (A)** の 10 問 */
+      const 全部A = Array.from({ length: 10 }, (_, i) => ({
+        question: `Choose the best response. (A) Right ${i}. (B) No a${i}. (C) No b${i}.`,
+        answer: `(A) Right ${i}.`,
+      }))
+      /* **何度やっても均される。** 1回だけ見ると、まぐれで通ったのか
+         分からない(混ぜ方は毎回ちがう) */
+      let 偏り = ''
+      let 食い違い = ''
+      let 増減 = ''
+      for (let n = 0; n < 20; n += 1) {
+        const out = spreadAnswerMarks(全部A)
+        const 数 = { A: 0, B: 0, C: 0 }
+        out.forEach((it) => { 数[it.answer.slice(1, 2)] += 1 })
+        /* **数を書き写さない。** 10 問を3つに割れば 4・3・3 ——
+           「いちばん多い」と「いちばん少ない」の差が1以内であること */
+        const 並 = Object.values(数)
+        if (Math.max(...並) - Math.min(...並) > 1) 偏り = JSON.stringify(数)
+        out.forEach((it) => {
+          const at = 'ABCD'.indexOf(it.answer.slice(1, 2))
+          const c = splitChoices(it.question).choices[at]
+          if (!c || choiceBody(c) !== choiceBody(it.answer)) {
+            食い違い = `${it.question} / ${it.answer}`
+          }
+          const 元 = splitChoices(全部A[0].question).choices.length
+          if (splitChoices(it.question).choices.length !== 元) 増減 = it.question
+        })
+      }
+      ok(!偏り, '正解の記号 … 20 回まわして、1度も (A) に偏らない', 偏り)
+      ok(!食い違い, '正解の記号 … 記号の位置に、同じ応答が並んでいる', 食い違い)
+      ok(!増減, '正解の記号 … 選択肢を足さない・落とさない(並べ替えだけ)', 増減)
+      /* **指示文を落とさない**(取り組み方へ回す元である) */
+      ok(spreadAnswerMarks(全部A)
+        .every((it) => it.question.startsWith('Choose the best response. (A) ')),
+      '正解の記号 … 指示文は先頭に残る')
+      /* **元の配列を触らない。** 触ると、押すたびに並びが変わる */
+      ok(全部A.every((it) => it.answer.startsWith('(A) ')),
+        '正解の記号 … 渡した問そのものは書き換えない')
+      /* **いちばん危ない形**(CLAUDE.md)—— 読み取れない問は1文字も触らない */
+      const 素 = [{ question: 'What time does it start?', answer: 'At five.' }]
+      ok(spreadAnswerMarks(素)[0].question === 素[0].question
+        && spreadAnswerMarks(素)[0].answer === 素[0].answer,
+      '正解の記号 … 選択肢の無い問は、1文字も触らない')
+      const 不一致 = [{ question: 'Pick. (A) a (B) b (C) c', answer: '(A) zzz' }]
+      ok(spreadAnswerMarks(不一致)[0].question === 不一致[0].question
+        && spreadAnswerMarks(不一致)[0].answer === 不一致[0].answer,
+      '正解の記号 … どの選択肢とも合わない答えは、動かさない')
+      /* **記号なしで来た答えに、記号を足さない**(元の書き方にそろえる) */
+      const 記号なし = [{ question: 'Pick. (A) yes (B) no (C) maybe', answer: 'no' }]
+      ok(!/^\(/.test(spreadAnswerMarks(記号なし)[0].answer),
+        '正解の記号 … 記号なしの答えには、記号を足さない',
+        spreadAnswerMarks(記号なし)[0].answer)
+      /* **選択肢が4つの問も均す**(Part 5 は (A)〜(D))。
+         **3つの問と混ざっても偏らない** */
+      const 四択 = Array.from({ length: 8 }, (_, i) => ({
+        question: `Choose one. (A) Right ${i}. (B) a${i}. (C) b${i}. (D) c${i}.`,
+        answer: `(A) Right ${i}.`,
+      }))
+      let 四の偏り = ''
+      for (let n = 0; n < 20; n += 1) {
+        const 数 = { A: 0, B: 0, C: 0, D: 0 }
+        spreadAnswerMarks(四択).forEach((it) => { 数[it.answer.slice(1, 2)] += 1 })
+        const 並 = Object.values(数)
+        if (Math.max(...並) - Math.min(...並) > 1) 四の偏り = JSON.stringify(数)
+      }
+      ok(!四の偏り, '正解の記号 … 選択肢が4つの問も均す', 四の偏り)
+    }
+    /* ★ **保存する道が、本当にここを通っているか**(第5.331節)。
+         素の関数だけを見ると、**`materials.js` が通していなくても緑**になる
+         —— そのときは実機でいつまでも (A) のままである。
+         **`cleanItems()` を直に呼んでいる場所が1つも無い**ことも見る
+         (1か所でも素通りすると、その道だけ偏る) */
+    {
+      const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+      const mats = read('src/lib/materials.js').replace(/\/\*[\s\S]*?\*\//g, '')
+      const 通す = /const bakeItems = \(items[^)]*\) =>\s*spreadAnswerMarks\(cleanItems\(/.test(mats)
+      const 素通り = (mats.match(/[^e]cleanItems\(/g) ?? [])
+        .filter((_, i, a) => a.length > 0).length
+      ok(通す, '正解の記号 … 保存する直前に、決まりで散らしている')
+      ok(素通り === 1, '正解の記号 … `cleanItems()` を素通りで呼ぶ道が残っていない',
+        `${素通り} か所`)
+    }
     /* **シャッフルできる種類**(第5.325 → 5.329節)。
        **出る側と出ない側の両方**を見る */
     ok(canShuffleKind('pattern') && canShuffleKind('exam'),
