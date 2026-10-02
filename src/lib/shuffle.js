@@ -23,11 +23,16 @@
  * 画面が描き直されるたびに順が変わってしまう。
  *
  * `null` / 空 / 1つでも落ちない(**無ければ素通り、にしない**)。
+ *
+ * ★ **`rand` を渡せるようにした**(第5.350節)。既定は `Math.random` なので、
+ * 呼んでいる側は1か所も変わらない。**検証から決まった並びを作るため**である
+ * —— 混ぜ方をもう1つ書くより、ここに入り口を1つ足すほうがよい
+ * (CLAUDE.md「混ぜ方は1か所」)。
  */
-export function shuffled(list) {
+export function shuffled(list, rand = Math.random) {
   const rows = [...(list ?? [])]
   for (let i = rows.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1))
+    const j = Math.floor(rand() * (i + 1))
     ;[rows[i], rows[j]] = [rows[j], rows[i]]
   }
   return rows

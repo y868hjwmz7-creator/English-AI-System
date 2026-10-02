@@ -178,29 +178,20 @@ console.log('\n▶ 窓口へ渡す「作り方」')
   /* **別解を書かせているか**(利用者の指定「別解を設け、明記すること」) */
   is(/answer_alt/.test(選) && /answer_alt/.test(開),
     'どちらの形でも、別解の欄を書かせている')
-  /* ★ **別解を選択肢に入れさせない。**
-       入ると**正解が2つある4択**になり、答え合わせができない */
-  is(/別解は選択肢に入れない/.test(選),
-    '選択肢ありのときは、別解を選択肢に入れさせない')
   /* **訳を書かせているか** —— 無いと Quick Response に回せない */
   is(/answer_ja/.test(選) && /answer_ja/.test(開), '応答の訳を書かせている')
-  /* ★ **誤りの選択肢を、正解に似せさせない**(2026-10-01 実機・利用者の指摘)。
+  /* ★ **選択肢について、AI に何も言わなくなった**(第5.350節)。
 
-       > 選択肢A-Cが似過ぎていて問題になっていません。
-       > もっと脈絡のないランダムなものを間違えている選択肢として
+       第5.344節では「別解を選択肢に入れない」「正解に似せない」
+       「音の似た語を混ぜない」を**作り方の文で**言っていた。
+       **2度めの指摘で、指示では直らないと分かった**ので、
+       **選択肢はこちらで組み立てる**ことにした(`responseChoices.js`)。
 
-     実機では「Mistakes make purple / papers / people」のように、
-     **同じ文型のまま1語だけ**入れ替えたものが並んでいた。
-     それは**音の聞き分け**の問題で、**覚えた表現を思い出す**練習ではない */
-  is(/似せない/.test(選) && /かみ合わない/.test(選),
-    '誤りの選択肢を、正解に似せさせない(脈絡のない応答にさせる)')
-  /* ★ **音の似た語を混ぜさせていないか。** これは TOEIC の本番の形で、
-       **応答問題には当てはまらない**(言われた場所だけを直す) */
+       だから、ここで作り方の文を見る見張りは**下の節へ移してある** ——
+       「誤りが1つも重複しない」「ほかの問の正解が出てこない」
+       「長さで見分けられない」を、**組み立てた結果そのもので**測る。
+       **決まりは1つも軽くなっていない。見る場所が変わっただけである。** */
   is(!/音が似/.test(選), '応答問題では「音の似た語を混ぜる」と書いていない')
-
-  /* **選択肢ありと、選択肢なしで、本当に違うか**(出る側と出ない側) */
-  is(選.includes('(A)') && 選.includes(`${D.CHOICE_COUNT}つ`),
-    '選択肢ありでは、記号と数が書いてある')
   is(!開.includes('(A)') && /question は\*\*空にする/.test(開),
     '選択肢なしでは、設問を空にさせる')
   is(選 !== 開, '2つの形で、渡す文が違う')
@@ -791,7 +782,7 @@ console.log('\n▶ 解答の訳は、えらんだ表現から埋まるか(第5.3
   /* **画面が通しているか。** 関数があっても、呼んでいなければ効かない。
      **名前を先に読み取ってから**その名前で数える(式を書き写さない) */
   const form = noC(R('src/components/MaterialForm.jsx'))
-  is(/fillAnswerJa\(\s*items\s*,\s*isResponseKind\(kind\)/.test(form),
+  is(/fillAnswerJa\(\s*items\s*,\s*resOn\s*,\s*resPhrases\s*\)/.test(form),
     '画面が、生成の直後に `fillAnswerJa()` を通している')
   /* **画面の中で種類を見分けていない**(判断は1か所) */
   is(!/kind\s*===\s*'response'/.test(form),
@@ -828,6 +819,199 @@ console.log('\n▶ 読み上げた英文の訳は、解答を開くまで出な�
     is((src.match(/audioJaOf\(it, sec\.exercise_type\)/g) ?? []).length >= 2,
       `${名} … 訳は audioJaOf() を通して出している`)
   }
+}
+
+console.log('\n▶ 読み上げの最後に答えが入っていたら落とすか(第5.350節)')
+{
+  const 答 = 'I appreciate your help.'
+  const 問 = (heard) => [{ audio_text: heard, answer: 答 }]
+  const 落とす = (heard) => D.stripHeardAnswer(問(heard), true)[0].audio_text
+
+  is(落とす(`Could you give me a hand with these boxes? ${答}`)
+    === 'Could you give me a hand with these boxes?',
+    '読み上げの最後に入った答えが落ちる')
+
+  /* **大文字小文字・句読点のちがいも落ちる**(normEn を通している) */
+  is(落とす('Could you give me a hand? i APPRECIATE your help')
+    === 'Could you give me a hand?',
+    '大文字小文字・句読点がちがっても落ちる')
+
+  /* ★ **いちばん危ない形**(CLAUDE.md)。**1文しか無ければ触らない** ——
+       落とすと読み上げが空になり、その問は鳴らしようがなくなる */
+  is(落とす(答) === 答, '1文しか無ければ触らない(読み上げを空にしない)')
+
+  /* **途中の文は落とさない。** 抜くと残った文がつながらなくなる */
+  const 途中 = `${答} Could you give me a hand?`
+  is(落とす(途中) === 途中, '途中に入っているときは触らない(末尾だけを落とす)')
+
+  /* **略語のピリオドで切らない**(文の切り方は sentenceSplit.js 1か所) */
+  is(落とす(`Mr. Smith is waiting at the front desk. ${答}`)
+    === 'Mr. Smith is waiting at the front desk.',
+    '略語のピリオドで切らない(Mr. Smith が残る)')
+
+  /* **答えが入っていなければ、1文字も変えない** */
+  const そのまま = 'Could you give me a hand? It will only take a minute.'
+  is(落とす(そのまま) === そのまま, '答えが入っていなければ、1文字も変えない')
+
+  /* **出ない側**(CLAUDE.md)。応答問題でなければ触らない */
+  is(D.stripHeardAnswer(問(`Could you help? ${答}`), false)[0].audio_text
+    === `Could you help? ${答}`,
+    '応答問題でなければ、1問も触らない')
+
+  /* **作り方の文でも禁じている。** 落とす仕組みと両方でふさぐ */
+  const rule = (await import('../src/data/replyRule.js')).REPLY_RULE
+  is(/audio_text の中に answer を入れない/.test(rule),
+    '作り方の文(REPLY_RULE)が「読み上げに答えを入れない」と言っている')
+  /* **テスト対策の Part 2 にも、同じ決まりが届く**(文は1か所) */
+  const { examBrief } = await import('../src/data/examPrep.js')
+  is(examBrief('toeic_lr', 'p2').includes('audio_text の中に answer を入れない'),
+    'TOEIC L&R Part 2 にも、その決まりがそのまま届く')
+
+  /* **画面が通しているか**(名前を先に読み取ってから数える) */
+  const form = noC(R('src/components/MaterialForm.jsx'))
+  is(/stripHeardAnswer\(\s*items\s*,\s*resOn\s*\)/.test(form),
+    '画面が `stripHeardAnswer()` を通している')
+}
+
+console.log('\n▶ 同じ解答の問が、続けて出ないか(第5.350節)')
+{
+  const 並び = (items) => items.map((x) => x.answer).join('')
+  const 隣が同じ = (items) => items
+    .filter((x, i) => i > 0 && x.answer === items[i - 1].answer).length
+
+  const 問 = 'AABBCC'.split('').map((a, i) => ({ answer: a, id: i }))
+  is(隣が同じ(D.spreadSameAnswer(問, true)) === 0,
+    '同じ解答が隣に並ばない', 並び(D.spreadSameAnswer(問, true)))
+
+  /* **1問も捨てない。** 並べ替えるだけである */
+  const out = D.spreadSameAnswer(問, true)
+  is(out.length === 問.length
+    && new Set(out.map((x) => x.id)).size === 問.length,
+    '問は1つも増えず、減らず、入れ替わっただけ')
+
+  /* ★ **いちばん危ない形**(CLAUDE.md)。**本番でいちばん多い形**で測る ——
+       30 問 = 15 表現 × 2 回。短い例だと、まぐれで緑になる */
+  const 本番 = Array.from({ length: 15 }, (_, k) => k)
+    .flatMap((k) => [{ answer: `p${k}` }, { answer: `p${k}` }])
+  is(隣が同じ(D.spreadSameAnswer(本番, true)) === 0,
+    `30 問(15 表現 × ${D.TIMES_PER_PHRASE} 回)でも、隣に同じ解答が1つも無い`)
+
+  /* ★ **並べようがない残りが出ても、問を捨てない**。
+       **入力の選び方で2度つまずいた**(CLAUDE.md「その1本を外したときに
+       赤くなる入力を選ぶ」)—— `A A A` は**解答が1種類**なので
+       いちばん手前の早い return で返り、**最後まで通らない。**
+       `A A A B` にすると「A B A」まで置いたところで**残りが A だけ**になり、
+       置けなくなる道をちゃんと通る */
+  const 置けない = ['A', 'A', 'A', 'B'].map((a, i) => ({ answer: a, id: i }))
+  const 残した = D.spreadSameAnswer(置けない, true)
+  is(残した.length === 4 && new Set(残した.map((x) => x.id)).size === 4,
+    '置けなくなっても、問を1つも捨てない', 残した.map((x) => x.answer).join(''))
+  /* 解答が1種類しか無ければ、何もしない(そこで返る) */
+  const 同じだけ = [{ answer: 'A' }, { answer: 'A' }, { answer: 'A' }]
+  is(D.spreadSameAnswer(同じだけ, true).length === 3,
+    '解答が1種類しか無ければ、そのまま返す')
+
+  /* **出ない側。** 応答問題でなければ並べ替えない */
+  is(並び(D.spreadSameAnswer(問, false)) === 'AABBCC',
+    '応答問題でなければ、並べ替えない')
+
+  /* **画面では、交互に並べ直したあとに通す** —— 先に置くと打ち消される */
+  const form = noC(R('src/components/MaterialForm.jsx'))
+  const 交互 = form.indexOf('interleave(tagIds')
+  const 散らす = form.indexOf('spreadSameAnswer(items')
+  is(交互 > 0 && 散らす > 交互,
+    '画面が、交互に並べ直したあとに `spreadSameAnswer()` を通している')
+}
+
+console.log('\n▶ 誤りの選択肢を、こちらで組み立てているか(第5.350節)')
+{
+  const C = await import('../src/lib/responseChoices.js')
+  /* 決まった並びにするための乱数(検証のため。**仕組みは触らない**) */
+  const 種 = () => { let n = 1; return () => ((n = (n * 1103515245 + 12345) % 2147483648) / 2147483648) }
+  /* ★ **読み取りは本物の切り分けを通す**(第5.350節)。
+       はじめ `split('\n')` で読んでいたので、`spreadAnswerMarks()` が
+       **空白でつなぎ直した**あとは1つも読み取れず、
+       **仕組みは正しいのに見張りだけが赤くなった**(CLAUDE.md
+       「見比べる相手は、できるだけ近いもの」) */
+  const { splitChoices, choiceBody } = await import('../src/lib/choiceLines.js')
+  const 選択肢 = (it) => splitChoices(it.question).choices.map(choiceBody)
+
+  is(C.choicePool().length > 300,
+    `候補が十分にある(${C.choicePool().length} 件)`)
+
+  /* ★ **いちばん危ない形**(CLAUDE.md)。**本番でいちばん多い 30 問**で測る ——
+       少ない問数だと、使いまわしていても気づけない。
+
+       ★ **正解は、候補と同じ一覧から取る**(2度めのつまずき)。
+         はじめ `This is answer number 3.` のような**候補に無い文**を
+         正解にしていたので、「ほかの問の正解を誤りに混ぜない」の1本を
+         外しても**緑のまま**だった —— 混ざりようがない文だったのである
+         (CLAUDE.md「その1本を外したときに赤くなる入力を選ぶ」)。
+         本番でも、正解は Native Flow の表現そのものである */
+  const 表現 = C.choicePool().slice(0, 15)
+  const 本番 = 表現.flatMap((en) => [{ answer: en }, { answer: en }])
+  const out = C.buildChoices(本番, true, { rand: 種() })
+  is(out.every((it) => 選択肢(it).length === D.CHOICE_COUNT),
+    `30 問とも、選択肢が ${D.CHOICE_COUNT} つできる`)
+  is(out.every((it, i) => 選択肢(it).includes(本番[i].answer)),
+    '30 問とも、正解が選択肢の中に入っている')
+
+  const 誤り = out.flatMap((it, i) => 選択肢(it).filter((c) => c !== 本番[i].answer))
+  is(誤り.length === out.length * (D.CHOICE_COUNT - 1)
+    && new Set(誤り.map(K.normEn ?? ((x) => x))).size === 誤り.length,
+    `誤りの選択肢 ${誤り.length} 個が、1つも重複していない(使いまわさない)`)
+
+  /* **ほかの問の正解を、誤りに混ぜない**(どちらが正しいか分からなくなる) */
+  const 正解ぜんぶ = new Set(本番.map((x) => x.answer))
+  is(!誤り.some((c) => 正解ぜんぶ.has(c)),
+    'ほかの問の正解が、誤りの選択肢に出てこない')
+
+  /* **長さで見分けられないか。** 正解がいちばん長い / 短いばかりでは、
+     中身を読まなくても当たってしまう(第5.339節と同じ考え方) */
+  const 語数 = (t) => String(t).trim().split(/\s+/).length
+  const いちばん長い = out.filter((it, i) => {
+    const cs = 選択肢(it)
+    return 語数(本番[i].answer) === Math.max(...cs.map(語数))
+      && cs.filter((c) => 語数(c) === 語数(本番[i].answer)).length === 1
+  }).length
+  is(いちばん長い <= out.length / 2,
+    `正解がいちばん長い問が半分以下(${いちばん長い} / ${out.length} 問)`)
+
+  /* **候補が足りなければ触らない**(黙って選択肢を減らさない) */
+  const 足りない = C.buildChoices([{ answer: 'Yes.' }], true, { pool: ['Only one.'], rand: 種() })
+  is(!足りない[0].question, '候補が足りなければ、選択肢を作らない(減らさない)')
+
+  /* **出ない側。** 選択肢を出さない形・応答問題でないときは触らない */
+  is(!C.buildChoices([{ answer: 'Yes.' }], false, { rand: 種() })[0].question,
+    '選択肢を出さない形では、1問も触らない')
+
+  /* ★ **正解の位置は `spreadAnswerMarks()` が散らす**(第5.331節)。
+       組み立てた形をあちらが読めなければ、**正解が全部 (C) に並ぶ** */
+  const { spreadAnswerMarks } = await import('../src/lib/choiceLines.js')
+  const 散らした = spreadAnswerMarks(out)
+  const 位置 = 散らした.map((it) => 選択肢(it).findIndex((c) => c === it.answer))
+  is(!位置.includes(-1) && new Set(位置).size >= 2,
+    `正解の位置が散る(あちらが読める形になっている・位置 ${[...new Set(位置)].sort().join('/')})`)
+
+  /* **記号を書き写していない**(呼び名は choiceLines.js 1か所) */
+  const src = noC(R('src/lib/responseChoices.js'))
+  is(/CHOICE_MARKS/.test(src) && !/\['A',\s*'B'/.test(src),
+    '記号の一覧を書き写していない(`CHOICE_MARKS` を引いている)')
+  /* **混ぜ方も書き写していない**(shuffle.js 1か所) */
+  is(/shuffled\(/.test(src) && !/Fisher|Math\.floor\(rand\(\)/.test(src),
+    '自前の混ぜ方を書いていない(`shuffled()` を通している)')
+
+  /* **AI には作らせていない**(作り方の文が「空にする」と言っている) */
+  const brief = D.responseBrief({ form: 'choices', phrases: [{ en: 'Sure.', ja: 'もちろん。' }] })
+  is(/question は\*\*空にする\*\*/.test(brief),
+    '作り方の文が「question は空にする」と言っている(AI に作らせない)')
+  is(!/\(A\)\(B\)\(C\)/.test(brief),
+    '作り方の文に、選択肢の記号が1つも出てこない')
+
+  /* **画面が通している**(選択肢を出す形のときだけ) */
+  const form = noC(R('src/components/MaterialForm.jsx'))
+  is(/buildChoices\(\s*items\s*,\s*resOn && hasChoices\(resForm\)\s*\)/.test(form),
+    '画面が、選択肢を出す形のときだけ `buildChoices()` を通している')
 }
 
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

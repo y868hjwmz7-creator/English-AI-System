@@ -47,6 +47,10 @@ import { choiceBody } from './choiceLines.js'
    データベースの `public.norm_en()` と**同じ**ものである ——
    ここで小さな `toLowerCase()` を書くと、**規則が2つになる** */
 import { normEn } from './textNorm.js'
+/* ★ **文の切り方は `sentenceSplit.js` 1か所**（第5.350節）。
+   「読み上げの最後に答えが入っている」を落とすのに、文の終わりが要る ——
+   ここで `/[.!?]/` と書くと、略語(Mr. / U.S.)で切れてしまう */
+import { splitSentences } from './sentenceSplit.js'
 
 /**
  * **選べる問題数**(2026-10-01 利用者の指定「選べる問題数は 10 20 30」)。
@@ -160,30 +164,22 @@ export function responseBrief({ form = DEFAULT_RESPONSE_FORM, phrases = [], time
     '**表現は1文字も変えない。** 下に書いたまま answer に入れる。',
   ].join('')
   const 形 = hasChoices(form)
+    /* ★ **選択肢は、こちらで組み立てる**（第5.350節・2026-10-02 実機の指摘）。
+
+         > 選択肢ももっと増やしてください。同じもので使いまわし過ぎですので、
+         > 全然関係ないものももっと入れないとです
+
+       **2度めの指摘である。** 第5.344節では作り方の文を厳しくしただけで、
+       **同じ誤りの選択肢が何度も出てくるのは直らなかった** ——
+       1回の呼び出しでは AI の中の「手持ち」が尽きるし、
+       **呼び出しをまたぐと前に何を出したか知らない。**
+
+       だから **AI には選択肢を作らせない。** こちらが
+       Native Flow の 690 表現から、**1つの教材で二度使わずに**選ぶ
+       (`responseChoices.js`)。**0円**で、**本当に関係のない応答**になり、
+       **長さも正解にそろう。** */
     ? [
-      `question に「Choose the best response.」と**${CHOICE_COUNT}つ**の応答を`,
-      '(A)(B)(C) の形で並べる。**正解はそのうち1つだけ**にする。',
-      /* ★ **誤りの選択肢を、正解に似せない**(2026-10-01 実機・利用者の指摘)。
-
-           > 選択肢A-Cが似過ぎていて問題になっていません。
-           > もっと脈絡のないランダムなものを間違えている選択肢として
-           > 置いてください。
-
-         実機では「Mistakes make purple / papers / people」のように、
-         **同じ文型のまま1語だけ**入れ替えたものが並んでいた。
-         それは**音の聞き分け**の問題であって、
-         **覚えた表現を思い出す**練習ではない —— この教材の狙いから外れる。
-
-         TOEIC の対策(`examPrep.js` の Part 2)では、音の似た語を混ぜるのが
-         **本番そのもの**なので、あちらは変えていない(言われた場所だけを直す)。 */
-      '**誤りの選択肢は、正解に似せない。**',
-      '同じ文型のまま1語だけ入れ替えたもの（例: Mistakes make purple /',
-      'Mistakes make papers）は**作らない**。',
-      '**話題も場面もかみ合わない応答**にする ——',
-      'それだけを聞けば英語として自然だが、**その質問への答えにはならない**もの。',
-      '正解と**語を重ねない**（同じ出だし・同じ語の繰り返しにしない）。',
-      /* **別解を選択肢に入れない。** 4択に正解が2つ並ぶと答え合わせができない */
-      '**別解は選択肢に入れない**（answer_alt にだけ書く）。',
+      'question は**空にする**（選択肢はこちらで組み立てる）。',
     ].join('')
     : [
       'question は**空にする**（選択肢を出さない形である）。',
@@ -411,4 +407,103 @@ export function fillAnswerJa(items, on, phrases) {
     const ja = 訳.get(normEn(answerSpeakText(it)))
     return ja ? { ...it, answer_ja: ja } : it
   })
+}
+
+/**
+ * ★ **選択肢の頭に置く1文**(第5.350節)。
+ *
+ * **ここ1か所。** 組み立てる側(`responseChoices.js`)も、
+ * 「取り組み方」へ回す仕組み(`commonLead`)も、この同じ文字を見る。
+ */
+export const CHOICE_LEAD = 'Choose the best response.'
+
+/**
+ * ★ **読み上げる英文の最後から、答えを落とす**
+ * (第5.350節・2026-10-02 実機の指摘)。
+ *
+ *   > 読み上げられる分の最後に、回答となるはずのフレーズが
+ *   > 丸ごと入ってしまっているケースが多いです
+ *
+ * 作り方の文でも禁じてある(`REPLY_RULE`)が、**指示は読み飛ばされうる。**
+ * ここで落とせば、窓口を配り直す前でも直る
+ * (`givesAwayAnswer` と同じ考え方・CLAUDE.md)。
+ *
+ * - **落とすのは「末尾の文」だけ。** 途中から抜くと、
+ *   残った文がつながらなくなる(**黙って壊さない**)
+ * - **1文しか無いときは触らない。** 読み上げを空にすると、
+ *   その問は鳴らしようがなくなる(**黙って消さない**)
+ * - 突き合わせは `normEn()` —— 大文字小文字や句読点のちがいを吸収する
+ *
+ * @param {Array} items 窓口が返した問
+ * @param {boolean} on 応答問題か(`isResponseKind(kind)`。**ここで判じ直さない**)
+ * @returns {Array} 直した問
+ */
+export function stripHeardAnswer(items, on) {
+  const rows = items ?? []
+  if (!on) return rows
+  return rows.map((it) => {
+    const heard = String(it?.audio_text ?? '')
+    const want = normEn(answerSpeakText(it))
+    if (!heard.trim() || !want) return it
+    const spans = splitSentences(heard)
+    /* **1文だけなら触らない。** 落とすと読み上げが空になる */
+    if (spans.length < 2) return it
+    let end = spans.length
+    while (end > 1
+      && normEn(heard.slice(spans[end - 1].start, spans[end - 1].end)) === want) end -= 1
+    if (end === spans.length) return it
+    const cut = heard.slice(0, spans[end - 1].end).trim()
+    return cut ? { ...it, audio_text: cut } : it
+  })
+}
+
+/**
+ * ★ **同じ解答の問を、続けて出さない**
+ * (第5.350節・2026-10-02 実機の指摘)。
+ *
+ *   > 2連続で同じ回答の問題が続くこともすごく多く、これも改善してください
+ *
+ * **出どころは、この教材の設計そのものである** ——
+ * 1つの表現を `TIMES_PER_PHRASE` 回、正解にする(利用者の指定
+ * 「量をこなすため」)。AI は**表現ごとにまとめて**作るので、
+ * **何もしなければ必ず隣に並ぶ。**
+ *
+ * **解答の多い鍵から順に置き、直前と同じ鍵は後回しにする。**
+ * 置けなくなった(残りが直前と同じ鍵だけ)ときは、そのまま出す ——
+ * **問を捨てない。** 2問とも同じ解答しか無い教材では、並べようがない。
+ *
+ * @param {Array} items 問
+ * @param {boolean} on 応答問題か(`isResponseKind(kind)`)
+ * @returns {Array} 並べ替えた問(**元の配列は触らない**)
+ */
+export function spreadSameAnswer(items, on) {
+  const rows = items ?? []
+  if (!on || rows.length < 3) return rows
+  /** 解答ごとの束。**入れた順のまま**(同じ解答の中では並べ替えない) */
+  const 束 = new Map()
+  rows.forEach((it, i) => {
+    const key = normEn(answerSpeakText(it)) || `#${i}`
+    const b = 束.get(key) ?? []
+    b.push(it)
+    束.set(key, b)
+  })
+  if (束.size < 2) return rows
+  const out = []
+  let 直前 = null
+  while (out.length < rows.length) {
+    /* **残りがいちばん多い鍵。** ただし直前と同じ鍵は飛ばす */
+    let えらぶ = null
+    for (const [key, b] of 束) {
+      if (!b.length || key === 直前) continue
+      if (えらぶ === null || b.length > 束.get(えらぶ).length) えらぶ = key
+    }
+    if (えらぶ === null) {
+      /* 直前と同じ鍵しか残っていない。**並べようがないので、そのまま出す** */
+      for (const b of 束.values()) while (b.length) out.push(b.shift())
+      break
+    }
+    out.push(束.get(えらぶ).shift())
+    直前 = えらぶ
+  }
+  return out
 }

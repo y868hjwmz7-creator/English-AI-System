@@ -171,8 +171,13 @@ export const choiceBody = (text) =>
 /** その文が記号で始まっているか(元の書き方を崩さないため) */
 const hasMark = (text) => /^\s*\([A-D]\)/.test(String(text ?? ''))
 
-/** 何番目を何の記号にするか。**`(A)` から順に振り直す** */
-const MARKS = ['A', 'B', 'C', 'D']
+/**
+ * 何番目を何の記号にするか。**`(A)` から順に振り直す**
+ *
+ * ★ **出してある**(第5.350節)。選択肢をこちらで組み立てる側
+ * (`responseChoices.js`)も同じ記号を使う —— **呼び名を2か所に書かない** */
+export const CHOICE_MARKS = ['A', 'B', 'C', 'D']
+const MARKS = CHOICE_MARKS
 
 /**
  * **その段の問の、正解の位置を散らす。**

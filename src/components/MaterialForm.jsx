@@ -112,10 +112,14 @@ import {
 import {
   DEFAULT_RESPONSE_COUNT, DEFAULT_RESPONSE_FORM, DEFAULT_RESPONSE_PICK,
   DEFAULT_RESPONSE_SOURCE, RESPONSE_COUNTS, RESPONSE_FORMS, RESPONSE_PICKS,
-  RESPONSE_SOURCES, TIMES_PER_PHRASE, fillAnswerJa, needsLearner, phrasesNeeded,
-  picksCount, pickPhrases,
-  questionsFrom, responseBrief, responseNote, responsePlan, usesTextBook,
+  RESPONSE_SOURCES, TIMES_PER_PHRASE, fillAnswerJa, hasChoices, needsLearner,
+  phrasesNeeded, picksCount, pickPhrases,
+  questionsFrom, responseBrief, responseNote, responsePlan,
+  spreadSameAnswer, stripHeardAnswer, usesTextBook,
 } from '../lib/responseDrill.js'
+/* ★ **誤りの選択肢は、こちらで組み立てる**（第5.350節)。
+     候補(Native Flow の 690 表現)を引き連れるので、別のファイルに置いてある */
+import { buildChoices } from '../lib/responseChoices.js'
 import { loadResponseRows } from '../lib/responseSources.js'
 /* **混ぜ方は `shuffle.js` 1か所**(自前の混ぜ方を書かない・第5.282節) */
 import { shuffled } from '../lib/shuffle.js'
@@ -1537,13 +1541,39 @@ export default function MaterialForm({
          AI が空で返しても、ここで埋まる（**引き直さないので 0円**）。
          **埋めるのは空のときだけ。** 判断は `fillAnswerJa()` 1か所で、
          ここで `kind === 'response'` と書かない */
-      items = fillAnswerJa(items, isResponseKind(kind), resPhrases)
+      items = fillAnswerJa(items, resOn, resPhrases)
+
+      /* ★ **読み上げの最後に入った答えを落とす**（第5.350節・利用者の指摘
+           「読み上げられる分の最後に、回答となるはずのフレーズが丸ごと
+           入ってしまっているケースが多いです」）。
+
+         作り方の文でも禁じてある（`REPLY_RULE`）が、**指示は読み飛ばされうる。**
+         ここで落とせば、窓口を配り直す前でも直る */
+      items = stripHeardAnswer(items, resOn)
+
+      /* ★ **誤りの選択肢は、こちらで組み立てる**（第5.350節・利用者の指摘
+           「選択肢ももっと増やしてください。同じもので使いまわし過ぎです」）。
+
+         **2度めの指摘である。** 作り方の文を厳しくしても、AI は
+         **呼び出しをまたぐと前に何を出したかを知らない**ので直らない。
+         Native Flow の 690 表現から、**1つの教材で二度使わずに**選ぶ（0円）。
+         **選択肢を出す形のときだけ**(`hasChoices()`) */
+      items = buildChoices(items, resOn && hasChoices(resForm))
 
       // 交互に並んでいなければ、こちらで並べ直す。
       // 指示だけに頼ると、まとまって並ぶことがある。
       if (tagIds.length > 1) {
         items = interleave(tagIds.map((t) => items.filter((it) => it.tag_id === t)))
       }
+
+      /* ★ **同じ解答の問を続けて出さない**（第5.350節・利用者の指摘
+           「2連続で同じ回答の問題が続くこともすごく多く」）。
+
+         **この教材の設計そのものが出どころ**である —— 1つの表現を2回
+         正解にするので、AI は表現ごとにまとめて作る。**何もしなければ必ず隣に並ぶ。**
+         **交互に並べ直したあと**に置く —— あちらが先に並べ替えるので、
+         ここが最後でないと打ち消される */
+      items = spreadSameAnswer(items, resOn)
 
       made.push({
         exercise_type: plan[i].exercise_type,
