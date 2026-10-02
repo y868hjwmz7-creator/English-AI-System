@@ -35,9 +35,13 @@ const R = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
 const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
 
 const D = await import('../src/lib/responseDrill.js')
+/* ★ **重複を見る鍵**（第5.345節）。`materials.js` から出してあるので、
+     **素の node でそのまま測れる**（あちらは `import.meta.env` を引き連れている） */
+const K = await import('../src/lib/dedupKeys.js')
 const { DEFAULT_SECTIONS, defaultSectionsFor, sectionsFor, exerciseType }
   = await import('../src/data/exerciseTypes.js')
-const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, canShuffleKind, isResponseKind, needsWeakTag }
+const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, canShuffleKind, isResponseKind, needsWeakTag,
+  repeatsAnswer }
   = await import('../src/data/materialKinds.js')
 const { EXAM_SOURCES } = await import('../src/lib/examBuild.js')
 
@@ -532,6 +536,82 @@ console.log('\n▶ 正解が、本当に「応答」になるか(第5.344節)')
     ok(`長さ … いちばん長い形(${最長[0]}・表現 ${要る} 個)で ${最長[1]} 文字`
       + `(窓口の上限 ${上限} 文字の ${Math.round(最長[1] / 上限 * 100)}%)`)
   }
+}
+
+
+console.log('\n▶ えらんだ問数が、そのまま出来るか(第5.345節)')
+{
+  /* ★ 2026-10-02 実機・利用者の指摘。
+
+       > 応答問題で15個のフレーズをテキストから入れる、を選択すると
+       > その倍の問題数30を選択していて、そうなるはずなのに、
+       > 15問になってしまっています。
+       > 恐らく指定できる問題数全てで同じ仕様になってしまっています
+
+     **重複を見る鍵に `answer` が入っていた。**
+     応答問題は**1つの表現を2回、正解にする**設計なので、
+     **2回目が1問残らず「前に出した英文」として落ちていた** —— きっちり半分。
+
+     **実データの形で測る**(決まりだけ見ても足りない・第5.341節で学んだ)。 */
+  const 要る = D.phrasesNeeded(Math.max(...D.RESPONSE_COUNTS))
+  const 表現 = Array.from({ length: 要る }, (_, i) => `Phrase number ${i}.`)
+  /** 1つの表現が `TIMES_PER_PHRASE` 回、正解になる問の一覧(窓口が返す形) */
+  const 作られた = []
+  for (let r = 0; r < D.TIMES_PER_PHRASE; r += 1) {
+    for (const en of 表現) 作られた.push({ audio_text: `Question ${r} for ${en}`, answer: en })
+  }
+  const 欲しい数 = D.questionsFrom(表現.map((en) => ({ en, ja: 'え' })))
+
+  /* ── ① **応答問題では、同じ解答が何度出ても落ちない** ── */
+  const 応答 = K.dropDuplicates(作られた, new Set(), repeatsAnswer('response'))
+  is(応答.kept.length === 欲しい数,
+    `応答問題では、${欲しい数} 問がそのまま残る(解答が ${D.TIMES_PER_PHRASE} 回出ても落ちない)`,
+    `残った ${応答.kept.length} 問 / 落ちた ${応答.dropped.length} 問`)
+
+  /* ── ② **出ない側。** ふつうの教材では、これまでどおり落ちる ──
+         ここを見ないと、**どの教材でも落とさない形**に書き換えても緑のまま */
+  const ふつう = K.dropDuplicates(作られた, new Set(), repeatsAnswer('pattern'))
+  is(ふつう.kept.length === 表現.length,
+    'ふつうの教材では、同じ解答は、これまでどおり落ちる',
+    `残った ${ふつう.kept.length} 問`)
+
+  /* ── ③ **いちばん危ない形。** 緩めすぎていないか ──
+         **読み上げる質問が同じなら、応答問題でも落とす**
+         (作り方も「同じ質問を繰り返さない」と言っている) */
+  const 同じ質問 = [
+    { audio_text: 'Shall we go over the numbers?', answer: 'Sounds good.' },
+    { audio_text: 'Shall we go over the numbers?', answer: 'After you.' },
+  ]
+  const 質問かぶり = K.dropDuplicates(同じ質問, new Set(), repeatsAnswer('response'))
+  is(質問かぶり.kept.length === 1,
+    '応答問題でも、読み上げる質問が同じものは落ちる',
+    `残った ${質問かぶり.kept.length} 問`)
+
+  /* ── ④ **判断は1か所か。** 画面でも `materials.js` でも
+         `kind === 'response'` と書いていないか */
+  const 自前 = ['src/components/MaterialForm.jsx', 'src/lib/materials.js']
+    .filter((f) => /kind === 'response'/.test(noC(R(f))))
+  is(!自前.length, "判断は `repeatsAnswer()` 1か所(画面でも `kind === 'response'` と書かない)",
+    自前.join(' / '))
+  is(repeatsAnswer('response') && !repeatsAnswer('exam') && !repeatsAnswer(''),
+    '応答問題だけが真(テスト対策の Part 2 は、同じ応答が2回出たら本当の重複)')
+
+  /* ── ⑤ **画面が、本当に渡しているか** ──
+         **素の関数だけ見ると、画面が渡していなくても緑になる**(第5.330節で踏んだ) */
+  const form = noC(R('src/components/MaterialForm.jsx'))
+  is(/repeatAnswer: repeatsAnswer\(kind\)/.test(form),
+    '画面が、生成の呼び出しに判断を渡している')
+
+  /* ── ⑥ **落とす検査ぜんぶに通っているか** ──
+       ★ **1か所でも渡し忘れると、そこで落ちて半分に戻る。**
+         `generateSectionUnique` の中の呼び出しを**1つずつ数える** */
+  const mat = noC(R('src/lib/materials.js'))
+  const 中身 = mat.slice(mat.indexOf('export async function generateSectionUnique'))
+  const 呼び出し = [...中身.matchAll(/\b(sentencesOf|rawSentencesOf|dropDuplicates)\(([^)]*)\)/g)]
+  const 渡し忘れ = 呼び出し.filter((m) => !/repeatAnswer/.test(m[2]))
+  is(呼び出し.length >= 5 && !渡し忘れ.length,
+    `落とす検査 ${呼び出し.length} か所とも、判断を受け取っている`,
+    渡し忘れ.length ? 渡し忘れ.map((m) => m[0]).join(' / ') : '')
 }
 
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

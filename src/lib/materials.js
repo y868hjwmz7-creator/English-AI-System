@@ -16,6 +16,8 @@ import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
      素の node で読めない(CLAUDE.md「走らせられる形に切り出す」) */
 import { emptyDropCounts } from './dropReasons.js'
 import { normEn } from './textNorm.js'
+/* ★ **重複を見る鍵**(第5.345節)。素の node で測れる形に出してある */
+import { dropDuplicates, rawSentencesOf, sentencesOf } from './dedupKeys.js'
 /* **「この英文は避けて」と渡す本数**(第5.261節)。
    集める本数と渡す本数を**同じ数にする** —— 別にすると、集めたうちの
    いくつかを捨てることになり、**どれが捨てられるかを誰も決めていない**
@@ -87,6 +89,8 @@ export {
   /* ★ **応答問題か**(0073・第5.332節)。**同じ理由でここへ足す** ——
        足し忘れると、画面からは「存在しない名前」になる */
   isResponseKind,
+  /* ★ **解答がわざと何度も正解になる種類か**（第5.345節）。同じ理由でここへ足す */
+  repeatsAnswer,
   /* **弱点タグが要る種類かどうか**(第5.263節)。画面でも同じ判断が
      要るので、出し直す。**画面で `!isPassageKind(kind) && …` と
      書き直さない** —— 種類を足した日に、必ず片方だけ古くなる */
@@ -1985,31 +1989,16 @@ export async function createAccount({ loginId, password, displayName, role = 'le
    ここは読み直して出し直すだけ —— **呼ぶ側は1行も変わっていない** */
 export { normEn }
 
-/**
- * 1つの設問に含まれる英文をすべて取り出す(そろえた形で)。
- *
- * 提示文・読み上げ文・解答のどれか1つでも既出と一致すれば、
- * その設問は「前に出した文」である。穴埋めの提示文は「___」が
- * 空白に潰れるため、解答文と同じ形になる。
- */
-/* **例文と練習の英文も数に入れる**(第5.254節)。
-   単語 / フレーズは1語ずつのまとまりになり、**英文はその中にもある。**
-   ここに入れないと、**あとの「ランダムで出題」が同じ文を作り直す**
-   (利用者の指定「これらの問題は始めの問題とは被らない内容とすること」)。
-   **拾い方はここ1か所** —— 作る側と照合する側で書き写さない */
-const insideEn = (item) => [
-  ...(Array.isArray(item?.practice) ? item.practice : []).map((d) => d?.en),
-  ...(Array.isArray(item?.examples) ? item.examples : []).map((x) => x?.en),
-]
+/* ★ **「同じ英文か」を見分ける鍵も、同じ作法で出した**(第5.345節)。
 
-export const sentencesOf = (item) =>
-  [item?.prompt_en, item?.audio_text, item?.answer, ...insideEn(item)]
-    .map(normEn).filter(Boolean)
+   落とす算段をここに置いたままだと、**手元で一度も測れない**
+   (このファイルは `import.meta.env` を引き連れている)。
+   **応答問題で問数がきっちり半分になっていたのに、見張りを 1 本も
+   書けなかった**のは、これが理由である。
 
-/** 設問から、そのまま照合に出せる生の英文を取り出す */
-export const rawSentencesOf = (item) =>
-  [item?.prompt_en, item?.audio_text, item?.answer, ...insideEn(item)]
-    .map((v) => String(v ?? '').trim()).filter(Boolean)
+   **中身は 1 行も変えずに移した** —— 呼ぶ側は 1 行も変わらない
+   (`normEn` を `textNorm.js` へ出したときと、まったく同じ作法)。 */
+export { dropDuplicates, rawSentencesOf, sentencesOf }
 
 /**
  * その弱点タグですでに使われている英文を集める(①の誘導用)。
@@ -2199,24 +2188,6 @@ export async function findUsedSentences(candidates, { learnerId = null, tagIds =
 }
 
 /**
- * 生成した設問から、すでにある英文と同じものを取り除く。
- *
- * usedSet は「そろえた形」の集合。残した設問の英文はその場で
- * usedSet に足す。同じ生成の中で同じ文が二度出るのも防ぐため。
- */
-export function dropDuplicates(items, usedSet) {
-  const kept = []
-  const dropped = []
-  for (const it of items ?? []) {
-    const keys = sentencesOf(it)
-    if (!keys.length) { kept.push(it); continue }
-    if (keys.some((k) => usedSet.has(k))) dropped.push(keys[0])
-    else { kept.push(it); keys.forEach((k) => usedSet.add(k)) }
-  }
-  return { kept, dropped }
-}
-
-/**
  * 生成にかかる費用の目安。
  *
  * **いま使っているのは Claude Sonnet 5**(100万トークンあたり
@@ -2336,6 +2307,11 @@ export async function findSimilarSentences(candidates, {
  */
 export async function generateSectionUnique(params, {
   usedSet, learnerIds = [], tagIds, similar = true, threshold = SIMILARITY_THRESHOLD,
+  /* ★ **解答がわざと何度も正解になる教材か**（第5.345節）。
+       **どの種類がそうなのかは `repeatsAnswer()` 1 か所**が持つ ——
+       ここで `kind === …` と書かない。
+       **渡さなければ、これまでとまったく同じ**である */
+  repeatAnswer = false,
 }) {
   const wanted = params.count
   const items = []
@@ -2382,7 +2358,7 @@ export async function generateSectionUnique(params, {
     usage.cacheRead += data.usage?.cacheRead ?? 0
 
     // ① 手元で分かる重複
-    const { kept: unique, dropped } = dropDuplicates(data.section?.items ?? [], usedSet)
+    const { kept: unique, dropped } = dropDuplicates(data.section?.items ?? [], usedSet, repeatAnswer)
     dropped.forEach(() => 落とす('dup'))
 
     // ①' **答えが問題文の中に見えている問**(2026-09 実機・利用者の指摘)
@@ -2407,14 +2383,14 @@ export async function generateSectionUnique(params, {
       if (isWrongShape(params.sectionType, it)) {
         落とす('shape')
         shaped.push(it)
-        sentencesOf(it).forEach((k) => usedSet.add(k))
+        sentencesOf(it, repeatAnswer).forEach((k) => usedSet.add(k))
         continue
       }
       if (givesAwayAnswer(params.sectionType, it)) {
         落とす('giveaway')
         // **同じ文をもう一度作らせない。** `dropDuplicates` が
         // すでに控えているが、鍵が取れない形もあるので念のため入れる
-        sentencesOf(it).forEach((k) => usedSet.add(k))
+        sentencesOf(it, repeatAnswer).forEach((k) => usedSet.add(k))
       } else {
         kept.push(it)
       }
@@ -2423,7 +2399,7 @@ export async function generateSectionUnique(params, {
     // ② 一字一句同じ英文(データベースに照合)
     //    共有する相手が複数いるときは、**全員ぶん**を見る。
     //    照合は索引が効くので、人数が増えても軽い。
-    const candidates = kept.flatMap(rawSentencesOf)
+    const candidates = kept.flatMap((it) => rawSentencesOf(it, repeatAnswer))
     const used = new Set()
     for (const scope of learnerIds.length ? learnerIds : [null]) {
       const { data: hit, error: lookupError } = await findUsedSentences(candidates, {
@@ -2435,7 +2411,7 @@ export async function generateSectionUnique(params, {
 
     const survived = []
     for (const it of kept) {
-      const keys = sentencesOf(it)
+      const keys = sentencesOf(it, repeatAnswer)
       if (keys.some((k) => used.has(k))) {
         落とす('used')
         keys.forEach((k) => usedSet.add(k))   // 二度と候補に出さない
@@ -2449,7 +2425,7 @@ export async function generateSectionUnique(params, {
     if (useSimilar && survived.length) {
       // 1問につき1文だけ照合する。提示文と解答は同じ意味なので、
       // 両方送ると同じ判定を2回することになる。
-      const texts = survived.map((it) => rawSentencesOf(it)[0] ?? '')
+      const texts = survived.map((it) => rawSentencesOf(it, repeatAnswer)[0] ?? '')
       // 意味の近さは変換に時間がかかるため、1人ずつは回さない。
       // 相手が1人ならその人、複数ならライブラリ全体(弱点)で見る。
       const { data: found, error: simError } = await findSimilarSentences(texts, {
@@ -2480,7 +2456,7 @@ export async function generateSectionUnique(params, {
     survived.forEach((it, i) => {
       if (close.has(i)) {
         落とす('similar')
-        sentencesOf(it).forEach((k) => usedSet.add(k))
+        sentencesOf(it, repeatAnswer).forEach((k) => usedSet.add(k))
       } else if (items.length < wanted) {
         items.push(it)
       }

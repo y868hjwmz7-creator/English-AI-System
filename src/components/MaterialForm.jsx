@@ -41,6 +41,7 @@ import {
   fillGrammar, generateChunkJa, generateSection,
   bodyWord, canPasteBody, freeFromSubject, generateSectionUnique,
   isDialogueKind, isExamKind, isPassageKind, isResponseKind, isVocabKind, needsWeakTag,
+  repeatsAnswer,
   isDrillKind,
   kindLabel, usesScene,
   subjectLabel, subjectHint, subjectExample,
@@ -1489,7 +1490,14 @@ export default function MaterialForm({
              決めているから**である(窓口の側もそう見ている) */
           examPart: makeBrief(),
         },
-        { usedSet, learnerIds: shareWith, tagIds },
+        {
+          usedSet, learnerIds: shareWith, tagIds,
+          /* ★ **解答がわざと何度も正解になる教材か**（第5.345節）。
+               応答問題は 1 つの表現を 2 回正解にするので、
+               **解答を重複の鍵にすると問数がきっちり半分になる**。
+               **判断は `repeatsAnswer()` 1 か所**(ここで `kind === …` と書かない) */
+          repeatAnswer: repeatsAnswer(kind),
+        },
       )
       if (result.error) throw new Error(result.error)
 
