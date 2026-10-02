@@ -17,6 +17,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  audioJaOf,
   countLabel, countUnit, exerciseType, isCardSection, isPassageSection,
   noteIsAnswer, sectionLabel,
 } from '../data/exerciseTypes.js'
@@ -2732,7 +2733,11 @@ export default function LessonView({
                   {/* 本文(記事・会話)の訳は、はじめは伏せる。
                       英文だけが出ていたほうがシャドーイングしやすく、
                       「訳を見る」で確かめられる。設問の日本語は伏せない。 */}
-                  {it.prompt_ja && (secIsPassage
+                  {/* ★ **読み上げた英文の訳は、ここに出さない**（第5.346節）。
+                       リスニングは**聞いて答える**ので、訳が先に見えると
+                       答えが割れる。その場合は「解答を見る」の中で出す。
+                       **判断は `audioJaOf()` 1か所**（ここで種類を見分けない） */}
+                  {it.prompt_ja && !audioJaOf(it, sec.exercise_type) && (secIsPassage
                     ? isOpen(k(it, i)) && <div className="lesson-ja">{it.prompt_ja}</div>
                     : <div className="lesson-ja">{it.prompt_ja}</div>)}
                   {it.question && (
@@ -2901,6 +2906,17 @@ export default function LessonView({
                         <div className="lesson-heard">
                           <span className="lesson-heard-label">読み上げた英文</span>
                           <span lang="en">{it.audio_text}</span>
+                          {/* ★ **読み上げた英文の訳**（第5.346節・利用者の指定）。
+                               **欄は `audioJaOf()` 1か所**が決める（ここで
+                               `it.prompt_ja` と書き写さない）。
+                               **聞く前には出さない** —— ここは「解答を見る」を
+                               押したあとの中である。**読み上げた英文と同じ箱に入れる**
+                               —— 別々の物にすると、あいだの隙間を気にする話になる */}
+                          {audioJaOf(it, sec.exercise_type) && (
+                            <span className="lesson-heard-ja">
+                              {audioJaOf(it, sec.exercise_type)}
+                            </span>
+                          )}
                         </div>
                       )}
                       {/* 解答も**語に触れれば意味が出て、単語帳に入れられる。**

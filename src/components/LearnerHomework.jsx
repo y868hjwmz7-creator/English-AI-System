@@ -11,7 +11,9 @@ import ChoiceLines from './ChoiceLines.jsx'
 import { askFields } from '../lib/choiceLines.js'
 import Loading from './Loading.jsx'
 import { cefrLabel } from '../data/cefr.js'
-import { exerciseType, isPassageSection, sectionLabel } from '../data/exerciseTypes.js'
+import {
+  audioJaOf, exerciseType, isPassageSection, sectionLabel,
+} from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
 import TeachingNote from './TeachingNote.jsx'
 import PhraseChips from './PhraseChips.jsx'
@@ -732,7 +734,13 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                                  statuses={wordStatuses} onMark={markIn(markWord, a.material?.id)} />
                                   </div>
                                 )}
-                                {it.prompt_ja && <div>{it.prompt_ja}</div>}
+                                {/* ★ **読み上げた英文の訳は、ここに出さない**（第5.346節）。
+                                     リスニングは**聞いて答える**ので、訳が先に見えると
+                                     答えが割れる。「解答を見る」の中で出す。
+                                     **判断は `audioJaOf()` 1か所** */}
+                                {it.prompt_ja && !audioJaOf(it, sec.exercise_type) && (
+                                  <div>{it.prompt_ja}</div>
+                                )}
                                 {/* ★ **選択肢は1行ずつ**(第5.338節)。
                                      レッスン表示にだけ在った部品を、ここでも使う ——
                                      同じ教材なのに、**ゲストの画面では4つの選択肢が
@@ -757,6 +765,22 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                 {it.answer && type?.hideAnswerFromLearner ? (
                                   <details className="answer">
                                     <summary>解答を見る</summary>
+                                    {/* ★ **何を言われたのかを出す**（第5.346節）。
+                                         リスニングは英文を見せずに聞かせるので、
+                                         **答え合わせで読み上げた英文そのものを出す**
+                                         （レッスン表示と同じ。**分からないと直しようがない**）。
+                                         訳の欄は **`audioJaOf()` 1か所**が決める */}
+                                    {type?.hidePromptFromLearner && it.audio_text && (
+                                      <div className="lesson-heard">
+                                        <span className="lesson-heard-label">読み上げた英文</span>
+                                        <span lang="en">{it.audio_text}</span>
+                                        {audioJaOf(it, sec.exercise_type) && (
+                                          <span className="lesson-heard-ja">
+                                            {audioJaOf(it, sec.exercise_type)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                     {/* 解答も**語に触れれば意味が出て、単語帳に入れられる。**
                                         訳と読み上げも付く(2026-09 利用者の指定)。
                                         **`<details>` の中なので、開くまでは鳴らせない。**

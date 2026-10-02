@@ -39,8 +39,10 @@ const {
 const { DROP_REASONS, emptyDropCounts, isExhausted }
   = await import('../src/lib/dropReasons.js')
 const { askFields, dropsLead, splitAsk } = await import('../src/lib/choiceLines.js')
-const { EXERCISE_TYPES, defaultSectionsFor, isBlankItem, isPassageSection, sectionsFor }
-  = await import('../src/data/exerciseTypes.js')
+/* ★ **応答が本当に応答になっているかの決まり**（第5.346節） */
+const { REPLY_RULE } = await import('../src/data/replyRule.js')
+const { EXERCISE_TYPES, audioJaOf, defaultSectionsFor, isBlankItem, isPassageSection,
+  sectionsFor } = await import('../src/data/exerciseTypes.js')
 const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, isExamKind, needsWeakTag }
   = await import('../src/data/materialKinds.js')
 
@@ -1696,6 +1698,76 @@ console.log('\n▶ 設問と選択肢が、1行ずつになるか(第5.343節)')
   } else {
     ok(`設問の行 … 穴埋め ${穴埋め.length} 個だけが「本文の欄に選択肢を書かない」`)
   }
+}
+
+/** ★ 条件をそのまま渡す形（このファイルの `ok()` は文字を出すだけ） */
+const is2 = (cond, name, d = '') => (cond ? ok(d ? `${name}（${d}）` : name) : ng(name, d))
+
+
+console.log('\n▶ 応答と、読み上げた英文の訳(第5.346節)')
+{
+  /* ── ① **TOEIC L&R Part 2 にも、同じ決まりが入っているか** ──
+         2026-10-02 利用者の指定「テスト対策にも入れますか → はい」。
+         **文は `REPLY_RULE` 1か所**。ここで言い回しを書き写さず、
+         **あちらから読み取って**そのまま入っているかを見る */
+  const p2 = examBrief('toeic_lr', 'p2')
+  is2(p2.includes(REPLY_RULE), '応答 … TOEIC Part 2 に、応答問題とまったく同じ決まりが入っている')
+
+  /* ── ② **出ない側。** 応答をえらぶ問ではない PART にまで入れていないか ──
+         入れると嘘になる(本文を聞いて設問に答える Part 3・4 は、
+         そもそも「相手に返事をする」問ではない) */
+  const 余計 = PICKABLE
+    .filter(({ exam, part }) => examBrief(exam.id, part.id).includes(REPLY_RULE))
+    .map(({ exam, part }) => `${exam.id}/${part.id}`)
+  is2(余計.length === 1 && 余計[0] === 'toeic_lr/p2',
+    '応答 … その決まりが入るのは、応答をえらぶ PART だけ', 余計.join(' / ') || 'どこにも入っていない')
+
+  /* ── ③ **決まりの中身**(独り言 / おうむ返しの両方) ── */
+  const 欠け = ['入れ替わる', '続きのセリフ', 'おうむ返し'].filter((w) => !REPLY_RULE.includes(w))
+  is2(!欠け.length, '応答 … 話す人が入れ替わり、独り言もおうむ返しも禁じている',
+    欠け.join(' / '))
+
+  /* ── ④ **読み上げた英文の訳**(2026-10-02 利用者の指定)──
+       「TOEIC L&R PART2 も応答問題も、読み上げられた文の日本語訳も
+         つけてください」
+
+       **窓口が必ず書くか。** 任意にすると、そのときの気分で入ったり
+       入らなかったりする(`answer_ja` を必須にしたのとまったく同じ理由) */
+  const fnSrc2 = read('supabase/functions/generate-material/index.ts')
+  const 欄 = /listening:\s*\{\s*required:\s*\[([^\]]*)\]/.exec(noC(fnSrc2))?.[1] ?? ''
+  is2(/'prompt_ja'/.test(欄), '訳 … 窓口が、読み上げた英文の訳を必ず書く', 欄.trim())
+  is2(/prompt_ja に\*\*audio_text/.test(fnSrc2),
+    '訳 … 何の訳かを、窓口の指示で言っている(設問の訳と取り違えない)')
+
+  /* ── ⑤ **画面が引く欄は1か所か** ──
+       **出る側と出ない側の両方。** 声を出さない演習で誤って出ると、
+       **問題文の訳として先に見えて、答えが割れる** */
+  const 出る = audioJaOf({ prompt_ja: 'あ' }, 'listening')
+  const 出ない = audioJaOf({ prompt_ja: 'あ' }, 'article')
+  is2(出る === 'あ' && !出ない,
+    '訳 … 聞いて答える演習だけが訳を持つ(記事などは持たない)')
+
+  /* ── ⑥ **空の問として落ちないか** ──
+       ★ `fields` に入れると `isBlankItem` が必須として数え、
+         **訳の無い古い教材が1問残らず落ちる**(第5.341節で踏んだ形) */
+  is2(!isBlankItem('listening',
+    { audio_text: 'a', question: 'q', answer: 'x', answer_ja: 'や' }),
+  '訳 … 訳の無い問を、空の問として落とさない')
+
+  /* ── ⑦ **3つの画面とも、聞く前に訳を見せていないか** ──
+       1画面でも素の `it.prompt_ja` を出すと、**そこだけ答えが割れる** */
+  const 画面 = ['LessonView', 'MaterialBody', 'LearnerHomework']
+  const 生で出す = 画面.filter((名) => {
+    const src = noC(read(`src/components/${名}.jsx`))
+    const 行 = [...src.matchAll(/\{it\.prompt_ja &&([^\n]*)/g)].map((m) => m[1])
+    return 行.some((x) => !/audioJaOf/.test(x))
+  })
+  const 通していない = 画面.filter((名) => !/audioJaOf\(/.test(noC(read(`src/components/${名}.jsx`))))
+  if (通していない.length) {
+    ng('訳 … 読み上げた英文の訳を出していない画面がある', 通していない.join(' / '))
+  } else if (生で出す.length) {
+    ng('訳 … 聞く前に訳が見える画面がある(答えが割れる)', 生で出す.join(' / '))
+  } else ok(`訳 … ${画面.length} 画面とも \`audioJaOf()\` を通し、聞く前には出さない`)
 }
 
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

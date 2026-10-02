@@ -614,5 +614,49 @@ console.log('\n▶ えらんだ問数が、そのまま出来るか(第5.345節)
     渡し忘れ.length ? 渡し忘れ.map((m) => m[0]).join(' / ') : '')
 }
 
+
+console.log('\n▶ 解答を声にするとき、記号は読まない(第5.346節)')
+{
+  /* ★ 2026-10-02 利用者の指定。
+
+       > テスト対策(TOEIC L&R Part 2)の解答が、記号の「(A)」ごと
+       > 読み上げられます。直しますか → はい、しかし既存の教材の
+       > 作り直しは必要ありません。
+
+     `answer` には**記号と語句の両方**が入っている(第5.331節)。
+     **画面にはそのまま出すが、声にするときは記号を落とす。** */
+  is(D.answerSpeakText({ answer: '(A) Next Monday morning.' }) === 'Next Monday morning.',
+    '記号つきの解答から、記号を落として鳴らす',
+    D.answerSpeakText({ answer: '(A) Next Monday morning.' }))
+
+  /* ★ **応答問題の音声は1本も作り直さない**(利用者の指定)。
+       あちらの `answer` には記号が無いので、**文字が1つも変わらない**
+       (= 指紋が同じ = 0円)。**ここが変わると、まるごと再課金になる** */
+  const 記号なし = 'Just bring yourself.'
+  is(D.answerSpeakText({ answer: 記号なし }) === 記号なし,
+    '記号の無い解答は、1文字も変えない(応答問題の音声は作り直さない)')
+
+  /* **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+     **文の中の括弧まで落としてはいけない** */
+  const 文中 = 'We met (again) last week.'
+  is(D.answerSpeakText({ answer: 文中 }) === 文中,
+    '文の途中の括弧は落とさない(頭の記号だけ)')
+  is(D.answerSpeakText({}) === '' && D.answerSpeakText(null) === '',
+    '解答が無ければ、空を返す(落ちない)')
+
+  /* ── **押して鳴らす側も、同じ関数を通っているか** ──
+       ★ **支度(`sectionRestClips`)と聞き流しはこの関数を通る。**
+         押す側だけ別の文字を渡すと、**支度した音声が1本も当たらず、
+         待つうえに二度課金**になる(CLAUDE.md「数え方を2通り持たない」) */
+  const ans = noC(R('src/components/AnswerEn.jsx'))
+  is(/answerSpeakText\(/.test(ans), '押して鳴らす側も、同じ関数を通している')
+  is(!/<SpeakButton text=\{body\}/.test(ans),
+    '押して鳴らす側が、画面に出す文字をそのまま渡していない')
+  /* **判断を2か所に持たない。** 画面の中で記号を落としていないか */
+  const 自前 = ['AnswerEn', 'LessonView', 'MaterialBody', 'LearnerHomework']
+    .filter((名) => /\(\[A-D\]\)|\(A\) /.test(noC(R(`src/components/${名}.jsx`))))
+  is(!自前.length, '画面の中で、記号を自前に落としていない', 自前.join(' / '))
+}
+
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

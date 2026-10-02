@@ -255,11 +255,14 @@ const material = asSpeech ? {
     instruction: '英文は見ずに聞くこと。聞いたあとの質問に答えなさい。',
     items: [
       { id: 'r-1', audio_text: 'Could you give me a hand with these boxes?',
+        /* ★ **読み上げた英文の訳**（第5.346節）。欄は `prompt_ja` */
+        prompt_ja: 'この箱、手伝ってもらえますか。',
         question: 'Choose the best response. (A) I appreciate your help. '
           + '(B) The museum closes at six. (C) My brother plays the violin.',
         answer: 'I appreciate your help.',
         answer_ja: '助かります。' },
       { id: 'r-2', audio_text: 'Shall we go over the numbers one more time?',
+        prompt_ja: '数字をもう一度見ておきましょうか。',
         question: 'Choose the best response. (A) The rain stopped an hour ago. '
           + "(B) That's exactly what I had in mind. (C) She lives near the station.",
         answer: "That's exactly what I had in mind.",
@@ -292,11 +295,14 @@ const material = asSpeech ? {
     instruction: '英文は見ずに聞くこと。聞いたあとの質問に答えなさい。',
     items: [
       { id: 'x-1', audio_text: 'When does the new branch open downtown?',
+        /* ★ **読み上げた英文の訳**（第5.346節）。欄は `prompt_ja` */
+        prompt_ja: '街の新しい支店は、いつ開きますか。',
         question: 'Choose the best response. (A) Next Monday morning. '
           + "(B) It's on the second floor. (C) She opened the door.",
         answer: '(A) Next Monday morning.',
         answer_ja: '(A) 来週の月曜の朝です。' },
       { id: 'x-2', audio_text: 'Who is going to lead the training session?',
+        prompt_ja: '研修は誰が進めますか。',
         question: 'Choose the best response. (A) In the main hall. '
           + '(B) Ms. Tanaka from human resources. (C) Twice a week.',
         answer: '(B) Ms. Tanaka from human resources.',

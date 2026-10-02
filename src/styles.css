@@ -6116,6 +6116,14 @@ html, body { overflow-x: clip; }
   display: block; font-size: .68em; margin-bottom: 2px;
 }
 .lesson-sheet .lesson-heard-label { color: var(--accent); }
+/* ★ **読み上げた英文の訳**（第5.346節）。
+   **同じ箱の中**に入れてあるので、あいだの隙間を
+   `margin` で作らない —— 英文の下に改行して続くだけである。
+   **色だけに頼らない**（うすい字 + 小さめで、英文と見分ける） */
+.lesson-heard-ja {
+  display: block; margin-top: 2px;
+  font-size: .92em; color: var(--text-muted);
+}
 
 /* ── プレイン(色を使わない)──────────────────────────────────
    「色が多いと疲れる」という感じ方もあるため、色を足す前の

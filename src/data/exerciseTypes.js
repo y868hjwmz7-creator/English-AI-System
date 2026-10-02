@@ -109,6 +109,19 @@ export const EXERCISE_TYPES = [
        訳があると Quick Response(日本語 → 英語)にも回せる。
        **効くのはこれから作る教材だけ**(利用者がそれでよいと決めた) */
     fields: ['audio_text', 'question', 'answer', 'answer_ja'], audioFrom: 'audio_text',
+    /* ★ **読み上げた英文の日本語訳**（2026-10-02 利用者の指定・第5.346節）。
+
+         > TOEIC L&R PART2も応答問題も、読み上げられた文の
+         > 日本語訳もつけてください。
+
+       **欄は `prompt_ja`**。リスニングでは `prompt_en` が空なので
+       あいており、表の列ももうある（**移行は要らない**）。
+
+       **`fields` には入れない。** あちらに入れると `isBlankItem` が
+       **必須の欄**として数え、訳の無い問が 1 問残らず落ちる
+       （第5.341節で踏んだ「3回とも 0 問」そのもの）。
+       **窓口の側で必須にしてある**ので、新しく作る教材には必ず入る。 */
+    audioJaFrom: 'prompt_ja',
     /* **聞く英文そのもの**を解説する。設問や解答より、こちらが本体である */
     grammarFrom: 'audio_text',
     answerLang: 'en',
@@ -527,6 +540,26 @@ const SPARE_FIELDS = new Set([
  *   ここに置けば、いまの窓口のままでも作り直しが別の問に差し替える
  *   (`givesAwayAnswer` と同じ考え方)。
  */
+/**
+ * ★ **読み上げた英文の、日本語訳**（第5.346節）。
+ *
+ * **どの欄かは `audioJaFrom` 1か所**が決める ——
+ * 画面の中で `it.prompt_ja` と書き写すと、欄を変えた日に
+ * **画面ごとに食い違う**（CLAUDE.md）。
+ *
+ * **宣言していない演習は、必ず空を返す。**
+ * そうすれば呼ぶ側は「あれば出す」と書くだけで済み、
+ * **聲を出さない演習で誤って出ることがありえない。**
+ *
+ * ★ **これが出る演習では、`prompt_ja` を「問題文の訳」として出さない。**
+ * リスニングは**聞いて答える**ので、訳が先に見えると答えが割れる。
+ */
+export const audioJaOf = (it, typeId) => {
+  const from = exerciseType(typeId)?.audioJaFrom
+  if (!from) return ''
+  return String(it?.[from] ?? '').trim()
+}
+
 export const isBlankItem = (exerciseTypeId, item) => {
   const type = exerciseType(exerciseTypeId)
   if (!type) return false

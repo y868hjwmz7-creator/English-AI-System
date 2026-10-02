@@ -32,6 +32,11 @@
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import { answerHasAudio } from '../data/exerciseTypes.js'
+/* ★ **解答を声にするときの英文は `answerSpeakText()` 1か所**（第5.346節）。
+   支度（`sectionRestClips`）も聞き流しもこの関数を通る ——
+   ここだけ別の文字を渡すと、**支度した音声が1本も当たらず、
+   待つうえに二度課金になる**（CLAUDE.md「数え方を2通り持たない」） */
+import { answerSpeakText } from '../lib/responseDrill.js'
 
 export default function AnswerEn({
   text, ja = '', level = null,
@@ -61,6 +66,10 @@ export default function AnswerEn({
 }) {
   const body = String(text ?? '').trim()
   if (!body) return null
+  /* ★ **画面には記号ごと出し、声にするときだけ落とす**（第5.346節）。
+       テスト対策の解答は「(A) Next Monday morning.」の形で入っており、
+       そのまま渡すと**「エー」まで読み上げられていた** */
+  const 声 = answerSpeakText({ answer: body })
   return (
     <>
       <div className={className}>
@@ -72,7 +81,7 @@ export default function AnswerEn({
       {String(ja ?? '').trim() && <div className={jaClassName}>{ja}</div>}
       {clipVoice !== undefined && answerHasAudio(typeId) && (
         <div className="item-audio">
-          <SpeakButton text={body} voice={voice} clipVoice={clipVoice} tier={tier}
+          <SpeakButton text={声} voice={voice} clipVoice={clipVoice} tier={tier}
                        {...(rate == null ? {} : { rate })} />
         </div>
       )}

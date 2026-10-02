@@ -39,7 +39,9 @@ import Phonetic from './Phonetic.jsx'
 import { cefrLabel } from '../data/cefr.js'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import { industryLabel } from '../data/industries.js'
-import { countLabel, exerciseType, isCardSection, sectionLabel } from '../data/exerciseTypes.js'
+import {
+  audioJaOf, countLabel, exerciseType, isCardSection, sectionLabel,
+} from '../data/exerciseTypes.js'
 import { chunkDrills } from '../data/chunkKinds.js'
 import ChunkCard from './ChunkCard.jsx'
 import { kindLabel } from '../lib/materials.js'
@@ -204,7 +206,13 @@ export default function MaterialBody({
                     {/* `preview-ja` は**紙用の目印。** 記事・会話の紙では
                         訳を出さない(スラッシュを手書きするための用紙なので)。
                         画面には指定を1つも足していないので、見た目は変わらない */}
-                    {it.prompt_ja && <div className="preview-ja">{it.prompt_ja}</div>}
+                    {/* ★ **読み上げた英文の訳は、ここに出さない**（第5.346節）。
+                         リスニングは**聞いて答える**ので、問題文の訳として
+                         先に出すと答えが割れる。下の「読み上げ」の行に添える。
+                         **判断は `audioJaOf()` 1か所**（ここで種類を見分けない） */}
+                    {it.prompt_ja && !audioJaOf(it, sec.exercise_type) && (
+                      <div className="preview-ja">{it.prompt_ja}</div>
+                    )}
                     {/* ★ **選択肢は1行ずつ**(第5.338節)。
                          レッスン表示にだけ在った部品を、ここでも使う ——
                          同じ教材なのに、**紙では4つの選択肢が1行の団子**だった。
@@ -226,6 +234,11 @@ export default function MaterialBody({
                     {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
                     {it.audio_text && !it.prompt_en && (
                       <div lang="en" className="muted">読み上げ: {it.audio_text}</div>
+                    )}
+                    {/* ★ **読み上げた英文の訳**（第5.346節・利用者の指定）。
+                         **欄は `audioJaOf()` 1か所**が決める */}
+                    {audioJaOf(it, sec.exercise_type) && (
+                      <div className="preview-ja">{audioJaOf(it, sec.exercise_type)}</div>
                     )}
                     {/* 解答も**語に触れれば意味が出て、単語帳に入れられる。**
                         訳と読み上げも付く(2026-09 利用者の指定)。
