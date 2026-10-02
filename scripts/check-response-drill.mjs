@@ -462,5 +462,77 @@ console.log('\n▶ 正解の聞き流し(第5.334節)')
   is(/answer: ''/.test(骨), '骨組みの応答問題に、英文の無い問が混ざっている')
 }
 
+
+console.log('\n▶ 正解が、本当に「応答」になるか(第5.344節)')
+{
+  /* ★ 2026-10-02 実機・利用者の指摘。
+
+       > 変ですよね、独り言はなしにしましょう！
+       > 純粋に応答としてふさわしいものを解答にします
+
+     実機ではこの2つが出ていた。**どちらも応答になっていない。**
+
+       Mom, I want to show you my new dance moves!  → Look at me.
+         … **同じ子どもの続きのセリフ**(独り言)
+       Will you be paying with cash or credit card today? → Cash or charge?
+         … **同じ店員の言い換え**(おうむ返し)
+
+     **見る語は、決まりの中身そのもの**にする ——
+     「入れ替わる」「続きのセリフ」「おうむ返し」の3つが、この決まりである。 */
+  const 選 = D.responseBrief({ form: 'choices', phrases: [{ en: 'After you.', ja: 'お先にどうぞ。' }] })
+  const 開 = D.responseBrief({ form: 'open', phrases: [{ en: 'After you.', ja: 'お先にどうぞ。' }] })
+  const 決まり = ['入れ替わる', '続きのセリフ', 'おうむ返し']
+  const 欠け = 決まり.filter((w) => !選.includes(w))
+  is(!欠け.length, '話す人が入れ替わり、独り言もおうむ返しも禁じている',
+    欠け.length ? `欠けている: ${欠け.join(' / ')}` : 決まり.join(' / '))
+
+  /* ★ **形(選択肢あり / なし)で分けていないか。**
+       独り言になっていたのは**正解そのもの**であって、誤りの選択肢ではない。
+       下の `形` の側へ入れると、**選択肢なしのときだけ直らない** ——
+       **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md) */
+  const 片方だけ = 決まり.filter((w) => 選.includes(w) !== 開.includes(w))
+  is(!片方だけ.length, '選択肢なしの形でも、まったく同じ決まりが出る',
+    片方だけ.length ? `選択肢ありにしか無い: ${片方だけ.join(' / ')}` : '2つの形で同じ')
+
+  /* **実機で出た2つの例が、そのまま入っているか。**
+     言葉で言うより、**外した形を1つ見せる**ほうが効く(第5.339節と同じ) */
+  const 例 = ['Look at me.', 'Cash or charge?']
+  is(例.every((x) => 選.includes(x)), '実機で出た「応答になっていない例」を見せている',
+    例.join(' / '))
+
+  /* ★ **窓口へ届く長さ。**(2026-10-02 実測)
+
+       この欄(`examPart`)は**テスト対策と分け合っている**(第5.332節)。
+       応答問題は**正解にする表現をそのまま並べて送る**ので、
+       文の長い Native Flow を 15 個えらぶと**上限を超え、
+       末尾の表現が黙って消える** —— 消えたぶんだけ問が少なく作られる。
+
+       **上限を書き写さない。窓口から読み取る**(第5.340節と同じ作法)。
+       **いちばん長くなる形で測る** ——
+       「選べるいちばん多い問数」で、「実データのいちばん長い表現」を並べる。 */
+  const fn = R('supabase/functions/generate-material/index.ts')
+  const 上限 = Number(/examPart[^\n]*slice\(0,\s*(\d+)\)/.exec(fn)?.[1])
+  const { nativeFlowRows } = await import('../src/data/nativeFlow.js')
+  const 長い順 = [...nativeFlowRows()].sort((a, b) =>
+    (String(b.en ?? '') + String(b.ja ?? '')).length
+    - (String(a.en ?? '') + String(a.ja ?? '')).length)
+  const 要る = D.phrasesNeeded(Math.max(...D.RESPONSE_COUNTS))
+  const 最長 = D.RESPONSE_FORMS
+    .map((f) => [f.id, D.responseBrief({ form: f.id, phrases: 長い順.slice(0, 要る) }).length])
+    .sort((a, b) => b[1] - a[1])[0]
+  if (!上限) {
+    ng('長さ … 窓口の上限を読み取れない(探し方が壊れている)')
+  } else if (最長[1] > 上限) {
+    ng(`長さ … 窓口の上限 ${上限} 文字を超えている(末尾の表現が黙って消える)`,
+      `${最長[0]} … ${最長[1]} 文字 / 表現 ${要る} 個`)
+  } else if (最長[1] > 上限 * 0.95) {
+    ng(`長さ … 上限 ${上限} 文字まで、あと ${上限 - 最長[1]} 文字しかない`,
+      `${最長[0]} … ${最長[1]} 文字`)
+  } else {
+    ok(`長さ … いちばん長い形(${最長[0]}・表現 ${要る} 個)で ${最長[1]} 文字`
+      + `(窓口の上限 ${上限} 文字の ${Math.round(最長[1] / 上限 * 100)}%)`)
+  }
+}
+
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
