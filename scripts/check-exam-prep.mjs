@@ -637,10 +637,73 @@ console.log('\n▶ 答え方(第5.336節)')
     ng('TOEIC Speaking … いまの公式の構成に無い「解決策を提案する問題」が残っている')
   } else ok('TOEIC Speaking … 古い構成の PART は残っていない')
 
-  /* **VERSANT は 63 問**(8 + 16 + 24 + 10 + 3 + 2) */
-  if (問数('versant') !== 63) {
-    ng('VERSANT … 本番は 63 問', `${問数('versant')} 問になっている`)
-  } else ok('VERSANT … PART の問数を足すと 63 問(本番どおり)')
+  /* ★ **VERSANT は 40 問**(8 + 16 + 6 + 6 + 2 + 2)。**第5.348節で 63 → 40**。
+       2024年1月の新形式(Versant by Pearson English Speaking and Listening Test)。
+       旧形式(63問)のままだと、**本番に無い PART を2つ出す** */
+  if (問数('versant') !== 40) {
+    ng('VERSANT … 新形式の本番は 40 問(質問8 + 復唱16 + 会話6 + 文章6 + リテリング2 + 自由2)',
+      `${問数('versant')} 問になっている`)
+  } else ok('VERSANT … PART の問数を足すと 40 問(新形式どおり)')
+
+  /* ★ **廃止された2つの PART が残っていないか**(第5.348節)。
+       TOEIC Speaking の「解決策を提案する問題」と**まったく同じ形**の見張りである。
+       **名前だけでなく、作り方の文も見る** —— PART を消しても、
+       作り方に「並べ替えて1文にする」が残っていれば本番に無い問が作られる */
+  {
+    const やめた = ['文の構築', 'Sentence Build', '並べ替えて1文に', '音読']
+    const 残り = []
+    for (const part of examPartsOf('versant').concat(examSkipsOf('versant'))) {
+      const 文 = `${part.label} ${part.what ?? ''} ${part.make ?? ''}`
+      for (const 語 of やめた) {
+        if (文.includes(語)) 残り.push(`versant/${part.id} … 「${語}」`)
+      }
+    }
+    if (残り.length) {
+      ng('VERSANT … 新形式で廃止された PART が残っている', 残り.join('\n    '))
+    } else ok('VERSANT … 廃止された「音読」「文の構築」は、名前も作り方も残っていない')
+  }
+
+  /* ★ **本番のパッセージの長さ**(第5.348節・利用者の指摘)。
+
+       > Story retellingは、もっと長いです。平均の単語数なども調べて
+
+     **書いてあったのは「30〜40語」**で、旧形式の下限(30語)よりさらに短かった。
+     新形式(Speaking and Listening Test)は **4〜10文・50〜150語**である。
+
+     **数を書き写していない** —— 作り方の文から**読み取った数**が、
+     旧形式の幅(30〜90)に収まっていたら赤にする。
+     Part D も同じ長さなので、**2つとも**見る */
+  {
+    const 短すぎ = []
+    for (const id of ['d', 'e']) {
+      const 文 = examBrief('versant', id)
+      /* 「50〜150 語」の形を読み取る(全角と半角のどちらの波線でも) */
+      const m = /(\d+)\s*[〜~]\s*(\d+)\s*語/.exec(文)
+      if (!m) { 短すぎ.push(`versant/${id} … パッセージの語数が作り方に無い`); continue }
+      const [下, 上] = [Number(m[1]), Number(m[2])]
+      if (下 < 50 || 上 < 150) {
+        短すぎ.push(`versant/${id} … ${下}〜${上} 語(新形式は 50〜150 語)`)
+      }
+      if (!/4\s*[〜~]\s*10\s*文/.test(文)) {
+        短すぎ.push(`versant/${id} … 4〜10 文 が作り方に無い`)
+      }
+    }
+    if (短すぎ.length) {
+      ng('VERSANT … パッセージが本番より短い', 短すぎ.join('\n    '))
+    } else ok('VERSANT … Part D / E のパッセージは 50〜150 語・4〜10 文(新形式どおり)')
+  }
+
+  /* ★ **復唱は 5〜15 語**(第5.348節)。「最後は 18 語ほど」と書いていた ——
+       **本番より長い文で練習させていた。** ここも**読み取って**見る */
+  {
+    const 文 = examBrief('versant', 'b')
+    const 語 = [...文.matchAll(/\*\*(\d+)\s*語\*\*/g)].map((x) => Number(x[1]))
+    if (語.length < 2) {
+      ng('VERSANT … 復唱の語数が作り方から読み取れない', 語.join(' / ') || 'なし')
+    } else if (Math.min(...語) !== 5 || Math.max(...語) !== 15) {
+      ng('VERSANT … 復唱は本番の 5〜15 語にそろえる', `${Math.min(...語)}〜${Math.max(...語)} 語`)
+    } else ok('VERSANT … 復唱は 5〜15 語で、順に長くなる(本番どおり)')
+  }
 
   /* **TOEFL iBT(2026年の形)。** Speaking 11問 / Writing 12題 と、
      PART に書いてある数が合っていること */

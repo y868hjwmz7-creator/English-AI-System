@@ -176,9 +176,11 @@ export const FORMATS = {
   choice3: { label: '3つから選ぶ', choices: 3 },
   /** 語そのものを書き入れる(TOEFL Complete the Words / IELTS の記入式) */
   fill: { label: '語を書き入れる', choices: 0 },
-  /** 1語か短い句で答える(Versant Part C) */
+  /** 1語か短い句で答える(Versant Part A / C / D) */
   short: { label: '1語か短い句で答える', choices: 0 },
-  /** 並べ替えて1文にする(Versant Part D / TOEFL Build a Sentence) */
+  /* 並べ替えて1文にする(TOEFL Build a Sentence)。
+     ★ **Versant の「文の構築」は 2024 年の新形式で廃止された**(第5.348節)。
+        ここに書いてあった「Versant Part D」は、もう本番に無い */
   order: { label: '並べ替えて1文にする', choices: 0 },
   /** 声に出して読む・復唱する */
   aloud: { label: '声に出して読む', choices: 0 },
@@ -842,70 +844,130 @@ export const EXAMS = [
   })),
 
   /* ────────────────────────────────────────────────────────────
-     VERSANT(Versant English Test)
-     63問・15〜20分。**機械が採点する**ので、正解が1つに決まる問が多い
+     VERSANT(Versant by Pearson English Speaking and Listening Test)
+     **40問・17〜20分。機械が採点する**ので、正解が1つに決まる問が多い
+
+     ★ **2026-10-02 に新形式へ入れ替えた**(第5.348節・利用者の指定)。
+
+       > VERSANTのテストですが、旧形式に沿ってしまっていますので、
+       > 新形式の仕様に直してください。とくに、文の再構築(sentence build)は
+       > もう新形式には存在しません。また、Story retellingは、もっと長いです。
+       > 平均の単語数なども調べてやり直してください
+
+     **2024年1月に形が変わっていた。** 書いてあったのは旧 Versant English
+     Test(63問)で、**本番に無い PART を2つ並べていた。**
+
+       | | 旧(63問) | 新(40問) |
+       |---|---|---|
+       | A | **音読 8** | **質問への短い応答 8** |
+       | B | 復唱 16 | 復唱 16 |
+       | C | 短文質問への応答 24 | **会話に関する質問 6** |
+       | D | **文の構築 10** | **文章に関する質問 6** |
+       | E | リテリング 3(本文 30〜90語) | リテリング 2(**本文 50〜150語**) |
+       | F | 自由回答 2 | 自由回答 2 |
+
+     **廃止は2つ** —— 音読(Reading)と**文の構築(Sentence Builds)**。
+     **足されたのも2つ** —— 会話に関する質問と、文章に関する質問。
+     短文質問は 24 → 8 問に減り、**Part A へ動いた。**
+
+     ★ **ストーリーリテリングの本文は、2倍以上長い。**
+     旧 Versant English Test は 3〜6文・30〜90語だったが、
+     新しい Speaking and Listening Test は **4〜10文・50〜150語**である。
+     書いてあったのは「30〜40語」で、**旧形式の下限よりさらに短かった。**
+     Part D のパッセージも同じ 50〜150語である。
+
+     **この環境からは pearson.com に届かない**(egress で塞がれている)ので、
+     検索の結果に出てくる公式ガイドの中身と日本語の解説を突き合わせ、
+     **2つ以上の出どころで一致したものだけ**を書いてある。
      ──────────────────────────────────────────────────────────── */
   {
     id: 'versant',
     label: 'VERSANT',
-    full: 'Versant English Test(スピーキング・リスニング)',
-    outline: '63問・15〜20分。Part A〜F の6つ。CEFR A2〜C1 を見分ける',
+    full: 'Versant by Pearson English Speaking and Listening Test',
+    outline: '40問・17〜20分。Part A〜F の6つ。CEFR A2〜C1 を見分ける',
     parts: [
-      { id: 'a', label: 'Part A 音読(Reading)', real: '8問・1問15秒', format: 'aloud',
-        /* ★ **本番の表示**(第5.337節)。画面には**番号つきの文が並び**、
-             「Now, please read sentence 7.」のように**番号で指示される。**
-             だから1問1文で、話がつながっていてはいけない */
-        what: '番号つきで並んだ英文のうち、指示された番号のものだけを15秒で読み上げる',
-        sections: [{ exercise_type: 'read_aloud', count: 12 }],
-        make: `Versant Part A(音読)。${COMMON}`
-          + 'prompt_en に**1文だけ**(8〜14語)、prompt_ja にその訳を入れる。'
-          + '**文どうしをつなげない** —— 1問1文で、話はつながらなくてよい。'
-          + '構文も語彙もやさしくする(本番は「すらすら読めるか」を見ている)。'
-          + '**15秒で読みきれる長さ**にする(本番の応答時間である)。'
-          + '**読みまちがえやすい音**を必ず入れる —— '
-          + '子音が3つ続くところ(strengths)・th と s・l と r・'
-          + '語尾の -ed と -s・数字と固有名詞。' },
-      { id: 'b', label: 'Part B 復唱(Repeats)', real: '16問', format: 'aloud',
+      { id: 'a', label: 'Part A 質問への短い応答(Give a short answer)',
+        real: '8問・1問15秒', format: 'short',
+        what: '短い質問を聞き、1語か短い句で答える',
+        set: '1問につき質問1文',
+        sections: [{ exercise_type: 'listening', count: 12 }],
+        make: `Versant Part A(質問への短い応答)。${COMMON}`
+          + 'audio_text に**質問1文**(8〜15語)、question には'
+          + '「Answer in one word or a short phrase.」と入れ、'
+          + 'answer には**1語か短い句**を入れる。'
+          /* ★ **本番が定めている範囲**(第5.348節)。公式の案内は
+               「12歳の母語話者と、英語圏に住んだことのない大人の
+               どちらにも分かる範囲」と書いている */
+          + '**知識ではなく、聞き取りと常識で答えられる問**にする'
+          + '(例: What is frozen water called? /'
+          + ' Is a grandmother or a baby more likely to be elderly?)。'
+          + '**文化・地理・歴史の知識、固有名詞、計算の要る問は作らない。**'
+          + '時・順序・数・語の意味・筋道のどれかで答えが決まる問にする。'
+          + '**15秒で答えきれる問**にする(本番の応答時間である)。'
+          + 'note に**聞き取りの山になる語**を日本語で書く。' },
+      { id: 'b', label: 'Part B 復唱(Repeat the sentence)', real: '16問', format: 'aloud',
         what: '聞こえた英文を、そのまま繰り返す。だんだん長くなる',
         sections: [{ exercise_type: 'read_aloud', count: 16 }],
         make: `Versant Part B(復唱)。${COMMON}`
           + 'prompt_en に**1文だけ**、prompt_ja にその訳を入れる。'
-          + '**だんだん長くする** —— 1問目は 5 語ほど、最後は 18 語ほどにし、'
-          + '**順に増やす**(ここが Part A といちばん違う)。'
+          /* ★ **本番は 5〜15 語**(第5.348節)。それまで「最後は 18 語ほど」と
+               書いていた —— 本番より長い文で練習させていた */
+          + '**だんだん長くする** —— 1問目は **5 語**、最後は **15 語**にし、'
+          + '**順に増やす**(本番は 5〜15 語で、やさしい順に出る)。'
           + '長い文は、**関係詞・分詞・接続詞で1回だけ**伸ばす。'
           + 'ばらばらの語を並べただけの文にしない —— 意味が取れれば覚えられる。' },
-      { id: 'c', label: 'Part C 短文質問への応答(Short Answer Questions)', real: '24問', format: 'short',
-        what: '短い質問を聞き、1語か短い句で答える',
-        set: '1問につき質問1文',
-        sections: [{ exercise_type: 'listening', count: 12 }],
-        make: `Versant Part C(短文質問への応答)。${COMMON}`
-          + 'audio_text に**質問1文**(8〜15語)、question には'
-          + '「Answer in one word or a short phrase.」と入れ、'
-          + 'answer には**1語か短い句**を入れる。'
-          + '**知識ではなく、聞き取りと常識で答えられる問**にする'
-          + '(例: How many days are there in a week?)。'
-          + '専門知識・固有名詞・計算の要る問は作らない。'
-          + 'note に**聞き取りの山になる語**を日本語で書く。' },
-      { id: 'd', label: 'Part D 文の構築(Sentence Builds)', real: '10問', format: 'order',
-        what: '読み上げられる3つのかたまりを、意味の通る1文に並べ替えて言う',
-        sections: [{ exercise_type: 'translate_ja_en', count: 10 }],
-        make: `Versant Part D(文の構築)。${COMMON}`
-          + '**prompt_ja に、並べ替える3つのかたまりを日本語で書かずに、'
-          + '英語のかたまりをそのまま並べて入れる。** 形は必ずこうする ——'
-          + '「次の3つのかたまりを並べ替えて1文にする: (1) … / (2) … / (3) …」。'
-          + '**わざと順番を入れ替えて**出すこと(正しい順で並べない)。'
-          + 'answer に**正しく並べた1文**を入れる。'
-          + 'answer_alt には、**別の並べ方でも通る場合だけ**その文を入れる'
-          + '(無ければ空)。'
-          + '1文は 8〜14 語。**並べ方が1つに決まる文**にする。' },
-      { id: 'e', label: 'Part E ストーリーリテリング(Story Retelling)', real: '3問・1問30秒', format: 'speak',
+      { id: 'c', label: 'Part C 会話に関する質問(Answer a question about a conversation)',
+        real: '6問', format: 'short',
+        what: '2人の短い会話を聞き、その内容について1問、短く答える',
+        /* ★ **本番の1セット**。会話1本につき設問は**1問だけ**である。
+             もっと練習したいときは、作る画面の**倍率**で増やす */
+        set: '会話1本につき設問1問',
+        sections: [
+          { exercise_type: 'dialogue', count: 4 },
+          { exercise_type: 'comprehension', count: 1 },
+        ],
+        make: `Versant Part C(会話に関する質問)。${COMMON}`
+          + '**2人の会話を1本**つくる —— 1本は **3〜5 発言**で、'
+          + '**本番と同じ短さ**にする(長い会話にしない)。'
+          + '設問は**その会話について1問だけ**で、'
+          + '**Wh- の疑問文**(何を・どこで・いつ・なぜ・だれが)にする。'
+          + 'answer には**1語か短い句**を入れる'
+          + '(文で答えさせない。機械が採点するためである)。'
+          + '**聞いていれば分かること**だけを訊く —— '
+          + '推測や、会話に出てこない知識が要る問にしない。'
+          + '身近な場面にする(買い物・道案内・予約・職場でのやりとり)。' },
+      { id: 'd', label: 'Part D 文章に関する質問(Answer questions about a passage)',
+        real: '6問(1つの文章につき3問 × 2)', format: 'short',
+        what: '短い文章を聞き、その内容について3問、短く答える',
+        set: '文章1本につき設問3問',
+        sections: [
+          { exercise_type: 'article', count: 1 },
+          { exercise_type: 'comprehension', count: 3 },
+        ],
+        make: `Versant Part D(文章に関する質問)。${COMMON}`
+          /* ★ **本番のパッセージは 50〜150語・4〜10文**(第5.348節)。
+               Part E とまったく同じ長さである */
+          + '本文は**50〜150 語(4〜10 文)の短い話を1つ**にする'
+          + '(本番のパッセージの長さである)。'
+          + '**出来事の話**にする —— 誰が・いつ・どこで・何をして・どうなったか。'
+          + '設問は**3問**で、どれも**Wh- の疑問文**にする。'
+          + 'answer には**1語か短い句**を入れる'
+          + '(文で答えさせない。機械が採点するためである)。'
+          + '**聞いていれば分かること**だけを訊く。'
+          + '3問は**話の別のところ**を訊く(同じ1文から3問作らない)。' },
+      { id: 'e', label: 'Part E ストーリーリテリング(Retell a passage)',
+        real: '2問・1問30秒', format: 'speak',
         what: '短い話を聞き、自分の言葉で30秒で言い直す',
         sections: [
-          { exercise_type: 'article', count: 3 },
-          { exercise_type: 'discussion', count: 3 },
+          { exercise_type: 'article', count: 2 },
+          { exercise_type: 'discussion', count: 2 },
         ],
         make: `Versant Part E(ストーリーリテリング)。${COMMON}`
-          + '本文は**30〜40 語の短い話**にする(1段落 = 1つの話)。'
+          /* ★ **ここが利用者の指摘そのもの**(第5.348節)。
+               「30〜40 語」と書いていた —— 旧形式の下限(30語)より短く、
+               新形式(50〜150語)の半分にも届かない */
+          + '本文は**1段落 = 1つの話**で、**1つが 50〜150 語(4〜10 文)**にする'
+          + '(**本番のパッセージの長さである。30〜40 語では短すぎる**)。'
           + '**誰が・どこで・何をして・どうなったか**がはっきりする話にする'
           + '(本番は、その4つを言い直せるかを見ている)。'
           + '意見や説明ではなく、**出来事**にする。'
@@ -913,7 +975,7 @@ export const EXAMS = [
           + '「Retell this story in your own words.」の形にし、'
           + 'note に**言い直すときに落としてはいけない点**を日本語で3つ書く。'
           + '**30秒で言い直せる量**にする(本番の応答時間である)。' },
-      { id: 'f', label: 'Part F 自由回答(Open Questions)', real: '2問・1問40秒', format: 'speak',
+      { id: 'f', label: 'Part F 自由回答(Give your opinion)', real: '2問・1問40秒', format: 'speak',
         what: '身近な話題について、自分の考えを40秒で話す',
         sections: [{ exercise_type: 'discussion', count: 6 }],
         make: `Versant Part F(自由回答)。${COMMON}`
@@ -1560,7 +1622,7 @@ export const examPartLine = (examId, partId) => {
        信じられない(第5.187節)。**いまの状態**として1行に足す。
        **呼び名は `FORMATS` 1か所**(ここで「4択」と書き写さない) */
   const 答え方 = formatOf(part)?.label ?? ''
-  /* **同じことを2つ出さない**(CLAUDE.md)。Versant Part C の
+  /* **同じことを2つ出さない**(CLAUDE.md)。Versant の Part A / C / D の
      「1語か短い句で答える」のように、**何をする問題か**の説明に
      もう入っていることがある */
   /* ★ **作れない部分も出す**(第5.337節)。**黙って絞らない**(CLAUDE.md) ——
