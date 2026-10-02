@@ -112,7 +112,7 @@ import {
 import {
   DEFAULT_RESPONSE_COUNT, DEFAULT_RESPONSE_FORM, DEFAULT_RESPONSE_PICK,
   DEFAULT_RESPONSE_SOURCE, RESPONSE_COUNTS, RESPONSE_FORMS, RESPONSE_PICKS,
-  RESPONSE_SOURCES, TIMES_PER_PHRASE, needsLearner, phrasesNeeded, pickPhrases,
+  RESPONSE_SOURCES, TIMES_PER_PHRASE, needsLearner, phrasesNeeded, picksCount, pickPhrases,
   questionsFrom, responseBrief, responseNote, responsePlan, usesTextBook,
 } from '../lib/responseDrill.js'
 import { loadResponseRows } from '../lib/responseSources.js'
@@ -685,11 +685,12 @@ export default function MaterialForm({
       if (error) { setResError(error.message); setResRows(null); return }
       const rows = data ?? []
       setResRows(rows)
-      if (resPick === 'manual') {
+      if (!picksCount(resPick)) {
         /* **自分でえらぶときは、こちらで決めない。**
-           並べるだけ —— 何個えらべばよいかは下の1行が言う */
+           並べるだけで、**何個えらんでもよい**（第5.347節）。
+           **「◯問には△個」と言わない** —— 目標の問数そのものが無い */
         setResSaid(`${rows.length} 個の表現から、えらんでください`
-          + `（${resCount} 問には ${phrasesNeeded(resCount)} 個）。`)
+          + `（えらんだ数 × ${TIMES_PER_PHRASE} 回が問数になります）。`)
         return
       }
       /* **混ぜ方は `shuffle.js` 1か所**(自前の混ぜ方を書かない) */
@@ -704,7 +705,7 @@ export default function MaterialForm({
     }
   }
 
-  /** 自分でえらぶときの、入れ外し。**上限は言うが、止めない** */
+  /** 自分でえらぶときの、入れ外し。**上限は無い**（第5.347節） */
   const toggleResPhrase = (row) => {
     const key = String(row?.en ?? '').trim().toLowerCase()
     const at = resPhrases.findIndex((p) => p.en.trim().toLowerCase() === key)
@@ -712,7 +713,9 @@ export default function MaterialForm({
       ? resPhrases.filter((_, i) => i !== at)
       : [...resPhrases, { en: row.en, ja: row.ja, ...(row.from ? { from: row.from } : {}) }]
     setResPhrases(next)
-    setResSaid(responseNote(next, resCount))
+    /* ★ **自分でえらぶときは、目標の問数を渡さない**（第5.347節）。
+         渡すと、**そのぶんだけえらんだのに「足りない」と言われる** */
+    setResSaid(responseNote(next, picksCount(resPick) ? resCount : null))
   }
 
   const wordLearner = shareWith.length === 1 ? shareWith[0] : null
@@ -2077,17 +2080,28 @@ export default function MaterialForm({
               </>
             )}
 
-            <label className="wbfilter-row">
-              <span className="wbfilter-name">問題数</span>
-              <select className="wbfilter-ctl" value={resCount}
-                      onChange={(e) => setResCount(Number(e.target.value))}>
-                {RESPONSE_COUNTS.map((n) => (
-                  <option key={n} value={n}>
-                    {n} 問（表現 {phrasesNeeded(n)} 個 × {TIMES_PER_PHRASE} 回）
-                  </option>
-                ))}
-              </select>
-            </label>
+            {/* ★ **問題数の欄は、おまかせのときだけ**（第5.347節）。
+
+                 > 自分で入れたい表現を選んだ場合は、問題数はその2倍に
+                 > なるという仕様でお願いいたします。
+                 > つまり、問題数に制限はないということです。
+
+               自分でえらぶときは**えらんだ数 × 回数**が問数なので、
+               この欄は**何も決めていない** —— **効かない操作を見せない**（CLAUDE.md）。
+               **判断は `picksCount()` 1か所**（ここで `=== 'manual'` と書かない） */}
+            {picksCount(resPick) && (
+              <label className="wbfilter-row">
+                <span className="wbfilter-name">問題数</span>
+                <select className="wbfilter-ctl" value={resCount}
+                        onChange={(e) => setResCount(Number(e.target.value))}>
+                  {RESPONSE_COUNTS.map((n) => (
+                    <option key={n} value={n}>
+                      {n} 問（表現 {phrasesNeeded(n)} 個 × {TIMES_PER_PHRASE} 回）
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
 
             <label className="wbfilter-row">
               <span className="wbfilter-name">出し方</span>
@@ -2135,7 +2149,7 @@ export default function MaterialForm({
           {/* **自分でえらぶ**(利用者の指定「完全手動でも選べるオプション」)。
               引いた全部を並べて、押すたびに入れ外しする。
               **長い一覧は畳む**(CLAUDE.md)—— 690 件が並ぶことがある */}
-          {resPick === 'manual' && resRows !== null && resRows.length > 0 && (
+          {!picksCount(resPick) && resRows !== null && resRows.length > 0 && (
             <details className="res-pick">
               <summary>
                 えらべる表現 {resRows.length} 個（いま {resPhrases.length} 個）

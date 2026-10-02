@@ -38,6 +38,8 @@ const D = await import('../src/lib/responseDrill.js')
 /* ★ **重複を見る鍵**（第5.345節）。`materials.js` から出してあるので、
      **素の node でそのまま測れる**（あちらは `import.meta.env` を引き連れている） */
 const K = await import('../src/lib/dedupKeys.js')
+/* ★ **作り直しの回数**（第5.347節） */
+const A = await import('../src/lib/genAttempts.js')
 const { DEFAULT_SECTIONS, defaultSectionsFor, sectionsFor, exerciseType }
   = await import('../src/data/exerciseTypes.js')
 const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, canShuffleKind, isResponseKind, needsWeakTag,
@@ -656,6 +658,89 @@ console.log('\n▶ 解答を声にするとき、記号は読まない(第5.346�
   const 自前 = ['AnswerEn', 'LessonView', 'MaterialBody', 'LearnerHomework']
     .filter((名) => /\(\[A-D\]\)|\(A\) /.test(noC(R(`src/components/${名}.jsx`))))
   is(!自前.length, '画面の中で、記号を自前に落としていない', 自前.join(' / '))
+}
+
+
+console.log('\n▶ 自分でえらぶときは、問数に上限が無い(第5.347節)')
+{
+  /* ★ 2026-10-02 利用者の指定。
+
+       > 応答問題において、自分で入れたい表現を選んだ場合は、
+       > 問題数はその2倍になるという仕様でお願いいたします。
+       > つまり、問題数に制限はないということです。 */
+
+  /* ── ① **判断は1か所か**(出る側と出ない側の両方)── */
+  is(D.picksCount('auto') && !D.picksCount('manual'),
+    'おまかせは問数をえらび、自分でえらぶときはえらばない(判断は1か所)')
+
+  /* ── ② **えらんだ数 × 回数が、そのまま問数になるか** ──
+         **上限が無い**ので、`RESPONSE_COUNTS` のいちばん多い数より
+         多くえらんでも、そのぶん増える */
+  const 多い = D.phrasesNeeded(Math.max(...D.RESPONSE_COUNTS)) * 4
+  const 表現 = Array.from({ length: 多い }, (_, i) => ({ en: `p${i}`, ja: `え${i}` }))
+  const plan = D.responsePlan([{ exercise_type: 'listening', count: 0 }], true, 表現)
+  is(plan[0].count === 多い * D.TIMES_PER_PHRASE,
+    `えらんだ ${多い} 個が、そのまま ${多い * D.TIMES_PER_PHRASE} 問になる(上限で切られない)`,
+    `${plan[0].count} 問`)
+
+  /* ── ③ **「足りない」と言わないか** ──
+         ★ **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+           **目標の問数より少なくえらんだとき**。目標を渡すと
+           「◯問には△個が必要です」と出て、**えらんだ本人に嘘を言う** */
+  const 少し = 表現.slice(0, 3)
+  const 自分で = D.responseNote(少し, null)
+  const おまかせ = D.responseNote(少し, Math.max(...D.RESPONSE_COUNTS))
+  is(!/必要です/.test(自分で) && /必要です/.test(おまかせ),
+    '自分でえらぶときは「◯問には△個が必要です」と言わない(おまかせでは言う)',
+    自分で)
+
+  /* ── ④ **画面が、問数の欄を出し分けているか** ──
+         **素の関数だけ見ると、画面が通していなくても緑になる**(第5.330節) */
+  const form = noC(R('src/components/MaterialForm.jsx'))
+  is(/\{picksCount\(resPick\) && \(/.test(form),
+    '画面が、問数の欄を `picksCount()` で出し分けている')
+  is(!/resPick === 'manual'/.test(form),
+    "画面の中で `resPick === 'manual'` と書いていない(判断を2か所に持たない)")
+  is(/responseNote\(next, picksCount\(resPick\) \? resCount : null\)/.test(form),
+    '画面が、自分でえらぶときは目標の問数を渡していない')
+
+  /* ── ⑤ **作り直しの回数が、頼んだ問数に足りるか** ──
+       ★ 窓口は**1回に 30 問まで**しか作らない。作り直しが5回の決め打ちだと
+         **150 問が天井**で、そこから先は黙って足りなくなる。
+         **1回あたりの数は、窓口のコードから読み取る**(書き写さない) */
+  const fn = R('supabase/functions/generate-material/index.ts')
+  const ひと回ぶん = [...fn.matchAll(/Math\.min\(Math\.max\(Number\(body\.count[^)]*\), 1\), (\d+)\)/g)]
+    .map((m) => Number(m[1]))
+  const そろって = ひと回ぶん.length >= 1 && ひと回ぶん.every((n) => n === A.GEN_PER_CALL)
+  is(そろって, '窓口が1回に作る数と、こちらの数がそろっている',
+    `窓口 ${ひと回ぶん.join(' / ')} / こちら ${A.GEN_PER_CALL}`)
+  const 届かない = [10, 30, 100, 200, 400, 1000]
+    .filter((n) => A.genAttempts(n) * A.GEN_PER_CALL < n)
+  is(!届かない.length, '頼んだ問数に、作り直しの回数が足りる(10〜1000 問)',
+    届かない.join(' / '))
+  /* **止まる条件は残す**(CLAUDE.md)。何回でも回さない */
+  is(A.genAttempts(30) === 5 && A.genAttempts(1e9) < 1e9,
+    '少ないときはこれまでどおり 5 回で、止まる条件も残っている',
+    `30 問 → ${A.genAttempts(30)} 回`)
+  is(/genAttempts\(wanted\)/.test(noC(R('src/lib/materials.js'))),
+    '作る側が、その回数を通している')
+
+  /* ── ⑥ **冊をまるごとえらんでも、窓口で切られないか** ──
+       **上限が無い**ので、**いちばん多い形は「冊ぜんぶ」**である。
+       切られると**末尾の表現が黙って消える**(第5.344節で踏んだ形) */
+  const 上限 = Number(/examPart[^\n]*slice\(0,\s*(\d+)\)/.exec(fn)?.[1])
+  const { nativeFlowRows } = await import('../src/data/nativeFlow.js')
+  const 冊 = nativeFlowRows()
+  const まるごと = D.responseBrief({ form: 'choices', phrases: 冊 }).length
+  if (!上限) {
+    ng('長さ … 窓口の上限を読み取れない(探し方が壊れている)')
+  } else if (まるごと > 上限) {
+    ng(`長さ … 冊ぜんぶ(${冊.length} 個)で上限 ${上限} 文字を超える(末尾が黙って消える)`,
+      `${まるごと} 文字`)
+  } else {
+    ok(`長さ … 冊ぜんぶ(${冊.length} 個 = ${冊.length * D.TIMES_PER_PHRASE} 問)でも`
+      + ` ${まるごと} 文字(窓口の上限 ${上限} 文字の ${Math.round(まるごと / 上限 * 100)}%)`)
+  }
 }
 
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

@@ -18,6 +18,8 @@ import { emptyDropCounts } from './dropReasons.js'
 import { normEn } from './textNorm.js'
 /* ★ **重複を見る鍵**(第5.345節)。素の node で測れる形に出してある */
 import { dropDuplicates, rawSentencesOf, sentencesOf } from './dedupKeys.js'
+/* ★ **作り直しの回数**（第5.347節）。素の node で測れる形に出してある */
+import { genAttempts } from './genAttempts.js'
 /* **「この英文は避けて」と渡す本数**(第5.261節)。
    集める本数と渡す本数を**同じ数にする** —— 別にすると、集めたうちの
    いくつかを捨てることになり、**どれが捨てられるかを誰も決めていない**
@@ -2343,7 +2345,14 @@ export async function generateSectionUnique(params, {
   let useSimilar = similar
   const usage = { input: 0, output: 0, cacheRead: 0 }
 
-  for (let attempt = 0; attempt < 5 && items.length < wanted; attempt += 1) {
+  /* ★ **作り直しの回数は、頼まれた問数から出す**（第5.347節）。
+       5 回の決め打ちだったので、窓口が 1 回 30 問までなことと合わせて
+       **150 問が天井**だった —— 応答問題で「上限は無い」と言いながら、
+       **その先は黙って足りなくなる。**
+       **決め方は `genAttempts()` 1か所**（ここで数を書き写さない）。
+       **止まる条件は残す** —— 何回でも回すわけではない */
+  const 作り直しの上限 = genAttempts(wanted)
+  for (let attempt = 0; attempt < 作り直しの上限 && items.length < wanted; attempt += 1) {
     const { data, error } = await generateSection({
       ...params,
       count: wanted - items.length,
