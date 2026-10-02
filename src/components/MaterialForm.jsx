@@ -112,7 +112,8 @@ import {
 import {
   DEFAULT_RESPONSE_COUNT, DEFAULT_RESPONSE_FORM, DEFAULT_RESPONSE_PICK,
   DEFAULT_RESPONSE_SOURCE, RESPONSE_COUNTS, RESPONSE_FORMS, RESPONSE_PICKS,
-  RESPONSE_SOURCES, TIMES_PER_PHRASE, needsLearner, phrasesNeeded, picksCount, pickPhrases,
+  RESPONSE_SOURCES, TIMES_PER_PHRASE, fillAnswerJa, needsLearner, phrasesNeeded,
+  picksCount, pickPhrases,
   questionsFrom, responseBrief, responseNote, responsePlan, usesTextBook,
 } from '../lib/responseDrill.js'
 import { loadResponseRows } from '../lib/responseSources.js'
@@ -1527,6 +1528,16 @@ export default function MaterialForm({
           : undefined,
         tag_no: undefined,
       }))
+
+      /* ★ **解答の訳は、えらんだ表現から埋める**（第5.349節・利用者の指摘
+           「解答に英語しか表示されていなかったのでこれを改善して欲しい」）。
+
+         応答問題の解答は**えらんだ表現そのまま**なので、
+         **その訳は、はじめから手元のファイルにある** ——
+         AI が空で返しても、ここで埋まる（**引き直さないので 0円**）。
+         **埋めるのは空のときだけ。** 判断は `fillAnswerJa()` 1か所で、
+         ここで `kind === 'response'` と書かない */
+      items = fillAnswerJa(items, isResponseKind(kind), resPhrases)
 
       // 交互に並んでいなければ、こちらで並べ直す。
       // 指示だけに頼ると、まとまって並ぶことがある。

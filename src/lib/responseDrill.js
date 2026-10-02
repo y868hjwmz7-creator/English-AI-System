@@ -42,6 +42,11 @@ import { EXAM_SOURCES } from './examBuild.js'
 import { REPLY_RULE } from '../data/replyRule.js'
 /* ★ **記号（(A) ）の落とし方は 1 か所**（第5.346節） */
 import { choiceBody } from './choiceLines.js'
+/* ★ **突き合わせは `normEn()` 1か所**（第5.349節）。
+   大文字小文字・句読点・空白のちがいを吸収する規則は、
+   データベースの `public.norm_en()` と**同じ**ものである ——
+   ここで小さな `toLowerCase()` を書くと、**規則が2つになる** */
+import { normEn } from './textNorm.js'
 
 /**
  * **選べる問題数**(2026-10-01 利用者の指定「選べる問題数は 10 20 30」)。
@@ -360,4 +365,50 @@ export function responseAnswers(material, on) {
     }
   }
   return out
+}
+
+/**
+ * ★ **解答の訳は、えらんだ表現の側にある**（第5.349節・2026-10-02 利用者の指摘）。
+ *
+ *   > A2+以上でも解答に英語しか表示されていなかったのでこれを改善して欲しいです
+ *
+ * 応答問題の `answer` は**トレーナーがえらんだ表現そのまま**である
+ * （作り方に「表現は1文字も変えない」と書いてある）。
+ * つまり**その日本語訳は、はじめから手元のファイルにある** ——
+ * `answer_ja` を AI に書かせる必要はなく、**書かせると空で返ることがある。**
+ *
+ * **ファイルに書いてあるものは引き直さない = 0円**（CLAUDE.md）。
+ * ここで埋めれば、AI が何を返しても**解答の訳が無い問は作られない。**
+ *
+ * - **空のときだけ埋める。** AI が書いたものは上書きしない ——
+ *   場面に合わせて言い換えていることがあり、**黙って別の訳に差し替えない**
+ * - **一覧に無い英文は、何も付けない。** 似ている別の表現の訳を
+ *   当てると、**嘘の訳**になる（0 と `null` を取り違えない、と同じ）
+ * - **応答問題でなければ、1問も触らない**（`on` は呼ぶ側の
+ *   `isResponseKind()` から受け取る。**ここで判じ直さない**）
+ *
+ * @param {Array} items 窓口が返した問
+ * @param {boolean} on 応答問題か(`isResponseKind(kind)`)
+ * @param {Array<{en: string, ja: string}>} phrases えらんだ表現
+ * @returns {Array} 訳を埋めた問（`on` が false なら、渡したものをそのまま）
+ */
+export function fillAnswerJa(items, on, phrases) {
+  const rows = items ?? []
+  if (!on) return rows
+  /* 英文 → 訳。**同じ英文が2つあれば、先に書いてあるほうを使う** */
+  const 訳 = new Map()
+  for (const p of phrases ?? []) {
+    const key = normEn(p?.en)
+    const ja = String(p?.ja ?? '').trim()
+    if (!key || !ja || 訳.has(key)) continue
+    訳.set(key, ja)
+  }
+  if (!訳.size) return rows
+  return rows.map((it) => {
+    if (String(it?.answer_ja ?? '').trim()) return it
+    /* **読む欄と同じ落とし方を通す**（`answerSpeakText()`）——
+       テスト対策のような「(A) …」の形でも突き合わせられる */
+    const ja = 訳.get(normEn(answerSpeakText(it)))
+    return ja ? { ...it, answer_ja: ja } : it
+  })
 }

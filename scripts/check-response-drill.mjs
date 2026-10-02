@@ -743,5 +743,92 @@ console.log('\n▶ 自分でえらぶときは、問数に上限が無い(第5.3
   }
 }
 
+console.log('\n▶ 解答の訳は、えらんだ表現から埋まるか(第5.349節)')
+{
+  /* **表現の訳はファイルにある。** AI に書かせる必要がなく、
+     書かせると**空で返ることがある**(実機で「解答に英語しか出ない」) */
+  const 表現 = [
+    { en: 'I appreciate your help.', ja: '助かります。' },
+    { en: "That's exactly what I had in mind.", ja: 'まさにそう考えていました。' },
+  ]
+  const 空 = [{ answer: 'I appreciate your help.', answer_ja: '' }]
+  is(D.fillAnswerJa(空, true, 表現)[0].answer_ja === '助かります。',
+    '空の訳が、えらんだ表現から埋まる')
+
+  /* **大文字小文字や句読点のちがいを吸収する。**
+     **いちばん危ない形を入れる**(CLAUDE.md)—— そのままの文字で
+     突き合わせていたら、ここで落ちる */
+  const ちがう形 = [{ answer: "that's EXACTLY  what i had in mind", answer_ja: '' }]
+  is(D.fillAnswerJa(ちがう形, true, 表現)[0].answer_ja === 'まさにそう考えていました。',
+    '大文字小文字・句読点・空白がちがっても埋まる')
+
+  /* ★ **記号つきの解答でも埋まる**(テスト対策は「(A) …」の形)。
+       **読む欄と同じ落とし方を通している**かを見る */
+  const 記号つき = [{ answer: '(B) I appreciate your help.', answer_ja: '' }]
+  is(D.fillAnswerJa(記号つき, true, 表現)[0].answer_ja === '助かります。',
+    '記号「(B)」が付いた解答でも埋まる(読む欄と同じ落とし方)')
+
+  /* **黙って上書きしない。** AI が場面に合わせて言い換えていることがある */
+  const すでに = [{ answer: 'I appreciate your help.', answer_ja: 'もう書いてある訳' }]
+  is(D.fillAnswerJa(すでに, true, 表現)[0].answer_ja === 'もう書いてある訳',
+    'すでに訳があるものは、黙って上書きしない')
+
+  /* **嘘の訳を付けない。** 一覧に無い英文には何も足さない
+     (0 と null を取り違えない、と同じ考え方) */
+  const 知らない = [{ answer: 'Something else entirely.', answer_ja: '' }]
+  is(D.fillAnswerJa(知らない, true, 表現)[0].answer_ja === '',
+    '一覧に無い英文には、何も付けない(似ている別の訳を当てない)')
+
+  /* **出ない側も見る**(CLAUDE.md)。応答問題でなければ1問も触らない ——
+     `on` を無視して全部に埋める形に書き換えても、ここで赤くなる */
+  is(D.fillAnswerJa(空, false, 表現)[0].answer_ja === '',
+    '応答問題でなければ、1問も触らない')
+  /* 表現を1つも渡していないときも、落ちずにそのまま返す */
+  is(D.fillAnswerJa(空, true, [])[0].answer_ja === ''
+    && D.fillAnswerJa(空, true, undefined)[0].answer_ja === '',
+    '表現が1つも無ければ、そのまま返す(落ちない)')
+
+  /* **画面が通しているか。** 関数があっても、呼んでいなければ効かない。
+     **名前を先に読み取ってから**その名前で数える(式を書き写さない) */
+  const form = noC(R('src/components/MaterialForm.jsx'))
+  is(/fillAnswerJa\(\s*items\s*,\s*isResponseKind\(kind\)/.test(form),
+    '画面が、生成の直後に `fillAnswerJa()` を通している')
+  /* **画面の中で種類を見分けていない**(判断は1か所) */
+  is(!/kind\s*===\s*'response'/.test(form),
+    "画面の中で `kind === 'response'` と書いていない")
+}
+
+console.log('\n▶ 読み上げた英文の訳は、解答を開くまで出ないか(第5.346 / 5.349節)')
+{
+  /* ★ **2026-10-02 実機の指摘**(第5.349節)。
+
+       > 初めから読み上げられる文の日本語訳が選択肢の上に表示されていました
+       > …解答を見ない限り訳は見れないようにしたいところです
+
+     出どころは**端末に残っていた古い版**だった(いまの版は出さない)。
+     だから**ここで止めておく** —— 3つの画面のどれかで、
+     `prompt_ja` を素のまま出す行が戻ったら赤くなる。
+
+     **「出る」と「出ない」の両方を見る**(CLAUDE.md) */
+  for (const f of [
+    'src/components/LessonView.jsx',
+    'src/components/MaterialBody.jsx',
+    'src/components/LearnerHomework.jsx',
+  ]) {
+    const src = noC(R(f))
+    const 名 = f.split('/').pop()
+    /* ①**素のまま出す行には、必ず「聞く演習ではない」の条件が付く。**
+         `{it.prompt_ja && ...}` だけの行が1つでもあったら赤 */
+    const 素のまま = [...src.matchAll(/\{\s*it\.prompt_ja\s*&&\s*(!?)\s*(\w*)/g)]
+      .filter((m) => !(m[1] === '!' && m[2] === 'audioJaOf'))
+    is(!素のまま.length,
+      `${名} … 読み上げた英文の訳を、素のまま出す行が無い`,
+      素のまま.map((m) => m[0]).join(' / '))
+    /* ②**出す側もある。** 1つも出さない形に書き換えたら、ここで赤くなる */
+    is((src.match(/audioJaOf\(it, sec\.exercise_type\)/g) ?? []).length >= 2,
+      `${名} … 訳は audioJaOf() を通して出している`)
+  }
+}
+
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)
