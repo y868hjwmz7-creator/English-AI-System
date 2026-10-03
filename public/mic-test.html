@@ -170,6 +170,17 @@ audio { width: 100%; margin-top: 10px; }
 </div>
 
 <div class="card">
+  <h2><span class="step">6</span>英語の音声の大きさ</h2>
+  <p class="hint">
+    <strong>先にアプリで教材を開いて、英語の音声を何本か聴いてから</strong>
+    このページを開いてください。<br />
+    アプリが測った大きさが、ここに出ます。<strong>何も押さなくて構いません。</strong>
+  </p>
+  <ul class="rows" id="loud-rows"></ul>
+  <div class="result" id="out-loud"><em>まだ測っていません</em></div>
+</div>
+
+<div class="card">
   <h2>結果</h2>
   <p class="hint">下のボタンでコピーして、そのままチャットに貼ってください。</p>
   <button class="sub" id="btn-copy">結果をコピーする</button>
@@ -961,7 +972,90 @@ audio { width: 100%; margin-top: 10px; }
       wrap.appendChild(b)
     })
     el('out-as').innerHTML = '<em>上のボタンを、上から順に押してください</em>'
-  }())
+  }());
+
+
+  /* ════════════════════════════════════════════════════════════════
+     ★ **英語の音声の大きさ**(第5.363節・2026-10-03 実機
+
+       > まだ音楽がだいぶデカいな
+
+     もっと上げたいが、**上げすぎると割れる。** しかも割れた音は
+     **置いてある MP3 に焼き付く**ので、直すには作り直す(= 課金)しかない。
+
+     **だから、耳ではなく数字で決める。**
+     アプリは鳴らした音声を解いて大きさを測り、端末に控えている
+     (`src/lib/loudness.js`)。**このページは同じ置き場所を読むだけ**なので、
+     **アプリで何本か聴いてから開けば、そのまま数字が出る。**
+     ════════════════════════════════════════════════════════════════ */
+  (function setupLoudness() {
+    /* **鍵を書き写さない。** `loudness.js` と同じ組み立て方で作る ——
+       版(`MEASURE_REV`)が進んだら、ここも自然に新しいほうを読む。
+       **いちばん新しい版から順に探す**(古い控えが残っていても拾う) */
+    var found = null
+    var foundRev = 0
+    for (var rev = 9; rev >= 1; rev -= 1) {
+      var raw = null
+      try { raw = window.localStorage.getItem('eas.loud.' + rev) } catch (e) { raw = null }
+      if (!raw) continue
+      try {
+        var obj = JSON.parse(raw)
+        if (obj && Object.keys(obj).length) { found = obj; foundRev = rev; break }
+      } catch (e) { /* 読めないものは飛ばす */ }
+    }
+
+    if (!found) {
+      el('out-loud').innerHTML = '<span class="warn">まだ1本も測れていません。'
+        + '<strong>アプリで教材を開き、英語の音声を2〜3本聴いてから</strong>'
+        + 'このページを開き直してください。</span>'
+      log('音声の大きさ: まだ1本も測れていない')
+      return
+    }
+
+    /* **山(peak)から、あと何 dB 上げられるかを出す。**
+       山が 1.0 に届いたところで割れる —— 0.5 なら 2倍(= 6dB)まで */
+    var rows = []
+    Object.keys(found).forEach(function (k) {
+      var v = found[k] || {}
+      var rms = Number(v.rms) || 0
+      var peak = Number(v.peak) || 0
+      if (!rms) return
+      rows.push({
+        key: k, rms: rms, peak: peak,
+        room: peak > 0 ? (20 * Math.log10(1 / Math.min(peak, 1))) : null,
+      })
+    })
+    rows.sort(function (a, b) { return b.rms - a.rms })
+
+    el('loud-rows').innerHTML = rows.map(function (r) {
+      var room = r.room === null ? '(山を測れていません)' : ('あと ' + r.room.toFixed(1) + ' dB')
+      return '<li><span class="k">' + r.key + '</span><span class="v">'
+        + '山 ' + r.peak.toFixed(3) + ' / ' + room + '</span></li>'
+    }).join('')
+
+    var 山あり = rows.filter(function (r) { return r.room !== null })
+    log('音声の大きさ(版 ' + foundRev + '・' + rows.length + ' 声)')
+    rows.forEach(function (r) {
+      log('  ' + r.key + ' … 平均 ' + r.rms.toFixed(4) + ' / 山 ' + r.peak.toFixed(4)
+        + (r.room === null ? ' / 山は未測定' : ' / あと ' + r.room.toFixed(1) + 'dB'))
+    })
+
+    if (!山あり.length) {
+      el('out-loud').innerHTML = '<span class="warn">' + rows.length
+        + ' 声ぶん測れていますが、<strong>山がまだ測れていません</strong>。'
+        + 'アプリを開き直して、もう一度音声を聴いてください。</span>'
+      return
+    }
+    /* **いちばん余裕の小さい声が、上げ幅の上限である** */
+    var 最小 = 山あり.reduce(function (a, b) { return a.room < b.room ? a : b })
+    el('out-loud').innerHTML = mark(最小.room >= 1.5,
+      'あと ' + 最小.room.toFixed(1) + ' dB まで上げられます'
+      + '(いちばん余裕の小さい声: ' + 最小.key + ')')
+      + '<br /><span class="hint">この数字をそのまま送ってください。'
+      + '上げ幅をここから決めます。</span>'
+    log('  → 上げられるのは、あと ' + 最小.room.toFixed(1) + 'dB まで('
+      + 最小.key + ' がいちばん余裕が小さい)')
+  }());
 
   el('btn-copy').addEventListener('click', function () {
     var btn = this

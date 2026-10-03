@@ -55,6 +55,11 @@ const LOUD_KEY = `eas.loud.${LOUD_REV}`
  * 実際、これを入れる前は2つめ以降が素通りしていた。
  */
 let seq = 0
+/** **控えはそのまま**に、モジュールだけ読み直す(第5.363節) */
+async function fresh() {
+  seq += 1
+  return import(`../src/lib/loudness.js?v=${seq}`)
+}
 async function withVoices(voices) {
   seq += 1
   const mod = await import(`../src/lib/loudness.js?v=${seq}`)
@@ -264,6 +269,90 @@ check('画面の描き替え(rAF)には頼っていない(粗すぎた)',
   !clips.includes('requestAnimationFrame'))
 check('止めるときもなだらかに下げている(`FADE_STOP`)',
   clips.includes('FADE_STOP') && clips.includes('setInterval'))
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **あと何 dB 上げられるか**(第5.363節・2026-10-03 実機)
+
+     > まだ音楽がだいぶデカいな
+
+   上げたいが、**上げすぎると割れる。** しかも割れた音は置いてある MP3 に
+   焼き付くので、直すには作り直す(= 課金)しかない。
+   **だから耳ではなく、いちばん大きな山(peak)から数字で決める。**
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const loudSrc = readFileSync(
+    new URL('../src/lib/loudness.js', import.meta.url), 'utf8')
+
+  /* ── ① **計算そのもの**(山が 1.0 に届いたところで割れる)── */
+  store.clear()
+  store.set(LOUD_KEY, JSON.stringify({
+    'premium|a': { rms: 0.05, peak: 0.5 },      // ちょうど半分 → あと 6dB
+    'premium|b': { rms: 0.04, peak: 1 },        // もう目一杯 → あと 0dB
+    'premium|c': { rms: 0.03 },                 // 山を測っていない
+  }))
+  const L2 = await fresh()
+  const 六 = L2.headroomDb('premium', 'a')
+  check('山が半分なら、あと 6dB 上げられる',
+    六 !== null && Math.abs(六 - 6.0206) < 0.01, `${六}`)
+  check('山が目一杯なら、あと 0dB(これ以上は割れる)',
+    L2.headroomDb('premium', 'b') === 0)
+  /* **0 と「測っていない」を混ぜない**(CLAUDE.md)——
+     0 を返すと「余裕が無い」と取り違え、**上げられるのに上げなくなる** */
+  check('山を測っていなければ `null`(0 と取り違えない)',
+    L2.headroomDb('premium', 'c') === null
+    && L2.headroomDb('premium', 'zzz') === null)
+  /* **1 を超える山でも、負の余裕を返さない** */
+  store.clear()
+  store.set(LOUD_KEY, JSON.stringify({ 'premium|a': { rms: 0.05, peak: 1.4 } }))
+  const L3 = await fresh()
+  check('1 を超えた山でも、余裕は 0 で止まる(負を返さない)',
+    L3.headroomDb('premium', 'a') === 0)
+
+  /* ── ② **並べて返す側**(診断のページがそのまま出す)── */
+  store.clear()
+  store.set(LOUD_KEY, JSON.stringify({
+    'premium|a': { rms: 0.03, peak: 0.5 },
+    'premium|b': { rms: 0.06, peak: 0.8 },
+    'premium|c': { rms: 0 },                    // 測り損ね
+  }))
+  const L4 = await fresh()
+  const rows = L4.loudnessRows()
+  check('測れた声だけを返す(測り損ねは落とす)', rows.length === 2, `${rows.length} 声`)
+  check('大きい順に並ぶ', rows[0]?.key === 'premium|b')
+  check('余裕も添える', Math.abs((rows[1]?.headroom ?? 0) - 6.0206) < 0.01)
+  store.clear()
+  check('1声も測れていなければ、空で返す(落ちない)',
+    (await fresh()).loudnessRows().length === 0)
+
+  /* ── ③ ★ **山は「生の波」で測っているか** ──
+         耳の感じ方に合わせた波(`shaped`)は**測るために形を変えてある**。
+         あちらで測ると、**割れるかどうかの判断がずれる**
+         (数え方を2通り持たない・CLAUDE.md) */
+  check('山は、生の波(`buf`)で測っている(形を変えた波で測っていない)',
+    /const raw = buf\.getChannelData\(0\)/.test(loudSrc))
+
+  /* ── ④ ★ **山は間引かずに測っているか** ──
+         平均(RMS)は間引いてよいが、**山は1点しかないことがある。**
+         間引くと、いちばん大きいところを**跨いで見落とす** */
+  const 山の輪 = loudSrc.match(/let peak = 0[\s\S]{0,200}?\n    \}/)?.[0] ?? ''
+  check('山は間引かずに、1点ずつ見ている',
+    /i \+= 1\)/.test(山の輪) && !/i \+= step/.test(山の輪), 山の輪.split('\n')[1] ?? '')
+
+  /* ── ⑤ **診断のページが、同じ置き場所を読んでいるか** ──
+         素の関数だけ見ると、**ページが読んでいなくても緑になる** */
+  const page = readFileSync(
+    new URL('../public/mic-test.html', import.meta.url), 'utf8')
+  check('診断のページが、アプリの控えを読んでいる',
+    /'eas\.loud\.' \+ rev/.test(page))
+  check('診断のページが、鍵を書き写していない(版は順に探す)',
+    !/'eas\.loud\.4'|"eas\.loud\.4"/.test(page))
+  check('診断のページが、あと何 dB かを出している',
+    /20 \* Math\.log10\(1 \/ Math\.min\(peak, 1\)\)/.test(page))
+  /* **いちばん余裕の小さい声が、上げ幅の上限である** */
+  check('診断のページが、いちばん余裕の小さい声を選んでいる',
+    /a\.room < b\.room \? a : b/.test(page))
+}
 
 console.log(failed
   ? `\n❌ ${failed} 件が意図どおりではありません`

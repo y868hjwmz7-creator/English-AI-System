@@ -125,7 +125,9 @@ const SILENCE = 0.02
  *
  *   1 … 波形をそのまま二乗した平均(素の RMS)
  *   2 … **耳の感じ方に合わせてから**測る(下記)
- *   3 … ★ **音声そのものの大きさが変わった**(第5.362節)。
+ *   4 … ★ **上げ幅を変え、`peak`(いちばん大きな山)も控えるようにした**
+ *        (第5.363節)。**どこまで上げられるかを、端末から読み取るため。**
+ *   3 … **音声そのものの大きさが変わった**(第5.362節)。
  *        窓口が置くときに MP3 の `global_gain` を上げるようにしたので、
  *        **これから作る音声は 3dB 大きい。**
  *        測り方は変えていないが、**測った値の意味が変わった** ——
@@ -134,7 +136,7 @@ const SILENCE = 0.02
  *        進めれば次に鳴らしたときに測り直される(1声につき1回・**0円**。
  *        鳴らすために取ってある音をそのまま測るだけで、窓口は呼ばない)
  */
-const MEASURE_REV = 3
+const MEASURE_REV = 4
 
 const KEY = `eas.loud.${MEASURE_REV}`
 
@@ -212,6 +214,44 @@ export function gainFor(tier, voice) {
 
 /** もう測ってあるか */
 export const isMeasured = (tier, voice) => !!load()[loudKey(tier, voice)]?.rms
+
+/**
+ * ★ **その声は、あと何 dB 上げても割れないか**(第5.363節)。
+ *
+ *   > まだ音楽がだいぶデカいな
+ *
+ * **いちばん大きな山が 1.0 に届いたところで割れる。**
+ * 山が 0.5 なら、2倍(= 6dB)までは割れない。
+ *
+ * **ここは「鳴らすため」ではなく「どこまで上げられるかを知るため」**である
+ * (窓口の `EN_BOOST_DB` を、耳ではなく数字で決められるようにする)。
+ *
+ * **測っていなければ `null`。** 0 を返すと「余裕が無い」と取り違える
+ * (0 と「数えられなかった」を混ぜない・CLAUDE.md)。
+ */
+export function headroomDb(tier, voice) {
+  const peak = load()[loudKey(tier, voice)]?.peak
+  if (!(peak > 0)) return null
+  return 20 * Math.log10(1 / Math.min(peak, 1))
+}
+
+/**
+ * ★ **測れている声ぜんぶを、大きい順に返す**(第5.363節)。
+ *
+ * 診断のページ(`public/mic-test.html`)が、そのまま並べる。
+ * **いちばん余裕の小さい声が、上げ幅の上限**である。
+ */
+export function loudnessRows() {
+  return Object.entries(load())
+    .map(([key, v]) => ({
+      key,
+      rms: Number(v?.rms) || 0,
+      peak: Number(v?.peak) || 0,
+      headroom: v?.peak > 0 ? 20 * Math.log10(1 / Math.min(v.peak, 1)) : null,
+    }))
+    .filter((r) => r.rms > 0)
+    .sort((a, b) => b.rms - a.rms)
+}
 
 /** いま測っているもの。**同じ声を二度測らない** */
 const measuring = new Set()
@@ -311,7 +351,27 @@ export async function measureClip(url, tier, voice) {
     }
     if (!heard) return false
 
-    load()[key] = { rms: Math.sqrt(sum / heard) }
+    /* ★ **いちばん大きな山も控える**(第5.363節)。
+
+         > まだ音楽がだいぶデカいな
+
+       もっと上げたいが、**上げすぎると割れる。** どこまで上げられるかは
+       **いちばん大きな山**で決まる(山が 0.5 なら、あと2倍 = 6dB)。
+
+       **耳の感じ方に合わせた波(`shaped`)では測らない。**
+       割れるのは**生の波**のほうで、あちらは測るために形を変えてある ——
+       **数え方を2通り持たない**(CLAUDE.md)。
+
+       **間引かない。** 山は1点しかないことがあるので、
+       間引くと**いちばん大きいところを跨いで見落とす。** */
+    const raw = buf.getChannelData(0)
+    let peak = 0
+    for (let i = 0; i < raw.length; i += 1) {
+      const v = Math.abs(raw[i])
+      if (v > peak) peak = v
+    }
+
+    load()[key] = { rms: Math.sqrt(sum / heard), peak }
     save()
     return true
   } catch {
