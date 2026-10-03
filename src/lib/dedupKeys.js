@@ -97,3 +97,27 @@ export function dropDuplicates(items, usedSet, repeatAnswer = false) {
   }
   return { kept, dropped }
 }
+
+/**
+ * ★ **設問そのもの**(第5.354節・2026-10-03 利用者の指定)。
+ *
+ *   > テスト対策や応答問題で、全く同じ設問が散見されます。…
+ *   > これは絶対に同じ設問は作らない設定にしてください
+ *
+ * **解答(`answer`)は入れない。** 理由が2つある。
+ *
+ *   ①**応答問題は、1つの表現をわざと2回**正解にする(第5.345節)
+ *   ②単語やフレーズの解答は**1語**である —— スクール全体で二度と
+ *     使えなくすると、**ありふれた語が永久に使えなくなる**
+ *
+ * **設問の本体は `prompt_en`(読んで答える)か `audio_text`(聞いて答える)**
+ * のどちらかに入る。VERSANT Part A と応答問題は後者である。
+ */
+const askFieldsOf = (item) => [item?.prompt_en, item?.audio_text]
+
+/** 照合のための鍵(そろえた形) */
+export const askKeysOf = (item) => askFieldsOf(item).map(normEn).filter(Boolean)
+
+/** 問い合わせに渡す、もとの文字のまま */
+export const rawAsksOf = (item) => askFieldsOf(item)
+  .map((v) => String(v ?? '').trim()).filter(Boolean)

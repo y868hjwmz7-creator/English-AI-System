@@ -1056,5 +1056,70 @@ console.log('\n▶ 窓口が必須にしている欄を、作り方が「空に�
     '窓口は question を必須にしていない(設問の無い問が、ほんとうに在る)')
 }
 
+console.log('\n▶ 同じ設問を二度と作らないか(テスト対策と応答問題・第5.354節)')
+{
+  /* ★ **2026-10-03 実機。「同じレベルで2つ教材を作ったら 5 個くらい同じ設問」。**
+
+       出どころは**照合が1文も見ていなかったこと**である。
+       `used_sentences()`(0008 の SQL)は**ゲストか弱点タグで絞った教材**しか
+       見ないのに、テスト対策と応答問題は**タグが要らず、作る時点では
+       まだ誰にも共有していない** —— どちらの条件にも当たらなかった。 */
+  const { asksUnique } = await import('../src/data/materialKinds.js')
+
+  /* **出る側と出ない側の両方**(CLAUDE.md)。全部 true を返す形に
+     書き換えても緑にならないよう、**当たらない種類も数える** */
+  is(asksUnique('exam') && asksUnique('response'),
+    'テスト対策と応答問題では、設問をスクール全体で照合する')
+  const ほか = NEW_MATERIAL_KINDS.filter((k) => !asksUnique(k.id))
+  is(ほか.length >= 3,
+    'ほかの種類はこれまでどおり(作れる教材が痩せない)',
+    ほか.map((k) => k.id).join(' / '))
+
+  /* ★ **解答は見ない。** 応答問題は1つの表現をわざと2回正解にするし、
+       単語の解答は1語である —— 入れると**ありふれた語が永久に使えなくなる** */
+  const 問 = { prompt_en: '', audio_text: 'What is frozen water called?', answer: 'Ice.' }
+  is(K.askKeysOf(問).length === 1 && !K.askKeysOf(問).some((k) => /ice/.test(k)),
+    '設問の鍵に、解答を入れていない', K.askKeysOf(問).join(' / '))
+  /* **読んで答える問も、聞いて答える問も、どちらも拾う** */
+  is(K.askKeysOf({ prompt_en: 'She ( ) early.' }).length === 1
+    && K.askKeysOf({ audio_text: 'Are you free?' }).length === 1
+    && K.askKeysOf({}).length === 0,
+    '読む問も聞く問も拾い、空なら何も返さない')
+  /* **そろえた形と、もとの文字の両方を出す**(問い合わせには、もとの文字を渡す) */
+  is(K.rawAsksOf(問)[0] === 'What is frozen water called?',
+    '問い合わせには、もとの文字のまま渡す')
+
+  /* **作る側が、その段を通しているか。** 関数があっても呼んでいなければ効かない */
+  const mats = noC(R('src/lib/materials.js'))
+  is(/askUnique && survived\.length/.test(mats),
+    '作る側が、設問の照合を1段通している')
+  is(/findUsedAsks\(asks\)/.test(mats), '照合は台帳をまるごと見ている(絞らない)')
+  /* ★ **まとめて1回で訊かない。** 長い英文を並べると URL が切られ、
+       **切られたぶんは「使われていない」ことになる** */
+  is(/ASK_CHUNK/.test(mats) && /i \+= ASK_CHUNK/.test(mats),
+    '照合を小分けにしている(長い URL で切られない)')
+
+  /* **画面が渡しているか。** 判断は1か所で、画面で種類を見分けない */
+  const form = noC(R('src/components/MaterialForm.jsx'))
+  is(/askUnique: asksUnique\(kind\)/.test(form),
+    '画面が `asksUnique(kind)` を渡している')
+
+  /* ★ **誘導のほうも直っているか**(落とすだけだと、問数が足りなくなる)。
+       タグが無ければ、**同じ種類(同じ PART)**から集める */
+  /* **道は2つある**(本文を作る道と、ドリル / テスト対策の道)。
+     **両方**が同じ集め方をしていること —— 片方だけだと、
+     **タグの要らない種類がまた素通りする**(それが今回の形である) */
+  const 集め方 = (form.match(/await loadUsedSentencesLike\(likeQuery\(\)\)/g) ?? []).length
+  is(集め方 === 2,
+    'タグが無いときも、同じ種類から避ける英文を集めている(2つの道とも)',
+    `${集め方} か所`)
+  /* **PART で絞っているか** —— テスト対策は `kind` がぜんぶ `exam` なので、
+     絞らないと TOEIC の英文で VERSANT Part A の棚が埋まる */
+  is(/titleLike: isExamKind\(kind\) \? examTitle\(examId, partId\)/.test(form),
+    '集めるとき、同じ PART のものに絞っている')
+  is(/if \(titleLike\) query = query\.ilike\('title'/.test(noC(R('src/lib/materials.js'))),
+    '絞り込みが、本当に問い合わせに効いている')
+}
+
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

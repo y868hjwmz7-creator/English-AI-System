@@ -40,6 +40,7 @@ import {
   NEW_MATERIAL_KINDS, assignMaterial, countMaterialsLike, createMaterial, estimateCost,
   fillGrammar, generateChunkJa, generateSection,
   bodyWord, canPasteBody, freeFromSubject, generateSectionUnique,
+  asksUnique,
   isDialogueKind, isExamKind, isPassageKind, isResponseKind, isVocabKind, needsWeakTag,
   repeatsAnswer,
   isDrillKind,
@@ -942,6 +943,12 @@ export default function MaterialForm({
        同じ業界のスピーチを避けるほうが役に立つ) */
     genre: kind === 'reading' ? genre : '',
     scene: isDialogueKind(kind) ? scene : '',
+    /* ★ **同じ PART のものだけを集める**(第5.354節)。
+         テスト対策は `kind` がぜんぶ `exam` なので、絞らないと
+         **TOEIC の英文で VERSANT Part A の棚が埋まる**。
+         **PART の名前は教材の名前に入っている**(`examTitle`・第5.309節)ので、
+         そこで絞る。**名前を組み立てるのはあちら1か所** */
+    titleLike: isExamKind(kind) ? examTitle(examId, partId) : '',
   })
 
   /** 弱点タグを、AI に渡す文言にする */
@@ -1425,8 +1432,16 @@ export default function MaterialForm({
    * 弱点が複数なら問数を分けて、1問ずつ交互に並べる(第5.16.1節)。
    */
   const generateDrill = async ({ step, cancelled }) => {
-    // ① 生成の前に、すでに使った英文を渡して避けさせる(誘導)
-    const { data: used } = await loadUsedSentences(tagIds)
+    /* ① 生成の前に、すでに使った英文を渡して避けさせる(誘導)
+
+       ★ **タグが無ければ、同じ種類(同じ PART)から集める**(第5.354節)。
+         テスト対策と応答問題は**弱点タグが要らない**ので、ここは
+         **ずっと空のまま**だった —— AI は前に何を作ったかを知らずに書き、
+         同じ設問が何度も出ていた。**本文を作る道では、前からこうしてある**
+         (0046)。**こちらにだけ無かった。** */
+    const { data: used } = tagIds.length
+      ? await loadUsedSentences(tagIds)
+      : await loadUsedSentencesLike(likeQuery())
     const usedSet = new Set((used ?? []).map(normEn))
 
     const plan = planNow()
@@ -1505,6 +1520,14 @@ export default function MaterialForm({
                **解答を重複の鍵にすると問数がきっちり半分になる**。
                **判断は `repeatsAnswer()` 1 か所**(ここで `kind === …` と書かない) */
           repeatAnswer: repeatsAnswer(kind),
+          /* ★ **同じ設問を二度と作らない**(第5.354節・利用者の指定
+               「これは絶対に同じ設問は作らない設定にしてください」)。
+
+             テスト対策と応答問題は**弱点タグが要らず、作る時点では
+             まだ誰にも共有していない**ので、これまでの照合は
+             **1文も見ていなかった**。ここだけ、台帳をまるごと照合する。
+             **判断は `asksUnique()` 1か所**(ここで `kind === …` と書かない) */
+          askUnique: asksUnique(kind),
         },
       )
       if (result.error) throw new Error(result.error)

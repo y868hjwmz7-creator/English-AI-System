@@ -17,7 +17,9 @@ import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
 import { emptyDropCounts } from './dropReasons.js'
 import { normEn } from './textNorm.js'
 /* ★ **重複を見る鍵**(第5.345節)。素の node で測れる形に出してある */
-import { dropDuplicates, rawSentencesOf, sentencesOf } from './dedupKeys.js'
+import {
+  askKeysOf, dropDuplicates, rawAsksOf, rawSentencesOf, sentencesOf,
+} from './dedupKeys.js'
 /* ★ **作り直しの回数**（第5.347節）。素の node で測れる形に出してある */
 import { genAttempts } from './genAttempts.js'
 /* **「この英文は避けて」と渡す本数**(第5.261節)。
@@ -90,6 +92,7 @@ export {
   isExamKind,
   /* ★ **応答問題か**(0073・第5.332節)。**同じ理由でここへ足す** ——
        足し忘れると、画面からは「存在しない名前」になる */
+  asksUnique,
   isResponseKind,
   /* ★ **解答がわざと何度も正解になる種類か**（第5.345節）。同じ理由でここへ足す */
   repeatsAnswer,
@@ -2000,7 +2003,50 @@ export { normEn }
 
    **中身は 1 行も変えずに移した** —— 呼ぶ側は 1 行も変わらない
    (`normEn` を `textNorm.js` へ出したときと、まったく同じ作法)。 */
-export { dropDuplicates, rawSentencesOf, sentencesOf }
+export { askKeysOf, dropDuplicates, rawAsksOf, rawSentencesOf, sentencesOf }
+
+/**
+ * ★ **その設問は、スクールのどこかで一度でも使われたか**
+ * (第5.354節・2026-10-03 利用者の指定)。
+ *
+ *   > 特にVERSANTのPART Aの問題など、同じレベルで2つ教材を作ったら
+ *   > すでに5個くらい同じ設問でした。これは絶対に同じ設問は作らない設定に
+ *
+ * ── なぜ、これまでの照合では止まらなかったか ──────────────────
+ *
+ *   `used_sentences()`(②の保証)は、**ゲストか弱点タグで絞った教材**しか
+ *   見ない(0008 の SQL)。ところがテスト対策と応答問題は
+ *
+ *     ・**弱点タグが要らない**(`needsWeakTag` が false)
+ *     ・**作る時点では、まだ誰にも共有していない**
+ *
+ *   ので、**どちらの条件にも当たらず、1文も返っていなかった。**
+ *   **保証が、まるごと働いていなかった**ことになる。
+ *
+ * ── なぜ SQL を足さずに済ませるか ────────────────────────────
+ *
+ *   台帳(`material_sentences`)は**トレーナーなら全部見てよい**
+ *   (0008 の RLS)。だから**こちらから直に照合できる** ——
+ *   利用者に SQL を貼ってもらう必要がない(**DDL は戻せない**・CLAUDE.md)。
+ *
+ * **まとめて1回で訊かない。** 長い英文を 100 本も並べると URL が長くなり、
+ * 途中で切られる(**切られると「使われていない」ことになってしまう**)。
+ */
+const ASK_CHUNK = 25
+
+export async function findUsedAsks(candidates) {
+  if (!supabase || !candidates?.length) return ok(new Set())
+  const keys = [...new Set((candidates ?? []).map(normEn).filter(Boolean))]
+  const out = new Set()
+  for (let i = 0; i < keys.length; i += ASK_CHUNK) {
+    const { data, error } = await supabase
+      .from('material_sentences').select('text_norm')
+      .in('text_norm', keys.slice(i, i + ASK_CHUNK))
+    if (error) return fail(error, 'すでに使った設問を照合できませんでした')
+    for (const row of data ?? []) if (row?.text_norm) out.add(row.text_norm)
+  }
+  return ok(out)
+}
 
 /**
  * その弱点タグですでに使われている英文を集める(①の誘導用)。
@@ -2030,12 +2076,19 @@ export async function loadUsedSentences(tagIds, limit = AVOID_MAX) {
  *   **そこから集める。**
  */
 export async function loadUsedSentencesLike({
-  kind = '', industry = '', genre = '', scene = '', limit = AVOID_MAX,
+  kind = '', industry = '', genre = '', scene = '', titleLike = '', limit = AVOID_MAX,
 } = {}) {
   if (!supabase || !kind) return ok([])
   let query = supabase
     .from('materials').select('id').eq('kind', kind)
     .order('created_at', { ascending: false }).limit(20)
+  /* ★ **同じ PART のものだけを集める**(第5.354節)。
+       テスト対策は `kind` がぜんぶ `exam` なので、絞らないと
+       **TOEIC の英文で VERSANT Part A の棚が埋まる** ——
+       いちばん避けたい「前に作った同じ PART」が1本も渡らない。
+       **PART の名前は教材の名前に入っている**(`examTitle`・第5.309節)。
+       **業種では絞らない**(テスト対策に業種は無い) */
+  if (titleLike) query = query.ilike('title', `%${titleLike}%`)
   query = industry ? query.eq('industry', industry) : query.is('industry', null)
   if (genre) query = query.eq('genre', genre)
   if (scene) query = query.eq('scene', scene)
@@ -2314,6 +2367,13 @@ export async function generateSectionUnique(params, {
        ここで `kind === …` と書かない。
        **渡さなければ、これまでとまったく同じ**である */
   repeatAnswer = false,
+  /* ★ **設問を、スクール全体で二度と出さないか**(第5.354節)。
+
+       テスト対策と応答問題は**弱点タグが要らず、作る時点では誰にも
+       共有していない**ので、これまでの照合(②)が1文も返していなかった。
+       **渡さなければ、これまでとまったく同じ**である ——
+       **どの種類がそうなのかは呼ぶ側が決める**(ここで `kind === …` と書かない) */
+  askUnique = false,
 }) {
   const wanted = params.count
   const items = []
@@ -2418,7 +2478,7 @@ export async function generateSectionUnique(params, {
       hit.forEach((k) => used.add(k))
     }
 
-    const survived = []
+    let survived = []
     for (const it of kept) {
       const keys = sentencesOf(it, repeatAnswer)
       if (keys.some((k) => used.has(k))) {
@@ -2427,6 +2487,35 @@ export async function generateSectionUnique(params, {
       } else {
         survived.push(it)
       }
+    }
+
+    /* ★ **②' 設問そのものを、スクール全体で照合する**(第5.354節)。
+
+         > これは絶対に同じ設問は作らない設定にしてください
+
+       上の②は**ゲストか弱点タグで絞った教材**しか見ない。
+       テスト対策と応答問題は**タグが要らず、作る時点では誰にも
+       共有していない**ので、**②はこれまで1文も返していなかった。**
+
+       ここは**絞らない。** 台帳(`material_sentences`)をまるごと見る。
+       見るのは**設問の本体だけ**(`prompt_en` / `audio_text`)——
+       解答まで見ると、応答問題の「わざと2回」と、単語の1語が巻き添えになる
+       (**判断は `askKeysOf()` 1か所**)。 */
+    if (askUnique && survived.length) {
+      const asks = survived.flatMap((it) => rawAsksOf(it))
+      const { data: usedAsk, error: askError } = await findUsedAsks(asks)
+      if (askError) return { error: askError }
+      const 残り = []
+      for (const it of survived) {
+        const keys = askKeysOf(it)
+        if (keys.some((k) => usedAsk.has(k))) {
+          落とす('used')
+          keys.forEach((k) => usedSet.add(k))   // 二度と候補に出さない
+        } else {
+          残り.push(it)
+        }
+      }
+      survived = 残り
     }
 
     // ③ 意味が近すぎる英文
