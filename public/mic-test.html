@@ -156,6 +156,20 @@ audio { width: 100%; margin-top: 10px; }
 </div>
 
 <div class="card">
+  <h2><span class="step">5</span>ほかのアプリの音(Spotify など)</h2>
+  <p class="hint">
+    <strong>先に音楽アプリで曲を鳴らしてから</strong>、このページに戻って
+    下のボタンを上から順に押してください。<br />
+    ボタンを押すと <strong>2秒の「ポー」という音</strong>が鳴ります。
+    そのあいだ <strong>音楽が小さくなるか・止まるか・変わらないか</strong>を
+    聞き分けて、最後に教えてください。
+  </p>
+  <ul class="rows" id="as-rows"></ul>
+  <div id="as-buttons"></div>
+  <div class="result" id="out-as"><em>まだ試していません</em></div>
+</div>
+
+<div class="card">
   <h2>結果</h2>
   <p class="hint">下のボタンでコピーして、そのままチャットに貼ってください。</p>
   <button class="sub" id="btn-copy">結果をコピーする</button>
@@ -839,6 +853,115 @@ audio { width: 100%; margin-top: 10px; }
   })
 
   /* ---------- 結果のコピー ---------- */
+
+
+  /* ════════════════════════════════════════════════════════════════
+     ★ **ほかのアプリの音(第5.360節・2026-10-03 実機
+        「音楽アプリの音量を小さくする機能が効いていません」)**
+
+     W3C の仕様は `transient` について「**小さくすることもある(maybe)**」
+     としか書いておらず、**実装は Safari だけ**である。
+     こちらからは iOS を1度も動かせないので、**推測で値を変えない。**
+     **この端末が何を受け付け、何が起きるかを、ここで数える。**
+     (CLAUDE.md「端末に何が入っているかを、当て推量で決めない」)
+     ════════════════════════════════════════════════════════════════ */
+  var AS_TYPES = ['auto', 'playback', 'transient', 'transient-solo', 'ambient', 'play-and-record']
+  function audioSessionOf() {
+    try { return (typeof navigator !== 'undefined' && navigator.audioSession) || null }
+    catch (e) { return null }
+  }
+
+  /** 2秒の「ポー」。**その場で作る(通信もファイルも要らない)** */
+  function toneUrl(seconds, hz) {
+    var rate = 8000
+    var n = Math.round(rate * seconds)
+    var bytes = 44 + n * 2
+    var b = new Uint8Array(bytes)
+    var dv = new DataView(b.buffer)
+    function str(at, t) { for (var i = 0; i < t.length; i += 1) b[at + i] = t.charCodeAt(i) }
+    str(0, 'RIFF'); dv.setUint32(4, bytes - 8, true); str(8, 'WAVEfmt ')
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true)
+    dv.setUint32(24, rate, true); dv.setUint32(28, rate * 2, true)
+    dv.setUint16(32, 2, true); dv.setUint16(34, 16, true)
+    str(36, 'data'); dv.setUint32(40, n * 2, true)
+    for (var i = 0; i < n; i += 1) {
+      dv.setInt16(44 + i * 2, Math.round(Math.sin((2 * Math.PI * hz * i) / rate) * 9000), true)
+    }
+    var bin = ''
+    for (var k = 0; k < b.length; k += 1) bin += String.fromCharCode(b[k])
+    return 'data:audio/wav;base64,' + btoa(bin)
+  }
+
+  function asRows() {
+    var s = audioSessionOf()
+    var rows = [
+      ['音の種類を宣言できるか', s ? 'できる' : 'できない(この端末では何もしていません)', !!s],
+    ]
+    if (s) {
+      var t = ''; var st = ''
+      try { t = String(s.type) } catch (e) { t = '(読めない)' }
+      try { st = String(s.state) } catch (e) { st = '(この端末には無い)' }
+      rows.push(['いま宣言しているもの', t, null])
+      rows.push(['いまの状態', st, null])
+    }
+    el('as-rows').innerHTML = rows.map(function (r) {
+      var v = r[2] === null ? r[1] : mark(r[2], r[1])
+      return '<li><span class="k">' + r[0] + '</span><span class="v">' + v + '</span></li>'
+    }).join('')
+  }
+
+  (function setupAudioSession() {
+    var s = audioSessionOf()
+    results.hasAudioSession = !!s
+    log('音の種類の宣言: ' + (s ? 'できる' : 'できない'))
+    asRows()
+    if (!s) {
+      el('out-as').innerHTML = '<span class="warn">この端末は、音の種類を宣言できません。'
+        + 'ほかのアプリの音は、もともと止めていません。</span>'
+      el('as-buttons').innerHTML = ''
+      return
+    }
+    var tone = toneUrl(2, 440)
+    var wrap = el('as-buttons')
+    AS_TYPES.forEach(function (want) {
+      var b = document.createElement('button')
+      b.className = 'sub'
+      b.textContent = want + ' で2秒鳴らす'
+      b.addEventListener('click', function () {
+        var before = ''
+        try { before = String(s.type) } catch (e) { before = '?' }
+        var threw = ''
+        try { s.type = want } catch (e) { threw = String(e && e.message || e) }
+        var after = ''
+        try { after = String(s.type) } catch (e) { after = '?' }
+        /* ★ **受け付けたかどうかは、読み返して決める** ——
+             投げなくても黙って無視されることがある */
+        var 受けた = after === want
+        var line = want + ' … 宣言の前 ' + before + ' / 宣言の後 ' + after
+          + (threw ? ' / 断られた: ' + threw : '')
+        log(line)
+        var a = new Audio(tone)
+        a.addEventListener('ended', function () {
+          var st = ''
+          try { st = String(s.state) } catch (e) { st = '-' }
+          log('  鳴り終わり … 状態 ' + st + ' / 種類 ' + (function () {
+            try { return String(s.type) } catch (e) { return '?' }
+          })())
+        })
+        a.play().then(function () {
+          el('out-as').innerHTML = mark(受けた, want + ' を宣言 → 読み返すと ' + after)
+            + '<br /><span class="hint">鳴っているあいだ、音楽がどうなったかを覚えておいてください</span>'
+        }).catch(function (e) {
+          log('  鳴らせませんでした: ' + (e && e.message || e))
+          el('out-as').innerHTML = '<span class="ng">' + want
+            + ' … 音が鳴りませんでした(' + (e && e.message || e) + ')</span>'
+        })
+        setTimeout(asRows, 2400)
+      })
+      wrap.appendChild(b)
+    })
+    el('out-as').innerHTML = '<em>上のボタンを、上から順に押してください</em>'
+  }())
 
   el('btn-copy').addEventListener('click', function () {
     var btn = this

@@ -14094,6 +14094,62 @@ console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第
     '知らない値をえらばれても、既定(止める)に落ちる')
   A.forgetAudioSession()
 
+  /* ★ **えらんであるものが「混ざる側」なら、起動のときからそれを宣言する**
+       (第5.360節・2026-10-03 実機「音楽アプリの音量を小さくする機能が
+       効いていません」)。
+
+     端末が音の扱いを決めるのは**最初に鳴らした時**なので、
+     `ambient` で始めてから `transient` へ変えても**効かないことがありうる。**
+     `ambient` も `transient` も**どちらも音楽を止めない**ので、
+     起動のときに宣言しても第5.351節の約束は破れない。 */
+  /* ★ **測るのは「えらんだ直後」ではなく「次に開いたとき」である。**
+       端末が音の扱いを決めるのは最初に鳴らした時なので、
+       **開き直したときに何を宣言するか**が効きどころ ——
+       だから**しまってある値から読み直させる**(手元には `window` が無いので、
+       しまい場所を1つ差し込む。終わったら必ず戻す) */
+  const 前のwindow = globalThis.window
+  let しまった = ''
+  globalThis.window = {
+    localStorage: {
+      getItem: () => しまった,
+      setItem: (_k, v) => { しまった = v },
+    },
+  }
+  for (const m of A.MIX_MODES) {
+    A.forgetAudioSession(); A.setMixMode(m.id)
+    /* **ここで開き直す。** 覚えていた値を捨て、しまってあるほうから読む */
+    A.forgetAudioSession()
+    const 起動 = A.mixWithOthers()
+    const 鳴らす = A.takeOverAudio()
+    if (m.id === 'off') {
+      ok(起動 === A.MIX_TYPE && 鳴らす === A.OWN_TYPE,
+        '「止める」… 起動では音楽を止めず、鳴らすときに主になる', `${起動} → ${鳴らす}`)
+    } else {
+      ok(起動 === 鳴らす,
+        `「${m.label}」… 起動のときから、鳴らすときと同じ宣言`, `${起動} → ${鳴らす}`)
+    }
+  }
+  /* **主になる種類で始めていないか**(起動しただけで音楽が消える)。
+     **一覧は上の節と同じもの**を使う —— 書き写すと片方だけ古くなる */
+  const 起動の種類 = A.MIX_MODES.map((m) => {
+    A.forgetAudioSession(); A.setMixMode(m.id); A.forgetAudioSession()
+    return A.mixWithOthers()
+  })
+  ok(!起動の種類.some((t) => 主になる.includes(t)),
+    'どれをえらんでいても、起動しただけでは音楽を止めない', 起動の種類.join(' / '))
+  /* ★ **しまってある値を読み直しているか。**
+       読まずに決め打ちしていると、**開き直したとたん元に戻る** */
+  A.forgetAudioSession(); しまった = 'duck'
+  ok(A.mixMode() === 'duck' && A.mixWithOthers() === A.DUCK_TYPE,
+    '開き直しても、えらんであるものから宣言を決める', A.audioSessionNow())
+  /* **前の版の `on` も落とさない**(「そのまま」に読み替える) */
+  A.forgetAudioSession(); しまった = 'on'
+  ok(A.mixMode() === 'mix', '前の版の「混ぜる」をえらんでいた人も落とさない', A.mixMode())
+  /* **必ず戻す**(CLAUDE.md) */
+  if (前のwindow === undefined) delete globalThis.window
+  else globalThis.window = 前のwindow
+  A.forgetAudioSession()
+
   /* **効かない端末には、設定を出さない**(効かない操作を見せない) */
   const nav = noC(src('src/components/NavSettings.jsx'))
   ok(/mixWorks\(\) && \(/.test(nav), '宣言が効く端末にだけ、設定の行を出している')
