@@ -23,6 +23,8 @@
  * 使い方: `npm run test:audio`
  */
 
+import { readFileSync } from 'node:fs'
+
 // `loudness.js` は端末の控え(localStorage)を読む。**先に用意しておく**
 const store = new Map()
 globalThis.window = {
@@ -32,8 +34,18 @@ globalThis.window = {
   },
 }
 
-/** 控えの鍵。**測り方の版が入っている**(`MEASURE_REV`) */
-const LOUD_KEY = 'eas.loud.2'
+/**
+ * 控えの鍵。**測り方の版が入っている**(`MEASURE_REV`)。
+ *
+ * ★ **数を書き写さない**(第5.362節で踏んだ)。
+ *   `'eas.loud.2'` と書いてあったので、**版を1つ進めただけで
+ *   見張りが3本赤くなった** —— 仕組みは1ミリも壊れていない。
+ *   **あちらから読み取る。** そうすれば、次に進めた日も付いてくる。
+ */
+const LOUD_REV = /const MEASURE_REV = (\d+)/.exec(
+  readFileSync(new URL('../src/lib/loudness.js', import.meta.url), 'utf8'),
+)?.[1] ?? ''
+const LOUD_KEY = `eas.loud.${LOUD_REV}`
 
 /**
  * **毎回まっさらな控えで読み直す。**

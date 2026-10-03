@@ -14200,20 +14200,29 @@ console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第
   })
   ok(new Set(宣言.map((x) => x.split('=')[1])).size === A.MIX_MODES.length,
     'えらんだ3つが、それぞれ別の種類を宣言する', 宣言.join(' / '))
-  /* ★ **「小さくする」は、主になる種類ではない**(第5.356節)。
+  /* ★ **「そのまま」は、主になる種類ではない**(第5.356節)。
        W3C の一覧で主になる(exclusive)のは
        `playback` / `play-and-record` / `transient-solo` の3つ ——
        **ここに入っていたら、音楽が止まってしまう** */
   const 主になる = ['playback', 'play-and-record', 'transient-solo']
-  ok(!主になる.includes(A.DUCK_TYPE) && !主になる.includes(A.MIX_TYPE),
-    '「小さくする」も「そのまま」も、音楽を止める種類ではない',
-    `${A.DUCK_TYPE} / ${A.MIX_TYPE}`)
+  ok(!主になる.includes(A.MIX_TYPE),
+    '「そのまま」は、音楽を止める種類ではない', A.MIX_TYPE)
+  /* ★ **実機で測った結果を、そのまま見張りにする**(第5.362節)。
+
+       > transient と ambient以外は音楽が止まりました。
+
+     `transient` は `ambient` とまったく同じ振る舞いだった ——
+     **小さくはしない。** 同じことをするものを2つ見せないので消した。
+     **「仕様にそう書いてある」で足し直さないため**、ここで見張る */
+  ok(!A.MIX_MODES.some((m) => m.type === 'transient'),
+    '実機で `ambient` と同じ振る舞いだった `transient` を、えらばせていない',
+    A.MIX_MODES.map((m) => `${m.label}=${m.type}`).join(' / '))
   A.forgetAudioSession(); A.setMixMode('off')
   ok(A.takeOverAudio() === 'auto',
     '「止める」にしてあると、これまでどおり主になる', A.audioSessionNow())
   /* **切り替えたら、その場で効く**(「次に開いたときから」にしない) */
   A.forgetAudioSession()
-  ok(A.setMixMode('duck') === A.DUCK_TYPE && A.setMixMode('off') === A.OWN_TYPE,
+  ok(A.setMixMode('mix') === A.MIX_TYPE && A.setMixMode('off') === A.OWN_TYPE,
     '切り替えたら、その場で宣言が変わる')
   /* **知らない id は、既定に落とす**(いちばん危ない形・CLAUDE.md) */
   A.forgetAudioSession()
@@ -14266,8 +14275,8 @@ console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第
     'どれをえらんでいても、起動しただけでは音楽を止めない', 起動の種類.join(' / '))
   /* ★ **しまってある値を読み直しているか。**
        読まずに決め打ちしていると、**開き直したとたん元に戻る** */
-  A.forgetAudioSession(); しまった = 'duck'
-  ok(A.mixMode() === 'duck' && A.mixWithOthers() === A.DUCK_TYPE,
+  A.forgetAudioSession(); しまった = 'mix'
+  ok(A.mixMode() === 'mix' && A.mixWithOthers() === A.MIX_TYPE,
     '開き直しても、えらんであるものから宣言を決める', A.audioSessionNow())
   /* **前の版の `on` も落とさない**(「そのまま」に読み替える) */
   A.forgetAudioSession(); しまった = 'on'

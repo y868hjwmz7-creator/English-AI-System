@@ -714,20 +714,75 @@ function fadeMp3Tail(input) {
  */
 const JA_VOICE_ID = 'ja-1'
 
-/** 日本語の声を、どれだけ小さくして置くか(dB)。**1.5dB 刻みに丸まる** */
+/** 日本語の声を、英語より**どれだけ小さく**して置くか(dB)。**1.5dB 刻みに丸まる** */
 const JA_CUT_DB = 4.5
 
 /**
- * MP3 ぜんぶの `global_gain` を下げた写しを返す。
+ * ★ **英語の音声を、どれだけ大きくして置くか**(dB・第5.362節)。
+ *
+ * 2026-10-03 利用者の指定。
+ *
+ *   > それでは当アプリの英語の音声の最大音量をもっと大きくできるように
+ *   > してください
+ *
+ * ── なぜ、ここでしか上げられないのか ────────────────────────
+ *
+ *   | 道 | なぜ使えないか |
+ *   |---|---|
+ *   | `<audio>` の `volume` | **iOS は無視する。** そのうえ 1.0 が上限で、そもそも上げられない |
+ *   | Web Audio の `GainNode` | 2026-09 に通して**全部の声で雑音**。さらに**画面を消すと止まる**ので第5.285節が壊れる |
+ *   | ElevenLabs に頼む | **音量の指定が無い**(`loudness.js`) |
+ *   | 作り直す | `CLIP_REV` を進めることになり、**全部の音声が再課金** |
+ *
+ *   **残っていたのが、ここである。** 日本語を小さくするのに使っている
+ *   `global_gain` の書き換えは、**符号を変えれば大きくもできる。**
+ *
+ *   - **音は1ビットも作り直していない**(mp3gain と同じ考え方)
+ *   - **1バイトも増えない。1ミリ秒も削らない**
+ *   - **どの端末でも効く**(`volume` を使っていないので iPhone でも)
+ *   - **0円。** ElevenLabs を呼び直さない
+ *   - **音の通り道を1ミリも変えない** —— 第5.285節(画面を消しても鳴る)も
+ *     そのままである
+ *
+ * ── 気をつけること ───────────────────────────────────────
+ *
+ *   **上げすぎると割れる。** 元が大きく録れている音を持ち上げれば、
+ *   復号したときに上下で切り落とされる(ここは「音量の掛け算」なので、
+ *   リミッターもコンプレッションも入れない —— 利用者の指定)。
+ *
+ *   **こちらからは ElevenLabs を呼べないので、実際の大きさを測れない。**
+ *   だから `JA_CUT_DB` とまったく同じ扱いにしてある ——
+ *   **3.0dB は最初の置き場所**であって、耳で決める数である。
+ *   割れるなら 1.5 下げ、まだ小さいなら 1.5 上げる。**ここ1か所を直す。**
+ *
+ * ── すでに置いてある音声は、大きくならない ────────────────────
+ *
+ *   置き場所は(版・段・声の id・英文の指紋)で決まる。
+ *   ここで大きさを変えても**指紋は変わらない**ので、
+ *   すでにある音声はそのまま使われる。**これから作るものから**大きくなる。
+ *   (作り直せば全部そろうが、**1本ずつ課金される**ので、しない。
+ *   日本語を小さくしたとき・第5.274節とまったく同じ判断である)
+ */
+const EN_BOOST_DB = 3.0
+
+/** `global_gain` の上限。**8ビットなので 255 より上は無い** */
+const MAX_GAIN = 255
+
+/**
+ * MP3 ぜんぶの `global_gain` をずらした写しを返す。
+ *
+ * **`db` が正なら大きく、負なら小さくなる**(第5.362節で向きを足した)。
+ * **向きを2つの関数に分けない** —— 分けると、片方だけ直したときに
+ * 日本語と英語の釣り合いが黙って崩れる(CLAUDE.md「数え方を2通り持たない」)。
  *
  * **触れない形(MPEG2・ステレオ・CRC 付き)のときは、元のものをそのまま返す。**
  * 「直せないなら、何もしない」(`fadeMp3Tail` と同じ作法)。
  */
-function lowerMp3(input, cutDb) {
+function shiftMp3(input, db) {
   const bytes = new Uint8Array(input)
   /* **1.5dB が1目盛り。** 目盛りにならない小さな指定は「何もしない」 */
-  const cut = Math.round(Number(cutDb) / 1.5)
-  if (!(cut > 0)) return bytes
+  const step = Math.round(Number(db) / 1.5)
+  if (!step) return bytes
   const out = new Uint8Array(bytes)
   let i = 0
   let touched = 0
@@ -737,8 +792,9 @@ function lowerMp3(input, cutDb) {
     const base = f.at + 4
     for (const off of FADE_GAIN_BITS) {
       const cur = fadeReadBits(out, base, off, 8)
-      /* **0 より下は無い。** 下げ切ったところで止まる(音は消えない) */
-      fadeWriteBits(out, base, off, 8, Math.max(0, cur - cut))
+      /* **0 より下も、255 より上も無い。** 振り切ったところで止まる
+         (音は消えないし、別の数へ回り込まない) */
+      fadeWriteBits(out, base, off, 8, Math.max(0, Math.min(MAX_GAIN, cur + step)))
     }
     touched += 1
     i = f.at + f.len
@@ -1501,11 +1557,17 @@ Deno.serve(async (req) => {
      */
     // **`madeBy` で見る。** 良い声に断られて標準に落ちたときは、
     // 24kHz(MPEG2)なので `fadeMp3Tail` はどのみち何もしない
-    /* **日本語の声だけ、先に小さくする**(第5.274節)。
+    /* ★ **置くときに大きさを決める**(第5.274節 + 第5.362節)。
        iPhone は `<audio>` の `volume` を無視するので、
-       **置くときに小さくしておかないと、あちらでは一生そろわない** */
-    const evened = madeBy === 'eleven' && voiceId === JA_VOICE_ID
-      ? lowerMp3(audio, JA_CUT_DB) : audio
+       **置くときに決めておかないと、あちらでは一生変わらない。**
+
+       **日本語は、英語より `JA_CUT_DB` だけ小さい** ——
+       この差は利用者が耳で決めたものなので、
+       **英語を大きくしたぶん、日本語も同じだけ大きくする。**
+       そうしないと、英語を上げた日に**釣り合いが黙って崩れる**
+       (`JA_CUT_DB` は「日本語の絶対の大きさ」ではなく「差」である)。 */
+    const boost = EN_BOOST_DB - (voiceId === JA_VOICE_ID ? JA_CUT_DB : 0)
+    const evened = madeBy === 'eleven' ? shiftMp3(audio, boost) : audio
     const stored = madeBy === 'eleven' ? fadeMp3Tail(evened) : audio
     // **文字ごとの時刻**(ElevenLabs のときだけ返ってくる)
     const alignment = made.alignment ?? null

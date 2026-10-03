@@ -1219,12 +1219,17 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
   // 実際に作った会社で見ているか(`provider` のままだと、落ちたあとに食い違う)
   //
-  // **2つとも見る**(第5.274節で、日本語を小さくする1本が増えた)。
-  //   ① `evened` … 日本語の声だけ、置く前に小さくする
+  // **2つとも見る**(第5.274節で、置く前の大きさを決める1本が増えた)。
+  //   ① `evened` … 置く前に大きさを決める(第5.362節で英語も上げるようになった)
   //   ② `stored` … 終わりをなだらかにする
   // どちらも `madeBy`(実際に作った会社)で分けていなければならない
+  //
+  // ★ **式をそのまま書き写さない**(第5.362節で踏んだ)。
+  //   `voiceId === JA_VOICE_ID` まで書いてあったので、英語も上げるように
+  //   直した瞬間に**仕組みは無傷のまま赤くなった。**
+  //   見るのは「**`madeBy` で分けているか**」だけでよい。
   if (!/const stored = madeBy === 'eleven' \? fadeMp3Tail\(evened\) : audio/.test(speak)
-    || !/const evened = madeBy === 'eleven' && voiceId === JA_VOICE_ID/.test(speak)) {
+    || !/const evened = madeBy === 'eleven' \?/.test(speak)) {
     ng('置く前のなだらかにする判断が、実際に作った会社を見ていない')
   } else if (!/provider: madeBy,/.test(speak)) {
     ng('返している会社が、実際に作った会社ではない')

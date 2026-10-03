@@ -801,8 +801,8 @@ function fakeMp3({
     ng('窓口(speak)に mp3-fade の印が無い', '印を消すと、この検証が何も見なくなる')
   } else {
     const block = src.slice(a, b)
-    const { fadeMp3Tail, FADE_RAMP, lowerMp3, JA_VOICE_ID, JA_CUT_DB } = new Function(
-      `${block}\nreturn { fadeMp3Tail, FADE_RAMP, lowerMp3, JA_VOICE_ID, JA_CUT_DB }`,
+    const { fadeMp3Tail, FADE_RAMP, shiftMp3, JA_VOICE_ID, JA_CUT_DB, EN_BOOST_DB } = new Function(
+      `${block}\nreturn { fadeMp3Tail, FADE_RAMP, shiftMp3, JA_VOICE_ID, JA_CUT_DB, EN_BOOST_DB }`,
     )()
 
     // 窓口が**実際に呼んでいる**か。定義だけあって誰も呼ばなければ同じこと
@@ -906,80 +906,127 @@ function fakeMp3({
     if (fadeMp3Tail(new Uint8Array(0)).length !== 0) ng('空を渡すと落ちる')
     else ok('空を渡しても落ちない')
 
-    /* ══ **日本語の声だけ、置く前に小さくする**(第5.274節)══════════
+    /* ══ **置くときに、大きさを決める**(第5.274節 + ★第5.362節)══════
 
          > 日本語と英語のボリュームも調整したいです。
          > 今は日本語の shohei の声が英語の声に対して比較的大きいです。
+         ★> それでは当アプリの英語の音声の最大音量をもっと大きくできるように
+         ★> してください
 
        画面側の「声ごとにそろえる」は `<audio>` の `volume` を動かすので、
-       **iPhone では1ミリも効かない。** だから置くときに小さくする。
-       `fadeMp3Tail` とまったく同じ道具(`global_gain`)を使う。 */
+       **iPhone では1ミリも効かない。** だから置くときに決める。
+       `fadeMp3Tail` とまったく同じ道具(`global_gain`)を使う。
+
+       ★ **第5.362節で、向きを足した。** 符号を変えれば大きくもできる ——
+       `<audio>` の `volume` は 1.0 が上限で**そもそも上げられない**ので、
+       **ここが唯一の道**である。 */
     {
-      const 刻み = Math.round(JA_CUT_DB / 1.5)
       const 元 = fakeMp3({ frames: 6 })
-      const 小 = lowerMp3(元.bytes, JA_CUT_DB)
       const 場所 = spots(元.bytes)
+      const 全部 = 場所.length * 2
 
-      /* ① **ぜんぶのグラニュールが、同じだけ下がっているか。**
-           終わりだけを下げる `fadeMp3Tail` と、ここが違う */
-      let 違う = 0
-      let 下がった = 0
-      for (const at of 場所) {
-        for (const gr of [0, 1]) {
-          const was = gainAt(元.bytes, at, gr)
-          const now = gainAt(小, at, gr)
-          const want = Math.max(0, was - 刻み)
-          if (now !== want) 違う += 1
-          if (now !== was) 下がった += 1
+      /** その dB だけずらして、1グラニュールずつ見比べる */
+      const ずらす = (db) => {
+        const 後 = shiftMp3(元.bytes, db)
+        const 刻み = Math.round(db / 1.5)
+        let 違う = 0
+        let 動いた = 0
+        for (const at of 場所) {
+          for (const gr of [0, 1]) {
+            const was = gainAt(元.bytes, at, gr)
+            const now = gainAt(後, at, gr)
+            if (now !== Math.max(0, Math.min(255, was + 刻み))) 違う += 1
+            if (now !== was) 動いた += 1
+          }
+        }
+        return { 後, 刻み, 違う, 動いた }
+      }
+
+      /* ① **下げる向き**(日本語・これまでどおり) */
+      {
+        const { 刻み, 違う, 動いた } = ずらす(-JA_CUT_DB)
+        if (違う) ng(`小さくする … ${違う} グラニュールが思ったとおりでない`)
+        else if (動いた !== 全部) ng('小さくする … ぜんぶのグラニュールが動いていない')
+        else ok(`小さくする … ぜんぶを ${JA_CUT_DB}dB(${-刻み} 目盛り)下げている`)
+      }
+
+      /* ② ★ **上げる向き**(英語・第5.362節)。
+             **ここが無いと、音量はどうやっても上がらない** */
+      {
+        const { 後, 刻み, 違う, 動いた } = ずらす(EN_BOOST_DB)
+        if (違う) ng(`大きくする … ${違う} グラニュールが思ったとおりでない`)
+        else if (動いた !== 全部) ng('大きくする … ぜんぶのグラニュールが動いていない')
+        else ok(`大きくする … ぜんぶを ${EN_BOOST_DB}dB(${刻み} 目盛り)上げている`)
+        /* **本当に大きくなっているか**(向きを取り違えていないか) */
+        const 上がった = 場所.every((at) => [0, 1]
+          .every((gr) => gainAt(後, at, gr) > gainAt(元.bytes, at, gr)))
+        if (!上がった) ng('大きくする … 向きが逆になっている(小さくなっている)')
+        else ok('大きくする … 本当に大きいほうへ動いている')
+      }
+
+      /* ③ **音のデータは1バイトも触らない。** 長さも変わらない */
+      {
+        const 後 = shiftMp3(元.bytes, EN_BOOST_DB)
+        if (後.length !== 元.bytes.length) {
+          ng('大きさを変える … 長さが変わっている', `${後.length} ≠ ${元.bytes.length}`)
+        } else {
+          let 外 = 0
+          for (let i = 0; i < 後.length; i += 1) {
+            if (後[i] === 元.bytes[i]) continue
+            if (!場所.some((at) => i >= at + 4 && i < at + 4 + 17)) 外 += 1
+          }
+          if (外) ng(`大きさを変える … side info の外を ${外} バイト書き換えている`)
+          else ok('大きさを変える … 書き換えたのは side info の中だけ(長さもそのまま)')
         }
       }
-      if (違う) ng(`日本語を小さくする … ${違う} グラニュールが思ったとおりでない`)
-      else if (下がった !== 場所.length * 2) {
-        ng('日本語を小さくする … ぜんぶのグラニュールが下がっていない',
-          `${下がった} ≠ ${場所.length * 2}`)
-      } else {
-        ok(`日本語を小さくする … ぜんぶを ${JA_CUT_DB}dB`
-          + `(${刻み} 目盛り)下げている`)
-      }
 
-      /* ② **音のデータは1バイトも触らない。** 長さも変わらない */
-      if (小.length !== 元.bytes.length) {
-        ng('日本語を小さくする … 長さが変わっている', `${小.length} ≠ ${元.bytes.length}`)
-      } else {
-        let 外 = 0
-        for (let i = 0; i < 小.length; i += 1) {
-          if (小[i] === 元.bytes[i]) continue
-          if (!場所.some((at) => i >= at + 4 && i < at + 4 + 17)) 外 += 1
-        }
-        if (外) ng(`日本語を小さくする … side info の外を ${外} バイト書き換えている`)
-        else ok('日本語を小さくする … 書き換えたのは side info の中だけ(長さもそのまま)')
-      }
-
-      /* ③ **触れない形には何もしない**(Azure / Google は 24kHz = MPEG2)。
+      /* ④ **触れない形には何もしない**(Azure / Google は 24kHz = MPEG2)。
            「無ければ素通り」を避けるため、**出ない側も必ず見る** */
       const m24 = fakeMp3({ mpeg1: false, kbps: 48, hz: 24000, frames: 6 })
-      if (lowerMp3(m24.bytes, JA_CUT_DB).some((v, i) => v !== m24.bytes[i])) {
-        ng('日本語を小さくする … MPEG2(24kHz)を書き換えている')
-      } else ok('日本語を小さくする … MPEG2(24kHz)には何もしない')
+      if (shiftMp3(m24.bytes, EN_BOOST_DB).some((v, i) => v !== m24.bytes[i])
+        || shiftMp3(m24.bytes, -JA_CUT_DB).some((v, i) => v !== m24.bytes[i])) {
+        ng('大きさを変える … MPEG2(24kHz)を書き換えている')
+      } else ok('大きさを変える … MPEG2(24kHz)には、どちら向きでも何もしない')
 
-      /* ④ **0 や負を渡したら、何もしない**(1.5dB の目盛りにならない) */
-      if (lowerMp3(元.bytes, 0).some((v, i) => v !== 元.bytes[i])
-        || lowerMp3(元.bytes, -3).some((v, i) => v !== 元.bytes[i])) {
-        ng('日本語を小さくする … 0 や負を渡しても書き換えている')
-      } else ok('日本語を小さくする … 0 や負を渡したら何もしない')
+      /* ⑤ **0 を渡したら、何もしない**(1.5dB の目盛りにならない)。
+           ★ **負は「何もしない」ではなく「下げる」**になった(第5.362節) */
+      if (shiftMp3(元.bytes, 0).some((v, i) => v !== 元.bytes[i])
+        || shiftMp3(元.bytes, 0.4).some((v, i) => v !== 元.bytes[i])) {
+        ng('大きさを変える … 0 や目盛りにならない値で書き換えている')
+      } else ok('大きさを変える … 0 や、目盛りにならない値では何もしない')
 
-      /* ⑤ **下げ切っても 0 より下へ行かない**(音が裏返らない) */
-      const 底 = lowerMp3(元.bytes, 255 * 1.5)
-      let 負 = 0
-      for (const at of 場所) for (const gr of [0, 1]) if (gainAt(底, at, gr) !== 0) 負 += 1
-      if (負) ng(`日本語を小さくする … 下げ切ったのに 0 でないものが ${負} 個`)
-      else ok('日本語を小さくする … 下げ切っても 0 で止まる')
+      /* ⑥ **振り切っても、回り込まない**(音が裏返らない・別の数にならない) */
+      {
+        const 底 = shiftMp3(元.bytes, -255 * 1.5)
+        const 天 = shiftMp3(元.bytes, 255 * 1.5)
+        let はみ出し = 0
+        for (const at of 場所) {
+          for (const gr of [0, 1]) {
+            if (gainAt(底, at, gr) !== 0) はみ出し += 1
+            if (gainAt(天, at, gr) !== 255) はみ出し += 1
+          }
+        }
+        if (はみ出し) ng(`大きさを変える … 振り切ったのに止まらないものが ${はみ出し} 個`)
+        else ok('大きさを変える … 下は 0、上は 255 で止まる(回り込まない)')
+      }
 
-      /* ⑥ **窓口が、日本語のときだけ呼んでいるか。**
-           定義だけあって誰も呼ばなければ、何も起きない */
-      if (!/const evened = madeBy === 'eleven' && voiceId === JA_VOICE_ID\s*\n\s*\? lowerMp3\(audio, JA_CUT_DB\) : audio/.test(src)) {
-        ng('窓口が lowerMp3 を、日本語のときだけ呼ぶ形になっていない')
-      } else ok('窓口は、日本語の声のときだけ小さくして置く')
+      /* ⑦ **窓口が、本当に呼んでいるか。**
+           定義だけあって誰も呼ばなければ、何も起きない。
+           ★ **英語にも日本語にもかける**(英語を上げたぶん、日本語も上げる)——
+             かけないと、利用者が耳で決めた釣り合いが黙って崩れる */
+      if (!/const boost = EN_BOOST_DB - \(voiceId === JA_VOICE_ID \? JA_CUT_DB : 0\)/.test(src)) {
+        ng('窓口が、日本語を「英語との差」で決める形になっていない')
+      } else ok('窓口は、日本語を「英語より JA_CUT_DB 小さく」置いている')
+      if (!/const evened = madeBy === 'eleven' \? shiftMp3\(audio, boost\) : audio/.test(src)) {
+        ng('窓口が shiftMp3 を呼ぶ形になっていない')
+      } else ok('窓口は、置く前に大きさを決めている')
+      /* ★ **英語が本当に上がる向きか**(0 や負だと、何も起きない) */
+      if (!(EN_BOOST_DB > 0)) ng('英語を大きくする幅が 0 以下になっている', EN_BOOST_DB)
+      else ok(`英語は ${EN_BOOST_DB}dB 大きくして置く`)
+      /* **向きを2つの関数に分けていない**(分けると片方だけ古くなる) */
+      if (/function lowerMp3|function raiseMp3/.test(src)) {
+        ng('大きさを変える関数が2つある(向きごとに分けている)')
+      } else ok('大きさを変える関数は1つだけ(向きは符号で決まる)')
 
       /* ⑦ **声の id を2か所に書かない。**
            `src/data/clipVoices.js` の `JA_VOICE` と同じでなければならない */
