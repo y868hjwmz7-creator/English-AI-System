@@ -14059,6 +14059,33 @@ console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第
   ok(/mixWithOthers\(\)/.test(app), '画面が、起動のときに「混ざる音」と宣言している')
   /* **種類の名前を画面に書き写していない**(呼び名は1か所) */
   ok(!/'ambient'|"ambient"/.test(app), "画面の中で 'ambient' と書き写していない")
+
+  /* ★ **どちらを取るかは、利用者が決める**(第5.352節)。
+       **iPhone では両立しない**ので、設定で切り替えられること */
+  A.forgetAudioSession()
+  ok(A.mixOn() === false, '既定は「止める」(消音スイッチで英語が鳴らない事故を起こさない)')
+  A.forgetAudioSession()
+  A.setMixOn(true)
+  ok(A.takeOverAudio() === 'ambient',
+    '「混ぜる」にしてあると、鳴らすときも主にならない', A.audioSessionNow())
+  A.forgetAudioSession()
+  A.setMixOn(false)
+  ok(A.takeOverAudio() === 'auto',
+    '「止める」にしてあると、これまでどおり主になる', A.audioSessionNow())
+  /* **切り替えたら、その場で効く**(「次に開いたときから」にしない) */
+  A.forgetAudioSession()
+  ok(A.setMixOn(true) === 'ambient' && A.setMixOn(false) === 'auto',
+    '切り替えたら、その場で宣言が変わる')
+  A.forgetAudioSession()
+
+  /* **効かない端末には、設定を出さない**(効かない操作を見せない) */
+  const nav = noC(src('src/components/NavSettings.jsx'))
+  ok(/mixWorks\(\) && \(/.test(nav), '宣言が効く端末にだけ、設定の行を出している')
+  /* **画面が覚えさせているか。** 関数があっても、呼んでいなければ効かない */
+  ok(/setMixOn\(v\)/.test(app), '画面が `setMixOn()` を通している')
+  /* **名前を2つ置かない。** すぐ下の行はアプリ自身の音楽である */
+  ok(/label="ほかのアプリの音"/.test(nav) && /label="音楽"/.test(nav),
+    '「音楽」とは別の名前にしてある(違うものに同じ名前を付けない)')
 }
 
 console.log(ng

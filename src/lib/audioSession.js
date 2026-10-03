@@ -79,6 +79,26 @@ const sessionOf = () => {
   } catch { return null }
 }
 
+/**
+ * ★ **どちらを取るかは、利用者が決める**(第5.352節・2026-10-03 利用者の指定)。
+ *
+ *   > アプリの英語の音声を聴くと音楽が消えてしまいます。
+ *
+ * **iPhone では、この2つは両立しない。**
+ * iOS のアプリが使える「主になりつつ混ぜる」(`mixWithOthers`)は、
+ * **Web ページには公開されていない** —— 宣言できるのは種類1つだけである。
+ *
+ *   | 宣言 | ほかのアプリの音楽 | 画面を消したとき | 消音スイッチ |
+ *   |---|---|---|---|
+ *   | `ambient` | **鳴り続ける** | **止まる** | **鳴らない** |
+ *   | `auto` | 止まる | **鳴り続ける** | 鳴る |
+ *
+ * だから**設定で切り替える**(利用者の選択)。
+ * **既定は「止める」** —— 消音スイッチの入った iPhone で
+ * **英語の音声そのものが鳴らない**という事故を、既定では起こさない。
+ */
+const KEY = 'eas.mixAudio'
+
 /** いま宣言しているもの。**同じものを二度入れない** */
 let いま = null
 
@@ -98,15 +118,47 @@ const 入れる = (type) => {
 export const mixWithOthers = () => 入れる(MIX_TYPE)
 
 /**
+ * ★ **この端末で、宣言が効くか**(第5.352節)。
+ *
+ * **名前(UA)で見分けない。** 持っているかどうかを見るだけである
+ * (`volumeWorks()` とまったく同じ作法)。
+ * **効かない端末に、効かない設定を見せない**(CLAUDE.md)。
+ */
+export const mixWorks = () => Boolean(sessionOf())
+
+/** ほかのアプリの音と混ぜるか。**覚える。既定は「止める」** */
+let 混ぜる = null
+export function mixOn() {
+  if (混ぜる === null) {
+    try { 混ぜる = window.localStorage.getItem(KEY) === 'on' } catch { 混ぜる = false }
+  }
+  return 混ぜる
+}
+
+/**
+ * 混ぜるかどうかを決める。**その場で効かせる** ——
+ * 「次に開いたときから」では、切り替えた気がしない(第5.257節と同じ)。
+ */
+export function setMixOn(next) {
+  混ぜる = Boolean(next)
+  try { window.localStorage.setItem(KEY, 混ぜる ? 'on' : 'off') } catch { /* 使えなくても困らない */ }
+  return 入れる(混ぜる ? MIX_TYPE : OWN_TYPE)
+}
+
+/**
  * ★ **こちらの音を主にする。本当に鳴らす直前に呼ぶ。**
  *
  * **鳴らす道のぜんぶ**が通ること —— 1つ漏らすと、その道の音が
  * **消音スイッチで黙り、画面を消すと止まる**(第5.285節が壊れる)。
+ *
+ * ★ **「混ぜる」にしてあるときは、主にならない**(第5.352節)。
+ * **判断はここ1か所** —— 鳴らす側(`audioClips.js` / `bgm.js` /
+ * `speech.js` / `recognition.js`)は、どちらであっても**呼ぶだけ**である。
  */
-export const takeOverAudio = () => 入れる(OWN_TYPE)
+export const takeOverAudio = () => 入れる(mixOn() ? MIX_TYPE : OWN_TYPE)
 
 /** いま何を宣言しているか(**検証と、画面に出すため**) */
 export const audioSessionNow = () => いま
 
 /** 手元の検証用。覚えた値を捨てる */
-export const forgetAudioSession = () => { いま = null }
+export const forgetAudioSession = () => { いま = null; 混ぜる = null }
