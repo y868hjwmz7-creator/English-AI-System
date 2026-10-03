@@ -61,6 +61,11 @@ import { dropReasonLine, emptyDropCounts, isExhausted } from '../lib/dropReasons
 import {
   angleBrief, angleWithSubject, anglesFor, pickAngle,
 } from '../data/materialAngles.js'
+/* ★ **用件 × 感情 × 相手への態度 × 会話上の反応**(第5.361節)。
+   **一覧も呼び名も、あちら1か所**(画面に書き写さない) */
+import {
+  SPEECH_AXES, STANCE_NONE, parseStance, pickStance, stanceBrief, stanceText, stanceWorks,
+} from '../data/speechAxes.js'
 import { chunkPlan } from '../lib/chunkJa.js'
 import {
   genreHint, genreLabel, genresFor, sceneHint, sceneLabel, scenesFor,
@@ -356,11 +361,19 @@ export default function MaterialForm({
      空なら「おまかせ」=**まだ使っていない切り口から1枚引く。**
      同じ場面でも、切り口が違えばまったく別の話になる */
   const [angle, setAngle] = useState(initial.angle ?? '')
+  /* ★ **用件 × 感情 × 相手への態度 × 会話上の反応**(0074・第5.361節)。
+       **軸ごとに1つ**持つ。しまう形(`|` つなぎ)にするのは送る直前だけで、
+       **つなぎ方は `stanceText()` 1か所**である */
+  const [stance, setStance] = useState(() => parseStance(initial.stance ?? ''))
   /* **実際に使った切り口と、何の話だったか。**
      入力の `angle`(おまかせのまま)とは別に持つ。
      ここへ入れてしまうと、「作り直す」を押したときに
      **同じ切り口に固定されてしまう**(おまかせが効かなくなる) */
   const [usedAngle, setUsedAngle] = useState('')
+  /* ★ **実際に使った人物設定**(0074・第5.361節)。`usedAngle` と同じ理由で
+       入力(`stance`)とは別に持つ —— 入力へ入れると、「作り直す」で
+       **同じ気持ち・同じ態度に固定されてしまう**(おまかせが効かなくなる) */
+  const [usedStance, setUsedStance] = useState('')
   const [gist, setGist] = useState('')
   /* **同じ組み合わせの教材が、もう何本あるか**(0046)。
      **そもそも新しく作らないのが、いちばん被らない。**
@@ -1244,6 +1257,23 @@ export default function MaterialForm({
     const angleId = angle
       || (subjectLeads ? '' : pickAngle(kind, past.map((x) => x.angle))?.id || '')
 
+    /* ★ **用件 × 感情 × 相手への態度 × 会話上の反応**(第5.361節)。
+
+         **切り口(`angle`)とまったく同じ作法。**
+         ・えらんであればそれ
+         ・「おまかせ」なら**まだ使っていないものから1つ**引く
+         ・**細かい指定が主のときは引かない**(書いた中身を上書きしない)
+         ・**話し手がいる教材だけ**(`stanceWorks()` 1か所)
+
+         過去に使った組み合わせは `materials.stance` にしまってある ——
+         **ほどき方は `parseStance()` 1か所**(ここで `|` と書かない) */
+    const 使った = past.map((x) => parseStance(x.stance))
+    const stancePicked = !stanceWorks(kind) ? {} : Object.fromEntries(
+      SPEECH_AXES.map((a) => [a.id, stance[a.id]
+        || (subjectLeads ? STANCE_NONE
+          : pickStance(a.id, 使った.map((u) => u[a.id]))?.id || STANCE_NONE)]),
+    )
+
     step(0, exerciseLabel(bodyPlan.exercise_type))
     const { data: body, error: bodyError } = await generateSection({
       sectionType: bodyPlan.exercise_type,
@@ -1286,7 +1316,12 @@ export default function MaterialForm({
          窓口はどちらも命令として渡すので、噛み合わないと
          どちらへ転ぶか分からない。**窓口は置き直さない** ——
          切り口は画面が作る文字列なので、ここで足せば届く */
-      angle: angleWithSubject(angleBrief(angleId), subject.trim().length > 0),
+      /* ★ **人物設定も、この欄に足して送る**(第5.361節)。
+           **窓口は置き直さない** —— 切り口と同じく、画面が作る文字列だからである
+           (`speechBrief` / `angle` とまったく同じ作法・CLAUDE.md)。
+           **1つも選んでいなければ空**なので、ほかの種類は1文字も変わらない */
+      angle: [angleWithSubject(angleBrief(angleId), subject.trim().length > 0),
+        stanceBrief(stancePicked)].filter(Boolean).join('\n\n'),
       /* **その PART の作り方を、そのまま送る**(第5.309節)。
          **窓口に一覧を書き写さない**(`angle` / `chunkKinds` と同じ作法)——
          書き写すと、PART を1つ直したいだけで窓口を配り直すことになる。
@@ -1421,6 +1456,10 @@ export default function MaterialForm({
          `gist` は窓口を置き直すまで返ってこない —— そのときは空のまま
          保存され、**見出しと話題で代わりに避けさせる** */
       angle: angleId || null,
+      /* ★ **実際に使った人物設定**(0074)。`angle` とまったく同じ理由で返す ——
+           次に作るとき「まだ使っていないもの」を知るために要る。
+           **つなぎ方は `stanceText()` 1か所**(ここで `|` と書かない) */
+      stance: stanceText(stancePicked) || null,
       gist: body.gist ?? null,
       teachingPoint: body.teaching_point ?? null,
       autoTitle: autoTitle(),
@@ -1746,6 +1785,7 @@ export default function MaterialForm({
     // 前の下書きの控えを残さない(0046)。
     // 残すと、別の切り口で作り直したのに前の切り口が保存される
     setUsedAngle('')
+    setUsedStance('')
     setGist('')
 
     /* **画面から切り離して走らせる**(2026-09 利用者の指定)。
@@ -1793,6 +1833,11 @@ export default function MaterialForm({
     // 話の切り口(0046)。**選んだものだけを控える** ——
     // 実際に引いた切り口を入れると、戻ったときにおまかせが効かなくなる
     angle,
+    /* ★ **用件 × 感情 × 態度 × 反応も控える**(0074・第5.361節)。
+         **選んだものだけ**(切り口とまったく同じ理由)。
+         控えないと、別の画面から戻ったときに「おまかせ」へ戻っており、
+         **指定したはずの気持ちと、作られた教材が食い違う** */
+    stance: stanceText(stance),
     visibility, instruction, mustUse,
     /* **文法解説を作るかどうかも控える**(第5.213節)。
        控えないと、別の画面から戻ったときに「作る」へ戻っており、
@@ -1851,6 +1896,7 @@ export default function MaterialForm({
     /* **実際に使った切り口と筋**(0046)。入力の `angle` とは別に持つ。
        ここを入力へ入れてしまうと、「作り直す」で同じ切り口に固定される */
     setUsedAngle(r.angle ?? '')
+    setUsedStance(r.stance ?? '')
     setGist(r.gist ?? '')
     if (r.teachingPoint) setTeachingPoint(r.teachingPoint)
     setDropped(r.dropped ?? 0)
@@ -1952,6 +1998,11 @@ export default function MaterialForm({
          次に同じ業界・場面で作るとき、これを渡して避けさせる。
          **0046 を貼る前は送らない**(`createMaterial` が外す) */
       angle: usedAngle || angle, gist,
+      /* ★ **どの用件・気持ち・態度・反応で書いたか**(0074・第5.361節)。
+           `angle` とまったく同じ扱い —— **0074 を貼る前は送らない**
+           (`createMaterial` が外す)。送らなければ、おまかせが
+           「まだ使っていないもの」を知れないだけで、教材は作れる */
+      stance: usedStance || stanceText(stance),
       // **おまかせは、ここで1回だけ決めて保存する。**
       // 開くたびに選び直すと、同じ教材なのに毎回ちがう声になり、
       // そのたびに音声を作り直す(= 課金される)。
@@ -2427,6 +2478,34 @@ export default function MaterialForm({
           </select>
         </label>
       )}
+
+      {/* ★ **用件 × 感情 × 相手への態度 × 会話上の反応**(第5.361節・利用者の指定)
+
+            > たとえば「仕事のミスを報告する」場面でも、「焦って言い訳する」
+            > 「落ち込んで謝る」「怒って責任を追及する」「冷静に再発防止策を
+            > 提案する」と、感情や態度を変えるだけで会話の内容が大きく変わる。
+
+          **話し手がいる教材だけに出す**(判断は `stanceWorks()` 1か所)——
+          読み物には話し手がいないので「怒っている」も「受け流す」も
+          成り立たない(効かない操作を見せない・CLAUDE.md)。
+
+          **一覧も呼び名も `speechAxes.js` 1か所。** ここに書き写さない */}
+      {stanceWorks(kind) && SPEECH_AXES.map((a) => (
+        <label className="field" key={a.id}>
+          <span>{a.label}</span>
+          <select value={stance[a.id] ?? ''}
+                  onChange={(e) => setStance({ ...stance, [a.id]: e.target.value })}>
+            {/* **「おまかせ」の意味は切り口とそろえる**(第5.232節)——
+                細かい指定が書いてあるなら、こちらは付けない */}
+            <option value={STANCE_NONE}>
+              {subjectLeads ? `${a.label}は付けない(細かい指定にまかせる)` : `おまかせ(${a.hint})`}
+            </option>
+            {a.values.map((v) => (
+              <option key={v.id} value={v.id}>{v.label}</option>
+            ))}
+          </select>
+        </label>
+      ))}
 
       {/* **もう何本あるか。** そもそも新しく作らないのが、いちばん被らない。
           **数えられなかったときは出さない**(0 と取り違えさせない) */}

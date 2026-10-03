@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   56行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   57行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -268,4 +268,11 @@ from (
             where conname = 'materials_kind_check'
               and pg_get_constraintdef(oid) like '%''response''%')
     and exists (select 1 from pg_proc where proname = 'material_kinds'), 55
+  -- **列そのものを見る**(0074・第5.361節)。0046(`angle`)と同じ見方 ——
+  -- 列が1つ増えるだけの移行なので、**その列があるか**で見る。
+  -- 貼り忘れると、おまかせが同じ「感情 × 態度 × 反応」を続けて引く
+  union all select '0074 教材に「用件 × 感情 × 態度 × 反応」を覚えさせる(pending_matome.sql)',
+    exists (select 1 from information_schema.columns
+            where table_schema = 'public' and table_name = 'materials'
+              and column_name = 'stance'), 56
 ) t order by 順;

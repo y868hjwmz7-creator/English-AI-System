@@ -476,6 +476,9 @@ export async function createMaterial({
   headline = '', headlineJa = '', genre = '', scene = '', topic = '', voiceIds = null,
   // 話の切り口と、何の話だったか(0046)。**似た教材を作らないための控え**
   angle = '', gist = '',
+  /* ★ **用件 × 感情 × 相手への態度 × 会話上の反応**(0074・第5.361節)。
+       **つなぎ方は `stanceText()` 1か所**(ここで `|` と書かない) */
+  stance = '',
   sections = [], tagIds = [], createdBy,
 }) {
   if (!supabase) return ng('Supabase が設定されていません')
@@ -528,6 +531,11 @@ export async function createMaterial({
         ? {} : { angle: String(angle).trim() }),
       ...(missingColumns.has('gist') || !String(gist ?? '').trim()
         ? {} : { gist: String(gist).trim() }),
+      /* ★ **用件 × 感情 × 態度 × 反応**(0074)。`angle` とまったく同じ作法 ——
+           **列がまだ無いと分かっているときは送らない。**
+           0074 を貼る前は、ここが空のまま教材ができる(それでよい) */
+      ...(missingColumns.has('stance') || !String(stance ?? '').trim()
+        ? {} : { stance: String(stance).trim() }),
       // 読み上げに使う声の並び(0017)。空なら既定(アメリカ英語・女性)。
       // **列がまだ無いと分かっているときは、送らない。**
       // 送ると挿入ごと失敗し、教材を1本も作れなくなる
@@ -2189,7 +2197,7 @@ async function sentencesFromMaterials(ids, limit) {
  *   場面まで同じなら、いちばん被りやすい。逆に業界も場面も違えば、
  *   そもそも似ようがない(避けさせる指示を長くするだけ損である)。
  *
- * @returns {{data: {text: string, angle: string}[]}} 新しい順
+ * @returns {{data: {text: string, angle: string, stance: string}[]}} 新しい順
  */
 export async function loadRecentStories({
   kind = '', industry = '', genre = '', scene = '', limit = 15,
@@ -2204,7 +2212,7 @@ export async function loadRecentStories({
   const { data, error } = await runTolerant(() => {
     let query = supabase
       .from('materials')
-      .select(`headline, topic${optLast('gist')}${optLast('angle')}`)
+      .select(`headline, topic${optLast('gist')}${optLast('angle')}${optLast('stance')}`)
       .eq('kind', kind)
       .order('created_at', { ascending: false })
       .limit(limit)
@@ -2222,8 +2230,11 @@ export async function loadRecentStories({
     // **筋があればそれを使う。** 無ければ見出しと話題で代える
     const text = [String(m.gist ?? '').trim(), String(m.headline ?? '').trim(),
       String(m.topic ?? '').trim()].filter(Boolean).join(' / ')
-    if (text) rows.push({ text, angle: String(m.angle ?? '').trim() })
-    else if (m.angle) rows.push({ text: '', angle: String(m.angle).trim() })
+    /* ★ **組み合わせ(0074)も返す。** 返さないと、おまかせが
+         「まだ使っていないもの」を知らないまま引く(第5.361節) */
+    const stance = String(m.stance ?? '').trim()
+    if (text) rows.push({ text, angle: String(m.angle ?? '').trim(), stance })
+    else if (m.angle || stance) rows.push({ text: '', angle: String(m.angle ?? '').trim(), stance })
   }
   return ok(rows)
 }

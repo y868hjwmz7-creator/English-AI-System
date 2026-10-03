@@ -1410,7 +1410,13 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
       new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
     ok(/pickAngle\(kind, past\.map/.test(form),
       '画面が、まだ使っていない切り口から引いている')
-    ok(/angle: angleWithSubject\(angleBrief\(angleId\), subject/.test(form),
+    /* ★ **式をそのまま書き写さない**(CLAUDE.md・4度踏んだ)。
+         第5.361節で人物設定を同じ欄に足したとき、
+         `angle: angleWithSubject(` と書いてあったこの1本が
+         **仕組みは1ミリも壊れていないのに赤くなった。**
+         **呼んでいるかどうかだけ**を見る */
+    ok(/angleWithSubject\(angleBrief\(angleId\), subject/.test(form)
+      && /\bangle:/.test(form),
       '画面が、切り口を窓口へ渡している(話題があれば、話題のほうを強くして)')
     ok(/loadRecentStories\(likeQuery\(\)\)/.test(form),
       '画面が、同じ組み合わせの過去の話を引いている')
@@ -1457,6 +1463,120 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(/add column if not exists gist/.test(matome), 'まとめた1つに 0046 が入っている')
     ok(/column_name = 'gist'/.test(check), 'check.sql が 0046 を見ている')
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **用件 × 感情 × 相手への態度 × 会話上の反応**(第5.361節・利用者の指定)
+
+     > 感情を表す・相手に働きかける・反応するという観点でも、軸を広げられる。
+     > ただし、これらは全部を「話す目的」という一つの欄に詰め込むより、
+     > 次のように分けると教材の組み合わせを作りやすい。
+
+   切り口(`materialAngles.js`)とまったく同じ立て付けなので、
+   見張りも同じところを見る ——
+   **閉じた一覧 / まだ使っていないものから引く / 画面が本当に通している**。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const AX = await import('../src/data/speechAxes.js')
+  const formSrc = readFileSync(
+    new URL('../src/components/MaterialForm.jsx', import.meta.url), 'utf8')
+
+  /* ── ① **4つの軸がそろっているか**(1つの欄に詰め込んでいない)── */
+  ok(AX.SPEECH_AXES.length === 4,
+    '軸は4つある(1つの欄に詰め込んでいない)',
+    AX.SPEECH_AXES.map((a) => a.label).join(' / '))
+  /* **掛け算になっているか。** 軸を分ける意味はここにしかない ——
+     **値を書き写さない**(増やした日もひとりでに付いてくる) */
+  const 通り = AX.SPEECH_AXES.reduce((n, a) => n * a.values.length, 1)
+  const 足し算 = AX.SPEECH_AXES.reduce((n, a) => n + a.values.length, 0)
+  ok(通り > 足し算 * 100, '4つを掛け合わせると、組み合わせが桁違いに増える',
+    `${通り.toLocaleString()} 通り(足し算なら ${足し算} 個)`)
+
+  /* ── ② **同じ言葉を2つの軸に出していないか** ──
+         出すと、トレーナーがどちらを選べばよいか分からなくなる */
+  const 呼び名 = AX.SPEECH_AXES.flatMap((a) => a.values.map((v) => v.label))
+  const ids = AX.SPEECH_AXES.flatMap((a) => a.values.map((v) => v.id))
+  ok(new Set(呼び名).size === 呼び名.length, '同じ言葉が2つの軸に出ていない',
+    `${呼び名.length} 個`)
+  ok(new Set(ids).size === ids.length, 'id も重なっていない')
+  /* **英語も添えてあるか。**「苛立つ」と「うんざりする」は
+     日本語だけ渡すと AI の中で混ざる */
+  ok(AX.SPEECH_AXES.every((a) => a.values.every((v) => /^[\x20-\x7e]+$/.test(v.en))),
+    'どの値にも、取り違えようのない英語が添えてある')
+
+  /* ── ③ **まだ使っていないものから引く**(切り口と同じ)── */
+  {
+    const em = AX.axisOf('emotion').values
+    const used = em.slice(0, 5).map((v) => v.id)
+    ok(AX.pickStance('emotion', used, () => 0)?.id === em[5].id,
+      'まだ使っていない気持ちから引く')
+    ok(AX.pickStance('emotion', em.map((v) => v.id), () => 0) != null,
+      '全部使い切っても、行き止まりにならない')
+    ok(AX.pickStance('emotion', [], () => 0.999999) != null, '端の値でも引ける')
+    ok(AX.pickStance('nothing', [], () => 0) === null, '知らない軸では引かない')
+  }
+
+  /* ── ④ **しまう / ほどく**(`materials.stance`)── */
+  {
+    const p = { purpose: 'pu_apologize', emotion: 'em_down', attitude: 'at_openup',
+      reaction: 're_excuse' }
+    const t = AX.stanceText(p)
+    ok(AX.SPEECH_AXES.every((a) => t.includes(p[a.id])), 'えらんだ4つが、1つの文字列に入る', t)
+    ok(JSON.stringify(AX.parseStance(t)) === JSON.stringify(p), 'ほどくと、元どおりになる')
+    /* **いちばん危ない形**(CLAUDE.md)—— 空・知らない値・1つだけ */
+    ok(AX.stanceText({}) === '' && AX.stanceText(null) === '',
+      '1つも選んでいなければ、空になる')
+    ok(Object.keys(AX.parseStance('')).length === 0
+      && Object.keys(AX.parseStance('zzz|yyy')).length === 0,
+      '知らない値は捨てる(当て推量で埋めない)')
+    ok(JSON.stringify(AX.parseStance(AX.stanceText({ emotion: 'em_angry' })))
+      === JSON.stringify({ emotion: 'em_angry' }), '1つだけでも、ほどける')
+  }
+
+  /* ── ⑤ **窓口へ渡す文** ── */
+  {
+    const b = AX.stanceBrief({ emotion: 'em_rushed', reaction: 're_excuse' })
+    ok(b.includes('焦る') && b.includes('flustered'), '選んだものが、名前と英語で入る')
+    ok(!b.includes('相手への態度'), '選んでいない軸は、1行も入れない')
+    ok(AX.stanceBrief({}) === '' && AX.stanceBrief(null) === '',
+      '1つも選んでいなければ、何も渡さない(空の見出しを送らない)')
+    /* ★ **ここが肝心。** 書かないと `I'm really anxious.` と
+         気持ちを言葉で説明してしまい、練習にならない */
+    ok(/説明させない/.test(b) && /I am anxious/.test(b),
+      '気持ちを言葉で説明させない、と言っている')
+  }
+
+  /* ── ⑥ **出る側 / 出ない側**(CLAUDE.md)── */
+  ok(AX.stanceWorks('dialogue') && AX.stanceWorks('meeting') && AX.stanceWorks('response'),
+    '話し手がいる教材では出す(会話 / 会議 / 応答問題)')
+  ok(!AX.stanceWorks('reading') && !AX.stanceWorks('word') && !AX.stanceWorks('speech'),
+    '話し手がいない教材には出さない(効かない操作を見せない)')
+
+  /* ── ⑦ **画面が本当に通しているか** ──
+         素の関数だけ見ると、**画面が渡していなくても緑になる**(第5.330節) */
+  ok(/stanceWorks\(kind\) && SPEECH_AXES\.map/.test(formSrc),
+    '画面が、話し手のいる教材にだけ4つの欄を出している')
+  ok(/pickStance\(a\.id, 使った\.map/.test(formSrc),
+    '画面が、まだ使っていないものから引いている')
+  ok(/stanceBrief\(stancePicked\)/.test(formSrc), '画面が、窓口へ渡している')
+  ok(/stance: stanceText\(stancePicked\)/.test(formSrc),
+    '画面が、実際に使った組み合わせを控えている')
+  ok(/stance: usedStance \|\| stanceText\(stance\)/.test(formSrc),
+    '画面が、それを教材に保存している')
+  /* **呼び名を画面に書き写していないか**(一覧は1か所) */
+  ok(!呼び名.some((w) => new RegExp(`'${w}'`).test(formSrc)),
+    '値の呼び名を、画面に書き写していない')
+  /* **`|` を画面で書いていないか**(つなぎ方は1か所) */
+  const 渡す所 = formSrc.match(/const stancePicked[\s\S]{0,400}?\)\n/)?.[0] ?? ''
+  ok(!/'\|'|join\('\|'\)/.test(渡す所), 'つなぎ方(`|`)を画面に書き写していない')
+
+  /* ── ⑧ **しまう側・読む側**(`materials.js`)── */
+  const lib = readFileSync(new URL('../src/lib/materials.js', import.meta.url), 'utf8')
+  ok(/missingColumns\.has\('stance'\)/.test(lib),
+    '0074 を貼る前は送らない(送ると教材を1本も作れなくなる)')
+  ok(/optLast\('stance'\)/.test(lib), '過去の教材から、使った組み合わせを読み直している')
+  ok(/stance: String\(m\.stance \?\? ''\)\.trim\(\)|const stance = String\(m\.stance/.test(lib),
+    '読んだものを、引く側へ返している')
 }
 
 
@@ -7179,31 +7299,38 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      新しい移行にそろっている」が、`supabase/migrations/` の
      いちばん大きい番号と突き合わせている。
      **同じことをする見張りを2つ置かない**(CLAUDE.md) */
-  /* **0073 も、制約の一覧に値を1つ足すだけ**(第5.332節。0072 と同じ)。
-     `materials_kind_check` に `response` が増えるだけなので、
-     **表も列も関数も増えない。** 関数の有無で見ると、
-     **0069 を貼った時点で「もう入っています」**になる
-     (いちばん悪い壊れ方・CLAUDE.md)。
-     **`exam` で見てもいけない** —— 0072 を貼った時点で通ってしまう。
+  /* ★ **0074 は、列が1つ増える移行である**(第5.361節)。
+       `materials.stance`(用件 × 感情 × 態度 × 反応)1列だけ ——
+       **表はもう在る**ので、「表が在るか」で見ると
+       **貼る前でも「もう入っています」**と出る
+       (CLAUDE.md が「いちばん悪い壊れ方」と呼んでいるもの)。
+       だから **0064 と同じく、その列があるか**で見る。
+       0064〜0073 のぶんは、まとめた1つと `check.sql` の側で
+       そのまま見張り続ける —— **消していない**
 
-     だから **`material_kinds()` に訊いて、いちばん新しい値が入っているか**で
-     見る(0067 で `section_types()` に訊いたのと、まったく同じ立て付け)。
-     0064〜0072 のぶんは、まとめた1つと `check.sql` の側で
-     そのまま見張り続ける —— **消していない**
-
-     **値を書き写さない。性質で見る**(CLAUDE.md)——
-     `check.sql` のいちばん下の行が見ている値と**同じもの**を見ているか、で
-     突き合わせる。そうすれば、次に種類を足した日も**ひとりでに付いてくる** */
+       **値を書き写さない。性質で見る**(CLAUDE.md)——
+       **移行のファイルそのもの**から列の名前を読み取って突き合わせる。
+       そうすれば、次に列を足した日も**ひとりでに付いてくる** */
   {
-    const 印 = setup.match(/has: '([a-z_]+)'/)?.[1] ?? ''
-    /* `check.sql` のいちばん後ろにある `material_kinds` の行が見ている値 */
+    const 印 = /NEWEST_MARK = \{[\s\S]{0,600}?column: '([a-z_]+)'/
+      .exec(setup)?.[1] ?? ''
+    const 表 = /NEWEST_MARK = \{[\s\S]{0,600}?table: '([a-z_]+)'/
+      .exec(setup)?.[1] ?? ''
+    /* いちばん新しい移行が、どの表にどの列を足しているか */
+    const newestFile = readdirSync(new URL('../supabase/migrations/', import.meta.url))
+      .filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort().at(-1)
+    const sql = readFileSync(
+      new URL(`../supabase/migrations/${newestFile}`, import.meta.url), 'utf8')
+    const 足す表 = /alter table public\.([a-z_]+)/.exec(sql)?.[1] ?? ''
+    const 足す列 = /add column if not exists ([a-z_]+)/.exec(sql)?.[1] ?? ''
+    ok(!!印 && 印 === 足す列 && 表 === 足す表,
+      `0074 … 印は「${足す表} に ${足す列} があるか」(列を1つ足すだけの移行だから)`,
+      `印 ${表}.${印} / 移行が足すのは ${足す表}.${足す列}`)
+    /* **`check.sql` も、同じ列を見ているか**(片方だけ直すと食い違う) */
     const chk = readFileSync(
       new URL('../supabase/apply/check.sql', import.meta.url), 'utf8')
-    const 最後 = [...chk.matchAll(/pg_get_constraintdef\(oid\) like '%''([a-z_]+)''%'/g)]
-      .map((m) => m[1])
-    ok(/rpc: 'material_kinds'/.test(setup) && !!印 && 最後.at(-1) === 印,
-      `0073 … 印は「種類の一覧に ${印} が入っているか」(値を1つ足すだけの移行だから)`,
-      `印 ${印} / check.sql の最後 ${最後.at(-1)}`)
+    ok(new RegExp(`column_name = '${足す列}'`).test(chk),
+      `check.sql … 0074 も、同じ列(${足す列})を見ている`)
   }
   /* **0071 の判定は、`check.sql` の側に残っている。**
      印が 0072 へ進んでも、あちらの行は消さない ——
