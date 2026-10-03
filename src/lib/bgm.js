@@ -33,6 +33,8 @@
  */
 import { supabase, withTimeout } from './supabase.js'
 import { bgmLevel, setBgmLevel } from './mixVolume.js'
+/* ★ **曲も、こちらの音である**(第5.351節)。鳴らす直前に宣言を戻す */
+import { takeOverAudio } from './audioSession.js'
 
 const BUCKET = 'bgm'
 const TABLE = 'bgm_tracks'
@@ -234,6 +236,8 @@ async function play(i) {
   try { a.pause() } catch { /* 何もしない */ }
   a.volume = 0
   a.src = url
+  /* ★ **曲も、こちらの音である**(第5.351節)。鳴らす直前に宣言を戻す */
+  takeOverAudio()
   try { await a.play() } catch { return }
   to(bgmLevel(), 700)
 }

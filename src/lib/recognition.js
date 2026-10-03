@@ -19,6 +19,8 @@
  *   「Chrome を使えば回避できる」という手は存在しない。
  */
 import { releaseMicrophone } from './speech.js'
+/* ★ **ほかのアプリの音を止めるかどうか**(第5.351節) */
+import { takeOverAudio } from './audioSession.js'
 
 const SR = typeof window !== 'undefined'
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -98,6 +100,10 @@ export function startRecognition({ lang = 'en-US' } = {}) {
   }
 
   try {
+    /* ★ **聞き取りはマイクを掴む**(第5.351節)。
+         ブラウザに任せる扱いへ戻しておく —— `ambient`(混ざる音)の
+         宣言のままマイクを掴ませない */
+    takeOverAudio()
     recognition.start()
   } catch (e) {
     settled = true

@@ -71,6 +71,10 @@ import {
 import { voiceLevel } from './mixVolume.js'
 /* **間を音で置く**(第5.285節)。作り方は `silentWav.js` 1か所 */
 import { SILENT_STEP_MS, silentKey, silentNeeded, silentWav } from './silentWav.js'
+/* ★ **ほかのアプリの音を止めるかどうか**(第5.351節)。
+   **`prime()` では呼ばない** —— あれは解錠のための無音で、
+   そこで主になると「立ち上げただけで Spotify が消える」に戻る */
+import { takeOverAudio } from './audioSession.js'
 /* **調べるための控えを画面に出すかは `clipProbe.js` 1か所**(第5.292節) */
 import { showsOnScreen } from './clipProbe.js'
 /* **端末に「いま鳴らしている」と伝える**(第5.285節)。
@@ -2161,6 +2165,12 @@ export async function playClip({
     el.addEventListener('error', finish)
     endCurrent = finish
 
+    /* ★ **ここから先は、こちらの音が主**(第5.351節)。
+         **鳴らす直前に宣言を戻す** —— ふだんは `ambient`(ほかのアプリの音と
+         混ざる)にしてあるので、戻さないと**消音スイッチで黙り、
+         画面を消すと止まる**(第5.285節が壊れる)。
+         **判断は `audioSession.js` 1か所**(ここで種類を書かない) */
+    takeOverAudio()
     const started = el.play()
     if (started?.catch) {
       started.catch(() => {

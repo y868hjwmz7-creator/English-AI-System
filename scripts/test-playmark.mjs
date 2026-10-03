@@ -13973,6 +13973,94 @@ console.log('\n▶ 支度を、何本か同時に走らせる(第5.307節)')
   }
 }
 
+console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第5.351節)')
+{
+  const A = await import('../src/lib/audioSession.js')
+  const src = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/.*$/gm, '')
+
+  /* **混ざる側と、主になる側の両方を見る**(CLAUDE.md「出る側と出ない側」) */
+  A.forgetAudioSession()
+  ok(A.mixWithOthers() === 'ambient', '起動のときは「混ざる音」と宣言する', A.audioSessionNow())
+  ok(A.takeOverAudio() === 'auto',
+    '鳴らす直前は、ブラウザに任せる扱いへ戻す(いまの振る舞いと同じ)', A.audioSessionNow())
+
+  /* ★ **`playback` を名指ししない。** 名指しすると、録音や端末の声のときに
+       こちらが選んだ種類のほうが邪魔になる。**戻すのは既定(`auto`)である** */
+  ok(!/'playback'|"playback"/.test(noC(src('src/lib/audioSession.js'))),
+    '`playback` を名指ししていない(既定へ戻すだけ)')
+
+  /* **同じ種類を二度入れない**(端末に何度も言わない) */
+  A.forgetAudioSession()
+  let 回 = 0
+  const 偽 = { set type(v) { 回 += 1; this._v = v }, get type() { return this._v } }
+  const 元 = globalThis.navigator
+  try {
+    Object.defineProperty(globalThis, 'navigator', { value: { audioSession: 偽 }, configurable: true })
+    A.mixWithOthers(); A.mixWithOthers(); A.mixWithOthers()
+    ok(回 === 1, '同じ種類は、何度呼んでも1度しか入れない', `${回} 回`)
+    A.takeOverAudio()
+    ok(回 === 2 && 偽.type === 'auto', '種類が変わったときだけ入れ直す', `${回} 回 / ${偽.type}`)
+  } finally {
+    if (元 === undefined) delete globalThis.navigator
+    else Object.defineProperty(globalThis, 'navigator', { value: 元, configurable: true })
+  }
+
+  /* ★ **受け付けない端末で落ちない**(いちばん危ない形・CLAUDE.md)。
+       この仕組みを持っているのは Safari だけである */
+  A.forgetAudioSession()
+  const 元2 = globalThis.navigator
+  try {
+    Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true })
+    ok(A.mixWithOthers() === 'ambient' && A.takeOverAudio() === 'auto',
+      '宣言を受け付けない端末でも落ちない(覚えるだけ)')
+  } finally {
+    if (元2 === undefined) delete globalThis.navigator
+    else Object.defineProperty(globalThis, 'navigator', { value: 元2, configurable: true })
+  }
+
+  /* ★ **鳴らす道ぜんぶが通っているか。**
+       1つ漏らすと、その道の音が**消音スイッチで黙り、画面を消すと止まる**
+       (第5.285節が壊れる)。**手前 8 行の中に在るか**で数える */
+  const 通る = (file, 目じるし) => {
+    const lines = src(file).split('\n')
+    const at = lines.findIndex((l) => l.includes(目じるし))
+    if (at < 0) return `見つからない: ${目じるし}`
+    const 手前 = lines.slice(Math.max(0, at - 8), at).join('\n')
+    return /takeOverAudio\(\)/.test(手前) ? '' : `手前に無い: ${目じるし}`
+  }
+  const 漏れ = [
+    通る('src/lib/audioClips.js', 'const started = el.play()'),
+    通る('src/lib/bgm.js', 'await a.play()'),
+    通る('src/lib/speech.js', 'micStream = await navigator.mediaDevices.getUserMedia'),
+    通る('src/lib/recognition.js', 'recognition.start()'),
+  ].filter(Boolean)
+  /* 端末の声は**2か所**ある。どちらも通ること */
+  const 声 = noC(src('src/lib/speech.js'))
+  const 読む = (声.match(/speechSynthesis\.speak\(/g) ?? []).length
+  const 戻す = (声.match(/takeOverAudio\(\)\s*\n\s*window\.speechSynthesis\.speak\(/g) ?? []).length
+  ok(!漏れ.length, '音を出す道は、ぜんぶ宣言を戻している(教材 / 曲 / 録音 / 聞き取り)',
+    漏れ.join(' / '))
+  ok(読む >= 2 && 戻す === 読む,
+    `端末の声も、${読む} か所とも宣言を戻している`, `戻している ${戻す} / ${読む}`)
+
+  /* ★ **出ない側 —— 解錠と、ボタンの音では戻さない。**
+       ここで戻すと「立ち上げて触っただけで Spotify が消える」に逆戻りする */
+  const clips = src('src/lib/audioClips.js').split('\n')
+  const prime = clips.findIndex((l) => l.includes('const played = el.play()'))
+  const 解錠の手前 = clips.slice(Math.max(0, prime - 8), prime).join('\n')
+  ok(prime > 0 && !/takeOverAudio\(\)/.test(解錠の手前),
+    '解錠のための無音では、宣言を戻さない(ここが出どころだった)')
+  ok(!/audioSession|takeOverAudio/.test(src('src/lib/sfx.js')),
+    'ボタンの「ポン」でも、宣言を戻さない')
+
+  /* **起動のときに1回。** 画面が呼んでいなければ、何も効かない */
+  const app = noC(src('src/App.jsx'))
+  ok(/mixWithOthers\(\)/.test(app), '画面が、起動のときに「混ざる音」と宣言している')
+  /* **種類の名前を画面に書き写していない**(呼び名は1か所) */
+  ok(!/'ambient'|"ambient"/.test(app), "画面の中で 'ambient' と書き写していない")
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')

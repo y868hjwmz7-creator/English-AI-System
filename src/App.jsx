@@ -23,6 +23,10 @@ import { setViewerRole } from './lib/viewer.js'
    読み方も外し方も `materialLink.js` 1か所 */
 import { materialIdFromUrl, urlWithoutMaterial } from './lib/materialLink.js'
 import { installTapFeedback } from './lib/haptics.js'
+/* ★ **ほかのアプリの音を止めない**(第5.351節・2026-10-03 利用者の指定
+     「このアプリを立ち上げたときに Spotify などで聞いている音楽が
+     消えないように出来ないですか」)。**種類の名前は `audioSession.js` 1か所** */
+import { mixWithOthers } from './lib/audioSession.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 /* 英語の音声と音楽の大きさ(2026-09 利用者の指定)。
    **覚えるのは `mixVolume.js`、曲に当てるのは `bgm.js` 1か所** */
@@ -307,6 +311,14 @@ export default function App() {
   // 触る端末で、押したときに短い手応えを返す(2026-08 の要望)。
   // **アプリで1か所だけ。** 画面ごとに書くと、新しいボタンで必ず抜ける
   useEffect(() => installTapFeedback(), [])
+
+  /* ★ **起動したら「混ざる音」と宣言する**(第5.351節)。
+       **触る前に言っておく** —— 最初に画面へ触れた瞬間、解錠のための
+       無音(`audioClips.js` の `prime()`)と `AudioContext` の起こし
+       (`sfx.js`)が走るので、そこで Spotify が止まっていた。
+       **教材の音声を鳴らす直前に `takeOverAudio()` が戻す**ので、
+       聞くときの振る舞いは1ミリも変わらない */
+  useEffect(() => { mixWithOthers() }, [])
 
   useEffect(() => { applyTheme(theme) }, [theme])
   useEffect(() => { applyPalette(palette) }, [palette])

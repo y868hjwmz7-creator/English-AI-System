@@ -16,6 +16,9 @@
  */
 import { markIndexAt, totalWeight, weighWords, wordMarks } from './wordTiming.js'
 import { voiceLevel } from './mixVolume.js'
+/* ★ **ほかのアプリの音を止めるかどうか**(第5.351節)。
+   端末の声も、録音も、**こちらが音を使う側**である */
+import { takeOverAudio } from './audioSession.js'
 import { displayAtOf, speakText } from './speakText.js'
 
 /** ブラウザが読み上げ機能に対応しているか */
@@ -425,6 +428,8 @@ export function speak(text, { voice, rate = 0.9, onWord } = {}) {
      ここは MP3 を作れなかったときの受け皿なので、ここだけ
      いつも最大だと「つまみを下げたのに、その1本だけ大きい」になる */
   utterance.volume = voiceLevel()
+  /* ★ **端末の声も、こちらの音である**(第5.351節) */
+  takeOverAudio()
   window.speechSynthesis.speak(utterance)
   return true
 }
@@ -488,6 +493,8 @@ export function speakOnce(text, { voice, rate = 0.9, onWord } = {}) {
   const words = String(text).split(/\s+/).length
   timer = window.setTimeout(finish, (Math.max(2, words / 2.2) * 2 + 2) * 1000)
 
+  /* ★ **端末の声も、こちらの音である**(第5.351節) */
+  takeOverAudio()
   window.speechSynthesis.speak(utterance)
 
   return {
@@ -640,6 +647,10 @@ async function ensureAudioGraph() {
 
   teardownAudioGraph()
 
+  /* ★ **録音は、ブラウザに任せる扱いに戻す**(第5.351節)。
+       `ambient` のままマイクを掴ませない —— あちらは「混ざる音」の宣言で、
+       録音のための扱いではない */
+  takeOverAudio()
   micStream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
   })
