@@ -126,16 +126,38 @@ export const DEFAULT_RESPONSE_PICK = 'auto'
  */
 export function responseBrief({ form = DEFAULT_RESPONSE_FORM, phrases = [], times = TIMES_PER_PHRASE } = {}) {
   const rows = (phrases ?? [])
-    .map((p) => ({ en: String(p?.en ?? '').trim(), ja: String(p?.ja ?? '').trim() }))
+    .map((p) => ({
+      en: String(p?.en ?? '').trim(),
+      ja: String(p?.ja ?? '').trim(),
+      /* **`need` を持っていればそれ。** 無ければ `times` 回
+         （これまでの呼び方をそのまま通す） */
+      need: Math.max(1, Math.round(Number(p?.need ?? times) || times)),
+    }))
     .filter((p) => p.en)
   if (!rows.length) return ''
+  /* ★ **表現ごとに「あと何問」を書く**（第5.359節・2026-10-03 実機の指摘）。
+
+       > 67個の英文から134個の応答問題を作ったら、5回も6回も解答になる文も
+       > あれば一度も出てこないものもありました
+
+     窓口は**1回に 30 問まで**なので、134 問は**5〜7回に分かれる。**
+     これまでは**どの回にも同じ「67個・2問ずつ」を渡していた** ——
+     1回で作れるのは 15 個ぶんだけなので、AI は**毎回その場で選び直し**、
+     呼び出しをまたいで何を作ったかも知らない。
+     **だから偏った。**（`phraseTurn()` が、この回のぶんだけを渡す）
+
+     **数は書かずに、行から読ませる。** 「2問ずつ」と書くと、
+     1問だけ足りない表現が混ざった回で食い違う。 */
   const 一覧 = rows
-    .map((p, i) => `${i + 1}. ${p.en}${p.ja ? `（${p.ja}）` : ''}`)
+    .map((p, i) => `${i + 1}. ${p.en}${p.ja ? `（${p.ja}）` : ''} … ${p.need} 問`)
     .join('\n')
+  const 合計 = rows.reduce((a, p) => a + p.need, 0)
   const 共通 = [
     '応答問題。**答えが先に決まっている。**',
     `下の表現を「応答の正解」にして、**その応答が自然に返る質問や発言**を作る。`,
-    `**1つの表現につき ${times} 問**、**場面の違う質問**を作る`,
+    `**表現ごとに、横に書いた問数ちょうど**作る（**全部で ${合計} 問**）。`,
+    '**ここに書いていない表現を正解にした問は、1問も作らない。**',
+    '同じ表現で2問以上作るときは、**場面の違う質問**にする',
     '（同じ質問を繰り返さない。別の場面で同じ応答を言う練習である）。',
     'audio_text に**質問または発言を1文**（10〜15語）、',
     'answer に**応答そのもの**を入れる。',
@@ -192,6 +214,69 @@ export function responseBrief({ form = DEFAULT_RESPONSE_FORM, phrases = [], time
       '聞いた人が自分で応答を言い、答え合わせで answer と answer_alt を見る。',
     ].join('')
   return `${共通}${形}\n\n【応答の正解にする表現】\n${一覧}`
+}
+
+/**
+ * ★ **この1回で頼む表現と、その問数**(第5.359節・2026-10-03 実機の指摘)。
+ *
+ *   > 67個の英文をNative Flowから選んで134個の応答問題を作ったら、
+ *   > **5回も6回も解答になる文もあれば一度も出てこないものもありました**
+ *
+ * ── なぜ偏ったか(**測って分かったこと**)──────────────────
+ *
+ *     表現 67 個 → 問数 134 問
+ *     窓口は **1回に 30 問まで** → 呼び出しは最低 5 回、上限 7 回
+ *     ところが**どの回にも、同じ「67 個・2問ずつ」**を渡していた
+ *
+ *   1回で作れるのは **15 個ぶん**だけなので、AI は**毎回その場で
+ *   15 個を選び直す。** しかも**呼び出しをまたいで何を作ったか知らない。**
+ *   だから好きな表現が何度も選ばれ、選ばれない表現が残った。
+ *
+ *   **AI の気まぐれではない。こちらが同じ注文を5回出していた。**
+ *
+ * ── 直し方 ──────────────────────────────────────────
+ *
+ *   **その回で頼むぶんだけを渡す。**
+ *   しかも「15 個ずつ順に」ではなく、**いま何問できているかを数えてから**
+ *   足りないものを渡す —— こうしておけば、
+ *   **落とされた問(重複・壊れた英文)も、次の回で取り返される。**
+ *
+ * **並びは変えない。** 元の順のまま、入るところまで取る ——
+ * 並べ替えると、どの回に何が行くかが読めなくなる(CLAUDE.md
+ * 「一覧を勝手に減らさない。並べ替えも減らすに当たる」)。
+ *
+ * @param {Array<{en,ja}>} phrases 正解にする表現(ぜんぶ)
+ * @param {Array<object>} made ここまでに出来ている問
+ * @param {number} need この回で頼める問数
+ * @param {number} times 1つの表現を何回出すか
+ * @returns {Array<{en,ja,need}>} この回で頼むぶん(**1つは必ず返す**)
+ */
+export function phraseTurn(phrases, made, need, times = TIMES_PER_PHRASE) {
+  /* **出来ている数は、読む欄と同じ落とし方で数える**(`answerSpeakText()`)
+     —— 「(A) …」の形でも突き合わせられる(`fillAnswerJa` と同じ作法) */
+  const 出た = new Map()
+  for (const it of made ?? []) {
+    const k = normEn(answerSpeakText(it))
+    if (!k) continue
+    出た.set(k, (出た.get(k) ?? 0) + 1)
+  }
+  const 残り = (phrases ?? [])
+    .map((p) => ({
+      ...p,
+      need: Math.max(0, times - (出た.get(normEn(p?.en)) ?? 0)),
+    }))
+    .filter((p) => p.need > 0 && String(p?.en ?? '').trim())
+
+  const 枠 = Math.max(1, Math.round(Number(need) || 0))
+  const out = []
+  let 計 = 0
+  for (const p of 残り) {
+    /* **1つ目は、枠を超えても入れる** —— 0 個で頼むと何も作られない */
+    if (out.length && 計 + p.need > 枠) break
+    out.push(p)
+    計 += p.need
+  }
+  return out
 }
 
 /**

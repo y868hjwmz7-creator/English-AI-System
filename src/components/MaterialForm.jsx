@@ -116,7 +116,7 @@ import {
   DEFAULT_RESPONSE_SOURCE, RESPONSE_COUNTS, RESPONSE_FORMS, RESPONSE_PICKS,
   RESPONSE_SOURCES, TIMES_PER_PHRASE, fillAnswerJa, hasChoices, needsLearner,
   phrasesNeeded, picksCount, pickPhrases,
-  questionsFrom, responseBrief, responseNote, responsePlan,
+  phraseTurn, questionsFrom, responseBrief, responseNote, responsePlan,
   spreadSameAnswer, stripHeardAnswer, usesTextBook,
 } from '../lib/responseDrill.js'
 /* ★ **誤りの選択肢は、こちらで組み立てる**（第5.350節)。
@@ -1538,6 +1538,21 @@ export default function MaterialForm({
              英文だけなので、教材を作る呼び出しの 1/30 ほどである。
              **判断は `proofreads()` 1か所**(ここで `kind === …` と書かない) */
           proofread: proofreads(kind),
+          /* ★ **その回のぶんだけを頼む**(第5.359節・2026-10-03 実機の指摘
+               「5回も6回も解答になる文もあれば一度も出てこないものも」)。
+
+             窓口は1回に 30 問までなので、134 問は5〜7回に分かれる。
+             **どの回にも同じ「67 個・2問ずつ」を渡していた**ので、
+             AI は毎回その場で 15 個を選び直し、偏った。
+             **何個をこの回に回すかは `phraseTurn()` 1か所**が決める ——
+             ここで割り算を書かない。
+             **応答問題でなければ渡さない**(これまでとまったく同じ) */
+          briefFor: isResponseKind(kind)
+            ? (need, made) => responseBrief({
+              form: resForm,
+              phrases: phraseTurn(resPhrases, made, need),
+            })
+            : null,
         },
       )
       if (result.error) throw new Error(result.error)

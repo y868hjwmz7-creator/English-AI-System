@@ -2418,6 +2418,20 @@ export async function generateSectionUnique(params, {
        **渡さなければ、これまでとまったく同じ**である ——
        **どの種類で読み返すかは `proofreads()` 1か所**が決める */
   proofread = false,
+  /* ★ **1回ぶんの作り方を、そのつど組み立てる**(第5.359節)。
+
+       窓口は**1回に 30 問まで**なので、134 問は5〜7回に分かれる。
+       **これまでは、どの回にも同じ作り方の文を渡していた** ——
+       応答問題では「67 個の表現を2問ずつ」と書いてあるのに1回で作れるのは
+       15 個ぶんだけなので、AI は毎回その場で選び直し、
+       **5〜6回出る表現と、1度も出ない表現**ができた(実機の指摘)。
+
+       渡せば、**いま何問できているかを見てから**その回のぶんを組み立てられる
+       —— 落ちた問も、次の回で取り返される。
+       **渡さなければ、これまでとまったく同じ**である。
+
+       @type {null | ((need: number, made: object[]) => string)} */
+  briefFor = null,
 }) {
   const wanted = params.count
   const items = []
@@ -2457,9 +2471,14 @@ export async function generateSectionUnique(params, {
        **止まる条件は残す** —— 何回でも回すわけではない */
   const 作り直しの上限 = genAttempts(wanted)
   for (let attempt = 0; attempt < 作り直しの上限 && items.length < wanted; attempt += 1) {
+    const need = wanted - items.length
+    /* ★ **その回のぶんだけを頼む**(第5.359節)。
+         `briefFor` を渡していなければ、これまでどおり同じ文である */
+    const brief = briefFor ? briefFor(need, items) : params.examPart
     const { data, error } = await generateSection({
       ...params,
-      count: wanted - items.length,
+      count: need,
+      ...(briefFor ? { examPart: brief } : {}),
       avoid: [...usedSet].slice(-AVOID_MAX),
     })
     if (error) return { error }

@@ -593,6 +593,136 @@ console.log('\n▶ 応答の聞き流し(第5.334節 / 第5.355節)')
   is(/answer: ''/.test(骨), '骨組みの応答問題に、英文の無い問が混ざっている')
 }
 
+console.log('\n▶ 表現ごとの問数が、そろうか(第5.359節)')
+{
+  /* ★ 2026-10-03 実機・利用者の指摘。
+
+       > 67個の英文をNative Flowから選んで134個の応答問題を作ったら、
+       > **5回も6回も解答になる文もあれば一度も出てこないものもありました**
+
+     窓口は**1回に 30 問まで**なので、134 問は5〜7回に分かれる。
+     ところが**どの回にも同じ「67 個・2問ずつ」**を渡していた ——
+     1回で作れるのは 15 個ぶんだけなので、AI は毎回その場で選び直し、
+     呼び出しをまたいで何を作ったかも知らない。**だから偏った。**
+
+     **AI の気まぐれではない。こちらが同じ注文を5回出していた。** */
+  const { GEN_PER_CALL } = await import('../src/lib/genAttempts.js')
+  /* **1回あたりの上限を書き写さない。** 窓口と突き合わせているほうから読む */
+  const 表現 = Array.from({ length: 67 }, (_, i) => ({ en: `E${i + 1}.`, ja: `ja${i + 1}` }))
+  const 全問 = D.questionsFrom(表現)
+
+  /* ── ① **ぜんぶ作ったとき、回数がそろうか** ── */
+  const 回す = (落ちる) => {
+    let made = []
+    const 回 = []
+    for (let n = 0; n < 20 && made.length < 全問; n += 1) {
+      const turn = D.phraseTurn(表現, made, Math.min(GEN_PER_CALL, 全問 - made.length))
+      if (!turn.length) break
+      回.push(turn.reduce((a, p) => a + p.need, 0))
+      let 作 = 0
+      for (const p of turn) {
+        for (let k = 0; k < p.need; k += 1) {
+          作 += 1
+          if (!落ちる || 作 % 3) made.push({ answer: p.en })
+        }
+      }
+    }
+    const 数 = new Map()
+    for (const it of made) 数.set(it.answer, (数.get(it.answer) ?? 0) + 1)
+    return {
+      made, 回,
+      回数: [...new Set(表現.map((p) => 数.get(p.en) ?? 0))].sort((a, b) => a - b),
+      出ない: 表現.filter((p) => !数.has(p.en)).length,
+      多すぎ: 表現.filter((p) => (数.get(p.en) ?? 0) > D.TIMES_PER_PHRASE).length,
+    }
+  }
+  const 素直 = 回す(false)
+  is(素直.出ない === 0, '1度も出ない表現が、1つも無い', `${素直.出ない} 個`)
+  is(素直.多すぎ === 0, `${D.TIMES_PER_PHRASE} 回を超える表現が、1つも無い`, `${素直.多すぎ} 個`)
+  is(素直.回数.length === 1 && 素直.回数[0] === D.TIMES_PER_PHRASE,
+    'どの表現も、ちょうど同じ回数だけ正解になる', `回数 ${素直.回数.join(' / ')}`)
+  is(素直.made.length === 全問, 'えらんだ問数が、そのまま出来る', `${素直.made.length} / ${全問} 問`)
+  /* **1回あたりの上限を超えて頼んでいないか**(超えたぶんは窓口が切り捨てる) */
+  is(素直.回.every((n) => n <= GEN_PER_CALL),
+    '1回に、窓口の上限より多く頼んでいない', `${素直.回.join(' / ')} 問(上限 ${GEN_PER_CALL})`)
+
+  /* ── ② ★ **落ちても取り返せるか**(ここが効きどころ)──
+         重複や壊れた英文で落ちた問は、**次の回で頼み直される。**
+         これまでは、落ちた表現は**二度と戻ってこなかった** */
+  const 欠け = 回す(true)
+  is(欠け.出ない === 0, '3問に1問が落ちても、1度も出ない表現は無い', `${欠け.出ない} 個`)
+  is(欠け.多すぎ === 0, '落ちても、同じ表現を作りすぎない', `${欠け.多すぎ} 個`)
+
+  /* ── ③ **出ない側 / いちばん危ない形**(CLAUDE.md)── */
+  const 済み = 表現.flatMap((p) => [{ answer: p.en }, { answer: p.en }])
+  is(D.phraseTurn(表現, 済み, GEN_PER_CALL).length === 0,
+    'ぜんぶ出来ていれば、1つも頼まない')
+  is(D.phraseTurn([], [], GEN_PER_CALL).length === 0 && D.phraseTurn(null, null, 0).length === 0,
+    '表現が1つも無くても落ちない')
+  /* **枠が小さくても、1つは返す** —— 0 個で頼むと、1問も作られずに輪が空回りする */
+  is(D.phraseTurn(表現, [], 1).length === 1,
+    '枠が1問でも、表現を1つは頼む(空回りさせない)')
+  /* **並びを変えていない**(CLAUDE.md「並べ替えも減らすに当たる」) */
+  const 先頭 = D.phraseTurn(表現, [], GEN_PER_CALL).map((p) => p.en)
+  is(先頭.join() === 表現.slice(0, 先頭.length).map((p) => p.en).join(),
+    '元の並びのまま、入るところまで取る', 先頭.slice(0, 3).join(' / '))
+  /* **記号つきの解答でも数えられるか**(テスト対策の「(A) …」の形) */
+  const 記号 = D.phraseTurn([{ en: 'Me too.', ja: '私も' }],
+    [{ answer: '(A) Me too.' }, { answer: '(B) Me too.' }], GEN_PER_CALL)
+  is(記号.length === 0, '記号の付いた解答も、同じ表現として数える')
+
+  /* ── ④ **作り方の文が、表現ごとの問数を言っているか** ── */
+  const 文 = D.responseBrief({ form: 'choices', phrases: D.phraseTurn(表現, [], GEN_PER_CALL) })
+  /* ★ **書いてある形を書き写さない。** 行から**数を読み取って**突き合わせる
+       —— 「… 2 問」と書くと、区切りを変えた日に**仕組みは無傷なのに
+       見張りだけが赤くなる**(CLAUDE.md・4度踏んだ) */
+  const 行の数 = (brief, en) => {
+    const 行 = brief.split('\n').find((l) => /^\d+\. /.test(l) && l.includes(en))
+    return Number(/(\d+)\s*問/.exec(行 ?? '')?.[1] ?? NaN)
+  }
+  is(行の数(文, 'E1.') === D.TIMES_PER_PHRASE,
+    '表現ごとに「あと何問」を書いている', `E1. … ${行の数(文, 'E1.')} 問`)
+  is(/書いていない表現/.test(文), 'ここに無い表現の問は作らない、と言っている')
+  /* **数を書き写していないか。** 「2問ずつ」と書くと、1問だけ足りない
+     表現が混ざった回で食い違う */
+  const 混ぜ = D.responseBrief({ form: 'choices',
+    phrases: [{ en: 'Aaa.', ja: 'あ', need: 1 }, { en: 'Bbb.', ja: 'い', need: 2 }] })
+  is(行の数(混ぜ, 'Aaa.') === 1 && 行の数(混ぜ, 'Bbb.') === 2,
+    '表現ごとに別の問数を書ける(1問だけ足りない表現が混ざっても食い違わない)',
+    `${行の数(混ぜ, 'Aaa.')} 問 / ${行の数(混ぜ, 'Bbb.')} 問`)
+  is(/全部で 3 問/.test(混ぜ), '合計も、足し算して書いてある')
+
+  /* ── ⑤ ★ **1回に送る表現の数が、頭打ちになっているか** ──
+         これまでは**どの回にも 67 個ぶん**を送っていた。
+         語数はそのまま課金になる(見えない費用を作らない・CLAUDE.md)。
+
+         **文字数の比で見ない** —— 作り方の決まりの文は長さが変わらないので、
+         比を見ると**表現が減っても半分にならず**、見張りだけが赤くなる
+         (実際そうなった)。**数えるのは一覧の行数**である */
+  const 一覧の数 = (brief) => (brief.match(/^\d+\. /gm) ?? []).length
+  const 全部 = D.responseBrief({ form: 'choices', phrases: 表現 })
+  is(一覧の数(文) <= Math.ceil(GEN_PER_CALL / D.TIMES_PER_PHRASE)
+    && 一覧の数(全部) === 表現.length,
+    '1回に送る表現は、窓口が1回に作れるぶんまで',
+    `1回ぶん ${一覧の数(文)} 個 / ぜんぶ送ると ${一覧の数(全部)} 個`)
+
+  /* ── ⑥ **生成の輪が、回ごとに組み立て直しているか** ──
+         素の関数だけ見ると、**画面が渡していなくても緑になる**(第5.330節) */
+  const lib = noC(R('src/lib/materials.js'))
+  is(/briefFor \? briefFor\(need, items\)/.test(lib),
+    '生成の輪が、回ごとに作り方を組み立て直している')
+  is(/\.\.\.\(briefFor \? \{ examPart: brief \} : \{\}\)/.test(lib),
+    '渡していなければ、これまでとまったく同じ文を送る')
+  const form = noC(R('src/components/MaterialForm.jsx'))
+  is(/briefFor: isResponseKind\(kind\)/.test(form), '画面が、応答問題のときだけ渡している')
+  is(/phrases: phraseTurn\(resPhrases, made, need\)/.test(form),
+    '何個をこの回に回すかは `phraseTurn()` が決める')
+  /* **画面の中で割り算していないか**(数え方を2通り持たない) */
+  const 渡す所 = form.match(/briefFor: isResponseKind[\s\S]{0,400}?: null,/)?.[0] ?? ''
+  is(!/Math\.ceil|Math\.floor|\/ 2|slice\(/.test(渡す所),
+    '画面の中で、何個ずつかを計算していない(判断は1か所)')
+}
+
 console.log('\n▶ 正解が、本当に「応答」になるか(第5.344 / 5.357節)')
 {
   /* ★ 2026-10-02 実機・利用者の指摘(第5.344節)。
