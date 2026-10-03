@@ -1003,15 +1003,57 @@ console.log('\n▶ 誤りの選択肢を、こちらで組み立てているか(
 
   /* **AI には作らせていない**(作り方の文が「空にする」と言っている) */
   const brief = D.responseBrief({ form: 'choices', phrases: [{ en: 'Sure.', ja: 'もちろん。' }] })
-  is(/question は\*\*空にする\*\*/.test(brief),
-    '作り方の文が「question は空にする」と言っている(AI に作らせない)')
-  is(!/\(A\)\(B\)\(C\)/.test(brief),
-    '作り方の文に、選択肢の記号が1つも出てこない')
+  /* ★ **「空にする」とは言わない**(第5.353節)。窓口は空の欄がある問を
+       落とすので、**言った日に 0 件になる**。言うのは「選択肢を書くな」である */
+  is(/選択肢\(A\)\(B\)\(C\)は書かない/.test(brief),
+    '作り方の文が「選択肢は書かない」と言っている(AI に作らせない)')
+  is(!/の形で並べる/.test(brief),
+    '作り方の文が、選択肢を並べろとは言っていない')
 
   /* **画面が通している**(選択肢を出す形のときだけ) */
   const form = noC(R('src/components/MaterialForm.jsx'))
   is(/buildChoices\(\s*items\s*,\s*resOn && hasChoices\(resForm\)\s*\)/.test(form),
     '画面が、選択肢を出す形のときだけ `buildChoices()` を通している')
+}
+
+console.log('\n▶ 窓口が必須にしている欄を、作り方が「空にする」と言っていないか(第5.353節)')
+{
+  /* ★ **2026-10-03 実機。5回連続で「listening の中身が空で返ってきました」。**
+
+       出どころは、前の日(第5.350節)にこちらが書いた
+       「question は**空にする**」である。窓口は**空の欄がある問を落とす**ので、
+       **1問残らず落ちて 0 件**になっていた。
+
+     **第5.341節とまったく同じ形**(窓口と画面で必須の欄が食い違う)。
+     あちらは窓口が任意にしたのに画面が必須のままで、今度は**逆向き**だった。
+     **だから、向きを問わずに突き合わせる。** */
+  const fn = R('supabase/functions/generate-material/index.ts')
+  const m = /listening:\s*\{\s*required:\s*\[([^\]]*)\]/.exec(fn)
+  const 必須 = m ? [...m[1].matchAll(/'(\w+)'/g)].map((x) => x[1]) : []
+  is(必須.length >= 3, `窓口の必須の欄を読み取れている(${必須.join(' / ') || 'なし'})`)
+
+  const 表現 = [{ en: 'Sure, that works for me.', ja: 'ええ、それで大丈夫です。' }]
+  for (const form of D.RESPONSE_FORMS.map((f) => f.id)) {
+    const 文 = D.responseBrief({ form, phrases: 表現 })
+    /* 「<欄> は**空にする**」と言っている必須の欄を探す */
+    const 空にしろ = 必須.filter((f) => new RegExp(`${f} は\\*\\*空にする`).test(文))
+    is(!空にしろ.length,
+      `${form} … 窓口が必須にしている欄を「空にする」と言っていない`,
+      空にしろ.join(' / '))
+  }
+
+  /* **選択肢ありの形は、question に何を入れるかを言っている。**
+     **文は `CHOICE_LEAD` 1か所**(書き写さない) */
+  const 選 = D.responseBrief({ form: 'choices', phrases: 表現 })
+  is(選.includes(`question には「${D.CHOICE_LEAD}」`),
+    '選択肢ありの形は、question に入れる文を言っている(空にしない)')
+
+  /* ★ **「自分で言う」形も、ちゃんと作れるか。**
+       こちらは第5.332節からずっと「question は空にする」と言っていた ——
+       **窓口が必須だったので、その形は一度も作れていなかった。**
+       いまは窓口が任意にしてあるので通る */
+  is(!必須.includes('question'),
+    '窓口は question を必須にしていない(設問の無い問が、ほんとうに在る)')
 }
 
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)

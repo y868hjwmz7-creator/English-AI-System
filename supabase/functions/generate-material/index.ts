@@ -733,8 +733,26 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
        `isBlankItem` が必須として数え、**古い教材を作り足すときに
        1 問残らず落ちる**（第5.341節で踏んだ「3回とも 0 問」）。
        **窓口だけが必須**でよい —— 新しく作る教材には必ず入る */
-  listening:       { required: ['audio_text', 'question', 'answer', 'answer_ja', 'prompt_ja'],
-    optional: ['note', 'tag_no'] },
+  /* ★ **`question` を「必須」から外した**(第5.353節・2026-10-03 実機)。
+
+       > 応答問題が作れなくなりました。5回連続くらいで失敗しています
+       > (listening の中身が空で返ってきました)
+
+     **第5.341節とまったく同じ形**である —— あちらは窓口が `hint` を任意に
+     したのに画面が必須のままで、本番に「与える語」の無い TOEIC Part 5 が
+     **1問残らず落ちて 0 問**になった。今度は**逆向き**で、
+     画面の作り方が「question は空にする」と言っているのに、
+     **窓口がここで必須のまま**だった。下の「空の欄がある問は落とす」が
+     **1問残らず落とし、5回とも 0 件**になった。
+
+     **選択肢を出さない形(応答問題の「自分で言う」)も、同じ理由で
+     ずっと作れなかった**(第5.332節から)。
+
+     **設問が要らない問は、ほんとうに在る。** 応答問題は選択肢を
+     こちらで組み立てる(第5.350節)し、「自分で言う」形には設問が無い。
+     TOEIC Part 2 などは、作り方の文が `question` に選択肢を書かせている。 */
+  listening:       { required: ['audio_text', 'answer', 'answer_ja', 'prompt_ja'],
+    optional: ['question', 'note', 'tag_no'] },
 
   // 本文。**英語と訳が必ず要る。** これが無いと音声も出せない
   article:         { required: ['prompt_en', 'prompt_ja'], optional: ['phrases'] },
