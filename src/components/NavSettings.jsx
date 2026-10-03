@@ -45,7 +45,7 @@ import { SortIcon } from './Icons.jsx'
 import VolumeRow from './VolumeRow.jsx'
 /* ★ **ほかのアプリの音を混ぜるか**(第5.352節)。
    **効く端末かどうかは `mixWorks()` 1か所**が決める(名前で見分けない) */
-import { mixWorks } from '../lib/audioSession.js'
+import { MIX_MODES, mixWorks } from '../lib/audioSession.js'
 import { THEMES } from '../lib/theme.js'
 import { PALETTES } from '../lib/palette.js'
 import { TIPS } from '../lib/tips.js'
@@ -72,20 +72,12 @@ function Pick({ label, options, value, onChange }) {
 const SOUNDS = [{ id: true, label: '鳴らす' }, { id: false, label: '鳴らさない' }]
 /** 音楽を流すか(第5.257節・2026-09-25 利用者の指定「音楽on / offの設定も」) */
 const MUSICS = [{ id: true, label: 'オン' }, { id: false, label: 'オフ' }]
-/**
- * ★ **ほかのアプリの音(Spotify など)を、混ぜるか止めるか**
- * (第5.352節・2026-10-03 利用者の指定)。
- *
- * **iPhone では、この2つは両立しない**(`audioSession.js` に理由がある)ので、
- * **どちらを取るかを利用者が決める。**
- *
- * **「音楽」という名前を使わない** —— すぐ下の行がアプリ自身の音楽の
- * オン / オフ である(CLAUDE.md「違うものに同じ名前を付けない」)。
- */
-const MIXES = [
-  { id: true, label: '混ぜる', hint: '音楽は鳴り続けます。画面を消すと英語の音声は止まります' },
-  { id: false, label: '止める', hint: '英語の音声は、画面を消しても鳴り続けます' },
-]
+/* ★ **ほかのアプリの音(Spotify など)の3つは、`MIX_MODES` が持っている**
+     (第5.352 / 5.356節)。**ここに書き写さない** ——
+     呼び名も、宣言する種類も、あちら1か所で決まる(CLAUDE.md)。
+
+     **「音楽」という名前を使わない** —— すぐ下の行がアプリ自身の音楽の
+     オン / オフ である(CLAUDE.md「違うものに同じ名前を付けない」)。 */
 const PREPARES = [
   { id: true, label: '自動', hint: '過去の教材も、裏で順に用意しておく' },
   { id: false, label: '使うときだけ', hint: '発行と「セッションで使う」のときだけ' },
@@ -179,7 +171,7 @@ export default function NavSettings({
             ほかのアプリの音を止めていない —— **効かない操作を見せない**
             (上の音量のつまみと、まったく同じ作法)。 */}
         {mixWorks() && (
-          <Pick label="ほかのアプリの音" options={MIXES} value={mix} onChange={onMix} />
+          <Pick label="ほかのアプリの音" options={MIX_MODES} value={mix} onChange={onMix} />
         )}
 
         {/* ── **音楽**(第5.257節・2026-09-25 利用者の指定)──────────────

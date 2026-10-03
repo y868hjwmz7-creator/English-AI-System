@@ -41,6 +41,7 @@ import {
   fillGrammar, generateChunkJa, generateSection,
   bodyWord, canPasteBody, freeFromSubject, generateSectionUnique,
   asksUnique,
+  proofreads,
   isDialogueKind, isExamKind, isPassageKind, isResponseKind, isVocabKind, needsWeakTag,
   repeatsAnswer,
   isDrillKind,
@@ -1528,6 +1529,15 @@ export default function MaterialForm({
              **1文も見ていなかった**。ここだけ、台帳をまるごと照合する。
              **判断は `asksUnique()` 1か所**(ここで `kind === …` と書かない) */
           askUnique: asksUnique(kind),
+          /* ★ **作った英文を、出す前に読み返す**(第5.358節・利用者の指摘
+               「こういうバグが起こらないような仕組みは作れますか？」)。
+
+             実機で VERSANT Part A に**英語として成り立っていない問**が出た。
+             **決まりでは見つけられないと、実データで測って決めた**
+             (`proofread.js` に経緯)。窓口をもう1回呼ぶが、送るのは
+             英文だけなので、教材を作る呼び出しの 1/30 ほどである。
+             **判断は `proofreads()` 1か所**(ここで `kind === …` と書かない) */
+          proofread: proofreads(kind),
         },
       )
       if (result.error) throw new Error(result.error)

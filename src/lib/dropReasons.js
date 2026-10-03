@@ -39,6 +39,13 @@ export const DROP_REASONS = {
   giveaway: '答えが見えている',
   used: 'すでに使った英文',
   similar: '意味が近すぎる',
+  /* ★ **英語として成り立っていない**(第5.358節)。
+       実機で VERSANT Part A に出た
+       「What do you call the first meal of a wedding day called a party after it?」
+       がこれである —— **訳も正解も正しく、英文だけが壊れていた。**
+       **ほかの理由に混ぜない** —— 混ぜると「英文が出尽くした」と
+       言ってしまい、作りの問題を「仕方がない」と言うことになる */
+  broken: '英語が壊れている',
 }
 
 /**

@@ -15,6 +15,8 @@ import { CEFR_LEVELS, cefrLabel } from '../data/cefr.js'
      ここは Supabase を引き連れているので、`npm run test:exam` が
      素の node で読めない(CLAUDE.md「走らせられる形に切り出す」) */
 import { emptyDropCounts } from './dropReasons.js'
+/* ★ **作った英文の読み返し**(第5.358節)。**算段はあちら1か所** */
+import { dropBroken, proofLines } from './proofread.js'
 import { normEn } from './textNorm.js'
 /* ★ **重複を見る鍵**(第5.345節)。素の node で測れる形に出してある */
 import {
@@ -96,6 +98,10 @@ export {
   isResponseKind,
   /* ★ **解答がわざと何度も正解になる種類か**（第5.345節）。同じ理由でここへ足す */
   repeatsAnswer,
+  /* ★ **作った英文を読み返す種類か**(第5.358節)。**同じ理由でここへ足す** ——
+       実際、ここへ足し忘れて `npm run build` が落ちた
+       (CLAUDE.md「3つめの形」をそのまま踏んだ) */
+  proofreads,
   /* **弱点タグが要る種類かどうか**(第5.263節)。画面でも同じ判断が
      要るので、出し直す。**画面で `!isPassageKind(kind) && …` と
      書き直さない** —— 種類を足した日に、必ず片方だけ古くなる */
@@ -2049,6 +2055,36 @@ export async function findUsedAsks(candidates) {
 }
 
 /**
+ * ★ **作った英文を読み返し、壊れているものを返す**(第5.358節)。
+ *
+ *   > VERSANTのPART Aの問題、この添付のような問題文は意味不明です。
+ *   > こういうバグが起こらないような仕組みは作れますか？
+ *
+ * **決まりでは無理だと、実データで測って決めた**(`proofread.js` に経緯)。
+ * **送るのは英文だけ**なので、教材を作る呼び出しの 1/30 ほどで済む。
+ *
+ * **ここで失敗しても、教材は捨てない。** 読み返せなかったぶんは
+ * これまでどおり出す —— 黙って絞らない(CLAUDE.md)。
+ *
+ * @param {string[]} lines 読み返す英文(`proofLines()` が集めたもの)
+ * @returns {{data: {bad: {en, why}[], checked, usage}} | {error}}
+ */
+export async function findBrokenEnglish(lines) {
+  /* **0行なら、窓口を呼ばない**(0円) */
+  if (!supabase || !lines?.length) {
+    return ok({ bad: [], checked: 0, usage: { input: 0, output: 0, cacheRead: 0 } })
+  }
+  const { data, error, detail } = await askGen({ mode: 'proofread', lines })
+  if (error) return ng(detail || `英文を読み返せませんでした: ${error.message}`)
+  if (data?.error) return ng(data.error)
+  return ok({
+    bad: Array.isArray(data?.bad) ? data.bad : [],
+    checked: Number(data?.checked ?? 0),
+    usage: data?.usage ?? { input: 0, output: 0, cacheRead: 0 },
+  })
+}
+
+/**
  * その弱点タグですでに使われている英文を集める(①の誘導用)。
  *
  * 上限をかけている。全部渡すと指示が長くなりすぎるため。
@@ -2374,6 +2410,14 @@ export async function generateSectionUnique(params, {
        **渡さなければ、これまでとまったく同じ**である ——
        **どの種類がそうなのかは呼ぶ側が決める**(ここで `kind === …` と書かない) */
   askUnique = false,
+  /* ★ **作った英文を、出す前に読み返すか**(第5.358節)。
+
+       実機で VERSANT Part A に**英語として成り立っていない問**が出た。
+       **決まりでは見つけられないと、実データで測って決めた**
+       (`proofread.js` に経緯)。窓口をもう1回呼ぶので、
+       **渡さなければ、これまでとまったく同じ**である ——
+       **どの種類で読み返すかは `proofreads()` 1か所**が決める */
+  proofread = false,
 }) {
   const wanted = params.count
   const items = []
@@ -2551,14 +2595,53 @@ export async function generateSectionUnique(params, {
       }
     }
 
+    const 通った = []
     survived.forEach((it, i) => {
       if (close.has(i)) {
         落とす('similar')
         sentencesOf(it, repeatAnswer).forEach((k) => usedSet.add(k))
-      } else if (items.length < wanted) {
-        items.push(it)
+      } else {
+        通った.push(it)
       }
     })
+
+    /* ★ **④ 作った英文を読み返す**(第5.358節・2026-10-03 実機の指摘)。
+
+         > VERSANTのPART Aの問題、この添付のような問題文は意味不明です。
+         > こういうバグが起こらないような仕組みは作れますか？
+
+       **いちばん最後に置く。** ①〜③で落ちるものを先に落としておけば、
+       **読み返しに送る語数がいちばん少なくなる**(語数ぶん課金される)。
+
+       **直さずに落とす** —— 英文を直すと、それに合わせて書かれた訳
+       (`answer_ja` / `prompt_ja`)が古くなる(`proofread.js` に理由がある)。
+       落としたぶんは、この輪がそのまま作り直す。
+
+       **読み返せなくても、教材は捨てない。** 知らせを残して、そのまま出す
+       (意味の近さ③とまったく同じ作法)。 */
+    let 残った = 通った
+    if (proofread && 通った.length) {
+      const lines = proofLines(通った)
+      const { data: pr, error: prError } = await findBrokenEnglish(lines)
+      if (prError) {
+        /* **黙って続けない。** 何が効いていないかを画面に出す */
+        warning = warning || `英文の読み返しができませんでした(${prError})。`
+          + 'そのまま出しています。'
+      } else {
+        usage.input += pr.usage?.input ?? 0
+        usage.output += pr.usage?.output ?? 0
+        usage.cacheRead += pr.usage?.cacheRead ?? 0
+        const { kept: 無事, dropped: 壊れ } = dropBroken(通った, (pr.bad ?? []).map((b) => b.en))
+        壊れ.forEach(() => 落とす('broken'))
+        壊れ.forEach((it) => sentencesOf(it, repeatAnswer).forEach((k) => usedSet.add(k)))
+        残った = 無事
+      }
+    }
+
+    for (const it of 残った) {
+      if (items.length >= wanted) break
+      items.push(it)
+    }
   }
 
   /*

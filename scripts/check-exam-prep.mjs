@@ -40,7 +40,7 @@ const { DROP_REASONS, emptyDropCounts, isExhausted }
   = await import('../src/lib/dropReasons.js')
 const { askFields, dropsLead, splitAsk } = await import('../src/lib/choiceLines.js')
 /* ★ **応答が本当に応答になっているかの決まり**（第5.346節） */
-const { REPLY_RULE } = await import('../src/data/replyRule.js')
+const { REPLY_RULE, REPLY_RULE_SWAP } = await import('../src/data/replyRule.js')
 const { EXERCISE_TYPES, audioJaOf, defaultSectionsFor, isBlankItem, isPassageSection,
   sectionsFor } = await import('../src/data/exerciseTypes.js')
 const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, isExamKind, needsWeakTag }
@@ -1545,6 +1545,129 @@ console.log('\n▶ 必須の欄が、窓口と画面でそろっているか(第
 }
 
 
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **作った英文を、出す前に読み返す**(第5.358節・2026-10-03 実機の指摘)
+
+     > VERSANTのPART Aの問題、この添付のような問題文は意味不明です。
+     > こういうバグが起こらないような仕組みは作れますか？
+
+       What do you call the first meal of a wedding day called a party after it?
+       （訳も正解も正しく、**英文だけが壊れていた**）
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 作った英文の読み返し(第5.358節)')
+{
+  const P = await import('../src/lib/proofread.js')
+  const 壊れ = 'What do you call the first meal of a wedding day called a party after it?'
+  const items = [
+    { audio_text: 壊れ, answer: 'A reception', answer_ja: '披露宴' },
+    { audio_text: 'How many days are in a week?', answer: 'Seven days', answer_ja: '7日' },
+    /* **いちばん危ない形を1つ**(CLAUDE.md)—— **短い応答**。
+       2語以下は文法が壊れようがないので、送れば語数ぶんの無駄になる */
+    { audio_text: 'Are you ready to go?', answer: 'Me too.', answer_ja: '私も' },
+  ]
+
+  /* ── ① **送る英文を、正しく集めているか** ── */
+  const lines = P.proofLines(items)
+  if (!lines.includes(壊れ)) ng('読み返し … 読み上げる英文を送っていない')
+  else ok('読み返し … 読み上げる英文を送っている')
+  if (lines.includes('Me too.')) ng('読み返し … 2語以下まで送っている(語数の無駄)')
+  else ok(`読み返し … 短すぎるものは送らない(${P.MIN_WORDS} 語から)`)
+  /* **同じ英文を2回送らない**(2回ぶん課金される) */
+  const 重なり = P.proofLines([...items, ...items])
+  if (重なり.length !== lines.length) ng('読み返し … 同じ英文を2回送っている', `${重なり.length} / ${lines.length}`)
+  else ok('読み返し … 同じ英文は1度だけ送る', `${lines.length} 行`)
+  /* **訳の欄を送っていない**(英文だけでよい。送れば語数が倍になる) */
+  if (P.PROOF_FIELDS.some((f) => f.endsWith('_ja'))) ng('読み返し … 訳の欄まで送っている')
+  else ok('読み返し … 送るのは英文の欄だけ', P.PROOF_FIELDS.join(' / '))
+
+  /* ── ② **壊れている英文を持つ問だけが落ちるか** ── */
+  const { kept, dropped } = P.dropBroken(items, [壊れ])
+  if (dropped.length !== 1 || kept.length !== items.length - 1) {
+    ng('読み返し … 壊れた問だけが落ちていない', `残り ${kept.length} / 落ち ${dropped.length}`)
+  } else ok('読み返し … 壊れた英文を持つ問だけが落ちる')
+  /* ★ **出ない側。** 1つも壊れていなければ、1問も落ちない
+       —— **いちばん危ない形**(ここで全部落ちると、教材が 0 問になる)。
+
+       **空文字を混ぜて測る。** 窓口が行を突き合わせられなかったときに
+       `en: ''` を返すことがありうる —— 空を鍵にすると、
+       **その欄が空の問が1つ残らず落ちる**(`text_en` はたいてい空である)。
+       **空の一覧だけで測ると、この道を1度も通らない**(CLAUDE.md) */
+  const 無事 = P.dropBroken(items, ['', '   '])
+  if (無事.kept.length !== items.length || 無事.dropped.length) {
+    ng('読み返し … 壊れが1つも無いのに落ちている', `残り ${無事.kept.length}`)
+  } else if (P.dropBroken(items, []).kept.length !== items.length) {
+    ng('読み返し … 壊れの一覧が空のときに落ちている')
+  } else ok('読み返し … 壊れが1つも無ければ(空文字が混ざっても)1問も落ちない')
+  /* **大文字小文字・前後の空白で取り逃がさない**(窓口が返す文字と突き合わせる) */
+  const ゆれ = P.dropBroken(items, [`  ${壊れ.toUpperCase()}  `])
+  if (ゆれ.dropped.length !== 1) ng('読み返し … 大文字小文字や空白で取り逃がす')
+  else ok('読み返し … 大文字小文字・空白のゆれでも当たる')
+
+  /* ── ③ **決まりで落としていないか**(実データで測って諦めた) ──
+         「同じ語幹が1文に2回」で落とすと、**正しい英語が 1.9% 巻き添え**になる
+         (from time to time / over and over again / Same old same old …)。
+         **決まりで落とす仕組みを入れていないこと**を見る */
+  const 読 = noC(read('src/lib/proofread.js'))
+  if (/\bstem\b|語幹|同じ語が2回/.test(読.replace(/^[^]*?export const PROOF_FIELDS/, ''))) {
+    ng('読み返し … 決まりで壊れを判じている(正しい英語を巻き添えにする)')
+  } else ok('読み返し … 決まりでは判じていない(落とすのは読み返しの結果だけ)')
+
+  /* ── ④ **窓口に、読み返しの頼みごとがあるか** ── */
+  const fn = noC(read('supabase/functions/generate-material/index.ts'))
+  if (!/mode === 'proofread'/.test(fn)) ng('読み返し … 窓口に頼みごとが無い')
+  else ok('読み返し … 窓口が `proofread` を受け取る')
+  /* ★ **番号ではなく英文で返すか。** 番号で返して画面が番号で落とすと、
+       **並びが1つずれただけで関係のない問が落ちる**
+       (数え方を2通り持たない・CLAUDE.md) */
+  if (!/bad\.push\(\{ en: lines\[no - 1\]/.test(fn)) {
+    ng('読み返し … 窓口が英文そのものを返していない(番号で落とすと、ずれる)')
+  } else ok('読み返し … 窓口は英文そのものを返す(番号で突き合わせない)')
+  /* **「迷ったら選ばない」と言っているか。**
+     正しい英文を落とすほうが、作り直しの費用になる */
+  if (!/迷ったら選ばない/.test(fn)) ng('読み返し … 迷ったときの寄せ先を言っていない')
+  else ok('読み返し … 迷ったら選ばない(正しい英文を落とさない側へ寄せる)')
+  /* **くだけた言い方を落とさないと言っているか**(Native Flow はこれだらけ) */
+  if (!/くだけた言い方/.test(fn)) ng('読み返し … 話し言葉を落とさないと言っていない')
+  else ok('読み返し … 話し言葉・省略は落とさないと言っている')
+
+  /* ── ⑤ **画面が、本当に通しているか** ──
+         素の関数だけ見ると、**画面が渡していなくても緑になる**(第5.330節) */
+  const lib2 = noC(read('src/lib/materials.js'))
+  const form2 = noC(read('src/components/MaterialForm.jsx'))
+  if (!/proofread && 通った\.length/.test(lib2)) ng('読み返し … 生成の輪が読み返していない')
+  else ok('読み返し … 生成の輪の中で読み返している(落ちたぶんは作り直される)')
+  if (!/落とす\('broken'\)/.test(lib2)) ng('読み返し … 落とした理由を `broken` で数えていない')
+  else ok('読み返し … 落とした理由を分けて数えている')
+  if (!/proofread: proofreads\(kind\)/.test(form2)) ng('読み返し … 画面が判断を渡していない')
+  else ok('読み返し … 画面が `proofreads()` の判断を渡している')
+  if (/kind === 'exam'|kind === 'response'/.test(form2.match(/proofread: [^\n]*/)?.[0] ?? '')) {
+    ng('読み返し … 画面の中で種類を見分けている(判断は1か所)')
+  } else ok('読み返し … 画面の中で種類を見分けていない')
+  /* **使ったぶんを、画面の費用に足しているか**(見えない費用を作らない) */
+  if (!/usage\.input \+= pr\.usage/.test(lib2)) ng('読み返し … 使ったぶんを費用に足していない')
+  else ok('読み返し … 使ったぶんが、画面の「かかった費用」に乗る')
+  /* **読み返せなかったときに、黙って続けていないか** */
+  if (!/英文の読み返しができませんでした/.test(lib2)) {
+    ng('読み返し … 読み返せなかったときに黙っている')
+  } else ok('読み返し … 読み返せなくても教材は捨てず、知らせを残す')
+
+  /* ── ⑥ **出る側 / 出ない側**(CLAUDE.md)── */
+  const { proofreads } = await import('../src/data/materialKinds.js')
+  if (!proofreads('exam') || !proofreads('response')) {
+    ng('読み返し … テスト対策と応答問題で読み返していない')
+  } else if (proofreads('reading') || proofreads('word')) {
+    ng('読み返し … 言われていない種類まで広げている(そのぶん課金される)')
+  } else ok('読み返し … テスト対策と応答問題だけ(言われた場所だけ)')
+  /* ★ **`asksUnique()` と兼ねていないか。**
+       いまは同じ顔ぶれだが、**意味が違う** ——
+       1つの関数で兼ねると、片方を広げた日にもう片方も動く */
+  const kinds = noC(read('src/data/materialKinds.js'))
+  if (/export const proofreads = asksUnique/.test(kinds)) {
+    ng('読み返し … `asksUnique()` の別名にしている(意味の違うものを兼ねている)')
+  } else ok('読み返し … `asksUnique()` とは別の関数にしてある')
+}
+
 /* ══════════════════════════════════════════════════════════════════
    ★ **問題文が2回出ないか**(第5.342節・2026-10-01 実機・利用者の指摘)
 
@@ -1769,25 +1892,33 @@ const is2 = (cond, name, d = '') => (cond ? ok(d ? `${name}（${d}）` : name) :
 
 console.log('\n▶ 応答と、読み上げた英文の訳(第5.346節)')
 {
-  /* ── ① **TOEIC L&R Part 2 にも、同じ決まりが入っているか** ──
+  /* ── ① **TOEIC L&R Part 2 に、決まりが入っているか** ──
          2026-10-02 利用者の指定「テスト対策にも入れますか → はい」。
-         **文は `REPLY_RULE` 1か所**。ここで言い回しを書き写さず、
+         **文は `replyRule.js` 1か所**。ここで言い回しを書き写さず、
          **あちらから読み取って**そのまま入っているかを見る */
   const p2 = examBrief('toeic_lr', 'p2')
-  is2(p2.includes(REPLY_RULE), '応答 … TOEIC Part 2 に、応答問題とまったく同じ決まりが入っている')
+  is2(p2.includes(REPLY_RULE_SWAP), '応答 … TOEIC Part 2 に、決まりがそのまま入っている')
+
+  /* ★ ── ①' **Part 2 は、応答問題のほうの決まりを使っていない**(第5.357節)──
+         応答問題は利用者の指定で**「同じ人の言い足し」も認めた**が、
+         **Part 2 は本番が「2人の会話」と決まっている。**
+         **広げるのは、言われた場所だけ**(CLAUDE.md) */
+  is2(!p2.includes(REPLY_RULE) && REPLY_RULE !== REPLY_RULE_SWAP,
+    '応答 … Part 2 には、応答問題のほうの決まり(言い足しも可)が入っていない')
 
   /* ── ② **出ない側。** 応答をえらぶ問ではない PART にまで入れていないか ──
          入れると嘘になる(本文を聞いて設問に答える Part 3・4 は、
          そもそも「相手に返事をする」問ではない) */
   const 余計 = PICKABLE
-    .filter(({ exam, part }) => examBrief(exam.id, part.id).includes(REPLY_RULE))
+    .filter(({ exam, part }) => examBrief(exam.id, part.id).includes(REPLY_RULE_SWAP))
     .map(({ exam, part }) => `${exam.id}/${part.id}`)
   is2(余計.length === 1 && 余計[0] === 'toeic_lr/p2',
     '応答 … その決まりが入るのは、応答をえらぶ PART だけ', 余計.join(' / ') || 'どこにも入っていない')
 
-  /* ── ③ **決まりの中身**(独り言 / おうむ返しの両方) ── */
-  const 欠け = ['入れ替わる', '続きのセリフ', 'おうむ返し'].filter((w) => !REPLY_RULE.includes(w))
-  is2(!欠け.length, '応答 … 話す人が入れ替わり、独り言もおうむ返しも禁じている',
+  /* ── ③ **決まりの中身**(話す人が入れ替わる / おうむ返し禁止) ── */
+  const 欠け = ['入れ替わる', '続きのセリフ', '言い直すだけ']
+    .filter((w) => !REPLY_RULE_SWAP.includes(w))
+  is2(!欠け.length, '応答 … Part 2 は話す人が入れ替わり、おうむ返しも禁じている',
     欠け.join(' / '))
 
   /* ── ④ **読み上げた英文の訳**(2026-10-02 利用者の指定)──

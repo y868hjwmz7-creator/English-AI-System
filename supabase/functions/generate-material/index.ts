@@ -1134,6 +1134,150 @@ const chunkJaTool = {
   },
 }
 
+/* ════════════════════════════════════════════════════════════════
+   **作った英文を、出す前に読み返す**(`mode: 'proofread'`・第5.358節)
+
+   2026-10-03 実機・利用者の指摘。
+
+     > VERSANTのPART Aの問題、この添付のような問題文は意味不明です。
+     > **こういうバグが起こらないような仕組みは作れますか？**
+
+       What do you call the first meal of a wedding day called a party after it?
+
+   **訳も正解も正しく、英文だけが壊れていた。**
+   決まりで見つけようとして諦めた経緯は `src/lib/proofread.js` にある
+   (実データで測ったら、正しい英語が 1.9% 引っかかった)。
+
+   **送るのは英文だけ。** 作り方も指示も渡さないので、
+   教材を作る呼び出しの 1/30 ほどの語数で済む。
+   ════════════════════════════════════════════════════════════════ */
+
+const PROOFREAD_SYSTEM = `あなたは英語教材の校正者である。
+
+# やること
+
+並んだ英文を1つずつ読み、**英語として成り立っていないもの**だけを選ぶ。
+
+## 選ぶもの(壊れている)
+
+- 文法が壊れている(関係詞・時制・語順の崩れ、語の重複)
+- 読んでも意味が取れない、言いたいことが分からない
+- 途中で切れている、別の言い方が混ざって1文になっている
+
+例:「What do you call the first meal of a wedding day called a party after it?」
+… call と called が二重になり、何を聞いているのか分からない。**これは選ぶ。**
+
+## 選ばないもの(正しい)
+
+- **くだけた言い方・話し言葉・省略**(Sounds good. / Not yet. / Same old same old.)
+- **短い返事や相づち**(1語でも正しい)
+- **同じ語が2回出るだけ**の言い回し(from time to time / over and over again)
+- 内容が平凡・つまらない・教材として物足りない
+- 好みの問題(もっと自然な言い方がある、など)
+
+**迷ったら選ばない。** 正しい英文を1つ落とすほうが、
+壊れた英文を1つ残すより害が大きい(作り直しで費用がかかる)。
+
+# 出力
+
+emit_broken という道具だけを使って返すこと。
+壊れているものが**1つも無ければ、空の配列**を返す。文章での説明は要らない。`
+
+/** 壊れている英文を受け取る道具。`strict: true` なので形は API が保証する */
+const proofreadTool = {
+  name: 'emit_broken',
+  description: '英語として成り立っていない行の番号を返す',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['bad'],
+    properties: {
+      bad: {
+        type: 'array',
+        description: '壊れている行だけ。1つも無ければ空の配列',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['no', 'why'],
+          properties: {
+            no: { type: 'integer', description: '渡された行の番号(1 から)' },
+            why: { type: 'string', description: 'どこが壊れているか。日本語で1行' },
+          },
+        },
+      },
+    },
+  },
+}
+
+/**
+ * 作った英文を読み返し、**壊れているものだけ**を返す。
+ *
+ * **直さない。落とすだけである** —— 英文を直すと、それに合わせて書かれた
+ * 訳(`answer_ja` / `prompt_ja`)が古くなる(`proofread.js` に理由がある)。
+ */
+async function proofread(apiKey: string, body: Record<string, unknown>) {
+  const lines = (Array.isArray(body.lines) ? body.lines : [])
+    .map((x) => String(x ?? '').trim()).filter(Boolean)
+  /* **0行で呼ばれたら、0円で返す**(窓口を呼ばない) */
+  if (!lines.length) return { ok: true, bad: [], usage: { input: 0, output: 0, cacheRead: 0 } }
+
+  const listing = lines.map((v, i) => `${i + 1}. ${v}`).join('\n')
+
+  const client = new Anthropic({ apiKey })
+  const { response, stopInfo } = await finishStream(client.messages.stream({
+    model: MODEL,
+    max_tokens: 4000,
+    output_config: { effort: 'low' },
+    system: [{ type: 'text', text: PROOFREAD_SYSTEM }],
+    tools: [proofreadTool as unknown as Anthropic.Tool],
+    tool_choice: { type: 'tool', name: 'emit_broken' },
+    messages: [{
+      role: 'user',
+      content: `# 英文\n\n${listing}\n\n`
+        + `**壊れている行だけ**を返すこと。1つも無ければ空の配列を返す。`,
+    }],
+  }))
+
+  if (response.stop_reason === 'refusal') {
+    /* **断りの文は `refusalNote()` 1か所**(第5.294節) */
+    return refusalNote(stopInfo)
+  }
+  if (response.stop_reason === 'max_tokens') {
+    return { error: '読み返しの結果が途中で切れました。もう一度お試しください。' }
+  }
+
+  const block = response.content.find((b) => b.type === 'tool_use')
+  if (!block || block.type !== 'tool_use') {
+    return { error: '読み返しの結果を読み取れませんでした。もう一度お試しください。' }
+  }
+  const result = block.input as { bad?: { no?: number; why?: string }[] }
+
+  /* **番号を、渡した英文そのものに戻して返す。**
+     画面は番号ではなく英文で落とす(`dropBroken`)—— 並びが食い違っても、
+     **関係のない問が落ちることがない**(数え方を2通り持たない・CLAUDE.md) */
+  const bad: { en: string; why: string }[] = []
+  const seen = new Set<number>()
+  for (const r of result.bad ?? []) {
+    const no = Number(r?.no ?? 0)
+    if (!Number.isInteger(no) || no < 1 || no > lines.length || seen.has(no)) continue
+    seen.add(no)
+    bad.push({ en: lines[no - 1], why: String(r?.why ?? '').trim() })
+  }
+
+  return {
+    ok: true,
+    bad,
+    checked: lines.length,
+    stop_reason: response.stop_reason ?? null,
+    usage: {
+      input: response.usage.input_tokens,
+      output: response.usage.output_tokens,
+      cacheRead: response.usage.cache_read_input_tokens ?? 0,
+    },
+  }
+}
+
 /**
  * カタマリごとの訳を作る。
  *
@@ -2064,8 +2208,9 @@ Deno.serve(async (req) => {
     }, 403)
   }
 
-  // **頼みごとは4つある。** 教材の下書き(既定)・カタマリごとの訳(0021)・
-  // **文法解説(0051)**・書いた答えの添削。どれも教材づくりの一部なので、
+  // **頼みごとは6つある。** 教材の下書き(既定)・カタマリごとの訳(0021)・
+  // **文法解説(0051)**・業種べつの単語帳(0057)・書いた答えの添削・
+  // **作った英文の読み返し(第5.358節)**。どれも教材づくりの一部なので、
   // 関数を増やさずここで分ける
   // (関数を増やすと、利用者が Supabase の画面で配置する手順が増える)。
   if (mode === 'chunk_ja') {
@@ -2081,6 +2226,11 @@ Deno.serve(async (req) => {
   }
   if (mode === 'review_writing') {
     return streamed(() => reviewWriting(apiKey, body))
+  }
+  /* ★ **作った英文の読み返し**(第5.358節)。教材は1本も作らない ——
+     壊れている行を返すだけで、落とすのは画面の側である(`dropBroken`) */
+  if (mode === 'proofread') {
+    return streamed(() => proofread(apiKey, body))
   }
 
   const sectionType = String(body.sectionType ?? '')

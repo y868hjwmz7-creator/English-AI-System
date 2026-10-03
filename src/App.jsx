@@ -26,7 +26,7 @@ import { installTapFeedback } from './lib/haptics.js'
 /* ★ **ほかのアプリの音を止めない**(第5.351節・2026-10-03 利用者の指定
      「このアプリを立ち上げたときに Spotify などで聞いている音楽が
      消えないように出来ないですか」)。**種類の名前は `audioSession.js` 1か所** */
-import { mixOn, mixWithOthers, setMixOn } from './lib/audioSession.js'
+import { mixMode, mixWithOthers, setMixMode } from './lib/audioSession.js'
 import { playSfx, setSoundOn, soundOn } from './lib/sfx.js'
 /* 英語の音声と音楽の大きさ(2026-09 利用者の指定)。
    **覚えるのは `mixVolume.js`、曲に当てるのは `bgm.js` 1か所** */
@@ -168,7 +168,7 @@ export default function App() {
   /* ★ **ほかのアプリの音を混ぜるか**(第5.352節)。**既定は「止める」** ——
      消音スイッチの入った iPhone で英語の音声そのものが鳴らない事故を、
      既定では起こさない(`audioSession.js` に理由がある) */
-  const [mix, setMix] = useState(mixOn)
+  const [mix, setMix] = useState(mixMode)
   /* 英語の音声と音楽の大きさ。**それぞれ別に覚える**(2026-09 利用者の指定)。
      自動で下げる仕組み(`duckBgm`)は道具ごと消してある */
   const [voiceVol, setVoiceVol] = useState(voiceLevel)
@@ -847,7 +847,7 @@ export default function App() {
         tips={tips} onTips={setTips}
         sound={sound} onSound={(v) => { setSound(v); setSoundOn(v) }}
         voiceVol={voiceVol} onVoiceVol={(v) => setVoiceVol(setVoiceLevel(v))}
-        mix={mix} onMix={(v) => { setMix(v); setMixOn(v) }}
+        mix={mix} onMix={(v) => { setMix(v); setMixMode(v) }}
         bgmVol={bgmVol} onBgmVol={(v) => setBgmVol(setBgmVolume(v))}
         music={music} onMusic={(v) => {
           setMusic(v); setBgmOn(v)
