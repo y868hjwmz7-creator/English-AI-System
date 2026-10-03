@@ -2005,7 +2005,10 @@ export default function LessonView({
                       className={`btn btn--small ${toneOn(!!answerRadio)}`}
                       aria-pressed={!!answerRadio}
                       onClick={listenAnswers}>
-                <SpeakerIcon />正解を聞き流す
+                {/* ★ **「応答を」に変えた**（第5.355節）。鳴るのは
+                    **読み上げられる文 → 応答**の対であって、正解だけではない
+                    —— **何が鳴るのかを、そのまま書く** */}
+                <SpeakerIcon />応答を聞き流す
               </button>
             )}
             {/* **集中モード**(2026-09 実機「どこにも集中モードがありません」)。

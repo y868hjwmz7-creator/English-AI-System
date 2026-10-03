@@ -864,6 +864,25 @@ export const noteIsAnswer = (typeId) => {
 export const answerHasAudio = (typeId) => exerciseType(typeId)?.answerLang === 'en'
 
 /**
+ * ★ **「聞いて、返す」演習か**(第5.355節・2026-10-03 利用者の指定)。
+ *
+ *   > 応答問題、VERSANT PART Aなど、応答系の問題の聞き流しが、
+ *   > 解答の正解の選択肢が読み上げられるだけになっています。
+ *   > 読み上げられる文→応答（正解の選択肢）だからこそ聞き流しの意味がある
+ *
+ * **種類(`kind`)では見分けない。** 応答問題も、テスト対策の
+ * VERSANT Part A / TOEIC L&R Part 2 も、**演習そのものは同じ**である
+ * (`listening`)。**教材の種類を数えると、PART を足した日に抜ける。**
+ *
+ *   ・**英文を見せずに聞かせる**(`hidePromptFromLearner`)
+ *   ・**解答が英語で、読み上げられる**(`answerHasAudio`)
+ *
+ * この2つがそろうものが「聞いて、返す」である。
+ */
+export const asksAndReplies = (typeId) => Boolean(exerciseType(typeId)?.hidePromptFromLearner)
+  && answerHasAudio(typeId)
+
+/**
  * **その演習に、読み上げが付くか**(第5.296節)。
  *
  * 判断は **`audioFrom` 1か所**である(`audioTextOf()` と同じ元)。

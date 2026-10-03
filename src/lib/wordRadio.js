@@ -468,6 +468,20 @@ export const radioTextOf = (row) => String(
 export const radioJaOf = (row) => String(row?.meaning_ja || row?.ja || '').trim()
 
 /**
+ * ★ **読み上げられる文**(第5.355節・2026-10-03 利用者の指定)。
+ *
+ *   > 読み上げられる文→応答（正解の選択肢）だからこそ聞き流しの意味がある
+ *
+ * **応答系の問だけが持つ**(応答問題・VERSANT Part A・TOEIC Part 2)。
+ * 単語帳や Quick Response の行には無いので、**空が返り、これまでどおり**
+ * くり返しで鳴る(**無ければ素通り、ではなく、無いことが意味を持つ**)。
+ */
+export const radioAskOf = (row) => String(row?.ask ?? '').trim()
+
+/** 読み上げられる文の訳(言う練習で使う) */
+export const radioAskJaOf = (row) => String(row?.askJa ?? '').trim()
+
+/**
  * ★ **その行を、どの声・どの段で鳴らすか**(第5.334節・2026-10-01
  * 利用者の指定「応答問題には正解の聞き流しモードを作ります」)。
  *
@@ -545,6 +559,35 @@ const saySteps = (en, gaps, ja) => [
   { kind: 'en', text: en },
 ]
 
+/**
+ * ★ **読み上げられる文 → 応答**(第5.355節)。
+ *
+ * **これまでは応答(正解)を2回くり返していた** —— 聞くほうには
+ * **何への応答なのかが分からない。**
+ *
+ *   聞き流し     : 読み上げの文(英) → 応答(英)
+ *   言う練習     : 読み上げの文(日) → 応答(日) → **言う番** →
+ *                  読み上げの文(英) → 応答(英)
+ *
+ * **言う番は、日本語のあとに置く**(ここが「自分で言う」ところである)。
+ * 答えを鳴らしてから間を置くと、**ただのリピートになる**(`saySteps` と同じ)。
+ */
+const replySteps = (ask, en, gaps, askJa, ja, say) => (say
+  ? [
+    ...jaStep(askJa),
+    ...(askJa && ja ? [{ kind: 'wait', ms: gaps.word }] : []),
+    ...jaStep(ja),
+    ...(gaps.recall > 0 ? [{ kind: 'wait', ms: gaps.recall, you: true }] : []),
+    { kind: 'en', text: ask },
+    { kind: 'wait', ms: gaps.word },
+    { kind: 'en', text: en },
+  ]
+  : [
+    { kind: 'en', text: ask },
+    { kind: 'wait', ms: gaps.word },
+    { kind: 'en', text: en },
+  ])
+
 export function radioSteps(row, modeId = DEFAULT_RADIO_MODE, gapMs = DEFAULT_RADIO_GAP) {
   const en = radioTextOf(row)
   if (!en) return []
@@ -555,6 +598,11 @@ export function radioSteps(row, modeId = DEFAULT_RADIO_MODE, gapMs = DEFAULT_RAD
   const gaps = radioGapsOf(gapMs, modeId)
   const ja = radioJaOf(row)
   const id = String(modeId ?? '')
+  /* ★ **応答系は、対で鳴らす**(第5.355節)。
+       **判断は「読み上げられる文を持っているか」1つ**で、
+       ここで教材の種類を見分けない(CLAUDE.md) */
+  const ask = radioAskOf(row)
+  if (ask) return replySteps(ask, en, gaps, radioAskJaOf(row), ja, id === MODE_SAY.id)
   if (id === MODE_SAY.id) return saySteps(en, gaps, ja)
   return [
     { kind: 'en', text: en },

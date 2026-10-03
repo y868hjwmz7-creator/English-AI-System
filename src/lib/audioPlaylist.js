@@ -35,14 +35,16 @@
  */
 import { castClipSpeakers, voiceFor } from './voiceCast.js'
 import { resolveVoices } from '../data/clipVoices.js'
-import { answerHasAudio, exerciseType, isPassageSection } from '../data/exerciseTypes.js'
+import {
+  answerHasAudio, asksAndReplies, audioJaOf, exerciseType, isPassageSection,
+} from '../data/exerciseTypes.js'
 /* ★ **応答問題では、解答の音声も支度する**(2026-10-01 利用者の指定・第5.334節)。
      **判断は `isResponseKind()` 1か所**(ここで `kind === …` と書かない) */
 import { isResponseKind } from '../data/materialKinds.js'
 /* ★ **解答として鳴らす英文は `answerSpeakText()` 1か所**(第5.334節)。
      ここで `it.answer` と書き写すと、**支度した音声と、聞き流しが探す音声の
      置き場所が食い違って1本も当たらない**(CLAUDE.md) */
-import { answerSpeakText, responseAnswers } from './responseDrill.js'
+import { answerSpeakText } from './responseDrill.js'
 import { PREMIUM, voiceTierFor } from './voiceTier.js'
 import { turnGapMs } from './turnGap.js'
 import { speakChunks } from './speakChunks.js'
@@ -280,8 +282,51 @@ export function sectionRestClips(material, section) {
 }
 
 /**
- * ★ **応答問題の「正解の聞き流し」に渡す一覧**(第5.334節・2026-10-01
- * 利用者の指定)。
+ * ★ **読み上げられる文 → 応答**(第5.355節・2026-10-03 利用者の指定)。
+ *
+ *   > 読み上げられる文→応答（正解の選択肢）だからこそ聞き流しの意味がある
+ *   > というものです。
+ *
+ * **これまでは応答(正解)だけを並べていた**(第5.334節)。
+ * 聞くほうには**何への応答なのかが分からない**ので、
+ * 「覚えたい表現が流れるだけ」になっていた。
+ *
+ * **訳も対で返す** —— 言う練習(日本語 → 英語)は
+ * **読み上げの文(日)→ 応答(日)→ 読み上げの文(英)→ 応答(英)** で鳴る
+ * (並べ方は `radioSteps()` 1か所)。
+ *
+ * **ここに置いてある理由**は、読み上げる欄を `audioTextOf()` が
+ * 決めるからである(`responseDrill.js` から呼ぶと輪になる)。
+ *
+ * **種類(`kind`)では見分けない** —— 応答問題も VERSANT Part A も
+ * 同じ `listening` である(`asksAndReplies()` 1か所)。
+ *
+ * @returns {Array<{ask, askJa, en, ja}>}
+ */
+export function responseAnswers(material) {
+  const out = []
+  for (const sec of material?.sections ?? []) {
+    const type = sec?.exercise_type
+    if (!asksAndReplies(type)) continue
+    for (const it of sec?.items ?? []) {
+      const en = answerSpeakText(it)
+      /* **応答の無い問は落とす。** 鳴らすものが無い */
+      if (!en) continue
+      out.push({
+        /* **読み上げる欄は `audioTextOf()` 1か所**(第5.266節)——
+           書き写すと、読み方を直した英文と**別の音声**を探すことになる */
+        ask: audioTextOf(it, type),
+        askJa: audioJaOf(it, type),
+        en,
+        ja: String(it?.answer_ja ?? '').trim(),
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * ★ **応答問題の「聞き流し」に渡す一覧**(第5.334節・2026-10-01 利用者の指定)。
  *
  *   > その上で、応答問題には正解の聞き流しモードを作ります。
  *   > 問題順をシャッフルもできる仕様です。
@@ -302,15 +347,14 @@ export function sectionRestClips(material, section) {
  *   混ぜるのは聞き流しの側(`radioList()` の「ランダム」)が受け持つ ——
  *   **混ぜ方を2つ持たない。**
  *
- * **応答問題でなければ、1件も返さない**(渡す側が判じ直さない)。
+ * **応答する段が1つも無ければ、1件も返さない**(渡す側が判じ直さない)。
  *
- * @returns {Array<{en, ja, clipVoice, tier}>} `WordRadio` の `rows` に
- *          そのまま渡せる形(`radioTextOf` が `en`、`radioJaOf` が `ja`、
- *          `radioVoiceOf` が `clipVoice` / `tier` を読む)
+ * @returns {Array<{ask, askJa, en, ja, clipVoice, tier}>} `WordRadio` の
+ *          `rows` にそのまま渡せる形(`radioAskOf` が `ask`、
+ *          `radioTextOf` が `en`、`radioVoiceOf` が `clipVoice` / `tier`)
  */
 export function responseRadioRows(material) {
-  const on = isResponseKind(material?.kind)
-  if (!on) return []
+  if (!responseAnswers(material).length) return []
   /* **支度の札を、英文で引けるようにしておく。**
      ここで `resolveVoices` / `voiceTierFor` を書き写さない */
   const 札 = new Map()
@@ -319,8 +363,13 @@ export function responseRadioRows(material) {
       if (!札.has(c.text)) 札.set(c.text, c)
     }
   }
-  return responseAnswers(material, on).map((r) => {
-    const c = 札.get(r.en)
+  return responseAnswers(material).map((r) => {
+    /* ★ **声は「読み上げられる文」から引く**(第5.355節)。
+         あちらは**どの教材でも支度してある**(`sectionRestClips`)が、
+         応答の音声を支度するのは応答問題だけである ——
+         応答で引くと、テスト対策では**1本も当たらない。**
+         **声と段は、問も応答も同じ**(支度も画面もそう渡している) */
+    const c = 札.get(r.ask) ?? 札.get(r.en)
     /* **声が引けなかったぶんは、そのまま返す**(`clipVoice` が無い)。
        聞き流しは**これまでどおりの声**で鳴らす —— 黙らせない
        (行き止まりを作らない・CLAUDE.md) */

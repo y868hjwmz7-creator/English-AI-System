@@ -331,34 +331,88 @@ console.log('\n▶ 解答の音声を、開く前に支度しているか(第5.3
     '解答の欄を、支度の側に書き写していない(answerSpeakText 1か所)')
 }
 
-console.log('\n▶ 正解の英文を、鳴る順に並べられるか(聞き流しの材料)')
+console.log('\n▶ 読み上げられる文 → 応答 の対で並べられるか(第5.355節)')
 {
+  /* ★ 2026-10-03 実機・利用者の指定。
+
+       > 応答問題、VERSANT PART Aなど、応答系の問題の聞き流しが、
+       > 解答の正解の選択肢が読み上げられるだけになっています。
+       > 読み上げられる文→応答（正解の選択肢）だからこそ聞き流しの意味が
+       > あるというものです。
+
+     **これまでは応答(正解)だけを並べていた**(第5.334節)。
+     聞くほうには**何への応答なのかが分からない。**
+
+     **種類(`kind`)では見分けない** —— 応答問題も VERSANT Part A も
+     同じ `listening` である(`asksAndReplies()` 1か所)。 */
+  const { responseAnswers } = await import('../src/lib/audioPlaylist.js')
   const mat = {
-    kind: 'response',
+    kind: 'response', voiceIds: [], tags: [],
     sections: [
       { exercise_type: 'listening', items: [
-        { answer: 'Me too.', answer_ja: '私も' },
-        { answer: '', answer_ja: 'から' },
+        { audio_text: 'Can you help me?', prompt_ja: '手伝ってくれる?',
+          answer: 'Me too.', answer_ja: '私も' },
+        /* **いちばん危ない形を1つ**(CLAUDE.md)—— 応答の無い問 */
+        { audio_text: 'Q2', answer: '', answer_ja: 'から' },
       ] },
       { exercise_type: 'listening', items: [
-        { answer: 'Not yet.', answer_ja: 'まだ' },
+        { audio_text: 'Are you done?', answer: 'Not yet.', answer_ja: 'まだ' },
       ] },
     ],
   }
-  const got = D.responseAnswers(mat, true)
-  is(got.length === 2, '英文の無い問は落とす', `${got.length} 件`)
+  const got = responseAnswers(mat)
+  is(got.length === 2, '応答の無い問は落とす', `${got.length} 件`)
   is(got[0]?.en === 'Me too.' && got[1]?.en === 'Not yet.',
     '段をまたいで、出た順に並ぶ')
-  is(got[0]?.ja === '私も', '訳も添える(聞き流しの札に出す)')
-  /* **出ない側。** 応答問題でなければ空 —— 渡す側が判じ直さないため */
-  is(D.responseAnswers(mat, false).length === 0,
-    '応答問題でなければ、1件も返さない')
+  is(got[0]?.ja === '私も', '応答の訳も添える')
+  /* ★ **ここが第5.355節そのもの。** 読み上げられる文が入っているか */
+  is(got[0]?.ask === 'Can you help me?' && got[1]?.ask === 'Are you done?',
+    '読み上げられる文が、対で入っている', got[0]?.ask)
+  is(got[0]?.askJa === '手伝ってくれる?', '読み上げられる文の訳も、対で入っている')
+
+  /* ★ **読み上げる欄を書き写していないか**(CLAUDE.md「数え方を2通り
+       持たない」)。`audio_text` と書き写すと、**読み方を直した英文**
+       (`audioTextOf()` が選ぶ)と別の音声を探すことになる */
+  const pl = noC(R('src/lib/audioPlaylist.js'))
+  const 対 = pl.match(/export function responseAnswers[\s\S]*?\n\}/)?.[0] ?? ''
+  is(/ask: audioTextOf\(it, type\)/.test(対),
+    '読み上げる欄は audioTextOf() 1か所(書き写していない)')
+  is(/askJa: audioJaOf\(it, type\)/.test(対),
+    '訳の欄も audioJaOf() 1か所')
+
+  /* **出る側 / 出ない側**(CLAUDE.md)。
+     **テスト対策(VERSANT Part A)でも鳴る** —— そこが利用者の指定である。
+     出ないのは「応答する段が1つも無い教材」のほう */
+  is(responseAnswers({ ...mat, kind: 'exam' }).length === got.length,
+    'テスト対策(VERSANT Part A)でも、同じだけ並ぶ')
+  /* ★ **いちばん近い相手で測る**(CLAUDE.md)。
+       `read_aloud` のように**解答そのものが無い**段で測ると、
+       「解答に読み上げが付くか」だけで落ちてしまい、
+       **「問を隠しているか」の半分が1度も効かない**(赤チェックで緑だった)。
+       `fill_blank` は**解答に読み上げが付く**が、**問は画面に出ている** */
+  const 別の段 = { ...mat, sections: [{ exercise_type: 'fill_blank', items: [
+    { audio_text: 'x', answer: 'y' }] }] }
+  is(responseAnswers(別の段).length === 0,
+    '応答する段が無ければ、1件も返さない(穴うめの段では鳴らさない)')
   /* **いちばん危ない形**(CLAUDE.md)—— 段が1つも無い教材 */
-  is(D.responseAnswers({ kind: 'response' }, true).length === 0,
+  is(responseAnswers({ kind: 'response' }).length === 0 && responseAnswers(null).length === 0,
     '段が1つも無い教材でも落ちない')
+  /* **判断を2か所に持っていないか。** `asksAndReplies()` 1か所である */
+  is(/asksAndReplies\(type\)/.test(対) && !/isResponseKind|kind ===/.test(対),
+    '種類では見分けない(判断は asksAndReplies 1か所)')
+  const { asksAndReplies } = await import('../src/data/exerciseTypes.js')
+  const { answerHasAudio, exerciseType } = await import('../src/data/exerciseTypes.js')
+  /* **2つの条件が、どちらも効いているか。**
+     ①解答に読み上げが付く(`read_aloud` は付かない)
+     ②問を聞くほうに見せていない(`fill_blank` は見せている) */
+  is(asksAndReplies('listening') && !asksAndReplies('read_aloud'),
+    '解答に読み上げの付かない段では、鳴らさない')
+  is(!asksAndReplies('fill_blank') && answerHasAudio('fill_blank')
+    && !exerciseType('fill_blank')?.hidePromptFromLearner,
+    '問が画面に出ている段では、鳴らさない(読み上げられる文が無いため)')
 }
 
-console.log('\n▶ 正解の聞き流し(第5.334節)')
+console.log('\n▶ 応答の聞き流し(第5.334節 / 第5.355節)')
 {
   /* ★ 2026-10-01 利用者の指定。
 
@@ -370,33 +424,108 @@ console.log('\n▶ 正解の聞き流し(第5.334節)')
      **必要なものが、もうぜんぶ在る**(`radioSteps` の節と同じ考え方)。
      足りなかったのは**何を鳴らすか**だけである。 */
   const { responseRadioRows } = await import('../src/lib/audioPlaylist.js')
-  const { radioVoiceOf, radioTextOf, radioJaOf, radioList, RADIO_ORDERS }
-    = await import('../src/lib/wordRadio.js')
+  const { radioVoiceOf, radioTextOf, radioJaOf, radioAskOf, radioAskJaOf,
+    radioList, radioSteps, radioModesFor, radioGapsOf, hidesAnswer, RADIO_ORDERS,
+    DEFAULT_RADIO_GAP, DEFAULT_SAY_GAP } = await import('../src/lib/wordRadio.js')
   const mat = {
     kind: 'response', voiceIds: [], tags: [],
     sections: [{ exercise_type: 'listening', items: [
-      { audio_text: 'Q1', answer: 'Me too.', answer_ja: '私も' },
+      { audio_text: 'Could you give me a hand?', prompt_ja: '手伝ってもらえますか。',
+        answer: 'I appreciate your help.', answer_ja: '助かります。' },
       { audio_text: 'Q2', answer: 'Not yet.', answer_ja: 'まだ' },
       { audio_text: 'Q3', answer: '  ' },
     ] }],
   }
   const rows = responseRadioRows(mat)
-  const 解答のある問 = mat.sections[0].items.filter((it) => D.answerSpeakText(it)).length
-  is(rows.length === 解答のある問, '正解だけが並ぶ(英文の無い問は落ちる)',
-    `${rows.length} 件 / 解答のある問 ${解答のある問}`)
+  const 応答のある問 = mat.sections[0].items.filter((it) => D.answerSpeakText(it)).length
+  is(rows.length === 応答のある問, '応答のある問だけが並ぶ',
+    `${rows.length} 件 / 応答のある問 ${応答のある問}`)
   /* **聞き流しが読む欄に、そのまま入っているか。**
      ここが食い違うと、**1件も鳴らずに素通りする**(`radioTextOf` が空を返す) */
-  is(rows.every((r) => radioTextOf(r)) && radioTextOf(rows[0]) === 'Me too.',
-    '聞き流しが読む欄(`radioTextOf`)に入っている', radioTextOf(rows[0]))
-  is(radioJaOf(rows[0]) === '私も', '訳も、聞き流しが読む欄に入っている')
+  is(rows.every((r) => radioTextOf(r)) && radioTextOf(rows[0]) === 'I appreciate your help.',
+    '応答が、聞き流しが読む欄(`radioTextOf`)に入っている', radioTextOf(rows[0]))
+  is(radioJaOf(rows[0]) === '助かります。', '応答の訳も、聞き流しが読む欄に入っている')
+  /* ★ **第5.355節。** 読み上げられる文も、聞き流しが読む欄に入っているか */
+  is(radioAskOf(rows[0]) === 'Could you give me a hand?',
+    '読み上げられる文が、聞き流しが読む欄(`radioAskOf`)に入っている')
+  is(radioAskJaOf(rows[0]) === '手伝ってもらえますか。',
+    'その訳も、聞き流しが読む欄(`radioAskJaOf`)に入っている')
+
+  /* ★ **対で鳴るか**(第5.355節)。
+       **並べ方は `radioSteps()` 1か所** —— 画面の中で組み立てない。
+       **値を書き写さない。性質で見る**(CLAUDE.md)—— 「2本め」ではなく
+       「英語が鳴る順が、読み上げられる文 → 応答になっているか」で見る */
+  const 英 = (steps) => steps.filter((s) => s.kind === 'en').map((s) => s.text)
+  const 日 = (steps) => steps.filter((s) => s.kind === 'ja').map((s) => s.text)
+  /* **読み方の id を書き写さない。** `hidesAnswer()` が
+     「答えを隠すほう = 言う練習」を教える(判断は1か所) */
+  const 読み方 = radioModesFor('qr')
+  const 言うid = 読み方.find((m) => hidesAnswer(m.id))?.id
+  const 聞くid = 読み方.find((m) => !hidesAnswer(m.id))?.id
+  is(言うid && 聞くid, '聞き流しに「聞く」と「言う」が、両方そのまま在る',
+    読み方.map((m) => m.label).join(' / '))
+  const 聞 = radioSteps(rows[0], 聞くid, DEFAULT_RADIO_GAP)
+  is(英(聞).join(' / ') === 'Could you give me a hand? / I appreciate your help.',
+    '聞き流しは、読み上げられる文 → 応答 の順に鳴る', 英(聞).join(' / '))
+  /* **いちばん危ない形を1つ**(CLAUDE.md)—— **読み上げの文の訳が無い問。**
+     ここで黙って落とすと、訳の無い問だけ**応答しか鳴らなくなる** */
+  const 訳なし = radioSteps(rows[1], 聞くid, DEFAULT_RADIO_GAP)
+  is(英(訳なし).join(' / ') === 'Q2 / Not yet.',
+    '読み上げの文の訳が無くても、英語は対で鳴る', 英(訳なし).join(' / '))
+  /* **間を置いているか。** 続けて鳴ると、どちらが応答か分からない */
+  const 間 = 聞.findIndex((s) => s.kind === 'wait')
+  is(間 > 0 && 間 < 聞.length - 1, '読み上げられる文と応答のあいだに、間がある')
+
+  /* ★ **日本語 → 英語でも同じ**(利用者の指定)。
+       **読み上げの文(日)→ 応答(日)→ 読み上げの文(英)→ 応答(英)** */
+  const 言 = radioSteps(rows[0], 言うid, DEFAULT_SAY_GAP)
+  is(日(言).join(' / ') === '手伝ってもらえますか。 / 助かります。',
+    '言う練習は、読み上げの文(日)→ 応答(日)の順に出る', 日(言).join(' / '))
+  is(英(言).join(' / ') === 'Could you give me a hand? / I appreciate your help.',
+    'そのあと、読み上げの文(英)→ 応答(英)の順に鳴る', 英(言).join(' / '))
+  /* **日本語が2つとも、英語より先に出ているか**(順が入れ替わっていない) */
+  const 日の位置 = 言.map((s, n) => (s.kind === 'ja' ? n : -1)).filter((n) => n >= 0)
+  const 英の位置 = 言.map((s, n) => (s.kind === 'en' ? n : -1)).filter((n) => n >= 0)
+  is(Math.max(...日の位置) < Math.min(...英の位置),
+    '日本語2つが、英語2つより先に出る(日→日→英→英)')
+  /* **言う番(自分で言う間)が、英語の前にあるか** */
+  const 言う番 = 言.findIndex((s) => s.you)
+  is(言う番 > Math.max(...日の位置) && 言う番 < Math.min(...英の位置),
+    '自分で言う間が、日本語のあとで英語の前にある')
+
+  /* ★ **出ない側。** ふつうの行(単語帳・Quick Response)は1ミリも変わらない ——
+       あちらに `ask` は無いので、**これまでどおり1本だけ鳴る** */
+  const 素 = radioSteps({ en: 'Hello.', ja: 'こんにちは' }, 聞くid, DEFAULT_RADIO_GAP)
+  /* ★ **英文だけで見ない。** ふつうの行は英文が2回なので、対にしてしまっても
+       **同じ2本に見える**(実際、赤チェックで緑のままだった)。
+       **間の長さが違う** —— ふつうの行は「くり返しの間」、
+       対は「語と語の間」である。**値は書き写さず、作る側から読み取る** */
+  const 間の = radioGapsOf(DEFAULT_RADIO_GAP, 聞くid)
+  const 待ち = (steps) => steps.filter((s) => s.kind === 'wait').map((s) => s.ms)
+  is(英(素).join(' / ') === 'Hello. / Hello.' && 待ち(素).join() === String(間の.repeat),
+    '単語帳と Quick Response は、これまでどおり(くり返しの間で2回)',
+    `${英(素).join(' / ')} / 間 ${待ち(素).join()}ms`)
+  is(待ち(聞).join() === String(間の.word) && 間の.word !== 間の.repeat,
+    '対で鳴らすときは、語と語の間(くり返しの間ではない)',
+    `${待ち(聞).join()}ms ≠ くり返し ${間の.repeat}ms`)
+  is(!radioAskOf({ en: 'Hello.' }) && !radioAskJaOf(null),
+    '読み上げられる文の無い行では、空を返す')
+
   /* ★ **声と段は、支度(`sectionRestClips`)から引いているか。**
-       書き写すと、**支度した MP3 に1本も当たらない**(待ち + 二度課金) */
+       書き写すと、**支度した MP3 に1本も当たらない**(待ち + 二度課金)。
+       **第5.355節で、引く鍵が「応答」から「読み上げられる文」に変わった** ——
+       あちらはどの教材でも支度してあるので、テスト対策でも当たる */
   const { sectionRestClips } = await import('../src/lib/audioPlaylist.js')
-  const 支度 = sectionRestClips(mat, mat.sections[0]).find((c) => c.text === 'Me too.')
+  const 支度 = sectionRestClips(mat, mat.sections[0])
+    .find((c) => c.text === 'Could you give me a hand?')
   const 声 = radioVoiceOf(rows[0])
   is(声.clipVoice === 支度?.voiceId && 声.clipTier === 支度?.tier,
     '聞き流しの声と段が、支度した音声とまったく同じ',
     `${声.clipTier} / ${声.clipVoice}`)
+  /* **テスト対策でも声が引けるか**(応答で引いていたら、ここが空になる) */
+  const 試 = responseRadioRows({ ...mat, kind: 'exam' })
+  is(radioVoiceOf(試[0]).clipVoice === 支度?.voiceId,
+    'テスト対策でも、支度した声が引ける(読み上げられる文で引いている)')
   /* **出ない側。** 単語帳と Quick Response の行には `clipVoice` が無いので、
      **あの2つは1ミリも変わらない** */
   is(Object.keys(radioVoiceOf({ en: 'x' })).length === 0
@@ -406,10 +535,11 @@ console.log('\n▶ 正解の聞き流し(第5.334節)')
      良い声で支度したものを取りに行かなくなる(= もう一度作る) */
   is(!('clipTier' in radioVoiceOf({ clipVoice: 'us-female' })),
     '段が分からないときは、段を当て推量で渡さない')
-  /* **応答問題でなければ、1件も返さない**(渡す側が判じ直さないため) */
-  is(responseRadioRows({ ...mat, kind: 'exam' }).length === 0
+  /* **応答する段が1つも無ければ、聞き流しに渡すものが無い** */
+  is(responseRadioRows({ ...mat, sections: [{ exercise_type: 'read_aloud',
+    items: [{ audio_text: 'x', answer: 'y' }] }] }).length === 0
     && responseRadioRows(null).length === 0,
-    '応答問題でなければ、聞き流しに渡すものが無い')
+    '応答する段が無ければ、聞き流しに渡すものが無い')
 
   /* ★ **問題順のシャッフル**(利用者の指定)。
        **混ぜ方を2つ持たない** —— 聞き流しがもう持っている
@@ -435,7 +565,11 @@ console.log('\n▶ 正解の聞き流し(第5.334節)')
   is(/<WordRadio[\s\S]{0,400}rows=\{answerRadio\}/.test(lv),
     'レッスン表示が、その一覧で `WordRadio` を描いている')
   is(/answerRows\.length > 0 && \(/.test(lv),
-    '正解が1つも無ければ、ボタンごと出さない(行き止まりを作らない)')
+    '応答が1つも無ければ、ボタンごと出さない(行き止まりを作らない)')
+  /* ★ **呼び名**(第5.355節)。「正解を聞き流す」では、
+       鳴るものが正解だけだと読める —— **いまは対で鳴る** */
+  is(/応答を聞き流す/.test(lv) && !/正解を聞き流す/.test(lv),
+    '画面の呼び名が「応答を聞き流す」になっている')
   /* **判断を画面に置いていないか**(置く場所の数だけ食い違う) */
   is(!/isResponseKind\(/.test(lv),
     'レッスン表示は、応答問題かどうかを一度も見ない(判断は1か所)')
@@ -458,7 +592,6 @@ console.log('\n▶ 正解の聞き流し(第5.334節)')
   const 骨 = sc.match(/id: 'test-response'[\s\S]*?\n\} : asExam/)?.[0] ?? ''
   is(/answer: ''/.test(骨), '骨組みの応答問題に、英文の無い問が混ざっている')
 }
-
 
 console.log('\n▶ 正解が、本当に「応答」になるか(第5.344節)')
 {

@@ -340,34 +340,17 @@ export const responsePlan = (plan, on, phrases) => (on
  */
 export const answerSpeakText = (it) => choiceBody(it?.answer)
 
-/**
- * ★ **正解の英文を、鳴る順に並べる**(2026-10-01 利用者の指定・第5.334節)。
- *
- *   > その上で、応答問題には正解の聞き流しモードを作ります。
- *   > 問題順をシャッフルもできる仕様です。
- *
- * **支度もこれを使い、聞き流しもこれを使う。**
- * 片方だけ別の並べ方をすると、**支度した音声と、鳴らすときに探す音声の
- * 置き場所が食い違って1本も当たらない**(CLAUDE.md「数え方を2通り持たない」)。
- *
- * **訳も添える**(聞き流しの札に出す)。英文の無い問は落とす。
- *
- * @param {object} material 教材(**応答問題でなければ空**)
- * @param {boolean} on 応答問題か(`isResponseKind(kind)`。**ここで判じ直さない**)
- * @returns {Array<{en: string, ja: string}>}
- */
-export function responseAnswers(material, on) {
-  if (!on) return []
-  const out = []
-  for (const sec of material?.sections ?? []) {
-    for (const it of sec?.items ?? []) {
-      const en = answerSpeakText(it)
-      if (!en) continue
-      out.push({ en, ja: String(it?.answer_ja ?? '').trim() })
-    }
-  }
-  return out
-}
+/* ★ **「正解の英文を、鳴る順に並べる」は `audioPlaylist.js` へ移した**
+     (第5.355節)。
+
+   聞き流しは **読み上げられる文 → 応答** の対で鳴らすことになり、
+   **読み上げる欄を `audioTextOf()` から引く**必要が出た。
+   あちらは `audioPlaylist.js` にあり、しかも**こちらを取り込んでいる**ので、
+   ここから呼ぶと輪になる。**読む欄の判断と同じ場所に置く**のが筋である
+   (CLAUDE.md「数え方を2通り持たない。鳴らす側と落とす側」)。
+
+   **中身は消していない。** `responseAnswers()` という名前のまま、
+   `audioPlaylist.js` にある(あちらも素の node でそのまま測れる)。 */
 
 /**
  * ★ **解答の訳は、えらんだ表現の側にある**（第5.349節・2026-10-02 利用者の指摘）。
