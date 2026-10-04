@@ -2142,5 +2142,143 @@ console.log('\n▶ 応答と、読み上げた英文の訳(第5.346節)')
   }
 }
 
+/* ============================================================================
+   ★ **同じ問題を、二度と出さない**(第5.368節・2026-10-04 利用者の指定)
+
+     > あと、試験なだけに同じ問題を何度も出さないようお願いします
+
+   第5.354節で「絶対に同じ設問は作らない」を入れたが、
+   **鍵が `prompt_en` と `audio_text` の2つだけ**だった。
+   ところが**えらべる 78 PART のうち 21 は、英文の欄が `question` しか無い**
+   (英検の英作文・TOEIC Speaking の応答と意見・VERSANT Part F など)。
+   **その 21 PART では、保証がまるごと働いていなかった。**
+
+   ── **ここでいちばん効く見張り** ──────────────────────────────
+
+     「えらべる PART を1つずつ、**その演習の形の問を作って、
+     鍵が1つでも取れるか**」を見る。**演習の種類を書き写さない** ——
+     どの欄が必須かは**窓口のコードから読み取る**(第5.340節)。
+     これを戻すと **21 PART が赤くなる。**
+   ========================================================================== */
+{
+  const fn = noC(read('supabase/functions/generate-material/index.ts'))
+  const { askKeysOf, sentencesOf, AVOID_COLUMNS }
+    = await import('../src/lib/dedupKeys.js')
+
+  /* ── 窓口の「演習ごとの必須の欄」を読み取る ──
+       **一覧をこちらに書かない。** 書き写すと、欄を変えた日に
+       **仕組みは直っているのに見張りだけが赤くなる**(CLAUDE.md) */
+  const 必須 = {}
+  for (const m of fn.matchAll(/(\w+):\s*\{\s*required:\s*\[([^\]]*)\]/g)) {
+    const 欄 = [...m[2].matchAll(/'([a-z_]+)'/g)].map((x) => x[1])
+    if (欄.length) 必須[m[1]] = 欄
+  }
+  is2(Object.keys(必須).length >= 15,
+    `設問 … 窓口から、演習ごとの必須の欄を読み取れた`, `${Object.keys(必須).length} 種類`)
+
+  /* **その演習の形の問を1つ作る。** 英語の欄にはそれぞれ違う文を入れる ——
+     同じ文を入れると、どの欄から鍵が取れたのか分からない */
+  const 作る = (type, 種) => {
+    const it = {}
+    for (const c of 必須[type] ?? []) {
+      it[c] = c.endsWith('_ja') ? `${種}の日本語` : `${種} sentence for ${c}.`
+    }
+    return it
+  }
+
+  /* ── ① **えらべる PART ぜんぶで、設問の鍵が取れるか** ── */
+  const 取れない = []
+  for (const { exam, part } of PICKABLE) {
+    const key = examKeyOf(exam.id, part.id)
+    for (const sec of examSectionsByKey(key) ?? []) {
+      const t = sec.exercise_type
+      if (!必須[t]) continue
+      if (!askKeysOf(作る(t, `${exam.id}/${part.id}`)).length) {
+        取れない.push(`${exam.id}/${part.id}(${t})`)
+      }
+    }
+  }
+  if (取れない.length) {
+    ng(`設問 … 鍵が1つも取れない PART がある(同じ問題が何度でも出る)`,
+      `${取れない.length} 件 … ${取れない.slice(0, 6).join(' / ')}`)
+  } else {
+    ok(`設問 … えらべる ${PICKABLE.length} PART ぜんぶで、設問の鍵が取れる`)
+  }
+
+  /* ── ② **「いつも `question` を鍵にする」になっていないか** ──
+       **出る側と出ない側の両方**(CLAUDE.md)。
+       `listening` の `question` には「最も適切な応答を選べ」のような
+       決まり文句が入りうる。鍵にすると **2問目から1問残らず落ち、
+       問数がきっちり 1 になる**(第5.345節で踏んだ形) */
+  const 決まり文句 = 'Choose the best response to the statement.'
+  const 聞く = askKeysOf({ audio_text: 'Could you send me the file?', question: 決まり文句 })
+  const 読む = askKeysOf({ question: 'Why did the writer contact the supplier?' })
+  is2(聞く.length === 1 && 読む.length === 1,
+    '設問 … 本体(読む / 聞く文)があるときは、`question` を鍵にしない',
+    `聞く ${聞く.length} 本 / 読むだけ ${読む.length} 本`)
+
+  /* ── ③ **1語の解答は鍵にしない** ──
+       第5.354節が `answer` を外した理由そのもの ——
+       スクール全体で二度と使えなくすると、**ありふれた語が永久に使えない**。
+       **2語以上(和文英訳)は鍵にする** —— あちらは問が日本語なので、
+       英文は解答にしか無い */
+  const 一語 = askKeysOf({ prompt_ja: '離れて働く', answer: 'remotely' })
+  const 一文 = askKeysOf({ prompt_ja: '終える報告書がある', answer: 'I have a report to finish.' })
+  is2(一語.length === 0 && 一文.length === 1,
+    '設問 … 1語の解答は鍵にしない(2語以上の和文英訳は鍵にする)',
+    `1語 ${一語.length} 本 / 1文 ${一文.length} 本`)
+
+  /* ── ④ **意味の近さを測る文が、入れ替わっていないか** ──
+       `rawSentencesOf(…)[0]` の1本だけを窓口へ送る。
+       `question` を前に挟むと**測る相手が変わる**(言われていないものが動く) */
+  /* **その1本を外したときに赤くなる入力を選ぶ**(CLAUDE.md)。
+     はじめ `prompt_en` のある問で測ったが、**本体を前に出しても
+     1本目は `prompt_en` のまま**なので緑だった(実際に空振りした)。
+     **`question` が本体になる問**で測る —— そこだけが入れ替わる */
+  const 一本目 = sentencesOf({
+    answer: 'Sure, I will send it right away.',
+    question: 'What does the woman offer to do?',
+  })[0]
+  is2(一本目 === 'sure i will send it right away',
+    '設問 … 重複を見る英文の1本目は、これまでと同じ(`question` を前に挟まない)',
+    JSON.stringify(一本目))
+
+  /* ── ⑤ **集める側も、同じ欄を読んでいるか** ──
+       **作る側と探す側で数え方を2通り持たない**(CLAUDE.md)。
+       集める側に `question` が無かったので、**AI に渡す「避けてほしい
+       英文」にも、前の設問が1本も入っていなかった** */
+  const lib = noC(read('src/lib/materials.js'))
+  is2(AVOID_COLUMNS.includes('question'),
+    '設問 … 避ける英文を集めるときも `question` を読む', AVOID_COLUMNS.join(' / '))
+  /* **窓を広く取らない**(第5.367節で踏んだ) ——
+     `.in('material_id'` の**すぐ上の1行**だけを見る。
+     `.select(…)` を括弧で囲って読もうとすると、
+     中に `join(', ')` の括弧があって途中で切れる(実際に赤くなった) */
+  const 行 = lib.split('\n')
+  const 印 = 行.findIndex((l) => l.includes(".in('material_id'"))
+  const 読む欄 = 印 > 0 ? (行[印 - 1] ?? '') : ''
+  is2(/\.select\(/.test(読む欄) && /AVOID_COLUMNS/.test(読む欄),
+    '設問 … 集める側は、その一覧をそのまま読む(欄を書き写さない)',
+    JSON.stringify(読む欄.trim()))
+
+  /* ── ⑥ **台帳(SQL)にも積まれるか** ──
+       **3つめの道である。** 鍵を直し、集める側を直しても、
+       **台帳に無ければスクール全体の照合は1件も返さない** */
+  const sql = read('supabase/migrations/0075_ledger_question.sql')
+  const 一覧 = /create or replace function public\.ledger_fields\(\)[\s\S]*?\$\$;/.exec(sql)?.[0] ?? ''
+  is2(/'question'/.test(一覧), '設問 … 台帳に積む欄の一覧に `question` が入っている')
+  /* **窓は、その1文で切る。** はじめ `[\s\S]*?` でファイルを跨いで
+     探していたので、**積むところを書き換えても、下の積み直しの
+     `ledger_fields()` に当たって緑のまま**だった(実際に2本空振りした)。
+     **`;` までで切る** —— 1文ずつ見る */
+  const 積む文 = [...sql.matchAll(/insert into public\.material_sentences[\s\S]*?;/g)]
+    .map((m) => m[0])
+  is2(積む文.length === 2 && 積む文.every((x) => /ledger_fields\(\)/.test(x)),
+    '設問 … 台帳に積む2か所とも、その一覧を読む(欄を書き写さない)',
+    `${積む文.filter((x) => /ledger_fields\(\)/.test(x)).length} / ${積む文.length} か所`)
+  is2(積む文.some((x) => /from public\.material_items/.test(x)),
+    '設問 … すでにある教材のぶんも積み直す(貼る前の設問が抜け落ちない)')
+}
+
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

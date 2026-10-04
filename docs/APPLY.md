@@ -100,7 +100,7 @@ GitHub のリポジトリにある窓口のコードを、**変更が入るた�
 | 貼る SQL(0031 ゲストのファイルの置き場) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-01f.sql` |
 | 貼る SQL(0032 セッションの記録) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02.sql` |
 | 貼る SQL(0033 ディスカッション・0034 に含まれるので不要) | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-02b.sql` |
-| **★いま貼っていただくもの … 0041〜0074 を全部まとめたもの** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_matome.sql` |
+| **★いま貼っていただくもの … 0041〜0075 を全部まとめたもの** | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_matome.sql` |
 | (参考)0055 ゲストごとに「出すもの」を決めるところだけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-16.sql` |
 | (参考)0054 スピーチの原稿の置き場だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-15.sql` |
 | (参考)0053 基礎単語を単語帳に入れる関数だけ | `https://github.com/y868hjwmz7-creator/English-AI-System/blob/claude/project-spec-document-k5wmwy/supabase/apply/pending_2026-09-14.sql` |
@@ -175,22 +175,26 @@ GitHub の中を辿らせない。
 
 ```sql
 select case when exists (
-  select 1 from pg_constraint
-  where conname = 'materials_kind_check'
-    and pg_get_constraintdef(oid) like '%''exam''%'
-) and exists (select 1 from pg_proc where proname = 'material_kinds')
-then '✅ テスト対策が使えます'
+  select 1 from pg_proc where proname = 'ledger_fields'
+    and pg_get_functiondef(oid) like '%question%'
+) and exists (
+  select 1 from pg_proc where proname = 'sync_material_sentences'
+    and pg_get_functiondef(oid) like '%ledger_fields%'
+)
+then '✅ 同じ問題は、二度と出ません'
 else '⬜ まだです。pending_matome.sql を貼ってください' end as 結果;
 ```
 
-**判定は `check.sql` の 0072 の行とまったく同じ**にしてある
+**判定は `check.sql` のいちばん新しい行(0075)とまったく同じ**にしてある
 (数え方を2通り持たない・CLAUDE.md)。
+**関数を呼ばずに、中身の文字を見る** —— 貼る前の DB には
+`ledger_fields()` がまだ無く、呼ぶとこの確認そのものが止まる。
 
 **利用者の DB と同じ作り方**(0071 までを、テスト対策を入れる前の版で流したもの)
 で確かめてある —— 貼る前は `⬜`、`pending_matome.sql` を貼ると `✅` になる。
 
 貼ったあと、`supabase/apply/check.sql` を実行すると
-**57行**の表が出て、`✅ もう入っています` / `⬜ まだです` が分かる。
+**58行**の表が出て、`✅ もう入っています` / `⬜ まだです` が分かる。
 (**行数は移行を足すたびに増える。** `check.sql` の冒頭に書いてある数と、
 `union all select` の数 + 1 がそろっているかを `npm run test:play` が見る)
 **何も書き換えない。見るだけ。**

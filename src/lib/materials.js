@@ -20,6 +20,7 @@ import { dropBroken, proofLines } from './proofread.js'
 import { normEn } from './textNorm.js'
 /* ★ **重複を見る鍵**(第5.345節)。素の node で測れる形に出してある */
 import {
+  AVOID_COLUMNS,
   askKeysOf, dropDuplicates, rawAsksOf, rawSentencesOf, sentencesOf,
 } from './dedupKeys.js'
 /* ★ **作り直しの回数**（第5.347節）。素の node で測れる形に出してある */
@@ -2017,7 +2018,7 @@ export { normEn }
 
    **中身は 1 行も変えずに移した** —— 呼ぶ側は 1 行も変わらない
    (`normEn` を `textNorm.js` へ出したときと、まったく同じ作法)。 */
-export { askKeysOf, dropDuplicates, rawAsksOf, rawSentencesOf, sentencesOf }
+export { AVOID_COLUMNS, askKeysOf, dropDuplicates, rawAsksOf, rawSentencesOf, sentencesOf }
 
 /**
  * ★ **その設問は、スクールのどこかで一度でも使われたか**
@@ -2148,16 +2149,22 @@ export async function loadUsedSentencesLike({
 async function sentencesFromMaterials(ids, limit) {
   if (!ids?.length) return ok([])
 
+  /* ★ **読む欄は `AVOID_COLUMNS` 1か所**(第5.368節)。
+       ここに `question` が無かったので、**内容理解・ディスカッション・
+       想定される質問の設問が、避ける一覧に1本も入っていなかった** ——
+       えらべる 78 PART のうち 21 は、英文の欄が `question` しか無い。
+       **AI は前に何を出したかを知らずに書いていた。**
+       **書き写さない** —— 落とす側(`dedupKeys.js`)と同じ一覧を読む */
   const { data, error } = await supabase
     .from('material_items')
-    .select('prompt_en, audio_text, answer')
+    .select(AVOID_COLUMNS.join(', '))
     .in('material_id', ids)
     .limit(400)
   if (error) return fail(error, 'すでにある英文を読めませんでした')
 
   const seen = new Set()
   for (const row of data ?? []) {
-    for (const v of [row.prompt_en, row.audio_text, row.answer]) {
+    for (const v of AVOID_COLUMNS.map((c) => row?.[c])) {
       const text = String(v ?? '').trim()
       // 英語の文だけを集める(和訳や日本語の設問は対象外)
       if (text && /^[\x20-\x7E\u2018\u2019\u201C\u201D]+$/.test(text) && /[a-zA-Z]/.test(text)) {

@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   57行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   58行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -275,4 +275,22 @@ from (
     exists (select 1 from information_schema.columns
             where table_schema = 'public' and table_name = 'materials'
               and column_name = 'stance'), 56
+  -- **関数の中身そのものを見る**(0075・第5.368節)。0071 と同じ立て付け ——
+  -- 表も列も行も増えない移行なので、表の有無では分からない。
+  -- **台帳に積む欄の一覧(`ledger_fields()`)に `question` が
+  -- 入っているか**で見る(0067 で `section_types()` に訊いたのと同じ)。
+  -- 貼り忘れると、**英検の英作文・TOEIC Speaking・VERSANT Part F など
+  -- 21 の PART で、同じ設問が何度でも出る**
+  -- **関数を呼ばない。** 貼る前の DB では `ledger_fields()` がまだ無く、
+  -- 呼ぶと **`check.sql` そのものが止まる**(SQL は and の左が偽でも
+  -- 右を飛ばすとは決まっていない)。利用者はこれを貼って
+  -- 「何がまだか」を見るのだから、**止まってはいけない** ——
+  -- だから `pg_proc` の**中身の文字**を見る(0071 と同じ見方)。
+  -- **2つとも見る**(0069 / 0070 と同じ)—— 一覧に `question` が
+  -- 入っていても、トリガーがその一覧を読んでいなければ積まれない
+  union all select '0075 英文の台帳に「設問」も積む(pending_matome.sql)',
+    exists (select 1 from pg_proc where proname = 'ledger_fields'
+              and pg_get_functiondef(oid) like '%question%')
+    and exists (select 1 from pg_proc where proname = 'sync_material_sentences'
+              and pg_get_functiondef(oid) like '%ledger_fields%'), 57
 ) t order by 順;

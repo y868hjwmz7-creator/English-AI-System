@@ -102,6 +102,45 @@ select pg_temp.expect3('台帳にはそろえた形で入っている',
   (select count(*)::int from public.material_sentences
    where text_norm = 'i have several emails to reply to'), 1);
 
+-- ── ★ 設問(question)も積まれるか(0075・第5.368節)──────────────
+--
+--   **英文の欄が `question` しか無い設問がある** ——
+--   内容理解・ディスカッション・想定される質問(英検の英作文・
+--   TOEIC Speaking・VERSANT Part F など 21 の PART)。
+--   0008 の台帳はこの欄を積んでいなかったので、
+--   **「絶対に同じ設問は作らない」が、その 21 PART では働いていなかった。**
+--
+--   **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+--   ここでは「**ほかの英文の欄が1つも無い設問**」である。
+--   前の2問は `prompt_en` を持っているので、
+--   `question` を積まなくても台帳に載ってしまう。
+insert into public.material_items
+  (material_id, section_id, seq, question, question_ja)
+values
+  ('dddddddd-0000-0000-0000-000000000001', 'dddddddd-1111-0000-0000-000000000001', 3,
+   'Why did the speaker contact the supplier?', '話し手はなぜ仕入先に連絡したのですか。');
+
+select pg_temp.expect3('設問だけの問でも、その英文が台帳に積まれる',
+  (select count(*)::int from public.material_sentences
+   where text_norm = 'why did the speaker contact the supplier'), 1);
+
+-- **積む欄の一覧は1か所**(`ledger_fields()`)。
+-- トリガーも、`check.sql` も、アプリの「準備の状態」もこれを読む
+select pg_temp.expect3('積む欄の一覧に `question` が入っている',
+  (select 'question' in (select public.ledger_fields())), true);
+
+select pg_temp.expect3('積む欄の一覧から、前からあった欄が1つも減っていない',
+  (select count(*)::int from (select public.ledger_fields() as f) t
+   where f in ('prompt_en', 'audio_text', 'answer', 'text_en')), 4);
+
+-- **消したら外れるか**(こちらも `question` だけの問で見る)
+delete from public.material_items
+where material_id = 'dddddddd-0000-0000-0000-000000000001' and seq = 3;
+
+select pg_temp.expect3('設問だけの問を消すと、その英文も台帳から外れる',
+  (select count(*)::int from public.material_sentences
+   where text_norm = 'why did the speaker contact the supplier'), 0);
+
 -- ── まだ誰にも共有していない段階 ──────────────────────────────
 -- ライブラリには既にあるので、同じ弱点なら「既出」になる。
 select pg_temp.expect3('同じ弱点のライブラリにある文は既出になる',

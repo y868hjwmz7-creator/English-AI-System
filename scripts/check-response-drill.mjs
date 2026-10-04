@@ -1450,5 +1450,55 @@ console.log('\n▶ 弱点タグを併用しても、正解にする表現は動�
   }
 }
 
+console.log('\n▶ 設問を鍵に足しても、応答問題の問数が減らない(第5.368節)')
+{
+  /* ★ **2026-10-04 利用者の指定「同じ問題を何度も出さないようお願いします」。**
+
+       設問の鍵に `question` を足した(**えらべる 78 PART のうち 21 は
+       英文の欄が `question` しか無く、保証が働いていなかった**)。
+
+       **ここが、その直しのいちばん危ないところである。**
+       応答問題と TOEIC Part 2 の `question` には
+       「最も適切な応答を選べ」のような**決まり文句**が入りうる。
+       いつも鍵にすると、**2問目から1問残らず落ち、問数がきっちり 1 になる**
+       —— 第5.345節(解答を鍵にして半分になった)と、まったく同じ形である。
+
+       **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)。 */
+  const 決まり文句 = 'Choose the best response to the statement you hear.'
+  const 問 = [
+    'Could you send me the file by noon?',
+    'How was the meeting this morning?',
+    'Where did you put the contract?',
+    'Do you know when he gets back?',
+  ].map((audio_text, i) => ({
+    audio_text, question: 決まり文句, answer: `Answer number ${i + 1}.`,
+  }))
+
+  /* **応答問題として落とす**(`repeatsAnswer('response')` が真)。
+     判断は書き写さない —— 種類から読み取る */
+  const 繰り返す = repeatsAnswer('response')
+  const { kept } = K.dropDuplicates(問.map((x) => ({ ...x })), new Set(), 繰り返す)
+  is(繰り返す && kept.length === 問.length,
+    '決まり文句の設問が同じでも、読み上げる文が違えば1問も落ちない',
+    `${kept.length} / ${問.length} 問`)
+
+  /* **「出る」と「出ない」の両方**(CLAUDE.md)——
+     読み上げる文まで同じなら、これまでどおり落ちる。
+     これが無いと、**鍵をぜんぶ捨てる形**に書き換えても緑のままになる */
+  const 同じ = [0, 1].map(() => ({
+    audio_text: 'Could you send me the file by noon?',
+    question: 決まり文句, answer: 'Sure, right away.',
+  }))
+  const { kept: 残り } = K.dropDuplicates(同じ, new Set(), 繰り返す)
+  is(残り.length === 1, '読み上げる文まで同じなら、2問目は落ちる', `${残り.length} / 2 問`)
+
+  /* **設問だけの問では、その設問が鍵になる** ——
+     応答問題そのものではないが、**同じ関数の別の枝**である。
+     ここが効かないと、英検の英作文などで同じ問題が何度でも出る */
+  const 設問だけ = [0, 1].map(() => ({ question: 'Do you think remote work will increase?' }))
+  const { kept: 一つ } = K.dropDuplicates(設問だけ, new Set(), 繰り返す)
+  is(一つ.length === 1, '設問しか無い問は、その設問が鍵になる', `${一つ.length} / 2 問`)
+}
+
 console.log(bad === 0 ? '\n✅ 応答問題の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

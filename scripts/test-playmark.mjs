@@ -7311,26 +7311,69 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
        **値を書き写さない。性質で見る**(CLAUDE.md)——
        **移行のファイルそのもの**から列の名前を読み取って突き合わせる。
        そうすれば、次に列を足した日も**ひとりでに付いてくる** */
+  /* ★ **移行の形を決め打ちしない**(第5.368節)。
+
+       もとは「**列を1つ足す移行**」だけを前提に書いてあった
+       (`column:` と `add column if not exists` を突き合わせていた)。
+       0075 は**関数の中身が変わるだけ**で、列も表も増えない ——
+       印を `rpc:` にしたとたん、**仕組みは1ミリも壊れていないのに
+       見張りだけが赤くなった**(CLAUDE.md が「逆向きに出る」と呼ぶ形)。
+
+       **印の形そのものを読み取ってから、その形で突き合わせる。**
+       列の印なら列を、関数の印なら関数を。
+       **どちらも、いちばん新しい移行が本当に足しているもの**と
+       突き合わせるので、次に形が変わった日も付いてくる。 */
   {
-    const 印 = /NEWEST_MARK = \{[\s\S]{0,600}?column: '([a-z_]+)'/
-      .exec(setup)?.[1] ?? ''
-    const 表 = /NEWEST_MARK = \{[\s\S]{0,600}?table: '([a-z_]+)'/
-      .exec(setup)?.[1] ?? ''
-    /* いちばん新しい移行が、どの表にどの列を足しているか */
+    const 印 = /NEWEST_MARK = \{[\s\S]{0,1400}?\n\}/.exec(setup)?.[0] ?? ''
+    const 列 = /column: '([a-z_]+)'/.exec(印)?.[1] ?? ''
+    const 表 = /table: '([a-z_]+)'/.exec(印)?.[1] ?? ''
+    const 関数 = /rpc: '([a-z_]+)'/.exec(印)?.[1] ?? ''
+    const 中身 = /has: '([a-z_]+)'/.exec(印)?.[1] ?? ''
+    /* いちばん新しい移行が、何を足しているか */
     const newestFile = readdirSync(new URL('../supabase/migrations/', import.meta.url))
       .filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort().at(-1)
+    const 番 = newestFile.slice(0, 4)
     const sql = readFileSync(
       new URL(`../supabase/migrations/${newestFile}`, import.meta.url), 'utf8')
-    const 足す表 = /alter table public\.([a-z_]+)/.exec(sql)?.[1] ?? ''
-    const 足す列 = /add column if not exists ([a-z_]+)/.exec(sql)?.[1] ?? ''
-    ok(!!印 && 印 === 足す列 && 表 === 足す表,
-      `0074 … 印は「${足す表} に ${足す列} があるか」(列を1つ足すだけの移行だから)`,
-      `印 ${表}.${印} / 移行が足すのは ${足す表}.${足す列}`)
-    /* **`check.sql` も、同じ列を見ているか**(片方だけ直すと食い違う) */
     const chk = readFileSync(
       new URL('../supabase/apply/check.sql', import.meta.url), 'utf8')
-    ok(new RegExp(`column_name = '${足す列}'`).test(chk),
-      `check.sql … 0074 も、同じ列(${足す列})を見ている`)
+
+    if (列) {
+      /* **列の印**(0064 / 0074 と同じ立て付け) */
+      const 足す表 = /alter table public\.([a-z_]+)/.exec(sql)?.[1] ?? ''
+      const 足す列 = /add column if not exists ([a-z_]+)/.exec(sql)?.[1] ?? ''
+      ok(!!足す列 && 列 === 足す列 && 表 === 足す表,
+        `${番} … 印は「${足す表} に ${足す列} があるか」(列を1つ足すだけの移行だから)`,
+        `印 ${表}.${列} / 移行が足すのは ${足す表}.${足す列}`)
+      ok(new RegExp(`column_name = '${足す列}'`).test(chk),
+        `check.sql … ${番} も、同じ列(${足す列})を見ている`)
+    } else if (関数) {
+      /* **関数の印**(0056 / 0071 / 0075 と同じ立て付け)。
+         **その移行が本当にその関数を作っているか**を見る ——
+         前の移行の関数を名乗ったままだと、
+         **貼る前でも「もう入っています」**と出る(いちばん悪い壊れ方) */
+      const 定義 = new RegExp(
+        `create or replace function public\\.${関数}\\(\\)[\\s\\S]*?\\$\\$;`).exec(sql)?.[0] ?? ''
+      ok(!!定義, `${番} … 印の関数(${関数})を、その移行が作っている`,
+        定義 ? '' : `${newestFile} に create が無い`)
+      /* ★ **一覧を返す関数なら、`has` は必須**(第5.368節)。
+           「在るかどうか」だけで判じると、**前の移行で作った関数が
+           残っているだけで「もう入っています」**と出る
+           (CLAUDE.md「いちばん悪い壊れ方」)。
+           **`returns setof` かどうかは、移行のコードから読み取る** */
+      const 一覧を返す = /returns setof/.test(定義)
+      ok(一覧を返す ? (!!中身 && new RegExp(`'${中身}'`).test(定義)) : !中身,
+        `${番} … 一覧を返す関数なら中身まで見る(いま ${中身 || 'なし'})`,
+        `一覧を返す ${一覧を返す} / has ${中身 || 'なし'}`)
+      /* **コメントを落としてから数える**(CLAUDE.md)——
+         `check.sql` の説明にも同じ関数の名前が出てくるので、
+         そのままだと**行を書き換えても緑のまま**になる(実際にそうなった) */
+      const 素のchk = chk.replace(/^\s*--.*$/gm, '')
+      ok(new RegExp(`${関数}`).test(素のchk),
+        `check.sql … ${番} も、同じ関数(${関数})を見ている`)
+    } else {
+      ng(`${番} … 準備の状態の印が、列でも関数でもない`, JSON.stringify(印.slice(0, 120)))
+    }
   }
   /* **0071 の判定は、`check.sql` の側に残っている。**
      印が 0072 へ進んでも、あちらの行は消さない ——

@@ -48,6 +48,67 @@ const insideEn = (item) => [
 ]
 
 /**
+ * ★ **その問を見分ける「本体」の英文**(第5.368節・2026-10-04 利用者の指定)。
+ *
+ *   > あと、試験なだけに同じ問題を何度も出さないようお願いします
+ *
+ * **`question` は、どの鍵にも入っていなかった。** そのため
+ * **えらべる 78 PART のうち 21 は、設問の鍵が1つも取れず**、
+ * 第5.354節の「絶対に同じ設問は作らない」が**まるごと働いていなかった**
+ * (英検の英作文・TOEIC Speaking・VERSANT Part F など ——
+ * あちらは `question` 以外に英文の欄が1つも無い)。
+ *
+ * ── **なぜ「いつも鍵にする」ではないのか**(ここが肝である)──────
+ *
+ *   `listening`(TOEIC Part 2・応答問題)では、`question` に
+ *   **「次の発言への応答として最も適切なものを選べ」のような決まり文句**が
+ *   入りうる。いつも鍵にすると、**2問目から1問残らず「前と同じ」として
+ *   落ち、問数がきっちり 1 になる**(第5.345節で踏んだ形そのもの)。
+ *
+ *   **だから順に試して、最初に見つかったものだけを本体とする。**
+ *
+ *     ① `prompt_en` / `audio_text` … 読む文・聞く文(ある演習では、これが本体)
+ *     ② `question`                 … 内容理解・ディスカッション・想定される質問
+ *     ③ `answer`(**2語以上のときだけ**)… 和文英訳(問は日本語なので、英文は解答だけ)
+ *
+ * ── **③ で「2語以上」を見るのはなぜか** ──────────────────────
+ *
+ *   第5.354節が `answer` を鍵から外した理由は
+ *   「**単語やフレーズの解答は1語**だから。スクール全体で二度と使えなく
+ *   すると、ありふれた語が永久に使えなくなる」である。
+ *   **その理由をそのまま条件にした** —— 1語なら鍵にしない。
+ *   演習の種類を並べない(足した人が、ここを直すとは気づけない)。
+ */
+const askFieldsOf = (item) => {
+  const 本体 = [item?.prompt_en, item?.audio_text]
+    .filter((v) => String(v ?? '').trim())
+  if (本体.length) return 本体
+  if (String(item?.question ?? '').trim()) return [item.question]
+  const 解答 = String(item?.answer ?? '').trim()
+  return /\s/.test(解答) ? [解答] : []
+}
+
+/** 照合のための鍵(そろえた形) */
+export const askKeysOf = (item) => askFieldsOf(item).map(normEn).filter(Boolean)
+
+/** 問い合わせに渡す、もとの文字のまま */
+export const rawAsksOf = (item) => askFieldsOf(item)
+  .map((v) => String(v ?? '').trim()).filter(Boolean)
+
+/**
+ * ★ **「前に出した英文」を集めるときに読む欄**(第5.368節)。
+ *
+ * **作る側と探す側で、数え方を2通り持たない**(CLAUDE.md)——
+ * 集める側(`sentencesFromMaterials`)が `question` を読んでいなかったので、
+ * **AI に渡す「避けてほしい英文」にも、前の設問が1本も入っていなかった。**
+ *
+ * 落とす鍵(上)と違い、こちらは**集めるだけ**なので
+ * **`question` はいつも読む**(一覧を勝手に減らさない・CLAUDE.md)。
+ * 日本語の設問は、集める側が「英語の文だけ」で弾く。
+ */
+export const AVOID_COLUMNS = ['prompt_en', 'audio_text', 'answer', 'question']
+
+/**
  * その問の、重複を見る英文をぜんぶ並べる。
  *
  * ★ `repeatAnswer` … **解答がわざと何度も出る教材か**(応答問題・第5.345節)。
@@ -64,6 +125,13 @@ const fieldsOf = (item, repeatAnswer = false) => [
   item?.audio_text,
   ...(repeatAnswer ? [] : [item?.answer]),
   ...insideEn(item),
+  /* ★ **本体を、いちばん後ろに足す**(第5.368節)。
+       `question` だけの問が、ここまで1つも鍵を持っていなかった。
+       **後ろに置く** —— 意味の近さを測るのは
+       `rawSentencesOf(…)[0]` の1本だけなので、
+       前に挟むと**測る文が入れ替わる**(直せと言われていないものが動く)。
+       同じ欄が二度並ぶのは構わない(鍵は集合として使う) */
+  ...askFieldsOf(item),
 ]
 
 /**
@@ -104,20 +172,6 @@ export function dropDuplicates(items, usedSet, repeatAnswer = false) {
  *   > テスト対策や応答問題で、全く同じ設問が散見されます。…
  *   > これは絶対に同じ設問は作らない設定にしてください
  *
- * **解答(`answer`)は入れない。** 理由が2つある。
- *
- *   ①**応答問題は、1つの表現をわざと2回**正解にする(第5.345節)
- *   ②単語やフレーズの解答は**1語**である —— スクール全体で二度と
- *     使えなくすると、**ありふれた語が永久に使えなくなる**
- *
- * **設問の本体は `prompt_en`(読んで答える)か `audio_text`(聞いて答える)**
- * のどちらかに入る。VERSANT Part A と応答問題は後者である。
+ * **どの欄が「設問そのもの」なのかは `askFieldsOf()` 1か所**(第5.368節)。
+ * `askKeysOf()` / `rawAsksOf()` はその上に出してある。
  */
-const askFieldsOf = (item) => [item?.prompt_en, item?.audio_text]
-
-/** 照合のための鍵(そろえた形) */
-export const askKeysOf = (item) => askFieldsOf(item).map(normEn).filter(Boolean)
-
-/** 問い合わせに渡す、もとの文字のまま */
-export const rawAsksOf = (item) => askFieldsOf(item)
-  .map((v) => String(v ?? '').trim()).filter(Boolean)
