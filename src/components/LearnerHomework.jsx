@@ -26,6 +26,12 @@ import { materialFileName } from '../lib/fileName.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
+/* **いつ取った控えか**を言葉にするのは1か所(`offlineNote.js`) */
+import { copyAgeText } from '../lib/offlineNote.js'
+/* ★ **開いた教材の音声を、先に控える**(第5.372節)。
+     控えるのは Service Worker で、**判断は `keepsAheadNow()` 1か所** */
+import { keepMaterialOffline } from '../lib/keepOffline.js'
+import { keepsAheadNow } from '../lib/offline.js'
 /* その日に印を付けた語(第5.219節)。**日の切れ目は `toDateKey` と同じ** */
 import { loadWordsMarkedOn } from '../lib/vocab.js'
 import { toDateKey } from '../lib/format.js'
@@ -82,6 +88,8 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
   const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  /** 控えから出したときの「いつのものか」。**電波があるときは空** */
+  const [copied, setCopied] = useState('')
   const [lessonOf, setLessonOf] = useState(null)   // レッスン表示で開いている教材
   /**
    * **いま紙に出している宿題**(null なら印刷していない)。
@@ -121,10 +129,13 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
   const { statuses: wordStatuses, mark: markWord, error: wordError } = useWordStatuses()
 
   const reload = async () => {
-    const { data, error: e } = await loadMyAssignments()
+    const { data, error: e, copiedAt } = await loadMyAssignments()
     setLoading(false)
     if (e) { setError(e); return }
     setError(null)
+    /* ★ **控えから出したなら、そう言う**(第5.372節)。
+         電波が無いときだけ起きる。**黙って古い宿題を出さない** */
+    setCopied(copiedAt ? copyAgeText(copiedAt) : '')
     setAssignments(data)
   }
 
@@ -355,6 +366,9 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                     wordStatuses={wordStatuses} onMarkWord={markWord} />
       )}
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
+      {/* ★ **控えから出したとき**(第5.372節)。電波が無いときだけ出る。
+             説明は書かない —— **いつのものか**だけ */}
+      {copied && <div className="notice notice--warn" role="status">{copied}</div>}
 
       {/* ── セッションの記録(0032)。**いちばん上に置く**
              (第5.219節・2026-09 利用者の指定)
@@ -626,7 +640,16 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                         </button>
                       )}
                       <button type="button" className="btn btn--small btn--primary"
-                              onClick={() => { setLessonOf(a.material); recordWorked(a) }}>
+                              onClick={() => {
+                                setLessonOf(a.material); recordWorked(a)
+                                /* ★ **開いたら、その教材の音声を先に控える**(第5.372節)。
+                                     Service Worker が控えるのは**一度鳴らしたもの**だけなので、
+                                     これが無いと「家で開いて、電車で聞く」ができない。
+                                     **0円**(置いてある MP3 を落とすだけ)だが**通信は使う**ので、
+                                     端末が「データ節約」と言っていたら何もしない。
+                                     **待たない** —— 開くほうを1ミリも遅らせない */
+                                if (keepsAheadNow()) keepMaterialOffline(a.material).catch(() => {})
+                              }}>
                         <ScreenIcon />大きく表示する
                       </button>
                     </div>

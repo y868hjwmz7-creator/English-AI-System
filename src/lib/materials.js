@@ -61,6 +61,9 @@ import { askWithRetry, genCutNote, isGenCut } from './genRetry.js'
 import { copyTitleFor } from './format.js'
 /* まとめて共有したときの知らせ。**文言はここではなく、あちら1か所** */
 import { manyDoneText, manyStoppedText } from './assignMany.js'
+/* **電波が無いせいかどうか**の見分けは1か所(`supabase.js` も同じものを呼ぶ) */
+import { isNetworkFail } from './netFail.js'
+import { saveCopy, readCopy, rememberWho, lastWho } from './localCopy.js'
 
 // 教材のレベルはゲストのレベルと同じ物差し(CEFR)を使う
 export { CEFR_LEVELS, cefrLabel }
@@ -69,6 +72,72 @@ const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
 
 const fail = (e, fallback) => ng(e?.message ? `${fallback}: ${e.message}` : fallback)
+
+/* ══════════════════════════════════════════════════════════════════
+ * **電波が無いときは、手元の控えを出す**(第5.372節)
+ *
+ *   > 通勤・移動中が多い(2026-10-04 利用者)
+ *
+ *   枠と音声は Service Worker が控える。**中身は控えられない** ——
+ *   `/rest/v1/` は鍵が要り、RLS で人ごとに違うものが返るので、
+ *   **通信そのものを控えると、別の人のものが出る**(`swPlan.js`)。
+ *   だから**読めたものを、こちら側で控える。**
+ *
+ *   【**控えを出すのは、電波が無いときだけ**】
+ *     断られた・行が無い・権限が無いは、**そのまま出す。**
+ *     そこで控えを出すと、**消えた教材がいつまでも見える。**
+ *
+ *   【**控えだと分かるように返す**】
+ *     `copiedAt` を一緒に返す。画面はそれを出す
+ *     (**黙って出さない**・CLAUDE.md)。
+ *
+ *   【**人の印が無ければ、控えない・読まない**】
+ *     会社の PC は同じ端末を何人も使う。印が無いと**次の人に出る。**
+ * ══════════════════════════════════════════════════════════════════ */
+
+/**
+ * いま入っている人の id。**取れなければ、最後に分かっていた人。**
+ *
+ * ★ **`getSession()` は、切符の期限が切れていると取り直しに行く。**
+ *   電波の無いところでは、それが失敗する(または返ってこない)——
+ *   **つまり、控えがいちばん要る場面で鍵が作れない。**
+ *   だから**待ちすぎず**、取れなければ覚えている人を使う
+ *   (ログアウトで、控えと一緒に忘れている)。
+ */
+async function 誰か() {
+  if (!supabase) return lastWho()
+  try {
+    const { data } = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise((r) => { setTimeout(() => r({ data: null }), 2500) }),
+    ])
+    const id = data?.session?.user?.id ?? null
+    rememberWho(id)
+    return id ?? lastWho()
+  } catch { return lastWho() }
+}
+
+/**
+ * 読んで、控える。失敗が**電波のせい**なら、控えを出す。
+ * @param {string} name 控えの名前(人の id と組にする)
+ * @param {() => Promise<{data:unknown, error:unknown}>} run
+ */
+async function withCopy(name, run) {
+  /* ★ **先に読みに行く。** 人の印を待ってから読むと、
+       `getSession()` の待ち(電波が無いと最大 2.5 秒)がそのまま
+       宿題の出るのを遅らせる —— **並べて走らせる** */
+  const 読む = run()
+  const who = await 誰か()
+  const r = await 読む
+  if (!r.error) {
+    if (who) saveCopy(who, name, r.data).catch(() => { /* 控えられないだけ */ })
+    return r
+  }
+  if (!who || !isNetworkFail(r.error)) return r
+  const c = await readCopy(who, name)
+  /* 控えが無ければ、**起きたことをそのまま出す**(嘘の知らせにしない) */
+  return c ? { data: c.data, error: null, copiedAt: c.at } : r
+}
 
 /*
  * 教材の種類と、その呼び分けは **`src/data/materialKinds.js`** に置いてある。
@@ -326,7 +395,11 @@ const normalizeMaterial = (m) => {
 export async function loadMaterial(materialId) {
   if (!supabase) return ng('Supabase が設定されていません')
   if (!materialId) return ng('教材が指定されていません')
+  /* ★ **一度開いた教材は、電波が無くても開ける**(第5.372節) */
+  return withCopy(`material:${materialId}`, () => 教材を読む(materialId))
+}
 
+async function 教材を読む(materialId) {
   const { data, error } = await runTolerant(() => supabase
     .from('materials')
     .select(`
@@ -844,7 +917,12 @@ export async function addMaterialWords({ materialId, learnerIds }) {
 
 export async function loadMyAssignments() {
   if (!supabase) return ng('Supabase が設定されていません')
+  /* ★ **電波が無いときは、手元の控えを出す**(第5.372節)。
+       ゲストが移動中にいちばん開くのがここ —— 空の一覧を出さない */
+  return withCopy('assignments', 宿題を読む)
+}
 
+async function 宿題を読む() {
   // まだ貼っていない列があっても、そこだけ外して読み直す。
   // **ここが失敗すると、ゲストは宿題を1件も開けない**
   //

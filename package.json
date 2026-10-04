@@ -30,7 +30,8 @@
     "test:exam": "node scripts/check-exam-prep.mjs",
     "test:response": "node scripts/check-response-drill.mjs",
     "test:clip": "node scripts/test-clipstart.mjs",
-    "test:feel": "node scripts/test-feel.mjs"
+    "test:feel": "node scripts/test-feel.mjs",
+    "test:offline": "node scripts/test-offline.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

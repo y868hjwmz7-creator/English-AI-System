@@ -2399,6 +2399,9 @@ function NavFootScreen() {
         songs={songs} song={songNow} onSong={(v) => { setSong(v); saveBgmPick(v) }}
         showPrepare
         prepare={prepAll} onPrepare={setPrepAll}
+        /* ★ オフラインの音声(第5.372節)。**本物と同じ形で描く** ——
+             数を渡さないと行ごと出ず、すき間を測れない */
+        clipsKept={12} onClipsClear={() => {}}
       />
       {/* **いちばん下は自分の欄**(第5.189節・利用者の指定
           「位置を Hisato Nakajima の要素の上にしてください」) */}

@@ -16,6 +16,7 @@
  * これまでどおり端末内(localStorage)のデータで動きます。
  */
 import { createClient } from '@supabase/supabase-js'
+import { isNetworkFail } from './netFail.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL?.trim()
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
@@ -79,8 +80,7 @@ export async function checkConnection() {
       // (2026-08 実測)。ここで見分けないと「つながりましたが断られました」と
       // 出てしまい、**電波の話なのに設定の話だと思わせる。**
       // Safari は `Load failed`、Chrome は `Failed to fetch` と言う
-      const offline = /failed to fetch|load failed|networkerror|network request failed/i
-        .test(error.message ?? '')
+      const offline = isNetworkFail(error)
       return {
         ok: false,
         reason: missingTable ? 'no-schema' : (offline ? 'network' : 'error'),

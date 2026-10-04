@@ -10,6 +10,7 @@
  * アプリはこれまでどおり端末内のデータで動く。
  */
 import { NET_TIMEOUT_MS, TIMEOUT_MARK, supabase, withTimeout } from './supabase.js'
+import { dropCopies } from './localCopy.js'
 
 /** いまログインしている人の情報。していなければ null。 */
 export async function getSession() {
@@ -124,6 +125,11 @@ export async function signIn(idOrEmail, password) {
 }
 
 export async function signOut() {
+  /* ★ **手元の控えを、まず捨てる**(第5.372節)。
+       会社の PC は、ゲストとトレーナーが**同じ端末**を使うことがある。
+       残したままにすると、**次に開いた人に前の人の宿題が出る。**
+       Supabase に届かなくても捨てる(だから先に呼ぶ)。 */
+  await dropCopies().catch(() => { /* 控えが無いだけ */ })
   if (!supabase) return
   await supabase.auth.signOut()
 }

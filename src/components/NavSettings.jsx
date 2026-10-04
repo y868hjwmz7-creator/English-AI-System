@@ -42,6 +42,8 @@
  *   `GearIcon` は、誰も呼ばなくなったので**消した**。
  */
 import { SortIcon } from './Icons.jsx'
+/* **ボタンの色は `btnTone.js` 1か所**(第5.242節)。ここで色名を書かない */
+import { TONE_SIDE } from '../lib/btnTone.js'
 import VolumeRow from './VolumeRow.jsx'
 /* ★ **ほかのアプリの音を混ぜるか**(第5.352節)。
    **効く端末かどうかは `mixWorks()` 1か所**が決める(名前で見分けない) */
@@ -108,6 +110,12 @@ export default function NavSettings({
   /** 「教材の支度」を出すか。**トレーナーと管理者だけ**(費用が出ていく) */
   showPrepare = false,
   prepare, onPrepare,
+  /* ★ **オフラインで鳴らせる音声の本数**(第5.372節)。
+       **数えられなければ `null`** —— そのときはこの行ごと出さない
+       (「0 と `null` を取り違えない」・CLAUDE.md)。
+       **0 円である** —— 置き場所にある MP3 を落としてくるだけで、
+       作り直してはいない(作り直しだけが課金される) */
+  clipsKept = null, onClipsClear,
 }) {
   return (
     <details className="nav-settings">
@@ -218,6 +226,27 @@ export default function NavSettings({
             いま何本待っているかは、上の帯がいつも出している。 */}
         {showPrepare && (
           <Pick label="教材の支度" options={PREPARES} value={prepare} onChange={onPrepare} />
+        )}
+
+        {/* ★ **オフラインで鳴らせる音声**(第5.372節・2026-10-04 利用者)。
+
+              > 通勤・移動中が多い
+
+            一度聞いた音声は、電波が無くても鳴る。**何本あるかを出す** ——
+            見えないものは管理できない(CLAUDE.md)。
+            **消しても 0 円**(置き場所から落とし直すだけ)なので、確認は置かない。
+            **数えられなければ、この行ごと出さない。** */}
+        {clipsKept !== null && (
+          <div className="nav-setting">
+            <span className="nav-setting-label">オフラインの音声</span>
+            <div className="nav-setting-side">
+              <span className="nav-setting-now">{clipsKept} 本</span>
+              <button type="button" className={`btn btn--small ${TONE_SIDE}`}
+                      onClick={onClipsClear} disabled={!clipsKept}>
+                消す
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </details>

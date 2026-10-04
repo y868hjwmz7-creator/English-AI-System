@@ -786,6 +786,17 @@ body {
 .nav-setting-label { color: var(--text-muted); font-size: var(--fs-11h); }
 .nav-setting .theme-switch { margin-left: 0; align-self: flex-start; }
 .nav-setting .theme-btn { padding: 6px 12px; }
+/* ★ オフラインの控え(第5.372節)。**数と「消す」を横に並べる。**
+     離すのは親の `gap` —— 子に `margin` を付けて回らない(共通ルール) */
+.nav-setting-side {
+  display: flex; align-items: center; gap: var(--sp-8);
+  align-self: flex-start;
+}
+.nav-setting-now {
+  color: var(--text-secondary);
+  /* 数が増えても行が動かないように、**幅の決まった数字**にする */
+  font-variant-numeric: tabular-nums;
+}
 
 /* 英語の音声と音楽の大きさ(2026-09 利用者の指定)。
    **見出しの行の右端に、いまの大きさを数で出す** —— つまみの位置だけでは、

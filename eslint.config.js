@@ -29,7 +29,7 @@ const browserGlobals = Object.fromEntries(
     'performance', 'crypto', 'alert', 'confirm', 'CustomEvent', 'Event', 'Image',
     'process', 'Deno', 'structuredClone', 'queueMicrotask', 'btoa', 'atob',
     'location', 'history', 'Buffer', 'CustomEvent', 'MediaStream', 'AbortSignal',
-    'URLSearchParams',
+    'URLSearchParams', 'MessageChannel',
   ].map((name) => [name, 'readonly']),
 )
 

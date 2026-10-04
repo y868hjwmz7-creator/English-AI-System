@@ -54,6 +54,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **テスト対策の PART の検証** | `npm run test:exam` |
 | **応答問題の検証** | `npm run test:response` |
 | **手触り(押した感じ・相棒・数の駆け上がり)の検証** | `npm run test:feel` |
+| **オフラインで開けるかの検証**(本当にサーバーを止めて測る) | `npm run test:offline` |
 | お手本音声の生成(Azure の鍵が必要) | `npm run audio` |
 | **英文の「型」の資料を PDF にする**(トレーナー向け) | `node scripts/make-frames-pdf.mjs` |
 | **英文の「型」のプレゼン資料を作る**(素人向け) | `npm run slides` |
@@ -61,12 +62,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 自動テストは `npm run test:db` / `test:chunk` / `test:audio` / `test:mp3` /
 `test:gap` / `test:play` / `test:paper` / `test:bar` / `test:voice` /
 `test:frame` / `test:shift` / `test:speak` / `test:similar` / `test:gen` /
-`test:clip` / `test:exam` / `test:response` / `test:feel` の18個。
+`test:clip` / `test:exam` / `test:response` / `test:feel` / `test:offline` の19個。
 ユニットテストの枠組みは無く、どれも素の node / psql で走る。
 **`test:similar` は、窓口(Deno)を素の node で走らせる**(第5.247節)——
 Supabase も Deno も AI も偽物に差し替え、算段だけを確かめる。
 **この環境では窓口を1度も動かせない**ので、走らせられる形を作った。
 **`test:audio` は耳の代わりである**(こちらには音が聞こえない)。
+**`test:offline` は地下鉄の代わりである** —— **本当にサーバーを止めて**
+画面が開くかを測る(`setOffline(true)` は **`127.0.0.1` を切らない**ので、
+あれで測ると**控えが1本も効いていなくても緑になる**・第5.372節)。
 **`test:feel` は指の代わりである** —— 押したときの `transform` を
 **そのまま測る**(第5.371節)。「CSS に `:active` の決まりがある」では
 見張ったことにならない ——
@@ -509,6 +513,7 @@ CLAUDE.md が 1.08MB になり、**毎ターン読み込まれて「prompt is to
 | [`22-パタプラ風の言う練習.md`](docs/notes/22-パタプラ風の言う練習.md) | 言う番から始める・答えを隠す・チャンクで積む・Type A → B・型でまとめる・qrOrder.js |
 | [`25-読み上げ用の英文.md`](docs/notes/25-読み上げ用の英文.md) | 画面の英文と声にする英文を分ける・当てはめる順・分からないものは変えない・語の色はどちらの位置で数えるか・ここで転んだ6つ・**会社名の読みを「細かい指定」で教える(第5.266節)** |
 | [`26-手触りと相棒.md`](docs/notes/26-手触りと相棒.md) | **押した感じ・登場・相棒(キャラクター)・点の駆け上がり・動きを減らす人への断り・test:feel(第5.371節)** |
+| [`27-オフラインで開ける.md`](docs/notes/27-オフラインで開ける.md) | **Service Worker・音声の控え・手元の控え・人ごとに分ける・ログアウトで捨てる・古い版に固まらない・test:offline(第5.372節)** |
 | [`24-名詞句.md`](docs/notes/24-名詞句.md) | 名詞句100・副詞句50・コロケーション100(単語帳の冊)・目的語もセット・骨を固定して肉だけ変える・66 型ぜんぶに骨・席の種類・主語の性格・確かめてから出す・nophrase |
 
 ## 利用者に作業を頼むときは `docs/APPLY.md` をそのまま使う

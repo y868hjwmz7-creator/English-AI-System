@@ -54,6 +54,7 @@ import QrReview from './components/QrReview.jsx'
 import PronunciationPractice from './components/PronunciationPractice.jsx'
 import BgmLibrary from './components/BgmLibrary.jsx'
 import AssignBooks from './components/AssignBooks.jsx'
+import OfflineNote from './components/OfflineNote.jsx'
 import { getSession, loadProfile, onAuthChange, signOut } from './lib/auth.js'
 import { loadLearnerFeatures } from './lib/learnerFeatures.js'
 import { showsBasics, showsFrameQr } from './data/learnerFeatures.js'
@@ -62,6 +63,7 @@ import { shelfList, shelvesFor } from './data/shelves.js'
 import { loadShelfCounts } from './lib/shelfWords.js'
 import { NATIVE_FLOW_UNITS, nfUnitsFor } from './data/nativeFlow.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
+import { applyUpdate, clipClear, clipCount, useOnline } from './lib/offline.js'
 
 export default function App() {
   /**
@@ -158,6 +160,27 @@ export default function App() {
   // メニューを押した回数。**同じ画面をもう一度押したことを伝えるためだけ**に使う。
   // **早く帰る条件より前に置く**(hook は必ず同じ順で呼ばれなければならない)
   const [navTick, setNavTick] = useState(0)
+  /* ★ **電波があるか**(第5.372節)。**早く帰る条件より前に置く** ——
+       hook は必ず同じ順で呼ばれなければならない(第5.220節) */
+  const online = useOnline()
+  /** 新しい版が控えているか。`main.jsx` が合図を出す(**勝手に入れ替えない**) */
+  const [updateReady, setUpdateReady] = useState(false)
+  /** オフラインで鳴らせる音声の本数。**数えられなければ `null`** */
+  const [clipsKept, setClipsKept] = useState(null)
+  useEffect(() => {
+    let 生きている = true
+    /* **開いた直後には数えない。** Service Worker が動き出すまで待つ ——
+       急いで数えると、まだ居ないので `null` のまま固まる */
+    const t = window.setTimeout(() => {
+      clipCount().then((n) => { if (生きている) setClipsKept(n) }).catch(() => {})
+    }, 1500)
+    return () => { 生きている = false; window.clearTimeout(t) }
+  }, [])
+  useEffect(() => {
+    const 来た = () => setUpdateReady(true)
+    window.addEventListener('app-update-ready', 来た)
+    return () => window.removeEventListener('app-update-ready', 来た)
+  }, [])
   const [palette, setPalette] = useState(loadPalette)
   /* 説明の文を出すかどうか。**既定は「出さない」**(2026-09 利用者の指定・
      `src/lib/tips.js`)。消してはいないので、ここを「出す」にすれば戻る */
@@ -858,6 +881,10 @@ export default function App() {
         songs={songs} song={songNow} onSong={(v) => { setSong(v); saveBgmPick(v) }}
         showPrepare={profile?.role === 'trainer' || profile?.role === 'owner'}
         prepare={prepAll} onPrepare={(v) => { setPrepAll(v); setPrepareAllOn(v) }}
+        /* ★ **オフラインで鳴らせる音声**(第5.372節)。
+             **数えられなければ `null`** が渡り、あちらは行ごと出さない */
+        clipsKept={clipsKept}
+        onClipsClear={async () => { await clipClear(); setClipsKept(await clipCount()) }}
       />
 
       {session && (
@@ -975,6 +1002,14 @@ export default function App() {
           onPublish={goPublish}
         />
         </div>
+
+        {/* ★ ── 電波が無い / 新しい版がある(第5.372節)──────────
+               **いちばん上の知らせにする。** 下にある知らせは
+               「作れなかった」など、電波が無ければ起きて当たり前のもの ——
+               先に**なぜ起きているか**が見えていないと、読み違える。
+               **出す / 出さないを決めるのは `offlineNote()` 1か所。** */}
+        <OfflineNote offline={!online} update={updateReady}
+                     onReload={applyUpdate} />
 
         {/* ── 裏で作っている教材のお知らせ ────────────────────
             2026-09 利用者の指定。

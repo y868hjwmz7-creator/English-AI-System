@@ -181,6 +181,20 @@ audio { width: 100%; margin-top: 10px; }
 </div>
 
 <div class="card">
+  <h2><span class="step">7</span>この端末に残っている控え</h2>
+  <p class="hint">
+    アプリは、<strong>電波が無くても開けるように</strong>画面と音声を
+    この端末に控えています(第5.372節)。<br />
+    <strong>うまく動かないときの逃げ道</strong>として、ここで全部捨てられます。
+    捨てても<strong>お金はかかりません</strong> —— 次に電波のあるところで
+    開けば、また溜まります。
+  </p>
+  <ul class="rows" id="sw-rows"></ul>
+  <button class="sub" id="btn-sw-clear">控えを全部捨てて、入れ直す</button>
+  <div class="result" id="out-sw"><em>まだ押していません</em></div>
+</div>
+
+<div class="card">
   <h2>結果</h2>
   <p class="hint">下のボタンでコピーして、そのままチャットに貼ってください。</p>
   <button class="sub" id="btn-copy">結果をコピーする</button>
@@ -1056,6 +1070,72 @@ audio { width: 100%; margin-top: 10px; }
     log('  → 上げられるのは、あと ' + 最小.room.toFixed(1) + 'dB まで('
       + 最小.key + ' がいちばん余裕が小さい)')
   }());
+
+  /* ══════════════════════════════════════════════════════════════
+   * **この端末に残っている控え**(第5.372節)
+   *
+   *   アプリは Service Worker と Cache で、画面と音声をこの端末に控える。
+   *   ここは**その逃げ道**である。
+   *
+   *   ★ **アプリの中には置かない。** 控えが壊れているときは、
+   *     アプリ自身が開けないことがある —— **壊れているものに頼る逃げ道は、
+   *     逃げ道にならない。** だからこのページから、素の JS で直に捨てる。
+   * ══════════════════════════════════════════════════════════════ */
+  function 控えを数える() {
+    if (!('caches' in window) || !navigator.serviceWorker) {
+      el('sw-rows').innerHTML = '<li><span class="k">控え</span>'
+        + '<span class="v">この端末では使っていません</span></li>'
+      return
+    }
+    Promise.all([
+      caches.keys().catch(function () { return [] }),
+      navigator.serviceWorker.getRegistrations().catch(function () { return [] }),
+    ]).then(function (out) {
+      var names = out[0]
+      var regs = out[1]
+      return Promise.all(names.map(function (n) {
+        return caches.open(n).then(function (c) { return c.keys() })
+          .then(function (k) { return { name: n, n: k.length } })
+          .catch(function () { return { name: n, n: null } })
+      })).then(function (rows) {
+        el('sw-rows').innerHTML =
+          '<li><span class="k">Service Worker</span><span class="v">'
+          + (regs.length ? regs.length + ' 件' : 'なし') + '</span></li>'
+          + rows.map(function (r) {
+            return '<li><span class="k">' + r.name + '</span><span class="v">'
+              + (r.n === null ? '(数えられません)' : r.n + ' 件') + '</span></li>'
+          }).join('')
+        log('控え: Service Worker ' + regs.length + ' 件 / '
+          + rows.map(function (r) { return r.name + ' ' + r.n }).join(', '))
+        results.caches = rows
+      })
+    }).catch(function () { /* 数えられないだけ。何も壊れていない */ })
+  }
+  控えを数える()
+
+  el('btn-sw-clear').addEventListener('click', function () {
+    var btn = this
+    btn.disabled = true
+    el('out-sw').innerHTML = '<em>捨てています…</em>'
+    Promise.all([
+      ('caches' in window)
+        ? caches.keys().then(function (ks) {
+          return Promise.all(ks.map(function (k) { return caches.delete(k) }))
+        }) : Promise.resolve([]),
+      navigator.serviceWorker
+        ? navigator.serviceWorker.getRegistrations().then(function (rs) {
+          return Promise.all(rs.map(function (r) { return r.unregister() }))
+        }) : Promise.resolve([]),
+    ]).then(function () {
+      el('out-sw').innerHTML = '<span class="ok">捨てました。'
+        + '<strong>アプリを開き直してください</strong>(控えは入れ直されます)。</span>'
+      log('控えを全部捨てた')
+      控えを数える()
+    }).catch(function (e) {
+      el('out-sw').innerHTML = '<span class="warn">捨てられませんでした: '
+        + (e && e.message ? e.message : e) + '</span>'
+    }).then(function () { btn.disabled = false })
+  })
 
   el('btn-copy').addEventListener('click', function () {
     var btn = this
