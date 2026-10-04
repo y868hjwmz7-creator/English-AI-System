@@ -11005,10 +11005,15 @@ button.wbfilter-ctl { text-align: left; }
 }
 .buddy-ink { fill: var(--accent); stroke: var(--accent); }
 .buddy-blush { fill: var(--series-5); opacity: 0.5; stroke: none; }
+/* 冠羽(とさか)と翼とくちばし。**新しい色は1つも足していない** */
+.buddy-crest { fill: var(--accent); stroke: none; }
+.buddy-wing  { fill: var(--accent-line); stroke: none; }
+.buddy-beak  { fill: var(--series-4); stroke: none; }
 
 /* やり切った顔だけ、からだを濃くする(**色は既にあるものから選ぶ**) */
 .buddy--proud .buddy-body { fill: var(--accent); stroke: var(--accent); }
 .buddy--proud .buddy-ink  { fill: var(--on-accent); stroke: var(--on-accent); }
+.buddy--proud .buddy-wing { fill: var(--accent-line); }
 .buddy--proud .buddy-blush { opacity: 0.35; }
 
 /* 息。**止まっている絵は死んで見える。**
