@@ -2199,7 +2199,18 @@ for (const [label, want] of Object.entries(WANT)) {
    応答問題にだけ出て、**ほかの教材には1つも出ない。**
    ══════════════════════════════════════════════════════════════════════ */
 {
-  const 名 = '正解を聞き流す'
+  /* ★ **札を書き写さない**(第5.368節)。
+       第5.355節で「正解を聞き流す」→「**応答を聞き流す**」に変えたのに、
+       **ここだけ古い札のまま**だった ——
+       **画面は1ミリも壊れていないのに、この見張りが2本赤いまま**だった
+       (CLAUDE.md「式も、関数の名前も書き写さない」。4度めである)。
+       **画面から読み取る** —— 次に呼び名が変わった日も付いてくる。
+       目じるしは `answerRadio` を押すボタン(`listenAnswers`)。 */
+  const lv = readFileSync(
+    new URL('../src/components/LessonView.jsx', import.meta.url), 'utf8')
+  const 名 = /onClick=\{listenAnswers\}[\s\S]*?<SpeakerIcon \/>([^<\n{]+)/
+    .exec(lv)?.[1]?.trim() ?? ''
+  if (!名) ng('正解の聞き流し … 画面から札を読み取れなかった')
   /* ── ① **出る側。** 応答問題で押せて、聞き流しが開く ───────────── */
   for (const w of [1280, 390]) {
     const page = await browser.newPage({ viewport: { width: w, height: 820 } })
@@ -11415,7 +11426,7 @@ const SCREENS = [
   ['speechboard', ''], ['speechboard', 'done=no'], ['speechboard', 'role=learner'],
   ['', 'role=trainer&who=g1'],
   /* ★ **応答問題のレッスン表示**(第5.334節)。練習の行に
-       「正解を聞き流す」が増えて **4つ横に並ぶ**ので、
+       「応答を聞き流す」が増えて **4つ横に並ぶ**ので、
        狭い画面では折り返す —— **横のすき間がいちばん出やすい形**である。
        **ボタンの色**も、ここで数えられる(地の色のままなら赤くなる) */
   ['', 'role=trainer&who=g1&kind=response'],
