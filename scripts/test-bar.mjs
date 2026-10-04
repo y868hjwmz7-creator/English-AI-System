@@ -2294,11 +2294,36 @@ for (const [label, want] of Object.entries(WANT)) {
     await page.close()
   }
 
-  /* ── ③ **出ない側。** ほかの教材には1つも出ない
+  /* ── ②' **テスト対策の応答系にも出る**(第5.355節・利用者の指定)。
+
+           > **応答問題、VERSANT PART Aなど**、応答系の問題の聞き流しが、
+           > 解答の正解の選択肢が読み上げられるだけになっています
+
+         骨組みの `kind=exam` は **TOEIC L&R Part 2**(まさに応答系)である。
+         **ここを「出ない側」に入れていたのは、こちらの間違いだった** ——
+         古い札(`正解を聞き流す`)で探していたので
+         **「出ていない」と読めて、緑のままだった**(第5.368節で札を
+         画面から読むようにして、初めて表に出た)。
+
+         **判断は `asksAndReplies()` 1か所**である ——
+         聞いて返す段を持つ教材には出て、持たない教材には出ない。 */
+  {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?role=trainer&who=g1&kind=exam`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(400)
+    const 札 = await page.evaluate(() => [...document.querySelectorAll('.practice-row button')]
+      .map((b) => b.textContent.trim()))
+    if (札.includes(名)) ok(`正解の聞き流し … 応答系のテスト対策にも出る(${札.join(' / ')})`)
+    else ng('正解の聞き流し … 応答系のテスト対策に出ていない', JSON.stringify(札))
+    await page.close()
+  }
+
+  /* ── ③ **出ない側。** 聞いて返す段を持たない教材には1つも出ない
            (効かない操作を見せない・CLAUDE.md)。
            **ここを見ないと、どの教材にも出す形に書き換えても緑のまま**である */
   for (const [名前, qs] of [
-    ['テスト対策', 'kind=exam'], ['会話', ''], ['文型ドリル', 'kind=drill'],
+    ['会話', ''], ['文型ドリル', 'kind=drill'],
     ['スピーチ', 'kind=speech'],
   ]) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
