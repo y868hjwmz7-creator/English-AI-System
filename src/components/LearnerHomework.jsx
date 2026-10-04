@@ -12,7 +12,7 @@ import { askFields } from '../lib/choiceLines.js'
 import Loading from './Loading.jsx'
 import { cefrLabel } from '../data/cefr.js'
 import {
-  audioJaOf, exerciseType, isPassageSection, sectionLabel,
+  audioJaOf, exerciseType, isPassageSection, sectionLabel, sectionOpenLabel,
 } from '../data/exerciseTypes.js'
 import PassagePractice from './PassagePractice.jsx'
 import TeachingNote from './TeachingNote.jsx'
@@ -761,10 +761,19 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                     設問は「何を訊かれているか」であって、答えではない */}
                                 {it.question_ja && <div className="answer-ja">{it.question_ja}</div>}
                                 {it.hint && <div className="field-hint">与える語: {it.hint}</div>}
-                                {/* 解答は、答えを考える前に見えてはいけない */}
-                                {it.answer && type?.hideAnswerFromLearner ? (
+                                {/* 解答は、答えを考える前に見えてはいけない。
+
+                                    ★ **正解が無くても、開いて確かめるものがある**
+                                    (第5.369節)。**復唱**は英文を画面に出さないので、
+                                    `answer` が無い —— ここが `it.answer` だけを
+                                    見ていたため、**言ったあとに何を言われたのかを
+                                    確かめる道が1つも無かった**(行き止まり)。
+                                    **何と書くかは `sectionOpenLabel()` 1か所** */}
+                                {((it.answer && type?.hideAnswerFromLearner)
+                                  || (type?.hidePromptFromLearner && !it.answer && it.audio_text)
+                                ) ? (
                                   <details className="answer">
-                                    <summary>解答を見る</summary>
+                                    <summary>{sectionOpenLabel(sec.exercise_type, false)}</summary>
                                     {/* ★ **何を言われたのかを出す**（第5.346節）。
                                          リスニングは英文を見せずに聞かせるので、
                                          **答え合わせで読み上げた英文そのものを出す**
@@ -785,6 +794,9 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                         訳と読み上げも付く(2026-09 利用者の指定)。
                                         **`<details>` の中なので、開くまでは鳴らせない。**
                                         答えが先に耳から入ることはない */}
+                                    {/* ★ **正解が無い問には出さない**(第5.369節)。
+                                         復唱は `answer` が空なので、空の箱を出さない */}
+                                    {it.answer && (
                                     <AnswerEn
                                       text={it.answer} ja={it.answer_ja} level={a.material?.level}
                                       statuses={wordStatuses}
@@ -797,6 +809,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                         voiceIds: a.material?.voiceIds,
                                       })}
                                     />
+                                    )}
                                     {it.answer_alt && (
                                       <div className="muted">別解: {it.answer_alt}</div>
                                     )}

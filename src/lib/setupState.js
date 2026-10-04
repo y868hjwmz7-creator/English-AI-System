@@ -56,7 +56,7 @@ import {
 /* ── 貼る SQL の印 ──────────────────────────────────────────── */
 
 /** いちばん新しい移行。**`supabase/migrations/` と必ずそろえる** */
-export const NEWEST_MIGRATION = '0075'
+export const NEWEST_MIGRATION = '0076'
 
 /**
  * その移行が入っているかを見る印。
@@ -205,9 +205,22 @@ export const NEWEST_MARK = {
        0074(列)も 0073(値)も 0072(値)も 0071(関数の中身)も、
        まとめた1つと `check.sql` の側でそのまま見張り続ける ——
        **消していない** */
-  rpc: 'ledger_fields',
-  has: 'question',
-  label: '英文の台帳に「設問」も積む(0075)',
+  /* ★ **0076 は、制約の一覧に値を1つ足すだけの移行である**(第5.369節)。
+       増えるのは `material_sections_type_check` の中の
+       `repeat_blind`(復唱)1つだけ ——
+       **0075 の `ledger_fields` で見ると、0075 を貼った時点で
+       「もう入っています」**と出てしまう(いちばん悪い壊れ方)。
+
+       だから **`section_types()`(0063)に訊いて、`repeat_blind` が
+       入っているか**で見る。0067 で `vocab_recall` を見たのと、
+       まったく同じ立て付けである。
+
+       0075(関数の中身)も 0074(列)も 0073 / 0072(値)も、
+       まとめた1つと `check.sql` の側でそのまま見張り続ける ——
+       **消していない** */
+  rpc: 'section_types',
+  has: 'repeat_blind',
+  label: '演習の種類に「復唱」を足す(0076)',
 }
 
 /** 貼る SQL の置き場(**押せる URL**。`raw.` は非公開だと開けない) */

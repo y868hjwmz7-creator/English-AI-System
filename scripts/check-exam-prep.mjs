@@ -2280,5 +2280,118 @@ console.log('\n▶ 応答と、読み上げた英文の訳(第5.346節)')
     '設問 … すでにある教材のぶんも積み直す(貼る前の設問が抜け落ちない)')
 }
 
+/* ============================================================================
+   ★ **復唱は、英文を初めから見せない**(第5.369節・2026-10-04 利用者の指定)
+
+     > 英文を繰り返す問題、VERSANTのPART Bのような問題ですが、
+     > **初めから英文が見えている仕様は絶対にやめてください**
+
+   **音読と復唱は正反対である。** ところが3つとも `read_aloud`(音読)で
+   作っていたので、**聞く前に答えが見えていた** ——
+   見て読めるなら、ただの音読である。
+
+   ── **見分け方を、書き写さない** ──────────────────────────────
+
+     どの PART が復唱なのかは、**その PART が自分で書いている言葉**
+     (`label` / `what`)から読み取る。
+     **一覧をこちらに持たない** —— PART を足した日に付いてくる。
+     突き合わせる相手は**仕組みの側**(`hidePromptFromLearner`)なので、
+     **同じ出どころを見ていない**(第5.337節で踏んだ形を避ける)。
+   ========================================================================== */
+{
+  const { exerciseType, sectionOpenLabel } = await import('../src/data/exerciseTypes.js')
+  const { canQuickRespond, QR_PAIR_TYPES } = await import('../src/lib/quickResponse.js')
+
+  /** その PART は「聞いて繰り返す」ものか(PART 自身の言葉から読み取る) */
+  const 復唱か = (p) => /復唱|聞こえた.*繰り返|Listen and Repeat/.test(`${p.label} ${p.what ?? ''}`)
+  /** その PART は「画面の英文を読み上げる」ものか */
+  const 音読か = (p) => !復唱か(p) && /音読|画面の英文/.test(`${p.label} ${p.what ?? ''}`)
+
+  const 隠す = (t) => Boolean(exerciseType(t)?.hidePromptFromLearner)
+
+  /* ── ① **復唱の PART は、英文を出さない演習だけを使う** ── */
+  const 見えている = []
+  const 復唱の数 = []
+  for (const { exam, part } of PICKABLE) {
+    if (!復唱か(part)) continue
+    復唱の数.push(`${exam.id}/${part.id}`)
+    const types = (examSectionsByKey(examKeyOf(exam.id, part.id)) ?? [])
+      .map((x) => x.exercise_type)
+    if (!types.length || !types.every(隠す)) 見えている.push(`${exam.id}/${part.id}(${types.join(',')})`)
+  }
+  if (!復唱の数.length) {
+    ng('復唱 … 「聞いて繰り返す」PART が1つも見つからない(目じるしが効いていない)')
+  } else if (見えている.length) {
+    ng('復唱 … 英文が初めから見えている PART がある', 見えている.join(' / '))
+  } else {
+    ok(`復唱 … ${復唱の数.join(' / ')} は、英文を画面に出さない演習を使っている`)
+  }
+
+  /* ── ② **音読の PART は、これまでどおり英文を出す** ──
+       **出る側と出ない側の両方**(CLAUDE.md)。片方だけだと、
+       **ぜんぶ隠す形**に書き換えても緑のままになる */
+  const 音読 = PICKABLE.filter(({ part }) => 音読か(part))
+  const 隠れてしまった = 音読.filter(({ exam, part }) =>
+    (examSectionsByKey(examKeyOf(exam.id, part.id)) ?? []).some((x) => 隠す(x.exercise_type)))
+  if (!音読.length) {
+    ng('復唱 … 「音読」の PART が1つも見つからない(比べる相手が無い)')
+  } else {
+    is2(!隠れてしまった.length,
+      `復唱 … 音読の PART(${音読.map((x) => `${x.exam.id}/${x.part.id}`).join(' / ')})は、英文を出したまま`,
+      隠れてしまった.map((x) => `${x.exam.id}/${x.part.id}`).join(' / '))
+  }
+
+  /* ── ③ **窓口が、画面に出る欄を出していない** ──
+       **出していない欄は書きようがない**(`strict: true`)。
+       欄の名前はこちらに書かない —— 復唱の演習を、段から読み取る */
+  const 復唱型 = [...new Set(PICKABLE.filter(({ part }) => 復唱か(part))
+    .flatMap(({ exam, part }) => (examSectionsByKey(examKeyOf(exam.id, part.id)) ?? [])
+      .map((x) => x.exercise_type)))]
+  const fnSrc3 = noC(read('supabase/functions/generate-material/index.ts'))
+  for (const t of 復唱型) {
+    const 欄 = new RegExp(`${t}:\\s*\\{\\s*required:\\s*\\[([^\\]]*)\\]`).exec(fnSrc3)?.[1] ?? ''
+    is2(!!欄 && !/'prompt_en'/.test(欄) && /'audio_text'/.test(欄),
+      `復唱 … 窓口は ${t} に画面へ出る欄を出していない(読み上げる欄だけ)`,
+      欄.trim() || '(窓口にその演習が無い)')
+  }
+
+  /* ── ④ **画面が、英文を伏せて・あとで確かめられるか** ──
+       **行き止まりを作らない**(CLAUDE.md)。伏せたまま確かめられないと、
+       言ったあとに何を言われたのか分からない */
+  const lv = noC(read('src/components/LessonView.jsx'))
+  const lh = noC(read('src/components/LearnerHomework.jsx'))
+  is2(/!secType\?\.hidePromptFromLearner && it\.prompt_en/.test(lv),
+    '復唱 … レッスン表示は、伏せる演習の英文を出さない')
+  is2(/hidePromptFromLearner && it\.audio_text/.test(lv),
+    '復唱 … 開いたときに、読み上げた英文が出る(レッスン表示)')
+  is2(/hidePromptFromLearner && !it\.answer && it\.audio_text/.test(lh),
+    '復唱 … ゲストの画面でも、正解が無くても開いて確かめられる')
+  for (const t of 復唱型) {
+    is2(sectionOpenLabel(t, false) === '英文を見る',
+      `復唱 … ${t} の開くボタンは「解答」と書かない`, sectionOpenLabel(t, false))
+  }
+
+  /* ── ⑤ **「演習の種類を足す場所は5つ」の5つめ** ──
+       Quick Response に足し忘れると、その教材だけ薄くなる(第5.256節) */
+  for (const t of 復唱型) {
+    is2(canQuickRespond(t), `復唱 … ${t} が Quick Response の対にある`,
+      QR_PAIR_TYPES.includes(t) ? '' : '入っていない')
+  }
+
+  /* ── ⑥ **表の制約に入っているか** ──
+       足し忘れると、**発行した瞬間に**止まる(第5.256節で踏んだ形) */
+  /* **1ファイルずつ見る。** はじめ2つを `join` して1度に探していたので、
+     **移行から外しても、まとめた1つに残っていて緑のまま**だった
+     (窓を広く取ったときの、いつもの形)。
+     **移行と、利用者が貼るファイルの両方**に入っていないといけない */
+  for (const f of ['supabase/migrations/0076_repeat_blind.sql',
+    'supabase/apply/pending_matome.sql']) {
+    const sql = read(f)
+    for (const t of 復唱型) {
+      is2(new RegExp(`'${t}'`).test(sql), `復唱 … ${t} が ${f.split('/').pop()} に入っている`)
+    }
+  }
+}
+
 console.log(bad === 0 ? '\n✅ テスト対策の検証は、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

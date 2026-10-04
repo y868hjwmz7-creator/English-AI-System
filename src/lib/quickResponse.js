@@ -80,6 +80,13 @@ const PAIR_FIELDS = {
      (`docs/notes/01` の一覧に5つめとして足した)。 */
   vocab_recall:    { ja: 'prompt_ja', en: 'answer', group: 'word' },
   phrase_recall:   { ja: 'prompt_ja', en: 'answer', group: 'word' },
+  /* ★ **復唱**(第5.369節)。英文は `audio_text` に入っている ——
+       画面に出さないためである。**日本語 → 英語で言う**練習に
+       そのまま回せる(本番と同じ「聞いて言う」ではないが、
+       言えるようになるための練習としては同じ向きである)。
+       **「演習の種類を足す場所は5つ」の5つめ**(`docs/notes/01`)——
+       ここに足し忘れると、その教材だけ Quick Response が薄くなる */
+  repeat_blind:    { ja: 'prompt_ja', en: 'audio_text', group: 'sentence' },
   // 旧「長文」。既存の教材でも使えるように残す
   read_aloud:      { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },
   overlapping:     { ja: 'prompt_ja', en: 'prompt_en', group: 'sentence' },

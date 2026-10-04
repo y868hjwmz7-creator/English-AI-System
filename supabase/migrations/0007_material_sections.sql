@@ -95,6 +95,10 @@ alter table public.material_sections
     'comprehension', 'discussion', 'audience_qa', 'vocab_note', 'culture_note',
     -- 旧「長文」で使っていたもの。既存の行のために残す
     'read_aloud', 'overlapping', 'shadowing', 'repeating',
+    -- ★ **復唱**(0076・第5.369節)。英文を画面に出さず、聞いて繰り返す。
+    --   音読(`read_aloud`)とは**正反対** —— あちらは画面の英文を読み上げる。
+    --   VERSANT Part B / TOEFL Listen and Repeat がこれである
+    'repeat_blind',
     -- 穴埋め。**新規では使わない**(0034 で誤り訂正へ差し替えた)。
     -- すでに作った教材を開くために残す
     'fill_blank',

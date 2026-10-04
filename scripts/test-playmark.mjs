@@ -38,7 +38,7 @@ import {
   DEFAULT_SECTIONS, MAX_ITEMS, PARENT_SECTION, RECALL_PER_WORD,
   EXERCISE_TYPES, SCALABLE_SECTIONS, amountsFor, answerHasAudio, defaultSectionsFor,
   exerciseLabel, isBlankItem, isChunkSection, isIncluded, isPassageSection, isWrongShape,
-  noteIsAnswer, sectionLabel, sectionsFor,
+  noteIsAnswer, sectionLabel, sectionOpenLabel, sectionsFor,
 } from '../src/data/exerciseTypes.js'
 /* かたまりの分類と練習(第5.230節)。**呼び名はここ1か所** */
 import {
@@ -836,7 +836,18 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     const lv = read('src/components/LessonView.jsx')
     ok(/secNoteIsAnswer && it\.note/.test(lv),
       'レッスン表示が、手がかりを開けるようにしている')
-    ok(/手がかりを見る/.test(lv), '「解答」と書かない(正解が無いものに解答は無い)')
+    /* ★ **札は `revealLabel()` 1か所に移った**(第5.369節)。
+         画面の中の文字で探していたので、**寄せた日に赤くなった**
+         (仕組みは無傷。CLAUDE.md「式も、関数の名前も書き写さない」)。
+         **呼んでいるか**と、**その関数が本当にそう返すか**を見る */
+    ok(/sectionOpenLabel\(sec\.exercise_type/.test(lv),
+      'レッスン表示は、札を1か所(`sectionOpenLabel()`)から取る')
+    ok(sectionOpenLabel('audience_qa', false) === '手がかりを見る'
+      && sectionOpenLabel('comprehension', false) === '解答を見る'
+      && sectionOpenLabel('repeat_blind', false) === '英文を見る',
+    '「解答」と書かない(正解が無いものに解答は無い)',
+    [sectionOpenLabel('audience_qa', false), sectionOpenLabel('comprehension', false),
+      sectionOpenLabel('repeat_blind', false)].join(' / '))
   }
 
   /* **場面を足した**(利用者の指定「『プレゼン』などを追加して下さい」)。
@@ -7352,19 +7363,32 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
          **その移行が本当にその関数を作っているか**を見る ——
          前の移行の関数を名乗ったままだと、
          **貼る前でも「もう入っています」**と出る(いちばん悪い壊れ方) */
-      const 定義 = new RegExp(
-        `create or replace function public\\.${関数}\\(\\)[\\s\\S]*?\\$\\$;`).exec(sql)?.[0] ?? ''
-      ok(!!定義, `${番} … 印の関数(${関数})を、その移行が作っている`,
-        定義 ? '' : `${newestFile} に create が無い`)
-      /* ★ **一覧を返す関数なら、`has` は必須**(第5.368節)。
+      /* ★ **関数は、前の移行が作っていてよい**(第5.369節)。
+
+           もとは「**いちばん新しい移行が、その関数を作っているか**」で
+           見ていた。0076 は**制約の一覧に値を1つ足すだけ**で、
+           訊く相手は 0063 が作った `section_types()` である ——
+           **仕組みは1ミリも壊れていないのに赤くなった**
+           (0072 / 0073 もこの形だった)。
+
+           **本当に守りたいのは1つである** ——
+           **印が見る中身(`has`)が、いちばん新しい移行の中にある**こと。
+           これなら 0072(値)・0075(関数の中身)・0076(値)の
+           どの形でも、そのまま付いてくる。 */
+      const どこかで作る = readdirSync(new URL('../supabase/migrations/', import.meta.url))
+        .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+        .some((f) => new RegExp(`create or replace function public\\.${関数}\\(\\)`)
+          .test(readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8')))
+      ok(どこかで作る, `${番} … 印の関数(${関数})を、どれかの移行が作っている`)
+      /* ★ **関数の印は、中身まで見る**(第5.368節)。
            「在るかどうか」だけで判じると、**前の移行で作った関数が
            残っているだけで「もう入っています」**と出る
-           (CLAUDE.md「いちばん悪い壊れ方」)。
-           **`returns setof` かどうかは、移行のコードから読み取る** */
-      const 一覧を返す = /returns setof/.test(定義)
-      ok(一覧を返す ? (!!中身 && new RegExp(`'${中身}'`).test(定義)) : !中身,
-        `${番} … 一覧を返す関数なら中身まで見る(いま ${中身 || 'なし'})`,
-        `一覧を返す ${一覧を返す} / has ${中身 || 'なし'}`)
+           (CLAUDE.md「いちばん悪い壊れ方」) */
+      ok(!!中身, `${番} … 関数の印は `.concat('`has`', ' で中身まで見る'),
+        中身 ? '' : '`has` が無い')
+      ok(!!中身 && new RegExp(`'${中身}'`).test(sql),
+        `${番} … 印が見る中身(${中身 || 'なし'})が、その移行の中にある`,
+        `${newestFile} の中に '${中身}' があるか`)
       /* **コメントを落としてから数える**(CLAUDE.md)——
          `check.sql` の説明にも同じ関数の名前が出てくるので、
          そのままだと**行を書き換えても緑のまま**になる(実際にそうなった) */

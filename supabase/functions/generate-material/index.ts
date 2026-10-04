@@ -523,6 +523,13 @@ const SECTION_INSTRUCTIONS: Record<string, string> = {
 
   // ── 旧「長文」で使っていたもの ────────────────────────────
   read_aloud:   '音読。prompt_en に英文、prompt_ja に訳を入れる。',
+  /* ★ **復唱**(第5.369節・2026-10-04 利用者の指定
+       「初めから英文が見えている仕様は絶対にやめてください」)。
+     **音読と正反対である** —— 英文を画面に出さないので、
+     `prompt_en` ではなく `audio_text` に入れる(リスニングと同じ欄)。 */
+  repeat_blind: '復唱(聞いて、そのまま繰り返す)。**audio_text に英文**を入れる'
+    + '(画面には出さず、読み上げるだけの欄である)。prompt_ja にその訳。'
+    + '**prompt_en は使わない** —— 英文が画面に見えたら、復唱にならない。',
   overlapping:  'オーバーラッピング。prompt_en に英文、prompt_ja に訳を入れる。',
   shadowing:    'シャドーイング。prompt_en に英文、prompt_ja に訳を入れる。',
   repeating:    'リピーティング。1文を短めにする。prompt_en に英文、prompt_ja に訳を入れる。',
@@ -793,6 +800,12 @@ const SECTION_FIELDS: Record<string, { required: string[]; optional: string[] }>
 
   // 旧「長文」で使っていたもの。既存の教材を作り直せるように残す
   read_aloud:      { required: ['prompt_en', 'prompt_ja'], optional: [] },
+  /* ★ **復唱**(第5.369節)。**`prompt_en` を欄ごと出さない** ——
+       出さなければ書きようがない(`strict: true`。
+       ディスカッションから `answer` を外したのと、まったく同じ作法)。
+       **訳(`prompt_ja`)は必須** —— 「英文を見る」の中で出すものなので、
+       あったり無かったりでは困る(リスニングの `answer_ja` と同じ理由)。 */
+  repeat_blind:    { required: ['audio_text', 'prompt_ja'], optional: ['tag_no'] },
   overlapping:     { required: ['prompt_en', 'prompt_ja'], optional: [] },
   shadowing:       { required: ['prompt_en', 'prompt_ja'], optional: [] },
   repeating:       { required: ['prompt_en', 'prompt_ja'], optional: [] },

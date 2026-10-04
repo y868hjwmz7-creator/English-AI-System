@@ -329,6 +329,46 @@ export const EXERCISE_TYPES = [
     fields: ['prompt_en', 'prompt_ja'], audioFrom: 'prompt_en',
     grammarFrom: 'prompt_en',
   },
+  /**
+   * ★ **復唱(聞いて、そのまま繰り返す)**(第5.369節・2026-10-04 利用者の指定)。
+   *
+   *   > 英文を繰り返す問題、VERSANTのPART Bのような問題ですが、
+   *   > **初めから英文が見えている仕様は絶対にやめてください**
+   *
+   * **音読と復唱は、正反対である。**
+   *
+   *   | | 英文 | どの PART |
+   *   |---|---|---|
+   *   | **音読**(`read_aloud`) | **見せる**(画面の英文を読み上げる) | TOEIC Speaking Q1-2 / 英検の二次試験 |
+   *   | **復唱**(ここ) | **見せない**(聞いてから繰り返す) | VERSANT Part B / TOEFL Listen and Repeat |
+   *
+   * ところが**3つとも `read_aloud` で作っていた。** `read_aloud` は
+   * `prompt_en` を画面にそのまま出すので、**聞く前に答えが見えていた** ——
+   * 復唱の練習にならない(見て読めば、ただの音読である)。
+   *
+   * **英文は `audio_text` に入れる。** そうすれば
+   * `hidePromptFromLearner` の仕組み(リスニングと同じもの)に乗る ——
+   *
+   *   ・画面に英文を出さない
+   *   ・読み上げは鳴る(`audioFrom`)
+   *   ・**訳も伏せる**(`audioJaFrom`。訳が見えたら中身が割れる)
+   *   ・「英文を見る」を押すと、**読み上げた英文と訳**が出る
+   *
+   * **`prompt_ja` は `fields` に入れない。** あちらに入れると
+   * `isBlankItem` が必須として数え、訳の無い問が1問残らず落ちる
+   * (第5.341節で踏んだ形)。**窓口の側で必須**にしてある。
+   *
+   * **`answerLang` は持たない** —— 正解が1つに決まるものではないので、
+   * `asksAndReplies()`(聞いて返す = 読み上げ文 → 応答の対)には入らない。
+   */
+  {
+    id: 'repeat_blind', label: '復唱',
+    instruction: '英文は見ずに聞いて、そのまま繰り返してください。',
+    fields: ['audio_text'], audioFrom: 'audio_text',
+    audioJaFrom: 'prompt_ja',
+    grammarFrom: 'audio_text',
+    hidePromptFromLearner: true,
+  },
   {
     id: 'overlapping', label: 'オーバーラッピング',
     instruction: 'お手本に重ねて読んでください。',
@@ -818,6 +858,34 @@ export const isCardSection = (typeId) =>
 export const noteIsAnswer = (typeId) => {
   const fields = exerciseType(typeId)?.fields ?? []
   return fields.includes('question') && !fields.includes('answer')
+}
+
+/**
+ * ★ **「開く」ボタンに、何と書くか**(第5.369節)。
+ *
+ * **名前に `revealLabel` は使えない。** `tapReveal.js` に
+ * **別のもの**(単語帳のタップの札)が、その名前で居る ——
+ * **違うものに同じ名前を付けない**(CLAUDE.md。作る前に `grep` した日に気づいた)。
+ *
+ * **判断はここ1か所。** 画面の中で `sec.exercise_type === '…'` と書かない
+ * (3つの画面に同じ枝が散り、必ず片方だけ古くなる)。
+ *
+ *   ・本文(記事・会話) … **訳**を伏せている
+ *   ・設問だけで正解が無いもの … **手がかり**(`noteIsAnswer()`)
+ *   ・**復唱** … 正解は無く、伏せているのは**英文そのもの**である
+ *   ・それ以外 … **解答**
+ *
+ * **「解答」と書かない**(正解が無いものに解答は無い・CLAUDE.md)。
+ * 復唱に「解答を見る」と出ていると、**何が出てくるのか分からない。**
+ */
+export const sectionOpenLabel = (typeId, open) => {
+  if (isPassageSection(typeId)) return open ? '訳を隠す' : '訳を見る'
+  if (noteIsAnswer(typeId)) return open ? '手がかりを隠す' : '手がかりを見る'
+  /* **解答の欄を持たないのに、伏せているものがある**種類(復唱)。
+     **種類の名前を並べない** —— 欄の形から決まる */
+  const fields = exerciseType(typeId)?.fields ?? []
+  if (!fields.includes('answer')) return open ? '英文を隠す' : '英文を見る'
+  return open ? '解答を隠す' : '解答を見る'
 }
 
 /**

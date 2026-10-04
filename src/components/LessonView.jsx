@@ -19,7 +19,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   audioJaOf,
   countLabel, countUnit, exerciseType, isCardSection, isPassageSection,
-  noteIsAnswer, sectionLabel,
+  noteIsAnswer, sectionLabel, sectionOpenLabel,
 } from '../data/exerciseTypes.js'
 import AiNote from './AiNote.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
@@ -2865,12 +2865,12 @@ export default function LessonView({
                     <button type="button" className="btn btn--small btn--ghost lesson-reveal"
                             aria-expanded={isOpen(k(it, i))}
                             onClick={() => toggleItem(k(it, i))}>
-                      {secIsPassage
-                        ? (isOpen(k(it, i)) ? '訳を隠す' : '訳を見る')
-                        /* **「解答」と書かない。** 正解が無いものに解答は無い */
-                        : secNoteIsAnswer
-                          ? (isOpen(k(it, i)) ? '手がかりを隠す' : '手がかりを見る')
-                          : (isOpen(k(it, i)) ? '解答を隠す' : '解答を見る')}
+                      {/* ★ **何と書くかは `sectionOpenLabel()` 1か所**(第5.369節)。
+                           **「解答」と書かない。** 正解が無いものに解答は無い。
+                           ここに枝を並べていたので、**復唱を足した日に
+                           「解答を見る」と出る**ところだった
+                           (伏せているのは英文そのものである) */}
+                      {sectionOpenLabel(sec.exercise_type, isOpen(k(it, i)))}
                     </button>
                   )}
 

@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   58行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   59行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -293,4 +293,12 @@ from (
               and pg_get_functiondef(oid) like '%question%')
     and exists (select 1 from pg_proc where proname = 'sync_material_sentences'
               and pg_get_functiondef(oid) like '%ledger_fields%'), 57
+  -- **制約そのものを見る**(0076・第5.369節)。0067 とまったく同じ見方 ——
+  -- 表も列も行も増えない移行なので、**一覧に `repeat_blind` が
+  -- 入っているか**で見る。貼り忘れると、VERSANT Part B と
+  -- TOEFL Listen and Repeat が**発行した瞬間に**止まる
+  union all select '0076 演習の種類に「復唱」(pending_matome.sql)',
+    exists (select 1 from pg_constraint
+            where conname = 'material_sections_type_check'
+              and pg_get_constraintdef(oid) like '%repeat_blind%'), 58
 ) t order by 順;
