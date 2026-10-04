@@ -14366,6 +14366,95 @@ console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第
     '「音楽」とは別の名前にしてある(違うものに同じ名前を付けない)')
 }
 
+/* ============================================================================
+   ★ **画面が渡す欄は、ぜんぶ窓口まで通っているか**(第5.370節・2026-10-04)
+
+     > その他にも機能しなさそうなことがあれば直してください
+
+   洗い出して、**1件見つかった** ——
+   **`speakerGenders`(話す人の性別)が、窓口に1文字も届いていなかった。**
+
+     画面(`MaterialForm`)   … 2026-09 から渡していた
+     `generateSection()`     … **受け取っていなかった = 入口で捨てていた**
+     窓口(`generate-material`)… `body.speakerGenders` を読む用意はできていた
+
+   `generateSection` は欄を**1つずつ名前で**受け取る形なので、
+   **名前が無い欄は、呼ぶ側がいくら渡しても届かない。**
+   しかも**教材は普通にできあがる**ので、誰も気づけない
+   ——「女性の声が男性役をしゃべる」は、一度も直っていなかった。
+
+   ── **守り方** ────────────────────────────────────────────────
+
+     ①画面が渡す欄が、`generateSection` の中に名前として出てくる
+     ②`generateSection` が送る欄を、窓口が `body.X` で読む
+
+     ①と②がそろえば、**端から端まで通っている**ことになる
+     (途中で名前を変える欄 —— `wordDrill` → `wordMin` / `wordMax` ——
+     も、送る側の名前で②が見るので、そのまま付いてくる)。
+     **一覧をこちらに持たない。** 欄を足した日に、ひとりでに付いてくる。
+   ========================================================================== */
+{
+  const 中身 = (src, from) => {
+    /* 括弧の数を数えて、そのオブジェクト1つだけを切り出す
+       (正規表現では入れ子で必ず取りこぼす) */
+    let i = from
+    let d = 0
+    for (; i < src.length; i += 1) {
+      if (src[i] === '{') { d += 1; if (d === 1) { from = i + 1 } }
+      else if (src[i] === '}') { d -= 1; if (d === 0) return src.slice(from, i) }
+    }
+    return ''
+  }
+  /** いちばん外側のキーだけを拾う。**まず「,」で区切り、頭の名前を読む** ——
+      文字をなめて「行頭か」を見る形にしたら、**空白にも当たって
+      そこで行頭を下ろしてしまい、1つも拾えなかった**(作った日に踏んだ) */
+  const 一段目 = (obj) => {
+    const 部 = ['']
+    let d = 0
+    for (const c of obj) {
+      if ('({['.includes(c)) d += 1
+      else if (')}]'.includes(c)) d -= 1
+      if (c === ',' && d === 0) 部.push('')
+      else 部[部.length - 1] += c
+    }
+    return [...new Set(部
+      .map((x) => /^\s*(?:\.\.\.)?([a-zA-Z]\w*)/.exec(x)?.[1])
+      .filter(Boolean))]
+  }
+
+  /* **コメントを落としてから数える**(CLAUDE.md)——
+     説明にも同じ欄の名前が出てくる。落とさないと、
+     **捨てられている欄も「ある」ことになってしまう**
+     (実際 `speakerGenders` は、経緯のコメントに2度出てくる) */
+  const 読む本 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/.*$/gm, '')
+  const form = 読む本('src/components/MaterialForm.jsx')
+  const lib = 読む本('src/lib/materials.js')
+  const gw2 = 読む本('supabase/functions/generate-material/index.ts')
+
+  /* ① 画面が渡す欄(第1引数のオブジェクトだけ) */
+  const 渡す = new Set()
+  for (const m of form.matchAll(/generateSection(?:Unique)?\(/g)) {
+    一段目(中身(form, m.index + m[0].length)).forEach((k) => 渡す.add(k))
+  }
+  /* `generateSection` の本体(引数 + 送るところ) */
+  const i0 = lib.indexOf('export async function generateSection({')
+  const 本体 = lib.slice(i0, lib.indexOf('export async function generateChunkJa'))
+  ok(渡す.size >= 10, `窓口へ … 画面が渡す欄を ${渡す.size} 個読み取れた`)
+  const 捨てられる = [...渡す].filter((k) => !new RegExp(`\\b${k}\\b`).test(本体))
+  ok(!捨てられる.length,
+    '窓口へ … 画面が渡す欄は、1つも入口で捨てられていない',
+    捨てられる.length ? `★ ${捨てられる.join(' / ')} が generateSection に無い` : '')
+
+  /* ② 送る欄を、窓口が読んでいるか */
+  const j0 = 本体.indexOf('await askGen({')
+  const 送る = 一段目(中身(本体, j0 + 'await askGen('.length))
+  const 読まれない = 送る.filter((k) => !new RegExp(`body\\.${k}\\b`).test(gw2))
+  ok(送る.length >= 10 && !読まれない.length,
+    `窓口へ … 送る ${送る.length} 個とも、窓口が読んでいる`,
+    読まれない.length ? `★ ${読まれない.join(' / ')} を窓口が読まない` : '')
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
