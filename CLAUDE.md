@@ -53,6 +53,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **鳴らし始める場所の検証**(本物の音を鳴らして測る) | `npm run test:clip` |
 | **テスト対策の PART の検証** | `npm run test:exam` |
 | **応答問題の検証** | `npm run test:response` |
+| **手触り(押した感じ・相棒・数の駆け上がり)の検証** | `npm run test:feel` |
 | お手本音声の生成(Azure の鍵が必要) | `npm run audio` |
 | **英文の「型」の資料を PDF にする**(トレーナー向け) | `node scripts/make-frames-pdf.mjs` |
 | **英文の「型」のプレゼン資料を作る**(素人向け) | `npm run slides` |
@@ -60,12 +61,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 自動テストは `npm run test:db` / `test:chunk` / `test:audio` / `test:mp3` /
 `test:gap` / `test:play` / `test:paper` / `test:bar` / `test:voice` /
 `test:frame` / `test:shift` / `test:speak` / `test:similar` / `test:gen` /
-`test:clip` / `test:exam` / `test:response` の17個。
+`test:clip` / `test:exam` / `test:response` / `test:feel` の18個。
 ユニットテストの枠組みは無く、どれも素の node / psql で走る。
 **`test:similar` は、窓口(Deno)を素の node で走らせる**(第5.247節)——
 Supabase も Deno も AI も偽物に差し替え、算段だけを確かめる。
 **この環境では窓口を1度も動かせない**ので、走らせられる形を作った。
 **`test:audio` は耳の代わりである**(こちらには音が聞こえない)。
+**`test:feel` は指の代わりである** —— 押したときの `transform` を
+**そのまま測る**(第5.371節)。「CSS に `:active` の決まりがある」では
+見張ったことにならない ——
+**`animation-fill-mode: both` が、終わったあとも打ち消していた**ことがある。
+**ヘッドレスの既定は「動きを減らす」**なので、`reducedMotion` を
+明示して2通り走らせないと、いつも「動かない」が返って素通りする。
 UI を変えたら **`npm run lint` と `npm run build` の両方**を通し、
 必要なら Playwright で実際に触って確かめる。
 
@@ -501,6 +508,7 @@ CLAUDE.md が 1.08MB になり、**毎ターン読み込まれて「prompt is to
 | [`23-型シフト.md`](docs/notes/23-型シフト.md) | 66 型の Quick Response(日本語 → 英語 2,872 / 言い換え 2,585)・専用の画面もマイクも採点も廃止・**束で掛け算して型ごとの数を増やす**・型で絞る・ヒント・確かめてから出す・test:shift |
 | [`22-パタプラ風の言う練習.md`](docs/notes/22-パタプラ風の言う練習.md) | 言う番から始める・答えを隠す・チャンクで積む・Type A → B・型でまとめる・qrOrder.js |
 | [`25-読み上げ用の英文.md`](docs/notes/25-読み上げ用の英文.md) | 画面の英文と声にする英文を分ける・当てはめる順・分からないものは変えない・語の色はどちらの位置で数えるか・ここで転んだ6つ・**会社名の読みを「細かい指定」で教える(第5.266節)** |
+| [`26-手触りと相棒.md`](docs/notes/26-手触りと相棒.md) | **押した感じ・登場・相棒(キャラクター)・点の駆け上がり・動きを減らす人への断り・test:feel(第5.371節)** |
 | [`24-名詞句.md`](docs/notes/24-名詞句.md) | 名詞句100・副詞句50・コロケーション100(単語帳の冊)・目的語もセット・骨を固定して肉だけ変える・66 型ぜんぶに骨・席の種類・主語の性格・確かめてから出す・nophrase |
 
 ## 利用者に作業を頼むときは `docs/APPLY.md` をそのまま使う

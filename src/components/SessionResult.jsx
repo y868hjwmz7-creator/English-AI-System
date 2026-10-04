@@ -30,6 +30,9 @@
  */
 import { useEffect } from 'react'
 import { playSfx } from '../lib/sfx.js'
+import Buddy from './Buddy.jsx'
+import { buddyFace } from '../lib/buddy.js'
+import { useCountUp } from '../lib/useCountUp.js'
 import { praiseFor, streakLine, weekLine } from '../lib/gamify.js'
 
 /**
@@ -54,15 +57,35 @@ export default function SessionResult({
      (`done` は「裏の仕事が終わった」と同じ音・`sfx.js`) */
   useEffect(() => { playSfx('done') }, [])
 
+  /* ★ **0 から駆け上がる**(第5.371節)。
+       **終わりの値は必ず `ok`** —— 見せ方だけを変えている
+       (`useCountUp` が `t >= ms` で丸める)。
+       動きを減らす端末では、最初から `ok` が出る */
+  const 見せる点 = useCountUp(ok)
+
   const praise = praiseFor(ok, total)
   const streak = streakLine(list)
   const weeks = weekLine(week)
 
   return (
     <div className="sresult">
-      {/* **点数は大きく。** やり切ったことが、ひと目で分かる */}
+      {/* ★ **相棒**(第5.371節)。**点から顔が決まる** ——
+           `buddyFace()` 1か所が決める(ここで `ok / total` を比べない)。
+           点が低くても責めない顔になる(知らないことは失敗ではない) */}
+      <p className="sresult-buddy">
+        <Buddy size="lg"
+               face={buddyFace({
+                 done: true,
+                 score: total > 0 ? Math.round((ok / total) * 100) : null,
+               })} />
+      </p>
+
+      {/* **点数は大きく。** やり切ったことが、ひと目で分かる。
+          ★ **数が駆け上がる**(第5.371節)—— 同じ数字でも、
+          0 から上がってくると**やり切ったことが体で分かる。**
+          **数そのものは渡された値のまま**で、見せ方だけを作る */}
       <p className="sresult-score">
-        <strong>{ok}</strong>
+        <strong>{見せる点}</strong>
         <span className="sresult-of">/ {total} {unit}</span>
       </p>
 

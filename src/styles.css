@@ -10891,3 +10891,234 @@ button.wbfilter-ctl { text-align: left; }
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
 }
 .res-chosen-body > li > [lang="en"] { font-weight: 600; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ★ 動きと相棒(第5.371節・2026-10-04 利用者の指定)
+
+     > 本当に驚く、英語が驚くほど上達し、驚くほど楽しいアプリに変えてください
+
+   ── 測ってから足した ────────────────────────────────────────
+
+     このファイルは 10,893 行あって、色の変数は 432 個、`var(--…)` は
+     2,330 回使われている。**色と間は、よく作られていた。**
+     ところが **`@keyframes` は 3 つ、`transition` は 19 か所**だけだった。
+     押しても何も返らず、画面はパッと入れ替わり、やり終えても何も起きない。
+     **「安く見える」のは中身ではなく、手触りのせいだった。**
+
+   ── **この層が守る3つの決まり** ────────────────────────────
+
+     ①**場所を動かす動きは、作らない。** 使うのは `transform` と
+       `opacity` だけ —— あの2つは**まわりの配置を1px も変えない。**
+       幅・高さ・余白・`display` は、動きの中で触らない
+       (利用者の指定「UI の配置が変化することをどの場所においても防ぐ」)。
+
+     ②**ミリ秒を1つも書かない。** 長さと曲線は `src/lib/motion.js` が持ち、
+       `main.jsx` が描く前に `:root` へ流し込む。ここは `var()` で読むだけ。
+       **変数が無ければ動かないだけ** —— 画面は何も壊れない。
+
+     ③**滑る動きが苦手な人には、動かさない。** 消すのではなく
+       **即座に終わらせる**(いちばん下の `prefers-reduced-motion`)。
+       何が起きたかは残る。
+
+   ── **祝福だけは長くてよい** ────────────────────────────────
+
+     `--motion-cheer` を使うのは**やり終えた1枚だけ**である。
+     ふだんの画面で長い動きを使うと、`npm run test:bar` の
+     「押しても、まわりの物が動かない」(押して 220ms 後に測る)が
+     **動き終わる前に測ることになる。** だから短い段しか使わない。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 押した感じ ───────────────────────────────────────────────
+     **いちばん効くのはここ**である。押して何も返らないものは、
+     壊れているのか押せていないのか分からない。
+
+     沈み込みは `transform` なので、**箱の大きさも隣の場所も変わらない。**
+     離せば元に戻る(`:active` は押しているあいだだけ)。 */
+.btn,
+.home-box,
+.tagchip,
+.theme-btn {
+  transition:
+    transform var(--motion-tap) var(--ease-out),
+    background-color var(--motion-tap) var(--ease-out),
+    border-color var(--motion-tap) var(--ease-out);
+}
+
+.btn:active:not(:disabled),
+.home-box:active,
+.tagchip:active,
+.theme-btn:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* **押せないものは沈まない。** 沈むと「効いた」と誤解させる
+   (効かない操作を見せない・CLAUDE.md) */
+.btn:disabled { transform: none; }
+
+/* ── 出てくるもの ─────────────────────────────────────────────
+     同時に全部現れると「描き直した」ように見える。
+     少しずつ遅らせると「並べた」ように見える。
+     **遅れは画面の側が `motion.js` から受け取って `style` で渡す** ——
+     ここに数を書かない。 */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ★ **`both` にしてはいけない**(第5.371節・作った日に測って気づいた)。
+
+     `animation-fill-mode: both` は、**終わったあとも最後のコマを居座らせる。**
+     最後のコマは `transform: none` なので、
+     **`:active` の沈み込みが、永久に打ち消されていた**
+     (`:active` には**なっている**のに `transform` が `matrix(1,0,0,1,0,0)`
+     のまま —— `getComputedStyle` を出して、初めて分かった)。
+
+     動きは**書いた決まりより強い**(cascade の origin が上)ので、
+     後ろに書いても・細かく書いても勝てない ——
+     CLAUDE.md「見た目は、当たりの強さと、既にある決まりで負ける」。
+
+     **`backwards` にする。** 遅らせているあいだだけ最初のコマを当て、
+     終わったら**何も残さない**(元の見た目に戻る)。 */
+.home-grid > .home-box {
+  animation: rise-in var(--motion-move) var(--ease-out) backwards;
+}
+
+/* ── 相棒 ─────────────────────────────────────────────────────
+     色はアプリの色をそのまま使う。**新しい色を1つも足していない。**
+     大きさは3段だけ。表情が変わっても `viewBox` は固定なので、
+     **箱の大きさは1px も動かない。** */
+.buddy {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  line-height: 0;
+}
+.buddy svg { display: block; width: 100%; height: 100%; }
+.buddy--sm { width: 28px; height: 28px; }
+.buddy--md { width: 56px; height: 56px; }
+.buddy--lg { width: 88px; height: 88px; }
+
+.buddy-body {
+  fill: var(--accent-soft);
+  stroke: var(--accent-line);
+  stroke-width: 2;
+}
+.buddy-ink { fill: var(--accent); stroke: var(--accent); }
+.buddy-blush { fill: var(--series-5); opacity: 0.5; stroke: none; }
+
+/* やり切った顔だけ、からだを濃くする(**色は既にあるものから選ぶ**) */
+.buddy--proud .buddy-body { fill: var(--accent); stroke: var(--accent); }
+.buddy--proud .buddy-ink  { fill: var(--on-accent); stroke: var(--on-accent); }
+.buddy--proud .buddy-blush { opacity: 0.35; }
+
+/* 息。**止まっている絵は死んで見える。**
+   上下に 1px 動くだけ —— `transform` なので配置は変わらない */
+@keyframes buddy-breathe {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1.5px); }
+}
+.buddy.is-breathing svg {
+  animation: buddy-breathe 3.4s var(--ease-out) infinite;
+}
+
+/* まばたき。**時計は持たない**(CSS に任せる)。
+   `scaleY` なので、目の位置も箱の大きさも動かない */
+@keyframes buddy-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.1); }
+}
+.buddy-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: buddy-blink 5.2s linear infinite;
+}
+
+/* 考えている顔。**待たせていることを隠さない** —— ゆっくり揺れる */
+@keyframes buddy-think {
+  0%, 100% { transform: rotate(-3deg); }
+  50%      { transform: rotate(3deg); }
+}
+.buddy--think svg {
+  transform-origin: 50% 80%;
+  animation: buddy-think 1.6s var(--ease-out) infinite;
+}
+
+/* できた顔。**1回だけ跳ねる**(くり返すと落ち着かない) */
+@keyframes buddy-glad {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.buddy--glad svg,
+.buddy--proud svg {
+  animation: buddy-glad var(--motion-sheet) var(--ease-pop) 1;
+}
+
+/* ── やり終えた1枚 ─────────────────────────────────────────────
+     **ここだけ長い動きを使ってよい。** 次に押すものは無く、
+     測る見張りも通らない(画面がまるごと変わったあとである) */
+.sresult-buddy {
+  display: grid;
+  place-items: center;
+  /* **すき間は `gap` で作る。** 余白で回らない(共通ルール) */
+}
+.sresult-score > strong {
+  display: inline-block;
+  animation: cheer-pop var(--motion-cheer) var(--ease-pop) both;
+}
+@keyframes cheer-pop {
+  0%   { opacity: 0; transform: scale(0.6); }
+  55%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ── 滑る動きが苦手な人には、動かさない ─────────────────────────
+     **消さずに、即座に終わらせる。** 何が起きたかは残る
+     (読み込みの帯を残しているのと、まったく同じ考え方)。 */
+@media (prefers-reduced-motion: reduce) {
+  .btn, .home-box, .tagchip, .theme-btn { transition: none; }
+  .btn:active:not(:disabled),
+  .home-box:active,
+  .tagchip:active,
+  .theme-btn:active { transform: none; }
+  .home-grid > .home-box { animation: none; }
+  .buddy.is-breathing svg,
+  .buddy-blink,
+  .buddy--think svg,
+  .buddy--glad svg,
+  .buddy--proud svg { animation: none; }
+  .sresult-score > strong { animation: none; }
+}
+
+/* 相棒の置き場。**すき間は `gap` で作る**(共通ルール)——
+   `.home-head` はもう `flex` + `gap` なので、何も足さなくて離れる。
+   やり終えた1枚は `.sresult` の `gap` に乗る */
+.home-buddy { align-self: start; }
+
+/* 相棒が居るときのホームの頭。**2列にして、挨拶に見せる。**
+   描いてみたら、上にぽつんと浮いて**迷子のアイコン**に見えた(測って決めた)。
+   **すき間は `gap`**(共通ルール)。幅の数は書かず、相棒の大きさに任せる */
+.home-head--buddy {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: var(--sp-12);
+  row-gap: var(--sp-2);
+}
+.home-head--buddy > .home-buddy { grid-row: 1 / span 2; align-self: center; }
+.home-head--buddy > .home-eyebrow { grid-column: 2; align-self: end; margin: 0; }
+.home-head--buddy > .home-title { grid-column: 2; align-self: start; margin: 0; }
+
+/* 考えている点。**順に濃くなる** —— 止まっていないことが分かる */
+.buddy-dots circle { fill: var(--accent); opacity: 0.25; }
+@keyframes buddy-dot {
+  0%, 70%, 100% { opacity: 0.25; }
+  35%           { opacity: 1; }
+}
+.buddy-dots circle:nth-child(1) { animation: buddy-dot 1.2s linear infinite; }
+.buddy-dots circle:nth-child(2) { animation: buddy-dot 1.2s linear infinite 0.18s; }
+.buddy-dots circle:nth-child(3) { animation: buddy-dot 1.2s linear infinite 0.36s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .buddy-dots circle { animation: none; }
+}

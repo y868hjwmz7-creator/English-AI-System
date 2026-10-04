@@ -29,7 +29,8 @@
     "test:gen": "node scripts/test-refusal.mjs",
     "test:exam": "node scripts/check-exam-prep.mjs",
     "test:response": "node scripts/check-response-drill.mjs",
-    "test:clip": "node scripts/test-clipstart.mjs"
+    "test:clip": "node scripts/test-clipstart.mjs",
+    "test:feel": "node scripts/test-feel.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

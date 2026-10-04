@@ -32,6 +32,9 @@
  *   **下に箱が並ぶ**。画面が入れ替わったようには見えない。
  */
 import { ChevronIcon } from './Icons.jsx'
+import Buddy from './Buddy.jsx'
+import { buddyFace } from '../lib/buddy.js'
+import { staggerMs } from '../lib/motion.js'
 
 /**
  * ホームそのものの id。
@@ -49,17 +52,28 @@ export default function AppHome({ pages = [], onPick = null }) {
 
   return (
     <section className="home">
-      <header className="home-head">
+      <header className="home-head home-head--buddy">
+        {/* ★ **相棒**(第5.371節・利用者の指定「キャラクター」)。
+             **言葉は持たせない** —— 顔だけである。
+             声かけは、やり終えた1枚がもう持っている(同じことを2つ見せない)。
+             どの顔になるかは `buddyFace()` 1か所が決める
+             (ここで `playing ? … : …` と書かない) */}
+        <Buddy face={buddyFace({})} size="md" className="home-buddy" />
         <p className="home-eyebrow">English AI System</p>
         <h2 className="home-title">どれから始めますか</h2>
       </header>
 
       {boxes.length ? (
         <div className="home-grid">
-          {boxes.map((p) => {
+          {boxes.map((p, i) => {
             const Icon = p.icon
             return (
               <button key={p.id} type="button" className="home-box"
+                      /* ★ **少しずつ遅らせて出す**(第5.371節)。
+                           同時に全部現れると「描き直した」ように見える。
+                           **遅れは `staggerMs()` 1か所**が決める ——
+                           ここに数を書かない。動きを減らす端末では 0 になる */
+                      style={{ animationDelay: `${staggerMs(i)}ms` }}
                       onClick={() => onPick?.(p.id)}>
                 <span className="home-box-icon" aria-hidden="true">
                   {Icon ? <Icon /> : null}
