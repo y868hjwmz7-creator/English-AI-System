@@ -1028,6 +1028,67 @@ function fakeMp3({
         ng('大きさを変える関数が2つある(向きごとに分けている)')
       } else ok('大きさを変える関数は1つだけ(向きは符号で決まる)')
 
+
+      /* ── ⑧ ★ **MP3 を置く道は、1つ残らず大きさを通るか**(第5.366節)──
+
+           2026-10-04 実機。
+
+             > 他の音楽アプリを流したまま全体を聴くで再生中に…
+
+           **「全体を聴く」の1本だけが、音量の直しを通っていなかった。**
+           発言ごとは `shiftMp3` を通るのに、まとめた1本は
+           `fadeMp3Tail` しか通っていなかった ——
+           **1文ずつ聴くときと「全体を聴く」で大きさが食い違う。**
+
+           CLAUDE.md の「**数え方を2通り持たない。作る側と探す側**」を、
+           音の大きさで踏んだ形である。
+           **置く道を1つ足した日に、ここが赤くなる。**
+
+           **数を書き写さない** —— `audio/mpeg` で置いているところを
+           数えて、**そのぜんぶ**が `shiftMp3` を通っているかを見る */
+      {
+        /* MP3 を置いている `fetch(...)` を、1つずつ切り出す */
+        const 置く = [...src.matchAll(
+          /const (\w+) = await fetch\([^]*?'Content-Type': 'audio\/mpeg'[^]*?body: (\w+),/g)]
+          .map((m) => m[2])
+        if (置く.length < 2) {
+          ng('MP3 を置く道を切り出せていない(見張りが何も見ていない)', `${置く.length} か所`)
+        } else {
+          /* **その変数が、どこで作られているかを辿る。**
+             1段しか見ないと、`stored = fadeMp3Tail(evened)` のように
+             **ひとつ手前で大きさを決めている道**を見落とす
+             (実際、はじめ1段しか見ずに取り違えた) */
+          const 通る = (名, 残り = 4) => {
+            if (残り <= 0) return false
+            const 作り = new RegExp(`const ${名} = ([^\\n]*)`).exec(src)?.[1] ?? ''
+            if (!作り) return false
+            if (/shiftMp3\(/.test(作り)) return true
+            /* 作りの中に出てくる変数を、1つずつ辿る */
+            return [...作り.matchAll(/\b([a-zA-Z_]\w*)\b/g)]
+              .map((m) => m[1])
+              .filter((v) => v !== 名)
+              .some((v) => 通る(v, 残り - 1))
+          }
+          const 漏れ = 置く.filter((名) => !通る(名))
+          if (漏れ.length) {
+            ng(`MP3 を置く道のうち ${漏れ.length} つが、大きさを通っていない`, 漏れ.join(' / '))
+          } else {
+            ok(`MP3 を置く道 ${置く.length} つとも、置く前に大きさを決めている`)
+          }
+        }
+        /* **まとめた1本は、日本語を引かない**(英語の声だけで作るため)。
+           引くと「全体を聴く」だけが 4.5dB 小さくなる */
+        const まとめ = /const wholeAudio = ([^\n]*)/.exec(src)?.[1] ?? ''
+        if (!/EN_BOOST_DB/.test(まとめ) || /JA_CUT_DB/.test(まとめ)) {
+          ng('まとめた1本の大きさが、英語の上げ幅になっていない', まとめ)
+        } else ok('まとめた1本は、英語の上げ幅をそのまま使う(日本語を引かない)')
+        /* **順番。** 先に大きさを決め、あとで終わりを下げる ——
+           逆だと、なだらかに下げた終わりまで持ち上げてしまう */
+        if (!/fadeMp3Tail\(shiftMp3\(/.test(src)) {
+          ng('まとめた1本で、大きさと終わりの下げの順が逆になっている')
+        } else ok('先に大きさを決め、あとで終わりを下げている(順が正しい)')
+      }
+
       /* ⑦ **声の id を2か所に書かない。**
            `src/data/clipVoices.js` の `JA_VOICE` と同じでなければならない */
       const cv = readFileSync(
@@ -2156,7 +2217,11 @@ function fakeMp3({
       ['記事は with-timestamps', /v1\/text-to-speech\/\$\{unique\[0\]\}\/with-timestamps/],
       ['1本の入り口がある', /if \(body\.whole\) \{/],
       ['時刻をそのまま控える', /alignment: made\.alignment/],
-      ['終わりをなだらかに下げる', /fadeMp3Tail\(made\.audio\)/],
+      /* ★ **式をそのまま書き写さない**(第5.366節で踏んだ)。
+           `fadeMp3Tail(made.audio)` と書いてあったので、
+           中を `shiftMp3(…)` で包んだ瞬間に**仕組みは無傷のまま外れた。**
+           **呼んでいるかどうか**だけを見る */
+      ['終わりをなだらかに下げる', /const wholeAudio = [^\n]*fadeMp3Tail\(/],
     ]
     let bad0 = bad
     for (const [what, re] of want) if (!re.test(fn)) ng(`窓口: ${what}`)
