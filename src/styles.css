@@ -10948,7 +10948,8 @@ button.wbfilter-ctl { text-align: left; }
 .btn,
 .home-box,
 .tagchip,
-.theme-btn {
+.theme-btn,
+.buddy-pick-btn {
   transition:
     transform var(--motion-tap) var(--ease-out),
     background-color var(--motion-tap) var(--ease-out),
@@ -10958,7 +10959,8 @@ button.wbfilter-ctl { text-align: left; }
 .btn:active:not(:disabled),
 .home-box:active,
 .tagchip:active,
-.theme-btn:active {
+.theme-btn:active,
+.buddy-pick-btn:active {
   transform: translateY(1px) scale(0.985);
 }
 
@@ -10995,37 +10997,64 @@ button.wbfilter-ctl { text-align: left; }
 }
 
 /* ── 相棒 ─────────────────────────────────────────────────────
-     色はアプリの色をそのまま使う。**新しい色を1つも足していない。**
-     大きさは3段だけ。表情が変わっても `viewBox` は固定なので、
-     **箱の大きさは1px も動かない。** */
+     色はアプリが持っているものだけ(`--series-4` 黄 / `--series-2` 橙 /
+     `--series-5` ほお / `--accent` 輪郭と目)。**新しい色は1つも足していない。**
+     大きさは3段。**表情が変わっても相棒を変えても、箱は 1px も動かない**
+     (`viewBox` は固定。きらめきと考えている点は重ねるだけ)。 */
 .buddy {
   display: inline-grid;
   place-items: center;
   flex: none;
   line-height: 0;
 }
+/* ★ **切り取りを効かせるため、はみ出させない。**
+     `overflow: visible` にすると **`viewBox` の切り取りが打ち消され**、
+     小さいときの「顔だけ」が効かなくなる(作った日に踏んだ)。
+     きらめきも考えている点も、**`viewBox` の中に収めてある。** */
 .buddy svg { display: block; width: 100%; height: 100%; }
 .buddy--sm { width: 28px; height: 28px; }
 .buddy--md { width: 56px; height: 56px; }
 .buddy--lg { width: 88px; height: 88px; }
 
-.buddy-body {
-  fill: var(--accent-soft);
-  stroke: var(--accent-line);
-  stroke-width: 2;
-}
-.buddy-ink { fill: var(--accent); stroke: var(--accent); }
-.buddy-blush { fill: var(--series-5); opacity: 0.5; stroke: none; }
-/* 冠羽(とさか)と翼とくちばし。**新しい色は1つも足していない** */
-.buddy-crest { fill: var(--accent); stroke: none; }
-.buddy-wing  { fill: var(--accent-line); stroke: none; }
-.buddy-beak  { fill: var(--series-4); stroke: none; }
+/* ★ **からだの色は、相棒ごと**(第5.373節・2026-10-05 利用者の指定で暖色)。
+     ここ以外に色を書かない —— 相棒を増やす日に、1行足すだけで済む */
+.buddy--k-bird { --buddy-fill: var(--series-4); }   /* 黄 */
+.buddy--k-fox  { --buddy-fill: var(--series-2); }   /* 橙 */
+.buddy--k-pal  { --buddy-fill: var(--series-2); }   /* 橙 */
 
-/* やり切った顔だけ、からだを濃くする(**色は既にあるものから選ぶ**) */
-.buddy--proud .buddy-body { fill: var(--accent); stroke: var(--accent); }
-.buddy--proud .buddy-ink  { fill: var(--on-accent); stroke: var(--on-accent); }
-.buddy--proud .buddy-wing { fill: var(--accent-line); }
-.buddy--proud .buddy-blush { opacity: 0.35; }
+/* ★ **輪郭線でシルエットを立てる。** 地色だけだと薄くて、手がからだに溶けた */
+.buddy-body {
+  fill: var(--buddy-fill, var(--series-4));
+  stroke: var(--accent);
+  stroke-width: 2.8;
+  stroke-linejoin: round;
+}
+.buddy-belly { fill: #fff; stroke: none; opacity: 0.82; }
+.buddy-tip { fill: #fff; stroke: none; opacity: 0.9; }
+/* 手は**からだより少し暗く。** 同じ色だと、ほとんど見えなかった */
+.buddy-limb {
+  fill: var(--buddy-fill, var(--series-4));
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  filter: brightness(0.82);
+}
+.buddy-foot { stroke: var(--accent); stroke-width: 2.4; fill: none; stroke-linecap: round; }
+.buddy-ink { fill: var(--accent); stroke: var(--accent); }
+/* ハイライト。**これが無いと、どれだけ描いても「死んだ目」になる** */
+.buddy-spark { fill: #fff; stroke: none; }
+.buddy-mouth { fill: var(--accent); stroke: none; }
+.buddy-nose { fill: var(--accent); stroke: none; }
+.buddy-beak { fill: var(--series-2); stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; }
+.buddy-gear { stroke: var(--accent); }
+.buddy-gear2 { fill: var(--accent); stroke: none; }
+/* ほおは**出ない顔でも同じ形を置く**(`opacity` だけ変える)——
+   出し入れすると、そこだけ描き直しが起きる */
+.buddy-blush { fill: var(--series-5); opacity: 0; }
+.buddy-blush.is-on { opacity: 0.75; }
+.buddy-shadow { fill: var(--accent); opacity: 0.14; }
+.buddy-star { fill: var(--series-4); stroke: var(--accent); stroke-width: 1.4; stroke-linejoin: round; }
+.buddy--k-bird .buddy-star { fill: var(--series-2); }
 
 /* 息。**止まっている絵は死んで見える。**
    上下に 1px 動くだけ —— `transform` なので配置は変わらない */
@@ -11092,11 +11121,12 @@ button.wbfilter-ctl { text-align: left; }
      **消さずに、即座に終わらせる。** 何が起きたかは残る
      (読み込みの帯を残しているのと、まったく同じ考え方)。 */
 @media (prefers-reduced-motion: reduce) {
-  .btn, .home-box, .tagchip, .theme-btn { transition: none; }
+  .btn, .home-box, .tagchip, .theme-btn, .buddy-pick-btn { transition: none; }
   .btn:active:not(:disabled),
   .home-box:active,
   .tagchip:active,
-  .theme-btn:active { transform: none; }
+  .theme-btn:active,
+  .buddy-pick-btn:active { transform: none; }
   .home-grid > .home-box { animation: none; }
   .buddy.is-breathing svg,
   .buddy-blink,
@@ -11138,3 +11168,23 @@ button.wbfilter-ctl { text-align: left; }
 @media (prefers-reduced-motion: reduce) {
   .buddy-dots circle { animation: none; }
 }
+
+/* 相棒をえらぶ列(第5.373節)。**絵で選ぶ**ので、ボタンは絵の入れ物だけ。
+   **文字用の錠剤(`.theme-switch`)を流用しない** —— あちらは字を並べる形で、
+   絵を入れると**大きな丸い塊**になって折り返した(描いて分かった)。
+   **すき間は `gap`**(共通ルール)。 */
+.buddy-pick { display: flex; gap: var(--sp-8); align-self: flex-start; }
+.buddy-pick-btn {
+  display: inline-grid;
+  place-items: center;
+  padding: 4px;
+  line-height: 0;
+  background: var(--surface);
+  /* **選んでも選ばなくても枠は 2px。** 太さで動かさない(共通ルール) */
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.buddy-pick-btn.is-on { border-color: var(--accent); background: var(--accent-soft); }
+/* **顔だけ**を、選べる大きさまで。`sm`(28px)のままでは小さすぎた */
+.buddy-pick .buddy--sm { width: 46px; height: 46px; }

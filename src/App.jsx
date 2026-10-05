@@ -64,6 +64,7 @@ import { loadShelfCounts } from './lib/shelfWords.js'
 import { NATIVE_FLOW_UNITS, nfUnitsFor } from './data/nativeFlow.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 import { applyUpdate, clipClear, clipCount, useOnline } from './lib/offline.js'
+import { loadBuddyKind, saveBuddyKind } from './lib/buddyKind.js'
 
 export default function App() {
   /**
@@ -182,6 +183,9 @@ export default function App() {
     return () => window.removeEventListener('app-update-ready', 来た)
   }, [])
   const [palette, setPalette] = useState(loadPalette)
+  /* ★ **相棒**(第5.373節)。端末ごとに覚える —— 配色や説明の文と同じ扱い。
+       **覚えるのも合図を出すのも `buddyKind.js` 1か所**(ここでは決めない) */
+  const [buddy, setBuddy] = useState(loadBuddyKind)
   /* 説明の文を出すかどうか。**既定は「出さない」**(2026-09 利用者の指定・
      `src/lib/tips.js`)。消してはいないので、ここを「出す」にすれば戻る */
   const [tips, setTips] = useState(loadTips)
@@ -885,6 +889,8 @@ export default function App() {
              **数えられなければ `null`** が渡り、あちらは行ごと出さない */
         clipsKept={clipsKept}
         onClipsClear={async () => { await clipClear(); setClipsKept(await clipCount()) }}
+        /* ★ 相棒(第5.373節)。**覚えたうえで、いま描かれている相棒にも知らせる** */
+        buddy={buddy} onBuddy={(v) => setBuddy(saveBuddyKind(v))}
       />
 
       {session && (

@@ -46,6 +46,7 @@ const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').repla
 
 const M = await import('../src/lib/motion.js')
 const B = await import('../src/lib/buddy.js')
+const K = await import('../src/lib/buddyKind.js')
 
 /* ══════════════════════════════════════════════════════════════════
    ① 算段(素の node)
@@ -122,6 +123,38 @@ console.log('\n▶ 相棒の顔(素の node で測る)')
   is(!無い.length, `${B.BUDDY_FACES.length} つの顔すべてに、読み上げの言葉がある`, 無い.join(' / '))
 }
 
+console.log('\n▶ 相棒をえらぶ(素の node で測る)')
+{
+  /* ★ **この一覧は手で並べる。** 画面から読み取ると、
+       相棒を1人消した日に期待も一緒に消えて**緑のまま**になる
+       (第5.337節で踏んだ「見張りが、自分と同じ出どころを見ている」)。
+       **一度入れたものを勝手に減らさない**(共通ルール) */
+  const 居るはず = ['bird', 'fox', 'pal']
+  const 居る = K.BUDDY_KINDS.map((k) => k.id)
+  const 消えた = 居るはず.filter((id) => !居る.includes(id))
+  is(!消えた.length, `相棒が ${居るはず.length} 人とも居る`, 消えた.join(' / '))
+  is(new Set(居る).size === 居る.length, '同じ id が2つ無い', 居る.join(' / '))
+  const 名無し = K.BUDDY_KINDS.filter((k) => !k.label)
+  is(!名無し.length, 'どの相棒にも名前がある(読み上げが読む)', 名無し.map((k) => k.id).join(' / '))
+
+  is(居る.includes(K.BUDDY_KIND_DEFAULT), '既定の相棒は、一覧の中に居る', K.BUDDY_KIND_DEFAULT)
+  /* ★ **出ない側がここの本番。** 知らない値で相棒が1人も出ない、は行き止まり */
+  const 変なの = ['zzz', '', null, undefined, 0, {}]
+  const 外 = 変なの.filter((v) => !居る.includes(K.buddyKindOf(v)))
+  is(!外.length, '知らない値でも、必ず誰かに落ちる', String(外.length))
+  is(K.buddyKindOf('fox') === 'fox', '正しい値は、そのまま通る')
+
+  /* **鍵の名前を画面に書かない**(`TIPS_KEY` と同じ作法) */
+  const nav = noC(read('src/components/NavSettings.jsx'))
+  const bud = noC(read('src/components/Buddy.jsx'))
+  is(!/localStorage/.test(nav) && !/localStorage/.test(bud),
+    '画面は、覚える場所を自分で触らない')
+  /* ★ **判断は1か所。** 画面の中で相棒の名前を書いて分けていないか */
+  is(!/kind === '|kind === "/.test(nav), '設定の画面で、相棒ごとに書き分けていない')
+  /* **選ばせる絵は、本物の相棒そのもの。** 別の絵を置くと、選んだ先と食い違う */
+  is(/<Buddy\b/.test(nav), '選ぶところに、本物の相棒を描いている')
+}
+
 console.log('\n▶ CSS は、ミリ秒を1つも持たない(数を2か所に書かない)')
 {
   const css = read('src/styles.css')
@@ -167,11 +200,14 @@ writeFileSync(join(dir, '.env'), 'VITE_SUPABASE_URL=\nVITE_SUPABASE_ANON_KEY=\n'
 /* **本物の部品を、そのまま描く。** 骨組みを別に書くと、
    **骨組みだけが直っていて本物は壊れている**が起きる(CLAUDE.md) */
 writeFileSync(join(ROOT, 'src/__feel.jsx'), `
+import { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import './styles.css'
 import { motionVars } from './lib/motion.js'
 import Buddy from './components/Buddy.jsx'
 import { BUDDY_FACES } from './lib/buddy.js'
+import { BUDDY_KINDS, BUDDY_KIND_DEFAULT, saveBuddyKind } from './lib/buddyKind.js'
+import NavSettings from './components/NavSettings.jsx'
 import AppHome from './components/AppHome.jsx'
 import SessionResult from './components/SessionResult.jsx'
 import { BookIcon, PenIcon, SpeakerIcon, ShelfIcon, HomeIcon } from './components/Icons.jsx'
@@ -186,15 +222,40 @@ const pages = [
   { id: 'home', label: 'ホーム', icon: HomeIcon },
 ]
 const list = Array.from({ length: 12 }, (_, i) => ({ ok: i < 9, en: 'x ' + i, ja: 'や ' + i }))
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <div className="app-shell is-wide" style={{ padding: 24, display: 'grid', gap: 32 }}>
-    <section className="card" id="faces">
-      {BUDDY_FACES.map((f) => <Buddy key={f} face={f} size="md" />)}
-    </section>
-    <section className="card"><AppHome pages={pages} onPick={() => {}} /></section>
-    <section className="card"><SessionResult items={list} unit="問" /></section>
-  </div>,
-)
+function Shell() {
+  /* **本物の設定の部品をそのまま置く。** 骨組みを別に書くと、
+     骨組みだけが直っていて本物は壊れている、が起きる */
+  const [buddy, setBuddy] = useState(BUDDY_KIND_DEFAULT)
+  return (
+    <div className="app-shell is-wide" style={{ padding: 24, display: 'grid', gap: 32 }}>
+      <section className="card" id="faces">
+        {BUDDY_FACES.map((f) => <Buddy key={f} face={f} size="md" />)}
+      </section>
+      <section className="card" id="kinds">
+        {BUDDY_KINDS.map((k) => (
+          <span key={k.id} data-kind={k.id}>
+            {BUDDY_FACES.map((f) => <Buddy key={f} kind={k.id} face={f} size="md" />)}
+            <Buddy kind={k.id} face="rest" size="sm" />
+          </span>
+        ))}
+      </section>
+      <section className="card" id="pick">
+        <NavSettings
+          theme="light" onTheme={() => {}} palette="a" onPalette={() => {}}
+          tips="off" onTips={() => {}} sound="on" onSound={() => {}}
+          voiceVol={60} onVoiceVol={() => {}} bgmVol={40} onBgmVol={() => {}}
+          music="off" onMusic={() => {}} songs={[]} song="" onSong={() => {}}
+          showPrepare prepare="off" onPrepare={() => {}}
+          clipsKept={12} onClipsClear={() => {}}
+          buddy={buddy} onBuddy={(v) => setBuddy(saveBuddyKind(v))}
+        />
+      </section>
+      <section className="card"><AppHome pages={pages} onPick={() => {}} /></section>
+      <section className="card"><SessionResult items={list} unit="問" /></section>
+    </div>
+  )
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Shell />)
 `)
 writeFileSync(join(ROOT, '__feel.html'), `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
@@ -278,6 +339,64 @@ console.log('\n▶ 本当に沈むか(実機で押して、そのまま測る)')
   is(b2.押し.active, '動きを減らす端末でも、`:active` にはなる')
   is(b2.押し.t === 'none' || b2.押し.t === 'matrix(1, 0, 0, 1, 0, 0)',
     '動きを減らす端末では、沈まない', b2.押し.t)
+}
+
+console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測る)')
+{
+  const page = await browser.newPage({ viewport: { width: 1000, height: 1400 } })
+  const 落ちた = []
+  page.on('pageerror', (e) => 落ちた.push(String(e)))
+  await page.goto(`http://localhost:${PORT}/__feel.html`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('#kinds .buddy')
+  await page.waitForTimeout(400)
+  is(!落ちた.length, '3人とも描いて落ちない', 落ちた.slice(0, 1).join(''))
+
+  const 数 = await page.locator('#kinds .buddy').count()
+  const はず = K.BUDDY_KINDS.length * (B.BUDDY_FACES.length + 1)
+  is(数 === はず, `相棒 ${K.BUDDY_KINDS.length} 人 × 顔 ${B.BUDDY_FACES.length} つが、ぜんぶ描かれる`, String(数))
+
+  /* ★ **ここが本番。** 相棒を変えても・顔が変わっても、箱は 1px も動かない
+       (利用者の指定「UI の配置が変化することをどの場所においても防いでください」) */
+  const 箱 = await page.$$eval('#kinds .buddy--md', (els) => els.map((el) => {
+    const r = el.getBoundingClientRect()
+    return `${Math.round(r.width)}x${Math.round(r.height)}`
+  }))
+  is(new Set(箱).size === 1, '相棒が違っても・顔が違っても、箱の大きさは同じ', [...new Set(箱)].join(' / '))
+
+  /* **小さいときは顔だけ。** 同じ絵のまま `viewBox` で切り出しているか */
+  const 枠 = await page.$$eval('#kinds .buddy', (els) => els.map((el) => ({
+    sm: el.classList.contains('buddy--sm'),
+    v: el.querySelector('svg')?.getAttribute('viewBox') ?? '',
+  })))
+  const 全身 = new Set(枠.filter((x) => !x.sm).map((x) => x.v))
+  const 顔だけ = new Set(枠.filter((x) => x.sm).map((x) => x.v))
+  is(全身.size === 1, '全身の箱は、相棒が違っても同じ', [...全身].join(' / '))
+  is(顔だけ.size === K.BUDDY_KINDS.length, '小さいときは、相棒ごとに顔を切り出している', [...顔だけ].join(' / '))
+  /* ★ **出ない側。** 切り出しが効いていないと、全身と同じ `viewBox` になる */
+  const 切れていない = [...顔だけ].filter((v) => 全身.has(v))
+  is(!切れていない.length, '小さいときに、全身のまま縮めていない', 切れていない.join(' / '))
+
+  /* ★ **選び直すと、同じ画面の相棒がその場で変わるか。**
+       合図が届いていないと、設定を閉じるまで絵が変わらない */
+  const 今 = () => page.$eval('#faces .buddy', (el) => el.className)
+  const 前 = await 今()
+  /* **設定は畳んである。** 開かないと押せない(閉じた箱は測れない・共通ルール) */
+  await page.click('#pick .nav-settings-sum')
+  await page.waitForTimeout(250)
+  const 行 = await page.locator('#pick .buddy-pick-btn').count()
+  is(行 === K.BUDDY_KINDS.length, `えらぶボタンが ${K.BUDDY_KINDS.length} つ出る`, String(行))
+  const 幅前 = await page.locator('#pick .buddy-pick').boundingBox()
+  await page.locator('#pick .buddy-pick-btn').nth(1).click()
+  await page.waitForTimeout(300)
+  const 後 = await 今()
+  const 幅後 = await page.locator('#pick .buddy-pick').boundingBox()
+  is(前 !== 後, '選び直すと、同じ画面の相棒がその場で変わる', `${前} → ${後}`)
+  /* **押しても、まわりの物が動かない**(共通ルール) */
+  is(Math.round(幅前.width) === Math.round(幅後.width)
+    && Math.round(幅前.height) === Math.round(幅後.height),
+    '選び直しても、えらぶ行の大きさは動かない',
+    `${Math.round(幅前.width)}x${Math.round(幅前.height)} → ${Math.round(幅後.width)}x${Math.round(幅後.height)}`)
+  await page.close()
 }
 
 console.log('\n▶ 本当に駆け上がるか(描く前から見張る)')

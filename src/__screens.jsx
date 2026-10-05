@@ -121,6 +121,7 @@ import Loading from './components/Loading.jsx'
 import HomeworkFilter from './components/HomeworkFilter.jsx'
 import { emptyHomeworkFilter } from './lib/homeworkFilter.js'
 import { setViewerRole } from './lib/viewer.js'
+import { BUDDY_KIND_DEFAULT } from './lib/buddyKind.js'
 import './styles.css'
 
 const q = new window.URLSearchParams(window.location.search)
@@ -2383,6 +2384,7 @@ function NavFootScreen() {
     ]
   const songs = bgmChoices(tracks)
   const songNow = bgmPickOf(tracks, song)
+  const [buddyNow, setBuddyNow] = useState(BUDDY_KIND_DEFAULT)
   return (
     <div className="app-nav-foot" style={{ width: '248px' }}>
       <NavSettings
@@ -2402,6 +2404,8 @@ function NavFootScreen() {
         /* ★ オフラインの音声(第5.372節)。**本物と同じ形で描く** ——
              数を渡さないと行ごと出ず、すき間を測れない */
         clipsKept={12} onClipsClear={() => {}}
+        /* ★ 相棒(第5.373節)。**本物と同じ形で描く** */
+        buddy={buddyNow} onBuddy={setBuddyNow}
       />
       {/* **いちばん下は自分の欄**(第5.189節・利用者の指定
           「位置を Hisato Nakajima の要素の上にしてください」) */}

@@ -44,6 +44,11 @@
 import { SortIcon } from './Icons.jsx'
 /* **ボタンの色は `btnTone.js` 1か所**(第5.242節)。ここで色名を書かない */
 import { TONE_SIDE } from '../lib/btnTone.js'
+/* ★ **相棒をえらぶ**(第5.373節・2026-10-05 利用者の指定
+     「というよりユーザーが選べるようにしたいです」)。
+     **一覧は `buddyKind.js` 1か所**で、ここでは並べるだけ */
+import { BUDDY_KINDS } from '../lib/buddyKind.js'
+import Buddy from './Buddy.jsx'
 import VolumeRow from './VolumeRow.jsx'
 /* ★ **ほかのアプリの音を混ぜるか**(第5.352節)。
    **効く端末かどうかは `mixWorks()` 1か所**が決める(名前で見分けない) */
@@ -116,6 +121,8 @@ export default function NavSettings({
        **0 円である** —— 置き場所にある MP3 を落としてくるだけで、
        作り直してはいない(作り直しだけが課金される) */
   clipsKept = null, onClipsClear,
+  /** いま選ばれている相棒と、選び直し(**値は呼ぶ側が持つ**) */
+  buddy, onBuddy,
 }) {
   return (
     <details className="nav-settings">
@@ -136,6 +143,36 @@ export default function NavSettings({
             畳むかどうかの決まりは `src/lib/tips.js` と styles.css の
             1行だけで、画面の側は `tip` の印を付けてあるだけである。 */}
         <Pick label="説明の文" options={TIPS} value={tips} onChange={onTips} />
+
+        {/* ★ **相棒**(第5.373節・2026-10-05 利用者の指定)。
+
+              > というよりユーザーが選べるようにしたいです
+
+            **言葉で選ばせない。絵で選ばせる**(「余計な説明書きは全て排除」)。
+            名前は読み上げ(`aria-label`)にだけ置いてある。
+            **一覧は `buddyKind.js` 1か所**で、ここは並べるだけ ——
+            増やす日に、この画面は1行も直らない。 */}
+        <div className="nav-setting">
+          <span className="nav-setting-label">相棒</span>
+          <div className="buddy-pick" role="group" aria-label="相棒">
+            {BUDDY_KINDS.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                className={`buddy-pick-btn${buddy === k.id ? ' is-on' : ''}`}
+                aria-pressed={buddy === k.id}
+                aria-label={k.label}
+                onClick={() => onBuddy?.(k.id)}
+              >
+                {/* **本物の相棒をそのまま描く。** 別の絵を置くと、
+                    選んだあとに出てくるものと食い違う。
+                    **顔だけ**(`sm`)にして3人を1行に収める —— 全身だと
+                    メニューの幅(248px)で折り返し、行の高さが相棒の数で動く */}
+                <Buddy kind={k.id} face="glad" size="sm" />
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* 押した手応え(音とふるえ)。レッスン中に鳴ると邪魔なことが
             あるので、切れるようにしてある
