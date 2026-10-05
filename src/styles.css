@@ -104,13 +104,16 @@
   --rizap-gold-soft: #2a2316;   /* 選んでいるものの、うすい地色 */
   --rizap-gold-line: #5a4a22;   /* その枠線 */
   --rizap-gold-on:   #15130d;   /* 金のべた塗りの上に乗る文字 */
-  /* ★ **選んでいるものの、透かした金**(第5.383節)。
+  /* ★ **選んでいるものの、透かした金**(第5.383 → 第5.385節)。
+
      **割合もここ1か所。** 暗い配色は `@media` と `[data-theme="dark"]` の
      2か所にあるので、あちらに書くと必ず片方だけ古くなる。
-     **地が透けるので、カードの上でも紙の上でも濃さが揃う。**
-     上に乗る金の文字との明暗差は、カードの上で 5.4 : 1、
-     ページの地の上で 6.5 : 1(どちらも実測)。 */
-  --rizap-gold-pick: color-mix(in srgb, var(--rizap-gold) 20%, transparent);
+     **地が透けるので、カードの上でもページの地の上でも濃さが揃う。**
+
+     ★ **18% は「管理者」の札(`.badge--admin`)と同じ**(第5.385節・
+     2026-10-05 利用者の指定「このデザインを選択中の表示にするのもあり」)。
+     **新しい見た目を作らない** —— すでにアプリの中にある形から選ぶ。 */
+  --rizap-gold-pick: color-mix(in srgb, var(--rizap-gold) 18%, transparent);
 
   /* 合っている / 違う。**ディクテーションの照らし合わせで使う。**
      緑と赤は色覚特性で見分けにくい組み合わせなので、
@@ -303,11 +306,13 @@
     --accent-soft: var(--rizap-gold-soft);
     --accent-line: var(--rizap-gold-line);
     /* ★ **選んでいる印は、べた塗りをやめて透かす**(第5.383節・利用者の指定)。
-       `:root` の「選んでいる印は、べた塗りではなく**うすい地色 + 同じ色の文字**」
-       と同じ作法に戻す。**枠線は金のまま** —— 色だけに頼らないため、
-       細い線と太字は残す(下の `[data-theme="dark"]` と**同じ値**にする) */
+       **文字は白**(第5.385節)—— 利用者が指した「管理者」の札とまったく同じ
+       組み合わせである(うすい金 + 金の細い枠 + 白い字)。
+       **金の字より読みやすい**(実測で 9 : 1 を超える)。
+       **枠線は金のまま** —— 色だけに頼らないため、細い線と太字は残す。
+       下の `[data-theme="dark"]` と**同じ値**にする */
     --pick-bg:   var(--rizap-gold-pick);
-    --pick-fg:   var(--rizap-gold);
+    --pick-fg:   var(--text-primary);
     --pick-line: var(--rizap-gold);
     /* 集中モードでも使う色(`:root` と同じ並び。**1か所でも抜くと食い違う**) */
     --accent-bg:   var(--rizap-gold-soft);
@@ -368,9 +373,10 @@
   --accent:      var(--rizap-gold);
   --accent-soft: var(--rizap-gold-soft);
   --accent-line: var(--rizap-gold-line);
-  /* ★ **選んでいる印は、べた塗りをやめて透かす**(第5.383節・上の @media と同じ値) */
+  /* ★ **選んでいる印は、べた塗りをやめて透かす**(第5.383 / 5.385節・
+       上の @media と同じ値。文字は白 =「管理者」の札と同じ組み合わせ) */
   --pick-bg:   var(--rizap-gold-pick);
-  --pick-fg:   var(--rizap-gold);
+  --pick-fg:   var(--text-primary);
   --pick-line: var(--rizap-gold);
   /* 集中モードでも使う色(上の @media と**同じ値**にする) */
   --accent-bg:   var(--rizap-gold-soft);
