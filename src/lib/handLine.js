@@ -91,6 +91,33 @@ export function 手のまる(cx, cy, rx, ry, seed, { n = 13, amp = 1.3, 回し =
   return 閉じる(ゆらす(まる(cx, cy, rx, ry, n, 回し), seed, amp))
 }
 
+/**
+ * **四角の点を並べる。** 角に点を1つずつ置いただけだと、
+ * `閉じる` が**辺の半分ぶんを丸めて、ただの楕円になる**
+ * (ぬりかべが「壁」に見えなかった・第5.376節。描いて分かった)。
+ * **辺の途中にも点を置く**と、角だけが少し丸い四角のまま残る。
+ * @param {number} 刻み 1辺を何個の点で持つか(多いほど角が立つ)
+ */
+export function 四角(x1, y1, x2, y2, 刻み = 3) {
+  const out = []
+  const 辺 = (ax, ay, bx, by) => {
+    for (let i = 0; i < 刻み; i += 1) {
+      const t = i / 刻み
+      out.push([ax + (bx - ax) * t, ay + (by - ay) * t])
+    }
+  }
+  辺(x1, y1, x2, y1)
+  辺(x2, y1, x2, y2)
+  辺(x2, y2, x1, y2)
+  辺(x1, y2, x1, y1)
+  return out
+}
+
+/** 震えた四角(壁・下駄・腰巻のように、角が要るもの) */
+export function 手の四角(x1, y1, x2, y2, seed, { amp = 1, 刻み = 3 } = {}) {
+  return 閉じる(ゆらす(四角(x1, y1, x2, y2, 刻み), seed, amp))
+}
+
 /** 震えた好きな形(点を自分で並べたいとき) */
 export function 手の形(pts, seed, amp = 1.3) {
   return 閉じる(ゆらす(pts, seed, amp))

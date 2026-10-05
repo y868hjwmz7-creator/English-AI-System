@@ -29,30 +29,33 @@
 /**
  * 相棒の一覧。**この順で画面に並ぶ。**
  *
- * **12 人**(2026-10-05 利用者の指定「これくらいの数からユーザーが選べるのが良い」)。
- * 生きもの・食べもの・道具を混ぜてある —— 似たものばかりだと、
- * **並べたときに「選んだ気」がしない。**
+ * **12 体の妖怪**(2026-10-05 利用者の指定「妖怪シリーズにしてください」)。
+ * 立ち姿・1色・手描きの線。**ひと目で誰か分かるもの**だけを選んである ——
+ * 名前を知らない妖怪を並べても、選びようがない。
+ *
+ * **素材サイトの絵は1つも写していない。** 妖怪は昔からある題材なので、
+ * 作風だけを合わせて、こちらで描き起こした。
  */
 export const BUDDY_KINDS = [
-  { id: 'robo', label: 'ロボ' },
-  { id: 'cat', label: 'ねこ' },
-  { id: 'dog', label: 'いぬ' },
-  { id: 'bear', label: 'くま' },
-  { id: 'bird', label: 'とり' },
-  { id: 'alien', label: 'うちゅうじん' },
-  { id: 'ghost', label: 'おばけ' },
-  { id: 'rice', label: 'おむすび' },
-  { id: 'egg', label: 'たまご' },
-  { id: 'glasses', label: 'めがね' },
-  { id: 'beard', label: 'ひげ' },
-  { id: 'turnip', label: 'かぶ' },
+  { id: 'kappa', label: 'かっぱ' },
+  { id: 'oni', label: 'おに' },
+  { id: 'tengu', label: 'てんぐ' },
+  { id: 'yuki', label: 'ゆきおんな' },
+  { id: 'kasa', label: 'からかさ' },
+  { id: 'zashiki', label: 'ざしきわらし' },
+  { id: 'nurikabe', label: 'ぬりかべ' },
+  { id: 'rokuro', label: 'ろくろくび' },
+  { id: 'bakeneko', label: 'ばけねこ' },
+  { id: 'konaki', label: 'こなきじじい' },
+  { id: 'momen', label: 'いったんもめん' },
+  { id: 'hitotsume', label: 'ひとつめこぞう' },
 ]
 
 /**
  * 何も選んでいない人に出す相棒。
- * **とりにしてある** —— 聞いて、そのまま返す(Quick Response・音読・復唱)。
+ * **かっぱにしてある** —— ひと目で妖怪と分かり、顔がはっきり描ける。
  */
-export const BUDDY_KIND_DEFAULT = 'bird'
+export const BUDDY_KIND_DEFAULT = 'kappa'
 
 /** 覚えておく鍵。**画面に鍵の名前を書かない**(`TIPS_KEY` と同じ作法) */
 export const BUDDY_KIND_KEY = 'eas.buddyKind'

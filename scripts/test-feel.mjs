@@ -124,27 +124,27 @@ console.log('\n▶ 相棒の顔(素の node で測る)')
   is(!無い.length, `${B.BUDDY_FACES.length} つの顔すべてに、読み上げの言葉がある`, 無い.join(' / '))
 }
 
-console.log('\n▶ 相棒をえらぶ(素の node で測る)')
+console.log('\n▶ 相棒をえらぶ(妖怪 12 体・素の node で測る)')
 {
   /* ★ **この一覧は手で並べる。** 画面から読み取ると、
-       相棒を1人消した日に期待も一緒に消えて**緑のまま**になる
+       妖怪を1体消した日に期待も一緒に消えて**緑のまま**になる
        (第5.337節で踏んだ「見張りが、自分と同じ出どころを見ている」)。
        **一度入れたものを勝手に減らさない**(共通ルール) */
-  const 居るはず = ['robo', 'cat', 'dog', 'bear', 'bird', 'alien',
-    'ghost', 'rice', 'egg', 'glasses', 'beard', 'turnip']
+  const 居るはず = ['kappa', 'oni', 'tengu', 'yuki', 'kasa', 'zashiki',
+    'nurikabe', 'rokuro', 'bakeneko', 'konaki', 'momen', 'hitotsume']
   const 居る = K.BUDDY_KINDS.map((k) => k.id)
   const 消えた = 居るはず.filter((id) => !居る.includes(id))
-  is(!消えた.length, `相棒が ${居るはず.length} 人とも居る`, 消えた.join(' / '))
+  is(!消えた.length, `妖怪が ${居るはず.length} 体とも居る`, 消えた.join(' / '))
   is(new Set(居る).size === 居る.length, '同じ id が2つ無い', 居る.join(' / '))
   const 名無し = K.BUDDY_KINDS.filter((k) => !k.label)
-  is(!名無し.length, 'どの相棒にも名前がある(読み上げが読む)', 名無し.map((k) => k.id).join(' / '))
+  is(!名無し.length, 'どの妖怪にも名前がある(読み上げが読む)', 名無し.map((k) => k.id).join(' / '))
 
-  is(居る.includes(K.BUDDY_KIND_DEFAULT), '既定の相棒は、一覧の中に居る', K.BUDDY_KIND_DEFAULT)
+  is(居る.includes(K.BUDDY_KIND_DEFAULT), '既定の妖怪は、一覧の中に居る', K.BUDDY_KIND_DEFAULT)
   /* ★ **出ない側がここの本番。** 知らない値で相棒が1人も出ない、は行き止まり */
   const 変なの = ['zzz', '', null, undefined, 0, {}]
   const 外 = 変なの.filter((v) => !居る.includes(K.buddyKindOf(v)))
   is(!外.length, '知らない値でも、必ず誰かに落ちる', String(外.length))
-  is(K.buddyKindOf('cat') === 'cat', '正しい値は、そのまま通る')
+  is(K.buddyKindOf('oni') === 'oni', '正しい値は、そのまま通る')
 
   /* **鍵の名前を画面に書かない**(`TIPS_KEY` と同じ作法) */
   const nav = noC(read('src/components/NavSettings.jsx'))
@@ -379,11 +379,11 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   await page.goto(`http://localhost:${PORT}/__feel.html`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#kinds .buddy')
   await page.waitForTimeout(400)
-  is(!落ちた.length, `${K.BUDDY_KINDS.length} 人とも描いて落ちない`, 落ちた.slice(0, 1).join(''))
+  is(!落ちた.length, `${K.BUDDY_KINDS.length} 体とも描いて落ちない`, 落ちた.slice(0, 1).join(''))
 
   const 数 = await page.locator('#kinds .buddy').count()
   const はず = K.BUDDY_KINDS.length * (B.BUDDY_FACES.length + 1)
-  is(数 === はず, `相棒 ${K.BUDDY_KINDS.length} 人 × 顔 ${B.BUDDY_FACES.length} つが、ぜんぶ描かれる`, String(数))
+  is(数 === はず, `妖怪 ${K.BUDDY_KINDS.length} 体 × 顔 ${B.BUDDY_FACES.length} つが、ぜんぶ描かれる`, String(数))
 
   /* ★ **ここが本番。** 相棒を変えても・顔が変わっても、箱は 1px も動かない
        (利用者の指定「UI の配置が変化することをどの場所においても防いでください」) */
@@ -394,18 +394,48 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   is(new Set(箱).size === 1, '相棒が違っても・顔が違っても、箱の大きさは同じ', [...new Set(箱)].join(' / '))
 
   /* **絵の箱は、相棒でも大きさでも1つ。**
-     顔だけの絵になったので、小さいときに切り出す必要が無くなった
-     (第5.374節。全身だったころは `viewBox` で顔を切り出していた) */
+     立ち姿に戻しても(第5.376節)、**小さいときに顔を切り出さない** ——
+     妖怪は形で見分けるもので、顔を抜くと**ぬりかべといったんもめんの
+     区別がつかなくなる**(えらぶ画面が、まさにそれである) */
   const 枠 = await page.$$eval('#kinds .buddy', (els) => els.map(
     (el) => el.querySelector('svg')?.getAttribute('viewBox') ?? ''))
   is(new Set(枠).size === 1, '絵の箱は、相棒が違っても大きさが違っても同じ', [...new Set(枠)].join(' / '))
 
-  /* ★ **塗りつぶしの相棒が、ちゃんと混ざっているか。**
+  /* ★ **顔は1か所で描いて、妖怪ごとの場所へ置いている**(第5.376節)。
+       全身になったので、顔の置き場も大きさも妖怪ごとに違う ——
+       ここが全部そろっていたら、**顔を12通り書き写したか、
+       `顔` の指定が1体も効いていない**かのどちらかである。
+       **目の場所を、絵の箱の中での割合で見る**(px で見ると、
+       画面の大きさが混ざって、そこの違いだけで緑になる) */
+  const 目の場 = await page.$$eval('#kinds [data-kind]', (els) => els.map((el) => {
+    const svg = el.querySelector('.buddy--md svg')
+    const 目 = svg?.querySelector('.buddy-ink path')
+    if (!svg || !目) return ''
+    const s = svg.getBoundingClientRect()
+    const e = 目.getBoundingClientRect()
+    if (!s.width || !s.height) return ''
+    return `${Math.round(((e.top + e.height / 2) - s.top) / s.height * 100)}`
+      + `/${Math.round(e.height / s.height * 100)}`
+  }))
+  is(!目の場.includes(''), 'どの妖怪にも、目が描かれている', 目の場.join(' '))
+  is(new Set(目の場).size >= 6,
+    '顔の置き場と大きさは、妖怪ごとに違う', `${new Set(目の場).size} 通り / ${目の場.length} 体`)
+
+  /* ★ **顔を `transform` で縮めていないか。**
+       `<g transform="scale(…)">` で縮めると、**線の太さまで縮む** ——
+       顔の小さい妖怪(ろくろくび)だけ線が細くなり、並べたときに弱って見える。
+       だから**点のほうを計算して置く**(`Face` の `P()`)。
+       ここは「書いていないこと」を測る ——
+       絵の中に `transform` が1つも無ければ、縮めようがない */
+  const 縮め = await page.$$eval('#kinds .buddy svg *[transform]', (els) => els.length)
+  is(縮め === 0, '顔を transform で縮めていない(線の太さがそろう)', `${縮め} か所`)
+
+  /* ★ **塗りつぶしの妖怪が、ちゃんと混ざっているか。**
        全部おなじ描き方だと、並べたときに退屈になる(2026-10-05 の指定) */
   const 塗り = await page.$$eval('#kinds .buddy.is-solid',
     (els) => [...new Set(els.map((el) => [...el.classList].find((c) => c.startsWith('buddy--k-'))))].length)
   is(塗り >= 1 && 塗り < K.BUDDY_KINDS.length,
-    '塗りつぶしと線だけが、どちらも居る', `塗り ${塗り} 人 / 全 ${K.BUDDY_KINDS.length} 人`)
+    '塗りつぶしと線だけが、どちらも居る', `塗り ${塗り} 体 / 全 ${K.BUDDY_KINDS.length} 体`)
 
   /* ★ **飾りの線が、塗りつぶしの相棒で消えていないか。**
        実際、うちゅうじんの触角が**白くなって1本も見えなかった**(第5.374節)——
@@ -439,7 +469,7 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   await page.click('#pick .nav-settings-sum')
   await page.waitForTimeout(250)
   const 行 = await page.locator('#pick .buddy-pick-btn').count()
-  is(行 === K.BUDDY_KINDS.length, `えらぶボタンが ${K.BUDDY_KINDS.length} つ出る`, String(行))
+  is(行 === K.BUDDY_KINDS.length, `えらぶボタンが ${K.BUDDY_KINDS.length} つ出る(12 体ぶん)`, String(行))
   const 幅前 = await page.locator('#pick .buddy-pick').boundingBox()
   await page.locator('#pick .buddy-pick-btn').nth(1).click()
   await page.waitForTimeout(300)
