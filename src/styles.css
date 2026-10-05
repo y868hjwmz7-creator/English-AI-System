@@ -10997,64 +10997,53 @@ button.wbfilter-ctl { text-align: left; }
 }
 
 /* ── 相棒 ─────────────────────────────────────────────────────
-     色はアプリが持っているものだけ(`--series-4` 黄 / `--series-2` 橙 /
-     `--series-5` ほお / `--accent` 輪郭と目)。**新しい色は1つも足していない。**
-     大きさは3段。**表情が変わっても相棒を変えても、箱は 1px も動かない**
-     (`viewBox` は固定。きらめきと考えている点は重ねるだけ)。 */
+     **1色だけ**(`--accent`)。2026-10-05 利用者の指定で、
+     手描きのアイコン集と同じ空気にそろえた —— 暖色の塗り分けはやめている。
+     **顔だけ**なので、28px でもそのまま読める(切り出しが要らない)。
+     `viewBox` は 12 人とも同じで、**箱の大きさは 1px も動かない。** */
 .buddy {
   display: inline-grid;
   place-items: center;
   flex: none;
   line-height: 0;
 }
-/* ★ **切り取りを効かせるため、はみ出させない。**
-     `overflow: visible` にすると **`viewBox` の切り取りが打ち消され**、
-     小さいときの「顔だけ」が効かなくなる(作った日に踏んだ)。
-     きらめきも考えている点も、**`viewBox` の中に収めてある。** */
 .buddy svg { display: block; width: 100%; height: 100%; }
 .buddy--sm { width: 28px; height: 28px; }
 .buddy--md { width: 56px; height: 56px; }
 .buddy--lg { width: 88px; height: 88px; }
 
-/* ★ **からだの色は、相棒ごと**(第5.373節・2026-10-05 利用者の指定で暖色)。
-     ここ以外に色を書かない —— 相棒を増やす日に、1行足すだけで済む */
-.buddy--k-bird { --buddy-fill: var(--series-4); }   /* 黄 */
-.buddy--k-fox  { --buddy-fill: var(--series-2); }   /* 橙 */
-.buddy--k-pal  { --buddy-fill: var(--series-2); }   /* 橙 */
-
-/* ★ **輪郭線でシルエットを立てる。** 地色だけだと薄くて、手がからだに溶けた */
+/* ★ **手描きの線。** 角も端も丸く、太さをそろえる ——
+     ここを1か所で決めているので、相棒を足しても線の表情は変わらない */
+.buddy svg {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .buddy-body {
-  fill: var(--buddy-fill, var(--series-4));
+  fill: var(--surface-1);
   stroke: var(--accent);
-  stroke-width: 2.8;
-  stroke-linejoin: round;
+  stroke-width: 2.6;
 }
-.buddy-belly { fill: #fff; stroke: none; opacity: 0.82; }
-.buddy-tip { fill: #fff; stroke: none; opacity: 0.9; }
-/* 手は**からだより少し暗く。** 同じ色だと、ほとんど見えなかった */
-.buddy-limb {
-  fill: var(--buddy-fill, var(--series-4));
-  stroke: var(--accent);
-  stroke-width: 2.4;
-  stroke-linejoin: round;
-  filter: brightness(0.82);
-}
-.buddy-foot { stroke: var(--accent); stroke-width: 2.4; fill: none; stroke-linecap: round; }
-.buddy-ink { fill: var(--accent); stroke: var(--accent); }
-/* ハイライト。**これが無いと、どれだけ描いても「死んだ目」になる** */
-.buddy-spark { fill: #fff; stroke: none; }
-.buddy-mouth { fill: var(--accent); stroke: none; }
-.buddy-nose { fill: var(--accent); stroke: none; }
-.buddy-beak { fill: var(--series-2); stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; }
-.buddy-gear { stroke: var(--accent); }
-.buddy-gear2 { fill: var(--accent); stroke: none; }
+.buddy-line { stroke: var(--accent); stroke-width: 2.4; fill: none; }
+/* ★ **からだの外にある飾り**(触角・ひげ・葉・腕)。**いつも紺。**
+     顔の線と同じ名前にしていたら、塗りつぶしの相棒で**白くなって消えた**
+     (うちゅうじんの触角が1本も見えなかった・描いて分かった) */
+.buddy-out { stroke: var(--accent); stroke-width: 2.4; fill: none; }
+.buddy-ink { fill: var(--accent); stroke: none; }
+.buddy-dot { fill: var(--accent); stroke: none; opacity: 0.9; }
+.buddy-band { fill: var(--accent); stroke: none; }
 /* ほおは**出ない顔でも同じ形を置く**(`opacity` だけ変える)——
    出し入れすると、そこだけ描き直しが起きる */
-.buddy-blush { fill: var(--series-5); opacity: 0; }
-.buddy-blush.is-on { opacity: 0.75; }
-.buddy-shadow { fill: var(--accent); opacity: 0.14; }
-.buddy-star { fill: var(--series-4); stroke: var(--accent); stroke-width: 1.4; stroke-linejoin: round; }
-.buddy--k-bird .buddy-star { fill: var(--series-2); }
+.buddy-blush { stroke: var(--accent); stroke-width: 1.8; fill: none; opacity: 0; }
+.buddy-blush.is-on { opacity: 0.55; }
+.buddy-star { stroke: var(--accent); stroke-width: 2; }
+
+/* ★ **12 人のうち3人は塗りつぶし。** 全部おなじ描き方だと、
+     並べたときに退屈になる(見せてもらった絵も、塗りと線が混ざっていた) */
+.buddy.is-solid .buddy-body { fill: var(--accent); }
+.buddy.is-solid .buddy-ink { fill: var(--on-accent); }
+.buddy.is-solid .buddy-line { stroke: var(--on-accent); }
+.buddy.is-solid .buddy-blush { stroke: var(--on-accent); }
+.buddy.is-solid .buddy-band { fill: var(--on-accent); opacity: 0.85; }
 
 /* 息。**止まっている絵は死んで見える。**
    上下に 1px 動くだけ —— `transform` なので配置は変わらない */
@@ -11186,5 +11175,7 @@ button.wbfilter-ctl { text-align: left; }
   cursor: pointer;
 }
 .buddy-pick-btn.is-on { border-color: var(--accent); background: var(--accent-soft); }
-/* **顔だけ**を、選べる大きさまで。`sm`(28px)のままでは小さすぎた */
-.buddy-pick .buddy--sm { width: 46px; height: 46px; }
+/* **顔だけ**を、選べる大きさまで。`sm`(28px)のままでは小さすぎた。
+   **12 人いるので折り返す** —— `gap` で離してあるので、何人でも崩れない */
+.buddy-pick { flex-wrap: wrap; }
+.buddy-pick .buddy--sm { width: 42px; height: 42px; }

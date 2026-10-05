@@ -1,291 +1,199 @@
 /**
  * ============================================================================
- * **相棒**(第5.371節 → 第5.373節・2026-10-05 利用者の指定)
+ * **相棒**(第5.371節 → 第5.373節 → 第5.374節)
  *
- *   > というよりユーザーが選べるようにしたいです
+ *   2026-10-05 利用者。手描きのアイコン集の写真を見せてもらって、
  *
- *   **こちらが1人に決めない。** 3人のうちから、使う人がえらぶ
- *   (どれを選んだかは `buddyKind.js` が覚える)。
+ *     > キャラのイメージとしてはこれらのものがあります。
+ *     > これくらいの数からユーザーが選べるのが良いです
  *
- * ── ここまでに**捨てた**作り ─────────────────────────────────
+ *   **12 人から、使う人がえらぶ。**
  *
- *   ①「丸に顔」だけ(顔しか無い)…… **アイコンであって、キャラクターではない**
- *   ②紺と薄い青だけ …………………… **地味。** 利用者の指定で暖色にした
- *   ③まっすぐ正面で固い ……………… **首をかしげる**
- *   ④目が小さく、上にある ………… **大きく・低く・離す**
+ * ── **あの絵そのものは1つも写していない** ──────────────────
  *
- *   いまの形は、この4つを直したものである。
+ *   見せてもらったのは素材サイト(illustAC)のもので、透かしも入っていた。
+ *   **作風は真似てよいが、絵そのものを写すのは別の話**である。
+ *   ここにあるのは、**同じ空気で描き起こした別物**である。
  *
- * ── 3人に**共通**なもの(書き写さない) ──────────────────────
+ * ── 作風(ここが、前の版といちばん違う) ─────────────────────
  *
- *   目・ほお・考えている点・影・首のかしげ・手の角 —— ぜんぶ1つずつしか無い。
- *   **違うのは、からだの形と色と持ちものだけ**である。
+ *   | | |
+ *   |---|---|
+ *   | **1色** | `--accent` だけ。暖色の塗り分けはやめた |
+ *   | **手描きの線** | わざと左右をそろえない。**きれいな円を1つも使わない** |
+ *   | **顔だけ** | 全身をやめた。だから **28px でも読める**(切り出しが要らない) |
+ *   | **塗りを混ぜる** | 12 のうち3人は塗りつぶし。**全部同じだと並べたとき退屈** |
  *
- * ── **小さいときは顔だけ** ──────────────────────────────────
+ *   前の版(暖色・全身・手足・しぐさ)は、**この指定で置き換えた。**
+ *   残してあるのは、**顔ごとの目と口**の作りだけである。
  *
- *   全身を 28px に縮めると、ただの染みになる。
- *   **同じ絵のまま、`viewBox` で顔を切り出す**(別の絵を描かない ——
- *   2枚あると、必ず片方だけ古くなる)。
+ * ── 12 人に**共通**なもの(書き写さない) ──────────────────────
+ *
+ *   目・口・ほお・考えている点・きらめき —— ぜんぶ1つずつしか無い。
+ *   **違うのは、頭のかたちと持ちものだけ**である。
+ *   だから相棒を1人足すのは、**`形` に1行書く**だけで済む。
  *
  * ── **箱の大きさは、顔でも相棒でも 1px も動かない** ──────────
  *
  *   「押しても、まわりの物が動かない」(利用者の指定)。
- *   `viewBox` は固定で、手も足も**どの顔でも必ず描く。**
- *   きらめきと考えている点は `overflow: visible` で**重ねるだけ**で、
- *   場所を取らない。
- *
- * ── 色は、アプリが持っているものだけ ───────────────────────
- *
- *   `--series-4`(黄)/ `--series-2`(橙)/ `--series-5`(ほお)/
- *   `--accent`(輪郭と目)。**新しい色を1つも足していない。**
+ *   `viewBox` は 12 人とも同じで、きらめきも考えている点も**この中に収めてある。**
  * ============================================================================
  */
 import { buddyAlt, buddyBreathes } from '../lib/buddy.js'
 import { BUDDY_KIND_DEFAULT, buddyKindOf } from '../lib/buddyKind.js'
 import { useBuddyKind } from '../lib/useBuddyKind.js'
 
-/* **目は大きく・低く・離す。** これだけで、ぐっと親しみやすくなる */
-const 目 = { l: 31, r: 51, y: 36, r0: 6.4 }
+/* 目と口の場所。**12 人とも同じ** —— 頭のほうを、ここに合わせて描く */
+const 目 = { l: 25, r: 39, y: 31 }
+const 口 = 42
 
-/** 片目。**まばたきは CSS がする**(ここで時計を持たない) */
-function Eye({ cx, cy, r, blink }) {
+/** 手描きらしく、**左右をそろえない。** きれいな円を1つも使わない */
+function Eyes({ face }) {
+  if (face === 'glad' || face === 'proud') {
+    return (
+      <g className="buddy-line" fill="none">
+        <path d={`M ${目.l - 4.5} ${目.y + 1.5} Q ${目.l} ${目.y - 4} ${目.l + 4.5} ${目.y + 1}`} />
+        <path d={`M ${目.r - 4.5} ${目.y + 1} Q ${目.r} ${目.y - 4.5} ${目.r + 4.5} ${目.y + 1.5}`} />
+      </g>
+    )
+  }
+  const dy = face === 'think' ? -2 : 0
+  const r = face === 'cheer' ? 3.4 : 2.7
+  /* **左右で少しだけ大きさを変える。** そろえると、とたんに機械の絵になる */
   return (
-    <g className={blink ? 'buddy-blink' : undefined}>
-      <circle className="buddy-ink" cx={cx} cy={cy} r={r} />
-      {/* ★ ハイライト。**無いと、どれだけ描いても「死んだ目」になる** */}
-      <circle className="buddy-spark" cx={cx + 2.2} cy={cy - 2.2} r="2.2" />
-      <circle className="buddy-spark" cx={cx - 2} cy={cy + 2.4} r="1" />
+    <g className="buddy-ink">
+      <ellipse className={face === 'rest' ? 'buddy-blink' : undefined}
+               cx={目.l} cy={目.y + dy} rx={r} ry={r + 0.4} />
+      <ellipse className={face === 'rest' ? 'buddy-blink' : undefined}
+               cx={目.r} cy={目.y + dy - 0.4} rx={r + 0.3} ry={r} />
     </g>
   )
 }
 
-function Eyes({ face }) {
+function Mouth({ face }) {
   if (face === 'glad' || face === 'proud') {
-    /* よろこんでいる目は、上に弧を描く(「^ ^」) */
-    return (
-      <g className="buddy-ink" fill="none" strokeWidth="3.4" strokeLinecap="round">
-        <path d={`M ${目.l - 6} ${目.y + 2} Q ${目.l} ${目.y - 6} ${目.l + 6} ${目.y + 2}`} />
-        <path d={`M ${目.r - 6} ${目.y + 2} Q ${目.r} ${目.y - 6} ${目.r + 6} ${目.y + 2}`} />
-      </g>
-    )
+    return <path className="buddy-line" fill="none" d={`M 26 ${口 - 1} Q 32 ${口 + 5} 38.5 ${口 - 1.5}`} />
   }
-  /* 考えている目は**上を見る**。励ます目は**大きめ**。
-     待つ・聞くは**まばたきする**(聞いているときは集中して、またたかない) */
-  const dy = face === 'think' ? -2.5 : 0
-  const r = face === 'cheer' ? 目.r0 + 0.8 : 目.r0
-  const blink = face === 'rest'
-  return (
-    <>
-      <Eye cx={目.l} cy={目.y + dy} r={r} blink={blink} />
-      <Eye cx={目.r} cy={目.y + dy} r={r} blink={blink} />
-    </>
-  )
+  if (face === 'cheer') return <path className="buddy-ink" d={`M 26 ${口 - 1} Q 32 ${口 + 8} 38.5 ${口 - 1} Z`} />
+  if (face === 'listen') return <ellipse className="buddy-ink" cx="32" cy={口 + 1} rx="3.2" ry="3.6" />
+  if (face === 'think') return <path className="buddy-line" fill="none" d={`M 27 ${口 + 1} Q 30 ${口 - 1.5} 32.5 ${口 + 0.5} Q 35 ${口 + 2.5} 37.5 ${口}`} />
+  return <path className="buddy-line" fill="none" d={`M 27.5 ${口} Q 32 ${口 + 1.5} 37 ${口 - 0.5}`} />
 }
 
-/** 口。**小鳥はくちばしが口のかわり**なので、こちらは使わない */
-function Mouth({ face, y }) {
-  const s = { fill: 'none', strokeWidth: 2.8, strokeLinecap: 'round' }
-  if (face === 'glad' || face === 'proud') {
-    return <path className="buddy-ink" d={`M 35 ${y - 1} Q 41 ${y + 5} 47 ${y - 1}`} {...s} />
-  }
-  if (face === 'cheer') return <path className="buddy-mouth" d={`M 34 ${y - 2} Q 41 ${y + 8} 48 ${y - 2} Z`} />
-  if (face === 'listen') return <ellipse className="buddy-mouth" cx="41" cy={y + 1} rx="4.4" ry="4" />
-  if (face === 'think') return <ellipse className="buddy-mouth" cx="41" cy={y} rx="2.8" ry="2.2" />
-  return <path className="buddy-ink" d={`M 37 ${y} Q 41 ${y + 2.5} 45 ${y}`} {...s} />
-}
-
-/**
- * ほお。**出ない顔でも、同じ形を置いておく**(`opacity` だけ変える)——
- * 出し入れすると、そこだけ描き直しが起きる。
- */
-const ほお = (face, y) => {
+const ほお = (face) => {
   const on = face === 'glad' || face === 'proud' || face === 'cheer'
   return (
-    <>
-      <ellipse className={`buddy-blush${on ? ' is-on' : ''}`} cx="21" cy={y} rx="5" ry="3.6" />
-      <ellipse className={`buddy-blush${on ? ' is-on' : ''}`} cx="61" cy={y} rx="5" ry="3.6" />
-    </>
+    <g className={`buddy-blush${on ? ' is-on' : ''}`}>
+      <path d="M 17 38 q 3 -1.5 5.5 0" /><path d="M 42 38 q 3 -1.5 5.5 0" />
+    </g>
   )
 }
 
-/** 足もとの影。**これが無いと、浮いて見える** */
-const 影 = <ellipse className="buddy-shadow" cx="41" cy="75" rx="18" ry="3" />
-
-/** 首のかしげ。**まっすぐ正面だけだと、固く見える** */
-function 傾き(face) {
-  if (face === 'listen') return -7
-  if (face === 'think') return 7
-  if (face === 'glad') return -4
-  if (face === 'cheer') return 4
-  return 0
-}
-
-/** 手の角。**顔ごとにしぐさを変える** —— ここが「アイコン」との差 */
-function 手の角(face) {
-  if (face === 'listen') return [-60, 12]   // 片手を耳に当てる
-  if (face === 'cheer') return [-55, 55]    // 両手を上げる
-  if (face === 'think') return [12, -52]    // 片手をあごに
-  /* **やり切った**は、よろこんだだけより**高く上げる。**
-     同じ形にしたら、`glad` と `proud` が見分けられなかった(描いて分かった) */
-  if (face === 'proud') return [-78, 78]
-  if (face === 'glad') return [-20, 20]
-  return [6, -6]
-}
-
-/** 考えている点。**待たせていることを隠さない** */
 const 考え = (face) => (face === 'think' ? (
   <g className="buddy-dots">
-    <circle cx="66" cy="18" r="2.2" /><circle cx="72" cy="12" r="2.6" /><circle cx="78" cy="5" r="3" />
+    <circle cx="51" cy="13" r="1.6" /><circle cx="56" cy="8.5" r="2" /><circle cx="61" cy="4" r="2.4" />
   </g>
 ) : null)
 
-/** やり切ったときだけ出る、きらめき。**場所は取らない**(重ねるだけ) */
 const きらめき = (face) => (face === 'proud' ? (
-  <g className="buddy-star">
-    <path d="M 12 16 l 1.8 4.4 4.4 1.8 -4.4 1.8 -1.8 4.4 -1.8 -4.4 -4.4 -1.8 4.4 -1.8 Z" />
-    <path d="M 70 10 l 1.4 3.4 3.4 1.4 -3.4 1.4 -1.4 3.4 -1.4 -3.4 -3.4 -1.4 3.4 -1.4 Z" />
+  <g className="buddy-star" fill="none">
+    <path d="M 7 12 v 7 M 3.5 15.5 h 7" /><path d="M 55 7 v 5 M 52.5 9.5 h 5" />
   </g>
 ) : null)
 
-/* ══ ① 小鳥 + ヘッドホン ══════════════════════════════════ */
-function Bird({ face }) {
-  const [la, ra] = 手の角(face)
-  return (
-    <>
-      {影}
-      <ellipse className="buddy-body" cx="41" cy="58" rx="17" ry="15" />
-      <ellipse className="buddy-belly" cx="41" cy="61" rx="10" ry="10" />
-      <g transform={`rotate(${la} 25 54)`}>
-        <path className="buddy-limb" d="M 25 48 Q 13 54 17 65 Q 26 59 28 50 Z" />
-      </g>
-      <g transform={`rotate(${ra} 57 54)`}>
-        <path className="buddy-limb" d="M 57 48 Q 69 54 65 65 Q 56 59 54 50 Z" />
-      </g>
-      <path className="buddy-foot" d="M 34 71 L 34 75 M 30 75 L 38 75" />
-      <path className="buddy-foot" d="M 48 71 L 48 75 M 44 75 L 52 75" />
-      <g transform={`rotate(${傾き(face)} 41 40)`}>
-        <circle className="buddy-body" cx="41" cy="33" r="23" />
-        {/* ★ ヘッドホン。**ひと目で「聞く子」と分かるシルエット** */}
-        <path className="buddy-gear" d="M 16 32 Q 41 2 66 32" fill="none" strokeWidth="5" strokeLinecap="round" />
-        <rect className="buddy-gear2" x="9" y="26" width="12" height="18" rx="6" />
-        <rect className="buddy-gear2" x="61" y="26" width="12" height="18" rx="6" />
-        <Eyes face={face} />
-        {ほお(face, 45)}
-        {/* くちばし。**聞いているときと励ますときだけ開く** */}
-        {face === 'listen' || face === 'cheer' ? (
-          <>
-            <path className="buddy-beak" d="M 35 44 L 47 44 L 41 50 Z" />
-            <path className="buddy-beak" d="M 37 53 L 45 53 L 41 50.3 Z" />
-          </>
-        ) : <path className="buddy-beak" d="M 35 44 L 47 44 L 41 52 Z" />}
-      </g>
-    </>
-  )
+/* ══ 12 人の頭。**かたちと持ちものだけ** ══════════════════════
+   きれいな円を1つも使っていない —— どれも少しずつ歪ませてある */
+const 形 = {
+  robo: { label: 'ロボ', solid: false, 描く: () => (<>
+    <path className="buddy-out" d="M 4 28 h 6 M 54 28 h 6 M 32 11 v -6" />
+    <circle className="buddy-ink" cx="32" cy="3.5" r="2.4" />
+    <path className="buddy-body" d="M 15 13 q 17 -2 34 0.5 q 2.5 16 0 36 q -17 2.5 -34 0 q -2.5 -18 0 -36.5 Z" />
+  </>) },
+  cat: { label: 'ねこ', solid: false, 描く: () => (<>
+    <path className="buddy-body" d="M 13 22 l -2 -14 l 14 7.5 Z" />
+    <path className="buddy-body" d="M 51 22 l 2.5 -14 l -14 8 Z" />
+    <path className="buddy-body" d="M 32 11 q 21 0.5 22 20 q 1 20 -22 20.5 q -23 -0.5 -22 -20.5 q 1 -19.5 22 -20 Z" />
+    <path className="buddy-out" d="M 8 33 h 7 M 8.5 38 l 6.5 -1.5 M 56 33 h -7 M 55.5 38 l -6.5 -1.5" />
+  </>) },
+  dog: { label: 'いぬ', solid: false, 描く: () => (<>
+    <path className="buddy-body" d="M 17 17 q -12 3 -11.5 17 q 0.5 13 9.5 13 q 4 -0.5 4.5 -6 Z" />
+    <path className="buddy-body" d="M 47 17 q 12 3.5 11.5 17 q -1 13 -10 13 q -4 -0.5 -4 -6 Z" />
+    <path className="buddy-body" d="M 32 10 q 18 1 18.5 20 q 0.5 21 -18.5 21.5 q -19 -0.5 -18.5 -21.5 q 0.5 -19 18.5 -20 Z" />
+  </>) },
+  bear: { label: 'くま', solid: true, 描く: () => (<>
+    <circle className="buddy-body" cx="16" cy="16" r="7.5" />
+    <circle className="buddy-body" cx="48" cy="16" r="7" />
+    <path className="buddy-body" d="M 32 10 q 21 1.5 21 21 q 0 20 -21 20.5 q -21.5 -0.5 -21 -20.5 q 0.5 -19.5 21 -21 Z" />
+  </>) },
+  bird: { label: 'とり', solid: false, 描く: () => (<>
+    <path className="buddy-out" d="M 29 10 q -3 -7 2 -8.5 q 1.5 4 2.5 8" />
+    <path className="buddy-out" d="M 34 10.5 q 3 -6.5 8 -6 q -2.5 3.5 -5 7" />
+    <path className="buddy-body" d="M 32 11 q 20.5 1 20 20.5 q -0.5 20 -20 20.5 q -20 -0.5 -20.5 -20.5 q -0.5 -19.5 20.5 -20.5 Z" />
+    <path className="buddy-ink" d="M 28 40 h 8.5 l -4.5 6 Z" />
+  </>) },
+  alien: { label: 'うちゅうじん', solid: true, 描く: () => (<>
+    <path className="buddy-body" d="M 32 13 q 23 1 22 21 q -1 20 -22 20 q -21.5 0 -22.5 -20 q -1 -20 22.5 -21 Z" />
+    <path className="buddy-out" d="M 24 15 q -6 -7 -5.5 -12" />
+    <path className="buddy-out" d="M 41 15 q 6.5 -7 6 -12" />
+    <circle className="buddy-ink" cx="18.5" cy="2" r="2.4" />
+    <circle className="buddy-ink" cx="47.5" cy="2" r="2.1" />
+  </>) },
+  ghost: { label: 'おばけ', solid: false, 描く: () => (<>
+    <path className="buddy-body"
+          d="M 32 8 q 19 0.5 19.5 19 l 0.5 25 q -4 -4.5 -7 0 q -3.5 4.5 -6.5 -0.5 q -3 -4.5 -6.5 0 q -3.5 4.5 -7 -0.5 q -3 -4 -6.5 0.5 l 0.5 -24.5 q 0 -18.5 19 -19 Z" />
+  </>) },
+  rice: { label: 'おむすび', solid: false, 描く: () => (<>
+    <path className="buddy-body" d="M 32 7 q 6 0 9 7 l 16 31 q 3 7 -5 7.5 h -40 q -8 -0.5 -5 -7.5 l 16 -31 q 3 -7 9 -7 Z" />
+    <path className="buddy-band" d="M 17 45 q 15 2.5 30 0 v 7.5 h -30 Z" />
+  </>) },
+  egg: { label: 'たまご', solid: false, 描く: () => (<>
+    <path className="buddy-body" d="M 32 6 q 13 6.5 16.5 23 q 3 19.5 -16.5 24 q -19.5 -4.5 -16.5 -24 q 3.5 -16.5 16.5 -23 Z" />
+    <path className="buddy-out" d="M 18 19 l 5 2.5 l -3.5 3.5 l 6 2 l -3 3" />
+  </>) },
+  mush: { label: 'きのこ', solid: false, 描く: () => (<>
+    <path className="buddy-body" d="M 15 23 q 1 31 17 31 q 16.5 -0.5 17 -31 Z" />
+    <path className="buddy-body" d="M 32 4 q 25 1 25.5 17 q 0.5 4.5 -5.5 4.5 h -40 q -6 0 -5.5 -4.5 q 0.5 -16 25.5 -17 Z" />
+    <circle className="buddy-dot" cx="19" cy="15" r="3.4" />
+    <circle className="buddy-dot" cx="44" cy="12" r="2.8" />
+  </>) },
+  fish: { label: 'さかな', solid: false, 描く: () => (<>
+    <path className="buddy-body" d="M 47 32 l 13 -11 q 2.5 11 0 22 Z" />
+    <path className="buddy-body" d="M 28 10 q 20 1 21 22 q -1 21 -21 21.5 q -22 -0.5 -23 -21.5 q 1 -21 23 -22 Z" />
+    <path className="buddy-out" d="M 29 11 q 6 -6 12 -6 q -2 4 -2 7" />
+  </>) },
+  turnip: { label: 'かぶ', solid: true, 描く: () => (<>
+    <path className="buddy-out" d="M 30 12 q -5 -7 -11 -8 q 2 7 9 9" />
+    <path className="buddy-out" d="M 35 12 q 4 -8 11 -9 q -1.5 7.5 -8.5 10" />
+    <path className="buddy-body" d="M 32 11 q 17 2 18 20 q 1 20 -18 21 q -19 -1 -18 -21 q 1 -18 18 -20 Z" />
+  </>) },
 }
-
-/* ══ ② キツネ ════════════════════════════════════════════ */
-function Fox({ face }) {
-  const [la, ra] = 手の角(face)
-  return (
-    <>
-      {影}
-      {/* しっぽ。**シルエットの引っかかり**(手と重ならない所まで下げてある) */}
-      <path className="buddy-body" d="M 56 66 Q 78 66 78 50 Q 72 62 58 60 Z" />
-      <path className="buddy-tip" d="M 74 54 Q 79 52 78 46 Q 75 52 72 53 Z" />
-      <ellipse className="buddy-body" cx="41" cy="58" rx="16" ry="14" />
-      <ellipse className="buddy-belly" cx="41" cy="61" rx="9.5" ry="9.5" />
-      <g transform={`rotate(${la} 26 54)`}>
-        <path className="buddy-limb" d="M 26 49 Q 15 54 18 64 Q 27 59 29 51 Z" />
-      </g>
-      <g transform={`rotate(${ra} 56 54)`}>
-        <path className="buddy-limb" d="M 56 49 Q 67 54 64 64 Q 55 59 53 51 Z" />
-      </g>
-      <path className="buddy-foot" d="M 34 70 L 34 74 M 30 74 L 38 74" />
-      <path className="buddy-foot" d="M 48 70 L 48 74 M 44 74 L 52 74" />
-      <g transform={`rotate(${傾き(face)} 41 40)`}>
-        <path className="buddy-body" d="M 21 22 L 16 2 L 36 14 Z" />
-        <path className="buddy-body" d="M 61 22 L 66 2 L 46 14 Z" />
-        <path className="buddy-tip" d="M 21.5 17 L 19 7 L 29 13 Z" />
-        <path className="buddy-tip" d="M 60.5 17 L 63 7 L 53 13 Z" />
-        <path className="buddy-body" d="M 41 10 C 59 10 64 24 64 36 C 64 50 54 58 41 58 C 28 58 18 50 18 36 C 18 24 23 10 41 10 Z" />
-        <ellipse className="buddy-belly" cx="41" cy="47" rx="13" ry="10" />
-        <Eyes face={face} />
-        {ほお(face, 45)}
-        <ellipse className="buddy-nose" cx="41" cy="43" rx="3.4" ry="2.6" />
-        <Mouth face={face} y={50} />
-      </g>
-    </>
-  )
-}
-
-/* ══ ③ まるい相棒 + マフラー ═══════════════════════════════ */
-function Pal({ face }) {
-  const [la, ra] = 手の角(face)
-  return (
-    <>
-      {影}
-      <path className="buddy-body"
-            d="M 41 8 C 60 8 66 22 66 38 C 66 52 61 62 59 68 C 57 73 50 74 41 74 C 32 74 25 73 23 68 C 21 62 16 52 16 38 C 16 22 22 8 41 8 Z" />
-      <ellipse className="buddy-belly" cx="41" cy="62" rx="12" ry="10" />
-      <g transform={`rotate(${la} 21 55)`}>
-        <path className="buddy-limb" d="M 21 50 Q 9 55 12 65 Q 22 60 24 52 Z" />
-      </g>
-      <g transform={`rotate(${ra} 61 55)`}>
-        <path className="buddy-limb" d="M 61 50 Q 73 55 70 65 Q 60 60 58 52 Z" />
-      </g>
-      <g transform={`rotate(${傾き(face)} 41 40)`}>
-        <Eyes face={face} />
-        {ほお(face, 45)}
-        <Mouth face={face} y={48} />
-      </g>
-      {/* マフラー。**首をかしげる箱の外**に置く —— 中に入れると一緒に回る */}
-      <path className="buddy-gear2" d="M 22 50 Q 41 57 60 50 L 60 55.5 Q 41 62.5 22 55.5 Z" />
-      <path className="buddy-gear2" d="M 54 54 L 63 72 L 55 73.5 L 49 57 Z" />
-    </>
-  )
-}
-
-/**
- * 相棒ごとの持ちもの。**ここ1か所**で、
- * 「どう描くか」と「小さいときに顔をどこで切り出すか」を決める。
- * **画面の中で `kind === '…'` と書かない**(CLAUDE.md)。
- */
-const 相棒 = {
-  bird: { 描く: Bird, 顔: '6 -2 70 70' },
-  fox: { 描く: Fox, 顔: '10 -1 62 62' },
-  pal: { 描く: Pal, 顔: '12 2 58 58' },
-}
-
-/**
- * 全身のときの箱。**きらめきも考えている点も、この中に収めてある** ——
- * はみ出させると `overflow: visible` が要り、そうすると
- * **小さいときの切り取りが効かなくなる。**
- */
-const 全身 = '-1 -2 84 84'
 
 /**
  * @param {object} p
  * @param {string} p.face  `buddyFace()` が決めた顔
- * @param {string} [p.size] `'sm'`(帯の中・**顔だけ**)/ `'md'` / `'lg'`
+ * @param {string} [p.size] `'sm'` / `'md'` / `'lg'`
  * @param {string} [p.kind] **ふだんは渡さない**(選ばれているものを自分で読む)。
- *   渡せるようにしてあるのは、見張りが3人とも描いて測れるようにするため
+ *   渡せるようにしてあるのは、見張りが 12 人とも描いて測れるようにするため
  */
 export default function Buddy({ face = 'rest', size = 'md', kind, className = '' }) {
   const 選び = useBuddyKind()
   const id = buddyKindOf(kind ?? 選び)
-  const 人 = 相棒[id] ?? 相棒[BUDDY_KIND_DEFAULT]
+  const 人 = 形[id] ?? 形[BUDDY_KIND_DEFAULT]
   const Draw = 人.描く
   return (
     <span
       className={`buddy buddy--${size} buddy--${face} buddy--k-${id}`
+        + (人.solid ? ' is-solid' : '')
         + (buddyBreathes(face) ? ' is-breathing' : '')
         + (className ? ` ${className}` : '')}
       role="img"
       aria-label={buddyAlt(face)}
     >
-      {/* **小さいときは顔だけを切り出す。** 絵は1枚のまま */}
-      <svg viewBox={size === 'sm' ? 人.顔 : 全身} focusable="false" aria-hidden="true">
-        <Draw face={face} />
+      <svg viewBox="0 0 64 64" focusable="false" aria-hidden="true">
+        <Draw />
+        <Eyes face={face} />
+        <Mouth face={face} />
+        {ほお(face)}
         {考え(face)}
         {きらめき(face)}
       </svg>

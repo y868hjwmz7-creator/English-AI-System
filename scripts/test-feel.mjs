@@ -129,7 +129,8 @@ console.log('\n▶ 相棒をえらぶ(素の node で測る)')
        相棒を1人消した日に期待も一緒に消えて**緑のまま**になる
        (第5.337節で踏んだ「見張りが、自分と同じ出どころを見ている」)。
        **一度入れたものを勝手に減らさない**(共通ルール) */
-  const 居るはず = ['bird', 'fox', 'pal']
+  const 居るはず = ['robo', 'cat', 'dog', 'bear', 'bird', 'alien',
+    'ghost', 'rice', 'egg', 'mush', 'fish', 'turnip']
   const 居る = K.BUDDY_KINDS.map((k) => k.id)
   const 消えた = 居るはず.filter((id) => !居る.includes(id))
   is(!消えた.length, `相棒が ${居るはず.length} 人とも居る`, 消えた.join(' / '))
@@ -142,7 +143,7 @@ console.log('\n▶ 相棒をえらぶ(素の node で測る)')
   const 変なの = ['zzz', '', null, undefined, 0, {}]
   const 外 = 変なの.filter((v) => !居る.includes(K.buddyKindOf(v)))
   is(!外.length, '知らない値でも、必ず誰かに落ちる', String(外.length))
-  is(K.buddyKindOf('fox') === 'fox', '正しい値は、そのまま通る')
+  is(K.buddyKindOf('cat') === 'cat', '正しい値は、そのまま通る')
 
   /* **鍵の名前を画面に書かない**(`TIPS_KEY` と同じ作法) */
   const nav = noC(read('src/components/NavSettings.jsx'))
@@ -349,7 +350,7 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   await page.goto(`http://localhost:${PORT}/__feel.html`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#kinds .buddy')
   await page.waitForTimeout(400)
-  is(!落ちた.length, '3人とも描いて落ちない', 落ちた.slice(0, 1).join(''))
+  is(!落ちた.length, `${K.BUDDY_KINDS.length} 人とも描いて落ちない`, 落ちた.slice(0, 1).join(''))
 
   const 数 = await page.locator('#kinds .buddy').count()
   const はず = K.BUDDY_KINDS.length * (B.BUDDY_FACES.length + 1)
@@ -363,18 +364,43 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   }))
   is(new Set(箱).size === 1, '相棒が違っても・顔が違っても、箱の大きさは同じ', [...new Set(箱)].join(' / '))
 
-  /* **小さいときは顔だけ。** 同じ絵のまま `viewBox` で切り出しているか */
-  const 枠 = await page.$$eval('#kinds .buddy', (els) => els.map((el) => ({
-    sm: el.classList.contains('buddy--sm'),
-    v: el.querySelector('svg')?.getAttribute('viewBox') ?? '',
-  })))
-  const 全身 = new Set(枠.filter((x) => !x.sm).map((x) => x.v))
-  const 顔だけ = new Set(枠.filter((x) => x.sm).map((x) => x.v))
-  is(全身.size === 1, '全身の箱は、相棒が違っても同じ', [...全身].join(' / '))
-  is(顔だけ.size === K.BUDDY_KINDS.length, '小さいときは、相棒ごとに顔を切り出している', [...顔だけ].join(' / '))
-  /* ★ **出ない側。** 切り出しが効いていないと、全身と同じ `viewBox` になる */
-  const 切れていない = [...顔だけ].filter((v) => 全身.has(v))
-  is(!切れていない.length, '小さいときに、全身のまま縮めていない', 切れていない.join(' / '))
+  /* **絵の箱は、相棒でも大きさでも1つ。**
+     顔だけの絵になったので、小さいときに切り出す必要が無くなった
+     (第5.374節。全身だったころは `viewBox` で顔を切り出していた) */
+  const 枠 = await page.$$eval('#kinds .buddy', (els) => els.map(
+    (el) => el.querySelector('svg')?.getAttribute('viewBox') ?? ''))
+  is(new Set(枠).size === 1, '絵の箱は、相棒が違っても大きさが違っても同じ', [...new Set(枠)].join(' / '))
+
+  /* ★ **塗りつぶしの相棒が、ちゃんと混ざっているか。**
+       全部おなじ描き方だと、並べたときに退屈になる(2026-10-05 の指定) */
+  const 塗り = await page.$$eval('#kinds .buddy.is-solid',
+    (els) => [...new Set(els.map((el) => [...el.classList].find((c) => c.startsWith('buddy--k-'))))].length)
+  is(塗り >= 1 && 塗り < K.BUDDY_KINDS.length,
+    '塗りつぶしと線だけが、どちらも居る', `塗り ${塗り} 人 / 全 ${K.BUDDY_KINDS.length} 人`)
+
+  /* ★ **飾りの線が、塗りつぶしの相棒で消えていないか。**
+       実際、うちゅうじんの触角が**白くなって1本も見えなかった**(第5.374節)——
+       飾りは**からだの外**にあるので、白くなると紙に溶ける。
+
+       ★ **箱の背景と比べてはいけない**(作った日に、これで赤チェックが空振りした)。
+       箱の背景は透明なので、**どんな色にしても一致しない。**
+       比べる相手は「**線だけの相棒の、同じ飾り**」である ——
+       塗りつぶしかどうかで色が変わっていないことを、そのまま測る。 */
+  const 飾り = await page.$$eval('#kinds .buddy', (els) => {
+    const 取る = (sel) => {
+      const el = document.querySelector(sel)
+      return el ? window.getComputedStyle(el).stroke : ''
+    }
+    return {
+      塗り: 取る('#kinds .buddy.is-solid .buddy-out'),
+      線: 取る('#kinds .buddy:not(.is-solid) .buddy-out'),
+      本数: els.length,
+    }
+  })
+  is(Boolean(飾り.塗り) && Boolean(飾り.線),
+    '塗りつぶしにも線だけにも、外の飾りがある', `${飾り.塗り} / ${飾り.線}`)
+  is(飾り.塗り === 飾り.線,
+    '外の飾りの色は、塗りつぶしでも変わらない(紙に溶けない)', `${飾り.塗り} / ${飾り.線}`)
 
   /* ★ **選び直すと、同じ画面の相棒がその場で変わるか。**
        合図が届いていないと、設定を閉じるまで絵が変わらない */
