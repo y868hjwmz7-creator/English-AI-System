@@ -347,8 +347,12 @@ async function 押して測る(動かす) {
     return { active: el.matches(':active'), t: window.getComputedStyle(el).transform }
   })
   const 顔 = await page.locator('#faces .buddy').count()
+  /* **妖怪の癖も、動きを減らす人には止める**(第5.378節)。
+     ここを `@media` の一覧に足し忘れると、**癖だけが動き続ける** */
+  const 癖 = await page.$$eval('#kinds .buddy-sway, #kinds .buddy-pulse, #kinds .buddy-drift',
+    (els) => [...new Set(els.map((el) => window.getComputedStyle(el).animationName))])
   await page.close()
-  return { 押し, 後, 落ちた, 顔 }
+  return { 押し, 後, 落ちた, 顔, 癖 }
 }
 
 console.log('\n▶ 本当に沈むか(実機で押して、そのまま測る)')
@@ -370,6 +374,11 @@ console.log('\n▶ 本当に沈むか(実機で押して、そのまま測る)')
   is(b2.押し.active, '動きを減らす端末でも、`:active` にはなる')
   is(b2.押し.t === 'none' || b2.押し.t === 'matrix(1, 0, 0, 1, 0, 0)',
     '動きを減らす端末では、沈まない', b2.押し.t)
+  /* ★ **出ない側。** 妖怪の癖も、動きを減らす人には1つも動かない */
+  is(a.癖.length > 0 && !a.癖.includes('none'),
+    '妖怪の癖は、ふつうの端末では動いている', a.癖.join(' / '))
+  is(b2.癖.length > 0 && b2.癖.every((n) => n === 'none'),
+    '動きを減らす端末では、妖怪の癖も止まる', b2.癖.join(' / '))
 }
 
 console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測る)')
@@ -410,7 +419,7 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
        画面の大きさが混ざって、そこの違いだけで緑になる) */
   const 目の場 = await page.$$eval('#kinds [data-kind]', (els) => els.map((el) => {
     const svg = el.querySelector('.buddy--md svg')
-    const 目 = svg?.querySelector('.buddy-ink path')
+    const 目 = svg?.querySelector('.buddy-pupil')
     if (!svg || !目) return ''
     const s = svg.getBoundingClientRect()
     const e = 目.getBoundingClientRect()
@@ -443,6 +452,93 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   const 縮め = await page.$$eval('#kinds .buddy svg *[transform]', (els) => els.length)
   is(縮め === 0, '顔を transform で縮めていない(線の太さがそろう)', `${縮め} か所`)
 
+  /* ★★ **笑っていないか。** ここが第5.378節の本番である。
+       利用者「表情を可愛くしすぎです。媚びているように見えます」
+       「笑顔など入りません」。
+       **「真顔にする」と毎回書きながら、口だけ笑わせていた** ——
+       `glad` / `proud` / `cheer` の口が、上向きの弧だった。
+
+       **文字で見張らない。** 「`手の線` を使っているか」では、
+       点の並び次第でいくらでも笑う。**描かれた線そのものを測る** ——
+       口の道の、まん中と両端の高さを比べる。
+       画面は下へ行くほど y が大きいので、**まん中が下がっていたら笑顔**である。
+       (塗りつぶしの口(開いた口)は弧を持たないので、ここでは測らない) */
+  const 笑い = await page.$$eval('#kinds .buddy--md', (els) => els.map((el) => {
+    const m = el.querySelector('.buddy-mouth')
+    if (!m) return null
+    if (window.getComputedStyle(m).fill !== 'none') return null
+    const len = m.getTotalLength()
+    if (!len) return null
+    const a = m.getPointAtLength(0)
+    const c = m.getPointAtLength(len / 2)
+    const b = m.getPointAtLength(len)
+    const kind = [...el.classList].find((x) => x.startsWith('buddy--k-')) ?? ''
+    const face = [...el.classList].find((x) => x.startsWith('buddy--') && !x.startsWith('buddy--k-')
+      && !['buddy--sm', 'buddy--md', 'buddy--lg'].includes(x)) ?? ''
+    return { 下がり: c.y - (a.y + b.y) / 2, kind, face }
+  }).filter(Boolean))
+  const 測れた = 笑い.length
+  const 最も笑う = 笑い.reduce((m, v) => (v.下がり > m.下がり ? v : m), { 下がり: -99 })
+  is(測れた >= K.BUDDY_KINDS.length * 2, '口の線を、ちゃんと測れている', `${測れた} 本`)
+  is(最も笑う.下がり < 0.8, '口が1つも笑っていない(まん中が下がっていない)',
+    `いちばん下がって ${最も笑う.下がり.toFixed(2)} ・ ${最も笑う.kind} ${最も笑う.face}`)
+
+  /* ★ **シルエットが、妖怪ごとに違うか**(第5.378節)。
+       第5.377節では着物・帯・足・腕を 18 体で共有し、
+       **そろえた結果、こちらの手で個性を潰した**
+       (利用者「妖怪っぽさが全然なく、個性が潰れています」)。
+       **絵の広がり(縦横)そのものを測る** ——
+       同じ型紙を使い回すと、ここが一斉にそろう。
+       **半分以上が別の寸法**であることを求める(数は一覧の長さから出す) */
+  const 寸 = await page.$$eval('#kinds [data-kind]', (els) => els.map((el) => {
+    const svg = el.querySelector('.buddy--md svg')
+    if (!svg) return ''
+    const b = svg.getBBox()
+    return `${Math.round(b.width)}x${Math.round(b.height)}`
+  }))
+  is(new Set(寸).size >= Math.ceil(K.BUDDY_KINDS.length * 0.6),
+    'シルエットは、妖怪ごとに違う(型紙を使い回していない)',
+    `${new Set(寸).size} 通り / ${寸.length} 体`)
+
+  /* ★ **妖怪ごとの癖**(第5.378節)。置いてあるだけでゆっくり動く場所を
+       1体につき1つ持たせてある —— 利用者「だんだん親しみが湧く相棒」。
+       **全体が1種類に寄っていないか**も見る(それでは個性にならない) */
+  const 癖 = await page.$$eval('#kinds [data-kind]', (els) => els.map((el) => {
+    const svg = el.querySelector('.buddy--md svg')
+    const 名 = ['buddy-sway', 'buddy-pulse', 'buddy-drift', 'buddy-drip']
+    const 居る = 名.filter((n) => svg?.querySelector(`.${n}`))
+    return 居る.join('+')
+  }))
+  is(!癖.includes(''), `${K.BUDDY_KINDS.length} 体とも、癖を1つ持っている`,
+    癖.map((v, i) => (v ? '' : String(i))).filter(Boolean).join(' '))
+  is(new Set(癖).size >= 3, '癖は1種類に寄っていない', [...new Set(癖)].join(' / '))
+  /* **本当に動いているか。** クラスが付いていても、`animation` が
+     どこにも書いていなければ**1px も動かない**(名前だけの見張りになる) */
+  const 動く = await page.$$eval('#kinds .buddy-sway, #kinds .buddy-pulse', (els) => els.map(
+    (el) => window.getComputedStyle(el).animationName))
+  is(動く.length > 0 && !動く.includes('none'), '癖は、本当に動く決まりを持っている',
+    [...new Set(動く)].join(' / '))
+
+  /* ★ **暖色が、ちゃんと別の色として出ているか**(第5.378節・利用者「ポップに」)。
+       `--buddy-warm` を書き忘れると `fill` が空に落ちて、
+       **ただの黒い塊**になる(画面を見ないと分からない) */
+  const 暖 = await page.$$eval('#kinds .buddy--md', (els) => {
+    const 取る = (sel) => {
+      const el = document.querySelector(sel)
+      return el ? window.getComputedStyle(el).fill : ''
+    }
+    const 線 = document.querySelector('#kinds .buddy-body')
+    return {
+      暖: 取る('#kinds .buddy-warm'),
+      紙: 線 ? window.getComputedStyle(線).fill : '',
+      墨: 線 ? window.getComputedStyle(線).stroke : '',
+      数: els.length,
+    }
+  })
+  is(Boolean(暖.暖) && 暖.暖 !== 'rgb(0, 0, 0)', '暖色が、ちゃんと色として出ている', 暖.暖)
+  is(暖.暖 !== 暖.墨 && 暖.暖 !== 暖.紙,
+    '暖色は、線の色とも紙の色とも違う', `${暖.暖} / 墨 ${暖.墨} / 紙 ${暖.紙}`)
+
   /* ★ **塗りつぶしの妖怪が、ちゃんと混ざっているか。**
        全部おなじ描き方だと、並べたときに退屈になる(2026-10-05 の指定)。
        **塗りすぎてもいけない** —— 見本で黒い塊は2つくらいで、
@@ -452,29 +548,41 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   is(塗り >= 1 && 塗り < K.BUDDY_KINDS.length,
     '塗りつぶしと線だけが、どちらも居る', `塗り ${塗り} 体 / 全 ${K.BUDDY_KINDS.length} 体`)
 
-  /* ★ **飾りの線が、塗りつぶしの相棒で消えていないか。**
+  /* ★ **飾りが、塗りつぶしの相棒で消えていないか。**
        実際、うちゅうじんの触角が**白くなって1本も見えなかった**(第5.374節)——
        飾りは**からだの外**にあるので、白くなると紙に溶ける。
 
        ★ **箱の背景と比べてはいけない**(作った日に、これで赤チェックが空振りした)。
        箱の背景は透明なので、**どんな色にしても一致しない。**
-       比べる相手は「**線だけの相棒の、同じ飾り**」である ——
-       塗りつぶしかどうかで色が変わっていないことを、そのまま測る。 */
+       **墨の色・紙の色・塗りの色**という、実際に取りうる相手と比べる。
+
+       ★ **測る相手は、第5.378節で変わった。** 塗りつぶしがうみぼうず1体になり、
+       その外の飾りは**暖色の波**である(`.buddy-out` を1本も持たない)。
+       **前の形のままだと、何も取れずに赤くなる** ——
+       見張りは、いま本当に在るものを測る。 */
   const 飾り = await page.$$eval('#kinds .buddy', (els) => {
-    const 取る = (sel) => {
+    const 色 = (sel, 何) => {
       const el = document.querySelector(sel)
-      return el ? window.getComputedStyle(el).stroke : ''
+      return el ? window.getComputedStyle(el)[何] : ''
     }
     return {
-      塗り: 取る('#kinds .buddy.is-solid .buddy-out'),
-      線: 取る('#kinds .buddy:not(.is-solid) .buddy-out'),
+      線の飾り: 色('#kinds .buddy:not(.is-solid) .buddy-out', 'stroke'),
+      塗りの飾り: 色('#kinds .buddy.is-solid .buddy-warm-line', 'stroke'),
+      塗りのからだ: 色('#kinds .buddy.is-solid .buddy-body', 'fill'),
+      紙: 色('#kinds .buddy:not(.is-solid) .buddy-body', 'fill'),
       本数: els.length,
     }
   })
-  is(Boolean(飾り.塗り) && Boolean(飾り.線),
-    '塗りつぶしにも線だけにも、外の飾りがある', `${飾り.塗り} / ${飾り.線}`)
-  is(飾り.塗り === 飾り.線,
-    '外の飾りの色は、塗りつぶしでも変わらない(紙に溶けない)', `${飾り.塗り} / ${飾り.線}`)
+  is(Boolean(飾り.線の飾り) && Boolean(飾り.塗りの飾り),
+    '線だけの相棒にも、塗りつぶしの相棒にも、外の飾りがある',
+    `${飾り.線の飾り} / ${飾り.塗りの飾り}`)
+  /* **紙に溶けない。** 白い紙の上で白くなったら、1本も見えない */
+  is(飾り.塗りの飾り !== 飾り.紙 && 飾り.線の飾り !== 飾り.紙,
+    '外の飾りは、紙の色に溶けない', `${飾り.塗りの飾り} / 紙 ${飾り.紙}`)
+  /* **塗りにも溶けない。** 濃いからだの上で同じ色なら、やはり見えない */
+  is(飾り.塗りの飾り !== 飾り.塗りのからだ,
+    '外の飾りは、塗りつぶしのからだにも溶けない',
+    `${飾り.塗りの飾り} / からだ ${飾り.塗りのからだ}`)
 
   /* ★ **選び直すと、同じ画面の相棒がその場で変わるか。**
        合図が届いていないと、設定を閉じるまで絵が変わらない */

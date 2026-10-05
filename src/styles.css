@@ -81,6 +81,10 @@
   --pos-conj:   #5c6470;  --pos-conj-bg:   #eff1f4;
   --pos-phrase: #4c6ba8;  --pos-phrase-bg: #eef2fa;
   --warn:    #eda100;   --warn-bg: #fdf3dc;
+  /* 相棒の暖色(第5.378節・利用者「暖色・橙または黄」)。
+     **`--warn` を使い回さない** —— あれは「気をつけて」の意味を持っており、
+     相棒の腰巻が警告色になると、意味のほうが先に効いてしまう */
+  --buddy-warm: #f0a132;
   --danger:  #e34948;
 
   /* ================================================================
@@ -260,6 +264,7 @@
     --pos-conj:   #a3adba;  --pos-conj-bg:   #262a2f;
     --pos-phrase: #93aee0;  --pos-phrase-bg: #212734;
     --warn:   #c98500;   --warn-bg: #2e2617;
+    --buddy-warm: #d9922f;
     --danger: #e66767;
     /* 暗い側では黒い影がほとんど見えない。**濃くするのではなく深くする** */
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.40);
@@ -315,6 +320,7 @@
   --pos-conj:   #a3adba;  --pos-conj-bg:   #262a2f;
   --pos-phrase: #93aee0;  --pos-phrase-bg: #212734;
   --warn:   #c98500;   --warn-bg: #2e2617;
+  --buddy-warm: #d9922f;
   --danger: #e66767;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.40);
   --shadow-2: 0 8px 26px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.40);
@@ -10999,7 +11005,10 @@ button.wbfilter-ctl { text-align: left; }
 /* ── 相棒 ─────────────────────────────────────────────────────
      **1色だけ**(`--accent`)。2026-10-05 利用者の指定で、
      手描きのアイコン集と同じ空気にそろえた —— 暖色の塗り分けはやめている。
-     **18 体の妖怪。立ち姿**である(第5.376 → 第5.377節)。
+     **18 体の妖怪。立ち姿**である(第5.376 → 5.377 → **第5.378節**)。
+     **型紙は持たない** —— そろえた結果、個性を潰したのが第5.377節である
+     (利用者「妖怪っぽさが全然なく、個性が潰れています」)。
+     そろえるのは**線の作風だけ。からだの形はそろえない。**
      **線は細く、どこも同じ太さ**(見本がそうである・第5.377節)——
      太いと、見本の「細い線で描いたアイコン」に見えない。
      `viewBox` は 18 体とも同じで、**箱の大きさは 1px も動かない。**
@@ -11028,6 +11037,34 @@ button.wbfilter-ctl { text-align: left; }
   stroke: var(--accent);
   stroke-width: 2.1;
 }
+
+/* ★ **暖色は1体につき1か所だけ**(第5.378節・利用者「ポップに」)。
+     色は、以前いただいた指定(**暖色・橙または黄**)に合わせてある。
+     **たくさん塗ると、とたんに子ども向けになる** ——
+     皿の水・腰巻・舌・鬼火・腹。それぞれ1か所である。
+     **塗りつぶしの相棒でも、暖色は暖色のまま**(`--on-accent` に落とさない)。
+     あれに落とすと、黒い海坊主の波が白くなって消える */
+.buddy-warm {
+  fill: var(--buddy-warm);
+  stroke: var(--accent);
+  stroke-width: 2.1;
+}
+.buddy-warm-line { stroke: var(--buddy-warm); stroke-width: 2.4; fill: none; }
+.buddy.is-solid .buddy-warm { stroke: var(--on-accent); }
+
+/* ★ **爬虫類の目**(第5.378節)。白目 + **縦のスリットの瞳。**
+     笑わないのに、瞳の太さだけで表情が出る ——
+     そして少しだけ不気味で、見ているうちに情が湧く
+     (利用者「爬虫類をペットにしている人の気持ちと似ている」)。
+     **瞳は、塗りつぶしの相棒でも紺のまま** —— 白目の上に乗るので、
+     `--on-accent`(白)に落とすと**瞳が消える** */
+.buddy-eye {
+  fill: var(--surface-1);
+  stroke: var(--accent);
+  stroke-width: 1.7;
+}
+.buddy-pupil { fill: var(--accent); stroke: none; }
+.buddy.is-solid .buddy-eye { stroke: var(--on-accent); }
 .buddy-line { stroke: var(--accent); stroke-width: 2.1; fill: none; }
 /* 顔の細い線(口・閉じた目)。**本体より少しだけ細い** */
 .buddy-ink2 { stroke: var(--accent); stroke-width: 1.8; fill: none; }
@@ -11044,9 +11081,9 @@ button.wbfilter-ctl { text-align: left; }
 .buddy-blush.is-on { opacity: 0.55; }
 .buddy-star { stroke: var(--accent); stroke-width: 2; }
 
-/* ★ **18 体のうち2体だけ塗りつぶし**(ぬりかべ・うみぼうず)。
-     見本も、黒い塊はその2つくらいである(第5.377節)——
-     3体以上を塗ると、並べたときに「線で描いた一覧」に見えなくなる */
+/* ★ **塗りつぶしは、うみぼうず1体だけ**(第5.378節)。
+     暖色が入ったぶん、塗りを減らしても一覧は退屈にならない ——
+     **線と暖色の置き方のほうで、違いを出す** */
 .buddy.is-solid .buddy-body { fill: var(--accent); }
 .buddy.is-solid .buddy-ink { fill: var(--on-accent); }
 .buddy.is-solid .buddy-line { stroke: var(--on-accent); }
@@ -11097,6 +11134,40 @@ button.wbfilter-ctl { text-align: left; }
   animation: buddy-glad var(--motion-sheet) var(--ease-pop) 1;
 }
 
+/* ★ **妖怪ごとの癖**(第5.378節)。**押したときではなく、置いてあるときに動く。**
+     止まっている絵は、何度見ても同じである ——
+     1体につき**1か所だけ**ゆっくり動かすと、2回目か3回目に気づいて、
+     そこから情が湧く(利用者「だんだん親しみが湧く相棒」)。
+
+     **4種類しか持たない。** 18 通り書くと、足した1体だけ動きが違う。
+     どれも `transform` なので、**箱の大きさは 1px も動かない。** */
+@keyframes buddy-sway {
+  0%, 100% { transform: rotate(-2.5deg); }
+  50%      { transform: rotate(2.5deg); }
+}
+@keyframes buddy-pulse {
+  0%, 100% { transform: scale(1); }
+  55%      { transform: scale(1.09); }
+}
+@keyframes buddy-drift {
+  0%, 100% { transform: translateX(-1.6px); }
+  50%      { transform: translateX(1.6px); }
+}
+@keyframes buddy-drip {
+  0%, 68% { transform: translateY(0); opacity: 1; }
+  88%     { transform: translateY(6px); opacity: 0; }
+  89%     { transform: translateY(0); opacity: 0; }
+  100%    { transform: translateY(0); opacity: 1; }
+}
+.buddy-sway, .buddy-pulse, .buddy-drift, .buddy-drip {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.buddy-sway  { animation: buddy-sway 3.9s var(--ease-out) infinite; }
+.buddy-pulse { animation: buddy-pulse 2.7s var(--ease-out) infinite; }
+.buddy-drift { animation: buddy-drift 4.6s var(--ease-out) infinite; }
+.buddy-drip  { animation: buddy-drip 3.4s linear infinite; }
+
 /* ── やり終えた1枚 ─────────────────────────────────────────────
      **ここだけ長い動きを使ってよい。** 次に押すものは無く、
      測る見張りも通らない(画面がまるごと変わったあとである) */
@@ -11130,7 +11201,11 @@ button.wbfilter-ctl { text-align: left; }
   .buddy-blink,
   .buddy--think svg,
   .buddy--glad svg,
-  .buddy--proud svg { animation: none; }
+  .buddy--proud svg,
+  .buddy-sway,
+  .buddy-pulse,
+  .buddy-drift,
+  .buddy-drip { animation: none; }
   .sresult-score > strong { animation: none; }
 }
 
