@@ -32,6 +32,8 @@
  *   **下に箱が並ぶ**。画面が入れ替わったようには見えない。
  */
 import { ChevronIcon } from './Icons.jsx'
+import Buddy from './Buddy.jsx'
+import { buddyFace } from '../lib/buddy.js'
 import { staggerMs } from '../lib/motion.js'
 
 /**
@@ -50,7 +52,11 @@ export default function AppHome({ pages = [], onPick = null }) {
 
   return (
     <section className="home">
-      <header className="home-head">
+      <header className="home-head home-head--buddy">
+        {/* ★ **相棒**(第5.381節)。**言葉は持たせない** —— 絵だけである。
+             声かけは、やり終えた1枚がもう持っている(同じことを2つ見せない)。
+             どの顔になるかは `buddyFace()` 1か所が決める */}
+        <Buddy face={buddyFace({})} size="md" className="home-buddy" />
         <p className="home-eyebrow">English AI System</p>
         <h2 className="home-title">どれから始めますか</h2>
       </header>

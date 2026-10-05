@@ -70,6 +70,19 @@
      検索でも出てこなかった。**正しい値をもらったら、この1行だけ直す。**
      いまの値は、黒い地の上での読みやすさから選んである
      (カードの上で 8.12 : 1。いままでの青は 6.60 : 1) */
+  /* ★ **相棒の暖色**(第5.381節)。ずらし刷りの、ずれて見える版の色。
+     **明るい配色でも暗い配色でも同じ橙**にしてある ——
+     墨のほうが `--text-primary`(黒 / 白)で入れ替わるので、
+     暖色まで入れ替えると、2色の関係がテーマごとに変わって落ち着かない。
+     **`--accent` を使わない** —— 暗い配色の accent は金なので(第5.380節)、
+     金の線に橙の版が重なって濁る */
+  --buddy-warm: #e8893a;
+  /* ★ **版の重ね方。** 明るい紙では `multiply`(重なったところが濃くなる。
+     本物の2色刷りと同じ)。**暗い配色では `multiply` が使えない** ——
+     黒い地に掛けると橙がほとんど黒になり、**ずらした版が消える**(描いて分かった)。
+     暗い側は素直に重ねる */
+  --buddy-blend: multiply;
+
   --rizap-gold:      #d4af37;   /* 文字・線・アイコン */
   --rizap-gold-soft: #2a2316;   /* 選んでいるものの、うすい地色 */
   --rizap-gold-line: #5a4a22;   /* その枠線 */
@@ -258,6 +271,8 @@
     --series-4: #c98500;
     --series-5: #d55181;
   
+    /* 相棒の版の重ね方。**暗い側は `multiply` が使えない**(第5.381節) */
+    --buddy-blend: normal;
     /* ★ **青ではなく、RIZAP の金**(第5.380節・利用者の指定)。
        値は `:root` の `--rizap-gold` 1組だけ(ここに直に書かない) */
     --accent:      var(--rizap-gold);
@@ -316,6 +331,8 @@
   --series-4: #c98500;
   --series-5: #d55181;
 
+  /* 相棒の版の重ね方。**暗い側は `multiply` が使えない**(第5.381節) */
+  --buddy-blend: normal;
   /* ★ **青ではなく、RIZAP の金**(第5.380節・利用者の指定) */
   --accent:      var(--rizap-gold);
   --accent-soft: var(--rizap-gold-soft);
@@ -11028,6 +11045,52 @@ button.wbfilter-ctl { text-align: left; }
   animation: rise-in var(--motion-move) var(--ease-out) backwards;
 }
 
+/* ── 相棒 ─────────────────────────────────────────────────────
+     **ずらし刷り**(第5.381節・利用者が4つの描き方から選んだ)。
+     暖色の版を少しずらして先に刷り、その上に墨の版を重ねる。
+
+     **線の太さは、どの相棒でも同じ。** `viewBox` も3体とも同じで、
+     **箱の大きさは 1px も動かない。**
+     **小さいときに切り出さない** —— 妖怪は立ち姿の形で見分けるものなので、
+     顔を抜くと塗り壁と唐傘の区別がつかなくなる(えらぶ画面がそれである)。 */
+.buddy {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  line-height: 0;
+}
+.buddy svg { display: block; width: 100%; height: 100%; }
+.buddy--sm { width: 30px; height: 30px; }
+.buddy--md { width: 56px; height: 56px; }
+.buddy--lg { width: 88px; height: 88px; }
+
+/* 線の表情。**ここ1か所で決める**ので、相棒を足しても変わらない */
+.buddy svg { stroke-linecap: round; stroke-linejoin: round; }
+
+/* ★ **暖色の版。** 少しずらして、先に刷る。
+     `multiply` なので、重なったところが濃くなる(本物の2色刷りと同じ) */
+.buddy-off {
+  transform: translate(2.8px, 2.4px);
+  fill: var(--buddy-warm);
+  stroke: var(--buddy-warm);
+  stroke-width: 7;
+  mix-blend-mode: var(--buddy-blend);
+}
+.buddy-off .buddy-off-tube { stroke-width: 15; }
+
+/* ★ **墨の版。** 色は `--text-primary` —— 明るい配色では黒、暗い配色では白 */
+.buddy-ink { fill: none; stroke: var(--text-primary); stroke-width: 4.4; }
+.buddy-ink .buddy-body { fill: var(--surface-1); }
+/* 暖色の面は**紙で塗る。** 塗らないと下の線が透けて、舌を柄が貫いた */
+.buddy-ink .buddy-warm { fill: var(--surface-1); }
+.buddy-ink .buddy-tube { stroke-width: 15; }
+.buddy-ink .buddy-tube-in { stroke: var(--surface-1); stroke-width: 8.6; }
+.buddy-ink .buddy-dot { fill: var(--text-primary); stroke-width: 0; }
+.buddy-ink .buddy-dots { fill: var(--text-primary); stroke-width: 0; opacity: 0.45; }
+.buddy-ink .buddy-ring { fill: var(--surface-1); stroke-width: 4; }
+.buddy-ink .buddy-hole { fill: var(--text-primary); stroke-width: 2.4; }
+.buddy-ink .buddy-spark { stroke: var(--buddy-warm); }
+
 /* ── やり終えた1枚 ─────────────────────────────────────────────
      **ここだけ長い動きを使ってよい。** 次に押すものは無く、
      測る見張りも通らない(画面がまるごと変わったあとである) */
@@ -11044,6 +11107,38 @@ button.wbfilter-ctl { text-align: left; }
 /* ── 滑る動きが苦手な人には、動かさない ─────────────────────────
      **消さずに、即座に終わらせる。** 何が起きたかは残る
      (読み込みの帯を残しているのと、まったく同じ考え方)。 */
+/* ★ 相棒の置き場。**すき間は `gap` で作る**(共通ルール)——
+     `.home-head` も `.sresult` も、もう `flex` / `grid` + `gap` である */
+.home-buddy { align-self: start; }
+.home-head--buddy {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: var(--sp-12);
+  row-gap: var(--sp-2);
+}
+.home-head--buddy > .home-buddy { grid-row: 1 / span 2; align-self: center; }
+.home-head--buddy > .home-eyebrow { grid-column: 2; align-self: end; margin: 0; }
+.home-head--buddy > .home-title { grid-column: 2; align-self: start; margin: 0; }
+.sresult-buddy { display: grid; place-items: center; }
+
+/* 相棒をえらぶ列。**絵で選ぶ**ので、ボタンは絵の入れ物だけ。
+   **顔だけを抜かない** —— 塗り壁と唐傘は、顔ではなく**形**で選ぶ */
+.buddy-pick { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-self: flex-start; }
+.buddy-pick-btn {
+  display: inline-grid;
+  place-items: center;
+  padding: 4px;
+  line-height: 0;
+  background: var(--surface);
+  /* **選んでも選ばなくても枠は 2px。** 太さで動かさない(共通ルール) */
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.buddy-pick-btn.is-on { border-color: var(--accent); background: var(--accent-soft); }
+.buddy-pick .buddy--sm { width: 52px; height: 52px; }
+
 @media (prefers-reduced-motion: reduce) {
   .btn, .home-box, .tagchip, .theme-btn { transition: none; }
   .btn:active:not(:disabled),
