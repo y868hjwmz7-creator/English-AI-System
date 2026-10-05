@@ -4867,15 +4867,33 @@ export default defineConfig({
           `一覧 ${測.一覧の高さ}px / 箱(${測.名}) ${測.箱の高さ}px`
           + ` → ${測.はみ出し}px はみ出し(そこから背景が切り替わる)`)
       } else {
-        ok('QR終わり … 終わりの一覧が、地の色の箱に収まっている',
-          `一覧 ${測.一覧の高さ}px / 箱(${測.名}) ${測.箱の高さ}px`)
+        ok('QR終わり … 終わりの一覧が、地の色の箱に収まっている'
+          + `(一覧 ${測.一覧の高さ}px / 箱 ${測.名} ${測.箱の高さ}px)`)
       }
-      /* **送れること**も見る。伸ばしたせいで下まで行けないのでは直っていない */
-      const 送れる = await page.evaluate(() => {
+      /* **送れること**も見る。伸ばしたせいで下まで行けないのでは直っていない。
+
+         ★ **ここの `ok()` は、文字を出すだけである**(`ok(条件, 名前)` ではない)。
+           `ok(送れる, '…')` と書いたら **`✓ true` と出て、失敗しようがなかった**
+           —— CLAUDE.md が名指しで書いてある罠を、その日に踏んだ(第5.387節)。
+           **赤くするのは `ng()` だけ。** 必ず `if (!条件) ng(…)` の形で書く */
+      const 送り = await page.evaluate(() => {
         const b = document.querySelector('.focus-body')
-        return b ? b.scrollHeight > b.clientHeight && window.getComputedStyle(b).overflowY !== 'hidden' : false
+        if (!b) return { ある: false }
+        return {
+          ある: true,
+          中: b.scrollHeight,
+          外: b.clientHeight,
+          縦: window.getComputedStyle(b).overflowY,
+        }
       })
-      ok(送れる, 'QR終わり … 伸ばしたぶんは、そのまま下まで送れる')
+      if (!送り.ある) {
+        ng('QR終わり … 送る箱が見つからない', '測れていない')
+      } else if (!(送り.中 > 送り.外) || 送り.縦 === 'hidden') {
+        ng('QR終わり … 伸ばしたぶんを、下まで送れない',
+          `中身 ${送り.中}px / 窓 ${送り.外}px / overflow-y: ${送り.縦}`)
+      } else {
+        ok(`QR終わり … 伸ばしたぶんは、そのまま下まで送れる(中身 ${送り.中}px / 窓 ${送り.外}px)`)
+      }
     }
   }
 
