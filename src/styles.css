@@ -8075,7 +8075,29 @@ button.wbfilter-ctl { text-align: left; }
    **中身なりに伸ばせば、白い地は最後まで続く。**
    単語帳は `.wordcard--result` を同じ理由で外してある(`:not(...)`)——
    **同じ直し方を、同じ理由で**。 */
-.qrfocus .qr--done { flex: 0 0 auto; }
+/* ★ **伸ばすのは `.qr` だけでは足りなかった**(第5.387節・2026-10-05 実測)。
+
+     利用者「以前直したはずなのですが、改善していません」。測ったら、
+     **終わりの一覧 2906px が、地の色を塗っている紙 809px の中**にいた ——
+     **7行目くらいから下は、紙の外(`--surface-0`)に乗っていた。**
+     だから途中で地の色が切り替わる。
+
+     ①`.qr` を伸ばしても、**親(紙・枠なしの箱)が画面の高さで止まる。**
+       親が中身より小さいままなので、はみ出した先に地の色が無い
+     ②**教材の中の Quick Response には、そもそも効いていなかった** ——
+       前の直しは `.qr--done` に掛けてあったが、**あの印を付けていたのは
+       復習(`QrReview`)だけ**で、`QuickResponse` は付けていなかった。
+       復習は紙を持たない(`.focus-plainbox`)ので、
+       **はみ出しても地の色が変わらず、直ったように見えていた**
+
+     **印は1つにする。** 終わったかどうかを知っているのは画面なので、
+     集中モードの骨組みに `is-done` を渡し、**入れ物も中身も**まとめて
+     「中身なりに伸ばす」へ切り替える(`.focus-body` は `overflow-y: auto`
+     なので、伸ばせばそのまま送れる)。 */
+.qrfocus.is-done .focus-body > .focus-paper,
+.qrfocus.is-done .focus-body > .focus-plainbox,
+.qrfocus.is-done .qr,
+.qrfocus.is-done .qr-card { flex: 0 0 auto; }
 /* 題の行と進み具合の線は**縮ませない**(6px の線が潰れて見えなくなる) */
 .qrfocus .qr-head, .qrfocus .qr-bar { flex: 0 0 auto; }
 .qrfocus .qr-body {

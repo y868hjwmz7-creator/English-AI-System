@@ -4799,6 +4799,86 @@ export default defineConfig({
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+     ★ **終わりの1枚が、地の色の箱からはみ出していないか**(第5.387節・
+       2026-10-05 利用者の指摘「以前直したはずなのですが、改善していません」)
+
+       > 終わった後のリストの背景の色が途中から切り替わっています。
+       > これが、背景が黒の時は字の色と重なって読めなくなります。
+
+     **測ったら、一覧 2906px が地の色を塗っている紙 809px の中にいた** ——
+     7行目くらいから下は紙の外に乗り、途中で背景が切り替わっていた。
+
+     ★ **前の直しが効いていなかった理由は2つ。**
+       ①`.qr` を伸ばしても、**親(紙)が画面の高さで止まる**
+       ②印を `.qr--done` に掛けていたが、**付けていたのは復習だけ** ——
+         教材の中の Quick Response には1度も効いていなかった
+
+     ★ **本物の `QuickResponse` を、本物の集中モードで動かして測る。**
+       手書きの骨組みを作ると、**骨組みだけが直っていて本物は壊れている**
+       が起きる(CLAUDE.md)。渡しているのは中身(30 問)だけである。
+     ══════════════════════════════════════════════════════════════════ */
+  {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrdone`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.qr-actions')
+    /* 30 問ぜんぶ「まだ」で答える = **全部が終わりの一覧に出る**(いちばん長い形) */
+    for (let i = 0; i < 40; i += 1) {
+      if (await page.locator('.qr-result').count()) break
+      const やめ = page.locator('.qr-actions .btn--quiet').first()
+      if (!(await やめ.count())) break
+      await やめ.click()
+      await page.waitForTimeout(25)
+    }
+    const 出た = await page.locator('.qr-result-list > li').count()
+    /* ★ **「無ければ素通り」させない。** 一覧が出ていなければ、
+         何も測っていないのと同じである(CLAUDE.md) */
+    if (出た < 10) {
+      ng('QR終わり … 終わりの一覧が出ていない(測れていない)', `${出た} 行`)
+    } else {
+      const 測 = await page.evaluate(() => {
+        /* **地の色を塗っている箱を、実際に探す。**
+           名前を書き写すと、入れ物の名前が変わった日に黙って素通りする */
+        const 一覧 = document.querySelector('.qr-result-list')
+        const 透明 = (el) => {
+          const c = (String(window.getComputedStyle(el).backgroundColor).match(/[\d.]+/g) ?? []).map(Number)
+          return !(c.length >= 3 && (c[3] ?? 1) > 0.99)
+        }
+        let 箱 = null
+        for (let n = 一覧.parentElement; n && n !== document.body; n = n.parentElement) {
+          if (!透明(n)) { 箱 = n; break }
+        }
+        if (!箱) return { ある: false }
+        const a = 一覧.getBoundingClientRect()
+        const b = 箱.getBoundingClientRect()
+        return {
+          ある: true,
+          名: 箱.className.split(' ')[0],
+          一覧の高さ: Math.round(a.height),
+          箱の高さ: Math.round(b.height),
+          はみ出し: Math.round(a.bottom - b.bottom),
+        }
+      })
+      if (!測.ある) {
+        ng('QR終わり … 地の色を塗っている箱が見つからない', '測れていない')
+      } else if (測.はみ出し > 1) {
+        ng('QR終わり … 終わりの一覧が、地の色の箱からはみ出している',
+          `一覧 ${測.一覧の高さ}px / 箱(${測.名}) ${測.箱の高さ}px`
+          + ` → ${測.はみ出し}px はみ出し(そこから背景が切り替わる)`)
+      } else {
+        ok('QR終わり … 終わりの一覧が、地の色の箱に収まっている',
+          `一覧 ${測.一覧の高さ}px / 箱(${測.名}) ${測.箱の高さ}px`)
+      }
+      /* **送れること**も見る。伸ばしたせいで下まで行けないのでは直っていない */
+      const 送れる = await page.evaluate(() => {
+        const b = document.querySelector('.focus-body')
+        return b ? b.scrollHeight > b.clientHeight && window.getComputedStyle(b).overflowY !== 'hidden' : false
+      })
+      ok(送れる, 'QR終わり … 伸ばしたぶんは、そのまま下まで送れる')
+    }
+  }
+
   /* ══ **番号の丸は、日本語のときも英語のときも同じ場所**(第5.270節)══
 
        2026-09-26 実機・利用者の指摘。

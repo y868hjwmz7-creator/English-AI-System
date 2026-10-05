@@ -1445,6 +1445,32 @@ const QRREAL = (
   </div>
 )
 
+/* ★ **終わりの1枚**(第5.387節・2026-10-05 実測)。
+
+     利用者「以前直したはずなのですが、改善していません」。
+     測ったら、**終わりの一覧 2906px が、地の色を塗っている紙 809px の中**
+     にいた —— 7行目くらいから下は紙の外に乗り、途中で背景が切り替わっていた。
+
+   **本物の `QuickResponse` をそのまま置く。** ここで手書きの骨組みを作ると、
+   **骨組みだけが直っていて本物は壊れている**が起きる(CLAUDE.md)。
+   こちらが渡すのは**中身(データ)だけ**である。
+
+   **30 問。** 短い一覧では画面に収まってしまい、**はみ出しを測れない。** */
+const QRDONE_ITEMS = Array.from({ length: 30 }, (_, i) => ({
+  id: `qd${i}`, seq: i + 1,
+  prompt_ja: `${i + 1} 番目の日本語の文です。これを英語で言います。`,
+  prompt_en: `This is sentence number ${i + 1} for the quick response drill.`,
+}))
+const QRDONE = (
+  <QuickResponse
+    material={{
+      id: 'qd', title: '2026-10-05 / 終わりの1枚', level: 'B1', kind: 'reading',
+      sections: [{ id: 'qds', seq: 1, exercise_type: 'article', instruction: '', items: QRDONE_ITEMS }],
+    }}
+    focus onFocusClose={() => {}} onClose={() => {}}
+  />
+)
+
 const qrScreen = (plain) => (
   <FocusFrame className="qrfocus" width="w100" page="qr" plain={plain} onClose={() => {}}
               /* **左上が ☰ になるのは、復習(`plain`)だけ**(第5.172節)。
@@ -2497,6 +2523,8 @@ createRoot(document.getElementById('root')).render(
     ? FOCUSVER
     : q.get('screen') === 'qrreal'
     ? QRREAL
+    : q.get('screen') === 'qrdone'
+    ? QRDONE
     : q.get('screen') === 'tabs'
     ? TABS
     : q.get('screen') === 'search'

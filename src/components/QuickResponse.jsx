@@ -343,7 +343,10 @@ export default function QuickResponse({
   return (
     <>
       <FocusFrame
-        className="qrfocus"
+        /* ★ **終わったら、入れ物も中身なりに伸ばす**(第5.387節)。
+             伸ばさないと、終わりの一覧が**地の色を塗っている箱からはみ出し**、
+             途中から背景が切り替わる(実測 2906px の一覧が 809px の紙の中にいた) */
+        className={`qrfocus${finished ? ' is-done' : ''}`}
         /* **紙の幅をそのまま引き継ぐ**(ほかの集中モードと同じ) */
         width={focusWidth}
         learnerId={learnerId}
