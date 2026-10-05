@@ -47,6 +47,7 @@ const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').repla
 const M = await import('../src/lib/motion.js')
 const B = await import('../src/lib/buddy.js')
 const K = await import('../src/lib/buddyKind.js')
+const H = await import('../src/lib/handLine.js')
 
 /* ══════════════════════════════════════════════════════════════════
    ① 算段(素の node)
@@ -130,7 +131,7 @@ console.log('\n▶ 相棒をえらぶ(素の node で測る)')
        (第5.337節で踏んだ「見張りが、自分と同じ出どころを見ている」)。
        **一度入れたものを勝手に減らさない**(共通ルール) */
   const 居るはず = ['robo', 'cat', 'dog', 'bear', 'bird', 'alien',
-    'ghost', 'rice', 'egg', 'mush', 'fish', 'turnip']
+    'ghost', 'rice', 'egg', 'glasses', 'beard', 'turnip']
   const 居る = K.BUDDY_KINDS.map((k) => k.id)
   const 消えた = 居るはず.filter((id) => !居る.includes(id))
   is(!消えた.length, `相棒が ${居るはず.length} 人とも居る`, 消えた.join(' / '))
@@ -154,6 +155,34 @@ console.log('\n▶ 相棒をえらぶ(素の node で測る)')
   is(!/kind === '|kind === "/.test(nav), '設定の画面で、相棒ごとに書き分けていない')
   /* **選ばせる絵は、本物の相棒そのもの。** 別の絵を置くと、選んだ先と食い違う */
   is(/<Buddy\b/.test(nav), '選ぶところに、本物の相棒を描いている')
+}
+
+console.log('\n▶ 手で描いた線(素の node で測る)')
+{
+  /* ★ **同じ種なら、いつも同じ形。**
+       `Math.random()` を使うと、**描き直すたびに相棒が歪み直す** ——
+       画面を触るたびに顔が変わるのは、気味が悪いだけである */
+  const a = H.手のまる(32, 32, 20, 20, 7)
+  const b = H.手のまる(32, 32, 20, 20, 7)
+  is(a === b && a.length > 40, '同じ種なら、いつも同じ形', `${a.length} 文字`)
+  is(H.手のまる(32, 32, 20, 20, 9) !== a, '種が違えば、形も違う')
+
+  /* ★ **本当に震えているか。** ここが本番 ——
+       震えが 0 なら、ただのきれいな円に戻る(直す前のあれである) */
+  const 読む = (d) => (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
+  const 揺れ = 読む(H.手のまる(32, 32, 20, 20, 5, { amp: 1.4 }))
+  const 素 = 読む(H.閉じる(H.まる(32, 32, 20, 20)))
+  const ずれ = 揺れ.map((v, i) => Math.abs(v - (素[i] ?? v)))
+  const 最大 = Math.max(...ずれ)
+  is(最大 > 0.4, '線が、本当に震えている', `いちばんのずれ ${最大.toFixed(1)}px`)
+  /* **震えすぎてもいけない。** 形が分からなくなる */
+  is(最大 < 6, '震えすぎて、形が崩れていない', `${最大.toFixed(1)}px`)
+
+  /* **左右をそろえない。** きれいな円は1つも使わない(あちらの絵の肝) */
+  const 丸 = H.まる(32, 32, 20, 20, 13)
+  is(丸.length === 13, 'きれいな円ではなく、点を並べて描く', `${丸.length} 点`)
+  is(H.閉じる([[0, 0], [1, 1]]) === '', '点が少なすぎたら、線を引かない')
+  is(H.ゆらす(null, 1).length === 0 && H.手の線([], 1) === '', '何も渡されなくても落ちない')
 }
 
 console.log('\n▶ CSS は、ミリ秒を1つも持たない(数を2か所に書かない)')

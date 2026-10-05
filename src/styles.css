@@ -11024,6 +11024,8 @@ button.wbfilter-ctl { text-align: left; }
   stroke-width: 2.6;
 }
 .buddy-line { stroke: var(--accent); stroke-width: 2.4; fill: none; }
+/* 顔の細い線(鼻・口・閉じた目)。**本体より少しだけ細い** */
+.buddy-ink2 { stroke: var(--accent); stroke-width: 2.2; fill: none; }
 /* ★ **からだの外にある飾り**(触角・ひげ・葉・腕)。**いつも紺。**
      顔の線と同じ名前にしていたら、塗りつぶしの相棒で**白くなって消えた**
      (うちゅうじんの触角が1本も見えなかった・描いて分かった) */
@@ -11042,6 +11044,7 @@ button.wbfilter-ctl { text-align: left; }
 .buddy.is-solid .buddy-body { fill: var(--accent); }
 .buddy.is-solid .buddy-ink { fill: var(--on-accent); }
 .buddy.is-solid .buddy-line { stroke: var(--on-accent); }
+.buddy.is-solid .buddy-ink2 { stroke: var(--on-accent); }
 .buddy.is-solid .buddy-blush { stroke: var(--on-accent); }
 .buddy.is-solid .buddy-band { fill: var(--on-accent); opacity: 0.85; }
 

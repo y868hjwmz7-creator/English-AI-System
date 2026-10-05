@@ -43,8 +43,8 @@ export const BUDDY_KINDS = [
   { id: 'ghost', label: 'おばけ' },
   { id: 'rice', label: 'おむすび' },
   { id: 'egg', label: 'たまご' },
-  { id: 'mush', label: 'きのこ' },
-  { id: 'fish', label: 'さかな' },
+  { id: 'glasses', label: 'めがね' },
+  { id: 'beard', label: 'ひげ' },
   { id: 'turnip', label: 'かぶ' },
 ]
 
