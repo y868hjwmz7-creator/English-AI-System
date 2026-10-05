@@ -124,14 +124,15 @@ console.log('\n▶ 相棒の顔(素の node で測る)')
   is(!無い.length, `${B.BUDDY_FACES.length} つの顔すべてに、読み上げの言葉がある`, 無い.join(' / '))
 }
 
-console.log('\n▶ 相棒をえらぶ(妖怪 12 体・素の node で測る)')
+console.log('\n▶ 相棒をえらぶ(妖怪 18 体・素の node で測る)')
 {
   /* ★ **この一覧は手で並べる。** 画面から読み取ると、
        妖怪を1体消した日に期待も一緒に消えて**緑のまま**になる
        (第5.337節で踏んだ「見張りが、自分と同じ出どころを見ている」)。
        **一度入れたものを勝手に減らさない**(共通ルール) */
   const 居るはず = ['kappa', 'oni', 'tengu', 'yuki', 'kasa', 'zashiki',
-    'nurikabe', 'rokuro', 'bakeneko', 'konaki', 'momen', 'hitotsume']
+    'nurikabe', 'rokuro', 'bakeneko', 'konaki', 'momen', 'hitotsume',
+    'kitsune', 'umibozu', 'toufu', 'yurei', 'kamaitachi', 'tanuki']
   const 居る = K.BUDDY_KINDS.map((k) => k.id)
   const 消えた = 居るはず.filter((id) => !居る.includes(id))
   is(!消えた.length, `妖怪が ${居るはず.length} 体とも居る`, 消えた.join(' / '))
@@ -418,8 +419,20 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
       + `/${Math.round(e.height / s.height * 100)}`
   }))
   is(!目の場.includes(''), 'どの妖怪にも、目が描かれている', 目の場.join(' '))
-  is(new Set(目の場).size >= 6,
+  is(new Set(目の場).size >= Math.ceil(K.BUDDY_KINDS.length / 2),
     '顔の置き場と大きさは、妖怪ごとに違う', `${new Set(目の場).size} 通り / ${目の場.length} 体`)
+
+  /* ★ **18 体が、本当に 18 通りの絵か。**
+       `形` を書き足すとき、**近い妖怪の行をまるごと写して id だけ変える**と、
+       一覧には 18 体並ぶのに**絵が同じものが2つ**できる ——
+       えらぶ画面で「同じものが2つ」は、いちばん分かりにくい壊れ方である
+       (CLAUDE.md「同じことをするものを2つ見せない」)。
+       **絵そのもの(SVG の中身)を突き合わせる** */
+  const 絵 = await page.$$eval('#kinds [data-kind]', (els) => els.map(
+    (el) => el.querySelector('.buddy--md svg')?.innerHTML ?? ''))
+  is(new Set(絵).size === K.BUDDY_KINDS.length,
+    `${K.BUDDY_KINDS.length} 体とも、別の絵になっている`,
+    `${new Set(絵).size} 通り / ${絵.length} 体`)
 
   /* ★ **顔を `transform` で縮めていないか。**
        `<g transform="scale(…)">` で縮めると、**線の太さまで縮む** ——
@@ -431,7 +444,9 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   is(縮め === 0, '顔を transform で縮めていない(線の太さがそろう)', `${縮め} か所`)
 
   /* ★ **塗りつぶしの妖怪が、ちゃんと混ざっているか。**
-       全部おなじ描き方だと、並べたときに退屈になる(2026-10-05 の指定) */
+       全部おなじ描き方だと、並べたときに退屈になる(2026-10-05 の指定)。
+       **塗りすぎてもいけない** —— 見本で黒い塊は2つくらいで、
+       3体以上を塗ると「線で描いた一覧」に見えなくなる(第5.377節) */
   const 塗り = await page.$$eval('#kinds .buddy.is-solid',
     (els) => [...new Set(els.map((el) => [...el.classList].find((c) => c.startsWith('buddy--k-'))))].length)
   is(塗り >= 1 && 塗り < K.BUDDY_KINDS.length,
@@ -469,7 +484,7 @@ console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測
   await page.click('#pick .nav-settings-sum')
   await page.waitForTimeout(250)
   const 行 = await page.locator('#pick .buddy-pick-btn').count()
-  is(行 === K.BUDDY_KINDS.length, `えらぶボタンが ${K.BUDDY_KINDS.length} つ出る(12 体ぶん)`, String(行))
+  is(行 === K.BUDDY_KINDS.length, `えらぶボタンが ${K.BUDDY_KINDS.length} つ出る(妖怪ぜんぶ)`, String(行))
   const 幅前 = await page.locator('#pick .buddy-pick').boundingBox()
   await page.locator('#pick .buddy-pick-btn').nth(1).click()
   await page.waitForTimeout(300)

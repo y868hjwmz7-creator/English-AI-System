@@ -10999,8 +10999,10 @@ button.wbfilter-ctl { text-align: left; }
 /* ── 相棒 ─────────────────────────────────────────────────────
      **1色だけ**(`--accent`)。2026-10-05 利用者の指定で、
      手描きのアイコン集と同じ空気にそろえた —— 暖色の塗り分けはやめている。
-     **12 体の妖怪。立ち姿**である(第5.376節「妖怪シリーズにしてください」)。
-     `viewBox` は 12 体とも同じで、**箱の大きさは 1px も動かない。**
+     **18 体の妖怪。立ち姿**である(第5.376 → 第5.377節)。
+     **線は細く、どこも同じ太さ**(見本がそうである・第5.377節)——
+     太いと、見本の「細い線で描いたアイコン」に見えない。
+     `viewBox` は 18 体とも同じで、**箱の大きさは 1px も動かない。**
      **小さいときに顔だけ切り出すことはしない** —— 妖怪は
      立ち姿の形で見分けるもので、顔を抜くと**ぬりかべといったんもめんの
      区別がつかなくなる**(えらぶ画面が、まさにそれである)。 */
@@ -11024,15 +11026,15 @@ button.wbfilter-ctl { text-align: left; }
 .buddy-body {
   fill: var(--surface-1);
   stroke: var(--accent);
-  stroke-width: 2.6;
+  stroke-width: 2.1;
 }
-.buddy-line { stroke: var(--accent); stroke-width: 2.4; fill: none; }
-/* 顔の細い線(鼻・口・閉じた目)。**本体より少しだけ細い** */
-.buddy-ink2 { stroke: var(--accent); stroke-width: 2.2; fill: none; }
+.buddy-line { stroke: var(--accent); stroke-width: 2.1; fill: none; }
+/* 顔の細い線(口・閉じた目)。**本体より少しだけ細い** */
+.buddy-ink2 { stroke: var(--accent); stroke-width: 1.8; fill: none; }
 /* ★ **からだの外にある飾り**(触角・ひげ・葉・腕)。**いつも紺。**
      顔の線と同じ名前にしていたら、塗りつぶしの相棒で**白くなって消えた**
      (うちゅうじんの触角が1本も見えなかった・描いて分かった) */
-.buddy-out { stroke: var(--accent); stroke-width: 2.4; fill: none; }
+.buddy-out { stroke: var(--accent); stroke-width: 2.1; fill: none; }
 .buddy-ink { fill: var(--accent); stroke: none; }
 .buddy-dot { fill: var(--accent); stroke: none; opacity: 0.9; }
 .buddy-band { fill: var(--accent); stroke: none; }
@@ -11042,9 +11044,9 @@ button.wbfilter-ctl { text-align: left; }
 .buddy-blush.is-on { opacity: 0.55; }
 .buddy-star { stroke: var(--accent); stroke-width: 2; }
 
-/* ★ **12 体のうち3体は塗りつぶし**(おに・ぬりかべ・ばけねこ)。
-     全部おなじ描き方だと、並べたときに退屈になる
-     (見せてもらった絵も、塗りと線が混ざっていた) */
+/* ★ **18 体のうち2体だけ塗りつぶし**(ぬりかべ・うみぼうず)。
+     見本も、黒い塊はその2つくらいである(第5.377節)——
+     3体以上を塗ると、並べたときに「線で描いた一覧」に見えなくなる */
 .buddy.is-solid .buddy-body { fill: var(--accent); }
 .buddy.is-solid .buddy-ink { fill: var(--on-accent); }
 .buddy.is-solid .buddy-line { stroke: var(--on-accent); }
@@ -11187,6 +11189,6 @@ button.wbfilter-ctl { text-align: left; }
 /* **立ち姿がそのまま見える大きさ**まで。`sm`(28px)では小さすぎた。
    **ここで顔だけを抜かない** —— ぬりかべといったんもめんは、
    顔ではなく**形**で選ぶものである。
-   **12 体いるので折り返す** —— `gap` で離してあるので、何体でも崩れない */
+   **18 体いるので折り返す** —— `gap` で離してあるので、何体でも崩れない */
 .buddy-pick { flex-wrap: wrap; }
 .buddy-pick .buddy--sm { width: 48px; height: 48px; }
