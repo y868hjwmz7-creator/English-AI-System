@@ -26,6 +26,7 @@ import {
 /* **色の一覧を書き写さない**(第5.242節)。3つの色は `btnTone.js` 1か所 */
 import { TONE_GO, TONE_ROW, TONE_SIDE, hasTone } from '../src/lib/btnTone.js'
 import { clozeAt, hasCloze } from '../src/lib/clozeSentence.js'
+import { PAGE_SIZE, pageRange, pageSlice } from '../src/lib/pageList.js'
 import { hasMaterialWords, materialWordsOf } from '../src/lib/materialWords.js'
 import {
   bestStreak, collectRows, goalLine, goalPart,
@@ -4916,6 +4917,85 @@ console.log('\n── 文法解説を作る欄(第5.210節)──')
       '起動画面 … 暗い配色の帯が、アプリの金と同じ色', `${暗い帯.join(' / ')} ・ 金 ${金}`)
     ok(Boolean(青) && 明るい帯 === 青,
       '起動画面 … 明るい配色の帯が、アプリの青と同じ色', `${明るい帯} ・ 青 ${青}`)
+
+    /* ══════════════════════════════════════════════════════════════
+       ★ **一覧を黙って切らない**(第5.386節・2026-10-05 利用者の指摘)
+
+         > ゲストのページで「この人に教材を作る」で作った教材が、
+         > 普通の「教材」のページに反映されず、他のゲストに共有できない
+
+       教材をさがす問い合わせが **`.limit(50)` の決め打ち**で、
+       **51 件目から先は絞り込みを全部外しても出てこなかった。**
+       作ったのに消えたように見え、見つからないから共有もできない。
+
+       **値を書き写さない。** 1ページぶんの件数は `PAGE_SIZE` から読む ——
+       書き写すと、変えた日に期待値も一緒に動いて素通りする(CLAUDE.md)。
+       ══════════════════════════════════════════════════════════════ */
+    {
+      /* **コメントを落としてから数える**(説明にも同じ語が出る・CLAUDE.md) */
+      const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/.*$/gm, '')
+      const 行 = (n) => Array.from({ length: n }, (_, i) => i)
+
+      /* **ちょうど1ページぶんなら、先は無い**(出ない側)。
+         ここが `>=` になっていると、**いつも「さらに読み込む」が出続ける** */
+      const ちょうど = pageSlice(行(PAGE_SIZE), PAGE_SIZE)
+      ok(ちょうど.more === false && ちょうど.list.length === PAGE_SIZE,
+        '一覧 … ちょうど1ページぶんなら、まだ先があるとは言わない',
+        `${ちょうど.list.length} 件 / more=${ちょうど.more}`)
+
+      /* **1件多ければ、先がある。その1件は出さない** */
+      const 余り = pageSlice(行(PAGE_SIZE + 1), PAGE_SIZE)
+      ok(余り.more === true && 余り.list.length === PAGE_SIZE,
+        '一覧 … 1件多く返ってきたら「まだ先がある」。余分は出さない',
+        `${余り.list.length} 件 / more=${余り.more}`)
+
+      /* **足りないときも、先があると言わない** */
+      const 少ない = pageSlice(行(3), PAGE_SIZE)
+      ok(少ない.more === false && 少ない.list.length === 3, '一覧 … 少ないときは、そのまま出す')
+
+      /* ★ **読む範囲。1件だけ余分に読む。**
+           ここが `offset + limit - 1` だと、**最後のページで
+           「まだある」と言い続ける / 1件足りない**のどちらかになる */
+      const [f0, t0] = pageRange(0, PAGE_SIZE)
+      ok(f0 === 0 && t0 - f0 === PAGE_SIZE,
+        '一覧 … 1ページぶん + 1件を読む(数える問い合わせを増やさない)', `${f0}..${t0}`)
+
+      /* ★ **続きが、前のページと重ならない・飛ばさない。**
+           切ったあとの件数ぶんだけ進むので、**次の先頭 = 前の末尾の次** */
+      const [f1] = pageRange(PAGE_SIZE, PAGE_SIZE)
+      ok(f1 === PAGE_SIZE, '一覧 … 続きは、出した件数の次から読む', String(f1))
+
+      /* **変な値でも落ちない**(行き止まりを作らない) */
+      const 変 = [pageRange(-5, PAGE_SIZE), pageRange(NaN, NaN), pageRange(0, 0)]
+      ok(変.every(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b > a),
+        '一覧 … 変な値を渡されても、範囲は壊れない', JSON.stringify(変))
+      ok(pageSlice(null, PAGE_SIZE).list.length === 0, '一覧 … 行が無くても落ちない')
+
+      /* ★ **問い合わせの側。** 決め打ちの打ち切りが残っていないか ——
+           **コメントを落としてから、使っている形で数える**(CLAUDE.md) */
+      const mats = noC(read2('src/lib/materials.js'))
+      const さがす = mats.slice(mats.indexOf('export async function searchMaterials'))
+      const さがす本体 = さがす.slice(0, さがす.indexOf('export async function', 10))
+      ok(!/\.limit\(\d+\)/.test(さがす本体),
+        '一覧 … さがす問い合わせに、決め打ちの打ち切りが残っていない')
+      ok(/\.range\(\.\.\.pageRange\(/.test(さがす本体),
+        '一覧 … 読む範囲は、区切りの算段 1 か所から取っている')
+      ok(/more/.test(さがす本体), '一覧 … 「まだ先がある」を返している')
+      /* **並びは2段。** 同じ秒の教材が2本あると、ページの切れ目で
+         同じものが二度出たり、1本飛んだりする */
+      ok(/order\('created_at'[\s\S]{0,80}?order\('id'/.test(さがす本体),
+        '一覧 … 並びを id まで決め切っている(ページの切れ目でずれない)')
+
+      /* ★ **画面の側。** 返ってきた「まだ先がある」を使っているか ——
+           窓口だけ直して画面に書き写していない、がこのリポジトリで何度も起きた */
+      for (const f of ['src/components/TrainerMaterials.jsx', 'src/components/AssignBooks.jsx']) {
+        const t = noC(read2(f))
+        ok(/offset:/.test(t), `一覧 … ${f.split('/').pop()} が、続きを読みに行ける`)
+        ok(/さらに読み込む/.test(t), `一覧 … ${f.split('/').pop()} に「さらに読み込む」がある`)
+        /* **先があるのに「ありません」と言わない**(嘘の知らせにしない) */
+        ok(/!more|!matMore/.test(t), `一覧 … ${f.split('/').pop()} は、先があるとき「ありません」と言わない`)
+      }
+    }
 
     /* ④ **役割が分かるまで、中身を描かない。**
           `pages` は役割で中身が変わるので、プロフィールを読み終える前は
@@ -12133,9 +12213,20 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       && /clearTimeout\(t\)/.test(ab),
     'その他の教材 … 打つたびには呼ばず、手が止まってから呼ぶ')
     /* **追い越された結果は捨てる** ——
-       捨てないと、古い検索の結果があとから新しい結果を上書きする */
-    ok(/if \(alive\) setMats\(data \?\? \[\]\)/.test(ab),
-      'その他の教材 … 追い越された結果は捨てる')
+       捨てないと、古い検索の結果があとから新しい結果を上書きする。
+
+       ★ **式を書き写していた**(第5.386節で踏んだ)。
+         `if (alive) setMats(…)` をそのまま書いてあったので、
+         **仕組みは1ミリも壊れていないのに**(`if (!alive) return` に
+         書き換えただけで)赤くなった —— CLAUDE.md
+         「式も、関数の名前も書き写さない」。
+         **性質で見る**:受け取ってから `setMats` を呼ぶまでのあいだに、
+         生きているかの確かめが入っていること。 */
+    const 受け取り = ab.indexOf('.then(')
+    const 入れる = ab.indexOf('setMats(', 受け取り)
+    ok(受け取り > 0 && 入れる > 受け取り
+      && /alive/.test(ab.slice(受け取り, 入れる)),
+    'その他の教材 … 追い越された結果は捨てる')
     /* **キーワードだけ**(2026-09 利用者の回答)——
        種類・レベル・業界でじっくり探すのは「教材」の画面の仕事である */
     ok(/searchMaterials\(\{ keyword: matQ \}\)/.test(ab),

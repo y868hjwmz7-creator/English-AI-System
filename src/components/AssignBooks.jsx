@@ -113,6 +113,10 @@ export default function AssignBooks({
   const [matQ, setMatQ] = useState('')
   /** さがした結果。**`null` は読み込み中**(無い、ではない) */
   const [mats, setMats] = useState(null)
+  /* ★ **まだ先があるか**(第5.386節)。読み足すのは「教材」の画面の仕事なので、
+       ここは**そう言うだけ**にする —— 同じ絞り込みを2か所に作らない */
+  const [matMore, setMatMore] = useState(false)
+  const [matMoreBusy, setMatMoreBusy] = useState(false)
   const [matPicked, setMatPicked] = useState([])
   const [matBusy, setMatBusy] = useState(false)
   const [matNote, setMatNote] = useState(null)
@@ -156,8 +160,14 @@ export default function AssignBooks({
     let alive = true
     setMats(null)
     const t = setTimeout(() => {
-      searchMaterials({ keyword: matQ }).then(({ data }) => {
-        if (alive) setMats(data ?? [])
+      searchMaterials({ keyword: matQ }).then(({ data, more }) => {
+        if (!alive) return
+        setMats(data ?? [])
+        /* ★ **まだ先があるなら、そう言う**(第5.386節)。
+             ここも前は新しい 50 件で打ち切っていて、**51 件目から先は
+             名前で絞り込まないと一生出てこなかった** ——
+             だから「他のゲストに共有できない」が起きる */
+        setMatMore(Boolean(more))
       })
     }, 300)
     return () => { alive = false; clearTimeout(t) }
@@ -394,7 +404,7 @@ export default function AssignBooks({
 
                 {/* **黙って空にしない。**読み込み中と、無いときを書き分ける */}
                 {mats === null && <Loading />}
-                {mats !== null && mats.length === 0 && (
+                {mats !== null && mats.length === 0 && !matMore && (
                   <p className="card-hint">当てはまる教材がありません。</p>
                 )}
 
@@ -413,6 +423,29 @@ export default function AssignBooks({
                     ))}
                   </div>
                 )}
+
+                {/* ★ **続きを読む**(第5.386節)。
+                      上の「当てはまる教材がありません」は、**先が無いときだけ**出す ——
+                      続きに在るかもしれないのに「ありません」と言わない */}
+                {mats !== null && matMore && (
+                  <div className="btn-row">
+                    <span className="card-hint">{mats.length} 件まで出しています。</span>
+                    <button type="button" className="btn btn--small" disabled={matMoreBusy}
+                            onClick={async () => {
+                              if (matMoreBusy) return
+                              setMatMoreBusy(true)
+                              const { data, more } = await searchMaterials({
+                                keyword: matQ, offset: mats.length,
+                              })
+                              setMatMoreBusy(false)
+                              setMats((now) => [...(now ?? []), ...(data ?? [])])
+                              setMatMore(Boolean(more))
+                            }}>
+                      {matMoreBusy ? '読み込んでいます…' : 'さらに読み込む'}
+                    </button>
+                  </div>
+                )}
+
 
                 {/* **えらんでいないあいだは出さない**(効かない操作を見せない) */}
                 {matPicked.length > 0 && (

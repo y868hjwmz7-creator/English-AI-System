@@ -190,6 +190,10 @@ export default function TrainerMaterials({
   const [lessonOf, setLessonOf] = useState(null)      // レッスン表示で開いている教材
 
   const [materials, setMaterials] = useState([])
+  /* ★ **まだ先があるか**(第5.386節)。`searchMaterials` が
+       1件だけ余分に読んで教えてくれる(数える問い合わせを増やさない) */
+  const [more, setMore] = useState(false)
+  const [moreBusy, setMoreBusy] = useState(false)
   const [learners, setLearners] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -274,18 +278,48 @@ export default function TrainerMaterials({
   const industryKinds = kindsOf(topIndustry)
   const isWorkFilter = Boolean(industry) && !isHobbyFilter
 
+  /* ★ **さがす条件は1か所で組む**(第5.386節)。
+       「さらに読み込む」が同じ条件で続きを読むので、書き写すと
+       **続きだけ別の条件になる**(置く場所の数だけ食い違う・CLAUDE.md) */
+  const 条件 = () => ({
+    tagIds, level, keyword, industry,
+    kind: kind || null,
+    genre: kind === 'reading' ? (genre || null) : null,
+    scene: isDialogueKind(kind) ? (scene || null) : null,
+  })
+
   const search = async () => {
     setLoading(true)
     setError(null)
-    const { data, error: e } = await searchMaterials({
-      tagIds, level, keyword, industry,
-      kind: kind || null,
-      genre: kind === 'reading' ? (genre || null) : null,
-      scene: isDialogueKind(kind) ? (scene || null) : null,
-    })
+    const { data, error: e, more: まだある } = await searchMaterials(条件())
     setLoading(false)
     if (e) { setError(e); return }
     setMaterials(data)
+    setMore(Boolean(まだある))
+  }
+
+  /* ★ **続きを読む**(第5.386節・2026-10-05 利用者の指摘)。
+
+       > ゲストのページで「この人に教材を作る」で作った教材が、
+       > 普通の「教材」のページに反映されず、他のゲストに共有できないことです
+
+       **前は 50 件で打ち切っていた。** 51 件目から先は、絞り込みを
+       全部「指定なし」にしても出てこない —— 作ったのに消えたように見え、
+       見つからないから他のゲストにも共有できなかった。
+
+       **何件目から読むかは、いま出している数そのもの。**
+       数を別に持つと、絞り込みを変えた日にずれる。 */
+  const readMore = async () => {
+    if (moreBusy) return
+    setMoreBusy(true)
+    setError(null)
+    const { data, error: e, more: まだある } = await searchMaterials({
+      ...条件(), offset: materials.length,
+    })
+    setMoreBusy(false)
+    if (e) { setError(e); return }
+    setMaterials((now) => [...now, ...(data ?? [])])
+    setMore(Boolean(まだある))
   }
 
   // 絞り込みが変わったら探し直す。search 自体は毎回作り直されるので依存に入れない。
@@ -968,9 +1002,13 @@ export default function TrainerMaterials({
 
       {loading ? (
         <Loading />
-      ) : shown.length === 0 ? (
+      ) : (shown.length === 0 && !more) ? (
         /* **無いときは、作る道をいちばん強く出す**(2026-09 利用者の指定)。
-           何も無い画面で「作る」を探させない */
+           何も無い画面で「作る」を探させない。
+           ★ **ただし「まだ先がある」ときは言わない**(第5.386節)——
+             続きに在るかもしれないのに「ありません」と言うと、
+             要らない教材をもう1本作らせることになる(そのぶん課金される)。
+             そのときは、下の「さらに読み込む」だけが出る */
         <div className="card finder-empty">
           <p className="card-hint">
             {filterCount
@@ -1424,6 +1462,23 @@ export default function TrainerMaterials({
             </div>
           ))}
         </>
+      )}
+
+      {/* ★ **まだ先があるなら、そう言って、読めるようにする**(第5.386節・
+             2026-10-05 利用者の指摘)。
+
+           **「無いので作る」より前に置く。** 先があるのに「見つからない」と
+           言われたら、要らない教材をもう1本作ることになる(そのぶん課金される)。
+
+           文字は**いまの状態**だけ(CLAUDE.md「余計な説明書きを置かない」)——
+           何件まで出しているかと、押せば続きが出ること。 */}
+      {!loading && more && (
+        <div className="card finder-more">
+          <p className="tip card-hint">{materials.length} 件まで出しています。</p>
+          <button type="button" className="btn" onClick={readMore} disabled={moreBusy}>
+            {moreBusy ? '読み込んでいます…' : 'さらに読み込む'}
+          </button>
+        </div>
       )}
 
       {/* **さがした結果の中にも「無いので作る」を置く**(2026-09 利用者の指定)。

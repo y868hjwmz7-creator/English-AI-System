@@ -39,6 +39,8 @@ import {
    書いてあれば、**読み上げにする英文だけ**を書き換える。
    算段はあちら1か所(素の node で走る) */
 import { parseSayAs, sayAsText } from './sayAs.js'
+/* ★ **一覧を黙って切らない**(第5.386節)。区切りの算段は1か所 */
+import { PAGE_SIZE, pageRange, pageSlice } from './pageList.js'
 /* **正解の記号を散らす**(第5.331節)。算段はあちら1か所 */
 import { spreadAnswerMarks } from './choiceLines.js'
 /* すでにある教材に、足りない演習だけを足す(第5.234節)。
@@ -226,6 +228,13 @@ export async function loadMyLearners() {
 export async function searchMaterials({
   tagIds = [], level = null, keyword = '', industry = null,
   kind = null, genre = null, scene = null, learnerId = null,
+  /* ★ **何件目から、何件ぶん読むか**(第5.386節・2026-10-05 利用者の指摘)。
+       ここは前まで `.limit(50)` の決め打ちで、**51 件目から先は
+       絞り込みを全部外しても出てこなかった。**
+       作ったのに消えたように見え、他のゲストにも共有できない ——
+       「黙って絞らない」(CLAUDE.md)の破り方そのものである。
+       **1ページぶんの件数は `pageList.js` 1か所**(ここに 50 と書かない) */
+  limit = PAGE_SIZE, offset = 0,
 } = {}) {
   if (!supabase) return ng('Supabase が設定されていません')
 
@@ -259,7 +268,7 @@ export async function searchMaterials({
     narrow((data ?? []).map((r) => r.material_id))
   }
 
-  if (ids !== null && !ids.length) return ok([])
+  if (ids !== null && !ids.length) return { data: [], error: null, more: false }
   const idsWithTag = ids
 
   const build = () => {
@@ -276,8 +285,14 @@ export async function searchMaterials({
                          speaker${optLast('phrases')}${optLast('phonetic')}${optLast('chunks')}${optLast('grammar')}${optLast('question_ja')}${optLast('answer_ja')}${optLast('chunk_kind')}${optLast('source_en')}${optLast('practice')} )
       )
     `)
+    /* ★ **並びは2段**(第5.386節)。`created_at` が同じ秒の教材が2本あると、
+         ページの切れ目で**同じものが二度出たり、1本飛んだり**する。
+         id まで見て、並びを決め切る */
     .order('created_at', { ascending: false })
-    .limit(50)
+    .order('id', { ascending: false })
+    /* ★ **1件だけ余分に読む。** 返ってきたら「まだ先がある」と分かる
+         (数える問い合わせを増やさない)。範囲は `pageList.js` が決める */
+    .range(...pageRange(offset, limit))
 
     if (idsWithTag) query = query.in('id', idsWithTag)
     if (level) query = query.eq('level', level)
@@ -308,7 +323,11 @@ export async function searchMaterials({
   const { data, error } = await runTolerant(build)
   if (error) return fail(error, '教材を読めませんでした')
 
-  return ok((data ?? []).map(normalizeMaterial))
+  /* ★ **余分の1件は出さない。** 代わりに「まだ先がある」を渡す
+       (第5.386節)。画面はこれを見て「さらに読み込む」を出す ——
+       **黙って切らない**(CLAUDE.md) */
+  const { list, more } = pageSlice(data ?? [], limit)
+  return { data: list.map(normalizeMaterial), error: null, more }
 }
 
 /**
