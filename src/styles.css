@@ -53,6 +53,28 @@
   --voice-a:     #2c6094;   /* 会話の1人目 */
   --voice-b:     #8a5588;   /* 会話の2人目 */
 
+  /* ★ **RIZAP の金**(第5.380節・2026-10-05 利用者の指定)。
+
+       > ダークモードにした際は、現状はブラックとブルーだと思うのですが、
+       > ブルーのところを RIZAP ゴールドに変えてください
+
+     **暗い配色のときだけ使う。**明るい配色は鋼色の青のままである。
+
+     ★ **値はここ1組だけ。** 暗い配色は `@media` と `[data-theme="dark"]` の
+     **2か所**にあるので、色を直に書くと**必ず片方だけ古くなる**
+     (CLAUDE.md「呼び名・色・幅・鍵の名前を2か所に書かない」)。
+     あちらからは `var(--rizap-gold)` で引く。
+
+     ★ **公式の色コードは確かめられていない。**
+     この環境からは rizap.jp へ出られず(egress proxy が遮断)、
+     検索でも出てこなかった。**正しい値をもらったら、この1行だけ直す。**
+     いまの値は、黒い地の上での読みやすさから選んである
+     (カードの上で 8.12 : 1。いままでの青は 6.60 : 1) */
+  --rizap-gold:      #d4af37;   /* 文字・線・アイコン */
+  --rizap-gold-soft: #2a2316;   /* 選んでいるものの、うすい地色 */
+  --rizap-gold-line: #5a4a22;   /* その枠線 */
+  --rizap-gold-on:   #15130d;   /* 金のべた塗りの上に乗る文字 */
+
   /* 合っている / 違う。**ディクテーションの照らし合わせで使う。**
      緑と赤は色覚特性で見分けにくい組み合わせなので、
      **必ず線(下線・取り消し線)も併せる** */
@@ -222,8 +244,8 @@
     --chunk-fg: #8faa94;
     --btn-bg:   #303030;
     --quiet-bg: #454541;
-    /* うすい水色の上に白い文字は薄い。**暗い側は文字を濃くする** */
-    --on-accent: #10222f;
+    /* 金のべた塗りの上は、**黒に近い文字**にする(第5.380節) */
+    --on-accent: var(--rizap-gold-on);
     --border:    #46463f;
   
     --text-primary:   #ffffff;
@@ -236,12 +258,14 @@
     --series-4: #c98500;
     --series-5: #d55181;
   
-    --accent:      #6aa6de;
-    --accent-soft: #1e2c3a;
-    --accent-line: #35516d;
+    /* ★ **青ではなく、RIZAP の金**(第5.380節・利用者の指定)。
+       値は `:root` の `--rizap-gold` 1組だけ(ここに直に書かない) */
+    --accent:      var(--rizap-gold);
+    --accent-soft: var(--rizap-gold-soft);
+    --accent-line: var(--rizap-gold-line);
     /* 集中モードでも使う色(`:root` と同じ並び。**1か所でも抜くと食い違う**) */
-    --accent-bg:   #1e2c3a;
-    --voice-a:     #6aa6de;
+    --accent-bg:   var(--rizap-gold-soft);
+    --voice-a:     var(--rizap-gold);
     --voice-b:     #c491c2;
     --ok: #6cc79a;   --ok-bg: #16281f;
     --ng: #e88b88;   --ng-bg: #2e1a19;
@@ -278,7 +302,8 @@
   --chunk-fg: #8faa94;
   --btn-bg:   #303030;
   --quiet-bg: #454541;
-  --on-accent: #10222f;
+  /* 金のべた塗りの上は、**黒に近い文字**にする(第5.380節) */
+  --on-accent: var(--rizap-gold-on);
   --border:    #46463f;
 
   --text-primary:   #ffffff;
@@ -291,12 +316,13 @@
   --series-4: #c98500;
   --series-5: #d55181;
 
-  --accent:      #6aa6de;
-  --accent-soft: #1e2c3a;
-  --accent-line: #35516d;
+  /* ★ **青ではなく、RIZAP の金**(第5.380節・利用者の指定) */
+  --accent:      var(--rizap-gold);
+  --accent-soft: var(--rizap-gold-soft);
+  --accent-line: var(--rizap-gold-line);
   /* 集中モードでも使う色(上の @media と**同じ値**にする) */
-  --accent-bg:   #1e2c3a;
-  --voice-a:     #6aa6de;
+  --accent-bg:   var(--rizap-gold-soft);
+  --voice-a:     var(--rizap-gold);
   --voice-b:     #c491c2;
   --ok: #6cc79a;   --ok-bg: #16281f;
   --ng: #e88b88;   --ng-bg: #2e1a19;
@@ -330,6 +356,14 @@ body {
   font-size: var(--fs-15);
   line-height: 1.7;
 }
+
+/* ★ **素のリンクの色を、どこにも決めていなかった**(第5.380節で気づいた)。
+     ブラウザ既定の青(#0000ee)と、訪問済みの紫(#551a8b)がそのまま出る ——
+     **暗い配色の黒い地では 2.08 : 1 と 1.78 : 1**。測ったら、ほとんど読めない。
+     `--accent` に乗せると、明るい配色では鋼色の青、
+     暗い配色では**金**になる(黒い地で 9.31 : 1)。
+     **`.btn` を打ち消さない** —— クラスのほうが強いので、ボタンは自分の色のまま */
+a { color: var(--accent); }
 
 /* ---- 読み込み中(1か所)----------------------------------------
    **`index.html` の起動画面と、まったく同じ形にしてある**
