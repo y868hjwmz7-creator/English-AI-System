@@ -65,7 +65,7 @@ export default function MaterialBody({
       {/* 紙に出したときだけ出る見出し。何の教材か分からない
           紙が配られると、あとで整理できない */}
       <div className="print-only print-head">
-        <MaterialTitle title={m.title} headline={m.headline} as="strong" size="sheet"
+        <MaterialTitle title={m.title} material={m} headline={m.headline} as="strong" size="sheet"
                        fallbackTags={[cefrLabel(m.level), kindLabel(m.kind),
                          industryLabel(m.industry)]} />
         <div className="print-meta">

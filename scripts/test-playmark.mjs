@@ -4895,6 +4895,28 @@ console.log('\n── 文法解説を作る欄(第5.210節)──')
       && html.includes("setAttribute('data-theme'"),
     `起動画面 … 配色の印(${key})を、描く前に付ける`)
 
+    /* ★ ③' **帯の色が、アプリの色と食い違っていないか**(第5.384節・
+          2026-10-05 利用者の指定「ダークモードの場合は、ローディングの
+          バーの色もゴールドに」)。
+
+          **ここは値で書くしかない** —— この style は React より先に描くので、
+          `src/styles.css` の変数はまだ読まれていない。だから
+          **styles.css から読み取って突き合わせる。**
+          値を見張りに書き写すと、色を変えた日に期待も一緒に動いて素通りする。
+
+          **暗い側は2か所ある**(`@media` と `[data-theme="dark"]`)。
+          **数も数える** —— 片方を消したら赤くなってほしい */
+    const css2 = read2('src/styles.css')
+    const 金 = /--rizap-gold:\s*(#[0-9a-f]{6})/i.exec(css2)?.[1]?.toLowerCase() ?? ''
+    const 青 = /--accent:\s*(#[0-9a-f]{6})/i.exec(css2)?.[1]?.toLowerCase() ?? ''
+    const 暗い帯 = [...html.matchAll(/data-theme=[^\n]*\.loading-bar > span \{ background: (#[0-9a-f]{6})/gi)]
+      .map((m) => m[1].toLowerCase())
+    const 明るい帯 = /background: (#[0-9a-f]{6}); animation: loading-slide/i.exec(html)?.[1]?.toLowerCase() ?? ''
+    ok(Boolean(金) && 暗い帯.length === 2 && 暗い帯.every((c) => c === 金),
+      '起動画面 … 暗い配色の帯が、アプリの金と同じ色', `${暗い帯.join(' / ')} ・ 金 ${金}`)
+    ok(Boolean(青) && 明るい帯 === 青,
+      '起動画面 … 明るい配色の帯が、アプリの青と同じ色', `${明るい帯} ・ 青 ${青}`)
+
     /* ④ **役割が分かるまで、中身を描かない。**
           `pages` は役割で中身が変わるので、プロフィールを読み終える前は
           ゲストの一覧になる。すると「メニューに無い画面なら先頭へ移す」が

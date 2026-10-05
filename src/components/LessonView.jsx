@@ -1905,7 +1905,7 @@ export default function LessonView({
         <div className={`lesson-head${qr ? ' is-hidden' : ''}`}>
           {/* **見出しには、小さな訳を添える**(0036・2026-09 利用者の指定)。
               0036 を貼る前に作った教材には入っていない(訳が出ないだけ) */}
-          <MaterialTitle title={material.title} headline={material.headline}
+          <MaterialTitle title={material.title} material={material} headline={material.headline}
                          headlineJa={material.headlineJa ?? material.headline_ja}
                          as="strong" size="sheet" />
           {/* **何の練習かを、紙の上に必ず残す。**

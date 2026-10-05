@@ -1029,6 +1029,8 @@ export default function TrainerMaterials({
                       そのときのために `fallbackTags` の先頭に弱点を渡す。 */}
                   <MaterialTitle
                     title={m.title}
+                    /* ★ 第5.384節。**大きく出す名前は `materialName()` が決める** */
+                    material={m}
                     headline={m.headline}
                     hideDate
                     weakness={m.tagIds.map(weaknessTagLabel).join(' + ')}

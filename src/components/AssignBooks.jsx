@@ -408,7 +408,7 @@ export default function AssignBooks({
                                  now.includes(m.id)
                                    ? now.filter((x) => x !== m.id) : [...now, m.id]))} />
                         {/* 題の出し方は `MaterialTitle` 1か所(教材の画面と同じ) */}
-                        <MaterialTitle title={m.title} as="span" size="row" hideDate />
+                        <MaterialTitle title={m.title} material={m} as="span" size="row" hideDate />
                       </label>
                     ))}
                   </div>

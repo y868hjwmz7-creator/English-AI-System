@@ -93,13 +93,20 @@
         :root:not([data-theme="light"]) .loading-name { color: #9a998f; }
         :root:not([data-theme="light"]) .loading-note { color: #cfcec4; }
         :root:not([data-theme="light"]) .loading-bar { background: #46463f; }
-        :root:not([data-theme="light"]) .loading-bar > span { background: #6aa6de; }
+        /* ★ **RIZAP の金**(第5.384節・2026-10-05 利用者の指定
+             「ダークモードの場合は、ローディングのバーの色もゴールドに」)。
+             **ここは値で書くしかない** —— この style は React より先に描く
+             ので、`src/styles.css` の `--rizap-gold` はまだ読まれていない。
+             **`src/styles.css` の `--rizap-gold` と同じ値にする。**
+             片方を直したら必ずもう片方も直す(`npm run test:play` が見張る) */
+        :root:not([data-theme="light"]) .loading-bar > span { background: #d4af37; }
       }
       :root[data-theme="dark"] body { background: #0c0c0b; color: #cfcec4; }
       :root[data-theme="dark"] .loading-name { color: #9a998f; }
       :root[data-theme="dark"] .loading-note { color: #cfcec4; }
       :root[data-theme="dark"] .loading-bar { background: #46463f; }
-      :root[data-theme="dark"] .loading-bar > span { background: #6aa6de; }
+      /* ★ 上の @media と**同じ値**(第5.384節)。1か所でも抜くと食い違う */
+      :root[data-theme="dark"] .loading-bar > span { background: #d4af37; }
 
       .loading {
         display: flex; flex-direction: column;

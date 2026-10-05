@@ -1503,6 +1503,11 @@ export default function MaterialForm({
     // 指導ポイントは最初の演習で1本だけ受け取る。演習ごとに集めていた
     // ころは、同じ内容が言い換えられて6本並んだ。
     let point = teachingPoint
+    /* ★ **AI が付けた一言の呼び名**(第5.384節・2026-10-05 利用者の指定)。
+         **最初の演習で1本だけ受け取る** —— 指導ポイントとまったく同じ理由で、
+         演習ごとに集めると言い換えが並ぶ。
+         **本文を持たない教材だけ**に返ってくる(本文は `headline` が名前) */
+    let nick = headlineJa
     let warn = null
     let droppedCount = 0
     const droppedWhy = emptyDropCounts()      // ★ 落とした理由(第5.341節)
@@ -1609,6 +1614,7 @@ export default function MaterialForm({
       spent.output += result.usage?.output ?? 0
       spent.cacheRead += result.usage?.cacheRead ?? 0
       if (result.teaching_point && !point) point = result.teaching_point
+      if (result.headline_ja && !nick) nick = result.headline_ja
 
       // 1問ごとに、どの弱点の問題かを持たせる。
       // 番号が返らなかった問は、順番で割り当てる(抜けを残さない)。
@@ -1707,7 +1713,10 @@ export default function MaterialForm({
     }
 
     return {
-      made, spent, headline: null, headlineJa: null, teachingPoint: point,
+      /* ★ `headlineJa` は**一言の呼び名**(第5.384節)。
+           本文のある教材では「見出しの訳」だが、本文を持たない教材では
+           これが名前そのものになる。**どちらを出すかは `materialName()` が決める** */
+      made, spent, headline: null, headlineJa: nick || null, teachingPoint: point,
       dropped: droppedCount, droppedWhy, short: shortCount, notes, warn,
       autoTitle: autoTitle(),
       form: formSnapshot(),
@@ -3746,10 +3755,27 @@ export default function MaterialForm({
         )}
       </fieldset>
 
+      {/* ★ **教材名は、畳みの外に出す**(第5.384節・2026-10-05 利用者の指定)。
+
+             > 同じレベルで「応答問題」をいくつか作ってゲストにアサインすると、
+             > 一番大きく表示される題名がすべて同じなので、見分けがつかず探しにくい
+
+           **欄そのものは前からあった。**「詳しく設定する(任意)」の中に
+           畳まれていて、`placeholder` も「作ると自動で入ります」だったので、
+           **誰も書かないまま**になっていた。
+
+           **必須にはしない。** トレーナー1人あたりの作業時間がこの仕組みの
+           制約なので(第5.6節)、毎回打たせると回らない。
+           空なら `materialName()` が中身から付ける。 */}
+      <label className="field">
+        <span>教材名</span>
+        <input value={title} onChange={(e) => setTitle(e.target.value)}
+               placeholder="空なら、中身から自動で付きます" />
+      </label>
+
       {/*
         記入欄は既定で閉じておく。並んでいるだけで煩雑に見えるうえ、
-        教材名は自動で付き、指導ポイントも生成で入るため、
-        ふだんは触らなくてよい(2026-08 の指摘)。
+        指導ポイントは生成で入るため、ふだんは触らなくてよい(2026-08 の指摘)。
       */}
       <div className="details-box">
         <button type="button" className="btn btn--link"
@@ -3758,7 +3784,7 @@ export default function MaterialForm({
         </button>
         {!showDetails && (
           <p className="tip field-hint">
-            教材名・取り組み方・指導ポイント
+            取り組み方・指導ポイント
             {/* **「話題」は、もうこの中に無い**(第5.190節で上へ出した) */}
             {isPassageKind(kind) && '・見出し'}
             。ふだんは触らなくて構いません(自動で入ります)。
@@ -3767,14 +3793,6 @@ export default function MaterialForm({
 
         {showDetails && (
           <>
-            <label className="field">
-              <span>
-                教材名
-              </span>
-              <input value={title} onChange={(e) => setTitle(e.target.value)}
-                     placeholder="作ると自動で入ります" />
-            </label>
-
             {/* **見出しは、スピーチでも要る**(教材の顔になる) */}
             {isPassageKind(kind) && (
               <label className="field">

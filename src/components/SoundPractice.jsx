@@ -139,6 +139,7 @@ export default function SoundPractice() {
             <div key={m.id} className="card">
               <MaterialTitle
                 title={m.title}
+                material={m}
                 headline={m.headline}
                 fallbackTags={[(m.tagIds ?? []).map(weaknessTagLabel).join(' + '),
                   cefrLabel(m.level)]}

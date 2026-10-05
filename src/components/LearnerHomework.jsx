@@ -540,6 +540,8 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                         `MaterialTitle` が出す(トレーナー側と同じ決まり) */}
                     <MaterialTitle
                       title={a.material?.title ?? '(教材が見つかりません)'}
+                      /* ★ **大きく出す名前は `materialName()` が決める**(第5.384節) */
+                      material={a.material}
                       headline={a.material?.headline}
                       hideDate
                       weakness={(a.material?.tagIds ?? []).map(weaknessTagLabel).join(' + ')}
@@ -603,7 +605,8 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
 
                 <div id={`homework-${a.id}`}>
                     <div className="print-only print-head">
-                      <MaterialTitle title={a.material?.title} headline={a.material?.headline}
+                      <MaterialTitle title={a.material?.title} material={a.material}
+                                     headline={a.material?.headline}
                                      as="strong" size="sheet" />
                       <div className="print-meta">
                         {cefrLabel(a.material?.level)} / {kindLabel(a.material?.kind)}

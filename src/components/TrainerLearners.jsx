@@ -1258,6 +1258,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                   手で名前を付けた教材のために、`fallbackTags` に渡す */}
                               <MaterialTitle
                                 title={m?.title ?? '(消された教材)'}
+                                /* ★ 第5.384節。**消された教材では `m` が無い**ので、
+                                     そのときはこれまでどおり `title` が出る */
+                                material={m}
                                 headline={m?.headline}
                                 hideDate
                                 weakness={(m?.tagIds ?? []).map(weaknessTagLabel).join(' + ')}

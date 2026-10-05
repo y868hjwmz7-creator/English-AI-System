@@ -15,6 +15,7 @@
  *   **保存されている教材名は変えない。** 既にある教材もそのまま直る。
  */
 import { parseMaterialTitle } from '../lib/format.js'
+import { materialName } from '../lib/materialName.js'
 
 export default function MaterialTitle({
   title, fallbackTags = [], headline = null, weakness = '',
@@ -31,8 +32,21 @@ export default function MaterialTitle({
    */
   headlineJa = null,
   as: Tag = 'h3', size = 'card', hideDate = false,
+  /**
+   * ★ **教材そのもの**(第5.384節・2026-10-05 利用者の指定)。
+   *
+   *   > 一番大きく表示される題名がすべて同じなので、見分けがつかず探しにくい
+   *
+   * 渡すと、**大きく出す呼び名を `materialName()` が決める** ——
+   * 教材名がレベルだけ(応答問題など)のときは、中身から組んだ名前になる。
+   * **ここで `kind === '…'` と書かない。** 決めるのは `materialName.js` 1か所。
+   *
+   * **渡さなければ、いままでどおり**(教材が消えているときは `title` だけが来る)。
+   */
+  material = null,
 }) {
-  const { date, main, tags } = parseMaterialTitle(title)
+  const { date, main: 名前そのまま, tags } = parseMaterialTitle(title)
+  const main = material ? materialName(material).name : 名前そのまま
   // 教材名に条件が入っていれば、それを札にする。手で付けた名前など、
   // 入っていないときは呼び出し側から渡されたもの(レベル・種類・業界)を使う。
   const chips = (tags.length ? tags : fallbackTags).filter(Boolean)

@@ -1060,7 +1060,12 @@ export async function loadLearnerAssignments(learnerId, limit = 50) {
         id, title, level, kind, headline, ${opt('headline_ja')} teaching_point,
         industry, genre, scene, created_by, ${opt('voice_ids')}
         material_tags ( tag_id ),
-        material_sections ( id, material_items ( id ) )
+        /* ★ answer も読む(第5.384節・2026-10-05 利用者の指定)。
+             見出しに出す呼び名を中身から組むため(materialName)。
+             行は1件も増やしていない —— もともと数えるために id を引いていた
+             ところに、短い欄を1つ足しただけである。本文も訳も読まない。
+             ここはテンプレート文字列の中なので、バッククォートは書けない。 */
+        material_sections ( id, seq, material_items ( id, seq, answer ) )
       )
     `)
     .eq('learner_id', learnerId)
@@ -1075,6 +1080,12 @@ export async function loadLearnerAssignments(learnerId, limit = 50) {
         ...a.materials,
         tagIds: (a.materials.material_tags ?? []).map((t) => t.tag_id),
         voiceIds: a.materials.voice_ids ?? [],
+        /* ★ **`materialName()` が読む形にそろえる**(第5.384節)。
+             本文を読んだときと**同じ欄の名前**(`sections[].items[]`)に
+             しておかないと、呼び名の決まりを2通り持つことになる */
+        sections: sortBySeq(a.materials.material_sections).map((sec) => ({
+          ...sec, items: sortBySeq(sec.material_items),
+        })),
         itemCount: (a.materials.material_sections ?? [])
           .reduce((n, sec) => n + (sec.material_items?.length ?? 0), 0),
       }

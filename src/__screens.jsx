@@ -975,7 +975,7 @@ function AssignScreen() {
                            onChange={() => setMatPicked((now) => (
                              now.includes(m.id)
                                ? now.filter((x) => x !== m.id) : [...now, m.id]))} />
-                    <MaterialTitle title={m.title} as="span" size="row" hideDate />
+                    <MaterialTitle title={m.title} material={m} as="span" size="row" hideDate />
                   </label>
                 ))}
               </div>
