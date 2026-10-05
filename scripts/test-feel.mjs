@@ -144,10 +144,38 @@ console.log('\n▶ 相棒をえらぶ(3体・素の node で測る)')
   is(!外.length, '知らない値でも、必ず誰かに落ちる', String(外.length))
   is(K.buddyKindOf('kasa') === 'kasa', '正しい値は、そのまま通る')
 
+  /* ★ **「出さない」**(第5.383節・利用者の指定
+       「相棒を「なし」にする選択肢が追加されていません」)。
+
+       ★ **描ける一覧と、えらべる一覧を混ぜていないか。**
+         混ぜると、**描けないものを1体として数える** ——
+         「3体とも別のシルエット」などの見張りが、空の絵を1つ数えて
+         いきなり赤くなる(あるいは、もっと悪く、緑のまま通る) */
+  const えらぶ = K.BUDDY_PICKS.map((k) => k.id)
+  is(えらぶ.length === 居る.length + 1,
+    `えらべるのは ${居る.length} 体 + 「出さない」`, えらぶ.join(' / '))
+  is(えらぶ.slice(0, 居る.length).join() === 居る.join(),
+    '妖怪の並びは、そのまま先に来る(並べ替えていない)', えらぶ.join(' / '))
+  is(えらぶ[えらぶ.length - 1] === K.BUDDY_KIND_NONE, '「出さない」は末尾', えらぶ.join(' / '))
+  is(K.BUDDY_PICKS.every((k) => k.label), 'えらべるものには、ぜんぶ名前がある')
+  is(K.buddyKindOf(K.BUDDY_KIND_NONE) === K.BUDDY_KIND_NONE, '「出さない」は、そのまま通る')
+  /* ★ **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+       片方だけだと、**いつも描く / 1体も描かない**に書き換えても緑のまま */
+  is(居る.every((id) => K.buddyShown(id)), `${居る.length} 体とも、描く側に出る`)
+  is(K.buddyShown(K.BUDDY_KIND_NONE) === false, '「出さない」だけが、描かれない')
+  is(K.buddyShown('zzz') === true, '知らない値では、相棒が消えない(行き止まりを作らない)')
+  is(K.BUDDY_KIND_DEFAULT !== K.BUDDY_KIND_NONE, '既定は「出さない」ではない')
+
   const nav = read('src/components/NavSettings.jsx')
   const bud = read('src/components/Buddy.jsx')
   is(!/localStorage/.test(nav) && !/localStorage/.test(bud), '画面は、覚える場所を自分で触らない')
   is(!/kind === '|kind === "/.test(nav), '設定の画面で、相棒ごとに書き分けていない')
+  /* ★ **`'none'` を画面に書いていないか。** 描くかどうかを決めるのは
+       `buddyShown()` 1か所である(CLAUDE.md「判断は1か所に持つ」)。
+       **コメントを落としてから数える** —— 説明の中には出てくる */
+  const 直書き = [nav, bud].filter((t) => new RegExp(`['"]${K.BUDDY_KIND_NONE}['"]`).test(noC(t)))
+  is(!直書き.length, `画面と相棒が、「${K.BUDDY_KIND_NONE}」を直に書いていない`, String(直書き.length))
+  is(/buddyShown\(/.test(noC(nav)), '描くかどうかは、設定の画面でも聞いている')
   is(/<Buddy\b/.test(nav), '選ぶところに、本物の相棒を描いている')
 }
 
@@ -466,7 +494,14 @@ console.log('\n▶ 相棒(実機で測る)')
   await page.click('#pick .nav-settings-sum')
   await page.waitForTimeout(250)
   const 行 = await page.locator('#pick .buddy-pick-btn').count()
-  is(行 === K.BUDDY_KINDS.length, `えらぶボタンが ${K.BUDDY_KINDS.length} つ出る`, String(行))
+  /* ★ **`BUDDY_PICKS.length` と比べない。** 画面はあの一覧から並べているので、
+       **見比べる相手が自分と同じ出どころ**になる ——
+       「出さない」が落ちた日に、期待も一緒に 3 へ下がって**緑のまま**だった
+       (CLAUDE.md「見張りが、自分と同じ出どころを見ていないか」・実際に踏んだ)。
+       **描ける妖怪の数 + 「出さない」の1つ**で数える */
+  is(行 === K.BUDDY_KINDS.length + 1,
+    `えらぶボタンが ${K.BUDDY_KINDS.length + 1} つ出る(${K.BUDDY_KINDS.length} 体 + 出さない)`,
+    String(行))
   const 幅前 = await page.locator('#pick .buddy-pick').boundingBox()
   await page.locator('#pick .buddy-pick-btn').nth(0).click()
   await page.waitForTimeout(300)
@@ -478,7 +513,163 @@ console.log('\n▶ 相棒(実機で測る)')
     && Math.round(幅前.height) === Math.round(幅後.height),
     '選び直しても、えらぶ行の大きさは動かない',
     `${Math.round(幅前.width)}x${Math.round(幅前.height)} → ${Math.round(幅後.width)}x${Math.round(幅後.height)}`)
+
+  /* ★ **「出さない」を押したら、本当に消えるか**(第5.383節)。
+       **「えらべる」だけでは足りない** —— 押しても消えない形に
+       書き換えても、上の見張りはぜんぶ緑のままである。
+       ★ 相棒は3か所に出る(ホーム・やり終えた1枚・顔の一覧)。
+         **数えるのは、`kind` を渡していないもの**だけ ——
+         `#kinds` は見本なので、えらんだものに関係なく出る */
+  const 頭前 = await page.locator('#pick .buddy-pick .buddy').count()
+  const 箱前 = await page.locator('.home-head--buddy').boundingBox()
+  await page.locator('#pick .buddy-pick-btn').nth(K.BUDDY_PICKS.length - 1).click()
+  await page.waitForTimeout(300)
+  const 消えた = {
+    ホーム: await page.locator('.home-buddy').count(),
+    結果: await page.locator('.sresult-buddy .buddy').count(),
+    顔: await page.locator('#faces .buddy').count(),
+    見本: await page.locator('#kinds .buddy').count(),
+    えらぶ: await page.locator('#pick .buddy-pick .buddy').count(),
+  }
+  is(消えた.ホーム === 0 && 消えた.結果 === 0 && 消えた.顔 === 0,
+    '「出さない」にすると、相棒がどこにも出ない', JSON.stringify(消えた))
+  is(消えた.見本 > 0, '見本(`kind` を渡したもの)は、それでも出る', String(消えた.見本))
+  is(消えた.えらぶ === 頭前, 'えらぶ列の相棒は、それでも出る', `${頭前} → ${消えた.えらぶ}`)
+  /* **空き地を残さない。** 相棒ぶんの隙間が居座ると、見出しが下へずれたまま */
+  const 箱後 = await page.locator('.home-head--buddy').boundingBox()
+  is(箱後.height < 箱前.height, '相棒を消したぶん、ホームの見出しに空き地が残らない',
+    `${Math.round(箱前.height)} → ${Math.round(箱後.height)}`)
+  /* **行き止まりを作らない。** 戻せること自体を見る */
+  const 空枠 = await page.locator('#pick .buddy-pick-btn .buddy-pick-off').count()
+  is(空枠 === 1, '「出さない」には、空のままではなく印が置いてある', String(空枠))
+  await page.locator('#pick .buddy-pick-btn').nth(0).click()
+  await page.waitForTimeout(300)
+  is(await page.locator('.home-buddy').count() === 1, '選び直せば、相棒はまた出る')
   await page.close()
+}
+
+console.log('\n▶ 選んでいる印の塗り(実測・第5.383節)')
+{
+  /* ★ 2026-10-05 利用者の指定(暗い配色の写真つき)。
+
+       > 選択しているもののゴールドの塗りつぶしが少し派手すぎて目にきついです。
+       > 少し透明度を出すなどしてバランスをとれませんか？
+       > また、弱点タグなども選択するとべた塗になる項目です
+
+     ★ **「CSS に `--pick-bg` と書いてある」では見張ったことにならない。**
+       値がどこで決まるかは**書いた場所の `--accent`** で変わるので、
+       **描いて、計算後の色をそのまま測る。**
+
+     ★ **暗い配色は2か所にある**(`@media` と `[data-theme="dark"]`)。
+       **両方測って、同じ色になることを見る** —— 片方だけ直すのが
+       この配色でいちばん多い壊れ方である(CLAUDE.md)。 */
+  const 測る = async (暗く) => {
+    const page = await browser.newPage({
+      viewport: { width: 900, height: 1200 },
+      colorScheme: 暗く === 'media' ? 'dark' : 'light',
+    })
+    await page.goto(`http://localhost:${PORT}/__feel.html`, { waitUntil: 'networkidle' })
+    await page.waitForSelector('#pick .nav-settings-sum')
+    if (暗く === 'attr') {
+      await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+    }
+    await page.click('#pick .nav-settings-sum')
+    await page.waitForSelector('#pick .theme-btn.is-active')
+    const v = await page.$eval('#pick .theme-btn.is-active', (el) => {
+      /* **色の書き方をそろえる。** `#d4af37` と `rgb(212, 175, 55)` を
+         そのまま比べると、いつも「違う」になる */
+      const 正す = (c) => {
+        const d = document.createElement('span')
+        d.style.color = c
+        document.body.appendChild(d)
+        const out = window.getComputedStyle(d).color
+        d.remove()
+        return out
+      }
+      const 解く = (c) => (String(c).match(/[\d.]+/g) ?? []).map(Number)
+      /* 下に透けている色を、本当にたどって重ねる(カード → ページ) */
+      const 下 = (node) => {
+        for (let n = node.parentElement; n; n = n.parentElement) {
+          const c = 解く(window.getComputedStyle(n).backgroundColor)
+          if (c.length >= 3 && (c[3] ?? 1) > 0.99) return c.slice(0, 3)
+        }
+        return [255, 255, 255]
+      }
+      const 重ねる = (前, 後) => {
+        const a = 前[3] ?? 1
+        return [0, 1, 2].map((i) => 前[i] * a + 後[i] * (1 - a))
+      }
+      const 明るさ = (rgb) => {
+        const f = rgb.map((v) => {
+          const x = v / 255
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+      }
+      const s = window.getComputedStyle(el)
+      const root = window.getComputedStyle(document.documentElement)
+      const 地 = 重ねる(解く(s.backgroundColor), 下(el))
+      const 字 = 重ねる(解く(s.color), 地)
+      const [hi, lo] = [明るさ(地), 明るさ(字)].sort((a, b) => b - a)
+      return {
+        bg: s.backgroundColor,
+        fg: 正す(s.color),
+        accent: 正す(root.getPropertyValue('--accent').trim()),
+        onAccent: 正す(root.getPropertyValue('--on-accent').trim()),
+        差: Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100,
+      }
+    })
+    await page.close()
+    return v
+  }
+  const 明 = await 測る('light')
+  const 暗1 = await 測る('media')
+  const 暗2 = await 測る('attr')
+
+  /* ★ **明るい配色は、1px も変えていない**(利用者は暗い配色の話をしている)。
+       **これが「出ない側」である** —— 透かす指定を全部に掛けてしまうと、
+       上の見張りだけでは気づけない */
+  is(明.bg === 明.accent, '明るい配色は、いままでどおりのべた塗り', `${明.bg} / ${明.accent}`)
+  is(明.fg === 明.onAccent, '明るい配色は、いままでどおり白い文字', `${明.fg} / ${明.onAccent}`)
+
+  for (const [名, v] of [['@media', 暗1], ['data-theme', 暗2]]) {
+    is(v.bg !== v.accent, `暗い配色(${名})は、金のべた塗りではない`, `${v.bg} / 金 ${v.accent}`)
+    /* **本当に透けているか。** 不透明な色で薄く塗ってもそれらしく見えるが、
+       紙の濃さが変わると浮く。利用者の言葉どおり「透明度を出す」を測る */
+    is(!/^rgb\(/.test(v.bg), `暗い配色(${名})の塗りは、本当に透けている`, v.bg)
+    is(v.fg === v.accent, `暗い配色(${名})は、同じ金の文字`, `${v.fg} / ${v.accent}`)
+    /* **目にきつくないことと、読めることは別。** 透かしすぎると読めなくなる */
+    is(v.差 >= 4.5, `暗い配色(${名})でも、字が読める明暗差`, `${v.差} : 1`)
+  }
+  is(暗1.bg === 暗2.bg && 暗1.fg === 暗2.fg,
+    '暗い配色の2か所が、まったく同じ色になっている', `${暗1.bg} / ${暗2.bg}`)
+
+  /* ★ **「選んだ印」の塗りを、1か所も取りこぼしていないか。**
+       利用者が名指ししたのは設定の錠剤と弱点タグだが、**同じ作りはほかにもある。**
+       `background: var(--accent)` を直に持っている「選んだ印」が残っていないかを見る。
+       **目じるしは先に数える**(CLAUDE.md)—— どれも1回しか出てこない */
+  const css = noC(read('src/styles.css'))
+  const 印たち = [
+    '.tagchip.is-on',
+    '.btn--toggle.is-active',
+    '.theme-btn.is-active',
+    '.tabbar--sub .tabbar-tab.is-active',
+    '.repeat-key.is-on, .shuffle-key.is-on',
+  ]
+  for (const 名 of 印たち) {
+    const i = css.indexOf(名)
+    const 中 = i < 0 ? '' : css.slice(i, css.indexOf('}', i))
+    is(i >= 0 && /--pick-bg/.test(中) && !/var\(--accent\)/.test(中),
+      `${名} は、透かせる塗りを使っている`, 中.replace(/\s+/g, ' ').trim())
+  }
+  /* ★ **紙(いつも明るい島)でも決め直しているか。**
+       `--pick-*` は**書いた場所の `--accent`** で決まってしまうので、
+       `:root` のぶんは紙に届かない(`--accent-bg` を3か所に書くのと同じ話) */
+  const 紙 = css.slice(css.indexOf('.lesson-sheet, .focus-paper'))
+  const 紙中 = 紙.slice(0, 紙.indexOf('}'))
+  is(/--accent:/.test(紙中) && /--pick-bg:/.test(紙中)
+    && /--pick-fg:/.test(紙中) && /--pick-line:/.test(紙中),
+    '紙の節は、`--accent` を差し替えたぶん `--pick-*` も決め直している')
 }
 
 console.log('\n▶ 本当に駆け上がるか(描く前から見張る)')

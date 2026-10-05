@@ -46,7 +46,7 @@ import { SortIcon } from './Icons.jsx'
 import { TONE_SIDE } from '../lib/btnTone.js'
 /* ★ **相棒をえらぶ**(第5.381節)。**一覧は `buddyKind.js` 1か所**で、
      ここでは並べるだけ —— 増やす日に、この画面は1行も直らない */
-import { BUDDY_KINDS } from '../lib/buddyKind.js'
+import { BUDDY_PICKS, buddyShown } from '../lib/buddyKind.js'
 import Buddy from './Buddy.jsx'
 import VolumeRow from './VolumeRow.jsx'
 /* ★ **ほかのアプリの音を混ぜるか**(第5.352節)。
@@ -149,7 +149,7 @@ export default function NavSettings({
         <div className="nav-setting">
           <span className="nav-setting-label">相棒</span>
           <div className="buddy-pick" role="group" aria-label="相棒">
-            {BUDDY_KINDS.map((k) => (
+            {BUDDY_PICKS.map((k) => (
               <button
                 key={k.id}
                 type="button"
@@ -158,7 +158,14 @@ export default function NavSettings({
                 aria-label={k.label}
                 onClick={() => onBuddy?.(k.id)}
               >
-                <Buddy kind={k.id} face="rest" size="sm" />
+                {/* ★ **「出さない」には、斜線の入った空枠を置く**(第5.383節)。
+                     **`k.id === 'none'` と書かない** —— 描くかどうかを決めるのは
+                     `buddyShown()` 1か所である(CLAUDE.md「判断は1か所に持つ」)。
+                     **空のままにしない** —— 押せるものに見えず、行き止まりになる。
+                     大きさは相棒とまったく同じなので、**列の高さは動かない** */}
+                {buddyShown(k.id)
+                  ? <Buddy kind={k.id} face="rest" size="sm" />
+                  : <span className="buddy-pick-off" aria-hidden="true" />}
               </button>
             ))}
           </div>

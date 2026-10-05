@@ -46,8 +46,30 @@ export const BUDDY_KINDS = [
 ]
 
 /**
+ * ★ **「出さない」**(第5.383節・2026-10-05 利用者の指定)。
+ *
+ *   > また、相棒を「なし」にする選択肢が追加されていません。
+ *
+ * **これは `BUDDY_KINDS` に混ぜない。** あちらは「描ける妖怪の一覧」で、
+ * 顔の数や形の違いを数える見張りが使っている。
+ * **混ぜると、描けないものを 1 体として数えてしまう。**
+ */
+export const BUDDY_KIND_NONE = 'none'
+
+/**
+ * ★ **設定の画面に並ぶもの。** 描ける妖怪のうしろに「出さない」を足す。
+ *
+ * **書き写さない。`BUDDY_KINDS` から組む** —— 妖怪を足した日に、
+ * ここへ書き足すのを忘れる(CLAUDE.md「一覧を2か所に書かない」)。
+ * **「出さない」は末尾**。先頭に置くと、ふだん選ぶものが1つ右へずれる。
+ */
+export const BUDDY_PICKS = [...BUDDY_KINDS, { id: BUDDY_KIND_NONE, label: '出さない' }]
+
+/**
  * 何も選んでいない人に出す相棒。
  * **唐傘にしてある** —— 3つの中でいちばん形がはっきりしている。
+ * **「出さない」を既定にしない** —— 選んだ覚えのない人の画面から、
+ * 黙って相棒が消えることになる。
  */
 export const BUDDY_KIND_DEFAULT = 'kasa'
 
@@ -66,7 +88,19 @@ export const BUDDY_KIND_EVENT = 'eas-buddy-kind'
  * 相棒が1体も出ない、ということにはしない(行き止まりを作らない)。
  */
 export function buddyKindOf(v) {
-  return BUDDY_KINDS.some((k) => k.id === v) ? v : BUDDY_KIND_DEFAULT
+  return BUDDY_PICKS.some((k) => k.id === v) ? v : BUDDY_KIND_DEFAULT
+}
+
+/**
+ * ★ **相棒を描くか。**(第5.383節)
+ *
+ * **画面の中で `kind === 'none'` と書かない**(CLAUDE.md「判断は1か所に持つ」)。
+ * 描くか描かないかを決めるのは、ここだけである。
+ * **既定は「描く」側ではなく、知らない値を既定(唐傘)に落としてから見る** ——
+ * 古い端末に別の名前が残っていても、相棒が消えることにはならない。
+ */
+export function buddyShown(v) {
+  return buddyKindOf(v) !== BUDDY_KIND_NONE
 }
 
 /** いま選ばれている相棒。**読めなくても既定に落ちるだけ** */

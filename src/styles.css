@@ -43,6 +43,23 @@
   --accent:      #2c6094;
   --accent-soft: #e7eef6;   /* 選んでいるものの地色 */
   --accent-line: #b9cde3;   /* その枠線 */
+  /* ★ **選んでいるものの、べた塗り**(第5.383節・2026-10-05 利用者の指定)。
+
+       > 選択しているもののゴールドの塗りつぶしが少し派手すぎて目にきついです。
+       > 少し透明度を出すなどしてバランスをとれませんか？
+       > また、弱点タグなども選択するとべた塗になる項目です
+
+     **明るい配色(鋼色の青)は 1px も変えていない。**
+     いままで `--accent` と `#fff` を直に書いていた塗りを、
+     **この3つに置き換えただけ**である —— 値は同じものを指している。
+     透かすのは**暗い配色の金だけ**(下の2か所で上書きする)。
+
+     ★ **ここに置くのは、「選んだ」ことを示す塗りだけ。**
+     次に進むボタン(`--accent` のべた塗り)・進み具合の帯・
+     番号の丸は、選んだ印ではないので触っていない。 */
+  --pick-bg:   var(--accent);
+  --pick-fg:   var(--on-accent);
+  --pick-line: var(--accent);
   /* ★ **集中モードでも使う色**(2026-09)。
      集中モードは紙の中から呼ばれるが、`createPortal` で body の直下に出す
      ようにしたので(左右の余白を「普通の画面」と同じ暗さにするため)、
@@ -87,6 +104,13 @@
   --rizap-gold-soft: #2a2316;   /* 選んでいるものの、うすい地色 */
   --rizap-gold-line: #5a4a22;   /* その枠線 */
   --rizap-gold-on:   #15130d;   /* 金のべた塗りの上に乗る文字 */
+  /* ★ **選んでいるものの、透かした金**(第5.383節)。
+     **割合もここ1か所。** 暗い配色は `@media` と `[data-theme="dark"]` の
+     2か所にあるので、あちらに書くと必ず片方だけ古くなる。
+     **地が透けるので、カードの上でも紙の上でも濃さが揃う。**
+     上に乗る金の文字との明暗差は、カードの上で 5.4 : 1、
+     ページの地の上で 6.5 : 1(どちらも実測)。 */
+  --rizap-gold-pick: color-mix(in srgb, var(--rizap-gold) 20%, transparent);
 
   /* 合っている / 違う。**ディクテーションの照らし合わせで使う。**
      緑と赤は色覚特性で見分けにくい組み合わせなので、
@@ -278,6 +302,13 @@
     --accent:      var(--rizap-gold);
     --accent-soft: var(--rizap-gold-soft);
     --accent-line: var(--rizap-gold-line);
+    /* ★ **選んでいる印は、べた塗りをやめて透かす**(第5.383節・利用者の指定)。
+       `:root` の「選んでいる印は、べた塗りではなく**うすい地色 + 同じ色の文字**」
+       と同じ作法に戻す。**枠線は金のまま** —— 色だけに頼らないため、
+       細い線と太字は残す(下の `[data-theme="dark"]` と**同じ値**にする) */
+    --pick-bg:   var(--rizap-gold-pick);
+    --pick-fg:   var(--rizap-gold);
+    --pick-line: var(--rizap-gold);
     /* 集中モードでも使う色(`:root` と同じ並び。**1か所でも抜くと食い違う**) */
     --accent-bg:   var(--rizap-gold-soft);
     --voice-a:     var(--rizap-gold);
@@ -337,6 +368,10 @@
   --accent:      var(--rizap-gold);
   --accent-soft: var(--rizap-gold-soft);
   --accent-line: var(--rizap-gold-line);
+  /* ★ **選んでいる印は、べた塗りをやめて透かす**(第5.383節・上の @media と同じ値) */
+  --pick-bg:   var(--rizap-gold-pick);
+  --pick-fg:   var(--rizap-gold);
+  --pick-line: var(--rizap-gold);
   /* 集中モードでも使う色(上の @media と**同じ値**にする) */
   --accent-bg:   var(--rizap-gold-soft);
   --voice-a:     var(--rizap-gold);
@@ -992,7 +1027,8 @@ a { color: var(--accent); }
   background: var(--surface-1); font-size: var(--fs-14);
 }
 .tabbar--sub .tabbar-tab.is-active {
-  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  background: var(--pick-bg); border-color: var(--pick-line);
+  color: var(--pick-fg); font-weight: 600;
 }
 
 .app-toolbar {
@@ -1436,7 +1472,9 @@ audio { width: 100%; margin-top: 4px; }
 .btn--toggle:not(.is-active) {
   background: var(--quiet-bg); border-color: var(--quiet-bg); color: var(--text-primary);
 }
-.btn--toggle.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn--toggle.is-active {
+  background: var(--pick-bg); border-color: var(--pick-line); color: var(--pick-fg);
+}
 
 /* **答えの3段目**(0027)。まだ / 覚えかけ / 覚えた のまん中。
    「まだ」(灰色の塗りつぶし)と「覚えた」(青の塗りつぶし)の**あいだ**に
@@ -2021,8 +2059,8 @@ html, body { overflow-x: clip; }
 }
 .tagchip:hover { border-color: var(--text-muted); }
 .tagchip.is-on {
-  background: var(--accent); border-color: var(--accent);
-  color: #fff; font-weight: 600;
+  background: var(--pick-bg); border-color: var(--pick-line);
+  color: var(--pick-fg); font-weight: 600;
 }
 .tagchip.is-static { cursor: default; }
 .tagchip.is-static:hover { border-color: var(--border); }
@@ -4415,7 +4453,7 @@ html, body { overflow-x: clip; }
   border: none; background: none; cursor: pointer;
   padding: 4px 10px; font-size: var(--fs-12); color: var(--text-secondary);
 }
-.theme-btn.is-active { background: var(--accent); color: #fff; font-weight: 600; }
+.theme-btn.is-active { background: var(--pick-bg); color: var(--pick-fg); font-weight: 600; }
 
 /* ── レッスンで使う表示(画面共有用)──────────────────────────
    紙に刷ったときと同じ見え方を、画面の上で出す。
@@ -4692,6 +4730,14 @@ html, body { overflow-x: clip; }
   /* 選んでいる印。**紙の上でもべた塗りにしない**(2026-08 の指摘) */
   --accent-soft:  #e7f0f4;
   --accent-line:  #a9c8d4;
+  /* ★ **ここでも決め直す**(第5.383節)。`--pick-*` は**書いた場所で
+     `--accent` が決まってしまう**ので、`:root` のぶんは紙に届かない。
+     紙はいつも明るい島なので、**べた塗りのまま**にする ——
+     暗い配色で透かすのは、黒い地の上の金が目にきついからである。
+     (`--accent-bg` / `--voice-a` を3か所に書いてあるのと同じ話) */
+  --pick-bg:      var(--accent);
+  --pick-fg:      var(--on-accent);
+  --pick-line:    var(--accent);
   /* 照らし合わせ。紙は常に白なので値で直接書く */
   --ok: #1f7a52;   --ok-bg: #e6f3ec;
   --ng: #b8322f;   --ng-bg: #fbeae9;
@@ -4788,6 +4834,9 @@ html, body { overflow-x: clip; }
   --btn-bg: var(--app-btn-bg);
   --quiet-bg: var(--app-quiet-bg);
   --on-accent: var(--app-on-accent);
+  --pick-bg: var(--app-pick-bg);
+  --pick-fg: var(--app-pick-fg);
+  --pick-line: var(--app-pick-line);
   --surface-0: var(--app-surface-0);
   --surface-1: var(--app-surface-1);
   --surface-2: var(--app-surface-2);
@@ -4858,6 +4907,9 @@ html, body { overflow-x: clip; }
   --btn-bg: var(--app-btn-bg);
   --quiet-bg: var(--app-quiet-bg);
   --on-accent: var(--app-on-accent);
+  --pick-bg: var(--app-pick-bg);
+  --pick-fg: var(--app-pick-fg);
+  --pick-line: var(--app-pick-line);
   --surface-0: var(--app-surface-0);
   --surface-1: var(--app-surface-1);
   --surface-2: var(--app-surface-2);
@@ -8257,6 +8309,9 @@ button.wbfilter-ctl { text-align: left; }
   --app-ok: var(--ok);
   --app-ok-bg: var(--ok-bg);
   --app-on-accent: var(--on-accent);
+  --app-pick-bg: var(--pick-bg);
+  --app-pick-fg: var(--pick-fg);
+  --app-pick-line: var(--pick-line);
   --app-phrase-bar: var(--phrase-bar);
   --app-phrase-bg: var(--phrase-bg);
   --app-pos-adj: var(--pos-adj);
@@ -9289,7 +9344,7 @@ button.wbfilter-ctl { text-align: left; }
 /* いま選んでいるもの。**色だけに頼らない** —— 地色 + 枠線 + 文字色の3つ
    (`aria-pressed` と `title` も付けてある) */
 .repeat-key.is-on, .shuffle-key.is-on {
-  background: var(--accent); border-color: var(--accent); color: #fff;
+  background: var(--pick-bg); border-color: var(--pick-line); color: var(--pick-fg);
 }
 
 /* ★ **速さは「いま何%か」だけ。枠も三角も無い**(第5.318節)
@@ -11124,7 +11179,12 @@ button.wbfilter-ctl { text-align: left; }
 
 /* 相棒をえらぶ列。**絵で選ぶ**ので、ボタンは絵の入れ物だけ。
    **顔だけを抜かない** —— 塗り壁と唐傘は、顔ではなく**形**で選ぶ */
-.buddy-pick { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-self: flex-start; }
+.buddy-pick {
+  display: flex; flex-wrap: wrap; gap: var(--sp-8); align-self: flex-start;
+  /* **絵の大きさは、ここ1か所。** 相棒と「出さない」の空枠が同じ値を引く
+     (CLAUDE.md「呼び名・色・幅を2か所に書かない」) */
+  --pick-size: 52px;
+}
 .buddy-pick-btn {
   display: inline-grid;
   place-items: center;
@@ -11137,7 +11197,18 @@ button.wbfilter-ctl { text-align: left; }
   cursor: pointer;
 }
 .buddy-pick-btn.is-on { border-color: var(--accent); background: var(--accent-soft); }
-.buddy-pick .buddy--sm { width: 52px; height: 52px; }
+.buddy-pick .buddy--sm { width: var(--pick-size); height: var(--pick-size); }
+/* ★ **「出さない」の印**(第5.383節・利用者の指定)。
+     **大きさは相棒と同じ** —— 選び直しても列の高さが 1px も動かない。
+     斜めの線を入れてあるのは、「まだ空いている」ではなく
+     **「置かない」**と読めるようにするためである */
+.buddy-pick-off {
+  width: var(--pick-size); height: var(--pick-size);
+  border: 2px dashed var(--border); border-radius: 12px;
+  background: linear-gradient(to top right,
+    transparent calc(50% - 1px), var(--border) calc(50% - 1px),
+    var(--border) calc(50% + 1px), transparent calc(50% + 1px));
+}
 
 @media (prefers-reduced-motion: reduce) {
   .btn, .home-box, .tagchip, .theme-btn { transition: none; }

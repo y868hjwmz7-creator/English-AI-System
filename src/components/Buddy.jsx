@@ -62,7 +62,7 @@
  * ============================================================================
  */
 import { buddyAlt, buddyBreathes } from '../lib/buddy.js'
-import { BUDDY_KIND_DEFAULT, buddyKindOf } from '../lib/buddyKind.js'
+import { BUDDY_KIND_DEFAULT, buddyKindOf, buddyShown } from '../lib/buddyKind.js'
 import { useBuddyKind } from '../lib/useBuddyKind.js'
 
 /* ══ 3体 ═══════════════════════════════════════════════════════
@@ -183,6 +183,12 @@ export default function Buddy({ face = 'rest', size = 'md', kind, className = ''
   const 選び = useBuddyKind()
   const id = buddyKindOf(kind ?? 選び)
   const 妖怪 = 形[id] ?? 形[BUDDY_KIND_DEFAULT]
+  /* ★ **「出さない」をえらんだ人には、何も描かない**(第5.383節)。
+       **フックより後ろで返す** —— 早い return を上に置くと、
+       読み込み中と読み込み後でフックの数が変わる(CLAUDE.md 第5.220節)。
+       置き場所(ホーム・やり終えた1枚)は `gap` で離してあるので、
+       **1体ぶんの空き地は残らない**(共通ルール「隙間は `gap` で作る」)。 */
+  if (!buddyShown(id)) return null
   /* **管は、太い墨の線 + 紙色の細い線**に展開する(幅が変わらない) */
   const 本体 = 妖怪.parts.flatMap((p) => (p.r === 'tube' ? [p, { ...p, r: 'tube-in' }] : [p]))
   const すべて = [...本体, ...顔パーツ(妖怪.顔, face)]
