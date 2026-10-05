@@ -49,6 +49,8 @@ const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').repla
 const M = await import('../src/lib/motion.js')
 const B = await import('../src/lib/buddy.js')
 const K = await import('../src/lib/buddyKind.js')
+const S = await import('../src/lib/answerScore.js')
+const T = await import('../src/lib/transcriptDiff.js')
 
 /* ══════════════════════════════════════════════════════════════════
    ① 算段(素の node)
@@ -147,6 +149,48 @@ console.log('\n▶ 相棒をえらぶ(3体・素の node で測る)')
   is(!/localStorage/.test(nav) && !/localStorage/.test(bud), '画面は、覚える場所を自分で触らない')
   is(!/kind === '|kind === "/.test(nav), '設定の画面で、相棒ごとに書き分けていない')
   is(/<Buddy\b/.test(nav), '選ぶところに、本物の相棒を描いている')
+}
+
+console.log('\n▶ 演習の手応え(素の node で測る)')
+{
+  /* ★ **境目を書き写さない。性質で見る**(CLAUDE.md)——
+       0.8 と書くと、線を動かした日に期待も一緒に動いて**素通りする** */
+  const 境 = S.ANSWER_OK_RATIO
+  is(境 > 0.5 && 境 < 1, '「できた」の線は、半分より上で、満点ではない', String(境))
+  is(S.answerOkOfRatio(境) === true, 'ちょうど線の上は「できた」')
+  is(S.answerOkOfRatio(境 - 0.001) === false, '線のすぐ下は「まだ」')
+  is(S.answerOkOfRatio(1) === true && S.answerOkOfRatio(0) === false, '満点は「できた」/ 0 は「まだ」')
+  /* ★ **0 と `null` を取り違えない**(CLAUDE.md)。数でないものは、いつも「まだ」 */
+  const 変なの = [null, undefined, NaN, '0.9', {}, Infinity]
+  is(変なの.every((v) => S.answerOkOfRatio(v) === false), '数でないものは、いつも「まだ」')
+  is(S.answerOkOf([]) === false && S.answerOkOf(null) === false, '照らし合わせが空なら「まだ」')
+
+  /* **出る側と出ない側の両方**(CLAUDE.md)。本物の照らし合わせを通す */
+  const 見る = (t, m) => S.answerOkOf(T.compareTranscript(t, m))
+  is(見る('I went to the park', 'I went to the park') === true, 'そのまま書けたら「できた」')
+  is(見る('I went to the park', 'I went to park') === true, '1語落ちても「できた」(責めない)')
+  is(見る('I went to the park', 'I go') === false, '半分も書けていなければ「まだ」')
+  is(見る('I went to the park', '') === false, '何も書いていなければ「まだ」')
+
+  /* ★ **手応えを返している画面は、減らさない。**
+       ここは手で並べる —— 画面から読み取ると、外した日に期待も一緒に消える */
+  const 返すはず = ['Wordbook', 'QuickResponse', 'QrReview', 'StepDictation']
+  /* ★ **「名前が出てくるか」で見ない**(CLAUDE.md)。
+       `import { answerFeedback } …` の行にも同じ名前が出るので、
+       呼ぶのをやめても**緑のまま**になる(作った日の赤チェックで踏んだ)。
+       **使っている形**(`answerFeedback(`)で数える */
+  const 返していない = 返すはず.filter(
+    (n) => !/answerFeedback\(/.test(noC(read(`src/components/${n}.jsx`))))
+  is(!返していない.length, `${返すはず.length} つの演習が、正解・不正解の手応えを返す`,
+    返していない.join(' / '))
+
+  /* ★ **画面の中で線を引かない。** `0.8` のような数と割合を比べていたら、
+       `answerScore.js` と二重になる(置く場所の数だけ食い違う) */
+  const 画面 = 返すはず.map((n) => noC(read(`src/components/${n}.jsx`))).join('\n')
+  is(!/spokenRatio\([^)]*\)\s*[<>]=?\s*0?\.\d/.test(画面),
+    '画面は、できたかどうかの線を自分で引いていない')
+  is(/answerOkOf\(/.test(noC(read('src/components/StepDictation.jsx'))),
+    'ディクテーションは、できたかどうかを1か所から取っている')
 }
 
 console.log('\n▶ CSS は、ミリ秒を1つも持たない(数を2か所に書かない)')

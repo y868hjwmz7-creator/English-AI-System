@@ -18,8 +18,12 @@
  */
 import SpeakCheckButton from './SpeakCheckButton.jsx'
 import PracticeRow from './PracticeRow.jsx'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { compareTranscript, spokenRatio } from '../lib/transcriptDiff.js'
+/* ★ **できたか、まだか**(第5.382節)。**しきい値はここに書かない** ——
+     ディクテーションでも話して確かめるときでも、同じ線で判断する */
+import { answerOkOf } from '../lib/answerScore.js'
+import { answerFeedback } from '../lib/haptics.js'
 import { isRecognitionSupported } from '../lib/recognition.js'
 import EnglishText from './EnglishText.jsx'
 import SpeakButton from './SpeakButton.jsx'
@@ -49,6 +53,47 @@ export default function StepDictation({
   // 書き取る意味がない(2026-08 実機)。難易度を上げるほど、
   // 一度に覚える文が増える
   const blocks = useMemo(() => groupSentences(sentences, size), [sentences, size])
+
+  /**
+   * ★ **照らし合わせが出たら、手応えを返す**(第5.382節・利用者の指定
+   * 「C 演習にも手応え」)。
+   *
+   * **1文につき1回だけ。** 打ち足すたびに鳴ると、うるさいだけで合図にならない。
+   * 解答を閉じたら忘れるので、**もう一度開けばまた鳴る。**
+   *
+   * できたかどうかは `answerOkOf()` 1か所が決める ——
+   * ここで割合を数と比べない(**置く場所の数だけ食い違う**)。
+   */
+  const 鳴らした = useRef(new Set())
+  useEffect(() => {
+    for (const s of blocks) {
+      const mine = (typed[s.id] ?? '').trim()
+      const 出た = Boolean(shown[s.id] && mine)
+      if (!出た) { 鳴らした.current.delete(s.id); continue }
+      if (鳴らした.current.has(s.id)) continue
+      鳴らした.current.add(s.id)
+      answerFeedback(answerOkOf(compareTranscript(s.text, mine)))
+    }
+  }, [blocks, shown, typed])
+
+  /**
+   * ★ **話して確かめた結果にも、同じ手応えを返す**(第5.382節)。
+   *
+   * **言い直したら、また鳴る。** 同じ結果が描き直されただけでは鳴らない ——
+   * 目じるしに**聞き取れた語そのもの**を使う(回数を数えると、
+   * 描き直しの回数で鳴ってしまう)。
+   */
+  const 話した = useRef(new Map())
+  useEffect(() => {
+    for (const s of blocks) {
+      const r = results?.[s.id]
+      if (!r?.diff?.length) { 話した.current.delete(s.id); continue }
+      const 印 = r.diff.map((d) => `${d.state}:${d.word}`).join('|')
+      if (話した.current.get(s.id) === 印) continue
+      話した.current.set(s.id, 印)
+      answerFeedback(answerOkOf(r.diff))
+    }
+  }, [blocks, results])
 
   /**
    * **速さとくり返しは、文ごとに持つ**(2026-09 利用者の指定)。
