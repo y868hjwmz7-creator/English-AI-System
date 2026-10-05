@@ -30,8 +30,6 @@
  */
 import { useEffect } from 'react'
 import { playSfx } from '../lib/sfx.js'
-import Buddy from './Buddy.jsx'
-import { buddyFace } from '../lib/buddy.js'
 import { useCountUp } from '../lib/useCountUp.js'
 import { praiseFor, streakLine, weekLine } from '../lib/gamify.js'
 
@@ -69,17 +67,6 @@ export default function SessionResult({
 
   return (
     <div className="sresult">
-      {/* ★ **相棒**(第5.371節)。**点から顔が決まる** ——
-           `buddyFace()` 1か所が決める(ここで `ok / total` を比べない)。
-           点が低くても責めない顔になる(知らないことは失敗ではない) */}
-      <p className="sresult-buddy">
-        <Buddy size="lg"
-               face={buddyFace({
-                 done: true,
-                 score: total > 0 ? Math.round((ok / total) * 100) : null,
-               })} />
-      </p>
-
       {/* **点数は大きく。** やり切ったことが、ひと目で分かる。
           ★ **数が駆け上がる**(第5.371節)—— 同じ数字でも、
           0 から上がってくると**やり切ったことが体で分かる。**

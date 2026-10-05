@@ -42,12 +42,8 @@ const ok = (s, d = '') => console.log(`✓ ${s}${d ? ` — ${d}` : ''}`)
 const ng = (s, d = '') => { bad += 1; console.log(`✗ ${s}${d ? `\n    ${d}` : ''}`) }
 const is = (cond, name, d = '') => (cond ? ok(name, d) : ng(name, d))
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
-const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/.*$/gm, '')
 
 const M = await import('../src/lib/motion.js')
-const B = await import('../src/lib/buddy.js')
-const K = await import('../src/lib/buddyKind.js')
-const H = await import('../src/lib/handLine.js')
 
 /* ══════════════════════════════════════════════════════════════════
    ① 算段(素の node)
@@ -92,100 +88,6 @@ console.log('\n▶ 動きの決まり(素の node で測る)')
     足りない.join(' / '))
 }
 
-console.log('\n▶ 相棒の顔(素の node で測る)')
-{
-  /* **出る側と出ない側の両方**(CLAUDE.md) */
-  is(B.buddyFace({ ok: true }) === 'glad' && B.buddyFace({ ok: false }) === 'cheer',
-    '合っていた / 違っていた で顔が変わる')
-  is(B.buddyFace({ busy: true, playing: true }) === 'think',
-    '待たせているときは、音より先に「考えている」顔')
-  is(B.buddyFace({ playing: true }) === 'listen', '音が鳴っていれば、聞いている顔')
-  is(B.buddyFace({}) === B.BUDDY_DEFAULT, '何もしていなければ、居るだけの顔')
-  /* **やり切ったら、点が低くても責めない** */
-  is(B.buddyFace({ done: true, score: 85 }) === 'proud'
-    && B.buddyFace({ done: true, score: 20 }) === 'cheer',
-  'やり切ったとき、点で顔が変わる')
-  /* ★ **0 と `null` を取り違えない**(CLAUDE.md。作った日に踏んだ) */
-  is(B.buddyFace({ done: true }) === 'proud'
-    && B.buddyFace({ done: true, score: 0 }) === 'cheer',
-  '点を渡していないのと、0 点だったのを取り違えない')
-  /* **知らない顔を返さない。** 画面は顔ごとに描き分けているので、
-     一覧に無いものが返ると**その場面だけ何も描かれない** */
-  const 場面 = [{}, { ok: true }, { ok: false }, { busy: true }, { playing: true },
-    { done: true }, { done: true, score: 0 }, { done: true, score: 100 }]
-  const 外 = 場面.map(B.buddyFace).filter((f) => !B.BUDDY_FACES.includes(f))
-  is(!外.length, '返す顔は、いつも一覧の中にある', 外.join(' / '))
-  /* **言葉を持たせていない**(声かけと二重にしない) */
-  const src = noC(read('src/lib/buddy.js'))
-  is(!/BUDDY_WORDS|praise|声かけ\s*=/.test(src),
-    '相棒は言葉を持たない(声かけは、やり終えた1枚の役目)')
-  /* **読み上げには伝わるか** */
-  const 無い = B.BUDDY_FACES.filter((f) => !B.buddyAlt(f))
-  is(!無い.length, `${B.BUDDY_FACES.length} つの顔すべてに、読み上げの言葉がある`, 無い.join(' / '))
-}
-
-console.log('\n▶ 相棒をえらぶ(妖怪 18 体・素の node で測る)')
-{
-  /* ★ **この一覧は手で並べる。** 画面から読み取ると、
-       妖怪を1体消した日に期待も一緒に消えて**緑のまま**になる
-       (第5.337節で踏んだ「見張りが、自分と同じ出どころを見ている」)。
-       **一度入れたものを勝手に減らさない**(共通ルール) */
-  const 居るはず = ['kappa', 'oni', 'tengu', 'yuki', 'kasa', 'zashiki',
-    'nurikabe', 'rokuro', 'bakeneko', 'konaki', 'momen', 'hitotsume',
-    'kitsune', 'umibozu', 'toufu', 'yurei', 'kamaitachi', 'tanuki']
-  const 居る = K.BUDDY_KINDS.map((k) => k.id)
-  const 消えた = 居るはず.filter((id) => !居る.includes(id))
-  is(!消えた.length, `妖怪が ${居るはず.length} 体とも居る`, 消えた.join(' / '))
-  is(new Set(居る).size === 居る.length, '同じ id が2つ無い', 居る.join(' / '))
-  const 名無し = K.BUDDY_KINDS.filter((k) => !k.label)
-  is(!名無し.length, 'どの妖怪にも名前がある(読み上げが読む)', 名無し.map((k) => k.id).join(' / '))
-
-  is(居る.includes(K.BUDDY_KIND_DEFAULT), '既定の妖怪は、一覧の中に居る', K.BUDDY_KIND_DEFAULT)
-  /* ★ **出ない側がここの本番。** 知らない値で相棒が1人も出ない、は行き止まり */
-  const 変なの = ['zzz', '', null, undefined, 0, {}]
-  const 外 = 変なの.filter((v) => !居る.includes(K.buddyKindOf(v)))
-  is(!外.length, '知らない値でも、必ず誰かに落ちる', String(外.length))
-  is(K.buddyKindOf('oni') === 'oni', '正しい値は、そのまま通る')
-
-  /* **鍵の名前を画面に書かない**(`TIPS_KEY` と同じ作法) */
-  const nav = noC(read('src/components/NavSettings.jsx'))
-  const bud = noC(read('src/components/Buddy.jsx'))
-  is(!/localStorage/.test(nav) && !/localStorage/.test(bud),
-    '画面は、覚える場所を自分で触らない')
-  /* ★ **判断は1か所。** 画面の中で相棒の名前を書いて分けていないか */
-  is(!/kind === '|kind === "/.test(nav), '設定の画面で、相棒ごとに書き分けていない')
-  /* **選ばせる絵は、本物の相棒そのもの。** 別の絵を置くと、選んだ先と食い違う */
-  is(/<Buddy\b/.test(nav), '選ぶところに、本物の相棒を描いている')
-}
-
-console.log('\n▶ 手で描いた線(素の node で測る)')
-{
-  /* ★ **同じ種なら、いつも同じ形。**
-       `Math.random()` を使うと、**描き直すたびに相棒が歪み直す** ——
-       画面を触るたびに顔が変わるのは、気味が悪いだけである */
-  const a = H.手のまる(32, 32, 20, 20, 7)
-  const b = H.手のまる(32, 32, 20, 20, 7)
-  is(a === b && a.length > 40, '同じ種なら、いつも同じ形', `${a.length} 文字`)
-  is(H.手のまる(32, 32, 20, 20, 9) !== a, '種が違えば、形も違う')
-
-  /* ★ **本当に震えているか。** ここが本番 ——
-       震えが 0 なら、ただのきれいな円に戻る(直す前のあれである) */
-  const 読む = (d) => (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
-  const 揺れ = 読む(H.手のまる(32, 32, 20, 20, 5, { amp: 1.4 }))
-  const 素 = 読む(H.閉じる(H.まる(32, 32, 20, 20)))
-  const ずれ = 揺れ.map((v, i) => Math.abs(v - (素[i] ?? v)))
-  const 最大 = Math.max(...ずれ)
-  is(最大 > 0.4, '線が、本当に震えている', `いちばんのずれ ${最大.toFixed(1)}px`)
-  /* **震えすぎてもいけない。** 形が分からなくなる */
-  is(最大 < 6, '震えすぎて、形が崩れていない', `${最大.toFixed(1)}px`)
-
-  /* **左右をそろえない。** きれいな円は1つも使わない(あちらの絵の肝) */
-  const 丸 = H.まる(32, 32, 20, 20, 13)
-  is(丸.length === 13, 'きれいな円ではなく、点を並べて描く', `${丸.length} 点`)
-  is(H.閉じる([[0, 0], [1, 1]]) === '', '点が少なすぎたら、線を引かない')
-  is(H.ゆらす(null, 1).length === 0 && H.手の線([], 1) === '', '何も渡されなくても落ちない')
-}
-
 console.log('\n▶ CSS は、ミリ秒を1つも持たない(数を2か所に書かない)')
 {
   const css = read('src/styles.css')
@@ -194,19 +96,20 @@ console.log('\n▶ CSS は、ミリ秒を1つも持たない(数を2か所に書
        のような**数と語**が書いてある。落とさずに数えると、
        **説明文に当たって、いつも赤くなる**(作った日に、そうなった) */
   const 全部 = css.replace(/\/\*[\s\S]*?\*\//g, '')
-  const 頭 = css.indexOf('★ 動きと相棒(第5.371節')
+  const 頭 = css.indexOf('★ 動き(第5.371節')
   const 層 = 全部.slice(全部.indexOf('.btn,\n.home-box,'))
   is(頭 > 0 && 層.length > 500, '動きの層が styles.css にある', `${層.length} 文字`)
   /* **この層の中に、生のミリ秒が書かれていないか。**
      `motion.js` が持つものを書き写すと、片方だけ古くなる */
   const 生の秒 = [...層.matchAll(/(?:transition|animation)[^;{]*?(\d+(?:\.\d+)?)m?s/g)]
     .map((m) => m[0]).filter((x) => !/var\(--motion/.test(x))
-  /* **息・まばたき・考える点の周期は、ここで持ってよい** ——
-     あれは「押し心地」ではなく、相棒の呼吸である。
-     それ以外(押した返り・出てくるもの・祝福)は変数から読む */
-  const 押し心地 = 生の秒.filter((x) => !/buddy-/.test(x))
-  is(!押し心地.length, '押した返り・出てくるもの・祝福は、長さを書き写していない',
-    押し心地.slice(0, 3).join(' / '))
+  /* ★ **外した日に、ここが緩んだ。**
+       相棒が居たころは「息・まばたきの周期だけは、ここで持ってよい」と
+       `buddy-` を**除いて**数えていた。相棒を外した(第5.379節)いま、
+       **除くものは1つも無い** —— そのまま全部数える。
+       **逃がす口を残したままにしない**(残すと、次に足した秒が素通りする) */
+  is(!生の秒.length, '押した返り・出てくるもの・祝福は、長さを書き写していない',
+    生の秒.slice(0, 3).join(' / '))
   /* **動きを減らす人への断りがあるか** */
   is(/@media \(prefers-reduced-motion: reduce\)/.test(層),
     '滑る動きが苦手な人には、動かさないと言っている')
@@ -231,13 +134,9 @@ writeFileSync(join(dir, '.env'), 'VITE_SUPABASE_URL=\nVITE_SUPABASE_ANON_KEY=\n'
 /* **本物の部品を、そのまま描く。** 骨組みを別に書くと、
    **骨組みだけが直っていて本物は壊れている**が起きる(CLAUDE.md) */
 writeFileSync(join(ROOT, 'src/__feel.jsx'), `
-import { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import './styles.css'
 import { motionVars } from './lib/motion.js'
-import Buddy from './components/Buddy.jsx'
-import { BUDDY_FACES } from './lib/buddy.js'
-import { BUDDY_KINDS, BUDDY_KIND_DEFAULT, saveBuddyKind } from './lib/buddyKind.js'
 import NavSettings from './components/NavSettings.jsx'
 import AppHome from './components/AppHome.jsx'
 import SessionResult from './components/SessionResult.jsx'
@@ -256,20 +155,8 @@ const list = Array.from({ length: 12 }, (_, i) => ({ ok: i < 9, en: 'x ' + i, ja
 function Shell() {
   /* **本物の設定の部品をそのまま置く。** 骨組みを別に書くと、
      骨組みだけが直っていて本物は壊れている、が起きる */
-  const [buddy, setBuddy] = useState(BUDDY_KIND_DEFAULT)
   return (
     <div className="app-shell is-wide" style={{ padding: 24, display: 'grid', gap: 32 }}>
-      <section className="card" id="faces">
-        {BUDDY_FACES.map((f) => <Buddy key={f} face={f} size="md" />)}
-      </section>
-      <section className="card" id="kinds">
-        {BUDDY_KINDS.map((k) => (
-          <span key={k.id} data-kind={k.id}>
-            {BUDDY_FACES.map((f) => <Buddy key={f} kind={k.id} face={f} size="md" />)}
-            <Buddy kind={k.id} face="rest" size="sm" />
-          </span>
-        ))}
-      </section>
       <section className="card" id="pick">
         <NavSettings
           theme="light" onTheme={() => {}} palette="a" onPalette={() => {}}
@@ -278,7 +165,6 @@ function Shell() {
           music="off" onMusic={() => {}} songs={[]} song="" onSong={() => {}}
           showPrepare prepare="off" onPrepare={() => {}}
           clipsKept={12} onClipsClear={() => {}}
-          buddy={buddy} onBuddy={(v) => setBuddy(saveBuddyKind(v))}
         />
       </section>
       <section className="card"><AppHome pages={pages} onPick={() => {}} /></section>
@@ -346,20 +232,14 @@ async function 押して測る(動かす) {
     const el = document.querySelector('.home-box')
     return { active: el.matches(':active'), t: window.getComputedStyle(el).transform }
   })
-  const 顔 = await page.locator('#faces .buddy').count()
-  /* **妖怪の癖も、動きを減らす人には止める**(第5.378節)。
-     ここを `@media` の一覧に足し忘れると、**癖だけが動き続ける** */
-  const 癖 = await page.$$eval('#kinds .buddy-sway, #kinds .buddy-pulse, #kinds .buddy-drift',
-    (els) => [...new Set(els.map((el) => window.getComputedStyle(el).animationName))])
   await page.close()
-  return { 押し, 後, 落ちた, 顔, 癖 }
+  return { 押し, 後, 落ちた }
 }
 
 console.log('\n▶ 本当に沈むか(実機で押して、そのまま測る)')
 {
   const a = await 押して測る(true)
   is(!a.落ちた.length, '描いて落ちない', a.落ちた.slice(0, 1).join(''))
-  is(a.顔 === B.BUDDY_FACES.length, `相棒の顔が ${B.BUDDY_FACES.length} つとも描かれる`, String(a.顔))
   is(a.押し.active, '押しているあいだ、`:active` になっている')
   /* ★ **ここが本番。** 「CSS に決まりがある」ではなく、
        **押しているあいだの `transform` が、本当に効いているか** */
@@ -374,237 +254,6 @@ console.log('\n▶ 本当に沈むか(実機で押して、そのまま測る)')
   is(b2.押し.active, '動きを減らす端末でも、`:active` にはなる')
   is(b2.押し.t === 'none' || b2.押し.t === 'matrix(1, 0, 0, 1, 0, 0)',
     '動きを減らす端末では、沈まない', b2.押し.t)
-  /* ★ **出ない側。** 妖怪の癖も、動きを減らす人には1つも動かない */
-  is(a.癖.length > 0 && !a.癖.includes('none'),
-    '妖怪の癖は、ふつうの端末では動いている', a.癖.join(' / '))
-  is(b2.癖.length > 0 && b2.癖.every((n) => n === 'none'),
-    '動きを減らす端末では、妖怪の癖も止まる', b2.癖.join(' / '))
-}
-
-console.log('\n▶ 相棒を変えても、場所が動かないか(実機で測る)')
-{
-  const page = await browser.newPage({ viewport: { width: 1000, height: 1400 } })
-  const 落ちた = []
-  page.on('pageerror', (e) => 落ちた.push(String(e)))
-  await page.goto(`http://localhost:${PORT}/__feel.html`, { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('#kinds .buddy')
-  await page.waitForTimeout(400)
-  is(!落ちた.length, `${K.BUDDY_KINDS.length} 体とも描いて落ちない`, 落ちた.slice(0, 1).join(''))
-
-  const 数 = await page.locator('#kinds .buddy').count()
-  const はず = K.BUDDY_KINDS.length * (B.BUDDY_FACES.length + 1)
-  is(数 === はず, `妖怪 ${K.BUDDY_KINDS.length} 体 × 顔 ${B.BUDDY_FACES.length} つが、ぜんぶ描かれる`, String(数))
-
-  /* ★ **ここが本番。** 相棒を変えても・顔が変わっても、箱は 1px も動かない
-       (利用者の指定「UI の配置が変化することをどの場所においても防いでください」) */
-  const 箱 = await page.$$eval('#kinds .buddy--md', (els) => els.map((el) => {
-    const r = el.getBoundingClientRect()
-    return `${Math.round(r.width)}x${Math.round(r.height)}`
-  }))
-  is(new Set(箱).size === 1, '相棒が違っても・顔が違っても、箱の大きさは同じ', [...new Set(箱)].join(' / '))
-
-  /* **絵の箱は、相棒でも大きさでも1つ。**
-     立ち姿に戻しても(第5.376節)、**小さいときに顔を切り出さない** ——
-     妖怪は形で見分けるもので、顔を抜くと**ぬりかべといったんもめんの
-     区別がつかなくなる**(えらぶ画面が、まさにそれである) */
-  const 枠 = await page.$$eval('#kinds .buddy', (els) => els.map(
-    (el) => el.querySelector('svg')?.getAttribute('viewBox') ?? ''))
-  is(new Set(枠).size === 1, '絵の箱は、相棒が違っても大きさが違っても同じ', [...new Set(枠)].join(' / '))
-
-  /* ★ **顔は1か所で描いて、妖怪ごとの場所へ置いている**(第5.376節)。
-       全身になったので、顔の置き場も大きさも妖怪ごとに違う ——
-       ここが全部そろっていたら、**顔を12通り書き写したか、
-       `顔` の指定が1体も効いていない**かのどちらかである。
-       **目の場所を、絵の箱の中での割合で見る**(px で見ると、
-       画面の大きさが混ざって、そこの違いだけで緑になる) */
-  const 目の場 = await page.$$eval('#kinds [data-kind]', (els) => els.map((el) => {
-    const svg = el.querySelector('.buddy--md svg')
-    const 目 = svg?.querySelector('.buddy-pupil')
-    if (!svg || !目) return ''
-    const s = svg.getBoundingClientRect()
-    const e = 目.getBoundingClientRect()
-    if (!s.width || !s.height) return ''
-    return `${Math.round(((e.top + e.height / 2) - s.top) / s.height * 100)}`
-      + `/${Math.round(e.height / s.height * 100)}`
-  }))
-  is(!目の場.includes(''), 'どの妖怪にも、目が描かれている', 目の場.join(' '))
-  is(new Set(目の場).size >= Math.ceil(K.BUDDY_KINDS.length / 2),
-    '顔の置き場と大きさは、妖怪ごとに違う', `${new Set(目の場).size} 通り / ${目の場.length} 体`)
-
-  /* ★ **18 体が、本当に 18 通りの絵か。**
-       `形` を書き足すとき、**近い妖怪の行をまるごと写して id だけ変える**と、
-       一覧には 18 体並ぶのに**絵が同じものが2つ**できる ——
-       えらぶ画面で「同じものが2つ」は、いちばん分かりにくい壊れ方である
-       (CLAUDE.md「同じことをするものを2つ見せない」)。
-       **絵そのもの(SVG の中身)を突き合わせる** */
-  const 絵 = await page.$$eval('#kinds [data-kind]', (els) => els.map(
-    (el) => el.querySelector('.buddy--md svg')?.innerHTML ?? ''))
-  is(new Set(絵).size === K.BUDDY_KINDS.length,
-    `${K.BUDDY_KINDS.length} 体とも、別の絵になっている`,
-    `${new Set(絵).size} 通り / ${絵.length} 体`)
-
-  /* ★ **顔を `transform` で縮めていないか。**
-       `<g transform="scale(…)">` で縮めると、**線の太さまで縮む** ——
-       顔の小さい妖怪(ろくろくび)だけ線が細くなり、並べたときに弱って見える。
-       だから**点のほうを計算して置く**(`Face` の `P()`)。
-       ここは「書いていないこと」を測る ——
-       絵の中に `transform` が1つも無ければ、縮めようがない */
-  const 縮め = await page.$$eval('#kinds .buddy svg *[transform]', (els) => els.length)
-  is(縮め === 0, '顔を transform で縮めていない(線の太さがそろう)', `${縮め} か所`)
-
-  /* ★★ **笑っていないか。** ここが第5.378節の本番である。
-       利用者「表情を可愛くしすぎです。媚びているように見えます」
-       「笑顔など入りません」。
-       **「真顔にする」と毎回書きながら、口だけ笑わせていた** ——
-       `glad` / `proud` / `cheer` の口が、上向きの弧だった。
-
-       **文字で見張らない。** 「`手の線` を使っているか」では、
-       点の並び次第でいくらでも笑う。**描かれた線そのものを測る** ——
-       口の道の、まん中と両端の高さを比べる。
-       画面は下へ行くほど y が大きいので、**まん中が下がっていたら笑顔**である。
-       (塗りつぶしの口(開いた口)は弧を持たないので、ここでは測らない) */
-  const 笑い = await page.$$eval('#kinds .buddy--md', (els) => els.map((el) => {
-    const m = el.querySelector('.buddy-mouth')
-    if (!m) return null
-    if (window.getComputedStyle(m).fill !== 'none') return null
-    const len = m.getTotalLength()
-    if (!len) return null
-    const a = m.getPointAtLength(0)
-    const c = m.getPointAtLength(len / 2)
-    const b = m.getPointAtLength(len)
-    const kind = [...el.classList].find((x) => x.startsWith('buddy--k-')) ?? ''
-    const face = [...el.classList].find((x) => x.startsWith('buddy--') && !x.startsWith('buddy--k-')
-      && !['buddy--sm', 'buddy--md', 'buddy--lg'].includes(x)) ?? ''
-    return { 下がり: c.y - (a.y + b.y) / 2, kind, face }
-  }).filter(Boolean))
-  const 測れた = 笑い.length
-  const 最も笑う = 笑い.reduce((m, v) => (v.下がり > m.下がり ? v : m), { 下がり: -99 })
-  is(測れた >= K.BUDDY_KINDS.length * 2, '口の線を、ちゃんと測れている', `${測れた} 本`)
-  is(最も笑う.下がり < 0.8, '口が1つも笑っていない(まん中が下がっていない)',
-    `いちばん下がって ${最も笑う.下がり.toFixed(2)} ・ ${最も笑う.kind} ${最も笑う.face}`)
-
-  /* ★ **シルエットが、妖怪ごとに違うか**(第5.378節)。
-       第5.377節では着物・帯・足・腕を 18 体で共有し、
-       **そろえた結果、こちらの手で個性を潰した**
-       (利用者「妖怪っぽさが全然なく、個性が潰れています」)。
-       **絵の広がり(縦横)そのものを測る** ——
-       同じ型紙を使い回すと、ここが一斉にそろう。
-       **半分以上が別の寸法**であることを求める(数は一覧の長さから出す) */
-  const 寸 = await page.$$eval('#kinds [data-kind]', (els) => els.map((el) => {
-    const svg = el.querySelector('.buddy--md svg')
-    if (!svg) return ''
-    const b = svg.getBBox()
-    return `${Math.round(b.width)}x${Math.round(b.height)}`
-  }))
-  is(new Set(寸).size >= Math.ceil(K.BUDDY_KINDS.length * 0.6),
-    'シルエットは、妖怪ごとに違う(型紙を使い回していない)',
-    `${new Set(寸).size} 通り / ${寸.length} 体`)
-
-  /* ★ **妖怪ごとの癖**(第5.378節)。置いてあるだけでゆっくり動く場所を
-       1体につき1つ持たせてある —— 利用者「だんだん親しみが湧く相棒」。
-       **全体が1種類に寄っていないか**も見る(それでは個性にならない) */
-  const 癖 = await page.$$eval('#kinds [data-kind]', (els) => els.map((el) => {
-    const svg = el.querySelector('.buddy--md svg')
-    const 名 = ['buddy-sway', 'buddy-pulse', 'buddy-drift', 'buddy-drip']
-    const 居る = 名.filter((n) => svg?.querySelector(`.${n}`))
-    return 居る.join('+')
-  }))
-  is(!癖.includes(''), `${K.BUDDY_KINDS.length} 体とも、癖を1つ持っている`,
-    癖.map((v, i) => (v ? '' : String(i))).filter(Boolean).join(' '))
-  is(new Set(癖).size >= 3, '癖は1種類に寄っていない', [...new Set(癖)].join(' / '))
-  /* **本当に動いているか。** クラスが付いていても、`animation` が
-     どこにも書いていなければ**1px も動かない**(名前だけの見張りになる) */
-  const 動く = await page.$$eval('#kinds .buddy-sway, #kinds .buddy-pulse', (els) => els.map(
-    (el) => window.getComputedStyle(el).animationName))
-  is(動く.length > 0 && !動く.includes('none'), '癖は、本当に動く決まりを持っている',
-    [...new Set(動く)].join(' / '))
-
-  /* ★ **暖色が、ちゃんと別の色として出ているか**(第5.378節・利用者「ポップに」)。
-       `--buddy-warm` を書き忘れると `fill` が空に落ちて、
-       **ただの黒い塊**になる(画面を見ないと分からない) */
-  const 暖 = await page.$$eval('#kinds .buddy--md', (els) => {
-    const 取る = (sel) => {
-      const el = document.querySelector(sel)
-      return el ? window.getComputedStyle(el).fill : ''
-    }
-    const 線 = document.querySelector('#kinds .buddy-body')
-    return {
-      暖: 取る('#kinds .buddy-warm'),
-      紙: 線 ? window.getComputedStyle(線).fill : '',
-      墨: 線 ? window.getComputedStyle(線).stroke : '',
-      数: els.length,
-    }
-  })
-  is(Boolean(暖.暖) && 暖.暖 !== 'rgb(0, 0, 0)', '暖色が、ちゃんと色として出ている', 暖.暖)
-  is(暖.暖 !== 暖.墨 && 暖.暖 !== 暖.紙,
-    '暖色は、線の色とも紙の色とも違う', `${暖.暖} / 墨 ${暖.墨} / 紙 ${暖.紙}`)
-
-  /* ★ **塗りつぶしの妖怪が、ちゃんと混ざっているか。**
-       全部おなじ描き方だと、並べたときに退屈になる(2026-10-05 の指定)。
-       **塗りすぎてもいけない** —— 見本で黒い塊は2つくらいで、
-       3体以上を塗ると「線で描いた一覧」に見えなくなる(第5.377節) */
-  const 塗り = await page.$$eval('#kinds .buddy.is-solid',
-    (els) => [...new Set(els.map((el) => [...el.classList].find((c) => c.startsWith('buddy--k-'))))].length)
-  is(塗り >= 1 && 塗り < K.BUDDY_KINDS.length,
-    '塗りつぶしと線だけが、どちらも居る', `塗り ${塗り} 体 / 全 ${K.BUDDY_KINDS.length} 体`)
-
-  /* ★ **飾りが、塗りつぶしの相棒で消えていないか。**
-       実際、うちゅうじんの触角が**白くなって1本も見えなかった**(第5.374節)——
-       飾りは**からだの外**にあるので、白くなると紙に溶ける。
-
-       ★ **箱の背景と比べてはいけない**(作った日に、これで赤チェックが空振りした)。
-       箱の背景は透明なので、**どんな色にしても一致しない。**
-       **墨の色・紙の色・塗りの色**という、実際に取りうる相手と比べる。
-
-       ★ **測る相手は、第5.378節で変わった。** 塗りつぶしがうみぼうず1体になり、
-       その外の飾りは**暖色の波**である(`.buddy-out` を1本も持たない)。
-       **前の形のままだと、何も取れずに赤くなる** ——
-       見張りは、いま本当に在るものを測る。 */
-  const 飾り = await page.$$eval('#kinds .buddy', (els) => {
-    const 色 = (sel, 何) => {
-      const el = document.querySelector(sel)
-      return el ? window.getComputedStyle(el)[何] : ''
-    }
-    return {
-      線の飾り: 色('#kinds .buddy:not(.is-solid) .buddy-out', 'stroke'),
-      塗りの飾り: 色('#kinds .buddy.is-solid .buddy-warm-line', 'stroke'),
-      塗りのからだ: 色('#kinds .buddy.is-solid .buddy-body', 'fill'),
-      紙: 色('#kinds .buddy:not(.is-solid) .buddy-body', 'fill'),
-      本数: els.length,
-    }
-  })
-  is(Boolean(飾り.線の飾り) && Boolean(飾り.塗りの飾り),
-    '線だけの相棒にも、塗りつぶしの相棒にも、外の飾りがある',
-    `${飾り.線の飾り} / ${飾り.塗りの飾り}`)
-  /* **紙に溶けない。** 白い紙の上で白くなったら、1本も見えない */
-  is(飾り.塗りの飾り !== 飾り.紙 && 飾り.線の飾り !== 飾り.紙,
-    '外の飾りは、紙の色に溶けない', `${飾り.塗りの飾り} / 紙 ${飾り.紙}`)
-  /* **塗りにも溶けない。** 濃いからだの上で同じ色なら、やはり見えない */
-  is(飾り.塗りの飾り !== 飾り.塗りのからだ,
-    '外の飾りは、塗りつぶしのからだにも溶けない',
-    `${飾り.塗りの飾り} / からだ ${飾り.塗りのからだ}`)
-
-  /* ★ **選び直すと、同じ画面の相棒がその場で変わるか。**
-       合図が届いていないと、設定を閉じるまで絵が変わらない */
-  const 今 = () => page.$eval('#faces .buddy', (el) => el.className)
-  const 前 = await 今()
-  /* **設定は畳んである。** 開かないと押せない(閉じた箱は測れない・共通ルール) */
-  await page.click('#pick .nav-settings-sum')
-  await page.waitForTimeout(250)
-  const 行 = await page.locator('#pick .buddy-pick-btn').count()
-  is(行 === K.BUDDY_KINDS.length, `えらぶボタンが ${K.BUDDY_KINDS.length} つ出る(妖怪ぜんぶ)`, String(行))
-  const 幅前 = await page.locator('#pick .buddy-pick').boundingBox()
-  await page.locator('#pick .buddy-pick-btn').nth(1).click()
-  await page.waitForTimeout(300)
-  const 後 = await 今()
-  const 幅後 = await page.locator('#pick .buddy-pick').boundingBox()
-  is(前 !== 後, '選び直すと、同じ画面の相棒がその場で変わる', `${前} → ${後}`)
-  /* **押しても、まわりの物が動かない**(共通ルール) */
-  is(Math.round(幅前.width) === Math.round(幅後.width)
-    && Math.round(幅前.height) === Math.round(幅後.height),
-    '選び直しても、えらぶ行の大きさは動かない',
-    `${Math.round(幅前.width)}x${Math.round(幅前.height)} → ${Math.round(幅後.width)}x${Math.round(幅後.height)}`)
-  await page.close()
 }
 
 console.log('\n▶ 本当に駆け上がるか(描く前から見張る)')
