@@ -4539,8 +4539,10 @@ export default defineConfig({
       ok(`下の行き先 ${w}px … 本文の下余白が帯を覆っている(帯 ${余白.帯}px / 余白 ${余白.余白}px)`)
     }
 
-    const m = await page.evaluate(() => [...document.querySelectorAll('.app-tab')]
-      .map((x) => {
+    const m = await page.evaluate(() => {
+      const 丸 = (n) => Math.round(n * 10) / 10
+      const 帯 = document.querySelector('.app-tabs').getBoundingClientRect()
+      return [...document.querySelectorAll('.app-tab')].map((x) => {
         const r = x.getBoundingClientRect()
         const ic = x.querySelector('.app-tab-icon').getBoundingClientRect()
         /* ★ **部品そのものも持っておく**(第5.401節)。
@@ -4548,16 +4550,36 @@ export default defineConfig({
              測った四角(`DOMRect`)ではない —— 渡すとその場で落ちる */
         const lbEl = x.querySelector('.app-tab-label')
         const lb = lbEl.getBoundingClientRect()
+        /* ★ **字そのものの四角を測る**(第5.402節)。
+             札の箱は2行ぶん取ってあるので、**箱を測っても字の位置は分からない** */
+        const rg = document.createRange(); rg.selectNodeContents(lbEl)
+        const 字四角 = rg.getBoundingClientRect()
+        /* ★ **区切りは飾り(`::before`)に移した**(第5.402節)。
+             `border-left` は場所を取るためだけに残してあるので、
+             **色を見ても、もう何も分からない** */
+        const 飾 = window.getComputedStyle(x, '::before')
         return {
           名: x.textContent.trim(),
-          幅: Math.round(r.width * 10) / 10,
-          絵: Math.round(ic.top * 10) / 10,
-          字: Math.round(lb.top * 10) / 10,
-          行数: Math.round(lb.height / parseFloat(window.getComputedStyle(lbEl).lineHeight)),
+          幅: 丸(r.width),
+          絵: 丸(ic.top),
+          字: 丸(lb.top),
+          /* ★ **札の箱ではなく、字を数える**(第5.402節)。
+               箱は2行ぶん取ってあるので、**箱を割ると いつも 2 になり**、
+               「320px で2行が無ければ赤」が**1度も働いていなかった** */
+          行数: Math.round(字四角.height / parseFloat(window.getComputedStyle(lbEl).lineHeight)),
+          行高: parseFloat(window.getComputedStyle(lbEl).lineHeight),
           はみ出し: lb.left < r.left - 0.5 || lb.right > r.right + 0.5,
-          縦線: window.getComputedStyle(x).borderLeftColor,
+          /* 絵の上と、字の下。**この2つがそろっていれば、まん中にある** */
+          上: 丸(ic.top - 帯.top),
+          下: 丸(帯.bottom - 字四角.bottom),
+          タブ高: 丸(r.height),
+          区切り: 飾.content === 'none' ? null : {
+            高さ: 丸(parseFloat(飾.height) || 0),
+            色: 飾.backgroundColor,
+          },
         }
-      }))
+      })
+    })
     const ちがう = (k) => new Set(m.map((x) => x[k])).size !== 1
     const 透ける = (c) => /rgba?\([^)]*,\s*0\s*\)/.test(c)
     const 折り返した = m.some((x) => x.行数 >= 2)
@@ -4573,19 +4595,41 @@ export default defineConfig({
         m.map((x) => `${x.名} ${x.字}`).join(' / '))
     } else if (m.some((x) => x.はみ出し)) {
       ng(`${どこ} … ラベルが横にはみ出している`)
-    } else if (!透ける(m[0].縦線)) {
-      ng(`${どこ} … 1つめにも縦線が付いている`, 'そこだけ 1px 狭くなる')
-    } else if (m.slice(1).some((x) => 透ける(x.縦線))) {
+    } else if (m[0].区切り) {
+      ng(`${どこ} … 1つめにも縦線が付いている`, 'いちばん左に、どこも分けていない線が出る')
+    } else if (m.slice(1).some((x) => !x.区切り || 透ける(x.区切り.色))) {
       ng(`${どこ} … タブのあいだに縦の区切りが無い`,
-        m.slice(1).map((x) => `${x.名} ${x.縦線}`).join(' / '))
+        m.slice(1).map((x) => `${x.名} ${x.区切り ? x.区切り.色 : 'なし'}`).join(' / '))
+    } else if (m.slice(1).some((x) => x.区切り.高さ > x.タブ高 * 0.8)) {
+      /* ★ **上下いっぱいに伸ばさない**(第5.402節・利用者の指定)。
+           **割合で見る** —— px を書くと、帯の高さを変えた日に意味を失う */
+      ng(`${どこ} … 区切りが上下いっぱいに伸びている`,
+        m.slice(1).map((x) => `${x.名} ${x.区切り.高さ} / タブ ${x.タブ高}`).join(' / '))
+    } else if (m.slice(1).some((x) => x.区切り.高さ < x.タブ高 * 0.2)) {
+      /* **短すぎても困る。** 消えたのと変わらない */
+      ng(`${どこ} … 区切りが短すぎて見えない`,
+        m.slice(1).map((x) => `${x.名} ${x.区切り.高さ} / タブ ${x.タブ高}`).join(' / '))
+    } else if (m.some((x) => Math.abs(x.上 - x.下) > x.行高 / 2)) {
+      /* ★ **絵と字の組が、帯のまん中にあるか**(第5.402節・利用者の指定)。
+
+           > 教材、単語帳、今日の宿題の文字が中央からズレています
+
+         札の箱は2行ぶん取ってあるので、**字を上にそろえると
+         1行の札の下に1行ぶんの空きがまるまる残る。**
+         **ものさしは行の高さの半分** —— px を書き写さない */
+      ng(`${どこ} … 絵と字の組が、帯のまん中からずれている`,
+        m.map((x) => `${x.名} 上 ${x.上} / 下 ${x.下}`).join(' / ')
+        + ` —— 行の高さ ${m[0].行高}`)
     } else if (w === 320 && !折り返した) {
       /* ★ **折り返していないなら、何も測っていない。**
            ここが赤いときは、字が小さくなったか言葉が変わったかである ——
            **測る幅を狭めること**(CLAUDE.md「無ければ素通りさせない」) */
       ng(`${どこ} … 2行になるラベルが1つも無い`, 'この幅で測る意味が無くなっている')
     } else {
-      ok(`${どこ} … 幅・絵・字の1行目がそろい、区切りは2つめから`
-        + `(${折り返した ? '2行になった札あり' : '全部1行'})`)
+      ok(`${どこ} … 幅・絵・字の1行目がそろい、区切りは2つめから・上下いっぱいでない`
+        + `(区切り ${m[1].区切り.高さ} / タブ ${m[1].タブ高}`
+        + ` / まん中からのずれ ${Math.round(Math.abs(m[0].上 - m[0].下) * 10) / 10}`
+        + ` / ${折り返した ? '2行になった札あり' : '全部1行'})`)
     }
   }
 

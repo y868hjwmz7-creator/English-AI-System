@@ -844,10 +844,24 @@ a { color: var(--accent); }
   border-left: 1px solid transparent;
   background: none; cursor: pointer;
   color: var(--text-secondary); font-size: var(--fs-11);
+  /* 区切りの線を、この箱の中に置くため(すぐ下) */
+  position: relative;
 }
-/* ★ **控えめな縦の区切り**(第5.401節)。**強く分断された印象にしない**ので、
-     上端の線とまったく同じ濃さを使う(色を2か所に書かない) */
-.app-tab + .app-tab { border-left-color: var(--tabs-line); }
+/* ★ **縦の区切りは、上下いっぱいに伸ばさない**(第5.402節・2026-10-06 利用者の指定)。
+
+     > 下部のタブメニューボタンの仕切りですが、
+     > 上下いっぱいに伸ばさない方がスタイリッシュな気がします
+
+   **場所は `border-left` が取ったまま**にする —— 色を付け替えるのをやめても、
+   4つとも同じ幅のままである(第5.401節の「取っておく」をそのまま残す)。
+   出すのは**見える線だけ**で、上下を**割合**でへこませる ——
+   **px を書かないので、帯の高さや字の大きさを変えた日もついてくる**
+   (CLAUDE.md「値を書き写さない。性質で見る」)。
+   色は上端の線とまったく同じ `--tabs-line`(色を2か所に書かない) */
+.app-tab + .app-tab::before {
+  content: ''; position: absolute; left: -1px; top: 28%; bottom: 28%;
+  width: 1px; background: var(--tabs-line);
+}
 .app-tab-icon { display: inline-flex; font-size: var(--fs-20); line-height: 1; }
 /* ★ **線の太さをそろえる**(第5.401節)。絵の部品そのものは触らない ——
      ほかの画面でも使っているので、**この帯の中だけ**でそろえる */
@@ -865,9 +879,16 @@ a { color: var(--accent); }
 
      **数を書かない。** 行の高さ(`line-height`)の2倍そのものである ——
      字を大きくした日も、言葉を変えた日も、ついてくる。
-     **上にそろえる**(`flex-start`)ので、1行の札も2行の札も
-     **1行目の位置が同じ**になる —— これが「上下にずれない」の中身である */
-  display: flex; align-items: flex-start; justify-content: center;
+     ★ **その中で、字はまん中に置く**(第5.402節・2026-10-06 利用者の指定)。
+
+       > 教材、単語帳、今日の宿題の文字が中央からズレています
+
+     上にそろえて(`flex-start`)いたので、**1行の札の下に1行ぶんの空きが
+     まるまる残り**、絵と字の組が**帯のまん中より上に浮いて見えていた**
+     (実測 —— 絵の上 10px に対して、字の下 19.3px)。
+     **札の高さは変えない**ので、2行になった札があっても
+     絵の位置も札の位置も1px も動かない —— 上の約束はそのままである */
+  display: flex; align-items: center; justify-content: center;
   min-height: calc(2 * 1.15em);
 }
 /* いまいる画面。**色だけに頼らない**(CLAUDE.md)。
