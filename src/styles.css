@@ -358,6 +358,15 @@
   /* 集中モードの紙。**地はいつも黒**なので、明暗で値を変えない
      (`.lesson-sheet` / `.focus-paper` の2か所で同じ値を書いていた) */
   --shadow-paper: 0 6px 24px rgb(0 0 0 / 32%);
+  /* ★ **紙の外(レッスン表示の地)**(第5.393節・2026-10-06 利用者の指定)
+
+       > 背景も紙も Quick Response の画面と同じ仕様にしてください。
+
+     もとは `.lesson { background: #3a3a38 }` と**生の灰色**が書いてあり、
+     「紙が浮いて見えるように**暗く**する」という覚え書きが添えてあった。
+     **紙が暗くなったので、いまは周りのほうが明るい** —— 逆転していた。
+     暗い配色では **Quick Response と同じ地(`--surface-0`)**にする。 */
+  --lesson-around: #3a3a38;
   /* キーボードで移動している人に、いまどこにいるかを見せる輪 */
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
 }
@@ -374,6 +383,8 @@
        ・前は 0x13 → 0x1a → 0x26 で、地とカードの差が 7 しかなかった
        ・枠線も一段強くして、カードの輪郭が分かるようにする */
     --surface-0: #0c0c0b;   /* ページの地。いちばん暗く */
+    /* ★ **紙の外も、アプリの地と同じ黒**(第5.393節・2026-10-06) */
+    --lesson-around: var(--surface-0);
     --surface-1: #1c1c1a;   /* カード */
     --surface-2: #2b2b28;   /* カードの中の面・札 */
     --chunk-fg: #8faa94;
@@ -443,6 +454,8 @@
   /* ★ 面の段差をはっきりさせる。**上の @media と同じ値にする。**
      1か所でも抜けると、そこを選んだときだけ色が食い違う */
   --surface-0: #0c0c0b;
+  /* ★ **紙の外も、アプリの地と同じ黒**(第5.393節・2026-10-06) */
+  --lesson-around: var(--surface-0);
   --surface-1: #1c1c1a;
   --surface-2: #2b2b28;
   --chunk-fg: #8faa94;
@@ -755,6 +768,21 @@ a { color: var(--accent); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .app-topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-8); }
+/* ★ **RIZAP のマーク**(第5.393節・2026-10-06 利用者の指定)。
+   帯のいちばん右に、どの画面でも出す。
+
+   ・**大きさはここだけ。** マークの中に `width` / `height` を持たせて
+     いないので、この高さ1つで決まる(**数を2か所に書かない**)
+   ・**縮ませない**(`flex: 0 0 auto`)—— 狭い画面でつぶれると、
+     何のマークか分からなくなる。詰まるぶんは `.app-topbar-title` が
+     省略(…)で引き受ける
+   ・**色を当てない。** 中は金のグラデーションなので、
+     白い帯でも黒い帯でもそのまま読める
+   ・**押せない。** 行き先を持たないので、押せる見た目にもしない */
+.rizap-logo {
+  flex: 0 0 auto;
+  display: block; height: 26px; width: auto;
+}
 
 /* ── 画面の下に貼り付く行き先(ゲスト・狭い画面だけ)──────────────
    2026-09 利用者の指定。
@@ -4563,7 +4591,11 @@ html, body { overflow-x: clip; }
 .lesson {
   position: fixed; inset: 0; z-index: 100;
   display: flex; flex-direction: column;
-  background: #3a3a38;   /* 紙の外。紙が浮いて見えるように暗くする */
+  /* ★ **紙の外は `--lesson-around` 1か所**(第5.393節・2026-10-06 利用者の指定)。
+       もとは `#3a3a38` と生の灰色で、「紙が浮いて見えるように**暗く**する」
+       という覚え書きが添えてあった —— **紙が暗くなったので逆転していた。**
+       暗い配色では Quick Response と同じ地(`--surface-0`)になる。 */
+  background: var(--lesson-around);
 }
 /* 帯そのものは折り返してよい(「表示」を開いたとき、設定が2段目に出る)。
    **いつも要る操作だけは、絶対に折り返させない。** */
@@ -4810,14 +4842,18 @@ html, body { overflow-x: clip; }
   --danger:         #b8322f;
   --shadow-1: 0 1px 2px rgb(36 41 47 / 8%);
   --shadow-2: 0 8px 26px rgb(36 41 47 / 12%), 0 2px 6px rgb(36 41 47 / 8%);
-  /* ★ **紙の上の「札」の色**(第5.392節・2026-10-06 利用者の指定)。
+  /* ★ **紙の上の「A2+ / 生活」のタグの色**(第5.392節・2026-10-06)。
 
-       「A2+ / 生活」のタグ(読むだけ)と「この文の要点」の札(押せる)。
        **もとは `background: #fff` と生の色が直に書いてあり**、
        紙が暗くなったとたん**白い塊**になって残った。
 
        **明るい紙はこれまでどおり。** 暗い紙でだけ金に寄せる
-       (利用者が3案から案3を選んだ)—— 値は暗い側の欄で決め直す。 */
+       (利用者が3案から案3を選んだ)—— 値は暗い側の欄で決め直す。
+
+     ★ **「この文の要点」の札は、もうこれを使っていない**(第5.393節)。
+       あちらは「句動詞」の札とまったく同じ見た目にする指定を受けたので、
+       `--surface-2` / `--border` / `--text-secondary` から取っている。
+       **使っているのは `.mtitle-chip` だけ**である。 */
   --chip-bg:      #ffffff;
   --chip-line:    var(--rule);
   --chip-fg:      var(--ink-soft);
@@ -5520,14 +5556,35 @@ html, body { overflow-x: clip; }
   margin-right: 2px;
 }
 .phrase-wrap { position: relative; }
-.phrase-chip {
-  padding: 2px 10px; border-radius: var(--r-pill);
-  border: 1px dashed var(--border); background: var(--surface-1);
-  color: var(--text-secondary); font: inherit; font-size: var(--fs-13); line-height: 1.6;
-  cursor: pointer;
+/* ★ **「この文の要点」の札は、かたまりの「句動詞」の札と同じ見た目**
+     (第5.393節・2026-10-06 利用者の指定)。
+
+       > 「この文の要素」のデザインは「句動詞」のものと
+       > 同じにしてみてください
+
+     **見た目の値は、この1か所だけに書く**
+     (CLAUDE.md「呼び名・色・幅・鍵の名前を2か所に書かない」)。
+     `.chunk-kind` の側に同じ値を書き写すと、**必ず片方だけが古くなる** ——
+     あちらが持っているのは並び方(`flex`)だけである。
+
+     **紙の上でも、何も足さない。** `--surface-2` / `--border` /
+     `--text-secondary` は紙の島が差し替えるので、明るい紙でも
+     暗い紙でも「句動詞」とまったく同じ色になる ——
+     第5.392節で当てていた金(`--chip-*`)は、ここから外した。
+
+     **`font: inherit` は先に書く** —— あれは一括指定なので、
+     あとに置くと `font-size` と `font-weight` を消す。 */
+.phrase-chip, .chunk-kind {
+  padding: 1px 9px; border-radius: var(--r-pill);
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-secondary);
+  font: inherit; font-size: var(--fs-11); font-weight: 700; line-height: 1.6;
 }
+/* 押せるのは要点の札だけ。**枠と字の濃さで示す**(地色を変えると、
+   「知らなかった」の色と見分けがつかない) */
+.phrase-chip { cursor: pointer; }
 .phrase-chip:hover, .phrase-chip.is-open {
-  border-style: solid; border-color: var(--text-muted); color: var(--text-primary);
+  border-color: var(--text-muted); color: var(--text-primary);
 }
 /* 「知らなかった」と付けた句は色が残る。**語とそろえる** */
 .phrase-chip.is-unknown {
@@ -5536,15 +5593,6 @@ html, body { overflow-x: clip; }
 }
 /* 「知っていた」に戻した札も薄くしない(2026-08 の指摘)。
    読みにくくなるだけで、得るものが無かった */
-/* ★ **紙の上の札は、紙が持っている色から取る**(第5.392節)。
-     もとは `background: #fff` と書いてあり、**暗い紙では白い塊**になった。
-     押せる札(`.phrase-chip`)は**破線のまま** —— 読むだけのタグと
-     見分ける印である(色だけに頼らない・CLAUDE.md)。
-     `.focus-paper` にも同じく当てる(**2つの紙で見え方を変えない**)。 */
-.lesson-sheet .phrase-chip,
-.focus-paper .phrase-chip {
-  background: var(--chip-bg); border-color: var(--chip-line); color: var(--chip-fg);
-}
 .lesson-sheet .phrases-label,
 .focus-paper .phrases-label { color: var(--ink-faint); }
 
@@ -11063,13 +11111,11 @@ button.wbfilter-ctl { text-align: left; }
    うすい地色 + 枠線 + 太字の3つで示す。
    **呼び名は `chunkKinds.js` 1か所**なので、ここには分類ごとの指定を置かない
    (7つぶん色を分けると、足した日に必ず片方だけ古くなる) */
-.chunk-kind {
-  flex: 0 0 auto;
-  padding: 1px 9px;
-  border: 1px solid var(--border); border-radius: var(--r-pill);
-  background: var(--surface-2); color: var(--text-secondary);
-  font-size: var(--fs-11); font-weight: 700;
-}
+/* ★ **色と形はここに書かない**(第5.393節)。
+   「この文の要点」の札と**まったく同じ見た目**にする指定を受けたので、
+   `.phrase-chip, .chunk-kind` の1か所へ寄せてある。
+   ここに持たせるのは、この札だけの事情(縮むな)だけである。 */
+.chunk-kind { flex: 0 0 auto; }
 .chunk-ja { color: var(--text-primary); }
 .chunk-note { color: var(--text-secondary); font-size: var(--fs-13); }
 /* 本文の中で、実際にそう使われていた1文。**引用だと目で分かるように**

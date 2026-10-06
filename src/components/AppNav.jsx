@@ -25,6 +25,7 @@
  */
 import { useEffect, useRef } from 'react'
 import { CloseIcon, MenuIcon } from './Icons.jsx'
+import RizapLogo from './RizapLogo.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 
 /**
@@ -205,7 +206,19 @@ export function AppTopbar({
             「単語帳」の横に青い丸が出ると、何の印か分からない */}
         {badge && <NavDot kind={badge} />}
       </h1>
-      {right && <div className="app-topbar-right">{right}</div>}
+      {/* ★ **右端は、いつも RIZAP のマーク**(第5.393節・2026-10-06 利用者の指定)。
+
+            > 上部バーの右端の方に常に表示されるようにしてください
+
+          **入れ物ごと、いつも描く。** もとは `right` があるときだけ
+          描いていたので、無い画面ではマークも消えていた。
+          `margin-left: auto` で右端へ寄るのはこの入れ物のほうで、
+          中は `gap` で離れる(**隙間は `gap` で作る**・共通ルール)。
+          **マークは最後の子**なので、何が渡ってきても右端はマークである。 */}
+      <div className="app-topbar-right">
+        {right}
+        <RizapLogo />
+      </div>
     </div>
   )
 }
