@@ -2329,15 +2329,22 @@ html, body { overflow-x: clip; }
    「狭い画面 かつ 行き先がある」ときで、幅だけでは決まらない
    (`showTabs = !navPush && tabs.length > 0`・`App.jsx`)。
 
-   **帯の高さは実測してある**(`?screen=tabs`)。57px(320px では 63px)+
-   端末の切り欠き。そこへ**12px の余白**を足す —— 利用者の指定
+   **帯の高さは実測してある**(`?screen=tabs`)。**65px** + 端末の切り欠き。
+   そこへ**12px の余白**を足す —— 利用者の指定
    「タブから少しだけマージンは取ってください」である。
-   `.sheet-floats.is-above-dock` とまったく同じ考え方。 */
-.app-shell.has-tabs .finder-float { bottom: calc(69px + env(safe-area-inset-bottom)); }
-@media (max-width: 320px) {
-  /* 320px では「Quick Response」が2行になり、帯が 63px になる(実測) */
-  .app-shell.has-tabs .finder-float { bottom: calc(75px + env(safe-area-inset-bottom)); }
-}
+   `.sheet-floats.is-above-dock` とまったく同じ考え方。
+
+   ★ **幅ごとの出し分けが要らなくなった**(第5.401節・2026-10-06)。
+     もとは「320px では 63px、それ以外は 57px」と**2つ**持っていた ——
+     「Quick Response」が狭い画面だけ2行になり、帯が高くなったためである。
+     いまは**どの幅でも2行ぶんの場所を取ってある**ので、
+     **帯の高さは 65px で変わらない。** 数も1つで済む。
+
+     ★ **帯を高くした日に、ここが赤くなった**(すき間が 12 → 4px)。
+       `npm run test:bar` が「すき間が 8〜24px に収まっているか」を
+       測っているので、**黙って近づくことはない。**
+       帯の高さを変えたら、**ここも一緒に動かす。** */
+.app-shell.has-tabs .finder-float { bottom: calc(77px + env(safe-area-inset-bottom)); }
 
 /* 無いときと、一覧のいちばん下に出す「作る」 */
 .finder-empty, .finder-more { display: flex; flex-direction: column; gap: var(--sp-10); }
