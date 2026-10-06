@@ -950,7 +950,12 @@ export default function App() {
         open={navOpen || focusMenu} wide={navPush && !focusMenu} compact={!wide}
         overFocus={focusMenu}
         onClose={() => (focusMenu ? setFocusMenu(false) : setNavOpen(false))}
-        title="English AI System"
+        /* ★ **左上の名前**(第5.394節・2026-10-06 利用者の指定
+             「左上のタイトルを『RIZAP ENGLISH』に変更してくれ」)。
+             **言われたのはここだけ。** 起動画面・ログイン画面・ホームの
+             いちばん上・ブラウザのタブ・1ファイル版の名前は、
+             まだ「English AI System」のままにしてある。 */
+        title="RIZAP ENGLISH"
         footer={navFooter}
       />
 
