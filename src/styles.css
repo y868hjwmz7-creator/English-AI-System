@@ -140,49 +140,65 @@
        **紙に刷るときは、この値が1つも届かない** ——
        インクを使わず、ゲストが書き込める。
      ════════════════════════════════════════════════════════════════ */
-  --pd-paper:        #201e1b;   /* 温かみのある炭。わずかに茶を含む(案C) */
-  --pd-ink:          #ebe6df;
-  --pd-ink-soft:     #b0a89d;
-  --pd-ink-faint:    #837b70;
-  --pd-rule:         #38332c;
+  /* ★ **紙の色は、Quick Response / 単語帳のカードと同じにする**
+       (2026-10-06 利用者の指定・第5.391節のつづき)
 
-  --pd-surface-0:    #282521;   /* 紙の上で「浮いた面」。ボタンの地 */
-  --pd-surface-1:    #24211d;
-  --pd-surface-2:    #2f2b26;
-  --pd-btn-bg:       #282521;
-  --pd-quiet-bg:     #2f2b26;
+         > やはり紙の色は Quick Response や単語帳と揃えてください。
+         > 赤みが強く、浮いている感じが強く、微妙でした。
+
+       はじめ「案C 温かみのある炭 `#201e1b`」にしたが、**実機で赤みが
+       立った。** 揃える相手は、アプリのカード(`--surface-1`)である。
+       **値は、暗い配色の `--surface-1` / `--text-primary` と同じにする** ——
+       `npm run test:paper` が、ずれていないかを突き合わせる
+       (`:root` で `var(--surface-1)` と書くと**明るい側の値**を拾うので、
+        ここは同じ値を書き、見張りで食い違いを捕まえる形にしてある)。 */
+  --pd-paper:        #1c1c1a;   /* = 暗い配色の --surface-1(カードと同じ) */
+  --pd-ink:          #ffffff;   /* = 暗い配色の --text-primary */
+  --pd-ink-soft:     #cfcec4;   /* = --text-secondary */
+  --pd-ink-faint:    #9a998f;   /* = --text-muted */
+  --pd-rule:         #46463f;   /* = --border */
+
+  --pd-surface-0:    #2b2b28;   /* 紙の上で「浮いた面」。ボタンの地 */
+  --pd-surface-1:    #232321;
+  --pd-surface-2:    #2b2b28;
+  --pd-btn-bg:       #2b2b28;
+  --pd-quiet-bg:     #35352f;
   --pd-on-accent:    #15130d;   /* 金のべた塗りの上に乗る文字 */
 
   --pd-danger:       #e8807c;
   --pd-warn:         #dcbb7e;
 
-  --pd-qa-bg:        #262320;
-  --pd-qa-line:      #38332c;
-  --pd-qa-stripe:    #25221e;   /* 1段落おきの地色。紙よりほんの少しだけ暗い */
-  --pd-qa-answer:    #2c2824;
+  --pd-qa-bg:        #212120;
+  --pd-qa-line:      #46463f;
+  --pd-qa-stripe:    #202020;   /* 1段落おきの地色。紙よりほんの少しだけ暗い */
+  --pd-qa-answer:    #272725;
   --pd-chunk-fg:     #9db89a;   /* カタマリごとの訳。セージの明るい側 */
 
-  --pd-accent-bg:    #2b2417;
-  --pd-accent-soft:  #2b2417;
+  --pd-accent-bg:    #2a2316;
+  --pd-accent-soft:  #2a2316;
   --pd-accent-line:  #5a4a22;
 
-  --pd-ok:           #6fbf93;   --pd-ok-bg:  #1f2a23;
-  --pd-ng:           #e8807c;   --pd-ng-bg:  #2e211f;
+  --pd-ok:           #6fbf93;   --pd-ok-bg:  color-mix(in srgb, #6fbf93 12%, #1c1c1a);
+  --pd-ng:           #e8807c;   --pd-ng-bg:  color-mix(in srgb, #e8807c 12%, #1c1c1a);
 
   /* ★ **解答(覚えたい表現)。利用者が6候補から選んだ「ミント」** */
-  --pd-answer:       #7fc49b;   --pd-answer-bg:    #1f2a23;
-  --pd-translate:    #9bb6df;   --pd-translate-bg: #212630;
-  --pd-note:         #dcbb7e;   --pd-note-bg:      #2b2517;
+  /* ★ **囲みの地は、紙の色に色を 12% だけ混ぜて作る。**
+       決め打ちで並べると、紙の色を変えた日に**ここだけ前の紙に合ったまま**
+       残る(実際、赤みのある紙に合わせた値が残っていた)。
+       混ぜる先を紙にしておけば、紙を変えても**ひとりでについてくる。** */
+  --pd-answer:       #7fc49b;   --pd-answer-bg:    color-mix(in srgb, #7fc49b 12%, #1c1c1a);
+  --pd-translate:    #9bb6df;   --pd-translate-bg: color-mix(in srgb, #9bb6df 12%, #1c1c1a);
+  --pd-note:         #dcbb7e;   --pd-note-bg:      color-mix(in srgb, #dcbb7e 12%, #1c1c1a);
 
   --pd-voice-a:      var(--rizap-gold);   /* 会話の1人目 */
   --pd-voice-b:      #c79ac5;             /* 2人目 */
 
-  --pd-speak-bg:     #2a2a2c;   --pd-speak-bar: #6f93a8;
+  --pd-speak-bg:     color-mix(in srgb, #6f93a8 14%, #1c1c1a);   --pd-speak-bar: #6f93a8;
   --pd-read-bg:      #3c4a52;   --pd-read-fg:   #eef6fa;
 
-  --pd-unknown-bg:   #3a2422;   --pd-unknown-bar: #e8706c;
-  --pd-phrase-bg:    #2d2638;   --pd-phrase-bar:  #a98ad8;
-  --pd-mark-hover-bg: #302b24;
+  --pd-unknown-bg:   color-mix(in srgb, #e8706c 16%, #1c1c1a);   --pd-unknown-bar: #e8706c;
+  --pd-phrase-bg:    color-mix(in srgb, #a98ad8 16%, #1c1c1a);   --pd-phrase-bar:  #a98ad8;
+  --pd-mark-hover-bg: #2e2e2a;
 
   --pd-pos-noun:   #86b6cc;  --pd-pos-verb:   #7fc49b;
   --pd-pos-adj:    #c79ac5;  --pd-pos-adv:    #dcbb7e;
@@ -6294,12 +6310,26 @@ html, body { overflow-x: clip; }
   color: var(--text-primary);
 }
 
-/* 紙の上(レッスン表示・印刷)は白黒に寄せる。
-   **色は必ず決め打ちにする。** var(--text-primary) のままだと、
-   暗い配色のときに白い文字が白い紙に載って消える(2026-08 実機で発生)。 */
-.mtitle--sheet .mtitle-main { color: #1a1a1a; }
-.mtitle--sheet .mtitle-date { color: #666; font-size: .6em; }
-.mtitle--sheet .mtitle-headline { color: #555; font-size: .8em; }
+/* ★ **決め打ちをやめ、紙の色から取る**(第5.391節のつづき・2026-10-06 実機)
+
+     もとはこう書いてあった。
+
+       /* 紙の上は白黒に寄せる。**色は必ず決め打ちにする。**
+          var(--text-primary) のままだと、暗い配色のときに
+          白い文字が白い紙に載って消える(2026-08 実機で発生)。 *\/
+       .mtitle--sheet .mtitle-main { color: #1a1a1a; }
+
+     **2026-08 の対策が、いま逆に効いた。** 当時は紙がいつも白かったので
+     黒を決め打ちしたが、**紙が暗くなったとたん、その黒が紙に沈んだ**
+     (題名 `#1a1a1a` / 紙 `#1c1c1a` —— 実測でほぼ同じ色だった)。
+
+     **いまは紙が「明るい島 / 暗い島」を両方持っている**ので、
+     `--ink` から取れば、白い紙でも暗い紙でも読める。
+     **決め打ちは、前提が変わった日に必ず裏返る**(CLAUDE.md
+     「色は必ず変数で持つ」)。 */
+.mtitle--sheet .mtitle-main { color: var(--ink); }
+.mtitle--sheet .mtitle-date { color: var(--ink-faint); font-size: .6em; }
+.mtitle--sheet .mtitle-headline { color: var(--ink-soft); font-size: .8em; }
 .mtitle--sheet .mtitle-chip {
   border-color: #bbb; background: transparent; color: #555; font-size: .6em;
 }
