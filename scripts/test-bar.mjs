@@ -588,14 +588,14 @@ for (const [label, want] of Object.entries(WANT)) {
       const 重なり = await page.evaluate(() => {
         const 出 = []
         for (const li of document.querySelectorAll('.lesson-page:not(.is-closed) .lesson-items > li')) {
-          const bf = getComputedStyle(li, '::before')
+          const bf = window.getComputedStyle(li, '::before')
           /* **浮いていないときは、この決まりの相手ではない**(広い画面) */
           if (bf.float !== 'left') continue
           const lir = li.getBoundingClientRect()
-          const 丸の右 = lir.left + parseFloat(getComputedStyle(li).paddingLeft)
+          const 丸の右 = lir.left + parseFloat(window.getComputedStyle(li).paddingLeft)
             + parseFloat(bf.width)
           for (const box of li.children) {
-            const c = getComputedStyle(box)
+            const c = window.getComputedStyle(box)
             /* **地色か左の線を持つ箱だけ**を見る(素の文字は回り込むので良い) */
             const 箱である = c.backgroundColor !== 'rgba(0, 0, 0, 0)'
               || parseFloat(c.borderLeftWidth) > 0
@@ -10162,6 +10162,52 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=form&kind=reading`,
     { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(600)
+
+  /* ★ **ゲストの名前を、はじめから並べない**(第5.398節・2026-10-06 実機)。
+
+       > このゲストを選択する部分も普段は閉じておいてください。
+       > ゲストと画面共有をしながらだと気まずいです。
+       > 検索と、一覧を開く仕様にするべきです。
+
+     この画面だけが**自前の札の一覧**を持っており、担当25人の名前が
+     常に並んでいた。えらぶ欄は `LearnerPick` 1か所に寄せてある。
+
+     **「開く前は0人、開いたら全員」の両方を見る**(CLAUDE.md)——
+     片方だけだと、**どこにも出さない形**に書き換えても緑のままになる。 */
+  {
+    const 名前の数 = () => page.locator('.learner-pick .assign-list label').count()
+    const 閉 = await 名前の数()
+    const ひらく = page.locator('.learner-pick-head button')
+    const あるか = await ひらく.count()
+    if (!あるか) {
+      ng('ゲストの欄 … 「一覧をひらく」が無い', '自前で札を並べていないか')
+    } else if (閉 !== 0) {
+      ng('ゲストの欄 … 開く前から名前が並んでいる', `${閉} 人ぶん見えている`)
+    } else {
+      await ひらく.first().click()
+      await page.waitForTimeout(250)
+      const 開 = await 名前の数()
+      if (開 === 0) ng('ゲストの欄 … 開いても1人も出ない')
+      else {
+        /* **打てば、開いていなくても出る**(行き止まりを作らない) */
+        await ひらく.first().click()
+        await page.waitForTimeout(200)
+        /* **`type` を書いていない入力である**(`SearchBar`)——
+           `[type="text"]` では当たらない。**打てるものだけを外す** */
+        await page.locator(
+          '.learner-pick input:not([type="checkbox"]):not([type="radio"])',
+        ).first().fill('検証ゲスト1')
+        await page.waitForTimeout(250)
+        const 打 = await 名前の数()
+        if (打 === 0) ng('ゲストの欄 … 名前を打っても出ない')
+        else ok(`ゲストの欄 … 既定は 0 人、開くと ${開} 人、打つと ${打} 人`)
+      }
+    }
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=form&kind=reading`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(600)
+  }
+
   const 初め = await 見る()
   if (!初め.ある) ng('文法解説の指定 … 記事の作成画面に出ていない')
   else if (!初め.入っている) {

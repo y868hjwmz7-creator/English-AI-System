@@ -133,6 +133,9 @@ import { shuffled } from '../lib/shuffle.js'
 /* **発行のボタンの言葉は `learnerPick.js` 1か所**(第5.395節)——
    画面に書き写すと、言い回しを変えた日に片方だけ古くなる */
 import { publishLabel } from '../lib/learnerPick.js'
+/* ★ **ゲストを選ぶ欄は1か所**(第5.238節 / 第5.398節)——
+   自前で札を並べると、**既定で閉じる・名前で探す**が片方だけ古くなる */
+import LearnerPick from './LearnerPick.jsx'
 import {
   NF_BOOK_ID, TEXT_BOOKS, loadTextPhrases, loadTextUnits, textBookLabel,
 } from '../lib/textBooks.js'
@@ -2857,39 +2860,39 @@ export default function MaterialForm({
           **画面の名前ではなく、選ぶ余地があるかで決める。** */}
       {!(learners.length === 1 && shareWith.length === 1) && (
       <fieldset className="field">
-        <legend>ゲスト</legend>
-        {learners.length === 0 ? (
+        {/* ★ **既定で畳む。えらぶ欄は `LearnerPick` 1か所**
+             (第5.398節・2026-10-06 実機・利用者の指定)。
+
+               > このゲストを選択する部分も普段は閉じておいてください。
+               > ゲストと画面共有をしながらだと気まずいです。
+               > 検索と、一覧を開く仕様にするべきです。
+
+             **この画面だけが、自前の札の一覧を持っていた。**
+             担当は1人あたり25人なので、**25人の名前が常に並び**、
+             レッスン中の画面共有に**ほかのゲストの名前がそのまま映っていた**
+             (仕様書 5.5)。その下にあるものも画面の外へ押し出される。
+
+             アサインの画面は第5.238節でとっくにこの形になっている ——
+             **同じものを2つ持っていたので、片方だけが古いままだった。**
+             見出しの行の「一覧をひらく」と名前での検索は、あちらが持っている。
+
+             **1人もいないときの1行も、あちらに渡す**(`emptyText`)——
+             渡した名簿が「担当ぜんぶ」であることは、こちらしか知らない。 */}
+        <LearnerPick
+          people={learners} picked={shareWith} onPick={setShareWith}
+          label="ゲスト"
+          emptyText="担当しているゲストがまだいません。「ゲスト」タブから追加できます。" />
+        {/* **1人だけ選んだときの断り書きは出さない**(2026-08 利用者の指定)。
+            ゲストのカードから作るときは必ずこの形になるので、
+            この1文だけがゲストモードに増えていた。
+            しかも「教材名にもお名前が入ります」は**もう本当ではない**
+            (教材名にゲスト名を入れない・CLAUDE.md)。
+            同じ英文を二度出さない仕組みは、選んだ人数によらず働く。 */}
+        {shareWith.length > 1 && (
           <p className="field-hint">
-            担当しているゲストがまだいません。「ゲスト」タブから追加できます。
+            {shareWith.length}人に出します。
+            <strong>全員ぶんの「前に出した英文」と照合します。</strong>
           </p>
-        ) : (
-          <>
-            <div className="tagpicker-tags">
-              {learners.map((l) => (
-                <button
-                  key={l.id} type="button"
-                  className={`tagchip${shareWith.includes(l.id) ? ' is-on' : ''}`}
-                  onClick={() => setShareWith(shareWith.includes(l.id)
-                    ? shareWith.filter((x) => x !== l.id)
-                    : [...shareWith, l.id])}
-                >
-                  {l.display_name}
-                </button>
-              ))}
-            </div>
-            {/* **1人だけ選んだときの断り書きは出さない**(2026-08 利用者の指定)。
-                ゲストのカードから作るときは必ずこの形になるので、
-                この1文だけがゲストモードに増えていた。
-                しかも「教材名にもお名前が入ります」は**もう本当ではない**
-                (教材名にゲスト名を入れない・CLAUDE.md)。
-                同じ英文を二度出さない仕組みは、選んだ人数によらず働く。 */}
-            {shareWith.length > 1 && (
-              <p className="field-hint">
-                {shareWith.length}人に出します。
-                <strong>全員ぶんの「前に出した英文」と照合します。</strong>
-              </p>
-            )}
-          </>
         )}
       </fieldset>
       )}

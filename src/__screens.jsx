@@ -566,6 +566,13 @@ const FORM = (
     {/* `?accent=` … **良い声が1人もいない訛り**を測るために渡す
         (第5.196節。読み方の欄は、そこでは出ない) */}
     <MaterialForm createdBy="t1"
+                  /* ★ **ゲストを渡す**(第5.398節)。渡さないと
+                       えらぶ欄が「まだいません」の1行になり、
+                       **既定で畳まれているかを1度も測れない。**
+                       担当は1人25人なので、その数で置く */
+                  learners={Array.from({ length: 25 }, (_, i) => ({
+                    id: `l${i + 1}`, display_name: `検証ゲスト${i + 1}`, status: 'active',
+                  }))}
                   initial={{ kind: q.get('kind') || 'speech',
                     ...(q.get('accent') ? { accent: q.get('accent') } : {}) }}
                   onCreated={() => {}} onCancel={() => {}} />
