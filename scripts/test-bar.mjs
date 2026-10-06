@@ -4506,6 +4506,85 @@ export default defineConfig({
     }
   }
 
+  /* ★ **4つのタブが、そろっているか**(第5.401節・2026-10-06 利用者の指定)。
+
+       > 「Quick Response」のように2行になるラベルがあっても、
+       > 各タブの内容が上下にずれて見えないよう、ラベル領域の高さを統一する
+       > 各タブの間に、控えめな縦の区切り線を設ける
+
+     **320px で測る** —— ここで「Quick Response」が2行になる。
+     390px では折り返さないので、**そこだけで測ると素通りする**
+     (CLAUDE.md「いちばん危ない形を、検証の中に必ず1つ置く」)。 */
+  for (const w of [320, 390]) {
+    await page.setViewportSize({ width: w, height: 844 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=tabs`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.app-tabs')
+    await page.waitForTimeout(200)
+    /* ★ **本文の下に取ってある余白が、帯より狭くなっていないか**(第5.401節)。
+         `.app-shell.has-tabs .app` の `padding-bottom` は**決め打ち**なので、
+         帯が高くなった日に**いちばん下の行が帯の下に隠れる。**
+         CLAUDE.md「値を書き写さない。性質で見る」—— **測って比べる** */
+    const 余白 = await page.evaluate(() => {
+      const bar = document.querySelector('.app-tabs')
+      const 本文 = document.querySelector('.app-shell.has-tabs .app')
+      if (!bar || !本文) return null
+      return { 帯: Math.round(bar.getBoundingClientRect().height),
+               余白: Math.round(parseFloat(window.getComputedStyle(本文).paddingBottom)) }
+    })
+    if (余白 && 余白.余白 < 余白.帯) {
+      ng(`下の行き先 ${w}px … 本文の下余白が帯より狭い`,
+        `帯 ${余白.帯}px / 余白 ${余白.余白}px —— いちばん下の行が隠れる`)
+    } else if (余白) {
+      ok(`下の行き先 ${w}px … 本文の下余白が帯を覆っている(帯 ${余白.帯}px / 余白 ${余白.余白}px)`)
+    }
+
+    const m = await page.evaluate(() => [...document.querySelectorAll('.app-tab')]
+      .map((x) => {
+        const r = x.getBoundingClientRect()
+        const ic = x.querySelector('.app-tab-icon').getBoundingClientRect()
+        const lb = x.querySelector('.app-tab-label').getBoundingClientRect()
+        return {
+          名: x.textContent.trim(),
+          幅: Math.round(r.width * 10) / 10,
+          絵: Math.round(ic.top * 10) / 10,
+          字: Math.round(lb.top * 10) / 10,
+          行数: Math.round(lb.height / parseFloat(window.getComputedStyle(lb).lineHeight)),
+          はみ出し: lb.left < r.left - 0.5 || lb.right > r.right + 0.5,
+          縦線: window.getComputedStyle(x).borderLeftColor,
+        }
+      }))
+    const ちがう = (k) => new Set(m.map((x) => x[k])).size !== 1
+    const 透ける = (c) => /rgba?\([^)]*,\s*0\s*\)/.test(c)
+    const 折り返した = m.some((x) => x.行数 >= 2)
+    const どこ = `下の行き先のそろい ${w}px`
+    if (m.length !== 4) ng(`${どこ} … タブが4つではない(${m.length})`)
+    else if (ちがう('幅')) {
+      ng(`${どこ} … 幅がそろっていない`, m.map((x) => `${x.名} ${x.幅}`).join(' / '))
+    } else if (ちがう('絵')) {
+      ng(`${どこ} … 絵の高さがそろっていない(折り返しで上下にずれている)`,
+        m.map((x) => `${x.名} ${x.絵}`).join(' / '))
+    } else if (ちがう('字')) {
+      ng(`${どこ} … ラベルの1行目がそろっていない`,
+        m.map((x) => `${x.名} ${x.字}`).join(' / '))
+    } else if (m.some((x) => x.はみ出し)) {
+      ng(`${どこ} … ラベルが横にはみ出している`)
+    } else if (!透ける(m[0].縦線)) {
+      ng(`${どこ} … 1つめにも縦線が付いている`, 'そこだけ 1px 狭くなる')
+    } else if (m.slice(1).some((x) => 透ける(x.縦線))) {
+      ng(`${どこ} … タブのあいだに縦の区切りが無い`,
+        m.slice(1).map((x) => `${x.名} ${x.縦線}`).join(' / '))
+    } else if (w === 320 && !折り返した) {
+      /* ★ **折り返していないなら、何も測っていない。**
+           ここが赤いときは、字が小さくなったか言葉が変わったかである ——
+           **測る幅を狭めること**(CLAUDE.md「無ければ素通りさせない」) */
+      ng(`${どこ} … 2行になるラベルが1つも無い`, 'この幅で測る意味が無くなっている')
+    } else {
+      ok(`${どこ} … 幅・絵・字の1行目がそろい、区切りは2つめから`
+        + `(${折り返した ? '2行になった札あり' : '全部1行'})`)
+    }
+  }
+
   /* **押したら本当に効くか。** 出ているだけで動かなければ意味がない */
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=tabs`,

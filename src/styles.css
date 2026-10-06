@@ -26,6 +26,14 @@
   --quiet-bg: #e4e7ea;   /* 「まだ」「共有する」など、一段うしろのボタン */
   --on-accent: #ffffff;  /* 青の塗りつぶしの上に乗る文字 */
   --border:    #d5d9de;
+  /* ★ **下の帯(`.app-tabs`)の線と影**(第5.401節・2026-10-06 利用者の指定)。
+       **1組だけ置く** —— 上端の境目にも、タブのあいだの縦の区切りにも、
+       同じ1つを使う(色を2か所に書かない)。
+
+       明るい配色では**薄いグレー**(本文との区別が分かる程度)。
+       影は**ごく控えめ** —— 線と影を同時に強く使うと、境目がぼやける */
+  --tabs-line:   var(--border);
+  --tabs-shadow: 0 -1px 4px rgb(36 41 47 / 8%);
 
   --text-primary:   #0b0b0b;
   --text-secondary: #4a4e54;
@@ -393,6 +401,13 @@
     /* 金のべた塗りの上は、**黒に近い文字**にする(第5.380節) */
     --on-accent: var(--rizap-gold-on);
     --border:    #46463f;
+    /* ★ **暗い配色の下の帯**(第5.401節)。線は**地より少し明るい** ——
+         帯(`--surface-1` #1c1c1a)の上に #46463f なので、
+         強すぎず、それでいて本文(#0c0c0b)との境目が見える。
+         **影は出さない** —— 黒い影は黒い地にそのまま沈み、
+         「明るい配色のために置いた影」が、ここでは何も分けていなかった */
+    --tabs-line:   var(--border);
+    --tabs-shadow: none;
   
     --text-primary:   #ffffff;
     --text-secondary: #cfcec4;
@@ -464,6 +479,9 @@
   /* 金のべた塗りの上は、**黒に近い文字**にする(第5.380節) */
   --on-accent: var(--rizap-gold-on);
   --border:    #46463f;
+  /* ★ 下の帯(第5.401節)。**`@media` の側とまったく同じ** */
+  --tabs-line:   var(--border);
+  --tabs-shadow: none;
 
   --text-primary:   #ffffff;
   --text-secondary: #cfcec4;
@@ -803,26 +821,54 @@ a { color: var(--accent); }
 .app-tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
   display: flex; align-items: stretch;
-  border-top: 1px solid var(--border);
+  /* ★ **線と影を、同時に強く使わない**(第5.401節・2026-10-06 利用者の指定)。
+       もとは 24px もぼかした影を敷いていたので、**本文の上に灰色がにじみ、
+       境目がぼやけていた**(明るい配色)。暗い配色では**黒い影が黒い地に
+       そのまま沈み**、どこからが帯なのか分からなかった。
+       **線で分け、影はごく控えめに**する。値は `--tabs-*` 1組だけ */
+  border-top: 1px solid var(--tabs-line);
   background: var(--surface-1);
   padding-bottom: env(safe-area-inset-bottom);
-  box-shadow: 0 -6px 24px rgb(0 0 0 / 10%);
+  box-shadow: var(--tabs-shadow);
 }
 .app-tab {
   flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; padding: 6px 2px;
+  gap: 4px; padding: 6px 2px;
   /* **押せる大きさ(56px)を割らない。** 下端は指が置きにくい */
   min-height: 56px;
-  border: none; border-top: 3px solid transparent; background: none; cursor: pointer;
+  /* ★ **4つとも同じ幅にする**(第5.401節)。区切り線を2つめから付けると、
+       **1つめだけが 1px 広くなる。** ぜんぶに場所を取らせて、
+       色だけを付け替える(**取っておく**・共通ルールと同じ考え方) */
+  border: none; border-top: 3px solid transparent;
+  border-left: 1px solid transparent;
+  background: none; cursor: pointer;
   color: var(--text-secondary); font-size: var(--fs-11);
 }
+/* ★ **控えめな縦の区切り**(第5.401節)。**強く分断された印象にしない**ので、
+     上端の線とまったく同じ濃さを使う(色を2か所に書かない) */
+.app-tab + .app-tab { border-left-color: var(--tabs-line); }
 .app-tab-icon { display: inline-flex; font-size: var(--fs-20); line-height: 1; }
+/* ★ **線の太さをそろえる**(第5.401節)。絵の部品そのものは触らない ——
+     ほかの画面でも使っているので、**この帯の中だけ**でそろえる */
+.app-tab-icon svg [stroke-width] { stroke-width: 1.5; }
 .app-tab-label {
   /* **名前は切らない。**「Quick…」では何のボタンか分からない。
      入らないぶんは2行に折り返させる(Quick Response の札と同じ判断) */
   max-width: 100%; line-height: 1.15; text-align: center;
   overflow-wrap: anywhere;
+  /* ★ **2行ぶんの場所を、はじめから取っておく**(第5.401節・利用者の指定)。
+
+       > 「Quick Response」のように2行になるラベルがあっても、
+       > 各タブの内容が上下にずれて見えないよう、
+       > ラベル領域の高さを統一する
+
+     **数を書かない。** 行の高さ(`line-height`)の2倍そのものである ——
+     字を大きくした日も、言葉を変えた日も、ついてくる。
+     **上にそろえる**(`flex-start`)ので、1行の札も2行の札も
+     **1行目の位置が同じ**になる —— これが「上下にずれない」の中身である */
+  display: flex; align-items: flex-start; justify-content: center;
+  min-height: calc(2 * 1.15em);
 }
 /* いまいる画面。**色だけに頼らない**(CLAUDE.md)。
    うすい地色 + 同じ色の文字 + 太字 + 上の帯の4つで示す */
