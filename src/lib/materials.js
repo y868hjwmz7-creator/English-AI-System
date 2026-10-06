@@ -1071,6 +1071,19 @@ export async function loadLearnerAssignments(learnerId, limit = 50) {
   /* **`created_by` も取ってくる**(2026-09)。「教材を消す」を出すかどうかは
      `canDeleteMaterial()` が見るので、無いと**自分で作った教材でも
      ボタンが出ない。** 0001 からある列なので `opt()` は要らない */
+  /* ★ **ここに書いてある文字は、そのまま Supabase へ送られる**
+       (2026-10-06・第5.389節で実機を壊した)。
+       `.select()` に渡すのは**列の名前を並べた1本の文字列**であって、
+       JavaScript のコードではない。だから中に `/* … *\/` を書くと、
+       **PostgREST が列の名前として読もうとして断り**、
+       **すべてのゲストの宿題が1件も返らなくなる。**
+       **説明は、必ず文字列の外に書く。**
+
+     ★ `material_sections ( id, seq, material_items ( id, seq, answer ) )`
+       —— `answer` も読む(第5.384節・2026-10-05 利用者の指定)。
+       見出しに出す呼び名を中身から組むため(`materialName`)。
+       行は1件も増やしていない —— もともと数えるために `id` を引いていた
+       ところに、短い欄を1つ足しただけである。本文も訳も読まない。 */
   const { data, error } = await runTolerant(() => supabase
     .from('assignments')
     .select(`
@@ -1079,11 +1092,6 @@ export async function loadLearnerAssignments(learnerId, limit = 50) {
         id, title, level, kind, headline, ${opt('headline_ja')} teaching_point,
         industry, genre, scene, created_by, ${opt('voice_ids')}
         material_tags ( tag_id ),
-        /* ★ answer も読む(第5.384節・2026-10-05 利用者の指定)。
-             見出しに出す呼び名を中身から組むため(materialName)。
-             行は1件も増やしていない —— もともと数えるために id を引いていた
-             ところに、短い欄を1つ足しただけである。本文も訳も読まない。
-             ここはテンプレート文字列の中なので、バッククォートは書けない。 */
         material_sections ( id, seq, material_items ( id, seq, answer ) )
       )
     `)

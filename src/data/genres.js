@@ -997,6 +997,121 @@ export const SCENES_BY_INDUSTRY = {
     { id: 'fas_online',  label: 'ネットで買う',   hint: '返品、交換、届いたら違った' },
     { id: 'fas_compli',  label: 'ほめる・ほめられる', hint: '「それいいね」から広げる' },
   ],
+  /* ── **生活**(2026-10-06 利用者の指定)────────────────────────────
+
+       > 起きる、歯を磨く、子供を寝かしつける、バスに乗る、
+       > 人をどこかに送る、迎えに行く、無数にある生活に紐づいた
+       > シチェーションを趣味の中に入れたいです。
+
+     **利用者が挙げた6つは、どれもここに1行ずつある**
+     (起きる / 歯を磨く / 子どもを寝かしつける / バスに乗る /
+      車で送っていく / 迎えに行く)。**言い換えずに、そのまま置いた** ——
+     探すときに利用者の言葉で見つかるほうがよい。
+
+     ★ **分野(`industries.js` の `daily`)は束で、ここは1つ1つの動作。**
+       「無数にある」のはこちら側である。
+       **足したいものが出てきたら、ここに1行書き足すだけ**でよく、
+       分野を増やす必要はない。
+
+     ★ **1つの種類につき 7 個**(決まりは 6〜8 個)。
+       `ownOf()` が「生活(全般)」のときに種類ぜんぶを集めるので、
+       全般を選ぶと **70 の場面**がそろう。
+
+     ★ **id の頭文字を種類ごとに分けてある**(`dly_` 朝 / `dlyk_` 子ども /
+       `dlym_` 移動 / `dlyh_` 家事 / `dlys_` 買い物 / `dlyr_` 住まい /
+       `dlyb_` からだ / `dlyf_` お金 / `dlyn_` 夜 / `dlyp_` ペット)。
+       `materials.scene` に保存されるので、**使い始めたら変えない**。
+     ──────────────────────────────────────────────────────── */
+  daily_morn: [
+    { id: 'dly_wake',    label: '起きる',           hint: 'もう起きて、あと5分、寝坊した' },
+    { id: 'dly_teeth',   label: '歯を磨く',         hint: '洗面所、顔を洗う、髪をとかす' },
+    { id: 'dly_dress',   label: '着替える',         hint: '何を着る、寒い、忘れもの' },
+    { id: 'dly_bfast',   label: '朝ごはん',         hint: '作る、食べさせる、パンとごはん' },
+    { id: 'dly_leave',   label: '出かける前',       hint: '鍵、財布、戸締まり、行ってきます' },
+    { id: 'dly_rush',    label: '時間がない朝',     hint: '急いで、間に合うか、タクシー' },
+    { id: 'dly_weather', label: '今日の天気と支度', hint: '傘、上着、暑い寒い' },
+  ],
+  daily_kids: [
+    { id: 'dlyk_bed',    label: '子どもを寝かしつける', hint: '絵本、電気を消す、まだ眠くない' },
+    { id: 'dlyk_school', label: '保育園・学校へ送り出す', hint: '持ちもの、先生への伝言、行きたくない' },
+    { id: 'dlyk_home',   label: '宿題を見る',       hint: 'わからない、あと少し、ほめる' },
+    { id: 'dlyk_play',   label: '一緒に遊ぶ',       hint: '公園、順番、もう帰るよ' },
+    { id: 'dlyk_fuss',   label: 'ぐずる・泣く',     hint: 'なだめる、理由を聞く、約束する' },
+    { id: 'dlyk_scold',  label: 'しかる・約束する', hint: 'だめな理由、次からどうする' },
+    { id: 'dlyk_meal',   label: 'ごはんを食べさせる', hint: '好き嫌い、こぼす、おかわり' },
+  ],
+  daily_move: [
+    { id: 'dlym_bus',    label: 'バスに乗る',       hint: '行き先、運賃、降りる停留所、乗り遅れ' },
+    { id: 'dlym_train',  label: '電車に乗る',       hint: '乗り換え、遅れ、切符、混んでいる' },
+    { id: 'dlym_drive',  label: '車で送っていく',   hint: '出る時間、道順、どこで降ろすか' },
+    { id: 'dlym_pick',   label: '迎えに行く',       hint: '何時に、どこで待つ、遅れる連絡' },
+    { id: 'dlym_walk',   label: '歩きと自転車',     hint: '近道、信号、雨の日' },
+    { id: 'dlym_taxi',   label: 'タクシーを呼ぶ',   hint: '行き先を言う、料金、おつり' },
+    { id: 'dlym_late',   label: '遅れそうなとき',   hint: '連絡する、謝る、次の便' },
+  ],
+  daily_house: [
+    { id: 'dlyh_wash',   label: '洗濯する',         hint: '干す、たたむ、しみ、乾かない' },
+    { id: 'dlyh_clean',  label: '掃除する',         hint: '掃除機、ふく、散らかっている' },
+    { id: 'dlyh_dish',   label: '食器を洗う',       hint: '順番、残りもの、ラップをかける' },
+    { id: 'dlyh_trash',  label: 'ゴミを出す',       hint: '分別、曜日、出し忘れ' },
+    { id: 'dlyh_cook',   label: '夕飯を作る',       hint: '献立、足りない材料、味見' },
+    { id: 'dlyh_share',  label: '分担を決める',     hint: '今日はどっち、代わってほしい' },
+    { id: 'dlyh_ask',    label: '片づけを頼む',     hint: 'ここに置いて、あとでやる' },
+  ],
+  daily_shop: [
+    { id: 'dlys_list',   label: '買うものを決める', hint: '切れているもの、頼まれたもの' },
+    { id: 'dlys_super',  label: 'スーパーで',       hint: '売り場を聞く、量、賞味期限' },
+    { id: 'dlys_pay',    label: 'レジで払う',       hint: '袋、カード、ポイント、おつり' },
+    { id: 'dlys_online', label: 'ネットで注文する', hint: '送料、届く日、品切れ' },
+    { id: 'dlys_deliv',  label: '宅配を受け取る',   hint: '時間指定、不在票、置き配' },
+    { id: 'dlys_return', label: '返品・交換',       hint: 'レシート、違うものが届いた' },
+    { id: 'dlys_price',  label: '値段を相談する',   hint: '高い、安いほう、まとめ買い' },
+  ],
+  daily_home: [
+    { id: 'dlyr_leak',   label: '水漏れ・故障',     hint: '止まらない、いつ直るか' },
+    { id: 'dlyr_key',    label: '鍵・戸締まり',     hint: 'なくした、閉め忘れ、スペアキー' },
+    { id: 'dlyr_repair', label: '修理に来てもらう', hint: '日どり、立ち会い、費用' },
+    { id: 'dlyr_noise',  label: '音の相談',         hint: '上の階、夜中、やわらかく伝える' },
+    { id: 'dlyr_hello',  label: 'ご近所への挨拶',   hint: '引っ越し、立ち話、お裾分け' },
+    { id: 'dlyr_rule',   label: 'ゴミ置き場と決まり', hint: '置き場、曜日、回覧' },
+    { id: 'dlyr_rent',   label: '大家・管理会社と', hint: '更新、設備、相談' },
+  ],
+  daily_body: [
+    { id: 'dlyb_sick',   label: '体調が悪い',       hint: 'どこが、いつから、休むか' },
+    { id: 'dlyb_recep',  label: '病院の受付で',     hint: '保険証、初めて、待ち時間' },
+    { id: 'dlyb_doctor', label: 'お医者さんに話す', hint: '痛み方、いつもの薬、持病' },
+    { id: 'dlyb_pharm',  label: '薬局で',           hint: '飲み方、回数、ジェネリック' },
+    { id: 'dlyb_dent',   label: '歯医者で',         hint: '痛む歯、治療の回数、麻酔' },
+    { id: 'dlyb_book',   label: '予約を取る・変える', hint: '空いている日、キャンセル' },
+    { id: 'dlyb_rest',   label: '休むと伝える',     hint: '職場、学校、代わりの人' },
+  ],
+  daily_money: [
+    { id: 'dlyf_bank',   label: '銀行の窓口で',     hint: '口座、振り込み、書き方' },
+    { id: 'dlyf_city',   label: '役所の窓口で',     hint: '住所変更、証明書、番号札' },
+    { id: 'dlyf_phone',  label: '携帯・ネットの契約', hint: '料金、乗り換え、解約' },
+    { id: 'dlyf_bill',   label: '支払いの相談',     hint: '引き落とし、期限、分けて払う' },
+    { id: 'dlyf_form',   label: '書類を書く',       hint: 'どこに何を書くか、控え' },
+    { id: 'dlyf_insure', label: '保険の手続き',     hint: '加入、請求、要る書類' },
+    { id: 'dlyf_wrong',  label: '払いすぎ・間違い', hint: '問い合わせる、返してもらう' },
+  ],
+  daily_night: [
+    { id: 'dlyn_bath',   label: 'お風呂',           hint: '順番、湯加減、子どもと入る' },
+    { id: 'dlyn_dinner', label: '夕飯のテーブルで', hint: '今日あったこと、おかわり' },
+    { id: 'dlyn_tv',     label: 'テレビ・動画を見る', hint: '何を見る、面白かったところ' },
+    { id: 'dlyn_plan',   label: '明日の話をする',   hint: '何時に出る、持ちもの、予定' },
+    { id: 'dlyn_relax',  label: 'ひと息つく',       hint: '疲れた、肩が重い、何か飲む' },
+    { id: 'dlyn_bed',    label: '寝る前',           hint: '電気、戸締まり、おやすみ' },
+    { id: 'dlyn_sleep',  label: '眠れない夜',       hint: '寝つけない、早く起きる日' },
+  ],
+  daily_pet: [
+    { id: 'dlyp_walk',   label: '散歩に連れていく', hint: 'いつもの道、ほかの犬、リード' },
+    { id: 'dlyp_feed',   label: 'えさをやる',       hint: '量、時間、食べない' },
+    { id: 'dlyp_vet',    label: '動物病院で',       hint: '予防接種、具合が悪い、費用' },
+    { id: 'dlyp_train',  label: 'しつけ',           hint: '待て、いたずら、ほめる' },
+    { id: 'dlyp_care',   label: 'お手入れ',         hint: '爪、シャンプー、抜け毛' },
+    { id: 'dlyp_away',   label: '世話を頼む',       hint: '預ける、鍵、やり方を伝える' },
+    { id: 'dlyp_talk',   label: '飼っている話をする', hint: '名前、歳、どこから来たか' },
+  ],
 }
 
 /**
@@ -1597,6 +1712,76 @@ export const GENRES_BY_INDUSTRY = {
     { id: 'fasg_basic',  label: '定番と長く着る',   hint: '素材、手入れ、選び方' },
     { id: 'fasg_brand',  label: 'ブランドの話',     hint: '成り立ち、作り手、値段の理由' },
     { id: 'fasg_sustain', label: '古着とサステナブル', hint: 'second-hand、直して着る' },
+  ],
+  /* ── **生活**(2026-10-06 利用者の指定)────────────────────────────
+
+     **趣味の共通の話題には落とさない。** あちらは「上達のコツ」
+     「はじめての人へ」で、**歯を磨くことに上達のコツは要らない。**
+     暮らしの読み物は「よそではどうしているか」「ちょっとした工夫」である。
+
+     ★ **場面と同じく、種類ごとに置く。** `ownOf()` は
+       親を選んだときだけ種類ぶんを集めるので、
+       **親の側に置くと、種類を選んだ人には1つも出ない。**
+     ──────────────────────────────────────────────────────── */
+  daily_morn: [
+    { id: 'dlyg_morn',   label: 'よその国の朝',     hint: '何時に起き、何を食べ、どう出かけるか' },
+    { id: 'dlyg_habit',  label: '朝の習慣',         hint: '続けている人の工夫' },
+    { id: 'dlyg_sleep',  label: '眠りと目覚め',     hint: 'なぜ起きられないのか' },
+    { id: 'dlyg_rush',   label: '間に合わせる工夫', hint: '前の晩に済ませておくこと' },
+  ],
+  daily_kids: [
+    { id: 'dlyg_kidsnight', label: '寝かしつけの話', hint: '国によって違うやり方' },
+    { id: 'dlyg_kidsschool', label: '学校と保育の仕組み', hint: '海外ではどうなっているか' },
+    { id: 'dlyg_kidsplay', label: '遊びと学び',     hint: '遊びの中で身につくこと' },
+    { id: 'dlyg_kidsrule', label: '家の決まりごと', hint: 'しかり方、ほめ方' },
+  ],
+  daily_move: [
+    { id: 'dlyg_transit', label: '街の乗りもの',    hint: 'バス、電車、料金の仕組み' },
+    { id: 'dlyg_commute', label: '通勤・通学の事情', hint: '時間、混み方、働き方との関係' },
+    { id: 'dlyg_drive',  label: '車のある暮らし',   hint: '送り迎え、駐車、維持費' },
+    { id: 'dlyg_walkcity', label: '歩いて暮らせる街', hint: '自転車、歩道、安全' },
+  ],
+  daily_house: [
+    { id: 'dlyg_chores', label: '家事の分担',       hint: '国や世代でどう違うか' },
+    { id: 'dlyg_clean',  label: '掃除と片づけ',     hint: '溜めないやり方' },
+    { id: 'dlyg_trash',  label: 'ゴミと分別',       hint: '国ごとの決まりの違い' },
+    { id: 'dlyg_meal',   label: '毎日の献立',       hint: '作り置き、使い切り' },
+  ],
+  daily_shop: [
+    { id: 'dlyg_store',  label: '店のかたち',       hint: 'スーパー、市場、無人レジ' },
+    { id: 'dlyg_price',  label: '値段と暮らし',     hint: '何が高くなったか' },
+    { id: 'dlyg_deliv',  label: '届く仕組み',       hint: '宅配、置き配、返品' },
+    { id: 'dlyg_waste',  label: '食べものを捨てない', hint: '買いすぎない工夫' },
+  ],
+  daily_home: [
+    { id: 'dlyg_rent',   label: '住まいの借り方',   hint: '契約、敷金、更新' },
+    { id: 'dlyg_fix',    label: '直して住む',       hint: '自分で直す、頼む' },
+    { id: 'dlyg_neigh',  label: 'ご近所との付き合い', hint: '国によってどこまで' },
+    { id: 'dlyg_energy', label: '光熱費と暮らし',   hint: '節約、断熱、季節' },
+  ],
+  daily_body: [
+    { id: 'dlyg_clinic', label: '医療のかかり方',   hint: '予約、費用、保険の仕組み' },
+    { id: 'dlyg_cold',   label: '風邪と体調',       hint: '休むかどうか、よその常識' },
+    { id: 'dlyg_dentist', label: '歯の手入れ',      hint: '通う頻度、磨き方' },
+    { id: 'dlyg_habitbody', label: '続く健康習慣',  hint: '歩く、寝る、食べる' },
+  ],
+  daily_money: [
+    { id: 'dlyg_paper',  label: '手続きの仕組み',   hint: '役所、窓口、オンライン' },
+    { id: 'dlyg_pay',    label: '払い方の変化',     hint: '現金、カード、スマホ' },
+    { id: 'dlyg_save',   label: 'お金のやりくり',   hint: '固定費の見直し' },
+    { id: 'dlyg_insure', label: '保険という仕組み', hint: '何にどこまで備えるか' },
+  ],
+  daily_night: [
+    { id: 'dlyg_evening', label: '夜のすごし方',    hint: '国ごとの夕飯の時間' },
+    { id: 'dlyg_bath',   label: 'お風呂の文化',     hint: '湯に浸かる国、浴びる国' },
+    { id: 'dlyg_screen', label: '寝る前の画面',     hint: '眠りへの影響' },
+    { id: 'dlyg_family', label: '家族の時間',       hint: '何を話し、何を決めるか' },
+  ],
+  daily_pet: [
+    { id: 'dlyg_petlife', label: 'ペットと暮らす',  hint: '迎える前に考えること' },
+    { id: 'dlyg_petwalk', label: '散歩と街',        hint: 'マナー、公園、同伴できる店' },
+    { id: 'dlyg_petvet', label: '動物の医療',       hint: '予防、費用、保険' },
+    { id: 'dlyg_petrule', label: '国ごとの決まり',  hint: '登録、しつけ、連れて行ける場所' },
   ],
 }
 

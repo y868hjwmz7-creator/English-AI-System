@@ -24,7 +24,7 @@ import {
 } from '../data/exerciseTypes.js'
 /* 文法解説を作るか(第5.213節)。**金額の見積もりも `grammarNote.js` 1か所** */
 import { grammarGuessYen } from '../lib/grammarNote.js'
-import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
+import { groupLabel, groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   cancelJob, clearJob, currentJob, startJob, takeJobResult, watchJob,
 } from '../lib/generateJob.js'
@@ -2342,7 +2342,7 @@ export default function MaterialForm({
         </div>
       )}
 
-      {/* **業界と趣味は、2つのプルダウンに分けて左右に並べる**
+      {/* **業界と「生活/趣味」は、2つのプルダウンに分けて左右に並べる**
           (2026-08 利用者の指定)。
 
           > 業界を選ばない場合に選べるようにしたいのが、「趣味・娯楽」です。
@@ -2350,7 +2350,12 @@ export default function MaterialForm({
           仕事で英語を使わない人もいるし、仕事の話ばかりでは続かない。
           **入れ物は1つのまま**(`materials.industry`)で、
           **選ぶ欄だけ2つに分ける。** 片方を選ぶと、もう片方は空に戻る
-          — 教材に付く分野は1つだからである。 */}
+          — 教材に付く分野は1つだからである。
+
+          ★ **右の欄の見出しは `groupLabel('hobby')` から取る**
+            (2026-10-06 利用者の指定「趣味のカテゴリーを生活/趣味に」)。
+            **書き写すと、呼び名を変えた日にここだけ古くなる**
+            (CLAUDE.md「呼び名を2か所に書かない」)。 */}
       <div className="field-row">
         <label className="field">
           <span>
@@ -2367,7 +2372,7 @@ export default function MaterialForm({
         </label>
         <label className="field">
           <span>
-            趣味
+            {groupLabel('hobby')}
             <span className="field-hint">仕事以外の場面</span>
           </span>
           <select value={isHobby ? topIndustry : ''}

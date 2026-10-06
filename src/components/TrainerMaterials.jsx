@@ -35,7 +35,7 @@ import {
 import { needsChunkJa } from '../lib/chunkJa.js'
 import { grammarCost, grammarTodo } from '../lib/grammarNote.js'
 import CastChip from './CastChip.jsx'
-import { groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
+import { groupLabel, groupOf, industriesIn, industryLabel, kindsOf, parentOf } from '../data/industries.js'
 import {
   FIND_MATERIAL_KINDS, addChunkJa, addGrammar, addSections, assignMaterial,
   duplicateMaterial, isDialogueKind, kindLabel, loadMyLearners, searchMaterials,
@@ -887,10 +887,13 @@ export default function TrainerMaterials({
             </select>
           </label>
 
-          {/* **業界と趣味は、プルダウンを2つに分けて左右に並べる**
+          {/* **業界と「生活/趣味」は、プルダウンを2つに分けて左右に並べる**
               (2026-08 利用者の指定)。作る画面と同じ形。
               **入れ物は `materials.industry` の1列のまま。**
-              教材が持つ場面は1つなので、片方を選ぶともう片方は空に戻る。 */}
+              教材が持つ場面は1つなので、片方を選ぶともう片方は空に戻る。
+
+              ★ 右の見出しは `groupLabel('hobby')`(2026-10-06)——
+                **作る画面とまったく同じ出どころ**にしてある。 */}
           <div className="field-row">
             <label className="field">
               <span>
@@ -907,7 +910,7 @@ export default function TrainerMaterials({
             </label>
             <label className="field">
               <span>
-                趣味
+                {groupLabel('hobby')}
                 <span className="field-hint">仕事以外の場面</span>
               </span>
               <select value={isHobbyFilter ? topIndustry : ''}

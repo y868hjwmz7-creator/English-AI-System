@@ -73,13 +73,13 @@ import {
 } from '../src/lib/wordTiming.js'
 import { charTimesOf } from '../src/lib/wholeAudio.js'
 import {
-  JOB_COST, SCENE_HINT_MAX, SHELF_PICK_KEY, WORDS_PER_BOOK, WORDS_PER_JOB,
+  JOB_COST, SCENE_HINT_MAX, SHELF_GROUPS, SHELF_PICK_KEY, WORDS_PER_BOOK, WORDS_PER_JOB,
   isShelf, levelTally, pickedShelves, shelfFeature,
   shelfCountOf, shelfIdOfFeature, shelfList, shelfOf, shelfSceneNames, shelfScenes, shelfTarget,
   shelfTodo, shelvesFor, showsShelf,
 } from '../src/data/shelves.js'
 import { CEFR_LEVELS, SHELF_LEVELS, cefrOption } from '../src/data/cefr.js'
-import { INDUSTRIES } from '../src/data/industries.js'
+import { INDUSTRIES, INDUSTRY_GROUPS } from '../src/data/industries.js'
 import { lockDepth, lockScroll } from '../src/lib/scrollLock.js'
 import { maxPieces, piecesOf, splitInto } from '../src/lib/focusChunks.js'
 import { spanForRange } from '../src/lib/wholeAudio.js'
@@ -1031,6 +1031,151 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     // 趣味なので、仕事の共通場面(交渉)ではなく趣味の共通場面が付く
     ok(scenesFor('fashion').some((x) => x.id === 'hob_gear'),
       'ファッションには、趣味の共通場面が付く')
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     ★ **生活**(第5.388節・2026-10-06 利用者の指定)
+
+       > 生活一般の基本の文型トレーニングが欲しいですね。起きる、歯を磨く、
+       > 子供を寝かしつける、バスに乗る、人をどこかに送る、迎えに行く、
+       > 無数にある生活に紐づいたシチェーションを趣味の中に入れたいです。
+       > そして趣味のカテゴリーを生活/趣味に変えましょう。
+
+     ★ **利用者が名前で挙げた6つを、1つずつ名指しで見る。**
+       数だけ数えると、**ぜんぶ別のものに書き換えても緑**になる。
+       挙げられたものが消えたら赤くなる、というのがこの見張りの役目である。
+
+     ★ **「出ない側」も見る**(CLAUDE.md)。
+       生活は趣味の側なので、**仕事の共通場面(交渉)は付かない。**
+       片側だけだと、`groupOf` を `'work'` に書き換えても緑のままになる。
+
+     ★ **話題は種類ごとに置く。** 親の側だけに置くと `ownOf()` の作りから
+       **種類を選んだ人には1つも出ない** —— そこを名指しで測る。
+     ══════════════════════════════════════════════════════════════════ */
+  {
+    const { groupLabel, groupOf, industriesIn, industryLabel, kindsOf } =
+      await import('../src/data/industries.js')
+    /* ★ **コメントを落としてから、使っている形で数える**(CLAUDE.md)——
+         説明の中にも同じ語が出てくるので、素の文字列では当てにならない */
+    const readP = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    const noNote2 = (src) => src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+
+    /* ── ① 組の呼び名。**「生活」が入っているか** ── */
+    ok(groupLabel('hobby').includes('生活'),
+      '組の呼び名に「生活」が入っている', groupLabel('hobby'))
+    ok(groupLabel('work') === INDUSTRY_GROUPS.find((g) => g.id === 'work')?.label,
+      '組の呼び名は `INDUSTRY_GROUPS` から引いている')
+
+    /* ── ② **呼び名を2か所に書いていない。** 棚の側は取り込んでいるか ──
+         **同じ中身かどうかではなく、同じものかどうか**を見る。
+         中身を見比べると、**書き写しても緑になる** */
+    {
+      const sh = await import('../src/data/shelves.js')
+      ok(sh.SHELF_GROUPS === INDUSTRY_GROUPS,
+        '棚の組は `INDUSTRY_GROUPS` そのもの(書き写していない)')
+      /* ★ **文字も数える。** 書き写しが戻ってきたら、ここで捕まる ——
+           説明(コメント)には「趣味」が出てくるので、先に落とす */
+      const shSrc = noNote2(readP('src/data/shelves.js'))
+      ok(!/label:\s*'[^']*趣味/.test(shSrc),
+        '棚のファイルに、組の呼び名を書いていない')
+    }
+
+    /* ── ③ 生活の分野が、趣味の側の1つめの欄に出る ── */
+    ok(industriesIn('hobby').some((i) => i.id === 'daily'),
+      '生活/趣味の一覧に「生活」がある')
+    ok(industryLabel('daily') === '生活', '「生活」の名前を引ける')
+    ok(groupOf('daily') === 'hobby', '生活は趣味の側(仕事の側に入っていない)')
+
+    /* ── ④ 種類(束)。**どの種類も趣味の側に落ちる** ── */
+    const kinds = kindsOf('daily').filter((k) => k.id !== 'daily')
+    ok(kinds.length >= 8, '生活に種類の束がある', `${kinds.length} 束`)
+    ok(kinds.every((k) => groupOf(k.id) === 'hobby'),
+      '生活の種類は、ぜんぶ趣味の側')
+    /* **それだけで通じる名前**になっているか(文型ドリルは分野だけが窓口へ届く) */
+    ok(kinds.every((k) => industryLabel(k.id).startsWith('生活')),
+      '種類の名前だけで「生活」と分かる', industryLabel(kinds[0]?.id))
+
+    /* ── ⑤ **利用者が挙げた6つ。1つずつ名指しで見る** ── */
+    const 挙がった = [
+      ['起きる', 'daily_morn'],
+      ['歯を磨く', 'daily_morn'],
+      ['寝かしつける', 'daily_kids'],
+      ['バスに乗る', 'daily_move'],
+      ['送っていく', 'daily_move'],
+      ['迎えに行く', 'daily_move'],
+    ]
+    for (const [言葉, 束] of 挙がった) {
+      const いる = scenesFor(束).some((x) => x.label.includes(言葉))
+      ok(いる, `生活の場面に「${言葉}」がある(${束})`)
+      /* **「生活(全般)」からも選べる** —— 束を選びきれない人のため */
+      ok(scenesFor('daily').some((x) => x.label.includes(言葉)),
+        `生活(全般)からも「${言葉}」が選べる`)
+    }
+
+    /* ── ⑥ 全般は、束ぜんぶを集める(1束より多い) ── */
+    const 生活場面 = (id) => scenesFor(id).filter((x) => x.id.startsWith('dly'))
+    ok(生活場面('daily').length > 生活場面('daily_morn').length * 2,
+      '生活(全般)は、束ぜんぶの場面を集める',
+      `全般 ${生活場面('daily').length} / 朝の支度 ${生活場面('daily_morn').length}`)
+    ok(生活場面('daily_morn').length >= 6 && 生活場面('daily_morn').length <= 8,
+      '1つの束の場面は 6〜8 個', `${生活場面('daily_morn').length} 個`)
+
+    /* ── ⑦ **出ない側。** 趣味なので、仕事の共通場面は付かない ── */
+    ok(!scenesFor('daily').some((x) => x.id === 'negotiation'),
+      '生活に、仕事の共通場面(交渉)は付かない')
+    ok(scenesFor('daily').some((x) => x.id === 'hob_gear'),
+      '生活には、趣味の共通場面が付く')
+
+    /* ── ⑧ 話題は**種類ごと**に置いてある(親だけに置くと出ない) ── */
+    for (const 束 of ['daily_morn', 'daily_move', 'daily_pet']) {
+      ok(genresFor(束).some((x) => x.id.startsWith('dlyg_')),
+        `${束} に、その束の話題がある`)
+    }
+    ok(genresFor('daily_morn').some((x) => x.id === 'hg_tips'),
+      '生活にも、趣味の共通の話題が付く(落としていない)')
+
+    /* ── ⑨ 名前を引けるか(引けないと教材名に id がそのまま出る) ── */
+    ok(sceneLabel('dlym_pick') === '迎えに行く', '生活の場面の名前を引ける')
+    {
+      const g = await import('../src/data/genres.js')
+      ok(g.genreLabel('dlyg_petwalk') === '散歩と街', '生活の話題の名前を引ける')
+    }
+
+    /* ── ⑩ **一度入れた分野を減らしていない** ──
+
+         ★ **下限(`>= 36`)だけでは、束を1つ消しても緑だった**(赤チェックで
+           分かった)。**両方向でそろっているか**を見る形に変えてある ——
+           束を1つ消すと、その束の場面と話題が**行き先の無い表**として残り、
+           ここで赤くなる。逆に束だけ足して場面を書き忘れても赤くなる。 */
+    {
+      const g = await import('../src/data/genres.js')
+      const 束id = kinds.map((k) => k.id)
+      for (const [表の名, 表] of [['場面', g.SCENES_BY_INDUSTRY], ['話題', g.GENRES_BY_INDUSTRY]]) {
+        const 生活の鍵 = Object.keys(表).filter((k) => k.startsWith('daily'))
+        /* **行き先の無い表が無いか**(束を消したら、ここで出る) */
+        const 迷子 = 生活の鍵.filter((k) => !束id.includes(k) && k !== 'daily')
+        ok(迷子.length === 0,
+          `生活の${表の名}の表は、ぜんぶ行き先がある`, 迷子.join(' / ') || '迷子なし')
+        /* **表の無い束が無いか**(束を足して書き忘れたら、ここで出る) */
+        const 空の束 = 束id.filter((k) => !(表[k] ?? []).length)
+        ok(空の束.length === 0,
+          `生活の束は、ぜんぶ${表の名}を持っている`, 空の束.join(' / ') || '空なし')
+      }
+    }
+    ok(INDUSTRIES.filter((i) => (i.group ?? 'work') === 'hobby').length >= 36,
+      '趣味の側の数が減っていない',
+      `${INDUSTRIES.filter((i) => (i.group ?? 'work') === 'hobby').length} 件`)
+
+    /* ── ⑪ 画面は `groupLabel()` を呼んでいる(文字を書き写していない) ── */
+    for (const f of ['src/components/MaterialForm.jsx', 'src/components/TrainerMaterials.jsx']) {
+      const src = noNote2(readP(f))
+      ok(src.includes("groupLabel('hobby')"),
+        `${f.split('/').pop()} は組の呼び名を groupLabel() から取る`)
+      ok(!/<span>\s*趣味\s*$/m.test(src),
+        `${f.split('/').pop()} に「趣味」を書き写していない`)
+    }
   }
 }
 
@@ -5973,7 +6118,10 @@ console.log('\nスピーチ練習(0054)')
   ok(list.every((s) => parents.some((p) => p.id === s.id)),
     '棚 … 一覧を別に持っていない(親の分野そのもの)')
   ok(list.some((s) => s.group === 'work') && list.some((s) => s.group === 'hobby'),
-    '棚 … お仕事と趣味・娯楽の両方がある')
+    /* ★ **知らせの文にも、組の呼び名を書き写さない**(第5.388節)——
+         「趣味・娯楽」と書いてあったので、利用者が「生活/趣味」に
+         変えた日から**嘘の文**になるところだった */
+    `棚 … ${SHELF_GROUPS.map((g) => g.label).join(' と ')} の両方がある`)
 
   /* ── 種類は、親の棚に落ちる ──
      利用者の「カテゴリーがかぶるものであれば既存のものに追加」が、
@@ -14566,6 +14714,65 @@ console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第
   ok(送る.length >= 10 && !読まれない.length,
     `窓口へ … 送る ${送る.length} 個とも、窓口が読んでいる`,
     読まれない.length ? `★ ${読まれない.join(' / ')} を窓口が読まない` : '')
+}
+
+/* ============================================================================
+   ★ **`.select()` の中にコメントを書かない**(第5.389節・2026-10-06 実機)
+
+     > というよりすべてのゲストのすべての宿題が消えているか
+     > アサインの紐づけがなくなっています
+
+   ── 何が起きていたか ──────────────────────────────────────
+
+     宿題を読む問い合わせの `.select(\`…\`)` の**中**に、こう書いていた。
+
+         material_tags ( tag_id ),
+         /* ★ answer も読む(第5.384節)… *\/
+         material_sections ( id, seq, material_items ( id, seq, answer ) )
+
+     **あれは JavaScript のコメントではない。** `.select()` に渡すのは
+     **列の名前を並べた1本の文字列**なので、`/*` も日本語の説明も
+     **そのまま Supabase へ送られる。**
+     PostgREST は列の名前として読もうとして断り、
+     **すべてのゲストの宿題が1件も返らなくなった。**
+
+     `npm run lint` も `npm run build` も通る。**開くまで分からない。**
+     しかも `runTolerant()` は「そんな列は無い」(42703)だけを拾うので、
+     **この断り方は1度も助けてくれない。**
+
+   ── だから機械で数える ────────────────────────────────────
+
+     `src/` のぜんぶの `.select(\`…\`)` を取り出して、
+     **中にコメントの印が入っていないか**を見る。
+     1か所でも入っていたら、その画面はまるごと動かない。
+   ============================================================================ */
+{
+  console.log('\n── ⑮ `.select()` の中にコメントを書いていないか ──')
+  const 並べる = (dir) => readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory()
+      ? 並べる(`${dir}/${e.name}`)
+      : (/\.(js|jsx)$/.test(e.name) ? [`${dir}/${e.name}`] : [])))
+  const files = 並べる('src')
+  let 数 = 0
+  const 汚れ = []
+  for (const f of files) {
+    const src = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    /* **テンプレート文字列の `.select()` だけが相手**である ——
+         素のクォートの中には、そもそも改行を書けない */
+    for (const m of src.matchAll(/\.select\(\s*`([^`]*)`/g)) {
+      数 += 1
+      const 中 = m.group ? m.group(1) : m[1]
+      if (中.includes('/*') || /(^|[^:])\/\//.test(中)) {
+        汚れ.push(`${f}:${src.slice(0, m.index).split('\n').length}`)
+      }
+    }
+  }
+  /* ★ **「無ければ素通り」させない**(CLAUDE.md)。
+       取り出せた `.select()` が1つも無ければ、何も測っていない */
+  ok(数 >= 5, `取り出せた \`.select()\` は ${数} 個`)
+  ok(汚れ.length === 0,
+    '`.select()` の中に、コメントを1つも書いていない',
+    汚れ.length ? `★ ${汚れ.join(' / ')} —— そのまま Supabase へ送られる` : '')
 }
 
 console.log(ng

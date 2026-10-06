@@ -34,7 +34,15 @@
  *   > 単語帳は業種ごと、出し方の中に場面やシチュエーションで絞り込み、
  *   > あなたのおすすめ通りでお願いします。
  *
- *   **棚は親の分野ごとに1冊 = 35冊。**
+ *   **棚は親の分野ごとに1冊。**
+ *
+ *   ★ **数は数えた日のものである。** この節を書いた 2026-09 は 35 冊で、
+ *     **2026-10-06 に「生活」を足して 36 冊**になった。
+ *     利用者の「業界や趣味を追加するたびに単語帳も追加する」どおり、
+ *     **分野を1行足せば棚も1冊増える**(`shelfList()`)。
+ *     **ここに書いてある数を、どこかに書き写さない** ——
+ *     見張りも `shelfList().length` から読む(CLAUDE.md
+ *     「値を書き写さない。性質で見る」)。
  *
  * ============================================================================
  * 【**場面べつは、やめた**】(2026-09 利用者の指定)
@@ -79,7 +87,7 @@
  *   一覧と**判断**はここに置き、`npm run test:play` が確かめる。
  */
 
-import { INDUSTRIES, industriesIn, industryLabel, parentOf } from './industries.js'
+import { INDUSTRIES, INDUSTRY_GROUPS, industriesIn, industryLabel, parentOf } from './industries.js'
 import { scenesFor } from './genres.js'
 import { cefrIndex } from './cefr.js'
 
@@ -92,11 +100,16 @@ import { cefrIndex } from './cefr.js'
  */
 export const SHELF_BOOK_LABEL = '業種べつの単語帳'
 
-/** 棚の組。**`INDUSTRY_GROUPS` と同じもの**(名前を2か所に持たない) */
-export const SHELF_GROUPS = [
-  { id: 'work', label: 'お仕事' },
-  { id: 'hobby', label: '趣味・娯楽' },
-]
+/**
+ * 棚の組。**`INDUSTRY_GROUPS` そのものである。**
+ *
+ * ★ もとは同じ中身を**ここに書き写していた**(2026-10-06 に直した)。
+ *   「`INDUSTRY_GROUPS` と同じもの」と注意書きまで添えてあったのに、
+ *   **書き写しは書き写しである** —— 利用者が「趣味・娯楽」を
+ *   「生活/趣味」に変えたとき、**棚の画面だけが古い呼び名のまま**に
+ *   なるところだった(CLAUDE.md「呼び名を2か所に書かない」)。
+ */
+export const SHELF_GROUPS = INDUSTRY_GROUPS
 
 /**
  * 棚の一覧。**親の分野そのもの**(お仕事 → 趣味・娯楽の順)。

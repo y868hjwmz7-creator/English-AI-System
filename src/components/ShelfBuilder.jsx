@@ -357,7 +357,12 @@ export default function ShelfBuilder({ me = null, onSelfChange = null }) {
     <section className="card shelfbuild">
       <h2 className="card-title"><ShelfIcon /> 業種べつの単語帳</h2>
       <p className="tip card-hint">
-        業種・趣味ごとに1冊ずつあります(全 {shelves.length} 冊)。
+        {/* ★ **組の呼び名を書き写さない**(2026-10-06)。もとは
+            「業種・趣味ごとに」と書いてあり、利用者が組の呼び名を
+            「生活/趣味」に変えたとき、**ここだけ古いまま**になった。
+            この文の言いたいことは「分野ごとに1冊」だけなので、
+            **呼び名そのものを出さない形**にした(CLAUDE.md) */}
+        分野ごとに1冊ずつあります(全 {shelves.length} 冊)。
         ここで作った語句は<strong>ゲストの単語帳には混ざりません</strong> ——
         独立した単語帳として、そのまま練習できます(0058)。
       </p>
