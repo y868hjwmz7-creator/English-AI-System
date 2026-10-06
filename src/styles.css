@@ -6062,6 +6062,17 @@ html, body { overflow-x: clip; }
   background: var(--translate-bg); font-size: .82em;
 }
 .lesson-sheet .lesson-ja { color: var(--translate); }
+/* ★ **設問の日本語は、ふつうの色**(第5.397節・2026-10-06 利用者の指定)。
+
+     > テストの問題の文字は青やミントでない普通の色でOKです
+
+   `.lesson-ja` は**2つの役**で使われている。
+     ・本文(記事・会話)の**訳** … 青のまま。「これは訳だ」と色で言う
+     ・設問の**問題文そのもの** … **訳ではない。** 青にする理由が無い
+   見分けるのは画面の側(`secIsPassage`)で、ここは色を決めるだけ。
+   **紙は明るい側も暗い側も `--ink`**(紙が持っている「ふつうの字の色」)。 */
+.lesson-sheet .lesson-ja--q,
+.focus-paper .lesson-ja--q { color: var(--ink); }
 /* カタマリごとの訳(0021)。**紙の上は決め打ちの色にそろえる。**
    `.lesson-sheet *` が全部を --ink にしてしまうので、ここで戻す */
 .lesson-sheet .chunk-ja { color: var(--ink-soft); }
@@ -6212,6 +6223,27 @@ html, body { overflow-x: clip; }
     margin: 0.52em 8px 2px 0;
   }
   .lesson-items > li::after { content: ''; display: block; clear: both; }
+  /* ★ **地色のある箱は、番号の丸の下へ潜る**(第5.397節・2026-10-06 実機)。
+
+       > 問題の番号と問題が重なってしまってます
+
+     番号を `float` にしてあるので、**文字は横に回り込む**。
+     ところが**回り込むのは文字(行の箱)だけ**で、
+     `.lesson-ja` のような**地色と枠線を持つ箱そのものは、
+     左端から始まったまま**である —— だから丸が箱の上に乗る。
+     **実測で 18px 重なっていた**(広い画面では 24px 空いている)。
+
+     `display: flow-root` にすると、その箱は**浮いているものを避けて**
+     置かれる。丸の右から始まるので、重ならない。
+     **広い画面は1px も変わらない**(あちらは `float` ではない)。
+
+     **一覧にする。** 「地色のある箱」を CSS では選べないので、
+     名前で並べるしかない —— **箱を足した日は、ここにも足す**
+     (`npm run test:bar` が、重なっていないかを測って見張る)。 */
+  .lesson-items > li > .lesson-ja,
+  .lesson-items > li > .lesson-note,
+  .lesson-items > li > .lesson-answer,
+  .lesson-items > li > .lesson-choices { display: flow-root; }
   /* 会話は、**番号と話す人の名前で1行を使う。** 本文は次の行から、
      左端にそろえる。
 

@@ -2763,7 +2763,10 @@ export default function LessonView({
                        **判断は `audioJaOf()` 1か所**（ここで種類を見分けない） */}
                   {it.prompt_ja && !audioJaOf(it, sec.exercise_type) && (secIsPassage
                     ? isOpen(k(it, i)) && <div className="lesson-ja">{it.prompt_ja}</div>
-                    : <div className="lesson-ja">{it.prompt_ja}</div>)}
+                    /* ★ **設問の日本語は「訳」ではない**(第5.397節)。
+                         本文の訳は青のまま(「これは訳だ」と色で言う)、
+                         **設問の問題文はふつうの色**にする */
+                    : <div className="lesson-ja lesson-ja--q">{it.prompt_ja}</div>)}
                   {it.question && (
                     /* ★ **選択肢は1行ずつ**(第5.329節)。同じ指示文は
                          「取り組み方」へ回してある(`共通の指示`) */
@@ -2788,7 +2791,8 @@ export default function LessonView({
                   {/* 設問の訳(0035)。**伏せない。**
                       設問は「何を訊かれているか」であって、答えではない
                       (すぐ上の `prompt_ja` も、設問では伏せていない) */}
-                  {it.question_ja && <div className="lesson-ja">{it.question_ja}</div>}
+                  {/* ★ 設問の訳も、問題文の側である(第5.397節) */}
+                  {it.question_ja && <div className="lesson-ja lesson-ja--q">{it.question_ja}</div>}
                   {it.hint && <div className="lesson-note">与える語: {it.hint}</div>}
 
                   {/* ── 通しで鳴らしているあいだは、**その段落の Listen が Stop になる**

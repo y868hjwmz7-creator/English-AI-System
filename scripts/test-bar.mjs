@@ -573,6 +573,54 @@ for (const [label, want] of Object.entries(WANT)) {
       ng('英文和訳 … 解答(和訳)に Listen が出ている', `開くと ${jaAfter} 個に増える`)
     } else ok('英文和訳 … 解答を開いても Listen は増えない(和訳は鳴らさない)')
 
+    /* ★ **番号の丸と、地色のある箱が重なっていないか**(第5.397節・2026-10-06
+         実機「問題の番号と問題が重なってしまってます」)。
+
+       狭い画面では番号を `float` にしてある。**文字は横に回り込むが、
+       地色と枠線を持つ箱は回り込まない** —— 左端から始まったままなので、
+       丸がその上に乗る。**実測で 18px 重なっていた。**
+
+       **狭い画面で測る**(広い画面では `float` ではないので、起きない)。
+       **1つも拾えなかったら赤**にする(無ければ素通りを塞ぐ・CLAUDE.md)。 */
+    await page.setViewportSize({ width: 393, height: 900 })
+    await page.waitForTimeout(250)
+    {
+      const 重なり = await page.evaluate(() => {
+        const 出 = []
+        for (const li of document.querySelectorAll('.lesson-page:not(.is-closed) .lesson-items > li')) {
+          const bf = getComputedStyle(li, '::before')
+          /* **浮いていないときは、この決まりの相手ではない**(広い画面) */
+          if (bf.float !== 'left') continue
+          const lir = li.getBoundingClientRect()
+          const 丸の右 = lir.left + parseFloat(getComputedStyle(li).paddingLeft)
+            + parseFloat(bf.width)
+          for (const box of li.children) {
+            const c = getComputedStyle(box)
+            /* **地色か左の線を持つ箱だけ**を見る(素の文字は回り込むので良い) */
+            const 箱である = c.backgroundColor !== 'rgba(0, 0, 0, 0)'
+              || parseFloat(c.borderLeftWidth) > 0
+            if (!箱である) continue
+            const br = box.getBoundingClientRect()
+            if (br.width < 1) continue
+            出.push({ 名: box.className || box.tagName, 差: Math.round(丸の右 - br.left) })
+          }
+        }
+        return 出
+      })
+      const 悪い = 重なり.filter((x) => x.差 > 0)
+      if (!重なり.length) {
+        ng('番号の丸 … 浮かせた番号と箱の組を1つも拾えていない', '測っていないのと同じ')
+      } else if (悪い.length) {
+        ng('番号の丸が、地色のある箱に重なっている',
+          悪い.map((x) => `${x.名} が ${x.差}px`).join(' / '))
+      } else {
+        ok(`番号の丸は、どの箱にも重なっていない(${重なり.length} 組・`
+          + `いちばん近くて ${Math.abs(Math.max(...重なり.map((x) => x.差)))}px 空き)`)
+      }
+    }
+    await page.setViewportSize({ width: 1500, height: 900 })
+    await page.waitForTimeout(250)
+
     /* 誤り訂正 … **出る側も数える。** 片方だけだと、
        「どこにも出さない」と書き換えても緑のままになる。
        ここは問題文に音が無い(`audioFrom: null`)ので、
