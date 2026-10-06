@@ -82,7 +82,7 @@ export default function SignIn() {
   return (
     <div className="signin">
       <div className="card signin-card">
-        <h1 className="app-title">English AI System</h1>
+        <h1 className="app-title">RIZAP ENGLISH</h1>
         <p className="tip card-hint">ログインしてください。</p>
 
         <form onSubmit={handleSubmit}>

@@ -23,7 +23,7 @@ export default function Loading({ full = false }) {
   return (
     <div className={`loading${full ? ' loading--full' : ''}`}
          role="status" aria-live="polite">
-      {full && <p className="loading-name">English AI System</p>}
+      {full && <p className="loading-name">RIZAP ENGLISH</p>}
       {/* 帯そのものは飾りである。読み上げるのは下の1行だけでよい */}
       <div className="loading-bar" aria-hidden="true"><span /></div>
       <p className="loading-note">読み込み中…</p>

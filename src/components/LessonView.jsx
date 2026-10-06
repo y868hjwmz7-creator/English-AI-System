@@ -1122,6 +1122,8 @@ export default function LessonView({
   /* 曲は**押したときに引く**(押さない人には1回も問い合わせが飛ばない)。
      **曲が0本でも聞き流しは始まる**(音楽が鳴らないだけ・行き止まりを作らない) */
   const [radioTracks, setRadioTracks] = useState([])
+  /** ★ 曲を読めなかった理由(第5.396節)。**空と取り違えない** */
+  const [radioTracksError, setRadioTracksError] = useState(null)
   /**
    * 「取り組み方」を開いている演習の id(2026-09 利用者の指定)。
    * **覚えない。** 「初めは閉じてて欲しい」という指定なので、
@@ -1232,8 +1234,11 @@ export default function LessonView({
     if (!answerRows.length) return
     stopAll()
     setAnswerRadio(answerRows)
-    const { data } = await listTracks()
+    /* ★ **読めなかったことを、0 曲として出さない**(第5.396節)。
+       `error` を捨てると、**曲が1つも登録されていないのと同じ見た目**になる */
+    const { data, error: 曲error } = await listTracks()
     setRadioTracks(data ?? [])
+    setRadioTracksError(曲error ?? null)
   }
   // 6Steps は本文(記事・会話)に対する練習である。**本文のページを探して渡す。**
   // いま開いているページが語句や設問でも、6Steps は本文に対して行う
@@ -2459,6 +2464,7 @@ export default function LessonView({
           where="qr"
           label={[material.title, '正解'].filter(Boolean).join(' / ')}
           tracks={radioTracks}
+          tracksError={radioTracksError}
           rate={rateOf(rateId)}
           learnerId={owner}
           onClose={() => setAnswerRadio(null)}

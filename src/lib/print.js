@@ -75,7 +75,7 @@ export function markPrint(element, { worksheet = false } = {}) {
  * @param opts.worksheet 問題だけにするか
  * @param opts.name **保存するときの既定のファイル名**(第5.229節)。
  *   ブラウザは **`document.title` をそのまま既定の名前にする**ので、
- *   渡さないと「English AI System」で保存されていた(2026-09 に気づいた)。
+ *   渡さないとアプリ名で保存されていた(2026-09 に気づいた)。
  *   ここで一時的に差し替え、印刷が終わったら**必ず戻す。**
  */
 export function printElement(element, opts = {}) {

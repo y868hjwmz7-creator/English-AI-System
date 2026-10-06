@@ -86,6 +86,10 @@ export default function ShelfBuilder({ me = null, onSelfChange = null }) {
   const [shelf, setShelf] = useState('')
   const [counts, setCounts] = useState(null)     // null = 数えられなかった
   const [rows, setRows] = useState(null)         // null = まだ読んでいない
+  /* ★ **読めなかったことを、「1語も無い」として出さない**(第5.396節)。
+       `error` を捨てていたので、問い合わせが失敗すると
+       **空の棚がそのまま描かれていた** —— 足し直させることになる */
+  const [rowsError, setRowsError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
   /**
@@ -143,17 +147,23 @@ export default function ShelfBuilder({ me = null, onSelfChange = null }) {
   }, [running, startedAt])
 
   const reload = async (id) => {
-    const { data } = await loadShelfWords(id)
-    setRows(data ?? [])
+    const { data, error: e } = await loadShelfWords(id)
+    setRowsError(e ?? null)
+    setRows(e ? null : (data ?? []))
   }
 
   useEffect(() => {
     let alive = true
-    if (!shelf) { setRows(null); return () => { alive = false } }
+    if (!shelf) { setRows(null); setRowsError(null); return () => { alive = false } }
     setRows(null)
+    setRowsError(null)
     setDraft(null)
     setNote(null)
-    loadShelfWords(shelf).then(({ data }) => { if (alive) setRows(data ?? []) })
+    loadShelfWords(shelf).then(({ data, error: e }) => {
+      if (!alive) return
+      setRowsError(e ?? null)
+      setRows(e ? null : (data ?? []))
+    })
     return () => { alive = false }
   }, [shelf])
 
@@ -492,7 +502,15 @@ export default function ShelfBuilder({ me = null, onSelfChange = null }) {
         </div>
       )}
 
-      {shelf && rows === null && <p className="muted">開いています…</p>}
+      {/* ★ **読めなかったのなら、そう出す**(第5.396節)。
+             **「開いています…」のまま止めない** */}
+      {shelf && rowsError && (
+        <p className="notice notice--warn" role="alert">
+          棚の語を読めませんでした。語は消えていません —— 読み込みだけが
+          失敗しています。{rowsError}
+        </p>
+      )}
+      {shelf && rows === null && !rowsError && <p className="muted">開いています…</p>}
 
       {shelf && rows !== null && (
         <>

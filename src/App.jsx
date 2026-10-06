@@ -111,7 +111,7 @@ export default function App() {
    *
    *   - 左のメニューで**どこにいるかの印が1つも点かない**
    *   - 上の帯の名前も出ない(`pageLabel` が控えの
-   *     「English AI System」に落ちる)
+   *     「RIZAP ENGLISH」に落ちる)
    *   - 中身は最後の枝(集計)に落ち、その上にゲストを選ぶ欄だけが残る
    *
    *   パソコンでは名前が並んでいるので気づけなかったが、
@@ -830,7 +830,7 @@ export default function App() {
      `pages` はメニューが見ているのと同じ一覧なので、**画面を足しても
      帯とメニューで食い違わない**(呼び名を2か所に持たない) */
   const nowPage = pages.find((p) => p.id === view) ?? null
-  const pageLabel = nowPage?.label ?? 'English AI System'
+  const pageLabel = nowPage?.label ?? 'RIZAP ENGLISH'
 
 
   /* 左のメニューの下に置くもの。**自分の欄 → 設定**の順に並べる。
@@ -952,9 +952,10 @@ export default function App() {
         onClose={() => (focusMenu ? setFocusMenu(false) : setNavOpen(false))}
         /* ★ **左上の名前**(第5.394節・2026-10-06 利用者の指定
              「左上のタイトルを『RIZAP ENGLISH』に変更してくれ」)。
-             **言われたのはここだけ。** 起動画面・ログイン画面・ホームの
-             いちばん上・ブラウザのタブ・1ファイル版の名前は、
-             まだ「English AI System」のままにしてある。 */
+             **そのあと「全部そろえて」と言われた**(第5.396節)ので、
+             起動画面・ログイン画面・ホームのいちばん上・ブラウザのタブ・
+             画面の下の版表示・ホーム画面に入れたときの名前も、
+             いまは**ぜんぶ「RIZAP ENGLISH」**である。 */
         title="RIZAP ENGLISH"
         footer={navFooter}
       />
@@ -1244,7 +1245,7 @@ export default function App() {
 
           <footer className="app-footer">
             <p>
-              English AI System — 試作版 v0.1.0
+              RIZAP ENGLISH — 試作版 v0.1.0
               {/* 公開時に版が埋め込まれる。手元で動かしているときは出ない。
                   「見ているのが新しい版かどうか」をこれで確かめる。 */}
               {import.meta.env.VITE_BUILD_STAMP && (

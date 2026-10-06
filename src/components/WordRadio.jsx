@@ -150,6 +150,18 @@ export default function WordRadio({
   size = 'all',
   /** 曲(`listTracks()` が返したもの)。無ければ音楽は流れない */
   tracks = [],
+  /**
+   * ★ **曲を読めなかったときの理由**(第5.396節・2026-10-06)。
+   *
+   * もとは呼ぶ側が `const { data } = await listTracks()` と書いており、
+   * **`error` を受け取らずに捨てていた。** 読めなかったときも
+   * `tracks` が空になるので、画面は**「曲が1曲も登録されていない」のと
+   * まったく同じ見た目**になり、えらぶ欄ごと消えていた ——
+   * **0 と `null` を取り違えない**(CLAUDE.md)。
+   *
+   * **読めなかったのなら、そう出す。** 空の欄は出さない。
+   */
+  tracksError = null,
   rate = 1,
   learnerId = null,
   onClose,
@@ -851,6 +863,13 @@ export default function WordRadio({
               **2曲以上あるときだけ出す**(`bgmChoices` が決める)——
               1曲しか無ければ「ぜんぶ」とその1曲は同じもので、
               **押しても何も変わらない**(効かない操作を見せない・CLAUDE.md)。 */}
+          {/* ★ **読めなかったことを、えらぶ場所に出す**(第5.396節)。
+                 **「曲がありません」とは言わない** —— 登録はされている */}
+          {tracksError && (
+            <p className="radio-set-name radio-set-no" role="alert">
+              曲を読めませんでした({tracksError})
+            </p>
+          )}
           {song選び.length > 0 && (
             <>
               <label className="radio-set-name" htmlFor={`${uid}-song`}>曲</label>

@@ -123,11 +123,16 @@ export default function QuickResponse({
    */
   const [radio, setRadio] = useState(null)
   const [tracks, setTracks] = useState([])
+  /** ★ 曲を読めなかった理由(第5.396節)。**空と取り違えない** */
+  const [tracksError, setTracksError] = useState(null)
   const listen = async () => {
     if (!pairs.length) return
     setRadio(pairs)
-    const { data } = await listTracks()
+    /* ★ **読めなかったことを、0 曲として出さない**(第5.396節)。
+       `error` を捨てると、**曲が1つも登録されていないのと同じ見た目**になる */
+    const { data, error: 曲error } = await listTracks()
     setTracks(data ?? [])
+    setTracksError(曲error ?? null)
   }
 
   /* 出題の枠まわり(開く・入るかどうかを測る・送りを戻す・くり返し)は
@@ -324,6 +329,7 @@ export default function QuickResponse({
       label={[material?.title, QR_MODES.find((m) => m.id === mode)?.label]
         .filter(Boolean).join(' / ')}
       tracks={tracks}
+      tracksError={tracksError}
       learnerId={learnerId}
       onClose={() => setRadio(null)}
     />

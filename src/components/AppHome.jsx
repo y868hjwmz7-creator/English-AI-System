@@ -26,7 +26,7 @@
  *   この画面の役目は「どこへ行くか」だけにしてある。
  *
  * 【起動画面の続きに見えるようにしてある】
- *   いちばん上の「English AI System」は、`Loading.jsx` の
+ *   いちばん上の「RIZAP ENGLISH」は、`Loading.jsx` の
  *   `.loading-name` と**まったく同じ字づかい**である(`styles.css` で
  *   選択子を分け合っている)。読み込みが終わると、その字はそこに残り、
  *   **下に箱が並ぶ**。画面が入れ替わったようには見えない。
@@ -57,7 +57,7 @@ export default function AppHome({ pages = [], onPick = null }) {
              声かけは、やり終えた1枚がもう持っている(同じことを2つ見せない)。
              どの顔になるかは `buddyFace()` 1か所が決める */}
         <Buddy face={buddyFace({})} size="md" className="home-buddy" />
-        <p className="home-eyebrow">English AI System</p>
+        <p className="home-eyebrow">RIZAP ENGLISH</p>
         <h2 className="home-title">どれから始めますか</h2>
       </header>
 

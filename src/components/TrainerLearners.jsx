@@ -1422,7 +1422,13 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                         setSharePicked([])
                                         setShareOpen(shareOpen === m.id ? null : m.id)
                                       }}>
-                                <ShareIcon />ほかのゲストにも共有
+                                {/* ★ **言葉は「共有」1語**(第5.396節・2026-10-06
+                                       利用者の指定「ゲストの画面では『他のゲストと
+                                       共有』ではなく『共有』で十分です。使いまわして
+                                       いる感じが出てしまいます」)。
+                                     **教材のカードのボタンとも同じ1語**になる。
+                                     誰に出すのかは、押して開いた中で選ぶ */}
+                                <ShareIcon />共有
                               </button>
                               <button type="button" className="btn btn--primary"
                                       disabled={lessonBusy === m.id}

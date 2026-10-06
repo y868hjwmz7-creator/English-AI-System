@@ -383,6 +383,8 @@ export default function QrReview({
      (単語帳とまったく同じ決まり。`WordRadio` の中でも呼んでいない) */
   const [radio, setRadio] = useState(null)   // 読む文。null なら出さない
   const [tracks, setTracks] = useState([])   // 曲(無ければ音楽は流れない)
+  /** ★ 曲を読めなかった理由(第5.396節)。**空と取り違えない** */
+  const [tracksError, setTracksError] = useState(null)
   /* **紙に出しているあいだだけ真**(2026-09 利用者の指定)。
      中身は刷る一瞬だけ描く(単語帳とまったく同じ作法) */
   const [printing, setPrinting] = useState(false)
@@ -680,8 +682,11 @@ export default function QrReview({
     const pool = orderQrPairs(shown.map(qrPairOf), order)
     if (!pool.length) return
     setRadio(pool)
-    const { data } = await listTracks()
+    /* ★ **読めなかったことを、0 曲として出さない**(第5.396節)。
+       `error` を捨てると、**曲が1つも登録されていないのと同じ見た目**になる */
+    const { data, error: 曲error } = await listTracks()
     setTracks(data ?? [])
+    setTracksError(曲error ?? null)
   }
 
   /**
@@ -1102,6 +1107,7 @@ export default function QrReview({
              **聞き流しの中で変えられる**ので、ここは始めの値だけである */
           size={size}
           tracks={tracks}
+          tracksError={tracksError}
           learnerId={learnerId}
           /* **聞き流しの左上も ☰**(第5.172節・利用者の指定) */
           onMenu={onMenu}

@@ -117,6 +117,10 @@ export default function AssignBooks({
        ここは**そう言うだけ**にする —— 同じ絞り込みを2か所に作らない */
   const [matMore, setMatMore] = useState(false)
   const [matMoreBusy, setMatMoreBusy] = useState(false)
+  /* ★ **読めなかったことを、「ありません」として出さない**(第5.396節)。
+       `error` を捨てていたので、問い合わせが失敗すると
+       **「当てはまる教材がありません」**と出ていた —— 第5.389節とまったく同じ形 */
+  const [matError, setMatError] = useState(null)
   const [matPicked, setMatPicked] = useState([])
   const [matBusy, setMatBusy] = useState(false)
   const [matNote, setMatNote] = useState(null)
@@ -160,9 +164,10 @@ export default function AssignBooks({
     let alive = true
     setMats(null)
     const t = setTimeout(() => {
-      searchMaterials({ keyword: matQ }).then(({ data, more }) => {
+      searchMaterials({ keyword: matQ }).then(({ data, error: e, more }) => {
         if (!alive) return
-        setMats(data ?? [])
+        setMatError(e ?? null)
+        setMats(e ? [] : (data ?? []))
         /* ★ **まだ先があるなら、そう言う**(第5.386節)。
              ここも前は新しい 50 件で打ち切っていて、**51 件目から先は
              名前で絞り込まないと一生出てこなかった** ——
@@ -404,7 +409,14 @@ export default function AssignBooks({
 
                 {/* **黙って空にしない。**読み込み中と、無いときを書き分ける */}
                 {mats === null && <Loading />}
-                {mats !== null && mats.length === 0 && !matMore && (
+                {/* ★ **読めなかったのなら、そう出す**(第5.396節)。
+                      **「ありません」と言わない** —— 在るのに読めていない */}
+                {matError && (
+                  <p className="notice notice--warn" role="alert">
+                    教材を読めませんでした。{matError}
+                  </p>
+                )}
+                {!matError && mats !== null && mats.length === 0 && !matMore && (
                   <p className="card-hint">当てはまる教材がありません。</p>
                 )}
 
@@ -434,10 +446,15 @@ export default function AssignBooks({
                             onClick={async () => {
                               if (matMoreBusy) return
                               setMatMoreBusy(true)
-                              const { data, more } = await searchMaterials({
+                              setMatError(null)
+                              const { data, error: e, more } = await searchMaterials({
                                 keyword: matQ, offset: mats.length,
                               })
                               setMatMoreBusy(false)
+                              /* ★ **読めなかったら、そこで止める**(第5.396節)。
+                                 前は `data ?? []` を足して `more` を false にして
+                                 いたので、**ボタンが黙って消えていた** */
+                              if (e) { setMatError(e); return }
                               setMats((now) => [...(now ?? []), ...(data ?? [])])
                               setMatMore(Boolean(more))
                             }}>

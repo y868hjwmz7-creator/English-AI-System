@@ -379,6 +379,8 @@ export default function Wordbook({
      **黙って足さない**(CLAUDE.md)。送ったことも、何が起きたのかも、
      その場に1行で出す */
   const [promoted, setPromoted] = useState(null)
+  /** ★ 育った語を送れなかった理由(第5.396節)。**黙って落ちない** */
+  const [promoteError, setPromoteError] = useState(null)
 
   const [view, setView] = useState('due')
   /**
@@ -412,6 +414,8 @@ export default function Wordbook({
      **記録は1ミリも動かさない**(`WordRadio` の中でも呼んでいない) */
   const [radio, setRadio] = useState(null)      // 読む語の一覧。null なら出さない
   const [tracks, setTracks] = useState([])      // 曲(無ければ音楽は流れない)
+  /** ★ 曲を読めなかった理由(第5.396節)。**空と取り違えない** */
+  const [tracksError, setTracksError] = useState(null)
   /* **紙に出しているあいだだけ真**(2026-09 利用者の指定)。
      中身は刷る一瞬だけ描く —— 1,200 語を常に描くと画面が重くなる
      (教材のカードの `printId` とまったく同じ作法・CLAUDE.md) */
@@ -715,7 +719,11 @@ export default function Wordbook({
    */
   const sendGrown = useCallback(async (list) => {
     if (learnerId) return
-    const { data } = await promoteGrownWords(list)
+    /* ★ **送れなかったことを、黙らせない**(第5.396節)。
+       `error` を捨てていたので、失敗すると**何も起きなかったのと
+       まったく同じ見た目**になり、復習に乗っていないことに気づけなかった */
+    const { data, error: e } = await promoteGrownWords(list)
+    setPromoteError(e ?? null)
     if (data?.sent) setPromoted(data)
   }, [learnerId])
 
@@ -1063,8 +1071,11 @@ export default function Wordbook({
     const pool = poolNow()
     if (!pool.length) return
     setRadio(pool)
-    const { data } = await listTracks()
+    /* ★ **読めなかったことを、0 曲として出さない**(第5.396節)。
+       `error` を捨てると、**曲が1つも登録されていないのと同じ見た目**になる */
+    const { data, error: 曲error } = await listTracks()
     setTracks(data ?? [])
+    setTracksError(曲error ?? null)
   }, [poolNow])
 
   /**
@@ -1801,6 +1812,12 @@ export default function Wordbook({
 
           **色だけに頼らない**(うすい地色 + 同じ色の文字 + 枠線 + 太字)。
           送る文が無い日は、この行ごと出ない(効かない知らせを出さない) */}
+      {/* ★ **送れなかったのなら、そう出す**(第5.396節) */}
+      {promoteError && (
+        <p className="notice notice--warn" role="alert">
+          育った語を Quick Response の復習に足せませんでした。{promoteError}
+        </p>
+      )}
       {promoted?.sent > 0 && (
         <p className="wb-promoted">
           <strong>{promoted.sent} 文</strong>を Quick Response の復習に足しました。
@@ -2072,6 +2089,7 @@ export default function Wordbook({
              **画面に出ているものと1文字も違わない** */
           label={shownLabel}
           tracks={tracks}
+          tracksError={tracksError}
           /* **「出しかた」で選んでいる数を、そのまま持ち込む**
              (第5.262節・2026-09-26 利用者の指定)。
              5問に絞って練習していた人には、そのまま5問が回る。

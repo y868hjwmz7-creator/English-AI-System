@@ -596,7 +596,7 @@ a { color: var(--accent); }
      > 選択したモードに飛ぶ仕様にしたいです
 
    **起動画面の続きに見えるようにしてある。** いちばん上の
-   「English AI System」は `.loading-name` と字づかいを分け合っており
+   「RIZAP ENGLISH」は `.loading-name` と字づかいを分け合っており
    (上の行)、読み込みが終わるとその字はそこに残って、下に箱が並ぶ。
 
    **色はすべて変数から取る** —— プレインを選べば箱の絵も灰色になり、
@@ -7206,6 +7206,15 @@ button.wbfilter-ctl { text-align: left; }
 }
 .radio-set-name {
   font-size: var(--fs-13); font-weight: 700; color: var(--text-secondary);
+}
+/* ★ **曲を読めなかったときの知らせ**(第5.396節)。
+   **2列をまたぐ** —— 名前の列に入れると、理由が読めるだけの幅が無い。
+   **色だけに頼らない**(うすい地色 + 同じ色の字 + 枠線 + 太字・CLAUDE.md) */
+.radio-set-no {
+  grid-column: 1 / -1; margin: 0;
+  padding: 6px 10px; border-radius: var(--r-8);
+  border: 1px solid var(--ng); background: var(--ng-bg); color: var(--ng);
+  font-weight: 700; line-height: 1.6;
 }
 /* **冊の中の区切り**(UNIT・章・型・段)(第5.288節・2026-09-27)。
 
