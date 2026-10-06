@@ -59,19 +59,22 @@ function varsIn(text) {
   return out
 }
 
+/* ★ **暗いときの紙は、2つの紙をまとめて1組にした**(第5.391節・2026-10-06)。
+     もとは `.focus-paper` だけを「アプリの色へ戻す」形だったが、
+     利用者がレッスン表示の紙も暗くすることを選んだ(4案を描いて案C)ので、
+     **両方の紙を同じ1組**にした。だから探す相手も両方を含む形になる。 */
 const island = body('.lesson-sheet, .focus-paper {')
-const darkA = body(':root[data-theme="dark"] .focus-paper {')
-const darkB = body(':root:not([data-theme="light"]) .focus-paper {')
-const focus = body('.focus {')
+const darkA = body(':root[data-theme="dark"] .lesson-sheet,\n  :root[data-theme="dark"] .focus-paper {')
+const darkB = body(':root:not([data-theme="light"]) .lesson-sheet,\n  :root:not([data-theme="light"]) .focus-paper {')
 
 if (!island) ng('紙の島が見つからない', '`.lesson-sheet, .focus-paper {` が無い')
-if (!darkA) ng('暗いときの戻し(data-theme)が見つからない', '')
-if (!darkB) ng('暗いときの戻し(media)が見つからない', '')
-if (!focus) ng('`.focus` が見つからない', '')
+if (!darkA) ng('暗いときの紙(data-theme)が見つからない',
+  '2つの紙(.lesson-sheet と .focus-paper)をまとめた欄が要る')
+if (!darkB) ng('暗いときの紙(media)が見つからない',
+  '2つの紙(.lesson-sheet と .focus-paper)をまとめた欄が要る')
 
-if (island && darkA && darkB && focus) {
+if (island && darkA && darkB) {
   const want = varsIn(island)
-  const aliases = varsIn(focus).filter((n) => n.startsWith('--app-'))
 
   // ① ②
   for (const [name, got] of [['data-theme のほう', varsIn(darkA)], ['media のほう', varsIn(darkB)]]) {
@@ -87,27 +90,64 @@ if (island && darkA && darkB && focus) {
     ng('暗いときの戻しが、2か所で食い違っている', '同じ並びにすること')
   } else ok('暗いときの戻しは、2か所とも同じ')
 
-  // ③ 値を書き写していないか
+  /* ③ **色の値を書き写していないか。**
+       当てる場所は2つある(OS の設定 / 画面で切り替え)ので、
+       向こうに生の色を書くと**必ず片方だけ古くなる。**
+       値は `:root` の `--pd-…` 1組だけに置き、ここは並べるだけにする */
   for (const [name, text] of [['data-theme のほう', darkA], ['media のほう', darkB]]) {
     const literal = [...text.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)]
-      .filter(([, , v]) => !v.trim().startsWith('var(--app-'))
+      .filter(([, , v]) => !/^var\(--(pd|rizap)-/.test(v.trim()))
     if (literal.length) {
       ng(`${name}が色の値を書き写している`,
-        `別名(var(--app-…))から取ること: ${literal.map(([, n]) => n).join(' ')}`)
+        `出どころ(var(--pd-…))から取ること: ${literal.map(([, n]) => n).join(' ')}`)
     } else ok(`${name}は、色の値を1つも書き写していない`)
   }
 
-  // ④ 別名がそろっているか
-  const usedAlias = [...darkA.matchAll(/var\((--app-[a-z0-9-]+)\)/g)].map((m) => m[1])
-  const noAlias = [...new Set(usedAlias)].filter((n) => !aliases.includes(n))
-  if (noAlias.length) ng('`.focus` に控えていない別名を使っている', noAlias.join(' '))
-  else ok(`別名は ${aliases.length} 個、すべて \`.focus\` に控えてある`)
+  /* ④ **出どころ(`--pd-…`)が、`:root` にそろっているか。**
+       `:root` に無い名前を引くと、その欄だけ**何も効かず明るいまま**残る */
+  const root = body(':root {')
+  const have = varsIn(root ?? '').filter((n) => n.startsWith('--pd-'))
+  const 使う = [...new Set([...darkA.matchAll(/var\((--pd-[a-z0-9-]+)\)/g)].map((m) => m[1]))]
+  const 無い = 使う.filter((n) => !have.includes(n))
+  if (!root) ng('`:root` が見つからない', '')
+  else if (無い.length) ng('`:root` に無い出どころを引いている', 無い.join(' '))
+  else ok(`出どころは ${使う.length} 個、すべて \`:root\` にある`)
 
-  // 別名が自分自身を指していないか(輪になると黙って効かなくなる)
-  const cycle = [...focus.matchAll(/(--app-[a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)/g)]
-    .filter(([, alias, src]) => `--app${src.slice(1)}` !== alias)
-  if (cycle.length) ng('別名の付け方がずれている', cycle.map(([, a]) => a).join(' '))
-  else ok('別名は、もとの名前とそろっている')
+  /* ⑤ **紙に刷るときは、暗い紙が1つも届かないこと**(2026-10-06 利用者の指定
+       「印刷は白いまま」)。`@media screen` で囲ってあるかを見る ——
+       囲いを外すと、紙が真っ黒に刷られてインクを使い切る */
+  /* ★ **コメントを落としてから探す**(CLAUDE.md)。
+       この検証の説明文そのものに `@media screen` と書いてあるので、
+       生のまま探すと**囲いを外しても、説明に当たって緑のまま**になる
+       (2026-10-06 の赤チェックで、実際にそうなった)。
+       **長さは変えずに空白へ潰す** —— 位置がずれると手前を見誤る */
+  const 素 = css.replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+  for (const 印 of [':root[data-theme="dark"] .lesson-sheet',
+                    ':root:not([data-theme="light"]) .lesson-sheet']) {
+    const at = 素.indexOf(印)
+    const 手前 = 素.slice(Math.max(0, at - 260), at)
+    if (at < 0) ng('暗い紙の欄が見つからない', 印)
+    else if (!/@media\s+screen/.test(手前)) {
+      ng('暗い紙が、印刷にも届いてしまう', `${印} を @media screen で囲うこと`)
+    } else ok(`印刷には届かない(${印.includes('not(') ? 'media' : 'data-theme'} のほう)`)
+  }
+
+  /* ⑥ **解答の緑は、利用者が選んだもの**(2026-10-06「ミント」)。
+       **値は読み取ってから性質を見る** —— 書き写すと、変えた日に
+       仕組みを壊していなくても赤くなる(CLAUDE.md) */
+  {
+    const m = (root ?? '').match(/--pd-answer:\s*(#[0-9a-f]{6})/i)
+    const 紙 = (root ?? '').match(/--pd-paper:\s*(#[0-9a-f]{6})/i)
+    if (!m || !紙) ng('解答の色か紙の色が読み取れない', '')
+    else {
+      const lin = (c) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4)
+      const L = (h) => { const v = [1, 3, 5].map((i) => lin(parseInt(h.slice(i, i + 2), 16))); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2] }
+      const [x, y] = [L(m[1]), L(紙[1])].sort((a, b) => b - a)
+      const r = (x + 0.05) / (y + 0.05)
+      if (r < 4.5) ng('解答の緑が、紙の上で読みにくい', `${r.toFixed(2)} : 1(4.5 を割っている)`)
+      else ok(`解答の緑は、紙の上で読める(${r.toFixed(2)} : 1)`)
+    }
+  }
 }
 
 // ⑤ 紙のある集中モードの地は、配色によらず黒か

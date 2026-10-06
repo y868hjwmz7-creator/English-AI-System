@@ -115,6 +115,85 @@
      **新しい見た目を作らない** —— すでにアプリの中にある形から選ぶ。 */
   --rizap-gold-pick: color-mix(in srgb, var(--rizap-gold) 18%, transparent);
 
+  /* ════════════════════════════════════════════════════════════════
+     ★ **暗い配色のときの「紙」**(第5.391節・2026-10-06 利用者の指定)
+
+       > ダークモードの時の教材、紙をダークグレーにしたデザインに
+       > 変えることはできそうですか？配色とデザインの案をいくつか
+       > 可視化してみて下さい。せっかくのダークモード、目が疲れないように
+       > 教材内も統一できると最高です
+
+     **4案を描いて見てもらい、「案C 温かみのある炭」が選ばれた。**
+     解答の緑は、6候補を描いて**「ミント」**が選ばれている。
+
+     ★ **値はここ1組だけ。** 当てる側は `@media` と `[data-theme="dark"]` の
+       **2か所**にあるので、向こうに色を直に書くと**必ず片方だけ古くなる**
+       (CLAUDE.md・`--rizap-gold` とまったく同じ理由)。
+       向こうは `var(--pd-…)` を並べるだけで、**色は1つも書かない。**
+
+     ★ **紙は「明るい島」である**(下の `.lesson-sheet, .focus-paper`)。
+       部品ごとに打ち消して回ると新しい部品で必ず抜けるので、
+       **土台の変数ごと差し替える。** ここはその「暗い側の値」である。
+
+     ★ **印刷は白いまま**(2026-10-06 利用者の指定)。
+       当てる側を `@media screen` で囲ってあるので、
+       **紙に刷るときは、この値が1つも届かない** ——
+       インクを使わず、ゲストが書き込める。
+     ════════════════════════════════════════════════════════════════ */
+  --pd-paper:        #201e1b;   /* 温かみのある炭。わずかに茶を含む(案C) */
+  --pd-ink:          #ebe6df;
+  --pd-ink-soft:     #b0a89d;
+  --pd-ink-faint:    #837b70;
+  --pd-rule:         #38332c;
+
+  --pd-surface-0:    #282521;   /* 紙の上で「浮いた面」。ボタンの地 */
+  --pd-surface-1:    #24211d;
+  --pd-surface-2:    #2f2b26;
+  --pd-btn-bg:       #282521;
+  --pd-quiet-bg:     #2f2b26;
+  --pd-on-accent:    #15130d;   /* 金のべた塗りの上に乗る文字 */
+
+  --pd-danger:       #e8807c;
+  --pd-warn:         #dcbb7e;
+
+  --pd-qa-bg:        #262320;
+  --pd-qa-line:      #38332c;
+  --pd-qa-stripe:    #25221e;   /* 1段落おきの地色。紙よりほんの少しだけ暗い */
+  --pd-qa-answer:    #2c2824;
+  --pd-chunk-fg:     #9db89a;   /* カタマリごとの訳。セージの明るい側 */
+
+  --pd-accent-bg:    #2b2417;
+  --pd-accent-soft:  #2b2417;
+  --pd-accent-line:  #5a4a22;
+
+  --pd-ok:           #6fbf93;   --pd-ok-bg:  #1f2a23;
+  --pd-ng:           #e8807c;   --pd-ng-bg:  #2e211f;
+
+  /* ★ **解答(覚えたい表現)。利用者が6候補から選んだ「ミント」** */
+  --pd-answer:       #7fc49b;   --pd-answer-bg:    #1f2a23;
+  --pd-translate:    #9bb6df;   --pd-translate-bg: #212630;
+  --pd-note:         #dcbb7e;   --pd-note-bg:      #2b2517;
+
+  --pd-voice-a:      var(--rizap-gold);   /* 会話の1人目 */
+  --pd-voice-b:      #c79ac5;             /* 2人目 */
+
+  --pd-speak-bg:     #2a2a2c;   --pd-speak-bar: #6f93a8;
+  --pd-read-bg:      #3c4a52;   --pd-read-fg:   #eef6fa;
+
+  --pd-unknown-bg:   #3a2422;   --pd-unknown-bar: #e8706c;
+  --pd-phrase-bg:    #2d2638;   --pd-phrase-bar:  #a98ad8;
+  --pd-mark-hover-bg: #302b24;
+
+  --pd-pos-noun:   #86b6cc;  --pd-pos-verb:   #7fc49b;
+  --pd-pos-adj:    #c79ac5;  --pd-pos-adv:    #dcbb7e;
+  --pd-pos-conj:   #a8a49c;  --pd-pos-phrase: #9bb6df;
+
+  --pd-series-1: #86b6cc;  --pd-series-2: #e09a63;  --pd-series-3: #7fc49b;
+  --pd-series-4: #dcbb7e;  --pd-series-5: #d98aa8;
+
+  --pd-shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+  --pd-shadow-2: 0 8px 26px rgb(0 0 0 / 50%), 0 2px 6px rgb(0 0 0 / 40%);
+
   /* 合っている / 違う。**ディクテーションの照らし合わせで使う。**
      緑と赤は色覚特性で見分けにくい組み合わせなので、
      **必ず線(下線・取り消し線)も併せる** */
@@ -4787,6 +4866,171 @@ html, body { overflow-x: clip; }
   --series-1: #2f6f86;  --series-2: #b4551f;  --series-3: #1f7a52;
   --series-4: #8a6a33;  --series-5: #a8436b;
 }
+/* ════════════════════════════════════════════════════════════════════
+   ★ **暗い配色のときの「紙」を当てる**(第5.391節・2026-10-06 利用者の指定)
+
+     > せっかくのダークモード、目が疲れないように教材内も統一できると最高です
+
+   紙は上で「明るい島」にしてある(部品ごとに打ち消して回ると、
+   新しい部品で必ず抜けるため)。**その島ごと、暗い側へ差し替える。**
+
+   ★ **ここに色は1つも書かない。** 値は `:root` の `--pd-…` 1組だけで、
+     ここは並べ替えるだけである —— **当てる場所は2つある**ので
+     (OS の設定 / 画面で切り替え)、色を直に書くと必ず片方だけ古くなる。
+     `npm run test:paper` が、**2つの欄がぴたり同じ**で、
+     **どちらにも生の色が書かれていない**ことを見張る。
+
+   ★ **`@media screen` で囲ってある。** 紙に刷るときは、ここが1つも届かず
+     明るい島のままになる(2026-10-06 利用者の指定「印刷は白いまま」)——
+     インクを使わず、ゲストが書き込める。
+   ════════════════════════════════════════════════════════════════════ */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lesson-sheet,
+  :root:not([data-theme="light"]) .focus-paper {
+  --paper: var(--pd-paper);
+  --ink: var(--pd-ink);
+  --ink-soft: var(--pd-ink-soft);
+  --ink-faint: var(--pd-ink-faint);
+  --rule: var(--pd-rule);
+  --btn-bg: var(--pd-btn-bg);
+  --quiet-bg: var(--pd-quiet-bg);
+  --on-accent: var(--pd-on-accent);
+  --surface-0: var(--pd-surface-0);
+  --surface-1: var(--pd-surface-1);
+  --surface-2: var(--pd-surface-2);
+  --border: var(--pd-rule);
+  --text-primary: var(--pd-ink);
+  --text-secondary: var(--pd-ink-soft);
+  --text-muted: var(--pd-ink-faint);
+  --danger: var(--pd-danger);
+  --warn: var(--pd-warn);
+  --shadow-1: var(--pd-shadow-1);
+  --shadow-2: var(--pd-shadow-2);
+  --qa-bg: var(--pd-qa-bg);
+  --qa-line: var(--pd-qa-line);
+  --qa-stripe: var(--pd-qa-stripe);
+  --qa-answer: var(--pd-qa-answer);
+  --chunk-fg: var(--pd-chunk-fg);
+  --accent: var(--rizap-gold);
+  --accent-bg: var(--pd-accent-bg);
+  --accent-soft: var(--pd-accent-soft);
+  --accent-line: var(--pd-accent-line);
+  --pick-bg: var(--rizap-gold-pick);
+  --pick-fg: var(--pd-ink);
+  --pick-line: var(--rizap-gold);
+  --ok: var(--pd-ok);
+  --ok-bg: var(--pd-ok-bg);
+  --ng: var(--pd-ng);
+  --ng-bg: var(--pd-ng-bg);
+  --answer: var(--pd-answer);
+  --answer-bg: var(--pd-answer-bg);
+  --translate: var(--pd-translate);
+  --translate-bg: var(--pd-translate-bg);
+  --note: var(--pd-note);
+  --note-bg: var(--pd-note-bg);
+  --voice-a: var(--pd-voice-a);
+  --voice-b: var(--pd-voice-b);
+  --speak-bg: var(--pd-speak-bg);
+  --speak-bar: var(--pd-speak-bar);
+  --read-bg: var(--pd-read-bg);
+  --read-fg: var(--pd-read-fg);
+  --speaking-bg: var(--pd-speak-bg);
+  --speaking-bar: var(--pd-speak-bar);
+  --reading-bg: var(--pd-read-bg);
+  --reading-fg: var(--pd-read-fg);
+  --unknown-bg: var(--pd-unknown-bg);
+  --unknown-bar: var(--pd-unknown-bar);
+  --phrase-bg: var(--pd-phrase-bg);
+  --phrase-bar: var(--pd-phrase-bar);
+  --mark-hover-bg: var(--pd-mark-hover-bg);
+  --mark-hover-line: var(--rizap-gold);
+  --pos-noun: var(--pd-pos-noun);
+  --pos-verb: var(--pd-pos-verb);
+  --pos-adj: var(--pd-pos-adj);
+  --pos-adv: var(--pd-pos-adv);
+  --pos-conj: var(--pd-pos-conj);
+  --pos-phrase: var(--pd-pos-phrase);
+  --series-1: var(--pd-series-1);
+  --series-2: var(--pd-series-2);
+  --series-3: var(--pd-series-3);
+  --series-4: var(--pd-series-4);
+  --series-5: var(--pd-series-5);
+  }
+}
+@media screen {
+  :root[data-theme="dark"] .lesson-sheet,
+  :root[data-theme="dark"] .focus-paper {
+  --paper: var(--pd-paper);
+  --ink: var(--pd-ink);
+  --ink-soft: var(--pd-ink-soft);
+  --ink-faint: var(--pd-ink-faint);
+  --rule: var(--pd-rule);
+  --btn-bg: var(--pd-btn-bg);
+  --quiet-bg: var(--pd-quiet-bg);
+  --on-accent: var(--pd-on-accent);
+  --surface-0: var(--pd-surface-0);
+  --surface-1: var(--pd-surface-1);
+  --surface-2: var(--pd-surface-2);
+  --border: var(--pd-rule);
+  --text-primary: var(--pd-ink);
+  --text-secondary: var(--pd-ink-soft);
+  --text-muted: var(--pd-ink-faint);
+  --danger: var(--pd-danger);
+  --warn: var(--pd-warn);
+  --shadow-1: var(--pd-shadow-1);
+  --shadow-2: var(--pd-shadow-2);
+  --qa-bg: var(--pd-qa-bg);
+  --qa-line: var(--pd-qa-line);
+  --qa-stripe: var(--pd-qa-stripe);
+  --qa-answer: var(--pd-qa-answer);
+  --chunk-fg: var(--pd-chunk-fg);
+  --accent: var(--rizap-gold);
+  --accent-bg: var(--pd-accent-bg);
+  --accent-soft: var(--pd-accent-soft);
+  --accent-line: var(--pd-accent-line);
+  --pick-bg: var(--rizap-gold-pick);
+  --pick-fg: var(--pd-ink);
+  --pick-line: var(--rizap-gold);
+  --ok: var(--pd-ok);
+  --ok-bg: var(--pd-ok-bg);
+  --ng: var(--pd-ng);
+  --ng-bg: var(--pd-ng-bg);
+  --answer: var(--pd-answer);
+  --answer-bg: var(--pd-answer-bg);
+  --translate: var(--pd-translate);
+  --translate-bg: var(--pd-translate-bg);
+  --note: var(--pd-note);
+  --note-bg: var(--pd-note-bg);
+  --voice-a: var(--pd-voice-a);
+  --voice-b: var(--pd-voice-b);
+  --speak-bg: var(--pd-speak-bg);
+  --speak-bar: var(--pd-speak-bar);
+  --read-bg: var(--pd-read-bg);
+  --read-fg: var(--pd-read-fg);
+  --speaking-bg: var(--pd-speak-bg);
+  --speaking-bar: var(--pd-speak-bar);
+  --reading-bg: var(--pd-read-bg);
+  --reading-fg: var(--pd-read-fg);
+  --unknown-bg: var(--pd-unknown-bg);
+  --unknown-bar: var(--pd-unknown-bar);
+  --phrase-bg: var(--pd-phrase-bg);
+  --phrase-bar: var(--pd-phrase-bar);
+  --mark-hover-bg: var(--pd-mark-hover-bg);
+  --mark-hover-line: var(--rizap-gold);
+  --pos-noun: var(--pd-pos-noun);
+  --pos-verb: var(--pd-pos-verb);
+  --pos-adj: var(--pd-pos-adj);
+  --pos-adv: var(--pd-pos-adv);
+  --pos-conj: var(--pd-pos-conj);
+  --pos-phrase: var(--pd-pos-phrase);
+  --series-1: var(--pd-series-1);
+  --series-2: var(--pd-series-2);
+  --series-3: var(--pd-series-3);
+  --series-4: var(--pd-series-4);
+  --series-5: var(--pd-series-5);
+  }
+}
+
 /* 紙そのもの(レッスン表示)。**送る箱はこちらだけが持つ** */
 .lesson-sheet {
   flex: 1; overflow-y: auto;
@@ -4813,170 +5057,22 @@ html, body { overflow-x: clip; }
   border-radius: var(--r-12); box-shadow: var(--shadow-paper);
   line-height: 1.9;
 }
-/* ── 暗い配色のときは、集中モードの紙も暗くする ──────────────────
-     2026-09 利用者の指定。
+/* ★ **暗い配色のときの紙は、上の1組にまとめた**(第5.391節・2026-10-06)
 
-       > 配色が「暗い」「明るい」どちらが選択されているかにかかわらず、
-       > 紙の周囲は黒で統一でお願いします。
-       > つまり、配色が「暗い」の時は紙も黒です。
+     ここには **`.focus-paper` だけを暗くする戻し**が置いてあった
+     (2026-09 利用者の指定「配色が『暗い』の時は紙も黒です」)。
+     やっていたのは「明るい島を、アプリの色へ戻す」で、
+     訳も解答も補足も**ぜんぶ同じ灰色の地**に落ちていた。
 
-     **レッスン表示の紙(`.lesson-sheet`)は変えていない。** あちらは
-     画面共有用で、「暗い配色を選んでいても紙は白のまま」という別の決まりが
-     ある(共有先で見やすいことが優先)。変えたのは**集中モードの紙だけ**。
+     ★ **2026-10-06、利用者がレッスン表示の紙も暗くすることを選んだ**ので、
+       **2つの紙を1組の配色にそろえた**(上の `@media screen` の2か所)。
+       紙が2種類の暗さになるのを避けるためである ——
+       **同じことをするものを2つ持たない**(CLAUDE.md)。
 
-     やっていることは「明るい島を、アプリの色へ戻す」1つだけである。
-     値は `.focus` に控えた別名から取るので、**暗い側の色を書き写していない。**
-
-     **島に足した変数は、ここにも足すこと。**
-     `npm run test:paper` が、抜けを機械的に見つける
-     (`--speak-bg` と `--speaking-bg` の取り違えで、シャドーイング中の段落が
-      真っ黒になった件と、根っこは同じ失敗である)。 */
-:root[data-theme="dark"] .focus-paper {
-  --paper: var(--app-surface-1);
-  --ink: var(--app-text-primary);
-  --ink-soft: var(--app-text-secondary);
-  --ink-faint: var(--app-text-muted);
-  --rule: var(--app-border);
-  --btn-bg: var(--app-btn-bg);
-  --quiet-bg: var(--app-quiet-bg);
-  --on-accent: var(--app-on-accent);
-  --pick-bg: var(--app-pick-bg);
-  --pick-fg: var(--app-pick-fg);
-  --pick-line: var(--app-pick-line);
-  --surface-0: var(--app-surface-0);
-  --surface-1: var(--app-surface-1);
-  --surface-2: var(--app-surface-2);
-  --border: var(--app-border);
-  --text-primary: var(--app-text-primary);
-  --text-secondary: var(--app-text-secondary);
-  --text-muted: var(--app-text-muted);
-  --danger: var(--app-danger);
-  --shadow-1: var(--app-shadow-1);
-  --shadow-2: var(--app-shadow-2);
-  --qa-bg: var(--app-surface-2);
-  --qa-line: var(--app-border);
-  /* 1段落おきの地色(第5.240節)。**暗い配色では、カードの中の面に戻す** ——
-     ここで色の値を書き写さない(`test:paper` が見張っている) */
-  --qa-stripe: var(--app-surface-2);
-  --qa-answer: var(--app-surface-2);
-  --chunk-fg: var(--app-chunk-fg);
-  --accent: var(--app-accent);
-  --accent-bg: var(--app-accent-bg);
-  --accent-soft: var(--app-accent-soft);
-  --accent-line: var(--app-accent-line);
-  --ok: var(--app-ok);
-  --ok-bg: var(--app-ok-bg);
-  --ng: var(--app-ng);
-  --ng-bg: var(--app-ng-bg);
-  --answer: var(--app-ok);
-  --answer-bg: var(--app-surface-2);
-  --translate: var(--app-accent);
-  --translate-bg: var(--app-surface-2);
-  --note: var(--app-warn);
-  --note-bg: var(--app-surface-2);
-  --voice-a: var(--app-voice-a);
-  --voice-b: var(--app-voice-b);
-  --speak-bg: var(--app-speaking-bg);
-  --speak-bar: var(--app-speaking-bar);
-  --read-bg: var(--app-reading-bg);
-  --read-fg: var(--app-reading-fg);
-  --unknown-bg: var(--app-unknown-bg);
-  --unknown-bar: var(--app-unknown-bar);
-  --phrase-bg: var(--app-phrase-bg);
-  --phrase-bar: var(--app-phrase-bar);
-  --mark-hover-bg: var(--app-mark-hover-bg);
-  --mark-hover-line: var(--app-mark-hover-line);
-  --speaking-bg: var(--app-speaking-bg);
-  --speaking-bar: var(--app-speaking-bar);
-  --reading-bg: var(--app-reading-bg);
-  --reading-fg: var(--app-reading-fg);
-  --warn: var(--app-warn);
-  --pos-noun: var(--app-pos-noun);
-  --pos-verb: var(--app-pos-verb);
-  --pos-adj: var(--app-pos-adj);
-  --pos-adv: var(--app-pos-adv);
-  --pos-conj: var(--app-pos-conj);
-  --pos-phrase: var(--app-pos-phrase);
-  --series-1: var(--app-series-1);
-  --series-2: var(--app-series-2);
-  --series-3: var(--app-series-3);
-  --series-4: var(--app-series-4);
-  --series-5: var(--app-series-5);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .focus-paper {
-  --paper: var(--app-surface-1);
-  --ink: var(--app-text-primary);
-  --ink-soft: var(--app-text-secondary);
-  --ink-faint: var(--app-text-muted);
-  --rule: var(--app-border);
-  --btn-bg: var(--app-btn-bg);
-  --quiet-bg: var(--app-quiet-bg);
-  --on-accent: var(--app-on-accent);
-  --pick-bg: var(--app-pick-bg);
-  --pick-fg: var(--app-pick-fg);
-  --pick-line: var(--app-pick-line);
-  --surface-0: var(--app-surface-0);
-  --surface-1: var(--app-surface-1);
-  --surface-2: var(--app-surface-2);
-  --border: var(--app-border);
-  --text-primary: var(--app-text-primary);
-  --text-secondary: var(--app-text-secondary);
-  --text-muted: var(--app-text-muted);
-  --danger: var(--app-danger);
-  --shadow-1: var(--app-shadow-1);
-  --shadow-2: var(--app-shadow-2);
-  --qa-bg: var(--app-surface-2);
-  --qa-line: var(--app-border);
-  /* 1段落おきの地色(第5.240節)。**暗い配色では、カードの中の面に戻す** ——
-     ここで色の値を書き写さない(`test:paper` が見張っている) */
-  --qa-stripe: var(--app-surface-2);
-  --qa-answer: var(--app-surface-2);
-  --chunk-fg: var(--app-chunk-fg);
-  --accent: var(--app-accent);
-  --accent-bg: var(--app-accent-bg);
-  --accent-soft: var(--app-accent-soft);
-  --accent-line: var(--app-accent-line);
-  --ok: var(--app-ok);
-  --ok-bg: var(--app-ok-bg);
-  --ng: var(--app-ng);
-  --ng-bg: var(--app-ng-bg);
-  --answer: var(--app-ok);
-  --answer-bg: var(--app-surface-2);
-  --translate: var(--app-accent);
-  --translate-bg: var(--app-surface-2);
-  --note: var(--app-warn);
-  --note-bg: var(--app-surface-2);
-  --voice-a: var(--app-voice-a);
-  --voice-b: var(--app-voice-b);
-  --speak-bg: var(--app-speaking-bg);
-  --speak-bar: var(--app-speaking-bar);
-  --read-bg: var(--app-reading-bg);
-  --read-fg: var(--app-reading-fg);
-  --unknown-bg: var(--app-unknown-bg);
-  --unknown-bar: var(--app-unknown-bar);
-  --phrase-bg: var(--app-phrase-bg);
-  --phrase-bar: var(--app-phrase-bar);
-  --mark-hover-bg: var(--app-mark-hover-bg);
-  --mark-hover-line: var(--app-mark-hover-line);
-  --speaking-bg: var(--app-speaking-bg);
-  --speaking-bar: var(--app-speaking-bar);
-  --reading-bg: var(--app-reading-bg);
-  --reading-fg: var(--app-reading-fg);
-  --warn: var(--app-warn);
-  --pos-noun: var(--app-pos-noun);
-  --pos-verb: var(--app-pos-verb);
-  --pos-adj: var(--app-pos-adj);
-  --pos-adv: var(--app-pos-adv);
-  --pos-conj: var(--app-pos-conj);
-  --pos-phrase: var(--app-pos-phrase);
-  --series-1: var(--app-series-1);
-  --series-2: var(--app-series-2);
-  --series-3: var(--app-series-3);
-  --series-4: var(--app-series-4);
-  --series-5: var(--app-series-5);
-  }
-}
+     ★ **2026-09 の「レッスン表示の紙は白のまま」は、ここで取り消した。**
+       あれは「画面共有の相手に見やすいこと」を理由にしていたが、
+       2026-10-06 に利用者が暗い紙を選んだ(4案を描いて案C)。
+       **古い決まりを黙って上書きしない** —— 取り消したことを、ここに残す。 */
 @media (max-width: 600px) {
   /* 狭い画面では、囲みの余白がそのまま読む幅を削る(第5.63節と同じ話) */
   .focus-paper, .focus-plainbox { padding: 14px 12px; }
@@ -8313,64 +8409,10 @@ button.wbfilter-ctl { text-align: left; }
   overscroll-behavior: contain;
   touch-action: manipulation;
 
-  /* ── アプリの色を、別の名前で控えておく(集中モードの紙のため)──────
-       `.focus-paper` は、暗い配色のとき**アプリの配色に従う**(下記)。
-       ところが紙は `--surface-0` などアプリと**同じ名前**を差し替えて
-       いるので、戻そうとして `--surface-0: var(--surface-0)` と書くと
-       **自分を参照する輪**になり、黙って効かなくなる。
-
-       そこで**紙の外(ここ)で別名に控える。** ここでの `var(--surface-0)`
-       はアプリの値をそのまま指す。**色の値を書き写さないので、
-       配色を直せば集中モードの紙も一緒に直る。** */
-  --app-accent: var(--accent);
-  --app-accent-bg: var(--accent-bg);
-  --app-accent-line: var(--accent-line);
-  --app-accent-soft: var(--accent-soft);
-  --app-border: var(--border);
-  --app-btn-bg: var(--btn-bg);
-  --app-chunk-fg: var(--chunk-fg);
-  --app-danger: var(--danger);
-  --app-mark-hover-bg: var(--mark-hover-bg);
-  --app-mark-hover-line: var(--mark-hover-line);
-  --app-ng: var(--ng);
-  --app-ng-bg: var(--ng-bg);
-  --app-ok: var(--ok);
-  --app-ok-bg: var(--ok-bg);
-  --app-on-accent: var(--on-accent);
-  --app-pick-bg: var(--pick-bg);
-  --app-pick-fg: var(--pick-fg);
-  --app-pick-line: var(--pick-line);
-  --app-phrase-bar: var(--phrase-bar);
-  --app-phrase-bg: var(--phrase-bg);
-  --app-pos-adj: var(--pos-adj);
-  --app-pos-adv: var(--pos-adv);
-  --app-pos-conj: var(--pos-conj);
-  --app-pos-noun: var(--pos-noun);
-  --app-pos-phrase: var(--pos-phrase);
-  --app-pos-verb: var(--pos-verb);
-  --app-quiet-bg: var(--quiet-bg);
-  --app-reading-bg: var(--reading-bg);
-  --app-reading-fg: var(--reading-fg);
-  --app-series-1: var(--series-1);
-  --app-series-2: var(--series-2);
-  --app-series-3: var(--series-3);
-  --app-series-4: var(--series-4);
-  --app-series-5: var(--series-5);
-  --app-shadow-1: var(--shadow-1);
-  --app-shadow-2: var(--shadow-2);
-  --app-speaking-bar: var(--speaking-bar);
-  --app-speaking-bg: var(--speaking-bg);
-  --app-surface-0: var(--surface-0);
-  --app-surface-1: var(--surface-1);
-  --app-surface-2: var(--surface-2);
-  --app-text-muted: var(--text-muted);
-  --app-text-primary: var(--text-primary);
-  --app-text-secondary: var(--text-secondary);
-  --app-unknown-bar: var(--unknown-bar);
-  --app-unknown-bg: var(--unknown-bg);
-  --app-voice-a: var(--voice-a);
-  --app-voice-b: var(--voice-b);
-  --app-warn: var(--warn);
+  /* ★ **アプリの色の別名(`--app-…`)は、第5.391節で外した。**
+       あれは「集中モードの紙だけをアプリの色へ戻す」ために控えてあったが、
+       その戻しごと無くなった(紙の配色は `--pd-…` 1組に寄せた)。
+       **使う人のいない控えを残さない**(CLAUDE.md)。 */
 }
 /* ★ **紙のある集中モードは、地をいつも黒にする**(2026-09 利用者の指定)
 
