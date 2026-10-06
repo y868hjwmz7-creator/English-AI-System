@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   59行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   60行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -301,4 +301,16 @@ from (
     exists (select 1 from pg_constraint
             where conname = 'material_sections_type_check'
               and pg_get_constraintdef(oid) like '%repeat_blind%'), 58
+  -- **2つとも見る**(0077・第5.395節)。0069 / 0070 と同じ立て付け。
+  --   ①起動画面が訊く関数(`material_visibility`)が在るか
+  --   ②ほかのトレーナーから隠れている教材が、1件も残っていないか
+  -- **②だけでは足りない** —— 1度も「自分だけ」を押していなければ、
+  -- 貼る前から②は真になり、**貼っていないのに「もう入っています」**と
+  -- 出る(CLAUDE.md が「いちばん悪い壊れ方」と呼ぶもの)。
+  -- **関数は呼ばない。** 貼る前の DB にはまだ無く、呼ぶと
+  -- `check.sql` そのものが止まる(0071 / 0075 と同じ見方)
+  union all select '0077 「自分だけ」の教材を共有に戻す(pending_matome.sql)',
+    exists (select 1 from pg_proc where proname = 'material_visibility')
+    and not exists (select 1 from public.materials
+                    where visibility is distinct from 'school'), 59
 ) t order by 順;

@@ -28,6 +28,8 @@ import { TONE_GO, TONE_ROW, TONE_SIDE, hasTone } from '../src/lib/btnTone.js'
 import { clozeAt, hasCloze } from '../src/lib/clozeSentence.js'
 import { PAGE_SIZE, pageRange, pageSlice } from '../src/lib/pageList.js'
 import { hasMaterialWords, materialWordsOf } from '../src/lib/materialWords.js'
+/* ★ 発行のボタンの言葉(第5.395節)。**素の node で測れる形**に出してある */
+import { publishLabel } from '../src/lib/learnerPick.js'
 import {
   bestStreak, collectRows, goalLine, goalPart,
   praiseFor, streakLine, weekLine, STREAK_FROM,
@@ -14816,6 +14818,76 @@ console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第
   ok(汚れ.length === 0,
     '`.select()` に渡す文字列は、ぜんぶ列の名前の並びとして正しい',
     汚れ.length ? `★ ${汚れ.join(' / ')} —— そのまま Supabase へ送られる` : '')
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ★ **教材は、いつも「教材」に保管される**(第5.395節・2026-10-06)
+
+     > 「一人と共有する」という選択肢はなくしましょう。
+     > その人に作ったとしても「教材」のところには保管されるべきです
+     > 間違えてそのゲストだけに作ると、そのあと他の人と共有する方法がなく、
+     > 不便です
+
+   「公開範囲: 自分だけ」は**取り返しがつかなかった** ——
+   押すとほかのトレーナーから永久に見えなくなり、
+   あとから直す道が1つも無い(`materials` に書き換えの許可が無い)。
+
+   **欄ごと無くしたので、戻ってこないように見張る。**
+   ════════════════════════════════════════════════════════════════ */
+{
+  const form = readFileSync('src/components/MaterialForm.jsx', 'utf8')
+  /* **コメントを落としてから数える**(CLAUDE.md)——
+     この節の経緯を書いた説明の中にも、同じ語がそのまま出てくる。
+     **長さを変えずに空白へ潰す**(行の番号をずらさないため) */
+  const 素 = form
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
+
+  ok(!/setVisibility|visibility\s*===/.test(素),
+    '教材を作る画面は、公開範囲を1度も触らない',
+    /setVisibility|visibility\s*===/.test(素) ? '★「自分だけ」が戻っている' : '')
+  ok(!/'private'/.test(素),
+    "教材を作る画面に `'private'` という値が出てこない")
+
+  /* **出る側も見る**(片方だけだと、何も出さない形でも緑になる)。
+     発行のボタンの言葉は `learnerPick.js` 1か所から引いている */
+  ok(/publishLabel\(/.test(素),
+    '発行のボタンの言葉は `publishLabel()` から引いている')
+}
+
+/* ★ **発行のボタンの言葉**(第5.395節)。**素の node で測れる形**に
+     出してあるので、ここで中身そのものを確かめる */
+{
+  const 人 = [{ id: 'a', display_name: '田中' }, { id: 'b', display_name: '佐藤' }]
+  ok(publishLabel(人, []) === '発行する',
+    '誰も選んでいなければ「発行する」', publishLabel(人, []))
+  /* **「も」が入っているか。** ここが第5.395節の肝である ——
+     「1人と共有する」だと、その人専用に作るものに見えた */
+  ok(publishLabel(人, ['a']) === '発行して 田中 さんにも共有する',
+    '1人なら、その人の名前と「にも共有する」', publishLabel(人, ['a']))
+  ok(publishLabel(人, ['a', 'b']) === '発行して 2人にも共有する',
+    '2人以上なら人数で言う', publishLabel(人, ['a', 'b']))
+  /* **名前が引けないときに、黙って空にしない**(CLAUDE.md) */
+  ok(publishLabel(人, ['z']) === '発行して 1人にも共有する',
+    '名前が分からなければ、人数で言う(空にしない)', publishLabel(人, ['z']))
+}
+
+/* ★ **宿題の行から、ほかのゲストに共有できる**(第5.395節)。
+     ここが無かったので、「教材」へ行って同じものをもう一度
+     さがし当てるしかなかった。**共有の仕組みは1か所**(`assignMaterial`)*/
+{
+  const 画面 = readFileSync('src/components/TrainerLearners.jsx', 'utf8')
+  const 素 = 画面
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
+  ok(/ほかのゲストにも共有/.test(素), '宿題の行に「ほかのゲストにも共有」がある')
+  ok(/assignMaterial\(/.test(素), '共有は `assignMaterial()` を呼んでいる')
+  /* **ゲストを選ぶ欄は `LearnerPick` 1か所**(第5.238節)——
+     ここで自前の一覧を描くと、片方だけ古くなる */
+  ok(/<LearnerPick/.test(素), 'ゲストを選ぶ欄は `LearnerPick` を使っている')
+  /* **いま開いているゲストは、えらべる一覧から外す**(もう持っている) */
+  ok(/x\.id\s*!==\s*l\.id/.test(素),
+    'いま開いているゲストは、えらべる一覧に出さない')
 }
 
 console.log(ng

@@ -66,3 +66,24 @@ begin
   end loop;
   raise notice '  演習の種類を % 種類ぶん入れました', n;
 end $$;
+
+-- ③ 公開範囲 … 許されている値を1つずつ(第5.395節)
+--
+--   **ここがいちばん効く。** 0077 は「`private` の教材を `school` に戻す」
+--   という**行を書き換える移行**なので、**行が1つも無ければ、
+--   壊れていても緑のまま**である(「空の表に貼るのは、試したことにならない」)。
+--   一覧は書かない —— 制約から読み取る。
+do $$
+declare v text; n int := 0;
+begin
+  for v in
+    select (regexp_matches(pg_get_constraintdef(oid), '''([a-z_]+)''', 'g'))[1]
+    from pg_constraint where conname = 'materials_visibility_check'
+  loop
+    n := n + 1;
+    insert into public.materials (title, level, kind, visibility, created_by)
+      values ('検証用 公開範囲 ' || v, 'A2', 'pattern', v,
+              '99999999-9999-9999-9999-999999999999');
+  end loop;
+  raise notice '  公開範囲を % 種類ぶん入れました', n;
+end $$;

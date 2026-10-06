@@ -302,8 +302,15 @@ for f in supabase/migrations/*.sql; do
   esac
   run "-d $db -f $f"
 done
+# ★ **行を入れてから貼る**(第5.395節)。
+#   ここまで、`check.sql` は**行が1つも無い DB**でしか回していなかった。
+#   0077 のように「**行を書き換える**」移行は、行が無ければ
+#   **壊れていても緑のまま**である(実際、0077 を「1行も書き換えない」形に
+#   壊しても、この検証は3か所とも緑だった)。
+#   利用者の DB には行がある。**そちらで試す。**
+run "-d $db -f supabase/test/seed_rows.sql"
 run "-d $db -f supabase/apply/pending_matome.sql"
-check_all_green "$db" "0040 まで + まとめた1つ"
+check_all_green "$db" "0040 まで + 行 + まとめた1つ"
 su postgres -c "psql -q -c 'drop database if exists $db;'"
 
 echo

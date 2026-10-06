@@ -130,6 +130,9 @@ import { buildChoices } from '../lib/responseChoices.js'
 import { loadResponseRows } from '../lib/responseSources.js'
 /* **混ぜ方は `shuffle.js` 1か所**(自前の混ぜ方を書かない・第5.282節) */
 import { shuffled } from '../lib/shuffle.js'
+/* **発行のボタンの言葉は `learnerPick.js` 1か所**(第5.395節)——
+   画面に書き写すと、言い回しを変えた日に片方だけ古くなる */
+import { publishLabel } from '../lib/learnerPick.js'
 import {
   NF_BOOK_ID, TEXT_BOOKS, loadTextPhrases, loadTextUnits, textBookLabel,
 } from '../lib/textBooks.js'
@@ -247,7 +250,6 @@ export default function MaterialForm({
   const [include, setInclude] = useState(initial.include ?? {})
   const [instruction, setInstruction] = useState('')
   const [teachingPoint, setTeachingPoint] = useState('')
-  const [visibility, setVisibility] = useState('school')
   const [industry, setIndustry] = useState(initial.industry || '')
   const [sections, setSections] = useState([newSection()])
   const [tagIds, setTagIds] = useState(initial.tagIds ?? [])
@@ -1847,7 +1849,7 @@ export default function MaterialForm({
          控えないと、別の画面から戻ったときに「おまかせ」へ戻っており、
          **指定したはずの気持ちと、作られた教材が食い違う** */
     stance: stanceText(stance),
-    visibility, instruction, mustUse,
+    instruction, mustUse,
     /* **文法解説を作るかどうかも控える**(第5.213節)。
        控えないと、別の画面から戻ったときに「作る」へ戻っており、
        **外したはずの解説が作られて課金される** */
@@ -1887,7 +1889,6 @@ export default function MaterialForm({
     if (f.subject != null) setSubject(f.subject)
     if (f.angle != null) setAngle(f.angle)
     if (f.speakers != null) setSpeakers(f.speakers)
-    if (f.visibility) setVisibility(f.visibility)
     if (f.instruction != null) setInstruction(f.instruction)
     if (f.withGrammar != null) setWithGrammar(f.withGrammar)
     if (f.mustUse) setMustUse(f.mustUse)
@@ -2000,7 +2001,7 @@ export default function MaterialForm({
     const { data, error: message } = await createMaterial({
       title: title.trim() || autoTitle(),
       level, kind, instruction_ja: instruction, teaching_point: teachingPoint,
-      visibility, industry, sections, tagIds, createdBy,
+      industry, sections, tagIds, createdBy,
       headline, headlineJa,
       genre: kind === 'reading' ? genre : '', scene: isDialogueKind(kind) ? scene : '',
       /* **どの切り口で、何の話を書いたか**(0046)。
@@ -3829,34 +3830,33 @@ export default function MaterialForm({
         )}
       </div>
 
-      <fieldset className="field">
-        <legend>公開範囲</legend>
-        <div className="btn-row">
-          <button type="button"
-                  className={`btn btn--toggle${visibility === 'school' ? ' is-active' : ''}`}
-                  onClick={() => setVisibility('school')}>
-            全トレーナーで共有(おすすめ)
-          </button>
-          <button type="button"
-                  className={`btn btn--toggle${visibility === 'private' ? ' is-active' : ''}`}
-                  onClick={() => setVisibility('private')}>
-            自分だけ
-          </button>
-        </div>
-        <p className="tip field-hint">
-          共有すると他のトレーナーも使えます。
-        </p>
-      </fieldset>
+      {/* ★ **「公開範囲」の欄は、まるごと無くした**(第5.395節・2026-10-06
+             利用者の指定「『一人と共有する』という選択肢はなくしましょう。
+             その人に作ったとしても『教材』のところには保管されるべきです」)。
+
+           **「自分だけ」は、取り返しがつかなかった。**
+           押すとほかのトレーナーから永久に見えなくなり、
+           **あとから直す道が1つも無い**(`materials` に書き換えの許可が
+           データベース側に入っていない)。
+           ゲストのページから作ると「発行して 1人と共有する」と出るので、
+           その人専用に作るものだと見え、押してしまう。
+
+           **教材は既定で全トレーナーが共有する**(CLAUDE.md 冒頭)——
+           50人で共有すれば必要な教材が7週でそろう、という前提そのものである。
+           いまは `createMaterial()` の既定(`visibility = 'school'`)に任せ、
+           **この画面は公開範囲を1度も触らない**(値を2か所に持たない)。 */}
 
       {error && <div className="notice notice--warn" role="alert">{error}</div>}
 
       <div className="btn-row">
         <button type="submit" className="btn btn--primary" disabled={busy} ref={submitRef}>
-          {busy
-            ? '発行しています…'
-            : shareWith.length
-              ? `発行して ${shareWith.length}人と共有する`
-              : '発行する(共有はあとで)'}
+          {/* ★ **「教材として発行する」が主、「共有する」は付け足し**
+                 (第5.395節)。前は「発行して 1人と共有する」で、
+                 **その1人のためだけに作るように読めた。**
+                 「も」を入れて、**教材に残ったうえで、その人にも届く**
+                 ことを1行で言う。**名前の一覧は `learners` 1か所**から引く
+                 (ここに書き写さない)。 */}
+          {busy ? '発行しています…' : publishLabel(learners, shareWith)}
         </button>
         <button type="button" className="btn btn--ghost" onClick={onCancel}>やめる</button>
       </div>

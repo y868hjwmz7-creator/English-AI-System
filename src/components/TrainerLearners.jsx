@@ -12,15 +12,20 @@ import { lastLearner, rememberLearner, watchLearner } from '../lib/lastLearner.j
 /* **一覧を出すかどうかの決まりは1か所**(第5.238節)。
    ゲストを選ぶ欄(`LearnerPick`)とまったく同じ ——
    打ったときは、開いていなくても出す */
-import { showsLearnerList } from '../lib/learnerPick.js'
+import { NO_ACTIVE_TEXT, PICK_LABEL, showsLearnerList } from '../lib/learnerPick.js'
 /* **状態の対応表は `data/learnerStatus.js` 1か所。**
    上に貼り付く箱(`LearnerBar`)でも同じ札を出す */
 import { LEARNER_STATUS, statusCls, statusLabel } from '../data/learnerStatus.js'
 import {
-  addLearnerScore, createAccount, kindLabel, loadLearnerAssignments,
+  addLearnerScore, assignMaterial, createAccount, kindLabel, loadLearnerAssignments,
   eraseLearner, loadMyLearnersDetailed, loadScoreHistory, setLearnerCefr, setLearnerStatus,
   loadMaterial, wordsAddedNote,
 } from '../lib/materials.js'
+/* ★ **ほかのゲストにも共有する**(第5.395節)。
+     **ゲストを選ぶ欄は `LearnerPick` 1か所**(第5.238節)——
+     教材のカードの「共有」とまったく同じものを使う。
+     書き写すと、片方だけ古くなる */
+import LearnerPick from './LearnerPick.jsx'
 import { weaknessTagLabel } from '../data/weaknessTags.js'
 import MaterialTitle from './MaterialTitle.jsx'
 import MaterialBody from './MaterialBody.jsx'
@@ -45,7 +50,7 @@ import HomeworkFilter from './HomeworkFilter.jsx'
 /* **絞る・引く・並べるは `homeworkFilter.js` 1か所**(ゲストの
    「今週の宿題」と分け合っている)。画面ごとに書くと必ず食い違う */
 import { homeworkFilterOn, narrowHomework } from '../lib/homeworkFilter.js'
-import { PrintIcon, ScreenIcon, DownloadIcon } from './Icons.jsx'
+import { PrintIcon, ScreenIcon, DownloadIcon, ShareIcon } from './Icons.jsx'
 import Popover from './Popover.jsx'
 import { loadLearnerPractice, practiceStats, sendReminder } from '../lib/practice.js'
 import { loadWeeklyGoal, setWeeklyGoal } from '../lib/goals.js'
@@ -80,6 +85,23 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [message, setMessage] = useState(null)
+  /* ★ **ほかのゲストにも共有する**(第5.395節・2026-10-06 利用者の指摘)。
+
+       > 間違えてそのゲストだけに作ると、そのあと他の人と共有する方法がなく、
+       > 不便です
+
+     宿題の行にあるのは 印刷 / ダウンロード / セッションで使う の3つだけで、
+     **ここから共有する道が1つも無かった** —— 「教材」へ行って、同じものを
+     もう一度さがし当てるしかなかった。**作った場所で共有できるようにする。**
+
+     開いている宿題は**1つだけ**(`shareOpen` に教材の id)。
+     複数開くと、どの教材に出すのか見失う(教材のカードの `assigningId` と
+     まったく同じ作法である)。 */
+  const [shareOpen, setShareOpen] = useState(null)
+  const [sharePicked, setSharePicked] = useState([])
+  const [shareBusy, setShareBusy] = useState(false)
+  /** **失敗の知らせは、その操作をした場所に出す**(CLAUDE.md) */
+  const [shareError, setShareError] = useState(null)
   /* **開いているゲスト。控えは `lastLearner.js` 1か所**(2026-09 実機)。
      ほかの画面へ移るとこの部品ごと外れるので、`useState` だけだと
      戻ってきたときに一覧に立っている。**設定ではなく居場所**なので、
@@ -375,6 +397,27 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     }
   }, [printHwId, assignments])
 
+  /* ★ **この宿題の教材を、ほかのゲストにも共有する**(第5.395節)。
+
+       **共有する仕組みは `assignMaterial()` 1か所**(教材のカードと同じ)——
+       書き写すと、片方だけが単語帳へ語を入れ忘れる。
+
+       **開いているゲストには出さない。** もう持っているので、
+       押せる形で並べると二重に出してしまう(効かない操作を見せない)。 */
+  const shareToOthers = async (materialId) => {
+    if (!sharePicked.length) return
+    setShareBusy(true)
+    setShareError(null)
+    const { data, error: e } = await assignMaterial({
+      materialId, learnerIds: sharePicked, assignedBy: me.id,
+    })
+    setShareBusy(false)
+    if (e) { setShareError(e); return }
+    setShareOpen(null)
+    setSharePicked([])
+    setMessage(`${data.count} 人に共有しました。${wordsAddedNote(data.words)}`)
+  }
+
   const openDetail = async (id, tab = 'homework') => {
     setOpenId(id)
     // **開いたら、いちばん上へ。** 一覧の途中から開くと、
@@ -392,6 +435,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setFeatures(new Set())
     setWordNote(null)
     setPastError(null)
+    setShareOpen(null)
+    setSharePicked([])
+    setShareError(null)
     setDetailBusy(true)
     // `loadLearnerSummary`(study_logs の合計)は読まない。
     // **もう誰も入力しないので、いつも 0 になる**(2026-08 の設計変更)
@@ -1354,6 +1400,30 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                                 <DownloadIcon />
                                 {bodyBusy === m.id ? '開いています…' : dlLabel(m)}
                               </button>
+                              {/* ★ **ほかのゲストにも共有する**(第5.395節・
+                                      2026-10-06 利用者の指摘)。
+
+                                    > 間違えてそのゲストだけに作ると、
+                                    > そのあと他の人と共有する方法がなく、不便です
+
+                                  **作った場所で共有できるようにする。**
+                                  これまでは「教材」へ行き、同じものを
+                                  もう一度さがし当てるしかなかった。
+
+                                  **名前はすぐには出ない。** `LearnerPick` は
+                                  開くか打つまで一覧を描かない(`showsLearnerList`)
+                                  ので、**レッスン中の画面共有に、ほかのゲストの
+                                  名前が映らない**(仕様書 5.5)。 */}
+                              <button type="button"
+                                      className={`btn btn--small btn--quiet${shareOpen === m.id ? ' is-on' : ''}`}
+                                      aria-expanded={shareOpen === m.id}
+                                      onClick={() => {
+                                        setShareError(null)
+                                        setSharePicked([])
+                                        setShareOpen(shareOpen === m.id ? null : m.id)
+                                      }}>
+                                <ShareIcon />ほかのゲストにも共有
+                              </button>
                               <button type="button" className="btn btn--primary"
                                       disabled={lessonBusy === m.id}
                                       onClick={() => openLesson(m.id)}>
@@ -1363,6 +1433,37 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                               </button>
                             </div>
                           )}
+                          {/* **選ぶ欄は、押した行のすぐ下**(失敗の知らせも同じ)。
+                              見た目は教材のカードの「共有」と同じ `.share-box` */}
+                          {m && shareOpen === m.id && (() => {
+                            /* **いま開いているゲストは外す。** もう持っている。
+                               休会中・退会済はデータベース側が断るので、
+                               はじめから並べない(行き止まりを作らない) */
+                            const ほか = learners.filter(
+                              (x) => x.status === 'active' && x.id !== l.id,
+                            )
+                            return (
+                              <div className="share-box">
+                                <LearnerPick
+                                  people={ほか} picked={sharePicked} onPick={setSharePicked}
+                                  label={PICK_LABEL} emptyText={NO_ACTIVE_TEXT} />
+                                {shareError && (
+                                  <p className="notice notice--warn" role="alert">{shareError}</p>
+                                )}
+                                <div className="btn-row">
+                                  <button type="button" className="btn btn--primary"
+                                          disabled={shareBusy || !sharePicked.length}
+                                          onClick={() => shareToOthers(m.id)}>
+                                    {shareBusy
+                                      ? '共有しています…'
+                                      : (sharePicked.length
+                                        ? `${sharePicked.length} 人と共有する`
+                                        : '共有する')}
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })()}
                           {/* **集まったか / 足りないかを、押した場所に出す。**
                               文言は `AudioDownloadNote` 1か所 */}
                           {m && (

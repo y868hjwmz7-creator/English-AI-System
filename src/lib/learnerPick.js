@@ -81,3 +81,29 @@ export const pickedNames = (people, picked) => {
     .map((id) => byId.get(id)?.display_name)
     .filter(Boolean)
 }
+
+/**
+ * **発行のボタンに出す言葉**(第5.395節・2026-10-06 利用者の指定)。
+ *
+ *   > 「一人と共有する」という選択肢はなくしましょう。
+ *   > その人に作ったとしても「教材」のところには保管されるべきです
+ *
+ * 前は「発行して 1人と共有する」だった。**その1人のためだけに作る**
+ * ように読めるので、ゲストのページから作った教材を
+ * 「自分だけ」で出してしまい、あとから共有できなくなっていた。
+ *
+ * **「発行する」が主、「◯◯にも共有する」が付け足し**である。
+ * 「も」の1文字が、**教材に残ったうえで、その人にも届く**ことを言う。
+ *
+ * **名前は `people` から引く。画面に書き写さない**(`pickedNames` と同じ作法)。
+ * 名前が引けなかったときは人数で言う —— **黙って名前を空にしない。**
+ */
+export const publishLabel = (people, picked) => {
+  const ids = Array.isArray(picked) ? picked : []
+  if (!ids.length) return '発行する'
+  const names = pickedNames(people, ids)
+  if (ids.length === 1) {
+    return `発行して ${names[0] ? `${names[0]} さん` : '1人'}にも共有する`
+  }
+  return `発行して ${ids.length}人にも共有する`
+}
