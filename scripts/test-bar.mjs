@@ -4572,6 +4572,14 @@ export default defineConfig({
           /* 絵の上と、字の下。**この2つがそろっていれば、まん中にある** */
           上: 丸(ic.top - 帯.top),
           下: 丸(帯.bottom - 字四角.bottom),
+          /* ★ **絵そのものと、字の、横のまん中**(第5.403節)。
+               `.app-tab-icon` の箱ではなく **`svg` を測る** ——
+               `.icon` の `margin-right` は**箱の中**に入るので、
+               箱はまん中にあるのに**絵だけが左へ寄る** */
+          絵中心: (() => { const g = x.querySelector('.app-tab-icon svg')
+            return g ? 丸((g.getBoundingClientRect().left
+              + g.getBoundingClientRect().right) / 2) : null })(),
+          字中心: 丸((字四角.left + 字四角.right) / 2),
           タブ高: 丸(r.height),
           区切り: 飾.content === 'none' ? null : {
             高さ: 丸(parseFloat(飾.height) || 0),
@@ -4609,6 +4617,18 @@ export default defineConfig({
       /* **短すぎても困る。** 消えたのと変わらない */
       ng(`${どこ} … 区切りが短すぎて見えない`,
         m.slice(1).map((x) => `${x.名} ${x.区切り.高さ} / タブ ${x.タブ高}`).join(' / '))
+    } else if (m.some((x) => x.絵中心 == null)) {
+      ng(`${どこ} … 絵(svg)が描かれていない`, '測る相手が無いので、下の見張りが素通りする')
+    } else if (m.some((x) => Math.abs(x.絵中心 - x.字中心) >= 1)) {
+      /* ★ **絵と字が、同じ縦の線の上にあるか**(第5.403節・利用者の指定)。
+
+           > 教材と単語帳の中央が相変わらずアイコンとズレてます
+
+         `.icon` は「絵のうしろに文字が続く」ための `margin-right` を
+         持っている。**絵の下に字を置く形では使われないのに場所だけ取り**、
+         絵が半分ぶん左へずれる(実測 3.8px)。これで4度目である */
+      ng(`${どこ} … 絵と字の横のまん中がそろっていない`,
+        m.map((x) => `${x.名} 絵 ${x.絵中心} / 字 ${x.字中心}`).join(' / '))
     } else if (m.some((x) => Math.abs(x.上 - x.下) > x.行高 / 2)) {
       /* ★ **絵と字の組が、帯のまん中にあるか**(第5.402節・利用者の指定)。
 
@@ -4628,7 +4648,8 @@ export default defineConfig({
     } else {
       ok(`${どこ} … 幅・絵・字の1行目がそろい、区切りは2つめから・上下いっぱいでない`
         + `(区切り ${m[1].区切り.高さ} / タブ ${m[1].タブ高}`
-        + ` / まん中からのずれ ${Math.round(Math.abs(m[0].上 - m[0].下) * 10) / 10}`
+        + ` / まん中からのずれ 縦 ${Math.round(Math.abs(m[0].上 - m[0].下) * 10) / 10}`
+        + ` 横 ${Math.round(Math.abs(m[0].絵中心 - m[0].字中心) * 10) / 10}`
         + ` / ${折り返した ? '2行になった札あり' : '全部1行'})`)
     }
   }
