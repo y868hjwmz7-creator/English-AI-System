@@ -4543,13 +4543,17 @@ export default defineConfig({
       .map((x) => {
         const r = x.getBoundingClientRect()
         const ic = x.querySelector('.app-tab-icon').getBoundingClientRect()
-        const lb = x.querySelector('.app-tab-label').getBoundingClientRect()
+        /* ★ **部品そのものも持っておく**(第5.401節)。
+             `getComputedStyle` に渡せるのは**部品**であって、
+             測った四角(`DOMRect`)ではない —— 渡すとその場で落ちる */
+        const lbEl = x.querySelector('.app-tab-label')
+        const lb = lbEl.getBoundingClientRect()
         return {
           名: x.textContent.trim(),
           幅: Math.round(r.width * 10) / 10,
           絵: Math.round(ic.top * 10) / 10,
           字: Math.round(lb.top * 10) / 10,
-          行数: Math.round(lb.height / parseFloat(window.getComputedStyle(lb).lineHeight)),
+          行数: Math.round(lb.height / parseFloat(window.getComputedStyle(lbEl).lineHeight)),
           はみ出し: lb.left < r.left - 0.5 || lb.right > r.right + 0.5,
           縦線: window.getComputedStyle(x).borderLeftColor,
         }
