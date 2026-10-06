@@ -2262,7 +2262,22 @@ export default function LessonView({
           <QuickResponse material={qrMaterial} paper learnerId={owner}
                          /* **集中モードは、この画面のボタンが持つ**
                             (中にも同じボタンを置くと2つ並ぶ) */
-                         focus={qrFocus} onFocusClose={() => setQrFocus(false)}
+                         /* ★ **閉じたら、教材のトップページへ戻る**
+                            (2026-10-06 利用者の指定・第5.390節)
+
+                              > ダークモードのQRから閉じるボタンでもどると
+                              > 明るいモードのQRに戻ります。
+                              > 教材のトップページに戻るようにできませんか？
+
+                            もとは `setQrFocus(false)` だけだったので、
+                            **Quick Response のタブに残っていた** ——
+                            暗い集中モードから、紙の白い画面へ出るので
+                            **急に明るくなったように見える。**
+                            しかもそこは通り道で、用は済んでいる。
+                            `run` を外すと `qrFocus` も落ちる(下の `useEffect`)ので、
+                            **消す手は1つでよい**(同じことを2か所に書かない) */
+                         focus={qrFocus}
+                         onFocusClose={() => { setRun(null); setPage(0); resetItems() }}
                          /* 紙の幅をそのまま引き継ぐ(ほかの集中モードと同じ) */
                          focusWidth={width}
                          /* 速さ・文字・幅・印刷。**3つの集中モードで同じもの** */
