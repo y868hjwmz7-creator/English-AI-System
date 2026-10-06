@@ -4810,6 +4810,17 @@ html, body { overflow-x: clip; }
   --danger:         #b8322f;
   --shadow-1: 0 1px 2px rgb(36 41 47 / 8%);
   --shadow-2: 0 8px 26px rgb(36 41 47 / 12%), 0 2px 6px rgb(36 41 47 / 8%);
+  /* ★ **紙の上の「札」の色**(第5.392節・2026-10-06 利用者の指定)。
+
+       「A2+ / 生活」のタグ(読むだけ)と「この文の要点」の札(押せる)。
+       **もとは `background: #fff` と生の色が直に書いてあり**、
+       紙が暗くなったとたん**白い塊**になって残った。
+
+       **明るい紙はこれまでどおり。** 暗い紙でだけ金に寄せる
+       (利用者が3案から案3を選んだ)—— 値は暗い側の欄で決め直す。 */
+  --chip-bg:      #ffffff;
+  --chip-line:    var(--rule);
+  --chip-fg:      var(--ink-soft);
   /* 練習の囲み。**紙の上では、紙の色にそろえる** */
   --qa-bg:        #f7f8fa;   /* ごくうすい地色。紙より少しだけ濃い */
   --qa-line:      #e3e6e9;
@@ -4922,6 +4933,9 @@ html, body { overflow-x: clip; }
   --warn: var(--pd-warn);
   --shadow-1: var(--pd-shadow-1);
   --shadow-2: var(--pd-shadow-2);
+  --chip-bg: var(--rizap-gold-pick);
+  --chip-line: var(--rizap-gold);
+  --chip-fg: var(--pd-ink);
   --qa-bg: var(--pd-qa-bg);
   --qa-line: var(--pd-qa-line);
   --qa-stripe: var(--pd-qa-stripe);
@@ -4995,6 +5009,9 @@ html, body { overflow-x: clip; }
   --warn: var(--pd-warn);
   --shadow-1: var(--pd-shadow-1);
   --shadow-2: var(--pd-shadow-2);
+  --chip-bg: var(--rizap-gold-pick);
+  --chip-line: var(--rizap-gold);
+  --chip-fg: var(--pd-ink);
   --qa-bg: var(--pd-qa-bg);
   --qa-line: var(--pd-qa-line);
   --qa-stripe: var(--pd-qa-stripe);
@@ -5519,11 +5536,17 @@ html, body { overflow-x: clip; }
 }
 /* 「知っていた」に戻した札も薄くしない(2026-08 の指摘)。
    読みにくくなるだけで、得るものが無かった */
-/* 紙の上では、札の地の色を紙に合わせる */
-.lesson-sheet .phrase-chip {
-  background: #fff; border-color: var(--rule); color: var(--ink-soft);
+/* ★ **紙の上の札は、紙が持っている色から取る**(第5.392節)。
+     もとは `background: #fff` と書いてあり、**暗い紙では白い塊**になった。
+     押せる札(`.phrase-chip`)は**破線のまま** —— 読むだけのタグと
+     見分ける印である(色だけに頼らない・CLAUDE.md)。
+     `.focus-paper` にも同じく当てる(**2つの紙で見え方を変えない**)。 */
+.lesson-sheet .phrase-chip,
+.focus-paper .phrase-chip {
+  background: var(--chip-bg); border-color: var(--chip-line); color: var(--chip-fg);
 }
-.lesson-sheet .phrases-label { color: var(--ink-faint); }
+.lesson-sheet .phrases-label,
+.focus-paper .phrases-label { color: var(--ink-faint); }
 
 /* 吹き出しは body の直下に出す(`GlossPopover` が portal で置く)。
    紙は overflow-y: auto なので、横方向にも切ってしまう。
@@ -5787,7 +5810,6 @@ html, body { overflow-x: clip; }
 .lesson-head strong { font-size: 1.15em; }
 .lesson-head div { color: var(--ink-soft); margin-top: 3px; }
 .lesson-sheet .mtitle-headline { color: var(--accent); }
-.lesson-sheet .mtitle-chip { border-color: var(--rule); color: var(--ink-soft); background: #fff; }
 
 /* 何の練習か(弱点)。主役ではないので小さく、しかし必ず見えるように */
 /* ── 「読み上げの声」の札(2026-09 利用者の指定)──────────────────
@@ -6330,8 +6352,19 @@ html, body { overflow-x: clip; }
 .mtitle--sheet .mtitle-main { color: var(--ink); }
 .mtitle--sheet .mtitle-date { color: var(--ink-faint); font-size: .6em; }
 .mtitle--sheet .mtitle-headline { color: var(--ink-soft); font-size: .8em; }
-.mtitle--sheet .mtitle-chip {
-  border-color: #bbb; background: transparent; color: #555; font-size: .6em;
+/* ★ **色はここで決めない**(第5.392節)。
+     `size="sheet"` の見出しが出るのは**紙の中**(`LessonView`)か、
+     **印刷用の畳んだ見出し**(`.print-only.print-head`。画面では出ない)だけ。
+     色は、紙の中なら下の決まり、紙に刷るときは `@media print` が決める。
+     ここに書いてあった `#bbb` / `#555` は**どちらにも届いていなかった** ——
+     届かない決め打ちほど、あとで「直したのに変わらない」を生む。 */
+.mtitle--sheet .mtitle-chip { font-size: .6em; }
+/* ★ **紙の上では、紙が持っている色から取る**(第5.392節・2026-10-06)。
+     `.mtitle--sheet` より**後ろ**に置くこと —— 細かさが同じなので、
+     前に置くと当たらない(CLAUDE.md「打ち消す指定は、いちばん後ろに置く」)。 */
+.lesson-sheet .mtitle-chip,
+.focus-paper .mtitle-chip {
+  border-color: var(--chip-line); background: var(--chip-bg); color: var(--chip-fg);
 }
 
 /* レッスン表示:1問ずつの解答 */

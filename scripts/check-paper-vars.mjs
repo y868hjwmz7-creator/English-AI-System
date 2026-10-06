@@ -150,6 +150,58 @@ if (island && darkA && darkB) {
   }
 }
 
+/* ★ **紙の上の部品に、生の色を書いていないか**(第5.392節・2026-10-06 実機)
+
+     3つ続けて同じ壊れ方をした。**どれも「紙はいつも白い」前提で
+     書かれた決め打ち**で、紙が暗くなったとたん裏返った。
+
+       .mtitle--sheet .mtitle-main { color: #1a1a1a; }   → 紙に沈んで消えた
+       .lesson-sheet  .mtitle-chip { background: #fff; } → タグが白い塊
+       .lesson-sheet  .phrase-chip { background: #fff; } → 要点が白い塊
+
+     **決め打ちは、前提が変わった日に必ず裏返る。**
+     紙は変数の島を持っているので、そこから取れば明るくても暗くても読める。
+
+     **「出ない側」も見る** —— 1つも拾えていなければ、何も測っていない。 */
+{
+  const 素 = css.replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+  /* 紙を名指ししている決まりだけを見る(`@media print` の中は見ない ——
+     あちらは**紙に刷るときの白黒**で、決め打ちが正しい) */
+  const 印刷の中 = []
+  for (const m of 素.matchAll(/@media\s+print\s*\{/g)) {
+    let d = 0
+    for (let k = 素.indexOf('{', m.index); k < 素.length; k += 1) {
+      if (素[k] === '{') d += 1
+      else if (素[k] === '}') { d -= 1; if (d === 0) { 印刷の中.push([m.index, k]); break } }
+    }
+  }
+  const 刷るところ = (i) => 印刷の中.some(([a, b]) => i > a && i < b)
+
+  let 数 = 0
+  const 生 = []
+  for (const m of 素.matchAll(/(\.(?:lesson-sheet|focus-paper|mtitle--sheet)[^{}]*)\{([^{}]*)\}/g)) {
+    if (刷るところ(m.index)) continue
+    数 += 1
+    /* 色を決める欄だけ。`border-style` や大きさは相手ではない */
+    for (const d of m[2].matchAll(/(color|background|background-color|border-color|box-shadow)\s*:\s*([^;]+)/g)) {
+      if (/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i.test(d[2])) {
+        生.push(`${m[1].trim().split('\n')[0]} の ${d[1]}`)
+      }
+    }
+  }
+  /* ★ **この検証の `ok()` は、文字を1つしか取らない。**
+       `ok(条件, 名前)` と書くと **`✓ true` と出て、失敗しようがない** ——
+       CLAUDE.md が名指ししている罠を、2026-10-06 にまた踏んだ
+       (第5.387節で `test-bar.mjs` に踏んだのと同じ形)。
+       **赤くするのは `ng()` だけ。必ず `if (!条件) ng(…)` で書く。** */
+  if (数 < 20) ng('紙を名指ししている決まりが、ほとんど拾えていない', `${数} 個`)
+  else ok(`紙を名指ししている決まりを ${数} 個みた`)
+  if (生.length) {
+    ng('紙の上の部品に、生の色が書いてある',
+      `${[...new Set(生)].join(' / ')} —— 紙の変数から取ること`)
+  } else ok('紙の上の部品に、生の色を1つも書いていない')
+}
+
 // ⑤ 紙のある集中モードの地は、配色によらず黒か
 const ground = body('.focus--sheet {')
 if (!ground) {
