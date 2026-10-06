@@ -158,6 +158,9 @@ export default function TrainerLearners({ me, navTick = 0 }) {
   const { statuses: wordStatuses, mark: markWord } = useWordStatuses(openId)
   const [lessonBusy, setLessonBusy] = useState(null)
   const [assignments, setAssignments] = useState([])
+  /* 過去の宿題を**読めなかった**とき、その理由。
+     **0 件(`[]`)とは別の状態である**(第5.389節) */
+  const [pastError, setPastError] = useState(null)
   const [detailBusy, setDetailBusy] = useState(false)
   /**
    * **宿題のカードを、教材のカードと同じ形にする**(2026-08 利用者の指定)。
@@ -388,10 +391,11 @@ export default function TrainerLearners({ me, navTick = 0 }) {
     setGoal({ words: '', sentences: '' })
     setFeatures(new Set())
     setWordNote(null)
+    setPastError(null)
     setDetailBusy(true)
     // `loadLearnerSummary`(study_logs の合計)は読まない。
     // **もう誰も入力しないので、いつも 0 になる**(2026-08 の設計変更)
-    const [{ data: hist }, { data: past }, { data: aim }, { data: feat }] = await Promise.all([
+    const [{ data: hist }, 宿題, { data: aim }, { data: feat }] = await Promise.all([
       loadScoreHistory(id), loadLearnerAssignments(id),
       /* 0042 を貼る前は 0 が返る。**欄が空になるだけで、画面は壊れない** */
       loadWeeklyGoal(id),
@@ -399,7 +403,22 @@ export default function TrainerLearners({ me, navTick = 0 }) {
       loadLearnerFeatures(id),
     ])
     setHistory(hist ?? [])
-    setAssignments(past ?? [])
+    /* ★ **読めなかったことを、0 件として出さない**(第5.389節・2026-10-06)。
+
+         > ゲストの画面からそのゲストに過去アサインした宿題が
+         > ごっそり消えています!
+
+         もとは `setAssignments(past ?? [])` と書いてあった。
+         **`error` を受け取らずに捨てていた**ので、問い合わせが失敗すると
+         `null` が `[]` に丸まり、画面は
+         **「まだ何も共有していません」**と出していた ——
+         **本当は「読めなかった」のに、「0 件です」と嘘をついていた。**
+
+         CLAUDE.md の「**黙って落ちない。0 と `null` を取り違えない
+         (数えられなかったら、その行ごと出さない)**」そのものである。
+         これがあったせいで、出ない原因が**こちらにも利用者にも見えなかった。** */
+    setAssignments(宿題.data ?? [])
+    setPastError(宿題.error ? (宿題.error.message ?? String(宿題.error)) : null)
     setGoal({
       words: aim?.wordsGoal ? String(aim.wordsGoal) : '',
       sentences: aim?.sentGoal ? String(aim.sentGoal) : '',
@@ -1126,7 +1145,15 @@ export default function TrainerLearners({ me, navTick = 0 }) {
                         取り組みはこのゲストのことなので、タブの中ではなく
                         カードの上に置く(「リマインドする」もそこにある)。 */}
                     {detailBusy && <p className="muted">読み込み中…</p>}
-                    {!detailBusy && assignments.length === 0 && (
+                    {/* ★ **読めなかったときは、そう出す**(第5.389節)。
+                        **「0 件」と言わない** —— 共有し直させることになる */}
+                    {!detailBusy && pastError && (
+                      <p className="notice notice--warn">
+                        過去の宿題を読めませんでした。アサインは消えていません
+                        —— 読み込みだけが失敗しています。{pastError}
+                      </p>
+                    )}
+                    {!detailBusy && !pastError && assignments.length === 0 && (
                       <p className="card-hint">
                         まだ何も共有していません。「教材」タブから共有できます。
                       </p>
