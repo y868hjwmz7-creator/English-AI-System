@@ -100,6 +100,36 @@ jobs:
           echo "SUPABASE_PROJECT_REF=$REF" >> "$GITHUB_ENV"
           echo "配り先のプロジェクト: $REF"
 
+          # ------------------------------------------------------------
+          # ★ **鍵が「在るか」ではなく「まだ使えるか」を見る**
+          #    (第5.400節・2026-10-06 実機)
+          #
+          #   この回、**5つの窓口が 25 回ぜんぶ `401 Unauthorized`** で落ちた。
+          #   鍵は登録されていたが、**期限が切れていた。**
+          #   上の確認は「空でないか」しか見ていないので**素通りし**、
+          #   そのあと 3 分かけて 25 回やり直してから、ようやく赤くなった。
+          #   しかも出る言葉は「配れませんでした」だけで、
+          #   **理由(401)はログの奥にしか無い。**
+          #
+          #   **1回だけ問い合わせて、使えるかを確かめる。**
+          #   読むだけで、何も書き換えない(プロジェクトの一覧を引くだけ)。
+          # ------------------------------------------------------------
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            https://api.supabase.com/v1/projects || echo 000)"
+
+          if [ "$CODE" = "401" ] || [ "$CODE" = "403" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN が使えません($CODE Unauthorized)。期限が切れている可能性が高いです。https://supabase.com/dashboard/account/tokens で作り直し、GitHub の Settings → Secrets and variables → Actions で貼り替えてください。"
+            exit 1
+          fi
+          if [ "$CODE" != "200" ]; then
+            # **分かっていないことを、分かったように書かない**(CLAUDE.md)。
+            # 繋がらなかっただけかもしれないので、止めずに先へ進む
+            echo "::warning::鍵の確認に $CODE が返りました。そのまま配ってみます。"
+          else
+            echo "鍵は使えます(200)"
+          fi
+
       - name: 窓口を配る
         env:
           # Supabase CLI は、この名前の環境変数を自分で読みます
