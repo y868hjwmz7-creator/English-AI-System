@@ -39,7 +39,13 @@
  *
  *   あちらは上限(0056 より前は 200 行)で切る。基礎単語は 1,200 語
  *   あるので、**切られると段の後ろが丸ごと「まだ」に見える。**
- *   表を直に読めば上限に当たらない(棚とまったく同じ判断)。
+ *   表を直に読めば、その上限には当たらない(棚とまったく同じ判断)。
+ *
+ *   ★ **ただし「表を直に読めば切られない」は誤りだった**(第5.404節・
+ *   2026-10-07)。PostgREST(Supabase)は**1回に返す行数に上限**を持ち、
+ *   既定は **1,000 行**である。語が 1,000 を超えている人は、
+ *   **読めなかったぶんの覚え具合が付かず、「まだ・今日出す」に戻って見える。**
+ *   いまは `readAllRows()` で**分けて読む**(単語帳・棚と同じ形)。
  *
  * 【語で絞り込まない理由】
  *
@@ -51,6 +57,8 @@
  */
 import { supabase } from './supabase.js'
 import { basicRows } from './basicsCourse.js'
+/* ★ **終わりまで読む**(第5.404節)。単語帳・棚とまったく同じ道を通す */
+import { WORDBOOK_PAGE, readAllRows } from './wordbookPaging.js'
 
 const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
@@ -89,11 +97,28 @@ export async function loadBasicWordbook({ learnerId = null, tier = 'core' } = {}
   }
   if (!who) return ok(basicRows(tier, [], { today: day }))
 
-  const { data, error } = await supabase
-    .from('word_reviews')
-    .select('word_norm, status, box, due_on, learn_streak, added_at, updated_at')
-    .eq('learner_id', who)
-    .limit(BASIC_SEEN_LIMIT)
+  /* ★ **分けて読む**(第5.404節)。`.range()` を付けずに読むと、
+       PostgREST の上限(既定 1,000 行)で切られる ——
+       語が 1,000 を超えている人は、**読めなかったぶんの覚え具合が付かず、
+       段の後ろが丸ごと「まだ・今日出す」に戻って見える。**
+
+     **読む順を決める**(`word_norm`)。決めないと、ページのあいだで
+     同じ行が二度来たり、抜けたりする。
+     **並べ直しは要らない** —— `basicRows()` が**段の語の側から**
+     突き合わせるので、読んだ順は画面に出ない(単語帳とはそこが違う)。
+
+     **`.limit()` は置かない。** 範囲と上限を同時に渡すと、
+     どちらが効くのかが読めなくなる。**際限なく読まない**ほうは
+     `maxPages` が持つ —— 数は `BASIC_SEEN_LIMIT` 1か所から出す */
+  const { data, error } = await readAllRows(
+    (from, to) => supabase
+      .from('word_reviews')
+      .select('word_norm, status, box, due_on, learn_streak, added_at, updated_at')
+      .eq('learner_id', who)
+      .order('word_norm')
+      .range(from, to),
+    { size: WORDBOOK_PAGE, maxPages: Math.ceil(BASIC_SEEN_LIMIT / WORDBOOK_PAGE) },
+  )
   if (error) return ng(error)
 
   return ok(basicRows(tier, data ?? [], { today: day }))

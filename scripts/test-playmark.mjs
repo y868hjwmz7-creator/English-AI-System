@@ -15087,6 +15087,52 @@ console.log('\n▶ 読んだ順ではなく、画面に出す順で返す(第5.4
   ok(sortWordbook(null).length === 0, '一覧が無くても落ちない')
 }
 
+console.log('\n▶ 基礎単語の覚え具合も、終わりまで読む(第5.404節)')
+{
+  /* ★ **「表を直に読めば切られない」は誤りだった**(2026-10-07)。
+       `word_reviews` を直に読むところも、PostgREST の 1,000 行で切られる。
+       1,200 語ある基礎単語では、**段の後ろが丸ごと「まだ」に戻って見える。**
+
+     **本物の語の一覧で測る。** 1,200 語ぜんぶを「できた」にしておき、
+     1,000 行で切る窓口を通したあと、**「まだ」が1語も残らない**かを見る */
+  const { basicRows } = await import('../src/lib/basicsCourse.js')
+  const 今日 = '2026-10-07'
+  const 語 = basicRows('full', [], { today: 今日 }).map((r) => r.word_norm)
+  ok(語.length > WORDBOOK_PAGE,
+    '基礎単語は、1ページぶんより多い(でなければ何も測っていない)', `${語.length} 語`)
+  const 覚え具合 = 語.map((w) => ({
+    word_norm: w, status: 'known', box: 6, due_on: '2099-01-01',
+    learn_streak: 25, added_at: '2026-01-01T00:00:00+00:00',
+    updated_at: '2026-01-01T00:00:00+00:00',
+  }))
+  const 切る窓口 = (from, to) => Promise.resolve({
+    data: 覚え具合.slice(from, from + Math.min(to - from + 1, WORDBOOK_PAGE)),
+    error: null,
+  })
+  const { data } = await readAllRows(切る窓口)
+  const 残り = basicRows('full', data, { today: 今日 })
+    .filter((r) => r.status !== 'known').length
+  ok(残り === 0, '1,000 行で切られても、段の後ろが「まだ」に戻らない',
+    `まだ ${残り} 語 / 読めた ${data.length} 語`)
+}
+
+{
+  const 素 = (f) => readFileSync(f, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, a) => a + ' '.repeat(m.length - a.length))
+  const b = 素('src/lib/basicReviews.js')
+  ok(/readAllRows\(/.test(b), '基礎単語も `readAllRows()` で分けて読んでいる')
+  ok(/\.range\(from, to\)/.test(b), '範囲を指定して読んでいる(`.range()`)')
+  ok(/\.order\('word_norm'\)/.test(b), '読む順を決めている')
+  /* ★ **範囲と上限を同時に渡さない。** どちらが効くのか読めなくなる */
+  ok(!/\.limit\(/.test(b), '`.limit()` と `.range()` を混ぜていない')
+  /* **際限なく読まない数は、1か所から出す**(書き写さない) */
+  ok(/maxPages: Math\.ceil\(BASIC_SEEN_LIMIT \/ WORDBOOK_PAGE\)/.test(b),
+    '上限は `BASIC_SEEN_LIMIT` から出している(数を書き写していない)')
+  const 読む回数 = (b.match(/from\('word_reviews'\)/g) ?? []).length
+  ok(読む回数 === 1, '覚え具合を読む道は1本だけ', `${読む回数} か所`)
+}
+
 console.log('\n▶ 単語帳の読み方と、古い案内(第5.404節)')
 {
   const 素 = (f) => readFileSync(f, 'utf8')
