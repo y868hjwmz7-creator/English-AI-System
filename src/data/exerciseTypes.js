@@ -18,7 +18,8 @@
    `sectionLabel()` で使う。**種類の一覧は持たない**(あちらが1か所) */
 import { bodyWord } from './materialKinds.js'
 import {
-  DEFAULT_EXAM, EXAM_KIND, examSectionsByKey, examSectionsOf, firstPartOf,
+  DEFAULT_EXAM, EXAM_KIND, examRealCountByKey, examSectionsByKey, examSectionsOf,
+  firstPartOf,
 } from './examPrep.js'
 /* かたまりの分類(第5.230節)。**呼び名はあちら1か所** */
 import { CHUNK_KINDS, isChunkText } from './chunkKinds.js'
@@ -1270,8 +1271,68 @@ export const WORD_AMOUNTS = [
   { id: 'double',  label: '20 問', count: 20 },
 ]
 
-/** その演習で選べる増やし方。**3倍は文型ドリルだけ** */
-export const amountsFor = (typeId) => {
+/**
+ * **テスト対策で選べる問数**(第5.409節・2026-10-07 利用者の指定)。
+ *
+ *   > TOEICのPART5は10問、20問、30問を選べる形のはずなのに必ず10問になる
+ *   > 英検大問1も選択できるようにしてください
+ *
+ * **倍率(標準 / 倍 / 3倍)では決められない。** PART ごとに既定の数が違い、
+ * 「倍」が上限(`MAX_ITEMS`)を超えて**どれを押しても同じ数**になる
+ * (Part 5 は既定 30 なので、倍も3倍も 30 になっていた)。
+ * だから**問数そのもの**で選ばせる(単語 / フレーズと同じ作法・第5.248節)。
+ *
+ * **段は3つ** —— 10 問 / 20 問 と、**その PART の数**。
+ * ここに**本番の問数も混ぜる**ので、
+ * ・TOEIC Part 5(既定 30・本番 30) … 10 / 20 / **30**
+ * ・英検1級 大問1(既定 10・本番 22) … 10 / 20 / **22**
+ * ・英検2級 大問1(既定 10・本番 17) … 10 / **17** / 20
+ * と、**PART に合わせて自動で並ぶ。数を書き写していない。**
+ *
+ * **id は数そのもの**(`n30`)。ただし**既定の数だけは `default`** にする ——
+ * 前に作りかけた下書きが何も持っていないとき、`amounts[…] ?? 'default'` が
+ * そのまま既定に当たる(`WORD_AMOUNTS` と同じ考え方)。
+ *
+ * @param base 既定の問数(その PART の `sections` の数)
+ * @param real 本番の問数(1問 = 1項目でないときは 0)
+ */
+export const EXAM_STEPS = [10, 20]
+export const examAmounts = (base, real = 0) => {
+  const 丸 = (n) => Math.min(Math.max(Math.round(Number(n) || 0), 1), MAX_ITEMS)
+  const 既定 = 丸(base)
+  const 本番 = Number(real) > 0 ? 丸(real) : 0
+  const 数 = [...new Set([...EXAM_STEPS, 既定, ...(本番 ? [本番] : [])])]
+    .map(丸)
+    .filter((n, i, a) => a.indexOf(n) === i)
+    .sort((a, b) => a - b)
+  return 数.map((n) => ({
+    id: n === 既定 ? 'default' : `n${n}`,
+    /* **本番と同じ数には、そう書く。** 押す前に分かるようにする */
+    label: n === 本番 ? `${n} 問(本番)` : `${n} 問`,
+    count: n,
+  }))
+}
+
+/**
+ * **その演習は、数を変えられるか。**
+ *
+ * **テスト対策は、どの演習でも変えられる**(第5.409節)——
+ * `SCALABLE_SECTIONS` は演習の種類だけで決めているので、
+ * **PART ごとに違う組み合わせを拾えなかった**(`fill_blank` が入っておらず、
+ * Part 5 の数はどう押しても動かなかった)。
+ */
+export const isScalable = (kind, typeId) => (
+  kind === EXAM_KIND ? true : SCALABLE_SECTIONS.includes(typeId)
+)
+
+/**
+ * その演習で選べる増やし方。**3倍は文型ドリルだけ**
+ *
+ * **テスト対策は問数そのもの**(第5.409節)。
+ * `examKey` を渡さなければ、これまでとまったく同じである。
+ */
+export const amountsFor = (typeId, { examKey = '', base = 0 } = {}) => {
+  if (examKey) return examAmounts(base, examRealCountByKey(examKey))
   if (WORD_SECTIONS.includes(typeId)) return WORD_AMOUNTS
   return DRILL_SECTIONS.includes(typeId)
     ? AMOUNTS
@@ -1387,11 +1448,14 @@ export const sectionsFor = (kind, amounts = null, include = null, examKey = '') 
   const out = defaultSectionsFor(kind, examKey)
     .filter((s) => isIncluded(s.exercise_type, include))
     .map((s) => {
-      if (!SCALABLE_SECTIONS.includes(s.exercise_type)) return s
+      /* ★ **テスト対策は、どの演習でも数を変えられる**(第5.409節)。
+           判断は `isScalable()` 1か所 —— ここで `kind === …` と書かない */
+      if (!isScalable(kind, s.exercise_type)) return s
       /* **その演習で選べるものの中から探す**(第5.248節)。
          `AMOUNTS` を直に見ると、単語 / フレーズの「15 問」が
-         **どこにも見つからず、黙って既定に落ちる** */
-      const pick = amountsFor(s.exercise_type)
+         **どこにも見つからず、黙って既定に落ちる**。
+         ★ テスト対策は PART ごとに段が違うので、**鍵と既定の数も渡す** */
+      const pick = amountsFor(s.exercise_type, { examKey, base: s.count })
         .find((a) => a.id === amounts?.[s.exercise_type])
       if (!pick) return s
       /* **何問になるかは `countOf()` 1か所**(画面の札と同じもの) */

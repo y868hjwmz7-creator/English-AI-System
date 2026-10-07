@@ -1584,6 +1584,28 @@ export const examSectionsOf = (examId, partId) =>
  */
 export const examKeyOf = (examId, partId) => `${examId ?? ''}:${partId ?? ''}`
 
+/**
+ * **その PART の、本番の問数**(第5.409節・2026-10-07 利用者の指定)。
+ *
+ * `real` が「30問」のように**数だけ**のときに、その数を返す。
+ * それ以外(「16問(1つの文書につき4問 × 4)」「約10分」)は **0**。
+ *
+ * **0 を返すのは「本番と直に比べられない」という意味**である ——
+ * Part 3・4・7 の `count` は「本文を何本作るか」であって問数ではない
+ * (第5.336節の「本番の1セット」)。**0 と、問数が少ないことを混同しない。**
+ *
+ * **読み取り方はここ1か所。** 見張り(`check-exam-prep.mjs`)も同じ形で読む。
+ */
+export const examRealCount = (examId, partId) => Number(
+  /^(\d+)問$/.exec(String(examPartOf(examId, partId)?.real ?? '').trim())?.[1] ?? 0,
+)
+
+/** `"toeic_lr:p5"` → 本番の問数。知らない鍵は 0 */
+export const examRealCountByKey = (key) => {
+  const [examId, partId] = String(key ?? '').split(':')
+  return examRealCount(examId, partId)
+}
+
 /** `"toeic_lr:p5"` → その PART の演習の組み合わせ。知らない鍵は空 */
 export const examSectionsByKey = (key) => {
   const [examId, partId] = String(key ?? '').split(':')

@@ -17,8 +17,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, DEFAULT_CEFR, cefrOption } from '../data/cefr.js'
 import {
-  EXERCISE_TYPES, FIELD_LABELS, SCALABLE_SECTIONS, WORD_DRILLS,
-  DEFAULT_WORD_DRILL, amountsFor, countOf,
+  EXERCISE_TYPES, FIELD_LABELS, WORD_DRILLS,
+  DEFAULT_WORD_DRILL, amountsFor, countOf, isScalable,
   defaultSectionsFor, exerciseLabel, exerciseType, grammarSource, isIncluded,
   isPassageSection, sectionLabel, sectionsFor,
 } from '../data/exerciseTypes.js'
@@ -3004,11 +3004,22 @@ export default function MaterialForm({
             **効かない操作を見せない。同じことをするものを2つ見せない**
             (CLAUDE.md)。
             演習も1つしか無いので、チェックで外す意味も無い */}
+        {/* ★ **選んだ PART の演習を出す**(第5.409節・2026-10-07 利用者の指摘)。
+
+              > TOEICのPART5は10問、20問、30問を選べる形のはずなのに必ず10問になる
+
+            **鍵(`examKey`)を渡していなかった。** テスト対策なのに
+            `defaultSectionsFor(kind)` の既定(リスニング)を出していたので、
+            画面には「リスニングの数」の札が並び、**押しても Part 5 の
+            穴埋めには1つも効かなかった**(数は `fill_blank` で引くため)。
+            **効かない操作を見せない**(CLAUDE.md)の、いちばん分かりにくい形
+            —— 操作は見えていて、押せて、何も起きない。 */}
         {!isResponseKind(kind)
-          && defaultSectionsFor(kind).some((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type)) && (
+          && defaultSectionsFor(kind, (isExamKind(kind) ? examKey : ''))
+            .some((s2) => isScalable(kind, s2.exercise_type)) && (
           <div className="amount-row">
-            {defaultSectionsFor(kind)
-              .filter((s2) => SCALABLE_SECTIONS.includes(s2.exercise_type))
+            {defaultSectionsFor(kind, (isExamKind(kind) ? examKey : ''))
+              .filter((s2) => isScalable(kind, s2.exercise_type))
               .map((s2) => {
                 const base = s2.count
                 const now = amounts[s2.exercise_type] ?? 'default'
@@ -3034,7 +3045,8 @@ export default function MaterialForm({
                            aria-label={`${exerciseLabel(s2.exercise_type)}の数`}>
                         {/* **3倍(30問)が出るのは文型ドリルだけ**(2026-09)。
                             弱点が3つまで選べるので、1つあたり10問にすると30問になる */}
-                        {amountsFor(s2.exercise_type).map((a) => (
+                        {amountsFor(s2.exercise_type,
+                          { examKey: (isExamKind(kind) ? examKey : ''), base }).map((a) => (
                           <button key={a.id} type="button"
                                   className={`theme-btn${now === a.id ? ' is-active' : ''}`}
                                   aria-pressed={now === a.id}

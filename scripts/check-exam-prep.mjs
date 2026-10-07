@@ -33,7 +33,8 @@ import { readFileSync } from 'node:fs'
 const {
   DEFAULT_EXAM, EXAMS, EXAM_KIND, examBrief, examBriefByKey, examKeyOf, examLabel,
   examOf, examOutline, examPartLine, examPartOf, examPartsOf, examSectionsByKey,
-  examSectionsOf, examSkipLine, examSkipsOf, examTitle, firstPartOf,
+  examRealCountByKey, examSectionsOf, examSkipLine, examSkipsOf, examTitle,
+  firstPartOf,
   BLANK_AXES, FORMATS, TRAPS, choiceBrief, choicesOf, formatOf, partialOf,
 } = await import('../src/data/examPrep.js')
 const { DROP_REASONS, emptyDropCounts, isExhausted }
@@ -41,8 +42,9 @@ const { DROP_REASONS, emptyDropCounts, isExhausted }
 const { askFields, dropsLead, splitAsk } = await import('../src/lib/choiceLines.js')
 /* ★ **応答が本当に応答になっているかの決まり**（第5.346節） */
 const { REPLY_RULE, REPLY_RULE_SWAP } = await import('../src/data/replyRule.js')
-const { EXERCISE_TYPES, audioJaOf, defaultSectionsFor, isBlankItem, isPassageSection,
-  sectionsFor } = await import('../src/data/exerciseTypes.js')
+const { EXERCISE_TYPES, amountsFor, audioJaOf, defaultSectionsFor, isBlankItem,
+  isPassageSection, isScalable, MAX_ITEMS, sectionsFor }
+  = await import('../src/data/exerciseTypes.js')
 const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, isExamKind, needsWeakTag }
   = await import('../src/data/materialKinds.js')
 
@@ -150,6 +152,77 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
       } else {
         ok(`Part 5 … 本番と同じ ${本番} 問を作る(作り方の文も ${文の数} 問)`)
       }
+    }
+  }
+
+  /* ★ ══ **問数は選べる**(第5.409節・2026-10-07 利用者の指定)═══════════
+
+       > TOEICのPART5は10問、20問、30問を選べる形のはずなのに必ず10問になる
+       > 英検大問1も選択できるようにしてください
+
+     **押せるだけでは足りない。** もとは画面が `examKey` を渡しておらず、
+     「リスニングの数」の札が並んでいた —— 押せて、何も起きなかった。
+     だから**選んだ数が、本当に `sections` に出てくるか**まで見る。
+
+     **数を書き写さない。** 段は `amountsFor()` から読み取り、
+     その1つずつを `sectionsFor()` に通して、**返ってきた数と突き合わせる。** */
+  {
+    const 悪い = []
+    let 見た = 0
+    for (const { exam, part } of PICKABLE) {
+      const key = examKeyOf(exam.id, part.id)
+      for (const sec of part.sections ?? []) {
+        /* **テスト対策は、どの演習でも数を変えられる**(`isScalable`)。
+           ここが false を返す日が来たら、その時点で赤くなる */
+        if (!isScalable(EXAM_KIND, sec.exercise_type)) {
+          悪い.push(`${exam.id}/${part.id} … ${sec.exercise_type} の数を変えられない`)
+          continue
+        }
+        const 段 = amountsFor(sec.exercise_type, { examKey: key, base: sec.count })
+        if (段.length < 2) {
+          悪い.push(`${exam.id}/${part.id} … 選べる数が ${段.length} 個しかない`)
+          continue
+        }
+        /* **既定が1つだけあるか。** 無いと、開き直したとき黙って別の数になる */
+        const 既定 = 段.filter((a) => a.id === 'default')
+        if (既定.length !== 1) {
+          悪い.push(`${exam.id}/${part.id} … 既定の段が ${既定.length} 個`)
+          continue
+        }
+        if (既定[0].count !== sec.count) {
+          悪い.push(`${exam.id}/${part.id} … 既定の段(${既定[0].count})が`
+            + ` いまの数(${sec.count})と違う`)
+          continue
+        }
+        /* ★ **本番の数が、段に入っているか**(第5.409節)。
+             これが無いと、**本番を混ぜるのをやめても緑のまま**だった
+             (段の数が減るだけで、どれを選んでも正しく出るため)——
+             CLAUDE.md「無ければ素通りする形の検証を書かない」 */
+        const 本番 = examRealCountByKey(key)
+        if (本番 > 0 && 本番 <= MAX_ITEMS && !段.some((a) => a.count === 本番)) {
+          悪い.push(`${exam.id}/${part.id} … 本番の ${本番} 問が段に無い`
+            + `(${段.map((a) => a.count).join(' / ')})`)
+          continue
+        }
+        for (const a of 段) {
+          const 出た = sectionsFor(EXAM_KIND, { [sec.exercise_type]: a.id }, null, key)
+            .find((x) => x.exercise_type === sec.exercise_type)?.count
+          if (出た !== a.count) {
+            悪い.push(`${exam.id}/${part.id} … 「${a.label}」を選んだのに ${出た} 問`)
+          }
+          見た += 1
+        }
+      }
+    }
+    /* ★ **1つも測っていなければ赤**(無ければ素通りさせない・CLAUDE.md) */
+    if (!見た) ng('問数を選ぶ … 1つも測っていない', '段が1つも返っていない')
+    else if (悪い.length) ng('問数を選ぶ … 選んだ数が出てこない', 悪い.join('\n    '))
+    else {
+      const p5 = PICKABLE.find((x) => x.exam.id === 'toeic_lr' && x.part.id === 'p5')?.part
+      const 段 = p5 ? amountsFor(p5.sections[0].exercise_type,
+        { examKey: 'toeic_lr:p5', base: p5.sections[0].count }).map((a) => a.label) : []
+      ok(`問数を選ぶ … ${見た} 通りとも、選んだ数がそのまま出る`
+        + `(Part 5 は ${段.join(' / ')})`)
     }
   }
 
