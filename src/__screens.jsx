@@ -701,25 +701,33 @@ const QRMODE = (
 /* **その教材の語だけに絞ったとき**(0047・`?only=a,b,c`)。
    絞れているか・札が出ているか・外す道があるかを、実際に描いて数える */
 const only = (q.get('only') || '').split(',').map((w) => w.trim()).filter(Boolean)
-const WORDBOOK = (
-  <div className="app-main">
-    {/* **棚も基礎単語も渡さない。** これが「出ない」側である ——
-        0055 で基礎単語を外されたゲストの単語帳がこの形になる
-        (冊が1つしか無いので、切り替えごと出ない) */}
-    {/* **ビジネス必須チャンク集は `?chunk=1` のときだけ**(第5.199節)。
+/* ★ **ゲストの単語帳も `WithMenuTools` で包む**(第5.414節)。
+     チャンク集の見張りは `?screen=wordbook&chunk=1` を開くので、
+     ここが受け取った道具を描かないと、**紙のボタンが1つも無い。**
+     `?screen=mybook` だけ直して、こちらを忘れていた
+     (**同じ作りの場所を、数えずに1つだけ直していた**)。 */
+/* **棚も基礎単語も渡さない。** これが「出ない」側である ——
+   0055 で基礎単語を外されたゲストの単語帳がこの形になる
+   (冊が1つしか無いので、切り替えごと出ない)。
 
-        既定で出すと、**「冊が1つしか無い画面には、えらぶ場所ごと出さない」**
-        を見ている検証が、永久に赤くなる —— あの決まりはいまも生きている。
-        3つとも同じ値で渡す(冊に出す決まりは `showCol || showNp || showAdv`)。
-        **本物と1文字も違えない**(骨組みが食い違うと、検証は何も守らない) */}
-    <Wordbook learnerId="g1" learnerName="Airi" showBasics={false}
-              showCol={q.get('chunk') === '1'}
-              showNp={q.get('chunk') === '1'}
-              showAdv={q.get('chunk') === '1'}
-              only={only.length ? only : null}
-              onlyLabel={only.length ? '業界の語' : ''}
-              onClearOnly={only.length ? () => {} : null} />
-  </div>
+   **ビジネス必須チャンク集は `?chunk=1` のときだけ**(第5.199節)。
+   既定で出すと、**「冊が1つしか無い画面には、えらぶ場所ごと出さない」**
+   を見ている検証が、永久に赤くなる —— あの決まりはいまも生きている。
+   3つとも同じ値で渡す(冊に出す決まりは `showCol || showNp || showAdv`)。
+   **本物と1文字も違えない**(骨組みが食い違うと、検証は何も守らない) */
+const WORDBOOK = (
+  <WithMenuTools>
+    {(setTools) => (
+      <Wordbook learnerId="g1" learnerName="Airi" showBasics={false}
+                showCol={q.get('chunk') === '1'}
+                showNp={q.get('chunk') === '1'}
+                showAdv={q.get('chunk') === '1'}
+                only={only.length ? only : null}
+                onlyLabel={only.length ? '業界の語' : ''}
+                onClearOnly={only.length ? () => {} : null}
+                onMenu={(t) => setTools(t ?? null)} />
+    )}
+  </WithMenuTools>
 )
 
 /* **トレーナー自身の単語帳**(`?screen=mybook`・2026-09 利用者の指定)。
@@ -756,7 +764,19 @@ function WithMenuTools({ children }) {
   const [tools, setTools] = useState(null)
   return (
     <div className="app-main">
-      {tools && <div className="app-nav-tools">{tools}</div>}
+      {tools && (
+        <>
+          <div className="app-nav-tools">{tools}</div>
+          {/* ★ **閉じたら捨てる。本物とまったく同じ**(第5.414節)。
+                `App.jsx` は閉じるときに `setFocusTools(null)` している。
+                **捨てないと、押した瞬間の道具が居座る** ——
+                絞り込みを変えても**古い語数のボタンがそのまま出ている**ので、
+                見張りは ☰ を押し直さず、**絞る前の数を読んで赤くなった**
+                (3092 問のまま・2026-10-07)。
+                **骨組みは、本物と1文字も違えない**(CLAUDE.md)。 */}
+          <div className="nav-scrim" onClick={() => setTools(null)} />
+        </>
+      )}
       {children(setTools)}
     </div>
   )
