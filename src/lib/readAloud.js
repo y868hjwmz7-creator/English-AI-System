@@ -394,8 +394,16 @@ export async function readAloud(text, {
   stopReading()
   const mine = session
   /* ★ **ロック画面に「いま鳴らしているもの」を出す**(第5.285節)。
-     **`stopReading()` の後ろに置く** —— あちらが帯を片づける */
-  setNowPlaying({ title })
+     **`stopReading()` の後ろに置く** —— あちらが帯を片づける。
+
+     ★ **渡されなかったら、いま入っている題をそのままにする**(第5.416節)。
+       ここを素通りで `setNowPlaying({ title: '' })` と呼んでいたら、
+       **聞き流しが自分で入れた冊名を消していた**
+       (`WordRadio` は1語ずつここを通る)——
+       ロック画面の題が「Native Flow Vol.1 / UNIT 3 / S V O to do」から
+       **受け皿の「英語の練習」に落ちた。**
+       見張りが「空でないか」だけを見ていたので、**緑のまま**だった。 */
+  if (title) setNowPlaying({ title })
   nowPlaying(resumeKey, 0)
 
   // **1回しか呼ばない。** MP3 と端末の声で二度呼ぶと、
@@ -715,7 +723,9 @@ export function readAloudSequence(parts, {
      **`stopReading()` の後ろに置く** —— あちらが帯を片づけるので、
      前に置くと入れた題がその場で消える。
      端末はこれを見て「止めてはいけない音」と扱う */
-  setNowPlaying({ title })
+  /* ★ **渡されなかったら、いま入っている題をそのままにする**(第5.416節)。
+     理由は `readAloud()` の同じ行に書いてある(聞き流しの冊名を消していた) */
+  if (title) setNowPlaying({ title })
   if (onNext || onPrev) setMediaActions({ onNext, onPrev })
   /** 鳴り切ったときの後片づけ。**帯と操作をまとめて外す**(1か所) */
   const 片づける = () => { clearNowPlaying(); setMediaActions({}) }

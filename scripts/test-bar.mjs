@@ -7146,6 +7146,15 @@ export default defineConfig({
         const m = navigator.mediaSession?.metadata
         return m ? `${m.title}/${navigator.mediaSession.playbackState}` : ''
       })
+      /* ★ **画面に出ている題と突き合わせる**(第5.416節)。
+           ここは「空でないか」しか見ていなかったので、
+           **受け皿の題(「英語の練習」)に落ちても緑のまま**だった ——
+           実際に落ちた(`readAloud()` に足した `setNowPlaying({ title: '' })` が、
+           聞き流しが入れた冊名を消していた)。
+           **「出る / 出ない」の両方を見る**(CLAUDE.md)—— 題が
+           **何であるか**まで見ないと、見張ったことにならない */
+      const 見出し = await page.evaluate(() => (
+        document.querySelector('.drill-title')?.textContent ?? '').replace(/\s+/g, ' ').trim())
       await page.close()
       if (見た.size < 3) {
         ng(`聞き流し(時計 ${時計}) … 先へ進まない`,
@@ -7154,8 +7163,15 @@ export default defineConfig({
       } else if (!帯) {
         /* **ロック画面の帯**。これが無いと、端末はページごと寝かせる */
         ng(`聞き流し(時計 ${時計}) … ロック画面に出す題が入っていない`)
+      } else if (!見出し) {
+        ng(`聞き流し(時計 ${時計}) … 画面に、何を聞き流しているのかが出ていない`,
+          '**突き合わせる相手**が無いので、題を測れない')
+      } else if (!帯.startsWith(`${見出し}/`)) {
+        ng(`聞き流し(時計 ${時計}) … ロック画面の題が、画面の題と違う`,
+          `ロック画面「${帯}」/ 画面「${見出し}」`)
       } else {
-        ok(`聞き流し(時計 ${時計}) … 18 秒で ${見た.size} 文すすむ / ロック画面 ${帯}`)
+        ok(`聞き流し(時計 ${時計}) … 18 秒で ${見た.size} 文すすむ`
+          + ` / ロック画面の題は画面と同じ ${帯}`)
       }
     }
 
