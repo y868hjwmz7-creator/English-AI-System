@@ -43,7 +43,15 @@ import { STANDARD } from './voiceTier.js'
  * @param {Function} o.onIndex いま鳴っている番号が変わったとき(終わりで null)
  * @param {Function} o.onWord  いま読んでいる文の位置(終わりで null)
  */
-export default function useBodyAudio({ onIndex = null, onWord = null } = {}) {
+/**
+ * ★ `title` … **ロック画面に出す題**(第5.285節・2026-10-07 実機・利用者の指摘)。
+ *
+ *   > すべての教材で、スマホやタブレットで画面をオフにすると音が消えます
+ *
+ *   **画面に出ている名前をそのまま渡す**(`materialName()` の結果)。
+ *   書き写さない —— 呼び名は `materialName.js` 1か所である(第5.384節)。
+ */
+export default function useBodyAudio({ onIndex = null, onWord = null, title = '' } = {}) {
   const [playing, setPlaying] = useState(false)
   /** 音が出るまでのあいだ(`SpeakButton` と同じ見せ方) */
   const [waiting, setWaiting] = useState(false)
@@ -65,6 +73,9 @@ export default function useBodyAudio({ onIndex = null, onWord = null } = {}) {
   indexRef.current = onIndex
   const wordRef = useRef(onWord)
   wordRef.current = onWord
+  /* ★ 題も控えで持つ(いつも最新になる。`repeatRef` と同じ作法) */
+  const titleRef = useRef(title)
+  titleRef.current = title
 
   const stopRef = useRef(null)
   const ticker = useRef(null)
@@ -132,6 +143,8 @@ export default function useBodyAudio({ onIndex = null, onWord = null } = {}) {
       clipTier: tier,
       canJoin,
       resumeKey,
+      /* ★ **ロック画面に出す題**(第5.285節)。入れるのは鳴らす道1か所 */
+      title: titleRef.current,
       /* **単位は訊きに行く。** 鳴らしている最中に切り替えられる */
       repeatOf: () => repeatRef.current,
       partRangeOf,

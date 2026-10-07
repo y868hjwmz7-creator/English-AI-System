@@ -46,7 +46,7 @@ import {
   playClip, prefetchClip, quietWait, seekClip, stopClip, wholeClip, wholeSeams,
 } from './audioClips.js'
 /* **ロック画面の帯**(第5.285節)。画面を閉じたら片づける */
-import { clearNowPlaying, setMediaActions } from './mediaSession.js'
+import { clearNowPlaying, setMediaActions, setNowPlaying } from './mediaSession.js'
 import { FADE_STEP } from './loudness.js'
 import { isSpeechSupported, speakOnce, stopSpeaking } from './speech.js'
 import { clipSpeakerFor } from './voiceCast.js'
@@ -376,6 +376,16 @@ export async function readAloud(text, {
    * 時刻が本文と合わない、のどれかである。**行き止まりを作らない。**
    */
   whole = null,
+  /**
+   * ★ **ロック画面に出す題**(第5.285節・2026-10-07 実機・利用者の指摘)。
+   *
+   *   > すべての教材で、スマホやタブレットで画面をオフにすると音が消えます
+   *
+   *   1文ずつの「聞く」も、ここを通る。**題は、画面に出ているものを
+   *   そのまま渡す**(書き写さない)。渡さなければ受け皿の題になる
+   *   (詳しい経緯は `readAloudSequence` の同じ欄に書いてある)。
+   */
+  title = '',
 } = {}) {
   /* **止めるより先に、控えを取り出す。** `stopReading()` は
      いま鳴っているものの控えを作り直すので、順を逆にすると
@@ -383,6 +393,9 @@ export async function readAloud(text, {
   const from = takeMark(resumeKey)
   stopReading()
   const mine = session
+  /* ★ **ロック画面に「いま鳴らしているもの」を出す**(第5.285節)。
+     **`stopReading()` の後ろに置く** —— あちらが帯を片づける */
+  setNowPlaying({ title })
   nowPlaying(resumeKey, 0)
 
   // **1回しか呼ばない。** MP3 と端末の声で二度呼ぶと、
@@ -648,6 +661,30 @@ export function readAloudSequence(parts, {
    * 置き場所は英文の指紋で決まるので**そのぶん課金される**(CLAUDE.md)。
    */
   partRangeOf = null,
+  /**
+   * ★ **ロック画面に出す題**(第5.285節・2026-10-07 実機・利用者の指摘)。
+   *
+   *   > すべての教材で、スマホやタブレットで画面をオフにすると音が消えます
+   *
+   *   第5.285節で決めた「ロック画面に『いま鳴らしているもの』を出す」は、
+   *   **聞き流し(`WordRadio`)にしか入っていなかった。**
+   *   教材の読み上げは `setNowPlaying()` を1度も呼んでおらず、
+   *   ロック画面の題が **「英語の練習」(言わないための受け皿)**のままで、
+   *   次へ / 前へ のボタンも**どこにもつながっていなかった**
+   *   (`npm run test:bar` で測って分かった。聞き流しは本物の冊名が出る)。
+   *
+   *   **題は、画面に出ているものをそのまま渡す**(書き写さない)。
+   *   渡さなければ、これまでどおり受け皿の題になる。
+   */
+  title = '',
+  /**
+   * ★ **ロック画面の「次へ」「前へ」**(第5.285節)。
+   *
+   * **画面のボタンと同じ関数を渡す**(道を2つ作らない)。
+   * 渡さなかったものは**外す** —— 効かないボタンをロック画面に出さない。
+   */
+  onNext = null,
+  onPrev = null,
 } = {}) {
   const shown = (parts ?? []).filter((p) => String(p?.text ?? '').trim())
   /* ── **窓口が受け取れる長さを超える段落は、ここで分ける**(2026-09 実機)
@@ -674,6 +711,14 @@ export function readAloudSequence(parts, {
   stopReading()
   const mine = session
   if (!list.length) return () => {}
+  /* ★ **ロック画面に「いま鳴らしているもの」を出す**(第5.285節)。
+     **`stopReading()` の後ろに置く** —— あちらが帯を片づけるので、
+     前に置くと入れた題がその場で消える。
+     端末はこれを見て「止めてはいけない音」と扱う */
+  setNowPlaying({ title })
+  if (onNext || onPrev) setMediaActions({ onNext, onPrev })
+  /** 鳴り切ったときの後片づけ。**帯と操作をまとめて外す**(1か所) */
+  const 片づける = () => { clearNowPlaying(); setMediaActions({}) }
   /* 続きから始める番号。**一覧より外に出ていたら、言われた場所から**
      (教材を直すと段落の数が変わる。CLAUDE.md「範囲の外になっていることがある」)。
      **控えも `startIndex` も「段落の番号」である**(かけらの番号ではない) */
@@ -1188,6 +1233,12 @@ export function readAloudSequence(parts, {
     if (!played) return false                 // 鳴らせなかった。今までの形へ
 
     finished()
+    /* ★ **鳴り切ったら、ロック画面の帯を片づける**(第5.285節)。
+       止めたときは `stopReading()` が片づけるが、**最後まで鳴り切った
+       ときは誰も片づけていなかった** —— 何も鳴っていないのに
+       「再生中」と出続け、▶ を押しても誰も受け取らない
+       (`npm run test:bar` で `playing` のまま残るのを測った) */
+    片づける()
     onDone?.()
     onIndex?.(null)
     onWord?.(null)
@@ -1455,6 +1506,8 @@ export function readAloudSequence(parts, {
        `onIndex(null)` は止めたときにも来るので、これだけでは
        「止めた」と「終わった」を見分けられない。操作盤は
        **止めたときは番号を残し、終わったら消す**ので、両方が要る */
+    /* ★ **ここでも片づける**(第5.285節・上と同じ理由) */
+    片づける()
     onDone?.()
     onIndex?.(null)
     onWord?.(null)

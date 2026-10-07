@@ -28,6 +28,8 @@ import { printElement } from '../lib/print.js'
 import { materialFileName } from '../lib/fileName.js'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { stopReading } from '../lib/readAloud.js'
+/* ★ **ロック画面に出す題**(第5.285節)。呼び名は1か所(第5.384節) */
+import { materialName } from '../lib/materialName.js'
 import { voiceTierFor } from '../lib/voiceTier.js'
 import { castClipSpeakers, castVoices, voiceFor } from '../lib/voiceCast.js'
 import {
@@ -585,6 +587,13 @@ export default function LessonView({
    * **何を鳴らすかは押したときに渡す**(声も速さも段もページで変わる)。
    */
   const player = useBodyAudio({
+    /* ★ **ロック画面に出す題**(第5.285節・2026-10-07 実機・利用者の指摘
+         「すべての教材で、画面をオフにすると音が消えます」)。
+         **画面の見出しに出ているものをそのまま渡す** ——
+         呼び名は `materialName.js` 1か所である(第5.384節)。
+         `MaterialTitle` が描いているのと**同じ関数**なので、
+         ロック画面と画面の題が食い違わない */
+    title: materialName(material).name,
     onIndex: (i) => {
       setSpeakingKey(i === null ? null : playRef.current[i]?.key ?? null)
       setReadingAt(null)   // 次の文に移ったら、前の色を消す
@@ -2159,6 +2168,8 @@ export default function LessonView({
              `PassagePractice` を通さず、ここから直に出す
              (6Steps の中の1つではなく、6Steps と並ぶもう1つの取り組み方) */
           <FocusReader
+            /* ★ **ロック画面に出す題**(第5.285節)。紙とまったく同じ名前 */
+            title={materialName(material).name}
             section={passageSection}
             isDialogue={passageSection.exercise_type === 'dialogue'}
             voiceIds={material.voiceIds}
@@ -2186,6 +2197,8 @@ export default function LessonView({
           />
         ) : run === 'six' ? (
           <PassagePractice
+            /* ★ **ロック画面に出す題**(第5.285節)。紙とまったく同じ名前 */
+            title={materialName(material).name}
             section={passageSection}
             /* **6Steps の中にも集中モードを出す**(2026-09 利用者の指定
                「6steps全てに集中モードを作ってください」)。

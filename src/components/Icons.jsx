@@ -230,8 +230,6 @@ export function SearchIcon({ className = 'icon' }) {
 export function SortIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      {/* **太さ・線の始末は1か所にまとめる。** 6本の線と3つの輪で
-          ばらばらに書くと、どれか1つだけ古くなる */}
       {/* ★ **横線は2本**(第5.415節・2026-10-07 利用者の指定)。
 
             > 絞り込み・設定のアイコンは、YouTubeと同じ「横線2本＋つまみ」の

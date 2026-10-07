@@ -24,6 +24,8 @@ import { printElement } from '../lib/print.js'
 /* **保存する名前は `fileName.js` 1か所**(第5.229節) */
 import { materialFileName } from '../lib/fileName.js'
 import MaterialTitle from './MaterialTitle.jsx'
+/* ★ **ロック画面に出す題**(第5.285節)。呼び名は1か所(第5.384節) */
+import { materialName } from '../lib/materialName.js'
 import LessonView from './LessonView.jsx'
 import { kindLabel, loadMyAssignments, markAssignmentDone } from '../lib/materials.js'
 /* **いつ取った控えか**を言葉にするのは1か所(`offlineNote.js`) */
@@ -692,6 +694,10 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                             </h5>
                             {sec.instruction && <p className="card-hint">{sec.instruction}</p>}
                             <PassagePractice
+                              /* ★ **ロック画面に出す題**(第5.285節)。
+                                   上の `MaterialTitle` が大きく出しているのと
+                                   **同じ関数**で組む(書き写さない) */
+                              title={materialName(a.material).name}
                               section={sec}
                               /* 途中経過を教材ごとにまとめて消せるようにするため、
                                  教材の id も渡す(`src/lib/progress.js`) */

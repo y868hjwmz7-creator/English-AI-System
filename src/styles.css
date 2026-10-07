@@ -1144,6 +1144,14 @@ body:has(.app-tabs) .focus.qrfocus {
   /* 数が増えても行が動かないように、**幅の決まった数字**にする */
   font-variant-numeric: tabular-nums;
 }
+/* ★ **文のときだけ小さくする**(第5.416節)。
+     「ほかのアプリの音」の、えらんであるものの状態を1行で出すところ。
+     **上の決まりは数のためのもの**(控えの本数)なので、
+     そちらの見た目は1ミリも変えない(**言われた場所だけを直す**)。 */
+.nav-setting-now--text {
+  font-size: var(--fs-11h);
+  font-variant-numeric: normal;
+}
 
 /* 英語の音声と音楽の大きさ(2026-09 利用者の指定)。
    **見出しの行の右端に、いまの大きさを数で出す** —— つまみの位置だけでは、
@@ -6774,8 +6782,14 @@ button.wbfilter-ctl { text-align: left; }
      **隙間は `gap` で作る**(共通ルール)。`margin` で回すと、
      横に並べたときに**離すものが何も無くなる** */
 .wbfilter-met {
-  flex: 1 1 auto; min-width: 0;
   display: flex; align-items: center; gap: var(--sp-6);
+  /* **入れ物のほうが「欄」**なので、中身の高さは子が決める */
+  height: auto; padding: 0; border: 0; background: none;
+}
+/* 中の選ぶ欄は、カレンダーを除いた残りいっぱい */
+.wbfilter-met-sel {
+  flex: 1 1 auto; min-width: 0;
+  height: 36px; font-size: var(--fs-13);
 }
 /* カレンダーは**絵だけ**。押せる大きさ(36px)は割らない */
 .wbfilter-cal { flex: 0 0 auto; height: 36px; min-width: 36px; }

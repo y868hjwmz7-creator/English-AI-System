@@ -747,10 +747,27 @@ const WORDBOOK = (
    描いていなかった**(第5.276節で `?screen=qrradio` に踏んだのと同じ)。
 
    **骨組みは、本物と1文字も違えない**(CLAUDE.md)。 */
+/* ★ **☰ が受け取った道具を、ここで描く**(第5.414節・段階3)。
+     本物は `AppNav` の `tools` が描いている(`App.jsx` が預かって渡す)。
+     **受け取るだけで捨てると、骨組みでは1ミリも測れない** ——
+     紙に出す道具が ☰ の中へ移ったので、ここが無いと
+     「印刷のボタンに語数が出ていない」と**誤って赤くなる**。 */
+function WithMenuTools({ children }) {
+  const [tools, setTools] = useState(null)
+  return (
+    <div className="app-main">
+      {tools && <div className="app-nav-tools">{tools}</div>}
+      {children(setTools)}
+    </div>
+  )
+}
+
 const MYBOOK = (
-  <div className="app-main">
-    <Wordbook shelves={shelfList()} showCol onMenu={() => {}} />
-  </div>
+  <WithMenuTools>
+    {(setTools) => (
+      <Wordbook shelves={shelfList()} showCol onMenu={(t) => setTools(t ?? null)} />
+    )}
+  </WithMenuTools>
 )
 
 /* 教材のカードの操作(`?screen=tools`・2026-09 利用者の指定)。
@@ -1460,9 +1477,12 @@ const QR_SAY_PAIR = {
    **ファイルに書いてあり、Supabase を1回も呼ばない**ので、
    骨組み(接続なし)でもそのまま動く。 */
 const QRREAL = (
-  <div className="app-main" style={{ padding: 16 }}>
-    <QrReview nfUnits={NATIVE_FLOW_UNITS} frameOn onClose={() => {}} onMenu={() => {}} />
-  </div>
+  <WithMenuTools>
+    {(setTools) => (
+      <QrReview nfUnits={NATIVE_FLOW_UNITS} frameOn onClose={() => {}}
+                onMenu={(t) => setTools(t ?? null)} />
+    )}
+  </WithMenuTools>
 )
 
 /* ★ **終わりの1枚**(第5.387節・2026-10-05 実測)。
@@ -1701,13 +1721,25 @@ const QRRADIO = (
        冊の名前と、絞り込んでいれば Unit・中身・型まで入る */
     label="Native Flow Vol.1 / UNIT 3 / S V O to do"
     /* **「出しかた」で選んでいる数を持ち込む**(第5.262節・
-       2026-09-26 利用者の指定)。`?screen=qrradio&size=5` で、
-       **5問に絞って練習していた人が開いた形**を測れる。
-       渡さなければ「ぜんぶ」(本物の既定と同じ) */
-    size={q.get('size') === '5' ? 5 : 'all'}
-    /* **上限より多い文を入れておく**(CLAUDE.md「無ければ素通りする形の
-       検証を書かない」)—— 5問に絞っても減らない数しか無いと、
-       絞りを外しても緑のままになる */
+       2026-09-26 利用者の指定)。`?screen=qrradio&size=10` で、
+       **10問に絞って練習していた人が開いた形**を測れる。
+       渡さなければ「ぜんぶ」(本物の既定と同じ)。
+
+       ★ **値は書き写さず、そのまま渡す**(第5.414節)。
+         `=== '5' ? 5 : 'all'` と書いてあったが、段階3で
+         **一覧が 10 / 20 / ぜんぶになり、5 が無くなった** ——
+         `sizeOfValue()` が既定へ落とすので、
+         **「絞っていた人」と「絞っていない人」が同じ数になり、
+         この見張りは何も測らなくなっていた。**
+         いまは生の値を渡し、**正しいかどうかは本物(`WordRadio` の
+         `sizeOfValue()`)に決めさせる** —— 一覧を変えた日に、
+         骨組みを直さなくても付いてくる。 */
+    size={q.get('size') || 'all'}
+    /* **いちばん小さい数より多い文を入れておく**(CLAUDE.md「無ければ
+       素通りする形の検証を書かない」)—— 絞っても減らない数しか無いと、
+       絞りを外しても緑のままになる。
+       ★ **一覧の最小が 10 になった**(段階3)ので、8本では足りない。
+         **いちばん大きい数(20)より多く**してある。 */
     rows={[
       {
         en: 'We decided to take on the project even though the deadline was extremely tight.',
@@ -1723,6 +1755,23 @@ const QRRADIO = (
       { en: 'We are running behind schedule.', ja: '予定より遅れています。' },
       { en: 'That makes a lot of sense.', ja: 'とても納得できます。' },
       { en: 'I will look into it right away.', ja: 'すぐに調べます。' },
+      { en: 'Let us circle back to this next week.', ja: 'この件は来週あらためましょう。' },
+      { en: 'I am not sure I follow you.', ja: 'すみません、話が追えていません。' },
+      { en: 'Would Thursday morning work for you?', ja: '木曜の午前はご都合いかがですか。' },
+      { en: 'We will need a bit more time.', ja: 'もう少し時間が必要です。' },
+      { en: 'Thank you for bearing with us.', ja: 'お待たせして申し訳ありません。' },
+      { en: 'Let me double-check the figures.', ja: '数字をもう一度確かめます。' },
+      { en: 'That is outside our budget.', ja: 'それは予算を超えています。' },
+      { en: 'Could you send over the latest draft?', ja: '最新の原稿を送っていただけますか。' },
+      { en: 'I will keep you posted.', ja: '進み次第お知らせします。' },
+      { en: 'We are on the same page.', ja: '認識は合っています。' },
+      { en: 'Let me take that offline.', ja: 'その件は個別に話しましょう。' },
+      { en: 'I would rather hold off for now.', ja: 'いまは見送りたいです。' },
+      { en: 'Shall we wrap up here?', ja: 'ここで終わりにしましょうか。' },
+      { en: 'That is a fair point.', ja: 'それはもっともです。' },
+      { en: 'I will take care of it.', ja: '私が引き受けます。' },
+      { en: 'Could you clarify what you mean?', ja: 'どういう意味か教えていただけますか。' },
+      { en: 'We appreciate the quick turnaround.', ja: '早いご対応に感謝します。' },
     ]}
     /* **曲を2つ以上入れておく**(第5.194節・2026-09 利用者の指定
        「複数登録した曲から選べるようにしてください」)。

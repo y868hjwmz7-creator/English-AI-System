@@ -111,6 +111,16 @@ export default function FocusReader({
   section, isDialogue = false, voiceIds = null, tier,
   level = 'B1', wordStatuses = null, onMarkWord = null,
   materialId = null, learnerId = null, onClose,
+  /**
+   * ★ **ロック画面に出す題**(第5.285節・2026-10-07 実機・利用者の指摘)。
+   *
+   *   > すべての教材で、スマホやタブレットで画面をオフにすると音が消えます
+   *
+   * **呼ぶ側が、画面に出ている名前をそのまま渡す**(`materialName()`)。
+   * ここで組み立てない —— 呼び名は `materialName.js` 1か所(第5.384節)。
+   */
+  title = '',
+
   /* いまの速さ(「100%」)。**持っているのは紙の側**なので、
      そちらから受け取る(ここで数え直さない) */
   rateText = null,
@@ -328,6 +338,8 @@ export default function FocusReader({
   atRef.current = index
   const goRef = useRef(null)
   const player = useBodyAudio({
+    /* ★ **ロック画面に出す題**(第5.285節)。紙の側から受け取る */
+    title,
     onIndex: (i) => {
       setReadingAt(null)
       if (i !== null && i !== atRef.current) goRef.current?.(i)

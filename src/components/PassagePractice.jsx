@@ -100,6 +100,15 @@ export default function PassagePractice({
    * 紙の外(ゲストの宿題など)からは指定が無いので、そのままの幅になる。
    */
   focusWidth = 'w100',
+  /**
+   * ★ **ロック画面に出す題**(第5.285節・2026-10-07 実機・利用者の指摘)。
+   *
+   *   > すべての教材で、スマホやタブレットで画面をオフにすると音が消えます
+   *
+   * **呼ぶ側が、画面に出ている名前をそのまま渡す**(`materialName()`)。
+   * ここで組み立てない —— 呼び名は `materialName.js` 1か所(第5.384節)。
+   */
+  title = '',
   /** 集中モードを外から開け閉めする(渡さなければ自分で持つ) */
   focus: focusProp = null, onFocusChange = null,
   /**
@@ -381,6 +390,8 @@ export default function PassagePractice({
       {
         rate: rateOf(rateId, current.rate),
         clipTier: tier,
+        /* ★ **ロック画面に出す題**(第5.285節)。紙の側から受け取る */
+        title,
         // 押した段落から鳴らす。**切り取らずに、始める場所だけを言う**
         startIndex: at > 0 ? at : 0,
         /* **止めた場所から鳴らす**(2026-09 利用者の指定)。

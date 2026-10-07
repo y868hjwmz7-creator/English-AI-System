@@ -58,7 +58,20 @@ import { TIPS } from '../lib/tips.js'
 import { VOL_NO_TEXT, volumeWorks } from '../lib/mixVolume.js'
 
 /** 「どれか1つ」を選ぶ帯。**4つとも同じ形なので、書き写さない** */
-function Pick({ label, options, value, onChange }) {
+/**
+ * ★ `showHint` … **えらんであるものが、いまどうなっているかを1行で出す**
+ *   (第5.416節・2026-10-07)。
+ *
+ *   `title=`(吹き出し)だけでは、**指の端末では1文字も読めない。**
+ *   「そのまま」をえらんだ人は、**画面を消すと英語が止まる**ことを
+ *   知らないままそうなっていた(**黙って落ちない**・CLAUDE.md)。
+ *
+ *   **説明書きではない。** 出すのは**えらんであるもの1つの、いまの状態**
+ *   だけである(CLAUDE.md が残してよいとしている3つのうちの1つ)。
+ *   **文は `options` が持っている** —— ここに書き写さない。
+ */
+function Pick({ label, options, value, onChange, showHint = false }) {
+  const 出す = showHint ? options.find((o) => o.id === value)?.hint ?? '' : ''
   return (
     <div className="nav-setting">
       <span className="nav-setting-label">{label}</span>
@@ -71,6 +84,7 @@ function Pick({ label, options, value, onChange }) {
           </button>
         ))}
       </div>
+      {出す && <p className="nav-setting-now nav-setting-now--text">{出す}</p>}
     </div>
   )
 }
@@ -212,8 +226,11 @@ export default function NavSettings({
             いまのところ Safari だけで、ほかの端末ではそもそも
             ほかのアプリの音を止めていない —— **効かない操作を見せない**
             (上の音量のつまみと、まったく同じ作法)。 */}
+        {/* ★ **引きかえに失うものを、その場に出す**(第5.416節)——
+              「そのまま」は画面を消すと英語が止まる(`showHint`) */}
         {mixWorks() && (
-          <Pick label="ほかのアプリの音" options={MIX_MODES} value={mix} onChange={onMix} />
+          <Pick label="ほかのアプリの音" options={MIX_MODES} value={mix} onChange={onMix}
+                showHint />
         )}
 
         {/* ── **音楽**(第5.257節・2026-09-25 利用者の指定)──────────────

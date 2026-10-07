@@ -191,8 +191,12 @@ export default function WordbookFilter({
       {show.met && (
         <div className="wbfilter-row">
           <span className="wbfilter-name">出会った時期</span>
-          <div className="wbfilter-met">
-            <select className="wbfilter-ctl"
+          {/* ★ **欄はぜんぶ同じ幅**(第5.414節・`npm run test:bar` が捕まえた)。
+              中の `<select>` に `.wbfilter-ctl` を付けると、カレンダーの
+              ぶんだけ**この行だけ細くなる**(実測 172 / 218px)。
+              **「欄」は入れ物のほう**で、中は残りいっぱいを取る */}
+          <div className="wbfilter-met wbfilter-ctl">
+            <select className="wbfilter-met-sel"
                     aria-label="出会った時期"
                     value={met ?? ''}
                     onChange={(e) => set({ met: e.target.value || null })}>

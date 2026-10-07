@@ -80,7 +80,7 @@ import { repeatLabel, repeatSay } from '../src/lib/repeatLabel.js'
    文字を書き写すと、言い方を変えた日に**見張りだけが古くなる** */
 import { shuffleSay } from '../src/lib/shuffleSay.js'
 /* ★ **札の数は、一覧から出す。書き写さない**(第5.414節・段階3) */
-import { PICKS, SIZES, plainOrders } from '../src/lib/reviewScope.js'
+import { PICKS, SIZES, plainOrders, sizePickLabel } from '../src/lib/reviewScope.js'
 import { QUIZ_FORMS, WORD_ORDERS } from '../src/lib/wordQuiz.js'
 /* **速さの段と端は `speechRate.js` 1か所** */
 import { SPEECH_RATES } from '../src/lib/speechRate.js'
@@ -6064,7 +6064,8 @@ export default defineConfig({
     } else if (一つだけ) {
       ng('品詞の絞り込み … 選べるものが1つしか無いのに出している',
         '効かない操作を見せない(CLAUDE.md)')
-    } else if (!名前.includes('日付') || !名前.includes('レベル')) {
+    /* ★ **「日付」は「出会った時期」に統合した**(第5.414節) */
+    } else if (!名前.includes('出会った時期') || !名前.includes('レベル')) {
       ng('品詞の絞り込み … もとからあった行が消えている', 名前)
     } else {
       ok(`品詞の絞り込み … 2通りの言葉がまとまって出る(${選択肢})`)
@@ -7155,6 +7156,107 @@ export default defineConfig({
         ng(`聞き流し(時計 ${時計}) … ロック画面に出す題が入っていない`)
       } else {
         ok(`聞き流し(時計 ${時計}) … 18 秒で ${見た.size} 文すすむ / ロック画面 ${帯}`)
+      }
+    }
+
+    /* ── ★ **教材でも、画面を消しても鳴り続けるか**(第5.416節)─────────
+     *
+     *   2026-10-07 実機・利用者の指摘。
+     *
+     *     > すべての教材で、スマホやタブレットで画面をオフにすると
+     *     > 音が消えます💢これもいつの間にかこうなってました。
+     *
+     *   **第5.285節は、聞き流しだけを見張っていた。**
+     *   「全ての機能で同じ仕様にしておきたい」と言われていたのに、
+     *   **教材の読み上げ(`readAloud.js`)は1行も測っていなかった。**
+     *
+     *   測って分かったのは2つ。
+     *     ①先へ進むのは、時計を止めても**直っている**(間は無音で置いている)
+     *     ②**ロック画面の題が「英語の練習」のまま**だった ——
+     *       `setNowPlaying()` を呼んでいるのは聞き流しだけで、
+     *       教材は**受け皿の題**しか出していなかった。
+     *       端末はこの帯を見て「止めてはいけない音」と扱う。
+     *
+     *   **題は、画面に出ているものと突き合わせる**(書き写さない)——
+     *   `materialName()` が決める名前が、紙の見出し(`.mtitle-main`)と
+     *   ロック画面の両方に出る。**どちらかを書き換えたら赤くなる。**
+     *   ══════════════════════════════════════════════════════════════ */
+    for (const 時計 of ['ふつう', '止めた']) {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+      page.setDefaultTimeout(9000)
+      if (時計 === '止めた') {
+        await page.addInitScript(() => {
+          const real = window.setTimeout.bind(window)
+          window.setTimeout = (fn, ms, ...rest) => (
+            Number(ms) >= 150 ? 0 : real(fn, ms, ...rest))
+        })
+      }
+      await page.route('**/storage/v1/object/public/**', (r) => r.fulfill({
+        status: 200, contentType: 'audio/wav', body: wav(700),
+      }))
+      await page.route('**/functions/v1/**', (r) => r.fulfill({ status: 500, body: '{}' }))
+      await page.route('**/rest/v1/**', (r) => r.fulfill({
+        status: 200, contentType: 'application/json', body: '[]',
+      }))
+      /* **既定の画面が、教材の紙である**(`__screens.jsx` の最後) */
+      await page.goto(`http://localhost:${PORT}/__bar.html`,
+        { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(2000)
+      /* **触ってから鳴らす**(iPhone と同じで、解錠が要る)。
+         紙の上を押す —— ボタンの上を踏むと別のことが起きる */
+      await page.mouse.click(10, 500)
+      const 見出し = await page.evaluate(() => (
+        document.querySelector('.mtitle-main')?.textContent ?? '').trim())
+      await page.evaluate(() => { document.querySelector('.player-big')?.click() })
+      const 見た = new Set()
+      /* ★ **帯は、鳴っているあいだに読む**(第5.416節)。
+           鳴り切ったら `clearNowPlaying()` が片づけるので、
+           **終わってから読むと必ず空**になり、この見張りは
+           いつも赤くなる(実際に1度そうなった)。
+           だから**ひと刻みごとに読んで、空でなかったものを覚える。** */
+      let 帯 = ''
+      for (let i = 0; i < 24; i += 1) {
+        const 一 = await page.evaluate(() => ({
+          数: (document.querySelector('.player-at')?.textContent ?? '').trim(),
+          題: navigator.mediaSession?.metadata?.title ?? '',
+        }))
+        if (一.数) 見た.add(一.数)
+        if (!帯 && 一.題) 帯 = 一.題
+        await page.waitForTimeout(500)
+      }
+      /* **鳴り切ったら片づいているか**(効かない操作を残さない) */
+      const 残り = await page.evaluate(
+        () => navigator.mediaSession?.metadata?.title ?? '')
+      await page.close()
+      if (!見出し) {
+        ng(`教材(時計 ${時計}) … 紙に教材の名前が出ていない`,
+          '**突き合わせる相手**が無いので、題を測れない')
+      } else if (見た.size < 3) {
+        /* 「— / 2 発言」→「1 / 2」→「2 / 2」→「— / 2」と動く。
+           **3つ以上**見えていなければ、先へ進んでいない */
+        ng(`教材(時計 ${時計}) … 読み上げが先へ進まない`,
+          `12 秒で ${[...見た].join(' | ') || '(なし)'} しか出ていない`
+          + (時計 === '止めた' ? '(間を時計で置いている)' : '(そもそも鳴っていない)'))
+      } else if (!帯) {
+        /* **ロック画面の帯**。これが無いと、端末はページごと寝かせる */
+        ng(`教材(時計 ${時計}) … ロック画面に出す題が入っていない`)
+      } else if (帯 !== 見出し) {
+        /* ★ **受け皿の題(「英語の練習」)で終わらせない**(第5.416節)。
+             **紙の見出しと1文字も違えない** —— どちらも
+             `materialName()` が決めるので、食い違ったら
+             「`setNowPlaying()` を呼んでいない」という意味である */
+        ng(`教材(時計 ${時計}) … ロック画面の題が、紙の名前と違う`,
+          `ロック画面「${帯}」/ 紙「${見出し}」`)
+      } else if (残り) {
+        /* **鳴り切ったら片づける**(第5.416節)。
+           残すと、何も鳴っていないのに曲名と ▶ が出続け、
+           押しても誰も受け取らない(**行き止まりを作らない**) */
+        ng(`教材(時計 ${時計}) … 鳴り終わってもロック画面に帯が残っている`,
+          `「${残り}」—— `
+          + '止めたときは `stopReading()` が片づけるが、鳴り切った道は2つある')
+      } else {
+        ok(`教材(時計 ${時計}) … 12 秒で ${見た.size} 段落すすむ`
+          + ` / ロック画面の題は紙と同じ「${帯}」・鳴り終われば片づく`)
       }
     }
   }
@@ -10120,8 +10222,15 @@ for (const W of [1280, 794, 453, 390, 320]) {
      (CLAUDE.md「置き換える前に `grep -n` で数える」の、測る側での同じ話)。 */
   /* ★ **上の帯の聞き流しを、名指しで押す**(第5.414節)。
        `querySelectorAll('button')` から文字で探すと、同じ言葉の
-       ほかのボタンに当たる(CLAUDE.md「置き換える前に数える」) */
-  await page.evaluate(() => { document.querySelector('.wb-top-listen')?.click() })
+       ほかのボタンに当たる(CLAUDE.md「置き換える前に数える」)。
+       **ここは Quick Response の画面**なので `qr-top-listen` である ——
+       単語帳の `wb-top-listen` を書いていて、1本も押せていなかった
+       (「練習の画面から押しても、何も出ない」が出ていた)。
+       **どちらの画面でも押せるように、両方を並べる**
+       (片方しか無いので、取り違えようがない)。 */
+  await page.evaluate(() => {
+    document.querySelector('.wb-top-listen, .qr-top-listen')?.click()
+  })
   await page.waitForTimeout(1500)
   const 流 = await page.evaluate(() => ({
     ある: !!document.querySelector('.radio'),
@@ -11863,21 +11972,23 @@ for (const W of [1280, 794, 453, 390, 320]) {
     } else if (閉.絵.つまみ !== 2) {
       ng(`設定 ${W}px … 設定の絵のつまみが ${閉.絵.つまみ} つ`,
         '★ 横線2本 + つまみ2つ(第5.415節・利用者の指定)にそろえる')
-    } else if (閉.絵.線 < 6) {
+    } else if (閉.絵.線 < 4) {
+      /* ★ **2段 ×(つまみの左右に1本ずつ)= 4本**(第5.415節) */
       ng(`設定 ${W}px … 設定の絵の線が ${閉.絵.線} 本`,
-        '3段 ×(つまみの左右に1本ずつ)= 6本')
-    } else if (new Set(閉.絵.位置).size < 3) {
+        '2段 ×(つまみの左右に1本ずつ)= 4本')
+    } else if (new Set(閉.絵.位置).size < 2) {
       /* **「絵がある」だけを見ない。** つまみをそろえて
-         「ただの三本線」に戻したら赤くなる(第5.262節) */
-      ng(`設定 ${W}px … 3つのつまみがそろっていて、ただの三本線に見える`,
-        `位置 ${閉.絵.位置.join(' / ')}。**わざとずらす**(運動靴の印に戻る)`)
+         「ただの二本線」に戻したら赤くなる(第5.262節 / 第5.415節) */
+      ng(`設定 ${W}px … 2つのつまみがそろっていて、ただの二本線に見える`,
+        `位置 ${閉.絵.位置.join(' / ')}。**わざとずらす**(メニューの印に戻る)`)
     } else if (閉.高 < 40) {
       ng(`設定 ${W}px … 「設定」が ${閉.高}px しかなく、指で狙えない`)
     } else if (閉.はみ出し > 0) {
       ng(`設定 ${W}px … メニューの下が ${閉.はみ出し}px 横にはみ出している`)
     } else {
       ok(`設定 ${W}px … 畳んで「設定」1つ(${閉.高}px)・`
-        + `自分の欄より上・三本線と丸(線 ${閉.絵.線}・つまみ3・ずれている)・`
+        + `自分の欄より上・横線2本 + つまみ(線 ${閉.絵.線}・`
+        + `つまみ ${閉.絵.つまみ}・ずれている)・`
         + `中の ${閉.在る} 行は見えていない`)
     }
 
@@ -13309,10 +13420,21 @@ for (const W of [1280, 390]) {
      > 中でそれを選べるようにしてください。
 
    **算段は `npm run test:play` が見る。ここは描いて測る。**
-   骨組みには**8問**入れてある(上限より多い形・CLAUDE.md)ので、
-   5問に絞れば本当に減る —— **絞りを外したら赤くなる。**
+
+   ★ **数を書き写さない**(第5.414節・CLAUDE.md「値を書き写さない。
+     性質で見る」)。ここは `['&size=5', 5, …]` と**書き写してあった** ——
+     段階3で一覧が **10 / 20 / ぜんぶ**になり 5 が消えたので、
+     `sizeOfValue()` が既定へ落とし、**絞った人と絞っていない人が
+     同じ数になって、この見張りは何も測らなくなっていた。**
+
+   いまは **`SIZES` から組む。**
+   ①「ぜんぶ」で何問あるかを測り(= 骨組みの本数)
+   ②一覧の数ひとつずつで、**ちょうどその数**になるかを測る。
+   **骨組みが小さすぎたら赤くする** —— いちばん大きい数より多くないと、
+   絞っても減らないので**何も測れない**(「無ければ素通り」を自分で塞ぐ)。
    ══════════════════════════════════════════════════════════════ */
-for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['', 8, '絞っていない人']]) {
+/** 聞き流しを開いて、始まった問数と欄の中身を測る */
+async function 聞き流しを測る(q2) {
   const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
   page.setDefaultTimeout(8000)
   page.setDefaultNavigationTimeout(8000)
@@ -13325,14 +13447,14 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio${q2}`,
     { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(700)
+  /* **設定を開いてから測る**(第5.271節 → 第5.274節で右上の絵へ)。
+     「何問ずつ」の欄も設定の中なので、開かないと描かれていない */
+  await page.click('.radio-gear')
+  await page.waitForTimeout(150)
   /* **数はコンテンツの中**(第5.264節・2026-09-26 実機・利用者の指定
      「4/5などの数字は、コンテンツ部分内へ」)。
      帯の `.focus-count` から `.drill-count` へ移した ——
      **測る場所も一緒に移す**(移さないと、この見張りが黙る) */
-  /* **設定を開いてから測る**(第5.271節 → 第5.274節で右上の歯車へ)。
-     「何問ずつ」の欄も設定の中なので、開かないと描かれていない */
-  await page.click('.radio-gear')
-  await page.waitForTimeout(150)
   const m = await page.evaluate(() => ({
     数: (document.querySelector('.drill-count')?.textContent ?? '').trim(),
     題: (document.querySelector('.drill-title')?.textContent ?? '').trim(),
@@ -13341,7 +13463,40 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
       .map((o) => o.textContent.trim()),
     いま: document.querySelector('.radio-set-pick--take')?.value ?? '',
   }))
-  const 出た = Number((m.数.split('/')[1] ?? '').trim())
+  await page.close()
+  return { ...m, 出た: Number((m.数.split('/')[1] ?? '').trim()) }
+}
+
+/* ① まず「ぜんぶ」。これが骨組みの本数である(**書き写さない**) */
+const 全 = await 聞き流しを測る('&size=all')
+/* 一覧の数(「ぜんぶ」を除いたもの)。**`SIZES` 1か所から来る** */
+const 数の札 = SIZES.filter((n) => n !== 'all').map(Number)
+if (!Number.isFinite(全.出た) || 全.出た < 1) {
+  ng('聞き流し 390px … 「ぜんぶ」で何問あるのかが読めない', 全.数 || '(空)')
+} else if (全.出た <= Math.max(...数の札)) {
+  /* **ここが「無ければ素通り」を塞ぐ1本**(CLAUDE.md)。
+     骨組みが一覧の最大より少ないと、どの数をえらんでも
+     同じ本数になり、**絞りを外しても緑のまま**になる */
+  ng('聞き流し 390px … 骨組みの本数が少なすぎて、絞りを測れない',
+    `${全.出た} 問しか無い。一覧の最大 ${Math.max(...数の札)} より多く入れる`)
+} else {
+  ok(`聞き流し 390px … 「ぜんぶ」なら ${全.出た} 問`
+    + `(一覧の最大 ${Math.max(...数の札)} より多い)`)
+}
+
+/* ② 一覧の数ひとつずつ。**ちょうどその数**になること */
+for (const [q2, 期待, 何] of [
+  ...数の札.map((n) => [`&size=${n}`, n, `${n}問に絞っていた人`]),
+  ['&size=all', 全.出た, '絞っていない人'],
+]) {
+  const m = await 聞き流しを測る(q2)
+  const 出た = m.出た
+  /* ★ **欄の一覧も `SIZES` から組む**(第5.414節)。
+       `'5 問'` と書き写してあったので、一覧から 5 を外した日に
+       **本当は合っているのに赤くなった**(逆向きの事故・CLAUDE.md
+       「式も、関数の名前も書き写さない」)。 */
+  const 欄に要る = SIZES.map((n) => sizePickLabel(n, '問'))
+  const 足りない札 = 欄に要る.filter((t) => !m.札.includes(t))
   if (!m.札.length) {
     ng(`聞き流し 390px … 「何問ずつ」の欄が出ていない(${何})`)
   } else if (!m.題) {
@@ -13356,13 +13511,18 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   } else if (出た !== 期待) {
     ng(`聞き流し 390px … ${何}なのに ${出た} 問で始まっている`,
       `「${m.数}」—— 期待は ${期待} 問`)
-  } else if (!m.札.includes('ぜんぶ') || !m.札.includes('5 問')) {
-    ng('聞き流し 390px … 札の一覧が「出しかた」と合っていない', m.札.join(' / '))
+  } else if (足りない札.length) {
+    ng('聞き流し 390px … 札の一覧が「出しかた」と合っていない',
+      `出ている: ${m.札.join(' / ')} — 足りない: ${足りない札.join(' / ')}`)
+  } else if (m.札.length !== 欄に要る.length) {
+    /* **多いほうも見る**(出る / 出ないの両方・CLAUDE.md)。
+       一覧に無い数を足しても緑のままでは、見張ったことにならない */
+    ng('聞き流し 390px … 札の一覧に、「出しかた」に無いものが混ざっている',
+      `出ている: ${m.札.join(' / ')} — あるべきは ${欄に要る.join(' / ')}`)
   } else {
     ok(`聞き流し 390px … ${何}は ${出た} 問で始まる`
       + `(題「${m.題}」・${m.札.join(' / ')})`)
   }
-  await page.close()
 }
 /* **中で変えたら、その場で切り替わるか**(出る / 出ないの両方)。
    **「持ち込めている」だけを見ると、中で変えられなくても緑**になる */
@@ -13376,7 +13536,12 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   await page.route('**/auth/v1/**', (r) => r.fulfill({
     status: 200, contentType: 'application/json', body: '{}',
   }))
-  await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio&size=5`,
+  /* ★ **いちばん小さい数で開いて、中で「ぜんぶ」に変える**(第5.414節)。
+       `&size=5` と書き写してあったが、一覧から 5 が消えたので
+       **既定へ落ちて「ぜんぶ」と同じ数**になり、
+       この見張りは何も測らなくなっていた。`SIZES` から取る。 */
+  const 最小 = Math.min(...SIZES.filter((x) => x !== 'all').map(Number))
+  await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio&size=${最小}`,
     { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(700)
   /* **設定を開いてから変える**(第5.271節 → 第5.274節) */
@@ -13387,7 +13552,8 @@ for (const [q2, 期待, 何] of [['&size=5', 5, '5問に絞っていた人'], ['
   const 後 = await page.evaluate(() => (
     document.querySelector('.drill-count')?.textContent ?? '').trim())
   const n = Number((後.split('/')[1] ?? '').trim())
-  if (n !== 8) {
+  /* **本数は、さきに「ぜんぶ」で測ったもの**(書き写さない) */
+  if (n !== 全.出た) {
     ng('聞き流し 390px … 中で「ぜんぶ」にしても、問数が変わらない', `「${後}」`)
   } else {
     ok(`聞き流し 390px … 中で変えれば、その場で切り替わる(${後})`)
