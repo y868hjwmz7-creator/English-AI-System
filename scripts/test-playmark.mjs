@@ -2930,7 +2930,7 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     const qr = readFileSync(new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     ok(/stageTally\(rows\)/.test(qr), '覚え具合 … QrReview が `stageTally()` を呼んでいる')
-    ok(/<ReviewStats/.test(qr) && /stagePool\(rows, group\)/.test(qr),
+    ok(/<ReviewStats/.test(qr) && /stageOrDefaultPool\(rows, group\)/.test(qr),
       '段階を押す … QrReview が押せる札を出し、その段階で絞っている')
     const wb = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
@@ -2938,6 +2938,19 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '段階を押す … 単語帳が押せる札を出している')
     ok(/stageTally\(allRows\)/.test(wb),
       '覚え具合 … 単語帳の札も、読み込んだ行から数えている')
+    /* ★ **段をえらんでいないときの既定は、2つの画面で同じ**(第5.414節)。
+         もとは Quick Response だけ `stagePool()` を直に呼んでいたので、
+         **「ぜんぶ」に「覚えた」が混ざり、札の数と食い違っていた。**
+         **どちらも `stageOrDefaultPool()` 1か所を通る** */
+    /* **「出てくるか」で見ない**(CLAUDE.md)。`status !== 'known'` は
+       単語帳にもう1か所あるが、あれは**表を直に数える側**(ぜんぶ
+       読めているかの突き合わせ)で、**出す池とは別物**である。
+       **池の形**(`(…) .filter((r) => r.status !== 'known')`)だけを見る */
+    const 池を書き写した = (src) => /\)\s*\.filter\(\(r\) => r\.status !== 'known'\)/.test(src)
+    ok(!/stagePool\(rows, group\)/.test(qr)
+      && !池を書き写した(qr) && !池を書き写した(wb)
+      && /stageOrDefaultPool\(/.test(qr) && /stageOrDefaultPool\(/.test(wb),
+      '段階 … 「覚えた語は出さない」を、画面に書き写していない')
     /* ★ **1回でぜんぶ読む**(第5.406節)。段階と `status` が1対1でないので、
          段で読み分けると「覚えた」が2つの `status` にまたがって落ちる */
     ok(/status: null/.test(wb), '単語帳 … 1回でぜんぶ読んでいる(段で読み分けない)')

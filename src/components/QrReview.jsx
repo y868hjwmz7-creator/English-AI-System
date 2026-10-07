@@ -51,7 +51,7 @@ import {
 /* ★ **覚え具合は4段階**(第5.406節・2026-10-07 利用者の指定)。
      単語帳とまったく同じものを使う —— 分け方を2か所に書かない */
 import {
-  LEARN_STAGES, stageLead, stagePool, stageTally,
+  LEARN_STAGES, stageLead, stageOrDefaultPool, stageTally,
 } from '../lib/learnStage.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
 import { nextFilledBook } from '../lib/bookOpen.js'
@@ -516,8 +516,14 @@ export default function QrReview({
   /* **段で絞ってから、絞り込みを当てる。** 順はどちらでも同じものが残るが、
      **数え上げ(`tally`)は段で絞る前の `rows` から出す** ——
      押すたびに札の数が変わっては、何を選んでいるのか分からなくなる */
+  /* ★ **段をえらんでいないときは、「覚えた」を出さない**(第5.414節)。
+       もとは `stagePool()` を直に呼んでいたので、**Quick Response だけ
+       「ぜんぶ」に「覚えた」が混ざっていた** —— 単語帳は混ざらない。
+       **札の数(`pickCounts`)と実際に出るものが食い違う**ので、
+       **判断を `learnStage.js` 1か所にそろえた。**
+       「覚えた」は「詳しくしぼる」の段階からいつでも出せる */
   const filtered = useMemo(
-    () => applyWordbookFilter(stagePool(rows, group), filter),
+    () => applyWordbookFilter(stageOrDefaultPool(rows, group), filter),
     [rows, group, filter],
   )
   /** いま選んでいる範囲にあてはまるもの。**数え上げと同じ道を通す** */
