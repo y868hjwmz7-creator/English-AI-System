@@ -41,87 +41,41 @@
  *   何にも依存しない形へ出してある(`playMark.js` / `mp3Join.js` と同じ考え方)。
  *   `npm run test:play` が数字で見張る。
  */
-import { toDateKey } from './format.js'
+/* ★ **日付の道具と「出会った時期」は `metRange.js` 1か所**(第5.414節)。
+     `addedDayOf` が**ここと `wordbookFilter.js` に2つ**書いてあった */
+import { addedDayOf, daysAgo, todayKey } from './metRange.js'
 /* **既定の10は `SESSION_SIZE` から取る。** 単語帳がずっとその数だった。
    同じ数を2か所に書かない(`wordQuiz.js` は素の node で読める) */
-import {
-  DEFAULT_FORM, DEFAULT_ORDER, SESSION_SIZE, formOf, orderOf,
-} from './wordQuiz.js'
+import { DEFAULT_FORM, SESSION_SIZE, formOf } from './wordQuiz.js'
 import { FILTER_KEYS } from './wordbookFilter.js'
+/* ★ **段(覚え具合)は `learnStage.js` 1か所**(第5.406節)。
+     「何を出す」の「苦手」「未学習」は、あちらの段そのものである */
+import { stageOrDefaultPool, stagePool } from './learnStage.js'
 
-/** 今日(端末の日付)。"2026-08-30" */
-export const todayKey = () => toDateKey(new Date())
-
-/**
- * その行が単語帳・復習に入った日。無ければ null。
- *
- * **`toDateKey` を通す**(端末の日付に直す)。`.slice(0, 10)` だと
- * 世界標準時の日付になり、夜の語が前日になる。
- * **数え方を2通り持たない** —— `WordbookFilter` の `addedDayOf` は
- * これを出し直しているだけである。
- */
-export const addedDayOf = (row) => (row?.added_at
-  ? toDateKey(new Date(row.added_at))
-  : null)
-
-/** n 日前の日付キー */
-export function daysAgo(n, today = todayKey()) {
-  const d = new Date(`${today}T00:00:00`)
-  if (Number.isNaN(d.getTime())) return today
-  d.setDate(d.getDate() - Number(n || 0))
-  return toDateKey(d)
-}
+export { addedDayOf, daysAgo, todayKey }
 
 /**
- * 出題範囲。**時系列は「出会った日」で数える**(2026-09 利用者の指定)。
+ * 出題範囲 —— **期限を見るか、見ないか**の2つだけ。
  *
- *   「1週間以内」= **単語帳・復習に入った日**が7日前以降のもの。
- *   つまり「先週のレッスンで出会ったものをさらう」という使い方になる。
- *   いまのカレンダーの絞り込み(`added_at`)と**同じ日付**なので、
- *   考え方が2つに割れない。
+ * ★ **「出会った時期」(`d7`〜`d182`)は、ここから出て行った**
+ *    (第5.414節・段階3)。**1つも消していない** ——
+ *    「詳しくしぼる」の中の**絞り込みの欄**へ移り、
+ *    **カレンダーの「日付」と1つにまとまった**(`metRange.js`)。
  *
- * **`due`(今日出す)を先頭に、既定のまま残す。** 間隔をあけて出す仕組み
- * (箱)がこのアプリの背骨で、そこは壊さない。範囲は「そこに足す」のではなく
- * **「そこから広げる」**選択肢である。
+ *    もとは同じ行に「今日の復習」と「1週間以内」が混ざっていて、
+ *    **「1週間」が『1週間後に出る』なのか『1週間以内に出会った』なのか、
+ *    読んだだけでは決まらなかった**(第5.245節で行を2つに分けた)。
+ *    **性質がちがうものは、そもそも同じ仕組みに入れない。**
  *
- * **`all` は、いまの「おさらい」とまったく同じもの。** ボタンを別に置くと
- * **同じことをするものが2つ**になるので、この札に吸収する
- * (機能は消えていない —— これまでは0件になるまで見えなかったので、
- * むしろ届きやすくなる)。
+ * **`due`(今日の復習)は先頭のまま。** 間隔をあけて出す仕組み(箱)が
+ * このアプリの背骨で、そこは壊さない。
+ *
+ * **`all` は、いまの「おさらい」とまったく同じもの。**
  */
-/**
- * **札は、性質ごとに2つの行へ分ける**(第5.245節・2026-09-23 実機)。
- *
- *   > 今日出す、とかの意味が分かりにくいです。もっと直感的に
- *
- * 1つの行に、**性質のちがう2種類**が混ざっていた。
- *
- *   ・`due` … **復習の予定**の話(間隔の仕組みで、今日が復習の日のもの)
- *   ・`d7`〜`d182` … **いつ出会ったか**の話(単語帳・復習に入った日)
- *
- * 「今日出す」と「1週間」が横に並んでいるので、
- * **「1週間」が『1週間後に出る』なのか『1週間以内に出会った』なのか、
- * 読んだだけでは決まらない。** 言葉だけ直しても、混ざっていること自体が
- * 分かりにくさの元である。
- *
- * **見出しと並びで示す**(共通ルール「余計な説明書きを置かない。
- * かわりに見出しと並びで示す」)。
- */
-export const SCOPE_GROUPS = [
-  { id: 'basic', label: '何を出す' },
-  { id: 'met', label: '出会った時期' },
-]
-
 export const SCOPES = [
   /* **`due` は先頭のまま。** `scopeOf()` が既定として `SCOPES[0]` を返す */
-  { id: 'due', kind: 'due', group: 'basic', label: '今日の復習' },
-  { id: 'd7', kind: 'days', days: 7, group: 'met', label: '1週間以内' },
-  { id: 'd14', kind: 'days', days: 14, group: 'met', label: '2週間以内' },
-  { id: 'd21', kind: 'days', days: 21, group: 'met', label: '3週間以内' },
-  { id: 'd30', kind: 'days', days: 30, group: 'met', label: '1か月以内' },
-  { id: 'd90', kind: 'days', days: 90, group: 'met', label: '3か月以内' },
-  { id: 'd182', kind: 'days', days: 182, group: 'met', label: '半年以内' },
-  { id: 'all', kind: 'all', group: 'basic', label: 'ぜんぶ' },
+  { id: 'due', kind: 'due', label: '今日の復習' },
+  { id: 'all', kind: 'all', label: 'ぜんぶ' },
 ]
 
 export const scopeOf = (id) => SCOPES.find((s) => s.id === id) ?? SCOPES[0]

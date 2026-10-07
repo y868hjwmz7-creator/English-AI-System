@@ -20,7 +20,10 @@
  *   **呼ぶ側は1行も変わっていない** —— `WordbookFilter.jsx` が
  *   ここから読み直して、これまでどおり出し直している。
  */
-import { toDateKey } from './format.js'
+/* ★ **出会った時期は `metRange.js` 1か所**(第5.414節)。
+     「日付」(カレンダーで1日)と「出会った時期」(範囲)は、
+     **どちらも `added_at` を見ていた**ので、欄も値も1つにまとめた */
+import { addedDayOf, inMet, todayKey } from './metRange.js'
 import { industryLabel } from '../data/industries.js'
 import { genreLabel, sceneLabel } from '../data/genres.js'
 import { cefrOption } from '../data/cefr.js'
@@ -33,7 +36,12 @@ import { FRAME_INDEX, frameFormOf } from './frameMatch.js'
  * 「いくつ絞っているか」も「ぜんぶ外す」も「組み直すか」も、
  * すべてここから作る。**書き写さない。**
  */
-export const FILTER_KEYS = ['day', 'material', 'field', 'topic', 'level', 'pos', 'frame']
+/* ★ **`day` を `met` に改めた**(第5.414節)。
+     入るのは**範囲の id**(`d7`)か、**その日そのもの**(`2026-10-01`)。
+     鍵の名前を変えたので、**端末に覚えさせてある古い `day` は効かなくなる**
+     —— 絞り込みは毎回選ぶものなので、覚えさせていない(`runKeyOf` が
+     見張るだけ)。**黙って別の日で絞られるより、外れているほうが正しい** */
+export const FILTER_KEYS = ['met', 'material', 'field', 'topic', 'level', 'pos', 'frame']
 
 /** いくつ絞っているか。**畳んでいても分かるように**札の数として出す */
 export const countNarrowed = (filter) => FILTER_KEYS
@@ -50,8 +58,9 @@ export const emptyFilter = () => Object.fromEntries(FILTER_KEYS.map((k) => [k, n
    `\u0000` と書けば**同じ値のまま**、ふつうの文字列として読める */
 export const NO_MATERIAL = '\u0000none'
 
-/** その行が単語帳に入った日("2026-08-24")。無ければ null */
-export const addedDayOf = (row) => (row?.added_at ? toDateKey(new Date(row.added_at)) : null)
+/* ★ **入った日の数え方は `metRange.js` 1か所**(第5.414節)。
+     ここと `reviewScope.js` に**同じものが2つ**書いてあった */
+export { addedDayOf } from './metRange.js'
 
 /**
  * その語が「どの場面・話題で出会ったか」(0028)。
@@ -144,16 +153,19 @@ export const frameOf = (row) => {
  * 絞り込みを当てる。**判断はここ1か所。** 画面ごとに書くとずれる。
  *
  * @param {Array} rows 一覧ぜんぶ
- * @param {{day, material, field, topic, level, pos, frame}} filter
+ * @param {{met, material, field, topic, level, pos, frame}} filter
  */
 export function applyWordbookFilter(rows, filter) {
   const {
-    day = null, material = null, field = null,
+    met = null, material = null, field = null,
     topic = null, level = null, pos = null, frame = null,
   } = filter ?? {}
-  if (!day && !material && !field && !topic && !level && !pos && !frame) return rows
+  if (!met && !material && !field && !topic && !level && !pos && !frame) return rows
+  const day = todayKey()
   return (rows ?? []).filter((r) => {
-    if (day && addedDayOf(r) !== day) return false
+    /* ★ **範囲でも、その日そのものでも当たる**(第5.414節)。
+         当て方は `inMet()` 1か所 —— ここで `/^\d{4}/` と書かない */
+    if (met && !inMet(r, met, day)) return false
     if (material) {
       const key = r.material_title || NO_MATERIAL
       if (key !== material) return false

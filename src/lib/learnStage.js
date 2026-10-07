@@ -114,6 +114,19 @@ export const stagePool = (rows, id) => (id
   : (rows ?? []))
 
 /**
+ * ★ **段をえらんでいないときに出すもの**(第5.414節)。
+ *
+ * **「覚えた」は出さない**(これまでどおり)。もとは
+ * `rows.filter((r) => r.status !== 'known')` が
+ * **単語帳と Quick Response の2か所に書き写してあった** ——
+ * 「覚えた」の決め方を変えた日に、片方だけ古くなる形である。
+ */
+export const defaultPool = (rows) => (rows ?? []).filter((r) => r?.status !== 'known')
+
+/** 段 + 既定を1つにまとめたもの。**画面はこちらだけを呼ぶ** */
+export const stageOrDefaultPool = (rows, id) => (id ? stagePool(rows, id) : defaultPool(rows))
+
+/**
  * その段階を選んだら何が起きるのかを、1行の日本語で言う。
  * **押す前に分かるようにする**(`scopeLead` と同じ作法)。
  */
