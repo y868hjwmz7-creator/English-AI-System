@@ -18,7 +18,7 @@ import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, DEFAULT_CEFR, cefrOption } from '../data/cefr.js'
 import {
   ALL_PARTS, ALL_PARTS_LABEL, EXERCISE_TYPES, FIELD_LABELS, WORD_DRILLS,
-  DEFAULT_WORD_DRILL, amountsFor, countOf, isScalable, partKeyOf, sectionKey,
+  DEFAULT_WORD_DRILL, amountsFor, isScalable, partKeyOf, sectionKey,
   defaultSectionsFor, exerciseLabel, exerciseType, grammarSource, isIncluded,
   isPassageSection, sectionLabel, sectionsFor,
 } from '../data/exerciseTypes.js'
@@ -3067,8 +3067,9 @@ export default function MaterialForm({
                     {on ? (
                       <div className="theme-switch" role="group"
                            aria-label={`${exerciseLabel(s2.exercise_type)}の数`}>
-                        {/* **3倍(30問)が出るのは文型ドリルだけ**(2026-09)。
-                            弱点が3つまで選べるので、1つあたり10問にすると30問になる */}
+                        {/* ★ **どの演習でも 10 / 20 / 30**(第5.412節)。
+                            ここに既定の数と、テスト対策なら本番の数も混ざる ——
+                            **段は `amountsFor()` 1か所**が組む */}
                         {amountsFor(s2.exercise_type, {
                           examKey: isExamKind(kind) ? partKeyOf(examKey, s2) : '',
                           base,
@@ -3077,17 +3078,12 @@ export default function MaterialForm({
                                   className={`theme-btn${now === a.id ? ' is-active' : ''}`}
                                   aria-pressed={now === a.id}
                                   onClick={() => setAmounts({ ...amounts, [鍵]: a.id })}>
+                            {/* ★ **札そのものが問数である**(第5.412節)。
+                                倍率(標準 / 倍 / 3倍)をやめたので、
+                                実際の数を別に添える必要がなくなった ——
+                                **言葉は `stepAmounts()` 1か所**が持つ。
+                                ここで数を組み立てない(書き写すと片方が古くなる) */}
                             {a.label}
-                            {/* **倍率の札にだけ、実際の数を添える**(第5.248節)。
-                                単語 / フレーズは札そのものが「10 問」なので、
-                                添えると「10 問 10」と二重になる。
-                                数は `countOf()` 1か所から出す ——
-                                書き写すと、片方だけが古くなる(CLAUDE.md) */}
-                            {a.times != null && (
-                              <span className="amount-count">
-                                {countOf(base, a)}
-                              </span>
-                            )}
                           </button>
                         ))}
                       </div>

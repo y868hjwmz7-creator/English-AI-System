@@ -44,8 +44,9 @@ import {
   MAX_CHARS, MAX_PARTS, pastedParagraphs, speakerLine, speechBrief,
 } from '../src/lib/speechDraft.js'
 import {
-  DEFAULT_SECTIONS, MAX_ITEMS, PARENT_SECTION, RECALL_PER_WORD,
+  COUNT_STEPS, DEFAULT_SECTIONS, MAX_ITEMS, PARENT_SECTION, RECALL_PER_WORD,
   EXERCISE_TYPES, SCALABLE_SECTIONS, amountsFor, answerHasAudio, defaultSectionsFor,
+  isScalable, sectionKey,
   exerciseLabel, isBlankItem, isChunkSection, isIncluded, isPassageSection, isWrongShape,
   noteIsAnswer, sectionLabel, sectionOpenLabel, sectionsFor,
 } from '../src/data/exerciseTypes.js'
@@ -814,8 +815,14 @@ console.log('\n▶ おさらいは、まるごと混ぜて出す')
     ok(of('speech', { audience_qa: 'double' })?.count === 10, '「倍」で10問')
     ok(!of('speech', null, { audience_qa: false }), 'チェックを外せば作らない')
     ok(SCALABLE_SECTIONS.includes('audience_qa'), '問数を選べる演習に入っている')
-    ok(amountsFor('audience_qa').length === 2,
-      '選べるのは標準と倍の2つ(3倍は文型ドリルだけ)')
+    /* ★ **10 / 20 / 30 もえらべる**(第5.412節)。もとは標準と倍の2つきりで、
+       **上限が 10 問**だった。既定(5問)は段に残る(既定を下げない) */
+    ok(of('speech', { audience_qa: `n${Math.max(...COUNT_STEPS)}` })?.count
+      === Math.max(...COUNT_STEPS), 'いちばん上の段をえらべる')
+    ok(COUNT_STEPS.every((n) => amountsFor('audience_qa', { base: 5 })
+      .some((a) => a.count === n)),
+    '10 / 20 / 30 が1つ残らず段に入っている',
+    amountsFor('audience_qa', { base: 5 }).map((a) => a.label).join(' / '))
   }
 
   /* **Speech練習だけに入れる。** 記事にも会話にも、話し終えたあとの聴衆はいない */
@@ -11215,10 +11222,14 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       'かたまり … チェックで外せて、数も選べる')
     ok(isIncluded('vocab_note', null) && !isIncluded('vocab_note', { vocab_note: false }),
       'かたまり … 既定は入れる。外したら入らない')
-    /* **倍は選べる。3倍は文型ドリルだけ**(前からの決まりを壊していないか) */
-    const amt = amountsFor('vocab_note').map((a) => a.id)
-    ok(amt.includes('default') && amt.includes('double') && !amt.includes('triple'),
-      'かたまり … 標準と倍の2つから選べる', amt.join(' / '))
+    /* ★ **10 / 20 / 30 もえらべる**(第5.412節)。もとは 8 / 16 の2つきりだった。
+       **既定(記事なら8問)は段に残る** —— 既定を下げない(第5.13.3節) */
+    const 既定 = defaultSectionsFor('reading')
+      .find((x) => x.exercise_type === 'vocab_note').count
+    const amt = amountsFor('vocab_note', { base: 既定 })
+    ok(amt.some((a) => a.id === 'default' && a.count === 既定)
+      && COUNT_STEPS.every((n) => amt.some((a) => a.count === n)),
+    'かたまり … 既定と 10 / 20 / 30 からえらべる', amt.map((a) => a.label).join(' / '))
   }
   /* **窓口を置き直す前に作った教材が、1問残らず落ちないこと。**
      ここが必須だと、利用者が置き直すまで教材そのものを作れなくなる */
@@ -12192,22 +12203,75 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **値を書き写さない。性質で見る**(CLAUDE.md)。
        10/15/20 という数そのものではなく、
        **「3つある」「選んだとおりの数になる」**を見る */
-    const opts = amountsFor('vocabulary')
-    ok(opts.length === 3 && opts.every((o) => o.count > 0),
+    const opts = amountsFor('vocabulary', { base: 10 })
+    ok(opts.length >= 3 && opts.every((o) => o.count > 0),
       '単語 / フレーズ … 数は倍率ではなく、問数そのものでえらぶ',
       opts.map((o) => o.label).join(' / '))
-    ok(amountsFor('vocabulary') === amountsFor('phrase'),
-      '単語 / フレーズ … 単語とフレーズで、同じ選択肢を出す')
-    /* **倍率のほうを壊していないか**(「出る」と「出ない」の両方) */
-    ok(amountsFor('listening').every((o) => o.times > 0 && o.count == null),
-      '文型ドリル … これまでどおり倍率のまま')
+    ok(JSON.stringify(amountsFor('vocabulary', { base: 10 }))
+      === JSON.stringify(amountsFor('phrase', { base: 10 })),
+    '単語 / フレーズ … 単語とフレーズで、同じ選択肢を出す')
+
+    /* ══════════════════════════════════════════════════════════
+       ★ **どの演習でも 10 / 20 / 30 が選べる**(第5.412節・利用者の指定)
+
+         > 全ての教材で問題数を１０，２０，３０と設定できるはずなのに
+         > いつのまにか上限が２０問になっていたりします
+
+       **1つの演習で見ない。** もとの穴は「文型ドリルだけが 3 倍まで」
+       という**演習ごとの差**だったので、**ぜんぶを回らないと見つからない。**
+       **数は `COUNT_STEPS` から読む**(ここに 10/20/30 と書き写さない) */
+    {
+      const 足りない = []
+      const 既定ずれ = []
+      const 倍率が残った = []
+      for (const k of MATERIAL_KINDS) {
+        for (const s2 of defaultSectionsFor(k.id, '')) {
+          if (!isScalable(k.id, s2.exercise_type)) continue
+          const 段 = amountsFor(s2.exercise_type, { base: s2.count })
+          const 数 = 段.map((a) => a.count)
+          const 名 = `${k.id}/${s2.exercise_type}`
+          for (const n of COUNT_STEPS) if (!数.includes(n)) 足りない.push(`${名}:${n}`)
+          /* **既定が段に入っていないと、押していない状態に当たる札が無い。**
+             単語だけの教材(既定 20)が、黙って 10 問になっていた */
+          const 既定 = 段.filter((a) => a.id === 'default')
+          /* **既定の数を持たない演習(応答問題)には、既定の札が無いのが正しい** ——
+             あちらの問数はえらんだ表現の数で決まる(第5.332節) */
+          const 要る = s2.count > 0 ? 1 : 0
+          if (既定.length !== 要る || (要る && 既定[0].count !== s2.count)) {
+            既定ずれ.push(`${名}:既定${s2.count}→${既定.map((a) => a.count).join('') || '無し'}`)
+          }
+          if (段.some((a) => a.times != null)) 倍率が残った.push(名)
+        }
+      }
+      ok(足りない.length === 0,
+        '問数 … どの演習でも 10 / 20 / 30 がえらべる', 足りない.join(' / '))
+      ok(既定ずれ.length === 0,
+        '問数 … 既定の数が、段にちょうど1つ入っている', 既定ずれ.join(' / '))
+      ok(倍率が残った.length === 0,
+        '問数 … 倍率(標準 / 倍 / 3倍)は残っていない', 倍率が残った.join(' / '))
+      /* **「出る」と「出ない」の両方。** 既定が 10 のところは 10/20/30 の
+         3つきり、既定が 5 のところは **5 も残る**(既定を下げない) */
+      ok(amountsFor('comprehension', { base: 5 }).map((a) => a.count).join('/')
+        === `5/${COUNT_STEPS.join('/')}`,
+      '問数 … 既定が 10 でない演習は、既定も段に残る',
+      amountsFor('comprehension', { base: 5 }).map((a) => a.label).join(' / '))
+      /* **えらんだとおりの数になるか**(段に出すだけで効かない形を弾く)。
+         **いちばん上の段**で見る —— 上限で頭打ちにしていると赤くなる */
+      const 上 = Math.max(...COUNT_STEPS)
+      const 効いた = sectionsFor('reading', { comprehension: `n${上}` })
+        .find((x) => x.exercise_type === 'comprehension')?.count
+      ok(効いた === 上, `問数 … いちばん上の段をえらぶと ${上} 問になる`, String(効いた))
+      /* **鍵は `sectionKey()` 1か所**(通しの PART ごとに引くため) */
+      ok(sectionKey({ exercise_type: 'comprehension' }) === 'comprehension',
+        '問数 … 鍵は sectionKey() が作る')
+    }
 
     /* **えらんだとおりの数になるか。** 真ん中(15)は新しい id なので、
        `AMOUNTS` を直に見ていると**黙って既定に落ちる** */
     const n = (id) => sectionsFor('vocab', { vocabulary: id })
       .find((x) => x.exercise_type === 'vocabulary')?.count
     const 三つ = opts.map((o) => n(o.id))
-    ok(三つ.length === 3 && new Set(三つ).size === 3
+    ok(三つ.length === opts.length && new Set(三つ).size === opts.length
       && 三つ.every((v, i) => v === opts[i].count),
     '単語 / フレーズ … えらんだ札のとおりの問数になる', 三つ.join(' / '))
 
@@ -12257,14 +12321,15 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
       'フレーズだけ … 単語を外すと、単語を言う練習も外れる',
       だけ('vocabulary').join(' / '))
 
-    /* **数え方を2通り持たない。** 作る画面は `countOf()` を呼ぶ ——
-       `base * a.times` を書き写すと、倍率を持たない札で `NaN` になる
-       (実際になった) */
+    /* **数え方を2通り持たない。** ★ 札の言葉は `stepAmounts()` が持つ
+       (第5.412節)ので、画面は **`a.label` をそのまま出すだけ**である ——
+       `base * a.times` も「10 問」の書き写しも、画面に1つも無いこと */
     const readF = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
     const mf = readF('src/components/MaterialForm.jsx')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-    ok(/countOf\(base, a\)/.test(mf) && !/base \* a\.times/.test(mf),
-      '単語 / フレーズ … 画面は countOf() を呼ぶ(数を書き写していない)')
+    ok(/\{a\.label\}/.test(mf) && !/base \* a\.times/.test(mf)
+      && !COUNT_STEPS.some((v) => new RegExp(`['\`]${v} 問`).test(mf)),
+    '問数 … 画面は札の言葉をそのまま出す(数を書き写していない)')
 
     /* **窓口にも足したか**(CLAUDE.md「演習の種類を足す場所は4つ」)。
        画面にだけ足すと、**作った瞬間に断られる** */
