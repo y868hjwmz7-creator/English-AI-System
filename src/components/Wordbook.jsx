@@ -51,6 +51,10 @@ import BookPick from './BookPick.jsx'
 import DrillHead from './DrillHead.jsx'
 /* ★ **覚え具合の4つの点**(第5.417節・段階4の案A-3) */
 import LearnDots from './LearnDots.jsx'
+/* ★ **送る / 判定する操作**(第5.417節・段階4)。当てはめる決まりは
+     `cardMove.js` 1か所で、`CardMove` は描いて測るだけ */
+import CardMove from './CardMove.jsx'
+import { isCoarse, keyLabel } from '../lib/cardMove.js'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import WordRadio from './WordRadio.jsx'
@@ -1307,6 +1311,25 @@ export default function Wordbook({
     start()
   }, [isQuiz, loading, opened, rows.length, poolNow])
   const card = isQuiz ? queue[0] : null
+
+  /* ★ **前へ / 次へ**(第5.417節・2026-10-07 利用者の指定・段階4)。
+       矢印キー ← → と、紙の左右の余白クリックから来る。
+
+       **記録は1ミリも動かさない。** 送るだけである ——
+       覚え具合も、箱も、期限も、`answer()` を通ったときにだけ変わる
+       (**復習の仕組みは変えない**・指示書の約束)。
+
+       **その回の順番を回すだけ**(いちばん前 ⇄ いちばん後ろ)。
+       `rows` にも `doneRef` にも `gradedRef` にも触らない ——
+       10語の区切りも、終わりの一覧もそのままである。
+
+       **1枚しかないときは、何も起きない**(効かない操作をしない)。 */
+  /* **指の端末か**(第5.236節)。**幅で見分けない。** 判断は
+     `isCoarse()` 1か所で、ここはキーの印を出すかどうかにだけ使う */
+  const coarse = isCoarse()
+  const goNext = () => setQueue((q) => (q.length > 1 ? [...q.slice(1), q[0]] : q))
+  const goPrev = () => setQueue((q) => (
+    q.length > 1 ? [q[q.length - 1], ...q.slice(0, -1)] : q))
   /**
    * **いくつ終えて、ぜんぶでいくつか**(第5.180節でカードの中へ移した)。
    *
@@ -2383,6 +2406,27 @@ export default function Wordbook({
               選択肢や入力欄があるので**もともと空いていない** ——
               伸ばすと語と選択肢が数百 px 離れて、目が行き来する。
               **判断は `isSelfGraded()` 1か所**(形の一覧を2か所に持たない) */}
+          {/* ★ **送る / 判定する操作**(第5.417節・2026-10-07 利用者の指定・段階4)。
+                矢印キー ← → ↑ ↓ ・ 紙の左右の余白クリック ・
+                指の端末の左右スワイプ。**当てはまるかどうかは
+                `cardMove.js` 1か所**で、ここは何をするかを渡すだけである。
+
+                **押せる帯は、この入れ物の中にだけ出る** ——
+                上の帯にも、下のタブバーにも、下のボタンにもかからない
+                (利用者の指定「上部バーの部分は余白としてとらえない」)。 */}
+          <CardMove
+            /* ★ **聞き流しが開いているあいだは、1つも効かせない** ——
+                 矢印キーを聞いているのは窓(`window`)なので、
+                 上に重ねた画面で ← → を押しても**裏のカードが飛ぶ。**
+                 **既定は「できない」側**にする(CLAUDE.md) */
+            on={!radio}
+            onPrev={goPrev} onNext={goNext}
+            /* **どの訊き方でも効く**(2026-10-07 利用者の指定)——
+               4択・つづりでも、自分の申告が機械の判定より優先される。
+               **押すボタンとまったく同じ道を通る**(`answer()`)ので、
+               記録するかどうかの決まりは1ミリも変わらない */
+            onOk={() => answer(card, canLearning ? 'learning' : 'known')}
+            onYet={() => answer(card, 'unknown')}>
           <div className={`wordcard${isSelfGraded(form) ? ' wordcard--recall' : ''}`}
                ref={cardRef}>
 
@@ -2668,19 +2712,31 @@ export default function Wordbook({
                     そのときだけ、これまでの「覚えた」を出す
                     (**貼る前でも動く道を残す**・CLAUDE.md)。 */}
                 <div className="wordcard-answers">
+                  {/* ★ **キーの印は、ボタンの中に出す**(第5.417節)。
+                      説明の文を足さずに分かる形にする(**余計な説明書きを
+                      置かない**・共通ルール)。
+                      **キーの無い端末では出さない** —— 指しかない端末に
+                      「↑」と書いても押しようがない(効かない操作を見せない)。
+                      **印を足すのは `keyLabel()` 1か所**(書き写さない) */}
                   <button type="button" className="btn btn--quiet"
                           disabled={busy === card.word_norm}
-                          onClick={() => answer(card, 'unknown')}>まだ</button>
+                          onClick={() => answer(card, 'unknown')}>
+                    {keyLabel('まだ', 'yet', { keys: !coarse })}
+                  </button>
                   {canLearning
                     ? (
                       <button type="button" className="btn btn--primary"
                               disabled={busy === card.word_norm}
-                              onClick={() => answer(card, 'learning')}>覚えかけ</button>
+                              onClick={() => answer(card, 'learning')}>
+                        {keyLabel('覚えかけ', 'ok', { keys: !coarse })}
+                      </button>
                     )
                     : (
                       <button type="button" className="btn btn--primary"
                               disabled={busy === card.word_norm}
-                              onClick={() => answer(card, 'known')}>覚えた</button>
+                              onClick={() => answer(card, 'known')}>
+                        {keyLabel('覚えた', 'ok', { keys: !coarse })}
+                      </button>
                     )}
                 </div>
               </div>
@@ -2695,6 +2751,7 @@ export default function Wordbook({
                 箱と次に出す日は、**この仕組みが内側で使う数字**である。
                 ゲストにできることは何も無く、覚える助けにもならない。 */}
           </div>
+          </CardMove>
           </>)}
           </div>
         </div>

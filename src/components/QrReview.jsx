@@ -37,6 +37,9 @@ import Loading from './Loading.jsx'
 import WordbookFilter, { applyWordbookFilter, emptyFilter } from './WordbookFilter.jsx'
 import BookPick from './BookPick.jsx'
 import DrillHead from './DrillHead.jsx'
+/* ★ **送る / 判定する操作**(第5.417節・段階4)。単語帳と同じ部品 */
+import CardMove from './CardMove.jsx'
+import { isCoarse, keyLabel } from '../lib/cardMove.js'
 import ReviewScope from './ReviewScope.jsx'
 import FrameParts from './FrameParts.jsx'
 import ReviewStats from './ReviewStats.jsx'
@@ -801,6 +804,26 @@ export default function QrReview({
     setAt((i) => i + 1)
   }
 
+  /* ★ **前へ / 次へ**(第5.417節・2026-10-07 利用者の指定・段階4)。
+       矢印キー ← → と、紙の左右の余白クリックから来る。
+
+       **記録は1ミリも動かさない。** 送るだけである ——
+       箱も期限も、`answer()` を通ったときにだけ変わる
+       (**復習の仕組みは変えない**・指示書の約束)。
+
+       **端まで行ったら回り込む。** 聞き流しの「前へ」とまったく同じ作法
+       である(1問目から前へ押すと、末尾へ回る)——
+       **行き止まりを作らない**(CLAUDE.md)。
+       **1問しかないときは、何も起きない。** */
+  /* **指の端末か**(第5.236節)。**幅で見分けない。** 判断は
+     `isCoarse()` 1か所で、ここはキーの印を出すかどうかにだけ使う */
+  const coarse = isCoarse()
+  const 回す = (d) => setAt((i) => {
+    const n = run.length
+    if (n < 2) return i
+    return ((i + d) % n + n) % n
+  })
+
   /** **もう出さない**(間違えて溜めた文・すっかり言えるようになった文) */
   const retire = async () => {
     const card = run[at]
@@ -1315,10 +1338,24 @@ export default function QrReview({
           /* **1問ぶんは、教材の中の Quick Response とまったく同じ部品**(`QrCard`)。
              ちがうのはボタンの言葉だけ(2026-09 利用者の指定)。
              教材の中は「その場で言えたか」、こちらは「これから言えるか」を訊く */
+          /* ★ **送る / 判定する操作**(第5.417節・段階4)。
+               単語帳とまったく同じ部品・同じ決まりである(書き写さない) */
+          <CardMove
+            /* ★ **聞き流しが開いているあいだは、1つも効かせない** ——
+                 矢印キーを聞いているのは窓(`window`)なので、
+                 上に重ねた画面で ← → を押しても**裏のカードが飛ぶ。**
+                 **既定は「できない」側**にする(CLAUDE.md) */
+            on={!radio}
+            onPrev={() => 回す(-1)} onNext={() => 回す(1)}
+            onOk={() => answer(true)} onYet={() => answer(false)}>
           <QrCard
             pair={run[at]} no={at + 1}
             onAnswer={answer}
-            yetLabel="まだ" okLabel="言える"
+            /* ★ **キーの印は、ボタンの中に出す**(第5.417節)。
+               **印を足すのは `keyLabel()` 1か所**で、
+               **キーの無い端末には出さない**(効かない操作を見せない) */
+            yetLabel={keyLabel('まだ', 'yet', { keys: !coarse })}
+            okLabel={keyLabel('言える', 'ok', { keys: !coarse })}
             /* **ヒント**(2026-09 利用者の指定)。押した状態は**ここが持つ** ——
                カードは問ごとに描き直されるので、あちらに持つと1問で消える。
                **ヒントを持たない行にはボタンが出ない**(`QrCard` が見ている) */
@@ -1341,6 +1378,7 @@ export default function QrReview({
               </button>
             )}
           />
+          </CardMove>
         )}
         </>)}
       </section>

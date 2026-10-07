@@ -163,3 +163,28 @@ export const FLY_MS = 300
 
 /** 流れる向き(`transform` に渡す)。**判定と向きの対応は、ここ1か所** */
 export const flyX = (move) => (move === 'ok' ? '120%' : '-120%')
+
+/* ══════════════════════════════════════════════════════════════════
+   指で使う端末かどうか
+   ══════════════════════════════════════════════════════════════════ */
+
+/**
+ * ★ **指で使う端末か**(第5.236節)。
+ *
+ * **幅で見分けない** —— iPad Pro は 1366px で**ノートパソコンより広い**し、
+ * `max-width` だと**パソコンの窓を狭めたときにも形が変わる。**
+ *
+ * **問い合わせの文は、ここ1か所**(CSS にも同じ `(pointer: coarse)` が
+ * 書いてあるが、あちらは見た目の話で、こちらは振る舞いの話である)。
+ *
+ * **無い端末では `false`** —— 既定は「スワイプを効かせない」側にする
+ * (CLAUDE.md「既定は『できない』『見せない』側」)。
+ * `window` が無くても落ちないので、**素の node でも読み込める。**
+ */
+export const COARSE_Q = '(pointer: coarse)'
+
+export function isCoarse() {
+  try {
+    return Boolean(globalThis.window?.matchMedia?.(COARSE_Q)?.matches)
+  } catch { return false }
+}
