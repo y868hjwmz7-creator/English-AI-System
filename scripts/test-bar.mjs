@@ -7946,11 +7946,29 @@ export default defineConfig({
       for (const b of await page2.$$('.shelf-sub .wb-tiers .chip')) {
         if (((await b.textContent()) ?? '').includes('1200')) { await b.click(); break }
       }
-      await page2.waitForTimeout(700)
-      基.語2 = await page2.evaluate(
-        () => [...document.querySelectorAll('.wb-stat strong')]
-          .reduce((a, b) => a + Number(b.textContent || 0), 0),
-      )
+      /* ★ **決め打ちの 700ms で測らない**(第5.413節)。
+           読み直しのあいだ、画面は**帯1本**になる(`.wb-stat` が1つも無い)。
+           手元で測ると 200ms では札が 0 枚・700ms には 1200 と出るが、
+           **混んでいる回だけ 700ms を超える** —— 実際、700 本以上を
+           まわしたこの検証の終盤で1度だけ `360 → 0` と赤くなった。
+           **直っていないものが赤くなるのは、本当に壊れているものを
+           見落とすもと**である(CLAUDE.md)。
+
+           **「読み直しが終わったか」を待つ**(札がそろって、数が変わるまで)。
+           待っても変わらなければ、**そのとき見えた数をそのまま出す** ——
+           下の `基.語2 <= 基.語` が、ちゃんと赤くする。
+           **札が1枚も無いときは `-1`** を返す ——
+           0 を返すと「0 語だった」と読めてしまう(0 と null を取り違えない) */
+      const 札の合計 = () => page2.evaluate(() => {
+        const t = [...document.querySelectorAll('.wb-stat strong')]
+        return t.length === 0 ? -1 : t.reduce((a, b) => a + Number(b.textContent || 0), 0)
+      })
+      await page2.waitForFunction((前) => {
+        const t = [...document.querySelectorAll('.wb-stat strong')]
+        return t.length > 0
+          && t.reduce((a, b) => a + Number(b.textContent || 0), 0) !== 前
+      }, 基.語, { timeout: 8000 }).catch(() => { /* 変わらなければ下で赤くなる */ })
+      基.語2 = await 札の合計()
       await page2.close()
     }
 
