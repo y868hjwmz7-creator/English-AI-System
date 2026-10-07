@@ -1318,10 +1318,14 @@ export default function QrReview({
                あちらは集中モードや紙にも出るので、
                **言われていない場所を勝手に変えない**(CLAUDE.md) */
             showFrame
-            extra={(
-              /* **消す道を必ず用意する。** 溜まる一方だと、押し間違えた1問が
-                 ずっと出続ける。答えではない操作なので、枠線だけのボタンにする */
-              <button type="button" className="btn btn--ghost btn--small" onClick={retire}>
+            /* ★ **「もう出さない」はカードの右上へ**(第5.417節・
+                 2026-10-07 利用者の指定・段階4の案B-2)。
+                 もとは `extra`(答えの行)だったので、**判定のすぐ下に
+                 横幅いっぱいで並び、押し間違えやすかった。**
+                 **消す道そのものは1つも減らしていない** —— 置き場所だけ移した */
+            corner={(
+              <button type="button" className="btn btn--ghost btn--small qr-retire"
+                      onClick={retire}>
                 もう出さない
               </button>
             )}

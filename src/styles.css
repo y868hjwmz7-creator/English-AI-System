@@ -957,14 +957,22 @@ a { color: var(--accent); }
      **`.app-shell.has-tabs` の中にいない。** 印は「帯が描かれているか」
      そのもので見る —— 帯が無い幅(パソコン)では、この決まりは効かない。
 
-   【単語帳と Quick Response だけ】
-     `.wbfocus` / `.qrfocus` に名指しで掛ける。集中モード(教材を読む)・
-     聞き流し・スピーチは**言われていない**ので、1px も変えない。
+   【単語帳と Quick Response と、★ 聞き流し】
+     名指しで掛ける。集中モード(教材を読む)とスピーチは
+     **言われていない**ので、1px も変えない。
+
+   ★ **聞き流し(`.radio`)を足した**(第5.417節・2026-10-07 利用者の指定・
+     段階4の案C-1「出したまま」)。第5.405節の時点では
+     「聞き流しは言われていない」として外してあったが、
+     **あちらは聞きながら単語帳へ移りたい画面**である ——
+     出していないと、いちど「やめる」を押して戻ることになる
+     (**行き止まりを作らない**・CLAUDE.md)。
 
    `inset: 0` と `height: 100dvh` を持っているので、
    **`height: auto` にしないと下が縮まない**(高さの指定が勝つ)。 */
 body:has(.app-tabs) .focus.wbfocus,
-body:has(.app-tabs) .focus.qrfocus {
+body:has(.app-tabs) .focus.qrfocus,
+body:has(.app-tabs) .focus.radio {
   bottom: calc(var(--tabs-space) + env(safe-area-inset-bottom));
   height: auto;
 }
@@ -7990,7 +7998,24 @@ button.wbfilter-ctl { text-align: left; }
 .qr-card {
   display: flex; flex-direction: column;
   padding: 0; text-align: center;
+  /* ★ **右上の隅を置けるようにする**(第5.417節・段階4の案B-2) */
+  position: relative;
 }
+/* ★ **カードの右上**(第5.417節・2026-10-07 利用者の指定・段階4の案B-2)。
+     「もう出さない」を、判定のボタンから離してここへ置いた。
+
+     **浮かせる**(`absolute`)—— 流れの中に置くと、問ごとに
+     カードの高さが変わって**答えのボタンが上下に動く**
+     (`.wordcard-q` に高さを決めてあるのと同じ理由)。
+     浮いているものは「別々の物のあいだに隙間を置く」の相手ではない
+     (共通ルール「重なっているものは数えない」)。 */
+.qr-card-corner {
+  position: absolute; top: 0; right: 0; z-index: 1;
+  display: flex;
+}
+/* **答えではない操作なので、控えめに。** 枠線だけのボタンのまま、
+   字だけ一段落とす —— 「まだ」「言える」より目立たせない */
+.qr-retire { font-size: var(--fs-12); }
 .qr-body {
   /* **伸ばしながら、まん中を保つ**(2026-08 利用者の指定)。
 
