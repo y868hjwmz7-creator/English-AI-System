@@ -80,14 +80,107 @@ export const SCOPES = [
 
 export const scopeOf = (id) => SCOPES.find((s) => s.id === id) ?? SCOPES[0]
 
+/* ══════════════════════════════════════════════════════════════════
+   ★ **何を出す —— 4つ**(第5.414節・2026-10-07 利用者の指定・段階3)
+
+     > 何を出す:「今日の復習」「苦手」「未学習」「ぜんぶ」の4つ。
+     > それぞれに該当数を表示。初期設定は「今日の復習」。
+
+   【なぜ1つの操作にまとめたか】
+
+     もとは**2つの操作**だった。
+
+       ・範囲の札(`scope`) … 今日の復習 / ぜんぶ / 1週間以内 / …
+       ・段の札(`stage`)   … 未学習 / 苦手 / 学習中 / 覚えた
+
+     「苦手なものを今日ぶんから」をやるには、**2か所を押す**必要があり、
+     しかも**どちらを押したか画面の離れた場所に出ていた。**
+     ゲストの多くが使っていない、という指摘の芯がここである。
+
+     よく使う4つを**1つの行**にまとめた。
+     **`scope` と `stage` の組み合わせに名前を付けただけ**で、
+     **仕組みは1つも足していない**(「苦手」は `stage = 'weak'`、
+     「今日の復習」は `scope = 'due'` そのもの)。
+
+   【細かい組み合わせは、消していない】
+     「今日の復習 × 学習中」のような組は、**「詳しくしぼる」の中の
+     「段階」**で作れる(**勝手に狭めない**・CLAUDE.md)。
+     ══════════════════════════════════════════════════════════════════ */
+
 /**
- * 1回ぶんの個数(2026-09 利用者の指定で 5 / 10 / 20 / 30 / ぜんぶ)。
+ * **押したら何になるか**の表。**ここ1か所。**
+ * 画面で `id === 'weak' ? …` と書かない(判断は1か所・CLAUDE.md)。
+ */
+export const PICKS = [
+  { id: 'due', label: '今日の復習', scope: 'due', stage: null },
+  { id: 'weak', label: '苦手', scope: 'all', stage: 'weak' },
+  { id: 'new', label: '未学習', scope: 'all', stage: 'new' },
+  { id: 'all', label: 'ぜんぶ', scope: 'all', stage: null },
+]
+
+export const pickOf = (id) => PICKS.find((p) => p.id === id) ?? PICKS[0]
+
+/**
+ * いまの `(scope, stage)` に当たる札。**ちょうど1つに決まる。**
+ *
+ * **段をえらんでいればそちらが勝つ**(「苦手」「未学習」は段そのもの)。
+ * 「詳しくしぼる」で `learning` / `done` をえらんだときは、
+ * **4つのどれにも当たらない**ので `''` を返す ——
+ * **当てずっぽうで「ぜんぶ」を光らせない**(黙って嘘をつかない・CLAUDE.md)。
+ * そのときは「◯件しぼり中」の側が、絞っていることを言う。
+ */
+export const pickIdOf = (scope, stage) => {
+  if (stage) return PICKS.find((p) => p.stage === stage)?.id ?? ''
+  return scope === 'due' ? 'due' : 'all'
+}
+
+/**
+ * その札を押したら出るもの。**押す前の数も、押したあとの出題も、これ1つ。**
+ * **数え方を2通り持たない**(CLAUDE.md)。
+ */
+export const pickPool = (rows, id, today = todayKey()) => {
+  const p = pickOf(id)
+  return scopePool(stageOrDefaultPool(rows, p.stage), p.scope, today)
+}
+
+/** 札に添える数。**数が見えないと選べない**(第5.245節と同じ考え方) */
+export const pickCounts = (rows, today = todayKey()) => Object.fromEntries(
+  PICKS.map((p) => [p.id, pickPool(rows, p.id, today).length]),
+)
+
+/**
+ * 押したら何が起きるのかを、1行の日本語で言う。
+ * **仕組みの内側の数字(箱の番号)は出さない**(CLAUDE.md)。
+ */
+export function pickLead(id, unit = '問') {
+  const p = PICKS.find((x) => x.id === id)
+  if (!p) return `詳しくしぼっています。`
+  if (p.id === 'due') return `今日が復習の日のものから出します。`
+  if (p.id === 'all') return `溜まっている${unit}ぜんぶから出します。期限は見ません。`
+  return `「${p.label}」の${unit}から出します。期限は見ません。`
+}
+
+/**
+ * 1回ぶんの個数。★ **10 / 20 / ぜんぶ の3つ**(第5.414節・段階3)。
+ *
+ *   > 何問ずつ:「10」「20」「ぜんぶ」の3つ(5と30は廃止)
  *
  * **`SESSION_SIZE`(10)は既定として残す。** 単語帳がずっとその数だった。
  * `'all'` は「範囲にあるものを全部」。
  */
-export const SIZES = [5, 10, 20, 30, 'all']
+export const SIZES = [10, 20, 'all']
 export const DEFAULT_SIZE = SESSION_SIZE
+
+/**
+ * ★ **聞き流しの個数は、これまでどおり 5 / 10 / 20 / 30 / ぜんぶ**
+ * (第5.414節)。
+ *
+ * **言われた場所だけを直す**(CLAUDE.md)。「5と30は廃止」は
+ * **出しかたのシートの話**であって、聞き流しは別の画面である ——
+ * あちらは「何問流すか」で、短く5問だけ流す使い方がある。
+ * **同じ名前にしない**(違うものに同じ名前を付けない・共通ルール)。
+ */
+export const RADIO_SIZES = [5, 10, 20, 30, 'all']
 export const sizeLabel = (size) => (size === 'all' ? 'ぜんぶ' : String(size))
 
 /**
@@ -109,8 +202,8 @@ export const sizeLabel = (size) => (size === 'all' ? 'ぜんぶ' : String(size))
  * `'all'` をどう扱うかは、このファイルの持ちものである(判断は1か所)。
  * **知らない値は既定に落とす**(行き止まりを作らない)。
  */
-export const sizeOfValue = (v) =>
-  SIZES.find((n) => String(n) === String(v)) ?? DEFAULT_SIZE
+export const sizeOfValue = (v, list = SIZES) =>
+  (list ?? SIZES).find((n) => String(n) === String(v)) ?? DEFAULT_SIZE
 
 export const sizePickLabel = (size, unit = '問') =>
   (size === 'all' ? sizeLabel(size) : `${sizeLabel(size)} ${unit}`)
@@ -131,7 +224,7 @@ export const takeCount = (size, poolLength) => (size === 'all'
 export function isDueOn(dueOn, addedAt, today = todayKey()) {
   if (!dueOn) return true
   if (String(dueOn).slice(0, 10) <= today) return true
-  return (addedAt ? toDateKey(new Date(addedAt)) : null) === today
+  return addedDayOf({ added_at: addedAt }) === today
 }
 
 /** 行の形で受け取る版。画面はこちらを呼ぶ */
@@ -146,16 +239,10 @@ export const isDueNow = (row, today = todayKey()) => isDueOn(row?.due_on, row?.a
 export function scopePool(rows, scopeId, today = todayKey()) {
   const sc = scopeOf(scopeId)
   const list = rows ?? []
+  /* ★ **「出会った時期」はここから出て行った**(第5.414節)。
+       いまは絞り込みの側(`inMet()`・`metRange.js`)が当てる */
   if (sc.kind === 'all') return list
-  if (sc.kind === 'due') return list.filter((r) => isDueNow(r, today))
-  /* **「1週間以内」= 7日前の日付以降。** 日付そのもので比べるので、
-     時差でずれない。**出会った日が分からないもの(0024 を貼る前に
-     入った古い行)は入らない** —— 当てずっぽうで入れない */
-  const from = daysAgo(sc.days, today)
-  return list.filter((r) => {
-    const d = addedDayOf(r)
-    return Boolean(d) && d >= from
-  })
+  return list.filter((r) => isDueNow(r, today))
 }
 
 /** 札に添える数。**数が見えないと範囲を選べない**(ここが「直感的」の核心) */
@@ -174,11 +261,8 @@ export function scopeCounts(rows, today = todayKey()) {
  */
 export function scopeLead(scopeId, unit = '問') {
   const sc = scopeOf(scopeId)
-  /* **札の言葉を、そのまま文に続ける**(第5.245節)。
-     札が「1週間以内」になったので、ここで「以内」を足すと二重になる */
   if (sc.kind === 'due') return `今日が復習の日のものから出します。`
-  if (sc.kind === 'all') return `溜まっている${unit}ぜんぶから出します。期限は見ません。`
-  return `${sc.label}に出会った${unit}から出します。`
+  return `溜まっている${unit}ぜんぶから出します。期限は見ません。`
 }
 
 /**
