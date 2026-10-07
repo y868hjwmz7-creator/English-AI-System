@@ -1338,19 +1338,19 @@ function HwFilterDemo() {
    **本物の部品と本物の CSS で測る**(写した HTML では測らない)。
    `App.jsx` が本当にこれを出しているかは、`npm run test:bar` が
    ソースの形で別に見る —— ここだけ緑でも利用者の画面は変わらない。 */
-const TABS = (
-  /* **本物の骨組みで包む**(2026-09 実機)。「＋ 教材を作る」の浮きボタン
-     (`.finder-float`)を帯の上へ逃がす指定は `.app-shell.has-tabs` で
-     効かせてあるので、**包まないと測れない**(素通りする) */
+/* ★ **本物の骨組みで包む**(2026-09 実機 / 第5.405節で関数にした)。
+
+   「＋ 教材を作る」の浮きボタン(`.finder-float`)を帯の上へ逃がす指定は
+   `.app-shell.has-tabs` で効かせてあるので、**包まないと測れない**。
+
+   **包み方は、ここ1か所**(第5.405節)。練習中(集中モード)も下の
+   メニューを出すようになったので、**`?screen=qrrev&tabs=1` /
+   `?screen=mybook&tabs=1` も、まったく同じ包みで測る** ——
+   包みを2つ書くと、片方だけ本物と違っていても緑になる。 */
+const 帯つき = (中身) => (
   <div className="app-shell is-narrow has-tabs">
     <div className="app-body">
-      <div className="app">
-        <div style={{ height: '1200px' }} />
-        {/* 一覧の途中に出る「＋ 教材を作る」。**帯に被っていないか**を測る */}
-        <button type="button" className="btn btn--small finder-float">
-          ＋ 教材を作る
-        </button>
-      </div>
+      <div className="app">{中身}</div>
     </div>
     <AppTabs
       pages={[
@@ -1369,6 +1369,16 @@ const TABS = (
       }}
     />
   </div>
+)
+
+const TABS = 帯つき(
+  <>
+    <div style={{ height: '1200px' }} />
+    {/* 一覧の途中に出る「＋ 教材を作る」。**帯に被っていないか**を測る */}
+    <button type="button" className="btn btn--small finder-float">
+      ＋ 教材を作る
+    </button>
+  </>,
 )
 
 /* Quick Response の1問(`?screen=qr`・2026-09 利用者の指定)。
@@ -2525,7 +2535,9 @@ createRoot(document.getElementById('root')).render(
     : q.get('screen') === 'qr'
     ? qrScreen(false)
     : q.get('screen') === 'qrrev'
-    ? qrScreen(true)
+    /* ★ `&tabs=1` … **下のメニューと一緒に**描く(第5.405節)。
+         本物の `App.jsx` も、画面と帯を並べて描いている */
+    ? (q.get('tabs') ? 帯つき(qrScreen(true)) : qrScreen(true))
     : q.get('screen') === 'focusver'
     ? FOCUSVER
     : q.get('screen') === 'qrreal'
@@ -2537,7 +2549,7 @@ createRoot(document.getElementById('root')).render(
     : q.get('screen') === 'search'
     ? SEARCH
     : q.get('screen') === 'mybook'
-    ? MYBOOK
+    ? (q.get('tabs') ? 帯つき(MYBOOK) : MYBOOK)
     : q.get('screen') === 'wordbook'
     ? WORDBOOK
     : q.get('screen') === 'remake'

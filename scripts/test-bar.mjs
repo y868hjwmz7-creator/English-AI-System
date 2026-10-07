@@ -4667,6 +4667,107 @@ export default defineConfig({
     ok('下の行き先 … 押すとその画面へ移る')
   }
 
+  /* ══ 練習中も、下のメニューが出ているか(第5.405節・2026-10-07 利用者の指定)══
+
+       > 単語帳やクイックレスポンスの下部をメニューボタンに変更する
+
+     単語帳と Quick Response の練習は `.focus`(`z-index: 120`)で
+     **画面ぜんぶを覆う**ので、下のメニュー(`z-index: 40`)が隠れていた。
+     練習に入ると、ほかの画面へ移る道が無くなる。
+
+     **「出ているか」だけを見ない。** 見えていても、上に透明なものが
+     乗っていれば押せない。**押して、本当に移るか**まで見る。
+     **広い画面(帯の出ない幅)も測る** —— そこまで短くしてしまうと、
+     パソコンで下に空白の帯ができる(**出ない側**・CLAUDE.md)。 */
+  for (const [名, q] of [
+    ['単語帳', 'screen=mybook&tabs=1'],
+    ['Quick Response', 'screen=qrrev&tabs=1'],
+  ]) {
+    for (const w of [390, 320]) {
+      await page.setViewportSize({ width: w, height: 760 })
+      /* **`networkidle` を待たない**(CLAUDE.md)—— 音を鳴らす画面は
+         いつまでも「通信中」に見える。出るはずのものを待つ */
+      await page.goto(`http://localhost:${PORT}/__bar.html?${q}`,
+        { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('.app-tabs')
+      await page.waitForSelector('.focus')
+      await page.waitForTimeout(250)
+      const m = await page.evaluate(() => {
+        const 丸 = (n) => Math.round(n * 10) / 10
+        const 帯 = document.querySelector('.app-tabs').getBoundingClientRect()
+        const 練習 = document.querySelector('.focus').getBoundingClientRect()
+        const 押せるもの = [...document.querySelectorAll('.focus button')]
+          .map((b) => b.getBoundingClientRect())
+          .filter((r) => r.width > 0 && r.height > 0)
+        return {
+          タブ数: document.querySelectorAll('.app-tab').length,
+          帯の上: 丸(帯.top), 帯の高さ: 丸(帯.height),
+          練習の下: 丸(練習.bottom),
+          ボタンの下: 押せるもの.length
+            ? 丸(Math.max(...押せるもの.map((r) => r.bottom))) : null,
+        }
+      })
+      const どこ = `練習中のメニュー ${名} ${w}px`
+      const すき間 = Math.round((m.帯の上 - m.練習の下) * 10) / 10
+      if (m.タブ数 !== 4) {
+        ng(`${どこ} … 下のメニューが4つ出ていない(${m.タブ数})`)
+      } else if (すき間 < 0) {
+        ng(`${どこ} … 練習の画面が、メニューに被っている`,
+          `練習の下 ${m.練習の下} / 帯の上 ${m.帯の上}`)
+      } else if (すき間 > m.帯の高さ / 2) {
+        /* **上げすぎてもいけない。** 「被っていない」だけを見ると、
+           画面のはるか上へ逃がしても緑になる(浮きボタンと同じ考え方) */
+        ng(`${どこ} … 練習の画面が、メニューより上に離れすぎている`,
+          `すき間 ${すき間} / 帯 ${m.帯の高さ}`)
+      } else if (m.ボタンの下 == null) {
+        ng(`${どこ} … 押せるものが1つも無い`, '何も測っていない')
+      } else if (m.ボタンの下 > m.帯の上 + 0.5) {
+        ng(`${どこ} … 答えのボタンが、メニューの下に隠れている`,
+          `ボタンの下 ${m.ボタンの下} / 帯の上 ${m.帯の上}`)
+      } else {
+        ok(`${どこ} … メニューが出て、被っても離れてもいない`
+          + `(すき間 ${すき間} / 帯 ${m.帯の高さ} / ボタンの下 ${m.ボタンの下})`)
+      }
+
+      /* ★ **押して、本当に移るか。** 見えているだけでは意味がない。
+
+           **押せなかったことも、赤として数える**(第5.405節で踏んだ)。
+           帯の上に透明なものが乗っていると `tap()` はそこで落ちるので、
+           包まないと**検証そのものが止まり、残りを1本も測らない。** */
+      let 移った = null
+      try { await page.locator('.app-tab').nth(2).tap({ timeout: 4000 }) }
+      catch (e) { 移った = `押せなかった(${String(e.message).split('\n')[0].slice(0, 40)})` }
+      if (移った === null) {
+        移った = await page.evaluate(() => document.querySelector('.app-tabs').dataset.picked)
+      }
+      if (移った !== 'qr') {
+        ng(`${どこ} … 練習中にメニューを押しても移らない(${移った ?? 'なし'} / qr)`)
+      } else {
+        ok(`${どこ} … 練習中でも、押せば移る`)
+      }
+    }
+
+    /* **出ない側。** 帯の出ない広い画面では、これまでどおり下までいっぱい */
+    await page.setViewportSize({ width: 1280, height: 760 })
+    await page.goto(`http://localhost:${PORT}/__bar.html?${q.replace('&tabs=1', '')}`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.focus')
+    await page.waitForTimeout(250)
+    const 広い = await page.evaluate(() => ({
+      帯: Boolean(document.querySelector('.app-tabs')),
+      下: Math.round(document.querySelector('.focus').getBoundingClientRect().bottom),
+      窓: window.innerHeight,
+    }))
+    if (広い.帯) {
+      ng(`練習中のメニュー ${名} 1280px … 帯が出ている`, 'この幅では測る意味が変わる')
+    } else if (広い.下 < 広い.窓 - 1) {
+      ng(`練習中のメニュー ${名} 1280px … 帯が無いのに、練習の画面が短い`,
+        `下 ${広い.下} / 窓 ${広い.窓}`)
+    } else {
+      ok(`練習中のメニュー ${名} 1280px … 帯が無ければ、下までいっぱい(${広い.下})`)
+    }
+  }
+
   /* ══ 浮きボタンが、下の帯に被っていないか(2026-09 実機・利用者の指摘)══
        > トレーナーの教材画面で、下部のタブに「教材をつくる」が
        > 被ってしまっています。少し上に移動させて被らないように
