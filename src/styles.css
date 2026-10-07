@@ -11697,3 +11697,26 @@ button.wbfilter-ctl { text-align: left; }
   .sresult-score > strong { animation: none; }
 }
 
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **覚え具合の4つの点**(第5.417節・2026-10-07 利用者の指定・段階4の案A-3)
+
+     カードの中の、いちばん上。札でも帯でもなく**小さな点**にしたのは、
+     段階3で「項目が多すぎる」を削ったばかりだからである ——
+     同じ画面にまた札と帯を足すと元に戻る。
+
+   **数を決め打ちしない。** 点は `LearnDots` が `LEARN_STAGES` の数だけ
+   並べる(第5.406節で `repeat(3, …)` と書いて、4枚めが2段めに落ちた)。
+   だから `flex` で並べる —— **いくつ増えても1行のまま**である。
+   ══════════════════════════════════════════════════════════════════ */
+.learn-dots {
+  margin: 0 0 14px;
+  display: flex; justify-content: center; gap: 4px;
+}
+.learn-dot {
+  width: 18px; height: 4px; border-radius: var(--r-pill);
+  /* **済んだ段は `--accent`、まだの段は枠の色。**
+     値を直に書かない —— 暗い配色では金になる(第5.380節) */
+  background: var(--border);
+}
+.learn-dot.is-on { background: var(--accent); }

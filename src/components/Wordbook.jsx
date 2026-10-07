@@ -49,6 +49,8 @@ import {
 } from '../lib/wordQuiz.js'
 import BookPick from './BookPick.jsx'
 import DrillHead from './DrillHead.jsx'
+/* ★ **覚え具合の4つの点**(第5.417節・段階4の案A-3) */
+import LearnDots from './LearnDots.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import WordRadio from './WordRadio.jsx'
@@ -58,7 +60,7 @@ import { loadRateId, rateOf } from '../lib/speechRate.js'
      範囲(`scope`)と段階(`stage`)を1つの操作にまとめたのが `pick` である */
 import {
   loadForm, loadOrder, loadRepeat, loadScope, loadShuffle, loadSize,
-  PICKS, narrowedCount, orderToUse, pickCounts, pickIdOf, pickOf,
+  PICKS, narrowedCount, orderToUse, pickCounts, pickIdOf, pickName, pickOf,
   runKeyOf, saveForm, saveOrder, saveRepeat, saveScope, saveShuffle, saveSize,
   scopePool, shouldRecord, takeCount, todayKey,
 } from '../lib/reviewScope.js'
@@ -1701,7 +1703,18 @@ export default function Wordbook({
    * 「3 冊」と丸めると、**どの3冊なのかが分からない**
    * (**黙って丸めない**・CLAUDE.md)。
    */
-  const drillLabel = nowName(basicBook
+  /* ★ **いちばん前に「いま出している範囲」を足す**(第5.417節・
+       2026-10-07 利用者の指定・段階4の案A-3「ぜんぶ1行にまとめる」)。
+
+         今日の復習 / コロケーション基本動詞
+         苦手 / Native Flow Vol.1 / UNIT 3
+
+       **足すのは言葉1つ。行も箱も増やしていない** ——
+       段階3で「項目が多すぎる」を削ったばかりなので、
+       ここに札や帯を積むと元に戻る。
+       **「ぜんぶ」のときは足さない**(`pickName()` が空を返す)。
+       **言葉は `PICKS` 1か所**(書き写さない)。 */
+  const drillLabel = nowName([pickName(pick), ...(basicBook
     ? [bookLabel, tierOf(tier)?.label ?? '']
     : shelfBook
     ? [bookLabel, ...shelfPick
@@ -1710,7 +1723,7 @@ export default function Wordbook({
        名前は `chunkTitle()` が作る —— **冊の名前も組の名前も書き写さない** */
     : chunkBook
     ? [chunkTitle(chunkPart, chunkGroupOk(chunkPart, chunkGroup) ? chunkGroup : '')]
-    : [bookLabel])
+    : [bookLabel])])
   /* **絞っているときは、冊の名前そのものを差し替える**
      (2026-09 利用者の指定・第5.222節)。
 
@@ -2378,6 +2391,13 @@ export default function Wordbook({
                 コンテンツの上部にタイトルを」)。
                 Quick Response と**同じ部品・同じ置き場所**である */}
             {drillHead}
+
+            {/* ★ **覚え具合の4つの点**(第5.417節・2026-10-07 利用者の指定・
+                段階4の案A-3)。**いま開いている語が、どの段なのか**を
+                押す前に受け取れる。
+                **段を決めるのは `learnStage.js` 1か所**で、
+                この画面は行を渡すだけである */}
+            <LearnDots row={card} />
 
             {/* **出題は、高さの決まった枠に入れる**(2026-09 利用者の指定)。
                   > 単語や解答の長さに関わらず、しっかり中央に居座るように

@@ -44,7 +44,7 @@ import ReviewStats from './ReviewStats.jsx'
      単語帳とまったく同じものを使う —— 書き写さない */
 import {
   PICKS, loadRepeat, loadScope, loadShuffle, loadSize,
-  narrowedCount, orderToUse, pickCounts, pickIdOf, pickOf,
+  narrowedCount, orderToUse, pickCounts, pickIdOf, pickName, pickOf,
   runKeyOf, saveRepeat, saveScope, saveShuffle, saveSize, scopePool, shouldRecord,
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
@@ -907,11 +907,22 @@ export default function QrReview({
    *
    * **選んでいないものは並ばない**(「ぜんぶ」のときは冊の名前だけ)。
    */
-  const drillLabel = nowName(nfBook
+  /* ★ **いちばん前に「いま出している範囲」を足す**(第5.417節・
+       2026-10-07 利用者の指定・段階4の案A-3「ぜんぶ1行にまとめる」)。
+
+         今日の復習 / コロケーション基本動詞
+         苦手 / Native Flow Vol.1 / UNIT 3
+
+       **足すのは言葉1つ。行も箱も増やしていない** ——
+       段階3で「項目が多すぎる」を削ったばかりなので、
+       ここに札や帯を積むと元に戻る。
+       **「ぜんぶ」のときは足さない**(`pickName()` が空を返す)。
+       **言葉は `PICKS` 1か所**(書き写さない)。 */
+  const drillLabel = nowName([pickName(pick), ...(nfBook
     ? [bookLabel, unit ? unitName(unitOf(unit)) : '']
     : frameBook
     ? [bookLabel, framePartOf(part)?.label ?? '', frameFormLabel(part, form)]
-    : [bookLabel])
+    : [bookLabel])])
 
   /**
    * **冊の中の区切り**(Unit・中身・型)。**その冊の行の中**に出す(第5.167節)。
