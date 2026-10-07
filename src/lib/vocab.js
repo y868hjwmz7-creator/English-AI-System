@@ -19,6 +19,8 @@ import { supabase } from './supabase.js'
 import { canSeeSystemDetail } from './viewer.js'
 import { normWord } from './textNorm.js'
 import { KNOWN_AFTER } from './qrPromote.js'
+/* ★ **終わりまで読む**(第5.404節)。算段は素の node で走る形に出してある */
+import { WORDBOOK_PAGE, readAllRows, sortWordbook } from './wordbookPaging.js'
 /* **英語が入っている欄は `exerciseTypes.js` 1か所が決める**(第5.289節)。
    ここで `it.prompt_en || it.question` と書き写すと、
    **演習ごとに違う置き場所を取りこぼす**(単語 / フレーズの「言う」段が
@@ -553,12 +555,45 @@ async function readWordbook(learnerId, { status = 'unknown', limit = WORDBOOK_LI
   if (!supabase) return ng('Supabase が設定されていません')
   if (!learnerId) return ok([])
 
-  const call = (p_status) => supabase.rpc('review_words', {
-    p_learner: learnerId,
-    p_status,
-    p_limit: limit,
-    p_due_only: dueOnly,
-  })
+  /* ★ ══════════════════════════════════════════════════════════════
+       **終わりまで読む。1回の問い合わせで数え切らない**(第5.404節)
+
+       PostgREST(Supabase)は**1回に返す行数に上限**を持っており、
+       既定は **1,000 行**である。`.range()` を付けずに読むと、
+       **5,000 語まで頼んでいても 1,000 行で切られる。**
+
+       しかも単語帳は**期限の古い順**に返ってくるので、切られた 1,000 行は
+       **全部が期限切れ = 今日の復習**になる。だから「出しかた」の札が
+       **「今日の復習 1000」「ぜんぶ 1000」**でそろって止まっていた
+       (2026-10-07 実機・利用者の指摘)。
+
+       **棚の語を数えるところ(`shelfWords.js` の `loadShelfCounts()`)には、
+       まったく同じ注意書きがあって、もう直してある。**
+       こちらだけが直っていなかった ——
+       **1か所で踏んだ罠は、同じ読み方をしている場所を全部数える。**
+
+       **Supabase の設定(Max rows)には頼らない。** 上限がいくつでも
+       正しい形にする。「1ページぶんに満たなくなるまで読む」なら、
+       上限を知らなくてよい(上限が 5,000 なら1回で抜ける)。
+
+       **並び順を必ず決める。** 決めないと、ページのあいだで同じ行が
+       二度来たり、抜けたりする。鍵は `word_norm`(1人の中で重ならない)。
+       そのぶん**読む順が五十音順に変わる**ので、返す直前に
+       `sortWordbook()` で**SQL が返していたのと同じ順**に戻す ——
+       画面も出題も1文字も変えないためである。
+       ══════════════════════════════════════════════════════════════ */
+  const call = (p_status) => readAllRows(
+    (from, to) => supabase
+      .rpc('review_words', {
+        p_learner: learnerId,
+        p_status,
+        p_limit: limit,
+        p_due_only: dueOnly,
+      })
+      .order('word_norm')
+      .range(from, to),
+    { size: WORDBOOK_PAGE },
+  )
 
   const { data, error } = await call(status)
   if (error) return fail(error, '単語帳を読めませんでした')
@@ -577,10 +612,13 @@ async function readWordbook(learnerId, { status = 'unknown', limit = WORDBOOK_LI
   if (status === 'todo' && !(data ?? []).length) {
     const [yet, half] = await Promise.all([call('unknown'), call('learning')])
     if (!yet.error) {
-      return ok([...(yet.data ?? []), ...(half.error ? [] : half.data ?? [])])
+      return ok(sortWordbook([...(yet.data ?? []), ...(half.error ? [] : half.data ?? [])]))
     }
   }
-  return ok(data ?? [])
+  /* **読んだ順ではなく、画面に出す順で返す**(第5.404節)。
+     上で `word_norm` の順に読んでいるので、ここを通さないと
+     一覧が五十音順になる(= 画面が変わってしまう) */
+  return ok(sortWordbook(data ?? []))
 }
 
 /**

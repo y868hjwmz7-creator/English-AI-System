@@ -27,6 +27,12 @@ import {
 import { TONE_GO, TONE_ROW, TONE_SIDE, hasTone } from '../src/lib/btnTone.js'
 import { clozeAt, hasCloze } from '../src/lib/clozeSentence.js'
 import { PAGE_SIZE, pageRange, pageSlice } from '../src/lib/pageList.js'
+/* ★ **単語帳を終わりまで読む**(第5.404節)。
+     窓口を偽物に差し替えて、素の node で算段だけを測れる形にしてある */
+import {
+  WORDBOOK_MAX_PAGES, WORDBOOK_PAGE, readAllRows, sortWordbook,
+  outOfRange,
+} from '../src/lib/wordbookPaging.js'
 import { hasMaterialWords, materialWordsOf } from '../src/lib/materialWords.js'
 /* ★ 発行のボタンの言葉(第5.395節)。**素の node で測れる形**に出してある */
 import { publishLabel } from '../src/lib/learnerPick.js'
@@ -14892,6 +14898,234 @@ console.log('\n▶ ほかのアプリの音を、こちらが止めないか(第
   /* **いま開いているゲストは、えらべる一覧から外す**(もう持っている) */
   ok(/x\.id\s*!==\s*l\.id/.test(素),
     'いま開いているゲストは、えらべる一覧に出さない')
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   第5.404節 —— 単語帳が 1,000 語で切られていた(2026-10-07 実機・利用者の指摘)
+
+     > 単語帳の「今日の復習」と「ぜんぶ」が両方1000語で止まっている
+
+   PostgREST(Supabase)が1回に返す行数の上限(既定 1,000 行)で
+   切られていた。**アプリのどこにも 1000 とは書いていない**ので、
+   コードを読んでも見つからない形だった。
+
+   直したのは `vocab.js` の読み方(**分けて読む**)で、
+   算段は `wordbookPaging.js` に出してある。ここで数字で見張る。
+   ══════════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 単語帳を終わりまで読む(第5.404節)')
+{
+  /** 偽の窓口。**上限 `cap` 行で切る**(PostgREST のふるまいを真似る) */
+  const 窓口 = (total, { cap = WORDBOOK_PAGE, 回数 = null } = {}) => {
+    const all = Array.from({ length: total }, (_, i) => ({ word_norm: `w${i}` }))
+    return (from, to) => {
+      if (回数) 回数.n += 1
+      const 頼んだ = to - from + 1
+      return Promise.resolve({ data: all.slice(from, from + Math.min(頼んだ, cap)), error: null })
+    }
+  }
+
+  {
+    /* **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)——
+       1,000 ちょうどで切られる形が、まさに実機で起きていたものである */
+    const 回数 = { n: 0 }
+    const { data, error } = await readAllRows(窓口(2500, { 回数 }))
+    ok(!error && data.length === 2500,
+      '1,000 行で切られても、2,500 語ぜんぶ読める', `${data?.length} 語 / ${回数.n} 回`)
+  }
+  {
+    /* **切られていなければ、1回で終わる**(増える問い合わせは0回) */
+    const 回数 = { n: 0 }
+    const { data } = await readAllRows(窓口(300, { cap: 5000, 回数 }))
+    ok(data.length === 300 && 回数.n === 1,
+      '上限に当たらなければ、問い合わせは1回だけ', `${data.length} 語 / ${回数.n} 回`)
+  }
+  {
+    /* **ちょうど1ページぶんで終わるとき**、もう一度読んで 0 で止まる */
+    const 回数 = { n: 0 }
+    const { data } = await readAllRows(窓口(WORDBOOK_PAGE, { 回数 }))
+    ok(data.length === WORDBOOK_PAGE && 回数.n === 2,
+      'ちょうど1ページぶんのときも、取りこぼさない', `${data.length} 語 / ${回数.n} 回`)
+  }
+  {
+    /* **同じ行が二度来ても、数が増えない**(並びがずれたときの備え) */
+    const 同じ = () => Promise.resolve({
+      data: [{ word_norm: 'a' }, { word_norm: 'b' }, { word_norm: 'a' }], error: null,
+    })
+    const { data } = await readAllRows(同じ, { size: 100 })
+    ok(data.length === 2, '同じ語が二度来ても、1つに束ねる', `${data.length} 語`)
+  }
+  {
+    /* **1語も無いときに落ちない**(無ければ素通りを塞ぐ・CLAUDE.md) */
+    const { data, error } = await readAllRows(() => Promise.resolve({ data: [], error: null }))
+    ok(!error && Array.isArray(data) && data.length === 0, '1語も無くても、空で返る')
+  }
+  {
+    /* **際限なく読まない。** 窓口が永遠に満杯を返しても止まる */
+    const 回数 = { n: 0 }
+    const 満杯 = (from, to) => {
+      回数.n += 1
+      return Promise.resolve({
+        data: Array.from({ length: to - from + 1 }, (_, i) => ({ word_norm: `w${from + i}` })),
+        error: null,
+      })
+    }
+    await readAllRows(満杯, { size: 10, maxPages: 5 })
+    ok(回数.n === 5, '際限なく読まない(上限で止まる)', `${回数.n} 回`)
+    ok(WORDBOOK_MAX_PAGES > 0, '上限そのものが決まっている', `${WORDBOOK_MAX_PAGES} ページ`)
+  }
+  {
+    /* **読めなかったら、そこで止めて知らせる。**
+       途中まで返すと「黙って絞った」ことになる(CLAUDE.md) */
+    let 回 = 0
+    const 途中で失敗 = (from, to) => {
+      回 += 1
+      if (回 === 1) {
+        return Promise.resolve({
+          data: Array.from({ length: to - from + 1 }, (_, i) => ({ word_norm: `w${i}` })),
+          error: null,
+        })
+      }
+      return Promise.resolve({ data: null, error: '切れました' })
+    }
+    const { data, error } = await readAllRows(途中で失敗, { size: 10 })
+    ok(error === '切れました' && data === null,
+      '途中で読めなくなったら、半端な一覧を返さずに知らせる')
+  }
+}
+
+{
+  /* ★ **「その範囲はもう無い」は、失敗ではない**(第5.404節)。
+       ちょうど 1,000 語の人は、2回目に**終わりの先**を頼むことになる。
+       そこで赤くすると、**その人だけ単語帳が開かなくなる** */
+  let 回 = 0
+  const ちょうど = (from, to) => {
+    回 += 1
+    if (from > 0) return Promise.resolve({ data: null, error: { code: 'PGRST103' } })
+    return Promise.resolve({
+      data: Array.from({ length: to - from + 1 }, (_, i) => ({ word_norm: `w${i}` })),
+      error: null,
+    })
+  }
+  const { data, error } = await readAllRows(ちょうど, { size: 10 })
+  ok(!error && data.length === 10,
+    'ちょうど1ページぶんで、範囲の先を断られても落ちない', `${data?.length} 語 / ${回} 回`)
+  ok(outOfRange({ code: 'PGRST103' })
+    && outOfRange({ message: 'Requested range not satisfiable' })
+    && !outOfRange({ code: '42703', message: 'column does not exist' }),
+    '「範囲が無い」と、本物の失敗を見分けている')
+  {
+    /* **1回目で断られたら、本物の失敗として知らせる**(黙って空にしない) */
+    const 初回で断る = () => Promise.resolve({ data: null, error: { code: 'PGRST103' } })
+    const r = await readAllRows(初回で断る, { size: 10 })
+    ok(r.data === null && r.error, '1回目で断られたら、空ではなく失敗として返す')
+  }
+}
+
+console.log('\n▶ 「今日の復習」と「ぜんぶ」が 1000 で止まらない(第5.404節)')
+{
+  /* ★ **利用者が実際に見た形を、そのまま作って測る**(2026-10-07)。
+
+       > 単語帳の「今日の復習」と「ぜんぶ」が両方1000語で止まっている
+
+     窓口を**1,000 行で切る**偽物にして、2,500 語の単語帳を読む。
+     直す前はここが 1000 / 1000 になっていた。
+     **「出しかた」の札は読み込んだ行から数えている**ので、
+     読み切れていれば、そのまま札の数が正しくなる */
+  const 今日 = '2026-10-07'
+  const 全部 = Array.from({ length: 2500 }, (_, i) => ({
+    word_norm: `w${String(i).padStart(4, '0')}`,
+    status: i % 3 === 0 ? 'learning' : 'unknown',
+    due_on: '2026-09-01', box: 0,
+    updated_at: '2026-09-01T00:00:00+00:00',
+    added_at: '2026-09-01T00:00:00+00:00',
+  }))
+  const 切る窓口 = (from, to) => Promise.resolve({
+    data: 全部.slice(from, from + Math.min(to - from + 1, WORDBOOK_PAGE)),
+    error: null,
+  })
+  const { data } = await readAllRows(切る窓口)
+  const 数 = scopeCounts(sortWordbook(data), 今日)
+  ok(数.all === 2500, '「ぜんぶ」が 1000 で止まらない', `${数.all} 語`)
+  ok(数.due === 2500, '「今日の復習」も 1000 で止まらない', `${数.due} 語`)
+  /* **3つの札(表を直に数えたもの)と、「ぜんぶ」がそろうか。**
+     既定の段は「まだ + 練習中」を読むので、そこと突き合わせる ——
+     **「できた」は読んでいない**ので、3つの合計とは比べない */
+  const まだ = 全部.filter((r) => r.status === 'unknown').length
+  const 練習中 = 全部.filter((r) => r.status === 'learning').length
+  ok(数.all === まだ + 練習中,
+    '「ぜんぶ」=「まだ」+「練習中」になる', `${数.all} = ${まだ} + ${練習中}`)
+}
+
+console.log('\n▶ 読んだ順ではなく、画面に出す順で返す(第5.404節)')
+{
+  /* 分けて読むために `word_norm` の順で読んでいるので、
+     **並べ直さないと一覧が五十音順になる**(= 画面が変わってしまう) */
+  const 行 = (o) => ({
+    word_norm: 'x', status: 'unknown', due_on: '2026-10-01', box: 0,
+    updated_at: '2026-10-01T00:00:00+00:00', ...o,
+  })
+  const 元 = [
+    行({ word_norm: 'e', status: 'learning', due_on: '2026-09-01' }),
+    行({ word_norm: 'd', due_on: '2026-10-09' }),
+    行({ word_norm: 'c', box: 2 }),
+    行({ word_norm: 'b' }),
+    行({ word_norm: 'a', updated_at: '2026-10-02T00:00:00+00:00' }),
+  ]
+  const 並び = sortWordbook(元).map((r) => r.word_norm).join('')
+  ok(並び === 'abcde',
+    '「まだ」が先 / 期限の古い順 / 箱の小さい順 / 更新の新しい順', 並び)
+  ok(元.map((r) => r.word_norm).join('') === 'edcba',
+    '元の一覧は書き換えない(並べ直したものを返す)')
+  {
+    /* **同じ値が並んだときも、順が決まる。** 決まらないと
+       読むたびに一覧が入れ替わる(語の順を最後に足してある) */
+    const 同点 = [行({ word_norm: 'z' }), 行({ word_norm: 'y' })]
+    ok(sortWordbook(同点).map((r) => r.word_norm).join('') === 'yz',
+      'まったく同じ条件なら、語の順で決まる')
+  }
+  ok(sortWordbook(null).length === 0, '一覧が無くても落ちない')
+}
+
+console.log('\n▶ 単語帳の読み方と、古い案内(第5.404節)')
+{
+  const 素 = (f) => readFileSync(f, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, a) => a + ' '.repeat(m.length - a.length))
+
+  const v = 素('src/lib/vocab.js')
+  /* **窓口を呼ぶところが、分けて読む形になっているか。**
+     「名前が出てくるか」ではなく、**使っている形**で数える(CLAUDE.md) */
+  ok(/readAllRows\(/.test(v), '単語帳は `readAllRows()` で分けて読んでいる')
+  ok(/\.range\(from, to\)/.test(v), '範囲を指定して読んでいる(`.range()`)')
+  ok(/\.order\('word_norm'\)/.test(v),
+    '読む順を決めている(決めないとページのあいだで抜ける)')
+  /* ★ **「名前が出てくるか」で見ない**(CLAUDE.md)。
+       `sortWordbook(` は**2か所**にある(ふつうの道と、0027 を貼る前の道)。
+       片方を外しても、もう片方に当たって**緑のまま**だった(実際に踏んだ)。
+       **返す道を1つずつ数えて、素通りが1本も無いこと**を見る */
+  const 本体 = v.slice(v.indexOf('async function readWordbook'))
+    .slice(0, v.slice(v.indexOf('async function readWordbook')).indexOf('\n}\n') + 2)
+  const 返す道 = [...本体.matchAll(/return ok\(([^\n]*)/g)].map((m) => m[1])
+  const 素通り = 返す道
+    .filter((t) => !t.startsWith('[])') && !t.startsWith('sortWordbook('))
+  ok(返す道.length >= 3 && 素通り.length === 0,
+    '読んだ行は、必ず画面に出す順へ並べ直してから返す',
+    `返す道 ${返す道.length} 本 / 素通り ${素通り.length} 本`)
+  /* **`.range()` を外しても、`.rpc(` は残る。** だから
+     「rpc を呼んでいるか」では、この1本は何も守らない */
+  const 読む回数 = (v.match(/rpc\('review_words'/g) ?? []).length
+  ok(読む回数 === 1, '単語帳を読む道は1本だけ(書き写していない)', `${読む回数} か所`)
+
+  const w = 素('src/components/Wordbook.jsx')
+  /* ★ **古い案内を消したか**(第5.404節・利用者の指定)。
+       0056 はもう貼ってあるので、**従っても直らない案内**になっていた */
+  ok(!/0056 の SQL/.test(w), '「0056 の SQL を貼ると…」は画面から消えている')
+  /* **知らせそのものは残す。** 分けて読んでもなお足りないときに、
+     黙って絞ったことにしないための最後の砦である */
+  ok(/いまこの画面に読めているのは/.test(w),
+    '読めていないときの知らせは残っている(黙って絞らない)')
 }
 
 console.log(ng
