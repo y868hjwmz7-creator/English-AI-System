@@ -1762,6 +1762,21 @@ export default function Wordbook({
        **中身はここ1か所** —— 一覧の下にも、練習中の上の帯にも、
        これを置く(**書き写さない**) */
   const listenBtn = (
+    <button type="button" className="btn btn--ghost btn--small wb-top-listen"
+            disabled={restInScope === 0}
+            /* **帯を2段にしない**(第5.316節)。帯には ☰ / 冊名 ▾ /
+               これ / 出しかた の4つが並ぶので、**語数まで入れると
+               320px で折り返した**(実測 帯 57px / ボタン 34px)。
+               **数は読み上げと吹き出しの側に残す** —— 消さない */
+            aria-label={`聞き流す(${restInScope} 語)`}
+            title={`聞き流す(${restInScope} 語)`}
+            onClick={listen}>
+      <MusicIcon />聞き流し
+    </button>
+  )
+
+  /** 一覧の下に置くぶん。**語数まで出す**(ここは幅に余裕がある) */
+  const listenWide = (
     <button type="button" className="btn btn--quiet wb-listen"
             disabled={restInScope === 0}
             onClick={listen}>
@@ -1808,7 +1823,7 @@ export default function Wordbook({
   /** 一覧の下に置くぶん。**聞き流すと紙を、1つの行で `gap` で離す** */
   const toolsBox = (
     <div className="wb-tools">
-      {listenBtn}
+      {listenWide}
       {paperBox}
     </div>
   )

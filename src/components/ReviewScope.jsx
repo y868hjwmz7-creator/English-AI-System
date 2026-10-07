@@ -242,6 +242,9 @@ export default function ReviewScope({
                   key: g.id,
                   on: g.id === stage,
                   n: stageN[g.id] ?? 0,
+                  /* **0件の段は押せない**(効かない操作を見せない)。
+                     ただし**消さない** —— 「苦手は無い」ことも知らせである */
+                  disabled: (stageN[g.id] ?? 0) === 0,
                   label: g.label,
                   /* **もう一度押すと外れる**(`pickGroup` と同じ作法) */
                   onClick: () => onStage(g.id === stage ? null : g.id),

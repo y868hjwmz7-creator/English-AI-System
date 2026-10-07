@@ -44,6 +44,9 @@ import { shelfList } from '../src/data/shelves.js'
 import { INDUSTRY_GROUPS } from '../src/data/industries.js'
 /** 棚は何冊あるか。**いまの分野の数から出す** */
 const 棚の冊数 = () => shelfList().length
+/** ★ 「出しかた」に並ぶ札の数。**どの一覧も、持ち主から読む**(第5.414節) */
+const 札はいくつ = () => PICKS.length + SIZES.length + 2
+  + QUIZ_FORMS.length + LEARN_STAGES.length + plainOrders(WORD_ORDERS).length
 /** 組の呼び名(お仕事 / 生活-趣味)。**1か所から配る** */
 const 組の呼び名 = () => INDUSTRY_GROUPS.map((g) => g.label)
 /* **冊の数を書き写さない**(冊を足した日に、ここだけ古い数が残る) */
@@ -76,6 +79,9 @@ import { repeatLabel, repeatSay } from '../src/lib/repeatLabel.js'
 /* **シャッフルの言い方も、あちらから受け取る**(第5.325節)。
    文字を書き写すと、言い方を変えた日に**見張りだけが古くなる** */
 import { shuffleSay } from '../src/lib/shuffleSay.js'
+/* ★ **札の数は、一覧から出す。書き写さない**(第5.414節・段階3) */
+import { PICKS, SIZES, plainOrders } from '../src/lib/reviewScope.js'
+import { QUIZ_FORMS, WORD_ORDERS } from '../src/lib/wordQuiz.js'
 /* **速さの段と端は `speechRate.js` 1か所** */
 import { SPEECH_RATES } from '../src/lib/speechRate.js'
 /* ★ **覚え具合の段は `learnStage.js` 1か所**(第5.406節)。
@@ -5701,9 +5707,27 @@ export default defineConfig({
       }
     })
     let 開 = null
+    let 畳んだまま = null
     if (開く) {
       await page.click('.rscope-go .btn--small')
       await page.waitForTimeout(140)
+      /* ★ **「詳しくしぼる」は、はじめ畳んである**(第5.414節・段階3)。
+           畳んだままの姿を先に控えてから、開いて中身を測る ——
+           **「出る」と「出ない」の両方を見る**(CLAUDE.md) */
+      畳んだまま = await page.evaluate(() => {
+        const pop = document.querySelector('.sheet') || document.querySelector('.setpop')
+        if (!pop) return null
+        return {
+          札の数: pop.querySelectorAll('.rscope-chip').length,
+          見出し: [...pop.querySelectorAll('.rscope-head')]
+            .map((e) => e.textContent.trim()).join('/'),
+          しぼる欄: pop.querySelectorAll('.wbfilter-row').length,
+          詳しく: !!pop.querySelector('.rscope-more-btn'),
+          始める: (pop.querySelector('.rscope-go .btn--primary')?.textContent ?? '').trim(),
+        }
+      })
+      const more = await page.$('.rscope-more-btn')
+      if (more) { await more.click(); await page.waitForTimeout(180) }
       開 = await page.evaluate(() => {
         /* **狭い画面は下から出るシート、広い画面は吹き出し**
            (2026-09 利用者の指定)。どちらの形かも一緒に持ち帰る */
@@ -5721,13 +5745,24 @@ export default defineConfig({
             .map((e) => e.textContent.trim()).join('/'),
           /* **「繰り返す」が、個数の札と同じ行にいるか**(利用者の指定
              「一度に出す個数の横に」)。別の行に落ちていたら赤くする */
+          /* ★ **スイッチは問数の「すぐ下」**(第5.414節)。
+               もとは同じ行だったが、シャッフルと2つになったので下の行へ */
           繰り返すが個数と同じ行: (() => {
-            const rep = pop.querySelector('.rscope-repeat')
+            const sw = pop.querySelector('.rscope-switches')
             const row = pop.querySelector('[aria-labelledby="rscope-many"]')
-            return !!rep && !!row && row.contains(rep)
+            if (!sw || !row) return false
+            const a = row.getBoundingClientRect()
+            const b = sw.getBoundingClientRect()
+            return b.top >= a.bottom - 1 && b.top - a.bottom < 24
           })(),
           低い札: Math.min(...chips.map((c) => Math.round(c.getBoundingClientRect().height))),
           押せない札: chips.filter((c) => c.disabled).length,
+          /* ★ **0件の札は押せない**(第5.414節)。**数そのものを見る** ——
+               「押せない札が N 個」では、N を書き写すことになる */
+          数ゼロの札: chips.filter((c) => (c.querySelector('.chip-count')?.textContent ?? '') === '0').length,
+          数ゼロで押せる札: chips
+            .filter((c) => (c.querySelector('.chip-count')?.textContent ?? '') === '0' && !c.disabled)
+            .length,
           数を出している: pop.querySelectorAll('.chip-count').length,
           /* **絞り込みの欄が、ぜんぶ同じ幅か。** ここがそろっていないと
              ぎざぎざに折り返して「素人っぽい」見た目になる(利用者の指摘) */
@@ -5769,11 +5804,11 @@ export default defineConfig({
       })
     }
     await page.close()
-    return { 閉, 開 }
+    return { 閉, 開, 畳んだまま }
   }
 
   for (const w of [1280, 430, 390, 375, 360, 320]) {
-    const { 閉, 開 } = await 測る(w)
+    const { 閉, 開, 畳んだまま } = await 測る(w)
     /* **閉じているあいだ、札は1つも外に出ていない**(利用者の指定)。
        ここが緩むと、また13個が並んで始めるボタンが下へ押し出される */
     if (閉.外に出ている札 > 0) {
@@ -5812,27 +5847,44 @@ export default defineConfig({
       ng(`復習の範囲 ${w}px … 札が小さすぎる(${開.低い札}px)`)
     /* **数が札の中に出ているか。** ここが「直感的」の核心で、
        消すと「1週間以内に何問あるか」が分からないまま選ぶことになる */
-    } else if (開.数を出している < 8) {
+    } else if (開.数を出している < PICKS.length + LEARN_STAGES.length) {
       ng(`復習の範囲 ${w}px … 札に数が出ていない(${開.数を出している} 個)`,
-        '「1週間以内に23問ある」と見えて初めて、範囲を選べる')
-    /* 範囲8 + 個数5 + 繰り返す1 + 訊き方4 + 並べ方2 = 20
-       (2026-09 実機・利用者の指定で、上の帯から3つを移した) */
-    } else if (開.札の数 !== 20) {
-      ng(`復習の範囲 ${w}px … 札が 20 個`
-        + `(範囲8 + 個数5 + 繰り返す1 + 訊き方4 + 並べ方2)ではない`, `${開.札の数} 個`)
+        '「苦手が8問ある」と見えて初めて、何を出すか選べる')
+    /* ★ **数は一覧から出す。書き写さない**(第5.414節・CLAUDE.md)。
+         何を出す4 + 問数3 + スイッチ2 + 訊き方4 + 段階4 + 並べ方 */
+    } else if (開.札の数 !== 札はいくつ()) {
+      ng(`復習の範囲 ${w}px … 札が ${札はいくつ()} 個`
+        + `(何を出す${PICKS.length} + 問数${SIZES.length} + スイッチ2`
+        + ` + 訊き方${QUIZ_FORMS.length} + 段階${LEARN_STAGES.length}`
+        + ` + 並べ方${plainOrders(WORD_ORDERS).length})ではない`, `${開.札の数} 個`)
+    /* ★ **「詳しくしぼる」は、はじめ畳んである**(利用者の指定)。
+         **開いた姿と比べる** —— 畳んでも同じ数なら、畳めていない */
+    } else if (!畳んだまま?.詳しく) {
+      ng(`復習の範囲 ${w}px … 「詳しくしぼる」のボタンが無い`)
+    } else if (畳んだまま.札の数 >= 開.札の数
+      || 畳んだまま.しぼる欄 > 0) {
+      ng(`復習の範囲 ${w}px … 「詳しくしぼる」が畳まれていない`,
+        `畳んで札 ${畳んだまま.札の数} / 欄 ${畳んだまま.しぼる欄}`
+        + ` → 開いて札 ${開.札の数}`)
+    /* ★ **いちばん下に「◯問で始める」**(利用者の指定)。
+         押す前に出題数が分かること */
+    } else if (!/\d+ .で始める|ありません/.test(畳んだまま.始める)) {
+      ng(`復習の範囲 ${w}px … シートの下に「◯問で始める」が無い`,
+        畳んだまま.始める || '(無い)')
     /* **「おまかせ」は消した**(2026-09 実機・利用者の指定)。
        この人の単語帳はほとんどが箱0で、**ずっと4択**にしかならず、
        名前が嘘になっていた */
     } else if (開.札の言葉.includes('おまかせ') || 開.札の言葉.includes('つづりを書く')) {
       ng(`復習の範囲 ${w}px … 消したはずの形が札に残っている`, 開.札の言葉)
     /* **見出しが無いと、どの札が何なのか分からない** */
-    } else if (!開.見出し.includes('訊き方') || !開.見出し.includes('並べ方')) {
-      ng(`復習の範囲 ${w}px … 訊き方・並べ方の見出しが出ていない`, 開.見出し)
+    } else if (!開.見出し.includes('何を出す') || !開.見出し.includes('訊き方')
+      || !開.見出し.includes('段階')) {
+      ng(`復習の範囲 ${w}px … 何を出す・訊き方・段階の見出しが出ていない`, 開.見出し)
     /* **繰り返すは「一度に出す個数の横」**(利用者の指定)。
        別の行に落ちていたら、言われたとおりに置けていない */
     } else if (!開.繰り返すが個数と同じ行) {
-      ng(`復習の範囲 ${w}px … 「繰り返す」が個数と別の行にある`,
-        '利用者の指定は「一度に出す個数の横に」である')
+      ng(`復習の範囲 ${w}px … スイッチが問数のすぐ下にない`,
+        '利用者の指定は「そのすぐ下に「シャッフル」「繰り返す」」である')
     /* **吹き出しが画面からはみ出さない。** はみ出すと、
        いちばん下の札に永久に手が届かない(語の意味の吹き出しと同じ話) */
     } else if (!開.画面内) {
@@ -5862,12 +5914,19 @@ export default defineConfig({
   /* **0件の札は押せない**(効かない操作を見せない)。
      「出ない」側を見ないと、**全部押せる形に壊しても緑のまま**になる */
   const old = await 測る(390, '&rows=old')
-  if (!old.開 || old.開.押せない札 < 7) {
-    ng('復習の範囲 … 0件の札が押せてしまう', `押せない札 ${old.開?.押せない札} 個`)
+  /* ★ **数を書き写さない。性質で見る**(第5.414節・CLAUDE.md)。
+       「0 と出ている札が、ぜんぶ押せないこと」だけを見る。
+       **0 の札が1つも無ければ、何も測っていない**ので、そこも赤くする */
+  if (!old.開 || !old.開.数ゼロの札) {
+    ng('復習の範囲 … 0件の札が1つも無い(何も測れていない)',
+      `0 の札 ${old.開?.数ゼロの札} 個`)
+  } else if (old.開.数ゼロで押せる札 > 0) {
+    ng('復習の範囲 … 0件の札が押せてしまう',
+      `0 なのに押せる札 ${old.開.数ゼロで押せる札} 個`)
   } else if (!old.閉.ボタン.includes('ありません')) {
     ng('復習の範囲 … 出すものが無いのに、始められる', old.閉.ボタン)
   } else {
-    ok(`復習の範囲 … 0件の札は押せない(${old.開.押せない札} 個)`)
+    ok(`復習の範囲 … 0件の札は押せない(0 の札 ${old.開.数ゼロの札} 個)`)
   }
 
   /* ══ **段の札は、押せる**(2026-09 利用者の指定)═══════════════════
@@ -5956,7 +6015,8 @@ export default defineConfig({
     const 名前 = (開?.欄の名前 ?? []).join('/')
     if (!名前.includes('レベル')) {
       ng('絞り込み … レベルの行が出ていない', 名前 || '(1つも無い)')
-    } else if (!名前.includes('日付') || !名前.includes('分野')) {
+    /* ★ **「日付」は「出会った時期」に統合した**(第5.414節) */
+    } else if (!名前.includes('出会った時期') || !名前.includes('分野')) {
       ng('絞り込み … もとからあった行が消えている', 名前)
     } else {
       ok(`絞り込み … レベルが出て、もとの行も残っている(${名前})`)
@@ -10040,11 +10100,17 @@ for (const W of [1280, 794, 453, 390, 320]) {
   }
 
   /* ── 聞き流し。**練習の画面から押して、本当に出るか** ───────────── */
+  /* ★ **道具は「出しかた」から出た**(第5.414節・段階3・利用者の指定)。
+       聞き流しは**上の帯**へ、紙は **☰ の中**へ移した。
+       だから「出しかたの中に道具が2つ」は、もう**無いのが正しい** ——
+       **「出る」と「出ない」の両方を見る**(CLAUDE.md) */
   await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
   await page.waitForTimeout(500)
   const 道具 = await page.evaluate(() =>
     [...document.querySelectorAll('.sheet .wb-listen, .setpop .wb-listen')]
       .map((x) => x.textContent.trim()))
+  await page.evaluate(() => { document.querySelector('.sheet-back')?.click() })
+  await page.waitForTimeout(300)
   /* **「出しかた」の中のものを、名指しで押す。**
      2026-09-26 に帯のボタンが「🔊 聞き流し」になり、**文字が同じになった。**
      `querySelectorAll('button')` から文字で探すと、
@@ -10052,18 +10118,18 @@ for (const W of [1280, 794, 453, 390, 320]) {
      どちらも `listen()` を呼ぶので**緑のまま**で、
      この見張りは「出しかた」を測らなくなる
      (CLAUDE.md「置き換える前に `grep -n` で数える」の、測る側での同じ話)。 */
-  await page.evaluate(() => {
-    const b2 = [...document.querySelectorAll('.sheet .wb-listen, .setpop .wb-listen')]
-      .find((x) => (x.textContent || '').includes('聞き流し'))
-    if (b2) b2.click()
-  })
+  /* ★ **上の帯の聞き流しを、名指しで押す**(第5.414節)。
+       `querySelectorAll('button')` から文字で探すと、同じ言葉の
+       ほかのボタンに当たる(CLAUDE.md「置き換える前に数える」) */
+  await page.evaluate(() => { document.querySelector('.wb-top-listen')?.click() })
   await page.waitForTimeout(1500)
   const 流 = await page.evaluate(() => ({
     ある: !!document.querySelector('.radio'),
     文: (document.querySelector('.radio')?.textContent ?? '').replace(/\s+/g, ' ').slice(0, 120),
   }))
-  if (道具.length !== 2) {
-    ng('聞き流し … 練習の「出しかた」に道具が2つ出ていない', 道具.join(' / '))
+  if (道具.length !== 0) {
+    ng('聞き流し … 「出しかた」に道具が残っている(☰ と上の帯へ移した)',
+      道具.join(' / '))
   } else if (!流.ある) {
     ng('聞き流し … 練習の画面から押しても、何も出ない',
       '**押す場所と、受け取る場所は同じ数だけ要る**(第5.191節)')
@@ -10699,10 +10765,15 @@ for (const W of [1280, 794, 453, 390, 320]) {
    */
   const 数 = async () => {
     let got = await 読む()
+    /* ★ **紙に出す道具は ☰ の中へ移った**(第5.414節・段階3・
+         利用者の指定「印刷 / PDFで保存 … は☰メニューへ移す」)。
+         もとは「出しかた」の中にあったので、そちらを開いていた */
     if (got.紙 === null) {
-      await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+      await page.evaluate(() => { document.querySelector('.focus-burger')?.click() })
       await page.waitForTimeout(500)
       got = await 読む()
+      await page.evaluate(() => { document.querySelector('.nav-scrim')?.click() })
+      await page.waitForTimeout(300)
     }
     return got
   }
@@ -10710,7 +10781,11 @@ for (const W of [1280, 794, 453, 390, 320]) {
   const 読む = () => page.evaluate(() => {
     const 拾う = (re) => {
       for (const b of document.querySelectorAll('button')) {
-        const m = re.exec((b.textContent || '').replace(/\s+/g, ''))
+        /* ★ **読み上げの側も読む**(第5.414節)。上の帯の聞き流しは
+             帯を2段にしないため**絵 + 短い言葉**にしてあり、
+             語数は `aria-label` が持っている(消していない) */
+        const t = `${b.textContent || ''}${b.getAttribute('aria-label') || ''}`
+        const m = re.exec(t.replace(/\s+/g, ''))
         if (m) return Number(m[1])
       }
       return null
@@ -10821,7 +10896,7 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await 本棚をひらく(qp)
   await qp.waitForTimeout(300)
 
-  /** 紙のボタンの問数。**練習中は「出しかた」の中に入っている** */
+  /** 紙のボタンの問数。★ **練習中は ☰ の中に入っている**(第5.414節) */
   const 問数 = async () => {
     const 拾う = () => qp.evaluate(() => {
       for (const b of document.querySelectorAll('button')) {
@@ -10831,10 +10906,14 @@ for (const W of [1280, 794, 453, 390, 320]) {
       return null
     })
     let n = await 拾う()
+    /* ★ **紙に出す道具は ☰ の中へ移った**(第5.414節・段階3)。
+         もとは「出しかた」の中にあったので、そちらを開いていた */
     if (n === null) {
-      await qp.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+      await qp.evaluate(() => { document.querySelector('.focus-burger')?.click() })
       await qp.waitForTimeout(500)
       n = await 拾う()
+      await qp.evaluate(() => { document.querySelector('.nav-scrim')?.click() })
+      await qp.waitForTimeout(300)
     }
     return n
   }
@@ -11781,9 +11860,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
         '**位置を名前の要素の上に**(2026-09 利用者の指定・第5.189節)')
     } else if (!閉.絵) {
       ng(`設定 ${W}px … 「設定」に絵が無い`)
-    } else if (閉.絵.つまみ !== 3) {
+    } else if (閉.絵.つまみ !== 2) {
       ng(`設定 ${W}px … 設定の絵のつまみが ${閉.絵.つまみ} つ`,
-        '三本線と丸(つまみは3つ)にそろえる')
+        '★ 横線2本 + つまみ2つ(第5.415節・利用者の指定)にそろえる')
     } else if (閉.絵.線 < 6) {
       ng(`設定 ${W}px … 設定の絵の線が ${閉.絵.線} 本`,
         '3段 ×(つまみの左右に1本ずつ)= 6本')

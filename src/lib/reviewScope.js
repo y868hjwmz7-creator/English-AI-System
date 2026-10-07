@@ -171,16 +171,13 @@ export function pickLead(id, unit = '問') {
 export const SIZES = [10, 20, 'all']
 export const DEFAULT_SIZE = SESSION_SIZE
 
-/**
- * ★ **聞き流しの個数は、これまでどおり 5 / 10 / 20 / 30 / ぜんぶ**
- * (第5.414節)。
- *
- * **言われた場所だけを直す**(CLAUDE.md)。「5と30は廃止」は
- * **出しかたのシートの話**であって、聞き流しは別の画面である ——
- * あちらは「何問流すか」で、短く5問だけ流す使い方がある。
- * **同じ名前にしない**(違うものに同じ名前を付けない・共通ルール)。
- */
-export const RADIO_SIZES = [5, 10, 20, 30, 'all']
+/* ★ **聞き流しも、同じ一覧である**(第5.414節)。
+     はじめ `RADIO_SIZES`(5 / 10 / 20 / 30 / ぜんぶ)を別に持ったが、
+     **聞き流しの個数は「出しかた」で選んだ `size` をそのまま使う**ので、
+     一覧が2つあると**選べる札と、実際に流れる数が食い違う**
+     (5 をえらんでも `sizeOfValue()` が既定の 10 に落とす)。
+     `npm run test:bar` が「札の一覧が『出しかた』と合っていない」と
+     捕まえた —— **同じものを2つ持たない**(CLAUDE.md)。 */
 export const sizeLabel = (size) => (size === 'all' ? 'ぜんぶ' : String(size))
 
 /**
@@ -202,8 +199,8 @@ export const sizeLabel = (size) => (size === 'all' ? 'ぜんぶ' : String(size))
  * `'all'` をどう扱うかは、このファイルの持ちものである(判断は1か所)。
  * **知らない値は既定に落とす**(行き止まりを作らない)。
  */
-export const sizeOfValue = (v, list = SIZES) =>
-  (list ?? SIZES).find((n) => String(n) === String(v)) ?? DEFAULT_SIZE
+export const sizeOfValue = (v) =>
+  SIZES.find((n) => String(n) === String(v)) ?? DEFAULT_SIZE
 
 export const sizePickLabel = (size, unit = '問') =>
   (size === 'all' ? sizeLabel(size) : `${sizeLabel(size)} ${unit}`)

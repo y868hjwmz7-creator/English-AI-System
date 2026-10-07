@@ -134,7 +134,7 @@ import {
   genresFor, sceneLabel, scenesFor, speechScenesFor,
 } from '../src/data/genres.js'
 import {
-  DEFAULT_SIZE, PICKS, RADIO_SIZES, SIZES,
+  DEFAULT_SIZE, PICKS, SIZES,
   isDueOn, pickCounts, pickIdOf, pickLead, pickPool,
   runKeyOf, scopePool, shouldRecord, takeCount,
 } from '../src/lib/reviewScope.js'
@@ -3142,11 +3142,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(SIZES.length === 3 && SIZES.includes(10) && SIZES.includes(20)
     && SIZES.includes('all') && !SIZES.includes(5) && !SIZES.includes(30),
     '個数 … 10 / 20 / ぜんぶ の3つ(5と30は廃止)', SIZES.join(' / '))
-  /* ★ **聞き流しは、これまでどおり5つ**(**言われた場所だけを直す**)。
-       あちらは別の画面で、短く5問だけ流す使い方がある */
-  ok(RADIO_SIZES.length === 5 && RADIO_SIZES.includes(5) && RADIO_SIZES.includes(30),
-    '個数 … 聞き流しの個数は、これまでどおり 5 / 10 / 20 / 30 / ぜんぶ',
-    RADIO_SIZES.join(' / '))
+  /* ★ **聞き流しも同じ一覧**(第5.414節)。はじめ別に持ったが、
+       聞き流しの個数は「出しかた」の `size` をそのまま使うので、
+       **一覧が2つあると、選べる札と実際に流れる数が食い違う。**
+       `npm run test:bar` が捕まえた —— **同じものを2つ持たない** */
+  ok(!/RADIO_SIZES/.test(readFileSync(
+    new URL('../src/components/WordRadio.jsx', import.meta.url), 'utf8')),
+  '個数 … 聞き流しも「出しかた」と同じ一覧(2つ持たない)')
   ok(DEFAULT_SIZE === SESSION_SIZE,
     '個数 … 既定は `SESSION_SIZE` から取る(同じ数を2か所に書かない)')
 
@@ -6474,7 +6476,7 @@ console.log('\nスピーチ練習(0054)')
        一覧の下の行)ので、**一覧の下の行(`const toolsBox`)**を名指しする */
     const 行 = /const toolsBox = \(\s*<div className="wb-tools">([\s\S]*?)<\/div>/
       .exec(s)?.[1] ?? ''
-    ok((行.match(/wb-listen|listenBtn|paperBox/g) ?? []).length >= 2,
+    ok((行.match(/wb-listen|listenBtn|listenWide|paperBox/g) ?? []).length >= 2,
       `すき間 … ${f} は「聞き流す」と「印刷 / PDF」を1つの行にまとめている`)
   }
   {
@@ -8656,8 +8658,12 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     'Quick Response も同じ(黙って落とさない)')
   /* ★ **聞き流しは上の帯に一本化**(第5.414節・利用者の指定)。
        **中身は1か所**(`listenBtn`)で、一覧の下と帯の両方に置く */
-  ok(/const listenBtn = \(/.test(wb) && uses(wb, 'listenBtn') >= 2,
-    '単語帳の聞き流すが、上の帯にもある(1か所から描く)')
+  /* ★ **上の帯のぶんは、絵 + 短い言葉**(第5.316節「帯を1段に」)。
+       一覧の下のぶんは語数まで出す(幅に余裕がある)。
+       **言葉は2つでも、押した先は `listen` 1つ** —— 道を2つ作らない */
+  ok(/const listenBtn = \(/.test(wb) && /const listenWide = \(/.test(wb)
+    && (wb.match(/onClick=\{listen\}/g) ?? []).length === 2,
+  '単語帳の聞き流すが、上の帯にもある(押す先は1つ)')
   ok(/const listenBtn = \(/.test(qr) && uses(qr, 'listenBtn') >= 1,
     'Quick Response の聞き流すも、上の帯にある')
 
