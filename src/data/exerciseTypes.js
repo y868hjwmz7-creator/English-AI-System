@@ -18,8 +18,8 @@
    `sectionLabel()` で使う。**種類の一覧は持たない**(あちらが1か所) */
 import { bodyWord } from './materialKinds.js'
 import {
-  DEFAULT_EXAM, EXAM_KIND, examRealCountByKey, examSectionsByKey, examSectionsOf,
-  firstPartOf,
+  DEFAULT_EXAM, EXAM_KIND, examPartsOf, examRealCount, examRealCountByKey,
+  examRealSets, examSectionsByKey, examSectionsOf, firstPartOf,
 } from './examPrep.js'
 /* かたまりの分類(第5.230節)。**呼び名はあちら1か所** */
 import { CHUNK_KINDS, isChunkText } from './chunkKinds.js'
@@ -1145,11 +1145,102 @@ export const sectionLabel = (kind, typeId) =>
  */
 export const defaultSectionsFor = (kind, examKey = '') => {
   if (kind === EXAM_KIND) {
+    /* ★ **通し(全パート)**(第5.410節・2026-10-07 利用者の指定) */
+    const [examId, partId] = String(examKey ?? '').split(':')
+    if (partId === ALL_PARTS) return examAllSections(examId)
     const byPart = examSectionsByKey(examKey)
     return byPart.length ? byPart : DEFAULT_SECTIONS[EXAM_KIND]
   }
   return DEFAULT_SECTIONS[kind] ?? DEFAULT_SECTIONS.pattern
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   **全パートを通したテスト**(第5.410節・2026-10-07 利用者の指定)
+
+     > テスト対策全てに言えるのは、すべてのパートを通してのテストも
+     > 作れるようにすると最高です。
+     > その場合も各パートの問題数をそれぞれ調整可能にしてください
+
+   **PART を1つえらぶ代わりに「通し」をえらぶ**と、その試験の
+   作れる PART が**ぜんぶ並ぶ。** 1つの教材の中に、PART ごとの演習が
+   順に入る(`material_sections` は `unique (material_id, seq)` なので、
+   **同じ種類の演習を何度でも並べられる**)。
+
+   【問数は本番と同じから始める】(2026-10-07 利用者がえらんだ)
+   **数は `real` から読み取る。どこにも書き写さない**(第5.408 / 5.409節)。
+
+   | `real` の形 | どう読むか |
+   |---|---|
+   | `30問` | **設問の演習**をその数にする |
+   | `39問(1つの会話につき3問 × 13)` | **本文の演習**を「× 13」の数にする |
+   | `約10分` など | **読めないので、既定のまま** |
+
+   **黙って決め打ちしない** —— 読めなかったぶんは既定のままにして、
+   画面で1つずつ調整できる(どの PART も、これまでどおり段を出す)。
+   ══════════════════════════════════════════════════════════════════ */
+
+/**
+ * その演習の「試験 : PART」の鍵。**通しでは、その演習の PART を使う。**
+ *
+ * **ここ1か所**で決める —— 段(`amountsFor`)も作り方(`examBrief`)も
+ * この鍵で引くので、書き写すと片方だけ別の PART を見ることになる。
+ */
+export const partKeyOf = (examKey, sec) => {
+  const [examId, partId] = String(examKey ?? '').split(':')
+  return sec?.part ? `${examId}:${sec.part}` : `${examId}:${partId ?? ''}`
+}
+
+/** 「通し」の PART id。**ここ1か所**(画面も検証もこれを見る) */
+export const ALL_PARTS = 'all'
+
+/** 通しの札。**呼び名を2か所に書かない** */
+export const ALL_PARTS_LABEL = '通し(全パート)'
+
+/**
+ * その PART を**本番と同じ問数**にした演習の組み合わせ。
+ *
+ * 読み取れないものは**そのまま返す**(`examSectionsOf` と同じ中身)。
+ */
+export const realSectionsOf = (examId, partId) => {
+  const secs = examSectionsOf(examId, partId)
+  if (!secs.length) return secs
+  const 束 = examRealSets(examId, partId)
+  const 問 = examRealCount(examId, partId)
+  /* **本文の演習**(会話・記事)は「何本作るか」であって問数ではない。
+     だから `× N`(束の数)が読めたときだけ、そちらを動かす */
+  if (束 > 0 && secs.some((s) => isPassageSection(s.exercise_type))) {
+    return secs.map((s) => (isPassageSection(s.exercise_type)
+      ? { ...s, count: Math.min(束, MAX_ITEMS) } : s))
+  }
+  if (問 > 0) {
+    /* 本文があるときは**設問の側**を、無いときは**その演習**を本番の数にする */
+    const 的 = secs.some((s) => isPassageSection(s.exercise_type))
+      ? secs.filter((s) => !isPassageSection(s.exercise_type))
+      : secs
+    if (的.length === 1) {
+      return secs.map((s) => (s === 的[0] ? { ...s, count: Math.min(問, MAX_ITEMS) } : s))
+    }
+  }
+  return secs
+}
+
+/**
+ * 通しの演習の組み合わせ。**PART ごとに `part` を付ける** ——
+ * 同じ種類の演習が何度も出てくるので、
+ * **どの PART のものかが分からないと、問数も作り方も引けない。**
+ */
+export const examAllSections = (examId) => examPartsOf(examId)
+  .flatMap((p) => realSectionsOf(examId, p.id).map((s) => ({ ...s, part: p.id })))
+
+/**
+ * その演習を見分ける鍵。**通しでは「PART : 種類」**になる。
+ *
+ * **ここ1か所**で決める —— 問数(`amounts`)も、入れるかどうか(`include`)も、
+ * 画面も、この鍵で引く。書き写すと、PART をまたいだとき食い違う。
+ */
+export const sectionKey = (sec) => (
+  sec?.part ? `${sec.part}:${sec.exercise_type}` : String(sec?.exercise_type ?? '')
+)
 
 /**
  * **文型ドリルの4演習**(2026-09 利用者の指定)。
@@ -1421,7 +1512,11 @@ export const countOf = (base, option) => Math.min(
  * 内容の理解・ディスカッション・語句は本文から作るので、
  * **本文が無くなると、そもそも何も作れない。**
  */
-export const isIncluded = (typeId, include = null) => {
+export const isIncluded = (typeId, include = null, key = '') => {
+  /* ★ **通しでは、PART ごとに外せる**(第5.410節)。
+       鍵(`p5:fill_blank`)が来たらそちらを先に見る ——
+       同じ種類が何度も出てくるので、種類だけでは見分けられない */
+  if (key && key !== typeId && include?.[key] === false) return false
   /* **親を外したら、ぶら下がっているものも外れる**(第5.248節)。
      単語を外したのに「単語を言う」だけが残ると、
      **覚えていないものを言わせる**ことになる。
@@ -1446,7 +1541,7 @@ export const RECALL_PER_WORD = 3
 
 export const sectionsFor = (kind, amounts = null, include = null, examKey = '') => {
   const out = defaultSectionsFor(kind, examKey)
-    .filter((s) => isIncluded(s.exercise_type, include))
+    .filter((s) => isIncluded(s.exercise_type, include, sectionKey(s)))
     .map((s) => {
       /* ★ **テスト対策は、どの演習でも数を変えられる**(第5.409節)。
            判断は `isScalable()` 1か所 —— ここで `kind === …` と書かない */
@@ -1455,8 +1550,12 @@ export const sectionsFor = (kind, amounts = null, include = null, examKey = '') 
          `AMOUNTS` を直に見ると、単語 / フレーズの「15 問」が
          **どこにも見つからず、黙って既定に落ちる**。
          ★ テスト対策は PART ごとに段が違うので、**鍵と既定の数も渡す** */
-      const pick = amountsFor(s.exercise_type, { examKey, base: s.count })
-        .find((a) => a.id === amounts?.[s.exercise_type])
+      /* ★ **通しでは、その PART の段を引く**(第5.410節)。
+           `p3:dialogue` と `p7:article` では本番の数が違うので、
+           **種類だけで引くと、全部に同じ段が出る** */
+      const 鍵 = sectionKey(s)
+      const pick = amountsFor(s.exercise_type, { examKey: partKeyOf(examKey, s), base: s.count })
+        .find((a) => a.id === amounts?.[鍵])
       if (!pick) return s
       /* **何問になるかは `countOf()` 1か所**(画面の札と同じもの) */
       const n = countOf(s.count, pick)

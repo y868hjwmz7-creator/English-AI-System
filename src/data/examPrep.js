@@ -1600,6 +1600,17 @@ export const examRealCount = (examId, partId) => Number(
   /^(\d+)問$/.exec(String(examPartOf(examId, partId)?.real ?? '').trim())?.[1] ?? 0,
 )
 
+/**
+ * **その PART の、本番の「束」の数**(第5.410節)。
+ *
+ * `real` の「× 13」を読む ——「1つの会話につき3問 × **13**」なら 13。
+ * **本文を何本作るか**であって、問数ではない(第5.408節)。
+ * 書いていなければ 0。
+ */
+export const examRealSets = (examId, partId) => Number(
+  /×\s*(\d+)/.exec(String(examPartOf(examId, partId)?.real ?? ''))?.[1] ?? 0,
+)
+
 /** `"toeic_lr:p5"` → 本番の問数。知らない鍵は 0 */
 export const examRealCountByKey = (key) => {
   const [examId, partId] = String(key ?? '').split(':')
@@ -1616,6 +1627,28 @@ export const examSectionsByKey = (key) => {
 export const examBriefByKey = (key) => {
   const [examId, partId] = String(key ?? '').split(':')
   return examBrief(examId, partId)
+}
+
+/**
+ * **通し(全パート)の作り方。**(第5.410節)
+ *
+ * **PART ごとの作り方を、順につなぐ。** 窓口は `examPart` を
+ * 60,000 字まで受け取るので、いちばん長い試験(TOEFL 9,515 字)でも入る。
+ *
+ * **ただし、1回の呼び出しで渡すのは「その演習の PART」だけ**である ——
+ * 作る画面が演習ごとに `examBriefByKey(その PART)` を渡す。
+ * ここでつなぐのは、**画面に出す下書き**と、通しだと分かる見出しのため。
+ */
+export const examAllBrief = (examId) => {
+  const exam = examOf(examId)
+  if (!exam) return ''
+  const parts = examPartsOf(examId)
+  return [
+    `# 試験対策(${exam.full})`,
+    `## 通し(全 ${parts.length} PART)`,
+    '**1回の通しテスト**として、下の PART を順に作る。',
+    ...parts.map((p) => examBrief(examId, p.id)),
+  ].filter(Boolean).join('\n\n')
 }
 
 /**

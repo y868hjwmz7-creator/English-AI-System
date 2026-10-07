@@ -33,8 +33,8 @@ import { readFileSync } from 'node:fs'
 const {
   DEFAULT_EXAM, EXAMS, EXAM_KIND, examBrief, examBriefByKey, examKeyOf, examLabel,
   examOf, examOutline, examPartLine, examPartOf, examPartsOf, examSectionsByKey,
-  examRealCountByKey, examSectionsOf, examSkipLine, examSkipsOf, examTitle,
-  firstPartOf,
+  examRealCount, examRealCountByKey, examRealSets, examSectionsOf, examSkipLine,
+  examSkipsOf, examTitle, firstPartOf,
   BLANK_AXES, FORMATS, TRAPS, choiceBrief, choicesOf, formatOf, partialOf,
 } = await import('../src/data/examPrep.js')
 const { DROP_REASONS, emptyDropCounts, isExhausted }
@@ -43,8 +43,8 @@ const { askFields, dropsLead, splitAsk } = await import('../src/lib/choiceLines.
 /* ★ **応答が本当に応答になっているかの決まり**（第5.346節） */
 const { REPLY_RULE, REPLY_RULE_SWAP } = await import('../src/data/replyRule.js')
 const { EXERCISE_TYPES, amountsFor, audioJaOf, defaultSectionsFor, isBlankItem,
-  isPassageSection, isScalable, MAX_ITEMS, sectionsFor }
-  = await import('../src/data/exerciseTypes.js')
+  isPassageSection, isScalable, MAX_ITEMS, sectionsFor, ALL_PARTS, partKeyOf,
+  sectionKey } = await import('../src/data/exerciseTypes.js')
 const { MATERIAL_KINDS, NEW_MATERIAL_KINDS, isExamKind, needsWeakTag }
   = await import('../src/data/materialKinds.js')
 
@@ -223,6 +223,88 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
         { examKey: 'toeic_lr:p5', base: p5.sections[0].count }).map((a) => a.label) : []
       ok(`問数を選ぶ … ${見た} 通りとも、選んだ数がそのまま出る`
         + `(Part 5 は ${段.join(' / ')})`)
+    }
+  }
+
+  /* ★ ══ **全パート通し**(第5.410節・2026-10-07 利用者の指定)═══════════
+
+       > すべてのパートを通してのテストも作れるようにすると最高です。
+       > その場合も各パートの問題数をそれぞれ調整可能にしてください
+
+     見るのは5つ。**どれも数を書き写していない。**
+       ①通しに、その試験の作れる PART が**ぜんぶ**入っているか
+       ②演習に `part` が付いていて、**鍵が1つも重ならない**か
+         (重なると、1つ動かしたときに別の PART まで動く)
+       ③**PART ごとに問数を変えられる**か(1つ変えて、そこだけ変わるか)
+       ④**PART ごとに外せる**か
+       ⑤問数が**本番から来ている**か(読み取れる PART だけ) */
+  {
+    const 悪い = []
+    let 見た = 0
+    for (const exam of EXAMS) {
+      const parts = examPartsOf(exam.id).filter((p) => (p.sections ?? []).length)
+      if (!parts.length) continue
+      const key = examKeyOf(exam.id, ALL_PARTS)
+      const 通し = defaultSectionsFor(EXAM_KIND, key)
+      // ① ぜんぶ入っているか
+      const 入った = new Set(通し.map((s) => s.part))
+      const 抜け = parts.filter((p) => !入った.has(p.id)).map((p) => p.id)
+      if (抜け.length) 悪い.push(`${exam.id} … 通しに ${抜け.join(',')} が入っていない`)
+      // ② 鍵が重なっていないか
+      const 鍵 = 通し.map((x) => sectionKey(x))
+      if (new Set(鍵).size !== 鍵.length) {
+        悪い.push(`${exam.id} … 演習の鍵が重なっている(${鍵.join(' / ')})`)
+        continue
+      }
+      if (通し.some((x) => !x.part)) {
+        悪い.push(`${exam.id} … 演習に PART が付いていない`)
+        continue
+      }
+      for (const sec of 通し) {
+        const k = sectionKey(sec)
+        // ③ その1つだけ数が変わるか(**いちばん小さい段**にして確かめる)
+        const 段 = amountsFor(sec.exercise_type,
+          { examKey: partKeyOf(key, sec), base: sec.count })
+        const 別 = 段.find((a) => a.count !== sec.count)
+        if (!別) { 見た += 1; continue }
+        const 出た = sectionsFor(EXAM_KIND, { [k]: 別.id }, null, key)
+        const 変わった = 出た.filter((x, i) => x.count !== 通し[i].count)
+        if (変わった.length !== 1 || sectionKey(変わった[0]) !== k) {
+          悪い.push(`${exam.id}/${k} … ${別.label} にしたら`
+            + ` ${変わった.length} か所の数が動いた`)
+          continue
+        }
+        // ④ その1つだけ外れるか
+        const 残り = sectionsFor(EXAM_KIND, null, { [k]: false }, key)
+        if (残り.length !== 通し.length - 1 || 残り.some((x) => sectionKey(x) === k)) {
+          悪い.push(`${exam.id}/${k} … 外しても消えない(${残り.length} / ${通し.length})`)
+          continue
+        }
+        見た += 1
+      }
+      // ⑤ 本番の数から来ているか
+      for (const p of parts) {
+        const 問 = examRealCount(exam.id, p.id)
+        const 束 = examRealSets(exam.id, p.id)
+        const mine = 通し.filter((x) => x.part === p.id)
+        if (束 > 0 && 束 <= MAX_ITEMS) {
+          const 本文 = mine.find((x) => isPassageSection(x.exercise_type))
+          if (本文 && 本文.count !== 束) {
+            悪い.push(`${exam.id}/${p.id} … 本文が ${本文.count} 本(本番は ${束} 本)`)
+          }
+        } else if (問 > 0 && 問 <= MAX_ITEMS && mine.length === 1) {
+          if (mine[0].count !== 問) {
+            悪い.push(`${exam.id}/${p.id} … ${mine[0].count} 問(本番は ${問} 問)`)
+          }
+        }
+      }
+    }
+    if (!見た) ng('通し … 1つも測っていない', '通しの演習が1つも返っていない')
+    else if (悪い.length) ng('通し … 作りがおかしい', 悪い.join('\n    '))
+    else {
+      const t = defaultSectionsFor(EXAM_KIND, examKeyOf('toeic_lr', ALL_PARTS))
+      ok(`通し … ${見た} 個の演習とも、PART ごとに数を変えられて外せる`
+        + `(TOEIC は ${t.length} 演習 / 合計 ${t.reduce((n, x) => n + x.count, 0)} 問)`)
     }
   }
 
@@ -552,7 +634,12 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
        **2つが一致し、関数が1種類**でなければ赤くする。
        関数の名前は書き写さない(寄せ先を変えても付いてくる) */
   const 全 = (form.match(/examPart:/g) ?? []).length
-  const 渡す = [...form.matchAll(/examPart:\s*([A-Za-z_$][\w$]*)\(\)/g)].map((m) => m[1])
+  /* ★ **引数があっても数える**(第5.410節)。通しでは
+       `makeBrief(plan[i])` のように**その演習を渡す**(PART ごとに
+       作り方が違うため)。見ているのは**同じ1つの関数を通っているか**
+       であって、引数の有無ではない —— そこで止めると、
+       **仕組みは正しいのに見張りだけが赤くなる**(CLAUDE.md) */
+  const 渡す = [...form.matchAll(/examPart:\s*([A-Za-z_$][\w$]*)\(/g)].map((m) => m[1])
   const 回 = (全 === 渡す.length && new Set(渡す).size === 1) ? 渡す.length : 0
   if (回 < 3) {
     ng('画面 … 作る道のどれかで、PART の作り方を送っていない', `${回} か所`)

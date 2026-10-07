@@ -17,8 +17,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import WeaknessTagPicker from './WeaknessTagPicker.jsx'
 import { CEFR_LEVELS, DEFAULT_CEFR, cefrOption } from '../data/cefr.js'
 import {
-  EXERCISE_TYPES, FIELD_LABELS, WORD_DRILLS,
-  DEFAULT_WORD_DRILL, amountsFor, countOf, isScalable,
+  ALL_PARTS, ALL_PARTS_LABEL, EXERCISE_TYPES, FIELD_LABELS, WORD_DRILLS,
+  DEFAULT_WORD_DRILL, amountsFor, countOf, isScalable, partKeyOf, sectionKey,
   defaultSectionsFor, exerciseLabel, exerciseType, grammarSource, isIncluded,
   isPassageSection, sectionLabel, sectionsFor,
 } from '../data/exerciseTypes.js'
@@ -81,8 +81,8 @@ import {
    判断は `voicePlan.js` 1か所(素の node で確かめられる) */
 import { hasAnyAudio, voicePlanLine } from '../lib/voicePlan.js'
 import {
-  DEFAULT_EXAM, examBriefByKey, examKeyOf, examOutline, examPartLine, examPartsOf,
-  examSkipLine, examTitle, EXAMS, firstPartOf,
+  DEFAULT_EXAM, examAllBrief, examBriefByKey, examKeyOf, examOutline, examPartLine,
+  examPartOf, examPartsOf, examSkipLine, examTitle, EXAMS, firstPartOf,
 } from '../data/examPrep.js'
 import { picksBaseVoice } from '../lib/voiceTier.js'
 /* **出来上がった名前に、声の並びを合わせる**(2026-09 利用者の指摘
@@ -1058,7 +1058,13 @@ export default function MaterialForm({
    * **4か所に書き写していたのを、ここ1か所に寄せた** ——
    * 応答問題を足すのに、同じ式を5つ書くことになるためである。
    */
-  const makeBrief = () => {
+  const makeBrief = (sec = null) => {
+    /* ★ **通しでは、その演習の PART の作り方を渡す**(第5.410節)。
+         1本の教材に PART が10も入るので、**全部の作り方を毎回送ると**
+         「いま何を作っているのか」が AI に伝わらない。
+         **どの PART のものかは `partKeyOf()` 1か所**が決める */
+    if (isExamKind(kind) && sec?.part) return examBriefByKey(partKeyOf(examKey, sec))
+    if (isExamKind(kind) && partId === ALL_PARTS) return examAllBrief(examId)
     if (isExamKind(kind)) return examBriefByKey(examKey)
     if (isResponseKind(kind)) return responseBrief({ form: resForm, phrases: resPhrases })
     return ''
@@ -1561,7 +1567,7 @@ export default function MaterialForm({
              テスト対策でなければ空なので、ほかの種類は1文字も変わらない。
              **弱点タグが無くても作れるのは、これが「何の練習か」を
              決めているから**である(窓口の側もそう見ている) */
-          examPart: makeBrief(),
+          examPart: makeBrief(plan[i]),
         },
         {
           usedSet, learnerIds: shareWith, tagIds,
@@ -2163,6 +2169,15 @@ export default function MaterialForm({
               {examPartsOf(examId).map((x) => (
                 <option key={x.id} value={x.id}>{x.label}</option>
               ))}
+              {/* ★ **全パート通し**(第5.410節・2026-10-07 利用者の指定)。
+
+                    > すべてのパートを通してのテストも作れるようにすると最高です
+                    > その場合も各パートの問題数をそれぞれ調整可能に
+
+                  **いちばん下に置く。** ふだん使うのは1つの PART で、
+                  通しは「まとめて1本」のときだけである。
+                  **呼び名は `ALL_PARTS_LABEL` 1か所** */}
+              <option value={ALL_PARTS}>{ALL_PARTS_LABEL}</option>
             </select>
           </label>
         </div>
@@ -3022,21 +3037,30 @@ export default function MaterialForm({
               .filter((s2) => isScalable(kind, s2.exercise_type))
               .map((s2) => {
                 const base = s2.count
-                const now = amounts[s2.exercise_type] ?? 'default'
-                const on = isIncluded(s2.exercise_type, include)
+                /* ★ **通しでは、PART ごとに引く**(第5.410節)。
+                     同じ種類が何度も出てくるので、**種類だけで引くと
+                     Part 3 と Part 7 の「本文」が同じ数で動く。**
+                     鍵は `sectionKey()` 1か所 */
+                const 鍵 = sectionKey(s2)
+                const now = amounts[鍵] ?? 'default'
+                const on = isIncluded(s2.exercise_type, include, 鍵)
                 /* **最後の1つは外せない。** 全部外すと作るものが無くなる。
                    記事・会話は本文が必ず残るので、ここが効くのは
                    文型ドリル(4つとも外せる)のときだけである */
                 const last = on && planNow().length <= 1
                 return (
-                  <div key={s2.exercise_type}
+                  <div key={鍵}
                        className={`amount-pick${on ? '' : ' is-off'}`}>
                     <label className="amount-label">
                       <input type="checkbox" checked={on} disabled={last}
-                             onChange={() => setInclude({
-                               ...include, [s2.exercise_type]: !on,
-                             })} />
-                      <span>{exerciseLabel(s2.exercise_type)}</span>
+                             onChange={() => setInclude({ ...include, [鍵]: !on })} />
+                      {/* ★ **通しでは、どの PART のものかを書く**(第5.410節)。
+                             「穴埋め」が2つ並ぶと、どちらを動かしているのか
+                             分からない。**呼び名は `examPartOf()` から引く** */}
+                      <span>
+                        {s2.part ? `${examPartOf(examId, s2.part)?.label ?? s2.part} … ` : ''}
+                        {exerciseLabel(s2.exercise_type)}
+                      </span>
                     </label>
                     {/* **入れない演習に、問数の切り替えを出さない。**
                         効かない操作を見せると、押して確かめることになる */}
@@ -3045,14 +3069,14 @@ export default function MaterialForm({
                            aria-label={`${exerciseLabel(s2.exercise_type)}の数`}>
                         {/* **3倍(30問)が出るのは文型ドリルだけ**(2026-09)。
                             弱点が3つまで選べるので、1つあたり10問にすると30問になる */}
-                        {amountsFor(s2.exercise_type,
-                          { examKey: (isExamKind(kind) ? examKey : ''), base }).map((a) => (
+                        {amountsFor(s2.exercise_type, {
+                          examKey: isExamKind(kind) ? partKeyOf(examKey, s2) : '',
+                          base,
+                        }).map((a) => (
                           <button key={a.id} type="button"
                                   className={`theme-btn${now === a.id ? ' is-active' : ''}`}
                                   aria-pressed={now === a.id}
-                                  onClick={() => setAmounts({
-                                    ...amounts, [s2.exercise_type]: a.id,
-                                  })}>
+                                  onClick={() => setAmounts({ ...amounts, [鍵]: a.id })}>
                             {a.label}
                             {/* **倍率の札にだけ、実際の数を添える**(第5.248節)。
                                 単語 / フレーズは札そのものが「10 問」なので、
