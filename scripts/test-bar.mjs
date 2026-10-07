@@ -5689,8 +5689,19 @@ export default defineConfig({
              添えて」)。行が出ているだけでは足りない —— 名前が
              `cefrLabel`(「B1(中級)」)に戻っても行は出るので、
              **何と書いてあるか**まで読む */
+          /* ★ **行の名前は、そのままでは比べない**(第5.406節)。
+                 利用者の指定で「レベル」→「**教材のレベル**」に変えた日、
+                 **ちょうど一致**で探していたここだけが空になり、
+                 **仕組みは1ミリも壊れていないのに赤くなった**
+                 (CLAUDE.md「式も、関数の名前も書き写さない」の、言葉の側)。
+                 すぐ下の「行が出ているか」の見張りは `includes` で見ており、
+                 **同じファイルの中で2通りに書いてあった。**
+                 言いまわしそのものは `npm run test:play` が見張っている
+                 (「教材のレベル」と書いてあるか / ただの「レベル」が
+                 残っていないか)ので、ここは**どの行かを当てるだけ**でよい。
+                 `.wbfilter-name` に「レベル」を含む行は1つだけである */
           レベルの選択肢: [...pop.querySelectorAll('.wbfilter-row')]
-            .filter((r) => r.querySelector('.wbfilter-name')?.textContent.trim() === 'レベル')
+            .filter((r) => (r.querySelector('.wbfilter-name')?.textContent ?? '').includes('レベル'))
             .flatMap((r) => [...r.querySelectorAll('option')].map((o) => o.textContent.trim())),
           画面内: r.left >= -1 && r.right <= window.innerWidth + 1
             && r.top >= -1 && r.bottom <= window.innerHeight + 1,
