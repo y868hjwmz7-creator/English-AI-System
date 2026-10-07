@@ -113,6 +113,46 @@ const PICKABLE = EXAMS.flatMap((e) => examPartsOf(e.id).map((p) => ({ exam: e, p
   if (悪い.length) ng('PART … 作れない形のものがある', 悪い.join('\n    '))
   else ok(`PART … えらべる ${PICKABLE.length} 個は、どれも作れる形`)
 
+  /* ★ ══ **TOEIC Part 5 は、本番と同じ問数を作る**(第5.408節)═══════
+
+       > TOEICのPART５問題、３０問作れるようにしてください。
+       > １０問しか作れないのは本番の試験と違う仕様です。
+
+     **Part 5 は「1問 = 1項目」**(1文に空所1つ)なので、本番の問数と
+     作る問数を**そのまま比べられる。**
+
+     **数を書き写さない。** 期待する数は `real`(「30問」)から読み取り、
+     作る数は `sections` から数える —— どちらかを変えた日に、
+     もう片方が付いてこなければ赤くなる。
+     **作り方の文に書いてある数**も、同じものかを見る
+     (もとは `sections` と文の2か所に 10 が別々に書いてあった)。
+
+     **ほかの PART には広げない。** Part 3・4・7 の `count` は
+     「本文を何本作るか」であって問数ではないので、`real` と直に
+     比べられない(第5.336節の「本番の1セット」)。 */
+  {
+    const p5 = PICKABLE.find((x) => x.exam.id === 'toeic_lr' && x.part.id === 'p5')?.part
+    if (!p5) {
+      ng('Part 5 … えらべる PART の中に無い', '見張りが何も測っていない')
+    } else {
+      const 本番 = Number(/^(\d+)問$/.exec(String(p5.real ?? '').trim())?.[1] ?? 0)
+      const 作る = (p5.sections ?? []).reduce((n, sec) => n + Number(sec.count || 0), 0)
+      const 文の数 = Number(/(\d+)問に均等/.exec(String(p5.make ?? ''))?.[1] ?? 0)
+      if (!本番) {
+        ng('Part 5 … 本番の問数を読み取れない', `real は「${p5.real}」`)
+      } else if (作る !== 本番) {
+        ng('Part 5 … 本番と作る問数が食い違う', `本番 ${本番} 問 / 作る ${作る} 問`)
+      } else if (!文の数) {
+        ng('Part 5 … 作り方の文に問数が入っていない', 'AI に何問作るのか伝わらない')
+      } else if (文の数 !== 本番) {
+        ng('Part 5 … 作り方の文の問数が、作る数と食い違う',
+          `文は ${文の数} 問 / 作る ${作る} 問 —— 数を2か所に書いている`)
+      } else {
+        ok(`Part 5 … 本番と同じ ${本番} 問を作る(作り方の文も ${文の数} 問)`)
+      }
+    }
+  }
+
   /* ── **表の制約に、その演習が入っているか** ──
      入っていないと、**発行した瞬間に**
      「violates check constraint material_sections_type_check」で止まる。
